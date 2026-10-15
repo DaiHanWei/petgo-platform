@@ -23,6 +23,9 @@ public interface OpsPopupImpressionRepository extends JpaRepository<OpsPopupImpr
     Set<Long> findShownPopupIds(@Param("uid") long userId, @Param("ids") Collection<Long> popupIds,
             @Param("since") Instant since);
 
+    /** 该弹窗是否曾有过曝光（后台删除闸，返工清单 §0-2：上线过的弹窗只能停用不能删）。 */
+    boolean existsByPopupId(Long popupId);
+
     @Modifying
     @Query("delete from OpsPopupImpression i where i.userId = :uid")
     int deleteByUserId(@Param("uid") long userId);

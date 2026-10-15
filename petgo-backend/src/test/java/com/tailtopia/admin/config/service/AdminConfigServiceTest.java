@@ -354,7 +354,7 @@ class AdminConfigServiceTest {
     @Test
     void appVersionUnchangedAfterTrimWritesNothing() {
         seedAppVersion();
-        svc.updateAppVersion(new AppVersionConfigUpdate(" 1.3.3 ", "1.3.3", "1.0.0 ", IOS_URL, " " + ANDROID_URL), null, 7L);
+        svc.updateAppVersion(new AppVersionConfigUpdate(" 1.3.3 ", "1.3.3", "1.0.0 ", IOS_URL, " " + ANDROID_URL), null, true, 7L);
         verify(appVersion, never()).update(any(), anyLong());
         verify(changeLogs, never()).saveAll(anyList());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
@@ -365,7 +365,7 @@ class AdminConfigServiceTest {
         seedAppVersion();
         AppVersionConfigUpdate cmd = new AppVersionConfigUpdate("1.3.4", "1.3.4", "1.1.0", IOS_URL, ANDROID_URL);
         for (String confirm : new String[] {null, "", "1.1", "1.1.1"}) {
-            assertThatThrownBy(() -> svc.updateAppVersion(cmd, confirm, 7L))
+            assertThatThrownBy(() -> svc.updateAppVersion(cmd, confirm, true, 7L))
                     .isInstanceOf(AppException.class)
                     .satisfies(e -> assertThat(((AppException) e).getMessageCode())
                             .isEqualTo("admin.err.config.version.min-confirm"));
@@ -377,7 +377,7 @@ class AdminConfigServiceTest {
     @Test
     void appVersionLatestOnlyChangeNeedsNoConfirmAndLogsEachChangedField() {
         seedAppVersion();
-        svc.updateAppVersion(new AppVersionConfigUpdate("1.3.4", " 1.3.4", "1.0.0", IOS_URL, ANDROID_URL), null, 7L);
+        svc.updateAppVersion(new AppVersionConfigUpdate("1.3.4", " 1.3.4", "1.0.0", IOS_URL, ANDROID_URL), null, true, 7L);
 
         ArgumentCaptor<AppVersionConfigUpdate> sent = ArgumentCaptor.forClass(AppVersionConfigUpdate.class);
         verify(appVersion).update(sent.capture(), eq(7L));
@@ -395,7 +395,7 @@ class AdminConfigServiceTest {
     @Test
     void appVersionMinChangeWithMatchingConfirmSavesAndAudits() {
         seedAppVersion();
-        svc.updateAppVersion(new AppVersionConfigUpdate("1.3.3", "1.3.3", "1.1.0", IOS_URL, ANDROID_URL), " 1.1.0 ", 7L);
+        svc.updateAppVersion(new AppVersionConfigUpdate("1.3.3", "1.3.3", "1.1.0", IOS_URL, ANDROID_URL), " 1.1.0 ", true, 7L);
         verify(appVersion).update(any(), eq(7L));
         ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
         verify(changeLogs).saveAll(cap.capture());
@@ -413,10 +413,59 @@ class AdminConfigServiceTest {
         when(appVersion.update(any(), anyLong())).thenThrow(
                 AppException.validation("版本号格式不正确").code("admin.err.config.version.format"));
         assertThatThrownBy(() -> svc.updateAppVersion(
-                new AppVersionConfigUpdate("1.3", "1.3.3", "1.0.0", IOS_URL, ANDROID_URL), null, 7L))
+                new AppVersionConfigUpdate("1.3", "1.3.3", "1.0.0", IOS_URL, ANDROID_URL), null, true, 7L))
                 .isInstanceOf(AppException.class);
         verify(changeLogs, never()).saveAll(anyList());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    /** 返工清单 §0-9：改「最低支持版本」另需 config.app_min_version_edit —— 无码 403（先于确认值核对），不写库。 */
+    @Test
+    void appVersionMinChangeWithoutMinPermissionIsForbiddenBeforeWrite() {
+        seedAppVersion();
+        assertThatThrownBy(() -> svc.updateAppVersion(
+                new AppVersionConfigUpdate("1.3.3", "1.3.3", "1.1.0", IOS_URL, ANDROID_URL), "1.1.0", false, 7L))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.config.version.min-forbidden");
+                    assertThat(((AppException) e).getStatus()).isEqualTo(org.springframework.http.HttpStatus.FORBIDDEN);
+                });
+        verify(appVersion, never()).update(any(), anyLong());
+        verify(changeLogs, never()).saveAll(anyList());
+        // 其余字段不受影响：无码也能改最新版本号
+        svc.updateAppVersion(new AppVersionConfigUpdate("1.3.4", "1.3.3", "1.0.0", IOS_URL, ANDROID_URL), null, false, 7L);
+        verify(appVersion).update(any(), eq(7L));
+    }
+
+    /** 预检：逐字段改动（已 trim）+ 委托 validate；不写库、不审计。 */
+    @Test
+    void appVersionPreviewListsChangesAndValidatesWithoutWriting() {
+        seedAppVersion();
+        List<com.tailtopia.admin.config.dto.AppVersionChange> changes = svc.previewAppVersion(
+                new AppVersionConfigUpdate("1.3.3", " 1.3.4 ", "1.2.0", IOS_URL, ANDROID_URL), true);
+        assertThat(changes).extracting(com.tailtopia.admin.config.dto.AppVersionChange::field)
+                .containsExactly("androidLatestVersion", "minSupportedVersion");
+        assertThat(changes.get(0).oldValue()).isEqualTo("1.3.3");
+        assertThat(changes.get(0).newValue()).isEqualTo("1.3.4");
+        assertThat(com.tailtopia.admin.config.dto.AppVersionChange.touchesMin(changes)).isTrue();
+        verify(appVersion).validate(any());
+        verify(appVersion, never()).update(any(), anyLong());
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void appVersionPreviewRejectsNoChangeAndMinWithoutPermission() {
+        seedAppVersion();
+        assertThatThrownBy(() -> svc.previewAppVersion(
+                new AppVersionConfigUpdate(" 1.3.3", "1.3.3", "1.0.0", IOS_URL, ANDROID_URL), true))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.config.noChange"));
+        assertThatThrownBy(() -> svc.previewAppVersion(
+                new AppVersionConfigUpdate("1.3.3", "1.3.3", "1.1.0", IOS_URL, ANDROID_URL), false))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.config.version.min-forbidden"));
+        verify(appVersion, never()).validate(any());
     }
 
     private static <T> T instantiate(Class<T> cls) {

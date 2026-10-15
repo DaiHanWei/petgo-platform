@@ -125,7 +125,9 @@ class AdminPermissionsTest {
         // 2026-09-09（V1.3.0 Story 1.4 AC5）：场所管理 place.manage、暖贴虚拟身份评论
         //     comment.virtual_post 预先登记进 edit 组（端点分别在 Epic 5 / Epic 4 接线，
         //     期间列在 AdminPermissionWiringTest.PENDING_WIRING）⇒ 72 + 2 = 74。
+        // 2026-10-15（V1.3.4 后台返工清单 §1）：改最低支持版本 config.app_min_version_edit、
+        //     运营弹窗 ops_popup.manage、系统通知 ops_notify.view / ops_notify.send ⇒ 74 + 4 = 78。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(74);
+        assertThat(all).hasSize(78);
     }
 }

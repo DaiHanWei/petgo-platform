@@ -3,7 +3,7 @@
 <!--/*
   D2 运营配置（Story 9.2 → V1.3.0 Story 6.3 整体套模板 D，AB-19A「不动任何功能」）：四张配置卡各自成表单、自带保存钮
   （未修改禁用 → 修改激活 +「已修改」标 → 高危确认复述改动字段旧值 → 新值 → 提交）；组头不标红「高危」（D-8）。
-  卡顺序按 UI 稿 7-1：问诊定价 · KTP 模块高清图解锁定价 · PawCoin（含充值档位两表 + 新建）· 分享奖励。
+  卡顺序按 UI 稿 7-1：问诊定价 · KTP 模块高清图解锁定价 ·（V1.3.4 UI 稿 G1）App 版本更新 · PawCoin（含充值档位两表 + 新建）· 客服联系方式 · 分享奖励。
   卡内容各在 fragments/config-card-*.html（也是 htmx 成功 / 422 的返回目标）；端点 / 参数 / @PreAuthorize 逐字不变（Story 2.1 底账）。
   改值只影响后续（历史落快照）；变更留审计。
 */-->
@@ -27,20 +27,23 @@
         <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
             <div th:replace="~{admin/fragments/config-card-pricing :: card}"></div>
             <div th:replace="~{admin/fragments/config-card-ktp :: card}"></div>
+            <!--/* App 版本更新（V1.3.4 AB-22 · FR-124）——UI 稿 G1：排在「一次性解锁定价」之后；保存先预检、再由服务端确认弹层提交 */-->
+            <div th:replace="~{admin/fragments/config-card-app-version :: card}"></div>
             <div class="cfg-group" data-card-group="pawcoin">
                 <div th:replace="~{admin/fragments/config-card-pawcoin :: card}"></div>
                 <div th:replace="~{admin/fragments/config-card-pawcoin :: tiers}"></div>
             </div>
             <!--/* 客服联系方式（shop-v2 Story 3-1 / AD-S8）——改完即生效，不需发版、不需重启 */-->
             <div th:replace="~{admin/fragments/config-card-support :: card}"></div>
-            <!--/* App 版本配置（V1.3.4 AB-22 · FR-124）——App 冷启动读取，改完即生效；最低支持版本改动须再输一遍确认 */-->
-            <div th:replace="~{admin/fragments/config-card-app-version :: card}"></div>
         </th:block>
 
         <!--/* 分享奖励（V1.1.6 Story 18.3 · AB-3M）：独立权限码；edit 码也放进门里——应急操作员可能只握 share_reward_edit */-->
         <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_view') or hasAuthority('config.share_reward_edit')">
             <div th:replace="~{admin/fragments/config-card-share-reward :: card}"></div>
         </th:block>
+
+        <!--/* 服务端确认弹层宿主（V1.3.4 AB-22 · G3 / G4，fragments/confirm-modal）；成功后 admin:confirm-close 清空 */-->
+        <div id="confirm-host"></div>
     </div>
 </div>
 </body>

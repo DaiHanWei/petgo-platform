@@ -74,10 +74,13 @@ public class OpsNotificationCampaignService {
     @Transactional
     public String create(OpsCampaignDraft draft, long adminAccountId) {
         validate(draft);
-        OpsNotificationCampaign saved = campaigns.save(OpsNotificationCampaign.create(tokens.generate(),
+        OpsNotificationCampaign campaign = OpsNotificationCampaign.create(tokens.generate(),
                 draft.titleId(), draft.titleEn(), draft.bodyId(), draft.bodyEn(),
                 draft.targetType(), draft.targetValue(), draft.audience().toJson(),
-                draft.scheduledAt(), adminAccountId));
+                draft.scheduledAt(), adminAccountId);
+        campaign.recordAdminMeta(draft.estimatedCount(),
+                draft.audience().mode() == AudienceSpec.Mode.IDS ? draft.idsSource() : null);
+        OpsNotificationCampaign saved = campaigns.save(campaign);
         if (draft.audience().mode() == AudienceSpec.Mode.IDS) {
             targets.insertAll(saved.getId(), draft.targetUserIds()); // 去重由 DAO 负责
         }

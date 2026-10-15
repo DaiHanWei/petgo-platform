@@ -2,6 +2,7 @@ package com.tailtopia.auth.service;
 
 import com.tailtopia.notify.ops.domain.AudienceSpec;
 import com.tailtopia.profile.domain.PetType;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -22,6 +23,10 @@ import java.util.Map;
  * 各条件之间为「且」；键缺失 = 该条不筛；日期按 WIB 自然日含两端
  * （{@code from} → {@code >= from 00:00 WIB}，{@code to} → {@code < (to + 1 天) 00:00 WIB}），在此换算成
  * {@link Instant} 绑参。给了活跃时间条件时 {@code last_active_at IS NULL} 的用户不命中（比较本身即排除 NULL）。
+ *
+ * <p>相对键（V1.3.4 后台返工清单 §0-5）：{@code registeredWithinDays = N} → {@code created_at >= now − N 天}，
+ * {@code activeWithinDays = N} → {@code last_active_at >= now − N 天}；{@code now} = <b>实际发送 / 预估的那一刻</b>，
+ * 由调用方传入（纯函数不自己取钟）。
  *
  * <h2>IDS</h2>
  * 只取子表 {@code ops_notification_campaign_targets} 里的 id + 基础过滤；其余筛选键忽略
@@ -63,6 +68,10 @@ public final class OpsAudienceSql {
     }
 
     public static Query build(AudienceSpec spec, long campaignId, ZoneId wib) {
+        return build(spec, campaignId, wib, Instant.now());
+    }
+
+    public static Query build(AudienceSpec spec, long campaignId, ZoneId wib, Instant now) {
         StringBuilder where = new StringBuilder(BASE_FILTER);
         Map<String, Object> params = new LinkedHashMap<>();
         switch (spec.mode()) {
@@ -73,7 +82,7 @@ public final class OpsAudienceSql {
                 where.append(" AND ").append(IN_TARGETS);
                 params.put("campaignId", campaignId);
             }
-            case FILTER -> appendFilter(spec, wib, where, params);
+            case FILTER -> appendFilter(spec, wib, now, where, params);
         }
         return new Query(SELECT + where + ORDER, Collections.unmodifiableMap(params));
     }
@@ -85,13 +94,17 @@ public final class OpsAudienceSql {
      * <p>IDS 模式发送时 id 在子表里、预估时活动还没建，不能走这里：用 {@link #countIds()} 按粘贴的 id 分批计数。
      */
     public static Query count(AudienceSpec spec, ZoneId wib) {
+        return count(spec, wib, Instant.now());
+    }
+
+    public static Query count(AudienceSpec spec, ZoneId wib, Instant now) {
         if (spec.mode() == AudienceSpec.Mode.IDS) {
             throw new IllegalArgumentException("IDS 模式请用 countIds");
         }
         StringBuilder where = new StringBuilder(BASE_FILTER);
         Map<String, Object> params = new LinkedHashMap<>();
         if (spec.mode() == AudienceSpec.Mode.FILTER) {
-            appendFilter(spec, wib, where, params);
+            appendFilter(spec, wib, now, where, params);
         }
         return new Query(COUNT + where, Collections.unmodifiableMap(params));
     }
@@ -104,8 +117,32 @@ public final class OpsAudienceSql {
         return COUNT + BASE_FILTER + " AND u.id IN (:ids)";
     }
 
-    private static void appendFilter(AudienceSpec spec, ZoneId wib, StringBuilder where,
+    /**
+     * 指定用户 ID 逐个归类（V1.3.4 后台返工清单 §0-7，CSV / 粘贴的「有效 X 人，跳过 Y 个」）：
+     * {@code OK} 与 {@link #BASE_FILTER} <b>逐条同口径</b>（所以有效人数 = {@link #countIds()} 的结果），
+     * 其余按 不存在（兽医 / 后台账号 / 停用 enabled=false 并入）/ 已注销 / 已封号（status 非 ACTIVE）/ 虚拟号 归因；
+     * 库里查不到的 id 不在结果里，由调用方记作「不存在」。参数名 {@code ids}（调用方分批）。
+     */
+    public static String classifyIds() {
+        return "SELECT u.id, CASE"
+                + " WHEN u.role IS DISTINCT FROM 'USER' THEN 'NOT_FOUND'"
+                + " WHEN u.deleted_at IS NOT NULL THEN 'DELETED'"
+                + " WHEN u.status IS DISTINCT FROM 'ACTIVE' THEN 'BANNED'"
+                + " WHEN u.account_type IS DISTINCT FROM 'REAL' THEN 'VIRTUAL'"
+                + " WHEN u.enabled IS NOT TRUE THEN 'NOT_FOUND'"
+                + " ELSE 'OK' END AS k FROM users u WHERE u.id IN (:ids)";
+    }
+
+    private static void appendFilter(AudienceSpec spec, ZoneId wib, Instant now, StringBuilder where,
             Map<String, Object> params) {
+        if (spec.registeredWithinDays() != null) {
+            where.append(" AND u.created_at >= :regSince");
+            params.put("regSince", now.minus(Duration.ofDays(spec.registeredWithinDays())));
+        }
+        if (spec.activeWithinDays() != null) {
+            where.append(" AND u.last_active_at >= :actSince");
+            params.put("actSince", now.minus(Duration.ofDays(spec.activeWithinDays())));
+        }
         if (spec.registeredFrom() != null) {
             where.append(" AND u.created_at >= :regFrom");
             params.put("regFrom", startOf(spec.registeredFrom(), wib));

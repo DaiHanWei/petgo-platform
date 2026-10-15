@@ -88,8 +88,7 @@ function tailtopiaConfirmDiffMessage(form) {
     var on = form.getAttribute('data-confirm-diff-on') || 'on', off = form.getAttribute('data-confirm-diff-off') || 'off';
     var lines = [];
     form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
-        // data-diff-skip：确认用的输入（V1.3.4 AB-22「再次输入最低支持版本」）不是配置值，不复述
-        if (el.type === 'hidden' || el.disabled || el.hasAttribute('data-diff-skip')) { return; }
+        if (el.type === 'hidden' || el.disabled) { return; }
         var isCheck = el.type === 'checkbox' || el.type === 'radio';
         var cur = isCheck ? (el.checked ? '1' : '0') : el.value;
         var was = el.dataset.initialValue === undefined ? cur : el.dataset.initialValue;
@@ -194,6 +193,17 @@ document.addEventListener('click', function (e) {
     if (e.target.tagName === 'DIALOG' && typeof e.target.close === 'function') {
         e.target.close();
     }
+});
+
+// 服务端确认弹层 · 输入值确认（V1.3.4 AB-22 G4；AB-31 I8 复用，fragments/confirm-modal.html）：
+//   input[data-typed-confirm][data-expected] 的值（去首尾空格）与期望值完全一致时才放开同一表单里的
+//   [data-typed-confirm-submit]，否则保持禁用。🛡 只是体验：服务端按提交上来的值自己再比一次。
+document.addEventListener('input', function (e) {
+    var inp = e.target;
+    if (!inp || !inp.hasAttribute || !inp.hasAttribute('data-typed-confirm')) { return; }
+    var form = inp.form || (inp.closest && inp.closest('form'));
+    var btn = form && form.querySelector('[data-typed-confirm-submit]');
+    if (btn) { btn.disabled = (inp.value || '').trim() !== inp.getAttribute('data-expected'); }
 });
 
 // 筛选栏下拉选完即刷新（bug 20260820：人工复核页选了状态还得再点一次「筛选」，多一步且容易忘）。
@@ -1048,29 +1058,66 @@ document.addEventListener('change', function (e) {
         });
         return bad;
     }
-    // V1.3.4 AB-22：[data-reveal-when-changed="<字段名>"] —— 该字段偏离初值才显示并启用内含输入（App 版本卡「再次输入最低支持版本」），
-    // 改回初值即隐藏、禁用并清空。⚠️ 必须先于 dirty 比对执行：disabled 的输入不进 FormData，否则改回原值后卡仍算「已修改」。
-    // 体验护栏不是安全边界：确认值是否相符由服务端判定（422 min-confirm）。
-    function reveal(form) {
-        form.querySelectorAll('[data-reveal-when-changed]').forEach(function (box) {
-            var src = form.querySelector('[name="' + box.getAttribute('data-reveal-when-changed') + '"]');
-            // forceReveal：服务端回了 422 min-confirm 而本页认为没改（页面过期，库里已被别人改过）→ 也展开，否则卡死在一个禁用的框上
-            var changed = box.dataset.forceReveal === '1' ||
-                (!!src && src.dataset.initialValue !== undefined && src.value.trim() !== src.dataset.initialValue.trim());
-            box.hidden = !changed;
-            box.querySelectorAll('input').forEach(function (inp) {
-                inp.disabled = !changed;
-                if (!changed) { inp.value = ''; }
-            });
+    // V1.3.4 AB-22（UI 稿 G5 / G6）：App 版本更新卡 [data-av-row] 即时校验，口径与 AppVersionConfigService.validate 一致：
+    //   版本号 x.y.z（每段 0~9999、无前导零）→ 最低 ≤ iOS 最新、≤ Android 最新（分端报、带该端版本号）→ 链接须 https://
+    //   → 最低 > 1.0.0 时两个链接都得填（报在空的那一行下）。有错 → 错误贴在出错行下、输入框红边、保存钮禁用（自然不发预检、不弹层）。
+    //   文案全部来自卡上的 data-msg-*（{0} 由这里填）。服务端 422 仍是兜底。
+    var AV_VERSION = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
+    function avCompare(a, b) {
+        var pa = a.split('.'), pb = b.split('.');
+        for (var i = 0; i < 3; i++) {
+            var d = Number(pa[i]) - Number(pb[i]);
+            if (d !== 0) { return d; }
+        }
+        return 0;
+    }
+    function avInvalid(form) {
+        var box = form.querySelector('[data-msg-format]');
+        if (!box || !form.querySelector('[data-av-row]')) { return false; }
+        var val = function (name) { var el = form.querySelector('[name="' + name + '"]'); return el ? (el.value || '').trim() : ''; };
+        var ios = val('iosLatestVersion'), android = val('androidLatestVersion'), min = val('minSupportedVersion');
+        var iosUrl = val('iosStoreUrl'), androidUrl = val('androidStoreUrl');
+        var errs = {};
+        ['iosLatestVersion', 'androidLatestVersion', 'minSupportedVersion'].forEach(function (n) {
+            if (!AV_VERSION.test(val(n))) { errs[n] = box.getAttribute('data-msg-format'); }
         });
+        if (!errs.minSupportedVersion) {
+            if (!errs.iosLatestVersion && avCompare(min, ios) > 0) {
+                errs.minSupportedVersion = (box.getAttribute('data-msg-min-gt-ios') || '').split('{0}').join(ios);
+            } else if (!errs.androidLatestVersion && avCompare(min, android) > 0) {
+                errs.minSupportedVersion = (box.getAttribute('data-msg-min-gt-android') || '').split('{0}').join(android);
+            }
+        }
+        var raised = !errs.minSupportedVersion && AV_VERSION.test(min) && avCompare(min, '1.0.0') > 0;
+        [['iosStoreUrl', iosUrl], ['androidStoreUrl', androidUrl]].forEach(function (p) {
+            if (p[1] !== '' && p[1].indexOf('https://') !== 0) { errs[p[0]] = box.getAttribute('data-msg-scheme'); }
+            else if (p[1] === '' && raised) { errs[p[0]] = box.getAttribute('data-msg-blank'); }
+        });
+        var bad = false;
+        form.querySelectorAll('[data-av-row]').forEach(function (row) {
+            var inp = row.querySelector('input[name]');
+            var err = row.querySelector('[data-row-error]');
+            if (!inp || !err) { return; }
+            var msg = inp.disabled ? null : (errs[inp.name] || null);
+            if (msg) {
+                var text = '⚠ ' + msg;
+                if (err.textContent !== text) { err.textContent = text; }
+                bad = true;
+            }
+            err.hidden = !msg;
+            inp.classList.toggle('is-changed', inp.dataset.initialValue !== undefined && inp.value !== inp.dataset.initialValue);
+            inp.classList.toggle('is-invalid', !!msg);
+            inp.setAttribute('aria-invalid', msg ? 'true' : 'false');
+        });
+        return bad;
     }
     function refresh(form) {
-        reveal(form);
         var dirty = serialize(form) !== form.dataset.initial;
         form.classList.toggle('is-dirty', dirty);
         var save = form.querySelector('[data-save]');
         // 422 之后（data-invalid）保存钮禁用到再次修改（Story 6.3 AC3），dirty 基线不动：改回原值仍算干净、离开页面照提示
         var rowBad = rowsInvalid(form);
+        if (avInvalid(form)) { rowBad = true; }
         if (save) { save.disabled = !dirty || form.dataset.invalid === '1' || rowBad; }
         var flag = form.querySelector('[data-dirty-flag]');
         if (flag) { flag.hidden = !dirty; }
@@ -1107,9 +1154,6 @@ document.addEventListener('change', function (e) {
                     var el = name && form.querySelector('[name="' + name + '"]');
                     if (el) { el.classList.add('is-invalid'); }
                 });
-                if (err.getAttribute('data-code') === 'admin.err.config.version.min-confirm') {
-                    form.querySelectorAll('[data-reveal-when-changed]').forEach(function (box) { box.dataset.forceReveal = '1'; });
-                }
                 form.dataset.invalid = '1'; // 复审 #3：不动 dirty / diff 基线，只用独立标志禁用保存钮
                 refresh(form);
             }
@@ -1120,10 +1164,6 @@ document.addEventListener('change', function (e) {
         document.addEventListener(evt, function (e) {
             var el = e.target;
             if (el && el.classList && el.classList.contains('is-invalid')) { el.classList.remove('is-invalid'); }
-            // AB-22：用户动了源字段 → 撤销 422 带来的强制展开，回到「偏离初值才显示」
-            if (el && el.name && el.form) {
-                el.form.querySelectorAll('[data-reveal-when-changed="' + el.name + '"]').forEach(function (box) { delete box.dataset.forceReveal; });
-            }
             var form = el && el.closest ? el.closest('form[data-config-card]') : null;
             if (form && form.dataset.invalid === '1') { delete form.dataset.invalid; refresh(form); }
         });
@@ -1383,82 +1423,6 @@ document.addEventListener('click', function (e) {
                     .forEach(function (el) { el.classList.add('is-invalid'); first = first || el; });
             });
             if (first && first.scrollIntoView) { first.scrollIntoView({ block: 'center' }); }
-        });
-    });
-})();
-
-// ===== 发送前预估人数门槛（V1.3.4 AB-31 运营通知抽屉）=====
-// form[data-preview-form]：
-// · 「预估人数」按钮的结果落进 [data-preview-slot]，片段里 [data-preview-count] = N；
-//   N > 0 → 门槛隐藏字段 [data-preview-gate]（name=previewCount）置值（它挂 data-requires-text ⇒ 发送钮放开），
-//   并把 N 写进表单的 data-confirm-args（确认框 data-confirm 里的 {0}）；N = 0 或 422 报错 → 门槛清空，发送钮保持禁用。
-// · [data-preview-scope]（人群块）里任何输入变化 → 清掉旧结果 + 门槛清空：人群改了就必须按新条件重新预估，
-//   否则确认框里的「约 N 人」是上一次条件的数。
-// · 🔴 迟到的旧预估不能复活门槛：每次重置把表单的代数 +1，预估请求发出时记下当时的代数（挂在 xhr 上），
-//   回来时代数对不上（期间人群改过）就丢弃不 swap；按钮另挂 hx-sync="this:replace"，新预估顶掉在途旧预估。
-// · 确认框按「发送时间」切换文案：空 → data-confirm-now（{0} = N），填了 → data-confirm-scheduled（{1} = WIB 时间）。
-// 体验护栏不是安全边界：服务端按 previewCount 重算比对（AdminOpsNotifyService 预估闸），这里只保证「没看到人数就发不出去」。
-(function () {
-    function gen(form) { return form.__previewGen || 0; }
-    function syncConfirm(form) {
-        var gate = form.querySelector('[data-preview-gate]');
-        var n = gate ? gate.value : '';
-        var at = form.querySelector('[name="scheduledAt"]');
-        var when = at && at.value ? at.value.replace('T', ' ') : '';
-        var tpl = when ? form.getAttribute('data-confirm-scheduled') : form.getAttribute('data-confirm-now');
-        if (tpl) { form.setAttribute('data-confirm', tpl); }
-        if (n) { form.setAttribute('data-confirm-args', when ? n + '|' + when : n); } else { form.removeAttribute('data-confirm-args'); }
-    }
-    function setGate(form, n) {
-        var gate = form.querySelector('[data-preview-gate]');
-        if (!gate) { return; }
-        gate.value = n > 0 ? String(n) : '';
-        syncConfirm(form);
-        // 冒泡一个 input，让 data-requires-form 的同步逻辑重算发送钮（门槛不在 scope 内，不会触发下面的重置）
-        gate.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    function reset(e) {
-        var t = e.target;
-        if (t && t.name === 'scheduledAt') {
-            var f = t.closest ? t.closest('form[data-preview-form]') : null;
-            if (f) { syncConfirm(f); }
-            return;
-        }
-        var scope = t && t.closest ? t.closest('[data-preview-scope]') : null;
-        var form = scope ? scope.closest('form[data-preview-form]') : null;
-        if (!form) { return; }
-        form.__previewGen = gen(form) + 1;
-        var slot = form.querySelector('[data-preview-slot]');
-        if (slot) { slot.innerHTML = ''; }
-        setGate(form, 0);
-    }
-    function previewTarget(e) {
-        var t = e.detail && e.detail.target;
-        if (!t || !t.hasAttribute || !t.hasAttribute('data-preview-slot')) { return null; }
-        return t.closest('form[data-preview-form]');
-    }
-    function stale(e, form) {
-        var xhr = e.detail && e.detail.xhr;
-        return !xhr || xhr.__previewGen !== gen(form);
-    }
-    document.addEventListener('input', reset);
-    document.addEventListener('change', reset);
-    document.addEventListener('DOMContentLoaded', function () {
-        document.body.addEventListener('htmx:beforeRequest', function (e) {
-            var form = previewTarget(e);
-            if (form && e.detail.xhr) { e.detail.xhr.__previewGen = gen(form); }
-        });
-        // 本监听注册晚于文件头的 422 放行，后执行：旧代数的结果（含 422）一律不 swap
-        document.body.addEventListener('htmx:beforeSwap', function (e) {
-            var form = previewTarget(e);
-            if (form && stale(e, form)) { e.detail.shouldSwap = false; }
-        });
-        document.body.addEventListener('htmx:afterSwap', function (e) {
-            var form = previewTarget(e);
-            if (!form) { return; }
-            if (stale(e, form)) { return; }
-            var c = e.detail.target.querySelector('[data-preview-count]');
-            setGate(form, c ? (parseInt(c.getAttribute('data-preview-count'), 10) || 0) : 0);
         });
     });
 })();

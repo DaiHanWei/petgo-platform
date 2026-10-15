@@ -37,7 +37,10 @@ class AdminRoleSeedParityTest extends ApiIntegrationTest {
                     .map(AdminRolePermission::getPermissionCode).toList();
             assertThat(inDb).as(role + " 表内码集合 ≠ 迁移前快照")
                     .containsExactlyInAnyOrderElementsOf(e.getValue());
-            assertThat(inDb).doesNotContain(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST);
+            assertThat(inDb).doesNotContain(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST)
+                    // V1.3.4 返工清单 §1：四个新码不在任何 SYSTEM 角色下
+                    .doesNotContain(AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
+                            AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND);
             assertThat(inDb).allSatisfy(c -> assertThat(AdminPermissions.isValid(c)).isTrue());
         }
         assertThat(roles.findByCode("OPS_MANAGER")).as("OPS_MANAGER 不迁移（D-13）").isEmpty();

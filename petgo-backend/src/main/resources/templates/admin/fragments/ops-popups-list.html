@@ -1,87 +1,88 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <!--
-  运营弹窗列表片段（V1.3.4 AB-30）。rows — 表格 + 空态；done — 处置成功（整表 oob + toast）。
-  列：缩略图 · 名称 · 状态（启用 / 停用）+ 阶段（未开始 / 进行中 / 已结束，由时间窗现算）· 时间窗（WIB）·
-      优先级 · 人群 · 频次 · 跳转。
-  🔴 阶段与 App 候选过滤同一份判定（ScheduleWindow），只有「启用 + 进行中」的才可能弹出 ——
-     两个徽标并排显示，运营才分得清「我启用了为什么没弹」是没到时间还是已过期。
+  运营弹窗列表片段（V1.3.4 AB-30；按后台返工清单 §3 对齐 UI 稿 H1 / H2）。rows — 汇总条 + 表格 + 空态；done — 处置成功（整表 oob + toast）。
+  汇总四格（进行中 / 未开始 / 已结束 / 已停用）不受筛选影响；一条弹窗都没有时不出汇总条（H2）。
+  列：图片 · 名称 · 状态 · 生效时间（WIB）· 频次 · 目标人群 · 优先级 · 操作。
+  状态合一（§0-1）：DISABLED → 已停用；否则按时间窗现算（与 App 候选过滤同一份判定 ScheduleWindow）。
+  行内文字链接按状态出现：编辑（全部）/ 停用（进行中、未开始）/ 启用（已停用）/ 删除（未开始且从未曝光，§0-2）。
+  停用 / 启用 / 删除先 hx-get 服务端确认弹层（H8 / H9 / H10）到 #confirm-host；拉不到时红字落在列表上方 #ops-popup-row-error。
+  点行（或「编辑」）打开右侧抽屉（tr[data-drawer-url]，admin-drawer.js）。不展示曝光 / 点击数（走 PostHog）。
 -->
 <body>
 <th:block th:fragment="rows">
+    <div class="opsp-sum" th:if="${totalCount > 0}">
+        <div class="opsp-sum-item" th:each="s : ${states}">
+            <div class="k" th:text="#{'admin.opsPopups.state.' + ${s}}">进行中</div>
+            <div class="v" th:text="${counts.get(s)}">1</div>
+        </div>
+    </div>
     <table th:if="${!#lists.isEmpty(popups)}" class="opsp-table">
         <thead><tr>
-            <th th:text="#{admin.opsPopups.col.image}">图片</th>
+            <th class="opsp-col-img" th:text="#{admin.opsPopups.col.image}">图片</th>
             <th th:text="#{admin.opsPopups.col.name}">名称</th>
             <th th:text="#{admin.opsPopups.col.status}">状态</th>
-            <th th:text="#{admin.opsPopups.col.window}">时间窗（WIB）</th>
-            <th class="s-col-num" th:text="#{admin.opsPopups.col.priority}">优先级</th>
-            <th th:text="#{admin.opsPopups.col.audience}">人群</th>
+            <th th:text="#{admin.opsPopups.col.window}">生效时间（WIB）</th>
             <th th:text="#{admin.opsPopups.col.frequency}">频次</th>
-            <th th:text="#{admin.opsPopups.col.target}">跳转</th>
-            <th class="s-col-act" th:text="#{admin.common.actions}">操作</th>
+            <th th:text="#{admin.opsPopups.col.audience}">目标人群</th>
+            <th th:text="#{admin.opsPopups.col.priority}">优先级</th>
+            <th th:text="#{admin.common.actions}">操作</th>
         </tr></thead>
         <tbody>
-        <tr th:each="p : ${popups}" th:id="'ops-popup-row-' + ${p.token}">
-            <td>
-                <!-- 与 App 同一套换算；拼不出 URL（CDN 未配）显示提示而不是裂图 -->
-                <img th:if="${p.imageUrl != null}" th:src="${p.imageUrl}" alt="" class="opsp-thumb"/>
-                <span th:if="${p.imageUrl == null}" class="err" th:text="#{admin.opsPopups.urlUnresolved}">图片地址拼不出来</span>
-                <div th:if="${p.hasEnImage}" class="muted opsp-sub" th:text="#{admin.opsPopups.hasEnImage}">另有英文图</div>
+        <tr th:each="p : ${popups}" th:id="'ops-popup-row-' + ${p.token}"
+            th:attr="data-id=${p.token},data-drawer-url=@{/admin/ops-popups(open=${p.token})}">
+            <td class="opsp-col-img">
+                <!-- 与 App 同一套换算；拼不出 URL（CDN 未配）显示灰底占位而不是裂图 -->
+                <span class="opsp-thumb"><img th:if="${p.imageUrl != null}" th:src="${p.imageUrl}" alt=""/></span>
             </td>
-            <td th:text="${p.name}">双十一大促</td>
-            <td>
-                <span class="badge" th:classappend="${p.active} ? 'badge-ok' : 'badge-muted'"
-                      th:text="${p.active} ? #{admin.opsPopups.status.ACTIVE} : #{admin.opsPopups.status.DISABLED}">停用</span>
-                <span class="badge" th:classappend="${p.phase == 'ACTIVE'} ? 'badge-info'
-                         : (${p.phase == 'PENDING'} ? 'badge-warn' : 'badge-neutral')"
-                      th:text="#{'admin.opsPopups.phase.' + ${p.phase}}">进行中</span>
+            <td th:text="${p.name}">周末猫粮 8 折</td>
+            <td><span class="badge" th:classappend="${p.state == 'RUNNING'} ? 'badge-ok'
+                         : (${p.state == 'PENDING'} ? 'badge-info' : (${p.state == 'DISABLED'} ? 'badge-danger' : 'badge-muted'))"
+                      th:text="#{'admin.opsPopups.state.' + ${p.state}}">进行中</span></td>
+            <td class="opsp-window" th:text="${p.window}">10/10 00:00 – 10/13 23:59</td>
+            <td th:text="#{'admin.opsPopups.frequency.' + ${p.frequency}}">每天最多一次</td>
+            <td th:switch="${p.audience}">
+                <span th:case="'NEW'" th:text="#{admin.opsPopups.audienceList.NEW(${p.newUserDays})}">新用户（7 天内）</span>
+                <span th:case="'OLD'" th:text="#{admin.opsPopups.audienceList.OLD(${p.newUserDays})}">老用户（7 天以上）</span>
+                <span th:case="*" th:text="#{admin.opsPopups.audience.ALL}">全部用户</span>
             </td>
-            <td class="opsp-window">
-                <span th:text="${@adminTime.fmt(p.startsAt)}">2026-11-01 00:00</span>
-                <span class="muted">→</span>
-                <span th:if="${p.endsAt != null}" th:text="${@adminTime.fmt(p.endsAt)}">2026-11-12 00:00</span>
-                <span th:if="${p.endsAt == null}" class="muted" th:text="#{admin.opsPopups.noEnd}">长期有效</span>
-            </td>
-            <td class="s-col-num" th:text="${p.priority}">0</td>
-            <td>
-                <span th:text="#{'admin.opsPopups.audience.' + ${p.audience}}">全部用户</span>
-                <div th:if="${p.audience != 'ALL'}" class="muted opsp-sub"
-                     th:text="#{admin.opsPopups.newUserDaysShort(${p.newUserDays})}">分界 7 天</div>
-            </td>
-            <td th:text="#{'admin.opsPopups.frequency.' + ${p.frequency}}">每人一次</td>
-            <td th:insert="~{admin/fragments/ops-target-fields :: summary(${p.targetType}, ${p.targetValue})}"></td>
-            <td class="s-col-act">
-                <!-- 只读账号也能点开看详情（抽屉里全部禁用、无保存钮）；写操作按钮只给 config.edit -->
-                <button type="button" class="btn btn-sm btn-neutral" data-drawer-res="ops-popup"
+            <td class="opsp-num" th:text="${p.priority}">20</td>
+            <td class="opsp-acts">
+                <button type="button" class="opsp-lnk" data-drawer-res="ops-popup"
                         th:attr="data-drawer-open=@{/admin/ops-popups(open=${p.token})}"
-                        th:text="${canEdit} ? #{admin.opsPopups.btn.edit} : #{admin.opsPopups.btn.view}">编辑</button>
-                <form class="inline" th:if="${canEdit and !p.active}"
-                      th:attr="hx-post=@{/admin/ops-popups/{t}/activate(t=${p.token})}"
-                      hx-target="#ops-popup-row-error" hx-swap="innerHTML">
-                    <button class="btn btn-sm btn-primary" type="submit"
-                            th:text="#{admin.opsPopups.btn.activate}">启用</button>
-                </form>
-                <form class="inline" th:if="${canEdit and p.active}"
-                      th:attr="hx-post=@{/admin/ops-popups/{t}/deactivate(t=${p.token})},data-confirm=#{admin.opsPopups.confirmDeactivate}"
-                      hx-target="#ops-popup-row-error" hx-swap="innerHTML">
-                    <button class="btn btn-sm btn-neutral" type="submit"
-                            th:text="#{admin.opsPopups.btn.deactivate}">停用</button>
-                </form>
+                        th:text="#{admin.opsPopups.btn.edit}">编辑</button>
+                <button type="button" class="opsp-lnk dg" th:if="${p.canDeactivate}"
+                        th:attr="hx-get=@{/admin/ops-popups/{t}/confirm/deactivate(t=${p.token})}"
+                        hx-include="#ops-popup-filters" hx-target="#ops-popup-row-error" hx-swap="innerHTML"
+                        th:text="#{admin.opsPopups.btn.deactivate}">停用</button>
+                <button type="button" class="opsp-lnk" th:if="${p.canActivate}"
+                        th:attr="hx-get=@{/admin/ops-popups/{t}/confirm/activate(t=${p.token})}"
+                        hx-include="#ops-popup-filters" hx-target="#ops-popup-row-error" hx-swap="innerHTML"
+                        th:text="#{admin.opsPopups.btn.activate}">启用</button>
+                <button type="button" class="opsp-lnk dg" th:if="${p.canDelete}"
+                        th:attr="hx-get=@{/admin/ops-popups/{t}/confirm/delete(t=${p.token})}"
+                        hx-include="#ops-popup-filters" hx-target="#ops-popup-row-error" hx-swap="innerHTML"
+                        th:text="#{admin.opsPopups.btn.delete}">删除</button>
             </td>
         </tr>
         </tbody>
     </table>
-    <div class="empty" th:if="${#lists.isEmpty(popups)}">
+    <div class="empty opsp-empty" th:if="${totalCount == 0}">
         <span class="empty-emoji">🪧</span>
-        <p th:text="#{admin.opsPopups.empty}">还没有配置任何运营弹窗。</p>
+        <p th:text="#{admin.opsPopups.empty}">还没有任何运营弹窗。</p>
+        <button type="button" class="btn btn-primary btn-sm" data-drawer-res="ops-popup"
+                th:attr="data-drawer-open=@{/admin/ops-popups(create=1)}"
+                th:text="#{admin.opsPopups.btn.add}">＋ 新建弹窗</button>
+    </div>
+    <div class="empty opsp-empty" th:if="${totalCount > 0 and #lists.isEmpty(popups)}">
+        <p th:text="#{admin.opsPopups.emptyFiltered}">没有符合条件的弹窗。</p>
     </div>
 </th:block>
 
 <!--
-  处置成功。列表走 oob：抽屉表单的 hx-target 是抽屉里的错误槽，行按钮的 hx-target 是列表上方的 #ops-popup-row-error，
-  主 swap 都落不到表格上 —— 列表一律由下面这段 oob 换掉。整表重拉：改优先级会改变行序。
-  主 swap 内容为空：行按钮成功时顺带清掉上次的行内报错；🔴 行按钮不指向抽屉体 —— 那会清掉运营正在另一条上编辑的抽屉。
+  处置成功。列表走 oob：抽屉表单的 hx-target 是表单里的汇总槽，确认弹层表单的 hx-target 是弹层内的错误槽，
+  主 swap 都落不到表格上 —— 列表一律由下面这段 oob 换掉。整表重拉：改优先级 / 状态会改变行序与汇总。
+  主 swap 内容为空：顺带清掉汇总槽 / 弹层错误槽。🔴 不清抽屉体 —— 那会冲掉运营正在另一条上编辑的内容。
 -->
 <th:block th:fragment="done">
     <!--/* toast 必须多包一层：`beforeend:` oob 搬的是子节点。 */-->

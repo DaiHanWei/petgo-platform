@@ -8,7 +8,8 @@
   🔴 切换类型只是显隐（data-show-when，admin-core.js）：隐藏的那几格同时 disabled 不提交，
      所以「NONE」时根本没有 targetValue 字段，四个同名 targetValue 也只有可见的那一个生效。
   🔴 CATEGORY / APP_PAGE 只给下拉不让手填：值必须是枚举名，手填大小写一错就永远跳不过去。
-  文案键沿用 AB-30 落地时的 admin.opsPopups.*（两页同一套说法）。
+  文案键沿用 AB-30 落地时的 admin.opsPopups.*（两页同一套说法；V1.3.4 返工清单 §3 按 UI 稿改名：商品 / 品类 / App 内页面 / 外部链接 / 无跳转）。
+  两种排布：fields(idp) — 逐行（AB-31 运营通知抽屉）；inline(idp) — 类型 + 值并排一行、类型必填带占位（AB-30 运营弹窗，UI 稿 H4）。
 -->
 <body>
 <th:block th:fragment="fields(idp)">
@@ -57,6 +58,53 @@
             <input th:id="${idp + '-text'}" type="url" class="inp" name="targetValue" maxlength="512" placeholder="https://"
                    th:value="${form.targetType == 'EXTERNAL'} ? ${form.targetValue} : ''"
                    th:disabled="${form.targetType != 'EXTERNAL'}"/>
+        </div>
+    </div>
+</th:block>
+
+<!--/* 单行版（V1.3.4 后台返工清单 §3 · UI 稿 H4，运营弹窗用）：「类型下拉 + 目标值」并排一行，类型必填、无默认 ——
+       首项是占位「请选择跳转类型」（value=""，不选提交即 422 targetTypeRequired）。
+       右格按类型换控件：未选 / 无跳转 → 一个空白只读框占位（无 name，不提交）；其余同上面的 fields。
+       需要宿主 model：form、targetTypes、categories、appPages。 */-->
+<th:block th:fragment="inline(idp)">
+    <div class="opsp-two">
+        <select th:id="${idp + '-ttype'}" class="inp" name="targetType" data-show-switch>
+            <option value="" th:selected="${form.targetType == null or form.targetType == ''}"
+                    th:text="#{admin.opsPopups.form.targetTypePlaceholder}">请选择跳转类型</option>
+            <option th:each="t : ${targetTypes}" th:value="${t}"
+                    th:selected="${form.targetType == t.name()}"
+                    th:text="#{'admin.opsPopups.targetType.' + ${t}}">无跳转</option>
+        </select>
+        <div class="opsp-tval">
+            <div data-show-when="targetType:,NONE"
+                 th:hidden="${form.targetType != null and form.targetType != '' and form.targetType != 'NONE'}">
+                <input type="text" class="inp" readonly tabindex="-1" aria-hidden="true"/>
+            </div>
+            <div data-show-when="targetType:PRODUCT" th:hidden="${form.targetType != 'PRODUCT'}">
+                <input th:id="${idp + '-tproduct'}" type="text" class="inp" name="targetValue" maxlength="32"
+                       th:placeholder="#{admin.opsPopups.form.targetProduct}" placeholder="商品 token"
+                       th:value="${form.targetType == 'PRODUCT'} ? ${form.targetValue} : ''"
+                       th:disabled="${form.targetType != 'PRODUCT'}"/>
+            </div>
+            <div data-show-when="targetType:CATEGORY" th:hidden="${form.targetType != 'CATEGORY'}">
+                <select th:id="${idp + '-tcat'}" class="inp" name="targetValue" th:disabled="${form.targetType != 'CATEGORY'}">
+                    <option th:each="c : ${categories}" th:value="${c}"
+                            th:selected="${form.targetType == 'CATEGORY' and form.targetValue == c.name()}"
+                            th:text="#{'admin.v130.shopProducts.category.' + ${c}}">主粮</option>
+                </select>
+            </div>
+            <div data-show-when="targetType:APP_PAGE" th:hidden="${form.targetType != 'APP_PAGE'}">
+                <select th:id="${idp + '-tpage'}" class="inp" name="targetValue" th:disabled="${form.targetType != 'APP_PAGE'}">
+                    <option th:each="g : ${appPages}" th:value="${g}"
+                            th:selected="${form.targetType == 'APP_PAGE' and form.targetValue == g.name()}"
+                            th:text="#{'admin.opsPopups.appPage.' + ${g}}">首页</option>
+                </select>
+            </div>
+            <div data-show-when="targetType:EXTERNAL" th:hidden="${form.targetType != 'EXTERNAL'}">
+                <input th:id="${idp + '-text'}" type="url" class="inp" name="targetValue" maxlength="512" placeholder="https://"
+                       th:value="${form.targetType == 'EXTERNAL'} ? ${form.targetValue} : ''"
+                       th:disabled="${form.targetType != 'EXTERNAL'}"/>
+            </div>
         </div>
     </div>
 </th:block>

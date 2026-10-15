@@ -95,11 +95,40 @@ class AppVersionConfigServiceTest {
                 "admin.err.config.store-url.scheme");
     }
 
-    /** 只要高于任一端最新版本就拒。 */
+    /** 只要高于任一端最新版本就拒；V1.3.4 返工清单 §2 拆成 iOS / Android 两条，并带出该端最新版本号（UI 稿 G5）。 */
     @Test
-    void minGreaterThanEitherLatest_rejected() {
-        assertRejected(cmd("1.3.3", "1.5.0", "1.4.0", IOS_URL, ANDROID_URL),
-                "admin.err.config.version.min-gt-latest");
+    void minGreaterThanEitherLatest_rejectedPerPlatformWithVersionArg() {
+        assertThatThrownBy(() -> svc.update(cmd("1.3.3", "1.5.0", "1.4.0", IOS_URL, ANDROID_URL), 7L))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.config.version.min-gt-ios-latest");
+                    assertThat(((AppException) e).getMessageArgs()).containsExactly("1.3.3");
+                });
+        assertThatThrownBy(() -> svc.update(cmd("1.5.0", " 1.3.2 ", "1.4.0", IOS_URL, ANDROID_URL), 7L))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.config.version.min-gt-android-latest");
+                    assertThat(((AppException) e).getMessageArgs()).containsExactly("1.3.2");
+                });
+        verify(repo, never()).save(any());
+    }
+
+    /** {@code validate} 只校验、不读写库（后台保存前的确认弹层预检），返回 trim 后的值。 */
+    @Test
+    void validate_checksWithoutTouchingTheRepository() {
+        AppVersionConfigUpdate v = svc.validate(cmd(" 1.3.4 ", "1.3.4", "1.0.0", IOS_URL + " ", ""));
+        assertThat(v).isEqualTo(cmd("1.3.4", "1.3.4", "1.0.0", IOS_URL, ""));
+        assertThatThrownBy(() -> svc.validate(cmd("1.3.4", "1.3.4", "1.1.0", IOS_URL, "")))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.config.store-url.blank"));
+        Mockito.verifyNoInteractions(repo);
+    }
+
+    @Test
+    void compareVersions_isNumericPerSegment() {
+        assertThat(AppVersionConfigService.compareVersions("1.10.0", "1.9.0")).isPositive();
+        assertThat(AppVersionConfigService.compareVersions("1.0.0", "1.2.0")).isNegative();
+        assertThat(AppVersionConfigService.compareVersions("2.0.0", "2.0.0")).isZero();
     }
 
     @Test
@@ -108,12 +137,12 @@ class AppVersionConfigServiceTest {
         assertRejected(cmd("1.3.3", "1.3.3", "1.1.0", IOS_URL, null), "admin.err.config.store-url.blank");
     }
 
-    /** 校验顺序：格式先于链接 scheme，scheme 先于 min-gt-latest，min-gt-latest 先于 blank。 */
+    /** 校验顺序：格式先于链接 scheme，scheme 先于 min-gt-*-latest（iOS 先于 Android），min-gt 先于 blank。 */
     @Test
     void validationOrder() {
         assertRejected(cmd("1.3", "1.3.3", "9.0.0", "http://x", ""), "admin.err.config.version.format");
         assertRejected(cmd("1.3.3", "1.3.3", "9.0.0", "http://x", ""), "admin.err.config.store-url.scheme");
-        assertRejected(cmd("1.3.3", "1.3.3", "9.0.0", "", ""), "admin.err.config.version.min-gt-latest");
+        assertRejected(cmd("1.3.3", "1.3.3", "9.0.0", "", ""), "admin.err.config.version.min-gt-ios-latest");
     }
 
     @Test

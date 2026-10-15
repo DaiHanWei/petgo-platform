@@ -22,6 +22,7 @@ import com.tailtopia.config.repository.SupportContactConfigRepository;
 import com.tailtopia.config.domain.AppVersionConfig;
 import com.tailtopia.config.service.AppVersionConfigService;
 import com.tailtopia.config.service.AppVersionConfigUpdate;
+import com.tailtopia.admin.config.dto.AppVersionChange;
 import com.tailtopia.content.rank.AttributeTemplate;
 import com.tailtopia.admin.config.dto.ShareRewardForm;
 import com.tailtopia.shared.error.AppException;
@@ -521,42 +522,87 @@ public class AdminConfigService {
      * 后台保存 App 版本配置。改完即生效：{@code GET /api/v1/app-version} 每次读库、不加缓存。
      *
      * <p>流程：读当前行 → 五列逐字段 diff（新值先 trim，与 {@link AppVersionConfigService#update} 落库口径一致）
-     * → 无变化直接返回（不写库 / 日志 / 审计，同其它配置卡）→ 最低支持版本有改动时核对确认值
-     * → 委托 {@code update} 校验并写入 → 变更日志 + 审计 {@code CONFIG_UPDATE_APP_VERSION}。同一事务。
+     * → 无变化直接返回（不写库 / 日志 / 审计，同其它配置卡）→ 最低支持版本有改动时：先判权限码
+     * {@code config.app_min_version_edit}（403），再核对确认值（422 min-confirm）→ 委托 {@code update} 校验并写入
+     * → 变更日志 + 审计 {@code CONFIG_UPDATE_APP_VERSION}。同一事务。
      *
-     * <p>🔴 <b>校验不在这里重写</b>：四个错误码（D-17）唯一口径在 {@code AppVersionConfigService.update}，
-     * 本方法只新增「确认值不符」一个码。⚠️ 因 {@code update} 没有只校验不写的入口，确认值核对排在它<b>之前</b>——
-     * 最低版本被改动且未确认时先报 {@code min-confirm}，确认后才轮到格式 / 大小 / 链接校验；
-     * 两者都拦在写库之前，顺序只影响先看到哪条报错。
+     * <p>🔴 <b>校验不在这里重写</b>：格式 / 大小 / 链接的错误码唯一口径在 {@code AppVersionConfigService.validate}。
+     * 页面上「确认弹层输入新版本号」只是体验（V1.3.4 返工清单 §2 · G4），服务端仍按 {@code minConfirm} 判定——
+     * 绕过弹层直接 POST 照样要带对确认值；降回也算改动（防误操作）。
      *
-     * <p>「再输一遍」只在最低版本<b>有改动</b>时要求，降回也算改动（防误操作）：上调它会让低于该版本的
-     * 全部用户冷启动即被强制更新，是本卡唯一不可轻改的字段。
+     * @param canEditMin 调用方是否持有 {@code config.app_min_version_edit}（或超管）；端点本身仍只要求 config.edit
      */
     @Transactional
-    public void updateAppVersion(AppVersionConfigUpdate cmd, String minConfirm, long adminId) {
-        String ios = trimToEmpty(cmd.iosLatestVersion());
-        String android = trimToEmpty(cmd.androidLatestVersion());
-        String min = trimToEmpty(cmd.minSupportedVersion());
-        String iosUrl = trimToEmpty(cmd.iosStoreUrl());
-        String androidUrl = trimToEmpty(cmd.androidStoreUrl());
-
-        AppVersionConfig c = appVersion.current()
-                .orElseThrow(() -> new IllegalStateException("app_version_config 缺失"));
+    public void updateAppVersion(AppVersionConfigUpdate cmd, String minConfirm, boolean canEditMin, long adminId) {
+        AppVersionConfig c = currentAppVersion();
+        AppVersionConfigUpdate t = trimmed(cmd);
         List<ConfigChangeLog> logs = new ArrayList<>();
-        diff(logs, ConfigType.APP_VERSION, "ios_latest_version", c.getIosLatestVersion(), ios, adminId);
-        diff(logs, ConfigType.APP_VERSION, "android_latest_version", c.getAndroidLatestVersion(), android, adminId);
-        diff(logs, ConfigType.APP_VERSION, "min_supported_version", c.getMinSupportedVersion(), min, adminId);
-        diff(logs, ConfigType.APP_VERSION, "ios_store_url", c.getIosStoreUrl(), iosUrl, adminId);
-        diff(logs, ConfigType.APP_VERSION, "android_store_url", c.getAndroidStoreUrl(), androidUrl, adminId);
+        diff(logs, ConfigType.APP_VERSION, "ios_latest_version", c.getIosLatestVersion(), t.iosLatestVersion(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "android_latest_version", c.getAndroidLatestVersion(), t.androidLatestVersion(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "min_supported_version", c.getMinSupportedVersion(), t.minSupportedVersion(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "ios_store_url", c.getIosStoreUrl(), t.iosStoreUrl(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "android_store_url", c.getAndroidStoreUrl(), t.androidStoreUrl(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不审计（update 自身不判无变化，所以必须拦在调它之前）。
         }
-        if (!min.equals(c.getMinSupportedVersion())) {
-            require(min.equals(trimToEmpty(minConfirm)), "最低支持版本有改动，请再输入一遍新版本号确认",
+        if (!t.minSupportedVersion().equals(c.getMinSupportedVersion())) {
+            requireMinPermission(canEditMin);
+            require(t.minSupportedVersion().equals(trimToEmpty(minConfirm)), "最低支持版本有改动，请输入新版本号确认",
                     "admin.err.config.version.min-confirm");
         }
-        appVersion.update(new AppVersionConfigUpdate(ios, android, min, iosUrl, androidUrl), adminId);
+        appVersion.update(t, adminId);
         commit(logs, adminId, "APP_VERSION", "app_version_config");
+    }
+
+    /**
+     * 保存前预检（只校验、不写库；V1.3.4 后台返工清单 §2：确认弹层由服务端渲染，校验不过直接 422、不弹层）。
+     * 校验顺序与 {@link #updateAppVersion} 一致：无改动 → 最低版本权限 → {@code AppVersionConfigService.validate}。
+     *
+     * @return 逐字段改动（非空）
+     */
+    @Transactional(readOnly = true)
+    public List<AppVersionChange> previewAppVersion(AppVersionConfigUpdate cmd, boolean canEditMin) {
+        AppVersionConfig c = currentAppVersion();
+        AppVersionConfigUpdate t = trimmed(cmd);
+        List<AppVersionChange> changes = new ArrayList<>();
+        change(changes, AppVersionChange.IOS_LATEST, c.getIosLatestVersion(), t.iosLatestVersion());
+        change(changes, AppVersionChange.ANDROID_LATEST, c.getAndroidLatestVersion(), t.androidLatestVersion());
+        change(changes, AppVersionChange.MIN_SUPPORTED, c.getMinSupportedVersion(), t.minSupportedVersion());
+        change(changes, AppVersionChange.IOS_STORE_URL, c.getIosStoreUrl(), t.iosStoreUrl());
+        change(changes, AppVersionChange.ANDROID_STORE_URL, c.getAndroidStoreUrl(), t.androidStoreUrl());
+        require(!changes.isEmpty(), "没有改动", "admin.err.config.noChange");
+        if (AppVersionChange.touchesMin(changes)) {
+            requireMinPermission(canEditMin);
+        }
+        appVersion.validate(t);
+        return List.copyOf(changes);
+    }
+
+    private AppVersionConfig currentAppVersion() {
+        return appVersion.current().orElseThrow(() -> new IllegalStateException("app_version_config 缺失"));
+    }
+
+    private static AppVersionConfigUpdate trimmed(AppVersionConfigUpdate cmd) {
+        return new AppVersionConfigUpdate(trimToEmpty(cmd.iosLatestVersion()), trimToEmpty(cmd.androidLatestVersion()),
+                trimToEmpty(cmd.minSupportedVersion()), trimToEmpty(cmd.iosStoreUrl()), trimToEmpty(cmd.androidStoreUrl()));
+    }
+
+    private static void change(List<AppVersionChange> out, String field, String oldVal, String newVal) {
+        String o = oldVal == null ? "" : oldVal;
+        if (!o.equals(newVal)) {
+            out.add(new AppVersionChange(field, o, newVal));
+        }
+    }
+
+    /**
+     * 改「最低支持版本」另需 {@code config.app_min_version_edit}（返工清单 §0-9 / §1）。403 + 码，
+     * 与「采购入库另需编辑进货价权限」（{@code admin.err.inventory.costEditRequired}）同一写法：端点门是 config.edit，字段级再判一道。
+     */
+    private static void requireMinPermission(boolean canEditMin) {
+        if (!canEditMin) {
+            throw AppException.forbidden("修改最低支持版本需要「修改最低支持版本」权限")
+                    .code("admin.err.config.version.min-forbidden");
+        }
     }
 
     private static String trimToEmpty(String s) {

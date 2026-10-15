@@ -312,6 +312,12 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  tomcat:
+    # 🔴 后台「系统通知发送」的指定用户 ID（粘贴 / CSV 读进 textarea）走 x-www-form-urlencoded 整表提交，
+    # Tomcat 默认 max-http-form-post-size=2MB：5 万行 ID（含 CSV 多列、换行转义成 %0D%0A 后会膨胀）超了，
+    # Tomcat 在进 controller 之前就解析失败（丢参 / 报错），运营看不到「过大」这类可读提示。前端文件读取上限 4MB
+    # （AdminOpsNotifyController.MAX_CSV_BYTES），urlencode 后最多约 2.5 倍，这里放到 10MB。
+    max-http-form-post-size: ${SERVER_TOMCAT_MAX_FORM_POST_SIZE:10MB}
   servlet:
     session:
       # Story 1.2 AC6：后台会话闲置 8h 过期（滑动续期）。仅影响会话链（/admin/**）；/api/v1 无状态不受影响。

@@ -51,7 +51,10 @@ class AdminRoleTest {
         assertThat(AdminPermissions.isValid(AdminPermissions.COMMENT_VIRTUAL_POST)).isTrue();
         for (AdminRole role : AdminRole.values()) {
             assertThat(AdminRoleSeedSnapshot.effective(role))
-                    .doesNotContain(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST);
+                    .doesNotContain(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST)
+                    // V1.3.4 返工清单 §1：四个新码同样不预授予任何预置角色（超管隐式拥有）
+                    .doesNotContain(AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
+                            AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND);
         }
     }
 

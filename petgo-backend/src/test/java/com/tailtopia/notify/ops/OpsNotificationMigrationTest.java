@@ -41,4 +41,21 @@ class OpsNotificationMigrationTest {
         assertThat(d).contains("CHECK ((target_type = 'NONE') = (target_value IS NULL))");
         assertThat(d).contains("public_token VARCHAR(32) NOT NULL");
     }
+
+    @Test
+    void countsMigrationAddsNullableColumnsOnly() throws IOException {
+        // V1.3.4 AB-31 返工：新增 ALTER（不改 1107）；三列可空，存量行不受影响
+        Path f = Path.of("src/main/resources/db/migration/V20261015_1209__ops_notification_campaigns_counts.sql");
+        StringBuilder sb = new StringBuilder();
+        for (String line : Files.readString(f, StandardCharsets.UTF_8).split("\n")) {
+            int c = line.indexOf("--");
+            sb.append(c >= 0 ? line.substring(0, c) : line).append(' ');
+        }
+        String d = sb.toString().replaceAll("\\s+", " ");
+        assertThat(d).contains("ADD COLUMN estimated_count INT NULL")
+                .contains("ADD COLUMN planned_count INT NULL")
+                .contains("ADD COLUMN ids_source VARCHAR(8) NULL")
+                .contains("CHECK (ids_source IS NULL OR ids_source IN ('PASTE', 'CSV'))")
+                .doesNotContain("NOT NULL");
+    }
 }

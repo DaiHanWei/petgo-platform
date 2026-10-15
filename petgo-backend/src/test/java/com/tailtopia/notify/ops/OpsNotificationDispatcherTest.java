@@ -88,6 +88,7 @@ class OpsNotificationDispatcherTest {
         when(repo.touchProgress(eq(ID), any())).thenReturn(1);
         when(repo.addFailed(eq(ID), anyInt(), any())).thenReturn(1);
         when(repo.setSkipped(eq(ID), anyInt(), any())).thenReturn(1);
+        when(repo.setPlanned(eq(ID), anyInt(), any())).thenReturn(1);
         when(repo.finish(eq(ID), any(), any())).thenReturn(1);
         campaign(AudienceSpec.all());
         // 通知中心写入：每人一行，title 按语言（与 6.1 同口径），token = "dl" + userId
@@ -120,6 +121,21 @@ class OpsNotificationDispatcherTest {
         ArgumentCaptor<List<OpsRecipient>> cap = ArgumentCaptor.forClass(List.class);
         verify(notificationService, times(expectedCalls)).writeOpsAnnouncements(any(), cap.capture());
         return cap.getAllValues().stream().map(List::size).toList();
+    }
+
+    @Test
+    void plannedCountWrittenAtSendStart() {
+        audienceOf(7);
+        dispatcher.dispatch(ID);
+        verify(repo).setPlanned(ID, 7, NOW);
+    }
+
+    @Test
+    void plannedCountWriteLostMeansStop() {
+        audienceOf(3);
+        when(repo.setPlanned(eq(ID), anyInt(), any())).thenReturn(0);
+        dispatcher.dispatch(ID);
+        verifyNoInteractions(notificationService, pusher);
     }
 
     @Test

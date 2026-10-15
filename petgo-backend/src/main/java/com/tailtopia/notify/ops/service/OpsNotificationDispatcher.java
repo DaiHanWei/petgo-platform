@@ -117,6 +117,11 @@ public class OpsNotificationDispatcher {
         AudienceSpec spec = AudienceSpec.parse(campaign.getAudienceSpec());
         List<OpsRecipient> recipients = audience.resolve(spec, id);
         log.info("运营通知开始发送 campaignId={} recipients={}", id, recipients.size());
+        // 发送中行「已写入 / 计划」的分母（V1.3.4 AB-31 返工）：按实际发送时刻的人群写入
+        if (repo.setPlanned(id, recipients.size(), clock.instant()) == 0) {
+            stopped(id);
+            return;
+        }
 
         if (spec.mode() == AudienceSpec.Mode.IDS) {
             int skipped = (int) Math.max(0L, targets.countByCampaign(id) - recipients.size());

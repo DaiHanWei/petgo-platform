@@ -178,7 +178,9 @@ class AdminMessagesExternalizedTest {
     void everyMessageKeyReferencedByAdminTemplatesExistsInAllLocales() throws IOException {
         Path templates = Path.of("src", "main", "resources", "templates", "admin");
         // #{a.b.c} / #{a.b.c(...)}：key 后面只允许紧跟 } 或 (
-        Pattern literal = Pattern.compile("#\\{([a-zA-Z][a-zA-Z0-9_.]*[a-zA-Z0-9_])\\s*[({]?");
+        // 键里允许连字符（admin.err.config.version.min-gt-ios-latest、admin.flash.ops-notify.* 等）：原正则在 '-' 处截断，
+        // 截出来的半截键（admin.err.config.version.min）当然不在包里 → 误报（V1.3.4 AB-22 返工首次在模板里引用带连字符的键）。
+        Pattern literal = Pattern.compile("#\\{([a-zA-Z][a-zA-Z0-9_.-]*[a-zA-Z0-9_])\\s*[({]?");
         // #{'a.b.' + ${...}}：取单引号里的前缀
         Pattern prefixed = Pattern.compile("#\\{\\s*'([a-zA-Z][a-zA-Z0-9_.]*\\.)'\\s*\\+");
 

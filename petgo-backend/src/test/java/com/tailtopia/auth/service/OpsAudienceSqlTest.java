@@ -155,4 +155,39 @@ class OpsAudienceSqlTest {
                 () -> OpsAudienceSql.count(AudienceSpec.ids(), WIB))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    // ---------- 相对时间键（V1.3.4 后台返工清单 §0-5）----------
+
+    @Test
+    @DisplayName("相对键：created_at / last_active_at >= now − N 天，now 取调用方传入的发送时刻（定时按实际发送时刻圈人群）")
+    void relativeKeysUseNow() {
+        Instant now = Instant.parse("2026-10-15T03:00:00Z");
+        AudienceSpec spec = AudienceSpec.parse("{\"mode\":\"FILTER\",\"registeredWithinDays\":7,"
+                + "\"activeWithinDays\":30}");
+        OpsAudienceSql.Query q = OpsAudienceSql.build(spec, 42L, WIB, now);
+        assertThat(q.sql()).contains(" AND u.created_at >= :regSince").contains(" AND u.last_active_at >= :actSince");
+        assertThat(q.params()).containsEntry("regSince", Instant.parse("2026-10-08T03:00:00Z"))
+                .containsEntry("actSince", Instant.parse("2026-09-15T03:00:00Z"));
+        OpsAudienceSql.Query later = OpsAudienceSql.build(spec, 42L, WIB, now.plusSeconds(86_400));
+        assertThat(later.params().get("regSince")).isEqualTo(Instant.parse("2026-10-09T03:00:00Z"));
+        OpsAudienceSql.Query count = OpsAudienceSql.count(spec, WIB, now);
+        assertThat(count.params()).isEqualTo(q.params());
+    }
+
+    @Test
+    @DisplayName("ID 归类：OK 分支与基础过滤逐条同口径；兽医 / 后台账号 / 停用并入 NOT_FOUND，其余 DELETED / BANNED / VIRTUAL")
+    void classifyIdsMatchesBaseFilter() {
+        String sql = OpsAudienceSql.classifyIds();
+        assertThat(sql).contains("WHEN u.role IS DISTINCT FROM 'USER' THEN 'NOT_FOUND'")
+                .contains("WHEN u.deleted_at IS NOT NULL THEN 'DELETED'")
+                .contains("WHEN u.status IS DISTINCT FROM 'ACTIVE' THEN 'BANNED'")
+                .contains("WHEN u.account_type IS DISTINCT FROM 'REAL' THEN 'VIRTUAL'")
+                .contains("WHEN u.enabled IS NOT TRUE THEN 'NOT_FOUND'")
+                .contains("ELSE 'OK'").contains("u.id IN (:ids)");
+        // 基础过滤五个条件在归类里都有对应的非 OK 分支
+        for (String col : List.of("u.role", "u.account_type", "u.deleted_at", "u.enabled", "u.status")) {
+            assertThat(OpsAudienceSql.BASE_FILTER).contains(col);
+            assertThat(sql).contains(col);
+        }
+    }
 }

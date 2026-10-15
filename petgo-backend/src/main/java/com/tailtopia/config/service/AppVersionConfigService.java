@@ -42,6 +42,21 @@ public class AppVersionConfigService {
 
     @Transactional
     public AppVersionConfig update(AppVersionConfigUpdate cmd, long adminId) {
+        AppVersionConfigUpdate v = validate(cmd);
+        AppVersionConfig cfg = repository.findById(AppVersionConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("app_version_config 缺失"));
+        cfg.apply(v.iosLatestVersion(), v.androidLatestVersion(), v.minSupportedVersion(), v.iosStoreUrl(),
+                v.androidStoreUrl(), Instant.now(), adminId);
+        return repository.save(cfg);
+    }
+
+    /**
+     * 只校验、不写库（V1.3.4 后台返工清单 §2：保存前的确认弹层先走这里，校验不过不弹层）。
+     * 校验顺序与错误码是 {@link #update} 的唯一口径：格式 → 链接 scheme → 最低版本 ≤ iOS 最新 → ≤ Android 最新 → 上调须两链接齐。
+     *
+     * @return trim 后的值（与落库口径一致）
+     */
+    public AppVersionConfigUpdate validate(AppVersionConfigUpdate cmd) {
         String ios = trim(cmd.iosLatestVersion());
         String android = trim(cmd.androidLatestVersion());
         String min = trim(cmd.minSupportedVersion());
@@ -51,18 +66,23 @@ public class AppVersionConfigService {
         require(VERSION.matcher(ios).matches()
                         && VERSION.matcher(android).matches()
                         && VERSION.matcher(min).matches(),
-                "版本号格式不正确，应为 x.y.z", "admin.err.config.version.format");
+                "版本号格式应为 x.y.z", "admin.err.config.version.format");
         require(httpsOrBlank(iosUrl) && httpsOrBlank(androidUrl),
-                "商店链接必须以 https:// 开头", "admin.err.config.store-url.scheme");
-        require(compare(min, ios) <= 0 && compare(min, android) <= 0,
-                "最低支持版本不能高于任一端最新版本", "admin.err.config.version.min-gt-latest");
+                "商店链接须以 https:// 开头", "admin.err.config.store-url.scheme");
+        // 拆 iOS / Android 两条并带出该端最新版本号（UI 稿 G5）：运营一眼看出是哪一端挡住了
+        require(compare(min, ios) <= 0,
+                "最低支持版本不能高于 iOS 最新版本号（" + ios + "）", "admin.err.config.version.min-gt-ios-latest", ios);
+        require(compare(min, android) <= 0,
+                "最低支持版本不能高于 Android 最新版本号（" + android + "）",
+                "admin.err.config.version.min-gt-android-latest", android);
         require(!(compare(min, BASELINE_MIN) > 0 && (iosUrl.isEmpty() || androidUrl.isEmpty())),
-                "上调最低支持版本前，两个商店链接都必须填写", "admin.err.config.store-url.blank");
+                "上调最低支持版本前，须先填写 iOS 与 Android 商店链接", "admin.err.config.store-url.blank");
+        return new AppVersionConfigUpdate(ios, android, min, iosUrl, androidUrl);
+    }
 
-        AppVersionConfig cfg = repository.findById(AppVersionConfig.SINGLETON_ID)
-                .orElseThrow(() -> new IllegalStateException("app_version_config 缺失"));
-        cfg.apply(ios, android, min, iosUrl, androidUrl, Instant.now(), adminId);
-        return repository.save(cfg);
+    /** 两个版本号按数值逐段比较（入参须已通过格式校验）；给后台确认弹层判断上调 / 下调用。 */
+    public static int compareVersions(String a, String b) {
+        return compare(a, b);
     }
 
     private static String trim(String s) {

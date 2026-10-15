@@ -59,6 +59,10 @@ class PlaceCheckinSuccessPage extends ConsumerStatefulWidget {
   /// V1.3.4：从盖章动画页进来时的淡入时长（spec §2 拍板 A：停 0.4s 后约 0.3s 淡出进入成功页）。
   static const Duration ceremonyFadeIn = Duration(milliseconds: 300);
 
+  /// 空白护照本占位的最长时间（ST-07 弱网测试 2026-10-15）：护照重取超过它仍未回来 → 退到简版章面，
+  /// 不再让护照区整片空白（实测弱网下重取 5～17s 无任何提示）。退回后固定在简版，护照晚到也不跳变。
+  static const Duration passportPlaceholderMax = Duration(milliseconds: 1200);
+
   /// 路由页面：刚播过盖章动画（`ceremonyPlayed`）→ 300ms 淡入（动画页被 pushReplacement 替换，
   /// 淡入期间它仍垫在下面，即「动画最终帧 → 成功页」的交叉淡化）；其余（再访 / 兜底）保持默认平台转场。
   /// ⚠️ `app_router.dart` 与测试路由同用它。
@@ -98,6 +102,10 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
   /// V1.3.4 Story 4.3：每个成功页实例只检测一次「第一次打卡」里程碑的当场庆祝（重建 / 返回本页不重复）。
   bool _milestoneChecked = false;
 
+  /// 占位超时（[PlaceCheckinSuccessPage.passportPlaceholderMax]）时护照仍未取回 → 本页固定走简版章面。
+  bool _passportFellBack = false;
+  Timer? _placeholderTimer;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -108,6 +116,12 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
   void initState() {
     super.initState();
     // 刚盖的章要出现在护照里：进页即重取护照（章详情块读它；取到前 / 取不到用简版章面兜底）。
+    _placeholderTimer = Timer(PlaceCheckinSuccessPage.passportPlaceholderMax, () {
+      if (!mounted) return;
+      final stamps = ref.read(petPassportProvider).asData?.value.stamps;
+      final found = stamps?.any((s) => s.placeToken == args.result.placeToken) ?? false;
+      if (!found) setState(() => _passportFellBack = true);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.invalidate(petPassportProvider);
       // V1.3.4 Story 4.3 · AD-19：后端异步达成「第一次打卡」→ 盖在成功页上当场庆祝；没等到交补庆祝兜底。
@@ -120,15 +134,23 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
   }
 
   @override
+  void dispose() {
+    _placeholderTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final r = args.result;
     final passportAsync = ref.watch(petPassportProvider);
-    final passport = passportAsync.asData?.value;
+    final passport = _passportFellBack ? null : passportAsync.asData?.value;
     final stampIndex = passport?.stamps.indexWhere((s) => s.placeToken == r.placeToken) ?? -1;
     // 护照还在取（进页即重取）→ 先放空白护照本占位；只有真的取不到 / 找不到这枚章才退到简版章面。
     // （2026-10-06 动效验收：原先加载期间先闪约 0.8s 简版章面再换成护照本。）
-    final passportPending = stampIndex < 0 && (passportAsync.isLoading || passportAsync.isRefreshing);
+    // ST-07：占位有上限，超时后 [_passportFellBack] 让本页固定走简版章面。
+    final passportPending =
+        !_passportFellBack && stampIndex < 0 && (passportAsync.isLoading || passportAsync.isRefreshing);
     final date = r.visitDate == null ? null : formatDayMonthYear(context, r.visitDate!);
     return Scaffold(
       backgroundColor: AppColors.cream,
