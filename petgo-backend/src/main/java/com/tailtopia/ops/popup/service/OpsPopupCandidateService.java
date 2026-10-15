@@ -149,8 +149,10 @@ public class OpsPopupCandidateService {
      * 图片地址解析（AC3.4）：{@code https://} 且可解析出 host 才原样返回（复用 {@link OpsTargetPolicy#isHttpsUrl}）；
      * {@code http://} 不可用（不下发明文图）；
      * 其余视为公开桶 objectKey，经 {@link ShopImageUrlResolver#publicUrl} 拼 CDN（未配置 → null = 不可用）。
+     *
+     * <p>后台列表缩略图 / 抽屉回显（AB-30）也调这里：后台再写一份换算，就会出现「后台图正常、App 不出图」而看不出来。
      */
-    String resolveImage(String raw) {
+    public String resolveImage(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }

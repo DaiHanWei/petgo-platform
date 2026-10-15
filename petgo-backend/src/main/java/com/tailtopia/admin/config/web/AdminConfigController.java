@@ -8,6 +8,8 @@ import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.admin.config.service.AdminConfigService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.web.HxRequest;
+import com.tailtopia.config.service.AppVersionConfigService;
+import com.tailtopia.config.service.AppVersionConfigUpdate;
 import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
@@ -85,6 +87,13 @@ public class AdminConfigController {
                     "admin.err.config.supportEmailBlank", "email",
                     "admin.err.config.supportEmailInvalid", "email",
                     "admin.err.config.supportEmailTooLong", "email")),
+            // V1.3.4 AB-22 App 版本配置：四个码来自 AppVersionConfigService.update（D-17），min-confirm 是后台确认值
+            "appVersion", json(Map.of(
+                    "admin.err.config.version.format", "iosLatestVersion,androidLatestVersion,minSupportedVersion",
+                    "admin.err.config.version.min-gt-latest", "iosLatestVersion,androidLatestVersion,minSupportedVersion",
+                    "admin.err.config.store-url.scheme", "iosStoreUrl,androidStoreUrl",
+                    "admin.err.config.store-url.blank", "iosStoreUrl,androidStoreUrl",
+                    "admin.err.config.version.min-confirm", "minConfirm")),
             // ⚠️ Map.ofEntries：Map.of 最多 10 对，V1.3.2 Story 4.5 加两渠道后超了。
             "shareReward", json(Map.ofEntries(
                     Map.entry("admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap"),
@@ -123,14 +132,18 @@ public class AdminConfigController {
     private final PlatformConfigService read;
     private final com.tailtopia.share.repository.ShareRewardQuotaStatsRepository shareStats;
     private final AdminConfigService write;
+    /** App 版本配置读（V1.3.4 AB-22）；写经 {@link AdminConfigService#updateAppVersion}。 */
+    private final AppVersionConfigService appVersion;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
     public AdminConfigController(PlatformConfigService read, AdminConfigService write,
             Messages msg,
-            com.tailtopia.share.repository.ShareRewardQuotaStatsRepository shareStats) {
+            com.tailtopia.share.repository.ShareRewardQuotaStatsRepository shareStats,
+            AppVersionConfigService appVersion) {
         this.read = read;
+        this.appVersion = appVersion;
         this.shareStats = shareStats;
         this.write = write;
         this.msg = msg;
@@ -158,6 +171,8 @@ public class AdminConfigController {
         //    （缺行时消费方回退内置值而不是抛），页面这里用 orElse(null) 让模板自行判空。
         // （合并注：充值档位 tiers 由 view() 按 ops 6.2 口径单独设置，这里不再重复放。）
         model.addAttribute("supportContact", read.supportContact().orElse(null));
+        // V1.3.4 AB-22：App 版本配置单行；缺行（理论上不会，迁移带种子）时模板整卡不渲染，同客服卡。
+        model.addAttribute("appVersion", appVersion.current().orElse(null));
         model.addAttribute("shareRewardOverview", shareRewardOverview());
         model.addAttribute("errorFields", ERROR_FIELDS);
     }
@@ -256,6 +271,37 @@ public class AdminConfigController {
         } catch (AppException e) {
             // 🔒 msg.resolve 走的是 AppException 的 code + args，号码本身不在 args 里
             //    （IndonesiaPhone 的 detail 刻意不含输入）——错误提示不会把号码回显出去。
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/config";
+    }
+
+    /**
+     * App 版本配置（V1.3.4 AB-22 · FR-124）：两端最新版本 + 最低支持版本 + 两个商店链接。改完即生效（App 每次冷启动读库）。
+     *
+     * <p>🔴 复用 {@code config.view} / {@code config.edit}，不新增权限码（同客服联系方式卡先例）。
+     * {@code minConfirm} 只在最低支持版本有改动时才有意义（前端改了才显示该输入框），未改时浏览器不提交 ⇒ 非必填；
+     * 服务端是唯一判定点（改了却没确认 / 确认不符 → 422 {@code admin.err.config.version.min-confirm}）。
+     */
+    @PostMapping("/admin/config/app-version")
+    @PreAuthorize(EDIT_AUTH)
+    public String updateAppVersion(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam String iosLatestVersion, @RequestParam String androidLatestVersion,
+            @RequestParam String minSupportedVersion,
+            @RequestParam(defaultValue = "") String iosStoreUrl, @RequestParam(defaultValue = "") String androidStoreUrl,
+            @RequestParam(required = false) String minConfirm,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        AppVersionConfigUpdate cmd = new AppVersionConfigUpdate(iosLatestVersion, androidLatestVersion,
+                minSupportedVersion, iosStoreUrl, androidStoreUrl);
+        if (hx.isHtmx()) {
+            write.updateAppVersion(cmd, minConfirm, admin.getAdminAccountId());
+            return savedCard("cfg-app-version", "config-card-app-version", "admin.flash.config.appVersionSaved",
+                    model, response);
+        }
+        try {
+            write.updateAppVersion(cmd, minConfirm, admin.getAdminAccountId());
+            flash.addFlashAttribute("toast", msg.get("admin.flash.config.appVersionSaved"));
+        } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";

@@ -127,4 +127,32 @@ class OpsAudienceSqlTest {
         assertThat(q.sql()).doesNotContain(" OR u.").doesNotContain(" OR EXISTS");
         assertThat(q.sql().split(" AND ").length).isGreaterThanOrEqualTo(8);
     }
+
+    // ---------- 人数预估（V1.3.4 AB-31）----------
+
+    @Test
+    @DisplayName("计数：ALL / FILTER 与 build 同一段 WHERE、同一组参数，只把选列换成 count(*)，不排序")
+    void countSharesWhereWithBuild() {
+        for (String json : List.of("{\"mode\":\"ALL\"}",
+                "{\"mode\":\"FILTER\",\"registeredFrom\":\"2026-10-01\",\"activeTo\":\"2026-10-12\","
+                        + "\"hasPet\":false,\"species\":[\"DOG\"],\"hasShopOrder\":true,\"hasPhone\":true}")) {
+            AudienceSpec spec = AudienceSpec.parse(json);
+            OpsAudienceSql.Query send = OpsAudienceSql.build(spec, 42L, WIB);
+            OpsAudienceSql.Query count = OpsAudienceSql.count(spec, WIB);
+            String where = send.sql().substring("SELECT u.id, u.locale FROM users u WHERE ".length(),
+                    send.sql().length() - " ORDER BY u.id ASC".length());
+            assertThat(count.sql()).isEqualTo("SELECT count(*) FROM users u WHERE " + where);
+            assertThat(count.params()).isEqualTo(send.params());
+        }
+    }
+
+    @Test
+    @DisplayName("计数：IDS 不走 count(spec)（活动未建、子表无数据），改用 countIds：基础过滤 + u.id IN (:ids)")
+    void countIdsUsesBaseFilterOnly() {
+        assertThat(OpsAudienceSql.countIds())
+                .isEqualTo("SELECT count(*) FROM users u WHERE " + BASE + " AND u.id IN (:ids)");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> OpsAudienceSql.count(AudienceSpec.ids(), WIB))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

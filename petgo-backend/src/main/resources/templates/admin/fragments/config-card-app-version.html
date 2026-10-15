@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · App 版本配置卡（V1.3.4 AB-22 · FR-124）。POST /admin/config/app-version
+  （iosLatestVersion / androidLatestVersion / minSupportedVersion / iosStoreUrl / androidStoreUrl / minConfirm）。
+  App 每次冷启动读 GET /api/v1/app-version（不加缓存），改完即生效。后台 PRD 与 UI 稿不在仓库，按相邻配置卡风格自设计（2026-10-14 拍板）。
+  「再次输入最低支持版本」只在最低版本偏离初值时显示并启用（admin-core.js 的 data-reveal-when-changed）；
+  未显示时输入框 disabled ⇒ 不进 FormData、不进「已修改」比对；显示后也带 data-diff-skip，不进确认弹层复述。服务端仍以 422 min-confirm 兜底。
+  appVersion 为 null（缺行）时整卡不渲染，同客服联系方式卡。
+-->
+<body>
+<th:block th:fragment="card" th:if="${appVersion != null}"
+          th:with="action=@{/admin/config/app-version},hxPost=@{/admin/config/app-version},cardId='cfg-app-version',confirmDiff=true,confirmDiffTitle=#{admin.config.appVersion.confirmTitle},
+                   errorFields=${errorFields?.get('appVersion')},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::app-version-title}, ~{::app-version-form}, #{admin.config.btn.saveAppVersion})}">
+        <h2 class="cfg-title" th:fragment="app-version-title" th:text="#{admin.config.appVersion}">App 版本配置</h2>
+        <div th:fragment="app-version-form">
+            <p class="hint" th:text="#{admin.config.appVersionHint}">版本号格式 x.y.z。App 每次冷启动读取，改完立即生效 —— 不需发版、不需重启。</p>
+            <div class="cfg-grid-2">
+                <label class="field"><span th:text="#{admin.config.appVersion.iosLatest}">iOS 最新版本</span>
+                    <input class="inp field-full" type="text" name="iosLatestVersion" maxlength="20" required
+                           th:value="${appVersion.iosLatestVersion}" th:disabled="${!canEdit}"/>
+                </label>
+                <label class="field"><span th:text="#{admin.config.appVersion.androidLatest}">Android 最新版本</span>
+                    <input class="inp field-full" type="text" name="androidLatestVersion" maxlength="20" required
+                           th:value="${appVersion.androidLatestVersion}" th:disabled="${!canEdit}"/>
+                </label>
+                <label class="field"><span th:text="#{admin.config.appVersion.minSupported}">最低支持版本</span>
+                    <input class="inp field-full" type="text" name="minSupportedVersion" maxlength="20" required
+                           th:value="${appVersion.minSupportedVersion}" th:disabled="${!canEdit}"/>
+                </label>
+                <!--/* 慎改说明：上调最低版本 = 低于它的全部用户冷启动即被强制更新。⚠️ 文案不用「高危」二字（D-8：页面不标红「高危」，AdminConfigTemplateDIntegrationTest 守着） */-->
+                <p class="hint cfg-grid-right" data-risk-note="min-supported" th:text="#{admin.config.appVersion.minRisk}">
+                    ⚠ 慎改：低于该版本的所有用户打开 App 即被强制更新；上调前两个商店链接都必须填写。</p>
+                <label class="field cfg-grid-full" data-reveal-when-changed="minSupportedVersion" hidden th:if="${canEdit}">
+                    <span th:text="#{admin.config.appVersion.minConfirm}">再次输入最低支持版本（确认）</span>
+                    <input class="inp field-full" type="text" name="minConfirm" maxlength="20" autocomplete="off" data-diff-skip disabled/>
+                </label>
+                <label class="field cfg-grid-full"><span th:text="#{admin.config.appVersion.iosStoreUrl}">iOS 商店链接</span>
+                    <input class="inp field-full" type="text" name="iosStoreUrl" maxlength="512" inputmode="url"
+                           th:value="${appVersion.iosStoreUrl}" th:disabled="${!canEdit}"/>
+                </label>
+                <label class="field cfg-grid-full"><span th:text="#{admin.config.appVersion.androidStoreUrl}">Android 商店链接</span>
+                    <input class="inp field-full" type="text" name="androidStoreUrl" maxlength="512" inputmode="url"
+                           th:value="${appVersion.androidStoreUrl}" th:disabled="${!canEdit}"/>
+                </label>
+            </div>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-app-version :: card}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

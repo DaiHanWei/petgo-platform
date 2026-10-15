@@ -101,6 +101,8 @@ class OpsNotificationScannerTest {
         try (Stream<Path> s = Files.walk(root)) {
             List<Path> offenders = s.filter(p -> p.toString().endsWith(".java"))
                     .filter(p -> p.toString().contains("/web/"))
+                    // D-2：后台页面与其写接口归 admin 主题（AB-31 AdminOpsNotifyController），只守本主题不加端点
+                    .filter(p -> !p.toString().contains("/tailtopia/admin/"))
                     .filter(p -> {
                         try {
                             return Files.readString(p, StandardCharsets.UTF_8).contains("OpsNotification");

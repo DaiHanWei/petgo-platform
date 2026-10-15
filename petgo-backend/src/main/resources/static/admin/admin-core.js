@@ -88,7 +88,8 @@ function tailtopiaConfirmDiffMessage(form) {
     var on = form.getAttribute('data-confirm-diff-on') || 'on', off = form.getAttribute('data-confirm-diff-off') || 'off';
     var lines = [];
     form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
-        if (el.type === 'hidden' || el.disabled) { return; }
+        // data-diff-skip：确认用的输入（V1.3.4 AB-22「再次输入最低支持版本」）不是配置值，不复述
+        if (el.type === 'hidden' || el.disabled || el.hasAttribute('data-diff-skip')) { return; }
         var isCheck = el.type === 'checkbox' || el.type === 'radio';
         var cur = isCheck ? (el.checked ? '1' : '0') : el.value;
         var was = el.dataset.initialValue === undefined ? cur : el.dataset.initialValue;
@@ -147,6 +148,8 @@ document.addEventListener('DOMContentLoaded', function () {
         var elt = e.detail && e.detail.elt;
         var form = elt && elt.closest ? elt.closest('form[data-confirm], form[data-confirm-diff]') : null;
         if (!form || !tailtopiaIsHxForm(form)) { return; }
+        // 表单里另有自己 hx-* 的辅助按钮（AB-31「预估人数」）：它不是提交，不该弹表单的「确认发送」
+        if (elt !== form && elt.hasAttribute && elt.hasAttribute('data-no-confirm')) { return; }
         // 钮级 data-confirm（data-confirm-button，见本文件末尾）自己在 click 阶段确认过，这里不重复
         if (e.detail.triggeringEvent && e.detail.triggeringEvent.submitter
                 && e.detail.triggeringEvent.submitter.hasAttribute && e.detail.triggeringEvent.submitter.hasAttribute('data-confirm-button')) { return; }
@@ -661,9 +664,18 @@ function adminUploadError(root, text, selectors) {
     }
 
     function upload(root, file) {
-        var thumbs = root.querySelectorAll('[data-seed-thumb]').length;
-        if (thumbs >= MAX) {
-            window.alert(root.getAttribute('data-msg-limit') || 'max 9 images');
+        // 🔴 在途的也算张数（root._seedPending）：连粘两张 / 一次多选时，第一张还没回来 thumbs 仍是 0，
+        //    只数缩略图就会全部放行，传完一看超了上限（单图控件里出现两张）。
+        var thumbs = root.querySelectorAll('[data-seed-thumb]').length + (root._seedPending || 0);
+        // V1.3.4 AB-30：data-max-images 收紧张数（运营弹窗每种语言只有一张图）；不带的老模板仍按 MAX。
+        var max = parseInt(root.getAttribute('data-max-images') || '', 10) || MAX;
+        if (thumbs >= max) {
+            // 一次多选超额时同一轮只弹一次，不连弹 N 个 alert
+            if (!root._seedLimitAlerted) {
+                root._seedLimitAlerted = true;
+                setTimeout(function () { root._seedLimitAlerted = false; }, 0);
+                window.alert(root.getAttribute('data-msg-limit') || 'max 9 images');
+            }
             return;
         }
         // 🔴 超限的图**根本不发出去**（2026-09-03 stag 回归 P1）。
@@ -685,6 +697,11 @@ function adminUploadError(root, text, selectors) {
         var token = document.querySelector('meta[name="_csrf"]');
         var header = document.querySelector('meta[name="_csrf_header"]');
         if (token && header) { headers[header.content] = token.content; }
+        root._seedPending = (root._seedPending || 0) + 1;
+        var settled = false;
+        function settle() {
+            if (!settled) { settled = true; root._seedPending = Math.max(0, (root._seedPending || 1) - 1); }
+        }
         fetch(root.getAttribute('data-upload-url'), {
             method: 'POST', body: body, headers: headers, credentials: 'same-origin'
         }).then(function (r) {
@@ -705,6 +722,7 @@ function adminUploadError(root, text, selectors) {
                 return { ok: r.ok, status: r.status, body: parsed };
             });
         }).then(function (res) {
+            settle();
             if (status) { status.textContent = ''; }
             if (res.expired) {
                 showError(root, file, root.getAttribute('data-msg-expired') || 'session expired');
@@ -728,6 +746,7 @@ function adminUploadError(root, text, selectors) {
             addThumb(root, res.body);
         }).catch(function () {
             // 网络层就没走通（断网 / 被扩展拦掉）。同样必须出声。
+            settle();
             if (status) { status.textContent = ''; }
             showError(root, file, failedText(root));
         });
@@ -761,15 +780,35 @@ function adminUploadError(root, text, selectors) {
         sync(root);
     });
 
+    // 可编辑：有文件框且没被禁用（:disabled 连祖先 fieldset[disabled] 一并算 —— 只读账号的抽屉就是这么禁的）。
+    function editable(root) {
+        var input = root.querySelector('[data-seed-file]');
+        return !!input && !input.matches(':disabled') && !root.closest('fieldset[disabled]');
+    }
+
+    // 最近操作过的上传控件（点击 / 聚焦 / 拖放落在它里面）。页面上有多个控件时，粘贴只给它。
+    var lastActive = null;
+    function touch(e) {
+        var root = e.target.closest && e.target.closest('[data-seed-uploader]');
+        if (root) { lastActive = root; }
+    }
+    document.addEventListener('pointerdown', touch, true);
+    document.addEventListener('focusin', touch, true);
+    document.addEventListener('drop', touch, true);
+
     // 粘贴上传：剪贴板里有图就直接传（AC2）。
+    // 🔴 多个控件（运营弹窗印尼文 / 英文两张、商品主图 + 图集）时不能一把喂给所有控件 —— 同一张图会同时进两处。
+    //    只给最近操作过的那个；一个都没点过就不传（宁可让运营再点一下，也不猜）。单控件页面行为不变。
     document.addEventListener('paste', function (e) {
-        eachRoot(function (root) {
-            var items = (e.clipboardData && e.clipboardData.items) || [];
-            [].slice.call(items).forEach(function (it) {
-                if (it.kind === 'file' && it.type.indexOf('image/') === 0) {
-                    upload(root, it.getAsFile());
-                }
-            });
+        var roots = [].slice.call(document.querySelectorAll('[data-seed-uploader]'));
+        var root = roots.length === 1 ? roots[0]
+                : (lastActive && document.contains(lastActive) ? lastActive : null);
+        if (!root || !editable(root)) { return; }
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        [].slice.call(items).forEach(function (it) {
+            if (it.kind === 'file' && it.type.indexOf('image/') === 0) {
+                upload(root, it.getAsFile());
+            }
         });
     });
 
@@ -779,13 +818,17 @@ function adminUploadError(root, text, selectors) {
         var t = e.target.closest && e.target.closest('[data-seed-thumb]');
         if (t) { dragging = t; e.dataTransfer.effectAllowed = 'move'; }
     });
+    // 🔴 只在同一个控件内排序：跨控件拖过去等于把印尼文图挪进英文槽（或主图挪进图集），两边隐藏字段都会被改。
+    function sameRoot(a, b) {
+        return a.closest('[data-seed-uploader]') === b.closest('[data-seed-uploader]');
+    }
     document.addEventListener('dragover', function (e) {
         var over = e.target.closest && e.target.closest('[data-seed-thumb]');
-        if (dragging && over) { e.preventDefault(); }
+        if (dragging && over && sameRoot(dragging, over)) { e.preventDefault(); }
     });
     document.addEventListener('drop', function (e) {
         var over = e.target.closest && e.target.closest('[data-seed-thumb]');
-        if (!dragging || !over || over === dragging) { return; }
+        if (!dragging || !over || over === dragging || !sameRoot(dragging, over)) { return; }
         e.preventDefault();
         over.parentNode.insertBefore(dragging, over);
         sync(dragging.closest('[data-seed-uploader]'));
@@ -1005,7 +1048,24 @@ document.addEventListener('change', function (e) {
         });
         return bad;
     }
+    // V1.3.4 AB-22：[data-reveal-when-changed="<字段名>"] —— 该字段偏离初值才显示并启用内含输入（App 版本卡「再次输入最低支持版本」），
+    // 改回初值即隐藏、禁用并清空。⚠️ 必须先于 dirty 比对执行：disabled 的输入不进 FormData，否则改回原值后卡仍算「已修改」。
+    // 体验护栏不是安全边界：确认值是否相符由服务端判定（422 min-confirm）。
+    function reveal(form) {
+        form.querySelectorAll('[data-reveal-when-changed]').forEach(function (box) {
+            var src = form.querySelector('[name="' + box.getAttribute('data-reveal-when-changed') + '"]');
+            // forceReveal：服务端回了 422 min-confirm 而本页认为没改（页面过期，库里已被别人改过）→ 也展开，否则卡死在一个禁用的框上
+            var changed = box.dataset.forceReveal === '1' ||
+                (!!src && src.dataset.initialValue !== undefined && src.value.trim() !== src.dataset.initialValue.trim());
+            box.hidden = !changed;
+            box.querySelectorAll('input').forEach(function (inp) {
+                inp.disabled = !changed;
+                if (!changed) { inp.value = ''; }
+            });
+        });
+    }
     function refresh(form) {
+        reveal(form);
         var dirty = serialize(form) !== form.dataset.initial;
         form.classList.toggle('is-dirty', dirty);
         var save = form.querySelector('[data-save]');
@@ -1047,6 +1107,9 @@ document.addEventListener('change', function (e) {
                     var el = name && form.querySelector('[name="' + name + '"]');
                     if (el) { el.classList.add('is-invalid'); }
                 });
+                if (err.getAttribute('data-code') === 'admin.err.config.version.min-confirm') {
+                    form.querySelectorAll('[data-reveal-when-changed]').forEach(function (box) { box.dataset.forceReveal = '1'; });
+                }
                 form.dataset.invalid = '1'; // 复审 #3：不动 dirty / diff 基线，只用独立标志禁用保存钮
                 refresh(form);
             }
@@ -1057,6 +1120,10 @@ document.addEventListener('change', function (e) {
         document.addEventListener(evt, function (e) {
             var el = e.target;
             if (el && el.classList && el.classList.contains('is-invalid')) { el.classList.remove('is-invalid'); }
+            // AB-22：用户动了源字段 → 撤销 422 带来的强制展开，回到「偏离初值才显示」
+            if (el && el.name && el.form) {
+                el.form.querySelectorAll('[data-reveal-when-changed="' + el.name + '"]').forEach(function (box) { delete box.dataset.forceReveal; });
+            }
             var form = el && el.closest ? el.closest('form[data-config-card]') : null;
             if (form && form.dataset.invalid === '1') { delete form.dataset.invalid; refresh(form); }
         });
@@ -1269,3 +1336,129 @@ document.addEventListener('click', function (e) {
         if (!d.contains(e.target)) { d.removeAttribute('open'); }
     });
 });
+
+// ===== 表单内按下拉值显隐 + 抽屉表单 422 标红（V1.3.4 AB-30 运营弹窗抽屉）=====
+// · select[data-show-switch] 变化时，同表单内 [data-show-when="<字段名>:<值1>,<值2>"] 按当前值显隐；
+//   隐藏的那块里的输入**同时 disabled**（不进 FormData）—— 跳转类型切到 NONE 时 targetValue 根本不提交，
+//   四个同名 targetValue 输入也只有可见的那一个生效。初始显隐由服务端渲染（hidden / disabled），这里只管变化。
+// · form[data-error-fields]（非配置卡；配置卡另有自己的处理）：422 片段落进表单内的 .inline-error-slot 后，
+//   按错误码映射把对应输入（或 [data-error-name] 容器，如上传控件）标红；输入变化即清（上面那条全局监听）。
+// 体验护栏不是安全边界：取值合法性仍在服务端（AdminOpsPopupService + OpsTargetPolicy）。
+(function () {
+    document.addEventListener('change', function (e) {
+        var sel = e.target;
+        if (!sel || !sel.hasAttribute || !sel.hasAttribute('data-show-switch') || !sel.form) { return; }
+        sel.form.querySelectorAll('[data-show-when]').forEach(function (box) {
+            var spec = box.getAttribute('data-show-when');
+            var i = spec.indexOf(':');
+            if (spec.substring(0, i) !== sel.name) { return; }
+            var show = spec.substring(i + 1).split(',').indexOf(sel.value) >= 0;
+            box.hidden = !show;
+            box.querySelectorAll('input, select, textarea').forEach(function (inp) {
+                inp.disabled = !show;
+                if (!show) { inp.classList.remove('is-invalid'); }
+            });
+        });
+    });
+    // 上传控件换图时回填的是容器里的隐藏字段（setAndNotify 会冒泡 input）：清掉容器上的红边
+    document.addEventListener('input', function (e) {
+        var box = e.target && e.target.closest ? e.target.closest('[data-error-name].is-invalid') : null;
+        if (box) { box.classList.remove('is-invalid'); }
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var t = e.detail && e.detail.target;
+            if (!t || !t.classList || !t.classList.contains('inline-error-slot')) { return; }
+            var form = t.closest('form[data-error-fields]');
+            if (!form || form.hasAttribute('data-config-card')) { return; }
+            form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
+            var err = t.querySelector('.inline-error[data-code]');
+            if (!err) { return; }
+            var map = {};
+            try { map = JSON.parse(form.getAttribute('data-error-fields') || '{}'); } catch (ex) { map = {}; }
+            var first = null;
+            (map[err.getAttribute('data-code')] || '').split(',').forEach(function (name) {
+                if (!name) { return; }
+                form.querySelectorAll('[name="' + name + '"]:not([disabled]):not([type="hidden"]), [data-error-name="' + name + '"]')
+                    .forEach(function (el) { el.classList.add('is-invalid'); first = first || el; });
+            });
+            if (first && first.scrollIntoView) { first.scrollIntoView({ block: 'center' }); }
+        });
+    });
+})();
+
+// ===== 发送前预估人数门槛（V1.3.4 AB-31 运营通知抽屉）=====
+// form[data-preview-form]：
+// · 「预估人数」按钮的结果落进 [data-preview-slot]，片段里 [data-preview-count] = N；
+//   N > 0 → 门槛隐藏字段 [data-preview-gate]（name=previewCount）置值（它挂 data-requires-text ⇒ 发送钮放开），
+//   并把 N 写进表单的 data-confirm-args（确认框 data-confirm 里的 {0}）；N = 0 或 422 报错 → 门槛清空，发送钮保持禁用。
+// · [data-preview-scope]（人群块）里任何输入变化 → 清掉旧结果 + 门槛清空：人群改了就必须按新条件重新预估，
+//   否则确认框里的「约 N 人」是上一次条件的数。
+// · 🔴 迟到的旧预估不能复活门槛：每次重置把表单的代数 +1，预估请求发出时记下当时的代数（挂在 xhr 上），
+//   回来时代数对不上（期间人群改过）就丢弃不 swap；按钮另挂 hx-sync="this:replace"，新预估顶掉在途旧预估。
+// · 确认框按「发送时间」切换文案：空 → data-confirm-now（{0} = N），填了 → data-confirm-scheduled（{1} = WIB 时间）。
+// 体验护栏不是安全边界：服务端按 previewCount 重算比对（AdminOpsNotifyService 预估闸），这里只保证「没看到人数就发不出去」。
+(function () {
+    function gen(form) { return form.__previewGen || 0; }
+    function syncConfirm(form) {
+        var gate = form.querySelector('[data-preview-gate]');
+        var n = gate ? gate.value : '';
+        var at = form.querySelector('[name="scheduledAt"]');
+        var when = at && at.value ? at.value.replace('T', ' ') : '';
+        var tpl = when ? form.getAttribute('data-confirm-scheduled') : form.getAttribute('data-confirm-now');
+        if (tpl) { form.setAttribute('data-confirm', tpl); }
+        if (n) { form.setAttribute('data-confirm-args', when ? n + '|' + when : n); } else { form.removeAttribute('data-confirm-args'); }
+    }
+    function setGate(form, n) {
+        var gate = form.querySelector('[data-preview-gate]');
+        if (!gate) { return; }
+        gate.value = n > 0 ? String(n) : '';
+        syncConfirm(form);
+        // 冒泡一个 input，让 data-requires-form 的同步逻辑重算发送钮（门槛不在 scope 内，不会触发下面的重置）
+        gate.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    function reset(e) {
+        var t = e.target;
+        if (t && t.name === 'scheduledAt') {
+            var f = t.closest ? t.closest('form[data-preview-form]') : null;
+            if (f) { syncConfirm(f); }
+            return;
+        }
+        var scope = t && t.closest ? t.closest('[data-preview-scope]') : null;
+        var form = scope ? scope.closest('form[data-preview-form]') : null;
+        if (!form) { return; }
+        form.__previewGen = gen(form) + 1;
+        var slot = form.querySelector('[data-preview-slot]');
+        if (slot) { slot.innerHTML = ''; }
+        setGate(form, 0);
+    }
+    function previewTarget(e) {
+        var t = e.detail && e.detail.target;
+        if (!t || !t.hasAttribute || !t.hasAttribute('data-preview-slot')) { return null; }
+        return t.closest('form[data-preview-form]');
+    }
+    function stale(e, form) {
+        var xhr = e.detail && e.detail.xhr;
+        return !xhr || xhr.__previewGen !== gen(form);
+    }
+    document.addEventListener('input', reset);
+    document.addEventListener('change', reset);
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:beforeRequest', function (e) {
+            var form = previewTarget(e);
+            if (form && e.detail.xhr) { e.detail.xhr.__previewGen = gen(form); }
+        });
+        // 本监听注册晚于文件头的 422 放行，后执行：旧代数的结果（含 422）一律不 swap
+        document.body.addEventListener('htmx:beforeSwap', function (e) {
+            var form = previewTarget(e);
+            if (form && stale(e, form)) { e.detail.shouldSwap = false; }
+        });
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var form = previewTarget(e);
+            if (!form) { return; }
+            if (stale(e, form)) { return; }
+            var c = e.detail.target.querySelector('[data-preview-count]');
+            setGate(form, c ? (parseInt(c.getAttribute('data-preview-count'), 10) || 0) : 0);
+        });
+    });
+})();

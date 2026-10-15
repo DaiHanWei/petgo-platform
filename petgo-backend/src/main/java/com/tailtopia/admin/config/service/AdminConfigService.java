@@ -19,6 +19,9 @@ import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
 import com.tailtopia.config.repository.SupportContactConfigRepository;
+import com.tailtopia.config.domain.AppVersionConfig;
+import com.tailtopia.config.service.AppVersionConfigService;
+import com.tailtopia.config.service.AppVersionConfigUpdate;
 import com.tailtopia.content.rank.AttributeTemplate;
 import com.tailtopia.admin.config.dto.ShareRewardForm;
 import com.tailtopia.shared.error.AppException;
@@ -47,6 +50,8 @@ public class AdminConfigService {
     private final AdminAuditService audit;
     private final FeedRankConfigRepository feedRankRepo;
     private final SupportContactConfigRepository supportContactRepo;
+    /** App 版本配置（V1.3.4 AB-22）：校验与写入归 app 主题的服务（AD-1），本类只管 diff / 日志 / 审计。 */
+    private final AppVersionConfigService appVersion;
 
     /** 启用档位上限（AB-22A：活动调档最多 4 档；表上无约束，服务层数 + advisory 锁串行）。 */
     public static final int MAX_ENABLED_TIERS = 4;
@@ -60,9 +65,10 @@ public class AdminConfigService {
     public AdminConfigService(PricingConfigRepository pricingRepo, PawCoinConfigRepository pawcoinRepo,
             PawCoinTopupTierRepository tierRepo, ConfigChangeLogRepository changeLogs,
             AdminAuditService audit, FeedRankConfigRepository feedRankRepo,
-            SupportContactConfigRepository supportContactRepo) {
+            SupportContactConfigRepository supportContactRepo, AppVersionConfigService appVersion) {
         this.feedRankRepo = feedRankRepo;
         this.supportContactRepo = supportContactRepo;
+        this.appVersion = appVersion;
         this.pricingRepo = pricingRepo;
         this.pawcoinRepo = pawcoinRepo;
         this.tierRepo = tierRepo;
@@ -442,10 +448,13 @@ public class AdminConfigService {
     private static final int MAX_WHATSAPP_LEN = 20;
 
     /**
-     * {@code config_change_logs.old_value} / {@code new_value} 的列宽（V78，VARCHAR(64)）。
+     * 客服邮箱的长度闸 = {@code config_change_logs.old_value} / {@code new_value} 的<b>原</b>列宽（V78，VARCHAR(64)）。
      *
-     * <p>🔴 任何要写进变更日志的配置值都受它约束 —— 比字段自己那张表的列宽更紧时，
-     * 以它为准，否则保存时炸的是审计写入而不是业务校验（500 而不是 422）。
+     * <p>🔴 写进变更日志的值不得超过日志列宽，否则保存时炸的是审计写入而不是业务校验（500 而不是 422）；
+     * 现列宽见下条。
+     *
+     * <p>⚠️ V1.3.4 AB-22 的 V20261014_2304 已把两列加宽到 VARCHAR(512)（商店链接要整条记进日志）。
+     * 客服邮箱这道 64 闸<b>刻意保留</b>：放宽属于客服卡的行为变更，不随版本配置卡顺手改。
      */
     private static final int MAX_CHANGE_LOG_VALUE_LEN = 64;
 
@@ -504,6 +513,54 @@ public class AdminConfigService {
         // commit 拼出的审计 action 自动是 CONFIG_UPDATE_SUPPORT_CONTACT —— 不需要在
         // AuditActions 加常量，与既有 PRICING / PAWCOIN 一致。
         commit(logs, adminId, "SUPPORT_CONTACT", "support_contact_config");
+    }
+
+    // ── App 版本配置（V1.3.4 AB-22 · FR-124）────────────────────────────────
+
+    /**
+     * 后台保存 App 版本配置。改完即生效：{@code GET /api/v1/app-version} 每次读库、不加缓存。
+     *
+     * <p>流程：读当前行 → 五列逐字段 diff（新值先 trim，与 {@link AppVersionConfigService#update} 落库口径一致）
+     * → 无变化直接返回（不写库 / 日志 / 审计，同其它配置卡）→ 最低支持版本有改动时核对确认值
+     * → 委托 {@code update} 校验并写入 → 变更日志 + 审计 {@code CONFIG_UPDATE_APP_VERSION}。同一事务。
+     *
+     * <p>🔴 <b>校验不在这里重写</b>：四个错误码（D-17）唯一口径在 {@code AppVersionConfigService.update}，
+     * 本方法只新增「确认值不符」一个码。⚠️ 因 {@code update} 没有只校验不写的入口，确认值核对排在它<b>之前</b>——
+     * 最低版本被改动且未确认时先报 {@code min-confirm}，确认后才轮到格式 / 大小 / 链接校验；
+     * 两者都拦在写库之前，顺序只影响先看到哪条报错。
+     *
+     * <p>「再输一遍」只在最低版本<b>有改动</b>时要求，降回也算改动（防误操作）：上调它会让低于该版本的
+     * 全部用户冷启动即被强制更新，是本卡唯一不可轻改的字段。
+     */
+    @Transactional
+    public void updateAppVersion(AppVersionConfigUpdate cmd, String minConfirm, long adminId) {
+        String ios = trimToEmpty(cmd.iosLatestVersion());
+        String android = trimToEmpty(cmd.androidLatestVersion());
+        String min = trimToEmpty(cmd.minSupportedVersion());
+        String iosUrl = trimToEmpty(cmd.iosStoreUrl());
+        String androidUrl = trimToEmpty(cmd.androidStoreUrl());
+
+        AppVersionConfig c = appVersion.current()
+                .orElseThrow(() -> new IllegalStateException("app_version_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.APP_VERSION, "ios_latest_version", c.getIosLatestVersion(), ios, adminId);
+        diff(logs, ConfigType.APP_VERSION, "android_latest_version", c.getAndroidLatestVersion(), android, adminId);
+        diff(logs, ConfigType.APP_VERSION, "min_supported_version", c.getMinSupportedVersion(), min, adminId);
+        diff(logs, ConfigType.APP_VERSION, "ios_store_url", c.getIosStoreUrl(), iosUrl, adminId);
+        diff(logs, ConfigType.APP_VERSION, "android_store_url", c.getAndroidStoreUrl(), androidUrl, adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计（update 自身不判无变化，所以必须拦在调它之前）。
+        }
+        if (!min.equals(c.getMinSupportedVersion())) {
+            require(min.equals(trimToEmpty(minConfirm)), "最低支持版本有改动，请再输入一遍新版本号确认",
+                    "admin.err.config.version.min-confirm");
+        }
+        appVersion.update(new AppVersionConfigUpdate(ios, android, min, iosUrl, androidUrl), adminId);
+        commit(logs, adminId, "APP_VERSION", "app_version_config");
+    }
+
+    private static String trimToEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     // ── 内部 ──────────────────────────────────────────────────────────────────
