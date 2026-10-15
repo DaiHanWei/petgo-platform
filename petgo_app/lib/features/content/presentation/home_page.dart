@@ -16,6 +16,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
+import '../domain/feed_focus.dart';
 import '../domain/feed_item.dart';
 import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
@@ -238,16 +239,24 @@ class HomePage extends ConsumerWidget {
             onRefresh: () => ref.read(feedProvider.notifier).refresh(),
           );
         }
+        final pinnedAsync = ref.watch(pinnedSlotProvider);
         // 访客登录引导卡已下线（不再显示登录/注册按钮）；游客与登录态一致自动翻页浏览。
         return FeedMasonryView(
           header: header,
+          // bug 20261012-586：发布成功页「去 Feed 看」→ 定位刚发的帖。
+          // 🔴 首屏与顶置**都到手**才传：刷新中拿的是旧列表（会误判「没有」提前放弃）；
+          //    顶置晚到会把卡片整体往下推，先滚过去就白滚了。
+          focusItemId: feedAsync.isLoading || pinnedAsync.isLoading
+              ? null
+              : ref.watch(pendingFeedFocusProvider),
+          onFocusHandled: () => ref.read(pendingFeedFocusProvider.notifier).clear(),
           // V1.1.6 Story 16.5：FR-95 的效果归因靠这两个属性。
           // 🔴 rank_mode 由**服务端下发**（state.rankMode）而不是按 category 自己推 ——
           // 降级链级别 4 会让 ALL Tab 也走时间倒序，那对客户端完全无感。
           feedTab: category.analyticsTab,
           rankMode: state.rankMode,
           // 顶置坑位（V1.1.6 Story 4.2）：取数失败或无生效配置 → null → 什么都不渲染。
-          pinned: ref.watch(pinnedSlotProvider).value,
+          pinned: pinnedAsync.value,
           onTapPinned: (item) => context.push('/content/${item.id}'),
           onTapPromo: (promo) => openPromoTarget(context, promo),
           autoLoadMore: true,

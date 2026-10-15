@@ -676,6 +676,30 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findOwnPendingPosts(@Param("authorId") long authorId, Pageable pageable);
 
     /**
+     * 查看者<b>本人</b>在 {@code (since, until]} 内发布的公开帖（bug 20261012-586）——
+     * 已发布与挂起都算，最新在前。
+     *
+     * <p>推荐序首屏把它们插在自然流最前（紧跟顶置位之后），让作者在发布成功页点
+     * 「去 Feed 看」时一眼看到自己刚发的帖，而不是去和全平台内容抢分数。
+     *
+     * <p>🛡 {@code until} 不是摆设：后续页按<b>同一个种子时刻</b>重放本查询来去重，
+     * 种子之后才发的帖首屏没插过，后续页也不该被误排掉。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status IN (com.tailtopia.content.domain.PostStatus.PUBLISHED,
+                               com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.createdAt > :since
+              AND p.createdAt <= :until
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findOwnRecentPosts(@Param("authorId") long authorId,
+            @Param("since") Instant since, @Param("until") Instant until, Pageable pageable);
+
+    /**
      * 近期公开内容的 id（V1.1.6 Story 16.4）—— 供 P95 重算统计互动量分布。
      *
      * <p>🛡 只取 id：这个集合可能有几万条，取整个实体是白搬数据。
