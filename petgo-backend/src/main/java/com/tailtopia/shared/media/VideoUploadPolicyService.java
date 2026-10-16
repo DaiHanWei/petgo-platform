@@ -63,14 +63,23 @@ public class VideoUploadPolicyService {
         if (bucket == null || bucket.isBlank()) {
             throw AppException.mediaCredential("媒体存储未配置，请联系运营");
         }
-        consumeDailyQuota(userId);
+        // host 先算：endpoint 配错（502）时不该白扣当日配额（code review）。
+        String host = hostFor(bucket, props.getOss().getEndpoint());
+        String quotaKey = consumeDailyQuota(userId);
 
         String key = props.getOss().normalizedKeyPrefix()
                 + VIDEO_PREFIX + "/" + userId + "/" + MediaObjectKeys.randomToken() + ".mp4";
         MediaProperties.Video v = props.getVideo();
         Date expiration = Date.from(clock.instant().plusSeconds(v.getUploadTtlSeconds()));
-        AliyunOssClient.PostPolicySignature sig =
-                ossClient.signPostPolicy(expiration, buildConditions(key, v.getMaxBytes()));
+        AliyunOssClient.PostPolicySignature sig;
+        try {
+            sig = ossClient.signPostPolicy(expiration, buildConditions(key, v.getMaxBytes()));
+        } catch (RuntimeException e) {
+            // 签名失败（AK 漏配 / 轮换出错）用户一份策略都没拿到：退回这次计数，
+            // 否则修好配置后仍要等到 WIB 次日才能再申请（code review）。
+            redis.opsForValue().decrement(quotaKey);
+            throw e;
+        }
 
         // 顺序即客户端表单字段顺序（file 由客户端追加在最后）。
         Map<String, String> fields = new LinkedHashMap<>();
@@ -82,7 +91,7 @@ public class VideoUploadPolicyService {
         fields.put("Content-Type", VIDEO_CONTENT_TYPE);
         fields.put("x-oss-object-acl", "private");
         fields.put(AliyunOssClient.FORBID_OVERWRITE_HEADER, "true");
-        return new VideoUploadPolicyResponse(hostFor(bucket, props.getOss().getEndpoint()), key, fields);
+        return new VideoUploadPolicyResponse(host, key, fields);
     }
 
     /** 策略条件（AD-3 六条）。抽成纯函数供 L0 断言 {@code jsonize()}。 */
@@ -103,15 +112,20 @@ public class VideoUploadPolicyService {
         if (!ep.contains("://")) {
             ep = "https://" + ep;
         }
-        URI u = URI.create(ep);
-        if (u.getHost() == null) {
+        URI u;
+        try {
+            u = URI.create(ep);
+        } catch (IllegalArgumentException e) {
+            u = null; // endpoint 写坏了（如 "https://"）同样按「未配置」处理，不冒 500
+        }
+        if (u == null || u.getHost() == null) {
             throw AppException.mediaCredential("媒体存储未配置，请联系运营");
         }
         return u.getScheme() + "://" + bucket + "." + u.getHost();
     }
 
-    /** 当日（WIB）计数 +1，超限抛 429。 */
-    private void consumeDailyQuota(long userId) {
+    /** 当日（WIB）计数 +1，超限抛 429；返回计数 key（签名失败时退回用）。 */
+    private String consumeDailyQuota(long userId) {
         String day = LocalDate.now(clock.withZone(WIB)).format(DAY);
         String k = quotaKey(userId, day);
         Long count = redis.opsForValue().increment(k);
@@ -121,6 +135,7 @@ public class VideoUploadPolicyService {
         if (count != null && count > props.getVideo().getDailyPolicyLimit()) {
             throw AppException.videoUploadQuotaExceeded("今日视频上传次数已用完，请明天再试");
         }
+        return k;
     }
 
     static String quotaKey(long userId, String wibDay) {

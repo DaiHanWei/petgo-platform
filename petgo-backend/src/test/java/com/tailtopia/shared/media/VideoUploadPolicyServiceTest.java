@@ -139,4 +139,21 @@ class VideoUploadPolicyServiceTest {
         assertThatThrownBy(() -> service(BEFORE_WIB_MIDNIGHT).issue(9L)).isInstanceOf(AppException.class);
         verify(ops, never()).increment(anyString());
     }
+
+    /** code review：签名失败（无凭证 / 轮换出错）时退回这次计数，不白扣当日配额。 */
+    @Test
+    void signFailureRefundsQuota() {
+        when(oss.signPostPolicy(any(), any())).thenThrow(AppException.mediaCredential("x"));
+        assertThatThrownBy(() -> service(BEFORE_WIB_MIDNIGHT).issue(9L)).isInstanceOf(AppException.class);
+        verify(ops).increment("rl:media:video-policy:9:20261016");
+        verify(ops).decrement("rl:media:video-policy:9:20261016");
+    }
+
+    /** code review：endpoint 配错时在扣配额之前就失败。 */
+    @Test
+    void badEndpointFailsBeforeCounting() {
+        props.getOss().setEndpoint("https://");
+        assertThatThrownBy(() -> service(BEFORE_WIB_MIDNIGHT).issue(9L)).isInstanceOf(AppException.class);
+        verify(ops, never()).increment(anyString());
+    }
 }
