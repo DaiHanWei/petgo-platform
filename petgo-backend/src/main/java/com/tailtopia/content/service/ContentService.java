@@ -235,6 +235,22 @@ public class ContentService {
         return likes.sumLikesOnOwnPostsByAuthor(authorId);
     }
 
+    /**
+     * 是否<b>仍在审核中</b>的名单外强制审核视频帖（专题线 video Story 3.2，AD-5）：帖子存在、未删、
+     * {@code status=UNDER_REVIEW} 且 {@code review_reason=VIDEO_FORCED}。供审核超时扫描判断「不受人工审核总开关影响」，
+     * 经 service 暴露给 moderation，不让其直读 content 表。
+     *
+     * <p>⚠️ 必须同时判状态与删除态（code review）：作者自删 / 运营下架不会关闭审核队列项，只看 reason
+     * 会让总开关关着时 3 天后对已删帖误发超时通知、重复记违规；审核通过后 reason 也不清。
+     */
+    @Transactional(readOnly = true)
+    public boolean isVideoForcedReview(long postId) {
+        return posts.findById(postId)
+                .map(p -> p.getDeletedAt() == null && p.getStatus() == PostStatus.UNDER_REVIEW
+                        && ContentPost.REVIEW_REASON_VIDEO_FORCED.equals(p.getReviewReason()))
+                .orElse(false);
+    }
+
     /** 内容是否存在且可见（Story 3.7：举报前校验，经 service 暴露给 moderation，不让其直读 content 表）。 */
     @Transactional(readOnly = true)
     public boolean isVisible(long postId) {

@@ -203,7 +203,8 @@ public class ManualReviewService {
                 rejectComment(it, null, AuditActions.CONTENT_REVIEW_TIMED_OUT, ReviewStatus.TIMED_OUT,
                         "评论人工审核超时自动丢弃（队列项 #" + it.getId() + "）");
                 processed++;
-            } else if (postGateEnabled) {
+            } else if (postGateEnabled || contentService.isVideoForcedReview(it.getContentId())) {
+                // 专题线 video Story 3.2（AD-5 / V-40）：名单外视频帖入队不看总开关，超时也不看。
                 Long authorId = postAuthorId(it.getContentId());
                 contentService.discardReview(it.getContentId());
                 notifyPostAuthor(it.getContentId(), NotificationType.CONTENT_REVIEW_TIMED_OUT,

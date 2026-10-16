@@ -447,6 +447,32 @@ class ContentServiceTest {
     }
 
     @Test
+    void isVideoForcedReviewChecksReviewReason() {
+        // 专题线 video Story 3.2：只有 review_reason=VIDEO_FORCED 才算；其他原因 / 不存在 → false。
+        when(posts.findById(71L)).thenReturn(Optional.of(ContentPost.pendingReview(1L, ContentType.DAILY, null, "v",
+                java.util.List.of(), null, null, ContentPost.REVIEW_REASON_VIDEO_FORCED)));
+        when(posts.findById(72L)).thenReturn(Optional.of(ContentPost.pendingReview(1L, ContentType.DAILY, null, "v",
+                java.util.List.of(), null, null, "RISK_HIGH")));
+        when(posts.findById(73L)).thenReturn(Optional.empty());
+        // 已删（作者自删 / 运营下架，队列项仍 PENDING）→ 不算，免得超时扫描误发通知、重复记违规
+        ContentPost deleted = ContentPost.pendingReview(1L, ContentType.DAILY, null, "v",
+                java.util.List.of(), null, null, ContentPost.REVIEW_REASON_VIDEO_FORCED);
+        deleted.softDelete();
+        when(posts.findById(74L)).thenReturn(Optional.of(deleted));
+        // 已审核通过（reason 不清）→ 不算
+        ContentPost approved = ContentPost.pendingReview(1L, ContentType.DAILY, null, "v",
+                java.util.List.of(), null, null, ContentPost.REVIEW_REASON_VIDEO_FORCED);
+        approved.approveReview();
+        when(posts.findById(75L)).thenReturn(Optional.of(approved));
+
+        assertThat(service.isVideoForcedReview(71L)).isTrue();
+        assertThat(service.isVideoForcedReview(72L)).isFalse();
+        assertThat(service.isVideoForcedReview(73L)).isFalse();
+        assertThat(service.isVideoForcedReview(74L)).isFalse();
+        assertThat(service.isVideoForcedReview(75L)).isFalse();
+    }
+
+    @Test
     void nonAuthorCannotDelete() {
         when(posts.findById(5L)).thenReturn(Optional.of(ownedPost(5L, 1L)));
         assertThatThrownBy(() -> service.deleteByAuthor(5L, 999L)).isInstanceOf(AppException.class);
