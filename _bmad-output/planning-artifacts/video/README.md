@@ -13,6 +13,7 @@
 | 运营导出说明 | `官方视频导出规格.md` | 第一期运营在电脑上按此导出 |
 | ② 架构 delta | `architecture-video-delta.md` | **complete**（2026-10-16，AD-1 ~ AD-12，已过架构校验） |
 | ③ epics | `epics-video.md` | **complete**（3 个 Epic / 16 个 Story） |
+| ④ sprint-status | `implementation-artifacts/video/sprint-status-video.yaml` | 已生成（全部 backlog） |
 
 ## 输入与过程文件
 
@@ -25,4 +26,4 @@
 
 1. 第一期不做手机端压缩（决策 V-33）：运营按 `官方视频导出规格.md` 导出，App 只检查规格。压缩库结论（`pro_video_editor`）留给开放会员时用。
 2. ~~架构 delta~~ 已完成。
-3. ~~epics~~ 已完成。下一步：`bmad-check-implementation-readiness` → `bmad-sprint-planning`（产出 `implementation-artifacts/video/sprint-status-video.yaml`）→ 逐个 `bmad-create-story` / `bmad-dev-story`。
+3. ~~epics~~ 已完成。下一步：`bmad-check-implementation-readiness` → ~~sprint-planning~~ 已完成 → 逐个 `bmad-create-story` / `bmad-dev-story`。
