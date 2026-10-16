@@ -341,6 +341,11 @@ void main() {
         // 通知中心两处界面，挂任一单页前缀都会误导。名字由 PRD §4 定死（ops_popup_shown / _tapped / _closed）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'ops_',
+        // 短视频（专题线 video · FR-21 / Story 1.6）。模块是「视频」这件事 —— 发帖页的规格检查 / 上传 / 发布
+        // 与 Epic 2 的播放页、列表卡片曝光都属于它，挂到 publish_ 或 post_ 都只覆盖一半。
+        // ⚠️ 新模块入表。架构 AD-10 表里的事件名（video_spec_check 等）不满足「动作在词尾」，
+        //    按本规则改为 video_spec_check_completed / video_upload_failed / video_publish_succeeded。
+        'video_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[

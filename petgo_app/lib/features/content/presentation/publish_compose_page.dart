@@ -41,7 +41,9 @@ import '../domain/content_type.dart';
 import '../domain/publish_checkin_place.dart';
 import '../domain/image_exposure.dart';
 import '../domain/publish_controller.dart';
+import '../video/video_cover_service.dart';
 import '../video/video_draft_tile.dart';
+import '../video/video_post_repository.dart';
 import '../video/video_picker.dart';
 import '../video/video_spec.dart';
 import '../video/video_spec_error_card.dart';
@@ -56,6 +58,7 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((
   final useCase = ref.read(mediaUploadUseCaseProvider);
   final controller = PublishController(
     repository: ref.read(contentRepositoryProvider),
+    videoRepository: ref.read(videoPostRepositoryProvider),
     uploadOne: (bytes) async {
       final result = await useCase.uploadBytes(
         scope: MediaScope.public,
@@ -320,6 +323,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       _videoSpecError = null;
     });
     final result = await ref.read(videoSpecCheckerProvider).check(path);
+    // FR-21：每次规格检查都报（不带路径 / 文件名）。
+    Analytics.capture('video_spec_check_completed', {
+      'ok': result.ok,
+      'failed_items': result.failures.map((f) => f.name).join(','),
+    });
     if (!mounted) return;
     setState(() => _checkingVideo = false);
     if (!result.ok) {
@@ -338,8 +346,67 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     _onVideoAccepted(draft);
   }
 
-  /// 接入点：视频通过规格检查之后。Story 1.6 在这里抽封面、开始上传。
-  void _onVideoAccepted(VideoDraft draft) {}
+  /// 视频通过规格检查之后（专题线 video Story 1.6）：默认封面（第 1 秒）与视频上传并行开始。
+  void _onVideoAccepted(VideoDraft draft) {
+    final controller = ref.read(publishControllerProvider);
+    unawaited(controller.startVideoUpload());
+    unawaited(() async {
+      final cover = await ref.read(videoCoverServiceProvider).defaultCover(draft);
+      if (!mounted || !identical(controller.video, draft)) return;
+      if (cover == null) {
+        controller.markCoverMissing(); // 取帧失败：等用户从相册选
+      } else {
+        await controller.setVideoCover(cover);
+      }
+    }());
+  }
+
+  /// 从相册换封面（复用现有选图链路：去 EXIF、压缩）→ 缩到短边 720 → 上传。
+  Future<void> _changeCover(PublishController controller) async {
+    final bytes = await ref
+        .read(mediaUploadUseCaseProvider)
+        .pickAndProcess(source: MediaSource.gallery, context: context);
+    if (bytes == null || !mounted) return;
+    final cover = coverToJpeg720(bytes);
+    if (cover == null) return;
+    await controller.setVideoCover(cover);
+  }
+
+  /// 上传中关闭：先确认（AC5）。返回 true = 可以关。
+  Future<bool> _confirmDiscardVideo(PublishController controller, AppLocalizations l10n) async {
+    if (!controller.videoUploading) return true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('videoDiscardDialog'),
+        title: Text(l10n.videoDiscardTitle),
+        content: Text(l10n.videoDiscardBody),
+        actions: [
+          TextButton(
+            key: const ValueKey('videoDiscardKeep'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.videoDiscardKeep),
+          ),
+          TextButton(
+            key: const ValueKey('videoDiscardConfirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.videoDiscardConfirm),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      controller.cancelVideoUpload();
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _close(PublishController controller, AppLocalizations l10n) async {
+    if (await _confirmDiscardVideo(controller, l10n) && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
 
   /// 视频入口 + 检查中 + 不合格提示（专题线 video Story 1.5）。有视频时由 [_imageRow] 显示预览格。
   Widget _videoSection(PublishController controller, AppLocalizations l10n) {
@@ -488,6 +555,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final started = DateTime.now();
     int? id;
     String? blockSlug; // content-text-blocked / content-image-blocked（F10 审核拦截）
+    var videoDenied = false; // 专题线 video：403 video-permission-denied
     try {
       id = await controller.publish(
           idempotencyKey: key, petId: petId, placeCheckinToken: widget.placeCheckinToken);
@@ -495,6 +563,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       final slug = ProblemDetail.fromDioException(e)?.typeSlug;
       if (slug == 'content-text-blocked' || slug == 'content-image-blocked') {
         blockSlug = slug;
+      } else if (slug == 'video-permission-denied') {
+        videoDenied = true;
       }
     }
     // 「审核中」至少展示 ~900ms，避免一闪而过（faithful verifying affordance）。
@@ -602,6 +672,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         '/publish/rejected',
         extra: args.withReasons(reasons),
       ); // → P-39c 被拒
+    } else if (videoDenied) {
+      // 等级在编辑期间被降：留在编辑页、内容保留（AD-9）。
+      setState(() => _reviewing = false);
+      _toast(l10n.videoPermissionDenied);
     } else {
       // 其它失败（网络/图片上传）：退出审核中覆盖层，留在编辑页保留草稿，提示重试。
       setState(() => _reviewing = false);
@@ -649,7 +723,15 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final controller = ref.watch(publishControllerProvider);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => _body(context, l10n, controller),
+      // 专题线 video Story 1.6：视频上传中按系统返回 → 先确认放弃。
+      builder: (context, _) => PopScope(
+        canPop: !controller.videoUploading,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          await _close(controller, l10n);
+        },
+        child: _body(context, l10n, controller),
+      ),
     );
   }
 
@@ -692,7 +774,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                       label: l10n.publishCancel,
                       child: InkWell(
                         key: const ValueKey('publishClose'),
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: () => _close(controller, l10n),
                         customBorder: const CircleBorder(),
                         child: Container(
                           width: 34,
@@ -1242,7 +1324,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     // 专题线 video Story 1.5：媒体互斥 —— 有视频时整块换成视频预览格，不再出现「添加图片」。
     final video = controller.video;
     if (video != null) {
-      return VideoDraftTile(draft: video, onRemove: controller.clearVideo);
+      return VideoDraftTile(
+        draft: video,
+        controller: controller,
+        onRemove: controller.clearVideo,
+        onChangeCover: () => _changeCover(controller),
+      );
     }
     final items = controller.items;
     final showAdd = controller.canAddImage;

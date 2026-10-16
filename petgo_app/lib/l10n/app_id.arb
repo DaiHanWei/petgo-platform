@@ -2621,5 +2621,17 @@
   "videoSpecAudioCodec": "Audio harus AAC (atau tanpa audio).",
   "videoSpecHdr": "Video ini HDR. Matikan HDR saat ekspor.",
   "videoSpecFaststart": "Video belum dioptimalkan untuk web. Aktifkan Web Optimized / faststart saat ekspor.",
-  "videoSpecLocation": "Video berisi lokasi pengambilan. Ekspor ulang tanpa data lokasi."
+  "videoSpecLocation": "Video berisi lokasi pengambilan. Ekspor ulang tanpa data lokasi.",
+  "videoUploading": "Mengunggah {percent}%",
+  "videoUploadFailedRetry": "Gagal mengunggah. Ketuk untuk coba lagi.",
+  "videoUploadCancel": "Batal",
+  "videoCoverChange": "Ganti sampul",
+  "videoCoverPick": "Pilih sampul",
+  "videoCoverFailedRetry": "Gagal mengunggah sampul. Ketuk untuk coba lagi.",
+  "videoDiscardTitle": "Batalkan unggahan?",
+  "videoDiscardBody": "Unggahan akan dihentikan dan isi yang sudah kamu tulis tidak akan disimpan.",
+  "videoDiscardConfirm": "Batalkan",
+  "videoDiscardKeep": "Lanjut menulis",
+  "videoPermissionDenied": "Kamu belum bisa memposting video.",
+  "videoQuotaExceeded": "Kuota unggah video hari ini sudah habis. Coba lagi besok."
 }
