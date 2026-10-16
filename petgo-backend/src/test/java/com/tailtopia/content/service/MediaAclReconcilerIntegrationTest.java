@@ -57,6 +57,9 @@ class MediaAclReconcilerIntegrationTest extends ApiIntegrationTest {
         Mockito.doReturn(true).when(oss).hasCredentials();
         Mockito.doReturn(Optional.of(new AliyunOssClient.ObjectHead("video/mp4", 1000L)))
                 .when(oss).headObject(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+        // code review（1.3）：封面须为私有对象；测试封面视为 VIDEO_COVER 签出的私有图。
+        Mockito.doReturn(Optional.of(true))
+                .when(oss).isObjectPrivate(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
         Mockito.doReturn(true).when(oss)
                 .setObjectAcl(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyBoolean());
     }

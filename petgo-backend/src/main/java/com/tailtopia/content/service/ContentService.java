@@ -660,6 +660,11 @@ public class ContentService {
         if (!vipLevels.canPublishVideo(authorId)) {
             throw AppException.videoPermissionDenied("当前账号不能发布视频");
         }
+        // code review：一个视频对象只能属于一条帖子 —— 否则删其中一条，对账器会把另一条的视频改成私有。
+        // 并发由唯一索引 uq_content_posts_video_object_key 兜底。
+        if (posts.existsByVideoObjectKey(verified.objectKey())) {
+            throw AppException.videoObjectInvalid("视频已被使用，请重新上传");
+        }
         String text = blankToNull(req.text());
         List<String> imageUrls = List.of(req.imageUrls().get(0));
         List<Long> mentionedUserIds = mentions.sanitize(authorId, req.mentionedUserIds());

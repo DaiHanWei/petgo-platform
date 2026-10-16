@@ -753,6 +753,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             + "AND p.mediaAclDesired <> p.mediaAclApplied ORDER BY p.id")
     List<ContentPost> findMediaAclPending(Pageable pageable);
 
+    /** 专题线 video Story 1.3 code review：视频对象是否已被某条帖子使用（唯一索引兜并发）。 */
+    boolean existsByVideoObjectKey(String videoObjectKey);
+
     /**
      * 对账回写（专题线 video Story 1.4 · AD-6）：<b>条件单列 UPDATE</b>，只有「刚应用的就是当前期望」才算完成；
      * 影响 0 行 = desired 在此期间被改了，留到下一轮。

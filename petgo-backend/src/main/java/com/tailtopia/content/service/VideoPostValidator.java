@@ -85,7 +85,7 @@ public class VideoPostValidator {
 
     /**
      * 事务外完整校验（顺序刻意：本地能判死的先判，HEAD 放最后）：
-     * 等级 → 形状 → 视频 key 归属 → 封面归属 → HEAD 视频对象。
+     * 等级 → 形状 → 视频 key 归属 → 封面归属 → HEAD 视频对象 → 封面存在且私有。
      *
      * @return 通过校验的视频（含实际大小），交给事务内的 {@code ContentService.publish}
      */
@@ -111,6 +111,13 @@ public class VideoPostValidator {
         if (!VIDEO_CONTENT_TYPE.equals(ct) || head.contentLength() <= 0
                 || head.contentLength() > props.getVideo().getMaxBytes()) {
             throw AppException.videoObjectInvalid("视频文件不符合要求，请重新上传");
+        }
+        // code review：封面必须存在且是 VIDEO_COVER 签出的私有对象。已公开的图（头像、图文图片、
+        // 已发布视频帖的封面）不能拿来当封面 —— 对账器按帖子改封面 ACL，共用会互相把对方改私有。
+        boolean coverPrivate = ossClient.isObjectPrivate(props.getOss().getPublicBucket(), coverKey)
+                .orElseThrow(() -> AppException.videoObjectInvalid("封面还没有上传完成，请重新上传"));
+        if (!coverPrivate) {
+            throw AppException.videoObjectInvalid("封面无效，请重新上传");
         }
         return new VerifiedVideo(key, head.contentLength());
     }

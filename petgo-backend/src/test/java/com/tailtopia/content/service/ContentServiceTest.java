@@ -860,6 +860,18 @@ class ContentServiceTest {
         verify(manualReviewGate, never()).enqueue(anyLong());
     }
 
+    /** code review：同一个视频对象已被别的帖子使用 → 422，不落库（否则删一条会把另一条的视频改私有）。 */
+    @Test
+    void videoObjectAlreadyUsedIsRejected() {
+        when(vipLevels.canPublishVideo(1L)).thenReturn(true);
+        when(videoTrusted.isTrusted(1L)).thenReturn(true);
+        when(posts.existsByVideoObjectKey(VKEY)).thenReturn(true);
+        assertThatThrownBy(() -> service.publish(1L, videoReq("x"), null, VERIFIED))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.VIDEO_OBJECT_INVALID));
+        verify(posts, never()).save(any());
+    }
+
     @Test
     void videoWithoutOutOfTransactionVerificationIsRejected() {
         when(vipLevels.canPublishVideo(1L)).thenReturn(true);

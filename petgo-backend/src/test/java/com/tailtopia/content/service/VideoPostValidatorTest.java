@@ -49,6 +49,7 @@ class VideoPostValidatorTest {
         when(oss.objectKeyOfPublicUrl(anyString())).thenAnswer(inv ->
                 new AliyunOssClient(props).objectKeyOfPublicUrl(inv.getArgument(0)));
         when(oss.headObject("bkt", KEY)).thenReturn(Optional.of(new AliyunOssClient.ObjectHead("video/mp4", 25_000_000L)));
+        when(oss.isObjectPrivate("bkt", "public/9/cover.jpg")).thenReturn(Optional.of(true));
     }
 
     private static ContentPostCreateRequest req(ContentType type, Long petId, LocalDate date, String checkin,
@@ -161,5 +162,14 @@ class VideoPostValidatorTest {
         expect(ok(v(KEY, 5000, 720, 1280)), ErrorTypes.VIDEO_OBJECT_INVALID);
         when(oss.headObject("bkt", KEY)).thenReturn(Optional.of(new AliyunOssClient.ObjectHead("Video/MP4", 104_857_600L)));
         assertThat(validator.verifyObjects(UID, ok(v(KEY, 5000, 720, 1280))).sizeBytes()).isEqualTo(104_857_600L);
+    }
+
+    /** code review：封面必须存在且是私有对象（VIDEO_COVER 签出的）；已公开的图不能拿来当封面。 */
+    @Test
+    void coverMustExistAndBePrivate() {
+        when(oss.isObjectPrivate("bkt", "public/9/cover.jpg")).thenReturn(Optional.of(false));
+        expect(ok(v(KEY, 5000, 720, 1280)), ErrorTypes.VIDEO_OBJECT_INVALID);
+        when(oss.isObjectPrivate("bkt", "public/9/cover.jpg")).thenReturn(Optional.empty());
+        expect(ok(v(KEY, 5000, 720, 1280)), ErrorTypes.VIDEO_OBJECT_INVALID);
     }
 }

@@ -94,6 +94,9 @@ class VideoPostPublishIntegrationTest extends ApiIntegrationTest {
             }
             return Optional.of(new AliyunOssClient.ObjectHead("video/mp4", 25_000_000L));
         }).when(oss).headObject(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+        // code review（1.3）：封面须为私有对象；测试封面视为 VIDEO_COVER 签出的私有图。
+        Mockito.doReturn(Optional.of(true))
+                .when(oss).isObjectPrivate(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
     }
 
     private User videoUser(boolean inWhitelist) {
@@ -288,6 +291,17 @@ class VideoPostPublishIntegrationTest extends ApiIntegrationTest {
         publish(u.getId(), body(u.getId())).andExpect(status().isCreated());
         vipLevels.setLevel(u.getId(), 1);
         publish(u.getId(), body(u.getId())).andExpect(status().isForbidden());
+        assertThat(postCount(u.getId())).isEqualTo(1);
+    }
+
+    /** code review：同一个视频对象不能发两条帖子（否则删一条会把另一条的视频改私有）。 */
+    @Test
+    void sameVideoObjectCannotBePublishedTwice() throws Exception {
+        User u = videoUser(true);
+        publish(u.getId(), body(u.getId())).andExpect(status().isCreated());
+        publish(u.getId(), body(u.getId()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type", endsWith("video-object-invalid")));
         assertThat(postCount(u.getId())).isEqualTo(1);
     }
 

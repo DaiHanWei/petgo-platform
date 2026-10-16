@@ -146,6 +146,36 @@ public class AliyunOssClient {
     }
 
     /**
+     * 对象 ACL 是否为私有（专题线 video Story 1.3 code review：封面必须是 VIDEO_COVER 签出的私有对象，
+     * 不能拿已公开的图文图片 / 头像充当封面 —— 否则视频帖下架时对账器会把那张图一并改私有）。
+     *
+     * <p>🔴 外网往返 —— 禁止在数据库事务内调用（一致性规则 7）。
+     *
+     * @return empty = 对象不存在；{@code true} = ACL 显式为 private
+     */
+    public java.util.Optional<Boolean> isObjectPrivate(String bucket, String objectKey) {
+        if (!hasCredentials()) {
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储未配置，请联系运营");
+        }
+        OSS client = buildClient();
+        try {
+            com.aliyun.oss.model.ObjectAcl acl = client.getObjectAcl(bucket, stripLeadingSlash(objectKey));
+            return java.util.Optional.of(acl.getPermission() == com.aliyun.oss.model.ObjectPermission.Private);
+        } catch (com.aliyun.oss.OSSException e) {
+            if ("NoSuchKey".equals(e.getErrorCode())) {
+                return java.util.Optional.empty();
+            }
+            log.warn("OSS GetObjectAcl 失败 errorCode={}", e.getErrorCode());
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储暂不可用，请稍后重试");
+        } catch (com.aliyun.oss.ClientException e) {
+            log.warn("OSS GetObjectAcl 客户端异常 errorCode={}", e.getErrorCode());
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储暂不可用，请稍后重试");
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /**
      * 设置对象 ACL（专题线 video Story 1.4：视频与封面的公开 / 私有切换，仅由对账器调用）。L2 真实网络。
      *
      * <p>🔴 外网往返 —— 禁止在数据库事务内调用（一致性规则 7）。
