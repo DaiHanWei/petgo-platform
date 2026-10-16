@@ -36,7 +36,7 @@ development_status:
   # ===== Epic 2：用户能刷到并观看视频 =====
   epic-2: in-progress
   2-1-帖子接口下发视频信息与签名地址: review
-  2-2-视频能力声明与旧版过滤: backlog
+  2-2-视频能力声明与旧版过滤: review
   2-3-列表里的视频卡片: backlog
   2-4-全屏播放页: backlog
   2-5-播放页上的互动: backlog

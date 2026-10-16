@@ -107,29 +107,31 @@ class FeedServiceTest {
     @Test
     void chronoQueryVariesOnlyByViewerId() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
-        service.loadFeed("DAILY", null, null, null);   // 游客
-        service.loadFeed("DAILY", null, 42L, null);    // 登录
+        service.loadFeed("DAILY", null, null, null, true);   // 游客
+        service.loadFeed("DAILY", null, 42L, null, true);    // 登录
 
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.DAILY), eq(false),
                 eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(),
+                org.mockito.ArgumentMatchers.anyBoolean(),
                 any(Pageable.class));
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.DAILY), eq(false),
                 eq(true), eq(42L), eq(false), isNull(), isNull(), eq(false), isNull(),
+                org.mockito.ArgumentMatchers.anyBoolean(),
                 any(Pageable.class));
     }
 
     @Test
     void growthCategoryRequiresPetAndTypeFilter() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
-        service.loadFeed("GROWTH_MOMENT", null, null, null);
+        service.loadFeed("GROWTH_MOMENT", null, null, null, true);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.GROWTH_MOMENT),
-                eq(true), eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(), any(Pageable.class));
+                eq(true), eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     @Test
@@ -140,10 +142,10 @@ class FeedServiceTest {
                 .mapToObj(i -> post(100 - i, ContentType.DAILY, 1L, base.minusSeconds(i), null))
                 .toList();
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(rows);
 
-        FeedPageResponse page = service.loadFeed("DAILY", null, null, null);
+        FeedPageResponse page = service.loadFeed("DAILY", null, null, null, true);
         assertThat(page.items()).hasSize(20);
         assertThat(page.hasMore()).isTrue();
         assertThat(page.nextCursor()).isNotNull();
@@ -157,10 +159,10 @@ class FeedServiceTest {
         List<ContentPost> rows = List.of(
                 post(2L, ContentType.DAILY, 1L, Instant.now(), List.of("https://cdn/a.jpg")));
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(rows);
 
-        FeedPageResponse page = service.loadFeed("DAILY", null, null, null);
+        FeedPageResponse page = service.loadFeed("DAILY", null, null, null, true);
         assertThat(page.items()).hasSize(1);
         assertThat(page.hasMore()).isFalse();
         assertThat(page.nextCursor()).isNull();
@@ -172,12 +174,12 @@ class FeedServiceTest {
     void deletedAuthorAnonymizedInProjection() {
         List<ContentPost> rows = List.of(post(5L, ContentType.DAILY, 9L, Instant.now(), null));
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(rows);
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(9L, AuthorView.anonymized(9L)));
 
-        FeedPageResponse page = service.loadFeed("DAILY", null, null, null);
+        FeedPageResponse page = service.loadFeed("DAILY", null, null, null, true);
         assertThat(page.items().get(0).authorDeleted()).isTrue();
         assertThat(page.items().get(0).authorNickname()).isNull();
         assertThat(page.items().get(0).authorAvatarUrl()).isNull();
@@ -187,28 +189,28 @@ class FeedServiceTest {
     @Test
     void cursorDecodedAndPassedToRepo() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
         Instant ts = Instant.parse("2026-06-01T12:00:00Z");
         String cursor = new FeedCursor(ts, 50L).encode();
 
-        service.loadFeed("DAILY", cursor, null, null);
+        service.loadFeed("DAILY", cursor, null, null, true);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.DAILY), eq(false),
-                eq(false), isNull(), eq(true), eq(ts), eq(50L), eq(false), isNull(), any(Pageable.class));
+                eq(false), isNull(), eq(true), eq(ts), eq(50L), eq(false), isNull(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     @Test
     void loggedInViewerThreadsViewerIdForReporterFilter() {
         // 内容审核 cm-6 §5.4：登录用户 → hasViewer=true + viewerId 透传（后端排除本人已举报的帖）。
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
-        service.loadFeed("DAILY", null, 42L, null);
+        service.loadFeed("DAILY", null, 42L, null, true);
 
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.DAILY), eq(false),
-                eq(true), eq(42L), eq(false), isNull(), isNull(), eq(false), isNull(), any(Pageable.class));
+                eq(true), eq(42L), eq(false), isNull(), isNull(), eq(false), isNull(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     /**
@@ -224,29 +226,29 @@ class FeedServiceTest {
     void feedSurvivesWhenThePinLookupBlowsUp() {
         when(pins.activePin(any(), any())).thenThrow(new IllegalStateException("boom"));
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
-        var page = service.loadFeed("DAILY", null, null, null);
+        var page = service.loadFeed("DAILY", null, null, null, true);
 
         assertThat(page.items()).isEmpty();
         // 降级 = 当作没有顶置继续走：不排除任何内容
         org.mockito.Mockito.verify(posts).findFeed(eq(ContentType.DAILY), eq(false), eq(false),
-                isNull(), eq(false), isNull(), isNull(), eq(false), isNull(), any(Pageable.class));
+                isNull(), eq(false), isNull(), isNull(), eq(false), isNull(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     /** 🛡 **只首屏让位** —— 带游标（后续页）时不查顶置、也不排除。 */
     @Test
     void laterPagesDoNotYieldAtAll() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
-        service.loadFeed("DAILY", new FeedCursor(java.time.Instant.now(), 9L).encode(), null, null);
+        service.loadFeed("DAILY", new FeedCursor(java.time.Instant.now(), 9L).encode(), null, null, true);
 
         org.mockito.Mockito.verifyNoInteractions(pins);
         org.mockito.Mockito.verify(posts).findFeed(any(), any(Boolean.class), any(Boolean.class),
-                any(), eq(true), any(), any(), eq(false), isNull(), any(Pageable.class));
+                any(), eq(true), any(), any(), eq(false), isNull(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     // ── V1.1.6 Story 16.3：ALL Tab 与非 ALL Tab 是两条独立路径 ──────────
@@ -261,10 +263,10 @@ class FeedServiceTest {
     @Test
     void allTabUsesRecommendationPathAndNotTheChronoQuery() {
         List<ContentPost> rows = List.of(post(7L, ContentType.DAILY, 1L, Instant.now(), null));
-        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
                 .thenReturn(rankedPage(rows, "next-token"));
 
-        FeedPageResponse page = service.loadFeed("ALL", null, 5L, "sess-1");
+        FeedPageResponse page = service.loadFeed("ALL", null, 5L, "sess-1", true);
 
         assertThat(page.items()).hasSize(1);
         assertThat(page.nextCursor()).isEqualTo("next-token");
@@ -275,10 +277,10 @@ class FeedServiceTest {
     @Test
     void categoryTabNeverTouchesTheRecommendationPath() {
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
-        service.loadFeed("DAILY", null, 5L, "sess-1");
+        service.loadFeed("DAILY", null, 5L, "sess-1", true);
 
         org.mockito.Mockito.verifyNoInteractions(recommendations);
     }
@@ -291,18 +293,18 @@ class FeedServiceTest {
      */
     @Test
     void level4FallsBackToChronoAndKeepsAllFilters() {
-        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
                 .thenThrow(new IllegalStateException("scoring blew up"));
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of(post(3L, ContentType.DAILY, 1L, Instant.now(), null)));
 
-        FeedPageResponse page = service.loadFeed("ALL", null, 42L, null);
+        FeedPageResponse page = service.loadFeed("ALL", null, 42L, null, true);
 
         assertThat(page.items()).hasSize(1); // 用户拿到内容，不是 500、不是空页
         org.mockito.Mockito.verify(posts).findFeed(isNull(), eq(false),
                 eq(true), eq(42L), // 🛡 举报者/拉黑过滤所依赖的两个参数仍然传下去了
-                eq(false), isNull(), isNull(), eq(false), isNull(), any(Pageable.class));
+                eq(false), isNull(), isNull(), eq(false), isNull(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     /**
@@ -313,11 +315,11 @@ class FeedServiceTest {
      */
     @Test
     void invalidCursorStillFailsInsteadOfSilentlyFallingBack() {
-        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
                 .thenThrow(com.tailtopia.shared.error.AppException.validation("游标无效"));
 
         org.assertj.core.api.Assertions
-                .assertThatThrownBy(() -> service.loadFeed("ALL", "garbage", null, null))
+                .assertThatThrownBy(() -> service.loadFeed("ALL", "garbage", null, null, true))
                 .isInstanceOf(com.tailtopia.shared.error.AppException.class);
         org.mockito.Mockito.verifyNoInteractions(posts);
     }
@@ -329,19 +331,19 @@ class FeedServiceTest {
                 mock(com.tailtopia.content.domain.ContentPin.class);
         when(pin.getContentId()).thenReturn(77L);
         when(pins.activePin(any(), any())).thenReturn(java.util.Optional.of(pin));
-        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
                 .thenReturn(rankedPage(List.of(), null));
 
-        service.loadFeed("ALL", null, null, null);
+        service.loadFeed("ALL", null, null, null, true);
         org.mockito.Mockito.verify(recommendations)
-                .page(isNull(), isNull(), isNull(), eq(FeedService.PAGE_SIZE), eq(77L));
+                .page(isNull(), isNull(), isNull(), eq(FeedService.PAGE_SIZE), eq(77L), org.mockito.ArgumentMatchers.anyBoolean());
 
         // ⚠️ 后续页游标必须是真 rank 格式：ALL Tab 入口有双格式兼容预检，
         //    非 rank 格式的串到不了 recommendations（chrono 会分流走时序、垃圾串 422）。
         String rankCursor = new com.tailtopia.content.rank.FeedRankCursor("s-test-seed", 20).encode();
-        service.loadFeed("ALL", rankCursor, null, null);
+        service.loadFeed("ALL", rankCursor, null, null, true);
         org.mockito.Mockito.verify(recommendations)
-                .page(isNull(), isNull(), eq(rankCursor), eq(FeedService.PAGE_SIZE), isNull());
+                .page(isNull(), isNull(), eq(rankCursor), eq(FeedService.PAGE_SIZE), isNull(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     /**
@@ -352,10 +354,10 @@ class FeedServiceTest {
     void legacyChronoCursorOnAllTabContinuesTheChronoSession() {
         String chronoCursor = new FeedCursor(Instant.now(), 50L).encode();
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
-        FeedPageResponse page = service.loadFeed("ALL", chronoCursor, null, null);
+        FeedPageResponse page = service.loadFeed("ALL", chronoCursor, null, null, true);
 
         assertThat(page.rankMode()).isEqualTo(FeedPageResponse.RANK_MODE_CHRONO);
         org.mockito.Mockito.verifyNoInteractions(recommendations); // 没进推荐链路，直接时序
@@ -368,18 +370,72 @@ class FeedServiceTest {
     @Test
     void level4WithRankCursorFallsBackToChronoFirstPage() {
         String rankCursor = new com.tailtopia.content.rank.FeedRankCursor("s-test-seed", 20).encode();
-        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
                 .thenThrow(new IllegalStateException("redis blew up"));
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
-        FeedPageResponse page = service.loadFeed("ALL", rankCursor, null, null);
+        FeedPageResponse page = service.loadFeed("ALL", rankCursor, null, null, true);
 
         assertThat(page.rankMode()).isEqualTo(FeedPageResponse.RANK_MODE_CHRONO);
         // 降级查询按「无游标首页」发出（第 5 个参数 hasCursor=false）—— rank 游标没被硬塞给 chrono。
         org.mockito.Mockito.verify(posts).findFeed(isNull(), eq(false),
                 eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(),
+                org.mockito.ArgumentMatchers.anyBoolean(),
                 any(Pageable.class));
+    }
+
+    // ── 专题线 video Story 2.2：能力透传与顶置例外 ──────────────────────
+
+    private static ContentPost videoPost(long id) {
+        ContentPost p = post(id, ContentType.DAILY, 5L, Instant.now(), List.of("https://cdn/c.jpg"));
+        p.attachVideo("video/5/k.mp4", 5000, 720, 1280, 10L);
+        return p;
+    }
+
+    /** 旧版（无视频能力）：分类 Tab 把 includeVideo=false 传进 SQL（过滤在查询里，不在内存里）。 */
+    @Test
+    void oldClientPassesIncludeVideoFalseIntoChronoQuery() {
+        when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+                .thenReturn(List.of());
+        service.loadFeed("DAILY", null, null, null, false);
+        org.mockito.Mockito.verify(posts).findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), eq(false), any(Pageable.class));
+    }
+
+    /** 旧版：ALL Tab 把能力传给推荐服务（候选池 / 序列键由它按能力分开）。 */
+    @Test
+    void oldClientPassesIncludeVideoFalseToRecommendation() {
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(),
+                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(rankedPage(List.of(), null));
+        service.loadFeed("ALL", null, null, null, false);
+        org.mockito.Mockito.verify(recommendations).page(isNull(), isNull(), isNull(), eq(FeedService.PAGE_SIZE),
+                isNull(), eq(false));
+    }
+
+    /** AD-7 顶置例外：按 id 取出后判断；旧版遇到视频帖 → 坑位为空，首页也不为它让位。 */
+    @Test
+    void pinnedVideoIsAnEmptySlotForOldClientsAndIsNotYielded() {
+        com.tailtopia.content.domain.ContentPin pin = mock(com.tailtopia.content.domain.ContentPin.class);
+        when(pin.getContentId()).thenReturn(77L);
+        when(pin.getObjectType()).thenReturn(com.tailtopia.content.domain.PinObjectType.CONTENT);
+        when(pins.activePin(any(), any())).thenReturn(java.util.Optional.of(pin));
+        when(posts.findById(77L)).thenReturn(java.util.Optional.of(videoPost(77L)));
+
+        assertThat(service.loadPinnedSlot(com.tailtopia.content.domain.ContentPin.SLOT_HOME_FEED, null, false).pin())
+                .isNull();
+        assertThat(service.loadPinnedSlot(com.tailtopia.content.domain.ContentPin.SLOT_HOME_FEED, null, true).pin())
+                .isNotNull();
+
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(),
+                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(rankedPage(List.of(), null));
+        service.loadFeed("ALL", null, null, null, false);
+        org.mockito.Mockito.verify(recommendations).page(isNull(), isNull(), isNull(), eq(FeedService.PAGE_SIZE),
+                isNull(), eq(false));
+        service.loadFeed("ALL", null, null, null, true);
+        org.mockito.Mockito.verify(recommendations).page(isNull(), isNull(), isNull(), eq(FeedService.PAGE_SIZE),
+                eq(77L), eq(true));
     }
 }

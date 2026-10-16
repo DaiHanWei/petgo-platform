@@ -62,7 +62,7 @@ public class ContentSharePageController {
         // 🛡 **在成功/失效分叉之前报**：失效也是要看的数（见 PostSharePageAnalytics 注释）。
         analytics.linkOpened(visitorId, request);
 
-        Optional<SharedPostResponse> opt = shareService.findSharedPost(shareToken);
+        Optional<SharedPostResponse> opt = shareService.findSharedPost(shareToken, true) /* H5 页：视频帖显示封面 + 升级提示（Story 2.6），不按能力过滤 */;
         if (opt.isEmpty()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             model.addAttribute("downloadUrl", downloadUrl);

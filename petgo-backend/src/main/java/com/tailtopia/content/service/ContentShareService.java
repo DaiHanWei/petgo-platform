@@ -114,13 +114,15 @@ public class ContentShareService {
      * 由调用方收敛到失效页 —— <b>绝不区分原因</b>，否则这个端点就成了内容状态探测器。
      */
     @Transactional(readOnly = true)
-    public Optional<SharedPostResponse> findSharedPost(String shareToken) {
+    public Optional<SharedPostResponse> findSharedPost(String shareToken, boolean includeVideo) {
         return shares.findByShareToken(shareToken)
                 .flatMap(s -> posts.findById(s.getContentPostId()))
                 .filter(p -> p.getDeletedAt() == null)
                 .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
                 .filter(p -> p.getReportHiddenAt() == null)
                 .filter(p -> accounts.isActive(p.getAuthorId()))
+                // 专题线 video Story 2.2（AD-7）：旧版 App 内打开视频帖的分享链接 → 与失效同一个结果（404）。
+                .filter(p -> includeVideo || p.getMediaType() != com.tailtopia.content.domain.MediaType.VIDEO)
                 // 🔴 这里**没有** visibility 过滤，是刻意的（AD-15 Rule 6，见类注释）。
                 .map(this::project);
     }

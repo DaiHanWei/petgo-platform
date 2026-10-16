@@ -65,7 +65,7 @@ class FeedPinnedFollowTest {
     }
 
     private FeedItemResponse pinnedItem(Long viewer) {
-        return service.loadPinnedSlot(ContentPin.SLOT_HOME_FEED, viewer).pin().item();
+        return service.loadPinnedSlot(ContentPin.SLOT_HOME_FEED, viewer, true).pin().item();
     }
 
     @Test

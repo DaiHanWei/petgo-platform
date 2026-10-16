@@ -167,7 +167,7 @@ class UserPublicPostsTest {
     void authorsLikesAndCommentsAreEachFetchedOncePerPage() {
         stubPage(20);
 
-        service.userPublicPosts(AUTHOR, 5L, null);
+        service.userPublicPosts(AUTHOR, 5L, null, true);
 
         verify(accounts, times(1)).findAuthorViews(anyList());
         verify(likes, times(1)).countByPostIdIn(anyList());
@@ -183,7 +183,7 @@ class UserPublicPostsTest {
     void aGuestNeverAsksWhichPostsTheyLiked() {
         stubPage(5);
 
-        service.userPublicPosts(AUTHOR, null, null);
+        service.userPublicPosts(AUTHOR, null, null, true);
 
         verify(likes, never()).findLikedPostIds(anyLong(), anyList());
     }
@@ -193,7 +193,7 @@ class UserPublicPostsTest {
     void anEmptyPageIssuesNoBatchQueriesAtAll() {
         stubPage(0);
 
-        FeedPageResponse page = service.userPublicPosts(AUTHOR, 5L, null);
+        FeedPageResponse page = service.userPublicPosts(AUTHOR, 5L, null, true);
 
         assertThat(page.items()).isEmpty();
         assertThat(page.hasMore()).isFalse();
@@ -209,7 +209,7 @@ class UserPublicPostsTest {
     void aFullPageIsTrimmedAndCarriesTheNextCursor() {
         int pageSize = stubOverflowingPage();
 
-        FeedPageResponse page = service.userPublicPosts(AUTHOR, 5L, null);
+        FeedPageResponse page = service.userPublicPosts(AUTHOR, 5L, null, true);
 
         assertThat(page.items()).hasSize(pageSize);
         assertThat(page.hasMore()).isTrue();
@@ -225,10 +225,10 @@ class UserPublicPostsTest {
         stubPage(0);
         Instant ts = Instant.parse("2026-09-01T10:00:00Z");
 
-        service.userPublicPosts(AUTHOR, 5L, new FeedCursor(ts, 42L).encode());
+        service.userPublicPosts(AUTHOR, 5L, new FeedCursor(ts, 42L).encode(), true);
 
         verify(posts).findPublicPostsByAuthor(eq(AUTHOR), eq(true), eq(5L), eq(true), eq(ts),
-                eq(42L), any(Pageable.class));
+                eq(42L), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     /** 🔴 访客 id 必须**带进查询**（上面那两条排除全靠它）；游客则整段关掉。 */
@@ -236,13 +236,13 @@ class UserPublicPostsTest {
     void theViewerIsHandedToTheQuerySoTheExclusionsCanRun() {
         stubPage(0);
 
-        service.userPublicPosts(AUTHOR, 5L, null);
+        service.userPublicPosts(AUTHOR, 5L, null, true);
         verify(posts).findPublicPostsByAuthor(eq(AUTHOR), eq(true), eq(5L), eq(false), any(),
-                any(), any(Pageable.class));
+                any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
 
-        service.userPublicPosts(AUTHOR, null, null);
+        service.userPublicPosts(AUTHOR, null, null, true);
         verify(posts).findPublicPostsByAuthor(eq(AUTHOR), eq(false), isNull(), eq(false), any(),
-                any(), any(Pageable.class));
+                any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class));
     }
 
     /**
@@ -254,21 +254,21 @@ class UserPublicPostsTest {
     void theProfileGridIsNotAFeedOutletSoItCarriesNoRankMode() {
         stubPage(3);
 
-        assertThat(service.userPublicPosts(AUTHOR, 5L, null).rankMode()).isNull();
+        assertThat(service.userPublicPosts(AUTHOR, 5L, null, true).rankMode()).isNull();
     }
 
     // ===== helpers =====
 
     private void stubPage(int n) {
         when(posts.findPublicPostsByAuthor(anyLong(), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Pageable.class))).thenReturn(rows(n));
+                any(Boolean.class), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class))).thenReturn(rows(n));
     }
 
     /** 造出「比一页多一条」，用来验截断与游标。返回 PAGE_SIZE。 */
     private int stubOverflowingPage() {
         int pageSize = FeedService.PAGE_SIZE;
         when(posts.findPublicPostsByAuthor(anyLong(), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Pageable.class)))
+                any(Boolean.class), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class)))
                 .thenReturn(rows(pageSize + 1));
         return pageSize;
     }

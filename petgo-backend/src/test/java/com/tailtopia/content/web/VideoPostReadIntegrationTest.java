@@ -94,7 +94,8 @@ class VideoPostReadIntegrationTest extends ApiIntegrationTest {
     }
 
     private JsonNode getJson(String path, Long viewer) throws Exception {
-        var req = get(path);
+        // Story 2.2 起不带能力头 = 旧版（看不到视频帖）；本类验的是新版下发形状。
+        var req = get(path).header(com.tailtopia.shared.web.ClientCapabilities.HEADER, "video");
         if (viewer != null) {
             req = req.header(HttpHeaders.AUTHORIZATION, userBearer(viewer));
         }
@@ -155,7 +156,8 @@ class VideoPostReadIntegrationTest extends ApiIntegrationTest {
         assertThat(mine.get("video").get("url").asText()).contains("Signature=");
 
         mvc.perform(get("/api/v1/content-posts/" + id)
-                        .header(HttpHeaders.AUTHORIZATION, userBearer(newUser().getId())))
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(newUser().getId()))
+                        .header(com.tailtopia.shared.web.ClientCapabilities.HEADER, "video"))
                 .andExpect(status().isNotFound());
     }
 
