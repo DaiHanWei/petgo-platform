@@ -47,13 +47,18 @@ public class ContentDetailService {
     /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
 
+    /** 专题线 video Story 2.1：媒体投影（视频地址 / 作者签名地址）。 */
+    private final PostMediaResolver postMedia;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            PostMediaResolver postMedia) {
+        this.postMedia = postMedia;
         this.placeCheckins = placeCheckins;
         this.followReader = followReader;
         this.contentTags = contentTags;
@@ -144,6 +149,7 @@ public class ContentDetailService {
                 ? com.tailtopia.social.read.FollowState.NONE
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace, authorToken, followState);
+                decorations, sizes, mentions, checkinPlace, authorToken, followState,
+                postMedia.resolve(post, viewerId));
     }
 }

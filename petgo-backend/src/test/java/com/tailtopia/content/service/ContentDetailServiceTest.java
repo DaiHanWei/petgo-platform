@@ -66,7 +66,7 @@ class ContentDetailServiceTest {
                 // V1.3.2 Story 1.5：打卡场所条只读口。
                 placeCheckins,
                 // V1.3.4 follow Story 2.1：详情头部关注关系。
-                followReader);
+                followReader, com.tailtopia.content.service.PostMediaFixtures.passthrough());
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);

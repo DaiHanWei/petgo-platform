@@ -83,7 +83,9 @@ public class FeedService {
             ContentTagQueryService contentTags, UserHideRelationReader hideRelations,
             FeedRecommendationService recommendations,
             com.tailtopia.mention.service.MentionViewService mentionViews,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            PostMediaResolver postMedia) {
+        this.postMedia = postMedia;
         this.mentionViews = mentionViews;
         this.followReader = followReader;
         this.posts = posts;
@@ -101,6 +103,9 @@ public class FeedService {
 
     /** V1.3.4 follow Story 2.1：卡片作者的关注关系（只读端口，同 hideRelations 的模块边界）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
+
+    /** 专题线 video Story 2.1：媒体投影（视频地址 / 作者看未公开视频帖时的签名地址）。 */
+    private final PostMediaResolver postMedia;
 
     /**
      * 一页作者的 token 与关注关系（V1.3.4 follow Story 2.1 · AD-6 / AD-16）—— <b>整页各一次查询</b>。
@@ -398,7 +403,8 @@ public class FeedService {
                         com.tailtopia.mention.service.MentionViewService.pick(
                                 p.getMentionedUserIds(), mentions),
                         follow.tokens().get(p.getAuthorId()),
-                        follow.stateOf(p.getAuthorId())))
+                        follow.stateOf(p.getAuthorId()),
+                        postMedia.resolve(p, viewerId)))
                 .toList();
         return new FeedPageResponse(items, nextCursor, hasMore, rankMode);
     }
@@ -465,7 +471,7 @@ public class FeedService {
                 decorationTags(one).get(post.getId()),
                 com.tailtopia.mention.service.MentionViewService.pick(
                         post.getMentionedUserIds(), mentionsFor(one, viewerId)),
-                token, followState);
+                token, followState, postMedia.resolve(post, viewerId));
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
@@ -538,7 +544,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null))
+                        null, null, postMedia.resolve(p, viewerId)))
                 .toList();
 
         String nextCursor = null;
@@ -588,7 +594,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null))
+                        null, null, postMedia.resolve(p, userId)))
                 .toList();
 
         String nextCursor = null;

@@ -40,9 +40,12 @@ public class ContentShareService {
     private final ContentShareRepository shares;
     private final CardTokenGenerator tokenGenerator;
     private final AccountQueryService accounts;
+    /** 专题线 video Story 2.1：媒体投影（分享页匿名 → 公开地址）。 */
+    private final PostMediaResolver postMedia;
 
     public ContentShareService(ContentPostRepository posts, ContentShareRepository shares,
-            CardTokenGenerator tokenGenerator, AccountQueryService accounts) {
+            CardTokenGenerator tokenGenerator, AccountQueryService accounts, PostMediaResolver postMedia) {
+        this.postMedia = postMedia;
         this.posts = posts;
         this.shares = shares;
         this.tokenGenerator = tokenGenerator;
@@ -139,14 +142,7 @@ public class ContentShareService {
         // 注销匿名化也在那一层，本处不重复实现。
         AuthorView author = accounts.findAuthorViews(List.of(post.getAuthorId()))
                 .getOrDefault(post.getAuthorId(), AuthorView.anonymized(post.getAuthorId()));
-        List<String> images = post.getImageUrls() == null ? List.of() : List.copyOf(post.getImageUrls());
-        return new SharedPostResponse(
-                author.nickname(),
-                author.avatarUrl(),
-                author.deleted(),
-                post.getType().name(),
-                post.getText(),
-                images,
-                post.getCreatedAt());
+        // 专题线 video Story 2.1：分享页匿名访问 → 查看者 null，视频恒为公开地址。
+        return SharedPostResponse.of(post, author, postMedia.resolve(post, null));
     }
 }

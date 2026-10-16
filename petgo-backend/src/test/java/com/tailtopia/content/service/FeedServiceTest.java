@@ -68,7 +68,7 @@ class FeedServiceTest {
                         mock(com.tailtopia.auth.service.AccountQueryService.class),
                         mock(com.tailtopia.social.read.UserHideRelationReader.class)),
                 // V1.3.4 follow Story 2.1：作者关注关系（整页一次批量）。
-                followReader);
+                followReader, com.tailtopia.content.service.PostMediaFixtures.passthrough());
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
