@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../mention/domain/mention_draft.dart';
 import '../data/content_repository.dart';
+import '../video/video_spec.dart';
 import 'content_type.dart';
 import 'feed_image_layout.dart';
 import 'image_crop.dart';
@@ -74,6 +75,30 @@ class PublishController extends ChangeNotifier {
   final List<ImageUploadItem> items = <ImageUploadItem>[];
   bool publishing = false;
 
+  /// 已通过规格检查的视频（专题线 video Story 1.5 · AD-9）。与 [items] **互斥**：
+  /// 媒体要么是图片列表，要么是单个视频，不能混发。只存路径，不读进内存（一致性规则 8）。
+  VideoDraft? video;
+
+  /// 还能不能加图：有视频时不能。
+  bool get canAddImage => video == null && items.length < kMaxImages;
+
+  /// 还能不能选视频：已有图片或已有视频时不能。
+  bool get canPickVideo => items.isEmpty && video == null;
+
+  void setVideo(VideoDraft draft) {
+    if (items.isNotEmpty) return;
+    video = draft;
+    // 视频帖只能是日常或科普（FR-10）。
+    if (type == ContentType.growthMoment) type = ContentType.daily;
+    notifyListeners();
+  }
+
+  void clearVideo() {
+    if (video == null) return;
+    video = null;
+    notifyListeners();
+  }
+
   /// 成长日历事件日期（F9）：仅 GROWTH_MOMENT 有意义，决定档案侧显示位置（与发布时间解耦）。
   /// 不可未来——由 UI date picker 与服务端共同守护。
   DateTime? eventDate;
@@ -91,10 +116,14 @@ class PublishController extends ChangeNotifier {
   bool get canPublish =>
       !publishing &&
       !isUploading &&
+      // Story 1.5：视频的上传与发布在 Story 1.6 实现，此前有视频时一律不可发布。
+      video == null &&
       textWithinLimit &&
       (text.trim().isNotEmpty || items.isNotEmpty);
 
   void setType(ContentType t) {
+    // 已选视频时「成长日记」不可选（FR-5）。
+    if (video != null && t == ContentType.growthMoment) return;
     type = t;
     // 切到 Moment / Tips 时把开关复位为默认开启：它们不渲染开关，若残留 false
     // 会让「看不见的开关」偷偷把公开内容发成私密。
@@ -126,7 +155,7 @@ class PublishController extends ChangeNotifier {
   /// 加入一张待传图片（≤9）。返回是否成功加入。
   /// [cropOffset]：露出区域页给的露出位置（仅超界图）；字节原样入列，不裁不重编码。
   bool addImage(Uint8List bytes, {double? cropOffset}) {
-    if (items.length >= kMaxImages) return false;
+    if (items.length >= kMaxImages || video != null) return false;
     // 只读文件头，不整张解码 —— 9 张图各解一遍会让加图这一步明显卡顿。
     items.add(ImageUploadItem(bytes, size: imageSizeOf(bytes), cropOffset: cropOffset));
     notifyListeners();

@@ -26,7 +26,10 @@ class ContentApiControllerTest {
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
     private final com.tailtopia.content.service.VideoPostValidator validator =
             mock(com.tailtopia.content.service.VideoPostValidator.class);
-    private final ContentApiController controller = new ContentApiController(service, rateLimiter, validator);
+    private final com.tailtopia.content.service.MediaAclReconciler reconciler =
+            mock(com.tailtopia.content.service.MediaAclReconciler.class);
+    private final ContentApiController controller =
+            new ContentApiController(service, rateLimiter, validator, reconciler);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();
@@ -62,18 +65,36 @@ class ContentApiControllerTest {
                 new com.tailtopia.content.dto.VideoPayload("video/7/k.mp4", 5000, 720, 1280));
         var verified = new com.tailtopia.content.service.VideoPostValidator.VerifiedVideo("video/7/k.mp4", 10L);
         when(validator.verifyObjects(7L, req)).thenReturn(verified);
+        when(service.publish(7L, req, "IDEM", verified)).thenReturn(
+                new ContentPostResponse(42L, ContentType.DAILY, null, "hi", null, null, Instant.now()));
 
         controller.publish(jwt("7"), "IDEM", req);
 
-        var order = org.mockito.Mockito.inOrder(validator, service);
+        var order = org.mockito.Mockito.inOrder(validator, service, reconciler);
         order.verify(validator).verifyObjects(7L, req);
         order.verify(service).publish(7L, req, "IDEM", verified);
+        // Story 1.4：发布返回（事务已提交）之后才即时对账。
+        order.verify(reconciler).reconcileOne(42L);
+    }
+
+    @Test
+    void inlineReconcileFailureDoesNotFailPublish() {
+        var req = new ContentPostCreateRequest(ContentType.DAILY, null, "hi", java.util.List.of("c"), null, null,
+                null, null, null, null, com.tailtopia.content.domain.MediaType.VIDEO,
+                new com.tailtopia.content.dto.VideoPayload("video/7/k.mp4", 5000, 720, 1280));
+        var verified = new com.tailtopia.content.service.VideoPostValidator.VerifiedVideo("video/7/k.mp4", 10L);
+        when(validator.verifyObjects(7L, req)).thenReturn(verified);
+        when(service.publish(7L, req, null, verified)).thenReturn(
+                new ContentPostResponse(42L, ContentType.DAILY, null, "hi", null, null, Instant.now()));
+        when(reconciler.reconcileOne(42L)).thenThrow(new IllegalStateException("oss down"));
+
+        assertThat(controller.publish(jwt("7"), null, req).id()).isEqualTo(42L);
     }
 
     @Test
     void imagePostSkipsVideoVerification() {
         controller.publish(jwt("7"), null, new ContentPostCreateRequest(ContentType.DAILY, null, "hi", null));
-        org.mockito.Mockito.verifyNoInteractions(validator);
+        org.mockito.Mockito.verifyNoInteractions(validator, reconciler);
     }
 
     @Test

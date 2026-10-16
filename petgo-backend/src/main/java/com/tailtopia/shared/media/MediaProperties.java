@@ -163,6 +163,49 @@ public class MediaProperties {
         private long maxBytes = 104_857_600L;
         /** 每账号每 WIB 自然日可申请的策略次数，默认 50。 */
         private int dailyPolicyLimit = 50;
+        /**
+         * 视频 CDN 域名（Story 1.4 · AD-11），如 {@code https://v.tailtopia.id}。空 = 不走 CDN，
+         * 下发 OSS 源站地址、不刷新缓存（stag 可以不配；生产必须配）。
+         */
+        private String cdnBaseUrl = "";
+        /** 文件公开对账的 cron（默认每分钟）。{@code -} = 关闭（测试环境）。 */
+        private String aclReconcileCron = "0 * * * * *";
+        /** 每轮对账最多处理的帖子数。 */
+        private int aclReconcileBatch = 100;
+        /** 期望状态变化后超过这么多秒仍未生效 → ERROR 告警。 */
+        private long aclStuckAfterSeconds = 300;
+
+        public String getCdnBaseUrl() {
+            return cdnBaseUrl;
+        }
+
+        public void setCdnBaseUrl(String cdnBaseUrl) {
+            this.cdnBaseUrl = cdnBaseUrl;
+        }
+
+        public String getAclReconcileCron() {
+            return aclReconcileCron;
+        }
+
+        public void setAclReconcileCron(String aclReconcileCron) {
+            this.aclReconcileCron = aclReconcileCron;
+        }
+
+        public int getAclReconcileBatch() {
+            return aclReconcileBatch;
+        }
+
+        public void setAclReconcileBatch(int aclReconcileBatch) {
+            this.aclReconcileBatch = aclReconcileBatch;
+        }
+
+        public long getAclStuckAfterSeconds() {
+            return aclStuckAfterSeconds;
+        }
+
+        public void setAclStuckAfterSeconds(long aclStuckAfterSeconds) {
+            this.aclStuckAfterSeconds = aclStuckAfterSeconds;
+        }
 
         public long getUploadTtlSeconds() {
             return uploadTtlSeconds;

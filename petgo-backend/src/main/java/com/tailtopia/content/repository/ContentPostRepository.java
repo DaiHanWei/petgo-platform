@@ -744,4 +744,25 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     @Query("UPDATE ContentPost p SET p.imageSizes = :sizes, p.updatedAt = :now WHERE p.id = :id")
     int updateImageSizes(@Param("id") long id, @Param("sizes") List<ImageSize> sizes,
             @Param("now") Instant now);
+
+    /**
+     * 待对账的视频帖（专题线 video Story 1.4 · AD-6）：期望 ≠ 已生效。按 id 升序，命中部分索引
+     * {@code idx_content_posts_media_acl_pending}。
+     */
+    @Query("SELECT p FROM ContentPost p WHERE p.mediaType = com.tailtopia.content.domain.MediaType.VIDEO "
+            + "AND p.mediaAclDesired <> p.mediaAclApplied ORDER BY p.id")
+    List<ContentPost> findMediaAclPending(Pageable pageable);
+
+    /**
+     * 对账回写（专题线 video Story 1.4 · AD-6）：<b>条件单列 UPDATE</b>，只有「刚应用的就是当前期望」才算完成；
+     * 影响 0 行 = desired 在此期间被改了，留到下一轮。
+     *
+     * <p>🔴 用 native：{@code mediaAclApplied} 映射为 {@code updatable=false}（防实体整行 save 覆盖），
+     * 不依赖 Hibernate 在 HQL 批量更新里如何对待该标记。禁止改成 load → set → save。
+     */
+    @Transactional
+    @Modifying
+    @Query(value = "UPDATE content_posts SET media_acl_applied = :acl WHERE id = :id AND media_acl_desired = :acl",
+            nativeQuery = true)
+    int markMediaAclApplied(@Param("id") long id, @Param("acl") String acl);
 }

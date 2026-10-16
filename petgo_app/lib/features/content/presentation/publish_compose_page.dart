@@ -41,6 +41,10 @@ import '../domain/content_type.dart';
 import '../domain/publish_checkin_place.dart';
 import '../domain/image_exposure.dart';
 import '../domain/publish_controller.dart';
+import '../video/video_draft_tile.dart';
+import '../video/video_picker.dart';
+import '../video/video_spec.dart';
+import '../video/video_spec_error_card.dart';
 import 'publish_exposure_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
@@ -209,6 +213,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 选图/处理中（拍照返回 → 解码压缩剥 EXIF）：网格显占位 loading，避免「拍完没反应」。
   bool _addingImage = false;
 
+  /// 视频规格检查进行中（专题线 video Story 1.5）：期间禁止再次选择。
+  bool _checkingVideo = false;
+
+  /// 最近一次不合格的检查结果；有值时显示逐条提示卡。
+  VideoSpecResult? _videoSpecError;
+
   /// 拖拽重排的**仅 UI 层**预览态（V1.3.0 Story 4.1 · U2「其余格实时让位」）。
   ///
   /// 🔴 这里只放「正在拖哪张、悬在第几位」两个下标，**不是第二份顺序**：
@@ -286,6 +296,100 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (_linkedPet != null) return;
     final pet = await ref.read(profileRepositoryProvider).getMyProfile();
     if (mounted) setState(() => _linkedPet = pet);
+  }
+
+  /// 是否显示「视频」入口（专题线 video Story 1.5 · FR-5）。
+  ///
+  /// 只有等级 ≥ 10 的账号能看到；从成长日历 / Diary 语境（preset=growthMoment）、打卡后发帖、
+  /// 晒图预填进来时不显示 —— 这几条路的语境都是「图文 + 宠物」，视频帖不带宠物、打卡与日期（FR-6）。
+  bool get _videoEntryVisible {
+    final profile = ref.read(authControllerProvider).profile;
+    return (profile?.canPublishVideo ?? false) &&
+        widget.preset != ContentType.growthMoment &&
+        widget.placeCheckinToken == null &&
+        widget.initialImages == null;
+  }
+
+  /// 选视频 → 规格检查（专题线 video Story 1.5 · FR-6 / FR-7）。只拿文件路径，不读进内存。
+  Future<void> _pickVideo(PublishController controller) async {
+    if (_checkingVideo || !controller.canPickVideo) return;
+    final path = await ref.read(videoPickerProvider)();
+    if (path == null || !mounted) return; // 取消：什么都不变
+    setState(() {
+      _checkingVideo = true;
+      _videoSpecError = null;
+    });
+    final result = await ref.read(videoSpecCheckerProvider).check(path);
+    if (!mounted) return;
+    setState(() => _checkingVideo = false);
+    if (!result.ok) {
+      setState(() => _videoSpecError = result);
+      return;
+    }
+    final draft = VideoDraft(
+      path: path,
+      durationMs: result.durationMs!,
+      width: result.displayWidth!,
+      height: result.displayHeight!,
+      sizeBytes: result.sizeBytes!,
+    );
+    // setVideo 内部会把「成长日记」切回「日常」（视频帖只能是日常或科普）。
+    controller.setVideo(draft);
+    _onVideoAccepted(draft);
+  }
+
+  /// 接入点：视频通过规格检查之后。Story 1.6 在这里抽封面、开始上传。
+  void _onVideoAccepted(VideoDraft draft) {}
+
+  /// 视频入口 + 检查中 + 不合格提示（专题线 video Story 1.5）。有视频时由 [_imageRow] 显示预览格。
+  Widget _videoSection(PublishController controller, AppLocalizations l10n) {
+    if (!_videoEntryVisible || controller.video != null) return const SizedBox.shrink();
+    final enabled = controller.canPickVideo && !_checkingVideo;
+    final error = _videoSpecError;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Opacity(
+              opacity: enabled ? 1 : 0.5,
+              child: OutlinedButton.icon(
+                key: const ValueKey('publishAddVideo'),
+                onPressed: enabled ? () => _pickVideo(controller) : null,
+                icon: _checkingVideo
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint),
+                      )
+                    : const Icon(Icons.videocam_outlined, size: 18, color: AppColors.mint),
+                label: Text(
+                  _checkingVideo ? l10n.videoSpecChecking : l10n.publishAddVideo,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink2),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                ),
+              ),
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            VideoSpecErrorCard(
+              result: error,
+              onDismiss: () => setState(() => _videoSpecError = null),
+              onRepick: () {
+                setState(() => _videoSpecError = null);
+                _pickVideo(controller);
+              },
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _addImage(
@@ -683,6 +787,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 ],
                 const SizedBox(height: 16),
                 _imageRow(controller, l10n),
+                _videoSection(controller, l10n),
                 const SizedBox(height: 14),
                 // —— 文字 ——（原型 textarea-wrap：1.5px #E6E6E6 外框 + 圆角11 + 内部右下字数）
                 Container(
@@ -880,6 +985,16 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   Widget _growthChip(AppLocalizations l10n, PublishController controller) {
+    // 专题线 video Story 1.5：已选视频时「成长日记」不可选（视频帖只能是日常或科普）。
+    if (controller.video != null) {
+      return _TypeChip(
+        keyValue: 'seg_GROWTH_MOMENT',
+        label: '${l10n.publishSegmentGrowth} 🌟',
+        selected: false,
+        enabled: false,
+        onTap: () {},
+      );
+    }
     final enabled = _hasPetProfile;
     return _TypeChip(
       keyValue: 'seg_GROWTH_MOMENT',
@@ -1124,8 +1239,13 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 照片区：原型 3 列网格，首格为虚线「Tambah」添加格，其后为缩略图（带上传态/删除）。
   Widget _imageRow(PublishController controller, AppLocalizations l10n) {
+    // 专题线 video Story 1.5：媒体互斥 —— 有视频时整块换成视频预览格，不再出现「添加图片」。
+    final video = controller.video;
+    if (video != null) {
+      return VideoDraftTile(draft: video, onRemove: controller.clearVideo);
+    }
     final items = controller.items;
-    final showAdd = items.length < kMaxImages;
+    final showAdd = controller.canAddImage;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

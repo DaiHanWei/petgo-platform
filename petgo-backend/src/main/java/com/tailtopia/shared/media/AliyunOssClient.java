@@ -145,6 +145,33 @@ public class AliyunOssClient {
         }
     }
 
+    /**
+     * 设置对象 ACL（专题线 video Story 1.4：视频与封面的公开 / 私有切换，仅由对账器调用）。L2 真实网络。
+     *
+     * <p>🔴 外网往返 —— 禁止在数据库事务内调用（一致性规则 7）。
+     *
+     * @return {@code false} = 对象不存在（NoSuchKey）；其他异常原样抛给调用方按「单条失败」处理
+     */
+    public boolean setObjectAcl(String bucket, String objectKey, boolean publicRead) {
+        if (!hasCredentials()) {
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储未配置，请联系运营");
+        }
+        OSS client = buildClient();
+        try {
+            client.setObjectAcl(bucket, stripLeadingSlash(objectKey), publicRead
+                    ? com.aliyun.oss.model.CannedAccessControlList.PublicRead
+                    : com.aliyun.oss.model.CannedAccessControlList.Private);
+            return true;
+        } catch (com.aliyun.oss.OSSException e) {
+            if ("NoSuchKey".equals(e.getErrorCode()) || "404".equals(e.getErrorCode())) {
+                return false;
+            }
+            throw e;
+        } finally {
+            client.shutdown();
+        }
+    }
+
     public String privateBucket() {
         return props.getOss().getPrivateBucket();
     }
