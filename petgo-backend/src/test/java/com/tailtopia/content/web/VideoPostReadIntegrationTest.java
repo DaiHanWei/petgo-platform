@@ -178,4 +178,21 @@ class VideoPostReadIntegrationTest extends ApiIntegrationTest {
         assertThat(detail.get("mediaType").asText()).isEqualTo("IMAGE");
         assertThat(detail.has("video")).isFalse();
     }
+
+    /** 专题线 video Story 2.6：H5 分享页对视频帖只出封面 + 角标 + 升级提示，不出视频地址。 */
+    @Test
+    void h5SharePageShowsCoverAndUpgradeNoticeWithoutVideoUrl() throws Exception {
+        User author = videoUser(true);
+        long id = publishVideo(author);
+        jdbc.update("UPDATE content_posts SET media_acl_applied='PUBLIC' WHERE id=?", id);
+        String token = json.readTree(mvc.perform(post("/api/v1/content-posts/" + id + "/share-link")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(author.getId())))
+                .andReturn().getResponse().getContentAsString()).get("shareToken").asText();
+
+        String html = mvc.perform(get("/c/" + token)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).contains("id=\"videoCover\"").contains("id=\"videoNotice\"")
+                .contains("https://cdn.petgo.test/public/" + author.getId() + "/cover.jpg")
+                .doesNotContain("<video").doesNotContain("abcdefghijklmnopqrstuv.mp4");
+    }
 }
