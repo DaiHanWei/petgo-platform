@@ -303,6 +303,20 @@ public class AccountQueryService {
         return users.findById(userId);
     }
 
+    /**
+     * 按 id 批量取账号（任意 role / 状态），后台列表组装用（专题线 video Story 1.1 视频免审名单页）。
+     * 不存在的 id 不在返回 Map 里。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, User> findAccountsByIds(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, User> out = new java.util.HashMap<>();
+        users.findAllById(userIds).forEach(u -> out.put(u.getId(), u));
+        return out;
+    }
+
     /** Story 3.1：按 id 取普通用户（role=USER），供后台用户详情只读聚合。 */
     @Transactional(readOnly = true)
     public Optional<User> findUserById(long userId) {

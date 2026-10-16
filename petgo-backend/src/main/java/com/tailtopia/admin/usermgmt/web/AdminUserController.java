@@ -41,6 +41,15 @@ public class AdminUserController {
     private static final String GRANT_PAWCOIN_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')";
     /**
+     * 改会员等级（专题线 video Story 1.1）。⚠️ 必须拼常量：码里有两个点，
+     * {@code AdminPermissionWiringTest} 的字面量正则认不出，不拼常量会被判死码。
+     */
+    private static final String VIP_LEVEL_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('" + AdminPermissions.USER_VIP_LEVEL_EDIT + "')";
+    /** 加入 / 移出视频免审名单（专题线 video Story 1.1）。与名单页同一个码。 */
+    private static final String VIDEO_TRUSTED_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('" + AdminPermissions.VIDEO_TRUSTED_MANAGE + "')";
+    /**
      * 每页条数。V1.3.0 Story 8.1 起 20（AC1，与其余模板 B 列表一致）。
      *
      * <p>⚠️ 搜索态仍**不分页**：服务层按昵称模糊封顶 50 条，那是「找一个人」的用法，
@@ -56,11 +65,16 @@ public class AdminUserController {
     /** V1.3.2 后台 AB-23：已购解锁页签取数（随抽屉同一次渲染，切页签不再请求）。 */
     private final com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases;
 
+    /** 专题线 video Story 1.1：会员等级与视频免审名单两项处置。 */
+    private final com.tailtopia.admin.usermgmt.service.AdminUserVideoService videoService;
+
     public AdminUserController(AdminUserService adminUserService,
-            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases) {
+            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases,
+            com.tailtopia.admin.usermgmt.service.AdminUserVideoService videoService) {
         this.adminUserService = adminUserService;
         this.msg = msg;
         this.purchases = purchases;
+        this.videoService = videoService;
     }
 
     @GetMapping("/admin/users")
@@ -127,6 +141,8 @@ public class AdminUserController {
         model.addAttribute("user", adminUserService.detail(userId, canSeePhone));
         // 第六页签「已购解锁」（AB-23）：读业务表解锁状态，PawCoin 付的也查得到。只读、无 PII，权限沿用本抽屉。
         model.addAttribute("purchases", purchases.forUser(userId));
+        // 专题线 video Story 1.1：基本信息页签展示「视频免审名单：是 / 否」。
+        model.addAttribute("videoTrusted", videoService.isTrusted(userId));
         // 赠币表单一次性幂等 token（bug 20260728-389）：防双击/回退重提交重复入账。
         model.addAttribute("grantToken", java.util.UUID.randomUUID().toString());
     }
@@ -171,6 +187,72 @@ public class AdminUserController {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/users?open=" + userId;
+    }
+
+    /**
+     * 改会员等级（专题线 video Story 1.1 · FR-2）。{@code level} 按字符串收再解析：非数字也要给出校验错误而不是 400。
+     */
+    @PostMapping("/admin/users/{userId}/vip-level")
+    @PreAuthorize(VIP_LEVEL_AUTH)
+    public String setVipLevel(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long userId,
+            @RequestParam("level") String level,
+            org.springframework.security.core.Authentication auth,
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model,
+            jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            int v = parseLevel(level);
+            videoService.setVipLevel(userId, v, admin.getAdminAccountId());
+            return afterAction(userId, auth, msg.get("admin.flash.user.vipLevelUpdated", v), model, response);
+        }
+        try {
+            int v = parseLevel(level);
+            videoService.setVipLevel(userId, v, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.user.vipLevelUpdated", v));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/users?open=" + userId;
+    }
+
+    /** 加入 / 移出视频免审名单（专题线 video Story 1.1 · FR-22）。{@code action=add|remove}，均幂等。 */
+    @PostMapping("/admin/users/{userId}/video-trusted")
+    @PreAuthorize(VIDEO_TRUSTED_AUTH)
+    public String setVideoTrusted(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long userId,
+            @RequestParam("action") String action,
+            org.springframework.security.core.Authentication auth,
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model,
+            jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            return afterAction(userId, auth, applyVideoTrusted(userId, action, admin), model, response);
+        }
+        try {
+            flash.addFlashAttribute("notice", applyVideoTrusted(userId, action, admin));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/users?open=" + userId;
+    }
+
+    private String applyVideoTrusted(long userId, String action, AdminUserDetails admin) {
+        if ("add".equals(action)) {
+            return videoService.addTrusted(userId, admin.getAdminAccountId())
+                    ? msg.get("admin.flash.user.videoTrustedAdded")
+                    : msg.get("admin.flash.user.videoTrustedAlready");
+        }
+        if ("remove".equals(action)) {
+            return videoService.removeTrusted(userId, admin.getAdminAccountId())
+                    ? msg.get("admin.flash.user.videoTrustedRemoved")
+                    : msg.get("admin.flash.user.videoTrustedNotIn");
+        }
+        throw AppException.validation("未知操作").code("admin.err.user.videoTrustedAction");
+    }
+
+    private static int parseLevel(String raw) {
+        try {
+            return Integer.parseInt(raw == null ? "" : raw.trim());
+        } catch (NumberFormatException e) {
+            throw AppException.validation("会员等级须在 1–99 之间").code("admin.err.user.vipLevelRange");
+        }
     }
 
     @PostMapping("/admin/users/{userId}/deactivate")

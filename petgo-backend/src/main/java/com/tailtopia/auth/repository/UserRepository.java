@@ -53,6 +53,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
             nativeQuery = true)
     int addFollowingCount(@Param("userId") long userId, @Param("delta") int delta);
 
+    /**
+     * 会员等级定向写（专题线 video Story 1.1）。{@code vip_level} 实体只读映射，只能走这条 native UPDATE。
+     * 已注销行不改（返回 0）。
+     */
+    @Modifying
+    @Query(value = "UPDATE users SET vip_level = :level, updated_at = now() WHERE id = :userId AND deleted_at IS NULL",
+            nativeQuery = true)
+    int updateVipLevel(@Param("userId") long userId, @Param("level") int level);
+
+    /** 读最新会员等级并锁行（{@code FOR UPDATE}），供改等级时取准确的旧值做审计；用户不存在 → null。 */
+    @Query(value = "SELECT vip_level FROM users WHERE id = :userId FOR UPDATE", nativeQuery = true)
+    Integer findVipLevelForUpdate(@Param("userId") long userId);
+
+    /** 读最新会员等级（不经实体缓存）；用户不存在 → null。 */
+    @Query(value = "SELECT vip_level FROM users WHERE id = :userId", nativeQuery = true)
+    Integer findVipLevel(@Param("userId") long userId);
+
     /** 同 {@link #addFollowingCount}，改 {@code follower_count}。 */
     @Modifying
     @Query(value = "UPDATE users SET follower_count = GREATEST(follower_count + :delta, 0) WHERE id = :userId",
