@@ -92,6 +92,15 @@ class ContentDetailPage extends ConsumerWidget {
 
     // bug 20260923-539（PRD E-10）：停留时长埋点包在最外层 —— 加载 / 错误 / 数据三态切换
     // 不会重建这层 State，计时从进页到离页连续不断。
+    // 专题线 video Story 2.4/2.5：视频帖已在播时，发评论触发的重拉失败**不能**把播放页换成错误页
+    // （那会关掉正在播的视频、把观看拆成两段）—— 保留旧数据继续播（code review）。
+    final previous = detailAsync.hasError ? detailAsync.value : null;
+    if (previous != null && previous.isVideo) {
+      return _DetailDwellTracker(
+        postId: postId,
+        child: VideoPostPage(detail: previous, source: videoSource, focusComments: focusComments),
+      );
+    }
     return _DetailDwellTracker(
       postId: postId,
       child: detailAsync.when(
@@ -232,7 +241,7 @@ class _DetailScaffold extends ConsumerWidget {
           IconButton(
             key: const ValueKey('detailMenu'),
             icon: const Icon(Icons.more_horiz, color: AppColors.ink),
-            onPressed: () => _showMoreSheet(context, ref, detail, l10n),
+            onPressed: () => showContentMoreSheet(context, ref, detail, l10n),
           ),
         ],
       ),
@@ -258,7 +267,7 @@ class _DetailScaffold extends ConsumerWidget {
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
-                      child: _authorRow(context, ref, l10n),
+                      child: ContentAuthorRow(detail: detail),
                     ),
                     // V1.3.0 Story 2.2 · AC1：元素顺序为 作者行 → **图片** → 文字 → 互动栏 → 评论区。
                     // 图片前置的理由：详情页是「看图」的页面，正文在图上面会把图挤到首屏之外。
@@ -385,7 +394,22 @@ class _DetailScaffold extends ConsumerWidget {
         ref.read(commentsRefreshProvider.notifier).bump();
       };
 
-  Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
+}
+
+/// 作者行（头像 + 昵称 + 运营标签 + 时间 / 类型徽章 + 关注按钮）。
+/// 专题线 video Story 2.5：从详情页抽出来，图文详情（亮色）与视频播放页叠加层（[onDark]）共用 ——
+/// 注销不可点、关注按钮显示条件、拉黑 / 举报后退回列表这些规则只有一份（V-13）。
+class ContentAuthorRow extends ConsumerWidget {
+  const ContentAuthorRow({super.key, required this.detail, this.onDark = false});
+
+  final ContentDetail detail;
+
+  /// 压在视频画面上：白字、隐藏时间 / 类型徽章行、关注按钮垫浅底。
+  final bool onDark;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
     // 映射单一来源：分享卡也用它（见 ContentTypeBadge 的注释）。
     final badge = ContentTypeBadge.of(detail.type, l10n);
@@ -407,12 +431,14 @@ class _DetailScaffold extends ConsumerWidget {
               UserTagRow(
                 position: 'detail',
                 name: name,
-                nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+                nameStyle: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.w700, color: onDark ? Colors.white : null),
                 tags: detail.authorDeleted ? const [] : detail.authorTags,
               ),
               // V1.3.4 follow Story 2.1 · AC6.1（UI 稿 C4）：分类徽章从作者行最右**移到时间右侧**，
               // 最右位置换成关注按钮。徽章大小不变（T-17）。
               // 时间优先完整显示（最多占满整行），徽章用剩下的宽度、放不下就省略（code-review 2.1 #4）。
+              if (!onDark)
               LayoutBuilder(
                 builder: (context, c) => Row(
                   children: [
@@ -466,131 +492,141 @@ class _DetailScaffold extends ConsumerWidget {
         Expanded(child: tappable),
         // V1.3.4 follow Story 2.1 · AC6（UI 稿 C4 / C5 / C6 / C7）：自己的帖子 / 已关注 / 已注销 / 封号不显示。
         if (!detail.authorDeleted && !detail.isAuthor)
-          FollowButton(
+          _followOnSurface(FollowButton(
             userId: detail.authorId,
             userToken: detail.authorToken,
             initial: detail.authorFollowState,
             snapshotEpoch: detail.followEpoch,
-            surfaceKey: 'detail:${detail.id}',
+            surfaceKey: '${onDark ? 'video' : 'detail'}:${detail.id}',
             style: FollowButtonStyle.textInline,
             source: 'content_detail',
-          ),
+          )),
       ],
     );
   }
 
-  /// 「···」更多底抽屉（原型 detail.html `detail-more-sheet`）：把手 + 单一互斥动作（红字行）+ Batal。
-  /// 自己内容 → 🗑 删除；他人内容 → 🚩 举报。
-  void _showMoreSheet(
-      BuildContext context, WidgetRef ref, ContentDetail detail, AppLocalizations l10n) {
-    final isAuthor = detail.isAuthor;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (sheetCtx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                      color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+  /// 视频画面上给关注按钮垫一层浅底（按钮本身是深色系文字）。
+  Widget _followOnSurface(Widget button) => onDark
+      ? DecoratedBox(
+          decoration: BoxDecoration(color: const Color(0xE6FFFFFF), borderRadius: BorderRadius.circular(14)),
+          child: button,
+        )
+      : button;
+}
+
+/// 「···」更多底抽屉（原型 detail.html `detail-more-sheet`）：把手 + 单一互斥动作（红字行）+ Batal。
+/// 专题线 video Story 2.5：抽成顶层函数，图文详情与视频播放页共用（规则一致，V-13）。
+/// 自己内容 → 🗑 删除；他人内容 → 🚩 举报。
+void showContentMoreSheet(
+    BuildContext context, WidgetRef ref, ContentDetail detail, AppLocalizations l10n) {
+  final isAuthor = detail.isAuthor;
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    builder: (sheetCtx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                    color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+              ),
+            ),
+            // 单一互斥动作行（红字 + emoji，左对齐，底分隔线）。
+            InkWell(
+              key: ValueKey(isAuthor ? 'detailMenuDelete' : 'detailMenuReport'),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                if (isAuthor) {
+                  _confirmDeleteContent(context, ref, detail, l10n);
+                } else {
+                  openReport(context, ref, detail.id, onReported: () {
+                    // cm-6 §6.1：详情页举报成功 → pop 回列表（该帖对本人已不存在，后端详情 404）+ 提示。
+                    // 同步乐观移除 Feed（含 V1.3.4 关注流）中的该卡片（若在列表；后端 §5.4 刷新亦已过滤）。
+                    removeFeedPost(ref, detail.id);
+                    if (context.mounted) {
+                      showAppToast(context, l10n.reportHiddenToast);
+                      Navigator.of(context).maybePop();
+                    }
+                  });
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppColors.line2)),
+                ),
+                child: Row(
+                  children: [
+                    Text(isAuthor ? '🗑' : '🚩', style: const TextStyle(fontSize: 16)),
+                    const SizedBox(width: 10),
+                    Text(
+                      isAuthor ? l10n.detailMoreDeleteContent : l10n.detailMoreReportContent,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.popRed),
+                    ),
+                  ],
                 ),
               ),
-              // 单一互斥动作行（红字 + emoji，左对齐，底分隔线）。
-              InkWell(
-                key: ValueKey(isAuthor ? 'detailMenuDelete' : 'detailMenuReport'),
-                onTap: () {
-                  Navigator.of(sheetCtx).pop();
-                  if (isAuthor) {
-                    _confirmDelete(context, ref, l10n);
-                  } else {
-                    openReport(context, ref, detail.id, onReported: () {
-                      // cm-6 §6.1：详情页举报成功 → pop 回列表（该帖对本人已不存在，后端详情 404）+ 提示。
-                      // 同步乐观移除 Feed（含 V1.3.4 关注流）中的该卡片（若在列表；后端 §5.4 刷新亦已过滤）。
-                      removeFeedPost(ref, detail.id);
-                      if (context.mounted) {
-                        showAppToast(context, l10n.reportHiddenToast);
-                        Navigator.of(context).maybePop();
-                      }
-                    });
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(color: AppColors.line2)),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(isAuthor ? '🗑' : '🚩', style: const TextStyle(fontSize: 16)),
-                      const SizedBox(width: 10),
-                      Text(
-                        isAuthor ? l10n.detailMoreDeleteContent : l10n.detailMoreReportContent,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.popRed),
-                      ),
-                    ],
-                  ),
-                ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => Navigator.of(sheetCtx).pop(),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    padding: const EdgeInsets.symmetric(vertical: 12)),
+                child: Text(l10n.commonCancel),
               ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => Navigator.of(sheetCtx).pop(),
-                  style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
-                      padding: const EdgeInsets.symmetric(vertical: 12)),
-                  child: Text(l10n.commonCancel),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  /// 二次确认删除（Story 3.6 · 原型 detail.html `delete-confirm-sheet`）：底抽屉 ⚠️ + 标题 + 正文
-  /// + 红 Hapus + Batal。确认 → 删除 → 刷新 Feed + 返回（该帖已不在列表，详情走 404）。
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
-    final ok = await showConfirmSheet(
-      context,
-      title: l10n.contentDeleteTitle,
-      message: l10n.contentDeleteConfirm,
-      confirmLabel: l10n.detailMenuDelete,
-      cancelLabel: l10n.commonCancel,
-      icon: Icons.delete_outline_rounded,
-      danger: true,
-      confirmKey: const ValueKey('confirmDeleteContent'),
-    );
-    if (!ok) return;
-    try {
-      await ref.read(detailRepositoryProvider).deleteContent(detail.id);
-      // Feed + me 页「我的发布」同步移除（重拉，软删帖 deleted_at 非空被过滤）。
-      ref.invalidate(feedProvider);
-      ref.invalidate(myPostsProvider);
-      ref.invalidate(meCountsProvider); // V1.3.4：我的页四格帖子数 / 获赞数随删帖变化
-      // 成长日历帖还出现在档案/时间线/日历视图，删后一并刷新（否则那些页仍显旧帖直到重启）。
-      if (detail.type == ContentType.growthMoment.wire) {
-        ref.invalidate(timelineFirstPageProvider);
-        ref.invalidate(archiveStatsProvider);
-        ref.invalidate(calendarMonthProvider);
-        ref.invalidate(dayDetailProvider);
-      }
-      if (context.mounted) Navigator.of(context).maybePop();
-    } catch (_) {
-      if (context.mounted) {
-        showAppToast(context, l10n.contentDeleteFailed);
-      }
+/// 二次确认删除（Story 3.6 · 原型 detail.html `delete-confirm-sheet`）：底抽屉 ⚠️ + 标题 + 正文
+/// + 红 Hapus + Batal。确认 → 删除 → 刷新 Feed + 返回（该帖已不在列表，详情走 404）。
+Future<void> _confirmDeleteContent(
+    BuildContext context, WidgetRef ref, ContentDetail detail, AppLocalizations l10n) async {
+  final ok = await showConfirmSheet(
+    context,
+    title: l10n.contentDeleteTitle,
+    message: l10n.contentDeleteConfirm,
+    confirmLabel: l10n.detailMenuDelete,
+    cancelLabel: l10n.commonCancel,
+    icon: Icons.delete_outline_rounded,
+    danger: true,
+    confirmKey: const ValueKey('confirmDeleteContent'),
+  );
+  if (!ok) return;
+  try {
+    await ref.read(detailRepositoryProvider).deleteContent(detail.id);
+    // Feed + me 页「我的发布」同步移除（重拉，软删帖 deleted_at 非空被过滤）。
+    ref.invalidate(feedProvider);
+    ref.invalidate(myPostsProvider);
+    ref.invalidate(meCountsProvider); // V1.3.4：我的页四格帖子数 / 获赞数随删帖变化
+    // 成长日历帖还出现在档案/时间线/日历视图，删后一并刷新（否则那些页仍显旧帖直到重启）。
+    if (detail.type == ContentType.growthMoment.wire) {
+      ref.invalidate(timelineFirstPageProvider);
+      ref.invalidate(archiveStatsProvider);
+      ref.invalidate(calendarMonthProvider);
+      ref.invalidate(dayDetailProvider);
+    }
+    if (context.mounted) Navigator.of(context).maybePop();
+  } catch (_) {
+    if (context.mounted) {
+      showAppToast(context, l10n.contentDeleteFailed);
     }
   }
 }

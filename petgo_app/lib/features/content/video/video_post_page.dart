@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/content_detail.dart';
 import 'video_nav.dart';
+import 'video_post_overlay.dart';
 import 'video_player_view.dart';
 
 /// 视频帖的全屏播放页（专题线 video Story 2.4 · FR-15 · AD-10）：`/content/:id` 拉到详情后按 `mediaType` 在页内渲染。
@@ -22,7 +23,7 @@ class VideoPostPage extends StatelessWidget {
   /// `?focus=comments` 进来：自动打开评论抽屉（Story 2.5 消费）。
   final bool focusComments;
 
-  /// 叠加层（Story 2.5）。
+  /// 叠加层；缺省为 [VideoPostOverlay]（Story 2.5：作者区、正文、互动）。测试可替换。
   final Widget Function(BuildContext context, ContentDetail detail)? overlayBuilder;
 
   @override
@@ -31,6 +32,8 @@ class VideoPostPage extends StatelessWidget {
     return Scaffold(
       key: const ValueKey('videoPostPage'),
       backgroundColor: Colors.black,
+      // 评论抽屉弹键盘时不压缩播放区（画面不跳）；抽屉自己做键盘避让（KeyboardInset）。
+      resizeToAvoidBottomInset: false,
       body: VideoPlayerView(
         postId: detail.id,
         url: video.url,
@@ -38,7 +41,9 @@ class VideoPostPage extends StatelessWidget {
         source: source,
         coverUrl: detail.imageUrls.isEmpty ? null : detail.imageUrls.first,
         overlay: Stack(children: [
-          if (overlayBuilder != null) overlayBuilder!(context, detail),
+          overlayBuilder != null
+              ? overlayBuilder!(context, detail)
+              : VideoPostOverlay(detail: detail, focusComments: focusComments),
           const VideoBackButton(),
         ]),
       ),
