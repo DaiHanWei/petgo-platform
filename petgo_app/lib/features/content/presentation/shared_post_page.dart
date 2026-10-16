@@ -10,6 +10,8 @@ import '../../../shared/widgets/letter_avatar.dart';
 import '../data/shared_post_repository.dart';
 import '../domain/content_type_badge.dart';
 import '../domain/shared_post.dart';
+import '../video/video_nav.dart';
+import '../video/video_player_view.dart';
 
 /// 分享链接在 **App 内**的落地页（Story 9.3 · AD-15 Rule 5）。
 ///
@@ -98,6 +100,27 @@ class _SharedPostPageState extends ConsumerState<SharedPostPage> {
           const SizedBox(height: AppSpacing.md),
           Text(post.body!, style: AppTypography.body),
         ],
+        // 专题线 video Story 2.4：视频帖在分享页内直接播放。分享投影刻意没有帖子 id（AD-15 Rule 5），
+        // 跳不了 /content/:id —— 偏离 AD-10「跳到 /content/:id」，见 story 2.4 Dev Notes（待 PO 确认）。
+        if (post.isVideo) ...[
+          const SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: AspectRatio(
+              aspectRatio: (post.video!.width > 0 && post.video!.height > 0)
+                  ? post.video!.width / post.video!.height
+                  : 9 / 16,
+              child: VideoPlayerView(
+                key: const ValueKey('sharedPostVideo'),
+                postId: null,
+                url: post.video!.url,
+                durationMs: post.video!.durationMs,
+                source: VideoSource.share,
+                coverUrl: post.imageUrls.isEmpty ? null : post.imageUrls.first,
+              ),
+            ),
+          ),
+        ] else
         for (final url in post.imageUrls) ...[
           const SizedBox(height: AppSpacing.md),
           ClipRRect(

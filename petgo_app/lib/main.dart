@@ -22,6 +22,7 @@ import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/notify/domain/app_update_bootstrap.dart';
 import 'package:tailtopia/features/notify/domain/push_permission_bootstrap.dart';
 import 'package:tailtopia/features/notify/domain/push_permission_state_reporter.dart';
+import 'features/content/video/video_analytics.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,6 +49,14 @@ Future<void> main() async {
   // 回调），PosthogObserver 为启动屏打的那条 `$screen` 就会排在 setup 前面 —— 原生 SDK
   // 对 setup 前的事件是**直接丢弃**（不缓冲），启动漏斗的第一级会凭空消失。
   unawaited(Analytics.init());
+  // 专题线 video Story 2.4：上次 App 被杀时没报出去的那条观看时长，启动补报后删除（排在 init 之后，同一通道按序）。
+  unawaited(() async {
+    try {
+      await VideoWatchStore(await AppPrefs.create()).replayPending();
+    } catch (_) {
+      // 补报失败无所谓（非关键路径）。
+    }
+  }());
   // V1：锁定竖屏（portrait-only）。
   SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,

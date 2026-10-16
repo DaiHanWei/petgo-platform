@@ -46,6 +46,13 @@ String contentDetailLocation(int id, {bool isVideo = false, VideoSource? source,
   return params.isEmpty ? '/content/$id' : '/content/$id?${params.join('&')}';
 }
 
+/// 给帖子详情位置补上来源 `src`（通知中心等没有 extra 的入口用；专题线 video Story 2.4）。
+/// 只作用于 `/content/:id`，其它路由原样返回；已有 `src` 不覆盖。图文帖带上也无害（详情页只在视频帖用它）。
+String withVideoSource(String location, VideoSource source) {
+  if (!location.startsWith('/content/') || location.contains('src=')) return location;
+  return '$location${location.contains('?') ? '&' : '?'}src=${source.wire}';
+}
+
 /// 打开帖子详情：视频帖带 `src` 与 [VideoRouteExtra]，图文帖与改动前一致（`/content/:id`，无 extra）。
 Future<void> pushContentDetail(BuildContext context, int id,
     {required bool isVideo, required VideoSource source, bool focusComments = false}) {

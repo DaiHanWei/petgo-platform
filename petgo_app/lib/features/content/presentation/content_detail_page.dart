@@ -43,15 +43,30 @@ import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'report_sheet.dart';
 import 'share_card/open_share_card.dart';
+import '../video/video_nav.dart';
+import '../video/video_post_page.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
 /// 多态完整（UX-DR18）：404 失效页 / 403 无权限页 / 网络错误 / 加载骨架。
 /// 「···」举报入口[3.7] + 作者删除入口[3.6]、点赞按钮行为[3.4]、作者点击迷你卡[3.8] 本 Story 仅占位。
 class ContentDetailPage extends ConsumerWidget {
-  const ContentDetailPage({super.key, required this.postId, this.focusComments = false});
+  const ContentDetailPage({
+    super.key,
+    required this.postId,
+    this.focusComments = false,
+    this.knownVideo = false,
+    this.videoSource = VideoSource.other,
+  });
 
   final int postId;
+
+  /// 列表已知是视频帖（路由 `extra` 带了 [VideoRouteExtra]，专题线 video Story 2.4）：
+  /// 加载期间直接显示黑底播放页骨架，跳过图文详情的白底加载态。
+  final bool knownVideo;
+
+  /// 进入来源（埋点 `source`）：`extra.source` → query `src` → `other`。
+  final VideoSource videoSource;
 
   /// 进来就滚到评论区（V1.1.6 Story 3.2 · AC4）。
   ///
@@ -80,10 +95,15 @@ class ContentDetailPage extends ConsumerWidget {
     return _DetailDwellTracker(
       postId: postId,
       child: detailAsync.when(
-        loading: () => _shell(context, body: const Center(
-            child: CircularProgressIndicator(color: AppColors.accentGrowth))),
+        loading: () => knownVideo
+            ? const VideoPostLoading()
+            : _shell(context, body: const Center(
+                child: CircularProgressIndicator(color: AppColors.accentGrowth))),
         error: (err, _) => _shell(context, body: _errorBody(context, ref, l10n, err)),
-        data: (d) => _DetailScaffold(postId: postId, detail: d, focusComments: focusComments),
+        // 专题线 video Story 2.4：按 mediaType 在页内分流（路由 /content/:id 不变）。
+        data: (d) => d.isVideo
+            ? VideoPostPage(detail: d, source: videoSource, focusComments: focusComments)
+            : _DetailScaffold(postId: postId, detail: d, focusComments: focusComments),
       ),
     );
   }

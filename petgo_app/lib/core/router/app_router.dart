@@ -119,6 +119,7 @@ import '../../features/vet/presentation/vet_request_detail_page.dart';
 import '../../features/vet/presentation/vet_workbench_shell.dart';
 import '../../shared/widgets/app_shell.dart';
 import '../../shared/widgets/bottom_tab_bar.dart';
+import '../../features/content/video/video_nav.dart';
 
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -1061,10 +1062,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         // 首页评论按钮沿用同一个名字 —— 两侧同名是硬要求，且接通后通知那条链路也跟着好了。
         //
         // ⚠️ 别与 `/profile/health?focus=<记录编号>` 混淆：同名不同义，路由不同不冲突。
-        builder: (c, s) => ContentDetailPage(
-          postId: int.parse(s.pathParameters['id']!),
-          focusComments: s.uri.queryParameters['focus'] == 'comments',
-        ),
+        // 专题线 video Story 2.4：列表点视频卡片会带 `extra: VideoRouteExtra` 与 `?src=`（埋点来源）；
+        // 通知 / 推送 / 深链没有 extra，先拉详情再按 mediaType 分流。
+        builder: (c, s) {
+          final extra = s.extra is VideoRouteExtra ? s.extra! as VideoRouteExtra : null;
+          return ContentDetailPage(
+            postId: int.parse(s.pathParameters['id']!),
+            focusComments: s.uri.queryParameters['focus'] == 'comments',
+            knownVideo: extra != null,
+            videoSource: extra?.source ?? VideoSource.parse(s.uri.queryParameters['src']),
+          );
+        },
       ),
       // 用户公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118）。shell 外顶层 push（隐藏 Tab Bar）。
       //
