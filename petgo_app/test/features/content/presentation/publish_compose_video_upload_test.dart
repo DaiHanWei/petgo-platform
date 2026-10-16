@@ -211,6 +211,21 @@ void main() {
     expect(c.videoStatus, MediaUploadStatus.idle);
   });
 
+  testWidgets('上传中点取消：显示中性「已取消」文案而非失败（code review）', (tester) async {
+    final repo = _VideoRepo()..gate = Completer<void>();
+    final (c, _) = await pump(tester, repo: repo);
+    await pickVideo(tester);
+    expect(c.videoUploading, isTrue);
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const ValueKey('videoUploadCancel')));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    expect(c.videoStatus, MediaUploadStatus.idle);
+    expect(find.text('Upload failed. Tap to retry.'), findsNothing);
+    expect(find.text('Upload canceled. Tap to upload.'), findsOneWidget);
+  });
+
   testWidgets('发布遇到 403 video-permission-denied：提示且留在编辑页', (tester) async {
     final ro = RequestOptions(path: '/api/v1/content-posts');
     final repo = _VideoRepo()

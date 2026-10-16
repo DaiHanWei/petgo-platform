@@ -2624,6 +2624,7 @@
   "videoSpecLocation": "Video berisi lokasi pengambilan. Ekspor ulang tanpa data lokasi.",
   "videoUploading": "Mengunggah {percent}%",
   "videoUploadFailedRetry": "Gagal mengunggah. Ketuk untuk coba lagi.",
+  "videoUploadCanceledRestart": "Unggahan dibatalkan. Ketuk untuk mengunggah.",
   "videoUploadCancel": "Batal",
   "videoCoverChange": "Ganti sampul",
   "videoCoverPick": "Pilih sampul",

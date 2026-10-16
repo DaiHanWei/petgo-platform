@@ -200,3 +200,11 @@ Claude Opus 5.5 (1M context)
 ### Change Log
 
 - 2026-10-16：实现 Story 1.6——默认封面（第 1 秒）与换封面、视频流式直传与封面并行上传、失败重试与退避、关闭确认、视频帖发布与 403 处理、发布类埋点；修 2 个由测试发现的 bug；L0 通过，L1 / L2 待部署后验收。
+
+## Senior Developer Review (AI) · 2026-10-16（云端）
+
+- **CONFIRMED 已修**：
+  1. `video_spec_check_completed.failed_items` 用枚举名逗号拼接，多项不合格时 > 64 字符被埋点去敏规则整键丢弃（违反 AC7）→ `VideoSpecFailure.analyticsCode` 短码（`unr/fmt/dur/size/res/vcodec/acodec/hdr/fast/loc`），全拼 ≤ 64 字符，有测试钉住。⚠️ 看板按短码取值。
+  2. 用户主动取消上传后卡片显示红色「上传失败，点击重试」→ idle 态改用中性文案 `videoUploadCanceledRestart`（en / id）与 `ink2` 色；补 widget 用例。
+- **PLAUSIBLE 未改**：封面上传用的默认 Dio 无超时；关闭发帖页不取消封面上传；下拉关闭后凭证请求失败仍可能上报 `video_upload_failed`；慢速默认封面可能覆盖用户自选封面；`coverToJpeg720` 在 UI 线程。
+- L0：`flutter analyze` 零问题、content / l10n / analytics 测试全绿；**L1/L2 待本地验收**。

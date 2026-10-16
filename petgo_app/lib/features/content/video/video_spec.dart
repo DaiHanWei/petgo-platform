@@ -46,7 +46,24 @@ enum VideoSpecFailure {
   faststart,
 
   /// 带拍摄地点。
-  location,
+  location;
+
+  /// 埋点 `video_spec_check_completed.failed_items` 用的短码（code review）。
+  ///
+  /// 🔴 埋点去敏规则会**整键丢弃**超过 64 字符的字符串值；用枚举名拼，全部不合格时有 76 字符，
+  /// 恰恰最该统计的情况会丢数据。短码全拼 ≤ 64 字符（有测试钉住）。改短码 = 改看板口径。
+  String get analyticsCode => switch (this) {
+        VideoSpecFailure.unreadable => 'unr',
+        VideoSpecFailure.format => 'fmt',
+        VideoSpecFailure.duration => 'dur',
+        VideoSpecFailure.size => 'size',
+        VideoSpecFailure.resolution => 'res',
+        VideoSpecFailure.videoCodec => 'vcodec',
+        VideoSpecFailure.audioCodec => 'acodec',
+        VideoSpecFailure.hdr => 'hdr',
+        VideoSpecFailure.faststart => 'fast',
+        VideoSpecFailure.location => 'loc',
+      };
 }
 
 /// 检查结果。合格时 1.6 直接用这里的时长、显示宽高、体积发请求。

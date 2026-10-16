@@ -86,6 +86,12 @@ void main() {
   });
 
   group('code review 补测', () {
+    test('埋点短码全拼 ≤ 64 字符（超过会被埋点去敏规则整键丢弃）', () {
+      final all = VideoSpecFailure.values.map((f) => f.analyticsCode).join(',');
+      expect(all.length, lessThanOrEqualTo(64));
+      expect(VideoSpecFailure.values.map((f) => f.analyticsCode).toSet().length, VideoSpecFailure.values.length);
+    });
+
     test('udta/meta/ilst/©xyz（iTunes 风格元数据）→ location', () async {
       final xyz = _box([0xA9, 0x78, 0x79, 0x7A],
           _box('data'.codeUnits, Uint8List.fromList([0, 0, 0, 1, 0, 0, 0, 0, ...'+37.5+127.0/'.codeUnits])));

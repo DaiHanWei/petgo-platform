@@ -338,7 +338,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     // FR-21：每次规格检查都报（不带路径 / 文件名）。
     Analytics.capture('video_spec_check_completed', {
       'ok': result.ok,
-      'failed_items': result.failures.map((f) => f.name).join(','),
+      'failed_items': result.failures.map((f) => f.analyticsCode).join(','),
     });
     if (!mounted) return;
     setState(() => _checkingVideo = false);

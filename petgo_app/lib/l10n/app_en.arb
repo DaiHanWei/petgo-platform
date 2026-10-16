@@ -4041,6 +4041,8 @@
   "@videoUploading": {"description": "Video upload progress (video story 1.6)", "placeholders": {"percent": {"type": "int"}}},
   "videoUploadFailedRetry": "Upload failed. Tap to retry.",
   "@videoUploadFailedRetry": {"description": "Video upload failed, tap to retry (video story 1.6)"},
+  "videoUploadCanceledRestart": "Upload canceled. Tap to upload.",
+  "@videoUploadCanceledRestart": {"description": "Shown after the user cancels a video upload; tap starts it again (video story 1.6)"},
   "videoUploadCancel": "Cancel",
   "@videoUploadCancel": {"description": "Cancel the video upload (video story 1.6)"},
   "videoCoverChange": "Change cover",

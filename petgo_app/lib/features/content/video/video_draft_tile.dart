@@ -124,7 +124,8 @@ class VideoDraftTile extends StatelessWidget {
         return GestureDetector(
           key: const ValueKey('videoUploadStart'),
           onTap: controller.startVideoUpload,
-          child: Text(l10n.videoUploadFailedRetry, style: style.copyWith(color: AppColors.coral)),
+          // idle 几乎只出现在用户主动取消之后：取消不算错误，用中性文案与颜色（code review）。
+          child: Text(l10n.videoUploadCanceledRestart, style: style.copyWith(color: AppColors.ink2)),
         );
     }
   }
