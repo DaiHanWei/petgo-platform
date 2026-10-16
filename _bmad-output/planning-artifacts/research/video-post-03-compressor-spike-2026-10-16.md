@@ -5,6 +5,8 @@
 
 ## 0. 结论
 
+> **2026-10-16 拍板**：采用 `pro_video_editor`，选型不做真机验证（专题线 video 决策 V-28）。§5 的真机项改到 FR-7 的 L2 验收中确认。
+
 - **推荐 `pro_video_editor`**，备选 `v_video_compressor`。两者都满足规格（H.264、≤720、≈2Mbps、30fps、faststart、方向正确）。
 - `video_compress`（最流行的老库）**淘汰**：码率不可控（iOS 达 10.6Mbps，90s 视频 121MB），安卓输出不是 faststart，iOS 不降帧，2025-02 起不再更新，且不支持 SwiftPM / Built-in Kotlin（Flutter 后续版本会编译不过）。
 - `native_video_compress` **淘汰**：在项目当前的 AGP 9.0.1 下编译失败。
