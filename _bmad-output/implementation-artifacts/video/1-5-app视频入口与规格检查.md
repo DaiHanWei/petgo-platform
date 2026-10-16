@@ -227,3 +227,15 @@ Claude Opus 5.5 (1M context)
 ### Change Log
 
 - 2026-10-16：实现 Story 1.5——会员等级下发到 App、发帖页视频入口（可见性 / 互斥）、纯 Dart MP4 规格检查器与 15 个样片、逐条不合格提示；L0 通过，L2 待部署后在模拟器 / 真机验收。
+
+## Senior Developer Review (AI) · 2026-10-16（云端）
+
+- **CONFIRMED 已修**：
+  1. 位置检查漏 `udta/meta/ilst/©xyz`（iTunes 风格）→ `_parseMeta` 进 `ilst` 判 `©xyz` / `loci`；补内存构造用例。
+  2. 无 `ftyp`（老式 .mov 开头 / ftyp 前有 free）报 `unreadable` 而 AC4 要求 `format` → 去掉「首 box 必须 ftyp」硬拦，扫描后 `majorBrand == null` 记 `format`（乱码文件仍 unreadable）。
+  3. 超限「实际值」四舍五入后像合格（90.04s → 「90.0s」）→ 超上限向上取整、低于下限向下取整；体积向上取整。新增 `video_spec_messages_test.dart`。
+  4. 图片 / 视频处理中的互斥窗口：拍照处理中可选视频、视频检查中可加图，一方被静默丢掉 → 入口与加图格互相看 `_addingImage` / `_checkingVideo` / `_pickingVideo`；`setVideo` 被拒时不启动上传。
+  5. 选择器未返回前可连点、选择器异常未捕获 → `_pickingVideo` 锁 + try/catch 按取消处理；补 2 个 widget 用例。
+- **偏离 AC（沿用 Completion Notes 已声明，未改）**：成长日记切回日常在 `setVideo` 里直接写 type，未走 `setType` / 未上报类型选择埋点 —— 待 PO 确认。
+- **PLAUSIBLE 未改**：文件尾垃圾 / udta 内不规范子 box 判 unreadable；64 位 size 的 ftyp；HDR 只认 `nclx`；碎片化 MP4；`_videoEntryVisible` 用 `ref.read`。
+- L0：`flutter analyze` 零问题、`flutter test test/features/content` 全绿；**L1/L2 待本地验收**（真机检查耗时、iOS 选择器原样文件）。

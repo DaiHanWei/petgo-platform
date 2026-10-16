@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -61,6 +62,7 @@ void main() {
     String? checkinToken,
     List<Uint8List>? initialImages,
     String? pickedPath,
+    Future<String?> Function()? picker,
   }) async {
     tester.view.physicalSize = const Size(1200, 3200);
     tester.view.devicePixelRatio = 1.0;
@@ -70,7 +72,7 @@ void main() {
       publishControllerProvider.overrideWithValue(controller),
       profileRepositoryProvider.overrideWithValue(_PetRepo()),
       authControllerProvider.overrideWith(_auth(vipLevel)),
-      videoPickerProvider.overrideWithValue(() async => pickedPath),
+      videoPickerProvider.overrideWithValue(picker ?? () async => pickedPath),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
@@ -175,5 +177,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.video, isNull);
     expect(find.byKey(const ValueKey('videoSpecErrorCard')), findsNothing);
+  });
+
+  testWidgets('选择器抛异常（already_active / 读文件失败）：按取消处理，不向 UI 抛（code review）', (tester) async {
+    final c = await pump(tester, preset: ContentType.daily, picker: () async => throw StateError('already_active'));
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(c.video, isNull);
+  });
+
+  testWidgets('选择器未返回前连点：只打开一次（code review）', (tester) async {
+    var calls = 0;
+    final pending = Completer<String?>();
+    await pump(tester, preset: ContentType.daily, picker: () {
+      calls++;
+      return pending.future;
+    });
+    await tester.tap(entry);
+    await tester.pump();
+    await tester.tap(entry, warnIfMissed: false);
+    await tester.pump();
+    expect(calls, 1);
+    pending.complete(null);
+    await tester.pumpAndSettle();
   });
 }

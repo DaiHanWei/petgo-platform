@@ -9,9 +9,9 @@ String videoSpecFailureMessage(AppLocalizations l10n, VideoSpecFailure f, VideoS
     case VideoSpecFailure.format:
       return l10n.videoSpecFormat;
     case VideoSpecFailure.duration:
-      return l10n.videoSpecDuration(((r.durationMs ?? 0) / 1000).toStringAsFixed(1));
+      return l10n.videoSpecDuration(_durationSeconds(r.durationMs ?? 0));
     case VideoSpecFailure.size:
-      return l10n.videoSpecSize(((r.sizeBytes ?? 0) / (1024 * 1024)).toStringAsFixed(1));
+      return l10n.videoSpecSize(_sizeMb(r.sizeBytes ?? 0));
     case VideoSpecFailure.resolution:
       return l10n.videoSpecResolution('${r.displayWidth ?? 0}×${r.displayHeight ?? 0}');
     case VideoSpecFailure.videoCodec:
@@ -26,6 +26,16 @@ String videoSpecFailureMessage(AppLocalizations l10n, VideoSpecFailure f, VideoS
       return l10n.videoSpecLocation;
   }
 }
+
+/// 实际时长（秒，1 位小数）。超上限向上取整、低于下限向下取整 —— 四舍五入会把 90.04s 显示成
+/// 「90.0s」，配上「需 3–90 秒」看起来像合格（code review）。
+String _durationSeconds(int ms) {
+  final tenths = ms > kVideoMaxDurationMs ? (ms / 100).ceil() : (ms / 100).floor();
+  return (tenths / 10).toStringAsFixed(1);
+}
+
+/// 实际体积（MB，1 位小数，向上取整：超限的才会显示，不能被舍成「100.0」）。
+String _sizeMb(int bytes) => ((bytes / (1024 * 1024 / 10)).ceil() / 10).toStringAsFixed(1);
 
 String _codecName(String? fourcc) {
   switch (fourcc) {

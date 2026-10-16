@@ -42,7 +42,6 @@ class VideoSpecChecker {
     int? mdatOffset;
 
     var off = 0;
-    var first = true;
     while (off + 8 <= fileLength) {
       await raf.setPosition(off);
       final head = await raf.read(16);
@@ -60,10 +59,6 @@ class VideoSpecChecker {
       }
       if (size < headerLen || off + size > fileLength) {
         return VideoSpecResult.unreadable;
-      }
-      if (first) {
-        if (type != 'ftyp') return VideoSpecResult.unreadable;
-        first = false;
       }
       if (type == 'ftyp' && majorBrand == null && size >= headerLen + 4) {
         majorBrand = String.fromCharCodes(head.sublist(headerLen, headerLen + 4));
@@ -92,7 +87,9 @@ class VideoSpecChecker {
     }
 
     final failures = <VideoSpecFailure>[];
-    if (majorBrand == 'qt  ') failures.add(VideoSpecFailure.format);
+    // 没有 ftyp（老式 .mov 以 wide/mdat/moov 开头）或 QuickTime 品牌 → 不是 MP4 封装（AC4：format）。
+    // 顶层 box 结构本身的合法性仍由上面的扫描把关（乱码文件照旧 unreadable）。
+    if (majorBrand == null || majorBrand == 'qt  ') failures.add(VideoSpecFailure.format);
     final durationMs = info.durationMs!;
     if (durationMs < kVideoMinDurationMs || durationMs > kVideoMaxDurationMs) {
       failures.add(VideoSpecFailure.duration);
@@ -297,6 +294,11 @@ class VideoSpecChecker {
         }
       } else if (type == _xyz || type == 'loci') {
         info.hasLocation = true;
+      } else if (type == 'ilst') {
+        // iTunes 风格元数据：坐标在 meta/ilst/©xyz（ExifTool 的 ItemList:GPSCoordinates）。
+        _forEachChild(b, bd, cBody, cEnd, (t2, _, _) {
+          if (t2 == _xyz || t2 == 'loci') info.hasLocation = true;
+        });
       }
     });
   }

@@ -219,6 +219,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 视频规格检查进行中（专题线 video Story 1.5）：期间禁止再次选择。
   bool _checkingVideo = false;
 
+  /// 视频选择器打开中（专题线 video Story 1.5 code review：防连点）。
+  bool _pickingVideo = false;
+
   /// 最近一次不合格的检查结果；有值时显示逐条提示卡。
   VideoSpecResult? _videoSpecError;
 
@@ -315,8 +318,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 选视频 → 规格检查（专题线 video Story 1.5 · FR-6 / FR-7）。只拿文件路径，不读进内存。
   Future<void> _pickVideo(PublishController controller) async {
-    if (_checkingVideo || !controller.canPickVideo) return;
-    final path = await ref.read(videoPickerProvider)();
+    if (_pickingVideo || _checkingVideo || _addingImage || !controller.canPickVideo) return;
+    // 选择器打开期间也锁住入口：连点会让 image_picker 抛 already_active（code review）。
+    setState(() => _pickingVideo = true);
+    String? path;
+    try {
+      path = await ref.read(videoPickerProvider)();
+    } catch (_) {
+      path = null; // 选择器异常（already_active / 读文件失败）：按取消处理，不向 UI 抛
+    } finally {
+      if (mounted) setState(() => _pickingVideo = false);
+    }
     if (path == null || !mounted) return; // 取消：什么都不变
     setState(() {
       _checkingVideo = true;
@@ -343,6 +355,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
     // setVideo 内部会把「成长日记」切回「日常」（视频帖只能是日常或科普）。
     controller.setVideo(draft);
+    // 被拒（例如检查期间已有图片入列）就不启动上传与取帧（code review）。
+    if (!identical(controller.video, draft)) return;
     _onVideoAccepted(draft);
   }
 
@@ -411,7 +425,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 视频入口 + 检查中 + 不合格提示（专题线 video Story 1.5）。有视频时由 [_imageRow] 显示预览格。
   Widget _videoSection(PublishController controller, AppLocalizations l10n) {
     if (!_videoEntryVisible || controller.video != null) return const SizedBox.shrink();
-    final enabled = controller.canPickVideo && !_checkingVideo;
+    // 图片处理中（拍照解码 / 压缩）也不可选视频：否则图片稍后入列失败会被静默丢掉（code review）。
+    final enabled = controller.canPickVideo && !_checkingVideo && !_pickingVideo && !_addingImage;
     final error = _videoSpecError;
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -1494,7 +1509,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       child: GestureDetector(
         key: const ValueKey('publishAddImage'),
         // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
-        onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
+        // 视频选择 / 检查进行中不可加图：检查合格后 setVideo 会因已有图片被拒，视频被静默丢掉（code review）。
+        onTap: (_addingImage || _checkingVideo || _pickingVideo)
+            ? null
+            : () => _pickImageSource(controller, l10n),
         child: CustomPaint(
           painter: DashedRRectPainter(
             color: AppColors.dashedViolet,

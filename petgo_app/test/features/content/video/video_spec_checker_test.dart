@@ -85,6 +85,27 @@ void main() {
     });
   });
 
+  group('code review 补测', () {
+    test('udta/meta/ilst/©xyz（iTunes 风格元数据）→ location', () async {
+      final xyz = _box([0xA9, 0x78, 0x79, 0x7A],
+          _box('data'.codeUnits, Uint8List.fromList([0, 0, 0, 1, 0, 0, 0, 0, ...'+37.5+127.0/'.codeUnits])));
+      final hdlr = _box('hdlr'.codeUnits,
+          Uint8List.fromList([0, 0, 0, 0, 0, 0, 0, 0, ...'mdir'.codeUnits, ...List.filled(13, 0)]));
+      final ilst = _box('ilst'.codeUnits, xyz);
+      // ISO FullBox 风格的 meta：版本+标志 4 字节，再是 hdlr、ilst。
+      final meta = _box('meta'.codeUnits, Uint8List.fromList([0, 0, 0, 0, ...hdlr, ...ilst]));
+      final f = await _temp('ilst.mp4', _injectIntoMoov(_box('udta'.codeUnits, meta)));
+      expect((await checker.check(f.path)).failures, [VideoSpecFailure.location]);
+    });
+
+    test('没有 ftyp（老式 .mov 开头）→ format，而不是 unreadable', () async {
+      final b = File('$dir/ok_avc_720x1280.mp4').readAsBytesSync();
+      final ftypSize = ByteData.sublistView(b).getUint32(0);
+      final f = await _temp('noftyp.mp4', b.sublist(ftypSize));
+      expect((await checker.check(f.path)).failures, [VideoSpecFailure.format]);
+    });
+  });
+
   group('位置信息的另外两种写法（样片里没有，测试时注入 moov）', () {
     test('udta/©xyz（Android 录像）', () async {
       final xyz = _box([0xA9, 0x78, 0x79, 0x7A], Uint8List.fromList('+37.5+127.0/'.codeUnits));
