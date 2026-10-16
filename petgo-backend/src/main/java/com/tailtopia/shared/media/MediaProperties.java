@@ -17,6 +17,7 @@ public class MediaProperties {
 
     private final Oss oss = new Oss();
     private final SignedUrl signedUrl = new SignedUrl();
+    private final Video video = new Video();
 
     public String getAccessKeyId() {
         return accessKeyId;
@@ -40,6 +41,10 @@ public class MediaProperties {
 
     public SignedUrl getSignedUrl() {
         return signedUrl;
+    }
+
+    public Video getVideo() {
+        return video;
     }
 
     /** OSS 双桶寻址。雅加达 region {@code ap-southeast-5}。 */
@@ -147,6 +152,40 @@ public class MediaProperties {
 
         public void setUploadTtlSeconds(long uploadTtlSeconds) {
             this.uploadTtlSeconds = uploadTtlSeconds;
+        }
+    }
+
+    /** 专题线 video（Story 1.2 · AD-3）：视频 PostObject 上传策略。前缀 {@code media.video}。 */
+    public static class Video {
+        /** 策略有效期（秒），默认 1800。OSS 只在请求开始时检查过期（NFR-7：100MB @ 5Mbps 上行）。 */
+        private long uploadTtlSeconds = 1800;
+        /** 单个视频体积上限（字节），默认 100MB（决策 V-30）。 */
+        private long maxBytes = 104_857_600L;
+        /** 每账号每 WIB 自然日可申请的策略次数，默认 50。 */
+        private int dailyPolicyLimit = 50;
+
+        public long getUploadTtlSeconds() {
+            return uploadTtlSeconds;
+        }
+
+        public void setUploadTtlSeconds(long uploadTtlSeconds) {
+            this.uploadTtlSeconds = uploadTtlSeconds;
+        }
+
+        public long getMaxBytes() {
+            return maxBytes;
+        }
+
+        public void setMaxBytes(long maxBytes) {
+            this.maxBytes = maxBytes;
+        }
+
+        public int getDailyPolicyLimit() {
+            return dailyPolicyLimit;
+        }
+
+        public void setDailyPolicyLimit(int dailyPolicyLimit) {
+            this.dailyPolicyLimit = dailyPolicyLimit;
         }
     }
 }

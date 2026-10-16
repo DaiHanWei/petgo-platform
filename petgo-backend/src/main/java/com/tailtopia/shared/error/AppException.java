@@ -179,4 +179,29 @@ public class AppException extends RuntimeException {
     public static AppException followBlocked(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.FOLLOW_BLOCKED, detail);
     }
+
+    /** 专题线 video Story 1.2：通用上传类型不在图片白名单内 → 422 {@code upload-content-type-not-allowed}。 */
+    public static AppException uploadContentTypeNotAllowed(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.UPLOAD_CONTENT_TYPE_NOT_ALLOWED, detail);
+    }
+
+    /** 专题线 video Story 1.2：等级 &lt; 10 申请视频 / 视频封面上传 → 403 {@code video-permission-denied}。 */
+    public static AppException videoPermissionDenied(String detail) {
+        return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.VIDEO_PERMISSION_DENIED, detail);
+    }
+
+    /** 专题线 video Story 1.2：视频上传策略超出每日次数 → 429 {@code video-upload-quota-exceeded}。 */
+    public static AppException videoUploadQuotaExceeded(String detail) {
+        return new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorTypes.VIDEO_UPLOAD_QUOTA_EXCEEDED, detail);
+    }
+
+    /** 专题线 video Story 1.3：视频 / 封面对象不合规 → 422 {@code video-object-invalid}。 */
+    public static AppException videoObjectInvalid(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.VIDEO_OBJECT_INVALID, detail);
+    }
+
+    /** 专题线 video Story 1.3：视频与图片混发 / 视频帖媒体数量不对 → 422 {@code video-mixed-media}。 */
+    public static AppException videoMixedMedia(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.VIDEO_MIXED_MEDIA, detail);
+    }
 }

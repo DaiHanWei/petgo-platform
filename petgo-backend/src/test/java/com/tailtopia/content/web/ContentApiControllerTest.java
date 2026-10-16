@@ -24,7 +24,9 @@ class ContentApiControllerTest {
 
     private final ContentService service = mock(ContentService.class);
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
-    private final ContentApiController controller = new ContentApiController(service, rateLimiter);
+    private final com.tailtopia.content.service.VideoPostValidator validator =
+            mock(com.tailtopia.content.service.VideoPostValidator.class);
+    private final ContentApiController controller = new ContentApiController(service, rateLimiter, validator);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();
@@ -49,5 +51,37 @@ class ContentApiControllerTest {
         assertThatThrownBy(() -> controller.publish(
                 null, null, new ContentPostCreateRequest(ContentType.DAILY, null, "hi", null)))
                 .isInstanceOf(AppException.class);
+    }
+
+    // ---------- 专题线 video Story 1.3：HEAD 在事务外 ----------
+
+    @Test
+    void videoIsVerifiedOutsideTransactionBeforePublish() {
+        var req = new ContentPostCreateRequest(ContentType.DAILY, null, "hi", java.util.List.of("c"), null, null,
+                null, null, null, null, com.tailtopia.content.domain.MediaType.VIDEO,
+                new com.tailtopia.content.dto.VideoPayload("video/7/k.mp4", 5000, 720, 1280));
+        var verified = new com.tailtopia.content.service.VideoPostValidator.VerifiedVideo("video/7/k.mp4", 10L);
+        when(validator.verifyObjects(7L, req)).thenReturn(verified);
+
+        controller.publish(jwt("7"), "IDEM", req);
+
+        var order = org.mockito.Mockito.inOrder(validator, service);
+        order.verify(validator).verifyObjects(7L, req);
+        order.verify(service).publish(7L, req, "IDEM", verified);
+    }
+
+    @Test
+    void imagePostSkipsVideoVerification() {
+        controller.publish(jwt("7"), null, new ContentPostCreateRequest(ContentType.DAILY, null, "hi", null));
+        org.mockito.Mockito.verifyNoInteractions(validator);
+    }
+
+    @Test
+    void videoPostValidatorIsNotTransactional() {
+        Class<?> c = com.tailtopia.content.service.VideoPostValidator.class;
+        assertThat(c.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isFalse();
+        assertThat(java.util.Arrays.stream(c.getDeclaredMethods())
+                .noneMatch(m -> m.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)))
+                .isTrue();
     }
 }

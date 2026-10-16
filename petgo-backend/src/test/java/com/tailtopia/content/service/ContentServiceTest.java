@@ -34,6 +34,8 @@ class ContentServiceTest {
     private IdempotencyService idempotency;
     private org.springframework.context.ApplicationEventPublisher events;
     private ManualReviewGate manualReviewGate;
+    private VideoTrustedPublisherService videoTrusted;
+    private com.tailtopia.auth.service.VipLevelService vipLevels;
     private ContentService service;
 
     @BeforeEach
@@ -72,7 +74,12 @@ class ContentServiceTest {
                 // V1.3.2 Story 1.5：打卡关联只读口（本类按需 stub）。
                 placeCheckins,
                 // V1.3.4 Story 2.1：露出位置校验用真实实现（纯函数、无 IO）。
-                new ImageCropOffsetValidator());
+                new ImageCropOffsetValidator(),
+                // 专题线 video Story 1.3：名单 / 等级按需 stub；validateShape 是纯函数，用真实实现
+                // （它不碰构造器依赖 —— HEAD 只在事务外的 verifyObjects 里，本类不测）。
+                videoTrusted = Mockito.mock(VideoTrustedPublisherService.class),
+                vipLevels = Mockito.mock(com.tailtopia.auth.service.VipLevelService.class),
+                new VideoPostValidator(null, null, null));
     }
 
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
@@ -775,5 +782,114 @@ class ContentServiceTest {
         assertThat(pending.getImageCropOffsets())
                 .as("挂起分支漏写露出位置 —— 审核通过后进 Feed 会无声退化为居中")
                 .isEqualTo(java.util.Arrays.asList(0.25, null));
+    }
+
+    // ---------- 专题线 video Story 1.3：视频帖发布分支 ----------
+
+    private static final String COVER = "https://cdn.example/public/1/cover.jpg";
+    private static final String VKEY = "video/1/abcdefghijklmnopqrstuv.mp4";
+
+    private static ContentPostCreateRequest videoReq(String text) {
+        return new ContentPostCreateRequest(ContentType.DAILY, null, text, List.of(COVER), null,
+                com.tailtopia.content.domain.ContentVisibility.PRIVATE, // 请求私密也要被强制公开
+                List.of(new com.tailtopia.content.domain.ImageSize(1, 1)), // 客户端尺寸不采信
+                null, null, null, com.tailtopia.content.domain.MediaType.VIDEO,
+                new com.tailtopia.content.dto.VideoPayload(VKEY, 75_000, 720, 1280));
+    }
+
+    private static final VideoPostValidator.VerifiedVideo VERIFIED = new VideoPostValidator.VerifiedVideo(VKEY, 25_000_000L);
+
+    private ContentPost savedPost() {
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+        verify(posts).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void trustedVideoPublishesDirectlyWithoutModerationOrBackfill() {
+        when(vipLevels.canPublishVideo(1L)).thenReturn(true);
+        when(videoTrusted.isTrusted(1L)).thenReturn(true);
+
+        // 正文含 L1 违禁词也直接发布：名单内跳过全部审核（AD-5）。
+        service.publish(1L, videoReq("ayo main judi online"), "K", VERIFIED);
+
+        ContentPost p = savedPost();
+        assertThat(p.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.PUBLISHED);
+        assertThat(p.getMediaType()).isEqualTo(com.tailtopia.content.domain.MediaType.VIDEO);
+        assertThat(p.getVisibility()).isEqualTo(com.tailtopia.content.domain.ContentVisibility.PUBLIC);
+        assertThat(p.getImageUrls()).containsExactly(COVER);
+        assertThat(p.getImageSizes()).containsExactly(new com.tailtopia.content.domain.ImageSize(720, 1280));
+        assertThat(p.getImageCropOffsets()).isNull();
+        assertThat(p.getVideoObjectKey()).isEqualTo(VKEY);
+        assertThat(p.getVideoDurationMs()).isEqualTo(75_000);
+        assertThat(p.getVideoSizeBytes()).isEqualTo(25_000_000L);
+        assertThat(p.getMediaAclDesired()).isEqualTo(com.tailtopia.content.domain.MediaAcl.PUBLIC);
+        assertThat(p.getMediaAclApplied()).isEqualTo(com.tailtopia.content.domain.MediaAcl.PRIVATE);
+        assertThat(p.getMediaAclDesiredAt()).isNotNull();
+        verify(events).publishEvent(any(com.tailtopia.content.event.ContentPublishedEvent.class));
+        verify(idempotency).store("K", 100L);
+        verify(manualReviewGate, never()).enqueue(anyLong());
+    }
+
+    @Test
+    void untrustedVideoIsForcedIntoReviewEvenWhenGateDisabled() {
+        when(vipLevels.canPublishVideo(1L)).thenReturn(true);
+        when(videoTrusted.isTrusted(1L)).thenReturn(false);
+        // 默认 manualReviewGate.enabled()=false。
+
+        service.publish(1L, videoReq("halo"), null, VERIFIED);
+
+        ContentPost p = savedPost();
+        assertThat(p.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(p.getReviewReason()).isEqualTo(ContentPost.REVIEW_REASON_VIDEO_FORCED);
+        assertThat(p.getMediaAclDesired()).isEqualTo(com.tailtopia.content.domain.MediaAcl.PRIVATE);
+        assertThat(p.getMediaAclApplied()).isEqualTo(com.tailtopia.content.domain.MediaAcl.PRIVATE);
+        assertThat(p.getImageSizes()).containsExactly(new com.tailtopia.content.domain.ImageSize(720, 1280));
+        verify(manualReviewGate).enqueue(100L);
+        verify(manualReviewGate, never()).enabled();
+        verify(events, never()).publishEvent(any(com.tailtopia.content.event.ContentPublishedEvent.class));
+    }
+
+    @Test
+    void untrustedVideoTextHardBlockedIsRejected() {
+        when(vipLevels.canPublishVideo(1L)).thenReturn(true);
+        assertThatThrownBy(() -> service.publish(1L, videoReq("ayo main judi online"), null, VERIFIED))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.CONTENT_TEXT_BLOCKED));
+        verify(posts, never()).save(any());
+        verify(manualReviewGate, never()).enqueue(anyLong());
+    }
+
+    @Test
+    void videoWithoutOutOfTransactionVerificationIsRejected() {
+        when(vipLevels.canPublishVideo(1L)).thenReturn(true);
+        // 3 参 publish（后台调用方）传 VIDEO：没经过 HEAD / 归属校验，不许落库。
+        assertThatThrownBy(() -> service.publish(1L, videoReq("x"), null))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.VIDEO_OBJECT_INVALID));
+        // 校验过的 key 与请求不一致同样拒。
+        assertThatThrownBy(() -> service.publish(1L, videoReq("x"), null,
+                new VideoPostValidator.VerifiedVideo("video/1/other.mp4", 1L)))
+                .isInstanceOf(AppException.class);
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void levelIsRecheckedInsideTransaction() {
+        when(vipLevels.canPublishVideo(1L)).thenReturn(false); // 事务外校验之后被后台降级
+        assertThatThrownBy(() -> service.publish(1L, videoReq("x"), null, VERIFIED))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.VIDEO_PERMISSION_DENIED));
+        verify(posts, never()).save(any());
+    }
+
+    @Test
+    void imagePostCarryingVideoIsMixedMedia() {
+        var req = new ContentPostCreateRequest(ContentType.DAILY, null, "x", List.of(COVER), null, null, null,
+                null, null, null, null, new com.tailtopia.content.dto.VideoPayload(VKEY, 5000, 720, 1280));
+        assertThatThrownBy(() -> service.publish(1L, req, null))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.VIDEO_MIXED_MEDIA));
+        verify(posts, never()).save(any());
     }
 }

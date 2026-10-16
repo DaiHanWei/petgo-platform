@@ -101,7 +101,10 @@ class MentionEventPublishTest {
                 Mockito.mock(ContentPinService.class),
                 new MentionSanitizer(accounts, hideRelations, candidates),
                 Mockito.mock(com.tailtopia.place.service.PlaceCheckinQueryService.class),
-                new ImageCropOffsetValidator());
+                new ImageCropOffsetValidator(),
+                Mockito.mock(VideoTrustedPublisherService.class),
+                Mockito.mock(com.tailtopia.auth.service.VipLevelService.class),
+                new VideoPostValidator(null, null, null));
     }
 
     private static void setId(ContentPost p, long id) {

@@ -68,6 +68,17 @@ public final class ErrorTypes {
      */
     public static final URI FOLLOW_BLOCKED = URI.create(BASE + "follow-blocked");
 
+    /** 专题线 video Story 1.2：通用上传申请了白名单外的类型（422，白名单只有图片）。 */
+    public static final URI UPLOAD_CONTENT_TYPE_NOT_ALLOWED = URI.create(BASE + "upload-content-type-not-allowed");
+    /** 专题线 video Story 1.2：会员等级不足，不能申请视频 / 视频封面上传（403）。 */
+    public static final URI VIDEO_PERMISSION_DENIED = URI.create(BASE + "video-permission-denied");
+    /** 专题线 video Story 1.2：视频上传策略超出每日（WIB 自然日）次数上限（429）。 */
+    public static final URI VIDEO_UPLOAD_QUOTA_EXCEEDED = URI.create(BASE + "video-upload-quota-exceeded");
+    /** 专题线 video Story 1.3：视频帖的视频 / 封面对象不合规（时长宽高越界、非本人、不存在、类型或大小不对）（422）。 */
+    public static final URI VIDEO_OBJECT_INVALID = URI.create(BASE + "video-object-invalid");
+    /** 专题线 video Story 1.3：视频与图片混发，或视频帖缺视频 / 封面数量不对（422）。 */
+    public static final URI VIDEO_MIXED_MEDIA = URI.create(BASE + "video-mixed-media");
+
     private ErrorTypes() {
     }
 }

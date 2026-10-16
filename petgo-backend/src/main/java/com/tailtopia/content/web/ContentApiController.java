@@ -1,8 +1,10 @@
 package com.tailtopia.content.web;
 
+import com.tailtopia.content.domain.MediaType;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.VideoPostValidator;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
@@ -24,6 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>{@code POST}：JWT；201 + {@link ContentPostResponse}；{@code Idempotency-Key} 头去重；写端点限流。
  * author 取自 JWT，不信任客户端。
+ *
+ * <p>视频帖（专题线 video Story 1.3）：先在<b>本层（事务外）</b>做 {@link VideoPostValidator#verifyObjects}
+ * （等级、归属、OSS HEAD），再进 {@code @Transactional} 的 {@code publish} —— HEAD 不许在事务里发（一致性规则 7）。
  */
 @RestController
 @RequestMapping("/api/v1/content-posts")
@@ -34,10 +39,13 @@ public class ContentApiController {
 
     private final ContentService contentService;
     private final RedisRateLimiter rateLimiter;
+    private final VideoPostValidator videoPostValidator;
 
-    public ContentApiController(ContentService contentService, RedisRateLimiter rateLimiter) {
+    public ContentApiController(ContentService contentService, RedisRateLimiter rateLimiter,
+            VideoPostValidator videoPostValidator) {
         this.contentService = contentService;
         this.rateLimiter = rateLimiter;
+        this.videoPostValidator = videoPostValidator;
     }
 
     @PostMapping
@@ -47,6 +55,10 @@ public class ContentApiController {
             @Valid @RequestBody ContentPostCreateRequest req) {
         long authorId = currentUserId(jwt);
         rateLimiter.check("rl:content:publish:" + authorId, PUBLISH_LIMIT, PUBLISH_WINDOW);
+        if (req.mediaTypeOrImage() == MediaType.VIDEO) {
+            VideoPostValidator.VerifiedVideo verified = videoPostValidator.verifyObjects(authorId, req);
+            return contentService.publish(authorId, req, idempotencyKey, verified);
+        }
         return contentService.publish(authorId, req, idempotencyKey);
     }
 

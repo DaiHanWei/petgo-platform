@@ -25,6 +25,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class PostDistributionQuery {
 
+    // 专题线 video Story 1.3：视频帖不进暖评分发列表（FR-10：视频帖不触发暖评）。
     private static final String BASE_CTE = """
             WITH base AS (
                 SELECT cp.id, cp.author_id, cp.created_at, cp.status, cp.text,
@@ -33,6 +34,7 @@ public class PostDistributionQuery {
                 FROM content_posts cp
                 JOIN users u ON u.id = cp.author_id
                 WHERE cp.deleted_at IS NULL
+                  AND cp.media_type = 'IMAGE'
                   AND (:excludeVirtual = FALSE OR u.account_type <> 'VIRTUAL')
                   AND (:status = 'all' OR (:status = 'visible' AND cp.status = 'PUBLISHED') OR (:status = 'takendown' AND cp.status <> 'PUBLISHED'))
                   AND (cp.created_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN :fromDate AND :toDate
