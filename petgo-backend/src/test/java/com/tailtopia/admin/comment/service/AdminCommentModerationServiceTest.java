@@ -54,6 +54,7 @@ class AdminCommentModerationServiceTest {
     }
 
     private void stubEnrichment(String nickname, boolean authorDeleted) {
+        when(contentService.adminMedia(ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
         when(contentService.adminRowsByIds(ArgumentMatchers.any()))
                 .thenReturn(List.of(new AdminContentRow(9L, ContentType.DAILY, 3L, "帖子正文",
                         false, Instant.now(), List.of("https://cdn/x.jpg"), null)));

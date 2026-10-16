@@ -104,7 +104,8 @@ class MentionEventPublishTest {
                 new ImageCropOffsetValidator(),
                 Mockito.mock(VideoTrustedPublisherService.class),
                 Mockito.mock(com.tailtopia.auth.service.VipLevelService.class),
-                new VideoPostValidator(null, null, null));
+                new VideoPostValidator(null, null, null),
+                Mockito.mock(PostMediaResolver.class));
     }
 
     private static void setId(ContentPost p, long id) {

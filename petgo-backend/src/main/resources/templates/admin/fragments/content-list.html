@@ -124,6 +124,8 @@
             <span th:if="${c.imageUrls() == null or #lists.isEmpty(c.imageUrls())}" class="muted">—</span>
             <img th:each="img : ${c.imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox
                  style="width:48px;height:48px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle;cursor:zoom-in"/>
+            <!--/* 专题线 video Story 3.3：视频帖 = 签名封面 + 「视频」标识（播放在抽屉里） */-->
+            <span th:if="${c.isVideo()}" class="badge badge-muted" data-video-badge th:text="#{admin.video.badge}">视频</span>
         </td>
         <!--/* ⚠️ 零赞的帖子不在 likeCounts 里（group by 不给空组造行），必须兜底成 0 */-->
         <td th:text="${likeCounts == null ? '—' : (likeCounts[c.id()] ?: 0)}">0</td>

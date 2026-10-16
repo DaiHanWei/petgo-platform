@@ -53,19 +53,38 @@ public class PostMediaResolver {
         }
         try {
             Duration ttl = videoUrls.signedTtl(p);
-            String video = videoUrls.signedUrl(p, ttl);
-            List<String> images = p.getImageUrls();
-            Optional<String> coverKey = videoUrls.coverObjectKey(p);
-            if (coverKey.isPresent()) {
-                images = List.of(signedUrls.sign(props.getOss().getPublicBucket(), coverKey.get(), ttl));
-            }
-            return new PostMedia(MediaType.VIDEO, view(p, video), images);
+            return new PostMedia(MediaType.VIDEO, view(p, videoUrls.signedUrl(p, ttl)), signedCover(p, ttl));
         } catch (RuntimeException e) {
             // 签名失败（凭证异常等）不能把作者的整页列表 / 详情拖成 502：降级为公开地址（可能暂时 403），
             // 只记 postId 与异常类名（code review）。
             log.warn("video_sign_failed postId={} cause={}", p.getId(), e.getClass().getSimpleName());
             return new PostMedia(MediaType.VIDEO, view(p, videoUrls.publicUrl(p)), p.getImageUrls());
         }
+    }
+
+    /**
+     * 后台预览（专题线 video Story 3.3 · AD-8 {@code forAdmin}）：视频帖不管当前公开与否，视频与封面一律签名
+     * （有效期同作者签名）；图文帖原样。签名失败降级为原地址（不让后台整页 502），只记 postId 与异常类名。
+     */
+    public PostMedia resolveForAdmin(ContentPost p) {
+        if (p.getMediaType() != MediaType.VIDEO) {
+            return PostMedia.image(p);
+        }
+        try {
+            // forAdmin 与这里同一个 TTL（signedTtl），封面跟着签同样时长。
+            return new PostMedia(MediaType.VIDEO, view(p, videoUrls.forAdmin(p)), signedCover(p, videoUrls.signedTtl(p)));
+        } catch (RuntimeException e) {
+            log.warn("video_admin_sign_failed postId={} cause={}", p.getId(), e.getClass().getSimpleName());
+            return new PostMedia(MediaType.VIDEO, view(p, videoUrls.publicUrl(p)), p.getImageUrls());
+        }
+    }
+
+    /** 封面签名；封面 key 反解不出（不在本桶 CDN 前缀下）→ 保留原地址。 */
+    private List<String> signedCover(ContentPost p, Duration ttl) {
+        Optional<String> coverKey = videoUrls.coverObjectKey(p);
+        return coverKey.isPresent()
+                ? List.of(signedUrls.sign(props.getOss().getPublicBucket(), coverKey.get(), ttl))
+                : p.getImageUrls();
     }
 
     private static VideoView view(ContentPost p, String url) {

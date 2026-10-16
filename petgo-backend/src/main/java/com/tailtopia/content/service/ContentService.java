@@ -83,6 +83,8 @@ public class ContentService {
     private final VipLevelService vipLevels;
     /** 专题线 video Story 1.3：事务内只用它的纯函数 {@code validateShape}；HEAD 在 Controller 事务外做。 */
     private final VideoPostValidator videoPostValidator;
+    /** 专题线 video Story 3.3：后台列表 / 详情的视频帖一律换签名地址（AD-8 forAdmin）。 */
+    private final PostMediaResolver postMedia;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
@@ -93,7 +95,7 @@ public class ContentService {
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
             ImageCropOffsetValidator cropOffsets,
             VideoTrustedPublisherService videoTrustedPublishers, VipLevelService vipLevels,
-            VideoPostValidator videoPostValidator) {
+            VideoPostValidator videoPostValidator, PostMediaResolver postMedia) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -111,6 +113,7 @@ public class ContentService {
         this.videoTrustedPublishers = videoTrustedPublishers;
         this.vipLevels = vipLevels;
         this.videoPostValidator = videoPostValidator;
+        this.postMedia = postMedia;
     }
 
     /**
@@ -306,22 +309,62 @@ public class ContentService {
     }
 
     /**
+     * 专题线 video Story 3.3：把<b>要展示的</b>后台行里的视频帖换成签名视频 + 签名封面（AD-8 forAdmin）；
+     * 图文帖原样、不多查库。视频帖一次 {@code IN} 查回实体再签。
+     *
+     * <p>⚠️ {@link #adminSearch} / {@link #adminRow} / {@link #adminRowsByIds} 本身<b>不签名</b>（code review）：
+     * 导出（最多 5000 行）、按点赞时间的候选池（最多 2000 条）、批量改物种只读 authorId —— 这些路径逐行签名
+     * 纯属浪费（每次签名都新建一个 OSS 客户端）。只有真正渲染到页面的那一页 / 那一行由调用方显式调本方法。
+     */
+    @Transactional(readOnly = true)
+    public List<com.tailtopia.content.dto.AdminContentRow> adminMedia(
+            List<com.tailtopia.content.dto.AdminContentRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return rows == null ? List.of() : rows;
+        }
+        List<Long> videoIds = rows.stream().filter(com.tailtopia.content.dto.AdminContentRow::isVideo)
+                .map(com.tailtopia.content.dto.AdminContentRow::id).toList();
+        if (videoIds.isEmpty()) {
+            return rows;
+        }
+        java.util.Map<Long, ContentPost> byId = posts.findAllById(videoIds).stream()
+                .collect(java.util.stream.Collectors.toMap(ContentPost::getId, p -> p));
+        return rows.stream().map(r -> {
+            ContentPost p = r.isVideo() ? byId.get(r.id()) : null;
+            return p == null ? r : r.withMedia(postMedia.resolveForAdmin(p));
+        }).toList();
+    }
+
+    /**
      * 后台内容详情投影（2026-09-02 内容详情页）：**全文**（列表行是截断预览）+ 状态 + 可见性，
      * 含已删/审核挂起 —— 复核场景恰恰要看这些。content 模块对外只读 DTO，admin 不拿实体。
      */
     public record AdminPostDetail(long id, ContentType type, Long authorId, Long petId,
             String text, List<String> imageUrls, boolean deleted, PostStatus status,
             com.tailtopia.content.domain.ContentVisibility visibility, Instant createdAt,
-            String speciesOverride) {
+            String speciesOverride,
+            /** 专题线 video Story 3.3：媒体类型；视频帖 {@code imageUrls} = [签名封面]。 */
+            com.tailtopia.content.domain.MediaType mediaType,
+            /** 专题线 video Story 3.3：签名视频地址（只视频帖有；勿入日志）。 */
+            String videoUrl) {
+
+        /** 是否视频帖（模板用）。 */
+        public boolean isVideo() {
+            return mediaType == com.tailtopia.content.domain.MediaType.VIDEO;
+        }
     }
 
     /** 后台内容详情（2026-09-02）；不存在返回 empty。 */
     @Transactional(readOnly = true)
     public Optional<AdminPostDetail> adminDetail(long postId) {
-        return posts.findById(postId).map(p -> new AdminPostDetail(p.getId(), p.getType(),
-                p.getAuthorId(), p.getPetId(), p.getText(), p.getImageUrls(),
-                p.getDeletedAt() != null, p.getStatus(), p.getVisibility(), p.getCreatedAt(),
-                p.getSpeciesOverride()));
+        return posts.findById(postId).map(p -> {
+            com.tailtopia.content.dto.PostMedia media = postMedia.resolveForAdmin(p);
+            return new AdminPostDetail(p.getId(), p.getType(),
+                    p.getAuthorId(), p.getPetId(), p.getText(), media.imageUrls(),
+                    p.getDeletedAt() != null, p.getStatus(), p.getVisibility(), p.getCreatedAt(),
+                    p.getSpeciesOverride(), media.mediaType(),
+                    media.video() == null ? null : media.video().url());
+        });
     }
 
     /**
@@ -345,7 +388,7 @@ public class ContentService {
                 .map(p -> new com.tailtopia.content.dto.AdminContentRow(p.getId(), p.getType(),
                         p.getAuthorId(), p.getText(), p.getDeletedAt() != null, p.getCreatedAt(),
                         p.getImageUrls(), p.getSpeciesOverride(),
-                        commentCounts.getOrDefault(p.getId(), 0L)))
+                        commentCounts.getOrDefault(p.getId(), 0L), p.getMediaType(), null))
                 .toList();
     }
 

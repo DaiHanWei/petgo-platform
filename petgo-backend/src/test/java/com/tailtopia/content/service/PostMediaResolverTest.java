@@ -146,4 +146,41 @@ class PostMediaResolverTest {
         assertThat(m.video().url()).isEqualTo("https://oss.test/video/1/k.mp4");
         assertThat(m.imageUrls()).containsExactly(COVER);
     }
+
+    // ===== 专题线 video Story 3.3：后台预览一律签名 =====
+
+    @Test
+    void adminAlwaysGetsSignedVideoAndCoverEvenWhenPublic() {
+        PostMedia m = resolver.resolveForAdmin(video(true, MediaAcl.PUBLIC));
+        assertThat(m.mediaType()).isEqualTo(MediaType.VIDEO);
+        assertThat(m.video().url()).isEqualTo("https://signed/video/1/k.mp4?Signature=x");
+        assertThat(m.imageUrls()).containsExactly("https://signed/public/1/c.jpg?Signature=x");
+    }
+
+    @Test
+    void adminGetsSignedUrlsForUnderReviewOrTakenDownVideo() {
+        ContentPost p = video(false, MediaAcl.PRIVATE);
+        p.softDelete();
+        PostMedia m = resolver.resolveForAdmin(p);
+        assertThat(m.video().url()).startsWith("https://signed/");
+        assertThat(m.firstImageUrl()).startsWith("https://signed/");
+    }
+
+    @Test
+    void adminImagePostIsPassedThroughUnchanged() {
+        ContentPost p = ContentPost.publish(AUTHOR, ContentType.DAILY, null, "t", List.of(COVER));
+        PostMedia m = resolver.resolveForAdmin(p);
+        assertThat(m.mediaType()).isEqualTo(MediaType.IMAGE);
+        assertThat(m.imageUrls()).isSameAs(p.getImageUrls());
+        verify(signer, never()).sign(anyString(), anyString(), any());
+    }
+
+    @Test
+    void adminSigningFailureFallsBackToStoredUrls() {
+        when(signer.sign(anyString(), anyString(), any(Duration.class))).thenThrow(new IllegalStateException("no creds"));
+        PostMedia m = resolver.resolveForAdmin(video(true, MediaAcl.PUBLIC));
+        assertThat(m.mediaType()).isEqualTo(MediaType.VIDEO);
+        assertThat(m.video().url()).isEqualTo("https://oss.test/video/1/k.mp4");
+        assertThat(m.imageUrls()).containsExactly(COVER);
+    }
 }

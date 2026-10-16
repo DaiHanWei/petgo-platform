@@ -28,6 +28,7 @@ import org.mockito.Mockito;
 class ContentServiceTest {
 
     private ContentPostRepository posts;
+    private final PostMediaResolver postMedia = Mockito.mock(PostMediaResolver.class);
     private com.tailtopia.content.repository.CommentRepository comments;
     private com.tailtopia.content.repository.ContentLikeRepository likes;
     private ProfileService profileService;
@@ -79,7 +80,8 @@ class ContentServiceTest {
                 // （它不碰构造器依赖 —— HEAD 只在事务外的 verifyObjects 里，本类不测）。
                 videoTrusted = Mockito.mock(VideoTrustedPublisherService.class),
                 vipLevels = Mockito.mock(com.tailtopia.auth.service.VipLevelService.class),
-                new VideoPostValidator(null, null, null));
+                new VideoPostValidator(null, null, null),
+                postMedia);
     }
 
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
@@ -470,6 +472,33 @@ class ContentServiceTest {
         assertThat(service.isVideoForcedReview(73L)).isFalse();
         assertThat(service.isVideoForcedReview(74L)).isFalse();
         assertThat(service.isVideoForcedReview(75L)).isFalse();
+    }
+
+    @Test
+    void adminMediaSignsOnlyVideoRows() {
+        // 专题线 video Story 3.3：图文行原样且不查库；视频行一次 IN 查回实体，换成后台签名投影。
+        var image = new com.tailtopia.content.dto.AdminContentRow(1L, ContentType.DAILY, 9L, "i", false,
+                java.time.Instant.now(), java.util.List.of("https://cdn/a.jpg"), null, 0L);
+        assertThat(service.adminMedia(java.util.List.of(image))).containsExactly(image);
+        verify(posts, never()).findAllById(any());
+
+        ContentPost vp = ContentPost.publish(9L, ContentType.DAILY, null, "v", java.util.List.of("https://cdn/c.jpg"));
+        org.springframework.test.util.ReflectionTestUtils.setField(vp, "id", 2L);
+        var video = new com.tailtopia.content.dto.AdminContentRow(2L, ContentType.DAILY, 9L, "v", true,
+                java.time.Instant.now(), java.util.List.of("https://cdn/c.jpg"), null, 3L,
+                com.tailtopia.content.domain.MediaType.VIDEO, null);
+        when(posts.findAllById(java.util.List.of(2L))).thenReturn(java.util.List.of(vp));
+        when(postMedia.resolveForAdmin(vp)).thenReturn(new com.tailtopia.content.dto.PostMedia(
+                com.tailtopia.content.domain.MediaType.VIDEO,
+                new com.tailtopia.content.dto.VideoView("https://signed/v.mp4", 1000, 720, 1280),
+                java.util.List.of("https://signed/c.jpg")));
+
+        var out = service.adminMedia(java.util.List.of(image, video));
+        assertThat(out.get(0)).isSameAs(image);
+        assertThat(out.get(1).videoUrl()).isEqualTo("https://signed/v.mp4");
+        assertThat(out.get(1).imageUrls()).containsExactly("https://signed/c.jpg");
+        assertThat(out.get(1).deleted()).isTrue();
+        assertThat(out.get(1).commentCount()).isEqualTo(3L);
     }
 
     @Test

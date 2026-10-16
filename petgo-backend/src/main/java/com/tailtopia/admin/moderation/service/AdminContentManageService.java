@@ -95,8 +95,9 @@ public class AdminContentManageService {
         Instant toI = to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         String keyword = (q == null || q.isBlank()) ? null : q;
         String s = ("comments_desc".equals(sort) || "comments_asc".equals(sort)) ? sort : null;
-        return contentService.adminSearch(ct, authorId, fromI, toI, deleted, keyword, s,
-                PAGE_SIZE, Math.max(page, 0) * PAGE_SIZE);
+        // 专题线 video Story 3.3：只对渲染的这一页签视频帖地址（导出不签）。
+        return contentService.adminMedia(contentService.adminSearch(ct, authorId, fromI, toI, deleted, keyword, s,
+                PAGE_SIZE, Math.max(page, 0) * PAGE_SIZE));
     }
 
     /**
@@ -409,7 +410,8 @@ public class AdminContentManageService {
         int offset = page * PAGE_SIZE;
         List<AdminContentRow> pageRows = offset >= matched.size() ? List.of()
                 : matched.subList(offset, Math.min(offset + PAGE_SIZE, matched.size()));
-        return new LikeWindowPage(pageRows, ordered, poolFull);
+        // 专题线 video Story 3.3：候选池（最多 2000 条）不签，只签渲染的这一页。
+        return new LikeWindowPage(contentService.adminMedia(pageRows), ordered, poolFull);
     }
 
     /**
@@ -603,7 +605,8 @@ public class AdminContentManageService {
     /** 按 id 取单条后台行（HTMX 局部刷新用）；不存在返回 null。 */
     @Transactional(readOnly = true)
     public AdminContentRow row(long postId) {
-        return contentService.adminRow(postId);
+        AdminContentRow row = contentService.adminRow(postId);
+        return row == null ? null : contentService.adminMedia(List.of(row)).get(0);
     }
 
     /** 主动下架（必填原因）：软删 + 关闭该帖待处理举报单 + 作者通知（既有事件）+ 审计。 */
