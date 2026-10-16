@@ -135,6 +135,22 @@ class MediaAclReconcilerTest {
         reconciler(Instant.now()).run();
 
         assertThat(messages()).noneMatch(m -> m.startsWith("video_acl"));
+        // code review：OSS 已按 PUBLIC 改过但回写落空 → 记漂移，保证 desired 被改回时下一轮仍会选中纠正。
+        verify(posts).markMediaAclDrifted(3L, "PUBLIC");
+    }
+
+    /** code review：视频 ACL 已改、封面那步抛异常 → 记漂移（OSS 状态可能已偏离 applied）。 */
+    @Test
+    void coverFailureAfterVideoChangedMarksDrift() {
+        ContentPost p = video(4, true);
+        when(posts.findMediaAclPending(any())).thenReturn(List.of(p));
+        when(oss.setObjectAcl("bkt", "video/1/v4.mp4", true)).thenReturn(true);
+        when(oss.setObjectAcl("bkt", "public/1/c4.jpg", true)).thenThrow(new IllegalStateException("boom"));
+
+        reconciler(Instant.now()).run();
+
+        verify(posts, never()).markMediaAclApplied(eq(4L), anyString());
+        verify(posts).markMediaAclDrifted(4L, "PUBLIC");
     }
 
     @Test

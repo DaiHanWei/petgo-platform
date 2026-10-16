@@ -160,4 +160,22 @@ class MediaAclReconcilerIntegrationTest extends ApiIntegrationTest {
         contentService.releaseReportHold(id);
         assertThat(applied(id)).isEqualTo("PUBLIC");
     }
+
+    /** code review：回写落空且 desired 已改走 → 记漂移，applied=尝试值，findMediaAclPending 能选回这条。 */
+    @Test
+    void driftMarkMakesPostPendingAgain() throws Exception {
+        User u = videoUser(true);
+        Mockito.doReturn(false).when(oss).hasCredentials(); // 发布时不即时对账，保持 applied=PRIVATE
+        long id = publish(u);
+        Mockito.doReturn(true).when(oss).hasCredentials();
+        jdbc.update("UPDATE content_posts SET media_acl_desired='PRIVATE' WHERE id=?", id);
+
+        assertThat(posts.markMediaAclDrifted(id, "PUBLIC")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT media_acl_applied FROM content_posts WHERE id=?", String.class, id))
+                .isEqualTo("PUBLIC");
+        assertThat(posts.findMediaAclPending(org.springframework.data.domain.PageRequest.of(0, 10_000)))
+                .extracting(com.tailtopia.content.domain.ContentPost::getId).contains(id);
+        // desired 与尝试值相同时不动（原「下一轮重试」路径不变）。
+        assertThat(posts.markMediaAclDrifted(id, "PRIVATE")).isZero();
+    }
 }

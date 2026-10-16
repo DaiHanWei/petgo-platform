@@ -110,20 +110,39 @@ public class MediaAclReconciler {
                 // F21 下文件不会被删：缺对象只可能是上传没完成或数据异常。收敛，避免每分钟无限重试刷 ERROR。
                 log.error("video_acl_object_missing postId={} desired={} video={} cover={}",
                         p.getId(), desired, videoFound ? "ok" : "missing", coverFound ? "ok" : "missing");
-                done = posts.markMediaAclApplied(p.getId(), desired.name()) > 0;
+                done = writeBack(p.getId(), desired);
                 return done;
             }
             cdn.refresh(urls.publicUrl(p));
-            done = posts.markMediaAclApplied(p.getId(), desired.name()) > 0;
+            done = writeBack(p.getId(), desired);
             return done;
         } catch (RuntimeException e) {
             log.warn("video_acl_reconcile_failed postId={} desired={} cause={}",
                     p.getId(), desired, e.getClass().getSimpleName());
+            // 视频那步可能已经改成功、封面那步才抛：OSS 状态可能已偏离 applied，记漂移保证下一轮会回来。
+            markDrifted(p.getId(), desired);
             return false;
         } finally {
             if (!done) {
                 warnIfStuck(p, desired);
             }
+        }
+    }
+
+    /** 条件回写；0 行（desired 被并发改了）时记漂移，见 {@link ContentPostRepository#markMediaAclDrifted}。 */
+    private boolean writeBack(long postId, MediaAcl attempted) {
+        if (posts.markMediaAclApplied(postId, attempted.name()) > 0) {
+            return true;
+        }
+        markDrifted(postId, attempted);
+        return false;
+    }
+
+    private void markDrifted(long postId, MediaAcl attempted) {
+        try {
+            posts.markMediaAclDrifted(postId, attempted.name());
+        } catch (RuntimeException e) {
+            log.warn("video_acl_drift_mark_failed postId={} cause={}", postId, e.getClass().getSimpleName());
         }
     }
 

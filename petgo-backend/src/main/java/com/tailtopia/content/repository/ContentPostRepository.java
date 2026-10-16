@@ -768,4 +768,18 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     @Query(value = "UPDATE content_posts SET media_acl_applied = :acl WHERE id = :id AND media_acl_desired = :acl",
             nativeQuery = true)
     int markMediaAclApplied(@Param("id") long id, @Param("acl") String acl);
+
+    /**
+     * 对账漂移标记（专题线 video Story 1.4 code review）：OSS 可能已按 {@code attempted} 改过，但条件回写没成功
+     * （期间 desired 被并发改掉 / 封面那步抛异常）。若此刻 desired 已不等于 attempted，就把 applied 记成
+     * attempted —— applied 本义是「OSS 实际状态」，这样 desired ≠ applied，下一轮必然重新选中并纠正。
+     * 否则（desired 又被改回 = applied）这条帖子会被当成一致，OSS 上的公开状态永远没人纠正。
+     *
+     * <p>desired 仍等于 attempted 时影响 0 行，原有「下一轮重试」路径不变。同样是条件单列 native UPDATE。
+     */
+    @Transactional
+    @Modifying
+    @Query(value = "UPDATE content_posts SET media_acl_applied = :attempted "
+            + "WHERE id = :id AND media_acl_desired <> :attempted", nativeQuery = true)
+    int markMediaAclDrifted(@Param("id") long id, @Param("attempted") String attempted);
 }
