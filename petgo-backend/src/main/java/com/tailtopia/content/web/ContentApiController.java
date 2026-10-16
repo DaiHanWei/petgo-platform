@@ -84,6 +84,8 @@ public class ContentApiController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         contentService.deleteByAuthor(id, currentUserId(jwt));
+        // 专题线 video Story 3.1：事务已提交，视频帖立即把文件改回私有（失败由定时任务兜底）。
+        mediaAclReconciler.reconcileQuietly(id);
     }
 
     private static long currentUserId(Jwt jwt) {

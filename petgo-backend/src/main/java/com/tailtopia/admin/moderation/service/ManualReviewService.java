@@ -108,13 +108,17 @@ public class ManualReviewService {
         return ViolationCounts.fromMap(violationCounts.countsFor(authorId));
     }
 
-    /** 通过：帖子转 PUBLISHED / 评论转 VISIBLE（此刻发新评论事件）+ 审计。仅 PENDING 可处置。 */
+    /**
+     * 通过：帖子转 PUBLISHED / 评论转 VISIBLE（此刻发新评论事件）+ 审计。仅 PENDING 可处置。
+     *
+     * @return 帖子 id（评论审核返回 null）——供 Controller 事务外即时对账（专题线 video Story 3.1 / 3.2）
+     */
     @Transactional
-    public void approve(long itemId, long actorAccountId) {
+    public Long approve(long itemId, long actorAccountId) {
         ManualReviewItem it = requirePending(itemId);
         if (it.getContentType() == ReviewContentType.COMMENT) {
             if (staleDiscard(it, actorAccountId)) {
-                return; // D-CM3：陈旧结果作废（休眠；V1 不可达）
+                return null; // D-CM3：陈旧结果作废（休眠；V1 不可达）
             }
             commentService.approveComment(it.getContentId()); // VISIBLE + 此刻发 ContentCommentedEvent（G4）
             it.decide(ReviewStatus.APPROVED, actorAccountId, Instant.now());
@@ -122,7 +126,7 @@ public class ManualReviewService {
             // D-CM6：正向静默——不给评论作者发「通过」通知。
             auditService.record(actorAccountId, AuditActions.CONTENT_REVIEW_APPROVED, "COMMENT",
                     String.valueOf(it.getContentId()), "评论人工审核通过（队列项 #" + itemId + "）");
-            return;
+            return null;
         }
         contentService.approveReview(it.getContentId());
         // D-CM6：正向静默——审核通过不给帖子作者发通知（作者本就在「我的发布」可见）。审计仍记（解耦）。
@@ -130,6 +134,7 @@ public class ManualReviewService {
         queue.save(it);
         auditService.record(actorAccountId, AuditActions.CONTENT_REVIEW_APPROVED, "CONTENT_POST",
                 String.valueOf(it.getContentId()), "人工审核通过（队列项 #" + itemId + "）");
+        return it.getContentId();
     }
 
     /**
@@ -137,18 +142,20 @@ public class ManualReviewService {
      *
      * <p>story 8 §5.2：{@code decision}（判定依据/备注）由处置表单采集，折叠进 append-only 审计 summary
      * （无内容正文原文）；作者拒绝通知文案不变（本版本不提供具体驳回原因/申诉，§5.5）。{@code decision} 可空。
+     *
+     * @return 帖子 id（评论审核返回 null）——供 Controller 事务外即时对账（专题线 video Story 3.1 / 3.2）
      */
     @Transactional
-    public void reject(long itemId, long actorAccountId, ModerationDecision decision) {
+    public Long reject(long itemId, long actorAccountId, ModerationDecision decision) {
         ModerationDecision d = decision == null ? ModerationDecision.none() : decision;
         ManualReviewItem it = requirePending(itemId);
         if (it.getContentType() == ReviewContentType.COMMENT) {
             if (staleDiscard(it, actorAccountId)) {
-                return;
+                return null;
             }
             rejectComment(it, actorAccountId, AuditActions.CONTENT_REVIEW_REJECTED, ReviewStatus.REJECTED,
                     "评论人工审核拒绝（队列项 #" + itemId + "）；" + d.auditFragment());
-            return;
+            return null;
         }
         Long authorId = postAuthorId(it.getContentId());
         contentService.discardReview(it.getContentId());
@@ -160,6 +167,7 @@ public class ManualReviewService {
                 String.valueOf(it.getContentId()), "人工审核拒绝（队列项 #" + itemId + "）；" + d.auditFragment());
         // story 9 §5.1：帖子 FR-12A 人工判定拒绝 = 人工判定违规 → 同事务累加 POST 计数。
         recordPostViolation(authorId);
+        return it.getContentId();
     }
 
     /**

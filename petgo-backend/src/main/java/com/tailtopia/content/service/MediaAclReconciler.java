@@ -90,6 +90,22 @@ public class MediaAclReconciler {
         return reconcile(found.get());
     }
 
+    /**
+     * 即时对账的「尽力而为」版（专题线 video Story 3.1 · AD-6）：下架 / 恢复 / 删除 / 审核处置等接口在
+     * **事务提交后、Controller 层**调用。任何异常只记 WARN，接口结果不受影响，交给定时任务兜底。
+     * {@code postId} 为 null（如评论审核）或非视频帖时无事可做。
+     */
+    public void reconcileQuietly(Long postId) {
+        if (postId == null) {
+            return;
+        }
+        try {
+            reconcileOne(postId);
+        } catch (RuntimeException e) {
+            log.warn("video_acl_reconcile_inline_failed postId={} cause={}", postId, e.getClass().getSimpleName());
+        }
+    }
+
     private static boolean needsReconcile(ContentPost p) {
         return p.getMediaType() == MediaType.VIDEO && p.getMediaAclDesired() != null
                 && p.getMediaAclDesired() != p.getMediaAclApplied();

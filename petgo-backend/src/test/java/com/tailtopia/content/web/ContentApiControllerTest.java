@@ -105,4 +105,13 @@ class ContentApiControllerTest {
                 .noneMatch(m -> m.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)))
                 .isTrue();
     }
+
+    /** 专题线 video Story 3.1：作者删除后事务外即时对账（吞异常由 reconcileQuietly 负责）。 */
+    @Test
+    void deleteReconcilesInlineAfterCommit() {
+        controller.delete(jwt("7"), 42L);
+        var order = org.mockito.Mockito.inOrder(service, reconciler);
+        order.verify(service).deleteByAuthor(42L, 7L);
+        order.verify(reconciler).reconcileQuietly(42L);
+    }
 }

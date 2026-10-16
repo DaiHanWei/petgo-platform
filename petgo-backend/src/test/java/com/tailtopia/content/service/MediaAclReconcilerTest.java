@@ -230,4 +230,17 @@ class MediaAclReconcilerTest {
         assertThat(reconciler(Instant.now()).reconcileOne(50L)).isTrue();
         verify(posts).markMediaAclApplied(50L, "PUBLIC");
     }
+
+    /** 专题线 video Story 3.1：即时对账「尽力而为」—— null 无事可做；异常只记 WARN，不往外抛。 */
+    @Test
+    void reconcileQuietlySwallowsFailuresAndIgnoresNull() {
+        MediaAclReconciler r = reconciler(Instant.now());
+        r.reconcileQuietly(null);
+        verify(posts, never()).findById(anyLong());
+
+        when(oss.hasCredentials()).thenReturn(true);
+        when(posts.findById(77L)).thenThrow(new IllegalStateException("db down"));
+        r.reconcileQuietly(77L);
+        assertThat(messages()).anyMatch(m -> m.startsWith("video_acl_reconcile_inline_failed postId=77"));
+    }
 }
