@@ -29,6 +29,16 @@ public class AliyunCdnCacheRefresher implements CdnCacheRefresher {
         this.props = props;
     }
 
+    /** 测试用（专题线 video Story 3.4 · L0 打桩）：直接注入 SDK 客户端，不懒建。 */
+    AliyunCdnCacheRefresher(MediaProperties props, IAcsClient client) {
+        this.props = props;
+        this.client = client;
+    }
+
+    /**
+     * 刷新单个视频 URL 的 CDN 缓存。失败（含服务端返回的 {@code ServerException}，它是 {@code ClientException}
+     * 的子类）一律抛出，由对账器不回写 applied、记漂移、下一轮重试。异常信息只带 errorCode，不带 URL / 凭证。
+     */
     @Override
     public void refresh(String url) {
         try {

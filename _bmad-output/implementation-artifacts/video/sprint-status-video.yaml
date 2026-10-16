@@ -47,5 +47,5 @@ development_status:
   3-1-所有可见性变化都带动文件公开状态: review
   3-2-名单外视频帖的审核超时: review
   3-3-后台预览与识别视频帖: review
-  3-4-视频cdn接入: backlog
+  3-4-视频cdn接入: review
   epic-3-retrospective: optional

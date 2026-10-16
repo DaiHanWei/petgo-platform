@@ -139,6 +139,25 @@ class MediaAclReconcilerTest {
         verify(posts).markMediaAclDrifted(3L, "PUBLIC");
     }
 
+    /** 专题线 video Story 3.4 AC1：CDN 刷新失败 → 不回写 applied、记漂移，下一轮重试（再跑一次成功即回写）。 */
+    @Test
+    void cdnRefreshFailureIsRetriedNextRound() {
+        ContentPost p = video(5, true);
+        when(posts.findMediaAclPending(any())).thenReturn(List.of(p));
+        org.mockito.Mockito.doThrow(new IllegalStateException("CDN 刷新失败 errorCode=Throttling"))
+                .doNothing().when(cdn).refresh(anyString());
+
+        reconciler(Instant.now()).run();
+
+        verify(posts, never()).markMediaAclApplied(eq(5L), anyString());
+        verify(posts).markMediaAclDrifted(5L, "PUBLIC");
+        assertThat(messages()).anyMatch(m -> m.startsWith("video_acl_reconcile_failed postId=5"))
+                .noneMatch(m -> m.contains("https://"));
+
+        reconciler(Instant.now()).run();
+        verify(posts).markMediaAclApplied(5L, "PUBLIC");
+    }
+
     /** code review：视频 ACL 已改、封面那步抛异常 → 记漂移（OSS 状态可能已偏离 applied）。 */
     @Test
     void coverFailureAfterVideoChangedMarksDrift() {
