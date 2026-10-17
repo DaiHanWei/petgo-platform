@@ -8,7 +8,7 @@ import 'video_player_view.dart';
 /// 视频帖的全屏播放页（专题线 video Story 2.4 · FR-15 · AD-10）：`/content/:id` 拉到详情后按 `mediaType` 在页内渲染。
 ///
 /// 黑底、App 保持竖屏（全局已锁）。作者区 / 正文 / 互动叠加层由 Story 2.5 通过 [overlayBuilder] 挂上。
-class VideoPostPage extends StatelessWidget {
+class VideoPostPage extends StatefulWidget {
   const VideoPostPage({
     super.key,
     required this.detail,
@@ -27,7 +27,23 @@ class VideoPostPage extends StatelessWidget {
   final Widget Function(BuildContext context, ContentDetail detail)? overlayBuilder;
 
   @override
+  State<VideoPostPage> createState() => _VideoPostPageState();
+}
+
+class _VideoPostPageState extends State<VideoPostPage> {
+  /// 评论抽屉是否打开：打开时画面收到上方，不被抽屉挡住。
+  final _commentsOpen = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _commentsOpen.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final detail = widget.detail;
+    final overlayBuilder = widget.overlayBuilder;
     final video = detail.video!;
     return Scaffold(
       key: const ValueKey('videoPostPage'),
@@ -38,12 +54,13 @@ class VideoPostPage extends StatelessWidget {
         postId: detail.id,
         url: video.url,
         durationMs: video.durationMs,
-        source: source,
+        source: widget.source,
+        compact: _commentsOpen,
         coverUrl: detail.imageUrls.isEmpty ? null : detail.imageUrls.first,
         overlay: Stack(children: [
           overlayBuilder != null
-              ? overlayBuilder!(context, detail)
-              : VideoPostOverlay(detail: detail, focusComments: focusComments),
+              ? overlayBuilder(context, detail)
+              : VideoPostOverlay(detail: detail, focusComments: widget.focusComments, commentsOpen: _commentsOpen),
           const VideoBackButton(),
         ]),
       ),

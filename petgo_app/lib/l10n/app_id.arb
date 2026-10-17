@@ -2636,6 +2636,8 @@
   "videoDiscardBody": "Unggahan akan dihentikan dan isi yang sudah kamu tulis tidak akan disimpan.",
   "videoDiscardConfirm": "Batalkan",
   "videoDiscardKeep": "Lanjut menulis",
+  "videoDiscardPostTitle": "Buang postingan video ini?",
+  "videoDiscardPostBody": "Video dan tulisanmu tidak akan disimpan.",
   "videoPermissionDenied": "Kamu belum bisa memposting video.",
   "videoQuotaExceeded": "Kuota unggah video hari ini sudah habis. Coba lagi besok."
 }

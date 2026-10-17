@@ -432,7 +432,9 @@ class ContentAuthorRow extends ConsumerWidget {
                 position: 'detail',
                 name: name,
                 nameStyle: AppTypography.body.copyWith(
-                    fontWeight: FontWeight.w700, color: onDark ? Colors.white : null),
+                    fontWeight: FontWeight.w700,
+                    color: onDark ? Colors.white : null,
+                    shadows: onDark ? const [Shadow(color: Color(0x66000000), blurRadius: 6)] : null),
                 tags: detail.authorDeleted ? const [] : detail.authorTags,
               ),
               // V1.3.4 follow Story 2.1 · AC6.1（UI 稿 C4）：分类徽章从作者行最右**移到时间右侧**，
@@ -823,9 +825,12 @@ class _ScrollIntoViewOnMountState extends State<_ScrollIntoViewOnMount> {
 /// UI 稿 SH1 画的是顶栏右上角放分享，但那会把「···」挤掉；2026-08-14 产品决定分享让位。
 /// V1.3.0 Story 2.3 把分享从正文下方的互动栏挪进**固定底栏**，顶栏仍然保持现状。
 class DetailShareCardButton extends ConsumerStatefulWidget {
-  const DetailShareCardButton({super.key, required this.detail});
+  const DetailShareCardButton({super.key, required this.detail, this.onDark = false});
 
   final ContentDetail detail;
+
+  /// 压在深色画面上（视频播放页）：白色图标 + 阴影。
+  final bool onDark;
 
   @override
   ConsumerState<DetailShareCardButton> createState() => _ShareCardButtonState();
@@ -858,7 +863,8 @@ class _ShareCardButtonState extends ConsumerState<DetailShareCardButton> {
       child: Icon(
         Icons.ios_share_rounded,
         size: DetailBarMetrics.iconSize,
-        color: _busy ? AppColors.muted : AppColors.textSecondary,
+        color: _busy ? AppColors.muted : (widget.onDark ? Colors.white : AppColors.textSecondary),
+        shadows: widget.onDark ? const [Shadow(color: Color(0x66000000), blurRadius: 6)] : null,
       ),
     );
   }

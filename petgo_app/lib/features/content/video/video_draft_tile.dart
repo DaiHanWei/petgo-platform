@@ -76,12 +76,15 @@ class VideoDraftTile extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            key: const ValueKey('videoDraftRemove'),
-            tooltip: l10n.videoRemove,
-            onPressed: controller.publishing ? null : onRemove,
-            icon: const Icon(Icons.close_rounded, color: AppColors.ink2),
-          ),
+          // 上传中只留「Batal」一个取消动作：X（移除视频）与它挨着，含义不同却长得像，容易误点
+          // 直接丢掉视频（L2 走查）。取消 / 完成 / 失败之后再出现 X。
+          if (controller.videoStatus != MediaUploadStatus.uploading)
+            IconButton(
+              key: const ValueKey('videoDraftRemove'),
+              tooltip: l10n.videoRemove,
+              onPressed: controller.publishing ? null : onRemove,
+              icon: const Icon(Icons.close_rounded, color: AppColors.ink2),
+            ),
         ],
       ),
     );

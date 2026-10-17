@@ -17,6 +17,7 @@ import '../presentation/content_detail_page.dart';
 import '../presentation/detail_providers.dart';
 import '../presentation/feed_controller.dart';
 import '../presentation/like_button.dart';
+import 'video_player_view.dart';
 
 /// 播放页叠加层（专题线 video Story 2.5 · FR-16 · AD-10）：作者区、正文、点赞 / 点赞人、评论抽屉、分享、举报或删除。
 ///
@@ -24,9 +25,12 @@ import '../presentation/like_button.dart';
 /// `CommentComposer`、`DetailShareCardButton`、`showContentMoreSheet`、`openUserProfile`。
 /// 游客的登录墙由这些组件自己处理。叠在画面之上、播放器控件（静音 / 进度条）之下。
 class VideoPostOverlay extends ConsumerStatefulWidget {
-  const VideoPostOverlay({super.key, required this.detail, this.focusComments = false});
+  const VideoPostOverlay({super.key, required this.detail, this.focusComments = false, this.commentsOpen});
 
   final ContentDetail detail;
+
+  /// 评论抽屉开合状态（播放页据此把画面收到上方）。
+  final ValueNotifier<bool>? commentsOpen;
 
   /// `?focus=comments` 进来：首帧后自动打开一次评论抽屉。
   final bool focusComments;
@@ -41,7 +45,7 @@ class _VideoPostOverlayState extends ConsumerState<VideoPostOverlay> {
     super.initState();
     if (widget.focusComments) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) showVideoCommentsSheet(context, widget.detail);
+        if (mounted) showVideoCommentsSheet(context, widget.detail, openState: widget.commentsOpen);
       });
     }
   }
@@ -53,19 +57,21 @@ class _VideoPostOverlayState extends ConsumerState<VideoPostOverlay> {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Stack(
       children: [
-        // 底部渐变遮罩：让白字在任何画面上都可读。不吃点击（单击暂停仍落到画面）。
+        // 底部渐变遮罩：让白字在任何画面上都可读（亮画面也一样）。不吃点击（单击暂停仍落到画面）。
         const Positioned(
           left: 0,
           right: 0,
           bottom: 0,
-          height: 260,
+          height: 340,
           child: IgnorePointer(
             child: DecoratedBox(
+              key: ValueKey('videoBottomScrim'),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x00000000), Color(0xB3000000)],
+                  colors: [Color(0x00000000), Color(0x80000000), Color(0xD9000000)],
+                  stops: [0, 0.45, 1],
                 ),
               ),
             ),
@@ -91,7 +97,7 @@ class _VideoPostOverlayState extends ConsumerState<VideoPostOverlay> {
                       text: d.body!,
                       mentions: d.mentions,
                       mentionContext: MentionContext.post,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+                      style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4, shadows: _textShadow),
                       onTapUser: (userId) => openUserProfile(context, ref, userId,
                           entry: AccountActionEntry.mention,
                           onBlocked: () {
@@ -109,17 +115,14 @@ class _VideoPostOverlayState extends ConsumerState<VideoPostOverlay> {
             ],
           ),
         ),
-        // 右侧竖排：点赞 / 评论 / 分享 / 更多。浅底圆角面板 —— 复用的组件图标是深色系。
+        // 右侧竖排：点赞 / 评论 / 分享 / 更多。白色图标 + 阴影直接压在画面上（不放浅色底板，
+        // 黑底播放页上底板突兀且会挡竖屏画面）；复用组件走 onDark 配色。
         Positioned(
           right: 12,
           bottom: bottomInset + 64,
-          child: Container(
+          child: Padding(
             key: const ValueKey('videoActions'),
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xE6FFFFFF),
-              borderRadius: BorderRadius.circular(28),
-            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -129,27 +132,29 @@ class _VideoPostOverlayState extends ConsumerState<VideoPostOverlay> {
                   initialCount: d.likeCount,
                   source: 'detail',
                   likersSource: 'content_detail',
+                  onDark: true,
                   onSettled: (liked, count) => syncFeedCounts(ref, d.id, liked: liked, likeCount: count),
                 ),
                 const SizedBox(height: 12),
                 InkWell(
                   key: const ValueKey('videoCommentButton'),
                   customBorder: const CircleBorder(),
-                  onTap: () => showVideoCommentsSheet(context, d),
+                  onTap: () => showVideoCommentsSheet(context, d, openState: widget.commentsOpen),
                   child: Padding(
                     padding: const EdgeInsets.all(6),
                     child: Column(children: [
-                      const Icon(Icons.chat_bubble_outline_rounded, size: 22, color: AppColors.textSecondary),
-                      Text('${d.commentCount}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                      const Icon(Icons.chat_bubble_outline_rounded, size: 22, color: Colors.white, shadows: _textShadow),
+                      Text('${d.commentCount}',
+                          style: const TextStyle(fontSize: 11, color: Colors.white, shadows: _textShadow)),
                     ]),
                   ),
                 ),
                 const SizedBox(height: 12),
-                DetailShareCardButton(detail: d),
+                DetailShareCardButton(detail: d, onDark: true),
                 const SizedBox(height: 12),
                 IconButton(
                   key: const ValueKey('videoMoreButton'),
-                  icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
+                  icon: const Icon(Icons.more_horiz, color: Colors.white, shadows: _textShadow),
                   onPressed: () => showContentMoreSheet(context, ref, d, l10n),
                 ),
               ],
@@ -161,9 +166,23 @@ class _VideoPostOverlayState extends ConsumerState<VideoPostOverlay> {
   }
 }
 
+/// 白字 / 白图标压在画面上的统一阴影。
+const List<Shadow> _textShadow = [Shadow(color: Color(0x66000000), blurRadius: 6)];
+
 /// 评论抽屉（专题线 video Story 2.5 · FR-16）：评论列表 + 输入框。**视频继续播放**（不暂停）。
 /// 键盘避让：`isScrollControlled` + 固定高度 sheet 套 [KeyboardInset]（petgo_app/CLAUDE.md「底部弹层」）。
-Future<void> showVideoCommentsSheet(BuildContext context, ContentDetail detail) {
+/// [openState]：抽屉开着时置 true，播放页据此把画面收到上方（抽屉不挡画面）。
+Future<void> showVideoCommentsSheet(BuildContext context, ContentDetail detail,
+    {ValueNotifier<bool>? openState}) async {
+  openState?.value = true;
+  try {
+    await _showCommentsSheet(context, detail);
+  } finally {
+    openState?.value = false;
+  }
+}
+
+Future<void> _showCommentsSheet(BuildContext context, ContentDetail detail) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -172,7 +191,7 @@ Future<void> showVideoCommentsSheet(BuildContext context, ContentDetail detail) 
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (sheetCtx) => KeyboardInset(
       child: FractionallySizedBox(
-        heightFactor: 0.7,
+        heightFactor: 1 - kVideoCompactTopFraction,
         child: Consumer(
           builder: (ctx, ref, _) {
             final currentUserId = ref.watch(authControllerProvider).profile?.id;

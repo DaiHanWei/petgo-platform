@@ -61,6 +61,7 @@ void main() {
     ContentType? preset,
     String? checkinToken,
     List<Uint8List>? initialImages,
+    bool videoEntryAllowed = true,
     String? pickedPath,
     Future<String?> Function()? picker,
   }) async {
@@ -86,6 +87,7 @@ void main() {
             preset: preset,
             placeCheckinToken: checkinToken,
             initialImages: initialImages,
+            videoEntryAllowed: videoEntryAllowed,
           ),
         ),
       ),
@@ -101,13 +103,30 @@ void main() {
     expect(entry, findsNothing);
   });
 
-  testWidgets('等级 10 能看到视频入口', (tester) async {
-    await pump(tester);
+  testWidgets('等级 10 在 Momen / Edukasi 下能看到视频入口', (tester) async {
+    final c = await pump(tester, preset: ContentType.daily);
+    expect(entry, findsOneWidget);
+    c.setType(ContentType.knowledge);
+    await tester.pump();
     expect(entry, findsOneWidget);
   });
 
-  testWidgets('成长日历 / Diary 语境（preset=growthMoment）不显示', (tester) async {
-    await pump(tester, preset: ContentType.growthMoment);
+  testWidgets('按当前类型判断：Diary 下隐藏，切到 Momen 出现（底栏 + 在 Diary Tab 也一样，FR-5）', (tester) async {
+    final c = await pump(tester, preset: ContentType.growthMoment);
+    expect(c.type, ContentType.growthMoment);
+    expect(entry, findsNothing);
+    c.setType(ContentType.daily);
+    await tester.pump();
+    expect(entry, findsOneWidget);
+    c.setType(ContentType.growthMoment);
+    await tester.pump();
+    expect(entry, findsNothing);
+  });
+
+  testWidgets('成长日历入口（videoEntryAllowed=false）切到 Momen 也不显示', (tester) async {
+    final c = await pump(tester, preset: ContentType.growthMoment, videoEntryAllowed: false);
+    c.setType(ContentType.daily);
+    await tester.pump();
     expect(entry, findsNothing);
   });
 
@@ -129,9 +148,11 @@ void main() {
     expect(btn.onPressed, isNull);
   });
 
-  testWidgets('选到合规视频：出现预览格，类型从成长日记切回日常，成长日记 chip 禁用', (tester) async {
+  testWidgets('选到合规视频：出现预览格，成长日记 chip 禁用', (tester) async {
     final c = await pump(tester, pickedPath: '$fixtures/ok_avc_720x1280.mp4');
-    expect(c.type, ContentType.growthMoment); // 有宠物档案 → 默认 Diary
+    expect(c.type, ContentType.growthMoment); // 有宠物档案 → 默认 Diary，此时没有视频入口
+    c.setType(ContentType.daily);
+    await tester.pump();
     await tester.runAsync(() async {
       await tester.tap(entry);
       await Future<void>.delayed(const Duration(milliseconds: 300));

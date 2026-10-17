@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/domain/card_link.dart';
 import '../../profile/domain/share_service.dart';
+import '../video/video_spec_messages.dart';
 import 'feed_controller.dart';
 import 'publish_compose_page.dart';
 
@@ -24,7 +27,17 @@ class PublishResultArgs {
     this.cardToken,
     this.petName,
     this.postId,
+    this.videoDurationMs,
+    this.videoCover,
   });
+
+  /// 视频帖（专题线 video）：时长毫秒。非空即视频帖 —— 预览改显示封面 + 时长，不再是「N 张图」。
+  final int? videoDurationMs;
+
+  /// 视频帖封面的本地 JPEG（封面上传后是私有对象，预览只能用本地字节）。
+  final Uint8List? videoCover;
+
+  bool get isVideo => videoDurationMs != null;
 
   /// 刚发布成功的帖子 id（bug 20261012-586）：「去 Feed 看」据此在 Discover 里定位并高亮它。
   /// 发布前构建的预览参数（审核中 / 被拒页）为 null；为 null 时退回「只切 Tab」。
@@ -61,6 +74,8 @@ class PublishResultArgs {
         cardToken: cardToken,
         petName: petName,
         postId: postId,
+        videoDurationMs: videoDurationMs,
+        videoCover: videoCover,
       );
 
   PublishResultArgs withPostId(int id) => PublishResultArgs(
@@ -73,6 +88,8 @@ class PublishResultArgs {
         cardToken: cardToken,
         petName: petName,
         postId: id,
+        videoDurationMs: videoDurationMs,
+        videoCover: videoCover,
       );
 
   /// DEV 直达样例（深链无 extra 时用，供逐屏视觉验收）。
@@ -151,7 +168,7 @@ class PublishDonePage extends ConsumerWidget {
                 args: args,
                 meta: private
                     // 私密：无社区互动，❤/💬 只会误导；改类型 + 图片数（与审核中页同款 meta）。
-                    ? Text('${args.typeLabel} · ${l10n.vetInboxImages(args.photoCount)}',
+                    ? Text('${args.typeLabel} · ${_mediaSummary(args, l10n)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 11, color: AppColors.muted))
@@ -206,7 +223,8 @@ class PublishDonePage extends ConsumerWidget {
               // 去成长档案页摸那个 FAB。分享出去 → 朋友点进来 → 看到真实日记 → 注册，
               // 这条链路已实测 70% 转化，是目前唯一有效的增长通道。
               // 私密保存也照给：分享的是宠物的成长册主页，不是刚才这条内容。
-              if (args.cardToken != null) _ShareGrowthBookButton(args: args),
+              // 视频帖不关联宠物：不出「分享成长册」（专题线 video）。
+              if (args.cardToken != null && !args.isVideo) _ShareGrowthBookButton(args: args),
               // 私密时主 CTA 已指向 Diary，次按钮再指 Diary 就重复 → 不渲染。
               if (!private)
                 TextButton(
@@ -343,7 +361,7 @@ class PublishReviewingView extends StatelessWidget {
           const SizedBox(height: 24),
           _PreviewCard(
             args: args,
-            meta: Text('${args.typeLabel} · ${l10n.vetInboxImages(args.photoCount)}',
+            meta: Text('${args.typeLabel} · ${_mediaSummary(args, l10n)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 11, color: AppColors.muted)),
@@ -451,7 +469,7 @@ class PublishRejectedPage extends StatelessWidget {
               meta: Row(
                 children: [
                   Flexible(
-                    child: Text('${args.typeLabel} · ${l10n.vetInboxImages(args.photoCount)} · ',
+                    child: Text('${args.typeLabel} · ${_mediaSummary(args, l10n)} · ',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 11, color: AppColors.muted)),
@@ -554,20 +572,42 @@ class _PreviewCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-                color: AppColors.cream2, borderRadius: BorderRadius.circular(10)),
-            child: Text(args.petEmoji, style: const TextStyle(fontSize: 22)),
-          ),
+          if (args.videoCover != null)
+            // 视频帖：封面缩略图 + 播放角标（不是宠物 emoji —— 视频帖不关联宠物）。
+            ClipRRect(
+              key: const ValueKey('publishResultVideoCover'),
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Stack(fit: StackFit.expand, children: [
+                  Image.memory(args.videoCover!, fit: BoxFit.cover),
+                  const Center(
+                    child: Icon(Icons.play_circle_fill_rounded, size: 20, color: Colors.white),
+                  ),
+                ]),
+              ),
+            )
+          else
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: AppColors.cream2, borderRadius: BorderRadius.circular(10)),
+              child: args.isVideo
+                  ? const Icon(Icons.videocam_outlined, size: 22, color: AppColors.mint)
+                  : Text(args.petEmoji, style: const TextStyle(fontSize: 22)),
+            ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(args.excerpt.isEmpty ? '—' : args.excerpt,
+                Text(
+                    args.excerpt.isNotEmpty
+                        ? args.excerpt
+                        : (args.isVideo ? AppLocalizations.of(context).publishAddVideo : '—'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -581,4 +621,10 @@ class _PreviewCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 预览卡的媒体摘要：图文帖「N 张图」，视频帖「Video 0:10」（专题线 video）。
+String _mediaSummary(PublishResultArgs args, AppLocalizations l10n) {
+  final ms = args.videoDurationMs;
+  return ms == null ? l10n.vetInboxImages(args.photoCount) : '${l10n.publishAddVideo} ${formatVideoDuration(ms)}';
 }

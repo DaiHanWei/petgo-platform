@@ -48,7 +48,9 @@ class _PublishLandingPageState extends ConsumerState<PublishLandingPage> {
     await PublishComposePage.open(context,
         preset: widget.preset,
         presetEventDate: widget.presetEventDate,
-        milestoneCode: widget.milestoneCode);
+        milestoneCode: widget.milestoneCode,
+        // 成长日历语境（生日深链 / 日历格 / 里程碑去发布）整页不出现视频（FR-5）。
+        videoEntryAllowed: widget.preset != ContentType.growthMoment);
     if (!mounted) return;
     // 所有入口统一走「重新成为栈顶才离开」（bug 20260924-564）：
     // 原先非里程碑路径在这里无条件 go('/home') 清栈 —— 从 Diary 日历「+」进来放弃发布，

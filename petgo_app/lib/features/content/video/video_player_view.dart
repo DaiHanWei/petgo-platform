@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,6 +21,9 @@ const Duration kVideoFirstFrameTimeout = Duration(seconds: 15);
 
 /// 全屏播放视图（专题线 video Story 2.4 · FR-15）：黑底、按原比例居中、封面 + 转圈、有声自动播放、
 /// 单击暂停、进度条可拖、循环、15 秒超时重试、静音会话内记住、后台暂停回前台不续播、离开即释放。
+/// 评论抽屉打开时画面占屏幕上方的比例（抽屉高度 = 1 - 该值）。
+const double kVideoCompactTopFraction = 0.4;
+
 class VideoPlayerView extends ConsumerStatefulWidget {
   const VideoPlayerView({
     super.key,
@@ -29,6 +33,7 @@ class VideoPlayerView extends ConsumerStatefulWidget {
     required this.source,
     this.coverUrl,
     this.overlay,
+    this.compact,
   });
 
   /// 帖子 id（埋点用）；App 内分享页没有 id → null。
@@ -42,6 +47,9 @@ class VideoPlayerView extends ConsumerStatefulWidget {
 
   /// 叠加层（作者、正文、互动 —— Story 2.5）。叠在画面之上、控件之下。
   final Widget? overlay;
+
+  /// 为 true 时把画面收进屏幕上方 [kVideoCompactTopFraction] 区域（评论抽屉打开时，画面不被抽屉挡住）。
+  final ValueListenable<bool>? compact;
 
   @override
   ConsumerState<VideoPlayerView> createState() => _VideoPlayerViewState();
@@ -206,6 +214,31 @@ class _VideoPlayerViewState extends ConsumerState<VideoPlayerView> with WidgetsB
     super.dispose();
   }
 
+  /// 评论抽屉打开时把画面挤到上方（底部留出抽屉高度），关上后动画回到全屏居中。
+  Widget _compactFrame(Widget child) {
+    final compact = widget.compact;
+    if (compact == null) return child;
+    return ValueListenableBuilder<bool>(
+      valueListenable: compact,
+      builder: (context, on, child) {
+        final mq = MediaQuery.of(context);
+        return AnimatedPadding(
+          key: const ValueKey('videoCompactFrame'),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          padding: on
+              ? EdgeInsets.only(
+                  top: mq.padding.top + 48,
+                  bottom: mq.size.height * (1 - kVideoCompactTopFraction),
+                )
+              : EdgeInsets.zero,
+          child: child,
+        );
+      },
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -219,7 +252,7 @@ class _VideoPlayerViewState extends ConsumerState<VideoPlayerView> with WidgetsB
       child: Stack(
         fit: StackFit.expand,
         children: [
-          GestureDetector(
+          _compactFrame(GestureDetector(
             key: const ValueKey('videoTapArea'),
             behavior: HitTestBehavior.opaque,
             onTap: _failed ? _retry : _togglePlay,
@@ -235,7 +268,7 @@ class _VideoPlayerViewState extends ConsumerState<VideoPlayerView> with WidgetsB
                 ]),
               ),
             ),
-          ),
+          )),
           if (showCover && !_failed)
             const Center(child: CircularProgressIndicator(key: ValueKey('videoLoading'), color: Colors.white)),
           if (_failed)

@@ -83,6 +83,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.placeCheckinPlace,
     this.initialText,
     this.initialImages,
+    this.videoEntryAllowed = true,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -108,6 +109,11 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// 超 [kMaxImages] 丢弃。关闭发帖页即随 autoDispose 清空（无草稿，NFR-10）。
   final List<Uint8List>? initialImages;
 
+  /// 入口是否允许出现「视频」（专题线 video FR-5）。成长日历语境（`/publish?preset=growth-calendar`
+  /// 着陆页）传 false；底栏「＋」即使在 Diary Tab（preset=growthMoment）也保持 true —— 用户切到
+  /// Momen / Edukasi 后照样能选视频。
+  final bool videoEntryAllowed;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
@@ -118,6 +124,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     PublishCheckinPlace? placeCheckinPlace,
     String? initialText,
     List<Uint8List>? initialImages,
+    bool videoEntryAllowed = true,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -142,6 +149,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
           placeCheckinPlace: placeCheckinPlace,
           initialText: initialText,
           initialImages: initialImages,
+          videoEntryAllowed: videoEntryAllowed,
         ),
       ),
     );
@@ -306,12 +314,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 是否显示「视频」入口（专题线 video Story 1.5 · FR-5）。
   ///
-  /// 只有等级 ≥ 10 的账号能看到；从成长日历 / Diary 语境（preset=growthMoment）、打卡后发帖、
-  /// 晒图预填进来时不显示 —— 这几条路的语境都是「图文 + 宠物」，视频帖不带宠物、打卡与日期（FR-6）。
-  bool get _videoEntryVisible {
+  /// 只有等级 ≥ 10 的账号能看到，且**按当前选中的类型**判断：Diary（成长日记）下隐藏，Momen / Edukasi
+  /// 下显示 —— 视频帖只能是日常或科普（FR-10）。底栏「＋」无论在哪个 Tab 按下规则都一样（FR-5）；
+  /// 只有成长日历、打卡后发帖、晒图预填这几条「图文 + 宠物」专用入口整页不出现视频。
+  bool _videoEntryVisible(PublishController controller) {
     final profile = ref.read(authControllerProvider).profile;
     return (profile?.canPublishVideo ?? false) &&
-        widget.preset != ContentType.growthMoment &&
+        widget.videoEntryAllowed &&
+        controller.type != ContentType.growthMoment &&
         widget.placeCheckinToken == null &&
         widget.initialImages == null;
   }
@@ -387,14 +397,16 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   /// 上传中关闭：先确认（AC5）。返回 true = 可以关。
+  /// 已选视频时关闭发帖页先确认（上传中、上传完成都算 —— 视频与文案一关就丢，没有草稿）。
   Future<bool> _confirmDiscardVideo(PublishController controller, AppLocalizations l10n) async {
-    if (!controller.videoUploading) return true;
+    if (controller.video == null) return true;
+    final uploading = controller.videoUploading;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         key: const ValueKey('videoDiscardDialog'),
-        title: Text(l10n.videoDiscardTitle),
-        content: Text(l10n.videoDiscardBody),
+        title: Text(uploading ? l10n.videoDiscardTitle : l10n.videoDiscardPostTitle),
+        content: Text(uploading ? l10n.videoDiscardBody : l10n.videoDiscardPostBody),
         actions: [
           TextButton(
             key: const ValueKey('videoDiscardKeep'),
@@ -410,7 +422,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       ),
     );
     if (ok == true) {
-      controller.cancelVideoUpload();
+      if (uploading) controller.cancelVideoUpload();
       return true;
     }
     return false;
@@ -424,7 +436,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 视频入口 + 检查中 + 不合格提示（专题线 video Story 1.5）。有视频时由 [_imageRow] 显示预览格。
   Widget _videoSection(PublishController controller, AppLocalizations l10n) {
-    if (!_videoEntryVisible || controller.video != null) return const SizedBox.shrink();
+    if (!_videoEntryVisible(controller) || controller.video != null) return const SizedBox.shrink();
     // 图片处理中（拍照解码 / 压缩）也不可选视频：否则图片稍后入列失败会被静默丢掉（code review）。
     final enabled = controller.canPickVideo && !_checkingVideo && !_pickingVideo && !_addingImage;
     final error = _videoSpecError;
@@ -721,6 +733,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // 抓手 2：有档案才有成长册可分享；为空时成功页不渲染分享 CTA。
       cardToken: _linkedPet?.cardToken,
       petName: _linkedPet?.name,
+      videoDurationMs: controller.video?.durationMs,
+      videoCover: controller.video == null ? null : controller.coverBytes,
     );
   }
 
@@ -740,7 +754,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       listenable: controller,
       // 专题线 video Story 1.6：视频上传中按系统返回 → 先确认放弃。
       builder: (context, _) => PopScope(
-        canPop: !controller.videoUploading,
+        canPop: controller.video == null,
         onPopInvokedWithResult: (didPop, _) async {
           if (didPop) return;
           await _close(controller, l10n);

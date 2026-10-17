@@ -211,6 +211,35 @@ void main() {
     expect(c.videoStatus, MediaUploadStatus.idle);
   });
 
+  testWidgets('上传中只有「Batal」一个取消动作：X（移除）隐藏，上传完成后才出现', (tester) async {
+    final repo = _VideoRepo()..gate = Completer<void>();
+    final (c, _) = await pump(tester, repo: repo);
+    await pickVideo(tester);
+    expect(c.videoUploading, isTrue);
+    expect(find.byKey(const ValueKey('videoUploadCancel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('videoDraftRemove')), findsNothing);
+    await tester.runAsync(() async {
+      repo.gate!.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    expect(c.videoStatus, MediaUploadStatus.success);
+    expect(find.byKey(const ValueKey('videoDraftRemove')), findsOneWidget);
+  });
+
+  testWidgets('上传完成后关闭也要确认（视频与文案一关就丢）', (tester) async {
+    final (c, _) = await pump(tester);
+    await pickVideo(tester);
+    expect(c.videoStatus, MediaUploadStatus.success);
+    await tester.tap(find.byKey(const ValueKey('publishClose')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('videoDiscardDialog')), findsOneWidget);
+    expect(find.text('Discard this video post?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('videoDiscardConfirm')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PublishComposePage), findsNothing);
+  });
+
   testWidgets('上传中点取消：显示中性「已取消」文案而非失败（code review）', (tester) async {
     final repo = _VideoRepo()..gate = Completer<void>();
     final (c, _) = await pump(tester, repo: repo);

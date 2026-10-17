@@ -164,6 +164,21 @@ void main() {
     expect(player.calls, isNot(contains('pause')));
   });
 
+  testWidgets('评论抽屉打开时画面收到上方（不被抽屉挡住），关上后恢复', (tester) async {
+    await pump(tester, _video());
+    final frame = find.byKey(const ValueKey('videoCompactFrame'));
+    EdgeInsetsGeometry padding() => tester.widget<AnimatedPadding>(frame).padding;
+    expect(padding(), EdgeInsets.zero);
+    await tester.tap(find.byKey(const ValueKey('videoCommentButton')));
+    await tester.pumpAndSettle();
+    final open = padding() as EdgeInsets;
+    // 底部让出抽屉高度（屏高 780 × 0.6）。
+    expect(open.bottom, closeTo(780 * (1 - kVideoCompactTopFraction), 0.1));
+    Navigator.of(tester.element(find.byKey(const ValueKey('videoCommentsSheet')))).pop();
+    await tester.pumpAndSettle();
+    expect(padding(), EdgeInsets.zero);
+  });
+
   testWidgets('focus=comments 进来：自动打开一次评论抽屉', (tester) async {
     await pump(tester, _video(), focusComments: true);
     await tester.pumpAndSettle();
