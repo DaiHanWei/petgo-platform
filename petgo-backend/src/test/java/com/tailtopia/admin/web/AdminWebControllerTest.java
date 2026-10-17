@@ -36,6 +36,8 @@ class AdminWebControllerTest {
     private AdminVirtualAccountService virtualAccountService;
     private com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
     private AdminWebController controller;
+    private com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService workbench;
+    private com.tailtopia.content.service.MediaAclReconciler mediaAcl;
 
     @BeforeEach
     void setUp() {
@@ -46,9 +48,11 @@ class AdminWebControllerTest {
         when(virtualAccountService.list()).thenReturn(List.of());
         identities = mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class);
         when(identities.selectableIdentities()).thenReturn(List.of());
+        workbench = mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class);
+        mediaAcl = mock(com.tailtopia.content.service.MediaAclReconciler.class);
         controller = new AdminWebController(adminContentService, adminModerationService, adminVetService, virtualAccountService,
                 TestMessages.real(),
-                identities, mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class));
+                identities, workbench, mediaAcl);
     }
 
     private AdminUserDetails admin() {
@@ -215,5 +219,33 @@ class AdminWebControllerTest {
         assertThat(binding.hasGlobalErrors()).isTrue();
         verify(adminContentService, org.mockito.Mockito.never())
                 .publishSeed(anyLong(), any(), any(), any(), any(), any(), anyBoolean(), any());
+    }
+
+    // ===== 专题线 video Story 3.1：举报处置后事务外即时对账文件公开状态 =====
+
+    @Test
+    void reportDispositionsReconcileMediaAclAfterServiceCall() {
+        when(workbench.postIdOfReport(11L)).thenReturn(java.util.Optional.of(501L));
+        when(workbench.postIdOfReport(12L)).thenReturn(java.util.Optional.empty());
+        var flash = new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap();
+        var hx = com.tailtopia.admin.shared.web.HxRequest.NONE;
+
+        controller.takedown(admin(), 11L, hx, new ConcurrentModel(), null);
+        var order = org.mockito.Mockito.inOrder(adminModerationService, mediaAcl);
+        order.verify(adminModerationService).takedown(eq(11L), any());
+        order.verify(mediaAcl).reconcileQuietly(501L);
+
+        controller.dismiss(admin(), 11L, hx, new ConcurrentModel(), null);
+        order.verify(adminModerationService).dismiss(eq(11L), any());
+        order.verify(mediaAcl).reconcileQuietly(501L);
+
+        controller.dismissAllForPost(admin(), 502L, hx, new ConcurrentModel(), null, flash);
+        order.verify(adminModerationService).dismissAllForPost(eq(502L), any());
+        order.verify(mediaAcl).reconcileQuietly(502L);
+
+        // 查不到帖子 id 的工单：不拿工单 id 冒充帖子 id（交给定时任务）
+        controller.takedown(admin(), 12L, hx, new ConcurrentModel(), null);
+        verify(mediaAcl).reconcileQuietly((Long) null);
+        verify(mediaAcl, org.mockito.Mockito.never()).reconcileQuietly(12L);
     }
 }

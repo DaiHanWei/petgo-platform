@@ -14,6 +14,8 @@ import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/notify/domain/app_update_controller.dart';
+import '../../features/notify/domain/app_version_check.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
@@ -117,6 +119,7 @@ import '../../features/vet/presentation/vet_request_detail_page.dart';
 import '../../features/vet/presentation/vet_workbench_shell.dart';
 import '../../shared/widgets/app_shell.dart';
 import '../../shared/widgets/bottom_tab_bar.dart';
+import '../../features/content/video/video_nav.dart';
 
 /// 根 Navigator key（供拦截器在 401 续期失败后于全局弹登录引导，Story 1.5 F3）。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -258,6 +261,8 @@ String? rawDeepLinkRedirect(Uri uri) {
 /// 对一个「从 WhatsApp 点链接进来」的人来说，那就是一条死路 ——
 /// 而这条链路的全部意义正是把人**引进** App。
 void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
+  // 强制更新期间不导航：基座 go 后下一帧再 push 深链，会盖在重弹的强更弹窗之上（OCR 审查 #1）。
+  if (ref.read(appUpdateControllerProvider).decision == UpdateDecision.forced) return;
   final ctx = rootNavigatorKey.currentContext;
   if (ctx == null || !ctx.mounted) {
     ref.read(routerProvider).go(location); // 极端兜底：拿不到 context 时至少别丢深链
@@ -1057,10 +1062,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         // 首页评论按钮沿用同一个名字 —— 两侧同名是硬要求，且接通后通知那条链路也跟着好了。
         //
         // ⚠️ 别与 `/profile/health?focus=<记录编号>` 混淆：同名不同义，路由不同不冲突。
-        builder: (c, s) => ContentDetailPage(
-          postId: int.parse(s.pathParameters['id']!),
-          focusComments: s.uri.queryParameters['focus'] == 'comments',
-        ),
+        // 专题线 video Story 2.4：列表点视频卡片会带 `extra: VideoRouteExtra` 与 `?src=`（埋点来源）；
+        // 通知 / 推送 / 深链没有 extra，先拉详情再按 mediaType 分流。
+        builder: (c, s) {
+          final extra = s.extra is VideoRouteExtra ? s.extra! as VideoRouteExtra : null;
+          return ContentDetailPage(
+            postId: int.parse(s.pathParameters['id']!),
+            focusComments: s.uri.queryParameters['focus'] == 'comments',
+            knownVideo: extra != null,
+            videoSource: extra?.source ?? VideoSource.parse(s.uri.queryParameters['src']),
+          );
+        },
       ),
       // 用户公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118）。shell 外顶层 push（隐藏 Tab Bar）。
       //

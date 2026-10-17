@@ -7,6 +7,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,8 +28,9 @@ public class MeContentController {
 
     @GetMapping("/posts")
     public FeedPageResponse myPosts(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(required = false) String cursor) {
-        return feedService.myPosts(currentUserId(jwt), cursor);
+            @RequestParam(required = false) String cursor,
+            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
+        return feedService.myPosts(currentUserId(jwt), cursor, com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
     }
 
     private static long currentUserId(Jwt jwt) {

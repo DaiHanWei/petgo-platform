@@ -18,12 +18,21 @@ public record ContentPostResponse(
         List<String> imageUrls,
         String dangerLevel,
         LocalDate eventDate,
-        Instant createdAt) {
+        Instant createdAt,
+        /** 媒体类型（专题线 video Story 2.1）：发布回显用，恒下发。回显不带视频播放地址。 */
+        com.tailtopia.content.domain.MediaType mediaType) {
 
     /** 兼容无事件日期的构造（既有调用点 / 测试桩）：eventDate 省为 null。 */
     public ContentPostResponse(Long id, ContentType type, Long petId, String text,
             List<String> imageUrls, String dangerLevel, Instant createdAt) {
         this(id, type, petId, text, imageUrls, dangerLevel, null, createdAt);
+    }
+
+    /** 兼容无媒体类型的构造（既有调用点 / 测试桩）：图文帖。 */
+    public ContentPostResponse(Long id, ContentType type, Long petId, String text,
+            List<String> imageUrls, String dangerLevel, LocalDate eventDate, Instant createdAt) {
+        this(id, type, petId, text, imageUrls, dangerLevel, eventDate, createdAt,
+                com.tailtopia.content.domain.MediaType.IMAGE);
     }
 
     public static ContentPostResponse from(ContentPost p) {
@@ -35,6 +44,7 @@ public record ContentPostResponse(
                 p.getImageUrls(),
                 p.getDangerLevel(),
                 p.getEventDate(),
-                p.getCreatedAt());
+                p.getCreatedAt(),
+                p.getMediaType());
     }
 }

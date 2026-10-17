@@ -1,7 +1,13 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+
+import '../../../core/analytics/analytics.dart';
+import '../../../core/network/problem_detail.dart';
 
 import '../../mention/domain/mention_draft.dart';
 import '../data/content_repository.dart';
+import '../video/video_post_repository.dart';
+import '../video/video_spec.dart';
 import 'content_type.dart';
 import 'feed_image_layout.dart';
 import 'image_crop.dart';
@@ -40,6 +46,12 @@ const int kMaxPostTextLength = 1000;
 /// 单张超 10MB 压不下时由处理层抛错；本控制器只管上传编排。
 const int kMaxImages = 9;
 
+/// 视频 / 封面的上传状态（专题线 video Story 1.6）。
+enum MediaUploadStatus { idle, uploading, success, failed }
+
+/// 视频上传失败原因（决定提示文案与埋点 errorType）。
+enum VideoUploadError { policy, upload, permission, quota }
+
 /// Publish Compose 上传状态机（Story 2.3 · F4）。
 ///
 /// 持每图独立状态；「重试」**仅重传失败件**，文字在内存保留；控制器随 sheet dispose 即清空
@@ -48,11 +60,17 @@ class PublishController extends ChangeNotifier {
   PublishController({
     required this.uploadOne,
     required this.repository,
-  });
+    this.videoRepository,
+    Future<void> Function(Duration)? delay,
+  }) : _delay = delay ?? ((d) => Future<void>.delayed(d));
 
   /// 单张上传函数（成功返回对外 URL，失败抛异常）。注入便于 L0 单测。
   final Future<String> Function(Uint8List bytes) uploadOne;
   final ContentRepository repository;
+
+  /// 视频帖上传与发布（专题线 video Story 1.6）；为 null 时视频流程不可用（老测试 / 无视频场景）。
+  final VideoPostRepository? videoRepository;
+  final Future<void> Function(Duration) _delay;
 
   ContentType type = ContentType.daily;
 
@@ -74,6 +92,216 @@ class PublishController extends ChangeNotifier {
   final List<ImageUploadItem> items = <ImageUploadItem>[];
   bool publishing = false;
 
+  /// 已通过规格检查的视频（专题线 video Story 1.5 · AD-9）。与 [items] **互斥**：
+  /// 媒体要么是图片列表，要么是单个视频，不能混发。只存路径，不读进内存（一致性规则 8）。
+  VideoDraft? video;
+
+  /// 还能不能加图：有视频时不能。
+  bool get canAddImage => video == null && items.length < kMaxImages;
+
+  /// 还能不能选视频：已有图片或已有视频时不能。
+  bool get canPickVideo => items.isEmpty && video == null;
+
+  void setVideo(VideoDraft draft) {
+    if (items.isNotEmpty) return;
+    video = draft;
+    // 视频帖只能是日常或科普（FR-10）。
+    if (type == ContentType.growthMoment) type = ContentType.daily;
+    notifyListeners();
+  }
+
+  void clearVideo() {
+    if (video == null) return;
+    _cancelToken?.cancel();
+    _cancelToken = null;
+    _coverGeneration++;
+    video = null;
+    videoStatus = MediaUploadStatus.idle;
+    videoProgress = 0;
+    videoObjectKey = null;
+    videoUploadMs = null;
+    videoError = null;
+    coverBytes = null;
+    coverStatus = MediaUploadStatus.idle;
+    coverUrl = null;
+    notifyListeners();
+  }
+
+  // ---------- 专题线 video Story 1.6：视频与封面上传 ----------
+
+  MediaUploadStatus videoStatus = MediaUploadStatus.idle;
+
+  /// 视频上传进度 0–1。
+  double videoProgress = 0;
+  String? videoObjectKey;
+
+  /// 最后一次成功上传的耗时（埋点 `video_publish.uploadMs`）。
+  int? videoUploadMs;
+  VideoUploadError? videoError;
+
+  /// 封面 JPEG（本地字节；封面上传后是私有的，预览只能用本地字节）。
+  Uint8List? coverBytes;
+  MediaUploadStatus coverStatus = MediaUploadStatus.idle;
+  String? coverUrl;
+
+  CancelToken? _cancelToken;
+
+  /// 换封面时让旧的上传结果作废。
+  int _coverGeneration = 0;
+
+  /// 申请凭证失败时的退避（AD 过程规范：1 / 2 / 4 秒）。
+  static const List<Duration> policyBackoff = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+  ];
+
+  bool get videoUploading =>
+      videoStatus == MediaUploadStatus.uploading || coverStatus == MediaUploadStatus.uploading;
+
+  /// 申请凭证（失败退避重试；403 / 429 不重试）→ 流式上传。用户点「重试」也走这里，从头来。
+  Future<void> startVideoUpload() async {
+    final repo = videoRepository;
+    final draft = video;
+    if (repo == null || draft == null || videoStatus == MediaUploadStatus.uploading) return;
+    final token = CancelToken();
+    _cancelToken = token;
+    videoStatus = MediaUploadStatus.uploading;
+    videoProgress = 0;
+    videoError = null;
+    notifyListeners();
+
+    VideoUploadPolicy? policy;
+    for (var attempt = 0; policy == null; attempt++) {
+      try {
+        policy = await repo.requestPolicy();
+      } on DioException catch (e) {
+        final slug = ProblemDetail.fromDioException(e)?.typeSlug;
+        final terminal = slug == 'video-permission-denied'
+            ? VideoUploadError.permission
+            : slug == 'video-upload-quota-exceeded'
+                ? VideoUploadError.quota
+                : null;
+        if (terminal != null || attempt >= policyBackoff.length) {
+          _failVideo(token, terminal ?? VideoUploadError.policy);
+          return;
+        }
+      } catch (_) {
+        if (attempt >= policyBackoff.length) {
+          _failVideo(token, VideoUploadError.policy);
+          return;
+        }
+      }
+      if (policy == null) {
+        await _delay(policyBackoff[attempt]);
+        if (token.isCancelled || !identical(video, draft)) return;
+      }
+    }
+
+    final started = DateTime.now();
+    try {
+      await repo.uploadVideo(policy, draft.path,
+          cancelToken: token,
+          onProgress: (sent, total) {
+            if (total > 0 && identical(_cancelToken, token)) {
+              videoProgress = sent / total;
+              notifyListeners();
+            }
+          });
+    } catch (e) {
+      if (token.isCancelled || (e is DioException && CancelToken.isCancel(e))) {
+        if (identical(_cancelToken, token)) {
+          videoStatus = MediaUploadStatus.idle;
+          notifyListeners();
+        }
+        return; // 用户主动取消不算失败、不上报
+      }
+      _failVideo(token, VideoUploadError.upload);
+      return;
+    }
+    if (!identical(_cancelToken, token)) return;
+    videoObjectKey = policy.key;
+    videoUploadMs = DateTime.now().difference(started).inMilliseconds;
+    videoProgress = 1;
+    videoStatus = MediaUploadStatus.success;
+    notifyListeners();
+  }
+
+  Future<void> retryVideoUpload() => startVideoUpload();
+
+  void _failVideo(CancelToken token, VideoUploadError error) {
+    if (!identical(_cancelToken, token)) return;
+    videoStatus = MediaUploadStatus.failed;
+    videoError = error;
+    notifyListeners();
+    Analytics.capture('video_upload_failed', {'error_type': error.name});
+  }
+
+  /// 取消进行中的视频上传（关闭发帖页确认放弃时调用）。
+  void cancelVideoUpload() {
+    _cancelToken?.cancel();
+    _cancelToken = null;
+    if (videoStatus == MediaUploadStatus.uploading) {
+      videoStatus = MediaUploadStatus.idle;
+      notifyListeners();
+    }
+  }
+
+  /// 设置（或更换）封面并上传；旧封面的上传结果作废。
+  Future<void> setVideoCover(Uint8List jpeg) async {
+    coverBytes = jpeg;
+    coverUrl = null;
+    final generation = ++_coverGeneration;
+    await _uploadCover(jpeg, generation);
+  }
+
+  Future<void> retryCoverUpload() async {
+    final bytes = coverBytes;
+    if (bytes == null) return;
+    await _uploadCover(bytes, ++_coverGeneration);
+  }
+
+  /// 取帧失败：没有默认封面，等用户从相册选。
+  void markCoverMissing() {
+    coverStatus = MediaUploadStatus.failed;
+    notifyListeners();
+    Analytics.capture('video_upload_failed', {'error_type': 'cover'});
+  }
+
+  Future<void> _uploadCover(Uint8List jpeg, int generation) async {
+    final repo = videoRepository;
+    if (repo == null) return;
+    coverStatus = MediaUploadStatus.uploading;
+    notifyListeners();
+    try {
+      final url = await repo.uploadCover(jpeg);
+      if (generation != _coverGeneration) return;
+      coverUrl = url;
+      coverStatus = MediaUploadStatus.success;
+    } catch (_) {
+      if (generation != _coverGeneration) return;
+      coverStatus = MediaUploadStatus.failed;
+      Analytics.capture('video_upload_failed', {'error_type': 'cover'});
+    }
+    notifyListeners();
+  }
+
+  bool _disposed = false;
+
+  /// 上传 / 封面的异步回调可能在发帖页关闭（控制器 dispose）之后才回来 —— 那时不能再通知。
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    // 关闭发帖页（含下拉关闭 sheet）→ 不在后台继续传（AC5）。
+    _disposed = true;
+    _cancelToken?.cancel();
+    super.dispose();
+  }
+
   /// 成长日历事件日期（F9）：仅 GROWTH_MOMENT 有意义，决定档案侧显示位置（与发布时间解耦）。
   /// 不可未来——由 UI date picker 与服务端共同守护。
   DateTime? eventDate;
@@ -91,10 +319,16 @@ class PublishController extends ChangeNotifier {
   bool get canPublish =>
       !publishing &&
       !isUploading &&
+      // 专题线 video Story 1.6：有视频时，视频与封面都上传成功才可发布。
+      (video == null ||
+          (videoStatus == MediaUploadStatus.success && coverStatus == MediaUploadStatus.success)) &&
       textWithinLimit &&
-      (text.trim().isNotEmpty || items.isNotEmpty);
+      // 视频帖文案可以为空（FR-10）：视频本身就满足「文字或媒体至少一项」。
+      (text.trim().isNotEmpty || items.isNotEmpty || video != null);
 
   void setType(ContentType t) {
+    // 已选视频时「成长日记」不可选（FR-5）。
+    if (video != null && t == ContentType.growthMoment) return;
     type = t;
     // 切到 Moment / Tips 时把开关复位为默认开启：它们不渲染开关，若残留 false
     // 会让「看不见的开关」偷偷把公开内容发成私密。
@@ -126,7 +360,7 @@ class PublishController extends ChangeNotifier {
   /// 加入一张待传图片（≤9）。返回是否成功加入。
   /// [cropOffset]：露出区域页给的露出位置（仅超界图）；字节原样入列，不裁不重编码。
   bool addImage(Uint8List bytes, {double? cropOffset}) {
-    if (items.length >= kMaxImages) return false;
+    if (items.length >= kMaxImages || video != null) return false;
     // 只读文件头，不整张解码 —— 9 张图各解一遍会让加图这一步明显卡顿。
     items.add(ImageUploadItem(bytes, size: imageSizeOf(bytes), cropOffset: cropOffset));
     notifyListeners();
@@ -214,6 +448,7 @@ class PublishController extends ChangeNotifier {
   /// [placeCheckinToken]：打卡后顺手发帖（V1.3.2 Story 1.5）原样透传；任何类型都带（AD-10）。
   Future<int?> publish({required String idempotencyKey, int? petId, String? placeCheckinToken}) async {
     if (!canPublish) return null;
+    if (video != null) return _publishVideo(idempotencyKey);
     publishing = true;
     // AC4：状态机从这一刻起接管顺序 —— 重排入口即刻停响应，直到发布成功或整体取消。
     _orderLocked = true;
@@ -251,6 +486,36 @@ class PublishController extends ChangeNotifier {
       // 走到这里只有两种情形：发布成功，或抛了异常。两者都不该继续锁着 ——
       // 仍有失败件的那条路在上面 `return null` 时就出去了，锁留给它。
       if (allUploaded) _orderLocked = false;
+      notifyListeners();
+    }
+  }
+
+  /// 视频帖发布（专题线 video Story 1.6 · AC6）：不走图片上传状态机与顺序锁。
+  Future<int?> _publishVideo(String idempotencyKey) async {
+    final repo = videoRepository;
+    final draft = video;
+    if (repo == null || draft == null || videoObjectKey == null || coverUrl == null) return null;
+    publishing = true;
+    notifyListeners();
+    try {
+      final trimmed = text.trim();
+      final id = await repo.publishVideo(
+        type: type == ContentType.knowledge ? ContentType.knowledge : ContentType.daily,
+        text: trimmed.isEmpty ? null : trimmed,
+        coverUrl: coverUrl!,
+        video: draft,
+        objectKey: videoObjectKey!,
+        mentionedUserIds: mentions.userIdsIn(trimmed),
+        idempotencyKey: idempotencyKey,
+      );
+      Analytics.capture('video_publish_succeeded', {
+        'duration_ms': draft.durationMs,
+        'size_bytes': draft.sizeBytes,
+        'upload_ms': ?videoUploadMs,
+      });
+      return id;
+    } finally {
+      publishing = false;
       notifyListeners();
     }
   }

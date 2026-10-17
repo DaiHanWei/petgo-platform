@@ -3,6 +3,8 @@ package com.tailtopia.content.dto;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.ImageSize;
+import com.tailtopia.content.domain.MediaType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -66,38 +68,46 @@ public record ContentPostCreateRequest(
          * 与 {@link #imageSizes()} 的「整组作废」<b>刻意不同</b> —— 露出位置丢了没有兜底，
          * 会无声退化为居中，用户的选择白做。
          */
-        @Size(max = 9, message = "最多 9 张图片") List<Double> imageCropOffsets) {
+        @Size(max = 9, message = "最多 9 张图片") List<Double> imageCropOffsets,
+        /**
+         * 媒体类型（专题线 video Story 1.3）。省略 = {@link MediaType#IMAGE}（老客户端 / 后台发帖行为不变）。
+         * {@code VIDEO} 时 {@link #imageUrls()} 恰好 1 张封面、{@link #video()} 必填，视频与图片不能混发。
+         */
+        MediaType mediaType,
+        /** 视频信息；只在 {@code mediaType=VIDEO} 时出现，图文帖带了即 422 {@code video-mixed-media}。 */
+        @Valid VideoPayload video) {
 
     /** 兼容无事件日期的发布（日常/科普 / 后台补发）：eventDate 省为 null，可见范围默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls) {
-        this(type, petId, text, imageUrls, null, null, null, null, null, null);
+        this(type, petId, text, imageUrls, null, null, null, null, null, null, null, null);
     }
 
     /** 兼容不带可见范围的调用（老客户端 / 既有测试）：默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate) {
-        this(type, petId, text, imageUrls, eventDate, null, null, null, null, null);
+        this(type, petId, text, imageUrls, eventDate, null, null, null, null, null, null, null);
     }
 
     /** 兼容不带图片尺寸的调用（老客户端 / 既有测试 / 后台种子发布）：一律走服务端兜底测量。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility) {
-        this(type, petId, text, imageUrls, eventDate, visibility, null, null, null, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, null, null, null, null, null, null);
     }
 
     /** 兼容不带 @ 名单的调用（老客户端 / 既有测试 / 运营发帖）：视为没 @ 任何人。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
             List<ImageSize> imageSizes) {
-        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, null, null, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, null, null, null, null, null);
     }
 
     /** 兼容不带打卡关联的调用（V1.3.2 前的 8 参形态：老客户端 / 既有测试 / 运营发帖）：普通发帖。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
             List<ImageSize> imageSizes, List<Long> mentionedUserIds) {
-        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds, null, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds, null, null,
+                null, null);
     }
 
     /** 兼容不带露出位置的调用（V1.3.4 前的 9 参形态：老客户端 / 既有测试 / 运营发帖）：全部居中。 */
@@ -105,7 +115,21 @@ public record ContentPostCreateRequest(
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
             List<ImageSize> imageSizes, List<Long> mentionedUserIds, String placeCheckinToken) {
         this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds,
-                placeCheckinToken, null);
+                placeCheckinToken, null, null, null);
+    }
+
+    /** 兼容不带媒体类型的调用（专题线 video 前的 10 参形态：老客户端 / 既有测试 / 运营发帖）：图文帖。 */
+    public ContentPostCreateRequest(ContentType type, Long petId, String text,
+            List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
+            List<ImageSize> imageSizes, List<Long> mentionedUserIds, String placeCheckinToken,
+            List<Double> imageCropOffsets) {
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds,
+                placeCheckinToken, imageCropOffsets, null, null);
+    }
+
+    /** 省略即图文帖。 */
+    public MediaType mediaTypeOrImage() {
+        return mediaType == null ? MediaType.IMAGE : mediaType;
     }
 
     /** 省略即公开（NFR-6：私密只由用户主动关开关产生）。 */

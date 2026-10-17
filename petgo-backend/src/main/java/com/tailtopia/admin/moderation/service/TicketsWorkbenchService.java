@@ -181,7 +181,7 @@ public class TicketsWorkbenchService {
                     d.getDisposalType() == null ? null : d.getDisposalType().name(),
                     d.getOperatorId() == null ? null : operators.getOrDefault(d.getOperatorId(), "#" + d.getOperatorId()),
                     d.getCreatedAt(), d.getReportId())).toList();
-            samples = content.adminSearch(null, userId, null, null, null, null, null, SAMPLE_SIZE, 0);
+            samples = content.adminMedia(content.adminSearch(null, userId, null, null, null, null, null, SAMPLE_SIZE, 0));
             throttle = throttleRead.forAccounts(List.of(userId), Instant.now()).get(userId);
         }
         // 个性签名：仿冒 / 骚扰举报时签名往往就是证据本身（旧面板口径保留）。

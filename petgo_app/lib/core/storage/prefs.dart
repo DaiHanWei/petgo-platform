@@ -155,6 +155,12 @@ class AppPrefs {
     }
   }
 
+  // --- 专题线 video Story 2.4：最后一条未上报的观看时长（App 被杀后下次启动补报，补报后删除） ---
+  static const _kPendingVideoWatch = 'petgo.video.pending_watch_time';
+  String? get pendingVideoWatch => _prefs.getString(_kPendingVideoWatch);
+  Future<void> setPendingVideoWatch(String json) => _prefs.setString(_kPendingVideoWatch, json);
+  Future<void> clearPendingVideoWatch() => _prefs.remove(_kPendingVideoWatch);
+
   int getInt(String key, {int fallback = 0}) => _prefs.getInt(key) ?? fallback;
   Future<void> setInt(String key, int value) => _prefs.setInt(key, value);
   bool getBool(String key, {bool fallback = false}) => _prefs.getBool(key) ?? fallback;

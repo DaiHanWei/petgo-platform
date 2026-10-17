@@ -47,15 +47,18 @@ public class AdminContentPinService {
     /** 抽屉里的作者昵称（Story 7.3 · AC3 顶置内容预览）。 */
     private final com.tailtopia.auth.service.AccountQueryService accountQuery;
     private final PinnableContentPicker picker;
+    /** 专题线 video Story 3.3：顶置视频帖的封面用签名地址（帖子下架 / 私有后仍能预览）。 */
+    private final com.tailtopia.content.service.PostMediaResolver postMedia;
 
     public AdminContentPinService(ContentPinService pins, ContentPostRepository posts,
             AdminAuditService audit, com.tailtopia.auth.service.AccountQueryService accountQuery,
-            PinnableContentPicker picker) {
+            PinnableContentPicker picker, com.tailtopia.content.service.PostMediaResolver postMedia) {
         this.pins = pins;
         this.posts = posts;
         this.audit = audit;
         this.accountQuery = accountQuery;
         this.picker = picker;
+        this.postMedia = postMedia;
     }
 
     /** 一页排期 + 有无下一页（列表按生效时间倒序）。 */
@@ -127,11 +130,12 @@ public class AdminContentPinService {
                 summary, p.getStartsAt(), p.getEndsAt(), p.getTerminatedAt(), pins.phaseOf(p, now), gone);
         var author = post == null || post.getAuthorId() == null ? null
                 : accountQuery.findAuthorViews(List.of(post.getAuthorId())).get(post.getAuthorId());
+        com.tailtopia.content.dto.PostMedia media = post == null ? null : postMedia.resolveForAdmin(post);
         return new PinDetail(row,
-                post == null || post.getImageUrls() == null || post.getImageUrls().isEmpty()
-                        ? null : post.getImageUrls().get(0),
+                media == null ? null : media.firstImageUrl(),
                 author == null ? null : author.nickname(), author != null && author.deleted(),
-                p.getPromoImageUrl(), p.getPromoTitle(), p.getPromoLinkUrl());
+                p.getPromoImageUrl(), p.getPromoTitle(), p.getPromoLinkUrl(),
+                media != null && media.mediaType() == com.tailtopia.content.domain.MediaType.VIDEO);
     }
 
     /** 状态匹配：已提前结束的排期一律算「已结束」，与摘要条 / 徽标同口径。 */

@@ -467,7 +467,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(events.where((e) => e.$1 == 'app_notification_item_tapped'), hasLength(1));
-    expect(r.nav.pushed, '/content/81');
+    expect(r.nav.pushed, '/content/81?src=notification'); // 专题线 video Story 2.4：带埋点来源
   });
 
   testWidgets('AC7.1：点场所评论 → 场所详情', (tester) async {
@@ -535,7 +535,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('notification_n')));
     await tester.pumpAndSettle();
 
-    expect(r.nav.pushed, '/content/78');
+    expect(r.nav.pushed, '/content/78?src=notification');
   });
 
   testWidgets('AC2：非今天显示「d MMM, HH:mm」（本地时间）', (tester) async {

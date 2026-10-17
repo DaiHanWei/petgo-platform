@@ -127,6 +127,7 @@ petgo:
     app-download-url: ${CARD_APP_DOWNLOAD_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
   # 飞书群日报（每天 13:00 WIB 推昨日数据，admin/dailyreport；13 点是为等 GA4 日数据定稿）。webhook 留空 = 不推送（本地/测试天然关闭）。
   # webhook 与签名密钥 env 注入，绝不入库、绝不落日志。
+  # 多个群：webhook 用英文逗号分隔，密钥按位置一一对应（某群没开签名留空位，如 s1,,s3）；各群独立发送，一个失败不影响其余。
   daily-report:
     webhook-url: ${LARK_DAILY_REPORT_WEBHOOK_URL:}
     secret: ${LARK_DAILY_REPORT_SECRET:}
@@ -209,6 +210,14 @@ media:
   signed-url:
     ttl-seconds: ${SIGNED_URL_TTL_SECONDS:300}
     upload-ttl-seconds: ${UPLOAD_URL_TTL_SECONDS:600}
+  # 专题线 video：视频 PostObject 上传策略（Story 1.2 · AD-3）+ 文件公开对账与 CDN（Story 1.4 · AD-6 / AD-11）。
+  video:
+    upload-ttl-seconds: ${MEDIA_VIDEO_UPLOAD_TTL_SECONDS:1800}
+    max-bytes: ${MEDIA_VIDEO_MAX_BYTES:104857600}
+    daily-policy-limit: ${MEDIA_VIDEO_DAILY_POLICY_LIMIT:50}
+    # 空 = 不走 CDN（下发 OSS 源站地址、不刷新缓存）。stag 可不配；生产必须配。
+    cdn-base-url: ${MEDIA_VIDEO_CDN_BASE_URL:}
+    acl-reconcile-cron: ${MEDIA_VIDEO_ACL_RECONCILE_CRON:0 * * * * *}
 
 # 内容审核（内容审核 Story 1）：阿里云内容安全 green20220302 + 分层词库 + fail-closed 降级。
 # 凭证全部 env 注入，绝不入库 / 不落日志。mode=stub（默认，无凭证）走打桩客户端验评分/降级状态机（L0/L1）；

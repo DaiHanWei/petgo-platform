@@ -1,6 +1,7 @@
 package com.tailtopia.shared.media;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -128,5 +129,60 @@ class AliyunOssClientTest {
             n++;
         }
         return n;
+    }
+
+    // ---- 专题线 video Story 1.2：禁止覆盖 + PostObject 策略签名 ----
+
+    @Test
+    void presignPutRequestAlwaysSignsForbidOverwrite() {
+        var req = AliyunOssClient.presignPutRequest("b", "/public/1/x.jpg", "image/jpeg", 600, "public-read");
+        assertThat(req.getKey()).isEqualTo("public/1/x.jpg");
+        assertThat(req.getHeaders())
+                .containsEntry(AliyunOssClient.FORBID_OVERWRITE_HEADER, "true")
+                .containsEntry("x-oss-object-acl", "public-read");
+    }
+
+    @Test
+    void presignPutRequestWithoutAclStillForbidsOverwrite() {
+        var req = AliyunOssClient.presignPutRequest("b", "private/1/x.jpg", "image/jpeg", 600, null);
+        assertThat(req.getHeaders())
+                .containsEntry(AliyunOssClient.FORBID_OVERWRITE_HEADER, "true")
+                .doesNotContainKey("x-oss-object-acl");
+    }
+
+    @Test
+    void presignPutRequestSignsPrivateAclForVideoCover() {
+        var req = AliyunOssClient.presignPutRequest("b", "public/1/x.jpg", "image/jpeg", 600, "private");
+        assertThat(req.getHeaders()).containsEntry("x-oss-object-acl", "private");
+    }
+
+    @Test
+    void signPostPolicyWithoutCredentialsFailsFast() {
+        assertThatThrownBy(() -> client().signPostPolicy(new java.util.Date(),
+                VideoUploadPolicyService.buildConditions("video/1/k.mp4", 10)))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+    }
+
+    @Test
+    void signPostPolicyBase64EncodesPolicyAndSignsLocally() {
+        MediaProperties props = new MediaProperties();
+        props.setAccessKeyId("AKID-test");
+        props.setAccessKeySecret("secret-test");
+        AliyunOssClient c = new AliyunOssClient(props);
+
+        AliyunOssClient.PostPolicySignature sig = c.signPostPolicy(
+                new java.util.Date(4_102_444_800_000L), // 2100-01-01，确定性
+                VideoUploadPolicyService.buildConditions("video/1/k.mp4", 104_857_600L));
+
+        String json = new String(java.util.Base64.getDecoder().decode(sig.policyBase64()), StandardCharsets.UTF_8)
+                .replace("\\/", "/");
+        assertThat(json).contains("\"expiration\"").contains("[\"eq\",\"$key\",\"video/1/k.mp4\"]");
+        assertThat(sig.accessKeyId()).isEqualTo("AKID-test");
+        assertThat(sig.signature()).isNotBlank();
+        // 同输入同签名（HMAC 确定性），换 secret 签名必变。
+        props.setAccessKeySecret("other-secret");
+        assertThat(new AliyunOssClient(props).signPostPolicy(new java.util.Date(4_102_444_800_000L),
+                VideoUploadPolicyService.buildConditions("video/1/k.mp4", 104_857_600L)).signature())
+                .isNotEqualTo(sig.signature());
     }
 }

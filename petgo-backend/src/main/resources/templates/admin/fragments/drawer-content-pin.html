@@ -26,6 +26,7 @@
                   th:text="${r.ended()} ? #{admin.pins.phase.ended}
                            : (${r.phase.name() == 'ACTIVE'} ? #{admin.pins.phase.active} : #{admin.pins.phase.pending})">状态</span>
             <span class="badge badge-warn" th:if="${r.contentGone and !d.promo()}" th:text="#{admin.pins.contentGone}">内容失效未生效</span>
+            <span class="badge badge-muted" th:if="${!d.promo() and d.postVideo}" th:text="#{admin.video.badge}">视频</span>
         </h2>
         <div class="pin-preview">
             <img th:if="${d.promo()} ? ${d.promoImage != null} : ${d.postImage != null}"
