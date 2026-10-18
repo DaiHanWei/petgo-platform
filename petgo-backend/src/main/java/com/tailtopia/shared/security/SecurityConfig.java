@@ -341,6 +341,9 @@ public class SecurityConfig {
                                 "/api/v1/pet-profiles/me/boarding-passes/**").hasRole("USER")
                         // Tailsonality 主人类型（V1.3.2 Story 2.5）：账号级 /me 端点，同上面 /api/v1/me/* 的理由（sub 当 users.id 用）。
                         .requestMatchers("/api/v1/me/tailsonality/**").hasRole("USER")
+                        // V1.4.0 ① Story 1.4：等级页 / EXP 明细（及后续 popups / frame），controller 把 sub 当 users.id 用 →
+                        // 只给 USER；落 anyRequest().authenticated() 时兽医 token 能以同号用户名义读成长值明细。
+                        .requestMatchers("/api/v1/me/growth", "/api/v1/me/growth/**").hasRole("USER")
                         // Tailsonality 结果（V1.3.2 Story 2.1）：controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub
                         // 与 users.id 撞号 —— 落 anyRequest().authenticated() 会以同号用户名义提交 / 读取。不写 pet-profiles 通配。
                         .requestMatchers("/api/v1/pet-profiles/me/tailsonality",

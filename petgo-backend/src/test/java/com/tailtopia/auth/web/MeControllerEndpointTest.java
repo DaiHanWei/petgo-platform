@@ -86,6 +86,25 @@ class MeControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.onboardingCompleted").value(true));
     }
 
+    /** V1.4.0 ① Story 1.4 · AC5：GET 与 PATCH /me 都带成长值摘要（L1）。 */
+    @Test
+    void getAndPatchMe_carryGrowthBrief() throws Exception {
+        User u = newUser(PetStatus.HAS_PET);
+        mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.growth.level").value(1))
+                .andExpect(jsonPath("$.growth.tier").value("NEWBIE"))
+                .andExpect(jsonPath("$.growth.frame").value("NONE"))
+                .andExpect(jsonPath("$.growth.lifetimeTotal").value(0))
+                .andExpect(jsonPath("$.growth.nextThreshold").value(70));
+        Map<String, Object> body = new HashMap<>();
+        body.put("nickname", "胶囊");
+        mvc.perform(patch("/api/v1/me").header(HttpHeaders.AUTHORIZATION, userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.growth.level").value(1));
+    }
+
     /** GET 鉴权：缺 token → 401。 */
     @Test
     void getMe_withoutToken_is401() throws Exception {

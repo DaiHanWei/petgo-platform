@@ -41,6 +41,10 @@ class MeServiceTest {
     @Mock
     com.tailtopia.content.service.ContentService contentService;
 
+    /** V1.4.0 ① Story 1.4：/me 成长值摘要。 */
+    @Mock
+    com.tailtopia.growth.service.GrowthPageQuery growth;
+
     @InjectMocks
     MeService meService;
 
@@ -198,5 +202,39 @@ class MeServiceTest {
         UserProfileResponse resp = UserProfileResponse.from(freshUser(), false);
         assertThat(resp.postCount()).isNull();
         assertThat(resp.likeCount()).isNull();
+        assertThat(resp.growth()).isNull(); // V1.4.0 ① Story 1.4：登录不查成长值
+    }
+
+    private static final com.tailtopia.growth.web.dto.MeGrowthBrief BRIEF = new com.tailtopia.growth.web.dto.MeGrowthBrief(
+            7, com.tailtopia.growth.domain.GrowthTier.BUDDY, com.tailtopia.growth.domain.FrameChoice.BASIC, 1420L, 1800L);
+
+    /** V1.4.0 ① Story 1.4 · AC5：GET /me 带成长值摘要。 */
+    @Test
+    void getMeCarriesGrowthBrief() {
+        when(users.findById(1L)).thenReturn(Optional.of(freshUser()));
+        when(growth.brief(1L)).thenReturn(BRIEF);
+
+        assertThat(meService.getMe(1L).growth()).isEqualTo(BRIEF);
+    }
+
+    /** V1.4.0 ① Story 1.4 · AC5.2：PATCH /me 响应同样带（否则 App 用 PATCH 响应覆盖后胶囊消失）。 */
+    @Test
+    void updateMeCarriesGrowthBrief() {
+        User u = freshUser();
+        when(users.findById(1L)).thenReturn(Optional.of(u));
+        when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(growth.brief(1L)).thenReturn(BRIEF);
+
+        assertThat(meService.updateMe(1L, new UpdateMeRequest("Buddy", null, null, null, null)).growth())
+                .isEqualTo(BRIEF);
+    }
+
+    /** 不参与者 growth = null（NON_NULL 省略）。 */
+    @Test
+    void nonParticipantHasNoGrowth() {
+        when(users.findById(1L)).thenReturn(Optional.of(freshUser()));
+        when(growth.brief(1L)).thenReturn(null);
+
+        assertThat(meService.getMe(1L).growth()).isNull();
     }
 }
