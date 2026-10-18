@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
 import 'package:tailtopia/features/pet_passport/domain/pet_passport.dart';
 import 'package:tailtopia/features/pet_passport/data/pet_passport_repository.dart';
@@ -609,6 +610,8 @@ Future<void> _pumpDetail(
       authControllerProvider.overrideWith(() => _Auth(loggedIn
           ? const AuthState(status: AuthStatus.authenticated, role: 'USER')
           : const AuthState.guest())),
+      // V1.4.0 multi-pet Story 3.3：打卡改读宠物列表（只列 ACTIVE；1 只 = G4 不弹选择器）。
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 77, name: 'Momo')]),
       petProfileProvider.overrideWith(
           (ref) async => const PetProfile(id: 77, name: 'Momo', cardToken: 'card')),
       if (guide != null) loginGuideControllerProvider.overrideWithValue(guide),

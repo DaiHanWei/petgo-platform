@@ -4197,5 +4197,27 @@
     "placeholders": {
       "name": {"type": "String"}
     }
-  }
+  },
+  "diaryPetsComposeHint": "Write a Diary entry...",
+  "@diaryPetsComposeHint": {"description": "V1.4.0 multi-pet (Story 3.3) F-1: Diary compose placeholder when no pet is selected"},
+  "diaryPetsPair": "{first} & {second}",
+  "@diaryPetsPair": {"description": "V1.4.0 multi-pet (Story 3.3) F-2: linked pets capsule on image, 2 pets", "placeholders": {"first": {"type": "String"}, "second": {"type": "String"}}},
+  "diaryPetsWithPair": "with {first} & {second}",
+  "@diaryPetsWithPair": {"description": "V1.4.0 multi-pet (Story 3.3) F-2: linked pets capsule without image, 2 pets", "placeholders": {"first": {"type": "String"}, "second": {"type": "String"}}},
+  "diaryPetsMany": "{name} and others",
+  "@diaryPetsMany": {"description": "V1.4.0 multi-pet (Story 3.3) F-3: linked pets capsule on image, 3+ pets (first pet name)", "placeholders": {"name": {"type": "String"}}},
+  "diaryPetsWithMany": "with {name} and others",
+  "@diaryPetsWithMany": {"description": "V1.4.0 multi-pet (Story 3.3) F-3: linked pets capsule without image, 3+ pets", "placeholders": {"name": {"type": "String"}}},
+  "diaryPetsWithOne": "with {name}",
+  "@diaryPetsWithOne": {"description": "V1.4.0 multi-pet (Story 3.3) linked pets capsule without image, 1 pet (derived from F-2/F-3, pending copy review)", "placeholders": {"name": {"type": "String"}}},
+  "diaryPetsMore": "+{n}",
+  "@diaryPetsMore": {"description": "V1.4.0 multi-pet (Story 3.3) F6c: overflow avatar \"+N\" in the linked pets capsule", "placeholders": {"n": {"type": "int"}}},
+  "petPickerCheckinTitle": "Who's with you today?",
+  "@petPickerCheckinTitle": {"description": "V1.4.0 multi-pet (Story 3.3) G-1: check-in pet picker sheet title"},
+  "petPickerCheckinBody": "Choose at least 1 pet. Each pet gets its own stamp.",
+  "@petPickerCheckinBody": {"description": "V1.4.0 multi-pet (Story 3.3) G-2: check-in pet picker sheet body"},
+  "petPickerCheckedInHere": "Already checked in here today",
+  "@petPickerCheckedInHere": {"description": "V1.4.0 multi-pet (Story 3.3) G-3: subtitle of a pet row already checked in at this place today"},
+  "petPickerCheckinSubmit": "Check in ({n})",
+  "@petPickerCheckinSubmit": {"description": "V1.4.0 multi-pet (Story 3.3) G2: check-in pet picker submit button with selected count", "placeholders": {"n": {"type": "int"}}}
 }

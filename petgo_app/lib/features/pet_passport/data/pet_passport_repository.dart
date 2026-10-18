@@ -64,6 +64,13 @@ final petPassportProvider = FutureProvider.autoDispose<PetPassport>(
   retry: (_, _) => null,
 );
 
+/// 指定宠物的护照（V1.4.0 multi-pet Story 3.3）：打卡成功页只为 1 只宠物打卡、而它不是当前宠物时，
+/// 章详情要读**那只**宠物的护照（不能拿当前宠物的护照冒充）。其余页面仍用 [petPassportProvider]。
+final petPassportOfPetProvider = FutureProvider.autoDispose.family<PetPassport, int>(
+  (ref, petId) => ref.read(petPassportRepositoryProvider).fetch(petId: petId),
+  retry: (_, _) => null,
+);
+
 /// 已买版本列表（Story 3.4）。V1.4.0 multi-pet：跟随当前宠物。
 final passportSnapshotsProvider = FutureProvider.autoDispose<List<PassportSnapshotItem>>(
   (ref) async {

@@ -202,6 +202,22 @@ void main() {
     });
   });
 
+  group('V1.4.0 multi-pet Story 1.3 / 3.3 · checkedInPetIds', () {
+    test('逐宠物今日已打卡 id 原样解析', () {
+      final p = PlaceDetail.fromJson({...wire, 'checkedInPetIds': [3, 1]}.cast<String, dynamic>());
+      expect(p.checkedInPetIds, [3, 1]);
+    });
+
+    test('空表 = 谁都还没打（与缺键区分）', () {
+      expect(PlaceDetail.fromJson({...wire, 'checkedInPetIds': []}.cast<String, dynamic>()).checkedInPetIds,
+          isEmpty);
+    });
+
+    test('🔴 缺键（游客 / 老后端）→ null：抽屉降级为不置灰', () {
+      expect(PlaceDetail.fromJson(Map<String, dynamic>.from(wire)).checkedInPetIds, isNull);
+    });
+  });
+
   group('🔴 AC6：详情模型里没有收藏 / 评分 / 营业时间 / 打卡次数 / 可编辑', () {
     test('即使服务端多下发了这些键，客户端也不认（解析不报错、不产生任何状态）', () {
       final p = PlaceDetail.fromJson({

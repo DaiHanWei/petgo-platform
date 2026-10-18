@@ -45,4 +45,36 @@ void main() {
     final low = await send([-0.4, 0.5]);
     expect(low['imageCropOffsets'], [0.0, 0.5]);
   });
+
+  group('V1.4.0 multi-pet Story 3.3 · AC3.1：petIds', () {
+    Future<Map<String, dynamic>> body({required ContentType type, List<int> petIds = const [], int? petId}) async {
+      late RequestOptions sent;
+      final dio = Dio()
+        ..interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
+          sent = o;
+          h.resolve(Response(requestOptions: o, statusCode: 200, data: {'id': 1}));
+        }));
+      await DioContentRepository(dio)
+          .publish(type: type, text: 'hi', petIds: petIds, petId: petId, idempotencyKey: 'k');
+      return sent.data as Map<String, dynamic>;
+    }
+
+    test('Diary：请求体同时有 petIds（原序）与 petId = 第一只', () async {
+      final b = await body(type: ContentType.growthMoment, petIds: [3, 8]);
+      expect(b['petIds'], [3, 8]);
+      expect(b['petId'], 3);
+    });
+
+    test('Moment：两者都不写（老路径逐字节不变）', () async {
+      final b = await body(type: ContentType.daily);
+      expect(b.containsKey('petIds'), isFalse);
+      expect(b.containsKey('petId'), isFalse);
+    });
+
+    test('只给 petId（老调用方）→ 只写 petId', () async {
+      final b = await body(type: ContentType.growthMoment, petId: 5);
+      expect(b['petId'], 5);
+      expect(b.containsKey('petIds'), isFalse);
+    });
+  });
 }

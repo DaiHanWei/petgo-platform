@@ -457,6 +457,10 @@ void main() {
         // 🔴 刻意不用 `_viewed`：失败 / 超时时用户并没看到动画；也不用 `_completed`：那会把兜底结局藏进维度。
         //    名字由计划定死，扩表、不改名。
         '_played',
+        // Diary 发布成功（V1.4.0 multi-pet Story 3.3 · PRD §4 定死 `diary_published {pet_count}`）：`_published` = **服务端
+        // 已接住这条 Diary** 之后才报（审核拦截 / 失败不报），描述结果而非点击。
+        // 🔴 与 `content_publish_submitted`（点了提交）分开：那是漏斗入口，这条是结果。名字由 PRD 定死，扩表、不改名。
+        '_published',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

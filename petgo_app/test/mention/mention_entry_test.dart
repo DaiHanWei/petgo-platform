@@ -102,6 +102,7 @@ class _RecordingContentRepo implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],

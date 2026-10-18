@@ -2742,5 +2742,23 @@
     "placeholders": {
       "name": {"type": "String"}
     }
-  }
+  },
+  "diaryPetsComposeHint": "Tulis catatan Diary...",
+  "diaryPetsPair": "{first} & {second}",
+  "@diaryPetsPair": {"placeholders": {"first": {"type": "String"}, "second": {"type": "String"}}},
+  "diaryPetsWithPair": "bersama {first} & {second}",
+  "@diaryPetsWithPair": {"placeholders": {"first": {"type": "String"}, "second": {"type": "String"}}},
+  "diaryPetsMany": "{name} dkk.",
+  "@diaryPetsMany": {"placeholders": {"name": {"type": "String"}}},
+  "diaryPetsWithMany": "bersama {name} dkk.",
+  "@diaryPetsWithMany": {"placeholders": {"name": {"type": "String"}}},
+  "diaryPetsWithOne": "bersama {name}",
+  "@diaryPetsWithOne": {"placeholders": {"name": {"type": "String"}}},
+  "diaryPetsMore": "+{n}",
+  "@diaryPetsMore": {"placeholders": {"n": {"type": "int"}}},
+  "petPickerCheckinTitle": "Siapa yang ikut hari ini?",
+  "petPickerCheckinBody": "Pilih minimal 1 hewan. Setiap hewan dapat cap sendiri.",
+  "petPickerCheckedInHere": "Sudah check-in di sini hari ini",
+  "petPickerCheckinSubmit": "Check-in ({n})",
+  "@petPickerCheckinSubmit": {"placeholders": {"n": {"type": "int"}}}
 }

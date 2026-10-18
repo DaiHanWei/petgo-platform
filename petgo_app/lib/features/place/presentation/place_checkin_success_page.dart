@@ -14,20 +14,57 @@ import '../../pet_passport/data/pet_passport_repository.dart';
 import '../../pet_passport/domain/new_stamp_args.dart';
 import '../../pet_passport/presentation/passport_layout.dart';
 import '../../pet_passport/presentation/pet_passport_stamp_page.dart';
+import '../../profile/data/current_pet_provider.dart';
 import '../../profile/domain/milestone_instant_codes.dart';
+import '../../profile/presentation/widgets/pet_names.dart';
+import '../../../shared/widgets/app_image.dart';
 import '../../profile/presentation/milestone_instant_celebration.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
 import 'widgets/place_stamp_view.dart';
 
+/// 本次打卡的一只宠物（V1.4.0 multi-pet Story 3.3 · AC6.1）：名字 / 头像来自宠物列表，章来自打卡响应的逐宠物结果。
+class PlaceCheckinPetArgs {
+  const PlaceCheckinPetArgs({
+    required this.petId,
+    required this.name,
+    this.avatarUrl,
+    required this.isNewStamp,
+    required this.visitCount,
+  });
+
+  final int petId;
+
+  /// ⚠️ 只渲染，不写日志 / 埋点（§5）。
+  final String name;
+  final String? avatarUrl;
+  final bool isNewStamp;
+  final int visitCount;
+}
+
 /// 打卡成功页的入参（经 go_router `extra` 传入）。
 class PlaceCheckinSuccessArgs {
-  const PlaceCheckinSuccessArgs({required this.result, required this.petName, this.ceremonyPlayed = false});
+  const PlaceCheckinSuccessArgs({
+    required this.result,
+    required this.petName,
+    this.ceremonyPlayed = false,
+    this.pets = const [],
+  });
 
   final PlaceCheckinResult result;
 
-  /// 当前唯一宠物的名字（C2「{pet} dapat cap baru」）。
+  /// 第一只宠物的名字（C2「{pet} dapat cap baru」；单宠物路径用）。
   final String petName;
+
+  /// 本次打卡的全部宠物（按创建顺序，V1.4.0 multi-pet Story 3.3）。≤ 1 只 → 与改造前同一路径；
+  /// ≥ 2 只 → 一排章面（G3）。空表 = 老调用方（未经选宠物流程）。
+  final List<PlaceCheckinPetArgs> pets;
+
+  /// ≥ 2 只宠物 → 多章路径。
+  bool get isMultiPet => pets.length >= 2;
+
+  /// 任一宠物是新章（盖章动画据此，AC6.4）；无逐宠物信息 → 顶层字段。
+  bool get anyNewStamp => pets.isEmpty ? result.isNewStamp : pets.any((p) => p.isNewStamp);
 
   /// V1.3.4：刚播过全屏盖章动画（`PlaceStampCeremonyPage`）→ 不再播本页 0.36s 小落章，章面直接终态。
   /// 再访 / 动画兜底失败为 false，保持原样。
@@ -118,19 +155,51 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
     // 刚盖的章要出现在护照里：进页即重取护照（章详情块读它；取到前 / 取不到用简版章面兜底）。
     _placeholderTimer = Timer(PlaceCheckinSuccessPage.passportPlaceholderMax, () {
       if (!mounted) return;
-      final stamps = ref.read(petPassportProvider).asData?.value.stamps;
+      final other = _singlePetId;
+      final stamps = (other == null ? ref.read(petPassportProvider) : ref.read(petPassportOfPetProvider(other)))
+          .asData
+          ?.value
+          .stamps;
       final found = stamps?.any((s) => s.placeToken == args.result.placeToken) ?? false;
       if (!found) setState(() => _passportFellBack = true);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.invalidate(petPassportProvider);
+      if (mounted) {
+        final other = _singlePetId;
+        if (other == null) {
+          ref.invalidate(petPassportProvider);
+        } else {
+          ref.invalidate(petPassportOfPetProvider(other));
+        }
+      }
       // V1.3.4 Story 4.3 · AD-19：后端异步达成「第一次打卡」→ 盖在成功页上当场庆祝；没等到交补庆祝兜底。
       // 不按 isNewStamp 过滤（那是「这个场所的新章」），统一看「已完成未庆祝」。
       if (mounted && !_milestoneChecked) {
         _milestoneChecked = true;
-        unawaited(celebrateAutoMilestoneIfAny(context, ref, kPlaceCheckinMilestoneCodes));
+        unawaited(_celebrateMilestones());
       }
     });
+  }
+
+  /// V1.4.0 multi-pet Story 3.3 · AC6.6：多宠时按所选宠物**逐只**检查并依次弹（里程碑 provider 已是 petId family）；
+  /// 单宠 / 老调用方 → 与改造前同口径（当前宠物）。
+  Future<void> _celebrateMilestones() async {
+    if (args.pets.length <= 1) {
+      final only = _singlePetId;
+      await celebrateAutoMilestoneIfAny(context, ref, kPlaceCheckinMilestoneCodes, forPetId: only);
+      return;
+    }
+    await celebrateAutoMilestonesForPets(
+        context, ref, kPlaceCheckinMilestoneCodes, [for (final p in args.pets) p.petId]);
+  }
+
+  /// 单只宠物打卡、且它**确定不是**当前宠物 → 那只宠物的 id（章详情 / 里程碑按它读）；
+  /// 否则 null（= 当前宠物，改造前路径；当前宠物还没解析出来时也走改造前路径）。
+  int? get _singlePetId {
+    if (args.pets.length != 1) return null;
+    final id = args.pets.first.petId;
+    final current = ref.exists(effectivePetIdProvider) ? ref.read(effectivePetIdProvider).value : null;
+    return (current == null || id == current) ? null : id;
   }
 
   @override
@@ -143,7 +212,10 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final r = args.result;
-    final passportAsync = ref.watch(petPassportProvider);
+    if (args.isMultiPet) return _buildMulti(context, l10n);
+    final other = _singlePetId;
+    final passportAsync =
+        other == null ? ref.watch(petPassportProvider) : ref.watch(petPassportOfPetProvider(other));
     final passport = _passportFellBack ? null : passportAsync.asData?.value;
     final stampIndex = passport?.stamps.indexWhere((s) => s.placeToken == r.placeToken) ?? -1;
     // 护照还在取（进页即重取）→ 先放空白护照本占位；只有真的取不到 / 找不到这枚章才退到简版章面。
@@ -156,79 +228,7 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
       backgroundColor: AppColors.cream,
       // D-14：底部一行（成功页无评论输入条，可吸底）。C2 = 左次级「Lihat Paspor」+ 右主 CTA「Rekam Momen Ini」
       // （flex 1 : 2，主 CTA 更宽实心）；C2b = 只有主 CTA，整宽。两按钮同高、热区 ≥44、按压 0.96。
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Row(
-          key: const ValueKey('placeCheckinActions'),
-          children: [
-            if (r.isNewStamp) ...[
-              Expanded(
-                child: _Pressable(
-                  child: OutlinedButton(
-                    key: const ValueKey('placeCheckinViewPassport'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      // 1:2 分栏下本按钮只有 ~106dp 宽（360dp 屏），默认左右各 24 的内边距只剩 ~58 放字，
-                      // 「View Passport」被截成「View Pas…」（L2 验收 2026-10-05）。收窄内边距 + 字放不下时等比缩小，不截断。
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      foregroundColor: AppColors.mint,
-                      side: const BorderSide(color: AppColors.mint),
-                      // 与右侧主 CTA（filledButtonTheme：圆角 12 + 14.5/w700）同形同字重；
-                      // 主题未配 outlinedButtonTheme，不写则落到 Material 默认胶囊形 + 细字，两钮并排不统一。
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5, fontWeight: FontWeight.w700),
-                    ),
-                    // Story 1.3：先进 B4 整页落章（只在 isNewStamp 分支构造 NewStampArgs），
-                    // B4 的「Lihat Paspor」再 pushReplacement 到护照页停在新章。
-                    onPressed: () => context.push(
-                      PetInsightsRoutes.passportNewStamp,
-                      extra: NewStampArgs(
-                        placeToken: r.placeToken,
-                        placeName: r.placeName,
-                        placeType: r.placeType,
-                        stampImageUrl: r.stampImageUrl,
-                        stampCount: r.stampCount ?? 1,
-                      ),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(l10n.placeCheckinViewPassport, maxLines: 1),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
-            Expanded(
-              flex: 2,
-              child: _Pressable(
-                child: FilledButton.icon(
-                  key: const ValueKey('placeCheckinRecordMoment'),
-                  style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48), backgroundColor: AppColors.mint),
-                  // Story 1.5：Diary 预选 + 打卡关联随发布请求一次写入（AD-10 / AD-11）。
-                  onPressed: () => PublishComposePage.open(
-                    context,
-                    preset: ContentType.growthMoment,
-                    placeCheckinToken: r.checkinToken,
-                    placeCheckinPlace: PublishCheckinPlace(
-                      placeToken: r.placeToken,
-                      placeName: r.placeName,
-                      placeType: r.placeType,
-                    ),
-                  ),
-                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                  // 同理：窄屏放不下时等比缩小，不截断。
-                  label: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(l10n.placeCheckinRecordMoment, maxLines: 1),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      bottomNavigationBar: _actions(context, l10n),
       appBar: AppBar(
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,
@@ -293,6 +293,206 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// 底部按钮行（D-14）。单宠 / 多宠共用。
+  Widget _actions(BuildContext context, AppLocalizations l10n) {
+    final r = args.result;
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        key: const ValueKey('placeCheckinActions'),
+        children: [
+          // 「Lihat Paspor」仍按顶层 isNewStamp（= 第一只宠物；单宠与改造前一致）：护照是单只宠物的。
+          if (r.isNewStamp) ...[
+            Expanded(
+              child: _Pressable(
+                child: OutlinedButton(
+                  key: const ValueKey('placeCheckinViewPassport'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    // 1:2 分栏下本按钮只有 ~106dp 宽（360dp 屏），默认左右各 24 的内边距只剩 ~58 放字，
+                    // 「View Passport」被截成「View Pas…」（L2 验收 2026-10-05）。收窄内边距 + 字放不下时等比缩小，不截断。
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: AppColors.mint,
+                    side: const BorderSide(color: AppColors.mint),
+                    // 与右侧主 CTA（filledButtonTheme：圆角 12 + 14.5/w700）同形同字重；
+                    // 主题未配 outlinedButtonTheme，不写则落到 Material 默认胶囊形 + 细字，两钮并排不统一。
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5, fontWeight: FontWeight.w700),
+                  ),
+                  // Story 1.3：先进 B4 整页落章（只在 isNewStamp 分支构造 NewStampArgs），
+                  // B4 的「Lihat Paspor」再 pushReplacement 到护照页停在新章。
+                  onPressed: () => context.push(
+                    PetInsightsRoutes.passportNewStamp,
+                    extra: NewStampArgs(
+                      placeToken: r.placeToken,
+                      placeName: r.placeName,
+                      placeType: r.placeType,
+                      stampImageUrl: r.stampImageUrl,
+                      stampCount: r.stampCount ?? 1,
+                    ),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(l10n.placeCheckinViewPassport, maxLines: 1),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            flex: 2,
+            child: _Pressable(
+              child: FilledButton.icon(
+                key: const ValueKey('placeCheckinRecordMoment'),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48), backgroundColor: AppColors.mint),
+                // Story 1.5：Diary 预选 + 打卡关联随发布请求一次写入（AD-10 / AD-11）。
+                onPressed: () => PublishComposePage.open(
+                  context,
+                  preset: ContentType.growthMoment,
+                  placeCheckinToken: r.checkinToken,
+                  // G3：默认选中本次打卡的宠物（AC1.7 / AC6.5）；老调用方无逐宠物信息 → 不预选。
+                  initialPetIds: args.pets.isEmpty ? null : [for (final p in args.pets) p.petId],
+                  placeCheckinPlace: PublishCheckinPlace(
+                    placeToken: r.placeToken,
+                    placeName: r.placeName,
+                    placeType: r.placeType,
+                  ),
+                ),
+                icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                // 同理：窄屏放不下时等比缩小，不截断。
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(l10n.placeCheckinRecordMoment, maxLines: 1),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ≥ 2 只宠物（G3）：不出护照单章详情（那是单只宠物的护照），改为一排章面 + 各自头像 / 名字。
+  Widget _buildMulti(BuildContext context, AppLocalizations l10n) {
+    final r = args.result;
+    final date = r.visitDate == null ? null : formatDayMonthYear(context, r.visitDate!);
+    final newNames = [for (final p in args.pets) if (p.isNewStamp) p.name];
+    final subtitle = newNames.isNotEmpty
+        ? l10n.placeCheckinNewStamp(formatPetNames(l10n, newNames))
+        : l10n.placeCheckinRepeatStamp(r.placeName, args.pets.first.visitCount);
+    return Scaffold(
+      backgroundColor: AppColors.cream,
+      bottomNavigationBar: _actions(context, l10n),
+      appBar: AppBar(
+        backgroundColor: AppColors.cream,
+        scrolledUnderElevation: 0,
+        title: Text(l10n.placeCheckinButton),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          children: [
+            Text(l10n.placeCheckinSuccessTitle,
+                key: const ValueKey('placeCheckinSuccessTitle'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.3)),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              key: const ValueKey('placeCheckinStampLine'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.mint),
+            ),
+            const SizedBox(height: 16),
+            // UI 稿 `.stamps`：横排居中、间距 14；超过 2 枚时横向可滚，不换行。
+            LayoutBuilder(
+              builder: (context, c) => SingleChildScrollView(
+                key: const ValueKey('placeCheckinMultiStamps'),
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: c.maxWidth),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < args.pets.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 14),
+                        _PetStampCell(
+                          key: ValueKey('placeCheckinPetStamp-${args.pets[i].petId}'),
+                          result: r,
+                          pet: args.pets[i],
+                          animate: !args.ceremonyPlayed,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(date == null ? r.placeName : l10n.placeCheckinSuccessPlaceDate(r.placeName, date),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink2)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 多宠成功页的一枚章（UI 稿 `.stampc`）：110 章面（新章落章轻反馈 / 再访静态）+ 头像 26 + 名字 12 `ink2`，间距 6；
+/// 再访在名字后标「×{visitCount}」（与 C2b 角标同写法）。
+class _PetStampCell extends StatelessWidget {
+  const _PetStampCell({super.key, required this.result, required this.pet, this.animate = true});
+
+  final PlaceCheckinResult result;
+  final PlaceCheckinPetArgs pet;
+  final bool animate;
+
+  @override
+  Widget build(BuildContext context) {
+    final face = PlaceStampView(placeType: result.placeType, imageUrl: result.stampImageUrl, size: 110);
+    final Widget stamp = pet.isNewStamp && animate
+        ? TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: PlaceCheckinSuccessPage.stampAnimation,
+            curve: Curves.easeOutBack,
+            builder: (context, t, child) => Opacity(
+              opacity: t.clamp(0.0, 1.0),
+              child: Transform.scale(scale: 1.25 - 0.25 * t, child: child),
+            ),
+            child: face,
+          )
+        : face;
+    final hasAvatar = pet.avatarUrl != null && pet.avatarUrl!.isNotEmpty;
+    return SizedBox(
+      width: 110,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          stamp,
+          const SizedBox(height: 6),
+          CircleAvatar(
+            radius: 13,
+            backgroundColor: AppColors.mintTint,
+            backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 78),
+            child: hasAvatar ? null : const Icon(Icons.pets, size: 14, color: AppColors.mint500),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            pet.isNewStamp ? pet.name : '${pet.name} ×${pet.visitCount}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: AppColors.ink2),
+          ),
+        ],
       ),
     );
   }
