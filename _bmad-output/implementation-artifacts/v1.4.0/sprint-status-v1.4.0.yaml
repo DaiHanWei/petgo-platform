@@ -15,7 +15,7 @@
 # 四条线合并顺序：① -> ② -> ③ -> ④（① PRD §6.1）
 #
 # ===== 迁移预分配 =====
-# 0.1 V20261018_1400
+# 0.1 V20261018_1400（通知类型）+ V20261018_1401（支付用途）—— 实现时拆成一约束一文件，见 story Completion Notes
 
 generated: 2026-10-18
 last_updated: 2026-10-18
@@ -26,4 +26,4 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.0"
 
 development_status:
   epic-0: in-progress
-  0-1-四条线共用地基: ready-for-dev
+  0-1-四条线共用地基: review

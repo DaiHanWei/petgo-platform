@@ -52,6 +52,19 @@ class PaymentDisplayNoTest {
         assertThat(prefixes).hasSize(PaymentPurpose.values().length);
     }
 
+    /** V1.4.0 Story 0.1：送礼 / 宠物名额月租两个新用途各有独立前缀（全部前缀互不相同由上一条保证）。 */
+    @Test
+    void v140PurposesHaveOwnPrefixes() {
+        java.util.Map<PaymentPurpose, String> expected = java.util.Map.of(
+                PaymentPurpose.GIFT, "PAYGIFT-", PaymentPurpose.PET_SLOT_RENT, "PAYSLOT-");
+        expected.forEach((purpose, prefix) -> {
+            PaymentIntent p = PaymentIntent.create(1L, purpose, PayChannel.QRIS, 5_000L, "IDR", "tok");
+            ReflectionTestUtils.setField(p, "id", 11L);
+            ReflectionTestUtils.setField(p, "createdAt", Instant.parse("2026-10-18T01:00:00Z"));
+            assertThat(PaymentDisplayNo.of(p)).isEqualTo(prefix + "20261018-000011");
+        });
+    }
+
     @Test
     void unsavedIntentYieldsNullSoCallerFallsBackToToken() {
         PaymentIntent p = PaymentIntent.create(1L, PaymentPurpose.ID_HD, PayChannel.QRIS,
