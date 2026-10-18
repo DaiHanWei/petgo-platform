@@ -100,4 +100,37 @@ class GiftModuleBoundaryGuardTest {
         }
         assertThat(offenders).as("② 的接口本分支不存在，禁止引用或自造（P-3）").isEmpty();
     }
+
+    /**
+     * Story 1.2 · AC5.4：通知模块提供方无关 —— notify 任何源码不 import 送礼模块；本 story 动到的通知类与读端口包
+     * 也不 import profile（宠物名只经 {@code notify.port.NotificationPetNames}）。
+     */
+    @Test
+    void notifyModuleDoesNotImportGiftAndPetNamesGoThroughPort() throws IOException {
+        Path notify = Path.of("src/main/java/com/tailtopia/notify");
+        List<String> offenders = new ArrayList<>();
+        try (Stream<Path> s = Files.walk(notify)) {
+            for (Path p : s.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String src = read(p);
+                if (src.contains("com.tailtopia.gift.")) {
+                    offenders.add(p.getFileName() + " → gift");
+                }
+                String name = p.getFileName().toString();
+                boolean touched = p.toString().contains("/notify/port/")
+                        || List.of("NotificationService.java", "NotificationCenterService.java",
+                                "InteractionCopyRenderer.java").contains(name);
+                if (touched && src.contains("com.tailtopia.profile.")) {
+                    offenders.add(name + " → profile");
+                }
+            }
+        }
+        assertThat(offenders).as("notify 不依赖送礼 / 宠物档案的类（AC5.4）").isEmpty();
+    }
+
+    /** Story 1.2：退回只调钱包 {@code credit}（退给送礼人自己），送礼模块不出现 {@code debit} 之外的钱包写入口。 */
+    @Test
+    void refundOnlyCreditsTheSenderThroughWallet() throws IOException {
+        String src = read(GIFT.resolve("service/GiftRefundService.java"));
+        assertThat(src).contains("wallet.credit(order.getSenderId()").doesNotContain("getOwnerId()");
+    }
 }

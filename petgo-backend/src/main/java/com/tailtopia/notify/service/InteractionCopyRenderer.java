@@ -101,15 +101,33 @@ public class InteractionCopyRenderer {
     }
 
     /**
-     * 第一行文案（推送标题 / 列表第一行）。点赞、场所评论按 {@code others == 0} 选 {@code .one} / {@code .many}；
+     * 第一行文案（推送标题 / 列表第一行）。收礼无宠物名时用 noPet 文案。点赞、场所评论按 {@code others == 0} 选 {@code .one} / {@code .many}；
      * 评论按 {@code variant} 选「评论了你的帖子」/「回复了你的评论」；新粉丝「关注了你」。
      *
      * @throws IllegalArgumentException 非互动类型
      */
     public String title(NotificationType type, String variant, ActorSummary s, Locale locale) {
+        return title(type, variant, s, locale, null);
+    }
+
+    /**
+     * 同 {@link #title(NotificationType, String, ActorSummary, Locale)}，另带宠物名（V1.4.0 gift Story 1.2 · AC5.3）：
+     * 只有 {@code PET_GIFT_RECEIVED} 用到 —— {@code others == 0} → {@code notify.tpl.giftReceived.one}（{0} 昵称、{1} 宠物名）；
+     * 否则 {@code .many}（{0} 昵称、{1} 其余人数、{2} 宠物名、{3} 总人数）；{@code petName == null}（宠物已删 / 查不到）→
+     * {@code .one.noPet} / {@code .many.noPet}。其余四类忽略 {@code petName}，行为不变。
+     */
+    public String title(NotificationType type, String variant, ActorSummary s, Locale locale, String petName) {
         String name = s.latestNickname();
         // {1} 以字符串传入：MessageFormat 对数字会按语言插千分位（1.234 / 1,234）。
         String others = String.valueOf(s.others());
+        if (type == NotificationType.PET_GIFT_RECEIVED) {
+            String total = String.valueOf(s.total());
+            String suffix = petName == null ? ".noPet" : "";
+            String pet = petName == null ? "" : petName;
+            return s.others() == 0
+                    ? msg("notify.tpl.giftReceived.one" + suffix, locale, name, pet)
+                    : msg("notify.tpl.giftReceived.many" + suffix, locale, name, others, pet, total);
+        }
         return switch (type) {
             case CONTENT_LIKED -> s.others() == 0
                     ? msg("notify.tpl.liked.one", locale, name)
@@ -123,6 +141,14 @@ public class InteractionCopyRenderer {
             case USER_FOLLOWED -> msg("notify.tpl.followed", locale, name);
             default -> throw new IllegalArgumentException("not an interaction type: " + type);
         };
+    }
+
+    /**
+     * 收礼推送标题（单笔文案，V1.4.0 gift Story 1.2 · AC5.3）：{@code notify.tpl.giftReceived.push}
+     * （{0} 送礼人昵称、{1} 礼物、{2} 宠物名）。{@code giftLabel} 由调用方给：数量 1 时为礼物名、≥ 2 时「礼物名 ×N」。
+     */
+    public String giftPushTitle(String actorName, String giftLabel, String petName, Locale locale) {
+        return msg("notify.tpl.giftReceived.push", locale, actorName, giftLabel, petName);
     }
 
     private String msg(String key, Locale locale, Object... args) {

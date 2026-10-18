@@ -42,10 +42,18 @@ public class NotificationService {
     /** 场所评论推送去抖键前缀（D-7，Story 3.2 使用）：{@code notify:placecommentpush:{placeId}}。 */
     public static final String PLACE_COMMENT_PUSH_KEY_PREFIX = "notify:placecommentpush:";
 
-    /** {@link #sendInteraction} 只接受这四种互动类型（模板只覆盖它们）。 */
+    /**
+     * 带触发人的互动类型（模板只覆盖它们）。{@link #sendInteraction} 只接受前四种；{@code PET_GIFT_RECEIVED}
+     * （V1.4.0 gift Story 1.2）只经 {@link #sendGiftReceived} 写入。本集合同时是通知列表现拼、未读角标「有效未读」口径的事实源
+     * （{@link InteractionActorResolver#INTERACTION_TYPE_NAMES} 由它派生）。
+     */
     static final java.util.Set<NotificationType> INTERACTION_TYPES = java.util.EnumSet.of(
             NotificationType.CONTENT_LIKED, NotificationType.CONTENT_COMMENTED,
-            NotificationType.USER_FOLLOWED, NotificationType.PLACE_COMMENTED);
+            NotificationType.USER_FOLLOWED, NotificationType.PLACE_COMMENTED,
+            NotificationType.PET_GIFT_RECEIVED);
+
+    /** 收礼聚合键前缀（V1.4.0 gift · AD-8）：{@code GIFT:PET:{petId}}，同一宠物未读即合并。不去抖（{@link #debounceKey} 返回 null）。 */
+    static final String GIFT_AGGREGATE_PREFIX = "GIFT:PET:";
 
     /** 推送去抖窗口（AD-10）。 */
     static final Duration PUSH_DEBOUNCE = Duration.ofMinutes(10);
@@ -177,59 +185,135 @@ public class NotificationService {
     public Notification sendInteraction(long recipientUserId, NotificationType type, long actorUserId,
             String aggregateKey, String targetRef, Long commentId, String variant, String pushBodyText) {
         // 3.1 code-review F1：非互动类型在写库之前就拒绝（否则行写了、渲染推送时才炸）。
-        if (!INTERACTION_TYPES.contains(type)) {
+        if (!INTERACTION_TYPES.contains(type) || type == NotificationType.PET_GIFT_RECEIVED) {
             throw new IllegalArgumentException("not an interaction type: " + type);
         }
-        String title = fallbackTitle(type, variant);
-        String body = "点击查看";
         long id;
         String token;
         if (aggregateKey == null) {
-            Notification saved = repo.save(Notification.interaction(recipientUserId, type, title, body,
-                    type.name(), generateToken(), targetRef, null, commentId, variant));
+            Notification saved = repo.save(Notification.interaction(recipientUserId, type, fallbackTitle(type, variant),
+                    INTERACTION_FALLBACK_BODY, type.name(), generateToken(), targetRef, null, commentId, variant));
             aggregates.addActor(saved.getId(), actorUserId);
             bumpUnreadBadge(recipientUserId);
             id = saved.getId();
             token = saved.getDeepLinkToken();
         } else {
-            NotificationAggregateDao.UpsertResult r = aggregates.upsertAggregate(recipientUserId, type, title, body,
-                    type.name(), generateToken(), targetRef, aggregateKey, commentId, variant);
-            boolean newActor = aggregates.addActor(r.id(), actorUserId);
-            if (r.inserted()) {
-                bumpUnreadBadge(recipientUserId);
-            } else if (newActor) {
-                aggregates.touch(r.id()); // 合并：时间刷新、角标不动
-                // 3.3 code-review F3：合并前这条若「不可见」（原触发人全被过滤 → 列表隐藏、角标未计，T-36），
-                // 这次合进来的人让它重新可见 → 角标要补 +1，否则铃铛比可见未读少 1。
-                if (wasInvisible(recipientUserId, r.id(), actorUserId)) {
-                    bumpUnreadBadge(recipientUserId);
-                }
-            } else {
+            AggregateWrite w = writeAggregate(recipientUserId, type, actorUserId, aggregateKey, targetRef, commentId,
+                    variant);
+            if (w.outcome() == ActorOutcome.SAME_ACTOR) {
                 // T-29：同一人取消赞再赞、仍未读 —— 不刷新时间、不顶到最上、不再推送。
-                return repo.findById(r.id()).orElseThrow();
+                return repo.findById(w.id()).orElseThrow();
             }
-            id = r.id();
-            token = r.deepLinkToken();
+            id = w.id();
+            token = w.token();
         }
         Notification saved = repo.findById(id).orElseThrow();
         // 3.1 code-review F1：推送放到本事务提交之后 —— 渲染要查库，查询异常若发生在事务内会把刚写的通知一起回滚
         // （角标已 +1、去抖键已占，通知却没了）。提交后再推，任何异常都只丢这一次推送。无事务（单测）时直接执行。
-        Runnable push = () -> {
+        runAfterCommit(() -> {
             try {
                 pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, pushBodyText);
             } catch (RuntimeException e) {
                 log.warn("互动推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
             }
-        };
+        });
+        return saved;
+    }
+
+    /** 互动通知落库兜底正文（不含昵称 / 原文，AD-3）。 */
+    private static final String INTERACTION_FALLBACK_BODY = "点击查看";
+
+    /** 聚合写入时本次触发人的三种结局。 */
+    private enum ActorOutcome {
+        /** 新建了一条（角标已 +1）。 */
+        CREATED,
+        /** 合并进未读同键行、本人是新触发人（已刷新时间；必要时补角标）。 */
+        MERGED_NEW_ACTOR,
+        /** 合并进未读同键行、本人已在触发人里（什么都没做，T-29 分支）。 */
+        SAME_ACTOR
+    }
+
+    private record AggregateWrite(long id, String token, ActorOutcome outcome) {
+    }
+
+    /**
+     * 聚合类互动的 upsert + 记触发人 + 角标（{@link #sendInteraction} 与 {@link #sendGiftReceived} 共用这一份）：
+     * 新建 → 角标 +1；新触发人 → {@code touch} 刷新时间（角标不动，原条目不可见时补 +1）；同一触发人 → 不动，交调用方决定。
+     */
+    private AggregateWrite writeAggregate(long recipientUserId, NotificationType type, long actorUserId,
+            String aggregateKey, String targetRef, Long commentId, String variant) {
+        NotificationAggregateDao.UpsertResult r = aggregates.upsertAggregate(recipientUserId, type,
+                fallbackTitle(type, variant), INTERACTION_FALLBACK_BODY, type.name(), generateToken(), targetRef,
+                aggregateKey, commentId, variant);
+        boolean newActor = aggregates.addActor(r.id(), actorUserId);
+        if (r.inserted()) {
+            bumpUnreadBadge(recipientUserId);
+            return new AggregateWrite(r.id(), r.deepLinkToken(), ActorOutcome.CREATED);
+        }
+        if (newActor) {
+            aggregates.touch(r.id()); // 合并：时间刷新、角标不动
+            // 3.3 code-review F3：合并前这条若「不可见」（原触发人全被过滤 → 列表隐藏、角标未计，T-36），
+            // 这次合进来的人让它重新可见 → 角标要补 +1，否则铃铛比可见未读少 1。
+            if (wasInvisible(recipientUserId, r.id(), actorUserId)) {
+                bumpUnreadBadge(recipientUserId);
+            }
+            return new AggregateWrite(r.id(), r.deepLinkToken(), ActorOutcome.MERGED_NEW_ACTOR);
+        }
+        return new AggregateWrite(r.id(), r.deepLinkToken(), ActorOutcome.SAME_ACTOR);
+    }
+
+    /** 本事务提交之后执行；无事务同步（单测直调）时立即执行。 */
+    private static void runAfterCommit(Runnable task) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    push.run();
+                    task.run();
                 }
             });
         } else {
-            push.run();
+            task.run();
+        }
+    }
+
+    /**
+     * 收礼互动通知（V1.4.0 gift Story 1.2 · AC5 · AD-8）：{@code PET_GIFT_RECEIVED}，按宠物 {@code GIFT:PET:{petId}} 未读即合并。
+     *
+     * <p>与点赞走同一套 upsert / 记触发人 / 角标逻辑（{@link #writeAggregate}），<b>两处不同</b>：
+     * <ol>
+     *   <li>同一送礼人在未读期间再送（T-29 分支）→ <b>照样 {@code touch} 刷新时间并推送</b>（每份礼物都有人花了钱）；</li>
+     *   <li>推送<b>不去抖</b>（每份都推、单笔文案）。</li>
+     * </ol>
+     * {@code targetRef} = 宠物 id（与访客路由 {@code /pets/:petId} 同口径）；{@code commentId / variant = null}。
+     *
+     * <p>推送在本事务<b>提交之后</b>（失败只丢这次推送）；虚拟号 / 官方号不推；{@code pushTitle} 为空（触发人已注销 / 封号）→ 不推、仍落库。
+     * {@code pushTitle} 由调用方按收件人语言渲染，<b>不落库、不进日志</b>。拉黑 / 隐藏抑制<b>不在这里</b>（在送礼监听器）。
+     * REQUIRES_NEW 的理由同 {@link #send}。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification sendGiftReceived(long recipientUserId, long actorUserId, long petId, String pushTitle) {
+        String aggregateKey = GIFT_AGGREGATE_PREFIX + petId;
+        String targetRef = String.valueOf(petId);
+        AggregateWrite w = writeAggregate(recipientUserId, NotificationType.PET_GIFT_RECEIVED, actorUserId,
+                aggregateKey, targetRef, null, null);
+        if (w.outcome() == ActorOutcome.SAME_ACTOR) {
+            aggregates.touch(w.id()); // 同一人再送：仍顶到最上（与点赞 T-29 相反）
+        }
+        Notification saved = repo.findById(w.id()).orElseThrow();
+        if (pushTitle != null && !pushTitle.isBlank()) {
+            long id = w.id();
+            String token = w.token();
+            runAfterCommit(() -> {
+                try {
+                    if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
+                        return;
+                    }
+                    pusher.pushToUser(recipientUserId, pushTitle, "", NotificationType.PET_GIFT_RECEIVED.name(),
+                            token, targetRef);
+                } catch (RuntimeException e) {
+                    log.warn("收礼推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
+                }
+            });
         }
         return saved;
     }
@@ -323,6 +407,7 @@ public class NotificationService {
                     ? "有人回复了你的评论" : "有人评论了你的内容";
             case USER_FOLLOWED -> "有人关注了你";
             case PLACE_COMMENTED -> "有人评论了你添加的地点";
+            case PET_GIFT_RECEIVED -> "有人给你的宠物送了礼物";
             default -> type.name();
         };
     }

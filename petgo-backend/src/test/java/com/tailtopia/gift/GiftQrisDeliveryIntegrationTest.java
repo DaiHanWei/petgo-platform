@@ -131,7 +131,9 @@ class GiftQrisDeliveryIntegrationTest extends ApiIntegrationTest {
         paymentIntents.applyCallback(paid(r));
 
         long id = orderId(r.orderToken());
-        assertThat(orderStatus(r.orderToken())).isEqualTo("UNDELIVERED_REFUND_PENDING");
+        // Story 1.2 起：交付事务提交后 GiftUndeliveredListener 同步（AFTER_COMMIT）退回 → applyCallback 返回时已是 UNDELIVERED_REFUNDED。
+        // 退回细节（流水 / 总账 / 通知）由 GiftRefundIntegrationTest 验。
+        assertThat(orderStatus(r.orderToken())).isEqualTo("UNDELIVERED_REFUNDED");
         assertThat(jdbc.queryForObject("SELECT undelivered_reason FROM gift_orders WHERE id = ?", String.class, id))
                 .isEqualTo("PET_DELETED");
         assertThat(jdbc.queryForObject("SELECT status FROM payment_intents WHERE public_token = ?", String.class,

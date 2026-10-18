@@ -21,7 +21,8 @@ import org.hibernate.annotations.DynamicUpdate;
  *
  * <p>🔴 状态只经 {@code GiftDeliveryService}（DELIVERED / UNDELIVERED_REFUND_PENDING，条件更新）、
  * 两个支付监听与发起服务的「幂等重放发现旧意图已过窗」（{@link #markExpired} / {@link #markFailed}）改变；
- * 退回相关状态由 Story 1.2 的退回服务改变。
+ * 退回相关状态只由 Story 1.2 的 {@code GiftRefundService} 改变（{@link #markRefunded} / {@link #recordRefundFailure}，
+ * 均在行锁下、只认 UNDELIVERED_REFUND_PENDING）。
  *
  * <p>🔴 {@code @DynamicUpdate}：实体 UPDATE 只写脏列。{@code pet_id} 由库级 {@code ON DELETE SET NULL} 维护、
  * {@code delivered_at} / {@code undelivered_reason} 由交付的条件更新（原生 SQL）写入 —— 全列 UPDATE 会把装载时的旧值写回：
@@ -170,6 +171,43 @@ public class GiftOrder {
 
     public boolean isPending() {
         return status == GiftOrderStatus.PENDING;
+    }
+
+    /** 是否待退回（Story 1.2：退回服务的状态守卫）。 */
+    public boolean isRefundPending() {
+        return status == GiftOrderStatus.UNDELIVERED_REFUND_PENDING;
+    }
+
+    /**
+     * UNDELIVERED_REFUND_PENDING → UNDELIVERED_REFUNDED（Story 1.2 · AC1.3，只由 {@code GiftRefundService} 调用，
+     * 与 {@code credit} 同一事务）。非待退回返回 false 不动。
+     */
+    public boolean markRefunded(Instant now) {
+        if (!isRefundPending()) {
+            return false;
+        }
+        status = GiftOrderStatus.UNDELIVERED_REFUNDED;
+        refundedAt = now;
+        refundError = null;
+        return true;
+    }
+
+    /**
+     * 记一次退回失败（Story 1.2 · AC1.4，只由 {@code GiftRefundService} 调用）：{@code refund_attempts + 1}、
+     * {@code refund_error} = 异常简单类名（截到 64 字符，<b>不存 message</b>）；次数达到 {@code maxAttempts} → REFUND_MANUAL。
+     * 非待退回返回 false 不动。
+     */
+    public boolean recordRefundFailure(String errorClass, int maxAttempts) {
+        if (!isRefundPending()) {
+            return false;
+        }
+        refundAttempts += 1;
+        String err = errorClass == null || errorClass.isBlank() ? "RuntimeException" : errorClass;
+        refundError = err.length() > 64 ? err.substring(0, 64) : err;
+        if (refundAttempts >= maxAttempts) {
+            status = GiftOrderStatus.REFUND_MANUAL;
+        }
+        return true;
     }
 
     public Long getId() {

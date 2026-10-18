@@ -1,8 +1,11 @@
 package com.tailtopia.gift.repository;
 
 import com.tailtopia.gift.domain.GiftOrder;
+import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +23,26 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
     Optional<GiftOrder> findByPaymentIntentId(long paymentIntentId);
 
     Optional<GiftOrder> findByPublicToken(String publicToken);
+
+    /**
+     * 行锁读订单（{@code SELECT … FOR UPDATE}，Story 1.2 · AC1.1）：退回的首次触发、重试任务与并发触发串行化，
+     * 配合状态守卫与 {@code credit} 的幂等键保证只入账一次。只给 {@code GiftRefundService} 用。
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from GiftOrder o where o.id = :id")
+    Optional<GiftOrder> findByIdForUpdate(@Param("id") long id);
+
+    /**
+     * 待重试退回的订单 id（Story 1.2 · AC3.2）：{@code UNDELIVERED_REFUND_PENDING AND refund_attempts < :maxAttempts}，
+     * 按 id 升序、最多 {@code limit} 条。
+     */
+    @Query(value = """
+            SELECT id FROM gift_orders
+             WHERE status = 'UNDELIVERED_REFUND_PENDING' AND refund_attempts < :maxAttempts
+             ORDER BY id ASC
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findRefundRetryIds(@Param("maxAttempts") int maxAttempts, @Param("limit") int limit);
 
     /** PENDING → DELIVERED（交付）。返回受影响行数：1 = 本次交付，0 = 已被并发交付 / 已非 PENDING。 */
     @Modifying(flushAutomatically = true)
