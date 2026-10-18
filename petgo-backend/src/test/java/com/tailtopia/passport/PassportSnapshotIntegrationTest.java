@@ -199,7 +199,7 @@ class PassportSnapshotIntegrationTest extends ApiIntegrationTest {
         checkIn(o, newPlace());
         String body = start(o, "QRIS").andReturn().getResponse().getContentAsString();
         String intent = json.readTree(body).path("payment").path("token").asText();
-        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteByUserId(o.user().getId()));
+        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteAllForAccount(o.user().getId()));
         assertThat(snapshotRows(o)).isZero();
         paymentIntents.applyCallback(new PaymentCallback(intent, "gw-" + SEQ.incrementAndGet(), GatewayStatus.PAID,
                 Map.of()));

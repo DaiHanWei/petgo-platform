@@ -126,8 +126,10 @@ public class ProfileApiController {
      */
     @DeleteMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteMyProfile(@AuthenticationPrincipal Jwt jwt) {
-        profileService.deleteMyProfile(currentUserId(jwt));
+    public void deleteMyProfile(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        // V1.4.0 multi-pet（Story 1.3）：只删这一只；不带 petId = 默认宠物（旧版 App）。
+        profileService.deleteMyProfile(currentUserId(jwt), petId);
     }
 
     /**

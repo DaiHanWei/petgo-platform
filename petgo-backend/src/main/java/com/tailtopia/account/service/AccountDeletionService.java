@@ -150,7 +150,7 @@ public class AccountDeletionService {
 
         // 删除/匿名化各模块，收集待删个人媒体（content 由 user 行删除自动匿名，无需单独调用）。
         PersonalMedia media = PersonalMedia.empty()
-                .merge(profileDeletion.deleteByUserId(userId))
+                .merge(profileDeletion.deleteAllForAccount(userId)) // V1.4.0 multi-pet：逐只删全部宠物，最后按账号给身份证打标
                 .merge(triageDeletion.deleteByUserId(userId))
                 .merge(consultAnonymization.anonymizeByUserId(userId));
         notificationDeletion.deleteByUserId(userId);

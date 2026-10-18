@@ -14,8 +14,9 @@ import java.util.List;
  *   <li>**没有** `favorited` / 收藏相关字段；</li>
  *   <li>**没有** `rating` / 评分打星；</li>
  *   <li>**没有** 营业时间 / 电话 / 商户资料类字段；</li>
- *   <li>打卡只有**一个**字段 {@code checkedInToday}（V1.3.2 Story 1.1）：登录用户本人宠物今天（WIB）
- *       在此是否已打卡；游客省略。**没有**打卡次数 / 能否打卡 / 打卡人列表这类字段；</li>
+ *   <li>打卡只有 {@code checkedInToday}（V1.3.2 Story 1.1）与 {@code checkedInPetIds}（V1.4.0 multi-pet
+ *       Story 1.3）两个字段：登录用户本人宠物今天（WIB）在此是否已打卡（全部宠物都打过才为 true）/ 已打过的
+ *       本人宠物；游客两键都省略。**没有**打卡次数 / 能否打卡 / 打卡人列表这类字段；</li>
  *   <li>**没有** 任何「可编辑」标记 —— 用户不可编辑场所（2026-09-15 拍板）。</li>
  * </ul>
  * ⚠️ 这不是「还没做」，是**明确不做**。往这里加任何一条之前先回 PRD ⑥ / 决策日志改口径。
@@ -65,7 +66,12 @@ public record PlaceDetailResponse(
          * 今日已打卡（V1.3.2 Story 1.1 AC3）：本人任一宠物今天（WIB 自然日）在此场所是否已打卡。
          * 🔴 游客为 null → **省略该键**（与 distanceMeters 同一 NON_NULL 机制），不是 false。
          */
-        Boolean checkedInToday) {
+        Boolean checkedInToday,
+        /**
+         * 今天（WIB）已在此场所打卡的本人宠物 id（V1.4.0 multi-pet Story 1.3 · AD-13）。
+         * 🔴 游客为 null → **省略该键**（同 checkedInToday 的 NON_NULL 机制）。
+         */
+        List<Long> checkedInPetIds) {
 
     /**
      * 详情大图宽度（物理像素）。
@@ -94,6 +100,18 @@ public record PlaceDetailResponse(
             List<PlacePhotoView> photos, Integer distanceMeters,
             long commentCount, long recommendCount, long notRecommendCount,
             int photoSlotsRemaining, Boolean checkedInToday) {
+        return of(p, markedBy, photos, distanceMeters, commentCount, recommendCount,
+                notRecommendCount, photoSlotsRemaining, checkedInToday, null);
+    }
+
+    /**
+     * 带逐宠物打卡状态的完整工厂（V1.4.0 multi-pet Story 1.3）；{@code checkedInToday} /
+     * {@code checkedInPetIds} 为 null = 游客（两键都省略）。
+     */
+    public static PlaceDetailResponse of(Place p, AuthorView markedBy,
+            List<PlacePhotoView> photos, Integer distanceMeters,
+            long commentCount, long recommendCount, long notRecommendCount,
+            int photoSlotsRemaining, Boolean checkedInToday, List<Long> checkedInPetIds) {
         return new PlaceDetailResponse(
                 p.getPublicToken(),
                 p.getName(),
@@ -110,7 +128,8 @@ public record PlaceDetailResponse(
                 recommendCount,
                 notRecommendCount,
                 Math.max(0, photoSlotsRemaining),
-                checkedInToday);
+                checkedInToday,
+                checkedInPetIds);
     }
 
 }

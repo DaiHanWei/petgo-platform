@@ -220,15 +220,24 @@ public class ConsultCloseService {
     }
 
     private void publishClosed(ConsultSession s, boolean rated) {
-        // petId 会话不持有 → 传 null，由 profile 侧按 userId 反查（V1 单宠物）。
+        // V1.4.0 multi-pet（Story 1.3 · AD-12 / P-7）：会话不持有宠物 → 取本会话订单上的宠物
+        // （consult_orders.pet_profile_id，按 consult_session_id 取最新一张）；无订单的旧会话 → null，
+        // profile 侧回落默认宠物。
         // 携带事件日期(结束时点)+症状/等级/诊断摘要，供 profile 归档成 VET_CONSULT 健康事件（Bug 139）。
         VetDiagnosis d = s.getVetDiagnosis();
         Instant at = s.terminalAt();
         LocalDate eventDate =
                 at != null ? LocalDate.ofInstant(at, ZoneOffset.UTC) : LocalDate.now(ZoneOffset.UTC);
         events.publishEvent(new ConsultClosedEvent(
-                s.getId(), s.getUserId(), s.getVetId(), null,
+                s.getId(), s.getUserId(), s.getVetId(), orderPetIdOf(s),
                 s.getImConversationId(), s.getAiImageRefs(), rated,
                 eventDate, s.getAiSymptomText(), s.getAiDangerLevel(), d == null ? null : d.diagnosis()));
+    }
+
+    /** 本会话订单上的宠物（Story 1.2 的 {@code findFirstByConsultSessionIdOrderByIdDesc}）；无订单 / 单上无宠物 → null。 */
+    private Long orderPetIdOf(ConsultSession s) {
+        return orders.findFirstByConsultSessionIdOrderByIdDesc(s.getId())
+                .map(ConsultOrder::getPetProfileId)
+                .orElse(null);
     }
 }

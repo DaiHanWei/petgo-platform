@@ -86,7 +86,7 @@ public class HealthRecordService {
                 blankToNull(req.note()));
         HealthRecordResponse saved = HealthRecordResponse.from(records.save(r));
         // 里程碑第四触发路径（FR-45C，Story 7.2）：VACCINE→M3 / DEWORM→M4（listener 提交后异步幂等完成）。
-        events.publishEvent(new HealthRecordCreatedEvent(ownerId, type));
+        events.publishEvent(new HealthRecordCreatedEvent(ownerId, type, petId));
         return saved;
     }
 

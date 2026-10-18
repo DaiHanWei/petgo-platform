@@ -839,6 +839,28 @@ public class ContentService {
     }
 
     /**
+     * 某作者某宠物<b>已发布</b>的成长日历条数（V1.4.0 multi-pet Story 1.3 · AD-12：Diary 计数类里程碑
+     * 1 / 10 / 30 条按这只宠物判）。口径同改造前的里程碑计数（只数 PUBLISHED，不含审核中），只是加了宠物维度。
+     */
+    @Transactional(readOnly = true)
+    public long countPublishedGrowthMomentsOfPet(long authorId, long petId) {
+        return posts.countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatus(
+                authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED);
+    }
+
+    /**
+     * 帖子关联的宠物（V1.4.0 multi-pet Story 1.3 · P-7：被赞 / 被评论等内容触发的里程碑归帖子关联的宠物）。
+     * 仅 Diary（{@code GROWTH_MOMENT}）且仍关联宠物时有值；Moment / Tips、已解除关联或帖子不存在 → empty
+     * （调用方回落默认宠物）。Story 3.1 改为多宠关联。
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> growthMomentPetIdOf(long postId) {
+        return posts.findById(postId)
+                .filter(p -> p.getType() == ContentType.GROWTH_MOMENT)
+                .map(ContentPost::getPetId);
+    }
+
+    /**
      * 推荐池的 content 侧一半（V1.3.0 batch-b1 Story 4.1 · AC1/AC2）。
      *
      * <p>经 service 暴露，<b>不让 profile 直读 content_posts 表</b>（架构边界，同
@@ -943,6 +965,21 @@ public class ContentService {
                         && p.getType() == ContentType.GROWTH_MOMENT
                         && p.getDeletedAt() == null
                         && p.getStatus() == PostStatus.PUBLISHED)
+                .orElse(false);
+    }
+
+    /**
+     * 同 {@link #isOwnGrowthMoment}，且帖子关联的是 {@code petId} 这只宠物（V1.4.0 multi-pet Story 1.3 · AD-12：
+     * 里程碑打卡只能关联该宠物的成长日历内容）。Story 3.1 改为查 {@code content_pets}。
+     */
+    @Transactional(readOnly = true)
+    public boolean isOwnGrowthMomentOfPet(long ownerId, long petId, long postId) {
+        return posts.findById(postId)
+                .map(p -> p.getAuthorId() == ownerId
+                        && p.getType() == ContentType.GROWTH_MOMENT
+                        && p.getDeletedAt() == null
+                        && p.getStatus() == PostStatus.PUBLISHED
+                        && p.getPetId() != null && p.getPetId() == petId)
                 .orElse(false);
     }
 

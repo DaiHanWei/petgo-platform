@@ -6,6 +6,7 @@ import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.consult.event.ConsultClosedEvent;
+import com.tailtopia.content.service.ContentService;
 import com.tailtopia.profile.domain.HealthRecordType;
 import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
@@ -13,6 +14,7 @@ import com.tailtopia.profile.event.CardSharedEvent;
 import com.tailtopia.profile.event.HealthArchivedEvent;
 import com.tailtopia.profile.event.HealthRecordCreatedEvent;
 import com.tailtopia.profile.event.ProfileCreatedEvent;
+import java.util.Optional;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -37,6 +39,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * 组合依赖 C-L4/D-L4（健康全完成）与计数阈值由 {@link MilestoneCompletionService} 内部处理；
  * 陪伴满 30 天走 {@link MilestoneScheduledCompleter}（@Scheduled）。
  *
+ * <p>V1.4.0 multi-pet（Story 1.3 · AD-12 / P-7）：带宠物的事件只完成那只宠物；内容触发（被赞 / 被评论 /
+ * 平台帖）归帖子关联的宠物——Diary → 其关联宠物，Moment / Tips → 默认宠物；问诊结束归单上宠物（无单 → 默认宠物）。
+ * <b>不再</b>对账号下全部宠物逐只完成。
+ *
  * <p>⚠️ <b>本类不得再出现里程碑后缀字符串</b>（V1.3.0 Story 1.1 · AD-A4）：拼后缀寻址默认三张清单
  * 同号位含义相同，通用清单只有 16 项、猫狗各 31 项，曾一次造出五处线上错误。
  */
@@ -44,15 +50,17 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class MilestoneAutoCompleteListener {
 
     private final MilestoneCompletionService completion;
+    private final ContentService contentService;
 
-    public MilestoneAutoCompleteListener(MilestoneCompletionService completion) {
+    public MilestoneAutoCompleteListener(MilestoneCompletionService completion, ContentService contentService) {
         this.completion = completion;
+        this.contentService = contentService;
     }
 
     @Async
     @TransactionalEventListener
     public void onProfileCreated(ProfileCreatedEvent e) {
-        completion.completeForOwner(e.ownerId(), MilestoneAutoEvent.PROFILE_CREATED,
+        completion.completeForPet(e.petProfileId(), MilestoneAutoEvent.PROFILE_CREATED,
                 MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
@@ -71,16 +79,26 @@ public class MilestoneAutoCompleteListener {
     @Async
     @TransactionalEventListener
     public void onContentPublished(ContentPublishedEvent e) {
-        if (e.type() == ContentType.GROWTH_MOMENT) {
-            // 计数类：首张（≥1）/ 满 10 / 满 30，统一走计数判定（按物种查表，通用宠物满 10 是 G-M4）。
-            completion.onGrowthMomentCount(e.authorId(), e.authorGrowthMomentCount());
+        // V1.4.0 multi-pet（Story 1.3）：Diary 只点亮其关联宠物；未关联宠物（petId 为 null）不触发计数 / L 级回填。
+        // Story 3.1 把 petId 换成遍历 petIds。
+        if (e.type() == ContentType.GROWTH_MOMENT && e.petId() != null) {
+            long petId = e.petId();
+            // 计数类：首张（≥1）/ 满 10 / 满 30，按<b>这只宠物</b>的已发布 Diary 数判（按物种查表，通用宠物满 10 是 G-M4）。
+            completion.onGrowthMomentCountForPet(petId,
+                    contentService.countPublishedGrowthMomentsOfPet(e.authorId(), petId));
             // 「系统推送 + 当天发布」L 级节点回填：第一个生日 L1 / 满 100 天 L2 / 满 365 天 L3（8.6）。
-            completion.completeDateGatedLNodesOnPublish(e.authorId());
+            completion.completeDateGatedLNodesForPet(petId);
         }
         // 首条平台帖子：DAILY 恒算；GROWTH_MOMENT / KNOWLEDGE 需 PUBLIC（对外可见）才算。幂等，与上面互不影响。
+        // P-7：Diary → 其关联宠物；Moment / Tips（及未关联宠物的 Diary）→ 默认宠物。
         if (isPlatformPost(e)) {
-            completion.completeForOwner(e.authorId(), MilestoneAutoEvent.PLATFORM_POST,
-                    MilestoneCompletionSource.SYSTEM_AUTO);
+            if (e.type() == ContentType.GROWTH_MOMENT && e.petId() != null) {
+                completion.completeForPet(e.petId(), MilestoneAutoEvent.PLATFORM_POST,
+                        MilestoneCompletionSource.SYSTEM_AUTO);
+            } else {
+                completion.completeForDefaultPet(e.authorId(), MilestoneAutoEvent.PLATFORM_POST,
+                        MilestoneCompletionSource.SYSTEM_AUTO);
+            }
         }
     }
 
@@ -92,14 +110,14 @@ public class MilestoneAutoCompleteListener {
     @Async
     @TransactionalEventListener
     public void onCardShared(CardSharedEvent e) {
-        completion.completeForOwner(e.ownerId(), MilestoneAutoEvent.CARD_SHARED,
+        completion.completeForPet(e.petProfileId(), MilestoneAutoEvent.CARD_SHARED,
                 MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Async
     @TransactionalEventListener
     public void onHealthArchived(HealthArchivedEvent e) {
-        completion.completeForOwner(e.ownerId(), MilestoneAutoEvent.CONSULT_ARCHIVED,
+        completion.completeForPet(e.petProfileId(), MilestoneAutoEvent.CONSULT_ARCHIVED,
                 MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
@@ -117,11 +135,12 @@ public class MilestoneAutoCompleteListener {
     @TransactionalEventListener
     public void onHealthRecordCreated(HealthRecordCreatedEvent e) {
         MilestoneAutoEvent event = eventFor(e.type());
+        // V1.4.0 multi-pet（Story 1.3）：只完成录入记录的这只宠物。
         if (event != null) {
-            completion.completeForOwner(e.ownerId(), event, MilestoneCompletionSource.SYSTEM_AUTO);
+            completion.completeForPet(e.petProfileId(), event, MilestoneCompletionSource.SYSTEM_AUTO);
         }
-        // Lulus Pemula 新手任务⑥（录入健康记录，任一 type）：可能是最后一块 → 尝试聚合解锁（7.3）。
-        completion.maybeUnlockLulusPemulaForOwner(e.ownerId());
+        // Lulus Pemula 新手任务⑥（录入健康记录，任一 type）：可能是最后一块 → 尝试聚合解锁（7.3），只判这只宠物。
+        completion.maybeUnlockLulusPemulaForPet(e.petProfileId());
     }
 
     /**
@@ -155,12 +174,16 @@ public class MilestoneAutoCompleteListener {
      * <p>与 S4「第一次保存兽医问诊结论」**分属两个独立订阅，不合并**：S4 订 {@code HealthArchivedEvent}
      * （用户可跳过存档），本节点订本事件（只要看过兽医就算）。合并会让「跳过存档」把它一起吃掉。
      *
-     * <p>幂等：{@code completeForOwner} 依赖 {@code milestone_completions} 的唯一约束，重复关闭安全。
+     * <p>幂等：依赖 {@code milestone_completions} 的唯一约束，重复关闭安全。
+     *
+     * <p>V1.4.0 multi-pet（Story 1.3 · P-7）：归问诊单上的宠物（{@code petId} 由 consult 侧按会话订单填）；
+     * 无订单的旧会话（{@code petId == null}）→ 默认宠物，<b>不是</b>全部宠物。
      */
     @Async
     @TransactionalEventListener
     public void onConsultClosed(ConsultClosedEvent e) {
-        completion.completeForOwner(e.userId(), MilestoneAutoEvent.CONSULT_CLOSED,
+        // 单上宠物已删（订单 pet_profile_id 无外键）→ 回落默认宠物。
+        completion.completeForPetOrDefault(e.userId(), e.petId(), MilestoneAutoEvent.CONSULT_CLOSED,
                 MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
@@ -170,15 +193,26 @@ public class MilestoneAutoCompleteListener {
         if (e.commenterId() == e.contentAuthorId()) {
             return; // 自评不计「第一次被评论」。
         }
-        completion.completeForOwner(e.contentAuthorId(), MilestoneAutoEvent.FIRST_COMMENT,
-                MilestoneCompletionSource.SYSTEM_AUTO);
+        completeForPostPet(e.postId(), e.contentAuthorId(), MilestoneAutoEvent.FIRST_COMMENT);
     }
 
     @Async
     @TransactionalEventListener
     public void onContentLiked(ContentLikedEvent e) {
         // 自赞 content 侧已不发事件（无需再排除）。
-        completion.completeForOwner(e.authorId(), MilestoneAutoEvent.FIRST_LIKE,
-                MilestoneCompletionSource.SYSTEM_AUTO);
+        completeForPostPet(e.postId(), e.authorId(), MilestoneAutoEvent.FIRST_LIKE);
+    }
+
+    /**
+     * P-7（V1.4.0 multi-pet Story 1.3）：内容触发的里程碑归帖子关联的宠物——Diary → 其关联宠物；
+     * Moment / Tips、已解除关联的 Diary、帖子已不存在 → 作者的默认宠物。
+     */
+    private void completeForPostPet(long postId, long authorId, MilestoneAutoEvent event) {
+        Optional<Long> petId = contentService.growthMomentPetIdOf(postId);
+        if (petId.isPresent()) {
+            completion.completeForPet(petId.get(), event, MilestoneCompletionSource.SYSTEM_AUTO);
+        } else {
+            completion.completeForDefaultPet(authorId, event, MilestoneCompletionSource.SYSTEM_AUTO);
+        }
     }
 }

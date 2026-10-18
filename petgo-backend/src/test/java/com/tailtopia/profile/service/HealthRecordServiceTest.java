@@ -88,6 +88,9 @@ class HealthRecordServiceTest {
         verify(events).publishEvent(ev.capture());
         assertThat(ev.getValue()).isInstanceOf(
                 com.tailtopia.profile.event.HealthRecordCreatedEvent.class);
+        // V1.4.0 multi-pet（Story 1.3 · AC6）：事件带录入记录的这只宠物。
+        assertThat(((com.tailtopia.profile.event.HealthRecordCreatedEvent) ev.getValue()).petProfileId())
+                .isEqualTo(5L);
     }
 
     @Test

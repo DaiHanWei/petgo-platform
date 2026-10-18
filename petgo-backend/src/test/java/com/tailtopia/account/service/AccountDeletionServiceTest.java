@@ -82,7 +82,7 @@ class AccountDeletionServiceTest {
     void executeRunsFullCascadeAndMarksDone() {
         AccountDeletion d = pending(1L, 7L);
         when(deletions.findById(1L)).thenReturn(Optional.of(d));
-        when(profileDeletion.deleteByUserId(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("h1")));
+        when(profileDeletion.deleteAllForAccount(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("h1")));
         when(triageDeletion.deleteByUserId(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("t1", "t2")));
         when(consultAnonymization.anonymizeByUserId(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("c1")));
         when(authDeletion.deleteByUserId(7L))
@@ -91,7 +91,7 @@ class AccountDeletionServiceTest {
         service().execute(1L);
 
         // 删除/匿名化各模块均被调用
-        verify(profileDeletion).deleteByUserId(7L);
+        verify(profileDeletion).deleteAllForAccount(7L);
         verify(triageDeletion).deleteByUserId(7L);
         verify(consultAnonymization).anonymizeByUserId(7L);
         verify(notificationDeletion).deleteByUserId(7L);
@@ -153,6 +153,6 @@ class AccountDeletionServiceTest {
 
         service().execute(1L);
 
-        verify(profileDeletion, org.mockito.Mockito.never()).deleteByUserId(anyLong());
+        verify(profileDeletion, org.mockito.Mockito.never()).deleteAllForAccount(anyLong());
     }
 }

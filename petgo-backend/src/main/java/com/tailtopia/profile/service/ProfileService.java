@@ -122,14 +122,20 @@ public class ProfileService {
      * 与注销 7.3「匿名化保留 UGC」一致。<b>petStatus 不改</b>：删后用户仍为 HAS_PET 但无档案，
      * 前端据 GET /me 的 404 落「空档案态」，可重建档案或切换宠物状态（闭合 bug 20260702-237 的困死）。
      *
-     * <p>DB 级联由内层 {@code ProfileDeletionService#deleteByUserId} 原子提交；OSS 对象自 2026-08-19（F21）
+     * <p>DB 级联由内层 {@code ProfileDeletionService#deleteByPetId} 原子提交；OSS 对象自 2026-08-19（F21）
      * 起<b>保留不删</b>——id_cards 快照可能长期引用头像对象（{@code MediaDeletionService} 只记账）。无档案 → 404。
      */
     public void deleteMyProfile(long ownerId) {
-        if (!profiles.existsByOwnerId(ownerId)) {
-            throw AppException.notFound("尚未创建宠物档案");
-        }
-        PersonalMedia media = profileDeletion.deleteByUserId(ownerId);
+        deleteMyProfile(ownerId, null);
+    }
+
+    /**
+     * V1.4.0 multi-pet（Story 1.3 · AD-9）：只删指定的一只（{@code petId} 为 null = 默认宠物，兼容旧版 App）；
+     * 他人 / 不存在的 petId 与无档案一样 404。不再给身份证打标（按账号打标只在注销路径）。
+     */
+    public void deleteMyProfile(long ownerId, Long petId) {
+        PetProfile pet = petResolver.resolve(ownerId, petId);
+        PersonalMedia media = profileDeletion.deleteByPetId(ownerId, pet.getId());
         mediaDeletion.deletePrivateKeys(media.privateKeys());
         mediaDeletion.deletePublicByUrls(media.publicUrls());
     }

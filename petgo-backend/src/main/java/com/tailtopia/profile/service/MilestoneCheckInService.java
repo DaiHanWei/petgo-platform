@@ -65,7 +65,7 @@ public class MilestoneCheckInService {
      *
      * <p>V1.4.0 multi-pet（Story 1.2 · P10）：按指定宠物打卡（{@code petId} 为 null = 默认宠物）。宠物解析刻意放在
      * 健康类里程碑拒绝之后：无档案账号打健康类里程碑仍是 422（与改造前一致），不是 404；
-     * 「帖子必须关联该宠物」的校验在 Story 1.3。
+     * 帖子必须关联该宠物（Story 1.3），否则 422。
      */
     @Transactional
     public MilestoneItemResponse checkIn(long ownerId, Long petId, String code, long contentId) {
@@ -85,8 +85,9 @@ public class MilestoneCheckInService {
         if (completions.existsByPetMilestoneId(milestone.getId())) {
             throw AppException.conflict("该里程碑已完成");
         }
-        if (!contentService.isOwnGrowthMoment(ownerId, contentId)) {
-            throw AppException.validation("只能关联本人成长日历内容");
+        // V1.4.0 multi-pet（Story 1.3 · AD-12）：帖子必须关联这只宠物（关联 A 的帖子不能给 B 打卡）。
+        if (!contentService.isOwnGrowthMomentOfPet(ownerId, pet.getId(), contentId)) {
+            throw AppException.validation("只能关联该宠物的成长日历内容");
         }
         if (completions.existsByLinkedContentId(contentId)) {
             throw AppException.conflict("该内容已关联其它里程碑");

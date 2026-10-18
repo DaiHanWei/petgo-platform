@@ -147,22 +147,60 @@ class ProfileServiceTest {
 
     @Test
     void deleteMyProfileCascadesAndCleansMedia() {
-        when(profiles.existsByOwnerId(1L)).thenReturn(true);
-        when(profileDeletion.deleteByUserId(1L)).thenReturn(new com.tailtopia.shared.media.PersonalMedia(
+        PetProfile only = withId(PetProfile.create(1L, PetType.CAT, "Momo", null, null, null, null, "TOK"), 5L);
+        when(profiles.findDefault(1L)).thenReturn(java.util.Optional.of(only));
+        when(profileDeletion.deleteByPetId(1L, 5L)).thenReturn(new com.tailtopia.shared.media.PersonalMedia(
                 java.util.List.of("k1", "k2"), java.util.List.of("https://cdn/avatar.jpg")));
 
         service.deleteMyProfile(1L);
 
-        Mockito.verify(profileDeletion).deleteByUserId(1L);
+        Mockito.verify(profileDeletion).deleteByPetId(1L, 5L);
         Mockito.verify(mediaDeletion).deletePrivateKeys(java.util.List.of("k1", "k2"));
         Mockito.verify(mediaDeletion).deletePublicByUrls(java.util.List.of("https://cdn/avatar.jpg"));
     }
 
     @Test
     void deleteMyProfileWithoutProfileThrows404() {
-        when(profiles.existsByOwnerId(9L)).thenReturn(false);
+        when(profiles.findDefault(9L)).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> service.deleteMyProfile(9L)).isInstanceOf(AppException.class);
-        Mockito.verify(profileDeletion, Mockito.never()).deleteByUserId(Mockito.anyLong());
+        Mockito.verify(profileDeletion, Mockito.never()).deleteByPetId(Mockito.anyLong(), Mockito.anyLong());
+    }
+
+    /** V1.4.0 multi-pet Story 1.3 · AC1.3：带 petId 只删那一只，不碰默认宠物。 */
+    @Test
+    void deleteMyProfileWithPetIdDeletesOnlyThatPet() {
+        PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
+        when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
+        when(profileDeletion.deleteByPetId(1L, 11L)).thenReturn(com.tailtopia.shared.media.PersonalMedia.empty());
+
+        service.deleteMyProfile(1L, 11L);
+
+        Mockito.verify(profileDeletion).deleteByPetId(1L, 11L);
+        Mockito.verify(profileDeletion, Mockito.never()).deleteAllForAccount(Mockito.anyLong());
+        Mockito.verify(profiles, Mockito.never()).findDefault(Mockito.anyLong());
+    }
+
+    /** 他人 / 不存在的 petId → 404，不删任何东西。 */
+    @Test
+    void deleteMyProfileWithForeignPetId404() {
+        when(profiles.findByIdAndOwnerId(99L, 1L)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.deleteMyProfile(1L, 99L))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus().value()).isEqualTo(404));
+        Mockito.verify(profileDeletion, Mockito.never()).deleteByPetId(Mockito.anyLong(), Mockito.anyLong());
+    }
+
+    /** 不带 petId = 默认宠物（兼容旧版 App）。 */
+    @Test
+    void deleteMyProfileWithoutPetIdDeletesDefaultPet() {
+        PetProfile a = withId(PetProfile.create(1L, PetType.CAT, "A", null, null, null, null, "TOK_A"), 10L);
+        when(profiles.findDefault(1L)).thenReturn(java.util.Optional.of(a));
+        when(profileDeletion.deleteByPetId(1L, 10L)).thenReturn(com.tailtopia.shared.media.PersonalMedia.empty());
+
+        service.deleteMyProfile(1L, null);
+
+        Mockito.verify(profileDeletion).deleteByPetId(1L, 10L);
     }
 
     @Test

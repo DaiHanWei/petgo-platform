@@ -89,7 +89,7 @@ class MilestoneCheckInServiceTest {
         when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
-        when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(true);
+        when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
         when(completions.existsByLinkedContentId(99L)).thenReturn(false);
         when(completionService.completeCodeForPet(
                 10L, "C-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
@@ -125,9 +125,11 @@ class MilestoneCheckInServiceTest {
         when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
-        when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(false);
+        when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(false);
         assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S6", 99L))
-                .isInstanceOf(AppException.class).hasMessageContaining("本人成长日历");
+                .isInstanceOf(AppException.class)
+                // V1.4.0 multi-pet（Story 1.3 · AC5）：文案按 story 改为「只能关联该宠物的成长日历内容」。
+                .hasMessageContaining("该宠物的成长日历");
     }
 
     @Test
@@ -135,7 +137,7 @@ class MilestoneCheckInServiceTest {
         when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
-        when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(true);
+        when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
         when(completions.existsByLinkedContentId(99L)).thenReturn(true);
         assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S6", 99L))
                 .isInstanceOf(AppException.class).hasMessageContaining("已关联其它里程碑");
@@ -151,7 +153,7 @@ class MilestoneCheckInServiceTest {
         setField(m, "id", 8L);
         when(milestones.findByPetProfileIdAndCode(11L, "D-S6")).thenReturn(Optional.of(m));
         when(completions.existsByPetMilestoneId(8L)).thenReturn(false);
-        when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(true);
+        when(contentService.isOwnGrowthMomentOfPet(7L, 11L, 99L)).thenReturn(true);
         when(completions.existsByLinkedContentId(99L)).thenReturn(false);
         when(completionService.completeCodeForPet(11L, "D-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
                 .thenReturn(true);
@@ -165,6 +167,32 @@ class MilestoneCheckInServiceTest {
         when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.checkIn(7L, 99L, "C-S6", 99L)).isInstanceOf(AppException.class);
         assertThatThrownBy(() -> service.candidates(7L, 99L)).isInstanceOf(AppException.class);
+    }
+
+    /** V1.4.0 multi-pet Story 1.3 · AC5：帖子只关联 A，用 B 打卡 → 422；用 A → 成功。 */
+    @Test
+    void checkInRejectsPostOfAnotherPet() {
+        PetProfile b = PetProfile.create(7L, PetType.CAT, "Bobo", null, null, null, null, "TOKB");
+        setField(b, "id", 11L);
+        when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
+        PetMilestone mb = PetMilestone.of(11L, MilestoneCatalog.byCode("C-S6"));
+        setField(mb, "id", 8L);
+        when(milestones.findByPetProfileIdAndCode(11L, "C-S6")).thenReturn(Optional.of(mb));
+        when(milestones.findByPetProfileIdAndCode(10L, "C-S6")).thenReturn(Optional.of(milestone("C-S6", 5)));
+        when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
+        when(contentService.isOwnGrowthMomentOfPet(7L, 11L, 99L)).thenReturn(false);
+        when(completionService.completeCodeForPet(10L, "C-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.checkIn(7L, 11L, "C-S6", 99L))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus().value()).isEqualTo(422))
+                .hasMessageContaining("该宠物的成长日历");
+        org.mockito.Mockito.verify(completionService, org.mockito.Mockito.never())
+                .completeCodeForPet(org.mockito.ArgumentMatchers.eq(11L), org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+
+        assertThat(service.checkIn(7L, 10L, "C-S6", 99L).completed()).isTrue();
     }
 
     private static void setField(Object o, String name, Object value) {

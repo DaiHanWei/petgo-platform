@@ -21,22 +21,23 @@ import org.junit.jupiter.api.Test;
 class MilestoneHealthRecordPathTest {
 
     private final MilestoneCompletionService completion = mock(MilestoneCompletionService.class);
-    private final MilestoneAutoCompleteListener listener = new MilestoneAutoCompleteListener(completion);
+    private final MilestoneAutoCompleteListener listener = new MilestoneAutoCompleteListener(completion,
+            org.mockito.Mockito.mock(com.tailtopia.content.service.ContentService.class));
 
     @Test
     void vaccineCompletesM3AndTriesLulusPemula() {
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.VACCINE));
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_VACCINE,
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.VACCINE, 70L));
+        verify(completion).completeForPet(70L, MilestoneAutoEvent.HEALTH_RECORD_VACCINE,
                 MilestoneCompletionSource.SYSTEM_AUTO);
-        verify(completion).maybeUnlockLulusPemulaForOwner(7L); // 第 6 新手任务
+        verify(completion).maybeUnlockLulusPemulaForPet(70L); // 第 6 新手任务
     }
 
     @Test
     void dewormCompletesM4AndTriesLulusPemula() {
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.DEWORM));
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_DEWORM,
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.DEWORM, 70L));
+        verify(completion).completeForPet(70L, MilestoneAutoEvent.HEALTH_RECORD_DEWORM,
                 MilestoneCompletionSource.SYSTEM_AUTO);
-        verify(completion).maybeUnlockLulusPemulaForOwner(7L);
+        verify(completion).maybeUnlockLulusPemulaForPet(70L);
     }
 
     /**
@@ -46,23 +47,23 @@ class MilestoneHealthRecordPathTest {
      */
     @Test
     void menstruationAndCustomSkipMilestonesButStillTryLulusPemula() {
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.MENSTRUATION));
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.CUSTOM));
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.MENSTRUATION, 70L));
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.CUSTOM, 70L));
         // 无任何里程碑完成……
-        verify(completion, never()).completeForOwner(
-                org.mockito.ArgumentMatchers.eq(7L),
+        verify(completion, never()).completeForPet(
+                org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.any(MilestoneAutoEvent.class),
                 org.mockito.ArgumentMatchers.any());
         // ……但每次都尝试 Lulus Pemula 聚合解锁（健康记录=第 6 任务）。
-        verify(completion, times(2)).maybeUnlockLulusPemulaForOwner(7L);
+        verify(completion, times(2)).maybeUnlockLulusPemulaForPet(70L);
     }
 
     /** Story 5.1 新增映射：录绝育 → M9（2026-07-29 产品确认）。 */
     @Test
     void neuterCompletesM9AndTriesLulusPemula() {
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER));
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_NEUTER,
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER, 70L));
+        verify(completion).completeForPet(70L, MilestoneAutoEvent.HEALTH_RECORD_NEUTER,
                 MilestoneCompletionSource.SYSTEM_AUTO);
-        verify(completion).maybeUnlockLulusPemulaForOwner(7L);
+        verify(completion).maybeUnlockLulusPemulaForPet(70L);
     }
 }

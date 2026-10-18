@@ -84,7 +84,7 @@ class PostCheckinLinkIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.checkinPlace").doesNotExist());
 
         // 删档：打卡行被删 → FK ON DELETE SET NULL，帖子保留。
-        profileDeletion.deleteByUserId(u.getId());
+        profileDeletion.deleteAllForAccount(u.getId());
         assertThat(jdbc.queryForObject("SELECT place_checkin_id FROM content_posts WHERE id = ?", Long.class, postId))
                 .isNull();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM content_posts WHERE id = ?", Long.class, postId)).isOne();

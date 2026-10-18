@@ -291,7 +291,7 @@ class PetCardShareRewardIntegrationTest extends ApiIntegrationTest {
         submitResult(u, 0);
         assertThat(ts(u, TailsonalityShareRewardService.CardType.RESULT)).isEqualTo(20);
 
-        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteByUserId(u.getId()));
+        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteAllForAccount(u.getId()));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tailsonality_share_rewards "
                 + "WHERE user_id = ? AND pet_profile_id IS NULL", Long.class, u.getId())).isEqualTo(1);
 

@@ -177,7 +177,7 @@ class TailsonalityBadgeIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get(timelineBase).header("Authorization", userBearer(u.getId())))
                 .andExpect(jsonPath("$.items[?(@.itemType == 'TAILSONALITY_BANNER')]").isEmpty());
 
-        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteByUserId(u.getId()));
+        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteAllForAccount(u.getId()));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tailsonality_results r WHERE r.user_id = ?",
                 Integer.class, u.getId())).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM keepsake_purchases WHERE user_id = ? AND pet_profile_id IS NULL",

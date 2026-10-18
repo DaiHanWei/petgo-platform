@@ -226,7 +226,7 @@ class KeepsakePurchaseIntegrationTest extends ApiIntegrationTest {
                 PayChannel.PAWCOIN);
         long price = purchases.findByPublicToken(r.purchaseToken()).orElseThrow().getPriceIdr();
 
-        profileDeletion.deleteByUserId(u.getId());
+        profileDeletion.deleteAllForAccount(u.getId());
         var row = purchases.findByPublicToken(r.purchaseToken()).orElseThrow();
         assertThat(row.getPetProfileId()).isNull();
         assertThat(row.getStatus()).isEqualTo(KeepsakePurchaseStatus.PAID);
