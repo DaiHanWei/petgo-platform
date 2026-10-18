@@ -40,8 +40,8 @@ development_status:
   1-3-app通知设置页与设置页入口: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-帖子与场所收藏后端: ready-for-dev
+  epic-2: in-progress
+  2-1-帖子与场所收藏后端: review
   2-2-我的收藏列表后端: ready-for-dev
   2-3-app帖子与场所收藏按钮: ready-for-dev
   2-4-app我的页disimpan-tab: ready-for-dev

@@ -70,10 +70,14 @@ public class PlaceQueryService {
     /** 详情「今日已打卡」（V1.3.2 Story 1.1 AC3）：与打卡判定同一个 WIB 日界。 */
     private final PlaceCheckinService checkins;
 
+    /** V1.4.0 ④ Story 2.1：详情「是否已收藏」（只读口）。 */
+    private final com.tailtopia.collect.service.CollectStateQuery collectState;
+
     public PlaceQueryService(PlaceRepository places, AccountQueryService accounts,
             PlaceCommentQueryService placeComments, PlaceAttitudeCounters attitudeCounters,
             PlacePhotoRepository photos, PlacePhotoService photoService,
-            PlaceCheckinService checkins) {
+            PlaceCheckinService checkins, com.tailtopia.collect.service.CollectStateQuery collectState) {
+        this.collectState = collectState;
         this.places = places;
         this.checkins = checkins;
         this.photoService = photoService;
@@ -126,8 +130,10 @@ public class PlaceQueryService {
                 - photos.countOccupyingSlots(p.getId()));
         // V1.3.2 Story 1.1 AC3：登录用户才查「今日已打卡」；游客为 null → 省略该键（不查打卡表）。
         Boolean checkedInToday = viewerId == null ? null : checkins.checkedInToday(viewerId, p.getId());
+        // V1.4.0 ④ Story 2.1：按解析后的场所判（P-6，含并入它的场所）；游客 false、不查。
+        boolean collected = viewerId != null && collectState.isPlaceCollected(viewerId, p.getId());
         return PlaceDetailResponse.of(p, markedBy, photoViews, distance, commentCount,
-                attitudes.recommend(), attitudes.notRecommend(), slotsRemaining, checkedInToday);
+                attitudes.recommend(), attitudes.notRecommend(), slotsRemaining, checkedInToday, collected);
     }
 
     /**

@@ -11,7 +11,7 @@ import java.util.List;
  *
  * <h2>🔴 反向验收：这里**没有**的字段（FR-112.6 / AC6）</h2>
  * <ul>
- *   <li>**没有** `favorited` / 收藏相关字段；</li>
+ *   <li>收藏：V1.4.0 ④ 起只有 {@code collected} 一个收藏键；收藏<b>数</b>仍不下发（PRD：场所收藏数本版本不展示）；</li>
  *   <li>**没有** `rating` / 评分打星；</li>
  *   <li>**没有** 营业时间 / 电话 / 商户资料类字段；</li>
  *   <li>打卡只有**一个**字段 {@code checkedInToday}（V1.3.2 Story 1.1）：登录用户本人宠物今天（WIB）
@@ -65,7 +65,9 @@ public record PlaceDetailResponse(
          * 今日已打卡（V1.3.2 Story 1.1 AC3）：本人任一宠物今天（WIB 自然日）在此场所是否已打卡。
          * 🔴 游客为 null → **省略该键**（与 distanceMeters 同一 NON_NULL 机制），不是 false。
          */
-        Boolean checkedInToday) {
+        Boolean checkedInToday,
+        /** 当前用户是否已收藏（V1.4.0 ④ Story 2.1 · AD-10）：按解析后的场所判（含并入它的场所，P-6）；游客 false，恒下发。 */
+        boolean collected) {
 
     /**
      * 详情大图宽度（物理像素）。
@@ -86,14 +88,23 @@ public record PlaceDetailResponse(
             long commentCount, long recommendCount, long notRecommendCount,
             int photoSlotsRemaining) {
         return of(p, markedBy, photos, distanceMeters, commentCount, recommendCount,
-                notRecommendCount, photoSlotsRemaining, null);
+                notRecommendCount, photoSlotsRemaining, null, false);
     }
 
-    /** 带「今日已打卡」的完整工厂（V1.3.2 Story 1.1）；{@code checkedInToday} 为 null = 游客（省略该键）。 */
+    /** 带「今日已打卡」的工厂（V1.3.2 Story 1.1）；{@code checkedInToday} 为 null = 游客（省略该键）。 */
     public static PlaceDetailResponse of(Place p, AuthorView markedBy,
             List<PlacePhotoView> photos, Integer distanceMeters,
             long commentCount, long recommendCount, long notRecommendCount,
             int photoSlotsRemaining, Boolean checkedInToday) {
+        return of(p, markedBy, photos, distanceMeters, commentCount, recommendCount, notRecommendCount,
+                photoSlotsRemaining, checkedInToday, false);
+    }
+
+    /** 完整工厂（V1.4.0 ④ Story 2.1 加 {@code collected}）。 */
+    public static PlaceDetailResponse of(Place p, AuthorView markedBy,
+            List<PlacePhotoView> photos, Integer distanceMeters,
+            long commentCount, long recommendCount, long notRecommendCount,
+            int photoSlotsRemaining, Boolean checkedInToday, boolean collected) {
         return new PlaceDetailResponse(
                 p.getPublicToken(),
                 p.getName(),
@@ -110,7 +121,8 @@ public record PlaceDetailResponse(
                 recommendCount,
                 notRecommendCount,
                 Math.max(0, photoSlotsRemaining),
-                checkedInToday);
+                checkedInToday,
+                collected);
     }
 
 }

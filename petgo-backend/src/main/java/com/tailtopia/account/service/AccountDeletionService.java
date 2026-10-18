@@ -6,6 +6,7 @@ import com.tailtopia.account.event.AccountDeletionRequestedEvent;
 import com.tailtopia.account.repository.AccountDeletionRepository;
 import com.tailtopia.admin.moderation.service.ManualReviewService;
 import com.tailtopia.auth.service.AuthAccountDeletionService;
+import com.tailtopia.collect.service.CollectDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.ContentShareService;
@@ -82,6 +83,8 @@ public class AccountDeletionService {
     private final OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
     /** V1.4.0 ④ Story 1.1：推送分类开关（账号级纯个人数据，物理删）。 */
     private final PushPreferenceService pushPreferences;
+    /** V1.4.0 ④ Story 2.1：帖子 / 场所收藏（仅本人可见的私人数据，物理删）。 */
+    private final CollectDeletionService collectDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -98,7 +101,7 @@ public class AccountDeletionService {
             MentionCandidateMaintenanceService mentionCandidateMaintenance,
             TailsonalityDeletionService tailsonalityDeletion, FollowService followService,
             OpsPopupImpressionDeletionService opsPopupImpressionDeletion,
-            PushPreferenceService pushPreferences) {
+            PushPreferenceService pushPreferences, CollectDeletionService collectDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -123,6 +126,7 @@ public class AccountDeletionService {
         this.followService = followService;
         this.opsPopupImpressionDeletion = opsPopupImpressionDeletion;
         this.pushPreferences = pushPreferences;
+        this.collectDeletion = collectDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -208,6 +212,9 @@ public class AccountDeletionService {
         // V1.3.2 Story 2.5：Tailsonality 主人类型是账号级个人数据（AD-17），须在 user 行删除前物理删除
         // （tailsonality_owner_types.user_id 对 users 有 FK、无 ON DELETE）。宠物级的结果行已随上面的 profileDeletion 删掉。
         tailsonalityDeletion.deleteOwnerTypeByUserId(userId);
+        // V1.4.0 ④ Story 2.1：本人的帖子 / 场所收藏物理删（users 行只匿名化，FK CASCADE 不触发），在 authDeletion 之前。
+        // ⚠️ 他人收藏的、指向本人帖子的行不删：帖子置 AUTHOR_DEACTIVATED 后列表读时显示不可见，由对方自行移除。
+        collectDeletion.deleteByUserId(userId);
 
         // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
         pawCoinDeletion.voidBalanceAndPurge(userId);

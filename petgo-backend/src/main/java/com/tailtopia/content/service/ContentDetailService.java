@@ -47,13 +47,18 @@ public class ContentDetailService {
     /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
 
+    /** V1.4.0 ④ Story 2.1：详情的收藏状态 / 作者视角收藏数（只读口，不依赖 CollectService，避免 Bean 环）。 */
+    private final com.tailtopia.collect.service.CollectStateQuery collectState;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            com.tailtopia.collect.service.CollectStateQuery collectState) {
+        this.collectState = collectState;
         this.placeCheckins = placeCheckins;
         this.followReader = followReader;
         this.contentTags = contentTags;
@@ -121,6 +126,9 @@ public class ContentDetailService {
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。
         long likeCount = likes.countByPostId(postId);
         boolean liked = viewerId != null && likes.existsByPostIdAndUserId(postId, viewerId);
+        // V1.4.0 ④ Story 2.1（AD-10）：是否已收藏（游客 false、不查）；收藏数只给作者看、不计作者自己。
+        boolean collected = viewerId != null && collectState.isPostCollected(viewerId, postId);
+        Long collectCount = isAuthor ? collectState.collectCountExcludingAuthor(postId, post.getAuthorId()) : null;
         // V1.1.6 Story 5.2：装饰标签（三处展示位之一）。单条也走批量方法 ——
         // 仓储刻意不提供逐条取法，免得别处照着写成逐条查。
         var decorations = contentTags.findVisibleTags(java.util.List.of(postId), java.time.Instant.now())
@@ -144,6 +152,6 @@ public class ContentDetailService {
                 ? com.tailtopia.social.read.FollowState.NONE
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace, authorToken, followState);
+                decorations, sizes, mentions, checkinPlace, authorToken, followState, collected, collectCount);
     }
 }

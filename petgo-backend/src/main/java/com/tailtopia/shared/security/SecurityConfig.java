@@ -193,6 +193,9 @@ public class SecurityConfig {
                         // V1.3.4 点赞人列表：仅 role=USER（游客 401、兽医 403）。
                         // ⚠️ 必须排在下方 GET /api/v1/content-posts/** permitAll 之前，否则被通配吞掉。
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts/*/likers").hasRole("USER")
+                        // V1.4.0 ④ Story 2.1：帖子收藏 / 取消（POST + DELETE），仅 role=USER（controller 把 jwt.sub 当 users.id 用，
+                        // 兽医 token 的 sub=vetId 会以同号用户名义收藏）。不带 HttpMethod，两种方法一并覆盖；精确路径。
+                        .requestMatchers("/api/v1/content-posts/*/collect").hasRole("USER")
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts").permitAll()
                         // 内容详情 + 评论只读对游客可见（Story 3.3）：GET 详情/评论/回复放行（写仍需 JWT）
@@ -275,6 +278,8 @@ public class SecurityConfig {
                         // 场所打卡（V1.3.2 Story 1.1）：**仅 role=USER**，同举报的理由（controller 把 jwt.sub
                         // 当 users.id 用）。仍然精确路径，不写 `/places/**` 通配。
                         .requestMatchers(HttpMethod.POST, "/api/v1/places/*/checkins").hasRole("USER")
+                        // V1.4.0 ④ Story 2.1：场所收藏 / 取消（POST + DELETE），仅 role=USER，同上理由；精确路径，不写 `/places/**`。
+                        .requestMatchers("/api/v1/places/*/collect").hasRole("USER")
                         // 场所评论列表（Story 1.7）：同详情，GET 对游客放行。
                         // ⚠️ 这条**必须写在** `GET /api/v1/places/*` 之后也无妨（两者路径形状不同，
                         //    `/*` 只匹配一段），但绝不能省 —— 省了它游客拉评论会 401，

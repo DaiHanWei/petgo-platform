@@ -46,4 +46,18 @@ class ContentDetailViewCountParamTest {
         verify(detailService).getDetail(55L, null);
         verify(viewStats, never()).recordView(anyLong(), any(), any());
     }
+
+    /** V1.4.0 ④ Story 2.1 · AC6.6：兽医 token（sub = vetId）按游客读 —— 不得拿到同号用户的收藏状态。 */
+    @Test
+    void nonUserRoleIsTreatedAsGuest() {
+        org.springframework.security.oauth2.jwt.Jwt vet = org.springframework.security.oauth2.jwt.Jwt
+                .withTokenValue("t").header("alg", "none").subject("7").claim("role", "VET").build();
+        controller.detail(vet, 55L, "anon", false);
+        verify(detailService).getDetail(55L, null);
+
+        org.springframework.security.oauth2.jwt.Jwt user = org.springframework.security.oauth2.jwt.Jwt
+                .withTokenValue("t").header("alg", "none").subject("7").claim("role", "USER").build();
+        controller.detail(user, 56L, "anon", false);
+        verify(detailService).getDetail(56L, 7L);
+    }
 }

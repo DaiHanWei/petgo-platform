@@ -41,6 +41,8 @@ class PlaceQueryServiceTest {
     private PlaceQueryService service;
     private final com.tailtopia.place.service.PlaceCheckinService checkins =
             Mockito.mock(com.tailtopia.place.service.PlaceCheckinService.class);
+    private final com.tailtopia.collect.service.CollectStateQuery collectState =
+            Mockito.mock(com.tailtopia.collect.service.CollectStateQuery.class);
 
     @BeforeEach
     void setUp() {
@@ -67,7 +69,9 @@ class PlaceQueryServiceTest {
                 new com.tailtopia.place.service.PlacePhotoService(places, photos, null,
                         com.tailtopia.place.PlaceTestSupport.oss()),
                 // V1.3.2 Story 1.1：详情「今日已打卡」。
-                checkins);
+                checkins,
+                // V1.4.0 ④ Story 2.1：详情「是否已收藏」。
+                collectState);
     }
 
     /** 游客不查打卡表；登录用户按服务结果下发（V1.3.2 Story 1.1 AC3）。 */
@@ -80,6 +84,19 @@ class PlaceQueryServiceTest {
         assertThat(service.detail("kopi", null, null, null).checkedInToday()).isNull();
         Mockito.verifyNoInteractions(checkins);
         assertThat(service.detail("kopi", null, null, 42L).checkedInToday()).isTrue();
+    }
+
+    /** V1.4.0 ④ Story 2.1 · AC6.4：登录用户按解析后的场所 id 查「是否已收藏」；游客 false、不查。 */
+    @Test
+    void collectedOnlyForSignedInViewersByResolvedId() {
+        Place p = place("kopi2", JKT_LAT, JKT_LNG);
+        when(places.resolveForView("kopi2")).thenReturn(java.util.Optional.of(p));
+        when(collectState.isPlaceCollected(42L, p.getId())).thenReturn(true);
+
+        assertThat(service.detail("kopi2", null, null, null).collected()).isFalse();
+        Mockito.verifyNoInteractions(collectState);
+        assertThat(service.detail("kopi2", null, null, 42L).collected()).isTrue();
+        Mockito.verify(collectState).isPlaceCollected(42L, p.getId());
     }
 
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */
