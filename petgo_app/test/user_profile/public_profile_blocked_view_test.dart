@@ -82,7 +82,7 @@ Future<void> _pump(WidgetTester tester) async {
     publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(_identityOnly())),
     publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
     // 被拉黑时服务端回 204；没养宠物时也回 204 —— 客户端两种都是「没有宠物卡」。
-    publicProfilePetProvider(_kOwnerId).overrideWith((ref) async => null),
+    publicProfilePetsProvider(_kOwnerId).overrideWith((ref) async => const []),
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
   addTearDown(container.dispose);

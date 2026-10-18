@@ -7,6 +7,7 @@ import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/domain/health_list_item.dart';
 import 'package:tailtopia/features/profile/presentation/health_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// 假健康记录 repo：list 返固定混排；记录 create 次数。
 class _FakeHealthRepo implements HealthRecordRepository {
@@ -16,19 +17,19 @@ class _FakeHealthRepo implements HealthRecordRepository {
   HealthRecordDraft? lastDraft;
 
   @override
-  Future<List<HealthListItem>> list() async => _items;
+  Future<List<HealthListItem>> list({int? petId}) async => _items;
 
   @override
-  Future<void> create(HealthRecordDraft draft) async {
+  Future<void> create(HealthRecordDraft draft, {int? petId}) async {
     createCalls++;
     lastDraft = draft;
   }
 
   @override
-  Future<void> update(int id, HealthRecordDraft draft) async {}
+  Future<void> update(int id, HealthRecordDraft draft, {int? petId}) async {}
 
   @override
-  Future<void> delete(int id) async {}
+  Future<void> delete(int id, {int? petId}) async {}
 }
 
 /// list 恒抛指定 DioException（无档案 404 / 5xx），记录调用次数以断言是否被自动重试。
@@ -38,7 +39,7 @@ class _ThrowingHealthRepo extends _FakeHealthRepo {
   int listCalls = 0;
 
   @override
-  Future<List<HealthListItem>> list() async {
+  Future<List<HealthListItem>> list({int? petId}) async {
     listCalls++;
     throw error;
   }
@@ -60,7 +61,7 @@ Future<_FakeHealthRepo> _pump(WidgetTester tester, List<HealthListItem> items) a
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final repo = _FakeHealthRepo(items);
   await tester.pumpWidget(ProviderScope(
-    overrides: [healthRecordRepositoryProvider.overrideWithValue(repo)],
+    overrides: [effectivePetIdProvider.overrideWithValue(const AsyncData(1)), healthRecordRepositoryProvider.overrideWithValue(repo)],
     child: const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -135,7 +136,7 @@ void main() {
     );
     addTearDown(router.dispose);
     await tester.pumpWidget(ProviderScope(
-      overrides: [healthRecordRepositoryProvider.overrideWithValue(_FakeHealthRepo(mixed))],
+      overrides: [effectivePetIdProvider.overrideWithValue(const AsyncData(1)), healthRecordRepositoryProvider.overrideWithValue(_FakeHealthRepo(mixed))],
       child: MaterialApp.router(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -157,7 +158,7 @@ void main() {
   testWidgets('无宠物档案 404 → 不自动重试、立即显示「先建档」空态', (tester) async {
     final repo = _ThrowingHealthRepo(_httpError(404));
     await tester.pumpWidget(ProviderScope(
-      overrides: [healthRecordRepositoryProvider.overrideWithValue(repo)],
+      overrides: [effectivePetIdProvider.overrideWithValue(const AsyncData(1)), healthRecordRepositoryProvider.overrideWithValue(repo)],
       child: const MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,

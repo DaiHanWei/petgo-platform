@@ -16,6 +16,7 @@ import '../domain/triage_wording_guard.dart';
 import 'triage_red_result.dart';
 import 'widgets/triage_paywall.dart';
 import 'widgets/unlock_method_sheet.dart';
+import '../../profile/data/pet_list_repository.dart';
 
 /// Debug 截图钩子一次性 guard（DEV_ARCHIVE_PROMPT 在结果就绪后自动弹存档确认，截 archive-confirm 用）。
 bool _devArchiveShown = false;
@@ -247,6 +248,7 @@ class TriageResultView extends ConsumerWidget {
       if (!context.mounted) return;
       ref.invalidate(timelineFirstPageProvider);
       ref.invalidate(archiveStatsProvider);
+      ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       if (saved) {
         // 文案复用问诊侧的同一条（「已保存 —— 去 Diary 看」）：两处说的是同一件事，
         // 各留一份会在改文案时漏改其中一处。

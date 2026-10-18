@@ -9,6 +9,7 @@ import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/domain/newbie_tasks.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// L0 widget（Story 8.2 · FR-42）：L/M/S 分区 + 进度 + 徽章彩色/灰锁 + 点击弹层分流 + 失败重试。
 ///
@@ -51,7 +52,9 @@ MilestoneList _sample() => MilestoneList(
 Widget _wrap({MilestoneList? data, Object? error, Set<String> justCelebrated = const {}}) =>
     ProviderScope(
       overrides: [
-        milestoneListProvider.overrideWith((ref) async {
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
+        milestoneListProvider.overrideWith((ref, _) async {
           if (error != null) throw error;
           return data ?? _sample();
         }),
@@ -259,7 +262,9 @@ void main() {
 
   testWidgets('本机本会话已弹过的条目 → 即使列表仍读到未庆祝也不补弹', (tester) async {
     final container = ProviderContainer(overrides: [
-      milestoneListProvider.overrideWith((ref) async => _uncelebrated()),
+      // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
+      milestoneListProvider.overrideWith((ref, _) async => _uncelebrated()),
       newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(
           items: [], completedCount: 6, total: 6, lulusPemulaUnlocked: true)),
     ]);
@@ -284,7 +289,9 @@ void main() {
 
   testWidgets('补弹一次后列表重拉（回报未落库）→ 不再弹第二次', (tester) async {
     final container = ProviderContainer(overrides: [
-      milestoneListProvider.overrideWith((ref) async => _uncelebrated()),
+      // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
+      milestoneListProvider.overrideWith((ref, _) async => _uncelebrated()),
       newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(
           items: [], completedCount: 6, total: 6, lulusPemulaUnlocked: true)),
     ]);

@@ -1183,7 +1183,12 @@
   "petProfileSexPick": "Pilih",
   "petProfileDeleteButton": "Hapus Profil {name}",
   "petProfileDeleteIrreversible": "Tindakan ini tidak dapat dibatalkan",
-  "petProfileDeleteConfirmTitle": "Hapus profil ini?",
+  "petProfileDeleteConfirmTitle": "Hapus profil {name}?",
+  "@petProfileDeleteConfirmTitle": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
   "petProfileDeleteConfirmBody": "Diary dan milestone {name} akan dihapus permanen. Postinganmu tetap ada, dan setelahnya kamu bisa ganti status hewan.",
   "petProfileDeleteConfirmYes": "Hapus",
   "petProfileDeleteFailed": "Gagal menghapus, silakan coba lagi",
@@ -2605,5 +2610,32 @@
   "followingExploreDiscover": "Jelajahi Discover ›",
   "postLikersTitle": "Suka",
   "postLikersEmpty": "Belum ada yang menyukai",
-  "postLikersLoadFailed": "Gagal memuat daftar"
+  "postLikersLoadFailed": "Gagal memuat daftar",
+  "petListManage": "Kelola",
+  "petSlotFullTitle": "Slot hewan penuh",
+  "petSlotFullBody": "Kamu sudah punya {petCount} hewan dari {slotTotal} slot. Tambah slot dengan naik level, atau sewa slot {price} / 30 hari.",
+  "@petSlotFullBody": {
+    "placeholders": {
+      "petCount": {"type": "int"},
+      "slotTotal": {"type": "int"},
+      "price": {"type": "String"}
+    }
+  },
+  "petSlotFullRent": "Sewa slot",
+  "petSlotLimitTitle": "Maksimal 5 hewan",
+  "petSlotLimitBody": "Satu akun bisa punya maksimal 5 hewan.",
+  "petSlotLimitOk": "Oke",
+  "petSlotPageTitle": "Kelola Hewan",
+  "petDeleteConfirmBodyOther": "Diary, milestone, dan catatan kesehatan {name} akan dihapus permanen. Postinganmu tetap ada. Hewan lain tidak terpengaruh, dan slot {name} bisa dipakai lagi.",
+  "@petDeleteConfirmBodyOther": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "petDeleteSuccess": "Profil {name} dihapus",
+  "@petDeleteSuccess": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  }
 }

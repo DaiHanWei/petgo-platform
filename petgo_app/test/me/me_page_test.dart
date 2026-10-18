@@ -3,17 +3,34 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/me_page.dart';
-import 'package:tailtopia/features/profile/data/profile_repository.dart';
-import 'package:tailtopia/features/profile/data/timeline_repository.dart';
-import 'package:tailtopia/features/profile/domain/archive_stats.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/pet_avatar_item.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+
+/// 单只 [PetProfile] → 列表项（diaryCount 12 = 原统计栏桩数）。
+List<PetListItem> _listOf(PetProfile? pet) => [
+      if (pet != null)
+        PetListItem(
+          id: pet.id,
+          name: pet.name,
+          avatarUrl: pet.avatarUrl,
+          petType: pet.petType,
+          birthday: pet.birthday,
+          tailsonalityBadge: pet.tailsonalityBadge,
+          isDefault: true,
+          diaryCount: 12,
+        ),
+    ];
 
 /// Story 7.1 · F8：信息架构重组——顶栏双图标 + 主体「人+宠物」 + AC5 宠物区位三态。
 Future<void> _pump(
@@ -24,6 +41,7 @@ Future<void> _pump(
   MeCounts? counts = const MeCounts(postCount: 15, likeCount: 3, followingCount: 50, followerCount: 30),
   Object? countsError,
   Completer<MeCounts>? countsPending,
+  List<PetListItem>? pets,
 }) async {
   tester.view.physicalSize = const Size(1200, 3200);
   tester.view.devicePixelRatio = 1.0;
@@ -38,10 +56,9 @@ Future<void> _pump(
       if (countsPending != null) return countsPending.future;
       return counts!;
     }),
-    petProfileProvider.overrideWith((ref) async => pet),
-    // 宠物卡 diary 标签取此 provider；测试不打真实后端。
-    archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
-        happyMomentCount: 12, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
+    // V1.4.0 multi-pet（Story 1.5）：Hewanku 改读宠物列表；diary 角标取列表项的 diaryCount
+    // （原先取统计栏 happyMomentCount = 12，这里给同一个数，断言不变）。测试不打真实后端。
+    petListProvider.overrideWith((ref) async => pets ?? _listOf(pet)),
   ]);
   addTearDown(container.dispose);
   container.read(authControllerProvider.notifier).applyProfile(profile);
@@ -288,5 +305,183 @@ void main() {
     final orders = y(find.byKey(const ValueKey('meOrders')));
     final posts = y(find.text(l10n.meMyPostsTitle.toUpperCase()));
     expect(edit < pets && pets < orders && orders < posts, isTrue);
+  });
+
+  // ===== V1.4.0 multi-pet Story 1.5 · AC2（UI 稿 A0 ~ A3）=====
+  group('V1.4.0 multi-pet：Hewanku 宠物列表', () {
+    const two = [
+      PetListItem(id: 1, name: 'Orenji', petType: 'CAT', isDefault: true, diaryCount: 2),
+      PetListItem(id: 2, name: 'Kopi', petType: 'DOG', diaryCount: 5),
+    ];
+
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    Future<ProviderContainer> pumpRouted(WidgetTester tester, List<PetListItem> pets) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(initialLocation: '/me', routes: [
+        GoRoute(path: '/me', builder: (_, _) => const MePage()),
+        GoRoute(path: '/profile', builder: (_, _) => const Scaffold(body: Text('diary-tab'))),
+        GoRoute(path: '/me/pet-slots', builder: (_, _) => const Scaffold(body: Text('slots'))),
+      ]);
+      addTearDown(router.dispose);
+      final container = ProviderContainer(overrides: [
+        myPostsProvider.overrideWith((ref) async => const []),
+        meCountsProvider.overrideWith((ref, userId) async =>
+            const MeCounts(postCount: 0, likeCount: 0, followingCount: 0, followerCount: 0)),
+        petListProvider.overrideWith((ref) async => pets),
+      ]);
+      addTearDown(container.dispose);
+      container
+          .read(authControllerProvider.notifier)
+          .applyProfile(const UserProfile(nickname: 'A', petStatus: 'HAS_PET', hasPetProfile: true));
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return container;
+    }
+
+    testWidgets('A1：两只 → 两个头像 +「+」，标题右侧「Manage ›」', (tester) async {
+      await _pump(tester,
+          profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET'), pets: two);
+      expect(find.byKey(const ValueKey('mePetCard')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetCard-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetAdd')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetsManage')), findsOneWidget);
+      expect(find.text('Manage'), findsOneWidget);
+      // 每只的 diary 角标取各自的 diaryCount。
+      expect(find.descendant(of: find.byKey(const ValueKey('mePetDiaryTag-1')), matching: find.text('5')),
+          findsOneWidget);
+      // 头像 56（UI 稿 A1）。
+      final avatar = find.descendant(
+          of: find.byKey(const ValueKey('mePetCard')), matching: find.byType(CircleAvatar));
+      expect(tester.getSize(avatar).width, 56);
+    });
+
+    testWidgets('A2：只有 1 只 → 1 个头像 +「+」，同样有 Manage', (tester) async {
+      await _pump(tester,
+          profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET'), pets: [two.first]);
+      expect(find.byKey(const ValueKey('mePetCard')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetCard-1')), findsNothing);
+      expect(find.byKey(const ValueKey('mePetAdd')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetsManage')), findsOneWidget);
+    });
+
+    testWidgets('A0：列表为空 → 沿用引导卡，没有「+」与 Manage', (tester) async {
+      await _pump(tester,
+          profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET'), pets: const []);
+      expect(find.byKey(const ValueKey('mePetGuideCard')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetAdd')), findsNothing);
+      expect(find.byKey(const ValueKey('mePetsManage')), findsNothing);
+    });
+
+    testWidgets('A3：只读宠物 → 锁标在头像左下（避开右上 diary 角标）', (tester) async {
+      await _pump(tester, profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET'), pets: const [
+        PetListItem(id: 1, name: 'Orenji', isDefault: true, diaryCount: 2),
+        PetListItem(id: 2, name: 'Kopi', status: 'READ_ONLY', diaryCount: 5),
+      ]);
+      expect(find.byKey(const ValueKey('mePetLock')), findsNothing);
+      final lock = find.byKey(const ValueKey('mePetLock-1'));
+      expect(lock, findsOneWidget);
+      final avatar = find.descendant(
+          of: find.byKey(const ValueKey('mePetCard-1')), matching: find.byType(CircleAvatar));
+      final a = tester.getRect(avatar);
+      final l = tester.getCenter(lock);
+      expect(l.dx, lessThan(a.center.dx), reason: '锁标在左');
+      expect(l.dy, greaterThan(a.center.dy), reason: '锁标在下');
+      final badge = tester.getCenter(find.byKey(const ValueKey('mePetDiaryTag-1')));
+      expect(badge.dx, greaterThan(a.center.dx), reason: 'diary 角标仍在右上');
+    });
+
+    testWidgets('点另一只 → select + 跳 Diary Tab + pet_switched {source: me_page}', (tester) async {
+      final events = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+      final c = await pumpRouted(tester, two);
+
+      await tester.tap(find.byKey(const ValueKey('mePetCard-1')));
+      await tester.pumpAndSettle();
+
+      expect(c.read(currentPetIdProvider), 2);
+      expect(find.text('diary-tab'), findsOneWidget);
+      expect(events.where((e) => e.$1 == 'pet_switched').map((e) => e.$2), [
+        {'from_pet_id': 1, 'to_pet_id': 2, 'source': 'me_page'},
+      ]);
+    });
+
+    testWidgets('点当前那只 → 照样进 Diary Tab，但不报 pet_switched（from == to）', (tester) async {
+      final events = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+      await pumpRouted(tester, two);
+
+      await tester.tap(find.byKey(const ValueKey('mePetCard')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('diary-tab'), findsOneWidget);
+      expect(events.where((e) => e.$1 == 'pet_switched'), isEmpty);
+    });
+
+    testWidgets('code review #2：宠物列表失效后 diary 角标 / 性格小标跟着刷新', (tester) async {
+      var calls = 0;
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final c = ProviderContainer(overrides: [
+        myPostsProvider.overrideWith((ref) async => const []),
+        meCountsProvider.overrideWith((ref, userId) async =>
+            const MeCounts(postCount: 0, likeCount: 0, followingCount: 0, followerCount: 0)),
+        petListProvider.overrideWith((ref) async {
+          calls++;
+          return [
+            PetListItem(
+                id: 1,
+                name: 'Orenji',
+                isDefault: true,
+                diaryCount: calls == 1 ? 2 : 3,
+                tailsonalityBadge: calls == 1 ? null : 'ENFP'),
+          ];
+        }),
+      ]);
+      addTearDown(c.dispose);
+      c.read(authControllerProvider.notifier)
+          .applyProfile(const UserProfile(nickname: 'A', petStatus: 'HAS_PET'));
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: MePage(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.byKey(const ValueKey('mePetDiaryTag')), matching: find.text('2')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetTailsonality')), findsNothing);
+
+      // 发布 Diary / 佩戴小标后各调用点都会失效宠物列表（见 pet_list_refresh_guard_test）。
+      c.invalidate(petListProvider);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.byKey(const ValueKey('mePetDiaryTag')), matching: find.text('3')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetTailsonality')), findsOneWidget);
+    });
+
+    testWidgets('Manage › → 名额管理页（占位）', (tester) async {
+      await pumpRouted(tester, two);
+      await tester.tap(find.byKey(const ValueKey('mePetsManage')));
+      await tester.pumpAndSettle();
+      expect(find.text('slots'), findsOneWidget);
+    });
   });
 }

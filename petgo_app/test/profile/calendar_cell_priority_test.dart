@@ -30,7 +30,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
-            child: ArchiveCalendar(onOpenDay: (_) {}, onAddOnDate: (_) {}),
+            child: ArchiveCalendar(ownerPetId: 1, onOpenDay: (_) {}, onAddOnDate: (_) {}),
           ),
         ),
       ),

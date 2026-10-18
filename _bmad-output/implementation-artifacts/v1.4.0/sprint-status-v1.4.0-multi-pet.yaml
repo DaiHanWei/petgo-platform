@@ -42,7 +42,7 @@ development_status:
   1-2-宠物寻址改造二-其余模块与跨模块读口: review
   1-3-按宠物删除与按宠物计算: review
   1-4-名额计算与解除单宠物限制: review
-  1-5-app宠物列表-diary切换-他人主页-建档删除: ready-for-dev
+  1-5-app宠物列表-diary切换-他人主页-建档删除: review
   epic-1-retrospective: optional
 
   epic-2: backlog

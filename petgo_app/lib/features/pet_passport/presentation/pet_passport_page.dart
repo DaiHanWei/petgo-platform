@@ -18,6 +18,7 @@ import '../../place/presentation/widgets/place_stamp_view.dart';
 import 'share/passport_share_card.dart';
 import 'widgets/passport_snapshot_sheet.dart';
 import 'passport_page_face.dart';
+import '../../profile/data/current_pet_provider.dart';
 
 /// 宠物护照页（V1.3.2 batch-a Story 1.2 · AC5 · UI 稿 B1 / B2 / B2b）。
 ///
@@ -71,7 +72,10 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
         context: context,
         ref: ref,
         sheet: (balance) => PassportSnapshotPayPicker(passport: p, balance: balance),
-        start: (channel) => ref.read(petPassportRepositoryProvider).startSnapshot(channel),
+        // V1.4.0 multi-pet：快照的是当前宠物的护照。
+        start: (channel) async => ref
+            .read(petPassportRepositoryProvider)
+            .startSnapshot(channel, petId: await readRequestPetId(ref)),
         // 🔴 不能只看 currentVersionUnlocked：买的是发起时冻结的版本（D-4），付款窗内又盖了新章时当前版本仍锁，
         // 那样付了钱面板却永远不认。已买版本数增加 = 这笔已发放（复审 #1）。
         pollPaid: () async {

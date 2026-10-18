@@ -22,6 +22,7 @@ import '../domain/boarding_pass.dart';
 import 'share/boarding_pass_share_card.dart';
 import 'widgets/boarding_pass_card.dart';
 import 'widgets/boarding_pass_unlock_sheet.dart';
+import '../../profile/data/current_pet_provider.dart';
 
 /// 登机牌详情 B3b（未解锁）/ B3c（已解锁）（V1.3.2 Story 3.5 · AC9）。
 ///
@@ -85,7 +86,10 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
         context: context,
         ref: ref,
         sheet: (balance) => BoardingPassPayPicker(pass: d, balance: balance),
-        start: (channel) => ref.read(boardingPassRepositoryProvider).unlock(widget.placeToken, channel),
+        // V1.4.0 multi-pet：解锁的是当前宠物在该场所的登机牌。
+        start: (channel) async => ref
+            .read(boardingPassRepositoryProvider)
+            .unlock(widget.placeToken, channel, petId: await readRequestPetId(ref)),
         pollPaid: () async => (await ref.refresh(boardingPassDetailProvider(widget.placeToken).future)).unlocked,
         purchasePurpose: 'BOARDING_PASS',
         cashPriceIdr: () => price,

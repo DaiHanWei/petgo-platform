@@ -15,7 +15,7 @@ class _Repo implements MilestoneRepository {
   final reported = <List<String>>[];
 
   @override
-  Future<void> reportCelebrations(List<String> codes) {
+  Future<void> reportCelebrations(List<String> codes, {int? petId}) {
     reported.add(codes);
     return completer.future;
   }
@@ -34,7 +34,7 @@ void main() {
     listBuilds = 0;
     c = ProviderContainer(overrides: [
       milestoneRepositoryProvider.overrideWithValue(repo),
-      milestoneListProvider.overrideWith((ref) async {
+      milestoneListProvider.overrideWith((ref, _) async {
         listBuilds++;
         return const MilestoneList(petName: 'Momo', completedCount: 0, totalCount: 0, groups: []);
       }),
@@ -51,16 +51,16 @@ void main() {
   });
 
   test('回报成功 → 保留，并刷新列表缓存', () async {
-    final sub = c.listen(milestoneListProvider, (_, _) {});
+    final sub = c.listen(milestoneListProvider(1), (_, _) {});
     addTearDown(sub.close);
-    await c.read(milestoneListProvider.future);
+    await c.read(milestoneListProvider(1).future);
     expect(listBuilds, 1);
 
     var done = false;
     c.read(locallyCelebratedMilestonesProvider.notifier).report(['C-M8'], onDone: () => done = true);
     repo.completer.complete();
     await Future<void>.delayed(Duration.zero);
-    await c.read(milestoneListProvider.future);
+    await c.read(milestoneListProvider(1).future);
 
     expect(c.read(locallyCelebratedMilestonesProvider), {'C-M8'});
     expect(listBuilds, 2, reason: '缓存里是未庆祝的旧值，必须重拉');

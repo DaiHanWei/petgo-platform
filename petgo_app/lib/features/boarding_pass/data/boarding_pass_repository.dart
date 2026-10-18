@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../keepsake/domain/keepsake_purchase_result.dart';
+import '../../profile/data/current_pet_provider.dart';
 import '../../profile/domain/id_card.dart';
 import '../domain/boarding_pass.dart';
 
@@ -13,20 +14,25 @@ class BoardingPassRepository {
 
   final Dio dio;
 
-  Future<BoardingPassList> list() async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.petBoardingPasses);
+  /// V1.4.0 multi-pet（Story 1.5 · AC7）：列表 / 详情 / 解锁都带 [petId]（null = 后端默认宠物）。
+  Future<BoardingPassList> list({int? petId}) async {
+    final resp =
+        await dio.get<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petBoardingPasses, petId));
     return BoardingPassList.fromJson(resp.data ?? const {});
   }
 
   /// 该宠物在该场所无打卡 / 未知 token → 404（以 DioException 抛出）。
-  Future<BoardingPassDetail> detail(String placeToken) async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.petBoardingPass(placeToken));
+  Future<BoardingPassDetail> detail(String placeToken, {int? petId}) async {
+    final resp = await dio
+        .get<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petBoardingPass(placeToken), petId));
     return BoardingPassDetail.fromJson(resp.data ?? const {});
   }
 
   /// 单张解锁：已解锁 409 `keepsake-already-unlocked`、余额不足 409 `pawcoin-insufficient`。
-  Future<KeepsakePurchaseResult> unlock(String placeToken, HdPayChannel channel) async {
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.petBoardingPassUnlock(placeToken),
+  Future<KeepsakePurchaseResult> unlock(String placeToken, HdPayChannel channel,
+      {int? petId}) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+        ApiPaths.withPet(ApiPaths.petBoardingPassUnlock(placeToken), petId),
         data: {'channel': channel.wire});
     return KeepsakePurchaseResult.fromJson(resp.data ?? const {});
   }
@@ -38,12 +44,20 @@ final boardingPassRepositoryProvider =
 /// ⚠️ 本文件的 provider 一律 `retry: (_, _) => null`（bug 20261006-583）：Riverpod 3 默认对抛错的 provider
 /// 自动指数退避重试（最多 10 次、约 40s+），重试期间状态是 `AsyncLoading` 而不是 `AsyncError` ——
 /// 断网时页面一直停在加载骨架（空白护照本），「加载失败，重试」要 40 多秒后才出来。失败就停在失败态，重试由用户触发。
+///
+/// V1.4.0 multi-pet：跟随当前宠物（[requestPetIdProvider]）。
 final boardingPassListProvider = FutureProvider.autoDispose<BoardingPassList>(
-  (ref) => ref.read(boardingPassRepositoryProvider).list(),
+  (ref) async {
+    final petId = await ref.watch(requestPetIdProvider.future);
+    return ref.read(boardingPassRepositoryProvider).list(petId: petId);
+  },
   retry: (_, _) => null,
 );
 
 final boardingPassDetailProvider = FutureProvider.autoDispose.family<BoardingPassDetail, String>(
-  (ref, placeToken) => ref.read(boardingPassRepositoryProvider).detail(placeToken),
+  (ref, placeToken) async {
+    final petId = await ref.watch(requestPetIdProvider.future);
+    return ref.read(boardingPassRepositoryProvider).detail(placeToken, petId: petId);
+  },
   retry: (_, _) => null,
 );

@@ -15,6 +15,8 @@ import 'tailsonality_retake.dart';
 import 'tailsonality_routes.dart';
 import 'widgets/tailsonality_intro_sheet.dart';
 import 'widgets/ts_result_row.dart';
+import '../../profile/data/current_pet_provider.dart';
+import '../../profile/data/pet_list_repository.dart';
 
 /// Tailsonality 结果列表页（V1.3.2 Story 2.6）：一只宠物的全部测试结果，最新在上（接口顺序）。
 ///
@@ -83,7 +85,7 @@ class _TailsonalityResultsPageState extends ConsumerState<TailsonalityResultsPag
     if (ok != true || !mounted) return;
     setState(() => _busyToken = r.token);
     try {
-      await ref.read(tailsonalityRepositoryProvider).unequipBadge();
+      await ref.read(tailsonalityRepositoryProvider).unequipBadge(petId: await readRequestPetId(ref));
       await _refreshAfterChange();
     } catch (_) {
       if (mounted) showAppToast(context, l10n.tailsonalityBadgeEquipFailed);
@@ -95,6 +97,7 @@ class _TailsonalityResultsPageState extends ConsumerState<TailsonalityResultsPag
   /// 佩戴变了：列表（equipped）与本人档案（小标）都要重取。等列表回来再解除 loading，避免闪回旧状态。
   Future<void> _refreshAfterChange() async {
     ref.invalidate(petProfileProvider);
+    ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页头像下的性格小标取宠物列表
     try {
       ref.invalidate(tailsonalityResultsProvider);
       await ref.read(tailsonalityResultsProvider.future).timeout(const Duration(seconds: 10));

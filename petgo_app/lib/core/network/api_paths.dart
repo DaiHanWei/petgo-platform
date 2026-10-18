@@ -156,6 +156,25 @@ class ApiPaths {
   static const String petProfiles = '$base/pet-profiles';
   static const String petProfileMe = '$base/pet-profiles/me';
 
+  /// 「我的宠物」列表（V1.4.0 multi-pet Story 1.1 · AD-14）：`PetListItemResponse[]`，最早建档在前。
+  static const String petProfileList = '$base/pet-profiles/me/list';
+
+  /// 宠物名额摘要（V1.4.0 multi-pet Story 1.4）：点「+」时先取它判 A4 / A4b。仅 role=USER。
+  static const String petSlotsMe = '$base/pet-slots/me';
+
+  /// 他人公开主页的**宠物列表**（V1.4.0 multi-pet Story 1.4）：数组，空数组 = 没有宠物。游客可读。
+  static String userPublicPets(int userId) => '$base/users/$userId/pets';
+
+  /// `/pet-profiles/me/*` 带当前宠物（V1.4.0 multi-pet · AD-14 / P-4）：[petId] 为 null → 原样
+  /// （后端落默认宠物，与旧版 App 同口径）；否则追加 `?petId=` / `&petId=`。
+  ///
+  /// ⚠️ 只给**按宠物**的端点用；账号级端点（身份证卡列表 / 详情 / 新建、年龄卡奖励、
+  /// token 寻址的结果 / 快照详情）不带（Story 1.5 AC7「仓库改造清单」）。
+  static String withPet(String path, int? petId) {
+    if (petId == null) return path;
+    return '$path${path.contains('?') ? '&' : '?'}petId=$petId';
+  }
+
   /// 宠物身份证数据 / 生成（Story 6.1 后端 · 6.2 前端）。GET 取数据+generated 标志；POST 生成分配流水号（幂等）。
   static const String petProfileIdCard = '$base/pet-profiles/me/id-card';
 
@@ -281,8 +300,6 @@ class ApiPaths {
   /// 站内访客：时间线（不分页，`?limit=`）。
   static String inAppPetTimeline(int petId) => '$base/pets/$petId/visitor/timeline';
 
-  /// 他人公开主页的**宠物卡**（Story 2.3 · AC3）。游客可读；没有档案时 204。
-  static String userPublicPet(int userId) => '$base/users/$userId/pet';
 
   /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
   static const String petProfileMilestones = '$base/pet-profiles/me/milestones';

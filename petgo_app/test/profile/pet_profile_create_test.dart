@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/pet_slot/data/pet_slot_repository.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.dart';
@@ -12,11 +17,14 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 class _FakeRepo implements ProfileRepository {
   @override
-  Future<void> deleteMyProfile() async {}
+  Future<void> deleteMyProfile({int? petId}) async {}
 
   PetProfile? existing;
   bool createCalled = false;
   bool failExists = false; // true → 模拟并发 409（档案已存在）
+  /// V1.4.0 multi-pet：非空 → 建档回 409 + 该 ProblemDetail 响应体（pet-slot-full / pet-limit-reached）。
+  Map<String, dynamic>? fail409Body;
+  int createdId = 1;
   String? lastPetType;
   String? lastSex;
 
@@ -36,6 +44,13 @@ class _FakeRepo implements ProfileRepository {
     createCalled = true;
     lastPetType = petType;
     lastSex = sex;
+    if (fail409Body != null) {
+      final req = RequestOptions(path: '/pet-profiles');
+      throw DioException(
+        requestOptions: req,
+        response: Response(requestOptions: req, statusCode: 409, data: fail409Body),
+      );
+    }
     if (failExists) {
       final req = RequestOptions(path: '/pet-profiles');
       throw DioException(
@@ -43,8 +58,8 @@ class _FakeRepo implements ProfileRepository {
         response: Response(requestOptions: req, statusCode: 409),
       );
     }
-    final made =
-        PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
+    final made = PetProfile(
+        id: createdId, name: name, cardToken: 'T', petType: petType, birthday: birthday);
     // 🔴 建完档，档案**就存在了** —— 之前这里不回写，`getMyProfile()` 建档后仍返回 null，
     //    于是「建档成功 → 重新拉档案 → 拉到非空」这条真实时序在测试里根本不会发生，
     //    bug 20260826（庆祝页一闪而过）正是从这个缺口溜过去的。
@@ -53,7 +68,7 @@ class _FakeRepo implements ProfileRepository {
   }
 
   @override
-  Future<PetProfile?> getMyProfile() async => existing;
+  Future<PetProfile?> getMyProfile({int? petId}) async => existing;
 
   @override
   Future<PetProfile> update({
@@ -65,6 +80,7 @@ class _FakeRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    int? petId,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }
@@ -302,5 +318,174 @@ void main() {
     expect(container.read(authControllerProvider).profile?.hasPetProfile, isTrue);
     expect(find.text('profile'), findsOneWidget); // 提示并直达档案 Tab
     await tester.pump(const Duration(seconds: 3)); // 走完 petProfileExists toast 定时器
+  });
+
+  // ===== V1.4.0 multi-pet Story 1.5 · AC4.5 / AC4.6 =====
+  group('V1.4.0 multi-pet：建档页', () {
+    const twoPets = [
+      PetListItem(id: 1, name: 'Orenji', isDefault: true),
+      PetListItem(id: 2, name: 'Kopi'),
+    ];
+
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    ProviderContainer containerFor(_FakeRepo repo, {List<PetListItem> pets = twoPets}) {
+      final c = ProviderContainer(overrides: [
+        profileRepositoryProvider.overrideWithValue(repo),
+        petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+        petListProvider.overrideWith((ref) async => pets),
+      ]);
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    Map<String, dynamic> problem(String slug, [Map<String, dynamic> ext = const {}]) => {
+          'type': 'https://petgo/errors/$slug',
+          'title': 'x',
+          'status': 409,
+          'detail': '后端显示串（不得渲染）',
+          ...ext,
+        };
+
+    Future<void> pumpAt(WidgetTester tester, ProviderContainer c, String location) async {
+      await tester.binding.setSurfaceSize(const Size(440, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = GoRouter(initialLocation: location, routes: [
+        GoRoute(
+          path: '/profile/create',
+          builder: (_, s) => PetProfileCreatePage(
+              addFlow: s.uri.queryParameters[PetProfileCreatePage.addFlowQuery] == '1'),
+        ),
+        GoRoute(path: '/profile', builder: (_, _) => const Scaffold(body: Text('profile'))),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp.router(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          routerConfig: router,
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('A5：从「+」添加流程（?add=1）进来 → 已有档案也不跳走，直接渲染表单', (tester) async {
+      final repo = _FakeRepo()..existing = const PetProfile(id: 1, name: 'Orenji', cardToken: 'T');
+      await pumpAt(tester, containerFor(repo), '/profile/create?add=1');
+
+      expect(find.byKey(const ValueKey('petProfileSubmit')), findsOneWidget);
+      expect(find.text('profile'), findsNothing);
+    });
+
+    testWidgets('code review #3：存量入口（不带 ?add=1）+ 已有宠物 → 仍「已有档案直达」Diary Tab', (tester) async {
+      final repo = _FakeRepo()..existing = const PetProfile(id: 1, name: 'Orenji', cardToken: 'T');
+      await pumpAt(tester, containerFor(repo), '/profile/create');
+
+      expect(find.text('profile'), findsOneWidget);
+      expect(find.byKey(const ValueKey('petProfileSubmit')), findsNothing);
+    });
+
+    testWidgets('存量入口 + 还没有宠物 → 照常渲染表单', (tester) async {
+      await pumpAt(tester, containerFor(_FakeRepo(), pets: const []), '/profile/create');
+      expect(find.byKey(const ValueKey('petProfileSubmit')), findsOneWidget);
+    });
+
+    testWidgets('409 pet-slot-full → A4（扩展成员里的数字 + Rp 价格），不渲染后端显示串', (tester) async {
+      final repo = _FakeRepo()
+        ..fail409Body = problem('pet-slot-full', {
+          'canRent': true,
+          'nextLevelSlot': 5,
+          'petCount': 2,
+          'slotTotal': 2,
+          'unitPrice': 5000,
+        });
+      await _pumpRouted(tester, containerFor(repo));
+      await _fillAndSubmit(tester);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.petSlotFullTitle), findsOneWidget);
+      expect(find.text(l10n.petSlotFullBody(2, 2, 'Rp5.000')), findsOneWidget);
+      expect(find.text('后端显示串（不得渲染）'), findsNothing);
+      expect(find.text('profile'), findsNothing, reason: '名额已满不是「已有档案」，不直达');
+    });
+
+    testWidgets('409 pet-limit-reached → A4b（唯一按钮 OK）', (tester) async {
+      final repo = _FakeRepo()..fail409Body = problem('pet-limit-reached');
+      await _pumpRouted(tester, containerFor(repo));
+      await _fillAndSubmit(tester);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.petSlotLimitTitle), findsOneWidget);
+      expect(find.byKey(const ValueKey('petSlotLimitOk')), findsOneWidget);
+      expect(find.byKey(const ValueKey('confirmSheetCancel')), findsNothing);
+    });
+
+    testWidgets('409 profile-exists → 沿用原提示并直达档案', (tester) async {
+      final repo = _FakeRepo()..fail409Body = problem('profile-exists');
+      await _pumpRouted(tester, containerFor(repo));
+      await _fillAndSubmit(tester);
+
+      expect(find.text('profile'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('建档成功 → 新宠物成为当前宠物 + pet_added {pet_index, slot_source}', (tester) async {
+      final events = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+      final repo = _FakeRepo()..createdId = 3;
+      final c = containerFor(repo);
+      await _pumpRouted(tester, c);
+      await _fillAndSubmit(tester);
+
+      expect(c.read(currentPetIdProvider), 3);
+      // 没有「+」入口带来的名额摘要 → slot_source 按 default 报；只数按已加载列表（2 只）+ 1。
+      expect(events.where((e) => e.$1 == 'pet_added').map((e) => e.$2), [
+        {'pet_index': 3, 'slot_source': 'default'},
+      ]);
+    });
+
+    testWidgets('slot_source 按建档前的名额摘要推：≤ 默认 + 等级 → level；超出 → rent', (tester) async {
+      Future<Map<String, Object>?> run(PetSlotOverview o) async {
+        final events = <(String, Map<String, Object>?)>[];
+        Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+        final repo = _FakeRepo();
+        final c = containerFor(repo);
+        await tester.binding.setSurfaceSize(const Size(440, 1600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(UncontrolledProviderScope(
+          container: c,
+          child: MaterialApp.router(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: GoRouter(initialLocation: '/', routes: [
+              GoRoute(path: '/', builder: (_, _) => PetProfileCreatePage(slotOverview: o)),
+              GoRoute(path: '/profile/created', builder: (_, _) => const Text('created')),
+              GoRoute(path: '/profile', builder: (_, _) => const Text('profile')),
+            ]),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        await _fillAndSubmit(tester);
+        return events.firstWhere((e) => e.$1 == 'pet_added').$2;
+      }
+
+      PetSlotOverview o(int petCount, {int levelSlots = 1}) => PetSlotOverview(
+          total: 1 + levelSlots + 1,
+          cap: 5,
+          defaultSlots: 1,
+          levelSlots: levelSlots,
+          rentalSlots: 1,
+          petCount: petCount,
+          rentable: 1,
+          canRent: true,
+          unitPrice: 5000,
+          days: 30);
+
+      expect(await run(o(0)), {'pet_index': 1, 'slot_source': 'default'});
+      expect(await run(o(1)), {'pet_index': 2, 'slot_source': 'level'});
+      expect(await run(o(2)), {'pet_index': 3, 'slot_source': 'rent'});
+    });
   });
 }

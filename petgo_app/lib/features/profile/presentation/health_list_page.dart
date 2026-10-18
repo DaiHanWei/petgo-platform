@@ -13,6 +13,7 @@ import '../../../core/theme/colors.dart';
 import '../../../shared/boundary/triage_category_jump.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../data/current_pet_provider.dart';
 import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
 import '../data/timeline_repository.dart';
@@ -24,6 +25,7 @@ import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
 import '../data/milestone_celebration_reporter.dart';
 import 'widgets/milestone_celebration.dart';
+import '../data/pet_list_repository.dart';
 
 /// 健康记录列表页 `p-health-list`（Story 7.2 · FR-45B/45C · UX-DR10）。结构化记录（可编辑）+ 问诊存档
 /// （🏥 只读）混排，`editable` 区分可点。新增/编辑结构化记录；创建 VACCINE/DEWORM 联动里程碑第四路径。
@@ -128,7 +130,10 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final l10n = AppLocalizations.of(context);
-    final async = ref.watch(healthListProvider);
+    // V1.4.0 multi-pet（Story 1.5）：健康记录按当前宠物（family 键 petId）。
+    final petAsync = watchEffectivePetId(ref);
+    final petId = petAsync.value;
+    final async = petId == null ? null : ref.watch(healthListProvider(petId));
     return Scaffold(
       backgroundColor: AppColors.cream2,
       // 0711：AppBar 右上「+」入口（与底部整宽按钮双入口，取代原 FAB）。
@@ -153,7 +158,12 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
           const SizedBox(width: 4),
         ],
       ),
-      body: async.when(
+      body: async == null
+          // 当前宠物还没定下来 / 取不到 / 没有宠物（与后端 404「尚未创建宠物档案」同一空态）。
+          ? (petAsync.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _empty(petAsync.hasError ? l10n.healthLoadError : l10n.healthNoProfile))
+          : async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
           if (e is DioException && e.response?.statusCode == 404) {
@@ -571,6 +581,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       // 日历仍是旧快照（口径同 pet_profile_edit_page._deleteProfile 的失效链）。
       ref.invalidate(timelineFirstPageProvider);
       ref.invalidate(archiveStatsProvider);
+      ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       ref.invalidate(calendarMonthProvider);
       ref.invalidate(dayDetailProvider);
     }
@@ -594,6 +605,9 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   late final TextEditingController _name;
   late final TextEditingController _note;
   bool _busy = false;
+
+  /// 本次保存落到的宠物（V1.4.0 multi-pet）；里程碑庆祝检测按它取列表。
+  int? _petId;
 
   @override
   void initState() {
@@ -633,8 +647,11 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
     );
     try {
       final repo = ref.read(healthRecordRepositoryProvider);
+      // V1.4.0 multi-pet（Story 1.5）：记录落到当前宠物（列表取不到 → null = 后端默认宠物）。
+      final petId = await readRequestPetId(ref);
+      _petId = petId;
       if (widget.existing != null) {
-        await repo.update(widget.existing!.id, draft);
+        await repo.update(widget.existing!.id, draft, petId: petId);
         if (!mounted) return;
         Navigator.of(context).pop(true);
         return;
@@ -643,9 +660,13 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       // 弱网/测试环境挂起时放弃庆祝检测，不拖慢保存主流程）。
       MilestoneList? before;
       try {
-        before = await ref.read(milestoneListProvider.future).timeout(const Duration(seconds: 2));
+        if (petId != null) {
+          before = await ref
+              .read(milestoneListProvider(petId).future)
+              .timeout(const Duration(seconds: 2));
+        }
       } catch (_) {}
-      await repo.create(draft);
+      await repo.create(draft, petId: petId);
       // bug 20260729-405：解锁瞬间自动弹庆祝层（此前只有 SnackBar 提示，用户需自己去里程碑页才看到）。
       final unlocked = await _pollNewlyUnlocked(before);
       if (!mounted) return;
@@ -672,7 +693,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   /// 尚未落库，须延时重拉。仅当存在解锁候选才轮询（否则每次保存都白等 ~2.5s）；
   /// [before] 拉取失败（null）时无法可靠 diff，宁可不弹也不误弹旧里程碑。
   Future<MilestoneItem?> _pollNewlyUnlocked(MilestoneList? before) async {
-    if (before == null || !_mayUnlockMilestone(before)) return null;
+    final petId = _petId;
+    if (petId == null || before == null || !_mayUnlockMilestone(before)) return null;
     final beforeCodes = <String>{
       for (final g in before.groups)
         for (final it in g.items)
@@ -683,7 +705,7 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       ref.invalidate(milestoneListProvider);
       try {
         final now = await ref
-            .read(milestoneListProvider.future)
+            .read(milestoneListProvider(petId).future)
             .timeout(const Duration(seconds: 2));
         // Story 5.2 · AC3：一次保存可能同时点亮多条（如首针疫苗 → M3 + 聚合「Lulus Pemula」）。
         // 收集**全部**新解锁，取**级别最高**的一条去庆祝（只弹一次），其余由弹层底部的
@@ -709,7 +731,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   Future<void> _celebrate(MilestoneItem done) async {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
-    final listData = ref.read(milestoneListProvider).asData?.value;
+    final petId = _petId;
+    final listData = petId == null ? null : ref.read(milestoneListProvider(petId)).asData?.value;
     final petName = listData?.petName ?? '';
     final collection = listData == null
         ? const <MilestoneItem>[]
@@ -740,7 +763,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   Future<void> _delete() async {
     setState(() => _busy = true);
     try {
-      await ref.read(healthRecordRepositoryProvider).delete(widget.existing!.id);
+      final petId = await readRequestPetId(ref);
+      await ref.read(healthRecordRepositoryProvider).delete(widget.existing!.id, petId: petId);
       if (mounted) Navigator.of(context).pop(true);
     } catch (_) {
       if (mounted) {

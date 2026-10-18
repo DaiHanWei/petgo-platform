@@ -440,7 +440,7 @@ class _FakeTsRepo implements TailsonalityRepository {
   int calls = 0;
 
   @override
-  Future<List<TailsonalityResult>> fetchResults() async {
+  Future<List<TailsonalityResult>> fetchResults({int? petId}) async {
     calls++;
     if (delay > Duration.zero) await Future<void>.delayed(delay);
     if (fails) throw Exception('network');

@@ -16,6 +16,7 @@ import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/presentation/pet_insights_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.2 Story 3.5 · L0：wire 契约、列表两态 + 次数 + 空态、详情（PASSPORT 独占一行 / 水印 / 吸底 / 下架 / 占位图）、B7b 与购买。
 void main() {
@@ -85,6 +86,8 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       retry: (_, _) => null,
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         boardingPassRepositoryProvider.overrideWithValue(repo),
         keepsakePricingProvider.overrideWith((ref) async => const KeepsakePricing(
             ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
@@ -226,13 +229,13 @@ class _Repo implements BoardingPassRepository {
   final List<HdPayChannel> unlocks = [];
 
   @override
-  Future<BoardingPassList> list() async => listResult;
+  Future<BoardingPassList> list({int? petId}) async => listResult;
 
   @override
-  Future<BoardingPassDetail> detail(String placeToken) async => current;
+  Future<BoardingPassDetail> detail(String placeToken, {int? petId}) async => current;
 
   @override
-  Future<KeepsakePurchaseResult> unlock(String placeToken, HdPayChannel channel) async {
+  Future<KeepsakePurchaseResult> unlock(String placeToken, HdPayChannel channel, {int? petId}) async {
     unlocks.add(channel);
     current = BoardingPassDetail.fromJson({
       'placeToken': current.placeToken,

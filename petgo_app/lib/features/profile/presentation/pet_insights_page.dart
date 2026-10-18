@@ -19,6 +19,7 @@ import '../data/onboarding_mark_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/insight_entry_card.dart';
+import '../data/current_pet_provider.dart';
 
 /// 「Know Your Pet」聚合页的路由路径（V1.3.0 批次 A · Story 5.1 · AD-A17）。
 ///
@@ -278,7 +279,7 @@ Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
   PetProfile? pet;
   try {
     try {
-      results = await ref.read(tailsonalityRepositoryProvider).fetchResults();
+      results = await ref.read(tailsonalityRepositoryProvider).fetchResults(petId: await readRequestPetId(ref));
     } catch (_) {
       results = const [];
     }

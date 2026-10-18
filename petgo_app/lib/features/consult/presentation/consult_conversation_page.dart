@@ -27,6 +27,7 @@ import 'consult_diagnosis_sheet.dart';
 import 'consult_diagnosis_view.dart';
 import 'consult_rating_dialog.dart';
 import 'im_chat_placeholder.dart';
+import '../../profile/data/pet_list_repository.dart';
 
 /// 用户侧进行中会话界面（Story 5.5 + 5.6）。
 ///
@@ -343,6 +344,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       // 存档（ARCHIVED）后使成长档案时间线 / 统计失效 → 进档案页即见 diary（bug 20260707）。
       ref.invalidate(timelineFirstPageProvider);
       ref.invalidate(archiveStatsProvider);
+      ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       // 存档成功给用户明确反馈（bug 20260721-338）+ 本地翻转 isArchived 使按钮当场变「已存入」标签（bug 20260721-333）。
       if (saved) {
         setState(() => _diagnosis = _diagnosis?.copyWith(isArchived: true));

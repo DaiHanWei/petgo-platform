@@ -165,7 +165,7 @@ Future<_FakeProfileRepo> _pump(WidgetTester tester, List<Comment> comments,
     detailRepositoryProvider.overrideWithValue(_CommentsRepo(comments)),
     publicProfileRepositoryProvider.overrideWithValue(repo),
     publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
-    publicProfilePetProvider(7).overrideWith((ref) async => null),
+    publicProfilePetsProvider(7).overrideWith((ref) async => const []),
   ]);
   addTearDown(container.dispose);
   await _pumpWith(tester, container: container);
@@ -234,7 +234,7 @@ void main() {
       detailRepositoryProvider.overrideWithValue(repo),
       publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(_budi)),
       publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
-      publicProfilePetProvider(7).overrideWith((ref) async => null),
+      publicProfilePetsProvider(7).overrideWith((ref) async => const []),
       blockedUsersRepositoryProvider.overrideWithValue(blocks),
       authControllerProvider.overrideWith(_LoggedInAuth.new),
     ]);

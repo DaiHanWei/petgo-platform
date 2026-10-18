@@ -16,6 +16,7 @@ import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// 发布请求抛注入异常的 fake（模拟审核 422）。
 class _ThrowRepo implements ContentRepository {
@@ -70,7 +71,7 @@ class _OkRepo implements ContentRepository {
 
 class _FakeProfileRepo implements ProfileRepository {
   @override
-  Future<void> deleteMyProfile() async {}
+  Future<void> deleteMyProfile({int? petId}) async {}
 
   @override
   Future<PetProfile> create({
@@ -88,7 +89,7 @@ class _FakeProfileRepo implements ProfileRepository {
       PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
 
   @override
-  Future<PetProfile?> getMyProfile() async => null;
+  Future<PetProfile?> getMyProfile({int? petId}) async => null;
 
   @override
   Future<PetProfile> update({
@@ -100,6 +101,7 @@ class _FakeProfileRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    int? petId,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }
@@ -107,7 +109,7 @@ class _FakeProfileRepo implements ProfileRepository {
 /// 有宠物档案的档案仓库：成长日历发布必带 pet_id（bug 564 成功路径用）。
 class _WithPetProfileRepo extends _FakeProfileRepo {
   @override
-  Future<PetProfile?> getMyProfile() async =>
+  Future<PetProfile?> getMyProfile({int? petId}) async =>
       const PetProfile(id: 1, name: 'Oyen', cardToken: 'T');
 }
 
@@ -670,6 +672,8 @@ void main() {
       publishControllerProvider
           .overrideWithValue(_controller(_OkRepo())..setText('Oyen sehat hari ini')),
       profileRepositoryProvider.overrideWithValue(_WithPetProfileRepo()),
+      // V1.4.0 multi-pet：发布页按当前宠物取档案（requestPetIdProvider ← effectivePetIdProvider）。
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
       authControllerProvider.overrideWith(() => _WithArchiveAuth()),
     ]);
     addTearDown(container.dispose);

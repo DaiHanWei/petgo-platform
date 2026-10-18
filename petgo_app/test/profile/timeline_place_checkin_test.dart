@@ -10,6 +10,7 @@ import 'package:tailtopia/features/profile/domain/day_detail.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 import 'package:tailtopia/features/profile/presentation/day_detail_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.2 Story 1.6 · L0：Diary 打卡条目的模型、能力参数与某天详情渲染。
 void main() {
@@ -101,6 +102,8 @@ void main() {
       ]);
       await tester.pumpWidget(ProviderScope(
         overrides: [
+          // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+          effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
           dayDetailProvider.overrideWith((ref, d) async => detail),
           visitorDayDetailProvider.overrideWith((ref, a) async => detail),
         ],

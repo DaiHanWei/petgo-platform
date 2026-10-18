@@ -70,8 +70,8 @@ void main() {
               petType: 'CAT',
               birthday: DateTime(2025, 1, 1),
             )),
-        timelineFirstPageProvider.overrideWith((ref) async => const TimelinePage(items: [])),
-        archiveStatsProvider.overrideWith((ref) async => ArchiveStats(
+        timelineFirstPageProvider.overrideWith((ref, _) async => const TimelinePage(items: [])),
+        archiveStatsProvider.overrideWith((ref, _) async => ArchiveStats(
               happyMomentCount: 1,
               consultCount: 0,
               milestoneCompleted: milestoneCompleted,

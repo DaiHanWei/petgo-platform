@@ -14,6 +14,7 @@ import '../../../profile/domain/card_link.dart';
 import '../../domain/boarding_pass.dart';
 import '../widgets/boarding_pass_card.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
+import '../../../profile/data/current_pet_provider.dart';
 
 /// 登机牌分享卡（V1.3.2 Story 4.3 · UI 稿 B9）：通用骨架的一种用法。
 ///
@@ -98,7 +99,10 @@ Future<void> openBoardingPassSharePreview(BuildContext context, WidgetRef ref, B
         Analytics.capture('passport_card_shared', {'card_type': 'boarding'});
         // Story 4.5：同一时机上报领奖（BOARDING，整体一个类型、不带场所 token），失败当 0、没发静默。
         unawaited(claimKeepsakeShareReward(routeCtx, ref,
-            () => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(PassportShareRewardRepository.boarding)));
+            () async => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(
+                PassportShareRewardRepository.boarding,
+                // V1.4.0 multi-pet：奖励记到当前宠物。
+                petId: await readRequestPetId(ref))));
       },
     ),
   ));

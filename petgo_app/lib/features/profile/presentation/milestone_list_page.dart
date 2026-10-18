@@ -10,7 +10,9 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../data/current_pet_provider.dart';
 import '../data/milestone_celebration_reporter.dart';
+import '../data/pet_list_repository.dart';
 import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
 import '../data/timeline_repository.dart';
@@ -142,6 +144,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       if (!mounted) return;
       // 回报落库后刷新（列表已由 reporter 统一刷新），让档案 Tab 的角标口径立刻一致。
       ref.invalidate(archiveStatsProvider);
+      ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
     });
   }
 
@@ -158,7 +161,16 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final async = ref.watch(milestoneListProvider);
+    // V1.4.0 multi-pet（Story 1.5）：里程碑按当前宠物（family 键 petId）。
+    final petAsync = watchEffectivePetId(ref);
+    final petId = petAsync.value;
+    final AsyncValue<MilestoneList> async = petId != null
+        ? ref.watch(milestoneListProvider(petId))
+        : (petAsync.isLoading
+            ? const AsyncLoading<MilestoneList>()
+            // 列表取不到 / 没有宠物：落现有失败态（可重试）。
+            : AsyncError<MilestoneList>(
+                petAsync.error ?? StateError('no pet'), petAsync.stackTrace ?? StackTrace.empty));
     async.whenData(_maybeDevShow);
     async.whenData(_maybeCatchUp);
     return Scaffold(
@@ -178,7 +190,10 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => _MilestoneError(
-          onRetry: () => ref.invalidate(milestoneListProvider),
+          onRetry: () {
+            ref.invalidate(milestoneListProvider);
+            if (petId == null) ref.invalidate(petListProvider);
+          },
         ),
         data: (data) => RefreshIndicator(
           onRefresh: () async {
@@ -624,12 +639,18 @@ class _Badge extends ConsumerWidget {
   }
 }
 
+/// 当前宠物已加载的里程碑列表（V1.4.0 multi-pet：family 键取 `effectivePetIdProvider`）；未就绪 → null。
+MilestoneList? _currentMilestones(WidgetRef ref) {
+  final petId = ref.read(effectivePetIdProvider).value;
+  return petId == null ? null : ref.read(milestoneListProvider(petId)).asData?.value;
+}
+
 /// 徽章点击弹层（FR-42）：系统类→说明文案、打卡类未完成→「已打卡 / 去发布」两入口。
 /// 点击已完成徽章 → 重温 P-35 解锁庆祝动效（L 级附分享卡）。
 void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
   final l10n = AppLocalizations.of(context);
   final locale = Localizations.localeOf(context);
-  final data = ref.read(milestoneListProvider).asData?.value;
+  final data = _currentMilestones(ref);
   final petName = data?.petName ?? '';
   final collection = data == null ? const <MilestoneItem>[] : [for (final g in data.groups) ...g.items];
   final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
@@ -652,7 +673,7 @@ void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
 /// + DESKRIPSI 说明卡（FR-43 文案）+ 打卡类两入口/系统类只读。
 void _showBadgeSheet(BuildContext context, WidgetRef ref, MilestoneItem item) {
   // 打卡引导/说明文案（P-33b · FR-43）需替换 {name} → 宠物名（列表已加载，取当前值即可）。
-  final petName = ref.read(milestoneListProvider).asData?.value.petName ?? '';
+  final petName = _currentMilestones(ref)?.petName ?? '';
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -968,10 +989,11 @@ class _CandidateTile extends ConsumerWidget {
     final router = GoRouter.maybeOf(context);
     try {
       // 庆祝卡片文案需替换 {name} → 宠物名（列表已加载，取当前值即可）。
-      final listData = ref.read(milestoneListProvider).asData?.value;
+      final listData = _currentMilestones(ref);
       final petName = listData?.petName ?? '';
-      final completed =
-          await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
+      final completed = await ref.read(milestoneRepositoryProvider).checkIn(
+          milestoneCode, candidate.contentId,
+          petId: ref.read(effectivePetIdProvider).value);
       // 🔴 必须在 invalidate 之前记本地：重拉回来这条仍是 celebratedAt == null，
       //    而回报要等下面的庆祝弹窗关掉才发 —— 不先记，列表页会在即时庆祝之上再补弹一次。
       markMilestonesCelebrating(ref, [completed.code]);

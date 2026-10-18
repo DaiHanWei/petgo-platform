@@ -16,6 +16,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../profile/data/current_pet_provider.dart';
 import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
@@ -44,6 +45,7 @@ import '../domain/publish_controller.dart';
 import 'publish_exposure_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
+import '../../profile/data/pet_list_repository.dart';
 
 /// 发布控制器 provider（autoDispose：sheet 关闭即 dispose，清空内存草稿，NFR-10 无持久草稿）。
 final publishControllerProvider = Provider.autoDispose<PublishController>((
@@ -284,7 +286,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 懒加载当前用户的宠物档案（成长日历发帖必带 pet_id，Story 2.3 AC2）。
   Future<void> _ensurePetLoaded() async {
     if (_linkedPet != null) return;
-    final pet = await ref.read(profileRepositoryProvider).getMyProfile();
+    // V1.4.0 multi-pet（Story 1.5）：发布页选宠物在 3.3；本 story 维持「当前宠物」。
+    // 这里允许为取当前宠物发一次列表请求（冷启动直接进发布页时它可能还没被任何界面建立）。
+    final petId = await ref.read(requestPetIdProvider.future);
+    final pet = await ref.read(profileRepositoryProvider).getMyProfile(petId: petId);
     if (mounted) setState(() => _linkedPet = pet);
   }
 
@@ -417,6 +422,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (controller.type == ContentType.growthMoment) {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       }
       // 里程碑「去发布」回填（Story 8.4）：仍为成长日历类型 → 以新内容 id 自动打卡完成（best-effort）。
       MilestoneItem? completedMilestone;
@@ -425,7 +431,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         try {
           completedMilestone = await ref
               .read(milestoneRepositoryProvider)
-              .checkIn(widget.milestoneCode!, id);
+              .checkIn(widget.milestoneCode!, id, petId: _linkedPet?.id);
         } catch (_) {
           // 回填失败静默：用户可回里程碑页手动「已打卡」关联该内容。
         }
@@ -436,7 +442,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (completedMilestone != null) {
         final done = completedMilestone;
         final locale = Localizations.localeOf(context);
-        final listData = ref.read(milestoneListProvider).asData?.value;
+        final listPetId = _linkedPet?.id;
+        final listData =
+            listPetId == null ? null : ref.read(milestoneListProvider(listPetId)).asData?.value;
         final petName = listData?.petName ?? '';
         final collection = listData == null
             ? const <MilestoneItem>[]

@@ -1937,7 +1937,13 @@
     }
   },
   "petProfileDeleteIrreversible": "This action can't be undone",
-  "petProfileDeleteConfirmTitle": "Delete this profile?",
+  "petProfileDeleteConfirmTitle": "Delete {name}'s profile?",
+  "@petProfileDeleteConfirmTitle": {
+    "description": "V1.4.0 multi-pet R-1: delete confirm sheet title names the pet being deleted",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
   "petProfileDeleteConfirmBody": "{name}'s diary and milestones will be permanently deleted. Your posts stay, and you can switch pet status afterwards.",
   "@petProfileDeleteConfirmBody": {
     "placeholders": {
@@ -4004,5 +4010,42 @@
   "postLikersEmpty": "No likes yet",
   "@postLikersEmpty": {"description": "Post likers bottom sheet empty state (V1.3.4)"},
   "postLikersLoadFailed": "Couldn't load the list",
-  "@postLikersLoadFailed": {"description": "Post likers bottom sheet load-failed title (V1.3.4)"}
+  "@postLikersLoadFailed": {"description": "Post likers bottom sheet load-failed title (V1.3.4)"},
+  "petListManage": "Manage",
+  "@petListManage": {"description": "V1.4.0 multi-pet A-1: Me page Hewanku section title right-side entry to pet slot management"},
+  "petSlotFullTitle": "Pet slots are full",
+  "@petSlotFullTitle": {"description": "V1.4.0 multi-pet A-2: slot-full sheet title"},
+  "petSlotFullBody": "You have {petCount} pets in {slotTotal} slots. Get more slots by leveling up, or rent a slot for {price} / 30 days.",
+  "@petSlotFullBody": {
+    "description": "V1.4.0 multi-pet A-3: slot-full sheet body; price is the backend unit price already formatted (e.g. Rp5.000)",
+    "placeholders": {
+      "petCount": {"type": "int"},
+      "slotTotal": {"type": "int"},
+      "price": {"type": "String"}
+    }
+  },
+  "petSlotFullRent": "Rent a slot",
+  "@petSlotFullRent": {"description": "V1.4.0 multi-pet A-4: slot-full sheet primary button"},
+  "petSlotLimitTitle": "Up to 5 pets",
+  "@petSlotLimitTitle": {"description": "V1.4.0 multi-pet A-5: pet limit reached sheet title"},
+  "petSlotLimitBody": "One account can have up to 5 pets.",
+  "@petSlotLimitBody": {"description": "V1.4.0 multi-pet A-6: pet limit reached sheet body"},
+  "petSlotLimitOk": "OK",
+  "@petSlotLimitOk": {"description": "V1.4.0 multi-pet A-7: pet limit reached sheet only button"},
+  "petSlotPageTitle": "Manage Pets",
+  "@petSlotPageTitle": {"description": "V1.4.0 multi-pet D-1: pet slot management page title"},
+  "petDeleteConfirmBodyOther": "{name}'s Diary, milestones and health records will be deleted permanently. Your posts stay. Other pets aren't affected, and {name}'s slot can be used again.",
+  "@petDeleteConfirmBodyOther": {
+    "description": "V1.4.0 multi-pet C-1: delete confirm sheet body when it is not the last pet",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "petDeleteSuccess": "{name}'s profile deleted",
+  "@petDeleteSuccess": {
+    "description": "V1.4.0 multi-pet C-2: toast after deleting a pet that is not the last one",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  }
 }

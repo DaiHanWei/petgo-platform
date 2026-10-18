@@ -14,6 +14,12 @@ import '../../domain/pet_age.dart';
 /// 每项宽 84：头像 64（外圈 2px 浅紫环 + 2px 白边）+ 右上角 diary 数角标（[diaryCount] 为 null 时不画），
 /// 下方名字 → Tailsonality 小标（佩戴才有）→「物种 · 年龄」。无头像时为宠物图标占位。
 /// 外层由调用方放进横向 `SingleChildScrollView`（角标向右上溢出 6 / 4，需留 padding）。
+///
+/// V1.4.0 multi-pet（Story 1.5 · AC2.4 / AC3.1）追加可选参数，**默认值 = 改动前的外观**：
+/// - [size]：头像直径（默认 64 = 改动前；「我的」页 56，Diary 切换器 40）；
+/// - [readOnly]：只读宠物 → 头像灰化 + **左下**锁标（避开右上 diary 角标），名字转弱化色；
+/// - [selected]：当前宠物 → 外环换主色（切换器「紫环」）；
+/// - [compact]：切换器形态 → 只有头像 + 名字（不画性格小标 / 物种 · 年龄），宽 = 头像 + 12。
 class PetAvatarItem extends StatelessWidget {
   const PetAvatarItem({
     super.key,
@@ -27,7 +33,15 @@ class PetAvatarItem extends StatelessWidget {
     this.diaryBadgeKey,
     this.tailsonalityKey,
     this.metaKey,
+    this.size = kDefaultSize,
+    this.readOnly = false,
+    this.selected = false,
+    this.compact = false,
+    this.lockKey,
   });
+
+  /// 改动前的头像直径（CircleAvatar radius 32）。
+  static const double kDefaultSize = 64;
 
   final String name;
   final String? avatarUrl;
@@ -44,17 +58,44 @@ class PetAvatarItem extends StatelessWidget {
   final Key? tailsonalityKey;
   final Key? metaKey;
 
+  final double size;
+  final bool readOnly;
+  final bool selected;
+  final bool compact;
+
+  /// 只读锁标的 key（测试定位用）。
+  final Key? lockKey;
+
+  /// 灰化矩阵（UI 稿 `.pav.ro` / `.psw-i.ro`：grayscale(.85) + 降透明度）。
+  static const ColorFilter _greyscale = ColorFilter.matrix(<double>[
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0, 0, 0, 0.75, 0,
+  ]);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final count = diaryCount;
     final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
     final meta = _meta(l10n);
+    Widget avatar = CircleAvatar(
+      // key 随 URL 变：换头像后强制重建，杜绝旧图不重绘。
+      key: ValueKey('petAvatar-$avatarUrl'),
+      radius: size / 2,
+      backgroundColor: AppColors.border,
+      backgroundImage: AppImage.provider(avatarUrl, thumbWidth: 200),
+      child: hasAvatar
+          ? null
+          : Icon(Icons.pets, size: size * 0.44, color: AppColors.textTertiary),
+    );
+    if (readOnly) avatar = ColorFiltered(colorFilter: _greyscale, child: avatar);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: SizedBox(
-        width: 84,
+        width: compact ? size + 12 : 84,
         child: Column(
           children: [
             Stack(
@@ -62,24 +103,32 @@ class PetAvatarItem extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                      color: AppColors.dashedViolet, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                      color: selected ? AppColors.mint : AppColors.dashedViolet,
+                      shape: BoxShape.circle),
                   child: Container(
                     padding: const EdgeInsets.all(2),
                     decoration:
                         const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: CircleAvatar(
-                      // key 随 URL 变：换头像后强制重建，杜绝旧图不重绘。
-                      key: ValueKey('petAvatar-$avatarUrl'),
-                      radius: 32,
-                      backgroundColor: AppColors.border,
-                      backgroundImage: AppImage.provider(avatarUrl, thumbWidth: 200),
-                      child: hasAvatar
-                          ? null
-                          : const Icon(Icons.pets, size: 28, color: AppColors.textTertiary),
-                    ),
+                    child: avatar,
                   ),
                 ),
+                if (readOnly)
+                  Positioned(
+                    left: -4,
+                    bottom: -2,
+                    child: Container(
+                      key: lockKey,
+                      width: compact ? 18 : 22,
+                      height: compact ? 18 : 22,
+                      decoration: BoxDecoration(
+                        color: AppColors.ink2,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: Icon(Icons.lock, size: compact ? 9 : 11, color: Colors.white),
+                    ),
+                  ),
                 if (count != null)
                   Positioned(
                     right: -6,
@@ -107,16 +156,20 @@ class PetAvatarItem extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: compact ? 3 : 10),
             Text(
               name,
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
+              style: TextStyle(
+                  fontSize: compact ? 10.5 : 13,
+                  fontWeight: compact && !selected ? FontWeight.w500 : FontWeight.w600,
+                  color: readOnly
+                      ? AppColors.muted
+                      : (compact && !selected ? AppColors.ink2 : AppColors.ink)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
             ),
-            if (tailsonalityBadge != null)
+            if (!compact && tailsonalityBadge != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 // T-7：名字下方，放不下省略（裁掉而不是撑破 84 宽）。
@@ -131,6 +184,7 @@ class PetAvatarItem extends StatelessWidget {
                   ),
                 ),
               ),
+            if (!compact)
             Text(
               meta,
               key: metaKey,

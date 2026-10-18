@@ -7,6 +7,7 @@ import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/domain/newbie_tasks.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// L0 widget（Story 7.3 · FR-47）：里程碑页顶部新手卡半完成 / 达成 / 失败重试三态。
 const _emptyMilestones = MilestoneList(
@@ -37,7 +38,9 @@ NewbieTasks _tasks({required int done, bool unlocked = false}) {
 
 Widget _wrap({NewbieTasks? tasks, Object? error}) => ProviderScope(
       overrides: [
-        milestoneListProvider.overrideWith((ref) async => _emptyMilestones),
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
+        milestoneListProvider.overrideWith((ref, _) async => _emptyMilestones),
         newbieTasksProvider.overrideWith((ref) async {
           if (error != null) throw error;
           return tasks ?? _tasks(done: 3);

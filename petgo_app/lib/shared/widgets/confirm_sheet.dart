@@ -16,6 +16,9 @@ import '../../core/theme/colors.dart';
 ///   持有提交态——提交中主按钮与取消**一并禁用且抽屉不关**，回调返回 true 才 `pop(true)`，
 ///   返回 false 抽屉**保持打开**让用户直接重试（失败提示由回调自己给）。
 ///
+/// **V1.4.0 multi-pet Story 1.5 加 [showCancel]**（默认 true = 原行为）：「已达 5 只上限」抽屉只有一个
+/// 「Oke」按钮（UI 稿 A4b），传 false 不渲染次按钮。
+///
 /// ⚠️ 为什么不另写一个平行的确认抽屉：手柄 36×4、圆角 24、内边距 22/12/22/30、主按钮 radius 14…
 /// 两套同义视觉规格日后必然漂移。要什么就往这里加可选参数。
 Future<bool> showConfirmSheet(
@@ -30,6 +33,7 @@ Future<bool> showConfirmSheet(
   Future<bool> Function()? onConfirm,
   Key? confirmKey,
   Key? cancelKey,
+  bool showCancel = true,
 }) async {
   final result = await showModalBottomSheet<bool>(
     context: context,
@@ -49,6 +53,7 @@ Future<bool> showConfirmSheet(
       onConfirm: onConfirm,
       confirmKey: confirmKey,
       cancelKey: cancelKey,
+      showCancel: showCancel,
     ),
   );
   return result ?? false;
@@ -66,6 +71,7 @@ class _ConfirmSheet extends StatefulWidget {
     required this.onConfirm,
     required this.confirmKey,
     required this.cancelKey,
+    this.showCancel = true,
   });
 
   final String title;
@@ -78,6 +84,7 @@ class _ConfirmSheet extends StatefulWidget {
   final Future<bool> Function()? onConfirm;
   final Key? confirmKey;
   final Key? cancelKey;
+  final bool showCancel;
 
   @override
   State<_ConfirmSheet> createState() => _ConfirmSheetState();
@@ -182,6 +189,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               ),
             ),
+            if (widget.showCancel) ...[
             const SizedBox(height: 10),
             // 次按钮（取消，描边）
             SizedBox(
@@ -200,6 +208,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               ),
             ),
+            ],
           ],
         ),
       ),

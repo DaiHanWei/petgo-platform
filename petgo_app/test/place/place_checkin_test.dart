@@ -32,6 +32,7 @@ import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 import '../profile/milestone_instant_fakes.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.2 batch-a Story 1.1 · L0：打卡结果契约 + 详情页打卡按钮流程（AC4）+ 成功页两种形态（AC5）。
 void main() {
@@ -645,6 +646,8 @@ Future<void> _pumpSuccess(WidgetTester tester,
           : Future(() => passport ?? (throw StateError('offline')))),
       milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
       if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
+      // V1.4.0 multi-pet：里程碑列表按当前宠物分族，当场庆祝要先知道是哪只。
+      if (milestones != null) effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
     ],
     child: MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,

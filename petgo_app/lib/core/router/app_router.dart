@@ -9,6 +9,9 @@ import '../analytics/analytics.dart';
 import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
 
+import '../../features/pet_slot/data/pet_slot_repository.dart' show PetSlotOverview;
+import '../../features/pet_slot/presentation/add_pet_flow.dart' show kPetSlotsRoute;
+import '../../features/pet_slot/presentation/pet_slot_page.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
@@ -715,6 +718,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/me/addresses/:token',
         builder: (c, s) => AddressFormPageV2(token: s.pathParameters['token']),
       ),
+      // 名额管理页（V1.4.0 multi-pet Story 1.5 占位；Story 2.4 同路由替换为 D1 ~ D15）。
+      // 🔒 挂在 /me 前缀下 → 自动进 _controlledLocations 受控名单（游客深链回首页）。
+      GoRoute(path: kPetSlotsRoute, builder: (c, s) => const PetSlotPage()),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
       GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),
@@ -726,7 +732,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
       GoRoute(path: '/onboarding/profile', builder: (c, s) => const ProfileOnboardingPage()),
       // 宠物档案创建表单（Story 2.2）。受控路由（/profile/ 前缀，游客被门控）。
-      GoRoute(path: '/profile/create', builder: (c, s) => const PetProfileCreatePage()),
+      // V1.4.0 multi-pet：extra = 「+」入口取到的名额摘要（推 pet_added.slot_source 用），可缺省。
+      GoRoute(
+        path: '/profile/create',
+        builder: (c, s) => PetProfileCreatePage(
+          slotOverview: s.extra is PetSlotOverview ? s.extra as PetSlotOverview : null,
+          // `?add=1` = 从「+」添加流程进来（不走「已有档案直达」）；存量入口不带。
+          addFlow: s.uri.queryParameters[PetProfileCreatePage.addFlowQuery] == '1',
+        ),
+      ),
       // 建档「创建成功」庆祝页（Story 1.7 R2 · FR-0G · F15）。受控（/profile/ 前缀）。
       // 经 extra 接收刚创建的 PetProfile；主 CTA 串接推送时机（庆祝页后、进首页前，Story 6.4）后进首页。
       GoRoute(

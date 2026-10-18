@@ -16,10 +16,12 @@ class PassportShareRewardRepository {
   static const String boarding = 'BOARDING';
 
   /// @return 真的发了多少枚；0 = 没发（**不区分原因**）。非 num → 0。
-  Future<int> reportShareForReward(String cardType) async {
-    final res = await _ref
-        .read(dioProvider)
-        .post<Map<String, dynamic>>(ApiPaths.mePassportShareRewards, data: {'cardType': cardType});
+  ///
+  /// V1.4.0 multi-pet（Story 1.5 · AC7）：[petId] = 奖励记到哪只宠物（null = 后端默认宠物）。
+  Future<int> reportShareForReward(String cardType, {int? petId}) async {
+    final res = await _ref.read(dioProvider).post<Map<String, dynamic>>(
+        ApiPaths.withPet(ApiPaths.mePassportShareRewards, petId),
+        data: {'cardType': cardType});
     final coins = res.data?['coins'];
     return coins is num ? coins.toInt() : 0;
   }

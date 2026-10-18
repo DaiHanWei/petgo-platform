@@ -98,8 +98,8 @@ Widget _archiveApp({List<TimelineItem> items = const []}) {
             ),
           )),
       petProfileProvider.overrideWith((ref) async => _pet()),
-      timelineFirstPageProvider.overrideWith((ref) async => TimelinePage(items: items)),
-      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+      timelineFirstPageProvider.overrideWith((ref, _) async => TimelinePage(items: items)),
+      archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
           happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
       // 日历也要桩化：不桩就走真 dio，切到日历视图后留下未完成的网络 timer，测试收不了尾。
@@ -341,6 +341,11 @@ void main() {
         // 通知中心两处界面，挂任一单页前缀都会误导。名字由 PRD §4 定死（ops_popup_shown / _tapped / _closed）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'ops_',
+        // 多宠物（V1.4.0 multi-pet Story 1.5 · PRD §4：pet_added / pet_switched / pet_slot_full_shown）。
+        // V1.4.0 multi-pet：模块是『宠物 / 宠物名额』这件事，跨我的页、Diary Tab、建档三处界面，
+        // 挂到 `me_` / `diary_` 都会误导；新模块入表，非为遗留事件放宽。
+        // ⚠️ 与既有 `pet_card_`（对外 H5 名片）语义不同、互不吞并：那组前缀照留。
+        'pet_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[

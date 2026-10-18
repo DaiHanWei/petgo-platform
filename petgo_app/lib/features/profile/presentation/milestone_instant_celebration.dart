@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/deep_link_routes.dart';
 import '../../../l10n/app_localizations.dart';
+import '../data/current_pet_provider.dart';
 import '../data/milestone_celebration_reporter.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
@@ -31,16 +32,26 @@ Future<void> celebrateAutoMilestoneIfAny(BuildContext context, WidgetRef ref, Se
   final delays = ref.read(milestoneInstantPollDelaysProvider);
   if (delays.isEmpty) return;
 
+  // V1.4.0 multi-pet（Story 1.5）：里程碑按当前宠物（family 键）；取不到当前宠物 → 交补庆祝兜底。
+  final int? petId;
+  try {
+    petId = await ref.read(effectivePetIdProvider.future).timeout(_readTimeout);
+  } catch (_) {
+    return;
+  }
+  if (petId == null || !context.mounted) return;
+  final listProvider = milestoneListProvider(petId);
+
   Future<MilestoneList?> read() async {
     try {
-      return await ref.read(milestoneListProvider.future).timeout(_readTimeout);
+      return await ref.read(listProvider.future).timeout(_readTimeout);
     } catch (_) {
       return null; // 读失败 / 超时：静默放弃，交补庆祝兜底。
     }
   }
 
   // 会话早先断网留下的旧错误会被 `.future` 直接抛出 → 先失效再读，别被旧错误掐掉检测。
-  if (ref.read(milestoneListProvider).hasError) ref.invalidate(milestoneListProvider);
+  if (ref.read(listProvider).hasError) ref.invalidate(listProvider);
 
   // 预读：回填过 / 重测再解锁 / 再次打卡的常见情形在这里就结束，省掉 ~2.5s 请求。
   final first = await read();
@@ -55,7 +66,7 @@ Future<void> celebrateAutoMilestoneIfAny(BuildContext context, WidgetRef ref, Se
   for (final d in delays) {
     await Future<void>.delayed(d);
     if (!context.mounted) return;
-    ref.invalidate(milestoneListProvider);
+    ref.invalidate(listProvider);
     final now = await read();
     if (now == null || !context.mounted) return;
     final item = pickInstantCelebration(now, codes, ref.read(locallyCelebratedMilestonesProvider));

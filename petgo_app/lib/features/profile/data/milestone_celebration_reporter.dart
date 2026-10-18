@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'current_pet_provider.dart';
 import 'milestone_repository.dart';
 
 /// 庆祝回报的**唯一发起点**（V1.3.0 批次 A · Story 1.5 · FR-111 · AD-A3.1）。
@@ -68,7 +69,12 @@ class LocallyCelebratedMilestones extends Notifier<Set<String>> {
   void report(List<String> codes, {void Function()? onDone}) {
     add(codes);
     final epoch = _epoch;
-    ref.read(milestoneRepositoryProvider).reportCelebrations(codes).then((_) {
+    // V1.4.0 multi-pet（Story 1.5）：回报落到当前宠物（同步窥视；未解析 → null = 后端默认宠物）。
+    // ⚠️ 必须同步发出：本地标记与回报同一拍（见上面 add），不为取 petId 多等一拍。
+    ref
+        .read(milestoneRepositoryProvider)
+        .reportCelebrations(codes, petId: peekEffectivePetId(ref))
+        .then((_) {
       // 换账号时本 provider 已被 invalidate：旧账号的收尾一概不做。
       if (_stale(epoch)) return;
       // 落库后刷新列表缓存：milestoneListProvider 不 autoDispose，不刷新的话

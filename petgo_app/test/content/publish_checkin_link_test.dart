@@ -177,7 +177,7 @@ class _RecordingRepo implements ContentRepository {
 
 class _WithPetRepo implements ProfileRepository {
   @override
-  Future<PetProfile?> getMyProfile() async => const PetProfile(id: 1, name: 'Oyen', cardToken: 'T');
+  Future<PetProfile?> getMyProfile({int? petId}) async => const PetProfile(id: 1, name: 'Oyen', cardToken: 'T');
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

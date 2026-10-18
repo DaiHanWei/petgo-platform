@@ -43,6 +43,7 @@ import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'report_sheet.dart';
 import 'share_card/open_share_card.dart';
+import '../../profile/data/pet_list_repository.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
@@ -563,6 +564,7 @@ class _DetailScaffold extends ConsumerWidget {
       if (detail.type == ContentType.growthMoment.wire) {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
         ref.invalidate(calendarMonthProvider);
         ref.invalidate(dayDetailProvider);
       }
