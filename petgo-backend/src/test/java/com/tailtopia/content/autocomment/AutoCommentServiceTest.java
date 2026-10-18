@@ -76,7 +76,7 @@ class AutoCommentServiceTest {
         when(post.getText()).thenReturn("Main di taman");
         when(post.getCreatedAt()).thenReturn(Instant.parse("2026-09-29T01:00:00Z"));
         when(posts.findById(POST_ID)).thenReturn(Optional.of(post));
-        when(speciesResolver.resolve(any(), any())).thenReturn(new ResolvedSpecies("DOG", SpeciesSource.PET_PROFILE));
+        when(speciesResolver.resolve(any(ContentPost.class))).thenReturn(new ResolvedSpecies("DOG", SpeciesSource.PET_PROFILE));
         identity = mock(User.class);
         when(identity.getId()).thenReturn(VIRTUAL);
         when(identity.getNickname()).thenReturn("Budi");

@@ -339,7 +339,7 @@ public class FeedRecommendationService {
         Set<Long> honored = contentTags.findVisibleTags(ids, now).keySet();
         Map<Long, ResolvedSpecies> species = speciesResolver.resolveAll(usable.stream()
                 .map(p -> new ContentSpeciesResolver.Input(p.getId(), p.getSpeciesOverride(),
-                        p.getAuthorId()))
+                        p.getAuthorId(), p.getType()))
                 .toList());
 
         List<RankCandidate> candidates = new ArrayList<>(usable.size());
@@ -370,8 +370,8 @@ public class FeedRecommendationService {
                 .toList(), now);
 
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(candidates,
-                viewerMainSpecies(viewerId), decay, honored,
-                throttle, now, params, schedule, seed), wanted);
+                decay, honored, throttle, now, params, schedule, seed,
+                viewerSpeciesCounts(viewerId)), wanted);
         if (r.attributeRelaxed() > 0 || r.speciesRelaxed() > 0) {
             // 🛡 级别 1、2 是**预期行为，不告警** —— 只记 debug 供排查（§6.2）。
             log.debug("推荐序降级 池={} 属性放宽={} 物种放宽={} 防扎堆让步={}",
@@ -439,19 +439,25 @@ public class FeedRecommendationService {
     }
 
     /**
-     * 查看者主物种；无宠物档案 / 游客 → {@code null}（物种维度不生效）。
+     * 查看者物种权重：物种 → 宠物数；无宠物档案 / 游客 → 空 Map（物种维度不生效）。
      *
      * <p>🔴 这是<b>「拿不到物种信号」，不是「按用户类型区别对待」</b>：同一个用户建了档案后
      * 自动获得物种偏好，无需任何分档判定。
      *
-     * <p>🔴 <b>多宠账号</b>：V1.4.0 multi-pet Story 1.2（V-1）先确定性取<b>默认宠物</b>的物种
-     * （{@code DefaultPetPolicy}），不抛异常、不退回时间倒序；多物种权重化在 V1.4.0 multi-pet 3.2。
+     * <p>🔴 <b>多宠账号</b>（V1.4.0 multi-pet Story 3.2 · AD-11）：取账号<b>全部</b>宠物（含只读、
+     * 已删的物理删除自然不在），按物种计数；引擎把主物种配额按此比例拆分。
+     * 首页<b>不跟随</b> Diary Tab 的当前宠物 —— 这里不读任何 petId。
      */
-    private String viewerMainSpecies(Long viewerId) {
+    private Map<String, Integer> viewerSpeciesCounts(Long viewerId) {
         if (viewerId == null) {
-            return null;
+            return Map.of();
         }
-        return pets.findDefault(viewerId).map(PetProfile::getPetType)
-                .map(Enum::name).orElse(null);
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (PetProfile pet : pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(viewerId)) {
+            if (pet.getPetType() != null) {
+                counts.merge(pet.getPetType().name(), 1, Integer::sum);
+            }
+        }
+        return counts;
     }
 }

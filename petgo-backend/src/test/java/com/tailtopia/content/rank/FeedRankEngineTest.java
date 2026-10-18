@@ -443,4 +443,109 @@ class FeedRankEngineTest {
                 Set.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), null), 10);
         assertThat(ids(seeded)).isEqualTo(ids(plain));
     }
+
+    // ── V1.4.0 multi-pet Story 3.2：物种权重化（AD-11 · AC17 · P-6）──────────
+
+    private FeedRankEngine.Result rankWeighted(List<RankCandidate> pool, Map<String, Integer> viewer,
+            RankParams params, String seed, int wanted) {
+        return engine.rank(new FeedRankEngine.Input(pool, Map.of(), Set.of(), Map.of(), NOW, params,
+                AttributeTemplate.defaultSchedule(), seed, viewer), wanted);
+    }
+
+    private static RankParams quotas(int main, int other, int general) {
+        return new RankParams(P.freshnessWeight(), P.interactionWeight(), P.commentWeight(),
+                P.interactionP95(), P.honorBoost(), P.shuffleStrength(), main, other, general,
+                P.maxSameAttributeRun(), P.maxSameAuthorRun(), P.maxSameAuthorPerWindow(),
+                P.maxSameOtherSpeciesRun(), P.eduFreshnessHalfLifeHours());
+    }
+
+    private static Map<String, Long> bySpecies(List<RankCandidate> picked) {
+        return picked.stream().collect(java.util.stream.Collectors.groupingBy(
+                x -> x.species() == null ? "NULL" : x.species(), java.util.stream.Collectors.counting()));
+    }
+
+    /**
+     * 单宠物（{CAT:1}，以及同物种多只 {CAT:3}）与旧单值主物种逐条相同；无宠物（空 Map）与 {@code null} 相同。
+     * 覆盖多种池、多种条数、带 / 不带种子。
+     */
+    @Test
+    void singleSpeciesWeightsAreIdenticalToLegacyMainSpecies() {
+        List<List<RankCandidate>> pools = List.of(
+                richPool(List.of(ContentSpecies.CAT, ContentSpecies.DOG, ContentSpecies.OTHER,
+                        ContentSpecies.GENERAL)),
+                richPool(List.of(ContentSpecies.DOG)),
+                richPool(List.of(ContentSpecies.CAT, ContentSpecies.GENERAL)));
+        for (List<RankCandidate> pool : pools) {
+            for (String seed : new String[] {null, "s:aaa"}) {
+                for (int wanted : new int[] {7, 10, 30}) {
+                    FeedRankEngine.Result legacy = engine.rank(new FeedRankEngine.Input(pool,
+                            ContentSpecies.CAT, Map.of(), Set.of(), Map.of(), NOW, P,
+                            AttributeTemplate.defaultSchedule(), seed), wanted);
+                    for (Map<String, Integer> w : List.of(Map.of("CAT", 1), Map.of("CAT", 3))) {
+                        FeedRankEngine.Result weighted = rankWeighted(pool, w, P, seed, wanted);
+                        assertThat(ids(weighted)).isEqualTo(ids(legacy));
+                        assertThat(weighted.speciesRelaxed()).isEqualTo(legacy.speciesRelaxed());
+                        assertThat(weighted.attributeRelaxed()).isEqualTo(legacy.attributeRelaxed());
+                    }
+                    FeedRankEngine.Result none = engine.rank(new FeedRankEngine.Input(pool, null,
+                            Map.of(), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(),
+                            seed), wanted);
+                    assertThat(ids(rankWeighted(pool, Map.of(), P, seed, wanted))).isEqualTo(ids(none));
+                }
+            }
+        }
+    }
+
+    /** AC17 引擎级：2 猫 1 狗、配额 10/0/0 → 首窗猫 7、狗 3。 */
+    @Test
+    void twoCatsOneDogTenZeroZeroGivesSevenThree() {
+        List<RankCandidate> pool = richPool(List.of(ContentSpecies.CAT, ContentSpecies.DOG));
+
+        FeedRankEngine.Result r = rankWeighted(pool, Map.of("CAT", 2, "DOG", 1), quotas(10, 0, 0),
+                null, 10);
+
+        assertThat(r.picked()).hasSize(10);
+        assertThat(bySpecies(r.picked())).containsEntry("CAT", 7L).containsEntry("DOG", 3L);
+        assertThat(r.speciesRelaxed()).isZero();
+    }
+
+    /** P-6：默认 6/2/2 下 2 猫 1 狗 → 猫 4、狗 2、其他物种 2、通用 2（只拆主物种配额）。 */
+    @Test
+    void twoCatsOneDogDefaultQuotasGivesFourTwoTwoTwo() {
+        List<RankCandidate> pool = richPool(List.of(ContentSpecies.CAT, ContentSpecies.DOG,
+                ContentSpecies.OTHER, ContentSpecies.GENERAL));
+
+        FeedRankEngine.Result r = rankWeighted(pool, Map.of("CAT", 2, "DOG", 1), P, null, 10);
+
+        assertThat(r.picked()).hasSize(10);
+        assertThat(bySpecies(r.picked())).containsEntry("CAT", 4L).containsEntry("DOG", 2L)
+                .containsEntry("OTHER", 2L).containsEntry("GENERAL", 2L);
+        assertThat(r.speciesRelaxed()).isZero();
+    }
+
+    /** 每个窗口各自按拆分配额（第二窗同样 7 / 3）。 */
+    @Test
+    void weightedQuotaResetsEachWindow() {
+        List<RankCandidate> pool = richPool(List.of(ContentSpecies.CAT, ContentSpecies.DOG));
+
+        FeedRankEngine.Result r = rankWeighted(pool, Map.of("CAT", 2, "DOG", 1), quotas(10, 0, 0),
+                null, 20);
+
+        assertThat(r.picked()).hasSize(20);
+        assertThat(bySpecies(r.picked().subList(10, 20))).containsEntry("CAT", 7L).containsEntry("DOG", 3L);
+    }
+
+    /** 池里狗内容不足：按既有放宽链补位，不空槽。 */
+    @Test
+    void scarceDogContentIsBackfilledByRelaxationChain() {
+        List<RankCandidate> pool = new ArrayList<>(richPool(List.of(ContentSpecies.CAT)));
+        pool.add(c(9001, 9001, FeedAttribute.values()[0], ContentSpecies.DOG, 100));
+
+        FeedRankEngine.Result r = rankWeighted(pool, Map.of("CAT", 2, "DOG", 1), quotas(10, 0, 0),
+                null, 10);
+
+        assertThat(r.picked()).hasSize(10);
+        assertThat(bySpecies(r.picked())).containsEntry("CAT", 9L).containsEntry("DOG", 1L);
+        assertThat(r.speciesRelaxed()).isPositive();
+    }
 }

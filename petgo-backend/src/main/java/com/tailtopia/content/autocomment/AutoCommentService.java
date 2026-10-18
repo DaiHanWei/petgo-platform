@@ -260,7 +260,7 @@ public class AutoCommentService {
     }
 
     private String speciesOf(ContentPost post) {
-        String species = speciesResolver.resolve(post.getSpeciesOverride(), post.getAuthorId()).species();
+        String species = speciesResolver.resolve(post).species();
         return species == null ? ContentSpecies.GENERAL : species;
     }
 

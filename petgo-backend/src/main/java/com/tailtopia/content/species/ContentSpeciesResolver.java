@@ -3,13 +3,19 @@ package com.tailtopia.content.species;
 import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.service.ContentPetQuery;
 import com.tailtopia.profile.domain.PetProfile;
-import com.tailtopia.profile.service.DefaultPetPolicy;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,8 +24,14 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <h2>优先级链</h2>
  * <pre>
- *   行级覆写 > 作者账号物种定位（仅虚拟账号）> 作者宠物档案 > 无
+ *   ① 行级覆写 species_override（运营）
+ *   ② 作者账号物种定位 account_species（仅虚拟账号；NULL 读作 GENERAL）
+ *   ③ 内容关联：Diary（GROWTH_MOMENT）按 content_pets 关联宠物的物种集合
+ *   ④ 作者全部宠物：Moment / Tips（及无关联宠物的 Diary）按作者名下全部宠物的物种集合
+ *   ⑤ 无 → NONE（引擎消费时映射 GENERAL，见 SpeciesBucket）
  * </pre>
+ * V1.4.0 multi-pet Story 3.2（AD-11）：③④ 的物种集合去重后 <b>1 种 → 该物种、≥ 2 种 → GENERAL（通用池）</b>、
+ * 0 种 → 下一级；来源一律记 {@link SpeciesSource#PET_PROFILE}（不新增枚举值）。只读宠物计入，已删宠物物理删除自然不在。
  *
  * <h2>🔴 读时推导，不是发布时快照（AC2 / OQ-20）</h2>
  * <b>这是本 story 杠杆最高的地方</b>：改完账号定位，该号名下**全部历史内容**的物种归属
@@ -38,21 +50,42 @@ public class ContentSpeciesResolver {
 
     private final UserRepository users;
     private final PetProfileRepository pets;
+    private final ContentPetQuery contentPets;
 
-    public ContentSpeciesResolver(UserRepository users, PetProfileRepository pets) {
+    public ContentSpeciesResolver(UserRepository users, PetProfileRepository pets,
+            ContentPetQuery contentPets) {
         this.users = users;
         this.pets = pets;
+        this.contentPets = contentPets;
     }
 
-    /** 一条内容的推导。 */
+    /** 一条内容的推导（不知内容类型 ⇒ 按 ④ 作者全部宠物规则）。 */
     @Transactional(readOnly = true)
     public ResolvedSpecies resolve(String rowOverride, Long authorId) {
         return resolveAll(List.of(new Input(0L, rowOverride, authorId)))
                 .getOrDefault(0L, ResolvedSpecies.NONE);
     }
 
-    /** 批量推导的输入。 */
-    public record Input(long contentId, String rowOverride, Long authorId) {
+    /** 一条内容的推导（带类型：Diary 走 ③ 关联宠物）。 */
+    @Transactional(readOnly = true)
+    public ResolvedSpecies resolve(ContentPost post) {
+        long id = post.getId() == null ? 0L : post.getId();
+        return resolveAll(List.of(new Input(id, post.getSpeciesOverride(), post.getAuthorId(),
+                post.getType()))).getOrDefault(id, ResolvedSpecies.NONE);
+    }
+
+    /**
+     * 批量推导的输入。
+     *
+     * @param contentId 即 postId（Diary 的 ③ 按它读 {@code content_pets}）
+     * @param type      内容类型；{@code null} ⇒ 按 ④ 作者全部宠物规则（旧 3 参构造的语义）
+     */
+    public record Input(long contentId, String rowOverride, Long authorId, ContentType type) {
+
+        /** 兼容旧调用（无类型 ⇒ 作者规则）。 */
+        public Input(long contentId, String rowOverride, Long authorId) {
+            this(contentId, rowOverride, authorId, null);
+        }
     }
 
     /**
@@ -63,28 +96,50 @@ public class ContentSpeciesResolver {
     @Transactional(readOnly = true)
     public Map<Long, ResolvedSpecies> resolveAll(List<Input> inputs) {
         List<Long> authorIds = inputs.stream()
-                .map(Input::authorId).filter(java.util.Objects::nonNull).distinct().toList();
+                .map(Input::authorId).filter(Objects::nonNull).distinct().toList();
         Map<Long, User> authors = new HashMap<>();
         if (!authorIds.isEmpty()) {
             for (User u : users.findAllById(authorIds)) {
                 authors.put(u.getId(), u);
             }
         }
-        // V1.4.0 multi-pet（Story 1.2 · X27，V-1）：作者物种 = 作者默认宠物物种（确定性，不再「后者覆盖前者」）；
-        // 「Diary 按关联宠物 / 多物种 → 通用池」在 3.2。
-        Map<Long, PetProfile> petsByOwner = authorIds.isEmpty()
-                ? new HashMap<>()
-                : DefaultPetPolicy.pickPerOwner(pets.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(authorIds));
+        // V1.4.0 multi-pet Story 3.2（AD-11）：作者名下**全部**宠物的物种集合（一次查完，含只读）。
+        Map<Long, Set<String>> speciesByOwner = new HashMap<>();
+        if (!authorIds.isEmpty()) {
+            for (PetProfile pet : pets.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(authorIds)) {
+                String s = ContentSpecies.fromPetType(pet.getPetType());
+                if (s != null) {
+                    speciesByOwner.computeIfAbsent(pet.getOwnerId(), k -> new LinkedHashSet<>()).add(s);
+                }
+            }
+        }
+        // ③ Diary 的关联宠物：一次取关联、一次按 id 取这些宠物的物种（禁 N+1）。
+        List<Long> diaryIds = inputs.stream()
+                .filter(in -> in.type() == ContentType.GROWTH_MOMENT)
+                .map(Input::contentId).distinct().toList();
+        Map<Long, List<Long>> linkedPets = diaryIds.isEmpty() ? Map.of() : contentPets.petsOfAll(diaryIds);
+        Map<Long, String> speciesByPet = new HashMap<>();
+        Set<Long> linkedPetIds = new LinkedHashSet<>();
+        linkedPets.values().forEach(linkedPetIds::addAll);
+        if (!linkedPetIds.isEmpty()) {
+            for (PetProfile pet : pets.findAllById(linkedPetIds)) {
+                String s = ContentSpecies.fromPetType(pet.getPetType());
+                if (s != null) {
+                    speciesByPet.put(pet.getId(), s);
+                }
+            }
+        }
 
         Map<Long, ResolvedSpecies> out = new HashMap<>();
         for (Input in : inputs) {
-            out.put(in.contentId(), resolveOne(in, authors, petsByOwner));
+            out.put(in.contentId(), resolveOne(in, authors, speciesByOwner, linkedPets, speciesByPet));
         }
         return out;
     }
 
     private ResolvedSpecies resolveOne(Input in, Map<Long, User> authors,
-            Map<Long, PetProfile> petsByOwner) {
+            Map<Long, Set<String>> speciesByOwner, Map<Long, List<Long>> linkedPets,
+            Map<Long, String> speciesByPet) {
         // ① 行级覆写 —— 运营手工改过的，优先级最高。
         if (ContentSpecies.isValid(in.rowOverride())) {
             return new ResolvedSpecies(in.rowOverride(), SpeciesSource.ROW_OVERRIDE);
@@ -105,11 +160,33 @@ public class ContentSpeciesResolver {
             return new ResolvedSpecies(effectiveAccountSpecies(author),
                     SpeciesSource.ACCOUNT_SPECIES);
         }
-        // ③ 作者宠物档案。
-        PetProfile pet = petsByOwner.get(in.authorId());
-        String fromPet = pet == null ? null : ContentSpecies.fromPetType(pet.getPetType());
-        return fromPet == null ? ResolvedSpecies.NONE
-                : new ResolvedSpecies(fromPet, SpeciesSource.PET_PROFILE);
+        // ③ Diary 按关联宠物的物种集合；关联全被删（content_pets 无行）→ 回落 ④（Story 3.2 待确认 2 的默认做法）。
+        if (in.type() == ContentType.GROWTH_MOMENT) {
+            Set<String> linked = new LinkedHashSet<>();
+            for (Long petId : linkedPets.getOrDefault(in.contentId(), List.of())) {
+                String s = speciesByPet.get(petId);
+                if (s != null) {
+                    linked.add(s);
+                }
+            }
+            ResolvedSpecies fromLinked = fromSpeciesSet(linked);
+            if (fromLinked != null) {
+                return fromLinked;
+            }
+        }
+        // ④ 作者名下全部宠物的物种集合。
+        ResolvedSpecies fromAuthor = fromSpeciesSet(speciesByOwner.get(in.authorId()));
+        return fromAuthor == null ? ResolvedSpecies.NONE : fromAuthor;
+    }
+
+    /** 物种集合 → 结果：1 种 → 该物种；≥ 2 种 → GENERAL（通用池）；空 → {@code null}（走下一级）。 */
+    private static ResolvedSpecies fromSpeciesSet(Collection<String> species) {
+        if (species == null || species.isEmpty()) {
+            return null;
+        }
+        Set<String> distinct = new LinkedHashSet<>(species);
+        String s = distinct.size() == 1 ? distinct.iterator().next() : ContentSpecies.GENERAL;
+        return new ResolvedSpecies(s, SpeciesSource.PET_PROFILE);
     }
 
     /**

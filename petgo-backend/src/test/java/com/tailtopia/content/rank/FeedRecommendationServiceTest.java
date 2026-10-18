@@ -437,17 +437,30 @@ class FeedRecommendationServiceTest {
     }
 
     /**
-     * V1.4.0 multi-pet（Story 1.2 · X26，V-1）：查看者有两只不同物种的宠物 → 主物种 = 默认（最早建）宠物物种，
-     * 不抛异常、照常出页（不退回时间倒序）。
+     * V1.4.0 multi-pet（Story 1.2 · X26，V-1）的「多宠不抛异常、照常出页（不退回时间倒序）」意图保留；
+     * 「主物种 = 默认宠物物种」的过渡断言按 Story 3.2（AD-11 · AC2.4）<b>按设计改写</b>为：
+     * 传给引擎的是全部宠物的物种计数。
      */
     @Test
-    void multiPetViewerMainSpeciesIsTheDefaultPetsSpecies() {
+    void multiPetViewerPassesSpeciesCountsToEngine() {
         java.time.Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
-        when(pets.findDefault(9L)).thenCallRealMethod();
         when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
                 com.tailtopia.profile.support.PetFixtures.pet(9L, 90L, com.tailtopia.profile.domain.PetType.DOG, t0),
                 com.tailtopia.profile.support.PetFixtures.pet(9L, 91L, com.tailtopia.profile.domain.PetType.CAT,
                         t0.plusSeconds(60))));
+
+        RankRun run = runThroughSpyEngine(9L, Map.of());
+
+        assertThat(run.page().posts()).isNotEmpty();
+        assertThat(run.input().viewerSpecies()).isEqualTo(Map.of("DOG", 1, "CAT", 1));
+    }
+
+    /** 引擎实参与出页结果。 */
+    private record RankRun(FeedRankEngine.Input input, FeedRecommendationService.RankedPage page) {
+    }
+
+    /** 走一次生成（50 条池，likes 可选），用 spy 引擎截下传给引擎的 Input。 */
+    private RankRun runThroughSpyEngine(Long viewerId, Map<Long, Long> likeCounts) {
         when(sequences.length(any(), any())).thenReturn(0L);
         when(sequences.read(any(), any(), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
                 .thenReturn(List.of());
@@ -455,10 +468,26 @@ class FeedRecommendationServiceTest {
         for (long i = 1; i <= 50; i++) {
             pool.add(post(i, i));
         }
+        List<ContentLikeRepository.PostLikeCount> lc = new ArrayList<>();
+        likeCounts.forEach((id, n) -> lc.add(new ContentLikeRepository.PostLikeCount() {
+            @Override
+            public Long getPostId() {
+                return id;
+            }
+
+            @Override
+            public long getLikeCount() {
+                return n;
+            }
+        }));
+        when(likes.countByPostIdIn(anyList())).thenReturn(lc);
         when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
         when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
             Collection<Long> asked = inv.getArgument(0);
             List<ContentPost> out = new ArrayList<>();
+            if (asked == null) {
+                return out; // 二次打桩时 Mockito 会以 null 实参调一次上一个 answer
+            }
             for (Long id : asked) {
                 out.add(post(id, id));
             }
@@ -468,12 +497,72 @@ class FeedRecommendationServiceTest {
         FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles);
 
-        FeedRecommendationService.RankedPage p = svc.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = svc.page(viewerId, null, null, 20, null);
 
-        assertThat(p.posts()).isNotEmpty();
         org.mockito.ArgumentCaptor<FeedRankEngine.Input> in = org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
         verify(engine, org.mockito.Mockito.atLeastOnce()).rank(in.capture(), anyInt());
-        assertThat(in.getValue().mainSpecies()).isEqualTo("DOG");
+        return new RankRun(in.getValue(), p);
+    }
+
+    /** Story 3.2 AC2：2 猫 1 狗（其中一只只读）→ {CAT:2, DOG:1}；只读计入；首页不读任何 petId。 */
+    @Test
+    void viewerSpeciesCountsIncludeReadOnlyPets() {
+        java.time.Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        var readOnlyCat = com.tailtopia.profile.support.PetFixtures.pet(9L, 92L,
+                com.tailtopia.profile.domain.PetType.CAT, t0.plusSeconds(120));
+        org.springframework.test.util.ReflectionTestUtils.setField(readOnlyCat, "status",
+                com.tailtopia.profile.domain.PetStatus.READ_ONLY);
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 90L, com.tailtopia.profile.domain.PetType.CAT, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 91L, com.tailtopia.profile.domain.PetType.DOG,
+                        t0.plusSeconds(60)),
+                readOnlyCat));
+
+        RankRun run = runThroughSpyEngine(9L, Map.of());
+
+        assertThat(run.input().viewerSpecies()).isEqualTo(Map.of("CAT", 2, "DOG", 1));
+        // 只按账号取全部宠物 —— 不按宠物 id / 默认宠物取（首页不跟随 Diary Tab）
+        verify(pets, never()).findById(org.mockito.ArgumentMatchers.anyLong());
+        verify(pets, never()).findDefault(org.mockito.ArgumentMatchers.anyLong());
+        verify(pets, never()).findByIdAndOwnerId(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** Story 3.2 AC2：游客 / 无宠物 → 空 Map（物种维度不生效，与改造前 null 等价）。 */
+    @Test
+    void guestAndPetlessViewerGetEmptySpeciesWeights() {
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of());
+
+        assertThat(runThroughSpyEngine(9L, Map.of()).input().viewerSpecies()).isEmpty();
+        assertThat(runThroughSpyEngine(null, Map.of()).input().viewerSpecies()).isEmpty();
+    }
+
+    /**
+     * Story 3.2 AC4.8（PRD AC5）：多宠账号照常按打分排序，<b>不退回时间倒序</b>——
+     * 老帖互动高时，返回序列 ≠ 按 created_at 倒序的那份。
+     */
+    @Test
+    void multiPetViewerStillGetsScoredOrderNotTimeDesc() {
+        java.time.Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 90L, com.tailtopia.profile.domain.PetType.CAT, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 91L, com.tailtopia.profile.domain.PetType.CAT,
+                        t0.plusSeconds(30)),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 92L, com.tailtopia.profile.domain.PetType.DOG,
+                        t0.plusSeconds(60))));
+        Map<Long, Long> lk = new java.util.HashMap<>();
+        for (long i = 1; i <= 50; i++) {
+            lk.put(i, i * 10); // id 越大越老、互动越高
+        }
+
+        RankRun run = runThroughSpyEngine(9L, lk);
+
+        List<Long> got = run.page().posts().stream().map(ContentPost::getId).toList();
+        List<Long> timeDesc = run.page().posts().stream()
+                .sorted(java.util.Comparator.comparing(ContentPost::getCreatedAt).reversed())
+                .map(ContentPost::getId).toList();
+        assertThat(got).isNotEmpty().isNotEqualTo(timeDesc);
+        assertThat(run.input().viewerSpecies()).isEqualTo(Map.of("CAT", 2, "DOG", 1));
     }
 
     /** 空池 → 空页 + 无游标，不抛错。 */
