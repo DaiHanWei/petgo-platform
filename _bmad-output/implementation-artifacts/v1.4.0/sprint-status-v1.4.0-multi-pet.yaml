@@ -48,7 +48,7 @@ development_status:
   epic-2: in-progress
   2-1-宠物状态-reconcile与只读拦截: review
   2-2-月租名额购买续租与价格配置: review
-  2-3-名额到期扫描与通知: ready-for-dev
+  2-3-名额到期扫描与通知: review
   2-4-app名额管理-租用续租与只读体验: ready-for-dev
   epic-2-retrospective: optional
 

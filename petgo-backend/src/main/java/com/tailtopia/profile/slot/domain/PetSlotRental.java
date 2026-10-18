@@ -86,6 +86,12 @@ public class PetSlotRental {
         this.remindedAt = null;
     }
 
+    /** 到期（Story 2.3 扫描）：{@code status = EXPIRED}、{@code expired_at = now}。 */
+    public void markExpired(Instant now) {
+        this.status = PetSlotRentalStatus.EXPIRED;
+        this.expiredAt = now;
+    }
+
     public Long getId() {
         return id;
     }
