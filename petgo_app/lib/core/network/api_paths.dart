@@ -135,6 +135,10 @@ class ApiPaths {
   static const String meGrowth = '$base/me/growth';
   static const String meGrowthLedger = '$meGrowth/ledger';
 
+  /// 升级庆祝 / 存量汇总弹窗（Story 2.1 后端 · 2.3 App）：拉取与确认（kind = celebration | backfill）。
+  static const String growthPopups = '$meGrowth/popups';
+  static String growthPopupAck(String kind) => '$meGrowth/popups/$kind/ack';
+
   /// PawCoin 余额 + 流水游标分页（Story 1.4）。
   static const String mePawcoin = '$base/me/pawcoin';
 

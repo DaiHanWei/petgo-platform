@@ -6,6 +6,7 @@ import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/qr_payment_sheet.dart';
+import '../../../growth/domain/growth_popup_trigger.dart';
 import '../../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../data/id_card_repository.dart';
 import '../../domain/id_card.dart';
@@ -118,6 +119,7 @@ Future<IdCardHdFlowResult> openIdCardHdPaywall(
     final res = await container.read(idCardRepositoryProvider).purchaseHdForCard(card.id, channel);
     if (res.unlocked) {
       invalidateUnlocked();
+      growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
       toast(l10n.idCardHdUnlockedToast);
       return IdCardHdFlowResult.unlocked;
     }
@@ -135,6 +137,7 @@ Future<IdCardHdFlowResult> openIdCardHdPaywall(
       if (paid) {
         // 投放归因：QRIS 现金到账（PawCoin 当场成交不计，钱在充值时已计）。
         Analytics.capturePurchase(amountIdr: priceIdr, purpose: 'ID_HD', orderRef: res.paymentRef);
+        growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
         invalidateUnlocked();
         toast(l10n.idCardHdUnlockedToast);
         return IdCardHdFlowResult.unlocked;

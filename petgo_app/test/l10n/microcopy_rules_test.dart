@@ -133,6 +133,8 @@ const _sameInBothLocales = {
   // V1.4.0 ① Tailrent Level（Story 1.5）：等级体系专名「Tailrent Level」、等级缩写 Lv、经验值 EXP，
   // 以及 UI 稿文案表（本地运营已审核）里 EN / ID 同写的借词 Event / Tips —— 两语同形，不是漏译。
   'tailrent', 'level', 'lv', 'exp', 'event', 'tips',
+  // V1.4.0 ① Story 2.3：存量汇总账单「Total」——印尼语同写（UI 稿 E1 屏内）。
+  'total',
   // 配对连接符「{宠物} x {主人}」（V1.3.2 · 2026-10-05 分享卡设计稿）：小写 x 当「×」用，两语同写，不是词。
   'x',
   // 印尼语直接借用的英文词

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/growth_models.dart';
+import '../domain/growth_popups.dart';
 
 /// Tailrent Level 数据层（V1.4.0 ① Story 1.5）：等级页首屏 + EXP 明细分页。JWT / 续期由 `AuthInterceptor` 处理。
 class GrowthRepository {
@@ -15,6 +16,36 @@ class GrowthRepository {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.meGrowth);
     return GrowthSummary.fromJson(resp.data!);
   }
+
+  /// 待弹的升级庆祝 / 存量汇总（Story 2.3）。照运营弹窗仓储的姿态：**失败即空、绝不抛**（5s 超时 / 非 2xx / 解析失败 → null）。
+  Future<GrowthPopups?> fetchPopups() async {
+    try {
+      final resp = await dio
+          .get<Map<String, dynamic>>(ApiPaths.growthPopups)
+          .timeout(popupTimeout);
+      return GrowthPopups.fromJson(resp.data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 确认升级庆祝（带弹出时看到的 toLevel，防弹出期间又升级被吞）。失败静默、不重试。
+  Future<void> ackCelebration(int toLevel) async {
+    try {
+      await dio
+          .post<void>(ApiPaths.growthPopupAck('celebration'), queryParameters: {'toLevel': toLevel})
+          .timeout(popupTimeout);
+    } catch (_) {}
+  }
+
+  /// 确认存量汇总。失败静默、不重试。
+  Future<void> ackBackfill() async {
+    try {
+      await dio.post<void>(ApiPaths.growthPopupAck('backfill')).timeout(popupTimeout);
+    } catch (_) {}
+  }
+
+  static const Duration popupTimeout = Duration(seconds: 5);
 
   Future<GrowthLedgerPage> fetchLedger({String? cursor}) async {
     final resp = await dio.get<Map<String, dynamic>>(

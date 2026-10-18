@@ -1,3 +1,4 @@
+import '../../growth/domain/growth_popup_trigger.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -120,6 +121,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
             purpose: 'VET_CONSULT',
             orderRef: _payRef,
           );
+          growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
         }
         // 兽医问诊漏斗终点：支付完成、会话建立。
         Analytics.capture('consult_session_started', {'consult_type': 'VET'});
@@ -187,6 +189,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
             {'consult_type': 'VET', 'method': 'pawcoin'});
         // PawCoin 即时成功 → 余额已变，失效缓存供全 App 后续读到真实值（bug 20260806）。
         ref.invalidate(pawCoinProvider);
+        growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
         // 建单建会话已完成 → 跳会话。
         _poll?.cancel();
         _display?.cancel();

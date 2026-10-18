@@ -71,6 +71,9 @@ class DeepLinkRoutes {
         return growthArchive;
       case 'MILESTONE_NODE':
         return milestoneList;
+      case 'GROWTH_LEVEL_UP':
+        // V1.4.0 ① Story 2.3：升级通知 → 等级页（字面量：core 不 import feature；与 LevelPage.location 一致）。
+        return '/me/growth';
       case 'NAME_RESET':
         // 名称违规重置（内容审核 cm-4）：单一 NAME_RESET 类型，targetRef 区分昵称 vs 宠物名。
         // 宠物名 targetRef=cardToken → 宠物档案编辑页（V1 单宠物自解析，不拼 token 入路径）；

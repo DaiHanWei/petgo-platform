@@ -352,6 +352,10 @@ void main() {
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
         // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
         '_submitted', '_started',
+        // Tailrent Level（V1.4.0 ① PRD §4，事件名定死 `growth_level_up`）：「等级提升」这一结果。
+        // 与 `_shown`（庆祝曝光）分开：前者是数据层拿到升级，后者是用户真的看见。
+        // ⚠️ 只放这个精确词尾，不放宽成 `_up`；扩表、不改名。
+        '_level_up',
         // 用户对提示的响应（V1.1.6 Story 8.2）：`_responded` 与 `_tapped` 的区别在于
         // **它是对一个「被问」的回答**，取值有多档（granted / denied / settings_opened /
         // dismissed），而不是单一动作。分母是提示曝光数（`_shown`），配对使用。

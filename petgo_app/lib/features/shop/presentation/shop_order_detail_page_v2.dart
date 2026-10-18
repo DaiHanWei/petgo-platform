@@ -39,6 +39,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
+import '../../growth/domain/growth_popup_trigger.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../support/presentation/support_whatsapp_button.dart';
 import '../data/cart_repository.dart';
@@ -784,6 +785,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         ref.invalidate(shopOrderDetailProvider(widget.orderToken));
         Analytics.capture('toko_order_payment_succeeded',
             {'pay_channel': 'PAWCOIN', 'attribution_source': order.attributionSource});
+        growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
         showAppToast(context, l10n.shopOrderPaid);
         return;
       }
@@ -835,6 +837,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           purpose: 'SHOP_ORDER',
           orderRef: order.orderToken,
         );
+        growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
         Analytics.capture('toko_order_payment_succeeded', {
           'pay_channel': order.payChannel ?? 'UNKNOWN',
           'attribution_source': order.attributionSource,

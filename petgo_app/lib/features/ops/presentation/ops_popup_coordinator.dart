@@ -1,3 +1,4 @@
+import '../../growth/presentation/growth_popup_coordinator.dart';
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
@@ -42,6 +43,7 @@ class OpsPopupCoordinator {
     BuildContext? Function()? rootContext,
     bool Function()? rootCanPop,
     bool Function()? isResumed,
+    this._beforeLedgerCheck,
   })  : _ledger = ledger ?? StartupPopupLedger.instance,
         _now = now ?? DateTime.now,
         _precache = precache ?? defaultPrecache,
@@ -66,6 +68,12 @@ class OpsPopupCoordinator {
   final BuildContext? Function() _rootContext;
   final bool Function() _rootCanPop;
   final bool Function() _isResumed;
+
+  /// V1.4.0 ① Story 2.3：首次读 ledger 之前等它（≤ [beforeLedgerCheckTimeout]，超时 / 异常放行）；null = 不等。
+  /// 成长弹窗依赖一次网络拉取，可能晚于这里的 ledger 检查返回 → 两窗叠加；由它等冷启动那次拉取有结论。
+  final Future<void> Function()? _beforeLedgerCheck;
+
+  static const Duration beforeLedgerCheckTimeout = Duration(seconds: 3);
 
   /// 首帧后延 500ms（D-22）。
   static const Duration showDelay = Duration(milliseconds: 500);
@@ -183,6 +191,17 @@ class OpsPopupCoordinator {
     // 4) 兽医不弹。
     if (_auth().isVet) return _settle();
 
+    // 4b) 等升级庆祝 / 存量汇总冷启动拉取有结论（V1.4.0 ①，可选注入）。
+    final before = _beforeLedgerCheck;
+    if (before != null) {
+      try {
+        await before().timeout(beforeLedgerCheckTimeout);
+      } catch (_) {
+        // 超时 / 异常：照常继续。
+      }
+      if (_disposed || _settled) return;
+    }
+
     // 5) 本次冷启动出现过功能弹窗 → 顺延到下次冷启动。
     if (_ledger.hasAny) return _settle();
 
@@ -297,6 +316,8 @@ final Provider<OpsPopupCoordinator> opsPopupCoordinatorProvider =
     prefs: AppPrefs.create,
     auth: () => ref.read(authControllerProvider),
     authReady: () => ref.read(authControllerProvider.notifier).ensureRestored(),
+    // V1.4.0 ① Story 2.3：升级庆祝 > 存量汇总 > 运营开屏弹窗。
+    beforeLedgerCheck: () => ref.read(growthPopupCoordinatorProvider).coldStartSettled,
   );
   ref.onDispose(c.dispose);
   return c;

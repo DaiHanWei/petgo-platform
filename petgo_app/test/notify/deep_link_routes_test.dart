@@ -153,4 +153,9 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('USER_FOLLOWED', 'abc'), DeepLinkRoutes.notificationsCenter);
     expect(DeepLinkRoutes.pushPayloadToLocation('USER_FOLLOWED', null), DeepLinkRoutes.notificationsCenter);
   });
+
+  test('V1.4.0 ① 2.3：GROWTH_LEVEL_UP → 等级页（固定目标，忽略 targetRef）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('GROWTH_LEVEL_UP', '7:BUDDY'), '/me/growth');
+    expect(DeepLinkRoutes.pushPayloadToLocation('GROWTH_LEVEL_UP', null), '/me/growth');
+  });
 }

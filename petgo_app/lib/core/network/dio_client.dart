@@ -8,6 +8,7 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/data/google_auth_client.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/login_guide_controller.dart';
+import '../../features/growth/data/growth_action_interceptor.dart';
 import '../l10n/locale_controller.dart';
 import '../router/app_router.dart';
 import '../storage/secure_storage.dart';
@@ -72,6 +73,8 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
       return device == 'id' ? 'id' : 'en';
     },
   ));
+  // V1.4.0 ① Story 2.3：发帖 / 评论 / 点赞 / 打卡成功后触发成长弹窗拉取（只看响应、不改请求，401 重放不受影响）。
+  dio.interceptors.add(GrowthActionInterceptor());
   // 接口日志（仅 debug 输出控制台，脱敏）。置于 auth 之后 → 打印的是最终带鉴权的请求与真实响应。
   if (kDebugMode) {
     dio.interceptors.add(ApiLogInterceptor());
