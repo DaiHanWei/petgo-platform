@@ -189,6 +189,9 @@ public final class AdminPageCatalog {
             shared("ai-orders", G_ORDERS, "/admin/ai-orders", List.of(ORDER_VIEW, ORDER_EXPORT)).nav("admin.nav.aiOrders", "ai-orders", ORDER_VIEW),
             page("payments", G_ORDERS, "/admin/payments",
                     List.of(PAYMENT_VIEW), List.of(), List.of(PAYMENT_LIST_EXPORT)).nav("admin.nav.payments", "payments", PAYMENT_VIEW),
+            // V1.4.0 ③ AB-36：送礼记录（照支付记录页，模板 B 只读）；导出同用 gift.order_view（PRD 只定义一个只读码）。
+            page("gift-orders", G_ORDERS, "/admin/gift-orders",
+                    List.of(GIFT_ORDER_VIEW), List.of(), List.of()).nav("admin.nav.giftOrders", "gift-orders", GIFT_ORDER_VIEW),
             page("settlements", G_ORDERS, "/admin/settlements",
                     List.of(SETTLEMENT_VIEW), List.of(), List.of(SETTLEMENT_PAYOUT)).nav("admin.nav.settlements", "settlements", SETTLEMENT_VIEW),
             page("red-overage", G_ORDERS, "/admin/red-overage",

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  送礼记录的摘要条 / 表格 / 分页（V1.4.0 ③ gift Story 3.2，模板 B，UI 稿 M1 ~ M3）。
+    sumbar(oob) — 四格；全站视图：送礼笔数 · 送礼人数 · 成功金额（其中 PawCoin）· 已付款未送达；
+                  异常单视图（anomalyView）：已付款未送达 · 涉及金额 · 已退回 · 退回失败
+    rows(oob)   — 表格 + 空态 + 分页；oob=true 时摘要条随片段一并换
+  🔴 摘要覆盖**整个筛选结果**（一条 SQL 聚合），不是当前这一页。
+  🔴 显示口径：礼物名 / 宠物名取订单快照；宠物已删「（已删除）{快照名}」；送礼人 / 主人已注销「（已注销）#id」
+     （不显示注销前昵称，AC6.1）；payment_intent 只显示 public_token 缩写（不外露自增 id）；refund_error 不渲染。
+  🔴 行不可点、无任何操作按钮（只读）。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="gift-orders-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <th:block th:unless="${anomalyView}">
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.orders}">送礼笔数</div>
+            <div class="sum-value" data-sum="orders" th:text="${#numbers.formatInteger(summary.orders(), 1, 'COMMA')}">0</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.senders}">送礼人数</div>
+            <div class="sum-value" data-sum="senders" th:text="${#numbers.formatInteger(summary.senders(), 1, 'COMMA')}">0</div>
+            <div class="hint" th:text="#{admin.v140.giftOrders.sum.sendersHint}">去重</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.delivered}">成功金额</div>
+            <div class="sum-value" data-sum="delivered" th:text="'Rp' + ${#numbers.formatInteger(summary.deliveredAmount(), 1, 'COMMA')}">Rp0</div>
+            <div class="hint" th:text="#{admin.v140.giftOrders.sum.deliveredCoin(${#numbers.formatInteger(summary.deliveredCoin(), 1, 'COMMA')})}">其中 PawCoin Rp0</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.undelivered}">已付款未送达</div>
+            <div class="sum-value" data-sum="undelivered" th:text="${#numbers.formatInteger(summary.undelivered(), 1, 'COMMA')}">0</div>
+        </div>
+    </th:block>
+    <th:block th:if="${anomalyView}">
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.undelivered}">已付款未送达</div>
+            <div class="sum-value" data-sum="undelivered" th:text="${#numbers.formatInteger(summary.undelivered(), 1, 'COMMA')}">0</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.amount}">涉及金额</div>
+            <div class="sum-value" data-sum="amount" th:text="'Rp' + ${#numbers.formatInteger(summary.undeliveredAmount(), 1, 'COMMA')}">Rp0</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.refunded}">已退回</div>
+            <div class="sum-value" data-sum="refunded" th:text="${#numbers.formatInteger(summary.refunded(), 1, 'COMMA')}">0</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v140.giftOrders.sum.refundFailed}">退回失败</div>
+            <div class="sum-value" data-sum="refund-failed" th:text="${#numbers.formatInteger(summary.refundFailed(), 1, 'COMMA')}">0</div>
+        </div>
+    </th:block>
+</div>
+
+<!--/* 送礼人 / 主人单元格：{昵称} #{id}；已注销「（已注销）#id」。 */-->
+<th:block th:fragment="who(name, idText, deleted)">
+    <span th:if="${deleted}" class="muted" th:text="#{admin.v140.giftOrders.deletedUser(${idText})}">（已注销）#1</span>
+    <th:block th:unless="${deleted}"><span th:text="${name}">Andi</span> <span class="muted" th:text="'#' + ${idText}">#1</span></th:block>
+</th:block>
+
+<!--/* 收礼宠物单元格：快照名；pet_id 为空「（已删除）{快照名}」。 */-->
+<th:block th:fragment="pet(r)">
+    <span th:if="${r.petDeleted()}" class="muted" th:text="#{admin.v140.giftOrders.deletedPet(${r.petName()})}">（已删除）Boba</span>
+    <span th:unless="${r.petDeleted()}" th:text="${r.petName()}">Mochi</span>
+</th:block>
+
+<!--/* 状态徽章：三个异常状态都显示「已付款未送达」。 */-->
+<th:block th:fragment="status(r)">
+    <span class="badge" th:classappend="${r.statusBadge()}"
+          th:text="#{'admin.v140.giftOrders.status.' + ${r.statusGroup()}}">已送达</span>
+</th:block>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/gift-orders-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(orders)}" class="tags-table gift-table" id="gift-orders-table">
+        <thead>
+        <tr>
+            <th class="nowrap" th:text="#{admin.v140.giftOrders.col.time}">时间（WIB）</th>
+            <th th:text="#{admin.v140.giftOrders.col.sender}">送礼人</th>
+            <th th:text="#{admin.v140.giftOrders.col.pet}">收礼宠物</th>
+            <th th:text="#{admin.v140.giftOrders.col.owner}">宠物主人</th>
+            <th th:text="#{admin.v140.giftOrders.col.gift}">礼物</th>
+            <th class="num" th:text="#{admin.v140.giftOrders.col.qty}">数量</th>
+            <th class="num" th:text="#{admin.v140.giftOrders.col.total}">总价</th>
+            <th th:text="#{admin.v140.giftOrders.col.channel}">渠道</th>
+            <th th:text="#{admin.v140.giftOrders.col.status}">状态</th>
+            <th th:unless="${anomalyView}" th:text="#{admin.v140.giftOrders.col.intent}">支付意图</th>
+            <th th:if="${anomalyView}" th:text="#{admin.v140.giftOrders.col.reason}">原因</th>
+            <th th:if="${anomalyView}" th:text="#{admin.v140.giftOrders.col.refund}">PawCoin 退回</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${orders}">
+            <td class="nowrap muted" th:text="${@adminTime.fmt(r.createdAt())}">2026-10-17 13:20</td>
+            <td class="nowrap"><th:block th:replace="~{admin/fragments/gift-orders-list :: who(${r.senderName()}, ${r.senderIdText()}, ${r.senderDeleted()})}"></th:block></td>
+            <td class="nowrap"><th:block th:replace="~{admin/fragments/gift-orders-list :: pet(${r})}"></th:block></td>
+            <td class="nowrap"><th:block th:replace="~{admin/fragments/gift-orders-list :: who(${r.ownerName()}, ${r.ownerIdText()}, ${r.ownerDeleted()})}"></th:block></td>
+            <td th:text="${r.giftName(#locale)}">Salmon</td>
+            <td class="num" th:text="${r.quantity()}">1</td>
+            <td class="num" th:text="${r.totalText()}">Rp5,000</td>
+            <td class="nowrap" th:text="#{'admin.v140.giftOrders.channel.' + ${r.channel()}}">QRIS</td>
+            <td class="nowrap"><th:block th:replace="~{admin/fragments/gift-orders-list :: status(${r})}"></th:block></td>
+            <td th:unless="${anomalyView}" class="nowrap">
+                <code th:if="${r.intentShort() != null}" th:text="${r.intentShort()}" th:title="${r.intentToken()}">pi_8d0…a3b</code>
+                <span th:if="${r.intentShort() == null}" class="muted">—</span>
+            </td>
+            <td th:if="${anomalyView}" class="nowrap"
+                th:text="${r.knownReason()} ? #{'admin.v140.giftOrders.reason.' + ${r.undeliveredReason()}} : ${r.undeliveredReason()}">宠物已删除</td>
+            <td th:if="${anomalyView}" class="nowrap"
+                th:title="#{admin.v140.giftOrders.refund.attempts(${r.refundAttemptsText()})}">
+                <span th:if="${r.status() == 'UNDELIVERED_REFUNDED'}"
+                      th:text="#{admin.v140.giftOrders.refund.done(${r.totalText()}, ${@adminTime.fmt(r.refundedAt())})}">已退回 Rp20,000 · 2026-10-16 20:12</span>
+                <span th:if="${r.status() == 'UNDELIVERED_REFUND_PENDING'}" class="badge badge-warn"
+                      th:text="#{admin.v140.giftOrders.refund.pending}">退回失败 · 待重试</span>
+                <span th:if="${r.status() == 'REFUND_MANUAL'}" class="badge badge-danger"
+                      th:text="#{admin.v140.giftOrders.refund.manual}">退回失败 · 需人工</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(orders)}">
+        <span class="empty-emoji">🎁</span>
+        <p th:text="#{admin.v140.giftOrders.empty}">暂无符合筛选条件的送礼记录</p>
+    </div>
+
+    <!--/* ⚠️ 翻页链接必须带上全部筛选条件，否则点「下一页」会悄悄回到无筛选的全量。 */-->
+    <div class="pager" th:if="${totalPages > 0}">
+        <a th:if="${hasPrev}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.prev}"
+           th:href="@{/admin/gift-orders(page=${page - 1},senderId=${senderId},ownerId=${ownerId},channel=${channel},status=${status},from=${from},to=${to})}">上一页</a>
+        <span th:text="#{admin.audit.page(${page + 1}, ${totalPages}, ${totalElements})}">分页</span>
+        <a th:if="${hasNext}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.next}"
+           th:href="@{/admin/gift-orders(page=${page + 1},senderId=${senderId},ownerId=${ownerId},channel=${channel},status=${status},from=${from},to=${to})}">下一页</a>
+    </div>
+</th:block>
+</body>
+</html>

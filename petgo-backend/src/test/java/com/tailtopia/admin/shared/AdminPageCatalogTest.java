@@ -110,7 +110,8 @@ class AdminPageCatalogTest {
                 "virtual-accounts", "warm-replies", "places",
                 "ops-popups", // V1.3.4 AB-30
                 "ops-notifications", // V1.3.4 AB-31
-                "gift-catalog")) { // V1.4.0 ③ AB-35
+                "gift-catalog", // V1.4.0 ③ AB-35
+                "gift-orders")) { // V1.4.0 ③ AB-36
             assertThat(actives).as("active=" + active + " 没有对应侧栏项").contains(active);
         }
     }

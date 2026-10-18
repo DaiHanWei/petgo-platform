@@ -268,6 +268,10 @@ public final class AuditActions {
     /** 改送礼 QRIS 最低金额（{@code pricing_config.gift_qris_min_amount}，只对送礼生效）。 */
     public static final String GIFT_QRIS_MIN_UPDATED = "GIFT_QRIS_MIN_UPDATED";
 
+    // ===== 送礼记录（V1.4.0 ③ gift Story 3.2，AB-36）=====
+    /** 按当前筛选导出送礼记录 xlsx。摘要记行数 / 是否截断 / 全部筛选条件（查看列表与抽屉页签不写审计）。 */
+    public static final String GIFT_ORDER_LIST_EXPORTED = "GIFT_ORDER_LIST_EXPORTED";
+
     private AuditActions() {
     }
 }

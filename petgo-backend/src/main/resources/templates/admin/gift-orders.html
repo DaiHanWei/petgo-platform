@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  送礼记录（V1.4.0 ③ gift Story 3.2 · AB-36，UI 稿 M1 ~ M3；💰 订单与资金组，排在「支付记录」后）。
+  页面形态照「支付记录」（模板 B）：标题行 +「导出当前结果」→ 说明 → 整页 GET 筛选栏 → 摘要条 → 表格 → 分页。
+  🔴 只读：没有任何 POST 表单、没有改单 / 补退 / 重试按钮；行不可点（无抽屉 → tpl-b-list 传 noDrawer=true）。
+  🔴 状态筛「已付款未送达」（UNDELIVERED = 三个异常状态）时表格换异常单视图（M2）：去 payment_intent，加「原因」「PawCoin 退回」。
+  ⚠️ 筛选是整页 GET：翻页 / 导出链接必须带全部筛选参数，少一个就会静默丢筛选。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.v140.giftOrders.title}">送礼记录</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='giftOrder',noDrawer=true">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.v140.giftOrders.title}">送礼记录</h1>
+            <!--/* ⚠️ sec:authorize 与 AdminGiftOrderController.VIEW_AUTH 逐字一致（导出同用查看码），否则按钮在、点了 403。 */-->
+            <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('gift.order_view')"
+               class="btn btn-neutral btn-sm" data-no-drawer id="gift-orders-export"
+               th:href="@{/admin/gift-orders/export.xlsx(senderId=${senderId},ownerId=${ownerId},channel=${channel},status=${status},from=${from},to=${to})}"
+               th:text="#{admin.v140.giftOrders.export}">导出当前结果</a>
+        </div>
+        <p class="hint" th:text="#{admin.v140.giftOrders.hint}">App 内所有送礼订单（PawCoin 与 QRIS）。只读，不提供改单。</p>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::gift-order-filters}, ~{::gift-order-summary}, ~{::gift-order-table}, ~{})}">
+            <form th:fragment="gift-order-filters" class="filter-bar" method="get" th:action="@{/admin/gift-orders}">
+                <label class="field"><span th:text="#{admin.v140.giftOrders.filter.senderId}">送礼人 ID</span>
+                    <input type="number" name="senderId" class="inp" min="1" th:value="${senderId}"/></label>
+                <label class="field"><span th:text="#{admin.v140.giftOrders.filter.ownerId}">宠物主人 ID</span>
+                    <input type="number" name="ownerId" class="inp" min="1" th:value="${ownerId}"/></label>
+                <label class="field"><span th:text="#{admin.v140.giftOrders.col.channel}">渠道</span>
+                    <select name="channel" class="sel">
+                        <option value="" th:text="#{admin.v140.giftOrders.filter.allChannels}">全部渠道</option>
+                        <option th:each="c : ${channelOptions}" th:value="${c}" th:selected="${channel == c}"
+                                th:text="#{'admin.v140.giftOrders.channel.' + ${c}}">PawCoin</option>
+                    </select></label>
+                <label class="field"><span th:text="#{admin.v140.giftOrders.col.status}">状态</span>
+                    <select name="status" class="sel">
+                        <option value="" th:text="#{admin.v140.giftOrders.filter.allStatuses}">全部状态</option>
+                        <option th:each="s : ${statusOptions}" th:value="${s}" th:selected="${status == s}"
+                                th:text="#{'admin.v140.giftOrders.status.' + ${s}}">已送达</option>
+                    </select></label>
+                <!--/* 🛡 WIB 字样必须在输入框旁：后台一律按雅加达时间解释；「止」含当天（服务层取次日 00:00 为上界）。 */-->
+                <label class="field"><span th:text="#{admin.v140.giftOrders.filter.dateRange}">时间段（WIB，含止当天）</span>
+                    <input type="date" name="from" class="inp" th:value="${from}"/>
+                    <input type="date" name="to" class="inp" th:value="${to}"/>
+                    <span class="muted">WIB</span></label>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.v140.giftOrders.filter.search}">查询</button>
+                <a th:href="@{/admin/gift-orders}" class="btn btn-sm" data-no-drawer
+                   th:text="#{admin.v140.giftOrders.filter.reset}">清空筛选</a>
+            </form>
+
+            <div th:fragment="gift-order-summary" th:replace="~{admin/fragments/gift-orders-list :: sumbar(false)}"></div>
+
+            <div th:fragment="gift-order-table" th:remove="tag">
+                <div id="gift-orders-rows">
+                    <div th:replace="~{admin/fragments/gift-orders-list :: rows(false)}"></div>
+                </div>
+                <!--/* 异常单口径常驻（放在 #gift-orders-rows 外面，整表重拉不丢）：后台不手动补退 / 重试（AC3.3）。 */-->
+                <p class="hint" th:if="${anomalyView}" data-notice="gift-refund-retry"
+                   th:text="#{admin.v140.giftOrders.refund.note}">退回失败的订单由系统每 10 分钟自动重试，最多 5 次；仍失败标「需人工」，请联系技术处理。</p>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

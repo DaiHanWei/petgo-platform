@@ -128,7 +128,8 @@ class AdminPermissionsTest {
         // 2026-10-15（V1.3.4 后台返工清单 §1）：改最低支持版本 config.app_min_version_edit、
         //     运营弹窗 ops_popup.manage、系统通知 ops_notify.view / ops_notify.send ⇒ 74 + 4 = 78。
         // 2026-10-18（V1.4.0 ③ gift Story 3.1）：+2 V1.4.0 ③ gift.catalog_view / gift.catalog_edit ⇒ 78 + 2 = 80。
+        // 2026-10-18（V1.4.0 ③ gift Story 3.2）：+1 送礼记录 gift.order_view（导出同码，不另设）⇒ 80 + 1 = 81。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(80);
+        assertThat(all).hasSize(81);
     }
 }

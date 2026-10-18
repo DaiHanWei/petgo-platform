@@ -352,10 +352,10 @@
         <p class="muted" th:text="#{admin.v140.users.tab.placeholder}">暂无数据</p>
     </section>
 
-    <!--/* ⑨ 收送礼记录（V1.4.0 Story 0.1 空容器）：由 ③ feat/1.4.0-gift 填充，页签头与 data-utab-panel 名不许改。 */-->
-    <section class="card card-full ud-card" data-utab-panel="gifts" hidden>
-        <p class="muted" th:text="#{admin.v140.users.tab.placeholder}">暂无数据</p>
-    </section>
+    <!--/* ⑨ 收送礼记录（V1.4.0 Story 0.1 空容器）：由 ③ feat/1.4.0-gift 填充，页签头与 data-utab-panel 名不许改。
+           ③ Story 3.2：内容在独立片段 drawer-users-gifts :: panel（根元素仍是 data-utab-panel="gifts" 的 section，
+           胶囊切换 / 翻页只换这一块）。 */-->
+    <section th:replace="~{admin/fragments/drawer-users-gifts :: panel(false)}"></section>
 
     <div id="user-drawer-err" class="lst-inline-error" aria-live="polite"></div>
 
