@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -13,6 +14,8 @@ import '../../../shared/widgets/post_grid_tile.dart';
 import '../../../shared/widgets/profile_stats_row.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_response.dart';
+import '../../collect/domain/collect_target.dart';
+import '../../collect/presentation/saved_collections_section.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/pet_profile.dart';
@@ -32,7 +35,10 @@ import 'profile_edit_sheet.dart';
 /// 收进二级设置页（点设置图标进入）；主页面主体只承载「人 + 宠物」内容——用户信息 / 宠物卡片或引导卡
 /// （AC5 三态，人 60%/宠物 40%）/ 宠物状态 / 我的发布。语言(7.2)/退出注销(7.3) 仅放入口。
 class MePage extends ConsumerWidget {
-  const MePage({super.key});
+  const MePage({super.key, this.saved});
+
+  /// `/me?saved=post|place`（V1.4.0 ④ Story 2.4）：收藏成功 Toast「Lihat」的落点 → 切到 Disimpan 对应子分类。
+  final String? saved;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -94,12 +100,8 @@ class MePage extends ConsumerWidget {
           // 余额格，退款经订单详情可达）。
           _ActivitySection(onOrders: () => context.push('/me/orders')),
           const SizedBox(height: AppSpacing.lg),
-          // ⑤ 我的发布（原型 Postinganku）：小节标题（表头不显示数量，数量在四格）+ 裸 2 列网格。
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: _SectionTitle(l10n.meMyPostsTitle),
-          ),
-          _MyPostsList(),
+          // ⑤ 我的发布（原型 Postinganku）+ V1.4.0 ④ Disimpan：Tab 行替换原小节标题，Postinganku 内容不变。
+          _PostsArea(saved: saved),
         ],
       ),
     );
@@ -491,6 +493,156 @@ class _ProfileHeadCard extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Postinganku / Disimpan 区（V1.4.0 ④ Story 2.4 · UI 稿 E1）。默认 Postinganku（= 原 `_MyPostsList`，一字不改）；
+/// Disimpan 内为分段 + 隐私横条 + 收藏列表（仅本人可见；他人主页不出现）。
+///
+/// `?saved=`：`initState` 与 `didUpdateWidget` 都处理；处理后清参数（否则分支记住的 location 一直带着同一个值，
+/// 手动切回 Postinganku 再点「Lihat」时参数不变、`didUpdateWidget` 不触发）并把 Tab 行滚到可见。
+class _PostsArea extends StatefulWidget {
+  const _PostsArea({this.saved});
+
+  final String? saved;
+
+  @override
+  State<_PostsArea> createState() => _PostsAreaState();
+}
+
+class _PostsAreaState extends State<_PostsArea> with AutomaticKeepAliveClientMixin {
+  final GlobalKey _tabRowKey = GlobalKey();
+
+  /// 「我的」页 body 是懒构建的 `ListView`：本区滚出缓存范围会被回收，选中的 Disimpan / 子分类随之丢失 —— 保活。
+  @override
+  bool get wantKeepAlive => true;
+  bool _savedTab = false;
+  CollectTarget _segment = CollectTarget.post;
+
+  @override
+  void initState() {
+    super.initState();
+    _applySaved(widget.saved);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostsArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.saved != widget.saved) _applySaved(widget.saved);
+  }
+
+  void _applySaved(String? raw) {
+    final target = CollectTarget.fromSavedParam(raw);
+    if (target == null) return; // 未知值 / null：不改当前选中
+    final changed = !_savedTab || _segment != target;
+    _savedTab = true;
+    _segment = target;
+    if (changed) _reportViewed();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // maybeOf：单测里 MaterialApp(home: MePage()) 没有 GoRouter，不得抛。
+      GoRouter.maybeOf(context)?.go('/me');
+      final ctx = _tabRowKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx, alignment: 0, duration: const Duration(milliseconds: 250));
+      }
+    });
+  }
+
+  /// 每次进入一个子分类报一次（点 Disimpan、切分段、经 `?saved=` 落到 Disimpan）；重复点 / 重建 / 加载更多不报。
+  void _reportViewed() =>
+      Analytics.capture('collection_list_viewed', {'tab': _segment == CollectTarget.post ? 'post' : 'place'});
+
+  void _selectTab(bool saved) {
+    if (saved == _savedTab) return;
+    setState(() => _savedTab = saved);
+    if (saved) _reportViewed();
+  }
+
+  void _selectSegment(CollectTarget t) {
+    if (t == _segment) return;
+    setState(() => _segment = t);
+    _reportViewed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          key: _tabRowKey,
+          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.line2))),
+          child: Row(
+            children: [
+              _MeTab(
+                key: const ValueKey('meTabMyPosts'),
+                label: l10n.meMyPostsTitle,
+                active: !_savedTab,
+                onTap: () => _selectTab(false),
+              ),
+              const SizedBox(width: 22),
+              _MeTab(
+                key: const ValueKey('meTabSaved'),
+                label: l10n.collectSavedToast,
+                active: _savedTab,
+                trailingIcon: Icons.lock_outline_rounded,
+                onTap: () => _selectTab(true),
+              ),
+            ],
+          ),
+        ),
+        if (_savedTab)
+          SavedCollectionsSection(segment: _segment, onSegmentChanged: _selectSegment)
+        else ...[
+          const SizedBox(height: AppSpacing.md),
+          _MyPostsList(),
+        ],
+      ],
+    );
+  }
+}
+
+/// Tab 行一项（UI 稿 `.mtabs`）：15 / w600；选中 ink + 2.5px mint 下划线（压在 1px 分隔线上），未选中 muted。
+class _MeTab extends StatelessWidget {
+  const _MeTab({super.key, required this.label, required this.active, required this.onTap, this.trailingIcon});
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final IconData? trailingIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? AppColors.ink : AppColors.muted;
+    return Semantics(
+      selected: active,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        child: Transform.translate(
+          offset: const Offset(0, 1),
+          child: Container(
+            padding: const EdgeInsets.only(top: 8, bottom: 9),
+            decoration: active
+                ? const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.mint, width: 2.5)))
+                : null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color)),
+                if (trailingIcon != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(trailingIcon, size: 13, color: color),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

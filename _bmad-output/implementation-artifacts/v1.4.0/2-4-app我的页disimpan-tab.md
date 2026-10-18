@@ -1,6 +1,6 @@
 # Story 2.4: App「我的」页 Disimpan Tab
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 push-collect · 分支 `feat/1.4.0-push-collect`
 > 口径优先级：`decision-log.md` ④ 节 > `推送开关与收藏/1-4-0推送开关与收藏prd.md`（§3.2、§4、§6.5 ⑤⑥⑦）> `architecture-v1.4.0-push-collect-delta.md`（AD-11、AD-16、AD-17、P-5 ~ P-8）> UI 稿 `推送开关与收藏/ui-1-4-0-push-collect-integrated-v1.html` E1 ~ E9（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。云端规则见同目录 `cloud-rules-push-collect.md`。
@@ -108,17 +108,17 @@ so that 想再看时能找到。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**（对照前面 story 实际提交的代码，有出入先改本文件、Completion Notes 记一句）：
+- [x] **T0 开工核对**（对照前面 story 实际提交的代码，有出入先改本文件、Completion Notes 记一句）：
   - 2.2：接口路径与 JSON 字段名（`postId` / `collectedAt` / `available` / `post.{type,excerpt,coverUrl,author.{nickname,avatarUrl}}`（无 `title`）；`placeToken` / `name` / `place.{type,coverUrl,addressText}`；`nextCursor`），`available=false` 时 `post` / `place` 确为 null。
   - 2.3：`features/collect/` 实际结构、仓库类名与 provider 名、取消收藏方法名与返回 / 异常形态（404 是否抛 `DioException`）、帖子 / 场所收藏按钮的成功回调位置、Toast「Lihat」实际跳的 location（预期 `/me?saved=post|place`）、arb 键 `collectSavedToast` / `collectRemoveFailed` 与信号 `collectionsRevisionProvider` 的实际名字。
   - 1.3 / 2.3：`test/analytics/v140_push_collect_events_test.dart` 的实际常量名；`v112_events_test.dart` 是否已有 `'collection_'`（不应有）。
-- [ ] **T1 数据层**：`ApiPaths` 两条、domain 模型、仓库两个 fetch、两个 controller + provider（AC6.1）；`resetUserScopedCaches` + `_mustReset` 登记（AC6.3）
-- [ ] **T2 行组件**：`CollectedPostRow` / `CollectedPlaceRow`（正常 + 不可见两态，AC2.2 / AC2.3 / AC3.2 / AC3.3）；`PostGridTile._badgeStyle` 改为公开 `badgeStyle`（见实现提示）；`EmptyState` 加可选 `iconColor`
-- [ ] **T3 「我的」页**：Tab 行 + `_PostsArea`（Disimpan 分段 / 横条 / 列表 / 空态 / 失败 / 加载更多）、移除抽屉（AC1 ~ AC4）
-- [ ] **T4 路由与失效**：`_tabRootPage` 传 `saved`、`MePage(saved:)`、清参数与滚动（AC5.1 ~ AC5.4）；列表 provider 订阅 `collectionsRevisionProvider`（AC5.5）
-- [ ] **T5 埋点**：两事件 + 守卫登记 + V1.4.0 清单（AC8）
-- [ ] **T6 文案**：arb 两份（AC7）+ `flutter gen-l10n`
-- [ ] **T7 测试与收尾**：见「测试」；`flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
+- [x] **T1 数据层**：`ApiPaths` 两条、domain 模型、仓库两个 fetch、两个 controller + provider（AC6.1）；`resetUserScopedCaches` + `_mustReset` 登记（AC6.3）
+- [x] **T2 行组件**：`CollectedPostRow` / `CollectedPlaceRow`（正常 + 不可见两态，AC2.2 / AC2.3 / AC3.2 / AC3.3）；`PostGridTile._badgeStyle` 改为公开 `badgeStyle`（见实现提示）；`EmptyState` 加可选 `iconColor`
+- [x] **T3 「我的」页**：Tab 行 + `_PostsArea`（Disimpan 分段 / 横条 / 列表 / 空态 / 失败 / 加载更多）、移除抽屉（AC1 ~ AC4）
+- [x] **T4 路由与失效**：`_tabRootPage` 传 `saved`、`MePage(saved:)`、清参数与滚动（AC5.1 ~ AC5.4）；列表 provider 订阅 `collectionsRevisionProvider`（AC5.5）
+- [x] **T5 埋点**：两事件 + 守卫登记 + V1.4.0 清单（AC8）
+- [x] **T6 文案**：arb 两份（AC7）+ `flutter gen-l10n`
+- [x] **T7 测试与收尾**：见「测试」；`flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -228,10 +228,41 @@ so that 想再看时能找到。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- `flutter analyze` 零警告；`flutter gen-l10n` 已跑。
+- 新增 / 改动相关测试全绿；全量 `flutter test` 3495 例全绿（1 skipped 为存量）。
+- 未整文件 `dart format`。
 
 ### Completion Notes List
 
+- **🔴 L2 待本地验收（还原度 ≥ 95%）**：Android 模拟器连后端（含 2.1 / 2.2）：详情收藏 → Toast「Lihat」→ Disimpan 最上方；场所同；收藏帖子被删除 / 作者拉黑我 → 不可见行 → 移除；场所下架 → 灰显 → 恢复后正常；空态 / 断网失败态；逐屏对照 UI 稿 E1 ~ E9（Hewanku 区不计入，归 3.1）。本 story 无 L1。
+- T0 核对：2.2 JSON 字段与 story 一致（帖子无 `title`、不可见时 `post` / `place` 为 null、末页无 `nextCursor`）；2.3 实际名字一致（`CollectRepository.uncollectPost/uncollectPlace`、`collectionsRevisionProvider`、`CollectTarget.fromSavedParam`、arb `collectSavedToast` / `collectRemoveFailed`、清单常量 `pushCollectInventory`）；`v112_events_test.dart` 原无 `collection_`。**名字微调**：story 写的行组件 `CollectedPostRow` / `CollectedPlaceRow` 与领域模型同名易混，实际组件名 `CollectedPostRowView` / `CollectedPlaceRowView`（Key 仍按 story：`collectedPostRow_{postId}` / `collectedPlaceRow_{placeToken}`）；分页结果类型为 typedef `CollectionPageData<T>`。
+- 拍板点复述：① 移除用 `showConfirmSheet(onConfirm)`，失败抽屉不关可重试，404 视同成功；② 不加下拉刷新；③ 场所详情不带 `from`；④ `?saved=` 消费后 `go('/me')` 清参数并滚到 Tab 行；⑤ 可见条目不提供移除；⑥ `PostGridTile.badgeStyle` 公开（仅改名）、`EmptyState` 加可选 `iconColor`（默认外观不变，有回归测试）。
+- 两个列表 provider 为 `AsyncNotifierProvider.autoDispose` + `retry: (_, _) => null`（同 1.3：Riverpod 3 默认自动重试会让失败态停在加载中），已登记 `resetUserScopedCaches` 与 `_mustReset`；默认停在 Postinganku 时零请求（测试钉住）。
+- 既有断言更新：`test/me/me_page_test.dart` AC4.3 的 Postinganku 定位由大写文本改为 `ValueKey('meTabMyPosts')`，顺序语义不变。
+- **code-review 修复（CONFIRMED）**：① `loadMore` 在途时若列表被信号重拉 / 重试（换代）则丢弃结果，否则旧页会拼回新首页（重复 Key）；② `loadMore` 回来后在**最新**状态上追加，避免在途期间本地移除的行被拼回；③ `_PostsArea` 加 `AutomaticKeepAliveClientMixin`——「我的」页 body 是懒构建 `ListView`，滚出缓存范围会回收、选中的 Disimpan / 子分类丢失；④ 信号重拉 / 重试期间保留已加载内容（不塌成转圈），只有从没拿到数据时才转圈 / 报错；⑤ 单行坏数据（缺 `postId` / 空 `placeToken`）只跳过该行，不让整页失败；⑥ 移除成功回调前检查 `context.mounted`。
+- code-review 未采纳：Tab / 分段复用既有文案键（story AC7 明定复用 `collectSavedToast` / `profilePostsTitle` / `placeDetailTitle`）；`_PostsList` / `_PlacesList` 合并为泛型组件（重构超出范围）；404 分支保留（AC3.4 明定，注释已写明是防御）。
+
 ### File List
 
+- `petgo_app/lib/features/collect/domain/collected_item.dart`（新）
+- `petgo_app/lib/features/collect/presentation/collection_list_controller.dart`（新）
+- `petgo_app/lib/features/collect/presentation/collected_rows.dart`（新）
+- `petgo_app/lib/features/collect/presentation/saved_collections_section.dart`（新）
+- `petgo_app/lib/features/collect/data/collect_repository.dart`（改：`fetchCollectedPosts` / `fetchCollectedPlaces`）
+- `petgo_app/lib/core/network/api_paths.dart`（改：`meCollectionPosts` / `meCollectionPlaces`）
+- `petgo_app/lib/features/me/presentation/me_page.dart`（改：`MePage(saved:)`、`_PostsArea` Tab 行 + Disimpan）
+- `petgo_app/lib/core/router/app_router.dart`（改：me Tab 读 `?saved=`）
+- `petgo_app/lib/app.dart`（改：`resetUserScopedCaches` 登记两个列表 provider）
+- `petgo_app/lib/shared/widgets/post_grid_tile.dart`（改：`badgeStyle` 公开）
+- `petgo_app/lib/shared/widgets/empty_state.dart`（改：可选 `iconColor`）
+- `petgo_app/lib/l10n/app_en.arb` / `app_id.arb`（改：15 个 `collect*` 键）
+- 测试（新）：`test/collect/collect_fakes.dart`、`test/collect/collected_item_test.dart`、`test/collect/collection_list_controller_test.dart`、`test/collect/collected_rows_test.dart`、`test/me/me_page_saved_tab_test.dart`、`test/me/me_saved_query_param_test.dart`、`test/shared/empty_state_icon_color_test.dart`
+- 测试（改）：`test/me/me_page_test.dart`（AC4.3 定位）、`test/app/user_scoped_cache_registry_test.dart`（两项）、`test/analytics/v112_events_test.dart`（前缀 `collection_` + 属性 `is_unavailable`）、`test/analytics/v140_push_collect_events_test.dart`（追加两条）
+
 ### Change Log
+
+- 2026-10-18：实现 Story 2.4（「我的」页 Postinganku / Disimpan Tab、收藏列表、不可见条目移除、`?saved=` 落点、埋点）；code-review 后修 6 项。状态 → review。

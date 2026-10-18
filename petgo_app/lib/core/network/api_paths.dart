@@ -128,6 +128,10 @@ class ApiPaths {
   /// 「我的发布」三类混合时间线（Story 7.1，FR-36）。
   static const String mePosts = '$base/me/posts';
 
+  /// V1.4.0 ④ Story 2.4：我的收藏列表（仅本人，role=USER）。`?cursor=` 分页，每页 20。
+  static const String meCollectionPosts = '$base/me/collections/posts';
+  static const String meCollectionPlaces = '$base/me/collections/places';
+
   /// 6 个新手任务进度 + Lulus Pemula 解锁态（Story 7.3，FR-47）。
   static const String meNewbieTasks = '$base/me/newbie-tasks';
 

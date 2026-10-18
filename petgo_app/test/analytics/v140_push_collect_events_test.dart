@@ -18,6 +18,9 @@ void main() {
     'content_uncollected': 'content_uncollected',
     'place_collected': 'place_collected',
     'place_uncollected': 'place_uncollected',
+    // Story 2.4：我的页 Disimpan 列表
+    'collection_list_viewed': 'collection_list_viewed',
+    'collection_item_opened': 'collection_item_opened',
   };
 
   test('🔴 ④ 清单逐条在 lib 里有上报点', () {

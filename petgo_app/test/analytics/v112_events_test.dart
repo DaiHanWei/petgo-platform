@@ -294,6 +294,10 @@ void main() {
         // place_comment_posted / place_photo_added / place_shared）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'place_',
+        // V1.4.0 ④ 收藏列表（P-8）：模块是「我的收藏列表」这件事，事件名由 PRD §4 定死（`collection_list_viewed` /
+        // `collection_item_opened`），扩表、不改名；与 2.3 的 `content_collected` / `place_collected` 刻意分开——
+        // 那是收藏动作，这里是列表浏览。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'collection_',
         // 内容详情页停留时长（V1.3.0 批次 A · PRD E-10，bug 20260923-539）。模块是「详情页」本身 ——
         // 名字由 PRD §4 定死为 `detail_page_dwell`（AD-A23：实现不得改名），扩表、不改名。
         // ⚠️ 新模块入表，不是为遗留事件放宽规则。
@@ -522,6 +526,8 @@ void main() {
         'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
         // V1.4.0 ④ Story 2.3：收藏四事件。place_id = 场所 token（不外露自增 id，AD-17）；content_type ∈ diary / moment / tips。
         'post_id', 'content_type', 'place_id',
+        // V1.4.0 ④ Story 2.4：收藏列表条目点击（不可见条目弹移除抽屉）。'tab' 已在上方。
+        'is_unavailable',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

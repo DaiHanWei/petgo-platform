@@ -193,7 +193,8 @@ Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   // ⚠️ 2026-08-28 v1 版式整体删除，双 UI 并存机制随之移除；此处直接构造 v2 页面。
   AppTab.shop => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
   AppTab.home => const HomePage(),
-  AppTab.me => const MePage(),
+  // V1.4.0 ④ Story 2.4：读 `?saved=post|place`（收藏 Toast「Lihat」落点 → Disimpan 对应子分类）。
+  AppTab.me => MePage(saved: state.uri.queryParameters['saved']),
 };
 
 /// 冷启动深链是否需要**先铺一层底座页再叠上去**（纯函数，L0 可测）。

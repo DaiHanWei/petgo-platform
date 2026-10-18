@@ -286,7 +286,8 @@ void main() {
     final edit = y(find.byKey(const ValueKey('meEditNickname')));
     final pets = y(find.text(l10n.mePetsSection.toUpperCase()));
     final orders = y(find.byKey(const ValueKey('meOrders')));
-    final posts = y(find.text(l10n.meMyPostsTitle.toUpperCase()));
+    // V1.4.0 ④ Story 2.4：Postinganku 小节标题换成 Tab 行（不再大写）→ 按 Tab 的 Key 定位，顺序语义不变。
+    final posts = y(find.byKey(const ValueKey('meTabMyPosts')));
     expect(edit < pets && pets < orders && orders < posts, isTrue);
   });
 }

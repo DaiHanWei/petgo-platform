@@ -32,6 +32,8 @@ const _mustReset = <String>[
   'tailsonalityOwnerTypeProvider',
   // V1.4.0 push-collect
   'pushSettingsProvider',
+  'collectedPostsProvider',
+  'collectedPlacesProvider',
 ];
 
 void main() {

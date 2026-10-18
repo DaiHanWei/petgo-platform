@@ -2640,5 +2640,20 @@
   "collectSavedToastAction": "Lihat",
   "collectSaveFailed": "Gagal menyimpan, coba lagi",
   "collectRemoveFailed": "Gagal membatalkan, coba lagi",
-  "collectActionLabel": "Simpan"
+  "collectActionLabel": "Simpan",
+  "collectPrivacyHint": "Hanya kamu yang bisa melihat",
+  "collectUnavailablePost": "Konten tidak tersedia lagi",
+  "collectUnavailablePlace": "Tempat tidak tersedia lagi",
+  "collectTapToRemove": "Ketuk untuk menghapus",
+  "collectRemovePostMessage": "Postingan ini mungkin sudah dihapus atau disembunyikan. Hapus dari Disimpan?",
+  "collectRemovePlaceMessage": "Tempat ini mungkin sudah dihapus. Hapus dari Disimpan?",
+  "collectRemoveConfirm": "Hapus dari Disimpan",
+  "collectRemovedToast": "Dihapus dari Disimpan",
+  "collectEmptyPostsTitle": "Belum ada postingan disimpan",
+  "collectEmptyPostsHint": "Ketuk ikon simpan di postingan untuk menyimpannya di sini.",
+  "collectEmptyPlacesTitle": "Belum ada tempat disimpan",
+  "collectEmptyPlacesHint": "Ketuk ikon simpan di halaman tempat untuk menyimpannya di sini.",
+  "collectLoadFailedTitle": "Gagal memuat",
+  "collectLoadFailedHint": "Periksa koneksi lalu coba lagi.",
+  "collectLoadMore": "Muat lagi"
 }
