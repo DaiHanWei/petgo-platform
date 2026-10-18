@@ -100,4 +100,13 @@ class PlaceCollectServiceTest {
         verify(collections).deleteForDisplayItem(ME, 4L, 4L);
         org.mockito.Mockito.verifyNoMoreInteractions(collections);
     }
+
+    /** Story 2.2 code-review：已软删的 MERGED 行不跳转（与列表去重同口径），只删它自己那一组。 */
+    @Test
+    void softDeletedMergedDoesNotJump() {
+        Place gone = place(5L, PlaceStatus.MERGED, 20L, true);
+        when(places.findAnyByPublicToken("goneMerged")).thenReturn(Optional.of(gone));
+        service().uncollect("goneMerged", ME);
+        verify(collections).deleteForDisplayItem(ME, 5L, 5L);
+    }
 }

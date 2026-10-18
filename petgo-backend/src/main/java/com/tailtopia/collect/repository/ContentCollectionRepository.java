@@ -31,6 +31,20 @@ public interface ContentCollectionRepository extends JpaRepository<ContentCollec
     @Query("select count(c) from ContentCollection c where c.postId = :postId and c.userId <> :authorId")
     long countByPostIdExcludingUser(@Param("postId") long postId, @Param("authorId") long authorId);
 
+    /**
+     * 我的帖子收藏分页（V1.4.0 ④ Story 2.2）：按<b>收藏行</b> {@code created_at DESC, id DESC} keyset，
+     * 走 {@code idx_content_collections_user_created}。不在 SQL 里按可见性过滤（不可见行照样占位）。
+     * 调用方传 {@code PageRequest.of(0, 21)}。
+     */
+    @Query("""
+            SELECT c FROM ContentCollection c
+            WHERE c.userId = :me
+              AND (c.createdAt < :ts OR (c.createdAt = :ts AND c.id < :lastId))
+            ORDER BY c.createdAt DESC, c.id DESC
+            """)
+    java.util.List<ContentCollection> findPage(@Param("me") long me, @Param("ts") java.time.Instant ts,
+            @Param("lastId") long lastId, org.springframework.data.domain.Pageable pageable);
+
     /** 注销：删本人全部帖子收藏。 */
     @Modifying
     @Query("delete from ContentCollection c where c.userId = :userId")

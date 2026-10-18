@@ -99,6 +99,52 @@ class PlaceQueryServiceTest {
         Mockito.verify(collectState).isPlaceCollected(42L, p.getId());
     }
 
+    // ===== V1.4.0 ④ Story 2.2：我的收藏场所卡片 =====
+
+    private static void setField(Place p, String field, Object value) {
+        try {
+            var f = Place.class.getDeclaredField(field);
+            f.setAccessible(true);
+            f.set(p, value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void collectedCardsVisibilityAndCoverOnlyForVisible() {
+        Place active = place("act", JKT_LAT, JKT_LNG);
+        Place delisted = place("del", JKT_LAT, JKT_LNG);
+        setField(delisted, "status", PlaceStatus.DELISTED);
+        Place soft = place("soft", JKT_LAT, JKT_LNG);
+        setField(soft, "deletedAt", java.time.Instant.now());
+        when(places.findAllById(any())).thenReturn(List.of(active, delisted, soft));
+        var photo = com.tailtopia.place.domain.PlacePhoto.contributed(active.getId(), 1L, "places/a.jpg", 0);
+        when(photos.findVisibleForPlaces(List.of(active.getId()))).thenReturn(List.of(photo));
+
+        var cards = service.collectedCards(List.of(active.getId(), delisted.getId(), soft.getId()));
+
+        assertThat(cards.get(active.getId()).visible()).isTrue();
+        assertThat(cards.get(active.getId()).coverUrl()).contains("x-oss-process=image/resize,w_320/format,jpg");
+        assertThat(cards.get(delisted.getId()).visible()).isFalse();
+        assertThat(cards.get(delisted.getId()).coverUrl()).isNull();
+        assertThat(cards.get(delisted.getId()).name()).isEqualTo("Tempat del");
+        assertThat(cards.get(soft.getId()).visible()).isFalse();
+        Mockito.verify(photos).findVisibleForPlaces(List.of(active.getId()));
+        Mockito.verify(places, Mockito.never()).resolveForView(Mockito.anyString());
+        Mockito.verify(places, Mockito.never()).findVisibleById(Mockito.any());
+    }
+
+    @Test
+    void collectedCardsSkipPhotoQueryWhenNoneVisible() {
+        Place delisted = place("del2", JKT_LAT, JKT_LNG);
+        setField(delisted, "status", PlaceStatus.DELISTED);
+        when(places.findAllById(any())).thenReturn(List.of(delisted));
+        service.collectedCards(List.of(delisted.getId()));
+        Mockito.verify(photos, Mockito.never()).findVisibleForPlaces(Mockito.anyList());
+        assertThat(service.collectedCards(List.of())).isEmpty();
+    }
+
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */
     private static final java.util.concurrent.atomic.AtomicLong SEQ =
             new java.util.concurrent.atomic.AtomicLong(1);

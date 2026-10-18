@@ -353,6 +353,11 @@ public class SecurityConfig {
                         // V1.4.0 ④ Story 1.1：推送分类设置，仅 role=USER（controller 把 jwt.sub 当 users.id 用；
                         // 兽医 token 的 sub=vetId 与 users.id 撞号，落 anyRequest().authenticated() 会以同号用户名义读写推送设置）。精确路径，不写 /api/v1/me/** 通配。
                         .requestMatchers("/api/v1/me/push-settings").hasRole("USER")
+                        // V1.4.0 ④ Story 2.2：我的收藏列表，仅 role=USER（同上：controller 把 jwt.sub 当 users.id 用，
+                        // 兽医 token 落 anyRequest().authenticated() 会以同号用户名义读别人的收藏）。精确路径；
+                        // 不限 HttpMethod（只限 GET 的话 HEAD 会落到兜底规则、照样执行 GET 处理器）。
+                        .requestMatchers("/api/v1/me/collections/posts",
+                                "/api/v1/me/collections/places").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

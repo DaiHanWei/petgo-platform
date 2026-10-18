@@ -246,6 +246,48 @@ public class PlaceQueryService {
     }
 
     /**
+     * 「我的收藏」场所卡片（V1.4.0 ④ Story 2.2 · AD-11）：内部视图，由 collect 模块组装成对外行。
+     *
+     * @param visible 与 {@code resolveForView} 结果非空等价（ACTIVE 且未软删）；不可见时 {@code coverUrl} 恒 null
+     *                （下架可能正因图片违规，不下发封面）
+     */
+    public record CollectedPlaceCard(long id, String token, String name, com.tailtopia.place.domain.PlaceType type,
+            String addressText, String coverUrl, boolean visible) {
+    }
+
+    /**
+     * 批量取「我的收藏」场所卡片（V1.4.0 ④ Story 2.2）：{@code findAllById} 一次（不过滤软删，正好拿到不可见场所的名称与 token）
+     * + 可见场所照片一次（全不可见时短路）。封面与场所列表同口径（首张对外可见照片 → 去 EXIF 缩略图）。
+     *
+     * @param placeIds 已解析好的有效场所 id（MERGED 的跳转由调用方 SQL 完成）
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, CollectedPlaceCard> collectedCards(java.util.Collection<Long> placeIds) {
+        if (placeIds == null || placeIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Place> rows = places.findAllById(placeIds);
+        List<Long> visibleIds = rows.stream()
+                .filter(p -> p.getStatus() == PlaceStatus.ACTIVE && p.getDeletedAt() == null)
+                .map(Place::getId)
+                .toList();
+        java.util.Set<Long> visibleSet = new java.util.HashSet<>(visibleIds);
+        Map<Long, List<PlacePhoto>> photosByPlace = photosOf(visibleIds);
+        Map<Long, CollectedPlaceCard> out = new java.util.HashMap<>(rows.size() * 2);
+        for (Place p : rows) {
+            boolean visible = visibleSet.contains(p.getId());
+            String cover = visible
+                    ? com.tailtopia.shared.media.AliyunOssClient.exifStrippedThumbUrl(
+                            firstUrl(photosByPlace.getOrDefault(p.getId(), List.of())),
+                            com.tailtopia.place.dto.PlaceListItemResponse.LIST_THUMB_WIDTH_PX)
+                    : null;
+            out.put(p.getId(), new CollectedPlaceCard(p.getId(), p.getPublicToken(), p.getName(), p.getType(),
+                    p.getAddressText(), cover, visible));
+        }
+        return out;
+    }
+
+    /**
      * 整页照片一次取回后按场所分组（Story 1.9 · AD-6）。
      *
      * <p>🔴 **绝不按场所逐个查** —— 一页 20 个场所就是 20 次查询。

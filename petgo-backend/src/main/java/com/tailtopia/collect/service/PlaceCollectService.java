@@ -35,12 +35,15 @@ public class PlaceCollectService {
         return true;
     }
 
-    /** 取消：按 token 找原场所行（含下架与软删）；找不到 → 照常 {@code false}（幂等、永不 404）。 */
+    /**
+     * 取消：按 token 找原场所行（含下架与软删）；找不到 → 照常 {@code false}（幂等、永不 404）。
+     * 已软删的 MERGED 行不跳转（与 {@code resolveForView} / 列表去重同口径），只删它自己那一组。
+     */
     @Transactional
     public boolean uncollect(String token, long me) {
         places.findAnyByPublicToken(token).ifPresent(raw -> {
             long targetId = raw.getStatus() == PlaceStatus.MERGED && raw.getMergedIntoId() != null
-                    ? raw.getMergedIntoId() : raw.getId();
+                    && raw.getDeletedAt() == null ? raw.getMergedIntoId() : raw.getId();
             collections.deleteForDisplayItem(me, raw.getId(), targetId);
         });
         return false;

@@ -98,4 +98,33 @@ class PlaceCollectIntegrationTest extends ApiIntegrationTest {
         assertThat(rows(u, x.getId()) + rows(u, y.getId())).isZero();
         expectCollected(u, x.getPublicToken(), false);
     }
+
+    @Test
+    @DisplayName("Story 2.2 code-review：已软删的 MERGED 场所单独成条，移除它不连带删保留场所那一条")
+    void softDeletedMergedIsItsOwnItem() throws Exception {
+        User u = newUser();
+        Place a = newPlace(places, u);
+        Place b = newPlace(places, u);
+        act(true, u, a.getPublicToken(), 200);
+        act(true, u, b.getPublicToken(), 200);
+        jdbc.update("UPDATE places SET status = 'MERGED', merged_into_id = ?, deleted_at = now() WHERE id = ?",
+                b.getId(), a.getId());
+        act(false, u, a.getPublicToken(), 200);
+        assertThat(rows(u, a.getId())).isZero();
+        assertThat(rows(u, b.getId())).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Story 2.2 code-review：合并链 A→B→C，列表把 A 的行显示成 B，拿 B 的 token 能删掉 A 的行")
+    void mergeChainEntryIsRemovable() throws Exception {
+        User u = newUser();
+        Place a = newPlace(places, u);
+        Place b = newPlace(places, u);
+        Place c = newPlace(places, u);
+        act(true, u, a.getPublicToken(), 200);
+        jdbc.update("UPDATE places SET status = 'MERGED', merged_into_id = ? WHERE id = ?", b.getId(), a.getId());
+        jdbc.update("UPDATE places SET status = 'MERGED', merged_into_id = ? WHERE id = ?", c.getId(), b.getId());
+        act(false, u, b.getPublicToken(), 200);
+        assertThat(rows(u, a.getId())).isZero();
+    }
 }
