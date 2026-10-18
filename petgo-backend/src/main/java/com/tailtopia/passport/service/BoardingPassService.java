@@ -14,6 +14,7 @@ import com.tailtopia.place.service.PlaceIdentityQuery;
 import com.tailtopia.place.service.PlaceStampQueryService;
 import com.tailtopia.profile.dto.PetPassportSubject;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.purchase.domain.KeepsakeRef;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.dto.KeepsakePurchaseResponse;
@@ -43,10 +44,13 @@ public class BoardingPassService {
     private final BoardingPassUnlockRepository unlocks;
     private final KeepsakePurchaseService purchases;
     private final PassportTokenGenerator tokens;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可购买登机牌（409，不写解锁行、不建意图）。 */
+    private final PetWriteGuard petWriteGuard;
 
     public BoardingPassService(PetProfileQueryService pets, PetPassportRepository passportRows,
             PlaceStampQueryService stamps, PlaceIdentityQuery places, BoardingPassUnlockRepository unlocks,
-            KeepsakePurchaseService purchases, PassportTokenGenerator tokens) {
+            KeepsakePurchaseService purchases, PassportTokenGenerator tokens, PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.pets = pets;
         this.passportRows = passportRows;
         this.stamps = stamps;
@@ -99,6 +103,8 @@ public class BoardingPassService {
     @Transactional(noRollbackFor = PayException.class)
     public KeepsakePurchaseResponse unlock(long userId, long petId, String placeToken, PayChannel channel) {
         PetPassportSubject pet = requirePet(userId, petId);
+        // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、insertIfAbsent 之前校验可写。
+        petWriteGuard.requireWritable(pet.petId());
         PlaceStampRef card = requireCard(pet.petId(), placeToken);
         // 🔴 复审：与场所合并互斥。先对最终场所行加 FOR SHARE 并复核未被并掉 —— 否则合并把旧行改挂到保留方后，
         // 这里的 insert 不再冲突、在被并方下建出一行新的活动行，用户付了钱卡却挂在保留方上看不到（或重复付款不被标记）。

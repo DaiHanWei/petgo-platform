@@ -14,6 +14,8 @@ import com.tailtopia.tailsonality.service.TailsonalityDeletionService;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.slot.PetSlotStateService;
+import com.tailtopia.profile.slot.PetSlotTrigger;
 import com.tailtopia.shared.media.PersonalMedia;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,6 +44,8 @@ public class ProfileDeletionService {
     private final PlaceCheckinDeletionService placeCheckins;
     private final PetPassportDeletionService petPassports;
     private final TailsonalityDeletionService tailsonality;
+    /** V1.4.0 multi-pet Story 2.1（AC6）：删一只后释放名额，只读宠物按序恢复（只恢复不降级）。 */
+    private final PetSlotStateService petSlotState;
 
     public ProfileDeletionService(PetProfileRepository petProfiles, HealthEventRepository healthEvents,
             HealthRecordRepository healthRecords, PetMilestoneRepository petMilestones,
@@ -49,7 +53,7 @@ public class ProfileDeletionService {
             MilestoneShareRepository milestoneShares, ContentPostRepository contentPosts,
             SerialAllocationService serialAllocation, IdCardRepository idCards,
             PlaceCheckinDeletionService placeCheckins, PetPassportDeletionService petPassports,
-            TailsonalityDeletionService tailsonality) {
+            TailsonalityDeletionService tailsonality, PetSlotStateService petSlotState) {
         this.petProfiles = petProfiles;
         this.healthEvents = healthEvents;
         this.healthRecords = healthRecords;
@@ -62,6 +66,7 @@ public class ProfileDeletionService {
         this.placeCheckins = placeCheckins;
         this.petPassports = petPassports;
         this.tailsonality = tailsonality;
+        this.petSlotState = petSlotState;
     }
 
     /**
@@ -74,6 +79,9 @@ public class ProfileDeletionService {
      */
     @Transactional
     public PersonalMedia deleteByPetId(long ownerId, long petId) {
+        // 2.1 复审：先取账号锁再删行。否则删行留下的行锁与并发 reconcile / 改选持有的账号锁互相等待 → 死锁（40P01）。
+        // xact 锁可重入，后面 reconcile 再取同一把锁不阻塞。
+        petSlotState.lockAccount(ownerId);
         Optional<PersonalMedia> media = deletePetRows(ownerId, petId);
         if (media.isEmpty()) {
             return PersonalMedia.empty();
@@ -81,6 +89,10 @@ public class ProfileDeletionService {
         // 账号最后一只宠物删净 → 按账号打标（与改造前单宠物删档同效；AUTO flush 保证 exists 看到上面的 delete）。
         if (!petProfiles.existsByOwnerId(ownerId)) {
             idCards.markProfileDeleted(ownerId, Instant.now());
+        } else {
+            // V1.4.0 multi-pet Story 2.1（AC6）：名额释放 → 只读宠物按序恢复（同一事务、同一把账号锁）。
+            // 删的是最后一只时无宠物可恢复，不加锁。删除只读宠物照常允许（不经 PetWriteGuard）。
+            petSlotState.reconcile(ownerId, PetSlotTrigger.PET_DELETED);
         }
         return media.get();
     }

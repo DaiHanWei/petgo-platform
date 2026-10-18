@@ -45,8 +45,8 @@ development_status:
   1-5-app宠物列表-diary切换-他人主页-建档删除: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-宠物状态-reconcile与只读拦截: ready-for-dev
+  epic-2: in-progress
+  2-1-宠物状态-reconcile与只读拦截: review
   2-2-月租名额购买续租与价格配置: ready-for-dev
   2-3-名额到期扫描与通知: ready-for-dev
   2-4-app名额管理-租用续租与只读体验: ready-for-dev

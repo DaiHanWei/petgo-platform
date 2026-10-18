@@ -92,8 +92,11 @@ class BoardingPassUnitTest {
     private final BoardingPassUnlockRepository unlocks = mock(BoardingPassUnlockRepository.class);
     private final KeepsakePurchaseService purchases = mock(KeepsakePurchaseService.class);
     private final PassportTokenGenerator tokens = mock(PassportTokenGenerator.class);
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
     private final BoardingPassService service =
-            new BoardingPassService(pets, passportRows, stamps, places, unlocks, purchases, tokens);
+            new BoardingPassService(pets, passportRows, stamps, places, unlocks, purchases, tokens, petWriteGuard);
 
     private static PlaceStampRef card(long placeId, PlaceAvailability a, LocalDate last) {
         return new PlaceStampRef(placeId, new PlaceStamp("t" + placeId, "P" + placeId, PlaceType.CAFE, a,
@@ -228,6 +231,20 @@ class BoardingPassUnitTest {
         assertThatThrownBy(() -> service.unlock(USER, PET, "t1", PayChannel.QRIS)).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
         verify(unlocks, never()).insertIfAbsent(anyLong(), anyLong(), anyString());
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #10）：只读宠物买登机牌 → 409 pet-read-only，不写解锁行、不进付款。 */
+    @Test
+    void unlockOnReadOnlyPetRejected409WithoutRows() {
+        owner();
+        org.mockito.Mockito.doThrow(AppException.petReadOnly(PET)).when(petWriteGuard).requireWritable(PET);
+        assertThatThrownBy(() -> service.unlock(USER, PET, "t1", PayChannel.PAWCOIN))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(unlocks, never()).insertIfAbsent(anyLong(), anyLong(), anyString());
+        verify(purchases, never()).start(anyLong(), any(), any());
     }
 
     // ---------- 发放口（AC6）----------

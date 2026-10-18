@@ -51,4 +51,22 @@ class PetListItemResponseTest {
         when(resolver.listOwned(OWNER)).thenReturn(List.of());
         assertThat(service.listMine(OWNER)).isEmpty();
     }
+
+    /** V1.4.0 multi-pet Story 2.1（AC2.3）：status 读真实列、带 keepActive；默认宠物 = 最早的 ACTIVE。 */
+    @Test
+    void statusAndKeepActiveComeFromColumns() {
+        var a = pet(OWNER, 10L, T0);
+        var b = pet(OWNER, 11L, T0.plusSeconds(1));
+        a.markReadOnly();
+        b.setKeepActive(true);
+        when(resolver.listOwned(OWNER)).thenReturn(List.of(a, b));
+        when(badges.badgeOf(anyLong())).thenReturn(Optional.empty());
+
+        List<PetListItemResponse> list = service.listMine(OWNER);
+
+        assertThat(list).extracting(PetListItemResponse::status).containsExactly("READ_ONLY", "ACTIVE");
+        assertThat(list).extracting(PetListItemResponse::keepActive).containsExactly(false, true);
+        assertThat(list).filteredOn(PetListItemResponse::isDefault).extracting(PetListItemResponse::id)
+                .containsExactly(11L);
+    }
 }

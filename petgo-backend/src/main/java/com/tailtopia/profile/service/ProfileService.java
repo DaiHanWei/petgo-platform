@@ -52,12 +52,16 @@ public class ProfileService {
     private final PetSlotService petSlots;
     /** V1.4.0 multi-pet Story 1.4：建档按账号串行化（名额相关写操作的唯一账号锁）。 */
     private final PetSlotLock petSlotLock;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可编辑档案（409 {@code pet-read-only}）。 */
+    private final PetWriteGuard petWriteGuard;
 
     public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
             MilestoneService milestoneService, ProfileDeletionService profileDeletion,
             MediaDeletionService mediaDeletion, ApplicationEventPublisher events,
             com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges,
-            PetResolver petResolver, PetSlotService petSlots, PetSlotLock petSlotLock) {
+            PetResolver petResolver, PetSlotService petSlots, PetSlotLock petSlotLock,
+            PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.tailsonalityBadges = tailsonalityBadges;
         this.petResolver = petResolver;
         this.petSlots = petSlots;
@@ -174,6 +178,8 @@ public class ProfileService {
     @Transactional
     public PetProfileResponse update(long ownerId, Long petId, PetProfileUpdateRequest req) {
         PetProfile profile = petResolver.resolve(ownerId, petId);
+        // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、任何改动之前校验可写；409 时控制器不触发名片重渲染。
+        petWriteGuard.requireWritable(profile);
 
         boolean nameChanged = false;
         if (req.name() != null) {

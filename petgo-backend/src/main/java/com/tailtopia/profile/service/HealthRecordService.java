@@ -4,6 +4,7 @@ import com.tailtopia.profile.domain.ArchiveDecision;
 import com.tailtopia.profile.domain.HealthEvent;
 import com.tailtopia.profile.domain.HealthRecord;
 import com.tailtopia.profile.domain.HealthRecordType;
+import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.HealthListItemResponse;
 import com.tailtopia.profile.dto.HealthRecordCreateRequest;
 import com.tailtopia.profile.dto.HealthRecordResponse;
@@ -31,9 +32,12 @@ public class HealthRecordService {
     private final HealthEventRepository healthEvents;
     private final PetResolver petResolver;
     private final ApplicationEventPublisher events;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可增 / 改 / 删健康记录（409 {@code pet-read-only}）。 */
+    private final PetWriteGuard petWriteGuard;
 
     public HealthRecordService(HealthRecordRepository records, HealthEventRepository healthEvents,
-            PetResolver petResolver, ApplicationEventPublisher events) {
+            PetResolver petResolver, ApplicationEventPublisher events, PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.records = records;
         this.healthEvents = healthEvents;
         this.petResolver = petResolver;
@@ -77,7 +81,7 @@ public class HealthRecordService {
 
     @Transactional
     public HealthRecordResponse create(long ownerId, Long petIdOrNull, HealthRecordCreateRequest req) {
-        long petId = requirePet(ownerId, petIdOrNull);
+        long petId = requireWritablePet(ownerId, petIdOrNull);
         HealthRecordType type = parseType(req.type());
         String customName = blankToNull(req.customName());
         requireCustomName(type, customName);
@@ -98,7 +102,7 @@ public class HealthRecordService {
     /** 记录须属于所选宠物（{@code findByIdAndPetProfileId}），用 A 的 petId 改 B 的记录 → 404。 */
     @Transactional
     public HealthRecordResponse update(long ownerId, Long petIdOrNull, long recordId, HealthRecordUpdateRequest req) {
-        long petId = requirePet(ownerId, petIdOrNull);
+        long petId = requireWritablePet(ownerId, petIdOrNull);
         HealthRecord r = records.findByIdAndPetProfileId(recordId, petId)
                 .orElseThrow(() -> AppException.notFound("健康记录不存在"));
         if (req.type() != null) {
@@ -127,7 +131,7 @@ public class HealthRecordService {
 
     @Transactional
     public void delete(long ownerId, Long petIdOrNull, long recordId) {
-        long petId = requirePet(ownerId, petIdOrNull);
+        long petId = requireWritablePet(ownerId, petIdOrNull);
         HealthRecord r = records.findByIdAndPetProfileId(recordId, petId)
                 .orElseThrow(() -> AppException.notFound("健康记录不存在"));
         records.delete(r);
@@ -135,6 +139,13 @@ public class HealthRecordService {
 
     private long requirePet(long ownerId, Long petId) {
         return petResolver.resolve(ownerId, petId).getId();
+    }
+
+    /** 写路径：先归属（{@link PetResolver}，404）再可写（{@link PetWriteGuard}，只读 409）。 */
+    private long requireWritablePet(long ownerId, Long petId) {
+        PetProfile pet = petResolver.resolve(ownerId, petId);
+        petWriteGuard.requireWritable(pet);
+        return pet.getId();
     }
 
     private static HealthRecordType parseType(String raw) {

@@ -36,10 +36,13 @@ public class MilestoneCheckInService {
     private final MilestoneCompletionRepository completions;
     private final MilestoneCompletionService completionService;
     private final ContentService contentService;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可打卡（409 {@code pet-read-only}）。 */
+    private final PetWriteGuard petWriteGuard;
 
     public MilestoneCheckInService(PetProfileRepository profiles, PetMilestoneRepository milestones,
             MilestoneCompletionRepository completions, MilestoneCompletionService completionService,
-            ContentService contentService) {
+            ContentService contentService, PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.profiles = profiles;
         this.milestones = milestones;
         this.completions = completions;
@@ -77,6 +80,8 @@ public class MilestoneCheckInService {
             throw AppException.validation("该里程碑只能由健康记录或兽医问诊自动点亮，不支持打卡");
         }
         PetProfile pet = requireProfile(ownerId, petId);
+        // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、任何写之前校验可写。
+        petWriteGuard.requireWritable(pet);
         PetMilestone milestone = milestones.findByPetProfileIdAndCode(pet.getId(), code)
                 .orElseThrow(() -> AppException.notFound("里程碑不存在"));
         if (milestone.getTriggerType() != MilestoneTriggerType.USER_CHECKIN) {

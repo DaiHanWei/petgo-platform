@@ -13,6 +13,7 @@ import com.tailtopia.place.repository.PlaceCheckinPetRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.place.repository.PlaceVisitRepository;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.shared.error.AppException;
 import java.time.Clock;
 import java.time.Instant;
@@ -63,19 +64,23 @@ public class PlaceCheckinService {
     private final PlaceStampQueryService stamps;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：所选宠物逐只可写校验（只读 → 409 {@code pet-read-only}）。 */
+    private final PetWriteGuard petWriteGuard;
 
     @Autowired
     public PlaceCheckinService(PlaceRepository places, PlaceVisitRepository checkins,
             PlaceCheckinPetRepository checkinPets, PetProfileQueryService pets,
             PlaceTokenGenerator tokens, PetPassportService passports, PlaceStampQueryService stamps,
-            ApplicationEventPublisher events) {
-        this(places, checkins, checkinPets, pets, tokens, passports, stamps, events, Clock.systemUTC());
+            ApplicationEventPublisher events, PetWriteGuard petWriteGuard) {
+        this(places, checkins, checkinPets, pets, tokens, passports, stamps, events, petWriteGuard,
+                Clock.systemUTC());
     }
 
     PlaceCheckinService(PlaceRepository places, PlaceVisitRepository checkins,
             PlaceCheckinPetRepository checkinPets, PetProfileQueryService pets,
             PlaceTokenGenerator tokens, PetPassportService passports, PlaceStampQueryService stamps,
-            ApplicationEventPublisher events, Clock clock) {
+            ApplicationEventPublisher events, PetWriteGuard petWriteGuard, Clock clock) {
+        this.petWriteGuard = petWriteGuard;
         this.places = places;
         this.checkins = checkins;
         this.checkinPets = checkinPets;
@@ -103,6 +108,10 @@ public class PlaceCheckinService {
             throw AppException.validation("坐标缺失或超出合法范围");
         }
         List<Long> petIds = ownedPetIds(userId, req.petIds());
+        // V1.4.0 multi-pet Story 2.1（AD-8）：先归属（上面 422 / 403）再逐只可写；只读 → 409，不写任何行。
+        for (Long petId : petIds) {
+            petWriteGuard.requireWritable(petId);
+        }
 
         double meters = GeoBox.distanceMeters(req.latitude(), req.longitude(),
                 place.getLatitude(), place.getLongitude());
@@ -165,7 +174,7 @@ public class PlaceCheckinService {
 
     /**
      * 详情页「今日已打卡」（AC3 · V1.4.0 multi-pet Story 1.3）：逐宠物判定本人宠物今天（WIB）在该场所是否已打卡。
-     * {@code allCheckedIn} = 本人有宠物且全部宠物都已打（Story 2.1 起改为「全部 ACTIVE 宠物」）。
+     * {@code allCheckedIn} = 本人有正常宠物且全部正常（ACTIVE）宠物都已打（Story 2.1 起）。
      * 游客不调本方法（字段省略）。
      */
     @Transactional(readOnly = true)
@@ -178,7 +187,10 @@ public class PlaceCheckinService {
                 checked.add(petId);
             }
         }
-        return new CheckinTodayStatus(!own.isEmpty() && checked.size() == own.size(), List.copyOf(checked));
+        // Story 2.1：「全部」只算正常宠物（只读宠物不能打卡）；单宠物账号恒 ACTIVE，与改造前一致。
+        List<Long> active = pets.findActivePetIdsByOwner(userId);
+        boolean allChecked = !active.isEmpty() && checked.containsAll(active);
+        return new CheckinTodayStatus(allChecked, List.copyOf(checked));
     }
 
     /** 唯一约束名（与迁移 V20260930_1131 同名）。 */

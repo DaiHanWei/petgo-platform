@@ -38,4 +38,39 @@ class DefaultPetPolicyTest {
         assertThat(DefaultPetPolicy.pickPerOwner(List.of())).isEmpty();
         assertThat(DefaultPetPolicy.pickPerOwner(null)).isEmpty();
     }
+
+    // ---- V1.4.0 multi-pet Story 2.1（AC2.2）：最早创建的 ACTIVE，没有 ACTIVE 再取最早创建 ----
+
+    @Test
+    void picksEarliestActiveSkippingReadOnly() {
+        var a = pet(1L, 10L, T0);
+        var b = pet(1L, 11L, T0.plusSeconds(60));
+        var c = pet(1L, 12L, T0.plusSeconds(120));
+        a.markReadOnly();
+        assertThat(DefaultPetPolicy.pick(List.of(a, b, c))).containsSame(b);
+    }
+
+    @Test
+    void allReadOnlyFallsBackToEarliest() {
+        var a = pet(1L, 10L, T0);
+        var b = pet(1L, 11L, T0.plusSeconds(60));
+        a.markReadOnly();
+        b.markReadOnly();
+        assertThat(DefaultPetPolicy.pick(List.of(a, b))).containsSame(a);
+    }
+
+    @Test
+    void pickPerOwnerUsesSameActiveFirstRule() {
+        var a1 = pet(1L, 10L, T0);
+        var b1 = pet(2L, 20L, T0);
+        var a2 = pet(1L, 11L, T0.plusSeconds(60));
+        var b2 = pet(2L, 21L, T0.plusSeconds(60));
+        a1.markReadOnly();
+        b1.markReadOnly();
+        b2.markReadOnly();
+        var map = DefaultPetPolicy.pickPerOwner(List.of(a1, b1, a2, b2));
+        assertThat(map.get(1L)).isSameAs(a2);
+        assertThat(map.get(2L)).isSameAs(b1);
+        assertThat(map.keySet()).containsExactly(1L, 2L);
+    }
 }

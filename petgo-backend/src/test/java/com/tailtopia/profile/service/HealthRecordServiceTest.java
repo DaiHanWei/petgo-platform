@@ -32,7 +32,8 @@ class HealthRecordServiceTest {
     private final PetProfileRepository profiles = mock(PetProfileRepository.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final HealthRecordService service =
-            new HealthRecordService(records, healthEvents, new PetResolver(profiles), events);
+            new HealthRecordService(records, healthEvents, new PetResolver(profiles), events,
+                    new PetWriteGuard(profiles));
 
     @BeforeEach
     void setUp() {
@@ -144,5 +145,55 @@ class HealthRecordServiceTest {
     void foreignPetId404OnList() {
         when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.timeline(7L, 99L)).isInstanceOf(AppException.class);
+    }
+
+    // ---- V1.4.0 multi-pet Story 2.1（AC7 #4）：只读宠物 → 409 pet-read-only，不写不删、不发事件 ----
+
+    private PetProfile readOnlyPet(long id) {
+        PetProfile p = com.tailtopia.profile.support.PetFixtures.pet(7L, id, java.time.Instant.EPOCH);
+        p.markReadOnly();
+        when(profiles.findByIdAndOwnerId(id, 7L)).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    private static void assertPetReadOnly(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, long petId) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(com.tailtopia.shared.error.PetReadOnlyException.class, e -> {
+            assertThat(e.getStatus().value()).isEqualTo(409);
+            assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+            assertThat(e.problemExtensions()).containsEntry("petId", petId);
+        });
+    }
+
+    @Test
+    void createOnReadOnlyPet409() {
+        readOnlyPet(8L);
+        assertPetReadOnly(() -> service.create(7L, 8L, req("VACCINE", null)), 8L);
+        verify(records, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void updateOnReadOnlyPet409() {
+        readOnlyPet(8L);
+        assertPetReadOnly(() -> service.update(7L, 8L, 1L,
+                new HealthRecordUpdateRequest(null, null, null, null, "n")), 8L);
+        verify(records, never()).findByIdAndPetProfileId(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong());
+        verify(records, never()).save(any());
+    }
+
+    @Test
+    void deleteOnReadOnlyPet409() {
+        readOnlyPet(8L);
+        assertPetReadOnly(() -> service.delete(7L, 8L, 1L), 8L);
+        verify(records, never()).delete(any());
+    }
+
+    /** 归属先于可写：他人宠物仍 404，不泄露其状态。 */
+    @Test
+    void foreignPetStill404OnWrite() {
+        when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.create(7L, 99L, req("VACCINE", null)))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(404));
     }
 }

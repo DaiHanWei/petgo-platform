@@ -27,7 +27,8 @@ class HealthMilestoneCheckInRefusedTest {
                 Mockito.mock(com.tailtopia.profile.repository.PetMilestoneRepository.class),
                 Mockito.mock(com.tailtopia.profile.repository.MilestoneCompletionRepository.class),
                 Mockito.mock(MilestoneCompletionService.class),
-                Mockito.mock(com.tailtopia.content.service.ContentService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentService.class),
+                Mockito.mock(PetWriteGuard.class));
     }
 
     @Test

@@ -31,6 +31,8 @@ class HealthEventServiceTest {
     private ProfileService profileService;
     private ImToOssArchiver archiver;
     private HealthEventService service;
+    /** V1.4.0 multi-pet Story 2.1：真实 PetWriteGuard + mock 仓储（默认查不到 → 放行）。 */
+    private com.tailtopia.profile.repository.PetProfileRepository pets;
 
     @BeforeEach
     void setUp() {
@@ -39,8 +41,9 @@ class HealthEventServiceTest {
         archiver = Mockito.mock(ImToOssArchiver.class);
         when(profileService.ownsPet(1L, 5L)).thenReturn(true);
         when(archiver.archiveImImagesToPrivate(anyLong(), anyList())).thenReturn(List.of());
+        pets = Mockito.mock(com.tailtopia.profile.repository.PetProfileRepository.class);
         service = new HealthEventService(repo, profileService, archiver,
-                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
+                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class), new PetWriteGuard(pets));
     }
 
     private ArchiveDecisionRequest archivedReq() {
@@ -129,6 +132,54 @@ class HealthEventServiceTest {
         service.recordDecision(1L, req);
 
         verify(archiver, never()).archiveImImagesToPrivate(anyLong(), anyList());
+    }
+
+    // ---- V1.4.0 multi-pet Story 2.1（AC7 #6）：仅 ARCHIVED 写路径拦只读宠物；SKIPPED 照常 ----
+
+    private void petFiveReadOnly() {
+        var p = com.tailtopia.profile.support.PetFixtures.pet(1L, 5L, java.time.Instant.EPOCH);
+        p.markReadOnly();
+        when(pets.findById(5L)).thenReturn(Optional.of(p));
+    }
+
+    @Test
+    void archivedOnReadOnlyPetRejected409WithoutSideEffects() {
+        petFiveReadOnly();
+        when(repo.findBySourceRef("ref-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.recordDecision(1L, archivedReq()))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(repo, never()).save(any());
+        verify(archiver, never()).archiveImImagesToPrivate(anyLong(), anyList());
+    }
+
+    @Test
+    void skippedToArchivedUpgradeOnReadOnlyPetRejected409() {
+        petFiveReadOnly();
+        HealthEvent existing = HealthEvent.skipped(5L, HealthSourceType.AI_TRIAGE, "ref-1", LocalDate.now());
+        when(repo.findBySourceRef("ref-1")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.recordDecision(1L, archivedReq()))
+                .isInstanceOf(com.tailtopia.shared.error.PetReadOnlyException.class);
+        assertThat(existing.getArchiveDecision()).isEqualTo(ArchiveDecision.SKIPPED);
+        verify(archiver, never()).archiveImImagesToPrivate(anyLong(), anyList());
+    }
+
+    @Test
+    void skippedOnReadOnlyPetStillRecorded() {
+        petFiveReadOnly();
+        when(repo.findBySourceRef("ref-3")).thenReturn(Optional.empty());
+        when(repo.save(any(HealthEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        var req = new ArchiveDecisionRequest(HealthSourceType.AI_TRIAGE, "ref-3", 5L, ArchiveDecision.SKIPPED,
+                null, null, null, null, null);
+
+        ArchiveDecisionResponse resp = service.recordDecision(1L, req);
+
+        assertThat(resp.decision()).isEqualTo(ArchiveDecision.SKIPPED);
+        verify(repo).save(any(HealthEvent.class));
     }
 
     @Test

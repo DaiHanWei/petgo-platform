@@ -30,6 +30,15 @@ public final class ErrorTypes {
     /** V1.4.0 multi-pet Story 1.4（AD-3）：已达每账号 5 只上限（409，优先于 {@link #PET_SLOT_FULL}）。 */
     public static final URI PET_LIMIT_REACHED = URI.create(BASE + "pet-limit-reached");
 
+    /**
+     * V1.4.0 multi-pet Story 2.1（AD-8）：对只读宠物做写操作（409），ProblemDetail 扩展成员 {@code petId}，
+     * 见 {@link PetReadOnlyException}。
+     */
+    public static final URI PET_READ_ONLY = URI.create(BASE + "pet-read-only");
+
+    /** V1.4.0 multi-pet Story 2.1（D13）：账号宠物数 ≤ 名额，无需选择保持正常的宠物（409）。 */
+    public static final URI PET_SELECTION_NOT_NEEDED = URI.create(BASE + "pet-selection-not-needed");
+
     /** Story 2.3 R2（F10）：发布时三方自动审核——文字关键词命中违规（422，不落库）。 */
     public static final URI CONTENT_TEXT_BLOCKED = URI.create(BASE + "content-text-blocked");
 

@@ -58,7 +58,8 @@ class ProfileServiceTest {
         when(petSlots.unitPrice()).thenReturn(PetSlotService.DEFAULT_UNIT_PRICE);
         when(petSlots.quotaOf(org.mockito.ArgumentMatchers.anyLong())).thenReturn(quota(1, 0, 5));
         service = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
-                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock);
+                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock,
+                new PetWriteGuard(profiles));
     }
 
     private PetProfileCreateRequest req() {
@@ -270,7 +271,8 @@ class ProfileServiceTest {
     void recordCardSharedPublishesForChosenPet() {
         var events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
         ProfileService svc = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
-                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock);
+                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock,
+                new PetWriteGuard(profiles));
         PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
         when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
         svc.recordCardShared(1L, 11L);
@@ -373,5 +375,23 @@ class ProfileServiceTest {
         PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
         when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(1L)).thenReturn(java.util.List.of(a, b));
         assertThat(service.listOwned(1L)).extracting(PetProfile::getName).containsExactly("A", "B");
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #5）：编辑只读宠物档案 → 409 pet-read-only，不改字段、不落库、不发送审事件。 */
+    @Test
+    void updateReadOnlyPetRejected409WithoutChanges() {
+        PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
+        b.markReadOnly();
+        when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
+
+        assertThatThrownBy(() -> service.update(1L, 11L,
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "B2", null, null, null, null, null, null)))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        assertThat(b.getName()).isEqualTo("B");
+        Mockito.verify(profiles, Mockito.never()).save(any(PetProfile.class));
+        Mockito.verify(events, Mockito.never()).publishEvent(any(Object.class));
     }
 }

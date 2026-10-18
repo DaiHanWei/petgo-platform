@@ -2,6 +2,7 @@ package com.tailtopia.tailsonality.service;
 
 import com.tailtopia.profile.dto.OwnedPetRef;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.tailsonality.domain.TailsonalityCatalog;
 import com.tailtopia.tailsonality.domain.TailsonalityCode;
@@ -41,18 +42,21 @@ public class TailsonalityResultService {
     private final TailsonalityTokenGenerator tokens;
     private final TailsonalityBadgeRepository badges;
     private final TailsonalityUpgradePricing upgradePricing;
+    /** V1.4.0 multi-pet Story 2.1（AD-8 / 待确认 2）：只读宠物不可新增测试结果（409 {@code pet-read-only}）。 */
+    private final PetWriteGuard petWriteGuard;
     private final Clock clock;
 
     @Autowired
     public TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
             TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges,
-            TailsonalityUpgradePricing upgradePricing) {
-        this(results, pets, tokens, badges, upgradePricing, Clock.systemUTC());
+            TailsonalityUpgradePricing upgradePricing, PetWriteGuard petWriteGuard) {
+        this(results, pets, tokens, badges, upgradePricing, petWriteGuard, Clock.systemUTC());
     }
 
     TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
             TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges,
-            TailsonalityUpgradePricing upgradePricing, Clock clock) {
+            TailsonalityUpgradePricing upgradePricing, PetWriteGuard petWriteGuard, Clock clock) {
+        this.petWriteGuard = petWriteGuard;
         this.results = results;
         this.pets = pets;
         this.tokens = tokens;
@@ -64,6 +68,8 @@ public class TailsonalityResultService {
     @Transactional
     public TailsonalityResultResponse submit(long userId, Long petId, Map<String, ?> body) {
         OwnedPetRef pet = requirePet(userId, petId);
+        // V1.4.0 multi-pet Story 2.1：归属（404）之后、写结果之前校验可写（只读 → 409）。
+        petWriteGuard.requireWritable(pet.petId());
         Map<String, Integer> answers = normalize(body);
         TailsonalityQuestionSet set = TailsonalityCatalog.forPetType(pet.petType());
         TailsonalityCode code = TailsonalityScorer.score(set, answers);

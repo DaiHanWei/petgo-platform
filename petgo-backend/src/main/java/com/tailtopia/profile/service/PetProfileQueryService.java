@@ -104,6 +104,18 @@ public class PetProfileQueryService {
     }
 
     /**
+     * 账号名下正常（{@code ACTIVE}）宠物 id，按创建时间升序（V1.4.0 multi-pet Story 2.1）：场所详情「全部宠物都已打卡」
+     * 只算正常宠物（只读宠物不能打卡，不应让按钮永远停在「可打卡」）。单宠物账号恒 = {@link #findPetIdsByOwner}。
+     */
+    @Transactional(readOnly = true)
+    public List<Long> findActivePetIdsByOwner(long ownerId) {
+        return petProfiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId).stream()
+                .filter(p -> !p.isReadOnly())
+                .map(PetProfile::getId)
+                .toList();
+    }
+
+    /**
      * 账号名下宠物的 id + 物种（V1.3.2 Story 2.1：Tailsonality 按物种选题套）。
      * V1.4.0 multi-pet：{@code petId} 非空 → 校验归属（不属于本人 / 不存在 → empty，调用方 404）；
      * null → 默认宠物。tailsonality 包据此取宠物，不直接注入 {@code PetProfileRepository}。

@@ -35,8 +35,11 @@ class TailsonalityUnlockServiceTest {
     private final PetProfileQueryService pets = mock(PetProfileQueryService.class);
     private final KeepsakePurchaseService purchases = mock(KeepsakePurchaseService.class);
     private final TailsonalityUpgradePricing upgradePricing = mock(TailsonalityUpgradePricing.class);
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
     private final TailsonalityUnlockService service =
-            new TailsonalityUnlockService(results, pets, purchases, upgradePricing);
+            new TailsonalityUnlockService(results, pets, purchases, upgradePricing, petWriteGuard);
 
     private TailsonalityResult row(Instant unlockedAt) {
         TailsonalityResult r = TailsonalityResult.create("tok", 3L, 7L, TailsonalityQuestionSet.CAT, Map.of(),
@@ -139,5 +142,33 @@ class TailsonalityUnlockServiceTest {
         assertThatThrownBy(() -> service.unlockMatch(8L, "tok", PayChannel.PAWCOIN)).isInstanceOf(AppException.class)
                 .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
         verify(purchases, never()).start(anyLong(), any(), any());
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #7）：只读宠物的结果解锁 / 配型解锁 → 409 pet-read-only，不进付款。 */
+    @Test
+    void readOnlyPetUnlockAndMatchRejected409WithoutPurchase() {
+        ownsPet();
+        when(results.findForUpdateByPublicToken("tok")).thenReturn(Optional.of(row(null)));
+        org.mockito.Mockito.doThrow(AppException.petReadOnly(3L)).when(petWriteGuard).requireWritable(3L);
+
+        for (Runnable call : java.util.List.<Runnable>of(
+                () -> service.unlock(7L, "tok", PayChannel.PAWCOIN),
+                () -> service.unlockMatch(7L, "tok", PayChannel.PAWCOIN))) {
+            assertThatThrownBy(call::run).isInstanceOfSatisfying(AppException.class, e -> {
+                assertThat(e.getStatus().value()).isEqualTo(409);
+                assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+            });
+        }
+        verify(purchases, never()).start(anyLong(), any(), any());
+    }
+
+    /** Story 2.1：归属先于可写——非本人结果仍 404，不走 guard。 */
+    @Test
+    void foreignResultStill404BeforeWritability() {
+        when(results.findForUpdateByPublicToken("tok")).thenReturn(Optional.of(row(null)));
+        when(pets.ownsPet(7L, 3L)).thenReturn(false);
+        assertThatThrownBy(() -> service.unlock(7L, "tok", PayChannel.PAWCOIN))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(404));
+        verify(petWriteGuard, never()).requireWritable(anyLong());
     }
 }

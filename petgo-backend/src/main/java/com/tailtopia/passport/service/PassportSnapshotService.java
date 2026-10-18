@@ -15,6 +15,7 @@ import com.tailtopia.place.service.PlaceIdentityQuery;
 import com.tailtopia.place.service.PlaceStampQueryService;
 import com.tailtopia.profile.dto.PetPassportSubject;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.purchase.domain.KeepsakeRef;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.service.KeepsakePurchaseService;
@@ -46,20 +47,24 @@ public class PassportSnapshotService {
     private final PetProfileQueryService pets;
     private final KeepsakePurchaseService purchases;
     private final PassportTokenGenerator tokens;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可购买护照快照（409，不冻结快照、不建意图）。 */
+    private final PetWriteGuard petWriteGuard;
     private final Clock clock;
 
     @Autowired
     public PassportSnapshotService(PetPassportService passports, PetPassportRepository passportRows,
             PassportSnapshotRepository snapshots, PlaceStampQueryService stamps, PlaceIdentityQuery places,
             PlaceSetHash hash, PetProfileQueryService pets, KeepsakePurchaseService purchases,
-            PassportTokenGenerator tokens) {
-        this(passports, passportRows, snapshots, stamps, places, hash, pets, purchases, tokens, Clock.systemUTC());
+            PassportTokenGenerator tokens, PetWriteGuard petWriteGuard) {
+        this(passports, passportRows, snapshots, stamps, places, hash, pets, purchases, tokens, petWriteGuard,
+                Clock.systemUTC());
     }
 
     PassportSnapshotService(PetPassportService passports, PetPassportRepository passportRows,
             PassportSnapshotRepository snapshots, PlaceStampQueryService stamps, PlaceIdentityQuery places,
             PlaceSetHash hash, PetProfileQueryService pets, KeepsakePurchaseService purchases,
-            PassportTokenGenerator tokens, Clock clock) {
+            PassportTokenGenerator tokens, PetWriteGuard petWriteGuard, Clock clock) {
+        this.petWriteGuard = petWriteGuard;
         this.passports = passports;
         this.passportRows = passportRows;
         this.snapshots = snapshots;
@@ -85,6 +90,8 @@ public class PassportSnapshotService {
         long petId = passports.ensureIssuedFor(userId, requestedPetId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"))
                 .subject().petId();
+        // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、冻结快照之前校验可写；409 整笔回滚（含上面的幂等签发）。
+        petWriteGuard.requireWritable(petId);
         passportRows.findForUpdateByPetProfileId(petId)
                 .orElseThrow(() -> new IllegalStateException("护照签发后回读为空"));
         List<PlaceStampRef> current = stamps.stampRefsOf(petId);

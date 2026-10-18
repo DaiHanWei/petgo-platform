@@ -56,8 +56,11 @@ class PassportSnapshotServiceTest {
     private final PetProfileQueryService pets = mock(PetProfileQueryService.class);
     private final KeepsakePurchaseService purchases = mock(KeepsakePurchaseService.class);
     private final PassportTokenGenerator tokens = mock(PassportTokenGenerator.class);
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
     private final PassportSnapshotService service = new PassportSnapshotService(passports, passportRows, snapshots,
-            stamps, places, new PlaceSetHash(places), pets, purchases, tokens);
+            stamps, places, new PlaceSetHash(places), pets, purchases, tokens, petWriteGuard);
 
     private final PetPassportSubject subject = new PetPassportSubject(PET, "Momo", "CAT", Instant.EPOCH, null);
     private PetPassport passport;
@@ -220,5 +223,21 @@ class PassportSnapshotServiceTest {
         when(snapshots.findByPetProfileIdAndPaidAtIsNotNullOrderByPaidAtDescIdDesc(petB)).thenReturn(List.of());
         assertThat(service.list(USER, petB).items()).isEmpty();
         verify(snapshots, never()).findByPetProfileIdAndPaidAtIsNotNullOrderByPaidAtDescIdDesc(PET);
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #9）：只读宠物买护照快照 → 409 pet-read-only，不冻结快照、不进付款。 */
+    @Test
+    void startOnReadOnlyPetRejected409WithoutSnapshot() {
+        currentStamps(1, 2);
+        org.mockito.Mockito.doThrow(com.tailtopia.shared.error.AppException.petReadOnly(PET))
+                .when(petWriteGuard).requireWritable(PET);
+        assertThatThrownBy(() -> service.start(USER, null, PayChannel.PAWCOIN))
+                .isInstanceOfSatisfying(com.tailtopia.shared.error.AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(snapshots, never()).saveAndFlush(any());
+        verify(passportRows, never()).findForUpdateByPetProfileId(anyLong());
+        verify(purchases, never()).start(anyLong(), any(), any());
     }
 }

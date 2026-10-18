@@ -26,6 +26,8 @@ import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.MilestoneShareRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.slot.PetSlotStateService;
+import com.tailtopia.profile.slot.PetSlotTrigger;
 import com.tailtopia.profile.support.PetFixtures;
 import com.tailtopia.shared.media.PersonalMedia;
 import com.tailtopia.tailsonality.service.TailsonalityDeletionService;
@@ -58,6 +60,7 @@ class ProfileDeletionServiceTest {
     private final PlaceCheckinDeletionService placeCheckins = mock(PlaceCheckinDeletionService.class);
     private final PetPassportDeletionService petPassports = mock(PetPassportDeletionService.class);
     private final TailsonalityDeletionService tailsonality = mock(TailsonalityDeletionService.class);
+    private final PetSlotStateService petSlotState = mock(PetSlotStateService.class);
 
     private ProfileDeletionService service;
     private PetProfile a;
@@ -67,7 +70,7 @@ class ProfileDeletionServiceTest {
     void setUp() {
         service = new ProfileDeletionService(petProfiles, healthEvents, healthRecords, petMilestones,
                 milestoneCompletions, milestoneShares, contentPosts, serialAllocation, idCards,
-                placeCheckins, petPassports, tailsonality);
+                placeCheckins, petPassports, tailsonality, petSlotState);
         a = PetFixtures.pet(OWNER, PET_A, PetType.CAT, Instant.parse("2026-01-01T00:00:00Z"));
         b = PetFixtures.pet(OWNER, PET_B, PetType.DOG, Instant.parse("2026-02-01T00:00:00Z"));
         ReflectionTestUtils.setField(a, "serialId", 128L);
@@ -181,5 +184,43 @@ class ProfileDeletionServiceTest {
         InOrder o = inOrder(petProfiles, idCards);
         o.verify(petProfiles).delete(a);
         o.verify(idCards).markProfileDeleted(eq(OWNER), any(Instant.class));
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC6）：删一只后还剩宠物 → 同一事务内 reconcile(PET_DELETED)，在删除之后。 */
+    @Test
+    void deletingOnePetReconcilesRemainingPetsAfterDelete() {
+        service.deleteByPetId(OWNER, PET_A);
+
+        InOrder o = inOrder(petProfiles, petSlotState);
+        o.verify(petProfiles).delete(a);
+        o.verify(petSlotState).reconcile(OWNER, PetSlotTrigger.PET_DELETED);
+    }
+
+    /** Story 2.1（AC6）：删最后一只无宠物可恢复、不加锁；注销路径（逐只删全部）不 reconcile。 */
+    @Test
+    void lastPetDeletionAndAccountDeletionSkipReconcile() {
+        when(petProfiles.existsByOwnerId(OWNER)).thenReturn(false);
+        service.deleteByPetId(OWNER, PET_A);
+        service.deleteAllForAccount(OWNER);
+
+        verify(petSlotState, never()).reconcile(anyLong(), any());
+    }
+
+    /** Story 2.1（AC6）：foreign / 不存在的宠物 → no-op，也不 reconcile。 */
+    @Test
+    void foreignPetDeletionDoesNotReconcile() {
+        when(petProfiles.findByIdAndOwnerId(99L, OWNER)).thenReturn(Optional.empty());
+        service.deleteByPetId(OWNER, 99L);
+        verify(petSlotState, never()).reconcile(anyLong(), any());
+    }
+
+    /** 2.1 复审：先取账号锁再删行（防与并发 reconcile / 改选死锁）。 */
+    @Test
+    void deleteByPetIdLocksAccountBeforeDeletingRows() {
+        service.deleteByPetId(OWNER, PET_A);
+        InOrder o = inOrder(petSlotState, healthEvents, petProfiles);
+        o.verify(petSlotState).lockAccount(OWNER);
+        o.verify(healthEvents).deleteByPetId(PET_A);
+        o.verify(petProfiles).delete(a);
     }
 }

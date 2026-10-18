@@ -75,6 +75,9 @@ public class ContentService {
     /** V1.3.4 Story 2.1：每张图露出位置的严格校验（长度不符 / 越界 → 422，不整组作废）。 */
     private final ImageCropOffsetValidator cropOffsets;
 
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：Diary 关联只读宠物 → 409 {@code pet-read-only}（可写校验单一入口）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard;
+
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
@@ -82,7 +85,9 @@ public class ContentService {
             ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
             ContentPinService pins, MentionSanitizer mentions,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            ImageCropOffsetValidator cropOffsets) {
+            ImageCropOffsetValidator cropOffsets,
+            com.tailtopia.profile.service.PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -501,6 +506,9 @@ public class ContentService {
                 throw AppException.validation("无法绑定该宠物档案")
                         .code("admin.err.seed.petNotOwned");
             }
+            // V1.4.0 multi-pet Story 2.1（AD-8）：先归属（上面 422）再可写——只读宠物 → 409 pet-read-only，不落库。
+            // Story 3.1 改 petIds 后逐只调。
+            petWriteGuard.requireWritable(petId);
             // AC5（R2 · F9）：事件日期仅 GROWTH_MOMENT 有值；缺省取今天；不可未来。
             // 「今天」按印尼业务时区 WIB（Asia/Jakarta, UTC+7）判定，勿用 UTC——否则 WIB 00:00~07:00
             // 用户本地已是新一天、App 默认取本地今天，会被 UTC 的昨天误判为「未来」而拒发（prod 事故 2026-07-20）。

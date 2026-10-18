@@ -59,6 +59,9 @@ class PlaceCheckinServiceTest {
     private final PlaceStampQueryService stamps = mock(PlaceStampQueryService.class);
     private final org.springframework.context.ApplicationEventPublisher events =
             mock(org.springframework.context.ApplicationEventPublisher.class);
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
 
     private Place place;
 
@@ -67,7 +70,7 @@ class PlaceCheckinServiceTest {
 
     private PlaceCheckinService serviceAt(Instant now) {
         return new PlaceCheckinService(places, checkins, checkinPets, pets, tokens, passports, stamps,
-                events, Clock.fixed(now, ZoneOffset.UTC));
+                events, petWriteGuard, Clock.fixed(now, ZoneOffset.UTC));
     }
 
     @BeforeEach
@@ -77,6 +80,8 @@ class PlaceCheckinServiceTest {
         ReflectionTestUtils.setField(place, "id", PLACE_ID);
         when(places.resolveForView(anyString())).thenReturn(Optional.of(place));
         when(pets.findPetIdsByOwner(USER)).thenReturn(List.of(PET));
+        // Story 2.1：正常宠物 = 全部宠物（本类既有用例都没有只读宠物），跟随各用例对 findPetIdsByOwner 的桩。
+        when(pets.findActivePetIdsByOwner(USER)).thenAnswer(inv -> pets.findPetIdsByOwner(USER));
         com.tailtopia.passport.domain.PetPassport pp = org.mockito.Mockito.mock(
                 com.tailtopia.passport.domain.PetPassport.class);
         when(pp.getPassportNo()).thenReturn("TT02P2600128");
@@ -405,5 +410,43 @@ class PlaceCheckinServiceTest {
         verify(events).publishEvent(ev.capture());
         assertThat(ev.getValue()).isEqualTo(new com.tailtopia.place.event.PlaceCheckedInEvent(
                 USER, place.getPublicToken(), PlaceType.CAFE, false, 4, List.of(PET, PET_B)));
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #2）：所选宠物有只读 → 409 pet-read-only，不写打卡行。 */
+    @Test
+    void readOnlySelectedPetRejected409WithoutWrites() {
+        org.mockito.Mockito.doThrow(AppException.petReadOnly(PET)).when(petWriteGuard).requireWritable(PET);
+
+        assertThatThrownBy(() -> serviceAt(NOON_WIB).checkIn("t", USER, at(LAT)))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getType()).isEqualTo(ErrorTypes.PET_READ_ONLY);
+                });
+        verify(checkins, never()).saveAndFlush(any());
+        verify(checkinPets, never()).saveAndFlush(any());
+        verify(passports, never()).ensureIssued(anyLong(), anyLong());
+    }
+
+    /** Story 2.1：归属先于可写——含非本人宠物仍 403 checkin-pet-forbidden，不走 guard。 */
+    @Test
+    void foreignPetStill403BeforeWritability() {
+        PlaceCheckinRequest req = new PlaceCheckinRequest(LAT, LNG, List.of(999L));
+        assertThatThrownBy(() -> serviceAt(NOON_WIB).checkIn("t", USER, req))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getType()).isEqualTo(ErrorTypes.CHECKIN_PET_FORBIDDEN));
+        verify(petWriteGuard, never()).requireWritable(anyLong());
+    }
+
+    /** Story 2.1：「全部已打卡」只算正常宠物——只读的 B 没打卡也算全部已打。 */
+    @Test
+    void allCheckedInCountsOnlyActivePets() {
+        twoPets();
+        when(pets.findActivePetIdsByOwner(USER)).thenReturn(List.of(PET));
+        when(checkins.existsForPetOnDay(PET, PLACE_ID, TODAY)).thenReturn(true);
+
+        CheckinTodayStatus st = serviceAt(NOON_WIB).checkedInToday(USER, PLACE_ID);
+
+        assertThat(st.checkedInPetIds()).containsExactly(PET);
+        assertThat(st.allCheckedIn()).isTrue();
     }
 }

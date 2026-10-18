@@ -2,6 +2,7 @@ package com.tailtopia.tailsonality.service;
 
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.purchase.domain.KeepsakeRef;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.dto.KeepsakePurchaseResponse;
@@ -27,9 +28,13 @@ public class TailsonalityUnlockService {
     private final PetProfileQueryService pets;
     private final KeepsakePurchaseService purchases;
     private final TailsonalityUpgradePricing upgradePricing;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可付费解锁（409 {@code pet-read-only}，不建意图、不扣币）。 */
+    private final PetWriteGuard petWriteGuard;
 
     public TailsonalityUnlockService(TailsonalityResultRepository results, PetProfileQueryService pets,
-            KeepsakePurchaseService purchases, TailsonalityUpgradePricing upgradePricing) {
+            KeepsakePurchaseService purchases, TailsonalityUpgradePricing upgradePricing,
+            PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.results = results;
         this.pets = pets;
         this.purchases = purchases;
@@ -41,6 +46,7 @@ public class TailsonalityUnlockService {
     @Transactional(noRollbackFor = PayException.class)
     public KeepsakePurchaseResponse unlock(long userId, String token, PayChannel channel) {
         TailsonalityResult row = lockOwned(userId, token);
+        petWriteGuard.requireWritable(row.getPetProfileId()); // Story 2.1：归属（404）之后、付款之前
         KeepsakeRef ref = new KeepsakeRef(KeepsakeSku.TAILSONALITY, row.getId(), row.getPublicToken(),
                 row.getPetProfileId(), row.getUnlockedAt() != null, upgradePricing.upgradePriceOrNull(row));
         return purchases.start(userId, ref, channel);
@@ -50,6 +56,7 @@ public class TailsonalityUnlockService {
     @Transactional(noRollbackFor = PayException.class)
     public KeepsakePurchaseResponse unlockMatch(long userId, String token, PayChannel channel) {
         TailsonalityResult row = lockOwned(userId, token);
+        petWriteGuard.requireWritable(row.getPetProfileId()); // Story 2.1：归属（404）之后、付款之前
         KeepsakeRef ref = new KeepsakeRef(KeepsakeSku.TS_MATCH, row.getId(), row.getPublicToken(),
                 row.getPetProfileId(), row.matchUnlocked());
         return purchases.start(userId, ref, channel);

@@ -42,7 +42,8 @@ class IdCardServiceTest {
     private final IdCardHdPurchaseRepository hdPurchases = mock(IdCardHdPurchaseRepository.class);
     private final IdCardRepository idCards = mock(IdCardRepository.class);
     private final IdCardService service =
-            new IdCardService(profiles, serialAllocation, cardNumbers, hdPurchases, idCards);
+            new IdCardService(profiles, serialAllocation, cardNumbers, hdPurchases, idCards,
+                    new PetWriteGuard(profiles));
 
     private static PetProfile pet() {
         return PetProfile.create(7L, PetType.CAT, "Momo", null, "英短", LocalDate.of(2022, 1, 1), "乖", "TOK");
@@ -117,6 +118,24 @@ class IdCardServiceTest {
         verify(serialAllocation, never()).allocate();
         verify(profiles, never()).save(any());
         assertThat(res.serialId()).isEqualTo(99L);
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #11）：只读宠物不分配新号 → 409；已有号的幂等回读照常。 */
+    @Test
+    void generateOnReadOnlyPetWithoutSerialIs409AndAllocatesNothing() {
+        PetProfile p = pet();
+        org.springframework.test.util.ReflectionTestUtils.setField(p, "id", 10L);
+        p.markReadOnly();
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
+
+        assertThatThrownBy(() -> service.generateSerial(7L, 10L))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY));
+        verify(serialAllocation, never()).allocate();
+        verify(profiles, never()).save(any());
+
+        p.assignSerial(99L);
+        assertThat(service.generateSerial(7L, 10L).serialId()).isEqualTo(99L);
     }
 
     @Test

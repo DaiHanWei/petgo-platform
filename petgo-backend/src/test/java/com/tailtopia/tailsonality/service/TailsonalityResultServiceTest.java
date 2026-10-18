@@ -44,6 +44,9 @@ class TailsonalityResultServiceTest {
     private TailsonalityResultService service;
     private com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository badges;
     private final List<TailsonalityResult> stored = new ArrayList<>();
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
 
     @BeforeEach
     void setUp() {
@@ -63,7 +66,7 @@ class TailsonalityResultServiceTest {
         badges = mock(com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository.class);
         when(badges.findResultIdByPetProfileId(PET)).thenReturn(Optional.empty());
         service = new TailsonalityResultService(repo, pets, tokens, badges,
-                mock(TailsonalityUpgradePricing.class), Clock.fixed(Instant.parse("2026-09-30T08:00:00Z"), ZoneOffset.UTC));
+                mock(TailsonalityUpgradePricing.class), petWriteGuard, Clock.fixed(Instant.parse("2026-09-30T08:00:00Z"), ZoneOffset.UTC));
     }
 
     private static Map<String, Object> body(int idx) {
@@ -254,5 +257,17 @@ class TailsonalityResultServiceTest {
         when(pets.findOwnedPet(USER, 99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.list(USER, 99L)).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #8 · 待确认 2 默认拦）：只读宠物提交测试 → 409 pet-read-only，不写结果行。 */
+    @Test
+    void submitOnReadOnlyPetRejected409WithoutRow() {
+        org.mockito.Mockito.doThrow(AppException.petReadOnly(PET)).when(petWriteGuard).requireWritable(PET);
+        assertThatThrownBy(() -> service.submit(USER, null, body(0)))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(repo, never()).save(any());
     }
 }

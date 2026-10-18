@@ -36,10 +36,13 @@ public class IdCardService {
     private final CardNumberService cardNumbers;
     private final IdCardHdPurchaseRepository hdPurchases;
     private final IdCardRepository idCards;
+    /** V1.4.0 multi-pet Story 2.1（AD-8 / AC7 #11）：给只读宠物分配身份证流水号 → 409 {@code pet-read-only}。 */
+    private final PetWriteGuard petWriteGuard;
 
     public IdCardService(PetProfileRepository profiles, SerialAllocationService serialAllocation,
             CardNumberService cardNumbers, IdCardHdPurchaseRepository hdPurchases,
-            IdCardRepository idCards) {
+            IdCardRepository idCards, PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.profiles = profiles;
         this.serialAllocation = serialAllocation;
         this.cardNumbers = cardNumbers;
@@ -193,6 +196,9 @@ public class IdCardService {
         PetProfile pet = profiles.findByIdAndOwnerId(petId, ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
         if (pet.getSerialId() == null) {
+            // V1.4.0 multi-pet Story 2.1（AC7 #11）：本方法收 petId → 只读宠物不分配新号（409）；
+            // 已有号的幂等回读不写库，照常返回。建卡 createCard / V2 不挂宠物，不拦（App 4.2 只列正常宠物）。
+            petWriteGuard.requireWritable(pet);
             long serial = serialAllocation.allocate();
             pet.assignSerial(serial);
             profiles.save(pet);

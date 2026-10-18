@@ -44,7 +44,7 @@ class MilestoneCheckInServiceTest {
         completionService = Mockito.mock(MilestoneCompletionService.class);
         contentService = Mockito.mock(ContentService.class);
         service = new MilestoneCheckInService(profiles, milestones, completions,
-                completionService, contentService);
+                completionService, contentService, new PetWriteGuard(profiles));
         when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(profile()));
     }
 
@@ -222,5 +222,21 @@ class MilestoneCheckInServiceTest {
         assertThatThrownBy(() -> service.checkIn(8L, null, "C-S6", 99L))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> org.assertj.core.api.Assertions.assertThat(e.getStatus().value()).isEqualTo(404));
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #3）：只读宠物里程碑打卡 → 409 pet-read-only，不完成、不读里程碑。 */
+    @Test
+    void checkInOnReadOnlyPetRejected409() {
+        PetProfile ro = profile();
+        ro.markReadOnly();
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(ro));
+
+        assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S6", 99L))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        Mockito.verifyNoInteractions(completionService);
+        Mockito.verify(milestones, Mockito.never()).findByPetProfileIdAndCode(Mockito.anyLong(), Mockito.anyString());
     }
 }

@@ -72,8 +72,13 @@ class ContentServiceTest {
                 // V1.3.2 Story 1.5：打卡关联只读口（本类按需 stub）。
                 placeCheckins,
                 // V1.3.4 Story 2.1：露出位置校验用真实实现（纯函数、无 IO）。
-                new ImageCropOffsetValidator());
+                new ImageCropOffsetValidator(),
+                // V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。
+                petWriteGuard);
     }
+
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            Mockito.mock(com.tailtopia.profile.service.PetWriteGuard.class);
 
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
             Mockito.mock(com.tailtopia.place.service.PlaceCheckinQueryService.class);
@@ -104,6 +109,31 @@ class ContentServiceTest {
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "moment", null), null);
         assertThat(resp.type()).isEqualTo(ContentType.GROWTH_MOMENT);
         assertThat(resp.petId()).isEqualTo(5L);
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #1）：Diary 关联只读宠物 → 409 pet-read-only，不落库、不发事件。 */
+    @Test
+    void growthMomentWithReadOnlyPetRejected409() {
+        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        Mockito.doThrow(AppException.petReadOnly(5L)).when(petWriteGuard).requireWritable(5L);
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "x", null), null))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType().toString()).isEqualTo("https://petgo/errors/pet-read-only");
+                });
+        verify(posts, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    /** Story 2.1：归属先于可写——非本人宠物仍是原来的 422，不走 guard。 */
+    @Test
+    void unownedPetIsCheckedBeforeWritability() {
+        when(profileService.ownsPet(1L, 7L)).thenReturn(false);
+        assertThatThrownBy(() -> service.publish(1L,
+                new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 7L, "x", null), null))
+                .isInstanceOf(AppException.class);
+        verify(petWriteGuard, never()).requireWritable(Mockito.anyLong());
     }
 
     @Test

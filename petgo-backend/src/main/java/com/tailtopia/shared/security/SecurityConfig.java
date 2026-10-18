@@ -336,6 +336,8 @@ public class SecurityConfig {
                         // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。
                         // V1.4.0 multi-pet：「我的宠物」列表含宠物名 / 生日，兽医 token 不得以同号用户名义读取。精确路径。
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/list").hasRole("USER")
+                        // V1.4.0 multi-pet Story 2.1：改选保持正常的宠物（写宠物状态），兽医 token 不得以同号用户名义改。精确路径。
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/pet-profiles/me/active-selection").hasRole("USER")
                         // V1.4.0 multi-pet Story 1.4：名额摘要，controller 把 jwt.sub 当 users.id 用 —— 兽医 token 不得以同号用户名义读取。
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-slots/me").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/passport").hasRole("USER")
