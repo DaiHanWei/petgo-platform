@@ -34,7 +34,12 @@ public class PetSlotLock {
     public void lockUser(long userId) {
         entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(:ns, :uid)")
                 .setParameter("ns", PET_SLOT_LOCK_NS)
-                .setParameter("uid", (int) (userId % Integer.MAX_VALUE))
+                .setParameter("uid", lockKey(userId))
                 .getSingleResult();
+    }
+
+    /** 两参锁的第二个键（与 {@link #lockUser} 同算法；JDBC 保存点内取同一把锁时用，见 {@code PetSlotGranter}）。 */
+    static int lockKey(long userId) {
+        return (int) (userId % Integer.MAX_VALUE);
     }
 }

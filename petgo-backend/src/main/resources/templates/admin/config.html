@@ -33,6 +33,8 @@
                 <div th:replace="~{admin/fragments/config-card-pawcoin :: card}"></div>
                 <div th:replace="~{admin/fragments/config-card-pawcoin :: tiers}"></div>
             </div>
+            <!--/* 宠物名额月租价格（V1.4.0 multi-pet Story 2.2 · AB-34.3）——UI 稿 L7：排在「PawCoin · 充值档位」之后、「客服联系方式」之前 */-->
+            <div th:replace="~{admin/fragments/config-card-pet-slot :: card}"></div>
             <!--/* 客服联系方式（shop-v2 Story 3-1 / AD-S8）——改完即生效，不需发版、不需重启 */-->
             <div th:replace="~{admin/fragments/config-card-support :: card}"></div>
         </th:block>

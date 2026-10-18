@@ -4,6 +4,7 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
+import com.tailtopia.admin.config.dto.PetSlotPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.ConfigChangeLog;
@@ -154,6 +155,32 @@ public class AdminConfigService {
         c.setPassportBoardingUnlockPrice(form.passportBoardingPrice());
         c.setTailsonalityUnlockPrice(form.tailsonalityUnlockPrice());
         c.setTailsonalityMatchUnlockPrice(form.tailsonalityMatchUnlockPrice());
+        pricingRepo.save(c);
+        commit(logs, adminId, "PRICING", "pricing_config");
+    }
+
+    // ── 宠物名额月租价格（V1.4.0 multi-pet Story 2.2 · AB-34.3 · UI 稿 L7）──
+    /**
+     * 每个名额 / 30 天的月租价（{@code pricing_config.pet_slot_monthly_price}）。下限同一次性解锁价
+     * {@value #MIN_UNLOCK_PRICE}（与迁移 V20261018_1602 的 DB CHECK 同口径，先拦成 422），上限同充值档位
+     * {@link #MAX_TIER_AMOUNT}。真变化才写 {@code config_change_logs}（PRICING，字段名 = 列名）+ 一条审计
+     * {@code CONFIG_UPDATE_PRICING}；无变化不写不审计。只影响之后的新租与续租；已生成的 PENDING 单按下单快照。
+     */
+    @Transactional
+    public void updatePetSlotPricing(PetSlotPricingForm form, long adminId) {
+        require(form.petSlotMonthlyPrice() >= MIN_UNLOCK_PRICE,
+                "价格须为 ≥100 的整数（IDR）", "admin.err.config.petSlotPriceMin");
+        require(form.petSlotMonthlyPrice() <= MAX_TIER_AMOUNT,
+                "价格须 ≤ 100000000 IDR", "admin.err.config.petSlotPriceMax");
+        PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.PRICING, "pet_slot_monthly_price", c.getPetSlotMonthlyPrice(),
+                form.petSlotMonthlyPrice(), adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计。
+        }
+        c.setPetSlotMonthlyPrice(form.petSlotMonthlyPrice());
         pricingRepo.save(c);
         commit(logs, adminId, "PRICING", "pricing_config");
     }

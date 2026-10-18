@@ -7,7 +7,10 @@ import static org.mockito.Mockito.when;
 import com.tailtopia.growth.domain.GrowthLevel;
 import com.tailtopia.growth.domain.GrowthTier;
 import com.tailtopia.growth.service.GrowthQueryService;
+import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.slot.repository.PetSlotRentalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,11 +23,13 @@ class PetSlotServiceTest {
 
     private final GrowthQueryService growth = mock(GrowthQueryService.class);
     private final PetProfileRepository profiles = mock(PetProfileRepository.class);
+    private final PetSlotRentalRepository rentals = mock(PetSlotRentalRepository.class); // 未桩 = 0 个生效月租
+    private final PlatformConfigService platformConfig = mock(PlatformConfigService.class);
     private PetSlotService service;
 
     @BeforeEach
     void setUp() {
-        service = new PetSlotService(growth, profiles);
+        service = new PetSlotService(growth, profiles, rentals, platformConfig);
     }
 
     private void level(int lv) {
@@ -91,8 +96,14 @@ class PetSlotServiceTest {
         assertThat(q.canRent()).isEqualTo(q.rentable() > 0);
     }
 
+    /** Story 2.2 按设计改变：单价不再是常量，改读 {@code pricing_config.pet_slot_monthly_price}（迁移种子 5000）。 */
     @Test
-    void unitPriceIsConstantForNow() {
+    void unitPriceReadsPricingConfig() {
+        PricingConfig pricing = mock(PricingConfig.class);
+        when(platformConfig.pricing()).thenReturn(pricing);
+        when(pricing.getPetSlotMonthlyPrice()).thenReturn(PetSlotService.DEFAULT_UNIT_PRICE);
         assertThat(service.unitPrice()).isEqualTo(5000L);
+        when(pricing.getPetSlotMonthlyPrice()).thenReturn(7000L);
+        assertThat(service.unitPrice()).isEqualTo(7000L);
     }
 }

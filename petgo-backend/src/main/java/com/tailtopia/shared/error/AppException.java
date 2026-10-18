@@ -178,6 +178,21 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_SELECTION_NOT_NEEDED, detail);
     }
 
+    /** V1.4.0 multi-pet Story 2.2：可租数不足 → 409 {@code pet-slot-rent-unavailable}（扩展成员 {@code rentable}）。 */
+    public static AppException petSlotRentUnavailable(int rentable) {
+        return new PetSlotRentUnavailableException(rentable, null);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：续租个数超上限 → 409 {@code pet-slot-rent-unavailable}（另带 {@code renewableMax}）。 */
+    public static AppException petSlotRenewOverLimit(int rentable, int renewableMax) {
+        return new PetSlotRentUnavailableException(rentable, renewableMax);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：所选名额不在生效中 → 409 {@code pet-slot-renew-invalid}。 */
+    public static AppException petSlotRenewInvalid(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_SLOT_RENEW_INVALID, detail);
+    }
+
     /** V1.3.2 Story 3.3：佩戴未解锁结果 → 422 {@code tailsonality-badge-locked}。 */
     public static AppException tailsonalityBadgeLocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.TAILSONALITY_BADGE_LOCKED, detail);

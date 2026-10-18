@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · 「宠物名额月租价格」卡（V1.4.0 multi-pet Story 2.2 · AB-34.3 · UI 稿 L7）。单独一张模板 D 配置卡（不并入「一次性解锁定价」卡）。
+  POST /admin/config/pet-slot-pricing（petSlotMonthlyPrice，≥100 且 ≤100000000；每个名额 / 30 天）。权限沿用 config.edit / config.view。
+  确认弹层复述改动字段旧值 → 新值（data-confirm-diff）。只影响之后的新租用和续租；已生效的名额与已生成的待付单不变。
+-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/config/pet-slot-pricing},hxPost=@{/admin/config/pet-slot-pricing},cardId='cfg-pet-slot',confirmDiff=true,
+                   errorFields=${errorFields?.get('petSlot')},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::pet-slot-title}, ~{::pet-slot-form}, #{admin.config.petSlot.btn.save})}">
+        <h2 class="cfg-title" th:fragment="pet-slot-title" th:text="#{admin.config.petSlot.title}">宠物名额月租价格</h2>
+        <div th:fragment="pet-slot-form">
+            <!--/* 价格行同 KTP 定价卡：Rp 前缀 + 右对齐 + 等宽数字；行内校验（admin-core.js data-price-row）<100 或超上限 → 错误紧贴该行。
+                   ⚠️ 行标签必须是 label 内第一个 span：确认弹层复述「标签：旧值 → 新值」取的就是它。 */-->
+            <label class="field price-row" data-price-row>
+                <span class="price-row-label" th:text="#{admin.config.petSlot.row}">每个名额 / 30 天</span>
+                <span class="price-inp">
+                    <span class="price-inp-prefix" aria-hidden="true">Rp</span>
+                    <input class="inp price-inp-field" type="number" name="petSlotMonthlyPrice" min="100" max="100000000" step="1" required
+                           inputmode="numeric" data-money th:value="${pricing.petSlotMonthlyPrice}" th:disabled="${!canEdit}"
+                           aria-describedby="cfg-pet-slot-err-petSlotMonthlyPrice"/>
+                </span>
+                <span class="hint" th:text="#{admin.config.petSlot.hint}">只影响之后的新租用和续租；已生效的名额不变。</span>
+                <span class="row-error" role="alert" hidden data-row-error id="cfg-pet-slot-err-petSlotMonthlyPrice"
+                      th:attr="data-msg-min=#{admin.err.config.petSlotPriceMin},data-msg-max=#{admin.err.config.petSlotPriceMax}"></span>
+            </label>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-pet-slot :: card}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

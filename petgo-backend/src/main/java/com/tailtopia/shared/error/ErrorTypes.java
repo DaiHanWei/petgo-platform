@@ -39,6 +39,15 @@ public final class ErrorTypes {
     /** V1.4.0 multi-pet Story 2.1（D13）：账号宠物数 ≤ 名额，无需选择保持正常的宠物（409）。 */
     public static final URI PET_SELECTION_NOT_NEEDED = URI.create(BASE + "pet-selection-not-needed");
 
+    /**
+     * V1.4.0 multi-pet Story 2.2（AD-6）：租用个数超出可租数 / 续租个数超出「5 − 1 − 等级名额」（409），
+     * 扩展成员 {@code rentable}（续租另带 {@code renewableMax}），见 {@link PetSlotRentUnavailableException}。
+     */
+    public static final URI PET_SLOT_RENT_UNAVAILABLE = URI.create(BASE + "pet-slot-rent-unavailable");
+
+    /** V1.4.0 multi-pet Story 2.2（AD-6）：所选名额已过期 / 非生效中，不能续租（409，走新租）。 */
+    public static final URI PET_SLOT_RENEW_INVALID = URI.create(BASE + "pet-slot-renew-invalid");
+
     /** Story 2.3 R2（F10）：发布时三方自动审核——文字关键词命中违规（422，不落库）。 */
     public static final URI CONTENT_TEXT_BLOCKED = URI.create(BASE + "content-text-blocked");
 

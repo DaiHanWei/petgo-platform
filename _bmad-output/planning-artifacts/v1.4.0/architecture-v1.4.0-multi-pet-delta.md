@@ -95,6 +95,7 @@ Spring Boot 4 / Java 21 / PostgreSQL + Flyway（时间戳号）；`@Async` + DB 
 **AD-5 · 名额与购买表。**
 - `pet_slot_rentals(id, user_id, source VARCHAR(16) CHECK IN ('RENT','ADMIN_GRANT'), starts_at, expires_at, status CHECK IN ('ACTIVE','EXPIRED'), reminded_at, expired_at, purchase_id, created_at)`，索引 `(status, expires_at)`、`(user_id, status)`。
 - `pet_slot_purchases(id, user_id, kind CHECK IN ('RENT','RENEW','ADMIN_GRANT'), quantity, unit_price, total, channel, payment_intent_id UNIQUE NULL, idem_key UNIQUE, status CHECK IN ('PENDING','PAID','FAILED','EXPIRED'), rental_ids BIGINT[], days INT, operator_admin_id, reason, created_at, paid_at)`（照 `keepsake_purchases`）。
+- **补充（Story 2.2 落地，2026-10-18）**：两表都加 `public_token VARCHAR(32) NOT NULL UNIQUE`（项目强制「对外标识不可枚举」——续租接口按名额寻址、App 轮询按购买单寻址，不外露自增 id）；迁移 `V20261018_1601`。`pet_slot_purchases.status` 另加 `ORPHAN_PAID`（已到账、发放失败，交人工）与 `OVERPAID`（已到账、发放会超 5 个名额而未发，交人工退款）；QRIS 行 `idem_key` 带 `:{intentId}` 后缀（同键重开另起一行、不改挂）；`pet_slot_rentals` 加 `purchase_id` 索引（Story 2.2 code review）。
 - **名额 = min(5, 1 + [Lv≥5] + [Lv≥10] + 生效月租数)**，实时计算（`PetSlotService.quotaOf(userId)`，读 `GrowthQueryService.getLevel`；虚拟号 / 官方号按「不参与」= 只算默认 + 月租）。可租数 = 5 − 名额。
 
 **AD-6 · 支付。**

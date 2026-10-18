@@ -340,6 +340,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/pet-profiles/me/active-selection").hasRole("USER")
                         // V1.4.0 multi-pet Story 1.4：名额摘要，controller 把 jwt.sub 当 users.id 用 —— 兽医 token 不得以同号用户名义读取。
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-slots/me").hasRole("USER")
+                        // V1.4.0 multi-pet Story 2.2：月租下单（扣币 / 建意图）与购买单轮询，同上理由（sub 当 users.id 用）。精确路径。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/pet-slots/me/rentals").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/pet-slots/me/renewals").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pet-slots/me/purchases/*").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/passport").hasRole("USER")
                         // 护照快照（V1.3.2 Story 3.4）：发起购买 / 已购列表 / 回看，同上理由（sub 当 users.id 用）。
                         .requestMatchers("/api/v1/pet-profiles/me/passport/snapshots",

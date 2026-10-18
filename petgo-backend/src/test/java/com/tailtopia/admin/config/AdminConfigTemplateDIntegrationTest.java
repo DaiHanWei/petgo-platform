@@ -83,11 +83,13 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
     void pageRendersFourIndependentCardsWithUnchangedEndpoints() throws Exception {
         String html = mvc.perform(get("/admin/config").param("lang", "zh_CN").with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(count(html, "data-config-card")).isEqualTo(6);
+        // V1.4.0 multi-pet Story 2.2（UI 稿 L7）按设计新增第七张卡「宠物名额月租价格」
+        assertThat(count(html, "data-config-card")).isEqualTo(7);
         for (String[] card : new String[][] {
                 {"cfg-pricing", "/admin/config/pricing", "vetConsultPrice"}, {"cfg-ktp", "/admin/config/ktp-pricing", "passportPagePrice"},
                 {"cfg-pawcoin", "/admin/config/pawcoin", "premiumRate"}, {"cfg-share-reward", "/admin/config/share-reward", "shareRewardMonthlyCap"},
-                {"cfg-support", "/admin/config/support-contact", "whatsappNumber"}}) {
+                {"cfg-support", "/admin/config/support-contact", "whatsappNumber"},
+                {"cfg-pet-slot", "/admin/config/pet-slot-pricing", "petSlotMonthlyPrice"}}) {
             assertThat(html).as(card[0]).contains("id=\"" + card[0] + "\"").contains("action=\"" + card[1] + "\"").contains("hx-post=\"" + card[1] + "\"")
                     .contains("hx-target=\"#" + card[0] + "-err\"").contains("id=\"" + card[0] + "-err\"").contains("name=\"" + card[2] + "\"")
                     .containsPattern("id=\"" + card[0] + "\"[^>]*data-confirm-diff=\"true\"").containsPattern("id=\"" + card[0] + "\"[^>]*data-error-fields=");
@@ -100,8 +102,8 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
                 .containsPattern("id=\"cfg-app-version\"[^>]*data-error-fields=")
                 .doesNotContainPattern("id=\"cfg-app-version\"[^>]*data-confirm-diff").contains("id=\"confirm-host\"");
         // 保存钮初始禁用 + 「已修改」标；确认弹层文案模板挂在表单上（前端拼旧值 → 新值）
-        assertThat(count(html, "data-save")).isEqualTo(6);
-        assertThat(count(html, "data-dirty-flag")).isEqualTo(6);
+        assertThat(count(html, "data-save")).isEqualTo(7);
+        assertThat(count(html, "data-dirty-flag")).isEqualTo(7);
         assertThat(html).contains("data-confirm-diff-line=\"{0}：{1} → {2}\"").contains("确认修改以下配置");
         // D-8「组头不标红高危」对其余配置卡照旧；唯一例外是 AB-22 的「最低支持版本」行 —— 后台 PRD §1.1 / UI 稿 G1 明确要求
         // 该行左侧红线 +「高危」标签（返工清单 §2）。所以只把这张卡切掉再断言，且它自己必须恰好出现一次。
@@ -117,6 +119,9 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         assertThat(html.indexOf("id=\"cfg-ktp\"")).isLessThan(html.indexOf("id=\"cfg-app-version\""));
         assertThat(html.indexOf("id=\"cfg-app-version\"")).isLessThan(html.indexOf("id=\"cfg-pawcoin\""));
         assertThat(html.indexOf("id=\"cfg-pawcoin\"")).isLessThan(html.indexOf("id=\"cfg-share-reward\""));
+        // V1.4.0 UI 稿 L7：月租价格卡在「PawCoin · 充值档位」之后、「客服联系方式」之前
+        assertThat(html.indexOf("id=\"cfg-tiers\"")).isLessThan(html.indexOf("id=\"cfg-pet-slot\""));
+        assertThat(html.indexOf("id=\"cfg-pet-slot\"")).isLessThan(html.indexOf("id=\"cfg-support\""));
     }
 
     /** AC3：htmx 提交成功 → 该卡 fragment（HX-Retarget #cfg-pricing + outerHTML）+ toast oob；失败 → 422 行内 err 带 data-code，Retarget 到 err 槽。 */
