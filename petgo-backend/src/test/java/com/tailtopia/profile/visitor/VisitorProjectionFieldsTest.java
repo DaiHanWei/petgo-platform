@@ -99,9 +99,10 @@ class VisitorProjectionFieldsTest {
     @Test
     void visitorStatsHasNoHealthRecordCount() {
         assertNoForbiddenComponents(VisitorStats.class);
-        // 顺带钉住列数：三列的口径来自 PRD §2.9（Diary / 问诊次数 / 里程碑），
-        // 里程碑占两个数（完成 / 总数），故是 4 个组件。
-        assertThat(VisitorStats.class.getRecordComponents()).hasSize(4);
+        // 顺带钉住列数：统计卡三格（V1.4.0 gift Story 2.1 起为 Diary / 礼物总价值 / 里程碑），
+        // 里程碑占两个数（完成 / 总数），另保留旧版 App 仍在读的问诊次数 consultCount，故是 5 个组件。
+        // giftTotalValue 不含任何禁词（上面 assertNoForbiddenComponents 已验）。
+        assertThat(VisitorStats.class.getRecordComponents()).hasSize(5);
     }
 
     /**

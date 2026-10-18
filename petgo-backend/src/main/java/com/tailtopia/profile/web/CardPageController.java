@@ -124,7 +124,12 @@ public class CardPageController {
         // 健康记录条数在投影层就没进来，本处即便想下发也没有可下发的东西。
         VisitorStats stats = visitors.stats(profile);
         model.addAttribute("happyCount", stats.happyMomentCount());
-        model.addAttribute("consultCount", stats.consultCount());
+        // V1.4.0 gift Story 2.1（AC6 · decision-log ③ S6）：票根第二列 Konsultasi → Hadiah（礼物总价值），始终显示。
+        // 数字与单位拆开下发，模板给「Rp」与「rb / jt」单独设 0.6 倍字号；缩写规则与 App 同一张用例表（IdrCompact）。
+        com.tailtopia.shared.format.IdrCompact.Parts gift =
+                com.tailtopia.shared.format.IdrCompact.parts(stats.giftTotalValue());
+        model.addAttribute("giftValueNumber", gift.number());
+        model.addAttribute("giftValueUnit", gift.unit());
         model.addAttribute("milestoneCompleted", stats.milestoneCompleted());
         model.addAttribute("hasMilestones", stats.milestoneCompleted() > 0);
         // ② 里程碑收藏区（V1.1.6 Story 1.2）：完成数 / 总数 + 具名徽章 + 锁定位 + 「+N」。

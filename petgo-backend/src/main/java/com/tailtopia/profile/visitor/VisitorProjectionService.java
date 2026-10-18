@@ -264,7 +264,9 @@ public class VisitorProjectionService {
                 authorStats.happyMomentCount(),
                 authorStats.consultCount(),
                 authorStats.milestoneCompleted(),
-                MilestoneCatalog.forType(profile.getPetType()).size());
+                MilestoneCatalog.forType(profile.getPetType()).size(),
+                // V1.4.0 gift Story 2.1：礼物总价值复用作者态同一次计算，不另写一份。
+                authorStats.giftTotalValue());
         // healthRecordCount 到此为止，不进 VisitorStats。
     }
 

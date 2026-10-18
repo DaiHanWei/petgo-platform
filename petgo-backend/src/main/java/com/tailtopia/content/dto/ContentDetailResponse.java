@@ -82,7 +82,14 @@ public record ContentDetailResponse(
          * 元素为 {@code [0, 1]} 或 {@code null}（原样下发）。存量 / 无超界图为 null → 省略；App 无值即居中。
          * 与 {@code FeedItemResponse.imageCropOffsets()} 同口径。
          */
-        List<Double> imageCropOffsets) {
+        List<Double> imageCropOffsets,
+        /**
+         * Diary 礼物区（V1.4.0 gift Story 2.1 · AC5 · AD-10）：这条 Diary 关联的宠物各自收到的礼物汇总 + 墙前 3 行。
+         * 只有 {@code GROWTH_MOMENT} 且经 {@code GiftPetDirectory.petsOfPost} 取到宠物时下发；Moment / Tips /
+         * 无关联宠物（含私密 / 审核中 / 举报隐藏的 Diary）为 null → NON_NULL 省略，App 不渲染礼物区。
+         * 宠物有关联但 0 礼物 → 照常一项（数值 0、{@code wallPreview} 空表）。
+         */
+        List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -95,10 +102,13 @@ public record ContentDetailResponse(
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
             List<com.tailtopia.mention.dto.MentionView> mentions) {
         return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
-                null, null, null);
+                null, null, null, null);
     }
 
-    /** 带打卡场所条的完整工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。 */
+    /**
+     * 带打卡场所条的完整工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。
+     * {@code giftPets}（V1.4.0 gift Story 2.1）为 null 或空表 = 不下发礼物区。
+     */
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
             long commentCount, boolean liked, boolean isAuthor,
             List<ContentTagView> decorationTags,
@@ -106,7 +116,8 @@ public record ContentDetailResponse(
             List<com.tailtopia.mention.dto.MentionView> mentions,
             com.tailtopia.place.dto.CheckinPlaceView checkinPlace,
             String authorToken,
-            com.tailtopia.social.read.FollowState authorFollowState) {
+            com.tailtopia.social.read.FollowState authorFollowState,
+            List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets) {
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
@@ -114,6 +125,7 @@ public record ContentDetailResponse(
                 p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
                 p.getCreatedAt(), mentions, checkinPlace,
-                author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets());
+                author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets(),
+                (giftPets == null || giftPets.isEmpty()) ? null : giftPets);
     }
 }

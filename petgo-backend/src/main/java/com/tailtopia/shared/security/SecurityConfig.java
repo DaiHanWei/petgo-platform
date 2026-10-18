@@ -351,6 +351,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/gifts/catalog").hasRole("USER")
                         .requestMatchers(HttpMethod.POST, "/api/v1/pets/*/gifts").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/me/gift-orders/*").hasRole("USER")
+                        // 礼物页（V1.4.0 gift Story 2.1）：汇总 + 墙 / 粉丝榜。主人视角靠 viewerId == ownerId 判定，
+                        // 兽医 token 的 sub 与 users.id 撞号会被误判成主人 → 只给 USER。精确路径，不影响 /api/v1/pets/*/visitor/**。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts/supporters").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

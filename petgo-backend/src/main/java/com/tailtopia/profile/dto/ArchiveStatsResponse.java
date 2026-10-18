@@ -19,6 +19,9 @@ package com.tailtopia.profile.dto;
  *        且 {@code celebrated_at IS NULL}（AD-A1.3），前端不得另立本地标记。
  *        <p>⚠️ 档案 Tab **只显示角标、永不弹全屏庆祝**（AD-A2.1）；补弹只挂里程碑列表页，
  *        否则用户从档案 Tab 点进列表页会被连弹两次
+ * @param giftTotalValue 这只宠物收到的礼物总价值（IDR，V1.4.0 gift Story 2.1 · AD-10）：Diary 统计卡中间格
+ *        「Hadiah」。只含已送达（读汇总表 {@code gift_pet_wall}），<b>按宠物算</b>。
+ *        ⚠️ {@code consultCount} <b>保留</b>：旧版 App 仍在读，不随统计卡换格删除
  */
 public record ArchiveStatsResponse(
         long happyMomentCount,
@@ -26,5 +29,6 @@ public record ArchiveStatsResponse(
         long milestoneCompleted,
         int milestoneTotal,
         long healthRecordCount,
-        long milestoneUncelebrated) {
+        long milestoneUncelebrated,
+        long giftTotalValue) {
 }

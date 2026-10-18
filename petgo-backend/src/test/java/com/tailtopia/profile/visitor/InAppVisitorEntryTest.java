@@ -144,7 +144,7 @@ class InAppVisitorEntryTest {
     @Test
     void everyInAppEndpointGoesThroughTheSharedProjection() {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
-        when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30));
+        when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30, 0L));
         when(visitors.timeline(any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of());
 
         inApp.profile(user(VIEWER), PET_ID);

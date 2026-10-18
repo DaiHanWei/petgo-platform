@@ -47,13 +47,25 @@ public class ContentDetailService {
     /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
 
+    /** V1.4.0 gift Story 2.1：Diary 礼物区 —— 宠物只经送礼模块端口取（不直接读 post.getPetId()，AD-5）。 */
+    private final com.tailtopia.gift.port.GiftPetDirectory giftPetDirectory;
+    /** V1.4.0 gift Story 2.1：礼物区汇总 + 墙前 3 行（读汇总表的只读查询）。 */
+    private final com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase;
+
+    /** 详情礼物区每只宠物展示的礼物种类数（UI 稿 A3「单价最高的 3 种」）。 */
+    static final int GIFT_PREVIEW_KINDS = 3;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            com.tailtopia.gift.port.GiftPetDirectory giftPetDirectory,
+            com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase) {
+        this.giftPetDirectory = giftPetDirectory;
+        this.giftShowcase = giftShowcase;
         this.placeCheckins = placeCheckins;
         this.followReader = followReader;
         this.contentTags = contentTags;
@@ -144,6 +156,28 @@ public class ContentDetailService {
                 ? com.tailtopia.social.read.FollowState.NONE
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace, authorToken, followState);
+                decorations, sizes, mentions, checkinPlace, authorToken, followState, giftPets(post));
+    }
+
+    /**
+     * Diary 礼物区（V1.4.0 gift Story 2.1 · AC5）。只对 {@code GROWTH_MOMENT} 调端口；Moment / Tips 直接 null。
+     * 端口返回空（无宠物 / 私密 / 审核中 / 举报隐藏，1.1 过渡实现口径）→ null。批量两次查询（汇总 + 墙前 3），
+     * 不按宠物逐个查 —— 为多宠（对齐 story 4.1 只换端口实现）留好形状。可见性不另做：已过 {@link #requireVisiblePost}。
+     */
+    private List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets(ContentPost post) {
+        if (post.getType() != com.tailtopia.content.domain.ContentType.GROWTH_MOMENT) {
+            return null;
+        }
+        var pets = giftPetDirectory.petsOfPost(post.getId());
+        if (pets.isEmpty()) {
+            return null;
+        }
+        List<Long> petIds = pets.stream().map(com.tailtopia.gift.port.GiftPetDirectory.GiftPet::petId).toList();
+        var summaries = giftShowcase.summariesOf(petIds);
+        var previews = giftShowcase.wallPreviewOf(petIds, GIFT_PREVIEW_KINDS);
+        return pets.stream()
+                .map(pet -> com.tailtopia.gift.web.dto.GiftPetSummaryView.of(pet,
+                        summaries.get(pet.petId()), previews.get(pet.petId())))
+                .toList();
     }
 }

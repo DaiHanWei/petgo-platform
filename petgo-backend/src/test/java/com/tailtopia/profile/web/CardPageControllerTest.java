@@ -82,12 +82,17 @@ class CardPageControllerTest {
     }
 
     private void stubOwner(long happy, long consult, long milestoneCompleted) {
+        stubOwner(happy, consult, milestoneCompleted, 0L);
+    }
+
+    private void stubOwner(long happy, long consult, long milestoneCompleted, long giftTotalValue) {
         when(accountQueryService.isActive(7L)).thenReturn(true);
         when(accountQueryService.findAuthorViews(any()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false, java.util.List.of())));
         // 第 6 个字段是 V1.3.0 Story 1.4 的「未庆祝」角标数；访客页不展示它，给 0。
+        // 第 7 个字段是 V1.4.0 gift Story 2.1 的礼物总价值（票根 Hadiah 列）。
         when(timelineService.getStats(7L))
-                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0));
+                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0, giftTotalValue));
     }
 
     @Test
@@ -110,7 +115,10 @@ class CardPageControllerTest {
         // OG 标题已印尼语化（修 20260702-208：原硬编码中文「成长故事」→「Kisah tumbuh kembang」）。
         assertThat(model.getAttribute("ogTitle").toString()).contains("Kisah tumbuh kembang");
         assertThat(model.getAttribute("happyCount")).isEqualTo(2L);
-        assertThat(model.getAttribute("consultCount")).isEqualTo(1L);
+        // V1.4.0 gift Story 2.1：票根第二列 Konsultasi → Hadiah，模型不再有 consultCount（问诊次数 1 也不下发到页面）。
+        assertThat(model.containsAttribute("consultCount")).isFalse();
+        assertThat(model.getAttribute("giftValueNumber")).isEqualTo("0");
+        assertThat(model.getAttribute("giftValueUnit")).isEqualTo("");
         assertThat(model.getAttribute("hasMilestones")).isEqualTo(false); // 里程碑零态
         assertThat(model.getAttribute("hasMoments")).isEqualTo(true);
         // E4：对外图带去 EXIF process 参数
@@ -120,6 +128,25 @@ class CardPageControllerTest {
                 (List<CardPageController.CardMoment>) model.getAttribute("moments");
         assertThat(moments).hasSize(1);
         assertThat(moments.get(0).getImageUrls().get(0)).contains("x-oss-process=image/");
+    }
+
+    /** V1.4.0 gift Story 2.1 · AC6：Hadiah 列由礼物总价值缩写拆成数字 + 单位（与 App 同一张用例表）。 */
+    @Test
+    void giftTotalValueIsSplitIntoNumberAndUnit() {
+        when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
+        when(contentService.findRecentGrowthMomentsByEventDate(eq(7L), eq(10L), anyInt())).thenReturn(List.of());
+        long[] amounts = {0L, 188_000L, 1_500L};
+        String[][] expected = {{"0", ""}, {"188", "rb"}, {"1,5", "rb"}};
+        for (int i = 0; i < amounts.length; i++) {
+            stubOwner(0, 3, 0, amounts[i]);
+            Model model = new ConcurrentModel();
+            controller.card("TOK", model, req(), mock(HttpServletResponse.class));
+            assertThat(model.getAttribute("giftValueNumber")).isEqualTo(expected[i][0]);
+            assertThat(model.getAttribute("giftValueUnit")).isEqualTo(expected[i][1]);
+            assertThat(model.containsAttribute("consultCount")).isFalse();
+            // 零里程碑 → Tonggak 整列隐藏（维持现状，decision-log ③ S6）
+            assertThat(model.getAttribute("hasMilestones")).isEqualTo(false);
+        }
     }
 
     @Test
