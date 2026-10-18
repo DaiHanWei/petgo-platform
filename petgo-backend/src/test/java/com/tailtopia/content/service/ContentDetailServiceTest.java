@@ -44,6 +44,11 @@ class ContentDetailServiceTest {
     private com.tailtopia.social.read.FollowReader followReader =
             org.mockito.Mockito.mock(com.tailtopia.social.read.FollowReader.class);
 
+    /** V1.4.0 multi-pet Story 3.1：关联宠物只读口 + 宠物批量读口。 */
+    private final ContentPetQuery contentPetQuery = mock(ContentPetQuery.class);
+    private final com.tailtopia.profile.service.PetQueryService petQuery =
+            mock(com.tailtopia.profile.service.PetQueryService.class);
+
     @BeforeEach
     void setUp() {
         posts = mock(ContentPostRepository.class);
@@ -66,7 +71,9 @@ class ContentDetailServiceTest {
                 // V1.3.2 Story 1.5：打卡场所条只读口。
                 placeCheckins,
                 // V1.3.4 follow Story 2.1：详情头部关注关系。
-                followReader);
+                followReader,
+                // V1.4.0 multi-pet Story 3.1：Diary 关联宠物（默认无关联）。
+                contentPetQuery, petQuery);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
@@ -261,5 +268,67 @@ class ContentDetailServiceTest {
         assertThat(d.authorFollowState()).isEqualTo(com.tailtopia.social.read.FollowState.NONE);
         org.mockito.Mockito.verify(followReader, org.mockito.Mockito.never())
                 .followState(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    // ===== V1.4.0 multi-pet Story 3.1 · AC8：详情下发关联宠物 =====
+
+    private static ContentPost diaryPost(long id, long authorId) {
+        ContentPost p = ContentPost.publish(authorId, ContentType.GROWTH_MOMENT, 21L, "body", List.of());
+        set(p, "id", id);
+        set(p, "createdAt", Instant.now());
+        return p;
+    }
+
+    private static com.tailtopia.profile.dto.PetView petView(long id, String name,
+            com.tailtopia.profile.domain.PetStatus status) {
+        return new com.tailtopia.profile.dto.PetView(id, 7L, name, "https://cdn/" + id + ".jpg",
+                com.tailtopia.profile.domain.PetType.CAT, status, Instant.parse("2026-01-01T00:00:00Z"));
+    }
+
+    private void stubAuthor() {
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
+    }
+
+    /** Diary 两只 → pets 按关联表顺序（创建顺序），名字头像一次批量取；只读宠物照常列出。 */
+    @Test
+    void diaryDetailListsLinkedPetsInOrder() {
+        stubAuthor();
+        when(posts.findById(5L)).thenReturn(Optional.of(diaryPost(5L, 7L)));
+        when(contentPetQuery.petsOf(5L)).thenReturn(List.of(21L, 22L));
+        when(petQuery.getAll(List.of(21L, 22L))).thenReturn(Map.of(
+                21L, petView(21L, "Mochi", com.tailtopia.profile.domain.PetStatus.ACTIVE),
+                22L, petView(22L, "Bolu", com.tailtopia.profile.domain.PetStatus.READ_ONLY)));
+
+        var pets = service.getDetail(5L, 7L).pets();
+
+        assertThat(pets).extracting(com.tailtopia.content.dto.ContentPetView::petId).containsExactly(21L, 22L);
+        assertThat(pets.get(1).name()).isEqualTo("Bolu"); // 只读照列
+        assertThat(pets.get(0).petType()).isEqualTo("CAT");
+        // 3-1 复审：他人可见的宠物头像走去 EXIF 投递地址（同访客视图 E4）。
+        assertThat(pets.get(0).avatarUrl()).startsWith("https://cdn/21.jpg?x-oss-process=");
+        Mockito.verify(petQuery, Mockito.times(1)).getAll(org.mockito.ArgumentMatchers.anyCollection());
+        Mockito.verify(petQuery, Mockito.never()).get(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** Moment → pets 为 null（不查关联表）。 */
+    @Test
+    void momentDetailHasNoPets() {
+        stubAuthor();
+        when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
+
+        assertThat(service.getDetail(1L, 7L).pets()).isNull();
+        Mockito.verifyNoInteractions(contentPetQuery, petQuery);
+    }
+
+    /** Diary 无关联（宠物已全部删除）→ pets 为 null。 */
+    @Test
+    void diaryWithoutLinksHasNoPets() {
+        stubAuthor();
+        when(posts.findById(6L)).thenReturn(Optional.of(diaryPost(6L, 7L)));
+        when(contentPetQuery.petsOf(6L)).thenReturn(List.of());
+
+        assertThat(service.getDetail(6L, 7L).pets()).isNull();
+        Mockito.verifyNoInteractions(petQuery);
     }
 }

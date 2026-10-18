@@ -44,6 +44,9 @@ class MilestoneMultiPetIntegrationTest extends ApiIntegrationTest {
     private MilestoneAutoCompleteListener listener;
     @Autowired
     private ContentPostRepository posts;
+    /** V1.4.0 multi-pet Story 3.1：直接造的 Diary 同步写 content_pets（计数 / 打卡校验读关联表）。 */
+    @Autowired
+    private com.tailtopia.content.repository.ContentPetRepository contentPets;
 
     private boolean dropped;
     private final List<Long> extraPets = new ArrayList<>();
@@ -87,7 +90,8 @@ class MilestoneMultiPetIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void diaryOfALightsOnlyA() throws Exception {
-        ContentPost diary = posts.save(ContentPost.publish(owner, ContentType.GROWTH_MOMENT, petA, "A", List.of()));
+        ContentPost diary = com.tailtopia.content.support.ContentPetsTestFixture.link(contentPets,
+                posts.save(ContentPost.publish(owner, ContentType.GROWTH_MOMENT, petA, "A", List.of())));
 
         listener.onContentPublished(new ContentPublishedEvent(diary.getId(), owner, ContentType.GROWTH_MOMENT,
                 petA, 1L, ContentVisibility.PRIVATE, Instant.now()));
@@ -108,8 +112,8 @@ class MilestoneMultiPetIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void checkInWithPostOfAnotherPetIsRejected() throws Exception {
-        ContentPost diaryOfA = posts.save(
-                ContentPost.publish(owner, ContentType.GROWTH_MOMENT, petA, "A", List.of()));
+        ContentPost diaryOfA = com.tailtopia.content.support.ContentPetsTestFixture.link(contentPets, posts.save(
+                ContentPost.publish(owner, ContentType.GROWTH_MOMENT, petA, "A", List.of())));
         String body = "{\"contentId\":" + diaryOfA.getId() + "}";
 
         mvc.perform(post("/api/v1/pet-profiles/me/milestones/C-S6/check-in")

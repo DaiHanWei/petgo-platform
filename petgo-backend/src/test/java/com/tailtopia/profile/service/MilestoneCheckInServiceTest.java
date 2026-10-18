@@ -195,6 +195,27 @@ class MilestoneCheckInServiceTest {
         assertThat(service.checkIn(7L, 10L, "C-S6", 99L).completed()).isTrue();
     }
 
+    /** V1.4.0 multi-pet Story 3.1 · AC7.2：帖子关联 A、B（content_pets 两行）→ 用 B 打卡允许（判定经 isOwnGrowthMomentOfPet）。 */
+    @Test
+    void checkInWithPostLinkedToBothPetsAllowedForSecondPet() {
+        PetProfile b = PetProfile.create(7L, PetType.CAT, "Bobo", null, null, null, null, "TOKB");
+        setField(b, "id", 11L);
+        when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
+        PetMilestone mb = PetMilestone.of(11L, MilestoneCatalog.byCode("C-S6"));
+        setField(mb, "id", 8L);
+        when(milestones.findByPetProfileIdAndCode(11L, "C-S6")).thenReturn(Optional.of(mb));
+        // 关联表里 A、B 都有这条帖（pet_id 兼容字段只记 A）。
+        when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
+        when(contentService.isOwnGrowthMomentOfPet(7L, 11L, 99L)).thenReturn(true);
+        when(completionService.completeCodeForPet(11L, "C-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
+                .thenReturn(true);
+
+        assertThat(service.checkIn(7L, 11L, "C-S6", 99L).completed()).isTrue();
+        org.mockito.Mockito.verify(contentService).isOwnGrowthMomentOfPet(7L, 11L, 99L);
+        org.mockito.Mockito.verify(contentService, org.mockito.Mockito.never())
+                .isOwnGrowthMoment(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
     private static void setField(Object o, String name, Object value) {
         try {
             java.lang.reflect.Field f = o.getClass().getDeclaredField(name);

@@ -17,6 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface ContentPostRepository extends JpaRepository<ContentPost, Long>, ContentPostAdminSearch {
 
+    // V1.4.0 multi-pet Story 3.1（AD-10）：按宠物的读口一律用
+    //   EXISTS (SELECT 1 FROM ContentPet cp WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+    // 不再读 p.petId（那只是「第一只」兼容字段，多宠帖的第二只起在那里看不到）；其余谓词逐字不变。
+
     /**
      * 推荐池候选（V1.3.0 batch-b1 Story 4.1 · AC1/AC2）—— <b>一条实时聚合查询，不许加缓存</b>。
      *
@@ -25,9 +29,13 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *   <li>「近 14 天有新公开 Diary 帖」→ {@code HAVING MAX(created_at) >= :since}；</li>
      *   <li>「公开成长记录 ≥3 条」→ {@code HAVING COUNT(*) >= :minRecords}。</li>
      * </ul>
-     * 谓词完全相同（GROWTH_MOMENT + PUBLIC + PUBLISHED + 未删 + pet_id 非空），
-     * 所以 {@code idx_content_posts_pet_recommend}（部分索引，谓词已下推）一条就够，
-     * 索引里只剩 {@code (pet_id, created_at)} —— GROUP BY 键 + 聚合列，可 index-only scan。
+     * 谓词完全相同（GROWTH_MOMENT + PUBLIC + PUBLISHED + 未删 + 至少关联一只宠物）。
+     *
+     * <h2>V1.4.0 multi-pet Story 3.1：按 {@code content_pets.pet_profile_id} 聚合</h2>
+     * 一条关联两只宠物的帖分别计入两只的「公开记录数 / 最近发帖 / 互动量」。{@code candidates} 与 {@code liked}
+     * <b>两段同时</b>换成 join {@code content_pets}（两段谓词逐字相同，改一处必须改两处）。
+     * 原 {@code idx_content_posts_pet_recommend}（按 {@code pet_id} 的部分索引）因此用不上，≤500 DAU 可接受，
+     * 不为此新增 {@code content_posts} 索引；keyset 游标与 WIB 截断写法不动。
      *
      * <h2>🔴 排序：最近更新倒序，**同日**按互动量（AC1）</h2>
      * 「同日」是按 {@code created_at} 的日期截断分桶 —— 不截断的话同一天里先发的永远排后面，
@@ -78,28 +86,29 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      */
     @Query(value = """
             WITH candidates AS (
-                SELECT pet_id,
-                       MAX(created_at) AS last_at,
-                       COUNT(*)        AS total
-                  FROM content_posts
-                 WHERE type = 'GROWTH_MOMENT'
-                   AND visibility = 'PUBLIC'
-                   AND status = 'PUBLISHED'
-                   AND deleted_at IS NULL
-                   AND pet_id IS NOT NULL
-                 GROUP BY pet_id
+                SELECT cp.pet_profile_id AS pet_id,
+                       MAX(p.created_at) AS last_at,
+                       COUNT(*)          AS total
+                  FROM content_posts p
+                  JOIN content_pets cp ON cp.post_id = p.id
+                 WHERE p.type = 'GROWTH_MOMENT'
+                   AND p.visibility = 'PUBLIC'
+                   AND p.status = 'PUBLISHED'
+                   AND p.deleted_at IS NULL
+                 GROUP BY cp.pet_profile_id
                 HAVING COUNT(*) >= :minRecords
-                   AND MAX(created_at) >= :since
+                   AND MAX(p.created_at) >= :since
             ), liked AS (
-                SELECT p.pet_id AS pet_id, COUNT(*) AS cnt
+                SELECT cp.pet_profile_id AS pet_id, COUNT(*) AS cnt
                   FROM content_likes l
                   JOIN content_posts p ON p.id = l.post_id
-                 WHERE p.pet_id IN (SELECT pet_id FROM candidates)
+                  JOIN content_pets cp ON cp.post_id = p.id
+                 WHERE cp.pet_profile_id IN (SELECT pet_id FROM candidates)
                    AND p.type = 'GROWTH_MOMENT'
                    AND p.visibility = 'PUBLIC'
                    AND p.status = 'PUBLISHED'
                    AND p.deleted_at IS NULL
-                 GROUP BY p.pet_id
+                 GROUP BY cp.pet_profile_id
             )
             SELECT c.pet_id                AS pet_id,
                    c.last_at               AS last_at,
@@ -134,7 +143,10 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * 做成同一张图重复摆放是 UI 稿 UX-DR15 专门点出来的明显 bug。
      *
      * <p>⚠️ 判据比推荐池多一条「有配图」：{@code image_urls} 是 JSONB 数组，
-     * 空数组与 NULL 都算没图。走 {@code idx_content_posts_pet_cover}。
+     * 空数组与 NULL 都算没图。
+     * <p>V1.4.0 multi-pet Story 3.1：按 {@code content_pets} 取宠物（多宠帖是每只关联宠物的候选封面）；
+     * {@code idx_content_posts_pet_cover} 因此用不上（≤500 DAU 可接受），但下面 {@code jsonb_typeof} 的顺序约束照旧；
+     * 三行图片谓词刻意不带表别名，与索引条件逐字相同（{@code content_pets} 无同名列，不歧义）。
      * <p>⚠️ {@code jsonb_typeof = 'array'} 这一条**必须在 length 之前、且与索引条件逐字相同**：
      * {@code jsonb_array_length} 对非数组 jsonb 直接抛错（不是返回 null），而部分索引的条件
      * 与查询谓词不一致时 planner 用不上那条索引 —— 两处改一处就等于悄悄全表扫。
@@ -145,19 +157,20 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * @return 每行 {@code [petId(Long), firstImageUrl(String)]}；没有带图公开帖的宠物不出现
      */
     @Query(value = """
-            SELECT DISTINCT ON (pet_id)
-                   pet_id AS pet_id,
-                   (image_urls ->> 0) AS cover_url
-              FROM content_posts
-             WHERE pet_id IN (:petIds)
-               AND type = 'GROWTH_MOMENT'
-               AND visibility = 'PUBLIC'
-               AND status = 'PUBLISHED'
-               AND deleted_at IS NULL
+            SELECT DISTINCT ON (cp.pet_profile_id)
+                   cp.pet_profile_id AS pet_id,
+                   (p.image_urls ->> 0) AS cover_url
+              FROM content_posts p
+              JOIN content_pets cp ON cp.post_id = p.id
+             WHERE cp.pet_profile_id IN (:petIds)
+               AND p.type = 'GROWTH_MOMENT'
+               AND p.visibility = 'PUBLIC'
+               AND p.status = 'PUBLISHED'
+               AND p.deleted_at IS NULL
                AND image_urls IS NOT NULL
                AND jsonb_typeof(image_urls) = 'array'
                AND jsonb_array_length(image_urls) > 0
-             ORDER BY pet_id, created_at DESC, id DESC
+             ORDER BY cp.pet_profile_id, p.created_at DESC, p.id DESC
             """, nativeQuery = true)
     List<Object[]> findLatestPublicCovers(@Param("petIds") java.util.Collection<Long> petIds);
 
@@ -256,13 +269,42 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     long countByRealAuthor();
 
     /**
-     * 删除宠物档案前解绑其成长帖（bug 20260702-237 / 决策 F18）：把引用该 pet 的 content_posts.pet_id 置 NULL。
-     * FK fk_content_posts_pet 无 ON DELETE，直接删 pet 会被引用阻断；置空保留帖子本体（UGC 保留），
-     * 仅解除与已删宠物的绑定（pet_id 可空，仅 GROWTH_MOMENT 曾绑定）。返回受影响行数。
+     * 删除宠物档案前解绑其成长帖（bug 20260702-237 / 决策 F18）。FK fk_content_posts_pet 无 ON DELETE，直接删 pet
+     * 会被引用阻断；帖子本体保留（UGC 保留），仅解除与已删宠物的关联。返回 {@code content_posts} 受影响行数。
+     *
+     * <p>V1.4.0 multi-pet Story 3.1（AD-9 / AD-10）：<b>只解除这一只</b>，两步同一事务（调用方 {@code @Transactional}）：
+     * ① {@code pet_id} 指向它的帖顺延为剩余关联宠物里最早建档的一只（没有则置空）；
+     * ② 显式删它在 {@code content_pets} 的行（不只靠级联，语义清楚）。
      */
-    @Modifying
-    @Query("update ContentPost p set p.petId = null where p.petId = :petId")
-    int detachPet(@Param("petId") long petId);
+    default int detachPet(long petId) {
+        int repointed = repointFirstPetAfterDetach(petId);
+        deleteContentPetsOfPet(petId);
+        return repointed;
+    }
+
+    /**
+     * {@link #detachPet} 第 ①步：{@code pet_id} = 剩余关联宠物里最早的一只（创建顺序），无则 NULL。
+     * ⚠️ 刻意不 {@code clearAutomatically}：调用方（删宠物 / 注销）同一事务里还持有别的托管实体，清掉会丢它们后续的改动
+     * （与改造前的 JPQL 版同口径）。
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE content_posts p
+               SET pet_id = (SELECT cp.pet_profile_id
+                               FROM content_pets cp
+                               JOIN pet_profiles pp ON pp.id = cp.pet_profile_id
+                              WHERE cp.post_id = p.id
+                                AND cp.pet_profile_id <> :petId
+                              ORDER BY pp.created_at, pp.id
+                              LIMIT 1)
+             WHERE p.pet_id = :petId
+            """, nativeQuery = true)
+    int repointFirstPetAfterDetach(@Param("petId") long petId);
+
+    /** {@link #detachPet} 第 ②步：删该宠物的全部内容关联。 */
+    @Modifying(flushAutomatically = true)
+    @Query(value = "DELETE FROM content_pets WHERE pet_profile_id = :petId", nativeQuery = true)
+    int deleteContentPetsOfPet(@Param("petId") long petId);
 
     /** 后台用户详情（Story 3.1）：某作者全部内容（含已软删，运营视角），createdAt 倒序。 */
     List<ContentPost> findByAuthorIdOrderByCreatedAtDesc(long authorId);
@@ -307,8 +349,19 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * bug 20260721-271：按 petId 过滤——删宠档后 detachPet 把旧帖 pet_id 置 NULL，
      * 不加 petId 会让 NULL 旧帖漏进新宠物档案（串档）。
      */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.createdAt < :before
+            ORDER BY p.createdAt DESC
+            """)
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndCreatedAtLessThanOrderByCreatedAtDesc(
-            long authorId, long petId, ContentType type, Instant before, Pageable pageable);
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("before") Instant before, Pageable pageable);
 
     /**
      * Diary 打卡条目去重（V1.3.2 Story 1.6 · AD-9）：这批打卡里，哪些有一条<b>会出现在作者自看时间线</b>的关联帖。
@@ -319,7 +372,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     @Query("""
             SELECT DISTINCT p.placeCheckinId FROM ContentPost p
             WHERE p.authorId = :authorId
-              AND p.petId = :petId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
               AND p.type = :type
               AND p.deletedAt IS NULL
               AND p.placeCheckinId IN :checkinIds
@@ -344,7 +398,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
-              AND p.petId = :petId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
               AND p.type = :type
               AND p.deletedAt IS NULL
               AND p.eventDate IS NOT NULL
@@ -371,7 +426,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     @Query("""
             SELECT p FROM ContentPost p
             WHERE p.authorId = :authorId
-              AND p.petId = :petId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
               AND p.type = :type
               AND p.deletedAt IS NULL
               AND p.eventDate IS NULL
@@ -386,12 +442,34 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /** 日历月度聚合（Story 2.4 R2 · F9）：某作者某宠物某类型未删内容，event_date 落 [from,to]，按 event_date 升、created_at 升（bug 271 加 petId）。 */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.eventDate BETWEEN :from AND :to
+            ORDER BY p.eventDate ASC, p.createdAt ASC
+            """)
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
-            long authorId, long petId, ContentType type, LocalDate from, LocalDate to);
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /** 当天详情（Story 2.4 R2 · F9）：某作者某宠物某类型未删内容，指定 event_date，按 created_at 升序（bug 271 加 petId）。 */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.eventDate = :eventDate
+            ORDER BY p.createdAt ASC
+            """)
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndEventDateOrderByCreatedAtAsc(
-            long authorId, long petId, ContentType type, LocalDate eventDate);
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("eventDate") LocalDate eventDate);
 
     /**
      * 日历月度聚合的<b>访客版</b>（V1.1.6 Story 2.2）：在上面那条之上<b>再叠一层 {@code status} 过滤</b>。
@@ -403,14 +481,38 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *
      * <p>⚠️ 将来若有人想「统一成一个方法」，请先读完这段再动。
      */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.status = :status
+              AND p.eventDate BETWEEN :from AND :to
+            ORDER BY p.eventDate ASC, p.createdAt ASC
+            """)
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateBetweenOrderByEventDateAscCreatedAtAsc(
-            long authorId, long petId, ContentType type, PostStatus status, LocalDate from, LocalDate to);
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("status") PostStatus status, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /**
      * 当天详情的<b>访客版</b>（V1.1.6 Story 2.2）。与上面「当天详情」那条成对，理由同上 —— 不可互换。
      */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.status = :status
+              AND p.eventDate = :eventDate
+            ORDER BY p.createdAt ASC
+            """)
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusAndEventDateOrderByCreatedAtAsc(
-            long authorId, long petId, ContentType type, PostStatus status, LocalDate eventDate);
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("status") PostStatus status, @Param("eventDate") LocalDate eventDate);
 
     /**
      * 名片快乐时刻流（Story 2.6 AC7 · F9）：某作者**某宠物**某类型未删内容，按 event_date 倒序取最近 N。
@@ -418,8 +520,19 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * bug 20260730-435：必须带 petId——删旧宠物档案走 detachPet（pet_id 置 NULL、帖保留 PUBLISHED），
      * 只按作者过滤会把旧宠物遗留帖混进新宠物的名片/打卡候选。
      */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.status = :status
+            ORDER BY p.eventDate DESC, p.createdAt DESC
+            """)
     List<ContentPost> findByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusOrderByEventDateDescCreatedAtDesc(
-            long authorId, long petId, ContentType type, PostStatus status, Pageable pageable);
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("status") PostStatus status, Pageable pageable);
 
     /** 统计：某作者某类型未删且已发布内容数（里程碑计数 Story 8.3，按作者跨宠计）。 */
     long countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
@@ -429,9 +542,40 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     long countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatus(
             long authorId, long petId, ContentType type, PostStatus status);
 
-    /** 统计（多状态版）：档案统计栏含审核中（bug 20260728-379，与 timeline 展示口径对齐）。 */
+    /**
+     * 统计（多状态版）：档案统计栏含审核中（bug 20260728-379，与 timeline 展示口径对齐）。
+     * V1.4.0 multi-pet Story 3.1：按 {@code content_pets} 计。
+     */
+    @Query("""
+            SELECT count(p) FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.status IN :statuses
+            """)
     long countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusIn(
-            long authorId, long petId, ContentType type, Collection<PostStatus> statuses);
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("statuses") Collection<PostStatus> statuses);
+
+    /**
+     * 某作者某宠物某类型未删、单状态的内容数（V1.4.0 multi-pet Story 3.1 · AD-12：Diary 计数类里程碑按这只宠物判，
+     * 走 {@code content_pets}）。上面 {@code countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatus} 仍读兼容字段，
+     * 主代码已无调用方，按 story 不动。
+     */
+    @Query("""
+            SELECT count(p) FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND EXISTS (SELECT 1 FROM ContentPet cp
+                          WHERE cp.id.postId = p.id AND cp.id.petProfileId = :petId)
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.status = :status
+            """)
+    long countPublishedGrowthMomentsOfPet(
+            @Param("authorId") long authorId, @Param("petId") long petId, @Param("type") ContentType type,
+            @Param("status") PostStatus status);
 
     /**
      * 「我的发布」（Story 7.1，FR-36）：当前作者未软删的全部内容（三类混合），keyset 游标倒序。

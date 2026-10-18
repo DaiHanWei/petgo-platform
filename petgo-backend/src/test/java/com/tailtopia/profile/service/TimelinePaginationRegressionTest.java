@@ -36,6 +36,9 @@ class TimelinePaginationRegressionTest extends ApiIntegrationTest {
     private PetProfileRepository petProfiles;
     @Autowired
     private ContentPostRepository posts;
+    /** V1.4.0 multi-pet Story 3.1：直接造的 Diary 同步写 content_pets（时间线读关联表）。 */
+    @Autowired
+    private com.tailtopia.content.repository.ContentPetRepository contentPets;
 
     /**
      * 核心回归：补记一篇上月的日记（{@code event_date} 旧、{@code created_at} 最新），
@@ -134,6 +137,7 @@ class TimelinePaginationRegressionTest extends ApiIntegrationTest {
         ContentPost p = posts.save(ContentPost.publish(uid, ContentType.GROWTH_MOMENT, pet.getId(),
                 text, List.of("img/" + text + ".jpg"),
                 eventDate == null ? null : LocalDate.parse(eventDate)));
+        com.tailtopia.content.support.ContentPetsTestFixture.link(contentPets, p);
         return p.getId();
     }
 

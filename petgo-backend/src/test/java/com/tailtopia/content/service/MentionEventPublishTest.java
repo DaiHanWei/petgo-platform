@@ -21,7 +21,6 @@ import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.mention.repository.MentionCandidateRepository;
 import com.tailtopia.mention.service.MentionSanitizer;
-import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.HashMap;
@@ -92,7 +91,6 @@ class MentionEventPublishTest {
         service = new ContentService(posts,
                 Mockito.mock(CommentRepository.class),
                 Mockito.mock(ContentLikeRepository.class),
-                Mockito.mock(ProfileService.class),
                 idempotency,
                 new ContentModerationService(),
                 events, manualReviewGate,
@@ -102,7 +100,11 @@ class MentionEventPublishTest {
                 new MentionSanitizer(accounts, hideRelations, candidates),
                 Mockito.mock(com.tailtopia.place.service.PlaceCheckinQueryService.class),
                 new ImageCropOffsetValidator(),
-                Mockito.mock(com.tailtopia.profile.service.PetWriteGuard.class));
+                Mockito.mock(com.tailtopia.profile.service.PetWriteGuard.class),
+                // V1.4.0 multi-pet Story 3.1：本类只发 DAILY，不碰宠物关联。
+                Mockito.mock(com.tailtopia.profile.service.PetResolver.class),
+                Mockito.mock(com.tailtopia.content.repository.ContentPetRepository.class),
+                Mockito.mock(ContentPetQuery.class));
     }
 
     private static void setId(ContentPost p, long id) {

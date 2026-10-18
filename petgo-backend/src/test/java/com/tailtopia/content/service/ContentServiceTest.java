@@ -13,7 +13,8 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.repository.ContentPostRepository;
-import com.tailtopia.profile.service.ProfileService;
+import com.tailtopia.profile.service.PetResolver;
+import com.tailtopia.profile.support.PetFixtures;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import java.time.LocalDate;
@@ -30,7 +31,10 @@ class ContentServiceTest {
     private ContentPostRepository posts;
     private com.tailtopia.content.repository.CommentRepository comments;
     private com.tailtopia.content.repository.ContentLikeRepository likes;
-    private ProfileService profileService;
+    /** V1.4.0 multi-pet Story 3.1：归属校验改经 PetResolver（原 ProfileService.ownsPet）；默认「不属于本人」→ 404。 */
+    private PetResolver petResolver;
+    private com.tailtopia.content.repository.ContentPetRepository contentPets;
+    private ContentPetQuery contentPetQuery;
     private IdempotencyService idempotency;
     private org.springframework.context.ApplicationEventPublisher events;
     private ManualReviewGate manualReviewGate;
@@ -41,7 +45,11 @@ class ContentServiceTest {
         posts = Mockito.mock(ContentPostRepository.class);
         comments = Mockito.mock(com.tailtopia.content.repository.CommentRepository.class);
         likes = Mockito.mock(com.tailtopia.content.repository.ContentLikeRepository.class);
-        profileService = Mockito.mock(ProfileService.class);
+        petResolver = Mockito.mock(PetResolver.class);
+        // 与原 ownsPet 默认 false 等价：未显式声明归属的宠物一律 404。
+        when(petResolver.resolve(anyLong(), any())).thenThrow(AppException.notFound("宠物档案不存在"));
+        contentPets = Mockito.mock(com.tailtopia.content.repository.ContentPetRepository.class);
+        contentPetQuery = Mockito.mock(ContentPetQuery.class);
         idempotency = Mockito.mock(IdempotencyService.class);
         when(idempotency.findResourceId(any())).thenReturn(Optional.empty());
         when(posts.save(any(ContentPost.class))).thenAnswer(inv -> {
@@ -58,7 +66,7 @@ class ContentServiceTest {
         // 审核用真实 stub：既有用例文本均良性 → PASS；R2 用例显式触发拦截标记。
         // V1.1.6 Story 3.1：尺寸归一用真实实现（纯函数、无 IO）；兜底测量用 mock ——
         // 它是 @Async 且会发网络请求，单测里不该真跑。
-        service = new ContentService(posts, comments, likes, profileService, idempotency,
+        service = new ContentService(posts, comments, likes, idempotency,
                 new ContentModerationService(), events, manualReviewGate,
                 new ImageSizeResolver(), Mockito.mock(ImageSizeBackfillService.class),
                 // V1.1.6 Story 4.1：顶置联动。本类不验联动，给 mock；联动本身由 L1 覆盖。
@@ -74,7 +82,9 @@ class ContentServiceTest {
                 // V1.3.4 Story 2.1：露出位置校验用真实实现（纯函数、无 IO）。
                 new ImageCropOffsetValidator(),
                 // V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。
-                petWriteGuard);
+                petWriteGuard,
+                // V1.4.0 multi-pet Story 3.1：归属 / 关联写入 / 关联只读口。
+                petResolver, contentPets, contentPetQuery);
     }
 
     private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
@@ -82,6 +92,17 @@ class ContentServiceTest {
 
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
             Mockito.mock(com.tailtopia.place.service.PlaceCheckinQueryService.class);
+
+    /** 声明 {@code ids} 属于 {@code owner}（建档时刻 = EPOCH + id 秒，即 id 小者先建档）。 */
+    private void ownPets(long owner, long... ids) {
+        for (long id : ids) {
+            ownPetCreatedAt(owner, id, java.time.Instant.EPOCH.plusSeconds(id));
+        }
+    }
+
+    private void ownPetCreatedAt(long owner, long id, java.time.Instant createdAt) {
+        Mockito.doReturn(PetFixtures.pet(owner, id, createdAt)).when(petResolver).resolve(owner, id);
+    }
 
     private static void setId(ContentPost p, long id) {
         try {
@@ -104,7 +125,7 @@ class ContentServiceTest {
 
     @Test
     void growthMomentRequiresOwnedPet() {
-        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        ownPets(1L, 5L);
         ContentPostResponse resp = service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "moment", null), null);
         assertThat(resp.type()).isEqualTo(ContentType.GROWTH_MOMENT);
@@ -114,7 +135,7 @@ class ContentServiceTest {
     /** V1.4.0 multi-pet Story 2.1（AC7 #1）：Diary 关联只读宠物 → 409 pet-read-only，不落库、不发事件。 */
     @Test
     void growthMomentWithReadOnlyPetRejected409() {
-        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        ownPets(1L, 5L);
         Mockito.doThrow(AppException.petReadOnly(5L)).when(petWriteGuard).requireWritable(5L);
         assertThatThrownBy(() -> service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "x", null), null))
@@ -126,10 +147,10 @@ class ContentServiceTest {
         verify(events, never()).publishEvent(any(Object.class));
     }
 
-    /** Story 2.1：归属先于可写——非本人宠物仍是原来的 422，不走 guard。 */
+    /** Story 2.1：归属先于可写——非本人宠物被拒（Story 3.1 起按 NFR5 为 404），不走 guard。 */
     @Test
     void unownedPetIsCheckedBeforeWritability() {
-        when(profileService.ownsPet(1L, 7L)).thenReturn(false);
+        // 7L 未声明归属 → PetResolver 404（setUp 默认）。
         assertThatThrownBy(() -> service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 7L, "x", null), null))
                 .isInstanceOf(AppException.class);
@@ -146,7 +167,7 @@ class ContentServiceTest {
 
     @Test
     void growthMomentWithUnownedPetRejected() {
-        when(profileService.ownsPet(1L, 7L)).thenReturn(false);
+        // 7L 未声明归属 → PetResolver 404（setUp 默认）。
         assertThatThrownBy(() -> service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 7L, "x", null), null))
                 .isInstanceOf(AppException.class);
@@ -194,7 +215,7 @@ class ContentServiceTest {
 
     @Test
     void growthMomentStoresGivenEventDate() {
-        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        ownPets(1L, 5L);
         LocalDate past = LocalDate.of(2020, 1, 2);
         ContentPostResponse resp = service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null, past), null);
@@ -203,7 +224,7 @@ class ContentServiceTest {
 
     @Test
     void growthMomentDefaultsEventDateToToday() {
-        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        ownPets(1L, 5L);
         ContentPostResponse resp = service.publish(1L,
                 new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null, null), null);
         // 缺省事件日期按印尼业务时区 WIB 判定（Asia/Jakarta），勿用 UTC（prod 事故 2026-07-20）。
@@ -212,7 +233,7 @@ class ContentServiceTest {
 
     @Test
     void growthMomentFutureEventDateRejected() {
-        when(profileService.ownsPet(1L, 5L)).thenReturn(true);
+        ownPets(1L, 5L);
         // WIB 今天 +1 天：无论服务器 UTC 处于一天中哪个时刻，都严格晚于 WIB 今天。
         LocalDate future = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta")).plusDays(1);
         assertThatThrownBy(() -> service.publish(1L,
@@ -805,5 +826,264 @@ class ContentServiceTest {
         assertThat(pending.getImageCropOffsets())
                 .as("挂起分支漏写露出位置 —— 审核通过后进 Feed 会无声退化为居中")
                 .isEqualTo(java.util.Arrays.asList(0.25, null));
+    }
+
+    // ===== V1.4.0 multi-pet Story 3.1：Diary 关联多只宠物（AC3 / AC4）=====
+
+    private static final long PET_A = 21L; // 先建档
+    private static final long PET_B = 22L;
+
+    private static ContentPostCreateRequest diary(Long petId, List<Long> petIds) {
+        return diary(petId, petIds, "Main bareng");
+    }
+
+    private static ContentPostCreateRequest diary(Long petId, List<Long> petIds, String text) {
+        return new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, petId, text, null, null, null,
+                null, null, null, null, petIds);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Long> savedLinkPetIds() {
+        var captor = org.mockito.ArgumentCaptor.forClass(Iterable.class);
+        verify(contentPets).saveAll(captor.capture());
+        List<Long> out = new java.util.ArrayList<>();
+        for (Object o : (Iterable<Object>) captor.getValue()) {
+            var link = (com.tailtopia.content.domain.ContentPet) o;
+            assertThat(link.getPostId()).isEqualTo(100L);
+            out.add(link.getPetProfileId());
+        }
+        return out;
+    }
+
+    private com.tailtopia.content.event.ContentPublishedEvent publishedEvent() {
+        var captor = org.mockito.ArgumentCaptor.forClass(com.tailtopia.content.event.ContentPublishedEvent.class);
+        verify(events).publishEvent(captor.capture());
+        return captor.getValue();
+    }
+
+    /** AC3 / AC4.3：选 B、A（A 先建档）→ pet_id = A、关联两行、事件 petIds = [A, B] / petId = A。 */
+    @Test
+    void diaryWithTwoPetsStoresFirstPetAndLinksBoth() {
+        ownPetCreatedAt(1L, PET_A, java.time.Instant.parse("2026-01-01T00:00:00Z"));
+        ownPetCreatedAt(1L, PET_B, java.time.Instant.parse("2026-02-01T00:00:00Z"));
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        ContentPostResponse resp = service.publish(1L, diary(null, List.of(PET_B, PET_A)), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getPetId()).isEqualTo(PET_A);
+        assertThat(resp.petId()).isEqualTo(PET_A);
+        assertThat(savedLinkPetIds()).containsExactly(PET_A, PET_B);
+        var e = publishedEvent();
+        assertThat(e.petIds()).containsExactly(PET_A, PET_B);
+        assertThat(e.petId()).isEqualTo(PET_A);
+    }
+
+    /** 「第一只」按建档时刻而非 id：id 大的先建档时排第一。 */
+    @Test
+    void firstPetFollowsCreationOrderNotId() {
+        ownPetCreatedAt(1L, 30L, java.time.Instant.parse("2026-03-01T00:00:00Z"));
+        ownPetCreatedAt(1L, 31L, java.time.Instant.parse("2025-03-01T00:00:00Z"));
+
+        service.publish(1L, diary(null, List.of(30L, 31L)), null);
+
+        assertThat(savedLinkPetIds()).containsExactly(31L, 30L);
+        assertThat(publishedEvent().petId()).isEqualTo(31L);
+    }
+
+    /** 旧版 App / 后台种子：只传 petId → 视为 [petId]。 */
+    @Test
+    void legacyPetIdOnlyIsTreatedAsSinglePet() {
+        ownPets(1L, 5L);
+
+        service.publish(1L, new ContentPostCreateRequest(ContentType.GROWTH_MOMENT, 5L, "m", null), null);
+
+        assertThat(savedLinkPetIds()).containsExactly(5L);
+        var e = publishedEvent();
+        assertThat(e.petIds()).containsExactly(5L);
+        assertThat(e.petId()).isEqualTo(5L);
+    }
+
+    /** petIds 非空时以 petIds 为准（petId 不再并入）。 */
+    @Test
+    void petIdsTakePrecedenceOverLegacyPetId() {
+        ownPets(1L, PET_A, PET_B);
+
+        service.publish(1L, diary(PET_A, List.of(PET_B)), null);
+
+        assertThat(savedLinkPetIds()).containsExactly(PET_B);
+    }
+
+    /** petIds 与 petId 都没有 → 422 validation（沿用 growthNeedsPet 码），不落库。 */
+    @Test
+    void diaryWithoutAnyPetIs422() {
+        assertThatThrownBy(() -> service.publish(1L, diary(null, List.of()), null))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(422);
+                    assertThat(e.getMessageCode()).isEqualTo("admin.err.seed.growthNeedsPet");
+                });
+        verify(posts, never()).save(any());
+        verify(contentPets, never()).saveAll(any());
+    }
+
+    /** 含非本人 / 不存在的宠物 → 404（NFR5），保留后台回显码，不落库、不建关联。 */
+    @Test
+    void diaryWithForeignPetIs404AndNothingSaved() {
+        ownPets(1L, PET_A);
+
+        assertThatThrownBy(() -> service.publish(1L, diary(null, List.of(PET_A, 999L)), null))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(404);
+                    assertThat(e.getMessageCode()).isEqualTo("admin.err.seed.petNotOwned");
+                });
+        verify(posts, never()).save(any());
+        verify(contentPets, never()).saveAll(any());
+        verify(petWriteGuard, never()).requireWritable(anyLong());
+    }
+
+    /** 含只读宠物 → 409 pet-read-only（带该 petId），不落库、不发事件。 */
+    @Test
+    void diaryWithReadOnlyPetIs409AndNothingSaved() {
+        ownPets(1L, PET_A, PET_B);
+        Mockito.doThrow(AppException.petReadOnly(PET_B)).when(petWriteGuard).requireWritable(PET_B);
+
+        assertThatThrownBy(() -> service.publish(1L, diary(null, List.of(PET_A, PET_B)), null))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType().toString()).isEqualTo("https://petgo/errors/pet-read-only");
+                    assertThat(((com.tailtopia.shared.error.PetReadOnlyException) e).getPetId()).isEqualTo(PET_B);
+                });
+        verify(posts, never()).save(any());
+        verify(contentPets, never()).saveAll(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    /** 重复 id 去重：[A, A, B] → 两行。 */
+    @Test
+    void duplicatePetIdsAreDeduplicated() {
+        ownPets(1L, PET_A, PET_B);
+
+        service.publish(1L, diary(null, List.of(PET_A, PET_A, PET_B)), null);
+
+        assertThat(savedLinkPetIds()).containsExactly(PET_A, PET_B);
+    }
+
+    /** AC15：Moment / Tips 带 petIds / petId 一律忽略：pet_id 为空、不建关联、事件 petIds 为空表。 */
+    @Test
+    void momentAndTipsIgnorePetIds() {
+        for (ContentType t : List.of(ContentType.DAILY, ContentType.KNOWLEDGE)) {
+            Mockito.clearInvocations(posts, contentPets, events);
+            var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+            service.publish(1L, new ContentPostCreateRequest(t, PET_A, "hi", null, null, null,
+                    null, null, null, null, List.of(PET_A, PET_B)), null);
+
+            verify(posts).save(captor.capture());
+            assertThat(captor.getValue().getPetId()).isNull();
+            verify(contentPets, never()).saveAll(any());
+            assertThat(publishedEvent().petIds()).isEmpty();
+        }
+        verify(petResolver, never()).resolve(anyLong(), any());
+    }
+
+    /** 🔴 AC3.3：挂起分支（UNDER_REVIEW）同样要写 content_pets。 */
+    @Test
+    void pendingReviewDiaryAlsoLinksAllPets() {
+        when(manualReviewGate.enabled()).thenReturn(true);
+        ownPets(1L, PET_A, PET_B);
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        service.publish(1L, diary(null, List.of(PET_A, PET_B), "stub-high borderline text"), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(captor.getValue().getPetId()).isEqualTo(PET_A);
+        assertThat(savedLinkPetIds()).containsExactly(PET_A, PET_B);
+        verify(events, never()).publishEvent(any(com.tailtopia.content.event.ContentPublishedEvent.class));
+    }
+
+    /** AC3.5：幂等重放不重复建关联。 */
+    @Test
+    void idempotentReplayDoesNotRelink() {
+        ContentPost existing = ContentPost.publish(1L, ContentType.GROWTH_MOMENT, PET_A, "old", null);
+        when(idempotency.findResourceId("KEY3")).thenReturn(Optional.of(42L));
+        when(posts.findById(42L)).thenReturn(Optional.of(existing));
+
+        service.publish(1L, diary(null, List.of(PET_A, PET_B)), "KEY3");
+
+        verify(contentPets, never()).saveAll(any());
+        verify(petResolver, never()).resolve(anyLong(), any());
+    }
+
+    /** AC4.2：挂起帖过审 → 事件 petIds 读回关联表（全部关联宠物），petId = 第一只。 */
+    @Test
+    void approveReviewEventCarriesLinkedPets() {
+        ContentPost p = ContentPost.pendingReview(1L, ContentType.GROWTH_MOMENT, PET_A, "x", null,
+                LocalDate.of(2026, 1, 1), null, "RISK_HIGH");
+        setId(p, 60L);
+        when(posts.findById(60L)).thenReturn(Optional.of(p));
+        when(contentPetQuery.petsOf(60L)).thenReturn(List.of(PET_A, PET_B));
+
+        service.approveReview(60L);
+
+        var e = publishedEvent();
+        assertThat(e.petIds()).containsExactly(PET_A, PET_B);
+        assertThat(e.petId()).isEqualTo(PET_A);
+    }
+
+    /** publishTrusted 不支持 Diary，事件 petIds 恒为空表。 */
+    @Test
+    void publishTrustedEventHasNoPets() {
+        service.publishTrusted(1L, new ContentPostCreateRequest(ContentType.DAILY, null, "hi", null), "k9");
+        assertThat(publishedEvent().petIds()).isEmpty();
+    }
+
+    /** AC7.2：里程碑打卡「帖子关联该宠物」读 content_pets。 */
+    @Test
+    void isOwnGrowthMomentOfPetReadsContentPets() {
+        ContentPost p = ContentPost.publish(1L, ContentType.GROWTH_MOMENT, PET_A, "x", null);
+        setId(p, 61L);
+        when(posts.findById(61L)).thenReturn(Optional.of(p));
+        when(contentPets.existsById(new com.tailtopia.content.domain.ContentPet.Key(61L, PET_B))).thenReturn(true);
+
+        assertThat(service.isOwnGrowthMomentOfPet(1L, PET_B, 61L)).isTrue(); // pet_id = A，但关联了 B
+        assertThat(service.isOwnGrowthMomentOfPet(1L, 23L, 61L)).isFalse(); // 未关联
+        assertThat(service.isOwnGrowthMomentOfPet(2L, PET_B, 61L)).isFalse(); // 非本人
+    }
+
+    /** P-7：被赞 / 被评论归帖子关联的每一只宠物；Moment → 空表（调用方回落默认宠物）。 */
+    @Test
+    void growthMomentPetIdsOfReturnsAllLinkedPets() {
+        ContentPost diaryPost = ContentPost.publish(1L, ContentType.GROWTH_MOMENT, PET_A, "x", null);
+        setId(diaryPost, 62L);
+        ContentPost moment = ContentPost.publish(1L, ContentType.DAILY, null, "x", null);
+        setId(moment, 63L);
+        when(posts.findById(62L)).thenReturn(Optional.of(diaryPost));
+        when(posts.findById(63L)).thenReturn(Optional.of(moment));
+        when(contentPetQuery.petsOf(62L)).thenReturn(List.of(PET_A, PET_B));
+
+        assertThat(service.growthMomentPetIdsOf(62L)).containsExactly(PET_A, PET_B);
+        assertThat(service.growthMomentPetIdsOf(63L)).isEmpty();
+        assertThat(service.growthMomentPetIdsOf(64L)).isEmpty();
+    }
+
+    /** AC7.1：按宠物的已发布 Diary 数走 content_pets 的计数查询。 */
+    @Test
+    void countPublishedGrowthMomentsOfPetUsesLinkTable() {
+        when(posts.countPublishedGrowthMomentsOfPet(1L, PET_B, ContentType.GROWTH_MOMENT,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED)).thenReturn(3L);
+
+        assertThat(service.countPublishedGrowthMomentsOfPet(1L, PET_B)).isEqualTo(3L);
+    }
+
+    /** AC3.1：DTO 层 @Size(max = 5)：6 只被拦。 */
+    @Test
+    void moreThanFivePetIdsRejectedByDto() {
+        try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            var violations = factory.getValidator().validate(
+                    diary(null, List.of(1L, 2L, 3L, 4L, 5L, 6L)));
+            assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("petIds");
+            assertThat(factory.getValidator().validate(diary(null, List.of(1L, 2L, 3L, 4L, 5L)))).isEmpty();
+        }
     }
 }

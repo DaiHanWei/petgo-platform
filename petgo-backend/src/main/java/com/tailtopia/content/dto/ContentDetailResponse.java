@@ -82,7 +82,13 @@ public record ContentDetailResponse(
          * 元素为 {@code [0, 1]} 或 {@code null}（原样下发）。存量 / 无超界图为 null → 省略；App 无值即居中。
          * 与 {@code FeedItemResponse.imageCropOffsets()} 同口径。
          */
-        List<Double> imageCropOffsets) {
+        List<Double> imageCropOffsets,
+        /**
+         * 关联宠物（V1.4.0 multi-pet Story 3.1 · AC8，<b>末尾追加</b>）：只有 Diary 且至少关联 1 只宠物时下发，
+         * 按「第一只」口径（宠物创建顺序）排序；Moment / Tips / 无关联 → null（NON_NULL 省略键）。
+         * 只读宠物照常列出；已删宠物因级联已不在关联表。Feed 卡片不加（决策日志 F6）。
+         */
+        List<ContentPetView> pets) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -95,10 +101,10 @@ public record ContentDetailResponse(
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
             List<com.tailtopia.mention.dto.MentionView> mentions) {
         return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
-                null, null, null);
+                null, null, null, null);
     }
 
-    /** 带打卡场所条的完整工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。 */
+    /** 带打卡场所条的完整工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。不带关联宠物。 */
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
             long commentCount, boolean liked, boolean isAuthor,
             List<ContentTagView> decorationTags,
@@ -107,6 +113,24 @@ public record ContentDetailResponse(
             com.tailtopia.place.dto.CheckinPlaceView checkinPlace,
             String authorToken,
             com.tailtopia.social.read.FollowState authorFollowState) {
+        return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
+                checkinPlace, authorToken, authorFollowState, null);
+    }
+
+    /**
+     * 带关联宠物的完整工厂（V1.4.0 multi-pet Story 3.1）。{@code pets} 为 null / 空，或帖子不是 Diary → 省略该键。
+     */
+    public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
+            long commentCount, boolean liked, boolean isAuthor,
+            List<ContentTagView> decorationTags,
+            List<com.tailtopia.content.domain.ImageSize> imageSizes,
+            List<com.tailtopia.mention.dto.MentionView> mentions,
+            com.tailtopia.place.dto.CheckinPlaceView checkinPlace,
+            String authorToken,
+            com.tailtopia.social.read.FollowState authorFollowState,
+            List<ContentPetView> pets) {
+        List<ContentPetView> linkedPets = p.getType() == ContentType.GROWTH_MOMENT
+                && pets != null && !pets.isEmpty() ? List.copyOf(pets) : null;
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
@@ -114,6 +138,6 @@ public record ContentDetailResponse(
                 p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
                 p.getCreatedAt(), mentions, checkinPlace,
-                author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets());
+                author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets(), linkedPets);
     }
 }

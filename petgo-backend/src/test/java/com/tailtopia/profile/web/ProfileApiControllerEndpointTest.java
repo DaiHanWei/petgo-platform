@@ -31,6 +31,10 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
     @Autowired
     private com.tailtopia.content.repository.ContentPostRepository contentPosts;
 
+    /** V1.4.0 multi-pet Story 3.1：直接造的 Diary 同步写 content_pets（按宠物读口读关联表）。 */
+    @Autowired
+    private com.tailtopia.content.repository.ContentPetRepository contentPets;
+
     private String createBody(String name) {
         return """
                 {"name":"%s","petType":"DOG","breed":"柴犬","intro":"乖巧","birthday":"2022-01-01"}
@@ -466,7 +470,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
         com.tailtopia.content.domain.ContentPost p = com.tailtopia.content.domain.ContentPost.publish(
                 ownerId, com.tailtopia.content.domain.ContentType.GROWTH_MOMENT, petIdOf(ownerId),
                 "moment", java.util.List.of(img), LocalDate.parse(eventDate));
-        contentPosts.save(p);
+        com.tailtopia.content.support.ContentPetsTestFixture.link(contentPets, contentPosts.save(p));
     }
 
     private long petIdOf(long ownerId) {

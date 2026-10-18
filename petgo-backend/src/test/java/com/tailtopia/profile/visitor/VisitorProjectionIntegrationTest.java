@@ -125,6 +125,8 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
                 """,
                 ownerId, petId, text, status, visibility, daysAgo,
                 softDeleted ? java.sql.Timestamp.from(Instant.now()) : null);
+        // V1.4.0 multi-pet Story 3.1：按宠物的读口改读 content_pets，直插的帖同步补关联（同迁移回填）。
+        com.tailtopia.content.support.ContentPetsTestFixture.backfillFromPetId(jdbc);
     }
 
     private String render(String token) throws Exception {

@@ -24,7 +24,6 @@ import com.tailtopia.profile.event.ProfileCreatedEvent;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -140,7 +139,7 @@ class MilestoneAutoCompleteListenerTest {
 
     @Test
     void likeOnDiaryGoesToItsPet() {
-        when(contentService.growthMomentPetIdOf(100L)).thenReturn(Optional.of(PET_B));
+        when(contentService.growthMomentPetIdsOf(100L)).thenReturn(List.of(PET_B));
         listener.onContentLiked(new ContentLikedEvent(100L, 99L, OWNER, NOW));
         verify(completion).completeForPet(PET_B, MilestoneAutoEvent.FIRST_LIKE, AUTO);
         verifyNeverAccountWide();
@@ -148,7 +147,7 @@ class MilestoneAutoCompleteListenerTest {
 
     @Test
     void likeOnMomentGoesToDefaultPet() {
-        when(contentService.growthMomentPetIdOf(100L)).thenReturn(Optional.empty());
+        when(contentService.growthMomentPetIdsOf(100L)).thenReturn(List.of());
         listener.onContentLiked(new ContentLikedEvent(100L, 99L, OWNER, NOW));
         verify(completion).completeForDefaultPet(OWNER, MilestoneAutoEvent.FIRST_LIKE, AUTO);
         verifyNeverAccountWide();
@@ -156,7 +155,7 @@ class MilestoneAutoCompleteListenerTest {
 
     @Test
     void commentOnDiaryGoesToItsPet() {
-        when(contentService.growthMomentPetIdOf(100L)).thenReturn(Optional.of(PET_A));
+        when(contentService.growthMomentPetIdsOf(100L)).thenReturn(List.of(PET_A));
         listener.onContentCommented(new ContentCommentedEvent(100L, 1L, 99L, OWNER, null, NOW, null));
         verify(completion).completeForPet(PET_A, MilestoneAutoEvent.FIRST_COMMENT, AUTO);
         verifyNeverAccountWide();
@@ -164,12 +163,56 @@ class MilestoneAutoCompleteListenerTest {
 
     @Test
     void commentOnTipsGoesToDefaultPetAndSelfCommentIgnored() {
-        when(contentService.growthMomentPetIdOf(100L)).thenReturn(Optional.empty());
+        when(contentService.growthMomentPetIdsOf(100L)).thenReturn(List.of());
         listener.onContentCommented(new ContentCommentedEvent(100L, 1L, OWNER, OWNER, null, NOW, null));
         verify(completion, never()).completeForDefaultPet(anyLong(), any(), any());
 
         listener.onContentCommented(new ContentCommentedEvent(100L, 2L, 99L, OWNER, null, NOW, null));
         verify(completion).completeForDefaultPet(OWNER, MilestoneAutoEvent.FIRST_COMMENT, AUTO);
+        verifyNeverAccountWide();
+    }
+
+    // ===== V1.4.0 multi-pet Story 3.1（AC7.1 / P-7）：Diary 按 petIds 逐只 =====
+
+    /** petIds = [A, B] → 两只各自按自己的已发布 Diary 数完成计数类 / L 级回填；公开 → 两只各一次首条平台帖子。 */
+    @Test
+    void multiPetDiaryCompletesEachLinkedPet() {
+        when(contentService.countPublishedGrowthMomentsOfPet(OWNER, PET_A)).thenReturn(1L);
+        when(contentService.countPublishedGrowthMomentsOfPet(OWNER, PET_B)).thenReturn(10L);
+
+        listener.onContentPublished(new ContentPublishedEvent(100L, OWNER, ContentType.GROWTH_MOMENT, PET_A,
+                11L, ContentVisibility.PUBLIC, NOW, List.of(PET_A, PET_B)));
+
+        verify(completion).onGrowthMomentCountForPet(PET_A, 1L);
+        verify(completion).onGrowthMomentCountForPet(PET_B, 10L);
+        verify(completion).completeDateGatedLNodesForPet(PET_A);
+        verify(completion).completeDateGatedLNodesForPet(PET_B);
+        verify(completion).completeForPet(PET_A, MilestoneAutoEvent.PLATFORM_POST, AUTO);
+        verify(completion).completeForPet(PET_B, MilestoneAutoEvent.PLATFORM_POST, AUTO);
+        verify(completion, never()).completeForDefaultPet(anyLong(), any(), any());
+        verifyNeverAccountWide();
+    }
+
+    /** Moment 带的 petIds（理论上恒空）不触发 Diary 计数；首条平台帖子仍账号默认宠物一次。 */
+    @Test
+    void momentPlatformPostStillDefaultPetOnce() {
+        listener.onContentPublished(new ContentPublishedEvent(100L, OWNER, ContentType.DAILY, null,
+                0L, ContentVisibility.PUBLIC, NOW, List.of()));
+
+        verify(completion, never()).onGrowthMomentCountForPet(anyLong(), anyLong());
+        verify(completion, org.mockito.Mockito.times(1))
+                .completeForDefaultPet(OWNER, MilestoneAutoEvent.PLATFORM_POST, AUTO);
+        verifyNeverAccountWide();
+    }
+
+    /** 多宠 Diary 被赞 → 每只关联宠物各完成一次「第一次被赞」。 */
+    @Test
+    void likeOnMultiPetDiaryGoesToEachPet() {
+        when(contentService.growthMomentPetIdsOf(100L)).thenReturn(List.of(PET_A, PET_B));
+        listener.onContentLiked(new ContentLikedEvent(100L, 99L, OWNER, NOW));
+        verify(completion).completeForPet(PET_A, MilestoneAutoEvent.FIRST_LIKE, AUTO);
+        verify(completion).completeForPet(PET_B, MilestoneAutoEvent.FIRST_LIKE, AUTO);
+        verify(completion, never()).completeForDefaultPet(anyLong(), any(), any());
         verifyNeverAccountWide();
     }
 

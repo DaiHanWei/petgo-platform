@@ -14,7 +14,7 @@ import com.tailtopia.profile.event.CardSharedEvent;
 import com.tailtopia.profile.event.HealthArchivedEvent;
 import com.tailtopia.profile.event.HealthRecordCreatedEvent;
 import com.tailtopia.profile.event.ProfileCreatedEvent;
-import java.util.Optional;
+import java.util.List;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -79,22 +79,24 @@ public class MilestoneAutoCompleteListener {
     @Async
     @TransactionalEventListener
     public void onContentPublished(ContentPublishedEvent e) {
-        // V1.4.0 multi-pet（Story 1.3）：Diary 只点亮其关联宠物；未关联宠物（petId 为 null）不触发计数 / L 级回填。
-        // Story 3.1 把 petId 换成遍历 petIds。
-        if (e.type() == ContentType.GROWTH_MOMENT && e.petId() != null) {
-            long petId = e.petId();
-            // 计数类：首张（≥1）/ 满 10 / 满 30，按<b>这只宠物</b>的已发布 Diary 数判（按物种查表，通用宠物满 10 是 G-M4）。
+        // V1.4.0 multi-pet（Story 1.3 → 3.1）：Diary 按 petIds <b>逐只</b>点亮其关联宠物；未关联宠物（空表）不触发计数 /
+        // L 级回填。
+        List<Long> diaryPets = e.type() == ContentType.GROWTH_MOMENT ? e.petIds() : List.of();
+        for (long petId : diaryPets) {
+            // 计数类：首张（≥1）/ 满 10 / 满 30，按<b>这只宠物</b>的已发布 Diary 数判（content_pets；按物种查表，通用宠物满 10 是 G-M4）。
             completion.onGrowthMomentCountForPet(petId,
                     contentService.countPublishedGrowthMomentsOfPet(e.authorId(), petId));
             // 「系统推送 + 当天发布」L 级节点回填：第一个生日 L1 / 满 100 天 L2 / 满 365 天 L3（8.6）。
             completion.completeDateGatedLNodesForPet(petId);
         }
         // 首条平台帖子：DAILY 恒算；GROWTH_MOMENT / KNOWLEDGE 需 PUBLIC（对外可见）才算。幂等，与上面互不影响。
-        // P-7：Diary → 其关联宠物；Moment / Tips（及未关联宠物的 Diary）→ 默认宠物。
+        // P-7：Diary → 其关联宠物（Story 3.1：每一只）；Moment / Tips（及未关联宠物的 Diary）→ 默认宠物。
         if (isPlatformPost(e)) {
-            if (e.type() == ContentType.GROWTH_MOMENT && e.petId() != null) {
-                completion.completeForPet(e.petId(), MilestoneAutoEvent.PLATFORM_POST,
-                        MilestoneCompletionSource.SYSTEM_AUTO);
+            if (!diaryPets.isEmpty()) {
+                for (long petId : diaryPets) {
+                    completion.completeForPet(petId, MilestoneAutoEvent.PLATFORM_POST,
+                            MilestoneCompletionSource.SYSTEM_AUTO);
+                }
             } else {
                 completion.completeForDefaultPet(e.authorId(), MilestoneAutoEvent.PLATFORM_POST,
                         MilestoneCompletionSource.SYSTEM_AUTO);
@@ -204,15 +206,17 @@ public class MilestoneAutoCompleteListener {
     }
 
     /**
-     * P-7（V1.4.0 multi-pet Story 1.3）：内容触发的里程碑归帖子关联的宠物——Diary → 其关联宠物；
-     * Moment / Tips、已解除关联的 Diary、帖子已不存在 → 作者的默认宠物。
+     * P-7（V1.4.0 multi-pet Story 1.3）：内容触发的里程碑归帖子关联的宠物——Diary → 其关联宠物（Story 3.1：每一只）；
+     * Moment / Tips、已解除全部关联的 Diary、帖子已不存在 → 作者的默认宠物。
      */
     private void completeForPostPet(long postId, long authorId, MilestoneAutoEvent event) {
-        Optional<Long> petId = contentService.growthMomentPetIdOf(postId);
-        if (petId.isPresent()) {
-            completion.completeForPet(petId.get(), event, MilestoneCompletionSource.SYSTEM_AUTO);
-        } else {
+        List<Long> petIds = contentService.growthMomentPetIdsOf(postId);
+        if (petIds.isEmpty()) {
             completion.completeForDefaultPet(authorId, event, MilestoneCompletionSource.SYSTEM_AUTO);
+            return;
+        }
+        for (long petId : petIds) {
+            completion.completeForPet(petId, event, MilestoneCompletionSource.SYSTEM_AUTO);
         }
     }
 }

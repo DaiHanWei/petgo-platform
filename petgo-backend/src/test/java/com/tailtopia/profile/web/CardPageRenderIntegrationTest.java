@@ -300,6 +300,8 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                 ownerId, petId, text,
                 imageUrl == null ? null : "[\"" + imageUrl + "\"]",
                 daysAgo);
+        // V1.4.0 multi-pet Story 3.1：按宠物的读口改读 content_pets，直插的帖同步补关联（同迁移回填）。
+        com.tailtopia.content.support.ContentPetsTestFixture.backfillFromPetId(jdbc);
     }
 
     /** 从 HTML 里抓某一类相框中用到的图片文件名。 */
