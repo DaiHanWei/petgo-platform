@@ -8,6 +8,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/startup/startup_popup_ledger.dart';
 import '../../auth/domain/auth_state.dart';
+import '../data/growth_frame_controller.dart';
 import '../data/growth_repository.dart';
 import '../domain/growth_models.dart';
 import '../domain/growth_popup_trigger.dart';
@@ -44,12 +45,14 @@ class GrowthPopupCoordinator {
     Future<GrowthPopupOutcome?> Function(BuildContext ctx, GrowthBackfill b, AuthState auth)? showBackfill,
     void Function(BuildContext ctx)? openLevelPage,
     Duration? actionDelay,
+    Future<bool> Function(String frame)? applyFrame,
   })  : _ledger = ledger ?? StartupPopupLedger.instance,
         _rootContext = rootContext ?? (() => rootNavigatorKey.currentContext),
         _topIsPopup = topIsPopup ?? _rootTopIsPopup,
         _isResumed = isResumed ??
             (() => WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed),
-        _showCelebration = showCelebration ?? _defaultShowCelebration,
+        _showCelebration = showCelebration ??
+            ((ctx, c, auth, levels) => _defaultShowCelebration(ctx, c, auth, levels, applyFrame)),
         _showBackfill = showBackfill ?? _defaultShowBackfill,
         _openLevelPage = openLevelPage ?? ((ctx) => GoRouter.of(ctx).push(LevelPage.location)),
         _actionDelay = actionDelay ?? afterActionDelay;
@@ -302,11 +305,16 @@ class GrowthPopupCoordinator {
     return top is PopupRoute;
   }
 
-  static Future<GrowthPopupOutcome?> _defaultShowCelebration(
-      BuildContext ctx, GrowthCelebration c, AuthState auth, List<GrowthLevelDef> levels) {
+  static Future<GrowthPopupOutcome?> _defaultShowCelebration(BuildContext ctx, GrowthCelebration c, AuthState auth,
+      List<GrowthLevelDef> levels, Future<bool> Function(String frame)? applyFrame) {
     final p = auth.profile;
     return showLevelUpCelebration(ctx,
-        celebration: c, avatarUrl: p?.avatarUrl, nickname: p?.nickname ?? p?.displayName ?? '', levels: levels);
+        celebration: c,
+        avatarUrl: p?.avatarUrl,
+        nickname: p?.nickname ?? p?.displayName ?? '',
+        levels: levels,
+        onApplyFrame: applyFrame,
+        currentFrame: p?.growth?.frame);
   }
 
   static Future<GrowthPopupOutcome?> _defaultShowBackfill(BuildContext ctx, GrowthBackfill b, AuthState auth) {
@@ -325,6 +333,15 @@ final Provider<GrowthPopupCoordinator> growthPopupCoordinatorProvider = Provider
     auth: () => ref.read(authControllerProvider),
     authReady: () => ref.read(authControllerProvider.notifier).ensureRestored(),
     levels: () async => (await repo.fetchPage()).levels,
+    // Story 3.3：庆祝页「Pakai Bingkai Baru」一键戴上（成功同步「我的」页头像框）；任何失败按「切换失败」。
+    applyFrame: (frame) async {
+      try {
+        await ref.read(growthFrameControllerProvider).choose(frame);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    },
   );
   ref.onDispose(c.dispose);
   return c;

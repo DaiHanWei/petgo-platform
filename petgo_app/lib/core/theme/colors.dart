@@ -208,6 +208,10 @@ class AppColors {
   static const Color frameAnimatedHighlight = Color(0xFFF09BC4);
   static const Color frameAnimatedGlow = Color(0x596E2E9E); // rgba(110,46,158,.35)
 
+  // 选框（V1.4.0 ① Story 3.3）：切换中转圈底圈 `.spin`、庆祝页「已戴上」按钮底 `.pbtn.done`（字色复用 mint700）。
+  static const Color growthFrameSpinTrack = Color(0xFFE4DCF5);
+  static const Color growthFrameAppliedFill = Color(0xFFF1EEF7);
+
   /// 角标阴影 `0 1px 3px rgba(20,16,40,.18)`。
   static const Color growthBadgeShadow = Color(0x2E141028);
 

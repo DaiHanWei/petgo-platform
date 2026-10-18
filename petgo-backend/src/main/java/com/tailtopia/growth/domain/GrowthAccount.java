@@ -98,6 +98,12 @@ public class GrowthAccount {
         this.updatedAt = now;
     }
 
+    /** 用户选框（Story 3.3）。🔴 只由 {@code GrowthFrameService} 调用；可用性校验在那里。 */
+    public void chooseFrame(FrameChoice choice, Instant now) {
+        this.frameChoice = choice;
+        this.updatedAt = now;
+    }
+
     /**
      * 升级写待弹庆祝（Story 2.1 · AD-10）：已有待弹保留原 from、只推进 to（连跳只弹一次、显示最终等级）。
      */

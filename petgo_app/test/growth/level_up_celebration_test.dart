@@ -91,6 +91,7 @@ void main() {
   });
 
   testWidgets('跨段位 AUTO + 星级 → 星级文案；✕ 关闭', (tester) async {
+    // Story 3.3 起头像戴上动效框（8 秒一圈）→ 在「移除动画」下测，否则 pumpAndSettle 永不结束。
     final out = await _pump(
         tester,
         const GrowthCelebration(
@@ -99,7 +100,8 @@ void main() {
           tierUp: true,
           toTier: GrowthTier.star,
           frameAction: GrowthFrameAction.auto,
-        ));
+        ),
+        still: true);
     expect(find.text('Kamu termasuk pecinta hewan paling aktif di TailTopia.'), findsOneWidget);
     expect(find.text('Lihat Level Saya'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('growthCelebrationClose')));

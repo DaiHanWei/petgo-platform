@@ -12,6 +12,7 @@ import '../../notify/domain/notification_grouping.dart';
 import '../data/growth_repository.dart';
 import '../domain/growth_models.dart';
 import 'exp_ledger_page.dart';
+import 'frame_picker_row.dart';
 import 'growth_labels.dart';
 import 'growth_ledger_tile.dart';
 import 'growth_progress_bar.dart';
@@ -57,22 +58,52 @@ class LevelPage extends ConsumerWidget {
   }
 }
 
-class _LevelContent extends ConsumerWidget {
+class _LevelContent extends ConsumerStatefulWidget {
   const _LevelContent({required this.summary});
 
   final GrowthSummary summary;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_LevelContent> createState() => _LevelContentState();
+}
+
+class _LevelContentState extends ConsumerState<_LevelContent> {
+  /// Story 3.3：切框成功后用 `PUT` 响应覆盖首屏的头像框四档（不必再拉整页）；首屏数据换了就以新数据为准。
+  GrowthFrames? _frames;
+
+  @override
+  void didUpdateWidget(_LevelContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.summary, widget.summary)) _frames = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = widget.summary;
     final profile = ref.watch(authControllerProvider).profile;
+    final frames = _frames ?? summary.frames;
+    final nickname = profile?.nickname ?? profile?.displayName ?? '';
+    final l10n = AppLocalizations.of(context);
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
       children: [
         _LevelCard(
           summary: summary,
           avatarUrl: profile?.avatarUrl,
-          nickname: profile?.nickname ?? profile?.displayName ?? '',
+          nickname: nickname,
+          effectiveFrame: frames?.effective,
         ),
+        // B1 顺序：等级卡之下、「Keuntungan level」之上。
+        if (frames != null && frames.options.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _SectionTitle(l10n.growthFrameSectionTitle),
+          FramePickerRow(
+            frames: frames,
+            avatarUrl: profile?.avatarUrl,
+            nickname: nickname,
+            onChanged: (f) => setState(() => _frames = f),
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         _BenefitsSection(summary: summary),
         const SizedBox(height: AppSpacing.lg),
@@ -122,11 +153,14 @@ String _tierRange(AppLocalizations l10n, GrowthTier? tier, int from, int? to) {
 
 /// 等级卡（B1 / B3）：段位浅色底。
 class _LevelCard extends StatelessWidget {
-  const _LevelCard({required this.summary, this.avatarUrl, required this.nickname});
+  const _LevelCard({required this.summary, this.avatarUrl, required this.nickname, this.effectiveFrame});
 
   final GrowthSummary summary;
   final String? avatarUrl;
   final String nickname;
+
+  /// 生效框代码（Story 3.3：切框后即时重绘）。
+  final String? effectiveFrame;
 
   @override
   Widget build(BuildContext context) {
@@ -148,8 +182,14 @@ class _LevelCard extends StatelessWidget {
       decoration: BoxDecoration(color: GrowthTierStyle.tint(s.tier), borderRadius: BorderRadius.circular(20)),
       child: Column(
         children: [
-          // 本 story 不画框不画角标（Epic 3 的共享装饰层负责）。
-          InitialAvatar(avatarUrl: avatarUrl, nickname: nickname, radius: 42),
+          // Story 3.3（B1）：84 + 生效框 + 数字角标 26（3.2 共享装饰层）。
+          InitialAvatar(
+            key: const ValueKey('growthLevelAvatar'),
+            avatarUrl: avatarUrl,
+            nickname: nickname,
+            radius: 42,
+            growth: growthBadgeFor(s, effectiveFrame),
+          ),
           const SizedBox(height: 12),
           Text(
             l10n.growthLevelShort('${s.level}'),

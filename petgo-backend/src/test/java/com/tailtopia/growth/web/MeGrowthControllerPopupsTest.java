@@ -19,7 +19,7 @@ class MeGrowthControllerPopupsTest {
 
     private final GrowthPopupService popups = mock(GrowthPopupService.class);
     private final MeGrowthController controller = new MeGrowthController(mock(GrowthPageQuery.class),
-            mock(GrowthLedgerPageQuery.class), popups);
+            mock(GrowthLedgerPageQuery.class), popups, mock(com.tailtopia.growth.service.GrowthFrameService.class));
     private final Jwt jwt = Jwt.withTokenValue("t").header("alg", "none").subject("7").build();
 
     @Test

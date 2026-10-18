@@ -12,6 +12,15 @@ class GrowthRepository {
 
   final Dio dio;
 
+  /// 选头像框（Story 3.3）：`frame ∈ NONE / BASIC / UPGRADED / ANIMATED`。成功返回新的四档；
+  /// 任何失败（409 `frame-locked`、网络、5xx、响应解析失败）都抛，调用方统一按「切换失败」处理。
+  Future<GrowthFrames> setFrame(String frame) async {
+    final resp = await dio.put<Map<String, dynamic>>(ApiPaths.meGrowthFrame, data: {'frame': frame});
+    final frames = GrowthFrames.fromJson(resp.data);
+    if (frames == null) throw const FormatException('bad frames response');
+    return frames;
+  }
+
   Future<GrowthSummary> fetchPage() async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.meGrowth);
     return GrowthSummary.fromJson(resp.data!);

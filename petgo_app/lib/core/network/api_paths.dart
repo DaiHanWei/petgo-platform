@@ -135,6 +135,9 @@ class ApiPaths {
   static const String meGrowth = '$base/me/growth';
   static const String meGrowthLedger = '$meGrowth/ledger';
 
+  /// 选头像框（V1.4.0 ① Story 3.3 · AD-16）：`PUT {frame}` → 头像框四档；未解锁 409 `frame-locked`。
+  static const String meGrowthFrame = '$meGrowth/frame';
+
   /// 升级庆祝 / 存量汇总弹窗（Story 2.1 后端 · 2.3 App）：拉取与确认（kind = celebration | backfill）。
   static const String growthPopups = '$meGrowth/popups';
   static String growthPopupAck(String kind) => '$meGrowth/popups/$kind/ack';

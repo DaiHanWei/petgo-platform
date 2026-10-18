@@ -49,7 +49,8 @@ const prdRules = [
   GrowthRuleProgress(code: 'SPEND_SHOP', points: 5, unitAmount: 10000),
 ];
 
-GrowthSummary midSummary({List<GrowthLedgerEntry>? recent}) => GrowthSummary(
+GrowthSummary midSummary({List<GrowthLedgerEntry>? recent, GrowthFrames? frames}) => GrowthSummary(
+      frames: frames,
       participating: true,
       level: 7,
       tier: GrowthTier.buddy,

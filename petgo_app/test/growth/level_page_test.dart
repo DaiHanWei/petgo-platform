@@ -3,13 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/growth/data/growth_repository.dart';
+import 'package:tailtopia/features/growth/domain/growth_models.dart';
 import 'package:tailtopia/features/growth/presentation/level_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 import 'growth_fixtures.dart';
 
 /// V1.4.0 ① Story 1.5 · AC2 ~ AC4（L0，结构断言，不做 golden）。
-Future<void> _pump(WidgetTester tester, FakeGrowthRepository repo) async {
+Future<void> _pump(WidgetTester tester, FakeGrowthRepository repo, {bool still = false}) async {
   tester.view.physicalSize = const Size(1200, 4000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -25,6 +26,11 @@ Future<void> _pump(WidgetTester tester, FakeGrowthRepository repo) async {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('id'),
+      // 头像框一排里有动效框预览（8 秒一圈）：含它的用例在「移除动画」下测，否则 pumpAndSettle 永不结束。
+      builder: still
+          ? (context, child) =>
+              MediaQuery(data: MediaQuery.of(context).copyWith(disableAnimations: true), child: child!)
+          : null,
     ),
   ));
   await tester.pumpAndSettle();
@@ -127,5 +133,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.pageCalls, 2);
     expect(find.byKey(const ValueKey('growthLevelCard')), findsOneWidget);
+  });
+
+  testWidgets('V1.4.0 ① 3.3（B1 / C）：有头像框四档 → 等级卡之下显示一排，头部头像戴生效框', (tester) async {
+    const frames = GrowthFrames(effective: 'BASIC', options: [
+      GrowthFrameOption(frame: 'NONE', unlocked: true, unlockLevel: 1),
+      GrowthFrameOption(frame: 'BASIC', unlocked: true, unlockLevel: 5),
+      GrowthFrameOption(frame: 'UPGRADED', unlocked: false, unlockLevel: 10),
+      GrowthFrameOption(frame: 'ANIMATED', unlocked: false, unlockLevel: 15),
+    ]);
+    await _pump(tester, FakeGrowthRepository(pages: [midSummary(frames: frames)]), still: true);
+
+    expect(find.text('BINGKAI AVATAR'), findsOneWidget);
+    expect(find.byKey(const ValueKey('growthFramePicker')), findsOneWidget);
+    final avatar = find.byKey(const ValueKey('growthLevelAvatar'));
+    expect(find.descendant(of: avatar, matching: find.byKey(const ValueKey('growthFrame_basic'))), findsOneWidget);
+    expect(find.descendant(of: avatar, matching: find.text('7')), findsOneWidget);
+    // B1 顺序：一排在「Keuntungan level」之上。
+    expect(tester.getTopLeft(find.byKey(const ValueKey('growthFramePicker'))).dy,
+        lessThan(tester.getTopLeft(find.text('Terbuka').first).dy));
+  });
+
+  testWidgets('无头像框四档（旧后端）→ 不显示一排', (tester) async {
+    await _pump(tester, FakeGrowthRepository(pages: [midSummary()]));
+    expect(find.byKey(const ValueKey('growthFramePicker')), findsNothing);
   });
 }

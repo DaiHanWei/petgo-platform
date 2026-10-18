@@ -272,6 +272,9 @@ void main() {
         // 入口横跨「我的」页胶囊、升级庆祝页、升级通知三处（`growth_level_page_viewed` 的 source 区分），
         // 挂到 me_ / notify_ 任一前缀下都会误导。⚠️ 新模块入表，不是为遗留事件放宽规则。
         'growth_',
+        // 头像框切换（V1.4.0 ① Story 3.3 · PRD §4 定死的事件名 `avatar_frame_changed`）：等级页一排与升级庆祝页
+        // 两个入口都报，归属「头像框」这一对象而非某个页面。⚠️ 只放这个精确前缀，不放宽成 `avatar_`。
+        'avatar_frame_',
         // 宠物身份证卡面分享奖励（FR-96 / Story 18.2）。
         // 🔴 与 `pet_card_` 刻意分开：那一组是**宠物主页对外 H5 名片**（FR-92），
         //    这一组是**身份证卡面图片**（FR-49A 那条链、带水印、有 HD 付费点）。
@@ -356,6 +359,9 @@ void main() {
         // 与 `_shown`（庆祝曝光）分开：前者是数据层拿到升级，后者是用户真的看见。
         // ⚠️ 只放这个精确词尾，不放宽成 `_up`；扩表、不改名。
         '_level_up',
+        // 头像框切换（V1.4.0 ① Story 3.3 · PRD §4 定死 `avatar_frame_changed`）：只在 PUT 成功后报一次的「结果」。
+        // ⚠️ 只放这个精确词尾，不放宽成 `_changed`；扩表、不改名。
+        '_frame_changed',
         // 用户对提示的响应（V1.1.6 Story 8.2）：`_responded` 与 `_tapped` 的区别在于
         // **它是对一个「被问」的回答**，取值有多档（granted / denied / settings_opened /
         // dismissed），而不是单一动作。分母是提示曝光数（`_shown`），配对使用。

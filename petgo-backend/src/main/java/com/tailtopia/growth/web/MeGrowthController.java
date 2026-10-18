@@ -1,10 +1,14 @@
 package com.tailtopia.growth.web;
 
+import com.tailtopia.growth.domain.FrameChoice;
+import com.tailtopia.growth.service.GrowthFrameService;
 import com.tailtopia.growth.service.GrowthLedgerPageQuery;
 import com.tailtopia.growth.service.GrowthPageQuery;
 import com.tailtopia.growth.service.GrowthPopupService;
+import com.tailtopia.growth.web.dto.GrowthFrameRequest;
 import com.tailtopia.growth.web.dto.GrowthLedgerPage;
 import com.tailtopia.growth.web.dto.GrowthPageResponse;
+import com.tailtopia.growth.web.dto.GrowthPageResponse.Frames;
 import com.tailtopia.growth.web.dto.GrowthPopupsResponse;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.error.ErrorTypes;
@@ -15,6 +19,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,11 +36,14 @@ public class MeGrowthController {
     private final GrowthPageQuery page;
     private final GrowthLedgerPageQuery ledger;
     private final GrowthPopupService popups;
+    private final GrowthFrameService frames;
 
-    public MeGrowthController(GrowthPageQuery page, GrowthLedgerPageQuery ledger, GrowthPopupService popups) {
+    public MeGrowthController(GrowthPageQuery page, GrowthLedgerPageQuery ledger, GrowthPopupService popups,
+            GrowthFrameService frames) {
         this.page = page;
         this.ledger = ledger;
         this.popups = popups;
+        this.frames = frames;
     }
 
     @GetMapping
@@ -71,6 +80,27 @@ public class MeGrowthController {
             default -> throw new AppException(HttpStatus.BAD_REQUEST, ErrorTypes.VALIDATION, "未知的弹窗类型");
         }
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 选头像框（Story 3.3 · AD-16）：{@code NONE} 恒允许；未解锁 → 409 {@code frame-locked}；非法值 → 422。
+     * 返回与 {@code GET} 同一个头像框四档 DTO，App 直接刷新一排卡片。
+     */
+    @PutMapping("/frame")
+    public Frames frame(@AuthenticationPrincipal Jwt jwt, @RequestBody(required = false) GrowthFrameRequest body) {
+        long userId = currentUserId(jwt);
+        return frames.choose(userId, parseFrame(body));
+    }
+
+    private static FrameChoice parseFrame(GrowthFrameRequest body) {
+        if (body == null || body.frame() == null) {
+            throw AppException.validation("frame is required");
+        }
+        try {
+            return FrameChoice.valueOf(body.frame());
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("frame must be one of NONE, BASIC, UPGRADED, ANIMATED");
+        }
     }
 
     private static long currentUserId(Jwt jwt) {

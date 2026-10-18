@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/initial_avatar.dart';
 import '../../ops/presentation/ops_popup_dialog.dart';
+import '../domain/growth_badge.dart';
 import '../domain/growth_level_color.dart';
 import '../domain/growth_models.dart';
 import '../domain/growth_popups.dart';
@@ -26,12 +28,16 @@ Future<GrowthPopupOutcome?> showLevelUpCelebration(
   String? avatarUrl,
   String nickname = '',
   List<GrowthLevelDef> levels = const [],
+  Future<bool> Function(String frame)? onApplyFrame,
+  String? currentFrame,
 }) {
   final view = LevelUpCelebrationView(
+    currentFrame: currentFrame,
     celebration: celebration,
     avatarUrl: avatarUrl,
     nickname: nickname,
     levels: levels,
+    onApplyFrame: onApplyFrame,
   );
   return showGeneralDialog<GrowthPopupOutcome>(
     context: rootContext,
@@ -53,12 +59,28 @@ class LevelUpCelebrationView extends StatefulWidget {
     this.avatarUrl,
     this.nickname = '',
     this.levels = const [],
+    this.onApplyFrame,
+    this.currentFrame,
   });
 
   final GrowthCelebration celebration;
   final String? avatarUrl;
   final String nickname;
   final List<GrowthLevelDef> levels;
+
+  /// Story 3.3（D3 → D5 / D6）：「Pakai Bingkai Baru」一键戴上，返回是否成功；null = 旧行为（进等级页）。
+  final Future<bool> Function(String frame)? onApplyFrame;
+
+  /// 当前生效框代码（`/me` 的 `growth.frame`）：D3 戴上新框前头像先显示它（手动选过框的用户不至于显示成无框）。
+  final String? currentFrame;
+
+  /// 新段位的最高可用档（按段位、不按等级数字）。
+  static String? highestFrameOf(GrowthTier? tier) => switch (tier) {
+        GrowthTier.buddy => 'BASIC',
+        GrowthTier.guardian => 'UPGRADED',
+        GrowthTier.star => 'ANIMATED',
+        _ => null,
+      };
 
   @override
   State<LevelUpCelebrationView> createState() => _LevelUpCelebrationViewState();
@@ -70,6 +92,34 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
     duration: const Duration(milliseconds: 1200),
   );
   bool _started = false;
+
+  /// Story 3.3：一键戴上请求中 / 已戴上（D5，按钮变「Bingkai terpasang ✓」且不可点；页面不自动关）。
+  bool _applying = false;
+  bool _applied = false;
+
+  Future<void> _applyNewFrame(String target) async {
+    final apply = widget.onApplyFrame;
+    if (apply == null || _applying || _applied) return;
+    final l10n = AppLocalizations.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
+    setState(() => _applying = true);
+    var ok = false;
+    try {
+      ok = await apply(target);
+    } catch (_) {
+      ok = false;
+    }
+    // 成功即上报（用户在请求中关掉了庆祝页也算换过框）。
+    if (ok) {
+      Analytics.capture('avatar_frame_changed', {'frame_id': target.toLowerCase()});
+    }
+    if (!mounted) return;
+    setState(() {
+      _applying = false;
+      _applied = ok;
+    });
+    showAppToastOnOverlay(overlay, ok ? l10n.growthFrameChanged : l10n.growthFrameChangeFailed);
+  }
 
   @override
   void initState() {
@@ -243,6 +293,9 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
         primary = l10n.growthViewMyLevel;
         secondary = l10n.commonClose;
     }
+    final applyTarget = c.frameAction == GrowthFrameAction.offerNewFrame && widget.onApplyFrame != null
+        ? LevelUpCelebrationView.highestFrameOf(tier)
+        : null;
     final benefits = [
       for (final code in c.unlockedBenefits)
         if (GrowthLabels.benefit(l10n, code) case final String text) (code, text),
@@ -292,15 +345,21 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Column(
                       children: [
-                        _RingAvatar(
-                          progress: c.frameAction == GrowthFrameAction.auto ? 1 : 0,
-                          fromColor: GrowthTierStyle.color(tier),
-                          toColor: GrowthTierStyle.color(tier),
-                          level: c.toLevel,
-                          tier: tier,
+                        // Story 3.3：120 + 框 + 数字角标 34（3.2 共享装饰层）。AUTO 已自动戴上最高档；一键戴上成功后换新框。
+                        InitialAvatar(
+                          key: const ValueKey('growthCelebrationAvatar'),
                           avatarUrl: widget.avatarUrl,
                           nickname: widget.nickname,
-                          size: 120,
+                          radius: 60,
+                          growth: tier == null
+                              ? null
+                              : GrowthBadge(
+                                  level: c.toLevel,
+                                  tier: tier,
+                                  frame: GrowthFrame.fromCode(_applied || c.frameAction == GrowthFrameAction.auto
+                                      ? LevelUpCelebrationView.highestFrameOf(tier)
+                                      : widget.currentFrame),
+                                ),
                         ),
                         const SizedBox(height: 16),
                         Text(l10n.growthCelebrationTitle,
@@ -375,9 +434,13 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                     children: [
                       _PrimaryButton(
                         key: const ValueKey('growthCelebrationPrimary'),
-                        label: primary,
-                        // Story 3.3：改为调 PUT /api/v1/me/growth/frame 一键戴上（D5 成功 / D6 失败）
-                        onTap: () => _close(GrowthPopupOutcome.viewLevel),
+                        label: _applied ? l10n.growthFrameApplied : primary,
+                        done: _applied,
+                        // Story 3.3：OFFER_NEW_FRAME → 调 PUT /api/v1/me/growth/frame 一键戴上（D5 成功 / D6 失败）；
+                        // 请求中与已戴上都不可点。没注入 onApplyFrame 时保持旧行为（进等级页）。
+                        onTap: applyTarget != null
+                            ? (_applying || _applied ? null : () => _applyNewFrame(applyTarget))
+                            : () => _close(GrowthPopupOutcome.viewLevel),
                       ),
                       TextButton(
                         key: const ValueKey('growthCelebrationSecondary'),
@@ -410,17 +473,22 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
 
 /// 品牌主色按钮（同运营弹窗按钮），高 46、热区 ≥ 44。
 class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({super.key, required this.label, required this.onTap});
+  const _PrimaryButton({super.key, required this.label, required this.onTap, this.done = false});
 
   final String label;
-  final VoidCallback onTap;
+
+  /// null = 不可点（一键戴上请求中 / 已戴上）。
+  final VoidCallback? onTap;
+
+  /// D5「Bingkai terpasang ✓」：浅紫底、深紫字、不可点。
+  final bool done;
 
   @override
   Widget build(BuildContext context) => SizedBox(
         width: double.infinity,
         height: 46,
         child: Material(
-          color: AppColors.mint,
+          color: done ? AppColors.growthFrameAppliedFill : AppColors.mint,
           borderRadius: const BorderRadius.all(Radius.circular(12)),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -429,7 +497,10 @@ class _PrimaryButton extends StatelessWidget {
               child: Text(label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.onAccent)),
+                  style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: done ? AppColors.mint700 : AppColors.onAccent)),
             ),
           ),
         ),

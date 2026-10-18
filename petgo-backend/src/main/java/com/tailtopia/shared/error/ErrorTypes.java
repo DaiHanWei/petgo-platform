@@ -68,6 +68,11 @@ public final class ErrorTypes {
      */
     public static final URI FOLLOW_BLOCKED = URI.create(BASE + "follow-blocked");
 
+    /**
+     * 头像框未解锁（V1.4.0 ① Story 3.3 · AD-16）：所选档不在当前段位可用档内，{@code frame_choice} 不变（409）。
+     */
+    public static final URI FRAME_LOCKED = URI.create(BASE + "frame-locked");
+
     private ErrorTypes() {
     }
 }
