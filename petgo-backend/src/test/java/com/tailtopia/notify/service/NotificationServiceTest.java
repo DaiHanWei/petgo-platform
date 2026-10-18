@@ -14,6 +14,8 @@ import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.repository.NotificationAggregateDao;
 import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.notify.preference.PushPreferenceService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -47,6 +49,15 @@ class NotificationServiceTest {
     InteractionCopyRenderer copy;
     @Mock
     InteractionActorResolver resolver;
+    /** V1.4.0 ④ Story 1.2：推送闸门。默认「全开」（Mockito 对 boolean 默认 false，不桩会让所有推送断言变红）。 */
+    @Mock
+    PushPreferenceService prefs;
+
+    @BeforeEach
+    void allPushCategoriesEnabled() {
+        org.mockito.Mockito.lenient().when(prefs.isEnabled(org.mockito.ArgumentMatchers.anyLong(), any()))
+                .thenReturn(true);
+    }
 
     private NotificationService service() {
         // push 文案本地化（bug 20260625-105）：mock MessageSource 回退到传入原文案，保持既有推送文本断言。
@@ -54,7 +65,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(2));
         when(accountQuery.localeOf(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(java.util.Locale.forLanguageTag("id"));
-        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
     }
 
     @Test
@@ -101,7 +112,7 @@ class NotificationServiceTest {
         // 而本路径**根本不发推送**、用不到它们 —— 严格 stub 模式下会报 UnnecessaryStubbing。
         // 这本身就是"没发推送"的一个旁证。
         NotificationService svc =
-                new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+                new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
         Notification n = svc.sendWithoutPush(7L, NotificationType.MILESTONE_SM_NODE,
                 "留痕标题", "留痕正文", NotificationType.MILESTONE_NODE.name(), "C-S14");
 
@@ -124,7 +135,7 @@ class NotificationServiceTest {
         when(redis.opsForValue()).thenReturn(valueOps);
         when(accountQuery.isVirtual(7L)).thenReturn(true);
         // 不走 service()：推送文案/语言根本用不到（严格 stub 下即为"没推送"的旁证）。
-        NotificationService svc = new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+        NotificationService svc = new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
 
         svc.send(7L, NotificationType.CONTENT_LIKED, "a", "b", "X", "r");
         svc.sendWithCopy(7L, NotificationType.CONTENT_LIKED, "K", null, "a", "b", "r");
@@ -141,7 +152,7 @@ class NotificationServiceTest {
 
     /** 互动路径用的服务：不 stub 旧 pushText（严格 stub 下多余 stub 会报错）。 */
     private NotificationService interactionService() {
-        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
     }
 
     private void stubPushRendering() {
@@ -412,7 +423,7 @@ class NotificationServiceTest {
         when(valueOps.increment(NotificationService.UNREAD_KEY_PREFIX + "7")).thenReturn(1L);
         when(resolver.effectiveUnreadCount(7L)).thenReturn(4L);
 
-        new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver)
+        new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs)
                 .sendWithoutPush(7L, NotificationType.MILESTONE_SM_NODE, "t", "b", "MILESTONE_NODE", "C-S1");
 
         verify(valueOps).set(NotificationService.UNREAD_KEY_PREFIX + "7", "4");

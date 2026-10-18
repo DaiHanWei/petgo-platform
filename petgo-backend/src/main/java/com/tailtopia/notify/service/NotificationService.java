@@ -2,6 +2,7 @@ package com.tailtopia.notify.service;
 
 import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.preference.PushPreferenceService;
 import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.repository.NotificationAggregateDao;
 import com.tailtopia.notify.repository.NotificationRepository;
@@ -65,13 +66,15 @@ public class NotificationService {
     private final NotificationActorRepository actors;
     private final InteractionCopyRenderer copy;
     private final InteractionActorResolver unreadResolver;
+    /** V1.4.0 ④ Story 1.2：推送分类开关闸门（AD-5）——只决定推 / 不推，不影响落库与角标。 */
+    private final PushPreferenceService prefs;
     private final SecureRandom random = new SecureRandom();
 
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
             NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
             com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
             NotificationActorRepository actors, InteractionCopyRenderer copy,
-            InteractionActorResolver unreadResolver) {
+            InteractionActorResolver unreadResolver, PushPreferenceService prefs) {
         this.repo = repo;
         this.redis = redis;
         this.pusher = pusher;
@@ -81,6 +84,7 @@ public class NotificationService {
         this.actors = actors;
         this.copy = copy;
         this.unreadResolver = unreadResolver;
+        this.prefs = prefs;
     }
 
     /**
@@ -138,6 +142,9 @@ public class NotificationService {
         // 站内通知中心不用这里的文本（App 端按 type 自行本地化），故落库 title/body 保持不变。
         if (skipPushForVirtual(recipientUserId)) {
             return saved;
+        }
+        if (!pushAllowed(recipientUserId, type)) {
+            return saved; // V1.4.0 ④ AD-5：关了这类推送 → 只留通知中心
         }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
         pusher.pushToUser(recipientUserId,
@@ -247,6 +254,10 @@ public class NotificationService {
         if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
             return;
         }
+        // V1.4.0 ④ AD-5：关了这类推送 → 只留通知中心；必须先于 acquirePushSlot（不占去抖键、不查触发人、不渲染）。
+        if (!pushAllowed(recipientUserId, type)) {
+            return;
+        }
         String slot = debounceKey(aggregateKey);
         if (!acquirePushSlot(slot)) {
             return;
@@ -276,6 +287,19 @@ public class NotificationService {
             return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, "1", PUSH_DEBOUNCE));
         } catch (RuntimeException e) {
             log.warn("推送去抖键不可用（照常推送）cause={}", e.getClass().getSimpleName());
+            return true;
+        }
+    }
+
+    /**
+     * 推送分类开关闸门（V1.4.0 ④ Story 1.2 · AD-5）：分类判断只经 {@link PushPreferenceService}（内部 {@code PushCategory.of}）。
+     * {@code isEnabled} 自身已兜底；这里再兜一层 —— 异常照常推送（宁多勿漏，同 {@link #acquirePushSlot}）。
+     */
+    private boolean pushAllowed(long recipientUserId, NotificationType type) {
+        try {
+            return prefs.isEnabled(recipientUserId, type);
+        } catch (RuntimeException e) {
+            log.warn("推送偏好查询失败（照常推送）cause={}", e.getClass().getSimpleName());
             return true;
         }
     }
@@ -386,6 +410,9 @@ public class NotificationService {
         bumpUnreadBadge(recipientUserId);
         if (skipPushForVirtual(recipientUserId)) {
             return saved;
+        }
+        if (!pushAllowed(recipientUserId, type)) {
+            return saved; // V1.4.0 ④ AD-5：关了这类推送 → 只留通知中心
         }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
         pusher.pushToUser(recipientUserId,

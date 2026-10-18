@@ -10,12 +10,15 @@ import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.domain.OpsRecipient;
 import com.tailtopia.notify.ops.repository.OpsCampaignTargetDao;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
+import com.tailtopia.notify.preference.PushCategory;
+import com.tailtopia.notify.preference.PushPreferenceService;
 import com.tailtopia.notify.service.NotificationPusher;
 import com.tailtopia.notify.service.NotificationService;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,10 +39,13 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * 仍失败整批计 failed 且跳过推送）→ 逐人同步推送（失败的人按 1s/2s/4s 重推 3 轮，成功的人不重推）→
  * 批间等 1 秒 → 收尾。
  *
+ * <p>V1.4.0 ④ Story 1.2（AD-5 / P-4）：每批写入通知中心之后、推送之前，一次查出本批里关闭了「活动与优惠」（PROMO）的人，
+ * 他们<b>只留通知中心</b>：不推送、不计推送进展、不计失败；{@code recipient_count}（写入通知中心人数）照常包含他们。
+ *
  * <p>本身不加事务；每一步各自短事务（仓储方法自带 / {@code writeOpsAnnouncements} REQUIRES_NEW）。
  * 已写入通知中心的行任何情况下都不回滚、不删除（PRD AC6）。
  *
- * <p>🔒 日志只记活动 id、批次序号、本批写入数、本批失败数、最终状态；不记收件人 id、标题、正文、token。
+ * <p>🔒 日志只记活动 id、批次序号、本批写入数、本批失败数、本批被推送开关拦下的人数、最终状态；不记收件人 id、标题、正文、token。
  */
 @Service
 public class OpsNotificationDispatcher {
@@ -48,31 +54,37 @@ public class OpsNotificationDispatcher {
 
     static final String DEEP_LINK_TYPE = NotificationType.OPS_ANNOUNCEMENT.name();
 
+    /** 运营公告所属推送分类（映射只在 {@link PushCategory#of}，此处不另写 —— 当前为 PROMO「活动与优惠」）。 */
+    private static final PushCategory PUSH_CATEGORY = PushCategory.of(NotificationType.OPS_ANNOUNCEMENT);
+
     private final OpsNotificationCampaignRepository repo;
     private final OpsCampaignTargetDao targets;
     private final OpsAudienceQuery audience;
     private final NotificationService notificationService;
     private final NotificationPusher pusher;
+    private final PushPreferenceService prefs;
     private final OpsDispatchPacer pacer;
     private final Clock clock;
     private final OpsNotifyParams params;
 
     @Autowired
     public OpsNotificationDispatcher(OpsNotificationCampaignRepository repo, OpsCampaignTargetDao targets,
-            OpsAudienceQuery audience, NotificationService notificationService, NotificationPusher pusher) {
-        this(repo, targets, audience, notificationService, pusher, OpsDispatchPacer.THREAD_SLEEP,
+            OpsAudienceQuery audience, NotificationService notificationService, NotificationPusher pusher,
+            PushPreferenceService prefs) {
+        this(repo, targets, audience, notificationService, pusher, prefs, OpsDispatchPacer.THREAD_SLEEP,
                 Clock.systemUTC(), OpsNotifyParams.DEFAULTS);
     }
 
     /** 测试用：注入记录型 pacer（不真睡）与固定时钟。 */
     public OpsNotificationDispatcher(OpsNotificationCampaignRepository repo, OpsCampaignTargetDao targets,
             OpsAudienceQuery audience, NotificationService notificationService, NotificationPusher pusher,
-            OpsDispatchPacer pacer, Clock clock, OpsNotifyParams params) {
+            PushPreferenceService prefs, OpsDispatchPacer pacer, Clock clock, OpsNotifyParams params) {
         this.repo = repo;
         this.targets = targets;
         this.audience = audience;
         this.notificationService = notificationService;
         this.pusher = pusher;
+        this.prefs = prefs;
         this.pacer = pacer;
         this.clock = clock;
         this.params = params;
@@ -151,8 +163,8 @@ public class OpsNotificationDispatcher {
                 return;
             }
             failedTotal += out.failed();
-            log.info("运营通知批次完成 campaignId={} batch={} written={} failed={}", id, b + 1,
-                    out.written(), out.failed());
+            log.info("运营通知批次完成 campaignId={} batch={} written={} failed={} muted={}", id, b + 1,
+                    out.written(), out.failed(), out.muted());
             if (b < batches - 1 && !pause(params.batchInterval())) {
                 interrupted(id);
                 return;
@@ -161,8 +173,8 @@ public class OpsNotificationDispatcher {
         finish(id, failedTotal);
     }
 
-    /** 一批的结果：通知中心写入人数、失败人数（单位：人）。 */
-    private record BatchOutcome(int written, int failed) {
+    /** 一批的结果：通知中心写入人数、失败人数、被推送开关拦下的人数（单位：人）。 */
+    private record BatchOutcome(int written, int failed, int muted) {
     }
 
     /** 写通知中心的结果：{@code rows == null && !stop} = 重试已尽仍失败；{@code stop} = 必须停止。 */
@@ -187,18 +199,22 @@ public class OpsNotificationDispatcher {
             if (repo.addFailed(id, batch.size(), clock.instant()) == 0) {
                 return null;
             }
-            return new BatchOutcome(0, batch.size());
+            return new BatchOutcome(0, batch.size(), 0);
         }
         if (repo.addRecipients(id, written.size(), clock.instant()) == 0) {
             return null;
         }
+        // V1.4.0 ④ AD-5 / P-4：关了「活动与优惠」的人只留通知中心 —— 不推送、不 tick、不计失败。
+        Set<Long> muted = mutedAmong(id, written);
+        List<Notification> toPush = muted.isEmpty() ? written
+                : written.stream().filter(n -> !muted.contains(n.getRecipientUserId())).toList();
 
         int[] pushed = {0};
         int succeeded = 0;
         List<Notification> failed = new ArrayList<>();
-        for (Notification n : written) {
+        for (Notification n : toPush) {
             if (Thread.currentThread().isInterrupted()) {
-                return abort(id, written.size() - succeeded);
+                return abort(id, toPush.size() - succeeded);
             }
             if (push(n, campaign)) {
                 succeeded++;
@@ -206,19 +222,19 @@ public class OpsNotificationDispatcher {
                 failed.add(n);
             }
             if (!tick(id, pushed)) {
-                return abort(id, written.size() - succeeded);
+                return abort(id, toPush.size() - succeeded);
             }
         }
         // 只重推失败的人（成功的人不重推，防重复打扰）。
         List<Duration> backoffs = params.retryBackoffs();
         for (int round = 0; round < backoffs.size() && !failed.isEmpty(); round++) {
             if (!pause(backoffs.get(round))) {
-                return abort(id, written.size() - succeeded);
+                return abort(id, toPush.size() - succeeded);
             }
             List<Notification> still = new ArrayList<>();
             for (Notification n : failed) {
                 if (Thread.currentThread().isInterrupted()) {
-                    return abort(id, written.size() - succeeded);
+                    return abort(id, toPush.size() - succeeded);
                 }
                 if (push(n, campaign)) {
                     succeeded++;
@@ -226,7 +242,7 @@ public class OpsNotificationDispatcher {
                     still.add(n);
                 }
                 if (!tick(id, pushed)) {
-                    return abort(id, written.size() - succeeded);
+                    return abort(id, toPush.size() - succeeded);
                 }
             }
             failed = still;
@@ -238,7 +254,18 @@ public class OpsNotificationDispatcher {
         } else if (repo.touchProgress(id, clock.instant()) == 0) {
             return null;
         }
-        return new BatchOutcome(written.size(), failed.size());
+        return new BatchOutcome(written.size(), failed.size(), written.size() - toPush.size());
+    }
+
+    /** 本批里关闭了运营公告所属分类（PROMO）推送的收件人（一次查询）。查询异常 → 视为无人关闭、照常全推（宁多勿漏）。 */
+    private Set<Long> mutedAmong(long id, List<Notification> written) {
+        try {
+            return prefs.mutedAmong(written.stream().map(Notification::getRecipientUserId).toList(),
+                    PUSH_CATEGORY);
+        } catch (RuntimeException e) {
+            log.warn("推送偏好批量查询失败（本批照常推送）campaignId={} cause={}", id, e.getClass().getSimpleName());
+            return Set.of();
+        }
     }
 
     /** 停止：尽力把本批未推送成功的人数计入 failed_count，返回 {@code null}。 */

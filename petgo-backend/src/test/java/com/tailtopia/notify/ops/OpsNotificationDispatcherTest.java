@@ -26,6 +26,8 @@ import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.ops.service.OpsDispatchPacer;
 import com.tailtopia.notify.ops.service.OpsNotificationDispatcher;
 import com.tailtopia.notify.ops.service.OpsNotifyParams;
+import com.tailtopia.notify.preference.PushCategory;
+import com.tailtopia.notify.preference.PushPreferenceService;
 import com.tailtopia.notify.service.NotificationPusher;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.ops.target.OpsTargetType;
@@ -74,6 +76,9 @@ class OpsNotificationDispatcherTest {
     NotificationService notificationService;
     @Mock
     NotificationPusher pusher;
+    /** V1.4.0 ④ Story 1.2：mutedAmong 默认返回空 Set（Mockito 默认值）→ 既有用例行为不变。 */
+    @Mock
+    PushPreferenceService prefs;
 
     private final List<Duration> sleeps = new ArrayList<>();
     private final OpsDispatchPacer pacer = sleeps::add;
@@ -81,7 +86,7 @@ class OpsNotificationDispatcherTest {
 
     @BeforeEach
     void setUp() {
-        dispatcher = new OpsNotificationDispatcher(repo, targets, audience, notificationService, pusher, pacer,
+        dispatcher = new OpsNotificationDispatcher(repo, targets, audience, notificationService, pusher, prefs, pacer,
                 Clock.fixed(NOW, ZoneOffset.UTC), OpsNotifyParams.DEFAULTS);
         when(repo.claimForSending(eq(ID), any())).thenReturn(1);
         when(repo.addRecipients(eq(ID), anyInt(), any())).thenReturn(1);
@@ -336,7 +341,7 @@ class OpsNotificationDispatcherTest {
         audienceOf(1201);
         OpsDispatchPacer interrupting = d -> Thread.currentThread().interrupt();
         OpsNotificationDispatcher d = new OpsNotificationDispatcher(repo, targets, audience, notificationService,
-                pusher, interrupting, Clock.fixed(NOW, ZoneOffset.UTC), OpsNotifyParams.DEFAULTS);
+                pusher, prefs, interrupting, Clock.fixed(NOW, ZoneOffset.UTC), OpsNotifyParams.DEFAULTS);
         try {
             d.dispatch(ID);
         } finally {
@@ -345,5 +350,99 @@ class OpsNotificationDispatcherTest {
         assertThat(writtenBatchSizes(1)).containsExactly(500);
         verify(repo).finish(ID, OpsCampaignStatus.PARTIAL_FAILED, NOW);
         verify(pusher, times(500)).pushToUserNow(anyLong(), anyString(), anyString(), any(), any(), any());
+    }
+
+    // ===== V1.4.0 ④ Story 1.2：推送分类开关闸门（AD-5 / P-4）=====
+
+    @Test
+    void mutedRecipientsGetNotificationButNoPush() {
+        audienceOf(5);
+        when(prefs.mutedAmong(any(), eq(PushCategory.PROMO))).thenReturn(Set.of(2L, 4L));
+
+        dispatcher.dispatch(ID);
+
+        for (long uid : new long[] {1L, 3L, 5L}) {
+            verify(pusher).pushToUserNow(eq(uid), any(), any(), any(), any(), any());
+        }
+        verify(pusher, never()).pushToUserNow(eq(2L), any(), any(), any(), any(), any());
+        verify(pusher, never()).pushToUserNow(eq(4L), any(), any(), any(), any(), any());
+        verify(repo).addRecipients(ID, 5, NOW); // 触达 = 写入通知中心人数，含被拦下的人
+        verify(repo, never()).addFailed(anyLong(), anyInt(), any());
+        verify(repo).finish(ID, OpsCampaignStatus.DONE, NOW);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mutedAmongQueriedOncePerBatchWithPromo() {
+        audienceOf(1201);
+        dispatcher.dispatch(ID);
+        ArgumentCaptor<java.util.Collection<Long>> ids = ArgumentCaptor.forClass(java.util.Collection.class);
+        ArgumentCaptor<PushCategory> cat = ArgumentCaptor.forClass(PushCategory.class);
+        verify(prefs, times(3)).mutedAmong(ids.capture(), cat.capture());
+        assertThat(ids.getAllValues()).extracting(java.util.Collection::size).containsExactly(500, 500, 201);
+        assertThat(cat.getAllValues()).containsOnly(PushCategory.PROMO);
+    }
+
+    @Test
+    void mutedRecipientsNeverRetriedAndNotCountedAsFailed() {
+        audienceOf(10);
+        when(prefs.mutedAmong(any(), eq(PushCategory.PROMO))).thenReturn(Set.of(1L, 2L));
+        doAnswer(inv -> (long) inv.getArgument(0) != 3L) // 3 号恒失败
+                .when(pusher).pushToUserNow(anyLong(), any(), any(), any(), any(), any());
+
+        dispatcher.dispatch(ID);
+
+        verify(pusher, never()).pushToUserNow(eq(1L), any(), any(), any(), any(), any());
+        verify(pusher, never()).pushToUserNow(eq(2L), any(), any(), any(), any(), any());
+        verify(pusher, times(4)).pushToUserNow(eq(3L), any(), any(), any(), any(), any()); // 首推 + 3 轮
+        verify(repo).addFailed(ID, 1, NOW);
+        verify(repo).finish(ID, OpsCampaignStatus.PARTIAL_FAILED, NOW);
+    }
+
+    @Test
+    void wholeBatchMutedStillTouchesProgressAndFinishesDone() {
+        audienceOf(3);
+        when(prefs.mutedAmong(any(), eq(PushCategory.PROMO))).thenReturn(Set.of(1L, 2L, 3L));
+
+        dispatcher.dispatch(ID);
+
+        verifyNoInteractions(pusher);
+        verify(repo, times(2)).touchProgress(ID, NOW); // 写库前一次 + 批末一次
+        verify(repo, never()).addFailed(anyLong(), anyInt(), any());
+        verify(repo).finish(ID, OpsCampaignStatus.DONE, NOW);
+    }
+
+    @Test
+    void interruptCountsOnlyUnfinishedPushTargets() {
+        audienceOf(600);
+        when(prefs.mutedAmong(any(), eq(PushCategory.PROMO)))
+                .thenReturn(Set.copyOf(LongStream.rangeClosed(401, 500).boxed().toList()));
+        int[] n = {0};
+        doAnswer(inv -> {
+            if (++n[0] == 10) {
+                Thread.currentThread().interrupt();
+            }
+            return true;
+        }).when(pusher).pushToUserNow(anyLong(), any(), any(), any(), any(), any());
+        try {
+            dispatcher.dispatch(ID);
+        } finally {
+            Thread.interrupted();
+        }
+        // 本批 500 人写入，100 人被拦下 → 待推 400；推完 10 人后中断 → 未完成 390（不含被拦下的人）
+        verify(repo).addFailed(ID, 390, NOW);
+        verify(repo).finish(ID, OpsCampaignStatus.PARTIAL_FAILED, NOW);
+    }
+
+    @Test
+    void mutedAmongFailureFallsBackToPushEveryone() {
+        audienceOf(5);
+        when(prefs.mutedAmong(any(), any())).thenThrow(new RuntimeException("db"));
+
+        dispatcher.dispatch(ID);
+
+        verify(pusher, times(5)).pushToUserNow(anyLong(), any(), any(), any(), any(), any());
+        verify(repo, never()).addFailed(anyLong(), anyInt(), any());
+        verify(repo).finish(ID, OpsCampaignStatus.DONE, NOW);
     }
 }
