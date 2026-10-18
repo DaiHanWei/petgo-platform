@@ -19,9 +19,13 @@ class PetInfoCard extends StatelessWidget {
     this.consultCount,
     this.milestoneCount,
     this.topRight,
+    this.avatarKey,
   });
 
   final PetHeaderInfo profile;
+
+  /// 头像的位置锚点（V1.4.0 gift Story 1.3：访客视图送出动效的落点）。只用来量位置；默认 null 行为不变。
+  final GlobalKey? avatarKey;
 
   /// 卡片右上角（头像行最右）的附加控件——作者态放「只看 Diary」开关（2026-10-06 产品）；访客态不传。
   final Widget? topRight;
@@ -92,6 +96,7 @@ class PetInfoCard extends StatelessWidget {
           Row(
             children: [
               Container(
+                key: avatarKey,
                 width: 62,
                 height: 62,
                 alignment: Alignment.center,

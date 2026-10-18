@@ -45,7 +45,12 @@ class DiaryHeader extends StatelessWidget {
     this.onOpenMilestones,
     this.insightsEntryAnchor,
     this.readOnly = false,
+    this.avatarKey,
   });
+
+  /// 宠物信息卡头像的位置锚点，原样透传给 [PetInfoCard]（V1.4.0 gift Story 1.3 送出动效落点）。
+  /// 默认 null 行为不变。
+  final GlobalKey? avatarKey;
 
   /// 综合入口卡的**位置锚点**（V1.3.0 Story 5.4）。
   ///
@@ -135,6 +140,7 @@ class DiaryHeader extends StatelessWidget {
           consultCount: consultCount,
           milestoneCount: milestoneCompleted,
           topRight: petCardAction,
+          avatarKey: avatarKey,
         ),
         // 🛡 入口网格（健康记录 / 身份证）整块移除，不是「留个锁」——
         // 健康记录不对访客开放；身份证入口跳的是当前登录用户自己的卡，点进去必然出错。

@@ -7,6 +7,8 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../gift/presentation/widgets/gift_entry.dart';
+import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
@@ -68,6 +70,9 @@ class VisitorArchiveView extends ConsumerStatefulWidget {
 }
 
 class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
+  /// 宠物信息卡头像锚点（V1.4.0 gift Story 1.3：送出动效落点）。
+  final GlobalKey _avatarKey = GlobalKey(debugLabel: 'visitorPetAvatar');
+
   @override
   void initState() {
     super.initState();
@@ -106,7 +111,10 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
                 profile: profile.header,
                 // 🛡 只读：编辑铅笔与入口网格两张卡整块不渲染。
                 readOnly: true,
-                // titleAction 不传 → 分享按钮整块消失（访客不得二次转发）。
+                // 分享按钮不传（访客不得二次转发）。V1.4.0 gift Story 1.3 · A1：标题行右侧放送礼胶囊
+                // （只站内入口、且不是自己的宠物；见 [_giftPill]）。
+                titleAction: _giftPill(),
+                avatarKey: _avatarKey,
                 happyCount: stats?.happyMomentCount,
                 consultCount: stats?.consultCount,
                 milestoneCompleted: stats?.milestoneCompleted,
@@ -128,6 +136,27 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
           ),
         ),
       ),
+    );
+  }
+
+  /// A1 送礼胶囊（V1.4.0 gift Story 1.3 · AC1.1 / AC1.5）。
+  ///
+  /// - 只有**站内入口**有 petId；分享链接（`/pet/:token`）拿不到 petId → 本分支不显示（待确认）。
+  /// - 自己的宠物不显示；`petProfileProvider` 加载中 / 失败时**也不显示**（防自己的宠物闪现一下送礼按钮）。
+  /// - 只在档案加载成功的分支里调（失效页不去读当前用户的宠物档案）。
+  Widget? _giftPill() {
+    final petId = widget.scope.petId;
+    if (!widget.scope.isInApp || petId == null) return null;
+    final mine = ref.watch(petProfileProvider);
+    if (!mine.hasValue || mine.isLoading || mine.hasError) return null;
+    if (mine.value?.id == petId) return null;
+    return GiftSendPill(
+      petId: petId,
+      flightTargetKey: _avatarKey,
+      // 统计格「Hadiah +N」属 Story 2.2；这里先失效，2.2 接上即生效。
+      onDelivered: () {
+        if (mounted) ref.invalidate(visitorStatsProvider(widget.scope));
+      },
     );
   }
 

@@ -41,7 +41,7 @@ development_status:
   epic-1: in-progress
   1-1-礼物目录与送礼后端: review
   1-2-未送达退回与送礼通知: review
-  1-3-app送礼入口-面板-支付与动效: ready-for-dev
+  1-3-app送礼入口-面板-支付与动效: review
   epic-1-retrospective: optional
 
   epic-2: backlog

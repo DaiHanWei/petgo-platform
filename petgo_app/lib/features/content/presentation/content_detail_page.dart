@@ -9,6 +9,7 @@ import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../place/domain/checkin_place_ref.dart';
 import '../../place/presentation/place_detail_page.dart';
+import '../../gift/presentation/widgets/gift_entry.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
 import '../domain/content_tag.dart';
@@ -184,6 +185,11 @@ class _DetailDwellTrackerState extends State<_DetailDwellTracker>
   Widget build(BuildContext context) => widget.child;
 }
 
+/// 详情页礼物区显示条件（V1.4.0 gift Story 1.3 · AC1.2 / AC1.3）：只有**他人的 Diary**（`GROWTH_MOMENT`），
+/// 且作者未注销。主人拉黑我时照常显示（PRD AC9）；我拉黑主人时详情页本就 404，进不来。
+bool _showGiftZone(ContentDetail detail) =>
+    detail.type == ContentType.growthMoment.wire && !detail.isAuthor && !detail.authorDeleted;
+
 class _DetailScaffold extends ConsumerWidget {
   const _DetailScaffold({
     required this.postId,
@@ -315,6 +321,9 @@ class _DetailScaffold extends ConsumerWidget {
                             const SizedBox(height: AppSpacing.md),
                             _DetailCheckinPlaceStrip(place: detail.checkinPlace!),
                           ],
+                          // V1.4.0 gift Story 1.3 · A3：他人 Diary 的礼物区（打卡场所条之后、分隔线之前）。
+                          // 自己的 Diary / Moment / Tips 本 story 不显示（A6 的礼物区展示属 Story 2.2）。
+                          if (_showGiftZone(detail)) GiftDetailZone(postId: detail.id),
                           const SizedBox(height: AppSpacing.md),
                           const Divider(height: AppSpacing.xl, color: AppColors.divider),
                           // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。

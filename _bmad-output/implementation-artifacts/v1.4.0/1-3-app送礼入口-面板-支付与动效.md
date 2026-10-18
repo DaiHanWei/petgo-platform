@@ -1,6 +1,6 @@
 # Story 1.3: App——送礼入口、面板、支付与动效
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 gift · 分支 `feat/1.4.0-gift`
 > 口径优先级：`decision-log.md` ③ 节 > `送礼/1-4-0送礼prd.md` > `architecture-v1.4.0-gift-delta.md`（AD-1 ~ AD-13、P-1 ~ P-3）> UI 稿 `送礼/ui-1-4-0-gift-integrated-v1.html`（定稿；均在 `_bmad-output/planning-artifacts/v1.4.0/`）。
@@ -18,8 +18,8 @@ so that 送礼又快又不出错。
 ## Acceptance Criteria
 
 **AC1 — 入口与不显示（A1 / A3 / A4 / A6）** `[L0]` `[L2]`（PRD AC1、AD-13）
-1. **A1 他人宠物 Diary Tab（访客视图）**：`VisitorArchiveView` 给 `DiaryHeader` 传 `titleAction`：紫色实心胶囊「Kirim Hadiah」（高 34、圆角 999、padding `0 14 0 11`、间距 4、底 `AppColors.mint` #845EC9、白字 12.5 / w700、阴影 `0 4 12 rgba(132,94,201,.28)`、前置 `Icons.redeem` 16 白；点击热区补到 ≥ 44）。显示条件：`scope.isInApp && scope.petId != null` 且 `scope.petId != ref.watch(petProfileProvider).valueOrNull?.id`（自己的宠物不显示；`petProfileProvider` 加载中 / 失败时**不显示**，防自己的宠物闪现）。
-2. **A3 他人 Diary 详情**：`detail.type == ContentType.growthMoment.wire && !detail.isAuthor && !detail.authorDeleted` 时，在 `content_detail_page.dart` 打卡场所条之后、分隔线之前（:314-319 之间）插入礼物区 `GiftDetailZone`：浅紫底卡（底 #F8F6FF、圆角 24、padding 10、上间距 12、纵向间距 8）→ 区标题「HADIAH」（11 / w700、字间距 .6、`AppColors.muted`）→ 整宽次级按钮「Kirim Hadiah」（高 44、圆角 14、白底、紫字 14 / w700、1.5px #C2B0EC 描边、前置 `Icons.redeem` 18 紫）。**宠物行（头像 + n hadiah + 礼物缩略）属 Story 2.2**，本 story 不画。
+1. **A1 他人宠物 Diary Tab（访客视图）**：`VisitorArchiveView` 给 `DiaryHeader` 传 `titleAction`：紫色实心胶囊「Kirim Hadiah」（高 34、圆角 999、padding `0 14 0 11`、间距 4、底 `AppColors.mint` #845EC9、白字 12.5 / w700、阴影 `0 4 12 rgba(132,94,201,.28)`、前置 `Icons.redeem` 16 白；点击热区补到 ≥ 44）。显示条件：`scope.isInApp && scope.petId != null` 且 `scope.petId != ref.watch(petProfileProvider).value?.id`（Riverpod 3 无 `valueOrNull`，`.value` 即同义）（自己的宠物不显示；`petProfileProvider` 加载中 / 失败时**不显示**，防自己的宠物闪现）。
+2. **A3 他人 Diary 详情**：`detail.type == ContentType.growthMoment.wire && !detail.isAuthor && !detail.authorDeleted` 时，在 `content_detail_page.dart` 打卡场所条之后、分隔线之前（:316 与 :317 之间）插入礼物区 `GiftDetailZone`：浅紫底卡（底 #F8F6FF、圆角 24、padding 10、上间距 12、纵向间距 8）→ 区标题「HADIAH」（11 / w700、字间距 .6、`AppColors.muted`）→ 整宽次级按钮「Kirim Hadiah」（高 44、圆角 14、白底、紫字 14 / w700、1.5px #C2B0EC 描边、前置 `Icons.redeem` 18 紫）。**宠物行（头像 + n hadiah + 礼物缩略）属 Story 2.2**，本 story 不画。
 3. **A6 自己的 Diary 详情 / Moment（`DAILY`）/ Tips（`KNOWLEDGE`）**：本 story 不显示礼物区与按钮（A6 的礼物区展示在 2.2 补）。`comment_composer.dart` `_actions()`（:444-481）底栏**不加**送礼按钮（UI 稿把入口放在礼物区，不进点赞 / 分享栏）。
 4. **A4 / A7（多宠）本分支过渡**：详情页只按 `GET /gifts/catalog?postId={detail.id}` 返回的 `recipient`（单宠）送，不弹选宠物抽屉；Completion Notes 写「A7 在对齐 story 4.1 接入」。
 5. 分享链接进入的访客视图（`/pet/:token`，`scope.petId == null`）本分支**不显示**按钮（UI 稿要求显示，但该入口拿不到 petId），Completion Notes「待确认」记一句。
@@ -78,7 +78,7 @@ so that 送礼又快又不出错。
    - 1300–1600ms：图标淡出、移除 Overlay，然后 Toast。
    - 目标：访客视图 = 宠物信息卡头像（`PetInfoCard` / `DiaryHeader` 新增可选 `GlobalKey? avatarKey` 透传，默认 null 行为不变）；详情页 = `GiftDetailZone` 的 key；取不到目标 → 屏幕水平中线、高 30% 处。
 2. **减少动态效果**：`MediaQuery.maybeDisableAnimationsOf(context) ?? false`（先例 `place_stamp_ceremony_page.dart:106`、`stamp_ceremony.dart:142`）为 true → 不飞行、不出粒子、直接 Toast。
-3. D2 Toast：`showAppToast`（`app_toast.dart:35`，默认时长）「Terkirim ke {petName} 🎁」（PRD「已送给 Mochi 🎁」，🎁 保留）。
+3. D2 Toast：`showAppToast`（`app_toast.dart:35`，默认时长）「{giftName} ×{n} terkirim ke {petName}」（数量 1 省略「×1」）——**按拍板 P-4 用礼物名、不用 emoji**（取代 PRD「已送给 Mochi 🎁」；T0 核对改）。
 4. 统计格「Hadiah +N」数字滚动与详情页礼物区「n hadiah」更新属 Story 2.2；本 story 成功后只 `ref.invalidate(visitorStatsProvider(scope))`（访客视图）以便 2.2 接上。
 5. 同屏只此一处动效；不做全屏特效。
 
@@ -131,7 +131,7 @@ so that 送礼又快又不出错。
 | `giftLockedError` | Hadiah ini belum terbuka untuk levelmu. | This gift isn't unlocked for your level yet. |
 | `giftUnavailable` | Hadiah ini sudah tidak tersedia. | This gift is no longer available. |
 | `giftUndelivered` | Hadiah tidak terkirim. PawCoin akan dikembalikan ke saldomu. | Gift not delivered. Your PawCoin will be returned to your balance. |
-| `giftSentToast(petName)` | Terkirim ke {petName} 🎁 | Sent to {petName} 🎁 |
+| `giftSentToast(giftName, count, petName)` | `{count, plural, =1{{giftName} terkirim ke {petName}} other{{giftName} ×{count} terkirim ke {petName}}}` | `{count, plural, =1{{giftName} sent to {petName}} other{{giftName} ×{count} sent to {petName}}}` |
 
 - 复用既有键（不新建）：`keepsakePayConfirm`（Bayar Rp{price}）、`idCardHdPawcoinSub`（Saldo {balance} · Potong {cost} koin）、`triageUnlockTopupFirst`（Isi saldo dulu →）、`idCardHdPurchaseError`、`idCardHdInsufficientBalance`、`commonRetry`、`petTypeCat / petTypeDog / petTypeOther`。
 - `giftPayExpired` 与 ② 新增的同句文案在对齐时可合并，本分支先用自己的键（② 的键在本分支不存在）。
@@ -139,7 +139,7 @@ so that 送礼又快又不出错。
 
 **AC8 — 数据层** `[L0]`
 1. `lib/core/network/api_paths.dart` 加 `giftCatalog`（`$base/gifts/catalog`）、`petGifts(int petId)`、`meGiftOrder(String token)`。
-2. `lib/features/gift/data/gift_repository.dart`：`fetchCatalog({int? petId, int? postId})`、`send(...)`、`orderStatus(token)`；provider 照 `keepsake_repository.dart:20-24`（`Provider` + `FutureProvider.autoDispose.family`）。
+2. `lib/features/gift/data/gift_repository.dart`：`fetchCatalog({int? petId, int? postId})`、`send(...)`、`orderStatus(token)`；provider 照 `keepsake_repository.dart:20-25`（`Provider` + `FutureProvider.autoDispose`；目录按收礼方取用 `.family`，并照 `boarding_pass_repository.dart:38-49` 加 `retry: (_, _) => null`）。
 3. `lib/features/gift/domain/`：`GiftCatalog`（`recipient`、`qrisMinAmount`、`tiers`、`exclusiveGroups`、`lockBlock`）、`GiftItem`（`nameFor(Locale)`：`id` → `nameId`，其余 → `nameEn`）、`GiftSendResult`（字段与 `KeepsakePurchaseResult` 同名：`delivered`、`paymentToken`、`paymentDisplayNo`、`payload`、`orderToken`、`status`）、`GiftOrderStatus` 枚举（未知值 → `unknown`，按 PENDING 处理）。
 4. 只用 `fromJson`，缺字段不崩；金额 `int`。
 
@@ -149,15 +149,15 @@ so that 送礼又快又不出错。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：对照 1.1 实际提交的接口 / 字段 / 错误类型核对本文件；有出入先改本文件（Completion Notes 记一句）
-- [ ] **T1 数据层**（AC8）
-- [ ] **T2 `PayChannelPicker` 扩展**（AC3.1 ~ 3.3）+ 新参数单测；既有调用方零改动
-- [ ] **T3 送礼面板** `gift_panel_sheet.dart`（AC2）
-- [ ] **T4 流程** `gift_send_flow.dart`（AC3.4 ~ 3.6、AC4）
-- [ ] **T5 动效** `gift_send_animation.dart` + `PetInfoCard` / `DiaryHeader` 可选 `avatarKey`（AC5）
-- [ ] **T6 入口**：`visitor_archive_view.dart` titleAction、`content_detail_page.dart` `GiftDetailZone`（AC1）
-- [ ] **T7 埋点**登记与清单测试（AC6）；**T8 arb**（AC7，`flutter gen-l10n` 由构建生成）
-- [ ] **T9** `flutter analyze` + 相关测试；Completion Notes 标「L2 待本地验收（模拟器 B1 / C2 / D1）」与「待确认」两条
+- [x] **T0 开工核对**：对照 1.1 实际提交的接口 / 字段 / 错误类型核对本文件；有出入先改本文件（Completion Notes 记一句）
+- [x] **T1 数据层**（AC8）
+- [x] **T2 `PayChannelPicker` 扩展**（AC3.1 ~ 3.3）+ 新参数单测；既有调用方零改动
+- [x] **T3 送礼面板** `gift_panel_sheet.dart`（AC2）
+- [x] **T4 流程** `gift_send_flow.dart`（AC3.4 ~ 3.6、AC4）
+- [x] **T5 动效** `gift_send_animation.dart` + `PetInfoCard` / `DiaryHeader` 可选 `avatarKey`（AC5）
+- [x] **T6 入口**：`visitor_archive_view.dart` titleAction、`content_detail_page.dart` `GiftDetailZone`（AC1）
+- [x] **T7 埋点**登记与清单测试（AC6）；**T8 arb**（AC7，`flutter gen-l10n` 由构建生成）
+- [x] **T9** `flutter analyze` + 相关测试；Completion Notes 标「L2 待本地验收（模拟器 B1 / C2 / D1）」与「待确认」两条
 
 ## Dev Notes
 
@@ -175,7 +175,7 @@ so that 送礼又快又不出错。
 | `lib/features/profile/data/profile_repository.dart` | `petProfileProvider`（:143，当前用户自己的宠物，`PetProfile.id` :71） | 只读 | — |
 | `lib/features/profile/presentation/widgets/diary_header.dart` | `titleAction`（:40 / :88），标题行 `if (titleAction != null) …`（:114-115）；内嵌 `PetInfoCard(`（:132） | 加可选 `avatarKey` 透传 | 默认 null 行为不变 |
 | `lib/features/profile/presentation/widgets/pet_info_card.dart` | 头像 `_avatar()`（:44），物种映射（:67-72），三格统计 Consultations 格（:166） | 加可选 `avatarKey`；**统计格不动（2.2 改）** | — |
-| `lib/features/content/presentation/content_detail_page.dart` | 打卡场所条（:314-317）→ `SizedBox(md)` + `Divider`（:318-319）→ KOMENTAR；`detail.isAuthor`（:448 / :466）、`authorDeleted`；类型判断写法 `detail.type == ContentType.growthMoment.wire`（:563） | :317 与 :318 之间插 `GiftDetailZone` | 其余结构不动 |
+| `lib/features/content/presentation/content_detail_page.dart` | 打卡场所条（:313-316）→ `SizedBox(md)` + `Divider`（:317-318）→ KOMENTAR；`detail.isAuthor`（:448 / :466）、`authorDeleted`；类型判断写法 `detail.type == ContentType.growthMoment.wire`（:563） | :316 与 :317 之间插 `GiftDetailZone` | 其余结构不动 |
 | `lib/features/content/domain/content_type.dart` | `daily('DAILY')` = Moment、`growthMoment('GROWTH_MOMENT')` = Diary、`knowledge('KNOWLEDGE')` = Tips（:2） | — | — |
 | `lib/features/content/domain/content_detail.dart` | 字段无 petId（:8），有 `id / type / isAuthor / authorDeleted` | 不改（2.1 / 2.2 加 `giftPets`） | — |
 | `lib/features/content/presentation/comment_composer.dart` | `_actions()`（:444-481）= `LikeButton` + `DetailShareCardButton`，`_tapTarget` 44×44（:484） | **不改** | 底栏只点赞 + 分享 |
@@ -224,7 +224,7 @@ so that 送礼又快又不出错。
 - **L0（云端可跑：`flutter analyze` + `flutter test`，结构断言，不写 golden）**：
   - `test/shared/pay_channel_picker_ext_test.dart`：不传新参数时与现状一致（PawCoin 默认、余额不足默认 QRIS、充值 pop + push）；`qrisDisabledReason` → QRIS 不可点、副标题替换、hint 出现；QRIS 禁用 + 余额不足 → 无选中、确认置灰；`onConfirm` 返回 false 抽屉不关、按钮恢复，true 关闭并返回渠道；转圈期间渠道行不可点；`onTopUp` 被调用。
   - `test/gift/gift_panel_sheet_test.dart`：默认选中第一项；×5 高亮、手动 +1 后无胶囊高亮；1 时「−」禁、99 时「+」禁；合计与按钮金额联动（Rp5.000）；专属组标签与锁区块文案（Lv5 / Lv15 / 无）；锁区块点击出 Toast 且面板不关；B6 / B7 与重试；名称按 locale 取 id / en。
-  - `test/gift/gift_send_flow_test.dart`（假仓储 + 假路由）：PawCoin 成功 → 抽屉关 → Toast「Terkirim ke Mochi 🎁」→ 余额 invalidate；`pawcoin-insufficient` 抽屉保留；`gift-blocked` 关闭 + `giftCannotSend`；关闭选渠道回面板且选择保留；充值返回后重开选渠道且礼物 / 数量保留；换渠道后 `requestId` 变化、同渠道重试不变；QRIS `pollPaid` 三种中止类别对应三种 Toast。
+  - `test/gift/gift_send_flow_test.dart`（假仓储 + 假路由）：PawCoin 成功 → 抽屉关 → Toast「Tulang ×5 terkirim ke Mochi」（P-4）→ 余额 invalidate；`pawcoin-insufficient` 抽屉保留；`gift-blocked` 关闭 + `giftCannotSend`；关闭选渠道回面板且选择保留；充值返回后重开选渠道且礼物 / 数量保留；换渠道后 `requestId` 变化、同渠道重试不变；QRIS `pollPaid` 三种中止类别对应三种 Toast。
   - `test/gift/gift_entry_visibility_test.dart`：访客视图自己的宠物 / `petProfileProvider` 加载中不显示、他人显示；分享链接（petId null）不显示；详情页 `GROWTH_MOMENT` 非作者显示、作者 / 已注销作者不显示、`DAILY` / `KNOWLEDGE` 不显示；`_actions()` 仍只有两个按钮（`detailBottomActions` 子项数）。
   - `test/gift/gift_send_animation_test.dart`：`MediaQuery(disableAnimations: true)` → 无飞行 Overlay、直接 Toast；正常 → `pump(1600ms)` 后 Overlay 移除、Toast 出现；`quantity = 1` 无「×N」。
   - `test/gift/gift_models_test.dart`：目录 / 发起响应 / 订单状态 JSON 解析，未知状态不崩。
@@ -249,10 +249,84 @@ so that 送礼又快又不出错。
 
 ### Agent Model Used
 
+Claude (cloud dev agent)
+
 ### Debug Log References
+
+- `flutter analyze` 基线（改动前）0 issue → 改动后 0 issue。
+- `flutter test` 全量：见 Completion Notes「L0 结果」。
+- 测试环境踩点：flutter_test 的测试字体每个字形是 fontSize 见方的方块，360 宽画布下 `PayChannelPicker` 余额不足行「Isi saldo dulu →」会把副标题挤成逐字换行而溢出（真机字体不会）——流程测试改用 800 宽逻辑画布，组件未改。
 
 ### Completion Notes List
 
+- **T0 开工核对（对照 1.1 = 459f9f2e、1.2 = 0feee5e6）**：`GiftController` 三条接口、`GiftCatalogResponse`（`recipient{petId,name,avatarUrl,petType,breed}` / `qrisMinAmount` / `tiers{price,gifts}` / `exclusiveGroups{minLevel,gifts}` / `lockBlock{requiredLevel}`；`GiftItem{giftToken,nameEn,nameId,iconUrl,price,kind,minLevel}`）、`GiftSendRequest{giftToken,quantity,channel,requestId(≤64),source,postId}`、`GiftSendResponse{delivered,payment{token,displayNo,…},payload,orderToken,status}`、`GiftOrderStatusResponse.status` 七值、6 个 ProblemDetail slug（`gift-own-pet` / `gift-blocked` / `gift-locked` / `gift-qris-below-min` / `gift-pet-gone` / `gift-unavailable`）与 `pawcoin-insufficient` 均与本文件一致；`GiftSource` 小写 `diary_tab` / `content_detail` / `gift_page` 一致。App 侧 `PayChannelPicker`（:11 / :26-38 / :65-67 / :104-114 / :117-123 / :127）、5 个调用方行号、`qr_payment_sheet.dart`（:14-24 / :36-42 / :78 / :100-108 / :115）、`vet_timed_pay_page._topUp`（:218-239）、`keepsake_pay_flow`（:39-48 / :52 / :86-90）、`visitor_archive_view`（:40 / :61 / :64 / :105-115）、`diary_header`（:40 / :88 / :114-115 / :132）、`pet_info_card`（:44 / :67-72）、`comment_composer._actions`（:444-481 / :484）、`milestone_celebration._Confetti`（:439 / :446 / :477 / :522 / :553）、`analytics.dart`（:137 / :163 / :214 / :320）、`v112_events_test`（:146-166 / :217-333）、`v140_events_inventory_test`（:53 / :75）一致。**改了本文件四处**：① `content_detail_page.dart` 行号整体前移 1（打卡场所条 :313-316、分隔线 :317-318，插入点改为 :316 与 :317 之间）；② Riverpod 3 无 `valueOrNull`，AC1.1 改为 `.value`；③ `keepsake_repository.dart` 的 provider 是 `FutureProvider.autoDispose`（非 family，:20-25），AC8.2 改写为「照它 + 目录用 `.family` + `retry: (_, _) => null`（照 `boarding_pass_repository.dart`）」；④ **拍板 P-4**（本文件末尾 + 架构增量 §P-4「Toast 用礼物名、不用 emoji」）与 AC5.3 / AC7 / 测试小节的「Terkirim ke {petName} 🎁」冲突 → 按 P-4 改为 `giftSentToast(giftName, count, petName)`：「{礼物名} ×{n} terkirim ke {宠物名}」，数量 1 省略「×1」（与 1.2 推送同口径）。
+- AC1 ~ AC8 实现完毕；AC9.1 L0 全绿（见下）；AC9.2 模拟器演示留本地。
+- **流程（AC3 / AC4）**：`runGiftSendFlow` 面板 → 选渠道 →（充值 → 选渠道）→（关闭 → 面板）→ 成功 / 结束，任何时刻只有一层抽屉；目录 provider 在整条流程内 `listenManual` 保活（关选渠道回面板不重拉、礼物 / 数量照旧）；`gift-unavailable` 时 `invalidate` 后重开面板。扣款中 `PayChannelPicker` 用 `PopScope(canPop: !_busy)` 挡返回 / 点遮罩；流程另在抽屉关闭后等待在途请求结果再判（防「请求途中被拖下去」时漏掉已扣款的送达）。
+- **埋点**：5 个事件（本 story 范围；`gift_wall_opened` / `gift_sender_list_opened` 属 2.2）。`gift_panel_opened` 在**目录首次显示出来时**报（`pet_id` 取目录 `recipient.petId`——详情页按 postId 进来时 App 事先不知道 petId；每条流程只报一次，关选渠道回面板不重报）；`gift_send_tapped` 在面板点「Kirim」时报；`gift_qris_low_amount_shown` 每次「Kirim」后首次展示置灰 QRIS 时报一次。`v112_events_test.dart` 只加 `gift_` 前缀（不加后缀、不放宽正则）；新建 `test/analytics/v140_gift_events_test.dart` 对账。
+- **数量 1 的 Toast** 省略「×1」；`×N` 动效只在数量 ≥ 2 时出现（AC5.1）。
+- 无新依赖（pubspec 未动）、无 golden、未整文件 `dart format`、未改 `kApiBaseUrl`、无后端改动。
+
+#### L0 结果
+
+- `flutter gen-l10n` ✅；`flutter analyze` ✅ No issues found（基线同为 0）。
+- 新测试：`test/shared/pay_channel_picker_ext_test.dart`（7）、`test/gift/gift_models_test.dart`（7）、`test/gift/gift_panel_sheet_test.dart`（12）、`test/gift/gift_send_flow_test.dart`（14）、`test/gift/gift_entry_visibility_test.dart`（13）、`test/gift/gift_send_animation_test.dart`（5）、`test/analytics/v140_gift_events_test.dart`（5）全绿。
+- 既有：`test/keepsake/keepsake_contract_test.dart`、`test/shared/*`（含 `qr_payment_sheet_test.dart`）、`test/analytics/*`、`test/profile/visitor_archive_view_test.dart`、`test/content/*`、`test/user_profile/*`、`test/l10n/*` 全绿。
+- `flutter test` 全量：✅ `+3474 ~1: All tests passed!`（~1 为既有 skip，非本 story）。首轮全量曾红 2 条（`test/profile/pet_recommendation_test.dart` AC7 两条：访客视图在档案失效分支也去读 `petProfileProvider`，真 dio 留下 pending timer）→ 改为只在档案加载成功分支里读（`_giftPill()` 挪进 `data:`），测试未改、复跑全量绿。
+
+#### L1/L2 待本地验收
+
+- L2（Android 模拟器 + stag 后端）：B1（Lv1 锁区块 + Toast）、C2（总价 Rp5.000 QRIS 置灰 + 提示）、D1（PawCoin 送达动效 + Toast）演示录屏。
+- L2：C3 充值回流（充值页返回后自动重开选渠道、余额刷新）、C5 扣款中转圈与禁点、C6 真二维码付款、C7 过期 Toast「Pembayaran kedaluwarsa. Coba lagi.」。
+- L2：视觉对稿（面板 88% 高、礼物格选中态、专属组段位色、锁区块、详情页礼物区、访客视图胶囊位置）；系统「减少动态效果」开启时无飞行直接 Toast。
+- L1：无（本 story 只 App）。
+
+#### 待确认
+
+1. **分享链接访客视图（`/pet/:token`）不显示送礼按钮**（AC1.5）：该入口拿不到 petId，UI 稿要求显示；本分支按 story 不显示。
+2. **A7 选宠物抽屉在对齐 story 4.1 接入**：本分支详情页按 `GET /gifts/catalog?postId=` 返回的单宠 `recipient` 送；锁区块点击只出 Toast「Terbuka di Lv{N}」，4.1 改为关面板跳 `/me/growth`；段位色为 gift 模块私有常量（`GiftStyle`），4.1 改用 ① 的 token。
+3. **Toast 文案按 P-4 改用礼物名**（取代 PRD / UI 稿「Terkirim ke Mochi 🎁」）：ID「{礼物名} ×{n} terkirim ke {宠物名}」、EN「{gift} ×{n} sent to {pet}」，数量 1 省略「×1」。
+4. **EN 文案全部为提议值、待本地团队审**（UI 稿只有印尼语）；`giftLockedError` / `giftUnavailable` / `giftUndelivered` 是 UI 稿未画的错误分支提议值（ID 亦待审）。`giftPayExpired` 与 ② 同句文案在对齐时可合并。
+5. **详情页游客点「Kirim Hadiah」先走登录门控**（`requireLogin`，`entrySource: 'gift'`）：story 未写游客情形，送礼接口仅 USER，取与点赞 / 评论同口径的保守做法。
+6. **`gift_panel_opened` 上报时机**：在目录首次显示时（为拿到 `pet_id`），目录加载失败 / 被拒（C9）的那次打开不计入；如需「点了入口即报」需另定 `pet_id` 口径。
+7. **送达后 `onDelivered`**：`runGiftSendFlow` 比 AC4.6 的签名多一个可选 `VoidCallback? onDelivered`（访客视图用它 `invalidate(visitorStatsProvider(scope))`，供 2.2 接上「Hadiah」格）。
+8. **QRIS 发起返回 `delivered=false` 但无 `payload`**（理论上只有 1.1「待确认 7」的极端重放）：Toast `idCardHdPurchaseError`、抽屉保留可重试（同渠道复用 requestId，后端按幂等返回同一笔）。PawCoin 渠道返回未送达同样按失败提示。
+9. 步进器圆钮视觉 32、热区 44：为补足热区，步进器容器整体高度随之变为 50（视觉圆钮尺寸不变），L2 对稿时确认可接受。
+
 ### File List
 
+**新增（petgo_app/）**
+- `lib/features/gift/domain/gift_catalog.dart`
+- `lib/features/gift/domain/gift_send_result.dart`
+- `lib/features/gift/data/gift_repository.dart`
+- `lib/features/gift/presentation/gift_style.dart`
+- `lib/features/gift/presentation/gift_panel_sheet.dart`
+- `lib/features/gift/presentation/gift_send_flow.dart`
+- `lib/features/gift/presentation/gift_send_animation.dart`
+- `lib/features/gift/presentation/widgets/gift_entry.dart`
+- `test/gift/gift_fakes.dart`
+- `test/gift/gift_models_test.dart`
+- `test/gift/gift_panel_sheet_test.dart`
+- `test/gift/gift_send_flow_test.dart`
+- `test/gift/gift_entry_visibility_test.dart`
+- `test/gift/gift_send_animation_test.dart`
+- `test/shared/pay_channel_picker_ext_test.dart`
+- `test/analytics/v140_gift_events_test.dart`
+
+**修改（petgo_app/）**
+- `lib/core/network/api_paths.dart`（+3 路径）
+- `lib/shared/widgets/pay_channel_picker.dart`（+4 可选参数、无选中规则；不传时行为不变）
+- `lib/features/profile/presentation/visitor_archive_view.dart`（titleAction 送礼胶囊 + 自己宠物判断 + avatarKey）
+- `lib/features/profile/presentation/widgets/diary_header.dart`（可选 `avatarKey` 透传）
+- `lib/features/profile/presentation/widgets/pet_info_card.dart`（可选 `avatarKey`）
+- `lib/features/content/presentation/content_detail_page.dart`（`GiftDetailZone` + `_showGiftZone`）
+- `lib/l10n/app_en.arb` / `lib/l10n/app_id.arb`（+28 个 `gift*` 键）
+- `test/analytics/v112_events_test.dart`（`allowedPrefixes` 加 `gift_`）
+
+**修改（规划 / 实现产物）**
+- `_bmad-output/implementation-artifacts/v1.4.0/1-3-app送礼入口-面板-支付与动效.md`（T0 修订 + 本记录）
+- `_bmad-output/implementation-artifacts/v1.4.0/sprint-status-v1.4.0-gift.yaml`（1-3 → review）
+
 ### Change Log
+
+- 2026-10-18：T0 核对后修订本文件四处（详情页行号、Riverpod 3 `.value`、keepsake provider 形态、P-4 Toast 文案）；实现 App 送礼入口 / 面板 / 选渠道扩展 / PawCoin 与 QRIS 支付 / 送出动效 / 埋点 / 文案；L0 绿，状态 → review。
+- 2026-10-18（code review 修复 2 条）：① `PayChannelPicker` 扣款中下滑仍能关抽屉（BottomSheet 拖拽关闭直接 `pop`、不经 `PopScope`）→ 传 `onConfirm` 时扣款中用内层竖向拖拽手势吃掉拖动（不传新参数时树与行为不变）；② `pawcoin-insufficient` 后只 invalidate 余额、抽屉里仍是旧余额与「已选 PawCoin」，用户只能反复撞 409 → 选渠道抽屉改为 watch `pawCoinProvider` 取余额并按余额 re-key（AC4.4「刷新余额」）；补测试 2 条，`flutter analyze` 0 issue、`flutter test` 全量 +3476 ~1 绿。
