@@ -7,7 +7,7 @@
 
 | 顺序 | 线 | PRD | UI 稿 | 功能分支 |
 |---|---|---|---|---|
-| **①** | Tailrent Level（用户等级 · 成长值） | `Tailrent等级/1-4-0Tailrent等级prd.md`（FR-143/144 · AB-32/33） | App 30 屏 + 后台 22 屏，2026-10-14 定稿 | `feat/1.4.0-tailrent-level` |
+| **①** | Tailrent Level（用户等级 · 成长值） | `Tailrent等级/1-4-0Tailrent等级prd.md`（FR-143/144 · AB-32/33） | App 30 屏 + 后台 22 屏，2026-10-14 定稿 | `feat/1.4.0-tailrent-level`（架构增量 + 4 Epic / 16 story 已就绪，2026-10-18） |
 | ② | 多宠物 | `多宠物/1-4-0多宠物prd.md`（FR-145~147 · AB-34）+ 新增文案对照表 | App 64 屏 + 后台 8 屏，2026-10-15 定稿 | `feat/1.4.0-multi-pet` |
 | ③ | 送礼 | `送礼/1-4-0送礼prd.md`（FR-148/149 · AB-35/36） | App + 后台各一份（PRD 内尚未标注定稿） | `feat/1.4.0-gift` |
 | ④ | 推送开关与收藏 | `推送开关与收藏/1-4-0推送开关与收藏prd.md`（FR-150/151） | App 26 屏，2026-10-17 定稿（开发注意见 PRD §6.5） | `feat/1.4.0-push-collect` |
