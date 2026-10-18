@@ -178,4 +178,37 @@ class AppColors {
 
   /// 点赞红心 —— 迁为 coral。
   static const Color likeHeart = coral;
+
+  // ============================================================
+  // V1.4.0 ① Tailrent Level 段位色（架构 §5.6，UI 稿 A1「白天到星夜」，OQ-12）
+  // ============================================================
+  // 🔴 段位色只在这里定义：角标 / 段位名 / 等级胶囊一律用段位色；逐级色只用于等级页进度条。
+  // 刻意避开里程碑 S·M·L 三色（绿 #1F9E6A / 紫 #845EC9 / 金 #F6A609，OQ-6）。
+
+  static const Color tierPemula = Color(0xFF66748C);
+  static const Color tierSahabat = Color(0xFF0A7FA3);
+  static const Color tierPenjaga = Color(0xFF2B4FBF);
+
+  /// Bintang 为渐变（Start → End）；纯色场景取 Start。
+  static const Color tierBintangStart = Color(0xFF4A2E9E);
+  static const Color tierBintangEnd = Color(0xFFB5307F);
+
+  // 段位浅色底（等级卡 / 胶囊外底）。
+  static const Color tierPemulaTint = Color(0xFFEEF1F5);
+  static const Color tierSahabatTint = Color(0xFFE1F2F8);
+  static const Color tierPenjagaTint = Color(0xFFE7ECFB);
+  static const Color tierBintangTint = Color(0xFFEFE9FB);
+
+  /// 逐级色（UI 稿 A1 色条）：段内浅 → 深、跨段换色相。Lv1–20 依次；Lv21+ 由 `growthLevelColor` 兜底。
+  static const List<Color> growthLevelColors = [
+    // Pemula Lv1–4
+    Color(0xFFC5CCD8), Color(0xFF9CA4B3), Color(0xFF737D8D), Color(0xFF4A5568),
+    // Sahabat Lv5–9
+    Color(0xFF8ED3EA), Color(0xFF6CB5CD), Color(0xFF4A96B0), Color(0xFF287892), Color(0xFF065A75),
+    // Penjaga Lv10–14
+    Color(0xFFA8B8F2), Color(0xFF8597DA), Color(0xFF6276C2), Color(0xFF3F56A9), Color(0xFF1C3591),
+    // Bintang Lv15–20
+    Color(0xFFB9A6EE), Color(0xFFB38CD3), Color(0xFFAD72B8), Color(0xFFA6589E), Color(0xFFA03E83),
+    Color(0xFF9A2468),
+  ];
 }

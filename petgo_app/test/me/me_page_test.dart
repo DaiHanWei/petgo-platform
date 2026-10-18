@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/growth/domain/growth_models.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/me_page.dart';
@@ -58,7 +61,92 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
+/// V1.4.0 ① Story 1.5：带路由的版本（胶囊点击要 push `/me/growth`）。
+Future<void> _pumpRouted(WidgetTester tester,
+    {required UserProfile profile, MeCounts counts = const MeCounts(), bool countsFail = false}) async {
+  tester.view.physicalSize = const Size(1200, 3200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  final container = ProviderContainer(overrides: [
+    myPostsProvider.overrideWith((ref) async => const <MyPost>[]),
+    meCountsProvider.overrideWith((ref, userId) async {
+      if (countsFail) throw StateError('me down');
+      return counts;
+    }),
+    petProfileProvider.overrideWith((ref) async => null),
+    archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+        happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
+  ]);
+  addTearDown(container.dispose);
+  container.read(authControllerProvider.notifier).applyProfile(profile);
+  final router = GoRouter(initialLocation: '/me', routes: [
+    GoRoute(path: '/me', builder: (c, s) => const MePage()),
+    GoRoute(path: '/me/growth', builder: (c, s) => const Text('LEVEL_PAGE')),
+  ]);
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: MaterialApp.router(
+      routerConfig: router,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('id'),
+    ),
+  ));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  group('V1.4.0 ① Story 1.5 · AC1 等级胶囊', () {
+    const brief = GrowthBrief(level: 7, tier: GrowthTier.buddy, frame: 'BASIC', lifetimeTotal: 1420, nextThreshold: 1800);
+
+    testWidgets('有 growth → 昵称下显示胶囊（Lv7 Sahabat），相机角标仍在', (tester) async {
+      await _pumpRouted(tester,
+          profile: const UserProfile(id: 1, nickname: '小明'), counts: const MeCounts(postCount: 1, growth: brief));
+
+      final capsule = find.byKey(const ValueKey('meLevelCapsule'));
+      expect(capsule, findsOneWidget);
+      expect(find.descendant(of: capsule, matching: find.text('Lv7')), findsOneWidget);
+      expect(find.descendant(of: capsule, matching: find.text('Sahabat')), findsOneWidget);
+      expect(find.byIcon(Icons.photo_camera), findsOneWidget);
+      expect(find.bySemanticsLabel('Lv7 Sahabat'), findsOneWidget);
+    });
+
+    testWidgets('点胶囊 → 进等级页并上报 growth_level_page_viewed {source: me_page}', (tester) async {
+      final captured = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+      await _pumpRouted(tester, profile: const UserProfile(id: 1, nickname: '小明'), counts: const MeCounts(growth: brief));
+
+      await tester.tap(find.byKey(const ValueKey('meLevelCapsule')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('LEVEL_PAGE'), findsOneWidget);
+      expect(captured.where((c) => c.$1 == 'growth_level_page_viewed'), hasLength(1));
+      expect(captured.firstWhere((c) => c.$1 == 'growth_level_page_viewed').$2, {'source': 'me_page'});
+    });
+
+    testWidgets('/me 已加载且 growth 为 null（不参与）→ 不用登录态里的旧 growth', (tester) async {
+      await _pumpRouted(tester, profile: const UserProfile(id: 1, nickname: '小明', growth: brief));
+
+      expect(find.byKey(const ValueKey('meLevelCapsule')), findsNothing);
+    });
+
+    testWidgets('/me 还没拿到（失败）→ 回落登录态里的 growth', (tester) async {
+      await _pumpRouted(tester, profile: const UserProfile(id: 1, nickname: '小明', growth: brief), countsFail: true);
+
+      expect(find.byKey(const ValueKey('meLevelCapsule')), findsOneWidget);
+    });
+
+    testWidgets('growth 为 null → 不显示胶囊、不闪 Lv1', (tester) async {
+      await _pumpRouted(tester, profile: const UserProfile(id: 1, nickname: '小明'));
+
+      expect(find.byKey(const ValueKey('meLevelCapsule')), findsNothing);
+      expect(find.text('Lv1'), findsNothing);
+      expect(find.byIcon(Icons.photo_camera), findsOneWidget);
+    });
+  });
+
   testWidgets('AC1: 顶栏双图标 + 主体人+宠物 + 主体不再平铺语言/退出/注销', (tester) async {
     await _pump(
       tester,

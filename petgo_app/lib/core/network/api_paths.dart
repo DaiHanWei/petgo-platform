@@ -131,6 +131,10 @@ class ApiPaths {
   /// 6 个新手任务进度 + Lulus Pemula 解锁态（Story 7.3，FR-47）。
   static const String meNewbieTasks = '$base/me/newbie-tasks';
 
+  /// V1.4.0 ① Tailrent Level：等级页首屏 / EXP 明细游标分页（Story 1.4 后端 · 1.5 App）。
+  static const String meGrowth = '$base/me/growth';
+  static const String meGrowthLedger = '$meGrowth/ledger';
+
   /// PawCoin 余额 + 流水游标分页（Story 1.4）。
   static const String mePawcoin = '$base/me/pawcoin';
 

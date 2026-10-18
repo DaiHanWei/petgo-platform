@@ -24,6 +24,24 @@ void main() {
     // 此处守等级色作为「文本/边框」用时对底色可辨识（≥3:1 图形对象阈值）。
     expect(_contrast(AppColors.triageRed, base), greaterThanOrEqualTo(3.0));
   });
+
+  _tierContrast();
+}
+
+/// V1.4.0 ① Tailrent Level（NFR8）：等级胶囊 / 角标的白字对段位色 ≥ 4.5:1（Bintang 取渐变两端）。
+void _tierContrast() {
+  test('段位色上的白字 ≥ 4.5:1（AA）', () {
+    const white = Color(0xFFFFFFFF);
+    for (final c in const [
+      AppColors.tierPemula,
+      AppColors.tierSahabat,
+      AppColors.tierPenjaga,
+      AppColors.tierBintangStart,
+      AppColors.tierBintangEnd,
+    ]) {
+      expect(_contrast(white, c), greaterThanOrEqualTo(4.5), reason: '$c');
+    }
+  });
 }
 
 double _contrast(Color fg, Color bg) {
