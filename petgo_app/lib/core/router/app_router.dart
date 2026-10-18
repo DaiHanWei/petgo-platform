@@ -920,7 +920,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    登录门控不变。`go` 清栈落地后的出路由 TriagePage 自带（顶栏返回 + PopScope，
       //    栈空导向 /home）—— 不在此处包壳，避免 push 入口双顶栏。
       GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),
-      GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
+      // V1.4.0 multi-pet Story 4.1：可选 `?petId=`（入口已选宠物）；缺失由页面补走一次选择。
+      GoRoute(
+        path: '/triage/upload',
+        builder: (c, s) => TriageUploadPage(petId: int.tryParse(s.uri.queryParameters['petId'] ?? '')),
+      ),
       // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。
       GoRoute(
         path: '/triage/result/:id',
@@ -938,7 +942,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // 直连问诊病例填写页（Story F）：症状 + 照片，提交才发起 DIRECT 会话。
-      GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
+      // V1.4.0 multi-pet Story 4.1（H4）：可选 `?petId=`（咨询前所选宠物），缺省 = 后端默认宠物。
+      GoRoute(
+        path: '/consult/case',
+        builder: (c, s) => ConsultCaseFormPage(petId: int.tryParse(s.uri.queryParameters['petId'] ?? '')),
+      ),
       // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
       GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
       // Story 3-3：路径不变，多接一个可选 `?orderToken=` 用来预选关联订单（可改可清空）。

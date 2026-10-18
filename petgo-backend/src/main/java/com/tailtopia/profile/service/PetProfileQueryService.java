@@ -7,6 +7,7 @@ import com.tailtopia.profile.dto.PetPassportSubject;
 import com.tailtopia.profile.dto.PetProfileSnapshot;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.ai.TriagePetContext;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -194,6 +195,25 @@ public class PetProfileQueryService {
         DefaultPetPolicy.pickPerOwner(petProfiles.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(ids))
                 .forEach((owner, p) -> out.put(owner, toIdentity(p)));
         return out;
+    }
+
+    /**
+     * AI 分诊的宠物只读上下文（V1.4.0 multi-pet Story 4.1 · P-1 / AD-13）：按 {@code ownerId + petId} 取，
+     * 不属于本人 / 已删 → empty（调用方以「不带上下文」照常分诊）。只出结构化字段：物种 {@code PetType.name()}、
+     * 整月龄（同 {@link #ageMonths}，生日缺失 null）、体重；<b>不出</b>名字 / 品种等自由文本。triage 模块经此读口
+     * 取数，不直读 {@code PetProfileRepository}。结果属宠物资料，调用方不得落日志。
+     *
+     * <p>code review 4-1 B1：{@code REQUIRES_NEW}——分诊处理器在自己的事务里调本方法并吞掉失败（按不带上下文继续）。
+     * 若与外层事务共用，内层异常会把外层标成 rollback-only，提交时抛 {@code UnexpectedRollbackException}，
+     * 吞异常形同虚设（同 {@code ConsultSessionService#vetPeerOf} 的教训）；独立只读事务失败只回滚它自己。
+     */
+    @Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public Optional<TriagePetContext> findTriageContext(long ownerId, long petId) {
+        return petProfiles.findByIdAndOwnerId(petId, ownerId)
+                .map(p -> new TriagePetContext(
+                        p.getPetType() == null ? null : p.getPetType().name(),
+                        ageMonths(p.getBirthday()),
+                        p.getWeightKg()));
     }
 
     private Optional<PetProfile> ownedOrDefault(long ownerId, Long petId) {

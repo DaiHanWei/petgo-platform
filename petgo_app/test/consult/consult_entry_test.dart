@@ -2,6 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/features/consult/domain/consult_request.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/consult/data/consult_repository.dart';
 import 'package:tailtopia/features/consult/domain/consult_session.dart';
 import 'package:tailtopia/features/consult/presentation/consult_entry_page.dart';
@@ -127,4 +131,92 @@ void main() {
     expect(find.byType(ConsultRatingDialog), findsNothing);
     expect(repo.markPromptedCalls, 1);
   });
+
+  // ---- V1.4.0 multi-pet Story 4.1 · AC7.5（H4）：兽医咨询自填路径先选宠物；AI 升级路径不弹 ----
+  group('Story 4.1 H4 选宠物', () {
+    const pets = [
+      PetListItem(id: 7, name: 'Momo', isDefault: true),
+      PetListItem(id: 8, name: 'Kopi'),
+    ];
+
+    Future<_UpgradeRepo> pumpRouted(WidgetTester tester, {int? triageTaskId}) async {
+      SharedPreferences.setMockInitialValues({});
+      final repo = _UpgradeRepo();
+      final router = GoRouter(routes: [
+        GoRoute(path: '/', builder: (c, s) => ConsultEntryPage(triageTaskId: triageTaskId)),
+        GoRoute(path: '/consult/case', builder: (c, s) => Scaffold(body: Text('case:${s.uri.query}'))),
+        GoRoute(
+            path: '/consult/vet-request/waiting/:token',
+            builder: (c, s) => Scaffold(body: Text('waiting:${s.pathParameters['token']}'))),
+      ]);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          consultRepositoryProvider.overrideWithValue(repo),
+          petListProvider.overrideWith((ref) async => pets),
+        ],
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+      return repo;
+    }
+
+    Future<void> frames(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('≥2 只：Mulai konsultasi → 弹 H4 → Lanjut → /consult/case?petId=', (tester) async {
+      await pumpRouted(tester);
+      await tester.tap(find.byKey(const ValueKey('consultStartButton')));
+      await frames(tester);
+      expect(find.text('Konsultasi untuk siapa?'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('petPickerRow-8')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('petPickerConfirm')));
+      await frames(tester);
+      expect(find.text('case:petId=8'), findsOneWidget);
+    });
+
+    testWidgets('≥2 只：取消 H4 → 停留入口页，不进病例页', (tester) async {
+      await pumpRouted(tester);
+      await tester.tap(find.byKey(const ValueKey('consultStartButton')));
+      await frames(tester);
+      await tester.tapAt(const Offset(10, 10));
+      await frames(tester);
+      expect(find.textContaining('case:'), findsNothing);
+      expect(find.byKey(const ValueKey('consultStartButton')), findsOneWidget);
+    });
+
+    testWidgets('AI 升级路径不弹选择、不传 petId（后端按分诊任务的宠物）', (tester) async {
+      final repo = await pumpRouted(tester, triageTaskId: 42);
+      await tester.tap(find.byKey(const ValueKey('consultStartButton')));
+      await frames(tester);
+      expect(find.text('Konsultasi untuk siapa?'), findsNothing);
+      expect(repo.upgradeCalls, [42]);
+      expect(find.text('waiting:tok-1'), findsOneWidget);
+    });
+  });
+}
+
+/// Story 4.1：带在线态与升级入队的 fake（升级只记 triageTaskId，返回入队中请求）。
+class _UpgradeRepo extends _FakeConsultRepository {
+  _UpgradeRepo() : super(online: true);
+  final List<int> upgradeCalls = [];
+
+  @override
+  Future<bool> vetOnline() async => true;
+
+  @override
+  Future<ConsultRequest> createRequestFromUpgrade(int triageTaskId) async {
+    upgradeCalls.add(triageTaskId);
+    return ConsultRequest.fromJson(const {'requestToken': 'tok-1', 'state': 'QUEUEING'});
+  }
 }

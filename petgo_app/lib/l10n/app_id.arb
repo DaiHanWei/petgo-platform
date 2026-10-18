@@ -2760,5 +2760,14 @@
   "petPickerCheckinBody": "Pilih minimal 1 hewan. Setiap hewan dapat cap sendiri.",
   "petPickerCheckedInHere": "Sudah check-in di sini hari ini",
   "petPickerCheckinSubmit": "Check-in ({n})",
-  "@petPickerCheckinSubmit": {"placeholders": {"n": {"type": "int"}}}
+  "@petPickerCheckinSubmit": {"placeholders": {"n": {"type": "int"}}},
+  "petPickerTriageTitle": "Cek gejala untuk siapa?",
+  "petPickerTriageHint": "AI akan memakai jenis, umur, dan berat hewan ini.",
+  "petPickerReadOnlyNoSave": "Hanya-baca · hasil tidak bisa disimpan",
+  "petSlotArchiveBlockedTitle": "Perpanjang slot untuk menyimpan",
+  "petSlotArchiveBlockedBody": "Hasil cek {name} tidak bisa disimpan ke Catatan Kesehatan karena slot {name} sudah berakhir.",
+  "@petSlotArchiveBlockedBody": {"placeholders": {"name": {"type": "String"}}},
+  "petPickerConsultTitle": "Konsultasi untuk siapa?",
+  "petPickerConsultHint": "Dokter akan melihat profil hewan ini.",
+  "petPickerContinue": "Lanjut"
 }

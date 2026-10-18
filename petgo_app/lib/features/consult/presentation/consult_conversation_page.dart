@@ -16,7 +16,6 @@ import '../../notify/domain/push_permission_prompt.dart';
 import '../../notify/presentation/push_permission_guide_flow.dart';
 import '../../notify/domain/push_suppression.dart';
 import '../../profile/data/health_event_repository.dart';
-import '../../profile/data/timeline_repository.dart';
 import '../../profile/presentation/archive_prompt_dialog.dart';
 import '../data/consult_repository.dart';
 import '../domain/consult_case.dart';
@@ -82,6 +81,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
   // **绝不能再填任何具体人名**，否则同样的误判会再来一次。
   String? _vetName;
   String? _vetAvatarUrl;
+  int? _petId; // V1.4.0 multi-pet Story 4.1（AC5 / AC8.3）：会话所属宠物，存档用；null → 当前宠物
+  bool _sessionLoaded = false; // 至少拿到过一次会话视图（code review 4-1 A4：之前 _petId 未知，不能存档）
   bool? _vetOnline; // null = 未知 → 顶栏不显示在线/离线那一行（不猜）
 
   @override
@@ -151,6 +152,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
         if (s.vetDisplayName != null) _vetName = s.vetDisplayName;
         if (s.vetAvatarUrl != null) _vetAvatarUrl = s.vetAvatarUrl;
         if (s.vetOnline != null) _vetOnline = s.vetOnline;
+        if (s.petId != null) _petId = s.petId;
+        _sessionLoaded = true;
       });
       _syncSuspendTicker(); // 挂起态启用 1s 倒计时刷新，退出挂起则停
       // 进行中（已接单）才登录 IM：取 UserSig 经后端 MAU 闸门（用户须有活跃会话）。
@@ -328,6 +331,14 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
     final d = _diagnosis;
     setState(() => _savingToArchive = true); // 立即给按钮 loading 态，网络在途不再"无响应"
     try {
+      // code review 4-1 A4：会话视图还没回来（_petId 未知）→ 先等它，否则会落到当前宠物。取不到 → 抛 → 「保存失败」。
+      if (!_sessionLoaded) {
+        final s = await ref.read(consultRepositoryProvider).get(widget.sessionId);
+        if (!mounted) return;
+        _petId = s.petId;
+        _sessionLoaded = true;
+      }
+      if (!mounted) return;
       final saved = await showArchivePrompt(
         context,
         ref,
@@ -338,12 +349,14 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
           adviceSummary: d?.generalAdvice,
           // 显式点保存：绕过「只问一次」守卫——此前选过「跳过」也能补存（bug 20260727 保存静默无效）。
           explicitSave: true,
+          // V1.4.0 multi-pet Story 4.1（AC8.3）：存到会话订单上的宠物；null（V1.0 会话）→ 当前宠物。
+          petId: _petId,
         ),
       );
       if (!mounted) return;
       // 存档（ARCHIVED）后使成长档案时间线 / 统计失效 → 进档案页即见 diary（bug 20260707）。
-      ref.invalidate(timelineFirstPageProvider);
-      ref.invalidate(archiveStatsProvider);
+      // V1.4.0 multi-pet Story 4.1（AC8.6）：只失效该宠物的 family（未知 → 全失效）。
+      invalidateArchiveViews(ref, _petId);
       ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       // 存档成功给用户明确反馈（bug 20260721-338）+ 本地翻转 isArchived 使按钮当场变「已存入」标签（bug 20260721-333）。
       if (saved) {

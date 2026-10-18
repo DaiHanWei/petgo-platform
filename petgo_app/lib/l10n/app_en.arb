@@ -4219,5 +4219,21 @@
   "petPickerCheckedInHere": "Already checked in here today",
   "@petPickerCheckedInHere": {"description": "V1.4.0 multi-pet (Story 3.3) G-3: subtitle of a pet row already checked in at this place today"},
   "petPickerCheckinSubmit": "Check in ({n})",
-  "@petPickerCheckinSubmit": {"description": "V1.4.0 multi-pet (Story 3.3) G2: check-in pet picker submit button with selected count", "placeholders": {"n": {"type": "int"}}}
+  "@petPickerCheckinSubmit": {"description": "V1.4.0 multi-pet (Story 3.3) G2: check-in pet picker submit button with selected count", "placeholders": {"n": {"type": "int"}}},
+  "petPickerTriageTitle": "Who are you checking symptoms for?",
+  "@petPickerTriageTitle": {"description": "V1.4.0 multi-pet (Story 4.1) H-1: AI triage pet picker sheet title"},
+  "petPickerTriageHint": "AI will use this pet's species, age and weight.",
+  "@petPickerTriageHint": {"description": "V1.4.0 multi-pet (Story 4.1) H-2: AI triage pet picker sheet body"},
+  "petPickerReadOnlyNoSave": "Read-only · results can't be saved",
+  "@petPickerReadOnlyNoSave": {"description": "V1.4.0 multi-pet (Story 4.1) H-3: subtitle of a read-only pet row in the triage / vet consult pet picker (still selectable)"},
+  "petSlotArchiveBlockedTitle": "Renew the slot to save",
+  "@petSlotArchiveBlockedTitle": {"description": "V1.4.0 multi-pet (Story 4.1) H-4: title of the sheet blocking archiving a result to a read-only pet"},
+  "petSlotArchiveBlockedBody": "{name}'s results can't be saved to Health Records because {name}'s slot has expired.",
+  "@petSlotArchiveBlockedBody": {"description": "V1.4.0 multi-pet (Story 4.1) H-5: body of the archive blocked sheet; {name} = the read-only pet's name", "placeholders": {"name": {"type": "String"}}},
+  "petPickerConsultTitle": "Who is this consultation for?",
+  "@petPickerConsultTitle": {"description": "V1.4.0 multi-pet (Story 4.1) H-6: vet consult pet picker sheet title"},
+  "petPickerConsultHint": "The vet will see this pet's profile.",
+  "@petPickerConsultHint": {"description": "V1.4.0 multi-pet (Story 4.1) H-7: vet consult pet picker sheet body"},
+  "petPickerContinue": "Continue",
+  "@petPickerContinue": {"description": "V1.4.0 multi-pet (Story 4.1) H1 / H4: pet picker bottom button (not in copy table; EN proposed, pending ops review)"}
 }

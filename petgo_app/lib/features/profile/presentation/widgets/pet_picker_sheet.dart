@@ -13,6 +13,12 @@ import '../../domain/pet_age.dart';
 /// 哪些行不可选（[disabledPetIds]）及其副标题覆盖（[disabledSubtitle]）。
 ///
 /// 返回所选宠物 id（**按 [pets] 的顺序** = 创建顺序，不按点选先后）；关闭抽屉 → null。
+///
+/// V1.4.0 multi-pet Story 4.1（H1 / H4）补三个可选参数（默认值 = 原行为，3.3 调用点零影响）：
+/// - [confirmLabel]：单选模式下给了它 → 「点行只选中、吸底按钮确认」（UI 稿 H1 `.rcard` + 「Lanjut」），
+///   选中行 `mintTint2` 底 + 描边 + `check_circle`，未选 `radio_button_unchecked`；
+/// - [initialSelectedId]：上述模式的默认选中（问诊默认 Diary 当前宠物）；
+/// - [lockedPetIds] / [lockedSubtitle]：**可选**但带锁的行（只读宠物：可问不可存档），头像角标锁 + 副标题覆盖。
 Future<List<int>?> showPetPickerSheet(
   BuildContext context, {
   required List<PetListItem> pets,
@@ -22,6 +28,10 @@ Future<List<int>?> showPetPickerSheet(
   Set<int> disabledPetIds = const {},
   String? disabledSubtitle,
   String Function(int count)? submitLabel,
+  String? confirmLabel,
+  int? initialSelectedId,
+  Set<int> lockedPetIds = const {},
+  String? lockedSubtitle,
 }) {
   return showModalBottomSheet<List<int>>(
     context: context,
@@ -38,6 +48,10 @@ Future<List<int>?> showPetPickerSheet(
       disabledPetIds: disabledPetIds,
       disabledSubtitle: disabledSubtitle,
       submitLabel: submitLabel,
+      confirmLabel: confirmLabel,
+      initialSelectedId: initialSelectedId,
+      lockedPetIds: lockedPetIds,
+      lockedSubtitle: lockedSubtitle,
     ),
   );
 }
@@ -52,6 +66,10 @@ class PetPickerSheet extends StatefulWidget {
     this.disabledPetIds = const {},
     this.disabledSubtitle,
     this.submitLabel,
+    this.confirmLabel,
+    this.initialSelectedId,
+    this.lockedPetIds = const {},
+    this.lockedSubtitle,
   });
 
   final List<PetListItem> pets;
@@ -70,15 +88,49 @@ class PetPickerSheet extends StatefulWidget {
   /// 多选主按钮文案（入参 = 已选只数）；null = 系统本地化的「OK」。
   final String Function(int count)? submitLabel;
 
+  /// 单选 + 吸底确认（Story 4.1 H1 / H4「Lanjut」）；null = 原单选行为（点行即返回）。多选模式忽略。
+  final String? confirmLabel;
+
+  /// 单选确认模式的默认选中（不在 [pets] 里 / 不可选 → 不预选）。
+  final int? initialSelectedId;
+
+  /// 可选但带锁的行（Story 4.1：只读宠物可问不可存档）：头像角标锁、副标题用 [lockedSubtitle]。
+  final Set<int> lockedPetIds;
+
+  /// 带锁行的副标题；null = 照常显示物种 · 年龄。
+  final String? lockedSubtitle;
+
   @override
   State<PetPickerSheet> createState() => _PetPickerSheetState();
 }
 
 class _PetPickerSheetState extends State<PetPickerSheet> {
-  /// 默认**全不选**（AC5.2）。
+  /// 默认**全不选**（AC5.2）；单选确认模式按 [PetPickerSheet.initialSelectedId] 预选。
   final Set<int> _selected = <int>{};
 
+  bool get _singleConfirm => !widget.multiSelect && widget.confirmLabel != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialSelectedId;
+    if (_singleConfirm &&
+        initial != null &&
+        !widget.disabledPetIds.contains(initial) &&
+        widget.pets.any((p) => p.id == initial)) {
+      _selected.add(initial);
+    }
+  }
+
   void _tap(int id) {
+    if (_singleConfirm) {
+      setState(() {
+        _selected
+          ..clear()
+          ..add(id);
+      });
+      return;
+    }
     if (!widget.multiSelect) {
       Navigator.of(context).pop(<int>[id]);
       return;
@@ -133,6 +185,21 @@ class _PetPickerSheetState extends State<PetPickerSheet> {
                 ),
               ),
             ),
+            if (_singleConfirm) ...[
+              const SizedBox(height: 8),
+              FilledButton(
+                key: const ValueKey('petPickerConfirm'),
+                onPressed: count > 0 ? () => Navigator.of(context).pop(_selected.toList()) : null,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: AppColors.mint,
+                  foregroundColor: AppColors.onAccent,
+                  disabledBackgroundColor: AppColors.line2,
+                  disabledForegroundColor: AppColors.muted,
+                ),
+                child: Text(widget.confirmLabel!),
+              ),
+            ],
             if (widget.multiSelect) ...[
               const SizedBox(height: 8),
               FilledButton(
@@ -161,14 +228,27 @@ class _PetPickerSheetState extends State<PetPickerSheet> {
       ?petSpeciesLabel(l10n, p.petType),
       ?formatPetAge(l10n, p.birthday)?.replaceAll(' ', ' '),
     ].join(' · ');
-    final subtitle = disabled && widget.disabledSubtitle != null ? widget.disabledSubtitle! : meta;
-    final Widget trailing = disabled
-        ? const Icon(Icons.block, size: 20, color: AppColors.muted)
-        : widget.multiSelect
-            ? Icon(selected ? Icons.check_box : Icons.check_box_outline_blank,
-                key: ValueKey('petPickerCheck-${p.id}'),
-                color: selected ? AppColors.mint : AppColors.ink2)
-            : const Icon(Icons.chevron_right_rounded, color: AppColors.ink2);
+    final locked = !disabled && widget.lockedPetIds.contains(p.id);
+    final subtitle = disabled && widget.disabledSubtitle != null
+        ? widget.disabledSubtitle!
+        : locked && widget.lockedSubtitle != null
+            ? widget.lockedSubtitle!
+            : meta;
+    final Widget trailing;
+    if (disabled) {
+      trailing = const Icon(Icons.block, size: 20, color: AppColors.muted);
+    } else if (_singleConfirm) {
+      trailing = Icon(selected ? Icons.check_circle : Icons.radio_button_unchecked,
+          key: ValueKey('petPickerRadio-${p.id}'),
+          size: 22,
+          color: selected ? AppColors.mint : AppColors.muted);
+    } else if (widget.multiSelect) {
+      trailing = Icon(selected ? Icons.check_box : Icons.check_box_outline_blank,
+          key: ValueKey('petPickerCheck-${p.id}'),
+          color: selected ? AppColors.mint : AppColors.ink2);
+    } else {
+      trailing = const Icon(Icons.chevron_right_rounded, color: AppColors.ink2);
+    }
     return PetCardRow(
       key: ValueKey('petPickerRow-${p.id}'),
       avatarUrl: p.avatarUrl,
@@ -177,6 +257,7 @@ class _PetPickerSheetState extends State<PetPickerSheet> {
       trailing: trailing,
       selected: selected,
       disabled: disabled,
+      locked: locked,
       onTap: disabled ? null : () => _tap(p.id),
     );
   }
@@ -195,6 +276,7 @@ class PetCardRow extends StatelessWidget {
     required this.trailing,
     this.selected = false,
     this.disabled = false,
+    this.locked = false,
     this.onTap,
   });
 
@@ -206,6 +288,9 @@ class PetCardRow extends StatelessWidget {
 
   /// 不可选：底 `#FAFAFB`、名字与头像 0.55 透明（副标题与尾部图标不透明，CSS `.sheet .crow.dis`）。
   final bool disabled;
+
+  /// 头像右下角小锁（Story 4.1 H1：只读宠物行，仍可点）。
+  final bool locked;
   final VoidCallback? onTap;
 
   static const Color disabledBg = Color(0xFFFAFAFB);
@@ -223,6 +308,29 @@ class PetCardRow extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: AppColors.ink));
+    if (locked) {
+      avatar = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          avatar,
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              key: const ValueKey('petCardRowLock'),
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: AppColors.mint,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.card, width: 1.5),
+              ),
+              child: const Icon(Icons.lock_rounded, size: 9, color: AppColors.onAccent),
+            ),
+          ),
+        ],
+      );
+    }
     if (disabled) {
       avatar = Opacity(opacity: 0.55, child: avatar);
       nameText = Opacity(opacity: 0.55, child: nameText);

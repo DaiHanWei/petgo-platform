@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:tailtopia/features/auth/data/me_repository.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/data/health_event_repository.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pending_archive.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
@@ -16,7 +18,10 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 class _FakeHealthRepo implements HealthEventRepository {
   final List<({String sourceRef, int petId, ArchiveDecision decision})> calls = [];
   final Set<String> decided;
-  _FakeHealthRepo({Set<String>? decided}) : decided = decided ?? {};
+  _FakeHealthRepo({Set<String>? decided, this.readOnly409 = false}) : decided = decided ?? {};
+
+  /// V1.4.0 multi-pet Story 4.1：后端兜底 409 `pet-read-only`（前端状态过期）。
+  final bool readOnly409;
 
   @override
   Future<bool> hasDecision(String sourceRef) async => decided.contains(sourceRef);
@@ -32,6 +37,18 @@ class _FakeHealthRepo implements HealthEventRepository {
     String? adviceSummary,
     List<String> imImageRefs = const [],
   }) async {
+    if (readOnly409) {
+      final opts = RequestOptions(path: '/api/v1/health-events/archive-decisions');
+      throw DioException(
+        requestOptions: opts,
+        response: Response(requestOptions: opts, statusCode: 409, data: {
+          'type': 'https://petgo/errors/pet-read-only',
+          'status': 409,
+          'detail': 'backend detail must not be shown',
+          'petId': petId,
+        }),
+      );
+    }
     calls.add((sourceRef: sourceRef, petId: petId, decision: decision));
   }
 }
@@ -114,6 +131,9 @@ Future<GoRouter> _pumpTrigger(
   WidgetTester tester, {
   required ProviderContainer container,
   bool redState = false,
+  int? petId,
+  bool explicitSave = false,
+  List<bool>? results,
 }) async {
   final router = GoRouter(
     initialLocation: '/trigger',
@@ -125,17 +145,22 @@ Future<GoRouter> _pumpTrigger(
             builder: (context, ref, _) => Center(
               child: ElevatedButton(
                 key: const ValueKey('go'),
-                onPressed: () => showArchivePrompt(
-                  context,
-                  ref,
-                  ArchivePromptArgs(
-                    sourceRef: 'triage:1',
-                    sourceType: HealthSourceType.aiTriage,
-                    symptomSummary: 'cough',
-                    aiLevel: 'RED',
-                    redState: redState,
-                  ),
-                ),
+                onPressed: () async {
+                  final saved = await showArchivePrompt(
+                    context,
+                    ref,
+                    ArchivePromptArgs(
+                      sourceRef: 'triage:1',
+                      sourceType: HealthSourceType.aiTriage,
+                      symptomSummary: 'cough',
+                      aiLevel: 'RED',
+                      redState: redState,
+                      petId: petId,
+                      explicitSave: explicitSave,
+                    ),
+                  );
+                  results?.add(saved);
+                },
                 child: const Text('go'),
               ),
             ),
@@ -143,6 +168,7 @@ Future<GoRouter> _pumpTrigger(
         ),
       ),
       GoRoute(path: '/profile/create', builder: (c, s) => const Scaffold(body: Text('create-page'))),
+      GoRoute(path: '/me/pet-slots', builder: (c, s) => Scaffold(body: Text('slots-${s.uri.query}'))),
     ],
   );
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -162,12 +188,21 @@ ProviderContainer _container({
   required _FakeHealthRepo health,
   PetProfile? pet,
   _FakeMeRepo? me,
+  List<PetListItem>? pets,
+  bool petListFails = false,
 }) {
   final c = ProviderContainer(overrides: [
     authControllerProvider.overrideWith(() => _TestAuthController(auth)),
     healthEventRepositoryProvider.overrideWithValue(health),
     petProfileProvider.overrideWith((ref) async => pet),
     if (me != null) meRepositoryProvider.overrideWithValue(me),
+    if (pets != null) petListProvider.overrideWith((ref) async => pets),
+    // 4xx 不走 Riverpod 默认重试（retryExcept4xx），失败立即落定。
+    if (petListFails)
+      petListProvider.overrideWith((ref) async => throw DioException(
+          requestOptions: RequestOptions(path: '/x'),
+          response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: 403))),
+    profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
   ]);
   addTearDownContainer(c);
   return c;
@@ -320,5 +355,136 @@ void main() {
     expect(health.calls.first.decision, ArchiveDecision.archived);
     expect(container.read(pendingArchiveProvider), isNull);
     expect(find.text('celebrate'), findsNothing); // 跳过庆祝页
+  });
+
+  // ===== V1.4.0 multi-pet Story 4.1 · AC8：存到所选宠物 + 只读拦截（H2）=====
+  group('Story 4.1 多宠存档', () {
+    const pets = [
+      PetListItem(id: 7, name: 'Momo', isDefault: true),
+      PetListItem(id: 8, name: 'Kopi'),
+      PetListItem(id: 9, name: 'Boba', status: PetListItem.statusReadOnly),
+    ];
+
+    testWidgets('args.petId → 标题用这只的名字、记录到这只的 id', (tester) async {
+      final health = _FakeHealthRepo();
+      final container = _container(
+          auth: _auth(status: 'HAS_PET', hasProfile: true), health: health, pet: _pet, pets: pets);
+      await _pumpTrigger(tester, container: container, petId: 8);
+
+      await tester.tap(find.byKey(const ValueKey('go')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Kopi'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('archiveSave')));
+      await tester.pumpAndSettle();
+
+      expect(health.calls.single.petId, 8);
+      expect(health.calls.single.decision, ArchiveDecision.archived);
+    });
+
+    testWidgets('petId=null → 旧路径（petProfileProvider 的当前宠物）', (tester) async {
+      final health = _FakeHealthRepo();
+      final container = _container(
+          auth: _auth(status: 'HAS_PET', hasProfile: true), health: health, pet: _pet, pets: pets);
+      await _pumpTrigger(tester, container: container);
+
+      await tester.tap(find.byKey(const ValueKey('go')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('archiveSave')));
+      await tester.pumpAndSettle();
+
+      expect(health.calls.single.petId, 7);
+    });
+
+    for (final explicit in [false, true]) {
+      testWidgets('只读宠物（explicitSave=$explicit）→ 弹 H2、不弹存入/跳过、不记录、返回 false',
+          (tester) async {
+        tester.platformDispatcher.localesTestValue = const [Locale('id')];
+        addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+        final health = _FakeHealthRepo();
+        final results = <bool>[];
+        final container = _container(
+            auth: _auth(status: 'HAS_PET', hasProfile: true), health: health, pet: _pet, pets: pets);
+        await _pumpTrigger(tester,
+            container: container, petId: 9, explicitSave: explicit, results: results);
+
+        await tester.tap(find.byKey(const ValueKey('go')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('archiveSave')), findsNothing);
+        expect(find.text('Perpanjang slot untuk menyimpan'), findsOneWidget);
+        expect(
+            find.text('Hasil cek Boba tidak bisa disimpan ke Catatan Kesehatan karena slot Boba sudah berakhir.'),
+            findsOneWidget);
+        expect(find.text('Perpanjang slot'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('archiveBlockedSkip')));
+        await tester.pumpAndSettle();
+
+        expect(health.calls, isEmpty);
+        expect(results, [false]);
+      });
+    }
+
+    testWidgets('H2「Perpanjang slot」→ 名额管理页 ?action=renew，仍不记录', (tester) async {
+      final health = _FakeHealthRepo();
+      final container = _container(
+          auth: _auth(status: 'HAS_PET', hasProfile: true), health: health, pet: _pet, pets: pets);
+      await _pumpTrigger(tester, container: container, petId: 9);
+
+      await tester.tap(find.byKey(const ValueKey('go')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('archiveBlockedRenew')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('slots-action=renew'), findsOneWidget);
+      expect(health.calls, isEmpty);
+    });
+
+    testWidgets('后端兜底 409 pet-read-only → 弹 H2（不显后端 detail）、返回 false', (tester) async {
+      final health = _FakeHealthRepo(readOnly409: true);
+      final results = <bool>[];
+      final container = _container(
+          auth: _auth(status: 'HAS_PET', hasProfile: true), health: health, pet: _pet, pets: pets);
+      await _pumpTrigger(tester, container: container, petId: 8, results: results);
+
+      await tester.tap(find.byKey(const ValueKey('go')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('archiveSave')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('archiveBlockedRenew')), findsOneWidget);
+      expect(find.textContaining('backend detail'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('archiveBlockedSkip')));
+      await tester.pumpAndSettle();
+      expect(results, [false]);
+    });
+
+    // code review 4-1 A1：给了 petId 就只存这只，绝不悄悄落到当前宠物。
+    testWidgets('A1: 列表已取到但所选宠物不在（刚被删）→ 不存档、提示失败、返回 false', (tester) async {
+      final health = _FakeHealthRepo();
+      final results = <bool>[];
+      final container = _container(
+          auth: _auth(status: 'HAS_PET', hasProfile: true), health: health, pet: _pet, pets: pets);
+      await _pumpTrigger(tester, container: container, petId: 42, results: results);
+
+      await tester.tap(find.byKey(const ValueKey('go')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('archiveSave')), findsNothing);
+      expect(health.calls, isEmpty);
+      expect(results, [false]);
+      await tester.pump(const Duration(seconds: 5)); // toast 计时器
+    });
+
+    testWidgets('A1: 宠物列表取不到 → 仍按所选 petId 存（不落到当前宠物 7）', (tester) async {
+      final health = _FakeHealthRepo();
+      final container = _container(
+          auth: _auth(status: 'HAS_PET', hasProfile: true), health: health, pet: _pet, petListFails: true);
+      await _pumpTrigger(tester, container: container, petId: 8);
+
+      await tester.tap(find.byKey(const ValueKey('go')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('archiveSave')));
+      await tester.pumpAndSettle();
+
+      expect(health.calls.single.petId, 8);
+    });
   });
 }

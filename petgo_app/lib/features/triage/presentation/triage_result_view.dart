@@ -7,7 +7,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
-import '../../profile/data/timeline_repository.dart';
+import '../../profile/presentation/archive_prompt_dialog.dart' show invalidateArchiveViews;
 import '../data/triage_repository.dart';
 import '../domain/triage_archive.dart';
 import '../domain/triage_unlock_controller.dart';
@@ -246,8 +246,8 @@ class TriageResultView extends ConsumerWidget {
           symptom: summary,
           explicitSave: true);
       if (!context.mounted) return;
-      ref.invalidate(timelineFirstPageProvider);
-      ref.invalidate(archiveStatsProvider);
+      // V1.4.0 multi-pet Story 4.1（AC8.6）：只失效所选宠物的时间线 / 统计（未知 → 全失效）。
+      invalidateArchiveViews(ref, triageId == null ? null : triageSubmittedPetId(ref, triageId!));
       ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       if (saved) {
         // 文案复用问诊侧的同一条（「已保存 —— 去 Diary 看」）：两处说的是同一件事，

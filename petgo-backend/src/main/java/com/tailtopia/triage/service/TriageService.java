@@ -1,5 +1,6 @@
 package com.tailtopia.triage.service;
 
+import com.tailtopia.profile.service.PetResolver;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.triage.domain.TriageStatus;
 import com.tailtopia.triage.domain.TriageTask;
@@ -29,17 +30,23 @@ public class TriageService {
     private final TriageTaskRepository tasks;
     private final ApplicationEventPublisher events;
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
+    private final PetResolver petResolver;
 
     public TriageService(TriageTaskRepository tasks, ApplicationEventPublisher events,
-            com.tailtopia.config.service.PlatformConfigService platformConfig) {
+            com.tailtopia.config.service.PlatformConfigService platformConfig, PetResolver petResolver) {
         this.tasks = tasks;
         this.events = events;
         this.platformConfig = platformConfig;
+        this.petResolver = petResolver;
     }
 
     /**
      * 受理分诊（AC1）。同 Idempotency-Key 命中既有任务直接回原 triageId，不重复入队；
      * 否则建 PENDING 任务并发 {@link TriageSubmittedEvent}（AFTER_COMMIT 异步处理）。
+     *
+     * <p>V1.4.0 multi-pet Story 4.1（AD-2）：带 {@code petId} → 经 {@link PetResolver} 校验归属（不属于本人 / 不存在
+     * → 404，不建任务），放在幂等查找<b>之后</b>（重放不因宠物后来被删而 404）。不带 → 与改造前一致（{@code pet_id = null}、
+     * 不带宠物上下文，<b>不</b>用默认宠物兜底）。只读宠物可提交（只读可问不可存档，不调 {@code PetWriteGuard}）。
      */
     @Transactional
     public TriageAcceptedResponse submit(long userId, TriageSubmitRequest req, String idempotencyKey,
@@ -51,6 +58,9 @@ public class TriageService {
                 TriageTask t = existing.get();
                 return TriageAcceptedResponse.of(t.getId(), t.getStatus());
             }
+        }
+        if (req.petId() != null) {
+            petResolver.resolve(userId, req.petId()); // 归属校验：查不到一律 404（不泄露存在性）
         }
         TriageTask task = tasks.save(TriageTask.submit(
                 userId, req.petId(), req.symptomText(), req.imageObjectKeys(), key, responseLocale));
@@ -89,7 +99,8 @@ public class TriageService {
             throw AppException.conflict("分诊尚未完成，暂不能升级兽医");
         }
         return new TriageUpgradeContext(
-                task.getId(), task.getDangerLevel(), task.getSymptomText(), task.getImageObjectKeys());
+                task.getId(), task.getDangerLevel(), task.getSymptomText(), task.getImageObjectKeys(),
+                task.getPetId());
     }
 
     /** 用户 AI 问诊历史（Story 5.8）。供 consult 历史聚合经本接口拉取（禁直读 triage repository）。 */

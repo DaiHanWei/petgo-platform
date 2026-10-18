@@ -147,4 +147,34 @@ class PetProfileQueryServiceTest {
         assertThat(service.ownsPet(1L, 11L)).isTrue();
         assertThat(service.ownsPet(1L, 20L)).isFalse();
     }
+
+    // ---- V1.4.0 multi-pet Story 4.1 · AC2.4：AI 分诊只读上下文 ----
+
+    @Test
+    void triageContextIsBuiltFromThatOwnedPetOnly() {
+        java.time.LocalDate birthday = java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusMonths(38);
+        org.springframework.test.util.ReflectionTestUtils.setField(b, "birthday", birthday);
+        org.springframework.test.util.ReflectionTestUtils.setField(b, "weightKg", new java.math.BigDecimal("12.40"));
+
+        var ctx = service.findTriageContext(1L, 11L).orElseThrow();
+
+        assertThat(ctx.species()).isEqualTo("DOG");
+        assertThat(ctx.ageMonths()).isEqualTo(38);
+        assertThat(ctx.weightKg()).isEqualByComparingTo("12.4");
+    }
+
+    @Test
+    void triageContextEmptyForForeignOrDeletedPet() {
+        assertThat(service.findTriageContext(1L, 20L)).isEmpty(); // 他人宠物（findByIdAndOwnerId 未命中）
+        assertThat(service.findTriageContext(1L, 999L)).isEmpty(); // 已删
+    }
+
+    @Test
+    void triageContextToleratesMissingBirthdayAndWeight() {
+        var ctx = service.findTriageContext(1L, 10L).orElseThrow();
+
+        assertThat(ctx.species()).isEqualTo("CAT");
+        assertThat(ctx.ageMonths()).isNull();
+        assertThat(ctx.weightKg()).isNull();
+    }
 }

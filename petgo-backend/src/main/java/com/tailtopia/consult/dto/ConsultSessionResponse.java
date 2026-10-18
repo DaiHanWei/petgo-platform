@@ -29,6 +29,10 @@ import java.time.Instant;
  * <p><b>{@code vetImUserId}（2026-09-24，bug 519/521）</b>：对端兽医的 IM 账号，经 {@link ImAccountMapper}
  * 带环境前缀下发（生产 {@code v_<vetId>}，stag {@code stg_v_<vetId>}）。App 必须用它作 C2C 对端，
  * <b>不得自拼</b> {@code v_}；无兽医时为 null（NON_NULL 省略）。
+ *
+ * <p><b>{@code petId}（V1.4.0 multi-pet Story 4.1）</b>：本会话所属宠物（会话订单上的 {@code pet_profile_id}），
+ * App 兽医问诊存档据此存到对的宠物。<b>只在读路径</b> {@code GET /consult-sessions/{id}} 富化；无订单的 V1.0 会话 /
+ * 写路径为 null（NON_NULL 省略，App 退回当前宠物）。
  */
 public record ConsultSessionResponse(
         long id,
@@ -46,7 +50,8 @@ public record ConsultSessionResponse(
         String vetDisplayName,
         String vetAvatarUrl,
         Boolean vetOnline,
-        String vetImUserId) {
+        String vetImUserId,
+        Long petId) {
 
     /** 不带兽医身份的基础视图（写路径 / 尚无兽医的 WAITING 用）。 */
     public static ConsultSessionResponse of(ConsultSession s, long timeoutSeconds, boolean alreadyActive) {
@@ -62,6 +67,12 @@ public record ConsultSessionResponse(
      */
     public static ConsultSessionResponse of(ConsultSession s, long timeoutSeconds, boolean alreadyActive,
             VetPeer vetPeer) {
+        return of(s, timeoutSeconds, alreadyActive, vetPeer, null);
+    }
+
+    /** 读路径（{@code GET /consult-sessions/{id}}）：另带会话所属宠物 id（V1.4.0 multi-pet Story 4.1）。 */
+    public static ConsultSessionResponse of(ConsultSession s, long timeoutSeconds, boolean alreadyActive,
+            VetPeer vetPeer, Long petId) {
         // null 按「没有对端信息」处理：顶栏身份不值得为一个 NPE 把会话轮询打成 500。
         VetPeer peer = vetPeer == null ? VetPeer.UNKNOWN : vetPeer;
         long elapsed = s.getWaitingStartedAt() == null
@@ -83,7 +94,8 @@ public record ConsultSessionResponse(
                 peer.displayName(),
                 peer.avatarUrl(),
                 peer.online(),
-                s.getVetId() == null ? null : ImAccountMapper.vetImId(s.getVetId()));
+                s.getVetId() == null ? null : ImAccountMapper.vetImId(s.getVetId()),
+                petId);
     }
 
     /**

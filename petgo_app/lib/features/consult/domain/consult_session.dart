@@ -16,6 +16,7 @@ class ConsultSession {
     this.vetAvatarUrl,
     this.vetOnline,
     this.vetImUserId,
+    this.petId,
   });
 
   final int id;
@@ -48,6 +49,10 @@ class ConsultSession {
   // 对端兽医 IM 账号（后端带环境前缀下发：生产 v_<id>，stag stg_v_<id>；bug 519/521）。
   // C2C 对端一律用它，**不自拼 v_**；老后端未下发时才回落旧格式（老后端必为无前缀环境）。
   final String? vetImUserId;
+
+  // 本会话所属宠物（V1.4.0 multi-pet Story 4.1 · AC5）：仅读路径 `GET /consult-sessions/{id}` 下发
+  // （会话订单上的宠物）；null = V1.0 无订单会话 / 老后端 → 存档退回当前宠物。
+  final int? petId;
 
   /// 顶栏头像的首字母兜底。无名字 → `?`（不再写死 `D`）。
   String get vetInitial => initialOf(vetDisplayName);
@@ -92,6 +97,7 @@ class ConsultSession {
         vetAvatarUrl: _blankToNull(json['vetAvatarUrl'] as String?),
         vetOnline: json['vetOnline'] as bool?,
         vetImUserId: _blankToNull(json['vetImUserId'] as String?),
+        petId: (json['petId'] as num?)?.toInt(),
       );
 
   static String? _blankToNull(String? v) =>

@@ -33,6 +33,7 @@ class HealthEventServiceTest {
     private HealthEventService service;
     /** V1.4.0 multi-pet Story 2.1：真实 PetWriteGuard + mock 仓储（默认查不到 → 放行）。 */
     private com.tailtopia.profile.repository.PetProfileRepository pets;
+    private org.springframework.context.ApplicationEventPublisher publisher;
 
     @BeforeEach
     void setUp() {
@@ -42,8 +43,8 @@ class HealthEventServiceTest {
         when(profileService.ownsPet(1L, 5L)).thenReturn(true);
         when(archiver.archiveImImagesToPrivate(anyLong(), anyList())).thenReturn(List.of());
         pets = Mockito.mock(com.tailtopia.profile.repository.PetProfileRepository.class);
-        service = new HealthEventService(repo, profileService, archiver,
-                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class), new PetWriteGuard(pets));
+        publisher = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
+        service = new HealthEventService(repo, profileService, archiver, publisher, new PetWriteGuard(pets));
     }
 
     private ArchiveDecisionRequest archivedReq() {
@@ -186,5 +187,32 @@ class HealthEventServiceTest {
     void hasDecisionDelegates() {
         when(repo.existsBySourceRef("ref-x")).thenReturn(true);
         assertThat(service.hasDecision("ref-x")).isTrue();
+    }
+
+    // ---- V1.4.0 multi-pet Story 4.1 · AC6：AI_TRIAGE / VET_CONSULT × 只读 × {新建 ARCHIVED, SKIPPED→ARCHIVED} → 409 ----
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} upgrade={1}")
+    @org.junit.jupiter.params.provider.CsvSource({
+            "AI_TRIAGE, false", "AI_TRIAGE, true", "VET_CONSULT, false", "VET_CONSULT, true"})
+    void readOnlyPetArchiveBlockedForBothSources(HealthSourceType source, boolean upgradeFromSkipped) {
+        petFiveReadOnly();
+        HealthEvent existing = upgradeFromSkipped
+                ? HealthEvent.skipped(5L, source, "ref-ro", LocalDate.now())
+                : null;
+        when(repo.findBySourceRef("ref-ro")).thenReturn(Optional.ofNullable(existing));
+        var req = new ArchiveDecisionRequest(source, "ref-ro", 5L, ArchiveDecision.ARCHIVED,
+                LocalDate.of(2026, 10, 18), "muntah", "YELLOW", "observe", List.of("im-1"));
+
+        assertThatThrownBy(() -> service.recordDecision(1L, req))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(repo, never()).save(any());
+        verify(archiver, never()).archiveImImagesToPrivate(anyLong(), anyList());
+        verify(publisher, never()).publishEvent(any(Object.class));
+        if (existing != null) {
+            assertThat(existing.getArchiveDecision()).isEqualTo(ArchiveDecision.SKIPPED);
+        }
     }
 }
