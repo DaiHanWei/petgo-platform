@@ -50,8 +50,8 @@ development_status:
   2-3-我的送礼记录: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-后台礼物目录与qris最低金额: ready-for-dev
+  epic-3: in-progress
+  3-1-后台礼物目录与qris最低金额: review
   3-2-后台送礼记录与抽屉收送礼记录: ready-for-dev
   epic-3-retrospective: optional
 

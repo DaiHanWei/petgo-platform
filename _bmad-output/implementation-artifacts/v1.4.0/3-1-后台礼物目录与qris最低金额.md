@@ -1,6 +1,6 @@
 # Story 3.1: 后台礼物目录与送礼 QRIS 最低金额
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 gift · 分支 `feat/1.4.0-gift`（从 `dev_1.4.0` 地基之后切出，与 ①② 并行）
 > 口径优先级：`decision-log.md` ③ 节 > `送礼/1-4-0送礼prd.md`（§3.3 AB-35）> `architecture-v1.4.0-gift-delta.md`（AD-1 / AD-4 / AD-11、§5、§6）> `送礼/ui-admin-1-4-0-gift-integrated-v1.html`（L1 ~ L7）（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。跨分支契约以 `_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md`「2026-10-18 V1.4.0 四条线共用地基」节为准。
@@ -38,8 +38,8 @@ so that 不发版也能上新、调价、下线礼物，并控制小额送礼只
    - 类型：徽章「普通」（`badge-muted`）/「专属」（`badge-info` 或现有最接近的信息色徽章）。
    - 最低等级：专属显示 `Lv{min_level}`，普通「—」。
    - 状态：圆点 + 徽章「在线」（`dot--ok` + `badge-ok`）/「已下线」（`dot--done` + `badge-muted`），已下线整行 `row-muted`（同 `user-tags-list.html:57`、`admin.css:759`）。
-2. 排序：`status = 'OFFLINE'` 的排最后；其余先普通后专属；同组按 `price ASC, sort_order ASC, id ASC`（与 UI L1 示例一致；SQL 写成 `ORDER BY (status = 'OFFLINE'), (kind = 'EXCLUSIVE'), price, sort_order, id`）。
-3. 摘要条三格（**全目录口径，不随筛选变**）：在线礼物（`status = ONLINE` 数）/ 其中专属（在线且 `EXCLUSIVE`）/ 已下线（`OFFLINE` 数）。三个数一次 SQL 聚合，与表格取同一次 `now` 无关（目录无时间维度）。
+2. 排序：`status = 'OFFLINE'` 的排最后；其余先普通后专属；同组按 `price ASC, sort_order ASC, id ASC`（与 UI L1 示例一致；实现为一次 `findAll` 后服务层 Comparator，等价于 `ORDER BY (status = 'OFFLINE'), (kind = 'EXCLUSIVE'), price, sort_order, id`——T0 核对后改，见 Completion Notes）。
+3. 摘要条三格（**全目录口径，不随筛选变**）：在线礼物（`status = ONLINE` 数）/ 其中专属（在线且 `EXCLUSIVE`）/ 已下线（`OFFLINE` 数）。三个数与表格、价格下拉出自同一次全表读取（目录百级），目录无时间维度。
 4. 筛选栏（UI L1 新增，用户标签页没有）：`<form method="get" data-autosubmit>` 三个下拉——价格（「全部价格」+ 目录里出现过的全部价格去重升序）、类型（全部 / 普通 / 专属）、状态（全部 / 在线 / 已下线）。参数 `price`（Long）/ `kind`（`NORMAL|EXCLUSIVE`）/ `status`（`ONLINE|OFFLINE`），**宽松解析**（不认识的值当不限，照 `AdminPaymentController.parseEnum` :186-195）。htmx 请求只回 `gift-catalog-list :: rows(oob=true)`（摘要条随 oob 换），非 htmx 回整页。
 5. 空态：目录为空「还没有任何礼物，点右上角「新建礼物」开始。」；筛选无结果「没有符合筛选条件的礼物」（`.empty`）。
 6. 点行 = `data-drawer-url=/admin/gift-catalog/{id}/drawer`（同 `user-tags-list.html:55-56`）；`?open={id}` 深链兜底照 `user-tags.html:73-74`。
@@ -70,7 +70,7 @@ so that 不发版也能上新、调价、下线礼物，并控制小额送礼只
 1. 复用 `admin.tagicon.AdminTagIconService` 的校验骨架（格式白名单 :55 PNG / WebP、`MAX_BYTES` 512KB :52、字节量宽高 + 最小边 42 :94-100、OSS 公开对象上传 :102-115），**不另写第二套校验**。
 2. 服务加**向后兼容的重载**（共享件，缺省行为逐字不变）：
    - 新增 `public enum IconPurpose { TAG, GIFT }`（放 `admin.tagicon` 包），每项带 OSS 子目录（TAG = 现 `FOLDER = "tag-icon"` :58；GIFT = `"gift-icon"`）与文案键前缀（TAG = `admin.tagicon.`；GIFT = `admin.gifticon.`）；
-   - 新增 `uploadOrKeep(MultipartFile file, IconPurpose purpose)`、`specText(IconPurpose purpose)`、`iconRequiredMessage(IconPurpose purpose)`；原 `uploadOrKeep(MultipartFile)`（:77）/ `specText(String context)`（:171）/ `iconRequiredMessage()`（:155）**签名与行为不变**（内部委托 TAG），用户标签 / 内容标签两处调用方一行不改。
+   - 新增 `uploadOrKeep(MultipartFile file, IconPurpose purpose)`、`specText(IconPurpose purpose, String context)`（键 = `<前缀>spec.<context>`，礼物用 `create` / `edit` 两段；T0 核对：单参 `specText(IconPurpose)` 选不出新建 / 编辑两段文案，改为双参）、`iconRequiredMessage(IconPurpose purpose)`；原 `uploadOrKeep(MultipartFile)`（:77）/ `specText(String context)`（:171）/ `iconRequiredMessage()`（:155）**签名与行为不变**（内部委托 TAG），用户标签 / 内容标签两处调用方一行不改。
 3. 礼物版报错与规格说明只把「标签图标」改成「礼物图标」（UI L4 原话），键见 Dev Notes「文案键」：`admin.gifticon.noJpeg / heic / badType / readFailed / tooLarge / unmeasurable / tooSmall / required / uploadFailed / spec.create / spec.edit`。错误**行内**显示在 `#gift-drawer-err`，不走 toast（后台惯例）。
 4. ⚠️ **不加「正方形」校验**：epics / 架构写了「正方形」，但 `AdminTagIconService` 自 2026-09-02 起已取消正方形与最大边长要求（:41-48 注释），UI L2 / L4 的规格说明也只写「推荐 112×112；最短边 ≥ 42」。按「复用该服务的校验」实现，Completion Notes 记一句（见「待确认」1）。
 
@@ -126,18 +126,18 @@ so that 不发版也能上新、调价、下线礼物，并控制小额送礼只
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**（结论写进 Completion Notes；与本文件不符先改本文件再写码）
-  - [ ] 0.1 1.1 落地的礼物目录实体 / 仓储真实名字（1.1 story 定为 `gift.domain.GiftCatalogItem` / `GiftKind` + `gift.repository.*`）、列名与 1.1 AC1.2 一致（`for_cat/for_dog/for_other`、`kind`、`min_level`、`sort_order DEFAULT 0`、`status`、`updated_by`、表级 CHECK `ck_gift_catalog_exclusive_level`、索引 `ix_gift_catalog_online`）、`GiftTokenGenerator`
-  - [ ] 0.2 1.1 的 `PricingConfig.giftQrisMinAmount`（只有 getter，本 story 加 setter）与送礼发起读它的入口（`PlatformConfigService.pricing()`）；确认读口**每次查库无缓存**（`PlatformConfigService.java:23` 现状注释「无缓存」）
-  - [ ] 0.3 1.1 的 `GET /api/v1/gifts/catalog` 是否只取 `ONLINE`、是否每次查库；送礼发起是否校验 `ONLINE`；交付是否只读订单快照（AC6.6 / AC7.2 依赖）
-  - [ ] 0.4 `gift_orders.gift_id` 无专门索引（1.1 AC1.3 的四个索引不含它）：AC6.4 统计按礼物顺序扫可接受，不加迁移，记一句
-- [ ] **T1 权限码 + 页面目录**（AC1、AC2）：`AdminPermissions` 两码 + `GROUPS`；`AdminPageCatalog` 插 `gift-catalog` 页；三个计数 / 不预授测试改数；`AdminPageCatalogTest` 的 active 列表（:103-112）加 `"gift-catalog"`
-- [ ] **T2 图标服务重载**（AC5）：`IconPurpose` + 三个重载；原签名委托 TAG；`AdminTagIconServiceTest` 补 GIFT 用例（OSS key 前缀 `public/gift-icon/`、礼物版文案）
-- [ ] **T3 后台服务 `admin.gift.service.AdminGiftCatalogService`**：`list(filter)` / `summary()` / `priceOptions()` / `detail(id)`（含收送统计）/ `create` / `update` / `setOnline` / `qrisMin()` / `previewQrisMin` / `updateQrisMin`；校验；审计；`config_change_logs`
-- [ ] **T4 Controller `admin.gift.web.AdminGiftCatalogController`**：端点见 Dev Notes「端点一览」
-- [ ] **T5 模板**：`templates/admin/gift-catalog.html`（页 + `#confirm-host` + 刷新监听 + 深链兜底）、`fragments/gift-catalog-list.html`（`sumbar(oob)` / `rows(oob)` / `row(g, oob)`）、`fragments/drawer-gift.html`（`drawer` / `createForm` / `afterAction` / `created`）、`fragments/gift-qris-line.html`（配置行 + 行内展开）；`AdminHxEvents.GIFT_CATALOG_LIST_REFRESH`
-- [ ] **T6 审计常量 + 四份文案**（AC10、AC11）
-- [ ] **T7 测试**（见 Dev Notes「测试」）：L0 全写全跑；L1 写好能编译
+- [x] **T0 开工核对**（结论写进 Completion Notes；与本文件不符先改本文件再写码）
+  - [x] 0.1 1.1 落地的礼物目录实体 / 仓储真实名字（1.1 story 定为 `gift.domain.GiftCatalogItem` / `GiftKind` + `gift.repository.*`）、列名与 1.1 AC1.2 一致（`for_cat/for_dog/for_other`、`kind`、`min_level`、`sort_order DEFAULT 0`、`status`、`updated_by`、表级 CHECK `ck_gift_catalog_exclusive_level`、索引 `ix_gift_catalog_online`）、`GiftTokenGenerator`
+  - [x] 0.2 1.1 的 `PricingConfig.giftQrisMinAmount`（只有 getter，本 story 加 setter）与送礼发起读它的入口（`PlatformConfigService.pricing()`）；确认读口**每次查库无缓存**（`PlatformConfigService.java:23` 现状注释「无缓存」）
+  - [x] 0.3 1.1 的 `GET /api/v1/gifts/catalog` 是否只取 `ONLINE`、是否每次查库；送礼发起是否校验 `ONLINE`；交付是否只读订单快照（AC6.6 / AC7.2 依赖）
+  - [x] 0.4 `gift_orders.gift_id` 无专门索引（1.1 AC1.3 的四个索引不含它）：AC6.4 统计按礼物顺序扫可接受，不加迁移，记一句
+- [x] **T1 权限码 + 页面目录**（AC1、AC2）：`AdminPermissions` 两码 + `GROUPS`；`AdminPageCatalog` 插 `gift-catalog` 页；三个计数 / 不预授测试改数；`AdminPageCatalogTest` 的 active 列表（:103-112）加 `"gift-catalog"`
+- [x] **T2 图标服务重载**（AC5）：`IconPurpose` + 三个重载；原签名委托 TAG；`AdminTagIconServiceTest` 补 GIFT 用例（OSS key 前缀 `public/gift-icon/`、礼物版文案）
+- [x] **T3 后台服务 `admin.gift.service.AdminGiftCatalogService`**：`list(filter)` / `summary()` / `priceOptions()` / `detail(id)`（含收送统计）/ `create` / `update` / `setOnline` / `qrisMin()` / `previewQrisMin` / `updateQrisMin`；校验；审计；`config_change_logs`
+- [x] **T4 Controller `admin.gift.web.AdminGiftCatalogController`**：端点见 Dev Notes「端点一览」
+- [x] **T5 模板**：`templates/admin/gift-catalog.html`（页 + `#confirm-host` + 刷新监听 + 深链兜底）、`fragments/gift-catalog-list.html`（`sumbar(oob)` / `rows(oob)` / `row(g, oob)`）、`fragments/drawer-gift.html`（`drawer` / `createForm` / `afterAction` / `created`）、`fragments/gift-qris-line.html`（配置行 + 行内展开）；`AdminHxEvents.GIFT_CATALOG_LIST_REFRESH`
+- [x] **T6 审计常量 + 四份文案**（AC10、AC11）
+- [x] **T7 测试**（见 Dev Notes「测试」）：L0 全写全跑；L1 写好能编译
 
 ## Dev Notes
 
@@ -207,7 +207,7 @@ so that 不发版也能上新、调价、下线礼物，并控制小额送礼只
 
 | 字段 | 规则 | 文案码 |
 |---|---|---|
-| 图标（新建） | 必填；PNG / WebP；≤ 512KB；最短边 ≥ 42；能测出尺寸 | `admin.err.gift.iconRequired`（= `admin.gifticon.required`）及 `admin.gifticon.*` |
+| 图标（新建） | 必填；PNG / WebP；≤ 512KB；最短边 ≥ 42；能测出尺寸 | `admin.err.gift.iconRequired`（文案与 `admin.gifticon.required` 同值；单独成键以满足 `AdminMessagesExternalizedTest` 的「后台异常挂 admin.err.* 码」）及 `admin.gifticon.*` |
 | `nameEn` / `nameId` | trim 后非空、≤ 40 | `admin.err.gift.nameRequired` / `admin.err.gift.nameTooLong` |
 | `price` | 整数，100 ~ 100,000,000 | `admin.err.gift.priceRange` |
 | `kind` | `NORMAL` / `EXCLUSIVE`（缺省 NORMAL） | `admin.err.gift.kindInvalid` |
@@ -322,10 +322,87 @@ so that 不发版也能上新、调价、下线礼物，并控制小额送礼只
 
 ### Agent Model Used
 
+Claude (cloud dev agent)
+
 ### Debug Log References
+
+- `LANG=C.UTF-8 LC_ALL=C.UTF-8 ./mvnw -B clean package -DskipTests` → BUILD SUCCESS（含测试编译，L1 新类能编译）。
+- `LANG=C.UTF-8 LC_ALL=C.UTF-8 ./mvnw -B test -Dtest='AdminGiftCatalogServiceTest,AdminTagIconServiceTest,AdminTagEditKeepsIconTest,AdminPageCatalogTest,AdminPageCatalogAuthorityTest,AdminPermissionsTest,AdminPermissionMatrixStaticTest,AdminRoleTest,AdminPermissionWiringTest,AdminActiveKeyCatalogTest,AuditActionLabelsTest,AdminMessagesParityTest,AdminMessagesExternalizedTest,AdminNavModelTest,AdminRetiredRoutesStaticTest,AdminFragmentResponsesTest,AdminConfigServiceTest,RolePermissionResolverTest,AdminRoleServiceTest,AdminAccountRoleServiceTest,ConsultShopBoundaryTest,GiftModuleBoundaryGuardTest,GiftCatalogServiceTest,GiftSendServiceTest,GiftDeliveryServiceTest,GiftPaidHandlerTest,GiftPaymentFailedHandlerTest,GiftRefundServiceTest,GiftRefundRetryJobTest,GiftNotifyListenerTest,KeepsakePurchaseServiceTest,TailsonalityUpgradePricingTest,AiUnlockServiceTest,FreeQuotaServiceTest' -Dsurefire.failIfNoSpecifiedTests=false` → 309 tests，0 失败。
+- 首轮 `AdminActiveKeyCatalogTest` 红：Controller 里 `active` 用了常量 `ACTIVE`，守卫要求字面量 → 改为 `"gift-catalog"` 字面量后绿。
+- `bash scripts/ci/check-i18n-keys.sh`（3783 key 四包相等）、`check-admin-hardcoded-text.sh`（裸文案 0）、`check-admin-permission-consistency.sh`（权限册 80 · 零差异）、`check-flyway-versions.sh origin/main`（OK，本 story 无新迁移）全绿。
+- 模板渲染：开发期用临时 SpringTemplateEngine + WebContext 脚本直渲 `gift-catalog-list :: rows(true)`、`drawer-gift`（可编辑 / 只读两态）、`createForm`、`gift-qris-line`（两态）、`confirm-modal`，无 Thymeleaf 解析错误；脚本已删除，未入库（整页渲染由 L1 `AdminPagesRenderSmokeTest` 覆盖）。
 
 ### Completion Notes List
 
+**T0 开工核对结论**
+- 0.1 1.1 实体 / 仓储：`gift.domain.GiftCatalogItem`（`create(...)` 工厂，原只读）/ `GiftKind` / `GiftCatalogStatus`，`gift.repository.GiftCatalogRepository`（`findByStatus` / `findByPublicToken`）、`GiftOrderRepository`；列名与 `V20261018_1700` 一致（`for_cat/for_dog/for_other`、`kind`、`min_level`、`sort_order DEFAULT 0`、`status`、`updated_by`、`ck_gift_catalog_exclusive_level`、`ix_gift_catalog_online`）；`gift.service.GiftTokenGenerator` 存在。本 story 给 `GiftCatalogItem` **追加**写方法 `edit(...)` / `setStatus(...)` / `setUpdatedBy(...)`（1.1 类注释明确「后台录入与改值在 3.1 再加写方法」），既有方法与 App 侧契约不变。
+- 0.2 `PricingConfig.giftQrisMinAmount` 只有 getter（1.1）→ 本 story 加 `setGiftQrisMinAmount`；送礼发起读 `PlatformConfigService.pricing().getGiftQrisMinAmount()`，类注释「无缓存」、单行直读 → 改值立即生效。
+- 0.3 `GiftCatalogService.catalog` 只取 `findByStatus(ONLINE)` 且每次查库；`GiftSendService` 发起校验 `isOnline`（④）与 QRIS 最低金额（⑧）；交付读订单快照（`GiftDeliveryService` / `GiftPaidHandler`）→ AC6.6 / AC7.2 成立。
+- 0.4 `gift_orders.gift_id` 无专门索引：收送统计（`GiftOrderRepository.deliveredTotalsOfGift`，一条原生 SQL）顺序扫可接受，不加迁移。
+- **story 文字修订（T0 核对后先改本文件）**：① AC5.2 `specText(IconPurpose)` → `specText(IconPurpose, String context)`（单参选不出新建 / 编辑两段规格文案）；② AC3.2 / 3.3 「SQL ORDER BY / 一次 SQL 聚合」→ 一次 `findAll` + 服务层排序 / 计数（目录百级；摘要、价格下拉、表格出自同一次读取，避免可空参数在原生 SQL 里的类型推断问题）；③ 校验表 `admin.err.gift.iconRequired` 单独成键（与 `admin.gifticon.required` 同文案），因 `AdminMessagesExternalizedTest` 要求后台异常挂 `admin.err.*` 码且死键检查要求该键在 Java 里被引用。Dev Notes 表中的 file:line 以本分支实际为准（`AdminPermissions` / `AdminPageCatalog` 行号有偏移，常量与位置语义一致）。
+
+**实现要点**
+- 权限：`GIFT_CATALOG_VIEW = "gift.catalog_view"` / `GIFT_CATALOG_EDIT = "gift.catalog_edit"` 加在 `OPS_NOTIFY_SEND` 之后，分别进 view / edit 组末尾；`ALL` 78 → 80；不预授任何预置角色（`AdminRole` / `admin_role_permissions` 未动，`OPS_MANAGER` 仍 41）。
+- 页面目录：`gift-catalog` 插在 `algo-params` 与 `share-reward` 之间，`navCodes = VIEW, EDIT` 与 Controller `VIEW_AUTH` 逐字同集。
+- 图标：`IconPurpose { TAG("tag-icon","admin.tagicon."), GIFT("gift-icon","admin.gifticon.") }`；三个重载；原单参方法签名与行为不变（内部委托 TAG），用户标签 / 内容标签调用方未改；**不加正方形校验**（待确认 1）。
+- 后台服务 `AdminGiftCatalogService`：校验先于上传（不合规不留孤儿图标）；新建 `public_token` 经 `GiftTokenGenerator`、`status = ONLINE`、`updated_by = adminId`；编辑无真变化不写库不写审计、换图只记 `icon changed`；上下线幂等；QRIS 预检与保存同一校验方法，保存同事务写 `pricing_config` + `config_change_logs(PRICING, gift_qris_min_amount)` + 审计 `GIFT_QRIS_MIN_UPDATED`（`pricing_config` / `gift_qris_min_amount`）。未改 `AdminConfigService`、`PaymentIntentService.createIntent`、送礼发起 / 交付 / 退回逻辑；`PawCoinWalletService` 零改动；无新迁移、未碰任何 CHECK。
+- 类型改专属 / 普通只影响之后的新发起（交付不再校验等级，AD-7）。
+- 模板：页 `gift-catalog.html`（`#confirm-host`、刷新监听 `hx-include="closest form"` 保留筛选、`?open=` 深链兜底、`?create=1`）；`gift-catalog-list`（sumbar / rows / row）；`drawer-gift`（drawer / createForm / created / afterAction + 类型切换与「未改不可保存」脚本，`disabled` 由脚本加）；`gift-qris-line`（line / saved）。admin.css 只追加 `.gift-table .num` / `.gift-cfgline*` / `.gift-kv` 几条。
+- 文案：95 个新键四份 messages 同步（`messages.properties` = en）。
+
+**L1/L2 待本地验收**（云端无 Docker，未跑）
+- L1：`AdminGiftCatalogIntegrationTest`（新建 → App 目录可见 → 下线不可见 + 审计幂等；JPG 422 含「礼物图标」、专属缺等级 422；改价后 PENDING QRIS 订单交付仍按 Rp5,000 快照；QRIS 预检弹层含 `Rp10,000 → Rp15,000`、保存后 15,000 + `config_change_logs` +1、Rp10,000 送礼 QRIS → `gift-qris-below-min`、同额 PAWCOIN_TOPUP QRIS 照常发起、同值 422；VIEW 用户页面无「新建礼物」、配置行只读、抽屉只读、所有写端点与新建抽屉 403；无权限 403）。
+- L1：`AdminPagesRenderSmokeTest.everySidebarLinkMatchesItsPageGate`、`AdminNavPermissionMatrixTest`、`AdminPageCatalogCoverageTest`、`AdminRoleSeedParityTest`（已补两码不预授断言）、`AdminUserTagIntegrationTest` / `AdminUserTagDrawerIntegrationTest`（图标服务重载回归）；全量 `mvn -B clean package`（`DB_NAME=<新建空库>`，先 flush Redis DB0）。
+- L2：本地后台人工过 L1 ~ L7（新建 / 编辑 / 换图 / 下线原生 confirm / 重新上线 / QRIS 行内展开 → 弹层 → 保存 toast / 只读账号），中 / 英 / 印尼三语切换；类型单选切换最低等级显隐；未修改时保存钮置灰。
+- L1 测试数据注意：`AdminGiftCatalogIntegrationTest` 每个用例前后把 `pricing_config.gift_qris_min_amount` 复位为 10000（全库单行，避免影响其他送礼用例）。
+
+**待确认**
+1. 图标「正方形」：epics / 架构写「正方形」，复用的 `AdminTagIconService` 2026-09-02 已取消正方形要求、UI 稿也未要求 → 按推荐**不校验正方形**（只保留 PNG / WebP、≤512KB、最短边 ≥42）。
+2. QRIS 新金额输入位置：UI L6 画在弹层里；共享件 `AdminConfirmModal` 无通用输入槽 → 按推荐输入放配置行行内展开，弹层只读复述服务端算好的新旧值，未改共享件。
+3. 最低等级上限：本分支无 ① 等级表，用 `GiftCatalogRules.MAX_LEVEL_FALLBACK = 20`（类注释已写「4.1 对齐时改读 ① 等级表最高级」）。
+4. 收送统计 `{0}` / `{1}` 经 MessageFormat 按界面语言格式化数字（印尼语界面千分位为点号）；金额（Rp）一律千分位逗号（后台惯例）。如需统计数字也固定逗号，另行确认。
+5. `scripts/ci/admin-write-ops-allowlist.txt`（V1.3.0 基线 diff 白名单）未登记新端点：该白名单自 V1.3.4 起未随新页维护（ops-popups / ops-notifications 均未登记），本 story 未擅自补；若 CI 仍以 V1.3.0 基线跑 diff，需编排者决定是否登记。
+
+**与 ① / ② 合并**：见 Dev Notes「与 ① / ② 合并时会冲突的点」——`AdminPageCatalog` 顺序 `algo-params → growth → gift-catalog`；权限计数测试与记账注释按并集重写；`AuditActions` / 四份 messages / `AdminHxEvents` / `admin.css` 末尾纯追加。
+
 ### File List
 
+新增
+- `petgo-backend/src/main/java/com/tailtopia/admin/gift/service/AdminGiftCatalogService.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/gift/service/GiftCatalogRules.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/gift/web/AdminGiftCatalogController.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/gift/dto/GiftCatalogRow.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/gift/dto/GiftCatalogSummary.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/gift/dto/GiftCatalogForm.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/tagicon/IconPurpose.java`
+- `petgo-backend/src/main/resources/templates/admin/gift-catalog.html`
+- `petgo-backend/src/main/resources/templates/admin/fragments/gift-catalog-list.html`
+- `petgo-backend/src/main/resources/templates/admin/fragments/drawer-gift.html`
+- `petgo-backend/src/main/resources/templates/admin/fragments/gift-qris-line.html`
+- `petgo-backend/src/test/java/com/tailtopia/admin/gift/service/AdminGiftCatalogServiceTest.java`（L0）
+- `petgo-backend/src/test/java/com/tailtopia/admin/gift/AdminGiftCatalogIntegrationTest.java`（L1）
+
+修改
+- `petgo-backend/src/main/java/com/tailtopia/admin/account/domain/AdminPermissions.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/shared/AdminPageCatalog.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/audit/service/AuditActions.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/shared/web/AdminHxEvents.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/tagicon/AdminTagIconService.java`
+- `petgo-backend/src/main/java/com/tailtopia/config/domain/PricingConfig.java`
+- `petgo-backend/src/main/java/com/tailtopia/gift/domain/GiftCatalogItem.java`
+- `petgo-backend/src/main/java/com/tailtopia/gift/repository/GiftOrderRepository.java`
+- `petgo-backend/src/main/resources/i18n/messages.properties` / `messages_en.properties` / `messages_id.properties` / `messages_zh_CN.properties`
+- `petgo-backend/src/main/resources/static/admin/admin.css`
+- `petgo-backend/src/test/java/com/tailtopia/admin/account/domain/AdminPermissionsTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/admin/account/domain/AdminRoleTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/admin/roles/AdminRoleSeedParityTest.java`（L1）
+- `petgo-backend/src/test/java/com/tailtopia/admin/shared/AdminPageCatalogTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/admin/shared/AdminPermissionMatrixStaticTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/admin/tagicon/AdminTagIconServiceTest.java`
+- `_bmad-output/implementation-artifacts/v1.4.0/3-1-后台礼物目录与qris最低金额.md`
+- `_bmad-output/implementation-artifacts/v1.4.0/sprint-status-v1.4.0-gift.yaml`
+
 ### Change Log
+
+- 2026-10-18：实现 Story 3.1（后台礼物目录 + 送礼 QRIS 最低金额）：权限两码（78 → 80，不预授）、页面目录、图标服务 `IconPurpose` 重载、后台服务 / Controller / 四个模板、审计 5 常量、95 个四语文案；L0 309 tests 全绿，CI 文案 / 权限 / flyway 脚本全绿；L1 / L2 待本地验收。T0 核对后修订本文件 AC3.2 / 3.3 / AC5.2 / 校验表三处。
+- 2026-10-18：bmad-code-review 对抗式复审（权限 / CSRF / 审计 / 服务端校验与 DB CHECK / 图标校验与 OSS 路径 / 下线与改价快照 / QRIS 预检-确认 / 模板转义 / 回归）：无 CONFIRMED 缺陷，未改代码；PLAUSIBLE 项（`pricing_config` 无行锁 / 无 `@Version` 的并发改值、模板 B 筛选栏在摘要条之上与 UI L1 顺序不同、QRIS 预检 422 后错误槽残留）留待本地 L2 判断。L0 重跑全绿。

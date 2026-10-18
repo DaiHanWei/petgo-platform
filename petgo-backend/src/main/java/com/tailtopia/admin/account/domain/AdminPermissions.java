@@ -236,6 +236,12 @@ public final class AdminPermissions {
     /** 新建 / 取消系统通知发送（AB-31；发送与查看分权，一次可触达全量用户）。 */
     public static final String OPS_NOTIFY_SEND = "ops_notify.send";
 
+    // V1.4.0 ③ AB-35，不预授 —— 礼物目录（G_CONFIG，照用户标签页）。超管隐式拥有，需要时在角色页勾选。
+    /** 查看礼物目录页（列表 / 抽屉 / QRIS 最低金额当前值）。 */
+    public static final String GIFT_CATALOG_VIEW = "gift.catalog_view";
+    /** 编辑礼物目录：新建 / 编辑 / 上下线礼物、改送礼 QRIS 最低金额（写审计）。 */
+    public static final String GIFT_CATALOG_EDIT = "gift.catalog_edit";
+
     // 兽医分成月结对账（V1.1 Epic 9，Story 9-5）
     /** 月结对账查看。 */
     public static final String SETTLEMENT_VIEW = "settlement.view";
@@ -328,7 +334,7 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
                     SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW,
-                    OPS_NOTIFY_VIEW)),
+                    OPS_NOTIFY_VIEW, GIFT_CATALOG_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
@@ -343,7 +349,7 @@ public final class AdminPermissions {
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
                     SHOP_ORDER_FULFILL,
                     PLACE_MANAGE, COMMENT_VIRTUAL_POST,
-                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND)));
+                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND, GIFT_CATALOG_EDIT)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。

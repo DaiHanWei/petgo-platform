@@ -256,6 +256,18 @@ public final class AuditActions {
     /** 开封判定判例沉淀（AB-12D）。⚠️ 一致性工具，非风控工具（SPEC-24）。 */
     public static final String SHOP_RETURN_PRECEDENT_ADDED = "SHOP_RETURN_PRECEDENT_ADDED";
 
+    // ===== 礼物目录（V1.4.0 ③ gift Story 3.1，AB-35）=====
+    /** 新建礼物。摘要记名称 / 价格 / 类型 / 等级 / 物种 / 排序（不记图标 URL）。 */
+    public static final String GIFT_CATALOG_CREATED = "GIFT_CATALOG_CREATED";
+    /** 编辑礼物。摘要记改前 → 改后（换图只记 {@code icon changed}）；无真变化不写。 */
+    public static final String GIFT_CATALOG_UPDATED = "GIFT_CATALOG_UPDATED";
+    /** 下线礼物（只下线不物理删除，已收到的按订单快照照常展示）。 */
+    public static final String GIFT_CATALOG_OFFLINED = "GIFT_CATALOG_OFFLINED";
+    /** 重新上线礼物。 */
+    public static final String GIFT_CATALOG_ONLINED = "GIFT_CATALOG_ONLINED";
+    /** 改送礼 QRIS 最低金额（{@code pricing_config.gift_qris_min_amount}，只对送礼生效）。 */
+    public static final String GIFT_QRIS_MIN_UPDATED = "GIFT_QRIS_MIN_UPDATED";
+
     private AuditActions() {
     }
 }

@@ -16,7 +16,8 @@ import java.time.Instant;
 /**
  * 礼物目录行（V1.4.0 gift Story 1.1 · AD-1 · 表 {@code gift_catalog}）。只下线不物理删除。
  *
- * <p>本 story 只读（App 目录 / 发起送礼）；后台录入与改值在 Story 3.1（届时再加写方法）。
+ * <p>App 侧只读（目录 / 发起送礼）；后台录入与改值在 Story 3.1（{@link #edit} / {@link #setStatus}）——
+ * 改价 / 改名 / 换图 / 下线都只动本行，不碰任何订单与礼物墙（下单时已快照，AD-2 / AD-3）。
  * {@link #forCat} / {@link #forDog} / {@link #forOther} 三者皆 false = 通用礼物。
  */
 @Entity(name = "GiftCatalogItem")
@@ -100,6 +101,41 @@ public class GiftCatalogItem {
         g.sortOrder = sortOrder;
         g.status = GiftCatalogStatus.ONLINE;
         return g;
+    }
+
+    /**
+     * 后台编辑（V1.4.0 gift Story 3.1 · AC6）。{@code iconUrl} 为 null = 保留原图标。
+     * 种类与等级的组合规则同 {@link #create}（与库级 CHECK 同口径）。
+     */
+    public void edit(String nameEn, String nameId, String iconUrl, long price, boolean forCat, boolean forDog,
+            boolean forOther, GiftKind kind, Integer minLevel, int sortOrder, Long updatedBy) {
+        if ((kind == GiftKind.EXCLUSIVE) != (minLevel != null) || (minLevel != null && minLevel < 1)) {
+            throw new IllegalArgumentException("专属礼物必须带 ≥1 的解锁等级，普通礼物不得带等级");
+        }
+        this.nameEn = nameEn;
+        this.nameId = nameId;
+        if (iconUrl != null) {
+            this.iconUrl = iconUrl;
+        }
+        this.price = price;
+        this.forCat = forCat;
+        this.forDog = forDog;
+        this.forOther = forOther;
+        this.kind = kind;
+        this.minLevel = minLevel;
+        this.sortOrder = sortOrder;
+        this.updatedBy = updatedBy;
+    }
+
+    /** 上 / 下线（Story 3.1 · AC7）。只下线不物理删除。 */
+    public void setStatus(GiftCatalogStatus status, Long updatedBy) {
+        this.status = status;
+        this.updatedBy = updatedBy;
+    }
+
+    /** 记录最近一次修改的后台账号（新建时由后台服务写入）。 */
+    public void setUpdatedBy(Long updatedBy) {
+        this.updatedBy = updatedBy;
     }
 
     @PrePersist

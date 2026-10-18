@@ -59,4 +59,15 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
              WHERE id = :id AND status = 'PENDING'
             """, nativeQuery = true)
     int markUndeliveredIfPending(@Param("id") long id, @Param("reason") String reason);
+
+    /**
+     * 后台礼物抽屉的收送统计（V1.4.0 gift Story 3.1 · AC6.4）：该礼物 {@code DELIVERED} 订单的数量之和与订单数，
+     * 一行两列 {@code [received, sent]}。只读；{@code gift_id} 无专门索引，礼物百级 / 订单千级顺序扫可接受。
+     */
+    @Query(value = """
+            SELECT COALESCE(SUM(quantity), 0) AS received, COUNT(*) AS sent
+              FROM gift_orders
+             WHERE gift_id = :giftId AND status = 'DELIVERED'
+            """, nativeQuery = true)
+    List<Object[]> deliveredTotalsOfGift(@Param("giftId") long giftId);
 }

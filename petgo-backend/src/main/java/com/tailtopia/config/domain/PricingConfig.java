@@ -52,7 +52,7 @@ public class PricingConfig {
     private long tailsonalityMatchUnlockPrice;
 
     /** FR-148 送礼 · QRIS 单笔最低金额（IDR，≥100，默认 10000；V1.4.0 gift Story 1.1）。只在送礼服务发起 QRIS 前读，
-     * 不进通用 {@code createIntent}。后台改值（setter）留给 Story 3.1。 */
+     * 不进通用 {@code createIntent}。后台改值在 Story 3.1（{@code AdminGiftCatalogService}）。 */
     @Column(name = "gift_qris_min_amount", nullable = false)
     private long giftQrisMinAmount;
 
@@ -153,5 +153,10 @@ public class PricingConfig {
 
     public long getGiftQrisMinAmount() {
         return giftQrisMinAmount;
+    }
+
+    /** 只由后台礼物目录页改（V1.4.0 gift Story 3.1 · AC8）；≥100 由服务层先拦，库级 CHECK 兜底。 */
+    public void setGiftQrisMinAmount(long v) {
+        this.giftQrisMinAmount = v;
     }
 }

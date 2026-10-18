@@ -247,6 +247,9 @@ public final class AdminPageCatalog {
                     List.of(OPS_NOTIFY_VIEW), List.of(OPS_NOTIFY_SEND), List.of()).nav("admin.nav.opsNotifications", "ops-notifications", OPS_NOTIFY_VIEW, OPS_NOTIFY_SEND),
             page("algo-params", G_CONFIG, "/admin/algo-params",
                     List.of(CONFIG_ALGO_PARAM_VIEW), List.of(CONFIG_ALGO_PARAM_EDIT), List.of()).nav("admin.nav.algoParams", "algo-params", CONFIG_ALGO_PARAM_VIEW),
+            // V1.4.0 ③ AB-35：礼物目录（照用户标签页；顶部送礼 QRIS 最低金额）。与 ① 合并时顺序 algo-params → growth → gift-catalog。
+            page("gift-catalog", G_CONFIG, "/admin/gift-catalog",
+                    List.of(GIFT_CATALOG_VIEW), List.of(GIFT_CATALOG_EDIT), List.of()).nav("admin.nav.giftCatalog", "gift-catalog", GIFT_CATALOG_VIEW, GIFT_CATALOG_EDIT),
             page("share-reward", G_CONFIG, null,
                     List.of(CONFIG_SHARE_REWARD_VIEW), List.of(CONFIG_SHARE_REWARD_EDIT), List.of()),
             page("audit-logs", G_CONFIG, "/admin/audit-logs",

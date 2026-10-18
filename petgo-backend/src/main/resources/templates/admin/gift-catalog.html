@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  礼物目录（V1.4.0 ③ gift Story 3.1 · AB-35，UI 稿 L1 ~ L7；⚙️ 配置与安全组）。页面形态照「用户标签」页（模板 B）：
+  标题行（+「新建礼物」）→ 说明 → 送礼 QRIS 最低金额配置行 → 摘要条三格 → 筛选栏 → 表格；点行开 480 抽屉，行内无按钮。
+  🔴 只下线不物理删除：没有删除按钮、没有删除端点（AD-1）。
+  🔴 改价 / 改名 / 换图 / 下线都不碰订单与礼物墙（下单快照，AD-2 / AD-3）。
+  ⚠️ 下线用浏览器原生 confirm（抽屉底部 data-confirm）；QRIS 最低金额用服务端确认弹层（#confirm-host，decision-log ③）。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.v140.gift.title}">礼物目录</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='gift'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.v140.gift.title}">礼物目录</h1>
+            <!--/* 只读用户不渲染（L7，用户标签现状）；sec:authorize 与 Controller EDIT_AUTH 逐字一致 */-->
+            <button type="button" class="btn btn-primary btn-sm"
+                    th:attr="data-drawer-open=@{/admin/gift-catalog/new/drawer},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    data-drawer-res="gift"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('gift.catalog_edit')"
+                    th:text="#{admin.v140.gift.new}">＋ 新建礼物</button>
+        </div>
+        <p class="muted" th:text="#{admin.v140.gift.subtitle}">App 送礼面板里的礼物。</p>
+
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!--/* 送礼 QRIS 最低金额配置行（AC8 / UI L1 · L6）：「修改」行内展开 → 服务端确认弹层 */-->
+        <div th:replace="~{admin/fragments/gift-qris-line :: line}"></div>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::gift-filters}, ~{::gift-summary}, ~{::gift-table}, ~{::gift-drawer})}">
+            <form th:fragment="gift-filters" class="filter-bar" data-autosubmit th:action="@{/admin/gift-catalog}" method="get"
+                  th:attr="hx-get=@{/admin/gift-catalog}" hx-target="#gift-rows" hx-swap="innerHTML" hx-push-url="true">
+                <!--/* 抽屉内新建 / 编辑 / 上下线成功 → HX-Trigger admin:gift-catalog-list-refresh：
+                       🔴 必须 hx-include 筛选表单（closest form），否则刷新会丢筛选（用户标签页没有筛选，不能照抄静态 URL）。 */-->
+                <span hidden data-gift-refresh th:attr="hx-get=@{/admin/gift-catalog}" hx-include="closest form"
+                      hx-trigger="admin:gift-catalog-list-refresh from:body" hx-target="#gift-rows" hx-swap="innerHTML"></span>
+                <label class="field">
+                    <span th:text="#{admin.v140.gift.col.price}">价格</span>
+                    <select name="price" class="sel">
+                        <option value="" th:selected="${fPrice == null}" th:text="#{admin.v140.gift.filter.allPrices}">全部价格</option>
+                        <option th:each="p : ${priceOptions}" th:value="${p}" th:selected="${fPrice == p}"
+                                th:text="'Rp' + ${#numbers.formatInteger(p, 1, 'COMMA')}">Rp1,000</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.v140.gift.col.kind}">类型</span>
+                    <select name="kind" class="sel">
+                        <option value="" th:selected="${fKind == null}" th:text="#{admin.v140.gift.filter.allKinds}">全部类型</option>
+                        <option th:each="k : ${kinds}" th:value="${k}" th:selected="${fKind == k}"
+                                th:text="#{'admin.v140.gift.kind.' + ${k}}">普通</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.v140.gift.col.status}">状态</span>
+                    <select name="status" class="sel">
+                        <option value="" th:selected="${fStatus == null}" th:text="#{admin.v140.gift.filter.allStatuses}">全部状态</option>
+                        <option th:each="s : ${statuses}" th:value="${s}" th:selected="${fStatus == s}"
+                                th:text="#{'admin.v140.gift.status.' + ${s}}">在线</option>
+                    </select>
+                </label>
+            </form>
+
+            <div th:fragment="gift-summary" th:replace="~{admin/fragments/gift-catalog-list :: sumbar(false)}"></div>
+
+            <div th:fragment="gift-table" id="gift-rows">
+                <div th:replace="~{admin/fragments/gift-catalog-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="gift-drawer" class="drawer-title" th:text="#{admin.v140.gift.drawer.detailTitle}">礼物详情</div>
+        </div>
+
+        <!--/* ?open=<id> 深链兜底（admin-drawer.js 先按当前页找行，找不到就用这里给的 URL）。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="gift"
+              th:attr="data-drawer-deeplink=@{/admin/gift-catalog/{id}/drawer(id=${open})}"></span>
+
+        <!--/* 服务端确认弹层宿主（QRIS 最低金额 · UI L6；fragments/confirm-modal.html 以 HX-Retarget 换进来） */-->
+        <div id="confirm-host"></div>
+    </div>
+</div>
+</body>
+</html>
