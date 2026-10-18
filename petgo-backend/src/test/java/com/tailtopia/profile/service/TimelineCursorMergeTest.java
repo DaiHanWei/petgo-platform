@@ -41,7 +41,7 @@ class TimelineCursorMergeTest {
     private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityTimeline =
             Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityTimelineQuery.class);
 
-    private ProfileService profileService;
+    private PetResolver petResolver;
     private ContentService contentService;
     private HealthEventTimelineSource health;
     @SuppressWarnings("unchecked")
@@ -59,15 +59,13 @@ class TimelineCursorMergeTest {
 
     @BeforeEach
     void setUp() {
-        profileService = Mockito.mock(ProfileService.class);
+        petResolver = Mockito.mock(PetResolver.class);
         contentService = Mockito.mock(ContentService.class);
         health = Mockito.mock(HealthEventTimelineSource.class);
         MilestoneService milestoneService = Mockito.mock(MilestoneService.class);
         com.tailtopia.profile.repository.HealthRecordRepository healthRecords =
                 Mockito.mock(com.tailtopia.profile.repository.HealthRecordRepository.class);
-
-        when(profileService.hasProfile(1L)).thenReturn(true);
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet()));
+        when(petResolver.resolve(1L, null)).thenReturn(pet());
         when(healthProvider.getIfAvailable()).thenReturn(health);
 
         // 假 content 源：复刻 ContentPostRepository 两路查询 + 归并的语义。
@@ -114,7 +112,7 @@ class TimelineCursorMergeTest {
         when(milestoneCompletions.findTimelineViewsBefore(anyLong(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of());
         when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
-        service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
+        service = new TimelineService(petResolver, contentService, healthProvider, milestoneService,
                 // V1.3.0 Story 1.4：档案统计栏顺带下发的「未庆祝」角标数；本类不验它，给 mock（默认 0）。
                 Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, milestoneCompletions, idCards,

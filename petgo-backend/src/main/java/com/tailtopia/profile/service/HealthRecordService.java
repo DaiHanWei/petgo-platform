@@ -4,7 +4,6 @@ import com.tailtopia.profile.domain.ArchiveDecision;
 import com.tailtopia.profile.domain.HealthEvent;
 import com.tailtopia.profile.domain.HealthRecord;
 import com.tailtopia.profile.domain.HealthRecordType;
-import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.HealthListItemResponse;
 import com.tailtopia.profile.dto.HealthRecordCreateRequest;
 import com.tailtopia.profile.dto.HealthRecordResponse;
@@ -12,7 +11,6 @@ import com.tailtopia.profile.dto.HealthRecordUpdateRequest;
 import com.tailtopia.profile.event.HealthRecordCreatedEvent;
 import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.profile.repository.HealthRecordRepository;
-import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -31,14 +29,14 @@ public class HealthRecordService {
 
     private final HealthRecordRepository records;
     private final HealthEventRepository healthEvents;
-    private final PetProfileRepository profiles;
+    private final PetResolver petResolver;
     private final ApplicationEventPublisher events;
 
     public HealthRecordService(HealthRecordRepository records, HealthEventRepository healthEvents,
-            PetProfileRepository profiles, ApplicationEventPublisher events) {
+            PetResolver petResolver, ApplicationEventPublisher events) {
         this.records = records;
         this.healthEvents = healthEvents;
-        this.profiles = profiles;
+        this.petResolver = petResolver;
         this.events = events;
     }
 
@@ -48,7 +46,13 @@ public class HealthRecordService {
      */
     @Transactional(readOnly = true)
     public List<HealthListItemResponse> timeline(long ownerId) {
-        long petId = requirePet(ownerId);
+        return timeline(ownerId, null);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物（null = 默认宠物）的健康时间线。 */
+    @Transactional(readOnly = true)
+    public List<HealthListItemResponse> timeline(long ownerId, Long petIdOrNull) {
+        long petId = requirePet(ownerId, petIdOrNull);
         List<HealthListItemResponse> merged = new ArrayList<>();
         for (HealthRecord r : records.findByPetProfileIdOrderByEventDateDescIdDesc(petId)) {
             merged.add(HealthListItemResponse.ofRecord(r));
@@ -68,7 +72,12 @@ public class HealthRecordService {
 
     @Transactional
     public HealthRecordResponse create(long ownerId, HealthRecordCreateRequest req) {
-        long petId = requirePet(ownerId);
+        return create(ownerId, null, req);
+    }
+
+    @Transactional
+    public HealthRecordResponse create(long ownerId, Long petIdOrNull, HealthRecordCreateRequest req) {
+        long petId = requirePet(ownerId, petIdOrNull);
         HealthRecordType type = parseType(req.type());
         String customName = blankToNull(req.customName());
         requireCustomName(type, customName);
@@ -83,7 +92,13 @@ public class HealthRecordService {
 
     @Transactional
     public HealthRecordResponse update(long ownerId, long recordId, HealthRecordUpdateRequest req) {
-        long petId = requirePet(ownerId);
+        return update(ownerId, null, recordId, req);
+    }
+
+    /** 记录须属于所选宠物（{@code findByIdAndPetProfileId}），用 A 的 petId 改 B 的记录 → 404。 */
+    @Transactional
+    public HealthRecordResponse update(long ownerId, Long petIdOrNull, long recordId, HealthRecordUpdateRequest req) {
+        long petId = requirePet(ownerId, petIdOrNull);
         HealthRecord r = records.findByIdAndPetProfileId(recordId, petId)
                 .orElseThrow(() -> AppException.notFound("健康记录不存在"));
         if (req.type() != null) {
@@ -107,16 +122,19 @@ public class HealthRecordService {
 
     @Transactional
     public void delete(long ownerId, long recordId) {
-        long petId = requirePet(ownerId);
+        delete(ownerId, null, recordId);
+    }
+
+    @Transactional
+    public void delete(long ownerId, Long petIdOrNull, long recordId) {
+        long petId = requirePet(ownerId, petIdOrNull);
         HealthRecord r = records.findByIdAndPetProfileId(recordId, petId)
                 .orElseThrow(() -> AppException.notFound("健康记录不存在"));
         records.delete(r);
     }
 
-    private long requirePet(long ownerId) {
-        return profiles.findByOwnerId(ownerId)
-                .map(PetProfile::getId)
-                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    private long requirePet(long ownerId, Long petId) {
+        return petResolver.resolve(ownerId, petId).getId();
     }
 
     private static HealthRecordType parseType(String raw) {

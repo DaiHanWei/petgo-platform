@@ -32,13 +32,13 @@ class HealthRecordServiceTest {
     private final PetProfileRepository profiles = mock(PetProfileRepository.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final HealthRecordService service =
-            new HealthRecordService(records, healthEvents, profiles, events);
+            new HealthRecordService(records, healthEvents, new PetResolver(profiles), events);
 
     @BeforeEach
     void setUp() {
         PetProfile pet = mock(PetProfile.class);
         when(pet.getId()).thenReturn(5L);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(pet));
+        when(profiles.findDefault(7L)).thenReturn(Optional.of(pet));
     }
 
     private static HealthRecordCreateRequest req(String type, String customName) {
@@ -47,7 +47,7 @@ class HealthRecordServiceTest {
 
     @Test
     void createNoProfile404() {
-        when(profiles.findByOwnerId(9L)).thenReturn(Optional.empty());
+        when(profiles.findDefault(9L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.create(9L, req("VACCINE", null)))
                 .isInstanceOf(AppException.class);
         verify(records, never()).save(any());
@@ -103,5 +103,43 @@ class HealthRecordServiceTest {
         when(records.findByIdAndPetProfileId(99L, 5L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.delete(7L, 99L)).isInstanceOf(AppException.class);
         verify(records, never()).delete(any());
+    }
+
+    // ---------- V1.4.0 multi-pet：按 petId 寻址（AC5） ----------
+
+    @Test
+    void petIdAEditingBsRecord404() {
+        // A=5（默认，setUp 已备）、B=6；记录 77 属于 B。用 petId=A 改 / 删 → 按 (77, A) 查不到 → 404。
+        PetProfile a = mock(PetProfile.class);
+        when(a.getId()).thenReturn(5L);
+        when(profiles.findByIdAndOwnerId(5L, 7L)).thenReturn(Optional.of(a));
+        when(records.findByIdAndPetProfileId(77L, 5L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.update(7L, 5L, 77L,
+                new HealthRecordUpdateRequest(null, null, null, null, "x")))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.delete(7L, 5L, 77L)).isInstanceOf(AppException.class);
+        verify(records, never()).save(any());
+        verify(records, never()).delete(any());
+    }
+
+    @Test
+    void createWithPetIdBWritesToB() {
+        PetProfile b = mock(PetProfile.class);
+        when(b.getId()).thenReturn(6L);
+        when(profiles.findByIdAndOwnerId(6L, 7L)).thenReturn(Optional.of(b));
+        HealthRecord saved = mock(HealthRecord.class);
+        when(saved.getId()).thenReturn(1L);
+        when(saved.getType()).thenReturn(HealthRecordType.VACCINE);
+        when(records.save(any())).thenReturn(saved);
+        service.create(7L, 6L, req("VACCINE", null));
+        ArgumentCaptor<HealthRecord> cap = ArgumentCaptor.forClass(HealthRecord.class);
+        verify(records).save(cap.capture());
+        assertThat(cap.getValue().getPetProfileId()).isEqualTo(6L);
+    }
+
+    @Test
+    void foreignPetId404OnList() {
+        when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.timeline(7L, 99L)).isInstanceOf(AppException.class);
     }
 }

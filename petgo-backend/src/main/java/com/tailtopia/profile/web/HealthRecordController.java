@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,6 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>owner 取自 JWT，绝不信任客户端传入。{@code {id}} 仅在鉴权 owner 作用域内可寻址（记录须归属当前用户
  * 宠物，否则 404 防枚举）——单宠物 owner 子资源，不跨用户枚举出数据。无档案 → 404。
+ *
+ * <p>V1.4.0 multi-pet：各端点接受可选 {@code ?petId=}（不传 = 默认宠物）；记录须属于所选宠物，否则 404。
  */
 @RestController
 @RequestMapping("/api/v1/pet-profiles/me/health-records")
@@ -47,31 +50,35 @@ public class HealthRecordController {
 
     /** 健康时间线混排（Story 7.2）：结构化记录（editable）+ 问诊存档（只读）按 event_date 倒序。无档案 → 404。 */
     @GetMapping
-    public List<HealthListItemResponse> list(@AuthenticationPrincipal Jwt jwt) {
-        return service.timeline(currentUserId(jwt));
+    public List<HealthListItemResponse> list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        return service.timeline(currentUserId(jwt), petId);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public HealthRecordResponse create(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody HealthRecordCreateRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:health-record:write:" + ownerId, WRITE_LIMIT, WINDOW);
-        return service.create(ownerId, req);
+        return service.create(ownerId, petId, req);
     }
 
     @PatchMapping("/{id}")
     public HealthRecordResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+            @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody HealthRecordUpdateRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:health-record:write:" + ownerId, WRITE_LIMIT, WINDOW);
-        return service.update(ownerId, id, req);
+        return service.update(ownerId, petId, id, req);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        service.delete(currentUserId(jwt), id);
+    public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        service.delete(currentUserId(jwt), petId, id);
     }
 
     private static long currentUserId(Jwt jwt) {

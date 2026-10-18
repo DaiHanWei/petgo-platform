@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -33,9 +34,12 @@ public class PetPassportController {
     private final PetPassportService passports;
     private final PassportSnapshotService snapshots;
     private final RedisRateLimiter rateLimiter;
+    /** V1.4.0 multi-pet：按宠物端点的归属校验（不属于本人 → 404）。 */
+    private final com.tailtopia.profile.service.PetResolver petResolver;
 
     public PetPassportController(PetPassportService passports, PassportSnapshotService snapshots,
-            RedisRateLimiter rateLimiter) {
+            RedisRateLimiter rateLimiter, com.tailtopia.profile.service.PetResolver petResolver) {
+        this.petResolver = petResolver;
         this.passports = passports;
         this.snapshots = snapshots;
         this.rateLimiter = rateLimiter;
@@ -51,23 +55,34 @@ public class PetPassportController {
      * <p>无宠物档案 → 404 {@code not-found}（与时间线 {@code requireProfile} 同口径）。
      */
     @GetMapping("/api/v1/pet-profiles/me/passport")
-    public PetPassportResponse passport(@AuthenticationPrincipal Jwt jwt) {
-        return passports.pageFor(currentUserId(jwt));
+    public PetPassportResponse passport(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
+        return passports.pageFor(userId);
     }
 
     /** 发起「当前版本」快照购买（Story 3.4 · AC3）：无章 422、已买 409；响应带 {@code snapshotToken}。 */
     @PostMapping(SNAPSHOTS)
     public PassportSnapshotPurchaseResponse startSnapshot(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody KeepsakePayRequest req) {
         long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
         rateLimiter.check("rl:passport:snapshot:" + userId, SNAPSHOT_LIMIT, SNAPSHOT_WINDOW);
         return snapshots.start(userId, req.channel());
     }
 
     /** 已购版本（Story 3.4 · AC7.1）：只列已付，按 paidAt 倒序。 */
     @GetMapping(SNAPSHOTS)
-    public PassportSnapshotListResponse listSnapshots(@AuthenticationPrincipal Jwt jwt) {
-        return snapshots.list(currentUserId(jwt));
+    public PassportSnapshotListResponse listSnapshots(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
+        return snapshots.list(userId);
     }
 
     /** 回看（Story 3.4 · AC7.2）：非本人 / 未付 / 不存在 → 404。 */

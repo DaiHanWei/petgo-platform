@@ -39,12 +39,16 @@ public class ProfileService {
     private final ApplicationEventPublisher events;
     /** V1.3.2 Story 3.3：档案响应带角色小标（tailsonality 只读口，只依赖自己的仓库，无循环）。 */
     private final com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges;
+    /** V1.4.0 multi-pet：「我的宠物」只经 {@link PetResolver} 取（AD-2）。 */
+    private final PetResolver petResolver;
 
     public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
             MilestoneService milestoneService, ProfileDeletionService profileDeletion,
             MediaDeletionService mediaDeletion, ApplicationEventPublisher events,
-            com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges) {
+            com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges,
+            PetResolver petResolver) {
         this.tailsonalityBadges = tailsonalityBadges;
+        this.petResolver = petResolver;
         this.profiles = profiles;
         this.tokenGenerator = tokenGenerator;
         this.milestoneService = milestoneService;
@@ -135,8 +139,13 @@ public class ProfileService {
      */
     @Transactional
     public PetProfileResponse update(long ownerId, PetProfileUpdateRequest req) {
-        PetProfile profile = profiles.findByOwnerId(ownerId)
-                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+        return update(ownerId, null, req);
+    }
+
+    /** V1.4.0 multi-pet：编辑指定宠物（petId 为 null = 默认宠物）。不属于本人 → 404。 */
+    @Transactional
+    public PetProfileResponse update(long ownerId, Long petId, PetProfileUpdateRequest req) {
+        PetProfile profile = petResolver.resolve(ownerId, petId);
 
         boolean nameChanged = false;
         if (req.name() != null) {
@@ -197,9 +206,14 @@ public class ProfileService {
     /** 当前用户档案（无则 404）。供「已有档案直达」与后续 Story 复用。 */
     @Transactional(readOnly = true)
     public PetProfileResponse getMyProfile(long ownerId) {
-        return profiles.findByOwnerId(ownerId)
-                .map(p -> PetProfileResponse.from(p, badgeOf(p)))
-                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+        return getMyProfile(ownerId, null);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物档案（petId 为 null = 默认宠物）。 */
+    @Transactional(readOnly = true)
+    public PetProfileResponse getMyProfile(long ownerId, Long petId) {
+        PetProfile p = petResolver.resolve(ownerId, petId);
+        return PetProfileResponse.from(p, badgeOf(p));
     }
 
     private String badgeOf(PetProfile p) {
@@ -218,8 +232,13 @@ public class ProfileService {
      */
     @Transactional
     public void recordCardShared(long ownerId) {
-        PetProfile pet = profiles.findByOwnerId(ownerId)
-                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+        recordCardShared(ownerId, null);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物的名片分享信号（petId 为 null = 默认宠物）。 */
+    @Transactional
+    public void recordCardShared(long ownerId, Long petId) {
+        PetProfile pet = petResolver.resolve(ownerId, petId);
         events.publishEvent(new com.tailtopia.profile.event.CardSharedEvent(
                 ownerId, pet.getId(), Instant.now()));
     }
@@ -253,9 +272,7 @@ public class ProfileService {
      */
     @Transactional(readOnly = true)
     public boolean ownsPet(long ownerId, long petId) {
-        return profiles.findByOwnerId(ownerId)
-                .map(p -> p.getId().equals(petId))
-                .orElse(false);
+        return profiles.existsByIdAndOwnerId(petId, ownerId);
     }
 
     /** 解析宠物类型（F6）：必填 + 枚举合法，非法 → 422。@NotBlank 已拦空，此处兜底大小写/非法值。 */

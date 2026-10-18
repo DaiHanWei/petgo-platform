@@ -536,4 +536,69 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
                 .andExpect(status().isNotFound());
     }
+
+    // ---------- V1.4.0 multi-pet Story 1.1：/me/list 与 petId 寻址（单宠物库） ----------
+
+    @Test
+    void listWithoutPetsIsEmptyArrayNot404() throws Exception {
+        User owner = newUser();
+        mvc.perform(get("/api/v1/pet-profiles/me/list").header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void listWithOnePetReturnsOneDefaultItem() throws Exception {
+        User owner = newUser();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("单只")))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/v1/pet-profiles/me/list").header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].isDefault").value(true))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[0].diaryCount").value(0));
+    }
+
+    @Test
+    void otherUsersPetIdIs404AndNonNumericIs400() throws Exception {
+        User owner = newUser();
+        User other = newUser();
+        String otherBody = mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(other.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("别人家")))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long othersPet = json.readTree(otherBody).get("id").asLong();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("自己家")))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/v1/pet-profiles/me").param("petId", String.valueOf(othersPet))
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/pet-profiles/me").param("petId", "987654321")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/pet-profiles/me").param("petId", "abc")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isBadRequest());
+        // 不带 petId 与改造前一致：返回自己的那只。
+        mvc.perform(get("/api/v1/pet-profiles/me").header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("自己家"));
+    }
+
+    @Test
+    void listRejectsNonUserRole() throws Exception {
+        User owner = newUser();
+        mvc.perform(get("/api/v1/pet-profiles/me/list")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner.getId(), com.tailtopia.auth.domain.Role.VET)))
+                .andExpect(status().isForbidden());
+    }
 }

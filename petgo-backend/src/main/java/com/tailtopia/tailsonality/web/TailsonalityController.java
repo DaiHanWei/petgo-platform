@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -50,9 +51,13 @@ public class TailsonalityController {
     private final TailsonalityUnlockService unlockService;
     private final TailsonalityBadgeService badgeService;
     private final RedisRateLimiter rateLimiter;
+    /** V1.4.0 multi-pet：按宠物端点的归属校验（不属于本人 → 404）。 */
+    private final com.tailtopia.profile.service.PetResolver petResolver;
 
     public TailsonalityController(TailsonalityResultService service, TailsonalityUnlockService unlockService,
-            TailsonalityBadgeService badgeService, RedisRateLimiter rateLimiter) {
+            TailsonalityBadgeService badgeService, RedisRateLimiter rateLimiter,
+            com.tailtopia.profile.service.PetResolver petResolver) {
+        this.petResolver = petResolver;
         this.service = service;
         this.unlockService = unlockService;
         this.badgeService = badgeService;
@@ -62,15 +67,22 @@ public class TailsonalityController {
     @PostMapping("/results")
     @ResponseStatus(HttpStatus.CREATED)
     public TailsonalityResultResponse submit(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId,
             @RequestBody Map<String, Object> body) {
         long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
         rateLimiter.check("rl:tailsonality:submit:" + userId, SUBMIT_LIMIT, SUBMIT_WINDOW);
         return service.submit(userId, body);
     }
 
     @GetMapping("/results")
-    public TailsonalityResultListResponse list(@AuthenticationPrincipal Jwt jwt) {
-        return service.list(currentUserId(jwt));
+    public TailsonalityResultListResponse list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
+        return service.list(userId);
     }
 
     @GetMapping("/results/{token}")
@@ -108,8 +120,11 @@ public class TailsonalityController {
     /** 卸下（D-16）：幂等，无佩戴也 204。 */
     @DeleteMapping("/badge")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void unequipBadge(@AuthenticationPrincipal Jwt jwt) {
+    public void unequipBadge(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
         rateLimiter.check("rl:tailsonality:badge:" + userId, BADGE_LIMIT, BADGE_WINDOW);
         badgeService.unequip(userId);
     }

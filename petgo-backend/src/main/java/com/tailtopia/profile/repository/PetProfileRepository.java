@@ -16,6 +16,20 @@ public interface PetProfileRepository extends JpaRepository<PetProfile, Long> {
 
     boolean existsByOwnerId(long ownerId);
 
+    /** V1.4.0 multi-pet（AD-2）：账号全部宠物，按创建时间升序（同刻按 id 升序）。 */
+    List<PetProfile> findAllByOwnerIdOrderByCreatedAtAscIdAsc(long ownerId);
+
+    /** 按宠物 id 取且校验归属（不属于本人 = 查不到）。 */
+    Optional<PetProfile> findByIdAndOwnerId(long id, long ownerId);
+
+    boolean existsByIdAndOwnerId(long id, long ownerId);
+
+    /** 默认宠物（定义只在 {@link com.tailtopia.profile.service.DefaultPetPolicy}）。 */
+    default Optional<PetProfile> findDefault(long ownerId) {
+        return com.tailtopia.profile.service.DefaultPetPolicy.pick(
+                findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId));
+    }
+
     Optional<PetProfile> findByCardToken(String cardToken);
 
     /** 建档满阈值天数的档案（陪伴里程碑定时扫描，Story 8.3 C-M8 陪伴满 30 天）。 */

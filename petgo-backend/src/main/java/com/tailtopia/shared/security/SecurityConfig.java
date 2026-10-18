@@ -332,6 +332,8 @@ public class SecurityConfig {
                                 "/api/v1/me/shop/**").hasRole("USER")
                         // 宠物护照（V1.3.2 Story 1.2）：GET 里会签发（写）且 controller 把 jwt.sub 当 users.id 用 ——
                         // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。
+                        // V1.4.0 multi-pet：「我的宠物」列表含宠物名 / 生日，兽医 token 不得以同号用户名义读取。精确路径。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/list").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/passport").hasRole("USER")
                         // 护照快照（V1.3.2 Story 3.4）：发起购买 / 已购列表 / 回看，同上理由（sub 当 users.id 用）。
                         .requestMatchers("/api/v1/pet-profiles/me/passport/snapshots",

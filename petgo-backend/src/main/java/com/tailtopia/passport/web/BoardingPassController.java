@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 登机牌（V1.3.2 Story 3.5）。仅 {@code role=USER}（SecurityConfig 精确 matcher）。 */
@@ -29,26 +30,41 @@ public class BoardingPassController {
 
     private final BoardingPassService service;
     private final RedisRateLimiter rateLimiter;
+    /** V1.4.0 multi-pet：按宠物端点的归属校验（不属于本人 → 404）。 */
+    private final com.tailtopia.profile.service.PetResolver petResolver;
 
-    public BoardingPassController(BoardingPassService service, RedisRateLimiter rateLimiter) {
+    public BoardingPassController(BoardingPassService service, RedisRateLimiter rateLimiter,
+            com.tailtopia.profile.service.PetResolver petResolver) {
+        this.petResolver = petResolver;
         this.service = service;
         this.rateLimiter = rateLimiter;
     }
 
     @GetMapping
-    public BoardingPassListResponse list(@AuthenticationPrincipal Jwt jwt) {
-        return service.list(currentUserId(jwt));
+    public BoardingPassListResponse list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
+        return service.list(userId);
     }
 
     @GetMapping("/{placeToken}")
-    public BoardingPassDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable String placeToken) {
-        return service.detail(currentUserId(jwt), placeToken);
+    public BoardingPassDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable String placeToken,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
+        return service.detail(userId, placeToken);
     }
 
     @PostMapping("/{placeToken}/unlock")
     public KeepsakePurchaseResponse unlock(@AuthenticationPrincipal Jwt jwt, @PathVariable String placeToken,
-            @Valid @RequestBody KeepsakePayRequest req) {
+            @Valid @RequestBody KeepsakePayRequest req,
+            @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
+        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
+        petResolver.resolveOptional(userId, petId);
         rateLimiter.check("rl:boarding:unlock:" + userId, UNLOCK_LIMIT, UNLOCK_WINDOW);
         return service.unlock(userId, placeToken, req.channel());
     }

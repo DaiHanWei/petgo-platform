@@ -15,7 +15,6 @@ import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.service.HealthEventTimelineSource.HealthEventView;
-import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -63,7 +62,7 @@ public class TimelineService {
                     .thenComparing(TimelineItemResponse::date)
                     .reversed();
 
-    private final ProfileService profileService;
+    private final PetResolver petResolver;
     private final ContentService contentService;
 
     /** V1.1.6 Story 5.2：内容装饰标签，**组装完成后统一贴一次**（AD-11）。 */
@@ -80,7 +79,7 @@ public class TimelineService {
     /** V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（tailsonality 只读口，profile 不直接注入其仓库）。 */
     private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityUnlocks;
 
-    public TimelineService(ProfileService profileService, ContentService contentService,
+    public TimelineService(PetResolver petResolver, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
             MilestoneService milestoneService, MilestoneCelebrationService celebrationService,
             HealthRecordRepository healthRecords,
@@ -89,7 +88,7 @@ public class TimelineService {
             com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins,
             com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityUnlocks) {
         this.tailsonalityUnlocks = tailsonalityUnlocks;
-        this.profileService = profileService;
+        this.petResolver = petResolver;
         this.placeCheckins = placeCheckins;
         this.contentTags = contentTags;
         this.contentService = contentService;
@@ -134,8 +133,15 @@ public class TimelineService {
     @Transactional(readOnly = true)
     public TimelinePageResponse getTimeline(long ownerId, String cursor, int limit, TimelineCapabilities caps,
             boolean diaryOnly) {
+        return getTimeline(ownerId, null, cursor, limit, caps, diaryOnly);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物的时间线（{@code petId} 为 null = 默认宠物；不属于本人 → 404）。 */
+    @Transactional(readOnly = true)
+    public TimelinePageResponse getTimeline(long ownerId, Long petId, String cursor, int limit,
+            TimelineCapabilities caps, boolean diaryOnly) {
         // 需有档案；无则 404（前端据此渲染空态）。取 petId 供成长帖按当前宠物过滤（bug 271）。
-        PetProfile profile = requireProfile(ownerId);
+        PetProfile profile = requireProfile(ownerId, petId);
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
         TimelineAnchor anchor = TimelineAnchor.decode(cursor);
 
@@ -253,7 +259,7 @@ public class TimelineService {
             // V1.1.6 修正：按**复合锚点**（就诊日期 + 同日归档时刻）取，不再退化为单键上界 ——
             // 问诊存档有独立的就诊日期，排序按它、取数按归档时刻就是「两把尺子」。
             List<HealthEventView> events = health.recentHealthEvents(
-                    ownerId, anchor.eventDate(), anchor.sameDayKey(), fetch);
+                    petId, anchor.eventDate(), anchor.sameDayKey(), fetch);
             for (HealthEventView h : events) {
                 healthItems.add(TimelineItemResponse.healthEvent(
                         h.createdAt(), h.eventDate(), h.aiLevel(), h.symptomSummary(),
@@ -468,7 +474,14 @@ public class TimelineService {
      */
     @Transactional(readOnly = true)
     public CalendarMonthResponse getCalendarMonth(long ownerId, int year, int month, TimelineCapabilities caps) {
-        PetProfile profile = requireProfile(ownerId);
+        return getCalendarMonth(ownerId, null, year, month, caps);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物的日历（{@code petId} 为 null = 默认宠物）。 */
+    @Transactional(readOnly = true)
+    public CalendarMonthResponse getCalendarMonth(long ownerId, Long petId, int year, int month,
+            TimelineCapabilities caps) {
+        PetProfile profile = requireProfile(ownerId, petId);
         YearMonth ym = YearMonth.of(year, month);
         LocalDate from = ym.atDay(1);
         LocalDate to = ym.atEndOfMonth();
@@ -494,7 +507,7 @@ public class TimelineService {
             // 🔴 V1.1.6 修正：按**就诊日期**落格，不是归档时刻。
             // 改之前一次三个月前的问诊若今天才归档，会显示在「今天」那一格 ——
             // 数据本身没错（就诊日期一直存着），是取数读错了字段。
-            for (HealthEventView h : health.healthEventsInRange(ownerId, from, to)) {
+            for (HealthEventView h : health.healthEventsInRange(profile.getId(), from, to)) {
                 int day = h.eventDate().getDayOfMonth();
                 CalendarMonthResponse.DayCell c = byDay.get(day);
                 if (c == null) {
@@ -572,7 +585,13 @@ public class TimelineService {
     /** 带客户端能力的当天详情（V1.3.2 Story 1.6）：声明 place_checkin 时追加当天（UTC 日）打卡，排在健康记录之后。 */
     @Transactional(readOnly = true)
     public DayDetailResponse getDayDetail(long ownerId, LocalDate date, TimelineCapabilities caps) {
-        PetProfile profile = requireProfile(ownerId);
+        return getDayDetail(ownerId, null, date, caps);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物的当天详情（{@code petId} 为 null = 默认宠物）。 */
+    @Transactional(readOnly = true)
+    public DayDetailResponse getDayDetail(long ownerId, Long petId, LocalDate date, TimelineCapabilities caps) {
+        PetProfile profile = requireProfile(ownerId, petId);
         List<TimelineItemResponse> items = new ArrayList<>();
         for (GrowthMomentView g : contentService.findGrowthMomentsOnDate(ownerId, profile.getId(), date)) {
             items.add(TimelineItemResponse.happyMoment(
@@ -581,7 +600,7 @@ public class TimelineService {
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         if (health != null) {
             // 🔴 V1.1.6 修正：按**就诊日期**取当天，与上面的结构化健康记录同口径。
-            for (HealthEventView h : health.healthEventsOnDay(ownerId, date)) {
+            for (HealthEventView h : health.healthEventsOnDay(profile.getId(), date)) {
                 items.add(TimelineItemResponse.healthEvent(h.createdAt(), h.eventDate(),
                         h.aiLevel(), h.symptomSummary(), h.sourceType(), h.sourceRef()));
             }
@@ -614,10 +633,16 @@ public class TimelineService {
      */
     @Transactional(readOnly = true)
     public ArchiveStatsResponse getStats(long ownerId) {
-        PetProfile profile = requireProfile(ownerId);
+        return getStats(ownerId, null);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物的统计栏（{@code petId} 为 null = 默认宠物）。 */
+    @Transactional(readOnly = true)
+    public ArchiveStatsResponse getStats(long ownerId, Long petId) {
+        PetProfile profile = requireProfile(ownerId, petId);
         long happy = contentService.countGrowthMoments(ownerId, profile.getId());
         HealthEventTimelineSource health = healthSource.getIfAvailable();
-        long consult = health == null ? 0L : health.countHealthEvents(ownerId);
+        long consult = health == null ? 0L : health.countHealthEvents(profile.getId());
         MilestoneService.MilestoneProgress progress =
                 milestoneService.getProgress(profile.getId(), profile.getPetType());
         long healthRecordCount = healthRecords.countByPetProfileId(profile.getId());
@@ -675,9 +700,9 @@ public class TimelineService {
         return out;
     }
 
-    private PetProfile requireProfile(long ownerId) {
-        return profileService.findByOwnerId(ownerId)
-                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    /** 有 petId 校验归属、无 petId 取默认宠物；无档案 / 不属于本人 → 404（只经 {@link PetResolver}）。 */
+    private PetProfile requireProfile(long ownerId, Long petId) {
+        return petResolver.resolve(ownerId, petId);
     }
 
 }

@@ -40,7 +40,7 @@ class ProfileServiceTest {
         when(tailsonalityBadges.badgeOf(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Optional.empty());
         service = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
                 mediaDeletion, Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
-                tailsonalityBadges);
+                tailsonalityBadges, new PetResolver(profiles));
     }
 
     private PetProfileCreateRequest req() {
@@ -108,7 +108,7 @@ class ProfileServiceTest {
 
     @Test
     void getMyProfileNotFoundThrows404() {
-        when(profiles.findByOwnerId(9L)).thenReturn(java.util.Optional.empty());
+        when(profiles.findDefault(9L)).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> service.getMyProfile(9L)).isInstanceOf(AppException.class);
     }
 
@@ -116,7 +116,7 @@ class ProfileServiceTest {
     void updatePartialKeepsCardTokenAndChangesFields() {
         PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", "u", "Breed",
                 java.time.LocalDate.of(2020, 1, 1), "old intro", "TOK_KEEP");
-        when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
+        when(profiles.findDefault(1L)).thenReturn(java.util.Optional.of(existing));
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
 
         PetProfileResponse resp = service.update(1L,
@@ -130,7 +130,7 @@ class ProfileServiceTest {
 
     @Test
     void updateWithoutProfileThrows404() {
-        when(profiles.findByOwnerId(9L)).thenReturn(java.util.Optional.empty());
+        when(profiles.findDefault(9L)).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> service.update(9L,
                 new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "X", null, null, null, null, null, null)))
                 .isInstanceOf(AppException.class);
@@ -139,7 +139,7 @@ class ProfileServiceTest {
     @Test
     void updateBlankNameRejected() {
         PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", null, null, null, null, "TOK");
-        when(profiles.findByOwnerId(1L)).thenReturn(java.util.Optional.of(existing));
+        when(profiles.findDefault(1L)).thenReturn(java.util.Optional.of(existing));
         assertThatThrownBy(() -> service.update(1L,
                 new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "   ", null, null, null, null, null, null)))
                 .isInstanceOf(AppException.class);
@@ -174,5 +174,52 @@ class ProfileServiceTest {
         assertThat(resp.breed()).isNull();
         assertThat(resp.intro()).isNull();
         assertThat(resp.avatarUrl()).isNull();
+    }
+
+    // ---------- V1.4.0 multi-pet：按 petId 寻址 ----------
+
+    @Test
+    void getMyProfileWithPetIdReturnsThatPet() {
+        PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
+        when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
+        assertThat(service.getMyProfile(1L, 11L).name()).isEqualTo("B");
+    }
+
+    @Test
+    void getMyProfileWithForeignPetId404() {
+        when(profiles.findByIdAndOwnerId(99L, 1L)).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> service.getMyProfile(1L, 99L)).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void updateWithPetIdChangesOnlyThatPet() {
+        PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
+        when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.update(1L, 11L,
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "B2", null, null, null, null, null, null));
+        assertThat(b.getName()).isEqualTo("B2");
+        Mockito.verify(profiles, Mockito.never()).findDefault(Mockito.anyLong());
+    }
+
+    @Test
+    void recordCardSharedPublishesForChosenPet() {
+        var events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
+        ProfileService svc = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
+                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles));
+        PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
+        when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
+        svc.recordCardShared(1L, 11L);
+        var cap = org.mockito.ArgumentCaptor.forClass(Object.class);
+        Mockito.verify(events).publishEvent(cap.capture());
+        assertThat(((com.tailtopia.profile.event.CardSharedEvent) cap.getValue()).petProfileId()).isEqualTo(11L);
+    }
+
+    @Test
+    void ownsPetUsesIdAndOwnerExistence() {
+        when(profiles.existsByIdAndOwnerId(11L, 1L)).thenReturn(true);
+        when(profiles.existsByIdAndOwnerId(99L, 1L)).thenReturn(false);
+        assertThat(service.ownsPet(1L, 11L)).isTrue();
+        assertThat(service.ownsPet(1L, 99L)).isFalse();
     }
 }
