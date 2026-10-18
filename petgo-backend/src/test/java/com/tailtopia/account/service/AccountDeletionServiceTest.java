@@ -61,6 +61,8 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.social.service.FollowService followService;
     /** V1.3.4 Story 5.1：运营弹窗曝光随注销物理删除。 */
     @Mock com.tailtopia.ops.popup.service.OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
+    /** V1.4.0 ④ Story 1.1：推送分类开关随注销物理删除。 */
+    @Mock com.tailtopia.notify.preference.PushPreferenceService pushPreferences;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -69,7 +71,7 @@ class AccountDeletionServiceTest {
                 contentService, reviewService, violationCountService,
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
-                followService, opsPopupImpressionDeletion);
+                followService, opsPopupImpressionDeletion, pushPreferences);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -114,6 +116,11 @@ class AccountDeletionServiceTest {
         org.mockito.InOrder popupBeforeUserRow = org.mockito.Mockito.inOrder(opsPopupImpressionDeletion, authDeletion);
         popupBeforeUserRow.verify(opsPopupImpressionDeletion).deleteByUserId(7L);
         popupBeforeUserRow.verify(authDeletion).deleteByUserId(7L);
+        // V1.4.0 ④ Story 1.1 · AC7：推送设置显式删（users 行只匿名化，FK CASCADE 不触发），且在 user 行处理之前。
+        verify(pushPreferences).deleteByUserId(7L);
+        org.mockito.InOrder pushBeforeUserRow = org.mockito.Mockito.inOrder(pushPreferences, authDeletion);
+        pushBeforeUserRow.verify(pushPreferences).deleteByUserId(7L);
+        pushBeforeUserRow.verify(authDeletion).deleteByUserId(7L);
         // V1.3.0 场所评论注销联动（NFR-8 / D1/D2）：独立表，content 那条级联碰不到它 ——
         // 漏了的话注销用户的场所评论会继续挂着身份对所有人可见。
         verify(placeCommentService).deactivateAuthorComments(7L);

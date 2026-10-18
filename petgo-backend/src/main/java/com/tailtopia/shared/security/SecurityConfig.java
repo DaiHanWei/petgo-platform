@@ -345,6 +345,9 @@ public class SecurityConfig {
                         // 与 users.id 撞号 —— 落 anyRequest().authenticated() 会以同号用户名义提交 / 读取。不写 pet-profiles 通配。
                         .requestMatchers("/api/v1/pet-profiles/me/tailsonality",
                                 "/api/v1/pet-profiles/me/tailsonality/**").hasRole("USER")
+                        // V1.4.0 ④ Story 1.1：推送分类设置，仅 role=USER（controller 把 jwt.sub 当 users.id 用；
+                        // 兽医 token 的 sub=vetId 与 users.id 撞号，落 anyRequest().authenticated() 会以同号用户名义读写推送设置）。精确路径，不写 /api/v1/me/** 通配。
+                        .requestMatchers("/api/v1/me/push-settings").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

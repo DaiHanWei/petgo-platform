@@ -68,6 +68,9 @@ public final class ErrorTypes {
      */
     public static final URI FOLLOW_BLOCKED = URI.create(BASE + "follow-blocked");
 
+    /** V1.4.0 ④ Story 1.1：试图关闭「订单与账号」类推送（422，该分类不可关）。 */
+    public static final URI PUSH_CATEGORY_LOCKED = URI.create(BASE + "push-category-locked");
+
     private ErrorTypes() {
     }
 }
