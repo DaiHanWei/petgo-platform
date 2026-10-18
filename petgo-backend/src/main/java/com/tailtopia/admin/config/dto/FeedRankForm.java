@@ -7,6 +7,8 @@ package com.tailtopia.admin.config.dto;
  * 做成输入框只会让人以为"填个大点的数就能压住爆款"，而下一次重算就把它冲掉了。
  *
  * <p>{@code throttleFactor} 是 Story 17.1 · AC5 加的限流系数（平台级，默认 0.2）。
+ *
+ * <p>{@code authorLevelBoost} 是 V1.4.0 ① Story 3.4 加的作者等级加权（Lv15 及以上真实作者，默认 1.05，1 = 不加权）。
  */
 public record FeedRankForm(
         double freshnessWeight,
@@ -16,6 +18,7 @@ public record FeedRankForm(
         /** 刷新抖动幅度 0–1（2026-09-01）：0=关闭，越大下拉刷新换得越狠。 */
         double shuffleStrength,
         double throttleFactor,
+        double authorLevelBoost,
         int seenWindowDays,
         int windowSize,
         int attrFunQuota,

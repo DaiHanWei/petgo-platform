@@ -46,6 +46,7 @@ class FeedRecommendationServiceTest {
     private FeedSeenStore seen;
     private FeedSequenceStore sequences;
     private com.tailtopia.moderation.throttle.service.RankThrottleService throttles;
+    private com.tailtopia.growth.service.GrowthQueryService growth;
     private FeedRecommendationService service;
     private com.tailtopia.config.domain.FeedRankConfig cfg;
     private com.tailtopia.config.service.PlatformConfigService platformConfig;
@@ -94,9 +95,12 @@ class FeedRecommendationServiceTest {
         throttles = mock(com.tailtopia.moderation.throttle.service.RankThrottleService.class);
         when(throttles.factorsFor(anyList(), any())).thenReturn(Map.of());
 
+        // V1.4.0 ① Story 3.4：mock 的 cfg 作者加权为 0 ⇒ 不加权、不查等级（既有用例行为不变）。
+        growth = mock(com.tailtopia.growth.service.GrowthQueryService.class);
+
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
-                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles);
+                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles, growth);
     }
 
     private static ContentPost post(long id, long authorId) {
@@ -610,10 +614,15 @@ class FeedRecommendationServiceTest {
 
     /** 用 spy 引擎重建服务，跑一次生成，取传进引擎的 RankParams。 */
     private RankParams paramsReachingTheEngine() {
+        return inputReachingTheEngine().params();
+    }
+
+    /** 同上，取整个引擎输入（V1.4.0 ① Story 3.4：作者系数 Map）。 */
+    private FeedRankEngine.Input inputReachingTheEngine() {
         FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
         FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags,
                 species, pets, seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000),
-                platformConfig, throttles);
+                platformConfig, throttles, growth);
         generationPath(Map.of());
         List<ContentPost> pool = new ArrayList<>();
         for (long i = 1; i <= 30; i++) {
@@ -626,7 +635,7 @@ class FeedRecommendationServiceTest {
         org.mockito.ArgumentCaptor<FeedRankEngine.Input> input =
                 org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
         verify(engine).rank(input.capture(), anyInt());
-        return input.getValue().params();
+        return input.getValue();
     }
 
     @Test
@@ -783,5 +792,55 @@ class FeedRecommendationServiceTest {
         assertThat(FeedSequenceStore.seedTime("s-seed-1")).isNull();
         assertThat(FeedSequenceStore.seedTime("x123")).isNull();
         assertThat(FeedSequenceStore.seedTime(null)).isNull();
+    }
+
+    // ── V1.4.0 ① Story 3.4：作者等级加权 ────────────────────────────
+
+    private static RankCandidate cand(long id, long authorId) {
+        return new RankCandidate(id, authorId, FeedAttribute.FUN, null, java.time.Instant.EPOCH, 0, 0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void authorFactorsOnlyForParticipatingLv15AuthorsWithOneDedupedLevelsCall() {
+        when(growth.getLevels(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(Map.of(
+                15L, com.tailtopia.growth.domain.GrowthLevel.of(15, com.tailtopia.growth.domain.GrowthTier.STAR),
+                14L, com.tailtopia.growth.domain.GrowthLevel.of(14, com.tailtopia.growth.domain.GrowthTier.GUARDIAN),
+                99L, com.tailtopia.growth.domain.GrowthLevel.NOT_PARTICIPATING)); // 虚拟号：展示等级再高也不吃
+
+        Map<Long, Double> f = service.authorFactors(
+                List.of(cand(1, 15), cand(2, 15), cand(3, 14), cand(4, 99)), 1.05);
+
+        assertThat(f).isEqualTo(Map.of(15L, 1.05));
+        org.mockito.ArgumentCaptor<java.util.Collection<Long>> ids =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        org.mockito.Mockito.verify(growth, org.mockito.Mockito.times(1)).getLevels(ids.capture());
+        assertThat(ids.getValue()).containsExactlyInAnyOrder(15L, 14L, 99L);
+        org.mockito.Mockito.verify(growth, org.mockito.Mockito.never())
+                .getBadges(org.mockito.ArgumentMatchers.anyCollection());
+    }
+
+    /** 生成路径真的把作者系数 Map 传进了引擎（而不是只在辅助方法里算对）。 */
+    @Test
+    void authorFactorsReachTheEngineOnGeneration() {
+        when(cfg.getAuthorLevelBoost()).thenReturn(1.05);
+        when(growth.getLevels(org.mockito.ArgumentMatchers.anyCollection())).thenAnswer(inv -> {
+            java.util.Collection<Long> ids = inv.getArgument(0);
+            Map<Long, com.tailtopia.growth.domain.GrowthLevel> out = new java.util.HashMap<>();
+            for (Long id : ids) {
+                out.put(id, id == 7L
+                        ? com.tailtopia.growth.domain.GrowthLevel.of(15, com.tailtopia.growth.domain.GrowthTier.STAR)
+                        : com.tailtopia.growth.domain.GrowthLevel.of(3, com.tailtopia.growth.domain.GrowthTier.NEWBIE));
+            }
+            return out;
+        });
+
+        assertThat(inputReachingTheEngine().authorFactors()).isEqualTo(Map.of(7L, 1.05));
+    }
+
+    @Test
+    void boostOfOneMeansEmptyMapAndNoLevelQuery() {
+        assertThat(service.authorFactors(List.of(cand(1, 15)), 1.0)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(growth);
     }
 }

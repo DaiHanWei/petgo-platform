@@ -324,6 +324,10 @@ public class AdminConfigService {
                 "限流系数须在 0–1 之间且两端都不取："
                         + "取 1 等于没处置，取 0 会让被限流的内容永远排不进首页（那是下架，不是降权）",
                 "admin.err.config.throttleFactorRange");
+        // V1.4.0 ① Story 3.4：与建表 CHECK [1, 2] 同一口径；两端可取（1 = 不加权）。
+        require(form.authorLevelBoost() >= 1.0 && form.authorLevelBoost() <= 2.0,
+                "作者等级加权须在 1–2（1 = 不加权；小于 1 就成了降权）",
+                "admin.err.config.authorLevelBoostRange");
 
         AttributeTemplate.Rejection attrProblem = AttributeTemplate.rejectUnusableQuotasDetailed(
                 form.attrFunQuota(), form.attrEduQuota(), form.attrLifeQuota(), form.windowSize());
@@ -351,6 +355,7 @@ public class AdminConfigService {
         diff(logs, t, "exposure_decay", c.getExposureDecay(), form.exposureDecay(), adminId);
         diff(logs, t, "shuffle_strength", c.getShuffleStrength(), form.shuffleStrength(), adminId);
         diff(logs, t, "throttle_factor", c.getThrottleFactor(), form.throttleFactor(), adminId);
+        diff(logs, t, "author_level_boost", c.getAuthorLevelBoost(), form.authorLevelBoost(), adminId);
         diff(logs, t, "seen_window_days", c.getSeenWindowDays(), form.seenWindowDays(), adminId);
         diff(logs, t, "window_size", c.getWindowSize(), form.windowSize(), adminId);
         diff(logs, t, "attr_fun_quota", c.getAttrFunQuota(), form.attrFunQuota(), adminId);
@@ -368,6 +373,7 @@ public class AdminConfigService {
         c.setExposureDecay(form.exposureDecay());
         c.setShuffleStrength(form.shuffleStrength());
         c.setThrottleFactor(form.throttleFactor());
+        c.setAuthorLevelBoost(form.authorLevelBoost());
         c.setSeenWindowDays(form.seenWindowDays());
         c.setWindowSize(form.windowSize());
         c.setAttrFunQuota(form.attrFunQuota());

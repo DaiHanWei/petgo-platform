@@ -30,7 +30,7 @@ class FeedRankEngineTest {
 
     private FeedRankEngine.Result rank(List<RankCandidate> pool, String mainSpecies, int wanted) {
         return engine.rank(new FeedRankEngine.Input(pool, mainSpecies, Map.of(), Set.of(),
-                Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), wanted);
+                Map.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), wanted);
     }
 
     private static List<FeedAttribute> attrs(FeedRankEngine.Result r) {
@@ -197,7 +197,7 @@ class FeedRankEngineTest {
 
         // id1 已曝光（×0.3）→ 让位给 id2
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(1L, 0.3), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
+                Map.of(1L, 0.3), Set.of(), Map.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(r)).containsExactly(2L);
     }
 
@@ -212,12 +212,12 @@ class FeedRankEngineTest {
 
         // id2 带生效中标签 → ×1.3 反超
         FeedRankEngine.Result boosted = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(2L), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
+                Map.of(), Set.of(2L), Map.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(boosted)).containsExactly(2L);
 
         // 标签到期（不在集合内）→ 回落 1.0，id1 恢复领先
         FeedRankEngine.Result expired = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
+                Map.of(), Set.of(), Map.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(expired)).containsExactly(1L);
     }
 
@@ -231,7 +231,7 @@ class FeedRankEngineTest {
         assertThat(ids(rank(pool, null, 1))).containsExactly(1L);
 
         FeedRankEngine.Result throttled = engine.rank(new FeedRankEngine.Input(pool, null,
-                Map.of(), Set.of(), Map.of(1L, 0.2), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
+                Map.of(), Set.of(), Map.of(1L, 0.2), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), null), 1);
         assertThat(ids(throttled)).containsExactly(2L);
     }
 
@@ -404,7 +404,7 @@ class FeedRankEngineTest {
 
     private FeedRankEngine.Result rankSeeded(List<RankCandidate> pool, String seed, int wanted) {
         return engine.rank(new FeedRankEngine.Input(pool, null, Map.of(), Set.of(),
-                Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), seed), wanted);
+                Map.of(), Map.of(), NOW, P, AttributeTemplate.defaultSchedule(), seed), wanted);
     }
 
     /**
@@ -438,9 +438,34 @@ class FeedRankEngineTest {
                 P.maxSameAttributeRun(), P.maxSameAuthorRun(), P.maxSameAuthorPerWindow(),
                 P.maxSameOtherSpeciesRun(), P.eduFreshnessHalfLifeHours());
         FeedRankEngine.Result seeded = engine.rank(new FeedRankEngine.Input(pool, null, Map.of(),
-                Set.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), "s:aaa"), 10);
+                Set.of(), Map.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), "s:aaa"), 10);
         FeedRankEngine.Result plain = engine.rank(new FeedRankEngine.Input(pool, null, Map.of(),
-                Set.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), null), 10);
+                Set.of(), Map.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), null), 10);
         assertThat(ids(seeded)).isEqualTo(ids(plain));
+    }
+
+    /** V1.4.0 ① Story 3.4 · AC2：作者系数按 authorId 键；空 Map 与改动前排序完全一致。 */
+    @Test
+    void authorFactorsBoostByAuthorAndEmptyMapIsNeutral() {
+        List<RankCandidate> pool = List.of(
+                c(1L, 11L, FeedAttribute.FUN, null, 5),
+                c(2L, 22L, FeedAttribute.FUN, null, 5));
+        // 同分：id 做 tie-breaker → 1 在前。
+        assertThat(ids(rank(pool, null, 2))).containsExactly(1L, 2L);
+
+        FeedRankEngine.Result boosted = engine.rank(new FeedRankEngine.Input(pool, null,
+                Map.of(), Set.of(), Map.of(), Map.of(22L, 1.05), NOW, P, AttributeTemplate.defaultSchedule(), null), 2);
+        assertThat(ids(boosted)).containsExactly(2L, 1L);
+
+        // 按 postId 误放不会生效（键是 authorId）。
+        FeedRankEngine.Result wrongKey = engine.rank(new FeedRankEngine.Input(pool, null,
+                Map.of(), Set.of(), Map.of(), Map.of(2L, 1.05), NOW, P, AttributeTemplate.defaultSchedule(), null), 2);
+        assertThat(ids(wrongKey)).containsExactly(1L, 2L);
+
+        List<RankCandidate> rich = richPool(List.of("CAT", "DOG"));
+        assertThat(ids(engine.rank(new FeedRankEngine.Input(rich, "CAT", Map.of(), Set.of(), Map.of(), Map.of(),
+                NOW, P, AttributeTemplate.defaultSchedule(), null), 30)))
+                .isEqualTo(ids(engine.rank(new FeedRankEngine.Input(rich, "CAT", Map.of(), Set.of(), Map.of(), null,
+                        NOW, P, AttributeTemplate.defaultSchedule(), null), 30)));
     }
 }

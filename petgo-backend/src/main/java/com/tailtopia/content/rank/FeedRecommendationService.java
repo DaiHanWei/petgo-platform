@@ -10,6 +10,7 @@ import com.tailtopia.content.species.ContentSpeciesResolver;
 import com.tailtopia.content.species.ResolvedSpecies;
 import com.tailtopia.config.domain.FeedRankConfig;
 import com.tailtopia.config.service.PlatformConfigService;
+import com.tailtopia.growth.service.GrowthQueryService;
 import com.tailtopia.moderation.throttle.service.RankThrottleService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -98,12 +99,21 @@ public class FeedRecommendationService {
     private final PlatformConfigService platformConfig;
     private final RankThrottleService rankThrottles;
 
+    /**
+     * V1.4.0 ① AD-15 · Story 3.4：作者等级加权只看<b>权益用</b>等级（{@code getLevels}；虚拟号 / 官方号不参与 ⇒ 不加权），
+     * 不得用展示用的 {@code getBadges}（5.5）。
+     */
+    private final GrowthQueryService growth;
+
+    /** 作者等级加权门槛（PRD 拍板写死，不做参数）。 */
+    static final int AUTHOR_BOOST_MIN_LEVEL = 15;
+
     public FeedRecommendationService(ContentPostRepository posts, ContentLikeRepository likes,
             CommentRepository comments, ContentTagQueryService contentTags,
             ContentSpeciesResolver speciesResolver, PetProfileRepository pets,
             FeedSeenStore seenStore, FeedSequenceStore sequenceStore, FeedRankEngine engine,
             FeedRankProperties props, PlatformConfigService platformConfig,
-            RankThrottleService rankThrottles) {
+            RankThrottleService rankThrottles, GrowthQueryService growth) {
         this.posts = posts;
         this.likes = likes;
         this.comments = comments;
@@ -116,6 +126,7 @@ public class FeedRecommendationService {
         this.props = props;
         this.platformConfig = platformConfig;
         this.rankThrottles = rankThrottles;
+        this.growth = growth;
     }
 
     /**
@@ -369,9 +380,11 @@ public class FeedRecommendationService {
                 .map(c -> new RankThrottleService.Target(c.id(), c.authorId()))
                 .toList(), now);
 
+        Map<Long, Double> authorBoost = authorFactors(candidates, cfg.getAuthorLevelBoost());
+
         FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(candidates,
                 viewerMainSpecies(viewerId), decay, honored,
-                throttle, now, params, schedule, seed), wanted);
+                throttle, authorBoost, now, params, schedule, seed), wanted);
         if (r.attributeRelaxed() > 0 || r.speciesRelaxed() > 0) {
             // 🛡 级别 1、2 是**预期行为，不告警** —— 只记 debug 供排查（§6.2）。
             log.debug("推荐序降级 池={} 属性放宽={} 物种放宽={} 防扎堆让步={}",
@@ -453,5 +466,24 @@ public class FeedRecommendationService {
         }
         return pets.findByOwnerId(viewerId).map(PetProfile::getPetType)
                 .map(Enum::name).orElse(null);
+    }
+
+    /**
+     * 作者等级系数（V1.4.0 ① AD-15 · Story 3.4）：去重作者一次 {@code getLevels}；参与且 ≥ Lv15 的作者放入
+     * {@code boost}，其余不放（缺省 1.0，同限流 Map「无记录 ⇒ 不在 Map」的口径）。加权为 1.0（不加权）时连查询都不发。
+     * 查询异常不另兜底：沿用 {@code FeedService.recommendedFeed} 的级别 4 降级（时间倒序）。
+     */
+    Map<Long, Double> authorFactors(List<RankCandidate> candidates, double boost) {
+        if (boost <= 1.0 || candidates.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> authors = candidates.stream().map(RankCandidate::authorId).distinct().toList();
+        Map<Long, Double> out = new java.util.HashMap<>();
+        growth.getLevels(authors).forEach((authorId, level) -> {
+            if (level.participating() && level.level() >= AUTHOR_BOOST_MIN_LEVEL) {
+                out.put(authorId, boost);
+            }
+        });
+        return out;
     }
 }
