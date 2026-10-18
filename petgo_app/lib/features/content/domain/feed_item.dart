@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../growth/domain/growth_badge.dart';
 import '../../mention/domain/mention_view.dart';
 import '../../social/domain/follow_state.dart';
 import 'content_tag.dart';
@@ -103,6 +104,7 @@ class FeedItem {
     this.imageCropOffsets = const [],
     this.imageUrls = const [],
     this.authorTags = const [],
+    this.authorBadge,
     this.decorationTags = const [],
     this.mentions = const [],
     this.authorToken,
@@ -131,6 +133,9 @@ class FeedItem {
 
   /// 作者的运营标签（V1.1.6 Story 5.1 · FR-74）。最多 3 个；注销作者恒为空。
   final List<UserTag> authorTags;
+
+  /// 作者等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? authorBadge;
 
   /// 内容装饰标签（V1.1.6 Story 5.2 · FR-75）。挂在图片区**左下角位**。
   final List<ContentTag> decorationTags;
@@ -233,6 +238,7 @@ class FeedItem {
         imageCropOffsets: imageCropOffsets,
         imageUrls: imageUrls,
         authorTags: authorTags,
+        authorBadge: authorBadge,
         decorationTags: decorationTags,
         mentions: mentions,
         authorToken: authorToken,
@@ -261,6 +267,7 @@ class FeedItem {
         imageCropOffsets: cropOffsetListFromJson(json['imageCropOffsets']),
         // 同样在无图时整个字段都不下发。
         authorTags: UserTag.listFromJson(json['authorTags']),
+        authorBadge: GrowthBadge.fromFlat(json),
         decorationTags: ContentTag.listFromJson(json['decorationTags']),
         imageUrls: (json['imageUrls'] as List?)?.whereType<String>().toList(growable: false) ??
             const [],

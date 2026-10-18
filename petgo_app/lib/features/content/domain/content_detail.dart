@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../growth/domain/growth_badge.dart';
 import '../../mention/domain/mention_view.dart';
 import '../../social/domain/follow_state.dart';
 import 'content_tag.dart';
@@ -18,6 +19,7 @@ class ContentDetail {
     required this.createdAt,
     this.authorNickname,
     this.authorTags = const [],
+    this.authorBadge,
     this.decorationTags = const [],
     this.authorAvatarUrl,
     this.body,
@@ -54,6 +56,7 @@ class ContentDetail {
         createdAt: createdAt,
         authorNickname: authorNickname,
         authorTags: authorTags,
+        authorBadge: authorBadge,
         decorationTags: decorationTags,
         authorAvatarUrl: authorAvatarUrl,
         body: body,
@@ -83,6 +86,9 @@ class ContentDetail {
 
   /// 作者的运营标签（V1.1.6 Story 5.1）。最多 3 个；注销作者恒为空。
   final List<UserTag> authorTags;
+
+  /// 作者等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? authorBadge;
 
   /// 内容装饰标签（V1.1.6 Story 5.2）。有图叠首图角落 / 无图置正文下方。
   final List<ContentTag> decorationTags;
@@ -145,6 +151,7 @@ class ContentDetail {
       createdAt: DateTime.parse(json['createdAt'] as String),
       authorNickname: json['authorNickname'] as String?,
       authorTags: UserTag.listFromJson(json['authorTags']),
+      authorBadge: GrowthBadge.fromFlat(json),
       decorationTags: ContentTag.listFromJson(json['decorationTags']),
       authorAvatarUrl: json['authorAvatarUrl'] as String?,
       body: json['body'] as String?,

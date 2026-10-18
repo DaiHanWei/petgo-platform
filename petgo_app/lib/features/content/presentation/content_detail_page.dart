@@ -377,6 +377,7 @@ class _DetailScaffold extends ConsumerWidget {
           name: name,
           deleted: detail.authorDeleted,
           size: 36,
+          growth: detail.authorBadge,
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(

@@ -199,6 +199,18 @@ class AppColors {
   static const Color tierPenjagaTint = Color(0xFFE7ECFB);
   static const Color tierBintangTint = Color(0xFFEFE9FB);
 
+  // 头像框三档（V1.4.0 ① Story 3.2，UI 稿 `.avw.fr-b|fr-u|fr-p`）：框色随档位、不随佩戴者段位。
+  // 深端复用段位色（Sahabat / Penjaga / Bintang）。
+  static const Color frameBasicStart = Color(0xFF3FB3D6);
+  static const Color frameUpgradedStart = Color(0xFF7D93EA);
+  static const Color frameUpgradedEnd = Color(0xFF1A2F80);
+  static const Color frameUpgradedOuter = Color(0xFFAEBCF0);
+  static const Color frameAnimatedHighlight = Color(0xFFF09BC4);
+  static const Color frameAnimatedGlow = Color(0x596E2E9E); // rgba(110,46,158,.35)
+
+  /// 角标阴影 `0 1px 3px rgba(20,16,40,.18)`。
+  static const Color growthBadgeShadow = Color(0x2E141028);
+
   /// 逐级色（UI 稿 A1 色条）：段内浅 → 深、跨段换色相。Lv1–20 依次；Lv21+ 由 `growthLevelColor` 兜底。
   static const List<Color> growthLevelColors = [
     // Pemula Lv1–4

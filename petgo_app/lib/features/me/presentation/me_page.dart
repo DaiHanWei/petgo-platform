@@ -14,6 +14,7 @@ import '../../../shared/widgets/post_grid_tile.dart';
 import '../../../shared/widgets/profile_stats_row.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_response.dart';
+import '../../growth/domain/growth_badge.dart';
 import '../../growth/domain/growth_models.dart';
 import '../../growth/presentation/level_capsule.dart';
 import '../../growth/presentation/level_page.dart';
@@ -463,7 +464,13 @@ class _ProfileHeadCard extends StatelessWidget {
           onTap: onAvatarTap,
           child: Stack(
             children: [
-              InitialAvatar(avatarUrl: profile?.avatarUrl, nickname: name, radius: 42),
+              // V1.4.0 ① Story 3.2（A6）：只戴框、不放等级角标（等级看下方胶囊）；相机角标仍在最上层。
+              InitialAvatar(
+                  avatarUrl: profile?.avatarUrl,
+                  nickname: name,
+                  radius: 42,
+                  growth: GrowthBadge.fromBrief(growth),
+                  showLevelBadge: false),
               Positioned(
                 right: 0,
                 bottom: 0,

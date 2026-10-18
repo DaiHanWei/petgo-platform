@@ -18,6 +18,8 @@ import 'package:tailtopia/features/content/presentation/author_moderation_callba
 import 'package:tailtopia/features/content/presentation/social_tab.dart';
 import 'package:tailtopia/features/content/presentation/widgets/following_empty_view.dart';
 import 'package:tailtopia/features/content/presentation/widgets/following_strip.dart';
+import 'package:tailtopia/features/growth/domain/growth_badge.dart';
+import 'package:tailtopia/features/growth/domain/growth_models.dart';
 import 'package:tailtopia/features/social/data/follow_suggestion_repository.dart';
 import 'package:tailtopia/features/social/data/following_strip_repository.dart';
 import 'package:tailtopia/features/social/domain/follow_list_item.dart';
@@ -267,5 +269,23 @@ void main() {
 
     onAuthorHidden(ref, 9)();
     expect(c.read(followingFeedProvider).value!.items.map((i) => i.id), [1]);
+  });
+
+  testWidgets('V1.4.0 ① 3.2（A8）：戴框者框替代紫环；没戴框者保留紫环 + 数字角标；格子外尺寸不变', (tester) async {
+    await _pump(tester, posts: [_post(1)], strip: const [
+      FollowingStripUser(userId: 100, userToken: 'tok100', nickname: 'framed',
+          badge: GrowthBadge(level: 12, tier: GrowthTier.guardian, frame: GrowthFrame.upgraded)),
+      FollowingStripUser(userId: 101, userToken: 'tok101', nickname: 'ring',
+          badge: GrowthBadge(level: 6, tier: GrowthTier.buddy)),
+    ]);
+    final framed = find.byKey(const ValueKey('followingStripAvatar_100'));
+    final ring = find.byKey(const ValueKey('followingStripAvatar_101'));
+    expect(find.descendant(of: framed, matching: find.byKey(const ValueKey('followingStripFramed'))), findsOneWidget);
+    expect(find.descendant(of: framed, matching: find.byKey(const ValueKey('followingStripRing'))), findsNothing);
+    expect(find.descendant(of: framed, matching: find.byKey(const ValueKey('growthFrame_upgraded'))), findsOneWidget);
+    expect(find.descendant(of: ring, matching: find.byKey(const ValueKey('followingStripRing'))), findsOneWidget);
+    expect(find.descendant(of: ring, matching: find.text('6')), findsOneWidget);
+    expect(tester.getSize(find.byKey(const ValueKey('followingStripFramed'))),
+        tester.getSize(find.byKey(const ValueKey('followingStripRing'))));
   });
 }

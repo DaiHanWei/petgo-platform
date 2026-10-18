@@ -53,7 +53,12 @@ class FollowUserRow extends ConsumerWidget {
         style: AppTypography.body.copyWith(fontWeight: FontWeight.w600));
     final identity = Row(
       children: [
-        LetterAvatar(url: item.deleted ? null : item.avatarUrl, name: name, deleted: item.deleted, size: 40),
+        LetterAvatar(
+            url: item.deleted ? null : item.avatarUrl,
+            name: name,
+            deleted: item.deleted,
+            size: 40,
+            growth: item.badge),
         const SizedBox(width: 12),
         Expanded(
           child: subtitle == null
