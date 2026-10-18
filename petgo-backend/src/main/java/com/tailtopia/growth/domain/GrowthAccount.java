@@ -88,6 +88,36 @@ public class GrowthAccount {
         this.updatedAt = now;
     }
 
+    /**
+     * 升级写待弹庆祝（Story 2.1 · AD-10）：已有待弹保留原 from、只推进 to（连跳只弹一次、显示最终等级）。
+     */
+    public void markCelebration(int fromLevel, int toLevel, Instant now) {
+        if (this.celebrateFromLevel == null) {
+            this.celebrateFromLevel = fromLevel;
+        }
+        this.celebrateToLevel = toLevel;
+        this.updatedAt = now;
+    }
+
+    /** 清掉待弹庆祝（ack / 降级后读时校正）。 */
+    public void clearCelebration(Instant now) {
+        this.celebrateFromLevel = null;
+        this.celebrateToLevel = null;
+        this.updatedAt = now;
+    }
+
+    /** 弹出期间又升了级：只把 from 推进到已看过的等级，保留 to（Story 2.1 · AC4.2）。 */
+    public void advanceCelebrationFrom(int fromLevel, Instant now) {
+        this.celebrateFromLevel = fromLevel;
+        this.updatedAt = now;
+    }
+
+    /** 存量汇总弹窗已确认（Story 2.1 / 2.2）。 */
+    public void clearBackfillPopup(Instant now) {
+        this.backfillPopupPending = false;
+        this.updatedAt = now;
+    }
+
     public Long getUserId() {
         return userId;
     }

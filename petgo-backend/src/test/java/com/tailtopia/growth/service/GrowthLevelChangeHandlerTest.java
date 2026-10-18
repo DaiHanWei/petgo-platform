@@ -99,6 +99,54 @@ class GrowthLevelChangeHandlerTest {
         verify(events, never()).publishEvent(any(Object.class));
     }
 
+    // ---------- Story 2.1：待弹庆祝 ----------
+
+    @Test
+    void levelUpWritesPendingCelebration() {
+        GrowthAccount a = GrowthAccount.of(7L, 500, 4);
+
+        handler.onLifetimeChanged(a, RuleCode.POST_PUBLISHED);
+
+        assertThat(a.getCelebrateFromLevel()).isEqualTo(4);
+        assertThat(a.getCelebrateToLevel()).isEqualTo(5);
+    }
+
+    @Test
+    void secondLevelUpKeepsOriginalFromAndAdvancesTo() {
+        GrowthAccount a = GrowthAccount.of(7L, 500, 4);
+        handler.onLifetimeChanged(a, RuleCode.POST_PUBLISHED); // 4 → 5，未确认
+        a.addLifetime(800, Instant.now()); // 1300 → Lv7
+
+        handler.onLifetimeChanged(a, RuleCode.GIFT_SENT);
+
+        assertThat(a.getCelebrateFromLevel()).isEqualTo(4);
+        assertThat(a.getCelebrateToLevel()).isEqualTo(7);
+    }
+
+    @Test
+    void levelDownDoesNotTouchPendingCelebration() {
+        GrowthAccount a = GrowthAccount.of(7L, 500, 4);
+        handler.onLifetimeChanged(a, RuleCode.POST_PUBLISHED);
+        a.addLifetime(-10, Instant.now()); // 490 → Lv4
+
+        handler.onLifetimeChanged(a, RuleCode.POST_PUBLISHED);
+
+        assertThat(a.getLevel()).isEqualTo(4);
+        assertThat(a.getCelebrateFromLevel()).isEqualTo(4);
+        assertThat(a.getCelebrateToLevel()).isEqualTo(5);
+    }
+
+    @Test
+    void launchBackfillDoesNotWriteCelebration() {
+        GrowthAccount a = GrowthAccount.of(7L, 900, 1);
+
+        handler.onLifetimeChanged(a, RuleCode.LAUNCH_BACKFILL);
+
+        assertThat(a.getLevel()).isEqualTo(6);
+        assertThat(a.getCelebrateFromLevel()).isNull();
+        assertThat(a.getCelebrateToLevel()).isNull();
+    }
+
     @Test
     void emptyResultFallsBackToLevelOne() {
         when(jdbc.queryForObject(eq(GrowthLevelChangeHandler.LEVEL_FOR_TOTAL_SQL), anyMap(), eq(Integer.class)))

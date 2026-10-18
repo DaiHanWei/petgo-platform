@@ -36,7 +36,9 @@ class MeGrowthControllerTest {
 
     private final GrowthPageQuery page = mock(GrowthPageQuery.class);
     private final GrowthLedgerPageQuery ledger = mock(GrowthLedgerPageQuery.class);
-    private final MeGrowthController controller = new MeGrowthController(page, ledger);
+    private final com.tailtopia.growth.service.GrowthPopupService popups =
+            mock(com.tailtopia.growth.service.GrowthPopupService.class);
+    private final MeGrowthController controller = new MeGrowthController(page, ledger, popups);
     private MockMvc mvc;
 
     @BeforeEach

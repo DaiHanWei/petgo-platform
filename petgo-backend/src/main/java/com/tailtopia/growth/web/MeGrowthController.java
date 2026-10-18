@@ -2,12 +2,19 @@ package com.tailtopia.growth.web;
 
 import com.tailtopia.growth.service.GrowthLedgerPageQuery;
 import com.tailtopia.growth.service.GrowthPageQuery;
+import com.tailtopia.growth.service.GrowthPopupService;
 import com.tailtopia.growth.web.dto.GrowthLedgerPage;
 import com.tailtopia.growth.web.dto.GrowthPageResponse;
+import com.tailtopia.growth.web.dto.GrowthPopupsResponse;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.error.ErrorTypes;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,10 +29,12 @@ public class MeGrowthController {
 
     private final GrowthPageQuery page;
     private final GrowthLedgerPageQuery ledger;
+    private final GrowthPopupService popups;
 
-    public MeGrowthController(GrowthPageQuery page, GrowthLedgerPageQuery ledger) {
+    public MeGrowthController(GrowthPageQuery page, GrowthLedgerPageQuery ledger, GrowthPopupService popups) {
         this.page = page;
         this.ledger = ledger;
+        this.popups = popups;
     }
 
     @GetMapping
@@ -41,6 +50,27 @@ public class MeGrowthController {
             return GrowthLedgerPage.empty();
         }
         return ledger.page(userId, cursor);
+    }
+
+    /** 待弹的升级庆祝 / 存量汇总（Story 2.1 · AD-11）。 */
+    @GetMapping("/popups")
+    public GrowthPopupsResponse popups(@AuthenticationPrincipal Jwt jwt) {
+        return popups.getPopups(currentUserId(jwt));
+    }
+
+    /**
+     * 确认弹窗（幂等，204）。{@code kind ∈ celebration | backfill}；{@code toLevel} 仅 celebration 用（防弹出期间又升级被吞）。
+     */
+    @PostMapping("/popups/{kind}/ack")
+    public ResponseEntity<Void> ack(@AuthenticationPrincipal Jwt jwt, @PathVariable String kind,
+            @RequestParam(required = false) Integer toLevel) {
+        long userId = currentUserId(jwt);
+        switch (kind) {
+            case "celebration" -> popups.ackCelebration(userId, toLevel);
+            case "backfill" -> popups.ackBackfill(userId);
+            default -> throw new AppException(HttpStatus.BAD_REQUEST, ErrorTypes.VALIDATION, "未知的弹窗类型");
+        }
+        return ResponseEntity.noContent().build();
     }
 
     private static long currentUserId(Jwt jwt) {

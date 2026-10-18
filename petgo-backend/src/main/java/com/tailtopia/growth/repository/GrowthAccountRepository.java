@@ -25,6 +25,16 @@ public interface GrowthAccountRepository extends JpaRepository<GrowthAccount, Lo
             + "ON CONFLICT (user_id) DO NOTHING", nativeQuery = true)
     int insertIfAbsent(@Param("userId") long userId);
 
+    /**
+     * 降级后读时校正（Story 2.1 · AC3.3）：待弹的 {@code min(to, level) <= from} 时原子清掉两列。条件写在 SQL 里，
+     * 不依赖内存实体（同事务里已读出的实体可能已过时）；并发入账若刚推进了待弹，条件不再成立、不会被误清。
+     */
+    @Modifying
+    @Query(value = "UPDATE growth_accounts SET celebrate_from_level = NULL, celebrate_to_level = NULL, "
+            + "updated_at = now() WHERE user_id = :userId AND celebrate_from_level IS NOT NULL "
+            + "AND LEAST(celebrate_to_level, level) <= celebrate_from_level", nativeQuery = true)
+    int clearStaleCelebration(@Param("userId") long userId);
+
     /** {@code SELECT … FOR UPDATE}：锁住账户行。 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from GrowthAccount a where a.userId = :userId")

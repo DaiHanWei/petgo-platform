@@ -54,9 +54,12 @@ public class GrowthLevelChangeHandler {
             return;
         }
         lockedAccount.changeLevel(newLevel, clock.instant());
+        // Story 2.1：只有升级且来源不是存量补算才写待弹庆祝；降级不写、不清（读时校正，见 GrowthPopupService）。
+        // 升级通知由 GrowthNotifyListener 在 AFTER_COMMIT 消费下面这个事件发出（入账回滚则不发）。
+        if (newLevel > oldLevel && source != RuleCode.LAUNCH_BACKFILL) {
+            lockedAccount.markCelebration(oldLevel, newLevel, clock.instant());
+        }
         events.publishEvent(new GrowthLevelChangedEvent(lockedAccount.getUserId(), oldLevel, newLevel));
-        // TODO Story 2.1：升级且 source != LAUNCH_BACKFILL → 写待弹庆祝（celebrate_from/to_level）+ AFTER_COMMIT 发
-        //  GROWTH_LEVEL_UP 通知；降级不通知、不弹窗。保留 source 参数即为此。
     }
 
     /** 累计值对应的等级：{@code max(level) where threshold <= total}（一条 SQL，不缓存）。包级可见供批量重算复用。 */

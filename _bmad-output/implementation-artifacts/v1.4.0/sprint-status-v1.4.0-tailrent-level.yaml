@@ -45,8 +45,8 @@ development_status:
   1-5-我的页等级胶囊-等级页与exp明细页: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-升级通知与弹窗接口: ready-for-dev
+  epic-2: in-progress
+  2-1-升级通知与弹窗接口: review
   2-2-存量用户补算与虚拟号展示等级初始化: ready-for-dev
   2-3-升级庆祝-存量汇总弹窗与通知中心: ready-for-dev
   epic-2-retrospective: optional
