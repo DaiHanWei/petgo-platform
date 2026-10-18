@@ -363,17 +363,20 @@ public class AccountQueryService {
      *
      * <p>独立事务：调用方是请求链路上的 filter，活跃刷新失败<b>绝不可</b>波及业务事务
      * —— 记不上「他今天来过」最多让召回推送晚一轮，让用户的请求 500 则是真事故。
+     *
+     * @return 是否为该用户当天（WIB）首次活跃（{@code user_active_days} 本次新写入一行）。
+     *         V1.4.0 ① Story 1.1：为 true 时调用方发 {@code UserDailyActiveEvent}（每日登录成长值）。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public void touchLastActive(long userId, Instant now) {
+    public boolean touchLastActive(long userId, Instant now) {
         users.touchLastActiveAt(userId, now, now.atZone(ZoneOffset.UTC).toLocalDate()
                 .atStartOfDay(ZoneOffset.UTC).toInstant());
         // 日报「昨日日活」：按印尼自然日逐日记录（last_active_at 只存最后一次，算不了历史某天的日活）。
-        users.recordActiveDay(userId, now.atZone(WIB).toLocalDate());
+        return users.recordActiveDay(userId, now.atZone(WIB).toLocalDate()) == 1;
     }
 
     /** 日报切日时区（运营在雅加达）。 */
-    private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
+    private static final java.time.ZoneId WIB = com.tailtopia.shared.schedule.ScheduleWindow.WIB;
 
     private static LocalDate toUtcDate(Instant instant) {
         return instant == null ? null : instant.atZone(ZoneOffset.UTC).toLocalDate();

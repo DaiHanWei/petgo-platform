@@ -16,7 +16,8 @@ import com.tailtopia.profile.domain.MilestoneLevel;
  * @param title   里程碑中文标题（推送文案用）
  * @param source  完成来源（V1.1.2 Story 6.1 追加）：埋点 {@code path} 属性据此判定。
  *                notify 侧不关心它 —— 加这个字段纯为让分析侧能回答「这个里程碑是怎么点亮的」。
+ * @param petId   达成的宠物档案 id（V1.4.0 ① Story 1.1 追加；账号级里程碑为 null）：成长值按「账号 × code × 宠物」幂等。
  */
 public record MilestoneCompletedEvent(long ownerId, String code, MilestoneLevel level, String title,
-        MilestoneCompletionSource source) {
+        MilestoneCompletionSource source, Long petId) {
 }

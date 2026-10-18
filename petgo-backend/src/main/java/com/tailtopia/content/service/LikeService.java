@@ -5,6 +5,7 @@ import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.LikeResponse;
 import com.tailtopia.content.event.ContentLikedEvent;
+import com.tailtopia.content.event.ContentUnlikedEvent;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.shared.error.AppException;
@@ -51,11 +52,17 @@ public class LikeService {
         return new LikeResponse(true, likes.countByPostId(postId));
     }
 
-    /** 取消点赞（幂等：未赞 DELETE 亦成功）。 */
+    /**
+     * 取消点赞（幂等：未赞 DELETE 亦成功）。真删到行且非自赞时发 {@link ContentUnlikedEvent}
+     * （V1.4.0 ① 扣回点赞成长值）；未赞时取消、自赞取消都不发。
+     */
     @Transactional
     public LikeResponse unlike(long postId, long userId) {
-        requireVisible(postId);
-        likes.deleteByPostIdAndUserId(postId, userId);
+        ContentPost post = requireVisible(postId);
+        int deleted = likes.deleteByPostIdAndUserId(postId, userId);
+        if (deleted > 0 && post.getAuthorId() != userId) {
+            events.publishEvent(new ContentUnlikedEvent(postId, userId, post.getAuthorId()));
+        }
         return new LikeResponse(false, likes.countByPostId(postId));
     }
 

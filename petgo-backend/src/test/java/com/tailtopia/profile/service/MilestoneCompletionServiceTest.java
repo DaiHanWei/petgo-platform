@@ -329,7 +329,11 @@ class MilestoneCompletionServiceTest {
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions, times(1)).save(cap.capture());
         assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(m);
-        verify(events, times(1)).publishEvent(any(com.tailtopia.profile.event.MilestoneCompletedEvent.class));
+        ArgumentCaptor<com.tailtopia.profile.event.MilestoneCompletedEvent> ev =
+                ArgumentCaptor.forClass(com.tailtopia.profile.event.MilestoneCompletedEvent.class);
+        verify(events, times(1)).publishEvent(ev.capture());
+        // V1.4.0 ① Story 1.1：事件末尾追加 petId = 达成的宠物档案 id（成长值按账号 × code × 宠物幂等）。
+        assertThat(ev.getValue().petId()).isEqualTo(10L);
     }
 
     @Test

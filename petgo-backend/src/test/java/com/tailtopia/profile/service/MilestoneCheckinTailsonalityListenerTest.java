@@ -46,7 +46,7 @@ class MilestoneCheckinTailsonalityListenerTest {
     }
 
     private static PlaceCheckedInEvent checkin(List<Long> petIds) {
-        return new PlaceCheckedInEvent(7L, "t".repeat(32), PlaceType.PARK, true, 1, petIds);
+        return new PlaceCheckedInEvent(7L, "t".repeat(32), PlaceType.PARK, true, 1, petIds, 11L);
     }
 
     private static KeepsakeUnlockedEvent unlocked(KeepsakeSku sku) {

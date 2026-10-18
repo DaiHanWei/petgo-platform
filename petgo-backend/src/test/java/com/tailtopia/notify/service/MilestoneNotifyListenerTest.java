@@ -26,7 +26,7 @@ class MilestoneNotifyListenerTest {
 
     private static MilestoneCompletedEvent event(String code, MilestoneLevel level) {
         return new MilestoneCompletedEvent(7L, code, level, "标题",
-                MilestoneCompletionSource.SYSTEM_AUTO);
+                MilestoneCompletionSource.SYSTEM_AUTO, 3L);
     }
 
     /** L 级维持现状：通知中心 + 系统推送。**本 story 一字未改**，这条是它的回归。 */

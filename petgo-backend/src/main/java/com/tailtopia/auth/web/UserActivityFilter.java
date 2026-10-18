@@ -1,12 +1,15 @@
 package com.tailtopia.auth.web;
 
+import com.tailtopia.auth.event.UserDailyActiveEvent;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.shared.schedule.ScheduleWindow;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Instant;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -26,15 +29,19 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *       独立命名空间<b>且大量碰撞</b>（SecurityConfig 安全评审三轮 #1）。不加这道判断，
  *       兽医每次刷工作台都会把某个无关用户标记成「今天来过」，召回名单直接失真。</li>
  *   <li><b>放在链后、异常全吞</b>：活跃刷新失败最多让召回晚一轮；让用户的请求 500 是真事故。</li>
+ *   <li><b>当天首次活跃发 {@link UserDailyActiveEvent}</b>（V1.4.0 ① Story 1.1，每日登录成长值）：
+ *       仅当 {@code touchLastActive} 返回 true；发布失败同样吞掉。</li>
  * </ol>
  */
 @Component
 public class UserActivityFilter extends OncePerRequestFilter {
 
     private final AccountQueryService accounts;
+    private final ApplicationEventPublisher events;
 
-    public UserActivityFilter(AccountQueryService accounts) {
+    public UserActivityFilter(AccountQueryService accounts, ApplicationEventPublisher events) {
         this.accounts = accounts;
+        this.events = events;
     }
 
     @Override
@@ -52,7 +59,11 @@ public class UserActivityFilter extends OncePerRequestFilter {
             Long userId = currentUserId();
             if (userId != null) {
                 try {
-                    accounts.touchLastActive(userId, Instant.now());
+                    Instant now = Instant.now();
+                    if (accounts.touchLastActive(userId, now)) {
+                        events.publishEvent(new UserDailyActiveEvent(userId,
+                                now.atZone(ScheduleWindow.WIB).toLocalDate()));
+                    }
                 } catch (Exception ignored) {
                     // 刷新失败绝不可影响业务响应。
                 }
