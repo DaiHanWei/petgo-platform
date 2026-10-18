@@ -151,6 +151,43 @@ class GrowthPopupServiceTest {
         service.ackCelebration(8L, null);
     }
 
+    // ---------- Story 2.2：存量汇总 ----------
+
+    private GrowthAccount backfillAccount(boolean pending) {
+        GrowthAccount a = account(4, null, null, null);
+        ReflectionTestUtils.setField(a, "backfillPopupPending", pending);
+        ReflectionTestUtils.setField(a, "backfillActiveDays", 60);
+        ReflectionTestUtils.setField(a, "backfillMilestoneCount", 13);
+        ReflectionTestUtils.setField(a, "backfillMilestoneExp", 95);
+        when(levels.findById(4)).thenReturn(Optional.of(GrowthLevelDef.of(4, 250, GrowthTier.NEWBIE)));
+        return a;
+    }
+
+    @Test
+    void pendingBackfillReturnsSnapshot() {
+        backfillAccount(true);
+        GrowthPopupsResponse.BackfillView b = service.getPopups(7L).backfill();
+        assertThat(b).isEqualTo(new GrowthPopupsResponse.BackfillView(4, GrowthTier.NEWBIE, 60, 13, 95, 275));
+    }
+
+    @Test
+    void notPendingBackfillIsNull() {
+        backfillAccount(false);
+        assertThat(service.getPopups(7L).backfill()).isNull();
+    }
+
+    @Test
+    void celebrationAndBackfillTogether() {
+        GrowthAccount a = backfillAccount(true);
+        ReflectionTestUtils.setField(a, "level", 5);
+        ReflectionTestUtils.setField(a, "celebrateFromLevel", 4);
+        ReflectionTestUtils.setField(a, "celebrateToLevel", 5);
+        when(levels.findById(5)).thenReturn(Optional.of(GrowthLevelDef.of(5, 500, GrowthTier.BUDDY)));
+        GrowthPopupsResponse r = service.getPopups(7L);
+        assertThat(r.celebration()).isNotNull();
+        assertThat(r.backfill().tier()).isEqualTo(GrowthTier.BUDDY);
+    }
+
     @Test
     void nonParticipantGetsNothing() {
         when(page.participating(9L)).thenReturn(false);

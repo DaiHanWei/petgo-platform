@@ -49,6 +49,16 @@ public class GrowthAccount {
     @Column(name = "backfill_popup_pending", nullable = false)
     private boolean backfillPopupPending;
 
+    /** 上线补算快照（Story 2.2 · V20261018_1503），仅供存量汇总弹窗显示，不参与任何计算。 */
+    @Column(name = "backfill_active_days")
+    private Integer backfillActiveDays;
+
+    @Column(name = "backfill_milestone_count")
+    private Integer backfillMilestoneCount;
+
+    @Column(name = "backfill_milestone_exp")
+    private Integer backfillMilestoneExp;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -148,6 +158,18 @@ public class GrowthAccount {
 
     public boolean isBackfillPopupPending() {
         return backfillPopupPending;
+    }
+
+    public Integer getBackfillActiveDays() {
+        return backfillActiveDays;
+    }
+
+    public Integer getBackfillMilestoneCount() {
+        return backfillMilestoneCount;
+    }
+
+    public Integer getBackfillMilestoneExp() {
+        return backfillMilestoneExp;
     }
 
     public Instant getUpdatedAt() {

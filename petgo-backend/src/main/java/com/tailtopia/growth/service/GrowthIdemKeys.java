@@ -88,6 +88,11 @@ public final class GrowthIdemKeys {
         return "SPEND:SHOP:" + shopOrderId;
     }
 
+    /** 上线存量补算（Story 2.2；迁移 V20261018_1503 里以 SQL 写同一格式）：{@code BACKFILL:{u}}。 */
+    public static String backfill(long userId) {
+        return "BACKFILL:" + userId;
+    }
+
     /** 退款扣回的 sourceKey（Story 1.3）：{@code REFUND:{refundKey}}，拼进 {@link #reverse}。 */
     public static String refundSource(String refundKey) {
         return "REFUND:" + refundKey;

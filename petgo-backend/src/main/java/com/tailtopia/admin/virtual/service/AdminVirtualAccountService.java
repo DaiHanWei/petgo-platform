@@ -6,6 +6,7 @@ import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.content.species.ContentSpecies;
+import com.tailtopia.growth.service.GrowthDisplayLevelService;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.UUID;
@@ -24,10 +25,14 @@ public class AdminVirtualAccountService {
 
     private final UserRepository users;
     private final AdminAuditService audit;
+    /** V1.4.0 ① Story 2.2：新建虚拟号随机展示等级 6–8（AB-33.4：表单不加字段）。 */
+    private final GrowthDisplayLevelService growthDisplayLevels;
 
-    public AdminVirtualAccountService(UserRepository users, AdminAuditService audit) {
+    public AdminVirtualAccountService(UserRepository users, AdminAuditService audit,
+            GrowthDisplayLevelService growthDisplayLevels) {
         this.users = users;
         this.audit = audit;
+        this.growthDisplayLevels = growthDisplayLevels;
     }
 
     @Transactional(readOnly = true)
@@ -124,6 +129,7 @@ public class AdminVirtualAccountService {
             u.setAccountSpecies(accountSpecies);
             users.save(u);
         }
+        growthDisplayLevels.assignInitial(u.getId());
         audit.record(adminId, "VIRTUAL_ACCOUNT_CREATE", "user", String.valueOf(u.getId()),
                 "nickname=" + nn);
         return u.getId();

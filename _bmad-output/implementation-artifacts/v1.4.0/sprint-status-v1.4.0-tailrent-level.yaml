@@ -47,7 +47,7 @@ development_status:
 
   epic-2: in-progress
   2-1-升级通知与弹窗接口: review
-  2-2-存量用户补算与虚拟号展示等级初始化: ready-for-dev
+  2-2-存量用户补算与虚拟号展示等级初始化: review
   2-3-升级庆祝-存量汇总弹窗与通知中心: ready-for-dev
   epic-2-retrospective: optional
 

@@ -25,13 +25,15 @@ class AdminVirtualAccountServiceTest {
 
     private UserRepository users;
     private AdminAuditService audit;
+    private com.tailtopia.growth.service.GrowthDisplayLevelService displayLevels;
     private AdminVirtualAccountService svc;
 
     @BeforeEach
     void setUp() {
         users = Mockito.mock(UserRepository.class);
         audit = Mockito.mock(AdminAuditService.class);
-        svc = new AdminVirtualAccountService(users, audit);
+        displayLevels = Mockito.mock(com.tailtopia.growth.service.GrowthDisplayLevelService.class);
+        svc = new AdminVirtualAccountService(users, audit, displayLevels);
     }
 
     @Test
@@ -55,6 +57,8 @@ class AdminVirtualAccountServiceTest {
         long id = svc.create("汪星人", "https://x/a.jpg", 7L);
         assertThat(id).isEqualTo(42L);
         verify(audit).record(eq(7L), eq("VIRTUAL_ACCOUNT_CREATE"), anyString(), eq("42"), anyString());
+        // V1.4.0 ① Story 2.2 · AC4：新建虚拟号随机展示等级（表单不加字段）。
+        verify(displayLevels).assignInitial(42L);
     }
 
     private static void setId(User u, long id) {
@@ -71,6 +75,7 @@ class AdminVirtualAccountServiceTest {
     void createRejectsBlankNickname() {
         assertThatThrownBy(() -> svc.create("  ", null, 7L)).isInstanceOf(AppException.class);
         verify(users, never()).save(any());
+        verify(displayLevels, never()).assignInitial(org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test

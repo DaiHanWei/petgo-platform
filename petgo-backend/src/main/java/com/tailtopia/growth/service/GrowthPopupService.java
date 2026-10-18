@@ -67,9 +67,19 @@ public class GrowthPopupService {
         return new GrowthPopupsResponse(celebration, backfill(a));
     }
 
-    /** 存量汇总：Story 2.2 填充；本 story 恒 null。 */
+    /**
+     * 存量汇总（Story 2.2）：{@code backfill_popup_pending = true} 才返回。天数 / 里程碑读补算当时的快照列
+     * （{@code user_active_days} 上线后还在增长，现算会对不上当时入账值）；{@code level / tier} 为当前等级与段位。
+     */
     BackfillView backfill(GrowthAccount a) {
-        return null;
+        if (!a.isBackfillPopupPending()) {
+            return null;
+        }
+        long days = a.getBackfillActiveDays() == null ? 0 : a.getBackfillActiveDays();
+        long count = a.getBackfillMilestoneCount() == null ? 0 : a.getBackfillMilestoneCount();
+        long exp = a.getBackfillMilestoneExp() == null ? 0 : a.getBackfillMilestoneExp();
+        GrowthTier tier = levels.findById(a.getLevel()).map(GrowthLevelDef::getTier).orElse(GrowthTier.NEWBIE);
+        return new BackfillView(a.getLevel(), tier, days, count, exp, days * 3 + exp);
     }
 
     private CelebrationView celebration(GrowthAccount a) {
