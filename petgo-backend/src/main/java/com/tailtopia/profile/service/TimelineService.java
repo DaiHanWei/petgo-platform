@@ -313,7 +313,13 @@ public class TimelineService {
         // 保的是用户已经花过的钱）；而时间线讲的是「这只宠物的成长事件」，
         // 一张属于别的宠物的卡不该占这只宠物的时间线位置，付没付费都一样。
         List<TimelineItemResponse> idCardIssues = new ArrayList<>();
-        List<IdCard> cards = diaryOnly ? List.<IdCard>of() : idCards.findByUserIdOrderByCreatedAtDesc(ownerId).stream()
+        //
+        // 🔴 V1.4.0 multi-pet（1.4 复审）：id_cards 只挂账号，多宠后若每只宠物都出这条，同一张卡会出现在
+        // 每只宠物的时间线上。只在**默认宠物**的时间线出（单宠物账号默认宠物就是唯一那只，行为不变）。
+        boolean idCardOnThisPet = !diaryOnly && petResolver.resolveOptional(ownerId, null)
+                .map(d -> d.getId() == null || d.getId() == petId)
+                .orElse(true);
+        List<IdCard> cards = !idCardOnThisPet ? List.<IdCard>of() : idCards.findByUserIdOrderByCreatedAtDesc(ownerId).stream()
                 .filter(c -> c.getProfileDeletedAt() == null)
                 .toList();
         if (!cards.isEmpty()) {

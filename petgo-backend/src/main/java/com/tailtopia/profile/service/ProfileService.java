@@ -13,18 +13,25 @@ import com.tailtopia.profile.dto.PetProfileResponse;
 import com.tailtopia.profile.dto.PetProfileUpdateRequest;
 import com.tailtopia.profile.event.ProfileCreatedEvent;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.slot.PetSlotFullException;
+import com.tailtopia.profile.slot.PetSlotLock;
+import com.tailtopia.profile.slot.PetSlotQuota;
+import com.tailtopia.profile.slot.PetSlotService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.error.ErrorTypes;
 import com.tailtopia.shared.media.MediaDeletionService;
 import com.tailtopia.shared.media.PersonalMedia;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 宠物档案服务（Story 2.2）：创建（单账号单宠物）+ 当前用户档案查询 + 名片 token 生成。
+ * 宠物档案服务（Story 2.2）：创建（V1.4.0 multi-pet Story 1.4 起按名额，最多 5 只）+ 当前用户档案查询 + 名片 token 生成。
  *
  * <p>{@code ownerId} 一律由调用方从 JWT 取，绝不信任客户端传入（防越权）。
  */
@@ -41,14 +48,20 @@ public class ProfileService {
     private final com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges;
     /** V1.4.0 multi-pet：「我的宠物」只经 {@link PetResolver} 取（AD-2）。 */
     private final PetResolver petResolver;
+    /** V1.4.0 multi-pet Story 1.4：名额只经 {@link PetSlotService#quotaOf}（架构 §5）。 */
+    private final PetSlotService petSlots;
+    /** V1.4.0 multi-pet Story 1.4：建档按账号串行化（名额相关写操作的唯一账号锁）。 */
+    private final PetSlotLock petSlotLock;
 
     public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
             MilestoneService milestoneService, ProfileDeletionService profileDeletion,
             MediaDeletionService mediaDeletion, ApplicationEventPublisher events,
             com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges,
-            PetResolver petResolver) {
+            PetResolver petResolver, PetSlotService petSlots, PetSlotLock petSlotLock) {
         this.tailsonalityBadges = tailsonalityBadges;
         this.petResolver = petResolver;
+        this.petSlots = petSlots;
+        this.petSlotLock = petSlotLock;
         this.profiles = profiles;
         this.tokenGenerator = tokenGenerator;
         this.milestoneService = milestoneService;
@@ -58,12 +71,20 @@ public class ProfileService {
     }
 
     /**
-     * 创建当前用户的宠物档案。已存在 → 409（单账号单宠物，FR-11）。
+     * 创建当前用户的宠物档案（V1.4.0 multi-pet Story 1.4 · AD-3）：同一事务内、任何写入之前——
+     * ① 按账号加锁（并发建档串行化）；② 已有 5 只 → 409 {@code pet-limit-reached}；
+     * ③ 已建只数 ≥ 名额 → 409 {@code pet-slot-full}（带扩展成员）；④ 其余照旧建档。
      */
     @Transactional
     public PetProfileResponse create(long ownerId, PetProfileCreateRequest req) {
-        if (profiles.existsByOwnerId(ownerId)) {
-            throw AppException.profileExists("已有宠物档案，V1 暂仅支持单只宠物");
+        petSlotLock.lockUser(ownerId);
+        long count = profiles.countByOwnerId(ownerId);
+        if (count >= PetSlotService.MAX_PETS) {
+            throw new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_LIMIT_REACHED, "已达宠物数量上限");
+        }
+        PetSlotQuota quota = petSlots.quotaOf(ownerId);
+        if (count >= quota.total()) {
+            throw new PetSlotFullException(quota, petSlots.unitPrice());
         }
         String name = req.name() == null ? null : req.name().trim();
         if (name == null || name.isEmpty()) {
@@ -108,8 +129,9 @@ public class ProfileService {
             }
             return PetProfileResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
-            // 并发双开窗：唯一约束兜底（owner_id / card_token），归一为 409。
-            throw AppException.profileExists("已有宠物档案，V1 暂仅支持单只宠物");
+            // 唯一约束只剩 card_token（理论撞号；并发建档已由 PetSlotLock 串行化）。
+            // 仍归一为 409 profile-exists：旧版 App 只认这个 slug。
+            throw AppException.profileExists("宠物档案创建冲突，请重试");
         }
     }
 
@@ -229,6 +251,11 @@ public class ProfileService {
     @Transactional(readOnly = true)
     public Optional<PetProfile> findDefault(long ownerId) {
         return profiles.findDefault(ownerId);
+    }
+
+    /** V1.4.0 multi-pet Story 1.4：账号全部宠物（按创建时间升序，同刻按 id），经 {@link PetResolver#listOwned}。 */
+    public List<PetProfile> listOwned(long ownerId) {
+        return petResolver.listOwned(ownerId);
     }
 
     private String badgeOf(PetProfile p) {

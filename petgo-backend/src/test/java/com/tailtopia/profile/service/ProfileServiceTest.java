@@ -10,6 +10,11 @@ import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.dto.PetProfileCreateRequest;
 import com.tailtopia.profile.dto.PetProfileResponse;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.slot.PetSlotFullException;
+import com.tailtopia.profile.slot.PetSlotLock;
+import com.tailtopia.profile.slot.PetSlotQuota;
+import com.tailtopia.profile.slot.PetSlotService;
+import com.tailtopia.shared.error.ErrorTypes;
 import com.tailtopia.shared.error.AppException;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +32,15 @@ class ProfileServiceTest {
     private ProfileService service;
 
     private com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges;
+    private PetSlotService petSlots;
+    private PetSlotLock petSlotLock;
+    private org.springframework.context.ApplicationEventPublisher events;
+
+    /** 名额（Lv1 占位：total 1、可租 4、下一档 Lv5）。 */
+    private static PetSlotQuota quota(int total, int petCount, Integer nextLevelSlot) {
+        int rentable = PetSlotService.MAX_PETS - total;
+        return new PetSlotQuota(total, 1, total - 1, 0, petCount, rentable, rentable > 0, nextLevelSlot, false);
+    }
 
     @BeforeEach
     void setUp() {
@@ -38,9 +52,13 @@ class ProfileServiceTest {
         when(tokenGenerator.generate()).thenReturn("TOKEN_ABC");
         tailsonalityBadges = Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityBadgeQuery.class);
         when(tailsonalityBadges.badgeOf(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Optional.empty());
+        petSlots = Mockito.mock(PetSlotService.class);
+        petSlotLock = Mockito.mock(PetSlotLock.class);
+        events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
+        when(petSlots.unitPrice()).thenReturn(PetSlotService.DEFAULT_UNIT_PRICE);
+        when(petSlots.quotaOf(org.mockito.ArgumentMatchers.anyLong())).thenReturn(quota(1, 0, 5));
         service = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
-                mediaDeletion, Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
-                tailsonalityBadges, new PetResolver(profiles));
+                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock);
     }
 
     private PetProfileCreateRequest req() {
@@ -62,7 +80,7 @@ class ProfileServiceTest {
 
     @Test
     void createPersistsWithGeneratedToken() {
-        when(profiles.existsByOwnerId(1L)).thenReturn(false);
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
 
         PetProfileResponse resp = service.create(1L, req());
@@ -75,7 +93,7 @@ class ProfileServiceTest {
 
     @Test
     void invalidPetTypeRejected() {
-        when(profiles.existsByOwnerId(1L)).thenReturn(false);
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
         assertThatThrownBy(() -> service.create(1L, new PetProfileCreateRequest(
                 null, "BIRD", "Momo", null, LocalDate.of(2022, 1, 1), null)))
                 .isInstanceOf(AppException.class)
@@ -84,23 +102,31 @@ class ProfileServiceTest {
 
     @Test
     void blankPetTypeRejected() {
-        when(profiles.existsByOwnerId(1L)).thenReturn(false);
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
         assertThatThrownBy(() -> service.create(1L, new PetProfileCreateRequest(
                 null, "  ", "Momo", null, LocalDate.of(2022, 1, 1), null)))
                 .isInstanceOf(AppException.class);
     }
 
+    /**
+     * V1.4.0 multi-pet Story 1.4 · AC7.1：规则按设计改变——原「已有档案 → 409 profile-exists」，
+     * 现为「已建只数 ≥ 名额 → 409 pet-slot-full」（Lv1 占位下名额 1，所以已有 1 只仍 409，只是 type 变了）。
+     */
     @Test
-    void duplicateProfileRejectedWith409() {
-        when(profiles.existsByOwnerId(1L)).thenReturn(true);
+    void duplicateProfileRejectedWith409PetSlotFullUnderDefaultQuota() {
+        when(profiles.countByOwnerId(1L)).thenReturn(1L);
+        when(petSlots.quotaOf(1L)).thenReturn(quota(1, 1, 5));
         assertThatThrownBy(() -> service.create(1L, req()))
-                .isInstanceOf(AppException.class)
-                .hasMessageContaining("单只宠物");
+                .isInstanceOf(PetSlotFullException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getStatus().value()).isEqualTo(409);
+                    assertThat(((AppException) e).getType()).isEqualTo(ErrorTypes.PET_SLOT_FULL);
+                });
     }
 
     @Test
     void blankNameRejected() {
-        when(profiles.existsByOwnerId(1L)).thenReturn(false);
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
         assertThatThrownBy(() -> service.create(1L,
                 new PetProfileCreateRequest(null, "CAT", "   ", null, null, null)))
                 .isInstanceOf(AppException.class);
@@ -205,7 +231,7 @@ class ProfileServiceTest {
 
     @Test
     void blankOptionalFieldsNormalizedToNull() {
-        when(profiles.existsByOwnerId(1L)).thenReturn(false);
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
         when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
         PetProfileResponse resp = service.create(1L,
                 new PetProfileCreateRequest("  ", "DOG", "Momo", "  ", null, "  "));
@@ -244,7 +270,7 @@ class ProfileServiceTest {
     void recordCardSharedPublishesForChosenPet() {
         var events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
         ProfileService svc = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
-                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles));
+                mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock);
         PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
         when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
         svc.recordCardShared(1L, 11L);
@@ -259,5 +285,93 @@ class ProfileServiceTest {
         when(profiles.existsByIdAndOwnerId(99L, 1L)).thenReturn(false);
         assertThat(service.ownsPet(1L, 11L)).isTrue();
         assertThat(service.ownsPet(1L, 99L)).isFalse();
+    }
+
+    // ---------- V1.4.0 multi-pet Story 1.4：名额校验 ----------
+
+    @Test
+    void lockIsTakenBeforeCountingAndQuota() {
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
+        service.create(1L, req());
+        org.mockito.InOrder order = Mockito.inOrder(petSlotLock, profiles, petSlots);
+        order.verify(petSlotLock).lockUser(1L);
+        order.verify(profiles).countByOwnerId(1L);
+        order.verify(petSlots).quotaOf(1L);
+        order.verify(profiles).save(any(PetProfile.class));
+    }
+
+    @Test
+    void fivePetsRejectedWithPetLimitReachedBeforeSlotCheck() {
+        when(profiles.countByOwnerId(1L)).thenReturn(5L);
+        when(petSlots.quotaOf(1L)).thenReturn(quota(5, 5, null));
+        assertThatThrownBy(() -> service.create(1L, req()))
+                .isInstanceOf(AppException.class)
+                .isNotInstanceOf(PetSlotFullException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getStatus().value()).isEqualTo(409);
+                    assertThat(((AppException) e).getType()).isEqualTo(ErrorTypes.PET_LIMIT_REACHED);
+                });
+        Mockito.verify(petSlots, Mockito.never()).quotaOf(Mockito.anyLong());
+        Mockito.verify(profiles, Mockito.never()).save(any(PetProfile.class));
+    }
+
+    @Test
+    void slotFullCarriesExtensions() {
+        when(profiles.countByOwnerId(1L)).thenReturn(2L);
+        when(petSlots.quotaOf(1L)).thenReturn(quota(2, 2, 10)); // Lv5：名额 2
+        assertThatThrownBy(() -> service.create(1L, req()))
+                .isInstanceOf(PetSlotFullException.class)
+                .satisfies(e -> {
+                    var ext = ((PetSlotFullException) e).problemExtensions();
+                    assertThat(ext).containsEntry("slotTotal", 2).containsEntry("petCount", 2)
+                            .containsEntry("canRent", true).containsEntry("nextLevelSlot", 10)
+                            .containsEntry("unitPrice", 5000L);
+                });
+        Mockito.verify(profiles, Mockito.never()).save(any(PetProfile.class));
+    }
+
+    @Test
+    void secondPetCreatedWhenQuotaAllowsAndPublishesEvents() {
+        when(profiles.countByOwnerId(1L)).thenReturn(1L);
+        when(petSlots.quotaOf(1L)).thenReturn(quota(2, 1, 10)); // Lv5
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 101L));
+        PetProfileResponse resp = service.create(1L, req());
+        assertThat(resp.name()).isEqualTo("Momo");
+        Mockito.verify(milestoneService).assignRoster(101L, PetType.CAT);
+        var cap = org.mockito.ArgumentCaptor.forClass(Object.class);
+        Mockito.verify(events, Mockito.times(3)).publishEvent(cap.capture());
+        assertThat(cap.getAllValues()).hasAtLeastOneElementOfType(com.tailtopia.profile.event.ProfileCreatedEvent.class)
+                .hasAtLeastOneElementOfType(com.tailtopia.namemoderation.event.NameSubmittedEvent.class)
+                .hasAtLeastOneElementOfType(com.tailtopia.avatarmoderation.event.AvatarReviewRequestedEvent.class);
+    }
+
+    /** PRD AC9：Lv10 建满 3 只后降到 Lv9（名额 2）→ 已建照常，只是不能再建第 4 只。 */
+    @Test
+    void downgradeKeepsExistingPetsButBlocksNewOne() {
+        when(profiles.countByOwnerId(1L)).thenReturn(3L);
+        when(petSlots.quotaOf(1L)).thenReturn(quota(2, 3, 10)); // Lv9
+        assertThatThrownBy(() -> service.create(1L, req())).isInstanceOf(PetSlotFullException.class);
+        PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 12L);
+        when(profiles.findByIdAndOwnerId(12L, 1L)).thenReturn(java.util.Optional.of(b));
+        assertThat(service.getMyProfile(1L, 12L).name()).isEqualTo("B");
+    }
+
+    @Test
+    void uniqueViolationStillNormalizedToProfileExists() {
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
+        when(profiles.save(any(PetProfile.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_pet_profiles_card_token"));
+        assertThatThrownBy(() -> service.create(1L, req()))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getType()).isEqualTo(ErrorTypes.PROFILE_EXISTS));
+    }
+
+    @Test
+    void listOwnedDelegatesToResolverOrder() {
+        PetProfile a = withId(PetProfile.create(1L, PetType.CAT, "A", null, null, null, null, "TOK_A"), 10L);
+        PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(1L)).thenReturn(java.util.List.of(a, b));
+        assertThat(service.listOwned(1L)).extracting(PetProfile::getName).containsExactly("A", "B");
     }
 }

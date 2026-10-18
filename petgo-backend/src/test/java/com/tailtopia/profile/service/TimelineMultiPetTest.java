@@ -111,4 +111,16 @@ class TimelineMultiPetTest {
         verify(health).countHealthEvents(A);
     }
 
+
+    /** 1.4 复审：账号级身份证「名片已生成」只出在默认宠物 A 的时间线，B 的时间线不查卡。 */
+    @Test
+    void idCardIssuedOnlyOnDefaultPetTimeline() {
+        when(resolver.resolveOptional(OWNER, null)).thenReturn(java.util.Optional.of(pet(OWNER, A, T0)));
+
+        service.getTimeline(OWNER, B, null, 20, ALL, false);
+        verify(idCards, never()).findByUserIdOrderByCreatedAtDesc(OWNER);
+
+        service.getTimeline(OWNER, A, null, 20, ALL, false);
+        verify(idCards).findByUserIdOrderByCreatedAtDesc(OWNER);
+    }
 }

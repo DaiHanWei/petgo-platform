@@ -170,12 +170,13 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                         .content(createBody("旺财")))
                 .andExpect(status().isCreated());
 
-        // 单账号单宠物：再建 → 409。
+        // V1.4.0 multi-pet Story 1.4：名额（Lv1 占位下 = 1）已满 → 409 pet-slot-full（原 profile-exists，规则按设计改变）。
         mvc.perform(post("/api/v1/pet-profiles")
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody("小黑")))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("https://petgo/errors/pet-slot-full"));
     }
 
     // ---------- 查询自己的档案 ----------

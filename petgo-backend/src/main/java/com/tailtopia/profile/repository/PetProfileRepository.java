@@ -11,6 +11,9 @@ public interface PetProfileRepository extends JpaRepository<PetProfile, Long> {
 
     boolean existsByOwnerId(long ownerId);
 
+    /** V1.4.0 multi-pet Story 1.4：账号已建宠物只数（名额判定，经 {@code PetSlotService.quotaOf} / 建档上限）。 */
+    long countByOwnerId(long ownerId);
+
     /** V1.4.0 multi-pet（AD-2）：账号全部宠物，按创建时间升序（同刻按 id 升序）。 */
     List<PetProfile> findAllByOwnerIdOrderByCreatedAtAscIdAsc(long ownerId);
 

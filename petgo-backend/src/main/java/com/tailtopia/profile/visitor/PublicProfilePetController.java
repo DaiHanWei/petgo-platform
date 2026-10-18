@@ -5,6 +5,7 @@ import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.read.UserHideRelationReader;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -99,6 +100,31 @@ public class PublicProfilePetController {
         //    里程碑进度与两次健康表计数 —— 五条查询换一个数，而这是个游客可达的端点。
         return ResponseEntity.ok(PublicProfilePetResponse.of(pet.get(), visitors.diaryCount(pet.get()),
                 tailsonalityBadges.badgeOf(pet.get().getId()).orElse(null)));
+    }
+
+    /**
+     * 他人主页宠物列表（V1.4.0 multi-pet Story 1.4 · AD-3 · FR-145.4）：{@code GET /api/v1/users/{userId}/pets}。
+     *
+     * <p>与单只接口 {@link #pet} <b>同一套守卫</b>：我拉黑对方 → 403 {@code blocked-user}；对方拉黑我 / 对方注销或被封 /
+     * 无宠物 → {@code 200 []}（列表接口用空列表表达「没有」，不用 204；三者不可区分）。按创建时间升序（id 兜底），
+     * 每项与单只接口同一投影（Diary 条数、角色小标）；<b>不返回宠物状态</b>（只读是主人自己的状态）。
+     */
+    @GetMapping("/api/v1/users/{userId}/pets")
+    public List<PublicProfilePetResponse> pets(@AuthenticationPrincipal Jwt jwt, @PathVariable long userId) {
+        Long viewerId = viewerId(jwt);
+        if (viewerId != null && hideRelations.isBlocked(viewerId, userId)) {
+            throw AppException.blockedUser("你已拉黑该用户");
+        }
+        if (viewerId != null && hideRelations.isBlocked(userId, viewerId)) {
+            return List.of();
+        }
+        if (!accounts.isActive(userId)) {
+            return List.of();
+        }
+        return profiles.listOwned(userId).stream()
+                .map(p -> PublicProfilePetResponse.of(p, visitors.diaryCount(p),
+                        tailsonalityBadges.badgeOf(p.getId()).orElse(null)))
+                .toList();
     }
 
     /** 登录<b>用户</b> id（游客 / 非 USER 角色 → null）。兽医 {@code sub=vetId} 与 users.id 会碰撞。 */
