@@ -57,8 +57,10 @@ class AdminGrowthUserServiceTest {
     private final GrowthLevelDefRepository levels = mock(GrowthLevelDefRepository.class);
     private final AdminAccountRepository adminAccounts = mock(AdminAccountRepository.class);
     private final AdminAuditService audit = mock(AdminAuditService.class);
+    private final com.tailtopia.growth.service.GrowthDisplayLevelService displayLevels =
+            mock(com.tailtopia.growth.service.GrowthDisplayLevelService.class);
     private final AdminGrowthUserService service = new AdminGrowthUserService(jdbc, ledgerService, levels,
-            adminAccounts, audit);
+            adminAccounts, audit, displayLevels);
 
     @BeforeEach
     void setUp() {
@@ -103,8 +105,15 @@ class AdminGrowthUserServiceTest {
     @SuppressWarnings("unchecked")
     private void user(String accountType, String status, boolean deleted, Long total, Integer level,
             Integer displayLevel) {
+        user(accountType, "USER", status, deleted, total, level, displayLevel);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void user(String accountType, String role, String status, boolean deleted, Long total, Integer level,
+            Integer displayLevel) {
         Map<String, Object> v = new HashMap<>();
         v.put("account_type", accountType);
+        v.put("role", role);
         v.put("status", status);
         v.put("deleted", deleted);
         v.put("name", "Ana");
@@ -496,5 +505,89 @@ class AdminGrowthUserServiceTest {
     void ruleOptionsExcludePseudoRow() {
         assertThat(AdminGrowthUserService.RULE_OPTIONS).doesNotContain("PASSIVE_GROUP")
                 .contains("ADMIN_ADJUST", "OPS_CAMPAIGN", "LAUNCH_BACKFILL");
+    }
+
+    // ------------------------------------------------------------------ Story 4.4 · P-7 官方号展示等级
+
+    @Test
+    void officialAccountShowsEditableDisplayLevelAndNoLedger() {
+        user("REAL", "ADMIN", "ACTIVE", false, null, null, 12);
+
+        Tab t = service.tab(U);
+
+        assertThat(t.official()).isTrue();
+        assertThat(t.displayLevel()).isEqualTo(12);
+        // 表里最高 Lv4（GUARDIAN）：Lv12 取不高于它的最高一行的段位
+        assertThat(t.displayTier()).isEqualTo(GrowthTier.GUARDIAN);
+        assertThat(t.ledger()).isNull();
+        assertThat(t.displayLevelOptions()).extracting(com.tailtopia.growth.service.GrowthDisplayLevelService.DisplayLevel::level)
+                .containsExactly(1, 2, 3, 4);
+        assertThat(service.ledger(U, null, null, null, null).rows()).isEmpty();
+    }
+
+    @Test
+    void setOfficialDisplayLevelWritesAndAuditsOnlyWhenChanged() {
+        user("REAL", "ADMIN", "ACTIVE", false, null, null, 7);
+        when(displayLevels.set(U, 3)).thenReturn(new com.tailtopia.growth.service.GrowthDisplayLevelService.Change(7, 3,
+                true));
+
+        service.setOfficialDisplayLevel(U, "3", 99L);
+        verify(audit).record(99L, AuditActions.GROWTH_DISPLAY_LEVEL_CHANGED, "user", "7", "displayLevel 7→3");
+
+        when(displayLevels.set(U, 3)).thenReturn(new com.tailtopia.growth.service.GrowthDisplayLevelService.Change(3, 3,
+                false));
+        service.setOfficialDisplayLevel(U, "3", 99L);
+        verify(audit, times(1)).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void setOfficialDisplayLevelRejectsNonOfficialTargets() {
+        user("REAL", "USER", "ACTIVE", false, null, null, null);
+        assertThatThrownBy(() -> service.setOfficialDisplayLevel(U, "3", 99L))
+                .satisfies(t -> assertThat(((AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.display.officialOnly"));
+        user("VIRTUAL", "USER", "ACTIVE", false, null, null, 6);
+        assertThatThrownBy(() -> service.setOfficialDisplayLevel(U, "3", 99L))
+                .satisfies(t -> assertThat(((AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.display.officialOnly"));
+        verify(displayLevels, never()).set(anyLong(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void nonNumericDisplayLevelGoesToRangeCheck() {
+        user("REAL", "ADMIN", "ACTIVE", false, null, null, 7);
+        when(displayLevels.set(U, 0)).thenThrow(AppException.validation("x").code("admin.err.growth.display.outOfRange", 4));
+        assertThatThrownBy(() -> service.setOfficialDisplayLevel(U, "abc", 99L))
+                .satisfies(t -> assertThat(((AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.display.outOfRange"));
+    }
+
+    @Test
+    void vetAccountIsNotOfficial() {
+        user("REAL", "VET", "ACTIVE", false, null, null, null);
+        when(ledgerService.participates(U)).thenReturn(false);
+        Tab t = service.tab(U);
+        assertThat(t.state()).isEqualTo(State.REAL);
+        assertThat(t.adjustBlockedKey()).isEqualTo("admin.err.growth.notParticipating");
+        assertThatThrownBy(() -> service.setOfficialDisplayLevel(U, "3", 99L))
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode())
+                        .isEqualTo("admin.err.growth.display.officialOnly"));
+    }
+
+    @Test
+    void officialWithDeletionSubmittedIsRejected() {
+        user("REAL", "ADMIN", "ACTIVE", false, null, null, 7);
+        when(jdbc.queryForObject(eq(AdminGrowthUserService.DELETION_SQL), any(MapSqlParameterSource.class),
+                eq(Long.class))).thenReturn(1L);
+        assertThatThrownBy(() -> service.setOfficialDisplayLevel(U, "3", 99L))
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode())
+                        .isEqualTo("admin.err.growth.userInactive"));
+        verify(displayLevels, never()).set(anyLong(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void officialTabCarriesDisplayNameForConfirm() {
+        user("REAL", "ADMIN", "ACTIVE", false, null, null, 7);
+        assertThat(service.tab(U).displayName()).isEqualTo("Ana");
     }
 }

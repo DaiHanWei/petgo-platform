@@ -178,6 +178,34 @@ public class AdminVirtualAccountService {
                 "species=" + species);
     }
 
+    /**
+     * 改虚拟号展示等级（V1.4.0 ① Story 4.4 · AD-1 / AC12）：只写 {@code growth_accounts.display_level}
+     * （经 {@link GrowthDisplayLevelService#set}，不写流水、不发通知、不触发升降级）。值未变不写审计。
+     *
+     * @param levelRaw 下拉提交值；非整数按越界处理（422，不让 400 JSON 被 htmx 换进抽屉）
+     */
+    @Transactional
+    public void setDisplayLevel(long userId, String levelRaw, long adminId) {
+        User u = users.findById(userId)
+                .orElseThrow(() -> AppException.notFound("账号不存在")
+                        .code("admin.err.virtualAccount.accountNotFound"));
+        if (u.getAccountType() != AccountType.VIRTUAL) {
+            throw AppException.validation("仅虚拟账号有「展示等级」").code("admin.err.growth.display.virtualOnly");
+        }
+        int level;
+        try {
+            level = Integer.parseInt(levelRaw == null ? "" : levelRaw.trim());
+        } catch (NumberFormatException e) {
+            level = 0; // → set() 的越界 422
+        }
+        GrowthDisplayLevelService.Change c = growthDisplayLevels.set(userId, level);
+        if (c.changed()) {
+            audit.record(adminId, com.tailtopia.admin.audit.service.AuditActions.GROWTH_DISPLAY_LEVEL_CHANGED, "user",
+                    String.valueOf(userId),
+                    "displayLevel " + (c.oldLevel() == null ? "—" : c.oldLevel()) + "→" + c.newLevel());
+        }
+    }
+
     private static VirtualAccountRow toRow(User u) {
         return new VirtualAccountRow(u.getId(), u.getNickname(), u.getAvatarUrl(), u.isEnabled(),
                 u.getPublishedCount(),

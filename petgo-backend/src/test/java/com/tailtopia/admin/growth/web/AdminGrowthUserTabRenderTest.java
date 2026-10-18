@@ -222,4 +222,21 @@ class AdminGrowthUserTabRenderTest {
                 .contains("hx-swap-oob=\"beforeend:#admin-toast-host\"").contains("已调整 +50 EXP")
                 .contains("<div id=\"user-drawer-err\" hx-swap-oob=\"innerHTML\"></div>");
     }
+
+    @Test
+    void officialAccountShowsEditableDisplayLevelCard() {
+        auth("ROLE_ADMIN", "user.view", "virtual_account.manage");
+        Tab t = new Tab(7L, State.OFFICIAL, false, null, 1, null, 0, null, null, 12, GrowthTier.GUARDIAN, null,
+                List.of(new com.tailtopia.growth.service.GrowthDisplayLevelService.DisplayLevel(12, GrowthTier.GUARDIAN)));
+
+        String html = render("panel(true)", vars(t));
+
+        assertThat(html).contains("data-growth-state=\"OFFICIAL\"").contains("Lv12").contains("data-growth-display-form")
+                .contains("/admin/users/7/growth/display-level").contains("data-confirm-args=\"#7\"")
+                .contains("Lv12 · Guardian").doesNotContain("user-growth-adjust-form").doesNotContain("user-growth-ledger");
+
+        auth("ROLE_ADMIN", "user.view");
+        assertThat(render("panel(true)", vars(t))).doesNotContain("data-growth-display-form")
+                .contains("需要「管理虚拟账号」权限");
+    }
 }

@@ -106,4 +106,15 @@ class AdminGrowthUserAccessControlTest {
         assertThat(AdminGrowthUserController.GROWTH_ADJUST_AUTH).contains("'growth.user_adjust'");
         assertThat(AdminGrowthUserController.VIEW_AUTH).contains("'user.view'");
     }
+
+    @Test
+    void officialDisplayLevelNeedsVirtualAccountManage() {
+        var admin = new AdminUserDetails(1L, null, "a@x", null, AdminAccountType.SUPER_ADMIN);
+        auth("ROLE_ADMIN", "user.view", "growth.user_adjust");
+        assertThatThrownBy(() -> controller.setDisplayLevel(admin, 7L, "3", HxRequest.NONE, new ConcurrentModel(),
+                new MockHttpServletResponse(), new RedirectAttributesModelMap())).isInstanceOf(AccessDeniedException.class);
+        auth("ROLE_ADMIN", "virtual_account.manage");
+        assertThatCode(() -> controller.setDisplayLevel(admin, 7L, "3", HxRequest.NONE, new ConcurrentModel(),
+                new MockHttpServletResponse(), new RedirectAttributesModelMap())).doesNotThrowAnyException();
+    }
 }
