@@ -61,14 +61,18 @@ class ContentDetailAndCommentContractTest {
                 // V1.3.4 follow Story 2.1：作者 token 与关注关系（AD-6 键名）。
                 "t".repeat(32), new com.tailtopia.social.read.FollowState(false, true),
                 // V1.3.4 Story 2.1：每张图的露出位置（与 imageUrls 同序；null 元素原样下发）。
-                java.util.Arrays.asList(1.0, null));
+                java.util.Arrays.asList(1.0, null),
+                // V1.4.0 ① Story 3.1：作者等级三字段。
+                7, "BUDDY", "BASIC");
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
                 "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState",
-                "imageCropOffsets"));
+                "imageCropOffsets", "authorLevel", "authorTier", "authorFrame"));
+        assertThat(wire(d)).containsEntry("authorLevel", 7).containsEntry("authorTier", "BUDDY")
+                .containsEntry("authorFrame", "BASIC");
         @SuppressWarnings("unchecked")
         Map<String, Object> follow = (Map<String, Object>) wire(d).get("authorFollowState");
         assertThat(follow).isEqualTo(Map.of("iFollow", false, "followsMe", true));
@@ -87,8 +91,10 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
+        // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略。
+        assertThat(wire(d)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
         // V1.3.4：作者已注销 / 封号时 token 与关注关系不下发。
         assertThat(wire(d)).doesNotContainKey("authorToken").doesNotContainKey("authorFollowState");
         // V1.3.4 Story 2.1：存量 / 无超界图的帖不下发露出位置（App 无值即居中）。
@@ -106,12 +112,14 @@ class ContentDetailAndCommentContractTest {
                 // V1.3.0 Story 2.4：点赞数与已赞状态恒下发（实时聚合，库里没有计数列）。
                 5L, true,
                 // V1.3.0 batch-b1 Story 3.3：评论里的 @。
-                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)),
+                // V1.4.0 ① Story 3.1：作者等级（无框 → authorFrame 省略）。
+                3, "NEWBIE", null);
 
         assertThat(wire(top).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "body", "createdAt", "replyCount", "replies", "moderationStatus",
-                "likeCount", "liked", "mentions"));
+                "likeCount", "liked", "mentions", "authorLevel", "authorTier"));
     }
 
     @Test
@@ -128,6 +136,8 @@ class ContentDetailAndCommentContractTest {
         assertThat(wire(reply)).doesNotContainKey("replyCount");
         // Story 3.3：没 @ 人的评论整列省略（存量评论恒如此）。
         assertThat(wire(reply)).doesNotContainKey("mentions");
+        // V1.4.0 ① Story 3.1：growth == null（14 参兼容构造）→ 等级三字段整体省略。
+        assertThat(wire(reply)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
     }
 
     @Test

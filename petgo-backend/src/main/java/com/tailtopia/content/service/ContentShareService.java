@@ -147,6 +147,9 @@ public class ContentShareService {
                 post.getType().name(),
                 post.getText(),
                 images,
-                post.getCreatedAt());
+                post.getCreatedAt(),
+                author.badgeLevel(),
+                author.badgeTier(),
+                author.badgeFrame());
     }
 }

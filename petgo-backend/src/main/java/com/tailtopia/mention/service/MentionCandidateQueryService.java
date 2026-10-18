@@ -98,7 +98,8 @@ public class MentionCandidateQueryService {
             if (author == null || author.deleted()) {
                 continue;
             }
-            out.add(new MentionCandidateView(id, author.nickname(), author.avatarUrl()));
+            out.add(new MentionCandidateView(id, author.nickname(), author.avatarUrl(),
+                    author.badgeLevel(), author.badgeTier(), author.badgeFrame()));
         }
         return List.copyOf(out);
     }

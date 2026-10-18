@@ -93,7 +93,15 @@ public record FeedItemResponse(
          * <p>存量 / 无超界图的帖为 {@code null} → NON_NULL 省略；App 无值即居中。
          * 库里原值下发，不对齐、不改写（写入时已校验等长）。
          */
-        List<Double> imageCropOffsets) {
+        List<Double> imageCropOffsets,
+        /**
+         * 作者等级展示（V1.4.0 ① Story 3.1 · AD-14 / FR-144.1）：{@code authorLevel} 等级、{@code authorTier} 段位
+         * （{@code GrowthTier} 名）、{@code authorFrame} 生效头像框（BASIC / UPGRADED / ANIMATED，无框省略）。
+         * 作者已注销 / 已停用 / 不展示等级时三者均为 null（NON_NULL 下键整体消失，老 App 不受影响）。
+         */
+        Integer authorLevel,
+        String authorTier,
+        String authorFrame) {
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
@@ -131,6 +139,9 @@ public record FeedItemResponse(
                 mentions,
                 author.deleted() ? null : authorToken,
                 authorFollowState,
-                p.getImageCropOffsets());
+                p.getImageCropOffsets(),
+                author.badgeLevel(),
+                author.badgeTier(),
+                author.badgeFrame());
     }
 }

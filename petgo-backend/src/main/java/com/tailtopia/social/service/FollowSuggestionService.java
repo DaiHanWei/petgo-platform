@@ -79,7 +79,8 @@ public class FollowSuggestionService {
                     return new FollowListItem(id, tokens.get(id), v.nickname(), v.avatarUrl(),
                             false, false, s.followsMe(), false, false,
                             pet == null || pet.getPetType() == null ? null : pet.getPetType().name(),
-                            pet == null ? null : pet.getBirthday());
+                            pet == null ? null : pet.getBirthday(),
+                            v.badgeLevel(), v.badgeTier(), v.badgeFrame());
                 })
                 .toList();
         return new FollowSuggestionsResponse(items);

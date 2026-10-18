@@ -127,4 +127,26 @@ class PlaceCommentResponseContractTest {
         assertThat(w).containsEntry("hasMore", false);
         assertThat(w).doesNotContainKey("nextCursor");
     }
+
+    /** V1.4.0 ① Story 3.1：作者有等级 → 三字段下发；无框 → authorFrame 省略。 */
+    @Test
+    void authorGrowthFieldsAreFlattened() {
+        AuthorView withGrowth = AUTHOR.withGrowth(new com.tailtopia.growth.domain.GrowthBadge(
+                12, com.tailtopia.growth.domain.GrowthTier.GUARDIAN, com.tailtopia.growth.domain.FrameChoice.UPGRADED));
+        Map<String, Object> w = wire(PlaceCommentResponse.of(comment(null), withGrowth, 9L));
+        assertThat(w).containsEntry("authorLevel", 12).containsEntry("authorTier", "GUARDIAN")
+                .containsEntry("authorFrame", "UPGRADED");
+
+        AuthorView noFrame = AUTHOR.withGrowth(new com.tailtopia.growth.domain.GrowthBadge(
+                1, com.tailtopia.growth.domain.GrowthTier.NEWBIE, null));
+        assertThat(wire(PlaceCommentResponse.of(comment(null), noFrame, 9L)))
+                .containsEntry("authorLevel", 1).doesNotContainKey("authorFrame");
+    }
+
+    /** V1.4.0 ① Story 3.1：growth == null → 三字段整体省略（老 App 不受影响）。 */
+    @Test
+    void authorGrowthFieldsAbsentWithoutGrowth() {
+        assertThat(wire(PlaceCommentResponse.of(comment(null), AUTHOR, 9L)))
+                .doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
+    }
 }

@@ -7,6 +7,8 @@ import com.tailtopia.auth.domain.UserStatus;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.dto.UserLifecycleSnapshot;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.growth.domain.GrowthBadge;
+import com.tailtopia.growth.service.GrowthQueryService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -33,9 +35,15 @@ public class AccountQueryService {
     /** V1.1.6 Story 5.1：运营标签随作者投影一并批量取（AD-11）。 */
     private final UserTagQueryService userTags;
 
-    public AccountQueryService(UserRepository users, UserTagQueryService userTags) {
+    /**
+     * V1.4.0 ① Story 3.1：作者等级随投影一并批量取（AD-14）。🔴 {@code GrowthQueryService} 不得反向注入本类（bean 循环）。
+     */
+    private final GrowthQueryService growth;
+
+    public AccountQueryService(UserRepository users, UserTagQueryService userTags, GrowthQueryService growth) {
         this.users = users;
         this.userTags = userTags;
+        this.growth = growth;
     }
 
     /**
@@ -226,11 +234,23 @@ public class AccountQueryService {
         }));
     }
 
-    /** 身份三件套（id / 昵称 / 头像 + 是否注销）。缺失的 id 按匿名化补齐，调用方按 id 取必有值。 */
+    /**
+     * 身份三件套（id / 昵称 / 头像 + 是否注销）+ 作者等级。缺失的 id 按匿名化补齐，调用方按 id 取必有值。
+     *
+     * <p>V1.4.0 ① Story 3.1：对<b>未注销</b>的作者整批调一次 {@code getBadges}（常数次查询，AD-14）；
+     * 停用 / 不展示等级的账号 {@code getBadges} 不返回 → {@code growth = null}。全部已注销时不查。
+     */
     private Map<Long, AuthorView> basicViews(Collection<Long> userIds) {
         Map<Long, AuthorView> found = users.findAllById(userIds).stream()
                 .map(AccountQueryService::toAuthorView)
-                .collect(Collectors.toMap(AuthorView::userId, Function.identity()));
+                // 显式 HashMap：下面要 computeIfPresent 贴等级（Collectors.toMap 不保证可变）。
+                .collect(Collectors.toMap(AuthorView::userId, Function.identity(), (a, b) -> a,
+                        java.util.HashMap::new));
+        List<Long> visible = found.values().stream().filter(v -> !v.deleted()).map(AuthorView::userId).toList();
+        if (!visible.isEmpty()) {
+            Map<Long, GrowthBadge> badges = growth.getBadges(visible);
+            badges.forEach((userId, badge) -> found.computeIfPresent(userId, (k, v) -> v.withGrowth(badge)));
+        }
         return userIds.stream().distinct()
                 .collect(Collectors.toMap(Function.identity(),
                         id -> found.getOrDefault(id, AuthorView.anonymized(id))));

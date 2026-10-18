@@ -40,7 +40,8 @@ public class FollowingStripService {
                 .filter(tokens::containsKey)
                 .map(id -> {
                     AuthorView v = views.getOrDefault(id, AuthorView.anonymized(id));
-                    return new FollowingStripResponse.Item(id, tokens.get(id), v.nickname(), v.avatarUrl());
+                    return new FollowingStripResponse.Item(id, tokens.get(id), v.nickname(), v.avatarUrl(),
+                            v.badgeLevel(), v.badgeTier(), v.badgeFrame());
                 })
                 .toList();
         return new FollowingStripResponse(items);

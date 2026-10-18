@@ -135,7 +135,8 @@ public class FollowListQueryService {
                     s.iFollow(),
                     s.followsMe(),
                     blocked.contains(id),
-                    viewerId != null && viewerId.equals(id));
+                    viewerId != null && viewerId.equals(id),
+                    v); // Story 3.1：等级三字段（注销 / 停用 / 无等级 → null）
         }).toList();
     }
 

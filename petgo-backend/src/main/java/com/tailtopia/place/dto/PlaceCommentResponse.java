@@ -34,7 +34,14 @@ public record PlaceCommentResponse(
         String attitude,
         Instant createdAt,
         String moderationStatus,
-        boolean mine) {
+        boolean mine,
+        /**
+         * 作者等级展示（V1.4.0 ① Story 3.1 · AD-14）：等级 / 段位（{@code GrowthTier} 名）/ 生效头像框（无框省略）。
+         * 作者已注销 / 已停用 / 不展示等级时三者均为 null（NON_NULL 省略）。与 {@code FeedItemResponse} 同口径。
+         */
+        Integer authorLevel,
+        String authorTier,
+        String authorFrame) {
 
     public static PlaceCommentResponse of(PlaceComment c, AuthorView author, Long viewerId) {
         CommentModerationStatus s = c.getModerationStatus();
@@ -48,6 +55,9 @@ public record PlaceCommentResponse(
                 c.getAttitude() == null ? null : c.getAttitude().name(),
                 c.getCreatedAt(),
                 (s == null ? CommentModerationStatus.VISIBLE : s).name(),
-                viewerId != null && viewerId.equals(c.getAuthorId()));
+                viewerId != null && viewerId.equals(c.getAuthorId()),
+                author.badgeLevel(),
+                author.badgeTier(),
+                author.badgeFrame());
     }
 }
