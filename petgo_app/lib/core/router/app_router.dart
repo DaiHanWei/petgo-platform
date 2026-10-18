@@ -30,6 +30,7 @@ import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
+import '../../features/gift/presentation/gift_orders_page.dart';
 import '../../features/gift/presentation/gift_page.dart';
 import '../../features/content/presentation/shared_post_page.dart';
 import '../../features/content/presentation/home_page.dart';
@@ -1014,6 +1015,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
       GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
+      // 我的送礼记录（V1.4.0 gift Story 2.3 · AC4.1）：钱包页入口 + 退回通知 `GIFT_UNDELIVERED_REFUND` 直达。
+      // 同样 /me 前缀受控（游客自动拦截）+ shell 外隐 Tab。
+      GoRoute(path: GiftOrdersPage.routePath, builder: (c, s) => const GiftOrdersPage()),
       // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
       GoRoute(
         path: '/me/orders',

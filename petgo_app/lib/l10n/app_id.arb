@@ -2651,5 +2651,14 @@
   "giftNotifyReceivedTitle": "Hadiah baru",
   "giftNotifyReceivedBody": "Ada yang mengirim hadiah untuk hewanmu.",
   "giftNotifyRefundTitle": "Hadiah tidak terkirim",
-  "giftNotifyRefundBodyFallback": "Hadiahmu tidak terkirim. PawCoin sudah dikembalikan ke saldomu."
+  "giftNotifyRefundBodyFallback": "Hadiahmu tidak terkirim. PawCoin sudah dikembalikan ke saldomu.",
+  "giftOrdersTitle": "Riwayat Hadiah",
+  "giftOrdersEntrySub": "Hadiah yang kamu kirim",
+  "giftOrdersStatusDelivered": "Terkirim",
+  "giftOrdersStatusRefunded": "Dikembalikan ke PawCoin",
+  "giftOrdersPetGone": "Hewan ini sudah tidak ada",
+  "giftOrdersEmptyTitle": "Belum ada riwayat hadiah",
+  "giftOrdersEmptyHint": "Hadiah yang kamu kirim akan muncul di sini.",
+  "giftTxnSend": "Kirim hadiah",
+  "giftTxnRefund": "Hadiah dikembalikan"
 }

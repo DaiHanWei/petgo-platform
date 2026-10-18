@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/gift_catalog.dart';
+import '../domain/gift_order_history.dart';
 import '../domain/gift_send_result.dart';
 import '../domain/gift_showcase.dart';
 
@@ -54,6 +55,12 @@ class GiftRepository {
     final res = await dio.get<Map<String, dynamic>>(ApiPaths.petGiftSupporters(petId),
         queryParameters: {'cursor': ?cursor});
     return GiftSupporterPage.fromJson(res.data ?? const {});
+  }
+
+  /// 我的送礼记录一页（V1.4.0 gift Story 2.3 · AC4.2）；[cursor] 为 null = 第一页。
+  Future<GiftOrderHistoryPage> getMyGiftOrders({String? cursor}) async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.meGiftOrders, queryParameters: {'cursor': ?cursor});
+    return GiftOrderHistoryPage.fromJson(res.data ?? const {});
   }
 
   /// 单笔订单状态（QRIS `pollPaid` 用）。

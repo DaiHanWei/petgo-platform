@@ -351,6 +351,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/gifts/catalog").hasRole("USER")
                         .requestMatchers(HttpMethod.POST, "/api/v1/pets/*/gifts").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/me/gift-orders/*").hasRole("USER")
+                        // 我的送礼记录（V1.4.0 gift Story 2.3）：上一条通配匹配不到不带段的列表路径 → 补精确路径，
+                        // 不加会落 anyRequest().authenticated()，兽医 token 能以同号用户名义读送礼记录。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/gift-orders").hasRole("USER")
                         // 礼物页（V1.4.0 gift Story 2.1）：汇总 + 墙 / 粉丝榜。主人视角靠 viewerId == ownerId 判定，
                         // 兽医 token 的 sub 与 users.id 撞号会被误判成主人 → 只给 USER。精确路径，不影响 /api/v1/pets/*/visitor/**。
                         .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts").hasRole("USER")

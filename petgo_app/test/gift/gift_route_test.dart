@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/router/app_router.dart';
+import 'package:tailtopia/core/router/deep_link_routes.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/gift/presentation/gift_orders_page.dart';
 import 'package:tailtopia/features/gift/presentation/gift_page.dart';
 import 'package:tailtopia/features/profile/presentation/visitor_archive_view.dart';
 
@@ -52,5 +54,20 @@ void main() {
     const auth = AuthState(status: AuthStatus.authenticated, role: 'USER');
     expect(redirectWouldRewrite(auth, '/pets/5/gifts?wall=expanded'), isFalse);
     expect(redirectWouldRewrite(const AuthState.guest(), '/pets/5/gifts'), isFalse);
+  });
+
+  // V1.4.0 gift Story 2.3 · AC4.1 / AC5：送礼记录页路由 + 退回通知落点确实是本页。
+  test('/me/gift-orders → 送礼记录页路由；退回通知 GIFT_UNDELIVERED_REFUND 的落点匹配到同一条', () {
+    expect(leaf('/me/gift-orders').path, GiftOrdersPage.routePath);
+    final target = DeepLinkRoutes.pushPayloadToLocation('GIFT_UNDELIVERED_REFUND', 'ordTok123');
+    expect(target, GiftOrdersPage.routePath);
+    expect(leaf(target).path, GiftOrdersPage.routePath);
+  });
+
+  test('送礼记录页在 /me 受控前缀下：游客被改写，已登录用户不被改写', () {
+    const auth = AuthState(status: AuthStatus.authenticated, role: 'USER');
+    expect(redirectWouldRewrite(auth, GiftOrdersPage.routePath), isFalse);
+    expect(redirectWouldRewrite(const AuthState.guest(), GiftOrdersPage.routePath), isTrue);
+    expect(deepLinkNeedsBaseRoute(GiftOrdersPage.routePath), isTrue);
   });
 }

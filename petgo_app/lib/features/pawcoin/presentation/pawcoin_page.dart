@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../gift/presentation/gift_orders_page.dart';
 import '../domain/pawcoin_transaction.dart';
 import 'pawcoin_controller.dart';
 
@@ -62,6 +64,9 @@ class _Content extends ConsumerWidget {
         padding: const EdgeInsets.all(AppSpacing.screenEdge),
         children: [
           _BalanceCard(balance: state.balance),
+          const SizedBox(height: AppSpacing.lg),
+          // V1.4.0 gift Story 2.3 · AC2（decision-log ③ S7）：送礼记录入口，在余额卡与流水标题之间。
+          const _GiftOrdersEntry(),
           const SizedBox(height: AppSpacing.xl),
           Text(l10n.pawcoinTxnListTitle,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink2)),
@@ -141,6 +146,57 @@ class _BalanceCard extends StatelessWidget {
   }
 }
 
+/// 「Riwayat Hadiah ›」入口卡（V1.4.0 gift Story 2.3 · AC2 · UI 稿 F1）：样式照「我的」页 Pesanan Saya 卡。
+class _GiftOrdersEntry extends StatelessWidget {
+  const _GiftOrdersEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+        ],
+      ),
+      child: Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: const ValueKey('pawcoinGiftOrdersEntry'),
+          onTap: () => context.push(GiftOrdersPage.routePath),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.redeem_rounded, size: 26, color: AppColors.mint),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(l10n.giftOrdersTitle,
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                      const SizedBox(height: 2),
+                      Text(l10n.giftOrdersEntrySub,
+                          style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: AppColors.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 只读流水行（继承 canonical ledger row）。<b>整行非交互、绝不可点</b>（禁转账 UI）。
 /// 入账（delta>=0）绿 `+` / 消费（delta<0）红 `−`；类型按 code 本地化。
 class _LedgerRow extends StatelessWidget {
@@ -167,7 +223,7 @@ class _LedgerRow extends StatelessWidget {
               color: positive ? AppColors.momenBadgeBg : AppColors.coralTint,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(_txnIcon(item.type),
+            child: Icon(_txnIcon(item),
                 size: 22, color: positive ? AppColors.triageGreen : AppColors.coral),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -175,7 +231,7 @@ class _LedgerRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_typeLabel(l10n, item.type),
+                Text(_txnLabel(l10n, item),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 if (item.createdAt != null)
@@ -267,6 +323,15 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
+/// 流水文案（V1.4.0 gift Story 2.3 · AC3 · decision-log ③ S8）：**先看 refType** —— 送礼扣款（`GIFT`，type = SPEND）
+/// 显示「Kirim hadiah」、未送达退回（`GIFT_REFUND`，按 P-1 记 type = TOPUP）显示「Hadiah dikembalikan」；
+/// 其余按 type 映射，文案不变。钱包服务与后端流水接口零改动（refType 本就下发）。
+String _txnLabel(AppLocalizations l10n, PawCoinTxnItem item) => switch (item.refType) {
+      'GIFT' => l10n.giftTxnSend,
+      'GIFT_REFUND' => l10n.giftTxnRefund,
+      _ => _typeLabel(l10n, item.type),
+    };
+
 /// 类型按 code 本地化（勿渲染后端串）。
 String _typeLabel(AppLocalizations l10n, String type) => switch (type) {
       'TOPUP' => l10n.pawcoinTxnTopup,
@@ -276,8 +341,16 @@ String _typeLabel(AppLocalizations l10n, String type) => switch (type) {
       _ => type,
     };
 
+/// 流水图标：同样先看 refType（送礼 = 收据图标同 SPEND；退回 = replay 同 REFUND —— 不按 refType 判，
+/// type = TOPUP 的退回会显示成加号）。颜色仍按 delta 正负，不在这里。
+IconData _txnIcon(PawCoinTxnItem item) => switch (item.refType) {
+      'GIFT' => Icons.receipt_long_outlined,
+      'GIFT_REFUND' => Icons.replay,
+      _ => _typeIcon(item.type),
+    };
+
 /// 流水图标（按类型；0718 流水行左侧彩色图标）。
-IconData _txnIcon(String type) => switch (type) {
+IconData _typeIcon(String type) => switch (type) {
       'TOPUP' => Icons.add,
       'REFUND' => Icons.replay,
       'BONUS' => Icons.card_giftcard_outlined,

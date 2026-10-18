@@ -7,11 +7,16 @@ import com.tailtopia.gift.dto.GiftSendResponse;
 import com.tailtopia.gift.service.GiftCatalogService;
 import com.tailtopia.gift.service.GiftOrderQueryService;
 import com.tailtopia.gift.service.GiftSendService;
+import com.tailtopia.gift.service.MyGiftOrderQuery;
+import com.tailtopia.gift.web.dto.GiftOrderPage;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.error.ErrorTypes;
+import com.tailtopia.shared.paging.KeysetCursor;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,7 +31,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code GET /api/v1/gifts/catalog?petId=|postId=} —— 礼物目录（二选一）；</li>
  *   <li>{@code POST /api/v1/pets/{petId}/gifts} —— 发起送礼；</li>
- *   <li>{@code GET /api/v1/me/gift-orders/{orderToken}} —— 单笔状态（QRIS 轮询，仅本人）。</li>
+ *   <li>{@code GET /api/v1/me/gift-orders/{orderToken}} —— 单笔状态（QRIS 轮询，仅本人）；</li>
+ *   <li>{@code GET /api/v1/me/gift-orders?cursor=} —— 我的送礼记录（Story 2.3 · AC1，只送出，仅本人）。</li>
  * </ul>
  */
 @RestController
@@ -40,13 +46,15 @@ public class GiftController {
     private final GiftSendService sendService;
     private final GiftOrderQueryService orderQuery;
     private final RedisRateLimiter rateLimiter;
+    private final MyGiftOrderQuery myOrders;
 
     public GiftController(GiftCatalogService catalogService, GiftSendService sendService,
-            GiftOrderQueryService orderQuery, RedisRateLimiter rateLimiter) {
+            GiftOrderQueryService orderQuery, RedisRateLimiter rateLimiter, MyGiftOrderQuery myOrders) {
         this.catalogService = catalogService;
         this.sendService = sendService;
         this.orderQuery = orderQuery;
         this.rateLimiter = rateLimiter;
+        this.myOrders = myOrders;
     }
 
     @GetMapping("/api/v1/gifts/catalog")
@@ -71,6 +79,24 @@ public class GiftController {
     @GetMapping("/api/v1/me/gift-orders/{orderToken}")
     public GiftOrderStatusResponse orderStatus(@AuthenticationPrincipal Jwt jwt, @PathVariable String orderToken) {
         return orderQuery.orderStatus(currentUserId(jwt), orderToken);
+    }
+
+    /**
+     * 我的送礼记录（Story 2.3 · AC1）：只作用于 JWT {@code sub} 本人，不接受 userId / token 参数；非法游标 → 400。
+     * 与单笔 {@code /{orderToken}} 不同段数，不冲突。
+     */
+    @GetMapping("/api/v1/me/gift-orders")
+    public GiftOrderPage myGiftOrders(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "cursor", required = false) String cursor) {
+        long userId = currentUserId(jwt);
+        KeysetCursor after = null;
+        if (cursor != null && !cursor.isBlank()) {
+            after = KeysetCursor.decodeOrNull(cursor);
+            if (after == null) {
+                throw new AppException(HttpStatus.BAD_REQUEST, ErrorTypes.VALIDATION, "游标无效");
+            }
+        }
+        return myOrders.page(userId, after);
     }
 
     private static long currentUserId(Jwt jwt) {
