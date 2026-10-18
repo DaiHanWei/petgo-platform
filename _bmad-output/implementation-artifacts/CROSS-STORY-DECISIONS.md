@@ -236,3 +236,4 @@
 - ① 成长值流水的「关联宠物」在 ② 合并前取 `content_posts.pet_id` 单值，② 合并后改为写入全部关联宠物（① PRD §6.4）。
 - 功能分支与 `dev_1.4.0` 冲突时**不反向合并 dev 进功能分支**，从 dev 切对齐分支处理。
 - **短视频线 `vip_level`**（`feat/video`，已上 stag、未进 main）是 Tailrent Level 的先行版。视频功能不早于等级上线；上线前视频发布门槛改读 `GrowthQueryService`，`vip_level` 字段与后台入口由视频线自行退场。stag 上的相关数据届时直接覆盖，不做迁移兼容。合并视频线时注意它也改了后台用户抽屉、`AdminPermissions`、`AuditActions`，以地基 + 四条线合并后的版本为基准解冲突。
+- **推送分类开关（④，2026-10-18 规划）**：每个 `NotificationType` 必须在 `notify.preference.PushCategory.of` 指定分类（穷尽 `switch` 无 `default`，漏了编译失败）。**任何新增的推送出口**（不经 `NotificationService.send` / `sendWithCopy` / `sendInteraction` 三条已加闸门路径、直接调 `NotificationPusher` 或 IM 离线推送的）必须先调 `PushPreferenceService.isEnabled(userId, type)`，「订单与账号」类除外。①③ 新增的推送出口在 ④ 对齐 story 3.1 统一核查。
