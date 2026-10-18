@@ -36,5 +36,5 @@
 | v1.3.0 | 多 PRD 组合（首个：运营后台 UI 重构），集成分支 `dev_1.3.0` | `planning-artifacts/v1.3.0/` | 开工中，PRD 陆续传入 |
 | v1.3.2 | 插画依赖包：Tailsonality 人格测试 / 宠物护照与场所盖章 / 场所打卡 / 里程碑徽章重绘，集成分支 `dev_1.3.2` | `planning-artifacts/v1.3.2/` | 规划入库（2026-09-28），待拆 epics |
 | v1.3.4 | 推荐算法校准 / 原图上传 / 版本更新提醒 / 里程碑两项 / 运营弹窗与通知 / KTP 样式迭代 / 用户关注与通知中心，集成分支 `dev_1.3.4` | `planning-artifacts/v1.3.4/` | app、ktp、follow 三主题已实现并合入 `dev_1.3.4`（2026-10-13） |
-| v1.4.0 | 精选自营电商（Toko） | `planning-artifacts/v1.4.0/` | 开发中（并行线） |
+| v1.4.0 | ~~精选自营电商（Toko）~~ | `planning-artifacts/v1.4.0/` | ⛔ 已废除（2026-10-18），勿参考；新 V1.4.0 另行规划 |
 | admin-backend | 运营后台重构（Lark 登录 / 审计 / 兽医·用户·内容管理） | `planning-artifacts/admin-backend/` | 已上线 |
