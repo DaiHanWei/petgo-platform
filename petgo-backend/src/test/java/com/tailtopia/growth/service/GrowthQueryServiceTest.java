@@ -78,6 +78,7 @@ class GrowthQueryServiceTest {
                 .contains("u.account_type = 'REAL'")
                 .contains("u.deleted_at IS NULL")
                 .contains("u.status = 'ACTIVE'")
+                .contains("account_deletions") // 注销作业已开始即不参与（Story 1.2）
                 .contains("LEFT JOIN growth_accounts")
                 .contains("LEFT JOIN growth_levels");
     }

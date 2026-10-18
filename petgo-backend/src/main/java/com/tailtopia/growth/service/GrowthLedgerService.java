@@ -51,22 +51,25 @@ public class GrowthLedgerService {
     private final GrowthLedgerRepository ledger;
     private final GrowthRuleRepository rules;
     private final GrowthDailyCounterRepository counters;
+    private final GrowthLevelChangeHandler levelChange;
     private final Clock clock;
 
     @Autowired
     public GrowthLedgerService(NamedParameterJdbcTemplate jdbc, GrowthAccountRepository accounts,
-            GrowthLedgerRepository ledger, GrowthRuleRepository rules, GrowthDailyCounterRepository counters) {
-        this(jdbc, accounts, ledger, rules, counters, Clock.systemUTC());
+            GrowthLedgerRepository ledger, GrowthRuleRepository rules, GrowthDailyCounterRepository counters,
+            GrowthLevelChangeHandler levelChange) {
+        this(jdbc, accounts, ledger, rules, counters, levelChange, Clock.systemUTC());
     }
 
     GrowthLedgerService(NamedParameterJdbcTemplate jdbc, GrowthAccountRepository accounts,
             GrowthLedgerRepository ledger, GrowthRuleRepository rules, GrowthDailyCounterRepository counters,
-            Clock clock) {
+            GrowthLevelChangeHandler levelChange, Clock clock) {
         this.jdbc = jdbc;
         this.accounts = accounts;
         this.ledger = ledger;
         this.rules = rules;
         this.counters = counters;
+        this.levelChange = levelChange;
         this.clock = clock;
     }
 
@@ -191,12 +194,10 @@ public class GrowthLedgerService {
         jdbc.update(INSERT_LEDGER_SQL, p);
     }
 
-    /**
-     * 累计变化的唯一收口。Story 1.2 在此接 {@code GrowthLevelChangeHandler}（等级重算与连锁反应）；
-     * 本 story 内 {@code level} 保持不变。
-     */
+    /** 累计变化的唯一收口：改累计后经 {@link GrowthLevelChangeHandler}（单一连锁出口）重算等级（Story 1.2）。 */
     private void applyDelta(GrowthAccount account, long delta, RuleCode source) {
         account.addLifetime(delta, clock.instant());
+        levelChange.onLifetimeChanged(account, source);
     }
 
     /** {@code [1, 2]} → {@code "{1,2}"}；空 / null → null。 */

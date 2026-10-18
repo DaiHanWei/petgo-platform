@@ -48,8 +48,9 @@ class GrowthLedgerServiceTest {
     private final GrowthLedgerRepository ledger = mock(GrowthLedgerRepository.class);
     private final GrowthRuleRepository rules = mock(GrowthRuleRepository.class);
     private final GrowthDailyCounterRepository counters = mock(GrowthDailyCounterRepository.class);
+    private final GrowthLevelChangeHandler levelChange = mock(GrowthLevelChangeHandler.class);
     private final GrowthLedgerService service = new GrowthLedgerService(jdbc, accounts, ledger, rules, counters,
-            Clock.fixed(AT, ZoneOffset.UTC));
+            levelChange, Clock.fixed(AT, ZoneOffset.UTC));
 
     private GrowthAccount account;
 
@@ -126,7 +127,8 @@ class GrowthLedgerServiceTest {
         assertThat(row.getValue("wibDate")).isEqualTo(DAY);
         assertThat(row.getValue("reversesId")).isNull();
         assertThat(account.getLifetimeTotal()).isEqualTo(105);
-        assertThat(account.getLevel()).isEqualTo(1); // 本 story 不重算等级
+        // Story 1.2：累计变化后经单一连锁出口重算等级，source = 本次规则。
+        verify(levelChange).onLifetimeChanged(account, RuleCode.POST_PUBLISHED);
     }
 
     @Test
@@ -138,6 +140,7 @@ class GrowthLedgerServiceTest {
         verify(counters, never()).tryGrant(anyLong(), any(), anyString(), anyInt(), anyInt());
         verifyNothingWritten();
         assertThat(account.getLifetimeTotal()).isEqualTo(100);
+        verify(levelChange, never()).onLifetimeChanged(any(), any());
     }
 
     @Test
@@ -258,6 +261,8 @@ class GrowthLedgerServiceTest {
         assertThat(row.getValue("ruleCode")).isEqualTo("LIKE_RECEIVED");
         assertThat(row.getValue("idemKey")).isEqualTo("REV:42:UNLIKE");
         assertThat(account.getLifetimeTotal()).isEqualTo(99);
+        // Story 1.2：扣回同样经 handler，source = 原流水规则代码。
+        verify(levelChange).onLifetimeChanged(account, RuleCode.LIKE_RECEIVED);
         // 不返还额度、不改原流水：counters 未被触碰，原流水只读实体。
         verify(counters, never()).tryGrant(anyLong(), any(), anyString(), anyInt(), anyInt());
     }

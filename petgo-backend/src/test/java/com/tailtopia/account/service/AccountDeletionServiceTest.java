@@ -61,6 +61,8 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.social.service.FollowService followService;
     /** V1.3.4 Story 5.1：运营弹窗曝光随注销物理删除。 */
     @Mock com.tailtopia.ops.popup.service.OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
+    /** V1.4.0 ① Story 1.2：成长值数据随注销物理删除。 */
+    @Mock com.tailtopia.growth.service.GrowthAccountDeletionService growthDeletion;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -69,7 +71,7 @@ class AccountDeletionServiceTest {
                 contentService, reviewService, violationCountService,
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
-                followService, opsPopupImpressionDeletion);
+                followService, opsPopupImpressionDeletion, growthDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -106,6 +108,13 @@ class AccountDeletionServiceTest {
         verify(onboardingMarkDeletion).deleteByUserId(7L);
         // V1.3.2 Story 2.5：Tailsonality 主人类型（账号级）也在级联里，且在 user 行删除之前。
         verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
+        // V1.4.0 ① Story 1.2 · AC7：成长值三张表在 tailsonality 之后、PawCoin 作废之前删除（AD-18）。
+        verify(growthDeletion).deleteByUserId(7L);
+        org.mockito.InOrder growthOrder = org.mockito.Mockito.inOrder(tailsonalityDeletion, growthDeletion,
+                pawCoinDeletion);
+        growthOrder.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
+        growthOrder.verify(growthDeletion).deleteByUserId(7L);
+        growthOrder.verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         org.mockito.InOrder beforeUserRow = org.mockito.Mockito.inOrder(tailsonalityDeletion, authDeletion);
         beforeUserRow.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
         beforeUserRow.verify(authDeletion).deleteByUserId(7L);
