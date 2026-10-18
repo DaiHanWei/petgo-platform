@@ -129,7 +129,8 @@ class AdminPermissionsTest {
         //     运营弹窗 ops_popup.manage、系统通知 ops_notify.view / ops_notify.send ⇒ 74 + 4 = 78。
         // 2026-10-18（V1.4.0 ① Story 4.1 · AB-32）：成长体系配置 growth.config_view / growth.config_edit
         //     （不预授任何预置角色）⇒ 78 + 2 = 80。
+        // 2026-10-18（V1.4.0 ① Story 4.2 · AB-33）：调整用户 EXP growth.user_adjust（P-5 预授 OPS_MANAGER）⇒ 80 + 1 = 81。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(80);
+        assertThat(all).hasSize(81);
     }
 }

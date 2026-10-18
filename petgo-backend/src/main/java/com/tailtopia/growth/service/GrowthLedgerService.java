@@ -3,11 +3,13 @@ package com.tailtopia.growth.service;
 import com.tailtopia.growth.domain.GrowthAccount;
 import com.tailtopia.growth.domain.GrowthLedgerEntry;
 import com.tailtopia.growth.domain.GrowthRule;
+import com.tailtopia.growth.domain.ReverseReason;
 import com.tailtopia.growth.domain.RuleCode;
 import com.tailtopia.growth.repository.GrowthAccountRepository;
 import com.tailtopia.growth.repository.GrowthDailyCounterRepository;
 import com.tailtopia.growth.repository.GrowthLedgerRepository;
 import com.tailtopia.growth.repository.GrowthRuleRepository;
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import java.sql.Types;
 import java.time.Clock;
@@ -42,6 +44,25 @@ public class GrowthLedgerService {
     static final String INSERT_LEDGER_SQL = "INSERT INTO growth_ledger (user_id, rule_code, delta, ref_type, ref_id, "
             + "pet_ids, idem_key, reverses_id, reason, wib_date, created_at) VALUES (:userId, :ruleCode, :delta, "
             + ":refType, :refId, CAST(:petIds AS BIGINT[]), :idemKey, :reversesId, :reason, :wibDate, :createdAt)";
+
+    /** 后台调整（Story 4.2）：比入账多 {@code note / operator_admin_id} 两列。 */
+    static final String INSERT_ADJUST_SQL = "INSERT INTO growth_ledger (user_id, rule_code, delta, idem_key, reason, "
+            + "note, operator_admin_id, wib_date, created_at) VALUES (:userId, :ruleCode, :delta, :idemKey, :reason, "
+            + ":note, :operatorAdminId, :wibDate, :createdAt)";
+
+    static final String ACCOUNT_TYPE_SQL = "SELECT account_type FROM users WHERE id = :id";
+
+    static final String DELETION_SUBMITTED_SQL = "SELECT count(*) FROM account_deletions WHERE user_id = :id";
+
+    /** 已注销 / 已停用 / 注销作业已开始（与「不参与」的其余原因——官方号——区分文案）。 */
+    static final String INACTIVE_SQL = "SELECT count(*) FROM users u WHERE u.id = :id AND (u.deleted_at IS NOT NULL "
+            + "OR u.status <> 'ACTIVE' OR EXISTS (SELECT 1 FROM account_deletions ad WHERE ad.user_id = u.id))";
+
+    /** 与 {@code growth_ledger.note VARCHAR(200)} 一致。 */
+    public static final int NOTE_MAX_LENGTH = 200;
+
+    /** {@code ADMIN:} + token 不得超过幂等键列宽；页面给的是 36 位 UUID，这里放宽到 64。 */
+    static final int GRANT_TOKEN_MAX_LENGTH = 64;
 
     private static final List<String> SPEND_RULES = List.of(RuleCode.SPEND_DIGITAL.name(), RuleCode.SPEND_SHOP.name());
 
@@ -142,6 +163,122 @@ public class GrowthLedgerService {
         return true;
     }
 
+    /**
+     * 后台对单个用户调整 EXP / 发运营活动（V1.4.0 ① Story 4.2 · AD-5 adjust）。同一事务：
+     * ① 入参 → ② 参与判定（虚拟号 / 注销 / 停用 / 官方号 422）→ ③ {@code OPS_CAMPAIGN} 须启用 → ④ 懒建并锁账户行 →
+     * ⑤ 幂等键已在 = 重复提交（{@code replayed}，不改任何东西）→ ⑥ 累计 + delta &lt; 0 拒绝（AD-1：运营调整不截断）→
+     * ⑦ 插流水 → ⑧ 改累计并经 {@link GrowthLevelChangeHandler} 定级与连锁。不占每日额度（{@code growth_daily_counters}）。
+     *
+     * <p>调用方（后台服务）在<b>同一事务</b>里按 {@code replayed} 决定是否写审计。
+     */
+    @Transactional
+    public AdminAdjustCommand.Result adjust(AdminAdjustCommand cmd) {
+        validateAdjust(cmd.type(), cmd.delta(), cmd.note(), cmd.grantToken());
+        long userId = cmd.userId();
+        String idemKey = GrowthIdemKeys.admin(cmd.grantToken().trim());
+        // 重复提交先认（code-review）：入账成功后用户被停用 / 运营活动被停用，回退重提同一 token 仍应是「已处理」而非 422。
+        GrowthLedgerEntry prior = ledger.findByIdemKey(idemKey).orElse(null);
+        if (prior != null) {
+            return replayed(prior, userId);
+        }
+        requireAdjustable(userId);
+        if (cmd.type() == AdminAdjustCommand.AdjustType.OPS_CAMPAIGN && !campaignEnabled()) {
+            throw AppException.validation("「运营活动」规则已停用").code("admin.err.growth.campaignDisabled");
+        }
+        accounts.insertIfAbsent(userId);
+        GrowthAccount account = accounts.lockById(userId).orElseThrow();
+        long oldTotal = account.getLifetimeTotal();
+        int oldLevel = account.getLevel();
+        // 并发的同 token 两次提交：行锁串行后，后到的一次在这里看见先到的那条流水。
+        prior = ledger.findByIdemKey(idemKey).orElse(null);
+        if (prior != null) {
+            return replayed(prior, userId);
+        }
+        if (oldTotal + cmd.delta() < 0) {
+            throw AppException.validation("调整后累计不能小于 0").code("admin.err.growth.belowZero", oldTotal);
+        }
+        MapSqlParameterSource p = new MapSqlParameterSource()
+                .addValue("userId", userId)
+                .addValue("ruleCode", cmd.type().name())
+                .addValue("delta", cmd.delta())
+                .addValue("idemKey", idemKey)
+                // 架构 AD-2：reason 只给「运营调整」记 ADMIN_ADJUST；运营活动的说明只在 note（活动名）。
+                .addValue("reason", cmd.type() == AdminAdjustCommand.AdjustType.ADMIN_ADJUST
+                        ? ReverseReason.ADMIN_ADJUST.name() : null)
+                .addValue("note", cmd.note().trim())
+                .addValue("operatorAdminId", cmd.operatorAdminId())
+                .addValue("wibDate", clock.instant().atZone(ScheduleWindow.WIB).toLocalDate())
+                .addValue("createdAt", java.sql.Timestamp.from(clock.instant()));
+        jdbc.update(INSERT_ADJUST_SQL, p);
+        applyDelta(account, cmd.delta(), cmd.type().rule());
+        return new AdminAdjustCommand.Result(oldTotal, account.getLifetimeTotal(), oldLevel, account.getLevel(),
+                false);
+    }
+
+    /** 幂等命中：token 必须属于同一用户（别人的 token 被拿来重放 → 422，不假装成功）；四个数都是当前值。 */
+    private AdminAdjustCommand.Result replayed(GrowthLedgerEntry prior, long userId) {
+        if (prior.getUserId() != userId) {
+            throw AppException.validation("缺少幂等标识，请刷新页面后重试").code("admin.err.growth.missingToken");
+        }
+        GrowthAccount acc = accounts.findById(userId).orElse(null);
+        long total = acc == null ? 0 : acc.getLifetimeTotal();
+        int level = acc == null ? 1 : acc.getLevel();
+        return new AdminAdjustCommand.Result(total, total, level, level, true);
+    }
+
+    /**
+     * 调整的入参校验（预览与入账共用一份，422 + 文案码）：类型必选、增减 ≠ 0、原因 / 活动名必填且 ≤ 200、token 必有。
+     */
+    public static void validateAdjust(AdminAdjustCommand.AdjustType type, Integer delta, String note,
+            String grantToken) {
+        if (type == null) {
+            throw AppException.validation("请选择调整类型").code("admin.err.growth.typeRequired");
+        }
+        if (delta == null || delta == 0) {
+            throw AppException.validation("增减值不能为 0").code("admin.err.growth.deltaZero");
+        }
+        if (note == null || note.isBlank()) {
+            throw AppException.validation("请填写原因或活动名称").code("admin.err.growth.noteRequired");
+        }
+        if (note.trim().length() > NOTE_MAX_LENGTH) {
+            throw AppException.validation("原因或活动名称不能超过 200 字").code("admin.err.growth.noteTooLong");
+        }
+        if (grantToken == null || grantToken.isBlank() || grantToken.trim().length() > GRANT_TOKEN_MAX_LENGTH) {
+            throw AppException.validation("缺少幂等标识，请刷新页面后重试").code("admin.err.growth.missingToken");
+        }
+    }
+
+    /** 参与判定（与 {@link #accrue} 同一口径）；不参与时按原因给 422：虚拟号单列一句，其余（注销 / 停用 / 官方号）一句。 */
+    public void requireAdjustable(long userId) {
+        if (isParticipating(userId)) {
+            // 后台比入账更严（code-review）：注销已提交（作业还在 PENDING）就不许再手动调整，不只靠模板藏卡片。
+            Long pending = jdbc.queryForObject(DELETION_SUBMITTED_SQL, Map.of("id", userId), Long.class);
+            if (pending == null || pending == 0) {
+                return;
+            }
+            throw AppException.validation("该账号已注销或已停用，不可调整").code("admin.err.growth.userInactive");
+        }
+        List<String> type = jdbc.queryForList(ACCOUNT_TYPE_SQL, Map.of("id", userId), String.class);
+        if (type.isEmpty()) {
+            throw AppException.notFound("用户不存在").code("admin.err.user.notFound");
+        }
+        if ("VIRTUAL".equals(type.get(0))) {
+            throw AppException.validation("虚拟号不参与成长值").code("admin.err.growth.virtualNotParticipating");
+        }
+        Long inactive = jdbc.queryForObject(INACTIVE_SQL, Map.of("id", userId), Long.class);
+        if (inactive == null || inactive == 0) {
+            // 未注销、未停用但仍不参与 = 官方号等 role ≠ USER 的账号
+            throw AppException.validation("该账号不参与成长值").code("admin.err.growth.notParticipating");
+        }
+        throw AppException.validation("该账号已注销或已停用，不可调整").code("admin.err.growth.userInactive");
+    }
+
+    /** {@code growth_rules.OPS_CAMPAIGN.enabled}；行不存在视作停用。 */
+    @Transactional(readOnly = true)
+    public boolean campaignEnabled() {
+        return rules.findById(RuleCode.OPS_CAMPAIGN.name()).map(GrowthRule::isEnabled).orElse(false);
+    }
+
     /** 按幂等键读一条流水（只读；Story 1.3 退款扣回定位原消费）。 */
     @Transactional(readOnly = true)
     public java.util.Optional<GrowthLedgerEntry> findByIdemKey(String idemKey) {
@@ -161,6 +298,12 @@ public class GrowthLedgerService {
         return rules.findById(rule.name())
                 .map(r -> GrowthPoints.ofAmount(amount, r.getPoints(), r.getUnitAmount()))
                 .orElse(0);
+    }
+
+    /** 是否参与成长值（{@link GrowthParticipation} 口径；后台成长值页签据此决定调整卡是否可用）。 */
+    @Transactional(readOnly = true)
+    public boolean participates(long userId) {
+        return isParticipating(userId);
     }
 
     private boolean isParticipating(long userId) {

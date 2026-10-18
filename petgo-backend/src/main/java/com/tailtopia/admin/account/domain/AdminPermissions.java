@@ -216,6 +216,14 @@ public final class AdminPermissions {
     public static final String GROWTH_CONFIG_EDIT = "growth.config_edit";
 
     /**
+     * 调整单个用户的 EXP（V1.4.0 ① AB-33 · Story 4.2：用户抽屉「成长值」页签的普通调整 / 运营活动发放）。
+     * 入账走 {@code GrowthLedgerService.adjust}（幂等键 {@code ADMIN:{token}}），每次写操作审计。
+     *
+     * <p>⚠️ 按 PRD P-5 <b>预授 {@code OPS_MANAGER}</b>（见 {@code AdminRole}），偏离「新码不预授」惯例；四个表驱动岗位不授。
+     */
+    public static final String GROWTH_USER_ADJUST = "growth.user_adjust";
+
+    /**
      * 查看分享奖励配置与当月消耗（V1.1.6 Story 18.3 · AC5）。
      *
      * <p>🛡 与 {@link #CONFIG_VIEW} 分开：分享奖励是增长侧的数，
@@ -357,7 +365,8 @@ public final class AdminPermissions {
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
                     SHOP_ORDER_FULFILL,
                     PLACE_MANAGE, COMMENT_VIRTUAL_POST,
-                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND, GROWTH_CONFIG_EDIT)));
+                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND, GROWTH_CONFIG_EDIT,
+                    GROWTH_USER_ADJUST)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。

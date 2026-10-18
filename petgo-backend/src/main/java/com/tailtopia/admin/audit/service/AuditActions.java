@@ -265,6 +265,8 @@ public final class AuditActions {
     public static final String GROWTH_LEVEL_TABLE_UPDATED = "GROWTH_LEVEL_TABLE_UPDATED";
     /** 失败 / 僵死的重算任务重新执行。target = 新任务 id。 */
     public static final String GROWTH_RECALC_RETRIED = "GROWTH_RECALC_RETRIED";
+    /** 后台对单个用户调整 EXP / 发运营活动（V1.4.0 ① Story 4.2 · AB-33）。target = {@code USER} / userId；幂等命中不写。 */
+    public static final String GROWTH_USER_ADJUSTED = "GROWTH_USER_ADJUSTED";
 
     private AuditActions() {
     }

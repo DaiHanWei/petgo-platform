@@ -147,6 +147,9 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
                 .contains("data-utab-panel=\"growth\"").contains("data-utab-panel=\"petSlots\"")
                 .contains("data-utab-panel=\"gifts\"")
                 .contains("成长值").contains("宠物与名额").contains("收送礼记录").contains("暂无数据");
+        assertThat(html).as("V1.4.0 ① Story 4.2：成长值面板已填充（概览 + 明细），不再是地基占位")
+                .contains("id=\"user-growth-panel\"").contains("data-growth-state=\"REAL\"")
+                .contains("id=\"user-growth-ledger\"").contains("该用户还没有成长值记录");
         assertThat(html).as("🔴 err 槽必须带 id：htmx 只在目标带 id 时才发 HX-Target 头")
                 .contains("id=\"user-drawer-err\"");
         assertThat(html).as("历史问诊那句「仅元数据」不可省 —— 少了它运营会来要聊天记录")

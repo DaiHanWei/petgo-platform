@@ -31,6 +31,9 @@
             <span th:unless="${user.deleted()}" class="badge"
                   th:classappend="${user.deactivated()} ? 'badge-danger' : 'badge-ok'"
                   th:text="${user.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span>
+            <!--/* V1.4.0 ① Story 4.2 · I6：虚拟号徽章（判定取成长值页签视图，不改 AdminUserDetailView） */-->
+            <span th:if="${growthTab != null and growthTab.virtual()}" class="badge badge-muted" data-virtual-badge
+                  th:text="#{admin.v140.growth.virtual.badge}">虚拟号</span>
         </h2>
     </header>
 
@@ -342,10 +345,9 @@
         </th:block>
     </section>
 
-    <!--/* ⑦ 成长值（V1.4.0 Story 0.1 空容器）：由 ① feat/1.4.0-tailrent-level 填充，页签头与 data-utab-panel 名不许改。 */-->
-    <section class="card card-full ud-card" data-utab-panel="growth" hidden>
-        <p class="muted" th:text="#{admin.v140.users.tab.placeholder}">暂无数据</p>
-    </section>
+    <!--/* ⑦ 成长值（V1.4.0 Story 0.1 地基容器，① Story 4.2 填充）：页签头与 data-utab-panel 名不许改。
+           片段根元素仍是 data-utab-panel="growth" 的 section（加 id 供调整成功后只换本页签）。 */-->
+    <section th:replace="~{admin/fragments/drawer-users-growth :: panel(false)}"></section>
 
     <!--/* ⑧ 宠物与名额（V1.4.0 Story 0.1 空容器）：由 ② feat/1.4.0-multi-pet 填充，页签头与 data-utab-panel 名不许改。 */-->
     <section class="card card-full ud-card" data-utab-panel="petSlots" hidden>

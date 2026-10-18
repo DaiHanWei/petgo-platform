@@ -1352,3 +1352,11 @@ dialog.cm-modal label.cm-typed { display: block; margin: 0; font-size: var(--fs-
 .growth-levels-grid .inp { width: 140px; }
 .growth-rule-fld { margin-bottom: 12px; }
 .growth-rule-err { color: var(--danger, #C0392B); font-size: 12px; margin: 4px 0 0; }
+
+/* ── V1.4.0 ① Story 4.2：用户抽屉「成长值」页签（I1 ~ I7）── */
+.growth-ov { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+.growth-ov-cell { padding: 8px 10px; border: 1px solid var(--line, #E3E7EE); border-radius: 8px; }
+.growth-ov-val { margin: 4px 0 0; font-size: 16px; }
+.growth-adjust { margin: 12px 0; }
+.growth-adjust .inp[disabled], .growth-adjust input[type=radio][disabled] { opacity: .5; cursor: not-allowed; }
+.growth-ledger { margin-top: 12px; }

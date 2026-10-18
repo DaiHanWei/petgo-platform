@@ -130,11 +130,12 @@ class AdminPermissionMatrixStaticTest {
     /**
      * 权限册规模：基线 72 + V1.3.0 `place.manage`、`comment.virtual_post` = 74（AC2）
      * + V1.3.4 返工清单 §1 四码（`config.app_min_version_edit` / `ops_popup.manage` / `ops_notify.view` / `ops_notify.send`）= 78
-     * + V1.4.0 ① Story 4.1 两码（`growth.config_view` / `growth.config_edit`）= 80。
+     * + V1.4.0 ① Story 4.1 两码（`growth.config_view` / `growth.config_edit`）= 80
+     * + V1.4.0 ① Story 4.2 一码（`growth.user_adjust`）= 81。
      */
     @Test
-    void thePermissionRegisterHasExactlyEightyCodes() {
-        assertThat(AdminPermissions.ALL).hasSize(80);
+    void thePermissionRegisterHasExactlyEightyOneCodes() {
+        assertThat(AdminPermissions.ALL).hasSize(81);
         assertThat(AdminPermissions.ALL)
                 .contains(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST,
                         AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,

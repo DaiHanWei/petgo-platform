@@ -9,7 +9,7 @@ import java.time.LocalDate;
  * <p>格式 {@code {类型}:{字段}:{字段}}。点赞 / 收藏的键<b>不含时间</b> = 终身一次。
  * 扣回统一 {@link #reverse}：取消点赞 / 取消收藏 / 下架的 sourceKey 固定（原入账终身一次，扣回也只能一次）；
  * 退款（Story 1.3）用 {@code "REFUND:" + refundKey}，最终形如 {@code REV:123:REFUND:rf_xxx}。
- * {@code SPEND:*} / {@code ADMIN:*} / {@code BATCH:*} / {@code BACKFILL:*} 由后续 story 追加到本类。
+ * {@code BATCH:*} 由 Story 4.3 追加到本类。
  */
 public final class GrowthIdemKeys {
 
@@ -19,6 +19,9 @@ public final class GrowthIdemKeys {
     public static final String SOURCE_UNLIKE = "UNLIKE";
     public static final String SOURCE_UNCOLLECT = "UNCOLLECT";
     public static final String SOURCE_TAKEDOWN = "TAKEDOWN";
+
+    /** {@link #spendIntent} 的前缀（Story 4.2 后台明细按它认出「关联对象是支付单」）。 */
+    public static final String SPEND_INTENT_PREFIX = "SPEND:PI:";
 
     private GrowthIdemKeys() {
     }
@@ -70,7 +73,7 @@ public final class GrowthIdemKeys {
 
     /** 现金 / QRIS 消费（Story 1.3）：{@code SPEND:PI:{intentId}}。 */
     public static String spendIntent(long intentId) {
-        return "SPEND:PI:" + intentId;
+        return SPEND_INTENT_PREFIX + intentId;
     }
 
     /** 纯 PawCoin 消费（Story 1.3）：{@code SPEND:COIN:{debit 的幂等键}}。 */
@@ -91,6 +94,11 @@ public final class GrowthIdemKeys {
     /** 上线存量补算（Story 2.2；迁移 V20261018_1503 里以 SQL 写同一格式）：{@code BACKFILL:{u}}。 */
     public static String backfill(long userId) {
         return "BACKFILL:" + userId;
+    }
+
+    /** 后台单个调整 / 运营活动（Story 4.2）：{@code ADMIN:{grantToken}}，token 为页面渲染时生成的一次性 UUID。 */
+    public static String admin(String grantToken) {
+        return "ADMIN:" + grantToken;
     }
 
     /** 退款扣回的 sourceKey（Story 1.3）：{@code REFUND:{refundKey}}，拼进 {@link #reverse}。 */
