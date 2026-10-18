@@ -2,8 +2,8 @@
 
 评审对象（作为一个 PRD 集整体评审）：
 
-- `_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md`（用户端，FR-93 ~ FR-110）
-- `_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md`（运营后台，模块 10–13 + 模块 6 扩展）
+- `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md`（用户端，FR-93 ~ FR-110）
+- `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md`（运营后台，模块 10–13 + 模块 6 扩展）
 
 校准输入（非评审对象）：`decision-log.md`、`README.md`。
 stakes = launch 级 · shape = brownfield 增量 + chain-top（下游 UX → 架构 → epics → story）。

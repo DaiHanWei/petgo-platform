@@ -318,7 +318,7 @@ cd petgo_app && flutter build apk --debug \
 `UPDATE shop_products SET is_active=true WHERE public_token LIKE 'demo-%';`
 
 ⚠️ **dev 用户（id=1）默认零订单、无宠物档案**，7 屏里 6 屏点不动。造数脚本见
-`_bmad-output/implementation-artifacts/v1.4.0/seed-user1-l2.sh`（下单/支付/收货走真实 API，
+`_bmad-output/implementation-artifacts/v1.4.0-toko-废弃/seed-user1-l2.sh`（下单/支付/收货走真实 API，
 只有「发货」和「日期回溯」用 SQL）。要点：
 - **混合支付**要靠 `shop_pawcoin_rules.max_coin_per_order` 封顶（设为 50000），
   光给余额会让整单被币付掉、拿不到两段拆分。

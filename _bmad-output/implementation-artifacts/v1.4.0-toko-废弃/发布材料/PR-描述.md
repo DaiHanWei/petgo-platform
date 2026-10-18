@@ -28,7 +28,7 @@
 - `OrderCenterService`（三线共享）：四个 `if` 分支与四个映射器**一行未改**，只改了取数那一句与归并/游标段
 
 ### 第 3 层 · 其余按 Epic 读
-每个 Epic 的实现说明在 `_bmad-output/implementation-artifacts/v1.4.0/<epic>-<n>-*.md`，
+每个 Epic 的实现说明在 `_bmad-output/implementation-artifacts/v1.4.0-toko-废弃/<epic>-<n>-*.md`，
 每份都写了 AC → 验证方式的对照表和「为什么这么做」。
 
 ---
@@ -104,7 +104,7 @@ Flutter 侧只原样回传（已逐个核对）；服务端各留一轮过渡兼
 
 ## 合并后
 
-按 `_bmad-output/implementation-artifacts/v1.4.0/人工验收清单.md` 走：
+按 `_bmad-output/implementation-artifacts/v1.4.0-toko-废弃/人工验收清单.md` 走：
 **合 stag → 部署 staging → 在 staging 上做 L2 → 生产 → 盯 C 节两个告警**。
 
 ### ✅ 迁移升级路径已提前演练（2026-08-18）

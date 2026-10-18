@@ -195,7 +195,7 @@ FR-94 说「每日建议喂量为 Makanan 品类**必填**」。但 **DEP-6（�
 
 - 需求：[Source: `epics-v1.4.0.md#Story 1.3`] · [`PRD-v1.4.0-后台.md#AB-10A`] [`#AB-10B`] · [`PRD-v1.4.0.md#FR-94`]
 - 权限：[Source: `epics-v1.4.0.md#NFR-11`]（模块 10–13 独立权限；进货价单独权限位）
-- 并行：[Source: `implementation-artifacts/v1.4.0/HEX-SIGNOFF.md#B 类`]
+- 并行：[Source: `implementation-artifacts/v1.4.0-toko-废弃/HEX-SIGNOFF.md#B 类`]
 - 前序：1.1（`shop_products`/`shop_skus`）· 1.2（`InventoryService.ensureRow`）
 
 ---

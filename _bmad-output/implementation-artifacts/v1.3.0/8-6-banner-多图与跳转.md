@@ -228,7 +228,7 @@ CREATE INDEX IF NOT EXISTS ix_shop_banners_active_pick
 
 ### 现状八：ACT-D 留痕落点
 
-`_bmad-output/planning-artifacts/v1.4.0/decision-log.md`（电商一期决策日志，编号 `S-n`）—— **grep `banner|Banner|轮播` 零命中**。也就是说「单图 + 纯展示 + 不做轮播」这条口径**从来没有进过决策日志**，只活在代码注释里（2026-08-27 拍板）。
+`_bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md`（电商一期决策日志，编号 `S-n`）—— **grep `banner|Banner|轮播` 零命中**。也就是说「单图 + 纯展示 + 不做轮播」这条口径**从来没有进过决策日志**，只活在代码注释里（2026-08-27 拍板）。
 ACT-D 原文（`PRD-v1.3.0-shop-v2.md:300`）：「在电商一期决策日志补记本版推翻的口径：…**banner 轮播翻案**；…」
 
 ---
@@ -271,7 +271,7 @@ ACT-D 原文（`PRD-v1.3.0-shop-v2.md:300`）：「在电商一期决策日志�
 **And** ⑦ 的注释里那句「要加跳转时是一次明确的契约变更」改写为「跳转已于 V1.3.0 Story 8-6 落地，字段语义见 …」—— **让下一个人读到的是现状，不是一条与代码相反的笔记** `[L0]`
 
 **AC4 · ACT-D 留痕** `[L0]`
-**Given** `_bmad-output/planning-artifacts/v1.4.0/decision-log.md` 中**没有任何 banner 条目**（grep 零命中），该口径只活在代码注释里
+**Given** `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md` 中**没有任何 banner 条目**（grep 零命中），该口径只活在代码注释里
 **When** 本 story 实施
 **Then** 在电商一期决策日志中补记一条：原口径（单图 + 纯展示 + 不做轮播，2026-08-27 拍板）、**翻案理由**（SHOP-FR-22：现状看起来能点、点了没反应，属 UJ-1②「点不动/被误导」，运营已提报）、翻案版本（V1.3.0 shop-v2 Story 8-6）、新口径（多图 + 可点，两类跳转目标）`[L0]`
 **And** 编号沿用该文件的 `S-n` 体系（**不要用 `SD-n` / `D-n` / `AD-S n`，那是别的主题的号段**）`[L0]`

@@ -1,7 +1,7 @@
 # Validation Report — TailTopia V1.4.0 · 精选自营电商（用户端 + 运营后台）
 
-- **PRD：** `_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md`（用户端，FR-93~FR-110）
-  `_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md`（运营后台，模块 10–13 + 模块 6 扩展）
+- **PRD：** `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md`（用户端，FR-93~FR-110）
+  `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md`（运营后台，模块 10–13 + 模块 6 扩展）
 - **配套输入（非评审对象）：** `v1.4.0/README.md` · `v1.4.0/decision-log.md`
 - **Rubric：** `.claude/skills/bmad-prd/assets/prd-validation-checklist.md`
 - **Run at：** 2026-08-14T10:26:37Z

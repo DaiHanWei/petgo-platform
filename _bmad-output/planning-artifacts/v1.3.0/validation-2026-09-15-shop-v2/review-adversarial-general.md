@@ -183,7 +183,7 @@
 
 ### M-8 · 引用的需求来源文件大多不在仓库，云端 agent 读不到
 - **位置**：文件头；§1.3；§3；§4.5；§9
-- **问题**：`../../电商V2/需求梳理-2026-09-11.md`、`research-sea-pet-ecom.md`、`research-whatsapp-integration.md`、`.memlog.md`、`AGENTS.md:51` 在仓库里都找不到（`HANDOFF.md` 实际位于 `implementation-artifacts/v1.4.0/`，`deferred-work.md` 位于 `implementation-artifacts/`，路径都没写全）。CLAUDE.md 规定云端 session 靠仓库自包含。BUG-x / APP-x / OPS-x / MKT-x 这些编号的原文也都在缺失的文件里。
+- **问题**：`../../电商V2/需求梳理-2026-09-11.md`、`research-sea-pet-ecom.md`、`research-whatsapp-integration.md`、`.memlog.md`、`AGENTS.md:51` 在仓库里都找不到（`HANDOFF.md` 实际位于 `implementation-artifacts/v1.4.0-toko-废弃/`，`deferred-work.md` 位于 `implementation-artifacts/`，路径都没写全）。CLAUDE.md 规定云端 session 靠仓库自包含。BUG-x / APP-x / OPS-x / MKT-x 这些编号的原文也都在缺失的文件里。
 - **建议**：把来源文件入库到 `v1.3.0/` 下（或在附录里摘录原文）；所有引用写仓库相对全路径；`AGENTS.md` 改为引用 `CROSS-STORY-DECISIONS.md`。
 
 ### M-9 · FR-145 购物车部分结算分组放错，而且是接口契约级改动却没有拍板项

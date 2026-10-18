@@ -43,7 +43,7 @@ so that 我不需要搜索也能找到要买的东西。
 **And** 🔴 **区域①（补货提醒）与区域②（档案精选）整区不渲染，且不保留空标题** —— 这是 PRD 定义的**合法状态**（无触发/无档案时本就不渲染），**不是待补的占位**。原型可见效果是页面直接从「Kategori」开始。两区在 Epic 6 接入
 
 `[L0]` widget 测试：无搜索框 · 四个品类 chip · 无区域①② 的任何残留标题
-`[L2]` 模拟器视觉比对 `_bmad-output/planning-artifacts/v1.4.0/页面/pages/01-Toko首页-游客态.html`
+`[L2]` 模拟器视觉比对 `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/页面/pages/01-Toko首页-游客态.html`
 
 ### AC2 — 🔒 游客态：不触发登录引导（与既有机制有意不同）
 
@@ -202,9 +202,9 @@ so that 我不需要搜索也能找到要买的东西。
 ### References
 
 - [Source: `_bmad-output/planning-artifacts/epics-v1.4.0.md#Story 1.6`（L463–495）]
-- [Source: `_bmad-output/planning-artifacts/v1.4.0/页面/pages/01-Toko首页-游客态.html`（原型，✅ 可直接实现）]
-- [Source: `_bmad-output/planning-artifacts/v1.4.0/UX-v1.4.0.md`（L38-39 原型清单 · L91 「①② 整区不渲染，不保留空标题」· L129 UX-DR12 Tab 归 DEP-1/DEP-2）]
-- [Source: `_bmad-output/planning-artifacts/v1.4.0/decision-log.md#C-7`（SKU 上限与「不做搜索」是同一套论证）]
+- [Source: `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/页面/pages/01-Toko首页-游客态.html`（原型，✅ 可直接实现）]
+- [Source: `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/UX-v1.4.0.md`（L38-39 原型清单 · L91 「①② 整区不渲染，不保留空标题」· L129 UX-DR12 Tab 归 DEP-1/DEP-2）]
+- [Source: `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md#C-7`（SKU 上限与「不做搜索」是同一套论证）]
 - [Source: `petgo_app/lib/core/router/app_router.dart`（L114-133 受控名单与三条硬约束）]
 - [Source: `petgo-backend/src/main/java/com/tailtopia/shared/media/PresignedUploadService.java`（L49-67 公开桶 URL 拼法）]
 

@@ -4,7 +4,7 @@ status: draft
 created: 2026-08-10
 updated: 2026-08-15
 validated: 2026-08-14
-validation_report: "_bmad-output/planning-artifacts/v1.4.0/validation-2026-08-14/validation-report.md"
+validation_report: "_bmad-output/planning-artifacts/v1.4.0-toko-废弃/validation-2026-08-14/validation-report.md"
 decided_2026_08_15: "C-10 扩展 PaymentIntent（原 D-9/OQ-35/L-8）· C-11 FR-108 挪 1.2.0（原 D-10/OQ-36/L-10）· C-12 行级部分退货 + 去程运费（原 OQ-38，落为 FR-104A）· C-13 砍换货（原 OQ-39）· SPEC-15 提前量 7 天。连带消解：D-5/OQ-29 · A-16 疫苗类分母污染"
 carried_findings: "⏳ 待拍板 OQ-37 / OQ-40 / OQ-41（安全攸关）/ OQ-42 · 后台 OQ-30~32 无 D 编号 · SPEC-1~SPEC-25（§9B 待补规格）· DEP-1~DEP-9（其中 DEP-6 已升为版本核心单点依赖）· L-9/L-11/L-12（§8A 未闭合项）"
 blocking_backend_dev: "无 —— C-10 拍板后已解除。开工前须先落 §8B 的两项并行护栏（Flyway 独占号段 · 共享枚举追加约定），且须三人共同确认"
@@ -791,7 +791,7 @@ PawCoin 原本只用于虚拟商品（AI 问诊解锁 FR-43A、兽医咨询 FR-4
 >
 > **另有本条完全漏记的一个枚举，而它才是本版本唯一必须改的：** `pay/domain/PayChannel`（2 值 `QRIS`/`PAWCOIN`）——C-10 要加 `MIXED`。它被 **4 个实体**映射（`PaymentIntent` / `ConsultOrder` / `AiConsultOrder` / `IdCardHdPurchase`），取值被 **4 个 CHECK 约束**分别钉在 4 张表上。处置见架构 delta **AD-3**（只放宽 `payment_intents` 一处，另三处刻意不放宽作纵深防御）。
 
-> 三项均须**三人共同确认**，不是单方面写。**✅ 2026-08-15 已起草：`implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md`（待三人签字）**，签字后追加摘要到 `CROSS-STORY-DECISIONS.md`（`CLAUDE.md` 指定「遇冲突以此为准」）。
+> 三项均须**三人共同确认**，不是单方面写。**✅ 2026-08-15 已起草：`implementation-artifacts/v1.4.0-toko-废弃/PARALLEL-DEV-CONTRACT.md`（待三人签字）**，签字后追加摘要到 `CROSS-STORY-DECISIONS.md`（`CLAUDE.md` 指定「遇冲突以此为准」）。
 >
 > 🔴 **该契约的 §0 记录了两次真实事故，都在本仓库里：** ① **2026-07-11** 跨分支 Flyway 撞号 → V1.1 资金地基迁移号全量 +13 重排（记录在 `V60` 文件头）；② **2026-07-30** 两条工作线各自 `DROP+ADD` 同一个 `ck_notifications_type` → 合并后**审核通知整类静默失效**（记录在 `V97` 文件头）。**事故 ② 与本版本改 `PayChannel` 的处境完全相同**——两边各自测试全绿、合并无冲突、编译不报错，只在真发那类通知时才炸。
 

@@ -2,8 +2,8 @@
 
 **评审员：** 跨文档一致性专项（validate 意图，只评审不修改）
 **评审对象：**
-- 用户端：`_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md`（FR-93 ~ FR-110）
-- 后台：`_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md`（模块 10–13 + 模块 6 扩展）
+- 用户端：`_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md`（FR-93 ~ FR-110）
+- 后台：`_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md`（模块 10–13 + 模块 6 扩展）
 
 **配套输入（仅用于判断某不一致是否已被登记）：** `decision-log.md`、`README.md`
 

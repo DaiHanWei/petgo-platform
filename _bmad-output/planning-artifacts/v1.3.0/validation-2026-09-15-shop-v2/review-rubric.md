@@ -101,7 +101,7 @@
 
 这是一份 chain-top PRD（下游是架构 delta → epics → dev agent），所以此维度权重高。正面：FR 编号全局续号并在 §4 开头说明起点、§5 对 NFR 双编号空间的警告与「全限定名」规则非常有价值、§9 把既有工程纪律映射到具体 FR 是下游最需要的那种信息。
 
-但抽取层面问题较多：**无 Glossary**（激励溢价/补偿溢价、`displayNo`/`publicToken`/`TOKO-…`、外部商品编号/货号、发现位、可售/锁定 等核心名词无定义，且有漂移）；**§3 与 §4 严重脱节**（§4.3 后补的 FR-121/123/139~148 在 §3 全部缺席，§4.7 税务在 §3 缺席）；**§4 的 FR 表没有「实现哪个 UJ」列**，追溯只能靠 §3，而 §3 又不全；**关键上下文依赖仓外文件**：`需求梳理-2026-09-11.md`（BUG-/APP-/OPS-/MKT-/CAT- 全部编码的定义处）、`research-sea-pet-ecom.md`、`research-whatsapp-integration.md`、`.memlog.md` 均不在仓内；`HANDOFF.md`（§9 来源）实际位于 `implementation-artifacts/v1.4.0/HANDOFF.md` 但 PRD 未给路径；`AGENTS.md:51`（§3 引用）在仓内不存在（应为 `CLAUDE.md`）。
+但抽取层面问题较多：**无 Glossary**（激励溢价/补偿溢价、`displayNo`/`publicToken`/`TOKO-…`、外部商品编号/货号、发现位、可售/锁定 等核心名词无定义，且有漂移）；**§3 与 §4 严重脱节**（§4.3 后补的 FR-121/123/139~148 在 §3 全部缺席，§4.7 税务在 §3 缺席）；**§4 的 FR 表没有「实现哪个 UJ」列**，追溯只能靠 §3，而 §3 又不全；**关键上下文依赖仓外文件**：`需求梳理-2026-09-11.md`（BUG-/APP-/OPS-/MKT-/CAT- 全部编码的定义处）、`research-sea-pet-ecom.md`、`research-whatsapp-integration.md`、`.memlog.md` 均不在仓内；`HANDOFF.md`（§9 来源）实际位于 `implementation-artifacts/v1.4.0-toko-废弃/HANDOFF.md` 但 PRD 未给路径；`AGENTS.md:51`（§3 引用）在仓内不存在（应为 `CLAUDE.md`）。
 
 ### Findings
 
@@ -109,7 +109,7 @@
 - **high** FR→UJ 追溯缺失（§4 全部表格）— §4 所有 FR 表只有「需求 / 验收要点」两列；FR-121、123、133~146、149~151 在全文找不到所实现的旅程格。下游 epic 无法按旅程组织。*Fix:* §4 每张表加「实现」列（UJ-n ⑥ / 跨旅程 / 合规强制）。
 - **high** 关键需求来源不在仓内且未内联（§1 头注、§1.2、§1.3、§2 UJ-1 ①、§4.3 FR-139~148「运营 0910 第 N 条」、§4.3 FR-147「`deferred-work.md` 有完整可行性分析」、§6 缺陷存量「9 条 + 2 条留白 story」）— BUG-1/3、APP-1~8、OPS-1~14、CAT-1/4/6/7、MKT-1~9、C-18/C-19、「运营 0910 清单」第 2/5/6/7/9/10 条，其原文均只在 `需求梳理-2026-09-11.md`，云端/下游 agent 无法解析；§6 缺陷存量基线「9 条」未列出是哪 9 条；FR-147 依赖的可行性分析未摘要。*Fix:* 在附录内联「来源编码 → 一句话原文」对照表（至少覆盖 PRD 引用到的编码）与「运营 0910 清单 13 条」原文；列出缺陷存量基线的 9 条 ID；FR-147 摘要 deferred-work 的结论。或把 `电商V2/` 目录入库并改为仓内相对路径。
 - **medium** 无 Glossary，术语漂移（全文）— 「客服接得住」（§3 组名）vs「客服可达」（§1.2 主线 D、§4.4、§6）；「退款入口」（FR-117）vs「退货入口」（UJ-4 ①）vs「申请退款」；「Lark 通知」（FR-130）vs「Lark 提醒」（D-30）；「外部商品编号 / 商品编码 / 货号 / SKU 编码」混用（§3 注、FR-121、D-20）；「激励溢价 / 补偿溢价 / 平台责任补偿溢价」。*Fix:* 加 §0 或附录 Glossary，至少定义：两类溢价、订单号三形态（`displayNo`/`publicToken`/`TOKO-…` 关系）、商品编号与货号、发现位三处、库存四原语。
-- **medium** 跨仓引用路径错误（§3 购买闭环注「`AGENTS.md:51`」、§9 头注「`HANDOFF.md §三`」）— 仓根无 `AGENTS.md`（项目约定在 `CLAUDE.md`）；`HANDOFF.md` 实在 `_bmad-output/implementation-artifacts/v1.4.0/HANDOFF.md`。*Fix:* 改为可解析的仓内路径。
+- **medium** 跨仓引用路径错误（§3 购买闭环注「`AGENTS.md:51`」、§9 头注「`HANDOFF.md §三`」）— 仓根无 `AGENTS.md`（项目约定在 `CLAUDE.md`）；`HANDOFF.md` 实在 `_bmad-output/implementation-artifacts/v1.4.0-toko-废弃/HANDOFF.md`。*Fix:* 改为可解析的仓内路径。
 - **low** 文档头状态过期（frontmatter、§1 头注）— frontmatter `updated: 2026-09-14`，头注「状态：Discovery 进行中……已定 §1，§2 起草中」，而正文已含 2026-09-15 决策与完整 §1~§9；§2 仍保留「请逐条推翻或确认」的教练口吻。下游无法判断哪些段落已确认。*Fix:* 更新 `updated` 与状态行，按节标注「已确认 / 待确认」。
 
 ---

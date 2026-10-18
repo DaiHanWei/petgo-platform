@@ -15,7 +15,7 @@ baseline:
   - _bmad-output/planning-artifacts/v1.1.2/architecture-v1.1.2-delta.md
   - _bmad-output/planning-artifacts/v1.1.4/architecture-v1.1.4-delta.md
   - _bmad-output/planning-artifacts/v1.1.6/architecture-v1.1.6-delta.md
-  - _bmad-output/planning-artifacts/v1.4.0/architecture-v1.4.0-delta.md   # 并行电商线（商城组 17 页的现状依据）
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/architecture-v1.4.0-delta.md   # 并行电商线（商城组 17 页的现状依据）
 inputDocuments:
   - _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md
   - _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md

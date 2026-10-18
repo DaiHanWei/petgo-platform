@@ -234,8 +234,8 @@ so that **后台能往里录数据、App 能把商品取出来展示（FR-94 / F
 
 - 需求：[Source: `_bmad-output/planning-artifacts/epics-v1.4.0.md#Story 1.1`]（AC 原文）· [`v1.4.0/PRD-v1.4.0.md#FR-94`] [`#FR-94A`] [`#FR-93A`]
 - 架构：[Source: `_bmad-output/planning-artifacts/architecture-v1.4.0-delta.md#AD-4`]（模块位置）[`#AD-7`]（token）
-- 决策：[Source: `_bmad-output/planning-artifacts/v1.4.0/decision-log.md#C-13`]（砍换货，`return_policy` 三值）[`#C-7`]（SKU 上限 30）[`#DEP-6`]（喂量数据未到位，Rendy）
-- 并行：[Source: `_bmad-output/implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md#§1`]（Flyway 号段）
+- 决策：[Source: `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md#C-13`]（砍换货，`return_policy` 三值）[`#C-7`]（SKU 上限 30）[`#DEP-6`]（喂量数据未到位，Rendy）
+- 并行：[Source: `_bmad-output/implementation-artifacts/v1.4.0-toko-废弃/PARALLEL-DEV-CONTRACT.md#§1`]（Flyway 号段）
 - 护栏：[Source: `CLAUDE.md#强制护栏`]
 
 ---

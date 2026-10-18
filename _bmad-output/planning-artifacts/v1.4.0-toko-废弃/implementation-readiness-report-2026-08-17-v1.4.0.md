@@ -8,14 +8,14 @@ project_name: 'TailTopia V1.4.0 · 精选自营电商'
 date: '2026-08-17'
 scope: 'V1.4.0 增量 delta；brownfield；三人并行；Flyway 独占号段 V101–V139'
 documentsAssessed:
-  - _bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md
-  - _bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md
-  - _bmad-output/planning-artifacts/v1.4.0/architecture-v1.4.0-delta.md
-  - _bmad-output/planning-artifacts/v1.4.0/epics-v1.4.0.md
-  - _bmad-output/planning-artifacts/v1.4.0/UX-v1.4.0.md
-  - _bmad-output/planning-artifacts/v1.4.0/页面/
-  - _bmad-output/planning-artifacts/v1.4.0/decision-log.md
-  - _bmad-output/implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/architecture-v1.4.0-delta.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/epics-v1.4.0.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/UX-v1.4.0.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/页面/
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md
+  - _bmad-output/implementation-artifacts/v1.4.0-toko-废弃/PARALLEL-DEV-CONTRACT.md
 baselinesReadOnly:
   - _bmad-output/planning-artifacts/v1.0.0/PRD.md                    # V1.0 冻结
   - _bmad-output/planning-artifacts/architecture.md           # V1.0 冻结
@@ -45,7 +45,7 @@ baselinesReadOnly:
 | **Epics** | `epics-v1.4.0.md`（129KB，9 Epic / 57 Story） | `epics.md`（V1.0 冻结 46 story）· `epics-v1.1.md` · `epics-v1.1.2.md` |
 | **UX** | `v1.4.0/UX-v1.4.0.md`（12KB，UX-DR1~14）+ `v1.4.0/页面/`（15 屏原型，视觉权威） | `UX_DESIGN.md` / `UX_EXPERIENCE.md`（🔴 **F8 判定为焦糖色旧版，不作品牌权威**）· `incoming-*/UX_*.new.md` · `admin-backend/UX_DESIGN.md` |
 | **决策台账** | `v1.4.0/decision-log.md`（C-1~C-17 / S-1~S-14 / L-1~L-13 / DEP-1~DEP-9） | `CROSS-STORY-DECISIONS.md`（既有，遇冲突以此为准） |
-| **并行契约** | `implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md` | — |
+| **并行契约** | `implementation-artifacts/v1.4.0-toko-废弃/PARALLEL-DEV-CONTRACT.md` | — |
 
 ### 重复与缺失
 

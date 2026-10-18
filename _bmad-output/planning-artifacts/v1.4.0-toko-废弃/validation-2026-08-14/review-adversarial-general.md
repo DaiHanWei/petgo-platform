@@ -1,6 +1,6 @@
 # 对抗性评审 — V1.4.0 电商 PRD
 
-评审对象：`_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md`（用户端 FR-93~FR-110）与 `_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md`（后台模块 10–13 + 模块 6 扩展）。
+评审对象：`_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md`（用户端 FR-93~FR-110）与 `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md`（后台模块 10–13 + 模块 6 扩展）。
 配套输入 `decision-log.md` / `README.md` 仅作对照，不在评审范围内。README §4 已登记的 CODE-1~CODE-5 五处代码偏差不重复列出；下文若涉及其连带影响，均已注明增量部分。
 
 ---

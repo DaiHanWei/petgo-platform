@@ -14,12 +14,12 @@ baseline:
   - _bmad-output/planning-artifacts/v1.1.0/architecture-v1.1-delta.md   # V1.1 已完成
   - _bmad-output/planning-artifacts/v1.1.2/architecture-v1.1.2-delta.md # V1.1.2
 sources:
-  - _bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md
-  - _bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md
-  - _bmad-output/planning-artifacts/v1.4.0/decision-log.md
-  - _bmad-output/planning-artifacts/v1.4.0/README.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/README.md
 companions:
-  - _bmad-output/implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md
+  - _bmad-output/implementation-artifacts/v1.4.0-toko-废弃/PARALLEL-DEV-CONTRACT.md
 flywayBaseline: 'V100'
 flywayRange: 'V101–V139（独占号段，见 PARALLEL-DEV-CONTRACT.md §1，待三人签字）'
 ---
@@ -32,7 +32,7 @@ flywayRange: 'V101–V139（独占号段，见 PARALLEL-DEV-CONTRACT.md §1，�
 >
 > **运维 envelope 零增量**：不引入任何新中间件、不新增外部依赖、不改变部署形态（德国单机）。**唯一的外部新依赖是承运商商务账号（DEP-5），属商务动作而非技术组件**——本版本的物流是「后台手工填运单号 + 外链查询」，不接承运商 API（FR-103）。
 >
-> ⚠️ **本版本是三人并行**。所有涉及共享物（Flyway 号 / 共享枚举 / `OrderCenterService` / App 共享壳）的决策，其**执行纪律**写在 `implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md`，本文件只写**技术裁定**。两份文件配套使用。
+> ⚠️ **本版本是三人并行**。所有涉及共享物（Flyway 号 / 共享枚举 / `OrderCenterService` / App 共享壳）的决策，其**执行纪律**写在 `implementation-artifacts/v1.4.0-toko-废弃/PARALLEL-DEV-CONTRACT.md`，本文件只写**技术裁定**。两份文件配套使用。
 
 ---
 

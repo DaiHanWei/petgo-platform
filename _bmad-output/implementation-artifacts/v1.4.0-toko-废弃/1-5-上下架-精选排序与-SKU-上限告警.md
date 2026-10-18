@@ -205,11 +205,11 @@ so that Toko 首页呈现的是我想主推的商品，且商品总数不失控�
 ### References
 
 - [Source: `_bmad-output/planning-artifacts/epics-v1.4.0.md#Story 1.5`（L438–460）]
-- [Source: `_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md#AB-10D`（L71–77，上限口径以此为准）]
-- [Source: `_bmad-output/planning-artifacts/v1.4.0/decision-log.md#C-7`（SKU 上限 30 与三处依赖）· `#S-3`（召回走手工选单取消）]
-- [Source: `_bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md#SPEC-7`（L865，本 Story 闭合其中「下架时已锁定库存归属」一项）]
+- [Source: `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md#AB-10D`（L71–77，上限口径以此为准）]
+- [Source: `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md#C-7`（SKU 上限 30 与三处依赖）· `#S-3`（召回走手工选单取消）]
+- [Source: `_bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md#SPEC-7`（L865，本 Story 闭合其中「下架时已锁定库存归属」一项）]
 - [Source: `petgo-backend/src/main/resources/db/migration/V101__init_shop_products_and_skus.sql`（L36-37 两列已存在）]
-- [Source: `_bmad-output/implementation-artifacts/v1.4.0/1-4-库存管理与采购入库.md#Completion Notes`（评审整改与三次假绿护栏的教训）]
+- [Source: `_bmad-output/implementation-artifacts/v1.4.0-toko-废弃/1-4-库存管理与采购入库.md#Completion Notes`（评审整改与三次假绿护栏的教训）]
 
 ---
 

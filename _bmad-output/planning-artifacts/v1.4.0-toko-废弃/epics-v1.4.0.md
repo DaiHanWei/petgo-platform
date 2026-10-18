@@ -10,14 +10,14 @@ baseline:
   - _bmad-output/planning-artifacts/v1.1.0/epics-v1.1.md     # V1.1（9 Epic / 46 story，只读不改）
   - _bmad-output/planning-artifacts/v1.1.2/epics-v1.1.2.md   # V1.1.2（7 Epic / 19 story，只读不改）
 inputDocuments:
-  - _bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0.md
-  - _bmad-output/planning-artifacts/v1.4.0/PRD-v1.4.0-后台.md
-  - _bmad-output/planning-artifacts/v1.4.0/architecture-v1.4.0-delta.md
-  - _bmad-output/planning-artifacts/v1.4.0/UX-v1.4.0.md
-  - _bmad-output/planning-artifacts/v1.4.0/页面/  # 15 屏原型，视觉权威为 pages/*.html 单文件
-  - _bmad-output/planning-artifacts/v1.4.0/decision-log.md
-  - _bmad-output/planning-artifacts/v1.4.0/README.md
-  - _bmad-output/implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/PRD-v1.4.0-后台.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/architecture-v1.4.0-delta.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/UX-v1.4.0.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/页面/  # 15 屏原型，视觉权威为 pages/*.html 单文件
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/README.md
+  - _bmad-output/implementation-artifacts/v1.4.0-toko-废弃/PARALLEL-DEV-CONTRACT.md
   - _bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md
 ---
 
