@@ -2635,5 +2635,10 @@
   "pushSettingsAlwaysOn": "Selalu aktif",
   "pushSettingsFooter": "Notifikasi yang dimatikan tetap masuk ke kotak Notifikasi di aplikasi.",
   "pushSettingsLoadFailed": "Gagal memuat pengaturan",
-  "pushSettingsSaveFailed": "Gagal menyimpan, coba lagi"
+  "pushSettingsSaveFailed": "Gagal menyimpan, coba lagi",
+  "collectSavedToast": "Disimpan",
+  "collectSavedToastAction": "Lihat",
+  "collectSaveFailed": "Gagal menyimpan, coba lagi",
+  "collectRemoveFailed": "Gagal membatalkan, coba lagi",
+  "collectActionLabel": "Simpan"
 }

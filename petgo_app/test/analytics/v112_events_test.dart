@@ -442,6 +442,10 @@ void main() {
         // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
         '_followed',
         '_unfollowed',
+        // 收藏 / 取消收藏（V1.4.0 ④ push-collect · P-8，PRD §4 定死 `content_collected` 等四个名字）：过去式，
+        // **服务端确认成功后**才报。`*_uncollected` 不以 `_collected` 结尾，两个都要登记。扩表、不改名。
+        '_collected',
+        '_uncollected',
         // 运营弹窗被关掉（V1.3.4 Story 5.4 · PRD §4 定死 `ops_popup_closed`）。
         // 🔴 与 `_dismissed` 区分：运营弹窗没有「未完成的流程」，关闭（✕ / 系统返回）是**中性结果**，
         //    看板按 shown / tapped / closed 三分。上面 `_dismissed` 注释里「刻意不用 `_closed`」针对的是
@@ -516,6 +520,8 @@ void main() {
         // 不外露自增 id；source ∈ {push, notification_center}（'source' 已在上方）。
         'campaign_id',
         'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
+        // V1.4.0 ④ Story 2.3：收藏四事件。place_id = 场所 token（不外露自增 id，AD-17）；content_type ∈ diary / moment / tips。
+        'post_id', 'content_type', 'place_id',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

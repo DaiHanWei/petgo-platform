@@ -76,9 +76,11 @@ void main() {
     /// 默认态是「点赞 + 分享」两个图标，**没有评论图标**——
     /// 评论输入框本身就常驻底栏，再放一个「跳到评论框」的图标是多余的；
     /// 评论数也只在评论区标题出现一次（AC3）。
-    testWidgets('底栏默认态两个图标：点赞 | 分享（评论图标已随互动栏合并去掉）', (tester) async {
+    /// V1.4.0 ④ Story 2.3：公开帖再加一个收藏 —— 点赞 | 分享 | 收藏（decision-log ④ Q2）。
+    testWidgets('底栏默认态三个图标：点赞 | 分享 | 收藏（评论图标已随互动栏合并去掉）', (tester) async {
       await pumpDetail(tester, _FakeDetailRepo(detail: detail()));
       expect(find.byKey(const ValueKey('detailShareCardIcon')), findsOneWidget);
+      expect(find.byKey(const ValueKey('detailCollectButton')), findsOneWidget);
       expect(find.byKey(const ValueKey('detailBottomActions')), findsOneWidget);
       expect(find.byKey(const ValueKey('detailCommentIcon')), findsNothing);
     });

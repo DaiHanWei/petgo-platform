@@ -30,7 +30,15 @@ class ContentDetail {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
+    this.collected = false,
+    this.collectCount,
   });
+
+  /// 当前用户是否已收藏（V1.4.0 ④ Story 2.3 · AD-10）。游客 / 老后端缺键 → false。
+  final bool collected;
+
+  /// 收藏数（不计作者自己）：**仅作者本人看时**后端才下发；非作者 / 游客 / 老后端 → null（不显示）。
+  final int? collectCount;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
   final String? authorToken;
@@ -66,6 +74,9 @@ class ContentDetail {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: epoch,
+        // 🔴 V1.4.0 ④：漏拷 → 进详情收藏态恒为 false、作者看不到收藏数。
+        collected: collected,
+        collectCount: collectCount,
       );
 
   final int id;
@@ -117,6 +128,8 @@ class ContentDetail {
   ///
   /// 只有一个用处：埋点 E-11 的 `is_private_diary`。**不要拿它当权限判据** ——
   /// 私密内容照样允许用户自己分享（AD-15 Rule 6），拿它去藏分享按钮就改了产品规则。
+  /// 例外（V1.4.0 ④ P-2）：收藏按钮按 P-2 对 PRIVATE 隐藏 —— 这是产品规则（只收藏公开帖），不是权限判据；
+  /// 分享仍不得据此隐藏。
   final String visibility;
 
   /// 正文里的 @（V1.3.0 batch-b1 Story 3.3）。
@@ -157,6 +170,9 @@ class ContentDetail {
       // V1.3.4 follow Story 2.1：缺失 / null 都按默认。
       authorToken: json['authorToken'] as String?,
       authorFollowState: FollowState.fromJson(json['authorFollowState']),
+      // V1.4.0 ④ Story 2.3：缺键（游客 / 老后端 / 非作者的 collectCount）按默认。
+      collected: json['collected'] == true,
+      collectCount: json['collectCount'] is int ? json['collectCount'] as int : null,
     );
   }
 }

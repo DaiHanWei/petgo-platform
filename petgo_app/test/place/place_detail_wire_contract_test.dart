@@ -188,7 +188,8 @@ void main() {
   /// 🔴 **AC6 的反向验收**：这些字段在契约里就**不存在**。
   ///
   /// 后端 `PlaceDetailResponseContractTest` 已经断言了响应里没有这些键；这里守住另一半 ——
-  /// 客户端域模型也不能悄悄长出这些概念（长出来就意味着有人在准备做收藏 / 打星 / 打卡）。
+  /// 客户端域模型也不能悄悄长出这些概念（长出来就意味着有人在准备做打星 / 打卡次数）。
+  /// V1.4.0 ④ 起有收藏，但**只有 `collected` 一个字段**（`favorited` 等名字仍禁用）。
   group('V1.3.2 Story 1.1 · checkedInToday', () {
     test('登录响应带 true / false 原样解析', () {
       expect(PlaceDetail.fromJson({...wire, 'checkedInToday': true}.cast<String, dynamic>())
@@ -202,7 +203,14 @@ void main() {
     });
   });
 
-  group('🔴 AC6：详情模型里没有收藏 / 评分 / 营业时间 / 打卡次数 / 可编辑', () {
+  group('V1.4.0 ④ Story 2.3 · collected', () {
+    test('collected:true 原样解析；缺键（游客 / 老后端）为 false', () {
+      expect(PlaceDetail.fromJson({...wire, 'collected': true}.cast<String, dynamic>()).collected, isTrue);
+      expect(PlaceDetail.fromJson(Map<String, dynamic>.from(wire)).collected, isFalse);
+    });
+  });
+
+  group('🔴 AC6：详情模型里没有评分 / 营业时间 / 打卡次数 / 可编辑；收藏只有 collected 一个字段', () {
     test('即使服务端多下发了这些键，客户端也不认（解析不报错、不产生任何状态）', () {
       final p = PlaceDetail.fromJson({
         ...wire,

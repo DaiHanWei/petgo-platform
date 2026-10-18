@@ -20,6 +20,7 @@ import '../../../core/media/media_scope.dart';
 import '../../../core/router/route_intent.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 import '../../auth/domain/auth_guard.dart';
+import '../../collect/presentation/collect_button.dart';
 import '../../content/presentation/report_sheet.dart';
 import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/domain/card_link.dart';
@@ -41,7 +42,8 @@ import 'place_mini_map.dart';
 /// 场所详情页（V1.3.0 batch-b1 Story 1.5 · UI 稿 A4）。
 ///
 /// <h2>🔴 反向验收：本页**没有**这些东西（FR-112.6 / AC6）</h2>
-/// 没有收藏、没有评分打星、没有营业时间/电话等商户字段、
+/// V1.4.0 ④ 起有收藏（顶栏「⋯」左侧一个按钮，只有 `collected` 一个字段、不展示计数）；
+/// 仍然没有评分打星、没有营业时间/电话等商户字段、
 /// **没有「编辑场所」入口**（本版用户不可编辑，2026-09-15 拍板；纠错走后台 AB-17A）。
 /// 这不是「还没做」，是明确不做 —— 后端 DTO 里连字段都没有（那侧有契约测试钉着）。
 ///
@@ -161,6 +163,10 @@ class PlaceDetailPage extends ConsumerWidget {
       },
       // 举报入口（AC5）。⚠️ 只在**真的有这个场所**时才给 —— 下架态弹举报抽屉毫无意义。
       onReport: async.hasValue ? () => _onReport(context, ref) : null,
+      // V1.4.0 ④ Story 2.3：收藏按钮与「⋯」同一条件（真的有这个场所才给）；token 用后端解析后的（MERGED → 保留场所）。
+      collectButton: async.hasValue
+          ? CollectButton.place(placeToken: async.value!.token, initialCollected: async.value!.collected)
+          : null,
       // 🔴 输入条只在**场所真的存在**时出现（Story 1.7）：
       // 404 空态下挂一个输入框，用户打完字一发就是另一个 404。
       composer: async.hasValue ? PlaceCommentComposer(token: token) : null,
@@ -177,7 +183,7 @@ class PlaceDetailPage extends ConsumerWidget {
   }
 
   Widget _scaffold(AppLocalizations l10n, Widget body,
-          {VoidCallback? onReport, Widget? composer}) =>
+          {VoidCallback? onReport, Widget? collectButton, Widget? composer}) =>
       Scaffold(
         backgroundColor: AppColors.cream,
         appBar: AppBar(
@@ -185,6 +191,8 @@ class PlaceDetailPage extends ConsumerWidget {
           scrolledUnderElevation: 0,
           // UI 稿 A4：顶栏不放「Tempat」标题 —— 场所名就在照片下方大字，顶栏再写一遍是噪音。
           actions: [
+            // V1.4.0 ④ Story 2.3（decision-log ④ Q1）：收藏在「⋯」左侧并排。
+            ?collectButton,
             if (onReport != null)
               IconButton(
                 key: const ValueKey('placeDetailMore'),

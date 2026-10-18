@@ -13,6 +13,11 @@ void main() {
     // Story 1.3：通知设置页
     'push_settings_viewed': 'push_settings_viewed',
     'push_category_toggled': 'push_category_toggled',
+    // Story 2.3：帖子 / 场所收藏按钮（服务端确认成功后报）
+    'content_collected': 'content_collected',
+    'content_uncollected': 'content_uncollected',
+    'place_collected': 'place_collected',
+    'place_uncollected': 'place_uncollected',
   };
 
   test('🔴 ④ 清单逐条在 lib 里有上报点', () {

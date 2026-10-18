@@ -4064,5 +4064,15 @@
   "pushSettingsLoadFailed": "Couldn't load settings",
   "@pushSettingsLoadFailed": {"description": "Push settings load failed title (V1.4.0)"},
   "pushSettingsSaveFailed": "Couldn't save, try again",
-  "@pushSettingsSaveFailed": {"description": "Push settings save failed toast (V1.4.0)"}
+  "@pushSettingsSaveFailed": {"description": "Push settings save failed toast (V1.4.0)"},
+  "collectSavedToast": "Saved",
+  "@collectSavedToast": {"description": "Toast after saving a post or place (V1.4.0 push-collect)"},
+  "collectSavedToastAction": "View",
+  "@collectSavedToastAction": {"description": "Toast action that opens the Saved tab on Me page (V1.4.0)"},
+  "collectSaveFailed": "Couldn't save, try again",
+  "@collectSaveFailed": {"description": "Toast when saving a post or place fails (V1.4.0)"},
+  "collectRemoveFailed": "Couldn't remove, try again",
+  "@collectRemoveFailed": {"description": "Toast when removing a saved post or place fails (V1.4.0)"},
+  "collectActionLabel": "Save",
+  "@collectActionLabel": {"description": "Save button tooltip / semantics label (V1.4.0)"}
 }
