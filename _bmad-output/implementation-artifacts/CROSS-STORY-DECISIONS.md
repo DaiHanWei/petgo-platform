@@ -224,7 +224,7 @@
 | 东西 | 由谁定义 | 其他分支 |
 |---|---|---|
 | `ck_notifications_type`（39 值，`V20261018_1400`） | 地基 | ①②③④ **一律不改**。确需新增类型 → 回到集成分支单独起一条重建迁移，不在功能分支里改 |
-| `ck_payment_intents_purpose`（11 值，`V20261018_1400`） | 地基 | 同上 |
+| `ck_payment_intents_purpose`（11 值，`V20261018_1401`） | 地基 | 同上 |
 | `NotificationType` 新增 5 值 / `PaymentPurpose` 新增 `GIFT`、`PET_SLOT_RENT` | 地基 | 只用，不增删、不改顺序 |
 | `growth.service.GrowthQueryService`（`getLevel` / `getLevels`）、`growth.domain.GrowthLevel` / `GrowthTier` | 地基（占位实现） | **① 只替换方法体，不改签名 / 包名**；②③ 只调用，**禁止替身或自写等级判断**；`participating=false` 一律不给权益 |
 | `growth.event.GrowthLevelChangedEvent` | 地基 | ① 发布、② 监听；不改字段 |

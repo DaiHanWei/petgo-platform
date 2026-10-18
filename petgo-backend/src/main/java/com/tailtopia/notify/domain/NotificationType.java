@@ -189,5 +189,46 @@ public enum NotificationType {
      *
      * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261012_1108__rebuild_ck_notifications_type.sql} 与 {@code V20261012_1300__rebuild_ck_notifications_type_follow_place.sql} 两条都列全集，D-26 / D-1）。
      */
-    PLACE_COMMENTED
+    PLACE_COMMENTED,
+
+    /**
+     * V1.4.0 ① Tailrent Level：升级（连跳多级只发一条，显示最终等级；降级不发）→ 本人。推送分类「成就与等级」（由 ④ 映射）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.4.0-tailrent-level} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261018_1400__v140_rebuild_ck_notifications_type.sql}）；四条线不再改该约束。
+     */
+    GROWTH_LEVEL_UP,
+
+    /**
+     * V1.4.0 ② 多宠物：月租宠物名额即将到期 → 本人。推送分类「订单与账号」（不可关）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.4.0-multi-pet} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261018_1400__v140_rebuild_ck_notifications_type.sql}）；四条线不再改该约束。
+     */
+    PET_SLOT_EXPIRING,
+
+    /**
+     * V1.4.0 ② 多宠物：月租宠物名额已到期 → 本人。推送分类「订单与账号」（不可关）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.4.0-multi-pet} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261018_1400__v140_rebuild_ck_notifications_type.sql}）；四条线不再改该约束。
+     */
+    PET_SLOT_EXPIRED,
+
+    /**
+     * V1.4.0 ③ 送礼：宠物收到礼物 → 宠物主人（{@code aggregateKey = GIFT:PET:{petId}}）。推送分类「礼物」（由 ④ 映射）。
+     * 不叫 {@code GIFT_RECEIVED}，避免和成长值规则代码同名。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.4.0-gift} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261018_1400__v140_rebuild_ck_notifications_type.sql}）；四条线不再改该约束。
+     */
+    PET_GIFT_RECEIVED,
+
+    /**
+     * V1.4.0 ③ 送礼：礼物未送达（如付款期间宠物被删）、PawCoin 已退回 → 送礼人。推送分类「订单与账号」（不可关）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.4.0-gift} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261018_1400__v140_rebuild_ck_notifications_type.sql}）；四条线不再改该约束。
+     */
+    GIFT_UNDELIVERED_REFUND
 }

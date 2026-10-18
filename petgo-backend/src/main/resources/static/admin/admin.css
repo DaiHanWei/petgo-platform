@@ -931,8 +931,8 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ===== B7 用户列表 + 五页签抽屉（V1.3.0 Story 8.1）===== */
 .users-table td { vertical-align: middle; }
 .ud-head h2 { margin: 0 0 8px; font-size: var(--fs-md); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-/* 🔴 nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */
-.ud-tabs { margin: 0 0 10px; flex-wrap: nowrap; overflow-x: auto; }
+/* V1.4.0 Story 0.1：页签增至 9 个，600 宽一行放不下 → 按 ① PRD OQ-8 改为换两行（UI 稿 .tabs.w），不再横向滚动。 */
+.ud-tabs { margin: 0 0 10px; flex-wrap: wrap; }
 .ud-tabs .tab { white-space: nowrap; }
 /* V1.3.2 后台 AB-23：用户详情抽屉 480 → 600px（六页签三语都放不下 480，UI 稿 E1 实测）。
    🔴 只放宽这一个抽屉 —— 场所等其余抽屉维持 480 是有意的，不要借此统一加宽。 */

@@ -285,6 +285,9 @@ public class GemPayGateway implements PaymentGateway {
             case "PASSPORT_SNAP" -> "Pet Passport";
             case "BOARDING_PASS" -> "Boarding Pass";
             case "TS_MATCH" -> "Tailsonality Match";
+            // V1.4.0 Story 0.1：送礼 / 宠物名额月租。
+            case "GIFT" -> "Pet Gift";
+            case "PET_SLOT_RENT" -> "Pet Slot Rent";
             default -> "TailTopia Payment";
         };
     }
