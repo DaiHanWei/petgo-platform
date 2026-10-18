@@ -154,4 +154,20 @@ class GrowthLevelChangeHandlerTest {
 
         assertThat(handler.levelFor(0)).isEqualTo(1);
     }
+
+    /** V1.4.0 ① Story 4.1：等级表重算入口——升级照常写待弹 + 发事件；降级只发事件（视作非补算来源）。 */
+    @Test
+    void levelTableChangeBehavesLikeANonBackfillSource() {
+        GrowthAccount up = GrowthAccount.of(7L, 500, 4);
+        handler.onLevelTableChanged(up);
+        assertThat(up.getLevel()).isEqualTo(5);
+        assertThat(up.getCelebrateToLevel()).isEqualTo(5);
+        verify(events).publishEvent(new GrowthLevelChangedEvent(7L, 4, 5));
+
+        GrowthAccount down = GrowthAccount.of(8L, 100, 4);
+        handler.onLevelTableChanged(down);
+        assertThat(down.getLevel()).isEqualTo(2);
+        assertThat(down.getCelebrateToLevel()).isNull();
+        verify(events).publishEvent(new GrowthLevelChangedEvent(8L, 4, 2));
+    }
 }

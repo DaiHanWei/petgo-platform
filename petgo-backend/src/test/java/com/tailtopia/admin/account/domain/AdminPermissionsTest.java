@@ -127,7 +127,9 @@ class AdminPermissionsTest {
         //     期间列在 AdminPermissionWiringTest.PENDING_WIRING）⇒ 72 + 2 = 74。
         // 2026-10-15（V1.3.4 后台返工清单 §1）：改最低支持版本 config.app_min_version_edit、
         //     运营弹窗 ops_popup.manage、系统通知 ops_notify.view / ops_notify.send ⇒ 74 + 4 = 78。
+        // 2026-10-18（V1.4.0 ① Story 4.1 · AB-32）：成长体系配置 growth.config_view / growth.config_edit
+        //     （不预授任何预置角色）⇒ 78 + 2 = 80。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(78);
+        assertThat(all).hasSize(80);
     }
 }

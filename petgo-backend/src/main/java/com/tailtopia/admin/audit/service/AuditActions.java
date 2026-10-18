@@ -256,6 +256,16 @@ public final class AuditActions {
     /** 开封判定判例沉淀（AB-12D）。⚠️ 一致性工具，非风控工具（SPEC-24）。 */
     public static final String SHOP_RETURN_PRECEDENT_ADDED = "SHOP_RETURN_PRECEDENT_ADDED";
 
+    // ── V1.4.0 ① AB-32 · Story 4.1：成长体系配置（摘要写改前 → 改后；不写 config_change_logs）──────────
+    /** 改一条成长值规则（分值 / 每日上限 / 合计上限 / 每 Rp / 启停用）。target = 规则代码。 */
+    public static final String GROWTH_RULE_UPDATED = "GROWTH_RULE_UPDATED";
+    /** 改消费换算（两档比例 + 支付用途归档）。target = {@code spend}。 */
+    public static final String GROWTH_SPEND_CONFIG_UPDATED = "GROWTH_SPEND_CONFIG_UPDATED";
+    /** 改等级表（门槛 / 末尾追加一级），并入库一次全量重算任务。target = {@code levels}。 */
+    public static final String GROWTH_LEVEL_TABLE_UPDATED = "GROWTH_LEVEL_TABLE_UPDATED";
+    /** 失败 / 僵死的重算任务重新执行。target = 新任务 id。 */
+    public static final String GROWTH_RECALC_RETRIED = "GROWTH_RECALC_RETRIED";
+
     private AuditActions() {
     }
 }

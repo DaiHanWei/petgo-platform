@@ -202,6 +202,20 @@ public final class AdminPermissions {
     public static final String CONFIG_ALGO_PARAM_EDIT = "config.algo_param_edit";
 
     /**
+     * 查看「成长体系」配置页（V1.4.0 ① AB-32 · Story 4.1：成长值规则 / 消费换算 / 等级表）。
+     *
+     * <p>不预授任何预置角色（超管隐式拥有）。
+     */
+    public static final String GROWTH_CONFIG_VIEW = "growth.config_view";
+
+    /**
+     * 改「成长体系」配置（V1.4.0 ① AB-32 · Story 4.1）。改等级表会触发全量等级重算；每次修改写操作审计。
+     *
+     * <p>不预授任何预置角色（超管隐式拥有）。
+     */
+    public static final String GROWTH_CONFIG_EDIT = "growth.config_edit";
+
+    /**
      * 查看分享奖励配置与当月消耗（V1.1.6 Story 18.3 · AC5）。
      *
      * <p>🛡 与 {@link #CONFIG_VIEW} 分开：分享奖励是增长侧的数，
@@ -328,7 +342,7 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
                     SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW,
-                    OPS_NOTIFY_VIEW)),
+                    OPS_NOTIFY_VIEW, GROWTH_CONFIG_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
@@ -343,7 +357,7 @@ public final class AdminPermissions {
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
                     SHOP_ORDER_FULFILL,
                     PLACE_MANAGE, COMMENT_VIRTUAL_POST,
-                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND)));
+                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND, GROWTH_CONFIG_EDIT)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。

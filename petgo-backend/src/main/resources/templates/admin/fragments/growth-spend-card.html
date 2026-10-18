@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  成长体系 · 「消费换算」页签（V1.4.0 ① Story 4.1 · UI G4 · AD-4 / AD-8）。模型：${spend}（SpendView）、${spendErrorFields}。
+  一张模板 D 配置卡（原生 diff 确认，整卡一个保存钮）：上半两档比例，下半支付用途归档（锁定行只读、不出下拉，服务端也忽略其提交值）。
+  card 也是保存成功的返回片段（:: saved，HX-Retarget #cfg-growth-spend 原位替换）。
+*/-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/growth/spend},hxPost=@{/admin/growth/spend},cardId='cfg-growth-spend',confirmDiff=true,
+                   confirmDiffTitle=#{admin.v140.growth.confirm.title},confirmDiffNote=#{admin.v140.growth.effectiveNote},errorFields=${spendErrorFields},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.growth.config_edit})}">
+  <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::gspend-title}, ~{::gspend-form}, #{admin.v140.growth.spend.save})}">
+    <span th:fragment="gspend-title" th:text="#{admin.v140.growth.tab.spend}">消费换算</span>
+    <div th:fragment="gspend-form" data-section="growth-spend">
+      <h3 th:text="#{admin.v140.growth.spend.ratioTitle}">换算比例</h3>
+      <div class="cfg-grid-2">
+        <label class="field"><span th:text="#{admin.v140.growth.spend.digital} + ' · ' + #{admin.v140.growth.drawer.unitAmount}">数字服务 · 每 Rp</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="digitalUnit" th:value="${spend.digitalUnit}" th:disabled="${!canEdit}"/></label>
+        <label class="field"><span th:text="#{admin.v140.growth.spend.digital} + ' · EXP'">数字服务 · EXP</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="digitalPoints" th:value="${spend.digitalPoints}" th:disabled="${!canEdit}"/></label>
+        <label class="field"><span th:text="#{admin.v140.growth.spend.toko} + ' · ' + #{admin.v140.growth.drawer.unitAmount}">Toko · 每 Rp</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="tokoUnit" th:value="${spend.tokoUnit}" th:disabled="${!canEdit}"/></label>
+        <label class="field"><span th:text="#{admin.v140.growth.spend.toko} + ' · EXP'">Toko · EXP</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="tokoPoints" th:value="${spend.tokoPoints}" th:disabled="${!canEdit}"/></label>
+      </div>
+
+      <h3 th:text="#{admin.v140.growth.spend.purposeTitle}">支付用途归档</h3>
+      <p class="hint" th:text="#{admin.v140.growth.spend.purposeHint}">按实付总额换算，四舍五入。</p>
+      <table class="tbl">
+        <thead>
+        <tr>
+          <th th:text="#{admin.v140.growth.spend.col.purpose}">支付用途</th>
+          <th th:text="#{admin.v140.growth.spend.col.desc}">说明</th>
+          <th th:text="#{admin.v140.growth.spend.col.tier}">档位</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="p : ${spend.purposes}" th:attr="data-purpose=${p.purpose}">
+          <td><code th:text="${p.purpose}">VET_CONSULT</code></td>
+          <td th:text="#{${'admin.payments.purpose.' + p.purpose}}">兽医问诊</td>
+          <td>
+            <span th:if="${p.locked}" class="muted" th:attr="data-locked=${p.purpose}"
+                  th:text="#{${'admin.v140.growth.spend.locked.' + p.tier.name()}}">🔒 不计（不可改）</span>
+            <!--/* label 首个 span = 原生 diff 确认复述用的字段名 */-->
+            <label th:unless="${p.locked}"><span hidden th:text="${p.purpose}">VET_CONSULT</span>
+              <select class="inp" th:name="'tier.' + ${p.purpose}" th:disabled="${!canEdit}">
+                <option th:each="t : ${spendTierOptions}"
+                        th:value="${t.name()}" th:selected="${t == p.tier}"
+                        th:text="#{${'admin.v140.growth.spend.tier.' + t.name()}}">数字服务</option>
+              </select></label>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/growth-spend-card :: card}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

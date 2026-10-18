@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.v140.growth.title}">成长体系 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- 模板 D 配置卡（dirty / diff 确认 / 422 红边）、服务端确认弹层与规则编辑抽屉（admin-drawer.js，[data-drawer-open] 入口） -->
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<!--/* V1.4.0 ① AB-32 · Story 4.1（UI G1 ~ G7）：成长体系配置。三个页签一次渲染、纯前端切 hidden，不为切页签发请求。
+     🛡 页面门 = growth.config_view 或 growth.config_edit；写端点只认 growth.config_edit（直接 POST 也 403）。 */-->
+<div th:replace="~{admin/layout :: page(~{::content})}">
+  <div th:fragment="content" th:remove="tag">
+
+    <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+    <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+    <!--/* 标题行用 .wb-title-row：右侧给 Story 4.3「批量发放」按钮留位置。 */-->
+    <div class="wb-title-row">
+        <h1 th:text="#{admin.v140.growth.title}">成长体系</h1>
+    </div>
+    <p class="hint" data-notice="growth-intro" th:text="#{admin.v140.growth.intro}">成长值只用于定级。</p>
+
+    <div class="tabs" role="tablist" data-growth-tabs>
+        <button type="button" class="tab" role="tab" data-gtab="rules" th:classappend="${tab == 'rules'} ? 'tab--on'"
+                th:attr="aria-selected=${tab == 'rules'}" th:text="#{admin.v140.growth.tab.rules}">成长值规则</button>
+        <button type="button" class="tab" role="tab" data-gtab="spend" th:classappend="${tab == 'spend'} ? 'tab--on'"
+                th:attr="aria-selected=${tab == 'spend'}" th:text="#{admin.v140.growth.tab.spend}">消费换算</button>
+        <button type="button" class="tab" role="tab" data-gtab="levels" th:classappend="${tab == 'levels'} ? 'tab--on'"
+                th:attr="aria-selected=${tab == 'levels'}" th:text="#{admin.v140.growth.tab.levels}">等级表</button>
+    </div>
+
+    <section data-gtab-panel="rules" th:hidden="${tab != 'rules'}">
+        <div th:replace="~{admin/fragments/growth-rules :: rulesTable}"></div>
+    </section>
+    <section data-gtab-panel="spend" th:hidden="${tab != 'spend'}">
+        <div th:replace="~{admin/fragments/growth-spend-card :: card}"></div>
+    </section>
+    <section data-gtab-panel="levels" th:hidden="${tab != 'levels'}">
+        <div th:replace="~{admin/fragments/growth-levels-card :: card}"></div>
+    </section>
+
+    <!-- 等级表保存的服务端确认弹层宿主（G6，同 App 版本卡 AB-22） -->
+    <div id="confirm-host"></div>
+
+    <!-- 规则编辑抽屉（480，G2 / G3）：「编辑」按钮的 data-drawer-open 装进 #growthrule-drawer .drawer-body -->
+    <div th:replace="~{admin/fragments/tpl-shared :: drawer('growthrule', ~{::growthrule-drawer-title})}">
+        <span th:fragment="growthrule-drawer-title" th:text="#{admin.v140.growth.tab.rules}">成长值规则</span>
+    </div>
+
+    <script>
+        (function () {
+            var root = document.querySelector('[data-growth-tabs]');
+            if (!root) { return; }
+            root.addEventListener('click', function (e) {
+                var btn = e.target.closest('[data-gtab]');
+                if (!btn) { return; }
+                var name = btn.getAttribute('data-gtab');
+                root.querySelectorAll('[data-gtab]').forEach(function (b) {
+                    var on = b === btn;
+                    b.classList.toggle('tab--on', on);
+                    b.setAttribute('aria-selected', String(on));
+                });
+                document.querySelectorAll('[data-gtab-panel]').forEach(function (p) {
+                    p.hidden = p.getAttribute('data-gtab-panel') !== name;
+                });
+            });
+        })();
+    </script>
+  </div>
+</div>
+</body>
+</html>

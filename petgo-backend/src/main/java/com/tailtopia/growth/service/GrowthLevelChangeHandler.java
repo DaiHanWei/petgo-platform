@@ -48,6 +48,21 @@ public class GrowthLevelChangeHandler {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void onLifetimeChanged(GrowthAccount lockedAccount, RuleCode source) {
+        recompute(lockedAccount, source == RuleCode.LAUNCH_BACKFILL);
+    }
+
+    /**
+     * 等级表被改后的重算（V1.4.0 ① Story 4.1 · AD-12）：累计不变、按新表重新定级。连锁与入账完全相同（升级写待弹 +
+     * 发事件 → 升级通知；降级只发事件），视作非补算来源；不占用 {@link RuleCode} 取值。
+     *
+     * @param lockedAccount 已 {@code FOR UPDATE} 锁住的账户行
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void onLevelTableChanged(GrowthAccount lockedAccount) {
+        recompute(lockedAccount, false);
+    }
+
+    private void recompute(GrowthAccount lockedAccount, boolean backfill) {
         int oldLevel = lockedAccount.getLevel();
         int newLevel = levelFor(lockedAccount.getLifetimeTotal());
         if (newLevel == oldLevel) {
@@ -56,7 +71,7 @@ public class GrowthLevelChangeHandler {
         lockedAccount.changeLevel(newLevel, clock.instant());
         // Story 2.1：只有升级且来源不是存量补算才写待弹庆祝；降级不写、不清（读时校正，见 GrowthPopupService）。
         // 升级通知由 GrowthNotifyListener 在 AFTER_COMMIT 消费下面这个事件发出（入账回滚则不发）。
-        if (newLevel > oldLevel && source != RuleCode.LAUNCH_BACKFILL) {
+        if (newLevel > oldLevel && !backfill) {
             lockedAccount.markCelebration(oldLevel, newLevel, clock.instant());
         }
         events.publishEvent(new GrowthLevelChangedEvent(lockedAccount.getUserId(), oldLevel, newLevel));

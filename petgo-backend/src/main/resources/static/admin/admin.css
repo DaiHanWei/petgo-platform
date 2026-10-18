@@ -1338,3 +1338,17 @@ dialog.cm-modal .modal-foot .cm-cancel { background: var(--surface); color: var(
 dialog.cm-modal label.cm-typed { display: block; margin: 0; font-size: var(--fs-sm); color: var(--ink); }
 .cm-typed-prompt { display: block; margin-bottom: 6px; }
 .cm-typed-input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+/* ── V1.4.0 ① Story 4.1：成长体系配置页（段位色点 4.2 / 4.4 复用；色值同 App 段位色 §5.6）── */
+.tier-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.tier-NEWBIE { background: #66748C; }
+.tier-BUDDY { background: #0A7FA3; }
+.tier-GUARDIAN { background: #2B4FBF; }
+.tier-STAR { background: linear-gradient(135deg, #4A2E9E, #B5307F); }
+.cm-facts { margin: 10px 0; }
+.cm-fact + .cm-fact { margin-top: 4px; }
+.growth-recalc { margin: 0 0 12px; }
+.growth-levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.growth-levels-grid .inp { width: 140px; }
+.growth-rule-fld { margin-bottom: 12px; }
+.growth-rule-err { color: var(--danger, #C0392B); font-size: 12px; margin: 4px 0 0; }

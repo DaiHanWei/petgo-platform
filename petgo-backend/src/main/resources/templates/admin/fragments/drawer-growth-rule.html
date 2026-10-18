@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  成长体系 · 规则编辑抽屉（V1.4.0 ① Story 4.1 · UI G2 / G3）。模型：${rule}（RuleRow）、${passiveGroupCap}。
+  只渲染该型有的字段（主动计次 / 被动 / 里程碑 / 按金额 / 运营活动）；保存走模板 D 配置卡壳的原生 diff 确认。
+  422（G3）：服务端一次收集全部字段错误 → :: errors（汇总进卡底 err 槽 + 逐字段 oob 贴到 #grule-err-<field>）。
+*/-->
+<body>
+<th:block th:fragment="ruleDrawer"
+          th:with="action=@{/admin/growth/rules/{c}(c=${rule.code})},hxPost=@{/admin/growth/rules/{c}(c=${rule.code})},cardId='growthrule-form',confirmDiff=true,
+                   confirmDiffTitle=#{admin.v140.growth.confirm.title},confirmDiffNote=#{admin.v140.growth.effectiveNote},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.growth.config_edit})},kind=${rule.kind.name()}">
+  <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::grule-title}, ~{::grule-form}, #{admin.v130.tpl.save})}">
+    <span th:fragment="grule-title" th:text="#{admin.v140.growth.drawer.title(${rule.code})}">编辑规则 · DAILY_LOGIN</span>
+    <div th:fragment="grule-form" th:attr="data-rule-kind=${kind}">
+      <p class="growth-rule-fld"><b th:text="#{admin.v140.growth.drawer.name}">名称</b>:
+          <span th:text="#{${'admin.v140.growth.rule.' + rule.code}}">每日登录</span></p>
+      <p class="growth-rule-fld"><b th:text="#{admin.v140.growth.drawer.source}">触发来源</b>:
+          <span th:text="#{${'admin.v140.growth.rule.' + rule.code + '.source'}}">当天首次打开 App 时</span></p>
+
+      <!--/* 按金额：每 Rp + 分值；其余（运营活动除外）：每次分值 */-->
+      <div class="growth-rule-fld" th:if="${kind == 'PER_AMOUNT'}">
+        <label class="field"><span th:text="#{admin.v140.growth.drawer.unitAmount}">每 Rp</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="unitAmount" th:value="${rule.unitAmount}" th:disabled="${!canEdit}"/></label>
+        <div id="grule-err-unitAmount" class="growth-rule-err"></div>
+      </div>
+      <div class="growth-rule-fld" th:if="${kind != 'CAMPAIGN'}">
+        <label class="field"><span th:text="#{admin.v140.growth.drawer.points}">每次分值</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="points" th:value="${rule.points}" th:disabled="${!canEdit}"/></label>
+        <p class="hint" th:text="#{admin.v140.growth.drawer.pointsHint}">正整数</p>
+        <div id="grule-err-points" class="growth-rule-err"></div>
+      </div>
+      <div class="growth-rule-fld" th:if="${kind == 'ACTIVE'}">
+        <label class="field"><span th:text="#{admin.v140.growth.drawer.dailyCap}">每日上限（次）</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="dailyCap" th:value="${rule.dailyCap}" th:disabled="${!canEdit}"/></label>
+        <p class="hint" th:text="#{admin.v140.growth.drawer.dailyCapHint}">按 WIB 自然日计；不填 = 不限</p>
+        <div id="grule-err-dailyCap" class="growth-rule-err"></div>
+      </div>
+      <div class="growth-rule-fld" th:if="${kind == 'PASSIVE'}">
+        <label class="field"><span th:text="#{admin.v140.growth.drawer.groupCap}">合计上限组（每天）</span>
+          <input class="inp field-full" type="number" min="1" step="1" name="groupCap" th:value="${passiveGroupCap}" th:disabled="${!canEdit}"/></label>
+        <p class="hint" th:text="#{admin.v140.growth.drawer.groupCapHint}">被动三项共用一组。</p>
+        <div id="grule-err-groupCap" class="growth-rule-err"></div>
+      </div>
+      <div class="growth-rule-fld">
+        <label><input type="checkbox" name="enabled" value="true" th:checked="${rule.enabled}" th:disabled="${!canEdit}"/>
+          <span th:text="#{admin.v140.growth.drawer.enabled}">启用</span></label>
+        <p class="hint" th:text="#{admin.v140.growth.drawer.enabledHint}">停用后不再入账，已入账的不变。</p>
+      </div>
+    </div>
+  </div>
+</th:block>
+
+<th:block th:fragment="errors">
+    <span class="growth-rule-err" role="alert" th:attr="data-invalid=${invalidInputs}" th:text="${summary}">2 处填写有误</span>
+    <div th:each="e : ${errorFieldMessages}" th:id="'grule-err-' + ${e.key}" class="growth-rule-err" hx-swap-oob="innerHTML"><p
+            th:each="m : ${e.value}" th:text="${m}">须为 ≥1 的整数</p></div>
+</th:block>
+</body>
+</html>
