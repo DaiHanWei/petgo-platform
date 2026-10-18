@@ -444,14 +444,14 @@ public class FeedRecommendationService {
      * <p>🔴 这是<b>「拿不到物种信号」，不是「按用户类型区别对待」</b>：同一个用户建了档案后
      * 自动获得物种偏好，无需任何分档判定。
      *
-     * <p>🔴 <b>多宠账号本 story 不实现细化</b>（当前平台单账号单宠物，该分支不触发）——
-     * 细化归 V1.2.0 FR-64。
+     * <p>🔴 <b>多宠账号</b>：V1.4.0 multi-pet Story 1.2（V-1）先确定性取<b>默认宠物</b>的物种
+     * （{@code DefaultPetPolicy}），不抛异常、不退回时间倒序；多物种权重化在 V1.4.0 multi-pet 3.2。
      */
     private String viewerMainSpecies(Long viewerId) {
         if (viewerId == null) {
             return null;
         }
-        return pets.findByOwnerId(viewerId).map(PetProfile::getPetType)
+        return pets.findDefault(viewerId).map(PetProfile::getPetType)
                 .map(Enum::name).orElse(null);
     }
 }

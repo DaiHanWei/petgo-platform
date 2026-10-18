@@ -216,9 +216,7 @@ public class ProfileApiController {
     public IdCardDataResponse myIdCard(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long ownerId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
-        return idCardService.getMyIdCard(ownerId);
+        return idCardService.getMyIdCard(ownerId, petResolver.resolve(ownerId, petId).getId());
     }
 
     /**
@@ -230,9 +228,7 @@ public class ProfileApiController {
             @RequestParam(name = "petId", required = false) Long petId) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
-        return idCardService.generateSerial(ownerId);
+        return idCardService.generateSerial(ownerId, petResolver.resolve(ownerId, petId).getId());
     }
 
     /**
@@ -245,9 +241,7 @@ public class ProfileApiController {
             @Valid @RequestBody HdPurchaseRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idhd:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
-        return idCardHdService.purchase(ownerId, req.channel());
+        return idCardHdService.purchase(ownerId, petResolver.resolve(ownerId, petId).getId(), req.channel());
     }
 
     // ---- Story 6-7：身份证多卡（快照历史列表 + 独立建卡器 + 按卡解锁） ----
@@ -315,10 +309,10 @@ public class ProfileApiController {
             @RequestParam(name = "petId", required = false) Long petId) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
+        // V1.4.0 multi-pet（Story 1.2 · P-3）：奖励按宠物；无档案 = null ⇒ 0（不是 404），他人 petId ⇒ 404。
+        Long rewardPetId = petResolver.resolveOptional(ownerId, petId).map(p -> p.getId()).orElse(null);
         return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
-                idCardShareRewards.rewardAfterShare(ownerId, cardId,
+                idCardShareRewards.rewardAfterShare(ownerId, cardId, rewardPetId,
                         java.time.Instant.now()));
     }
 
@@ -358,10 +352,10 @@ public class ProfileApiController {
             @Valid @RequestBody com.tailtopia.share.dto.TailsonalityShareRewardRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:tsshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
+        // V1.4.0 multi-pet（Story 1.2 · P-3）：奖励按宠物；无档案 = null ⇒ 0（不是 404），他人 petId ⇒ 404。
+        Long rewardPetId = petResolver.resolveOptional(ownerId, petId).map(p -> p.getId()).orElse(null);
         return com.tailtopia.share.dto.PetCardShareRewardResponse.of(
-                tailsonalityShareRewards.rewardAfterShare(ownerId,
+                tailsonalityShareRewards.rewardAfterShare(ownerId, rewardPetId,
                         com.tailtopia.share.service.TailsonalityShareRewardService.CardType.valueOf(req.cardType()),
                         java.time.Instant.now()));
     }
@@ -378,10 +372,10 @@ public class ProfileApiController {
             @Valid @RequestBody com.tailtopia.share.dto.PassportShareRewardRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:ppshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
+        // V1.4.0 multi-pet（Story 1.2 · P-3）：奖励按宠物；无档案 = null ⇒ 0（不是 404），他人 petId ⇒ 404。
+        Long rewardPetId = petResolver.resolveOptional(ownerId, petId).map(p -> p.getId()).orElse(null);
         return com.tailtopia.share.dto.PetCardShareRewardResponse.of(
-                passportShareRewards.rewardAfterShare(ownerId,
+                passportShareRewards.rewardAfterShare(ownerId, rewardPetId,
                         com.tailtopia.share.service.PassportShareRewardService.CardType.valueOf(req.cardType()),
                         java.time.Instant.now()));
     }
@@ -396,17 +390,17 @@ public class ProfileApiController {
      *
      * <p>🛡 只回一个数，**不回原因**：AC3 不许把「额度用完了」讲给用户听
      * （会诱导攒着别分享 / 月初集中刷满）。判据见
-     * {@link com.tailtopia.share.service.IdCardShareRewardService#advertisableCoins(long)}。
+     * {@link com.tailtopia.share.service.IdCardShareRewardService#advertisableCoins(long, java.util.Optional)}。
      */
     @GetMapping("/me/id-cards/share-reward")
     public com.tailtopia.share.dto.IdCardShareRewardResponse shareRewardPreview(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long ownerId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
+        // V1.4.0 multi-pet（Story 1.2 · X15）：按宠物判定是否已领；无档案 ⇒ 0。
+        java.util.Optional<Long> previewPetId = petResolver.resolveOptional(ownerId, petId).map(p -> p.getId());
         return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
-                idCardShareRewards.advertisableCoins(ownerId));
+                idCardShareRewards.advertisableCoins(ownerId, previewPetId));
     }
 
     /** 购买某卡 HD（按卡解锁）。 */

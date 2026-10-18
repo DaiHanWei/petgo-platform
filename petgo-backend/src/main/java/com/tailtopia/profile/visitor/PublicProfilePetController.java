@@ -89,7 +89,8 @@ public class PublicProfilePetController {
         if (!accounts.isActive(userId)) {
             return ResponseEntity.noContent().build();
         }
-        Optional<PetProfile> pet = profiles.findByOwnerId(userId);
+        // V1.4.0 multi-pet（Story 1.2 · P15）：默认宠物；列表接口 GET /users/{userId}/pets 在 1.4。
+        Optional<PetProfile> pet = profiles.findDefault(userId);
         if (pet.isEmpty()) {
             return ResponseEntity.noContent().build();
         }

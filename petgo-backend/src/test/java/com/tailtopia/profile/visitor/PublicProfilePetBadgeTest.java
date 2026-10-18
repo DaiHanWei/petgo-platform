@@ -36,7 +36,7 @@ class PublicProfilePetBadgeTest {
         controller = new PublicProfilePetController(profiles, visitors, accounts, hide, badges);
         PetProfile p = PetProfile.create(OWNER, PetType.CAT, "Miu", null, null, null, null, "tok-secret");
         ReflectionTestUtils.setField(p, "id", 42L);
-        when(profiles.findByOwnerId(OWNER)).thenReturn(Optional.of(p));
+        when(profiles.findDefault(OWNER)).thenReturn(Optional.of(p));
         when(accounts.isActive(OWNER)).thenReturn(true);
     }
 
@@ -57,7 +57,7 @@ class PublicProfilePetBadgeTest {
         when(accounts.isActive(OWNER)).thenReturn(false);
         assertThat(controller.pet(null, OWNER).getStatusCode().value()).isEqualTo(204);
         verify(badges, never()).badgeOf(org.mockito.ArgumentMatchers.anyLong());
-        verify(profiles, never()).findByOwnerId(any(Long.class));
+        verify(profiles, never()).findDefault(any(Long.class));
     }
 
     /** AC4.4：点进去的访客视图不加该字段（AD-3 只点名两处）。 */

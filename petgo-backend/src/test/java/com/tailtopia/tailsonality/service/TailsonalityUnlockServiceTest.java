@@ -11,8 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.pay.domain.PayChannel;
-import com.tailtopia.profile.domain.PetType;
-import com.tailtopia.profile.dto.OwnedPetRef;
 import com.tailtopia.profile.service.PetProfileQueryService;
 import com.tailtopia.purchase.domain.KeepsakeRef;
 import com.tailtopia.purchase.domain.KeepsakeSku;
@@ -49,14 +47,15 @@ class TailsonalityUnlockServiceTest {
     }
 
     private void ownsPet() {
-        when(pets.findOwnedPet(7L)).thenReturn(Optional.of(new OwnedPetRef(3L, PetType.CAT)));
+        // V1.4.0 multi-pet：token 寻址 → 结果行上的宠物（3L）+ 归属校验。
+        when(pets.ownsPet(7L, 3L)).thenReturn(true);
         when(upgradePricing.upgradePriceOrNull(any())).thenReturn(null); // Mockito 对 Long 默认回 0，显式回 null = 原价
     }
 
     @Test
     void buildsRefFromLockedRowAndDelegates() {
         ownsPet();
-        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(row(null)));
+        when(results.findForUpdateByPublicToken("tok")).thenReturn(Optional.of(row(null)));
         KeepsakePurchaseResponse resp = KeepsakePurchaseResponse.unlocked("p1");
         when(purchases.start(eq(7L), any(), eq(PayChannel.PAWCOIN))).thenReturn(resp);
 
@@ -70,7 +69,7 @@ class TailsonalityUnlockServiceTest {
     @Test
     void unlockedRowIsPassedAsAlreadyUnlocked() {
         ownsPet();
-        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L))
+        when(results.findForUpdateByPublicToken("tok"))
                 .thenReturn(Optional.of(row(Instant.EPOCH)));
         service.unlock(7L, "tok", PayChannel.QRIS);
         ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
@@ -81,10 +80,10 @@ class TailsonalityUnlockServiceTest {
     @Test
     void unknownTokenAndNoPetAreBoth404() {
         ownsPet();
-        when(results.findForUpdateByPublicTokenAndPetProfileId("x", 3L)).thenReturn(Optional.empty());
+        when(results.findForUpdateByPublicToken("x")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.unlock(7L, "x", PayChannel.PAWCOIN)).isInstanceOf(AppException.class)
                 .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
-        when(pets.findOwnedPet(8L)).thenReturn(Optional.empty());
+        when(pets.ownsPet(8L, 3L)).thenReturn(false);
         assertThatThrownBy(() -> service.unlock(8L, "tok", PayChannel.PAWCOIN)).isInstanceOf(AppException.class)
                 .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
         verify(purchases, never()).start(anyLong(), any(), any());
@@ -97,7 +96,7 @@ class TailsonalityUnlockServiceTest {
         ownsPet();
         TailsonalityResult r = row(null);
         ReflectionTestUtils.setField(r, "matchUnlockedAt", Instant.EPOCH);
-        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(r));
+        when(results.findForUpdateByPublicToken("tok")).thenReturn(Optional.of(r));
         when(upgradePricing.upgradePriceOrNull(r)).thenReturn(2000L);
         service.unlock(7L, "tok", PayChannel.QRIS);
         ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
@@ -108,7 +107,7 @@ class TailsonalityUnlockServiceTest {
     @Test
     void matchUnlockBuildsTsMatchRef() {
         ownsPet();
-        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(row(null)));
+        when(results.findForUpdateByPublicToken("tok")).thenReturn(Optional.of(row(null)));
         service.unlockMatch(7L, "tok", PayChannel.PAWCOIN);
         ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
         verify(purchases).start(eq(7L), ref.capture(), eq(PayChannel.PAWCOIN));
@@ -119,14 +118,26 @@ class TailsonalityUnlockServiceTest {
     @Test
     void matchUnlockOnFullyUnlockedOrMatchBoughtRowIsAlreadyUnlocked() {
         ownsPet();
-        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(row(Instant.EPOCH)));
+        when(results.findForUpdateByPublicToken("tok")).thenReturn(Optional.of(row(Instant.EPOCH)));
         service.unlockMatch(7L, "tok", PayChannel.QRIS);
         TailsonalityResult bought = row(null);
         ReflectionTestUtils.setField(bought, "matchUnlockedAt", Instant.EPOCH);
-        when(results.findForUpdateByPublicTokenAndPetProfileId("tok2", 3L)).thenReturn(Optional.of(bought));
+        when(results.findForUpdateByPublicToken("tok2")).thenReturn(Optional.of(bought));
         service.unlockMatch(7L, "tok2", PayChannel.QRIS);
         ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
         verify(purchases, org.mockito.Mockito.times(2)).start(eq(7L), ref.capture(), eq(PayChannel.QRIS));
         assertThat(ref.getAllValues()).allMatch(KeepsakeRef::alreadyUnlocked);
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · X13）：token 寻址，不要求 petId；结果属于他人宠物 → 404，不下单。 */
+    @Test
+    void foreignTokenIs404WithoutStartingPurchase() {
+        when(results.findForUpdateByPublicToken("tok")).thenReturn(Optional.of(row(null)));
+        when(pets.ownsPet(8L, 3L)).thenReturn(false);
+        assertThatThrownBy(() -> service.unlock(8L, "tok", PayChannel.PAWCOIN)).isInstanceOf(AppException.class)
+                .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
+        assertThatThrownBy(() -> service.unlockMatch(8L, "tok", PayChannel.PAWCOIN)).isInstanceOf(AppException.class)
+                .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
+        verify(purchases, never()).start(anyLong(), any(), any());
     }
 }

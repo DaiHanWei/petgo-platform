@@ -76,7 +76,7 @@ class PlaceCheckinServiceTest {
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE), LAT, LNG, "Jl. A", null, 1L, "Jakarta");
         ReflectionTestUtils.setField(place, "id", PLACE_ID);
         when(places.resolveForView(anyString())).thenReturn(Optional.of(place));
-        when(pets.findPetIdByOwner(USER)).thenReturn(Optional.of(PET));
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of(PET));
         com.tailtopia.passport.domain.PetPassport pp = org.mockito.Mockito.mock(
                 com.tailtopia.passport.domain.PetPassport.class);
         when(pp.getPassportNo()).thenReturn("TT02P2600128");
@@ -152,7 +152,7 @@ class PlaceCheckinServiceTest {
 
     @Test
     void noPetProfileIs422NoPet() {
-        when(pets.findPetIdByOwner(USER)).thenReturn(Optional.empty());
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of());
 
         assertThatThrownBy(() -> serviceAt(NOON_WIB).checkIn("t", USER, at(LAT)))
                 .satisfies(t -> assertProblem(t, ErrorTypes.CHECKIN_NO_PET, HttpStatus.UNPROCESSABLE_ENTITY));
@@ -165,6 +165,21 @@ class PlaceCheckinServiceTest {
             assertThatThrownBy(() -> s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, ids)))
                     .satisfies(t -> assertProblem(t, ErrorTypes.CHECKIN_PET_FORBIDDEN, HttpStatus.FORBIDDEN));
         }
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · X18）：账号两只宠物都可被选；含他人 petId 仍 403。 */
+    @Test
+    void bothOwnPetsSelectableButForeignPetIs403() {
+        long second = 71L;
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of(PET, second));
+        PlaceCheckinService s = serviceAt(NOON_WIB);
+
+        PlaceCheckinResponse r = s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(PET, second)));
+        assertThat(r.checkinToken()).hasSize(32);
+        verify(checkinPets, org.mockito.Mockito.times(2)).saveAndFlush(any());
+
+        assertThatThrownBy(() -> s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(second, 999L))))
+                .satisfies(t -> assertProblem(t, ErrorTypes.CHECKIN_PET_FORBIDDEN, HttpStatus.FORBIDDEN));
     }
 
     @Test

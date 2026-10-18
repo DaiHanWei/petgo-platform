@@ -1,7 +1,6 @@
 package com.tailtopia.tailsonality.service;
 
 import com.tailtopia.pay.domain.PayChannel;
-import com.tailtopia.profile.dto.OwnedPetRef;
 import com.tailtopia.profile.service.PetProfileQueryService;
 import com.tailtopia.purchase.domain.KeepsakeRef;
 import com.tailtopia.purchase.domain.KeepsakeSku;
@@ -56,9 +55,13 @@ public class TailsonalityUnlockService {
         return purchases.start(userId, ref, channel);
     }
 
+    /**
+     * V1.4.0 multi-pet（Story 1.2 · X13，token 寻址）：按 token 加锁读，再按结果行上的宠物校验归属；
+     * <b>不要求 petId</b>。不存在 / 非本人 / 宠物已删 → 同一个 404。
+     */
     private TailsonalityResult lockOwned(long userId, String token) {
-        OwnedPetRef pet = pets.findOwnedPet(userId).orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
-        return results.findForUpdateByPublicTokenAndPetProfileId(token, pet.petId())
+        return results.findForUpdateByPublicToken(token)
+                .filter(r -> r.getPetProfileId() != null && pets.ownsPet(userId, r.getPetProfileId()))
                 .orElseThrow(() -> AppException.notFound("结果不存在"));
     }
 }

@@ -1,7 +1,9 @@
 package com.tailtopia.profile.service;
 
 import com.tailtopia.profile.domain.PetProfile;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -21,5 +23,23 @@ public final class DefaultPetPolicy {
             return Optional.empty();
         }
         return Optional.of(orderedByCreatedAsc.get(0));
+    }
+
+    /**
+     * 多账号批量取默认宠物（V1.4.0 multi-pet Story 1.2）：每个 owner 取其列表里的第一只。
+     *
+     * @param orderedByCreatedAsc 已按 {@code created_at, id} 升序排好的多账号宠物（如
+     *     {@code findAllByOwnerIdInOrderByCreatedAtAscIdAsc}）
+     * @return {@code ownerId → 默认宠物}；无宠物的账号不入 map
+     */
+    public static Map<Long, PetProfile> pickPerOwner(List<PetProfile> orderedByCreatedAsc) {
+        Map<Long, PetProfile> out = new LinkedHashMap<>();
+        if (orderedByCreatedAsc == null) {
+            return out;
+        }
+        for (PetProfile p : orderedByCreatedAsc) {
+            out.putIfAbsent(p.getOwnerId(), p);
+        }
+        return out;
     }
 }

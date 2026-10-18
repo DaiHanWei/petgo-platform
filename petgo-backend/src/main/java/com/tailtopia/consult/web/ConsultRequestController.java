@@ -18,7 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
  * 免费入队端点（Story 3.2，Epic 3 计费流入口）。{@code POST /api/v1/consultations}（JWT USER）：
  * 免费发起咨询 → {@code consult_requests}(QUEUEING) <b>不扣费不建订单</b> + 广播在线兽医（FR-22E）。
  *
- * <p>宠物档案一人一宠（{@code PetProfileRepository.findByOwnerId}），故 pet_profile 从 owner 派生、不收客户端传
+ * <p>宠物取账号默认宠物（V1.4.0 multi-pet 过渡，{@code PetProfileRepository.findDefault}；按所选宠物发起在 4.1），
+ * 故 pet_profile 从 owner 派生、不收客户端传
  * （用户身份取自 JWT，不信任客户端）。接单在 3-3、限时支付建单在 3-4。
  *
  * <p><b>V84 起 body 带病例</b>（Story 3.2 [OPEN] 收口 + D1/D2）：兽医接单前据病例判断是否接单，故入队即落病例。

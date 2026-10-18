@@ -49,8 +49,8 @@ public class MilestoneCheckInService {
 
     /** 内容关联选择器候选：本人成长日历内容，已关联其它里程碑的标 {@code linked}（前端置灰）。 */
     @Transactional(readOnly = true)
-    public MilestoneCheckinCandidateResponse.Page candidates(long ownerId) {
-        PetProfile pet = requireProfile(ownerId);
+    public MilestoneCheckinCandidateResponse.Page candidates(long ownerId, long petId) {
+        PetProfile pet = requireProfile(ownerId, petId);
         Set<Long> linkedIds = linkedContentIds(pet.getId());
         List<MilestoneCheckinCandidateResponse> items = contentService
                 .findRecentGrowthMomentsByEventDate(ownerId, pet.getId(), CANDIDATE_LIMIT).stream()
@@ -62,9 +62,13 @@ public class MilestoneCheckInService {
     /**
      * 打卡：把一条本人成长日历内容关联到「用户打卡」类里程碑 {@code code} 并完成（USER_CHECKIN）。
      * 返回完成后的里程碑项（供前端触发庆祝 8.5）。
+     *
+     * <p>V1.4.0 multi-pet（Story 1.2 · P10）：按指定宠物打卡（{@code petId} 为 null = 默认宠物）。宠物解析刻意放在
+     * 健康类里程碑拒绝之后：无档案账号打健康类里程碑仍是 422（与改造前一致），不是 404；
+     * 「帖子必须关联该宠物」的校验在 Story 1.3。
      */
     @Transactional
-    public MilestoneItemResponse checkIn(long ownerId, String code, long contentId) {
+    public MilestoneItemResponse checkIn(long ownerId, Long petId, String code, long contentId) {
         // ⚠️ 安全攸关护栏（Story 5.2 · NFR-11）：健康类里程碑（M3 疫苗 / M4 驱虫 / M5 第一次看兽医 /
         // M9 绝育）**取消打卡路径，只能自动点亮**（FR-86，2026-07-31 产品拍板）。
         // 后端必须**显式拒绝**——只在前端隐藏按钮不合格：绕过 UI 直接调接口仍能打卡就等于规则没落地。
@@ -72,7 +76,7 @@ public class MilestoneCheckInService {
         if (HealthMilestones.isHealthMilestone(code)) {
             throw AppException.validation("该里程碑只能由健康记录或兽医问诊自动点亮，不支持打卡");
         }
-        PetProfile pet = requireProfile(ownerId);
+        PetProfile pet = requireProfile(ownerId, petId);
         PetMilestone milestone = milestones.findByPetProfileIdAndCode(pet.getId(), code)
                 .orElseThrow(() -> AppException.notFound("里程碑不存在"));
         if (milestone.getTriggerType() != MilestoneTriggerType.USER_CHECKIN) {
@@ -88,8 +92,8 @@ public class MilestoneCheckInService {
             throw AppException.conflict("该内容已关联其它里程碑");
         }
         // 打卡路径本就持有完整 code，直接传（V1.3.0 Story 1.1 · AD-A4：不再拆后缀再拼回去）。
-        boolean done = completionService.completeCodeForOwner(
-                ownerId, code, MilestoneCompletionSource.USER_CHECKIN, contentId);
+        boolean done = completionService.completeCodeForPet(
+                pet.getId(), code, MilestoneCompletionSource.USER_CHECKIN, contentId);
         if (!done) {
             // 并发兜底（唯一约束）：已被另一请求完成。
             throw AppException.conflict("该里程碑已完成");
@@ -123,9 +127,19 @@ public class MilestoneCheckInService {
                 v.id(), v.firstImageUrl(), v.eventDate(), v.text(), linked);
     }
 
-    private PetProfile requireProfile(long ownerId) {
-        return profiles.findByOwnerId(ownerId)
+    private PetProfile requireProfile(long ownerId, long petId) {
+        return profiles.findByIdAndOwnerId(petId, ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    }
+
+    /** petId 为 null → 默认宠物（无档案 404「尚未创建宠物档案」）；他人 / 不存在 petId → 404（同 {@code PetResolver}）。 */
+    private PetProfile requireProfile(long ownerId, Long petId) {
+        if (petId == null) {
+            return profiles.findDefault(ownerId)
+                    .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+        }
+        return profiles.findByIdAndOwnerId(petId, ownerId)
+                .orElseThrow(() -> AppException.notFound("宠物档案不存在"));
     }
 
     private static String titleOf(String code) {

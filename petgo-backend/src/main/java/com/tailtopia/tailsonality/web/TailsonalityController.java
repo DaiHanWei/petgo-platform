@@ -70,19 +70,19 @@ public class TailsonalityController {
             @RequestParam(name = "petId", required = false) Long petId,
             @RequestBody Map<String, Object> body) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
+        // V1.4.0 multi-pet：带 petId 校验归属（他人 → 404）；不带 = 默认宠物，无宠物 = null（服务层照旧 404）。
+        Long pid = petResolver.resolveOptional(userId, petId).map(p -> p.getId()).orElse(null);
         rateLimiter.check("rl:tailsonality:submit:" + userId, SUBMIT_LIMIT, SUBMIT_WINDOW);
-        return service.submit(userId, body);
+        return service.submit(userId, pid, body);
     }
 
     @GetMapping("/results")
     public TailsonalityResultListResponse list(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
-        return service.list(userId);
+        // V1.4.0 multi-pet：带 petId 校验归属（他人 → 404）；不带 = 默认宠物，无宠物 = null（服务层照旧 404）。
+        Long pid = petResolver.resolveOptional(userId, petId).map(p -> p.getId()).orElse(null);
+        return service.list(userId, pid);
     }
 
     @GetMapping("/results/{token}")
@@ -123,10 +123,10 @@ public class TailsonalityController {
     public void unequipBadge(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
+        // V1.4.0 multi-pet：带 petId 校验归属（他人 → 404）；不带 = 默认宠物，无宠物 = null（服务层照旧 404）。
+        Long pid = petResolver.resolveOptional(userId, petId).map(p -> p.getId()).orElse(null);
         rateLimiter.check("rl:tailsonality:badge:" + userId, BADGE_LIMIT, BADGE_WINDOW);
-        badgeService.unequip(userId);
+        badgeService.unequip(userId, pid);
     }
 
     private static long currentUserId(Jwt jwt) {

@@ -15,7 +15,7 @@ import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.consult.service.ConsultHistoryService;
 import com.tailtopia.content.service.ContentService;
-import com.tailtopia.profile.service.ProfileService;
+import com.tailtopia.profile.service.PetResolver;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 class AdminUserServiceTest {
 
     private AccountQueryService accountQuery;
-    private ProfileService profileService;
+    private PetResolver profileService;
     private ContentService contentService;
     private ConsultHistoryService consultHistory;
     private com.tailtopia.auth.service.AuthService authService;
@@ -42,7 +42,7 @@ class AdminUserServiceTest {
     @BeforeEach
     void setUp() {
         accountQuery = mock(AccountQueryService.class);
-        profileService = mock(ProfileService.class);
+        profileService = mock(PetResolver.class);
         contentService = mock(ContentService.class);
         consultHistory = mock(ConsultHistoryService.class);
         authService = mock(com.tailtopia.auth.service.AuthService.class);
@@ -165,7 +165,7 @@ class AdminUserServiceTest {
     void detailAggregatesFiveBlocksViaOwningServices() {
         User u = user();
         when(accountQuery.findUserById(42L)).thenReturn(Optional.of(u));
-        when(profileService.findByOwnerId(42L)).thenReturn(Optional.empty());
+        when(profileService.listOwned(42L)).thenReturn(List.of());
         when(contentService.listByAuthorForAdmin(42L)).thenReturn(List.of(
                 new ContentService.PostSummary(7L, com.tailtopia.content.domain.ContentType.DAILY, "hi", false, 42L)));
         when(consultHistory.adminSessionMetadata(42L)).thenReturn(List.of(
@@ -181,6 +181,23 @@ class AdminUserServiceTest {
         // 经各 owning service 读（不直读 repo）。
         verify(contentService).listByAuthorForAdmin(42L);
         verify(consultHistory).adminSessionMetadata(42L);
+    }
+
+    @Test
+    void detailListsAllPetsInCreationOrder() {
+        // V1.4.0 multi-pet（Story 1.2 · X29）：两只宠物 → 「宠物档案」块两行，按创建时间。
+        User u = user();
+        when(accountQuery.findUserById(42L)).thenReturn(Optional.of(u));
+        Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        when(profileService.listOwned(42L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(42L, 10L, com.tailtopia.profile.domain.PetType.CAT, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(42L, 11L, com.tailtopia.profile.domain.PetType.DOG,
+                        t0.plusSeconds(60))));
+
+        AdminUserDetailView v = service.detail(42L);
+
+        assertThat(v.pets()).extracting(AdminUserDetailView.PetRow::id).containsExactly(10L, 11L);
+        assertThat(v.pets()).extracting(AdminUserDetailView.PetRow::petType).containsExactly("CAT", "DOG");
     }
 
     @Test

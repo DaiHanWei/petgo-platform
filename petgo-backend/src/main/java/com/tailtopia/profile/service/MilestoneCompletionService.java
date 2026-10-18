@@ -64,30 +64,33 @@ public class MilestoneCompletionService {
     }
 
     /**
-     * 按档案 owner + **自动事件**幂等完成（系统自动类无关联内容）。返回是否**新**完成。
+     * 按档案 owner + **自动事件**幂等完成（系统自动类无关联内容）。返回是否有**任一只**宠物**新**完成。
      * 事件 → code 由 {@link MilestoneAutoCompleteMap} 按物种显式列举，该物种无对应节点 → no-op。
+     *
+     * <p>V1.4.0 multi-pet（Story 1.2 · P6，AD-12 账号级语义）：对账号<b>每只</b>宠物逐只完成（按创建时间）。
+     * 哪些监听改为按宠物调用在 Story 1.3。
      */
     @Transactional
     public boolean completeForOwner(long ownerId, MilestoneAutoEvent event,
             MilestoneCompletionSource source) {
-        Optional<PetProfile> profile = profiles.findByOwnerId(ownerId);
-        if (profile.isEmpty()) {
-            return false;
+        boolean any = false;
+        for (PetProfile p : profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId)) {
+            any |= complete(p.getId(), p.getPetType(), event, source, null);
         }
-        PetProfile p = profile.get();
-        return complete(p.getId(), p.getPetType(), event, source, null);
+        return any;
     }
 
-    /** 按档案 owner + **完整 code** 幂等完成，可带关联成长日历内容（用户打卡 8.4）。返回是否**新**完成。 */
+    /**
+     * 按宠物 id + **完整 code** 幂等完成，可带关联成长日历内容（用户打卡 8.4）。返回是否**新**完成。
+     * V1.4.0 multi-pet（Story 1.2 · P7）：打卡是按宠物的动作，只完成指定宠物（取代旧 owner 版本）。
+     * 宠物不存在 → false。
+     */
     @Transactional
-    public boolean completeCodeForOwner(long ownerId, String code, MilestoneCompletionSource source,
+    public boolean completeCodeForPet(long petProfileId, String code, MilestoneCompletionSource source,
             Long linkedContentId) {
-        Optional<PetProfile> profile = profiles.findByOwnerId(ownerId);
-        if (profile.isEmpty()) {
-            return false;
-        }
-        PetProfile p = profile.get();
-        return complete(p.getId(), p.getPetType(), code, source, linkedContentId);
+        return profiles.findById(petProfileId)
+                .map(p -> complete(p.getId(), p.getPetType(), code, source, linkedContentId))
+                .orElse(false);
     }
 
     /** 按宠物 id + 自动事件幂等完成（V1.3.4：打卡 / 性格测试按宠物达成，不经 owner 反查）。宠物不存在 → false。 */
@@ -147,11 +150,19 @@ public class MilestoneCompletionService {
     /**
      * 聚合里程碑「Lulus Pemula」运行时解锁入口（Story 7.3）：由健康记录创建事件触发
      * （{@link MilestoneAutoCompleteListener#onHealthRecordCreated}）——健康记录任务可能是最后一块。
-     * 单宠假设：owner→当前档案。幂等（{@link #complete} 唯一约束短路）。
+     * V1.4.0 multi-pet（Story 1.2 · P8）：逐只判定（每只自己判前置）。幂等（{@link #complete} 唯一约束短路）。
      */
     @Transactional
     public void maybeUnlockLulusPemulaForOwner(long ownerId) {
-        profiles.findByOwnerId(ownerId)
+        for (PetProfile p : profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId)) {
+            checkAndUnlockLulusPemula(p.getId(), p.getPetType());
+        }
+    }
+
+    /** 按宠物判定 Lulus Pemula（V1.4.0 multi-pet Story 1.2 预留，供 1.3 按宠物路由的监听用）。宠物不存在 → no-op。 */
+    @Transactional
+    public void maybeUnlockLulusPemulaForPet(long petProfileId) {
+        profiles.findById(petProfileId)
                 .ifPresent(p -> checkAndUnlockLulusPemula(p.getId(), p.getPetType()));
     }
 
@@ -211,29 +222,35 @@ public class MilestoneCompletionService {
         completeDateGatedLNodesOnPublish(ownerId, java.time.Instant.now());
     }
 
-    /** 同上，可注入「当前时刻」（测时区边界用）。 */
+    /**
+     * 同上，可注入「当前时刻」（测时区边界用）。V1.4.0 multi-pet（Story 1.2 · P9，过渡）：账号每只宠物逐只判定；
+     * 发帖改按关联宠物在 Story 1.3。
+     */
     void completeDateGatedLNodesOnPublish(long ownerId, java.time.Instant now) {
-        PetProfile p = profiles.findByOwnerId(ownerId).orElse(null);
-        if (p == null) {
-            return;
+        for (PetProfile p : profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId)) {
+            completeDateGatedLNodesForPet(p, now);
         }
+    }
+
+    /** 单只宠物的日期门槛 L 级节点回填（生日 L1 / 陪伴 100 天 L2 / 365 天 L3），口径同上。 */
+    void completeDateGatedLNodesForPet(PetProfile p, java.time.Instant now) {
         java.time.LocalDate today = now.atZone(WIB).toLocalDate();
         java.time.LocalDate birthday = p.getBirthday();
         if (birthday != null && birthday.getMonthValue() == today.getMonthValue()
                 && birthday.getDayOfMonth() == today.getDayOfMonth()) {
-            completeForOwner(ownerId, MilestoneAutoEvent.FIRST_BIRTHDAY,
-                    MilestoneCompletionSource.PUBLISH);
+            complete(p.getId(), p.getPetType(), MilestoneAutoEvent.FIRST_BIRTHDAY,
+                    MilestoneCompletionSource.PUBLISH, null);
         }
         if (p.getCreatedAt() != null) {
             long days = java.time.temporal.ChronoUnit.DAYS.between(
                     p.getCreatedAt().atZone(WIB).toLocalDate(), today);
             if (days >= 100) {
-                completeForOwner(ownerId, MilestoneAutoEvent.COMPANION_100_DAYS,
-                        MilestoneCompletionSource.PUBLISH);
+                complete(p.getId(), p.getPetType(), MilestoneAutoEvent.COMPANION_100_DAYS,
+                        MilestoneCompletionSource.PUBLISH, null);
             }
             if (days >= 365) {
-                completeForOwner(ownerId, MilestoneAutoEvent.COMPANION_365_DAYS,
-                        MilestoneCompletionSource.PUBLISH);
+                complete(p.getId(), p.getPetType(), MilestoneAutoEvent.COMPANION_365_DAYS,
+                        MilestoneCompletionSource.PUBLISH, null);
             }
         }
     }

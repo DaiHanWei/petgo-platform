@@ -101,7 +101,8 @@ public class RecommendationSilenceService {
      */
     @Transactional(readOnly = true)
     public boolean isSilenced(long userId) {
-        PetProfile pet = profiles.findByOwnerId(userId).orElse(null);
+        // V1.4.0 multi-pet（Story 1.2 · X20）：与 ProfileRecommendationService 同一只（默认宠物），静默判定才对得上。
+        PetProfile pet = profiles.findDefault(userId).orElse(null);
         if (pet == null) {
             return false;
         }

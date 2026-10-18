@@ -184,7 +184,7 @@ class BlockedViewerProfileTest {
         assertThat(resp.getStatusCode().value()).isEqualTo(204);
         assertThat(resp.getBody()).isNull();
         // 连档案都不查。
-        verify(profiles, never()).findByOwnerId(anyLong());
+        verify(profiles, never()).findDefault(anyLong());
     }
 
     // ===== AC3：判定在服务端，且走既有的统一出口 =====

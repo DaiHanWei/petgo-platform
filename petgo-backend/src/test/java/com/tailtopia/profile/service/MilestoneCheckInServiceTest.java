@@ -45,7 +45,7 @@ class MilestoneCheckInServiceTest {
         contentService = Mockito.mock(ContentService.class);
         service = new MilestoneCheckInService(profiles, milestones, completions,
                 completionService, contentService);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile()));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(profile()));
     }
 
     private PetProfile profile() {
@@ -76,7 +76,7 @@ class MilestoneCheckInServiceTest {
         when(contentService.findRecentGrowthMomentsByEventDate(7L, 10L, 100))
                 .thenReturn(List.of(moment(2), moment(3)));
 
-        MilestoneCheckinCandidateResponse.Page page = service.candidates(7L);
+        MilestoneCheckinCandidateResponse.Page page = service.candidates(7L, 10L);
 
         assertThat(page.items()).hasSize(2);
         assertThat(page.items().get(0).contentId()).isEqualTo(2L);
@@ -91,13 +91,13 @@ class MilestoneCheckInServiceTest {
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
         when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(true);
         when(completions.existsByLinkedContentId(99L)).thenReturn(false);
-        when(completionService.completeCodeForOwner(
-                7L, "C-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
+        when(completionService.completeCodeForPet(
+                10L, "C-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
                 .thenReturn(true);
         when(completions.findByPetMilestoneId(5L)).thenReturn(
                 Optional.of(MilestoneCompletion.of(5L, MilestoneCompletionSource.USER_CHECKIN, 99L)));
 
-        MilestoneItemResponse resp = service.checkIn(7L, "C-S6", 99L);
+        MilestoneItemResponse resp = service.checkIn(7L, 10L, "C-S6", 99L);
 
         assertThat(resp.code()).isEqualTo("C-S6");
         assertThat(resp.completed()).isTrue();
@@ -107,7 +107,7 @@ class MilestoneCheckInServiceTest {
     void checkInRejectsNonCheckinMilestone() {
         when(milestones.findByPetProfileIdAndCode(10L, "C-S1"))
                 .thenReturn(Optional.of(milestone("C-S1", 6))); // SYSTEM_AUTO
-        assertThatThrownBy(() -> service.checkIn(7L, "C-S1", 99L))
+        assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S1", 99L))
                 .isInstanceOf(AppException.class).hasMessageContaining("非用户打卡");
     }
 
@@ -116,7 +116,7 @@ class MilestoneCheckInServiceTest {
         when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(true);
-        assertThatThrownBy(() -> service.checkIn(7L, "C-S6", 99L))
+        assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S6", 99L))
                 .isInstanceOf(AppException.class).hasMessageContaining("已完成");
     }
 
@@ -126,7 +126,7 @@ class MilestoneCheckInServiceTest {
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
         when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(false);
-        assertThatThrownBy(() -> service.checkIn(7L, "C-S6", 99L))
+        assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S6", 99L))
                 .isInstanceOf(AppException.class).hasMessageContaining("本人成长日历");
     }
 
@@ -137,8 +137,34 @@ class MilestoneCheckInServiceTest {
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
         when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(true);
         when(completions.existsByLinkedContentId(99L)).thenReturn(true);
-        assertThatThrownBy(() -> service.checkIn(7L, "C-S6", 99L))
+        assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S6", 99L))
                 .isInstanceOf(AppException.class).hasMessageContaining("已关联其它里程碑");
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · P7 / P10）：petId=B 打卡只查 B 的 roster、只完成 B；不属于本人 → 404。 */
+    @Test
+    void checkInOnSecondPetCompletesOnlyThatPet() {
+        PetProfile b = PetProfile.create(7L, PetType.DOG, "Bobo", null, null, null, null, "TOKB");
+        setField(b, "id", 11L);
+        when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
+        PetMilestone m = PetMilestone.of(11L, MilestoneCatalog.byCode("D-S6"));
+        setField(m, "id", 8L);
+        when(milestones.findByPetProfileIdAndCode(11L, "D-S6")).thenReturn(Optional.of(m));
+        when(completions.existsByPetMilestoneId(8L)).thenReturn(false);
+        when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(true);
+        when(completions.existsByLinkedContentId(99L)).thenReturn(false);
+        when(completionService.completeCodeForPet(11L, "D-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
+                .thenReturn(true);
+
+        service.checkIn(7L, 11L, "D-S6", 99L);
+
+        org.mockito.Mockito.verify(completionService).completeCodeForPet(
+                11L, "D-S6", MilestoneCompletionSource.USER_CHECKIN, 99L);
+        org.mockito.Mockito.verify(milestones, org.mockito.Mockito.never()).findByPetProfileIdAndCode(10L, "D-S6");
+
+        when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.checkIn(7L, 99L, "C-S6", 99L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.candidates(7L, 99L)).isInstanceOf(AppException.class);
     }
 
     private static void setField(Object o, String name, Object value) {
@@ -149,5 +175,24 @@ class MilestoneCheckInServiceTest {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /** V1.4.0 multi-pet 1.2 复审：无档案 + 健康类里程碑仍先 422（健康拒绝在宠物解析之前），不是 404。 */
+    @Test
+    void healthMilestoneWithoutProfileStill422() {
+        org.mockito.Mockito.when(profiles.findDefault(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> service.checkIn(8L, null, "C-M3", 99L))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getStatus().value()).isEqualTo(422));
+    }
+
+    @Test
+    void nullPetIdWithoutProfile404() {
+        org.mockito.Mockito.when(profiles.findDefault(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> service.checkIn(8L, null, "C-S6", 99L))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getStatus().value()).isEqualTo(404));
     }
 }

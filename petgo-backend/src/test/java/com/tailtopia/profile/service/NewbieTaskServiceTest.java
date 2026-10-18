@@ -59,7 +59,7 @@ class NewbieTaskServiceTest {
 
     @Test
     void countsTasksIndependently_S1S2DoneAndHealthRecord() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        when(profiles.findDefault(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
         stub(10, "C-S1", true);
         stub(10, "C-S2", true);
         stub(10, "C-S3", false);
@@ -86,7 +86,7 @@ class NewbieTaskServiceTest {
 
     @Test
     void reportsLulusPemulaUnlockedWhenCompletionExists() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
+        when(profiles.findDefault(7L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
         stub(10, "G-S1", true);
         stub(10, "G-S2", true);
         stub(10, "G-S3", true);
@@ -101,9 +101,29 @@ class NewbieTaskServiceTest {
         assertThat(r.lulusPemulaUnlocked()).isTrue();
     }
 
+    /** V1.4.0 multi-pet（Story 1.2 · P13，过渡）：两只宠物 → 按默认（最早建）宠物算。 */
+    @Test
+    void multiPetUsesDefaultPet() {
+        PetProfile a = profile(PetType.CAT, 10);
+        setField(a, "createdAt", java.time.Instant.parse("2026-01-01T00:00:00Z"));
+        PetProfile b = profile(PetType.DOG, 11);
+        setField(b, "createdAt", java.time.Instant.parse("2026-02-01T00:00:00Z"));
+        when(profiles.findDefault(7L)).thenCallRealMethod();
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(a, b));
+        for (String c : new String[] {"C-S1", "C-S2", "C-S3", "C-S4", "C-S5", "C-S16"}) {
+            stub(10, c, false);
+        }
+
+        service.progress(7L);
+
+        org.mockito.Mockito.verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndCode(10L, "C-S1");
+        org.mockito.Mockito.verify(milestones, org.mockito.Mockito.never()).findByPetProfileIdAndCode(
+                org.mockito.ArgumentMatchers.eq(11L), org.mockito.ArgumentMatchers.anyString());
+    }
+
     @Test
     void noProfileThrowsNotFound() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.empty());
+        when(profiles.findDefault(7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.progress(7L)).isInstanceOf(AppException.class);
     }
 

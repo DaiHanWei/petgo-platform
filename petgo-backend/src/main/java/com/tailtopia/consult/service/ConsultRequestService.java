@@ -123,8 +123,9 @@ public class ConsultRequestService {
             return new CreateResult(requests.findFirstByUserIdOrderByCreatedAtAsc(userId).orElseThrow(),
                     true);
         }
-        // 归属：一人一宠（findByOwnerId），无档案不能发起。
-        PetProfile pet = petProfiles.findByOwnerId(userId)
+        // 归属：V1.4.0 multi-pet（Story 1.2 · X1，过渡）取默认宠物，无档案不能发起（409 不变）；
+        // 按所选宠物发起在 Story 4.1。
+        PetProfile pet = petProfiles.findDefault(userId)
                 .orElseThrow(() -> AppException.conflict("需先建立宠物档案后再发起问诊"));
         Instant queueDeadline = Instant.now().plus(Duration.ofSeconds(QUEUE_TIMEOUT_SECONDS));
         ConsultRequest req = ConsultRequest.queue(
@@ -221,7 +222,7 @@ public class ConsultRequestService {
         List<VetQueueResponse.VetAwaitingPayItem> awaitingPays = requests
                 .findByVetIdAndStateOrderByCreatedAtAsc(vetId, ConsultRequestState.ACCEPTED_AWAIT_PAY)
                 .stream()
-                .map(r -> VetQueueResponse.VetAwaitingPayItem.of(r, petIdentityOf(r.getUserId())))
+                .map(r -> VetQueueResponse.VetAwaitingPayItem.of(r, petIdentityOf(r)))
                 .toList();
         List<VetQueueResponse.VetQueueItem> available = List.of();
         List<ConsultRequest> pool =
@@ -229,10 +230,14 @@ public class ConsultRequestService {
         if (!pool.isEmpty()) {
             List<Long> userIds = pool.stream().map(ConsultRequest::getUserId)
                     .filter(Objects::nonNull).distinct().toList();
-            Map<Long, PetIdentityView> pets = petQuery.findIdentitiesByOwners(userIds);
+            // V1.4.0 multi-pet（Story 1.2 · X2）：问诊按单上的宠物（键 = petId），不再按账号反查。
+            List<Long> petIds = pool.stream().map(ConsultRequest::getPetProfileId)
+                    .filter(Objects::nonNull).distinct().toList();
+            Map<Long, PetIdentityView> pets = petQuery.findIdentitiesByPetIds(petIds);
             Map<Long, AuthorView> authors = accounts.findAuthorViews(userIds);
             available = pool.stream()
-                    .map(r -> VetQueueResponse.VetQueueItem.of(r, pets.get(r.getUserId()),
+                    .map(r -> VetQueueResponse.VetQueueItem.of(r,
+                            r.getPetProfileId() == null ? null : pets.get(r.getPetProfileId()),
                             handleOf(authors, r.getUserId())))
                     .toList();
         }
@@ -262,9 +267,15 @@ public class ConsultRequestService {
         return new ConsultAiContextResponse(true, req.getAiDangerLevel(), req.getSymptomText(), urls);
     }
 
-    /** 单条宠物身份（awaitingPay 用）：缺失/注销 → null（前端降级）。 */
-    private PetIdentityView petIdentityOf(Long userId) {
-        return userId == null ? null : petQuery.findIdentityByOwner(userId).orElse(null);
+    /**
+     * 单条宠物身份（awaitingPay 用）：按单上的宠物（V1.4.0 multi-pet Story 1.2 · X3）。
+     * 注销（user_id 已剥）/ 宠物已删（pet_profile_id 无外键）→ null（前端降级）。
+     */
+    private PetIdentityView petIdentityOf(ConsultRequest r) {
+        if (r.getUserId() == null) {
+            return null;
+        }
+        return petQuery.findIdentityByPetId(r.getPetProfileId()).orElse(null);
     }
 
     /** 机主昵称（注销/缺失 → null，匿名化不泄漏身份）。 */

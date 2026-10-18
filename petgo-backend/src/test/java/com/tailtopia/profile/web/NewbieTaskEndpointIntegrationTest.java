@@ -74,8 +74,8 @@ class NewbieTaskEndpointIntegrationTest extends ApiIntegrationTest {
 
         for (String code : com.tailtopia.profile.domain.MilestoneCatalog
                 .newbiePrereqCodes(PetType.CAT)) {
-            completionService.completeCodeForOwner(
-                    u.getId(), code, MilestoneCompletionSource.SYSTEM_AUTO, null);
+            completionService.completeCodeForPet(
+                    pet.getId(), code, MilestoneCompletionSource.SYSTEM_AUTO, null);
         }
 
         // 无健康记录 → 5/6，Lulus Pemula 未解锁。

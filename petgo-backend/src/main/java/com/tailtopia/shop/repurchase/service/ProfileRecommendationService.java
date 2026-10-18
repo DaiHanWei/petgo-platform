@@ -71,14 +71,14 @@ public class ProfileRecommendationService {
     /**
      * 为该用户的宠物出推荐。
      *
-     * <p>🔴 <b>直接用该用户的唯一宠物，不做宠物选择器</b>（L-11 单账号单宠物硬约束）。
-     * ⚠️ <b>1.3.0 多宠物后启用</b>：届时入参要换成 petProfileId，并在前端加选择器。
+     * <p>🔴 <b>用该用户的默认宠物，不做宠物选择器</b>（V1.4.0 multi-pet Story 1.2 · X19：Toko 档案推荐
+     * 不随 Diary 切换宠物，固定按 {@code DefaultPetPolicy} 的默认宠物）。
      *
      * @return 永不为 null；无档案时返回空结果 + {@code degraded=true}
      */
     @Transactional(readOnly = true)
     public RecommendationView recommendFor(long userId) {
-        PetProfile pet = profiles.findByOwnerId(userId).orElse(null);
+        PetProfile pet = profiles.findDefault(userId).orElse(null);
         if (pet == null) {
             // 未建档：前端用建档引导卡替换整区（FR-93 状态矩阵），这里不编造推荐
             return RecommendationView.empty(null, true, "PROFILE");

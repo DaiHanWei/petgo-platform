@@ -65,9 +65,8 @@ public class MilestoneController {
     public MilestoneCheckinCandidateResponse.Page checkinCandidates(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long ownerId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
-        return checkInService.candidates(ownerId);
+        long pid = petResolver.resolve(ownerId, petId).getId();
+        return checkInService.candidates(ownerId, pid);
     }
 
     /**
@@ -79,9 +78,8 @@ public class MilestoneController {
             @PathVariable String code, @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody MilestoneCheckinRequest req) {
         long ownerId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
-        return checkInService.checkIn(ownerId, code, req.contentId());
+        // 宠物在服务层解析（健康类里程碑先拒 422，再解析宠物），保持无档案账号的旧行为。
+        return checkInService.checkIn(ownerId, petId, code, req.contentId());
     }
 
     /**
@@ -94,9 +92,8 @@ public class MilestoneController {
             @PathVariable String code, @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody MilestoneShareRequest req) {
         long ownerId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
-        return shareService.createOrRefresh(ownerId, code, req);
+        long pid = petResolver.resolve(ownerId, petId).getId();
+        return shareService.createOrRefresh(ownerId, pid, code, req);
     }
 
     /**
@@ -116,9 +113,8 @@ public class MilestoneController {
             @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody MilestoneCelebrationReportRequest req) {
         long ownerId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(ownerId, petId);
-        return celebrationService.reportCelebrated(ownerId, req.codes());
+        long pid = petResolver.resolve(ownerId, petId).getId();
+        return celebrationService.reportCelebrated(ownerId, pid, req.codes());
     }
 
     private static long currentUserId(Jwt jwt) {

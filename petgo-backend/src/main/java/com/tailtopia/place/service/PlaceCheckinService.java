@@ -20,7 +20,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -186,7 +185,8 @@ public class PlaceCheckinService {
      * {@code checkin-pet-forbidden}。返回去重后的列表（保持请求顺序）。
      */
     private List<Long> ownedPetIds(long userId, List<Long> requested) {
-        Optional<Long> own = pets.findPetIdByOwner(userId);
+        // V1.4.0 multi-pet（Story 1.2 · X18）：账号全部宠物都可被选；逐宠物打卡语义在 Story 1.3。
+        List<Long> own = pets.findPetIdsByOwner(userId);
         if (own.isEmpty()) {
             throw AppException.checkinNoPet("还没有宠物档案");
         }
@@ -194,7 +194,7 @@ public class PlaceCheckinService {
             throw AppException.checkinPetForbidden("宠物不属于当前用户");
         }
         Set<Long> unique = new LinkedHashSet<>(requested);
-        if (unique.contains(null) || !Set.of(own.get()).containsAll(unique)) {
+        if (unique.contains(null) || !new java.util.HashSet<>(own).containsAll(unique)) {
             throw AppException.checkinPetForbidden("宠物不属于当前用户");
         }
         return List.copyOf(unique);

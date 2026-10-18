@@ -44,18 +44,16 @@ public class BoardingPassController {
     public BoardingPassListResponse list(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
-        return service.list(userId);
+        long pid = petResolver.resolve(userId, petId).getId(); // V1.4.0 multi-pet：无宠物 / 他人 → 404
+        return service.list(userId, pid);
     }
 
     @GetMapping("/{placeToken}")
     public BoardingPassDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable String placeToken,
             @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
-        return service.detail(userId, placeToken);
+        long pid = petResolver.resolve(userId, petId).getId(); // V1.4.0 multi-pet：无宠物 / 他人 → 404
+        return service.detail(userId, pid, placeToken);
     }
 
     @PostMapping("/{placeToken}/unlock")
@@ -63,10 +61,10 @@ public class BoardingPassController {
             @Valid @RequestBody KeepsakePayRequest req,
             @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
+        // 先限流再解析宠物（与改造前顺序一致：超限一律 429，404 也计入次数）。
         rateLimiter.check("rl:boarding:unlock:" + userId, UNLOCK_LIMIT, UNLOCK_WINDOW);
-        return service.unlock(userId, placeToken, req.channel());
+        long pid = petResolver.resolve(userId, petId).getId(); // V1.4.0 multi-pet：无宠物 / 他人 → 404
+        return service.unlock(userId, pid, placeToken, req.channel());
     }
 
     private static long currentUserId(Jwt jwt) {

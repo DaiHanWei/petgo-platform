@@ -134,7 +134,7 @@ class PetCardShareRewardIntegrationTest extends ApiIntegrationTest {
         Place p = places.save(Place.mark(java.util.UUID.randomUUID().toString().replace("-", ""),
                 "Taman " + SEQ.incrementAndGet(), PlaceType.PARK, List.of(PlaceTag.PETS_ALLOWED_INSIDE),
                 LAT, LNG, "Jl. Test", null, 1L, "Jakarta"));
-        long petId = pets.findByOwnerId(u.getId()).orElseThrow().getId();
+        long petId = pets.findDefault(u.getId()).orElseThrow().getId();
         mvc.perform(post("/api/v1/places/" + p.getPublicToken() + "/checkins")
                         .header("Authorization", userBearer(u.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -143,11 +143,16 @@ class PetCardShareRewardIntegrationTest extends ApiIntegrationTest {
     }
 
     private long ts(User u, TailsonalityShareRewardService.CardType t) {
-        return tailsonality.rewardAfterShare(u.getId(), t, Instant.now());
+        return tailsonality.rewardAfterShare(u.getId(), defaultPetId(u.getId()), t, Instant.now());
     }
 
     private long pp(User u, PassportShareRewardService.CardType t) {
-        return passport.rewardAfterShare(u.getId(), t, Instant.now());
+        return passport.rewardAfterShare(u.getId(), defaultPetId(u.getId()), t, Instant.now());
+    }
+
+    /** V1.4.0 multi-pet：控制器不带 petId 时 resolveOptional 的结果 = 默认宠物 id（无档案 null）。 */
+    private Long defaultPetId(long userId) {
+        return pets.findDefault(userId).map(com.tailtopia.profile.domain.PetProfile::getId).orElse(null);
     }
 
     private long rows(String table, long userId) {
@@ -181,7 +186,7 @@ class PetCardShareRewardIntegrationTest extends ApiIntegrationTest {
         assertThat(pp(u, PassportShareRewardService.CardType.PAGE)).as("没有章不发护照卡").isZero();
         assertThat(pp(u, PassportShareRewardService.CardType.BOARDING)).as("没有打卡不发登机牌卡").isZero();
         User noPet = newUser();
-        assertThat(tailsonality.rewardAfterShare(noPet.getId(), TailsonalityShareRewardService.CardType.RESULT,
+        assertThat(tailsonality.rewardAfterShare(noPet.getId(), null, TailsonalityShareRewardService.CardType.RESULT,
                 Instant.now())).as("无档案不发").isZero();
         assertThat(rows("tailsonality_share_rewards", u.getId())).isZero();
     }

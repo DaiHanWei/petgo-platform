@@ -71,9 +71,7 @@ public class AdminSeedAssistController {
     /**
      * 某发布账号名下的宠物档案（HTMX 片段）。
      *
-     * <p>⚠️ <b>V1 是「单账号单宠物」</b>（`uq_pet_profiles_owner_id` 唯一约束），
-     * 所以这个下拉实际只会有 0 或 1 项。仍然做成下拉而不是"显示那一只"，
-     * 是因为 14-1 的「关联物种」要挂在它之后，而且将来放开多宠物时这里不用重做。
+     * <p>V1.4.0 multi-pet（Story 1.2 · X30）：一个账号可有多只宠物，下拉列出<b>全部</b>宠物（按创建时间）。
      *
      * <p>🔴 <b>虚拟账号必然是 0 项</b> —— 它没有宠物档案。这正是成长日历
      * （{@code GROWTH_MOMENT}）此前发不出来的原因：那类内容必须绑档案。
@@ -83,10 +81,10 @@ public class AdminSeedAssistController {
     @PreAuthorize(AUTH)
     public String petOptions(@RequestParam(required = false) Long authorUserId, Model model) {
         List<PetOption> options = authorUserId == null ? List.of()
-                : pets.findByOwnerId(authorUserId)
-                        .map(p -> List.of(new PetOption(p.getId(), p.getName(),
-                                p.getPetType() == null ? "—" : p.getPetType().name())))
-                        .orElseGet(List::of);
+                : pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(authorUserId).stream()
+                        .map(p -> new PetOption(p.getId(), p.getName(),
+                                p.getPetType() == null ? "—" : p.getPetType().name()))
+                        .toList();
         model.addAttribute("petOptions", options);
         return "admin/fragments/seed-pet-select :: options";
     }

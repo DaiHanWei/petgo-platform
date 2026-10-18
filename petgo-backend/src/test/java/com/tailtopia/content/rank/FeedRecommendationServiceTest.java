@@ -65,7 +65,7 @@ class FeedRecommendationServiceTest {
         when(comments.countVisibleForViewerIn(anyList(), any())).thenReturn(List.of());
         when(tags.findVisibleTags(any(), any())).thenReturn(Map.of());
         when(species.resolveAll(anyList())).thenReturn(Map.of());
-        when(pets.findByOwnerId(org.mockito.ArgumentMatchers.anyLong()))
+        when(pets.findDefault(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(java.util.Optional.empty());
         when(seen.decayFactors(any(), anyList(), any())).thenReturn(Map.of());
         when(sequences.newSeed(any())).thenReturn("s-seed-1");
@@ -434,6 +434,46 @@ class FeedRecommendationServiceTest {
         FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
 
         assertThat(p.posts()).isNotEmpty();
+    }
+
+    /**
+     * V1.4.0 multi-pet（Story 1.2 · X26，V-1）：查看者有两只不同物种的宠物 → 主物种 = 默认（最早建）宠物物种，
+     * 不抛异常、照常出页（不退回时间倒序）。
+     */
+    @Test
+    void multiPetViewerMainSpeciesIsTheDefaultPetsSpecies() {
+        java.time.Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        when(pets.findDefault(9L)).thenCallRealMethod();
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 90L, com.tailtopia.profile.domain.PetType.DOG, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 91L, com.tailtopia.profile.domain.PetType.CAT,
+                        t0.plusSeconds(60))));
+        when(sequences.length(any(), any())).thenReturn(0L);
+        when(sequences.read(any(), any(), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
+                .thenReturn(List.of());
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 50; i++) {
+            pool.add(post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
+            Collection<Long> asked = inv.getArgument(0);
+            List<ContentPost> out = new ArrayList<>();
+            for (Long id : asked) {
+                out.add(post(id, id));
+            }
+            return out;
+        });
+        FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
+        FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
+                seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles);
+
+        FeedRecommendationService.RankedPage p = svc.page(9L, null, null, 20, null);
+
+        assertThat(p.posts()).isNotEmpty();
+        org.mockito.ArgumentCaptor<FeedRankEngine.Input> in = org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
+        verify(engine, org.mockito.Mockito.atLeastOnce()).rank(in.capture(), anyInt());
+        assertThat(in.getValue().mainSpecies()).isEqualTo("DOG");
     }
 
     /** 空池 → 空页 + 无游标，不抛错。 */

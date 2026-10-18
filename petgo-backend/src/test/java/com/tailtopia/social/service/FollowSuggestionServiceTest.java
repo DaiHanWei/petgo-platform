@@ -38,14 +38,16 @@ class FollowSuggestionServiceTest {
     private AccountQueryService accounts;
     private FollowReader followReader;
     private FollowSuggestionService service;
+    private com.tailtopia.profile.repository.PetProfileRepository pets;
 
     @BeforeEach
     void setUp() {
         follows = mock(UserFollowRepository.class);
         accounts = mock(AccountQueryService.class);
         followReader = mock(FollowReader.class);
+        pets = mock(com.tailtopia.profile.repository.PetProfileRepository.class);
         service = new FollowSuggestionService(follows, accounts, followReader,
-                mock(com.tailtopia.profile.repository.PetProfileRepository.class), Clock.fixed(NOW, ZoneOffset.UTC));
+                pets, Clock.fixed(NOW, ZoneOffset.UTC));
         when(accounts.findAuthorViewsWithoutTags(anyCollection())).thenAnswer(inv -> {
             Collection<Long> ids = inv.getArgument(0);
             return ids.stream().collect(Collectors.toMap(id -> id,
@@ -109,5 +111,22 @@ class FollowSuggestionServiceTest {
 
         assertThat(service.suggestionsFor(VIEWER).items()).extracting(FollowListItem::userId)
                 .containsExactly(10L, 20L);
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · X28）：候选有两只宠物 → 确定性取默认（最早建）宠物的物种。 */
+    @Test
+    void multiPetCandidateShowsDefaultPetSpecies() {
+        when(follows.findSuggestionIds(anyLong(), org.mockito.ArgumentMatchers.any(), anyInt()))
+                .thenReturn(List.of(10L));
+        Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        when(pets.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(anyCollection())).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(10L, 1L, com.tailtopia.profile.domain.PetType.DOG, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(10L, 2L, com.tailtopia.profile.domain.PetType.CAT,
+                        t0.plusSeconds(60))));
+
+        List<FollowListItem> items = service.suggestionsFor(VIEWER).items();
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).petType()).isEqualTo("DOG");
     }
 }

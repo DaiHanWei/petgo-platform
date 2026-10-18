@@ -44,7 +44,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                                  "birthday":"2024-03-10","intro":"Suka tidur"}
                                 """))
                 .andExpect(status().isCreated());
-        return profiles.findByOwnerId(owner.getId()).orElseThrow().getCardToken();
+        return profiles.findDefault(owner.getId()).orElseThrow().getCardToken();
     }
 
     private String render(String token) throws Exception {
@@ -227,7 +227,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                                 {"petType":"OTHER","name":"X","birthday":"2020-01-01"}
                                 """))
                 .andExpect(status().isCreated());
-        PetProfile p = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile p = profiles.findDefault(owner.getId()).orElseThrow();
 
         String html = render(p.getCardToken());
         assertThat(html).contains("Lihat cerita X");
@@ -248,7 +248,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
     void clusterAndCollageNeverShareTheSamePhoto() throws Exception {
         User owner = newUser();
         String token = createProfileAndGetToken(owner);
-        long petId = profiles.findByOwnerId(owner.getId()).orElseThrow().getId();
+        long petId = profiles.findDefault(owner.getId()).orElseThrow().getId();
         for (int i = 1; i <= 6; i++) {
             insertMomentWithPhoto(owner.getId(), petId, "m" + i, "https://cdn.test/photo" + i + ".jpg", i);
         }
@@ -275,7 +275,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
     void collagePositionsStartAtP1EvenWhenSomeMomentsHaveNoPhoto() throws Exception {
         User owner = newUser();
         String token = createProfileAndGetToken(owner);
-        long petId = profiles.findByOwnerId(owner.getId()).orElseThrow().getId();
+        long petId = profiles.findDefault(owner.getId()).orElseThrow().getId();
         // 最新的一条**没有配图**（正是踩到的那种老数据）
         insertMomentWithPhoto(owner.getId(), petId, "no-photo", null, 1);
         for (int i = 2; i <= 7; i++) {

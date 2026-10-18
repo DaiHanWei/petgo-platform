@@ -4,6 +4,7 @@ import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.service.DefaultPetPolicy;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import java.util.HashMap;
 import java.util.List;
@@ -69,12 +70,11 @@ public class ContentSpeciesResolver {
                 authors.put(u.getId(), u);
             }
         }
-        Map<Long, PetProfile> petsByOwner = new HashMap<>();
-        if (!authorIds.isEmpty()) {
-            for (PetProfile p : pets.findByOwnerIdIn(authorIds)) {
-                petsByOwner.put(p.getOwnerId(), p);
-            }
-        }
+        // V1.4.0 multi-pet（Story 1.2 · X27，V-1）：作者物种 = 作者默认宠物物种（确定性，不再「后者覆盖前者」）；
+        // 「Diary 按关联宠物 / 多物种 → 通用池」在 3.2。
+        Map<Long, PetProfile> petsByOwner = authorIds.isEmpty()
+                ? new HashMap<>()
+                : DefaultPetPolicy.pickPerOwner(pets.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(authorIds));
 
         Map<Long, ResolvedSpecies> out = new HashMap<>();
         for (Input in : inputs) {

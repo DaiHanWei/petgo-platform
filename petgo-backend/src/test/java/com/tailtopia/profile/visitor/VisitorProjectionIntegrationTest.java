@@ -69,7 +69,7 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
                                  "birthday":"2024-03-10","intro":"Suka tidur"}
                                 """))
                 .andExpect(status().isCreated());
-        return profiles.findByOwnerId(owner.getId()).orElseThrow();
+        return profiles.findDefault(owner.getId()).orElseThrow();
     }
 
     /** 一条结构化健康记录（疫苗 / 驱虫这类）。归属键是 <b>petProfileId</b>，不是 ownerId。 */

@@ -216,13 +216,17 @@ public class ProfileService {
         return PetProfileResponse.from(p, badgeOf(p));
     }
 
-    private String badgeOf(PetProfile p) {
-        return p.getId() == null ? null : tailsonalityBadges.badgeOf(p.getId()).orElse(null);
+    /**
+     * 账号默认宠物（V1.4.0 multi-pet Story 1.2：取代旧 {@code findByOwnerId} 包装；定义只在 {@link DefaultPetPolicy}）。
+     * 供访客主页等「按账号展示一只」的过渡入口用。
+     */
+    @Transactional(readOnly = true)
+    public Optional<PetProfile> findDefault(long ownerId) {
+        return profiles.findDefault(ownerId);
     }
 
-    @Transactional(readOnly = true)
-    public Optional<PetProfile> findByOwnerId(long ownerId) {
-        return profiles.findByOwnerId(ownerId);
+    private String badgeOf(PetProfile p) {
+        return p.getId() == null ? null : tailsonalityBadges.badgeOf(p.getId()).orElse(null);
     }
 
     /**

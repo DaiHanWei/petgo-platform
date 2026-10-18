@@ -130,7 +130,7 @@ class TimelinePaginationRegressionTest extends ApiIntegrationTest {
     }
 
     private long savePost(long uid, String eventDate, String text) {
-        PetProfile pet = petProfiles.findByOwnerId(uid).orElseThrow();
+        PetProfile pet = petProfiles.findDefault(uid).orElseThrow();
         ContentPost p = posts.save(ContentPost.publish(uid, ContentType.GROWTH_MOMENT, pet.getId(),
                 text, List.of("img/" + text + ".jpg"),
                 eventDate == null ? null : LocalDate.parse(eventDate)));

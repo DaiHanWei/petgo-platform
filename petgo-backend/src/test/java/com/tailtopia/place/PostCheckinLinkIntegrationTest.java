@@ -66,7 +66,7 @@ class PostCheckinLinkIntegrationTest extends ApiIntegrationTest {
     @Test
     void ownCheckinLinksAndDetailShowsTheStripThenDeletionNullsTheLink() throws Exception {
         User u = userWithPet();
-        PetProfile pet = petProfiles.findByOwnerId(u.getId()).orElseThrow();
+        PetProfile pet = petProfiles.findDefault(u.getId()).orElseThrow();
         Place p = places.save(Place.mark(java.util.UUID.randomUUID().toString().replace("-", ""), "Kopi Kucing",
                 PlaceType.CAFE, List.of(PlaceTag.PETS_ALLOWED_INSIDE), LAT, LNG, "Jl. Test", null, u.getId(), "Jakarta"));
         String token = checkIn(u, pet, p);
@@ -93,7 +93,7 @@ class PostCheckinLinkIntegrationTest extends ApiIntegrationTest {
     @Test
     void someoneElsesOrUnknownTokenIs422() throws Exception {
         User owner = userWithPet();
-        PetProfile pet = petProfiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile pet = petProfiles.findDefault(owner.getId()).orElseThrow();
         Place p = places.save(Place.mark(java.util.UUID.randomUUID().toString().replace("-", ""), "Taman",
                 PlaceType.PARK, List.of(PlaceTag.LEASH_REQUIRED), LAT, LNG, "Jl. Test", null, owner.getId(), "Jakarta"));
         String token = checkIn(owner, pet, p);

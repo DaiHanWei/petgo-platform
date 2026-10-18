@@ -20,7 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 任务完成态由既有里程碑完成（S1–S5）与 {@code health_records} 存在性推导，独立计数。
  *
  * <p>解锁副作用（6 任务全达成 → 完成 Lulus Pemula）由 {@link MilestoneCompletionService}
- * 承载（运行时事件触发），本服务不写。单宠假设：沿用 {@code findByOwnerId}（每 owner 单档案）。
+ * 承载（运行时事件触发），本服务不写。V1.4.0 multi-pet（Story 1.2 · P13，过渡）：取默认宠物（{@code findDefault}）；
+ * 「任意一只达成即算」（P-2）在 Story 1.3。
  */
 @Service
 public class NewbieTaskService {
@@ -41,7 +42,7 @@ public class NewbieTaskService {
     /** 当前用户 6 新手任务进度（无档案 → 404 防枚举）。 */
     @Transactional(readOnly = true)
     public NewbieTaskResponse progress(long ownerId) {
-        PetProfile pet = profiles.findByOwnerId(ownerId)
+        PetProfile pet = profiles.findDefault(ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
         long petProfileId = pet.getId();
         PetType petType = pet.getPetType();

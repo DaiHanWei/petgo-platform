@@ -58,9 +58,9 @@ public class PetPassportController {
     public PetPassportResponse passport(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
-        return passports.pageFor(userId);
+        // V1.4.0 multi-pet：带 petId 校验归属（他人 → 404）；不带 = 默认宠物，无宠物 = null（服务层照旧 404）。
+        Long pid = petResolver.resolveOptional(userId, petId).map(p -> p.getId()).orElse(null);
+        return passports.pageFor(userId, pid);
     }
 
     /** 发起「当前版本」快照购买（Story 3.4 · AC3）：无章 422、已买 409；响应带 {@code snapshotToken}。 */
@@ -69,10 +69,10 @@ public class PetPassportController {
             @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody KeepsakePayRequest req) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
+        // V1.4.0 multi-pet：带 petId 校验归属（他人 → 404）；不带 = 默认宠物，无宠物 = null（服务层照旧 404）。
+        Long pid = petResolver.resolveOptional(userId, petId).map(p -> p.getId()).orElse(null);
         rateLimiter.check("rl:passport:snapshot:" + userId, SNAPSHOT_LIMIT, SNAPSHOT_WINDOW);
-        return snapshots.start(userId, req.channel());
+        return snapshots.start(userId, pid, req.channel());
     }
 
     /** 已购版本（Story 3.4 · AC7.1）：只列已付，按 paidAt 倒序。 */
@@ -80,9 +80,9 @@ public class PetPassportController {
     public PassportSnapshotListResponse listSnapshots(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId) {
         long userId = currentUserId(jwt);
-        // TODO(v1.4.0-multi-pet-1.2): 把 pet.getId() 传入服务层
-        petResolver.resolveOptional(userId, petId);
-        return snapshots.list(userId);
+        // V1.4.0 multi-pet：带 petId 校验归属（他人 → 404）；不带 = 默认宠物，无宠物 = null（服务层照旧 404）。
+        Long pid = petResolver.resolveOptional(userId, petId).map(p -> p.getId()).orElse(null);
+        return snapshots.list(userId, pid);
     }
 
     /** 回看（Story 3.4 · AC7.2）：非本人 / 未付 / 不存在 → 404。 */

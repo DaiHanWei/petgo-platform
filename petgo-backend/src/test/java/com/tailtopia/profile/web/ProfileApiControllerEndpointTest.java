@@ -54,7 +54,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.cardToken").isNotEmpty())
                 .andExpect(jsonPath("$.id").isNumber());
 
-        PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile saved = profiles.findDefault(owner.getId()).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("旺财", saved.getName());
         org.junit.jupiter.api.Assertions.assertEquals(owner.getId(), saved.getOwnerId());
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -256,7 +256,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.name").value("大旺"))
                 .andExpect(jsonPath("$.intro").value("换名字了"));
 
-        PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile saved = profiles.findDefault(owner.getId()).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("大旺", saved.getName());
         // cardToken 不变（编辑不重生成）。
         org.junit.jupiter.api.Assertions.assertNotNull(saved.getCardToken());
@@ -287,7 +287,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.sex").value("MALE"));
 
         // 真落库（不是只在响应里回显）。
-        PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile saved = profiles.findDefault(owner.getId()).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(
                 com.tailtopia.profile.domain.PetSex.MALE, saved.getSex());
 
@@ -469,7 +469,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
     }
 
     private long petIdOf(long ownerId) {
-        return profiles.findByOwnerId(ownerId).orElseThrow().getId();
+        return profiles.findDefault(ownerId).orElseThrow().getId();
     }
 
     @Test

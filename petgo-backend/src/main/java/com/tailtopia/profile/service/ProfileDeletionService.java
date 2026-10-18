@@ -66,7 +66,8 @@ public class ProfileDeletionService {
 
     @Transactional
     public PersonalMedia deleteByUserId(long userId) {
-        Optional<PetProfile> profile = petProfiles.findByOwnerId(userId);
+        // V1.4.0 multi-pet（Story 1.2 · P14，过渡）：默认宠物（库里仍单宠物，等价）；按 petId 删除 / 注销删全部在 1.3。
+        Optional<PetProfile> profile = petProfiles.findDefault(userId);
         if (profile.isEmpty()) {
             return PersonalMedia.empty();
         }

@@ -100,7 +100,7 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
                         weight_kg, created_at, updated_at)
                 VALUES (?, ?, 'Mochi', ?, ?, ?, now(), now())
                 """, ownerId, petType, birthday, "pc" + SEQ.incrementAndGet(), weightKg);
-        return profiles.findByOwnerId(ownerId).orElseThrow();
+        return profiles.findDefault(ownerId).orElseThrow();
     }
 
     /**

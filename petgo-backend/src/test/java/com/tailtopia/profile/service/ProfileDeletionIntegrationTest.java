@@ -46,7 +46,7 @@ class ProfileDeletionIntegrationTest extends ApiIntegrationTest {
         profileDeletion.deleteByUserId(uid);
 
         // 档案已物理删。
-        assertThat(petProfiles.findByOwnerId(uid)).isEmpty();
+        assertThat(petProfiles.findDefault(uid)).isEmpty();
         // 成长帖保留，仅解绑（pet_id 置空），不随宠物删除。
         ContentPost reloaded = posts.findById(growth.getId()).orElseThrow();
         assertThat(reloaded.getPetId()).isNull();

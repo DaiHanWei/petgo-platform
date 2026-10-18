@@ -55,7 +55,7 @@ class ProfileApiControllerTest {
 
     @Test
     void tailsonalityShareRewardDelegatesWithJwtUserAndRateLimits() {
-        when(tailsonalityShareRewards.rewardAfterShare(eq(77L),
+        when(tailsonalityShareRewards.rewardAfterShare(eq(77L), ArgumentMatchers.isNull(),
                 eq(com.tailtopia.share.service.TailsonalityShareRewardService.CardType.MATCH),
                 ArgumentMatchers.any())).thenReturn(15L);
         var resp = controller.rewardTailsonalityShare(jwt("77"), null,
@@ -66,7 +66,7 @@ class ProfileApiControllerTest {
 
     @Test
     void passportShareRewardDelegatesWithJwtUserAndRateLimits() {
-        when(passportShareRewards.rewardAfterShare(eq(77L),
+        when(passportShareRewards.rewardAfterShare(eq(77L), ArgumentMatchers.isNull(),
                 eq(com.tailtopia.share.service.PassportShareRewardService.CardType.BOARDING),
                 ArgumentMatchers.any())).thenReturn(0L);
         var resp = controller.rewardPassportShare(jwt("77"), null,

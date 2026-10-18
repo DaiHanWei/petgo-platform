@@ -70,7 +70,7 @@ class VisitorCalendarIntegrationTest extends ApiIntegrationTest {
                                  "birthday":"2024-03-10","intro":"Suka tidur"}
                                 """))
                 .andExpect(status().isCreated());
-        return profiles.findByOwnerId(owner.getId()).orElseThrow();
+        return profiles.findDefault(owner.getId()).orElseThrow();
     }
 
     /** 直插一条快乐时刻到指定日期，可指定审核状态、可见性、是否软删、有没有配图。 */

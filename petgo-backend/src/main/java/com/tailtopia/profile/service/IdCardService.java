@@ -173,20 +173,24 @@ public class IdCardService {
         return (v == null || v.isBlank()) ? null : v.trim();
     }
 
-    /** 当前用户身份证数据（只读，不分配号）。无档案 → 404。老用户 serial=null → {@code generated=false}。 */
+    /**
+     * 当前用户身份证数据（只读，不分配号）。无档案 → 404。老用户 serial=null → {@code generated=false}。
+     * V1.4.0 multi-pet（Story 1.2 · P2）：按指定宠物（控制器经 {@code PetResolver} 解析）；高清已购仍按账号。
+     */
     @Transactional(readOnly = true)
-    public IdCardDataResponse getMyIdCard(long ownerId) {
-        return profiles.findByOwnerId(ownerId)
+    public IdCardDataResponse getMyIdCard(long ownerId, long petId) {
+        return profiles.findByIdAndOwnerId(petId, ownerId)
                 .map(p -> IdCardDataResponse.from(p, hdPurchases.existsPaidByUserId(ownerId)))
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
     }
 
     /**
      * 生成身份证（分配流水号）。幂等：已有号则原样返回（不重复分配、不换号）；无号则分配后落库。无档案 → 404。
+     * V1.4.0 multi-pet（Story 1.2 · P3）：流水号挂 {@code pet_profiles.serial_id}，按指定宠物。
      */
     @Transactional
-    public IdCardDataResponse generateSerial(long ownerId) {
-        PetProfile pet = profiles.findByOwnerId(ownerId)
+    public IdCardDataResponse generateSerial(long ownerId, long petId) {
+        PetProfile pet = profiles.findByIdAndOwnerId(petId, ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
         if (pet.getSerialId() == null) {
             long serial = serialAllocation.allocate();
