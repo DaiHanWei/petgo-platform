@@ -2626,6 +2626,111 @@
   "petSlotLimitBody": "Satu akun bisa punya maksimal 5 hewan.",
   "petSlotLimitOk": "Oke",
   "petSlotPageTitle": "Kelola Hewan",
+  "petReadonlyBannerTitle": "Slot sudah berakhir",
+  "petReadonlyBannerBody": "Perpanjang untuk lanjut mencatat.",
+  "petSlotRenew": "Perpanjang",
+  "petSlotUsedSuffix": "/ {total} slot dipakai",
+  "@petSlotUsedSuffix": {
+    "placeholders": {"total": {"type": "int"}}
+  },
+  "petSlotCapNote": "Maksimal 5 hewan per akun",
+  "petSlotSourceDefault": "Bawaan",
+  "petSlotSourceLevel": "Level",
+  "petSlotSourceRent": "Sewa",
+  "petSlotCellAvailable": "Bisa disewa",
+  "petSlotCellEmpty": "Kosong",
+  "petReadonlyBadge": "Hanya-baca",
+  "petSlotRentalsSection": "Slot sewa",
+  "petSlotRentalName": "Slot sewa {n}",
+  "@petSlotRentalName": {
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotRentalEnds": "Berakhir {date}",
+  "@petSlotRentalEnds": {
+    "placeholders": {"date": {"type": "String"}}
+  },
+  "petSlotRentalEndsSoon": "Berakhir {date} · {n} hari lagi",
+  "@petSlotRentalEndsSoon": {
+    "placeholders": {"date": {"type": "String"}, "n": {"type": "int"}}
+  },
+  "petSlotNoAutoRenewNote": "Slot sewa tidak diperpanjang otomatis. Kami ingatkan 3 hari sebelum berakhir.",
+  "petSlotRentCta": "Sewa slot · {price} / {days} hari",
+  "@petSlotRentCta": {
+    "placeholders": {"price": {"type": "String"}, "days": {"type": "int"}}
+  },
+  "petReadonlyShortNote": "Slot kamu kurang {n}. Pilih hewan yang tetap aktif — yang lain jadi hanya-baca sampai slot diperpanjang.",
+  "@petReadonlyShortNote": {
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotChangeSelection": "Ubah pilihan",
+  "petSlotMaxReached": "Sudah maksimal 5 slot",
+  "petSlotRentSheetTitle": "Sewa slot hewan",
+  "petSlotItemName": "Slot hewan",
+  "petSlotUnitPrice": "{price} / slot · {days} hari",
+  "@petSlotUnitPrice": {
+    "placeholders": {"price": {"type": "String"}, "days": {"type": "int"}}
+  },
+  "petSlotRentSheetNote": "Berlaku {days} hari sejak pembayaran. Tidak diperpanjang otomatis.",
+  "@petSlotRentSheetNote": {
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "petSlotQuantityLabel": "Jumlah slot",
+  "petSlotQuantityTotal": "{n} × {price}",
+  "@petSlotQuantityTotal": {
+    "placeholders": {"n": {"type": "int"}, "price": {"type": "String"}}
+  },
+  "petSlotRentSuccess": "Slot hewan bertambah {n} · berlaku sampai {date}",
+  "@petSlotRentSuccess": {
+    "placeholders": {"n": {"type": "int"}, "date": {"type": "String"}}
+  },
+  "petSlotRentOnlyN": "Saat ini kamu hanya bisa menyewa {n} slot. Coba lagi dengan jumlah lebih sedikit.",
+  "@petSlotRentOnlyN": {
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotRentPendingPayment": "Masih ada pembayaran slot yang belum selesai. Selesaikan atau tunggu sampai kedaluwarsa, lalu coba lagi.",
+  "petSlotPaymentExpired": "Pembayaran kedaluwarsa. Coba lagi.",
+  "petSlotPaymentProcessing": "Pembayaran diterima dan sedang diproses. Hubungi CS jika slot belum bertambah.",
+  "petSlotRenewSheetTitle": "Perpanjang slot",
+  "petSlotRenewSheetNote": "Ditambah {days} hari dari tanggal berakhir sekarang.",
+  "@petSlotRenewSheetNote": {
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "petSlotRenewRowRange": "{from} → {to}",
+  "@petSlotRenewRowRange": {
+    "placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}
+  },
+  "petSlotRenewSuccess": "Slot diperpanjang sampai {date}",
+  "@petSlotRenewSuccess": {
+    "placeholders": {"date": {"type": "String"}}
+  },
+  "petSlotSelectTitle": "Pilih hewan yang tetap aktif",
+  "petSlotSelectNote": "Kamu punya {n} slot. Hewan yang tidak dipilih jadi hanya-baca sampai slot ditambah.",
+  "@petSlotSelectNote": {
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotSelectCount": "{selected} / {total} dipilih",
+  "@petSlotSelectCount": {
+    "placeholders": {"selected": {"type": "int"}, "total": {"type": "int"}}
+  },
+  "petSlotSelectSaved": "Pilihan disimpan",
+  "petSlotLoadError": "Gagal memuat slot hewan",
+  "petSlotStatusActive": "Aktif",
+  "petReadonlyBlockTitle": "Slot {name} sudah berakhir",
+  "@petReadonlyBlockTitle": {
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "petReadonlyBlockBody": "Perpanjang slot untuk lanjut mencatat. Kamu tetap bisa melihat dan membagikan catatan {name}.",
+  "@petReadonlyBlockBody": {
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "petReadonlyHealthCount": "{n} catatan",
+  "@petReadonlyHealthCount": {
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotHealthTitleNamed": "Catatan Kesehatan · {name}",
+  "@petSlotHealthTitleNamed": {
+    "placeholders": {"name": {"type": "String"}}
+  },
   "petDeleteConfirmBodyOther": "Diary, milestone, dan catatan kesehatan {name} akan dihapus permanen. Postinganmu tetap ada. Hewan lain tidak terpengaruh, dan slot {name} bisa dipakai lagi.",
   "@petDeleteConfirmBodyOther": {
     "placeholders": {

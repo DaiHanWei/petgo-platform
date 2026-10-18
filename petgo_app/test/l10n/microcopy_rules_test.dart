@@ -136,6 +136,8 @@ const _sameInBothLocales = {
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',
   'major', 'small', 'legend', 'no', 'm', 's', 'l',
+  // V1.4.0 multi-pet Story 2.4（D-5 名额来源标签「Level」）：新增文案对照表规定两语同写，印尼语直接借用 level。
+  'level',
   // SI 单位符号：中英印尼三语写法完全相同（`m` 已在上面那行）。
   // 距离文案 `{km} km`（V1.3.0 batch-b1 Story 1.2）两个 locale 只差小数点分隔符，
   // 而那个差异落在**数值**里、由 NumberFormat 按 locale 产出，不在这个字符串里。

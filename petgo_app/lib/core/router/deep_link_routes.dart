@@ -40,6 +40,9 @@ class DeepLinkRoutes {
   /// 获客成本已经沉没，只差把他们直接送到这一页。
   static const String createPetProfile = '/profile/create';
 
+  /// 名额管理页（V1.4.0 multi-pet Story 2.4 · K1：两类名额到期通知的落点）。与 `kPetSlotsRoute` 同值。
+  static const String petSlots = '/me/pet-slots';
+
   /// Feed（D3 内容钩子落点）。**分支根，必须 `go` 不能 `push`**，见 [shellTabRoots]。
   static const String feedHome = '/home';
 
@@ -57,6 +60,7 @@ class DeepLinkRoutes {
   /// - `PET_BIRTHDAY` → 「+发布」预选成长日历。
   /// - `COMPANION_ANNIVERSARY` → 成长档案 Tab。
   /// - `MILESTONE_NODE` → 里程碑列表页（壳）。
+  /// - `PET_SLOT_EXPIRING` / `PET_SLOT_EXPIRED` → 名额管理页（V1.4.0 multi-pet Story 2.4 · K1）。
   ///
   /// 其它/空 → 通知中心兜底。
   static String pushPayloadToLocation(String? type, String? targetRef, {bool commentAnchor = false}) {
@@ -71,6 +75,11 @@ class DeepLinkRoutes {
         return growthArchive;
       case 'MILESTONE_NODE':
         return milestoneList;
+      case 'PET_SLOT_EXPIRING':
+      case 'PET_SLOT_EXPIRED':
+        // 名额到期提醒 / 已到期（V1.4.0 multi-pet Story 2.4 · K1）：后端 targetRef 恒空 → 必须在
+        // 「无 targetRef → 通知中心」短路之前；落名额管理页（续租 / 新租都在那里）。
+        return petSlots;
       case 'NAME_RESET':
         // 名称违规重置（内容审核 cm-4）：单一 NAME_RESET 类型，targetRef 区分昵称 vs 宠物名。
         // 宠物名 targetRef=cardToken → 宠物档案编辑页（V1 单宠物自解析，不拼 token 入路径）；

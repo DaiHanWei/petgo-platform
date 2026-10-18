@@ -26,6 +26,8 @@ import '../domain/milestone_titles.dart';
 import '../data/milestone_celebration_reporter.dart';
 import 'widgets/milestone_celebration.dart';
 import '../data/pet_list_repository.dart';
+import '../../../core/network/problem_detail.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 
 /// 健康记录列表页 `p-health-list`（Story 7.2 · FR-45B/45C · UX-DR10）。结构化记录（可编辑）+ 问诊存档
 /// （🏥 只读）混排，`editable` 区分可点。新增/编辑结构化记录；创建 VACCINE/DEWORM 联动里程碑第四路径。
@@ -134,11 +136,20 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     final petAsync = watchEffectivePetId(ref);
     final petId = petAsync.value;
     final async = petId == null ? null : ref.watch(healthListProvider(petId));
+    // V1.4.0 multi-pet Story 2.4 · AC5.8（E3）：多宠时标题带宠物名；当前宠物只读时「+」/「Tambah catatan」带锁、点了弹 E1。
+    final pets = ref.watch(petListProvider).value ?? const <PetListItem>[];
+    PetListItem? currentPet;
+    for (final p in pets) {
+      if (p.id == petId) currentPet = p;
+    }
+    final readOnly = currentPet?.isReadOnly ?? false;
     return Scaffold(
       backgroundColor: AppColors.cream2,
       // 0711：AppBar 右上「+」入口（与底部整宽按钮双入口，取代原 FAB）。
       appBar: AppBar(
-        title: Text(l10n.healthListTitle),
+        title: Text(pets.length > 1 && currentPet != null
+            ? l10n.petSlotHealthTitleNamed(currentPet.name)
+            : l10n.healthListTitle),
         actions: [
           // 🔴 DEP-1 闭合（2026-08-21）：Health 让出底栏 Tab 位给 Toko 后，
           //    「发起问诊」失去全部界面入口——本页此前只**展示**问诊存档（_HealthCat CONSULT），
@@ -152,7 +163,9 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
           ),
           IconButton(
             key: const ValueKey('healthAddTop'),
-            icon: const Icon(Icons.add, color: AppColors.ink),
+            icon: readOnly
+                ? const _LockedIcon(icon: Icons.add, key: ValueKey('healthAddTopLocked'))
+                : const Icon(Icons.add, color: AppColors.ink),
             onPressed: () => _openForm(context, ref),
           ),
           const SizedBox(width: 4),
@@ -173,7 +186,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
         },
         data: (items) {
           _handleFocusOnce(items);
-          return _dataView(context, ref, l10n, items);
+          return _dataView(context, ref, l10n, items, readOnly: readOnly);
         },
       ),
     );
@@ -184,8 +197,9 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
-    List<HealthListItem> items,
-  ) {
+    List<HealthListItem> items, {
+    bool readOnly = false,
+  }) {
     return Column(
       children: [
         Expanded(
@@ -224,7 +238,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
             ],
           ),
         ),
-        _bottomAddBar(context, ref, l10n),
+        _bottomAddBar(context, ref, l10n, readOnly: readOnly),
       ],
     );
   }
@@ -243,6 +257,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
   );
 
   /// 6 类分类卡网格（app 六 type 一一对应；最近日期前端按 items 聚合，无则「Belum ada」）。
+  /// V1.4.0 multi-pet Story 2.4：UI 稿 E3 的「{n} catatan」条数口径**未采用**（单宠用户不得有变化，code review #5，待确认）。
   Widget _categoryGrid(
     BuildContext context,
     WidgetRef ref,
@@ -341,7 +356,8 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     return latest;
   }
 
-  Widget _bottomAddBar(BuildContext context, WidgetRef ref, AppLocalizations l10n) => SafeArea(
+  Widget _bottomAddBar(BuildContext context, WidgetRef ref, AppLocalizations l10n,
+          {bool readOnly = false}) => SafeArea(
     top: false,
     child: Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -351,7 +367,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
         child: FilledButton.icon(
           key: const ValueKey('healthAddBottom'),
           onPressed: () => _openForm(context, ref),
-          icon: const Icon(Icons.add),
+          icon: Icon(readOnly ? Icons.lock_outline : Icons.add),
           label: Text(l10n.healthAddTitle),
         ),
       ),
@@ -565,6 +581,9 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     HealthListItem? existing,
     String? presetType,
   }) async {
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 新增前端先拦（不发请求），弹 E1。
+    // 打开**已有**记录不拦（AD-8：查看永不受限，code review #4）——拦在表单的保存 / 删除上。
+    if (existing == null && !guardPetWritable(context, ref)) return;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -630,6 +649,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
+    // V1.4.0 multi-pet Story 2.4（code review #4）：只读宠物的已有记录可看，保存时才弹 E1。
+    if (!guardPetWritable(context, ref)) return;
     final name = _name.text.trim();
     if (_type == 'CUSTOM' && name.isEmpty) {
       ScaffoldMessenger.of(
@@ -679,9 +700,12 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       // 每存一次都弹一次，带奖杯的措辞让人误以为又解锁了一个节点。真解锁走上面的庆祝层，
       // 这里静默即可（表单关闭 + 列表新增一条已是足够反馈）。**别再加回"顺带提一句"的提示。**
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
+        // V1.4.0 multi-pet Story 2.4 · AC5.6：后端兜底 409 `pet-read-only` → 统一弹 E1，不报保存失败。
+        final pd = e is DioException ? ProblemDetail.fromDioException(e) : null;
+        if (pd != null && handlePetReadOnly(context, ref, pd)) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.healthSaveError)));
       }
     }
@@ -761,6 +785,7 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   }
 
   Future<void> _delete() async {
+    if (!guardPetWritable(context, ref)) return;
     setState(() => _busy = true);
     try {
       final petId = await readRequestPetId(ref);
@@ -930,4 +955,28 @@ bool mayUnlockHealthMilestone(String type, MilestoneList list) {
   final sPrereqsDone = ['S1', 'S2', 'S3', 'S4', 'S5'].every(completed);
   final lulus = sPrereqsDone && (uncompleted('S16') || uncompleted('S9'));
   return direct || lulus;
+}
+
+/// 「带锁」的图标（E3：只读时右上「+」叠一个小锁）。
+class _LockedIcon extends StatelessWidget {
+  const _LockedIcon({super.key, required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 26,
+        height: 26,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(child: Icon(icon, color: AppColors.muted)),
+            const Positioned(
+              right: -2,
+              bottom: -2,
+              child: Icon(Icons.lock, size: 12, color: AppColors.ink2),
+            ),
+          ],
+        ),
+      );
 }

@@ -45,7 +45,12 @@ class DiaryHeader extends StatelessWidget {
     this.onOpenMilestones,
     this.insightsEntryAnchor,
     this.readOnly = false,
+    this.hideEditButton = false,
   });
+
+  /// 当前宠物只读（V1.4.0 multi-pet Story 2.4 · AC5.2 / B4）：**只**隐藏编辑铅笔；入口两栏、里程碑、分享照常。
+  /// 与访客态 [readOnly]（整块移除入口网格）是两回事，默认 false = 改动前外观。
+  final bool hideEditButton;
 
   /// 综合入口卡的**位置锚点**（V1.3.0 Story 5.4）。
   ///
@@ -115,7 +120,7 @@ class DiaryHeader extends StatelessWidget {
               titleAction!,
               const SizedBox(width: 8),
             ],
-            if (!readOnly)
+            if (!readOnly && !hideEditButton)
               _iconBtn(
                 key: const ValueKey('editProfileButton'),
                 onTap: onEditProfile,

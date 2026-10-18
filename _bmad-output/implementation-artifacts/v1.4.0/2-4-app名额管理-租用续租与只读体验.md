@@ -1,6 +1,6 @@
 # Story 2.4: App——名额管理、租用续租与只读体验
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 multi-pet · 分支 `feat/1.4.0-multi-pet`
 > 口径优先级：`decision-log.md` ② 节 > `多宠物/1-4-0多宠物prd.md` > `architecture-v1.4.0-multi-pet-delta.md` > UI 稿 `多宠物/ui-1-4-0-multi-pet-integrated-v1.html`（定稿，A4 / B4 / D1 ~ D15 / E1 ~ E3 / K1）（均在 `_bmad-output/planning-artifacts/v1.4.0/`）；新增文案取 `多宠物/1-4-0多宠物-新增文案对照表.md`。
@@ -70,6 +70,7 @@ so that 名额与只读状态对我是透明的。
 3. `pet_readonly_banner_shown`：B4 横幅首次出现（每次进入该宠物 Diary Tab 一次），属性无 PII（不带宠物名）。
 4. `pet_readonly_renew_tapped`：B4 / E1「续租」点击，属性 `source`（`banner` / `block_sheet`）。
 5. `test/analytics/v112_events_test.dart` 的 `allowedPrefixes`（:217 起）加 `'pet_slot_'`、`'pet_readonly_'`（写注释说明是新模块入表，照现有条目格式；若 1.5 已为 `pet_slot_full_shown` 加过 `pet_slot_` 则只补 `pet_readonly_`）。事件经 `Analytics.capture`，属性走 `scrub`。
+   〔T0〕1.5 实际入表的是更宽的 `'pet_'`（注释已写明「宠物 / 宠物名额」模块），已覆盖 `pet_slot_*` / `pet_readonly_*` 四个新事件 → 本 story **不改**前缀表（不重复登记、不放宽后缀）。
 
 **AC8 — 文案（arb，EN / ID 逐条）** `[L0]`
 1. 新键一律 `petSlot*` / `petReadonly*` 前缀（已 grep：`app_en.arb` / `app_id.arb` 现无此前缀键）；同时加进 `lib/l10n/app_id.arb` 与 `app_en.arb`，带 `@key` 占位符描述；`{price}` / `{days}` 取后端，不写死（对照表说明）。
@@ -135,16 +136,16 @@ so that 名额与只读状态对我是透明的。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：1.5 / 2.1 / 2.2 / 2.3 已合入；读 1.5 的 `petListProvider` / `currentPetIdProvider` / 切换器 / A4 占位实际实现
-- [ ] **T1** `features/pet_slot/`：`data/pet_slot_repository.dart`（四个接口 + `ApiPaths` 常量）、`domain/`（`PetSlotOverview`、`PetSlotRental`、`PetSlotPurchaseStatus`）、`petSlotOverviewProvider`
-- [ ] **T2** 名额管理页 D1 ~ D4 / D15 + 路由 `/me/pet-slots` + 接通 A1 / A4（AC1）
-- [ ] **T3** `PayChannelPicker` 可选数量 / 自定义条目区；`runKeepsakePurchase` 可选 `onQrAborted`（AC2.1 / AC2.5，其他调用点零改动）
-- [ ] **T4** 租用流程 D5 ~ D10b、续租 D11 / D12（AC2 / AC3）
-- [ ] **T5** 改选抽屉 D13 / D14（AC4）
-- [ ] **T6** 只读：锁标、B4 横幅、`openPetSlotRenewal`、E1 `showPetReadonlyBlockSheet` + `handlePetReadOnly`、各入口接入、E2 / E3（AC5）
-- [ ] **T7** 通知中心 K1 + 深链（AC6）
-- [ ] **T8** 埋点 + 命名守卫前缀（AC7）；arb 两份（AC8）
-- [ ] **T9** `flutter analyze` + 相关测试；Android 模拟器演示 D2 / D5 / E1；Completion Notes 标「L2 待本地验收」（云端跑不了模拟器）
+- [x] **T0 开工核对**：1.5 / 2.1 / 2.2 / 2.3 已合入；读 1.5 的 `petListProvider` / `currentPetIdProvider` / 切换器 / A4 占位实际实现
+- [x] **T1** `features/pet_slot/`：`data/pet_slot_repository.dart`（四个接口 + `ApiPaths` 常量）、`domain/`（`PetSlotOverview`、`PetSlotRental`、`PetSlotPurchaseStatus`）、`petSlotOverviewProvider`〔T0：`PetSlotOverview` 1.5 已建在 `data/pet_slot_repository.dart`，按其注释在原处追加字段；`PetSlotRental` / `PetSlotPurchaseStatus` 放 `domain/pet_slot_purchase.dart`〕
+- [x] **T2** 名额管理页 D1 ~ D4 / D15 + 路由 `/me/pet-slots` + 接通 A1 / A4（AC1）
+- [x] **T3** `PayChannelPicker` 可选数量 / 自定义条目区；`runKeepsakePurchase` 可选 `onQrAborted`（AC2.1 / AC2.5，其他调用点零改动）
+- [x] **T4** 租用流程 D5 ~ D10b、续租 D11 / D12（AC2 / AC3）
+- [x] **T5** 改选抽屉 D13 / D14（AC4）
+- [x] **T6** 只读：锁标、B4 横幅、`openPetSlotRenewal`、E1 `showPetReadonlyBlockSheet` + `handlePetReadOnly`、各入口接入、E2 / E3（AC5）
+- [x] **T7** 通知中心 K1 + 深链（AC6）
+- [x] **T8** 埋点 + 命名守卫前缀（AC7）；arb 两份（AC8）
+- [ ] **T9** `flutter analyze` + 相关测试 ✅；Android 模拟器演示 D2 / D5 / E1 ⏳（L2 待本地验收，云端跑不了模拟器）
 
 ## Dev Notes
 
@@ -198,6 +199,7 @@ so that 名额与只读状态对我是透明的。
 ### 测试
 
 **验证层级**
+- 〔T0〕仓库测试目录与 features 平行、不带 `features/` 前缀（1.5 已用 `test/pet_slot/`）：下列 `test/features/pet_slot/*` 实际落在 `test/pet_slot/*`、`test/features/notify/*` 落在 `test/notify/*`；续租抽屉 / 改选抽屉用例并入 `test/pet_slot/pet_slot_page_test.dart`（经页面真实打开抽屉），`pet_readonly_block_test.dart` 另含 E2 / E3 页面接入用例。
 - **L0（云端可跑）**：
   - `test/features/pet_slot/pet_slot_overview_test.dart`：`PetSlotOverview.fromJson`（构成、rentals 顺序、`daysLeft`）。
   - `test/features/pet_slot/pet_slot_page_test.dart`（widget）：D1 / D2 / D3 / D4 四态的关键文案与按钮可用性；D15 重试重取；`rentable = 0` 主按钮禁用。
@@ -229,10 +231,120 @@ so that 名额与只读状态对我是透明的。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- 基线（改动前，`feat/1.4.0-multi-pet` @ 7388a1ca）：`flutter analyze` → No issues found；`flutter test` 基线 3493 通过 / 1 跳过（1.5 记录）。
+- 首轮全量：唯一失败为 `test/l10n/microcopy_rules_test.dart` D-3（`petSlotSourceLevel` EN / ID 同为「Level」）→ 对照表 D-5 规定两语同写，按该测试的既定扩展方式把 `level` 登记进 `_sameInBothLocales`（带注释），未放宽判据。
+- 改动后：`flutter analyze` → No issues found；`flutter test` 全量 → 3550 通过 / 1 跳过 / 0 失败（+57）。
+- code review 修复后：`flutter analyze` → **No issues found**；`flutter test` 全量 → **3557 通过 / 1 跳过 / 0 失败**（再 +7）。
 
 ### Completion Notes List
 
+**L1/L2 待本地验收**：Android 模拟器演示 D2 / D5 / E1（连 stag 后端 + 真登录）、PawCoin 租 1 个 → D9、续租两条 → D12、改选 → D14、只读宠物 Diary Tab 横幅 + 健康「+」弹 E1、通知中心两类卡片点击直达名额管理页，以及 UI 稿逐屏还原度打分（≥ 95%）——云端 headless 跑不了，需本地验收。本 story **只 App，后端零改动**，无 L1 测试；**无 Flyway 迁移**（`check-flyway-versions.sh origin/main` OK，241 个迁移）。
+
+**T0 核对结果**（与 1.5 / 2.1 / 2.2 / 2.3 已提交代码）：
+- 后端端点 / DTO 与本文件一致：`GET /api/v1/pet-slots/me`（`PetSlotOverview` 1.4 的 11 个字段 + 2.2 末尾追加 `readOnlyCount / shortBy / renewableMax / rentals[]{token,index,source,startsAt,expiresAt,daysLeft}`）；`POST /pet-slots/me/rentals` `{quantity, channel}`、`POST /pet-slots/me/renewals` `{rentalTokens, channel}`，均强制 `Idempotency-Key` 头（≤ 80 字符，缺失 422），响应与 `KeepsakePurchaseResponse` 同形（`unlocked / payment / payload / purchaseToken`）；`GET /pet-slots/me/purchases/{purchaseToken}` → `{status, expiresAt}`（`expiresAt` 仅 PAID 时有）；`PUT /pet-profiles/me/active-selection` `{petIds}` → 最新宠物列表。channel 线格式 `PAWCOIN` / `QRIS`（复用 `HdPayChannel.wire`）。
+- ProblemDetail：`pet-read-only`（扩展成员 `petId`）、`pet-slot-rent-unavailable`（`rentable` [+ `renewableMax`]）、`pet-slot-renew-invalid`、`pet-selection-not-needed`；购买状态除 PENDING / PAID / FAILED / EXPIRED 外还有 `ORPHAN_PAID` / `OVERPAID`（2.2 复审新增）。
+- App 侧：`petListProvider` / `currentPetIdProvider` / `effectivePetIdProvider` / `PetSwitcher`（锁标已做，AC5.1 只核对）/ 「我的」页 Hewanku 锁标与「Kelola ›」（已指向 `/me/pet-slots`）/ A4 抽屉 / `/me/pet-slots` 占位页（同路由同文件替换）与本文件一致；`PetSlotOverview` 1.5 建在 `data/pet_slot_repository.dart`（注释要求 2.4 原处追加），故未迁到 `domain/`；`v112_events_test.dart` 1.5 已入表 `'pet_'`（覆盖本 story 四个事件）。本文件已就 T1 / AC7.5 / 测试路径加〔T0〕标注。
+
+**实现要点**
+- 数据层：`ApiPaths.petSlotRentals / petSlotRenewals / petSlotPurchase(token) / petActiveSelection`；`PetSlotRepository.rent / renew / purchaseStatus / changeSelection`；`newPetSlotIdempotencyKey()`（`Random.secure` 128 bit，`petslot-` + 32 hex，每次点主按钮生成一次）；`PetSlotOverview` 追加四字段（均有默认值，1.5 构造调用零改动）+ `hasRentals` / `needsSelection`；`ProblemDetail.extensions`（标准字段外的顶层键，默认空 map，既有调用零影响）。
+- 名额管理页 `PetSlotPage(action)`：进页 post-frame 失效摘要 + 宠物列表；名额卡（大数字 = `petCount`，后缀 D-2，5 格：正常宠物在前、只读在后依次占格，来源按 默认 → 等级 → 月租；已拥有未占用「Kosong · 来源」+ 加号；其余「Bisa disewa」+ 锁）→ Slot sewa（≤ 3 天金色 D-13）→ Hewanku（状态胶囊 Aktif / 锁 Hanya-baca；`needsSelection` 时「Ubah pilihan ›」+ D-16）→ D-14 → 吸底主按钮（`rentable = 0` 置灰 D-18）+ 有月租时「Perpanjang」；D15 整页 `EmptyState(cloud_off)` + `commonRetry` 重取两 provider。`?action=rent|renew`：拿到最新摘要后自动弹 D5 / D11（P-5：renew 无生效中月租 → D5、数量默认 `shortBy`）。
+- `PayChannelPicker`：可选 `PayQuantityConfig quantity`（步进器 + 「{n} × {price}」总价行）与 `itemsArea / itemsTotal / itemsLineLabel`（续租勾选列表）；给了后 PawCoin 余额判断 / 扣币数 / QRIS 金额 / 主按钮全部按总价；都不传时 build 路径与改动前相同（5 处既有调用零改动，其测试全绿）。
+- `runKeepsakePurchase` 加可选 `onQrAborted`（原样透传 `showQrPaymentSheet(onAborted:)`，4 处既有调用不传）。
+- 租用 / 续租 `runPetSlotRent / runPetSlotRenew`（`pet_slot_purchase_flow.dart`）：`onChannelConfirmed` 生成幂等键 + `pet_slot_rent_started`；`pollPaid` PAID → true、EXPIRED / FAILED → `QrPaymentAborted('EXPIRED' / 'FAILED')`、ORPHAN_PAID / OVERPAID → `QrPaymentAborted('PAID_NEEDS_SUPPORT')`；`purchasePurpose: 'PET_SLOT_RENT'`、`cashPriceIdr = 单价 × 个数`；结束后**不论成败**失效摘要 + 宠物列表（409 `pet-slot-rent-unavailable` / `pet-slot-renew-invalid` 由 flow 报 D10 文案，这里负责刷新）；成功 `pet_slot_rent_succeeded` + D9 / D12 SnackBar（日期取购买查询 `expiresAt`，PawCoin 成交后补查一次，取不到按今天 + days 近似）；D10b 过期 SnackBar 只在名额流程补（通用面板未改）。
+- 续租抽屉 `PetSlotRenewPaySheet`：默认勾前 `renewableMax` 个生效中月租，超上限的行可见不可勾，全不勾主按钮禁用；行「{原到期 d MMM} → {新到期 d MMM yyyy}」，新到期 = 原到期 + days。
+- 改选 `ActiveSelectionSheet`：把手 → 标题 D-29 → D-30 → 勾选行（头像 / 名字 / 物种 · 年龄）→「{n} / {total} dipilih」+ Simpan；默认勾 ACTIVE；勾满后其余不可勾；未选满禁用；成功关抽屉 + 失效 + Toast D-32；失败抽屉保持 + 顶部 Toast（`petProfileSaveFailed` + `commonRetry` 动作）。
+- 只读：`pet_readonly_block.dart`（`currentPetIfLoaded`（只在 provider 已存在时读，不额外发请求）/ `guardPetWritable` / `showPetReadonlyBlockSheet`（E1，`showConfirmSheet` 紫锁，不放改选入口）/ `handlePetReadOnly`（409 → E1 + 失效宠物列表，返回 bool）/ `openPetSlotRenewal`（`pet_readonly_renew_tapped {source}` + push `/me/pet-slots?action=renew`））；`PetReadonlyBanner`（B4，挂载一次报 `pet_readonly_banner_shown`，属性为空）。
+- 接入点：Diary `_ArchiveBody`（切换器之后、`DiaryHeader` 之前插 B4；`DiaryHeader.hideEditButton` 隐藏铅笔，访客态 `readOnly` 语义不变）；档案编辑页保存（前端拦 + 409 兜底）；健康记录页（标题多宠带名、只读「+」/「Tambah catatan」带锁、新增类 `_openForm` 拦（含分类卡预选、`?add=` 预弹）；已有记录可打开查看，表单保存 / 删除时拦；表单保存 409 兜底）；里程碑页（Header 锁标、未完成徽章改弹 E1）；Kenali Hewanmu 付费项（KTP 选卡款建卡、Tailsonality 无结果开测 / 结果页空态开测 / 重测、护照快照 `_buy`、登机牌 `_buy`）；`runKeepsakePurchase` 的 409 `pet-read-only` 分支（护照 / 登机牌 / Tailsonality 解锁的后端兜底）。发 Diary / 打卡未接（3.3）。
+- 通知中心（K1）：图标表 `PET_SLOT_EXPIRING` 金色 `hourglass_bottom_rounded` / `PET_SLOT_EXPIRED` coral `lock_clock_rounded`；`_typeLabel / _typeBody` 两类型与 OPS 共用 `_storedTitle / _storedBody`（原 `_opsTitle / _opsBody` 改名，trim 空回退 `notifyTypeSystem / notifyBodySystem`；`_serverTitle` 名字已被「后端文案条目」占用，故用 `_stored*`），注释措辞已更新；埋点映射显式登记两类型；`DeepLinkRoutes.pushPayloadToLocation` 固定目标 switch 加两类型 → `/me/pet-slots`（在无 targetRef 短路之前，推送点开走同一映射）；`notification_item.dart` 类型注释补两类型。
+- 文案：AC8 表 42 键 + 3 个额外键 `petSlotPaymentProcessing`（见待确认 6）、`petSlotRentOnlyN` / `petSlotRentPendingPayment`（code review #3，见待确认 12），EN / ID 两份（仓库只有这两个 arb），已 `flutter gen-l10n`；价格统一 `formatIdrAmount`，日期 `formatDayMonthYear / formatDayMonth`（`d MMM yyyy` 按 App 语言）。
+
+**埋点口径名 → 实际名**：`pet_slot_rent_started`（同名，`{count, is_renewal, channel}`，channel = `pawcoin` / `qris`）；PRD `pet_slot_rent_paid` → **`pet_slot_rent_succeeded`**（后缀白名单无 `_paid`）；`pet_readonly_banner_shown`（同名，无属性）；`pet_readonly_renew_tapped`（同名，`{source: banner | block_sheet}`）。均经 `Analytics.capture`、无宠物名。
+
+**L0 测试（均已跑、全绿）**
+- 新增：`test/pet_slot/pet_slot_overview_test.dart`（11）、`test/pet_slot/pet_slot_page_test.dart`（25，含 code review 补的幂等键 4 例 + rentable 1 提示：D1 / 价格不写死 / D2 / D3 / D4 / D15；D5 PawCoin + 埋点 / 步进器上下限 / D10b / D10 / OVERPAID / QRIS 到账 / 409 rent-unavailable 刷新；续租默认勾选 + 一次付款 + D12 / 超上限不可勾 + 全不勾禁用 / 409 renew-invalid；`?action=` 三分流；改选成功 / 失败）、`test/shared/pay_channel_picker_quantity_test.dart`（6，含 PawCoin 超余额回落 2 例）、`test/keepsake/keepsake_pay_flow_test.dart`（4：onQrAborted 透传 / 不传不变 / 409 pet-read-only → E1 / 余额不足照旧）、`test/pet_slot/pet_readonly_block_test.dart`（12：guard / E1 两按钮 / handlePetReadOnly / B4 横幅续租去向；E3 标题 / 分类卡仍为日期 / 锁 / 拦截 / 已有记录可看、保存删除才拦；E2 锁标 / 徽章拦截 / 正常宠物不变）、`test/notify/notification_center_pet_slot_test.dart`（4），共用桩 `test/pet_slot/pet_slot_fakes.dart`。
+- 补：`test/profile/growth_archive_state_branch_test.dart`（+2：B4 只读横幅在页头前 + 铅笔隐藏 + 埋点无宠物名 / 正常宠物零变化）。
+- 改：`test/l10n/microcopy_rules_test.dart`（`_sameInBothLocales` 登记 `level`，见 Debug Log）。
+- `test/analytics/v112_events_test.dart`、`test/l10n/*`、`test/pet_slot/add_pet_flow_test.dart` 及既有 picker / 通知 / 健康 / 里程碑 / 付费流程测试全绿；全量 3557 / 1 skip / 0 fail（code review 修复后）。
+- L1：无（本 story 不碰后端）。
+
+**与本文件文字的偏差**
+1. `PetSlotOverview` 留在 `data/pet_slot_repository.dart`（1.5 现状 + 其注释），`PetSlotRental` / `PetSlotPurchaseStatus` 在 `domain/pet_slot_purchase.dart`（T1 写三者都在 `domain/`）。
+2. 测试路径为 `test/pet_slot/*` / `test/notify/*`（仓库惯例，非 `test/features/*`）；续租 / 改选抽屉用例并入页面测试。
+3. AC7.5 不改前缀表（1.5 的 `'pet_'` 已覆盖）。
+4. `handlePetReadOnly` 返回同步 `bool`，E1 不 await（调用方据返回值短路，不阻塞）；名字取不到（列表未加载）时 E1 用空名字照弹。
+5. `openPetSlotRenewal` 的 D11 / D5 分流放在名额管理页拿到最新摘要之后做（`?action=renew`），而不是 helper 内先取摘要——结果与 AC5.3 相同，且不会用到过期缓存。
+6. 名额卡大数字取 `petCount`（UI 稿 D3「3 / 2 slot dipakai」= 宠物数 / 名额；D4 稿件 4 只却写 5/5 视为稿件笔误）。
+7. 已拥有未占用格文案「Kosong · {来源}」（稿 D4「Kosong」下带「Sewa」来源）。
+8. B4 横幅位于切换器之后、`DiaryHeader`（含标题行）之前；稿 E1 画面里标题行在横幅之上，但标题行属于 `DiaryHeader`，按 AC5.2「`DiaryHeader` 之前」实现。
+9. 健康记录页：已有记录可打开查看，保存 / 删除时才弹 E1（code review #4）；E3 分类卡「{n} catatan」**未采用**，保持最近日期（code review #5，见待确认 2），`petReadonlyHealthCount` 键已加但暂未使用。
+10. `runKeepsakePurchase` 新增 409 `pet-read-only` 分支（AC5.6 后端兜底的统一落点），对 4 处既有调用而言只改变该新错误类型的提示（原会报「支付失败」）。
+11. 改选失败提示用 `petProfileSaveFailed`（「Gagal menyimpan, silakan coba lagi」）+ `commonRetry` 动作——D10 原文是「支付失败」，用在改选上语义不对。
+
+### code review 结果（2026-10-18，均已修复）
+
+1. **CONFIRMED · 重复扣款 / 重复出码**：每次确认都新生成 `Idempotency-Key`，重试永远不重放。→ 新增 `PetSlotAttemptStore`（`petSlotAttemptStoreProvider`）：按「种类 + 数量（或排序后的名额 token）+ 渠道」记键，跨重试沿用；终态（PAID 成交 / EXPIRED / FAILED / ORPHAN_PAID / OVERPAID）或 4xx 业务拒绝（408 / 429 除外）后清掉；网络错误 / 5xx / 关面板未付保留。测试：网络超时后重试同键、成交后再买新键、换数量新键、QRIS 关面板再付同键、409 后新键。
+2. **CONFIRMED · 选 PawCoin 后金额涨过余额仍按 PawCoin 确认**：`PayChannelPicker` 显式选了 PawCoin 但 `!enoughCoin` → 回落 QRIS（与界面一致；减回余额内恢复 PawCoin）。不传新参数的既有调用里该分支只会在价格重取变高时触发，行为同样与界面一致。测试 +2。
+3. **PLAUSIBLE · 待付单占位导致 409 一直报「支付失败」**：`runKeepsakePurchase` 加可选 `onProblem`（返回 true = 调用方已提示；既有调用不传）；名额新租读 409 扩展成员 `rentable`：> 0 →「只能租 {n} 个」，= 0 →「还有未完成的名额付款」；配合 #1，409 后换新键、同意图网络重试重放。测试 +1（改写 1）。
+4. **PLAUSIBLE · 只读宠物点已有健康记录被 E1 挡住查看**：`_openForm` 只对新增拦；表单 `_save` / `_delete` 入口拦。测试 +1。
+5. **单宠回归 · 分类卡改成条数**：恢复「最近日期」原显示（代码与改动前一致），条数口径转待确认 2。测试改写 1。
+6. **Minor · 页面销毁后 `ref.invalidate` 抛错**：流程结束的刷新改为 `context.mounted` 时才做（页面已走则下次进页 `_enter` 自会重取）；其余异步后用到的依赖均在开头取好。
+
+### 待确认
+
+1. **只读后的「续租」去向**（AC5.3 / P-5）：按拍板——有生效中月租 → D11；无 → D5 新租、数量默认 `shortBy`。
+2. **E3 分类卡计数**：UI 稿 E3 / 对照表 E-3 为「{n} catatan」，但改了会让单宠 ACTIVE 用户也变样 → 按 code review 保持现状（最近日期），文案键 `petReadonlyHealthCount` 已备；是否只对只读 / 多宠页改为条数，请产品确认。
+10. **AD-8 与本文件 AC5.5 的冲突**：AD-8「查看永不受限」；本文件把 KTP 创建 / Tailsonality 开测 / 护照快照 / 登机牌购买入口列为 E1 拦截——这些都是写 / 付费动作（查看已有卡 / 结果 / 护照 / 登机牌不拦），按本文件保留；健康记录「点已有记录」已改为可看（拦在保存 / 删除）。
+11. **幂等键存放**：`petSlotAttemptStoreProvider` 为进程内、非 autoDispose；换账号不清（键是随机串，后端按账号隔离幂等键，旧键在新账号下只是一个新键）。
+12. **409 `pet-slot-rent-unavailable` 两条新文案**（`petSlotRentOnlyN` / `petSlotRentPendingPayment`，EN + ID，本 agent 拟稿，**不在对照表**），待产品定稿。只提示、不自动下调步进器上限（页面的 `rentable` 不含待付单，记住后端值会在付款窗过后变成过期限制）。
+3. **对照表未列的 4 个键**（`petSlotStatusActive` / `petSlotHealthTitleNamed` / `petSlotQuantityTotal` / `petSlotRenewRowRange`）按本文件提议值，交本地运营审核。
+4. **D-24 数量**：`{n}`（多租时不写死 +1）。
+5. **D-5 来源标签**：按对照表「Level」（稿 D1 说明为「Dari level」）。
+6. **ORPHAN_PAID / OVERPAID 的 App 文案**（2.2 待确认移交）：保守按「付款已收到、处理中 / 请联系客服」新增 `petSlotPaymentProcessing`（ID「Pembayaran diterima dan sedang diproses. Hubungi CS jika slot belum bertambah.」/ EN「Payment received and being processed. Contact support if your slot doesn't appear.」，本 agent 拟稿，**不在对照表**），只在 QRIS 轮询到这两态时出 SnackBar；PawCoin 路径后端会整笔回滚 409，不会出现这两态。待产品定稿。
+7. **SnackBar 日期**：D9 / D12 的 `{date}` 用设备本地时区格式化 `expiresAt`（后端 2.3 通知按 WIB）；跨日边界时两者可能差一天，L2 时留意。
+8. **E1 名字回落**：409 兜底时宠物列表未加载 → E1 标题为「Slot  sudah berakhir」（名字空），是否需要换无名字的通用文案请确认。
+9. **B4 横幅曝光口径**：每次横幅挂载报一次（切宠物 / 重进 Diary 页面重建时）；IndexedStack 保活下仅切底部 Tab 回来不重报。
+
 ### File List
 
+新增：
+- `petgo_app/lib/features/pet_slot/domain/pet_slot_purchase.dart`
+- `petgo_app/lib/features/pet_slot/presentation/pet_slot_purchase_flow.dart`
+- `petgo_app/lib/features/pet_slot/presentation/active_selection_sheet.dart`
+- `petgo_app/lib/features/pet_slot/presentation/pet_slot_pet_row.dart`
+- `petgo_app/lib/features/pet_slot/presentation/pet_readonly_block.dart`
+- `petgo_app/lib/features/pet_slot/presentation/pet_readonly_banner.dart`
+- `petgo_app/test/pet_slot/pet_slot_fakes.dart`
+- `petgo_app/test/pet_slot/pet_slot_overview_test.dart`
+- `petgo_app/test/pet_slot/pet_slot_page_test.dart`
+- `petgo_app/test/pet_slot/pet_readonly_block_test.dart`
+- `petgo_app/test/shared/pay_channel_picker_quantity_test.dart`
+- `petgo_app/test/keepsake/keepsake_pay_flow_test.dart`
+- `petgo_app/test/notify/notification_center_pet_slot_test.dart`
+
+修改（lib）：
+- `petgo_app/lib/core/network/api_paths.dart`、`petgo_app/lib/core/network/problem_detail.dart`
+- `petgo_app/lib/core/router/app_router.dart`、`petgo_app/lib/core/router/deep_link_routes.dart`
+- `petgo_app/lib/shared/widgets/pay_channel_picker.dart`
+- `petgo_app/lib/features/keepsake/presentation/keepsake_pay_flow.dart`
+- `petgo_app/lib/features/pet_slot/data/pet_slot_repository.dart`、`.../presentation/pet_slot_page.dart`（占位页替换）、`.../presentation/add_pet_flow.dart`
+- `petgo_app/lib/features/notify/presentation/notification_center_page.dart`、`petgo_app/lib/features/notify/domain/notification_item.dart`
+- `petgo_app/lib/features/profile/presentation/{growth_archive_page,health_list_page,milestone_list_page,pet_profile_edit_page,pet_insights_page,id_card_page}.dart`、`.../widgets/diary_header.dart`
+- `petgo_app/lib/features/pet_passport/presentation/pet_passport_page.dart`、`petgo_app/lib/features/boarding_pass/presentation/boarding_pass_detail_page.dart`
+- `petgo_app/lib/features/tailsonality/presentation/{tailsonality_results_page,tailsonality_retake}.dart`
+- `petgo_app/lib/l10n/app_en.arb`、`petgo_app/lib/l10n/app_id.arb`
+
+修改（test）：
+- `petgo_app/test/profile/growth_archive_state_branch_test.dart`（+2 用例）
+- `petgo_app/test/l10n/microcopy_rules_test.dart`（同形词表登记 `level`）
+
+文档：
+- `_bmad-output/implementation-artifacts/v1.4.0/2-4-app名额管理-租用续租与只读体验.md`（〔T0〕标注、状态、任务勾选、Dev Agent Record）
+
 ### Change Log
+
+- 2026-10-18：code review 修复 6 项（幂等键跨重试、PawCoin 超余额回落 QRIS、409 rent-unavailable 具体提示、只读健康记录可查看、分类卡恢复最近日期、销毁后不刷新）。analyze 0 issue；test 3557 / 1 skip / 0 fail；仍 review（L1/L2 待本地验收）。
+- 2026-10-18：实现 Story 2.4（名额管理页 D1 ~ D4 / D15、`PayChannelPicker` 数量步进器 / 条目区、租用 D5 ~ D10b、续租 D11 / D12、改选 D13 / D14、只读 B4 / E1 ~ E3 与各写入口拦截、通知中心 K1 两类到期 + 深链、四个埋点、43 个新文案键）。L0 绿（analyze 0 issue；test 3550 / 1 skip / 0 fail），Status → review；L1/L2 待本地验收（L2 模拟器演示与还原度打分）。

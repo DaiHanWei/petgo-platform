@@ -19,6 +19,7 @@ import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/user_state.dart';
 import '../../content/domain/home_refresh_provider.dart';
+import '../../pet_slot/presentation/pet_readonly_banner.dart';
 import '../data/milestone_repository.dart';
 import '../data/pet_recommendation_repository.dart';
 import '../data/current_pet_provider.dart';
@@ -489,6 +490,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final stats = ref.watch(archiveStatsProvider(widget.petId)).asData?.value;
+    // V1.4.0 multi-pet Story 2.4 · AC5.2（B4）：当前宠物只读 → 页头前插横幅、隐藏编辑铅笔；其余照常可看可分享。
+    final petReadOnly = ref.watch(petListProvider.select((a) =>
+        a.value?.any((p) => p.id == widget.petId && p.isReadOnly) ?? false));
     _bumpIfViewportNotScrollable();
     return RefreshIndicator(
       color: AppColors.mint,
@@ -511,6 +515,10 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             widget.switcher!,
             const SizedBox(height: 10),
           ],
+          if (petReadOnly) ...[
+            const PetReadonlyBanner(),
+            const SizedBox(height: 12),
+          ],
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
           // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
           DiaryHeader(
@@ -528,6 +536,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             // 迁移引导蒙层的高亮框位置从这里量（Story 5.4）。只量位置，不改行为。
             insightsEntryAnchor: _insightsEntryAnchor,
             onEditProfile: widget.onEditProfile,
+            hideEditButton: petReadOnly,
             // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
             // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由
             // 与它只差一个字母，替换会误伤（AD-A17.7）。

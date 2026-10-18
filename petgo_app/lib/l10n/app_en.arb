@@ -4034,6 +4034,156 @@
   "@petSlotLimitOk": {"description": "V1.4.0 multi-pet A-7: pet limit reached sheet only button"},
   "petSlotPageTitle": "Manage Pets",
   "@petSlotPageTitle": {"description": "V1.4.0 multi-pet D-1: pet slot management page title"},
+  "petReadonlyBannerTitle": "Slot has expired",
+  "@petReadonlyBannerTitle": {"description": "V1.4.0 multi-pet B-1 (Story 2.4)"},
+  "petReadonlyBannerBody": "Renew to keep recording.",
+  "@petReadonlyBannerBody": {"description": "V1.4.0 multi-pet B-2 (Story 2.4)"},
+  "petSlotRenew": "Renew",
+  "@petSlotRenew": {"description": "V1.4.0 multi-pet B-3 (Story 2.4)"},
+  "petSlotUsedSuffix": "/ {total} slots used",
+  "@petSlotUsedSuffix": {
+    "description": "V1.4.0 multi-pet D-2 (Story 2.4)",
+    "placeholders": {"total": {"type": "int"}}
+  },
+  "petSlotCapNote": "Up to 5 pets per account",
+  "@petSlotCapNote": {"description": "V1.4.0 multi-pet D-3 (Story 2.4)"},
+  "petSlotSourceDefault": "Default",
+  "@petSlotSourceDefault": {"description": "V1.4.0 multi-pet D-4 (Story 2.4)"},
+  "petSlotSourceLevel": "Level",
+  "@petSlotSourceLevel": {"description": "V1.4.0 multi-pet D-5 (Story 2.4)"},
+  "petSlotSourceRent": "Rented",
+  "@petSlotSourceRent": {"description": "V1.4.0 multi-pet D-6 (Story 2.4)"},
+  "petSlotCellAvailable": "Available to rent",
+  "@petSlotCellAvailable": {"description": "V1.4.0 multi-pet D-7 (Story 2.4)"},
+  "petSlotCellEmpty": "Empty",
+  "@petSlotCellEmpty": {"description": "V1.4.0 multi-pet D-8 (Story 2.4)"},
+  "petReadonlyBadge": "Read-only",
+  "@petReadonlyBadge": {"description": "V1.4.0 multi-pet D-9 (Story 2.4)"},
+  "petSlotRentalsSection": "Rented slots",
+  "@petSlotRentalsSection": {"description": "V1.4.0 multi-pet D-10 (Story 2.4)"},
+  "petSlotRentalName": "Rented slot {n}",
+  "@petSlotRentalName": {
+    "description": "V1.4.0 multi-pet D-11 (Story 2.4)",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotRentalEnds": "Ends {date}",
+  "@petSlotRentalEnds": {
+    "description": "V1.4.0 multi-pet D-12 (Story 2.4)",
+    "placeholders": {"date": {"type": "String"}}
+  },
+  "petSlotRentalEndsSoon": "Ends {date} · {n} days left",
+  "@petSlotRentalEndsSoon": {
+    "description": "V1.4.0 multi-pet D-13 (Story 2.4)",
+    "placeholders": {"date": {"type": "String"}, "n": {"type": "int"}}
+  },
+  "petSlotNoAutoRenewNote": "Rented slots don't renew automatically. We'll remind you 3 days before they end.",
+  "@petSlotNoAutoRenewNote": {"description": "V1.4.0 multi-pet D-14 (Story 2.4)"},
+  "petSlotRentCta": "Rent a slot · {price} / {days} days",
+  "@petSlotRentCta": {
+    "description": "V1.4.0 multi-pet D-15 (Story 2.4)",
+    "placeholders": {"price": {"type": "String"}, "days": {"type": "int"}}
+  },
+  "petReadonlyShortNote": "You're {n} slot short. Choose which pets stay active — the others become read-only until you renew.",
+  "@petReadonlyShortNote": {
+    "description": "V1.4.0 multi-pet D-16 (Story 2.4)",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotChangeSelection": "Change selection",
+  "@petSlotChangeSelection": {"description": "V1.4.0 multi-pet D-17 (Story 2.4)"},
+  "petSlotMaxReached": "You've reached the 5-slot limit",
+  "@petSlotMaxReached": {"description": "V1.4.0 multi-pet D-18 (Story 2.4)"},
+  "petSlotRentSheetTitle": "Rent a pet slot",
+  "@petSlotRentSheetTitle": {"description": "V1.4.0 multi-pet D-19 (Story 2.4)"},
+  "petSlotItemName": "Pet slot",
+  "@petSlotItemName": {"description": "V1.4.0 multi-pet D-20 (Story 2.4)"},
+  "petSlotUnitPrice": "{price} / slot · {days} days",
+  "@petSlotUnitPrice": {
+    "description": "V1.4.0 multi-pet D-21 (Story 2.4)",
+    "placeholders": {"price": {"type": "String"}, "days": {"type": "int"}}
+  },
+  "petSlotRentSheetNote": "Valid for {days} days from payment. Doesn't renew automatically.",
+  "@petSlotRentSheetNote": {
+    "description": "V1.4.0 multi-pet D-22 (Story 2.4)",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "petSlotQuantityLabel": "Number of slots",
+  "@petSlotQuantityLabel": {"description": "V1.4.0 multi-pet D-23 (Story 2.4)"},
+  "petSlotQuantityTotal": "{n} × {price}",
+  "@petSlotQuantityTotal": {
+    "description": "V1.4.0 multi-pet D5 total row (Story 2.4)",
+    "placeholders": {"n": {"type": "int"}, "price": {"type": "String"}}
+  },
+  "petSlotRentSuccess": "+{n} pet slot · valid until {date}",
+  "@petSlotRentSuccess": {
+    "description": "V1.4.0 multi-pet D-24 (Story 2.4)",
+    "placeholders": {"n": {"type": "int"}, "date": {"type": "String"}}
+  },
+  "petSlotRentOnlyN": "You can rent only {n} slot(s) right now. Try again with fewer.",
+  "@petSlotRentOnlyN": {
+    "description": "V1.4.0 multi-pet (Story 2.4 code review #3, not in copy table): 409 pet-slot-rent-unavailable with rentable > 0",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotRentPendingPayment": "You still have a slot payment in progress. Finish it or wait until it expires, then try again.",
+  "@petSlotRentPendingPayment": {"description": "V1.4.0 multi-pet (Story 2.4 code review #3, not in copy table): 409 pet-slot-rent-unavailable with rentable = 0 (pending QRIS order holds the slots)"},
+  "petSlotPaymentExpired": "Payment expired. Try again.",
+  "@petSlotPaymentExpired": {"description": "V1.4.0 multi-pet D-25 (Story 2.4)"},
+  "petSlotPaymentProcessing": "Payment received and being processed. Contact support if your slot doesn't appear.",
+  "@petSlotPaymentProcessing": {"description": "V1.4.0 multi-pet (story 2.4 ORPHAN_PAID / OVERPAID, not in copy table) (Story 2.4)"},
+  "petSlotRenewSheetTitle": "Renew slot",
+  "@petSlotRenewSheetTitle": {"description": "V1.4.0 multi-pet D-26 (Story 2.4)"},
+  "petSlotRenewSheetNote": "Adds {days} days from the current end date.",
+  "@petSlotRenewSheetNote": {
+    "description": "V1.4.0 multi-pet D-27 (Story 2.4)",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "petSlotRenewRowRange": "{from} → {to}",
+  "@petSlotRenewRowRange": {
+    "description": "V1.4.0 multi-pet D11 row (Story 2.4)",
+    "placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}
+  },
+  "petSlotRenewSuccess": "Slot renewed until {date}",
+  "@petSlotRenewSuccess": {
+    "description": "V1.4.0 multi-pet D-28 (Story 2.4)",
+    "placeholders": {"date": {"type": "String"}}
+  },
+  "petSlotSelectTitle": "Choose pets to keep active",
+  "@petSlotSelectTitle": {"description": "V1.4.0 multi-pet D-29 (Story 2.4)"},
+  "petSlotSelectNote": "You have {n} slots. Pets you don't choose become read-only until you add slots.",
+  "@petSlotSelectNote": {
+    "description": "V1.4.0 multi-pet D-30 (Story 2.4)",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotSelectCount": "{selected} / {total} selected",
+  "@petSlotSelectCount": {
+    "description": "V1.4.0 multi-pet D-31 (Story 2.4)",
+    "placeholders": {"selected": {"type": "int"}, "total": {"type": "int"}}
+  },
+  "petSlotSelectSaved": "Selection saved",
+  "@petSlotSelectSaved": {"description": "V1.4.0 multi-pet D-32 (Story 2.4)"},
+  "petSlotLoadError": "Couldn't load pet slots",
+  "@petSlotLoadError": {"description": "V1.4.0 multi-pet D-33 (Story 2.4)"},
+  "petSlotStatusActive": "Active",
+  "@petSlotStatusActive": {"description": "V1.4.0 multi-pet D1 status (Story 2.4)"},
+  "petReadonlyBlockTitle": "{name}'s slot has expired",
+  "@petReadonlyBlockTitle": {
+    "description": "V1.4.0 multi-pet E-1 (Story 2.4)",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "petReadonlyBlockBody": "Renew the slot to keep recording. You can still view and share {name}'s records.",
+  "@petReadonlyBlockBody": {
+    "description": "V1.4.0 multi-pet E-2 (Story 2.4)",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "petReadonlyHealthCount": "{n} records",
+  "@petReadonlyHealthCount": {
+    "description": "V1.4.0 multi-pet E-3 (Story 2.4)",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "petSlotHealthTitleNamed": "Health Records · {name}",
+  "@petSlotHealthTitleNamed": {
+    "description": "V1.4.0 multi-pet E3 title (Story 2.4)",
+    "placeholders": {"name": {"type": "String"}}
+  },
   "petDeleteConfirmBodyOther": "{name}'s Diary, milestones and health records will be deleted permanently. Your posts stay. Other pets aren't affected, and {name}'s slot can be used again.",
   "@petDeleteConfirmBodyOther": {
     "description": "V1.4.0 multi-pet C-1: delete confirm sheet body when it is not the last pet",

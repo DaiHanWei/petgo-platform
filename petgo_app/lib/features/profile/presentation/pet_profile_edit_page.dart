@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:date_picker_plus/date_picker_plus.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -5,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
+import '../../../core/network/problem_detail.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import '../../../core/theme/colors.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../../core/theme/spacing.dart';
@@ -111,6 +114,12 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：正在编辑的那只是只读 → 前端先拦（不发请求），弹 E1。
+    final editing = _editingPetIfLoaded();
+    if (editing != null && editing.isReadOnly) {
+      showPetReadonlyBlockSheet(context, ref, editing);
+      return;
+    }
     setState(() => _submitting = true);
     try {
       await ref.read(profileRepositoryProvider).update(
@@ -128,11 +137,25 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       // V1.4.0 multi-pet：名字 / 头像也显示在宠物列表（我的页 / Diary 切换器）里。
       ref.invalidate(petListProvider);
       if (mounted) context.go('/profile');
-    } catch (_) {
-      if (mounted) _toast(l10n.petProfileSaveFailed);
+    } catch (e) {
+      if (!mounted) return;
+      // 后端兜底 409 `pet-read-only`（AC5.6）→ 统一弹 E1，不报保存失败。
+      final pd = e is DioException ? ProblemDetail.fromDioException(e) : null;
+      if (pd != null && handlePetReadOnly(context, ref, pd)) return;
+      _toast(l10n.petProfileSaveFailed);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// 正在编辑的那只在宠物列表里的项（列表未加载 → null，放行由后端兜底）。
+  PetListItem? _editingPetIfLoaded() {
+    final id = _petId;
+    if (id == null || !ref.exists(petListProvider)) return null;
+    for (final p in ref.read(petListProvider).value ?? const <PetListItem>[]) {
+      if (p.id == id) return p;
+    }
+    return null;
   }
 
   /// 删除档案（bug 20260702-237 / 决策 F18）：二次确认 → DELETE /pet-profiles/me →

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
@@ -75,6 +76,8 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
 
   Future<void> _buy(BoardingPassDetail d) async {
     if (_buying) return;
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 付费 / 新增类入口先弹 E1（不发请求）。
+    if (!guardPetWritable(context, ref)) return;
     final l10n = AppLocalizations.of(context);
     final price = ref.read(keepsakePricingProvider).value?.boardingPass;
     if (price == null) return;

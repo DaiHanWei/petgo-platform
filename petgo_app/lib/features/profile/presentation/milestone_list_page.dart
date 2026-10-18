@@ -10,6 +10,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import '../data/current_pet_provider.dart';
 import '../data/milestone_celebration_reporter.dart';
 import '../data/pet_list_repository.dart';
@@ -206,7 +207,8 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
             children: [
               // 0711 milestone-with-starter 顺序：宠物卡 → 新手任务卡 → 分级徽章。
               // bug 20260722-351：移除「全部完成/未全部完成」筛选切换钮，直接展示全部分组。
-              _Header(data: data),
+              // V1.4.0 multi-pet Story 2.4 · AC5.7（E2）：只读宠物 Header 头像带锁标，页面其余不变、可查看。
+              _Header(data: data, readOnly: _currentReadOnly(petId)),
               const SizedBox(height: AppSpacing.lg),
               const _NewbieCard(),
               const SizedBox(height: AppSpacing.lg),
@@ -220,13 +222,20 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       ),
     );
   }
+
+  bool _currentReadOnly(int? petId) =>
+      petId != null &&
+      (ref.watch(petListProvider).value?.any((p) => p.id == petId && p.isReadOnly) ?? false);
 }
 
 /// 顶部宠物信息 + 总进度。
 class _Header extends StatelessWidget {
-  const _Header({required this.data});
+  const _Header({required this.data, this.readOnly = false});
 
   final MilestoneList data;
+
+  /// 当前宠物只读（E2）：头像左下加锁标。
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -247,18 +256,39 @@ class _Header extends StatelessWidget {
         children: [
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: data.petAvatarUrl == null
-                      ? Container(
-                          color: AppColors.mintTint,
-                          child: const Icon(Icons.pets_rounded, color: AppColors.mint),
-                        )
-                      : AppImage.widget(data.petAvatarUrl!, fit: BoxFit.cover, thumbWidth: 240),
-                ),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: data.petAvatarUrl == null
+                          ? Container(
+                              color: AppColors.mintTint,
+                              child: const Icon(Icons.pets_rounded, color: AppColors.mint),
+                            )
+                          : AppImage.widget(data.petAvatarUrl!, fit: BoxFit.cover, thumbWidth: 240),
+                    ),
+                  ),
+                  if (readOnly)
+                    Positioned(
+                      left: -3,
+                      bottom: -2,
+                      child: Container(
+                        key: const ValueKey('milestoneHeaderLock'),
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: AppColors.ink2,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(Icons.lock, size: 10, color: Colors.white),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -585,6 +615,8 @@ class _Badge extends ConsumerWidget {
           _showCelebration(context, ref, item);
           return;
         }
+        // V1.4.0 multi-pet Story 2.4 · AC5.5（E2）：只读宠物点未完成徽章不再进打卡 / 健康记录，改弹 E1。
+        if (!guardPetWritable(context, ref)) return;
         // 未完成健康类：一律有去处（AD-A6.5）。有记录类型可填的进健康记录页并预选，
         // 没有的（第一次看兽医 M5 / G-M1）进真人兽医问诊入口 —— 不是 AI 分诊。
         switch (healthDestinationFor(item.code)) {

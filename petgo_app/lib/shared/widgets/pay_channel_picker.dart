@@ -18,6 +18,37 @@ String formatIdrAmount(int v) {
   return b.toString();
 }
 
+/// [PayChannelPicker] 的可选数量步进器（V1.4.0 multi-pet Story 2.4 · D5 拍板）。
+///
+/// 给了才渲染「{label}」步进器 + 「{n} × {单价}  {总价}」总价行，PawCoin 余额判断 / 扣币数 / QRIS 金额 /
+/// 主按钮金额全部改按**总价**（单价 × 数量）。文案由调用方传入（本组件在 `shared/`，不认识业务）。
+class PayQuantityConfig {
+  const PayQuantityConfig({
+    required this.label,
+    required this.max,
+    required this.lineLabel,
+    this.min = 1,
+    this.initial = 1,
+    this.onChanged,
+    this.decrementKey = const ValueKey('payQtyMinus'),
+    this.incrementKey = const ValueKey('payQtyPlus'),
+  });
+
+  /// 步进器左侧标签（如「Jumlah slot」）。
+  final String label;
+  final int min;
+  final int max;
+  final int initial;
+
+  /// 总价行左侧文案，入参为当前数量（如 `n => '$n × Rp5.000'`）。
+  final String Function(int quantity) lineLabel;
+
+  /// 数量变化回调（调用方据此记下本次要买几个）。初始值不回调。
+  final ValueChanged<int>? onChanged;
+  final Key decrementKey;
+  final Key incrementKey;
+}
+
 /// 一次性付费的「选渠道」抽屉主体（KTP 高清图 Story 6.3 抽出；V1.3.2 Story 3.2 起 Tailsonality / 护照 / 登机牌复用）。
 ///
 /// 放在 `showModalBottomSheet` 里，确认时 `pop(HdPayChannel)`，下滑关闭 → null。
@@ -35,6 +66,10 @@ class PayChannelPicker extends StatefulWidget {
     required this.confirmLabel,
     this.confirmKey = const ValueKey('hdPayConfirm'),
     this.retryKey = const ValueKey('hdPriceRetry'),
+    this.quantity,
+    this.itemsArea,
+    this.itemsTotal,
+    this.itemsLineLabel,
   });
 
   final Widget header;
@@ -49,6 +84,16 @@ class PayChannelPicker extends StatefulWidget {
   final Key confirmKey;
   final Key retryKey;
 
+  /// 可选数量步进器（V1.4.0 multi-pet Story 2.4）。**null = 与改动前逐像素一致**（既有 5 处调用不传）。
+  final PayQuantityConfig? quantity;
+
+  /// 可选的自定义条目区（V1.4.0 multi-pet Story 2.4 · D11 续租勾选列表），放在说明与渠道行之间。
+  /// 给了它时金额改用 [itemsTotal]（调用方按勾选算好；null / ≤ 0 = 没选，禁确认），
+  /// 并在条目区下方渲染总价行（左 [itemsLineLabel]、右总价）。与 [quantity] 互斥（同时给时以条目区为准）。
+  final Widget? itemsArea;
+  final int? itemsTotal;
+  final String? itemsLineLabel;
+
   @override
   State<PayChannelPicker> createState() => _PayChannelPickerState();
 }
@@ -57,14 +102,39 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
   /// 用户显式点选的渠道；null=按余额够不够自动定（价格加载完成后才有意义）。
   HdPayChannel? _picked;
 
+  /// 当前数量（只在 [PayChannelPicker.quantity] 给了时有意义）。
+  late int _qty = _clampQty(widget.quantity?.initial ?? 1);
+
+  int _clampQty(int v) {
+    final q = widget.quantity;
+    if (q == null) return v;
+    final hi = q.max < q.min ? q.min : q.max;
+    return v.clamp(q.min, hi);
+  }
+
+  void _setQty(int v) {
+    final next = _clampQty(v);
+    if (next == _qty) return;
+    setState(() => _qty = next);
+    widget.quantity?.onChanged?.call(next);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final priceAsync = widget.price;
-    final int? priceIdr = priceAsync.value;
+    final int? unitIdr = priceAsync.value;
+    final qtyCfg = widget.itemsArea == null ? widget.quantity : null;
+    // 本次应付总额：条目区 → 调用方算好的总价（没选 = null）；数量步进器 → 单价 × 数量；否则 = 价格本身。
+    final int? priceIdr = widget.itemsArea != null
+        ? (unitIdr == null || (widget.itemsTotal ?? 0) <= 0 ? null : widget.itemsTotal)
+        : (qtyCfg != null && unitIdr != null ? unitIdr * _qty : unitIdr);
     final enoughCoin = priceIdr != null && widget.balance >= priceIdr;
-    final HdPayChannel selected =
-        _picked ?? (enoughCoin ? HdPayChannel.pawcoin : HdPayChannel.qris);
+    // 显式选过 PawCoin、但金额随后涨过余额（数量 + / 勾选更多名额 / 价格重取）→ 回落 QRIS：
+    // 与界面一致（PawCoin 行此时置灰、不显示选中），确认结果不能还是 PawCoin（Story 2.4 code review #2）。
+    final HdPayChannel selected = _picked == HdPayChannel.pawcoin && !enoughCoin
+        ? HdPayChannel.qris
+        : (_picked ?? (enoughCoin ? HdPayChannel.pawcoin : HdPayChannel.qris));
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
@@ -89,6 +159,17 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
             Text(widget.body,
                 style: const TextStyle(color: AppColors.ink2, fontSize: 13, height: 1.5)),
             const SizedBox(height: 18),
+            if (widget.itemsArea != null) ...[
+              widget.itemsArea!,
+              const SizedBox(height: 10),
+              _totalRow(widget.itemsLineLabel ?? '', priceIdr),
+              const SizedBox(height: 14),
+            ] else if (qtyCfg != null) ...[
+              _quantityRow(qtyCfg),
+              const SizedBox(height: 10),
+              _totalRow(qtyCfg.lineLabel(_qty), priceIdr),
+              const SizedBox(height: 14),
+            ],
             if (priceAsync.hasError) ...[
               Center(
                 child: PriceLoadRetry(key: widget.retryKey, onRetry: widget.onRetryPrice),
@@ -139,6 +220,63 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
       ),
     );
   }
+
+  /// 数量步进器行（D5「Jumlah slot  − 1 +」）。
+  Widget _quantityRow(PayQuantityConfig q) {
+    Widget btn(Key key, IconData icon, VoidCallback? onTap) => InkWell(
+          key: key,
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: onTap == null ? AppColors.cream2 : AppColors.mintTint,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Icon(icon, size: 18, color: onTap == null ? AppColors.muted : AppColors.mint),
+          ),
+        );
+    return Row(
+      children: [
+        Expanded(
+          child: Text(q.label,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+        ),
+        btn(q.decrementKey, Icons.remove, _qty > q.min ? () => _setQty(_qty - 1) : null),
+        SizedBox(
+          width: 40,
+          child: Text('$_qty',
+              key: const ValueKey('payQtyValue'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        ),
+        btn(q.incrementKey, Icons.add, _qty < q.max ? () => _setQty(_qty + 1) : null),
+      ],
+    );
+  }
+
+  /// 总价行（「{n} × Rp5.000    Rp10.000」）。
+  Widget _totalRow(String left, int? total) => Container(
+        key: const ValueKey('payTotalRow'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.cream2,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(left, style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
+            ),
+            Text(total == null ? '…' : 'Rp${formatIdrAmount(total)}',
+                key: const ValueKey('payTotalAmount'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+          ],
+        ),
+      );
 }
 
 class _PayMethodTile extends StatelessWidget {

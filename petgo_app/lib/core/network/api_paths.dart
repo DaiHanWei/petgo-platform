@@ -162,6 +162,16 @@ class ApiPaths {
   /// 宠物名额摘要（V1.4.0 multi-pet Story 1.4）：点「+」时先取它判 A4 / A4b。仅 role=USER。
   static const String petSlotsMe = '$base/pet-slots/me';
 
+  /// 月租新租 / 续租下单（V1.4.0 multi-pet Story 2.2 · AC8；App 2.4 接入）：强制 `Idempotency-Key` 头。
+  static const String petSlotRentals = '$base/pet-slots/me/rentals';
+  static const String petSlotRenewals = '$base/pet-slots/me/renewals';
+
+  /// 月租购买状态（`pollPaid` 轮询）：PENDING / PAID / FAILED / EXPIRED（另有 ORPHAN_PAID / OVERPAID 交人工）。
+  static String petSlotPurchase(String purchaseToken) => '$base/pet-slots/me/purchases/$purchaseToken';
+
+  /// 改选「保持正常」的宠物（V1.4.0 multi-pet Story 2.1 · D13）：`{"petIds":[…]}`，返回最新宠物列表。
+  static const String petActiveSelection = '$base/pet-profiles/me/active-selection';
+
   /// 他人公开主页的**宠物列表**（V1.4.0 multi-pet Story 1.4）：数组，空数组 = 没有宠物。游客可读。
   static String userPublicPets(int userId) => '$base/users/$userId/pets';
 

@@ -10,6 +10,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import '../../profile/domain/id_card.dart';
 import '../domain/keepsake_purchase_result.dart';
 
@@ -36,6 +37,13 @@ enum KeepsakeFlowOutcome {
 ///
 /// 🔴 错误按 `ProblemDetail.typeSlug` 分流，**不要**「409 一律当余额不足」：
 /// `keepsake-already-unlocked` 也是 409，把它说成余额不足会让已付款用户去充值。
+/// V1.4.0 multi-pet Story 2.4 · AC5.6：409 `pet-read-only`（当前宠物刚变只读）→ 统一弹 E1 拦截抽屉，不报支付失败。
+///
+/// [onQrAborted]（V1.4.0 multi-pet Story 2.4 · AC2.5，可选）：原样透传给 `showQrPaymentSheet(onAborted:)` ——
+/// 只在 [pollPaid] 抛 `QrPaymentAborted`（付款已不可能完成）时回调；**不传 = 行为与改动前一致**（现有 4 处调用不传）。
+///
+/// [onProblem]（V1.4.0 multi-pet Story 2.4 code review #3，可选）：发起失败带 ProblemDetail 时先交给调用方，
+/// 返回 true = 调用方已给出提示（本流程不再报通用失败文案）；不传 / 返回 false = 照旧分流。
 Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   required BuildContext context,
   required WidgetRef ref,
@@ -45,6 +53,8 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   required String purchasePurpose,
   required int? Function() cashPriceIdr,
   void Function(HdPayChannel channel)? onChannelConfirmed,
+  void Function(QrPaymentAborted abort)? onQrAborted,
+  bool Function(ProblemDetail problem)? onProblem,
 }) async {
   int balance = 0;
   try {
@@ -83,7 +93,8 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
       toast(l10n.idCardHdPurchaseError);
       return KeepsakeFlowOutcome.notCompleted;
     }
-    final paid = await showQrPaymentSheet(context, payload: payload, orderRef: res.paymentRef, pollPaid: pollPaid);
+    final paid = await showQrPaymentSheet(context,
+        payload: payload, orderRef: res.paymentRef, pollPaid: pollPaid, onAborted: onQrAborted);
     if (paid) {
       // 投放归因：QRIS 现金到账（PawCoin 当场成交走上面的 unlocked 分支，不计——钱在充值时已计）。
       Analytics.capturePurchase(amountIdr: cashPriceIdr(), purpose: purchasePurpose, orderRef: res.paymentRef);
@@ -92,9 +103,13 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
     ref.invalidate(pawCoinProvider);
     return KeepsakeFlowOutcome.unlocked;
   } on DioException catch (e) {
-    switch (ProblemDetail.fromDioException(e)?.typeSlug) {
+    final pd = ProblemDetail.fromDioException(e);
+    if (pd != null && onProblem != null && onProblem(pd)) return KeepsakeFlowOutcome.notCompleted;
+    switch (pd?.typeSlug) {
       case 'keepsake-already-unlocked':
         return KeepsakeFlowOutcome.alreadyUnlocked;
+      case 'pet-read-only':
+        if (context.mounted) handlePetReadOnly(context, ref, pd!);
       case 'pawcoin-insufficient':
         toast(l10n.idCardHdInsufficientBalance);
       default:

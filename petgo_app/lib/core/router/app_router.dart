@@ -720,7 +720,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 名额管理页（V1.4.0 multi-pet Story 1.5 占位；Story 2.4 同路由替换为 D1 ~ D15）。
       // 🔒 挂在 /me 前缀下 → 自动进 _controlledLocations 受控名单（游客深链回首页）。
-      GoRoute(path: kPetSlotsRoute, builder: (c, s) => const PetSlotPage()),
+      // V1.4.0 multi-pet Story 2.4：?action=rent（A4「Sewa slot」）/ renew（B4 / E1「Perpanjang」）进页即弹抽屉。
+      GoRoute(
+          path: kPetSlotsRoute,
+          builder: (c, s) => PetSlotPage(action: s.uri.queryParameters['action'])),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
       GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),

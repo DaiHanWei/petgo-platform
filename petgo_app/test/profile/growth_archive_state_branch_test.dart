@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
@@ -426,6 +427,36 @@ void main() {
       SharedPreferences.setMockInitialValues({CurrentPetIdNotifier.prefKey: 99});
       await pump(tester);
       expect(title('Orenji'), findsOneWidget);
+    });
+
+    // ===== V1.4.0 multi-pet Story 2.4 · AC5.2（UI 稿 B4）=====
+    testWidgets('B4：当前宠物只读 → 页头前插只读横幅、编辑铅笔隐藏、上报 pet_readonly_banner_shown（无宠物名）',
+        (tester) async {
+      final events = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+      await pump(tester, list: const [
+        PetListItem(id: 1, name: 'Orenji', isDefault: true, status: PetListItem.statusReadOnly),
+        PetListItem(id: 2, name: 'Kopi'),
+      ]);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final banner = find.byKey(const ValueKey('petReadonlyBanner'));
+      expect(banner, findsOneWidget);
+      expect(find.text(l10n.petReadonlyBannerTitle), findsOneWidget);
+      expect(find.text(l10n.petReadonlyBannerBody), findsOneWidget);
+      expect(find.byKey(const ValueKey('petReadonlyBannerRenew')), findsOneWidget);
+      expect(tester.getRect(banner).bottom, lessThanOrEqualTo(tester.getRect(title('Orenji')).top),
+          reason: '横幅在 DiaryHeader 之前');
+      expect(find.byKey(const ValueKey('editProfileButton')), findsNothing);
+      final shown = events.where((e) => e.$1 == 'pet_readonly_banner_shown').toList();
+      expect(shown, hasLength(1));
+      expect(shown.single.$2?.values.contains('Orenji') ?? false, isFalse);
+    });
+
+    testWidgets('B4：正常宠物零变化（无横幅、铅笔在）', (tester) async {
+      await pump(tester);
+      expect(find.byKey(const ValueKey('petReadonlyBanner')), findsNothing);
+      expect(find.byKey(const ValueKey('editProfileButton')), findsOneWidget);
     });
   });
 }

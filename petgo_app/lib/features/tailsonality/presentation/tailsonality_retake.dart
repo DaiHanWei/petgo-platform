@@ -5,6 +5,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../domain/content/ts_dialog_copy.dart';
@@ -17,6 +18,8 @@ import 'widgets/ts_rich_text.dart';
 /// 免费、不限次、无任何次数提示（PRD §3.2）：确认文案取内容表 `kTsRetakeDialog`（内容设计 §2.6）→ 确认 →
 /// 发 `tailsonality_retake_confirmed` → 说明抽屉 →「Mulai Tes」→ 答题。取消什么都不发生。
 Future<void> startTailsonalityRetake(BuildContext context, WidgetRef ref) async {
+  // V1.4.0 multi-pet Story 2.4 · AC5.5：只读宠物不能重测（提交会被后端 409）→ 先弹 E1。
+  if (!guardPetWritable(context, ref)) return;
   final locale = Localizations.localeOf(context);
   final d = kTsRetakeDialog;
   final ok = await showConfirmSheet(

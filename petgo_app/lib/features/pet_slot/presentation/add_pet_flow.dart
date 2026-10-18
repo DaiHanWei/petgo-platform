@@ -9,7 +9,7 @@ import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/pay_channel_picker.dart' show formatIdrAmount;
 import '../data/pet_slot_repository.dart';
 
-/// 名额管理页路由（Story 1.5 占位；Story 2.4 在同一路由、同一文件里替换为 D1 ~ D15）。
+/// 名额管理页路由（Story 1.5 占位；Story 2.4 已在同一路由、同一文件里替换为 D1 ~ D15）。
 const String kPetSlotsRoute = '/me/pet-slots';
 
 /// 「添加宠物」唯一入口（V1.4.0 multi-pet Story 1.5 · AC4.1）：「我的」页与 Diary 切换器的「+」共用。
@@ -43,7 +43,7 @@ Future<void> startAddPet(BuildContext context, WidgetRef ref, {required String s
 }
 
 /// A4 名额已满抽屉（AC4.2）。弹出一次上报一次 `pet_slot_full_shown {source, action}`：
-/// 点主按钮「Sewa slot」→ `rent`（进名额管理页，Story 2.4 接通 D5 租用抽屉）；关闭 / 次按钮 → `close`。
+/// 点主按钮「Sewa slot」→ `rent`（进名额管理页并直接弹 D5 租用抽屉，Story 2.4 `?action=rent`）；关闭 / 次按钮 → `close`。
 Future<void> showPetSlotFullSheet(
   BuildContext context,
   PetSlotFullInfo info, {
@@ -71,7 +71,7 @@ Future<void> showPetSlotFullSheet(
     'source': source,
     'action': rent ? 'rent' : 'close',
   });
-  if (rent) router?.push(kPetSlotsRoute);
+  if (rent) router?.push('$kPetSlotsRoute?action=rent');
 }
 
 /// A4b 已达 5 只上限（AC4.3）：同一个确认抽屉，唯一按钮「Oke」。

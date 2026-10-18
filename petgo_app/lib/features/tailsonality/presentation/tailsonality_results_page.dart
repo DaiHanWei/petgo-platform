@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
@@ -119,6 +120,8 @@ class _TailsonalityResultsPageState extends ConsumerState<TailsonalityResultsPag
   /// 空态「Mulai Tes」：档案加载中会等一会儿，期间再点忽略（否则叠两层抽屉）；取不到给提示。
   Future<void> _startFromEmpty() async {
     if (_opening) return;
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 付费 / 新增类入口先弹 E1（不发请求）。
+    if (!guardPetWritable(context, ref)) return;
     _opening = true;
     final pet = await readPetForTailsonality(ref);
     _opening = false;

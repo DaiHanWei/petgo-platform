@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
@@ -79,6 +80,8 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
   }
 
   void _onStyleTap(IdCardStyle style) {
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 付费 / 新增类入口先弹 E1（不发请求）。
+    if (!guardPetWritable(context, ref)) return;
     // AD-12 / T-12：wire 值大写；非学生卡不带 card_variant 键。
     Analytics.capture('id_card_style_tapped', {
       'card_type': style.cardType,
