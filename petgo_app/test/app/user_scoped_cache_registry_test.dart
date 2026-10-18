@@ -30,6 +30,8 @@ const _mustReset = <String>[
   'mentionCandidatesProvider',
   // V1.3.2 batch-a
   'tailsonalityOwnerTypeProvider',
+  // V1.4.0 push-collect
+  'pushSettingsProvider',
 ];
 
 void main() {

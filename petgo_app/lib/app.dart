@@ -38,6 +38,7 @@ import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
+import 'package:tailtopia/features/notify/data/push_settings_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
@@ -386,5 +387,6 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
   ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）
   ref.invalidate(tailsonalityOwnerTypeProvider); // V1.3.2：Tailsonality 主人类型（账号级常驻）
+  ref.invalidate(pushSettingsProvider); // V1.4.0 ④：推送分类设置（账号级，换账号不得沿用上一账号的开关）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

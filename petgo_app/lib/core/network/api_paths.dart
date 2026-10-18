@@ -193,6 +193,9 @@ class ApiPaths {
   /// Tailsonality 主人四字母类型（V1.3.2 Story 2.5）：账号级 GET / PUT；未设置 → `{}`。仅 role=USER。
   static const String meTailsonalityOwnerType = '$base/me/tailsonality/owner-type';
 
+  /// V1.4.0 ④ Story 1.3：推送分类开关，GET / PATCH `{categories:{CODE:bool}}`（部分更新），仅 role=USER。
+  static const String mePushSettings = '$base/me/push-settings';
+
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
 

@@ -84,6 +84,7 @@ import '../../features/consult/presentation/vet_request_confirm_page.dart';
 import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
+import '../../features/notify/presentation/push_settings_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
@@ -1009,6 +1010,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
       // 二级设置页（Story 7.1 · F8）：语言/退出/注销。受控（/me 前缀，需登录）。
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
+      // V1.4.0 ④ Story 1.3：通知设置页（推送分类开关）。受控（/me 前缀）；shell 外顶层隐 Tab Bar。
+      GoRoute(path: PushSettingsPage.routePath, builder: (c, s) => const PushSettingsPage()),
       // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。

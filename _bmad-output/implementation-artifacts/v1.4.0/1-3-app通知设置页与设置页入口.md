@@ -1,6 +1,6 @@
 # Story 1.3: App 通知设置页与设置页入口
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 push-collect · 分支 `feat/1.4.0-push-collect`
 > 口径优先级：`decision-log.md` ④ 节 > `推送开关与收藏/1-4-0推送开关与收藏prd.md` > `architecture-v1.4.0-push-collect-delta.md` > UI 稿 `推送开关与收藏/ui-1-4-0-push-collect-integrated-v1.html`（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。跨分支契约以 `CROSS-STORY-DECISIONS.md`「2026-10-18 V1.4.0 四条线共用地基」节为准。
@@ -141,13 +141,13 @@ so that 我能自己决定收哪些推送。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：拉 1.1 实际提交，核对 `GET / PATCH /api/v1/me/push-settings` 的路径、请求体 `{categories:{CODE:bool}}`、响应 `{categories:[{code,enabled,lockable}]}`、9 个 code 字面量与顺序；`settings_page.dart` 行号与本文件「现状」表一致。有出入先改本文件并在 Completion Notes 记一句
-- [ ] **T1 数据层**：`ApiPaths.mePushSettings`、`domain/push_settings.dart`、`data/push_settings_repository.dart`、`pushSettingsProvider`；登记 `resetUserScopedCaches` + `_mustReset`（AC3）
-- [ ] **T2 通知设置页**：页面 + 路由 + 状态卡 + 4 组 9 行 + 乐观保存 + 骨架 / 失败态（AC4 ~ AC8）
-- [ ] **T3 设置页**：`_navRow` 加 `valueColor` / `valueDot`；「Notifikasi」改入口；删 `_onNotifToggle` / `_showOpenSettingsDialog`；`_notif` 改 `bool?`；加 `isNotificationGrantedForTest`（AC1 / AC2）
-- [ ] **T4 埋点**：两个事件 + 新建 `test/analytics/v140_push_collect_events_test.dart` 登记（AC9）
-- [ ] **T5 arb**：EN / ID 30 个键 + `flutter gen-l10n`（AC10）
-- [ ] **T6 测试**：见 Dev Notes「测试」L0 列表；`flutter analyze` + 指定测试绿；Completion Notes 标「L2 待本地验收」
+- [x] **T0 开工核对**：拉 1.1 实际提交，核对 `GET / PATCH /api/v1/me/push-settings` 的路径、请求体 `{categories:{CODE:bool}}`、响应 `{categories:[{code,enabled,lockable}]}`、9 个 code 字面量与顺序；`settings_page.dart` 行号与本文件「现状」表一致。有出入先改本文件并在 Completion Notes 记一句
+- [x] **T1 数据层**：`ApiPaths.mePushSettings`、`domain/push_settings.dart`、`data/push_settings_repository.dart`、`pushSettingsProvider`；登记 `resetUserScopedCaches` + `_mustReset`（AC3）
+- [x] **T2 通知设置页**：页面 + 路由 + 状态卡 + 4 组 9 行 + 乐观保存 + 骨架 / 失败态（AC4 ~ AC8）
+- [x] **T3 设置页**：`_navRow` 加 `valueColor` / `valueDot`；「Notifikasi」改入口；删 `_onNotifToggle` / `_showOpenSettingsDialog`；`_notif` 改 `bool?`；加 `isNotificationGrantedForTest`（AC1 / AC2）
+- [x] **T4 埋点**：两个事件 + 新建 `test/analytics/v140_push_collect_events_test.dart` 登记（AC9）
+- [x] **T5 arb**：EN / ID 30 个键 + `flutter gen-l10n`（AC10）
+- [x] **T6 测试**：见 Dev Notes「测试」L0 列表；`flutter analyze` + 指定测试绿；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -251,10 +251,41 @@ so that 我能自己决定收哪些推送。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- `flutter analyze` 零警告；`flutter gen-l10n` 已跑。
+- 指定 L0：`test/me/`、`test/notify/`、`test/analytics/`、`test/app/user_scoped_cache_registry_test.dart`、`test/l10n/microcopy_rules_test.dart` 全绿；另跑全量 `flutter test` 3432 例全绿（1 skipped 为存量）。
+- 未整文件 `dart format`，新代码手工对齐。
 
 ### Completion Notes List
 
+- **🔴 L2 待本地验收**：A1 / A2（系统设置关通知后返回设置页右值变红）、B1–B6 逐屏对照 UI 稿（还原度 ≥ 95%）、「Buka Pengaturan」→ 系统设置开启 → 返回卡片变紫、断网切换回弹 + Toast、同账号两台设备设置互相可见（PRD AC4）。本 story 无 L1。
+- T0 核对：1.1 实际接口与本 story 一致（路径 `/api/v1/me/push-settings`、`{categories:{CODE:bool}}`、`{categories:[{code,enabled,lockable}]}`、9 个 code 与顺序）。`settings_page.dart` 行号整体偏移 +3（`_onNotifToggle` 实际在 :93→:96 起），内容一致，不影响施工。
+- 拍板点复述：① 图标按 UI 稿（`cream2` 底 + `*_rounded` 实心）；② `push_category_toggled` 只在保存成功后报、`category` 小写；③「Hadiah」用 `redeem_rounded` gold / goldTint，3.1 对齐；④ 设置页 `_notif` 改 `bool?`，首帧不显示右值；⑤ 通知设置页 resume 也做 `record(fromScreen:'push_settings_page')` + `syncRegistration`；⑥ 新建 `test/analytics/v140_push_collect_events_test.dart`（`pushCollectInventory` 先两条）。
+- 实现中发现并修复：① `pushSettingsProvider` 加 `retry: (_, _) => null`（Riverpod 3 默认自动重试，失败时状态停在 `AsyncLoading`，B6 失败态要 40 秒后才出来；同仓库 bug 20261006-583 先例）；② 设置页 `_navRow` 右值加「最多占行宽 55%、超出省略」（`LayoutBuilder` 取行宽）——「Notifikasi sistem nonaktif」在 360dp 窄屏会把行顶出界；既有短右值外观不变。
+- **code-review 修复（CONFIRMED）**：①「Buka Pengaturan」改为**先 `requestPushPermission()`、没拿到再 `openPushSettings()`**——iOS 上从未申请过权限（跳过 F7 软引导，notDetermined）的 App 在系统设置里没有「通知」项，只开系统设置会让用户无路可开；已拒绝时 `request()` 立即返回 false 不打扰。（AC6.2 原文只写「调 `openPushSettings()`」，此为保守补强，见「待确认」）；② 设置页被通知设置页盖住时不在 resume 刷新（`ModalRoute.isCurrent`），避免两页同时 `record` 导致跃迁归因总记成 `settings_page`，返回时仍由 `push().then` 刷新。
+- code-review 未采纳（与 story 明文冲突）：失败态也显示状态卡（B6 明定失败态只有云图标 + 标题 + 按钮）；按 429 / 422 区分 Toast（AC7.3 明定任何异常同一 Toast）；抽公共组件（AD-14 / AC5.2 明定照抄常量不改设置页）；去掉 `_inFlight`（实现提示明定）。
+- **待确认**：AC6.2「Buka Pengaturan」由「直接打开系统设置」改为「先申请一次权限、未授权再打开系统设置」（理由见上）；如产品坚持只开系统设置，删 `_onOpenSystem` 里的 request 分支即可。
+
 ### File List
 
+- `petgo_app/lib/features/notify/domain/push_settings.dart`（新）
+- `petgo_app/lib/features/notify/data/push_settings_repository.dart`（新）
+- `petgo_app/lib/features/notify/presentation/push_settings_page.dart`（新）
+- `petgo_app/lib/features/me/presentation/settings_page.dart`（改：入口行、`_navRow` 右值色 / 红点 / 省略、删开关逻辑、测试注入）
+- `petgo_app/lib/features/notify/data/push_permission_providers.dart`（改：`requestPushPermission` 注释）
+- `petgo_app/lib/core/network/api_paths.dart`（改：`mePushSettings`）
+- `petgo_app/lib/core/router/app_router.dart`（改：`/me/settings/notifications`）
+- `petgo_app/lib/app.dart`（改：`resetUserScopedCaches` 登记 `pushSettingsProvider`）
+- `petgo_app/lib/l10n/app_en.arb` / `app_id.arb`（改：30 个 `pushSettings*` 键）
+- `petgo_app/test/notify/push_settings_test.dart`（新）
+- `petgo_app/test/notify/push_settings_page_test.dart`（新）
+- `petgo_app/test/analytics/v140_push_collect_events_test.dart`（新）
+- `petgo_app/test/me/settings_page_test.dart`（改：追加 4 例，原用例未改）
+- `petgo_app/test/app/user_scoped_cache_registry_test.dart`（改：`_mustReset` 加 `pushSettingsProvider`）
+
 ### Change Log
+
+- 2026-10-18：实现 Story 1.3（通知设置页 + 设置页入口 + 数据层 + arb + 埋点清单）；code-review 后修 2 项。状态 → review。
