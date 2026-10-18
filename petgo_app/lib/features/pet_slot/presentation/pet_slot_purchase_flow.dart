@@ -229,7 +229,7 @@ Future<PetSlotFlowOutcome> _runPetSlotPurchase(
     return PetSlotFlowOutcome.notCompleted;
   }
 
-  Analytics.capture('pet_slot_rent_succeeded', props());
+  Analytics.capture('pet_slot_rent_paid', props());
   // PawCoin 当场成交没有轮询结果：再查一次购买单拿到期日；取不到就按「今天 + days」近似（只用于提示）。
   var expiresAt = paidStatus?.expiresAt;
   final token = purchaseToken;

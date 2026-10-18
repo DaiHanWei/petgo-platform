@@ -461,6 +461,10 @@ void main() {
         // 已接住这条 Diary** 之后才报（审核拦截 / 失败不报），描述结果而非点击。
         // 🔴 与 `content_publish_submitted`（点了提交）分开：那是漏斗入口，这条是结果。名字由 PRD 定死，扩表、不改名。
         '_published',
+        // 名额月租到账（V1.4.0 multi-pet Story 2.4 · PRD §4 定死 `pet_slot_rent_paid`）：`_paid` = **服务端确认已到账**
+        // 后才报（PawCoin 扣币成功 / QRIS 回调 PAID），描述结果而非点击；与 `pet_slot_rent_started`（发起）配对。
+        // 名字由 PRD 定死，扩表、不改名（同 `_played` / `_published` 先例）。
+        '_paid',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

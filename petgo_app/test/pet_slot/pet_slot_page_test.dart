@@ -136,7 +136,7 @@ void main() {
       expect(repo.rents.single.key, startsWith('petslot-'));
       expect(find.text(l10n.petSlotRentSuccess(2, '12 Nov 2026')), findsOneWidget);
       final started = events.where((e) => e.$1 == 'pet_slot_rent_started').map((e) => e.$2).toList();
-      final succeeded = events.where((e) => e.$1 == 'pet_slot_rent_succeeded').map((e) => e.$2).toList();
+      final succeeded = events.where((e) => e.$1 == 'pet_slot_rent_paid').map((e) => e.$2).toList();
       expect(started, [
         {'count': 2, 'is_renewal': false, 'channel': 'pawcoin'},
       ]);
@@ -183,7 +183,7 @@ void main() {
       final repo = await qrisFlow(tester, const [PetSlotPurchaseStatus(status: PetSlotPurchaseStatus.expired)]);
       expect(repo.statusQueries, ['p9']);
       expect(find.text(l10n.petSlotPaymentExpired), findsOneWidget);
-      expect(events.where((e) => e.$1 == 'pet_slot_rent_succeeded'), isEmpty);
+      expect(events.where((e) => e.$1 == 'pet_slot_rent_paid'), isEmpty);
     });
 
     testWidgets('D10 QRIS 失败 → 「Pembayaran gagal. Coba lagi.」', (tester) async {
@@ -202,7 +202,7 @@ void main() {
         PetSlotPurchaseStatus(status: PetSlotPurchaseStatus.paid, expiresAt: DateTime.utc(2026, 11, 20, 5)),
       ]);
       expect(find.text(l10n.petSlotRentSuccess(1, '20 Nov 2026')), findsOneWidget);
-      expect(events.where((e) => e.$1 == 'pet_slot_rent_succeeded').single.$2,
+      expect(events.where((e) => e.$1 == 'pet_slot_rent_paid').single.$2,
           {'count': 1, 'is_renewal': false, 'channel': 'qris'});
     });
 

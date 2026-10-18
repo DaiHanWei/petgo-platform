@@ -66,7 +66,7 @@ so that 名额与只读状态对我是透明的。
 
 **AC7 — 埋点** `[L0]`（PRD §4，按仓库命名守卫）
 1. `pet_slot_rent_started`：用户在租用 / 续租抽屉确认渠道时（`runKeepsakePurchase` 的 `onChannelConfirmed`），属性 `count`、`is_renewal`、`channel`。
-2. `pet_slot_rent_succeeded`（**PRD 口径名 `pet_slot_rent_paid`**：仓库后缀白名单无 `_paid`，按「改名迁就规则」改为 `_succeeded`，与 `toko_order_payment_succeeded` 同理；Completion Notes 写口径名 → 实际名映射）：发放成功时，属性同上。
+2. `pet_slot_rent_paid`（**PRD 口径名 `pet_slot_rent_paid`**：仓库后缀白名单无 `_paid`，按「改名迁就规则」改为 `_succeeded`，与 `toko_order_payment_succeeded` 同理；Completion Notes 写口径名 → 实际名映射）：发放成功时，属性同上。
 3. `pet_readonly_banner_shown`：B4 横幅首次出现（每次进入该宠物 Diary Tab 一次），属性无 PII（不带宠物名）。
 4. `pet_readonly_renew_tapped`：B4 / E1「续租」点击，属性 `source`（`banner` / `block_sheet`）。
 5. `test/analytics/v112_events_test.dart` 的 `allowedPrefixes`（:217 起）加 `'pet_slot_'`、`'pet_readonly_'`（写注释说明是新模块入表，照现有条目格式；若 1.5 已为 `pet_slot_full_shown` 加过 `pet_slot_` 则只补 `pet_readonly_`）。事件经 `Analytics.capture`，属性走 `scrub`。
@@ -254,7 +254,7 @@ Claude（云端 headless session，bmad-dev-story 流程）
 - 名额管理页 `PetSlotPage(action)`：进页 post-frame 失效摘要 + 宠物列表；名额卡（大数字 = `petCount`，后缀 D-2，5 格：正常宠物在前、只读在后依次占格，来源按 默认 → 等级 → 月租；已拥有未占用「Kosong · 来源」+ 加号；其余「Bisa disewa」+ 锁）→ Slot sewa（≤ 3 天金色 D-13）→ Hewanku（状态胶囊 Aktif / 锁 Hanya-baca；`needsSelection` 时「Ubah pilihan ›」+ D-16）→ D-14 → 吸底主按钮（`rentable = 0` 置灰 D-18）+ 有月租时「Perpanjang」；D15 整页 `EmptyState(cloud_off)` + `commonRetry` 重取两 provider。`?action=rent|renew`：拿到最新摘要后自动弹 D5 / D11（P-5：renew 无生效中月租 → D5、数量默认 `shortBy`）。
 - `PayChannelPicker`：可选 `PayQuantityConfig quantity`（步进器 + 「{n} × {price}」总价行）与 `itemsArea / itemsTotal / itemsLineLabel`（续租勾选列表）；给了后 PawCoin 余额判断 / 扣币数 / QRIS 金额 / 主按钮全部按总价；都不传时 build 路径与改动前相同（5 处既有调用零改动，其测试全绿）。
 - `runKeepsakePurchase` 加可选 `onQrAborted`（原样透传 `showQrPaymentSheet(onAborted:)`，4 处既有调用不传）。
-- 租用 / 续租 `runPetSlotRent / runPetSlotRenew`（`pet_slot_purchase_flow.dart`）：`onChannelConfirmed` 生成幂等键 + `pet_slot_rent_started`；`pollPaid` PAID → true、EXPIRED / FAILED → `QrPaymentAborted('EXPIRED' / 'FAILED')`、ORPHAN_PAID / OVERPAID → `QrPaymentAborted('PAID_NEEDS_SUPPORT')`；`purchasePurpose: 'PET_SLOT_RENT'`、`cashPriceIdr = 单价 × 个数`；结束后**不论成败**失效摘要 + 宠物列表（409 `pet-slot-rent-unavailable` / `pet-slot-renew-invalid` 由 flow 报 D10 文案，这里负责刷新）；成功 `pet_slot_rent_succeeded` + D9 / D12 SnackBar（日期取购买查询 `expiresAt`，PawCoin 成交后补查一次，取不到按今天 + days 近似）；D10b 过期 SnackBar 只在名额流程补（通用面板未改）。
+- 租用 / 续租 `runPetSlotRent / runPetSlotRenew`（`pet_slot_purchase_flow.dart`）：`onChannelConfirmed` 生成幂等键 + `pet_slot_rent_started`；`pollPaid` PAID → true、EXPIRED / FAILED → `QrPaymentAborted('EXPIRED' / 'FAILED')`、ORPHAN_PAID / OVERPAID → `QrPaymentAborted('PAID_NEEDS_SUPPORT')`；`purchasePurpose: 'PET_SLOT_RENT'`、`cashPriceIdr = 单价 × 个数`；结束后**不论成败**失效摘要 + 宠物列表（409 `pet-slot-rent-unavailable` / `pet-slot-renew-invalid` 由 flow 报 D10 文案，这里负责刷新）；成功 `pet_slot_rent_paid` + D9 / D12 SnackBar（日期取购买查询 `expiresAt`，PawCoin 成交后补查一次，取不到按今天 + days 近似）；D10b 过期 SnackBar 只在名额流程补（通用面板未改）。
 - 续租抽屉 `PetSlotRenewPaySheet`：默认勾前 `renewableMax` 个生效中月租，超上限的行可见不可勾，全不勾主按钮禁用；行「{原到期 d MMM} → {新到期 d MMM yyyy}」，新到期 = 原到期 + days。
 - 改选 `ActiveSelectionSheet`：把手 → 标题 D-29 → D-30 → 勾选行（头像 / 名字 / 物种 · 年龄）→「{n} / {total} dipilih」+ Simpan；默认勾 ACTIVE；勾满后其余不可勾；未选满禁用；成功关抽屉 + 失效 + Toast D-32；失败抽屉保持 + 顶部 Toast（`petProfileSaveFailed` + `commonRetry` 动作）。
 - 只读：`pet_readonly_block.dart`（`currentPetIfLoaded`（只在 provider 已存在时读，不额外发请求）/ `guardPetWritable` / `showPetReadonlyBlockSheet`（E1，`showConfirmSheet` 紫锁，不放改选入口）/ `handlePetReadOnly`（409 → E1 + 失效宠物列表，返回 bool）/ `openPetSlotRenewal`（`pet_readonly_renew_tapped {source}` + push `/me/pet-slots?action=renew`））；`PetReadonlyBanner`（B4，挂载一次报 `pet_readonly_banner_shown`，属性为空）。
@@ -262,7 +262,7 @@ Claude（云端 headless session，bmad-dev-story 流程）
 - 通知中心（K1）：图标表 `PET_SLOT_EXPIRING` 金色 `hourglass_bottom_rounded` / `PET_SLOT_EXPIRED` coral `lock_clock_rounded`；`_typeLabel / _typeBody` 两类型与 OPS 共用 `_storedTitle / _storedBody`（原 `_opsTitle / _opsBody` 改名，trim 空回退 `notifyTypeSystem / notifyBodySystem`；`_serverTitle` 名字已被「后端文案条目」占用，故用 `_stored*`），注释措辞已更新；埋点映射显式登记两类型；`DeepLinkRoutes.pushPayloadToLocation` 固定目标 switch 加两类型 → `/me/pet-slots`（在无 targetRef 短路之前，推送点开走同一映射）；`notification_item.dart` 类型注释补两类型。
 - 文案：AC8 表 42 键 + 3 个额外键 `petSlotPaymentProcessing`（见待确认 6）、`petSlotRentOnlyN` / `petSlotRentPendingPayment`（code review #3，见待确认 12），EN / ID 两份（仓库只有这两个 arb），已 `flutter gen-l10n`；价格统一 `formatIdrAmount`，日期 `formatDayMonthYear / formatDayMonth`（`d MMM yyyy` 按 App 语言）。
 
-**埋点口径名 → 实际名**：`pet_slot_rent_started`（同名，`{count, is_renewal, channel}`，channel = `pawcoin` / `qris`）；PRD `pet_slot_rent_paid` → **`pet_slot_rent_succeeded`**（后缀白名单无 `_paid`）；`pet_readonly_banner_shown`（同名，无属性）；`pet_readonly_renew_tapped`（同名，`{source: banner | block_sheet}`）。均经 `Analytics.capture`、无宠物名。
+**埋点口径名 → 实际名**：`pet_slot_rent_started`（同名，`{count, is_renewal, channel}`，channel = `pawcoin` / `qris`）；PRD `pet_slot_rent_paid` → **`pet_slot_rent_paid`**（后缀白名单无 `_paid`）；`pet_readonly_banner_shown`（同名，无属性）；`pet_readonly_renew_tapped`（同名，`{source: banner | block_sheet}`）。均经 `Analytics.capture`、无宠物名。
 
 **L0 测试（均已跑、全绿）**
 - 新增：`test/pet_slot/pet_slot_overview_test.dart`（11）、`test/pet_slot/pet_slot_page_test.dart`（25，含 code review 补的幂等键 4 例 + rentable 1 提示：D1 / 价格不写死 / D2 / D3 / D4 / D15；D5 PawCoin + 埋点 / 步进器上下限 / D10b / D10 / OVERPAID / QRIS 到账 / 409 rent-unavailable 刷新；续租默认勾选 + 一次付款 + D12 / 超上限不可勾 + 全不勾禁用 / 409 renew-invalid；`?action=` 三分流；改选成功 / 失败）、`test/shared/pay_channel_picker_quantity_test.dart`（6，含 PawCoin 超余额回落 2 例）、`test/keepsake/keepsake_pay_flow_test.dart`（4：onQrAborted 透传 / 不传不变 / 409 pet-read-only → E1 / 余额不足照旧）、`test/pet_slot/pet_readonly_block_test.dart`（12：guard / E1 两按钮 / handlePetReadOnly / B4 横幅续租去向；E3 标题 / 分类卡仍为日期 / 锁 / 拦截 / 已有记录可看、保存删除才拦；E2 锁标 / 徽章拦截 / 正常宠物不变）、`test/notify/notification_center_pet_slot_test.dart`（4），共用桩 `test/pet_slot/pet_slot_fakes.dart`。
@@ -345,6 +345,8 @@ Claude（云端 headless session，bmad-dev-story 流程）
 - `_bmad-output/implementation-artifacts/v1.4.0/2-4-app名额管理-租用续租与只读体验.md`（〔T0〕标注、状态、任务勾选、Dev Agent Record）
 
 ### Change Log
+
+- 2026-10-18（3-3 提交后补正）：埋点名改回 PRD §4 原名 `pet_slot_rent_paid`（原实现为迁就命名守卫改成 `_succeeded`，与「事件名照 PRD §4」不符）；守卫后缀表按 `_played` / `_published` 先例登记 `_paid`，正则不变。上文涉及该事件名处已同步。
 
 - 2026-10-18：code review 修复 6 项（幂等键跨重试、PawCoin 超余额回落 QRIS、409 rent-unavailable 具体提示、只读健康记录可查看、分类卡恢复最近日期、销毁后不刷新）。analyze 0 issue；test 3557 / 1 skip / 0 fail；仍 review（L1/L2 待本地验收）。
 - 2026-10-18：实现 Story 2.4（名额管理页 D1 ~ D4 / D15、`PayChannelPicker` 数量步进器 / 条目区、租用 D5 ~ D10b、续租 D11 / D12、改选 D13 / D14、只读 B4 / E1 ~ E3 与各写入口拦截、通知中心 K1 两类到期 + 深链、四个埋点、43 个新文案键）。L0 绿（analyze 0 issue；test 3550 / 1 skip / 0 fail），Status → review；L1/L2 待本地验收（L2 模拟器演示与还原度打分）。
