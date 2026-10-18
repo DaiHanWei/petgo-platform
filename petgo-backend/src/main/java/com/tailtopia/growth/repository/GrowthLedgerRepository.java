@@ -20,6 +20,10 @@ public interface GrowthLedgerRepository extends JpaRepository<GrowthLedgerEntry,
     @Query("select coalesce(sum(-e.delta), 0) from GrowthLedgerEntry e where e.reversesId = :originalId")
     long sumReversed(@Param("originalId") long originalId);
 
+    /** 按业务单反查原消费流水（Story 1.3 退款扣回）：最早的一条正向 SPEND_* 流水。 */
+    java.util.Optional<GrowthLedgerEntry> findFirstByRefTypeAndRefIdAndRuleCodeInAndDeltaGreaterThanOrderByIdAsc(
+            String refType, String refId, Collection<String> ruleCodes, int delta);
+
     /** 同账号同一里程碑 code 的正向入账条数（PRD AC15a：最多 5 次）。 */
     @Query("select count(e) from GrowthLedgerEntry e where e.userId = :userId and e.ruleCode in :ruleCodes "
             + "and e.refId = :code and e.delta > 0")

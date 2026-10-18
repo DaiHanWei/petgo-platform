@@ -43,6 +43,8 @@ public class GrowthLedgerService {
             + "pet_ids, idem_key, reverses_id, reason, wib_date, created_at) VALUES (:userId, :ruleCode, :delta, "
             + ":refType, :refId, CAST(:petIds AS BIGINT[]), :idemKey, :reversesId, :reason, :wibDate, :createdAt)";
 
+    private static final List<String> SPEND_RULES = List.of(RuleCode.SPEND_DIGITAL.name(), RuleCode.SPEND_SHOP.name());
+
     private static final List<String> MILESTONE_RULES = List.of(
             RuleCode.MILESTONE_S.name(), RuleCode.MILESTONE_M.name(), RuleCode.MILESTONE_L.name());
 
@@ -138,6 +140,19 @@ public class GrowthLedgerService {
                 original.getRefId(), null, idemKey, original.getId(), cmd.reason().name(), wibDate);
         applyDelta(account, -amount, RuleCode.valueOf(original.getRuleCode()));
         return true;
+    }
+
+    /** 按幂等键读一条流水（只读；Story 1.3 退款扣回定位原消费）。 */
+    @Transactional(readOnly = true)
+    public java.util.Optional<GrowthLedgerEntry> findByIdemKey(String idemKey) {
+        return ledger.findByIdemKey(idemKey);
+    }
+
+    /** 按业务单反查原消费流水（{@code rule_code IN (SPEND_DIGITAL, SPEND_SHOP)} 且 {@code delta > 0}）。 */
+    @Transactional(readOnly = true)
+    public java.util.Optional<GrowthLedgerEntry> findSpendByRef(String refType, String refId) {
+        return ledger.findFirstByRefTypeAndRefIdAndRuleCodeInAndDeltaGreaterThanOrderByIdAsc(refType, refId,
+                SPEND_RULES, 0);
     }
 
     /** 按金额比例的规则（送礼 / 消费）换算成长值；规则不存在或非比例规则 → 0。 */

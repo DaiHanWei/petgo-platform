@@ -4,6 +4,7 @@ import com.tailtopia.pay.domain.LedgerAccount;
 import com.tailtopia.pay.domain.LedgerDirection;
 import com.tailtopia.pay.domain.PawCoinTransaction;
 import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.event.PawCoinSpentEvent;
 import com.tailtopia.pay.repository.LedgerEntryRepository;
 import com.tailtopia.pay.repository.PawCoinTransactionRepository;
 import com.tailtopia.pay.repository.PawCoinWalletRepository;
@@ -11,6 +12,7 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,14 +37,17 @@ public class PawCoinWalletService {
     private final LedgerEntryRepository ledger;
     private final LedgerService ledgerService;
     private final IdempotencyService idempotency;
+    private final ApplicationEventPublisher events;
 
     public PawCoinWalletService(PawCoinWalletRepository wallets, PawCoinTransactionRepository txns,
-            LedgerEntryRepository ledger, LedgerService ledgerService, IdempotencyService idempotency) {
+            LedgerEntryRepository ledger, LedgerService ledgerService, IdempotencyService idempotency,
+            ApplicationEventPublisher events) {
         this.wallets = wallets;
         this.txns = txns;
         this.ledger = ledger;
         this.ledgerService = ledgerService;
         this.idempotency = idempotency;
+        this.events = events;
     }
 
     /**
@@ -95,6 +100,10 @@ public class PawCoinWalletService {
         PawCoinTransaction txn = txns.save(
                 PawCoinTransaction.of(userId, -coins, type, refType, refId, group));
         idempotency.store(walletKey(idempotencyKey), txn.getId());
+        // V1.4.0 ① Story 1.3：消费扣款真正成功后（重放已在上面短路）同事务发事件，成长值 AFTER_COMMIT 消费返。
+        if (type == PawCoinTxnType.SPEND) {
+            events.publishEvent(new PawCoinSpentEvent(userId, coins, refType, refId, idempotencyKey));
+        }
     }
 
     /** 当前余额（无钱包记 0）。 */

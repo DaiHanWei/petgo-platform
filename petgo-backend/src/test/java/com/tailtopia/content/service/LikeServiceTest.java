@@ -80,7 +80,7 @@ class LikeServiceTest {
 
         service.like(1L, 7L); // 自赞
         verify(likes).save(any(ContentLike.class));
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -93,7 +93,7 @@ class LikeServiceTest {
         assertThat(r.liked()).isTrue();
         assertThat(r.likeCount()).isEqualTo(1L);
         verify(likes, never()).save(any());
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -105,7 +105,7 @@ class LikeServiceTest {
         assertThat(r.liked()).isFalse();
         assertThat(r.likeCount()).isZero();
         verify(likes, times(1)).deleteByPostIdAndUserId(1L, 9L);
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     /** V1.4.0 ① Story 1.1 · AD-7：真删到行且非自赞 → 发 ContentUnlikedEvent（扣回点赞成长值）。 */
@@ -127,7 +127,7 @@ class LikeServiceTest {
 
         service.unlike(1L, 7L);
 
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test

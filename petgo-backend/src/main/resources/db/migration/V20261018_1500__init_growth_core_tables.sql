@@ -13,12 +13,12 @@
 
 CREATE TABLE growth_accounts (
     user_id                BIGINT PRIMARY KEY REFERENCES users (id),
-    lifetime_total         BIGINT      NOT NULL DEFAULT 0 CHECK (lifetime_total >= 0),
+    lifetime_total         BIGINT      NOT NULL DEFAULT 0 CONSTRAINT ck_growth_accounts_lifetime CHECK (lifetime_total >= 0),
     -- PRD 预留（未来可消耗余额），1.4.0 不读写。
     balance                BIGINT      NOT NULL DEFAULT 0,
     level                  INT         NOT NULL DEFAULT 1,
     -- NULL = 自动（取最高可用档）；NONE = 用户主动不戴。
-    frame_choice           VARCHAR(16) NULL CHECK (frame_choice IN ('NONE', 'BASIC', 'UPGRADED', 'ANIMATED')),
+    frame_choice           VARCHAR(16) NULL CONSTRAINT ck_growth_accounts_frame CHECK (frame_choice IN ('NONE', 'BASIC', 'UPGRADED', 'ANIMATED')),
     -- 仅虚拟号 / 官方号：运营设定的展示等级。
     display_level          INT         NULL,
     celebrate_from_level   INT         NULL,
@@ -34,7 +34,7 @@ CREATE TABLE growth_ledger (
     id                BIGSERIAL PRIMARY KEY,
     user_id           BIGINT       NOT NULL,
     rule_code         VARCHAR(32)  NOT NULL,
-    delta             INT          NOT NULL CHECK (delta <> 0),
+    delta             INT          NOT NULL CONSTRAINT ck_growth_ledger_delta CHECK (delta <> 0),
     ref_type          VARCHAR(32)  NULL,
     ref_id            VARCHAR(64)  NULL,
     pet_ids           BIGINT[]     NULL,
@@ -77,7 +77,7 @@ CREATE TABLE growth_rules (
 CREATE TABLE growth_levels (
     level     INT PRIMARY KEY,
     threshold BIGINT      NOT NULL,
-    tier      VARCHAR(16) NOT NULL CHECK (tier IN ('NEWBIE', 'BUDDY', 'GUARDIAN', 'STAR'))
+    tier      VARCHAR(16) NOT NULL CONSTRAINT ck_growth_levels_tier CHECK (tier IN ('NEWBIE', 'BUDDY', 'GUARDIAN', 'STAR'))
 );
 
 -- 19 条规则（PRD §3.1）。

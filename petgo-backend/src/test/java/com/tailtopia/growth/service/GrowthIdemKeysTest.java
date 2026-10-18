@@ -25,6 +25,15 @@ class GrowthIdemKeysTest {
     }
 
     @Test
+    void spendKeys() {
+        assertThat(GrowthIdemKeys.spendIntent(42L)).isEqualTo("SPEND:PI:42");
+        assertThat(GrowthIdemKeys.spendCoin("id-hd-card:5")).isEqualTo("SPEND:COIN:id-hd-card:5");
+        assertThat(GrowthIdemKeys.spendConsultCoin(9L)).isEqualTo("SPEND:COIN:vet-consult-order:9");
+        assertThat(GrowthIdemKeys.spendShop(7L)).isEqualTo("SPEND:SHOP:7");
+        assertThat(GrowthIdemKeys.refundSource("rf_1")).isEqualTo("REFUND:rf_1");
+    }
+
+    @Test
     void reverseConcatenatesOriginalIdAndSourceKey() {
         assertThat(GrowthIdemKeys.reverse(123L, GrowthIdemKeys.SOURCE_UNLIKE)).isEqualTo("REV:123:UNLIKE");
         assertThat(GrowthIdemKeys.reverse(123L, "REFUND:rf_xxx")).isEqualTo("REV:123:REFUND:rf_xxx");

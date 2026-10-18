@@ -68,6 +68,31 @@ public final class GrowthIdemKeys {
         return "GIFT_RECEIVED:" + giftOrderId;
     }
 
+    /** 现金 / QRIS 消费（Story 1.3）：{@code SPEND:PI:{intentId}}。 */
+    public static String spendIntent(long intentId) {
+        return "SPEND:PI:" + intentId;
+    }
+
+    /** 纯 PawCoin 消费（Story 1.3）：{@code SPEND:COIN:{debit 的幂等键}}。 */
+    public static String spendCoin(String debitIdempotencyKey) {
+        return "SPEND:COIN:" + debitIdempotencyKey;
+    }
+
+    /** 纯 PawCoin 问诊（Story 1.3）：按问诊订单 id，与 {@link #spendCoin} 同一命名空间。 */
+    public static String spendConsultCoin(long consultOrderId) {
+        return spendCoin("vet-consult-order:" + consultOrderId);
+    }
+
+    /** 电商订单（Story 1.3，QRIS / MIXED / 纯币都只经此处）：{@code SPEND:SHOP:{shopOrderId}}。 */
+    public static String spendShop(long shopOrderId) {
+        return "SPEND:SHOP:" + shopOrderId;
+    }
+
+    /** 退款扣回的 sourceKey（Story 1.3）：{@code REFUND:{refundKey}}，拼进 {@link #reverse}。 */
+    public static String refundSource(String refundKey) {
+        return "REFUND:" + refundKey;
+    }
+
     /** 反向流水：{@code REV:{原流水 id}:{sourceKey}}。 */
     public static String reverse(long originalLedgerId, String sourceKey) {
         return "REV:" + originalLedgerId + ":" + sourceKey;

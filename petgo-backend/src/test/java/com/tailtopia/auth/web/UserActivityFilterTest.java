@@ -61,7 +61,7 @@ class UserActivityFilterTest {
 
         run();
 
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -71,7 +71,7 @@ class UserActivityFilterTest {
 
         run(); // 不抛
 
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -81,6 +81,6 @@ class UserActivityFilterTest {
         run();
 
         verify(accounts, never()).touchLastActive(anyLong(), any());
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 }
