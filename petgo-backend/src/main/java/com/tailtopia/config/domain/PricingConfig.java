@@ -51,6 +51,11 @@ public class PricingConfig {
     @Column(name = "tailsonality_match_unlock_price", nullable = false)
     private long tailsonalityMatchUnlockPrice;
 
+    /** FR-148 送礼 · QRIS 单笔最低金额（IDR，≥100，默认 10000；V1.4.0 gift Story 1.1）。只在送礼服务发起 QRIS 前读，
+     * 不进通用 {@code createIntent}。后台改值（setter）留给 Story 3.1。 */
+    @Column(name = "gift_qris_min_amount", nullable = false)
+    private long giftQrisMinAmount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -144,5 +149,9 @@ public class PricingConfig {
 
     public void setTailsonalityMatchUnlockPrice(long v) {
         this.tailsonalityMatchUnlockPrice = v;
+    }
+
+    public long getGiftQrisMinAmount() {
+        return giftQrisMinAmount;
     }
 }

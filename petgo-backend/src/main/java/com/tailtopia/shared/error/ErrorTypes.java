@@ -68,6 +68,27 @@ public final class ErrorTypes {
      */
     public static final URI FOLLOW_BLOCKED = URI.create(BASE + "follow-blocked");
 
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC1）：给自己的宠物送礼（422）。 */
+    public static final URI GIFT_OWN_PET = URI.create(BASE + "gift-own-pet");
+
+    /**
+     * V1.4.0 gift Story 1.1（FR-148 / PRD AC9）：送礼人<b>拉黑了</b>宠物主人（403）。
+     * 只拦单向 {@code isBlocked(sender, owner)}；主人拉黑送礼人<b>不拦</b>。
+     */
+    public static final URI GIFT_BLOCKED = URI.create(BASE + "gift-blocked");
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC3）：专属礼物未解锁（送礼人等级不足或不参与成长体系，403）。 */
+    public static final URI GIFT_LOCKED = URI.create(BASE + "gift-locked");
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC4 · AD-4）：QRIS 单笔低于送礼最低金额（422）。 */
+    public static final URI GIFT_QRIS_BELOW_MIN = URI.create(BASE + "gift-qris-below-min");
+
+    /** V1.4.0 gift Story 1.1（FR-148）：收礼宠物不存在或主人已注销（404）。封号主人不算。 */
+    public static final URI GIFT_PET_GONE = URI.create(BASE + "gift-pet-gone");
+
+    /** V1.4.0 gift Story 1.1（FR-148）：礼物不存在或已下线（409）。 */
+    public static final URI GIFT_UNAVAILABLE = URI.create(BASE + "gift-unavailable");
+
     private ErrorTypes() {
     }
 }
