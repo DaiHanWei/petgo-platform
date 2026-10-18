@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../auth/domain/auth_guard.dart';
+import '../../../../shared/widgets/app_image.dart';
 import '../../domain/gift_send_result.dart';
+import '../../domain/gift_showcase.dart';
+import '../gift_page.dart';
 import '../gift_send_flow.dart';
 import '../gift_style.dart';
 
@@ -84,14 +88,27 @@ class _GiftSendPillState extends ConsumerState<GiftSendPill> {
   }
 }
 
-/// A3：他人 Diary 详情页的礼物区（V1.4.0 gift Story 1.3 · AC1.2）。
+/// A3 ~ A6：Diary 详情页的礼物区（V1.4.0 gift Story 1.3 · AC1.2 建区与按钮；Story 2.2 · AC4 加宠物行）。
 ///
-/// 本 story 只画区标题 + 次级按钮；宠物行（头像 + n hadiah + 礼物缩略）属 Story 2.2。
-/// 本分支单宠过渡：按 `postId` 由后端取收礼宠物，不弹选宠物抽屉（A7 在对齐 story 4.1 接入）。
+/// 浅紫底卡（#F8F6FF，圆角 16）→「HADIAH」→ 每只宠物一张白色小卡（头像 32 + 名字 +「N hadiah」+ 前 3 种礼物
+/// 叠放小圆片 +「+N」+「›」，点行进该宠物礼物页；0 礼物显示 A5 副标题、仍可点）→ 卡片底部整宽次级「Kirim Hadiah」。
+/// 按钮本身与显隐规则属 1.3（[showSendButton]，自己的 Diary A6 不显示）；本分支单宠过渡：按 `postId` 由后端取
+/// 收礼宠物，不弹选宠物抽屉（A7 在对齐 story 4.1 接入）。
 class GiftDetailZone extends ConsumerStatefulWidget {
-  const GiftDetailZone({super.key, required this.postId});
+  const GiftDetailZone({
+    super.key,
+    required this.postId,
+    this.pets = const [],
+    this.showSendButton = true,
+  });
 
   final int postId;
+
+  /// 详情 `giftPets`（Story 2.1）。
+  final List<GiftPetSummary> pets;
+
+  /// 「Kirim Hadiah」显隐（1.3 规则：他人的 Diary 且作者未注销）。
+  final bool showSendButton;
 
   @override
   ConsumerState<GiftDetailZone> createState() => _GiftDetailZoneState();
@@ -120,16 +137,23 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
     }
   }
 
+  /// 点宠物行进礼物页（AC4.3 / AC4.4）；礼物页接口仅 USER → 游客先登录门控。
+  void _openPet(int petId) {
+    if (!requireLogin(ref, context, entrySource: 'gift')) return;
+    context.push(GiftPage.routeFor(petId));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final lang = Localizations.localeOf(context).languageCode;
     return Container(
       key: _zoneKey,
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: GiftStyle.tint,
-        borderRadius: BorderRadius.circular(24),
+        color: AppColors.mintTint2,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -141,23 +165,135 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
                   color: AppColors.muted)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 44,
-            child: OutlinedButton.icon(
-              key: const ValueKey('giftDetailSendButton'),
-              onPressed: _start,
-              icon: const Icon(Icons.redeem, size: 18, color: AppColors.mint),
-              label: Text(l10n.giftSendButton,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.mint)),
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          for (final pet in widget.pets) ...[
+            const SizedBox(height: 8),
+            _GiftPetRow(pet: pet, lang: lang, onTap: () => _openPet(pet.petId)),
+          ],
+          if (widget.showSendButton) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: OutlinedButton.icon(
+                key: const ValueKey('giftDetailSendButton'),
+                onPressed: _start,
+                icon: const Icon(Icons.redeem, size: 18, color: AppColors.mint),
+                label: Text(l10n.giftSendButton,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.mint)),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
               ),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 详情礼物区的一只宠物（白色小卡，整行可点）。
+class _GiftPetRow extends StatelessWidget {
+  const _GiftPetRow({required this.pet, required this.lang, required this.onTap});
+
+  final GiftPetSummary pet;
+  final String lang;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final empty = pet.giftCount <= 0;
+    final avatar = AppImage.provider(pet.avatarUrl, thumbWidth: 120);
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: ValueKey('giftPetRow_${pet.petId}'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: GiftStyle.avatarBg,
+                  backgroundImage: avatar,
+                  child: avatar == null ? const Text('🐾', style: TextStyle(fontSize: 14)) : null,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(pet.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      Text(empty ? l10n.giftDetailEmpty : l10n.giftDetailCount(pet.giftCount),
+                          key: ValueKey('giftPetRowCount_${pet.petId}'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, color: AppColors.ink2)),
+                    ],
+                  ),
+                ),
+                // A5（0 礼物）：无图标、无「›」，但整行仍可点进 E3 / E4 空态。
+                if (!empty) ...[
+                  _stack(),
+                  if (pet.moreKinds > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Text('+${pet.moreKinds}',
+                          key: ValueKey('giftPetRowMore_${pet.petId}'),
+                          style: const TextStyle(fontSize: 11.5, color: AppColors.ink2)),
+                    ),
+                  const SizedBox(width: 2),
+                  const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.muted),
+                ],
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 前 3 种礼物叠放小圆片（与礼物墙同序）。
+  Widget _stack() {
+    final items = pet.wallPreview.take(3).toList();
+    const d = 22.0;
+    const step = 15.0;
+    return SizedBox(
+      key: ValueKey('giftPetRowIcons_${pet.petId}'),
+      width: items.isEmpty ? 0 : d + step * (items.length - 1),
+      height: d,
+      child: Stack(
+        children: [
+          for (var i = 0; i < items.length; i++)
+            Positioned(
+              left: step * i,
+              child: Semantics(
+                label: items[i].nameFor(lang),
+                child: Container(
+                  width: d,
+                  height: d,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: GiftStyle.tint,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: giftIcon(items[i].iconUrl, size: 14),
+                ),
+              ),
+            ),
         ],
       ),
     );

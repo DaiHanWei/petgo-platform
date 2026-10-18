@@ -21,12 +21,15 @@ class NotificationItem {
     this.opsTarget,
   });
 
-  /// 后端拼好文案的四种互动类型（V1.3.4 follow · Story 3.3 / 3.4）。
+  /// 后端拼好文案的互动类型（V1.3.4 follow · Story 3.3 / 3.4）。
+  /// V1.4.0 gift Story 2.2 · AC5.1：收礼 `PET_GIFT_RECEIVED`（1.2 后端拼整句「Andi mengirim … untuk Mochi」/
+  /// 合并「Andi dan 2 lainnya …」，App 只把 actorName 加粗）；无 actorName 时走本地兜底。
   static const Set<String> serverCopyTypes = {
     'CONTENT_LIKED',
     'CONTENT_COMMENTED',
     'USER_FOLLOWED',
     'PLACE_COMMENTED',
+    'PET_GIFT_RECEIVED',
   };
 
   // VET_REPLY|CONSULT_CLOSED|CONTENT_LIKED|CONTENT_COMMENTED|NEW_CONSULT_REQUEST|PET_BIRTHDAY|COMPANION_ANNIVERSARY|MILESTONE_NODE|OPS_ANNOUNCEMENT（V1.3.4 运营通知）|USER_FOLLOWED|PLACE_COMMENTED|…

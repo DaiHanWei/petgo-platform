@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../gift/presentation/gift_page.dart';
 import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -447,7 +448,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           DiaryHeader(
             profile: widget.profile.header,
             happyCount: stats?.happyMomentCount,
-            consultCount: stats?.consultCount,
+            // V1.4.0 gift Story 2.2 · A2：中间格礼物总价值，点进本宠物礼物页（E2）。
+            giftTotalValue: stats?.giftTotalValue,
+            onOpenGifts: () => context.push(GiftPage.routeFor(widget.profile.id)),
             milestoneCompleted: stats?.milestoneCompleted,
             milestoneTotal: stats?.milestoneTotal,
             healthRecordCount: stats?.healthRecordCount,

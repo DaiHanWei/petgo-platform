@@ -4,6 +4,7 @@ import '../../social/domain/follow_state.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
+import '../../gift/domain/gift_showcase.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
 class ContentDetail {
   const ContentDetail({
@@ -30,7 +31,12 @@ class ContentDetail {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
+    this.giftPets = const [],
   });
+
+  /// Diary 礼物区（V1.4.0 gift Story 2.1 下发 / 2.2 使用）：这条 Diary 关联的宠物各自收到的礼物汇总 + 墙前 3 行。
+  /// 缺键（Moment / Tips / 无关联宠物 / 老后端）→ 空表 → 不渲染礼物区。
+  final List<GiftPetSummary> giftPets;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
   final String? authorToken;
@@ -66,6 +72,7 @@ class ContentDetail {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: epoch,
+        giftPets: giftPets,
       );
 
   final int id;
@@ -157,6 +164,7 @@ class ContentDetail {
       // V1.3.4 follow Story 2.1：缺失 / null 都按默认。
       authorToken: json['authorToken'] as String?,
       authorFollowState: FollowState.fromJson(json['authorFollowState']),
+      giftPets: GiftPetSummary.listFromJson(json['giftPets']),
     );
   }
 }

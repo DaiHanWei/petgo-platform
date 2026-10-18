@@ -30,6 +30,7 @@ import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
+import '../../features/gift/presentation/gift_page.dart';
 import '../../features/content/presentation/shared_post_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
@@ -1080,6 +1081,18 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    App 内要求登录只会把人推回浏览器）；这条按 petId、**必须登录**（AD-4 Rule 1）。
       // ⚠️ 本路由**故意不进** `_controlledLocations` —— 登录门控在**进入前**由宠物卡
       //    的 `requireLogin` 做（FR-0C 的既有惯例），真正的边界在服务端那条不放行的规则上。
+      // 礼物页（V1.4.0 gift Story 2.2 · AC3.1）：**独立顶层路由**，与访客视图并列。
+      // go_router 按整段匹配 —— `/pets/5/gifts` 不会被下面的 `/pets/:petId` 吃成 petId='5/gifts'
+      // （那条 builder 是 int.parse，会崩；`gift_route_test.dart` 锁住）。
+      // ⚠️ 同访客视图**不进** `_controlledLocations`：登录门控在入口处（requireLogin）+ 服务端（仅 USER）。
+      // `?wall=expanded`：收礼通知深链，墙初始即展开（AC6.4）。petId 非数字 → 0 → 页面直接 E6，不崩。
+      GoRoute(
+        path: GiftPage.routePattern,
+        builder: (c, s) => GiftPage(
+          petId: int.tryParse(s.pathParameters['petId'] ?? '') ?? 0,
+          wallInitiallyExpanded: s.uri.queryParameters['wall'] == GiftPage.wallExpandedQuery,
+        ),
+      ),
       GoRoute(
         path: VisitorArchiveView.inAppRoutePattern,
         builder: (c, s) => VisitorArchiveView(

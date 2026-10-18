@@ -10,6 +10,7 @@ import 'package:tailtopia/features/content/data/detail_repository.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/presentation/content_detail_page.dart';
+import 'package:tailtopia/features/gift/domain/gift_showcase.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_scope.dart';
@@ -100,6 +101,8 @@ void main() {
           liked: false,
           isAuthor: isAuthor,
           createdAt: DateTime.utc(2026, 10, 1),
+          // V1.4.0 gift Story 2.2：礼物区按 giftPets 渲染（Story 2.1 只对有关联宠物的 Diary 下发）。
+          giftPets: type == 'GROWTH_MOMENT' ? const [GiftPetSummary(petId: 42, name: 'Mochi')] : const [],
         );
 
     Future<void> pump(WidgetTester tester, ContentDetail d) async {
@@ -169,7 +172,7 @@ void main() {
     test('源码：礼物区插在打卡场所条之后、分隔线之前', () {
       final src = File('lib/features/content/presentation/content_detail_page.dart').readAsStringSync();
       final strip = src.indexOf('_DetailCheckinPlaceStrip(place: detail.checkinPlace!)');
-      final gift = src.indexOf('GiftDetailZone(postId: detail.id)');
+      final gift = src.indexOf('GiftDetailZone(');
       final divider = src.indexOf('const Divider(height: AppSpacing.xl, color: AppColors.divider)');
       expect(gift, greaterThan(strip));
       expect(divider, greaterThan(gift));

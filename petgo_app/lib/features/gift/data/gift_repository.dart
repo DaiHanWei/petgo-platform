@@ -5,6 +5,7 @@ import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/gift_catalog.dart';
 import '../domain/gift_send_result.dart';
+import '../domain/gift_showcase.dart';
 
 /// 送礼数据层（V1.4.0 gift Story 1.3 · AC8；接口由 Story 1.1 提供）。
 class GiftRepository {
@@ -42,6 +43,19 @@ class GiftRepository {
     return GiftSendResult.fromJson(res.data ?? const {});
   }
 
+  /// 礼物页汇总 + 礼物墙（V1.4.0 gift Story 2.2 · AC3.2）。403 / 404 原样抛出，页面一律 E6。
+  Future<PetGiftShowcase> getPetGifts(int petId) async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.petGifts(petId));
+    return PetGiftShowcase.fromJson(res.data ?? const {});
+  }
+
+  /// 粉丝榜一页；[cursor] 为 null = 第一页。
+  Future<GiftSupporterPage> getSupporters(int petId, {String? cursor}) async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.petGiftSupporters(petId),
+        queryParameters: {'cursor': ?cursor});
+    return GiftSupporterPage.fromJson(res.data ?? const {});
+  }
+
   /// 单笔订单状态（QRIS `pollPaid` 用）。
   Future<GiftOrderStatus> orderStatus(String orderToken) async {
     final res = await dio.get<Map<String, dynamic>>(ApiPaths.meGiftOrder(orderToken));
@@ -61,5 +75,16 @@ final giftCatalogProvider = FutureProvider.autoDispose.family<GiftCatalog, GiftR
   (ref, recipient) => ref
       .read(giftRepositoryProvider)
       .fetchCatalog(petId: recipient.petId, postId: recipient.postId),
+  retry: (_, _) => null,
+);
+
+/// 礼物页汇总 + 墙（V1.4.0 gift Story 2.2 · AC3.2）。
+///
+/// 🔴 `isAutoDispose: true`（理由同 `timeline_repository.dart` 访客 provider 的注释）：Riverpod 3 的 family
+/// 默认 keep-alive —— 换账号后仍吃旧缓存、**绕过服务端拉黑守卫**，且同一只宠物再进来永不刷新。
+/// `retry: null`：失败停在 E6，由用户点「Coba lagi」（403 / 404 是确定性拒绝，重试只会白打后端）。
+final petGiftShowcaseProvider = FutureProvider.family<PetGiftShowcase, int>(
+  (ref, petId) => ref.read(giftRepositoryProvider).getPetGifts(petId),
+  isAutoDispose: true,
   retry: (_, _) => null,
 );

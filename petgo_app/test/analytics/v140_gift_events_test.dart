@@ -8,7 +8,7 @@ import 'package:tailtopia/core/analytics/analytics.dart';
 /// ⚠️ 左边是 PRD 的口径名，右边是代码里的实际名。两条不同不是笔误：仓库埋点命名守卫
 /// （`v112_events_test.dart`）要求「模块前缀 + 对象 + 动作词尾」，`_paid` / `_amount` 不在词尾白名单里。
 /// **改名迁就规则，不放宽规则**（同 `v140_events_inventory_test.dart` 的口径；那个文件是 Toko 线的，不往里加）。
-/// 这份映射就是给看板配置用的对照表。`gift_wall_opened` / `gift_sender_list_opened` 属 Story 2.2，届时补进来。
+/// 这份映射就是给看板配置用的对照表。`gift_wall_opened` / `gift_sender_list_opened` 由 Story 2.2 补入（礼物页）。
 void main() {
   const inventory = <String, String>{
     'gift_panel_opened': 'gift_panel_opened',
@@ -16,6 +16,8 @@ void main() {
     'gift_paid': 'gift_payment_succeeded',
     'gift_qris_blocked_low_amount': 'gift_qris_low_amount_shown',
     'gift_locked_block_tapped': 'gift_locked_block_tapped',
+    'gift_wall_opened': 'gift_wall_opened',
+    'gift_sender_list_opened': 'gift_sender_list_opened',
   };
 
   /// 每个事件必须带的属性键（PRD §4）。
@@ -25,6 +27,8 @@ void main() {
     'gift_payment_succeeded': ['gift_id', 'quantity', 'total_amount', 'channel'],
     'gift_qris_low_amount_shown': ['total_amount'],
     'gift_locked_block_tapped': ['required_level'],
+    'gift_wall_opened': ['is_owner'],
+    'gift_sender_list_opened': ['is_owner'],
   };
 
   /// `lib/features/gift/` 下每个 `Analytics.capture('…', {…})` 调用：事件名 → 属性键。

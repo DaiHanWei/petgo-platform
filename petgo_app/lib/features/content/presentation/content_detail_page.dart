@@ -185,7 +185,7 @@ class _DetailDwellTrackerState extends State<_DetailDwellTracker>
   Widget build(BuildContext context) => widget.child;
 }
 
-/// 详情页礼物区显示条件（V1.4.0 gift Story 1.3 · AC1.2 / AC1.3）：只有**他人的 Diary**（`GROWTH_MOMENT`），
+/// 详情页「Kirim Hadiah」显示条件（V1.4.0 gift Story 1.3 · AC1.2 / AC1.3；2.2 起礼物区本身按 `giftPets` 显示）：只有**他人的 Diary**（`GROWTH_MOMENT`），
 /// 且作者未注销。主人拉黑我时照常显示（PRD AC9）；我拉黑主人时详情页本就 404，进不来。
 bool _showGiftZone(ContentDetail detail) =>
     detail.type == ContentType.growthMoment.wire && !detail.isAuthor && !detail.authorDeleted;
@@ -321,9 +321,15 @@ class _DetailScaffold extends ConsumerWidget {
                             const SizedBox(height: AppSpacing.md),
                             _DetailCheckinPlaceStrip(place: detail.checkinPlace!),
                           ],
-                          // V1.4.0 gift Story 1.3 · A3：他人 Diary 的礼物区（打卡场所条之后、分隔线之前）。
-                          // 自己的 Diary / Moment / Tips 本 story 不显示（A6 的礼物区展示属 Story 2.2）。
-                          if (_showGiftZone(detail)) GiftDetailZone(postId: detail.id),
+                          // V1.4.0 gift Story 1.3 / 2.2 · A3 ~ A6：Diary 礼物区（打卡场所条之后、分隔线之前）。
+                          // 有 giftPets 才渲染（Moment / Tips / 无关联宠物不渲染）；自己的 Diary（A6）照常展示、
+                          // 无「Kirim Hadiah」—— 按钮显隐仍是 1.3 的 [_showGiftZone]。
+                          if (detail.giftPets.isNotEmpty)
+                            GiftDetailZone(
+                              postId: detail.id,
+                              pets: detail.giftPets,
+                              showSendButton: _showGiftZone(detail),
+                            ),
                           const SizedBox(height: AppSpacing.md),
                           const Divider(height: AppSpacing.xl, color: AppColors.divider),
                           // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。

@@ -40,6 +40,9 @@ class DeepLinkRoutes {
   /// 获客成本已经沉没，只差把他们直接送到这一页。
   static const String createPetProfile = '/profile/create';
 
+  /// 我的送礼记录（送礼退回通知落点，V1.4.0 gift Story 2.2 映射 / Story 2.3 落地页面与路由）。
+  static const String giftOrders = '/me/gift-orders';
+
   /// Feed（D3 内容钩子落点）。**分支根，必须 `go` 不能 `push`**，见 [shellTabRoots]。
   static const String feedHome = '/home';
 
@@ -107,6 +110,9 @@ class DeepLinkRoutes {
     }
     // 退款被驳回：refund 详情页以 extra 对象寻址、无 token 路由 → 落退款列表（安全落点）。
     if (type == 'REFUND_REJECTED') return '/me/refunds';
+    // 送礼未送达退回（V1.4.0 gift Story 2.2 · AC6.2 · decision-log ③ Q5）：进「我的送礼记录」列表页。
+    // targetRef 是订单 public_token，本版本只落列表、不用它定位单行（页面与路由由 Story 2.3 落地）。
+    if (type == 'GIFT_UNDELIVERED_REFUND') return giftOrders;
     // 账号警告/停用（bug 20260901-477）：后端 targetRef 恒空，必须在下面「无 targetRef →
     // 落通知中心」的短路**之前**分流（与 REFUND_REJECTED 同位）——落回通知中心时人本来
     // 就在通知中心，表现即「点了没反应」（与 bug 20260729-391 的死点击同型）。
@@ -156,6 +162,12 @@ class DeepLinkRoutes {
       case 'USER_FOLLOWED':
         final id = int.tryParse(targetRef);
         return id == null ? notificationsCenter : '/users/$id';
+      // 收礼（V1.4.0 gift Story 2.2 · AC6.1）：targetRef = 宠物 id（Story 1.2）→ 该宠物礼物页、墙展开。
+      // 🛡 非数字落通知中心（同 USER_FOLLOWED 防崩）。core 不 import feature 页面，故写字面量
+      // （与 `GiftPage.routeFor(id, wallExpanded: true)` 同形）。
+      case 'PET_GIFT_RECEIVED':
+        final id = int.tryParse(targetRef);
+        return id == null ? notificationsCenter : '/pets/$id/gifts?wall=expanded';
       default:
         // CONTENT_REVIEW_REJECTED / CONTENT_REVIEW_TIMED_OUT / REPORT_REVIEWED：
         // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。

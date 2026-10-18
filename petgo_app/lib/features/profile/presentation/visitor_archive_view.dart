@@ -7,6 +7,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../gift/presentation/gift_page.dart';
 import '../../gift/presentation/widgets/gift_entry.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
@@ -116,7 +117,10 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
                 titleAction: _giftPill(),
                 avatarKey: _avatarKey,
                 happyCount: stats?.happyMomentCount,
-                consultCount: stats?.consultCount,
+                // V1.4.0 gift Story 2.2 · A1：中间格礼物总价值。只读态同样可点（站内入口才有 petId）；
+                // 分享 token 态拿不到 petId → 只显示数值、不可点（待确认，同 1.3 送礼胶囊）。
+                giftTotalValue: stats?.giftTotalValue,
+                onOpenGifts: _openGifts(),
                 milestoneCompleted: stats?.milestoneCompleted,
                 milestoneTotal: stats?.milestoneTotal,
                 // 里程碑进度条只展示，不跳转（跳的是当前登录用户自己的里程碑页）。
@@ -153,11 +157,18 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
     return GiftSendPill(
       petId: petId,
       flightTargetKey: _avatarKey,
-      // 统计格「Hadiah +N」属 Story 2.2；这里先失效，2.2 接上即生效。
+      // 送达后失效统计 → 礼物格（Story 2.2）的总价值随之刷新。
       onDelivered: () {
         if (mounted) ref.invalidate(visitorStatsProvider(widget.scope));
       },
     );
+  }
+
+  /// 礼物格点击（V1.4.0 gift Story 2.2 · AC2.4 / AC2.6）：站内入口 → 该宠物礼物页（E1）；分享 token 态 null。
+  VoidCallback? _openGifts() {
+    final petId = widget.scope.petId;
+    if (!widget.scope.isInApp || petId == null) return null;
+    return () => context.push(GiftPage.routeFor(petId));
   }
 
   /// 返回（UI 稿 P1 的 `.ro-titlerow` 左侧箭头）。

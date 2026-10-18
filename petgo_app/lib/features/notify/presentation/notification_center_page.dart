@@ -358,6 +358,15 @@ class _NotificationCenterPageState
       unawaited(openUserProfile(context, ref, profileId));
       return;
     }
+    // V1.4.0 gift Story 2.2 · AC6.3：收礼「进 Diary Tab 并展开礼物墙」—— 先 go Diary Tab 根（Tab 根只能 go），
+    // **下一帧**再 push 礼物页（照 `_goDeepLinkWith` 的 post-frame 写法：go 的解析是异步的，同帧 push 会被吃掉），
+    // 返回即回到 Diary Tab。go 会收掉本页，故先取 router 实例。
+    if (item.type == 'PET_GIFT_RECEIVED' && location.startsWith('/pets/')) {
+      final router = GoRouter.of(context);
+      router.go(DeepLinkRoutes.growthArchive);
+      WidgetsBinding.instance.addPostFrameCallback((_) => router.push(location));
+      return;
+    }
     if (DeepLinkRoutes.isShellTabRoot(location)) {
       // Tab 分支根（如纪念日→/profile=Diary）只能 go 切分支：push 会二次构建 shell
       // → GlobalKey 撞车白屏 + 此后该 Tab 永久失效（bug 20260729）。go 同时收掉本页栈。
@@ -762,6 +771,14 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.cream2,
     ),
     'PET_BIRTHDAY' => (Icons.cake_rounded, AppColors.gold, AppColors.goldTint),
+    // V1.4.0 gift Story 2.2 · AC5.2（UI 稿 G1）：收礼金色礼物（同 PET_BIRTHDAY 金 / 金浅底，decision-log ③ #F6A609）。
+    'PET_GIFT_RECEIVED' => (Icons.redeem_rounded, AppColors.gold, AppColors.goldTint),
+    // UI 稿 G3：退回用紫色钱包（钱回来了）—— **不用** REFUND_REJECTED 的红色。
+    'GIFT_UNDELIVERED_REFUND' => (
+      Icons.account_balance_wallet_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
     'COMPANION_ANNIVERSARY' => (
       Icons.celebration_rounded,
       AppColors.gold,
@@ -901,8 +918,12 @@ class _NotificationTileState extends State<_NotificationTile> {
     'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
     // 被 @ 提及（V1.3.0 batch-b1 Story 3.4）：标题两种文案共用一句，正文才分帖子 / 评论。
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
-    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 title 的类型，理由见 [_opsTitle]。
+    // 运营通知（V1.3.4 Story 6.3）：读后端 title，理由见 [_opsTitle]。
     'OPS_ANNOUNCEMENT' => _opsTitle(l10n),
+    // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：继运营通知后又一个读后端 title 的类型，理由见 [_refundTitle]。
+    'GIFT_UNDELIVERED_REFUND' => _refundTitle(l10n),
+    // 收礼无 actorName（送礼人已注销 / 封号）→ 本地兜底；有 actorName 走「后端文案条目」分支。
+    'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedTitle,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -955,8 +976,11 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => _isCommentMention
         ? l10n.notifyBodyContentMentionedComment
         : l10n.notifyBodyContentMentionedPost,
-    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 body 的类型，理由见 [_opsTitle]。
+    // 运营通知（V1.3.4 Story 6.3）：读后端 body，理由见 [_opsTitle]。
     'OPS_ANNOUNCEMENT' => _opsBody(l10n),
+    // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3）：读后端 body，理由见 [_refundTitle]。
+    'GIFT_UNDELIVERED_REFUND' => _refundBody(l10n),
+    'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedBody,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };
@@ -973,6 +997,19 @@ class _NotificationTileState extends State<_NotificationTile> {
   String _opsBody(AppLocalizations l10n) {
     final b = widget.item.body?.trim() ?? '';
     return b.isEmpty ? l10n.notifyBodySystem : b;
+  }
+
+  /// 送礼未送达退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：**读后端 title / body**（同运营通知做法）。
+  /// 正文带三个运行时参数（宠物名、退回金额、原因），App 无从本地拼；Story 1.2 已按送礼人账号语言渲染后落库，
+  /// 与 G4 推送同一句。任一为空分别回落本地兜底，绝不显示空白。
+  String _refundTitle(AppLocalizations l10n) {
+    final t = widget.item.title?.trim() ?? '';
+    return t.isEmpty ? l10n.giftNotifyRefundTitle : t;
+  }
+
+  String _refundBody(AppLocalizations l10n) {
+    final b = widget.item.body?.trim() ?? '';
+    return b.isEmpty ? l10n.giftNotifyRefundBodyFallback : b;
   }
 
   /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。
@@ -1188,6 +1225,8 @@ class _NotificationTileState extends State<_NotificationTile> {
                         // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
                         // V1.3.4 两处例外：「后端文案条目」（hasServerCopy）走上面的分支读后端 title/body；
                         // `OPS_ANNOUNCEMENT` 在 _typeLabel / _typeBody 里读后端串（理由见 `_opsTitle`）。
+                        // V1.4.0 gift Story 2.2：`GIFT_UNDELIVERED_REFUND` 同理读后端串（正文带三个运行时参数，
+                        // App 无从本地拼；理由见 `_refundTitle`）。
                         Text(
                           _typeLabel(l10n),
                           style: const TextStyle(

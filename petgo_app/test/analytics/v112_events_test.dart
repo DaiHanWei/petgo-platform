@@ -521,6 +521,8 @@ void main() {
         // 不外露自增 id；source ∈ {push, notification_center}（'source' 已在上方）。
         'campaign_id',
         'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
+        // V1.4.0 gift Story 2.2（PRD §4）：gift_wall_opened / gift_sender_list_opened 区分主人与访客视角。
+        'is_owner',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

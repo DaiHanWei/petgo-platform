@@ -504,4 +504,8 @@ class ApiPaths {
 
   /// 单笔送礼订单状态（QRIS 轮询，仅本人）。token 由后端生成，URL-safe。
   static String meGiftOrder(String token) => '$base/me/gift-orders/$token';
+
+  /// 礼物页粉丝榜（V1.4.0 gift Story 2.1 / 2.2）：GET `?cursor=` → `GiftSupporterPage`，每页 20。
+  /// 礼物页汇总 + 墙是 GET [petGifts]（与发起送礼同路径不同方法）。仅 role=USER。
+  static String petGiftSupporters(int petId) => '$base/pets/$petId/gifts/supporters';
 }

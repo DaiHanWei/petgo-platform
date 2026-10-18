@@ -32,7 +32,8 @@ class DiaryHeader extends StatelessWidget {
     super.key,
     required this.profile,
     this.happyCount,
-    this.consultCount,
+    this.giftTotalValue,
+    this.onOpenGifts,
     this.milestoneCompleted,
     this.milestoneTotal,
     this.milestoneUncelebrated = 0,
@@ -72,7 +73,12 @@ class DiaryHeader extends StatelessWidget {
 
   /// 三列统计（未就绪传 null → 显占位「·」，沿用现状）。
   final int? happyCount;
-  final int? consultCount;
+
+  /// 中间格：礼物总价值（V1.4.0 gift Story 2.2；原 consultCount）。原样透传 [PetInfoCard]。
+  final int? giftTotalValue;
+
+  /// 点礼物格进礼物页。⚠️ 与 [readOnly] 无关：访客只读态同样可点（UI 稿 A1）。
+  final VoidCallback? onOpenGifts;
 
   /// 里程碑进度；任一为 null → 不渲染进度条（沿用现状：统计未就绪时该条不出现）。
   final int? milestoneCompleted;
@@ -137,7 +143,8 @@ class DiaryHeader extends StatelessWidget {
         PetInfoCard(
           profile: profile,
           happyCount: happyCount,
-          consultCount: consultCount,
+          giftTotalValue: giftTotalValue,
+          onOpenGifts: onOpenGifts,
           milestoneCount: milestoneCompleted,
           topRight: petCardAction,
           avatarKey: avatarKey,

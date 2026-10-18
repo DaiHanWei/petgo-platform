@@ -55,6 +55,9 @@ class AppColors {
   static const Color menstruationRed = Color(0xFFB03060);
   static const Color healthEventText = Color(0xFFC4263C); // 健康事件深红文字（原型 hentry #C4263C）
   static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
+  // V1.4.0 gift Story 2.2：礼物页粉丝榜前三名排名圆（金用 [gold]；不用 🥇🥈🥉 emoji，UI 稿 E1）。
+  static const Color rankSilver = Color(0xFFA7A7A7);
+  static const Color rankBronze = Color(0xFFC98A5A);
   // V1.3.2 Story 1.6 · Diary 打卡条目专属底色（青蓝，与里程碑 S/M/L 金紫、身份证紫区分）
   static const Color checkinTint = Color(0xFFE6F5F7);
   static const Color checkinBorder = Color(0xFFB7DFE5);

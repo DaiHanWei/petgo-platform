@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/place/presentation/place_detail_page.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
+import 'package:tailtopia/core/router/app_router.dart' show deepLinkNeedsBaseRoute;
 import 'package:tailtopia/core/router/deep_link_routes.dart';
+import 'package:tailtopia/features/gift/presentation/gift_page.dart';
 
 /// Story 6.1 J4：pushPayloadToLocation 七类映射 + 评论区锚点 + 未知 type/空 token 兜底。
 /// 🔄 PRD V1.0.0 修订（Fx · 2026-06-08）：四类→七类，新增生日/纪念日/里程碑节点三类固定目标（F2/F5）。
@@ -153,4 +155,25 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('USER_FOLLOWED', 'abc'), DeepLinkRoutes.notificationsCenter);
     expect(DeepLinkRoutes.pushPayloadToLocation('USER_FOLLOWED', null), DeepLinkRoutes.notificationsCenter);
   });
+
+  // V1.4.0 gift Story 2.2 · AC6.1 / AC6.2。
+  test('PET_GIFT_RECEIVED → 该宠物礼物页且墙展开（targetRef = 宠物 id）；非数字 / 空 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', '12'), '/pets/12/gifts?wall=expanded');
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', '12'),
+        GiftPage.routeFor(12, wallExpanded: true));
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', 'abc'), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', null), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', ''), DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('GIFT_UNDELIVERED_REFUND → 我的送礼记录（不依赖 targetRef 订单 token）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('GIFT_UNDELIVERED_REFUND', 'ordTok123'), '/me/gift-orders');
+    expect(DeepLinkRoutes.pushPayloadToLocation('GIFT_UNDELIVERED_REFUND', null), '/me/gift-orders');
+    expect(DeepLinkRoutes.giftOrders, '/me/gift-orders');
+  });
+
+  test('礼物页不是 Tab 根：冷启动需要先铺底座再叠（deepLinkNeedsBaseRoute）', () {
+    expect(deepLinkNeedsBaseRoute('/pets/12/gifts?wall=expanded'), isTrue);
+  });
 }
+

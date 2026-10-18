@@ -25,6 +25,7 @@ import 'gift_style.dart';
 /// 送礼入口 `source`（与后端 `GiftSource` 小写值一致；`gift_page` 由 Story 2.2 的礼物页传）。
 const String giftSourceDiaryTab = 'diary_tab';
 const String giftSourceContentDetail = 'content_detail';
+const String giftSourceGiftPage = 'gift_page';
 
 /// 充值页路由（与 `PayChannelPicker` 默认跳转、`vet_timed_pay_page._topUp` 同一条）。
 const String _rechargeRoute = '/me/pawcoin/recharge';
