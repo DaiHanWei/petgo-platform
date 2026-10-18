@@ -294,6 +294,7 @@ dialog.modal .modal-foot {
 /* 抽屉打开时 toast 挪到抽屉左侧，不再压住抽屉底部的保存钮（OP-10 自测 2026-10-15） */
 body:has(.drawer.is-open) .toast { right: calc(min(480px, 100vw) + 24px); }
 body:has(#user-drawer.drawer.is-open) .toast { right: calc(min(600px, 100vw) + 24px); }
+body:has(#growthbatch-drawer.drawer.is-open) .toast { right: calc(min(600px, 100vw) + 24px); }
 .err { color: var(--danger); font-size: var(--fs-sm); margin: 6px 0; }
 .ok { color: var(--ok); font-size: var(--fs-sm); margin: 6px 0; }
 
@@ -937,6 +938,8 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* V1.3.2 后台 AB-23：用户详情抽屉 480 → 600px（六页签三语都放不下 480，UI 稿 E1 实测）。
    🔴 只放宽这一个抽屉 —— 场所等其余抽屉维持 480 是有意的，不要借此统一加宽。 */
 #user-drawer.drawer { width: 600px; }
+/* V1.4.0 ① Story 4.3 · UI H1：批量发放抽屉 600 宽（同用户抽屉宽度），只放宽这一个 */
+#growthbatch-drawer.drawer { width: 600px; }
 .ud-purchases .ud-card + .ud-card { margin-top: 10px; }
 .ud-pc-title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--fs); }
 .ud-pc-table .num, .ud-pc-table .num-cell { font-variant-numeric: tabular-nums; }

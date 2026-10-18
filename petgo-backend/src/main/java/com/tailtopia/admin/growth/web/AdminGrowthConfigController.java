@@ -45,8 +45,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class AdminGrowthConfigController {
 
+    /**
+     * 页面门。V1.4.0 ① Story 4.3：加 {@code growth.user_adjust}——批量发放入口在本页，P-5 预授的 OPS_MANAGER 否则进不来；
+     * 只持该码时三个页签按只读渲染（模板按 {@code growth.config_edit} 判可编辑）。与目录 {@code growth} 页 navCodes 逐字同集。
+     */
     static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('" + AdminPermissions.GROWTH_CONFIG_VIEW
-            + "') or hasAuthority('" + AdminPermissions.GROWTH_CONFIG_EDIT + "')";
+            + "') or hasAuthority('" + AdminPermissions.GROWTH_CONFIG_EDIT
+            + "') or hasAuthority('" + AdminPermissions.GROWTH_USER_ADJUST + "')";
     static final String EDIT_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('" + AdminPermissions.GROWTH_CONFIG_EDIT
             + "')";
 

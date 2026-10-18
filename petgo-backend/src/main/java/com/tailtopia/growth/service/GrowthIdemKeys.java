@@ -9,7 +9,6 @@ import java.time.LocalDate;
  * <p>格式 {@code {类型}:{字段}:{字段}}。点赞 / 收藏的键<b>不含时间</b> = 终身一次。
  * 扣回统一 {@link #reverse}：取消点赞 / 取消收藏 / 下架的 sourceKey 固定（原入账终身一次，扣回也只能一次）；
  * 退款（Story 1.3）用 {@code "REFUND:" + refundKey}，最终形如 {@code REV:123:REFUND:rf_xxx}。
- * {@code BATCH:*} 由 Story 4.3 追加到本类。
  */
 public final class GrowthIdemKeys {
 
@@ -99,6 +98,11 @@ public final class GrowthIdemKeys {
     /** 后台单个调整 / 运营活动（Story 4.2）：{@code ADMIN:{grantToken}}，token 为页面渲染时生成的一次性 UUID。 */
     public static String admin(String grantToken) {
         return "ADMIN:" + grantToken;
+    }
+
+    /** 批量发放活动 EXP（Story 4.3）：{@code BATCH:{batchNo}:{u}}，按（批次号, 用户）去重。 */
+    public static String batch(String batchNo, long userId) {
+        return "BATCH:" + batchNo + ":" + userId;
     }
 
     /** 退款扣回的 sourceKey（Story 1.3）：{@code REFUND:{refundKey}}，拼进 {@link #reverse}。 */

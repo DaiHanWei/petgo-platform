@@ -283,4 +283,89 @@ class GrowthLedgerServiceAdjustTest {
         assertThat(AdjustType.fromOrNull(null)).isNull();
         assertThat(AdjustType.OPS_CAMPAIGN.rule()).isEqualTo(RuleCode.OPS_CAMPAIGN);
     }
+
+    // ------------------------------------------------------------------ Story 4.3 批量形态
+
+    @Test
+    void batchCommandUsesBatchKeyAndRecordsBatchNo() {
+        service.adjust(AdminAdjustCommand.batch(U, 50, "周年庆", ADMIN, "GB-202610181207-ABC123"));
+
+        SqlParameterSource row = insertedRow();
+        assertThat(row.getValue("idemKey")).isEqualTo(GrowthIdemKeys.batch("GB-202610181207-ABC123", U))
+                .isEqualTo("BATCH:GB-202610181207-ABC123:7");
+        assertThat(row.getValue("batchNo")).isEqualTo("GB-202610181207-ABC123");
+        assertThat(row.getValue("ruleCode")).isEqualTo("OPS_CAMPAIGN");
+        assertThat(row.getValue("reason")).isNull();
+        verify(levelChange).onLifetimeChanged(account, RuleCode.OPS_CAMPAIGN);
+    }
+
+    @Test
+    void singleAdjustLeavesBatchNoNull() {
+        service.adjust(cmd(AdjustType.ADMIN_ADJUST, 5));
+        assertThat(insertedRow().getValue("batchNo")).isNull();
+    }
+
+    @Test
+    void batchCommandValidation() {
+        assertThatThrownBy(() -> service.adjust(AdminAdjustCommand.batch(U, 0, "x", ADMIN, "GB-1")))
+                .satisfies(t -> assertThat(code(t)).isEqualTo("admin.err.growth.batch.expInvalid"));
+        assertThatThrownBy(() -> service.adjust(AdminAdjustCommand.batch(U, 5, " ", ADMIN, "GB-1")))
+                .satisfies(t -> assertThat(code(t)).isEqualTo("admin.err.growth.batch.campaignRequired"));
+        assertThatThrownBy(() -> service.adjust(AdminAdjustCommand.batch(U, 5, "x", ADMIN, "G".repeat(33))))
+                .satisfies(t -> assertThat(code(t)).isEqualTo("admin.err.growth.batch.batchNoInvalid"));
+    }
+
+    @Test
+    void classifyMapsEachRowInOneQueryAndDefaultsToNotFound() throws Exception {
+        java.util.List<Object[]> rows = java.util.List.of(
+                new Object[] {1L, "REAL", "ACTIVE", false, true},
+                new Object[] {2L, "REAL", "ACTIVE", true, false},
+                new Object[] {3L, "VIRTUAL", "ACTIVE", false, false},
+                new Object[] {4L, "REAL", "DEACTIVATED", false, false},
+                new Object[] {5L, "REAL", "ACTIVE", false, false});
+        org.mockito.Mockito.doAnswer(inv -> {
+            org.springframework.jdbc.core.RowCallbackHandler h = inv.getArgument(2);
+            for (Object[] r : rows) {
+                java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+                when(rs.getLong("id")).thenReturn((Long) r[0]);
+                when(rs.getString("account_type")).thenReturn((String) r[1]);
+                when(rs.getString("status")).thenReturn((String) r[2]);
+                when(rs.getBoolean("deleted")).thenReturn((Boolean) r[3]);
+                when(rs.getBoolean("eligible")).thenReturn((Boolean) r[4]);
+                h.processRow(rs);
+            }
+            return null;
+        }).when(jdbc).query(eq(GrowthLedgerService.CLASSIFY_SQL), anyMap(),
+                any(org.springframework.jdbc.core.RowCallbackHandler.class));
+
+        java.util.Map<Long, GrowthLedgerService.Eligibility> m = service.classify(java.util.List.of(1L, 2L, 3L, 4L,
+                5L, 6L, 1L));
+
+        assertThat(m).containsExactly(
+                java.util.Map.entry(1L, GrowthLedgerService.Eligibility.ELIGIBLE),
+                java.util.Map.entry(2L, GrowthLedgerService.Eligibility.DELETED),
+                java.util.Map.entry(3L, GrowthLedgerService.Eligibility.VIRTUAL),
+                java.util.Map.entry(4L, GrowthLedgerService.Eligibility.DEACTIVATED),
+                java.util.Map.entry(5L, GrowthLedgerService.Eligibility.NOT_PARTICIPATING),
+                java.util.Map.entry(6L, GrowthLedgerService.Eligibility.NOT_FOUND));
+        verify(jdbc, times(1)).query(eq(GrowthLedgerService.CLASSIFY_SQL), anyMap(),
+                any(org.springframework.jdbc.core.RowCallbackHandler.class));
+        // 参与判定与单个调整同一谓词（不在后台另写一套）
+        assertThat(GrowthLedgerService.CLASSIFY_SQL).contains(GrowthParticipation.ACTIVE_REGULAR_USER);
+    }
+
+    @Test
+    void batchMatchesComparesExistingNoteAndDelta() {
+        when(jdbc.queryForList(eq(GrowthLedgerService.BATCH_SIGNATURE_SQL), anyMap())).thenReturn(
+                java.util.List.of(java.util.Map.of("note", "周年庆", "delta", 50)));
+        assertThat(service.batchMatches("GB-1", "周年庆", 50)).isTrue();
+        assertThat(service.batchMatches("GB-1", "周年庆", 60)).isFalse();
+        assertThat(service.batchMatches("GB-1", "别的", 50)).isFalse();
+    }
+
+    @Test
+    void emptyBatchMatches() {
+        when(jdbc.queryForList(eq(GrowthLedgerService.BATCH_SIGNATURE_SQL), anyMap())).thenReturn(java.util.List.of());
+        assertThat(service.batchMatches("GB-1", "x", 1)).isTrue();
+    }
 }

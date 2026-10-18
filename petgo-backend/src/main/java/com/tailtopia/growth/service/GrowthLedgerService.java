@@ -47,8 +47,23 @@ public class GrowthLedgerService {
 
     /** 后台调整（Story 4.2）：比入账多 {@code note / operator_admin_id} 两列。 */
     static final String INSERT_ADJUST_SQL = "INSERT INTO growth_ledger (user_id, rule_code, delta, idem_key, reason, "
-            + "note, operator_admin_id, wib_date, created_at) VALUES (:userId, :ruleCode, :delta, :idemKey, :reason, "
-            + ":note, :operatorAdminId, :wibDate, :createdAt)";
+            + "note, operator_admin_id, batch_no, wib_date, created_at) VALUES (:userId, :ruleCode, :delta, :idemKey, "
+            + ":reason, :note, :operatorAdminId, :batchNo, :wibDate, :createdAt)";
+
+    /** 与 {@code growth_ledger.batch_no VARCHAR(32)} 一致。 */
+    public static final int BATCH_NO_MAX_LENGTH = 32;
+
+    /** 批量参与归类（Story 4.3）：一次 SQL，参与判定与 {@link #adjust} 同口径（{@link GrowthParticipation} + 注销已提交）。 */
+    static final String CLASSIFY_SQL = "SELECT u.id, u.account_type, u.status, "
+            + "(u.deleted_at IS NOT NULL OR EXISTS (SELECT 1 FROM account_deletions ad WHERE ad.user_id = u.id)) "
+            + "AS deleted, " + GrowthParticipation.ACTIVE_REGULAR_USER + " AS eligible FROM users u WHERE u.id IN (:ids)";
+
+    static final int CLASSIFY_CHUNK = 1000;
+
+    static final String BATCH_SIGNATURE_SQL = "SELECT DISTINCT note, delta FROM growth_ledger WHERE batch_no = :b";
+
+    /** 批量归类结果。{@code NOT_PARTICIPATING} = 未注销、未停用的非普通用户（官方号等）。 */
+    public enum Eligibility { ELIGIBLE, NOT_FOUND, DELETED, DEACTIVATED, VIRTUAL, NOT_PARTICIPATING }
 
     static final String ACCOUNT_TYPE_SQL = "SELECT account_type FROM users WHERE id = :id";
 
@@ -173,9 +188,13 @@ public class GrowthLedgerService {
      */
     @Transactional
     public AdminAdjustCommand.Result adjust(AdminAdjustCommand cmd) {
-        validateAdjust(cmd.type(), cmd.delta(), cmd.note(), cmd.grantToken());
+        if (cmd.batchNo() == null) {
+            validateAdjust(cmd.type(), cmd.delta(), cmd.note(), cmd.grantToken());
+        } else {
+            validateBatchAdjust(cmd);
+        }
         long userId = cmd.userId();
-        String idemKey = GrowthIdemKeys.admin(cmd.grantToken().trim());
+        String idemKey = cmd.idemKey();
         // 重复提交先认（code-review）：入账成功后用户被停用 / 运营活动被停用，回退重提同一 token 仍应是「已处理」而非 422。
         GrowthLedgerEntry prior = ledger.findByIdemKey(idemKey).orElse(null);
         if (prior != null) {
@@ -207,6 +226,7 @@ public class GrowthLedgerService {
                         ? ReverseReason.ADMIN_ADJUST.name() : null)
                 .addValue("note", cmd.note().trim())
                 .addValue("operatorAdminId", cmd.operatorAdminId())
+                .addValue("batchNo", cmd.batchNo())
                 .addValue("wibDate", clock.instant().atZone(ScheduleWindow.WIB).toLocalDate())
                 .addValue("createdAt", java.sql.Timestamp.from(clock.instant()));
         jdbc.update(INSERT_ADJUST_SQL, p);
@@ -298,6 +318,70 @@ public class GrowthLedgerService {
         return rules.findById(rule.name())
                 .map(r -> GrowthPoints.ofAmount(amount, r.getPoints(), r.getUnitAmount()))
                 .orElse(0);
+    }
+
+    /**
+     * 批量参与归类（Story 4.3 · 与单个调整同一判定，不在后台另写一套）：分块 IN 查询，每块一条 SQL。
+     * 顺序：注销（含注销已提交）→ 虚拟号 → 停用 → 参与 → 其余（官方号等）；不在 users 里 = NOT_FOUND。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Eligibility> classify(java.util.Collection<Long> userIds) {
+        Map<Long, Eligibility> out = new java.util.LinkedHashMap<>();
+        List<Long> ids = List.copyOf(new java.util.LinkedHashSet<>(userIds));
+        for (Long id : ids) {
+            out.put(id, Eligibility.NOT_FOUND);
+        }
+        for (int from = 0; from < ids.size(); from += CLASSIFY_CHUNK) {
+            List<Long> chunk = ids.subList(from, Math.min(ids.size(), from + CLASSIFY_CHUNK));
+            jdbc.query(CLASSIFY_SQL, Map.of("ids", chunk), (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
+                long id = rs.getLong("id");
+                Eligibility e;
+                if (rs.getBoolean("deleted")) {
+                    e = Eligibility.DELETED;
+                } else if ("VIRTUAL".equals(rs.getString("account_type"))) {
+                    e = Eligibility.VIRTUAL;
+                } else if (!"ACTIVE".equals(rs.getString("status"))) {
+                    e = Eligibility.DEACTIVATED;
+                } else if (rs.getBoolean("eligible")) {
+                    e = Eligibility.ELIGIBLE;
+                } else {
+                    e = Eligibility.NOT_PARTICIPATING;
+                }
+                out.put(id, e);
+            });
+        }
+        return out;
+    }
+
+    /**
+     * 某批次已入账流水的（活动名, 每人值）是否与本次一致（Story 4.3 code-review）：同一批次号只能对应一个活动与一个数额，
+     * 否则「按批次号查」就不再能还原一次发放。批次尚无流水 = 一致。
+     */
+    @Transactional(readOnly = true)
+    public boolean batchMatches(String batchNo, String campaign, int expPerUser) {
+        List<Map<String, Object>> rows = jdbc.queryForList(BATCH_SIGNATURE_SQL, Map.of("b", batchNo));
+        for (Map<String, Object> r : rows) {
+            if (!campaign.equals(r.get("note")) || ((Number) r.get("delta")).intValue() != expPerUser) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 批量形态的入参：只增、活动名 ≤ 200、批次号 ≤ 32。 */
+    private static void validateBatchAdjust(AdminAdjustCommand cmd) {
+        if (cmd.type() != AdminAdjustCommand.AdjustType.OPS_CAMPAIGN || cmd.delta() <= 0) {
+            throw AppException.validation("每人 EXP 须为正整数").code("admin.err.growth.batch.expInvalid");
+        }
+        if (cmd.note() == null || cmd.note().isBlank()) {
+            throw AppException.validation("请填写活动名称").code("admin.err.growth.batch.campaignRequired");
+        }
+        if (cmd.note().trim().length() > NOTE_MAX_LENGTH) {
+            throw AppException.validation("活动名称不能超过 200 字").code("admin.err.growth.batch.campaignTooLong");
+        }
+        if (cmd.batchNo().isBlank() || cmd.batchNo().length() > BATCH_NO_MAX_LENGTH) {
+            throw AppException.validation("批次号无效").code("admin.err.growth.batch.batchNoInvalid");
+        }
     }
 
     /** 是否参与成长值（{@link GrowthParticipation} 口径；后台成长值页签据此决定调整卡是否可用）。 */

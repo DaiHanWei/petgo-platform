@@ -249,7 +249,7 @@ public final class AdminPageCatalog {
                     List.of(CONFIG_ALGO_PARAM_VIEW), List.of(CONFIG_ALGO_PARAM_EDIT), List.of()).nav("admin.nav.algoParams", "algo-params", CONFIG_ALGO_PARAM_VIEW),
             // V1.4.0 ① AB-32 · Story 4.1：成长体系配置（规则 / 消费换算 / 等级表）。不预授；入口门 = VIEW 或 EDIT。
             page("growth", G_CONFIG, "/admin/growth",
-                    List.of(GROWTH_CONFIG_VIEW), List.of(GROWTH_CONFIG_EDIT), List.of(GROWTH_USER_ADJUST)).nav("admin.nav.growth", "growth", GROWTH_CONFIG_VIEW, GROWTH_CONFIG_EDIT),
+                    List.of(GROWTH_CONFIG_VIEW), List.of(GROWTH_CONFIG_EDIT), List.of(GROWTH_USER_ADJUST)).nav("admin.nav.growth", "growth", GROWTH_CONFIG_VIEW, GROWTH_CONFIG_EDIT, GROWTH_USER_ADJUST),
             page("share-reward", G_CONFIG, null,
                     List.of(CONFIG_SHARE_REWARD_VIEW), List.of(CONFIG_SHARE_REWARD_EDIT), List.of()),
             page("audit-logs", G_CONFIG, "/admin/audit-logs",
