@@ -40,7 +40,8 @@
                       th:text="${r.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</span></td>
             <td>
                 <th:block th:if="${r.editable()}">
-                    <button type="button" class="btn btn-neutral btn-sm" th:if="${canEdit}"
+                    <!--/* UI G1：「编辑」是紫色文字链接（.tbl a），不是灰底按钮；仍用 button 承载 data-drawer-open。 */-->
+                    <button type="button" class="growth-rule-edit" th:if="${canEdit}"
                             th:attr="data-drawer-open=@{/admin/growth/rules/{c}/drawer(c=${r.code})},data-rule-edit=${r.code}" data-drawer-res="growthrule"
                             th:text="#{admin.v140.growth.edit}">编辑</button>
                     <!--/* 只读（G7）：「编辑」变灰字、不可点。 */-->

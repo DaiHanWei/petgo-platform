@@ -8,6 +8,7 @@
   hxPost（htmx 提交：成功回卡 fragment，失败 422 行内 err 到 #<cardId>-err）、confirmDiff（true = 提交前复述改动）、errorFields（422 错误码 → 字段名 JSON，红边）、
   readonly（true = 保存钮固定禁用并显示 readonlyNote）、confirmDiffNote（可选：确认弹层末尾追加的一句提醒，V1.3.2 Story 3.1；缺省 = 行为不变）。
   confirmDiffTitle（可选：确认弹层标题，V1.4.0 ① Story 4.1；缺省仍取 admin.v130.config.confirm.title，输出逐字不变）。
+  cfgFootSlot（可选：插在页脚保存钮左侧的片段，V1.4.0 L2 第四轮 · 等级表「＋ 追加等级」；缺省 = 输出逐字不变）。
   需要服务端确认弹层的卡（V1.3.4 AB-22）不设 confirmDiff，hxPost 指向只校验的预检端点，由它回 fragments/confirm-modal 到页面 #confirm-host。
 -->
 <body>
@@ -23,6 +24,7 @@
     <div class="cfg-foot">
         <p class="inline-error-slot" aria-live="polite" th:attr="id=${cardId != null} ? (${cardId} + '-err') : null"></p>
         <span class="hint cfg-readonly" th:if="${readonly}" th:text="${readonlyNote} ?: #{admin.v130.tpl.readonly}">只读</span>
+        <th:block th:if="${cfgFootSlot != null}"><th:block th:replace="${cfgFootSlot}"></th:block></th:block>
         <button type="submit" class="btn btn-primary" disabled data-save
                 th:text="${saveLabelSlot} ?: #{admin.v130.tpl.save}">保存</button>
     </div>

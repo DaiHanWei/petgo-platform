@@ -16,12 +16,14 @@ class AdminTimeTest {
         assertThat(t.fmt(utc)).isEqualTo("2026-09-10 00:30");
         assertThat(t.fmtDate(utc)).isEqualTo("2026-09-10");
         assertThat(t.zone().getId()).isEqualTo("Asia/Jakarta");
+        assertThat(t.shortWib(utc)).isEqualTo("09-10 00:30");
     }
 
     @Test
     void nullSafe() {
         assertThat(t.fmt(null)).isEmpty();
         assertThat(t.fmtDate(null)).isEmpty();
+        assertThat(t.shortWib(null)).isEqualTo("—");
         assertThat(t.today()).isNotNull();
     }
 }

@@ -56,7 +56,7 @@
 
             <label class="field field-full">
                 <span th:text="#{admin.v140.gift.form.price}">价格</span>
-                <span>Rp <input type="number" name="price" class="inp" required step="1"
+                <span class="gift-money"><span class="gift-money-cur" aria-hidden="true">Rp</span><input type="number" name="price" class="gift-money-val" required step="1"
                                 th:attr="min=${minPrice},max=${maxPrice}" th:value="${g.price}"/></span>
             </label>
             <p class="hint" th:text="#{admin.v140.gift.form.priceHintEdit}">整数，≥ Rp100。改价只影响之后的新订单。</p>
@@ -140,6 +140,12 @@
 
     <script>
         (function () {
+            var t = document.querySelector('#gift-drawer .drawer-title');
+            if (t && t.hasAttribute('data-default-title')) { t.textContent = t.getAttribute('data-default-title'); }
+        })();
+    </script>
+    <script>
+        (function () {
             var form = document.querySelector('[data-gift-edit-form]');
             if (!form) { return; }
             var save = form.querySelector('[data-gift-save]');
@@ -164,10 +170,9 @@
 </div>
 
 <!--/* 新建礼物（AC4.2）：multipart；字段自上而下同 UI L2 */-->
-<div th:fragment="createForm" class="tag-create" id="gift-create">
+<div th:fragment="createForm" class="tag-create" id="gift-create" th:attr="data-drawer-title=#{admin.v140.gift.drawer.newTitle}">
     <form th:attr="hx-post=@{/admin/gift-catalog}" hx-encoding="multipart/form-data"
           hx-target="#gift-drawer-err" hx-swap="innerHTML" id="giftCreateForm" data-gift-form>
-        <h3 th:text="#{admin.v140.gift.drawer.newTitle}">新建礼物</h3>
         <label class="field field-full">
             <span th:text="#{admin.v140.gift.form.icon}">图标</span>
             <input type="file" name="iconFile" accept="image/png,image/webp" required/>
@@ -191,7 +196,8 @@
 
         <label class="field field-full">
             <span th:text="#{admin.v140.gift.form.price}">价格</span>
-            <span>Rp <input type="number" name="price" class="inp" required step="1" th:attr="min=${minPrice},max=${maxPrice}"/></span>
+            <!--/* UI L2：Rp 作为输入框前缀（同 ② 运营配置金额框） */-->
+            <span class="gift-money"><span class="gift-money-cur" aria-hidden="true">Rp</span><input type="number" name="price" class="gift-money-val" required step="1" th:attr="min=${minPrice},max=${maxPrice}"/></span>
         </label>
         <p class="hint" th:text="#{admin.v140.gift.form.priceHint}">整数，≥ Rp100。</p>
 
@@ -221,15 +227,29 @@
             <p class="hint" th:text="#{admin.v140.gift.form.minLevelHint}">送礼人等级达到才能看到、才能送。</p>
         </div>
 
+        <!--/* UI L2：排序说明作为占位文字放进输入框（不再单列一行 hint） */-->
         <label class="field field-full">
             <span th:text="#{admin.v140.gift.form.sortOrder}">排序</span>
-            <input type="number" name="sortOrder" class="inp" min="0" step="1" th:attr="max=${maxSortOrder}"/>
+            <input type="number" name="sortOrder" class="inp gift-sort" min="0" step="1" th:attr="max=${maxSortOrder}"
+                   th:placeholder="#{admin.v140.gift.form.sortOrderHint}"/>
         </label>
-        <p class="hint" th:text="#{admin.v140.gift.form.sortOrderHint}">数字小的在前</p>
 
-        <div id="gift-drawer-err" class="lst-inline-error" aria-live="polite"></div>
-        <button type="submit" class="btn btn-primary" th:text="#{admin.v140.gift.save}">保存</button>
+        <!--/* UI L2：保存钮在抽屉页脚（右下）；错误槽同排靠左，紧挨按钮 */-->
+        <div class="gift-create-foot">
+            <div id="gift-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.v140.gift.save}">保存</button>
+        </div>
     </form>
+    <script>
+        (function () {
+            // 抽屉头标题：新建 =「新建礼物」；详情 / 编辑抽屉体加载时由 drawer 片段恢复成页面给的默认标题。
+            var t = document.querySelector('#gift-drawer .drawer-title');
+            var f = document.getElementById('gift-create');
+            if (!t || !f) { return; }
+            if (!t.hasAttribute('data-default-title')) { t.setAttribute('data-default-title', t.textContent); }
+            t.textContent = f.getAttribute('data-drawer-title');
+        })();
+    </script>
     <script th:replace="~{admin/fragments/drawer-gift :: kindToggle}"></script>
 </div>
 

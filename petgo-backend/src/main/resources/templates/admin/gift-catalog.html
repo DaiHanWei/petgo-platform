@@ -39,36 +39,28 @@
         <div th:replace="~{admin/fragments/gift-catalog-list :: sumbar(false)}"></div>
 
         <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::gift-filters}, ~{}, ~{::gift-table}, ~{::gift-drawer})}">
-            <form th:fragment="gift-filters" class="filter-bar" data-autosubmit th:action="@{/admin/gift-catalog}" method="get"
+            <form th:fragment="gift-filters" class="filter-bar gift-fbar" data-autosubmit th:action="@{/admin/gift-catalog}" method="get"
                   th:attr="hx-get=@{/admin/gift-catalog}" hx-target="#gift-rows" hx-swap="innerHTML" hx-push-url="true">
                 <!--/* 抽屉内新建 / 编辑 / 上下线成功 → HX-Trigger admin:gift-catalog-list-refresh：
                        🔴 必须 hx-include 筛选表单（closest form），否则刷新会丢筛选（用户标签页没有筛选，不能照抄静态 URL）。 */-->
                 <span hidden data-gift-refresh th:attr="hx-get=@{/admin/gift-catalog}" hx-include="closest form"
                       hx-trigger="admin:gift-catalog-list-refresh from:body" hx-target="#gift-rows" hx-swap="innerHTML"></span>
-                <label class="field">
-                    <span th:text="#{admin.v140.gift.col.price}">价格</span>
-                    <select name="price" class="sel">
-                        <option value="" th:selected="${fPrice == null}" th:text="#{admin.v140.gift.filter.allPrices}">全部价格</option>
-                        <option th:each="p : ${priceOptions}" th:value="${p}" th:selected="${fPrice == p}"
-                                th:text="'Rp' + ${#numbers.formatInteger(p, 1, 'COMMA')}">Rp1,000</option>
-                    </select>
-                </label>
-                <label class="field">
-                    <span th:text="#{admin.v140.gift.col.kind}">类型</span>
-                    <select name="kind" class="sel">
-                        <option value="" th:selected="${fKind == null}" th:text="#{admin.v140.gift.filter.allKinds}">全部类型</option>
-                        <option th:each="k : ${kinds}" th:value="${k}" th:selected="${fKind == k}"
-                                th:text="#{'admin.v140.gift.kind.' + ${k}}">普通</option>
-                    </select>
-                </label>
-                <label class="field">
-                    <span th:text="#{admin.v140.gift.col.status}">状态</span>
-                    <select name="status" class="sel">
-                        <option value="" th:selected="${fStatus == null}" th:text="#{admin.v140.gift.filter.allStatuses}">全部状态</option>
-                        <option th:each="s : ${statuses}" th:value="${s}" th:selected="${fStatus == s}"
-                                th:text="#{'admin.v140.gift.status.' + ${s}}">在线</option>
-                    </select>
-                </label>
+                <!--/* UI L1：筛选为不带标签的下拉（.fbar）；首项「全部××」+ aria-label 承担字段名。 */-->
+                <select name="price" class="sel" th:attr="aria-label=#{admin.v140.gift.col.price}">
+                    <option value="" th:selected="${fPrice == null}" th:text="#{admin.v140.gift.filter.allPrices}">全部价格</option>
+                    <option th:each="p : ${priceOptions}" th:value="${p}" th:selected="${fPrice == p}"
+                            th:text="'Rp' + ${#numbers.formatInteger(p, 1, 'COMMA')}">Rp1,000</option>
+                </select>
+                <select name="kind" class="sel" th:attr="aria-label=#{admin.v140.gift.col.kind}">
+                    <option value="" th:selected="${fKind == null}" th:text="#{admin.v140.gift.filter.allKinds}">全部类型</option>
+                    <option th:each="k : ${kinds}" th:value="${k}" th:selected="${fKind == k}"
+                            th:text="#{'admin.v140.gift.kind.' + ${k}}">普通</option>
+                </select>
+                <select name="status" class="sel" th:attr="aria-label=#{admin.v140.gift.col.status}">
+                    <option value="" th:selected="${fStatus == null}" th:text="#{admin.v140.gift.filter.allStatuses}">全部状态</option>
+                    <option th:each="s : ${statuses}" th:value="${s}" th:selected="${fStatus == s}"
+                            th:text="#{'admin.v140.gift.status.' + ${s}}">在线</option>
+                </select>
             </form>
 
             <div th:fragment="gift-table" id="gift-rows">
