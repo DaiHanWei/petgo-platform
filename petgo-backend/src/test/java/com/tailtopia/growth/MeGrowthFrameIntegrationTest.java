@@ -90,7 +90,9 @@ class MeGrowthFrameIntegrationTest extends ApiIntegrationTest {
     void downgradeFallsBackToHighestAvailableWithoutRewritingChoice() throws Exception {
         User u = userAtLevel(10);
         putFrame(u, "UPGRADED", 200);
-        jdbc.update("UPDATE growth_accounts SET level = 9 WHERE user_id = ?", u.getId()); // 模拟退款降级
+        // 模拟退款降级：lifetime_total 与 level 一起降（同 userAtLevel 的自洽要求，否则异步每日登录入账会按累计值重算回 Lv10）
+        jdbc.update("UPDATE growth_accounts SET level = 9, lifetime_total = (SELECT threshold FROM growth_levels WHERE level = 9)"
+                + " WHERE user_id = ?", u.getId());
         assertThat(getJson(u, "/api/v1/me/growth").get("frames").get("effective").asText()).isEqualTo("BASIC");
         assertThat(frameChoice(u)).isEqualTo("UPGRADED");
     }
