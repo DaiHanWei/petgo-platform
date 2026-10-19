@@ -3,6 +3,7 @@ package com.tailtopia.admin.seed.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,8 +32,9 @@ import org.junit.jupiter.api.Test;
 class AdminContentScheduleRescheduleTest {
 
     private final SeedBatchRowRepository rows = mock(SeedBatchRowRepository.class);
+    private final SeedBatchService stateMachine = mock(SeedBatchService.class);
     private final AdminContentScheduleController controller = new AdminContentScheduleController(rows,
-            mock(SeedBatchService.class), mock(AdminSchedulePageService.class), mock(Messages.class));
+            stateMachine, mock(AdminSchedulePageService.class), mock(Messages.class));
 
     /** 明天同一时刻（WIB 墙上时间），保证在未来。 */
     private static final String TOMORROW = LocalDateTime.now(ZoneId.of("Asia/Jakarta")).plusDays(1)
@@ -62,11 +64,12 @@ class AdminContentScheduleRescheduleTest {
         SeedBatchRow r = row(status);
         Instant before = r.getScheduledAt();
         when(rows.findById(5L)).thenReturn(Optional.of(r));
-        assertThatThrownBy(() -> controller.doReschedule(5L, TOMORROW))
+        assertThatThrownBy(() -> controller.doReschedule(5L, TOMORROW, 3L))
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo(code));
         assertThat(r.getScheduledAt()).isEqualTo(before);
         verify(rows, never()).save(any());
+        verify(stateMachine, never()).reschedule(any(), any(), anyLong());
     }
 
     @Test
@@ -93,10 +96,10 @@ class AdminContentScheduleRescheduleTest {
     void scheduledRowIsRescheduled() {
         SeedBatchRow r = row(SeedBatchRowStatus.SCHEDULED);
         when(rows.findById(5L)).thenReturn(Optional.of(r));
-        controller.doReschedule(5L, TOMORROW);
+        controller.doReschedule(5L, TOMORROW, 3L);
         Instant expected = LocalDateTime.parse(TOMORROW).atZone(ZoneId.of("Asia/Jakarta")).toInstant();
-        assertThat(r.getScheduledAt()).isEqualTo(expected);
+        // 落库 + 审计交给 SeedBatchService.reschedule（同一事务），操作人透传
+        verify(stateMachine).reschedule(r, expected, 3L);
         assertThat(r.getStatus()).isEqualTo(SeedBatchRowStatus.SCHEDULED);
-        verify(rows).save(r);
     }
 }

@@ -94,7 +94,7 @@ public class AdminContentScheduleController {
             @RequestParam(required = false) Long authorId,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
-            doReschedule(rowId, scheduledAt);
+            doReschedule(rowId, scheduledAt, admin.getAdminAccountId());
             // ⚠️ 不做单行 oob：表按**计划时间升序**，改完时间那一行的位置会变 ——
             //    原位换掉只会让它停在旧位置，看起来像「改了但没排上」。整表按当前筛选重拉。
             AdminFragmentResponses.trigger(response, AdminHxEvents.SCHEDULE_LIST_REFRESH,
@@ -103,7 +103,7 @@ public class AdminContentScheduleController {
             return "admin/fragments/schedules-tab :: afterAction";
         }
         try {
-            doReschedule(rowId, scheduledAt);
+            doReschedule(rowId, scheduledAt, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.schedule.timeUpdated"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
@@ -111,7 +111,7 @@ public class AdminContentScheduleController {
         return redirect(authorId);
     }
 
-    void doReschedule(long rowId, String scheduledAt) {
+    void doReschedule(long rowId, String scheduledAt, long adminAccountId) {
         Instant at = requireFuture(scheduledAt);
         var row = rows.findById(rowId)
                 .orElseThrow(() -> AppException.notFound("排期不存在")
@@ -130,8 +130,7 @@ public class AdminContentScheduleController {
             throw AppException.validation("这一行已不在排期中（已发布或已取消排期），不能再改计划时间")
                     .code("admin.err.schedule.notReschedulable");
         }
-        row.setScheduledAt(at);
-        rows.save(row);
+        stateMachine.reschedule(row, at, adminAccountId);
     }
 
     /** 取消排期 → 回退草稿，不发布（AC4）。 */
