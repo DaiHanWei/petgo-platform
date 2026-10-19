@@ -121,9 +121,9 @@ public class GiftNotifyListener {
 
     /** 礼物名按语言取订单快照（{@code en} → EN 名；其余含 null → ID 名）；数量 ≥ 2 时加「 ×N」，1 时省略（UI 稿 G4）。 */
     static String giftLabel(GiftOrder order, Locale locale) {
-        boolean en = locale != null && "en".equalsIgnoreCase(locale.getLanguage());
-        String name = en ? order.getGiftNameEn() : order.getGiftNameId();
-        return order.getQuantity() >= 2 ? name + " ×" + order.getQuantity() : name;
+        // 与通知列表同一份口径（InteractionCopyRenderer.giftLabel，L2 第二轮起列表单人条目也带礼物）。
+        return InteractionCopyRenderer.giftLabel(order.getGiftNameEn(), order.getGiftNameId(), order.getQuantity(),
+                locale);
     }
 
     /** 金额按收件人语言千分位（id「25.000」/ en「25,000」），以字符串传入文案。 */

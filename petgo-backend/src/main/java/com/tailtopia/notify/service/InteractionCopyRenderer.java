@@ -117,6 +117,17 @@ public class InteractionCopyRenderer {
      * {@code .one.noPet} / {@code .many.noPet}。其余四类忽略 {@code petName}，行为不变。
      */
     public String title(NotificationType type, String variant, ActorSummary s, Locale locale, String petName) {
+        return title(type, variant, s, locale, petName, null);
+    }
+
+    /**
+     * 同上，另带礼物（V1.4.0 gift L2 第二轮 · PRD「XX 给你的 Mochi 送了 Tulang ×5」· 架构 P-4 用礼物名不用 emoji）：
+     * 只对 {@code PET_GIFT_RECEIVED} 且单个送礼人（{@code others == 0}）生效 —— {@code giftLabel} 非空 →
+     * {@code notify.tpl.giftReceived.oneGift}（{0} 昵称、{1} 宠物名、{2} 礼物）/ {@code .oneGift.noPet}（{0} 昵称、{1} 礼物）；
+     * 为空（查不到 / 送了不止一种）→ 回落 {@code .one}。多人合并照稿 G1 不列礼物。{@code giftLabel} 用 {@link #giftLabel} 拼。
+     */
+    public String title(NotificationType type, String variant, ActorSummary s, Locale locale, String petName,
+            String giftLabel) {
         String name = s.latestNickname();
         // {1} 以字符串传入：MessageFormat 对数字会按语言插千分位（1.234 / 1,234）。
         String others = String.valueOf(s.others());
@@ -124,6 +135,11 @@ public class InteractionCopyRenderer {
             String total = String.valueOf(s.total());
             String suffix = petName == null ? ".noPet" : "";
             String pet = petName == null ? "" : petName;
+            if (s.others() == 0 && giftLabel != null && !giftLabel.isBlank()) {
+                return petName == null
+                        ? msg("notify.tpl.giftReceived.oneGift.noPet", locale, name, giftLabel)
+                        : msg("notify.tpl.giftReceived.oneGift", locale, name, pet, giftLabel);
+            }
             return s.others() == 0
                     ? msg("notify.tpl.giftReceived.one" + suffix, locale, name, pet)
                     : msg("notify.tpl.giftReceived.many" + suffix, locale, name, others, pet, total);
@@ -149,6 +165,16 @@ public class InteractionCopyRenderer {
      */
     public String giftPushTitle(String actorName, String giftLabel, String petName, Locale locale) {
         return msg("notify.tpl.giftReceived.push", locale, actorName, giftLabel, petName);
+    }
+
+    /**
+     * 礼物文案片段（推送与通知列表共用一份口径，UI 稿 G1 / G4）：名称按语言取订单快照（{@code en} → EN 名；其余含 null → ID 名），
+     * 数量 ≥ 2 时加「 ×N」，1 时省略。
+     */
+    public static String giftLabel(String nameEn, String nameId, int quantity, Locale locale) {
+        boolean en = locale != null && "en".equalsIgnoreCase(locale.getLanguage());
+        String name = en ? nameEn : nameId;
+        return quantity >= 2 ? name + " ×" + quantity : name;
     }
 
     private String msg(String key, Locale locale, Object... args) {
