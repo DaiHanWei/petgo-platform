@@ -77,7 +77,8 @@ class PetAvatarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final count = diaryCount;
+    // 0 篇不画「0」角标（V1.4.0 L2 J0：稿只在有 Diary 时显示数字）。
+    final count = (diaryCount ?? 0) > 0 ? diaryCount : null;
     final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
     final meta = _meta(l10n);
     Widget avatar = CircleAvatar(

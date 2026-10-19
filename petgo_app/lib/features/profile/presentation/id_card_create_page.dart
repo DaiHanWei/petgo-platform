@@ -228,15 +228,17 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     final double radius = style.canvasRadius;
     final Widget cardFront = style.buildFront(_preview);
     final missingText = idCardMissingText(l10n, idCardMissingFields(style, _draft));
+    // V1.4.0 稿 I2 / I3：白底、宠物行 + 卡面 + 两个描边按钮**顶部对齐**（L2 还原度；原淡紫底、整组垂直居中，
+    // 上方留大片空白）；主按钮单独吸底。
     return Scaffold(
-      backgroundColor: AppColors.cream2,
+      backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.idCardCreateTitle)),
       body: SafeArea(
         child: Column(
           children: [
-            // 稿 C1：卡面 + 两个描边按钮为一组，在剩余空间内垂直居中；主按钮单独吸底。
             Expanded(
-              child: Center(
+              child: Align(
+                alignment: Alignment.topCenter,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   child: Column(
@@ -266,22 +268,20 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OutlinedButton(
                               key: const ValueKey('idCardEditInfo'),
                               onPressed: (_busy || _switching) ? null : _editInfo,
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              label: Text(l10n.idCardEditInfo),
-                              style: idCardOutlineButtonStyle(),
+                              style: _plainOutline,
+                              child: Text(l10n.idCardEditInfo),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OutlinedButton(
                               key: const ValueKey('idCardEditPhoto'),
                               onPressed: (_busy || _switching) ? null : _editPhoto,
-                              icon: const Icon(Icons.image_outlined, size: 18),
-                              label: Text(l10n.idCardEditPhoto),
-                              style: idCardOutlineButtonStyle(),
+                              style: _plainOutline,
+                              child: Text(l10n.idCardEditPhoto),
                             ),
                           ),
                         ],
@@ -424,6 +424,16 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         IdCardDetailPage.locationFor(card.id, autoExport: result == IdCardHdFlowResult.unlocked));
   }
 
+  /// 稿 I2 / I3「Ubah info」「Ganti foto」：白底浅灰描边、深灰字、无图标（只用于本页；详情页仍用共享样式）。
+  static final ButtonStyle _plainOutline = OutlinedButton.styleFrom(
+    minimumSize: const Size.fromHeight(52),
+    backgroundColor: AppColors.card,
+    foregroundColor: AppColors.ink2,
+    side: const BorderSide(color: AppColors.line, width: 1.5),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+  );
+
   void _toast(String msg) {
     if (!mounted) return;
     // 页面有 48 高吸底主按钮（+12 间距）：浮动条抬到按钮之上
@@ -462,11 +472,13 @@ class _KtpPetRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(l10n.petPickerForName(pet.name),
+              // 稿 I2 / I3：「Untuk」常规灰字，只有宠物名加粗。
+              child: Text.rich(
+                  _nameBold(l10n.petPickerForName(pet.name), pet.name),
                   key: const ValueKey('ktpPetRowName'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                  style: const TextStyle(fontSize: 13.5, color: AppColors.ink2)),
             ),
             if (canChange) ...[
               const SizedBox(width: 8),
@@ -482,18 +494,26 @@ class _KtpPetRow extends StatelessWidget {
         ),
       ),
     );
+    // 稿 I2 / I3：无底无框的文字行（L2 还原度，原为白色描边卡）。
     return Material(
       key: const ValueKey('ktpPetRow'),
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.line2),
-      ),
+      type: MaterialType.transparency,
+      borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: canChange
           ? InkWell(key: const ValueKey('ktpPetRowChange'), onTap: onChange, child: content)
           : content,
     );
+  }
+
+  static TextSpan _nameBold(String full, String name) {
+    final i = full.indexOf(name);
+    if (i < 0 || name.isEmpty) return TextSpan(text: full);
+    return TextSpan(children: [
+      TextSpan(text: full.substring(0, i)),
+      TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+      TextSpan(text: full.substring(i + name.length)),
+    ]);
   }
 }
 

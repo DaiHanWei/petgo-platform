@@ -354,17 +354,17 @@ void main() {
       expect(edit.bottom < infoCard.top, isTrue);
     });
 
-    testWidgets('综合入口卡有图标，且不渲染编号（编号可空）', (tester) async {
+    testWidgets('综合入口卡按 V1.4.0 稿为纯文字卡（无图标），且不渲染编号（编号可空）', (tester) async {
       await _pumpTall(tester, const DiaryGuestPage());
+      // V1.4.0 L2 还原度：1.4.0 稿 `.ent2` 两栏入口为无图标纯文字卡（取代 V1.3.0 稿 P1 的星芒图标）。
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('diaryIdCardButton')), matching: find.byType(Icon)),
+          findsNothing);
 
       // V1.3.0 Story 5.1：这一格从「宠物身份证」改成了「Know Your Pet」聚合入口
       // （身份证成为聚合页里的一张卡），图标按 UI 稿 P1 用星芒（2026-09-21 对稿由爪印改来：
       // 爪印与「宠物」语义重复，看不出这是个聚合入口）。key 不改 —— 入口在这一格的语义没变。
-      expect(
-          find.descendant(
-              of: find.byKey(const ValueKey('diaryIdCardButton')),
-              matching: find.byIcon(Icons.auto_awesome_outlined)),
-          findsOneWidget);
       // 稿子里的 #00842 编号在**入口卡**上不实现（老档案未申请时为 null → 会多出未定义状态）。
       // 注意只约束入口卡子树：时间线里的类⑤ 证件卡条目按 A6 稿**是要显示编号的**，不能一起禁掉。
       expect(

@@ -11,14 +11,14 @@ class GrowthLabels {
   static IconData ruleIcon(String code) => switch (code) {
         'DAILY_LOGIN' => Icons.login,
         'POST_PUBLISHED' => Icons.edit_note,
-        'COMMENT_POSTED' => Icons.mode_comment_outlined,
-        'LIKE_GIVEN' => Icons.favorite_border,
-        'PLACE_CHECKIN' => Icons.location_on_outlined,
-        'LIKE_RECEIVED' || 'COMMENT_RECEIVED' || 'COLLECT_RECEIVED' => Icons.volunteer_activism_outlined,
-        'MILESTONE_S' || 'MILESTONE_M' || 'MILESTONE_L' => Icons.emoji_events_outlined,
+        'COMMENT_POSTED' => Icons.mode_comment,
+        'LIKE_GIVEN' => Icons.favorite,
+        'PLACE_CHECKIN' => Icons.location_on,
+        'LIKE_RECEIVED' || 'COMMENT_RECEIVED' || 'COLLECT_RECEIVED' => Icons.volunteer_activism,
+        'MILESTONE_S' || 'MILESTONE_M' || 'MILESTONE_L' => Icons.emoji_events,
         'GIFT_SENT' || 'GIFT_RECEIVED' => Icons.redeem,
-        'SPEND_DIGITAL' => Icons.payments_outlined,
-        'SPEND_SHOP' => Icons.shopping_bag_outlined,
+        'SPEND_DIGITAL' => Icons.payments,
+        'SPEND_SHOP' => Icons.shopping_bag,
         _ => Icons.bolt,
       };
 
@@ -116,18 +116,18 @@ class GrowthLabels {
     if (e.delta < 0 && _deductReasons.contains(e.reason)) {
       return switch (e.reason) {
         'REFUND' => Icons.currency_exchange,
-        'UNLIKE' => Icons.heart_broken_outlined,
-        'UNCOLLECT' => Icons.bookmark_remove_outlined,
-        _ => Icons.remove_circle_outline,
+        'UNLIKE' => Icons.heart_broken,
+        'UNCOLLECT' => Icons.bookmark_remove,
+        _ => Icons.remove_circle,
       };
     }
     return switch (e.ruleCode) {
-      'ADMIN_ADJUST' => Icons.admin_panel_settings_outlined,
-      'OPS_CAMPAIGN' => Icons.celebration_outlined,
+      'ADMIN_ADJUST' => Icons.admin_panel_settings,
+      'OPS_CAMPAIGN' => Icons.celebration,
       'LAUNCH_BACKFILL' => Icons.history,
-      'LIKE_RECEIVED' => Icons.favorite_border,
-      'COMMENT_RECEIVED' => Icons.mode_comment_outlined,
-      'COLLECT_RECEIVED' => Icons.bookmark_border,
+      'LIKE_RECEIVED' => Icons.favorite,
+      'COMMENT_RECEIVED' => Icons.mode_comment,
+      'COLLECT_RECEIVED' => Icons.bookmark,
       _ => ruleIcon(e.ruleCode),
     };
   }

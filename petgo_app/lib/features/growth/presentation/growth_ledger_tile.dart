@@ -11,9 +11,12 @@ import 'growth_tier_style.dart';
 DateTime toWib(DateTime d) => d.toUtc().add(const Duration(hours: 7));
 
 /// EXP 明细条目（Story 1.5 · AC5.3）：等级页「Riwayat EXP」预览与明细页**同一个组件**。
-/// 左 36 圆底图标（入账浅紫底、扣回浅红底）、名称 + 时间、右侧增减值（加绿减红）。
+/// 左 34 圆角方块图标（入账浅紫底、扣回浅红底）、名称 + 时间、右侧增减值（加绿减红）；行底 1px 分隔（稿 `.hrow`）。
 class GrowthLedgerTile extends StatelessWidget {
-  const GrowthLedgerTile({super.key, required this.entry, this.showClock = true});
+  const GrowthLedgerTile({super.key, required this.entry, this.showClock = true, this.divider = true});
+
+  /// 行底分隔线（卡片里最后一行不画）。
+  final bool divider;
 
   final GrowthLedgerEntry entry;
 
@@ -30,20 +33,23 @@ class GrowthLedgerTile extends StatelessWidget {
         ? ''
         : (showClock ? DateFormat('HH.mm', locale) : DateFormat('d MMM', locale)).format(toWib(createdAt));
     final amount = growthNumber(context, entry.delta.abs());
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      decoration: divider
+          ? const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.line2)))
+          : null,
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              color: negative ? AppColors.coralTint : AppColors.mintTint,
-              shape: BoxShape.circle,
+              color: negative ? AppColors.coralTint : AppColors.cream2,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(GrowthLabels.ledgerIcon(entry), size: 18, color: negative ? AppColors.coral : AppColors.mint),
+            child: Icon(GrowthLabels.ledgerIcon(entry), size: 18, color: negative ? AppColors.danger : AppColors.mint),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,10 +58,10 @@ class GrowthLedgerTile extends StatelessWidget {
                   GrowthLabels.ledgerTitle(l10n, entry),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink),
                 ),
                 if (time.isNotEmpty)
-                  Text(time, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  Text(time, style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
               ],
             ),
           ),
@@ -65,7 +71,7 @@ class GrowthLedgerTile extends StatelessWidget {
               fontSize: 14,
               fontWeight: FontWeight.w700,
               fontFeatures: const [FontFeature.tabularFigures()],
-              color: negative ? AppColors.danger : AppColors.triageGreen,
+              color: negative ? AppColors.danger : AppColors.growthGain,
             ),
           ),
         ],

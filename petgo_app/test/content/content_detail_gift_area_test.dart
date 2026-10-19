@@ -157,6 +157,13 @@ void main() {
     expect(find.text('gift:43'), findsOneWidget);
   });
 
+  testWidgets('A6：自己的 Diary + 0 礼物 → 主人口径文案，不出「Jadi yang pertama!」（L2 P1-4）', (tester) async {
+    await _pump(tester, _detail(isAuthor: true, pets: const [_empty]));
+    expect(find.text('Belum ada hadiah dari teman'), findsOneWidget);
+    expect(find.text('Belum ada hadiah. Jadi yang pertama!'), findsNothing);
+    expect(_send(), findsNothing);
+  });
+
   testWidgets('+N：kindCount 等于预览数 → 不显示「+0」', (tester) async {
     await _pump(
         tester,

@@ -171,7 +171,17 @@ class _GiftOrdersEntry extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                const Icon(Icons.redeem_rounded, size: 26, color: AppColors.mint),
+                // 稿 F1：图标放在淡紫圆角方底里（L2 还原度）。
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.cream2,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.redeem_rounded, size: 24, color: AppColors.mint),
+                ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(

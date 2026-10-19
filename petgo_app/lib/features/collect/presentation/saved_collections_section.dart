@@ -141,15 +141,29 @@ Widget _errorState(AppLocalizations l10n, VoidCallback onRetry) => KeyedSubtree(
       ),
     );
 
+/// Disimpan 空态（稿 `.kv-es`：72 圆底书签 + 15 号标题 + 13 号灰说明；比通用 [EmptyState] 小一档，L2 还原度）。
 Widget _emptyState(Key key, String title, String hint) => Padding(
       key: key,
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-      child: EmptyState(
-        icon: Icons.bookmark_border_rounded,
-        iconBackground: AppColors.cream2,
-        iconColor: AppColors.mint,
-        title: title,
-        message: hint,
+      padding: const EdgeInsets.fromLTRB(24, 44, 24, AppSpacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(color: AppColors.cream2, shape: BoxShape.circle),
+            child: const Icon(Icons.bookmark_border_rounded, size: 32, color: AppColors.mint),
+          ),
+          const SizedBox(height: 10),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+          const SizedBox(height: 6),
+          Text(hint,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.muted)),
+        ],
       ),
     );
 

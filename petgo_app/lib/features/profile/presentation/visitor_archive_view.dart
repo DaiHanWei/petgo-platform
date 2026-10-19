@@ -249,18 +249,26 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
             ),
           );
         }
-        return Column(
-          children: [
-            for (int i = 0; i < page.items.length; i++)
-              TimelineItemTile(
-                item: page.items[i],
-                petName: petName,
-                thumbIndex: i,
-                onTap: _tapFor(page.items[i]),
-                // 🛡 徽章不可点：它在作者态跳的是当前登录用户自己的里程碑页。
-              ),
-          ],
-        );
+        // 按月分组标题（与主人态同一组件，稿 A1「OKTOBER 2026」）。
+        final tiles = <Widget>[];
+        String? lastMonthKey;
+        for (int i = 0; i < page.items.length; i++) {
+          final d = page.items[i].displayDate;
+          final monthKey = '${d.year}-${d.month}';
+          if (monthKey != lastMonthKey) {
+            tiles.add(TimelineMonthHeader(
+                key: ValueKey('visitorMonth-$monthKey'), date: d, first: lastMonthKey == null));
+            lastMonthKey = monthKey;
+          }
+          tiles.add(TimelineItemTile(
+            item: page.items[i],
+            petName: petName,
+            thumbIndex: i,
+            onTap: _tapFor(page.items[i]),
+            // 🛡 徽章不可点：它在作者态跳的是当前登录用户自己的里程碑页。
+          ));
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: tiles);
       },
     );
   }

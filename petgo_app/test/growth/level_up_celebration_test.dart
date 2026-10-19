@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/growth/domain/growth_models.dart';
 import 'package:tailtopia/features/growth/domain/growth_popups.dart';
@@ -48,7 +49,13 @@ void main() {
 
     expect(find.byKey(const ValueKey('growthCelebrationCard')), findsOneWidget);
     expect(find.byKey(const ValueKey('growthCelebrationFull')), findsNothing);
-    expect(find.text('Lv6 → Lv7'), findsOneWidget);
+    // 稿 D1：旧等级小号灰「Lv6 →」+ 新等级大号段位色「Lv7」（L2 还原度）。
+    final jump = find.byKey(const ValueKey('growthCelebrationJump'));
+    expect(find.descendant(of: jump, matching: find.text('Lv6 →')), findsOneWidget);
+    expect(find.descendant(of: jump, matching: find.text('Lv7')), findsOneWidget);
+    expect(tester.widget<Text>(find.descendant(of: jump, matching: find.text('Lv7'))).style!.color,
+        AppColors.tierSahabat);
+    expect(find.byIcon(Icons.bolt), findsOneWidget, reason: 'EXP 胶囊带 ⚡');
     expect(find.text('Kamu naik level!'), findsOneWidget);
     expect(find.text('Terus aktif bareng anabul untuk naik ke Lv8.'), findsOneWidget);
     expect(find.byKey(const ValueKey('growthCelebrationBadge')), findsOneWidget);
@@ -62,7 +69,9 @@ void main() {
   testWidgets('一次跳多级 → Naik 3 level sekaligus!；次按钮 = 只关掉', (tester) async {
     final out = await _pump(tester, const GrowthCelebration(fromLevel: 5, toLevel: 8, tierUp: false, toTier: GrowthTier.buddy));
     expect(find.text('Naik 3 level sekaligus!'), findsOneWidget);
-    expect(find.text('Lv5 → Lv8'), findsOneWidget);
+    final jump = find.byKey(const ValueKey('growthCelebrationJump'));
+    expect(find.descendant(of: jump, matching: find.text('Lv5 →')), findsOneWidget);
+    expect(find.descendant(of: jump, matching: find.text('Lv8')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('growthCelebrationSecondary')));
     await tester.pumpAndSettle();
     expect(out, [GrowthPopupOutcome.close]);
@@ -131,7 +140,8 @@ void main() {
     ));
     await tester.pump();
     expect(
-        find.descendant(of: find.byKey(const ValueKey('growthCelebrationBadge')), matching: find.text('Lv7')),
+        // 角标与全站一致只显示数字（L2 还原度：原「Lv7」）。
+        find.descendant(of: find.byKey(const ValueKey('growthCelebrationBadge')), matching: find.text('7')),
         findsOneWidget);
     expect(tester.binding.hasScheduledFrame, isFalse, reason: '不跑动画');
   });

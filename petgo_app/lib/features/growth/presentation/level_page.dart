@@ -85,7 +85,7 @@ class _LevelContentState extends ConsumerState<_LevelContent> {
     final nickname = profile?.nickname ?? profile?.displayName ?? '';
     final l10n = AppLocalizations.of(context);
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.screenEdge),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.screenEdge, 8, AppSpacing.screenEdge, 24),
       children: [
         _LevelCard(
           summary: summary,
@@ -95,7 +95,6 @@ class _LevelContentState extends ConsumerState<_LevelContent> {
         ),
         // B1 顺序：等级卡之下、「Keuntungan level」之上。
         if (frames != null && frames.options.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.lg),
           _SectionTitle(l10n.growthFrameSectionTitle),
           FramePickerRow(
             frames: frames,
@@ -104,18 +103,15 @@ class _LevelContentState extends ConsumerState<_LevelContent> {
             onChanged: (f) => setState(() => _frames = f),
           ),
         ],
-        const SizedBox(height: AppSpacing.lg),
         _BenefitsSection(summary: summary),
-        const SizedBox(height: AppSpacing.lg),
         _RulesSection(summary: summary),
-        const SizedBox(height: AppSpacing.lg),
         _RecentLedgerSection(entries: summary.recentLedger),
       ],
     );
   }
 }
 
-/// 小节标题：12 / w700 / 大写 / `muted`（与「我的」页同款）。
+/// 小节标题：12 / w700 / 大写 / `muted`（稿 `.sec2`：上 16、下 6）；右侧附注不大写。
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text, {this.trailing});
 
@@ -124,7 +120,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.fromLTRB(2, 16, 2, 6),
         child: Row(
           children: [
             Expanded(
@@ -168,18 +164,55 @@ class _LevelCard extends StatelessWidget {
     final s = summary;
     final range = s.tierBenefits.where((t) => t.tier == s.tier).firstOrNull;
     final tierColor = GrowthTierStyle.color(s.tier);
-    final String progress;
+    const metaStyle = TextStyle(fontSize: 12, fontFeatures: [FontFeature.tabularFigures()], color: AppColors.ink2);
+    const metaBold = TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink);
+    final Widget progress;
     if (s.isMaxLevel || s.nextLevel == null) {
-      progress = l10n.growthLevelTotalExp(growthNumber(context, s.lifetimeTotal));
+      progress = Text(
+        l10n.growthLevelTotalExp(growthNumber(context, s.lifetimeTotal)),
+        key: const ValueKey('growthLevelProgressText'),
+        textAlign: TextAlign.center,
+        style: metaStyle,
+      );
     } else {
+      // 稿 `.pmeta`：左「1.420 / 1.800 EXP」、右「Kurang 380 EXP ke Lv8」，关键数字加粗。
       final remain = (s.nextThreshold! - s.lifetimeTotal).clamp(0, s.nextThreshold!);
-      progress = '${l10n.growthLevelProgress(growthNumber(context, s.lifetimeTotal), growthNumber(context, s.nextThreshold!))}'
-          ' · ${l10n.growthLevelToNext(growthNumber(context, remain), '${s.nextLevel}')}';
+      final total = growthNumber(context, s.lifetimeTotal);
+      final remainText = growthNumber(context, remain);
+      progress = Row(
+        key: const ValueKey('growthLevelProgressText'),
+        children: [
+          Expanded(
+            child: Text.rich(
+              _boldFirst(l10n.growthLevelProgress(total, growthNumber(context, s.nextThreshold!)), total, metaBold),
+              style: metaStyle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text.rich(
+            _boldFirst(l10n.growthLevelToNext(remainText, '${s.nextLevel}'), remainText, metaBold),
+            style: metaStyle,
+          ),
+        ],
+      );
     }
     return Container(
       key: const ValueKey('growthLevelCard'),
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-      decoration: BoxDecoration(color: GrowthTierStyle.tint(s.tier), borderRadius: BorderRadius.circular(20)),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      // 稿 `.lvc`：段位浅色 → 白（70%）纵向渐变，圆角 24，双层轻投影。
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [GrowthTierStyle.tint(s.tier), AppColors.surface],
+          stops: const [0, 0.7],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 1), blurRadius: 2),
+          BoxShadow(color: Color(0x0A2B2A27), offset: Offset(0, 2), blurRadius: 8),
+        ],
+      ),
       child: Column(
         children: [
           // Story 3.3（B1）：84 + 生效框 + 数字角标 26（3.2 共享装饰层）。
@@ -195,49 +228,62 @@ class _LevelCard extends StatelessWidget {
             l10n.growthLevelShort('${s.level}'),
             key: const ValueKey('growthLevelBig'),
             style: TextStyle(
-              fontSize: 32,
+              fontSize: 34,
+              height: 1.1,
               fontWeight: FontWeight.w800,
+              letterSpacing: -0.7,
               fontFeatures: const [FontFeature.tabularFigures()],
               color: tierColor,
             ),
           ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: GrowthTierStyle.gradient(s.tier)),
+          const SizedBox(height: 6),
+          // 稿 `.tpill`：白底胶囊 + 段位色点 + 段位色字。
+          Container(
+            key: const ValueKey('growthLevelTierPill'),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.all(Radius.circular(999)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: GrowthTierStyle.gradient(s.tier)),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                range == null
-                    ? GrowthTierStyle.name(l10n, s.tier)
-                    : _tierRange(l10n, s.tier, range.fromLevel, range.toLevel),
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink2),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          GrowthProgressBar(summary: s),
-          const SizedBox(height: 8),
-          Text(
-            progress,
-            key: const ValueKey('growthLevelProgressText'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12,
-              fontFeatures: [FontFeature.tabularFigures()],
-              color: AppColors.ink2,
+                const SizedBox(width: 6),
+                Text(
+                  range == null
+                      ? GrowthTierStyle.name(l10n, s.tier)
+                      : _tierRange(l10n, s.tier, range.fromLevel, range.toLevel),
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: tierColor),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 18),
+          GrowthProgressBar(summary: s),
+          const SizedBox(height: 8),
+          progress,
         ],
       ),
     );
+  }
+
+  /// 把 [full] 里第一次出现的 [part] 加粗（数字来自 arb 占位符，语序随语言变也能命中）。
+  static TextSpan _boldFirst(String full, String part, TextStyle bold) {
+    final i = full.indexOf(part);
+    if (i < 0) return TextSpan(text: full);
+    return TextSpan(children: [
+      TextSpan(text: full.substring(0, i)),
+      TextSpan(text: part, style: bold),
+      TextSpan(text: full.substring(i + part.length)),
+    ]);
   }
 }
 
@@ -255,49 +301,87 @@ class _BenefitsSection extends StatelessWidget {
       final items = t.benefits.map((b) => GrowthLabels.benefit(l10n, b)).whereType<String>().toList();
       if (items.isEmpty) continue;
       final unlocked = summary.level >= t.fromLevel;
+      final range = t.toLevel == null
+          ? l10n.growthLevelShort('${t.fromLevel}+')
+          : l10n.growthLevelShort('${t.fromLevel}–${t.toLevel}');
+      // 稿 `.trow2`：每段位一张描边卡 —— 段位色点 + 「段位名 LvA–B」+ 权益行；右上状态胶囊。未解锁浅灰底、文字置灰。
       groups.add(Container(
         key: ValueKey('growthBenefitGroup_${t.tier?.name ?? t.fromLevel}'),
-        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
-        child: Column(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: unlocked ? AppColors.surface : AppColors.growthLockedCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.line2),
+        ),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              _tierRange(l10n, t.tier, t.fromLevel, t.toLevel),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: unlocked ? GrowthTierStyle.color(t.tier) : AppColors.muted,
+            Container(
+              width: 10,
+              height: 10,
+              margin: const EdgeInsets.only(top: 5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: GrowthTierStyle.gradient(t.tier)),
               ),
             ),
-            const SizedBox(height: 8),
-            for (final text in items)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Icon(
-                      unlocked ? Icons.check_circle : Icons.lock_outline,
-                      size: 16,
-                      color: unlocked ? AppColors.triageGreen : AppColors.muted,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
+                    TextSpan(children: [
+                      TextSpan(text: GrowthTierStyle.name(l10n, t.tier)),
+                      TextSpan(
+                        text: '  $range',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.muted),
+                      ),
+                    ]),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: unlocked ? AppColors.ink : AppColors.muted,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        text,
-                        style: TextStyle(fontSize: 13, color: unlocked ? AppColors.ink : AppColors.muted),
+                  ),
+                  for (final text in items)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Row(
+                        children: [
+                          Icon(
+                            unlocked ? Icons.check_circle : Icons.lock,
+                            size: 14,
+                            color: unlocked ? AppColors.triageGreen : AppColors.muted,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              text,
+                              style: TextStyle(fontSize: 12.5, color: unlocked ? AppColors.ink2 : AppColors.muted),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
-            Text(
-              unlocked ? l10n.growthBenefitUnlocked : l10n.growthLevelUnlocksAt('${t.fromLevel}'),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: unlocked ? AppColors.triageGreen : AppColors.muted,
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: unlocked ? AppColors.growthGainTint : AppColors.line2,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                unlocked ? l10n.growthBenefitUnlocked : l10n.growthLevelUnlocksAt('${t.fromLevel}'),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: unlocked ? AppColors.growthGain : AppColors.muted,
+                ),
               ),
             ),
           ],
@@ -425,70 +509,127 @@ class _RulesSection extends StatelessWidget {
       children: [
         _SectionTitle(
           l10n.growthRuleSectionTitle,
-          trailing: Text(l10n.growthRuleResetHint, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+          trailing: Text(l10n.growthRuleResetHint,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
-          child: Column(children: [for (final line in lines) _RuleRow(line: line)]),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          decoration: _cardDecoration,
+          child: Column(children: [
+            for (var i = 0; i < lines.length; i++) _RuleRow(line: lines[i], divider: i > 0),
+          ]),
         ),
       ],
     );
   }
 }
 
+/// 稿 `.qcard`：白底 + 1px 浅描边 + 圆角 16。
+const BoxDecoration _cardDecoration = BoxDecoration(
+  color: AppColors.surface,
+  borderRadius: BorderRadius.all(Radius.circular(16)),
+  border: Border.fromBorderSide(BorderSide(color: AppColors.line2)),
+);
+
+/// 稿 `.qrow`：34 圆角方块图标 + 名称 + 今日进度（72×5 紫色小条 + 「Hari ini 1/3」/ 满额绿字）；右侧紫色分值 + 小号「EXP」。
 class _RuleRow extends StatelessWidget {
-  const _RuleRow({required this.line});
+  const _RuleRow({required this.line, this.divider = false});
 
   final _RuleLine line;
+  final bool divider;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
       key: ValueKey('growthRule_${line.key}'),
       padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: divider
+          ? const BoxDecoration(border: Border(top: BorderSide(color: AppColors.growthRowDivider)))
+          : null,
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
-            decoration: const BoxDecoration(color: AppColors.mintTint, shape: BoxShape.circle),
+            width: 34,
+            height: 34,
+            decoration: const BoxDecoration(
+              color: AppColors.cream2,
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
             child: Icon(line.icon, size: 18, color: AppColors.mint),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(line.name,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
-                const SizedBox(height: 2),
-                Text(
-                  line.progress,
-                  style: TextStyle(fontSize: 12, color: line.maxed ? AppColors.triageGreen : AppColors.muted),
-                ),
-                if (line.ratio != null) ...[
-                  const SizedBox(height: 4),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: line.ratio,
-                      minHeight: 4,
-                      backgroundColor: AppColors.line2,
-                      color: line.maxed ? AppColors.triageGreen : AppColors.mint,
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    if (line.ratio != null) ...[
+                      SizedBox(
+                        key: ValueKey('growthRuleBar_${line.key}'),
+                        width: 72,
+                        height: 5,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            value: line.ratio,
+                            minHeight: 5,
+                            backgroundColor: AppColors.growthQuotaTrack,
+                            color: AppColors.mint,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: Text(
+                        line.progress,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: line.maxed ? FontWeight.w700 : FontWeight.w400,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: line.maxed ? AppColors.growthGain : AppColors.muted,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            line.points,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink),
-          ),
+          const SizedBox(width: 10),
+          _points(line.points),
         ],
       ),
+    );
+  }
+
+  /// 「+5 EXP」→ 紫色 15 粗体数字 + 10.5 灰「EXP」；按金额计的「+5 EXP / Rp1.000」同理，「EXP / Rp1.000」走小号灰字。
+  static Widget _points(String text) {
+    const unit = ' EXP';
+    const numStyle = TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      fontFeatures: [FontFeature.tabularFigures()],
+      color: AppColors.mint,
+    );
+    final cut = text.indexOf(unit);
+    if (cut < 0) {
+      return Text(text, textAlign: TextAlign.right, style: numStyle);
+    }
+    return Text.rich(
+      TextSpan(children: [
+        TextSpan(text: text.substring(0, cut)),
+        TextSpan(
+          text: text.substring(cut),
+          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.ink2),
+        ),
+      ]),
+      textAlign: TextAlign.right,
+      style: numStyle,
     );
   }
 }
@@ -519,8 +660,8 @@ class _RecentLedgerSection extends StatelessWidget {
                 ),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: _cardDecoration,
           child: entries.isEmpty
               ? Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -530,8 +671,12 @@ class _RecentLedgerSection extends StatelessWidget {
                 )
               : Column(
                   children: [
-                    for (final e in entries)
-                      GrowthLedgerTile(entry: e, showClock: _isRecentDay(e.createdAt)),
+                    for (var i = 0; i < entries.length; i++)
+                      GrowthLedgerTile(
+                        entry: entries[i],
+                        showClock: _isRecentDay(entries[i].createdAt),
+                        divider: i < entries.length - 1,
+                      ),
                   ],
                 ),
         ),
