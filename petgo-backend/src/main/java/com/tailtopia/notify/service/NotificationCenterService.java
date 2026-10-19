@@ -311,9 +311,11 @@ public class NotificationCenterService {
                 Long sender = senderByNotification.get(n.getId());
                 Long petId = giftPetId(n);
                 Instant at = since.get(n.getId());
-                if (sender != null && petId != null && at != null) {
+                if (sender != null && petId != null && at != null && n.getCreatedAt() != null) {
+                    // 上界 = 本条 created_at：送达（delivered_at = 交付事务的 now()）先于收礼通知事务（AFTER_COMMIT 后才写，
+                    // created_at = 其 now()），本条期间的每一单都 ≤ 它；本条已读后再送的落在新条目上、送达时刻 > 它
                     queries.put(n.getId(), new NotificationGiftLines.Query(petId, sender,
-                            at.minus(GIFT_SINCE_TOLERANCE)));
+                            at.minus(GIFT_SINCE_TOLERANCE), n.getCreatedAt()));
                 }
             }
             if (queries.isEmpty()) {

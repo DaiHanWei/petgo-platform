@@ -88,7 +88,8 @@ public class InteractionActorResolver {
         Map<Long, java.time.Instant> out = new HashMap<>();
         for (NotificationActor a : actorRepo.findByNotificationIds(actorByNotification.keySet())) {
             Long want = actorByNotification.get(a.getId().getNotificationId());
-            if (want != null && want == a.getId().getActorUserId() && a.getActedAt() != null) {
+            // 两边都是 Long：必须按数值比（== 是引用比较，id ≥ 128 出了 Long 缓存恒 false → 收礼单人条目拿不到礼物名）
+            if (want != null && java.util.Objects.equals(want, a.getId().getActorUserId()) && a.getActedAt() != null) {
                 out.put(a.getId().getNotificationId(), a.getActedAt());
             }
         }

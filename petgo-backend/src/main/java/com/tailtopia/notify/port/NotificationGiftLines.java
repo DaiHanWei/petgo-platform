@@ -16,8 +16,10 @@ public interface NotificationGiftLines {
      * 一条收礼通知的查询条件：该送礼人在本条通知合并期间（{@code since} 起）送给该宠物、已送达的订单。
      *
      * @param since 送礼人并入本条通知的时刻（{@code notification_actors.acted_at}）减去容差 —— 送达时刻略早于它
+     * @param until 本条通知最后一次刷新的时刻（{@code notifications.created_at}，每次有人送礼都会 touch 刷新）。
+     *              它之后送达的礼必然落在另一条通知上（本条已读后再送 → 新建 N2），不能再算进本条
      */
-    record Query(long petId, long senderId, Instant since) {
+    record Query(long petId, long senderId, Instant since, Instant until) {
     }
 
     /**

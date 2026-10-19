@@ -74,11 +74,12 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
 
     /**
      * 通知列表「送的是什么」（V1.4.0 gift L2 第二轮，{@code GiftNotificationGiftLines}）：一页涉及的宠物 × 送礼人、
-     * 自 {@code since} 起已送达的订单。结果在内存里再按每条通知的条件归属；一页 ≤ 20 条通知，量很小。
+     * 在 [{@code since}, {@code until}] 内已送达的订单。结果在内存里再按每条通知的条件归属；一页 ≤ 20 条通知，量很小。
      */
     @Query("select o from GiftOrder o where o.petId in :petIds and o.senderId in :senderIds "
-            + "and o.status = :status and o.deliveredAt >= :since order by o.deliveredAt asc, o.id asc")
+            + "and o.status = :status and o.deliveredAt >= :since and o.deliveredAt <= :until "
+            + "order by o.deliveredAt asc, o.id asc")
     List<GiftOrder> findDeliveredForNotify(@Param("petIds") java.util.Collection<Long> petIds,
             @Param("senderIds") java.util.Collection<Long> senderIds, @Param("status") GiftOrderStatus status,
-            @Param("since") java.time.Instant since);
+            @Param("since") java.time.Instant since, @Param("until") java.time.Instant until);
 }
