@@ -134,6 +134,20 @@ public class SeedBatchService {
     }
 
     /**
+     * 改计划时间（排期中的行；状态校验在调用方 {@code AdminContentScheduleController#doReschedule}）。
+     *
+     * <p>落库与审计同一事务：排期 / 取消都留审计，改时间原先漏记（L2 收尾补）——运营改了发布时间却查不到是谁改的。
+     */
+    @Transactional
+    public void reschedule(SeedBatchRow r, Instant at, long adminAccountId) {
+        Instant from = r.getScheduledAt();
+        r.setScheduledAt(at);
+        rows.save(r);
+        audit.record(adminAccountId, "SEED_ROW_RESCHEDULE", "seed_batch_row", String.valueOf(r.getId()),
+                "from=" + from + ";to=" + at);
+    }
+
+    /**
      * 取消排期 → 回退草稿（AC1）。
      *
      * <p>⚠️ 回退时**清掉计划时间**（在 {@code transitionTo} 里做）：
