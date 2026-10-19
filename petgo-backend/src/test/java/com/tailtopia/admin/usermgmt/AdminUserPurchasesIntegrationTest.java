@@ -23,6 +23,7 @@ import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.service.SerialAllocationService;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -55,6 +56,8 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
     private AdminAccountRepository adminAccounts;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private SerialAllocationService serialAllocation;
 
     private static final Instant T0 = Instant.parse("2026-09-10T03:00:00Z");
 
@@ -212,10 +215,13 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         hdPurchase(u.getId(), student, "PAWCOIN", null, T0.plus(1, ChronoUnit.HOURS));
         long sim = typedCard(u.getId(), base + 2, "SIM", null, "TX600324020003");
         hdPurchase(u.getId(), sim, "PAWCOIN", null, T0.plus(2, ChronoUnit.HOURS));
-        // V95 前老卡：无身份码，流水号补零到 4 位（如 42 → 0042）。流水号取库里空闲的 1–999（保留补零断言）——
-        // 写死 42 会和同库其他测试建的卡撞 uq_id_cards_serial（CI 全量跑时稳定复现）。
-        long legacySerial = jdbc.queryForObject("SELECT s FROM generate_series(1, 999) s "
-                + "WHERE NOT EXISTS (SELECT 1 FROM id_cards c WHERE c.serial_id = s) LIMIT 1", Long.class);
+        // V95 前老卡：无身份码，流水号补零到 4 位（如 42 → 0042）。流水号必须走生产号池 allocate() 取：
+        // - 写死 42 会和同库其他测试建的卡撞 uq_id_cards_serial（CI 全量跑时稳定复现）；
+        // - 「取 1–999 里库中空闲的最小号」也不行：新库上取到的正是 pet_serial_seq 的下一个号（如 1），
+        //   序列不知道它已被占，之后第一个经接口建卡的用例 nextval 拿到同号 → 500
+        //   （IdCardNumberReuseIntegrationTest.sourceOfAnotherUserIsNotUsed 全量稳定复现）。
+        //   号池取出的号仍是小号（测试库里远小于 9999），补零断言照旧成立。
+        long legacySerial = serialAllocation.allocate();
         String legacyNo = String.format("%04d", legacySerial);
         long legacy = jdbc.queryForObject("INSERT INTO id_cards (user_id, serial_id, name, hd_unlocked) "
                 + "VALUES (?, ?, 'Mochi', true) RETURNING id", Long.class, u.getId(), legacySerial);
