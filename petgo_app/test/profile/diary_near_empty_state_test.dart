@@ -9,6 +9,7 @@ import 'package:tailtopia/features/profile/domain/visitor_profile.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
@@ -89,6 +90,8 @@ Future<void> _pump(
   String locale = 'en',
   // 统计栏「Diary」数，须与时间线一致（2026-10-06 起它为 0 即把引导卡置顶）。
   int happyCount = 0,
+  // V1.4.0 multi-pet L2 第二轮：当前宠物只读。
+  bool readOnly = false,
 }) async {
   await tester.binding.setSurfaceSize(const Size(500, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -126,6 +129,11 @@ Future<void> _pump(
             healthRecordCount: healthRecordCount,
           )),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
+      if (readOnly)
+        petListProvider.overrideWith((ref) async => const [
+              PetListItem(
+                  id: 839, name: 'dada', isDefault: true, status: PetListItem.statusReadOnly),
+            ]),
     ],
     child: MaterialApp.router(
       routerConfig: router,
@@ -149,6 +157,16 @@ void main() {
       expect(find.byKey(const ValueKey('timelineEmptyCta')), findsOneWidget);
       expect(find.textContaining("dada's first diary entry"), findsOneWidget,
           reason: 'A4 稿的标题带宠物名；Diary 内一律用 diary entry，不再说 moment');
+    });
+
+    testWidgets('L2 r2 P2-4：只读宠物 → 空态只说「还没有 Diary」，不出劝写正文与 + Tambah ke Diary', (tester) async {
+      await _pump(tester,
+          firstPage: TimelinePage(items: [_profileCreatedBanner], hasMore: false), readOnly: true);
+
+      expect(find.byKey(const ValueKey('timelineFirstMomentCard')), findsOneWidget);
+      expect(find.text('No diary entries for dada yet'), findsOneWidget);
+      expect(find.byKey(const ValueKey('timelineEmptyCta')), findsNothing);
+      expect(find.textContaining("dada's first diary entry"), findsNothing);
     });
 
     testWidgets('还没发过内容 → 引导卡在所有 banner 最上面（2026-10-06 产品）', (tester) async {

@@ -348,7 +348,8 @@ class _PetSlotRenewPaySheetState extends State<PetSlotRenewPaySheet> {
     final n = sel.tokens.length;
     return PayChannelPicker(
       key: const ValueKey('petSlotRenewSheet'),
-      header: PetSlotSheetHeader(overview: o),
+      // 稿 D11：无商品头卡，标题「Perpanjang slot」直接起（L2 第二轮）。
+      header: null,
       title: l10n.petSlotRenewSheetTitle,
       body: l10n.petSlotRenewSheetNote(o.days),
       price: AsyncData(o.unitPrice),
@@ -359,6 +360,7 @@ class _PetSlotRenewPaySheetState extends State<PetSlotRenewPaySheet> {
       itemsTotal: n * o.unitPrice,
       itemsLineLabel: l10n.petSlotQuantityTotal(n, petSlotPrice(o.unitPrice)),
       itemsArea: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final r in o.rentals)
             _RenewRow(
@@ -394,37 +396,59 @@ class _RenewRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final from = formatDayMonth(context, rental.expiresAt.toLocal());
     final to = formatDayMonthYear(context, rental.renewedExpiry(days).toLocal());
-    return InkWell(
-      key: ValueKey('petSlotRenewRow-${rental.index}'),
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            Icon(Icons.event_outlined, size: 20, color: enabled ? AppColors.mint : AppColors.muted),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.petSlotRentalName(rental.index),
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: enabled ? AppColors.ink : AppColors.muted)),
-                  const SizedBox(height: 2),
-                  Text(l10n.petSlotRenewRowRange(from, to),
-                      style: const TextStyle(fontSize: 12, color: AppColors.ink2)),
-                ],
-              ),
+    // 稿 D11 `.sheet .crow`：描边卡片（1.5px #F0F0F0、r14、内边距 11/12、行距 8）；勾上 = 紫边 + 浅紫底；
+    // 超上限不可勾 = #FAFAFB 底、内容半透明（`.crow.dis`）。左侧 36 圆（cream2 底）放日历图标。
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('petSlotRenewRow-${rental.index}'),
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: checked ? AppColors.mintTint2 : (enabled ? AppColors.card : const Color(0xFFFAFAFB)),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: checked ? AppColors.mint : AppColors.line2, width: 1.5),
             ),
-            Icon(
-              checked ? Icons.check_box : Icons.check_box_outline_blank,
-              key: ValueKey('petSlotRenewCheck-${rental.index}'),
-              color: checked ? AppColors.mint : (enabled ? AppColors.ink2 : AppColors.line),
+            child: Row(
+              children: [
+                Opacity(
+                  opacity: enabled ? 1 : 0.55,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(color: AppColors.cream2, shape: BoxShape.circle),
+                    child: const Icon(Icons.event_outlined, size: 18, color: AppColors.mint),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(l10n.petSlotRentalName(rental.index),
+                          style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w600,
+                              color: enabled ? AppColors.ink : AppColors.muted)),
+                      const SizedBox(height: 1),
+                      Text(l10n.petSlotRenewRowRange(from, to),
+                          style: const TextStyle(fontSize: 12, color: AppColors.ink2)),
+                    ],
+                  ),
+                ),
+                Icon(
+                  checked ? Icons.check_box : Icons.check_box_outline_blank,
+                  key: ValueKey('petSlotRenewCheck-${rental.index}'),
+                  color: checked ? AppColors.mint : (enabled ? AppColors.ink2 : AppColors.line),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

@@ -27,6 +27,7 @@ import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.notify.port.NotificationGiftLines;
 import com.tailtopia.notify.port.NotificationPetNames;
 import com.tailtopia.ops.target.OpsTargetType;
 import com.tailtopia.shared.error.AppException;
@@ -102,6 +103,17 @@ class NotificationCenterServiceTest {
         return bf.getBeanProvider(NotificationPetNames.class);
     }
 
+    /** 收礼单人条目「送的是什么」端口（V1.4.0 gift L2 第二轮）；null = 缺 bean。 */
+    NotificationGiftLines giftLinesPort;
+
+    private ObjectProvider<NotificationGiftLines> giftLinesProvider() {
+        StaticListableBeanFactory bf = new StaticListableBeanFactory();
+        if (giftLinesPort != null) {
+            bf.addBean("notificationGiftLines", giftLinesPort);
+        }
+        return bf.getBeanProvider(NotificationGiftLines.class);
+    }
+
     private NotificationCenterService service() {
         ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
         source.setBasename("classpath:i18n/messages");
@@ -110,7 +122,7 @@ class NotificationCenterServiceTest {
         InteractionCopyRenderer copy = new InteractionCopyRenderer(accounts, hideRelations, source);
         InteractionActorResolver resolver = new InteractionActorResolver(repo, actorRepo, accounts, hideRelations);
         return new NotificationCenterService(repo, redis, resolver, accounts, comments, followReader, copy, campaigns,
-                petNamesProvider());
+                petNamesProvider(), giftLinesProvider());
     }
 
     @Test
@@ -638,5 +650,75 @@ class NotificationCenterServiceTest {
         List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(2L)), Set.of(), Set.of());
 
         assertThat(items.get(0).title()).isEqualTo("u2 mengirim hadiah untuk hewanmu");
+    }
+
+    // ===== V1.4.0 gift L2 第二轮：单人收礼条目带礼物名与数量（PRD「XX 给你的 Mochi 送了 Tulang ×5」，P-4 用名称）=====
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void singleSenderGiftRowShowsGiftLabelManyRowStaysGeneric() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        Notification five = giftRow(70L);
+        Notification single = giftRow(70L);
+        Notification many = giftRow(70L);
+        Notification noPet = giftRow(71L);
+        when(giftLinesPort.linesOf(any())).thenReturn(Map.of(
+                five.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 5),
+                single.getId(), new NotificationGiftLines.GiftLine("Cake", "Kue", 1),
+                noPet.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 2)));
+
+        List<NotificationItem> items = page(List.of(five, single, many, noPet),
+                Map.of(five.getId(), List.of(2L), single.getId(), List.of(3L), many.getId(), List.of(4L, 5L),
+                        noPet.getId(), List.of(6L)),
+                Set.of(), Set.of());
+
+        assertThat(items).extracting(NotificationItem::title).containsExactly(
+                "u2 mengirim Tulang ×5 untuk Mochi",
+                "u3 mengirim Kue untuk Mochi",
+                "u4 dan 1 lainnya mengirim hadiah untuk Mochi",
+                "u6 mengirim Tulang ×2 untuk hewanmu");
+        ArgumentCaptor<Map<Long, NotificationGiftLines.Query>> q = ArgumentCaptor.forClass(Map.class);
+        verify(giftLinesPort, times(1)).linesOf(q.capture());
+        assertThat(q.getValue()).as("多人合并条目不查礼物").containsOnlyKeys(five.getId(), single.getId(), noPet.getId());
+        NotificationGiftLines.Query fq = q.getValue().get(five.getId());
+        assertThat(fq.petId()).isEqualTo(70L);
+        assertThat(fq.senderId()).isEqualTo(2L);
+        assertThat(fq.since()).as("送礼人并入时刻 − 容差")
+                .isEqualTo(Instant.parse("2026-10-11T00:00:00Z").minus(NotificationCenterService.GIFT_SINCE_TOLERANCE));
+    }
+
+    @Test
+    void englishAccountGetsEnglishGiftName() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        Notification gift = giftRow(70L);
+        when(giftLinesPort.linesOf(any())).thenReturn(
+                Map.of(gift.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 5)));
+        when(repo.findPageBefore(eq(ME), any(), anyLong(), any(Pageable.class))).thenReturn(List.of(gift));
+        when(actorRepo.findByNotificationIds(anyCollection())).thenReturn(List.of(actor(gift.getId(), 2L)));
+        when(accounts.findActorViews(anyCollection())).thenAnswer(inv -> {
+            Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().collect(Collectors.toMap(id -> id, id -> view(id)));
+        });
+        when(hideRelations.hiddenByHolder(eq(ME), anyCollection())).thenReturn(Set.of());
+        when(accounts.localeOf(ME)).thenReturn(Locale.ENGLISH);
+
+        assertThat(service().list(ME, CURSOR, 20).items().get(0).title()).isEqualTo("u2 sent Bone ×5 to Mochi");
+    }
+
+    @Test
+    void giftLinesMissingOrFailingFallsBackToGenericCopy() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        when(giftLinesPort.linesOf(any())).thenThrow(new IllegalStateException("boom"));
+        Notification gift = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(2L)), Set.of(), Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u2 mengirim hadiah untuk Mochi");
     }
 }

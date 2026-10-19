@@ -490,7 +490,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final stats = ref.watch(archiveStatsProvider(widget.petId)).asData?.value;
-    // V1.4.0 multi-pet Story 2.4 · AC5.2（B4）：当前宠物只读 → 页头前插横幅、隐藏编辑铅笔；其余照常可看可分享。
+    // V1.4.0 multi-pet Story 2.4 · AC5.2（B4）：当前宠物只读 → 标题行下插横幅、隐藏编辑铅笔；其余照常可看可分享。
     final petReadOnly = ref.watch(petListProvider.select((a) =>
         a.value?.any((p) => p.id == widget.petId && p.isReadOnly) ?? false));
     _bumpIfViewportNotScrollable();
@@ -515,10 +515,6 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             widget.switcher!,
             const SizedBox(height: 10),
           ],
-          if (petReadOnly) ...[
-            const PetReadonlyBanner(),
-            const SizedBox(height: 12),
-          ],
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
           // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
           DiaryHeader(
@@ -542,6 +538,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             insightsEntryAnchor: _insightsEntryAnchor,
             onEditProfile: widget.onEditProfile,
             hideEditButton: petReadOnly,
+            // B4：只读横幅在标题行之下、宠物卡之上（稿 B4；第二轮 L2 前是插在标题行上方）。
+            belowTitle: petReadOnly ? const PetReadonlyBanner() : null,
             // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
             // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由
             // 与它只差一个字母，替换会误伤（AD-A17.7）。
@@ -1037,6 +1035,9 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final timelineAsync = ref.watch(timelineFirstPageProvider(widget.petId));
+    // V1.4.0 multi-pet L2 第二轮：只读宠物的空态不引导发帖（发布页里只读宠物根本不可选）。
+    final readOnly = ref.watch(petListProvider.select((a) =>
+        a.value?.any((p) => p.id == widget.petId && p.isReadOnly) ?? false));
     // 第一页的身份变了就重置分页状态（provider 被 invalidate → 新的 TimelinePage 实例）。
     final firstPage = timelineAsync.asData?.value;
     if (firstPage != null && (!_cursorInitialized || !identical(firstPage, _lastFirstPage))) {
@@ -1070,7 +1071,7 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         if (page.items.isEmpty && _extra.isEmpty) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(0, 18, 0, AppSpacing.xl),
-            child: _FirstMomentGuideCard(petName: widget.petName),
+            child: _FirstMomentGuideCard(petName: widget.petName, readOnly: readOnly),
           );
         }
         final items = <TimelineItem>[...page.items, ..._extra];
@@ -1142,7 +1143,7 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
               0,
               Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _FirstMomentGuideCard(petName: widget.petName),
+                child: _FirstMomentGuideCard(petName: widget.petName, readOnly: readOnly),
               ));
         }
         // 底部翻页页脚：加载中转圈 / 失败给重试 / 没有更多则什么都不加。
@@ -1194,10 +1195,14 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
 /// 出现条件是「**还没有任何快乐时刻**」，不是「时间线为空」—— 建档完成里程碑 banner
 /// 会一直占着一条，按「为空」判定这张卡永远不出现（2026-08-04 实机确认）。
 /// 已建档真实态与整条为空两种情形共用本卡，不再各写一套。
+///
+/// [readOnly]（V1.4.0 multi-pet L2 第二轮）：当前宠物只读 → 只留一句「还没有 Diary」，不出劝写正文与
+/// 「+ Tambah ke Diary」（发布页里只读宠物不可选；续租入口在页头横幅里，这里不重复）。
 class _FirstMomentGuideCard extends StatelessWidget {
-  const _FirstMomentGuideCard({required this.petName});
+  const _FirstMomentGuideCard({required this.petName, this.readOnly = false});
 
   final String petName;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1217,27 +1222,32 @@ class _FirstMomentGuideCard extends StatelessWidget {
         children: [
           const Text('📸', style: TextStyle(fontSize: 26)),
           const SizedBox(height: 8),
-          Text(l10n.growthArchiveTimelineEmpty(petName),
+          Text(
+              readOnly
+                  ? l10n.growthArchiveReadOnlyTimelineEmpty(petName)
+                  : l10n.growthArchiveTimelineEmpty(petName),
               textAlign: TextAlign.center,
               style: const TextStyle(
                   fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
-          const SizedBox(height: 5),
-          Text(l10n.growthArchiveTimelineEmptyBody,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, height: 1.5, color: AppColors.ink2)),
-          const SizedBox(height: 14),
-          FilledButton(
-            key: const ValueKey('timelineEmptyCta'),
-            onPressed: () => context.push('/publish?preset=growth-calendar'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.mint,
-              foregroundColor: AppColors.onAccent,
-              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          if (!readOnly) ...[
+            const SizedBox(height: 5),
+            Text(l10n.growthArchiveTimelineEmptyBody,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, height: 1.5, color: AppColors.ink2)),
+            const SizedBox(height: 14),
+            FilledButton(
+              key: const ValueKey('timelineEmptyCta'),
+              onPressed: () => context.push('/publish?preset=growth-calendar'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                foregroundColor: AppColors.onAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              ),
+              child: Text('+ ${l10n.growthArchiveRecordFirstMoment}',
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
             ),
-            child: Text('+ ${l10n.growthArchiveRecordFirstMoment}',
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-          ),
+          ],
         ],
       ),
     );

@@ -1,6 +1,7 @@
 package com.tailtopia.gift.repository;
 
 import com.tailtopia.gift.domain.GiftOrder;
+import com.tailtopia.gift.domain.GiftOrderStatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -70,4 +71,14 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
              WHERE gift_id = :giftId AND status = 'DELIVERED'
             """, nativeQuery = true)
     List<Object[]> deliveredTotalsOfGift(@Param("giftId") long giftId);
+
+    /**
+     * 通知列表「送的是什么」（V1.4.0 gift L2 第二轮，{@code GiftNotificationGiftLines}）：一页涉及的宠物 × 送礼人、
+     * 自 {@code since} 起已送达的订单。结果在内存里再按每条通知的条件归属；一页 ≤ 20 条通知，量很小。
+     */
+    @Query("select o from GiftOrder o where o.petId in :petIds and o.senderId in :senderIds "
+            + "and o.status = :status and o.deliveredAt >= :since order by o.deliveredAt asc, o.id asc")
+    List<GiftOrder> findDeliveredForNotify(@Param("petIds") java.util.Collection<Long> petIds,
+            @Param("senderIds") java.util.Collection<Long> senderIds, @Param("status") GiftOrderStatus status,
+            @Param("since") java.time.Instant since);
 }

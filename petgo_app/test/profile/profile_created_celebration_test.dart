@@ -32,6 +32,7 @@ void main() {
   Future<void> pumpCelebration(
     WidgetTester tester, {
     required Future<void> Function() onStartExplore,
+    Future<void> Function()? onViewProfile,
   }) async {
     await tester.pumpWidget(MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -40,6 +41,7 @@ void main() {
         petName: 'Momo',
         avatarUrl: null,
         onStartExplore: onStartExplore,
+        onViewProfile: onViewProfile,
       ),
     ));
     await tester.pumpAndSettle();
@@ -64,12 +66,15 @@ void main() {
     expect(started, isTrue);
   });
 
-  testWidgets('AC4: 次 CTA「Lihat profil dulu」→ 同样进 App（共用 onStartExplore）', (tester) async {
+  testWidgets('L2 r2 P3-7: 次 CTA「Lihat profil dulu」→ 只走 onViewProfile，不触发主 CTA（不开发布）', (tester) async {
     var started = false;
-    await pumpCelebration(tester, onStartExplore: () async => started = true);
+    var viewed = false;
+    await pumpCelebration(tester,
+        onStartExplore: () async => started = true, onViewProfile: () async => viewed = true);
 
     await tester.tap(find.byKey(const ValueKey('celebrationViewProfile')));
     await tester.pumpAndSettle();
-    expect(started, isTrue);
+    expect(viewed, isTrue);
+    expect(started, isFalse);
   });
 }

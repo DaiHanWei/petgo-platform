@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/pet_avatar_item.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
-/// 圆形宠物头像（我的页 Hewanku / 他人主页 Hewan 共用）：「物种 · 年龄」不被截断（验收 2026-10-15）。
+/// 圆形宠物头像（我的页 Hewanku / 他人主页 Hewan 共用）：「物种 · 年龄」单行（L2 第二轮按稿 A2 / J0 改，取代 2026-10-15 的两行）。
 void main() {
   Future<void> pump(WidgetTester tester, Locale locale) async {
     await tester.pumpWidget(MaterialApp(
@@ -30,21 +30,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('物种 · 年龄完整显示、不出省略号（en，排版实测）', (tester) async {
-    await pump(tester, const Locale('en'));
-    final para = tester.renderObject<RenderParagraph>(find.byKey(const ValueKey('meta')));
-    expect(para.didExceedMaxLines, isFalse, reason: '「物种 · 年龄」被截断');
-  });
-
-  // 测试字体每个字按整字号宽画（「1th 0bln」8 字 = 88px），比真机 Poppins 宽一倍，无法做排版实测；
-  // 只断言两条约束：允许两行、年龄内是不换行空格（只在「·」处折行）。
-  testWidgets('物种 · 年龄允许两行且年龄不被拆开（id）', (tester) async {
+  // L2 第二轮（稿 A2 / J0）：副标题改为**单行**、放不下尾部省略（原先允许两行，会把一排头像撑得高低不齐）。
+  testWidgets('物种 · 年龄单行显示，放不下尾部省略（稿 A2 / J0）', (tester) async {
     await pump(tester, const Locale('id'));
     final text = tester.widget<Text>(find.byKey(const ValueKey('meta')));
-    expect(text.maxLines, 2);
-    final age = text.data!.split(' · ').last;
-    expect(age, contains('\u00A0'));
-    expect(age.contains(' '), isFalse, reason: '年龄内的空格应为不换行空格');
+    expect(text.maxLines, 1);
+    expect(text.overflow, TextOverflow.ellipsis);
+    expect(text.data, startsWith('Anjing · '));
+    final para = tester.renderObject<RenderParagraph>(find.byKey(const ValueKey('meta')));
+    expect(para.size.height, lessThan(20), reason: '只占一行');
   });
 
   testWidgets('Diary 数为 0 → 不画「0」角标（L2 J0）', (tester) async {

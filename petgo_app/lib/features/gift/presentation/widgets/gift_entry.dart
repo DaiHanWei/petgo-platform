@@ -9,6 +9,7 @@ import '../../../../shared/widgets/app_image.dart';
 import '../../../content/domain/content_pet_ref.dart';
 import '../../../profile/data/pet_list_repository.dart';
 import '../../../profile/presentation/widgets/pet_picker_sheet.dart';
+import '../../data/gift_repository.dart';
 import '../../domain/gift_send_result.dart';
 import '../../domain/gift_showcase.dart';
 import '../gift_page.dart';
@@ -108,9 +109,13 @@ class GiftDetailZone extends ConsumerStatefulWidget {
     this.linkedPets = const [],
     this.showSendButton = true,
     this.isOwner = false,
+    this.onDelivered,
   });
 
   final int postId;
+
+  /// 送达后回调（V1.4.0 L2 第二轮 P1-1）：详情页据此重拉详情，礼物区的「N hadiah」/ 叠放礼物随之刷新。
+  final VoidCallback? onDelivered;
 
   /// 详情 `giftPets`（Story 2.1；4.1 起为全部关联宠物，与 [linkedPets] 同序）。
   final List<GiftPetSummary> pets;
@@ -157,6 +162,12 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
         flightTargetKey: _zoneKey,
         sourcePostId: widget.postId,
         isMultiPetPost: multi,
+        onDelivered: () {
+          if (!mounted) return;
+          // 礼物页若已缓存过这只宠物，回去时也要是新的。
+          ref.invalidate(petGiftShowcaseProvider(petId));
+          widget.onDelivered?.call();
+        },
       );
     } finally {
       _running = false;
@@ -166,12 +177,18 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
   /// A7：选择送给哪只（单选 + 吸底「Lanjut」，默认第一只；只读宠物不置灰）。关闭 → null。
   Future<int?> _pickPet(List<GiftPetSummary> pets) async {
     final l10n = AppLocalizations.of(context);
-    final types = {for (final p in widget.linkedPets) p.petId: p.petType};
+    final linked = {for (final p in widget.linkedPets) p.petId: p};
     final ids = await showPetPickerSheet(
       context,
       pets: [
         for (final p in pets)
-          PetListItem(id: p.petId, name: p.name, avatarUrl: p.avatarUrl, petType: types[p.petId]),
+          // 副标题「物种 · 年龄」：物种与生日都取详情 `pets`（`giftPets` 不带；L2 第二轮补年龄）。
+          PetListItem(
+              id: p.petId,
+              name: p.name,
+              avatarUrl: p.avatarUrl,
+              petType: linked[p.petId]?.petType,
+              birthday: linked[p.petId]?.birthday),
       ],
       title: l10n.giftPickPetTitle,
       body: l10n.giftPickPetSubtitle,

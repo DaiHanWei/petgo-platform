@@ -13,6 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
+import '../../growth/domain/growth_popup_trigger.dart';
 import '../../growth/presentation/level_page.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../profile/domain/id_card.dart';
@@ -417,6 +418,8 @@ class _GiftSendFlow {
     _toast(l10n.giftSentToast(sel.item.nameFor(locale), sel.quantity, sel.catalog.recipient.name));
     if (context.mounted) ref.invalidate(pawCoinProvider);
     onDelivered?.call();
+    // L2 第二轮 P1-2：送礼返成长值（送礼人 + 主人）后可能升级 → 当前页立即拉一次庆祝（PawCoin / QRIS 两条路都到这里）。
+    growthPopupTrigger.afterAction();
     Analytics.capture('gift_payment_succeeded', {
       'gift_id': sel.item.giftToken,
       'quantity': sel.quantity,
