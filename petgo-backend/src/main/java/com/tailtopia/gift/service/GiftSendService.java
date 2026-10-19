@@ -201,7 +201,36 @@ public class GiftSendService {
         PaymentIntent intent = createQrisIntent(order);
         order.attachPaymentIntent(intent.getId());
         orders.saveAndFlush(order);
-        String payload = ensureCharge(intent);
+        return chargeOrFailed(order, intent);
+    }
+
+    /**
+     * 出码；网关下单失败（{@link PayException}）且意图已被 {@code failChargeAttempt} 置 FAILED → 订单随之 FAILED，
+     * 返回正常响应 {@code {delivered:false, status:FAILED}}（与幂等重放旧 FAILED 单同形），<b>不再 500</b>。
+     *
+     * <p>stag 复验：原先原样抛出 → 500 → App 视为结果未知、保留 requestId → 第 2 次点击重放旧单才拿到 FAILED、
+     * 第 3 次才真正重下（用户必白点一次）。现在首次就回 FAILED，App（OCR #4 逻辑）当场清 requestId，下次即换新单。
+     * 事务语义不变：{@code noRollbackFor = PayException} 本就让意图 FAILED + 订单 FAILED 提交；这里吞掉异常后正常提交，
+     * 同样两行都留档、没有半成品。
+     *
+     * <p>只接 {@link PayException}：其它异常（程序错误等）照旧抛出走 500。意图没被置 FAILED（{@code failChargeAttempt}
+     * no-op：并发的另一请求已拿到网关单号）→ 也照旧抛出，绝不把可能已出码的单标成 FAILED。
+     * 日志 WARN 只记订单 / 意图 id 与安全原因（网关错误码已由网关适配层按 request_id 记过），不含 PII。
+     */
+    private GiftSendResponse chargeOrFailed(GiftOrder order, PaymentIntent intent) {
+        String payload;
+        try {
+            payload = ensureCharge(intent);
+        } catch (PayException e) {
+            if (intent.getStatus() != PaymentStatus.FAILED) {
+                throw e;
+            }
+            order.markFailed(); // 同步失败监听通常已置 FAILED；非 PENDING 时 no-op
+            orders.saveAndFlush(order);
+            log.warn("gift qris charge failed orderId={} intentId={} reason={}", order.getId(), intent.getId(),
+                    e.getMessage());
+            return GiftSendResponse.ofStatus(order.getPublicToken(), order.getStatus());
+        }
         return GiftSendResponse.paymentRequired(PaymentIntentResponse.of(intent), payload, order.getPublicToken());
     }
 
@@ -238,9 +267,8 @@ public class GiftSendService {
                         order.getStatus().name());
             }
             case PENDING -> {
-                String payload = ensureCharge(intent);
-                return GiftSendResponse.paymentRequired(PaymentIntentResponse.of(intent), payload,
-                        order.getPublicToken());
+                // 意图窗内但还没网关单号（首单出码前异常中断）→ 补下单；补下单再失败同样回 FAILED、不 500。
+                return chargeOrFailed(order, intent);
             }
             case EXPIRED, FAILED -> {
                 if (status == PaymentStatus.FAILED) {
@@ -264,7 +292,8 @@ public class GiftSendService {
 
     /**
      * 首次下单向网关取二维码载荷；幂等重放返回既有载荷。同 {@code KeepsakePurchaseService.ensureCharge} 的逻辑
-     * （那边不改，这里是 gift 包私有副本）。失败时 {@code failChargeAttempt} 留档后原样抛出。
+     * （那边不改，这里是 gift 包私有副本）。失败时 {@code failChargeAttempt} 留档后原样抛出，由
+     * {@link #chargeOrFailed} 收口。
      */
     private String ensureCharge(PaymentIntent entity) {
         if (entity.getGatewayRef() == null) {

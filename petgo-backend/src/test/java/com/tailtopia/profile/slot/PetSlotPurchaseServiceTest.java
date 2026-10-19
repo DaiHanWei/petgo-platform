@@ -35,6 +35,7 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.error.ErrorTypes;
 import com.tailtopia.shared.error.PetSlotRentUnavailableException;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PayException;
 import com.tailtopia.shared.pay.PaymentGateway;
 import java.time.Clock;
 import java.time.Duration;
@@ -325,6 +326,42 @@ class PetSlotPurchaseServiceTest {
             assertThat(created.getPaymentIntentId()).isEqualTo(60L);
             assertThat(created.getUnitPrice()).isEqualTo(7000L);
             assertThat(created.getTotal()).isEqualTo(7000L);
+        }
+
+        /**
+         * stag 复验：网关出码失败（PayException）→ 不再 500：意图 FAILED、本行 FAILED，返回无载荷的正常响应
+         * （App 提示「Pembayaran gagal. Coba lagi.」）；同键重试 createIntent 不复用 FAILED 意图 → 新意图、新行、真正重下。
+         */
+        @Test
+        void qrisGatewayPayFailureReturnsNoPayloadAndRowFailed() {
+            PaymentIntent pi = intent(62L, 5000L, PaymentStatus.PENDING);
+            stubIntent(pi);
+            when(gateway.createCharge(any())).thenThrow(new PayException("支付网关收款失败"));
+            org.mockito.Mockito.doAnswer(inv -> {
+                ReflectionTestUtils.setField(pi, "status", PaymentStatus.FAILED);
+                return null;
+            }).when(paymentIntents).failChargeAttempt("pi62");
+
+            PetSlotPurchaseResponse resp = service.rent(USER, 1, PayChannel.QRIS, CK);
+
+            assertThat(resp.unlocked()).isFalse();
+            assertThat(resp.payload()).isNull();
+            assertThat(resp.payment()).isNull();
+            ArgumentCaptor<PetSlotPurchase> rows = ArgumentCaptor.forClass(PetSlotPurchase.class);
+            verify(purchases, org.mockito.Mockito.times(2)).saveAndFlush(rows.capture());
+            assertThat(rows.getValue().getStatus()).isEqualTo(PetSlotPurchaseStatus.FAILED);
+            assertThat(resp.purchaseToken()).isEqualTo(rows.getValue().getPublicToken());
+            verify(paymentIntents).failChargeAttempt("pi62");
+            verify(paymentIntents, never()).attachCharge(anyString(), anyString(), any());
+        }
+
+        /** 意图没被置 FAILED（并发的另一请求已拿到网关单号）→ 照旧抛出，不把可能已出码的单标 FAILED。 */
+        @Test
+        void qrisGatewayPayFailureWithIntentNotFailedRethrows() {
+            stubIntent(intent(63L, 5000L, PaymentStatus.PENDING));
+            when(gateway.createCharge(any())).thenThrow(new PayException("支付网关收款失败"));
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.rent(USER, 1, PayChannel.QRIS, CK))
+                    .isInstanceOf(PayException.class);
         }
 
         /** code review #4：QRIS 先建意图（可能改写旧意图行）再取账号锁，与 applyCallback（意图行 → 账号锁）同序。 */

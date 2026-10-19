@@ -102,6 +102,16 @@ void main() {
     expect([q.delivered, q.paymentToken, q.paymentDisplayNo, q.paymentRef, q.payload],
         [false, 'pi', 'PAY-20261018-1', 'PAY-20261018-1', '000201']);
     expect(q.status, GiftOrderStatus.pending);
+    // 网关出码失败（后端 chargeOrFailed，与重放旧 FAILED 单同形）
+    final f = GiftSendResult.fromJson({
+      'delivered': false,
+      'payment': null,
+      'payload': null,
+      'orderToken': 'ord3',
+      'status': 'FAILED',
+    });
+    expect([f.delivered, f.payload, f.paymentToken, f.orderToken], [false, null, null, 'ord3']);
+    expect(f.status, GiftOrderStatus.failed);
     expect(GiftSendResult.fromJson({}).delivered, isFalse);
     expect(GiftSendResult.fromJson({'payment': {'token': 'pi'}}).paymentRef, 'pi');
   });
