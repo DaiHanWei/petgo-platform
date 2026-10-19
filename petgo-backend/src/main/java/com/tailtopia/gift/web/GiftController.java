@@ -29,7 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 送礼 App 接口（V1.4.0 gift Story 1.1 · AC9）。三条都只给 {@code role=USER}（{@code SecurityConfig} 精确 matcher）：
  * <ul>
- *   <li>{@code GET /api/v1/gifts/catalog?petId=|postId=} —— 礼物目录（二选一）；</li>
+ *   <li>{@code GET /api/v1/gifts/catalog?petId=|postId=} —— 礼物目录（二选一；{@code postId} 自 gift Story 4.1 起弃用，
+ *       App 一律走 {@code petId}，后端为兼容 1.4.0 早期包保留、行为维持「取第一只」）；</li>
  *   <li>{@code POST /api/v1/pets/{petId}/gifts} —— 发起送礼；</li>
  *   <li>{@code GET /api/v1/me/gift-orders/{orderToken}} —— 单笔状态（QRIS 轮询，仅本人）；</li>
  *   <li>{@code GET /api/v1/me/gift-orders?cursor=} —— 我的送礼记录（Story 2.3 · AC1，只送出，仅本人）。</li>
@@ -57,9 +58,16 @@ public class GiftController {
         this.myOrders = myOrders;
     }
 
+    /**
+     * 礼物目录。
+     *
+     * @param postId <b>已弃用</b>（gift Story 4.1 · AC3.4）：单宠过渡入口，经 {@code petsOfPost} 取<b>第一只</b>作收礼宠物。
+     *               App 4.1 起不再使用（多宠帖先选宠物再按 {@code petId} 取）；为兼容 1.4.0 早期包保留，不删。
+     */
     @GetMapping("/api/v1/gifts/catalog")
     public GiftCatalogResponse catalog(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(required = false) Long petId, @RequestParam(required = false) Long postId) {
+            @RequestParam(required = false) Long petId,
+            @Deprecated @RequestParam(required = false) Long postId) {
         return catalogService.catalog(currentUserId(jwt), petId, postId);
     }
 

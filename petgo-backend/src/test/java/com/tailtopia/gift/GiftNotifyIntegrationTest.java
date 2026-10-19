@@ -16,7 +16,6 @@ import com.tailtopia.gift.service.GiftSendService;
 import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.service.NotificationCenterService;
 import com.tailtopia.notify.service.NotificationPusher;
-import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.service.PawCoinWalletService;
@@ -53,8 +52,6 @@ class GiftNotifyIntegrationTest extends ApiIntegrationTest {
     private UserHideRelationService hideService;
     @Autowired
     private NotificationCenterService center;
-    @Autowired
-    private NotificationService notificationService;
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -140,20 +137,18 @@ class GiftNotifyIntegrationTest extends ApiIntegrationTest {
     }
 
     /**
-     * 同一主人两只宠物按 {@code GIFT:PET:{petId}} 分开两条。本分支 {@code pet_profiles} 仍有单宠约束
-     * {@code uq_pet_profiles_owner_id}（V3），同一主人建不出第二行 —— 第二只宠物挂在另一用户名下，
-     * 第二笔直接调 {@code sendGiftReceived(owner, …, kopiId, …)} 落到同一收件人（聚合键只认 petId）；
-     * 多宠真实送礼链路在 ② 合入后验（code-review 1.2）。
+     * 同一主人两只宠物按 {@code GIFT:PET:{petId}} 分开两条（gift Story 4.1：② 合入后走真实多宠送礼链路，
+     * 两只宠物同属一位主人）。
      */
     @Test
     void twoPetsOfOneOwnerAreSeparateRows() {
         User owner = newUser();
         PetProfile mochi = newPet(owner, "Mochi");
-        PetProfile kopi = newPet(newUser(), "Kopi");
+        PetProfile kopi = newPet(owner, "Kopi");
         User a = funded();
 
         give(a, mochi, 1);
-        notificationService.sendGiftReceived(owner.getId(), a.getId(), kopi.getId(), "x");
+        give(a, kopi, 1);
 
         assertThat(unreadGiftRows(owner, mochi)).isEqualTo(1L);
         assertThat(unreadGiftRows(owner, kopi)).isEqualTo(1L);

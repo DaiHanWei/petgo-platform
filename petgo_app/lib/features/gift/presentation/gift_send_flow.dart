@@ -13,6 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
+import '../../growth/presentation/level_page.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../profile/domain/id_card.dart';
 import '../data/gift_repository.dart';
@@ -40,6 +41,8 @@ const String _purchasePurpose = 'GIFT';
 ///
 /// [flightTargetKey]：送出动效的落点（访客视图 = 宠物头像，详情页 = 礼物区）；取不到 → 屏幕中上。
 /// [onDelivered]：送达后回调（访客视图用来失效统计，供 Story 2.2 的「Hadiah」格接上）。
+/// [sourcePostId]：详情页入口的帖子 id，只作发起接口的来源记录（后端不校验宠物与帖子的关联，gift Story 4.1 · AC3.3）。
+/// [isMultiPetPost]：详情页入口的帖子关联 ≥ 2 只宠物（`gift_panel_opened.is_multi_pet_post`，AC4.4）。
 ///
 /// 连点防重由入口按钮负责（流程进行中按钮不响应），本函数不设全局锁。
 Future<void> runGiftSendFlow({
@@ -49,6 +52,8 @@ Future<void> runGiftSendFlow({
   required String source,
   GlobalKey? flightTargetKey,
   VoidCallback? onDelivered,
+  int? sourcePostId,
+  bool isMultiPetPost = false,
 }) async {
   // 目录在整条流程里保活：面板关掉去选渠道、再回来时不重新加载（礼物与数量也照旧）。
   final keepAlive = ref.listenManual(giftCatalogProvider(recipient), (_, _) {});
@@ -60,6 +65,8 @@ Future<void> runGiftSendFlow({
       source: source,
       flightTargetKey: flightTargetKey,
       onDelivered: onDelivered,
+      sourcePostId: sourcePostId,
+      isMultiPetPost: isMultiPetPost,
     ).run();
   } finally {
     try {
@@ -114,6 +121,8 @@ class _GiftSendFlow {
     required this.source,
     this.flightTargetKey,
     this.onDelivered,
+    this.sourcePostId,
+    this.isMultiPetPost = false,
   })  : overlay = Overlay.of(context, rootOverlay: true),
         l10n = AppLocalizations.of(context),
         locale = Localizations.localeOf(context),
@@ -125,6 +134,8 @@ class _GiftSendFlow {
   final String source;
   final GlobalKey? flightTargetKey;
   final VoidCallback? onDelivered;
+  final int? sourcePostId;
+  final bool isMultiPetPost;
 
   /// await 之后 context 可能已失效：Toast 一律挂开流程时取好的根 Overlay。
   final OverlayState overlay;
@@ -155,6 +166,11 @@ class _GiftSendFlow {
         _toast(l10n.giftCannotSend);
         return;
       }
+      if (res is GiftPanelOpenLevelPage) {
+        // B1 / B2 锁区块（gift Story 4.1 · AC7.1）：面板已关，进 ① 等级页；本次送礼结束（返回不重开面板）。
+        if (context.mounted) unawaited(context.push(LevelPage.location));
+        return;
+      }
       final selection = (res as GiftPanelSend).selection;
       giftToken = selection.item.giftToken;
       quantity = selection.quantity;
@@ -177,8 +193,8 @@ class _GiftSendFlow {
     Analytics.capture('gift_panel_opened', {
       'source': source,
       'pet_id': catalog.recipient.petId,
-      // 本分支单宠过渡（A7 选宠物抽屉在对齐 story 4.1 接入），恒 false。
-      'is_multi_pet_post': false,
+      // gift Story 4.1 · AC4.4：详情页帖子关联 ≥ 2 只（先经 A7 选宠物）为 true；访客视图 / 礼物页恒 false。
+      'is_multi_pet_post': isMultiPetPost,
     });
   }
 
@@ -229,7 +245,7 @@ class _GiftSendFlow {
             channel: channel.wire,
             requestId: requestId!,
             source: source,
-            postId: recipient.postId,
+            postId: sourcePostId,
           );
           if (r.delivered) {
             outcome = _Delivered(channel);
@@ -372,7 +388,7 @@ class _GiftSendFlow {
       onAborted: (abort) {
         switch (abort.category) {
           case 'EXPIRED':
-            _toast(l10n.giftPayExpired);
+            _toast(l10n.paymentExpiredRetry);
           case 'UNDELIVERED':
             _toast(l10n.giftUndelivered);
           default:

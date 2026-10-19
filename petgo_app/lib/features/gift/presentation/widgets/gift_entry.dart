@@ -6,6 +6,9 @@ import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../auth/domain/auth_guard.dart';
 import '../../../../shared/widgets/app_image.dart';
+import '../../../content/domain/content_pet_ref.dart';
+import '../../../profile/data/pet_list_repository.dart';
+import '../../../profile/presentation/widgets/pet_picker_sheet.dart';
 import '../../domain/gift_send_result.dart';
 import '../../domain/gift_showcase.dart';
 import '../gift_page.dart';
@@ -92,20 +95,27 @@ class _GiftSendPillState extends ConsumerState<GiftSendPill> {
 ///
 /// 浅紫底卡（#F8F6FF，圆角 16）→「HADIAH」→ 每只宠物一张白色小卡（头像 32 + 名字 +「N hadiah」+ 前 3 种礼物
 /// 叠放小圆片 +「+N」+「›」，点行进该宠物礼物页；0 礼物显示 A5 副标题、仍可点）→ 卡片底部整宽次级「Kirim Hadiah」。
-/// 按钮本身与显隐规则属 1.3（[showSendButton]，自己的 Diary A6 不显示）；本分支单宠过渡：按 `postId` 由后端取
-/// 收礼宠物，不弹选宠物抽屉（A7 在对齐 story 4.1 接入）。
+/// 按钮本身与显隐规则属 1.3（[showSendButton]，自己的 Diary A6 不显示）。
+///
+/// gift Story 4.1 · AC4（A7）：一个区只有一个「Kirim Hadiah」；`giftPets ≥ 2` → 先弹选宠物抽屉（复用 ② 的
+/// [PetPickerSheet] 单选 + 吸底「Lanjut」，默认第一只，只读宠物照常可选），选定后关抽屉再开送礼面板（不叠层）；
+/// 只有 1 只 → 直接开面板。两种情况一律按 `petId` 取目录与发起，帖子 id 只作来源记录。
 class GiftDetailZone extends ConsumerStatefulWidget {
   const GiftDetailZone({
     super.key,
     required this.postId,
     this.pets = const [],
+    this.linkedPets = const [],
     this.showSendButton = true,
   });
 
   final int postId;
 
-  /// 详情 `giftPets`（Story 2.1）。
+  /// 详情 `giftPets`（Story 2.1；4.1 起为全部关联宠物，与 [linkedPets] 同序）。
   final List<GiftPetSummary> pets;
+
+  /// 详情 `pets`（② 3.3）：A7 行副标题的物种取这里（`giftPets` 不带物种）。
+  final List<ContentPetRef> linkedPets;
 
   /// 「Kirim Hadiah」显隐（1.3 规则：他人的 Diary 且作者未注销）。
   final bool showSendButton;
@@ -123,18 +133,49 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
     if (_running) return;
     // 详情页游客也能看：送礼接口仅 USER，游客先走登录门控（与点赞 / 评论同一入口）。
     if (!requireLogin(ref, context, entrySource: 'gift')) return;
+    final pets = widget.pets;
+    if (pets.isEmpty) return;
     _running = true;
     try {
+      final multi = pets.length >= 2;
+      var petId = pets.first.petId;
+      if (multi) {
+        final picked = await _pickPet(pets);
+        if (picked == null || !mounted) return; // 下滑 / 返回 = 不送
+        petId = picked;
+      }
+      if (!mounted) return;
       await runGiftSendFlow(
         context: context,
         ref: ref,
-        recipient: GiftRecipientRef.post(widget.postId),
+        recipient: GiftRecipientRef.pet(petId),
         source: giftSourceContentDetail,
         flightTargetKey: _zoneKey,
+        sourcePostId: widget.postId,
+        isMultiPetPost: multi,
       );
     } finally {
       _running = false;
     }
+  }
+
+  /// A7：选择送给哪只（单选 + 吸底「Lanjut」，默认第一只；只读宠物不置灰）。关闭 → null。
+  Future<int?> _pickPet(List<GiftPetSummary> pets) async {
+    final l10n = AppLocalizations.of(context);
+    final types = {for (final p in widget.linkedPets) p.petId: p.petType};
+    final ids = await showPetPickerSheet(
+      context,
+      pets: [
+        for (final p in pets)
+          PetListItem(id: p.petId, name: p.name, avatarUrl: p.avatarUrl, petType: types[p.petId]),
+      ],
+      title: l10n.giftPickPetTitle,
+      body: l10n.giftPickPetSubtitle,
+      multiSelect: false,
+      confirmLabel: l10n.petPickerContinue,
+      initialSelectedId: pets.first.petId,
+    );
+    return (ids == null || ids.isEmpty) ? null : ids.first;
   }
 
   /// 点宠物行进礼物页（AC4.3 / AC4.4）；礼物页接口仅 USER → 游客先登录门控。

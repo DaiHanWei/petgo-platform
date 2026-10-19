@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/notify/domain/notification_item.dart';
 import 'package:tailtopia/features/notify/presentation/notification_center_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -52,9 +54,12 @@ NotificationItem _refund({String? title, String? body, String token = 'tok-r'}) 
       createdAt: DateTime.now(),
     );
 
-Future<void> _pump(WidgetTester tester, List<NotificationItem> items) async {
+Future<void> _pump(WidgetTester tester, List<NotificationItem> items, {List<PetListItem>? myPets}) async {
   await tester.pumpWidget(ProviderScope(
-    overrides: [notificationRepositoryProvider.overrideWithValue(_FakeNotificationRepo(items))],
+    overrides: [
+      notificationRepositoryProvider.overrideWithValue(_FakeNotificationRepo(items)),
+      if (myPets != null) petListProvider.overrideWith((ref) async => myPets),
+    ],
     child: MaterialApp.router(
       locale: const Locale('id'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -143,5 +148,28 @@ void main() {
     GoRouter.of(ctx).pop();
     await tester.pumpAndSettle();
     expect(find.text('DIARY TAB'), findsOneWidget);
+  });
+
+  // gift Story 4.1 · AC6.4：多宠物主人点「B 收到礼物」→ 先把 B 切为当前宠物，再进 Diary Tab 叠 B 的礼物页。
+  testWidgets('多宠物：被送礼的是自己的宠物 → 先切为当前宠物再进 Diary Tab', (tester) async {
+    await _pump(tester, [_received()], myPets: const [
+      PetListItem(id: 11, name: 'Aaa', isDefault: true),
+      PetListItem(id: 12, name: 'Mochi'),
+    ]);
+    final c = ProviderScope.containerOf(tester.element(find.byType(NotificationCenterPage)));
+    expect(c.read(currentPetIdProvider), isNull);
+    await tester.tap(_tile('tok-g'));
+    await tester.pumpAndSettle();
+    expect(c.read(currentPetIdProvider), 12);
+    expect(find.text('gift:12:expanded'), findsOneWidget);
+  });
+
+  testWidgets('多宠物：宠物不在自己的列表（已删 / 已转手）→ 不切，照常进礼物页', (tester) async {
+    await _pump(tester, [_received()], myPets: const [PetListItem(id: 11, name: 'Aaa', isDefault: true)]);
+    final c = ProviderScope.containerOf(tester.element(find.byType(NotificationCenterPage)));
+    await tester.tap(_tile('tok-g'));
+    await tester.pumpAndSettle();
+    expect(c.read(currentPetIdProvider), isNull);
+    expect(find.text('gift:12:expanded'), findsOneWidget);
   });
 }

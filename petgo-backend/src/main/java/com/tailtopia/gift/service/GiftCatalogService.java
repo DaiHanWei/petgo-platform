@@ -28,8 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
  * App 礼物目录（V1.4.0 gift Story 1.1 · AC4 · AD-10 · PRD AC3 / AC3a）。
  *
  * <ul>
- *   <li>入参 {@code petId} / {@code postId} 二选一（{@code postId} 经 {@code GiftPetDirectory.petsOfPost} 取第一只，
- *       单宠过渡；对 AD-10 的补充）；收礼宠物校验与发起同口径（{@link GiftRecipientGuard}）。</li>
+ *   <li>入参 {@code petId} / {@code postId} 二选一（{@code postId} 经 {@code GiftPetDirectory.petsOfPost} 取第一只；
+ *       <b>已弃用</b>，gift Story 4.1 起 App 一律走 {@code petId}，保留只为兼容 1.4.0 早期包）；收礼宠物校验与发起同口径
+ *       （{@link GiftRecipientGuard}）。</li>
  *   <li>组内排序：适用收礼宠物物种 → 通用（三个物种标记皆 false）→ 其他；同组 {@code sort_order ASC, id ASC}。</li>
  *   <li>专属礼物按 {@link GrowthQueryService#getLevel} 过滤（{@code participating = false} 视为 level 0），
  *       只放 {@code min_level <= level}；{@code lockBlock.requiredLevel} = 未解锁专属礼物里最小的 {@code min_level}。</li>

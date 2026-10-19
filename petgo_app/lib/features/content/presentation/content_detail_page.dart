@@ -348,6 +348,7 @@ class _DetailScaffold extends ConsumerWidget {
                             GiftDetailZone(
                               postId: detail.id,
                               pets: detail.giftPets,
+                              linkedPets: detail.pets,
                               showSendButton: _showGiftZone(detail),
                             ),
                           const SizedBox(height: AppSpacing.md),

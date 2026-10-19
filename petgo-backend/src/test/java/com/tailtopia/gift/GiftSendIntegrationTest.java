@@ -223,7 +223,12 @@ class GiftSendIntegrationTest extends ApiIntegrationTest {
         send(sender.getId(), pet.getId(), catGift.getPublicToken(), 1, "PAWCOIN", "ok-1")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.delivered").value(true));
-        // 只读宠物（② 名额到期）在本分支尚不存在；送礼服务不读任何只读标记，对齐 story 4.1 时在此补断言。
+        // gift Story 4.1 · AC1.3：② 名额到期置只读的宠物照常收礼（送礼不调 PetWriteGuard.requireWritable）。
+        PetProfile readOnly = newPet(owner, PetType.DOG);
+        jdbc.update("UPDATE pet_profiles SET status = 'READ_ONLY' WHERE id = ?", readOnly.getId());
+        send(sender.getId(), readOnly.getId(), catGift.getPublicToken(), 1, "PAWCOIN", "ok-ro")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.delivered").value(true));
     }
 
     @Test

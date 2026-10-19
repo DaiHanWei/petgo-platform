@@ -67,21 +67,19 @@ enum GiftOrderStatus {
       this == undeliveredRefundPending || this == undeliveredRefunded || this == refundManual;
 }
 
-/// 送礼对象：按宠物（访客视图）或按帖子（详情页，后端取单宠 `recipient`，AD-5 / P-3）二选一。
+/// 送礼对象：一律按宠物（gift Story 4.1 · AC4.3：详情页也先选定宠物，不再按帖子由后端取「第一只」；
+/// 后端目录 `?postId=` 已弃用，仅兼容 1.4.0 早期包）。
 class GiftRecipientRef {
-  const GiftRecipientRef.pet(int this.petId) : postId = null;
-  const GiftRecipientRef.post(int this.postId) : petId = null;
+  const GiftRecipientRef.pet(this.petId);
 
-  final int? petId;
-  final int? postId;
+  final int petId;
 
   @override
-  bool operator ==(Object other) =>
-      other is GiftRecipientRef && other.petId == petId && other.postId == postId;
+  bool operator ==(Object other) => other is GiftRecipientRef && other.petId == petId;
 
   @override
-  int get hashCode => Object.hash(petId, postId);
+  int get hashCode => petId.hashCode;
 
   @override
-  String toString() => petId != null ? 'GiftRecipientRef.pet($petId)' : 'GiftRecipientRef.post($postId)';
+  String toString() => 'GiftRecipientRef.pet($petId)';
 }

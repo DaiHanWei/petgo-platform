@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
  * 通知列表取宠物名端口 {@link NotificationPetNames} 的实现（V1.4.0 gift Story 1.2 · AC5.4）。
  *
  * <p>逐个经 {@link GiftPetDirectory#pet} 取（一页 ≤ 20 行，可接受）；取宠物只经送礼自有端口（P-3）。
- * 🔴 对齐 story 4.1 时随端口换实现（改接 ② 的批量读口），{@link NotificationPetNames} 签名不变。
+ * gift Story 4.1 起端口实现已接 ② 的读口，本类不另接 ② 批量读口（送礼包内只有端口实现可引用 ②，守卫钉着）。
  */
 @Component
 public class GiftNotificationPetNames implements NotificationPetNames {

@@ -9,7 +9,9 @@ import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.repository.CommentRepository;
+import com.tailtopia.content.repository.ContentPetRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.support.ContentPetsTestFixture;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.util.List;
@@ -24,6 +26,8 @@ import org.springframework.beans.factory.annotation.Autowired;
  */
 class ContentDetailControllerEndpointTest extends ApiIntegrationTest {
 
+    @Autowired
+    private ContentPetRepository contentPets;
     @Autowired
     private ContentPostRepository posts;
 
@@ -74,8 +78,9 @@ class ContentDetailControllerEndpointTest extends ApiIntegrationTest {
         var pet = petProfiles.save(com.tailtopia.profile.domain.PetProfile.create(author.getId(),
                 com.tailtopia.profile.domain.PetType.CAT, "Mochi", null, null, null, null,
                 "CD-" + SEQ.incrementAndGet()));
-        ContentPost diary = posts.save(ContentPost.publish(author.getId(), ContentType.GROWTH_MOMENT, pet.getId(),
-                "diary", List.of(), java.time.LocalDate.of(2026, 10, 1)));
+        // gift Story 4.1：收礼宠物经 ② 的 content_pets 取（多宠实现），绕过发布接口造帖须同步写关联行。
+        ContentPost diary = ContentPetsTestFixture.link(contentPets, posts.save(ContentPost.publish(author.getId(),
+                ContentType.GROWTH_MOMENT, pet.getId(), "diary", List.of(), java.time.LocalDate.of(2026, 10, 1))));
         ContentPost moment = savePost(author.getId(), "moment");
         User viewer = newUser();
 

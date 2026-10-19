@@ -22,13 +22,6 @@ public final class GiftCatalogRules {
     /** 排序值范围。 */
     public static final int SORT_ORDER_MAX = 9999;
 
-    /**
-     * 专属礼物最低等级的上限（PRD 等级曲线 Lv1–20）。
-     *
-     * <p>⚠️ 本分支没有 ① 的等级表：先用常量兜底。4.1 对齐时改读 ① 等级表最高级。
-     */
-    public static final int MAX_LEVEL_FALLBACK = 20;
-
     /** 送礼 QRIS 最低金额下限（= DB CHECK，AD-4）。 */
     public static final long MIN_QRIS_AMOUNT = 100L;
     /** 送礼 QRIS 最低金额上限（同礼物单价上限）。 */

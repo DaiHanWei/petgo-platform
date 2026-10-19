@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/gift/data/gift_repository.dart';
+import 'package:tailtopia/features/gift/domain/gift_catalog.dart';
 import 'package:tailtopia/features/gift/domain/gift_send_result.dart';
 import 'package:tailtopia/features/gift/presentation/gift_send_animation.dart';
 import 'package:tailtopia/features/gift/presentation/gift_send_flow.dart';
@@ -35,6 +36,8 @@ void main() {
   Future<void> start(WidgetTester tester,
       {GiftRecipientRef recipient = const GiftRecipientRef.pet(42),
       String source = giftSourceDiaryTab,
+      int? sourcePostId,
+      bool isMultiPetPost = false,
       bool disableAnimations = false}) async {
     // 测试字体每个字形是 fontSize 见方的方块，360 宽时「Isi saldo dulu →」会把 PawCoin 行挤到逐字换行；
     // 用宽一点的逻辑画布（800×1300）避免测试环境专属的溢出。
@@ -54,6 +57,8 @@ void main() {
                   ref: ref,
                   recipient: recipient,
                   source: source,
+                  sourcePostId: sourcePostId,
+                  isMultiPetPost: isMultiPetPost,
                   onDelivered: () => delivered++,
                 ),
                 child: const Text('go'),
@@ -61,6 +66,13 @@ void main() {
             ),
           ),
         ),
+      ),
+      GoRoute(
+        path: '/me/growth',
+        builder: (_, _) {
+          pushed.add('growth');
+          return const Scaffold(body: Text('level page'));
+        },
       ),
       GoRoute(
         path: '/me/pawcoin/recharge',
@@ -179,10 +191,13 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
-  testWidgets('详情页入口：按 postId 取目录、发起带 source=content_detail 与 postId；数量 1 省略「×1」',
-      (tester) async {
-    await start(tester, recipient: const GiftRecipientRef.post(77), source: giftSourceContentDetail);
-    expect(repo.catalogArgs.single, (petId: null, postId: 77));
+  testWidgets('详情页入口（gift 4.1 · AC4.3）：按所选 petId 取目录、发起带 source=content_detail 与来源 postId；'
+      '多宠帖埋点 is_multi_pet_post=true；数量 1 省略「×1」', (tester) async {
+    await start(tester,
+        source: giftSourceContentDetail, sourcePostId: 77, isMultiPetPost: true);
+    expect(repo.catalogArgs.single, (petId: 42, postId: null));
+    expect(events.where((e) => e.$1 == 'gift_panel_opened').single.$2,
+        {'source': 'content_detail', 'pet_id': 42, 'is_multi_pet_post': true});
     await kirim(tester);
     await confirm(tester);
     await tester.pump(const Duration(seconds: 2));
@@ -190,6 +205,21 @@ void main() {
     expect([s.petId, s.source, s.postId], [42, 'content_detail', 77]);
     expect(find.text('Tulang terkirim ke Mochi'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('锁区块（gift 4.1 · AC7.1）→ 面板关 → 进 ① 等级页 /me/growth，流程结束不重开面板', (tester) async {
+    repo.catalog = sampleCatalog(lockBlock: const GiftLockBlock(requiredLevel: 5));
+    await start(tester);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('giftLockBlock')), 200,
+        scrollable: find.descendant(
+            of: find.byKey(const ValueKey('giftPanelGrid')), matching: find.byType(Scrollable)));
+    await tester.tap(find.byKey(const ValueKey('giftLockBlock')));
+    await tester.pumpAndSettle();
+    expect(panel(), findsNothing);
+    expect(pushed, ['growth']);
+    expect(find.text('level page'), findsOneWidget);
+    expect(events.where((e) => e.$1 == 'gift_locked_block_tapped').single.$2, {'required_level': 5});
+    expect(repo.sends, isEmpty);
   });
 
   testWidgets('pawcoin-insufficient → 抽屉保留、按钮恢复、刷新余额', (tester) async {

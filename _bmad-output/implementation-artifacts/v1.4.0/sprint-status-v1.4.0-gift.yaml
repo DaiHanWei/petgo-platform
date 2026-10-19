@@ -31,7 +31,7 @@
 # - P-1：QRIS 付款后无法送达退回 PawCoin 的总账口径（CASH_IN → FLOAT_LIABILITY），财务确认
 
 generated: 2026-10-18
-last_updated: 2026-10-18
+last_updated: 2026-10-19
 project: TailTopia V1.4.0 gift
 project_key: NOKEY
 tracking_system: file-system
@@ -56,5 +56,5 @@ development_status:
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-送礼与等级多宠物对齐: backlog  # 对齐分支本地做，云端不执行
+  4-1-送礼与等级多宠物对齐: review  # 对齐分支本地做，云端不执行
   epic-4-retrospective: optional

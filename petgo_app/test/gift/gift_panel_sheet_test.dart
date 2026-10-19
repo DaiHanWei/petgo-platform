@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/gift/data/gift_repository.dart';
 import 'package:tailtopia/features/gift/domain/gift_catalog.dart';
 import 'package:tailtopia/features/gift/domain/gift_send_result.dart';
@@ -182,17 +183,26 @@ void main() {
     expect(find.text('Naik level untuk membuka hadiah eksklusif'), findsOneWidget);
   });
 
-  testWidgets('锁区块 Lv5：点击出 Toast「Terbuka di Lv5」+ 埋点，面板不关', (tester) async {
+  test('段位色取 ① 的 token（gift 4.1 · AC7.2）：Lv5–9 Sahabat / Lv10–14 Penjaga / Lv15+ Bintang', () {
+    expect(GiftStyle.levelRing(5), AppColors.tierSahabat);
+    expect(GiftStyle.levelRing(9), AppColors.tierSahabat);
+    expect(GiftStyle.levelRing(10), AppColors.tierPenjaga);
+    expect(GiftStyle.levelRing(15), AppColors.tierBintangStart);
+    expect((GiftStyle.levelGradient(20) as LinearGradient).colors,
+        [AppColors.tierBintangStart, AppColors.tierBintangEnd]);
+  });
+
+  testWidgets('锁区块 Lv5（gift 4.1 · AC7.1）：点击 → 埋点 → 面板关闭并返回「进等级页」，不再出 Toast',
+      (tester) async {
     repo.catalog = sampleCatalog(lockBlock: const GiftLockBlock(requiredLevel: 5));
     await open(tester);
     expect(find.text('Lv5 buka lebih banyak hadiah'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('giftLockBlock')));
-    await tester.pump();
-    expect(find.text('Terbuka di Lv5'), findsOneWidget);
-    expect(find.byKey(const ValueKey('giftPanelLoaded')), findsOneWidget, reason: '面板不关');
-    expect(results, isEmpty);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('giftPanelLoaded')), findsNothing, reason: '面板关闭');
+    expect(results.single, isA<GiftPanelOpenLevelPage>());
+    expect(find.text('Terbuka di Lv5'), findsNothing, reason: '过渡 Toast 已删');
     expect(events.where((e) => e.$1 == 'gift_locked_block_tapped').single.$2, {'required_level': 5});
-    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('点「Kirim」→ 返回所选礼物与数量 + 埋点 gift_send_tapped', (tester) async {

@@ -6,8 +6,8 @@ import java.util.Optional;
 /**
  * 送礼模块取宠物的<b>自有端口</b>（V1.4.0 gift Story 1.1 · AD-5 / P-3）。
  *
- * <p>🔴 与 ①② 并行开发：② 的多宠接口在本分支不存在，送礼的服务与控制器<b>只依赖本接口</b>。
- * 签名是对齐 story 4.1 的契约 —— 对齐时只换实现（改接 ② 的读口），<b>不改签名、业务代码不动</b>。
+ * <p>送礼的服务与控制器<b>只依赖本接口</b>；唯一实现是接 ② 读口的 {@link MultiPetGiftPetDirectory}
+ * （gift Story 4.1 · AC1 换掉 1.1 的单宠过渡实现，签名未改）。
  */
 public interface GiftPetDirectory {
 
@@ -15,8 +15,8 @@ public interface GiftPetDirectory {
     Optional<GiftPet> pet(long petId);
 
     /**
-     * 某条内容关联的宠物（单宠过渡：只有公开、已发布、未下架、未删除的 Diary 帖且带宠物时返回一只，其余一律空表）。
-     * 多宠（一帖多宠）在 story 4.1 对齐。
+     * 某条内容关联的全部宠物，按宠物创建顺序（与详情 {@code pets} 同序）：只有公开、已发布、未下架、未删除的 Diary 帖
+     * 才有，其余一律空表；只读宠物照列，已删宠物不在。
      */
     List<GiftPet> petsOfPost(long postId);
 

@@ -130,7 +130,7 @@ public class AdminGiftCatalogController {
         model.addAttribute("iconSpecCreate", icons.specText(IconPurpose.GIFT, "create"));
         model.addAttribute("iconSpecEdit", icons.specText(IconPurpose.GIFT, "edit"));
         model.addAttribute("minLevel", 1);
-        model.addAttribute("maxLevel", GiftCatalogRules.MAX_LEVEL_FALLBACK);
+        model.addAttribute("maxLevel", service.maxMinLevel());
         model.addAttribute("minPrice", GiftCatalogRules.MIN_PRICE);
         model.addAttribute("maxPrice", GiftCatalogRules.MAX_PRICE);
         model.addAttribute("maxSortOrder", GiftCatalogRules.SORT_ORDER_MAX);
