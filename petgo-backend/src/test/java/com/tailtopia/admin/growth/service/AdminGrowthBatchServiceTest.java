@@ -203,7 +203,7 @@ class AdminGrowthBatchServiceTest {
     }
 
     @Test
-    void pureReplayCountsAlreadyGrantedAndWritesNoAudit() {
+    void pureReplayCountsAlreadyGrantedAndWritesReplayAudit() {
         when(ledger.adjust(any())).thenReturn(new AdminAdjustCommand.Result(50, 50, 1, 1, true));
 
         Result r = service.execute(BATCH, "x", "50", "1,2", 99L);
@@ -211,7 +211,11 @@ class AdminGrowthBatchServiceTest {
         assertThat(r.granted()).isZero();
         assertThat(r.alreadyGranted()).isEqualTo(2);
         assertThat(r.replayOnly()).isTrue();
-        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+        // 重复提交也留痕，但用单独动作码（「批量发放」条数仍 = 真实发放次数）
+        verify(audit).record(eq(99L), eq(AuditActions.GROWTH_BATCH_REPLAYED), eq("growth_batch"), eq(BATCH),
+                org.mockito.ArgumentMatchers.contains("已发过=2"));
+        verify(audit, never()).record(anyLong(), eq(AuditActions.GROWTH_BATCH_GRANTED), anyString(), anyString(),
+                anyString());
     }
 
     @Test

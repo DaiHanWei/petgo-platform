@@ -56,7 +56,7 @@ class AdminPublishIdentityServiceTest {
         petsAre();
         var row = service.listRealAccounts().get(0);
         assertThat(row.speciesGuess()).isEqualTo("—");
-        assertThat(row.speciesSource()).isEqualTo("推不出（该账号未建宠物档案）");
+        assertThat(row.speciesSource()).isEqualTo("NONE");
     }
 
     @Test
@@ -64,7 +64,7 @@ class AdminPublishIdentityServiceTest {
         petsAre(pet(USER, 1L, PetType.CAT, T0), pet(USER, 2L, PetType.CAT, T0.plusSeconds(1)));
         var row = service.listRealAccounts().get(0);
         assertThat(row.speciesGuess()).isEqualTo("CAT");
-        assertThat(row.speciesSource()).isEqualTo("宠物档案");
+        assertThat(row.speciesSource()).isEqualTo("PROFILE");
     }
 
     @Test
@@ -72,6 +72,6 @@ class AdminPublishIdentityServiceTest {
         petsAre(pet(USER, 1L, PetType.CAT, T0), pet(USER, 2L, PetType.DOG, T0.plusSeconds(1)));
         var row = service.listRealAccounts().get(0);
         assertThat(row.speciesGuess()).isEqualTo("GENERAL");
-        assertThat(row.speciesSource()).isEqualTo("宠物档案（多物种）");
+        assertThat(row.speciesSource()).isEqualTo("PROFILE_MULTI");
     }
 }

@@ -114,7 +114,7 @@
                 <td class="nowrap" th:text="${r.deletedCount} > 0
                              ? ${r.publishedByAdminCount} + ' (' + #{admin.publishIdentity.deleted(${r.deletedCount})} + ')'
                              : ${r.publishedByAdminCount}">0</td>
-                <td class="muted" th:text="${r.speciesGuess} + ' · ' + ${r.speciesSource}">—</td>
+                <td class="muted" th:text="${r.speciesGuess} + ' · ' + #{${'admin.publishIdentity.speciesSource.' + r.speciesSource}}">—</td>
                 <td class="nowrap">
                     <!--/* 🔴 移出前必须过确认弹层：那里要显示「还有 N 条待发布排期」——
                            N 只有服务端算得出来，而这个提示就是这条 AC 的全部意义。 */-->

@@ -12,7 +12,9 @@ import java.time.Instant;
  * @param speciesGuess          物种推导结果，只读自查列。⚠️ 运营真实账号**没有**「账号物种定位」
  *                              字段（那是虚拟账号补偿"无宠物档案"的专属字段），推不出来是常态，
  *                              本列的用途就是让运营提前知道哪些号属于这种情况。
- * @param speciesSource         推导来源（"宠物档案" / 推不出来的原因）。
+ * @param speciesSource         推导来源代码：{@code NONE}（未建宠物档案，推不出）/ {@code PROFILE}（宠物档案）/
+ *                              {@code PROFILE_MULTI}（宠物档案，多物种）。显示文案走 i18n
+ *                              {@code admin.publishIdentity.speciesSource.*}，不在服务层写死中文。
  */
 public record RealAccountRow(
         long userId,

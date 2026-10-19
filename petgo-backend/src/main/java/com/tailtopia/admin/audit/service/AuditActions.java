@@ -269,8 +269,13 @@ public final class AuditActions {
     public static final String GROWTH_RECALC_RETRIED = "GROWTH_RECALC_RETRIED";
     /** 后台对单个用户调整 EXP / 发运营活动（V1.4.0 ① Story 4.2 · AB-33）。target = {@code USER} / userId；幂等命中不写。 */
     public static final String GROWTH_USER_ADJUSTED = "GROWTH_USER_ADJUSTED";
-    /** 批量发放活动 EXP（V1.4.0 ① Story 4.3）。target = {@code growth_batch} / 批次号；纯重放不写。 */
+    /** 批量发放活动 EXP（V1.4.0 ① Story 4.3）。target = {@code growth_batch} / 批次号；纯重放记下面的 REPLAYED。 */
     public static final String GROWTH_BATCH_GRANTED = "GROWTH_BATCH_GRANTED";
+    /**
+     * 同一批次号重复提交、全部命中幂等未重复入账（V1.4.0 L2 第三轮）。target 同上；摘要记活动 / 每人 / 已发过人数。
+     * 单列动作码而不复用 GRANTED：「批量发放」的条数仍等于真实发放次数，重提的操作也留痕。
+     */
+    public static final String GROWTH_BATCH_REPLAYED = "GROWTH_BATCH_REPLAYED";
     /** 改虚拟号 / 官方号的展示等级（V1.4.0 ① Story 4.4）。target = {@code user} / userId；值未变不写。 */
     public static final String GROWTH_DISPLAY_LEVEL_CHANGED = "GROWTH_DISPLAY_LEVEL_CHANGED";
 
