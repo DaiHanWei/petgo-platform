@@ -24,7 +24,7 @@ const String kPetSlotAbortPaidNeedsSupport = 'PAID_NEEDS_SUPPORT';
 ///
 /// 键按「同一次购买意图」= 种类 + 数量（或所选名额 token）+ 渠道 记住，**跨重试沿用**：
 /// PawCoin 扣款已提交但响应超时 → 用户重试 → 后端按同键重放、不再扣；QRIS 关掉面板再付 → 同键复用原意图。
-/// 只在终态（PAID / EXPIRED / FAILED / ORPHAN_PAID / OVERPAID）或 4xx 业务拒绝后清掉；换数量 / 换名额 / 换渠道 = 新键。
+/// 只在终态（PAID / EXPIRED / FAILED / ORPHAN_PAID / OVERPAID）、4xx 业务拒绝或网关出码失败（200 无载荷）后清掉；换数量 / 换名额 / 换渠道 = 新键。
 /// 键是随机串、不含用户信息；后端按账号隔离幂等键。
 class PetSlotAttemptStore {
   final Map<String, String> _keys = {};
@@ -168,6 +168,12 @@ Future<PetSlotFlowOutcome> _runPetSlotPurchase(
       try {
         final res = await start(repo, channel, idempotencyKey ?? store.keyFor(id));
         purchaseToken = res.purchaseToken;
+        final payload = res.payload;
+        if (!res.unlocked && (payload == null || payload.isEmpty)) {
+          // 网关出码失败：后端已把意图 / 购买行置 FAILED、回 200 无载荷（不再 500）→ 这次意图已结束，
+          // 下次点击换新键重新下单（提示「Pembayaran gagal. Coba lagi.」由 runKeepsakePurchase 给出）。
+          store.clear(id);
+        }
         return res;
       } on DioException catch (e) {
         // 4xx 业务拒绝（409 名额已变 / 422 等）= 这次意图已结束 → 下次换新键；

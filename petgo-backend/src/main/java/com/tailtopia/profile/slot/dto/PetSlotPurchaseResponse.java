@@ -22,4 +22,11 @@ public record PetSlotPurchaseResponse(boolean unlocked, PaymentIntentResponse pa
             String purchaseToken) {
         return new PetSlotPurchaseResponse(false, payment, payload, purchaseToken);
     }
+
+    /**
+     * 网关下单失败（意图与本行已置 FAILED）：无意图、无载荷 → App 走「支付失败」提示；同键重试即另起新单。
+     */
+    public static PetSlotPurchaseResponse chargeFailed(String purchaseToken) {
+        return new PetSlotPurchaseResponse(false, null, null, purchaseToken);
+    }
 }

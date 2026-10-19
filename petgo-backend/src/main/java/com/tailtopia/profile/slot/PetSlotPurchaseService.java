@@ -422,14 +422,33 @@ public class PetSlotPurchaseService {
                     intent.getAmount(), PayChannel.QRIS, intent.getId(), qrisRowKey(key, intent.getId()), rentalIds,
                     Instant.now(clock)));
         }
-        String payload = ensureCharge(intent);
+        String payload;
+        try {
+            payload = ensureCharge(intent);
+        } catch (PayException e) {
+            // stag 复验：网关下单失败（如 stag GemPay 恒 P04）原先原样抛出 → 500 + 每次一条 ERROR。
+            // failChargeAttempt 已把意图置 FAILED（同步失败监听把本行置 FAILED），这里收口成正常响应：
+            // unlocked=false 且无载荷 → App 提示「Pembayaran gagal. Coba lagi.」；同键重试时 createIntent
+            // 不复用 FAILED 意图、另起新意图与新行，第 2 次点击即真正重下。事务照常提交（两行都留档、无半成品）。
+            // 只接 PayException；意图没被置 FAILED（并发的另一请求已拿到网关单号）→ 照旧抛出。
+            if (intent.getStatus() != PaymentStatus.FAILED) {
+                throw e;
+            }
+            if (row.getStatus() == PetSlotPurchaseStatus.PENDING) {
+                row.markStatus(PetSlotPurchaseStatus.FAILED);
+                purchases.saveAndFlush(row);
+            }
+            log.warn("pet slot qris charge failed purchaseId={} intentId={} reason={}", row.getId(), intent.getId(),
+                    e.getMessage());
+            return PetSlotPurchaseResponse.chargeFailed(row.getPublicToken());
+        }
         return PetSlotPurchaseResponse.paymentRequired(PaymentIntentResponse.of(intent), payload,
                 row.getPublicToken());
     }
 
     /**
      * 首次下单向网关取二维码载荷；幂等重放返回既有载荷（照 {@code KeepsakePurchaseService.ensureCharge} 的私有副本）。
-     * 失败时 {@code failChargeAttempt} 留档后原样抛出。
+     * 失败时 {@code failChargeAttempt} 留档后原样抛出，由 {@link #qrisRow} 收口为「无载荷」正常响应。
      */
     private String ensureCharge(PaymentIntent entity) {
         if (entity.getGatewayRef() == null) {

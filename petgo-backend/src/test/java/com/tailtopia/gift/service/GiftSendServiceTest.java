@@ -47,6 +47,7 @@ import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PayException;
 import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.time.Clock;
@@ -325,6 +326,65 @@ class GiftSendServiceTest {
         assertThatThrownBy(() -> service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS)))
                 .isInstanceOf(IllegalStateException.class);
         verify(paymentIntents).failChargeAttempt("pi-501");
+    }
+
+    /**
+     * stag 复验：网关出码失败（PayException，如 stag GemPay 恒 P04）→ 不再 500：意图经 failChargeAttempt 置 FAILED、
+     * 订单 FAILED，返回 {delivered:false, status:FAILED}（与重放旧 FAILED 单同形），App 首次就能清 requestId。
+     */
+    @Test
+    void qrisGatewayPayFailureReturnsFailedInsteadOfThrowing() {
+        PaymentIntent p = intent(501, PaymentStatus.PENDING, null, null);
+        createIntentReturns(p);
+        when(gateway.createCharge(any())).thenThrow(new PayException("支付网关收款失败"));
+        failChargeAttemptMarksFailed(p);
+
+        GiftSendResponse r = service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS));
+
+        assertThat(r.delivered()).isFalse();
+        assertThat(r.status()).isEqualTo("FAILED");
+        assertThat(r.payment()).isNull();
+        assertThat(r.payload()).isNull();
+        assertThat(r.orderToken()).isEqualTo("ORDERTOKEN");
+        verify(paymentIntents).failChargeAttempt("pi-501");
+        ArgumentCaptor<GiftOrder> saved = ArgumentCaptor.forClass(GiftOrder.class);
+        verify(orders, times(3)).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getStatus()).isEqualTo(GiftOrderStatus.FAILED);
+        verify(paymentIntents, never()).attachCharge(anyString(), anyString(), any());
+        verifyNoInteractions(wallet, delivery);
+    }
+
+    /** failChargeAttempt no-op（并发的另一请求已拿到网关单号，意图仍 PENDING）→ 不能标 FAILED，照旧抛出。 */
+    @Test
+    void qrisGatewayPayFailureWithIntentNotFailedStillRethrows() {
+        createIntentReturns(intent(501, PaymentStatus.PENDING, null, null));
+        when(gateway.createCharge(any())).thenThrow(new PayException("支付网关收款失败"));
+        assertThatThrownBy(() -> service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS)))
+                .isInstanceOf(PayException.class);
+    }
+
+    /** 重放时意图窗内但无网关单号 → 补下单；补下单失败同样回 FAILED、不 500。 */
+    @Test
+    void qrisReplayRechargeFailureReturnsFailed() {
+        GiftOrder existing = GiftTestFixtures.order(82L, PayChannel.QRIS, 1, 10_000);
+        existing.attachPaymentIntent(501L);
+        when(orders.findByIdemKey(anyString())).thenReturn(Optional.of(existing));
+        PaymentIntent p = ownIntent(501, PaymentStatus.PENDING, null, null);
+        when(gateway.createCharge(any())).thenThrow(new PayException("支付网关收款失败"));
+        failChargeAttemptMarksFailed(p);
+
+        GiftSendResponse r = service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS));
+
+        assertThat(r.status()).isEqualTo("FAILED");
+        assertThat(existing.getStatus()).isEqualTo(GiftOrderStatus.FAILED);
+    }
+
+    /** 模拟真实 failChargeAttempt：同一持久化上下文里把意图置 FAILED。 */
+    private void failChargeAttemptMarksFailed(PaymentIntent p) {
+        org.mockito.Mockito.doAnswer(inv -> {
+            ReflectionTestUtils.setField(p, "status", PaymentStatus.FAILED);
+            return null;
+        }).when(paymentIntents).failChargeAttempt(p.getPublicToken());
     }
 
     // ---------- 幂等 ----------

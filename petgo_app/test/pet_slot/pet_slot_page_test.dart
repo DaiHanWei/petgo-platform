@@ -319,6 +319,32 @@ void main() {
         await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
       });
 
+      testWidgets('QRIS 网关出码失败（200 无载荷）→「Pembayaran gagal. Coba lagi.」，第 2 次点击即换新键出码', (tester) async {
+        final repo = FakePetSlotRepo()
+          ..rentResult = const KeepsakePurchaseResult(unlocked: false, purchaseToken: 'p-gw-fail')
+          ..statuses = const [PetSlotPurchaseStatus(status: PetSlotPurchaseStatus.pending)];
+        await pumpSlotPage(tester, overviews: [overview(petCount: 2)], pets: twoPets, repo: repo, balance: 0);
+        await tester.tap(find.byKey(const ValueKey('petSlotRentButton')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('petSlotRentConfirm')));
+        await tester.pumpAndSettle();
+        expect(find.text('Pembayaran gagal. Coba lagi.'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+
+        repo.rentResult = const KeepsakePurchaseResult(unlocked: false, payload: '000201QR', purchaseToken: 'p-2');
+        await tester.tap(find.byKey(const ValueKey('petSlotRentButton')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('petSlotRentConfirm')));
+        await tester.pumpAndSettle();
+        expect(repo.rents, hasLength(2));
+        expect(repo.rents[1].key, isNot(repo.rents[0].key), reason: '已失败的意图不再沿用旧键');
+        expect(find.text(l10n.vetPayCancel), findsOneWidget, reason: '第 2 次点击即出码');
+        await tester.tap(find.text(l10n.vetPayCancel));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
+      });
+
       testWidgets('QRIS 关掉面板未付 → 再付沿用同键（复用原意图，不出第二张码）', (tester) async {
         final repo = FakePetSlotRepo()
           ..rentResult = const KeepsakePurchaseResult(unlocked: false, payload: '000201QR', purchaseToken: 'p9')

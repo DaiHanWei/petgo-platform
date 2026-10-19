@@ -10,6 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tailtopia.auth.domain.User;
+import com.tailtopia.gift.domain.GiftCatalogItem;
+import com.tailtopia.gift.domain.GiftKind;
+import com.tailtopia.gift.repository.GiftCatalogRepository;
+import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.PetType;
+import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
 import com.tailtopia.shared.pay.PayException;
@@ -53,6 +59,10 @@ class GatewayChargeFailureIntegrationTest extends ApiIntegrationTest {
     private JdbcTemplate jdbc;
     @Autowired
     private TriageProcessor triageProcessor;
+    @Autowired
+    private GiftCatalogRepository giftCatalog;
+    @Autowired
+    private PetProfileRepository petProfiles;
 
     private void gatewayFailsOnceThenSucceeds() {
         when(gateway.createCharge(any()))
@@ -161,5 +171,54 @@ class GatewayChargeFailureIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.payment.token").exists()));
 
         assertFailedKeptAndRetriedWithNewRequestId(u.getId(), "AI_UNLOCK", retry);
+    }
+
+    /**
+     * stag 复验（送礼）：网关出码失败 → 不再 500，而是 200 {@code {delivered:false, status:FAILED}}；订单 / 意图 FAILED 留档；
+     * 同 requestId 重放仍回 FAILED（不再下单）；App 据此清 requestId，新 requestId 第 2 次点击即真正重下（新 request_id）。
+     */
+    @Test
+    void giftChargeFailureReturnsFailedNot500AndNewRequestIdReorders() throws Exception {
+        User sender = newUser();
+        User owner = newUser();
+        PetProfile pet = petProfiles.save(PetProfile.create(owner.getId(), PetType.CAT, "Mochi", null, null, null, null,
+                "GF-" + SEQ.incrementAndGet()));
+        long n = SEQ.incrementAndGet();
+        GiftCatalogItem gift = giftCatalog.save(GiftCatalogItem.create("gf" + n, "Gift" + n, "Hadiah" + n,
+                "https://cdn/g.png", 10_000, false, false, false, GiftKind.NORMAL, null, 0));
+        gatewayFailsOnceThenSucceeds();
+        String firstRequest = "gf-req-" + SEQ.incrementAndGet();
+
+        var first = json.readTree(sendGift(sender, pet, gift, firstRequest)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.delivered").value(false))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andReturn().getResponse().getContentAsString());
+        String failedOrder = first.path("orderToken").asText();
+        assertThat(jdbc.queryForObject("SELECT status FROM gift_orders WHERE public_token = ?", String.class,
+                failedOrder)).isEqualTo("FAILED");
+
+        // 同 requestId 重放：回同一张 FAILED 单，不再碰网关
+        sendGift(sender, pet, gift, firstRequest)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.orderToken").value(failedOrder));
+        verify(gateway, org.mockito.Mockito.times(1)).createCharge(any());
+
+        String retry = tokenOf(sendGift(sender, pet, gift, "gf-req-" + SEQ.incrementAndGet())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.payload").value("qris-payload")));
+
+        assertFailedKeptAndRetriedWithNewRequestId(sender.getId(), "GIFT", retry);
+    }
+
+    private ResultActions sendGift(User sender, PetProfile pet, GiftCatalogItem gift, String requestId)
+            throws Exception {
+        return mvc.perform(post("/api/v1/pets/" + pet.getId() + "/gifts")
+                .header(HttpHeaders.AUTHORIZATION, userBearer(sender.getId()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("giftToken", gift.getPublicToken(), "quantity", 1,
+                        "channel", "QRIS", "requestId", requestId, "source", "diary_tab"))));
     }
 }
