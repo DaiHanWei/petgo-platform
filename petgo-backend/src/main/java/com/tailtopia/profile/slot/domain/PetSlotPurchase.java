@@ -111,6 +111,30 @@ public class PetSlotPurchase {
         return p;
     }
 
+    /**
+     * 运营补发行（Story 4.3 · AC5.2③）：{@code kind = ADMIN_GRANT}、1 个名额、金额 0、无渠道 / 意图，带操作人与原因。
+     * 先落 PENDING 拿 id（名额行的 {@code purchase_id}），发放后同一事务内 {@link #settle} 成 PAID。
+     */
+    public static PetSlotPurchase adminGrant(String publicToken, long userId, int days, String idemKey,
+            long operatorAdminId, String reason, Instant now) {
+        PetSlotPurchase p = new PetSlotPurchase();
+        p.publicToken = publicToken;
+        p.userId = userId;
+        p.kind = PetSlotPurchaseKind.ADMIN_GRANT;
+        p.quantity = 1;
+        p.unitPrice = 0L;
+        p.total = 0L;
+        p.channel = null;
+        p.paymentIntentId = null;
+        p.idemKey = idemKey;
+        p.days = days;
+        p.operatorAdminId = operatorAdminId;
+        p.reason = reason;
+        p.status = PetSlotPurchaseStatus.PENDING;
+        p.createdAt = now;
+        return p;
+    }
+
     public void markPaid(Instant now) {
         settle(PetSlotPurchaseStatus.PAID, now);
     }

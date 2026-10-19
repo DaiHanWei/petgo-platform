@@ -952,6 +952,13 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ud-pet-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-tint); display: flex; align-items: center; justify-content: center; }
 .ud-pet-name { margin: 0 0 2px; display: flex; gap: 6px; align-items: center; }
 .ud-danger { border-color: var(--danger); }
+/* V1.4.0 ② Story 4.3：「宠物与名额」页签（UI 稿 L1）——名额构成四格 + 已收款未发放的购买行。 */
+.ud-petslots .ud-pc-title { margin-top: 12px; }
+.ud-ps-kv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 4px; }
+.ud-ps-kv-cell { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; }
+.ud-ps-k { color: var(--muted); font-size: var(--fs-xs); }
+.ud-ps-v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ud-ps-exception td { background: var(--danger-bg); }
 .user-drawer .sticky-footer { bottom: 0; }
 
 /* ===== V1.3.0 Story 10.1：A7 Toko 退货审核 / A8 Toko 异常订单（模板 A 右栏） ===== */

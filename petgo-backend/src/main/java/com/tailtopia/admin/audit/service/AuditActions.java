@@ -137,6 +137,8 @@ public final class AuditActions {
     // ===== 用户账号治理补充 =====
     /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
     public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
+    /** 运营补发宠物名额（V1.4.0 ② Story 4.3 · AB-34.2；summary 含天数/到期/原因/幂等键，不落 PII）。 */
+    public static final String PET_SLOT_GRANTED = "PET_SLOT_GRANTED";
 
     // ===== 内容审核补充规范 story 8（后台审核增强）=====
     /** 调整人工审核队列项优先级（story 8，§5.1，含旧→新优先级）。 */

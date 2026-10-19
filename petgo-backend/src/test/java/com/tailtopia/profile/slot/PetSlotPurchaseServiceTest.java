@@ -81,7 +81,8 @@ class PetSlotPurchaseServiceTest {
     @BeforeEach
     void setUp() {
         service = new PetSlotPurchaseService(purchases, rentals, slots, state, lock, paymentIntents, intentRepo,
-                wallet, gateway, granter, tokens, Clock.fixed(NOW, ZoneOffset.UTC));
+                wallet, gateway, granter, tokens, mock(com.tailtopia.auth.service.AccountQueryService.class),
+                mock(com.tailtopia.account.repository.AccountDeletionRepository.class), Clock.fixed(NOW, ZoneOffset.UTC));
         when(tokens.generate()).thenAnswer(inv -> "tok" + ids.incrementAndGet());
         when(purchases.saveAndFlush(any(PetSlotPurchase.class))).thenAnswer(inv -> withId(inv.getArgument(0)));
         when(purchases.save(any(PetSlotPurchase.class))).thenAnswer(inv -> inv.getArgument(0));

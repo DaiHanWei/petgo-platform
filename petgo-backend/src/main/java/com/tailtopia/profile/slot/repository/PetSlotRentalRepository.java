@@ -21,6 +21,12 @@ public interface PetSlotRentalRepository extends JpaRepository<PetSlotRental, Lo
     List<PetSlotRental> findByUserIdAndStatusAndExpiresAtAfterOrderByStartsAtAscIdAsc(long userId,
             PetSlotRentalStatus status, Instant now);
 
+    /**
+     * 该用户全部名额（含已到期），后台「宠物与名额」页签月租明细用（Story 4.3）；排序由调用方按生效 / 到期再排。
+     * 🔴 仅供展示，不得拿来自算名额（名额只经 {@code quotaOf}）。
+     */
+    List<PetSlotRental> findByUserIdOrderByExpiresAtAscIdAsc(long userId);
+
     /** 续租寻址：按对外 token + 归属取（非本人 = 查不到 → 404）。 */
     Optional<PetSlotRental> findByPublicTokenAndUserId(String publicToken, long userId);
 

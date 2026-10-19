@@ -3,8 +3,10 @@ package com.tailtopia.profile.slot.repository;
 import com.tailtopia.profile.slot.domain.PetSlotPurchase;
 import com.tailtopia.profile.slot.domain.PetSlotPurchaseStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +20,13 @@ public interface PetSlotPurchaseRepository extends JpaRepository<PetSlotPurchase
 
     /** App 轮询寻址：按对外 token + 归属取（非本人 = 查不到 → 404）。 */
     Optional<PetSlotPurchase> findByPublicTokenAndUserId(String publicToken, long userId);
+
+    /**
+     * 后台购买记录（Story 4.3）：该用户指定状态的购买行，按 {@code created_at DESC, id DESC}（走
+     * {@code ix_pet_slot_purchases_user_created}），调用方用 {@link Pageable} 截条数。
+     */
+    List<PetSlotPurchase> findByUserIdAndStatusInOrderByCreatedAtDescIdDesc(long userId,
+            Collection<PetSlotPurchaseStatus> statuses, Pageable page);
 
     /** 同键重开时找旧 PENDING 行（调用方再按 {@code idem_key} 精确匹配）。 */
     List<PetSlotPurchase> findByUserIdAndStatus(long userId, PetSlotPurchaseStatus status);

@@ -56,11 +56,16 @@ public class AdminUserController {
     /** V1.3.2 后台 AB-23：已购解锁页签取数（随抽屉同一次渲染，切页签不再请求）。 */
     private final com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases;
 
+    /** V1.4.0 ② Story 4.3：「宠物与名额」页签取数（随抽屉同一次渲染，切页签不再请求）。 */
+    private final com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs;
+
     public AdminUserController(AdminUserService adminUserService,
-            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases) {
+            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases,
+            com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs) {
         this.adminUserService = adminUserService;
         this.msg = msg;
         this.purchases = purchases;
+        this.petSlotTabs = petSlotTabs;
     }
 
     @GetMapping("/admin/users")
@@ -129,6 +134,9 @@ public class AdminUserController {
         model.addAttribute("purchases", purchases.forUser(userId));
         // 赠币表单一次性幂等 token（bug 20260728-389）：防双击/回退重提交重复入账。
         model.addAttribute("grantToken", java.util.UUID.randomUUID().toString());
+        // V1.4.0 ② Story 4.3：「宠物与名额」页签（只读四块 + 补发卡）与补发表单的一次性幂等 token。
+        model.addAttribute("petSlotsTab", petSlotTabs.tab(userId));
+        model.addAttribute("petSlotGrantToken", java.util.UUID.randomUUID().toString());
     }
 
     /**

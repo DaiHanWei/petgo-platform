@@ -2,6 +2,7 @@ package com.tailtopia.profile.slot;
 
 import com.tailtopia.profile.slot.domain.PetSlotPurchase;
 import com.tailtopia.profile.slot.domain.PetSlotPurchaseKind;
+import com.tailtopia.profile.slot.domain.PetSlotRentalSource;
 import com.tailtopia.purchase.service.GrantSavepoint;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -32,6 +33,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <ul>
  *   <li>保存点内先取账号锁（与 {@link PetSlotLock#lockUser} 同一把两参 advisory 锁，可重入）；</li>
  *   <li>RENT：新建 {@code quantity} 行名额（{@code starts_at = paidAt}、+{@code days} 天、{@code source = RENT}）；</li>
+ *   <li>ADMIN_GRANT（Story 4.3 运营补发）：同 RENT 新建，{@code source = ADMIN_GRANT}；</li>
  *   <li>RENEW：所选名额仍生效（ACTIVE 且 {@code expires_at > paidAt}）→ {@code expires_at += days}、{@code reminded_at = NULL}；
  *       已过期 → 改为新建一行 RENT 名额（到账不回滚）；</li>
  *   <li>🔴 封顶：会新增名额且 {@code 1 + 等级名额 + 生效名额 + 新增数 > 5} → 不写任何行，返回 {@link Outcome#OVER_CAP}
@@ -49,7 +51,7 @@ public class PetSlotGranter {
             + " WHERE user_id = :uid AND id IN (:ids)";
     static final String INSERT_SQL = "INSERT INTO pet_slot_rentals"
             + " (public_token, user_id, source, starts_at, expires_at, status, purchase_id, created_at)"
-            + " VALUES (:token, :uid, 'RENT', :startsAt, :expiresAt, 'ACTIVE', :purchaseId, :startsAt) RETURNING id";
+            + " VALUES (:token, :uid, :source, :startsAt, :expiresAt, 'ACTIVE', :purchaseId, :startsAt) RETURNING id";
     static final String EXTEND_SQL = "UPDATE pet_slot_rentals"
             + " SET expires_at = expires_at + make_interval(days => :days), reminded_at = NULL"
             + " WHERE id = :id AND user_id = :uid";
@@ -152,9 +154,16 @@ public class PetSlotGranter {
         return new Result(Outcome.GRANTED, issued, trigger);
     }
 
+    /** 名额来源：运营补发行 → ADMIN_GRANT（Story 4.3）；新租 / 续租改新建 → RENT（2.2 原口径）。 */
+    static PetSlotRentalSource sourceOf(PetSlotPurchase row) {
+        return row.getKind() == PetSlotPurchaseKind.ADMIN_GRANT ? PetSlotRentalSource.ADMIN_GRANT
+                : PetSlotRentalSource.RENT;
+    }
+
     private long insert(PetSlotPurchase row, OffsetDateTime startsAt) {
         Long id = jdbc.queryForObject(INSERT_SQL, new MapSqlParameterSource("token", tokens.generate())
                 .addValue("uid", row.getUserId())
+                .addValue("source", sourceOf(row).name())
                 .addValue("startsAt", startsAt)
                 .addValue("expiresAt", startsAt.plusDays(row.getDays()))
                 .addValue("purchaseId", row.getId()), Long.class);

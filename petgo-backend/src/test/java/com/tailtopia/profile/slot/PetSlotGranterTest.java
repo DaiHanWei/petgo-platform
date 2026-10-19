@@ -148,6 +148,22 @@ class PetSlotGranterTest {
                 eq(Long.class));
     }
 
+    /** Story 4.3 code review：续租到账时所选名额已过期而改新建的那一行，来源仍是 RENT（只有 ADMIN_GRANT 行写 ADMIN_GRANT）。 */
+    @Test
+    void renewConversionRowKeepsSourceRentAndAdminGrantRowGetsAdminGrant() {
+        selected(new Object[] {12L, "EXPIRED", AT.minusMinutes(10)});
+        granter.grant(row(PetSlotPurchaseKind.RENEW, 1, List.of(12L)), PAID_AT);
+        verify(jdbc).queryForObject(eq(PetSlotGranter.INSERT_SQL),
+                argThat((SqlParameterSource p) -> "RENT".equals(p.getValue("source"))), eq(Long.class));
+
+        PetSlotPurchase admin = PetSlotPurchase.adminGrant("pa", USER, 7, "ADMIN_GRANT:t", 900L, "r", PAID_AT);
+        ReflectionTestUtils.setField(admin, "id", 2L);
+        granter.grant(admin, PAID_AT);
+        verify(jdbc).queryForObject(eq(PetSlotGranter.INSERT_SQL), argThat((SqlParameterSource p) ->
+                "ADMIN_GRANT".equals(p.getValue("source")) && AT.plusDays(7).equals(p.getValue("expiresAt"))),
+                eq(Long.class));
+    }
+
     @Test
     void renewActiveButPastExpiryIsTreatedAsExpired() {
         selected(new Object[] {11L, "ACTIVE", AT.minusSeconds(1)}); // 扫描尚未置 EXPIRED

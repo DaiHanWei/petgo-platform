@@ -147,6 +147,11 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
                 .contains("data-utab-panel=\"growth\"").contains("data-utab-panel=\"petSlots\"")
                 .contains("data-utab-panel=\"gifts\"")
                 .contains("成长值").contains("宠物与名额").contains("收送礼记录").contains("暂无数据");
+        assertThat(html).as("V1.4.0 ② Story 4.3：petSlots 容器已由「宠物与名额」页签片段填充，不再是占位")
+                .contains("id=\"user-petslots-panel\"").contains("当前名额").contains("宠物状态");
+        String petSlotsPanel = html.substring(html.indexOf("id=\"user-petslots-panel\""),
+                html.indexOf("data-utab-panel=\"gifts\""));
+        assertThat(petSlotsPanel).doesNotContain("暂无数据");
         assertThat(html).as("🔴 err 槽必须带 id：htmx 只在目标带 id 时才发 HX-Target 头")
                 .contains("id=\"user-drawer-err\"");
         assertThat(html).as("历史问诊那句「仅元数据」不可省 —— 少了它运营会来要聊天记录")

@@ -176,7 +176,7 @@ public final class AdminPageCatalog {
             //    ⚠️ 目录里**不再留条目** —— 留一个没有页面的条目就是侧栏上的死链。
             // 👥 用户
             page("users", G_USERS, "/admin/users",
-                    List.of(USER_VIEW), List.of(), List.of(USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN)).nav("admin.nav.users", "users", USER_VIEW),
+                    List.of(USER_VIEW), List.of(), List.of(USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST)).nav("admin.nav.users", "users", USER_VIEW),
             page("user-phone", G_USERS, null,
                     List.of(USER_PHONE_VIEW), List.of(), List.of(USER_PHONE_EXPORT)),
             page("user-tags", G_USERS, "/admin/user-tags",

@@ -201,6 +201,27 @@ class AdminUserServiceTest {
     }
 
     @Test
+    void detailListsThreePetsInCreationOrder() {
+        // V1.4.0 multi-pet（Story 4.3 · AC1）：「宠物档案」页签取账号全部宠物（经 PetResolver.listOwned，
+        // created_at ASC, id ASC）；PetRow 不加字段。
+        User u = user();
+        when(accountQuery.findUserById(42L)).thenReturn(Optional.of(u));
+        Instant t0 = Instant.parse("2026-06-12T03:00:00Z");
+        when(profileService.listOwned(42L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(42L, 5521L, com.tailtopia.profile.domain.PetType.CAT, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(42L, 6034L, com.tailtopia.profile.domain.PetType.DOG,
+                        t0.plusSeconds(86_400)),
+                com.tailtopia.profile.support.PetFixtures.pet(42L, 6120L, com.tailtopia.profile.domain.PetType.CAT,
+                        t0.plusSeconds(2 * 86_400))));
+
+        AdminUserDetailView v = service.detail(42L);
+
+        assertThat(v.pets()).hasSize(3);
+        assertThat(v.pets()).extracting(AdminUserDetailView.PetRow::id).containsExactly(5521L, 6034L, 6120L);
+        verify(profileService).listOwned(42L);
+    }
+
+    @Test
     void detailUnknownUserThrows() {
         when(accountQuery.findUserById(99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.detail(99L)).isInstanceOf(AppException.class);

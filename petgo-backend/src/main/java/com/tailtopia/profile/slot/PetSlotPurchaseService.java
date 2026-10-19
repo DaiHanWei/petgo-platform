@@ -1,5 +1,8 @@
 package com.tailtopia.profile.slot;
 
+import com.tailtopia.account.repository.AccountDeletionRepository;
+import com.tailtopia.auth.domain.User;
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentFailureCategory;
@@ -33,7 +36,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +64,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>价格每次下单实时读 {@link PetSlotService#unitPrice()} 并快照进购买行；改价只影响之后的新单，已生成的 PENDING 单按原价付。
  * 🔴 本类不写任何成长值逻辑（① 经 {@code PawCoinSpentEvent} / {@code PaymentIntentPaidEvent} 自行处理）。
+ *
+ * <h2>运营补发（Story 4.3 · {@link #grantByAdmin}）</h2>
+ * 不经支付：同一把账号锁 → 锁内 {@link PetSlotService#quotaOf} 判 5 封顶 → ADMIN_GRANT 购买行 → 经 {@link PetSlotGranter}
+ * 发放（{@code source = ADMIN_GRANT}）→ {@link PetSlotStateService#reconcile}（RENTAL_ADDED，只恢复不降级）。
+ * 审计由后台调用方在同一事务里写（{@code AdminPetSlotGrantService}，本包不依赖后台审计）。
  */
 @Service
 public class PetSlotPurchaseService {
@@ -69,6 +80,18 @@ public class PetSlotPurchaseService {
     /** 客户端 {@code Idempotency-Key} 最大长度（服务端键前缀 + 后缀 + 意图 id 须装进 {@code idem_key VARCHAR(160)}）。 */
     static final int MAX_CLIENT_KEY_LENGTH = 80;
     private static final String CURRENCY = "IDR";
+    /** 运营补发 {@code idem_key} 前缀（Story 4.3 · AC5.2③）。 */
+    public static final String ADMIN_GRANT_KEY_PREFIX = "ADMIN_GRANT:";
+    /** 运营补发天数上限（Story 4.3 需拍板 #1：防手误填成 3650）。 */
+    public static final int ADMIN_GRANT_MAX_DAYS = 365;
+    /** 运营补发原因最大长度（= {@code pet_slot_purchases.reason VARCHAR(200)}）。 */
+    public static final int ADMIN_GRANT_MAX_REASON = 200;
+    /**
+     * 运营补发幂等 token 形状：页面渲染的 UUID（36 位）；放宽到 ≤ 64 位 {@code [A-Za-z0-9-]}。
+     * {@code "ADMIN_GRANT:" + token} 须装进 {@code idem_key VARCHAR(160)}（code review #4：超长曾 500）。
+     */
+    static final java.util.regex.Pattern ADMIN_GRANT_TOKEN = java.util.regex.Pattern.compile("[A-Za-z0-9-]{1,64}");
+    private static final Logger log = LoggerFactory.getLogger(PetSlotPurchaseService.class);
 
     private final PetSlotPurchaseRepository purchases;
     private final PetSlotRentalRepository rentals;
@@ -81,21 +104,25 @@ public class PetSlotPurchaseService {
     private final PaymentGateway gateway;
     private final PetSlotGranter granter;
     private final PetSlotTokenGenerator tokens;
+    private final AccountQueryService accounts;
+    private final AccountDeletionRepository deletions;
     private final Clock clock;
 
     @Autowired
     public PetSlotPurchaseService(PetSlotPurchaseRepository purchases, PetSlotRentalRepository rentals,
             PetSlotService slots, PetSlotStateService state, PetSlotLock lock, PaymentIntentService paymentIntents,
             PaymentIntentRepository intentRepo, PawCoinWalletService wallet, PaymentGateway gateway,
-            PetSlotGranter granter, PetSlotTokenGenerator tokens) {
+            PetSlotGranter granter, PetSlotTokenGenerator tokens, AccountQueryService accounts,
+            AccountDeletionRepository deletions) {
         this(purchases, rentals, slots, state, lock, paymentIntents, intentRepo, wallet, gateway, granter, tokens,
-                Clock.systemUTC());
+                accounts, deletions, Clock.systemUTC());
     }
 
     PetSlotPurchaseService(PetSlotPurchaseRepository purchases, PetSlotRentalRepository rentals,
             PetSlotService slots, PetSlotStateService state, PetSlotLock lock, PaymentIntentService paymentIntents,
             PaymentIntentRepository intentRepo, PawCoinWalletService wallet, PaymentGateway gateway,
-            PetSlotGranter granter, PetSlotTokenGenerator tokens, Clock clock) {
+            PetSlotGranter granter, PetSlotTokenGenerator tokens, AccountQueryService accounts,
+            AccountDeletionRepository deletions, Clock clock) {
         this.purchases = purchases;
         this.rentals = rentals;
         this.slots = slots;
@@ -107,6 +134,8 @@ public class PetSlotPurchaseService {
         this.gateway = gateway;
         this.granter = granter;
         this.tokens = tokens;
+        this.accounts = accounts;
+        this.deletions = deletions;
         this.clock = clock;
     }
 
@@ -218,6 +247,89 @@ public class PetSlotPurchaseService {
         }
         Instant expiresAt = row.getStatus() == PetSlotPurchaseStatus.PAID ? latestExpiry(row) : null;
         return new PetSlotPurchaseStatusView(row.getStatus().name(), expiresAt);
+    }
+
+    // ── 运营补发（Story 4.3） ─────────────────────────────────────────────────
+
+    /**
+     * 运营补发 1 个名额（Story 4.3 · AC5）。同一事务、按序：
+     * <ol>
+     *   <li>校验：{@code 1 ≤ days ≤ 365}、原因非空且 ≤ 200、{@code grantToken} 非空 → 否则 422；用户不存在 → 404，已注销 → 422；</li>
+     *   <li>账号锁 {@link PetSlotLock#lockUser}（与建档 / 租用 / reconcile 同一把）；同 {@code idem_key} 已有行 → 重放
+     *       （不再建名额、不 reconcile，{@code replayed = true}）；锁内 {@code quotaOf} 总数已 = 5 → 422；</li>
+     *   <li>插 ADMIN_GRANT 购买行（金额 0、无渠道 / 意图、带操作人与原因）；</li>
+     *   <li>经 {@link PetSlotGranter} 发放 1 行名额（{@code source = ADMIN_GRANT}、{@code expires_at = now + days}），
+     *       购买行回填 {@code rental_ids}、置 PAID；</li>
+     *   <li>{@link PetSlotStateService#reconcile}（{@code RENTAL_ADDED}：有只读宠物时按顺序恢复，AD-4）。</li>
+     * </ol>
+     * 🔴 不收费：不调钱包、不建支付意图、不发 {@code PawCoinSpentEvent}（因而不产生成长值）。审计由调用方在同一事务里写。
+     * 日志只记 userId / days。
+     */
+    @Transactional
+    public AdminSlotGrantResult grantByAdmin(AdminSlotGrantCommand cmd) {
+        String reason = cmd.reason() == null ? "" : cmd.reason().trim();
+        if (cmd.days() < 1 || cmd.days() > ADMIN_GRANT_MAX_DAYS) {
+            throw AppException.validation("补发天数须为 1–365 的整数").code("admin.err.petSlot.daysInvalid");
+        }
+        if (reason.isEmpty()) {
+            throw AppException.validation("请填写补发原因").code("admin.err.petSlot.reasonRequired");
+        }
+        if (reason.length() > ADMIN_GRANT_MAX_REASON) {
+            throw AppException.validation("补发原因不能超过 200 字").code("admin.err.petSlot.reasonTooLong");
+        }
+        if (cmd.grantToken() == null || !ADMIN_GRANT_TOKEN.matcher(cmd.grantToken().trim()).matches()) {
+            // 空 / 超长 / 非法字符一律 422（不让超长 token 撞 idem_key VARCHAR(160) 冒成 500）。
+            throw AppException.validation("缺少幂等标识，请刷新页面后重试").code("admin.err.petSlot.missingToken");
+        }
+        long userId = cmd.userId();
+        User target = accounts.findUserById(userId)
+                .orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
+        // 🔴 注销是 @Async 级联、deletedAt 最后才落：受理后（account_deletions 已有行）即视为注销中，同样拒绝
+        //    （与抽屉 readOnly = deleted || deletionPending 同一口径；code review #2）。
+        if (target.getDeletedAt() != null || deletions.findByUserId(userId).isPresent()) {
+            throw AppException.validation("该账号已注销，不可补发").code("admin.err.petSlot.userDeleted");
+        }
+        String key = adminGrantKey(cmd.grantToken());
+
+        lock.lockUser(userId);
+        Optional<PetSlotPurchase> replay = purchases.findByIdemKey(key);
+        if (replay.isPresent()) {
+            PetSlotPurchase prior = replay.get();
+            if (prior.getUserId() != userId || prior.getKind() != PetSlotPurchaseKind.ADMIN_GRANT) {
+                // 同一 token 被拿去给另一个账号提交：不认作重放（也绝不给第二个人发名额），请刷新拿新 token。
+                throw AppException.validation("缺少幂等标识，请刷新页面后重试").code("admin.err.petSlot.missingToken");
+            }
+            return new AdminSlotGrantResult(latestExpiry(prior), true, prior.getDays());
+        }
+        if (slots.quotaOf(userId).total() >= PetSlotService.MAX_PETS) {
+            throw AppException.validation("该用户已有 5 个名额，不能再补发").code("admin.err.petSlot.limitReached");
+        }
+
+        Instant now = Instant.now(clock);
+        PetSlotPurchase row;
+        try {
+            row = purchases.saveAndFlush(PetSlotPurchase.adminGrant(tokens.generate(), userId, cmd.days(), key,
+                    cmd.operatorAdminId(), reason, now));
+        } catch (DataIntegrityViolationException e) {
+            // 同一 token 被并发提交给两个账号（两把不同的账号锁，互不串行）：后到者撞 idem_key 唯一键 → 409，整笔回滚。
+            throw AppException.conflict("缺少幂等标识，请刷新页面后重试").code("admin.err.petSlot.missingToken");
+        }
+        PetSlotGranter.Result result = granter.grant(row, now);
+        if (!result.granted()) {
+            // 锁内已按 quotaOf 判过封顶，正常不可达；抛错整笔回滚（购买行不留）。
+            throw AppException.validation("该用户已有 5 个名额，不能再补发").code("admin.err.petSlot.limitReached");
+        }
+        row.settle(PetSlotPurchaseStatus.PAID, now);
+        row.setRentalIds(result.rentalIds());
+        purchases.save(row);
+        state.reconcile(userId, result.trigger());
+        log.info("运营补发宠物名额 userId={} days={}", userId, cmd.days());
+        return new AdminSlotGrantResult(now.plus(Duration.ofDays(cmd.days())), false, cmd.days());
+    }
+
+    /** 运营补发的 {@code idem_key}：{@code "ADMIN_GRANT:" + token}（唯一键兜底，Story 4.3 · AC5.2③）。 */
+    static String adminGrantKey(String grantToken) {
+        return ADMIN_GRANT_KEY_PREFIX + grantToken.trim();
     }
 
     // ── 内部 ────────────────────────────────────────────────────────────────

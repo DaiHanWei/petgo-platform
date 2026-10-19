@@ -39,7 +39,8 @@ class AdminRoleTest {
             assertThat(role.isTemplated()).isTrue();
         }
         assertThat(AdminRole.OPS_MANAGER.isTableBacked()).isFalse();
-        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(41);
+        // V1.4.0 ② Story 4.3 · AD-15：+ user.pet_slot_adjust 预授 ⇒ 41 + 1 = 42（与 ① 合并后应为 43，以实测为准）。
+        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(42);
         assertThat(AdminRole.SUPER_ADMIN.isTableBacked()).isFalse();
         assertThat(AdminRole.CUSTOM.isTableBacked()).isFalse();
     }
@@ -55,6 +56,17 @@ class AdminRoleTest {
                     // V1.3.4 返工清单 §1：四个新码同样不预授予任何预置角色（超管隐式拥有）
                     .doesNotContain(AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
                             AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND);
+        }
+        // V1.4.0 ② Story 4.3 · AD-15：user.pet_slot_adjust 按 PRD 只预授 OPS_MANAGER（偏离「新码不预授」惯例），
+        //     其余预置角色（含四个表驱动岗位）一律没有；SUPER_ADMIN 隐式全权、不持码。
+        assertThat(AdminPermissions.isValid(AdminPermissions.USER_PET_SLOT_ADJUST)).isTrue();
+        for (AdminRole role : AdminRole.values()) {
+            if (role == AdminRole.OPS_MANAGER) {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).contains(AdminPermissions.USER_PET_SLOT_ADJUST);
+            } else {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).as(role + " 不应预授 user.pet_slot_adjust")
+                        .doesNotContain(AdminPermissions.USER_PET_SLOT_ADJUST);
+            }
         }
     }
 
