@@ -4235,5 +4235,13 @@
   "petPickerConsultHint": "The vet will see this pet's profile.",
   "@petPickerConsultHint": {"description": "V1.4.0 multi-pet (Story 4.1) H-7: vet consult pet picker sheet body"},
   "petPickerContinue": "Continue",
-  "@petPickerContinue": {"description": "V1.4.0 multi-pet (Story 4.1) H1 / H4: pet picker bottom button (not in copy table; EN proposed, pending ops review)"}
+  "@petPickerContinue": {"description": "V1.4.0 multi-pet (Story 4.1) H1 / H4: pet picker bottom button (not in copy table; EN proposed, pending ops review)"},
+  "petPickerForName": "For {name}",
+  "@petPickerForName": {"description": "V1.4.0 multi-pet (Story 4.2) I-1: KTP create page pet row, which pet the card is for", "placeholders": {"name": {"type": "String"}}},
+  "petPickerChange": "Change",
+  "@petPickerChange": {"description": "V1.4.0 multi-pet (Story 4.2) I-2: KTP create page pet row trailing button to switch pet"},
+  "petPickerChooseTitle": "Choose a pet",
+  "@petPickerChooseTitle": {"description": "V1.4.0 multi-pet (Story 4.2) I-3: KTP create pet picker sheet title (copy table says reuse existing, but no such key existed; EN proposed)"},
+  "petPickerUse": "Use",
+  "@petPickerUse": {"description": "V1.4.0 multi-pet (Story 4.2) I1: KTP create pet picker bottom button (not in copy table; EN proposed)"}
 }

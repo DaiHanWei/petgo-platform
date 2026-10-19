@@ -2769,5 +2769,10 @@
   "@petSlotArchiveBlockedBody": {"placeholders": {"name": {"type": "String"}}},
   "petPickerConsultTitle": "Konsultasi untuk siapa?",
   "petPickerConsultHint": "Dokter akan melihat profil hewan ini.",
-  "petPickerContinue": "Lanjut"
+  "petPickerContinue": "Lanjut",
+  "petPickerForName": "Untuk {name}",
+  "@petPickerForName": {"placeholders": {"name": {"type": "String"}}},
+  "petPickerChange": "Ganti",
+  "petPickerChooseTitle": "Pilih hewan",
+  "petPickerUse": "Pakai"
 }

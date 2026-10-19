@@ -165,3 +165,14 @@ final FutureProvider<PetProfile?> petProfileProvider = FutureProvider<PetProfile
   if (petId == null) return null;
   return repo.getMyProfile(petId: petId);
 });
+
+/// 按 petId 取**指定宠物**的完整档案（V1.4.0 multi-pet Story 4.2 · AC1.2 / AC3.2，`GET /pet-profiles/me?petId=`）。
+///
+/// 给「选了某只宠物、要它完整资料」的页面用（KTP 建卡预填：列表项没有品种 / 性别）；不属本人 / 已删 → null。
+/// **autoDispose**：没人监听即释放（换账号后不在内存里残留上个账号的宠物资料；下次取就是最新档案）。
+/// 命令式调用方取数期间需 `listenManual` 保活（见 KTP 建卡页 `_fetchPetProfile`）。
+/// 不自动重试：一次性取数，失败由调用方提示（KTP 换宠物 → toast、草稿不变）。
+final petProfileByIdProvider = FutureProvider.autoDispose.family<PetProfile?, int>(
+  (ref, petId) => ref.read(profileRepositoryProvider).getMyProfile(petId: petId),
+  retry: (_, _) => null,
+);
