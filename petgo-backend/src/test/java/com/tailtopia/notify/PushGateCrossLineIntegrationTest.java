@@ -139,7 +139,9 @@ class PushGateCrossLineIntegrationTest extends ApiIntegrationTest {
     private long pushes(User u, String type) {
         return org.mockito.Mockito.mockingDetails(pusher).getInvocations().stream()
                 .filter(i -> i.getMethod().getName().startsWith("pushToUser"))
-                .filter(i -> ((Long) i.getArgument(0)) == u.getId() && type.equals(i.getArgument(3)))
+                // 必须按值比：u.getId() 是 Long，两个 Long 用 == 是引用比较，仅 -128~127 命中装箱缓存才相等，
+                // 全量跑 id 过 127 后恒不等 → 计数恒 0（CI 红、单跑绿）。
+                .filter(i -> u.getId().equals(i.getArgument(0)) && type.equals(i.getArgument(3)))
                 .count();
     }
 
