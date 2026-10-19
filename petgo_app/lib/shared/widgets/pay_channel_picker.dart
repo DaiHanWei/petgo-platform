@@ -327,51 +327,69 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
     );
   }
 
-  /// 数量步进器行（D5「Jumlah slot  − 1 +」）。
+  /// 数量步进器行（D5「Jumlah slot  − 1 +」）：稿 `.stepper` —— 1px 浅描边卡，按钮 30 白底描边、不可点时淡出。
   Widget _quantityRow(PayQuantityConfig q) {
-    Widget btn(Key key, IconData icon, VoidCallback? onTap) => InkWell(
-          key: key,
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: onTap == null ? AppColors.cream2 : AppColors.mintTint,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.line),
+    Widget btn(Key key, IconData icon, VoidCallback? onTap) => Opacity(
+          opacity: onTap == null ? 0.35 : 1,
+          child: InkWell(
+            key: key,
+            borderRadius: BorderRadius.circular(9),
+            onTap: onTap,
+            // 视觉 30，点击热区补到 44。
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: AppColors.line, width: 1.5),
+                  ),
+                  child: Icon(icon, size: 16, color: AppColors.ink),
+                ),
+              ),
             ),
-            child: Icon(icon, size: 18, color: onTap == null ? AppColors.muted : AppColors.mint),
           ),
         );
-    return Row(
-      children: [
-        Expanded(
-          child: Text(q.label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
-        ),
-        btn(q.decrementKey, Icons.remove, _qty > q.min ? () => _setQty(_qty - 1) : null),
-        SizedBox(
-          width: 40,
-          child: Text('$_qty',
-              key: const ValueKey('payQtyValue'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
-        ),
-        btn(q.incrementKey, Icons.add, _qty < q.max ? () => _setQty(_qty + 1) : null),
-      ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 0, 0, 0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.line2),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(q.label,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+          ),
+          btn(q.decrementKey, Icons.remove, _qty > q.min ? () => _setQty(_qty - 1) : null),
+          SizedBox(
+            width: 20,
+            child: Text('$_qty',
+                key: const ValueKey('payQtyValue'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                    color: AppColors.ink)),
+          ),
+          btn(q.incrementKey, Icons.add, _qty < q.max ? () => _setQty(_qty + 1) : null),
+          const SizedBox(width: 4),
+        ],
+      ),
     );
   }
 
-  /// 总价行（「{n} × Rp5.000    Rp10.000」）。
-  Widget _totalRow(String left, int? total) => Container(
+  /// 总价行（「{n} × Rp5.000    Rp10.000」）：稿 `.total` —— 无底色，左灰右深色粗体。
+  Widget _totalRow(String left, int? total) => Padding(
         key: const ValueKey('payTotalRow'),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.cream2,
-          borderRadius: BorderRadius.circular(12),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
         child: Row(
           children: [
             Expanded(
@@ -379,7 +397,11 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
             ),
             Text(total == null ? '…' : 'Rp${formatIdrAmount(total)}',
                 key: const ValueKey('payTotalAmount'),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                    color: AppColors.ink)),
           ],
         ),
       );

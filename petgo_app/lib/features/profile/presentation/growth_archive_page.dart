@@ -13,7 +13,6 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
@@ -657,34 +656,66 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     );
   }
 
-  /// 「只看 Diary」开关（宠物卡右上角，竖排「开关 / 标签」）。开 = 只看自己发的帖子（服务端筛，见
-  /// diaryOnlyProvider）；关 = 各类 banner + 帖子全部。开关只作用于时间线：在日历视图拨动时顺带切回时间线。
+  /// 「只看 Diary」开关：宠物卡右上白色胶囊「Diary saja ⬭」（稿 `.tg`，L2 还原度；原为竖排「开关 / 标签」）。
+  /// 开 = 只看自己发的帖子（服务端筛，见 diaryOnlyProvider）；关 = 各类 banner + 帖子全部。
+  /// 开关只作用于时间线：在日历视图拨动时顺带切回时间线。
   Widget _diaryOnlyToggle(AppLocalizations l10n) {
     final on = ref.watch(diaryOnlyProvider);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Transform.scale(
-          scale: 0.75,
-          alignment: Alignment.centerRight,
-          child: Switch(
-            key: const ValueKey('diaryOnlySwitch'),
-            value: on,
-            activeThumbColor: AppColors.onAccent,
-            activeTrackColor: AppColors.mint,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            onChanged: (v) {
-              // 2026-10-06 产品：看有多少人用「只看 Diary」、开还是关（docs/reference/analytics-posthog-tracking.md §12.1）。
-              Analytics.capture('diary_only_toggled', {'on': v});
-              ref.read(diaryOnlyProvider.notifier).set(v);
-              if (_view != _ArchiveView.timeline) _switchView(_ArchiveView.timeline);
-            },
+    void toggle() {
+      final v = !on;
+      // 2026-10-06 产品：看有多少人用「只看 Diary」、开还是关（docs/reference/analytics-posthog-tracking.md §12.1）。
+      Analytics.capture('diary_only_toggled', {'on': v});
+      ref.read(diaryOnlyProvider.notifier).set(v);
+      if (_view != _ArchiveView.timeline) _switchView(_ArchiveView.timeline);
+    }
+
+    return Semantics(
+      toggled: on,
+      label: l10n.diaryOnlyToggle,
+      excludeSemantics: true,
+      child: GestureDetector(
+        key: const ValueKey('diaryOnlySwitch'),
+        behavior: HitTestBehavior.opaque,
+        onTap: toggle,
+        // 视觉 ~22 高胶囊，点击热区补到 44。
+        child: SizedBox(
+          height: 44,
+          child: Align(
+            alignment: Alignment.topRight,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
+              decoration: const BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.all(Radius.circular(999)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.diaryOnlyToggle,
+                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.ink2)),
+                  const SizedBox(width: 4),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 24,
+                    height: 14,
+                    padding: const EdgeInsets.all(2),
+                    alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      color: on ? AppColors.mint : AppColors.diaryToggleOff,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        Text(l10n.diaryOnlyToggle,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink2)),
-      ],
+      ),
     );
   }
 
@@ -1072,12 +1103,7 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
           final d = item.displayDate;
           final monthKey = '${d.year}-${d.month}';
           if (monthKey != lastMonthKey) {
-            tiles.add(Padding(
-              padding: EdgeInsets.only(top: lastMonthKey == null ? 0 : 6, bottom: 10),
-              child: Text(formatMonthYear(context, d),
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
-            ));
+            tiles.add(TimelineMonthHeader(date: d, first: lastMonthKey == null));
             lastMonthKey = monthKey;
           }
           final bool isHappy = item.resolvedType == TimelineItemType.happyMoment ||

@@ -43,7 +43,7 @@ void main() {
       expect(find.text(l10n.petSlotSourceDefault), findsOneWidget);
       expect(find.text(l10n.petSlotSourceLevel), findsOneWidget);
       expect(find.text(l10n.petSlotCellAvailable), findsNWidgets(3));
-      expect(find.text(l10n.petSlotRentalsSection), findsNothing);
+      expect(find.text(l10n.petSlotRentalsSection.toUpperCase()), findsNothing);
       expect(find.text(l10n.petSlotStatusActive), findsNWidgets(2));
       expect(find.text(l10n.petSlotNoAutoRenewNote), findsOneWidget);
       expect(find.byKey(const ValueKey('petSlotRenewButton')), findsNothing);
@@ -62,7 +62,8 @@ void main() {
       await pumpSlotPage(tester,
           overviews: [overview(petCount: 3, rentals: [rental(1, oct31)])],
           pets: [...twoPets, pet(3, 'Boba')]);
-      expect(find.text(l10n.petSlotRentalsSection), findsOneWidget);
+      // 稿 `.sec2`：小节标题大写（L2 还原度）。
+      expect(find.text(l10n.petSlotRentalsSection.toUpperCase()), findsOneWidget);
       expect(find.text(l10n.petSlotRentalName(1)), findsOneWidget);
       expect(find.text(l10n.petSlotRentalEnds('31 Okt 2026')), findsOneWidget);
       expect(find.text(l10n.petSlotSourceRent), findsOneWidget);
@@ -93,7 +94,9 @@ void main() {
       expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey('petSlotRenewButton'))).onPressed,
           isNotNull);
       expect(find.text(l10n.petSlotRentalEndsSoon('16 Okt 2026', 3)), findsOneWidget);
-      expect(find.text('${l10n.petSlotCellEmpty} · ${l10n.petSlotSourceRent}'), findsOneWidget);
+      // 空名额格：「Kosong」+ 来源小胶囊「Sewa」（与已占用的月租格同款，L2 还原度）。
+      expect(find.text(l10n.petSlotCellEmpty), findsOneWidget);
+      expect(find.text(l10n.petSlotSourceRent), findsNWidgets(2));
     });
 
     testWidgets('D15 加载失败：cloud_off + Gagal memuat slot hewan + Coba lagi → 重取恢复', (tester) async {

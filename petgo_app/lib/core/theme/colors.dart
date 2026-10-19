@@ -215,6 +215,34 @@ class AppColors {
   static const Color growthFrameSpinTrack = Color(0xFFE4DCF5);
   static const Color growthFrameAppliedFill = Color(0xFFF1EEF7);
 
+  /// 升级庆祝卡进度环底轨 `#ECEEF2`、EXP 胶囊底 `#F6F6F9`、等级页 / 庆祝权益卡行分隔 `#F3F3F6`（V1.4.0 L2 还原度）。
+  static const Color growthRingTrack = Color(0xFFECEEF2);
+  static const Color growthChipBg = Color(0xFFF6F6F9);
+  static const Color growthDivider = Color(0xFFF3F3F6);
+
+  /// 存量汇总弹窗小账单分隔线 `#E6E2EE`（行间虚线 / 合计上实线）。
+  static const Color growthReceiptLine = Color(0xFFE6E2EE);
+
+  /// 等级页（UI 稿 B1 / B2 / B6）：规则卡行分隔 `#F4F2F8`、今日进度小条底轨 `#EEEAF5`、未解锁段位卡底 `#FAFAFB`、
+  /// 「Terbuka di LvN」灰胶囊底 `#F0F0F0`（同 line2）、加分绿字 `#0E7A4D`（同 Momen 绿）。
+  static const Color growthRowDivider = Color(0xFFF4F2F8);
+  static const Color growthQuotaTrack = Color(0xFFEEEAF5);
+  static const Color growthLockedCard = Color(0xFFFAFAFB);
+  static const Color growthGain = Color(0xFF0E7A4D);
+  static const Color growthGainTint = Color(0xFFE7F8F0);
+
+  // V1.4.0 多宠物名额页（UI 稿 D1 / D2）：名额卡淡紫渐变起点 `#F3EDFF`、可租格底 `#F4F3F8` + 锁 `#B8B3C6`、
+  // 月租将到期字色 `#C4870B`；「Aktif」绿胶囊复用 [growthGainTint] / [growthGain]。
+  static const Color petSlotCardTop = Color(0xFFF3EDFF);
+  static const Color petSlotCellOff = Color(0xFFF4F3F8);
+  static const Color petSlotCellLock = Color(0xFFB8B3C6);
+  static const Color petSlotWarn = Color(0xFFC4870B);
+
+  /// Diary 资料卡（UI 稿 `.pic`）：135° `#F3EDFF` → `#FBF8FF` 渐变；「Diary saja」小开关关闭态底轨 `#E3E0EC`。
+  static const Color diaryCardTop = Color(0xFFF3EDFF);
+  static const Color diaryCardEnd = Color(0xFFFBF8FF);
+  static const Color diaryToggleOff = Color(0xFFE3E0EC);
+
   /// 角标阴影 `0 1px 3px rgba(20,16,40,.18)`。
   static const Color growthBadgeShadow = Color(0x2E141028);
 

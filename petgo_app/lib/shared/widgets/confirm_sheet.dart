@@ -23,6 +23,9 @@ import '../../core/theme/colors.dart';
 /// 「Lihat Level Saya」），调用方需区分「点了次按钮」与「点遮罩 / 下拉关闭」——两者都返回 false，
 /// 点次按钮时额外先回调一次 [onCancel]。
 ///
+/// **V1.4.0 L2 加 [dangerColor]**：danger 态默认仍为 Pop Art 红；删宠物档案（稿 C2 `.btn-p.danger`）传橙红
+/// [AppColors.danger]，其余调用方不变。
+///
 /// ⚠️ 为什么不另写一个平行的确认抽屉：手柄 36×4、圆角 24、内边距 22/12/22/30、主按钮 radius 14…
 /// 两套同义视觉规格日后必然漂移。要什么就往这里加可选参数。
 Future<bool> showConfirmSheet(
@@ -39,6 +42,7 @@ Future<bool> showConfirmSheet(
   Key? cancelKey,
   bool showCancel = true,
   VoidCallback? onCancel,
+  Color? dangerColor,
 }) async {
   final result = await showModalBottomSheet<bool>(
     context: context,
@@ -60,6 +64,7 @@ Future<bool> showConfirmSheet(
       cancelKey: cancelKey,
       showCancel: showCancel,
       onCancel: onCancel,
+      dangerColor: dangerColor,
     ),
   );
   return result ?? false;
@@ -79,6 +84,7 @@ class _ConfirmSheet extends StatefulWidget {
     required this.cancelKey,
     this.showCancel = true,
     this.onCancel,
+    this.dangerColor,
   });
 
   final String title;
@@ -93,6 +99,7 @@ class _ConfirmSheet extends StatefulWidget {
   final Key? cancelKey;
   final bool showCancel;
   final VoidCallback? onCancel;
+  final Color? dangerColor;
 
   @override
   State<_ConfirmSheet> createState() => _ConfirmSheetState();
@@ -131,7 +138,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = danger ? AppColors.popRed : AppColors.mint;
+    final accent = danger ? (widget.dangerColor ?? AppColors.popRed) : AppColors.mint;
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(

@@ -35,13 +35,14 @@ class GrowthProgressBar extends StatelessWidget {
     final nextTier = maxed ? s.tier : _tierOfLevel(s.nextLevel!, s);
     return Row(
       children: [
-        _Pill(text: l10n.growthLevelShort('${s.level}'), color: GrowthTierStyle.color(s.tier), filled: true),
+        // 稿 `.lpg .lc`：当前级实心胶囊 = 当前级逐级色底 + 深色字；下一级 = 白底虚线（下一级逐级色）+ 段位色字。
+        _Pill(text: l10n.growthLevelShort('${s.level}'), color: from, filled: true),
         const SizedBox(width: 8),
         Expanded(
           child: LayoutBuilder(
             builder: (context, c) {
               final width = c.maxWidth;
-              return ClipRRect(
+              final track = ClipRRect(
                 key: const ValueKey('growthProgressTrack'),
                 borderRadius: BorderRadius.circular(6),
                 child: Container(
@@ -67,6 +68,42 @@ class GrowthProgressBar extends StatelessWidget {
                   ),
                 ),
               );
+              if (maxed) return track;
+              // 稿 `.tr b`：进度头 16 白圆 + 投影，内嵌 8 当前进度色点。
+              final x = (width * ratio).clamp(8.0, width - 8.0);
+              return SizedBox(
+                height: 16,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    track,
+                    Positioned(
+                      left: x - 8,
+                      top: 0,
+                      child: Container(
+                        key: const ValueKey('growthProgressKnob'),
+                        width: 16,
+                        height: 16,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: Color(0x40141028), offset: Offset(0, 1), blurRadius: 4)],
+                        ),
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color.lerp(from, to, ratio) ?? to,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
             },
           ),
         ),
@@ -78,7 +115,11 @@ class GrowthProgressBar extends StatelessWidget {
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink2),
           )
         else
-          _Pill(text: l10n.growthLevelShort('${s.nextLevel}'), color: GrowthTierStyle.color(nextTier), filled: false),
+          _Pill(
+              text: l10n.growthLevelShort('${s.nextLevel}'),
+              color: GrowthTierStyle.color(nextTier),
+              border: to,
+              filled: false),
       ],
     );
   }
@@ -92,11 +133,14 @@ class GrowthProgressBar extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({required this.text, required this.color, required this.filled});
+  const _Pill({required this.text, required this.color, required this.filled, this.border});
 
   final String text;
   final Color color;
   final bool filled;
+
+  /// 虚线胶囊描边色（默认同字色）。
+  final Color? border;
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +152,7 @@ class _Pill extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w700,
           fontFeatures: const [FontFeature.tabularFigures()],
-          color: filled ? AppColors.onAccent : color,
+          color: filled ? AppColors.ink : color,
         ),
       ),
     );
@@ -118,9 +162,12 @@ class _Pill extends StatelessWidget {
         child: label,
       );
     }
-    return CustomPaint(
-      painter: DashedRRectPainter(color: color, radius: 999, dash: 3, gap: 2, strokeWidth: 1.2),
-      child: label,
+    return DecoratedBox(
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(999)),
+      child: CustomPaint(
+        painter: DashedRRectPainter(color: border ?? color, radius: 999, dash: 3, gap: 2, strokeWidth: 1.5),
+        child: label,
+      ),
     );
   }
 }

@@ -295,9 +295,12 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> with Widget
               ),
             ],
           ),
+          // 稿 B3：紧凑按钮左对齐（L2 还原度；原 Container 带 alignment 被撑成通栏）。
           Padding(
             padding: const EdgeInsets.only(left: 52, top: 4),
-            child: Container(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
@@ -314,13 +317,17 @@ class _PushSettingsPageState extends ConsumerState<PushSettingsPage> with Widget
                   child: Container(
                     height: 36,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
-                    alignment: Alignment.center,
-                    child: Text(l10n.mediaOpenSettings,
-                        style: const TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.onAccent)),
+                    // widthFactor: 1 → 按文字收宽（带 alignment 的 Container 会吃满松约束、变通栏）。
+                    child: Center(
+                      widthFactor: 1,
+                      child: Text(l10n.mediaOpenSettings,
+                          style: const TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.onAccent)),
+                    ),
                   ),
                 ),
               ),
+            ),
             ),
           ),
         ],

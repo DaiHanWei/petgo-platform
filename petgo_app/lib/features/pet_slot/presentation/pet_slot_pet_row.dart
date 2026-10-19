@@ -11,9 +11,13 @@ import '../../profile/domain/pet_age.dart';
 /// [showLock]：只读宠物头像灰化 + 锁标（名额管理页 D3；改选抽屉里不画，选择本身就在决定只读与否）。
 /// ⚠️ [PetListItem.name] 只渲染，不写日志 / 埋点（§5）。
 class PetSlotPetRow extends StatelessWidget {
-  const PetSlotPetRow({super.key, required this.pet, required this.trailing, this.showLock = true});
+  const PetSlotPetRow(
+      {super.key, required this.pet, required this.trailing, this.showLock = true, this.avatarSize = 40});
 
   final PetListItem pet;
+
+  /// 头像直径（名额页 Hewanku 稿为 36，改选抽屉沿用 40）。
+  final double avatarSize;
   final Widget trailing;
   final bool showLock;
 
@@ -30,7 +34,7 @@ class PetSlotPetRow extends StatelessWidget {
     final locked = showLock && pet.isReadOnly;
     final hasAvatar = pet.avatarUrl != null && pet.avatarUrl!.isNotEmpty;
     Widget avatar = CircleAvatar(
-      radius: 20,
+      radius: avatarSize / 2,
       backgroundColor: AppColors.border,
       backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 120),
       child: hasAvatar ? null : const Icon(Icons.pets, size: 18, color: AppColors.textTertiary),

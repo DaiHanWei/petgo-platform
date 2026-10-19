@@ -177,6 +177,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       cancelLabel: l10n.commonCancel,
       icon: Icons.delete_outline_rounded,
       danger: true,
+      dangerColor: AppColors.danger,
       confirmKey: const ValueKey('petProfileDeleteConfirm'),
     );
     if (!confirmed) return;
@@ -251,7 +252,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       backgroundColor: AppColors.base,
       appBar: AppBar(
         backgroundColor: AppColors.base,
-        centerTitle: true,
+        // 稿 C1：标题左对齐（L2 还原度，原居中）。
+        centerTitle: false,
+        titleSpacing: 0,
         leading: IconButton(
           icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
@@ -361,26 +364,14 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             decoration: _inputDeco(),
           ),
           const SizedBox(height: 16),
-          // JENIS HEWAN（F6 编辑态锁定）：标签左 + 红「锁 + tidak bisa diubah」右 + 灰底锁定下拉。
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _sectionLabel(l10n.petProfileTypeLabel),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.lock_outline, size: 11, color: AppColors.popRed),
-                  const SizedBox(width: 4),
-                  Text(l10n.petTypeLockedHint,
-                      style: const TextStyle(
-                          color: AppColors.popRed, fontSize: 10, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ],
-          ),
+          // JENIS HEWAN（F6 编辑态锁定）：灰底锁定字段，「🔒 Tidak bisa diubah」红字在框内右侧（稿 C1）。
+          _sectionLabel(l10n.petProfileTypeLabel),
           const SizedBox(height: 6),
           SpeciesField(
-              key: const ValueKey('petProfileEditTypeReadonly'), petType: _petType, locked: true),
+              key: const ValueKey('petProfileEditTypeReadonly'),
+              petType: _petType,
+              locked: true,
+              lockedHint: l10n.petTypeLockedHint),
           const SizedBox(height: 16),
           // RAS（品种）+ KELAMIN（性别）两列（原型 pet-edit）。
           Row(
@@ -482,15 +473,16 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           TextButton.icon(
             key: const ValueKey('petProfileDeleteButton'),
             onPressed: _deleting ? null : _confirmDelete,
+            // 稿 `.delbtn`：橙红 #E5604D（= AppColors.danger），非 Pop Art 玫红。
             style: TextButton.styleFrom(
-              foregroundColor: AppColors.popRed,
+              foregroundColor: AppColors.danger,
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
             icon: _deleting
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.popRed))
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.danger))
                 : const Icon(Icons.delete_outline, size: 20),
             label: Text(l10n.petProfileDeleteButton(_nameController.text.trim()),
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -508,8 +500,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
               letterSpacing: 0.5,
               color: AppColors.ink2),
           children: [
-            TextSpan(text: text),
-            if (required) const TextSpan(text: ' *', style: TextStyle(color: AppColors.popRed)),
+            // 稿 `.fl`：标签一律大写（arb 里「Berat badan (kg)」未大写，L2 还原度）。
+            TextSpan(text: text.toUpperCase()),
+            if (required) const TextSpan(text: ' *'),
           ],
         ),
       );

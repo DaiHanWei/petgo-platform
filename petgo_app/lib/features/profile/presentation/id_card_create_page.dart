@@ -462,11 +462,13 @@ class _KtpPetRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(l10n.petPickerForName(pet.name),
+              // 稿 I2 / I3：「Untuk」常规灰字，只有宠物名加粗。
+              child: Text.rich(
+                  _nameBold(l10n.petPickerForName(pet.name), pet.name),
                   key: const ValueKey('ktpPetRowName'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                  style: const TextStyle(fontSize: 13.5, color: AppColors.ink2)),
             ),
             if (canChange) ...[
               const SizedBox(width: 8),
@@ -482,18 +484,26 @@ class _KtpPetRow extends StatelessWidget {
         ),
       ),
     );
+    // 稿 I2 / I3：无底无框的文字行（L2 还原度，原为白色描边卡）。
     return Material(
       key: const ValueKey('ktpPetRow'),
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.line2),
-      ),
+      type: MaterialType.transparency,
+      borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: canChange
           ? InkWell(key: const ValueKey('ktpPetRowChange'), onTap: onChange, child: content)
           : content,
     );
+  }
+
+  static TextSpan _nameBold(String full, String name) {
+    final i = full.indexOf(name);
+    if (i < 0 || name.isEmpty) return TextSpan(text: full);
+    return TextSpan(children: [
+      TextSpan(text: full.substring(0, i)),
+      TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+      TextSpan(text: full.substring(i + name.length)),
+    ]);
   }
 }
 

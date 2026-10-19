@@ -14,11 +14,15 @@ String petTypeDisplay(AppLocalizations l10n, String type) => switch (type) {
 /// JENIS HEWAN 选择字段（原型 P-30/P-32）。
 /// [locked]=true → 灰底锁定只读（编辑态 F6：创建后不可改）；否则点击弹底部清单按枚举选。
 class SpeciesField extends StatelessWidget {
-  const SpeciesField({super.key, required this.petType, this.onChanged, this.locked = false});
+  const SpeciesField(
+      {super.key, required this.petType, this.onChanged, this.locked = false, this.lockedHint});
 
   final String? petType;
   final ValueChanged<String>? onChanged;
   final bool locked;
+
+  /// 锁定态框内右侧的红色说明（V1.4.0 稿 C1 `.fi.lk em`：「🔒 Tidak bisa diubah」在输入框内）；null = 只画灰锁。
+  final String? lockedHint;
 
   @override
   Widget build(BuildContext context) {
@@ -47,9 +51,20 @@ class SpeciesField extends StatelessWidget {
                         : (locked ? AppColors.textTertiary : AppColors.ink)),
               ),
             ),
-            Icon(locked ? Icons.lock_outline : Icons.keyboard_arrow_down,
-                size: locked ? 15 : 18,
-                color: locked ? const Color(0xFFCCCCCC) : AppColors.muted),
+            if (locked && lockedHint != null)
+              Row(
+                key: const ValueKey('petSpeciesLockedHint'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock, size: 12, color: AppColors.danger),
+                  const SizedBox(width: 3),
+                  Text(lockedHint!, style: const TextStyle(fontSize: 11.5, color: AppColors.danger)),
+                ],
+              )
+            else
+              Icon(locked ? Icons.lock_outline : Icons.keyboard_arrow_down,
+                  size: locked ? 15 : 18,
+                  color: locked ? const Color(0xFFCCCCCC) : AppColors.muted),
           ],
         ),
       ),

@@ -42,7 +42,11 @@ void main() {
 
     expect(find.text('Lv7'), findsWidgets);
     expect(find.text('Sahabat · Lv5–9'), findsWidgets);
-    expect(find.text('1.420 / 1.800 EXP · Kurang 380 EXP ke Lv8'), findsOneWidget);
+    // 稿 `.pmeta`：左右分列（L2 还原度），各自完整。
+    final meta = find.byKey(const ValueKey('growthLevelProgressText'));
+    expect(find.descendant(of: meta, matching: find.text('1.420 / 1.800 EXP')), findsOneWidget);
+    expect(find.descendant(of: meta, matching: find.text('Kurang 380 EXP ke Lv8')), findsOneWidget);
+    expect(find.byKey(const ValueKey('growthProgressKnob')), findsOneWidget);
     expect(find.byKey(const ValueKey('growthProgressFill')), findsOneWidget);
     expect(find.text('Lv8'), findsOneWidget); // 右端虚线胶囊
   });

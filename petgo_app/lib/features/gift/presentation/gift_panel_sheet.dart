@@ -284,7 +284,8 @@ class _GiftPanelSheetState extends ConsumerState<GiftPanelSheet> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: LayoutBuilder(
               builder: (context, c) {
-                final cellW = (c.maxWidth - 8 * 3) / 4;
+                // 向下取整：4 格 + 3 个间距恰好等于容器宽时，浮点误差会让 Wrap 把第 4 格挤到下一行（L2 实测每行只有 3 格）。
+                final cellW = ((c.maxWidth - 8 * 3) / 4).floorToDouble();
                 final children = <Widget>[];
                 var first = true;
                 for (final tier in catalog.sortedTiers) {
@@ -672,9 +673,11 @@ class _GiftCellState extends State<_GiftCell> {
         child: AnimatedScale(
           scale: _pressed ? 0.95 : 1,
           duration: const Duration(milliseconds: 150),
+          // Stack 给非定位子项的是松约束：卡片须显式撑满格宽，否则按内容收窄、勾跑到卡片外（L2 实测 B1）。
           child: Stack(
             children: [
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(2, 8, 2, 7),
                 decoration: BoxDecoration(
                   color: sel ? GiftStyle.tint : Colors.white,

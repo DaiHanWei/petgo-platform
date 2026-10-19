@@ -46,4 +46,27 @@ void main() {
     expect(age, contains('\u00A0'));
     expect(age.contains(' '), isFalse, reason: '年龄内的空格应为不换行空格');
   });
+
+  testWidgets('Diary 数为 0 → 不画「0」角标（L2 J0）', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('id'),
+      home: Scaffold(
+        body: Center(
+          child: PetAvatarItem(
+            name: 'doggy',
+            avatarUrl: null,
+            petType: 'DOG',
+            birthday: null,
+            tailsonalityBadge: null,
+            diaryCount: 0,
+            onTap: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('0'), findsNothing);
+  });
 }

@@ -6,6 +6,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/pay_channel_picker.dart' show formatIdrAmount;
 import '../../growth/presentation/level_page.dart';
 import '../data/pet_slot_repository.dart';
@@ -144,14 +145,18 @@ class _AddPetTileState extends ConsumerState<AddPetTile> {
             // 与头像项外圈（2 + 2 边）对齐：外框 = size + 8。
             Padding(
               padding: const EdgeInsets.all(4),
-              child: Container(
+              // 稿 `.psw-add` / `.pav.add`：白底 1.5px 淡紫**虚线**圆（L2 还原度，原为实线）。
+              child: CustomPaint(
+                key: const ValueKey('addPetTileDashed'),
+                painter: DashedRRectPainter(
+                    color: AppColors.dashedViolet, radius: size / 2, dash: 4, gap: 3, strokeWidth: 1.5),
+                child: Container(
                 width: size,
                 height: size,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.card,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.dashedViolet, width: 1.5),
                 ),
                 child: _busy
                     ? SizedBox(
@@ -161,6 +166,7 @@ class _AddPetTileState extends ConsumerState<AddPetTile> {
                             strokeWidth: 2, color: AppColors.mint),
                       )
                     : Icon(Icons.add, size: size * 0.5, color: AppColors.mint),
+              ),
               ),
             ),
           ],

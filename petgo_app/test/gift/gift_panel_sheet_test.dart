@@ -256,6 +256,24 @@ void main() {
     expect(repo.catalogCalls, 2);
   });
 
+  testWidgets('B1：同档 4 个礼物排在一行、等宽撑满（L2 实测原先每行只 3 格且格子按内容收窄）', (tester) async {
+    const w1 = GiftItem(giftToken: 'g-w1', nameEn: 'A', nameId: 'A', price: 1000);
+    const w2 = GiftItem(giftToken: 'g-w2', nameEn: 'B', nameId: 'B', price: 1000);
+    repo.catalog = GiftCatalog(
+      recipient: const GiftRecipient(petId: 42, name: 'Mochi'),
+      qrisMinAmount: 10000,
+      tiers: const [GiftTier(price: 1000, gifts: [tulang, ikan, w1, w2])],
+    );
+    await open(tester);
+    final tops = [
+      for (final t in ['g-tulang', 'g-ikan', 'g-w1', 'g-w2'])
+        tester.getTopLeft(find.byKey(ValueKey('giftCell-$t'))).dy,
+    ];
+    expect(tops.toSet(), hasLength(1), reason: '4 格同一行');
+    final w = tester.getSize(find.byKey(const ValueKey('giftCell-g-tulang'))).width;
+    expect(w, greaterThan(60));
+  });
+
   testWidgets('目录为空（接口成功、tiers 全空）→ 空态，不显示失败与「Coba lagi」（L2 P1-2）', (tester) async {
     repo.catalog = GiftCatalog(
       recipient: const GiftRecipient(petId: 42, name: 'Mochi'),
