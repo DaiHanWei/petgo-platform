@@ -360,6 +360,52 @@ void main() {
     expect(repo.sends.last.requestId, isNot(ids[2]));
   });
 
+  for (final closed in [GiftOrderStatus.failed, GiftOrderStatus.expired]) {
+    testWidgets('OCR #4：QRIS 回 ${closed.wire} 无码 → 同抽屉重试换新 requestId，第二次出码', (tester) async {
+      repo.catalog = sampleCatalog(qrisMinAmount: 1000);
+      repo.sendResults = [
+        GiftSendResult(delivered: false, orderToken: 'ord-dead', status: closed),
+        const GiftSendResult(
+          delivered: false,
+          paymentToken: 'pi-2',
+          paymentDisplayNo: 'PAY-2',
+          payload: '00020101021226',
+          orderToken: 'ord-2',
+          status: GiftOrderStatus.pending,
+        ),
+      ];
+      await start(tester);
+      await kirim(tester);
+      await tester.tap(find.text('QRIS'));
+      await tester.pumpAndSettle();
+      await confirm(tester); // 回已关单、无码 → 抽屉保留
+      expect(picker(), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await confirm(tester); // 同渠道重试
+      expect(repo.sends, hasLength(2));
+      expect(repo.sends[1].requestId, isNot(repo.sends[0].requestId), reason: '已关的单不能同键重放');
+      expect(picker(), findsNothing);
+      expect(find.textContaining('PAY-2'), findsWidgets, reason: '第二次出码成功');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 3));
+    });
+  }
+
+  testWidgets('OCR #4：仍待付但无码（非已关单）→ 同渠道重试仍复用 requestId', (tester) async {
+    repo.catalog = sampleCatalog(qrisMinAmount: 1000);
+    repo.sendResults = [const GiftSendResult(delivered: false, orderToken: 'ord-p', status: GiftOrderStatus.pending)];
+    await start(tester);
+    await kirim(tester);
+    await tester.tap(find.text('QRIS'));
+    await tester.pumpAndSettle();
+    await confirm(tester);
+    await tester.pump(const Duration(seconds: 3));
+    await confirm(tester);
+    await tester.pump(const Duration(seconds: 3));
+    expect(repo.sends, hasLength(2));
+    expect(repo.sends[1].requestId, repo.sends[0].requestId);
+  });
+
   group('QRIS', () {
     const pending = GiftSendResult(
       delivered: false,
