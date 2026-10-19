@@ -344,38 +344,84 @@ class GiftSendServiceTest {
         verifyNoInteractions(wallet, paymentIntents, gateway, delivery);
     }
 
+    /** 重放认订单自己挂的那笔意图（OCR #7）：PENDING → 同一笔的已存载荷，不再同键 createIntent。 */
+    private PaymentIntent ownIntent(long id, PaymentStatus status, String gatewayRef, Map<String, Object> meta) {
+        PaymentIntent p = intent(id, status, gatewayRef, meta);
+        when(paymentIntents.findById(id)).thenReturn(Optional.of(p));
+        when(paymentIntents.statusOf(SENDER, "pi-" + id)).thenReturn(status);
+        return p;
+    }
+
     @Test
     void qrisReplaySameIntentReturnsSavedPayload() {
         GiftOrder existing = GiftTestFixtures.order(78L, PayChannel.QRIS, 1, 10_000);
         existing.attachPaymentIntent(501L);
         when(orders.findByIdemKey(anyString())).thenReturn(Optional.of(existing));
-        createIntentReturns(intent(501, PaymentStatus.PENDING, "gw-1", Map.of("payload", "SAVED-QR")));
+        ownIntent(501, PaymentStatus.PENDING, "gw-1", Map.of("payload", "SAVED-QR"));
 
         GiftSendResponse r = service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS));
 
         assertThat(r.payload()).isEqualTo("SAVED-QR");
         assertThat(r.payment().token()).isEqualTo("pi-501");
         assertThat(r.orderToken()).isEqualTo(existing.getPublicToken());
-        verify(paymentIntents).createIntent(SENDER, PaymentPurpose.GIFT, PayChannel.QRIS, 10_000L, "IDR",
-                "GIFT_QRIS:" + existing.getPublicToken(), Duration.ofMinutes(60));
+        verify(paymentIntents, never()).createIntent(anyLong(), any(), any(), anyLong(), any(), any(), any());
         verifyNoInteractions(gateway, wallet);
         verify(orders, never()).saveAndFlush(any());
     }
 
+    /**
+     * OCR #7：幂等键映射丢失（Redis 过期 / 清空）时旧意图仍 PENDING、旧码仍可付 —— 原先同键 createIntent 会建出第二笔意图、
+     * 把订单置 EXPIRED，旧码付了却不送达。现在只认订单自己的意图：窗内照常返回旧码，订单仍 PENDING。
+     */
     @Test
-    void qrisReplayWithDifferentIntentExpiresOrderAndDoesNotAttachNewIntent() {
+    void qrisReplayKeepsLiveOwnIntentEvenIfIdempotencyMappingWasLost() {
         GiftOrder existing = GiftTestFixtures.order(79L, PayChannel.QRIS, 1, 10_000);
         existing.attachPaymentIntent(501L);
         when(orders.findByIdemKey(anyString())).thenReturn(Optional.of(existing));
-        createIntentReturns(intent(502, PaymentStatus.PENDING, null, null)); // 旧意图已过窗被懒过期 → 新意图
+        ownIntent(501, PaymentStatus.PENDING, "gw-1", Map.of("payload", "OLD-QR"));
+        createIntentReturns(intent(502, PaymentStatus.PENDING, null, null)); // 映射丢失时同键会拿到的新意图
+
+        GiftSendResponse r = service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS));
+
+        assertThat(r.payload()).isEqualTo("OLD-QR");
+        assertThat(existing.getStatus()).isEqualTo(GiftOrderStatus.PENDING);
+        assertThat(existing.getPaymentIntentId()).isEqualTo(501L);
+        verify(paymentIntents, never()).createIntent(anyLong(), any(), any(), anyLong(), any(), any(), any());
+    }
+
+    /** OCR #7：自己的意图已过窗 → statusOf 经意图状态机懒过期为 EXPIRED，订单随之 EXPIRED；不建新意图、不出码。 */
+    @Test
+    void qrisReplayWithOwnIntentExpiredExpiresOrderWithoutNewIntent() {
+        GiftOrder existing = GiftTestFixtures.order(80L, PayChannel.QRIS, 1, 10_000);
+        existing.attachPaymentIntent(501L);
+        when(orders.findByIdemKey(anyString())).thenReturn(Optional.of(existing));
+        ownIntent(501, PaymentStatus.EXPIRED, "gw-1", Map.of("payload", "OLD-QR"));
 
         GiftSendResponse r = service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS));
 
         assertThat(r.status()).isEqualTo("EXPIRED");
         assertThat(r.delivered()).isFalse();
         assertThat(r.payment()).isNull();
+        assertThat(r.payload()).isNull();
         assertThat(existing.getStatus()).isEqualTo(GiftOrderStatus.EXPIRED);
-        assertThat(existing.getPaymentIntentId()).as("不把新意图挂到旧订单上").isEqualTo(501L);
+        assertThat(existing.getPaymentIntentId()).isEqualTo(501L);
+        verify(paymentIntents).statusOf(SENDER, "pi-501"); // 意图先终态（支付模块状态机），订单后标
+        verify(paymentIntents, never()).createIntent(anyLong(), any(), any(), anyLong(), any(), any(), any());
+        verifyNoInteractions(gateway);
+    }
+
+    /** 意图已 FAILED、订单还 PENDING（漏了失败事件）→ 订单 FAILED。 */
+    @Test
+    void qrisReplayWithOwnIntentFailedFailsOrder() {
+        GiftOrder existing = GiftTestFixtures.order(81L, PayChannel.QRIS, 1, 10_000);
+        existing.attachPaymentIntent(501L);
+        when(orders.findByIdemKey(anyString())).thenReturn(Optional.of(existing));
+        ownIntent(501, PaymentStatus.FAILED, null, null);
+
+        GiftSendResponse r = service.send(SENDER, PET, req("g2", 1, PayChannel.QRIS));
+
+        assertThat(r.status()).isEqualTo("FAILED");
+        assertThat(existing.getStatus()).isEqualTo(GiftOrderStatus.FAILED);
         verifyNoInteractions(gateway);
     }
 

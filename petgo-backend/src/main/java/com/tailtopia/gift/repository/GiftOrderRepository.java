@@ -62,6 +62,18 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
     int markUndeliveredIfPending(@Param("id") long id, @Param("reason") String reason);
 
     /**
+     * 已关单（EXPIRED / FAILED）的订单又到账了（OCR #7）→ UNDELIVERED_REFUND_PENDING，走与「付款后无法送达」同一条退回路径
+     * （退 PawCoin，Story 1.2）。{@code undelivered_reason} 留空：三个既有原因都不对口，加新值要重建 CHECK，这里不值得；
+     * 后台列表对空原因显示空白，WARN 日志可追溯。返回受影响行数（0 = 已被并发处理 / 状态不对）。
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE gift_orders SET status = 'UNDELIVERED_REFUND_PENDING'
+             WHERE id = :id AND status IN ('EXPIRED', 'FAILED')
+            """, nativeQuery = true)
+    int markRefundPendingIfClosed(@Param("id") long id);
+
+    /**
      * 后台礼物抽屉的收送统计（V1.4.0 gift Story 3.1 · AC6.4）：该礼物 {@code DELIVERED} 订单的数量之和与订单数，
      * 一行两列 {@code [received, sent]}。只读；{@code gift_id} 无专门索引，礼物百级 / 订单千级顺序扫可接受。
      */
