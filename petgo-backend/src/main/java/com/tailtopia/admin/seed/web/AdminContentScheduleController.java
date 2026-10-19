@@ -111,7 +111,7 @@ public class AdminContentScheduleController {
         return redirect(authorId);
     }
 
-    private void doReschedule(long rowId, String scheduledAt) {
+    void doReschedule(long rowId, String scheduledAt) {
         Instant at = requireFuture(scheduledAt);
         var row = rows.findById(rowId)
                 .orElseThrow(() -> AppException.notFound("排期不存在")
@@ -122,6 +122,13 @@ public class AdminContentScheduleController {
             //    直接改个时间再排一次只会到点再失败一次。
             throw AppException.validation("这一行已发布失败，请先回工作台修好再重新提交")
                     .code("admin.err.schedule.failedRowFixFirst");
+        }
+        if (row.getStatus() != SeedBatchRowStatus.SCHEDULED) {
+            // 🔴 只有「排期中」能改时间。已发布（终态，内容已对外）改时间只会让后台与线上事实不一致；
+            //    已取消排期（回到草稿）/ 草稿 / 待确认的行不在排期表里，改出一个 scheduled_at 也不会被扫描发布，
+            //    却会让人以为它「又排上了」。抽屉可能是旧的（别人刚发布 / 刚取消）→ 服务端兜底拒绝，不信前端按钮态。
+            throw AppException.validation("这一行已不在排期中（已发布或已取消排期），不能再改计划时间")
+                    .code("admin.err.schedule.notReschedulable");
         }
         row.setScheduledAt(at);
         rows.save(row);

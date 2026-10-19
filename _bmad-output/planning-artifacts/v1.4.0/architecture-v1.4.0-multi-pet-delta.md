@@ -164,7 +164,7 @@ Spring Boot 4 / Java 21 / PostgreSQL + Flyway（时间戳号）；`@Async` + DB 
 | `V20261018_1602` | `pricing_config.pet_slot_monthly_price` | 2.2 |
 | `V20261018_1600` | `content_pets` + 回填存量 Diary | 3.1 |
 
-**6.5 跨线时序**：4.4（① `/popups` 加 `petSlotHint`、① 流水改取 `petIds`）**不在 `feat/1.4.0-multi-pet` 上做**——功能分支不反向合入 dev、拿不到 ① 代码；①② 均合入 `dev_1.4.0` 后，从 dev 切对齐分支 `feat/1.4.0-multipet-align` 本地补做。1.4 的名额计算依赖 ① 的 `getLevel` 真实现——① 未合并前读地基占位（真实用户 = Lv1），名额 = 默认 + 月租，行为正确。
+**6.5 跨线时序**：4.4（① `/popups` 加 `petSlotHint`、① 流水改取 `petIds`）**不在 `feat/1.4.0-multi-pet` 上做**——功能分支不反向合入 dev、拿不到 ① 代码；①② 均合入 `dev_1.4.0` 后，从 dev 切对齐分支 `feat/1.4.0-multipet-align` 本地补做（2026-10-19 回改：已按此完成，对齐分支经 `1a0d7f50` 合入 `dev_1.4.0`；① 流水改取 `petIds` 在 ① 合并时已落地，4.4 只核对 + 补测试）。1.4 的名额计算依赖 ① 的 `getLevel` 真实现——① 未合并前读地基占位（真实用户 = Lv1），名额 = 默认 + 月租，行为正确。
 
 ## 7. 校验结论（2026-10-18）
 

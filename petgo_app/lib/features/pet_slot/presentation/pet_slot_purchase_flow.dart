@@ -130,10 +130,14 @@ Future<PetSlotFlowOutcome> _runPetSlotPurchase(
   final store = ref.read(petSlotAttemptStoreProvider);
   final l10n = AppLocalizations.of(context);
   // 提示挂在顶部 Toast（L2 第三轮：底部 SnackBar 会盖住名额页吸底的「Perpanjang」）；
+  // L2 第四轮：再下压一个 AppBar 高度，落在「Kelola Hewan」标题下方而不是压住它。
+  // 支付失败 / 余额不足等由 runKeepsakePurchase 给的提示也经 notify 走这里（不再出底部 SnackBar）。
   // await 之后 context 可能已失效，先取好根 Overlay（同送礼流程）。
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   void snack(String msg) {
-    if (overlay != null && overlay.mounted) showAppToastOnOverlay(overlay, msg, top: true);
+    if (overlay != null && overlay.mounted) {
+      showAppToastOnOverlay(overlay, msg, top: true, extraTop: kToolbarHeight);
+    }
   }
   String? attemptId;
   String? idempotencyKey;
@@ -197,6 +201,7 @@ Future<PetSlotFlowOutcome> _runPetSlotPurchase(
     purchasePurpose: 'PET_SLOT_RENT',
     cashPriceIdr: () => overview.unitPrice * count(),
     onQrAborted: (abort) => abortCategory = abort.category,
+    notify: snack,
     onProblem: isRenewal
         ? null
         : (pd) {
@@ -224,7 +229,7 @@ Future<PetSlotFlowOutcome> _runPetSlotPurchase(
   if (outcome != KeepsakeFlowOutcome.unlocked) {
     switch (abortCategory) {
       case null:
-        break; // 关抽屉 / 关面板 / 失败（失败 SnackBar 已由 runKeepsakePurchase 给出）
+        break; // 关抽屉 / 关面板 / 失败（失败提示已由 runKeepsakePurchase 经 notify 走顶部 Toast 给出）
       case 'EXPIRED':
         snack(l10n.paymentExpiredRetry); // D10b：只在名额流程补提示
       case kPetSlotAbortPaidNeedsSupport:

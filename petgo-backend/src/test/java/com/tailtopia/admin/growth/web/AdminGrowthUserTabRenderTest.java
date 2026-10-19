@@ -91,6 +91,10 @@ class AdminGrowthUserTabRenderTest {
         public String wib(Instant t) {
             return "10-18 12:00";
         }
+
+        public String shortWib(Instant t) {
+            return "10-18 12:00";
+        }
     }
 
     private static void auth(String... authorities) {

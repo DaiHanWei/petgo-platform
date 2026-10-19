@@ -75,6 +75,8 @@ public class AdminGrowthUserService {
 
     static final String REF_CONTENT_POST = "CONTENT_POST";
 
+    static final String REF_GIFT_ORDER = "GIFT_ORDER";
+
     /** 明细里显示为「××扣回」的原因（{@code ADMIN_ADJUST} 不是扣回，走运营调整文案）。 */
     private static final Set<String> REVERSAL_REASONS = Set.of(ReverseReason.REFUND.name(),
             ReverseReason.UNLIKE.name(), ReverseReason.UNCOLLECT.name(), ReverseReason.TAKEDOWN.name());
@@ -251,7 +253,7 @@ public class AdminGrowthUserService {
         p.addValue("limit", PAGE_SIZE).addValue("offset", (long) page * PAGE_SIZE);
         List<Raw> raws = jdbc.query(PAGE_SELECT + where + " ORDER BY l.created_at DESC, l.id DESC "
                 + "LIMIT :limit OFFSET :offset", p, (rs, i) -> raw(rs));
-        return new Ledger(userId, toRows(raws), page, totalPages, count, everAny, rule, fromS, toS);
+        return new Ledger(userId, toRows(raws, userId), page, totalPages, count, everAny, rule, fromS, toS);
     }
 
     private boolean everAny(long userId) {
@@ -259,7 +261,7 @@ public class AdminGrowthUserService {
         return n != null && n > 0;
     }
 
-    private List<LedgerRow> toRows(List<Raw> raws) {
+    private List<LedgerRow> toRows(List<Raw> raws, long userId) {
         Map<Long, String> operators = operatorNames(raws);
         Map<Long, String> pets = petNames(raws);
         Map<Long, String> tokens = intentTokens(raws);
@@ -286,6 +288,13 @@ public class AdminGrowthUserService {
                     refHref = token == null ? null : "/admin/payments/" + token + "/drawer";
                 } else if (REF_CONTENT_POST.equals(r.refType) && parseLong(r.refId) != null) {
                     refHref = "/admin/content/" + parseLong(r.refId) + "/drawer";
+                } else if (REF_GIFT_ORDER.equals(r.refType)) {
+                    // UI I1：送礼单没有单条抽屉 → 跳「送礼记录」按本用户（送礼人 / 收礼主人）筛好的列表，该单就在其中。
+                    if ("GIFT_SENT".equals(r.ruleCode)) {
+                        refHref = "/admin/gift-orders?senderId=" + userId;
+                    } else if ("GIFT_RECEIVED".equals(r.ruleCode)) {
+                        refHref = "/admin/gift-orders?ownerId=" + userId;
+                    }
                 }
             }
             String petNames = null;

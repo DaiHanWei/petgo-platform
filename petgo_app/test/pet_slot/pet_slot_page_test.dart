@@ -204,6 +204,23 @@ void main() {
       await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
+    testWidgets('L2 第四轮：发起失败（网络超时）→ 顶部 Toast 落在 AppBar 标题下方，不出底部 SnackBar', (tester) async {
+      final repo = FakePetSlotRepo()
+        ..rentError = DioException(requestOptions: RequestOptions(path: '/x'), type: DioExceptionType.receiveTimeout);
+      await pumpSlotPage(tester, overviews: [overview(petCount: 2)], pets: twoPets, repo: repo);
+      await tester.tap(find.byKey(const ValueKey('petSlotRentButton')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('petSlotRentConfirm')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.idCardHdPurchaseError), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing, reason: '底部 SnackBar 会盖住吸底「Perpanjang」');
+      final appBarBottom = tester.getBottomLeft(find.byType(AppBar)).dy;
+      expect(tester.getTopLeft(find.text(l10n.idCardHdPurchaseError)).dy, greaterThanOrEqualTo(appBarBottom),
+          reason: 'Toast 不能压住页面标题「Kelola Hewan」');
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
+    });
+
     testWidgets('ORPHAN_PAID / OVERPAID → 「付款已收到、处理中 / 联系客服」，不说支付失败', (tester) async {
       await qrisFlow(tester, const [PetSlotPurchaseStatus(status: PetSlotPurchaseStatus.overpaid)]);
       expect(find.text(l10n.petSlotPaymentProcessing), findsOneWidget);

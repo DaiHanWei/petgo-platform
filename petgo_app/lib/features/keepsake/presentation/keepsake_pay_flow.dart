@@ -45,6 +45,9 @@ enum KeepsakeFlowOutcome {
 ///
 /// [onProblem]（V1.4.0 multi-pet Story 2.4 code review #3，可选）：发起失败带 ProblemDetail 时先交给调用方，
 /// 返回 true = 调用方已给出提示（本流程不再报通用失败文案）；不传 / 返回 false = 照旧分流。
+///
+/// [notify]（V1.4.0 L2 第四轮，可选）：失败 / 余额不足等提示交给调用方显示（名额页走顶部 Toast，
+/// 底部 SnackBar 会盖住吸底「Perpanjang」）。**不传 = 照旧底部 SnackBar**，其余调用方零影响。
 Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   required BuildContext context,
   required WidgetRef ref,
@@ -56,6 +59,7 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   void Function(HdPayChannel channel)? onChannelConfirmed,
   void Function(QrPaymentAborted abort)? onQrAborted,
   bool Function(ProblemDetail problem)? onProblem,
+  void Function(String message)? notify,
 }) async {
   int balance = 0;
   try {
@@ -78,6 +82,10 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   onChannelConfirmed?.call(channel);
   final l10n = AppLocalizations.of(context);
   void toast(String msg) {
+    if (notify != null) {
+      notify(msg);
+      return;
+    }
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
