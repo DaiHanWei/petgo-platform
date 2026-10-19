@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/format/idr_compact.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
 import '../../domain/pet_header_info.dart';
@@ -10,26 +11,39 @@ import '../../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart'
 /// 宠物护照卡（Story 2.4 · paspor.html 1:1 还原）。
 ///
 /// 横向 pet-top（大头像 + 名字/品种·年龄/一句话简介）+ 卡内三列统计
-/// （Momen Bahagia / Konsultasi / Milestone）。白底 rounded-20 + 柔阴影。
+/// （Momen Bahagia / Hadiah / Milestone）。白底 rounded-20 + 柔阴影。
+///
+/// V1.4.0 gift Story 2.2 · AC2：中间格由「Konsultasi」换成**礼物总价值**（缩写，`Rp53rb`）；
+/// 传 [onOpenGifts] 时该格可点进礼物页（标签后加紫色「›」）。
 class PetInfoCard extends StatelessWidget {
   const PetInfoCard({
     super.key,
     required this.profile,
     this.happyCount,
-    this.consultCount,
+    this.giftTotalValue,
+    this.onOpenGifts,
     this.milestoneCount,
     this.topRight,
+    this.avatarKey,
   });
 
   final PetHeaderInfo profile;
+
+  /// 头像的位置锚点（V1.4.0 gift Story 1.3：访客视图送出动效的落点）。只用来量位置；默认 null 行为不变。
+  final GlobalKey? avatarKey;
 
   /// 卡片右上角（头像行最右）的附加控件——作者态放「只看 Diary」开关（2026-10-06 产品）；访客态不传。
   final Widget? topRight;
 
   /// 统计三列（archiveStatsProvider 未就绪时传 null，显占位「·」）。
   final int? happyCount;
-  final int? consultCount;
   final int? milestoneCount;
+
+  /// 中间格：收到的礼物总价值（IDR）。null（统计未就绪）→ 占位「·」。
+  final int? giftTotalValue;
+
+  /// 点礼物格进礼物页（主人 / 站内访客注入）。null → 不可点、无「›」（游客示例、分享 token 态）。
+  final VoidCallback? onOpenGifts;
 
   /// 无头像时的 emoji 占位：**按物种取**（原先恒为 🐱，狗主人会看到自家狗顶着猫脸 ——
   /// 2026-08-04 用户实机反馈）。未知物种走中性爪印。
@@ -92,6 +106,7 @@ class PetInfoCard extends StatelessWidget {
           Row(
             children: [
               Container(
+                key: avatarKey,
                 width: 62,
                 height: 62,
                 alignment: Alignment.center,
@@ -163,7 +178,7 @@ class PetInfoCard extends StatelessWidget {
               children: [
                 _statCol(happyCount, l10n.petInfoStatHappyMoments),
                 _divider(),
-                _statCol(consultCount, l10n.petInfoStatConsult),
+                _giftCol(l10n),
                 _divider(),
                 _statCol(milestoneCount, l10n.petInfoStatMilestone),
               ],
@@ -190,6 +205,65 @@ class PetInfoCard extends StatelessWidget {
           ),
         ),
       );
+
+  /// 礼物格（AC2.2）：数字 17 号，「Rp」与「rb / jt」0.6 倍字号；颜色同三格统一的紫。
+  Widget _giftCol(AppLocalizations l10n) {
+    const numberStyle = TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.mint);
+    final v = giftTotalValue;
+    final Widget value;
+    if (v == null) {
+      value = const Text('·', style: numberStyle);
+    } else {
+      final p = idrCompactParts(v);
+      final unitStyle = numberStyle.copyWith(fontSize: 17 * 0.6);
+      value = Text.rich(
+        key: const ValueKey('petInfoGiftValue'),
+        TextSpan(children: [
+          TextSpan(text: 'Rp', style: unitStyle),
+          TextSpan(text: p.number, style: numberStyle),
+          if (p.unit.isNotEmpty) TextSpan(text: p.unit, style: unitStyle),
+        ]),
+        maxLines: 1,
+      );
+    }
+    final tappable = onOpenGifts != null;
+    final column = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      child: Column(
+        children: [
+          value,
+          const SizedBox(height: 1),
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(text: l10n.giftStatLabel),
+              if (tappable)
+                const TextSpan(
+                    text: ' ›',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.mint)),
+            ]),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 10, color: AppColors.ink2),
+          ),
+        ],
+      ),
+    );
+    return Expanded(
+      child: tappable
+          ? Semantics(
+              button: true,
+              child: InkWell(
+                key: const ValueKey('petInfoGiftStat'),
+                borderRadius: BorderRadius.circular(12),
+                onTap: onOpenGifts,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: column,
+                ),
+              ),
+            )
+          : KeyedSubtree(key: const ValueKey('petInfoGiftStat'), child: column),
+    );
+  }
 
   Widget _divider() =>
       Container(width: 1, height: 40, color: AppColors.line);

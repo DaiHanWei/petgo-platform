@@ -47,6 +47,9 @@ class TimelineServiceTest {
     private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckinQuery =
             Mockito.mock(com.tailtopia.place.service.PlaceCheckinTimelineQuery.class);
 
+    private final com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase =
+            Mockito.mock(com.tailtopia.gift.service.GiftShowcaseQuery.class);
+
     @BeforeEach
     void setUp() {
         petResolver = Mockito.mock(PetResolver.class);
@@ -70,7 +73,9 @@ class TimelineServiceTest {
                 // V1.3.2 Story 1.6：源⑥ 场所打卡（本类按需 stub；不声明能力时根本不调）。
                 placeCheckinQuery,
                 // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
-                tailsonalityTimeline);
+                tailsonalityTimeline,
+                // V1.4.0 gift Story 2.1：统计卡礼物总价值（按宠物算）。
+                giftShowcase);
     }
 
     private GrowthMomentView moment(long id, String iso) {
@@ -355,6 +360,23 @@ class TimelineServiceTest {
         assertThat(resp.consultCount()).isEqualTo(3L);
         assertThat(resp.milestoneCompleted()).isEqualTo(4L); // 真计数
         assertThat(resp.milestoneTotal()).isEqualTo(30); // 狗 = 30
+    }
+
+    /** V1.4.0 gift Story 2.1 · AC4.3：礼物总价值按 {@code profile.getId()}（这只宠物）取，填进 giftTotalValue。 */
+    @Test
+    void statsCarriesGiftTotalValueOfThisPet() {
+        // ③ 合入 dev_1.4.0：宠物经多宠物线 PetResolver 寻址（不传 petId = 默认宠物），不再走单宠 findByOwnerId。
+        when(petResolver.resolve(1L, null)).thenReturn(petWithId(PetType.DOG, 42L));
+        when(healthProvider.getIfAvailable()).thenReturn(null);
+        when(milestoneService.getProgress(anyLong(), eq(PetType.DOG)))
+                .thenReturn(new MilestoneService.MilestoneProgress(0L, 30));
+        when(giftShowcase.totalValueOfPet(42L)).thenReturn(53_000L);
+
+        ArchiveStatsResponse resp = service.getStats(1L);
+
+        assertThat(resp.giftTotalValue()).isEqualTo(53_000L);
+        assertThat(resp.consultCount()).isZero(); // consultCount 保留（旧版 App 仍在读）
+        verify(giftShowcase).totalValueOfPet(42L);
     }
 
     @Test

@@ -65,16 +65,25 @@ class ContentDetailAndCommentContractTest {
                 // V1.4.0 ① Story 3.1：作者等级三字段。
                 7, "BUDDY", "BASIC",
                 // V1.4.0 multi-pet Story 3.1：Moment 无关联宠物 → null 省略（形态见 diaryPetsKeyShape）。
-                null);
+                null,
+                // V1.4.0 gift Story 2.1：Diary 礼物区（关联宠物各自的礼物汇总 + 墙前 3 行）。
+                List.of(new com.tailtopia.gift.web.dto.GiftPetSummaryView(30L, "Mochi", null, 53_000L, 4L, 2,
+                        List.of(new com.tailtopia.gift.web.dto.GiftWallItemView("Cake", "Kue", "https://cdn/c.png",
+                                50_000L, 1L)))));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
                 "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState",
-                "imageCropOffsets", "authorLevel", "authorTier", "authorFrame"));
+                "imageCropOffsets", "authorLevel", "authorTier", "authorFrame", "giftPets"));
         assertThat(wire(d)).containsEntry("authorLevel", 7).containsEntry("authorTier", "BUDDY")
                 .containsEntry("authorFrame", "BASIC");
+        // V1.4.0 gift Story 2.1：礼物区只下发数字与 EN / ID 快照，不下发 owner / sender / 任何 token。
+        @SuppressWarnings("unchecked")
+        Map<String, Object> giftPet = ((List<Map<String, Object>>) wire(d).get("giftPets")).get(0);
+        assertThat(giftPet.keySet()).isEqualTo(Set.of("petId", "name", "totalValue", "giftCount", "kindCount",
+                "wallPreview"));
         @SuppressWarnings("unchecked")
         Map<String, Object> follow = (Map<String, Object>) wire(d).get("authorFollowState");
         assertThat(follow).isEqualTo(Map.of("iFollow", false, "followsMe", true));
@@ -93,7 +102,7 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
         // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略。
         assertThat(wire(d)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
@@ -103,6 +112,8 @@ class ContentDetailAndCommentContractTest {
         assertThat(wire(d)).doesNotContainKey("authorToken").doesNotContainKey("authorFollowState");
         // V1.3.4 Story 2.1：存量 / 无超界图的帖不下发露出位置（App 无值即居中）。
         assertThat(wire(d)).doesNotContainKey("imageCropOffsets");
+        // V1.4.0 gift Story 2.1：Moment / Tips / 无关联宠物不下发礼物区。
+        assertThat(wire(d)).doesNotContainKey("giftPets");
     }
 
     /** V1.4.0 multi-pet Story 3.1 · AC8：Diary 关联宠物 → {@code pets} 数组，每项四键，顺序原样（第一只在前）。 */
@@ -115,7 +126,9 @@ class ContentDetailAndCommentContractTest {
                 // V1.4.0 ① Story 3.1：作者等级三字段（null → 省略）。
                 null, null, null,
                 List.of(new ContentPetView(21L, "Mochi", "https://cdn/m.jpg", "CAT"),
-                        new ContentPetView(22L, "Bolu", null, "DOG")));
+                        new ContentPetView(22L, "Bolu", null, "DOG")),
+                // V1.4.0 gift Story 2.1：礼物区不在本例关注范围（null → 省略）。
+                null);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> pets = (List<Map<String, Object>>) wire(d).get("pets");
         assertThat(pets).hasSize(2);

@@ -40,7 +40,10 @@ class AdminRoleSeedParityTest extends ApiIntegrationTest {
             assertThat(inDb).doesNotContain(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST)
                     // V1.3.4 返工清单 §1：四个新码不在任何 SYSTEM 角色下
                     .doesNotContain(AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
-                            AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND);
+                            AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND)
+                    // V1.4.0 ③ AB-35：礼物目录两码同样不预授
+                    .doesNotContain(AdminPermissions.GIFT_CATALOG_VIEW, AdminPermissions.GIFT_CATALOG_EDIT)
+                    .doesNotContain(AdminPermissions.GIFT_ORDER_VIEW);
             assertThat(inDb).allSatisfy(c -> assertThat(AdminPermissions.isValid(c)).isTrue());
         }
         assertThat(roles.findByCode("OPS_MANAGER")).as("OPS_MANAGER 不迁移（D-13）").isEmpty();

@@ -39,8 +39,10 @@ class DiaryDemoData {
   }
 
   /// 示例统计（A1 页头：14 Momen / 3 Konsultasi / 9 Pencapaian，进度 9/30）。
+  /// V1.4.0 gift Story 2.2：中间格改礼物总价值，示例态显示 Rp188rb（[giftTotalValue]）。
   static const int happyCount = 14;
   static const int consultCount = 3;
+  static const int giftTotalValue = 188000;
   static const int milestoneCompleted = 9;
   static const int milestoneTotal = 30;
 

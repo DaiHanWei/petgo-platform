@@ -531,4 +531,22 @@ class ApiPaths {
   /// token 不做 URL 编码是刻意的：后端 `OpsTokenGenerator` 恒为 Base62（`[0-9a-zA-Z]`）22 位，
   /// 本身就是 URL-safe 的路径段。若日后改字符表，这里须改成 `Uri.encodeComponent(token)`。
   static String opsPopupImpressions(String token) => '$base/ops-popups/$token/impressions';
+
+  // ===== 送礼（V1.4.0 gift Story 1.3 · AD-10 / AD-13）=====
+  /// 礼物目录：`?petId=` 或 `?postId=` 二选一（详情页按帖子由后端取收礼宠物）。仅 role=USER。
+  static const String giftCatalog = '$base/gifts/catalog';
+
+  /// 发起送礼：POST `{giftToken, quantity, channel, requestId, source, postId?}` → `GiftSendResponse`。
+  /// 宠物沿用 petId 路由（与访客视图 `/pets/:petId` 一致）。
+  static String petGifts(int petId) => '$base/pets/$petId/gifts';
+
+  /// 单笔送礼订单状态（QRIS 轮询，仅本人）。token 由后端生成，URL-safe。
+  static String meGiftOrder(String token) => '$base/me/gift-orders/$token';
+
+  /// 我的送礼记录（V1.4.0 gift Story 2.3）：GET `?cursor=` → `GiftOrderPage`（只送出、时间倒序、每页 20）。仅 role=USER。
+  static const String meGiftOrders = '$base/me/gift-orders';
+
+  /// 礼物页粉丝榜（V1.4.0 gift Story 2.1 / 2.2）：GET `?cursor=` → `GiftSupporterPage`，每页 20。
+  /// 礼物页汇总 + 墙是 GET [petGifts]（与发起送礼同路径不同方法）。仅 role=USER。
+  static String petGiftSupporters(int petId) => '$base/pets/$petId/gifts/supporters';
 }

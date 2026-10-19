@@ -212,4 +212,38 @@ public class AppException extends RuntimeException {
     public static AppException frameLocked(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.FRAME_LOCKED, detail);
     }
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC1）：给自己的宠物送礼 → 422 {@code gift-own-pet}。 */
+    public static AppException giftOwnPet(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_OWN_PET, detail);
+    }
+
+    /**
+     * V1.4.0 gift Story 1.1（FR-148 / PRD AC9）：送礼人拉黑了主人 → 403 {@code gift-blocked}。
+     *
+     * <p>只在 {@code isBlocked(sender, owner)} 时抛；主人拉黑送礼人<b>不抛</b>（不暴露被拉黑）。
+     */
+    public static AppException giftBlocked(String detail) {
+        return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.GIFT_BLOCKED, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC3）：专属礼物未解锁 → 403 {@code gift-locked}。 */
+    public static AppException giftLocked(String detail) {
+        return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.GIFT_LOCKED, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC4）：QRIS 低于送礼最低金额 → 422 {@code gift-qris-below-min}。 */
+    public static AppException giftQrisBelowMin(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_QRIS_BELOW_MIN, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148）：收礼宠物不存在 / 主人已注销 → 404 {@code gift-pet-gone}。 */
+    public static AppException giftPetGone(String detail) {
+        return new AppException(HttpStatus.NOT_FOUND, ErrorTypes.GIFT_PET_GONE, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148）：礼物不存在 / 已下线 → 409 {@code gift-unavailable}。 */
+    public static AppException giftUnavailable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.GIFT_UNAVAILABLE, detail);
+    }
 }

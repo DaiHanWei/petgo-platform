@@ -55,6 +55,11 @@ public class PricingConfig {
     @Column(name = "pet_slot_monthly_price", nullable = false)
     private long petSlotMonthlyPrice;
 
+    /** FR-148 送礼 · QRIS 单笔最低金额（IDR，≥100，默认 10000；V1.4.0 gift Story 1.1）。只在送礼服务发起 QRIS 前读，
+     * 不进通用 {@code createIntent}。后台改值在 Story 3.1（{@code AdminGiftCatalogService}）。 */
+    @Column(name = "gift_qris_min_amount", nullable = false)
+    private long giftQrisMinAmount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -156,5 +161,14 @@ public class PricingConfig {
 
     public void setPetSlotMonthlyPrice(long v) {
         this.petSlotMonthlyPrice = v;
+    }
+
+    public long getGiftQrisMinAmount() {
+        return giftQrisMinAmount;
+    }
+
+    /** 只由后台礼物目录页改（V1.4.0 gift Story 3.1 · AC8）；≥100 由服务层先拦，库级 CHECK 兜底。 */
+    public void setGiftQrisMinAmount(long v) {
+        this.giftQrisMinAmount = v;
     }
 }

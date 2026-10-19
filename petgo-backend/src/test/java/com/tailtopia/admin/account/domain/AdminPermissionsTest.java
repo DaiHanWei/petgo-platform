@@ -132,7 +132,10 @@ class AdminPermissionsTest {
         // 2026-10-18（V1.4.0 ① Story 4.2 · AB-33）：调整用户 EXP growth.user_adjust（P-5 预授 OPS_MANAGER）⇒ 80 + 1 = 81。
         // 2026-10-19（V1.4.0 ② Story 4.3 · AD-15）：运营补发宠物名额 user.pet_slot_adjust（预授 OPS_MANAGER）⇒ 81 + 1 = 82
         //     （① 等级线 +3、② 多宠物线 +1，两线合入 dev_1.4.0 后实测）。
+        // 2026-10-18（V1.4.0 ③ gift Story 3.1）：gift.catalog_view / gift.catalog_edit（不预授）⇒ 82 + 2 = 84。
+        // 2026-10-18（V1.4.0 ③ gift Story 3.2）：送礼记录 gift.order_view（导出同码，不另设，不预授）⇒ 84 + 1 = 85
+        //     （2026-10-19 ③ 送礼线合入 dev_1.4.0 后实测：① +3、② +1、③ +3）。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(82);
+        assertThat(all).hasSize(85);
     }
 }

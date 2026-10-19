@@ -1,6 +1,6 @@
 # Story 2.2: App——统计卡礼物格、礼物页、详情礼物区、通知中心
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 gift · 分支 `feat/1.4.0-gift`
 > 口径优先级：`decision-log.md` ③ 节 > `送礼/1-4-0送礼prd.md` > `architecture-v1.4.0-gift-delta.md` > UI 稿 `送礼/ui-1-4-0-gift-integrated-v1.html`（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。
@@ -46,7 +46,7 @@ so that 礼物被看见。
 **AC4 — Diary 详情礼物区** `[L0]` `[L2]`（FR-149.3、PRD AC14 单宠部分、decision-log ③ Q3、UI 稿 A3 / A5 / A6）
 1. `ContentDetail`（`content_detail.dart`:8，`fromJson` :134）加 `final List<GiftPetSummary> giftPets`（缺键 → 空表）。
 2. `content_detail_page.dart`：礼物区插在场所条（:313-317 `_DetailCheckinPlaceStrip`）之后、分隔线（:319 `Divider`）之前；`giftPets` 为空不渲染（Moment / Tips / 无关联宠物）。作者区（:368 `_authorRow`）与图片区（:249 `_ImageCarousel(...)` 调用、:579 类定义）**不动**。
-3. 结构（A3）：浅紫底卡（`AppColors.mintTint2` #F8F6FF，圆角 16）→ 小标题 `giftDetailSectionTitle.toUpperCase()`（「HADIAH」，照 `detailCommentsTitle` 的大写写法）→ 每只宠物一张白色小卡：头像 32 + 名字 + `giftDetailCount`「24 hadiah」+ `wallPreview` 最多 3 个叠放小圆片图标 +「+N」（N = `kindCount − wallPreview.length`，0 不显示）+「›」；点该行 → `GiftPage.routeFor(petId)`（游客先 `requireLogin`）。
+3. 结构（A3）：浅紫底卡（`AppColors.mintTint2` #F8F6FF，圆角 16）→ 小标题 `giftZoneTitle.toUpperCase()`（「HADIAH」；T0：1.3 已建该键并已在 `GiftDetailZone` 渲染，不另建 `giftDetailSectionTitle`）→ 每只宠物一张白色小卡：头像 32 + 名字 + `giftDetailCount`「24 hadiah」+ `wallPreview` 最多 3 个叠放小圆片图标 +「+N」（N = `kindCount − wallPreview.length`，0 不显示）+「›」；点该行 → `GiftPage.routeFor(petId)`（游客先 `requireLogin`）。
 4. A5（该宠物 0 礼物）：副标题 `giftDetailEmpty`「Belum ada hadiah. Jadi yang pertama!」，无图标、无「›」，**仍可点进 E3 / E4 空态**（UI 稿 A5「实际也可点进 E3 空态，第三步定」→ 按可点实现，统一行为）。
 5. 「Kirim Hadiah」按钮位于礼物区卡片底部、整宽、**次级样式**（白底紫字 + `AppColors.dashedViolet` #C2B0EC 描边，UI 稿 A3 第三步视觉）——按钮本身与显隐规则（`isAuthor` 不显示、A6）**属 Story 1.3**；若 1.3 已在别处放了按钮，本 story 把它挪进礼物区卡片底部，不改其行为与埋点。
 6. A6（自己的 Diary）：礼物区照常展示、点行进 E2，无「Kirim Hadiah」。
@@ -87,7 +87,7 @@ so that 礼物被看见。
 | `giftPageEmptyVisitorHint` | Be the first to send {petName} a gift. | Jadi yang pertama kirim hadiah untuk {petName}. | E3 |
 | `giftPageEmptyOwnerHint` | Gifts from friends will show up here. | Hadiah dari teman akan muncul di sini. | E4 |
 | `giftLoadMoreFailed` | Couldn't load | Gagal memuat | E7（后接现有 `commonRetry`） |
-| `giftDetailSectionTitle` | Gifts | Hadiah | 详情礼物区标题（渲染时 `toUpperCase()`） |
+| ~~`giftDetailSectionTitle`~~ | — | — | T0：不建；复用 1.3 已有 `giftZoneTitle`（Gifts / Hadiah，同值同用处） |
 | `giftDetailCount` | {count, plural, =1{1 gift} other{{count} gifts}} | {count} hadiah | 详情宠物行 |
 | `giftDetailEmpty` | No gifts yet. Be the first! | Belum ada hadiah. Jadi yang pertama! | A5 |
 | `giftNotifyReceivedTitle` | New gift | Hadiah baru | 收礼通知无 actorName 兜底 |
@@ -106,13 +106,13 @@ so that 礼物被看见。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：2.1 实际 DTO 字段名；1.2 的 `PET_GIFT_RECEIVED` targetRef（预期数字 petId）与 `GIFT_UNDELIVERED_REFUND` 的 title / body / targetRef（预期订单 token）；1.3 的 `features/gift/` 结构、送礼面板打开函数签名、按钮 arb 键、`gift_` 前缀是否已登记、分享 token 态是否拿到 petId。有出入先改本文件并在 Completion Notes 记一句
-- [ ] **T1** `lib/shared/format/idr_compact.dart` + 测试（AC1）
-- [ ] **T2** 统计格：`ArchiveStats`、`PetInfoCard`、`DiaryHeader`、三个调用方、`DiaryDemoData`（AC2）
-- [ ] **T3** 礼物页：数据层 + provider + `GiftPage`（E1 ~ E7）+ 路由（AC3）
-- [ ] **T4** 详情礼物区：`ContentDetail` 模型 + `content_detail_page.dart` 插入（AC4）
-- [ ] **T5** 通知中心 + 深链（AC5 / AC6）
-- [ ] **T6** 埋点 + 守卫登记（AC7）；arb 两份（AC8）
+- [x] **T0 开工核对**：2.1 实际 DTO 字段名；1.2 的 `PET_GIFT_RECEIVED` targetRef（预期数字 petId）与 `GIFT_UNDELIVERED_REFUND` 的 title / body / targetRef（预期订单 token）；1.3 的 `features/gift/` 结构、送礼面板打开函数签名、按钮 arb 键、`gift_` 前缀是否已登记、分享 token 态是否拿到 petId。有出入先改本文件并在 Completion Notes 记一句
+- [x] **T1** `lib/shared/format/idr_compact.dart` + 测试（AC1）
+- [x] **T2** 统计格：`ArchiveStats`、`PetInfoCard`、`DiaryHeader`、三个调用方、`DiaryDemoData`（AC2）
+- [x] **T3** 礼物页：数据层 + provider + `GiftPage`（E1 ~ E7）+ 路由（AC3）
+- [x] **T4** 详情礼物区：`ContentDetail` 模型 + `content_detail_page.dart` 插入（AC4）
+- [x] **T5** 通知中心 + 深链（AC5 / AC6）
+- [x] **T6** 埋点 + 守卫登记（AC7）；arb 两份（AC8）
 - [ ] **T7** `flutter analyze` + 相关测试；Android 模拟器演示 E1 与统计卡（L2，留本地）
 
 ## Dev Notes
@@ -141,6 +141,13 @@ so that 礼物被看见。
 | `lib/core/theme/colors.dart` | `gold` #F6A609（:46）、`goldTint`（:57）、`mintTint2` #F8F6FF（:24）、`dashedViolet` #C2B0EC（:41）；**无** #A7A7A7 / #C98A5A | 新增 `rankSilver` / `rankBronze` 两个 token | 既有色值 |
 | `lib/l10n/app_en.arb` / `app_id.arb` | 无任何 `gift*` 键；`feedDeletedUser`（id :256 / en :389）、`detailNetworkError`（id :260）、`commonRetry`（id :2114） | 加 AC8 的键 | — |
 | `test/analytics/v112_events_test.dart` | 前缀白名单 `allowedPrefixes`（:216 起）、词尾 `allowedSuffixes`（:346）、属性 `propNames`（:491 起） | 登记 `gift_`（若 1.3 未做）、`is_owner` | 规则本身 |
+
+### T0 核对结果（2026-10-18，对照 1.2 = 0feee5e6、1.3 = 6b9a645c、2.1 = dcfe4531；优先于上表行号）
+
+- 2.1 实际 DTO：`GET /api/v1/pets/{petId}/gifts` → `PetGiftShowcaseResponse{pet{petId,name,avatarUrl,petType}, viewerIsOwner, totalValue, giftCount, supporterCount, wall[GiftWallItemView{nameEn,nameId,iconUrl,unitPrice,count}]}`；`/gifts/supporters?cursor=` → `GiftSupporterPage{items, nextCursor?}`，`GiftSupporterRow{rank, nickname?, avatarUrl?, deleted, totalAmount, giftCount, gifts[{iconUrl,nameEn,nameId,count}], moreKinds}`；详情 `giftPets[GiftPetSummaryView{petId,name,avatarUrl,totalValue,giftCount,kindCount,wallPreview[GiftWallItemView]}]`；统计 `giftTotalValue`（`ArchiveStatsResponse` / `VisitorStats` 同名）。墙「N jenis」= `wall.length`。
+- 1.2：`PET_GIFT_RECEIVED.targetRef = String.valueOf(petId)`（一致）；`GIFT_UNDELIVERED_REFUND` 后端渲染 title / body（一致）。
+- 1.3：`features/gift/{data/gift_repository.dart, domain/, presentation/{gift_send_flow.dart, gift_panel_sheet.dart, widgets/gift_entry.dart}}`；`runGiftSendFlow({context, ref, recipient: GiftRecipientRef, source, flightTargetKey?, onDelivered?})`；按钮键 `giftSendButton`；详情页礼物区 1.3 已建 `GiftDetailZone(postId)`（标题 `giftZoneTitle`、次级按钮 `ValueKey('giftDetailSendButton')`，显隐 `_showGiftZone`）→ 本 story 在其内加宠物行、按钮保持在卡片底部；`source` 常量只有 `diary_tab` / `content_detail`，本 story 加 `giftSourceGiftPage = 'gift_page'`。`gift_` 前缀 1.3 已登记（`v112_events_test.dart`:348），`_opened` 在 :388，`propNames` 在 :497。分享 token 态 1.3 **未**拿到 petId（1.3「待确认 1」）→ AC2.6 走「只显示数值、不可点」。
+- 行号更正：`pet_info_card.dart` 中间格 :171；`diary_header.dart` `consultCount` :35 / :75、透传 :140；`growth_archive_page.dart` :450；`visitor_archive_view.dart` `DiaryHeader(...)` :108-123；`content_detail_page.dart` 场所条 :320-323、1.3 礼物区 :326、Divider :328。
 
 ### 实现提示
 
@@ -198,10 +205,83 @@ so that 礼物被看见。
 
 ### Agent Model Used
 
+Claude (cloud dev agent)
+
 ### Debug Log References
+
+- `cd petgo_app && flutter gen-l10n` ✅；`flutter analyze` ✅ No issues found（基线 0 → 0）。
+- 新增 / 更新的相关测试单跑全绿；`flutter test` 全量 ✅ `+3543 ~1: All tests passed!`（~1 为既有 skip，非本 story）。
+- `bash scripts/ci/check-flyway-versions.sh origin/main` → OK（本 story 无迁移、无后端改动，未跑 mvn）。
+- 测试踩点：粉丝榜「滚入视口」判定在滚动回调里做时区块可能这一帧才建出来 → 滚动回调里另挂一次 post-frame 复判（`gift_page_test` 的滚入用例锁住）。
 
 ### Completion Notes List
 
+- **T0 开工核对（对照 1.2 = 0feee5e6、1.3 = 6b9a645c、2.1 = dcfe4531）**：2.1 DTO / 1.2 targetRef 与本文件一致；**改了本文件四处**：① 新增「T0 核对结果」小节（实际 DTO 字段名、1.3 实际文件 / 函数签名 / 按钮键、行号更正）；② 详情礼物区小标题改用 1.3 已建的 `giftZoneTitle`（同值同用处），AC4.3 与 AC8 表中 `giftDetailSectionTitle` 划掉不建；③ 1.3 已在详情页建 `GiftDetailZone`（标题 + 次级按钮），本 story 在其内加宠物行、按钮保持在卡片底部，不改其行为与埋点；④ `source = gift_page` 常量 1.3 未建 → 本 story 在 `gift_send_flow.dart` 加 `giftSourceGiftPage`。前序对外契约未改。
+- AC1：`lib/shared/format/idr_compact.dart`（`formatIdrCompact` / `idrCompactParts`，纯整数、向下截断、与语言无关）；测试逐行照抄 2.1 AC7 用例表 17 行 + parts 4 例，文件头写明对端 Java 路径。`toko_page_v2._compactIdr` 未动。
+- AC2：`ArchiveStats.giftTotalValue`（缺键 0，`consultCount` 保留）；`PetInfoCard` 中间格换礼物格（`Text.rich` 三段 span，单位 0.6 倍，颜色 mint；`onOpenGifts` 非 null → `InkWell`（Key `petInfoGiftStat`）热区 ≥ 44 + 紫色「›」）；`DiaryHeader` 参数 `consultCount` → `giftTotalValue` + `onOpenGifts`；主人 → `GiftPage.routeFor(profile.id)`；站内访客 → `GiftPage.routeFor(scope.petId)`；游客示例 `DiaryDemoData.giftTotalValue = 188000`（Rp188rb）、不可点。**分享 token 态无 petId → 只显示数值、不可点**（AC2.6，见待确认 1）。
+- AC3：`GiftPage`（`/pets/:petId/gifts` 独立顶层路由，注册在访客路由前；`int.tryParse` 失败 → petId 0 → 直接 E6 不发请求；不进受控前缀）；数据 `GiftRepository.getPetGifts / getSupporters` + `petGiftShowcaseProvider`（autoDispose family、`retry: null`）+ `GiftSupportersController`（autoDispose family Notifier，加载更多照 `PostLikersController` / 钱包页写法，build 代际防旧结果回写）。E1 ~ E7 全部实现；墙默认 8 格 +「Lihat semua ▾」、`?wall=expanded` 初始全开；排名圆金 / 银 / 铜（新增 token `AppColors.rankSilver` #A7A7A7 / `rankBronze` #C98A5A）+ 第 4 名起 `line2` 灰底灰字；注销者 `LetterAvatar(deleted)` +「Pengguna terhapus」；金额 `Rp{formatIdrAmount}` 14 号等宽；403 / 404 / 其它错误一律 E6；榜首页失败 = 区块内行内重试，下一页失败 = E7 行内重试（只补下一页）。首页不足一屏时 post-frame 自动补一次加载更多。访客吸底按钮调 `runGiftSendFlow(recipient: pet(petId), source: gift_page)`，送达后失效汇总与榜。
+- AC4：`ContentDetail.giftPets`（`GiftPetSummary.listFromJson`，缺键空表；`withFollowEpoch` 透传）；礼物区改为 `giftPets` 非空才渲染（自己的 Diary A6 也展示），「Kirim Hadiah」显隐仍走 1.3 `_showGiftZone`；卡片 `mintTint2` 圆角 16、白色宠物行（头像 32、名字、`giftDetailCount` / A5 `giftDetailEmpty`、3 个叠放小圆片、「+N」、「›」）；点行 `requireLogin` 后 push 礼物页（A5 也可点）。作者区 / 图片区未动。
+- AC5：`serverCopyTypes` 加 `PET_GIFT_RECEIVED`（沿用 `_serverTitle` 加粗 actorName；无 actorName → `giftNotifyReceivedTitle / Body`）；`_iconStyle` 收礼金色 `redeem_rounded`、退回紫色钱包；`GIFT_UNDELIVERED_REFUND` 在 `_typeLabel / _typeBody` 读后端 title / body（P-5），空则分别回落 `giftNotifyRefundTitle / giftNotifyRefundBodyFallback`，并在两处与 :1189 注释补理由。展开逻辑、`_notifTypeForAnalytics` 未改。
+- AC6：`pushPayloadToLocation`：`PET_GIFT_RECEIVED` + 数字 targetRef → `/pets/{id}/gifts?wall=expanded`（非数字 → 通知中心）；`GIFT_UNDELIVERED_REFUND` → `DeepLinkRoutes.giftOrders = '/me/gift-orders'`（页面 / 路由由 2.3 落地）。通知中心点收礼条目：`go('/profile')` 后 post-frame `push` 礼物页（返回即 Diary Tab）。系统推送冷 / 热启动走既有 `_goDeepLinkWith`，未改。
+- AC7：`gift_wall_opened`（initState 里 `listenManual` 首个 data 报一次）/ `gift_sender_list_opened`（`ScrollController` + 区块 `GlobalKey` 判进入视口，首屏可见首帧报，只报一次），属性均 `{is_owner}`；`v112_events_test` 的 `propNames` 加 `is_owner`（`gift_` 前缀 1.3 已登记、`_opened` 已在词尾表），`v140_gift_events_test` 对账表补两条。守卫未删、正则未放宽。
+- AC8：两份 arb 各加 18 键（AC8 表减去复用的 `giftZoneTitle`），EN 带 `@key` 描述与占位符类型；复用 `feedDeletedUser` / `detailNetworkError` / `commonRetry` / `giftSendButton`；`petInfoStatConsult` 保留。
+- AC9：被按设计打破的既有测试已更新断言（未删未 skip）：`growth_archive_r2_test`（Consultations → `Rp53rb` +「Gifts ›」）、`visitor_archive_view_test`（`'3'` → `Rp188rb`、分享 token 态不可点；新增站内态点礼物格 push 用例）、`gift_entry_visibility_test`（1.3 详情礼物区用例补 `giftPets`、源码顺序断言改匹配 `GiftDetailZone(`）。无 golden、未整文件 `dart format`、无新依赖、无后端改动。
+
+#### L1/L2 待本地验收
+
+- L1：无（本 story 只 App，无后端改动）。
+- L2（Android 模拟器 + stag 后端）：A1 / A2 统计卡（Rp53rb 分字号、紫色「›」、点进 E1 / E2）与礼物页 E1 对照 UI 稿还原度 ≥ 95%；E2 ~ E7 各态目视；详情礼物区 A3 / A5 / A6 视觉（浅紫卡、叠放图标、次级按钮）；通知中心 G1 / G3 视觉。
+- L2：真机点收礼推送冷启动 / 热启动 → 落礼物页（墙展开），返回到 Diary Tab；点通知中心收礼条目同样行为。
+- L2：退回通知点击进送礼记录（`/me/gift-orders` 页面由 Story 2.3 落地，2.3 完成后验证；在此之前点击会落 go_router 未匹配页）。
+- L2：游客在详情页点宠物行 → 登录强弹窗（L0 只覆盖已登录路径）。
+
+#### 待确认
+
+1. **分享 token 态（`/pet/:token`）礼物格不可点**（AC2.6）：1.3 未为该态拿到 petId（1.3 待确认 1），本 story 不擅自给公开投影加 petId → 只显示数值。若产品要可点，需后端在分享投影下发可寻址标识（petId 或新 token）。
+2. **退回通知在 2.3 前点击无落地页**：`/me/gift-orders` 路由由 2.3 新增；本 story 只做映射（按本文件 AC6.2）。
+3. **详情礼物区显示条件改为「有 `giftPets` 即显示」**：作者已注销的他人 Diary 若后端仍下发 `giftPets`，礼物区照常显示宠物行、无「Kirim Hadiah」（按钮仍走 1.3 规则）；如需整区隐藏再定。
+4. **礼物页加载中 / 失败态 AppBar 标题**用「Hadiah」（`giftStatLabel`）：UI 稿 E5 / E6 画的是「Hadiah Mochi」，但拿到数据前 App 不知道宠物名（路由只带 petId）；如需完全一致，可让入口经 `extra` 传宠物名，待定。
+5. **E3 / E4 空态**只显示空态组件（不显示汇总卡 / 墙 / 榜），与 UI 稿 E3 一致。
+6. **墙格图标回退**沿用 1.3 `giftIcon` 的 `Icons.redeem`（本文件写 `redeem_rounded`），同一视觉族，保持 gift 模块内一致。
+7. 所有新 EN 文案为本文件给定值；ID 取 UI 稿 / 本文件原文。
+
 ### File List
 
+**新增（petgo_app/）**
+- `lib/shared/format/idr_compact.dart`
+- `lib/features/gift/domain/gift_showcase.dart`
+- `lib/features/gift/presentation/gift_page.dart`
+- `lib/features/gift/presentation/gift_supporters_controller.dart`
+- `test/shared/format/idr_compact_test.dart`
+- `test/profile/pet_info_card_gift_stat_test.dart`
+- `test/gift/gift_page_test.dart`
+- `test/gift/gift_route_test.dart`
+- `test/content/content_detail_gift_area_test.dart`
+- `test/notify/gift_notification_test.dart`
+
+**修改（petgo_app/）**
+- `lib/core/network/api_paths.dart`（`petGiftSupporters`）
+- `lib/core/router/app_router.dart`（礼物页顶层路由）
+- `lib/core/router/deep_link_routes.dart`（`PET_GIFT_RECEIVED` / `GIFT_UNDELIVERED_REFUND`、`giftOrders`）
+- `lib/core/theme/colors.dart`（`rankSilver` / `rankBronze`）
+- `lib/features/content/domain/content_detail.dart`（`giftPets`）
+- `lib/features/content/presentation/content_detail_page.dart`（礼物区显示条件 + 传参）
+- `lib/features/gift/data/gift_repository.dart`（`getPetGifts` / `getSupporters` / `petGiftShowcaseProvider`）
+- `lib/features/gift/presentation/gift_send_flow.dart`（`giftSourceGiftPage`）
+- `lib/features/gift/presentation/widgets/gift_entry.dart`（`GiftDetailZone` 宠物行）
+- `lib/features/notify/domain/notification_item.dart`（`serverCopyTypes`）
+- `lib/features/notify/presentation/notification_center_page.dart`（图标、标题 / 正文、收礼点击）
+- `lib/features/profile/domain/archive_stats.dart`、`domain/diary_demo_data.dart`
+- `lib/features/profile/presentation/diary_guest_page.dart`、`growth_archive_page.dart`、`visitor_archive_view.dart`、`widgets/diary_header.dart`、`widgets/pet_info_card.dart`
+- `lib/l10n/app_en.arb` / `lib/l10n/app_id.arb`（+18 键）
+- `test/analytics/v112_events_test.dart`（`propNames` + `is_owner`）、`test/analytics/v140_gift_events_test.dart`（对账 +2）
+- `test/gift/gift_entry_visibility_test.dart`、`test/notify/deep_link_routes_test.dart`、`test/profile/growth_archive_r2_test.dart`、`test/profile/visitor_archive_view_test.dart`
+
+**修改（实现产物）**
+- `_bmad-output/implementation-artifacts/v1.4.0/2-2-app统计卡礼物格-礼物页-详情礼物区-通知中心.md`（T0 修订 + 本记录）
+- `_bmad-output/implementation-artifacts/v1.4.0/sprint-status-v1.4.0-gift.yaml`（2-2 → review）
+
 ### Change Log
+
+- 2026-10-18：T0 核对后修订本文件（T0 核对结果小节、`giftZoneTitle` 复用、1.3 `GiftDetailZone` 扩展、`gift_page` source 常量）；实现 App 金额缩写工具、统计卡礼物格、礼物页 E1 ~ E7 + 路由、详情礼物区、通知中心 G1 ~ G3 与深链、埋点与文案；L0 全绿（analyze 0 issue、flutter test 全量 +3543 ~1）；状态 → review（L2 待本地验收）。
+- 2026-10-18（code-review 复审）：修 `GiftSupportersController.loadMore` 在刷新（送达后 invalidate）进行中仍用旧游标续页、旧页可能晚到盖掉新首页 → 加 `state.isLoading` 守卫 + `gift_page_test` 回归用例；L0 复跑全绿。

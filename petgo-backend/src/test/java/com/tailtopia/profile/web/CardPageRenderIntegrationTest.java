@@ -216,6 +216,33 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
         assertThat(html).contains("Unduh App untuk lihat").contains("baru mulai!");
     }
 
+    /**
+     * V1.4.0 gift Story 2.1 · AC6：票根第二列 Konsultasi → Hadiah（礼物总价值缩写），始终渲染；0 显示「Rp0」。
+     *
+     * <p>汇总表行用 JDBC 直接造（本类只验模板渲染；交付路径由 {@code GiftShowcaseEndpointTest} 覆盖）。
+     */
+    @Test
+    void stubShowsGiftTotalValueInsteadOfConsultations() throws Exception {
+        User owner = newUser();
+        String token = createProfileAndGetToken(owner);
+        String zero = render(token);
+        assertThat(zero).contains("Hadiah").doesNotContain("Konsultasi");
+        assertThat(zero).contains("<span class=\"u\">Rp</span><span>0</span>");
+
+        long petId = profiles.findDefault(owner.getId()).orElseThrow().getId();
+        long n = SEQ.incrementAndGet();
+        Long giftId = jdbc.queryForObject("""
+                INSERT INTO gift_catalog (public_token, name_en, name_id, icon_url, price, kind)
+                VALUES (?, 'Cake', 'Kue', 'https://cdn/cake.png', 47000, 'NORMAL') RETURNING id""",
+                Long.class, "cr" + n);
+        jdbc.update("""
+                INSERT INTO gift_pet_wall (pet_id, gift_id, unit_price, gift_name_en, gift_name_id, gift_icon_url, count)
+                VALUES (?, ?, 47000, 'Cake', 'Kue', 'https://cdn/cake.png', 4)""", petId, giftId);
+        String html = render(token);
+        assertThat(html).contains("Hadiah").doesNotContain("Konsultasi");
+        assertThat(html).contains("<span class=\"u\">Rp</span><span>188</span><span class=\"u\">rb</span>");
+    }
+
     /** 存量档案没有生日 / 性别 / 品种也能正常渲染（AC3 的容错半条）。 */
     @Test
     void profileWithMinimalDataStillRenders() throws Exception {

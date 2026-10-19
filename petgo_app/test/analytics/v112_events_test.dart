@@ -353,6 +353,11 @@ void main() {
         // 挂到 `me_` / `diary_` 都会误导；新模块入表，非为遗留事件放宽。
         // ⚠️ 与既有 `pet_card_`（对外 H5 名片）语义不同、互不吞并：那组前缀照留。
         'pet_',
+        // V1.4.0 ③ 送礼，新模块入表，名字由 PRD §4 定、按词尾规则改名两条
+        // （`gift_paid` → `gift_payment_succeeded`、`gift_qris_blocked_low_amount` → `gift_qris_low_amount_shown`；
+        // 映射表见 `v140_gift_events_test.dart`）。模块是「送礼」——入口横跨访客视图、详情页、礼物页三处。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则；不加新后缀。
+        'gift_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -543,6 +548,8 @@ void main() {
         // 不外露自增 id；source ∈ {push, notification_center}（'source' 已在上方）。
         'campaign_id',
         'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
+        // V1.4.0 gift Story 2.2（PRD §4）：gift_wall_opened / gift_sender_list_opened 区分主人与访客视角。
+        'is_owner',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

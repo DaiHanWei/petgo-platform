@@ -30,6 +30,9 @@ class ContentDetailControllerEndpointTest extends ApiIntegrationTest {
     @Autowired
     private CommentRepository comments;
 
+    @Autowired
+    private com.tailtopia.profile.repository.PetProfileRepository petProfiles;
+
     private ContentPost savePost(long authorId, String text) {
         return posts.save(ContentPost.publish(authorId, ContentType.DAILY, null, text, List.of()));
     }
@@ -62,6 +65,34 @@ class ContentDetailControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.isAuthor").value(false))
                 .andExpect(jsonPath("$.liked").value(false))
                 .andExpect(jsonPath("$.commentCount").value(0));
+    }
+
+    /** V1.4.0 gift Story 2.1 · AC5：Diary（关联宠物）详情带 giftPets 一项（0 礼物照常一项）；Moment 不带。 */
+    @Test
+    void diaryDetailCarriesGiftPetsAndMomentDoesNot() throws Exception {
+        User author = newUser();
+        var pet = petProfiles.save(com.tailtopia.profile.domain.PetProfile.create(author.getId(),
+                com.tailtopia.profile.domain.PetType.CAT, "Mochi", null, null, null, null,
+                "CD-" + SEQ.incrementAndGet()));
+        ContentPost diary = posts.save(ContentPost.publish(author.getId(), ContentType.GROWTH_MOMENT, pet.getId(),
+                "diary", List.of(), java.time.LocalDate.of(2026, 10, 1)));
+        ContentPost moment = savePost(author.getId(), "moment");
+        User viewer = newUser();
+
+        mvc.perform(get("/api/v1/content-posts/" + diary.getId())
+                        .header("Authorization", userBearer(viewer.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.giftPets.length()").value(1))
+                .andExpect(jsonPath("$.giftPets[0].petId").value(pet.getId().intValue()))
+                .andExpect(jsonPath("$.giftPets[0].name").value("Mochi"))
+                .andExpect(jsonPath("$.giftPets[0].totalValue").value(0))
+                .andExpect(jsonPath("$.giftPets[0].giftCount").value(0))
+                .andExpect(jsonPath("$.giftPets[0].kindCount").value(0))
+                .andExpect(jsonPath("$.giftPets[0].wallPreview.length()").value(0));
+        mvc.perform(get("/api/v1/content-posts/" + moment.getId())
+                        .header("Authorization", userBearer(viewer.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.giftPets").doesNotExist());
     }
 
     @Test

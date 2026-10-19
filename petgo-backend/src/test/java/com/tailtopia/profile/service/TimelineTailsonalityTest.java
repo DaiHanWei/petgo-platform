@@ -71,7 +71,9 @@ class TimelineTailsonalityTest {
         service = new TimelineService(petResolver, contentService, healthProvider,
                 Mockito.mock(MilestoneService.class), Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, completions, idCards,
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class), checkins, unlocks);
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class), checkins, unlocks,
+                // V1.4.0 gift Story 2.1：统计卡礼物总价值（本类不验它，给 mock）。
+                Mockito.mock(com.tailtopia.gift.service.GiftShowcaseQuery.class));
     }
 
     private static TailsonalityTimelineView unlock(long id, String unlockedIso, String testedOn) {

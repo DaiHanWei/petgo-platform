@@ -7,6 +7,7 @@ class ArchiveStats {
     required this.milestoneTotal,
     this.healthRecordCount = 0,
     this.milestoneUncelebrated = 0,
+    this.giftTotalValue = 0,
   });
 
   final int happyMomentCount;
@@ -30,6 +31,10 @@ class ArchiveStats {
   /// 否则用户从档案 Tab 点进列表页会被连弹两次。
   final int milestoneUncelebrated;
 
+  /// 这只宠物收到的礼物总价值（IDR，V1.4.0 gift Story 2.1 / 2.2 · AD-10）：Diary 统计卡中间格。
+  /// 主人与访客同一数值；缺键（老后端）按 0。⚠️ [consultCount] 保留（`/card/preview` 旧页还在读）。
+  final int giftTotalValue;
+
   factory ArchiveStats.fromJson(Map<String, dynamic> json) => ArchiveStats(
         happyMomentCount: (json['happyMomentCount'] ?? 0) as int,
         consultCount: (json['consultCount'] ?? 0) as int,
@@ -37,5 +42,6 @@ class ArchiveStats {
         milestoneTotal: (json['milestoneTotal'] ?? 0) as int,
         healthRecordCount: (json['healthRecordCount'] ?? 0) as int,
         milestoneUncelebrated: (json['milestoneUncelebrated'] ?? 0) as int,
+        giftTotalValue: (json['giftTotalValue'] as num?)?.toInt() ?? 0,
       );
 }

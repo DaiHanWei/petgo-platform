@@ -360,6 +360,19 @@ public class SecurityConfig {
                         // 与 users.id 撞号 —— 落 anyRequest().authenticated() 会以同号用户名义提交 / 读取。不写 pet-profiles 通配。
                         .requestMatchers("/api/v1/pet-profiles/me/tailsonality",
                                 "/api/v1/pet-profiles/me/tailsonality/**").hasRole("USER")
+                        // 送礼（V1.4.0 gift Story 1.1）：目录 / 发起 / 单笔状态，controller 把 jwt.sub 当 users.id 用 ——
+                        // 兽医 token 的 sub 与 users.id 撞号，落 anyRequest().authenticated() 会以同号用户名义扣币送礼 / 读订单。
+                        // 精确路径，不写通配：不影响 /api/v1/pets/*/visitor/**，也不影响 Story 2.3 的列表 /api/v1/me/gift-orders。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/gifts/catalog").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/pets/*/gifts").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/gift-orders/*").hasRole("USER")
+                        // 我的送礼记录（V1.4.0 gift Story 2.3）：上一条通配匹配不到不带段的列表路径 → 补精确路径，
+                        // 不加会落 anyRequest().authenticated()，兽医 token 能以同号用户名义读送礼记录。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/gift-orders").hasRole("USER")
+                        // 礼物页（V1.4.0 gift Story 2.1）：汇总 + 墙 / 粉丝榜。主人视角靠 viewerId == ownerId 判定，
+                        // 兽医 token 的 sub 与 users.id 撞号会被误判成主人 → 只给 USER。精确路径，不影响 /api/v1/pets/*/visitor/**。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts/supporters").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

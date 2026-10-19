@@ -27,6 +27,7 @@ import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.notify.port.NotificationPetNames;
 import com.tailtopia.ops.target.OpsTargetType;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.paging.KeysetCursor;
@@ -52,6 +53,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -88,6 +91,17 @@ class NotificationCenterServiceTest {
     @Mock
     OpsNotificationCampaignRepository campaigns;
 
+    /** 收礼宠物名端口（V1.4.0 gift Story 1.2）；null = 缺 bean（切片测试场景）。 */
+    NotificationPetNames petNamesPort;
+
+    private ObjectProvider<NotificationPetNames> petNamesProvider() {
+        StaticListableBeanFactory bf = new StaticListableBeanFactory();
+        if (petNamesPort != null) {
+            bf.addBean("notificationPetNames", petNamesPort);
+        }
+        return bf.getBeanProvider(NotificationPetNames.class);
+    }
+
     private NotificationCenterService service() {
         ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
         source.setBasename("classpath:i18n/messages");
@@ -95,7 +109,8 @@ class NotificationCenterServiceTest {
         source.setFallbackToSystemLocale(false);
         InteractionCopyRenderer copy = new InteractionCopyRenderer(accounts, hideRelations, source);
         InteractionActorResolver resolver = new InteractionActorResolver(repo, actorRepo, accounts, hideRelations);
-        return new NotificationCenterService(repo, redis, resolver, accounts, comments, followReader, copy, campaigns);
+        return new NotificationCenterService(repo, redis, resolver, accounts, comments, followReader, copy, campaigns,
+                petNamesProvider());
     }
 
     @Test
@@ -542,5 +557,86 @@ class NotificationCenterServiceTest {
         verifyNoInteractions(campaigns);
         assertThat(item.opsTarget().type()).isEqualTo("NONE");
         assertThat(item.opsTarget().value()).isNull();
+    }
+
+    // ===== V1.4.0 gift Story 1.2 · AC5.4：收礼条目带宠物名，一页一次批量取 =====
+
+    private Notification giftRow(long petId) {
+        Notification n = Notification.interaction(ME, NotificationType.PET_GIFT_RECEIVED, "兜底标题", "点击查看",
+                NotificationType.PET_GIFT_RECEIVED.name(), "tok" + seq, String.valueOf(petId), "GIFT:PET:" + petId,
+                null, null);
+        ReflectionTestUtils.setField(n, "id", seq++);
+        ReflectionTestUtils.setField(n, "createdAt", Instant.parse("2026-10-11T00:00:00Z"));
+        return n;
+    }
+
+    @Test
+    void giftRowsFetchPetNamesOnceAndRenderOneManyAndNoPet() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        Notification one = giftRow(70L);
+        Notification many = giftRow(70L);
+        Notification gone = giftRow(71L);
+
+        List<NotificationItem> items = page(List.of(one, many, gone),
+                Map.of(one.getId(), List.of(2L), many.getId(), List.of(3L, 4L, 5L), gone.getId(), List.of(6L)),
+                Set.of(), Set.of());
+
+        assertThat(items).extracting(NotificationItem::title).containsExactly(
+                "u2 mengirim hadiah untuk Mochi",
+                "u3 dan 2 lainnya mengirim hadiah untuk Mochi",
+                "u6 mengirim hadiah untuk hewanmu");
+        assertThat(items.get(1).actorCount()).isEqualTo(3);
+        assertThat(items.get(0).body()).as("收礼条目 body = null").isNull();
+        assertThat(items.get(0).targetRef()).isEqualTo("70");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
+        verify(petNamesPort, times(1)).namesOf(ids.capture());
+        assertThat(ids.getValue()).containsExactlyInAnyOrder(70L, 71L);
+        verify(actorRepo, times(1)).findByNotificationIds(anyCollection());
+        verify(accounts, times(1)).findActorViews(anyCollection());
+    }
+
+    @Test
+    void missingPetNamesPortRendersNoPetCopy() {
+        petNamesPort = null;
+        Notification many = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(many), Map.of(many.getId(), List.of(3L, 4L)), Set.of(),
+                Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u3 dan 1 lainnya mengirim hadiah untuk hewanmu");
+    }
+
+    @Test
+    void pageWithoutGiftRowsNeverCallsPetNamesPort() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        Notification like = row(NotificationType.CONTENT_LIKED, null, null);
+
+        page(List.of(like), Map.of(like.getId(), List.of(2L)), Set.of(), Set.of());
+
+        verifyNoInteractions(petNamesPort);
+    }
+
+    @Test
+    void giftRowWhoseSendersAreAllHiddenIsHiddenAndPetNamesNotFetched() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        Notification gift = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(2L)), Set.of(2L), Set.of());
+
+        assertThat(items).isEmpty();
+        verifyNoInteractions(petNamesPort);
+    }
+
+    @Test
+    void petNamesPortFailureFallsBackToNoPetCopy() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenThrow(new IllegalStateException("boom"));
+        Notification gift = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(2L)), Set.of(), Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u2 mengirim hadiah untuk hewanmu");
     }
 }

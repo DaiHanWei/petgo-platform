@@ -148,4 +148,80 @@ class InteractionCopyRendererTest {
         assertThatThrownBy(() -> renderer.title(NotificationType.VET_REPLY, null, new ActorSummary(1L, "x", "t", 0), ID))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    // ===== V1.4.0 gift Story 1.2 · AC5.3 / AC7：收礼文案 =====
+
+    private static final Locale ZH = Locale.SIMPLIFIED_CHINESE;
+
+    @Test
+    void giftReceivedOneAndManyWithPetName() {
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 0), ID,
+                "Mochi")).isEqualTo("Andi mengirim hadiah untuk Mochi");
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 2), ID,
+                "Mochi")).isEqualTo("Andi dan 2 lainnya mengirim hadiah untuk Mochi");
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 0), EN,
+                "Mochi")).isEqualTo("Andi sent a gift to Mochi");
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 2), EN,
+                "Mochi")).isEqualTo("Andi and 2 others sent gifts to Mochi");
+    }
+
+    @Test
+    void giftReceivedWithoutPetNameUsesNoPetCopy() {
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 0), ID,
+                null)).isEqualTo("Andi mengirim hadiah untuk hewanmu");
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 3), ID,
+                null)).isEqualTo("Andi dan 3 lainnya mengirim hadiah untuk hewanmu");
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 3), EN,
+                null)).isEqualTo("Andi and 3 others sent gifts to your pet");
+        // 4 参版本对收礼类型 = 无宠物名
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 0), ID))
+                .isEqualTo("Andi mengirim hadiah untuk hewanmu");
+    }
+
+    /**
+     * zh_CN 合并文案：story 原拟「{0} 等 {3} 人」（总人数），但后台 messages 占位符集合须四语一致
+     * （{@code AdminMessagesParityTest}），改为与既有点赞同式「和另外 {1} 人」；渲染仍传入 {3} = 总人数备用。
+     */
+    @Test
+    void giftReceivedZhCopyAndOthersWithoutThousandsSeparator() {
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 2), ZH,
+                "Mochi")).isEqualTo("Andi 和另外 2 人给 Mochi 送了礼物");
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 0), ZH,
+                null)).isEqualTo("Andi 给你的宠物送了礼物");
+        assertThat(renderer.title(NotificationType.PET_GIFT_RECEIVED, null, new ActorSummary(1L, "Andi", "t", 1234),
+                ID, "Mochi")).isEqualTo("Andi dan 1234 lainnya mengirim hadiah untuk Mochi");
+    }
+
+    @Test
+    void petNameIsIgnoredForExistingTypes() {
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", "t", 0), ID,
+                "Mochi")).isEqualTo("Rani menyukai postinganmu");
+    }
+
+    @Test
+    void giftPushTitleIsSingleOrderCopy() {
+        assertThat(renderer.giftPushTitle("Andi", "Tulang ×5", "Mochi", ID)).isEqualTo("Andi mengirim Tulang ×5 untuk Mochi");
+        assertThat(renderer.giftPushTitle("Andi", "Bone", "Mochi", EN)).isEqualTo("Andi sent Bone to Mochi");
+        assertThat(renderer.giftPushTitle("Andi", "Tulang ×5", "Mochi", ZH)).isEqualTo("Andi 给你的 Mochi 送了 Tulang ×5");
+        // 昵称 / 宠物名里的引号与花括号原样输出
+        assertThat(renderer.giftPushTitle("D'Arcy {0}", "Bone", "M'o", EN)).isEqualTo("D'Arcy {0} sent Bone to M'o");
+    }
+
+    @Test
+    void refundCopyRendersPetNameAmountAndReasonWithApostrophe() {
+        ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
+        source.setBasename("classpath:i18n/messages");
+        source.setDefaultEncoding(StandardCharsets.UTF_8.name());
+        source.setFallbackToSystemLocale(false);
+        String reasonEn = source.getMessage("notify.giftRefund.reason", null, EN);
+        assertThat(source.getMessage("notify.GIFT_UNDELIVERED_REFUND.body", new Object[] {"Mochi", "25,000", reasonEn},
+                EN)).isEqualTo("Your gift to Mochi wasn't delivered (this pet is no longer available). "
+                        + "25,000 PawCoin has been returned to your balance.");
+        String reasonId = source.getMessage("notify.giftRefund.reason", null, ID);
+        assertThat(source.getMessage("notify.GIFT_UNDELIVERED_REFUND.body", new Object[] {"Mochi", "25.000", reasonId},
+                ID)).isEqualTo("Hadiahmu untuk Mochi tidak terkirim (hewan ini sudah tidak ada). "
+                        + "25.000 PawCoin sudah dikembalikan ke saldomu.");
+        assertThat(source.getMessage("notify.GIFT_UNDELIVERED_REFUND.title", new Object[] {"Mochi", "25.000", reasonId},
+                ID)).isEqualTo("Hadiah tidak terkirim");
+    }
 }

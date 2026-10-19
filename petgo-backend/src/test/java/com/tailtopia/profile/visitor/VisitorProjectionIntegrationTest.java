@@ -266,13 +266,15 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
         assertThat(visitor.consultCount()).isEqualTo(author.consultCount());
         assertThat(visitor.milestoneCompleted()).isEqualTo(author.milestoneCompleted());
         assertThat(visitor.milestoneTotal()).isEqualTo(author.milestoneTotal());
+        // V1.4.0 gift Story 2.1：礼物总价值同源（复用作者态同一次计算）
+        assertThat(visitor.giftTotalValue()).isEqualTo(author.giftTotalValue());
 
         // 作者侧确实数到了健康记录（证明上面的 fixture 真的落库了，不是空断言）
         assertThat(author.healthRecordCount()).isEqualTo(2);
         // 🛡 访客侧连这个字段都没有 —— 装不下就不可能填错
         assertThat(VisitorStats.class.getRecordComponents())
                 .as("VisitorStats 多出了字段，检查是不是把 healthRecordCount 加回来了")
-                .hasSize(4);
+                .hasSize(5); // V1.4.0 gift Story 2.1：+ giftTotalValue
         assertThat(render(pet.getCardToken()))
                 .as("页面上不得出现健康记录条数")
                 .doesNotContain("Catatan kesehatan");

@@ -121,7 +121,9 @@ class TimelineCursorMergeTest {
                 // V1.3.2 Story 1.6：源⑥ 场所打卡（本类按需 stub；不声明能力时根本不调）。
                 placeCheckinQuery,
                 // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
-                tailsonalityTimeline);
+                tailsonalityTimeline,
+                // V1.4.0 gift Story 2.1：统计卡礼物总价值（本类不验它，给 mock）。
+                Mockito.mock(com.tailtopia.gift.service.GiftShowcaseQuery.class));
     }
 
     // ===== 锚点编解码（AC1） =====

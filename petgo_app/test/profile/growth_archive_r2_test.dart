@@ -31,7 +31,8 @@ AuthState _authA() => const AuthState(
 
 const _profile = PetProfile(id: 1, name: 'Momo', cardToken: 'T', breed: 'Shiba');
 const _stats =
-    ArchiveStats(happyMomentCount: 5, consultCount: 2, milestoneCompleted: 0, milestoneTotal: 30);
+    ArchiveStats(happyMomentCount: 5, consultCount: 2, milestoneCompleted: 0, milestoneTotal: 30,
+        giftTotalValue: 53000);
 
 Widget _wrapPage({
   TimelinePage? page,
@@ -71,16 +72,19 @@ TimelineItem _happy(int id, String eventDate) => TimelineItem(
 void main() {
   // ===== AC5 统计栏 / 里程碑 / 第一条 🌟 / 视图切换 =====
 
-  testWidgets('AC5: 护照卡内统计显示快乐时刻/问诊数', (tester) async {
+  testWidgets('AC5: 护照卡内统计显示快乐时刻 / 礼物总价值（V1.4.0 gift 2.2：问诊格换礼物格）', (tester) async {
     await tester.pumpWidget(_wrapPage());
     await tester.pumpAndSettle();
     // paspor.html 重做：统计三列并入护照卡（Momen Bahagia/Konsultasi/Milestone）。
     expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
     expect(find.text('5'), findsWidgets); // happy 5
-    expect(find.text('2'), findsWidgets); // consult 2
+    // V1.4.0 gift Story 2.2 · AC2.5：中间格 = 礼物总价值缩写（Rp53.000 → Rp53rb），不再出现 Consultations。
+    expect(find.text('Rp53rb'), findsOneWidget);
     // 默认英文 locale：统计列标题走 l10n（0718 改版：首列标题「Happy Moments」→「Diary」）。
     expect(find.text('Diary'), findsOneWidget);
-    expect(find.text('Consultations'), findsOneWidget);
+    expect(find.text('Consultations'), findsNothing);
+    // 主人视图礼物格可点（A2 → E2）：标签后带紫色「›」。
+    expect(find.text('Gifts ›'), findsOneWidget);
   });
 
   testWidgets('AC5: 里程碑入口零态进度 0 / N', (tester) async {

@@ -62,15 +62,20 @@ public class AdminUserController {
     /** V1.4.0 ② Story 4.3：「宠物与名额」页签取数（随抽屉同一次渲染，切页签不再请求）。 */
     private final com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs;
 
+    /** V1.4.0 ③ gift Story 3.2：「收送礼记录」页签首屏（默认送出第 1 页 + 两个计数）。 */
+    private final com.tailtopia.admin.gift.service.AdminUserGiftsService userGifts;
+
     public AdminUserController(AdminUserService adminUserService,
             Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases,
             com.tailtopia.admin.growth.service.AdminGrowthUserService growth,
-            com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs) {
+            com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs,
+            com.tailtopia.admin.gift.service.AdminUserGiftsService userGifts) {
         this.adminUserService = adminUserService;
         this.msg = msg;
         this.purchases = purchases;
         this.growth = growth;
         this.petSlotTabs = petSlotTabs;
+        this.userGifts = userGifts;
     }
 
     @GetMapping("/admin/users")
@@ -137,6 +142,8 @@ public class AdminUserController {
         model.addAttribute("user", adminUserService.detail(userId, canSeePhone));
         // 第六页签「已购解锁」（AB-23）：读业务表解锁状态，PawCoin 付的也查得到。只读、无 PII，权限沿用本抽屉。
         model.addAttribute("purchases", purchases.forUser(userId));
+        // V1.4.0 ③ gift Story 3.2「收送礼记录」页签（权限沿用本抽屉；胶囊切换 / 翻页走 AdminUserGiftsController 只换本页签）。
+        model.addAttribute("giftsTab", userGifts.firstPage(userId));
         // 赠币表单一次性幂等 token（bug 20260728-389）：防双击/回退重提交重复入账。
         model.addAttribute("grantToken", java.util.UUID.randomUUID().toString());
         // 第七页签「成长值」（V1.4.0 ① Story 4.2）：概览 + 明细第 1 页；调整表单另用一枚一次性 token（幂等键 ADMIN:{token}）。

@@ -6,6 +6,7 @@ import 'content_pet_ref.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
+import '../../gift/domain/gift_showcase.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
 class ContentDetail {
   const ContentDetail({
@@ -34,10 +35,15 @@ class ContentDetail {
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
     this.pets = const [],
+    this.giftPets = const [],
   });
 
   /// Diary 关联的宠物（V1.4.0 multi-pet Story 3.3 · AC4.1），按创建顺序；Moment / Tips / 无关联 → 空表。
   final List<ContentPetRef> pets;
+
+  /// Diary 礼物区（V1.4.0 gift Story 2.1 下发 / 2.2 使用）：这条 Diary 关联的宠物各自收到的礼物汇总 + 墙前 3 行。
+  /// 缺键（Moment / Tips / 无关联宠物 / 老后端）→ 空表 → 不渲染礼物区。
+  final List<GiftPetSummary> giftPets;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
   final String? authorToken;
@@ -75,6 +81,7 @@ class ContentDetail {
         authorFollowState: authorFollowState,
         followEpoch: epoch,
         pets: pets,
+        giftPets: giftPets,
       );
 
   final int id;
@@ -172,6 +179,7 @@ class ContentDetail {
       authorFollowState: FollowState.fromJson(json['authorFollowState']),
       // V1.4.0 multi-pet Story 3.1 / 3.3：缺省 = 空表。
       pets: ContentPetRef.listFromJson(json['pets']),
+      giftPets: GiftPetSummary.listFromJson(json['giftPets']),
     );
   }
 }

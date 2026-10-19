@@ -9,6 +9,7 @@ import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.dto.NotificationPage;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
+import com.tailtopia.notify.port.NotificationPetNames;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.notify.service.InteractionCopyRenderer.ActorSummary;
 import com.tailtopia.ops.target.OpsTargetType;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,10 +70,14 @@ public class NotificationCenterService {
     private final FollowReader followReader;
     private final InteractionCopyRenderer copy;
     private final OpsNotificationCampaignRepository campaigns;
+    /** 收礼条目的宠物名（V1.4.0 gift Story 1.2 · AC5.4）；缺 bean（切片测试）时按 noPet 文案渲染。 */
+    private final ObjectProvider<NotificationPetNames> petNames;
 
     public NotificationCenterService(NotificationRepository repo, StringRedisTemplate redis,
             InteractionActorResolver actors, AccountQueryService accounts, CommentQueryService comments,
-            FollowReader followReader, InteractionCopyRenderer copy, OpsNotificationCampaignRepository campaigns) {
+            FollowReader followReader, InteractionCopyRenderer copy, OpsNotificationCampaignRepository campaigns,
+            ObjectProvider<NotificationPetNames> petNames) {
+        this.petNames = petNames;
         this.repo = repo;
         this.redis = redis;
         this.actors = actors;
@@ -217,6 +223,7 @@ public class NotificationCenterService {
         // ④ 评论快照：只对有可显示触发人的评论条目；⑤ 新粉丝关系：只对有可显示触发人的新粉丝条目
         Set<Long> commentIds = new LinkedHashSet<>();
         Set<Long> followerIds = new LinkedHashSet<>();
+        Set<Long> giftPetIds = new LinkedHashSet<>();
         boolean anyVisible = false;
         for (Notification n : pageRows) {
             Optional<ActorSummary> s = summaries.get(n.getId());
@@ -228,12 +235,19 @@ public class NotificationCenterService {
                 commentIds.add(n.getCommentId());
             } else if (n.getType() == NotificationType.USER_FOLLOWED) {
                 followerIds.add(s.get().latestActorId());
+            } else if (n.getType() == NotificationType.PET_GIFT_RECEIVED) {
+                Long petId = giftPetId(n);
+                if (petId != null) {
+                    giftPetIds.add(petId);
+                }
             }
         }
         Map<Long, NotificationCommentSnapshot> snapshots = commentIds.isEmpty() ? Map.of()
                 : comments.notificationSnapshots(commentIds);
         Map<Long, FollowState> states = followerIds.isEmpty() ? Map.of()
                 : followReader.followStates(userId, followerIds);
+        // ⑥ 收礼条目的宠物名：本页有收礼条目才查，一次批量（V1.4.0 gift Story 1.2 · AC5.4）
+        Map<Long, String> names = giftPetIds.isEmpty() ? Map.of() : petNamesOf(giftPetIds);
         Locale locale = anyVisible ? accounts.localeOf(userId) : null;
 
         List<NotificationItem> items = new ArrayList<>(pageRows.size());
@@ -243,16 +257,45 @@ public class NotificationCenterService {
             if (s == null) {
                 items.add(plain(n, opsTargets)); // 非互动类型（含运营通知），或上线前的存量（无触发人行）
             } else if (s.isPresent()) {
-                items.add(render(n, s.get(), locale, snapshots, states));
+                items.add(render(n, s.get(), locale, snapshots, states, names));
             }
             // s.isEmpty()：触发人全被过滤 → 从列表隐藏（T-36）
         }
         return new Rendered(items, summaries);
     }
 
+    /** 收礼条目的 targetRef = 宠物 id（{@code NotificationService.sendGiftReceived}）；坏值按查不到处理。 */
+    private static Long giftPetId(Notification n) {
+        if (n.getTargetRef() == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(n.getTargetRef());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** 宠物名一次批量取；端口缺失或异常 → 空（按 noPet 文案渲染，不拖垮通知中心）。 */
+    private Map<Long, String> petNamesOf(Set<Long> petIds) {
+        NotificationPetNames port = petNames.getIfAvailable();
+        if (port == null) {
+            return Map.of();
+        }
+        try {
+            Map<Long, String> m = port.namesOf(petIds);
+            return m == null ? Map.of() : m;
+        } catch (RuntimeException e) {
+            log.warn("通知列表取宠物名失败（按无宠物名渲染）cause={}", e.getClass().getSimpleName());
+            return Map.of();
+        }
+    }
+
     private NotificationItem render(Notification n, ActorSummary s, Locale locale,
-            Map<Long, NotificationCommentSnapshot> snapshots, Map<Long, FollowState> states) {
-        String title = copy.title(n.getType(), n.getVariant(), s, locale);
+            Map<Long, NotificationCommentSnapshot> snapshots, Map<Long, FollowState> states, Map<Long, String> names) {
+        String title = n.getType() == NotificationType.PET_GIFT_RECEIVED
+                ? copy.title(n.getType(), n.getVariant(), s, locale, petNameOf(n, names))
+                : copy.title(n.getType(), n.getVariant(), s, locale);
         String body = null;
         Boolean iFollow = null;
         Boolean followsMe = null;
@@ -268,6 +311,11 @@ public class NotificationCenterService {
         }
         return NotificationItem.rendered(n, title, body, s.latestActorId(), s.latestNickname(), s.latestToken(),
                 s.total(), iFollow, followsMe, bodyDeleted);
+    }
+
+    private static String petNameOf(Notification n, Map<Long, String> names) {
+        Long petId = giftPetId(n);
+        return petId == null ? null : names.get(petId);
     }
 
     /** 标记单条已读（token 定位，仅本人，否则 404 防枚举）+ 角标递减（不低于 0）。 */

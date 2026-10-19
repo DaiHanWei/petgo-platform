@@ -60,7 +60,9 @@ class TimelineMultiPetTest {
         when(milestoneService.getProgress(anyLong(), any())).thenReturn(new MilestoneService.MilestoneProgress(0, 0));
         service = new TimelineService(resolver, content, healthProvider, milestoneService,
                 mock(MilestoneCelebrationService.class), healthRecords, completions, idCards,
-                mock(com.tailtopia.content.service.ContentTagQueryService.class), checkins, tailsonality);
+                mock(com.tailtopia.content.service.ContentTagQueryService.class), checkins, tailsonality,
+                // V1.4.0 ③ 送礼线合入：统计卡礼物总价值的只读查询（本类不验礼物值，按宠物不串的用例归 gift 4-1 AC2.4）。
+                mock(com.tailtopia.gift.service.GiftShowcaseQuery.class));
     }
 
     @Test

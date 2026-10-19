@@ -58,7 +58,11 @@ class AdminRoleTest {
                     .doesNotContain(AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
                             AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND)
                     // V1.4.0 ① Story 4.1：成长体系配置两码不预授（超管隐式拥有）
-                    .doesNotContain(AdminPermissions.GROWTH_CONFIG_VIEW, AdminPermissions.GROWTH_CONFIG_EDIT);
+                    .doesNotContain(AdminPermissions.GROWTH_CONFIG_VIEW, AdminPermissions.GROWTH_CONFIG_EDIT)
+                    // V1.4.0 ③ AB-35：礼物目录两码不预授（超管隐式拥有）
+                    .doesNotContain(AdminPermissions.GIFT_CATALOG_VIEW, AdminPermissions.GIFT_CATALOG_EDIT)
+                    // V1.4.0 ③ AB-36：送礼记录查看码不预授（超管隐式拥有）
+                    .doesNotContain(AdminPermissions.GIFT_ORDER_VIEW);
         }
     }
 

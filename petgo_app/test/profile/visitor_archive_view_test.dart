@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_scope.dart';
 import 'package:tailtopia/features/profile/presentation/visitor_archive_view.dart';
@@ -58,7 +60,8 @@ Widget _wrap({
       authControllerProvider.overrideWith(() => _TestAuthController(auth)),
       visitorProfileProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => profile),
       visitorStatsProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => const ArchiveStats(
-          happyMomentCount: 24, consultCount: 3, milestoneCompleted: 7, milestoneTotal: 30)),
+          happyMomentCount: 24, consultCount: 3, milestoneCompleted: 7, milestoneTotal: 30,
+          giftTotalValue: 188000)),
       visitorTimelineProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => TimelinePage(items: items)),
     ],
     child: const MaterialApp(
@@ -174,7 +177,16 @@ void main() {
       expect(find.byKey(const ValueKey('visitorViewCalendar')), findsNothing);
       // 统计数字与作者态同源（AD-1 Rule 8）
       expect(find.text('24'), findsOneWidget);
-      expect(find.text('3'), findsOneWidget);
+      // V1.4.0 gift Story 2.2 · AC2.5：中间格由问诊数换成礼物总价值（缩写），不再出现 Consultations。
+      expect(find.text('Rp188rb'), findsOneWidget);
+      expect(find.text('3'), findsNothing);
+      expect(find.text('Consultations'), findsNothing);
+      // AC2.6：分享 token 态拿不到 petId → 礼物格只显示数值、不可点、无「›」。
+      expect(find.text('Gifts'), findsOneWidget);
+      expect(find.text('Gifts ›'), findsNothing);
+      expect(
+          find.descendant(of: find.byKey(const ValueKey('petInfoGiftStat')), matching: find.byType(InkWell)),
+          findsNothing);
     });
 
     /// AD-4：Diary 页从来没有「陪伴天数」，那是 H5 名片独有的，访客态不得引入。
@@ -247,6 +259,44 @@ void main() {
         expect(find.byKey(const ValueKey('diaryIdCardButton')), findsNothing);
         expect(find.byKey(const ValueKey('visitorSharedBanner')), findsOneWidget);
       }
+    });
+  });
+
+  /// V1.4.0 gift Story 2.2 · AC2.4（A1 → E1）：站内入口礼物格可点，push 该宠物礼物页。
+  group('礼物格（V1.4.0 gift 2.2）', () {
+    testWidgets('站内态：显示 Rp188rb +「Gifts ›」，点击 push /pets/{id}/gifts', (tester) async {
+      const scope = ArchiveScope.inAppVisitor(_petId);
+      final router = GoRouter(routes: [
+        GoRoute(path: '/', builder: (c, s) => const VisitorArchiveView(scope: scope)),
+        GoRoute(
+            path: '/pets/:petId/gifts',
+            builder: (c, s) => Text('GIFT PAGE ${s.pathParameters['petId']}')),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TestAuthController(
+              const AuthState(status: AuthStatus.authenticated, role: 'USER'))),
+          visitorProfileProvider(scope).overrideWith((ref) async => _profile),
+          visitorStatsProvider(scope).overrideWith((ref) async => const ArchiveStats(
+              happyMomentCount: 24, consultCount: 3, milestoneCompleted: 7, milestoneTotal: 30,
+              giftTotalValue: 188000)),
+          visitorTimelineProvider(scope).overrideWith((ref) async => const TimelinePage(items: [])),
+          petProfileProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rp188rb'), findsOneWidget);
+      expect(find.text('Gifts ›'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('petInfoGiftStat')));
+      await tester.pumpAndSettle();
+      expect(find.text('GIFT PAGE $_petId'), findsOneWidget);
     });
   });
 }

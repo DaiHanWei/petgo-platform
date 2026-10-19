@@ -274,6 +274,22 @@ public final class AuditActions {
     /** 改虚拟号 / 官方号的展示等级（V1.4.0 ① Story 4.4）。target = {@code user} / userId；值未变不写。 */
     public static final String GROWTH_DISPLAY_LEVEL_CHANGED = "GROWTH_DISPLAY_LEVEL_CHANGED";
 
+    // ===== 礼物目录（V1.4.0 ③ gift Story 3.1，AB-35）=====
+    /** 新建礼物。摘要记名称 / 价格 / 类型 / 等级 / 物种 / 排序（不记图标 URL）。 */
+    public static final String GIFT_CATALOG_CREATED = "GIFT_CATALOG_CREATED";
+    /** 编辑礼物。摘要记改前 → 改后（换图只记 {@code icon changed}）；无真变化不写。 */
+    public static final String GIFT_CATALOG_UPDATED = "GIFT_CATALOG_UPDATED";
+    /** 下线礼物（只下线不物理删除，已收到的按订单快照照常展示）。 */
+    public static final String GIFT_CATALOG_OFFLINED = "GIFT_CATALOG_OFFLINED";
+    /** 重新上线礼物。 */
+    public static final String GIFT_CATALOG_ONLINED = "GIFT_CATALOG_ONLINED";
+    /** 改送礼 QRIS 最低金额（{@code pricing_config.gift_qris_min_amount}，只对送礼生效）。 */
+    public static final String GIFT_QRIS_MIN_UPDATED = "GIFT_QRIS_MIN_UPDATED";
+
+    // ===== 送礼记录（V1.4.0 ③ gift Story 3.2，AB-36）=====
+    /** 按当前筛选导出送礼记录 xlsx。摘要记行数 / 是否截断 / 全部筛选条件（查看列表与抽屉页签不写审计）。 */
+    public static final String GIFT_ORDER_LIST_EXPORTED = "GIFT_ORDER_LIST_EXPORTED";
+
     private AuditActions() {
     }
 }

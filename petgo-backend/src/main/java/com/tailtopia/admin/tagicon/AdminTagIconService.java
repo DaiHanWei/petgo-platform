@@ -14,7 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 标签图标上传（V1.1.6 Story 11.5）—— 用户标签（AB-12A）与内容装饰标签（AB-10C）共用。
+ * 标签图标上传（V1.1.6 Story 11.5）—— 用户标签（AB-12A）与内容装饰标签（AB-10C）共用；
+ * V1.4.0 gift Story 3.1 起礼物目录（AB-35）也复用同一套校验（{@link IconPurpose#GIFT}，只换目录与文案）。
  *
  * <h2>🔴 为什么单独一个服务而不是复用种子图片那个</h2>
  * 校验骨架照抄种子图片上传（格式白名单 / 从字节量宽高 / OSS 公开对象），
@@ -54,8 +55,7 @@ public class AdminTagIconService {
     /** 🛡 白名单，且<b>不含 JPEG</b>（透明底，见类注释）。 */
     private static final Set<String> ALLOWED = Set.of("image/png", "image/webp");
 
-    /** OSS 子目录。 */
-    private static final String FOLDER = "tag-icon";
+    // OSS 子目录：V1.4.0 起按 {@link IconPurpose#folder()} 取（TAG = 原 "tag-icon"，GIFT = "gift-icon"）。
 
     private final AliyunOssClient oss;
     private final MediaProperties mediaProps;
@@ -75,19 +75,28 @@ public class AdminTagIconService {
      *             编辑标签时运营常常只改名称，表单里那个 file input 自然是空的。
      */
     public String uploadOrKeep(MultipartFile file) {
+        return uploadOrKeep(file, IconPurpose.TAG);
+    }
+
+    /**
+     * 按用途校验并上传（V1.4.0 gift Story 3.1 · AC5）：规则与 {@link #uploadOrKeep(MultipartFile)} 逐条相同，
+     * 只有 OSS 子目录与报错文案按 {@code purpose} 取。空文件同样返回 {@code null}（= 保留原图标）。
+     */
+    public String uploadOrKeep(MultipartFile file, IconPurpose purpose) {
         if (file == null || file.isEmpty()) {
             return null;
         }
-        String contentType = normalizedType(file);
+        String p = purpose.keyPrefix();
+        String contentType = normalizedType(file, p);
         if (file.getSize() > MAX_BYTES) {
-            throw AppException.validation(msg("admin.tagicon.tooLarge",
+            throw AppException.validation(msg(p + "tooLarge",
                     new Object[] {MAX_BYTES / 1024}));
         }
         byte[] bytes;
         try {
             bytes = file.getBytes();
         } catch (Exception e) {
-            throw AppException.validation(msg("admin.tagicon.readFailed", null));
+            throw AppException.validation(msg(p + "readFailed", null));
         }
 
         // 🔴 从字节量，不传上去再回读（沿用 12-2 的做法：本地量快一个量级，也不受 CDN 未生效影响）。
@@ -95,12 +104,12 @@ public class AdminTagIconService {
         if (size == null) {
             // ⚠️ 与种子图片那条链路不同：那边"测不出来"是放过（Feed 有占位兜底），
             //    图标这边**必须拦住** —— 尺寸与比例是本 story 的核心校验，测不出来就等于没校验。
-            throw AppException.validation(msg("admin.tagicon.unmeasurable", null));
+            throw AppException.validation(msg(p + "unmeasurable", null));
         }
-        requireSize(size);
+        requireSize(size, p);
 
         String key = mediaProps.getOss().normalizedKeyPrefix()
-                + "public/" + FOLDER + "/" + UUID.randomUUID() + "." + extOf(contentType);
+                + "public/" + purpose.folder() + "/" + UUID.randomUUID() + "." + extOf(contentType);
         try {
             return oss.putPublicObject(key, bytes, contentType);
         } catch (RuntimeException e) {
@@ -110,7 +119,7 @@ public class AdminTagIconService {
             // ⚠️ 报错里**不带异常细节**：桶名 / endpoint / 签名信息不该出现在运营界面上。
             log.warn("标签图标上传失败 key={} cls={} msg={}", key, e.getClass().getSimpleName(),
                     e.getMessage());
-            throw AppException.validation(msg("admin.tagicon.uploadFailed", null));
+            throw AppException.validation(msg(p + "uploadFailed", null));
         }
     }
 
@@ -118,16 +127,16 @@ public class AdminTagIconService {
      * 尺寸校验（2026-09-02 起只剩最小边长）。🛡 报错带**实际数值**，否则运营不知道要改成多少。
      * 上限与正方形要求已取消 —— 端上等比缩放，图什么形状都能正确显示。
      */
-    private void requireSize(ImageSize size) {
+    private void requireSize(ImageSize size, String p) {
         int w = size.w();
         int h = size.h();
         if (w < MIN_SIDE || h < MIN_SIDE) {
-            throw AppException.validation(msg("admin.tagicon.tooSmall",
+            throw AppException.validation(msg(p + "tooSmall",
                     new Object[] {w, h, MIN_SIDE}));
         }
     }
 
-    private String normalizedType(MultipartFile file) {
+    private String normalizedType(MultipartFile file, String p) {
         String name = file.getOriginalFilename() == null
                 ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
         String ct = file.getContentType() == null
@@ -135,14 +144,14 @@ public class AdminTagIconService {
         // 🔴 JPEG 单独给一句话，别混进"格式不支持"里（见类注释）。
         if (ct.contains("jpeg") || ct.contains("jpg")
                 || name.endsWith(".jpg") || name.endsWith(".jpeg")) {
-            throw AppException.validation(msg("admin.tagicon.noJpeg", null));
+            throw AppException.validation(msg(p + "noJpeg", null));
         }
         if (ct.contains("heic") || ct.contains("heif")
                 || name.endsWith(".heic") || name.endsWith(".heif")) {
-            throw AppException.validation(msg("admin.tagicon.heic", null));
+            throw AppException.validation(msg(p + "heic", null));
         }
         if (!ALLOWED.contains(ct)) {
-            throw AppException.validation(msg("admin.tagicon.badType", null));
+            throw AppException.validation(msg(p + "badType", null));
         }
         return ct;
     }
@@ -153,7 +162,12 @@ public class AdminTagIconService {
 
     /** 新建标签时缺图标的报错文案（图标是胶囊的固定组成部分，不是可选装饰）。 */
     public String iconRequiredMessage() {
-        return msg("admin.tagicon.required", null);
+        return iconRequiredMessage(IconPurpose.TAG);
+    }
+
+    /** 按用途取「新建必须上传图标」文案（V1.4.0 gift Story 3.1：礼物版 {@code admin.gifticon.required}）。 */
+    public String iconRequiredMessage(IconPurpose purpose) {
+        return msg(purpose.keyPrefix() + "required", null);
     }
 
     /**
@@ -169,8 +183,16 @@ public class AdminTagIconService {
      * @param context {@code contentTag} 或 {@code userTag}
      */
     public String specText(String context) {
+        return specText(IconPurpose.TAG, context);
+    }
+
+    /**
+     * 按用途取规格说明（V1.4.0 gift Story 3.1）：键 = {@code <前缀>spec.<context>}。
+     * 礼物用 {@code create} / {@code edit} 两段（编辑态多一句「不选文件即保留原图标」）。
+     */
+    public String specText(IconPurpose purpose, String context) {
         // {0}=最小边长 {1}=文件上限 KB（2026-09-02 起没有边长上限与正方形要求）。
-        return msg("admin.tagicon.spec." + context,
+        return msg(purpose.keyPrefix() + "spec." + context,
                 new Object[] {MIN_SIDE, MAX_BYTES / 1024});
     }
 

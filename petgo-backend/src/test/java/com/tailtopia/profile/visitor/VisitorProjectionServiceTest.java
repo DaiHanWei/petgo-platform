@@ -42,7 +42,7 @@ class VisitorProjectionServiceTest {
 
     @Test
     void statsUseThatPet() {
-        when(timelineService.getStats(OWNER, PET_B)).thenReturn(new ArchiveStatsResponse(3, 1, 2, 31, 9, 0));
+        when(timelineService.getStats(OWNER, PET_B)).thenReturn(new ArchiveStatsResponse(3, 1, 2, 31, 9, 0, 0));
 
         VisitorStats s = service.stats(petB);
 

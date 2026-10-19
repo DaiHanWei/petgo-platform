@@ -78,6 +78,11 @@ public class TimelineService {
     private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins;
     /** V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（tailsonality 只读口，profile 不直接注入其仓库）。 */
     private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityUnlocks;
+    /**
+     * V1.4.0 gift Story 2.1：统计卡「Hadiah」格的礼物总价值（读汇总表的只读查询，不是送礼交付服务）。
+     * 它只依赖 JDBC、不反向依赖 profile，不成环。
+     */
+    private final com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase;
 
     public TimelineService(PetResolver petResolver, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
@@ -86,9 +91,11 @@ public class TimelineService {
             MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards,
             com.tailtopia.content.service.ContentTagQueryService contentTags,
             com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins,
-            com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityUnlocks) {
+            com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityUnlocks,
+            com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase) {
         this.tailsonalityUnlocks = tailsonalityUnlocks;
         this.petResolver = petResolver;
+        this.giftShowcase = giftShowcase;
         this.placeCheckins = placeCheckins;
         this.contentTags = contentTags;
         this.contentService = contentService;
@@ -654,8 +661,11 @@ public class TimelineService {
         long healthRecordCount = healthRecords.countByPetProfileId(profile.getId());
         // 角标数（V1.3.0 Story 1.4 · AD-A2.2）：搭这一次请求的顺风车，不为它多发一次。
         long uncelebrated = celebrationService.countUncelebrated(profile.getId());
+        // V1.4.0 gift Story 2.1（AD-10）：礼物总价值 —— 按<b>这只宠物</b>算（不按主人汇总：多宠合入后会混算）。
+        // 主人 / 站内访客 / 分享 token / H5 名片四处都出自这一句。
+        long giftTotalValue = giftShowcase.totalValueOfPet(profile.getId());
         return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total(),
-                healthRecordCount, uncelebrated);
+                healthRecordCount, uncelebrated, giftTotalValue);
     }
 
     /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2 &gt; 场所打卡=3（V1.3.2）。 */
