@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/push/push_service.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/notify/data/push_settings_repository.dart';
@@ -126,6 +128,50 @@ void main() {
       tester.widget<Switch>(find.byKey(ValueKey('pushSettingsSwitch_$code')));
 
   List<MapEntry<String, Map<String, Object>?>> named(String e) => events.where((x) => x.key == e).toList();
+
+  // ===== V1.4.0 push-collect Story 3.1 · AC6：设置页图标与通知中心 _iconStyle 对齐（防漂移）=====
+  /// 设置行的首个图标（36 圆底里的那个）。
+  Icon leadIcon(WidgetTester tester, String code) {
+    final row = find.ancestor(of: find.byKey(ValueKey('pushSettingsSwitch_$code')), matching: find.byType(Row)).first;
+    return tester.widget<Icon>(find.descendant(of: row, matching: find.byType(Icon)).first);
+  }
+
+  testWidgets('3.1 AC6：Hadiah = 收礼金色 redeem；Tonggak & level = 里程碑奖杯绿（不是升级紫）', (tester) async {
+    await pump(tester);
+    final gift = leadIcon(tester, PushCategoryCode.gift);
+    expect(gift.icon, Icons.redeem_rounded);
+    expect(gift.color, AppColors.gold);
+    final achievement = leadIcon(tester, PushCategoryCode.achievement);
+    expect(achievement.icon, Icons.emoji_events_rounded);
+    expect(achievement.color, AppColors.triageGreen);
+    expect(achievement.icon, isNot(Icons.workspace_premium_rounded));
+  });
+
+  test('3.1 AC6.3：设置页代表类型的三元组与通知中心 _iconStyle 源码一致', () {
+    String norm(String x) => x.replaceAll(RegExp(r'\s+'), '').replaceAll(RegExp(r',\)$'), ')');
+    final center = File('lib/features/notify/presentation/notification_center_page.dart').readAsStringSync();
+    final settings = File('lib/features/notify/presentation/push_settings_page.dart').readAsStringSync();
+    String centerStyle(String type) {
+      final m = RegExp("'$type' => \\(([^)]*)\\)").firstMatch(center);
+      expect(m, isNotNull, reason: '_iconStyle 缺 $type');
+      return norm('(${m!.group(1)})');
+    }
+    String settingsStyle(String field) {
+      final m = RegExp('_Row\\(PushCategoryCode\\.$field, ([^)]*)\\)').firstMatch(settings);
+      expect(m, isNotNull, reason: '设置页缺 $field 行');
+      return norm('(${m!.group(1)})');
+    }
+    // 代表类型：Suka → CONTENT_LIKED、Komentar → CONTENT_COMMENTED、Hadiah → PET_GIFT_RECEIVED、
+    // Pengingat → PET_BIRTHDAY、Tonggak & level → MILESTONE_NODE（按 ④ UI B1 保持奖杯绿，见 3.1 待确认 1）。
+    const pairs = {
+      'like': 'CONTENT_LIKED',
+      'comment': 'CONTENT_COMMENTED',
+      'gift': 'PET_GIFT_RECEIVED',
+      'petReminder': 'PET_BIRTHDAY',
+      'achievement': 'MILESTONE_NODE',
+    };
+    pairs.forEach((field, type) => expect(settingsStyle(field), centerStyle(type), reason: '$field ↔ $type'));
+  });
 
   testWidgets('B1：4 组 9 行，8 个开关开、订单与账号为锁定胶囊；状态卡开启', (tester) async {
     await pump(tester);

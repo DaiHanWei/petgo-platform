@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/collect/data/collect_repository.dart';
 import 'package:tailtopia/features/growth/domain/growth_models.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
@@ -17,6 +18,8 @@ import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/pet_avatar_item.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+
+import '../collect/collect_fakes.dart';
 
 /// 单只 [PetProfile] → 列表项（diaryCount 12 = 原统计栏桩数）。
 List<PetListItem> _listOf(PetProfile? pet) => [
@@ -569,5 +572,67 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('slots'), findsOneWidget);
     });
+  });
+
+  // ===== V1.4.0 push-collect Story 3.1 · AC4.5：四线合并后的「我的」页同屏 =====
+  testWidgets('3.1 AC4：等级胶囊 + Hewanku 两只 + Tab 行同屏；切到 Disimpan 后名片与 Hewanku 不变', (tester) async {
+    tester.view.physicalSize = const Size(1200, 4000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    addTearDown(() => Analytics.debugCaptureSink = null);
+    Analytics.debugCaptureSink = (_, _) {};
+    const brief = GrowthBrief(level: 7, tier: GrowthTier.buddy, frame: 'BASIC', lifetimeTotal: 1420, nextThreshold: 1800);
+    const two = [
+      PetListItem(id: 1, name: 'Orenji', petType: 'CAT', isDefault: true, diaryCount: 2),
+      PetListItem(id: 2, name: 'Kopi', petType: 'DOG', diaryCount: 5),
+    ];
+    final container = ProviderContainer(retry: (_, _) => null, overrides: [
+      myPostsProvider.overrideWith((ref) async => const <MyPost>[]),
+      meCountsProvider.overrideWith((ref, userId) async => const MeCounts(postCount: 1, growth: brief)),
+      petListProvider.overrideWith((ref) async => two),
+      collectRepositoryProvider.overrideWithValue(FakeCollectRepo()),
+    ]);
+    addTearDown(container.dispose);
+    container
+        .read(authControllerProvider.notifier)
+        .applyProfile(const UserProfile(id: 1, nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true));
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
+        home: MePage(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    double y(Finder f) => tester.getCenter(f).dy;
+    void expectHeadAndPets() {
+      expect(find.byKey(const ValueKey('meLevelCapsule')), findsOneWidget);
+      expect(find.byKey(const ValueKey('meAvatarUpload')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetCard')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetCard-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mePetsManage')), findsOneWidget);
+      // 自上而下：名片（胶囊）→ Edit Profil → Hewanku → Aktivitas → Tab 行。
+      final capsule = y(find.byKey(const ValueKey('meLevelCapsule')));
+      final edit = y(find.byKey(const ValueKey('meEditNickname')));
+      final pets = y(find.byKey(const ValueKey('mePetCard')));
+      final orders = y(find.byKey(const ValueKey('meOrders')));
+      final tabs = y(find.byKey(const ValueKey('meTabMyPosts')));
+      expect(capsule < edit && edit < pets && pets < orders && orders < tabs, isTrue);
+      expect(y(find.byKey(const ValueKey('meTabSaved'))), tabs);
+    }
+
+    expectHeadAndPets();
+    expect(find.byKey(const ValueKey('meNoPosts')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('meTabSaved')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('savedSegPost')), findsOneWidget);
+    expect(find.byKey(const ValueKey('meNoPosts')), findsNothing);
+    expectHeadAndPets();
   });
 }

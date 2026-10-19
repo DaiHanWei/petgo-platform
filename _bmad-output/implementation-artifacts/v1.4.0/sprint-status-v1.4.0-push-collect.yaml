@@ -1,5 +1,5 @@
 # generated: 2026-10-18
-# last_updated: 2026-10-18  # 8 条 story（7 条 ready-for-dev 云端批跑；3.1 在对齐分支本地做）
+# last_updated: 2026-10-19  # 8 条 story（7 条 ready-for-dev 云端批跑；3.1 在对齐分支本地做）
 # project: TailTopia V1.4.0 · 主题 push-collect（④ 推送分类开关 · 收藏：后端 + App，无后台）
 # project_key: NOKEY
 # tracking_system: file-system
@@ -47,6 +47,6 @@ development_status:
   2-4-app我的页disimpan-tab: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-推送收藏与等级多宠物送礼对齐: backlog  # 对齐分支本地做，云端不执行
+  epic-3: in-progress
+  3-1-推送收藏与等级多宠物送礼对齐: review  # 对齐分支本地做（feat/1.4.0-push-collect-align），云端不执行
   epic-3-retrospective: optional

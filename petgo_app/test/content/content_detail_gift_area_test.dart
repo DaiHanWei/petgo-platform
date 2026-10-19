@@ -27,6 +27,7 @@ ContentDetail _detail({
   bool isAuthor = false,
   List<GiftPetSummary> pets = const [_mochi],
   CheckinPlaceRef? place,
+  int? collectCount,
 }) =>
     ContentDetail(
       id: 5,
@@ -42,6 +43,7 @@ ContentDetail _detail({
       createdAt: DateTime.utc(2026, 10, 1),
       checkinPlace: place,
       giftPets: pets,
+      collectCount: collectCount,
     );
 
 Future<void> _pump(WidgetTester tester, ContentDetail d) async {
@@ -177,6 +179,37 @@ void main() {
     await _pump(tester, _detail(pets: const []));
     expect(find.text('HADIAH'), findsNothing);
     expect(_send(), findsNothing);
+  });
+
+  // ===== V1.4.0 push-collect Story 3.1 · AC5.1 / AC5.3 / AC5.6：③ 礼物区 × ④ 底栏收藏 =====
+  testWidgets('3.1 AC5：底栏 点赞 → 分享卡 → 收藏，无送礼按钮；作者 Diary 礼物区（无 Kirim Hadiah）与收藏数 + 锁并存',
+      (tester) async {
+    await _pump(tester, _detail(isAuthor: true, collectCount: 4));
+    final bar = find.byKey(const ValueKey('detailBottomActions'));
+    double x(Finder f) => tester.getCenter(f).dx;
+    final like = find.descendant(of: bar, matching: find.byKey(const ValueKey('likeButton_5')));
+    final share = find.descendant(of: bar, matching: find.byKey(const ValueKey('detailShareCardIcon')));
+    final collect = find.descendant(of: bar, matching: find.byKey(const ValueKey('detailCollectButton')));
+    expect(like, findsOneWidget);
+    expect(share, findsOneWidget);
+    expect(collect, findsOneWidget);
+    expect(x(like) < x(share) && x(share) < x(collect), isTrue);
+    expect(find.descendant(of: bar, matching: find.byIcon(Icons.redeem)), findsNothing);
+    expect(find.descendant(of: bar, matching: find.byIcon(Icons.redeem_rounded)), findsNothing);
+    expect(find.descendant(of: bar, matching: find.byKey(const ValueKey('giftDetailSendButton'))), findsNothing);
+    // 作者态：数量 + 锁（C4）；礼物区照常在正文区、无「Kirim Hadiah」（③ A6）。
+    expect(find.descendant(of: bar, matching: find.byKey(const ValueKey('detailCollectCount'))), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.byKey(const ValueKey('detailCollectLock'))), findsOneWidget);
+    expect(_row(42), findsOneWidget);
+    expect(_send(), findsNothing);
+  });
+
+  testWidgets('3.1 AC5：非作者 → 礼物区有 Kirim Hadiah，底栏收藏无数量', (tester) async {
+    await _pump(tester, _detail(collectCount: 4));
+    final bar = find.byKey(const ValueKey('detailBottomActions'));
+    expect(find.descendant(of: bar, matching: find.byKey(const ValueKey('detailCollectButton'))), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.byKey(const ValueKey('detailCollectCount'))), findsNothing);
+    expect(_send(), findsOneWidget);
   });
 }
 
