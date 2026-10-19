@@ -26,6 +26,7 @@ import com.tailtopia.shared.pay.GatewayStatus;
 import com.tailtopia.shared.pay.PaymentCallback;
 import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,10 @@ class PetSlotRentalIntegrationTest extends ApiIntegrationTest {
     private PaymentReconciliationService reconciliation;
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** 兽医 token 经 BannedVetFilter 查 vet 行：不存在 / 非 ACTIVE → 401。要验「角色拦截 403」必须先造真兽医，不能拿任意 id 当 vetId。 */
+    @Autowired
+    private VetTestSupport vets;
 
     @BeforeEach
     void setUp() {
@@ -178,11 +183,12 @@ class PetSlotRentalIntegrationTest extends ApiIntegrationTest {
     @Test
     void missingIdempotencyKeyIs422AndVetIs403() throws Exception {
         User u = newUser();
+        long vetId = vets.newActiveVet("pet-slot-rental-it").getId();
         rent(u.getId(), 1, "PAWCOIN", null).andExpect(status().isUnprocessableEntity());
-        mvc.perform(post(BASE + "/rentals").header(HttpHeaders.AUTHORIZATION, vetBearer(u.getId()))
+        mvc.perform(post(BASE + "/rentals").header(HttpHeaders.AUTHORIZATION, vetBearer(vetId))
                 .header("Idempotency-Key", "x").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"quantity\":1,\"channel\":\"PAWCOIN\"}")).andExpect(status().isForbidden());
-        mvc.perform(get(BASE + "/purchases/abc").header(HttpHeaders.AUTHORIZATION, vetBearer(u.getId())))
+        mvc.perform(get(BASE + "/purchases/abc").header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
                 .andExpect(status().isForbidden());
         rent(u.getId(), 1, "MIXED", "m").andExpect(status().isUnprocessableEntity());
     }

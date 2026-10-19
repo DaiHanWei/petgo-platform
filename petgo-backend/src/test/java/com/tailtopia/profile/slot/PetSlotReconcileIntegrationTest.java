@@ -16,6 +16,7 @@ import com.tailtopia.growth.event.GrowthLevelChangedEvent;
 import com.tailtopia.growth.service.GrowthQueryService;
 import com.tailtopia.profile.support.MultiPetDbFixture;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,10 @@ class PetSlotReconcileIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** 兽医 token 经 BannedVetFilter 查 vet 行：不存在 / 非 ACTIVE → 401。要验「角色拦截 403」必须先造真兽医，不能拿任意 id 当 vetId。 */
+    @Autowired
+    private VetTestSupport vets;
 
     @Autowired
     private ApplicationEventPublisher events;
@@ -141,7 +146,7 @@ class PetSlotReconcileIntegrationTest extends ApiIntegrationTest {
         mvc.perform(put("/api/v1/pet-profiles/me/active-selection")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"petIds\":[]}"))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(put("/api/v1/pet-profiles/me/active-selection").header(HttpHeaders.AUTHORIZATION, vetBearer(1L))
+        mvc.perform(put("/api/v1/pet-profiles/me/active-selection").header(HttpHeaders.AUTHORIZATION, vetBearer(vets.newActiveVet("pet-slot-reconcile-it").getId()))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"petIds\":[]}"))
                 .andExpect(status().isForbidden());
     }

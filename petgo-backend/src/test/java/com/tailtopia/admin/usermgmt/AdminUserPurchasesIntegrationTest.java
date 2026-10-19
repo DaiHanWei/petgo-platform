@@ -186,7 +186,13 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         String html = drawer(buyer.getId());
         assertThat(html).contains("data-utab=\"purchases\"").contains("已购解锁").contains("ESTP-L")
                 .contains("data-utab-panel=\"purchases\"");
-        String panel = html.substring(html.indexOf("data-utab-panel=\"purchases\""), html.indexOf("id=\"user-drawer-err\""));
+        // 只截「已购解锁」这一个面板：起点 = 它自己的 data-utab-panel，终点 = 紧随其后的下一个 data-utab-panel。
+        // 原先截到 #user-drawer-err，会把 V1.4.0 地基后面各线填充的页签（⑧ 宠物与名额的补发表单、⑨ 送礼…）一起框进来，
+        // 那些页签本就有按钮 / 表单 —— 断言要守的是「已购解锁只读」，不是「抽屉后半段全只读」。
+        int panelStart = html.indexOf("data-utab-panel=\"purchases\"");
+        int panelEnd = html.indexOf("data-utab-panel=", panelStart + 1);
+        assertThat(panelEnd).as("已购解锁之后应还有下一个页签面板（V1.4.0 地基 ⑦ 成长值）").isPositive();
+        String panel = html.substring(panelStart, panelEnd);
         assertThat(panel).as("只读：不得出现任何按钮 / 表单").doesNotContain("<button").doesNotContain("<form");
 
         assertThat(drawer(nobody.getId())).contains("该用户还没有任何已购解锁");

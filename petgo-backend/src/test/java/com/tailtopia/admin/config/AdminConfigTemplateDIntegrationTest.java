@@ -168,7 +168,11 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         String viewOnly = mvc.perform(get("/admin/config").param("lang", "zh_CN")
                         .with(authentication(staffWith(AdminPermissions.CONFIG_VIEW, AdminPermissions.CONFIG_SHARE_REWARD_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(6); // 含客服联系方式卡、App 版本配置卡（同按 config.edit）
+        // 含客服联系方式卡、App 版本配置卡、V1.4.0 multi-pet Story 2.2「宠物名额月租价格」卡（三者同按 config.edit；
+        // 2.2 Dev Notes：权限沿用 config.edit / config.view，不新增权限码）→ 6 + 1 = 7
+        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(7);
+        assertThat(viewOnly).containsPattern("id=\"cfg-pet-slot\"[^>]*data-readonly=\"true\"")
+                .containsPattern("name=\"petSlotMonthlyPrice\"[^>]*disabled");
         assertThat(viewOnly).containsPattern("name=\"vetConsultPrice\"[^>]*disabled").containsPattern("name=\"shareRewardMonthlyCap\"[^>]*disabled")
                 .contains("需要「编辑配置」权限").contains("需要「改分享奖励配置（含总开关）」权限").doesNotContain("action=\"/admin/config/tiers\"");
         // 只持 share_reward_edit 的应急操作员：分享奖励卡可编辑，其它三卡不渲染

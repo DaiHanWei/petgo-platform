@@ -10,6 +10,7 @@ import com.tailtopia.auth.domain.User;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,10 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
 
     @Autowired
     private PetProfileRepository profiles;
+
+    /** 兽医 token 经 BannedVetFilter 查 vet 行：不存在 / 非 ACTIVE → 401。要验「角色拦截 403」必须先造真兽医，不能拿任意 id 当 vetId。 */
+    @Autowired
+    private VetTestSupport vets;
 
     @Autowired
     private com.tailtopia.content.repository.ContentPostRepository contentPosts;
@@ -601,9 +606,9 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
 
     @Test
     void listRejectsNonUserRole() throws Exception {
-        User owner = newUser();
+        long vetId = vets.newActiveVet("profile-list-it").getId();
         mvc.perform(get("/api/v1/pet-profiles/me/list")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(owner.getId(), com.tailtopia.auth.domain.Role.VET)))
+                        .header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
                 .andExpect(status().isForbidden());
     }
 }

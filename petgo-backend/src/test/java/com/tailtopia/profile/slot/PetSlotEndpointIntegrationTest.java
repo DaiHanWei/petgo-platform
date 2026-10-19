@@ -10,7 +10,9 @@ import com.tailtopia.growth.domain.GrowthLevel;
 import com.tailtopia.growth.domain.GrowthTier;
 import com.tailtopia.growth.service.GrowthQueryService;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -20,6 +22,10 @@ class PetSlotEndpointIntegrationTest extends ApiIntegrationTest {
     @MockitoBean
     private GrowthQueryService growth;
 
+    /** 兽医 token 经 BannedVetFilter 查 vet 行：不存在 / 非 ACTIVE → 401。要验「角色拦截 403」必须先造真兽医，不能拿任意 id 当 vetId。 */
+    @Autowired
+    private VetTestSupport vets;
+
     @Test
     void guestIs401() throws Exception {
         mvc.perform(get("/api/v1/pet-slots/me")).andExpect(status().isUnauthorized());
@@ -27,7 +33,7 @@ class PetSlotEndpointIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void vetIs403() throws Exception {
-        mvc.perform(get("/api/v1/pet-slots/me").header(HttpHeaders.AUTHORIZATION, vetBearer(1L)))
+        mvc.perform(get("/api/v1/pet-slots/me").header(HttpHeaders.AUTHORIZATION, vetBearer(vets.newActiveVet("pet-slot-endpoint-it").getId())))
                 .andExpect(status().isForbidden());
     }
 

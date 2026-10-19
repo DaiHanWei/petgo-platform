@@ -131,6 +131,25 @@ class MultiPetAddressingIntegrationTest extends ApiIntegrationTest {
         mvc.perform(post("/api/v1/pet-profiles/me/card-shares").param("petId", String.valueOf(petB))
                         .header(HttpHeaders.AUTHORIZATION, auth))
                 .andExpect(status().isNoContent());
+        // card-shares 发 CardSharedEvent → @Async AFTER_COMMIT 给 B 点亮「首次分享名片」（DOG = D-S3）。
+        // 必须等这条异步写落定再结束：否则它会插在 @AfterEach 清理「先删 completions、再删 pet_milestones」之间，
+        // 撞 milestone_completions_pet_milestone_id_fkey（CI 偶发红的根因）。顺带断言分享按 petId 落在 B、不串到 A。
+        awaitCompleted(petB, "D-S3");
+        org.assertj.core.api.Assertions.assertThat(completed(petB, "D-S3")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(completed(petA, "C-S3")).isFalse();
+    }
+
+    private boolean completed(long petId, String code) {
+        Long n = jdbc.queryForObject("SELECT count(*) FROM milestone_completions c JOIN pet_milestones m"
+                + " ON m.id = c.pet_milestone_id WHERE m.pet_profile_id = ? AND m.code = ?", Long.class, petId, code);
+        return n != null && n > 0;
+    }
+
+    private void awaitCompleted(long petId, String code) throws InterruptedException {
+        long deadline = System.nanoTime() + java.time.Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline && !completed(petId, code)) {
+            Thread.sleep(100);
+        }
     }
 
     @Test
