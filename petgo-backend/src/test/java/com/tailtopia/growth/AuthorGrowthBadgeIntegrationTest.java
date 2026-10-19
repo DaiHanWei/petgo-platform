@@ -54,7 +54,7 @@ class AuthorGrowthBadgeIntegrationTest extends ApiIntegrationTest {
     }
 
     private User virtual(int displayLevel) {
-        User v = users.saveAndFlush(User.newVirtual("it-badge-virtual-" + SEQ.incrementAndGet(), "v", null,
+        User v = users.saveAndFlush(User.newVirtual("virtual:it-badge-" + SEQ.incrementAndGet(), "v", null,
                 adminActorId()));
         account(v.getId(), 1, displayLevel, "NONE");
         return v;
@@ -114,22 +114,33 @@ class AuthorGrowthBadgeIntegrationTest extends ApiIntegrationTest {
         assertThat(detail.get("authorTier").asText()).isEqualTo("GUARDIAN");
         assertThat(detail.get("authorFrame").asText()).isEqualTo("UPGRADED");
 
-        JsonNode feed = json.readTree(mvc.perform(get("/api/v1/content-posts")
-                        .header("Authorization", userBearer(viewer.getId())))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        // 共享库全量跑时 ALL 推荐流里已有上千条帖，刚发的帖不一定在首页 → 顺着 cursor 翻页直到找到（有上限）。
         boolean sawVirtual = false;
-        for (JsonNode item : feed.get("items")) {
-            if (item.get("authorId").asLong() == virtual.getId()) {
-                sawVirtual = true;
-                assertThat(item.get("authorLevel").asInt()).isEqualTo(15);
-                assertThat(item.get("authorTier").asText()).isEqualTo("STAR");
-                assertThat(item.get("authorFrame").asText()).isEqualTo("ANIMATED");
+        String cursor = null;
+        for (int page = 0; page < 200 && !sawVirtual; page++) {
+            var req = get("/api/v1/content-posts").header("Authorization", userBearer(viewer.getId()));
+            if (cursor != null) {
+                req = req.param("cursor", cursor);
             }
-            if (item.path("authorDeleted").asBoolean()) {
-                assertThat(item.has("authorLevel")).isFalse();
+            JsonNode feed = json.readTree(mvc.perform(req)
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            for (JsonNode item : feed.get("items")) {
+                if (item.get("authorId").asLong() == virtual.getId()) {
+                    sawVirtual = true;
+                    assertThat(item.get("authorLevel").asInt()).isEqualTo(15);
+                    assertThat(item.get("authorTier").asText()).isEqualTo("STAR");
+                    assertThat(item.get("authorFrame").asText()).isEqualTo("ANIMATED");
+                }
+                if (item.path("authorDeleted").asBoolean()) {
+                    assertThat(item.has("authorLevel")).isFalse();
+                }
             }
+            if (!feed.path("hasMore").asBoolean() || feed.path("nextCursor").isNull()
+                    || feed.path("nextCursor").isMissingNode()) {
+                break;
+            }
+            cursor = feed.get("nextCursor").asText();
         }
-        // 刚发的帖在 ALL 推荐流首页（共享库下若被别的测试顶出首页，此断言会提示改造数据）。
-        assertThat(sawVirtual).as("virtual author post on first feed page").isTrue();
+        assertThat(sawVirtual).as("virtual author post in ALL feed").isTrue();
     }
 }

@@ -1,8 +1,11 @@
 package com.tailtopia.admin.virtual.service;
 
+import com.tailtopia.account.repository.AccountDeletionRepository;
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.virtual.dto.OfficialAccountRow;
 import com.tailtopia.admin.virtual.dto.VirtualAccountRow;
 import com.tailtopia.auth.domain.AccountType;
+import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.content.species.ContentSpecies;
@@ -27,12 +30,26 @@ public class AdminVirtualAccountService {
     private final AdminAuditService audit;
     /** V1.4.0 ① Story 2.2：新建虚拟号随机展示等级 6–8（AB-33.4：表单不加字段）。 */
     private final GrowthDisplayLevelService growthDisplayLevels;
+    /** V1.4.0 ① Story 4.4：展示等级写入前判「注销已提交」（D1/D2：级联进行中不再补建 growth_accounts 行）。 */
+    private final AccountDeletionRepository deletions;
 
     public AdminVirtualAccountService(UserRepository users, AdminAuditService audit,
-            GrowthDisplayLevelService growthDisplayLevels) {
+            GrowthDisplayLevelService growthDisplayLevels, AccountDeletionRepository deletions) {
         this.users = users;
         this.audit = audit;
         this.growthDisplayLevels = growthDisplayLevels;
+        this.deletions = deletions;
+    }
+
+    /**
+     * 官方号列表（V1.4.0 ① Story 4.4 · P-7，2026-10-19 拍板落点：「运营发布身份」页，不放开用户抽屉）。
+     * {@code role = ADMIN}、未注销、无注销申请；只供展示等级卡用。
+     */
+    @Transactional(readOnly = true)
+    public List<OfficialAccountRow> listOfficial() {
+        return users.findOfficialAccounts().stream()
+                .map(u -> new OfficialAccountRow(u.getId(), u.getNickname(), u.getAvatarUrl()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -179,8 +196,11 @@ public class AdminVirtualAccountService {
     }
 
     /**
-     * 改虚拟号展示等级（V1.4.0 ① Story 4.4 · AD-1 / AC12）：只写 {@code growth_accounts.display_level}
+     * 改虚拟号 / 官方号展示等级（V1.4.0 ① Story 4.4 · AD-1 / AC12 / P-7）：只写 {@code growth_accounts.display_level}
      * （经 {@link GrowthDisplayLevelService#set}，不写流水、不发通知、不触发升降级）。值未变不写审计。
+     *
+     * <p>🛡 服务端校验（不只靠模板藏表单）：目标须是虚拟号（{@code account_type = VIRTUAL}）或官方号
+     * （{@code role = ADMIN}），真实用户 / 兽医 → 422；已注销或注销已提交 → 422；越界 → 422（{@code set()}）。
      *
      * @param levelRaw 下拉提交值；非整数按越界处理（422，不让 400 JSON 被 htmx 换进抽屉）
      */
@@ -189,8 +209,11 @@ public class AdminVirtualAccountService {
         User u = users.findById(userId)
                 .orElseThrow(() -> AppException.notFound("账号不存在")
                         .code("admin.err.virtualAccount.accountNotFound"));
-        if (u.getAccountType() != AccountType.VIRTUAL) {
-            throw AppException.validation("仅虚拟账号有「展示等级」").code("admin.err.growth.display.virtualOnly");
+        if (u.getAccountType() != AccountType.VIRTUAL && u.getRole() != Role.ADMIN) {
+            throw AppException.validation("仅虚拟号与官方号有「展示等级」").code("admin.err.growth.display.syntheticOnly");
+        }
+        if (u.getDeletedAt() != null || deletions.findByUserId(userId).isPresent()) {
+            throw AppException.validation("该账号已注销或已停用，不可调整").code("admin.err.growth.userInactive");
         }
         int level;
         try {

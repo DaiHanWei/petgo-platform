@@ -143,11 +143,11 @@ class AdminGrowthBatchIntegrationTest extends ApiIntegrationTest {
         // 跨级升级者有 GROWTH_LEVEL_UP 通知
         long uid = real.get(0).getId();
         Instant deadline = Instant.now().plus(Duration.ofSeconds(10));
-        while (count("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'GROWTH_LEVEL_UP'", uid) == 0
+        while (count("SELECT COUNT(*) FROM notifications WHERE recipient_user_id = ? AND type = 'GROWTH_LEVEL_UP'", uid) == 0
                 && Instant.now().isBefore(deadline)) {
             Thread.sleep(200);
         }
-        assertThat(count("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'GROWTH_LEVEL_UP'", uid))
+        assertThat(count("SELECT COUNT(*) FROM notifications WHERE recipient_user_id = ? AND type = 'GROWTH_LEVEL_UP'", uid))
                 .isEqualTo(1);
     }
 

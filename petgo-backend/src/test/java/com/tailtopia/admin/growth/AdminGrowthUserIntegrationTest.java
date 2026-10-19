@@ -157,11 +157,11 @@ class AdminGrowthUserIntegrationTest extends ApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT rule_code FROM growth_ledger WHERE user_id = ?", String.class,
                 u.getId())).isEqualTo("OPS_CAMPAIGN");
         Instant deadline = Instant.now().plus(Duration.ofSeconds(10));
-        while (count("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'GROWTH_LEVEL_UP'", u.getId()) == 0
+        while (count("SELECT COUNT(*) FROM notifications WHERE recipient_user_id = ? AND type = 'GROWTH_LEVEL_UP'", u.getId()) == 0
                 && Instant.now().isBefore(deadline)) {
             Thread.sleep(200);
         }
-        assertThat(count("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'GROWTH_LEVEL_UP'", u.getId()))
+        assertThat(count("SELECT COUNT(*) FROM notifications WHERE recipient_user_id = ? AND type = 'GROWTH_LEVEL_UP'", u.getId()))
                 .isEqualTo(1);
     }
 

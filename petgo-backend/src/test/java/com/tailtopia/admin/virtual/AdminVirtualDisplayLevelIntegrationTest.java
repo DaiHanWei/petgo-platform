@@ -80,7 +80,7 @@ class AdminVirtualDisplayLevelIntegrationTest extends ApiIntegrationTest {
                 .doesNotContain("value=\"" + (max + 1) + "\"");
 
         long ledger = count("SELECT COUNT(*) FROM growth_ledger WHERE user_id = ?", id);
-        long notes = count("SELECT COUNT(*) FROM notifications WHERE user_id = ?", id);
+        long notes = count("SELECT COUNT(*) FROM notifications WHERE recipient_user_id = ?", id);
         long audits = count("SELECT COUNT(*) FROM admin_audit_logs WHERE action_type = 'GROWTH_DISPLAY_LEVEL_CHANGED' "
                 + "AND target_id = ?", String.valueOf(id));
         mvc.perform(htmx(post("/admin/virtual-accounts/" + id + "/display-level").with(authentication(manager))
@@ -88,7 +88,7 @@ class AdminVirtualDisplayLevelIntegrationTest extends ApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT display_level FROM growth_accounts WHERE user_id = ?", Integer.class, id))
                 .isEqualTo(12);
         assertThat(count("SELECT COUNT(*) FROM growth_ledger WHERE user_id = ?", id)).isEqualTo(ledger);
-        assertThat(count("SELECT COUNT(*) FROM notifications WHERE user_id = ?", id)).isEqualTo(notes);
+        assertThat(count("SELECT COUNT(*) FROM notifications WHERE recipient_user_id = ?", id)).isEqualTo(notes);
         assertThat(count("SELECT COUNT(*) FROM admin_audit_logs WHERE action_type = 'GROWTH_DISPLAY_LEVEL_CHANGED' "
                 + "AND target_id = ?", String.valueOf(id))).isEqualTo(audits + 1);
 
@@ -113,18 +113,80 @@ class AdminVirtualDisplayLevelIntegrationTest extends ApiIntegrationTest {
                 .param("displayLevel", "9"), "virtual-drawer-err")).andExpect(status().isUnprocessableEntity());
     }
 
+    /**
+     * P-7 官方号（2026-10-19 用户拍板落点）：在「运营发布身份」页设置，不放开用户抽屉。
+     * 列表显示 → 保存生效（只写 display_level、审计 1 行）→ 无权限只读 → 真实 USER 目标 422。
+     */
     @Test
-    void officialAccountDisplayLevelIsEditableInUserDrawer() throws Exception {
-        User official = newUser();
-        jdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", official.getId());
-        Authentication op = staffWith(AdminPermissions.USER_VIEW, AdminPermissions.VIRTUAL_ACCOUNT_MANAGE);
+    void officialAccountDisplayLevelIsEditableOnPublishIdentityPage() throws Exception {
+        long n = SEQ.incrementAndGet();
+        User official = users.saveAndFlush(User.newAdmin("official-dl-" + n + "@tailtopia.test", "官方号" + n, "{bcrypt}x"));
+        long id = official.getId();
+        Authentication manager = staffWith(AdminPermissions.VIRTUAL_ACCOUNT_MANAGE);
 
-        String html = mvc.perform(htmx(get("/admin/users/" + official.getId() + "/drawer").with(authentication(op)),
-                "user-drawer")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(html).contains("data-growth-state=\"OFFICIAL\"").contains("data-growth-display-form");
-        mvc.perform(htmx(post("/admin/users/" + official.getId() + "/growth/display-level").with(authentication(op))
-                .with(csrf()).param("displayLevel", "10"), "user-drawer-err")).andExpect(status().isOk());
-        assertThat(jdbc.queryForObject("SELECT display_level FROM growth_accounts WHERE user_id = ?", Integer.class,
-                official.getId())).isEqualTo(10);
+        String page = mvc.perform(get("/admin/virtual-accounts").with(authentication(manager)).param("lang", "zh_CN"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(page).contains("id=\"official-rows\"").contains("id=\"official-row-" + id + "\"")
+                .contains("官方号" + n).contains("/admin/virtual-accounts/official/" + id + "/display-level")
+                .contains("data-official-display-form");
+        // 官方号区块只有展示等级卡：不出现虚拟号专属的启停 / 物种入口
+        String block = page.substring(page.indexOf("id=\"official-rows\""), page.indexOf("id=\"official-inline-err\""));
+        assertThat(block).doesNotContain("/enabled").doesNotContain("/species").doesNotContain("accountSpecies");
+
+        long ledger = count("SELECT COUNT(*) FROM growth_ledger WHERE user_id = ?", id);
+        long audits = count("SELECT COUNT(*) FROM admin_audit_logs WHERE action_type = 'GROWTH_DISPLAY_LEVEL_CHANGED' "
+                + "AND target_id = ?", String.valueOf(id));
+        String saved = mvc.perform(htmx(post("/admin/virtual-accounts/official/" + id + "/display-level")
+                        .with(authentication(manager)).with(csrf()).param("displayLevel", "10"), "official-inline-err"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(saved).contains("id=\"official-rows\"").contains("hx-swap-oob").contains("admin-toast-host");
+        assertThat(jdbc.queryForObject("SELECT display_level FROM growth_accounts WHERE user_id = ?", Integer.class, id))
+                .isEqualTo(10);
+        assertThat(count("SELECT COUNT(*) FROM growth_ledger WHERE user_id = ?", id)).isEqualTo(ledger);
+        assertThat(count("SELECT COUNT(*) FROM admin_audit_logs WHERE action_type = 'GROWTH_DISPLAY_LEVEL_CHANGED' "
+                + "AND target_id = ?", String.valueOf(id))).isEqualTo(audits + 1);
+
+        // 无 manage：只读 + 提示，写入 403
+        Authentication viewer = staffWith(AdminPermissions.VIRTUAL_ACCOUNT_VIEW);
+        String readOnly = mvc.perform(get("/admin/virtual-accounts").with(authentication(viewer)).param("lang", "zh_CN"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String roBlock = readOnly.substring(readOnly.indexOf("id=\"official-rows\""),
+                readOnly.indexOf("id=\"official-inline-err\""));
+        assertThat(roBlock).contains("id=\"official-row-" + id + "\"").contains("Lv10")
+                .doesNotContain("data-official-display-form").doesNotContain("hx-post")
+                .contains("需要「管理虚拟账号」权限");
+        mvc.perform(htmx(post("/admin/virtual-accounts/official/" + id + "/display-level").with(authentication(viewer))
+                .with(csrf()).param("displayLevel", "9"), "official-inline-err")).andExpect(status().isForbidden());
+
+        // 真实 USER 目标 → 422；越界 → 422
+        User real = newUser();
+        mvc.perform(htmx(post("/admin/virtual-accounts/official/" + real.getId() + "/display-level")
+                .with(authentication(manager)).with(csrf()).param("displayLevel", "9"), "official-inline-err"))
+                .andExpect(status().isUnprocessableEntity());
+        int max = jdbc.queryForObject("SELECT MAX(level) FROM growth_levels", Integer.class);
+        mvc.perform(htmx(post("/admin/virtual-accounts/official/" + id + "/display-level")
+                .with(authentication(manager)).with(csrf()).param("displayLevel", String.valueOf(max + 1)),
+                "official-inline-err")).andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT display_level FROM growth_accounts WHERE user_id = ?", Integer.class, id))
+                .isEqualTo(10);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM growth_accounts WHERE user_id = ?", Long.class,
+                real.getId())).isZero();
+    }
+
+    /** 注销已提交的官方号（造 DONE 行，免得被注销扫描器真去级联）：列表不再出现、写入 422（D1/D2：级联进行中不补建 growth_accounts 行）。 */
+    @Test
+    void officialWithDeletionSubmittedIsHiddenAndRejected() throws Exception {
+        long n = SEQ.incrementAndGet();
+        User official = users.saveAndFlush(User.newAdmin("official-del-" + n + "@tailtopia.test", "注销官方号" + n,
+                "{bcrypt}x"));
+        jdbc.update("INSERT INTO account_deletions (user_id, status, requested_at) VALUES (?, 'DONE', now())",
+                official.getId());
+        Authentication manager = staffWith(AdminPermissions.VIRTUAL_ACCOUNT_MANAGE);
+        String page = mvc.perform(get("/admin/virtual-accounts").with(authentication(manager)).param("lang", "zh_CN"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(page).doesNotContain("id=\"official-row-" + official.getId() + "\"");
+        mvc.perform(htmx(post("/admin/virtual-accounts/official/" + official.getId() + "/display-level")
+                .with(authentication(manager)).with(csrf()).param("displayLevel", "9"), "official-inline-err"))
+                .andExpect(status().isUnprocessableEntity());
     }
 }

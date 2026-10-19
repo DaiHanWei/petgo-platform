@@ -27,8 +27,11 @@ class MeGrowthFrameIntegrationTest extends ApiIntegrationTest {
 
     private User userAtLevel(int level) {
         User u = newUser();
+        // lifetime_total 必须与 level 自洽（取该级门槛）：本用户发请求会经 UserActivityFilter 触发 @Async 每日登录入账，
+        // 入账按 lifetime_total 重算等级——写 0 会被打回 Lv1（NEWBIE → 生效框 NONE），断言随异步时序忽红忽绿。
         jdbc.update("INSERT INTO growth_accounts (user_id, lifetime_total, level, version, created_at, updated_at)"
-                + " VALUES (?, 0, ?, 0, now(), now())", u.getId(), level);
+                + " VALUES (?, (SELECT threshold FROM growth_levels WHERE level = ?), ?, 0, now(), now())",
+                u.getId(), level, level);
         return u;
     }
 

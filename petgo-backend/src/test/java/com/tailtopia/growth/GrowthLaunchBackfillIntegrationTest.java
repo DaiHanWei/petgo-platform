@@ -65,7 +65,7 @@ class GrowthLaunchBackfillIntegrationTest extends ApiIntegrationTest {
         User f = newUser();
         activeDays(f.getId(), 5);
         jdbc.update("INSERT INTO growth_accounts (user_id, lifetime_total, level) VALUES (?, 10, 1)", f.getId());
-        User v = users.saveAndFlush(User.newVirtual("it-bf-virtual-" + SEQ.incrementAndGet(), "v", null,
+        User v = users.saveAndFlush(User.newVirtual("virtual:it-bf-" + SEQ.incrementAndGet(), "v", null,
                 adminActorId()));
         long notificationsBefore = jdbc.queryForObject("SELECT count(*) FROM notifications", Long.class);
 

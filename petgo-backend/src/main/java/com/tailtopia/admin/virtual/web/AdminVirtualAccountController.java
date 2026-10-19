@@ -133,6 +133,7 @@ public class AdminVirtualAccountController {
                 default -> "admin/fragments/virtual-accounts-list :: rows(oob=true)";
             };
         }
+        populateOfficials(model); // 官方号区块只在整页里（htmx 分流的三块都不含它）
         return "admin/virtual-accounts";
     }
 
@@ -169,6 +170,17 @@ public class AdminVirtualAccountController {
         model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
         // V1.4.0 ① Story 4.4 · J2：展示等级卡（下拉 Lv1 ~ 等级表最高级，随追加自动变长）
         model.addAttribute("displayLevel", growthDisplayLevels.displayLevels(List.of(id)).get(id));
+        model.addAttribute("displayLevelOptions", growthDisplayLevels.levelOptions());
+    }
+
+    /**
+     * 官方号区块（V1.4.0 ① Story 4.4 · P-7，2026-10-19 拍板落点）：官方号列表 + 一次批量读展示等级 + 下拉选项。
+     */
+    private void populateOfficials(Model model) {
+        var officials = service.listOfficial();
+        model.addAttribute("officials", officials);
+        model.addAttribute("officialDisplayLevels", growthDisplayLevels.displayLevels(
+                officials.stream().map(com.tailtopia.admin.virtual.dto.OfficialAccountRow::id).toList()));
         model.addAttribute("displayLevelOptions", growthDisplayLevels.levelOptions());
     }
 
@@ -270,6 +282,30 @@ public class AdminVirtualAccountController {
         if (hx.isHtmx()) {
             service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());
             return afterAction(id, msg.get("admin.flash.growth.displayLevelSaved"), model, response);
+        }
+        try {
+            service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.growth.displayLevelSaved"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/virtual-accounts";
+    }
+
+    /**
+     * 改官方号展示等级（V1.4.0 ① Story 4.4 · P-7，2026-10-19 拍板落点）：与虚拟号展示等级同门、同一服务方法
+     * （目标须是虚拟号 / 官方号，真实用户 422；注销已提交 422；越界 422）。成功 → 官方号区块整块 oob + toast。
+     */
+    @PostMapping("/admin/virtual-accounts/official/{id}/display-level")
+    @PreAuthorize(AUTH)
+    public String setOfficialDisplayLevel(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, @RequestParam(value = "displayLevel", required = false) String displayLevel,
+            HxRequest hx, Model model, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());
+            populateOfficials(model);
+            model.addAttribute("toast", msg.get("admin.flash.growth.displayLevelSaved"));
+            return "admin/fragments/official-accounts :: saved";
         }
         try {
             service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());

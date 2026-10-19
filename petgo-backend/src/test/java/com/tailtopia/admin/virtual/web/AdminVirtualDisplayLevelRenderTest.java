@@ -162,4 +162,53 @@ class AdminVirtualDisplayLevelRenderTest {
         assertThat(html.indexOf("账号物种定位")).isLessThan(html.indexOf("展示等级"));
         assertThat(html.indexOf("展示等级")).isLessThan(html.indexOf("建号人"));
     }
+
+    // ------------------------------------------------------------------ P-7 官方号区块（2026-10-19 拍板落点）
+
+    private static final String OFFICIAL = "<div th:replace=\"~{admin/fragments/official-accounts :: rows(false)}\"></div>";
+
+    private static Map<String, Object> officials(DisplayLevel current) {
+        Map<String, Object> v = new HashMap<>();
+        v.put("officials", List.of(new com.tailtopia.admin.virtual.dto.OfficialAccountRow(9L, "TailUs", null)));
+        Map<Long, DisplayLevel> dl = new HashMap<>();
+        if (current != null) {
+            dl.put(9L, current);
+        }
+        v.put("officialDisplayLevels", dl);
+        v.put("displayLevelOptions", OPTIONS);
+        return v;
+    }
+
+    @Test
+    void officialBlockWithManageHasOnlyDisplayLevelForm() {
+        auth("ROLE_ADMIN", "virtual_account.manage");
+
+        String html = render(OFFICIAL, officials(new DisplayLevel(12, GrowthTier.GUARDIAN)));
+
+        assertThat(html).contains("id=\"official-rows\"").contains("id=\"official-row-9\"").contains("TailUs")
+                .contains("tier-GUARDIAN").contains("Lv12")
+                .contains("hx-post=\"/admin/virtual-accounts/official/9/display-level\"")
+                .contains("data-confirm-args=\"TailUs\"").contains("data-confirm-input=\"displayLevel\"")
+                .containsPattern("<option value=\"12\"\\s+selected=\"selected\">")
+                .doesNotContain("/enabled").doesNotContain("/species").doesNotContain("data-official-display-forbidden")
+                .doesNotContain("??");
+    }
+
+    @Test
+    void officialBlockWithoutManageIsReadOnlyWithHint() {
+        auth("ROLE_ADMIN", "virtual_account.view");
+
+        String html = render(OFFICIAL, officials(null));
+
+        assertThat(html).contains("id=\"official-row-9\"").contains("—").doesNotContain("hx-post")
+                .doesNotContain("<form").contains("data-official-display-forbidden").contains("需要「管理虚拟账号」权限");
+    }
+
+    @Test
+    void officialBlockEmptyState() {
+        auth("ROLE_ADMIN", "virtual_account.manage");
+        Map<String, Object> v = officials(null);
+        v.put("officials", List.of());
+        assertThat(render(OFFICIAL, v)).contains("暂无官方号").doesNotContain("<table");
+    }
 }

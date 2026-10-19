@@ -116,7 +116,7 @@ class GrowthActivityIntegrationTest extends ApiIntegrationTest {
     @Test
     void virtualAuthorGetsNothingButRealLikerDoes() throws Exception {
         User liker = newUser();
-        User virtual = users.saveAndFlush(User.newVirtual("it-virtual-" + SEQ.incrementAndGet(), "v", null,
+        User virtual = users.saveAndFlush(User.newVirtual("virtual:it-" + SEQ.incrementAndGet(), "v", null,
                 adminActorId()));
         long postId = postBy(virtual.getId());
 

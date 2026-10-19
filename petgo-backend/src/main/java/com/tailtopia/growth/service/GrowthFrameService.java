@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +38,13 @@ public class GrowthFrameService {
     private final GrowthLevelDefRepository levels;
     private final Clock clock;
 
+    @Autowired
     public GrowthFrameService(NamedParameterJdbcTemplate jdbc, GrowthAccountRepository accounts,
+            GrowthLevelDefRepository levels) {
+        this(jdbc, accounts, levels, Clock.systemUTC());
+    }
+
+    GrowthFrameService(NamedParameterJdbcTemplate jdbc, GrowthAccountRepository accounts,
             GrowthLevelDefRepository levels, Clock clock) {
         this.jdbc = jdbc;
         this.accounts = accounts;

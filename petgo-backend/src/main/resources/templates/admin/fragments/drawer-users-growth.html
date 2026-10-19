@@ -33,35 +33,6 @@
            th:utext="#{admin.v140.growth.virtual.hint(|<a href=&quot;${vaUrl}&quot; data-growth-va-link>${vaLabel}</a>|)}">虚拟号不参与成长值，没有明细，不能调整。</p>
     </div>
 
-    <!--/* 官方号（Story 4.4 · P-7）：不参与成长值；展示等级可改（官方号不在「运营发布身份」页，故落在这里），
-           门 = virtual_account.manage（与虚拟号展示等级同码）。原生确认，{1} 取下拉当前值。 */-->
-    <div th:if="${gtab.official()}" data-growth-state="OFFICIAL"
-         th:with="canSetDisplay=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''virtual_account.manage'')')}">
-        <h3 th:text="#{admin.v140.growth.display.title}">展示等级</h3>
-        <p class="growth-ov-val">
-            <th:block th:if="${gtab.displayLevel() != null}">
-                <b th:text="'Lv' + ${gtab.displayLevel()}">Lv12</b>
-                <span class="tier-dot" th:classappend="'tier-' + ${gtab.displayTier().name()}"></span><span
-                    th:text="#{${'admin.v140.growth.tier.' + gtab.displayTier().name()}}">Guardian</span>
-            </th:block>
-            <span th:unless="${gtab.displayLevel() != null}">—</span>
-        </p>
-        <form class="inline" th:if="${canSetDisplay and readOnly != true}" data-growth-display-form
-              th:attr="hx-post=@{/admin/users/{id}/growth/display-level(id=${gtab.userId()})},
-                       data-confirm=#{admin.v140.growth.display.confirm},data-confirm-args=${gtab.displayName() != null} ? ${gtab.displayName()} : ('#' + ${gtab.userId()})"
-              data-confirm-input="displayLevel" hx-target="#user-drawer-err" hx-swap="innerHTML">
-            <select name="displayLevel" class="sel" required>
-                <option th:each="o : ${gtab.displayLevelOptions()}" th:value="${o.level()}"
-                        th:selected="${gtab.displayLevel() != null and gtab.displayLevel() == o.level()}"
-                        th:text="#{admin.v140.growth.display.option(${o.level()}, #{${'admin.v140.growth.tier.' + o.tier().name()}})}">Lv7 · Buddy</option>
-            </select>
-            <button type="submit" class="btn btn-sm" th:text="#{admin.common.save}">保存</button>
-        </form>
-        <p class="hint" th:unless="${canSetDisplay}"
-           th:text="#{admin.v130.err.forbidden(#{perm.virtual_account.manage})}">需要「管理虚拟账号」权限</p>
-        <p class="hint" th:text="#{admin.v140.growth.official.hint}">官方号不参与成长值，没有明细，不能调整 EXP。</p>
-    </div>
-
     <!--/* 真实用户（I1）：概览三格 → 调整卡 → 明细 */-->
     <th:block th:if="${gtab.state().name() == 'REAL'}">
         <div class="growth-ov" data-growth-state="REAL">
@@ -89,8 +60,10 @@
              th:with="canAdjust=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.user_adjust'')')},
                       off=${!canAdjust or gtab.adjustBlockedKey() != null}">
             <h3 th:text="#{admin.v140.growth.adjust.title}">调整 EXP</h3>
+            <!--/* 置灰态不挂 hx-post（只给值 null 让 Thymeleaf 去掉该属性）：只读员工拿不到任何写入口
+                   （AdminUserDrawerIntegrationTest AC5 护栏 · 历史事故「按钮在、点了 403」）。 */-->
             <form class="inline" id="user-growth-adjust-form"
-                  th:attr="hx-post=@{/admin/users/{id}/growth/adjust/confirm(id=${gtab.userId()})}"
+                  th:attr="hx-post=${off} ? null : @{/admin/users/{id}/growth/adjust/confirm(id=${gtab.userId()})}"
                   hx-target="#user-drawer-err" hx-swap="innerHTML">
                 <!--/* 一次性幂等 token：调整成功后本面板重渲染 = 新 token（幂等键 ADMIN:{token}）。 */-->
                 <input type="hidden" name="grantToken" th:value="${growthGrantToken}"/>

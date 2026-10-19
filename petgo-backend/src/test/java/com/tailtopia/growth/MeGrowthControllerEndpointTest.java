@@ -25,6 +25,9 @@ class MeGrowthControllerEndpointTest extends ApiIntegrationTest {
     @Autowired
     private GrowthLedgerService ledger;
 
+    @Autowired
+    private com.tailtopia.support.VetTestSupport vets;
+
     private static final Instant NOW = Instant.now();
 
     private void gift(long userId, int i) {
@@ -75,7 +78,9 @@ class MeGrowthControllerEndpointTest extends ApiIntegrationTest {
     @Test
     void guestIs401AndVetIs403() throws Exception {
         mvc.perform(get("/api/v1/me/growth")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/me/growth").header(HttpHeaders.AUTHORIZATION, vetBearer(1L)))
+        // 须是真实存在的在职兽医：鉴权链会回查兽医账号，不存在的 vetId 直接 401，测不到 USER 门本身。
+        long vetId = vets.newActiveVet("me-growth").getId();
+        mvc.perform(get("/api/v1/me/growth").header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
                 .andExpect(status().isForbidden());
     }
 

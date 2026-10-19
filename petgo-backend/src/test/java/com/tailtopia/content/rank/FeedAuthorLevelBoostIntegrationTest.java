@@ -51,7 +51,7 @@ class FeedAuthorLevelBoostIntegrationTest extends ApiIntegrationTest {
         level(lv15.getId(), 15, null);
         User lv14 = newUser();
         level(lv14.getId(), 14, null);
-        User virtual = users.saveAndFlush(User.newVirtual("it-boost-virtual-" + SEQ.incrementAndGet(), "v", null,
+        User virtual = users.saveAndFlush(User.newVirtual("virtual:it-boost-" + SEQ.incrementAndGet(), "v", null,
                 adminActorId()));
         level(virtual.getId(), 1, 15); // 展示等级 15，但不参与成长值
 

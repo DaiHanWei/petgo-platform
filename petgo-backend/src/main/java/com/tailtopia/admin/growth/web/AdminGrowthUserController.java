@@ -42,10 +42,6 @@ public class AdminGrowthUserController {
     static final String GROWTH_ADJUST_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('"
             + AdminPermissions.GROWTH_USER_ADJUST + "')";
 
-    /** 展示等级（官方号，Story 4.4 · P-7）与「运营发布身份」页虚拟号展示等级同一个码。 */
-    static final String DISPLAY_LEVEL_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('"
-            + AdminPermissions.VIRTUAL_ACCOUNT_MANAGE + "')";
-
     private final AdminGrowthUserService service;
     private final Messages msg;
 
@@ -113,32 +109,6 @@ public class AdminGrowthUserController {
         try {
             service.adjust(userId, type, delta, note, grantToken, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.growth.adjusted", signedDelta(delta)));
-        } catch (AppException e) {
-            flash.addFlashAttribute("error", msg.resolve(e));
-        }
-        return "redirect:/admin/users?open=" + userId;
-    }
-
-    /**
-     * 改官方号展示等级（Story 4.4 · P-7）：原生确认后 POST；成功只换成长值页签 + toast；422 落 {@code #user-drawer-err}。
-     */
-    @PostMapping("/admin/users/{userId}/growth/display-level")
-    @PreAuthorize(DISPLAY_LEVEL_AUTH)
-    public String setDisplayLevel(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long userId,
-            @RequestParam(value = "displayLevel", required = false) String displayLevel, HxRequest hx, Model model,
-            HttpServletResponse response, RedirectAttributes flash) {
-        if (hx.isHtmx()) {
-            service.setOfficialDisplayLevel(userId, displayLevel, admin.getAdminAccountId());
-            response.setHeader(AdminFragmentResponses.HEADER_RETARGET, "#user-growth-panel");
-            response.setHeader(AdminFragmentResponses.HEADER_RESWAP, "outerHTML");
-            model.addAttribute("growthTab", service.tab(userId));
-            model.addAttribute("growthGrantToken", UUID.randomUUID().toString());
-            model.addAttribute("toast", msg.get("admin.flash.growth.displayLevelSaved"));
-            return "admin/fragments/drawer-users-growth :: saved";
-        }
-        try {
-            service.setOfficialDisplayLevel(userId, displayLevel, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", msg.get("admin.flash.growth.displayLevelSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }

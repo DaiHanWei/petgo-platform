@@ -11,7 +11,6 @@ import com.tailtopia.growth.domain.RuleCode;
 import com.tailtopia.growth.repository.GrowthLevelDefRepository;
 import com.tailtopia.growth.service.AdminAdjustCommand;
 import com.tailtopia.growth.service.AdminAdjustCommand.AdjustType;
-import com.tailtopia.growth.service.GrowthDisplayLevelService;
 import com.tailtopia.growth.service.GrowthIdemKeys;
 import com.tailtopia.growth.service.GrowthLedgerService;
 import com.tailtopia.pay.domain.PaymentPurpose;
@@ -54,7 +53,7 @@ public class AdminGrowthUserService {
 
     public static final int PAGE_SIZE = 20;
 
-    static final String USER_SQL = "SELECT u.account_type, u.role, u.status, u.deleted_at IS NOT NULL AS deleted, "
+    static final String USER_SQL = "SELECT u.account_type, u.status, u.deleted_at IS NOT NULL AS deleted, "
             + "COALESCE(u.nickname, u.display_name) AS name, a.lifetime_total, a.level, a.display_level "
             + "FROM users u LEFT JOIN growth_accounts a ON a.user_id = u.id WHERE u.id = :id";
 
@@ -64,8 +63,6 @@ public class AdminGrowthUserService {
             + "l.created_at FROM growth_ledger l LEFT JOIN growth_ledger o ON o.id = l.reverses_id";
 
     static final String COUNT_SELECT = "SELECT count(*) FROM growth_ledger l";
-
-    static final String DELETION_SQL = "SELECT count(*) FROM account_deletions WHERE user_id = :id";
 
     static final String EVER_SQL = "SELECT count(*) FROM growth_ledger WHERE user_id = :u";
 
@@ -94,27 +91,20 @@ public class AdminGrowthUserService {
     private final GrowthLevelDefRepository levels;
     private final AdminAccountRepository adminAccounts;
     private final AdminAuditService audit;
-    private final GrowthDisplayLevelService displayLevels;
 
     public AdminGrowthUserService(NamedParameterJdbcTemplate jdbc, GrowthLedgerService ledgerService,
-            GrowthLevelDefRepository levels, AdminAccountRepository adminAccounts, AdminAuditService audit,
-            GrowthDisplayLevelService displayLevels) {
+            GrowthLevelDefRepository levels, AdminAccountRepository adminAccounts, AdminAuditService audit) {
         this.jdbc = jdbc;
         this.ledgerService = ledgerService;
         this.levels = levels;
         this.adminAccounts = adminAccounts;
         this.audit = audit;
-        this.displayLevels = displayLevels;
     }
 
     // ------------------------------------------------------------------ 视图模型
 
-    /**
-     * 页签四态。停用是 REAL 的一个标记（概览与明细照常、调整卡置灰）。OFFICIAL = 官方号（{@code role = ADMIN}，与
-     * 上线回填 / {@code GrowthQueryService.BADGES_SQL} 同口径；兽医号 VET 不算，仍走 REAL + 不参与置灰；
-     * Story 4.4 · P-7）：不参与成长值，同虚拟号只看展示等级，但展示等级可在本页签改（官方号不在「运营发布身份」页）。
-     */
-    public enum State { REAL, VIRTUAL, DELETED, OFFICIAL }
+    /** 页签三态。停用是 REAL 的一个标记（概览与明细照常、调整卡置灰）。 */
+    public enum State { REAL, VIRTUAL, DELETED }
 
     /**
      * 页签视图。
@@ -126,31 +116,10 @@ public class AdminGrowthUserService {
      */
     public record Tab(long userId, State state, boolean deactivated, String adjustBlockedKey, int level,
             GrowthTier tier, long lifetimeTotal, Integer nextLevel, Long remaining, Integer displayLevel,
-            GrowthTier displayTier, Ledger ledger, List<GrowthDisplayLevelService.DisplayLevel> displayLevelOptions,
-            String displayName) {
-
-        /** 带展示等级下拉、无显示名（确认语回落到 #id）。 */
-        public Tab(long userId, State state, boolean deactivated, String adjustBlockedKey, int level, GrowthTier tier,
-                long lifetimeTotal, Integer nextLevel, Long remaining, Integer displayLevel, GrowthTier displayTier,
-                Ledger ledger, List<GrowthDisplayLevelService.DisplayLevel> displayLevelOptions) {
-            this(userId, state, deactivated, adjustBlockedKey, level, tier, lifetimeTotal, nextLevel, remaining,
-                    displayLevel, displayTier, ledger, displayLevelOptions, null);
-        }
-
-        /** Story 4.2 的 12 参形态（无展示等级下拉）。 */
-        public Tab(long userId, State state, boolean deactivated, String adjustBlockedKey, int level, GrowthTier tier,
-                long lifetimeTotal, Integer nextLevel, Long remaining, Integer displayLevel, GrowthTier displayTier,
-                Ledger ledger) {
-            this(userId, state, deactivated, adjustBlockedKey, level, tier, lifetimeTotal, nextLevel, remaining,
-                    displayLevel, displayTier, ledger, List.of());
-        }
+            GrowthTier displayTier, Ledger ledger) {
 
         public boolean virtual() {
             return state == State.VIRTUAL;
-        }
-
-        public boolean official() {
-            return state == State.OFFICIAL;
         }
 
         public boolean deleted() {
@@ -221,13 +190,6 @@ public class AdminGrowthUserService {
             GrowthTier dt = u.displayLevel == null ? null : tierOf(defs, u.displayLevel);
             return new Tab(userId, State.VIRTUAL, false, null, 1, null, 0, null, null, u.displayLevel, dt, null);
         }
-        if ("ADMIN".equals(u.role)) {
-            GrowthTier dt = u.displayLevel == null ? null : tierOf(defs, u.displayLevel);
-            List<GrowthDisplayLevelService.DisplayLevel> options = defs.stream()
-                    .map(d -> new GrowthDisplayLevelService.DisplayLevel(d.getLevel(), d.getTier())).toList();
-            return new Tab(userId, State.OFFICIAL, !"ACTIVE".equals(u.status), null, 1, null, 0, null, null,
-                    u.displayLevel, dt, null, options, u.name);
-        }
         boolean deactivated = !"ACTIVE".equals(u.status);
         String blocked = null;
         if (!ledgerService.participates(userId)) {
@@ -249,7 +211,7 @@ public class AdminGrowthUserService {
     @Transactional(readOnly = true)
     public Ledger ledger(long userId, String ruleRaw, String fromRaw, String toRaw, String pageRaw) {
         UserRow u = user(userId);
-        if (u.deleted || "VIRTUAL".equals(u.accountType) || "ADMIN".equals(u.role)) {
+        if (u.deleted || "VIRTUAL".equals(u.accountType)) {
             return new Ledger(userId, List.of(), 0, 1, 0, false, null, null, null);
         }
         return query(userId, ruleRaw, fromRaw, toRaw, pageRaw);
@@ -434,34 +396,6 @@ public class AdminGrowthUserService {
         return r;
     }
 
-    /**
-     * 改官方号展示等级（Story 4.4 · P-7）：目标须是未注销（含注销已提交）的官方号（role = ADMIN），否则 422；
-     * 写入经 {@link GrowthDisplayLevelService#set}（只写 display_level），值未变不写审计。
-     */
-    @Transactional
-    public void setOfficialDisplayLevel(long userId, String levelRaw, long adminId) {
-        UserRow u = user(userId);
-        if (u.deleted || "VIRTUAL".equals(u.accountType) || !"ADMIN".equals(u.role)) {
-            throw AppException.validation("仅官方号可在此设置展示等级").code("admin.err.growth.display.officialOnly");
-        }
-        Long deletion = jdbc.queryForObject(DELETION_SQL, new MapSqlParameterSource("id", userId), Long.class);
-        if (deletion != null && deletion > 0) {
-            // 注销已提交（异步级联进行中）：不再补建 growth_accounts 行（D1/D2），不只靠模板藏表单
-            throw AppException.validation("该账号已注销或已停用，不可调整").code("admin.err.growth.userInactive");
-        }
-        int level;
-        try {
-            level = Integer.parseInt(levelRaw == null ? "" : levelRaw.trim());
-        } catch (NumberFormatException e) {
-            level = 0; // → set() 的越界 422
-        }
-        GrowthDisplayLevelService.Change c = displayLevels.set(userId, level);
-        if (c.changed()) {
-            audit.record(adminId, AuditActions.GROWTH_DISPLAY_LEVEL_CHANGED, "user", String.valueOf(userId),
-                    "displayLevel " + (c.oldLevel() == null ? "—" : c.oldLevel()) + "→" + c.newLevel());
-        }
-    }
-
     // ------------------------------------------------------------------ 工具
 
     /** 带符号的增减值：{@code +5} / {@code -1}。 */
@@ -471,7 +405,7 @@ public class AdminGrowthUserService {
 
     private UserRow user(long userId) {
         List<UserRow> rows = jdbc.query(USER_SQL, new MapSqlParameterSource("id", userId), (rs, i) -> new UserRow(
-                rs.getString("account_type"), rs.getString("role"), rs.getString("status"), rs.getBoolean("deleted"), rs.getString("name"),
+                rs.getString("account_type"), rs.getString("status"), rs.getBoolean("deleted"), rs.getString("name"),
                 (Long) rs.getObject("lifetime_total", Long.class), (Integer) rs.getObject("level", Integer.class),
                 (Integer) rs.getObject("display_level", Integer.class)));
         if (rows.isEmpty()) {
@@ -569,7 +503,7 @@ public class AdminGrowthUserService {
         return ids;
     }
 
-    private record UserRow(String accountType, String role, String status, boolean deleted, String name, Long lifetimeTotal,
+    private record UserRow(String accountType, String status, boolean deleted, String name, Long lifetimeTotal,
             Integer level, Integer displayLevel) {
     }
 
