@@ -34,7 +34,11 @@
         <!--/* 送礼 QRIS 最低金额配置行（AC8 / UI L1 · L6）：「修改」行内展开 → 服务端确认弹层 */-->
         <div th:replace="~{admin/fragments/gift-qris-line :: line}"></div>
 
-        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::gift-filters}, ~{::gift-summary}, ~{::gift-table}, ~{::gift-drawer})}">
+        <!--/* UI L1 顺序：配置行 → 摘要条三格 → 筛选 → 表格。摘要条放在模板 B 外面（模板 B 的槽位是筛选在前），
+               id=gift-summary 不变，列表刷新的 oob 照样命中。 */-->
+        <div th:replace="~{admin/fragments/gift-catalog-list :: sumbar(false)}"></div>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::gift-filters}, ~{}, ~{::gift-table}, ~{::gift-drawer})}">
             <form th:fragment="gift-filters" class="filter-bar" data-autosubmit th:action="@{/admin/gift-catalog}" method="get"
                   th:attr="hx-get=@{/admin/gift-catalog}" hx-target="#gift-rows" hx-swap="innerHTML" hx-push-url="true">
                 <!--/* 抽屉内新建 / 编辑 / 上下线成功 → HX-Trigger admin:gift-catalog-list-refresh：
@@ -66,8 +70,6 @@
                     </select>
                 </label>
             </form>
-
-            <div th:fragment="gift-summary" th:replace="~{admin/fragments/gift-catalog-list :: sumbar(false)}"></div>
 
             <div th:fragment="gift-table" id="gift-rows">
                 <div th:replace="~{admin/fragments/gift-catalog-list :: rows(false)}"></div>

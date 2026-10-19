@@ -95,7 +95,8 @@
             <td class="nowrap"><th:block th:replace="~{admin/fragments/gift-orders-list :: who(${r.senderName()}, ${r.senderIdText()}, ${r.senderDeleted()})}"></th:block></td>
             <td class="nowrap"><th:block th:replace="~{admin/fragments/gift-orders-list :: pet(${r})}"></th:block></td>
             <td class="nowrap"><th:block th:replace="~{admin/fragments/gift-orders-list :: who(${r.ownerName()}, ${r.ownerIdText()}, ${r.ownerDeleted()})}"></th:block></td>
-            <td th:text="${r.giftName(#locale)}">Salmon</td>
+            <td class="nowrap"><img class="gift-ico" th:if="${r.giftIconUrl() != null}" th:src="${r.giftIconUrl()}" alt=""/><span
+                    th:text="${r.giftName(#locale)}">Salmon</span></td>
             <td class="num" th:text="${r.quantity()}">1</td>
             <td class="num" th:text="${r.totalText()}">Rp5,000</td>
             <td class="nowrap" th:text="#{'admin.v140.giftOrders.channel.' + ${r.channel()}}">QRIS</td>

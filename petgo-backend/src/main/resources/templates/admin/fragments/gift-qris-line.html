@@ -16,25 +16,26 @@
     <div class="gift-cfgline-main">
         <b th:text="#{admin.v140.gift.qris.label}">送礼 QRIS 最低金额</b>
         <div class="hint" th:text="#{admin.v140.gift.qris.hint}">总价低于此金额时只能用 PawCoin。</div>
-        <details class="pl-inline" th:if="${canEdit}" data-gift-qris-edit>
-            <summary class="btn btn-sm" th:text="#{admin.v140.gift.qris.edit}">修改</summary>
-            <form class="gift-cfgline-form" th:attr="hx-post=@{/admin/gift-catalog/qris-min/confirm}"
-                  hx-target="#gift-qris-err" hx-swap="innerHTML">
-                <label class="field">
-                    <span th:text="#{admin.v140.gift.qris.newAmount}">新金额</span>
-                    <span>Rp <input class="inp" type="number" name="amount" min="100" max="100000000" step="1" required
-                                    th:value="${qrisMin}"/></span>
-                </label>
-                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.v140.gift.qris.next}">下一步</button>
-            </form>
-        </details>
         <div id="gift-qris-err" class="lst-inline-error" aria-live="polite"></div>
     </div>
     <span class="gift-cfgline-value" data-gift-qris-value
           th:text="'Rp' + ${#numbers.formatInteger(qrisMin, 1, 'COMMA')}">Rp10,000</span>
+    <!--/* UI L1：「修改」在金额右侧、带按钮样式；展开后表单整行落到下方（.gift-cfgline details[open] 占满一行）。 */-->
+    <details class="pl-inline" th:if="${canEdit}" data-gift-qris-edit>
+        <summary class="btn btn-neutral btn-sm" th:text="#{admin.v140.gift.qris.edit}">修改</summary>
+        <form class="gift-cfgline-form" th:attr="hx-post=@{/admin/gift-catalog/qris-min/confirm}"
+              hx-target="#gift-qris-err" hx-swap="innerHTML">
+            <label class="field">
+                <span th:text="#{admin.v140.gift.qris.newAmount}">新金额</span>
+                <span>Rp <input class="inp" type="number" name="amount" min="100" max="100000000" step="1" required
+                                th:value="${qrisMin}"/></span>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.v140.gift.qris.next}">下一步</button>
+        </form>
+    </details>
     <!--/* 只读：按钮留在原地、禁用，并注明缺哪个权限（admin.css「不可用按钮留原地说明条件」） */-->
     <th:block th:unless="${canEdit}">
-        <button type="button" class="btn btn-sm" disabled
+        <button type="button" class="btn btn-neutral btn-sm" disabled
                 th:title="#{admin.v130.err.forbidden(#{perm.gift.catalog_edit})}"
                 th:text="#{admin.v140.gift.qris.edit}">修改</button>
         <span class="hint" data-notice="gift-qris-readonly"

@@ -1380,3 +1380,36 @@ dialog.cm-modal label.cm-typed { display: block; margin: 0; font-size: var(--fs-
 .gift-kv { display: grid; grid-template-columns: 132px 1fr; gap: 12px 0; margin: 0; font-size: 13px; }
 .gift-kv dt { color: var(--muted); }
 .gift-kv dd { margin: 0; font-weight: 600; color: var(--ink); word-break: break-word; }
+
+/* ── V1.4.0 L2 第三轮还原度（成长体系 G1/G4/G5 · 用户抽屉 I1 / L1 · 礼物目录 L1/L2 · 送礼记录 M1）── */
+/* G1/G4/G5：三个页签的卡片撑满内容区（.card 默认 680 上限会把 7 列规则表挤到折行） */
+[data-gtab-panel] .card { max-width: none; }
+/* 表格里的输入 / 下拉：.card label 默认 block + 上边距，会把控件挤到单元格第二行 → 行内、无边距 */
+[data-gtab-panel] .tbl label { display: inline; margin: 0; }
+[data-gtab-panel] .tbl td { vertical-align: middle; }
+.growth-levels-grid .tbl .inp { width: 120px; }
+/* G4：「每 Rp [__] = [__] EXP」一行 */
+.growth-ratio { row-gap: 12px; margin-bottom: 8px; }
+.growth-ratio-lbl { font-size: var(--fs-sm); color: var(--ink-2); margin: 8px 0 6px; }
+.growth-ratio-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--ink-2); }
+.growth-ratio-line label { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.growth-ratio-line .inp { width: 110px; }
+/* I1：调整类型单选横排 + 输入框与「调整」同一行 */
+.growth-adjust-types { margin: 6px 0 10px; }
+.growth-adjust-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.growth-adjust-row input[name=delta] { width: 140px; }
+.growth-adjust-row input[name=note] { flex: 1; min-width: 160px; }
+/* 宠物与名额 L1：补发天数占位「补发天数（正整数）」不截断 */
+.ps-days { width: 220px; }
+/* 礼物目录 L1：「修改」在金额右侧；展开后表单整行落到下方（同 .wb-title-row 的 pl-inline） */
+.gift-cfgline > details.pl-inline[open] { flex-basis: 100%; }
+#gift-summary { grid-template-columns: repeat(3, minmax(140px, 200px)); }
+/* 礼物抽屉 L2：分组不用浏览器默认 fieldset 边框，标签在上、选项横排（.opsp-rad） */
+.gift-fset { border: 0; padding: 0; margin: 12px 0 4px; min-width: 0; }
+.gift-fset > legend { padding: 0; margin-bottom: 6px; font-size: var(--fs-sm); color: var(--ink-2); }
+[data-gift-form] label.field > span:first-child { display: block; margin-bottom: 4px; }
+[data-gift-form] .cfg-grid-2 > .field { margin: 12px 0 4px; }
+/* 送礼记录 M1：礼物列图标（订单快照图） */
+.gift-ico { height: 20px; width: auto; max-width: 48px; vertical-align: middle; margin-right: 6px; }
+/* 全局 input 带 7px 9px 内边距，会把 .opsp-rad 的 14px 圆环撑成椭圆 → 这两处复用时清零 */
+.growth-adjust-types input[type=radio], .gift-fset input[type=radio], .gift-fset input[type=checkbox] { padding: 0; }
