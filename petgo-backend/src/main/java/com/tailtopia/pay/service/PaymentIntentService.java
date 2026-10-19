@@ -349,6 +349,15 @@ public class PaymentIntentService {
     }
 
     /**
+     * 按内部 id 读意图（只读；业务行只存了 {@code payment_intent_id} 时用，如送礼订单的幂等重放 —— OCR #7：
+     * 重放必须认订单<b>自己挂着的</b>那笔意图，不能靠幂等键映射再「取回」，映射丢失会建出第二笔意图）。
+     */
+    @Transactional(readOnly = true)
+    public Optional<PaymentIntent> findById(long id) {
+        return intents.findById(id);
+    }
+
+    /**
      * 支付状态轮询（Story 1.5）。<b>仅本人意图</b>——token 归属校验（{@code userId} 不符或不存在均
      * {@link AppException#notFound}，用 404 不用 403 以免泄漏他人 token 存在性）。
      *

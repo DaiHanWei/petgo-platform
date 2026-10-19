@@ -142,6 +142,24 @@ class GiftQrisDeliveryIntegrationTest extends ApiIntegrationTest {
         assertThat(events.stream(GiftUndeliveredEvent.class).filter(e -> e.giftOrderId() == id)).hasSize(1);
     }
 
+    /** OCR #7：订单已关（EXPIRED）、意图仍 PENDING 时到账 → 不静默丢弃，走既有退回路径退成 PawCoin。 */
+    @Test
+    void paidAfterOrderClosedIsRefundedNotDropped() {
+        User sender = newUser();
+        PetProfile pet = newPet(newUser());
+        GiftSendResponse r = startQris(sender, pet, 1);
+        jdbc.update("UPDATE gift_orders SET status = 'EXPIRED' WHERE public_token = ?", r.orderToken());
+
+        paymentIntents.applyCallback(paid(r));
+
+        long id = orderId(r.orderToken());
+        assertThat(orderStatus(r.orderToken())).isEqualTo("UNDELIVERED_REFUNDED");
+        assertThat(jdbc.queryForObject("SELECT status FROM payment_intents WHERE public_token = ?", String.class,
+                r.payment().token())).as("到账不回滚").isEqualTo("PAID");
+        assertThat(events.stream(GiftSentEvent.class).filter(e -> e.giftOrderId() == id)).isEmpty();
+        assertThat(events.stream(GiftUndeliveredEvent.class).filter(e -> e.giftOrderId() == id)).hasSize(1);
+    }
+
     @Test
     void unpaidExpiryMarksOrderExpiredWithoutEvents() {
         User sender = newUser();

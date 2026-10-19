@@ -67,6 +67,8 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.notify.preference.PushPreferenceService pushPreferences;
     /** V1.4.0 ④ Story 2.1：收藏随注销物理删除。 */
     @Mock com.tailtopia.collect.service.CollectDeletionService collectDeletion;
+    /** OCR #2：宠物名额随注销终止。 */
+    @Mock com.tailtopia.profile.slot.PetSlotAccountDeletionService petSlotDeletion;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -75,7 +77,8 @@ class AccountDeletionServiceTest {
                 contentService, reviewService, violationCountService,
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
-                followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion);
+                followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion,
+                petSlotDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -101,6 +104,12 @@ class AccountDeletionServiceTest {
         verify(triageDeletion).deleteByUserId(7L);
         verify(consultAnonymization).anonymizeByUserId(7L);
         verify(notificationDeletion).deleteByUserId(7L);
+        // OCR #2：名额在宠物删除之后、通知删除之前终止（否则到期扫描还会给已注销账号写通知 / 推送）。
+        org.mockito.InOrder slotOrder = org.mockito.Mockito.inOrder(profileDeletion, petSlotDeletion,
+                notificationDeletion);
+        slotOrder.verify(profileDeletion).deleteAllForAccount(7L);
+        slotOrder.verify(petSlotDeletion).expireAllForAccount(7L);
+        slotOrder.verify(notificationDeletion).deleteByUserId(7L);
         // PawCoin 余额作废纳入级联（Story 1.6），且在删 user 行前。
         verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         // 1.1.6 电商/分享注销联动：shop 清理 + 内容分享行删除 + 分享奖励留痕删除。

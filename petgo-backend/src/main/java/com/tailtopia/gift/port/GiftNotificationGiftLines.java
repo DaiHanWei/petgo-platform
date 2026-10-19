@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 /**
  * 通知列表「送的是什么」端口 {@link NotificationGiftLines} 的实现（V1.4.0 gift L2 第二轮）。
  *
- * <p>一页一次查询：取本页涉及的（宠物 × 送礼人）自最早 {@code since} 起已送达的订单，再在内存里按每条通知的条件归属。
+ * <p>一页一次查询：取本页涉及的（宠物 × 送礼人）在 [最早 {@code since}, 最晚 {@code until}] 内已送达的订单，再在内存里按每条通知的条件归属。
  * 只读订单快照（礼物名 / 数量），不碰别的模块。
  */
 @Component
@@ -35,19 +35,23 @@ public class GiftNotificationGiftLines implements NotificationGiftLines {
         Set<Long> pets = new HashSet<>();
         Set<Long> senders = new HashSet<>();
         Instant earliest = null;
+        Instant latest = null;
         for (Query q : queries.values()) {
             pets.add(q.petId());
             senders.add(q.senderId());
             earliest = earliest == null || q.since().isBefore(earliest) ? q.since() : earliest;
+            latest = latest == null || q.until().isAfter(latest) ? q.until() : latest;
         }
-        List<GiftOrder> delivered = orders.findDeliveredForNotify(pets, senders, GiftOrderStatus.DELIVERED, earliest);
+        List<GiftOrder> delivered = orders.findDeliveredForNotify(pets, senders, GiftOrderStatus.DELIVERED, earliest,
+                latest);
         Map<Long, GiftLine> out = new HashMap<>();
         queries.forEach((notificationId, q) -> {
             GiftLine line = null;
             Long giftId = null;
             for (GiftOrder o : delivered) {
                 if (o.getPetId() == null || o.getPetId() != q.petId() || o.getSenderId() != q.senderId()
-                        || o.getDeliveredAt() == null || o.getDeliveredAt().isBefore(q.since())) {
+                        || o.getDeliveredAt() == null || o.getDeliveredAt().isBefore(q.since())
+                        || o.getDeliveredAt().isAfter(q.until())) {
                     continue;
                 }
                 if (giftId == null) {

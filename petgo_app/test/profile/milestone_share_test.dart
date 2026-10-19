@@ -16,6 +16,7 @@ class _FakeRepo implements MilestoneRepository {
   String? lastLocale;
   String? lastCollectionLevels;
   List<String>? lastCollectionCodes;
+  int? lastPetId;
 
   @override
   Future<String> createShare(String code,
@@ -25,6 +26,7 @@ class _FakeRepo implements MilestoneRepository {
       required String collectionLevels,
       required List<String> collectionCodes, int? petId}) async {
     lastCode = code;
+    lastPetId = petId;
     lastCollectionCodes = collectionCodes;
     lastTitle = title;
     lastLocale = locale;
@@ -59,7 +61,7 @@ const _item = MilestoneItem(
   completed: true,
 );
 
-Future<String?> _runShare(WidgetTester tester, _FakeRepo repo) async {
+Future<String?> _runShare(WidgetTester tester, _FakeRepo repo, {int? petId}) async {
   String? captured;
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -74,6 +76,7 @@ Future<String?> _runShare(WidgetTester tester, _FakeRepo repo) async {
               locale: const Locale('id'),
               petName: 'Momo',
               shareText: 'SHARE_TEXT',
+              petId: petId,
               collection: const [
                 MilestoneItem(
                     code: 'C-L1',
@@ -125,5 +128,11 @@ void main() {
     final shared = await _runShare(tester, repo);
 
     expect(shared, 'SHARE_TEXT');
+  });
+
+  testWidgets('OCR #5：传了 petId（多宠物逐只庆祝）→ 建分享按这只宠物，不取当前宠物', (tester) async {
+    final repo = _FakeRepo(token: 'Ab3xK9');
+    await _runShare(tester, repo, petId: 77);
+    expect(repo.lastPetId, 77);
   });
 }

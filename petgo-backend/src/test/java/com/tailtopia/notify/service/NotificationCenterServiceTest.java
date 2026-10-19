@@ -687,6 +687,34 @@ class NotificationCenterServiceTest {
         assertThat(fq.senderId()).isEqualTo(2L);
         assertThat(fq.since()).as("送礼人并入时刻 − 容差")
                 .isEqualTo(Instant.parse("2026-10-11T00:00:00Z").minus(NotificationCenterService.GIFT_SINCE_TOLERANCE));
+        assertThat(fq.until()).as("上界 = 本条 created_at（OCR #6）").isEqualTo(five.getCreatedAt());
+    }
+
+    /**
+     * OCR #1：送礼人 id ≥ 128 时 {@code actedAt} 的 Long 引用比较恒 false → 曾拿不到条件、恒显示通用文案。
+     * 两份 Long 刻意用不同实例（与线上一致：一份来自 ActorSummary 的 long 重新装箱）。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void singleSenderWithLargeIdStillGetsGiftLabel() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        Notification gift = giftRow(70L);
+        when(giftLinesPort.linesOf(any())).thenAnswer(inv -> {
+            Map<Long, NotificationGiftLines.Query> q = inv.getArgument(0);
+            return q.containsKey(gift.getId())
+                    ? Map.of(gift.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 5)) : Map.of();
+        });
+        long big = 100_000L;
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(Long.valueOf(big))), Set.of(),
+                Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u100000 mengirim Tulang ×5 untuk Mochi");
+        ArgumentCaptor<Map<Long, NotificationGiftLines.Query>> q = ArgumentCaptor.forClass(Map.class);
+        verify(giftLinesPort, times(1)).linesOf(q.capture());
+        assertThat(q.getValue().get(gift.getId()).senderId()).isEqualTo(big);
     }
 
     @Test

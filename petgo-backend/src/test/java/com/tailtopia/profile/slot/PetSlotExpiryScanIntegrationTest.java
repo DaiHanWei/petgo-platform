@@ -76,6 +76,10 @@ class PetSlotExpiryScanIntegrationTest extends ApiIntegrationTest {
     private PlatformTransactionManager txManager;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private PetSlotAccountDeletionService slotDeletion;
+    @Autowired
+    private com.tailtopia.account.repository.AccountDeletionRepository accountDeletions;
 
     @BeforeEach
     void setUp() {
@@ -217,6 +221,42 @@ class PetSlotExpiryScanIntegrationTest extends ApiIntegrationTest {
         setExpiry(t2, 86_400L); // 「时间流逝」到新到期日前 1 天
         expiry.scan(Instant.now());
         assertThat(notices(u.getId(), "PET_SLOT_EXPIRING")).isEqualTo(2L);
+        assertThat(notices(u.getId(), "PET_SLOT_EXPIRED")).isZero();
+    }
+
+    /** OCR #2：已提交注销 / 已注销的账号，到期提醒扫描不再写通知（双保险之一：查询排除）。 */
+    @Test
+    void deletedOrDeletingAccountsGetNoExpiringReminder() throws Exception {
+        User deleting = newUser();
+        threePetsThreeSlots(deleting);
+        setExpiry(rentalTokens(deleting.getId()).get(1), 2 * 86_400L);
+        accountDeletions.save(com.tailtopia.account.domain.AccountDeletion.request(deleting.getId()));
+        User deleted = newUser();
+        threePetsThreeSlots(deleted);
+        setExpiry(rentalTokens(deleted.getId()).get(1), 2 * 86_400L);
+        jdbc.update("UPDATE users SET deleted_at = now() WHERE id = ?", deleted.getId());
+
+        expiry.scan(Instant.now());
+
+        assertThat(notices(deleting.getId(), "PET_SLOT_EXPIRING")).isZero();
+        assertThat(notices(deleted.getId(), "PET_SLOT_EXPIRING")).isZero();
+    }
+
+    /** OCR #2：注销级联把 ACTIVE 名额置 EXPIRED（保留行），之后扫描不再碰它们。 */
+    @Test
+    void accountDeletionExpiresActiveRentalsAndKeepsRows() throws Exception {
+        User u = newUser();
+        threePetsThreeSlots(u);
+        List<String> tokens = rentalTokens(u.getId());
+        setExpiry(tokens.get(1), 2 * 86_400L);
+
+        assertThat(slotDeletion.expireAllForAccount(u.getId())).isEqualTo(2);
+        assertThat(slotDeletion.expireAllForAccount(u.getId())).as("幂等可重跑").isZero();
+
+        assertThat(rentalStatus(tokens.get(0))).isEqualTo("EXPIRED");
+        assertThat(rentalStatus(tokens.get(1))).isEqualTo("EXPIRED");
+        expiry.scan(Instant.now());
+        assertThat(notices(u.getId(), "PET_SLOT_EXPIRING")).isZero();
         assertThat(notices(u.getId(), "PET_SLOT_EXPIRED")).isZero();
     }
 

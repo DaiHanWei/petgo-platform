@@ -20,6 +20,7 @@ import com.tailtopia.mention.service.MentionCandidateMaintenanceService;
 import com.tailtopia.place.service.PlaceCommentService;
 import com.tailtopia.place.service.PlacePhotoService;
 import com.tailtopia.profile.service.ProfileDeletionService;
+import com.tailtopia.profile.slot.PetSlotAccountDeletionService;
 import com.tailtopia.share.service.ShareRewardDeletionService;
 import com.tailtopia.shared.im.ImAccountMapper;
 import com.tailtopia.shared.im.TencentImClient;
@@ -88,6 +89,8 @@ public class AccountDeletionService {
     private final PushPreferenceService pushPreferences;
     /** V1.4.0 ④ Story 2.1：帖子 / 场所收藏（仅本人可见的私人数据，物理删）。 */
     private final CollectDeletionService collectDeletion;
+    /** OCR #2：宠物名额 ACTIVE → EXPIRED（保留付费记录），否则到期扫描继续给已注销账号写通知 / 推送。 */
+    private final PetSlotAccountDeletionService petSlotDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -105,7 +108,8 @@ public class AccountDeletionService {
             TailsonalityDeletionService tailsonalityDeletion, FollowService followService,
             OpsPopupImpressionDeletionService opsPopupImpressionDeletion,
             GrowthAccountDeletionService growthDeletion,
-            PushPreferenceService pushPreferences, CollectDeletionService collectDeletion) {
+            PushPreferenceService pushPreferences, CollectDeletionService collectDeletion,
+            PetSlotAccountDeletionService petSlotDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -132,6 +136,7 @@ public class AccountDeletionService {
         this.growthDeletion = growthDeletion;
         this.pushPreferences = pushPreferences;
         this.collectDeletion = collectDeletion;
+        this.petSlotDeletion = petSlotDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -167,6 +172,9 @@ public class AccountDeletionService {
                 .merge(profileDeletion.deleteAllForAccount(userId)) // V1.4.0 multi-pet：逐只删全部宠物，最后按账号给身份证打标
                 .merge(triageDeletion.deleteByUserId(userId))
                 .merge(consultAnonymization.anonymizeByUserId(userId));
+        // OCR #2：宠物已全部删除 → 名额终止（ACTIVE → EXPIRED，保留付费记录）。⚠️ 必须在通知删除【前】：
+        // 否则删完通知到这一步之间，到期扫描还能再给他写一条。
+        petSlotDeletion.expireAllForAccount(userId);
         notificationDeletion.deleteByUserId(userId);
 
         // 内容审核 story 9 注销联动（§5.5）：必须在 user 行删除【前】完成——此时 author_id 仍可识别其内容。

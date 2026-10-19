@@ -28,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class GiftNotificationGiftLinesTest {
 
     private static final Instant T0 = Instant.parse("2026-10-19T08:00:00Z");
+    private static final Instant T_END = T0.plusSeconds(600);
 
     private final GiftOrderRepository repo = mock(GiftOrderRepository.class);
     private final GiftNotificationGiftLines port = new GiftNotificationGiftLines(repo);
@@ -50,8 +51,8 @@ class GiftNotificationGiftLinesTest {
 
     @Test
     void sameGiftSumsMixedGiftsOmittedOutsideWindowIgnored() {
-        when(repo.findDeliveredForNotify(anyCollection(), anyCollection(), eq(GiftOrderStatus.DELIVERED), any()))
-                .thenReturn(List.of(
+        when(repo.findDeliveredForNotify(anyCollection(), anyCollection(), eq(GiftOrderStatus.DELIVERED), any(),
+                any())).thenReturn(List.of(
                         delivered(1, 2L, 70L, 5L, 1, T0.minusSeconds(3600)), // 上一批（已读通知）的，窗口外
                         delivered(2, 2L, 70L, 5L, 5, T0.plusSeconds(1)),
                         delivered(3, 2L, 70L, 5L, 2, T0.plusSeconds(60)), // 同一人未读期间再送同一种 → 累加
@@ -61,14 +62,36 @@ class GiftNotificationGiftLinesTest {
                         delivered(7, 4L, 70L, 5L, 1, T0.plusSeconds(1)))); // 4 送给 70 的不算进 71 的条目
 
         Map<Long, GiftLine> out = port.linesOf(Map.of(
-                100L, new Query(70L, 2L, T0),
-                101L, new Query(70L, 3L, T0),
-                102L, new Query(71L, 4L, T0),
-                103L, new Query(72L, 9L, T0)));
+                100L, new Query(70L, 2L, T0, T_END),
+                101L, new Query(70L, 3L, T0, T_END),
+                102L, new Query(71L, 4L, T0, T_END),
+                103L, new Query(72L, 9L, T0, T_END)));
 
         assertThat(out).containsOnlyKeys(100L, 102L);
         assertThat(out.get(100L)).isEqualTo(new GiftLine("Gift5", "Hadiah5", 7));
         assertThat(out.get(102L)).isEqualTo(new GiftLine("Gift6", "Hadiah6", 10));
-        verify(repo).findDeliveredForNotify(anyCollection(), anyCollection(), eq(GiftOrderStatus.DELIVERED), eq(T0));
+        verify(repo).findDeliveredForNotify(anyCollection(), anyCollection(), eq(GiftOrderStatus.DELIVERED), eq(T0),
+                eq(T_END));
+    }
+
+    /** OCR #6：N1 已读后同一人再送 → 新建 N2；N1 只认 created_at 之前送达的单，文案不变。 */
+    @Test
+    void readNotificationIgnoresGiftsDeliveredAfterItsCreatedAt() {
+        Instant n1At = T0.plusSeconds(5);
+        Instant n2Since = T0.plusSeconds(3600);
+        Instant n2At = n2Since.plusSeconds(1);
+        when(repo.findDeliveredForNotify(anyCollection(), anyCollection(), eq(GiftOrderStatus.DELIVERED), any(),
+                any())).thenReturn(List.of(
+                        delivered(1, 2L, 70L, 5L, 5, T0.plusSeconds(1)), // N1 期间：Tulang ×5
+                        delivered(2, 2L, 70L, 6L, 1, n2Since.plusMillis(500)))); // N1 已读后送的另一种 → 属于 N2
+
+        Map<Long, GiftLine> out = port.linesOf(Map.of(
+                200L, new Query(70L, 2L, T0, n1At),
+                201L, new Query(70L, 2L, n2Since.minusSeconds(10), n2At)));
+
+        assertThat(out.get(200L)).as("N1 不被之后的礼带成混合 / 累加").isEqualTo(new GiftLine("Gift5", "Hadiah5", 5));
+        assertThat(out.get(201L)).as("N2 只算自己的那一单").isEqualTo(new GiftLine("Gift6", "Hadiah6", 1));
+        verify(repo).findDeliveredForNotify(anyCollection(), anyCollection(), eq(GiftOrderStatus.DELIVERED), eq(T0),
+                eq(n2At));
     }
 }
