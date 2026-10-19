@@ -31,7 +31,9 @@ CREATE TABLE gift_catalog (
     CONSTRAINT ck_gift_catalog_kind CHECK (kind IN ('NORMAL', 'EXCLUSIVE')),
     CONSTRAINT ck_gift_catalog_status CHECK (status IN ('ONLINE', 'OFFLINE')),
     CONSTRAINT ck_gift_catalog_exclusive_level CHECK (
-        (kind = 'EXCLUSIVE' AND min_level >= 1) OR (kind = 'NORMAL' AND min_level IS NULL))
+        -- min_level IS NOT NULL 必须显式写：NULL >= 1 为 NULL，NULL OR FALSE 仍是 NULL，CHECK 视 NULL 为通过。
+        (kind = 'EXCLUSIVE' AND min_level IS NOT NULL AND min_level >= 1)
+        OR (kind = 'NORMAL' AND min_level IS NULL))
 );
 
 -- App 目录接口：只取 ONLINE，按价位 / 排序值分组。

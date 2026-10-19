@@ -186,7 +186,11 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         String html = drawer(buyer.getId());
         assertThat(html).contains("data-utab=\"purchases\"").contains("已购解锁").contains("ESTP-L")
                 .contains("data-utab-panel=\"purchases\"");
-        String panel = html.substring(html.indexOf("data-utab-panel=\"purchases\""), html.indexOf("id=\"user-drawer-err\""));
+        // 只截「已购解锁」自己的面板：到下一个 data-utab-panel 为止。V1.4.0 起其后的 growth / petSlots / gifts
+        // 三个地基容器由各线填充（如 gifts 页签按 story 3.2 AC5.2 / AC5.6 自带 hx-get 胶囊与翻页按钮），不属于本页签。
+        int start = html.indexOf("data-utab-panel=\"purchases\"");
+        int next = html.indexOf("data-utab-panel=", start + 1);
+        String panel = html.substring(start, next > 0 ? next : html.indexOf("id=\"user-drawer-err\""));
         assertThat(panel).as("只读：不得出现任何按钮 / 表单").doesNotContain("<button").doesNotContain("<form");
 
         assertThat(drawer(nobody.getId())).contains("该用户还没有任何已购解锁");

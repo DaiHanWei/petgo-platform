@@ -137,8 +137,11 @@ class AdminGiftOrdersIntegrationTest extends ApiIntegrationTest {
                 .contains("（已删除）Boba").contains("Tennis ball")
                 .contains("已送达").contains("待支付").contains("已过期").contains("已付款未送达")
                 .contains("第 1 / 1 页（共 6 条）")
-                .as("全站视图有支付意图列").contains("支付意图")
-                .as("只读：页面无任何 POST 表单").doesNotContain("method=\"post\"");
+                .as("全站视图有支付意图列").contains("支付意图");
+        // 只读断言只看业务内容区：layout 顶栏常驻「退出登录」POST 表单（layout.html，全后台每页都有），不属于本页。
+        String content = html.substring(html.indexOf("class=\"wb-title-row\""));
+        assertThat(content).as("只读：页面无任何 POST 表单 / hx-post 写入口")
+                .doesNotContain("method=\"post\"").doesNotContain("hx-post");
         assertThat(html).as("导出按钮带全部当前筛选").contains("/admin/gift-orders/export.xlsx?senderId=&amp;ownerId=" + owner.getId());
     }
 

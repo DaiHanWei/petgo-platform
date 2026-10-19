@@ -21,6 +21,7 @@ import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.pay.GatewayStatus;
 import com.tailtopia.shared.pay.PaymentCallback;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -53,6 +54,8 @@ class MeGiftOrderEndpointTest extends ApiIntegrationTest {
     private PawCoinWalletService wallet;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private VetTestSupport vets;
 
     private GiftCatalogItem tenK;
 
@@ -103,7 +106,8 @@ class MeGiftOrderEndpointTest extends ApiIntegrationTest {
     void threeStatusesNewestFirstAndQrisBecomesDeliveredAfterPayment() throws Exception {
         User sender = newUser();
         User owner = newUser();
-        PetProfile goneLater = newPet(owner);
+        // 本分支是单宠物模型（uq_pet_profiles_owner_id：一主人一只）→ 「付款前被删的宠物」挂另一位主人。
+        PetProfile goneLater = newPet(newUser());
         PetProfile pet = newPet(owner);
 
         GiftSendResponse refunded = send(sender, goneLater, PayChannel.QRIS, 1);
@@ -183,7 +187,9 @@ class MeGiftOrderEndpointTest extends ApiIntegrationTest {
         mvc.perform(get("/api/v1/me/gift-orders").param("cursor", "%%%bad")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(sender.getId())))
                 .andExpect(status().isBadRequest());
-        mvc.perform(get("/api/v1/me/gift-orders").header(HttpHeaders.AUTHORIZATION, vetBearer(sender.getId())))
+        // 兽医 token 须对应 active vet 行：否则 BannedVetFilter 先以「账号不存在」回 401，测不到角色拦截（403）。
+        long vetId = vets.newActiveVet("gift-orders-it").getId();
+        mvc.perform(get("/api/v1/me/gift-orders").header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/me/gift-orders")).andExpect(status().isUnauthorized());
     }

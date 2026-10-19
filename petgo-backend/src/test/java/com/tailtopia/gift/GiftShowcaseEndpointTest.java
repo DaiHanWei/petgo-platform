@@ -18,6 +18,7 @@ import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.social.service.UserHideRelationService;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,8 @@ class GiftShowcaseEndpointTest extends ApiIntegrationTest {
     private UserHideRelationService hideService;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private VetTestSupport vets;
 
     private GiftCatalogItem bone;
     private GiftCatalogItem cake;
@@ -239,9 +242,11 @@ class GiftShowcaseEndpointTest extends ApiIntegrationTest {
         assertThat(json.readTree(gone).get("detail")).isEqualTo(json.readTree(missing).get("detail"));
 
         mvc.perform(get(url)).andExpect(status().isUnauthorized());
-        mvc.perform(get(url).header(HttpHeaders.AUTHORIZATION, vetBearer(b.getId())))
+        // 兽医 token 须对应 active vet 行：否则 BannedVetFilter 先以「账号不存在」回 401，测不到角色拦截（403）。
+        long vetId = vets.newActiveVet("gift-showcase-it").getId();
+        mvc.perform(get(url).header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
                 .andExpect(status().isForbidden());
-        mvc.perform(get(url + "/supporters").header(HttpHeaders.AUTHORIZATION, vetBearer(b.getId())))
+        mvc.perform(get(url + "/supporters").header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
                 .andExpect(status().isForbidden());
     }
 

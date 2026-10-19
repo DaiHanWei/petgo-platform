@@ -115,7 +115,6 @@
         .stubrow > div { flex:1; text-align:center; }
         .stubrow .n { font-family:var(--display); font-variation-settings:'wght' 850; font-size:27px;
             line-height:1; }
-        /* V1.4.0 gift：Hadiah 列「Rp」与「rb / jt」为数字的 0.6 倍（UI 稿「定稿后修订」第 2 条） */
         .stub .n .u { font-size:.6em; }
         .stubrow .l { font-size:8.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
             color:var(--muted); margin-top:5px; }
@@ -278,7 +277,8 @@
                 <div class="l">Momen</div>
             </div>
             <div class="vr"></div>
-            <!--/* V1.4.0 gift：礼物总价值（Rp + 缩写数字 + rb / jt），始终渲染；「Rp」与单位 0.6 倍字号 */-->
+            <!--/* V1.4.0 gift：礼物总价值（Rp + 缩写数字 + rb / jt），始终渲染；「Rp」与单位 0.6 倍字号（.stub .n .u，UI 稿「定稿后修订」第 2 条）。
+                 CSS 注释会原样下发给用户（AC3 禁中文），说明只写在这条解析器级注释里。 */-->
             <div>
                 <div class="n" style="color:var(--green)"><span class="u">Rp</span><span th:text="${giftValueNumber}">0</span><span class="u" th:if="${giftValueUnit != null and !#strings.isEmpty(giftValueUnit)}" th:text="${giftValueUnit}">rb</span></div>
                 <div class="l">Hadiah</div>
