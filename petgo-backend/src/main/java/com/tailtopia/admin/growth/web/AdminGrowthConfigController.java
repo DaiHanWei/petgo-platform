@@ -257,13 +257,28 @@ public class AdminGrowthConfigController {
         params.forEach((k, v) -> {
             if (k.startsWith("lv.")) {
                 try {
-                    thresholds.put(Integer.parseInt(k.substring(3)), v);
+                    thresholds.put(Integer.parseInt(k.substring(3)), plainDigits(v));
                 } catch (NumberFormatException ignored) {
                     // 非法键忽略（不会出现在正常页面）
                 }
             }
         });
-        return new LevelsForm(thresholds, params.get("appendThreshold"), params.get("appendTier"));
+        return new LevelsForm(thresholds, plainDigits(params.get("appendThreshold")), params.get("appendTier"));
+    }
+
+    /** 规范的千分位写法（UI G5 门槛框按 {@code 4,500} 显示）。 */
+    private static final java.util.regex.Pattern GROUPED = java.util.regex.Pattern.compile("\\d{1,3}(,\\d{3})+");
+
+    /**
+     * 门槛框按千分位显示（UI G5）→ 提交回来先还原成纯数字再交给服务层校验。
+     * 只认规范分组（{@code 12,400}）；{@code 1,2,3} 这类不规范写法原样返回，照旧走「须为正整数」的 422，不猜用户意图。
+     */
+    static String plainDigits(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.strip();
+        return GROUPED.matcher(t).matches() ? t.replace(",", "") : raw;
     }
 
     /** G6 弹层：逐条改动 + 升 / 降级人数（服务端按候选新表算）+ 红色提醒；确认后带同一份表单值 POST 保存端点。 */

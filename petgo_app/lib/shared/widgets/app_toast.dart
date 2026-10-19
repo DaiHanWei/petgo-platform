@@ -35,22 +35,33 @@ Timer? _timer;
 ///
 /// [extraBottom]（V1.4.0 L2 第二轮，收藏 C2）：底部变体再往上抬多少（默认 0 = 与改动前逐字节一致）。
 /// 只给「页面自带较高底栏、默认位置会贴着底栏」的个别场景用，不改全局位置。
+///
+/// [extraTop]（V1.4.0 L2 第四轮，名额页 D7）：顶部变体再往下压多少（默认 0 = 与改动前逐字节一致）。
+/// 顶部默认位置（安全区 + 16）正好压在 AppBar 标题上；有 AppBar 的页面传 `kToolbarHeight`，让提示落在标题下方。
+/// 只对 `top: true` 生效，底部变体不受影响。
 void showAppToast(BuildContext context, String message,
     {Duration duration = const Duration(milliseconds: 2600),
     bool top = false,
     double extraBottom = 0,
+    double extraTop = 0,
     String? actionLabel,
     VoidCallback? onAction}) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
   showAppToastOnOverlay(overlay, message,
-      duration: duration, top: top, extraBottom: extraBottom, actionLabel: actionLabel, onAction: onAction);
+      duration: duration,
+      top: top,
+      extraBottom: extraBottom,
+      extraTop: extraTop,
+      actionLabel: actionLabel,
+      onAction: onAction);
 }
 
 void showAppToastOnOverlay(OverlayState overlay, String message,
     {Duration duration = const Duration(milliseconds: 2600),
     bool top = false,
     double extraBottom = 0,
+    double extraTop = 0,
     String? actionLabel,
     VoidCallback? onAction}) {
   _dismiss();
@@ -60,6 +71,7 @@ void showAppToastOnOverlay(OverlayState overlay, String message,
       duration: duration,
       top: top,
       extraBottom: extraBottom,
+      extraTop: extraTop,
       actionLabel: actionLabel,
       // 点完动作立刻收起 —— 动作已经执行，提示条再挂 5 秒只是挡视线。
       onAction: onAction == null
@@ -89,6 +101,7 @@ class _ToastWidget extends StatefulWidget {
     required this.duration,
     this.top = false,
     this.extraBottom = 0,
+    this.extraTop = 0,
     this.actionLabel,
     this.onAction,
   });
@@ -101,6 +114,9 @@ class _ToastWidget extends StatefulWidget {
 
   /// 底部变体额外上抬（默认 0）。
   final double extraBottom;
+
+  /// 顶部变体额外下压（默认 0）。
+  final double extraTop;
 
   /// 动作位文案（如「撤销」）。与 [onAction] 同时给才渲染。
   final String? actionLabel;
@@ -217,7 +233,7 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
       left: 24,
       right: 24,
       // 顶部变体：安全区 + 16（避开刘海/状态栏）。底部那套算法一字未动。
-      top: widget.top ? mq.padding.top + 16 : null,
+      top: widget.top ? mq.padding.top + 16 + widget.extraTop : null,
       bottom: widget.top ? null : bottom,
       // 🔴 只有带动作时才让它吃点击。纯提示仍旧穿透 —— 一个 2.6 秒的提示条
       //    挡住用户正要点的按钮，比不显示还糟。

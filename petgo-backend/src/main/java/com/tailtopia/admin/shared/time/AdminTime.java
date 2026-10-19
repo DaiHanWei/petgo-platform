@@ -48,6 +48,16 @@ public class AdminTime {
         return t == null ? "—" : WIB_LEGACY.format(t) + " WIB";
     }
 
+    private static final DateTimeFormatter SHORT = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZONE);
+
+    /**
+     * 紧凑 {@code MM-dd HH:mm}（WIB，无年份、无秒、无后缀）；null → "—"。
+     * 只给表头已注明「（WIB）」的窄表格用（V1.4.0 UI I1 成长值明细）。
+     */
+    public String shortWib(Instant t) {
+        return t == null ? "—" : SHORT.format(t);
+    }
+
     /** 「此刻的 WIB 时间」（datetime-local 参照，bug 20260828）。 */
     public String nowWibForInput() {
         return java.time.LocalDateTime.now(ZONE).format(INPUT);

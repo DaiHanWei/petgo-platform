@@ -111,21 +111,22 @@
 
 <!--/* 明细（I1 / I2）：筛选 / 翻页 = GET .../growth/ledger，只换本块。模型：${gl}（Ledger）、${ruleOptions}。 */-->
 <div th:fragment="ledger" id="user-growth-ledger" class="growth-ledger">
-    <form class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/users/{id}/growth/ledger(id=${gl.userId()})}"
+    <!--/* UI I1：明细筛选一行（规则下拉收窄 · 起–止日期 · 查询），不带标签框；可访问性靠 aria-label / title。 */-->
+    <form class="filter-bar growth-ledger-fbar" data-autosubmit th:attr="hx-get=@{/admin/users/{id}/growth/ledger(id=${gl.userId()})}"
           hx-target="#user-growth-ledger" hx-swap="outerHTML">
-        <label class="field"><span th:text="#{admin.v140.growth.ledger.col.rule}">规则</span>
-            <select name="rule" class="sel">
-                <option value="" th:selected="${gl.rule() == null}" th:text="#{admin.v140.growth.ledger.filter.allRules}">全部规则</option>
-                <option th:each="c : ${ruleOptions}" th:value="${c}" th:selected="${gl.rule() == c}"
-                        th:text="${c} + ' · ' + #{${'admin.v140.growth.rule.' + c}}">DAILY_LOGIN</option>
-            </select></label>
-        <label class="field"><span th:text="#{admin.v140.growth.ledger.filter.from}">起（WIB）</span>
-            <input type="date" name="from" class="inp" th:value="${gl.from()}"/></label>
-        <label class="field"><span th:text="#{admin.v140.growth.ledger.filter.to}">止（WIB）</span>
-            <input type="date" name="to" class="inp" th:value="${gl.to()}"/></label>
+        <select name="rule" class="sel growth-ledger-rule" th:attr="aria-label=#{admin.v140.growth.ledger.col.rule}">
+            <option value="" th:selected="${gl.rule() == null}" th:text="#{admin.v140.growth.ledger.filter.allRules}">全部规则</option>
+            <option th:each="c : ${ruleOptions}" th:value="${c}" th:selected="${gl.rule() == c}"
+                    th:text="${c} + ' · ' + #{${'admin.v140.growth.rule.' + c}}">DAILY_LOGIN</option>
+        </select>
+        <input type="date" name="from" class="inp growth-ledger-date" th:value="${gl.from()}"
+               th:attr="aria-label=#{admin.v140.growth.ledger.filter.from},title=#{admin.v140.growth.ledger.filter.from}"/>
+        <span class="muted" aria-hidden="true">–</span>
+        <input type="date" name="to" class="inp growth-ledger-date" th:value="${gl.to()}"
+               th:attr="aria-label=#{admin.v140.growth.ledger.filter.to},title=#{admin.v140.growth.ledger.filter.to}"/>
         <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.search}">查询</button>
     </form>
-    <table class="ud-table" data-section="growth-ledger">
+    <table class="ud-table growth-ledger-table" data-section="growth-ledger">
         <thead>
         <tr>
             <th th:text="#{admin.v140.growth.ledger.col.time}">时间（WIB）</th>
@@ -137,7 +138,7 @@
         </thead>
         <tbody>
         <tr th:each="r : ${gl.rows()}" th:attr="data-ledger-id=${r.id()}">
-            <td class="nowrap" th:text="${@adminTime.wib(r.createdAt())}">10-18 14:33</td>
+            <td class="nowrap num" th:text="${@adminTime.shortWib(r.createdAt())}">10-18 14:33</td>
             <td th:switch="${r.reversalReason() != null ? 'REV' : r.ruleCode()}">
                 <span th:case="'REV'" th:text="#{${'admin.v140.growth.ledger.reversal.' + r.reversalReason()}}">退款扣回</span>
                 <span th:case="'ADMIN_ADJUST'" th:text="#{admin.v140.growth.ledger.adminAdjust(${r.note() ?: '—'}, ${r.operator() ?: '—'})}">运营调整 · 补发（Ana）</span>
@@ -148,7 +149,7 @@
             <td th:with="refText=(${r.refTypeKey() != null} ? #{${r.refTypeKey()}} : ${r.refType()}) + (${r.refShown() != null} ? ' #' + ${r.refShown()} : '')">
                 <span th:if="${r.refType() == null}">—</span>
                 <a th:if="${r.refType() != null and r.refHref() != null}" th:href="@{${r.refHref()}}" target="_blank" rel="noopener"
-                   data-ledger-ref th:text="${refText}">帖子 #123</a>
+                   class="growth-ref-link" data-ledger-ref th:text="${refText}">帖子 #123</a>
                 <span th:if="${r.refType() != null and r.refHref() == null}" th:text="${refText}">打卡 #9</span>
             </td>
             <td th:text="${r.petNames() ?: '—'}">Mochi</td>
