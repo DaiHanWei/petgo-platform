@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
+import '../../../shared/widgets/dashed_rect.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/initial_avatar.dart';
@@ -176,9 +177,10 @@ class _FrameCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
+                // 稿：「Tanpa bingkai」两行完整显示，不截断。
                 Text(
                   label,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -225,11 +227,14 @@ class _FrameCard extends StatelessWidget {
   Widget _preview() {
     final frame = GrowthFrame.fromCode(code);
     if (frame == null) {
-      return Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.line, width: 1.5)),
-        child: const Icon(Icons.block_rounded, size: 20, color: AppColors.muted),
+      // 稿 `.fprev.none`：1.5px 虚线圆 + 禁止图标。
+      return CustomPaint(
+        painter: DashedRRectPainter(color: AppColors.line, radius: 22, dash: 4, gap: 3, strokeWidth: 1.5),
+        child: const SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(Icons.block_rounded, size: 20, color: AppColors.muted),
+        ),
       );
     }
     // 预览只看框：等级 / 段位不显示（showLevelBadge: false），这里给占位值。

@@ -11,7 +11,10 @@ import '../../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart'
 /// 宠物护照卡（Story 2.4 · paspor.html 1:1 还原）。
 ///
 /// 横向 pet-top（大头像 + 名字/品种·年龄/一句话简介）+ 卡内三列统计
-/// （Momen Bahagia / Hadiah / Milestone）。白底 rounded-20 + 柔阴影。
+/// （Momen Bahagia / Hadiah / Milestone）。
+///
+/// V1.4.0 L2 还原度（稿 `.pic`）：淡紫渐变卡 + 白色统计条（原为白卡 + 淡紫统计条，配色相反）；头像白 + 淡紫双环；
+/// 统计数字深色，仅可点的礼物金额用紫色强调。
 ///
 /// V1.4.0 gift Story 2.2 · AC2：中间格由「Konsultasi」换成**礼物总价值**（缩写，`Rp53rb`）；
 /// 传 [onOpenGifts] 时该格可点进礼物页（标签后加紫色「›」）。
@@ -92,34 +95,40 @@ class PetInfoCard extends StatelessWidget {
 
     return Container(
       key: const ValueKey('petInfoCard'),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(color: Color(0x142B2A27), offset: Offset(0, 6), blurRadius: 20),
-        ],
+      padding: const EdgeInsets.all(14),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.diaryCardTop, AppColors.diaryCardEnd],
+        ),
+        borderRadius: BorderRadius.all(Radius.circular(18)),
       ),
       child: Column(
         children: [
-          // pet-top：横向 大头像(62) + 名字/品种·年龄/简介
+          // pet-top：横向 大头像(62，白 2 + 淡紫 2 双环) + 名字/品种·年龄/简介
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                key: avatarKey,
                 width: 62,
                 height: 62,
-                alignment: Alignment.center,
-                clipBehavior: Clip.antiAlias,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.mint500, AppColors.mint],
-                  ),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.dashedViolet, spreadRadius: 4),
+                    BoxShadow(color: Colors.white, spreadRadius: 2),
+                  ],
                 ),
-                child: _avatar(),
+                child: Container(
+                  key: avatarKey,
+                  width: 62,
+                  height: 62,
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.violet100),
+                  child: _avatar(),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -133,7 +142,7 @@ class PetInfoCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                  fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                                  fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
                         ),
                         // V1.3.2 Story 3.3：佩戴 + 已解锁才有；null 不渲染任何占位。
                         if (profile.tailsonalityBadge != null) ...[
@@ -154,8 +163,8 @@ class PetInfoCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.muted,
+                              fontSize: 12,
+                              color: AppColors.ink2,
                               fontStyle: FontStyle.italic)),
                     ],
                   ],
@@ -163,23 +172,22 @@ class PetInfoCard extends StatelessWidget {
               ),
               if (topRight != null) ...[
                 const SizedBox(width: 8),
-                Align(alignment: Alignment.topRight, child: topRight!),
+                topRight!,
               ],
             ],
           ),
-          const SizedBox(height: 14),
-          // statsrow：violet-50 底 rounded-12，三列 + 竖分隔线
+          const SizedBox(height: 12),
+          // statsrow（稿 `.pic-s`）：白底 rounded-12，三列等分、无分隔线
           Container(
+            padding: const EdgeInsets.symmetric(vertical: 2),
             decoration: BoxDecoration(
-              color: AppColors.cream2,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
                 _statCol(happyCount, l10n.petInfoStatHappyMoments),
-                _divider(),
                 _giftCol(l10n),
-                _divider(),
                 _statCol(milestoneCount, l10n.petInfoStatMilestone),
               ],
             ),
@@ -191,31 +199,32 @@ class PetInfoCard extends StatelessWidget {
 
   Widget _statCol(int? n, String label) => Expanded(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Column(
             children: [
               Text(n?.toString() ?? '·',
                   style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.mint)),
+                      fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
               const SizedBox(height: 1),
               Text(label,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 10, color: AppColors.ink2)),
+                  style: const TextStyle(fontSize: 11, color: AppColors.ink2)),
             ],
           ),
         ),
       );
 
-  /// 礼物格（AC2.2）：数字 17 号，「Rp」与「rb / jt」0.6 倍字号；颜色同三格统一的紫。
+  /// 礼物格（AC2.2）：数字 16 号，「Rp」与「rb / jt」0.6 倍字号；可点（进礼物页）时紫色强调，否则同其余两格深色。
   Widget _giftCol(AppLocalizations l10n) {
-    const numberStyle = TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.mint);
+    final numberStyle = TextStyle(
+        fontSize: 16, fontWeight: FontWeight.w700, color: onOpenGifts != null ? AppColors.mint : AppColors.ink);
     final v = giftTotalValue;
     final Widget value;
     if (v == null) {
-      value = const Text('·', style: numberStyle);
+      value = Text('·', style: numberStyle);
     } else {
       final p = idrCompactParts(v);
-      final unitStyle = numberStyle.copyWith(fontSize: 17 * 0.6);
+      final unitStyle = numberStyle.copyWith(fontSize: 16 * 0.6);
       value = Text.rich(
         key: const ValueKey('petInfoGiftValue'),
         TextSpan(children: [
@@ -228,7 +237,7 @@ class PetInfoCard extends StatelessWidget {
     }
     final tappable = onOpenGifts != null;
     final column = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Column(
         children: [
           value,
@@ -242,7 +251,7 @@ class PetInfoCard extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.mint)),
             ]),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 10, color: AppColors.ink2),
+            style: const TextStyle(fontSize: 11, color: AppColors.ink2),
           ),
         ],
       ),
@@ -265,6 +274,4 @@ class PetInfoCard extends StatelessWidget {
     );
   }
 
-  Widget _divider() =>
-      Container(width: 1, height: 40, color: AppColors.line);
 }

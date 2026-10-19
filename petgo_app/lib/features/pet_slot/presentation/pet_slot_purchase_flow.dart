@@ -256,32 +256,36 @@ class PetSlotSheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Row(
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.mintTint,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.pets, color: AppColors.mint),
+    // 稿 `.goods`：紫色渐变横幅（135°）+ 白色爪印 30 + 白字标题 / 85% 白字单价。
+    return Container(
+      key: const ValueKey('petSlotSheetBanner'),
+      padding: const EdgeInsets.all(14),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.mint, AppColors.mint700],
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l10n.petSlotItemName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              const SizedBox(height: 2),
-              Text(l10n.petSlotUnitPrice(petSlotPrice(overview.unitPrice), overview.days),
-                  style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
-            ],
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.pets, size: 30, color: AppColors.onAccent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.petSlotItemName,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.onAccent)),
+                const SizedBox(height: 2),
+                Text(l10n.petSlotUnitPrice(petSlotPrice(overview.unitPrice), overview.days),
+                    style: TextStyle(fontSize: 12, color: AppColors.onAccent.withValues(alpha: 0.85))),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

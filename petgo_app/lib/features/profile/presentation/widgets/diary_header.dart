@@ -6,7 +6,6 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/count_badge.dart';
 import '../../domain/pet_header_info.dart';
 import 'pet_info_card.dart';
-import 'insight_entry_card.dart';
 
 /// Diary 页头**共用组件**（V1.1.2 Story 2.2 · FR-80/82）。
 ///
@@ -248,8 +247,35 @@ class DiaryHeader extends StatelessWidget {
     required IconData icon,
     required String title,
     required String sub,
-  }) =>
-      InsightEntryCard(inkKey: key, onTap: onTap, icon: icon, title: title, sub: sub);
+  }) {
+    // V1.4.0 稿 B5 / A2 `.ent2`：白底 1px 浅描边、圆角 14、无图标的纯文字两栏（L2 还原度）。
+    // 只改 Diary 页头这一处；聚合页仍用共享的 [InsightEntryCard]（带图标）。[icon] 保留参数位不渲染。
+    return Material(
+      color: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.line2),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: key,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              const SizedBox(height: 2),
+              Text(sub, style: const TextStyle(fontSize: 11, height: 1.35, color: AppColors.ink2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   /// 里程碑进度卡（msbar）：「🏆 Pencapaian {name}」+ "X / N" 紫色 + 进度槽。
   ///
@@ -281,14 +307,13 @@ class DiaryHeader extends StatelessWidget {
     return GestureDetector(
       key: const ValueKey('archiveMilestoneBar'),
       onTap: onOpenMilestones,
+      // 稿 `.msb`：白底 1px 浅描边、圆角 14；计数深灰；进度槽 6 高浅灰底。
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
-          ],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.line2),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,20 +326,23 @@ class DiaryHeader extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.ink)),
+                          fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.ink)),
                 ),
                 Text('$completed / $total',
                     style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.mint)),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                        color: AppColors.ink2)),
               ],
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
                 value: ratio,
-                minHeight: 5,
-                backgroundColor: AppColors.cream2,
+                minHeight: 6,
+                backgroundColor: AppColors.line2,
                 color: AppColors.mint,
               ),
             ),

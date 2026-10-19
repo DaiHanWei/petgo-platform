@@ -37,7 +37,7 @@ PetAge computePetAge(DateTime? birthday, {DateTime? now}) {
 /// 年龄的展示文案（**唯一出口**，档案页 / 我的页 / 名片页共用）。
 ///
 /// 不满 1 个月按**天**表达（「3 hari」）—— 原先一律走年 + 月，刚建档的幼宠会显示
-/// 「0th 0bln」（2026-08-04 用户实机反馈）。生日当天（0 天）与无生日一样返回 null，
+/// 「0th 0bln」（2026-08-04 用户实机反馈）。满月后：0 年只显示月、整年只显示年，否则年 + 月。生日当天（0 天）与无生日一样返回 null，
 /// 由调用方整段省略，不留「0 hari」这种空话。
 String? formatPetAge(AppLocalizations l10n, DateTime? birthday, {DateTime? now}) {
   if (birthday == null) return null;
@@ -45,6 +45,10 @@ String? formatPetAge(AppLocalizations l10n, DateTime? birthday, {DateTime? now})
   if (age.isUnderOneMonth) {
     return age.days < 1 ? null : l10n.growthArchiveAgeDays(age.days);
   }
+  // 0 年只说月（「3 bln」）、整年只说年（「2 thn」）、其余「1 thn 1 bln」—— UI 稿口径；
+  // 原先一律「{y}th {m}bln」，会出现「0th 3bln」（V1.4.0 L2 验收 P1-3）。
+  if (age.years == 0) return l10n.petAgeMonthsOnly(age.months);
+  if (age.months == 0) return l10n.petAgeYearsOnly(age.years);
   return l10n.growthArchiveAge(age.years, age.months);
 }
 

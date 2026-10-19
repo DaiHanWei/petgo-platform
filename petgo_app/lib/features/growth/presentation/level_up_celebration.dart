@@ -165,20 +165,26 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
     final l10n = AppLocalizations.of(context);
     final c = widget.celebration;
     final tier = c.toTier;
+    final tierColor = GrowthTierStyle.color(tier);
     final jump = c.toLevel - c.fromLevel;
     final isMax = widget.levels.isNotEmpty && c.toLevel >= widget.levels.map((d) => d.level).reduce(math.max);
-    final width = math.min(320.0, MediaQuery.sizeOf(context).width - 48);
+    // 稿 `.ring-ov` 左右 22、`.rcard` 圆角 28 + 投影。
+    final width = MediaQuery.sizeOf(context).width - 44;
     return Center(
-      child: Material(
+      child: Container(
         key: const ValueKey('growthCelebrationCard'),
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        child: SizedBox(
-          width: width,
+        width: width,
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.all(Radius.circular(28)),
+          boxShadow: [BoxShadow(color: Color(0x47141E1E), offset: Offset(0, 20), blurRadius: 48)],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -192,7 +198,7 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                         tier: tier,
                         avatarUrl: widget.avatarUrl,
                         nickname: widget.nickname,
-                        size: 84,
+                        frame: widget.currentFrame,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -200,50 +206,56 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                       l10n.growthCelebrationEyebrow,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
-                        color: GrowthTierStyle.color(tier),
+                        color: tierColor,
                       ),
+                    ),
+                    const SizedBox(height: 2),
+                    // 稿：旧等级 16 灰 + 「→」，新等级 30 段位色（基线对齐）。
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                      key: const ValueKey('growthCelebrationJump'),
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text('${l10n.growthLevelShort('${c.fromLevel}')} →',
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                                color: AppColors.muted)),
+                        const SizedBox(width: 8),
+                        Text(l10n.growthLevelShort('${c.toLevel}'),
+                            style: TextStyle(
+                                fontSize: 30,
+                                fontWeight: FontWeight.w800,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: tierColor)),
+                      ],
+                    ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      l10n.growthLevelJump(c.fromLevel, c.toLevel),
-                      key: const ValueKey('growthCelebrationJump'),
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
                       jump > 1 ? l10n.growthCelebrationCardBodyMulti(jump) : l10n.growthCelebrationCardBody,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14, color: AppColors.ink2),
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       isMax ? l10n.growthLevelMax : l10n.growthCelebrationKeepGoing(c.toLevel + 1),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                      style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
                     ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: GrowthTierStyle.tint(tier),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        l10n.growthExpAmount(growthNumber(context, c.lifetimeTotal)),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          color: GrowthTierStyle.color(tier),
-                        ),
-                      ),
-                    ),
+                    const SizedBox(height: 10),
+                    _ExpChip(tier: tier, label: l10n.growthExpAmount(growthNumber(context, c.lifetimeTotal))),
                     const SizedBox(height: 16),
                     _PrimaryButton(
                       key: const ValueKey('growthCelebrationPrimary'),
                       label: l10n.growthViewMyLevel,
+                      height: 50,
                       onTap: () => _close(GrowthPopupOutcome.viewLevel),
                     ),
                     TextButton(
@@ -251,12 +263,12 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                       onPressed: () => _close(GrowthPopupOutcome.close),
                       style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
                       child: Text(l10n.growthCelebrationLater,
-                          style: const TextStyle(color: AppColors.ink2, fontWeight: FontWeight.w600)),
+                          style: const TextStyle(fontSize: 14, color: AppColors.ink2, fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
               ),
-              Positioned(top: 4, right: 4, child: _CloseButton(onTap: () => _close(GrowthPopupOutcome.close))),
+              Positioned(top: 6, right: 6, child: _CloseButton(onTap: () => _close(GrowthPopupOutcome.close))),
             ],
           ),
         ),
@@ -306,16 +318,19 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
       color: AppColors.surface,
       child: Stack(
         children: [
-          // 顶部段位色柔光（径向渐变；色值取段位常量）。
+          // 顶部段位浅色柔光（稿 `.glow`：radial-gradient(120% 90% at 50% 0%, 段位浅色, #fff 72%)）。
           Positioned(
-            top: -120,
-            left: 0,
-            right: 0,
-            height: 420,
+            top: -60,
+            left: -40,
+            right: -40,
+            height: 430,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  colors: [GrowthTierStyle.color(tier).withValues(alpha: 0.22), AppColors.surface.withValues(alpha: 0)],
+                  center: Alignment.topCenter,
+                  radius: 1.1,
+                  colors: [GrowthTierStyle.tint(tier), AppColors.surface],
+                  stops: const [0, 0.72],
                 ),
               ),
             ),
@@ -338,7 +353,10 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
               children: [
                 Align(
                   alignment: Alignment.topRight,
-                  child: _CloseButton(onTap: () => _close(GrowthPopupOutcome.close)),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _CloseButton(onTap: () => _close(GrowthPopupOutcome.close)),
+                  ),
                 ),
                 Expanded(
                   child: SingleChildScrollView(
@@ -361,69 +379,115 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                                       : widget.currentFrame),
                                 ),
                         ),
-                        const SizedBox(height: 16),
-                        Text(l10n.growthCelebrationTitle,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink2)),
+                        const SizedBox(height: 22),
+                        Text(l10n.growthCelebrationEyebrow,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                                color: GrowthTierStyle.color(tier))),
                         const SizedBox(height: 4),
-                        Text(
-                          l10n.growthLevelJump(c.fromLevel, c.toLevel),
+                        // 稿 `.jump`：旧等级 20 灰 +「→」18 灰 + 新等级 52 段位色（基线对齐）。
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
                           key: const ValueKey('growthCelebrationJump'),
-                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: GrowthTierStyle.color(tier)),
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(l10n.growthLevelShort('${c.fromLevel}'),
+                                style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: [FontFeature.tabularFigures()],
+                                    color: AppColors.muted)),
+                            const SizedBox(width: 10),
+                            const Text('→', style: TextStyle(fontSize: 18, color: AppColors.muted)),
+                            const SizedBox(width: 10),
+                            Text(l10n.growthLevelShort('${c.toLevel}'),
+                                style: TextStyle(
+                                    fontSize: 52,
+                                    height: 1.05,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -1.5,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                    color: GrowthTierStyle.color(tier))),
+                          ],
+                        ),
                         ),
                         const SizedBox(height: 6),
                         Text(l10n.growthCelebrationTierTitle(tierName),
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink)),
                         if (description != null) ...[
                           const SizedBox(height: 6),
-                          Text(description,
-                              key: const ValueKey('growthCelebrationDescription'),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 14, color: AppColors.ink2)),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 290),
+                            child: Text(description,
+                                key: const ValueKey('growthCelebrationDescription'),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 13.5, height: 1.55, color: AppColors.ink2)),
+                          ),
                         ],
                         if (benefits.isNotEmpty) ...[
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
+                          // 稿 `.bn`：白卡圆角 20 + 双层柔影；标题段位色大写；行间 1px 分隔；图标 30 圆角 10 段位浅底。
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 7),
+                            decoration: const BoxDecoration(
                               color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.line2),
+                              borderRadius: BorderRadius.all(Radius.circular(20)),
+                              boxShadow: [
+                                BoxShadow(color: Color(0x0F2B2A27), offset: Offset(0, 1), blurRadius: 2),
+                                BoxShadow(color: Color(0x142B2A27), offset: Offset(0, 8), blurRadius: 24),
+                              ],
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(l10n.growthCelebrationUnlockedIn(tierName),
-                                    style: const TextStyle(
-                                        fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                                const SizedBox(height: 10),
-                                for (final (code, text) in benefits)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
+                                Text(l10n.growthCelebrationUnlockedIn(tierName).toUpperCase(),
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.6,
+                                        color: GrowthTierStyle.color(tier))),
+                                const SizedBox(height: 1),
+                                for (var k = 0; k < benefits.length; k++)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 7),
+                                    decoration: k == 0
+                                        ? null
+                                        : const BoxDecoration(
+                                            border: Border(top: BorderSide(color: AppColors.growthDivider))),
                                     child: Row(
                                       // multi-pet 4.4（K2）：带永久名额说明时图标与首行顶对齐，否则与 ① 定稿一致居中（K3）。
-                                      crossAxisAlignment: _slotHintFor(code)
+                                      crossAxisAlignment: _slotHintFor(benefits[k].$1)
                                           ? CrossAxisAlignment.start
                                           : CrossAxisAlignment.center,
                                       children: [
                                         Container(
-                                          width: 32,
-                                          height: 32,
+                                          width: 30,
+                                          height: 30,
                                           decoration: BoxDecoration(
                                             color: GrowthTierStyle.tint(tier),
-                                            shape: BoxShape.circle,
+                                            borderRadius: BorderRadius.circular(10),
                                           ),
-                                          child: Icon(_benefitIcon(code), size: 16, color: GrowthTierStyle.color(tier)),
+                                          child: Icon(_benefitIcon(benefits[k].$1),
+                                              size: 18, color: GrowthTierStyle.color(tier)),
                                         ),
                                         const SizedBox(width: 10),
                                         Expanded(
-                                          child: _slotHintFor(code)
+                                          child: _slotHintFor(benefits[k].$1)
                                               ? Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(text,
-                                                        style: const TextStyle(fontSize: 13, color: AppColors.ink)),
+                                                    Text(benefits[k].$2,
+                                                        style: const TextStyle(
+                                                            fontSize: 13.5,
+                                                            fontWeight: FontWeight.w500,
+                                                            color: AppColors.ink)),
                                                     const SizedBox(height: 2),
                                                     Text(l10n.petSlotCelebrationPermanentHint,
                                                         key: const ValueKey('growthCelebrationPetSlotHint'),
@@ -431,7 +495,11 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                                                             fontSize: 12, height: 1.45, color: AppColors.ink2)),
                                                   ],
                                                 )
-                                              : Text(text, style: const TextStyle(fontSize: 13, color: AppColors.ink)),
+                                              : Text(benefits[k].$2,
+                                                  style: const TextStyle(
+                                                      fontSize: 13.5,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: AppColors.ink)),
                                         ),
                                       ],
                                     ),
@@ -446,13 +514,15 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
                   child: Column(
                     children: [
                       _PrimaryButton(
                         key: const ValueKey('growthCelebrationPrimary'),
                         label: _applied ? l10n.growthFrameApplied : primary,
                         done: _applied,
+                        height: 52,
+                        shadow: true,
                         // Story 3.3：OFFER_NEW_FRAME → 调 PUT /api/v1/me/growth/frame 一键戴上（D5 成功 / D6 失败）；
                         // 请求中与已戴上都不可点。没注入 onApplyFrame 时保持旧行为（进等级页）。
                         onTap: applyTarget != null
@@ -466,7 +536,7 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                             : GrowthPopupOutcome.close),
                         style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
                         child: Text(secondary,
-                            style: const TextStyle(color: AppColors.ink2, fontWeight: FontWeight.w600)),
+                            style: const TextStyle(fontSize: 14, color: AppColors.ink2, fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
@@ -484,18 +554,23 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
 
   static IconData _benefitIcon(String code) => switch (code) {
         'PET_SLOT_PLUS_ONE' => Icons.pets,
-        'FRAME_BASIC' || 'FRAME_UPGRADED' || 'FRAME_ANIMATED' => Icons.account_circle_outlined,
+        'FRAME_BASIC' || 'FRAME_UPGRADED' || 'FRAME_ANIMATED' => Icons.account_circle,
         'EXCLUSIVE_GIFTS_BATCH1' || 'EXCLUSIVE_GIFTS_BATCH2' => Icons.redeem,
         'FEED_BOOST' => Icons.trending_up,
-        _ => Icons.workspace_premium_outlined,
+        _ => Icons.workspace_premium,
       };
 }
 
 /// 品牌主色按钮（同运营弹窗按钮），高 46、热区 ≥ 44。
 class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({super.key, required this.label, required this.onTap, this.done = false});
+  const _PrimaryButton(
+      {super.key, required this.label, required this.onTap, this.done = false, this.height = 46, this.shadow = false});
 
   final String label;
+  final double height;
+
+  /// 跨段位全屏吸底主按钮的紫色投影（稿 `.pbtn`）。
+  final bool shadow;
 
   /// null = 不可点（一键戴上请求中 / 已戴上）。
   final VoidCallback? onTap;
@@ -504,12 +579,18 @@ class _PrimaryButton extends StatelessWidget {
   final bool done;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => Container(
         width: double.infinity,
-        height: 46,
+        height: height,
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.all(Radius.circular(14)),
+          boxShadow: shadow && !done
+              ? const [BoxShadow(color: Color(0x4D845EC9), offset: Offset(0, 6), blurRadius: 16)]
+              : null,
+        ),
         child: Material(
           color: done ? AppColors.growthFrameAppliedFill : AppColors.mint,
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          borderRadius: const BorderRadius.all(Radius.circular(14)),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
@@ -554,7 +635,7 @@ class _CloseButton extends StatelessWidget {
   }
 }
 
-/// 头像 + 外圈进度环 + 右下段位色数字角标（本地简版；Story 3.2 的共享装饰组件上线后替换）。
+/// D1 卡片头像：148 进度环（描边 8，底轨浅灰）+ 104 头像（共享装饰层：当前框 + 数字角标，与全站角标一致只显示数字）。
 class _RingAvatar extends StatelessWidget {
   const _RingAvatar({
     required this.progress,
@@ -564,7 +645,7 @@ class _RingAvatar extends StatelessWidget {
     required this.tier,
     required this.avatarUrl,
     required this.nickname,
-    required this.size,
+    this.frame,
   });
 
   final double progress;
@@ -574,49 +655,69 @@ class _RingAvatar extends StatelessWidget {
   final GrowthTier? tier;
   final String? avatarUrl;
   final String nickname;
-  final double size;
+  final String? frame;
+
+  static const double _ring = 148;
+  static const double _avatar = 104;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final ring = Color.lerp(fromColor, toColor, progress) ?? toColor;
     return SizedBox(
-      width: size + 12,
-      height: size + 12,
+      width: _ring,
+      height: _ring,
       child: Stack(
         alignment: Alignment.center,
         children: [
           CustomPaint(
-            size: Size(size + 12, size + 12),
-            painter: _RingPainter(progress: progress, color: ring, track: AppColors.line2),
+            size: const Size(_ring, _ring),
+            painter: _RingPainter(progress: progress, color: ring, track: AppColors.growthRingTrack),
           ),
-          InitialAvatar(avatarUrl: avatarUrl, nickname: nickname, radius: size / 2),
-          Positioned(
-            right: 2,
-            bottom: 2,
-            child: Container(
-              key: const ValueKey('growthCelebrationBadge'),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: GrowthTierStyle.gradient(tier)),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppColors.surface, width: 2),
-              ),
-              child: Text(
-                l10n.growthLevelShort('$level'),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                  color: AppColors.onAccent,
-                ),
-              ),
+          KeyedSubtree(
+            key: const ValueKey('growthCelebrationBadge'),
+            child: InitialAvatar(
+              avatarUrl: avatarUrl,
+              nickname: nickname,
+              radius: _avatar / 2,
+              growth: tier == null
+                  ? null
+                  : GrowthBadge(level: level, tier: tier!, frame: GrowthFrame.fromCode(frame)),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// D1 EXP 胶囊：⚡ 段位色 + 「1.250 EXP」（浅灰底）。
+class _ExpChip extends StatelessWidget {
+  const _ExpChip({required this.tier, required this.label});
+
+  final GrowthTier? tier;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: const BoxDecoration(
+          color: AppColors.growthChipBg,
+          borderRadius: BorderRadius.all(Radius.circular(999)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.bolt, size: 14, color: GrowthTierStyle.color(tier)),
+            const SizedBox(width: 4),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                    color: AppColors.ink2)),
+          ],
+        ),
+      );
 }
 
 class _RingPainter extends CustomPainter {
@@ -628,7 +729,7 @@ class _RingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 5.0;
+    const stroke = 8.0;
     final rect = Offset.zero & size;
     final arcRect = rect.deflate(stroke / 2);
     canvas.drawArc(arcRect, 0, math.pi * 2, false,

@@ -34,11 +34,12 @@ void main() {
     final spans = (rich.textSpan! as TextSpan).children!.cast<TextSpan>();
     expect(spans.map((s) => s.text).toList(), ['Rp', '53', 'rb']);
     final number = spans[1].style!;
-    expect(number.fontSize, 17);
-    expect(spans[0].style!.fontSize, closeTo(17 * 0.6, 0.001));
-    expect(spans[2].style!.fontSize, closeTo(17 * 0.6, 0.001));
+    // V1.4.0 L2 还原度（稿 `.pic-s`）：数字 16；不可点时与其余两格同为深色。
+    expect(number.fontSize, 16);
+    expect(spans[0].style!.fontSize, closeTo(16 * 0.6, 0.001));
+    expect(spans[2].style!.fontSize, closeTo(16 * 0.6, 0.001));
     for (final s in spans) {
-      expect(s.style!.color, AppColors.mint);
+      expect(s.style!.color, AppColors.ink);
     }
     expect(find.text('Rp53rb'), findsOneWidget);
     expect(find.text('Hadiah'), findsOneWidget);
@@ -55,6 +56,9 @@ void main() {
     var taps = 0;
     await pump(tester, value: 188000, onOpenGifts: () => taps++);
     expect(find.text('Hadiah ›'), findsOneWidget);
+    // 稿 `.pic-s span.tap b`：可点的礼物金额紫色强调。
+    final rich = tester.widget<Text>(find.byKey(const ValueKey('petInfoGiftValue')));
+    expect((rich.textSpan! as TextSpan).children!.first.style!.color, AppColors.mint);
     expect(find.descendant(of: cell(), matching: find.byType(InkWell)), findsNothing,
         reason: 'InkWell 本身就是带 key 的那一格');
     expect(tester.widget(cell()), isA<InkWell>());

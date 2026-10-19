@@ -168,8 +168,9 @@ class _MoreItem extends StatelessWidget {
               width: FollowingStrip._outer,
               height: FollowingStrip._outer,
               child: CustomPaint(
-                painter: _DashedCirclePainter(color: AppColors.muted),
-                child: const Center(child: Icon(Icons.add_rounded, size: 26, color: AppColors.ink2)),
+                // V1.4.0 稿 A8 `.fsi .more`：淡紫虚线圈 + 紫色「···」，标签紫色（L2 还原度，原灰色「+」）。
+                painter: _DashedCirclePainter(color: AppColors.dashedViolet),
+                child: const Center(child: Icon(Icons.more_horiz_rounded, size: 22, color: AppColors.mint)),
               ),
             ),
             const SizedBox(height: 8),
@@ -178,7 +179,7 @@ class _MoreItem extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.muted),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.mint),
             ),
           ],
         ),

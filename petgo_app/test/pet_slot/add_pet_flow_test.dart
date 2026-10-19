@@ -55,6 +55,7 @@ void main() {
         },
       ),
       GoRoute(path: kPetSlotsRoute, builder: (_, _) => const Scaffold(body: Text('slots-page'))),
+      GoRoute(path: '/me/growth', builder: (_, _) => const Scaffold(body: Text('level-page'))),
     ]);
     addTearDown(router.dispose);
     final c = ProviderContainer(overrides: [
@@ -131,9 +132,23 @@ void main() {
     ]);
   });
 
-  testWidgets('A4 点关闭 → 留在原页 + pet_slot_full_shown {action: close}（每次弹出报一次）', (tester) async {
+  testWidgets('A4 次按钮「View my level」→ 等级页 + pet_slot_full_shown {action: upgrade}（L2 P1-1）',
+      (tester) async {
     await pump(tester, _o(petCount: 2, total: 2));
-    await tester.tap(find.byKey(const ValueKey('petSlotFullClose')));
+    expect(find.text(l10n.growthViewMyLevel), findsOneWidget);
+    expect(find.text(l10n.commonClose), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('petSlotFullViewLevel')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('level-page'), findsOneWidget);
+    expect(events.where((e) => e.$1 == 'pet_slot_full_shown').map((e) => e.$2), [
+      {'source': 'add_pet', 'action': 'upgrade'},
+    ]);
+  });
+
+  testWidgets('A4 点遮罩关闭 → 留在原页 + pet_slot_full_shown {action: close}（每次弹出报一次）', (tester) async {
+    await pump(tester, _o(petCount: 2, total: 2));
+    await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
 
     expect(find.text('slots-page'), findsNothing);
@@ -144,7 +159,7 @@ void main() {
     // 再点一次「+」→ 再弹一次、再报一次。
     await tester.tap(find.byKey(const ValueKey('add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('petSlotFullClose')));
+    await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
     expect(events.where((e) => e.$1 == 'pet_slot_full_shown'), hasLength(2));
   });
