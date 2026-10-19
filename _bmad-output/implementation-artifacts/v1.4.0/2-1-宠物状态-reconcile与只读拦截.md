@@ -1,6 +1,6 @@
 # Story 2.1: 宠物状态、reconcile 与只读拦截
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 multi-pet · 分支 `feat/1.4.0-multi-pet`
 > 口径优先级：`decision-log.md` ② 节 > `多宠物/1-4-0多宠物prd.md` > `architecture-v1.4.0-multi-pet-delta.md` > UI 稿（均在 `_bmad-output/planning-artifacts/v1.4.0/`）；跨分支契约以 `CROSS-STORY-DECISIONS.md`「2026-10-18 V1.4.0 四条线共用地基」节为准。
@@ -92,14 +92,14 @@ so that 我知道哪些宠物暂停了记录，也能决定保留谁。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：确认 Epic 1 已合入（`PetResolver`、`findDefault`、`quotaOf`、`deleteByPetId`、1603 迁移存在）；按 AC7 表的方法名重新 grep 接入点并更新行号
-- [ ] **T1 迁移 1604**（AC1）+ `PetStatus` 枚举 + `PetProfile` 字段（AC2.1）
-- [ ] **T2** `findDefault` ACTIVE 优先、`/me/list` 带真实 `status` / `keepActive`（AC2.2 / AC2.3）
-- [ ] **T3** `profile.slot.PetSlotLock` / `PetSlotTrigger` / `PetSlotStateService.reconcile` + `ReconcileResult`（AC3）
-- [ ] **T4** 改选接口 + DTO + `ErrorTypes.PET_SELECTION_NOT_NEEDED`（AC4）
-- [ ] **T5** `PetSlotLevelChangedListener`（AC5）；`deleteByPetId` 后 reconcile（AC6）
-- [ ] **T6** `PetWriteGuard` + `ErrorTypes.PET_READ_ONLY` + `AppException.petReadOnly` + 逐点接入（AC7）
-- [ ] **T7 测试**：L0 全部；L1 写好能编译；`mvn -B clean package`；Completion Notes 标「L1 待本地验收」
+- [x] **T0 开工核对**：确认 Epic 1 已合入（`PetResolver`、`findDefault`、`quotaOf`、`deleteByPetId`、1603 迁移存在）；按 AC7 表的方法名重新 grep 接入点并更新行号
+- [x] **T1 迁移 1604**（AC1）+ `PetStatus` 枚举 + `PetProfile` 字段（AC2.1）
+- [x] **T2** `findDefault` ACTIVE 优先、`/me/list` 带真实 `status` / `keepActive`（AC2.2 / AC2.3）
+- [x] **T3** `profile.slot.PetSlotLock` / `PetSlotTrigger` / `PetSlotStateService.reconcile` + `ReconcileResult`（AC3）
+- [x] **T4** 改选接口 + DTO + `ErrorTypes.PET_SELECTION_NOT_NEEDED`（AC4）
+- [x] **T5** `PetSlotLevelChangedListener`（AC5）；`deleteByPetId` 后 reconcile（AC6）
+- [x] **T6** `PetWriteGuard` + `ErrorTypes.PET_READ_ONLY` + `AppException.petReadOnly` + 逐点接入（AC7）
+- [x] **T7 测试**：L0 全部；L1 写好能编译；`mvn -B clean package`；Completion Notes 标「L1 待本地验收」
 
 ## Dev Notes
 
@@ -187,10 +187,76 @@ so that 我知道哪些宠物暂停了记录，也能决定保留谁。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- 云端 locale 为 POSIX，所有 mvn 命令加 `LC_ALL=C.UTF-8`（同 1.1 ~ 1.4）。
+- `List.of(..).contains(null)` 会 NPE → 改选的空值校验改用 `stream().anyMatch(Objects::isNull)`。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：云端只跑 L0（`./mvnw -B clean package -DskipTests` 绿 + 纯单元测试）。
+- L1（已写好、编译通过，**未运行**）：`profile/slot/PetSlotReconcileIntegrationTest`（迁移 1604 形态：`ck_pet_profiles_status` / `ix_pet_profiles_owner_status` / `keep_active` 默认 false、直插默认 ACTIVE；AC13c 四只降级 + `PUT /me/active-selection` 改选 A、D；改选 422 / 404 / 409 `pet-selection-not-needed`；游客 401、兽医 403；两线程并发 reconcile 串行（demoted 数 {2, 0}、终态一致）；删 A 后只读 C 恢复（AC6）；`GrowthLevelChangedEvent` 升级恢复 / 降级不转只读（AC5 / AC9））、`profile/slot/PetReadOnlyGuardIntegrationTest`（编辑档案 / 新增健康记录 / 发 Diary / 问诊存档 ARCHIVED / Tailsonality 提交打只读宠物 → 409 `pet-read-only` 带 `petId` + `traceId` 且库无新增行；SKIPPED 照常；他人只读宠物 404；GET / 删除不受影响；默认宠物 = 最早的 ACTIVE）。本地另需：空 scratch 库全量迁移启动、`ddl-auto=validate` 通过、既有单宠物集成测试全绿（AC9）。
+- L0 单测（新增）：`profile/slot/PetSlotStateServiceTest`（15，3 个 `@Nested`：到期降级 5 / 只恢复不降级 6 / 改选 4）、`profile/slot/PetSlotLevelChangedListenerTest`（4）、`profile/service/PetWriteGuardTest`（4）、`profile/web/ActiveSelectionValidationTest`（5）、`db/migration/PetStatusMigrationTextTest`（2）、`profile/PetStatusSingleEntryGuardTest`（3，含正则正 / 反例自检）。
+- L0 单测（补用例 / 改构造）：`DefaultPetPolicyTest`（+3：跳过只读取最早 ACTIVE、全只读回落最早、`pickPerOwner` 同口径）、`PetListItemResponseTest`（+1：status / keepActive 读列、默认 = 最早 ACTIVE）、`ProfileDeletionServiceTest`（+3：删后 `reconcile(PET_DELETED)` 在 delete 之后、删最后一只 / 注销不 reconcile、他人宠物不 reconcile）、各接入点「只读 → 409 且无副作用」：`ContentServiceTest`（+2）、`PlaceCheckinServiceTest`（+3，含「全部已打卡只算 ACTIVE」）、`MilestoneCheckInServiceTest`（+1）、`HealthRecordServiceTest`（+4）、`ProfileServiceTest`（+1）、`HealthEventServiceTest`（+3：ARCHIVED 拦、SKIPPED→ARCHIVED 补存拦、SKIPPED 放）、`TailsonalityUnlockServiceTest`（+2）、`TailsonalityResultServiceTest`（+1）、`PassportSnapshotServiceTest`（+1）、`BoardingPassUnitTest`（+1）、`IdCardServiceTest`（+1）。`MentionEventPublishTest` / `HealthMilestoneCheckInRefusedTest` 只改构造。既有断言均未改语义（只加构造参数 / 一处跟随桩 `findActivePetIdsByOwner → findPetIdsByOwner`）。
+- **全量 L0 回归**：`gen_unit.py` 重新筛出的 493 个纯单元测试类（含本 story 新增 6 个）一次跑完：**3662 例，0 失败 / 0 错误（7 个原有 skip）**，BUILD SUCCESS。单宠物既有测试未删、未 skip，断言语义未改。
+- 迁移：`V20261018_1604__pet_profiles_status_keep_active.sql`（预分配号）；`bash scripts/ci/check-flyway-versions.sh origin/main` OK（239 个迁移）；未改 `ck_notifications_type` / `ck_payment_intents_purpose`；不回填。
+- **锁复用**：`PetSlotStateService.reconcile` / `changeSelection` 进入即调 1.4 的 `PetSlotLock.lockUser`（两参 `pg_advisory_xact_lock(ns, uid)`，ns `0x5045_5453` "PETS"），与建档 `ProfileService.create`、2.2 月租发放是同一把账号锁，三者互斥。未另建锁类。
+- T0 核对（与 1.1 ~ 1.4 实际代码）：`DefaultPetPolicy.pick(List)` / `pickPerOwner`、`PetProfileRepository.findDefault`（default 方法委托 `pick`）/ `findAllByOwnerIdOrderByCreatedAtAscIdAsc` / `findByIdAndOwnerId`、`PetResolver.resolve/resolveOptional/listOwned`、`PetListService.listMine`、`PetListItemResponse.STATUS_ACTIVE`、`profile.slot.PetSlotService.quotaOf(long).total()` / `PetSlotLock.lockUser(long)`（`@Transactional(MANDATORY)`）、`ProfileDeletionService.deleteByPetId(ownerId, petId)` / `deleteAllForAccount`、`growth.event.GrowthLevelChangedEvent(long userId, int oldLevel, int newLevel)`（只监听，未改）均与 story 一致；行号漂移以代码为准。`PetQueryService`（③ 3.1）尚不存在 → AC2.4 无需改。`IdCardService.createCard / createCardV2` 仍按 ownerId、不收 petId → 不拦；`generateSerial(ownerId, petId)` 收 petId → 接入（见出入 6）。
+- AC7 接入点最终位置（均在归属校验之后）：① `ContentService.publish` `content/service/ContentService.java:511`（`ownsPet` 422 之后）；② `PlaceCheckinService.checkIn` `place/service/PlaceCheckinService.java:113`（`ownedPetIds` 422 / 403 之后逐只）；③ `MilestoneCheckInService.checkIn` `profile/service/MilestoneCheckInService.java:84`（健康类 422、`requireProfile` 404 之后）；④ `HealthRecordService.create / update / delete` `profile/service/HealthRecordService.java:84 / 105 / 134`（经 `requireWritablePet` :147）；⑤ `ProfileService.update` `profile/service/ProfileService.java:182`（409 抛出 → 控制器不执行 `scheduleRerender`）；⑥ `HealthEventService.recordDecision` `profile/service/HealthEventService.java:70`（SKIPPED→ARCHIVED 补存）/ `:86`（新 ARCHIVED）；⑦ `TailsonalityUnlockService.unlock / unlockMatch` `tailsonality/service/TailsonalityUnlockService.java:49 / 59`（`lockOwned` 404 之后、`purchases.start` 之前）；⑧ `TailsonalityResultService.submit` `tailsonality/service/TailsonalityResultService.java:72`；⑨ `PassportSnapshotService.start` `passport/service/PassportSnapshotService.java:94`（冻结快照之前）；⑩ `BoardingPassService.unlock` `passport/service/BoardingPassService.java:107`（`insertIfAbsent` 之前）；⑪ `IdCardService.generateSerial` `profile/service/IdCardService.java:201`。`KeepsakePurchaseService` / purchase 包未改，守卫测试未动；`IdCardHdService.purchaseCard` 及分享 / 庆祝 / 徽章 / 删除 / 全部 GET 未接。
+- AC6：`ProfileDeletionService.deleteByPetId` 删除后（同一事务）若账号仍有宠物 → `reconcile(PET_DELETED)`（`profile/service/ProfileDeletionService.java:92`）；删最后一只（照旧打标）与注销 `deleteAllForAccount` 不 reconcile、不加锁。
+
+#### 与 story 文字的出入（按代码现状 / 最保守口径实现）
+
+1. **AC2.1「只给包内可见的 setter」**：`PetProfile`（`profile.domain`）与 `PetSlotStateService`（`profile.slot`）不在同一包，包内可见则状态服务调不到。改为 `markReadOnly()` / `markActive()` / `setKeepActive(boolean)` 设为 public、Javadoc 标明仅 `PetSlotStateService` 可调，并新增源码守卫 `PetStatusSingleEntryGuardTest`（主代码中这三者的调用、以及 `pet_profiles` 的 `SET status / keep_active` 原生写，只允许出现在 `PetSlotStateService.java`）。实体另加只读口 `getStatus()` / `isReadOnly()` / `isKeepActive()`。
+2. **`DefaultPetPolicy.pickPerOwner`** 也改为「每账号最早的 ACTIVE，没有再取最早」（与 `pick` 同口径；story 只点名 `findDefault`，但批量版是同一个「默认宠物」定义，不同步会让生命周期推送 / 兽医端默认身份与 `/me` 不一致）。
+3. **改选入口**：`reconcile(userId, Trigger)` 的签名带不了选择集合 → 另设 `PetSlotStateService.changeSelection(userId, petIds)`：同一把锁内 归属 404 → 宠物数 ≤ 名额 409 → 去重后只数 ≠ 名额 422 → 写 `keep_active` → 内部按 `SELECTION_CHANGED` 重排（前「名额」只 ACTIVE、其余 READ_ONLY）。`petIds` 含 null / 请求体缺失按 422。直接调 `reconcile(SELECTION_CHANGED)` 也按同一顺序键重排。
+4. **`RENTAL_EXPIRED` 在正常数 < 名额时也按序补足恢复**（AC3.4 只写了降级分支；两分支互斥，补足恢复与 AD-4「名额允许时恢复」一致，且 `ReconcileResult.restored` 才有意义）。
+5. **端点放在新控制器** `profile/web/PetActiveSelectionController`（同前缀 `/api/v1/pet-profiles`），不改 `ProfileApiController` 构造（既有单测不动）；`SecurityConfig` 加精确路径 `PUT /api/v1/pet-profiles/me/active-selection` → `hasRole("USER")`。无限流（story 未要求）。
+6. **`IdCardService.generateSerial`（AC7 #11）只在要分配新号时拦**：已有流水号的幂等回读不写库，照常 200（避免只读宠物进身份证页时报错）。
+7. **`HealthEventService`（AC7 #6）只在 ARCHIVED 的两条写路径拦**（新建 ARCHIVED、SKIPPED→ARCHIVED 补存）；已决策的幂等重放（不写库）不拦，SKIPPED 照常。
+8. **`PlaceCheckinService.checkedInToday`**：按 1.3 story 移交给 2.1 的口径，`allCheckedIn` 改为「本人有正常宠物且全部 ACTIVE 宠物都已打」（新读口 `PetProfileQueryService.findActivePetIdsByOwner`）；单宠物账号恒等于改造前。
+9. **`ReconcileResult.PetRef`** 为 `ReconcileResult` 的嵌套 record（story 未定位置）；另有 `ReconcileResult.none()` / `changed()`。
+10. **`AppException.petReadOnly(petId)`** 返回新子类 `shared.error.PetReadOnlyException`（实现 `ProblemExtensions`，扩展成员 `petId`）；另加 `AppException.petSelectionNotNeeded(detail)`。detail 为中文服务端文案（App 按 type 映射，同既有先例）。
+11. **`PetWriteGuard`** 除 `requireWritable(long petId)` 外加了 `requireWritable(PetProfile)` 重载（调用方已取到实体时不再查库）；宠物查不到时放行（归属 / 存在性由调用方在前面判 404）。
+12. **L1 名额设定**：story 写 `@MockitoBean PetSlotService` 返回名额 2；实现改为 `@MockitoBean GrowthQueryService`（Lv5 = 名额 2、Lv10 = 3），走真实 `quotaOf`，覆盖更完整。
+13. 监听器方法本身不加 `@Transactional`（Spring 6.1+ 禁止 `@TransactionalEventListener` 上挂默认传播的事务，启动即失败）；事务由 `reconcile` 自己开，锁 MANDATORY 挂在其上（单测断言了注解形态）。
+
+#### code review（bmad-code-review）结果
+
+- 已修（PLAUSIBLE，竞态）：① 按只删除先删行、后在 reconcile 里取账号锁，与并发 reconcile / 改选可互等死锁 → `deleteByPetId` 开头先 `PetSlotStateService.lockAccount(ownerId)`（xact 锁可重入）；补 `deleteByPetIdLocksAccountBeforeDeletingRows`。② `PetProfile` 无 `@DynamicUpdate`，编辑档案与 reconcile 按整行回写会互相覆盖 status / keep_active / 审核重置的名字头像 → 加 `@org.hibernate.annotations.DynamicUpdate`（只写脏列）。
+- 已修（minor）：改选 `petIds` 无上限 → 超过 5 个 422（不进锁）；`PetStatusSingleEntryGuardTest` 补方法引用 `PetProfile::markReadOnly` 的命中。
+- 其余（迁移、reconcile 算法与加锁、等级监听、11 个写入口拦截顺序、默认宠物口径、改选端点鉴权）复审无问题。
+
+#### 待确认
+
+- 删除后 reconcile（AC6 / story 待确认 1）：按默认实现（加 `PET_DELETED`，只恢复不降级）。
+- Tailsonality 测试提交（AC7 #8 / story 待确认 2）：按默认实现（拦）。
+- 删除路径加锁顺序：`deleteByPetId` 先删行、后取账号锁（reconcile 入口加锁）；与建档（先锁后插）并发时理论上不会互等行锁，但未做 L1 并发验证，本地验收时可留意。
+- 兽医端 / 后台若有按「默认宠物」展示的地方（经 `pickPerOwner`），多宠账号在出现只读宠物后默认宠物可能换成另一只（出入 2 的直接后果，AD-2 原文口径）。
+
 ### File List
 
+- 新增 `petgo-backend/src/main/resources/db/migration/V20261018_1604__pet_profiles_status_keep_active.sql`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/domain/PetStatus.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/slot/{PetSlotStateService,PetSlotTrigger,ReconcileResult,PetSlotLevelChangedListener}.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/service/PetWriteGuard.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/web/PetActiveSelectionController.java`、`profile/dto/ActiveSelectionRequest.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/shared/error/PetReadOnlyException.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/profile/domain/PetProfile.java`（`status` / `keepActive`）
+- 修改 `petgo-backend/src/main/java/com/tailtopia/profile/service/{DefaultPetPolicy,PetProfileQueryService,ProfileDeletionService,ProfileService,MilestoneCheckInService,HealthRecordService,HealthEventService,IdCardService}.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/profile/dto/PetListItemResponse.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/content/service/ContentService.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/place/service/PlaceCheckinService.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/tailsonality/service/{TailsonalityUnlockService,TailsonalityResultService}.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/passport/service/{PassportSnapshotService,BoardingPassService}.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/shared/error/{ErrorTypes,AppException}.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/shared/security/SecurityConfig.java`
+- 新增测试（`petgo-backend/src/test/java/com/tailtopia/` 下）：`profile/slot/{PetSlotStateServiceTest,PetSlotLevelChangedListenerTest,PetSlotReconcileIntegrationTest,PetReadOnlyGuardIntegrationTest}`、`profile/service/PetWriteGuardTest`、`profile/web/ActiveSelectionValidationTest`、`profile/PetStatusSingleEntryGuardTest`、`db/migration/PetStatusMigrationTextTest`
+- 修改测试：`profile/service/{DefaultPetPolicyTest,ProfileDeletionServiceTest,ProfileServiceTest,MilestoneCheckInServiceTest,HealthMilestoneCheckInRefusedTest,HealthRecordServiceTest,HealthEventServiceTest,IdCardServiceTest}`、`profile/web/PetListItemResponseTest`、`content/service/{ContentServiceTest,MentionEventPublishTest}`、`place/service/PlaceCheckinServiceTest`、`tailsonality/service/{TailsonalityUnlockServiceTest,TailsonalityResultServiceTest}`、`passport/{PassportSnapshotServiceTest,BoardingPassUnitTest}`
+- 修改 `_bmad-output/implementation-artifacts/v1.4.0/2-1-宠物状态-reconcile与只读拦截.md`（状态、任务勾选、Dev Agent Record）
+
 ### Change Log
+
+- 2026-10-18：实现 Story 2.1（迁移 1604 `pet_profiles.status` / `keep_active`、`PetSlotStateService.reconcile` + 改选接口、等级事件监听、删除后释放名额、`PetWriteGuard` 接入 11 类写入口、默认宠物 ACTIVE 优先、`/me/list` 读真实状态），状态 → review（L1/L2 待本地验收）。

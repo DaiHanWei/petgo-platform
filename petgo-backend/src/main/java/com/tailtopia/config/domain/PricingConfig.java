@@ -51,6 +51,10 @@ public class PricingConfig {
     @Column(name = "tailsonality_match_unlock_price", nullable = false)
     private long tailsonalityMatchUnlockPrice;
 
+    /** 宠物名额月租：每个名额 / 30 天（IDR，≥100；V1.4.0 multi-pet Story 2.2 · AB-34.3）。下单时快照到购买行。 */
+    @Column(name = "pet_slot_monthly_price", nullable = false)
+    private long petSlotMonthlyPrice;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -144,5 +148,13 @@ public class PricingConfig {
 
     public void setTailsonalityMatchUnlockPrice(long v) {
         this.tailsonalityMatchUnlockPrice = v;
+    }
+
+    public long getPetSlotMonthlyPrice() {
+        return petSlotMonthlyPrice;
+    }
+
+    public void setPetSlotMonthlyPrice(long v) {
+        this.petSlotMonthlyPrice = v;
     }
 }

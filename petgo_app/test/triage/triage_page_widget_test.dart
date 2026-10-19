@@ -1,6 +1,15 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/consult/data/consult_repository.dart';
+import 'package:tailtopia/features/consult/domain/consult_history_item.dart';
+import 'package:tailtopia/features/consult/domain/consult_session.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/triage/presentation/triage_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
@@ -49,4 +58,99 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(LoginHardDialog), findsOneWidget);
   });
+
+  // ---- V1.4.0 multi-pet Story 4.1 · AC7.2（H1 / H3）：「Mulai Cek」先选宠物 ----
+  group('Story 4.1 H1 选宠物', () {
+    Future<void> pumpLoggedIn(WidgetTester tester, List<PetListItem> pets) async {
+      SharedPreferences.setMockInitialValues({});
+      final router = GoRouter(routes: [
+        GoRoute(path: '/', builder: (c, s) => const TriagePage()),
+        GoRoute(path: '/triage/upload', builder: (c, s) => Scaffold(body: Text('upload:${s.uri.query}'))),
+      ]);
+      final container = ProviderContainer(overrides: [
+        authControllerProvider.overrideWith(() => _LoggedIn()),
+        consultRepositoryProvider.overrideWithValue(_QuietConsultRepo()),
+        petListProvider.overrideWith((ref) async => pets),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          locale: const Locale('id'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    Future<void> frames(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    const two = [PetListItem(id: 7, name: 'Momo', isDefault: true), PetListItem(id: 8, name: 'Kopi')];
+
+    testWidgets('≥2 只：点 Mulai Cek 先弹抽屉；取消不跳转', (tester) async {
+      await pumpLoggedIn(tester, two);
+      await tester.tap(find.byKey(const ValueKey('triageEntryAI')));
+      await frames(tester);
+      expect(find.text('Cek gejala untuk siapa?'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await frames(tester);
+      expect(find.textContaining('upload:'), findsNothing);
+    });
+
+    testWidgets('≥2 只：选中 Kopi → Lanjut → /triage/upload?petId=8', (tester) async {
+      await pumpLoggedIn(tester, two);
+      await tester.tap(find.byKey(const ValueKey('triageEntryAI')));
+      await frames(tester);
+      await tester.tap(find.byKey(const ValueKey('petPickerRow-8')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('petPickerConfirm')));
+      await frames(tester);
+      expect(find.text('upload:petId=8'), findsOneWidget);
+    });
+
+    testWidgets('1 只：不弹（H3），直接进上传页并带那只的 petId（P-8）', (tester) async {
+      await pumpLoggedIn(tester, const [PetListItem(id: 7, name: 'Momo')]);
+      await tester.tap(find.byKey(const ValueKey('triageEntryAI')));
+      await frames(tester);
+      expect(find.text('Cek gejala untuk siapa?'), findsNothing);
+      expect(find.text('upload:petId=7'), findsOneWidget);
+    });
+
+    testWidgets('0 只：不弹，进上传页不带 petId（现状）', (tester) async {
+      await pumpLoggedIn(tester, const []);
+      await tester.tap(find.byKey(const ValueKey('triageEntryAI')));
+      await frames(tester);
+      expect(find.text('upload:'), findsOneWidget);
+    });
+  });
+}
+
+class _LoggedIn extends AuthController {
+  @override
+  AuthState build() => const AuthState(status: AuthStatus.authenticated, profile: UserProfile());
+}
+
+/// 登录态 TriagePage 的安静替身：无进行中会话 / 无补弹 / 空历史 / 无兽医在线。
+class _QuietConsultRepo extends ConsultRepository {
+  _QuietConsultRepo() : super(dio: Dio());
+
+  @override
+  Future<ConsultSession?> active() async => null;
+
+  @override
+  Future<ConsultSession?> pendingRating() async => null;
+
+  @override
+  Future<ConsultHistoryPage> history({String? cursor, int limit = 20}) async =>
+      const ConsultHistoryPage(items: <ConsultHistoryItem>[], hasMore: false);
+
+  @override
+  Future<ConsultAvailability> availability() async => const ConsultAvailability(vetOnline: false);
 }

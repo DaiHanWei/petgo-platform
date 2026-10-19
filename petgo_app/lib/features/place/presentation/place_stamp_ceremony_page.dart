@@ -159,6 +159,8 @@ class _PlaceStampCeremonyPageState extends State<PlaceStampCeremonyPage> {
         result: r,
         petName: widget.args.petName,
         ceremonyPlayed: ceremonyPlayed,
+        // V1.4.0 multi-pet Story 3.3 · AC6.4：args 原样传递（逐宠物的章）。
+        pets: widget.args.pets,
       ),
     );
   }

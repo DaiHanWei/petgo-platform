@@ -102,6 +102,7 @@ class _RecordingContentRepo implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
@@ -120,7 +121,7 @@ class _RecordingContentRepo implements ContentRepository {
 
 class _FakeProfileRepo implements ProfileRepository {
   @override
-  Future<void> deleteMyProfile() async {}
+  Future<void> deleteMyProfile({int? petId}) async {}
 
   @override
   Future<PetProfile> create({
@@ -138,7 +139,7 @@ class _FakeProfileRepo implements ProfileRepository {
       PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
 
   @override
-  Future<PetProfile?> getMyProfile() async => null;
+  Future<PetProfile?> getMyProfile({int? petId}) async => null;
 
   @override
   Future<PetProfile> update({
@@ -150,6 +151,7 @@ class _FakeProfileRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    int? petId,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }

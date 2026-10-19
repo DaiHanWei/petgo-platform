@@ -98,8 +98,8 @@ Widget _archiveApp({List<TimelineItem> items = const []}) {
             ),
           )),
       petProfileProvider.overrideWith((ref) async => _pet()),
-      timelineFirstPageProvider.overrideWith((ref) async => TimelinePage(items: items)),
-      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+      timelineFirstPageProvider.overrideWith((ref, _) async => TimelinePage(items: items)),
+      archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
           happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
       // 日历也要桩化：不桩就走真 dio，切到日历视图后留下未完成的网络 timer，测试收不了尾。
@@ -348,6 +348,11 @@ void main() {
         // 通知中心两处界面，挂任一单页前缀都会误导。名字由 PRD §4 定死（ops_popup_shown / _tapped / _closed）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'ops_',
+        // 多宠物（V1.4.0 multi-pet Story 1.5 · PRD §4：pet_added / pet_switched / pet_slot_full_shown）。
+        // V1.4.0 multi-pet：模块是『宠物 / 宠物名额』这件事，跨我的页、Diary Tab、建档三处界面，
+        // 挂到 `me_` / `diary_` 都会误导；新模块入表，非为遗留事件放宽。
+        // ⚠️ 与既有 `pet_card_`（对外 H5 名片）语义不同、互不吞并：那组前缀照留。
+        'pet_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -466,6 +471,14 @@ void main() {
         // 🔴 刻意不用 `_viewed`：失败 / 超时时用户并没看到动画；也不用 `_completed`：那会把兜底结局藏进维度。
         //    名字由计划定死，扩表、不改名。
         '_played',
+        // Diary 发布成功（V1.4.0 multi-pet Story 3.3 · PRD §4 定死 `diary_published {pet_count}`）：`_published` = **服务端
+        // 已接住这条 Diary** 之后才报（审核拦截 / 失败不报），描述结果而非点击。
+        // 🔴 与 `content_publish_submitted`（点了提交）分开：那是漏斗入口，这条是结果。名字由 PRD 定死，扩表、不改名。
+        '_published',
+        // 名额月租到账（V1.4.0 multi-pet Story 2.4 · PRD §4 定死 `pet_slot_rent_paid`）：`_paid` = **服务端确认已到账**
+        // 后才报（PawCoin 扣币成功 / QRIS 回调 PAID），描述结果而非点击；与 `pet_slot_rent_started`（发起）配对。
+        // 名字由 PRD 定死，扩表、不改名（同 `_played` / `_published` 先例）。
+        '_paid',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

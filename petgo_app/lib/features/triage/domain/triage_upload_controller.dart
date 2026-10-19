@@ -38,6 +38,11 @@ class TriageUploadController extends Notifier<TriageUploadDraft> {
     state = state.copyWith(symptomText: text);
   }
 
+  /// 写入所选宠物（V1.4.0 multi-pet Story 4.1 · AC7.3：上传页首帧重置之后由路由 `?petId=` / 补弹选择写入）。
+  void setPetId(int? petId) {
+    state = state.withPetId(petId);
+  }
+
   /// 退出上传页清空（NFR-10 无持久草稿）。
   void reset() {
     state = const TriageUploadDraft();
@@ -69,6 +74,8 @@ class TriageUploadController extends Notifier<TriageUploadDraft> {
           symptomText: symptom.isEmpty ? null : symptom,
           imageObjectKeys: keys,
           idempotencyKey: idempotencyKey,
+          // V1.4.0 multi-pet Story 4.1（P-1 / P-8）：所选宠物（单宠物也带它）；null = 不带（0 只宠物）。
+          petId: state.petId,
         );
   }
 }

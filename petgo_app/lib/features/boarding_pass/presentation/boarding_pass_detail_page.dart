@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
@@ -22,6 +23,7 @@ import '../domain/boarding_pass.dart';
 import 'share/boarding_pass_share_card.dart';
 import 'widgets/boarding_pass_card.dart';
 import 'widgets/boarding_pass_unlock_sheet.dart';
+import '../../profile/data/current_pet_provider.dart';
 
 /// 登机牌详情 B3b（未解锁）/ B3c（已解锁）（V1.3.2 Story 3.5 · AC9）。
 ///
@@ -74,6 +76,8 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
 
   Future<void> _buy(BoardingPassDetail d) async {
     if (_buying) return;
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 付费 / 新增类入口先弹 E1（不发请求）。
+    if (!guardPetWritable(context, ref)) return;
     final l10n = AppLocalizations.of(context);
     final price = ref.read(keepsakePricingProvider).value?.boardingPass;
     if (price == null) return;
@@ -85,7 +89,10 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
         context: context,
         ref: ref,
         sheet: (balance) => BoardingPassPayPicker(pass: d, balance: balance),
-        start: (channel) => ref.read(boardingPassRepositoryProvider).unlock(widget.placeToken, channel),
+        // V1.4.0 multi-pet：解锁的是当前宠物在该场所的登机牌。
+        start: (channel) async => ref
+            .read(boardingPassRepositoryProvider)
+            .unlock(widget.placeToken, channel, petId: await readRequestPetId(ref)),
         pollPaid: () async => (await ref.refresh(boardingPassDetailProvider(widget.placeToken).future)).unlocked,
         purchasePurpose: 'BOARDING_PASS',
         cashPriceIdr: () => price,

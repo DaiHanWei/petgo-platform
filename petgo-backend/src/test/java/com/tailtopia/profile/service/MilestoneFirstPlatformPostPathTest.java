@@ -27,7 +27,14 @@ class MilestoneFirstPlatformPostPathTest {
     private static final Instant NOW = Instant.parse("2026-08-05T07:00:00Z");
 
     private final MilestoneCompletionService completion = mock(MilestoneCompletionService.class);
-    private final MilestoneAutoCompleteListener listener = new MilestoneAutoCompleteListener(completion);
+    private final com.tailtopia.content.service.ContentService contentService =
+            mock(com.tailtopia.content.service.ContentService.class);
+    private final MilestoneAutoCompleteListener listener = new MilestoneAutoCompleteListener(completion, contentService);
+
+    {
+        // V1.4.0 multi-pet（Story 1.3）：计数按这只宠物（9L）的已发布 Diary 数判。
+        org.mockito.Mockito.when(contentService.countPublishedGrowthMomentsOfPet(7L, 9L)).thenReturn(1L);
+    }
 
     private static ContentPublishedEvent event(ContentType type, ContentVisibility visibility) {
         long growthCount = type == ContentType.GROWTH_MOMENT ? 1L : 0L;
@@ -39,11 +46,12 @@ class MilestoneFirstPlatformPostPathTest {
     void publicDiaryEntryCompletesS5AndStillCountsGrowthMoment() {
         listener.onContentPublished(event(ContentType.GROWTH_MOMENT, ContentVisibility.PUBLIC));
 
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+        // V1.4.0 multi-pet（Story 1.3 · P-7）：Diary 的 S5 归其关联宠物。
+        verify(completion).completeForPet(9L, MilestoneAutoEvent.PLATFORM_POST,
                 MilestoneCompletionSource.SYSTEM_AUTO);
         // 原有 S2 / M10 / L5 计数路径不受影响（不得为了修 S5 把计数判定挤掉）。
-        verify(completion).onGrowthMomentCount(7L, 1L);
-        verify(completion).completeDateGatedLNodesOnPublish(7L);
+        verify(completion).onGrowthMomentCountForPet(9L, 1L);
+        verify(completion).completeDateGatedLNodesForPet(9L);
     }
 
     /** 私密 Diary 只进作者自己的档案，不进任何公开位 → 不算平台发帖，但计数类照旧。 */
@@ -51,9 +59,11 @@ class MilestoneFirstPlatformPostPathTest {
     void privateDiaryEntryDoesNotCompleteS5ButStillCounts() {
         listener.onContentPublished(event(ContentType.GROWTH_MOMENT, ContentVisibility.PRIVATE));
 
-        verify(completion, never()).completeForOwner(
+        verify(completion, never()).completeForPet(
                 anyLong(), eq(MilestoneAutoEvent.PLATFORM_POST), any());
-        verify(completion).onGrowthMomentCount(7L, 1L);
+        verify(completion, never()).completeForDefaultPet(
+                anyLong(), eq(MilestoneAutoEvent.PLATFORM_POST), any());
+        verify(completion).onGrowthMomentCountForPet(9L, 1L);
     }
 
     /** Moment（DAILY）恒算平台发帖 —— 修改前的唯一路径，必须保持。 */
@@ -61,10 +71,11 @@ class MilestoneFirstPlatformPostPathTest {
     void momentPostCompletesS5() {
         listener.onContentPublished(event(ContentType.DAILY, ContentVisibility.PUBLIC));
 
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+        // P-7：Moment 归默认宠物。
+        verify(completion).completeForDefaultPet(7L, MilestoneAutoEvent.PLATFORM_POST,
                 MilestoneCompletionSource.SYSTEM_AUTO);
         // 非成长时刻不进计数类判定。
-        verify(completion, never()).onGrowthMomentCount(anyLong(), anyLong());
+        verify(completion, never()).onGrowthMomentCountForPet(anyLong(), anyLong());
     }
 
     /** 公开科普帖同样是「平台上的一条帖子」→ 算 S5，且不碰成长日历计数。 */
@@ -72,8 +83,9 @@ class MilestoneFirstPlatformPostPathTest {
     void publicKnowledgePostCompletesS5WithoutGrowthCount() {
         listener.onContentPublished(event(ContentType.KNOWLEDGE, ContentVisibility.PUBLIC));
 
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+        // P-7：Tips 归默认宠物。
+        verify(completion).completeForDefaultPet(7L, MilestoneAutoEvent.PLATFORM_POST,
                 MilestoneCompletionSource.SYSTEM_AUTO);
-        verify(completion, never()).onGrowthMomentCount(anyLong(), anyLong());
+        verify(completion, never()).onGrowthMomentCountForPet(anyLong(), anyLong());
     }
 }

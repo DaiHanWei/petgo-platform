@@ -92,8 +92,11 @@ class BoardingPassUnitTest {
     private final BoardingPassUnlockRepository unlocks = mock(BoardingPassUnlockRepository.class);
     private final KeepsakePurchaseService purchases = mock(KeepsakePurchaseService.class);
     private final PassportTokenGenerator tokens = mock(PassportTokenGenerator.class);
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
     private final BoardingPassService service =
-            new BoardingPassService(pets, passportRows, stamps, places, unlocks, purchases, tokens);
+            new BoardingPassService(pets, passportRows, stamps, places, unlocks, purchases, tokens, petWriteGuard);
 
     private static PlaceStampRef card(long placeId, PlaceAvailability a, LocalDate last) {
         return new PlaceStampRef(placeId, new PlaceStamp("t" + placeId, "P" + placeId, PlaceType.CAFE, a,
@@ -112,7 +115,9 @@ class BoardingPassUnitTest {
     }
 
     private void owner() {
-        when(pets.findPassportSubject(USER)).thenReturn(Optional.of(new PetPassportSubject(PET, "Momo", "CAT", Instant.EPOCH)));
+        // V1.4.0 multi-pet：品种随 subject 一并取（不再单独 findBreed）。
+        when(pets.findPassportSubject(USER, PET)).thenReturn(
+                Optional.of(new PetPassportSubject(PET, "Momo", "CAT", Instant.EPOCH, "Anggora")));
         PetPassport pp = org.springframework.beans.BeanUtils.instantiateClass(PetPassport.class);
         ReflectionTestUtils.setField(pp, "passportNo", "TT02P2600001");
         when(passportRows.findByPetProfileId(PET)).thenReturn(Optional.of(pp));
@@ -132,11 +137,29 @@ class BoardingPassUnitTest {
                 card(2, PlaceAvailability.UNAVAILABLE, LocalDate.of(2026, 9, 20))));
         when(unlocks.findByPetProfileId(PET)).thenReturn(List.of(row(5, 1, Instant.EPOCH, null),
                 row(6, 2, Instant.EPOCH, Instant.EPOCH)));
-        var r = service.list(USER);
+        var r = service.list(USER, PET);
         assertThat(r.passportNo()).isEqualTo("TT02P2600001");
         assertThat(r.items()).extracting(i -> i.placeToken()).containsExactly("t2", "t1");
         assertThat(r.items().get(0).unlocked()).as("superseded 不算").isFalse();
         assertThat(r.items().get(1).unlocked()).isTrue();
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · X9）：petId=B 只列 B 的卡；他人 petId → 404。 */
+    @Test
+    void listForSecondPetOnlyShowsThatPet() {
+        long petB = 71L;
+        when(pets.findPassportSubject(USER, petB))
+                .thenReturn(Optional.of(new PetPassportSubject(petB, "Bobo", "DOG", Instant.EPOCH, null)));
+        when(stamps.stampRefsOf(petB)).thenReturn(List.of(card(2, PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 3))));
+        when(unlocks.findByPetProfileId(petB)).thenReturn(List.of());
+
+        var r = service.list(USER, petB);
+
+        assertThat(r.items()).extracting(i -> i.placeToken()).containsExactly("t2");
+        verify(stamps, never()).stampRefsOf(PET);
+        when(pets.findPassportSubject(USER, 99L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.list(USER, 99L)).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
     }
 
     @Test
@@ -148,9 +171,8 @@ class BoardingPassUnitTest {
                 card(2, PlaceAvailability.UNAVAILABLE, LocalDate.of(2026, 9, 20))));
         when(places.cardInfoOf(1L)).thenReturn(Optional.of(new PlaceIdentityQuery.PlaceCardInfo("t1", "Jakarta", "https://img")));
         when(places.cardInfoOf(2L)).thenReturn(Optional.of(new PlaceIdentityQuery.PlaceCardInfo("t2", "Bandung", null)));
-        when(pets.findBreed(USER)).thenReturn(Optional.of("Anggora"));
 
-        var d = service.detail(USER, "old");
+        var d = service.detail(USER, PET, "old");
         assertThat(d.placeToken()).isEqualTo("t1");
         assertThat(d.passenger()).isEqualTo("Momo");
         assertThat(d.breed()).isEqualTo("Anggora");
@@ -161,7 +183,7 @@ class BoardingPassUnitTest {
         assertThat(d.unlocked()).isFalse();
         assertThat(d.unlockToken()).isNull();
 
-        var g = service.detail(USER, "gone");
+        var g = service.detail(USER, PET, "gone");
         assertThat(g.addressText()).isNull();
         assertThat(g.city()).isNull();
         assertThat(g.placeStatus()).isEqualTo(PlaceAvailability.UNAVAILABLE);
@@ -174,9 +196,9 @@ class BoardingPassUnitTest {
         when(places.findIdByToken("y")).thenReturn(Optional.of(3L));
         when(stamps.stampRefsOf(PET)).thenReturn(List.of(card(1, PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 3))));
         for (String t : List.of("x", "y")) {
-            assertThatThrownBy(() -> service.detail(USER, t)).isInstanceOfSatisfying(AppException.class,
+            assertThatThrownBy(() -> service.detail(USER, PET, t)).isInstanceOfSatisfying(AppException.class,
                     e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
-            assertThatThrownBy(() -> service.unlock(USER, t, PayChannel.QRIS)).isInstanceOfSatisfying(AppException.class,
+            assertThatThrownBy(() -> service.unlock(USER, PET, t, PayChannel.QRIS)).isInstanceOfSatisfying(AppException.class,
                     e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
         }
         verify(purchases, never()).start(anyLong(), any(), any());
@@ -191,7 +213,7 @@ class BoardingPassUnitTest {
         when(unlocks.findForUpdate(PET, 1L)).thenReturn(Optional.of(row(5, 1, null, null)));
         when(purchases.start(anyLong(), any(), any())).thenReturn(KeepsakePurchaseResponse.unlocked("kp"));
         when(places.lockIfFinal(1L)).thenReturn(true);
-        service.unlock(USER, "t1", PayChannel.PAWCOIN);
+        service.unlock(USER, PET, "t1", PayChannel.PAWCOIN);
         verify(places).lockIfFinal(1L);
         verify(unlocks).insertIfAbsent(PET, 1L, "n".repeat(32));
         ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
@@ -206,9 +228,23 @@ class BoardingPassUnitTest {
         when(places.findIdByToken("t1")).thenReturn(Optional.of(1L));
         when(stamps.stampRefsOf(PET)).thenReturn(List.of(card(1, PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 3))));
         when(places.lockIfFinal(1L)).thenReturn(false);
-        assertThatThrownBy(() -> service.unlock(USER, "t1", PayChannel.QRIS)).isInstanceOfSatisfying(AppException.class,
+        assertThatThrownBy(() -> service.unlock(USER, PET, "t1", PayChannel.QRIS)).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
         verify(unlocks, never()).insertIfAbsent(anyLong(), anyLong(), anyString());
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #10）：只读宠物买登机牌 → 409 pet-read-only，不写解锁行、不进付款。 */
+    @Test
+    void unlockOnReadOnlyPetRejected409WithoutRows() {
+        owner();
+        org.mockito.Mockito.doThrow(AppException.petReadOnly(PET)).when(petWriteGuard).requireWritable(PET);
+        assertThatThrownBy(() -> service.unlock(USER, PET, "t1", PayChannel.PAWCOIN))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(unlocks, never()).insertIfAbsent(anyLong(), anyLong(), anyString());
+        verify(purchases, never()).start(anyLong(), any(), any());
     }
 
     // ---------- 发放口（AC6）----------

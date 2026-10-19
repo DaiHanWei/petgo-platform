@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
+import com.tailtopia.admin.config.dto.PetSlotPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.AppVersionConfig;
@@ -76,6 +77,7 @@ class AdminConfigServiceTest {
         set(c, "tailsonalityUnlockPrice", 5000L);
         set(c, "tailsonalityMatchUnlockPrice", 3000L);
         set(c, "monthlyFreeQuota", 1);
+        set(c, "petSlotMonthlyPrice", 5000L);
         when(pricingRepo.findById(1L)).thenReturn(Optional.of(c));
         return c;
     }
@@ -198,6 +200,49 @@ class AdminConfigServiceTest {
         assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000, 99), 7L))
                 .isInstanceOf(AppException.class).hasMessageContaining("≥100");
         svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000, 4900), 7L); // 恰好低 100 可存
+    }
+
+    /** V1.4.0 multi-pet Story 2.2 · AC9：月租价 ≥100 且 ≤ MAX_TIER_AMOUNT，越界 422 不落库。 */
+    @Test
+    void petSlotPricingRejectsBelowHundredAndAboveMax() {
+        seedPricing();
+        assertThatThrownBy(() -> svc.updatePetSlotPricing(new PetSlotPricingForm(99), 7L))
+                .isInstanceOf(AppException.class).hasMessageContaining("≥100");
+        assertThatThrownBy(() -> svc.updatePetSlotPricing(new PetSlotPricingForm(0), 7L))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.updatePetSlotPricing(
+                new PetSlotPricingForm(AdminConfigService.MAX_TIER_AMOUNT + 1), 7L))
+                .isInstanceOf(AppException.class).hasMessageContaining("100000000");
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(pricingRepo, never()).save(any());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void petSlotPricingNoChangeWritesNothing() {
+        seedPricing();
+        svc.updatePetSlotPricing(new PetSlotPricingForm(5000), 7L);
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(pricingRepo, never()).save(any());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void petSlotPricingChangeWritesOneLogAndOneAudit() {
+        PricingConfig c = seedPricing();
+        svc.updatePetSlotPricing(new PetSlotPricingForm(7000), 7L);
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).singleElement().satisfies(l -> {
+            assertThat(l.getField()).isEqualTo("pet_slot_monthly_price");
+            assertThat(l.getOldValue()).isEqualTo("5000");
+            assertThat(l.getNewValue()).isEqualTo("7000");
+        });
+        assertThat(c.getPetSlotMonthlyPrice()).isEqualTo(7000);
+        assertThat(c.getTailsonalityUnlockPrice()).isEqualTo(5000); // 不联动其它价
+        verify(audit, times(1)).record(eq(7L), eq("CONFIG_UPDATE_PRICING"), anyString(), anyString(), anyString());
+        svc.updatePetSlotPricing(new PetSlotPricingForm(100), 7L); // 恰好下限可存
+        svc.updatePetSlotPricing(new PetSlotPricingForm(AdminConfigService.MAX_TIER_AMOUNT), 7L); // 恰好上限可存
     }
 
     @Test

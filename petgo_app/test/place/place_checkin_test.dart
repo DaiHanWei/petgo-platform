@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
 import 'package:tailtopia/features/pet_passport/domain/pet_passport.dart';
 import 'package:tailtopia/features/pet_passport/data/pet_passport_repository.dart';
@@ -32,6 +33,7 @@ import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 import '../profile/milestone_instant_fakes.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.2 batch-a Story 1.1 · L0：打卡结果契约 + 详情页打卡按钮流程（AC4）+ 成功页两种形态（AC5）。
 void main() {
@@ -608,6 +610,8 @@ Future<void> _pumpDetail(
       authControllerProvider.overrideWith(() => _Auth(loggedIn
           ? const AuthState(status: AuthStatus.authenticated, role: 'USER')
           : const AuthState.guest())),
+      // V1.4.0 multi-pet Story 3.3：打卡改读宠物列表（只列 ACTIVE；1 只 = G4 不弹选择器）。
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 77, name: 'Momo')]),
       petProfileProvider.overrideWith(
           (ref) async => const PetProfile(id: 77, name: 'Momo', cardToken: 'card')),
       if (guide != null) loginGuideControllerProvider.overrideWithValue(guide),
@@ -645,6 +649,8 @@ Future<void> _pumpSuccess(WidgetTester tester,
           : Future(() => passport ?? (throw StateError('offline')))),
       milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
       if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
+      // V1.4.0 multi-pet：里程碑列表按当前宠物分族，当场庆祝要先知道是哪只。
+      if (milestones != null) effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
     ],
     child: MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,

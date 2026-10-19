@@ -112,7 +112,7 @@ Future<_Nav> _pump(
     publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(profile ?? _profile())),
     publicUserPostsRepositoryProvider.overrideWithValue(postsRepo),
     // 宠物卡在本文件里不是被验对象 —— 给一个「没有宠物」，免得走真网络。
-    publicProfilePetProvider(_kTargetId).overrideWith((ref) async => null),
+    publicProfilePetsProvider(_kTargetId).overrideWith((ref) async => const []),
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
   addTearDown(container.dispose);

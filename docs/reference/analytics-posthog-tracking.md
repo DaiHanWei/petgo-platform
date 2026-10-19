@@ -63,6 +63,9 @@
 | `post_like_tapped` | `liked`: bool（点击后的目标态） | 内容流点赞按钮 | `like_button.dart:41` |
 | `content_publish_submitted` | `type`（帖子类型 enum name） | 发布内容提交 | `publish_compose_page.dart:156` |
 | `milestone_share_created` | `code`（里程碑代码）、`level`（等级 enum name） | 生成里程碑分享 | `milestone_share.dart:39` |
+| `diary_published` | `pet_count`（int，本条 Diary 关联的宠物数） | Diary 发布成功（服务端已接住；Moment / Tips、审核拦截、失败均不报；不带宠物名 / petId / 正文）—— V1.4.0 multi-pet Story 3.3 · PRD §4 新增 | `publish_compose_page.dart`（`_publish` 成功分支） |
+| `pet_slot_rent_started` / `pet_slot_rent_paid` | `count`（int，名额数）、`is_renewal`（bool）、`channel`（`PAWCOIN` / `QRIS`） | 名额月租发起 / 到账成功（`_paid` 只在服务端确认到账后报；ORPHAN_PAID / OVERPAID 不报）—— V1.4.0 multi-pet Story 2.4 · PRD §4 | `pet_slot_purchase_flow.dart` |
+| `diary_visitor_viewed` | `from`：既有 `profile` / 推荐卡来源等；**V1.4.0 multi-pet Story 3.3 新增取值 `content_detail`**（详情页关联宠物胶囊 / 抽屉 → 访客视图，E-17） | 进站内访客视图（`/pets/{petId}?from=`） | `visitor_archive_view.dart`（`initState`）；`content_linked_pets.dart` 拼 `from` |
 
 > 所有 `Analytics.capture` 调用都 try/catch 吞错，埋点失败绝不阻断主流程（`analytics.dart:81-90`）。
 

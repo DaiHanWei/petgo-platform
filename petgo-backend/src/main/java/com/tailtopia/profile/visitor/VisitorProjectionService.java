@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code VisitorProjectionFieldsTest} 用反射盯着这份清单，谁加了立刻红。
  *
  * <p>作为对照：作者态的 {@link TimelineService} 持有健康记录仓库与健康事件源 ——
- * 那正是本层不得照搬的部分。本层<b>只</b>向它借一样东西：{@link TimelineService#getStats(long)}，
+ * 那正是本层不得照搬的部分。本层<b>只</b>向它借一样东西：{@link TimelineService#getStats(long, Long)}，
  * 好让两个页面的统计数字出自同一个实现（AC5）。
  *
  * <h2>⚠️ 不套拉黑过滤，这是刻意的</h2>
@@ -259,7 +259,8 @@ public class VisitorProjectionService {
      */
     @Transactional(readOnly = true)
     public VisitorStats stats(PetProfile profile) {
-        ArchiveStatsResponse authorStats = timelineService.getStats(profile.getOwnerId());
+        // V1.4.0 multi-pet（Story 1.3 · AD-13）：按这只宠物统计（Diary / 问诊 / 里程碑只算该宠物）。
+        ArchiveStatsResponse authorStats = timelineService.getStats(profile.getOwnerId(), profile.getId());
         return new VisitorStats(
                 authorStats.happyMomentCount(),
                 authorStats.consultCount(),
@@ -287,7 +288,7 @@ public class VisitorProjectionService {
     /**
      * 已完成的里程碑（最近完成的在前），给访客展示徽章墙。
      *
-     * <p>⚠️ <b>只在确实有已完成里程碑时才查清单</b>：{@link MilestoneService#getMilestones(long)}
+     * <p>⚠️ <b>只在确实有已完成里程碑时才查清单</b>：{@link MilestoneService#getMilestones(long, Long)}
      * 标了 {@code @Transactional} 且 roster 缺失时会 <b>lazy 物化写库</b>。
      * 本层服务的是<b>匿名公开页</b> —— 无条件调用等于让每个陌生人的一次 GET 都可能触发写库
      * （Story 1.2 踩过同一个坑）。
@@ -297,7 +298,8 @@ public class VisitorProjectionService {
         if (completedCount <= 0) {
             return List.of();
         }
-        return milestoneService.getMilestones(profile.getOwnerId()).groups().stream()
+        // V1.4.0 multi-pet（Story 1.3 · AD-13）：徽章墙只取这只宠物的已完成里程碑。
+        return milestoneService.getMilestones(profile.getOwnerId(), profile.getId()).groups().stream()
                 .flatMap(g -> g.items().stream())
                 .filter(MilestoneItemResponse::completed)
                 .sorted(Comparator.comparing(MilestoneItemResponse::completedAt,

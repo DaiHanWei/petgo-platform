@@ -86,7 +86,7 @@ class CardPageControllerTest {
         when(accountQueryService.findAuthorViews(any()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false, java.util.List.of())));
         // 第 6 个字段是 V1.3.0 Story 1.4 的「未庆祝」角标数；访客页不展示它，给 0。
-        when(timelineService.getStats(7L))
+        when(timelineService.getStats(7L, 10L))
                 .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0));
     }
 
@@ -187,7 +187,7 @@ class CardPageControllerTest {
         var group = new com.tailtopia.profile.dto.MilestoneGroupResponse(
                 "S", items.length, items.length, List.of(items));
         // 参数序：petName, petAvatarUrl, completedCount, totalCount, groups
-        when(milestoneService.getMilestones(7L)).thenReturn(
+        when(milestoneService.getMilestones(7L, 10L)).thenReturn(
                 new com.tailtopia.profile.dto.MilestoneListResponse(
                         "Momo", null, items.length, items.length, List.of(group)));
     }
@@ -206,7 +206,8 @@ class CardPageControllerTest {
 
         controller.card("TOK", new ConcurrentModel(), req(), mock(HttpServletResponse.class));
 
-        org.mockito.Mockito.verify(milestoneService, org.mockito.Mockito.never()).getMilestones(7L);
+        org.mockito.Mockito.verify(milestoneService, org.mockito.Mockito.never()).getMilestones(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
     }
 
     /** 总数按物种取常量目录（猫 33，V1.3.4 +C-S17/C-S18），<b>不是</b>视觉稿里那个示意的 30。 */

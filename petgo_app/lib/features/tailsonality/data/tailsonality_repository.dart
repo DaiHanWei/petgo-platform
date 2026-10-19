@@ -17,14 +17,18 @@ class TailsonalityRepository {
 
   final Dio dio;
 
-  Future<TailsonalityResult> submit(Map<String, int> answers) async {
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.petTailsonalityResults, data: answers);
+  /// V1.4.0 multi-pet（Story 1.5 · AC7）：[petId] = 给哪只宠物答题（null = 后端默认宠物）。
+  Future<TailsonalityResult> submit(Map<String, int> answers, {int? petId}) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+        ApiPaths.withPet(ApiPaths.petTailsonalityResults, petId),
+        data: answers);
     return TailsonalityResult.fromJson(resp.data!);
   }
 
   /// 本人当前宠物的全部结果（新 → 旧）。
-  Future<List<TailsonalityResult>> fetchResults() async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.petTailsonalityResults);
+  Future<List<TailsonalityResult>> fetchResults({int? petId}) async {
+    final resp = await dio
+        .get<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petTailsonalityResults, petId));
     final raw = resp.data?['items'];
     return raw is List
         ? raw.map((e) => TailsonalityResult.fromJson((e as Map).cast<String, dynamic>())).toList()
@@ -56,8 +60,8 @@ class TailsonalityRepository {
   }
 
   /// 卸下（D-16）：幂等。
-  Future<void> unequipBadge() async {
-    await dio.delete<void>(ApiPaths.tailsonalityBadge);
+  Future<void> unequipBadge({int? petId}) async {
+    await dio.delete<void>(ApiPaths.withPet(ApiPaths.tailsonalityBadge, petId));
   }
 }
 

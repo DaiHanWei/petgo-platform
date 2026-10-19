@@ -159,6 +159,10 @@ petgo:
   # 将来开新城市只换 PlaceCityResolver 的实现，别在代码里写死城市名）。
   places:
     default-city: Jakarta
+  # 宠物月租名额到期扫描（V1.4.0 multi-pet Story 2.3 · AD-7）：每小时第 5 分（UTC，避开整点任务）。
+  # 先置到期 + reconcile、再发到期前 3 天提醒；状态列幂等，重复执行不重复通知。"-" = 关闭（集成测试基类关掉，测试直调 scan）。
+  pet-slot:
+    expiry-scan-cron: ${PET_SLOT_EXPIRY_SCAN_CRON:0 5 * * * *}
   shop:
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。

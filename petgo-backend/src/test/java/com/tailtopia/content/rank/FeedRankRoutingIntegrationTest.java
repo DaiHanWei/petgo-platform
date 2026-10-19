@@ -32,6 +32,9 @@ class FeedRankRoutingIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ContentPostRepository posts;
 
+    @Autowired
+    private com.tailtopia.profile.repository.PetProfileRepository pets;
+
     private JsonNode feed(String query) throws Exception {
         String body = mvc.perform(get("/api/v1/content-posts" + query))
                 .andExpect(status().isOk())
@@ -168,6 +171,36 @@ class FeedRankRoutingIntegrationTest extends ApiIntegrationTest {
         assertThat(first.get("rankMode").asText()).isEqualTo("recommend");
         JsonNode second = feed("?cursor=" + first.get("nextCursor").asText());
         assertThat(second.get("rankMode").asText()).isEqualTo("recommend");
+    }
+
+    // ── V1.4.0 multi-pet Story 3.2（AC4.8 / PRD AC5）──────────────────
+
+    /**
+     * 🔴 2 猫 1 狗的登录用户请求 ALL Tab：照常走推荐序（rankMode=recommend、
+     * 推荐序游标），不因多物种权重退回时间倒序。
+     */
+    @Test
+    void multiPetViewerStillGetsTheRecommendPath() throws Exception {
+        seedTwoPages();
+        com.tailtopia.auth.domain.User viewer = newUser();
+        for (com.tailtopia.profile.domain.PetType t : List.of(com.tailtopia.profile.domain.PetType.CAT,
+                com.tailtopia.profile.domain.PetType.CAT, com.tailtopia.profile.domain.PetType.DOG)) {
+            pets.save(com.tailtopia.profile.domain.PetProfile.create(viewer.getId(), t,
+                    "多宠" + (SEQ.incrementAndGet() % 100000), null, null, null, null,
+                    "tok" + SEQ.incrementAndGet()));
+        }
+
+        String body = mvc.perform(get("/api/v1/content-posts")
+                        .header("Authorization", userBearer(viewer.getId())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode page = json.readTree(body);
+
+        assertThat(page.get("rankMode").asText()).isEqualTo("recommend");
+        assertThat(page.get("items").size()).isPositive();
+        if (page.get("hasMore").asBoolean()) {
+            assertThat(FeedRankCursor.decode(page.get("nextCursor").asText()).seed()).isNotBlank();
+        }
     }
 
     private static boolean catching(Runnable r) {

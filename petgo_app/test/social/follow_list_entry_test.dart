@@ -67,7 +67,7 @@ Future<List<String>> _pump(WidgetTester tester, Widget home, {int? meId = 1}) as
     petProfileProvider.overrideWith((ref) async => null),
     publicProfileRepositoryProvider.overrideWithValue(_ProfileRepo()),
     publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPosts()),
-    publicProfilePetProvider(7).overrideWith((ref) async => null),
+    publicProfilePetsProvider(7).overrideWith((ref) async => const []),
   ]);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(

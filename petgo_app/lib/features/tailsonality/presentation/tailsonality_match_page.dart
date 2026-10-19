@@ -32,6 +32,7 @@ import 'widgets/ts_letter_compare.dart';
 import 'widgets/ts_match_card.dart';
 import 'widgets/ts_rich_text.dart';
 import 'widgets/ts_type_selector.dart';
+import '../../profile/data/pet_list_repository.dart';
 
 /// 主人配型页（V1.3.2 Story 2.5 · UX-DR9）。挂在某次结果 token 下：宠物侧用**这次结果**的四字母。
 ///
@@ -354,7 +355,10 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
       ref.invalidate(tailsonalityResultProvider(r.token));
       ref.invalidate(tailsonalityResultsProvider);
       // 买完整解读时服务端可能自动佩戴徽章（同结果页 _startUnlock）。
-      if (full) ref.invalidate(petProfileProvider);
+      if (full) {
+        ref.invalidate(petProfileProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页性格小标取宠物列表
+      }
       if (outcome == KeepsakeFlowOutcome.unlocked) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(full ? l10n.tailsonalityUnlockedToast : l10n.tailsonalityMatchUnlockedToast)));

@@ -56,8 +56,9 @@ public class MilestoneCelebrationService {
      * 它与服务端状态本就可能有几百毫秒的偏差，为此让回报失败只会换来一次多余的补弹。
      */
     @Transactional
-    public MilestoneCelebrationReportResponse reportCelebrated(long ownerId, List<String> codes) {
-        PetProfile pet = profiles.findByOwnerId(ownerId)
+    public MilestoneCelebrationReportResponse reportCelebrated(long ownerId, long petId, List<String> codes) {
+        // V1.4.0 multi-pet（Story 1.2 · P12）：按指定宠物（控制器经 PetResolver 解析），不属于本人 = 404。
+        PetProfile pet = profiles.findByIdAndOwnerId(petId, ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
 
         List<PetMilestone> roster = milestones.findByPetProfileIdOrderBySortOrderAsc(pet.getId());

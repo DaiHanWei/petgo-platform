@@ -116,6 +116,20 @@ class PlaceDetailResponseContractTest {
         }
     }
 
+    /** V1.4.0 multi-pet Story 1.3 · AC4.1：登录用户多一个 checkedInPetIds 键（其余键集不变）。 */
+    @Test
+    void signedInDetailCarriesCheckedInPetIds() {
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7,
+                false, List.of(70L)));
+
+        java.util.Set<String> expected = new java.util.HashSet<>(FULL_FIELDS);
+        expected.add("checkedInPetIds");
+        assertThat(m.keySet()).isEqualTo(expected);
+        assertThat(m.get("checkedInToday")).isEqualTo(false);
+        assertThat((List<?>) m.get("checkedInPetIds")).singleElement()
+                .satisfies(v -> assertThat(((Number) v).longValue()).isEqualTo(70L));
+    }
+
     /** V1.3.2 Story 1.1 AC3：游客响应**不含** checkedInToday（省略，不是 false）。 */
     @Test
     void guestDetailOmitsCheckedInToday() {

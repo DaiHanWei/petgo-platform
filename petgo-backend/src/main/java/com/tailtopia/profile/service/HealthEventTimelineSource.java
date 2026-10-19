@@ -14,6 +14,8 @@ import java.util.List;
  * 此前本注释写着「健康事件无独立 event_date 概念；问诊即记」—— <b>那是错的</b>：
  * 表里一直有 NOT NULL 的 {@code event_date}，而 {@code created_at} 是<b>归档进档案的时刻</b>。
  * 一次三个月前的问诊今天才归档，两者能差三个月，按后者定位就会把它显示在「今天」。
+ *
+ * <p>V1.4.0 multi-pet：全部方法按 {@code petId} 取（调用方已经过 {@link PetResolver} 归属校验）。
  */
 public interface HealthEventTimelineSource {
 
@@ -25,7 +27,7 @@ public interface HealthEventTimelineSource {
     }
 
     /**
-     * 取某用户在时间线锚点<b>之前</b>的健康事件（就诊日期倒序 → 同日归档时刻倒序）。
+     * 取某只宠物在时间线锚点<b>之前</b>的健康事件（就诊日期倒序 → 同日归档时刻倒序）。
      *
      * <p>🔴 <b>锚点是复合键，不能退化成单键上界。</b>排序按就诊日期、取数按归档时刻
      * 就是「两把尺子」：补录的旧问诊在排序上落到旧位置、在翻页上被当成新记录，
@@ -35,28 +37,28 @@ public interface HealthEventTimelineSource {
      * @param anchorKey  锚点的同日排序键
      * @param limit      本批最多条数
      */
-    List<HealthEventView> recentHealthEvents(long ownerId, LocalDate anchorDate, Instant anchorKey,
+    List<HealthEventView> recentHealthEvents(long petId, LocalDate anchorDate, Instant anchorKey,
             int limit);
 
     /**
-     * 取某用户<b>就诊日期</b>落在 [from, to] 内的健康事件（日历月角标）。
+     * 取某只宠物<b>就诊日期</b>落在 [from, to] 内的健康事件（日历月角标）。
      *
      * <p>🔴 参数从时刻区间改成了<b>日期区间</b>（V1.1.6 修正）—— 改之前查的是归档时刻，
      * 于是补录的旧问诊会落到「今天」那一格。
      *
      * <p>默认空实现：无实现 bean 时退化为空。
      */
-    default List<HealthEventView> healthEventsInRange(long ownerId, LocalDate from, LocalDate to) {
+    default List<HealthEventView> healthEventsInRange(long petId, LocalDate from, LocalDate to) {
         return List.of();
     }
 
-    /** 取某用户<b>就诊日期</b>为某天的健康事件（当天详情）。同上，按就诊日期而非归档时刻。 */
-    default List<HealthEventView> healthEventsOnDay(long ownerId, LocalDate day) {
+    /** 取某只宠物<b>就诊日期</b>为某天的健康事件（当天详情）。同上，按就诊日期而非归档时刻。 */
+    default List<HealthEventView> healthEventsOnDay(long petId, LocalDate day) {
         return List.of();
     }
 
-    /** 某用户问诊（健康事件）总数（Story 2.4 AC5 统计栏「问诊 X 次」）。默认 0。 */
-    default long countHealthEvents(long ownerId) {
+    /** 某只宠物问诊（健康事件）总数（Story 2.4 AC5 统计栏「问诊 X 次」）。默认 0。 */
+    default long countHealthEvents(long petId) {
         return 0L;
     }
 }

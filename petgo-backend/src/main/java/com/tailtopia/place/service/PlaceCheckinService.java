@@ -13,14 +13,17 @@ import com.tailtopia.place.repository.PlaceCheckinPetRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.place.repository.PlaceVisitRepository;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.shared.error.AppException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -61,19 +64,23 @@ public class PlaceCheckinService {
     private final PlaceStampQueryService stamps;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：所选宠物逐只可写校验（只读 → 409 {@code pet-read-only}）。 */
+    private final PetWriteGuard petWriteGuard;
 
     @Autowired
     public PlaceCheckinService(PlaceRepository places, PlaceVisitRepository checkins,
             PlaceCheckinPetRepository checkinPets, PetProfileQueryService pets,
             PlaceTokenGenerator tokens, PetPassportService passports, PlaceStampQueryService stamps,
-            ApplicationEventPublisher events) {
-        this(places, checkins, checkinPets, pets, tokens, passports, stamps, events, Clock.systemUTC());
+            ApplicationEventPublisher events, PetWriteGuard petWriteGuard) {
+        this(places, checkins, checkinPets, pets, tokens, passports, stamps, events, petWriteGuard,
+                Clock.systemUTC());
     }
 
     PlaceCheckinService(PlaceRepository places, PlaceVisitRepository checkins,
             PlaceCheckinPetRepository checkinPets, PetProfileQueryService pets,
             PlaceTokenGenerator tokens, PetPassportService passports, PlaceStampQueryService stamps,
-            ApplicationEventPublisher events, Clock clock) {
+            ApplicationEventPublisher events, PetWriteGuard petWriteGuard, Clock clock) {
+        this.petWriteGuard = petWriteGuard;
         this.places = places;
         this.checkins = checkins;
         this.checkinPets = checkinPets;
@@ -101,6 +108,10 @@ public class PlaceCheckinService {
             throw AppException.validation("坐标缺失或超出合法范围");
         }
         List<Long> petIds = ownedPetIds(userId, req.petIds());
+        // V1.4.0 multi-pet Story 2.1（AD-8）：先归属（上面 422 / 403）再逐只可写；只读 → 409，不写任何行。
+        for (Long petId : petIds) {
+            petWriteGuard.requireWritable(petId);
+        }
 
         double meters = GeoBox.distanceMeters(req.latitude(), req.longitude(),
                 place.getLatitude(), place.getLongitude());
@@ -118,10 +129,11 @@ public class PlaceCheckinService {
                 throw AppException.checkinAlreadyToday("今天已在这里打过卡");
             }
         }
-        // 本版本单宠：isNewStamp / visitCount 按首只宠物算（多宠界面属 Deferred）。
-        long primaryPet = petIds.get(0);
-        boolean isNewStamp = checkins.countForPetAtPlace(primaryPet, placeId) == 0;
-
+        // V1.4.0 multi-pet（Story 1.3 · AD-13）：每只宠物各自判新章（插入前该宠物在该场所无任何打卡）。
+        Map<Long, Boolean> newStampByPet = new LinkedHashMap<>();
+        for (Long petId : petIds) {
+            newStampByPet.put(petId, checkins.countForPetAtPlace(petId, placeId) == 0);
+        }
         PlaceCheckin saved;
         try {
             saved = checkins.saveAndFlush(
@@ -140,24 +152,45 @@ public class PlaceCheckinService {
             }
             throw e;
         }
-        long visitCount = checkins.countForPetAtPlace(primaryPet, placeId);
-        // Story 1.2：首次打卡同一事务内签发护照（幂等）；章数 = 不同当前 place_id 数。
-        PetPassport passport = passports.ensureIssued(primaryPet, userId);
-        int stampCount = stamps.stampCountOf(primaryPet);
+        // 每只宠物各盖一个章（G3）：各自的打卡次数、护照（首次打卡同一事务内签发，幂等）、章数（不同当前 place_id 数）。
+        List<PlaceCheckinResponse.PetStamp> petStamps = new ArrayList<>(petIds.size());
+        for (Long petId : petIds) {
+            long visitCount = checkins.countForPetAtPlace(petId, placeId);
+            PetPassport passport = passports.ensureIssued(petId, userId);
+            int stampCount = stamps.stampCountOf(petId);
+            petStamps.add(new PlaceCheckinResponse.PetStamp(petId, newStampByPet.get(petId), visitCount,
+                    passport.getPassportNo(), stampCount));
+        }
+        // 顶层单宠字段 = 第一只（兼容旧版 App）；事件字段不改（① 线追加 checkinId），其 isNewStamp / stampCount
+        // 也按第一只——只给护照埋点用。
+        PlaceCheckinResponse.PetStamp first = petStamps.get(0);
         events.publishEvent(new PlaceCheckedInEvent(userId, place.getPublicToken(), place.getType(),
-                isNewStamp, stampCount, petIds, saved.getId()));
+                first.isNewStamp(), first.stampCount(), petIds, saved.getId()));
         return new PlaceCheckinResponse(saved.getPublicToken(), place.getPublicToken(),
-                place.getName(), place.getType(), today, isNewStamp, visitCount,
-                passport.getPassportNo(), stampCount, stamps.stampUrlOf(place.getStampObjectKey()));
+                place.getName(), place.getType(), today, first.isNewStamp(), first.visitCount(),
+                first.passportNo(), first.stampCount(), stamps.stampUrlOf(place.getStampObjectKey()),
+                List.copyOf(petStamps));
     }
 
     /**
-     * 详情页「今日已打卡」（AC3）：本人任一宠物今天（WIB）在该场所是否已打卡。
+     * 详情页「今日已打卡」（AC3 · V1.4.0 multi-pet Story 1.3）：逐宠物判定本人宠物今天（WIB）在该场所是否已打卡。
+     * {@code allCheckedIn} = 本人有正常宠物且全部正常（ACTIVE）宠物都已打（Story 2.1 起）。
      * 游客不调本方法（字段省略）。
      */
     @Transactional(readOnly = true)
-    public boolean checkedInToday(long userId, long placeId) {
-        return checkins.existsForUserOnDay(userId, placeId, clock.instant().atZone(WIB).toLocalDate());
+    public CheckinTodayStatus checkedInToday(long userId, long placeId) {
+        LocalDate today = clock.instant().atZone(WIB).toLocalDate();
+        List<Long> own = pets.findPetIdsByOwner(userId);
+        List<Long> checked = new ArrayList<>(own.size());
+        for (Long petId : own) {
+            if (checkins.existsForPetOnDay(petId, placeId, today)) {
+                checked.add(petId);
+            }
+        }
+        // Story 2.1：「全部」只算正常宠物（只读宠物不能打卡）；单宠物账号恒 ACTIVE，与改造前一致。
+        List<Long> active = pets.findActivePetIdsByOwner(userId);
+        boolean allChecked = !active.isEmpty() && checked.containsAll(active);
+        return new CheckinTodayStatus(allChecked, List.copyOf(checked));
     }
 
     /** 唯一约束名（与迁移 V20260930_1131 同名）。 */
@@ -186,7 +219,8 @@ public class PlaceCheckinService {
      * {@code checkin-pet-forbidden}。返回去重后的列表（保持请求顺序）。
      */
     private List<Long> ownedPetIds(long userId, List<Long> requested) {
-        Optional<Long> own = pets.findPetIdByOwner(userId);
+        // V1.4.0 multi-pet：账号全部宠物都可被选（Story 1.2 · X18）；逐宠物判定 / 盖章见 checkIn（Story 1.3）。
+        List<Long> own = pets.findPetIdsByOwner(userId);
         if (own.isEmpty()) {
             throw AppException.checkinNoPet("还没有宠物档案");
         }
@@ -194,7 +228,7 @@ public class PlaceCheckinService {
             throw AppException.checkinPetForbidden("宠物不属于当前用户");
         }
         Set<Long> unique = new LinkedHashSet<>(requested);
-        if (unique.contains(null) || !Set.of(own.get()).containsAll(unique)) {
+        if (unique.contains(null) || !new java.util.HashSet<>(own).containsAll(unique)) {
             throw AppException.checkinPetForbidden("宠物不属于当前用户");
         }
         return List.copyOf(unique);

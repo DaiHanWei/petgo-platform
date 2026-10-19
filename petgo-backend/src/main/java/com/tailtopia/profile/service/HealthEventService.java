@@ -29,9 +29,12 @@ public class HealthEventService {
     private final ProfileService profileService;
     private final ImToOssArchiver imToOssArchiver;
     private final ApplicationEventPublisher events;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可存档问诊结论（仅 ARCHIVED 写路径；SKIPPED 照常）。 */
+    private final PetWriteGuard petWriteGuard;
 
     public HealthEventService(HealthEventRepository healthEvents, ProfileService profileService,
-            ImToOssArchiver imToOssArchiver, ApplicationEventPublisher events) {
+            ImToOssArchiver imToOssArchiver, ApplicationEventPublisher events, PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.healthEvents = healthEvents;
         this.profileService = profileService;
         this.imToOssArchiver = imToOssArchiver;
@@ -63,6 +66,8 @@ public class HealthEventService {
             HealthEvent ev = existing.get();
             if (ev.getArchiveDecision() == ArchiveDecision.SKIPPED
                     && req.decision() == ArchiveDecision.ARCHIVED) {
+                // V1.4.0 multi-pet Story 2.1（AD-8）：补存 = 新增存档记录 → 只读宠物 409（不复制图、不改行）。
+                petWriteGuard.requireWritable(req.petId());
                 List<String> imageKeys = imToOssArchiver.archiveImImagesToPrivate(req.petId(), req.imImageRefs());
                 ev.upgradeToArchived(blankToNull(req.symptomSummary()), blankToNull(req.aiLevel()),
                         blankToNull(req.adviceSummary()), imageKeys.isEmpty() ? null : imageKeys);
@@ -76,6 +81,9 @@ public class HealthEventService {
         LocalDate eventDate = req.eventDate() == null ? LocalDate.now() : req.eventDate();
         HealthEvent event;
         if (req.decision() == ArchiveDecision.ARCHIVED) {
+            // V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可存档（409，不复制图、不落行）；SKIPPED 不拦——
+            // 「跳过」不产生记录，后端兜底不应让它报错（App 的 H2 拦截在 4.1）。已决策的幂等重放不写库，同样不拦。
+            petWriteGuard.requireWritable(req.petId());
             // IM 聊天图复制到私密桶②，存自有 key（绝不存 IM URL）。AI 分诊图已在私密桶，直接引用其 key。
             List<String> imageKeys = imToOssArchiver.archiveImImagesToPrivate(req.petId(), req.imImageRefs());
             event = HealthEvent.archived(req.petId(), req.sourceType(), req.sourceRef(), eventDate,

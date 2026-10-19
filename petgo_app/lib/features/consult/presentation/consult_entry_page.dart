@@ -8,6 +8,8 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../profile/presentation/widgets/pet_pick_for_consult.dart';
+import '../../triage/presentation/triage_upload_page.dart' show triageUploadLocation;
 import '../data/consult_repository.dart';
 import '../domain/consult_request.dart';
 import '../domain/consult_session.dart';
@@ -104,6 +106,13 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     }
   }
 
+  /// 离线引导「用 AI」（V1.4.0 multi-pet Story 4.1 · AC7.2）：同 AI 问诊入口，≥2 只先选宠物，取消则停留。
+  Future<void> _useAi(BuildContext context) async {
+    final pick = await pickPetForConsult(context, ref, purpose: PetPickPurpose.triage);
+    if (pick == null || !context.mounted) return;
+    context.push(triageUploadLocation(pick.petId));
+  }
+
   Future<void> _start() async {
     if (_starting) return;
     // 点击即时查后台在线态（loading 在按钮上）。有兽医 → 去病例填写页（Story F：提交才发起 DIRECT
@@ -139,7 +148,12 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
         }
         return;
       }
-      await context.push('/consult/case');
+      // V1.4.0 multi-pet Story 4.1（H4）：≥2 只先单选宠物（只读可选：可问不可存档），取消则停留；
+      // AI 升级路径（上面）不弹——后端按分诊任务的宠物（AC4.2）。
+      final pick = await pickPetForConsult(context, ref, purpose: PetPickPurpose.vetConsult);
+      if (pick == null || !mounted) return;
+      final petId = pick.petId;
+      await context.push(petId == null ? '/consult/case' : '/consult/case?petId=$petId');
     } finally {
       if (mounted) setState(() => _starting = false);
     }
@@ -325,7 +339,7 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
                   width: double.infinity,
                   child: FilledButton(
                     key: const ValueKey('consultOfflineUseAi'),
-                    onPressed: () => context.push('/triage/upload'),
+                    onPressed: () => _useAi(context),
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: AppColors.mint,

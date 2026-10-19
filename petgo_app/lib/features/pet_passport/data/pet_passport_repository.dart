@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../keepsake/domain/keepsake_purchase_result.dart';
+import '../../profile/data/current_pet_provider.dart';
 import '../../profile/domain/id_card.dart';
 import '../domain/passport_snapshot.dart';
 import '../domain/pet_passport.dart';
@@ -17,20 +18,25 @@ class PetPassportRepository {
 
   final Dio dio;
 
-  Future<PetPassport> fetch() async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.petPassport);
+  /// V1.4.0 multi-pet（Story 1.5 · AC7）：护照页 / 发起快照 / 快照列表带 [petId]（null = 后端默认宠物）；
+  /// 快照详情按 token 寻址，不带。
+  Future<PetPassport> fetch({int? petId}) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petPassport, petId));
     return PetPassport.fromJson(resp.data ?? const {});
   }
 
   /// 发起「当前版本」快照购买（Story 3.4）。无章 422、已买 409 `keepsake-already-unlocked`。
-  Future<KeepsakePurchaseResult> startSnapshot(HdPayChannel channel) async {
-    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.petPassportSnapshots, data: {'channel': channel.wire});
+  Future<KeepsakePurchaseResult> startSnapshot(HdPayChannel channel, {int? petId}) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+        ApiPaths.withPet(ApiPaths.petPassportSnapshots, petId),
+        data: {'channel': channel.wire});
     return KeepsakePurchaseResult.fromJson(resp.data ?? const {});
   }
 
   /// 已买版本（只含已付，新 → 旧）。
-  Future<List<PassportSnapshotItem>> snapshots() async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.petPassportSnapshots);
+  Future<List<PassportSnapshotItem>> snapshots({int? petId}) async {
+    final resp = await dio
+        .get<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petPassportSnapshots, petId));
     return PassportSnapshotItem.listFromJson(resp.data ?? const {});
   }
 
@@ -48,14 +54,29 @@ final petPassportRepositoryProvider =
 /// 断网时页面一直停在加载骨架（空白护照本），「加载失败，重试」要 40 多秒后才出来。失败就停在失败态，重试由用户触发。
 ///
 /// 本人宠物护照。`autoDispose`：护照页是 push 进来的一次性页面，每次进入重新拉（新章要看得见）。
+///
+/// V1.4.0 multi-pet：跟随当前宠物（[requestPetIdProvider]）。
 final petPassportProvider = FutureProvider.autoDispose<PetPassport>(
-  (ref) => ref.read(petPassportRepositoryProvider).fetch(),
+  (ref) async {
+    final petId = await ref.watch(requestPetIdProvider.future);
+    return ref.read(petPassportRepositoryProvider).fetch(petId: petId);
+  },
   retry: (_, _) => null,
 );
 
-/// 已买版本列表（Story 3.4）。
+/// 指定宠物的护照（V1.4.0 multi-pet Story 3.3）：打卡成功页只为 1 只宠物打卡、而它不是当前宠物时，
+/// 章详情要读**那只**宠物的护照（不能拿当前宠物的护照冒充）。其余页面仍用 [petPassportProvider]。
+final petPassportOfPetProvider = FutureProvider.autoDispose.family<PetPassport, int>(
+  (ref, petId) => ref.read(petPassportRepositoryProvider).fetch(petId: petId),
+  retry: (_, _) => null,
+);
+
+/// 已买版本列表（Story 3.4）。V1.4.0 multi-pet：跟随当前宠物。
 final passportSnapshotsProvider = FutureProvider.autoDispose<List<PassportSnapshotItem>>(
-  (ref) => ref.read(petPassportRepositoryProvider).snapshots(),
+  (ref) async {
+    final petId = await ref.watch(requestPetIdProvider.future);
+    return ref.read(petPassportRepositoryProvider).snapshots(petId: petId);
+  },
   retry: (_, _) => null,
 );
 

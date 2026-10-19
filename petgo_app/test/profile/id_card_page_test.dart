@@ -19,9 +19,9 @@ class _FakeIdCardRepo implements IdCardRepository {
   final purchased = <int>[];
 
   @override
-  Future<int> reportShareForReward(int cardId) async => 0;
+  Future<int> reportShareForReward(int cardId, {int? petId}) async => 0;
   @override
-  Future<int> advertisableShareReward() async => 0;
+  Future<int> advertisableShareReward({int? petId}) async => 0;
 
   @override
   Future<List<IdCard>> listCards() async {
@@ -63,11 +63,11 @@ class _FakeIdCardRepo implements IdCardRepository {
   Future<int> hdPrice() async => 5000; // 同步返回不碰 dio（避免 timer 残留）
 
   @override
-  Future<IdCardData?> getMyIdCard() async => null;
+  Future<IdCardData?> getMyIdCard({int? petId}) async => null;
   @override
-  Future<IdCardData> generate() async => const IdCardData(generated: true);
+  Future<IdCardData> generate({int? petId}) async => const IdCardData(generated: true);
   @override
-  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel) async => const HdPurchaseResult(unlocked: true);
+  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel, {int? petId}) async => const HdPurchaseResult(unlocked: true);
 }
 
 class _Paw extends PawCoinController {

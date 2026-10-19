@@ -23,7 +23,7 @@ class _FakeRepo implements MilestoneRepository {
       required String body,
       required String locale,
       required String collectionLevels,
-      required List<String> collectionCodes}) async {
+      required List<String> collectionCodes, int? petId}) async {
     lastCode = code;
     lastCollectionCodes = collectionCodes;
     lastTitle = title;
@@ -37,18 +37,18 @@ class _FakeRepo implements MilestoneRepository {
   List<String>? lastReportedCelebrations;
 
   @override
-  Future<void> reportCelebrations(List<String> codes) async {
+  Future<void> reportCelebrations(List<String> codes, {int? petId}) async {
     lastReportedCelebrations = codes;
   }
 
   @override
-  Future<MilestoneList> getMilestones() => throw UnimplementedError();
+  Future<MilestoneList> getMilestones({int? petId}) => throw UnimplementedError();
   @override
-  Future<void> signalCardShared() => throw UnimplementedError();
+  Future<void> signalCardShared({int? petId}) => throw UnimplementedError();
   @override
-  Future<List<MilestoneCheckinCandidate>> getCheckinCandidates() => throw UnimplementedError();
+  Future<List<MilestoneCheckinCandidate>> getCheckinCandidates({int? petId}) => throw UnimplementedError();
   @override
-  Future<MilestoneItem> checkIn(String code, int contentId) => throw UnimplementedError();
+  Future<MilestoneItem> checkIn(String code, int contentId, {int? petId}) => throw UnimplementedError();
 }
 
 const _item = MilestoneItem(

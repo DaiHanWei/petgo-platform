@@ -10,6 +10,7 @@ import com.tailtopia.auth.domain.User;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,8 +29,16 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
     @Autowired
     private PetProfileRepository profiles;
 
+    /** 兽医 token 经 BannedVetFilter 查 vet 行：不存在 / 非 ACTIVE → 401。要验「角色拦截 403」必须先造真兽医，不能拿任意 id 当 vetId。 */
+    @Autowired
+    private VetTestSupport vets;
+
     @Autowired
     private com.tailtopia.content.repository.ContentPostRepository contentPosts;
+
+    /** V1.4.0 multi-pet Story 3.1：直接造的 Diary 同步写 content_pets（按宠物读口读关联表）。 */
+    @Autowired
+    private com.tailtopia.content.repository.ContentPetRepository contentPets;
 
     private String createBody(String name) {
         return """
@@ -54,7 +63,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.cardToken").isNotEmpty())
                 .andExpect(jsonPath("$.id").isNumber());
 
-        PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile saved = profiles.findDefault(owner.getId()).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("旺财", saved.getName());
         org.junit.jupiter.api.Assertions.assertEquals(owner.getId(), saved.getOwnerId());
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -170,12 +179,13 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                         .content(createBody("旺财")))
                 .andExpect(status().isCreated());
 
-        // 单账号单宠物：再建 → 409。
+        // V1.4.0 multi-pet Story 1.4：名额（Lv1 占位下 = 1）已满 → 409 pet-slot-full（原 profile-exists，规则按设计改变）。
         mvc.perform(post("/api/v1/pet-profiles")
                         .header(HttpHeaders.AUTHORIZATION, token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody("小黑")))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("https://petgo/errors/pet-slot-full"));
     }
 
     // ---------- 查询自己的档案 ----------
@@ -256,7 +266,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.name").value("大旺"))
                 .andExpect(jsonPath("$.intro").value("换名字了"));
 
-        PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile saved = profiles.findDefault(owner.getId()).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("大旺", saved.getName());
         // cardToken 不变（编辑不重生成）。
         org.junit.jupiter.api.Assertions.assertNotNull(saved.getCardToken());
@@ -287,7 +297,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.sex").value("MALE"));
 
         // 真落库（不是只在响应里回显）。
-        PetProfile saved = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile saved = profiles.findDefault(owner.getId()).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(
                 com.tailtopia.profile.domain.PetSex.MALE, saved.getSex());
 
@@ -465,11 +475,11 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
         com.tailtopia.content.domain.ContentPost p = com.tailtopia.content.domain.ContentPost.publish(
                 ownerId, com.tailtopia.content.domain.ContentType.GROWTH_MOMENT, petIdOf(ownerId),
                 "moment", java.util.List.of(img), LocalDate.parse(eventDate));
-        contentPosts.save(p);
+        com.tailtopia.content.support.ContentPetsTestFixture.link(contentPets, contentPosts.save(p));
     }
 
     private long petIdOf(long ownerId) {
-        return profiles.findByOwnerId(ownerId).orElseThrow().getId();
+        return profiles.findDefault(ownerId).orElseThrow().getId();
     }
 
     @Test
@@ -535,5 +545,70 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
         mvc.perform(get("/api/v1/pet-profiles/me/calendar?year=2026&month=6")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
                 .andExpect(status().isNotFound());
+    }
+
+    // ---------- V1.4.0 multi-pet Story 1.1：/me/list 与 petId 寻址（单宠物库） ----------
+
+    @Test
+    void listWithoutPetsIsEmptyArrayNot404() throws Exception {
+        User owner = newUser();
+        mvc.perform(get("/api/v1/pet-profiles/me/list").header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void listWithOnePetReturnsOneDefaultItem() throws Exception {
+        User owner = newUser();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("单只")))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/v1/pet-profiles/me/list").header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].isDefault").value(true))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[0].diaryCount").value(0));
+    }
+
+    @Test
+    void otherUsersPetIdIs404AndNonNumericIs400() throws Exception {
+        User owner = newUser();
+        User other = newUser();
+        String otherBody = mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(other.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("别人家")))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long othersPet = json.readTree(otherBody).get("id").asLong();
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("自己家")))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/v1/pet-profiles/me").param("petId", String.valueOf(othersPet))
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/pet-profiles/me").param("petId", "987654321")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/pet-profiles/me").param("petId", "abc")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isBadRequest());
+        // 不带 petId 与改造前一致：返回自己的那只。
+        mvc.perform(get("/api/v1/pet-profiles/me").header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("自己家"));
+    }
+
+    @Test
+    void listRejectsNonUserRole() throws Exception {
+        long vetId = vets.newActiveVet("profile-list-it").getId();
+        mvc.perform(get("/api/v1/pet-profiles/me/list")
+                        .header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
+                .andExpect(status().isForbidden());
     }
 }

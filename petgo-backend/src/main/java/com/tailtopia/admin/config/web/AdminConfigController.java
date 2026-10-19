@@ -4,6 +4,7 @@ import com.tailtopia.admin.config.dto.AppVersionChange;
 import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
+import com.tailtopia.admin.config.dto.PetSlotPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.admin.config.service.AdminConfigService;
@@ -82,6 +83,10 @@ public class AdminConfigController {
                     "admin.err.config.ktpPriceMin", "idHdDownloadPrice,passportPagePrice,passportBoardingPrice",
                     "admin.err.config.tailsonalityMatchPriceNotBelowUnlock",
                     "tailsonalityUnlockPrice,tailsonalityMatchUnlockPrice")),
+            // V1.4.0 multi-pet Story 2.2：宠物名额月租价格卡（UI 稿 L7）
+            "petSlot", json(Map.of(
+                    "admin.err.config.petSlotPriceMin", "petSlotMonthlyPrice",
+                    "admin.err.config.petSlotPriceMax", "petSlotMonthlyPrice")),
             "pawcoin", json(Map.of(
                     "admin.err.config.premiumRateRange", "premiumRate",
                     "admin.err.config.premiumFixedNegative", "premiumFixed")),
@@ -455,6 +460,31 @@ public class AdminConfigController {
         try {
             write.updateKtpPricing(form, admin.getAdminAccountId());
             flash.addFlashAttribute("toast", msg.get("admin.flash.config.ktpPricingSaved"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/config";
+    }
+
+    /**
+     * 宠物名额月租价格（V1.4.0 multi-pet Story 2.2 · AB-34.3 · UI 稿 L7）：单独一张模板 D 配置卡，与定价卡同码
+     * （{@code config.edit} 改、{@code config.view} 看，不新增权限）；htmx 成功原位换卡 + toast，失败 422 行内 err；
+     * 非 htmx PRG + flash（照 {@link #updateKtpPricing}）。只影响之后的新租与续租。
+     */
+    @PostMapping("/admin/config/pet-slot-pricing")
+    @PreAuthorize(EDIT_AUTH)
+    public String updatePetSlotPricing(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam long petSlotMonthlyPrice, HxRequest hx, Model model, HttpServletResponse response,
+            RedirectAttributes flash) {
+        PetSlotPricingForm form = new PetSlotPricingForm(petSlotMonthlyPrice);
+        if (hx.isHtmx()) {
+            write.updatePetSlotPricing(form, admin.getAdminAccountId());
+            return savedCard("cfg-pet-slot", "config-card-pet-slot", "admin.flash.config.petSlotPricingSaved", model,
+                    response);
+        }
+        try {
+            write.updatePetSlotPricing(form, admin.getAdminAccountId());
+            flash.addFlashAttribute("toast", msg.get("admin.flash.config.petSlotPricingSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }

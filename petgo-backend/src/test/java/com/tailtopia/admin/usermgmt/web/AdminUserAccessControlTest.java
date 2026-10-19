@@ -43,7 +43,8 @@ class AdminUserAccessControlTest {
         AdminUserController controller(AdminUserService s) {
             return new AdminUserController(s, TestMessages.real(),
                     mock(com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery.class),
-                    mock(com.tailtopia.admin.growth.service.AdminGrowthUserService.class));
+                    mock(com.tailtopia.admin.growth.service.AdminGrowthUserService.class),
+                    mock(com.tailtopia.admin.petslot.service.AdminPetSlotTabService.class));
         }
     }
 

@@ -1,7 +1,6 @@
 package com.tailtopia.growth.listener;
 
 import com.tailtopia.auth.event.UserDailyActiveEvent;
-import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.event.ContentCollectedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
@@ -10,7 +9,7 @@ import com.tailtopia.content.event.ContentRemovedEvent;
 import com.tailtopia.content.event.ContentUncollectedEvent;
 import com.tailtopia.content.event.ContentUnlikedEvent;
 import com.tailtopia.content.repository.ContentLikeRepository;
-import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.service.ContentPetQuery;
 import com.tailtopia.growth.domain.ReverseReason;
 import com.tailtopia.growth.domain.RuleCode;
 import com.tailtopia.growth.service.AccrualCommand;
@@ -55,20 +54,20 @@ public class GrowthActivityListener {
     static final String REF_MILESTONE = "MILESTONE";
 
     private final GrowthLedgerService ledger;
-    private final ContentPostRepository posts;
+    private final ContentPetQuery contentPets;
     private final ContentLikeRepository likes;
     private final Clock clock;
 
     @Autowired
-    public GrowthActivityListener(GrowthLedgerService ledger, ContentPostRepository posts,
+    public GrowthActivityListener(GrowthLedgerService ledger, ContentPetQuery contentPets,
             ContentLikeRepository likes) {
-        this(ledger, posts, likes, Clock.systemUTC());
+        this(ledger, contentPets, likes, Clock.systemUTC());
     }
 
-    GrowthActivityListener(GrowthLedgerService ledger, ContentPostRepository posts, ContentLikeRepository likes,
+    GrowthActivityListener(GrowthLedgerService ledger, ContentPetQuery contentPets, ContentLikeRepository likes,
             Clock clock) {
         this.ledger = ledger;
-        this.posts = posts;
+        this.contentPets = contentPets;
         this.likes = likes;
         this.clock = clock;
     }
@@ -82,12 +81,15 @@ public class GrowthActivityListener {
                 e.wibDate().atStartOfDay(ScheduleWindow.WIB).toInstant()));
     }
 
-    /** 发帖（PRD AC15）：私密 Diary 照常；同帖二次发布被 {@code POST:{postId}} 挡住。 */
+    /**
+     * 发帖（PRD AC15）：私密 Diary 照常；同帖二次发布被 {@code POST:{postId}} 挡住。
+     * 关联宠物取事件的 {@code petIds}（多宠物线合入后的全部关联宠物，CROSS-STORY 2026-10-18「其他口径」）。
+     */
     @Async
     @TransactionalEventListener
     public void onPublished(ContentPublishedEvent e) {
         accrue(new AccrualCommand(e.authorId(), RuleCode.POST_PUBLISHED, null, GrowthIdemKeys.post(e.postId()),
-                REF_CONTENT_POST, String.valueOf(e.postId()), petIds(e.petId()), orNow(e.createdAt())));
+                REF_CONTENT_POST, String.valueOf(e.postId()), petIds(e.petIds()), orNow(e.createdAt())));
     }
 
     /**
@@ -227,10 +229,13 @@ public class GrowthActivityListener {
         }
     }
 
-    /** 互动类关联宠物：读 {@code content_posts.pet_id} 单值（② 合并后改读多宠关联）；查不到不影响入账。 */
+    /**
+     * 互动类关联宠物：读多宠关联 {@code content_pets}（经 {@link ContentPetQuery}，宠物创建顺序；多宠物线合入后
+     * 由 {@code content_posts.pet_id} 单值改来，CROSS-STORY 2026-10-18「其他口径」）。无关联 / 查不到不影响入账。
+     */
     private List<Long> postPetIds(long postId) {
         try {
-            return petIds(posts.findById(postId).map(ContentPost::getPetId).orElse(null));
+            return petIds(contentPets.petsOf(postId));
         } catch (RuntimeException ex) {
             return null;
         }
@@ -238,6 +243,11 @@ public class GrowthActivityListener {
 
     private static List<Long> petIds(Long petId) {
         return petId == null ? null : List.of(petId);
+    }
+
+    /** 空表与 null 同义（不关联宠物 → pet_ids 列为 NULL，与单值口径一致）。 */
+    private static List<Long> petIds(List<Long> petIds) {
+        return petIds == null || petIds.isEmpty() ? null : List.copyOf(petIds);
     }
 
     private Instant orNow(Instant at) {

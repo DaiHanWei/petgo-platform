@@ -335,7 +335,7 @@ class _FakeRepo implements TailsonalityRepository {
   bool failNext = false;
 
   @override
-  Future<TailsonalityResult> submit(Map<String, int> answers) async {
+  Future<TailsonalityResult> submit(Map<String, int> answers, {int? petId}) async {
     bodies.add(Map.of(answers));
     if (failNext) {
       failNext = false;

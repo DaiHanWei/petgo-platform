@@ -20,9 +20,13 @@ class ArchiveCalendar extends ConsumerStatefulWidget {
   const ArchiveCalendar({
     super.key,
     required this.onOpenDay,
+    required this.ownerPetId,
     this.onAddOnDate,
     this.scope = const ArchiveScope.me(),
   });
+
+  /// 作者态的当前宠物（V1.4.0 multi-pet Story 1.5：日历按 petId 分族）；访客态忽略。
+  final int ownerPetId;
 
   final void Function(DateTime date) onOpenDay;
 
@@ -68,7 +72,8 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
 
   @override
   Widget build(BuildContext context) {
-    final monthAsync = ref.watch(calendarMonthProviderFor(widget.scope, _year, _month));
+    final monthAsync =
+        ref.watch(calendarMonthProviderFor(widget.scope, widget.ownerPetId, _year, _month));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -79,8 +84,8 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
           loading: () => const Padding(
               padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator())),
           error: (e, _) => _CalendarError(
-              onRetry: () =>
-                  ref.invalidate(calendarMonthProvider((year: _year, month: _month)))),
+              onRetry: () => ref.invalidate(
+                  calendarMonthProviderFor(widget.scope, widget.ownerPetId, _year, _month))),
           data: _grid,
         ),
       ],

@@ -66,38 +66,46 @@ public record ContentPostCreateRequest(
          * 与 {@link #imageSizes()} 的「整组作废」<b>刻意不同</b> —— 露出位置丢了没有兜底，
          * 会无声退化为居中，用户的选择白做。
          */
-        @Size(max = 9, message = "最多 9 张图片") List<Double> imageCropOffsets) {
+        @Size(max = 9, message = "最多 9 张图片") List<Double> imageCropOffsets,
+        /**
+         * Diary 关联的宠物 id（V1.4.0 multi-pet Story 3.1 · AD-10），最多 5 只，须全部属于当前用户且可写。
+         *
+         * <p>省略 / 空 = 兼容旧版 App 与后台种子：有 {@link #petId()} 则视为 {@code [petId]}。
+         * 仅 GROWTH_MOMENT 生效，日常 / 科普忽略。服务端去重并按宠物创建顺序排序，第一只写入 {@code pet_id}。
+         */
+        @Size(max = 5, message = "最多关联 5 只宠物") List<Long> petIds) {
 
     /** 兼容无事件日期的发布（日常/科普 / 后台补发）：eventDate 省为 null，可见范围默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls) {
-        this(type, petId, text, imageUrls, null, null, null, null, null, null);
+        this(type, petId, text, imageUrls, null, null, null, null, null, null, null);
     }
 
     /** 兼容不带可见范围的调用（老客户端 / 既有测试）：默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate) {
-        this(type, petId, text, imageUrls, eventDate, null, null, null, null, null);
+        this(type, petId, text, imageUrls, eventDate, null, null, null, null, null, null);
     }
 
     /** 兼容不带图片尺寸的调用（老客户端 / 既有测试 / 后台种子发布）：一律走服务端兜底测量。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility) {
-        this(type, petId, text, imageUrls, eventDate, visibility, null, null, null, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, null, null, null, null, null);
     }
 
     /** 兼容不带 @ 名单的调用（老客户端 / 既有测试 / 运营发帖）：视为没 @ 任何人。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
             List<ImageSize> imageSizes) {
-        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, null, null, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, null, null, null, null);
     }
 
     /** 兼容不带打卡关联的调用（V1.3.2 前的 8 参形态：老客户端 / 既有测试 / 运营发帖）：普通发帖。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
             List<ImageSize> imageSizes, List<Long> mentionedUserIds) {
-        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds, null, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds, null, null,
+                null);
     }
 
     /** 兼容不带露出位置的调用（V1.3.4 前的 9 参形态：老客户端 / 既有测试 / 运营发帖）：全部居中。 */
@@ -105,7 +113,16 @@ public record ContentPostCreateRequest(
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
             List<ImageSize> imageSizes, List<Long> mentionedUserIds, String placeCheckinToken) {
         this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds,
-                placeCheckinToken, null);
+                placeCheckinToken, null, null);
+    }
+
+    /** 兼容不带多宠关联的调用（V1.4.0 前的 10 参形态：旧版 App / 既有测试 / 后台种子）：按 {@code petId} 单只。 */
+    public ContentPostCreateRequest(ContentType type, Long petId, String text,
+            List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
+            List<ImageSize> imageSizes, List<Long> mentionedUserIds, String placeCheckinToken,
+            List<Double> imageCropOffsets) {
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds,
+                placeCheckinToken, imageCropOffsets, null);
     }
 
     /** 省略即公开（NFR-6：私密只由用户主动关开关产生）。 */

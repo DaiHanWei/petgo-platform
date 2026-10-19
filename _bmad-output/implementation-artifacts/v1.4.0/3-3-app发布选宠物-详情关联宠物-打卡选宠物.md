@@ -1,6 +1,6 @@
 # Story 3.3: App——发布选宠物、详情关联宠物、打卡选宠物
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 multi-pet · 分支 `feat/1.4.0-multi-pet`（从地基 Story 0.1 合入之后的 `dev_1.4.0` 切出）
 > 口径优先级：`decision-log.md` ② 节 > `多宠物/1-4-0多宠物prd.md` > `architecture-v1.4.0-multi-pet-delta.md`（AD-1 ~ AD-17、P-1 ~ P-4、V-1 / V-2）> UI 稿 `多宠物/ui-1-4-0-multi-pet-integrated-v1.html`（F 泳道 F1 ~ F6c、G 泳道 G1 ~ G4，2026-10-15 定稿）（均在 `_bmad-output/planning-artifacts/v1.4.0/`）；跨分支契约以 `CROSS-STORY-DECISIONS.md`「2026-10-18 V1.4.0 四条线共用地基」节为准。
@@ -108,15 +108,15 @@ so that 记录准确归到每只宠物。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：确认 1.3 / 1.5 / 2.4 / 3.1 实际提交的 provider 名、模型字段、后端响应键（Dev Notes「依赖的后端契约」）；不一致先改本文件；核对 Dev Notes「现状」file:line
-- [ ] **T1 文案**（AC8）：两份 arb + gen-l10n
-- [ ] **T2 公共件**：`formatPetNames`、`PetAvatarStack`（环扣 + +N）、`PetPickerSheet`（单选 / 多选）
-- [ ] **T3 发布页**（AC1 / AC2 / AC3）：chips、禁用条件、预选、请求体、F3 取第一只、失效
-- [ ] **T4 详情页**（AC4）：模型 `pets`、F6 / F6b / F6c 胶囊、装饰标签让位、抽屉与跳转
-- [ ] **T5 打卡**（AC5 / AC6）：选择器接入、逐宠物置灰、提交、成功页多章、Rekam Momen Ini 预选、里程碑逐只
-- [ ] **T6 埋点**（AC7）：`diary_published` + 文档登记
-- [ ] **T7 测试**（AC9）：widget / unit；`flutter analyze`
-- [ ] **T8** L2 标「待本地验收」（模拟器演示 + 还原度）
+- [x] **T0 开工核对**：确认 1.3 / 1.5 / 2.4 / 3.1 实际提交的 provider 名、模型字段、后端响应键（Dev Notes「依赖的后端契约」）；不一致先改本文件；核对 Dev Notes「现状」file:line
+- [x] **T1 文案**（AC8）：两份 arb + gen-l10n
+- [x] **T2 公共件**：`formatPetNames`、`PetAvatarStack`（环扣 + +N）、`PetPickerSheet`（单选 / 多选）
+- [x] **T3 发布页**（AC1 / AC2 / AC3）：chips、禁用条件、预选、请求体、F3 取第一只、失效
+- [x] **T4 详情页**（AC4）：模型 `pets`、F6 / F6b / F6c 胶囊、装饰标签让位、抽屉与跳转
+- [x] **T5 打卡**（AC5 / AC6）：选择器接入、逐宠物置灰、提交、成功页多章、Rekam Momen Ini 预选、里程碑逐只
+- [x] **T6 埋点**（AC7）：`diary_published` + 文档登记
+- [x] **T7 测试**（AC9）：widget / unit；`flutter analyze`
+- [x] **T8** L2 标「待本地验收」（模拟器演示 + 还原度）
 
 ## Dev Notes
 
@@ -145,8 +145,9 @@ so that 记录准确归到每只宠物。
 
 - **发布**（3.1）：请求 `petIds: number[]`（Diary ≥ 1、≤ 5）+ 兼容 `petId`；错误 `pet-read-only`（409，带 `petId`）、非本人 404、缺宠物 422。
 - **详情**（3.1）：`pets: [{petId, name, avatarUrl, petType}]`，仅 Diary 有关联时出现，按宠物创建顺序。
-- **场所详情**（1.3）：`checkedInToday`（全部正常宠物都打过才 true）+ 逐宠物今日状态，计划为 `checkedInTodayPetIds: number[]`。**缺失时降级**：抽屉不置灰任何行，靠提交时 409 兜底（AC5.4），Completion Notes 记「待确认」。
-- **打卡响应**（1.3）：顶层字段保持（= 第一只，旧版兼容）+ 逐宠物结果，计划为 `pets: [{petId, isNewStamp, visitCount, stampCount}]`。**缺失时降级**：≥ 2 只的成功页每枚章都按顶层 `isNewStamp` 显示，记「待确认」。
+- **场所详情**（1.3）：`checkedInToday`（全部正常宠物都打过才 true）+ 逐宠物今日状态，计划为 `checkedInTodayPetIds: number[]`。〔T0：实际键名 **`checkedInPetIds`**（`PlaceDetailResponse`，游客 NON_NULL 省略），App 按实际键解析。〕**缺失时降级**：抽屉不置灰任何行，靠提交时 409 兜底（AC5.4），Completion Notes 记「待确认」。
+- **打卡响应**（1.3）：顶层字段保持（= 第一只，旧版兼容）+ 逐宠物结果，计划为 `pets: [{petId, isNewStamp, visitCount, stampCount}]`。〔T0：实际 `PlaceCheckinResponse.PetStamp{petId, isNewStamp, visitCount, passportNo, stampCount}`，**不含名字 / 头像** → App 从 `petListProvider` 取名字 / 头像拼 `PlaceCheckinPetArgs`。〕
+- 〔T0 其余核对〕发布 `ContentPostCreateRequest.petIds`（`@Size(max=5)`）+ `petId` 兼容、409 `pet-read-only` 扩展成员 `petId`（3.1 / 2.1）一致；详情 `ContentDetailResponse.pets` = `ContentPetView(petId, name, avatarUrl, petType)` 一致；`petListProvider`（`PetListItem.id/name/avatarUrl/petType/birthday/status/isReadOnly`，最早建档在前）一致；当前宠物页面一律读 **`effectivePetIdProvider`**（1.5：`currentPetIdProvider` 只记偏好、可能失效）；`petPassportProvider` **不是** petId family（跟随当前宠物）→ AC5.5 护照整体失效一次、里程碑 `milestoneListProvider(petId)` 逐只失效；`celebrateAutoMilestoneIfAny` 原只查当前宠物 → 加可选 `forPetId`（AC6.6 逐只）；`timelineFirstPageProvider` / `archiveStatsProvider` / `calendarMonthProvider` / `dayDetailProvider` 为 petId family，AC3.4 按 AD-14「整组失效」整族 invalidate（覆盖每只关联宠物）。**缺失时降级**：≥ 2 只的成功页每枚章都按顶层 `isNewStamp` 显示，记「待确认」。
 
 ### 关键设计说明
 
@@ -211,10 +212,111 @@ so that 记录准确归到每只宠物。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- 基线（改动前，`feat/1.4.0-multi-pet` @ acc497c2）：`flutter analyze` → No issues found；`flutter test` 基线 3557 通过 / 1 跳过（2.4 记录）。
+- 首轮全量失败点（均已处理）：① `test/analytics/v112_events_test.dart` 动作后缀白名单无 `_published` → 按该测试既定扩展方式登记 `'_published'`（带注释：PRD §4 定死事件名，扩表不改名），未放宽正则；② `test/pet_passport/pet_passport_stamp_flow_test.dart` 源码守卫要求「Lihat Paspor」在 `if (r.isNewStamp) ...[` 分支 → 恢复按顶层 `isNewStamp`（见偏差 6）；③ 打卡 / 发布页既有测试原先桩 `petProfileProvider`，现改读 `petListProvider` → 只补 `petListProvider` 桩（见下）。
+- 改动后：`flutter analyze` → **No issues found**；`flutter test` 全量 → **3620 通过 / 1 跳过 / 0 失败**（+63）。
+- code review 修复后：`flutter analyze` → **No issues found**；`flutter test` 全量 → **3629 通过 / 1 跳过 / 0 失败**（再 +9）。
 
 ### Completion Notes List
 
+**L1/L2 待本地验收**：AC9.3 三段模拟器演示（F2 3 只选 2 只发布；F6 有图胶囊 + 抽屉 → 访客视图、F6b 无图、F6c 4 只「+2」；G2 3 只中 1 只已打过置灰、选 2 只 → G3 两枚章 → Rekam Momen Ini 预选这 2 只）与 F1 / F2 / F4 / F6 / F6b / F6c / G1 / G2 / G3 逐屏还原度打分（≥ 95%）云端 headless 跑不了，需本地连 stag / 真后端验收。本 story **只 App，后端零改动**，无 L1 测试；**无 Flyway 迁移**（`check-flyway-versions.sh origin/main` OK，242 个迁移）。
+
+**T0 核对**：见 Dev Notes「依赖的后端契约」的〔T0〕标注（`checkedInPetIds` 实际键名、打卡 `pets[]` 不含名字头像、`effectivePetIdProvider`、护照非 family、`celebrateAutoMilestoneIfAny` 加 `forPetId`）。其余 provider / 字段 / 错误码与本文件一致；行号有漂移，以代码为准。
+
+**实现要点**
+- 公共件：`profile/presentation/widgets/pet_names.dart`（`formatPetNames(l10n, names, {withPrefix})`，F2 占位 / F6 胶囊 / G3 副标题共用）、`pet_avatar_stack.dart`（`PetAvatarStack`：24 圆 + 2 白边、重叠 6、第一个最上层、> 3 只第 3 位「+N」走 `diaryPetsMore`）、`pet_picker_sheet.dart`（`showPetPickerSheet` / `PetPickerSheet` 单选（点行即返回）/ 多选（默认全不选、主按钮 `submitLabel(n)`）、`disabledPetIds` + `disabledSubtitle`、返回按列表顺序；统一卡片行 `PetCardRow` 供详情抽屉复用）。
+- 发布页：`PublishComposePage.open` / 构造器加 `initialPetIds`；`PublishController.petIds` + `setPetIds`，`canPublish` 在 Diary 追加「≥ 1 只」，`publish({idempotencyKey, List<int>? petIds, placeCheckinToken})`（`int? petId` 参数换掉）；`ContentRepository.publish` 加 `List<int> petIds`，非空时写 `petIds` + `petId = 第一只`，空则退回旧 `petId`（Moment / Tips 两者都不写）。chips 行替换「Untuk:」只读行（同位置）：只 ACTIVE、按创建顺序、选中 ✓、热区 ≥ 44；加载中同高占位、失败行内 `commonRetry`、无宠物不出；默认预选只做一次（initialPetIds 过滤 / 里程碑 = `effectivePetIdProvider` 当前宠物且非只读 / F4 只 1 只自动选中）；列表刷新后已选里变只读的自动剔除。占位 F1 `diaryPetsComposeHint` / F2 `publishHintGrowth(拼接名)`。409 `pet-read-only` → Toast `petReadonlyBlockTitle(名字)`（2.4 已有文案）+ 失效 `petListProvider` + 去掉该 id，不进成功页。F3 分享档案按第一只关联宠物 `getMyProfile(petId: 第一只)` best-effort。成功后整族失效时间线 / 统计 / 月历 / 当天详情 + 宠物列表；里程碑回填 / 庆祝按进页时的当前宠物（`_milestonePetId`）。
+- 详情页：`ContentDetail.pets`（`ContentPetRef.listFromJson`，缺省空表，`withFollowEpoch` 保留）；`ContentLinkedPetsCapsule`（`content/presentation/widgets/content_linked_pets.dart`）：有图深色毛玻璃（`0x8C14101E` + blur 8）叠在 `_ImageCarousel` 外层 Stack 左下 12 / 12（不随 PageView 滑动），装饰标签有宠物时上移到胶囊正上方（同左边距 12、间距 8），无宠物时位置不变；无图浅色胶囊在正文 / 装饰标签之后、打卡场所条之前（上 12 下 2），宠物名部分 w600 ink；仅 Diary 且非空显示；Semantics button + 名字串；1 只直接 `requireLogin` → `/pets/{id}?from=content_detail`，多只先弹抽屉（把手 + `PetCardRow`，副标题物种）。Feed / 作者行未加（源码测试钉住）。
+- 打卡：`PlaceDetail.checkedInPetIds`（null = 未下发）、`PlaceCheckinResult.pets`（`PlaceCheckinPetStamp`）；`PlaceCheckinButton(checkedInPetIds)`：定位成功后读 `petListProvider` 的 ACTIVE —— 0 只 Toast `placeCheckinNoPet`、1 只直接提交（G4）、≥ 2 只弹 `PetPickerSheet`（已打卡行置灰 G-3、关闭 = 取消、开抽屉期间按钮不转圈但不可重复点）；提交所选；全部正常宠物都打过才本地切「已打卡」；护照失效一次 + 每只所选宠物 `milestoneListProvider(id)` 失效；盖章动画「任一新章」即播（`args.anyNewStamp`）。
+- 成功页：`PlaceCheckinSuccessArgs.pets`（`PlaceCheckinPetArgs{petId, name, avatarUrl, isNewStamp, visitCount}`）+ `isMultiPet` / `anyNewStamp`；≤ 1 只走改造前同一路径（唯一差别：单只且确定不是当前宠物时章详情读新增的 `petPassportOfPetProvider(petId)`）；≥ 2 只一排 110 章面（横向可滚、居中、间距 14）+ 头像 26 + 名字（再访「名字 ×n」），副标题新章宠物拼名套 `placeCheckinNewStamp` / 全再访 `placeCheckinRepeatStamp(场所, 第一只次数)`；里程碑庆祝逐只 `celebrateAutoMilestoneIfAny(..., forPetId:)`；「Rekam Momen Ini」带 `initialPetIds = 本次打卡全部宠物`；盖章动画页原样透传 `pets`。
+- 埋点：新增 `diary_published {pet_count}`（Diary 成功分支，Moment / Tips / 失败不报，无名字 / id / 正文）；`diary_visitor_viewed.from` 新取值 `content_detail`；两者登记到 `docs/reference/analytics-posthog-tracking.md` §4；`content_publish_submitted` 未动。
+- 文案：AC8 表 11 键，EN / ID 两份（仓库只有这两个 arb），已 `flutter gen-l10n`。
+
+**L0 测试（均已跑、全绿）**
+- 新增：`test/content/content_detail_pets_test.dart`（20：模型解析 / 缺省 / 拼名规则 / F6 1–4 只头像数与「+2」/ 胶囊在 PageView 外且距左下 12 / 装饰标签让位与无宠物回归 / F6b 位置与文本 / Moment 不显示 / 1 只直达、多只抽屉、游客门控 / Semantics / Feed 与作者行源码守卫）、`test/content/publish_diary_published_analytics_test.dart`（3）、`test/place/place_checkin_pet_picker_test.dart`（8）、`test/place/place_checkin_success_multi_test.dart`（7）、`test/place/place_checkin_result_test.dart`（3，story 注明需新建）、`test/profile/pet_picker_sheet_test.dart`（2：单选 / 多选）。
+- 补：`test/content/publish_compose_test.dart`（+10：F1 只读不出现 + 置灰 + 占位 / F2 创建顺序 + 拼名 + ≥3 dkk / F4 自动选中可取消 / F5 Moment·Tips 无 chips + 切回保留 / initialPetIds 过滤 / 里程碑预选当前宠物 / 当前宠物只读不预选 / 列表失败重试 / 请求体 petIds + petId 第一只 + F3 分享第一只 / 409 只读）、`test/content/publish_controller_test.dart`（+4）、`test/content/content_repository_test.dart`（+3）、`test/place/place_detail_wire_contract_test.dart`（+3：`checkedInPetIds` 解析 / 空表 / 缺键 null）。
+- 只改调用形状 / 桩（断言语义未改、未删、未 skip）：`ContentRepository` 假实现补 `List<int> petIds = const []`（`publish_controller / publish_sync_switch / publish_preview_lightbox / publish_compose / publish_checkin_link / publish_reorder / mention_entry` 测试）；`c.publish(petId: N)` → `petIds: [N]`（`publish_controller_test`、`publish_sync_switch_test`）；补 `petListProvider` 桩（`publish_compose_test` 有档案 Diary 用例、`publish_checkin_link_test`、`place_checkin_test`、`place_checkin_flow_test`）。
+- `test/analytics/v112_events_test.dart`：后缀白名单登记 `'_published'`（见 Debug Log）。
+- `test/l10n/*`、`content_detail_test` / `content_detail_checkin_strip_test` / `content_tag_test`、`place_stamp_ceremony_page_test`、`place_wire_contract_test` 等既有测试全绿。
+- L1：无（本 story 不碰后端）。
+
+#### 与本文件文字的偏差
+
+1. **当前宠物读 `effectivePetIdProvider`**（AC1.7 写 `currentPetIdProvider`）：1.5 规定页面只读 effective（`currentPetIdProvider` 只记偏好、可能已失效）。
+2. **`PublishController.publish` 保留可选 `petIds` 入参**：选择状态住在控制器（`petIds` + `setPetIds`，`canPublish` 需要它）；`publish(petIds:)` 给了就先写入，不给用已选的。`ContentRepository.publish` 保留 `int? petId`（老调用方 / 测试），新增 `petIds` 优先。
+3. **AC3.4 失效方式**：按 AD-14「整组失效重取」对 `timelineFirstPageProvider` / `archiveStatsProvider` / `calendarMonthProvider` / `dayDetailProvider` 整族 invalidate（⊇ 每只关联宠物）；月历 / 当天详情此前未失效，顺带补上。
+4. **AC3.2 Toast 文案**：用 2.4 的 `petReadonlyBlockTitle(name)`（「Slot {name} sudah berakhir」）；2.4 无单独的只读 Toast 键。
+5. **AC5.4 `checkin-already-today`**：只 1 只正常宠物时保持改造前「直接切已打卡禁用态、不 Toast」（「必须保持」列）；≥ 2 只时按本 AC 刷新详情 + `placeCheckinFailed` Toast、按钮保持可点。
+6. **「Lihat Paspor」按钮条件**：仍按顶层 `isNewStamp`（= 第一只；既有源码守卫 `pet_passport_stamp_flow_test` 钉住该分支）；盖章动画按「任一新章」（AC6.4）。
+7. **单只宠物成功页章详情**：单只打卡且**确定不是**当前宠物时读新增的 `petPassportOfPetProvider(petId)`（`pet_passport_repository.dart`，只加不改），否则走原 `petPassportProvider`（单宠账号零变化）。
+8. **`celebrateAutoMilestoneIfAny` 加可选 `forPetId`**（1.5 函数，非破坏性扩展）：多宠逐只依次检查；单宠 / 老调用方不传 = 原口径。
+9. 打卡选宠物抽屉开着时按钮不转圈（仍不可重复点）：避免抽屉关闭 = 取消时多一个中间态，也让 widget 测试能 settle。
+10. F3 分享取第一只的用例写在 `publish_compose_test.dart`（需走发布流程到成功页），未放 `publish_done_share_test.dart`（那里只测成功页本身，结构不变）。
+11. 详情抽屉行副标题只有物种（3.1 `ContentPetView` 无生日，无法算年龄）。
+12. `PetPickerSheet` 多选未给 `submitLabel` 时用系统本地化「OK」（仓库无通用确认键，打卡一定传 G2 文案）。
+13. 全部宠物都只读（有宠物但 ACTIVE 为 0）时发布页不出 chips 行，Diary 无法提交（见待确认 7）。
+
+### code review 结果（2026-10-18，均已修复）
+
+1. **CONFIRMED · 逐只里程碑庆祝互相抑制 / 回报落错宠物**（AC6.6）：本机已庆祝集合只按 code 记、回报用当前宠物。→ `LocallyCelebratedMilestones` 另按 (petId, code) 记显式带 petId 的庆祝（`add / report` 加可选 `petId`、新增 `codesFor(petId)`；当前宠物的庆祝仍同时记进 `state`，不带 petId 的调用方与单宠物行为不变）；`celebrateAutoMilestoneIfAny(forPetId:)` 把 petId 一路传到 `_celebrate` → `markMilestonesCelebrating` / `report`，回报落到被庆祝的那只。修复中另发现两处会让第二只的庆祝丢失：① 回报落库后**整族**失效 `milestoneListProvider` 会作废下一只正在进行的预读（`.future` 挂到超时）→ 带 petId 时只失效那一只；② 上一只弹层退场转场期间宿主页 `isCurrent == false`，下一只被当成「被盖住」丢弃 → 新增 `celebrateAutoMilestonesForPets`（逐只依次、两只之间等宿主重新成为当前路由，最多 ~1.5s，期间进了别的页就停），成功页改调它。测试：`test/profile/milestone_per_pet_celebration_test.dart`（4：非当前宠物不进 state / 当前宠物同时进 state / report 落到给定 petId、不给 = 当前宠物 / 两只同一 code 各弹一次且各自回报 `C-S17@2`、`C-S17@3`）；既有 `milestone_local_celebrated_test`、`milestone_instant_celebration_test` 全绿。
+2. **PLAUSIBLE · 里程碑预选覆盖用户点选 / 里程碑回填落到未关联的宠物**：新增 `_userTouchedPets`，异步取到当前宠物时用户已点过 chip 就不再套默认预选；里程碑回填只在里程碑宠物仍在所选里时做（保守口径，不改用第一只——那只宠物不是里程碑的主人）；当前宠物没取到（null）时按改造前口径不带 petId。测试：`publish_compose_test` +3（等待期间点 chip 不被覆盖 / 仍选中 → 回填 `C-S1@2` / 取消勾选 → 不回填）。
+3. **补埋点负向用例**：`publish_diary_published_analytics_test` +2（`content-text-blocked` 进被拒页不报、409 `pet-read-only` 留编辑页不报）。
+
+### 待确认
+
+1. **`diary_published` 不存在**（本文件待确认 1）：按默认新增该事件；`v112_events_test` 后缀白名单新增 `_published`。
+2. **F6 胶囊与装饰标签共存**（本文件待确认 2）：按默认胶囊占左下、装饰标签上移到其正上方。
+3. **`diaryPetsWithOne`**「bersama {name}」/「with {name}」对照表未列，按句式推导，交本地运营审核。
+4. **F2 ≥ 3 只占位**：与 F6c 统一「第一只 + dkk.」。
+5. **F6 抽屉无标题**：只放把手 + 宠物行。
+6. **自己的 Diary 点胶囊也进访客视图**（J3，按稿件）。
+7. **全部宠物只读**时发布页不出 chips（只读不出现），Diary 置灰无提示；是否需要引导到续租（E1）请产品确认。
+8. **「Lihat Paspor」/ 护照页**：多宠打卡后「Lihat Paspor」→ B4 → 护照页仍是**当前宠物**的护照（护照页不在本 story 范围）；若第一只不是当前宠物，护照页可能看不到这枚新章。
+9. **打卡里程碑逐只庆祝**：每只调用一次轮询（各约 2.5s 上限），依次弹；L2 时留意体验。
+10. **后端 `checkedInToday` 口径**：1.3 / 2.1 实际为「全部 ACTIVE 宠物都打过」→ 按钮禁用；按钮可点时抽屉按 `checkedInPetIds` 置灰。缺键降级不置灰、靠 409 兜底。
+
 ### File List
 
+新增：
+- `petgo_app/lib/features/profile/presentation/widgets/pet_names.dart`
+- `petgo_app/lib/features/profile/presentation/widgets/pet_avatar_stack.dart`
+- `petgo_app/lib/features/profile/presentation/widgets/pet_picker_sheet.dart`
+- `petgo_app/lib/features/content/domain/content_pet_ref.dart`
+- `petgo_app/lib/features/content/presentation/widgets/content_linked_pets.dart`
+- `petgo_app/test/content/content_detail_pets_test.dart`
+- `petgo_app/test/content/publish_diary_published_analytics_test.dart`
+- `petgo_app/test/place/place_checkin_pet_picker_test.dart`
+- `petgo_app/test/place/place_checkin_success_multi_test.dart`
+- `petgo_app/test/place/place_checkin_result_test.dart`
+- `petgo_app/test/profile/pet_picker_sheet_test.dart`
+- `petgo_app/test/profile/milestone_per_pet_celebration_test.dart`（code review #1）
+
+修改（lib）：
+- `petgo_app/lib/features/content/data/content_repository.dart`
+- `petgo_app/lib/features/content/domain/{publish_controller,content_detail}.dart`
+- `petgo_app/lib/features/content/presentation/{publish_compose_page,content_detail_page}.dart`
+- `petgo_app/lib/features/place/data/place_repository.dart`（注释）
+- `petgo_app/lib/features/place/domain/{place_checkin_result,place_detail}.dart`
+- `petgo_app/lib/features/place/presentation/{place_checkin_button,place_checkin_success_page,place_detail_page,place_stamp_ceremony_page}.dart`
+- `petgo_app/lib/features/pet_passport/data/pet_passport_repository.dart`（新增 `petPassportOfPetProvider`）
+- `petgo_app/lib/features/profile/presentation/milestone_instant_celebration.dart`（可选 `forPetId`；code review：`celebrateAutoMilestonesForPets`、本地集合 / 回报按 petId）
+- `petgo_app/lib/features/profile/data/milestone_celebration_reporter.dart`（code review #1：按 (petId, code) 记、回报 / 失效按 petId）
+- `petgo_app/lib/l10n/app_en.arb`、`petgo_app/lib/l10n/app_id.arb`
+
+修改（test）：
+- 新增用例：`petgo_app/test/content/{publish_compose,publish_controller,content_repository}_test.dart`、`petgo_app/test/place/place_detail_wire_contract_test.dart`
+- 调用形状 / 桩：`petgo_app/test/content/{publish_sync_switch,publish_preview_lightbox,publish_checkin_link,publish_reorder}_test.dart`、`petgo_app/test/mention/mention_entry_test.dart`、`petgo_app/test/place/{place_checkin,place_checkin_flow}_test.dart`
+- `petgo_app/test/analytics/v112_events_test.dart`（后缀 `'_published'` 入表）
+
+文档：
+- `docs/reference/analytics-posthog-tracking.md`（`diary_published`、`diary_visitor_viewed.from=content_detail`）
+- `_bmad-output/implementation-artifacts/v1.4.0/3-3-app发布选宠物-详情关联宠物-打卡选宠物.md`（T0 标注、状态、任务、Dev Agent Record）
+
 ### Change Log
+
+- 2026-10-18：实现 Story 3.3（Diary 发布页宠物 chips F1 / F2 / F4 + 预选 + `petIds` 请求体 + 409 只读分流 + F3 第一只分享；详情页关联宠物胶囊 F6 / F6b / F6c + 抽屉 → 访客视图；打卡选宠物 G1 / G2 / G4 + 逐宠物置灰 + G3 多章成功页 + Rekam Momen Ini 预选 + 里程碑逐只；`diary_published` 埋点；11 个文案键；公共件 `formatPetNames` / `PetAvatarStack` / `PetPickerSheet`）。L0 绿（analyze 0 issue；test 3620 / 1 skip / 0 fail），Status → review；L1/L2 待本地验收。
+- 2026-10-18：code review 修复 3 项（逐只庆祝按 (petId, code) 记 + 回报落到该宠物 + 逐只依次不丢；里程碑预选不覆盖用户点选 + 回填只对仍选中的里程碑宠物；埋点负向用例）。analyze 0 issue；test 3629 / 1 skip / 0 fail。

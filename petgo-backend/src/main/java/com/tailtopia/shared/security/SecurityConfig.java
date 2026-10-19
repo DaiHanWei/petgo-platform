@@ -213,6 +213,8 @@ public class SecurityConfig {
                         // AC1 明写"仅对登录用户开放"，它靠落进默认的 authenticated 规则实现，
                         // 而不是再写一条规则（少动一次安全配置就少一次出错机会）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/pet").permitAll()
+                        // V1.4.0 multi-pet Story 1.4：主页宠物列表，与单只宠物卡同一口径（游客可读，viewer 只认 role=USER）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/pets").permitAll()
                         // V1.3.4 follow Story 1.1：关注 / 取关（PUT / DELETE），只给 USER。
                         // ⚠️ 不加这条会落到 anyRequest().authenticated()，兽医 token 也能以同号用户名义关注。
                         .requestMatchers("/api/v1/users/*/follow").hasRole("USER")
@@ -332,6 +334,16 @@ public class SecurityConfig {
                                 "/api/v1/me/shop/**").hasRole("USER")
                         // 宠物护照（V1.3.2 Story 1.2）：GET 里会签发（写）且 controller 把 jwt.sub 当 users.id 用 ——
                         // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。
+                        // V1.4.0 multi-pet：「我的宠物」列表含宠物名 / 生日，兽医 token 不得以同号用户名义读取。精确路径。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/list").hasRole("USER")
+                        // V1.4.0 multi-pet Story 2.1：改选保持正常的宠物（写宠物状态），兽医 token 不得以同号用户名义改。精确路径。
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/pet-profiles/me/active-selection").hasRole("USER")
+                        // V1.4.0 multi-pet Story 1.4：名额摘要，controller 把 jwt.sub 当 users.id 用 —— 兽医 token 不得以同号用户名义读取。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pet-slots/me").hasRole("USER")
+                        // V1.4.0 multi-pet Story 2.2：月租下单（扣币 / 建意图）与购买单轮询，同上理由（sub 当 users.id 用）。精确路径。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/pet-slots/me/rentals").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/pet-slots/me/renewals").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pet-slots/me/purchases/*").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/passport").hasRole("USER")
                         // 护照快照（V1.3.2 Story 3.4）：发起购买 / 已购列表 / 回看，同上理由（sub 当 users.id 用）。
                         .requestMatchers("/api/v1/pet-profiles/me/passport/snapshots",

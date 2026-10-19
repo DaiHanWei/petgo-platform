@@ -59,7 +59,7 @@ class MilestoneCelebrationServiceTest {
     private java.util.Map<String, Long> seedRoster(String... codes) {
         PetProfile p = PetProfile.create(7L, PetType.CAT, "Momo", null, null, null, null, "TOK");
         setField(p, "id", 10L);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
 
         java.util.Map<String, Long> ids = new java.util.LinkedHashMap<>();
         List<PetMilestone> roster = new ArrayList<>();
@@ -87,7 +87,7 @@ class MilestoneCelebrationServiceTest {
             var ids = seedRoster("C-S1", "C-S2", "C-M3");
             when(completions.markCelebrated(anyCollection(), any())).thenReturn(2);
 
-            service.reportCelebrated(7L, List.of("C-S1", "C-M3"));
+            service.reportCelebrated(7L, 10L, List.of("C-S1", "C-M3"));
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Collection<Long>> cap = ArgumentCaptor.forClass(Collection.class);
@@ -104,7 +104,7 @@ class MilestoneCelebrationServiceTest {
             var ids = seedRoster("C-S1");
             when(completions.markCelebrated(anyCollection(), any())).thenReturn(1);
 
-            service.reportCelebrated(7L, List.of("C-S1", "D-S1", "不存在的-code"));
+            service.reportCelebrated(7L, 10L, List.of("C-S1", "D-S1", "不存在的-code"));
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Collection<Long>> cap = ArgumentCaptor.forClass(Collection.class);
@@ -117,7 +117,7 @@ class MilestoneCelebrationServiceTest {
             var ids = seedRoster("C-S1");
             when(completions.markCelebrated(anyCollection(), any())).thenReturn(1);
 
-            service.reportCelebrated(7L, List.of("C-S1", "C-S1", "C-S1"));
+            service.reportCelebrated(7L, 10L, List.of("C-S1", "C-S1", "C-S1"));
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Collection<Long>> cap = ArgumentCaptor.forClass(Collection.class);
@@ -131,7 +131,7 @@ class MilestoneCelebrationServiceTest {
             when(completions.countByPetMilestoneIdInAndCelebratedAtIsNull(anyCollection()))
                     .thenReturn(3L);
 
-            MilestoneCelebrationReportResponse resp = service.reportCelebrated(7L, List.of("D-S1"));
+            MilestoneCelebrationReportResponse resp = service.reportCelebrated(7L, 10L, List.of("D-S1"));
 
             verify(completions, never()).markCelebrated(anyCollection(), any());
             assertThat(resp.markedCount()).isZero();
@@ -157,7 +157,7 @@ class MilestoneCelebrationServiceTest {
             when(completions.countByPetMilestoneIdInAndCelebratedAtIsNull(anyCollection()))
                     .thenReturn(1L);
 
-            MilestoneCelebrationReportResponse resp = service.reportCelebrated(7L, List.of("C-S1"));
+            MilestoneCelebrationReportResponse resp = service.reportCelebrated(7L, 10L, List.of("C-S1"));
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Collection<Long>> cap = ArgumentCaptor.forClass(Collection.class);
@@ -202,7 +202,7 @@ class MilestoneCelebrationServiceTest {
         when(completions.countByPetMilestoneIdInAndCelebratedAtIsNull(anyCollection())).thenReturn(0L);
 
         MilestoneCelebrationReportResponse resp =
-                service.reportCelebrated(7L, List.of("C-S1", "C-S2"));
+                service.reportCelebrated(7L, 10L, List.of("C-S1", "C-S2"));
 
         assertThat(resp.markedCount())
                 .as("markedCount 是实际由 NULL 变非空的行数，不是请求里的 code 数")
@@ -236,20 +236,34 @@ class MilestoneCelebrationServiceTest {
 
     @Test
     void noProfile_is404() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.empty());
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.empty());
 
-        Assertions.assertThatThrownBy(() -> service.reportCelebrated(7L, List.of("C-S1")))
+        Assertions.assertThatThrownBy(() -> service.reportCelebrated(7L, 10L, List.of("C-S1")))
                 .isInstanceOf(AppException.class);
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · P12）：只置位指定宠物自己的 roster，不碰另一只。 */
+    @Test
+    void secondPet_onlyItsOwnRosterIsTouched() {
+        PetProfile b = PetProfile.create(7L, PetType.DOG, "Bobo", null, null, null, null, "TOKB");
+        setField(b, "id", 11L);
+        when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
+        when(milestones.findByPetProfileIdOrderBySortOrderAsc(11L)).thenReturn(List.of());
+
+        service.reportCelebrated(7L, 11L, List.of("D-S1"));
+
+        verify(milestones).findByPetProfileIdOrderBySortOrderAsc(11L);
+        verify(milestones, never()).findByPetProfileIdOrderBySortOrderAsc(10L);
     }
 
     @Test
     void emptyRoster_reportsZeroWithoutTouchingCompletions() {
         PetProfile p = PetProfile.create(7L, PetType.CAT, "Momo", null, null, null, null, "TOK");
         setField(p, "id", 10L);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
         when(milestones.findByPetProfileIdOrderBySortOrderAsc(10L)).thenReturn(List.of());
 
-        MilestoneCelebrationReportResponse resp = service.reportCelebrated(7L, List.of("C-S1"));
+        MilestoneCelebrationReportResponse resp = service.reportCelebrated(7L, 10L, List.of("C-S1"));
 
         assertThat(resp.markedCount()).isZero();
         assertThat(resp.uncelebratedCount()).isZero();

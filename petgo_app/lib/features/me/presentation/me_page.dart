@@ -18,9 +18,9 @@ import '../../growth/domain/growth_badge.dart';
 import '../../growth/domain/growth_models.dart';
 import '../../growth/presentation/level_capsule.dart';
 import '../../growth/presentation/level_page.dart';
-import '../../profile/data/profile_repository.dart';
-import '../../profile/data/timeline_repository.dart';
-import '../../profile/domain/pet_profile.dart';
+import '../../pet_slot/presentation/add_pet_flow.dart';
+import '../../profile/data/current_pet_provider.dart';
+import '../../profile/data/pet_list_repository.dart';
 import '../../profile/presentation/widgets/pet_avatar_item.dart';
 import '../../social/domain/follow_list_item.dart';
 import '../../social/presentation/follow_list_page.dart';
@@ -200,9 +200,12 @@ class _EditProfileButton extends StatelessWidget {
 
 /// AC5 宠物区位三态分支（人 60%/宠物 40%）。
 ///
-/// - 状态 A 且已建档 → [_PetCard]（圆形头像一排，与他人主页同款），点击跳成长档案 Tab。
-/// - 状态 A 未建档 → [_PetGuideCard]「给你的宠物创建专属档案」，点击进 FR-11 创建流程。
+/// - 状态 A 且有宠物 → [_PetCard]（圆形头像一排 +「+」，与他人主页同款），点某只切到它并跳 Diary Tab。
+/// - 状态 A 但列表为空 → [_PetGuideCard]「给你的宠物创建专属档案」，点击进 FR-11 创建流程（A0，不改）。
 /// - 状态 B / C → 不显示（宠物卡片与引导卡均不渲染）。
+///
+/// V1.4.0 multi-pet（Story 1.5 · AC2）：数据源从单只 `petProfileProvider` 换成 [petListProvider]；
+/// 小节标题右侧加「Kelola ›」→ 名额管理页（占位，Story 2.4 填充）。
 class _PetZone extends ConsumerWidget {
   const _PetZone();
 
@@ -211,25 +214,48 @@ class _PetZone extends ConsumerWidget {
     final profile = ref.watch(authControllerProvider).profile;
     // PLANNING/ENTHUSIAST 不显示
     if (profile?.petStatus != 'HAS_PET') return const SizedBox.shrink();
-    // 「已建档」以真实档案为准，不信任登录响应里可能 stale 的 hasPetProfile：
+    // 「已建档」以真实宠物列表为准，不信任登录响应里可能 stale 的 hasPetProfile：
     // 后端 /auth/* 登录响应恒返回 hasPetProfile=false，仅 /me 与 /pet-profiles 才是权威，
     // 否则老用户登录后即便有档案，/me 仍会错误显示「创建宠物档案」引导卡（用户反馈）。
-    final petAsync = ref.watch(petProfileProvider);
+    final petsAsync = ref.watch(petListProvider);
     final l10n = AppLocalizations.of(context);
     // V1.3.4 Story 1.4 · AC3：独立小节「Hewanku」+ 内容；引导卡也属于宠物区，同样带标题（T-13）。
-    Widget section(Widget child) => Padding(
+    Widget section(Widget child, {bool manage = false}) => Padding(
           padding: const EdgeInsets.only(top: AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _SectionTitle(l10n.mePetsSection),
+              Row(
+                children: [
+                  Expanded(child: _SectionTitle(l10n.mePetsSection)),
+                  if (manage)
+                    GestureDetector(
+                      key: const ValueKey('mePetsManage'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => context.push(kPetSlotsRoute),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            l10n.petListManage,
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.mint),
+                          ),
+                          const Icon(Icons.chevron_right, size: 16, color: AppColors.mint),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.sm),
               child,
             ],
           ),
         );
-    return petAsync.when(
-      data: (pet) => section(pet == null ? const _PetGuideCard() : const _PetCard()),
+    return petsAsync.when(
+      data: (pets) => pets.isEmpty
+          ? section(const _PetGuideCard())
+          : section(_PetCard(pets: pets), manage: true),
       loading: () => const SizedBox.shrink(),
       // 拉取失败不误导地催建档，留空待重试。
       error: (_, _) => const SizedBox.shrink(),
@@ -279,51 +305,70 @@ class _PetGuideCard extends StatelessWidget {
 /// AC5 宠物区（状态 A 已建档）—— 圆形头像一排，与他人主页「Hewan」**同一个组件** [PetAvatarItem]。
 ///
 /// bug 20261015-590（2026-10-15 拍板）：原为整宽行卡（UI 稿 A1 `.petr`），与他人主页圆形头像不一致；
-/// 统一成圆形头像，为多宠物预留。diary 角标数仍取 `archiveStatsProvider.happyMomentCount`
-/// （bug 20260722-355：GROWTH_MOMENT 帖即「Diary」，>99 显示「99+」）；点头像仍跳成长档案 Tab。
+/// 统一成圆形头像，为多宠物预留。
 ///
-/// 组件按列表做（本版本数据源仍是单只 `petProfileProvider`，包成长度 0 / 1 的列表），不做多宠物取数。
+/// V1.4.0 multi-pet（Story 1.5 · AC2）：
+/// - 每只一个头像（56），diary 角标取 [PetListItem.diaryCount]（不再为角标单独 watch 统计栏）；末格「+」走
+///   [startAddPet]（与 Diary 切换器共用）。
+/// - 只读宠物 → 头像灰化 + 左下锁标；点它与正常宠物一样进 Diary Tab 并切到这只（只读横幅在 Story 2.4）。
+/// - 点某只 → `currentPetIdProvider.select` + `pet_switched {source: me_page}`（同一只不报）+ 跳 Diary Tab。
+/// - key：首只沿用 `mePetCard` / `mePetDiaryTag` / `mePetTailsonality` / `mePetCardMeta`（既有测试在用），
+///   其余加序号（`mePetCard-1` …）。
 class _PetCard extends ConsumerWidget {
-  const _PetCard();
+  const _PetCard({required this.pets});
+
+  final List<PetListItem> pets;
+
+  static Key _k(String base, int i) => ValueKey(i == 0 ? base : '$base-$i');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final petAsync = ref.watch(petProfileProvider);
-    return petAsync.maybeWhen(
-      data: (pet) {
-        if (pet == null) return const SizedBox.shrink();
-        final pets = <PetProfile>[pet];
-        final diary = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount;
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            // 角标向右上溢出 6 / 4，留出位置不被裁（与他人主页一致）。
-            padding: const EdgeInsets.only(top: 4, right: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final p in pets)
-                  PetAvatarItem(
-                    key: const ValueKey('mePetCard'),
-                    name: p.name,
-                    avatarUrl: p.avatarUrl,
-                    petType: p.petType,
-                    birthday: p.birthday,
-                    tailsonalityBadge: p.tailsonalityBadge,
-                    diaryCount: diary,
-                    diaryBadgeKey: const ValueKey('mePetDiaryTag'),
-                    tailsonalityKey: const ValueKey('mePetTailsonality'),
-                    metaKey: const ValueKey('mePetCardMeta'),
-                    onTap: () => context.go('/profile'), // 跳成长档案 Tab
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-      orElse: () => const SizedBox.shrink(),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        // 角标向右上溢出 6 / 4，留出位置不被裁（与他人主页一致）。
+        padding: const EdgeInsets.only(top: 4, right: 6, left: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < pets.length; i++)
+              PetAvatarItem(
+                key: _k('mePetCard', i),
+                name: pets[i].name,
+                avatarUrl: pets[i].avatarUrl,
+                petType: pets[i].petType,
+                birthday: pets[i].birthday,
+                tailsonalityBadge: pets[i].tailsonalityBadge,
+                diaryCount: pets[i].diaryCount,
+                diaryBadgeKey: _k('mePetDiaryTag', i),
+                tailsonalityKey: _k('mePetTailsonality', i),
+                metaKey: _k('mePetCardMeta', i),
+                lockKey: _k('mePetLock', i),
+                size: 56,
+                readOnly: pets[i].isReadOnly,
+                onTap: () => _open(context, ref, pets[i].id),
+              ),
+            const AddPetTile(key: ValueKey('mePetAdd'), size: 56, width: 84),
+          ],
+        ),
+      ),
     );
+  }
+
+  /// 点某只：切到它再跳 Diary Tab（记住上次查看由 currentPetIdProvider 落盘）。
+  void _open(BuildContext context, WidgetRef ref, int petId) {
+    final from = resolveEffectivePetId(pets, ref.read(currentPetIdProvider));
+    if (from != petId) {
+      // 埋点只带 id 与来源枚举，不带宠物名（§5）。
+      Analytics.capture('pet_switched', {
+        'from_pet_id': ?from,
+        'to_pet_id': petId,
+        'source': 'me_page',
+      });
+    }
+    ref.read(currentPetIdProvider.notifier).select(petId);
+    context.go('/profile'); // 跳成长档案 Tab
   }
 }
 

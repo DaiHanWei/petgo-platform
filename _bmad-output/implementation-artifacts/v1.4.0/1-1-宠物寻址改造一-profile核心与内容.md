@@ -1,6 +1,6 @@
 # Story 1.1: 宠物寻址改造（一）——profile 核心、内容与 Diary 系列
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 multi-pet · 分支 `feat/1.4.0-multi-pet`（从地基 Story 0.1 合入之后的 `dev_1.4.0` 切出）
 > 口径优先级：`decision-log.md` ② 节 > `多宠物/1-4-0多宠物prd.md` > `architecture-v1.4.0-multi-pet-delta.md`（AD-1 ~ AD-17、P-1 ~ P-4、V-1 / V-2）> UI 稿（均在 `_bmad-output/planning-artifacts/v1.4.0/`）；跨分支契约以 `CROSS-STORY-DECISIONS.md`「2026-10-18 V1.4.0 四条线共用地基」节为准。
@@ -56,14 +56,14 @@ so that 每只宠物的档案、时间线、日历和统计互不串。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：确认基线 `dev_1.4.0` 含地基 0.1；把 Dev Notes「现状」表与「调用点改造清单」的 file:line 逐一对一遍（行号漂了以代码为准，Completion Notes 记一句）
-- [ ] **T1 仓储 + 策略 + 解析器**（AC1）：`PetProfileRepository` 4 个方法、`DefaultPetPolicy`、`PetResolver` + 两个 L0 测试
-- [ ] **T2 ProfileService**（清单 #1 ~ #5）：`getMyProfile` / `update` / `recordCardShared` 加 `Long petId`；`ownsPet` 改 `existsByIdAndOwnerId`；`findByOwnerId` 包装方法本 story 保留（`AdminUserService`:398 仍在用，1.2 删）
-- [ ] **T3 TimelineService + 健康时间线源**（清单 #6 ~ #9）：`requireProfile(ownerId, petId)`；四个公开方法加 `Long petId` 重载、旧签名保留并委托 `null`；`HealthEventTimelineSource` 接口与实现改为按 `petId`
-- [ ] **T4 HealthRecordService**（清单 #10）：四个方法加 `Long petId`
-- [ ] **T5 MilestoneService.getMilestones**（清单 #11）：加 `(ownerId, Long petId)` 重载，旧签名委托 `null`（`VisitorProjectionService`:300 仍调旧签名，1.3 改）
-- [ ] **T6 控制器**（AC3 / AC6、端点清单）：逐端点加 `@RequestParam(name = "petId", required = false) Long petId`；新增 `GET /me/list` + `PetListItemResponse`
-- [ ] **T7 测试**（AC1 ~ AC5）：L0 单测全部；L1 集成测试写好能编译（云端不跑）
+- [x] **T0 开工核对**：确认基线 `dev_1.4.0` 含地基 0.1；把 Dev Notes「现状」表与「调用点改造清单」的 file:line 逐一对一遍（行号漂了以代码为准，Completion Notes 记一句）
+- [x] **T1 仓储 + 策略 + 解析器**（AC1）：`PetProfileRepository` 4 个方法、`DefaultPetPolicy`、`PetResolver` + 两个 L0 测试
+- [x] **T2 ProfileService**（清单 #1 ~ #5）：`getMyProfile` / `update` / `recordCardShared` 加 `Long petId`；`ownsPet` 改 `existsByIdAndOwnerId`；`findByOwnerId` 包装方法本 story 保留（`AdminUserService`:398 仍在用，1.2 删）
+- [x] **T3 TimelineService + 健康时间线源**（清单 #6 ~ #9）：`requireProfile(ownerId, petId)`；四个公开方法加 `Long petId` 重载、旧签名保留并委托 `null`；`HealthEventTimelineSource` 接口与实现改为按 `petId`
+- [x] **T4 HealthRecordService**（清单 #10）：四个方法加 `Long petId`
+- [x] **T5 MilestoneService.getMilestones**（清单 #11）：加 `(ownerId, Long petId)` 重载，旧签名委托 `null`（`VisitorProjectionService`:300 仍调旧签名，1.3 改）
+- [x] **T6 控制器**（AC3 / AC6、端点清单）：逐端点加 `@RequestParam(name = "petId", required = false) Long petId`；新增 `GET /me/list` + `PetListItemResponse`
+- [x] **T7 测试**（AC1 ~ AC5）：L0 单测全部；L1 集成测试写好能编译（云端不跑）
 - [ ] **T8** `mvn -B clean package`；Completion Notes 标「L1 待本地验收」
 
 ## Dev Notes
@@ -211,10 +211,45 @@ so that 每只宠物的档案、时间线、日历和统计互不串。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- 云端 locale 为 POSIX，`mvn` 编译中文嵌套测试类名报 `bad filename`；所有 mvn 命令加 `LC_ALL=C.UTF-8` 后正常（与代码无关，本地 macOS 不受影响）。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：云端只跑 L0（`./mvnw -B clean package -DskipTests` + 下列 L0 单测）。`MultiPetAddressingIntegrationTest`（新增）与 `ProfileApiControllerEndpointTest` 新增 3 例为 L1，已写好、编译通过，**未运行**。
+- L0 通过：`DefaultPetPolicyTest`、`PetResolverTest`、`ProfileServiceTest`、`TimelineServiceTest`、`TimelineCursorMergeTest`、`CalendarAndDayDetailStory34Test`、`TimelinePlaceCheckinTest`、`TimelineTailsonalityTest`、`TimelineMultiPetTest`（新增）、`HealthEventTimelineSourceImplTest`（新增）、`HealthRecordServiceTest`、`MilestoneServiceTest`（新增）、`PetListItemResponseTest`（新增）、`ProfileApiControllerTest`、`CardPageControllerTest`；另跑全部纯单元测试类做回归（见下）。`TimelinePaginationRegressionTest` 是 `@SpringBootTest`，属 L1，未跑。
+- T0 核对：Dev Notes 现状表行号与 `feat/1.4.0-multi-pet` @ 688f9bd5 一致，无漂移。
+- 与 story 文字的出入（已按代码现状实现，记于此）：
+  1. `GET /me/list` 的组装放在新类 `profile.service.PetListService`（不在 `ProfileService`）：`ContentService` 经 `ProfileService.ownsPet` 依赖 `ProfileService`，若 `ProfileService` 再注入 `ContentService` 会成环。
+  2. `TimelineService` / `HealthRecordService` / `MilestoneService` 的构造参数由 `ProfileService` / `PetProfileRepository` 换成 `PetResolver`（服务内取宠物只经 `PetResolver`）；`HealthEventTimelineSourceImpl` 不再依赖 `ProfileService`。相应单测只改了构造与桩（`findByOwnerId` → `petResolver.resolve(owner, null)` / `findDefault`；健康源桩由 ownerId 改为 petId），断言未改。
+  3. 「入口校验」端点（1.2 才改服务层的那些）一律用 `petResolver.resolveOptional(...)` 而不是 `resolve(...)`：不带 petId 时与改造前完全一致（含无档案账号——原服务对无档案各有自己的处理，`resolve` 会提前抛 404 改变行为）；带他人 / 不存在的 petId 仍 404。`TODO(v1.4.0-multi-pet-1.2)` 标记照写（共 20 处），1.2 清零。
+- 回归：全部纯单元测试类（自动筛出不含 `@SpringBootTest` / `@WebMvcTest` / `@DataJpaTest` / Testcontainers、不继承 `ApiIntegrationTest`、非 `*IntegrationTest` 的 467 个类）共 3454 例，0 失败 / 0 错误（7 个原有 skip）。单宠物既有测试未删、未 skip。
+- **code review（bmad-code-review）**：无行为回归类发现。CONFIRMED 1 条已修：新端点 `GET /me/list` 未显式限定 `ROLE_USER`，兽医 token 落 `anyRequest().authenticated()` 可按同号用户读宠物列表（AC4.4 要求仅 `ROLE_USER`）→ `SecurityConfig` 按惯例加精确路径 `hasRole("USER")`，`ProfileApiControllerEndpointTest.listRejectsNonUserRole`（L1）覆盖。PLAUSIBLE（未修，存量问题）：`GET /me`、`/me/timeline` 等其他 `/pet-profiles/me/*` 同样只靠 `authenticated()`，非本 story 引入。
+- 本 story 无迁移；未改 `ck_notifications_type` / `ck_payment_intents_purpose`。
+
+#### 待确认
+
+- 身份证分享奖励归属（story「待确认」原文）：按请求 `petId` 判定，缺省 = 默认宠物；本 story 只做入口校验，发放在 1.2。
+- 时间线源⑤「身份证首次生成」仍按账号取（`id_cards` 不挂宠物），多宠后每只宠物的时间线都会出现同一条「名片已生成」。story 未要求改，保持现状。
+
 ### File List
 
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/service/DefaultPetPolicy.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/service/PetResolver.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/service/PetListService.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/profile/dto/PetListItemResponse.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/profile/repository/PetProfileRepository.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/profile/service/{ProfileService,TimelineService,HealthEventTimelineSource,HealthEventTimelineSourceImpl,HealthRecordService,MilestoneService}.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/profile/web/{ProfileApiController,HealthRecordController,MilestoneController}.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/shared/security/SecurityConfig.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/tailsonality/web/TailsonalityController.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/passport/web/{BoardingPassController,PetPassportController}.java`
+- 新增测试 `profile/support/{PetFixtures,MultiPetDbFixture}.java`、`profile/service/{DefaultPetPolicyTest,PetResolverTest,MilestoneServiceTest,HealthEventTimelineSourceImplTest,TimelineMultiPetTest}.java`、`profile/web/PetListItemResponseTest.java`、`profile/MultiPetAddressingIntegrationTest.java`
+- 修改测试 `profile/service/{ProfileServiceTest,HealthRecordServiceTest,TimelineServiceTest,TimelineCursorMergeTest,CalendarAndDayDetailStory34Test,TimelinePlaceCheckinTest,TimelineTailsonalityTest}.java`、`profile/web/{ProfileApiControllerTest,ProfileApiControllerEndpointTest}.java`
+
 ### Change Log
+
+- 2026-10-18：实现 Story 1.1（PetResolver / DefaultPetPolicy / `/me/*` 可选 petId / `GET /me/list`），状态 → review（L1/L2 待本地验收）。

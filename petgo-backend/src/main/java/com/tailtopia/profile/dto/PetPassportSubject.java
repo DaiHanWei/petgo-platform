@@ -10,6 +10,7 @@ import java.time.Instant;
  * @param name      宠物名（护照页页眉）
  * @param petType   物种枚举名（CAT / DOG / OTHER）—— 决定护照号物种段
  * @param createdAt 建档时刻 —— KTP 号源「卡须晚于建档」的判据
+ * @param breed     品种原文（可空；V1.4.0 multi-pet Story 1.2：登机牌 BREED 直接从 subject 取）
  */
-public record PetPassportSubject(long petId, String name, String petType, Instant createdAt) {
+public record PetPassportSubject(long petId, String name, String petType, Instant createdAt, String breed) {
 }

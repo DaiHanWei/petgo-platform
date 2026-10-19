@@ -75,11 +75,28 @@ class PlaceQueryServiceTest {
     void checkedInTodayOnlyForSignedInViewers() {
         Place p = place("kopi", JKT_LAT, JKT_LNG);
         when(places.resolveForView("kopi")).thenReturn(java.util.Optional.of(p));
-        when(checkins.checkedInToday(42L, p.getId())).thenReturn(true);
+        when(checkins.checkedInToday(42L, p.getId()))
+                .thenReturn(new CheckinTodayStatus(true, java.util.List.of(70L)));
 
         assertThat(service.detail("kopi", null, null, null).checkedInToday()).isNull();
         Mockito.verifyNoInteractions(checkins);
         assertThat(service.detail("kopi", null, null, 42L).checkedInToday()).isTrue();
+    }
+
+    /** V1.4.0 multi-pet Story 1.3 · AC4.1：checkedInToday = 全部宠物都已打；另下发已打的 petId；游客两键都为 null。 */
+    @Test
+    void checkedInPetIdsForSignedInViewersOnly() {
+        Place p = place("kopi", JKT_LAT, JKT_LNG);
+        when(places.resolveForView("kopi")).thenReturn(java.util.Optional.of(p));
+        when(checkins.checkedInToday(42L, p.getId()))
+                .thenReturn(new CheckinTodayStatus(false, java.util.List.of(70L)));
+
+        var guest = service.detail("kopi", null, null, null);
+        assertThat(guest.checkedInToday()).isNull();
+        assertThat(guest.checkedInPetIds()).isNull();
+        var me = service.detail("kopi", null, null, 42L);
+        assertThat(me.checkedInToday()).isFalse();
+        assertThat(me.checkedInPetIds()).containsExactly(70L);
     }
 
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */

@@ -30,6 +30,8 @@ public final class AdminPermissions {
     public static final String USER_DELETE = "user.delete";
     /** 后台赠送 PawCoin（bug 20260728-389：运营向指定账户入账 BONUS）。 */
     public static final String USER_GRANT_PAWCOIN = "user.grant_pawcoin";
+    /** V1.4.0 ② AB-34：运营补发宠物名额（Story 4.3 · AD-15；预授 OPS_MANAGER，见 {@link AdminRole}）。 */
+    public static final String USER_PET_SLOT_ADJUST = "user.pet_slot_adjust";
     /**
      * 用户标签管理（V1.1.6 Story 11.3 · AB-12A）。查看 / 编辑分两码。
      * ⚠️ 编辑权限**不要下放得比其它模块更宽** —— 该页的分配支持批量，
@@ -355,7 +357,7 @@ public final class AdminPermissions {
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
                     CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
-                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_TAG_MANAGE,
+                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST, USER_TAG_MANAGE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,

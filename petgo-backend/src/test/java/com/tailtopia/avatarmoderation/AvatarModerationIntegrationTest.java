@@ -159,7 +159,7 @@ class AvatarModerationIntegrationTest extends ApiIntegrationTest {
 
         profileService.create(ownerId, new PetProfileCreateRequest(
                 VIOLATION_AVATAR, "CAT", "Kitty", null, LocalDate.of(2020, 1, 1), null));
-        PetProfile pet = petProfiles.findByOwnerId(ownerId).orElseThrow();
+        PetProfile pet = petProfiles.findDefault(ownerId).orElseThrow();
         long petId = pet.getId();
 
         AvatarReview rec = onlyReview(AvatarSubjectType.PET_AVATAR, petId); // B4

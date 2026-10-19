@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.auth.event.UserDailyActiveEvent;
-import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.event.ContentCollectedEvent;
@@ -20,7 +19,7 @@ import com.tailtopia.content.event.ContentRemovedEvent;
 import com.tailtopia.content.event.ContentUncollectedEvent;
 import com.tailtopia.content.event.ContentUnlikedEvent;
 import com.tailtopia.content.repository.ContentLikeRepository;
-import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.service.ContentPetQuery;
 import com.tailtopia.growth.domain.ReverseReason;
 import com.tailtopia.growth.domain.RuleCode;
 import com.tailtopia.growth.service.AccrualCommand;
@@ -36,7 +35,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -46,9 +44,9 @@ class GrowthActivityListenerTest {
     private static final Instant NOW = Instant.parse("2026-10-18T05:00:00Z");
 
     private final GrowthLedgerService ledger = mock(GrowthLedgerService.class);
-    private final ContentPostRepository posts = mock(ContentPostRepository.class);
+    private final ContentPetQuery contentPets = mock(ContentPetQuery.class);
     private final ContentLikeRepository likes = mock(ContentLikeRepository.class);
-    private final GrowthActivityListener listener = new GrowthActivityListener(ledger, posts, likes,
+    private final GrowthActivityListener listener = new GrowthActivityListener(ledger, contentPets, likes,
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     @org.junit.jupiter.api.BeforeEach
@@ -69,10 +67,8 @@ class GrowthActivityListenerTest {
         return c.getAllValues();
     }
 
-    private void postWithPet(long postId, Long petId) {
-        ContentPost p = mock(ContentPost.class);
-        when(p.getPetId()).thenReturn(petId);
-        when(posts.findById(postId)).thenReturn(Optional.of(p));
+    private void postWithPet(long postId, Long... petIds) {
+        when(contentPets.petsOf(postId)).thenReturn(List.of(petIds));
     }
 
     @Test
@@ -129,6 +125,20 @@ class GrowthActivityListenerTest {
         assertThat(cs.get(1).petIds()).containsExactly(9L);
     }
 
+    /** 多宠物线合入后（CROSS-STORY 2026-10-18「其他口径」）：发帖取事件全部关联宠物，互动取 content_pets 全部关联宠物。 */
+    @Test
+    void multiPetPostWritesAllLinkedPets() {
+        listener.onPublished(new ContentPublishedEvent(5L, 7L, ContentType.GROWTH_MOMENT, 9L, 1,
+                ContentVisibility.PUBLIC, NOW, List.of(9L, 10L)));
+        assertThat(accrued(1).get(0).petIds()).containsExactly(9L, 10L);
+
+        postWithPet(6L, 9L, 10L);
+        listener.onCommented(new ContentCommentedEvent(6L, 78L, 3L, 7L, 8L, NOW, 70L));
+        List<AccrualCommand> cs = accrued(3);
+        assertThat(cs.get(1).petIds()).containsExactly(9L, 10L);
+        assertThat(cs.get(2).petIds()).containsExactly(9L, 10L);
+    }
+
     @Test
     void selfCommentGivesNothing() {
         listener.onCommented(new ContentCommentedEvent(5L, 77L, 7L, 7L, 3L, NOW, 70L));
@@ -146,7 +156,7 @@ class GrowthActivityListenerTest {
 
     @Test
     void missingPostDoesNotBlockAccrual() {
-        when(posts.findById(5L)).thenReturn(Optional.empty());
+        when(contentPets.petsOf(5L)).thenReturn(List.of());
         listener.onLiked(new ContentLikedEvent(5L, 3L, 7L, NOW));
 
         List<AccrualCommand> cs = accrued(2);
@@ -155,7 +165,7 @@ class GrowthActivityListenerTest {
 
     @Test
     void likeGivesBothSidesKeyedForever() {
-        postWithPet(5L, null);
+        postWithPet(5L);
         listener.onLiked(new ContentLikedEvent(5L, 3L, 7L, NOW));
 
         List<AccrualCommand> cs = accrued(2);
@@ -169,7 +179,7 @@ class GrowthActivityListenerTest {
 
     @Test
     void likeAlreadyGoneWhenAccrualCommitsIsReversedRightAway() {
-        postWithPet(5L, null);
+        postWithPet(5L);
         when(likes.existsByPostIdAndUserId(5L, 3L)).thenReturn(false);
 
         listener.onLiked(new ContentLikedEvent(5L, 3L, 7L, NOW));
@@ -183,7 +193,7 @@ class GrowthActivityListenerTest {
 
     @Test
     void likeStillPresentIsNotReversed() {
-        postWithPet(5L, null);
+        postWithPet(5L);
 
         listener.onLiked(new ContentLikedEvent(5L, 3L, 7L, NOW));
 
@@ -271,7 +281,7 @@ class GrowthActivityListenerTest {
 
     @Test
     void ledgerFailureIsSwallowedAndSecondCommandStillRuns() {
-        postWithPet(5L, null);
+        postWithPet(5L);
         when(ledger.accrue(any())).thenThrow(new IllegalStateException("boom")).thenReturn(true);
 
         listener.onLiked(new ContentLikedEvent(5L, 3L, 7L, NOW));

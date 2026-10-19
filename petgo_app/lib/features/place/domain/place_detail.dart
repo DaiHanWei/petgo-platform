@@ -28,6 +28,7 @@ class PlaceDetail {
     this.description,
     this.distanceMeters,
     this.checkedInToday,
+    this.checkedInPetIds,
   });
 
   /// 不可枚举对外标识。
@@ -69,6 +70,12 @@ class PlaceDetail {
   /// 「服务端没说」吞成「还没打卡」（`?? 0` 兜底的老坑）。
   final bool? checkedInToday;
 
+  /// 今天（WIB）已在此打过卡的本人宠物 id（V1.4.0 multi-pet Story 1.3 下发 / 3.3 消费）。
+  ///
+  /// 打卡选宠物抽屉据此把这些行置灰（G1 / G2）。**null = 服务端没下发**（游客 / 老后端）→
+  /// 抽屉不置灰任何行，靠提交时 409 兜底；与空表（谁都还没打）区分开。
+  final List<int>? checkedInPetIds;
+
   final int commentCount;
   final int recommendCount;
   final int notRecommendCount;
@@ -101,11 +108,15 @@ class PlaceDetail {
       recommendCount: _nonNegInt(json['recommendCount']),
       notRecommendCount: _nonNegInt(json['notRecommendCount']),
       checkedInToday: json['checkedInToday'] is bool ? json['checkedInToday'] as bool : null,
+      checkedInPetIds: _intListOrNull(json['checkedInPetIds']),
       photoSlotsRemaining: json.containsKey('photoSlotsRemaining')
           ? _nonNegInt(json['photoSlotsRemaining'])
           : _estimateSlots(_photos(json['photos'])),
     );
   }
+
+  static List<int>? _intListOrNull(Object? raw) =>
+      raw is! List ? null : List.unmodifiable(raw.whereType<num>().map((e) => e.toInt()));
 
   static int _estimateSlots(List<PlacePhoto> photos) {
     final occupying =

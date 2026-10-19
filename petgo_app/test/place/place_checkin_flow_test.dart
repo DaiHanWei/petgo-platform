@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/rive/rive_runtime.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -207,6 +208,8 @@ Future<void> _pumpDetail(WidgetTester tester,
       locationGatewayProvider.overrideWithValue(_Gateway()),
       placeRepositoryProvider.overrideWithValue(_Repo(isNewStamp)),
       authControllerProvider.overrideWith(_Auth.new),
+      // V1.4.0 multi-pet Story 3.3：打卡改读宠物列表（只列 ACTIVE；1 只 = G4 不弹选择器）。
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 77, name: 'Momo')]),
       petProfileProvider.overrideWith((ref) async => const PetProfile(id: 77, name: 'Momo', cardToken: 'card')),
       petPassportProvider.overrideWith((ref) async => throw StateError('offline')),
       milestoneInstantPollDelaysProvider.overrideWithValue(const []),

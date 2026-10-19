@@ -275,6 +275,9 @@ class _NotificationCenterPageState
     'CONTENT_LIKED' => 'like',
     'CONTENT_COMMENTED' => 'comment',
     'VET_REPLY' => 'vet_reply',
+    // V1.4.0 multi-pet Story 2.4 · AC6.1：名额到期两类（显式登记，取值与线格式小写同形）。
+    'PET_SLOT_EXPIRING' => 'pet_slot_expiring',
+    'PET_SLOT_EXPIRED' => 'pet_slot_expired',
     _ => type.toLowerCase(),
   };
 
@@ -872,6 +875,18 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.checkinTint,
     ),
     // 运营通知（V1.3.4 Story 6.3 · UX-DR10 / UI 稿 E2）：紫色图标块 + 喇叭。
+    // 名额到期（V1.4.0 multi-pet Story 2.4 · K1）：即将到期金色沙漏、已到期 coral 锁钟 ——
+    // 配色同 ACCOUNT_WARNED / ACCOUNT_SUSPENDED 的「提醒 / 已发生」两档。
+    'PET_SLOT_EXPIRING' => (
+      Icons.hourglass_bottom_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
+    'PET_SLOT_EXPIRED' => (
+      Icons.lock_clock_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
     'OPS_ANNOUNCEMENT' => (
       Icons.campaign_outlined,
       AppColors.mint,
@@ -925,8 +940,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
     // 被 @ 提及（V1.3.0 batch-b1 Story 3.4）：标题两种文案共用一句，正文才分帖子 / 评论。
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
-    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 title 的类型，理由见 [_opsTitle]。
-    'OPS_ANNOUNCEMENT' => _opsTitle(l10n),
+    // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 title，理由见 [_storedTitle]。
+    'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedTitle(l10n),
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -980,22 +995,24 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => _isCommentMention
         ? l10n.notifyBodyContentMentionedComment
         : l10n.notifyBodyContentMentionedPost,
-    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 body 的类型，理由见 [_opsTitle]。
-    'OPS_ANNOUNCEMENT' => _opsBody(l10n),
+    // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 body，理由见 [_storedTitle]。
+    'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedBody(l10n),
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };
 
-  /// 运营通知（V1.3.4 Story 6.3 · FR-138）：**唯一读后端 title / body 的类型**。
-  /// 运营每次写的内容不同，App 不可能本地化；后端写入时已按收件人账号语言选好 EN / ID（6.1 AC5），
-  /// 推送与通知中心同一语言（PRD AC2）——所以这里原样显示，**不按 App 当前语言再选**。
-  /// 后端没给（理论上不会）时落中性兜底，绝不显示空白。
-  String _opsTitle(AppLocalizations l10n) {
+  /// 读后端 title / body 的类型（不含「后端文案条目」[NotificationItem.hasServerCopy] 那四种互动类型）：
+  /// - 运营通知（V1.3.4 Story 6.3 · FR-138）：运营每次写的内容不同，App 不可能本地化；
+  /// - 名额到期 `PET_SLOT_EXPIRING` / `PET_SLOT_EXPIRED`（V1.4.0 multi-pet Story 2.4 · K1 拍板）：正文含宠物名与到期日，
+  ///   后端（Story 2.3）按收件人账号语言渲染后落库，同 `OPS_ANNOUNCEMENT`。
+  /// 后端写入时已按收件人账号语言选好 EN / ID，推送与通知中心同一语言 —— 所以这里原样显示，
+  /// **不按 App 当前语言再选**。后端没给（理论上不会）时落中性兜底，绝不显示空白。
+  String _storedTitle(AppLocalizations l10n) {
     final t = widget.item.title?.trim() ?? '';
     return t.isEmpty ? l10n.notifyTypeSystem : t;
   }
 
-  String _opsBody(AppLocalizations l10n) {
+  String _storedBody(AppLocalizations l10n) {
     final b = widget.item.body?.trim() ?? '';
     return b.isEmpty ? l10n.notifyBodySystem : b;
   }
@@ -1212,7 +1229,8 @@ class _NotificationTileState extends State<_NotificationTile> {
                       children: [
                         // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
                         // V1.3.4 两处例外：「后端文案条目」（hasServerCopy）走上面的分支读后端 title/body；
-                        // `OPS_ANNOUNCEMENT` 在 _typeLabel / _typeBody 里读后端串（理由见 `_opsTitle`）。
+                        // `OPS_ANNOUNCEMENT` 与 `PET_SLOT_EXPIRING` / `PET_SLOT_EXPIRED`（K1）在 _typeLabel / _typeBody
+                        // 里读后端串（理由见 `_storedTitle`）。
                         Text(
                           _typeLabel(l10n),
                           style: const TextStyle(

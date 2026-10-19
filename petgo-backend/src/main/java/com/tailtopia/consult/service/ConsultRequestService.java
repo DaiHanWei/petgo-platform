@@ -17,6 +17,7 @@ import com.tailtopia.profile.dto.PetIdentityView;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetResolver;
 import com.tailtopia.shared.consult.ConsultProperties;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.SignedUrlService;
@@ -61,13 +62,15 @@ public class ConsultRequestService {
     private final TriageService triageService;
     private final SignedUrlService signedUrlService;
     private final PaymentIntentService paymentIntents;
+    private final PetResolver petResolver;
 
     public ConsultRequestService(ConsultRequestRepository requests, PetProfileRepository petProfiles,
             CardTokenGenerator tokenGenerator, ApplicationEventPublisher events,
             VetPresenceService presence, ConsultProperties props,
             PetProfileQueryService petQuery, AccountQueryService accounts,
             TriageService triageService, SignedUrlService signedUrlService,
-            PaymentIntentService paymentIntents) {
+            PaymentIntentService paymentIntents, PetResolver petResolver) {
+        this.petResolver = petResolver;
         this.triageService = triageService;
         this.signedUrlService = signedUrlService;
         this.requests = requests;
@@ -102,7 +105,7 @@ public class ConsultRequestService {
     @Deprecated
     @Transactional
     public CreateResult createRequest(long userId) {
-        return createRequest(userId, new CreateConsultationRequest(null, null, null, null));
+        return createRequest(userId, new CreateConsultationRequest(null, null, null, null, null));
     }
 
     /**
@@ -123,32 +126,63 @@ public class ConsultRequestService {
             return new CreateResult(requests.findFirstByUserIdOrderByCreatedAtAsc(userId).orElseThrow(),
                     true);
         }
-        // 归属：一人一宠（findByOwnerId），无档案不能发起。
-        PetProfile pet = petProfiles.findByOwnerId(userId)
+        // 无档案不能发起（409 不变，且先于其余校验，与改造前同序）。默认宠物 = 最早创建的正常宠物（AD-2）。
+        PetProfile defaultPet = petProfiles.findDefault(userId)
                 .orElseThrow(() -> AppException.conflict("需先建立宠物档案后再发起问诊"));
+        // AI_UPGRADE：先取分诊快照（RED 兜底拒绝），宠物沿用该次分诊（V1.4.0 multi-pet Story 4.1 · AC4.2）。
+        TriageUpgradeContext upgrade = upgradeContextOf(userId, body);
+        long petId = selectPetId(userId, body, upgrade, defaultPet);
         Instant queueDeadline = Instant.now().plus(Duration.ofSeconds(QUEUE_TIMEOUT_SECONDS));
         ConsultRequest req = ConsultRequest.queue(
-                userId, pet.getId(), tokenGenerator.generate(), queueDeadline);
-        bindCase(userId, req, body);
+                userId, petId, tokenGenerator.generate(), queueDeadline);
+        bindCase(req, body, upgrade);
         ConsultRequest saved = requests.save(req);
         // AFTER_COMMIT 广播在线兽医（notify 侧监听）：请求已落库才推，不吞资金写（此处非资金）。
         events.publishEvent(new ConsultRequestQueuedForBillingEvent(saved.getId()));
         return new CreateResult(saved, false);
     }
 
-    /** 绑病例：AI_UPGRADE 拉 triage 快照（RED 兜底拒绝）；否则绑自填病例（都为空则不绑）。 */
-    private void bindCase(long userId, ConsultRequest req, CreateConsultationRequest body) {
-        if (body != null && body.isAiUpgrade()) {
-            if (body.triageTaskId() == null) {
-                throw AppException.validation("升级发起需带分诊任务");
-            }
-            TriageUpgradeContext ctx = triageService.getResultForUpgrade(userId, body.triageTaskId());
-            if (ctx.dangerLevel() == DangerLevel.RED) {
-                // 架构不可协商：红色态零兽医引流。
-                throw AppException.forbidden("高危情况请立即就医，本通道不提供升级");
-            }
-            req.bindAiContext(ctx.triageTaskId(), ctx.dangerLevel().name(),
-                    ctx.symptomText(), ctx.imageObjectKeys());
+    /** AI_UPGRADE 拉 triage 快照（RED 兜底拒绝）；非升级 → null。 */
+    private TriageUpgradeContext upgradeContextOf(long userId, CreateConsultationRequest body) {
+        if (body == null || !body.isAiUpgrade()) {
+            return null;
+        }
+        if (body.triageTaskId() == null) {
+            throw AppException.validation("升级发起需带分诊任务");
+        }
+        TriageUpgradeContext ctx = triageService.getResultForUpgrade(userId, body.triageTaskId());
+        if (ctx.dangerLevel() == DangerLevel.RED) {
+            // 架构不可协商：红色态零兽医引流。
+            throw AppException.forbidden("高危情况请立即就医，本通道不提供升级");
+        }
+        return ctx;
+    }
+
+    /**
+     * 入队宠物（V1.4.0 multi-pet Story 4.1 · AC4.2 · AD-2）：
+     * <ul>
+     *   <li>AI_UPGRADE：该分诊任务的 {@code pet_id}（仍属本人才用）→ 否则退回 {@code body.petId}（同 DIRECT 校验）→ 默认宠物；</li>
+     *   <li>DIRECT：{@code body.petId} 经 {@link PetResolver} 校验归属（不属于本人 → 404）；不带（旧版 App）→ 默认宠物。</li>
+     * </ul>
+     * 只读宠物可以发起咨询（只读可问不可存档，不调 {@code PetWriteGuard}）。
+     */
+    private long selectPetId(long userId, CreateConsultationRequest body, TriageUpgradeContext upgrade,
+            PetProfile defaultPet) {
+        if (upgrade != null && upgrade.petId() != null && petQuery.ownsPet(userId, upgrade.petId())) {
+            return upgrade.petId();
+        }
+        Long requested = body == null ? null : body.petId();
+        if (requested != null) {
+            return petResolver.resolve(userId, requested).getId();
+        }
+        return defaultPet.getId();
+    }
+
+    /** 绑病例：AI_UPGRADE 定格 triage 快照；否则绑自填病例（都为空则不绑）。 */
+    private void bindCase(ConsultRequest req, CreateConsultationRequest body, TriageUpgradeContext upgrade) {
+        if (upgrade != null) {
+            req.bindAiContext(upgrade.triageTaskId(), upgrade.dangerLevel().name(),
+                    upgrade.symptomText(), upgrade.imageObjectKeys());
             return;
         }
         if (body == null) {
@@ -221,7 +255,7 @@ public class ConsultRequestService {
         List<VetQueueResponse.VetAwaitingPayItem> awaitingPays = requests
                 .findByVetIdAndStateOrderByCreatedAtAsc(vetId, ConsultRequestState.ACCEPTED_AWAIT_PAY)
                 .stream()
-                .map(r -> VetQueueResponse.VetAwaitingPayItem.of(r, petIdentityOf(r.getUserId())))
+                .map(r -> VetQueueResponse.VetAwaitingPayItem.of(r, petIdentityOf(r)))
                 .toList();
         List<VetQueueResponse.VetQueueItem> available = List.of();
         List<ConsultRequest> pool =
@@ -229,10 +263,14 @@ public class ConsultRequestService {
         if (!pool.isEmpty()) {
             List<Long> userIds = pool.stream().map(ConsultRequest::getUserId)
                     .filter(Objects::nonNull).distinct().toList();
-            Map<Long, PetIdentityView> pets = petQuery.findIdentitiesByOwners(userIds);
+            // V1.4.0 multi-pet（Story 1.2 · X2）：问诊按单上的宠物（键 = petId），不再按账号反查。
+            List<Long> petIds = pool.stream().map(ConsultRequest::getPetProfileId)
+                    .filter(Objects::nonNull).distinct().toList();
+            Map<Long, PetIdentityView> pets = petQuery.findIdentitiesByPetIds(petIds);
             Map<Long, AuthorView> authors = accounts.findAuthorViews(userIds);
             available = pool.stream()
-                    .map(r -> VetQueueResponse.VetQueueItem.of(r, pets.get(r.getUserId()),
+                    .map(r -> VetQueueResponse.VetQueueItem.of(r,
+                            r.getPetProfileId() == null ? null : pets.get(r.getPetProfileId()),
                             handleOf(authors, r.getUserId())))
                     .toList();
         }
@@ -262,9 +300,15 @@ public class ConsultRequestService {
         return new ConsultAiContextResponse(true, req.getAiDangerLevel(), req.getSymptomText(), urls);
     }
 
-    /** 单条宠物身份（awaitingPay 用）：缺失/注销 → null（前端降级）。 */
-    private PetIdentityView petIdentityOf(Long userId) {
-        return userId == null ? null : petQuery.findIdentityByOwner(userId).orElse(null);
+    /**
+     * 单条宠物身份（awaitingPay 用）：按单上的宠物（V1.4.0 multi-pet Story 1.2 · X3）。
+     * 注销（user_id 已剥）/ 宠物已删（pet_profile_id 无外键）→ null（前端降级）。
+     */
+    private PetIdentityView petIdentityOf(ConsultRequest r) {
+        if (r.getUserId() == null) {
+            return null;
+        }
+        return petQuery.findIdentityByPetId(r.getPetProfileId()).orElse(null);
     }
 
     /** 机主昵称（注销/缺失 → null，匿名化不泄漏身份）。 */

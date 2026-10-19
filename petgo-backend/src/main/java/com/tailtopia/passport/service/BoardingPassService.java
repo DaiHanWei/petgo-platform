@@ -14,6 +14,7 @@ import com.tailtopia.place.service.PlaceIdentityQuery;
 import com.tailtopia.place.service.PlaceStampQueryService;
 import com.tailtopia.profile.dto.PetPassportSubject;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.purchase.domain.KeepsakeRef;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.dto.KeepsakePurchaseResponse;
@@ -43,10 +44,13 @@ public class BoardingPassService {
     private final BoardingPassUnlockRepository unlocks;
     private final KeepsakePurchaseService purchases;
     private final PassportTokenGenerator tokens;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可购买登机牌（409，不写解锁行、不建意图）。 */
+    private final PetWriteGuard petWriteGuard;
 
     public BoardingPassService(PetProfileQueryService pets, PetPassportRepository passportRows,
             PlaceStampQueryService stamps, PlaceIdentityQuery places, BoardingPassUnlockRepository unlocks,
-            KeepsakePurchaseService purchases, PassportTokenGenerator tokens) {
+            KeepsakePurchaseService purchases, PassportTokenGenerator tokens, PetWriteGuard petWriteGuard) {
+        this.petWriteGuard = petWriteGuard;
         this.pets = pets;
         this.passportRows = passportRows;
         this.stamps = stamps;
@@ -58,8 +62,8 @@ public class BoardingPassService {
 
     /** 列表（AC3）：按最近到访倒序；无打卡 → 空表。无宠物 → 404。 */
     @Transactional(readOnly = true)
-    public BoardingPassListResponse list(long userId) {
-        PetPassportSubject pet = requirePet(userId);
+    public BoardingPassListResponse list(long userId, long petId) {
+        PetPassportSubject pet = requirePet(userId, petId);
         Set<Long> unlocked = unlocks.findByPetProfileId(pet.petId()).stream()
                 .filter(BoardingPassUnlock::isUnlocked).map(BoardingPassUnlock::getPlaceId).collect(Collectors.toSet());
         List<BoardingPassListResponse.Item> items = stamps.stampRefsOf(pet.petId()).stream()
@@ -76,14 +80,14 @@ public class BoardingPassService {
 
     /** 详情（AC4）：MERGED → 保留方；DELISTED 照常；该宠物在该场所无打卡 / 未知 token → 404。 */
     @Transactional(readOnly = true)
-    public BoardingPassDetailResponse detail(long userId, String placeToken) {
-        PetPassportSubject pet = requirePet(userId);
+    public BoardingPassDetailResponse detail(long userId, long petId, String placeToken) {
+        PetPassportSubject pet = requirePet(userId, petId);
         PlaceStampRef card = requireCard(pet.petId(), placeToken);
         PlaceStamp s = card.stamp();
         boolean active = s.availability() == PlaceAvailability.ACTIVE;
         var info = places.cardInfoOf(card.placeId()).orElse(null);
         BoardingPassUnlock row = unlocks.findByPetProfileIdAndPlaceId(pet.petId(), card.placeId()).orElse(null);
-        return new BoardingPassDetailResponse(s.placeToken(), pet.name(), pets.findBreed(userId).orElse(null),
+        return new BoardingPassDetailResponse(s.placeToken(), pet.name(), pet.breed(),
                 s.placeName(), passportNoOf(pet.petId()), card.lastVisitDate(), s.firstVisitDate(), s.visitCount(),
                 BoardingPassSeat.of(pet.petId(), card.placeId()), s.placeType(), s.availability(),
                 info == null ? null : info.firstPhotoUrl(), s.stampImageUrl(),
@@ -97,8 +101,10 @@ public class BoardingPassService {
      */
     // noRollbackFor 与 start 一致：网关下单失败时意图 FAILED 行要随事务提交留档。
     @Transactional(noRollbackFor = PayException.class)
-    public KeepsakePurchaseResponse unlock(long userId, String placeToken, PayChannel channel) {
-        PetPassportSubject pet = requirePet(userId);
+    public KeepsakePurchaseResponse unlock(long userId, long petId, String placeToken, PayChannel channel) {
+        PetPassportSubject pet = requirePet(userId, petId);
+        // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、insertIfAbsent 之前校验可写。
+        petWriteGuard.requireWritable(pet.petId());
         PlaceStampRef card = requireCard(pet.petId(), placeToken);
         // 🔴 复审：与场所合并互斥。先对最终场所行加 FOR SHARE 并复核未被并掉 —— 否则合并把旧行改挂到保留方后，
         // 这里的 insert 不再冲突、在被并方下建出一行新的活动行，用户付了钱卡却挂在保留方上看不到（或重复付款不被标记）。
@@ -127,7 +133,9 @@ public class BoardingPassService {
         return passportRows.findByPetProfileId(petId).map(PetPassport::getPassportNo).orElse(null);
     }
 
-    private PetPassportSubject requirePet(long userId) {
-        return pets.findPassportSubject(userId).orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    /** V1.4.0 multi-pet（Story 1.2 · X9）：按指定宠物（控制器经 PetResolver 解析）；不属于本人 → 404。 */
+    private PetPassportSubject requirePet(long userId, long petId) {
+        return pets.findPassportSubject(userId, petId)
+                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
     }
 }

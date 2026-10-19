@@ -2,6 +2,7 @@ import '../../auth/domain/user_tag.dart';
 import '../../growth/domain/growth_badge.dart';
 import '../../mention/domain/mention_view.dart';
 import '../../social/domain/follow_state.dart';
+import 'content_pet_ref.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
@@ -32,7 +33,11 @@ class ContentDetail {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
+    this.pets = const [],
   });
+
+  /// Diary 关联的宠物（V1.4.0 multi-pet Story 3.3 · AC4.1），按创建顺序；Moment / Tips / 无关联 → 空表。
+  final List<ContentPetRef> pets;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
   final String? authorToken;
@@ -69,6 +74,7 @@ class ContentDetail {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: epoch,
+        pets: pets,
       );
 
   final int id;
@@ -164,6 +170,8 @@ class ContentDetail {
       // V1.3.4 follow Story 2.1：缺失 / null 都按默认。
       authorToken: json['authorToken'] as String?,
       authorFollowState: FollowState.fromJson(json['authorFollowState']),
+      // V1.4.0 multi-pet Story 3.1 / 3.3：缺省 = 空表。
+      pets: ContentPetRef.listFromJson(json['pets']),
     );
   }
 }

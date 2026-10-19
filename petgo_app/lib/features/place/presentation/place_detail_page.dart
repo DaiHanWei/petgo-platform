@@ -276,7 +276,8 @@ class PlaceDetailPage extends ConsumerWidget {
               // V1.3.2 Story 1.1 AC4：打卡按钮 —— 距离行之后、描述之前；无定位（距离行省略）时
               // 照常紧跟名称 / 标签区。🔴 不吸底：吸底位是评论输入条（body Column 底部）。
               const SizedBox(height: AppSpacing.md),
-              PlaceCheckinButton(token: token, checkedInToday: p.checkedInToday),
+              PlaceCheckinButton(token: token,
+                  checkedInToday: p.checkedInToday, checkedInPetIds: p.checkedInPetIds),
               if (p.description != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(p.description!, style: AppTypography.body),

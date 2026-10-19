@@ -40,6 +40,8 @@ import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'features/profile/data/current_pet_provider.dart';
+import 'features/pet_slot/data/pet_slot_repository.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
 ///
@@ -270,7 +272,7 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
       if (next.status != AuthStatus.guest &&
           nextId != null &&
           nextId != prevId) {
-        resetUserScopedCaches(ref);
+        resetUserScopedCaches(ref, userId: nextId);
       }
 
       // 系统推送注册（收口于此单点，与 identify/缓存失效同一监听）：
@@ -355,7 +357,15 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
 /// 收口于 app.dart 组合根：跨 feature 的缓存协调放在根部，AuthController 保持纯净。
 /// 仅在「变为某个非游客用户」时调用（见上方 authControllerProvider 监听）——退出登录不调，
 /// 游客态无 token，失效会立即触发 /me 重拉 → 401 → 强制登录弹窗。
-void resetUserScopedCaches(WidgetRef ref) {
+void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
+  // V1.4.0 multi-pet（Story 1.5 · AC1.5）：宠物列表 / 当前宠物是账号维度 —— 换账号不得沿用上个账号的宠物 id。
+  // ⚠️ 本函数在**冷启动恢复会话**时也会跑（guest → authenticated）：不能一律清当前宠物，否则「记住上次查看」
+  //    （AC3.6）每次重启都丢。按账号绑定：偏好里的主人 = 本账号 → 保留；否则清（code review 2026-10-18 #1）。
+  // ⚠️ `petListProvider` 不在这里 invalidate：它 watch 当前账号，账号一变自己 reload（isReloading），
+  //    界面靠这个信号在换号期间不渲染上个账号的宠物；手动 invalidate 会把它变成 isRefreshing、信号就没了。
+  if (userId != null) ref.read(currentPetIdProvider.notifier).bindUser(userId);
+  ref.invalidate(effectivePetIdProvider);
+  ref.invalidate(petSlotOverviewProvider); // 名额摘要（点「+」时取，账号维度）
   ref.invalidate(petProfileProvider); // 成长档案 / 我的：宠物档案
   ref.invalidate(timelineFirstPageProvider); // 成长档案：时间线首页
   ref.invalidate(archiveStatsProvider); // 成长档案 / 我的：统计栏

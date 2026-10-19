@@ -18,6 +18,7 @@ class _FakeRepo implements ContentRepository {
   String? lastIdem;
   DateTime? lastEventDate;
   int publishCalls = 0;
+  List<int>? lastPetIds;
 
   /// 注入式发布异常（模拟审核 422 等）；非空则 publish 抛出。
   Object? throwOnPublish;
@@ -26,6 +27,7 @@ class _FakeRepo implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
@@ -39,6 +41,7 @@ class _FakeRepo implements ContentRepository {
     publishCalls++;
     lastType = type;
     lastPetId = petId;
+    lastPetIds = petIds;
     lastUrls = imageUrls;
     lastSizes = imageSizes;
     lastOffsets = imageCropOffsets;
@@ -127,14 +130,14 @@ void main() {
     final m = make();
     m.c.setText('moment');
     m.c.setType(ContentType.growthMoment);
-    await m.c.publish(idempotencyKey: 'K', petId: 5);
+    await m.c.publish(idempotencyKey: 'K', petIds: [5]);
     expect(m.repo.lastType, ContentType.growthMoment);
     expect(m.repo.lastPetId, 5);
 
     final m2 = make();
     m2.c.setText('daily');
     m2.c.setType(ContentType.daily);
-    await m2.c.publish(idempotencyKey: 'K', petId: 5);
+    await m2.c.publish(idempotencyKey: 'K', petIds: [5]);
     expect(m2.repo.lastPetId, isNull); // 普通类型忽略 petId
   });
 
@@ -155,7 +158,7 @@ void main() {
     final m = make();
     m.c.setText('moment');
     m.c.setType(ContentType.growthMoment);
-    await m.c.publish(idempotencyKey: 'K', petId: 5);
+    await m.c.publish(idempotencyKey: 'K', petIds: [5]);
     final today = DateTime.now();
     expect(m.repo.lastEventDate, isNotNull);
     expect(m.repo.lastEventDate!.year, today.year);
@@ -173,7 +176,7 @@ void main() {
     m.c.setText('生日');
     m.c.setType(ContentType.growthMoment);
     m.c.setEventDate(DateTime(2024, 5, 1, 13, 30));
-    await m.c.publish(idempotencyKey: 'K', petId: 9);
+    await m.c.publish(idempotencyKey: 'K', petIds: [9]);
     expect(m.repo.lastEventDate, DateTime(2024, 5, 1));
   });
 
@@ -319,6 +322,56 @@ void main() {
       await c.uploadAll();
       expect(received, hasLength(1));
       expect(identical(received.single, original), isTrue);
+    });
+  });
+
+  group('V1.4.0 multi-pet Story 3.3', () {
+    test('AC1.6：Diary 未选宠物 → canPublish false；选了 → true；Moment / Tips 不受影响', () {
+      final m = make();
+      m.c.setText('hi');
+      m.c.setType(ContentType.growthMoment);
+      expect(m.c.canPublish, isFalse);
+      m.c.setPetIds([1]);
+      expect(m.c.canPublish, isTrue);
+      m.c.setPetIds(const []);
+      m.c.setType(ContentType.daily);
+      expect(m.c.canPublish, isTrue);
+      m.c.setType(ContentType.knowledge);
+      expect(m.c.canPublish, isTrue);
+    });
+
+    test('AC3.1：publish 透传 petIds（原序）+ petId = 第一只；Moment 两者都不带', () async {
+      final m = make();
+      m.c.setText('hi');
+      m.c.setType(ContentType.growthMoment);
+      m.c.setPetIds([4, 2]);
+      expect(await m.c.publish(idempotencyKey: 'K'), 123);
+      expect(m.repo.lastPetIds, [4, 2]);
+      expect(m.repo.lastPetId, 4);
+
+      final m2 = make();
+      m2.c.setText('hi');
+      m2.c.setPetIds([4, 2]);
+      await m2.c.publish(idempotencyKey: 'K');
+      expect(m2.repo.lastPetIds, isEmpty);
+      expect(m2.repo.lastPetId, isNull);
+    });
+
+    test('AC2：切走再切回 Diary，已选宠物保留', () {
+      final m = make();
+      m.c.setType(ContentType.growthMoment);
+      m.c.setPetIds([7]);
+      m.c.setType(ContentType.daily);
+      m.c.setType(ContentType.growthMoment);
+      expect(m.c.petIds, [7]);
+    });
+
+    test('Diary 未选宠物 → publish 不发请求', () async {
+      final m = make();
+      m.c.setText('hi');
+      m.c.setType(ContentType.growthMoment);
+      expect(await m.c.publish(idempotencyKey: 'K'), isNull);
+      expect(m.repo.publishCalls, 0);
     });
   });
 }

@@ -17,6 +17,7 @@ import 'package:tailtopia/features/consult/presentation/im_chat_placeholder.dart
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/boundary/shop_link_policy.dart';
 import 'package:tailtopia/shared/boundary/triage_category_jump.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// 🔴🔴 Story 9.1 · L0 CI 长期看守：问诊与商品的边界（FR-110，**安全攸关**）。
 ///
@@ -144,7 +145,7 @@ void main() {
     testWidgets('🔴 兽医在会话里粘的商品链接，上屏时已是纯文本且不可点', (t) async {
       final fake = _FakeImService();
       await t.pumpWidget(ProviderScope(
-        overrides: [imServiceProvider.overrideWithValue(fake)],
+        overrides: [effectivePetIdProvider.overrideWithValue(const AsyncData(1)), imServiceProvider.overrideWithValue(fake)],
         // ImChatPlaceholder 顶层是 Expanded —— 必须给它一个 Flex 父级（同 vet_chat_test）
         child: _host(const Column(children: [ImChatPlaceholder(peerId: 'v_1')])),
       ));
@@ -260,7 +261,7 @@ Future<GoRouter> _pumpHealth(WidgetTester t, List<HealthListItem> items) async {
   ]);
   addTearDown(router.dispose);
   await t.pumpWidget(ProviderScope(
-    overrides: [healthRecordRepositoryProvider.overrideWithValue(_FakeHealthRepo(items))],
+    overrides: [effectivePetIdProvider.overrideWithValue(const AsyncData(1)), healthRecordRepositoryProvider.overrideWithValue(_FakeHealthRepo(items))],
     child: MaterialApp.router(
       locale: const Locale('id'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -276,13 +277,13 @@ class _FakeHealthRepo implements HealthRecordRepository {
   _FakeHealthRepo(this._items);
   final List<HealthListItem> _items;
   @override
-  Future<List<HealthListItem>> list() async => _items;
+  Future<List<HealthListItem>> list({int? petId}) async => _items;
   @override
-  Future<void> create(HealthRecordDraft draft) async {}
+  Future<void> create(HealthRecordDraft draft, {int? petId}) async {}
   @override
-  Future<void> update(int id, HealthRecordDraft draft) async {}
+  Future<void> update(int id, HealthRecordDraft draft, {int? petId}) async {}
   @override
-  Future<void> delete(int id) async {}
+  Future<void> delete(int id, {int? petId}) async {}
 }
 
 /// 只喂入站消息的 IM 替身（不触真实腾讯 SDK）。

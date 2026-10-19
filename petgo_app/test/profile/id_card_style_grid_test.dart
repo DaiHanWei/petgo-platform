@@ -3,10 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/id_card_style.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/id_card_style_grid.dart';
@@ -29,8 +32,16 @@ class _Repo implements IdCardRepository {
 
 final _beforeCutoff = DateTime.utc(2026, 10, 13);
 
+/// V1.4.0 multi-pet Story 4.2：Diary 当前宠物（不读偏好）。
+class _Current extends CurrentPetIdNotifier {
+  _Current(this.initial);
+  final int? initial;
+  @override
+  int? build() => initial;
+}
+
 Future<void> _pump(WidgetTester tester, Future<List<IdCard>> Function() list,
-    {Locale locale = const Locale('en'), DateTime? now}) async {
+    {Locale locale = const Locale('en'), DateTime? now, List<Override> overrides = const []}) async {
   final router = GoRouter(
     routes: [
       GoRoute(path: '/', builder: (c, s) => IdCardPage(clock: () => now ?? _beforeCutoff)),
@@ -47,7 +58,7 @@ Future<void> _pump(WidgetTester tester, Future<List<IdCard>> Function() list,
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
-    overrides: [idCardRepositoryProvider.overrideWithValue(_Repo(list))],
+    overrides: [idCardRepositoryProvider.overrideWithValue(_Repo(list)), ...overrides],
     child: MaterialApp.router(
       routerConfig: router,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -296,5 +307,38 @@ void main() {
     for (final p in paths) {
       expect(File(p).existsSync(), isTrue, reason: p);
     }
+  });
+
+  /// V1.4.0 multi-pet Story 4.2（AD-8「KTP 创建只列正常宠物，卡不挂宠物」· decision-log I2）× Story 2.4 E1：
+  /// 当前宠物只读但还有正常宠物 → 照常进建卡页（建卡页预填正常宠物）；一只正常宠物都没有 → 仍弹 E1。
+  group('Story 4.2 建卡入口只读拦截', () {
+    const ok = PetListItem(id: 1, name: 'Abu');
+    const ro = PetListItem(id: 2, name: 'Cici', status: PetListItem.statusReadOnly);
+
+    Future<void> pumpWithPets(WidgetTester tester, List<PetListItem> pets, int current) async {
+      await _pump(tester, () async => const [], overrides: [
+        petListProvider.overrideWith((ref) async => pets),
+        currentPetIdProvider.overrideWith(() => _Current(current)),
+      ]);
+      final c = ProviderScope.containerOf(tester.element(find.byType(IdCardPage)));
+      await c.read(effectivePetIdProvider.future);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('当前宠物只读、另有正常宠物 → 不弹 E1，进建卡页', (tester) async {
+      await pumpWithPets(tester, const [ok, ro], 2);
+      await tester.tap(find.byKey(const ValueKey('idCardStyleCell_ktp')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('petReadonlyBlockRenew')), findsNothing);
+      expect(find.text('create:ktp'), findsOneWidget);
+    });
+
+    testWidgets('全部宠物只读（数据异常）→ 仍弹 E1、不进建卡页', (tester) async {
+      await pumpWithPets(tester, const [ro], 2);
+      await tester.tap(find.byKey(const ValueKey('idCardStyleCell_ktp')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('petReadonlyBlockRenew')), findsOneWidget);
+      expect(find.text('create:ktp'), findsNothing);
+    });
   });
 }

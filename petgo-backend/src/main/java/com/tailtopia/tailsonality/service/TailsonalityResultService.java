@@ -2,6 +2,7 @@ package com.tailtopia.tailsonality.service;
 
 import com.tailtopia.profile.dto.OwnedPetRef;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.tailsonality.domain.TailsonalityCatalog;
 import com.tailtopia.tailsonality.domain.TailsonalityCode;
@@ -41,18 +42,21 @@ public class TailsonalityResultService {
     private final TailsonalityTokenGenerator tokens;
     private final TailsonalityBadgeRepository badges;
     private final TailsonalityUpgradePricing upgradePricing;
+    /** V1.4.0 multi-pet Story 2.1（AD-8 / 待确认 2）：只读宠物不可新增测试结果（409 {@code pet-read-only}）。 */
+    private final PetWriteGuard petWriteGuard;
     private final Clock clock;
 
     @Autowired
     public TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
             TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges,
-            TailsonalityUpgradePricing upgradePricing) {
-        this(results, pets, tokens, badges, upgradePricing, Clock.systemUTC());
+            TailsonalityUpgradePricing upgradePricing, PetWriteGuard petWriteGuard) {
+        this(results, pets, tokens, badges, upgradePricing, petWriteGuard, Clock.systemUTC());
     }
 
     TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
             TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges,
-            TailsonalityUpgradePricing upgradePricing, Clock clock) {
+            TailsonalityUpgradePricing upgradePricing, PetWriteGuard petWriteGuard, Clock clock) {
+        this.petWriteGuard = petWriteGuard;
         this.results = results;
         this.pets = pets;
         this.tokens = tokens;
@@ -62,8 +66,10 @@ public class TailsonalityResultService {
     }
 
     @Transactional
-    public TailsonalityResultResponse submit(long userId, Map<String, ?> body) {
-        OwnedPetRef pet = requirePet(userId);
+    public TailsonalityResultResponse submit(long userId, Long petId, Map<String, ?> body) {
+        OwnedPetRef pet = requirePet(userId, petId);
+        // V1.4.0 multi-pet Story 2.1：归属（404）之后、写结果之前校验可写（只读 → 409）。
+        petWriteGuard.requireWritable(pet.petId());
         Map<String, Integer> answers = normalize(body);
         TailsonalityQuestionSet set = TailsonalityCatalog.forPetType(pet.petType());
         TailsonalityCode code = TailsonalityScorer.score(set, answers);
@@ -76,8 +82,8 @@ public class TailsonalityResultService {
     }
 
     @Transactional(readOnly = true)
-    public TailsonalityResultListResponse list(long userId) {
-        OwnedPetRef pet = requirePet(userId);
+    public TailsonalityResultListResponse list(long userId, Long petId) {
+        OwnedPetRef pet = requirePet(userId, petId);
         List<TailsonalityResult> rows = results.findByPetProfileIdOrderByCreatedAtDescIdDesc(pet.petId());
         Long equippedId = badges.findResultIdByPetProfileId(pet.petId()).orElse(null);
         List<TailsonalityResultResponse> items = new ArrayList<>(rows.size());
@@ -89,14 +95,18 @@ public class TailsonalityResultService {
         return new TailsonalityResultListResponse(items);
     }
 
-    /** token 不存在或不属于当前用户当前宠物 → 同一个 404（防枚举）。 */
+    /**
+     * token 不存在或不属于当前用户的宠物 → 同一个 404（防枚举）。
+     * V1.4.0 multi-pet（Story 1.2 · X12，token 寻址）：由结果行的 {@code pet_profile_id} 反查宠物并校验归属，不要求 petId。
+     */
     @Transactional(readOnly = true)
     public TailsonalityResultResponse get(long userId, String token) {
-        OwnedPetRef pet = requirePet(userId);
-        TailsonalityResult row = results.findByPublicTokenAndPetProfileId(token, pet.petId())
+        TailsonalityResult row = results.findByPublicToken(token)
+                .filter(r -> r.getPetProfileId() != null && pets.ownsPet(userId, r.getPetProfileId()))
                 .orElseThrow(() -> AppException.notFound("结果不存在"));
-        boolean equipped = badges.findResultIdByPetProfileId(pet.petId()).map(row.getId()::equals).orElse(false);
-        return TailsonalityResultResponse.of(row, indexOf(pet.petId(), row.getId()), equipped,
+        long petId = row.getPetProfileId();
+        boolean equipped = badges.findResultIdByPetProfileId(petId).map(row.getId()::equals).orElse(false);
+        return TailsonalityResultResponse.of(row, indexOf(petId, row.getId()), equipped,
                 upgradePricing.upgradePriceOrNull(row));
     }
 
@@ -111,8 +121,9 @@ public class TailsonalityResultService {
         throw new IllegalStateException("result row not visible in its own transaction");
     }
 
-    private OwnedPetRef requirePet(long userId) {
-        return pets.findOwnedPet(userId).orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    /** V1.4.0 multi-pet：指定宠物（控制器经 PetResolver 校验）；null = 默认宠物；查不到 → 404。 */
+    private OwnedPetRef requirePet(long userId, Long petId) {
+        return pets.findOwnedPet(userId, petId).orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
     }
 
     /**

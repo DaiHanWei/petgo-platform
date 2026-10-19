@@ -32,9 +32,9 @@ class _Repo implements IdCardRepository {
   @override
   Future<List<IdCard>> listCards() async => [card];
   @override
-  Future<int> reportShareForReward(int cardId) async => 0;
+  Future<int> reportShareForReward(int cardId, {int? petId}) async => 0;
   @override
-  Future<int> advertisableShareReward() async => 0;
+  Future<int> advertisableShareReward({int? petId}) async => 0;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

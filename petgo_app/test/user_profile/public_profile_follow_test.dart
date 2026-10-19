@@ -136,9 +136,9 @@ Future<ProviderContainer> _pump(
   final container = ProviderContainer(overrides: [
     publicProfileRepositoryProvider.overrideWithValue(profiles),
     publicUserPostsRepositoryProvider.overrideWithValue(posts ?? _EmptyPosts()),
-    publicProfilePetProvider(_kTargetId).overrideWith((ref) async {
+    publicProfilePetsProvider(_kTargetId).overrideWith((ref) async {
       _petCalls++;
-      return null;
+      return const [];
     }),
     if (guide != null) loginGuideControllerProvider.overrideWithValue(guide),
     followRepositoryProvider.overrideWithValue(follows ?? _FollowRepo()),

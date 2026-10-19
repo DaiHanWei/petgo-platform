@@ -15,6 +15,7 @@ import 'package:tailtopia/features/profile/presentation/day_detail_page.dart';
 import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/archive_calendar.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 class _TestAuthController extends AuthController {
   _TestAuthController(this._initial);
@@ -39,13 +40,15 @@ Widget _wrapPage({
 }) {
   return ProviderScope(
     overrides: [
+      // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
       authControllerProvider.overrideWith(() => _TestAuthController(_authA())),
       petProfileProvider.overrideWith((ref) async => _profile),
-      timelineFirstPageProvider.overrideWith((ref) async {
+      timelineFirstPageProvider.overrideWith((ref, _) async {
         if (timelineError != null) throw timelineError;
         return page ?? const TimelinePage(items: []);
       }),
-      archiveStatsProvider.overrideWith((ref) async => stats!),
+      archiveStatsProvider.overrideWith((ref, _) async => stats!),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
     ],
     child: const MaterialApp(
@@ -103,10 +106,12 @@ void main() {
   testWidgets('AC5: 视图切换到日历视图', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         authControllerProvider.overrideWith(() => _TestAuthController(_authA())),
         petProfileProvider.overrideWith((ref) async => _profile),
-        timelineFirstPageProvider.overrideWith((ref) async => const TimelinePage(items: [])),
-        archiveStatsProvider.overrideWith((ref) async => _stats),
+        timelineFirstPageProvider.overrideWith((ref, _) async => const TimelinePage(items: [])),
+        archiveStatsProvider.overrideWith((ref, _) async => _stats),
         shareFabAnimatedShownProvider.overrideWith((ref) async => true),
         calendarMonthProvider.overrideWith(
             (ref, ym) async => CalendarMonth(year: ym.year, month: ym.month, days: const [])),
@@ -141,6 +146,8 @@ void main() {
     final added = <DateTime>[];
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         calendarMonthProvider.overrideWith(
             (ref, ym) async => CalendarMonth(year: ym.year, month: ym.month, days: const [])),
       ],
@@ -148,7 +155,7 @@ void main() {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: ListView(children: [ArchiveCalendar(onOpenDay: tapped.add, onAddOnDate: added.add)]),
+          body: ListView(children: [ArchiveCalendar(ownerPetId: 1, onOpenDay: tapped.add, onAddOnDate: added.add)]),
         ),
       ),
     ));
@@ -167,6 +174,8 @@ void main() {
     final tapped = <DateTime>[];
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         // 当月 1 号有记录（1 号必非未来）。
         calendarMonthProvider.overrideWith((ref, ym) async => CalendarMonth(
               year: ym.year,
@@ -178,7 +187,7 @@ void main() {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: ListView(children: [ArchiveCalendar(onOpenDay: tapped.add, onAddOnDate: (_) {})]),
+          body: ListView(children: [ArchiveCalendar(ownerPetId: 1, onOpenDay: tapped.add, onAddOnDate: (_) {})]),
         ),
       ),
     ));
@@ -195,6 +204,8 @@ void main() {
     final date = DateTime(2026, 6, 2);
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         dayDetailProvider.overrideWith((ref, d) async =>
             DayDetail(date: date, items: [_happy(1, '2026-06-02')])),
       ],
@@ -214,6 +225,8 @@ void main() {
     final date = DateTime(2026, 6, 2);
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         dayDetailProvider.overrideWith((ref, d) async => throw Exception('boom')),
       ],
       child: MaterialApp(

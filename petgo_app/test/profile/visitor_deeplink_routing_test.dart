@@ -62,8 +62,8 @@ Widget _wrap({
         return myProfile;
       }),
       // 作者态数据（作者分支渲染需要）
-      timelineFirstPageProvider.overrideWith((ref) async => const TimelinePage(items: [])),
-      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+      timelineFirstPageProvider.overrideWith((ref, _) async => const TimelinePage(items: [])),
+      archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
           happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
       // 访客态数据

@@ -1,6 +1,6 @@
 # Story 1.5: App——宠物列表、Diary Tab 切换、他人主页、建档与删除
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 multi-pet · 分支 `feat/1.4.0-multi-pet`（从地基 Story 0.1 合入之后的 `dev_1.4.0` 切出）
 > 口径优先级：`decision-log.md` ② 节 > `多宠物/1-4-0多宠物prd.md` > `architecture-v1.4.0-multi-pet-delta.md`（AD-1 ~ AD-17、P-1 ~ P-4、V-1 / V-2）> UI 稿 `多宠物/ui-1-4-0-multi-pet-integrated-v1.html`（定稿，A0 ~ A6、B1 ~ B6、C1 ~ C6、J0 ~ J3）；新增文案以 `多宠物/1-4-0多宠物-新增文案对照表.md` 为准。
@@ -17,7 +17,7 @@ so that 我能分别记录和浏览每只宠物。
 
 **AC1 — 宠物状态单一来源（AD-14、§5「App 状态单一来源」）** `[L0]`
 1. 新增 `features/profile/data/pet_list_repository.dart`：`PetListItem` 模型（字段同后端 `PetListItemResponse`，`status` 解析为 `isReadOnly = status == 'READ_ONLY'`，未知值按 ACTIVE）+ `PetListRepository.fetch()`（`GET ApiPaths.petProfileList`）+ `petListProvider`（`FutureProvider<List<PetListItem>>`）。
-2. `currentPetIdProvider`（`NotifierProvider<CurrentPetIdNotifier, int?>`）：本机偏好键 **`petgo.currentPetId`**（写法照 `DiaryOnlyNotifier`，`timeline_repository.dart`:167-189：`build` 先返回 null 再异步从 `AppPrefs` 恢复；`select(int petId)` 写入；`clear()` 删除），读写失败静默降级。
+2. `currentPetIdProvider`（`NotifierProvider<CurrentPetIdNotifier, int?>`，落在 `features/profile/data/current_pet_provider.dart`，与 `effectivePetIdProvider` 同文件）：本机偏好键 **`petgo.currentPetId`**（写法照 `DiaryOnlyNotifier`，`timeline_repository.dart`:167-189：`build` 先返回 null 再异步从 `AppPrefs` 恢复；`select(int petId)` 写入；`clear()` ~~删除~~ 写 0 表示未设〔T0：`AppPrefs` 没有删除键的方法，本 story 不改该类；宠物 id 恒正，0 = 未设〕），读写失败静默降级。
 3. `effectivePetIdProvider`（`FutureProvider<int?>`）：取 `petListProvider`；`currentPetId` 在列表里 → 用它；否则（未设、已删、换了账号）→ 列表中 `isDefault == true` 的那只（没有则第一只）；列表为空 → null。**页面一律只读它，不自存 petId**。
 4. 原 `petProfileProvider`（`profile_repository.dart`:143）**改为派生兼容层**：`FutureProvider<PetProfile?>`，`await effectivePetIdProvider.future` → null 返回 null，否则 `getMyProfile(petId: id)`。类型与名字不变，现有 19 个使用文件（Dev Notes「petProfileProvider 使用文件」）语义不变；**新代码不再引用它**（文件头注释写明）。
 5. `resetUserScopedCaches`（`app.dart`:355）登记：`ref.invalidate(petListProvider)`、`ref.invalidate(effectivePetIdProvider)`、`ref.read(currentPetIdProvider.notifier).clear()`（换账号不得沿用上个账号的宠物 id）。登出路径照旧不失效（避免游客 401 弹框）。
@@ -26,7 +26,7 @@ so that 我能分别记录和浏览每只宠物。
 1. `_PetZone` / `_PetCard`（`me_page.dart`:195 / :275）改读 `petListProvider`：有宠物 → 圆形头像一排（复用 `PetAvatarItem`，头像 56，每只 diary 角标取 `PetListItem.diaryCount`）+ 末格「+」；小节标题「Hewanku」右侧加 `Kelola ›`（`petListManage`，→ 名额管理页占位，见 AC4.4）。点某只 → `currentPetIdProvider.select(id)` + 上报 `pet_switched {from_pet_id, to_pet_id, source: me_page}`（from == to 不报）+ `context.go('/profile')`。
 2. A0：`HAS_PET` 但列表为空 → 沿用引导卡 `_PetGuideCard`（`mePetCardCreateTitle`），不改；PLANNING / ENTHUSIAST 不显示 Hewanku（现状）。A2：1 只 → 1 个头像 + 「+」，同样有 `Kelola ›`。
 3. A3：`isReadOnly` 的宠物头像灰化 + **左下**锁标（避开右上 diary 角标）；点它同 A1（进 Diary Tab 切到这只）。只读横幅、拦截抽屉不在本 story（2.4）。
-4. `PetAvatarItem`（`features/profile/presentation/widgets/pet_avatar_item.dart`）加可选 `readOnly`（默认 false）与 `size`（默认 56，切换器用 40）参数；不改其他调用方的外观。
+4. `PetAvatarItem`（`features/profile/presentation/widgets/pet_avatar_item.dart`）加可选 `readOnly`（默认 false）与 `size`（~~默认 56~~ **默认 64 = 改动前的实际直径**，「我的」页显式传 56，切换器用 40）参数；不改其他调用方的外观。〔T0 2026-10-18：代码里改动前是 `CircleAvatar(radius: 32)` = 64，默认 56 会改变他人主页外观，与「不改其他调用方外观」冲突，按后者取 64；另加 `selected`（当前紫环）/ `compact`（切换器只有头像 + 名字）/ `lockKey` 三个可选参数，默认值均为原外观〕
 5. 加载中 / 失败：与现状一致（`loading` / `error` 均不渲染整块，不催建档）。
 
 **AC3 — Diary Tab 宠物切换器（B1 ~ B6）** `[L0]` `[L2]`（epics 1.5 AC2、PRD AC2、UX-DR2）
@@ -40,8 +40,8 @@ so that 我能分别记录和浏览每只宠物。
 
 **AC4 — 添加宠物与名额拦截（A4 / A4b / A5 / A6）** `[L0]` `[L2]`（epics 1.5 AC3、PRD AC1）
 1. 「我的」页与切换器的「+」共用 `features/pet_slot/presentation/add_pet_flow.dart` 的 `startAddPet(context, ref, {required String source})`：先 `GET /pet-slots/me`（App 模型 `PetSlotOverview`，2.4 会扩展同一模型）——`petCount ≥ cap` → **A4b**；`petCount ≥ total` → **A4**；否则 `context.push('/profile/create')`。接口失败 → 直接进建档页（后端 409 兜底）。
-2. A4 名额已满抽屉：`showConfirmSheet`（`shared/widgets/confirm_sheet.dart`:21）——图标 `Icons.pets`、标题 `petSlotFullTitle`、正文 `petSlotFullBody(petCount, slotTotal, price)`（`price` 用 `unitPrice` 按现有金额格式化工具输出「Rp5.000」，**不写死**）、主按钮 `petSlotFullRent`（「Sewa slot」→ 名额管理页占位，2.4 接通 D5 租用抽屉）、次按钮见 Dev Notes「待拍板 1」（本 story 次按钮位放「关闭」语义，用现有通用取消键）。弹出即上报 `pet_slot_full_shown {source: add_pet, action}`：用户点主按钮 `action = rent`、关闭 / 点次按钮 `action = close`（每次弹出报一次，在抽屉关闭时带结果上报）。
-3. A4b 已达上限：同一 `showConfirmSheet`，标题 `petSlotLimitTitle`、正文 `petSlotLimitBody`、唯一按钮 `petSlotLimitOk`（「Oke」）。5 只时头像排横滑，「+」在最后。
+2. A4 名额已满抽屉（模型 `PetSlotOverview` / `PetSlotFullInfo` 落在 `features/pet_slot/data/pet_slot_repository.dart`）：`showConfirmSheet`（`shared/widgets/confirm_sheet.dart`:21）——图标 `Icons.pets`、标题 `petSlotFullTitle`、正文 `petSlotFullBody(petCount, slotTotal, price)`（`price` 用 `unitPrice` 按现有金额格式化工具输出「Rp5.000」，**不写死**）、主按钮 `petSlotFullRent`（「Sewa slot」→ 名额管理页占位，2.4 接通 D5 租用抽屉）、次按钮见 Dev Notes「待拍板 1」（本 story 次按钮位放「关闭」语义，用现有通用取消键）。弹出即上报 `pet_slot_full_shown {source: add_pet, action}`：用户点主按钮 `action = rent`、关闭 / 点次按钮 `action = close`（每次弹出报一次，在抽屉关闭时带结果上报）。
+3. A4b 已达上限：同一 `showConfirmSheet`，标题 `petSlotLimitTitle`、正文 `petSlotLimitBody`、唯一按钮 `petSlotLimitOk`（「Oke」）。〔T0：`showConfirmSheet` 恒渲染次按钮，「唯一按钮」需给它加可选 `showCancel`（默认 true = 原行为，既有调用零影响），见 Completion Notes 偏差〕5 只时头像排横滑，「+」在最后。
 4. 名额管理页占位：路由 **`/me/pet-slots`**（挂 `/me` 前缀，自动进受控路由名单），页面 `features/pet_slot/presentation/pet_slot_page.dart`：AppBar 标题 `petSlotPageTitle`（D-1「Kelola Hewan」），正文只列本人宠物（头像 + 名字，复用 `PetAvatarItem`），**不加任何名额 / 租用文案**——Story 2.4 在同一路由、同一文件里替换为 D1 ~ D15。
 5. A5 建档页（`pet_profile_create_page.dart`）：去掉「已有档案直达」守卫（:226-238，有档案就跳走）——改为不跳转、直接渲染表单；提交收到 409：`typeSlug == 'pet-slot-full'` → 弹 A4（用 ProblemDetail 扩展成员）；`'pet-limit-reached'` → 弹 A4b；`'profile-exists'` / 其他 409 → 沿用现有提示（:137）。
 6. 建档成功（A6 `profile_created_celebration_page.dart` 不改）：`currentPetIdProvider.select(新 id)`，`ref.invalidate(petListProvider)`；上报 `pet_added {pet_index, slot_source}`：`pet_index` = 建档后的宠物只数；`slot_source` 按建档**前**的 `PetSlotOverview` 推：第 1 只 → `default`；`pet_index ≤ defaultSlots + levelSlots` → `level`；否则 `rent`（取不到摘要时报 `default`）。
@@ -76,17 +76,17 @@ so that 我能分别记录和浏览每只宠物。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：后端 1.1 / 1.3 / 1.4 实际接口字段名与本文件一致（不一致先改本文件）；对一遍「现状」表 file:line
-- [ ] **T1 状态层**（AC1）：`PetListItem` / `PetListRepository` / `petListProvider`、`currentPetIdProvider`、`effectivePetIdProvider`、`petProfileProvider` 派生、`resetUserScopedCaches` 登记
-- [ ] **T2 ApiPaths + 仓库带 petId**（AC7）
-- [ ] **T3 Diary provider family 化**（AC3.7、provider 改造清单）+ 调用点
-- [ ] **T4 「我的」页 Hewanku**（AC2）+ `PetAvatarItem` 参数
-- [ ] **T5 切换器 + Diary Tab 跟随 / 切换中 / 失败**（AC3）
-- [ ] **T6 添加流程 + A4 / A4b + 占位页 + 建档页守卫**（AC4）
-- [ ] **T7 删除流程**（AC5）
-- [ ] **T8 他人主页**（AC6）
-- [ ] **T9 文案 + 埋点 + 守卫入表**（AC8）
-- [ ] **T10 测试**（见「验证层级」）；`flutter analyze`；Completion Notes 标「L2 待本地验收」
+- [x] **T0 开工核对**：后端 1.1 / 1.3 / 1.4 实际接口字段名与本文件一致（不一致先改本文件）；对一遍「现状」表 file:line
+- [x] **T1 状态层**（AC1）：`PetListItem` / `PetListRepository` / `petListProvider`、`currentPetIdProvider`、`effectivePetIdProvider`、`petProfileProvider` 派生、`resetUserScopedCaches` 登记
+- [x] **T2 ApiPaths + 仓库带 petId**（AC7）
+- [x] **T3 Diary provider family 化**（AC3.7、provider 改造清单）+ 调用点
+- [x] **T4 「我的」页 Hewanku**（AC2）+ `PetAvatarItem` 参数
+- [x] **T5 切换器 + Diary Tab 跟随 / 切换中 / 失败**（AC3）
+- [x] **T6 添加流程 + A4 / A4b + 占位页 + 建档页守卫**（AC4）
+- [x] **T7 删除流程**（AC5）
+- [x] **T8 他人主页**（AC6）
+- [x] **T9 文案 + 埋点 + 守卫入表**（AC8）
+- [x] **T10 测试**（见「验证层级」）；`flutter analyze`；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -215,10 +215,111 @@ so that 我能分别记录和浏览每只宠物。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- 基线（改动前，`feat/1.4.0-multi-pet` @ a87304b4）：`flutter analyze` → No issues found；`flutter test` → 3411 通过 / 1 跳过 / 0 失败。
+- 改动后：`flutter analyze` → No issues found（0 新增）；`flutter test` 全量 → 3477 通过 / 1 跳过 / 0 失败（+66 条新增用例）。
+- code review 修复后：`flutter analyze` → No issues found；`flutter test` 全量 → **3493 通过 / 1 跳过 / 0 失败**（再 +16 条）。
 
 ### Completion Notes List
 
+**L1/L2 待本地验收**：AC9 模拟器四屏（A1 两只 + Kelola、B1 切换器、C2 非最后一只新正文、J2 他人主页 > 4 只横滑）截图与 UI 稿逐屏还原度打分（≥ 95%）云端不跑，需本地连含 1.1 ~ 1.4 的后端（或 stag）验收。本 story 只 App，**后端零改动**，无 L1 测试；无 Flyway 迁移。
+
+**T0 核对结果**（后端 1.1 ~ 1.4 已提交代码 vs 本文件）：
+- `PetListItemResponse` 字段 `id/name/avatarUrl/petType/breed/birthday/createdAt/status/isDefault/tailsonalityBadge/diaryCount` 与本文件一致（`isDefault` 用 `@JsonProperty("isDefault")`，`status` 本线恒 `ACTIVE`，2.1 起读列）。
+- `PetSlotOverview` 字段 `total/cap/defaultSlots/levelSlots/rentalSlots/petCount/rentable/canRent/nextLevelSlot/unitPrice/days` 一致；409 扩展成员 `canRent/nextLevelSlot/petCount/slotTotal/unitPrice` 一致；ProblemDetail type 为 `https://petgo/errors/pet-slot-full` / `pet-limit-reached` / `profile-exists`，App 按末段 slug 判。
+- `/pet-profiles/me/*`、`/me/health-records`、`/me/milestones/*`、`/me/tailsonality/results|badge`、`/me/passport(/snapshots)`、`/me/boarding-passes/*`、`/me/id-card(/hd-download)`、`/me/card-shares`、`/me/id-cards/{cardId}/share-rewards`、`/me/id-cards/share-reward`、`/me/{tailsonality,passport}/share-rewards` 均接受可选 `?petId=`；`GET /users/{userId}/pets` 游客 permitAll；`DELETE /pet-profiles/me?petId=` 只删该只。均与本文件一致，未改后端契约。
+- 本文件与代码不一致处已先改正文（见 AC1.2 / AC2.4 / AC4.2 / AC4.3 的〔T0〕标注）。
+
+**实现要点**
+- 状态层：`pet_list_repository.dart`（`PetListItem` + `PetListRepository` + `petListProvider`，`retry: retryExcept4xx`）；`current_pet_provider.dart`（`currentPetIdProvider` / `resolveEffectivePetId` 纯函数 / `effectivePetIdProvider` / `requestPetIdProvider` / `readRequestPetId` / `peekEffectivePetId`）。`petProfileProvider` 改派生层（文件头注释写明新代码不再引用）。`resetUserScopedCaches` 登记 `petListProvider` / `effectivePetIdProvider` / `currentPetIdProvider.clear()` / `petSlotOverviewProvider`。
+- Diary family 化：`timelineFirstPageProvider(int)` / `archiveStatsProvider(int)` / `calendarMonthProvider(({petId, year, month}))` / `dayDetailProvider(({petId, date}))` / `milestoneListProvider(int)` / `healthListProvider(int)`；作用域选择器作者态多收 `ownerPetId`；既有整族 `invalidate` 写法不变。Diary 页用档案 id 作 family 键；健康 / 里程碑 / 某天详情页读 `effectivePetIdProvider`。
+- 仓库带 `?petId=`（`ApiPaths.withPet`）：profile（get/update/delete）、timeline 作者态四方法、health 四方法、milestone 六方法、id-card 旧单卡 + 分享奖励（上报 / 展示口径）、tailsonality（提交 / 结果列表 / 卸下徽章）+ 分享奖励、passport（护照 / 发起快照 / 快照列表）+ 分享奖励、boarding pass（列表 / 详情 / 解锁）。账号级端点未加。
+- 「我的」页 Hewanku 改读列表 + 「+」+ `Kelola ›`（→ `/me/pet-slots` 占位页）；Diary 切换器（B1 ~ B6）；`startAddPet` + A4 / A4b + 占位页；建档页去「已有档案直达」守卫 + 409 分流 + `pet_added`；编辑页按 petId 删 / 改 + C2 新正文 + C4 Toast + 当前宠物回落；他人主页换 `publicProfilePetsProvider`（旧 `publicProfilePetProvider` / `fetch` / `ApiPaths.userPublicPet` 无其他引用，已删）。
+- 埋点：`pet_switched {from_pet_id, to_pet_id, source}`（me_page / diary_tab，from == to 不报）、`pet_added {pet_index, slot_source}`、`pet_slot_full_shown {source: add_pet, action: rent|close}`；`v112_events_test.dart` 的 `allowedPrefixes` 按既有扩展路径入表 `'pet_'`（注释照本文件），未删守卫、未放宽正则。属性均为 id / 枚举 / 数字，不带宠物名。
+- 文案：新增 10 键 + 改写 `petProfileDeleteConfirmTitle(name)`，EN / ID 两份（仓库只有这两个 arb），已 `flutter gen-l10n`。
+
+**L0 测试（均已跑、全绿）**
+- 新增：`test/profile/current_pet_provider_test.dart`（14）、`test/profile/pet_list_repository_test.dart`（7）、`test/profile/pet_switcher_test.dart`（6）、`test/pet_slot/add_pet_flow_test.dart`（9）。
+- 补：`test/profile/growth_archive_state_branch_test.dart`（+7：B1 切换器在标题行之上 / B2 立即高亮 + 换名 + 骨架 + 切换器仍可点 / B3 失败卡 + 重试只重取当前宠物 / B5 / B6 / 记住上次查看 / 已删回落）、`test/me/me_page_test.dart`（+7：A1 / A2 / A0 / A3 锁标左下 / 点头像 select + go + pet_switched / from == to 不报 / Kelola）、`test/profile/pet_profile_create_test.dart`（+6：不再跳走 / 409 pet-slot-full → A4 / pet-limit-reached → A4b / profile-exists → 原提示 / select + pet_added / slot_source 三档）、`test/profile/pet_profile_edit_test.dart`（+5：C2 两种正文 / C4 Toast + 回落 + petId / C6 无 Toast / PATCH 带 petId）、`test/user_profile/public_profile_pet_test.dart`（+5：6 只全渲染横滑 / 空数组不渲染 / 无锁标 / 点第 3 只进访客视图 / 游客登录门控）。
+- `test/analytics/v112_events_test.dart`、`test/l10n/*` 全绿；全量 3477 / 1 skip / 0 fail。
+- 存量测试改动**只改调用形状 / 桩**（family `overrideWith((ref, _) …)`、假仓库方法补 `{int? petId}`、`ArchiveCalendar(ownerPetId: 1, …)`、补 `effectivePetIdProvider.overrideWithValue(const AsyncData(1))` / `petListProvider` 桩、`publicProfilePetsProvider` 桩），断言语义未改、未删、未 skip。`me_page_test` 的 diary 角标 12 改由列表项 `diaryCount: 12` 提供（原由统计栏桩提供），断言不变。
+
+**与本文件文字的偏差**
+1. `PetAvatarItem.size` 默认取 64（改动前实际直径），不是 56；「我的」页显式传 56。另加 `selected` / `compact` / `lockKey` 可选参数（默认 = 原外观）。
+2. `showConfirmSheet` 加可选 `showCancel`（默认 true）—— A4b「唯一按钮」无此参数做不出来；本文件写「不改，只调用」。
+3. `CurrentPetIdNotifier.clear()` 写 0（未设）而非删键（`AppPrefs` 无删除方法且本 story 不改该类）。
+4. A4 次按钮位用 `commonClose`（「Tutup / Close」，现有通用键），对应「关闭」语义；本文件写「现有通用取消键」。
+5. `petProfileProvider` 派生层：宠物列表取不到（网络 / 接口失败）时退回旧口径 `getMyProfile()`（不带 petId = 后端默认宠物），避免列表失败时把有宠用户误判成「无档案」。列表为空才返回 null。
+6. 新增 `requestPetIdProvider` 供「带 petId 的请求」使用（列表失败 → 用户选过的 `currentPetId`，没选过 → null = 默认宠物，见 code review #5）；命令式调用点用 `readRequestPetId`（当前宠物未被任何界面建立时不额外发列表请求，直接用 `currentPetId`），里程碑庆祝回报用 `peekEffectivePetId`（必须同步发出；未解析 → `currentPetId`）。发布页取当前宠物允许发一次列表请求（冷启动直进发布页）。
+7. 建档 409 / 「+」入口的抽屉都**不 await**（否则提交按钮 / 「+」在抽屉开着时一直转圈）；`pet_slot_full_shown` 仍在抽屉关闭时带结果上报。
+8. 建档前名额摘要经路由 `extra` 带进建档页（`PetProfileCreatePage.slotOverview`），用于推 `slot_source`；直接进建档页（引导卡等）时 `slot_source = default`、`pet_index` 用已加载列表长度 + 1。
+9. 编辑页删除：`auth.hasPetProfile` 只在删最后一只时置 false（原来删档恒置 false，多宠下会把仍有宠物的用户误标）；保存成功额外 `invalidate(petListProvider)`（名字 / 头像在列表里也显示）。
+10. `ArchiveCalendar` 新增必填 `ownerPetId`；`DayDetailPage` 作者态读 `watchEffectivePetId`（无宠物 → 空日文案，列表失败 → 原失败态，换号重取中 → 转圈）。
+11. （code review #3）AC4.5「去掉已有档案直达守卫」**只对「+」添加流程生效**：`startAddPet` 进建档页带 `?add=1`（`PetProfileCreatePage.addFlow`）；不带该参数的存量入口（深链生命周期 push、游客页 / 示例页、Toko 建档按钮、Diary 失败兜底、「我的」页 / Diary 空态引导卡等）保留改版前的「已有档案直达」（已有宠物 → Diary Tab）。
+12. （code review #1）当前宠物偏好按账号绑定：新增偏好键 `petgo.currentPetOwner`；`resetUserScopedCaches(ref, userId:)` 调 `CurrentPetIdNotifier.bindUser` —— 同一账号（冷启动恢复）保留、不同账号清除；AC1.5 原写的「`clear()`」改为按账号判。
+13. （code review #4）`petListProvider` 跟随当前账号（watch 账号 id，游客 → 空列表不发请求）；`resetUserScopedCaches` 不再手动 invalidate 它（保留「换号 = isReloading」信号）。
+
+### code review 结果（2026-10-18，均已修复）
+
+1. **CONFIRMED · 冷启动清掉「记住上次查看」**：`resetUserScopedCaches` 冷启动恢复会话也会跑，原先一律 `clear()`。→ 改为按账号绑定（`bindUser`，偏好存主人 id）：同账号保留、换号（含登出后换人登录）清除；进程内直接换号同步清。测试：`test/profile/current_pet_provider_test.dart`（bindUser 组 5 条）、`test/app/reset_user_scoped_pet_test.dart`（经 `resetUserScopedCaches` 的冷启动保留 / 换号清除 / A → B 立即清 3 条）。
+2. **CONFIRMED · 「我的」页 diary 角标 / 性格小标不刷新**：凡失效 `archiveStatsProvider` 的 9 个文件与 Tailsonality 解锁 / 佩戴 / 卸下 3 处，同时 `invalidate(petListProvider)`。测试：`test/me/pet_list_refresh_guard_test.dart`（源码扫描守卫 + 正则自检，豁免 `app.dart` / quiz 重试并写明理由）、`me_page_test` 补「列表失效后角标 / 小标刷新」。
+3. **CONFIRMED · 单宠存量入口丢了「已有档案直达」**：见偏差 11（`?add=1`）。测试：`pet_profile_create_test` 补「?add=1 有档案也渲染表单 / 不带参数 + 有宠物 → 直达 Diary / 不带参数 + 无宠物 → 表单」，`add_pet_flow_test` 断言「+」带 `?add=1`。
+4. **PLAUSIBLE · 换号后 Diary 可能渲染上个账号的宠物**：`petListProvider` 跟随账号（偏差 13）；Diary 页在列表 `isReloading` 期间整页转圈（`diaryAccountSwitching`），档案不在本账号列表里时不渲染；健康 / 里程碑 / 某天详情页改用 `watchEffectivePetId`（换号重取中视为未定，不拿旧 petId 发请求）。测试：`growth_archive_state_branch_test` 补「换账号 → 重取期间不渲染上个账号宠物、不发按宠物请求，之后显示新账号宠物」。
+5. **PLAUSIBLE · 列表取不到时写操作悄悄落到默认宠物**：`requestPetIdProvider` / `readRequestPetId` / `peekEffectivePetId` 在未解析时改用用户选过的 `currentPetId`（后端校验归属，非本人 → 404），没选过才不带（默认宠物，与旧版同口径）。读操作同口径（读到的是用户选的那只；那只已删且列表也取不到时会落到该页失败态）。测试：`current_pet_provider_test` 补「列表失败 + 选过 → 带它」。
+
+### 待确认
+
+1. **A4 次按钮「Lihat Level Saya」**：按「待拍板 1」默认做法未渲染，`add_pet_flow.dart` 留固定 TODO（① 合入后加 `growthViewMyLevel` → `/me/growth`，`action = upgrade`）。
+2. **当前宠物档案加载失败（B3 之外）**：沿用现状落空态（`_EmptyProfileView`，不含切换器）；此时用户可从「我的」页点别的宠物切走，Diary 页本身没有切换入口。是否需要在失败态顶部也放切换器，请产品确认。
+3. **`PetAvatarItem` 默认尺寸**：UI 稿 A1 注「头像 56（原 64，2026-10-15 缩小）」，但现网代码他人主页仍是 64。本 story 只让「我的」页用 56、他人主页保持 64（不改其他调用方外观）；他人主页是否也要缩到 56，请确认。
+5. **`?add=1` 的取舍**（code review #3）：存量入口一律保留「已有档案直达」，所以多宠用户只能从「我的」页 / Diary 切换器的「+」新增宠物；空态引导卡等入口对已有宠物的用户仍直达 Diary。若产品希望别的入口也能直接加第二只，需逐个入口改成走 `startAddPet`。
+6. **列表取不到时读操作带 `currentPetId`**（code review #5）：选过的那只若已被删除（且列表也取不到），护照 / 身份证 / 性格结果等页会落失败态而不是默认宠物；如需读操作仍回落默认宠物，请确认。
+4. **删除默认宠物后的短暂闪现**：删掉的是默认宠物时，列表重取完成前（约一次请求时长）切换器 / 页面可能仍按旧列表算一帧，随后切到剩余宠物；L2 本地验收时留意。
+
 ### File List
 
+新增：
+- `petgo_app/lib/features/profile/data/pet_list_repository.dart`
+- `petgo_app/lib/features/profile/data/current_pet_provider.dart`
+- `petgo_app/lib/features/profile/presentation/widgets/pet_switcher.dart`
+- `petgo_app/lib/features/pet_slot/data/pet_slot_repository.dart`
+- `petgo_app/lib/features/pet_slot/presentation/add_pet_flow.dart`
+- `petgo_app/lib/features/pet_slot/presentation/pet_slot_page.dart`
+- `petgo_app/test/profile/current_pet_provider_test.dart`
+- `petgo_app/test/profile/pet_list_repository_test.dart`
+- `petgo_app/test/profile/pet_switcher_test.dart`
+- `petgo_app/test/pet_slot/add_pet_flow_test.dart`
+- `petgo_app/test/app/reset_user_scoped_pet_test.dart`（code review #1）
+- `petgo_app/test/me/pet_list_refresh_guard_test.dart`（code review #2）
+
+修改（lib）：
+- `petgo_app/lib/app.dart`
+- `petgo_app/lib/core/network/api_paths.dart`
+- `petgo_app/lib/core/router/app_router.dart`
+- `petgo_app/lib/shared/widgets/confirm_sheet.dart`
+- `petgo_app/lib/l10n/app_en.arb`、`petgo_app/lib/l10n/app_id.arb`
+- `petgo_app/lib/features/me/presentation/me_page.dart`
+- `petgo_app/lib/features/profile/data/{profile_repository,timeline_repository,milestone_repository,health_record_repository,id_card_repository,milestone_celebration_reporter}.dart`
+- `petgo_app/lib/features/profile/domain/milestone_share.dart`
+- `petgo_app/lib/features/profile/presentation/{growth_archive_page,day_detail_page,health_list_page,milestone_list_page,milestone_instant_celebration,pet_card_page,pet_insights_page,id_card_detail_page,pet_profile_create_page,pet_profile_edit_page}.dart`
+- `petgo_app/lib/features/profile/presentation/widgets/{archive_calendar,pet_avatar_item}.dart`
+- `petgo_app/lib/features/tailsonality/data/{tailsonality_repository,tailsonality_share_reward_repository,tailsonality_providers}.dart`
+- `petgo_app/lib/features/tailsonality/presentation/{tailsonality_quiz_page,tailsonality_results_page}.dart`、`.../share/{result_share_card,match_share_card}.dart`
+- `petgo_app/lib/features/pet_passport/data/{pet_passport_repository,passport_share_reward_repository}.dart`、`.../presentation/pet_passport_page.dart`、`.../presentation/share/passport_share_card.dart`
+- `petgo_app/lib/features/boarding_pass/data/boarding_pass_repository.dart`、`.../presentation/boarding_pass_detail_page.dart`、`.../presentation/share/boarding_pass_share_card.dart`
+- `petgo_app/lib/features/content/presentation/publish_compose_page.dart`
+- `petgo_app/lib/features/user_profile/data/public_profile_pet_repository.dart`、`.../presentation/public_profile_page.dart`
+- （code review #2 追加失效宠物列表）`petgo_app/lib/shared/widgets/app_shell.dart`、`petgo_app/lib/features/consult/presentation/consult_conversation_page.dart`、`petgo_app/lib/features/content/presentation/content_detail_page.dart`、`petgo_app/lib/features/triage/presentation/triage_result_view.dart`、`petgo_app/lib/features/tailsonality/presentation/{tailsonality_result_page,tailsonality_match_page}.dart`
+
+修改（test，只改调用形状 / 桩 + 新增用例）：
+- `petgo_app/test/analytics/v112_events_test.dart`（`'pet_'` 入表）
+- `petgo_app/test/me/me_page_test.dart`、`petgo_app/test/profile/{growth_archive_state_branch,pet_profile_create,pet_profile_edit}_test.dart`、`petgo_app/test/user_profile/public_profile_pet_test.dart`（新增用例）
+- 调用形状 / 桩：`test/boarding_pass/{boarding_pass,boarding_pass_share}_test.dart`、`test/content/{publish_compose,publish_checkin_link}_test.dart`、`test/keepsake/fake_share_reward_repos.dart`、`test/mention/mention_entry_test.dart`、`test/pet_passport/passport_snapshot_test.dart`、`test/place/place_checkin_test.dart`、`test/profile/{archive_prompt_dialog,calendar_cell_priority,calendar_week_start,diary_near_empty_state,diary_no_profile_guide,growth_archive_r2,growth_archive,health_focus_from_timeline,health_list_page,id_card_detail_page,id_card_page,id_card_share_reward_hint,id_card_watermark,milestone_checkin,milestone_instant_celebration,milestone_list,milestone_local_celebrated,milestone_share,newbie_card,pet_card_share_analytics,pet_insights,timeline_five_class_render,timeline_pagination,timeline_place_checkin,visitor_deeplink_routing}_test.dart`、`test/profile/milestone_instant_fakes.dart`、`test/shop/consult_shop_boundary_test.dart`、`test/social/{comment_profile_entry,follow_list_entry}_test.dart`、`test/tailsonality/{tailsonality_badge,tailsonality_entry_coachmark,tailsonality_match_unlock,tailsonality_quiz,tailsonality_unlock}_test.dart`、`test/user_profile/{public_profile_blocked_view,public_profile_follow,public_profile_page,public_profile_posts,public_profile_self_view}_test.dart`
+
 ### Change Log
+
+- 2026-10-18：实现 Story 1.5（App 多宠物：宠物列表 / Diary 切换器 / 他人主页列表 / 建档名额拦截 / 单只删除；`/me/*` 带 `?petId=`；Diary provider 按 petId 分族；三个埋点 + `'pet_'` 前缀入表；10 个新文案键 + R-1 改写）。L0 绿（analyze 0 issue；test 3477 / 1 skip / 0 fail），Status → review；L2 待本地验收。
+- 2026-10-18：code review 修复 5 项（当前宠物按账号绑定、宠物列表随发布 / 佩戴刷新、存量建档入口保留直达、换号期间不渲染上个账号宠物、未解析时请求带用户选过的宠物）。analyze 0 issue；test 3493 / 1 skip / 0 fail。

@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
@@ -11,6 +17,7 @@ import 'package:tailtopia/features/profile/domain/share_service.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
 import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/pet_avatar_item.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
 import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
@@ -49,8 +56,8 @@ Widget _wrap({
         onProfileFetch?.call();
         return profile;
       }),
-      timelineFirstPageProvider.overrideWith((ref) async => const TimelinePage(items: [])),
-      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+      timelineFirstPageProvider.overrideWith((ref, _) async => const TimelinePage(items: [])),
+      archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
           happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
     ],
@@ -219,4 +226,258 @@ void main() {
       expect(kUngatedTabs.contains(AppTab.me), isFalse);
     });
   });
+
+  // ===== V1.4.0 multi-pet Story 1.5 · AC3（UI 稿 B1 ~ B6）=====
+  group('V1.4.0 multi-pet：Diary Tab 宠物切换', () {
+    const pets = [
+      PetListItem(id: 1, name: 'Orenji', isDefault: true),
+      PetListItem(id: 2, name: 'Kopi'),
+    ];
+    const orenji = PetProfile(id: 1, name: 'Orenji', cardToken: 'T1');
+    const kopi = PetProfile(id: 2, name: 'Kopi', cardToken: 'T2');
+
+    late _MultiPetRepo repo;
+    late Map<int, int> timelineFetches;
+    late Set<int> failingTimeline;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      repo = _MultiPetRepo({1: orenji, 2: kopi});
+      timelineFetches = {};
+      failingTimeline = {};
+    });
+
+    Future<ProviderContainer> pump(WidgetTester tester, {List<PetListItem> list = pets}) async {
+      tester.view.physicalSize = const Size(1080, 3200);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      final c = ProviderContainer(overrides: [
+        authControllerProvider.overrideWith(() => _TestAuthController(_authWith(petStatus: 'HAS_PET'))),
+        // 不桩 petProfileProvider：走真实派生层（effectivePetIdProvider → getMyProfile(petId:)）。
+        profileRepositoryProvider.overrideWithValue(repo),
+        petListProvider.overrideWith((ref) async => list),
+        timelineFirstPageProvider.overrideWith((ref, petId) async {
+          timelineFetches[petId] = (timelineFetches[petId] ?? 0) + 1;
+          if (failingTimeline.contains(petId)) throw StateError('offline');
+          return const TimelinePage(items: []);
+        }),
+        archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
+            happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
+        shareFabAnimatedShownProvider.overrideWith((ref) async => true),
+      ]);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GrowthArchivePage(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return c;
+    }
+
+    Finder title(String name) => find.text("$name's Diary");
+
+    testWidgets('B1：切换器在页面最顶部、标题行之上；默认宠物高亮', (tester) async {
+      await pump(tester);
+
+      final switcher = find.byKey(const ValueKey('petSwitcher'));
+      expect(switcher, findsOneWidget);
+      expect(title('Orenji'), findsOneWidget);
+      expect(tester.getRect(switcher).bottom, lessThanOrEqualTo(tester.getRect(title('Orenji')).top));
+      expect(tester.widget<PetAvatarItem>(find.byKey(const ValueKey('petSwitcherItem-1'))).selected, isTrue);
+    });
+
+    testWidgets('B2：点另一只 → 立即高亮 + 标题行立即换名 + 数据区骨架；切换器仍可点', (tester) async {
+      final c = await pump(tester);
+      repo.hold(2); // Kopi 的档案请求挂起，停在「切换中」
+
+      await tester.tap(find.byKey(const ValueKey('petSwitcherItem-2')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(c.read(currentPetIdProvider), 2);
+      expect(find.byKey(const ValueKey('diarySwitching')), findsOneWidget);
+      expect(title('Kopi'), findsOneWidget, reason: '名字取列表项，不等档案请求');
+      expect(find.byKey(const ValueKey('diarySwitchingSpinner')), findsOneWidget);
+      expect(tester.widget<PetAvatarItem>(find.byKey(const ValueKey('petSwitcherItem-2'))).selected, isTrue);
+      // 不是整页居中转圈：切换器还在、可点。
+      expect(find.byKey(const ValueKey('petSwitcher')), findsOneWidget);
+
+      // 切换中再点回 Orenji：切换器照常响应。
+      await tester.tap(find.byKey(const ValueKey('petSwitcherItem-1')));
+      await tester.pumpAndSettle();
+      expect(c.read(currentPetIdProvider), 1);
+      expect(title('Orenji'), findsOneWidget);
+
+      // 再切到 Kopi 并放行请求 → 落到 Kopi 的档案页。
+      await tester.tap(find.byKey(const ValueKey('petSwitcherItem-2')));
+      await tester.pump();
+      repo.release(2);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('diarySwitching')), findsNothing);
+      expect(title('Kopi'), findsOneWidget);
+      expect(timelineFetches[2], 1, reason: '时间线按 petId 分族取当前宠物');
+    });
+
+    testWidgets('B3：时间线失败 → 失败白卡；重试只重取当前宠物这一页', (tester) async {
+      failingTimeline.add(1);
+      await pump(tester);
+
+      expect(find.byKey(const ValueKey('timelineError')), findsOneWidget);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.growthLoadFailed), findsOneWidget);
+      expect(find.text(l10n.growthLoadRetry), findsOneWidget);
+      final before1 = timelineFetches[1]!;
+
+      failingTimeline.clear();
+      await tester.tap(find.byKey(const ValueKey('timelineRetry')));
+      await tester.pumpAndSettle();
+
+      expect(timelineFetches[1], greaterThan(before1));
+      expect(timelineFetches[2], isNull, reason: '不连带别的宠物');
+      expect(find.byKey(const ValueKey('timelineError')), findsNothing);
+    });
+
+    testWidgets('B5：只有 1 只 → 切换器 = 1 个头像 +「+」', (tester) async {
+      await pump(tester, list: const [PetListItem(id: 1, name: 'Orenji', isDefault: true)]);
+      expect(find.byKey(const ValueKey('petSwitcher')), findsOneWidget);
+      expect(find.byKey(const ValueKey('petSwitcherItem-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('petSwitcherAdd')), findsOneWidget);
+    });
+
+    testWidgets('B6：没有宠物 → 现有空态，不渲染切换器', (tester) async {
+      await pump(tester, list: const []);
+      expect(find.byKey(const ValueKey('petSwitcher')), findsNothing);
+      expect(find.byKey(const ValueKey('growthCreateButton')), findsOneWidget);
+    });
+
+    testWidgets('记住上次查看：偏好里是 Kopi → 进来就停在 Kopi', (tester) async {
+      SharedPreferences.setMockInitialValues({CurrentPetIdNotifier.prefKey: 2});
+      await pump(tester);
+      expect(title('Kopi'), findsOneWidget);
+      expect(tester.widget<PetAvatarItem>(find.byKey(const ValueKey('petSwitcherItem-2'))).selected, isTrue);
+    });
+
+    testWidgets('code review #4：换账号 → 重取期间不渲染上个账号的宠物，也不拿它的 petId 取数', (tester) async {
+      tester.view.physicalSize = const Size(1080, 3200);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      const mochi = PetProfile(id: 3, name: 'Mochi', cardToken: 'T3');
+      final repoAB = _MultiPetRepo({1: orenji, 2: kopi, 3: mochi});
+      final gateB = Completer<void>();
+      final c = ProviderContainer(overrides: [
+        authControllerProvider.overrideWith(() => _TestAuthController(const AuthState(
+            status: AuthStatus.authenticated,
+            role: 'USER',
+            profile: UserProfile(id: 1, petStatus: 'HAS_PET')))),
+        profileRepositoryProvider.overrideWithValue(repoAB),
+        // 与真实 provider 同样跟随当前账号（依赖变化 → reload）。
+        petListProvider.overrideWith((ref) async {
+          final uid = ref.watch(authControllerProvider.select((s) => s.profile?.id));
+          if (uid == 2) {
+            await gateB.future;
+            return const [PetListItem(id: 3, name: 'Mochi', isDefault: true)];
+          }
+          return pets;
+        }),
+        timelineFirstPageProvider.overrideWith((ref, petId) async {
+          timelineFetches[petId] = (timelineFetches[petId] ?? 0) + 1;
+          return const TimelinePage(items: []);
+        }),
+        archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
+            happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
+        shareFabAnimatedShownProvider.overrideWith((ref) async => true),
+      ]);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GrowthArchivePage(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(title('Orenji'), findsOneWidget);
+      final fetchesBefore = Map<int, int>.of(timelineFetches);
+
+      // 换到账号 B（列表还没回来）。
+      c.read(authControllerProvider.notifier)
+          .applyProfile(const UserProfile(id: 2, petStatus: 'HAS_PET'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('diaryAccountSwitching')), findsOneWidget);
+      expect(title('Orenji'), findsNothing, reason: '不得渲染上个账号的宠物');
+      expect(find.byKey(const ValueKey('petSwitcher')), findsNothing);
+      expect(timelineFetches, fetchesBefore, reason: '换号重取期间不发按宠物的请求');
+
+      gateB.complete();
+      await tester.pumpAndSettle();
+      expect(title('Mochi'), findsOneWidget);
+      expect(title('Orenji'), findsNothing);
+    });
+
+    testWidgets('记住的那只已删除 → 回落默认宠物', (tester) async {
+      SharedPreferences.setMockInitialValues({CurrentPetIdNotifier.prefKey: 99});
+      await pump(tester);
+      expect(title('Orenji'), findsOneWidget);
+    });
+
+    // ===== V1.4.0 multi-pet Story 2.4 · AC5.2（UI 稿 B4）=====
+    testWidgets('B4：当前宠物只读 → 页头前插只读横幅、编辑铅笔隐藏、上报 pet_readonly_banner_shown（无宠物名）',
+        (tester) async {
+      final events = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+      await pump(tester, list: const [
+        PetListItem(id: 1, name: 'Orenji', isDefault: true, status: PetListItem.statusReadOnly),
+        PetListItem(id: 2, name: 'Kopi'),
+      ]);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final banner = find.byKey(const ValueKey('petReadonlyBanner'));
+      expect(banner, findsOneWidget);
+      expect(find.text(l10n.petReadonlyBannerTitle), findsOneWidget);
+      expect(find.text(l10n.petReadonlyBannerBody), findsOneWidget);
+      expect(find.byKey(const ValueKey('petReadonlyBannerRenew')), findsOneWidget);
+      expect(tester.getRect(banner).bottom, lessThanOrEqualTo(tester.getRect(title('Orenji')).top),
+          reason: '横幅在 DiaryHeader 之前');
+      expect(find.byKey(const ValueKey('editProfileButton')), findsNothing);
+      final shown = events.where((e) => e.$1 == 'pet_readonly_banner_shown').toList();
+      expect(shown, hasLength(1));
+      expect(shown.single.$2?.values.contains('Orenji') ?? false, isFalse);
+    });
+
+    testWidgets('B4：正常宠物零变化（无横幅、铅笔在）', (tester) async {
+      await pump(tester);
+      expect(find.byKey(const ValueKey('petReadonlyBanner')), findsNothing);
+      expect(find.byKey(const ValueKey('editProfileButton')), findsOneWidget);
+    });
+  });
+}
+
+/// 按 petId 返回档案；[hold] 的宠物请求挂起到 [release]。
+class _MultiPetRepo implements ProfileRepository {
+  _MultiPetRepo(this.byId);
+
+  final Map<int, PetProfile> byId;
+  final Map<int, Completer<void>> _gates = {};
+
+  void hold(int petId) => _gates[petId] = Completer<void>();
+  void release(int petId) => _gates.remove(petId)?.complete();
+
+  @override
+  Future<PetProfile?> getMyProfile({int? petId}) async {
+    final gate = _gates[petId];
+    if (gate != null) await gate.future;
+    return byId[petId] ?? byId.values.first;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

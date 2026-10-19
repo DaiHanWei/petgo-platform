@@ -11,7 +11,9 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../pet_passport/data/pet_passport_repository.dart';
-import '../../profile/data/profile_repository.dart';
+import '../../profile/data/milestone_repository.dart';
+import '../../profile/data/pet_list_repository.dart';
+import '../../profile/presentation/widgets/pet_picker_sheet.dart';
 import '../data/location_service.dart';
 import '../data/place_repository.dart';
 import 'place_checkin_success_page.dart';
@@ -28,13 +30,22 @@ import 'place_location_controller.dart';
 ///
 /// 🛡 坐标只进这一个请求体：不 log、不进埋点、不进 toast。
 class PlaceCheckinButton extends ConsumerStatefulWidget {
-  const PlaceCheckinButton({super.key, required this.token, required this.checkedInToday});
+  const PlaceCheckinButton({
+    super.key,
+    required this.token,
+    required this.checkedInToday,
+    this.checkedInPetIds,
+  });
 
   /// 详情页的场所 token（打卡后按它刷新详情）。
   final String token;
 
-  /// 服务端下发的「今日已打卡」（游客 null）。
+  /// 服务端下发的「今日已打卡」（游客 null）。V1.4.0 multi-pet Story 1.3 起 = 全部正常宠物都打过才 true。
   final bool? checkedInToday;
+
+  /// 今天已在此打过卡的本人宠物 id（V1.4.0 multi-pet Story 1.3 / 3.3）：选宠物抽屉据此置灰。
+  /// null = 服务端没下发 → 抽屉不置灰任何行，靠提交时 409 兜底。
+  final List<int>? checkedInPetIds;
 
   @override
   ConsumerState<PlaceCheckinButton> createState() => _PlaceCheckinButtonState();
@@ -42,6 +53,12 @@ class PlaceCheckinButton extends ConsumerStatefulWidget {
 
 class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
   bool _submitting = false;
+
+  /// 本次流程看到的正常宠物数（409 分流用：1 只 = 改造前口径）。
+  int _activeCount = 1;
+
+  /// 选宠物抽屉开着（仍算流程中、防重复点击）：按钮不转圈 —— 抽屉关掉 = 取消，转圈只会多一个中间态。
+  bool _choosing = false;
 
   /// 本页刚打卡成功 / 刚收到 409 → 直接切禁用态，不等详情重拉回来。
   bool _doneLocally = false;
@@ -62,7 +79,7 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
           disabledBackgroundColor: AppColors.line2,
           disabledForegroundColor: AppColors.muted,
         ),
-        child: _submitting
+        child: _submitting && !_choosing
             ? const SizedBox.square(
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
@@ -122,28 +139,75 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
         if (mounted) showAppToast(context, l10n.placeCheckinLocationUnavailable);
         return;
       }
-      final pet = await ref.read(petProfileProvider.future);
-      if (pet == null) {
+      // V1.4.0 multi-pet Story 3.3 · AC5.1：只列正常（ACTIVE）宠物，只读的不出现（不是置灰）。
+      final all = await ref.read(petListProvider.future);
+      final active = [for (final p in all) if (!p.isReadOnly) p];
+      if (active.isEmpty) {
         if (mounted) showAppToast(context, l10n.placeCheckinNoPet);
         return;
+      }
+      _activeCount = active.length;
+      final already = {...?widget.checkedInPetIds};
+      final List<PetListItem> chosen;
+      if (active.length == 1) {
+        // G4：只有一只正常宠物 → 不弹选择器，直接提交它（改造前流程）。
+        chosen = active;
+      } else {
+        // G1 / G2：选宠物抽屉；关闭 = 取消本次打卡（按钮复位，不 Toast）。
+        if (!mounted) return;
+        setState(() => _choosing = true);
+        final List<int>? picked;
+        try {
+          picked = await showPetPickerSheet(
+            context,
+            pets: active,
+            title: l10n.petPickerCheckinTitle,
+            body: l10n.petPickerCheckinBody,
+            disabledPetIds: already,
+            disabledSubtitle: l10n.petPickerCheckedInHere,
+            submitLabel: l10n.petPickerCheckinSubmit,
+          );
+        } finally {
+          if (mounted) setState(() => _choosing = false);
+        }
+        if (picked == null || picked.isEmpty || !mounted) return;
+        chosen = [for (final p in active) if (picked.contains(p.id)) p];
       }
       // 🔴 原始精度提交（不经 placeDetailQueryFor 的三位小数归一）。
       final result = await repo.checkIn(
         widget.token,
         latitude: coords.latitude,
         longitude: coords.longitude,
-        petIds: [pet.id],
+        petIds: [for (final p in chosen) p.id],
       );
-      _doneLocally = true;
+      // 全部正常宠物今天都打过了才切「已打卡」禁用态（与后端 checkedInToday 同口径）；否则等详情重拉。
+      _doneLocally = active.every((p) => already.contains(p.id) || chosen.any((c) => c.id == p.id));
       invalidatePlaceDetailIn(container, widget.token);
       // Story 1.2 复审：栈里可能已有一个护照页（空态「Cari Tempat」→ 列表 → 打卡），
       // 不失效的话「Lihat Paspor」拿到的是缓存的旧护照，看不到新章、也定位不到它。
       container.invalidate(petPassportProvider);
-      // 新章才需要 Rive：后台初始化通常早已完成；没完成最多再等 500ms，等不到就不播（直接成功页）。
-      final playCeremony = result.isNewStamp && await RiveRuntime.ensureReady();
+      // V1.4.0 multi-pet Story 3.3 · AC5.5：每只所选宠物的里程碑（petId family）都失效。
+      for (final p in chosen) {
+        container.invalidate(milestoneListProvider(p.id));
+      }
+      // 逐宠物的章（1.3）；老后端没下发 → 每只都按顶层字段（降级，「待确认」）。
+      final stamps = {for (final s in result.pets) s.petId: s};
+      final petArgs = [
+        for (final p in chosen)
+          PlaceCheckinPetArgs(
+            petId: p.id,
+            name: p.name,
+            avatarUrl: p.avatarUrl,
+            isNewStamp: stamps[p.id]?.isNewStamp ?? result.isNewStamp,
+            visitCount: stamps[p.id]?.visitCount ?? result.visitCount,
+          ),
+      ];
+      final args = PlaceCheckinSuccessArgs(result: result, petName: chosen.first.name, pets: petArgs);
+      // 新章才需要 Rive（AC6.4：任一所选宠物是新章就播一次，章面是场所章、各宠物相同）：后台初始化通常早已完成；
+      // 没完成最多再等 500ms，等不到就不播（直接成功页）。
+      final playCeremony = args.anyNewStamp && await RiveRuntime.ensureReady();
       if (!mounted) return;
       final placeToken = result.placeToken.isEmpty ? widget.token : result.placeToken;
-      final args = PlaceCheckinSuccessArgs(result: result, petName: pet.name);
       // V1.3.4 签到盖章动画：新章先进全屏动画页（结束后它 pushReplacement 成功页，返回仍回详情）；
       // 再访、或 Rive 原生库不可用时跳过动画页，直接成功页（ceremonyPlayed 为 false，保留小落章）。
       context.push(
@@ -166,7 +230,15 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
   void _onFailure(AppLocalizations l10n, DioException e, ProviderContainer container) {
     final slug = ProblemDetail.fromDioException(e)?.typeSlug;
     if (slug == 'checkin-already-today') {
-      _doneLocally = true;
+      if (_activeCount <= 1) {
+        // 单只正常宠物：与改造前一致 —— 直接切「已打卡」禁用态。
+        _doneLocally = true;
+        return;
+      }
+      // V1.4.0 multi-pet Story 3.3 · AC5.4：多宠（并发 / 状态过期）→ 刷新详情（逐宠物今日状态）+ 现有失败文案，
+      // 不进成功页；按钮保持可点，抽屉按新状态置灰。
+      invalidatePlaceDetailIn(container, widget.token);
+      if (mounted) showAppToast(context, l10n.placeCheckinFailed);
       return;
     }
     if (e.response?.statusCode == 404 || slug == 'not-found') {

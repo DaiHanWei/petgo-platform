@@ -229,7 +229,7 @@ class _BadgeRepo implements TailsonalityRepository {
       );
 
   @override
-  Future<List<TailsonalityResult>> fetchResults() async => items;
+  Future<List<TailsonalityResult>> fetchResults({int? petId}) async => items;
 
   @override
   Future<void> equipBadge(String resultToken) async {
@@ -242,7 +242,7 @@ class _BadgeRepo implements TailsonalityRepository {
   }
 
   @override
-  Future<void> unequipBadge() async {
+  Future<void> unequipBadge({int? petId}) async {
     unequipCalls++;
     items = [for (final x in items) _with(x, false)];
   }

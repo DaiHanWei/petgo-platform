@@ -59,13 +59,18 @@ public class AdminUserController {
     /** V1.4.0 ① Story 4.2：「成长值」页签取数（随抽屉同一次渲染）。 */
     private final com.tailtopia.admin.growth.service.AdminGrowthUserService growth;
 
+    /** V1.4.0 ② Story 4.3：「宠物与名额」页签取数（随抽屉同一次渲染，切页签不再请求）。 */
+    private final com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs;
+
     public AdminUserController(AdminUserService adminUserService,
             Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases,
-            com.tailtopia.admin.growth.service.AdminGrowthUserService growth) {
+            com.tailtopia.admin.growth.service.AdminGrowthUserService growth,
+            com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs) {
         this.adminUserService = adminUserService;
         this.msg = msg;
         this.purchases = purchases;
         this.growth = growth;
+        this.petSlotTabs = petSlotTabs;
     }
 
     @GetMapping("/admin/users")
@@ -137,6 +142,9 @@ public class AdminUserController {
         // 第七页签「成长值」（V1.4.0 ① Story 4.2）：概览 + 明细第 1 页；调整表单另用一枚一次性 token（幂等键 ADMIN:{token}）。
         model.addAttribute("growthTab", growth.tab(userId));
         model.addAttribute("growthGrantToken", java.util.UUID.randomUUID().toString());
+        // V1.4.0 ② Story 4.3：「宠物与名额」页签（只读四块 + 补发卡）与补发表单的一次性幂等 token。
+        model.addAttribute("petSlotsTab", petSlotTabs.tab(userId));
+        model.addAttribute("petSlotGrantToken", java.util.UUID.randomUUID().toString());
     }
 
     /**

@@ -59,6 +59,9 @@ class PlaceCheckinServiceTest {
     private final PlaceStampQueryService stamps = mock(PlaceStampQueryService.class);
     private final org.springframework.context.ApplicationEventPublisher events =
             mock(org.springframework.context.ApplicationEventPublisher.class);
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
 
     private Place place;
 
@@ -67,7 +70,7 @@ class PlaceCheckinServiceTest {
 
     private PlaceCheckinService serviceAt(Instant now) {
         return new PlaceCheckinService(places, checkins, checkinPets, pets, tokens, passports, stamps,
-                events, Clock.fixed(now, ZoneOffset.UTC));
+                events, petWriteGuard, Clock.fixed(now, ZoneOffset.UTC));
     }
 
     @BeforeEach
@@ -76,7 +79,9 @@ class PlaceCheckinServiceTest {
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE), LAT, LNG, "Jl. A", null, 1L, "Jakarta");
         ReflectionTestUtils.setField(place, "id", PLACE_ID);
         when(places.resolveForView(anyString())).thenReturn(Optional.of(place));
-        when(pets.findPetIdByOwner(USER)).thenReturn(Optional.of(PET));
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of(PET));
+        // Story 2.1：正常宠物 = 全部宠物（本类既有用例都没有只读宠物），跟随各用例对 findPetIdsByOwner 的桩。
+        when(pets.findActivePetIdsByOwner(USER)).thenAnswer(inv -> pets.findPetIdsByOwner(USER));
         com.tailtopia.passport.domain.PetPassport pp = org.mockito.Mockito.mock(
                 com.tailtopia.passport.domain.PetPassport.class);
         when(pp.getPassportNo()).thenReturn("TT02P2600128");
@@ -152,7 +157,7 @@ class PlaceCheckinServiceTest {
 
     @Test
     void noPetProfileIs422NoPet() {
-        when(pets.findPetIdByOwner(USER)).thenReturn(Optional.empty());
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of());
 
         assertThatThrownBy(() -> serviceAt(NOON_WIB).checkIn("t", USER, at(LAT)))
                 .satisfies(t -> assertProblem(t, ErrorTypes.CHECKIN_NO_PET, HttpStatus.UNPROCESSABLE_ENTITY));
@@ -165,6 +170,22 @@ class PlaceCheckinServiceTest {
             assertThatThrownBy(() -> s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, ids)))
                     .satisfies(t -> assertProblem(t, ErrorTypes.CHECKIN_PET_FORBIDDEN, HttpStatus.FORBIDDEN));
         }
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · X18）：账号两只宠物都可被选；含他人 petId 仍 403。 */
+    @Test
+    void bothOwnPetsSelectableButForeignPetIs403() {
+        long second = 71L;
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of(PET, second));
+        stubPassport(second, "TT02P2600129");
+        PlaceCheckinService s = serviceAt(NOON_WIB);
+
+        PlaceCheckinResponse r = s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(PET, second)));
+        assertThat(r.checkinToken()).hasSize(32);
+        verify(checkinPets, org.mockito.Mockito.times(2)).saveAndFlush(any());
+
+        assertThatThrownBy(() -> s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(second, 999L))))
+                .satisfies(t -> assertProblem(t, ErrorTypes.CHECKIN_PET_FORBIDDEN, HttpStatus.FORBIDDEN));
     }
 
     @Test
@@ -269,11 +290,165 @@ class PlaceCheckinServiceTest {
 
     @Test
     void checkedInTodayUsesTheWibDay() {
-        when(checkins.existsForUserOnDay(eq(USER), eq(PLACE_ID), eq(LocalDate.of(2026, 10, 1))))
+        // V1.4.0 multi-pet（Story 1.3）：改为逐宠物判定（existsForPetOnDay），不再按账号查 existsForUserOnDay。
+        when(checkins.existsForPetOnDay(eq(PET), eq(PLACE_ID), eq(LocalDate.of(2026, 10, 1))))
                 .thenReturn(true);
 
-        assertThat(serviceAt(Instant.parse("2026-09-30T17:00:00Z")).checkedInToday(USER, PLACE_ID)).isTrue();
-        assertThat(serviceAt(Instant.parse("2026-09-30T16:59:00Z")).checkedInToday(USER, PLACE_ID)).isFalse();
-        verify(checkins, never()).existsForPetOnDay(anyLong(), anyLong(), any());
+        assertThat(serviceAt(Instant.parse("2026-09-30T17:00:00Z")).checkedInToday(USER, PLACE_ID)
+                .allCheckedIn()).isTrue();
+        assertThat(serviceAt(Instant.parse("2026-09-30T16:59:00Z")).checkedInToday(USER, PLACE_ID)
+                .allCheckedIn()).isFalse();
+        verify(checkins, never()).existsForUserOnDay(anyLong(), anyLong(), any());
+    }
+
+    // ---- V1.4.0 multi-pet Story 1.3 · AC4：逐宠物判定 / 逐宠物盖章 ----
+
+    private static final long PET_B = 71L;
+    private static final LocalDate TODAY = LocalDate.of(2026, 9, 30);
+
+    private void stubPassport(long petId, String no) {
+        com.tailtopia.passport.domain.PetPassport pp = org.mockito.Mockito.mock(
+                com.tailtopia.passport.domain.PetPassport.class);
+        when(pp.getPassportNo()).thenReturn(no);
+        when(passports.ensureIssued(petId, USER)).thenReturn(pp);
+    }
+
+    private void twoPets() {
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of(PET, PET_B));
+        stubPassport(PET_B, "TT02P2600129");
+        when(stamps.stampCountOf(PET_B)).thenReturn(1);
+    }
+
+    /** AC4.4：A 今天已打、B 未打 → checkedInPetIds = [A]、全部已打 = false。 */
+    @Test
+    void checkedInTodayIsPerPet() {
+        twoPets();
+        when(checkins.existsForPetOnDay(PET, PLACE_ID, TODAY)).thenReturn(true);
+
+        CheckinTodayStatus st = serviceAt(NOON_WIB).checkedInToday(USER, PLACE_ID);
+
+        assertThat(st.checkedInPetIds()).containsExactly(PET);
+        assertThat(st.allCheckedIn()).isFalse();
+    }
+
+    @Test
+    void checkedInTodayAllPetsCheckedIn() {
+        twoPets();
+        when(checkins.existsForPetOnDay(PET, PLACE_ID, TODAY)).thenReturn(true);
+        when(checkins.existsForPetOnDay(PET_B, PLACE_ID, TODAY)).thenReturn(true);
+
+        CheckinTodayStatus st = serviceAt(NOON_WIB).checkedInToday(USER, PLACE_ID);
+
+        assertThat(st.checkedInPetIds()).containsExactly(PET, PET_B);
+        assertThat(st.allCheckedIn()).isTrue();
+    }
+
+    @Test
+    void checkedInTodayWithoutPetsIsNotAllCheckedIn() {
+        when(pets.findPetIdsByOwner(USER)).thenReturn(List.of());
+
+        CheckinTodayStatus st = serviceAt(NOON_WIB).checkedInToday(USER, PLACE_ID);
+
+        assertThat(st.allCheckedIn()).isFalse();
+        assertThat(st.checkedInPetIds()).isEmpty();
+    }
+
+    /** AC4.4：A 已打，同时选 A、B → 409；只选 B → 成功。 */
+    @Test
+    void anySelectedPetAlreadyCheckedInIs409ButOtherPetAloneSucceeds() {
+        twoPets();
+        when(checkins.existsForPetOnDay(PET, PLACE_ID, TODAY)).thenReturn(true);
+        PlaceCheckinService s = serviceAt(NOON_WIB);
+
+        assertThatThrownBy(() -> s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(PET, PET_B))))
+                .satisfies(t -> assertProblem(t, ErrorTypes.CHECKIN_ALREADY_TODAY, HttpStatus.CONFLICT));
+        verify(checkins, never()).saveAndFlush(any());
+
+        PlaceCheckinResponse r = s.checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(PET_B)));
+        assertThat(r.passportNo()).isEqualTo("TT02P2600129");
+        assertThat(r.pets()).extracting(PlaceCheckinResponse.PetStamp::petId).containsExactly(PET_B);
+        verify(passports, never()).ensureIssued(PET, USER);
+    }
+
+    /** AC4.4：都没打过，同时选 A、B → 一条打卡行 + 两条关联，两只各自护照 / 各自新章；顶层 = 第一只。 */
+    @Test
+    void twoPetsEachGetTheirOwnStamp() {
+        twoPets();
+        when(checkins.countForPetAtPlace(PET, PLACE_ID)).thenReturn(0L, 1L);
+        when(checkins.countForPetAtPlace(PET_B, PLACE_ID)).thenReturn(0L, 1L);
+
+        PlaceCheckinResponse r = serviceAt(NOON_WIB)
+                .checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(PET, PET_B)));
+
+        verify(checkins, org.mockito.Mockito.times(1)).saveAndFlush(any(PlaceCheckin.class));
+        verify(checkinPets, org.mockito.Mockito.times(2)).saveAndFlush(any());
+        verify(passports).ensureIssued(PET, USER);
+        verify(passports).ensureIssued(PET_B, USER);
+        assertThat(r.pets()).hasSize(2);
+        assertThat(r.pets().get(0)).isEqualTo(new PlaceCheckinResponse.PetStamp(PET, true, 1L, "TT02P2600128", 4));
+        assertThat(r.pets().get(1)).isEqualTo(new PlaceCheckinResponse.PetStamp(PET_B, true, 1L, "TT02P2600129", 1));
+        // 顶层单宠字段 = 第一只（兼容旧版 App）。
+        assertThat(r.isNewStamp()).isTrue();
+        assertThat(r.visitCount()).isEqualTo(1L);
+        assertThat(r.passportNo()).isEqualTo("TT02P2600128");
+        assertThat(r.stampCount()).isEqualTo(4);
+    }
+
+    /** 每只宠物各自判新章：A 来过、B 首次 → A 非新章、B 新章；事件字段按第一只。 */
+    @Test
+    void newStampIsComputedPerPet() {
+        twoPets();
+        when(checkins.countForPetAtPlace(PET, PLACE_ID)).thenReturn(2L, 3L);
+        when(checkins.countForPetAtPlace(PET_B, PLACE_ID)).thenReturn(0L, 1L);
+
+        PlaceCheckinResponse r = serviceAt(NOON_WIB)
+                .checkIn("t", USER, new PlaceCheckinRequest(LAT, LNG, List.of(PET, PET_B)));
+
+        assertThat(r.pets()).extracting(PlaceCheckinResponse.PetStamp::isNewStamp).containsExactly(false, true);
+        assertThat(r.pets()).extracting(PlaceCheckinResponse.PetStamp::visitCount).containsExactly(3L, 1L);
+        assertThat(r.isNewStamp()).isFalse();
+        assertThat(r.visitCount()).isEqualTo(3L);
+        org.mockito.ArgumentCaptor<Object> ev = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue()).isEqualTo(new com.tailtopia.place.event.PlaceCheckedInEvent(
+                USER, place.getPublicToken(), PlaceType.CAFE, false, 4, List.of(PET, PET_B), 9001L));
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #2）：所选宠物有只读 → 409 pet-read-only，不写打卡行。 */
+    @Test
+    void readOnlySelectedPetRejected409WithoutWrites() {
+        org.mockito.Mockito.doThrow(AppException.petReadOnly(PET)).when(petWriteGuard).requireWritable(PET);
+
+        assertThatThrownBy(() -> serviceAt(NOON_WIB).checkIn("t", USER, at(LAT)))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getType()).isEqualTo(ErrorTypes.PET_READ_ONLY);
+                });
+        verify(checkins, never()).saveAndFlush(any());
+        verify(checkinPets, never()).saveAndFlush(any());
+        verify(passports, never()).ensureIssued(anyLong(), anyLong());
+    }
+
+    /** Story 2.1：归属先于可写——含非本人宠物仍 403 checkin-pet-forbidden，不走 guard。 */
+    @Test
+    void foreignPetStill403BeforeWritability() {
+        PlaceCheckinRequest req = new PlaceCheckinRequest(LAT, LNG, List.of(999L));
+        assertThatThrownBy(() -> serviceAt(NOON_WIB).checkIn("t", USER, req))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getType()).isEqualTo(ErrorTypes.CHECKIN_PET_FORBIDDEN));
+        verify(petWriteGuard, never()).requireWritable(anyLong());
+    }
+
+    /** Story 2.1：「全部已打卡」只算正常宠物——只读的 B 没打卡也算全部已打。 */
+    @Test
+    void allCheckedInCountsOnlyActivePets() {
+        twoPets();
+        when(pets.findActivePetIdsByOwner(USER)).thenReturn(List.of(PET));
+        when(checkins.existsForPetOnDay(PET, PLACE_ID, TODAY)).thenReturn(true);
+
+        CheckinTodayStatus st = serviceAt(NOON_WIB).checkedInToday(USER, PLACE_ID);
+
+        assertThat(st.checkedInPetIds()).containsExactly(PET);
+        assertThat(st.allCheckedIn()).isTrue();
     }
 }

@@ -125,9 +125,12 @@ public class PlaceQueryService {
         int slotsRemaining = (int) (PlacePhotoService.MAX_PHOTOS_PER_PLACE
                 - photos.countOccupyingSlots(p.getId()));
         // V1.3.2 Story 1.1 AC3：登录用户才查「今日已打卡」；游客为 null → 省略该键（不查打卡表）。
-        Boolean checkedInToday = viewerId == null ? null : checkins.checkedInToday(viewerId, p.getId());
+        // V1.4.0 multi-pet（Story 1.3）：逐宠物判定；checkedInToday = 全部宠物都已打（单宠物语义不变）。
+        CheckinTodayStatus today = viewerId == null ? null : checkins.checkedInToday(viewerId, p.getId());
         return PlaceDetailResponse.of(p, markedBy, photoViews, distance, commentCount,
-                attitudes.recommend(), attitudes.notRecommend(), slotsRemaining, checkedInToday);
+                attitudes.recommend(), attitudes.notRecommend(), slotsRemaining,
+                today == null ? null : today.allCheckedIn(),
+                today == null ? null : today.checkedInPetIds());
     }
 
     /**

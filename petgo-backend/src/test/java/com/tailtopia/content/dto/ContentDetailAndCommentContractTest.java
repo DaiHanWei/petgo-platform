@@ -63,7 +63,9 @@ class ContentDetailAndCommentContractTest {
                 // V1.3.4 Story 2.1：每张图的露出位置（与 imageUrls 同序；null 元素原样下发）。
                 java.util.Arrays.asList(1.0, null),
                 // V1.4.0 ① Story 3.1：作者等级三字段。
-                7, "BUDDY", "BASIC");
+                7, "BUDDY", "BASIC",
+                // V1.4.0 multi-pet Story 3.1：Moment 无关联宠物 → null 省略（形态见 diaryPetsKeyShape）。
+                null);
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
@@ -91,14 +93,37 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
         // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略。
         assertThat(wire(d)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
+        // V1.4.0 multi-pet Story 3.1：无关联宠物不下发 pets。
+        assertThat(wire(d)).doesNotContainKey("pets");
         // V1.3.4：作者已注销 / 封号时 token 与关注关系不下发。
         assertThat(wire(d)).doesNotContainKey("authorToken").doesNotContainKey("authorFollowState");
         // V1.3.4 Story 2.1：存量 / 无超界图的帖不下发露出位置（App 无值即居中）。
         assertThat(wire(d)).doesNotContainKey("imageCropOffsets");
+    }
+
+    /** V1.4.0 multi-pet Story 3.1 · AC8：Diary 关联宠物 → {@code pets} 数组，每项四键，顺序原样（第一只在前）。 */
+    @Test
+    void diaryPetsKeyShape() {
+        ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
+                ContentType.GROWTH_MOMENT, "正文", List.of(), null, 0L, 0L, false, false,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
+                null, null, null, null, null,
+                // V1.4.0 ① Story 3.1：作者等级三字段（null → 省略）。
+                null, null, null,
+                List.of(new ContentPetView(21L, "Mochi", "https://cdn/m.jpg", "CAT"),
+                        new ContentPetView(22L, "Bolu", null, "DOG")));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> pets = (List<Map<String, Object>>) wire(d).get("pets");
+        assertThat(pets).hasSize(2);
+        assertThat(pets.get(0).keySet()).isEqualTo(Set.of("petId", "name", "avatarUrl", "petType"));
+        assertThat(((Number) pets.get(0).get("petId")).longValue()).isEqualTo(21L);
+        assertThat(pets.get(0)).containsEntry("petType", "CAT");
+        // NON_NULL：没头像的那只省略 avatarUrl 键。
+        assertThat(pets.get(1).keySet()).isEqualTo(Set.of("petId", "name", "petType"));
     }
 
     @Test

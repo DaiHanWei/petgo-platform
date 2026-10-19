@@ -20,7 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 任务完成态由既有里程碑完成（S1–S5）与 {@code health_records} 存在性推导，独立计数。
  *
  * <p>解锁副作用（6 任务全达成 → 完成 Lulus Pemula）由 {@link MilestoneCompletionService}
- * 承载（运行时事件触发），本服务不写。单宠假设：沿用 {@code findByOwnerId}（每 owner 单档案）。
+ * 承载（运行时事件触发），本服务不写。V1.4.0 multi-pet（Story 1.3 · P-2）：对账号全部宠物，
+ * 每项任务「任意一只完成即算」；Lulus Pemula 已解锁 = 任一只已解锁。
  */
 @Service
 public class NewbieTaskService {
@@ -38,28 +39,28 @@ public class NewbieTaskService {
         this.healthRecords = healthRecords;
     }
 
-    /** 当前用户 6 新手任务进度（无档案 → 404 防枚举）。 */
+    /** 当前用户 6 新手任务进度（无档案 → 404 防枚举）。每项任务账号下任意一只宠物完成即算（P-2）。 */
     @Transactional(readOnly = true)
     public NewbieTaskResponse progress(long ownerId) {
-        PetProfile pet = profiles.findByOwnerId(ownerId)
-                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
-        long petProfileId = pet.getId();
-        PetType petType = pet.getPetType();
+        List<PetProfile> pets = profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId);
+        if (pets.isEmpty()) {
+            throw AppException.notFound("尚未创建宠物档案");
+        }
 
         List<NewbieTaskResponse.Item> items = new ArrayList<>();
         int done = 0;
         for (NewbieTask task : NewbieTask.ALL) {
-            boolean completed = task.isHealthRecord()
-                    ? healthRecords.existsByPetProfileId(petProfileId)
-                    : isMilestoneDone(petProfileId, petType, task.milestoneSuffix());
+            boolean completed = pets.stream().anyMatch(pet -> task.isHealthRecord()
+                    ? healthRecords.existsByPetProfileId(pet.getId())
+                    : isMilestoneDone(pet.getId(), pet.getPetType(), task.milestoneSuffix()));
             if (completed) {
                 done++;
             }
             items.add(new NewbieTaskResponse.Item(task.name(), completed));
         }
 
-        boolean lulusUnlocked = isMilestoneDoneByCode(
-                petProfileId, MilestoneCatalog.lulusPemulaCode(petType));
+        boolean lulusUnlocked = pets.stream().anyMatch(pet -> isMilestoneDoneByCode(
+                pet.getId(), MilestoneCatalog.lulusPemulaCode(pet.getPetType())));
         return new NewbieTaskResponse(items, done, NewbieTask.ALL.size(), lulusUnlocked);
     }
 

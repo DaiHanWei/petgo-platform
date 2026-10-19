@@ -5,6 +5,7 @@ import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.domain.SessionStatus;
 import com.tailtopia.consult.event.ConsultRequestFailedEvent;
 import com.tailtopia.consult.event.ConsultRequestQueuedEvent;
+import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.triage.domain.DangerLevel;
@@ -45,10 +46,12 @@ public class ConsultSessionService {
     private final ApplicationEventPublisher events;
     private final VetPresenceService presence;
     private final VetAccountService vetAccounts;
+    private final ConsultOrderRepository orders;
 
     public ConsultSessionService(ConsultSessionRepository repo, ConsultQueueService queue,
             TriageService triageService, ApplicationEventPublisher events,
-            VetPresenceService presence, VetAccountService vetAccounts) {
+            VetPresenceService presence, VetAccountService vetAccounts, ConsultOrderRepository orders) {
+        this.orders = orders;
         this.repo = repo;
         this.queue = queue;
         this.triageService = triageService;
@@ -86,6 +89,20 @@ public class ConsultSessionService {
         } catch (RuntimeException e) {
             return VetPeer.UNKNOWN;
         }
+    }
+
+    /**
+     * 会话所属宠物（V1.4.0 multi-pet Story 4.1 · AC5）：会话最近一张订单上的 {@code pet_profile_id}
+     * （与 {@code ConsultCloseService} 存档事件同一取法，保证存档口径一致）；无订单的 V1.0 会话 / 单上无宠物 → null。
+     * 只供<b>读路径</b>富化（写路径不调，见 {@code ConsultSessionResponse} 读写分离告诫）。
+     */
+    public Long petIdOf(ConsultSession s) {
+        if (s == null) {
+            return null;
+        }
+        return orders.findFirstByConsultSessionIdOrderByIdDesc(s.getId())
+                .map(com.tailtopia.consult.domain.ConsultOrder::getPetProfileId)
+                .orElse(null);
     }
 
     /** 发起结果：新建会话 or 命中已有占用态会话（alreadyActive=true，前端跳「查看进行中 →」）。 */

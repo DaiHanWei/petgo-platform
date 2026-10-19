@@ -19,10 +19,15 @@ class TriageUploadDraft {
   const TriageUploadDraft({
     this.images = const <TriageDraftImage>[],
     this.symptomText = '',
+    this.petId,
   });
 
   final List<TriageDraftImage> images;
   final String symptomText;
+
+  /// 所选宠物（V1.4.0 multi-pet Story 4.1 · H1）：提交时作 `petId`（AI 用其物种 / 年龄 / 体重，P-1），
+  /// 结果页存档也存到这只。null = 不带（0 只宠物 / 旧路径）。
+  final int? petId;
 
   /// 提交可用（Story 4.3 AC5 · R2）：**文字必填、图片选填**——仅以「症状文字非空」为准，
   /// 不再 require 图片（可仅凭文字提交）；图片仍受 ≤3 张 / ≤10MB 上限约束。后端 `@NotBlank` 为权威。
@@ -35,5 +40,10 @@ class TriageUploadDraft {
       TriageUploadDraft(
         images: images ?? this.images,
         symptomText: symptomText ?? this.symptomText,
+        petId: petId,
       );
+
+  /// 换所选宠物（可置 null，故不走 [copyWith]）。
+  TriageUploadDraft withPetId(int? id) =>
+      TriageUploadDraft(images: images, symptomText: symptomText, petId: id);
 }

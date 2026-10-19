@@ -64,16 +64,18 @@ public class PetPassportService {
      * 护照页（AC3）：先签发（幂等）再取章。
      *
      * <p>🔴 <b>写事务、不是 readOnly</b>：GET 里签发（D-6「首次进护照页」）。无宠物 → 404。
+     *
+     * @param petId V1.4.0 multi-pet：指定宠物（控制器已经 {@code PetResolver} 校验归属）；null = 默认宠物
      */
     @Transactional
-    public PetPassportResponse pageFor(long ownerId) {
-        IssuedPassport issued = ensureIssuedForOwner(ownerId)
+    public PetPassportResponse pageFor(long ownerId, Long petId) {
+        IssuedPassport issued = ensureIssuedFor(ownerId, petId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
-        long petId = issued.subject().petId();
+        long issuedPetId = issued.subject().petId();
         // 同一次聚合同时出章列表与版本判定用的 placeId（不另写一条 SQL）。
-        List<PlaceStampRef> refs = stamps.stampRefsOf(petId);
+        List<PlaceStampRef> refs = stamps.stampRefsOf(issuedPetId);
         List<PassportStampView> views = refs.stream().map(r -> PassportStampView.of(r.stamp())).toList();
-        PassportVersionQuery.VersionState v = versions.stateOf(petId, refs);
+        PassportVersionQuery.VersionState v = versions.stateOf(issuedPetId, refs);
         return new PetPassportResponse(issued.subject().name(), issued.passport().getPassportNo(),
                 views.size(), views, v.currentVersionUnlocked(), v.purchasedVersionCount());
     }
@@ -91,8 +93,11 @@ public class PetPassportService {
      */
     @Transactional
     public PetPassport ensureIssued(long petId, long ownerId) {
-        PetPassportSubject subject = pets.findPassportSubject(ownerId)
-                .filter(s -> s.petId() == petId)
+        // V1.4.0 multi-pet（Story 1.2 · X6）：按宠物 id 取摘要 + 归属校验（不再按账号取唯一宠物再比对）。
+        if (!pets.ownsPet(ownerId, petId)) {
+            throw new IllegalStateException("宠物不属于该用户");
+        }
+        PetPassportSubject subject = pets.findPassportSubjectByPetId(petId)
                 .orElseThrow(() -> new IllegalStateException("宠物不属于该用户"));
         return issue(subject, ownerId);
     }
@@ -124,10 +129,13 @@ public class PetPassportService {
         return issued;
     }
 
-    /** 按主人取宠物摘要后签发（护照页入口）。无宠物 → empty（调用方 404）。 */
+    /**
+     * 按主人 + 指定宠物取摘要后签发（护照页 / 快照入口）。V1.4.0 multi-pet（Story 1.2 · X7）：
+     * {@code petId} 非空 → 校验归属；null → 默认宠物。无宠物 / 不属于本人 → empty（调用方 404）。
+     */
     @Transactional
-    public Optional<IssuedPassport> ensureIssuedForOwner(long ownerId) {
-        return pets.findPassportSubject(ownerId)
+    public Optional<IssuedPassport> ensureIssuedFor(long ownerId, Long petId) {
+        return pets.findPassportSubject(ownerId, petId)
                 .map(s -> new IssuedPassport(s, issue(s, ownerId)));
     }
 

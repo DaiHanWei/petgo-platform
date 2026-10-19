@@ -1,6 +1,6 @@
 # Story 4.2: App——KTP 创建选宠物
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 multi-pet · 分支 `feat/1.4.0-multi-pet`
 > 口径优先级：`decision-log.md` ② 节（2026-10-13 I1–I3「先预填，用户可换」、**I2「默认预填 Diary Tab 当前选中的宠物；它若只读，则取最早创建的正常宠物」**）> `多宠物/1-4-0多宠物prd.md`（§3.1「按宠物计算的功能」表身份证 KTP 行：只列正常状态的宠物、卡片本身仍只挂账号）> `architecture-v1.4.0-multi-pet-delta.md`（AD-8「KTP 创建只列正常宠物（卡不挂宠物）」、AD-14、§5）> `多宠物/ui-1-4-0-multi-pet-integrated-v1.html`（I 泳道 I1 ~ I3）（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。跨分支契约以 `_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md`「2026-10-18」节为准。
@@ -47,14 +47,14 @@ so that 每只宠物都能有自己的身份证。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**（结论写 Completion Notes）
-  - [ ] 0.1 1.5 的 `petListProvider` 元素字段（`id / name / avatarUrl / petType / birthday / createdAt / status`）、`currentPetIdProvider` 的失效回落逻辑
-  - [ ] 0.2 1.1 / 1.5 是否已有「按 petId 取完整档案」的 provider（如 `petProfileByIdProvider(petId)`）；没有则在 `profile_repository.dart` 加 `fetchPetProfile(int petId)` + `FutureProvider.family`
-  - [ ] 0.3 3.3 实际落地的 `PetPickerSheet` API（单选模式、传入列表 / 过滤方式、确认按钮文案参数）
-- [ ] **T1 预填决策**（AC1）：纯函数 `int? resolveKtpPrefillPetId({required int? currentPetId, required List<PetSummary> pets})`（放 `features/profile/domain/`，便于单测）；`initState` 改为按它取档案
-- [ ] **T2 宠物行**（AC2）：`_KtpPetRow`（私有 widget，放本页文件或 `id_card/` 子目录）
-- [ ] **T3 换宠物抽屉**（AC3）：`PetPickerSheet` 单选模式，传入过滤后的 ACTIVE 列表；选中后重置草稿
-- [ ] **T4 文案 + 测试**（AC4 / AC5）
+- [x] **T0 开工核对**（结论写 Completion Notes）
+  - [x] 0.1 1.5 的 `petListProvider` 元素字段（`id / name / avatarUrl / petType / birthday / createdAt / status`）、`currentPetIdProvider` 的失效回落逻辑
+  - [x] 0.2 1.1 / 1.5 是否已有「按 petId 取完整档案」的 provider（如 `petProfileByIdProvider(petId)`）；没有则在 `profile_repository.dart` 加 `fetchPetProfile(int petId)` + `FutureProvider.family`
+  - [x] 0.3 3.3 实际落地的 `PetPickerSheet` API（单选模式、传入列表 / 过滤方式、确认按钮文案参数）
+- [x] **T1 预填决策**（AC1）：纯函数 `int? resolveKtpPrefillPetId({required int? currentPetId, required List<PetListItem> pets})`（放 `features/profile/domain/ktp_prefill_pet.dart`，便于单测；T0 更正：列表模型实际名 `PetListItem`，不是 `PetSummary`）；`initState` 改为按它取档案
+- [x] **T2 宠物行**（AC2）：`_KtpPetRow`（私有 widget，放本页文件或 `id_card/` 子目录）
+- [x] **T3 换宠物抽屉**（AC3）：`PetPickerSheet` 单选模式，传入过滤后的 ACTIVE 列表；选中后重置草稿
+- [x] **T4 文案 + 测试**（AC4 / AC5）
 
 ## Dev Notes
 
@@ -136,10 +136,71 @@ so that 每只宠物都能有自己的身份证。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- `flutter analyze` → No issues found
+- `flutter test`（全量）→ 3678 passed / 1 skipped（基线 4.1 后 3661 / 1，+17）；code review 修复后 3680 / 1
 
 ### Completion Notes List
 
+**L1/L2 待本地验收**（纯 App story，无 L1；L2 = Android 模拟器连 stag 演示 I1 / I2 / I3，建出的卡在列表可见、卡面为所选宠物资料）。
+
+**T0 核对结论（以代码为准）**
+- 0.1 列表模型实际是 `PetListItem`（`features/profile/data/pet_list_repository.dart`），字段 `id / name / avatarUrl / petType / breed / birthday / createdAt / status / isDefault / …`，`isReadOnly` = `status == READ_ONLY`（未知状态按 ACTIVE）；故事里的 `PetSummary` 不存在，T1 签名已改成 `List<PetListItem>`。`currentPetIdProvider` 只存「用户选过的那只」（可能失效 / null），回落在 `resolveEffectivePetId`（在列表里 → 它；否则 `isDefault`；再否则第一只）。后端 `isDefault` = `DefaultPetPolicy.pick` = 最早创建的 ACTIVE，所以「当前宠物 id 失效 / 没选过」回落到的就是最早 ACTIVE，与 AC1 ② 一致。
+- 0.2 **没有**按 petId 取完整档案的 provider；仓库已有 `ProfileRepository.getMyProfile({int? petId})`（`GET /pet-profiles/me?petId=`，404 → null），所以没加 `fetchPetProfile`，只在 `profile_repository.dart` 末尾加了 `petProfileByIdProvider = FutureProvider.autoDispose.family<PetProfile?, int>`（`retry` 关掉：一次性取数，失败由页面提示；autoDispose 见下方 code review #3）。
+- 0.3 `showPetPickerSheet` 单选 + 吸底确认模式在 4.1 已补好（`multiSelect: false` + `confirmLabel` + `initialSelectedId`），直接复用，**未改 `pet_picker_sheet.dart`**；调用方传已过滤的 ACTIVE 列表，不用 `lockedPetIds` / `disabledPetIds`。
+
+**实现要点**
+- `IdCardCreatePage.initState` → `_initPrefill()`：`petListProvider` → `resolveKtpPrefillPetId(currentPetId: currentPetIdProvider, pets)` → `petProfileByIdProvider(id)` 预填；预填字段与改造前逐字相同（抽成 `_applyProfile`）。迟到预填仍受 `_prefilled` 约束，并且只在宠物行仍是那只时才写入。本页不再引用 `petProfileProvider`（§5）。
+- 宠物行 `_KtpPetRow` 放在卡面 `AspectRatio` 之前：圆形头像（无头像用 `Icons.pets` 占位，同 `PetCardRow`）+「Untuk {name}」+「Ganti ›」；≥ 2 只 ACTIVE 时整行 `InkWell`（最小高 48）；1 只时无「Ganti」、不可点；0 只 / 无 ACTIVE 不显示。
+- 换宠物：选了另一只 → `ref.refresh(petProfileByIdProvider(id).future)` → 草稿整体重置（`IdCardFormDraft` 重建 + 头像换成新宠物的，`_prefilled = true`）；失败或 404 → toast `idCardCreateError`，草稿与宠物行不变；选的仍是当前那只 → 不请求。不回写 `currentPetIdProvider`。建卡请求体、卡款、水印、缺项提示、HD 流程未改动。
+- 文案：新增 `petPickerForName`（Untuk {name} / For {name}）、`petPickerChange`（Ganti / Change）、`petPickerChooseTitle`（Pilih hewan / Choose a pet）、`petPickerUse`（Pakai / Use），EN / ID 两份 arb 同加（仓库只有这两个 locale），已 `flutter gen-l10n`。没有新埋点（PRD §4 无此事件）。
+
+**2.4 E1 与本 story 的冲突（已按保守口径处理）**
+- 2.4 在「Pilih Kartu」点卡款（`id_card_page._onStyleTap`）接了 `guardPetWritable`：Diary 当前宠物只读 → 弹 E1、进不了建卡页。这样 AC1 ②「当前宠物只读 → 预填最早创建的正常宠物」永远走不到，也和 AD-8「KTP 创建只列正常宠物（卡不挂宠物）」矛盾。
+- 处理：入口改为 `_guardKtpEntry()`：当前宠物只读**且**已加载的列表里一只 ACTIVE 都没有 → 仍弹 E1（PRD「只读宠物不能买新付费项目」在这种情况仍然成立：没有能建卡的正常宠物）；只要还有正常宠物 → 放行，建卡页自动预填正常宠物，只读宠物不出现在抽屉里。列表没加载（不知道）→ 放行（同 `guardPetWritable` 的口径）。建卡页本身对「列表非空但无 ACTIVE」仍按 AC1 ③ 处理（深链等绕过入口的情况）。卡不挂宠物，后端建卡接口无宠物维度，没有 409 兜底问题。
+
+**L0 已跑**
+- `flutter analyze`：0 issue。
+- `flutter test` 全量：**3678 passed / 1 skipped**（+17）。新增 / 补充：`test/profile/ktp_prefill_pet_test.dart`（新，6：ACTIVE 当前 / 只读当前 / id 失效 / 未选过 / 空列表 / 无 ACTIVE）；`test/profile/id_card_create_page_test.dart`（+9：I2 当前 ACTIVE 预填 B + 行「For Bobo · Change」；当前只读 → 预填 A、不取只读档案；I1 抽屉只列 A / B、默认选中 B、选 A「Use」→ 此前改过的名字被重置、提交快照为 A；拉档案失败 → toast 仍是 B；选同一只不请求 + 下滑关闭不换；I3 只 1 只正常 → 无 Change、行不可点；单宠物账号「For Oyen」预填不变；0 只 → 无行、不取档案、缺项提示；无 ACTIVE → 按 0 只）；`test/profile/id_card_style_grid_test.dart`（+2：当前只读另有正常宠物 → 进建卡页不弹 E1；全部只读 → 仍弹 E1）。`microcopy_rules_test`、埋点守卫测试全绿。
+- 既有 `id_card_create_page_test` 14 例：只把 `petProfileProvider.overrideWith` 换成 `petListProvider`（缺省单宠物 id 1）+ `currentPetIdProvider` + `petProfileByIdProvider` 的 override，**断言未改**。`id_card_create_v2_path_test` / `id_card_form_fields_test` / `id_card_watermark_test` 不 pump 建卡页（源码 / 纯组件断言），无需改，全绿。
+- 后端零改动，没跑 mvn；无迁移，flyway-guard 不涉及。
+
+**L1 已写未跑**：无（纯 App）。
+
+**与正文的出入**
+- `PetSummary` → 实际 `PetListItem`（T1 签名已改）；没有新增 `fetchPetProfile`（复用已有 `getMyProfile(petId:)`），只加 family provider。
+- 换宠物取档案期间（`_switching`）「Ganti」和「Buat Kartu」都暂时禁用（防止把旧宠物的草稿提交出去）；「Buat Kartu」样式不变，只是不可点。正文 AC2.4 只写了 `_busy` 时禁用「Ganti」。
+- 宠物列表接口失败时：不显示宠物行，退回旧口径 `getMyProfile()`（不带 petId = 后端默认宠物）预填，与 `petProfileProvider` 失败回退同口径，没有引用 `petProfileProvider`。
+- 2.4 建卡入口 E1 改为「没有任何正常宠物才拦」，见上一节。
+
+**待确认**
+1. `petPickerChooseTitle` 的 ID「Pilih hewan」/ EN「Choose a pet」、`petPickerUse` 的 ID「Pakai」/ EN「Use」是按「需拍板」1、2 的建议新建的（对照表没有这两条 / 写了「沿用现有」但仓库里没有），EN 值需运营补审。
+2. 换宠物直接重置、不弹「已改内容会被重置」提示（按「需拍板」3 的建议）。
+3. 2.4 建卡入口 E1 的放宽（当前宠物只读但有正常宠物 → 放行）需产品确认；若坚持「当前宠物只读就拦」，AC1 ② 将无法触达。
+
+#### code review 结果（2026-10-19，按复审意见修复；仍未提交）
+
+- **#1（CONFIRMED）换宠物与「Ubah info」/「Ganti foto」竞态**：换宠物取档案期间（`_switching`）「Ubah info」「Ganti foto」也禁用（原来只禁「Ganti」「Buat Kartu」）。另外 `_editInfo` / `_editPhoto` 打开时记下 `_pet?.id`，抽屉结果 / 上传结果回来时宠物已换（或仍在换）→ 丢弃，不写回草稿 / 头像，避免「For A」配 B 的名字 / 生日。测试 +1：取 A 档案挂起期间四个入口都禁用、宠物行仍是 B；落定后入口恢复、提交快照为 A。说明：UI 上「Ganti」在 `_busy`（上传中）时本来就禁用、编辑抽屉是模态，所以「打开时记下的宠物 id」这层防御从界面上触发不到，没有单独的 widget 测试，靠代码路径保证。
+- **#2（PLAUSIBLE）单宠物用户每次进页多一次请求**：首屏预填的若就是 Diary 当前宠物（`resolveEffectivePetId(pets, currentPetIdProvider) == id`）→ 沿用改造前的 `petProfileProvider.future`（已加载就直接用缓存，新鲜度与改造前一致；返回的不是这只或抛错 → 再按 petId 取）。只有别的宠物（当前宠物只读时预填的最早 ACTIVE）、以及换宠物时才按 petId 取。这里**按复审要求**在新代码里引用了 `petProfileProvider`（偏离 §5「新代码不再引用」，理由是保持单宠物体验不回退）。测试：I2 用例改为断言「当前宠物走兼容层、按 petId 取 0 次」；+1 用例：退出再进建卡页不重复请求。
+- **#3（PLAUSIBLE）换账号后残留上个账号的宠物资料**：`petProfileByIdProvider` 改为 `FutureProvider.autoDispose.family`；页面用 `_fetchPetProfile` 取数时 `listenManual` 保活、取完 `close` → 立即释放（下次取自然是最新的，不再需要 `ref.refresh`）。没有注册到 `resetUserScopedCaches`（autoDispose 后无需）。测试：换宠物取完后 `container.exists(petProfileByIdProvider(1)) == false`。
+- 测试 harness：`_pump` 额外 override `petProfileProvider`（口径同生产：`effectivePetIdProvider` → 取那只），新增 `gates`、`currentProfileCalls` 参数；「迟到预填不覆盖已确认编辑」既有用例的 gate 改回挂在 `petProfileProvider` 上（单宠物 = 当前宠物路径），断言未改。
+- **复审后 L0**：`flutter analyze` 0 issue；`flutter test` 全量 **3680 passed / 1 skipped**（+2）。L2 仍待本地验收。
+
 ### File List
 
+- `petgo_app/lib/features/profile/domain/ktp_prefill_pet.dart`（新）
+- `petgo_app/lib/features/profile/data/profile_repository.dart`（加 `petProfileByIdProvider`）
+- `petgo_app/lib/features/profile/presentation/id_card_create_page.dart`
+- `petgo_app/lib/features/profile/presentation/id_card_page.dart`（建卡入口 E1 口径）
+- `petgo_app/lib/l10n/app_en.arb`、`petgo_app/lib/l10n/app_id.arb`
+- `petgo_app/test/profile/ktp_prefill_pet_test.dart`（新）
+- `petgo_app/test/profile/id_card_create_page_test.dart`
+- `petgo_app/test/profile/id_card_style_grid_test.dart`
+
 ### Change Log
+
+- 2026-10-19：code review 修复 #1（换宠物期间禁用 Ubah info / Ganti foto + 丢弃过期结果）、#2（当前宠物沿用兼容层缓存）、#3（`petProfileByIdProvider` autoDispose）；全量 3680 / 1。
+- 2026-10-18：实现 Story 4.2（KTP 建卡选宠物：预填决策、宠物行、换宠物抽屉、4 条新文案）；建卡入口 E1 按 AD-8 改为「无正常宠物才拦」；L0 全绿，状态 → review。

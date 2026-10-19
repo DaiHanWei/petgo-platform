@@ -43,6 +43,9 @@ import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'report_sheet.dart';
 import 'share_card/open_share_card.dart';
+import '../../profile/data/pet_list_repository.dart';
+import '../domain/content_pet_ref.dart';
+import 'widgets/content_linked_pets.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
@@ -195,10 +198,15 @@ class _DetailScaffold extends ConsumerWidget {
   final ContentDetail detail;
   final bool focusComments;
 
+  /// 关联宠物胶囊的显示条件（AC4.2）：只 Diary 且 `pets` 非空（1 只也显示）。Feed 卡片不加。
+  List<ContentPetRef> get _linkedPets =>
+      detail.type == ContentType.growthMoment.wire ? detail.pets : const <ContentPetRef>[];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final currentUserId = ref.watch(authControllerProvider).profile?.id;
+    final linkedPets = _linkedPets;
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(
@@ -252,6 +260,8 @@ class _DetailScaffold extends ConsumerWidget {
                         cropOffsets: detail.imageCropOffsets,
                         viewportHeight: viewport.maxHeight,
                         decorationTags: detail.decorationTags,
+                        // V1.4.0 multi-pet Story 3.3 · F6：首图左下深色胶囊（滑动轮播时固定不动）。
+                        linkedPets: linkedPets,
                         // 前缀带上帖子 id：同一屏里不会有第二个同 tag 的 Hero。
                         heroTagPrefix: 'content_detail_${detail.id}',
                       ),
@@ -301,6 +311,16 @@ class _DetailScaffold extends ConsumerWidget {
                         ),
                       ),
                     ],
+                    // V1.4.0 multi-pet Story 3.3 · F6b：无图 → 正文 / 装饰标签之后、打卡场所条之前，左对齐浅色胶囊
+                    // （上 12 下 2）。有图时胶囊叠在首图上（F6），这里不再出。
+                    if (detail.imageUrls.isEmpty && linkedPets.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(AppSpacing.screenEdge, 12, AppSpacing.screenEdge, 2),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ContentLinkedPetsCapsule(pets: linkedPets, dark: false),
+                        ),
+                      ),
                     // 图片之下的所有内容仍按原来的横向留白排版，与改版前一致。
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
@@ -564,6 +584,7 @@ class _DetailScaffold extends ConsumerWidget {
       if (detail.type == ContentType.growthMoment.wire) {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
         ref.invalidate(calendarMonthProvider);
         ref.invalidate(dayDetailProvider);
       }
@@ -585,7 +606,11 @@ class _ImageCarousel extends StatefulWidget {
     required this.viewportHeight,
     required this.heroTagPrefix,
     this.decorationTags = const [],
+    this.linkedPets = const [],
   });
+
+  /// V1.4.0 multi-pet Story 3.3 · F6：Diary 关联的宠物（空 = 不出胶囊，装饰标签位置不变）。
+  final List<ContentPetRef> linkedPets;
 
   final List<String> urls;
 
@@ -612,6 +637,9 @@ class _ImageCarousel extends StatefulWidget {
 }
 
 class _ImageCarouselState extends State<_ImageCarousel> {
+  /// 关联宠物胶囊距首图左 / 下边（UI 稿 `.pkchip.dark` left / bottom 12）。
+  static const double _petsCapsuleInset = 12;
+
   final PageController _controller = PageController();
   int _current = 0;
 
@@ -690,14 +718,30 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             ),
         ),
         // 装饰标签：左下角，与右上角的页码角标分处两角、互不遮挡。
+        // V1.4.0 multi-pet Story 3.3：有关联宠物时胶囊占左下 12 / 12，装饰标签上移到胶囊正上方
+        // （同左边距、间距 8）；无关联宠物时位置不变（AC5 回归保护）。
         if (widget.decorationTags.isNotEmpty)
           Positioned(
-            left: AppSpacing.sm,
-            bottom: AppSpacing.sm,
+            key: const ValueKey('detailDecorationTagOverlay'),
+            left: widget.linkedPets.isEmpty ? AppSpacing.sm : _petsCapsuleInset,
+            bottom: widget.linkedPets.isEmpty
+                ? AppSpacing.sm
+                : _petsCapsuleInset + kLinkedPetsCapsuleHeight + 8,
             right: AppSpacing.xl,
             child: Align(
               alignment: Alignment.centerLeft,
               child: ContentTagChip.overlay(tag: widget.decorationTags.first, position: 'detail'),
+            ),
+          ),
+        // F6：放在 PageView 外层 Stack → 滑动轮播时胶囊固定不动；最大宽 = 图宽 − 24。
+        if (widget.linkedPets.isNotEmpty)
+          Positioned(
+            left: _petsCapsuleInset,
+            bottom: _petsCapsuleInset,
+            right: _petsCapsuleInset,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ContentLinkedPetsCapsule(pets: widget.linkedPets, dark: true),
             ),
           ),
         if (widget.urls.length > 1)

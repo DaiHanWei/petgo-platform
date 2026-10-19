@@ -1,19 +1,30 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../pet_slot/data/pet_slot_repository.dart' show kPetReadOnlySlug;
+import '../../pet_slot/presentation/pet_readonly_block.dart' show openPetSlotRenewalWith;
 import '../data/health_event_repository.dart';
+import '../data/pet_list_repository.dart';
+import '../data/timeline_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/archive_prompt_guard.dart';
 import '../domain/pending_archive.dart';
 
-/// 问诊存档触发参数（由 Epic 4/5 结束页 / 红色态结果页提供）。petId 不在此——按用户状态解析。
+/// 问诊存档触发参数（由 Epic 4/5 结束页 / 红色态结果页提供）。
+///
+/// [petId]（V1.4.0 multi-pet Story 4.1 · AC8.1）：存到哪只宠物——AI 问诊 = 提交时所选、兽医问诊 = 会话订单上的；
+/// null = 按用户状态解析当前宠物（改造前行为）。
 class ArchivePromptArgs {
   const ArchivePromptArgs({
     required this.sourceRef,
@@ -24,6 +35,7 @@ class ArchivePromptArgs {
     this.imImageRefs = const [],
     this.redState = false,
     this.explicitSave = false,
+    this.petId,
   });
 
   final String sourceRef;
@@ -39,6 +51,87 @@ class ArchivePromptArgs {
   /// 用户显式点「存入宠物档案」按钮触发（bug 20260727 保存静默无效）：绕过「只问一次」守卫——
   /// FR-16 只约束结束时的自动弹窗，之前选过「跳过」不应让显式保存永久静默失效（后端支持 SKIPPED→ARCHIVED 升级）。
   final bool explicitSave;
+
+  /// 存档目标宠物（可空，见类注释）。
+  final int? petId;
+}
+
+/// 存档目标宠物（内部）：id + 界面用名字 + 是否只读。名字只渲染，不进日志 / 埋点（§5）。
+class _ArchivePet {
+  const _ArchivePet(this.id, this.name, {required this.readOnly});
+  final int id;
+  final String name;
+  final bool readOnly;
+}
+
+/// 存档目标解析结果：[pet] 为 null 且 [gone] = 指定的宠物已确认不在（刚被删）→ 不存档。
+typedef _ArchiveTarget = ({_ArchivePet? pet, bool gone});
+
+/// 按 [petId] 取存档目标（code review 4-1 A1：给了 id 就**只存这只**，绝不悄悄落到当前宠物）：
+/// - 宠物列表里有 → 这只（名字 + 只读状态）；
+/// - 列表已取到但没有它（刚被删）→ `gone`，调用方不存档；
+/// - 列表取不到 → 仍按这个 id 存（名字尽力按 id 取档案，取不到留空）；只读由后端 409 兜底、已删由后端拒绝。
+/// 没给 id → `petProfileProvider`（= 改造前取唯一宠物的旧路径，只读状态从已加载的列表补查）。
+Future<_ArchiveTarget> _resolveArchivePet(WidgetRef ref, int? petId) async {
+  if (petId != null) {
+    List<PetListItem>? pets;
+    try {
+      pets = await ref.read(petListProvider.future);
+    } catch (_) {
+      pets = null;
+    }
+    if (pets != null) {
+      for (final p in pets) {
+        if (p.id == petId) return (pet: _ArchivePet(p.id, p.name, readOnly: p.isReadOnly), gone: false);
+      }
+      return (pet: null, gone: true);
+    }
+    var name = '';
+    try {
+      name = (await ref.read(profileRepositoryProvider).getMyProfile(petId: petId))?.name ?? '';
+    } catch (_) {
+      // 名字只用于标题，取不到不阻断；归属 / 只读 / 存在性以后端为准。
+    }
+    return (pet: _ArchivePet(petId, name, readOnly: false), gone: false);
+  }
+  final pet = await ref.read(petProfileProvider.future);
+  if (pet == null) return (pet: null, gone: false);
+  var readOnly = false;
+  final loaded = ref.exists(petListProvider) ? ref.read(petListProvider).value : null;
+  for (final p in loaded ?? const <PetListItem>[]) {
+    if (p.id == pet.id) readOnly = p.isReadOnly;
+  }
+  return (pet: _ArchivePet(pet.id, pet.name, readOnly: readOnly), gone: false);
+}
+
+/// 存档后失效 Diary 时间线 / 统计（V1.4.0 multi-pet Story 4.1 · AC8.6）：知道存到哪只 → 只失效**该宠物**的
+/// petId family；不知道（旧路径）→ 整个 family 失效（= 改造前行为）。
+void invalidateArchiveViews(WidgetRef ref, int? petId) {
+  if (petId != null) {
+    ref.invalidate(timelineFirstPageProvider(petId));
+    ref.invalidate(archiveStatsProvider(petId));
+  } else {
+    ref.invalidate(timelineFirstPageProvider);
+    ref.invalidate(archiveStatsProvider);
+  }
+}
+
+/// H2 存档只读拦截（V1.4.0 multi-pet Story 4.1 · AC8.4 · decision-log H2）：沿用 E1 同款 [showConfirmSheet]——
+/// H-4 标题 / H-5 正文 /「Perpanjang slot」→ 名额管理页并弹续租 /「Lewati」。两键都**不**记录决策。
+Future<void> showArchiveReadOnlyBlockSheet(BuildContext context, {required String petName}) async {
+  final l10n = AppLocalizations.of(context);
+  final router = GoRouter.maybeOf(context);
+  final renew = await showConfirmSheet(
+    context,
+    title: l10n.petSlotArchiveBlockedTitle,
+    message: l10n.petSlotArchiveBlockedBody(petName),
+    confirmLabel: l10n.petSlotRenewSheetTitle,
+    cancelLabel: l10n.archivePromptSkip,
+    icon: Icons.lock_rounded,
+    confirmKey: const ValueKey('archiveBlockedRenew'),
+    cancelKey: const ValueKey('archiveBlockedSkip'),
+  );
+  if (renew && router != null) openPetSlotRenewalWith(router, source: 'block_sheet');
 }
 
 /// 一次性存档弹窗（Story 2.5 · AC1 三态 / AC3 回灌 / AC4 红色态）。供 Epic4/5 结束页与红色态结果页调用。
@@ -66,21 +159,33 @@ Future<bool> showArchivePrompt(
 
   // ① 状态 A + 已建档。
   if (isOwner && hasProfile) {
-    final pet = await ref.read(petProfileProvider.future);
+    final target = await _resolveArchivePet(ref, args.petId);
     if (!context.mounted) return false;
+    if (target.gone) {
+      // 所选宠物已被删（A1）：不存到别的宠物，给既有「保存失败」提示后结束。
+      showAppToast(context, AppLocalizations.of(context).consultArchiveSaveFailed);
+      return false;
+    }
+    final pet = target.pet;
     if (pet != null) {
+      if (pet.readOnly) {
+        // V1.4.0 multi-pet Story 4.1（AC8.4）：只读宠物 → 弹 H2 拦截，不弹「存入 / 跳过」、不发任何决策。
+        guard.markHandled(args.sourceRef);
+        await showArchiveReadOnlyBlockSheet(context, petName: pet.name);
+        return false;
+      }
       if (args.redState) {
         // AC4：红色态 A 已建档 → 直接存入，无弹窗确认。
         guard.markHandled(args.sourceRef);
-        await _record(ref, args, pet.id, ArchiveDecision.archived);
-        return true;
+        return _recordOrBlock(context, ref, args, pet, ArchiveDecision.archived);
       }
       // 存入档案确认用底部抽屉（stag：与病例/诊断结果等底部弹层交互统一）。
       final decision = await showArchiveSaveSheet(context, petName: pet.name);
       if (decision == null) return false; // 关闭未选 → 不记录，下次仍可弹（bug 20260721-338 返回 bool）
+      if (!context.mounted) return false;
       guard.markHandled(args.sourceRef);
-      await _record(ref, args, pet.id, decision);
-      return decision == ArchiveDecision.archived;
+      final recorded = await _recordOrBlock(context, ref, args, pet, decision);
+      return recorded && decision == ArchiveDecision.archived;
     }
     // hasProfile 但拉取为空（异常）→ 落到建档引导分支。
   }
@@ -191,6 +296,27 @@ Widget _archiveSheet({
       ),
     ),
   );
+}
+
+/// 记录决策；后端兜底 409 `pet-read-only`（前端状态过期，AC8.5）→ 失效宠物列表 + 弹 H2、返回 false
+/// （不显后端 detail、不当通用失败抛出）。其余错误照旧抛给调用方（toast「保存失败」）。成功返回 true。
+Future<bool> _recordOrBlock(
+  BuildContext context,
+  WidgetRef ref,
+  ArchivePromptArgs args,
+  _ArchivePet pet,
+  ArchiveDecision decision,
+) async {
+  try {
+    await _record(ref, args, pet.id, decision);
+    return true;
+  } on DioException catch (e) {
+    final pd = ProblemDetail.fromDioException(e);
+    if (pd?.typeSlug != kPetReadOnlySlug) rethrow;
+    ref.invalidate(petListProvider);
+    if (context.mounted) await showArchiveReadOnlyBlockSheet(context, petName: pet.name);
+    return false;
+  }
 }
 
 Future<void> _record(

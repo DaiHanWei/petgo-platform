@@ -14,6 +14,7 @@ import 'package:tailtopia/features/content/domain/publish_checkin_place.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/place/domain/place_summary.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -72,6 +73,8 @@ void main() {
         publishControllerProvider.overrideWithValue(controller),
         profileRepositoryProvider.overrideWithValue(_WithPetRepo()),
         authControllerProvider.overrideWith(_WithArchiveAuth.new),
+        // V1.4.0 multi-pet Story 3.3：Diary 宠物 chips 读宠物列表。
+        petListProvider.overrideWith((ref) async => const [PetListItem(id: 1, name: 'Oyen')]),
       ]);
       addTearDown(container.dispose);
       await tester.pumpWidget(UncontrolledProviderScope(
@@ -159,6 +162,7 @@ class _RecordingRepo implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
@@ -177,7 +181,7 @@ class _RecordingRepo implements ContentRepository {
 
 class _WithPetRepo implements ProfileRepository {
   @override
-  Future<PetProfile?> getMyProfile() async => const PetProfile(id: 1, name: 'Oyen', cardToken: 'T');
+  Future<PetProfile?> getMyProfile({int? petId}) async => const PetProfile(id: 1, name: 'Oyen', cardToken: 'T');
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

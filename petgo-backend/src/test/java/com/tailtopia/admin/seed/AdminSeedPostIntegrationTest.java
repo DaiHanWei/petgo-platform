@@ -253,7 +253,7 @@ class AdminSeedPostIntegrationTest extends ApiIntegrationTest {
     @Test
     void growthMomentCanFinallyBePublishedWithARealAccountThatHasAPet() throws Exception {
         User u = realAccountWithPet();
-        long petId = pets.findByOwnerId(u.getId()).orElseThrow().getId();
+        long petId = pets.findDefault(u.getId()).orElseThrow().getId();
         String marker = "成长日历-" + SEQ.incrementAndGet();
 
         mvc.perform(post("/admin/seed-post").with(authentication(superAdmin())).with(csrf())
@@ -357,7 +357,7 @@ class AdminSeedPostIntegrationTest extends ApiIntegrationTest {
     @Test
     void petDropdownListsOnlyThePetsOfTheChosenAccount() throws Exception {
         User u = realAccountWithPet();
-        PetProfile pet = pets.findByOwnerId(u.getId()).orElseThrow();
+        PetProfile pet = pets.findDefault(u.getId()).orElseThrow();
 
         String html = mvc.perform(get("/admin/seed-post/pets")
                         .param("authorUserId", String.valueOf(u.getId()))

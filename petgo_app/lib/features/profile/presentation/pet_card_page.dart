@@ -23,7 +23,9 @@ class PetCardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final profile = ref.watch(petProfileProvider).asData?.value;
-    final stats = ref.watch(archiveStatsProvider).asData?.value;
+    // V1.4.0 multi-pet（Story 1.5）：统计按当前宠物（= 上面这份档案）。
+    final stats =
+        profile == null ? null : ref.watch(archiveStatsProvider(profile.id)).asData?.value;
     final name = profile?.name ?? 'Mochi';
     final age = computePetAge(profile?.birthday);
     // 名片这行只给「X 岁」；不满 1 个月会变成「0 tahun」，故与档案页同样降级到天数

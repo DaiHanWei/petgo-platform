@@ -19,6 +19,8 @@ import '../../consult/domain/consult_history_item.dart';
 import '../../consult/domain/consult_session.dart';
 import '../../consult/presentation/consult_rating_dialog.dart';
 import '../../consult/presentation/consult_refresh.dart';
+import '../../profile/presentation/widgets/pet_pick_for_consult.dart';
+import 'triage_upload_page.dart' show triageUploadLocation;
 
 /// Konsultasi Kilat 问诊 hub（TailTopia Prototype 换肤 · Story 4.3 + 5.8）。
 ///
@@ -177,9 +179,12 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                 ref,
                 context,
                 pendingAction: const RouteIntent(location: '/triage/upload'),
-                onAllowed: () {
+                onAllowed: () async {
                   Analytics.buttonTapped(ButtonId.triageStart);
-                  context.push('/triage/upload');
+                  // V1.4.0 multi-pet Story 4.1（H1 / H3）：≥2 只先单选宠物，取消则停留；0 / 1 只不弹。
+                  final pick = await pickPetForConsult(context, ref, purpose: PetPickPurpose.triage);
+                  if (pick == null || !context.mounted) return;
+                  context.push(triageUploadLocation(pick.petId));
                 },
               ),
             ),

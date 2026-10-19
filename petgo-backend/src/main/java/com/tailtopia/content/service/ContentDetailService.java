@@ -47,13 +47,21 @@ public class ContentDetailService {
     /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
 
+    /** V1.4.0 multi-pet Story 3.1（AC8）：Diary 关联宠物（关联表只读口 + 宠物名字头像批量读口）。 */
+    private final ContentPetQuery contentPetQuery;
+    private final com.tailtopia.profile.service.PetQueryService petQuery;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            ContentPetQuery contentPetQuery,
+            com.tailtopia.profile.service.PetQueryService petQuery) {
+        this.contentPetQuery = contentPetQuery;
+        this.petQuery = petQuery;
         this.placeCheckins = placeCheckins;
         this.followReader = followReader;
         this.contentTags = contentTags;
@@ -144,6 +152,31 @@ public class ContentDetailService {
                 ? com.tailtopia.social.read.FollowState.NONE
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace, authorToken, followState);
+                decorations, sizes, mentions, checkinPlace, authorToken, followState, linkedPets(post));
+    }
+
+    /**
+     * Diary 关联宠物（V1.4.0 multi-pet Story 3.1 · AC8）：按「第一只」口径排序，名字头像一次批量取（禁逐只查）。
+     * 只读宠物照常列出；Moment / Tips / 无关联 → null（省略键）。
+     */
+    private List<com.tailtopia.content.dto.ContentPetView> linkedPets(ContentPost post) {
+        if (post.getType() != com.tailtopia.content.domain.ContentType.GROWTH_MOMENT) {
+            return null;
+        }
+        List<Long> petIds = contentPetQuery.petsOf(post.getId());
+        if (petIds.isEmpty()) {
+            return null;
+        }
+        var views = petQuery.getAll(petIds);
+        List<com.tailtopia.content.dto.ContentPetView> out = petIds.stream()
+                .map(views::get)
+                .filter(java.util.Objects::nonNull)
+                // 3-1 复审：给他人看的宠物头像走去 EXIF 的投递地址（同访客视图 E4，防 GPS 泄漏）。
+                .map(v -> new com.tailtopia.content.dto.ContentPetView(v.id(), v.name(),
+                        v.avatarUrl() == null ? null
+                                : com.tailtopia.shared.media.AliyunOssClient.exifStrippedDeliveryUrl(v.avatarUrl()),
+                        v.petType() == null ? null : v.petType().name()))
+                .toList();
+        return out.isEmpty() ? null : out;
     }
 }

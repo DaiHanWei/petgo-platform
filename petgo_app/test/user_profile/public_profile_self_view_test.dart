@@ -103,7 +103,7 @@ Future<void> _pump(
         .overrideWithValue(_FakeProfileRepo(_profile(self: self, tags: tags))),
     publicUserPostsRepositoryProvider
         .overrideWithValue(withPosts ? _OnePostRepo() : _EmptyPostsRepo()),
-    publicProfilePetProvider(_kMeId).overrideWith((ref) async => null),
+    publicProfilePetsProvider(_kMeId).overrideWith((ref) async => const []),
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
   addTearDown(container.dispose);

@@ -153,7 +153,8 @@ public class AdminContentManageService {
         boolean dbPageFull = rows.size() >= PAGE_SIZE;
         // 🛡 **整页一次算完**（resolveAll）—— 逐行 resolve 是 N+1，而这是运营最常打开的一页。
         var resolved = speciesResolver.resolveAll(rows.stream()
-                .map(r -> new ContentSpeciesResolver.Input(r.id(), r.speciesOverride(), r.authorId()))
+                .map(r -> new ContentSpeciesResolver.Input(r.id(), r.speciesOverride(), r.authorId(),
+                        r.type()))
                 .toList());
         // 可编辑判据用到的账号集合也一次查完。
         Set<Long> editableAuthors = editableAuthorIds(rows);
@@ -260,7 +261,8 @@ public class AdminContentManageService {
             throw AppException.notFound("内容不存在").code("admin.err.content.notFound");
         }
         var resolved = speciesResolver.resolveAll(List.of(
-                new ContentSpeciesResolver.Input(row.id(), row.speciesOverride(), row.authorId())));
+                new ContentSpeciesResolver.Input(row.id(), row.speciesOverride(), row.authorId(),
+                        row.type())));
         Set<Long> editable = editableAuthorIds(List.of(row));
         return new ContentSpeciesRow(row, resolved.getOrDefault(row.id(), ResolvedSpecies.NONE),
                 row.authorId() != null && editable.contains(row.authorId()));

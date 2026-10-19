@@ -136,7 +136,8 @@ class PlaceRepository {
   /// 那个 ~110 m 的归一是为详情查询的族键与隐私做的，打卡要拿它判 500 m，归一误差会让
   /// 站在门口的人被判「不在场」。坐标只在这一个请求体里：不进日志、不进埋点。
   ///
-  /// [petIds] 本版本 = 当前唯一宠物（界面不渲染宠物选择器）。
+  /// [petIds]（V1.4.0 multi-pet Story 3.3）：本次打卡的全部宠物（按创建顺序）—— 只 1 只正常宠物时就是它（G4），
+  /// ≥ 2 只时为选宠物抽屉里选中的那些（G1 / G2）；每只各自盖章 / 计数（Story 1.3）。
   /// 失败（too-far / already-today / no-pet / 404）以 [DioException] 抛给页面，按 `typeSlug` 分流。
   Future<PlaceCheckinResult> checkIn(
     String token, {

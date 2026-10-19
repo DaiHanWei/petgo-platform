@@ -24,6 +24,30 @@ public final class ErrorTypes {
     /** Story 2.2：单账号单宠物——已存在档案时再建（409）。 */
     public static final URI PROFILE_EXISTS = URI.create(BASE + "profile-exists");
 
+    /** V1.4.0 multi-pet Story 1.4（AD-3）：建档时名额已满（409），扩展成员见 {@code PetSlotFullException}。 */
+    public static final URI PET_SLOT_FULL = URI.create(BASE + "pet-slot-full");
+
+    /** V1.4.0 multi-pet Story 1.4（AD-3）：已达每账号 5 只上限（409，优先于 {@link #PET_SLOT_FULL}）。 */
+    public static final URI PET_LIMIT_REACHED = URI.create(BASE + "pet-limit-reached");
+
+    /**
+     * V1.4.0 multi-pet Story 2.1（AD-8）：对只读宠物做写操作（409），ProblemDetail 扩展成员 {@code petId}，
+     * 见 {@link PetReadOnlyException}。
+     */
+    public static final URI PET_READ_ONLY = URI.create(BASE + "pet-read-only");
+
+    /** V1.4.0 multi-pet Story 2.1（D13）：账号宠物数 ≤ 名额，无需选择保持正常的宠物（409）。 */
+    public static final URI PET_SELECTION_NOT_NEEDED = URI.create(BASE + "pet-selection-not-needed");
+
+    /**
+     * V1.4.0 multi-pet Story 2.2（AD-6）：租用个数超出可租数 / 续租个数超出「5 − 1 − 等级名额」（409），
+     * 扩展成员 {@code rentable}（续租另带 {@code renewableMax}），见 {@link PetSlotRentUnavailableException}。
+     */
+    public static final URI PET_SLOT_RENT_UNAVAILABLE = URI.create(BASE + "pet-slot-rent-unavailable");
+
+    /** V1.4.0 multi-pet Story 2.2（AD-6）：所选名额已过期 / 非生效中，不能续租（409，走新租）。 */
+    public static final URI PET_SLOT_RENEW_INVALID = URI.create(BASE + "pet-slot-renew-invalid");
+
     /** Story 2.3 R2（F10）：发布时三方自动审核——文字关键词命中违规（422，不落库）。 */
     public static final URI CONTENT_TEXT_BLOCKED = URI.create(BASE + "content-text-blocked");
 

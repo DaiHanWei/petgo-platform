@@ -21,6 +21,12 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
     List<ConsultOrder> findByVetIdAndConsultSessionIdIn(long vetId, java.util.Collection<Long> consultSessionIds);
 
     /**
+     * 会话最近一张订单（V1.4.0 multi-pet Story 1.2 · X4：兽医会话视图按单上的宠物取身份）。
+     * V1.0 免费会话无订单 → empty（调用方回落默认宠物）。
+     */
+    Optional<ConsultOrder> findFirstByConsultSessionIdOrderByIdDesc(long consultSessionId);
+
+    /**
      * 订单中心游标分页（Story 5.1）：本人订单，游标 {@code (beforeTs, beforeId)} 之后的一页，
      * 排序 {@code created_at DESC, id DESC}。
      *

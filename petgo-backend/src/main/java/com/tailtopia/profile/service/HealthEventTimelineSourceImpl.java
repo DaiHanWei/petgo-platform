@@ -11,54 +11,45 @@ import org.springframework.stereotype.Component;
 /**
  * {@link HealthEventTimelineSource} 实现（Story 2.5 提供 bean，供 2.4 {@link TimelineService} 聚合）。
  *
- * <p>只取已 ARCHIVED 的健康事件（SKIPPED 不展示）。经 {@link ProfileService} 解析当前用户的宠物，
- * 不让 timeline 直读 health_events 表的归属（边界经 service）。健康摘要/评级不进日志。
+ * <p>只取已 ARCHIVED 的健康事件（SKIPPED 不展示）。V1.4.0 multi-pet：直接按 {@code petId} 查
+ * （归属由调用方经 {@link PetResolver} 校验过）。健康摘要/评级不进日志。
  */
 @Component
 public class HealthEventTimelineSourceImpl implements HealthEventTimelineSource {
 
     private final HealthEventRepository healthEvents;
-    private final ProfileService profileService;
 
-    public HealthEventTimelineSourceImpl(HealthEventRepository healthEvents, ProfileService profileService) {
+    public HealthEventTimelineSourceImpl(HealthEventRepository healthEvents) {
         this.healthEvents = healthEvents;
-        this.profileService = profileService;
     }
 
     @Override
-    public List<HealthEventView> recentHealthEvents(long ownerId, LocalDate anchorDate,
+    public List<HealthEventView> recentHealthEvents(long petId, LocalDate anchorDate,
             Instant anchorKey, int limit) {
-        return profileService.findByOwnerId(ownerId)
-                .map(pet -> healthEvents
-                        .findBeforeAnchor(pet.getId(), ArchiveDecision.ARCHIVED,
-                                anchorDate, anchorKey, PageRequest.of(0, limit))
-                        .stream()
-                        .map(HealthEventTimelineSourceImpl::toView)
-                        .toList())
-                .orElse(List.of());
+        return healthEvents
+                .findBeforeAnchor(petId, ArchiveDecision.ARCHIVED, anchorDate, anchorKey, PageRequest.of(0, limit))
+                .stream()
+                .map(HealthEventTimelineSourceImpl::toView)
+                .toList();
     }
 
     @Override
-    public List<HealthEventView> healthEventsInRange(long ownerId, LocalDate from, LocalDate to) {
-        return profileService.findByOwnerId(ownerId)
-                .map(pet -> healthEvents
-                        .findByEventDateBetween(pet.getId(), ArchiveDecision.ARCHIVED, from, to)
-                        .stream()
-                        .map(HealthEventTimelineSourceImpl::toView)
-                        .toList())
-                .orElse(List.of());
+    public List<HealthEventView> healthEventsInRange(long petId, LocalDate from, LocalDate to) {
+        return healthEvents
+                .findByEventDateBetween(petId, ArchiveDecision.ARCHIVED, from, to)
+                .stream()
+                .map(HealthEventTimelineSourceImpl::toView)
+                .toList();
     }
 
     @Override
-    public List<HealthEventView> healthEventsOnDay(long ownerId, LocalDate day) {
-        return healthEventsInRange(ownerId, day, day);
+    public List<HealthEventView> healthEventsOnDay(long petId, LocalDate day) {
+        return healthEventsInRange(petId, day, day);
     }
 
     @Override
-    public long countHealthEvents(long ownerId) {
-        return profileService.findByOwnerId(ownerId)
-                .map(pet -> healthEvents.countByPetIdAndArchiveDecision(pet.getId(), ArchiveDecision.ARCHIVED))
-                .orElse(0L);
+    public long countHealthEvents(long petId) {
+        return healthEvents.countByPetIdAndArchiveDecision(petId, ArchiveDecision.ARCHIVED);
     }
 
     private static HealthEventView toView(com.tailtopia.profile.domain.HealthEvent e) {

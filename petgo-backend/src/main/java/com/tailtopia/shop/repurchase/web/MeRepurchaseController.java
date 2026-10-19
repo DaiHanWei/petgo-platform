@@ -72,11 +72,26 @@ public class MeRepurchaseController {
     @GetMapping("/shop/repurchase-cards")
     public List<RepurchaseCardView> cards(@AuthenticationPrincipal Jwt jwt) {
         long userId = currentUserId(jwt);
-        String petName = profiles.findByOwnerId(userId)
-                .map(com.tailtopia.profile.domain.PetProfile::getName).orElse(null);
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
         List<RepurchaseCardView> out = new ArrayList<>();
-        for (RepurchaseTrigger t : repurchase.activeTriggersFor(userId)) {
+        List<RepurchaseTrigger> active = repurchase.activeTriggersFor(userId);
+        // V1.4.0 multi-pet（Story 1.2 · X23）：名字按每张卡自己的宠物（触发器 pet_profile_id），一次批量取。
+        java.util.Map<Long, String> petNames = new java.util.HashMap<>();
+        java.util.Set<Long> petIds = new java.util.HashSet<>();
+        for (RepurchaseTrigger t : active) {
+            if (t.getPetProfileId() != null) {
+                petIds.add(t.getPetProfileId());
+            }
+        }
+        if (!petIds.isEmpty()) {
+            for (var p : profiles.findAllById(petIds)) {
+                if (Long.valueOf(userId).equals(p.getOwnerId())) {
+                    petNames.put(p.getId(), p.getName());
+                }
+            }
+        }
+        for (RepurchaseTrigger t : active) {
+            String petName = t.getPetProfileId() == null ? null : petNames.get(t.getPetProfileId());
             var sku = skus.findById(t.getSkuId()).orElse(null);
             if (sku == null) {
                 continue;

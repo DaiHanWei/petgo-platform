@@ -165,6 +165,34 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.KEEPSAKE_ALREADY_UNLOCKED, detail);
     }
 
+    /**
+     * V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可写 → 409 {@code pet-read-only}，扩展成员 {@code petId}。
+     * 只由 {@code PetWriteGuard} 抛（可写校验单一入口）。
+     */
+    public static AppException petReadOnly(long petId) {
+        return new PetReadOnlyException(petId);
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（D13）：宠物数 ≤ 名额时改选 → 409 {@code pet-selection-not-needed}。 */
+    public static AppException petSelectionNotNeeded(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_SELECTION_NOT_NEEDED, detail);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：可租数不足 → 409 {@code pet-slot-rent-unavailable}（扩展成员 {@code rentable}）。 */
+    public static AppException petSlotRentUnavailable(int rentable) {
+        return new PetSlotRentUnavailableException(rentable, null);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：续租个数超上限 → 409 {@code pet-slot-rent-unavailable}（另带 {@code renewableMax}）。 */
+    public static AppException petSlotRenewOverLimit(int rentable, int renewableMax) {
+        return new PetSlotRentUnavailableException(rentable, renewableMax);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：所选名额不在生效中 → 409 {@code pet-slot-renew-invalid}。 */
+    public static AppException petSlotRenewInvalid(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_SLOT_RENEW_INVALID, detail);
+    }
+
     /** V1.3.2 Story 3.3：佩戴未解锁结果 → 422 {@code tailsonality-badge-locked}。 */
     public static AppException tailsonalityBadgeLocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.TAILSONALITY_BADGE_LOCKED, detail);
