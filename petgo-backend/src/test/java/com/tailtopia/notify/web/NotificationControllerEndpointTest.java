@@ -10,8 +10,11 @@ import com.tailtopia.auth.domain.User;
 import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.shared.paging.KeysetCursor;
 import com.tailtopia.support.ApiIntegrationTest;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -205,8 +208,20 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
         // 🔴 id 只作为 tie-breaker 活在 base64url 游标里，明文一个都不许露 ——
         //    列表体本来就断言了不外泄 id（见 list_returnsOnlyOwnNotifications），
         //    游标不能成为绕过它的那扇后门。
+        //    ⚠️ 不能直接 cursor.doesNotContain(String.valueOf(id))：新库 id 是个位数，
+        //    base64 文本碰巧含该数字就误报（全量 L1 稳定复现）。改为按生产同一编码
+        //    （KeysetCursor：base64url("<epochMicros>:<id>")）还原出明文形态，断言游标里没有它。
+        KeysetCursor decoded = KeysetCursor.decodeOrNull(cursor);
+        assertThat(decoded).as("游标须是 KeysetCursor 编码的不透明串").isNotNull();
+        assertThat(ids).as("tie-breaker 是本页最后一条的 id").contains(decoded.id());
+        String plain = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
+        assertThat(plain).endsWith(":" + decoded.id());
+        // 不透明：纯 base64url 字符集、不是明文本身、不含明文 "<micros>:<id>" 及其分隔符
+        assertThat(cursor).matches("[A-Za-z0-9_-]+").isNotEqualTo(plain).doesNotContain(plain).doesNotContain(":");
+        // 也不是旧版明文毫秒游标（纯数字）
+        assertThat(cursor).doesNotMatch("\\d+");
         for (Long id : ids) {
-            assertThat(cursor).doesNotContain(String.valueOf(id));
+            assertThat(cursor).doesNotContain(":" + id);
             assertThat(body).doesNotContain("\"id\":" + id);
         }
         // 但它必须仍是个能用的游标（不是把功能删了换绿）
