@@ -128,23 +128,20 @@ void main() {
     });
   });
 
-  group('续租默认勾选（AC3.2）', () {
-    test('全部生效中月租，但最多 renewableMax 个', () {
-      final o = overview(levelSlots: 2, petCount: 3, renewableMax: 2, rentals: [
+  group('续租默认勾选（2.4 AC3.2 → 4.4 AC3 规则）', () {
+    test('勾正常宠物超出永久名额的那几个，最多 renewableMax 个', () {
+      // 默认 1 + 等级 1 + 月租 2、宠物 4 → 两个都要续
+      final o = overview(levelSlots: 1, petCount: 4, renewableMax: 3, rentals: [
         rental(1, DateTime.utc(2026, 10, 31)),
         rental(2, DateTime.utc(2026, 11, 3)),
       ]);
       expect(PetSlotRenewSelection.defaultFor(o).tokens, {'r1', 'r2'});
-      final limited = overview(levelSlots: 3, petCount: 3, renewableMax: 1, rentals: [
-        rental(1, DateTime.utc(2026, 10, 31)),
-      ]);
       final sel = PetSlotRenewSelection.defaultFor(
-          PetSlotOverview.fromJson({'renewableMax': 1, 'rentals': [
+          PetSlotOverview.fromJson({'renewableMax': 1, 'levelSlots': 0, 'petCount': 3, 'rentals': [
             {'token': 'a', 'index': 1, 'expiresAt': '2026-10-31T00:00:00Z'},
             {'token': 'b', 'index': 2, 'expiresAt': '2026-11-01T00:00:00Z'},
           ]}));
-      expect(limited.rentals, hasLength(1));
-      expect(sel.tokens, {'a'}, reason: '升级拿到永久名额 → 默认少勾一个');
+      expect(sel.tokens, {'a'}, reason: '受 renewableMax 限制，勾最早到期的');
       expect(sel.canCheck('b'), isFalse, reason: '超过上限的行可见、不可勾');
       sel.toggle('a');
       expect(sel.tokens, isEmpty);

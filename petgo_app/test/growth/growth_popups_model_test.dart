@@ -48,6 +48,21 @@ void main() {
       expect(p.isEmpty, isTrue);
     });
 
+    test('multi-pet 4.4：petSlotHint true / 缺省 / 非布尔 → false', () {
+      GrowthCelebration c(Object? v) => GrowthCelebration.fromJson({
+            'fromLevel': 4,
+            'toLevel': 5,
+            'tierUp': true,
+            if (v != #absent) 'petSlotHint': v,
+          })!;
+      expect(c(true).petSlotHint, isTrue);
+      expect(c(#absent).petSlotHint, isFalse);
+      expect(c(false).petSlotHint, isFalse);
+      expect(c('true').petSlotHint, isFalse);
+      expect(c(1).petSlotHint, isFalse);
+      expect(c(null).petSlotHint, isFalse);
+    });
+
     test('frameAction 未知值 → none；AUTO → auto', () {
       expect(GrowthFrameAction.fromCode('AUTO'), GrowthFrameAction.auto);
       expect(GrowthFrameAction.fromCode('WHAT'), GrowthFrameAction.none);

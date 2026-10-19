@@ -139,6 +139,30 @@ class GrowthActivityListenerTest {
         assertThat(cs.get(2).petIds()).containsExactly(9L, 10L);
     }
 
+    /** Story 4.4 · AC4.2 / AC4.5：他人点赞多宠帖 → LIKE_RECEIVED 写全部关联宠物；查询抛错 → null 且照常入账。 */
+    @Test
+    void likeOnMultiPetPostWritesAllPetsAndQueryFailureStillAccrues() {
+        postWithPet(5L, 9L, 10L);
+        listener.onLiked(new ContentLikedEvent(5L, 3L, 7L, NOW));
+        List<AccrualCommand> cs = accrued(2);
+        assertThat(cs.get(1).rule()).isEqualTo(RuleCode.LIKE_RECEIVED);
+        assertThat(cs.get(1).petIds()).containsExactly(9L, 10L);
+
+        when(contentPets.petsOf(6L)).thenThrow(new IllegalStateException("db down"));
+        listener.onLiked(new ContentLikedEvent(6L, 3L, 7L, NOW));
+        List<AccrualCommand> all = accrued(4);
+        assertThat(all.subList(2, 4)).allSatisfy(c -> assertThat(c.petIds()).isNull());
+        assertThat(all.get(3).rule()).isEqualTo(RuleCode.LIKE_RECEIVED);
+    }
+
+    /** Story 4.4 · AC4.1：事件 petIds 为空表（Moment / Tips）→ pet_ids = null。 */
+    @Test
+    void publishedWithEmptyPetIdsHasNoPetIds() {
+        listener.onPublished(new ContentPublishedEvent(5L, 7L, ContentType.KNOWLEDGE, null, 0,
+                ContentVisibility.PUBLIC, NOW, List.of()));
+        assertThat(accrued(1).get(0).petIds()).isNull();
+    }
+
     @Test
     void selfCommentGivesNothing() {
         listener.onCommented(new ContentCommentedEvent(5L, 77L, 7L, 7L, 3L, NOW, 70L));

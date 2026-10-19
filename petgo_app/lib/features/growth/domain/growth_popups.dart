@@ -28,6 +28,7 @@ class GrowthCelebration {
     this.lifetimeTotal = 0,
     this.unlockedBenefits = const [],
     this.frameAction = GrowthFrameAction.none,
+    this.petSlotHint = false,
   });
 
   final int fromLevel;
@@ -37,6 +38,10 @@ class GrowthCelebration {
   final int lifetimeTotal;
   final List<String> unlockedBenefits;
   final GrowthFrameAction frameAction;
+
+  /// 本次升级获得永久名额且有生效中的月租（V1.4.0 multi-pet Story 4.4 · AD-16，后端读时计算）。
+  /// 缺字段 / 非布尔 → false（旧后端兼容）。只是布尔，不带显示串。
+  final bool petSlotHint;
 
   static GrowthCelebration? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
@@ -52,6 +57,7 @@ class GrowthCelebration {
       lifetimeTotal: _int(json['lifetimeTotal']) ?? 0,
       unlockedBenefits: benefits is List ? benefits.whereType<String>().toList() : const [],
       frameAction: GrowthFrameAction.fromCode(json['frameAction']),
+      petSlotHint: json['petSlotHint'] == true,
     );
   }
 }

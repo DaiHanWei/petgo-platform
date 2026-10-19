@@ -402,6 +402,10 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 8),
                                     child: Row(
+                                      // multi-pet 4.4（K2）：带永久名额说明时图标与首行顶对齐，否则与 ① 定稿一致居中（K3）。
+                                      crossAxisAlignment: _slotHintFor(code)
+                                          ? CrossAxisAlignment.start
+                                          : CrossAxisAlignment.center,
                                       children: [
                                         Container(
                                           width: 32,
@@ -414,7 +418,20 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
                                         ),
                                         const SizedBox(width: 10),
                                         Expanded(
-                                          child: Text(text, style: const TextStyle(fontSize: 13, color: AppColors.ink)),
+                                          child: _slotHintFor(code)
+                                              ? Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(text,
+                                                        style: const TextStyle(fontSize: 13, color: AppColors.ink)),
+                                                    const SizedBox(height: 2),
+                                                    Text(l10n.petSlotCelebrationPermanentHint,
+                                                        key: const ValueKey('growthCelebrationPetSlotHint'),
+                                                        style: const TextStyle(
+                                                            fontSize: 12, height: 1.45, color: AppColors.ink2)),
+                                                  ],
+                                                )
+                                              : Text(text, style: const TextStyle(fontSize: 13, color: AppColors.ink)),
                                         ),
                                       ],
                                     ),
@@ -461,6 +478,9 @@ class _LevelUpCelebrationViewState extends State<LevelUpCelebrationView> with Si
       ),
     );
   }
+
+  /// multi-pet 4.4（AC2）：只挂在跨段位全屏的「+1 slot hewan」行下；无该行（如 STAR）则不显示。
+  bool _slotHintFor(String code) => code == 'PET_SLOT_PLUS_ONE' && widget.celebration.petSlotHint;
 
   static IconData _benefitIcon(String code) => switch (code) {
         'PET_SLOT_PLUS_ONE' => Icons.pets,

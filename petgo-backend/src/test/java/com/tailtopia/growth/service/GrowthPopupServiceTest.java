@@ -195,4 +195,69 @@ class GrowthPopupServiceTest {
         assertThat(r.celebration()).isNull();
         assertThat(r.backfill()).isNull();
     }
+
+    // ---- V1.4.0 multi-pet Story 4.4 · AC1：petSlotHint ----
+
+    /** 假判定：等级名额 [Lv≥5] + [Lv≥10] 变多 且 hasRental；记录调用参数。 */
+    private final List<int[]> hintCalls = new ArrayList<>();
+
+    private GrowthPopupService serviceWithHint(boolean hasRental) {
+        CelebrationPetSlotHint hint = (userId, from, to) -> {
+            hintCalls.add(new int[] {(int) userId, from, to});
+            int fromSlots = (from >= 5 ? 1 : 0) + (from >= 10 ? 1 : 0);
+            int toSlots = (to >= 5 ? 1 : 0) + (to >= 10 ? 1 : 0);
+            return toSlots > fromSlots && hasRental;
+        };
+        return new GrowthPopupService(accounts, levels, page, () -> hint,
+                Clock.fixed(Instant.parse("2026-10-19T05:00:00Z"), ZoneOffset.UTC));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "Lv{0} → Lv{1}，有月租 {2} → {3}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "4, 5, true, true",
+        "4, 5, false, false",
+        "5, 7, true, false",
+        "9, 10, true, true",
+        "4, 11, true, true",
+    })
+    void petSlotHintFromInjectedJudge(int from, int to, boolean hasRental, boolean expected) {
+        account(to, from, to, null);
+        assertThat(serviceWithHint(hasRental).getPopups(7L).celebration().petSlotHint()).isEqualTo(expected);
+    }
+
+    @Test
+    void petSlotHintUsesReadTimeCorrectedLevels() {
+        account(6, 4, 7, null); // 待弹 to 7、当前降到 6 → 按 4 → 6 判定
+        CelebrationView c = serviceWithHint(true).getPopups(7L).celebration();
+        assertThat(c.toLevel()).isEqualTo(6);
+        assertThat(c.petSlotHint()).isTrue();
+        assertThat(hintCalls).singleElement().satisfies(a -> assertThat(a).containsExactly(7, 4, 6));
+    }
+
+    @Test
+    void petSlotHintFalseWithoutImplementation() {
+        account(5, 4, 5, null);
+        assertThat(celebration().petSlotHint()).isFalse(); // 既有 4 参构造：不注入 ② 的 bean
+    }
+
+    @Test
+    void petSlotHintNotComputedWithoutCelebration() {
+        GrowthPopupService s = serviceWithHint(true);
+        account(5, null, null, null);
+        assertThat(s.getPopups(7L).celebration()).isNull();
+        account(4, 4, 7, null); // 校正后无待弹
+        assertThat(s.getPopups(7L).celebration()).isNull();
+        assertThat(hintCalls).isEmpty();
+    }
+
+    @Test
+    void petSlotHintFailureDegradesToFalse() {
+        account(5, 4, 5, null);
+        GrowthPopupService s = new GrowthPopupService(accounts, levels, page, () -> (u, f, t) -> {
+            throw new IllegalStateException("boom");
+        }, Clock.fixed(Instant.parse("2026-10-19T05:00:00Z"), ZoneOffset.UTC));
+        CelebrationView c = s.getPopups(7L).celebration();
+        assertThat(c.tierUp()).isTrue();
+        assertThat(c.petSlotHint()).isFalse();
+    }
 }

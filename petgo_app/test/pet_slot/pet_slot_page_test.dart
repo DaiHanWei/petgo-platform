@@ -331,7 +331,7 @@ void main() {
           {'count': 2, 'is_renewal': true, 'channel': 'pawcoin'});
     });
 
-    testWidgets('超过 renewableMax 的行不可勾；一个都不勾 → 主按钮禁用', (tester) async {
+    testWidgets('超过 renewableMax 的行不可勾（默认勾最早到期的）；一个都不勾 → 主按钮禁用', (tester) async {
       await pumpSlotPage(tester,
           overviews: [
             overview(levelSlots: 1, petCount: 4, renewableMax: 1, rentals: [rental(1, oct31), rental(2, oct16)]),
@@ -340,15 +340,33 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('petSlotRenewButton')));
       await tester.pumpAndSettle();
       Icon check(int i) => tester.widget<Icon>(find.byKey(ValueKey('petSlotRenewCheck-$i')));
-      expect(check(1).icon, Icons.check_box);
-      expect(check(2).icon, Icons.check_box_outline_blank);
-      await tester.tap(find.byKey(const ValueKey('petSlotRenewRow-2')));
-      await tester.pump();
-      expect(check(2).icon, Icons.check_box_outline_blank, reason: '已勾满上限');
+      expect(check(2).icon, Icons.check_box, reason: '4.4 AC3：从最早到期（16 Okt）的开始勾');
+      expect(check(1).icon, Icons.check_box_outline_blank);
       await tester.tap(find.byKey(const ValueKey('petSlotRenewRow-1')));
       await tester.pump();
-      expect(check(1).icon, Icons.check_box_outline_blank);
+      expect(check(1).icon, Icons.check_box_outline_blank, reason: '已勾满上限');
+      await tester.tap(find.byKey(const ValueKey('petSlotRenewRow-2')));
+      await tester.pump();
+      expect(check(2).icon, Icons.check_box_outline_blank);
       expect(tester.widget<FilledButton>(find.byKey(const ValueKey('petSlotRenewConfirm'))).onPressed, isNull);
+    });
+
+    testWidgets('4.4 AC3：升级拿到永久名额后默认少勾一个；正常宠物 ≤ 永久名额 → 默认不勾、主按钮禁用、抽屉不关', (tester) async {
+      await pumpSlotPage(tester,
+          overviews: [
+            overview(levelSlots: 2, petCount: 3, rentals: [rental(1, oct31)]),
+          ],
+          pets: [...twoPets, pet(3, 'Boba')]);
+      await tester.tap(find.byKey(const ValueKey('petSlotRenewButton')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Icon>(find.byKey(const ValueKey('petSlotRenewCheck-1'))).icon,
+          Icons.check_box_outline_blank);
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('petSlotRenewConfirm'))).onPressed, isNull);
+      expect(find.byKey(const ValueKey('petSlotRenewSheet')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('petSlotRenewRow-1')));
+      await tester.pump();
+      expect(tester.widget<Icon>(find.byKey(const ValueKey('petSlotRenewCheck-1'))).icon, Icons.check_box,
+          reason: '用户可手动再勾');
     });
 
     testWidgets('409 pet-slot-renew-invalid → D10 文案', (tester) async {
