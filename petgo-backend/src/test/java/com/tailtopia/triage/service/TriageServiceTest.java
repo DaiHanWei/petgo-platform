@@ -30,6 +30,7 @@ class TriageServiceTest {
     private TriageTaskRepository tasks;
     private ApplicationEventPublisher events;
     private TriageService service;
+    private com.tailtopia.profile.service.PetResolver petResolver;
 
     @BeforeEach
     void setUp() {
@@ -39,7 +40,8 @@ class TriageServiceTest {
         var pricing = mock(com.tailtopia.config.domain.PricingConfig.class);
         when(pricing.getAiUnlockPrice()).thenReturn(10000L);
         when(platformConfig.pricing()).thenReturn(pricing);
-        service = new TriageService(tasks, events, platformConfig);
+        petResolver = mock(com.tailtopia.profile.service.PetResolver.class);
+        service = new TriageService(tasks, events, platformConfig, petResolver);
     }
 
     @Test
@@ -140,5 +142,76 @@ class TriageServiceTest {
         assertThatThrownBy(() -> service.getResult(7L, 6L))
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getStatus().value()).isEqualTo(403));
+    }
+
+    // ---- V1.4.0 multi-pet Story 4.1 · AC1：petId 归属校验（幂等之后、建任务之前）----
+
+    private void saveAssignsId(long id) {
+        when(tasks.save(any())).thenAnswer(inv -> {
+            TriageTask t = inv.getArgument(0);
+            TriageTestSupport.set(t, "id", id);
+            return t;
+        });
+    }
+
+    @Test
+    void submitWithOwnedPetPersistsPetId() {
+        saveAssignsId(43L);
+        when(petResolver.resolve(7L, 20L)).thenReturn(com.tailtopia.profile.support.PetFixtures.pet(7L, 20L,
+                java.time.Instant.EPOCH));
+
+        service.submit(7L, new TriageSubmitRequest("咳嗽", null, 20L), null, "en");
+
+        ArgumentCaptor<TriageTask> saved = ArgumentCaptor.forClass(TriageTask.class);
+        verify(tasks).save(saved.capture());
+        assertThat(saved.getValue().getPetId()).isEqualTo(20L);
+        verify(events).publishEvent(any(TriageSubmittedEvent.class));
+    }
+
+    @Test
+    void submitWithForeignOrMissingPetIs404AndCreatesNoTask() {
+        when(petResolver.resolve(7L, 99L)).thenThrow(AppException.notFound("宠物档案不存在"));
+
+        assertThatThrownBy(() -> service.submit(7L, new TriageSubmitRequest("咳嗽", null, 99L), null, "en"))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus().value()).isEqualTo(404));
+        verify(tasks, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void submitWithoutPetIdKeepsLegacyBehaviorAndSkipsResolver() {
+        saveAssignsId(44L);
+
+        service.submit(7L, new TriageSubmitRequest("咳嗽", null, null), null, "en");
+
+        ArgumentCaptor<TriageTask> saved = ArgumentCaptor.forClass(TriageTask.class);
+        verify(tasks).save(saved.capture());
+        assertThat(saved.getValue().getPetId()).isNull(); // 不用默认宠物兜底
+        org.mockito.Mockito.verifyNoInteractions(petResolver);
+    }
+
+    @Test
+    void idempotentReplayWinsOverOwnershipCheck() {
+        TriageTask existing = TriageTestSupport.task(99L, 7L, TriageStatus.PROCESSING, "x", null);
+        when(tasks.findByIdempotencyKey("idem-2")).thenReturn(Optional.of(existing));
+
+        TriageAcceptedResponse resp = service.submit(
+                7L, new TriageSubmitRequest("咳嗽", null, 555L), "idem-2", "en");
+
+        assertThat(resp.triageId()).isEqualTo(99L);
+        org.mockito.Mockito.verifyNoInteractions(petResolver);
+        verify(tasks, never()).save(any());
+    }
+
+    @Test
+    void upgradeContextCarriesTaskPetId() {
+        TriageTask done = TriageTask.submit(7L, 20L, "呕吐", List.of("k1"), null, "en");
+        TriageTestSupport.set(done, "id", 5L);
+        TriageTestSupport.set(done, "status", TriageStatus.DONE);
+        TriageTestSupport.set(done, "dangerLevel", com.tailtopia.triage.domain.DangerLevel.YELLOW);
+        when(tasks.findById(5L)).thenReturn(Optional.of(done));
+
+        assertThat(service.getResultForUpgrade(7L, 5L).petId()).isEqualTo(20L);
     }
 }

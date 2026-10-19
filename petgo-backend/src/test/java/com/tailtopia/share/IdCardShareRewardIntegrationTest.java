@@ -65,8 +65,13 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
                 null, null, tokens.generate())).getId();
     }
 
+    /** V1.4.0 multi-pet：控制器不带 petId 时 resolveOptional 的结果 = 默认宠物 id（无档案 null）。 */
+    private Long defaultPetId(long userId) {
+        return pets.findDefault(userId).map(com.tailtopia.profile.domain.PetProfile::getId).orElse(null);
+    }
+
     private Long petProfileIdOf(long userId) {
-        return pets.findByOwnerId(userId).orElseThrow().getId();
+        return pets.findDefault(userId).orElseThrow().getId();
     }
 
     private Long savedReward;
@@ -118,7 +123,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         newPetProfile(u.getId());
         configure(true, 10000, 200, 3);
 
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .isEqualTo(200);
         assertThat(wallet.balanceOf(u.getId())).isEqualTo(200);
     }
@@ -130,8 +135,8 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         configure(true, 10000, 200, 3);
         IdCard c = card(u.getId());
 
-        assertThat(service.rewardAfterShare(u.getId(), c.getId(), Instant.now())).isEqualTo(200);
-        assertThat(service.rewardAfterShare(u.getId(), c.getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), c.getId(), defaultPetId(u.getId()), Instant.now())).isEqualTo(200);
+        assertThat(service.rewardAfterShare(u.getId(), c.getId(), defaultPetId(u.getId()), Instant.now()))
                 .as("同一档案第二次不该再发").isEqualTo(0);
         assertThat(wallet.balanceOf(u.getId())).isEqualTo(200);
     }
@@ -147,9 +152,9 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         newPetProfile(u.getId());
         configure(true, 10000, 200, 3);
 
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .isEqualTo(200);
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .as("🔴 换一张卡就能再领 = 按卡去重 = 无去重").isEqualTo(0);
         assertThat(rewards.findByPetProfileId(
                 java.util.Objects.requireNonNull(profileIdOf(u.getId())))).isPresent();
@@ -161,7 +166,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         User u = newUser(); // 刻意不建档案
         configure(true, 10000, 200, 3);
 
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .isEqualTo(0);
         assertThat(wallet.balanceOf(u.getId())).isEqualTo(0);
     }
@@ -176,7 +181,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         configure(true, 10000, 200, 3);
         IdCard theirs = card(owner.getId());
 
-        assertThat(service.rewardAfterShare(attacker.getId(), theirs.getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(attacker.getId(), theirs.getId(), defaultPetId(attacker.getId()), Instant.now()))
                 .isEqualTo(0);
         assertThat(wallet.balanceOf(attacker.getId())).isEqualTo(0);
     }
@@ -195,7 +200,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         newPetProfile(u.getId());
         configure(true, 10000, 200, 0);
 
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .isEqualTo(0);
     }
 
@@ -219,14 +224,14 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         newPetProfile(u.getId());
         configure(false, 10000, 200, 3);
 
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .isEqualTo(0);
         assertThat(rewards.findByPetProfileId(profileIdOf(u.getId())))
                 .as("🛡 没发成就不该留痕 —— 否则开关打开后这个档案再也拿不到了").isEmpty();
 
         // 开关打开后应该还能拿到。
         configure(true, 10000, 200, 3);
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .isEqualTo(200);
     }
 
@@ -237,7 +242,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         newPetProfile(u.getId());
         configure(true, 100, 200, 3); // 单次 200 > 月上限 100
 
-        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now()))
+        assertThat(service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now()))
                 .isEqualTo(0);
         assertThat(rewards.findByPetProfileId(profileIdOf(u.getId()))).isEmpty();
     }
@@ -249,7 +254,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         newPetProfile(u.getId());
         configure(true, 10000, 200, 3);
 
-        service.rewardAfterShare(u.getId(), card(u.getId()).getId(), Instant.now());
+        service.rewardAfterShare(u.getId(), card(u.getId()).getId(), defaultPetId(u.getId()), Instant.now());
         assertThat(shareReward.grantedThisMonth(u.getId())).isEqualTo(200);
         assertThat(wallet.balanceOf(u.getId())).isEqualTo(200);
     }
@@ -276,7 +281,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
         try {
             List<Callable<Long>> tasks = new java.util.ArrayList<>();
             for (int i = 0; i < threads; i++) {
-                tasks.add(() -> service.rewardAfterShare(u.getId(), cardId, Instant.now()));
+                tasks.add(() -> service.rewardAfterShare(u.getId(), cardId, defaultPetId(u.getId()), Instant.now()));
             }
             for (Future<Long> f : pool.invokeAll(tasks)) {
                 total += f.get();

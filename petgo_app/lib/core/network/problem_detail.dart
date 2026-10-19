@@ -12,6 +12,7 @@ class ProblemDetail {
     this.instance,
     this.traceId,
     this.errors = const [],
+    this.extensions = const {},
   });
 
   final String? type;
@@ -21,6 +22,10 @@ class ProblemDetail {
   final String? instance;
   final String? traceId;
   final List<FieldError> errors;
+
+  /// RFC 9457 扩展成员（标准字段之外的顶层键，如 409 `pet-read-only` 的 `petId`）。
+  /// V1.4.0 multi-pet Story 2.4 追加；默认空 map，既有调用方零影响。**只取数字 / 布尔 / token，不渲染显示串**。
+  final Map<String, dynamic> extensions;
 
   /// type 末段（如 .../validation → "validation"），便于按语义本地化文案。
   String? get typeSlug {
@@ -53,8 +58,16 @@ class ProblemDetail {
       instance: map['instance']?.toString(),
       traceId: map['traceId']?.toString(),
       errors: errors,
+      extensions: {
+        for (final e in map.entries)
+          if (!_standardKeys.contains(e.key)) e.key: e.value,
+      },
     );
   }
+
+  static const Set<String> _standardKeys = {
+    'type', 'title', 'status', 'detail', 'instance', 'traceId', 'errors',
+  };
 
   /// 从 dio 异常中尽力解析 ProblemDetail。
   static ProblemDetail? fromDioException(DioException e) {

@@ -13,7 +13,7 @@ import java.util.List;
  * 过去式命名。{@code imConversationId}/{@code aiImageRefs} 供存档拉取媒体（真实拉取属 L2）。
  * {@code eventDate}/{@code symptomSummary}/{@code aiLevel}/{@code adviceSummary} 供 profile 侧写健康事件
  * （随事件携带，避免 profile 反向依赖 consult 领域；健康数据仅按需，绝不进日志）。{@code petId} 会话不持有，
- * 由 profile 侧按 {@code userId} 反查（V1 单宠物）。
+ * V1.4.0 multi-pet（Story 1.3）起由 consult 侧填本会话订单上的宠物；无订单的旧会话为 null（profile 侧回落默认宠物）。
  */
 public record ConsultClosedEvent(
         long sessionId,

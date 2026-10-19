@@ -133,7 +133,7 @@ class TimelinePlaceCheckinIntegrationTest extends ApiIntegrationTest {
     @Test
     void rebuiltPetDoesNotInheritOldCheckins() throws Exception {
         Fixture f = checkedIn();
-        profileDeletion.deleteByUserId(f.user().getId());
+        profileDeletion.deleteAllForAccount(f.user().getId());
         petProfiles.save(PetProfile.create(f.user().getId(), PetType.CAT, "Momo2", null, null, null, null,
                 "TOK-" + SEQ.incrementAndGet()));
         assertThat(timeline(f.user(), true)).doesNotContain("PLACE_CHECKIN_BANNER");

@@ -23,6 +23,7 @@ import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.service.SerialAllocationService;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -55,6 +56,8 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
     private AdminAccountRepository adminAccounts;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private SerialAllocationService serialAllocation;
 
     private static final Instant T0 = Instant.parse("2026-09-10T03:00:00Z");
 
@@ -186,7 +189,13 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         String html = drawer(buyer.getId());
         assertThat(html).contains("data-utab=\"purchases\"").contains("已购解锁").contains("ESTP-L")
                 .contains("data-utab-panel=\"purchases\"");
-        String panel = html.substring(html.indexOf("data-utab-panel=\"purchases\""), html.indexOf("id=\"user-drawer-err\""));
+        // 只截「已购解锁」这一个面板：起点 = 它自己的 data-utab-panel，终点 = 紧随其后的下一个 data-utab-panel。
+        // 原先截到 #user-drawer-err，会把 V1.4.0 地基后面各线填充的页签（⑦ 成长值的查询 / 调整表单、⑧ 宠物与名额的补发表单、⑨ 送礼…）一起框进来，
+        // 那些页签本就有按钮 / 表单 —— 断言要守的是「已购解锁只读」，不是「抽屉后半段全只读」。
+        int panelStart = html.indexOf("data-utab-panel=\"purchases\"");
+        int panelEnd = html.indexOf("data-utab-panel=", panelStart + 1);
+        assertThat(panelEnd).as("已购解锁之后应还有下一个页签面板（V1.4.0 地基 ⑦ 成长值）").isPositive();
+        String panel = html.substring(panelStart, panelEnd);
         assertThat(panel).as("只读：不得出现任何按钮 / 表单").doesNotContain("<button").doesNotContain("<form");
 
         assertThat(drawer(nobody.getId())).contains("该用户还没有任何已购解锁");
@@ -206,22 +215,29 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         hdPurchase(u.getId(), student, "PAWCOIN", null, T0.plus(1, ChronoUnit.HOURS));
         long sim = typedCard(u.getId(), base + 2, "SIM", null, "TX600324020003");
         hdPurchase(u.getId(), sim, "PAWCOIN", null, T0.plus(2, ChronoUnit.HOURS));
-        // V95 前老卡：无身份码，流水号 42 → 0042
+        // V95 前老卡：无身份码，流水号补零到 4 位（如 42 → 0042）。流水号必须走生产号池 allocate() 取：
+        // - 写死 42 会和同库其他测试建的卡撞 uq_id_cards_serial（CI 全量跑时稳定复现）；
+        // - 「取 1–999 里库中空闲的最小号」也不行：新库上取到的正是 pet_serial_seq 的下一个号（如 1），
+        //   序列不知道它已被占，之后第一个经接口建卡的用例 nextval 拿到同号 → 500
+        //   （IdCardNumberReuseIntegrationTest.sourceOfAnotherUserIsNotUsed 全量稳定复现）。
+        //   号池取出的号仍是小号（测试库里远小于 9999），补零断言照旧成立。
+        long legacySerial = serialAllocation.allocate();
+        String legacyNo = String.format("%04d", legacySerial);
         long legacy = jdbc.queryForObject("INSERT INTO id_cards (user_id, serial_id, name, hd_unlocked) "
-                + "VALUES (?, 42, 'Mochi', true) RETURNING id", Long.class, u.getId());
+                + "VALUES (?, ?, 'Mochi', true) RETURNING id", Long.class, u.getId(), legacySerial);
         hdPurchase(u.getId(), legacy, "PAWCOIN", null, T0.plus(3, ChronoUnit.HOURS));
 
         UserPurchasesView v = query.forUser(u.getId());
         assertThat(v.ktpCards()).extracting(UserPurchasesView.KtpCard::styleKey)
                 .containsExactly("KTP", "SIM", "STUDENT.CERIA", "PASSPORT");
         assertThat(v.ktpCards()).extracting(UserPurchasesView.KtpCard::displayNo)
-                .containsExactly("0042", "TX600324020003", "TX600324020002", "TX600324020001");
+                .containsExactly(legacyNo, "TX600324020003", "TX600324020002", "TX600324020001");
 
         String html = drawer(u.getId());
         assertThat(html).contains("护照 · No. TX600324020001 · Mochi")
                 .contains("学生卡 Ceria · No. TX600324020002 · Mochi")
                 .contains("SIM 驾照 · No. TX600324020003 · Mochi")
-                .contains("KTP · No. 0042 · Mochi")
+                .contains("KTP · No. " + legacyNo + " · Mochi")
                 .doesNotContain("KTP #");
     }
 

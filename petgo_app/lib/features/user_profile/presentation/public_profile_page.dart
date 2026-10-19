@@ -15,6 +15,7 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/growth_avatar_decoration.dart';
 import '../../../shared/widgets/post_grid_tile.dart';
 import '../../../shared/widgets/profile_stats_row.dart';
 import '../../../shared/widgets/user_tag_row.dart';
@@ -158,7 +159,7 @@ class PublicProfilePage extends ConsumerWidget {
       (prev, next) {
         if (prev == next) return;
         ref.invalidate(publicProfileProvider(userId));
-        ref.invalidate(publicProfilePetProvider(userId));
+        ref.invalidate(publicProfilePetsProvider(userId));
         ref.invalidate(publicUserPostsProvider(userId));
       },
     );
@@ -254,25 +255,30 @@ class PublicProfilePage extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
       children: [
         Center(
-          // UI 稿 A2 `.av.person`：无头像 = 白底 + 1px line 描边（border-box 84）+ 实心 person 52 muted。
-          child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
-              ? Container(
-                  key: const ValueKey('profileAvatar'),
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.line),
+          // V1.4.0 ① Story 3.2（A4）：外包等级角标（26）+ 头像框；`profileAvatar` key 留在原控件上。
+          child: GrowthAvatarDecoration(
+            badge: p.badge,
+            diameter: 84,
+            // UI 稿 A2 `.av.person`：无头像 = 白底 + 1px line 描边（border-box 84）+ 实心 person 52 muted。
+            child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
+                ? Container(
+                    key: const ValueKey('profileAvatar'),
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: const Icon(Icons.person_rounded, size: 52, color: AppColors.muted),
+                  )
+                : CircleAvatar(
+                    key: const ValueKey('profileAvatar'),
+                    radius: 42,
+                    backgroundColor: AppColors.border,
+                    backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
                   ),
-                  child: const Icon(Icons.person_rounded, size: 52, color: AppColors.muted),
-                )
-              : CircleAvatar(
-                  key: const ValueKey('profileAvatar'),
-                  radius: 42,
-                  backgroundColor: AppColors.border,
-                  backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
-                ),
+          ),
         ),
         const SizedBox(height: 12),
         // 运营标签的第五处展示位（前四处：feed / detail / comment / mini_profile）。
@@ -698,8 +704,8 @@ class _SectionTitle extends StatelessWidget {
 /// 每项：头像 64（外圈 2px 白 + 2px 浅紫环）+ 右上角 diary 数角标，下方名字 +「物种 · 年龄」。
 /// 点头像进那只宠物的**访客视图**。
 ///
-/// ## 组件按列表做，本版本只有一只
-/// 数据源仍是现有单宠物接口（包成长度 0 / 1 的列表）；>4 只时横向滚动。**不做多宠物取数**。
+/// ## 组件按列表做（V1.4.0 multi-pet Story 1.5 起是真列表）
+/// 数据源 `GET /users/{userId}/pets`（全部宠物）；>4 只时横向滚动（J2）。
 ///
 /// ## 🔴 点进去要登录（AC1），但头像本身游客也看得见
 /// 站内访客接口**仅对登录用户开放**（AD-4 Rule 1），所以跳转前走 FR-0C 登录门控；
@@ -715,11 +721,12 @@ class _PetSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final pet = ref.watch(publicProfilePetProvider(userId)).value;
-    // 没有宠物 / 还在取 / 取失败 / 204 → 整块（含小节标题）不渲染（UI 稿 A5）。
+    // V1.4.0 multi-pet（Story 1.5 · AC6）：数据源换成该用户的全部宠物（J0 ~ J2）。
+    // 🛡 **不显示只读锁标**：访客不该看出主人的名额状态。
+    final pets = ref.watch(publicProfilePetsProvider(userId)).value;
+    // 没有宠物 / 还在取 / 取失败 / 空数组 → 整块（含小节标题）不渲染（UI 稿 A5）。
     // 🛡 失败也不给错误态：这是主页上的一个装饰区块，为它摆一条红字会喧宾夺主。
-    if (pet == null) return const SizedBox.shrink();
-    final pets = <PublicProfilePet>[pet];
+    if (pets == null || pets.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
       child: Column(
@@ -734,7 +741,7 @@ class _PetSection extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final p in pets) _item(context, ref, l10n, p),
+                for (var i = 0; i < pets.length; i++) _item(context, ref, l10n, pets[i], i),
               ],
             ),
           ),
@@ -744,18 +751,22 @@ class _PetSection extends ConsumerWidget {
   }
 
   /// 单项外观抽到共享件 [PetAvatarItem]（bug 20261015-590：我的页「Hewanku」同款）。
-  Widget _item(BuildContext context, WidgetRef ref, AppLocalizations l10n, PublicProfilePet pet) {
+  ///
+  /// key：首只沿用 `profilePetCard` 等（既有测试在用），其余加序号（`profilePetCard-1` …）。
+  Widget _item(BuildContext context, WidgetRef ref, AppLocalizations l10n, PublicProfilePet pet,
+      int index) {
+    Key k(String base) => ValueKey(index == 0 ? base : '$base-$index');
     return PetAvatarItem(
-      key: const ValueKey('profilePetCard'),
+      key: k('profilePetCard'),
       name: pet.name,
       avatarUrl: pet.avatarUrl,
       petType: pet.petType,
       birthday: pet.birthday,
       tailsonalityBadge: pet.tailsonalityBadge,
       diaryCount: pet.diaryCount,
-      diaryBadgeKey: const ValueKey('profilePetDiaryBadge'),
-      tailsonalityKey: const ValueKey('profilePetTailsonality'),
-      metaKey: const ValueKey('profilePetMeta'),
+      diaryBadgeKey: k('profilePetDiaryBadge'),
+      tailsonalityKey: k('profilePetTailsonality'),
+      metaKey: k('profilePetMeta'),
       onTap: () => _open(context, ref, pet),
     );
   }

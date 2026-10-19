@@ -10,6 +10,7 @@ import com.tailtopia.avatarmoderation.domain.AvatarDefaults;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.avatarmoderation.domain.AvatarSubjectType;
 import com.tailtopia.avatarmoderation.event.AvatarReviewRequestedEvent;
+import com.tailtopia.growth.service.GrowthPageQuery;
 import com.tailtopia.namemoderation.domain.NameTargetType;
 import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -33,13 +34,16 @@ public class MeService {
     private final ApplicationEventPublisher events;
     /** V1.3.4 follow Story 1.2：我的页四格的帖子数 / 获赞数（作者自视口径，D-5）。 */
     private final ContentService contentService;
+    /** V1.4.0 ① Story 1.4：我的页等级胶囊的成长值摘要。 */
+    private final GrowthPageQuery growth;
 
     public MeService(UserRepository users, PetProfileRepository petProfiles,
-            ApplicationEventPublisher events, ContentService contentService) {
+            ApplicationEventPublisher events, ContentService contentService, GrowthPageQuery growth) {
         this.users = users;
         this.petProfiles = petProfiles;
         this.events = events;
         this.contentService = contentService;
+        this.growth = growth;
     }
 
     @Transactional(readOnly = true)
@@ -47,11 +51,12 @@ public class MeService {
         return withStats(load(userId), userId);
     }
 
-    /** /me 聚合视图（GET 与 PATCH 共用）：带作者自视的帖子数 / 获赞数（D-5 / T-5）。 */
+    /** /me 聚合视图（GET 与 PATCH 共用）：带作者自视的帖子数 / 获赞数（D-5 / T-5）与成长值摘要（V1.4.0 ①）。 */
     private UserProfileResponse withStats(User user, long userId) {
         return UserProfileResponse.from(user, hasPetProfile(userId),
                 contentService.countOwnPostsByAuthor(userId),
-                contentService.sumLikesOnOwnPostsByAuthor(userId));
+                contentService.sumLikesOnOwnPostsByAuthor(userId),
+                growth.brief(userId));
     }
 
     /**

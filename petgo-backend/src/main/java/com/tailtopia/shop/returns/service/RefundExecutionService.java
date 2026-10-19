@@ -3,6 +3,8 @@ package com.tailtopia.shop.returns.service;
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.event.RefundSucceededEvent;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.ShopOrder;
@@ -20,6 +22,7 @@ import com.tailtopia.shop.returns.repository.ReturnRequestRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,11 +58,12 @@ public class RefundExecutionService {
     private final PawCoinWalletService wallet;
     private final PawCoinConfigRepository pawcoinConfig;
     private final ReturnRequestService requests;
+    private final ApplicationEventPublisher events;
 
     public RefundExecutionService(ReturnRequestRepository returns, ReturnLineRepository returnLines,
             ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             PawCoinWalletService wallet, PawCoinConfigRepository pawcoinConfig,
-            ReturnRequestService requests) {
+            ReturnRequestService requests, ApplicationEventPublisher events) {
         this.returns = returns;
         this.returnLines = returnLines;
         this.orders = orders;
@@ -67,6 +71,7 @@ public class RefundExecutionService {
         this.wallet = wallet;
         this.pawcoinConfig = pawcoinConfig;
         this.requests = requests;
+        this.events = events;
     }
 
     /**
@@ -157,6 +162,11 @@ public class RefundExecutionService {
         r.recordShipbackReimbursement(shipbackReimbursed);
         r.markRefunded();
         returns.save(r);
+        // V1.4.0 ① Story 1.3（AD-9 / P-4）：置 REFUNDED 即扣回消费返成长值（TO_BANK 不等线下打款）。
+        //    退款额 = 本次应退的订单内金额（不含补偿 / 激励溢价、回程运费）；分母 = 订单实付总额。
+        events.publishEvent(new RefundSucceededEvent(r.getPublicToken(), order.getUserId(),
+                PaymentPurpose.SHOP_ORDER, "SHOP_ORDER", String.valueOf(order.getId()), null, q.refundTotal(),
+                order.paidTotal()));
 
         // 🔴 订单侧累计字段【在同一事务内递增】（AD-2）——下一次部分退款的分母靠它
         order.recordRefund(q.refundTotal(), q.coinRefund());

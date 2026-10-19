@@ -114,7 +114,7 @@ class PlaceCheckinIntegrationTest extends ApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body(LAT, pet.getId())))
                 .andExpect(status().isCreated());
 
-        profileDeletion.deleteByUserId(u.getId());
+        profileDeletion.deleteAllForAccount(u.getId());
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM place_checkin_pets WHERE pet_profile_id = ?",
                 Long.class, pet.getId())).isZero();

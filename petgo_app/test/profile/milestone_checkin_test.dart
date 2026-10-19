@@ -7,6 +7,7 @@ import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/domain/newbie_tasks.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// L0 widget（Story 8.4）：「已打卡」picker — 候选列表、已关联置灰、选择 → checkIn 调用。
 class _FakeRepo implements MilestoneRepository {
@@ -19,12 +20,12 @@ class _FakeRepo implements MilestoneRepository {
   List<String>? lastReportedCelebrations;
 
   @override
-  Future<void> reportCelebrations(List<String> codes) async {
+  Future<void> reportCelebrations(List<String> codes, {int? petId}) async {
     lastReportedCelebrations = codes;
   }
 
   @override
-  Future<MilestoneList> getMilestones() async => const MilestoneList(
+  Future<MilestoneList> getMilestones({int? petId}) async => const MilestoneList(
         petName: 'Momo', completedCount: 0, totalCount: 1,
         groups: [
           MilestoneGroup(level: MilestoneLevel.s, completedCount: 0, totalCount: 1, items: [
@@ -36,10 +37,10 @@ class _FakeRepo implements MilestoneRepository {
       );
 
   @override
-  Future<List<MilestoneCheckinCandidate>> getCheckinCandidates() async => _candidates;
+  Future<List<MilestoneCheckinCandidate>> getCheckinCandidates({int? petId}) async => _candidates;
 
   @override
-  Future<MilestoneItem> checkIn(String code, int contentId) async {
+  Future<MilestoneItem> checkIn(String code, int contentId, {int? petId}) async {
     lastCode = code;
     lastContentId = contentId;
     return MilestoneItem(
@@ -48,7 +49,7 @@ class _FakeRepo implements MilestoneRepository {
   }
 
   @override
-  Future<void> signalCardShared() async {}
+  Future<void> signalCardShared({int? petId}) async {}
 
   @override
   Future<String> createShare(String code,
@@ -56,12 +57,14 @@ class _FakeRepo implements MilestoneRepository {
           required String body,
           required String locale,
           required String collectionLevels,
-          required List<String> collectionCodes}) async =>
+          required List<String> collectionCodes, int? petId}) async =>
       'token';
 }
 
 Widget _wrap(_FakeRepo repo) => ProviderScope(
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         milestoneRepositoryProvider.overrideWithValue(repo),
         // 顶部新手卡不参与本用例：达成态渲染紧凑横幅，避免真网络调用致 pumpAndSettle 超时。
         newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(

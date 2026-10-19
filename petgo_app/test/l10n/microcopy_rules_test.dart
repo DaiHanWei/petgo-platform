@@ -130,6 +130,12 @@ const _sameInBothLocales = {
   'new',
   // 币种符号 Rp（印尼盾）：两语写法相同，不是待翻译的词（V1.3.2 Story 3.2 l10n 说明）。
   'rp',
+  // V1.4.0 ① Tailrent Level（Story 1.5）：等级体系专名「Tailrent Level」、等级缩写 Lv、经验值 EXP，
+  // 以及 UI 稿文案表（本地运营已审核）里 EN / ID 同写的借词 Event / Tips —— 两语同形，不是漏译。
+  // （'level' 另被 multi-pet Story 2.4 的名额来源标签「Level」（D-5）用到，同一条豁免，合并时去重。）
+  'tailrent', 'level', 'lv', 'exp', 'event', 'tips',
+  // V1.4.0 ① Story 2.3：存量汇总账单「Total」——印尼语同写（UI 稿 E1 屏内）。
+  'total',
   // 配对连接符「{宠物} x {主人}」（V1.3.2 · 2026-10-05 分享卡设计稿）：小写 x 当「×」用，两语同写，不是词。
   'x',
   // 印尼语直接借用的英文词

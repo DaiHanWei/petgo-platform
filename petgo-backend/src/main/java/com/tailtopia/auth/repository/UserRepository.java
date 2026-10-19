@@ -209,6 +209,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 普通用户（不推兽医/管理员）、真实账号（<b>不推虚拟种子账号</b>——给自己的运营马甲发召回
      * 既污染漏斗又毫无意义）、未注销、未停用、状态 ACTIVE（被封号的人不该收到「回来记录吧」）。
      */
+    /**
+     * 「运营发布身份」页的官方号区块（V1.4.0 ① Story 4.4 · P-7，2026-10-19 拍板落点）：{@code role = ADMIN}、
+     * 非虚拟号、未注销、且没有任何注销申请行（注销已提交即不再列出，D1/D2）。
+     */
+    @Query("select u from User u where u.role = com.tailtopia.auth.domain.Role.ADMIN "
+            + "and u.accountType <> com.tailtopia.auth.domain.AccountType.VIRTUAL and u.deletedAt is null "
+            + "and not exists (select 1 from com.tailtopia.account.domain.AccountDeletion d where d.userId = u.id) "
+            + "order by u.id")
+    List<User> findOfficialAccounts();
+
     @Query("select u from User u where u.role = :role and u.accountType = :accountType "
             + "and u.deletedAt is null and u.enabled = true and u.status = :status")
     List<User> findLifecyclePushCandidates(@Param("role") Role role,

@@ -35,7 +35,9 @@ class PlaceDetailResponseContractTest {
             "latitude", "longitude", "distanceMeters", "markedBy",
             "commentCount", "recommendCount", "notRecommendCount", "photoSlotsRemaining",
             // V1.3.2 Story 1.1：登录用户的「今日已打卡」（游客省略，见下方专例）。
-            "checkedInToday");
+            "checkedInToday",
+            // V1.4.0 ④ Story 2.1：是否已收藏（primitive，恒下发；游客 false）。
+            "collected");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -102,8 +104,8 @@ class PlaceDetailResponseContractTest {
         Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7, true));
 
         for (String excluded : List.of(
-                // 收藏
-                "favorited", "favorite", "favoriteCount", "bookmarked",
+                // 收藏：V1.4.0 起只有 collected 一个键；收藏数仍不展示（PRD：场所收藏数本版本不展示）
+                "favorited", "favorite", "favoriteCount", "bookmarked", "collectCount",
                 // 评分打星
                 "rating", "ratingAvg", "score", "stars",
                 // 营业时间 / 电话等商户字段
@@ -114,6 +116,20 @@ class PlaceDetailResponseContractTest {
                 "editable", "canEdit", "editUrl")) {
             assertThat(m).as("AC6 反向验收：不该有 %s", excluded).doesNotContainKey(excluded);
         }
+    }
+
+    /** V1.4.0 multi-pet Story 1.3 · AC4.1：登录用户多一个 checkedInPetIds 键（其余键集不变）。 */
+    @Test
+    void signedInDetailCarriesCheckedInPetIds() {
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7,
+                false, List.of(70L)));
+
+        java.util.Set<String> expected = new java.util.HashSet<>(FULL_FIELDS);
+        expected.add("checkedInPetIds");
+        assertThat(m.keySet()).isEqualTo(expected);
+        assertThat(m.get("checkedInToday")).isEqualTo(false);
+        assertThat((List<?>) m.get("checkedInPetIds")).singleElement()
+                .satisfies(v -> assertThat(((Number) v).longValue()).isEqualTo(70L));
     }
 
     /** V1.3.2 Story 1.1 AC3：游客响应**不含** checkedInToday（省略，不是 false）。 */
@@ -211,5 +227,25 @@ class PlaceDetailResponseContractTest {
                 PlaceDetailResponse.of(noExtras, marker(), List.of(), null, 0L, 0L, 0L, 7));
         assertThat(m).doesNotContainKey("description");
         assertThat(m.get("photos")).isEqualTo(List.of());
+    }
+
+    /**
+     * V1.4.0 ① Story 3.1（已核对的副作用）：{@code markedBy} 直接序列化 {@code AuthorView} → 有等级时多出嵌套
+     * {@code growth:{level,tier,frame}}；无等级时整体缺失。{@code badgeLevel()} 等辅助方法不带 get 前缀、不进 JSON。
+     */
+    @Test
+    void markedByCarriesNestedGrowthOnlyWhenPresent() {
+        AuthorView withGrowth = marker().withGrowth(new com.tailtopia.growth.domain.GrowthBadge(
+                12, com.tailtopia.growth.domain.GrowthTier.GUARDIAN, com.tailtopia.growth.domain.FrameChoice.UPGRADED));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> markedBy = (Map<String, Object>) wire(
+                PlaceDetailResponse.of(place(), withGrowth, TWO_PHOTOS, null, 0L, 0L, 0L, 7)).get("markedBy");
+        assertThat(markedBy.get("growth")).isEqualTo(Map.of("level", 12, "tier", "GUARDIAN", "frame", "UPGRADED"));
+        assertThat(markedBy).doesNotContainKeys("badgeLevel", "badgeTier", "badgeFrame");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> plain = (Map<String, Object>) wire(
+                PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L, 7)).get("markedBy");
+        assertThat(plain).doesNotContainKeys("growth", "badgeLevel", "badgeTier", "badgeFrame");
     }
 }

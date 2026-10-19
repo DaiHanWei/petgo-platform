@@ -32,13 +32,14 @@ class HealthRecordServiceTest {
     private final PetProfileRepository profiles = mock(PetProfileRepository.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final HealthRecordService service =
-            new HealthRecordService(records, healthEvents, profiles, events);
+            new HealthRecordService(records, healthEvents, new PetResolver(profiles), events,
+                    new PetWriteGuard(profiles));
 
     @BeforeEach
     void setUp() {
         PetProfile pet = mock(PetProfile.class);
         when(pet.getId()).thenReturn(5L);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(pet));
+        when(profiles.findDefault(7L)).thenReturn(Optional.of(pet));
     }
 
     private static HealthRecordCreateRequest req(String type, String customName) {
@@ -47,7 +48,7 @@ class HealthRecordServiceTest {
 
     @Test
     void createNoProfile404() {
-        when(profiles.findByOwnerId(9L)).thenReturn(Optional.empty());
+        when(profiles.findDefault(9L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.create(9L, req("VACCINE", null)))
                 .isInstanceOf(AppException.class);
         verify(records, never()).save(any());
@@ -88,6 +89,9 @@ class HealthRecordServiceTest {
         verify(events).publishEvent(ev.capture());
         assertThat(ev.getValue()).isInstanceOf(
                 com.tailtopia.profile.event.HealthRecordCreatedEvent.class);
+        // V1.4.0 multi-pet（Story 1.3 · AC6）：事件带录入记录的这只宠物。
+        assertThat(((com.tailtopia.profile.event.HealthRecordCreatedEvent) ev.getValue()).petProfileId())
+                .isEqualTo(5L);
     }
 
     @Test
@@ -103,5 +107,93 @@ class HealthRecordServiceTest {
         when(records.findByIdAndPetProfileId(99L, 5L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.delete(7L, 99L)).isInstanceOf(AppException.class);
         verify(records, never()).delete(any());
+    }
+
+    // ---------- V1.4.0 multi-pet：按 petId 寻址（AC5） ----------
+
+    @Test
+    void petIdAEditingBsRecord404() {
+        // A=5（默认，setUp 已备）、B=6；记录 77 属于 B。用 petId=A 改 / 删 → 按 (77, A) 查不到 → 404。
+        PetProfile a = mock(PetProfile.class);
+        when(a.getId()).thenReturn(5L);
+        when(profiles.findByIdAndOwnerId(5L, 7L)).thenReturn(Optional.of(a));
+        when(records.findByIdAndPetProfileId(77L, 5L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.update(7L, 5L, 77L,
+                new HealthRecordUpdateRequest(null, null, null, null, "x")))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.delete(7L, 5L, 77L)).isInstanceOf(AppException.class);
+        verify(records, never()).save(any());
+        verify(records, never()).delete(any());
+    }
+
+    @Test
+    void createWithPetIdBWritesToB() {
+        PetProfile b = mock(PetProfile.class);
+        when(b.getId()).thenReturn(6L);
+        when(profiles.findByIdAndOwnerId(6L, 7L)).thenReturn(Optional.of(b));
+        HealthRecord saved = mock(HealthRecord.class);
+        when(saved.getId()).thenReturn(1L);
+        when(saved.getType()).thenReturn(HealthRecordType.VACCINE);
+        when(records.save(any())).thenReturn(saved);
+        service.create(7L, 6L, req("VACCINE", null));
+        ArgumentCaptor<HealthRecord> cap = ArgumentCaptor.forClass(HealthRecord.class);
+        verify(records).save(cap.capture());
+        assertThat(cap.getValue().getPetProfileId()).isEqualTo(6L);
+    }
+
+    @Test
+    void foreignPetId404OnList() {
+        when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.timeline(7L, 99L)).isInstanceOf(AppException.class);
+    }
+
+    // ---- V1.4.0 multi-pet Story 2.1（AC7 #4）：只读宠物 → 409 pet-read-only，不写不删、不发事件 ----
+
+    private PetProfile readOnlyPet(long id) {
+        PetProfile p = com.tailtopia.profile.support.PetFixtures.pet(7L, id, java.time.Instant.EPOCH);
+        p.markReadOnly();
+        when(profiles.findByIdAndOwnerId(id, 7L)).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    private static void assertPetReadOnly(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, long petId) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(com.tailtopia.shared.error.PetReadOnlyException.class, e -> {
+            assertThat(e.getStatus().value()).isEqualTo(409);
+            assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+            assertThat(e.problemExtensions()).containsEntry("petId", petId);
+        });
+    }
+
+    @Test
+    void createOnReadOnlyPet409() {
+        readOnlyPet(8L);
+        assertPetReadOnly(() -> service.create(7L, 8L, req("VACCINE", null)), 8L);
+        verify(records, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void updateOnReadOnlyPet409() {
+        readOnlyPet(8L);
+        assertPetReadOnly(() -> service.update(7L, 8L, 1L,
+                new HealthRecordUpdateRequest(null, null, null, null, "n")), 8L);
+        verify(records, never()).findByIdAndPetProfileId(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong());
+        verify(records, never()).save(any());
+    }
+
+    @Test
+    void deleteOnReadOnlyPet409() {
+        readOnlyPet(8L);
+        assertPetReadOnly(() -> service.delete(7L, 8L, 1L), 8L);
+        verify(records, never()).delete(any());
+    }
+
+    /** 归属先于可写：他人宠物仍 404，不泄露其状态。 */
+    @Test
+    void foreignPetStill404OnWrite() {
+        when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.create(7L, 99L, req("VACCINE", null)))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(404));
     }
 }

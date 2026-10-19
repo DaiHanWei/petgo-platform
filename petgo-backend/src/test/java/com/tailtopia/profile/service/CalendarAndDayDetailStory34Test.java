@@ -41,7 +41,7 @@ class CalendarAndDayDetailStory34Test {
     private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityTimeline =
             Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityTimelineQuery.class);
 
-    private ProfileService profileService;
+    private PetResolver petResolver;
     private ContentService contentService;
     private HealthRecordRepository healthRecords;
     private HealthEventTimelineSource health;
@@ -56,7 +56,7 @@ class CalendarAndDayDetailStory34Test {
 
     @BeforeEach
     void setUp() {
-        profileService = Mockito.mock(ProfileService.class);
+        petResolver = Mockito.mock(PetResolver.class);
         contentService = Mockito.mock(ContentService.class);
         healthRecords = Mockito.mock(HealthRecordRepository.class);
         health = Mockito.mock(HealthEventTimelineSource.class);
@@ -64,7 +64,7 @@ class CalendarAndDayDetailStory34Test {
         MilestoneCompletionRepository completions = Mockito.mock(MilestoneCompletionRepository.class);
         IdCardRepository idCards = Mockito.mock(IdCardRepository.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
-        service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
+        service = new TimelineService(petResolver, contentService, healthProvider, milestoneService,
                 // V1.3.0 Story 1.4：档案统计栏顺带下发的「未庆祝」角标数；本类不验它，给 mock（默认 0）。
                 Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, completions, idCards,
@@ -73,7 +73,9 @@ class CalendarAndDayDetailStory34Test {
                 // V1.3.2 Story 1.6：源⑥ 场所打卡（本类按需 stub；不声明能力时根本不调）。
                 placeCheckinQuery,
                 // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
-                tailsonalityTimeline);
+                tailsonalityTimeline,
+                // V1.4.0 gift Story 2.1：统计卡礼物总价值（本类不验它，给 mock）。
+                Mockito.mock(com.tailtopia.gift.service.GiftShowcaseQuery.class));
 
         PetProfile profile = PetProfile.create(1L, PetType.CAT, "Momo", null, null, null, null, "tok");
         java.lang.reflect.Field id;
@@ -84,7 +86,7 @@ class CalendarAndDayDetailStory34Test {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError(e);
         }
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(profile));
+        when(petResolver.resolve(1L, null)).thenReturn(profile);
     }
 
     private static HealthRecord record(HealthRecordType type, String createdAt) {
@@ -108,7 +110,7 @@ class CalendarAndDayDetailStory34Test {
     void calendarCountsHealthRecordsPerDay_andKeepsExistingDimensions() {
         when(contentService.findGrowthMomentsInMonth(eq(1L), anyLong(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of());
-        when(health.healthEventsInRange(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of());
+        when(health.healthEventsInRange(eq(9L), Mockito.any(), Mockito.any())).thenReturn(List.of());
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of(record(HealthRecordType.VACCINE, "2026-06-02T08:00:00Z"),
@@ -133,7 +135,7 @@ class CalendarAndDayDetailStory34Test {
                         DAY, List.of("https://x/1.jpg"), "文字",
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC,
                 com.tailtopia.content.domain.PostStatus.PUBLISHED)));
-        when(health.healthEventsInRange(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of());
+        when(health.healthEventsInRange(eq(9L), Mockito.any(), Mockito.any())).thenReturn(List.of());
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of(record(HealthRecordType.VACCINE, "2026-06-02T08:00:00Z")));
@@ -155,7 +157,7 @@ class CalendarAndDayDetailStory34Test {
                         DAY, List.of(), "文字",
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC,
                 com.tailtopia.content.domain.PostStatus.PUBLISHED)));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any()))
+        when(health.healthEventsOnDay(eq(9L), Mockito.any()))
                 .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T09:00:00Z"),
                         DAY, "GREEN", "摘要", "AI_TRIAGE", "triage:1")));
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
@@ -182,7 +184,7 @@ class CalendarAndDayDetailStory34Test {
                         new GrowthMomentView(1L, Instant.parse("2026-06-02T09:00:00Z"), DAY, List.of(), "早",
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC,
                 com.tailtopia.content.domain.PostStatus.PUBLISHED)));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any())).thenReturn(List.of());
+        when(health.healthEventsOnDay(eq(9L), Mockito.any())).thenReturn(List.of());
         when(healthRecords.findByPetProfileIdAndEventDateBetweenOrderByEventDateAscIdAsc(
                 anyLong(), eq(DAY), eq(DAY))).thenReturn(List.of());
 

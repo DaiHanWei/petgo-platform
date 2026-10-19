@@ -8,7 +8,7 @@ class FakeTailsonalityShareReward implements TailsonalityShareRewardRepository {
   bool fail = false;
 
   @override
-  Future<int> reportShareForReward(String cardType) async {
+  Future<int> reportShareForReward(String cardType, {int? petId}) async {
     calls.add(cardType);
     if (fail) throw Exception('network');
     return coins;
@@ -24,7 +24,7 @@ class FakePassportShareReward implements PassportShareRewardRepository {
   bool fail = false;
 
   @override
-  Future<int> reportShareForReward(String cardType) async {
+  Future<int> reportShareForReward(String cardType, {int? petId}) async {
     calls.add(cardType);
     if (fail) throw Exception('network');
     return coins;

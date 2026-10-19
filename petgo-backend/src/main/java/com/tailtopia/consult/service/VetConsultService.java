@@ -21,9 +21,11 @@ import com.tailtopia.profile.dto.PetIdentityView;
 import com.tailtopia.profile.service.PetProfileQueryService;
 import com.tailtopia.shared.error.AppException;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,10 +89,11 @@ public class VetConsultService {
                 // bug 20260803：弃单（用户超时离开未续期）不进收件箱，与接单守卫同口径。
                 .filter(s -> !s.isWaitingAbandoned(ConsultSessionService.WAITING_ABANDON_SECONDS))
                 .toList();
-        Identities ids = resolveIdentities(sessions);
+        // WAITING 会话是 V1.0 免费发起路径，没有订单 → 宠物回落默认宠物（V1.4.0 multi-pet Story 1.2 · X5）。
+        Identities ids = resolveIdentities(sessions, Map.of());
         return sessions.stream()
                 .map(s -> {
-                    PetIdentityView pet = ids.pet(s.getUserId());
+                    PetIdentityView pet = ids.pet(s);
                     return VetInboxItem.of(s, pet.name(), pet.species(), pet.ageMonths(), ids.handle(s.getUserId()));
                 })
                 .toList();
@@ -108,10 +111,10 @@ public class VetConsultService {
     public List<VetActiveItem> inProgressList(long vetId) {
         List<ConsultSession> sessions = repo.findByVetIdAndStatusIn(
                 vetId, List.of(SessionStatus.IN_PROGRESS));
-        Identities ids = resolveIdentities(sessions);
+        Identities ids = resolveIdentities(sessions, ordersBySession(vetId, sessions));
         return sessions.stream()
                 .map(s -> new VetActiveItem(s.getId(), s.getUserId(), s.getSource().name(),
-                        ids.pet(s.getUserId()).name(), ids.handle(s.getUserId()), ids.avatar(s.getUserId()),
+                        ids.pet(s).name(), ids.handle(s.getUserId()), ids.avatar(s.getUserId()),
                         com.tailtopia.shared.im.ImAccountMapper.userImId(s.getUserId())))
                 .toList();
     }
@@ -127,19 +130,15 @@ public class VetConsultService {
     public List<VetHistoryItem> historyList(long vetId) {
         List<ConsultSession> sessions = repo.findByVetIdAndStatusInOrderByCreatedAtDesc(
                 vetId, List.of(SessionStatus.PENDING_CLOSE, SessionStatus.CLOSED, SessionStatus.INTERRUPTED));
-        Identities ids = resolveIdentities(sessions);
         // 评分批量取（一次拿全该兽医的评分，按 sessionId 建 Map），避免逐条 findBySessionId。
         Map<Long, ConsultRating> ratingBySession = ratings.findByVetIdOrderByCreatedAtDesc(vetId).stream()
                 .collect(java.util.stream.Collectors.toMap(
                         ConsultRating::getSessionId, r -> r, (a, b) -> a));
         // V88（ref36 到手金额）：按 (vetId, 会话 id 批) 批量取订单，建 sessionId→order Map（避免 N+1）。
         // 迁移前订单 consult_session_id 为 null → 不入 Map，老历史到手金额为 null（前端显「—」）。
-        List<Long> sessionIds = sessions.stream().map(ConsultSession::getId).toList();
-        Map<Long, ConsultOrder> orderBySession = sessionIds.isEmpty()
-                ? Map.of()
-                : orders.findByVetIdAndConsultSessionIdIn(vetId, sessionIds).stream()
-                        .collect(java.util.stream.Collectors.toMap(
-                                ConsultOrder::getConsultSessionId, o -> o, (a, b) -> a));
+        Map<Long, ConsultOrder> orderBySession = ordersBySession(vetId, sessions);
+        // V1.4.0 multi-pet（Story 1.2 · X5）：宠物身份按会话的订单取（复用同一批订单，不再多查）。
+        Identities ids = resolveIdentities(sessions, orderBySession);
         return sessions.stream()
                 .map(s -> toHistoryItem(s, ids, ratingBySession.get(s.getId()), orderBySession.get(s.getId())))
                 // 排序键与展示键统一为 terminalAt，避免列表顺序与卡片日期打架。
@@ -171,13 +170,13 @@ public class VetConsultService {
     /** 富化单条会话视图（读路径 sessionView 用）：补宠物身份 + 机主昵称。 */
     @Transactional(readOnly = true)
     public VetSessionView toSessionView(ConsultSession s) {
-        PetIdentityView pet = petProfiles.findIdentityByOwner(s.getUserId()).orElse(EMPTY_PET);
+        PetIdentityView pet = sessionPet(s);
         return VetSessionView.of(s, pet.name(), pet.species(), pet.ageMonths(), handle(s.getUserId()));
     }
 
     private VetHistoryItem toHistoryItem(ConsultSession s, Identities ids, ConsultRating rating,
             ConsultOrder order) {
-        PetIdentityView pet = ids.pet(s.getUserId());
+        PetIdentityView pet = ids.pet(s);
         Integer stars = rating == null ? null : rating.getStars();
         String reviewText = rating == null ? null : rating.getComment();
         // V88：到手金额取订单 vet_payout 快照（无关联订单→null）；退款态（REFUNDING/REFUNDED）前端显 Rp0 删除线。
@@ -192,8 +191,44 @@ public class VetConsultService {
                 s.getSource().name(), payoutAmount, refunded);
     }
 
-    /** 批量解析一组会话的宠物身份 + 机主昵称（去重 userId 各查一次，杜绝逐条 N+1）。 */
-    private Identities resolveIdentities(List<ConsultSession> sessions) {
+    /**
+     * 单条会话的宠物身份（V1.4.0 multi-pet Story 1.2 · X4，问诊按单上的宠物）：会话最近一张订单的
+     * {@code pet_profile_id} → 该宠物；无订单（V1.0 免费会话）→ 机主默认宠物；都没有 / 单上宠物已删 → 空身份。
+     * 注销匿名化（user_id 已剥）→ 空身份。
+     */
+    private PetIdentityView sessionPet(ConsultSession s) {
+        if (s.getUserId() == null) {
+            return EMPTY_PET;
+        }
+        Optional<ConsultOrder> order = s.getId() == null
+                ? Optional.empty()
+                : orders.findFirstByConsultSessionIdOrderByIdDesc(s.getId());
+        if (order.isPresent() && order.get().getPetProfileId() != null) {
+            return petProfiles.findIdentityByPetId(order.get().getPetProfileId()).orElse(EMPTY_PET);
+        }
+        return petProfiles.findDefaultIdentityByOwner(s.getUserId()).orElse(EMPTY_PET);
+    }
+
+    /** 按 (vetId, 会话 id 批) 批量取订单，建 sessionId→order Map（避免 N+1）。无 consult_session_id 的老订单不入 Map。 */
+    private Map<Long, ConsultOrder> ordersBySession(long vetId, List<ConsultSession> sessions) {
+        List<Long> sessionIds = sessions.stream().map(ConsultSession::getId).filter(Objects::nonNull).toList();
+        if (sessionIds.isEmpty()) {
+            return Map.of();
+        }
+        return orders.findByVetIdAndConsultSessionIdIn(vetId, sessionIds).stream()
+                .filter(o -> o.getConsultSessionId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        ConsultOrder::getConsultSessionId, o -> o, (a, b) -> a));
+    }
+
+    /**
+     * 批量解析一组会话的宠物身份 + 机主昵称（杜绝逐条 N+1）。
+     *
+     * <p>V1.4.0 multi-pet（Story 1.2 · X5）：宠物身份按<b>会话</b>取——有订单的按单上宠物
+     * （{@code findIdentitiesByPetIds} 一次），无订单的按机主默认宠物（{@code findDefaultIdentitiesByOwners} 一次）；
+     * 单上宠物已删 → 空身份兜底，不抛。
+     */
+    private Identities resolveIdentities(List<ConsultSession> sessions, Map<Long, ConsultOrder> orderBySession) {
         List<Long> userIds = sessions.stream()
                 .map(ConsultSession::getUserId)
                 .filter(Objects::nonNull)
@@ -202,7 +237,37 @@ public class VetConsultService {
         if (userIds.isEmpty()) {
             return new Identities(Map.of(), Map.of());
         }
-        return new Identities(petProfiles.findIdentitiesByOwners(userIds), accounts.findAuthorViews(userIds));
+        Map<Long, Long> petIdBySession = new HashMap<>();
+        java.util.Set<Long> fallbackOwners = new java.util.HashSet<>();
+        for (ConsultSession s : sessions) {
+            if (s.getUserId() == null) {
+                continue;
+            }
+            ConsultOrder o = s.getId() == null ? null : orderBySession.get(s.getId());
+            if (o != null && o.getPetProfileId() != null) {
+                petIdBySession.put(s.getId(), o.getPetProfileId());
+            } else {
+                fallbackOwners.add(s.getUserId());
+            }
+        }
+        Map<Long, PetIdentityView> byPet = petIdBySession.isEmpty()
+                ? Map.of()
+                : petProfiles.findIdentitiesByPetIds(petIdBySession.values());
+        Map<Long, PetIdentityView> byOwner = fallbackOwners.isEmpty()
+                ? Map.of()
+                : petProfiles.findDefaultIdentitiesByOwners(fallbackOwners);
+        Map<Long, PetIdentityView> petBySession = new HashMap<>();
+        for (ConsultSession s : sessions) {
+            if (s.getUserId() == null || s.getId() == null) {
+                continue;
+            }
+            Long petId = petIdBySession.get(s.getId());
+            PetIdentityView v = petId != null ? byPet.get(petId) : byOwner.get(s.getUserId());
+            if (v != null) {
+                petBySession.put(s.getId(), v);
+            }
+        }
+        return new Identities(petBySession, accounts.findAuthorViews(userIds));
     }
 
     /** 机主昵称（单条 sessionView 用；注销/缺失 → null，匿名化不泄漏身份）。 */
@@ -214,10 +279,10 @@ public class VetConsultService {
         return v == null ? null : v.nickname();
     }
 
-    /** 批量富化结果持有（按 userId 取，缺失兜底空身份 / null 昵称）。 */
-    private record Identities(Map<Long, PetIdentityView> pets, Map<Long, AuthorView> authors) {
-        PetIdentityView pet(Long userId) {
-            PetIdentityView p = userId == null ? null : pets.get(userId);
+    /** 批量富化结果持有（宠物按会话 id 取、昵称按 userId 取；缺失兜底空身份 / null 昵称）。 */
+    private record Identities(Map<Long, PetIdentityView> petBySession, Map<Long, AuthorView> authors) {
+        PetIdentityView pet(ConsultSession s) {
+            PetIdentityView p = s.getId() == null ? null : petBySession.get(s.getId());
             return p != null ? p : EMPTY_PET;
         }
 

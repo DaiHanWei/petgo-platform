@@ -24,8 +24,13 @@ import 'vet_request_confirm_page.dart' show formatVetConsultIdr;
 /// 与 AI 分诊上传页同形(症状 + 最多 3 张照片 → 私密桶直传)，但**无任何 AI 提示**(不是 AI 分诊，
 /// 是直接发给真人兽医的病例)。提交才发起 DIRECT 会话(携带 symptomText + 私密图 key) → 等待页。
 /// 症状必填（bug 20260805-449：空病例让兽医零上下文，空/纯空白拦截提交 + 红框 + 提示），照片可选最多 3 张。
+///
+/// V1.4.0 multi-pet Story 4.1（H4）：[petId] = 「Mulai konsultasi」前所选宠物（路由 `?petId=`），随入队提交；
+/// null = 不带（旧路径 / 0 只宠物 → 后端默认宠物）。
 class ConsultCaseFormPage extends ConsumerStatefulWidget {
-  const ConsultCaseFormPage({super.key});
+  const ConsultCaseFormPage({super.key, this.petId});
+
+  final int? petId;
 
   @override
   ConsumerState<ConsultCaseFormPage> createState() => _ConsultCaseFormPageState();
@@ -116,6 +121,7 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
       final req = await ref.read(consultRepositoryProvider).createRequest(
             symptomText: _symptom.text,
             imageObjectKeys: _photos.map((p) => p.objectKey).toList(),
+            petId: widget.petId,
           );
       if (!mounted) return;
       // 占用命中（alreadyActive）已在支付态 → 直跳支付屏；否则入队等待屏。

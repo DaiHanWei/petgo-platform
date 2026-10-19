@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
@@ -18,6 +19,7 @@ import '../../place/presentation/widgets/place_stamp_view.dart';
 import 'share/passport_share_card.dart';
 import 'widgets/passport_snapshot_sheet.dart';
 import 'passport_page_face.dart';
+import '../../profile/data/current_pet_provider.dart';
 
 /// 宠物护照页（V1.3.2 batch-a Story 1.2 · AC5 · UI 稿 B1 / B2 / B2b）。
 ///
@@ -60,6 +62,8 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
   /// B7 → 选渠道 → 发起 → PawCoin 即得 / QRIS 轮询（Story 3.4 · AC6.3）。
   Future<void> _buy(PetPassport p) async {
     if (_buying) return;
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 付费 / 新增类入口先弹 E1（不发请求）。
+    if (!guardPetWritable(context, ref)) return;
     final l10n = AppLocalizations.of(context);
     final price = ref.read(keepsakePricingProvider).value?.passportSnapshot;
     if (price == null) return;
@@ -71,7 +75,10 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
         context: context,
         ref: ref,
         sheet: (balance) => PassportSnapshotPayPicker(passport: p, balance: balance),
-        start: (channel) => ref.read(petPassportRepositoryProvider).startSnapshot(channel),
+        // V1.4.0 multi-pet：快照的是当前宠物的护照。
+        start: (channel) async => ref
+            .read(petPassportRepositoryProvider)
+            .startSnapshot(channel, petId: await readRequestPetId(ref)),
         // 🔴 不能只看 currentVersionUnlocked：买的是发起时冻结的版本（D-4），付款窗内又盖了新章时当前版本仍锁，
         // 那样付了钱面板却永远不认。已买版本数增加 = 这笔已发放（复审 #1）。
         pollPaid: () async {

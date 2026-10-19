@@ -47,8 +47,10 @@ public class MilestoneShareService {
      * 无档案 / 无该里程碑 → 404；里程碑未完成 → 422（不信任客户端，后端校验）。
      */
     @Transactional
-    public MilestoneShareResponse createOrRefresh(long ownerId, String code, MilestoneShareRequest req) {
-        PetProfile pet = profiles.findByOwnerId(ownerId)
+    public MilestoneShareResponse createOrRefresh(long ownerId, long petId, String code,
+            MilestoneShareRequest req) {
+        // V1.4.0 multi-pet（Story 1.2 · P11）：按指定宠物（控制器经 PetResolver 解析），不属于本人 = 404。
+        PetProfile pet = profiles.findByIdAndOwnerId(petId, ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
         PetMilestone milestone = milestones.findByPetProfileIdAndCode(pet.getId(), code)
                 .orElseThrow(() -> AppException.notFound("里程碑不存在"));

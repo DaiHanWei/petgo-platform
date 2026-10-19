@@ -14,6 +14,7 @@ import '../../../shared/utils/image_processor.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../profile/presentation/widgets/pet_pick_for_consult.dart';
 import '../data/triage_repository.dart';
 import '../domain/triage_result_controller.dart';
 import '../domain/triage_result_state.dart';
@@ -21,10 +22,19 @@ import '../domain/triage_upload_controller.dart';
 import '../domain/triage_upload_state.dart';
 import 'triage_result_view.dart';
 
+/// 上传页路由（V1.4.0 multi-pet Story 4.1 · AC7.2）：带所选宠物 → `?petId=`；null（0 只宠物）→ 不带。
+String triageUploadLocation(int? petId) =>
+    petId == null ? '/triage/upload' : '/triage/upload?petId=$petId';
+
 /// AI 分诊上传页（Story 4.3 · F2/F3/F4/F5）。图文输入 + STS 直传私密桶 + 提交 → 等待 spinner /
 /// 超时 / 异常降级（重提交复用上次内容不重传 + 软引导兽医）+ 结果交棒占位（4.4/4.5）。
+///
+/// V1.4.0 multi-pet Story 4.1（AC7.3）：[petId] = 入口已选的宠物（路由 `?petId=`），首帧重置后写入草稿；
+/// 缺失（登录续跳 / 深链）→ 首帧后补走一次 [pickPetForConsult]（≥2 只弹 H1，取消则退出本页；1 只自动用那只）。
 class TriageUploadPage extends ConsumerStatefulWidget {
-  const TriageUploadPage({super.key});
+  const TriageUploadPage({super.key, this.petId});
+
+  final int? petId;
 
   @override
   ConsumerState<TriageUploadPage> createState() => _TriageUploadPageState();
@@ -44,6 +54,7 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
       if (!mounted) return;
       ref.read(triageResultProvider.notifier).reset();
       ref.read(triageUploadProvider.notifier).reset();
+      _applyPet();
     });
     // Debug 截图钩子（仅 debug + flag）：自动提交一次，直达分诊结果态。
     // 配 DEV_REAL_LOGIN + DEV_TRIAGE_SYMPTOM=<真症状>，自动注入症状并提交，
@@ -59,6 +70,40 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
         _submit();
       });
     }
+  }
+
+  /// 所选宠物是否已确定（code review 4-1 A3）：确定前提交按钮禁用，避免单宠物用户抢在解析完成前提交、
+  /// 把 petId 发成 null。
+  bool _petReady = false;
+
+  /// 所选宠物写入草稿（必须在 [TriageUploadController.reset] 之后）。
+  Future<void> _applyPet() async {
+    final upload = ref.read(triageUploadProvider.notifier);
+    if (widget.petId != null) {
+      upload.setPetId(widget.petId);
+      setState(() => _petReady = true);
+      return;
+    }
+    final pick = await pickPetForConsult(context, ref, purpose: PetPickPurpose.triage);
+    if (!mounted) return;
+    if (pick == null) {
+      // ≥2 只且用户取消 / 宠物列表取不到 → 不进入上传（同入口取消停留）。
+      _leave();
+      return;
+    }
+    upload.setPetId(pick.petId);
+    setState(() => _petReady = true);
+  }
+
+  /// 退出上传页（code review 4-1 A2）：登录续跳是 `context.go('/triage/upload')`，栈里只有本页、pop 不动 →
+  /// 回问诊 Tab（与结果页 `done()` 同口径）。
+  void _leave() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    GoRouter.maybeOf(context)?.go('/triage');
   }
 
   @override
@@ -304,7 +349,7 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            onPressed: draft.canSubmit ? _submit : null,
+            onPressed: draft.canSubmit && _petReady ? _submit : null,
             child: Text('${l10n.triageAnalyzeNow} →',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),

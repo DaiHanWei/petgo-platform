@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  礼物目录顶部「送礼 QRIS 最低金额」配置行（V1.4.0 ③ gift Story 3.1 · AC8 / AC9，UI 稿 L1 / L6 / L7）。
+    line  — 配置行：说明 + 当前值 +「修改」（details.pl-inline 行内展开：Rp 输入框 +「下一步」）
+    saved — 保存成功：配置行原位替换（HX-Retarget #gift-qris-line outerHTML）+ toast
+  🔴 「下一步」只做预检（/admin/gift-catalog/qris-min/confirm，不写库）→ 服务端确认弹层进 #confirm-host；
+     弹层里的「确认修改」才 POST /admin/gift-catalog/qris-min 写库 + config_change_logs + 审计。
+     新金额输入放在行内展开而非弹层：共享件 AdminConfirmModal 除输入值确认外没有输入槽，弹层只复述服务端算好的新旧值。
+  ⚠️ 只对送礼生效：月租 / 身份证高清图等其他付费不读这个值（AD-4）。
+  ⚠️ 只读（L7）：「修改」渲染成禁用钮 + 旁注所缺权限；canEdit 表达式与 Controller EDIT_AUTH 逐字一致。
+*/-->
+<body>
+<div th:fragment="line" id="gift-qris-line" class="gift-cfgline" data-section="gift-qris"
+     th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''gift.catalog_edit'')')}">
+    <div class="gift-cfgline-main">
+        <b th:text="#{admin.v140.gift.qris.label}">送礼 QRIS 最低金额</b>
+        <div class="hint" th:text="#{admin.v140.gift.qris.hint}">总价低于此金额时只能用 PawCoin。</div>
+        <details class="pl-inline" th:if="${canEdit}" data-gift-qris-edit>
+            <summary class="btn btn-sm" th:text="#{admin.v140.gift.qris.edit}">修改</summary>
+            <form class="gift-cfgline-form" th:attr="hx-post=@{/admin/gift-catalog/qris-min/confirm}"
+                  hx-target="#gift-qris-err" hx-swap="innerHTML">
+                <label class="field">
+                    <span th:text="#{admin.v140.gift.qris.newAmount}">新金额</span>
+                    <span>Rp <input class="inp" type="number" name="amount" min="100" max="100000000" step="1" required
+                                    th:value="${qrisMin}"/></span>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.v140.gift.qris.next}">下一步</button>
+            </form>
+        </details>
+        <div id="gift-qris-err" class="lst-inline-error" aria-live="polite"></div>
+    </div>
+    <span class="gift-cfgline-value" data-gift-qris-value
+          th:text="'Rp' + ${#numbers.formatInteger(qrisMin, 1, 'COMMA')}">Rp10,000</span>
+    <!--/* 只读：按钮留在原地、禁用，并注明缺哪个权限（admin.css「不可用按钮留原地说明条件」） */-->
+    <th:block th:unless="${canEdit}">
+        <button type="button" class="btn btn-sm" disabled
+                th:title="#{admin.v130.err.forbidden(#{perm.gift.catalog_edit})}"
+                th:text="#{admin.v140.gift.qris.edit}">修改</button>
+        <span class="hint" data-notice="gift-qris-readonly"
+              th:text="#{admin.v130.err.forbidden(#{perm.gift.catalog_edit})}">需要「编辑礼物目录」权限</span>
+    </th:block>
+</div>
+
+<th:block th:fragment="saved">
+    <div th:replace="~{admin/fragments/gift-qris-line :: line}"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

@@ -44,7 +44,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                                  "birthday":"2024-03-10","intro":"Suka tidur"}
                                 """))
                 .andExpect(status().isCreated());
-        return profiles.findByOwnerId(owner.getId()).orElseThrow().getCardToken();
+        return profiles.findDefault(owner.getId()).orElseThrow().getCardToken();
     }
 
     private String render(String token) throws Exception {
@@ -216,6 +216,33 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
         assertThat(html).contains("Unduh App untuk lihat").contains("baru mulai!");
     }
 
+    /**
+     * V1.4.0 gift Story 2.1 · AC6：票根第二列 Konsultasi → Hadiah（礼物总价值缩写），始终渲染；0 显示「Rp0」。
+     *
+     * <p>汇总表行用 JDBC 直接造（本类只验模板渲染；交付路径由 {@code GiftShowcaseEndpointTest} 覆盖）。
+     */
+    @Test
+    void stubShowsGiftTotalValueInsteadOfConsultations() throws Exception {
+        User owner = newUser();
+        String token = createProfileAndGetToken(owner);
+        String zero = render(token);
+        assertThat(zero).contains("Hadiah").doesNotContain("Konsultasi");
+        assertThat(zero).contains("<span class=\"u\">Rp</span><span>0</span>");
+
+        long petId = profiles.findDefault(owner.getId()).orElseThrow().getId();
+        long n = SEQ.incrementAndGet();
+        Long giftId = jdbc.queryForObject("""
+                INSERT INTO gift_catalog (public_token, name_en, name_id, icon_url, price, kind)
+                VALUES (?, 'Cake', 'Kue', 'https://cdn/cake.png', 47000, 'NORMAL') RETURNING id""",
+                Long.class, "cr" + n);
+        jdbc.update("""
+                INSERT INTO gift_pet_wall (pet_id, gift_id, unit_price, gift_name_en, gift_name_id, gift_icon_url, count)
+                VALUES (?, ?, 47000, 'Cake', 'Kue', 'https://cdn/cake.png', 4)""", petId, giftId);
+        String html = render(token);
+        assertThat(html).contains("Hadiah").doesNotContain("Konsultasi");
+        assertThat(html).contains("<span class=\"u\">Rp</span><span>188</span><span class=\"u\">rb</span>");
+    }
+
     /** 存量档案没有生日 / 性别 / 品种也能正常渲染（AC3 的容错半条）。 */
     @Test
     void profileWithMinimalDataStillRenders() throws Exception {
@@ -227,7 +254,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                                 {"petType":"OTHER","name":"X","birthday":"2020-01-01"}
                                 """))
                 .andExpect(status().isCreated());
-        PetProfile p = profiles.findByOwnerId(owner.getId()).orElseThrow();
+        PetProfile p = profiles.findDefault(owner.getId()).orElseThrow();
 
         String html = render(p.getCardToken());
         assertThat(html).contains("Lihat cerita X");
@@ -248,7 +275,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
     void clusterAndCollageNeverShareTheSamePhoto() throws Exception {
         User owner = newUser();
         String token = createProfileAndGetToken(owner);
-        long petId = profiles.findByOwnerId(owner.getId()).orElseThrow().getId();
+        long petId = profiles.findDefault(owner.getId()).orElseThrow().getId();
         for (int i = 1; i <= 6; i++) {
             insertMomentWithPhoto(owner.getId(), petId, "m" + i, "https://cdn.test/photo" + i + ".jpg", i);
         }
@@ -275,7 +302,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
     void collagePositionsStartAtP1EvenWhenSomeMomentsHaveNoPhoto() throws Exception {
         User owner = newUser();
         String token = createProfileAndGetToken(owner);
-        long petId = profiles.findByOwnerId(owner.getId()).orElseThrow().getId();
+        long petId = profiles.findDefault(owner.getId()).orElseThrow().getId();
         // 最新的一条**没有配图**（正是踩到的那种老数据）
         insertMomentWithPhoto(owner.getId(), petId, "no-photo", null, 1);
         for (int i = 2; i <= 7; i++) {
@@ -300,6 +327,8 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                 ownerId, petId, text,
                 imageUrl == null ? null : "[\"" + imageUrl + "\"]",
                 daysAgo);
+        // V1.4.0 multi-pet Story 3.1：按宠物的读口改读 content_pets，直插的帖同步补关联（同迁移回填）。
+        com.tailtopia.content.support.ContentPetsTestFixture.backfillFromPetId(jdbc);
     }
 
     /** 从 HTML 里抓某一类相框中用到的图片文件名。 */

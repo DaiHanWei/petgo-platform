@@ -1,27 +1,42 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/colors.dart';
+import '../../features/growth/domain/growth_badge.dart';
 import 'app_image.dart';
+import 'growth_avatar_decoration.dart';
 
 /// 头像：有 URL 用网络图，否则彩色圆 + 昵称首字母（对齐设计稿 S17）。
 ///
 /// ⚠️ V1.3.0 batch-b1 Story 2.4 **从 `me_page.dart` 原样抽出**（那时它是私有的
 /// `_InitialAvatar`）：资料编辑抽屉与「我的」页现在住在两个文件里，都要用它。
 /// **抽取时一个像素都没改**。
+///
+/// V1.4.0 ① Story 3.2：[growth] 非空时外包 [GrowthAvatarDecoration]；[showLevelBadge] 为 false 时只戴框（「我的」页 A6）。
+/// 不传 [growth] 时与改动前完全一致。
 class InitialAvatar extends StatelessWidget {
   const InitialAvatar({
     super.key,
     required this.avatarUrl,
     required this.nickname,
     required this.radius,
+    this.growth,
+    this.showLevelBadge = true,
   });
 
   final String? avatarUrl;
   final String nickname;
   final double radius;
+  final GrowthBadge? growth;
+  final bool showLevelBadge;
 
   @override
   Widget build(BuildContext context) {
+    final g = growth;
+    if (g == null) return _avatar();
+    return GrowthAvatarDecoration(badge: g, diameter: radius * 2, showLevelBadge: showLevelBadge, child: _avatar());
+  }
+
+  Widget _avatar() {
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
       return CircleAvatar(
         // key 随 URL 变：换头像后 URL 变 → 强制重建,杜绝「provider 原地变更但旧图不重绘」。

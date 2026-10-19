@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  成长体系 · 批量发放活动 EXP 抽屉体（V1.4.0 ① Story 4.3 · UI H1 ~ H5）。600 宽抽屉 #growthbatch-drawer（growth.html）。
+  四个片段：fill（① 填写）/ preview（② 预览）/ result（④ 结果）/ failed（H5 整体失败）。各步互换由端点 HX-Retarget
+  #growthbatch-drawer-body + innerHTML 完成；③ 二次确认是服务端确认弹层（#confirm-host）。
+  🔴 每一步都把规范化后的 ID 用隐藏字段带到下一步，服务端每次重新解析、重新归类（不信任上一步的页面）。
+  错误槽 #growthbatch-err 带 id（htmx 只在目标带 id 时才发 HX-Target，AdminBusinessExceptionAdvice 按它 Retarget）。
+*/-->
+<body>
+
+<!--/* 三步条（复用 .step-bar 类名；不可点回，只靠按钮）。 */-->
+<ol th:fragment="steps(current)" class="step-bar" data-growth-batch-steps>
+    <li class="step" th:each="i : ${#numbers.sequence(1, 3)}"
+        th:classappend="${i == current} ? 'step--on' : (${i < current} ? 'step--done' : '')"
+        th:text="#{${'admin.v140.growth.batch.step.' + i}}">1 · 填写</li>
+</ol>
+
+<!--/* ① 填写（H1）。模型：${bf}（回填值）、${fieldErrors}（字段 → 文案）、${formError}、${maxIds}。 */-->
+<div th:fragment="fill" data-growth-batch-step="fill">
+    <ol th:replace="~{admin/fragments/drawer-growth-batch :: steps(1)}"></ol>
+    <form th:attr="hx-post=@{/admin/growth/batch/preview}" hx-encoding="multipart/form-data"
+          hx-target="#growthbatch-drawer-body" hx-swap="innerHTML" data-growth-batch-fill>
+        <div class="banner err" role="alert" th:if="${formError != null}" th:text="${formError}">「运营活动」规则已停用</div>
+        <label class="field"><span th:text="#{admin.v140.growth.batch.campaign}">活动名称</span>
+            <input class="inp field-full" type="text" name="campaign" maxlength="200" required th:value="${bf.campaign()}"/></label>
+        <p class="hint" th:text="#{admin.v140.growth.batch.campaignHint}">写进每条流水，用户在 EXP 明细里看到。</p>
+        <p class="err" th:if="${fieldErrors.containsKey('campaign')}" data-field-error="campaign" th:text="${fieldErrors.get('campaign')}">请填写活动名称</p>
+
+        <label class="field"><span th:text="#{admin.v140.growth.batch.exp}">每人 EXP</span>
+            <input class="inp field-full" type="number" name="expPerUser" min="1" step="1" required th:value="${bf.expPerUser()}"/></label>
+        <p class="hint" th:text="#{admin.v140.growth.batch.expHint}">正整数。</p>
+        <p class="err" th:if="${fieldErrors.containsKey('expPerUser')}" data-field-error="expPerUser" th:text="${fieldErrors.get('expPerUser')}">每人 EXP 须为正整数</p>
+
+        <label class="field"><span th:text="#{admin.v140.growth.batch.ids}">用户 ID</span>
+            <textarea class="inp field-full" name="userIds" rows="6" th:text="${bf.userIds()}"></textarea></label>
+        <p class="hint" th:text="#{admin.v140.growth.batch.idsHint}">逗号、空格或换行分隔；或上传 CSV（一列 user_id）。</p>
+        <p>
+            <a class="btn btn-neutral btn-sm" th:href="@{/admin/growth/batch/template.csv}" download
+               th:text="#{admin.v140.growth.batch.template}">下载模板</a>
+            <label class="btn btn-neutral btn-sm"><span th:text="#{admin.v140.growth.batch.chooseFile}">选择文件</span>
+                <input type="file" name="file" accept=".csv,text/csv" hidden data-batch-file/></label>
+            <span class="muted" data-batch-file-name th:text="#{admin.v140.growth.batch.noFile}">未选择文件</span>
+        </p>
+        <!--/* 选中文件后显示文件名（隐藏 input 本身看不到）；未选时的文案来自 #{}，脚本只回写文件名。 */-->
+        <script>
+            (function () {
+                var input = document.querySelector('[data-batch-file]');
+                var label = document.querySelector('[data-batch-file-name]');
+                if (!input || !label) { return; }
+                var empty = label.textContent;
+                input.addEventListener('change', function () {
+                    label.textContent = input.files && input.files.length ? input.files[0].name : empty;
+                });
+            })();
+        </script>
+        <p class="err" th:if="${fieldErrors.containsKey('userIds')}" data-field-error="userIds" th:text="${fieldErrors.get('userIds')}">请填写或上传用户 ID</p>
+
+        <div id="growthbatch-err" class="lst-inline-error" aria-live="polite"></div>
+        <div class="modal-foot">
+            <button type="button" class="btn btn-neutral" data-drawer-close th:text="#{admin.v140.growth.cancel}">取消</button>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.v140.growth.batch.preview}">预览</button>
+        </div>
+    </form>
+</div>
+
+<!--/* ② 预览（H2）。模型：${pv}（AdminGrowthBatchService.Preview）。 */-->
+<div th:fragment="preview" data-growth-batch-step="preview">
+    <ol th:replace="~{admin/fragments/drawer-growth-batch :: steps(2)}"></ol>
+    <div class="sum">
+        <div class="sum-item"><span class="sum-label" th:text="#{admin.v140.growth.batch.sum.valid}">有效用户</span>
+            <br/><b class="sum-value" data-batch-valid th:text="${pv.valid()}">5</b></div>
+        <div class="sum-item"><span class="sum-label" th:text="#{admin.v140.growth.batch.sum.invalid}">无效 ID</span>
+            <br/><b class="sum-value" data-batch-invalid th:text="${pv.invalid()}">1</b></div>
+        <div class="sum-item"><span class="sum-label" th:text="#{admin.v140.growth.batch.sum.virtual}">虚拟号（已排除）</span>
+            <br/><b class="sum-value" data-batch-excluded th:text="${pv.excluded()}">1</b></div>
+    </div>
+    <p><b th:text="#{admin.v140.growth.batch.campaign}">活动名称</b>: <span th:text="${pv.campaign()}">周年庆</span></p>
+    <p><b th:text="#{admin.v140.growth.batch.exp}">每人 EXP</b>: <span th:text="${pv.expPerUser()}">50</span>
+        · <b th:text="#{admin.v140.growth.batch.total}">合计</b>: <span data-batch-total th:text="${#numbers.formatInteger(pv.total(), 1, 'COMMA')}">250</span></p>
+    <p><b th:text="#{admin.v140.growth.batch.confirm.batchNo}">批次号</b>: <code data-batch-no th:text="${pv.batchNo()}">GB-202610181200-AB12CD</code></p>
+
+    <table class="ud-table" th:unless="${#lists.isEmpty(pv.problems())}" data-batch-problems>
+        <thead><tr><th th:text="#{admin.v140.growth.batch.col.id}">用户 ID</th>
+            <th th:text="#{admin.v140.growth.batch.col.result}">结果</th></tr></thead>
+        <tbody><tr th:each="pr : ${pv.problems()}">
+            <td><code th:text="${pr.id()}">123</code></td>
+            <td th:text="#{${'admin.v140.growth.batch.reason.' + pr.reason()}}">用户不存在</td>
+        </tr></tbody>
+    </table>
+    <p class="muted" th:if="${pv.moreProblems() > 0}" th:text="#{admin.v140.growth.batch.moreRows(${pv.moreProblems()})}">另有 3 条未显示</p>
+    <p class="hint" th:text="#{admin.v140.growth.batch.previewNote}">无效 ID 与虚拟号不会发放，不阻塞整批。</p>
+
+    <div id="growthbatch-err" class="lst-inline-error" aria-live="polite"></div>
+    <div class="modal-foot">
+        <form th:attr="hx-post=@{/admin/growth/batch/form}" hx-target="#growthbatch-drawer-body" hx-swap="innerHTML" class="inline">
+            <input type="hidden" name="campaign" th:value="${pv.campaign()}"/>
+            <input type="hidden" name="expPerUser" th:value="${pv.expPerUser()}"/>
+            <input type="hidden" name="userIds" th:value="${pv.normalizedIds()}"/>
+            <button type="submit" class="btn btn-neutral" th:text="#{admin.v140.growth.batch.back}">← 上一步</button>
+        </form>
+        <form th:attr="hx-post=@{/admin/growth/batch/confirm}" hx-target="#growthbatch-err" hx-swap="innerHTML" class="inline">
+            <input type="hidden" name="batchNo" th:value="${pv.batchNo()}"/>
+            <input type="hidden" name="campaign" th:value="${pv.campaign()}"/>
+            <input type="hidden" name="expPerUser" th:value="${pv.expPerUser()}"/>
+            <input type="hidden" name="userIds" th:value="${pv.normalizedIds()}"/>
+            <button type="submit" class="btn btn-primary" th:disabled="${pv.valid() == 0}" data-batch-confirm
+                    th:text="#{admin.v140.growth.batch.confirmBtn}">确认发放</button>
+        </form>
+    </div>
+</div>
+
+<!--/* 重试表单（结果页有失败 / H5 失败页共用）：带同一批次号再次 POST /admin/growth/batch。模型：${retry} 或 ${fb}。 */-->
+<form th:fragment="retryForm(f)" th:attr="hx-post=@{/admin/growth/batch}" hx-target="#growthbatch-err" hx-swap="innerHTML"
+      class="inline" data-batch-retry>
+    <input type="hidden" name="batchNo" th:value="${f.batchNo()}"/>
+    <input type="hidden" name="campaign" th:value="${f.campaign()}"/>
+    <input type="hidden" name="expPerUser" th:value="${f.expPerUser()}"/>
+    <input type="hidden" name="userIds" th:value="${f.userIds()}"/>
+    <input type="hidden" name="validCount" th:value="${f.validCount()}"/>
+    <button type="submit" class="btn btn-primary" th:text="#{admin.v140.growth.batch.retry}">重试</button>
+</form>
+
+<!--/* ④ 结果（H4）。模型：${rs}（Result）、${retry}、${toast}（有新入账才有）。 */-->
+<th:block th:fragment="result">
+<div data-growth-batch-step="result">
+    <ol th:replace="~{admin/fragments/drawer-growth-batch :: steps(3)}"></ol>
+    <div class="banner ok" th:unless="${rs.replayOnly()}"
+         th:text="#{admin.v140.growth.batch.done(${rs.batchNo()}, ${rs.granted()}, ${rs.expPerUser()})}">已发放：批次 GB-…，5 位用户各 50 EXP。</div>
+    <div class="banner" th:if="${rs.replayOnly()}" data-batch-replayed
+         th:text="#{admin.v140.growth.batch.alreadyDone}">该批次已发放过，未重复发放</div>
+    <table class="ud-table">
+        <tbody>
+        <tr><th th:text="#{admin.v140.growth.batch.confirm.campaign}">活动</th><td th:text="${rs.campaign()}">周年庆</td></tr>
+        <tr><th th:text="#{admin.v140.growth.batch.result.granted}">入账人数</th><td data-batch-granted th:text="${rs.granted()}">5</td></tr>
+        <tr><th th:text="#{admin.v140.growth.batch.result.skipped}">未发放</th>
+            <td th:text="#{admin.v140.growth.batch.result.skippedDetail(${rs.skipped()}, ${rs.invalid()}, ${rs.excluded()})}">2（无效 1 · 虚拟号 1）</td></tr>
+        <tr><th th:text="#{admin.v140.growth.batch.result.operator}">操作人</th><td th:text="${rs.operator()}">Ana</td></tr>
+        </tbody>
+    </table>
+    <div id="growthbatch-err" class="lst-inline-error" aria-live="polite"></div>
+    <th:block th:if="${rs.failed() > 0}">
+        <p class="err" data-batch-failed th:text="#{admin.v140.growth.batch.result.failed(${rs.failed()})}">失败 1 人，可用同一批次号重试</p>
+        <form th:replace="~{admin/fragments/drawer-growth-batch :: retryForm(${retry})}"></form>
+    </th:block>
+    <div class="modal-foot">
+        <button type="button" class="btn btn-neutral" data-drawer-close th:text="#{admin.v140.growth.batch.finish}">完成</button>
+    </div>
+</div>
+<div hx-swap-oob="beforeend:#admin-toast-host" th:if="${toast != null}">
+    <div class="toast" role="status" th:text="${toast}">已发放 250 EXP（5 位用户）</div>
+</div>
+</th:block>
+
+<!--/* H5 整体失败（如数据库不可用）。模型：${fb}。 */-->
+<div th:fragment="failed" data-growth-batch-step="failed">
+    <ol th:replace="~{admin/fragments/drawer-growth-batch :: steps(3)}"></ol>
+    <div class="banner err" role="alert" th:text="#{admin.v140.growth.batch.failed}">发放失败：服务暂时不可用，请重试。</div>
+    <p><b th:text="#{admin.v140.growth.batch.confirm.batchNo}">批次号</b>: <code th:text="${fb.batchNo()}">GB-…</code></p>
+    <p th:if="${fb.validCount() != null}"><b th:text="#{admin.v140.growth.batch.sum.valid}">有效用户</b>: <span th:text="${fb.validCount()}">5</span></p>
+    <div id="growthbatch-err" class="lst-inline-error" aria-live="polite"></div>
+    <div class="modal-foot">
+        <form th:attr="hx-post=@{/admin/growth/batch/form}" hx-target="#growthbatch-drawer-body" hx-swap="innerHTML" class="inline">
+            <input type="hidden" name="campaign" th:value="${fb.campaign()}"/>
+            <input type="hidden" name="expPerUser" th:value="${fb.expPerUser()}"/>
+            <input type="hidden" name="userIds" th:value="${fb.userIds()}"/>
+            <button type="submit" class="btn btn-neutral" th:text="#{admin.v140.growth.batch.back}">← 上一步</button>
+        </form>
+        <form th:replace="~{admin/fragments/drawer-growth-batch :: retryForm(${fb})}"></form>
+    </div>
+</div>
+</body>
+</html>

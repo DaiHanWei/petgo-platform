@@ -3,11 +3,9 @@ package com.tailtopia.notify.lifecycle;
 import com.tailtopia.auth.dto.UserLifecycleSnapshot;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.notify.repository.LifecyclePushMarkRepository;
-import com.tailtopia.profile.dto.PetProfileSnapshot;
 import com.tailtopia.profile.service.PetProfileQueryService;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -87,14 +85,10 @@ public class LifecyclePushJob {
     /**
      * owner → 宠物名映射（<b>键存在即已建档</b>）。
      *
-     * <p>V1 单宠物，同一 owner 理论上只有一条档案；真出现多条时保留先建的那只
-     * （{@code merge} 取旧值），避免推送里的名字每天换一只。
+     * <p>V1.4.0 multi-pet（Story 1.2 · X24，AD-13）：名字固定取<b>默认宠物</b>（{@code DefaultPetPolicy}），
+     * 不再依赖无序遍历，推送里的名字不会每天换一只。
      */
     private Map<Long, String> petNameByOwner() {
-        Map<Long, String> map = new HashMap<>();
-        for (PetProfileSnapshot p : petProfiles.allSnapshots()) {
-            map.merge(p.ownerId(), p.name() == null ? "" : p.name(), (old, fresh) -> old);
-        }
-        return map;
+        return petProfiles.defaultPetNameByOwner();
     }
 }

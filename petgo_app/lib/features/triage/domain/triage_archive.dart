@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../profile/data/health_event_repository.dart';
 import '../../profile/presentation/archive_prompt_dialog.dart';
 import '../data/triage_repository.dart';
+import 'triage_result_controller.dart';
+import 'triage_upload_controller.dart';
 
 /// 「存入档案」触发器签名（Story 4.4 · F5）。注入式以便测试替身验证「点击→调起存档」。
 ///
@@ -25,7 +27,7 @@ typedef TriageArchiveHandler = Future<bool> Function(
 });
 
 ArchivePromptArgs _args(int triageId, DangerLevel level, String? advice, String? symptom,
-        {required bool redState, bool explicitSave = false}) =>
+        {required bool redState, bool explicitSave = false, int? petId}) =>
     ArchivePromptArgs(
       sourceRef: 'triage:$triageId',
       sourceType: HealthSourceType.aiTriage,
@@ -34,6 +36,7 @@ ArchivePromptArgs _args(int triageId, DangerLevel level, String? advice, String?
       adviceSummary: advice,
       redState: redState,
       explicitSave: explicitSave,
+      petId: petId,
     );
 
 /// 绿/黄态存档（Story 4.4 · FR-16）：经 Story 2.5 [showArchivePrompt] 三态承接——
@@ -48,8 +51,18 @@ Future<bool> _defaultArchive(
   bool explicitSave = false,
 }) async {
   if (triageId == null) return false;
+  // V1.4.0 multi-pet Story 4.1（AC8.2）：存到提交时所选的宠物（上传草稿，结果页与上传页同一生命周期）；
+  // 显式保存与黄色「Selesai」被动询问都经这里，只读拦截在 showArchivePrompt 内统一做。
   return showArchivePrompt(context, ref,
-      _args(triageId, level, advice, symptom, redState: false, explicitSave: explicitSave));
+      _args(triageId, level, advice, symptom,
+          redState: false, explicitSave: explicitSave, petId: triageSubmittedPetId(ref, triageId)));
+}
+
+/// 本次上传会话提交时所选的宠物——仅当 [triageId] 正是这次提交的任务（历史快照页回看旧结果时草稿属于别的会话，
+/// 不能借用 → null，退回当前宠物 = 改造前行为）。
+int? triageSubmittedPetId(WidgetRef ref, int triageId) {
+  if (ref.read(triageResultProvider).triageId != triageId) return null;
+  return ref.read(triageUploadProvider).petId;
 }
 
 final Provider<TriageArchiveHandler> triageArchiveHandlerProvider =

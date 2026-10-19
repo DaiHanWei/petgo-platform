@@ -155,7 +155,7 @@ class _FakeMarksRepo implements OnboardingMarkRepository {
 
 class _NoResultsRepo implements TailsonalityRepository {
   @override
-  Future<List<TailsonalityResult>> fetchResults() async => const [];
+  Future<List<TailsonalityResult>> fetchResults({int? petId}) async => const [];
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

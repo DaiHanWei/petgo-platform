@@ -39,6 +39,7 @@ import 'widgets/ts_result_card.dart';
 import 'widgets/ts_result_menu.dart';
 import 'widgets/ts_rich_text.dart';
 import 'widgets/ts_unlocked_analysis.dart';
+import '../../profile/data/pet_list_repository.dart';
 
 /// Tailsonality 结果页（V1.3.2 Story 2.4 免费态 · Story 3.2 解锁 / 已解锁态 / 挽留 · UX-DR6）。
 ///
@@ -307,6 +308,7 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
       ref.invalidate(tailsonalityResultsProvider);
       // Story 3.3：首次解锁服务端会自动佩戴 → 档案卡小标要重取（全局 keep-alive provider，不刷就一直是旧的）。
       ref.invalidate(petProfileProvider);
+      ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页性格小标取宠物列表
       if (outcome == KeepsakeFlowOutcome.unlocked) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.tailsonalityUnlockedToast)));
         // V1.3.4 Story 4.3 · AD-19：完整解读解锁 → 等后端异步达成「性格测试」里程碑当场庆祝（不阻塞收尾）。

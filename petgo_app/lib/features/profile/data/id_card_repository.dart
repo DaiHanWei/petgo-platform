@@ -4,20 +4,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/id_card.dart';
+import 'current_pet_provider.dart';
 
 /// 宠物身份证数据层（Story 6.2）。消费后端 6-1 的 `GET/POST /api/v1/pet-profiles/me/id-card`。
 /// 抽象便于测试注入 fake（照 [ProfileRepository] 范式）。
+///
+/// V1.4.0 multi-pet（Story 1.5 · AC7）：旧单卡 `GET/POST /me/id-card`、`/me/id-card/hd-download` 与
+/// 分享奖励（上报 / 展示口径）带 [petId]（null = 后端默认宠物）；卡列表 / 详情 / 新建 / 单卡高清 / 定价是账号级，不带。
 abstract class IdCardRepository {
   /// 当前用户身份证数据；无档案（后端 404）归一为 null（前端落空态）。
   /// 老用户/未生成 → `generated=false`（前端引导态）。**GET 不分配号**。
-  Future<IdCardData?> getMyIdCard();
+  Future<IdCardData?> getMyIdCard({int? petId});
 
   /// 生成身份证（分配全平台自增流水号，幂等）。无档案 → 抛错（404）。
-  Future<IdCardData> generate();
+  Future<IdCardData> generate({int? petId});
 
   /// 购买高清图下载（一次性永久，Story 6.3）。已购买/PawCoin 即时 → unlocked；QRIS → 返回待支付 token。
   /// 余额不足 → 抛 DioException(409)。无档案 → 404。
-  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel);
+  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel, {int? petId});
 
   // —— 多卡快照（Story 6.7）——
 
@@ -42,13 +46,13 @@ abstract class IdCardRepository {
   /// ⚠️ 只该在系统分享面板回调 `ShareResultStatus.success` 之后调（AC5）。
   /// 🛡 服务端刻意不返回「为什么没发」——不区分就没法把「你额度用完了」讲给用户听（AC3）。
   /// 🛡 失败不抛给分享链路：调用方把它当"没发"处理（AC7，不重试、不建补偿队列）。
-  Future<int> reportShareForReward(int cardId);
+  Future<int> reportShareForReward(int cardId, {int? petId});
 
   /// 分享奖励的**展示口径**（产品 2026-08-27）：可以对外承诺的枚数，0 = 卡面页不提奖励。
   ///
   /// 🔴 由服务端算，客户端不判：判据涉及总开关、每次发放数、日上限、以及"这只宠物领过没"，
   /// 在客户端复刻一份必然漂移，而漂移的后果是**承诺了却不发**（Story 18.2 AC6 反复要避免的）。
-  Future<int> advertisableShareReward();
+  Future<int> advertisableShareReward({int? petId});
 }
 
 class DioIdCardRepository implements IdCardRepository {
@@ -57,9 +61,10 @@ class DioIdCardRepository implements IdCardRepository {
   final Dio dio;
 
   @override
-  Future<IdCardData?> getMyIdCard() async {
+  Future<IdCardData?> getMyIdCard({int? petId}) async {
     try {
-      final res = await dio.get<Map<String, dynamic>>(ApiPaths.petProfileIdCard);
+      final res =
+          await dio.get<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petProfileIdCard, petId));
       return IdCardData.fromJson(res.data ?? const {});
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
@@ -70,15 +75,16 @@ class DioIdCardRepository implements IdCardRepository {
   }
 
   @override
-  Future<IdCardData> generate() async {
-    final res = await dio.post<Map<String, dynamic>>(ApiPaths.petProfileIdCard);
+  Future<IdCardData> generate({int? petId}) async {
+    final res =
+        await dio.post<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petProfileIdCard, petId));
     return IdCardData.fromJson(res.data ?? const {});
   }
 
   @override
-  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel) async {
+  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel, {int? petId}) async {
     final res = await dio.post<Map<String, dynamic>>(
-      ApiPaths.petProfileIdCardHdDownload,
+      ApiPaths.withPet(ApiPaths.petProfileIdCardHdDownload, petId),
       data: {'channel': channel.wire},
     );
     return HdPurchaseResult.fromJson(res.data ?? const {});
@@ -100,9 +106,9 @@ class DioIdCardRepository implements IdCardRepository {
 
   @override
   @override
-  Future<int> reportShareForReward(int cardId) async {
+  Future<int> reportShareForReward(int cardId, {int? petId}) async {
     final res = await dio.post<Map<String, dynamic>>(
-      '${ApiPaths.meIdCards}/$cardId/share-rewards',
+      ApiPaths.withPet('${ApiPaths.meIdCards}/$cardId/share-rewards', petId),
     );
     final coins = res.data?['coins'];
     return coins is num ? coins.toInt() : 0;
@@ -124,8 +130,9 @@ class DioIdCardRepository implements IdCardRepository {
   }
 
   @override
-  Future<int> advertisableShareReward() async {
-    final res = await dio.get<Map<String, dynamic>>(ApiPaths.meIdCardShareReward);
+  Future<int> advertisableShareReward({int? petId}) async {
+    final res =
+        await dio.get<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.meIdCardShareReward, petId));
     final coins = res.data?['coins'];
     return coins is num ? coins.toInt() : 0;
   }
@@ -145,9 +152,11 @@ final Provider<IdCardRepository> idCardRepositoryProvider =
     Provider<IdCardRepository>((ref) => DioIdCardRepository(ref.read(dioProvider)));
 
 /// 当前用户身份证数据（无档案 → null）。旧单卡端点，保留兼容。
-final FutureProvider<IdCardData?> idCardProvider = FutureProvider<IdCardData?>(
-  (ref) => ref.read(idCardRepositoryProvider).getMyIdCard(),
-);
+/// V1.4.0 multi-pet：跟随当前宠物（[requestPetIdProvider]）。
+final FutureProvider<IdCardData?> idCardProvider = FutureProvider<IdCardData?>((ref) async {
+  final petId = await ref.watch(requestPetIdProvider.future);
+  return ref.read(idCardRepositoryProvider).getMyIdCard(petId: petId);
+});
 
 /// HD 下载当前定价（后台可配实时下发，417 同类修复）。**无本地兜底价**：
 /// 失败为 AsyncError，付费抽屉显示重试并禁用付款按钮。
@@ -158,7 +167,9 @@ final idCardHdPriceProvider = FutureProvider.autoDispose<int>(
 /// 🛡 取不到就按 0 处理 —— 这只是一句文案，读失败绝不能让卡面页出错或空承诺。
 final idCardShareRewardProvider = FutureProvider.autoDispose<int>((ref) async {
   try {
-    return await ref.read(idCardRepositoryProvider).advertisableShareReward();
+    // V1.4.0 multi-pet：奖励按宠物（「这只宠物领过没」），带当前宠物。
+    final petId = await ref.watch(requestPetIdProvider.future);
+    return await ref.read(idCardRepositoryProvider).advertisableShareReward(petId: petId);
   } catch (_) {
     return 0;
   }

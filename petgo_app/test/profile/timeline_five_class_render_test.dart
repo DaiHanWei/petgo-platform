@@ -85,8 +85,8 @@ Widget _wrapRouted(TimelinePage page) {
             profile: UserProfile(petStatus: 'HAS_PET', hasPetProfile: true),
           ))),
       petProfileProvider.overrideWith((ref) async => _profile),
-      timelineFirstPageProvider.overrideWith((ref) async => page),
-      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+      timelineFirstPageProvider.overrideWith((ref, _) async => page),
+      archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
           happyMomentCount: 1, consultCount: 0, milestoneCompleted: 1, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
     ],
@@ -244,8 +244,8 @@ void main() {
                 profile: UserProfile(petStatus: 'HAS_PET', hasPetProfile: true),
               ))),
           petProfileProvider.overrideWith((ref) async => _profile),
-          timelineFirstPageProvider.overrideWith((ref) async => throw Exception('boom')),
-          archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+          timelineFirstPageProvider.overrideWith((ref, _) async => throw Exception('boom')),
+          archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
               happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
           shareFabAnimatedShownProvider.overrideWith((ref) async => true),
         ],

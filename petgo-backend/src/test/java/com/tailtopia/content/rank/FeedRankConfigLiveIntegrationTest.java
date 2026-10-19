@@ -44,7 +44,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
     private JdbcTemplate jdbc;
 
     private static final FeedRankForm SEED =
-            new FeedRankForm(0.6, 0.4, 2, 0.3, 0.8, 0.2, 7, 10, 5, 3, 2, 6, 2, 2);
+            new FeedRankForm(0.6, 0.4, 2, 0.3, 0.8, 0.2, 1.05, 7, 10, 5, 3, 2, 6, 2, 2);
 
     @AfterEach
     void restore() {
@@ -67,6 +67,15 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
         assertThat(c.getAttrFunQuota()).isEqualTo(5);
         assertThat(c.getSpeciesMainQuota()).isEqualTo(6);
         assertThat(c.getEduFreshnessHalfLifeHours()).isEqualTo(720.0); // V1.3.4 Story 1.2
+        assertThat(c.getAuthorLevelBoost()).isEqualTo(1.05); // V1.4.0 ① Story 3.4
+    }
+
+    /** V1.4.0 ① Story 3.4：表级 CHECK [1, 2] 兜底（后台校验之外直接改库也拒）。 */
+    @Test
+    void authorLevelBoostCheckRejectsBelowOne() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> jdbc.update("UPDATE feed_rank_config SET author_level_boost = 0.99 WHERE id = 1"))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
     // ── V1.3.4 Story 1.2：科普半衰期（FR-122.3 / 122.4）────────────────
@@ -84,7 +93,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
     void adminSaveLeavesEduHalfLifeUntouched() {
         jdbc.update("UPDATE feed_rank_config SET edu_freshness_half_life_hours = 360 WHERE id = 1");
 
-        write.updateFeedRank(new FeedRankForm(0.7, 0.3, 3, 0.2, 0.8, 0.2, 14, 10, 5, 3, 2, 6, 2, 2), 1L);
+        write.updateFeedRank(new FeedRankForm(0.7, 0.3, 3, 0.2, 0.8, 0.2, 1.05, 14, 10, 5, 3, 2, 6, 2, 2), 1L);
 
         assertThat(read.feedRank().getEduFreshnessHalfLifeHours()).isEqualTo(360.0);
     }
@@ -102,7 +111,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
     /** 🔴 写进去的值，读服务下一次就拿到 —— 中间没有任何缓存层。 */
     @Test
     void writeIsVisibleToTheReadServiceImmediately() {
-        write.updateFeedRank(new FeedRankForm(0.9, 0.1, 5, 0.15, 0.8, 0.2, 21, 10, 5, 3, 2, 6, 2, 2), 1L);
+        write.updateFeedRank(new FeedRankForm(0.9, 0.1, 5, 0.15, 0.8, 0.2, 1.05, 21, 10, 5, 3, 2, 6, 2, 2), 1L);
 
         FeedRankConfig c = read.feedRank();
         assertThat(c.getFreshnessWeight()).isEqualTo(0.9);
@@ -124,7 +133,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
                 read.feedRank().getWindowSize());
         assertThat(before.variantA()).containsExactlyElementsOf(AttributeTemplate.A);
 
-        write.updateFeedRank(new FeedRankForm(0.6, 0.4, 2, 0.3, 0.8, 0.2, 7, 10, 4, 4, 2, 6, 2, 2), 1L);
+        write.updateFeedRank(new FeedRankForm(0.6, 0.4, 2, 0.3, 0.8, 0.2, 1.05, 7, 10, 4, 4, 2, 6, 2, 2), 1L);
 
         FeedRankConfig c = read.feedRank();
         AttributeSchedule after = AttributeTemplate.forQuotas(c.getAttrFunQuota(),
@@ -151,7 +160,7 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
             posts.save(ContentPost.publish(newUser().getId(), ContentType.DAILY, null,
                     "cfg-live-" + SEQ.incrementAndGet(), List.of()));
         }
-        write.updateFeedRank(new FeedRankForm(0.2, 0.8, 4, 0.5, 0.8, 0.2, 3, 10, 4, 4, 2, 5, 3, 2), 1L);
+        write.updateFeedRank(new FeedRankForm(0.2, 0.8, 4, 0.5, 0.8, 0.2, 1.05, 3, 10, 4, 4, 2, 5, 3, 2), 1L);
 
         mvc.perform(get("/api/v1/content-posts"))
                 .andExpect(status().isOk());

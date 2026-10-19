@@ -70,7 +70,7 @@ class VisitorCalendarIntegrationTest extends ApiIntegrationTest {
                                  "birthday":"2024-03-10","intro":"Suka tidur"}
                                 """))
                 .andExpect(status().isCreated());
-        return profiles.findByOwnerId(owner.getId()).orElseThrow();
+        return profiles.findDefault(owner.getId()).orElseThrow();
     }
 
     /** 直插一条快乐时刻到指定日期，可指定审核状态、可见性、是否软删、有没有配图。 */
@@ -86,6 +86,8 @@ class VisitorCalendarIntegrationTest extends ApiIntegrationTest {
                 imageUrl == null ? null : "[\"" + imageUrl + "\"]",
                 status, visibility, java.sql.Date.valueOf(date),
                 softDeleted ? java.sql.Timestamp.from(Instant.now()) : null);
+        // V1.4.0 multi-pet Story 3.1：按宠物的读口改读 content_pets，直插的帖同步补关联（同迁移回填）。
+        com.tailtopia.content.support.ContentPetsTestFixture.backfillFromPetId(jdbc);
     }
 
     /** 一条公开、已发布、带图的快乐时刻（最常见的那种）。 */

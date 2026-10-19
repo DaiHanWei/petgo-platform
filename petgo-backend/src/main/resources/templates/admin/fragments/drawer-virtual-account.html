@@ -53,6 +53,32 @@
            th:text="#{admin.v130.err.forbidden(#{perm.virtual_account.manage})}">需要「管理虚拟账号」权限</p>
     </section>
 
+    <!--/* V1.4.0 ① Story 4.4 · J2：展示等级（同物种卡形态：下拉 + 保存 + 原生确认）。只写 display_level——
+           不参与成长值、不享任何权益；下拉 Lv1 ~ 等级表最高级（随追加自动变长）。 */-->
+    <section class="card card-full tag-card" data-section="virtual-display-level">
+        <h3 th:text="#{admin.v140.growth.display.title}">展示等级</h3>
+        <p class="hint" th:text="#{admin.v140.growth.display.hint}">只用于头像角标与对应段位的头像框。</p>
+        <form class="inline" th:if="${canManage}"
+              th:attr="hx-post=@{/admin/virtual-accounts/{id}/display-level(id=${a.id})},
+                       data-confirm=#{admin.v140.growth.display.confirm},data-confirm-args=${a.nickname}"
+              data-confirm-input="displayLevel" hx-target="#virtual-drawer-err" hx-swap="innerHTML">
+            <select name="displayLevel" class="sel" required>
+                <option th:each="o : ${displayLevelOptions}" th:value="${o.level()}"
+                        th:selected="${displayLevel != null and displayLevel.level() == o.level()}"
+                        th:text="#{admin.v140.growth.display.option(${o.level()}, #{${'admin.v140.growth.tier.' + o.tier().name()}})}">Lv7 · Buddy</option>
+            </select>
+            <button type="submit" class="btn btn-sm" th:text="#{admin.common.save}">保存</button>
+        </form>
+        <th:block th:unless="${canManage}">
+            <p data-display-level-current>
+                <th:block th:if="${displayLevel != null}"><span class="tier-dot" th:classappend="'tier-' + ${displayLevel.tier().name()}"></span><span
+                        th:text="'Lv' + ${displayLevel.level()}">Lv7</span></th:block>
+                <span th:if="${displayLevel == null}" class="muted">—</span>
+            </p>
+            <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.virtual_account.manage})}">需要「管理虚拟账号」权限</p>
+        </th:block>
+    </section>
+
     <div id="virtual-drawer-err" class="lst-inline-error" aria-live="polite"></div>
 
     <!--/* 启停。停用 → 拉确认弹层（hx-get 到 #confirm-host）；启用 → 直接 POST。 */-->

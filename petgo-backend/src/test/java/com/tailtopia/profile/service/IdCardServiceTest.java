@@ -42,7 +42,8 @@ class IdCardServiceTest {
     private final IdCardHdPurchaseRepository hdPurchases = mock(IdCardHdPurchaseRepository.class);
     private final IdCardRepository idCards = mock(IdCardRepository.class);
     private final IdCardService service =
-            new IdCardService(profiles, serialAllocation, cardNumbers, hdPurchases, idCards);
+            new IdCardService(profiles, serialAllocation, cardNumbers, hdPurchases, idCards,
+                    new PetWriteGuard(profiles));
 
     private static PetProfile pet() {
         return PetProfile.create(7L, PetType.CAT, "Momo", null, "英短", LocalDate.of(2022, 1, 1), "乖", "TOK");
@@ -50,9 +51,9 @@ class IdCardServiceTest {
 
     @Test
     void getMyIdCardOldUserWithoutSerialReturnsNotGenerated() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(pet()));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(pet()));
 
-        IdCardDataResponse res = service.getMyIdCard(7L);
+        IdCardDataResponse res = service.getMyIdCard(7L, 10L);
 
         assertThat(res.generated()).isFalse();
         assertThat(res.serialId()).isNull();
@@ -64,9 +65,9 @@ class IdCardServiceTest {
     void getMyIdCardWithSerialReturnsGeneratedWithSerial() {
         PetProfile p = pet();
         p.assignSerial(42L);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
 
-        IdCardDataResponse res = service.getMyIdCard(7L);
+        IdCardDataResponse res = service.getMyIdCard(7L, 10L);
 
         assertThat(res.generated()).isTrue();
         assertThat(res.serialId()).isEqualTo(42L);
@@ -74,16 +75,16 @@ class IdCardServiceTest {
 
     @Test
     void getMyIdCardNoProfile404() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.empty());
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getMyIdCard(7L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getMyIdCard(7L, 10L)).isInstanceOf(AppException.class);
     }
 
     @Test
     void getMyIdCardNeverAllocatesSerial() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(pet()));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(pet()));
 
-        service.getMyIdCard(7L);
+        service.getMyIdCard(7L, 10L);
 
         // 惰性分配红线：只读端点绝不分配号（保老用户「尚未生成」引导态持续可见）。
         verify(serialAllocation, never()).allocate();
@@ -93,10 +94,10 @@ class IdCardServiceTest {
     @Test
     void generateAssignsSerialWhenAbsentAndPersists() {
         PetProfile p = pet();
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
         when(serialAllocation.allocate()).thenReturn(1L);
 
-        IdCardDataResponse res = service.generateSerial(7L);
+        IdCardDataResponse res = service.generateSerial(7L, 10L);
 
         verify(serialAllocation).allocate();
         verify(profiles).save(p);
@@ -109,9 +110,9 @@ class IdCardServiceTest {
     void generateIsIdempotentWhenSerialAlreadyAssigned() {
         PetProfile p = pet();
         p.assignSerial(99L);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
 
-        IdCardDataResponse res = service.generateSerial(7L);
+        IdCardDataResponse res = service.generateSerial(7L, 10L);
 
         // 幂等：已有号不重复分配、不换号、不再落库（避免 pet_serial_seq 空耗）。
         verify(serialAllocation, never()).allocate();
@@ -119,12 +120,46 @@ class IdCardServiceTest {
         assertThat(res.serialId()).isEqualTo(99L);
     }
 
+    /** V1.4.0 multi-pet Story 2.1（AC7 #11）：只读宠物不分配新号 → 409；已有号的幂等回读照常。 */
+    @Test
+    void generateOnReadOnlyPetWithoutSerialIs409AndAllocatesNothing() {
+        PetProfile p = pet();
+        org.springframework.test.util.ReflectionTestUtils.setField(p, "id", 10L);
+        p.markReadOnly();
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
+
+        assertThatThrownBy(() -> service.generateSerial(7L, 10L))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY));
+        verify(serialAllocation, never()).allocate();
+        verify(profiles, never()).save(any());
+
+        p.assignSerial(99L);
+        assertThat(service.generateSerial(7L, 10L).serialId()).isEqualTo(99L);
+    }
+
     @Test
     void generateNoProfile404() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.empty());
+        when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.generateSerial(7L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.generateSerial(7L, 10L)).isInstanceOf(AppException.class);
         verify(serialAllocation, never()).allocate();
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · P2 / P3）：按指定宠物取 / 分配；不属于本人的 petId → 404，不分配号。 */
+    @Test
+    void secondPetGetsItsOwnSerialAndForeignPetIs404() {
+        PetProfile b = pet();
+        when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
+        when(serialAllocation.allocate()).thenReturn(2L);
+
+        assertThat(service.generateSerial(7L, 11L).serialId()).isEqualTo(2L);
+        verify(profiles, never()).findByIdAndOwnerId(10L, 7L);
+
+        when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.getMyIdCard(7L, 99L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.generateSerial(7L, 99L)).isInstanceOf(AppException.class);
+        verify(serialAllocation, org.mockito.Mockito.times(1)).allocate();
     }
 
     // ---- 卡可见性（V108，2026-08-19 决策 F21）：付费卡恒可见；档案已删的未付费卡隐藏 ----

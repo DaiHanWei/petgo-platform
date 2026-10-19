@@ -136,8 +136,6 @@ public class AdminContentManageController {
         model.addAttribute("to", to);
         model.addAttribute("status", status);
         model.addAttribute("q", q);
-        // 表头排序的当前状态（箭头方向 + 隐藏字段回填）。
-        // ⚠️ 「按点赞时间」档下面会把它清成 null —— 那一档行序固定，排序无效。
         model.addAttribute("sort", sort);
         model.addAttribute("page", page);
         model.addAttribute("species", species);

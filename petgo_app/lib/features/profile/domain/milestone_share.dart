@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics.dart';
+import '../data/current_pet_provider.dart';
 import '../data/milestone_repository.dart';
 import 'card_link.dart';
 import 'milestone.dart';
@@ -30,6 +31,8 @@ Future<void> shareMilestoneWithLink(
   final collectionCodes = unlocked.map((m) => m.code).toList();
   try {
     final copy = localizedMilestoneCelebration(item.code, locale, petName);
+    // V1.4.0 multi-pet（Story 1.5）：分享的是当前宠物的里程碑。
+    final petId = await readRequestPetId(ref);
     final token = await ref.read(milestoneRepositoryProvider).createShare(
           item.code,
           title: copy.title,
@@ -37,6 +40,7 @@ Future<void> shareMilestoneWithLink(
           locale: lang,
           collectionLevels: collectionLevels,
           collectionCodes: collectionCodes,
+          petId: petId,
         );
     message = '$shareText\n${milestoneShareUrl(token)}';
     Analytics.capture('milestone_share_created', {'code': item.code, 'level': item.level.name});

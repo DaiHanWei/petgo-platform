@@ -3,7 +3,16 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 /// 本次冷启动出现过的功能弹窗种类（V1.3.4 Story 5.3 · AD-12）。
-enum StartupPopupKind { att, pushPermission, forceUpdate, coachmark, milestoneCelebration }
+enum StartupPopupKind {
+  att,
+  pushPermission,
+  forceUpdate,
+  coachmark,
+  milestoneCelebration,
+  // V1.4.0 ① Tailrent Level（Story 2.3）：升级庆祝 / 存量汇总弹窗（只在末尾追加）。
+  growthCelebration,
+  growthBackfill,
+}
 
 /// 本次冷启动功能弹窗记录（V1.3.4 Story 5.3 · AD-12）：**只登记、不排队**。
 ///

@@ -27,5 +27,16 @@ public enum PaymentPurpose {
      * Tailsonality 配型单独解锁（2026-10-09）。🔴 末尾追加；列宽 VARCHAR(16) 放不下 {@code TAILSONALITY_MATCH}，故缩写。
      * DB 侧 CHECK 全量重建见 V20261009_0113。
      */
-    TS_MATCH
+    TS_MATCH,
+    /**
+     * V1.4.0 ③ 送礼（Story 0.1 地基占位，送礼业务由 {@code feat/1.4.0-gift} 实现）。🔴 末尾追加。
+     * <b>不走消费返成长值</b>，只走送礼规则 {@code GIFT_SENT} / {@code GIFT_RECEIVED}，避免同一笔算两次。
+     * DB 侧 CHECK 全量重建见 V20261018_1401；四条线不再改该约束。
+     */
+    GIFT,
+    /**
+     * V1.4.0 ② 宠物名额月租（Story 0.1 地基占位，业务由 {@code feat/1.4.0-multi-pet} 实现）。🔴 末尾追加。
+     * 成长值按数字服务档自动入账（① 负责），② 不写成长值逻辑。DB 侧 CHECK 见 V20261018_1401。
+     */
+    PET_SLOT_RENT
 }

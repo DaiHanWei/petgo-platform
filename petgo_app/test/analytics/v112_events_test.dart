@@ -98,8 +98,8 @@ Widget _archiveApp({List<TimelineItem> items = const []}) {
             ),
           )),
       petProfileProvider.overrideWith((ref) async => _pet()),
-      timelineFirstPageProvider.overrideWith((ref) async => TimelinePage(items: items)),
-      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+      timelineFirstPageProvider.overrideWith((ref, _) async => TimelinePage(items: items)),
+      archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
           happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
       // 日历也要桩化：不桩就走真 dio，切到日历视图后留下未完成的网络 timer，测试收不了尾。
@@ -268,6 +268,13 @@ void main() {
         //    **服务端从 H5 页上报**的（E-24~E-26），和 App 内的 Diary 页不是一回事。
         //    共用前缀会让人把两组数混着看。
         'pet_card_',
+        // Tailrent Level 等级体系（V1.4.0 ① PRD §4，5 个事件名定死）。模块是「等级体系」这件事 ——
+        // 入口横跨「我的」页胶囊、升级庆祝页、升级通知三处（`growth_level_page_viewed` 的 source 区分），
+        // 挂到 me_ / notify_ 任一前缀下都会误导。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'growth_',
+        // 头像框切换（V1.4.0 ① Story 3.3 · PRD §4 定死的事件名 `avatar_frame_changed`）：等级页一排与升级庆祝页
+        // 两个入口都报，归属「头像框」这一对象而非某个页面。⚠️ 只放这个精确前缀，不放宽成 `avatar_`。
+        'avatar_frame_',
         // 宠物身份证卡面分享奖励（FR-96 / Story 18.2）。
         // 🔴 与 `pet_card_` 刻意分开：那一组是**宠物主页对外 H5 名片**（FR-92），
         //    这一组是**身份证卡面图片**（FR-49A 那条链、带水印、有 HD 付费点）。
@@ -294,6 +301,10 @@ void main() {
         // place_comment_posted / place_photo_added / place_shared）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'place_',
+        // V1.4.0 ④ 收藏列表（P-8）：模块是「我的收藏列表」这件事，事件名由 PRD §4 定死（`collection_list_viewed` /
+        // `collection_item_opened`），扩表、不改名；与 2.3 的 `content_collected` / `place_collected` 刻意分开——
+        // 那是收藏动作，这里是列表浏览。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'collection_',
         // 内容详情页停留时长（V1.3.0 批次 A · PRD E-10，bug 20260923-539）。模块是「详情页」本身 ——
         // 名字由 PRD §4 定死为 `detail_page_dwell`（AD-A23：实现不得改名），扩表、不改名。
         // ⚠️ 新模块入表，不是为遗留事件放宽规则。
@@ -341,6 +352,16 @@ void main() {
         // 通知中心两处界面，挂任一单页前缀都会误导。名字由 PRD §4 定死（ops_popup_shown / _tapped / _closed）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'ops_',
+        // 多宠物（V1.4.0 multi-pet Story 1.5 · PRD §4：pet_added / pet_switched / pet_slot_full_shown）。
+        // V1.4.0 multi-pet：模块是『宠物 / 宠物名额』这件事，跨我的页、Diary Tab、建档三处界面，
+        // 挂到 `me_` / `diary_` 都会误导；新模块入表，非为遗留事件放宽。
+        // ⚠️ 与既有 `pet_card_`（对外 H5 名片）语义不同、互不吞并：那组前缀照留。
+        'pet_',
+        // V1.4.0 ③ 送礼，新模块入表，名字由 PRD §4 定、按词尾规则改名两条
+        // （`gift_paid` → `gift_payment_succeeded`、`gift_qris_blocked_low_amount` → `gift_qris_low_amount_shown`；
+        // 映射表见 `v140_gift_events_test.dart`）。模块是「送礼」——入口横跨访客视图、详情页、礼物页三处。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则；不加新后缀。
+        'gift_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -348,6 +369,13 @@ void main() {
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
         // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
         '_submitted', '_started',
+        // Tailrent Level（V1.4.0 ① PRD §4，事件名定死 `growth_level_up`）：「等级提升」这一结果。
+        // 与 `_shown`（庆祝曝光）分开：前者是数据层拿到升级，后者是用户真的看见。
+        // ⚠️ 只放这个精确词尾，不放宽成 `_up`；扩表、不改名。
+        '_level_up',
+        // 头像框切换（V1.4.0 ① Story 3.3 · PRD §4 定死 `avatar_frame_changed`）：只在 PUT 成功后报一次的「结果」。
+        // ⚠️ 只放这个精确词尾，不放宽成 `_changed`；扩表、不改名。
+        '_frame_changed',
         // 用户对提示的响应（V1.1.6 Story 8.2）：`_responded` 与 `_tapped` 的区别在于
         // **它是对一个「被问」的回答**，取值有多档（granted / denied / settings_opened /
         // dismissed），而不是单一动作。分母是提示曝光数（`_shown`），配对使用。
@@ -442,6 +470,10 @@ void main() {
         // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
         '_followed',
         '_unfollowed',
+        // 收藏 / 取消收藏（V1.4.0 ④ push-collect · P-8，PRD §4 定死 `content_collected` 等四个名字）：过去式，
+        // **服务端确认成功后**才报。`*_uncollected` 不以 `_collected` 结尾，两个都要登记。扩表、不改名。
+        '_collected',
+        '_uncollected',
         // 运营弹窗被关掉（V1.3.4 Story 5.4 · PRD §4 定死 `ops_popup_closed`）。
         // 🔴 与 `_dismissed` 区分：运营弹窗没有「未完成的流程」，关闭（✕ / 系统返回）是**中性结果**，
         //    看板按 shown / tapped / closed 三分。上面 `_dismissed` 注释里「刻意不用 `_closed`」针对的是
@@ -452,6 +484,14 @@ void main() {
         // 🔴 刻意不用 `_viewed`：失败 / 超时时用户并没看到动画；也不用 `_completed`：那会把兜底结局藏进维度。
         //    名字由计划定死，扩表、不改名。
         '_played',
+        // Diary 发布成功（V1.4.0 multi-pet Story 3.3 · PRD §4 定死 `diary_published {pet_count}`）：`_published` = **服务端
+        // 已接住这条 Diary** 之后才报（审核拦截 / 失败不报），描述结果而非点击。
+        // 🔴 与 `content_publish_submitted`（点了提交）分开：那是漏斗入口，这条是结果。名字由 PRD 定死，扩表、不改名。
+        '_published',
+        // 名额月租到账（V1.4.0 multi-pet Story 2.4 · PRD §4 定死 `pet_slot_rent_paid`）：`_paid` = **服务端确认已到账**
+        // 后才报（PawCoin 扣币成功 / QRIS 回调 PAID），描述结果而非点击；与 `pet_slot_rent_started`（发起）配对。
+        // 名字由 PRD 定死，扩表、不改名（同 `_played` / `_published` 先例）。
+        '_paid',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -516,6 +556,12 @@ void main() {
         // 不外露自增 id；source ∈ {push, notification_center}（'source' 已在上方）。
         'campaign_id',
         'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
+        // V1.4.0 gift Story 2.2（PRD §4）：gift_wall_opened / gift_sender_list_opened 区分主人与访客视角。
+        'is_owner',
+        // V1.4.0 ④ Story 2.3：收藏四事件。place_id = 场所 token（不外露自增 id，AD-17）；content_type ∈ diary / moment / tips。
+        'post_id', 'content_type', 'place_id',
+        // V1.4.0 ④ Story 2.4：收藏列表条目点击（不可见条目弹移除抽屉）。'tab' 已在上方。
+        'is_unavailable',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

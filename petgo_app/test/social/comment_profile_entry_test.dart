@@ -8,6 +8,8 @@ import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/presentation/comment_section.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/growth/domain/growth_badge.dart';
+import 'package:tailtopia/features/growth/domain/growth_models.dart';
 import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
 import 'package:tailtopia/features/social/domain/account_action_entry.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
@@ -165,7 +167,7 @@ Future<_FakeProfileRepo> _pump(WidgetTester tester, List<Comment> comments,
     detailRepositoryProvider.overrideWithValue(_CommentsRepo(comments)),
     publicProfileRepositoryProvider.overrideWithValue(repo),
     publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
-    publicProfilePetProvider(7).overrideWith((ref) async => null),
+    publicProfilePetsProvider(7).overrideWith((ref) async => const []),
   ]);
   addTearDown(container.dispose);
   await _pumpWith(tester, container: container);
@@ -234,7 +236,7 @@ void main() {
       detailRepositoryProvider.overrideWithValue(repo),
       publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(_budi)),
       publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
-      publicProfilePetProvider(7).overrideWith((ref) async => null),
+      publicProfilePetsProvider(7).overrideWith((ref) async => const []),
       blockedUsersRepositoryProvider.overrideWithValue(blocks),
       authControllerProvider.overrideWith(_LoggedInAuth.new),
     ]);
@@ -284,5 +286,23 @@ void main() {
 
     expect(_onProfilePage, findsNothing);
     expect(repo.calls, 0);
+  });
+
+  testWidgets('V1.4.0 ① 3.2 · AC4.1：点评论头像上的等级圆点 = 点头像（进主页）', (tester) async {
+    final c = Comment(
+      id: 1,
+      authorId: 7,
+      authorNickname: 'Budi',
+      authorDeleted: false,
+      body: 'Mahal amat',
+      createdAt: DateTime.utc(2026, 8, 14),
+      authorBadge: const GrowthBadge(level: 12, tier: GrowthTier.guardian, frame: GrowthFrame.basic),
+    );
+    await _pump(tester, [c]);
+    final dot = find.byKey(const ValueKey('growthLevelDot'));
+    expect(dot, findsOneWidget);
+    await tester.tapAt(tester.getCenter(dot) - const Offset(1, 1));
+    await tester.pumpAndSettle();
+    expect(_onProfilePage, findsOneWidget);
   });
 }

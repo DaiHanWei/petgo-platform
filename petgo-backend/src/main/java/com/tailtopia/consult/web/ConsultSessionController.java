@@ -92,8 +92,9 @@ public class ConsultSessionController {
     @GetMapping("/{id}")
     public ConsultSessionResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         ConsultSession s = service.getForUser(currentUserId(jwt), id);
+        // V1.4.0 multi-pet Story 4.1：读路径带会话所属宠物（App 存档用；无订单 → null）。
         return ConsultSessionResponse.of(s, ConsultSessionService.WAITING_TIMEOUT_SECONDS, false,
-                service.vetPeerOf(s));
+                service.vetPeerOf(s), service.petIdOf(s));
     }
 
     /**

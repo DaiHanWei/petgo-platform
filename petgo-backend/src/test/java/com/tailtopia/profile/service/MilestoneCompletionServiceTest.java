@@ -71,7 +71,7 @@ class MilestoneCompletionServiceTest {
 
     @Test
     void completesByExplicitCodeLookup() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
         long m = stubRoster(10, "C-S1");
 
         boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
@@ -85,7 +85,7 @@ class MilestoneCompletionServiceTest {
 
     @Test
     void idempotentWhenAlreadyCompleted() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
         long m = stubRoster(10, "C-S1");
         when(completions.existsByPetMilestoneId(m)).thenReturn(true); // 已完成
 
@@ -99,7 +99,7 @@ class MilestoneCompletionServiceTest {
     @Test
     void noopWhenSpeciesHasNoNodeForThisEvent() {
         // 通用清单没有「记录满 30 条」这个节点 —— 映射表显式给出 null，连查 roster 都不该发生。
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.OTHER, 10)));
 
         boolean done = service.completeForOwner(7L, MilestoneAutoEvent.GROWTH_MOMENT_30,
                 MilestoneCompletionSource.SYSTEM_AUTO);
@@ -113,7 +113,7 @@ class MilestoneCompletionServiceTest {
     /** roster 里查不到 code（roster 与目录走散）也只是 no-op，不抛异常。 */
     @Test
     void noopWhenCodeMissingFromRoster() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.OTHER, 10)));
         when(milestones.findByPetProfileIdAndCode(10, "G-S1")).thenReturn(Optional.empty());
 
         boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
@@ -125,11 +125,11 @@ class MilestoneCompletionServiceTest {
 
     @Test
     void growthCountUnlocksS2AndM10AtTen_butNotL5() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.DOG, 10)));
+        when(profiles.findById(10L)).thenReturn(Optional.of(profile(PetType.DOG, 10)));
         stubRoster(10, "D-S2");
         stubRoster(10, "D-M10");
 
-        service.onGrowthMomentCount(7L, 10);
+        service.onGrowthMomentCountForPet(10L, 10);
 
         // S2 ∈ 新手前置：完成后会再被 Lulus Pemula 前置扫描查一次（7.3），故 atLeastOnce。
         verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndCode(10, "D-S2");
@@ -140,12 +140,12 @@ class MilestoneCompletionServiceTest {
 
     @Test
     void growthCountUnlocksL5AtThirty() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.DOG, 10)));
+        when(profiles.findById(10L)).thenReturn(Optional.of(profile(PetType.DOG, 10)));
         stubRoster(10, "D-S2");
         stubRoster(10, "D-M10");
         stubRoster(10, "D-L5");
 
-        service.onGrowthMomentCount(7L, 30);
+        service.onGrowthMomentCountForPet(10L, 30);
 
         verify(completions, times(3)).save(any()); // S2 + M10 + L5
     }
@@ -158,12 +158,12 @@ class MilestoneCompletionServiceTest {
                 java.time.LocalDate.of(2024, today.getMonthValue(), today.getDayOfMonth()), null, "TOK");
         setField(p, "id", 10L);
         setField(p, "createdAt", Instant.now().minus(java.time.Duration.ofDays(120)));
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findById(10L)).thenReturn(Optional.of(p));
         long l1 = stubRoster(10, "C-L1");
         long l2 = stubRoster(10, "C-L2");
         stubRoster(10, "C-L3");
 
-        service.completeDateGatedLNodesOnPublish(7L);
+        service.completeDateGatedLNodesForPet(10L);
 
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions, times(2)).save(cap.capture());
@@ -178,10 +178,10 @@ class MilestoneCompletionServiceTest {
                 java.time.LocalDate.of(2024, 10, 6), null, "TOK");
         setField(p, "id", 10L);
         setField(p, "createdAt", Instant.parse("2026-09-30T00:00:00Z")); // 陪伴不足 100 天，只看 L1
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findById(10L)).thenReturn(Optional.of(p));
         long l1 = stubRoster(10, "C-L1");
 
-        service.completeDateGatedLNodesOnPublish(7L, Instant.parse("2026-10-05T22:30:00Z"));
+        service.completeDateGatedLNodesForPet(p, Instant.parse("2026-10-05T22:30:00Z"));
 
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions, times(1)).save(cap.capture());
@@ -196,9 +196,9 @@ class MilestoneCompletionServiceTest {
                 java.time.LocalDate.of(2024, 10, 6), null, "TOK");
         setField(p, "id", 10L);
         setField(p, "createdAt", Instant.parse("2026-09-30T00:00:00Z"));
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        when(profiles.findById(10L)).thenReturn(Optional.of(p));
 
-        service.completeDateGatedLNodesOnPublish(7L, Instant.parse("2026-10-05T16:30:00Z"));
+        service.completeDateGatedLNodesForPet(p, Instant.parse("2026-10-05T16:30:00Z"));
 
         verify(completions, never()).save(any());
     }
@@ -206,7 +206,7 @@ class MilestoneCompletionServiceTest {
     @Test
     void healthComboUnlocksL4WhenAllThreeDone() {
         PetProfile cat = profile(PetType.CAT, 10);
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(cat));
+        when(profiles.findById(10L)).thenReturn(Optional.of(cat));
         long m5 = stubRoster(10, "C-M5");
         long m3 = stubRoster(10, "C-M3");
         long m4 = stubRoster(10, "C-M4");
@@ -216,7 +216,7 @@ class MilestoneCompletionServiceTest {
         when(completions.existsByPetMilestoneId(m4)).thenReturn(true);
         when(completions.existsByPetMilestoneId(m5)).thenReturn(false, true);
 
-        boolean done = service.completeCodeForOwner(7L, "C-M5",
+        boolean done = service.completeCodeForPet(10L, "C-M5",
                 MilestoneCompletionSource.USER_CHECKIN, null);
 
         assertThat(done).isTrue();
@@ -232,7 +232,7 @@ class MilestoneCompletionServiceTest {
     /** S1–S4 已完成 + 本次完成 S5 + 有健康记录 → 解锁 Lulus Pemula（C-S16）。 */
     @Test
     void lulusPemulaUnlocksWhenAllFivePlusHealthRecord() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
         long s1 = stubRoster(10, "C-S1");
         long s2 = stubRoster(10, "C-S2");
         long s3 = stubRoster(10, "C-S3");
@@ -259,7 +259,7 @@ class MilestoneCompletionServiceTest {
     /** S1–S5 全完成但**无健康记录** → 不解锁 Lulus Pemula（仅存 S5）。 */
     @Test
     void lulusPemulaNotUnlockedWithoutHealthRecord() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
         long s1 = stubRoster(10, "C-S1");
         long s2 = stubRoster(10, "C-S2");
         long s3 = stubRoster(10, "C-S3");
@@ -284,7 +284,7 @@ class MilestoneCompletionServiceTest {
     /** 健康记录事件路径：S1–S5 已全完成，创建健康记录后经 owner 入口解锁 Lulus Pemula。 */
     @Test
     void healthRecordPathUnlocksLulusPemulaWhenFiveAlreadyDone() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
         long s1 = stubRoster(10, "C-S1");
         long s2 = stubRoster(10, "C-S2");
         long s3 = stubRoster(10, "C-S3");
@@ -329,7 +329,11 @@ class MilestoneCompletionServiceTest {
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions, times(1)).save(cap.capture());
         assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(m);
-        verify(events, times(1)).publishEvent(any(com.tailtopia.profile.event.MilestoneCompletedEvent.class));
+        ArgumentCaptor<com.tailtopia.profile.event.MilestoneCompletedEvent> ev =
+                ArgumentCaptor.forClass(com.tailtopia.profile.event.MilestoneCompletedEvent.class);
+        verify(events, times(1)).publishEvent(ev.capture());
+        // V1.4.0 ① Story 1.1：事件末尾追加 petId = 达成的宠物档案 id（成长值按账号 × code × 宠物幂等）。
+        assertThat(ev.getValue().petId()).isEqualTo(10L);
     }
 
     @Test
@@ -356,6 +360,181 @@ class MilestoneCompletionServiceTest {
 
         assertThat(done).isTrue();
         verify(milestones).findByPetProfileIdAndCode(10L, "G-S11");
+    }
+
+    // ===== V1.4.0 multi-pet Story 1.2：账号级入口逐只、打卡只完成指定宠物 =====
+
+    @Test
+    void completeForOwnerCompletesEachPet() {
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(
+                profile(PetType.CAT, 10), profile(PetType.DOG, 11)));
+        long a = stubRoster(10, "C-S1");
+        long b = stubRoster(11, "D-S1");
+
+        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isTrue();
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions, times(2)).save(cap.capture());
+        assertThat(cap.getAllValues().stream().map(MilestoneCompletion::getPetMilestoneId))
+                .containsExactlyInAnyOrder(a, b);
+    }
+
+    @Test
+    void completeForOwnerReturnsTrueWhenOnlySecondPetIsNew() {
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(
+                profile(PetType.CAT, 10), profile(PetType.CAT, 11)));
+        long a = stubRoster(10, "C-S1");
+        stubRoster(11, "C-S1");
+        when(completions.existsByPetMilestoneId(a)).thenReturn(true); // A 已完成
+
+        assertThat(service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
+                MilestoneCompletionSource.SYSTEM_AUTO)).isTrue();
+        verify(completions, times(1)).save(any());
+    }
+
+    @Test
+    void completeCodeForPetOnlyTouchesThatPet() {
+        when(profiles.findById(11L)).thenReturn(Optional.of(profile(PetType.CAT, 11)));
+        long b = stubRoster(11, "C-M5");
+
+        boolean done = service.completeCodeForPet(11L, "C-M5", MilestoneCompletionSource.USER_CHECKIN, 99L);
+
+        assertThat(done).isTrue();
+        verify(milestones, never()).findByPetProfileIdAndCode(10L, "C-M5");
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(b);
+        verify(profiles, never()).findAllByOwnerIdOrderByCreatedAtAscIdAsc(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void completeCodeForPetMissingPetIsNoop() {
+        when(profiles.findById(11L)).thenReturn(Optional.empty());
+        assertThat(service.completeCodeForPet(11L, "C-M5", MilestoneCompletionSource.USER_CHECKIN, null)).isFalse();
+        verify(completions, never()).save(any());
+    }
+
+    @Test
+    void lulusPemulaJudgedPerPet() {
+        // A：前置全完成 + 有健康记录 → 解锁；B：无健康记录 → 不解锁。
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(
+                profile(PetType.CAT, 10), profile(PetType.CAT, 11)));
+        for (long pet : new long[] {10, 11}) {
+            for (String c : new String[] {"C-S1", "C-S2", "C-S3", "C-S4", "C-S5"}) {
+                long id = stubRoster(pet, c);
+                when(completions.existsByPetMilestoneId(id)).thenReturn(true);
+            }
+        }
+        long lpA = stubRoster(10, "C-S16");
+        stubRoster(11, "C-S16");
+        when(healthRecords.existsByPetProfileId(10)).thenReturn(true);
+        when(healthRecords.existsByPetProfileId(11)).thenReturn(false);
+
+        service.maybeUnlockLulusPemulaForOwner(7L);
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions, times(1)).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(lpA);
+    }
+
+    @Test
+    void lulusPemulaForPetJudgesOnlyThatPet() {
+        when(profiles.findById(11L)).thenReturn(Optional.of(profile(PetType.CAT, 11)));
+        for (String c : new String[] {"C-S1", "C-S2", "C-S3", "C-S4", "C-S5"}) {
+            long id = stubRoster(11, c);
+            when(completions.existsByPetMilestoneId(id)).thenReturn(true);
+        }
+        long lp = stubRoster(11, "C-S16");
+        when(healthRecords.existsByPetProfileId(11)).thenReturn(true);
+
+        service.maybeUnlockLulusPemulaForPet(11L);
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(lp);
+        verify(healthRecords, never()).existsByPetProfileId(10);
+    }
+
+    // ===== V1.4.0 multi-pet Story 1.3：Diary 计数 / L 级回填 / 默认宠物 只碰一只 =====
+
+    @Test
+    void growthCountForPetOnlyTouchesThatPet() {
+        when(profiles.findById(11L)).thenReturn(Optional.of(profile(PetType.CAT, 11)));
+        long b = stubRoster(11, "C-S2");
+
+        service.onGrowthMomentCountForPet(11L, 1);
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(b);
+        verify(milestones, never()).findByPetProfileIdAndCode(org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.anyString());
+        verify(profiles, never()).findAllByOwnerIdOrderByCreatedAtAscIdAsc(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void dateGatedForMissingPetIsNoop() {
+        when(profiles.findById(11L)).thenReturn(Optional.empty());
+        service.completeDateGatedLNodesForPet(11L);
+        verify(completions, never()).save(any());
+    }
+
+    @Test
+    void completeForDefaultPetTouchesOnlyTheEarliestPet() {
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(
+                profile(PetType.CAT, 10), profile(PetType.DOG, 11)));
+        long a = stubRoster(10, "C-S5");
+        stubRoster(11, "D-S5");
+
+        assertThat(service.completeForDefaultPet(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO)).isTrue();
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(a);
+        verify(milestones, never()).findByPetProfileIdAndCode(11L, "D-S5");
+    }
+
+    @Test
+    void completeForDefaultPetWithoutPetsIsFalse() {
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of());
+        assertThat(service.completeForDefaultPet(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO)).isFalse();
+        verify(completions, never()).save(any());
+    }
+
+    /** 1.3 复审：单上宠物属于本人 → 完成它，不碰默认宠物。 */
+    @Test
+    void completeForPetOrDefaultUsesOwnedOrderPet() {
+        PetProfile b = profile(PetType.DOG, 11);
+        when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(java.util.Optional.of(b));
+        stubRoster(10, "C-S5");
+        long bm = stubRoster(11, "D-S5");
+
+        assertThat(service.completeForPetOrDefault(7L, 11L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO)).isTrue();
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(bm);
+    }
+
+    /** 1.3 复审：单上宠物已删（订单 pet_profile_id 无外键）→ 回落默认宠物，不丢里程碑。 */
+    @Test
+    void completeForPetOrDefaultFallsBackWhenOrderPetGone() {
+        when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(java.util.Optional.empty());
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(
+                profile(PetType.CAT, 10)));
+        long am = stubRoster(10, "C-S5");
+
+        assertThat(service.completeForPetOrDefault(7L, 99L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO)).isTrue();
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(am);
     }
 
     private static void setField(Object o, String name, Object value) {

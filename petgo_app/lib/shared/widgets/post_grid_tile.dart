@@ -41,7 +41,9 @@ class PostGridTile extends StatelessWidget {
   final VoidCallback onTap;
 
   /// 类型 → (badge 文案, 文字色, 底色)：Momen 绿 / Tips 黄 / Cerita 紫（原型 b-happy/b-tips/b-story）。
-  static (String, Color, Color) _badgeStyle(String type, AppLocalizations l10n) {
+  ///
+  /// V1.4.0 ④ Story 2.4：公开给「我的 → Disimpan」帖子行的类型标复用（避免第三份配色拷贝）。行为不变。
+  static (String, Color, Color) badgeStyle(String type, AppLocalizations l10n) {
     switch (type) {
       case 'GROWTH_MOMENT':
         return (l10n.mePostTypeMomen, AppColors.momenBadgeText, AppColors.momenBadgeBg);
@@ -56,7 +58,7 @@ class PostGridTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final hasImage = firstImageUrl != null && firstImageUrl!.isNotEmpty;
-    final (label, fg, bg) = _badgeStyle(type, l10n);
+    final (label, fg, bg) = badgeStyle(type, l10n);
     return GestureDetector(
       key: ValueKey('postGridTile_$postId'),
       onTap: onTap,

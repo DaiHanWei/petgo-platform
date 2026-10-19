@@ -5,10 +5,10 @@ purpose: '为 shop-v2 架构 delta 提供「已存在、必须尊重或扩展」
 created: '2026-09-15'
 status: 'extract-only（只抽取事实，零设计建议）'
 sources:
-  - _bmad-output/planning-artifacts/v1.4.0/architecture-v1.4.0-delta.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/architecture-v1.4.0-delta.md
   - origin/feat/1.3.0-ops-ui-refactor:_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md
   - _bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md
-  - _bmad-output/planning-artifacts/v1.4.0/decision-log.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/decision-log.md
   - petgo-backend 源码 / db/migration（现场 grep 核实）
 ---
 

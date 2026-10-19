@@ -150,7 +150,7 @@ class FeedRankJitterTest {
         List<Long> ideal = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
             FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(candidates, null, Map.of(),
-                    Set.of(), Map.of(), NOW, params, AttributeTemplate.defaultSchedule(),
+                    Set.of(), Map.of(), Map.of(), NOW, params, AttributeTemplate.defaultSchedule(),
                     refreshSeed(i)), 1);
             actual.add(r.picked().get(0).id());
 
@@ -158,7 +158,7 @@ class FeedRankJitterTest {
             long best = -1;
             double bestScore = Double.NEGATIVE_INFINITY;
             for (RankCandidate c : candidates) { // id 升序
-                double s = FeedRankScorer.finalScore(c, NOW, params, 1.0, 1.0, 1.0)
+                double s = FeedRankScorer.finalScore(c, NOW, params, 1.0, 1.0, 1.0, 1.0)
                         * (1 - 0.4 * u.nextDouble());
                 if (s > bestScore) { // 严格大于：同分 id 小者胜
                     bestScore = s;

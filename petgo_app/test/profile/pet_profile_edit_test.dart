@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_profile_edit_page.dart';
@@ -16,10 +20,14 @@ class _FakeRepo implements ProfileRepository {
   /// `updateCalled` 用来区分「传了 null」与「压根没调用 update」——只看 `updatedSex == null` 分不出这两者。
   String? updatedSex;
   bool updateCalled = false;
+  /// V1.4.0 multi-pet：删除 / 更新实际带出去的 petId。
+  int? deletedPetId;
+  int? updatedPetId;
 
   @override
-  Future<void> deleteMyProfile() async {
+  Future<void> deleteMyProfile({int? petId}) async {
     deleted = true;
+    deletedPetId = petId;
   }
 
   @override
@@ -38,7 +46,7 @@ class _FakeRepo implements ProfileRepository {
       profile;
 
   @override
-  Future<PetProfile?> getMyProfile() async => profile;
+  Future<PetProfile?> getMyProfile({int? petId}) async => profile;
 
   @override
   Future<PetProfile> update({
@@ -50,10 +58,12 @@ class _FakeRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    int? petId,
   }) async {
     updatedName = name;
     updatedSex = sex;
     updateCalled = true;
+    updatedPetId = petId;
     return profile.copyWith(name: name, sex: sex);
   }
 }
@@ -204,5 +214,107 @@ void main() {
     expect(find.byKey(const ValueKey('petProfileEditSexTile')), findsOneWidget);
     expect(find.text(l10n.petProfileSexPick), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  // ===== V1.4.0 multi-pet Story 1.5 · AC5（UI 稿 C1 ~ C6）=====
+  group('V1.4.0 multi-pet：删除单只宠物', () {
+    const kopi = PetProfile(id: 2, name: 'Kopi', cardToken: 'TOK2');
+    const twoPets = [
+      PetListItem(id: 1, name: 'Orenji', isDefault: true),
+      PetListItem(id: 2, name: 'Kopi'),
+    ];
+
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    Future<ProviderContainer> pumpRouted(
+        WidgetTester tester, _FakeRepo repo, List<PetListItem> pets) async {
+      await tester.binding.setSurfaceSize(const Size(440, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final c = ProviderContainer(overrides: [
+        profileRepositoryProvider.overrideWithValue(repo),
+        petProfileProvider.overrideWith((ref) async => repo.profile),
+        petListProvider.overrideWith((ref) async => pets),
+      ]);
+      addTearDown(c.dispose);
+      // 列表先解析好（真实路径里「我的」页 / Diary 已经取过）。
+      await c.read(petListProvider.future);
+      c.read(currentPetIdProvider.notifier).select(repo.profile.id);
+      final router = GoRouter(initialLocation: '/profile/edit', routes: [
+        GoRoute(path: '/profile/edit', builder: (_, _) => const PetProfileEditPage()),
+        GoRoute(path: '/profile', builder: (_, _) => const Scaffold(body: Text('diary-tab'))),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return c;
+    }
+
+    Future<void> openConfirm(WidgetTester tester) async {
+      final deleteBtn = find.byKey(const ValueKey('petProfileDeleteButton'));
+      await tester.ensureVisible(deleteBtn);
+      await tester.tap(deleteBtn);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('C2：不是最后一只 → 标题带名字 + 新正文', (tester) async {
+      await pumpRouted(tester, _FakeRepo(kopi), twoPets);
+      await openConfirm(tester);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.petProfileDeleteConfirmTitle('Kopi')), findsOneWidget);
+      expect(find.text(l10n.petDeleteConfirmBodyOther('Kopi')), findsOneWidget);
+      expect(find.text(l10n.petProfileDeleteConfirmBody('Kopi')), findsNothing);
+    });
+
+    testWidgets('C2：最后一只 → 标题带名字 + 原正文', (tester) async {
+      await pumpRouted(tester, _FakeRepo(kopi), const [PetListItem(id: 2, name: 'Kopi')]);
+      await openConfirm(tester);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.petProfileDeleteConfirmTitle('Kopi')), findsOneWidget);
+      expect(find.text(l10n.petProfileDeleteConfirmBody('Kopi')), findsOneWidget);
+    });
+
+    testWidgets('C4：删非最后一只 → 只删这只（带 petId）+ Toast + 回 Diary Tab + 当前宠物回落', (tester) async {
+      final repo = _FakeRepo(kopi);
+      final c = await pumpRouted(tester, repo, twoPets);
+      await openConfirm(tester);
+      await tester.tap(find.byKey(const ValueKey('petProfileDeleteConfirm')));
+      await tester.pumpAndSettle();
+
+      expect(repo.deletedPetId, 2);
+      expect(find.text('diary-tab'), findsOneWidget);
+      expect(find.text('Kopi\'s profile deleted'), findsOneWidget);
+      // 当前宠物清掉 → effectivePetIdProvider 回落默认宠物（列表重取后同一份桩：默认 = 1）。
+      expect(c.read(currentPetIdProvider), isNull);
+      expect(await c.read(effectivePetIdProvider.future), 1);
+      await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
+    });
+
+    testWidgets('C6：删最后一只 → 现状：回 Diary Tab，无 Toast', (tester) async {
+      final repo = _FakeRepo(kopi);
+      await pumpRouted(tester, repo, const [PetListItem(id: 2, name: 'Kopi')]);
+      await openConfirm(tester);
+      await tester.tap(find.byKey(const ValueKey('petProfileDeleteConfirm')));
+      await tester.pumpAndSettle();
+
+      expect(repo.deletedPetId, 2);
+      expect(find.text('diary-tab'), findsOneWidget);
+      expect(find.text('Kopi\'s profile deleted'), findsNothing);
+    });
+
+    testWidgets('保存只改编辑中的那只（PATCH 带 petId）', (tester) async {
+      final repo = _FakeRepo(kopi);
+      await pumpRouted(tester, repo, twoPets);
+      await tester.tap(find.byKey(const ValueKey('petProfileEditSubmit')));
+      await tester.pumpAndSettle();
+      expect(repo.updatedPetId, 2);
+    });
   });
 }

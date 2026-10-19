@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  成长体系 · 「成长值规则」页签（V1.4.0 ① Story 4.1 · UI G1）。模型：${rules}（AdminGrowthConfigService.RulesView）。
+  行顺序是 Java 常量 RULE_ORDER（不依赖表的物理顺序）；名称只取 i18n（不渲染库里任何显示串）；没有「新建」。
+  rulesTable 也是抽屉保存成功的返回片段（:: saved = table + toast oob，HX-Retarget #growth-rules 原位替换）。
+*/-->
+<body>
+<section id="growth-rules" class="card" th:fragment="rulesTable"
+         th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')}">
+    <table class="tbl">
+        <thead>
+        <tr>
+            <th th:text="#{admin.v140.growth.col.code}">规则代码</th>
+            <th th:text="#{admin.v140.growth.col.name}">名称</th>
+            <th th:text="#{admin.v140.growth.col.points}">每次分值</th>
+            <th th:text="#{admin.v140.growth.col.dailyCap}">每日上限</th>
+            <th th:text="#{admin.v140.growth.col.capGroup}">合计上限组</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th th:text="#{admin.common.actions}">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${rules.rows}" th:attr="data-rule=${r.code}">
+            <td><code th:text="${r.code}">DAILY_LOGIN</code></td>
+            <td th:text="#{${'admin.v140.growth.rule.' + r.code}}">每日登录</td>
+            <td th:switch="${r.kind.name()}">
+                <span th:case="'CAMPAIGN'" th:text="#{admin.v140.growth.cell.atGrant}">发放时填写</span>
+                <span th:case="'SPEND'" th:text="#{admin.v140.growth.cell.seeSpend}">见「消费换算」</span>
+                <span th:case="'PER_AMOUNT'" th:text="${r.unitAmount != null} ? #{admin.v140.growth.cell.perUnit(${r.unitAmount}, ${r.points})} : '+' + ${r.points}">每 Rp1000 = 5</span>
+                <span th:case="*" th:text="'+' + ${r.points}">+3</span>
+            </td>
+            <td th:switch="${r.kind.name()}">
+                <span th:case="'PASSIVE'">—</span>
+                <span th:case="'MILESTONE'" th:text="#{admin.v140.growth.cell.perMilestone}">每个里程碑 1 次</span>
+                <span th:case="*" th:text="${r.dailyCap != null} ? #{admin.v140.growth.cell.times(${r.dailyCap})} : #{admin.v140.growth.cell.unlimited}">不限</span>
+            </td>
+            <td th:text="${r.capGroup == 'PASSIVE'} ? #{admin.v140.growth.cell.passiveGroup(${rules.passiveGroupCap})} : '—'">—</td>
+            <td th:text="${r.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</td>
+            <td>
+                <th:block th:if="${r.editable()}">
+                    <button type="button" class="btn btn-neutral btn-sm" th:if="${canEdit}"
+                            th:attr="data-drawer-open=@{/admin/growth/rules/{c}/drawer(c=${r.code})},data-rule-edit=${r.code}" data-drawer-res="growthrule"
+                            th:text="#{admin.v140.growth.edit}">编辑</button>
+                    <!--/* 只读（G7）：「编辑」变灰字、不可点。 */-->
+                    <span class="muted" th:unless="${canEdit}" th:text="#{admin.v140.growth.edit}">编辑</span>
+                </th:block>
+                <span th:unless="${r.editable()}">—</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/growth-rules :: rulesTable}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

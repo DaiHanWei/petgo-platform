@@ -16,6 +16,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param self        这一行是不是我自己
  * @param petType     宠物物种 CAT/DOG/OTHER（仅推荐关注填充，其余列表为 null 省略）
  * @param petBirthday 宠物生日（同上，可空）
+ * @param level       等级展示（V1.4.0 ① Story 3.1 · AD-14）；注销 / 停用 / 无等级时省略
+ * @param tier        段位（{@code GrowthTier} 名）
+ * @param frame       生效头像框（BASIC / UPGRADED / ANIMATED），无框省略
  */
 public record FollowListItem(
         long userId,
@@ -29,11 +32,23 @@ public record FollowListItem(
         @JsonProperty("blockedByMe") boolean blockedByMe,
         @JsonProperty("self") boolean self,
         String petType,
-        java.time.LocalDate petBirthday) {
+        java.time.LocalDate petBirthday,
+        Integer level,
+        String tier,
+        String frame) {
 
     /** 不带宠物字段的便捷构造（关注 / 粉丝列表用）。 */
     public FollowListItem(long userId, String userToken, String nickname, String avatarUrl, boolean deleted,
             boolean iFollow, boolean followsMe, boolean blockedByMe, boolean self) {
-        this(userId, userToken, nickname, avatarUrl, deleted, iFollow, followsMe, blockedByMe, self, null, null);
+        this(userId, userToken, nickname, avatarUrl, deleted, iFollow, followsMe, blockedByMe, self, null, null,
+                null, null, null);
+    }
+
+    /** 带作者投影等级三字段的便捷构造（Story 3.1：关注 / 粉丝 / 点赞人列表用）。 */
+    public FollowListItem(long userId, String userToken, String nickname, String avatarUrl, boolean deleted,
+            boolean iFollow, boolean followsMe, boolean blockedByMe, boolean self,
+            com.tailtopia.auth.dto.AuthorView author) {
+        this(userId, userToken, nickname, avatarUrl, deleted, iFollow, followsMe, blockedByMe, self, null, null,
+                author.badgeLevel(), author.badgeTier(), author.badgeFrame());
     }
 }

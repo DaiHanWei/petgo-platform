@@ -7,6 +7,7 @@ import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/domain/health_list_item.dart';
 import 'package:tailtopia/features/profile/presentation/health_list_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.1.2 · Story 3.3 遗留项补齐（2026-08-04）：Diary 时间线的类④ 胶囊点进来，
 /// 必须**定位到点的那一条**，而不是只跳到列表顶部。
@@ -18,16 +19,16 @@ class _FakeHealthRepo implements HealthRecordRepository {
   final List<HealthListItem> _items;
 
   @override
-  Future<List<HealthListItem>> list() async => _items;
+  Future<List<HealthListItem>> list({int? petId}) async => _items;
 
   @override
-  Future<void> create(HealthRecordDraft draft) async {}
+  Future<void> create(HealthRecordDraft draft, {int? petId}) async {}
 
   @override
-  Future<void> update(int id, HealthRecordDraft draft) async {}
+  Future<void> update(int id, HealthRecordDraft draft, {int? petId}) async {}
 
   @override
-  Future<void> delete(int id) async {}
+  Future<void> delete(int id, {int? petId}) async {}
 }
 
 /// 造一串够长的记录，保证目标条目在首屏之外 —— 否则「有没有滚动」测不出来。
@@ -62,7 +63,7 @@ Future<void> _pumpWithFocus(WidgetTester tester, List<HealthListItem> items, Str
     ],
   );
   await tester.pumpWidget(ProviderScope(
-    overrides: [healthRecordRepositoryProvider.overrideWithValue(_FakeHealthRepo(items))],
+    overrides: [effectivePetIdProvider.overrideWithValue(const AsyncData(1)), healthRecordRepositoryProvider.overrideWithValue(_FakeHealthRepo(items))],
     child: MaterialApp.router(
       routerConfig: router,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

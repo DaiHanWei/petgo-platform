@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -83,6 +84,9 @@ class ContentSpeciesIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private AccountSpeciesDefaultReader speciesReader;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private long adminId() {
         long n = SEQ.incrementAndGet();
@@ -466,5 +470,78 @@ class ContentSpeciesIntegrationTest extends ApiIntegrationTest {
         ContentPost saved = postsOf(virtualId).stream()
                 .filter(p -> marker.equals(p.getText())).findFirst().orElseThrow();
         assertThat(saved.getSpeciesOverride()).isEqualTo(ContentSpecies.DOG);
+    }
+
+    // ——————————————— V1.4.0 multi-pet Story 3.2（AD-11 · AC16）多宠物种 ———————————————
+
+    private PetProfile petOf(long ownerId, PetType type) {
+        return pets.save(PetProfile.create(ownerId, type, "多宠" + (SEQ.incrementAndGet() % 100000),
+                null, null, LocalDate.of(2025, 1, 1), null, "tok" + SEQ.incrementAndGet()));
+    }
+
+    private ContentPost diaryOf(long authorId, PetProfile... linked) {
+        ContentPost saved = posts.save(ContentPost.publish(authorId, ContentType.GROWTH_MOMENT,
+                linked.length == 0 ? null : linked[0].getId(), "diary-" + SEQ.incrementAndGet(),
+                List.of()));
+        for (PetProfile pet : linked) {
+            com.tailtopia.content.support.ContentPetsTestFixture.linkPet(jdbc, saved.getId(), pet.getId());
+        }
+        return saved;
+    }
+
+    /** 真库：猫狗双宠作者的 Moment → GENERAL；一猫一狗 Diary → GENERAL；只关联猫的 Diary → CAT。 */
+    @Test
+    void multiPetAuthorSpeciesFollowsLinkedPetsAndAllPets() {
+        User real = newUser();
+        PetProfile cat = petOf(real.getId(), PetType.CAT);
+        PetProfile dog = petOf(real.getId(), PetType.DOG);
+        ContentPost moment = posts.save(ContentPost.publish(real.getId(), ContentType.DAILY, null,
+                "moment-" + SEQ.incrementAndGet(), List.of()));
+        ContentPost both = diaryOf(real.getId(), cat, dog);
+        ContentPost onlyCat = diaryOf(real.getId(), cat);
+
+        assertThat(resolver.resolve(moment).species()).isEqualTo(ContentSpecies.GENERAL);
+        assertThat(resolver.resolve(moment).source()).isEqualTo(SpeciesSource.PET_PROFILE);
+        assertThat(resolver.resolve(both).species()).isEqualTo(ContentSpecies.GENERAL);
+        assertThat(resolver.resolve(onlyCat).species()).isEqualTo(ContentSpecies.CAT);
+        assertThat(resolver.resolve(onlyCat).source()).isEqualTo(SpeciesSource.PET_PROFILE);
+
+        var batch = resolver.resolveAll(List.of(
+                new ContentSpeciesResolver.Input(moment.getId(), null, real.getId(), ContentType.DAILY),
+                new ContentSpeciesResolver.Input(both.getId(), null, real.getId(), ContentType.GROWTH_MOMENT),
+                new ContentSpeciesResolver.Input(onlyCat.getId(), null, real.getId(),
+                        ContentType.GROWTH_MOMENT)));
+        assertThat(batch.get(moment.getId()).species()).isEqualTo(ContentSpecies.GENERAL);
+        assertThat(batch.get(both.getId()).species()).isEqualTo(ContentSpecies.GENERAL);
+        assertThat(batch.get(onlyCat.getId()).species()).isEqualTo(ContentSpecies.CAT);
+    }
+
+    /** 只养猫作者的 Moment → CAT；Diary 关联全被删（无关联行）→ 回落作者全部宠物。 */
+    @Test
+    void singleSpeciesAuthorAndDiaryWithoutLinksFallBackToAuthorPets() {
+        User catOnly = newUser();
+        petOf(catOnly.getId(), PetType.CAT);
+        petOf(catOnly.getId(), PetType.CAT);
+        ContentPost moment = posts.save(ContentPost.publish(catOnly.getId(), ContentType.DAILY, null,
+                "moment-" + SEQ.incrementAndGet(), List.of()));
+        ContentPost unlinked = diaryOf(catOnly.getId());
+
+        assertThat(resolver.resolve(moment).species()).isEqualTo(ContentSpecies.CAT);
+        assertThat(resolver.resolve(unlinked).species()).isEqualTo(ContentSpecies.CAT);
+    }
+
+    /** 行级覆写仍最高（多宠作者也一样）。 */
+    @Test
+    void rowOverrideStillWinsForMultiPetAuthor() {
+        User real = newUser();
+        PetProfile cat = petOf(real.getId(), PetType.CAT);
+        petOf(real.getId(), PetType.DOG);
+        ContentPost diary = diaryOf(real.getId(), cat);
+
+        var r = resolver.resolveAll(List.of(new ContentSpeciesResolver.Input(diary.getId(),
+                ContentSpecies.DOG, real.getId(), ContentType.GROWTH_MOMENT))).get(diary.getId());
+
+        assertThat(r.species()).isEqualTo(ContentSpecies.DOG);
+        assertThat(r.source()).isEqualTo(SpeciesSource.ROW_OVERRIDE);
     }
 }

@@ -6,10 +6,13 @@ import com.tailtopia.account.event.AccountDeletionRequestedEvent;
 import com.tailtopia.account.repository.AccountDeletionRepository;
 import com.tailtopia.admin.moderation.service.ManualReviewService;
 import com.tailtopia.auth.service.AuthAccountDeletionService;
+import com.tailtopia.collect.service.CollectDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.ContentShareService;
+import com.tailtopia.growth.service.GrowthAccountDeletionService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
+import com.tailtopia.notify.preference.PushPreferenceService;
 import com.tailtopia.notify.service.NotificationDeletionService;
 import com.tailtopia.ops.popup.service.OpsPopupImpressionDeletionService;
 import com.tailtopia.pay.service.PawCoinAccountDeletionService;
@@ -79,6 +82,12 @@ public class AccountDeletionService {
     private final FollowService followService;
     /** V1.3.4 Story 5.1：运营弹窗曝光（登录用户的频次记录，纯个人数据，物理删）。 */
     private final OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
+    /** V1.4.0 ① Story 1.2：成长值账户 / 流水 / 每日额度（AD-18，物理删）。 */
+    private final GrowthAccountDeletionService growthDeletion;
+    /** V1.4.0 ④ Story 1.1：推送分类开关（账号级纯个人数据，物理删）。 */
+    private final PushPreferenceService pushPreferences;
+    /** V1.4.0 ④ Story 2.1：帖子 / 场所收藏（仅本人可见的私人数据，物理删）。 */
+    private final CollectDeletionService collectDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -94,7 +103,9 @@ public class AccountDeletionService {
             PlaceCommentService placeCommentService, PlacePhotoService placePhotoService,
             MentionCandidateMaintenanceService mentionCandidateMaintenance,
             TailsonalityDeletionService tailsonalityDeletion, FollowService followService,
-            OpsPopupImpressionDeletionService opsPopupImpressionDeletion) {
+            OpsPopupImpressionDeletionService opsPopupImpressionDeletion,
+            GrowthAccountDeletionService growthDeletion,
+            PushPreferenceService pushPreferences, CollectDeletionService collectDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -118,6 +129,9 @@ public class AccountDeletionService {
         this.tailsonalityDeletion = tailsonalityDeletion;
         this.followService = followService;
         this.opsPopupImpressionDeletion = opsPopupImpressionDeletion;
+        this.growthDeletion = growthDeletion;
+        this.pushPreferences = pushPreferences;
+        this.collectDeletion = collectDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -150,7 +164,7 @@ public class AccountDeletionService {
 
         // 删除/匿名化各模块，收集待删个人媒体（content 由 user 行删除自动匿名，无需单独调用）。
         PersonalMedia media = PersonalMedia.empty()
-                .merge(profileDeletion.deleteByUserId(userId))
+                .merge(profileDeletion.deleteAllForAccount(userId)) // V1.4.0 multi-pet：逐只删全部宠物，最后按账号给身份证打标
                 .merge(triageDeletion.deleteByUserId(userId))
                 .merge(consultAnonymization.anonymizeByUserId(userId));
         notificationDeletion.deleteByUserId(userId);
@@ -197,9 +211,19 @@ public class AccountDeletionService {
         // V1.3.4 Story 5.1：运营弹窗曝光行随注销物理删除（D1/D2）。
         // ⚠️ users 行只匿名化不删，ops_popup_impressions 的 FK ON DELETE CASCADE 在这条路径上不会触发 —— 必须显式删。
         opsPopupImpressionDeletion.deleteByUserId(userId);
+        // V1.4.0 ④ Story 1.1：推送设置是账号级个人数据；users 行只匿名化不删，FK CASCADE 在注销路径不触发 ——
+        // 必须显式删，且在 authDeletion 之前。
+        pushPreferences.deleteByUserId(userId);
         // V1.3.2 Story 2.5：Tailsonality 主人类型是账号级个人数据（AD-17），须在 user 行删除前物理删除
         // （tailsonality_owner_types.user_id 对 users 有 FK、无 ON DELETE）。宠物级的结果行已随上面的 profileDeletion 删掉。
         tailsonalityDeletion.deleteOwnerTypeByUserId(userId);
+        // V1.4.0 ① Story 1.2：成长值账户 / 流水 / 每日额度物理删除（AD-18、PRD AC10）。
+        // ⚠️ users 行只匿名化不删，growth_accounts 对 users 的 FK 永不触发 CASCADE —— 必须显式删；
+        //    放在 tailsonality 之后、PawCoin 作废之前（架构 AD-18 定的位置）。
+        growthDeletion.deleteByUserId(userId);
+        // V1.4.0 ④ Story 2.1：本人的帖子 / 场所收藏物理删（users 行只匿名化，FK CASCADE 不触发），在 authDeletion 之前。
+        // ⚠️ 他人收藏的、指向本人帖子的行不删：帖子置 AUTHOR_DEACTIVATED 后列表读时显示不可见，由对方自行移除。
+        collectDeletion.deleteByUserId(userId);
 
         // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
         pawCoinDeletion.voidBalanceAndPurge(userId);

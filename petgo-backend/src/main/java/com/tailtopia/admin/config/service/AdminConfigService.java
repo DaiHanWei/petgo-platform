@@ -4,6 +4,7 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
+import com.tailtopia.admin.config.dto.PetSlotPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.ConfigChangeLog;
@@ -154,6 +155,32 @@ public class AdminConfigService {
         c.setPassportBoardingUnlockPrice(form.passportBoardingPrice());
         c.setTailsonalityUnlockPrice(form.tailsonalityUnlockPrice());
         c.setTailsonalityMatchUnlockPrice(form.tailsonalityMatchUnlockPrice());
+        pricingRepo.save(c);
+        commit(logs, adminId, "PRICING", "pricing_config");
+    }
+
+    // ── 宠物名额月租价格（V1.4.0 multi-pet Story 2.2 · AB-34.3 · UI 稿 L7）──
+    /**
+     * 每个名额 / 30 天的月租价（{@code pricing_config.pet_slot_monthly_price}）。下限同一次性解锁价
+     * {@value #MIN_UNLOCK_PRICE}（与迁移 V20261018_1602 的 DB CHECK 同口径，先拦成 422），上限同充值档位
+     * {@link #MAX_TIER_AMOUNT}。真变化才写 {@code config_change_logs}（PRICING，字段名 = 列名）+ 一条审计
+     * {@code CONFIG_UPDATE_PRICING}；无变化不写不审计。只影响之后的新租与续租；已生成的 PENDING 单按下单快照。
+     */
+    @Transactional
+    public void updatePetSlotPricing(PetSlotPricingForm form, long adminId) {
+        require(form.petSlotMonthlyPrice() >= MIN_UNLOCK_PRICE,
+                "价格须为 ≥100 的整数（IDR）", "admin.err.config.petSlotPriceMin");
+        require(form.petSlotMonthlyPrice() <= MAX_TIER_AMOUNT,
+                "价格须 ≤ 100000000 IDR", "admin.err.config.petSlotPriceMax");
+        PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.PRICING, "pet_slot_monthly_price", c.getPetSlotMonthlyPrice(),
+                form.petSlotMonthlyPrice(), adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计。
+        }
+        c.setPetSlotMonthlyPrice(form.petSlotMonthlyPrice());
         pricingRepo.save(c);
         commit(logs, adminId, "PRICING", "pricing_config");
     }
@@ -324,6 +351,10 @@ public class AdminConfigService {
                 "限流系数须在 0–1 之间且两端都不取："
                         + "取 1 等于没处置，取 0 会让被限流的内容永远排不进首页（那是下架，不是降权）",
                 "admin.err.config.throttleFactorRange");
+        // V1.4.0 ① Story 3.4：与建表 CHECK [1, 2] 同一口径；两端可取（1 = 不加权）。
+        require(form.authorLevelBoost() >= 1.0 && form.authorLevelBoost() <= 2.0,
+                "作者等级加权须在 1–2（1 = 不加权；小于 1 就成了降权）",
+                "admin.err.config.authorLevelBoostRange");
 
         AttributeTemplate.Rejection attrProblem = AttributeTemplate.rejectUnusableQuotasDetailed(
                 form.attrFunQuota(), form.attrEduQuota(), form.attrLifeQuota(), form.windowSize());
@@ -351,6 +382,7 @@ public class AdminConfigService {
         diff(logs, t, "exposure_decay", c.getExposureDecay(), form.exposureDecay(), adminId);
         diff(logs, t, "shuffle_strength", c.getShuffleStrength(), form.shuffleStrength(), adminId);
         diff(logs, t, "throttle_factor", c.getThrottleFactor(), form.throttleFactor(), adminId);
+        diff(logs, t, "author_level_boost", c.getAuthorLevelBoost(), form.authorLevelBoost(), adminId);
         diff(logs, t, "seen_window_days", c.getSeenWindowDays(), form.seenWindowDays(), adminId);
         diff(logs, t, "window_size", c.getWindowSize(), form.windowSize(), adminId);
         diff(logs, t, "attr_fun_quota", c.getAttrFunQuota(), form.attrFunQuota(), adminId);
@@ -368,6 +400,7 @@ public class AdminConfigService {
         c.setExposureDecay(form.exposureDecay());
         c.setShuffleStrength(form.shuffleStrength());
         c.setThrottleFactor(form.throttleFactor());
+        c.setAuthorLevelBoost(form.authorLevelBoost());
         c.setSeenWindowDays(form.seenWindowDays());
         c.setWindowSize(form.windowSize());
         c.setAttrFunQuota(form.attrFunQuota());

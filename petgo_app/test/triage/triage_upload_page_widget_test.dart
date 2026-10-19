@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/triage/data/triage_repository.dart';
 import 'package:tailtopia/features/triage/domain/triage_result_controller.dart';
@@ -128,5 +133,127 @@ void main() {
     expect(find.byKey(const ValueKey('triageYellowPage')), findsNothing);
     expect(find.byKey(const ValueKey('triageGreenPage')), findsNothing);
     await tester.pump(const Duration(seconds: 5)); // 倒计时结束，清理定时器
+  });
+
+  // ---- V1.4.0 multi-pet Story 4.1 · AC7.3：路由 petId 写草稿；缺失时补走一次选择 ----
+  group('Story 4.1 上传页所选宠物', () {
+    const two = [PetListItem(id: 7, name: 'Momo', isDefault: true), PetListItem(id: 8, name: 'Kopi')];
+
+    Future<ProviderContainer> pumpPushed(WidgetTester tester, {int? petId, required List<PetListItem> pets}) async {
+      SharedPreferences.setMockInitialValues({});
+      final c = ProviderContainer(overrides: [
+        triageRepositoryProvider.overrideWithValue(_FakeTriageRepo([const TriageResult(status: TriageStatus.done)])),
+        petProfileProvider.overrideWith((ref) => null),
+        petListProvider.overrideWith((ref) async => pets),
+      ]);
+      addTearDown(c.dispose);
+      await tester.binding.setSurfaceSize(const Size(440, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                key: const ValueKey('open'),
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute<void>(builder: (_) => TriageUploadPage(petId: petId))),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.byKey(const ValueKey('open')));
+      await tester.pumpAndSettle();
+      return c;
+    }
+
+    testWidgets('带 ?petId= → 首帧重置后写入草稿，不弹选择', (tester) async {
+      final c = await pumpPushed(tester, petId: 8, pets: two);
+      expect(find.text('Cek gejala untuk siapa?'), findsNothing);
+      expect(c.read(triageUploadProvider).petId, 8);
+    });
+
+    testWidgets('缺 petId + ≥2 只 → 补弹 H1，选中后写草稿', (tester) async {
+      final c = await pumpPushed(tester, pets: two);
+      expect(find.text('Cek gejala untuk siapa?'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('petPickerRow-8')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('petPickerConfirm')));
+      await tester.pumpAndSettle();
+      expect(c.read(triageUploadProvider).petId, 8);
+      expect(find.byKey(const ValueKey('triageSymptomField')), findsOneWidget);
+    });
+
+    testWidgets('缺 petId + ≥2 只 + 取消 → 退出上传页', (tester) async {
+      await pumpPushed(tester, pets: two);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('triageSymptomField')), findsNothing);
+      expect(find.byKey(const ValueKey('open')), findsOneWidget);
+    });
+
+    testWidgets('缺 petId + 1 只 → 自动用那只', (tester) async {
+      final c = await pumpPushed(tester, pets: const [PetListItem(id: 7, name: 'Momo')]);
+      expect(find.text('Cek gejala untuk siapa?'), findsNothing);
+      expect(c.read(triageUploadProvider).petId, 7);
+    });
+  });
+
+  // ---- code review 4-1 A2 / A3 ----
+  testWidgets('A2: 登录续跳（go 进来、栈里只有上传页）+ ≥2 只 + 取消 → go 回问诊 Tab', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final c = ProviderContainer(overrides: [
+      triageRepositoryProvider.overrideWithValue(_FakeTriageRepo([const TriageResult(status: TriageStatus.done)])),
+      petProfileProvider.overrideWith((ref) => null),
+      petListProvider.overrideWith((ref) async =>
+          const [PetListItem(id: 7, name: 'Momo', isDefault: true), PetListItem(id: 8, name: 'Kopi')]),
+    ]);
+    addTearDown(c.dispose);
+    final router = GoRouter(initialLocation: '/triage/upload', routes: [
+      GoRoute(path: '/triage', builder: (_, _) => const Scaffold(body: Text('triage-tab'))),
+      GoRoute(path: '/triage/upload', builder: (_, _) => const TriageUploadPage()),
+    ]);
+    await tester.binding.setSurfaceSize(const Size(440, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('id'),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Cek gejala untuk siapa?'), findsOneWidget);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(find.text('triage-tab'), findsOneWidget);
+  });
+
+  testWidgets('A3: 所选宠物解析完成前提交按钮禁用（单宠物不会以 null 抢先提交）', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final list = Completer<List<PetListItem>>();
+    final c = ProviderContainer(overrides: [
+      triageRepositoryProvider.overrideWithValue(_FakeTriageRepo([const TriageResult(status: TriageStatus.done)])),
+      petProfileProvider.overrideWith((ref) => null),
+      petListProvider.overrideWith((ref) => list.future),
+    ]);
+    addTearDown(c.dispose);
+    await _pump(tester, c);
+    await tester.enterText(find.byKey(const ValueKey('triageSymptomField')), 'muntah');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('triageSubmit'))).onPressed, isNull);
+
+    list.complete(const [PetListItem(id: 7, name: 'Momo')]);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('triageSubmit'))).onPressed, isNotNull);
+    expect(c.read(triageUploadProvider).petId, 7);
   });
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'features/growth/domain/growth_popup_trigger.dart';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
@@ -38,7 +39,11 @@ import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
+import 'package:tailtopia/features/notify/data/push_settings_repository.dart';
+import 'package:tailtopia/features/collect/presentation/collection_list_controller.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'features/profile/data/current_pet_provider.dart';
+import 'features/pet_slot/data/pet_slot_repository.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
 ///
@@ -196,6 +201,8 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
     // ⚠️ 不做轮询：只在"用户回到 App"这个明确时点拉一次，不为角标烧流量和电。
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(unreadCountProvider);
+      // V1.4.0 ① Story 2.3：回前台拉一次待弹的升级庆祝 / 存量汇总（未 attach 时空操作）。
+      growthPopupTrigger.request(GrowthPullReason.resumed);
       // 回前台版本检查（V1.3.4 Story 3.2 · AC6.2）：距上次检查 < 6h、或冷启动检查尚未发出时
       // 由控制器直接空转，不产生网络调用。
       unawaited(_onResumeUpdateCheck());
@@ -267,7 +274,7 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
       if (next.status != AuthStatus.guest &&
           nextId != null &&
           nextId != prevId) {
-        resetUserScopedCaches(ref);
+        resetUserScopedCaches(ref, userId: nextId);
       }
 
       // 系统推送注册（收口于此单点，与 identify/缓存失效同一监听）：
@@ -352,7 +359,15 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
 /// 收口于 app.dart 组合根：跨 feature 的缓存协调放在根部，AuthController 保持纯净。
 /// 仅在「变为某个非游客用户」时调用（见上方 authControllerProvider 监听）——退出登录不调，
 /// 游客态无 token，失效会立即触发 /me 重拉 → 401 → 强制登录弹窗。
-void resetUserScopedCaches(WidgetRef ref) {
+void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
+  // V1.4.0 multi-pet（Story 1.5 · AC1.5）：宠物列表 / 当前宠物是账号维度 —— 换账号不得沿用上个账号的宠物 id。
+  // ⚠️ 本函数在**冷启动恢复会话**时也会跑（guest → authenticated）：不能一律清当前宠物，否则「记住上次查看」
+  //    （AC3.6）每次重启都丢。按账号绑定：偏好里的主人 = 本账号 → 保留；否则清（code review 2026-10-18 #1）。
+  // ⚠️ `petListProvider` 不在这里 invalidate：它 watch 当前账号，账号一变自己 reload（isReloading），
+  //    界面靠这个信号在换号期间不渲染上个账号的宠物；手动 invalidate 会把它变成 isRefreshing、信号就没了。
+  if (userId != null) ref.read(currentPetIdProvider.notifier).bindUser(userId);
+  ref.invalidate(effectivePetIdProvider);
+  ref.invalidate(petSlotOverviewProvider); // 名额摘要（点「+」时取，账号维度）
   ref.invalidate(petProfileProvider); // 成长档案 / 我的：宠物档案
   ref.invalidate(timelineFirstPageProvider); // 成长档案：时间线首页
   ref.invalidate(archiveStatsProvider); // 成长档案 / 我的：统计栏
@@ -386,5 +401,9 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
   ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）
   ref.invalidate(tailsonalityOwnerTypeProvider); // V1.3.2：Tailsonality 主人类型（账号级常驻）
+  ref.invalidate(pushSettingsProvider); // V1.4.0 ④：推送分类设置（账号级，换账号不得沿用上一账号的开关）
+  // V1.4.0 ④ Disimpan：「我的」页常驻，Disimpan 可见时 autoDispose 不回收，不登记 = 换账号看到上个账号的收藏（隐私）。
+  ref.invalidate(collectedPostsProvider);
+  ref.invalidate(collectedPlacesProvider);
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

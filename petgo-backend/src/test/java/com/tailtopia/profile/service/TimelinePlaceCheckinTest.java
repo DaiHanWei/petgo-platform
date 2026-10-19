@@ -46,7 +46,7 @@ class TimelinePlaceCheckinTest {
 
     @SuppressWarnings("unchecked")
     private final ObjectProvider<HealthEventTimelineSource> healthProvider = Mockito.mock(ObjectProvider.class);
-    private final ProfileService profileService = Mockito.mock(ProfileService.class);
+    private final PetResolver petResolver = Mockito.mock(PetResolver.class);
     private final ContentService contentService = Mockito.mock(ContentService.class);
     private final com.tailtopia.profile.repository.HealthRecordRepository healthRecords =
             Mockito.mock(com.tailtopia.profile.repository.HealthRecordRepository.class);
@@ -63,16 +63,18 @@ class TimelinePlaceCheckinTest {
         java.lang.reflect.Field f = PetProfile.class.getDeclaredField("id");
         f.setAccessible(true);
         f.set(p, PET);
-        when(profileService.findByOwnerId(OWNER)).thenReturn(Optional.of(p));
+        when(petResolver.resolve(OWNER, null)).thenReturn(p);
         when(completions.findTimelineViewsBefore(anyLong(), any(), any())).thenReturn(List.of());
         when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
         when(contentService.findCheckinIdsWithTimelinePost(anyLong(), anyLong(), anyCollection())).thenReturn(Set.of());
-        service = new TimelineService(profileService, contentService, healthProvider,
+        service = new TimelineService(petResolver, contentService, healthProvider,
                 Mockito.mock(MilestoneService.class), Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, completions, idCards,
                 Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class), checkins,
                 // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
-                tailsonalityTimeline);
+                tailsonalityTimeline,
+                // V1.4.0 gift Story 2.1：统计卡礼物总价值（本类不验它，给 mock）。
+                Mockito.mock(com.tailtopia.gift.service.GiftShowcaseQuery.class));
     }
 
     private static PlaceCheckinTimelineView checkin(long id, String iso, String status) {

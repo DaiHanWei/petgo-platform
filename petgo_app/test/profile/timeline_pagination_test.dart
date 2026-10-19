@@ -45,7 +45,7 @@ class _FakeTimelineRepo implements TimelineRepository {
   String? lastCursor;
 
   @override
-  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me(), bool diaryOnly = false}) async {
+  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me(), bool diaryOnly = false, int? petId}) async {
     page2Calls++;
     lastCursor = cursor;
     if (failPage2) {
@@ -55,14 +55,14 @@ class _FakeTimelineRepo implements TimelineRepository {
   }
 
   @override
-  Future<CalendarMonth> getCalendar(int year, int month, {ArchiveScope scope = const ArchiveScope.me()}) async =>
+  Future<CalendarMonth> getCalendar(int year, int month, {ArchiveScope scope = const ArchiveScope.me(), int? petId}) async =>
       CalendarMonth(year: year, month: month, days: const []);
 
   @override
-  Future<DayDetail> getDay(DateTime date, {ArchiveScope scope = const ArchiveScope.me()}) async => DayDetail(date: date, items: const []);
+  Future<DayDetail> getDay(DateTime date, {ArchiveScope scope = const ArchiveScope.me(), int? petId}) async => DayDetail(date: date, items: const []);
 
   @override
-  Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me()}) async => const ArchiveStats(
+  Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me(), int? petId}) async => const ArchiveStats(
       happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30);
 }
 
@@ -113,8 +113,8 @@ Future<_FakeTimelineRepo> _pump(
           petType: 'CAT',
           birthday: DateTime(2025, 1, 1))),
       timelineRepositoryProvider.overrideWithValue(repo),
-      timelineFirstPageProvider.overrideWith((ref) async => firstPage),
-      archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
+      timelineFirstPageProvider.overrideWith((ref, _) async => firstPage),
+      archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
           happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
     ],

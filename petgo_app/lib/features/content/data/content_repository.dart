@@ -12,6 +12,9 @@ abstract class ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    /// Diary 关联的全部宠物（V1.4.0 multi-pet Story 3.3 · AC3.1，按创建顺序）。非空时请求体写 `petIds`
+    /// **并同时写 `petId` = 第一只**（新旧后端都能收）；为空 → 整键省略，退回只看 [petId]（老路径逐字节不变）。
+    List<int> petIds,
     String? text,
     List<String> imageUrls,
     /// 与 [imageUrls] **同序等长**的原始宽高（V1.1.6 Story 3.5）。
@@ -45,6 +48,7 @@ class DioContentRepository implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
@@ -59,7 +63,12 @@ class DioContentRepository implements ContentRepository {
     // Story 4.2 同步开关 → Story 4.1 的 visibility 字段：关同步 = 仅自己可见。
     // 只在创建时可传；发布后不可更改（FR-83：唯一途径是删除该条内容）。
     data['visibility'] = syncToMoment ? kVisibilityPublic : kVisibilityPrivate;
-    if (petId != null) data['petId'] = petId;
+    if (petIds.isNotEmpty) {
+      data['petIds'] = petIds;
+      data['petId'] = petIds.first;
+    } else if (petId != null) {
+      data['petId'] = petId;
+    }
     if (text != null && text.isNotEmpty) data['text'] = text;
     // Story 3.2 AC4：没 @ 人时**整个字段不出现**，与老客户端的请求体逐字节一致。
     if (mentionedUserIds.isNotEmpty) data['mentionedUserIds'] = mentionedUserIds;

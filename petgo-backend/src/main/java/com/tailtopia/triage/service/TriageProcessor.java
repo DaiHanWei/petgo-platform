@@ -2,6 +2,8 @@ package com.tailtopia.triage.service;
 
 import com.tailtopia.shared.ai.GeminiClient;
 import com.tailtopia.shared.ai.GeminiTriageResult;
+import com.tailtopia.shared.ai.TriagePetContext;
+import com.tailtopia.profile.service.PetProfileQueryService;
 import com.tailtopia.shared.media.SignedUrlService;
 import com.tailtopia.triage.domain.DangerLevel;
 import com.tailtopia.triage.domain.TriageStatus;
@@ -28,6 +30,10 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>签名 URL 仅在内存中传给 Gemini，<b>绝不入库、绝不落日志</b>；任务只存对象 key。</li>
  *   <li>失败日志只记异常类名，<b>不落</b> 症状 / 图片 / 签名 URL / 解析结果 / Gemini key。</li>
  * </ul>
+ *
+ * <p>V1.4.0 multi-pet Story 4.1（P-1）：任务带 {@code pet_id} 时经 {@link PetProfileQueryService#findTriageContext}
+ * 取所选宠物的物种 / 月龄 / 体重，<b>仅在内存中</b>拼进模型用户侧输入（不入库、不落日志）；取不到（排队期间被删）
+ * 按不带上下文处理。安全层 {@link SafetyRuleLayer#enforce} 的参数与改造前逐字相同——宠物上下文<b>不是</b>安全层信号源。
  */
 @Service
 public class TriageProcessor {
@@ -39,13 +45,15 @@ public class TriageProcessor {
     private final SignedUrlService signedUrlService;
     private final GeminiClient geminiClient;
     private final SafetyRuleLayer safetyRuleLayer;
+    private final PetProfileQueryService petQuery;
 
     public TriageProcessor(TriageTaskRepository tasks, SignedUrlService signedUrlService,
-            GeminiClient geminiClient, SafetyRuleLayer safetyRuleLayer) {
+            GeminiClient geminiClient, SafetyRuleLayer safetyRuleLayer, PetProfileQueryService petQuery) {
         this.tasks = tasks;
         this.signedUrlService = signedUrlService;
         this.geminiClient = geminiClient;
         this.safetyRuleLayer = safetyRuleLayer;
+        this.petQuery = petQuery;
     }
 
     /**
@@ -63,6 +71,8 @@ public class TriageProcessor {
         }
         task.markProcessing();
         tasks.save(task);
+        // P-1：所选宠物的只读上下文（内存组装，不入库、不落日志）；无 petId / 宠物已删 → null（与改造前同 prompt）。
+        TriagePetContext petContext = petContextOf(task);
 
         while (true) {
             try {
@@ -72,7 +82,7 @@ public class TriageProcessor {
                 String detected = SymptomLanguageDetector.detect(task.getSymptomText());
                 String effectiveLocale = detected != null ? detected : task.getResponseLocale();
                 GeminiTriageResult result =
-                        geminiClient.analyze(task.getSymptomText(), signedUrls, effectiveLocale);
+                        geminiClient.analyze(task.getSymptomText(), signedUrls, effectiveLocale, petContext);
 
                 DangerLevel modelLevel = DangerLevel.fromNullable(result.dangerLevel());
                 // === Story 4.2 后置强制升红的唯一挂载点（只升不降、不可旁路）===
@@ -93,6 +103,23 @@ public class TriageProcessor {
                     return;
                 }
             }
+        }
+    }
+
+    /**
+     * code review 4-1 B1：取上下文失败（查库异常等）<b>不得</b>打断状态机（否则事务回滚、任务停在 PENDING 直到重启重扫）
+     * → 记异常类名（不落任何宠物资料）后按不带上下文照常分诊，与「宠物已删」同口径。
+     */
+    private TriagePetContext petContextOf(TriageTask task) {
+        if (task.getPetId() == null || task.getUserId() == null) {
+            return null;
+        }
+        try {
+            return petQuery.findTriageContext(task.getUserId(), task.getPetId()).orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("分诊宠物上下文读取失败，按不带上下文处理 triageId={} cause={}",
+                    task.getId(), e.getClass().getSimpleName());
+            return null;
         }
     }
 

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  「运营发布身份」页 · 官方号区块（V1.4.0 ① Story 4.4 · P-7，2026-10-19 用户拍板落点）。
+    rows(oob)  — 官方号表（role = ADMIN、未注销、无注销申请）；oob=true 时整块随片段一并换
+    saved      — 保存展示等级成功后的响应体：整块 oob + 清空错误槽 + toast
+  形态同虚拟号抽屉的展示等级卡：下拉 Lv1 ~ 等级表最高级 + 保存 + 原生确认；门 virtual_account.manage，
+  无权限只读 + 提示。🔴 官方号**没有**启停 / 物种定位等虚拟号专属操作，本片段不渲染任何此类入口。
+  只写 display_level：不参与成长值、不享任何权益（写入纪律见 GrowthDisplayLevelService）。
+*/-->
+<body>
+<div th:fragment="rows(oob)" id="official-rows" th:attr="hx-swap-oob=${oob} ? 'true' : null"
+     th:with="canManage=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''virtual_account.manage'')')}">
+    <table th:if="${!#lists.isEmpty(officials)}" class="tags-table" data-section="official-accounts">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
+            <th class="nowrap" th:text="#{admin.v140.growth.display.col}">展示等级</th>
+            <th th:if="${canManage}" th:text="#{admin.v140.growth.display.title}">展示等级</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="o : ${officials}" th:id="'official-row-' + ${o.id()}"
+            th:with="dl=${officialDisplayLevels != null} ? ${officialDisplayLevels.get(o.id())} : null">
+            <td class="nowrap muted" th:text="${o.id()}">0</td>
+            <td th:text="${o.nickname()}">TailUs</td>
+            <td class="nowrap" data-display-level>
+                <th:block th:if="${dl != null}"><span class="tier-dot" th:classappend="'tier-' + ${dl.tier().name()}"></span><span
+                        th:text="'Lv' + ${dl.level()}">Lv12</span></th:block>
+                <span th:if="${dl == null}" class="muted">—</span>
+            </td>
+            <td th:if="${canManage}">
+                <form class="inline" data-official-display-form
+                      th:attr="hx-post=@{/admin/virtual-accounts/official/{id}/display-level(id=${o.id()})},
+                               data-confirm=#{admin.v140.growth.display.confirm},data-confirm-args=${o.nickname() != null} ? ${o.nickname()} : ('#' + ${o.id()})"
+                      data-confirm-input="displayLevel" hx-target="#official-inline-err" hx-swap="innerHTML">
+                    <select name="displayLevel" class="sel" required>
+                        <option th:each="op : ${displayLevelOptions}" th:value="${op.level()}"
+                                th:selected="${dl != null and dl.level() == op.level()}"
+                                th:text="#{admin.v140.growth.display.option(${op.level()}, #{${'admin.v140.growth.tier.' + op.tier().name()}})}">Lv12 · Guardian</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm" th:text="#{admin.common.save}">保存</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="hint" th:if="${!canManage and !#lists.isEmpty(officials)}" data-official-display-forbidden
+       th:text="#{admin.v130.err.forbidden(#{perm.virtual_account.manage})}">需要「管理虚拟账号」权限</p>
+
+    <div class="empty" th:if="${#lists.isEmpty(officials)}">
+        <p th:text="#{admin.v140.growth.official.empty}">暂无官方号</p>
+    </div>
+</div>
+
+<th:block th:fragment="saved">
+    <div th:replace="~{admin/fragments/official-accounts :: rows(true)}"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

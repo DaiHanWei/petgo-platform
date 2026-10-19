@@ -34,7 +34,7 @@ class TimelineServiceTest {
     private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityTimeline =
             Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityTimelineQuery.class);
 
-    private ProfileService profileService;
+    private PetResolver petResolver;
     private ContentService contentService;
     private MilestoneService milestoneService;
     private com.tailtopia.profile.repository.HealthRecordRepository healthRecords;
@@ -47,14 +47,16 @@ class TimelineServiceTest {
     private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckinQuery =
             Mockito.mock(com.tailtopia.place.service.PlaceCheckinTimelineQuery.class);
 
+    private final com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase =
+            Mockito.mock(com.tailtopia.gift.service.GiftShowcaseQuery.class);
+
     @BeforeEach
     void setUp() {
-        profileService = Mockito.mock(ProfileService.class);
+        petResolver = Mockito.mock(PetResolver.class);
         contentService = Mockito.mock(ContentService.class);
         milestoneService = Mockito.mock(MilestoneService.class);
         healthRecords = Mockito.mock(com.tailtopia.profile.repository.HealthRecordRepository.class);
-        when(profileService.hasProfile(1L)).thenReturn(true);
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
+        when(petResolver.resolve(1L, null)).thenReturn(pet(PetType.DOG));
                 // Story 3.2 新增的两个源（本类不造它们的数据 → 返回空列表，等价于「只有内容 + 问诊存档」）。
         milestoneCompletions =
                 Mockito.mock(com.tailtopia.profile.repository.MilestoneCompletionRepository.class);
@@ -62,7 +64,7 @@ class TimelineServiceTest {
         when(milestoneCompletions.findTimelineViewsBefore(anyLong(), Mockito.any(), Mockito.any()))
                 .thenReturn(List.of());
         when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
-        service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
+        service = new TimelineService(petResolver, contentService, healthProvider, milestoneService,
                 // V1.3.0 Story 1.4：档案统计栏顺带下发的「未庆祝」角标数；本类不验它，给 mock（默认 0）。
                 Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, milestoneCompletions, idCards,
@@ -71,7 +73,9 @@ class TimelineServiceTest {
                 // V1.3.2 Story 1.6：源⑥ 场所打卡（本类按需 stub；不声明能力时根本不调）。
                 placeCheckinQuery,
                 // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
-                tailsonalityTimeline);
+                tailsonalityTimeline,
+                // V1.4.0 gift Story 2.1：统计卡礼物总价值（按宠物算）。
+                giftShowcase);
     }
 
     private GrowthMomentView moment(long id, String iso) {
@@ -192,7 +196,7 @@ class TimelineServiceTest {
     /** bug 20260721-271：成长时间线按当前宠物 petId 过滤（删档后旧帖 pet_id=NULL 不串入新宠物档案）。 */
     @Test
     void timelineFiltersGrowthByCurrentPetId() {
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(petWithId(PetType.DOG, 42L)));
+        when(petResolver.resolve(1L, null)).thenReturn(petWithId(PetType.DOG, 42L));
         when(healthProvider.getIfAvailable()).thenReturn(null);
         when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), eq(42L), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of());
@@ -203,7 +207,7 @@ class TimelineServiceTest {
 
     @Test
     void noProfileThrows404() {
-        when(profileService.hasProfile(9L)).thenReturn(false);
+        when(petResolver.resolve(9L, null)).thenThrow(AppException.notFound("尚未创建宠物档案"));
         assertThatThrownBy(() -> service.getTimeline(9L, null, 20)).isInstanceOf(AppException.class);
     }
 
@@ -286,7 +290,7 @@ class TimelineServiceTest {
 
     @Test
     void calendarAggregatesByEventDateWithEarliestImageAndHealthBadge() {
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
+        when(petResolver.resolve(1L, null)).thenReturn(pet(PetType.DOG));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
         // 同一天 6/2 两条：先 created 的 img2a 应为格子首图；6/10 一条。
@@ -319,7 +323,7 @@ class TimelineServiceTest {
 
     @Test
     void dayDetailSortsByCategoryThenTime() {
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.CAT)));
+        when(petResolver.resolve(1L, null)).thenReturn(pet(PetType.CAT));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.findGrowthMomentsOnDate(eq(1L), anyLong(), eq(LocalDate.parse("2026-06-02"))))
@@ -341,7 +345,7 @@ class TimelineServiceTest {
 
     @Test
     void statsCountsAndMilestoneProgressByPetType() {
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.DOG)));
+        when(petResolver.resolve(1L, null)).thenReturn(pet(PetType.DOG));
         HealthEventTimelineSource health = Mockito.mock(HealthEventTimelineSource.class);
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.countGrowthMoments(eq(1L), anyLong())).thenReturn(7L);
@@ -358,9 +362,26 @@ class TimelineServiceTest {
         assertThat(resp.milestoneTotal()).isEqualTo(30); // 狗 = 30
     }
 
+    /** V1.4.0 gift Story 2.1 · AC4.3：礼物总价值按 {@code profile.getId()}（这只宠物）取，填进 giftTotalValue。 */
+    @Test
+    void statsCarriesGiftTotalValueOfThisPet() {
+        // ③ 合入 dev_1.4.0：宠物经多宠物线 PetResolver 寻址（不传 petId = 默认宠物），不再走单宠 findByOwnerId。
+        when(petResolver.resolve(1L, null)).thenReturn(petWithId(PetType.DOG, 42L));
+        when(healthProvider.getIfAvailable()).thenReturn(null);
+        when(milestoneService.getProgress(anyLong(), eq(PetType.DOG)))
+                .thenReturn(new MilestoneService.MilestoneProgress(0L, 30));
+        when(giftShowcase.totalValueOfPet(42L)).thenReturn(53_000L);
+
+        ArchiveStatsResponse resp = service.getStats(1L);
+
+        assertThat(resp.giftTotalValue()).isEqualTo(53_000L);
+        assertThat(resp.consultCount()).isZero(); // consultCount 保留（旧版 App 仍在读）
+        verify(giftShowcase).totalValueOfPet(42L);
+    }
+
     @Test
     void statsMilestoneTotalForOtherPetIs15() {
-        when(profileService.findByOwnerId(1L)).thenReturn(Optional.of(pet(PetType.OTHER)));
+        when(petResolver.resolve(1L, null)).thenReturn(pet(PetType.OTHER));
         when(healthProvider.getIfAvailable()).thenReturn(null);
         when(contentService.countGrowthMoments(eq(1L), anyLong())).thenReturn(0L);
         when(milestoneService.getProgress(anyLong(), eq(PetType.OTHER)))
@@ -373,7 +394,7 @@ class TimelineServiceTest {
 
     @Test
     void calendarNoProfileThrows404() {
-        when(profileService.findByOwnerId(9L)).thenReturn(Optional.empty());
+        when(petResolver.resolve(9L, null)).thenThrow(com.tailtopia.shared.error.AppException.notFound("尚未创建宠物档案"));
         assertThatThrownBy(() -> service.getCalendarMonth(9L, 2026, 6)).isInstanceOf(AppException.class);
     }
 }

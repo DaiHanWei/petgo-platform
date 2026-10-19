@@ -23,6 +23,7 @@ import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_match_ca
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 import '../profile/milestone_instant_fakes.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// 2026-10-09 配型改回付费 · L0：配型页整页上锁、单买配型 Rp3,000、从配型页买完整解读（含配型）、
 /// 已买配型后完整解读只补差价。
@@ -74,6 +75,8 @@ void main() {
         // V1.3.4 Story 4.3：解锁成功后会检测当场庆祝；默认 const [] = 不检测（免真实网络与挂起计时器）。
         milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
         if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
+        // V1.4.0 multi-pet：里程碑列表按当前宠物分族，当场庆祝要先知道是哪只。
+        if (milestones != null) effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
       ],
       child: MaterialApp(
         locale: const Locale('id'),
@@ -240,7 +243,7 @@ class _Repo implements TailsonalityRepository {
   Future<TailsonalityResult> fetchResult(String token) async => current;
 
   @override
-  Future<List<TailsonalityResult>> fetchResults() async => [current];
+  Future<List<TailsonalityResult>> fetchResults({int? petId}) async => [current];
 
   @override
   Future<KeepsakePurchaseResult> unlock(String token, HdPayChannel channel) async {

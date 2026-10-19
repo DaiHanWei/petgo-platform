@@ -43,14 +43,31 @@ public record CommentResponse(
          * <p>🔴 <b>能不能点、显示什么昵称都是服务端算好的</b>（见 {@link MentionView}）。
          * 空表不下发 —— 评论区一页 40 行，每行挂一个空数组是白占体积。
          */
-        List<MentionView> mentions) {
+        List<MentionView> mentions,
+        /**
+         * 作者等级展示（V1.4.0 ① Story 3.1 · AD-14）：等级 / 段位（{@code GrowthTier} 名）/ 生效头像框（无框省略）。
+         * 作者已注销 / 已停用 / 不展示等级时三者均为 null（NON_NULL 省略）。与 {@code FeedItemResponse} 同口径。
+         */
+        Integer authorLevel,
+        String authorTier,
+        String authorFrame) {
+
+    /** 加等级三字段之前的 14 参构造器（三字段 = null），既有调用点不改也能编译。 */
+    public CommentResponse(Long id, long authorId, String authorNickname, String authorAvatarUrl,
+            boolean authorDeleted, java.util.List<com.tailtopia.auth.dto.UserTagView> authorTags, String body,
+            Instant createdAt, Integer replyCount, List<CommentResponse> replies, String moderationStatus,
+            long likeCount, boolean liked, List<MentionView> mentions) {
+        this(id, authorId, authorNickname, authorAvatarUrl, authorDeleted, authorTags, body, createdAt, replyCount,
+                replies, moderationStatus, likeCount, liked, mentions, null, null, null);
+    }
 
     /** 二级回复（无嵌套）。{@code mentions} 为 @ 投影（Story 3.3），没 @ 人时传 null。 */
     public static CommentResponse reply(Comment c, AuthorView author, long likeCount, boolean liked,
             List<MentionView> mentions) {
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
                 author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
-                c.getBody(), c.getCreatedAt(), null, null, statusName(c), likeCount, liked, mentions);
+                c.getBody(), c.getCreatedAt(), null, null, statusName(c), likeCount, liked, mentions,
+                author.badgeLevel(), author.badgeTier(), author.badgeFrame());
     }
 
     /**
@@ -66,7 +83,7 @@ public record CommentResponse(
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
                 author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 c.getBody(), c.getCreatedAt(), replyCount, firstReplies, statusName(c),
-                likeCount, liked, mentions);
+                likeCount, liked, mentions, author.badgeLevel(), author.badgeTier(), author.badgeFrame());
     }
 
     private static String statusName(Comment c) {

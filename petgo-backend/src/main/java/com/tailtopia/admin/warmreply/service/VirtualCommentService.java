@@ -99,7 +99,7 @@ public class VirtualCommentService {
         ContentPost post = requirePost(postId, false);
         Map<Long, User> authorCache = new HashMap<>();
         User author = users.findById(post.getAuthorId()).orElse(null);
-        String species = speciesResolver.resolve(post.getSpeciesOverride(), post.getAuthorId()).species();
+        String species = speciesResolver.resolve(post).species();
         List<ExistingComment> existing = existingComments(postId, justSubmittedId, authorCache);
         long visible = comments.countByPostIdAndDeletedAtIsNullAndModerationStatus(postId, CommentModerationStatus.VISIBLE);
         long virtual = comments.countByPostAndAuthorType(postId, AccountType.VIRTUAL,

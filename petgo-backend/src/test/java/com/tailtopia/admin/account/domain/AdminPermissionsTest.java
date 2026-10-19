@@ -127,7 +127,15 @@ class AdminPermissionsTest {
         //     期间列在 AdminPermissionWiringTest.PENDING_WIRING）⇒ 72 + 2 = 74。
         // 2026-10-15（V1.3.4 后台返工清单 §1）：改最低支持版本 config.app_min_version_edit、
         //     运营弹窗 ops_popup.manage、系统通知 ops_notify.view / ops_notify.send ⇒ 74 + 4 = 78。
+        // 2026-10-18（V1.4.0 ① Story 4.1 · AB-32）：成长体系配置 growth.config_view / growth.config_edit
+        //     （不预授任何预置角色）⇒ 78 + 2 = 80。
+        // 2026-10-18（V1.4.0 ① Story 4.2 · AB-33）：调整用户 EXP growth.user_adjust（P-5 预授 OPS_MANAGER）⇒ 80 + 1 = 81。
+        // 2026-10-19（V1.4.0 ② Story 4.3 · AD-15）：运营补发宠物名额 user.pet_slot_adjust（预授 OPS_MANAGER）⇒ 81 + 1 = 82
+        //     （① 等级线 +3、② 多宠物线 +1，两线合入 dev_1.4.0 后实测）。
+        // 2026-10-18（V1.4.0 ③ gift Story 3.1）：gift.catalog_view / gift.catalog_edit（不预授）⇒ 82 + 2 = 84。
+        // 2026-10-18（V1.4.0 ③ gift Story 3.2）：送礼记录 gift.order_view（导出同码，不另设，不预授）⇒ 84 + 1 = 85
+        //     （2026-10-19 ③ 送礼线合入 dev_1.4.0 后实测：① +3、② +1、③ +3）。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(78);
+        assertThat(all).hasSize(85);
     }
 }

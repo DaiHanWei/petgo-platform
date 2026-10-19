@@ -259,15 +259,24 @@ public class AdminPublishIdentityService {
      * 所以这里只能从宠物档案反推，<b>未建档就推不出来</b>，而这是常态而非异常。
      * 本列的用途就是让运营**提前知道**哪些号属于这种情况，否则无从察觉。
      *
-     * <p>🔴 story 提到的"养多物种推不出"在当前数据模型里**不可能出现**：
-     * {@code PetProfileRepository#findByOwnerId} 返回 {@code Optional} —— 一个用户至多一份宠物档案。
-     * 所以这里只有"有档案"和"没档案"两支。真要支持多宠物，那是另一件事（会改 V1 的档案模型），
-     * <b>不在本 story 提前留分支</b>：留了也没人能走到，反而让读代码的人以为支持多宠物。
+     * <p>V1.4.0 multi-pet（Story 1.2 · X31）：账号可有多只宠物 → 取全部宠物物种去重：
+     * 0 只 → 推不出；1 种 → 该物种；≥ 2 种 → {@code GENERAL}「宠物档案（多物种）」
+     * （与 V1.4.0 multi-pet 3.2「多物种 → 通用池」同口径）。
      */
     private Species deriveSpecies(long userId) {
-        return pets.findByOwnerId(userId)
-                .map(p -> new Species(p.getPetType().name(), "宠物档案"))
-                .orElse(new Species("—", "推不出（该账号未建宠物档案）"));
+        java.util.Set<String> species = new java.util.LinkedHashSet<>();
+        for (var p : pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(userId)) {
+            if (p.getPetType() != null) {
+                species.add(p.getPetType().name());
+            }
+        }
+        if (species.isEmpty()) {
+            return new Species("—", "推不出（该账号未建宠物档案）");
+        }
+        if (species.size() == 1) {
+            return new Species(species.iterator().next(), "宠物档案");
+        }
+        return new Species("GENERAL", "宠物档案（多物种）");
     }
 
     private static Optional<Long> parseId(String digits) {

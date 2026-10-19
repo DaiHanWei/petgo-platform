@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  用户抽屉 · 「成长值」页签（V1.4.0 ① Story 4.2 · AB-33 · UI I1 ~ I7）。模型：${growthTab}（AdminGrowthUserService.Tab）、
+  ${growthGrantToken}（调整表单的一次性幂等 token，每次渲染新生成）。
+  🔴 根元素就是地基的 data-utab-panel="growth" 容器（页签头与 data-utab-panel 名由地基定义，不许改）；
+     加 id="user-growth-panel" 供调整成功后 HX-Retarget outerHTML 只换本页签（整抽屉重渲染会把页签切回「基本信息」）。
+  三态：真实用户（概览 / 调整卡 / 明细）、虚拟号（只读展示等级）、已注销（一句提示）。停用 = 真实用户 + 调整卡置灰。
+  🛡 无 growth.user_adjust：调整卡置灰不隐藏（bug 20260901-475 口径）；服务端两个调整端点另有 403 / 422，不靠这里。
+  明细的规则名 / 原因 / 类型名全按代码取文案（§5.6），只有运营填的 note 原样输出（th:text 转义）。
+*/-->
+<body>
+<section th:fragment="panel(visible)" class="card card-full ud-card" data-utab-panel="growth" id="user-growth-panel"
+         th:hidden="${!visible}" th:with="gtab=${growthTab}">
+
+    <!--/* 已注销（AD-18：成长值数据已由注销清理） */-->
+    <p class="muted" th:if="${gtab.deleted()}" data-growth-state="DELETED"
+       th:text="#{admin.v140.growth.deleted}">账号已注销，成长值数据已清理</p>
+
+    <!--/* 虚拟号（I6）：只读展示等级，无调整卡、无明细 */-->
+    <div th:if="${gtab.virtual()}" data-growth-state="VIRTUAL">
+        <h3 th:text="#{admin.v140.growth.virtual.title}">展示等级</h3>
+        <p class="growth-ov-val">
+            <th:block th:if="${gtab.displayLevel() != null}">
+                <b th:text="'Lv' + ${gtab.displayLevel()}">Lv12</b>
+                <span class="tier-dot" th:classappend="'tier-' + ${gtab.displayTier().name()}"></span><span
+                    th:text="#{${'admin.v140.growth.tier.' + gtab.displayTier().name()}}">Guardian</span>
+            </th:block>
+            <span th:unless="${gtab.displayLevel() != null}">—</span>
+        </p>
+        <!--/* 「运营发布身份」做成到 /admin/virtual-accounts?open={id} 的链接：链接文字取导航文案并转义后再拼进 utext。 */-->
+        <p class="hint" th:with="vaUrl=@{/admin/virtual-accounts(open=${gtab.userId()})},vaLabel=${#strings.escapeXml(#messages.msg('admin.nav.virtualAccounts'))}"
+           th:utext="#{admin.v140.growth.virtual.hint(|<a href=&quot;${vaUrl}&quot; data-growth-va-link>${vaLabel}</a>|)}">虚拟号不参与成长值，没有明细，不能调整。</p>
+    </div>
+
+    <!--/* 真实用户（I1）：概览三格 → 调整卡 → 明细 */-->
+    <th:block th:if="${gtab.state().name() == 'REAL'}">
+        <div class="growth-ov" data-growth-state="REAL">
+            <div class="growth-ov-cell">
+                <span class="muted" th:text="#{admin.v140.growth.user.level}">当前等级</span>
+                <p class="growth-ov-val"><b th:text="'Lv' + ${gtab.level()}">Lv7</b>
+                    <span class="tier-dot" th:classappend="'tier-' + ${gtab.tier().name()}"></span><span
+                        th:text="#{${'admin.v140.growth.tier.' + gtab.tier().name()}}">Buddy</span></p>
+            </div>
+            <div class="growth-ov-cell">
+                <span class="muted" th:text="#{admin.v140.growth.user.total}">累计 EXP</span>
+                <p class="growth-ov-val"><b data-growth-total th:text="${#numbers.formatInteger(gtab.lifetimeTotal(), 1, 'COMMA')}">1,420</b></p>
+            </div>
+            <div class="growth-ov-cell">
+                <th:block th:unless="${gtab.maxed()}">
+                    <span class="muted" th:text="#{admin.v140.growth.user.toNext(${gtab.nextLevel()})}">距 Lv8 还差</span>
+                    <p class="growth-ov-val"><b th:text="${#numbers.formatInteger(gtab.remaining(), 1, 'COMMA')}">180</b></p>
+                </th:block>
+                <p class="growth-ov-val" th:if="${gtab.maxed()}"><b th:text="#{admin.v140.growth.user.maxed}">已满级</b></p>
+            </div>
+        </div>
+
+        <!--/* 调整卡（I3 / I7）：不在只读抽屉（注销已提交）里渲染。 */-->
+        <div class="growth-adjust" th:unless="${readOnly == true}" data-growth-adjust
+             th:with="canAdjust=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.user_adjust'')')},
+                      off=${!canAdjust or gtab.adjustBlockedKey() != null}">
+            <h3 th:text="#{admin.v140.growth.adjust.title}">调整 EXP</h3>
+            <!--/* 置灰态不挂 hx-post（只给值 null 让 Thymeleaf 去掉该属性）：只读员工拿不到任何写入口
+                   （AdminUserDrawerIntegrationTest AC5 护栏 · 历史事故「按钮在、点了 403」）。 */-->
+            <form class="inline" id="user-growth-adjust-form"
+                  th:attr="hx-post=${off} ? null : @{/admin/users/{id}/growth/adjust/confirm(id=${gtab.userId()})}"
+                  hx-target="#user-drawer-err" hx-swap="innerHTML">
+                <!--/* 一次性幂等 token：调整成功后本面板重渲染 = 新 token（幂等键 ADMIN:{token}）。 */-->
+                <input type="hidden" name="grantToken" th:value="${growthGrantToken}"/>
+                <label><input type="radio" name="type" value="ADMIN_ADJUST" checked th:disabled="${off}"
+                              th:attr="data-placeholder=#{admin.v140.growth.adjust.reason}"/>
+                    <span th:text="#{admin.v140.growth.adjust.type.ADMIN_ADJUST}">普通调整</span></label>
+                <label><input type="radio" name="type" value="OPS_CAMPAIGN" th:disabled="${off}"
+                              th:attr="data-placeholder=#{admin.v140.growth.adjust.campaign}"/>
+                    <span th:text="#{admin.v140.growth.adjust.type.OPS_CAMPAIGN}">运营活动</span></label>
+                <input type="number" name="delta" class="inp" step="1" required th:disabled="${off}"
+                       th:placeholder="#{admin.v140.growth.adjust.delta}"/>
+                <input type="text" name="note" class="inp" maxlength="200" required th:disabled="${off}"
+                       th:placeholder="#{admin.v140.growth.adjust.reason}" data-growth-note/>
+                <button type="submit" class="btn" th:disabled="${off}" th:text="#{admin.v140.growth.adjust.submit}">调整</button>
+            </form>
+            <p class="hint" th:unless="${canAdjust}" data-growth-adjust-forbidden
+               th:text="#{admin.v130.err.forbidden(#{perm.growth.user_adjust})}">需要「调整用户 EXP」权限</p>
+            <p class="hint" th:if="${canAdjust and gtab.adjustBlockedKey() != null}" data-growth-adjust-blocked
+               th:text="#{${gtab.adjustBlockedKey()}}">账号已停用，不可调整 EXP</p>
+            <p class="hint" th:text="#{admin.v140.growth.adjust.hint}">增减值可为负数。</p>
+            <!--/* 类型切换只换第二栏 placeholder（文案来自 data-placeholder，不在脚本里写死）。 */-->
+            <script>
+                (function () {
+                    var form = document.getElementById('user-growth-adjust-form');
+                    if (!form) { return; }
+                    form.addEventListener('change', function (e) {
+                        if (e.target.name !== 'type') { return; }
+                        var note = form.querySelector('[data-growth-note]');
+                        if (note) { note.placeholder = e.target.getAttribute('data-placeholder'); }
+                    });
+                })();
+            </script>
+        </div>
+
+        <th:block th:with="gl=${gtab.ledger()},ruleOptions=${gtab.ruleOptions()}">
+            <div th:replace="~{admin/fragments/drawer-users-growth :: ledger}"></div>
+        </th:block>
+    </th:block>
+</section>
+
+<!--/* 明细（I1 / I2）：筛选 / 翻页 = GET .../growth/ledger，只换本块。模型：${gl}（Ledger）、${ruleOptions}。 */-->
+<div th:fragment="ledger" id="user-growth-ledger" class="growth-ledger">
+    <form class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/users/{id}/growth/ledger(id=${gl.userId()})}"
+          hx-target="#user-growth-ledger" hx-swap="outerHTML">
+        <label class="field"><span th:text="#{admin.v140.growth.ledger.col.rule}">规则</span>
+            <select name="rule" class="sel">
+                <option value="" th:selected="${gl.rule() == null}" th:text="#{admin.v140.growth.ledger.filter.allRules}">全部规则</option>
+                <option th:each="c : ${ruleOptions}" th:value="${c}" th:selected="${gl.rule() == c}"
+                        th:text="${c} + ' · ' + #{${'admin.v140.growth.rule.' + c}}">DAILY_LOGIN</option>
+            </select></label>
+        <label class="field"><span th:text="#{admin.v140.growth.ledger.filter.from}">起（WIB）</span>
+            <input type="date" name="from" class="inp" th:value="${gl.from()}"/></label>
+        <label class="field"><span th:text="#{admin.v140.growth.ledger.filter.to}">止（WIB）</span>
+            <input type="date" name="to" class="inp" th:value="${gl.to()}"/></label>
+        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.search}">查询</button>
+    </form>
+    <table class="ud-table" data-section="growth-ledger">
+        <thead>
+        <tr>
+            <th th:text="#{admin.v140.growth.ledger.col.time}">时间（WIB）</th>
+            <th th:text="#{admin.v140.growth.ledger.col.rule}">规则</th>
+            <th class="num" th:text="#{admin.v140.growth.ledger.col.delta}">增减</th>
+            <th th:text="#{admin.v140.growth.ledger.col.ref}">关联对象</th>
+            <th th:text="#{admin.v140.growth.ledger.col.pet}">关联宠物</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${gl.rows()}" th:attr="data-ledger-id=${r.id()}">
+            <td class="nowrap" th:text="${@adminTime.wib(r.createdAt())}">10-18 14:33</td>
+            <td th:switch="${r.reversalReason() != null ? 'REV' : r.ruleCode()}">
+                <span th:case="'REV'" th:text="#{${'admin.v140.growth.ledger.reversal.' + r.reversalReason()}}">退款扣回</span>
+                <span th:case="'ADMIN_ADJUST'" th:text="#{admin.v140.growth.ledger.adminAdjust(${r.note() ?: '—'}, ${r.operator() ?: '—'})}">运营调整 · 补发（Ana）</span>
+                <span th:case="'OPS_CAMPAIGN'" th:text="#{admin.v140.growth.ledger.campaign(${r.note() ?: '—'}, ${r.operator() ?: '—'})}">运营活动 · 周年庆（Ana）</span>
+                <span th:case="*" th:text="#{${'admin.v140.growth.rule.' + r.ruleCode()}}">每日登录</span>
+            </td>
+            <td class="num" th:classappend="${r.delta() < 0} ? 'err'" th:text="${r.signedDelta()}">+5</td>
+            <td th:with="refText=(${r.refTypeKey() != null} ? #{${r.refTypeKey()}} : ${r.refType()}) + (${r.refShown() != null} ? ' #' + ${r.refShown()} : '')">
+                <span th:if="${r.refType() == null}">—</span>
+                <a th:if="${r.refType() != null and r.refHref() != null}" th:href="@{${r.refHref()}}" target="_blank" rel="noopener"
+                   data-ledger-ref th:text="${refText}">帖子 #123</a>
+                <span th:if="${r.refType() != null and r.refHref() == null}" th:text="${refText}">打卡 #9</span>
+            </td>
+            <td th:text="${r.petNames() ?: '—'}">Mochi</td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(gl.rows())}">
+            <td colspan="5" class="empty" th:text="${gl.everAny()} ? #{admin.v140.growth.ledger.emptyFiltered} : #{admin.v140.growth.ledger.empty}">该用户还没有成长值记录</td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="pager" th:if="${gl.totalPages() > 1}" th:attr="data-page=${gl.page()}">
+        <a th:if="${gl.hasPrevious()}" href="#" th:attr="hx-get=@{/admin/users/{id}/growth/ledger(id=${gl.userId()},rule=${gl.rule()},from=${gl.from()},to=${gl.to()},page=${gl.page() - 1})}"
+           hx-target="#user-growth-ledger" hx-swap="outerHTML" th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.v140.growth.ledger.page(${gl.page() + 1}, ${gl.totalPages()})}">1 / 3</span>
+        <a th:if="${gl.hasNext()}" href="#" th:attr="hx-get=@{/admin/users/{id}/growth/ledger(id=${gl.userId()},rule=${gl.rule()},from=${gl.from()},to=${gl.to()},page=${gl.page() + 1})}"
+           hx-target="#user-growth-ledger" hx-swap="outerHTML" th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</div>
+
+<!--/* 调整预检通过：服务端确认弹层（→ #confirm-host）+ 清掉抽屉错误槽里上一次 422 的残留。 */-->
+<th:block th:fragment="confirm">
+    <dialog th:replace="~{admin/fragments/confirm-modal :: modal}"></dialog>
+    <div id="user-drawer-err" hx-swap-oob="innerHTML"></div>
+</th:block>
+
+<!--/* 调整成功（I5）：只换本页签（HX-Retarget #user-growth-panel outerHTML）+ toast oob + 清抽屉错误槽。 */-->
+<th:block th:fragment="saved">
+    <section th:replace="~{admin/fragments/drawer-users-growth :: panel(true)}"></section>
+    <div id="user-drawer-err" hx-swap-oob="innerHTML"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已调整 +50 EXP</div>
+    </div>
+</th:block>
+</body>
+</html>

@@ -32,7 +32,8 @@ class DiaryHeader extends StatelessWidget {
     super.key,
     required this.profile,
     this.happyCount,
-    this.consultCount,
+    this.giftTotalValue,
+    this.onOpenGifts,
     this.milestoneCompleted,
     this.milestoneTotal,
     this.milestoneUncelebrated = 0,
@@ -45,7 +46,17 @@ class DiaryHeader extends StatelessWidget {
     this.onOpenMilestones,
     this.insightsEntryAnchor,
     this.readOnly = false,
+    this.hideEditButton = false,
+    this.avatarKey,
   });
+
+  /// 当前宠物只读（V1.4.0 multi-pet Story 2.4 · AC5.2 / B4）：**只**隐藏编辑铅笔；入口两栏、里程碑、分享照常。
+  /// 与访客态 [readOnly]（整块移除入口网格）是两回事，默认 false = 改动前外观。
+  final bool hideEditButton;
+
+  /// 宠物信息卡头像的位置锚点，原样透传给 [PetInfoCard]（V1.4.0 gift Story 1.3 送出动效落点）。
+  /// 默认 null 行为不变。
+  final GlobalKey? avatarKey;
 
   /// 综合入口卡的**位置锚点**（V1.3.0 Story 5.4）。
   ///
@@ -67,7 +78,12 @@ class DiaryHeader extends StatelessWidget {
 
   /// 三列统计（未就绪传 null → 显占位「·」，沿用现状）。
   final int? happyCount;
-  final int? consultCount;
+
+  /// 中间格：礼物总价值（V1.4.0 gift Story 2.2；原 consultCount）。原样透传 [PetInfoCard]。
+  final int? giftTotalValue;
+
+  /// 点礼物格进礼物页。⚠️ 与访客只读三态判定无关：访客态同样可点（UI 稿 A1）。
+  final VoidCallback? onOpenGifts;
 
   /// 里程碑进度；任一为 null → 不渲染进度条（沿用现状：统计未就绪时该条不出现）。
   final int? milestoneCompleted;
@@ -115,7 +131,7 @@ class DiaryHeader extends StatelessWidget {
               titleAction!,
               const SizedBox(width: 8),
             ],
-            if (!readOnly)
+            if (!readOnly && !hideEditButton)
               _iconBtn(
                 key: const ValueKey('editProfileButton'),
                 onTap: onEditProfile,
@@ -132,9 +148,11 @@ class DiaryHeader extends StatelessWidget {
         PetInfoCard(
           profile: profile,
           happyCount: happyCount,
-          consultCount: consultCount,
+          giftTotalValue: giftTotalValue,
+          onOpenGifts: onOpenGifts,
           milestoneCount: milestoneCompleted,
           topRight: petCardAction,
+          avatarKey: avatarKey,
         ),
         // 🛡 入口网格（健康记录 / 身份证）整块移除，不是「留个锁」——
         // 健康记录不对访客开放；身份证入口跳的是当前登录用户自己的卡，点进去必然出错。

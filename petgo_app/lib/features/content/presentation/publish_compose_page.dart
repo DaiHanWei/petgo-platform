@@ -16,6 +16,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../profile/data/current_pet_provider.dart';
 import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
@@ -44,6 +45,10 @@ import '../domain/publish_controller.dart';
 import 'publish_exposure_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
+import '../../profile/data/pet_list_repository.dart';
+import '../../profile/presentation/widgets/pet_names.dart';
+import '../../pet_slot/data/pet_slot_repository.dart' show kPetReadOnlySlug;
+import '../../../shared/widgets/app_image.dart';
 
 /// 发布控制器 provider（autoDispose：sheet 关闭即 dispose，清空内存草稿，NFR-10 无持久草稿）。
 final publishControllerProvider = Provider.autoDispose<PublishController>((
@@ -76,6 +81,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.placeCheckinPlace,
     this.initialText,
     this.initialImages,
+    this.initialPetIds,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -101,6 +107,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// 超 [kMaxImages] 丢弃。关闭发帖页即随 autoDispose 清空（无草稿，NFR-10）。
   final List<Uint8List>? initialImages;
 
+  /// Diary 默认预选的宠物（V1.4.0 multi-pet Story 3.3 · AC1.7）：打卡成功页「Rekam Momen Ini」= 本次打卡的宠物（G3）。
+  /// 预选时过滤掉已不在可选列表（ACTIVE）里的 id。null = 不预选（只 1 只正常宠物时仍自动选中，F4）。
+  final List<int>? initialPetIds;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
@@ -111,6 +121,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     PublishCheckinPlace? placeCheckinPlace,
     String? initialText,
     List<Uint8List>? initialImages,
+    List<int>? initialPetIds,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -135,6 +146,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
           placeCheckinPlace: placeCheckinPlace,
           initialText: initialText,
           initialImages: initialImages,
+          initialPetIds: initialPetIds,
         ),
       ),
     );
@@ -175,7 +187,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       c.setType(initial);
       if (initial == ContentType.growthMoment) {
         c.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认事件日期
-        _ensurePetLoaded();
       }
       _applyPrefill(c);
     });
@@ -199,8 +210,19 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     }
   }
 
-  /// 成长日历绑定的宠物档案（V1 单账号单宠物）。选「成长日历」时拉取，发布时带其 id。
+  /// 成功页分享用的宠物档案（只取 `cardToken` / 名字，best-effort）：Diary = **第一只关联宠物**（F3，
+  /// 与后端 `content_posts.pet_id` 同口径）；Moment / Tips = 当前宠物（改造前口径）。
+  /// V1.4.0 multi-pet Story 3.3：Diary 关联哪些宠物改由 [PublishController.petIds] 承载，不再取它。
   PetProfile? _linkedPet;
+
+  /// 宠物 chips 的默认选中只做一次（AC1.7）：宠物列表首次拿到数据时。
+  bool _petsInitialized = false;
+
+  /// 用户亲手点过 chip（code review：里程碑预选要异步取当前宠物，期间用户的点选不得被覆盖）。
+  bool _userTouchedPets = false;
+
+  /// 里程碑「去发布」所属的宠物（= 进页时 Diary Tab 的当前宠物）；回填打卡与庆祝都按它。
+  int? _milestonePetId;
 
   /// 提交期间的「审核中」覆盖层（P-39b）：覆盖编辑表单，提交结束后跳成功/被拒页。
   bool _reviewing = false;
@@ -281,11 +303,69 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     return profile?.hasPetProfile ?? false;
   }
 
-  /// 懒加载当前用户的宠物档案（成长日历发帖必带 pet_id，Story 2.3 AC2）。
-  Future<void> _ensurePetLoaded() async {
-    if (_linkedPet != null) return;
-    final pet = await ref.read(profileRepositoryProvider).getMyProfile();
+  /// 懒加载分享用的宠物档案（成功页「Bagikan buku tumbuh kembang {petName}」要 `cardToken`）。
+  ///
+  /// [petId] 给了 → 取这只（Diary 的第一只关联宠物，F3）；不给 → 当前宠物（Moment / Tips，改造前口径；
+  /// 允许为取当前宠物发一次列表请求，冷启动直接进发布页时它可能还没被任何界面建立）。
+  Future<void> _ensurePetLoaded({int? petId}) async {
+    if (_linkedPet != null && (petId == null || _linkedPet!.id == petId)) return;
+    final id = petId ?? await ref.read(requestPetIdProvider.future);
+    final pet = await ref.read(profileRepositoryProvider).getMyProfile(petId: id);
     if (mounted) setState(() => _linkedPet = pet);
+  }
+
+  /// 宠物 chips 的可选列表：只 ACTIVE（只读不出现，AC1.1），按创建顺序（列表本身即创建顺序）。
+  static List<PetListItem> _activePets(List<PetListItem> pets) =>
+      [for (final p in pets) if (!p.isReadOnly) p];
+
+  /// 宠物列表到了 → 默认选中（只做一次）/ 已选里有变只读或已删的 → 剔掉（AC1.7 / AC3.2）。
+  ///
+  /// 在 post-frame 里调：改控制器会 notify，不能在 build 中途做。
+  Future<void> _syncPetSelection(PublishController c, List<PetListItem> pets) async {
+    final active = _activePets(pets);
+    final activeIds = {for (final p in active) p.id};
+    if (!_petsInitialized) {
+      _petsInitialized = true;
+      final want = <int>{};
+      if (widget.initialPetIds != null) {
+        want.addAll(widget.initialPetIds!);
+      } else if (widget.milestoneCode != null) {
+        // 里程碑属于 Diary Tab 当前宠物（后端会校验帖子关联了它）；它若只读则不预选。
+        int? current;
+        try {
+          current = await ref.read(effectivePetIdProvider.future);
+        } catch (_) {
+          current = null; // 取不到当前宠物：不预选，用户自己点
+        }
+        if (!mounted) return;
+        _milestonePetId = current;
+        if (current != null) want.add(current);
+      }
+      // code review：等当前宠物期间用户已经点过 chip → 以用户为准，不再套默认预选。
+      if (_userTouchedPets) return;
+      var selected = [for (final p in active) if (want.contains(p.id)) p.id];
+      // F4：只有 1 只正常宠物 → 自动选中（仍是可点的 chip，可取消）。
+      if (selected.isEmpty && active.length == 1) selected = [active.first.id];
+      c.setPetIds(selected);
+      return;
+    }
+    final kept = [for (final id in c.petIds) if (activeIds.contains(id)) id];
+    if (kept.length != c.petIds.length) c.setPetIds(kept);
+  }
+
+  /// 点 chip：选中 / 取消；结果按创建顺序存（不按点选先后）。
+  void _togglePet(PublishController c, List<PetListItem> active, int id) {
+    _userTouchedPets = true;
+    final set = {...c.petIds};
+    if (!set.remove(id)) set.add(id);
+    c.setPetIds([for (final p in active) if (set.contains(p.id)) p.id]);
+  }
+
+  /// 已选宠物的名字（按创建顺序）—— 只用于渲染。
+  List<String> _selectedPetNames(PublishController c) {
+    final pets = ref.read(petListProvider).asData?.value ?? const <PetListItem>[];
+    final byId = {for (final p in pets) p.id: p.name};
+    return [for (final id in c.petIds) ?byId[id]];
   }
 
   Future<void> _addImage(
@@ -351,25 +431,16 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     Analytics.capture('content_publish_submitted', {
       'type': controller.type.name,
     });
-    // 成长日历必带 pet_id（否则后端 422）；V1 单宠物 → 取当前用户唯一档案。
-    if (controller.type == ContentType.growthMoment) {
-      await _ensurePetLoaded();
-      if (!mounted) return;
-      if (_linkedPet == null) {
-        _onGrowthBlocked(l10n); // 无档案兜底（理论上已被 segment 灰置拦住）
-        return;
-      }
-    }
+    // V1.4.0 multi-pet Story 3.3：Diary 必带至少 1 只宠物（按钮已按 canPublish 置灰，这里只是兜底）。
+    final growth = controller.type == ContentType.growthMoment;
+    if (growth && controller.petIds.isEmpty) return;
     final key = 'post-${DateTime.now().microsecondsSinceEpoch}';
-    final petId = controller.type == ContentType.growthMoment
-        ? _linkedPet?.id
-        : null;
     // 分享飞轮（留存手册抓手 2）：成功页要**当场**给可分享的成长册链接，
-    // 所以这里 best-effort 把档案取上来拿 cardToken（成长日历路径上面已取过，直接命中缓存）。
-    // 失败/无档案不阻断发布——代价只是成功页少一个分享按钮。
-    if (_linkedPet == null && _hasPetProfile) {
+    // 所以这里 best-effort 把档案取上来拿 cardToken。Diary 取**第一只关联宠物**（F3）；
+    // Moment / Tips 取当前宠物（改造前口径）。失败/无档案不阻断发布——代价只是成功页少一个分享按钮。
+    if (growth || _hasPetProfile) {
       try {
-        await _ensurePetLoaded();
+        await _ensurePetLoaded(petId: growth ? controller.petIds.first : null);
       } catch (_) {
         // 静默：分享按钮是加分项，不能让它挡住发布。
       }
@@ -384,13 +455,19 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final started = DateTime.now();
     int? id;
     String? blockSlug; // content-text-blocked / content-image-blocked（F10 审核拦截）
+    int? readOnlyPetId; // 409 pet-read-only：选中的宠物在提交瞬间变只读（AC3.2）
+    var readOnly = false;
     try {
       id = await controller.publish(
-          idempotencyKey: key, petId: petId, placeCheckinToken: widget.placeCheckinToken);
+          idempotencyKey: key, placeCheckinToken: widget.placeCheckinToken);
     } on DioException catch (e) {
-      final slug = ProblemDetail.fromDioException(e)?.typeSlug;
+      final pd = ProblemDetail.fromDioException(e);
+      final slug = pd?.typeSlug;
       if (slug == 'content-text-blocked' || slug == 'content-image-blocked') {
         blockSlug = slug;
+      } else if (slug == kPetReadOnlySlug) {
+        readOnly = true;
+        readOnlyPetId = (pd?.extensions['petId'] as num?)?.toInt();
       }
     }
     // 「审核中」至少展示 ~900ms，避免一闪而过（faithful verifying affordance）。
@@ -401,6 +478,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (!mounted) return;
 
     if (id != null) {
+      // V1.4.0 multi-pet Story 3.3 · AC7（PRD §4）：Diary 发布成功报 `diary_published`，属性只有关联宠物数；
+      // 🛡 不带宠物名 / petId / 正文。Moment / Tips 不报。
+      if (controller.type == ContentType.growthMoment) {
+        Analytics.capture('diary_published', {'pet_count': controller.petIds.length});
+      }
       // V1.3.2 Story 1.5 · AC6：打卡后顺手发帖成功。place_id 键装 token 值（沿用 place_detail_viewed 约定）；
       // 🛡 不带宠物名 / 正文 / 坐标。
       final checkinPlace = widget.placeCheckinPlace;
@@ -414,18 +496,28 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       ref.invalidate(myPostsProvider);
       ref.invalidate(meCountsProvider); // V1.3.4：我的页四格帖子数随发帖变化
       // 成长日历发帖 → 同步刷新成长档案时间线与统计，避免需手动下拉刷新才显示（F9）。
+      // V1.4.0 multi-pet Story 3.3 · AC3.4：一条 Diary 进**每只关联宠物**的时间线 / 统计 / 日历 ——
+      // 按「整组失效重取」（AD-14），整族失效即覆盖每只关联宠物的 petId 键。
       if (controller.type == ContentType.growthMoment) {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        ref.invalidate(calendarMonthProvider);
+        ref.invalidate(dayDetailProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       }
       // 里程碑「去发布」回填（Story 8.4）：仍为成长日历类型 → 以新内容 id 自动打卡完成（best-effort）。
       MilestoneItem? completedMilestone;
+      // code review：里程碑属于进页时的当前宠物；用户若把它取消勾选，这条 Diary 就没关联它 ——
+      // 后端会拒（静默失败）。保守口径：只在它仍在所选里时回填，否则不回填（用户可回里程碑页手动关联）。
+      final milestonePet = _milestonePetId;
       if (widget.milestoneCode != null &&
-          controller.type == ContentType.growthMoment) {
+          controller.type == ContentType.growthMoment &&
+          // 当前宠物没取到（null）→ 按改造前口径不带 petId（后端默认宠物）。
+          (milestonePet == null || controller.petIds.contains(milestonePet))) {
         try {
           completedMilestone = await ref
               .read(milestoneRepositoryProvider)
-              .checkIn(widget.milestoneCode!, id);
+              .checkIn(widget.milestoneCode!, id, petId: milestonePet);
         } catch (_) {
           // 回填失败静默：用户可回里程碑页手动「已打卡」关联该内容。
         }
@@ -436,7 +528,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (completedMilestone != null) {
         final done = completedMilestone;
         final locale = Localizations.localeOf(context);
-        final listData = ref.read(milestoneListProvider).asData?.value;
+        final listPetId = _milestonePetId;
+        final listData =
+            listPetId == null ? null : ref.read(milestoneListProvider(listPetId)).asData?.value;
         final petName = listData?.petName ?? '';
         final collection = listData == null
             ? const <MilestoneItem>[]
@@ -498,6 +592,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         '/publish/rejected',
         extra: args.withReasons(reasons),
       ); // → P-39c 被拒
+    } else if (readOnly) {
+      // AC3.2：选中的宠物在提交瞬间变只读（409 pet-read-only）→ 复用 2.4 的只读提示文案 + 刷新宠物列表；
+      // 列表回来后 [_syncPetSelection] 把它从 chips 里去掉（只读不出现）。不进成功页、草稿保留。
+      final pets = ref.read(petListProvider).asData?.value ?? const <PetListItem>[];
+      final name = pets.where((p) => p.id == readOnlyPetId).map((p) => p.name).firstOrNull ?? '';
+      if (readOnlyPetId != null) {
+        controller.setPetIds([for (final x in controller.petIds) if (x != readOnlyPetId) x]);
+      }
+      ref.invalidate(petListProvider);
+      setState(() => _reviewing = false);
+      _toast(l10n.petReadonlyBlockTitle(name));
     } else {
       // 其它失败（网络/图片上传）：退出审核中覆盖层，留在编辑页保留草稿，提示重试。
       setState(() => _reviewing = false);
@@ -674,8 +779,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 _segments(controller, l10n),
                 if (growthSelected) ...[
                   const SizedBox(height: 14),
-                  _petTargetRow(l10n),
-                  const SizedBox(height: 12),
+                  _petChipsRow(controller, l10n),
                   _syncSwitch(controller, l10n),
                 ] else ...[
                   const SizedBox(height: 12),
@@ -810,10 +914,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   String _hint(PublishController c, AppLocalizations l10n) {
     switch (c.type) {
       case ContentType.growthMoment:
-        // 原型 fake-ta：「Ceritakan momen spesial {宠物名}...」。
-        return l10n.publishHintGrowth(
-          _linkedPet?.name ?? l10n.publishPetFallback,
-        );
+        // V1.4.0 multi-pet Story 3.3：F1 未选 → 「Tulis catatan Diary...」；F2 / F4 已选 → 「…{拼接名}...」。
+        final names = _selectedPetNames(c);
+        return names.isEmpty
+            ? l10n.diaryPetsComposeHint
+            : l10n.publishHintGrowth(formatPetNames(l10n, names));
       case ContentType.knowledge:
         return l10n.publishHintKnowledge;
       default:
@@ -895,7 +1000,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                   widget.presetEventDate ?? DateTime.now(),
                 ); // F9 默认
               }
-              _ensurePetLoaded();
             }
           : () => _onGrowthBlocked(l10n),
     );
@@ -962,42 +1066,91 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         ],
       );
 
-  /// 关联对象（原型 petsel，仅成长）：紫浅底行「Untuk: 🐾 {pet} (wajib diisi)」。
-  Widget _petTargetRow(AppLocalizations l10n) {
-    final petName = _linkedPet?.name ?? l10n.publishPetFallback;
-    final emoji = switch (_linkedPet?.petType) {
-      'CAT' => '🐱',
-      'DOG' => '🐶',
-      _ => '🐾',
-    };
-    return Container(
-      key: const ValueKey('publishPetTarget'),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-      decoration: BoxDecoration(
-        color: AppColors.mintTint2, // 原型 petsel 紫浅底 #F8F6FF
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Row(
-        children: [
-          Text(
-            l10n.publishForLabel,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
+  /// 关联宠物 chips 行（V1.4.0 multi-pet Story 3.3 · AC1 · UI 稿 F1 / F2 / F4 `.forrow` / `.pchip`）。
+  ///
+  /// 位置不变（类型 chips 之后、同步开关之前）；可选 = 宠物列表里 ACTIVE 的（只读不出现），按创建顺序。
+  /// 加载中 → 同高占位；失败 → 行内「重试」（不阻塞 Moment / Tips）；无宠物 → 不出这一行（维持现状）。
+  Widget _petChipsRow(PublishController controller, AppLocalizations l10n) {
+    final petsAsync = ref.watch(petListProvider);
+    final pets = petsAsync.asData?.value;
+    if (pets != null) {
+      final needsSync = !_petsInitialized ||
+          controller.petIds.any((id) => !pets.any((p) => p.id == id && !p.isReadOnly));
+      if (needsSync) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _syncPetSelection(controller, pets);
+        });
+      }
+    }
+    Widget row(List<Widget> children, {Key? key}) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Container(
+            key: key,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.mintTint2, // 原型 forrow 紫浅底
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Wrap(
+              spacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  l10n.publishForLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                ...children,
+              ],
             ),
           ),
-          const SizedBox(width: 6),
-          Text(
-            '$emoji $petName',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.mint,
+        );
+    if (pets == null) {
+      if (petsAsync.hasError && !petsAsync.isLoading) {
+        return row([
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: TextButton(
+              key: const ValueKey('publishPetChipsRetry'),
+              onPressed: () => ref.invalidate(petListProvider),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.mint,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              child: Text(l10n.commonRetry),
             ),
           ),
-        ],
-      ),
-    );
+        ], key: const ValueKey('publishPetChips'));
+      }
+      // 加载中：与 chips 行同高的占位（不闪「无宠物」）。
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Container(
+          key: const ValueKey('publishPetChipsLoading'),
+          height: 60,
+          decoration: BoxDecoration(
+            color: AppColors.mintTint2,
+            borderRadius: BorderRadius.circular(11),
+          ),
+        ),
+      );
+    }
+    final active = _activePets(pets);
+    if (active.isEmpty) return const SizedBox.shrink(); // 无宠物：维持现状（Diary 段灰置 + 建档提示）
+    final selected = controller.petIds.toSet();
+    return row([
+      for (final p in active)
+        _PetChip(
+          key: ValueKey('publishPetChip-${p.id}'),
+          pet: p,
+          selected: selected.contains(p.id),
+          onTap: () => _togglePet(controller, active, p.id),
+        ),
+    ], key: const ValueKey('publishPetChips'));
   }
 
   /// 图片来源选择（原型「Tambah」单入口 → 相机 / 相册）。
@@ -1501,6 +1654,72 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 }
 
 /// 类型 pill chip（原型 tchip）：选中=紫底白字；未选=白底 #E6E6E6 边框；灰置=暗淡。
+/// 发布页宠物 chip（UI 稿 `.pchip`）：胶囊、白底、1.5 描边 `#DCD2F7`、内边距 3 / 10 / 3 / 3、头像 22 + 名字 12 / w600；
+/// 选中：描边与文字 `#845EC9` + 名字后「✓」（w800）。热区 ≥ 44 高（外包 `ConstrainedBox`，视觉尺寸不变）。
+class _PetChip extends StatelessWidget {
+  const _PetChip({super.key, required this.pet, required this.selected, required this.onTap});
+
+  final PetListItem pet;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.mint : AppColors.ink2;
+    final hasAvatar = pet.avatarUrl != null && pet.avatarUrl!.isNotEmpty;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Align(
+            widthFactor: 1,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(3, 3, 10, 3),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: selected ? AppColors.mint : AppColors.lineViolet, width: 1.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 11,
+                    backgroundColor: AppColors.mintTint,
+                    backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 66),
+                    child: hasAvatar ? null : const Icon(Icons.pets, size: 12, color: AppColors.mint500),
+                  ),
+                  const SizedBox(width: 5),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Text(
+                      pet.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+                    ),
+                  ),
+                  if (selected)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 1),
+                      child: Text('✓',
+                          key: const ValueKey('publishPetChipCheck'),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TypeChip extends StatelessWidget {
   const _TypeChip({
     required this.keyValue,

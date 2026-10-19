@@ -6,6 +6,7 @@ import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/qr_payment_sheet.dart';
+import '../../../growth/domain/growth_popup_trigger.dart';
 import '../../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../data/triage_repository.dart';
 import '../../domain/triage_unlock_controller.dart';
@@ -176,6 +177,8 @@ Future<void> runAiUnlockFlow(
     // 免费额度 / PawCoin 同步即成。
     Analytics.capture('ai_unlock_succeeded',
         {'consult_type': 'AI', 'method': _methodWire(method)});
+    // V1.4.0 ①：PawCoin 消费返成长值后可能升级（免费额度不计）。
+    if (method == UnlockMethod.pawcoin) growthPopupTrigger.afterAction();
   }
   if (st.phase == UnlockPhase.waitingPayment &&
       (st.payload?.isNotEmpty ?? false)) {
@@ -196,6 +199,7 @@ Future<void> runAiUnlockFlow(
             purpose: 'AI_UNLOCK',
             orderRef: st.payment?.displayNo ?? st.payment?.token,
           );
+          growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
           notifier.markUnlocked(triageId, r);
           return true;
         }

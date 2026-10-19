@@ -1,3 +1,5 @@
+import '../../growth/domain/growth_popups.dart';
+import '../../growth/presentation/growth_tier_style.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,6 +14,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../content/data/detail_repository.dart';
+import '../../gift/presentation/gift_pet_switch.dart';
 import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
@@ -273,6 +276,9 @@ class _NotificationCenterPageState
     'CONTENT_LIKED' => 'like',
     'CONTENT_COMMENTED' => 'comment',
     'VET_REPLY' => 'vet_reply',
+    // V1.4.0 multi-pet Story 2.4 · AC6.1：名额到期两类（显式登记，取值与线格式小写同形）。
+    'PET_SLOT_EXPIRING' => 'pet_slot_expiring',
+    'PET_SLOT_EXPIRED' => 'pet_slot_expired',
     _ => type.toLowerCase(),
   };
 
@@ -301,6 +307,10 @@ class _NotificationCenterPageState
     }
     if (_opening) return;
     Analytics.capture('app_notification_item_tapped', props);
+    // V1.4.0 ① Story 2.3：升级通知 → 等级页（深链表固定目标），进页来源 = notification。
+    if (item.type == 'GROWTH_LEVEL_UP') {
+      Analytics.capture('growth_level_page_viewed', {'source': 'notification'});
+    }
     final token = item.deepLinkToken;
     if (token != null && token.isNotEmpty && !item.read) {
       setState(() {
@@ -356,6 +366,18 @@ class _NotificationCenterPageState
     final profileId = item.type == 'USER_FOLLOWED' ? int.tryParse(targetRef ?? '') : null;
     if (profileId != null && location == '${PublicProfilePage.routeBase}/$profileId') {
       unawaited(openUserProfile(context, ref, profileId));
+      return;
+    }
+    // V1.4.0 gift Story 2.2 · AC6.3：收礼「进 Diary Tab 并展开礼物墙」—— 先 go Diary Tab 根（Tab 根只能 go），
+    // **下一帧**再 push 礼物页（照 `_goDeepLinkWith` 的 post-frame 写法：go 的解析是异步的，同帧 push 会被吃掉），
+    // 返回即回到 Diary Tab。go 会收掉本页，故先取 router 实例。
+    // gift Story 4.1 · AC6.4：多宠物下 Diary Tab 显示「当前宠物」—— go 之前先把被送礼的那只切为当前宠物
+    // （是自己的才切；已删 / 已转手不切，照原逻辑）。
+    if (item.type == 'PET_GIFT_RECEIVED' && location.startsWith('/pets/')) {
+      final router = GoRouter.of(context);
+      await selectGiftPetIfOwned(ref.read, location);
+      router.go(DeepLinkRoutes.growthArchive);
+      WidgetsBinding.instance.addPostFrameCallback((_) => router.push(location));
       return;
     }
     if (DeepLinkRoutes.isShellTabRoot(location)) {
@@ -762,6 +784,14 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.cream2,
     ),
     'PET_BIRTHDAY' => (Icons.cake_rounded, AppColors.gold, AppColors.goldTint),
+    // V1.4.0 gift Story 2.2 · AC5.2（UI 稿 G1）：收礼金色礼物（同 PET_BIRTHDAY 金 / 金浅底，decision-log ③ #F6A609）。
+    'PET_GIFT_RECEIVED' => (Icons.redeem_rounded, AppColors.gold, AppColors.goldTint),
+    // UI 稿 G3：退回用紫色钱包（钱回来了）—— **不用** REFUND_REJECTED 的红色。
+    'GIFT_UNDELIVERED_REFUND' => (
+      Icons.account_balance_wallet_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
     'COMPANION_ANNIVERSARY' => (
       Icons.celebration_rounded,
       AppColors.gold,
@@ -771,6 +801,12 @@ class _NotificationTileState extends State<_NotificationTile> {
       Icons.emoji_events_rounded,
       AppColors.triageGreen,
       AppColors.momenBadgeBg,
+    ),
+    // V1.4.0 ① Story 2.3（UI 稿 F1 / F2）：升级通知。
+    'GROWTH_LEVEL_UP' => (
+      Icons.workspace_premium_rounded,
+      AppColors.mint,
+      AppColors.cream2,
     ),
     // V1.1.6 Story 6.1：S/M 级里程碑（只留痕、不推送）。与 L 级同族但换一个更轻的图标 ——
     // 同族是因为落点一样（都进里程碑列表），轻一档是因为它本就是"小成就"。
@@ -860,6 +896,18 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.checkinTint,
     ),
     // 运营通知（V1.3.4 Story 6.3 · UX-DR10 / UI 稿 E2）：紫色图标块 + 喇叭。
+    // 名额到期（V1.4.0 multi-pet Story 2.4 · K1）：即将到期金色沙漏、已到期 coral 锁钟 ——
+    // 配色同 ACCOUNT_WARNED / ACCOUNT_SUSPENDED 的「提醒 / 已发生」两档。
+    'PET_SLOT_EXPIRING' => (
+      Icons.hourglass_bottom_rounded,
+      AppColors.gold,
+      AppColors.goldTint,
+    ),
+    'PET_SLOT_EXPIRED' => (
+      Icons.lock_clock_rounded,
+      AppColors.coral,
+      AppColors.coralTint,
+    ),
     'OPS_ANNOUNCEMENT' => (
       Icons.campaign_outlined,
       AppColors.mint,
@@ -868,6 +916,17 @@ class _NotificationTileState extends State<_NotificationTile> {
     ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
+
+  /// 升级通知标题 / 正文按 `targetRef = "{toLevel}:{TIER}"` 本地化（App 不渲染后端显示串）；解析失败退回系统兜底。
+  String _growthLevelUpTitle(AppLocalizations l10n) {
+    final ref = parseLevelUpRef(widget.item.targetRef);
+    return ref == null ? l10n.notifyTypeSystem : l10n.notifyTypeGrowthLevelUp(ref.level);
+  }
+
+  String _growthLevelUpBody(AppLocalizations l10n) {
+    final ref = parseLevelUpRef(widget.item.targetRef);
+    return ref == null ? l10n.notifyBodySystem : l10n.notifyBodyGrowthLevelUp(GrowthTierStyle.name(l10n, ref.tier));
+  }
 
   String _typeLabel(AppLocalizations l10n) => switch (widget.item.type) {
     'VET_REPLY' => l10n.notifyTypeVetReply,
@@ -878,6 +937,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
+    'GROWTH_LEVEL_UP' => _growthLevelUpTitle(l10n),
     // 🔴 S/M 必须写明**是哪一条里程碑**（AC4 明令禁止"你完成了一个里程碑"这类泛化文案）。
     'MILESTONE_SM_NODE' => _milestoneCopy(context).title,
     'TICKET_RESOLVED' => l10n.notifyTypeTicketResolved,
@@ -901,8 +961,12 @@ class _NotificationTileState extends State<_NotificationTile> {
     'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
     // 被 @ 提及（V1.3.0 batch-b1 Story 3.4）：标题两种文案共用一句，正文才分帖子 / 评论。
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
-    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 title 的类型，理由见 [_opsTitle]。
-    'OPS_ANNOUNCEMENT' => _opsTitle(l10n),
+    // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 title，理由见 [_storedTitle]。
+    'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedTitle(l10n),
+    // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：继运营通知后又一个读后端 title 的类型，理由见 [_refundTitle]。
+    'GIFT_UNDELIVERED_REFUND' => _refundTitle(l10n),
+    // 收礼无 actorName（送礼人已注销 / 封号）→ 本地兜底；有 actorName 走「后端文案条目」分支。
+    'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedTitle,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -917,6 +981,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
+    'GROWTH_LEVEL_UP' => _growthLevelUpBody(l10n),
     'MILESTONE_SM_NODE' => _milestoneCopy(context).body,
     'TICKET_RESOLVED' => l10n.notifyBodyTicketResolved,
     'CSAT_SURVEY' => l10n.notifyBodyCsatSurvey,
@@ -955,24 +1020,42 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => _isCommentMention
         ? l10n.notifyBodyContentMentionedComment
         : l10n.notifyBodyContentMentionedPost,
-    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 body 的类型，理由见 [_opsTitle]。
-    'OPS_ANNOUNCEMENT' => _opsBody(l10n),
+    // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 body，理由见 [_storedTitle]。
+    'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedBody(l10n),
+    // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3）：读后端 body，理由见 [_refundTitle]。
+    'GIFT_UNDELIVERED_REFUND' => _refundBody(l10n),
+    'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedBody,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };
 
-  /// 运营通知（V1.3.4 Story 6.3 · FR-138）：**唯一读后端 title / body 的类型**。
-  /// 运营每次写的内容不同，App 不可能本地化；后端写入时已按收件人账号语言选好 EN / ID（6.1 AC5），
-  /// 推送与通知中心同一语言（PRD AC2）——所以这里原样显示，**不按 App 当前语言再选**。
-  /// 后端没给（理论上不会）时落中性兜底，绝不显示空白。
-  String _opsTitle(AppLocalizations l10n) {
+  /// 读后端 title / body 的类型（不含「后端文案条目」[NotificationItem.hasServerCopy] 那四种互动类型）：
+  /// - 运营通知（V1.3.4 Story 6.3 · FR-138）：运营每次写的内容不同，App 不可能本地化；
+  /// - 名额到期 `PET_SLOT_EXPIRING` / `PET_SLOT_EXPIRED`（V1.4.0 multi-pet Story 2.4 · K1 拍板）：正文含宠物名与到期日，
+  ///   后端（Story 2.3）按收件人账号语言渲染后落库，同 `OPS_ANNOUNCEMENT`。
+  /// 后端写入时已按收件人账号语言选好 EN / ID，推送与通知中心同一语言 —— 所以这里原样显示，
+  /// **不按 App 当前语言再选**。后端没给（理论上不会）时落中性兜底，绝不显示空白。
+  String _storedTitle(AppLocalizations l10n) {
     final t = widget.item.title?.trim() ?? '';
     return t.isEmpty ? l10n.notifyTypeSystem : t;
   }
 
-  String _opsBody(AppLocalizations l10n) {
+  String _storedBody(AppLocalizations l10n) {
     final b = widget.item.body?.trim() ?? '';
     return b.isEmpty ? l10n.notifyBodySystem : b;
+  }
+
+  /// 送礼未送达退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：**读后端 title / body**（同运营通知做法）。
+  /// 正文带三个运行时参数（宠物名、退回金额、原因），App 无从本地拼；Story 1.2 已按送礼人账号语言渲染后落库，
+  /// 与 G4 推送同一句。任一为空分别回落本地兜底，绝不显示空白。
+  String _refundTitle(AppLocalizations l10n) {
+    final t = widget.item.title?.trim() ?? '';
+    return t.isEmpty ? l10n.giftNotifyRefundTitle : t;
+  }
+
+  String _refundBody(AppLocalizations l10n) {
+    final b = widget.item.body?.trim() ?? '';
+    return b.isEmpty ? l10n.giftNotifyRefundBodyFallback : b;
   }
 
   /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。
@@ -1187,7 +1270,10 @@ class _NotificationTileState extends State<_NotificationTile> {
                       children: [
                         // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
                         // V1.3.4 两处例外：「后端文案条目」（hasServerCopy）走上面的分支读后端 title/body；
-                        // `OPS_ANNOUNCEMENT` 在 _typeLabel / _typeBody 里读后端串（理由见 `_opsTitle`）。
+                        // `OPS_ANNOUNCEMENT` 与 `PET_SLOT_EXPIRING` / `PET_SLOT_EXPIRED`（K1）在 _typeLabel / _typeBody
+                        // 里读后端串（理由见 `_storedTitle`）。
+                        // V1.4.0 gift Story 2.2：`GIFT_UNDELIVERED_REFUND` 同理读后端串（正文带三个运行时参数，
+                        // App 无从本地拼；理由见 `_refundTitle`）。
                         Text(
                           _typeLabel(l10n),
                           style: const TextStyle(

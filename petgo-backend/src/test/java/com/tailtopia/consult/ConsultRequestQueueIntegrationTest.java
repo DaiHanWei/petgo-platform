@@ -44,6 +44,8 @@ class ConsultRequestQueueIntegrationTest extends ApiIntegrationTest {
     private CardTokenGenerator tokenGenerator;
     @Autowired
     private PlatformTransactionManager txManager;
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private long userWithPet() {
         User u = newUser();
@@ -115,5 +117,50 @@ class ConsultRequestQueueIntegrationTest extends ApiIntegrationTest {
         assertThat(requests.findById(accepted.getId())).isPresent();     // 已接单不删
         assertThat(requests.findById(accepted.getId()).orElseThrow().getState())
                 .isEqualTo(ConsultRequestState.ACCEPTED_AWAIT_PAY);
+    }
+
+    // ---- V1.4.0 multi-pet Story 4.1 · AC4：入队按所选宠物 ----
+
+    private long[] userWithTwoPets() {
+        long userId = newUser().getId();
+        long a = com.tailtopia.profile.support.MultiPetDbFixture.insertPet(jdbc, userId, "A", "CAT",
+                Instant.parse("2026-01-01T00:00:00Z"));
+        long b = com.tailtopia.profile.support.MultiPetDbFixture.insertPet(jdbc, userId, "B", "DOG",
+                Instant.parse("2026-01-01T00:01:00Z"));
+        return new long[] {userId, a, b};
+    }
+
+    private Long queuedPet(long userId) {
+        return requests.findFirstByUserIdOrderByCreatedAtAsc(userId).orElseThrow().getPetProfileId();
+    }
+
+    @Test
+    void createWithChosenPetQueuesThatPet() throws Exception {
+        long[] u = userWithTwoPets();
+        mvc.perform(post("/api/v1/consultations").header(HttpHeaders.AUTHORIZATION, userBearer(u[0]))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"symptomText\":\"muntah\",\"petId\":" + u[2] + "}"))
+                .andExpect(status().isOk());
+        assertThat(queuedPet(u[0])).isEqualTo(u[2]);
+    }
+
+    @Test
+    void createWithForeignPetIs404() throws Exception {
+        long[] u = userWithTwoPets();
+        long other = userWithPet();
+        long foreign = petProfiles.findDefault(other).orElseThrow().getId();
+        mvc.perform(post("/api/v1/consultations").header(HttpHeaders.AUTHORIZATION, userBearer(u[0]))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"symptomText\":\"muntah\",\"petId\":" + foreign + "}"))
+                .andExpect(status().isNotFound());
+        assertThat(requests.existsByUserId(u[0])).isFalse();
+    }
+
+    @Test
+    void createWithoutPetIdQueuesEarliestActivePet() throws Exception {
+        long[] u = userWithTwoPets();
+        mvc.perform(post("/api/v1/consultations").header(HttpHeaders.AUTHORIZATION, userBearer(u[0])))
+                .andExpect(status().isOk());
+        assertThat(queuedPet(u[0])).isEqualTo(u[1]);
     }
 }

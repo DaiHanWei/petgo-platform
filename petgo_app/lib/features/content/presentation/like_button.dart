@@ -51,6 +51,15 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 数字热区上下各多出的透明命中高度：数字文本行高约 18，上下各 7 → 总高约 32dp。
   static const double countVerticalHitPadding = 7;
 
+  /// 心形图标可见尺寸。
+  static const double heartSize = 20;
+
+  /// 详情页底栏（[expandCountHitArea] = false）爱心 / 数字热区的整高与爱心上下各补的透明命中高度：
+  /// 把两块热区都撑到底栏 44dp 命中框的整高（外层 ConstrainedBox + Center 只居中、不扩大命中范围，
+  /// 不补的话爱心只剩 20×20、数字只剩文字本身可点 —— OCR 审查 #3）。
+  static const double barHitHeight = 44;
+  static const double barVerticalHitPadding = (barHitHeight - heartSize) / 2;
+
   /// 数字热区撑高整行 ≈12dp（32 - 图标 20）；Feed 卡片操作行上下内边距各减去这个值的一半，
   /// 使卡片整体高度、爱心与数字的视觉位置都与拆分前一致。
   static const double countVerticalHitTrim = 6;
@@ -173,16 +182,16 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
       children: [
         // 🔴 key 必须带内容编号：本组件原先写死成详情页专用的名字，
         // 进了首页列表后一屏多张卡会**重复 key**（Flutter 里重复 key 会报错或错配状态）。
-        InkWell(
+        _heartHitArea(InkWell(
           key: ValueKey('likeButton_${widget.postId}'),
           onTap: _toggle,
           child: Icon(
             _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            size: 20,
+            size: LikeButton.heartSize,
             // 点赞红心（设计稿）：激活态用暖红 likeHeart，与 Feed 卡片点赞一致。
             color: color,
           ),
-        ),
+        )),
         GestureDetector(
           key: ValueKey('likeCount_${widget.postId}'),
           behavior: HitTestBehavior.opaque,
@@ -197,10 +206,29 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
                 : const EdgeInsets.only(left: AppSpacing.xs),
             // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
             // 看上去像"没点上"。
-            child: Text('$_count', style: AppTypography.caption.copyWith(color: color)),
+            child: _countHitHeight(Text('$_count', style: AppTypography.caption.copyWith(color: color))),
           ),
         ),
       ],
+    );
+  }
+
+  /// 详情页底栏：数字热区固定撑满 [LikeButton.barHitHeight]（文字只有约 18dp 高）。Feed 卡片原样返回。
+  Widget _countHitHeight(Widget text) => widget.expandCountHitArea
+      ? text
+      : SizedBox(height: LikeButton.barHitHeight, child: Center(widthFactor: 1, child: text));
+
+  /// 详情页底栏：爱心外包一层透明命中区，上下撑满 44dp 底栏高度（不改可见位置、不放大水波纹）。
+  /// Feed 卡片（[LikeButton.expandCountHitArea] = true）沿用原 20×20 命中区，避免改动卡片布局。
+  Widget _heartHitArea(Widget heart) {
+    if (widget.expandCountHitArea) return heart;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: LikeButton.barVerticalHitPadding),
+        child: heart,
+      ),
     );
   }
 }

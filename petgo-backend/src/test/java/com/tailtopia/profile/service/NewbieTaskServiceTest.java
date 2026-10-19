@@ -59,7 +59,7 @@ class NewbieTaskServiceTest {
 
     @Test
     void countsTasksIndependently_S1S2DoneAndHealthRecord() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
         stub(10, "C-S1", true);
         stub(10, "C-S2", true);
         stub(10, "C-S3", false);
@@ -86,7 +86,7 @@ class NewbieTaskServiceTest {
 
     @Test
     void reportsLulusPemulaUnlockedWhenCompletionExists() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.OTHER, 10)));
         stub(10, "G-S1", true);
         stub(10, "G-S2", true);
         stub(10, "G-S3", true);
@@ -101,9 +101,57 @@ class NewbieTaskServiceTest {
         assertThat(r.lulusPemulaUnlocked()).isTrue();
     }
 
+    /**
+     * V1.4.0 multi-pet（Story 1.3 · AC7 / P-2，取代 1.2 的「按默认宠物」过渡）：每项任务任意一只完成即算。
+     * A 完成 S1 ~ S3、B 完成 S4 + 有健康记录 → 5 / 6。
+     */
+    @Test
+    void multiPetAnyPetCompletesTask() {
+        PetProfile a = profile(PetType.CAT, 10);
+        PetProfile b = profile(PetType.DOG, 11);
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(a, b));
+        stub(10, "C-S1", true);
+        stub(10, "C-S2", true);
+        stub(10, "C-S3", true);
+        stub(10, "C-S4", false);
+        stub(10, "C-S5", false);
+        stub(10, "C-S16", false);
+        stub(11, "D-S1", false);
+        stub(11, "D-S2", false);
+        stub(11, "D-S3", false);
+        stub(11, "D-S4", true);
+        stub(11, "D-S5", false);
+        stub(11, "D-S16", false);
+        when(healthRecords.existsByPetProfileId(10)).thenReturn(false);
+        when(healthRecords.existsByPetProfileId(11)).thenReturn(true);
+
+        NewbieTaskResponse r = service.progress(7L);
+
+        assertThat(r.completedCount()).isEqualTo(5);
+        assertThat(r.lulusPemulaUnlocked()).isFalse();
+        Map<String, Boolean> byKey = r.items().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        NewbieTaskResponse.Item::key, NewbieTaskResponse.Item::done));
+        assertThat(byKey).containsEntry("SAVE_CONSULT", true)
+                .containsEntry("FIRST_DAILY", false)
+                .containsEntry("FIRST_HEALTH_RECORD", true);
+    }
+
+    /** 任一只已解锁 Lulus Pemula → 已解锁。 */
+    @Test
+    void multiPetLulusUnlockedOnAnyPet() {
+        PetProfile a = profile(PetType.CAT, 10);
+        PetProfile b = profile(PetType.OTHER, 11);
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(a, b));
+        stub(10, "C-S16", false);
+        stub(11, "G-S9", true);
+
+        assertThat(service.progress(7L).lulusPemulaUnlocked()).isTrue();
+    }
+
     @Test
     void noProfileThrowsNotFound() {
-        when(profiles.findByOwnerId(7L)).thenReturn(Optional.empty());
+        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of());
         assertThatThrownBy(() -> service.progress(7L)).isInstanceOf(AppException.class);
     }
 

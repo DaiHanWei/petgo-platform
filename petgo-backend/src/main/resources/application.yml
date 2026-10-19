@@ -127,6 +127,7 @@ petgo:
     app-download-url: ${CARD_APP_DOWNLOAD_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
   # 飞书群日报（每天 13:00 WIB 推昨日数据，admin/dailyreport；13 点是为等 GA4 日数据定稿）。webhook 留空 = 不推送（本地/测试天然关闭）。
   # webhook 与签名密钥 env 注入，绝不入库、绝不落日志。
+  # 多个群：webhook 用英文逗号分隔，密钥按位置一一对应（某群没开签名留空位，如 s1,,s3）；各群独立发送，一个失败不影响其余。
   daily-report:
     webhook-url: ${LARK_DAILY_REPORT_WEBHOOK_URL:}
     secret: ${LARK_DAILY_REPORT_SECRET:}
@@ -158,6 +159,10 @@ petgo:
   # 将来开新城市只换 PlaceCityResolver 的实现，别在代码里写死城市名）。
   places:
     default-city: Jakarta
+  # 宠物月租名额到期扫描（V1.4.0 multi-pet Story 2.3 · AD-7）：每小时第 5 分（UTC，避开整点任务）。
+  # 先置到期 + reconcile、再发到期前 3 天提醒；状态列幂等，重复执行不重复通知。"-" = 关闭（集成测试基类关掉，测试直调 scan）。
+  pet-slot:
+    expiry-scan-cron: ${PET_SLOT_EXPIRY_SCAN_CRON:0 5 * * * *}
   shop:
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。

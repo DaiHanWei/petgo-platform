@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../pet_slot/presentation/pet_readonly_block.dart';
+
 import 'package:go_router/go_router.dart';
 
 import '../../pet_passport/presentation/passport_layout.dart';
@@ -19,6 +21,7 @@ import '../data/onboarding_mark_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/insight_entry_card.dart';
+import '../data/current_pet_provider.dart';
 
 /// 「Know Your Pet」聚合页的路由路径（V1.3.0 批次 A · Story 5.1 · AD-A17）。
 ///
@@ -278,7 +281,7 @@ Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
   PetProfile? pet;
   try {
     try {
-      results = await ref.read(tailsonalityRepositoryProvider).fetchResults();
+      results = await ref.read(tailsonalityRepositoryProvider).fetchResults(petId: await readRequestPetId(ref));
     } catch (_) {
       results = const [];
     }
@@ -291,6 +294,8 @@ Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
     _tailsonalityOpening = false;
   }
   if (!context.mounted) return;
+  // V1.4.0 multi-pet Story 2.4 · AC5.5：没有结果 = 要开始新测试（写操作）→ 只读宠物先弹 E1；有结果照常进列表查看。
+  if (results.isEmpty && !guardPetWritable(context, ref)) return;
   if (results.isNotEmpty) {
     // Story 2.6：有结果 → 结果列表页（替换 2.3 的「进最近一次结果页」临时去向）。
     context.push(TailsonalityRoutes.results);

@@ -88,11 +88,24 @@ class PublishController extends ChangeNotifier {
   bool get isUploading =>
       items.any((i) => i.status == ImageUploadStatus.uploading);
 
+  /// Diary 关联的宠物（V1.4.0 multi-pet Story 3.3 · AC1 / AC3）：**按宠物创建顺序**（调用方排好）。
+  ///
+  /// 住在控制器上而不是页面 State 上：与正文同生同死（sheet 关闭即清空），且从 Diary 切到
+  /// Moment / Tips 再切回时已选保留（AC2）。只对 Diary 生效 —— Moment / Tips 请求体不带。
+  List<int> petIds = const <int>[];
+
   bool get canPublish =>
       !publishing &&
       !isUploading &&
       textWithinLimit &&
-      (text.trim().isNotEmpty || items.isNotEmpty);
+      (text.trim().isNotEmpty || items.isNotEmpty) &&
+      // Story 3.3 · AC1.6：Diary 至少选 1 只宠物；Moment / Tips 不受影响。
+      (type != ContentType.growthMoment || petIds.isNotEmpty);
+
+  void setPetIds(List<int> ids) {
+    petIds = List<int>.unmodifiable(ids);
+    notifyListeners();
+  }
 
   void setType(ContentType t) {
     type = t;
@@ -212,7 +225,10 @@ class PublishController extends ChangeNotifier {
   /// 发布：先确保图片全部上传成功；有失败件返回 null（调用方提示重试）。
   /// 成功则提交 post，返回新 post id。[idempotencyKey] 客户端生成防重。
   /// [placeCheckinToken]：打卡后顺手发帖（V1.3.2 Story 1.5）原样透传；任何类型都带（AD-10）。
-  Future<int?> publish({required String idempotencyKey, int? petId, String? placeCheckinToken}) async {
+  /// [petIds]（V1.4.0 multi-pet Story 3.3）：给了就先写入 [petIds]（按创建顺序）；不给用已选的。
+  /// 只有 Diary 才带进请求。
+  Future<int?> publish({required String idempotencyKey, List<int>? petIds, String? placeCheckinToken}) async {
+    if (petIds != null) this.petIds = List<int>.unmodifiable(petIds);
     if (!canPublish) return null;
     publishing = true;
     // AC4：状态机从这一刻起接管顺序 —— 重排入口即刻停响应，直到发布成功或整体取消。
@@ -232,7 +248,9 @@ class PublishController extends ChangeNotifier {
       final trimmed = text.trim();
       return await repository.publish(
         type: type,
-        petId: growth ? petId : null,
+        // Story 3.3 · AC3.1：Diary 带全部 petIds，并兼容写 petId = 第一只；Moment / Tips 两者都不带。
+        petId: growth && this.petIds.isNotEmpty ? this.petIds.first : null,
+        petIds: growth ? this.petIds : const <int>[],
         text: trimmed.isEmpty ? null : trimmed,
         // 🔴 只发正文里还留着 `@昵称` 的那些 id（插完又删掉的不算，否则对方会收到
         //    一条点进去正文里根本没有他的通知）。服务端还会再洗一遍。

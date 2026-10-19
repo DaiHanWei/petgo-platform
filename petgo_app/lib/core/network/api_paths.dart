@@ -128,8 +128,23 @@ class ApiPaths {
   /// 「我的发布」三类混合时间线（Story 7.1，FR-36）。
   static const String mePosts = '$base/me/posts';
 
+  /// V1.4.0 ④ Story 2.4：我的收藏列表（仅本人，role=USER）。`?cursor=` 分页，每页 20。
+  static const String meCollectionPosts = '$base/me/collections/posts';
+  static const String meCollectionPlaces = '$base/me/collections/places';
+
   /// 6 个新手任务进度 + Lulus Pemula 解锁态（Story 7.3，FR-47）。
   static const String meNewbieTasks = '$base/me/newbie-tasks';
+
+  /// V1.4.0 ① Tailrent Level：等级页首屏 / EXP 明细游标分页（Story 1.4 后端 · 1.5 App）。
+  static const String meGrowth = '$base/me/growth';
+  static const String meGrowthLedger = '$meGrowth/ledger';
+
+  /// 选头像框（V1.4.0 ① Story 3.3 · AD-16）：`PUT {frame}` → 头像框四档；未解锁 409 `frame-locked`。
+  static const String meGrowthFrame = '$meGrowth/frame';
+
+  /// 升级庆祝 / 存量汇总弹窗（Story 2.1 后端 · 2.3 App）：拉取与确认（kind = celebration | backfill）。
+  static const String growthPopups = '$meGrowth/popups';
+  static String growthPopupAck(String kind) => '$meGrowth/popups/$kind/ack';
 
   /// PawCoin 余额 + 流水游标分页（Story 1.4）。
   static const String mePawcoin = '$base/me/pawcoin';
@@ -155,6 +170,35 @@ class ApiPaths {
   /// 宠物档案（Story 2.2）。
   static const String petProfiles = '$base/pet-profiles';
   static const String petProfileMe = '$base/pet-profiles/me';
+
+  /// 「我的宠物」列表（V1.4.0 multi-pet Story 1.1 · AD-14）：`PetListItemResponse[]`，最早建档在前。
+  static const String petProfileList = '$base/pet-profiles/me/list';
+
+  /// 宠物名额摘要（V1.4.0 multi-pet Story 1.4）：点「+」时先取它判 A4 / A4b。仅 role=USER。
+  static const String petSlotsMe = '$base/pet-slots/me';
+
+  /// 月租新租 / 续租下单（V1.4.0 multi-pet Story 2.2 · AC8；App 2.4 接入）：强制 `Idempotency-Key` 头。
+  static const String petSlotRentals = '$base/pet-slots/me/rentals';
+  static const String petSlotRenewals = '$base/pet-slots/me/renewals';
+
+  /// 月租购买状态（`pollPaid` 轮询）：PENDING / PAID / FAILED / EXPIRED（另有 ORPHAN_PAID / OVERPAID 交人工）。
+  static String petSlotPurchase(String purchaseToken) => '$base/pet-slots/me/purchases/$purchaseToken';
+
+  /// 改选「保持正常」的宠物（V1.4.0 multi-pet Story 2.1 · D13）：`{"petIds":[…]}`，返回最新宠物列表。
+  static const String petActiveSelection = '$base/pet-profiles/me/active-selection';
+
+  /// 他人公开主页的**宠物列表**（V1.4.0 multi-pet Story 1.4）：数组，空数组 = 没有宠物。游客可读。
+  static String userPublicPets(int userId) => '$base/users/$userId/pets';
+
+  /// `/pet-profiles/me/*` 带当前宠物（V1.4.0 multi-pet · AD-14 / P-4）：[petId] 为 null → 原样
+  /// （后端落默认宠物，与旧版 App 同口径）；否则追加 `?petId=` / `&petId=`。
+  ///
+  /// ⚠️ 只给**按宠物**的端点用；账号级端点（身份证卡列表 / 详情 / 新建、年龄卡奖励、
+  /// token 寻址的结果 / 快照详情）不带（Story 1.5 AC7「仓库改造清单」）。
+  static String withPet(String path, int? petId) {
+    if (petId == null) return path;
+    return '$path${path.contains('?') ? '&' : '?'}petId=$petId';
+  }
 
   /// 宠物身份证数据 / 生成（Story 6.1 后端 · 6.2 前端）。GET 取数据+generated 标志；POST 生成分配流水号（幂等）。
   static const String petProfileIdCard = '$base/pet-profiles/me/id-card';
@@ -192,6 +236,9 @@ class ApiPaths {
 
   /// Tailsonality 主人四字母类型（V1.3.2 Story 2.5）：账号级 GET / PUT；未设置 → `{}`。仅 role=USER。
   static const String meTailsonalityOwnerType = '$base/me/tailsonality/owner-type';
+
+  /// V1.4.0 ④ Story 1.3：推送分类开关，GET / PATCH `{categories:{CODE:bool}}`（部分更新），仅 role=USER。
+  static const String mePushSettings = '$base/me/push-settings';
 
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
@@ -281,8 +328,6 @@ class ApiPaths {
   /// 站内访客：时间线（不分页，`?limit=`）。
   static String inAppPetTimeline(int petId) => '$base/pets/$petId/visitor/timeline';
 
-  /// 他人公开主页的**宠物卡**（Story 2.3 · AC3）。游客可读；没有档案时 204。
-  static String userPublicPet(int userId) => '$base/users/$userId/pet';
 
   /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
   static const String petProfileMilestones = '$base/pet-profiles/me/milestones';
@@ -325,6 +370,9 @@ class ApiPaths {
 
   /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
   static String contentPostLike(int id) => '$base/content-posts/$id/like';
+
+  /// V1.4.0 ④ Story 2.3：帖子收藏 POST / 取消 DELETE → `{collected}`。仅 role=USER；私密帖 422 `collect-not-public`。
+  static String contentPostCollect(int id) => '$base/content-posts/$id/collect';
 
   /// 单条内容分享链接（V1.1.6 Story 9.3）。作者本人 POST，回不可枚举 shareToken。
   static String contentPostShareLink(int id) => '$base/content-posts/$id/share-link';
@@ -458,6 +506,9 @@ class ApiPaths {
   /// ⚠️ Story 1.2 会加 `?lat=&lng=` 走距离分支；排序路径由服务端下发的 `sortMode` 说明。
   static const String places = '$base/places';
 
+  /// V1.4.0 ④ Story 2.3：场所收藏 POST / 取消 DELETE → `{collected}`。仅 role=USER；token 按保留场所解析（P-6）。
+  static String placeCollect(String token) => '$places/${Uri.encodeComponent(token)}/collect';
+
   /// 场所评论的删除端点（Story 1.7 AC7）。
   ///
   /// ⚠️ 不挂在 `/places/{token}/comments/{id}` 下：删除只认评论 id，
@@ -493,4 +544,22 @@ class ApiPaths {
   /// token 不做 URL 编码是刻意的：后端 `OpsTokenGenerator` 恒为 Base62（`[0-9a-zA-Z]`）22 位，
   /// 本身就是 URL-safe 的路径段。若日后改字符表，这里须改成 `Uri.encodeComponent(token)`。
   static String opsPopupImpressions(String token) => '$base/ops-popups/$token/impressions';
+
+  // ===== 送礼（V1.4.0 gift Story 1.3 · AD-10 / AD-13）=====
+  /// 礼物目录：`?petId=` 或 `?postId=` 二选一（详情页按帖子由后端取收礼宠物）。仅 role=USER。
+  static const String giftCatalog = '$base/gifts/catalog';
+
+  /// 发起送礼：POST `{giftToken, quantity, channel, requestId, source, postId?}` → `GiftSendResponse`。
+  /// 宠物沿用 petId 路由（与访客视图 `/pets/:petId` 一致）。
+  static String petGifts(int petId) => '$base/pets/$petId/gifts';
+
+  /// 单笔送礼订单状态（QRIS 轮询，仅本人）。token 由后端生成，URL-safe。
+  static String meGiftOrder(String token) => '$base/me/gift-orders/$token';
+
+  /// 我的送礼记录（V1.4.0 gift Story 2.3）：GET `?cursor=` → `GiftOrderPage`（只送出、时间倒序、每页 20）。仅 role=USER。
+  static const String meGiftOrders = '$base/me/gift-orders';
+
+  /// 礼物页粉丝榜（V1.4.0 gift Story 2.1 / 2.2）：GET `?cursor=` → `GiftSupporterPage`，每页 20。
+  /// 礼物页汇总 + 墙是 GET [petGifts]（与发起送礼同路径不同方法）。仅 role=USER。
+  static String petGiftSupporters(int petId) => '$base/pets/$petId/gifts/supporters';
 }

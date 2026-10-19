@@ -109,7 +109,8 @@ public class RepurchaseScanService {
         if (order == null || order.getDeliveredAt() == null) {
             return 0;   // 未签收 → 还没开始吃
         }
-        PetProfile pet = profiles.findByOwnerId(order.getUserId()).orElse(null);
+        // V1.4.0 multi-pet（Story 1.2 · X21，过渡）：订单不挂宠物 → 取默认宠物；触发器落该宠物 id。
+        PetProfile pet = profiles.findDefault(order.getUserId()).orElse(null);
         if (pet == null || pet.getWeightKg() == null) {
             return 0;   // 🔴 档案无体重 → 静默（这是 DEP-6 之外最常见的缺输入）
         }
@@ -298,7 +299,8 @@ public class RepurchaseScanService {
         if (order == null || order.getDeliveredAt() == null) {
             return null;
         }
-        PetProfile pet = profiles.findByOwnerId(t.getUserId()).orElse(null);
+        // V1.4.0 multi-pet（Story 1.2 · X22）：按触发器上的宠物（repurchase_triggers.pet_profile_id，FK CASCADE）。
+        PetProfile pet = t.getPetProfileId() == null ? null : profiles.findById(t.getPetProfileId()).orElse(null);
         if (pet == null || pet.getWeightKg() == null) {
             return null;
         }

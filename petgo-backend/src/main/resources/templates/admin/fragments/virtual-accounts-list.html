@@ -35,6 +35,7 @@
             <th th:text="#{admin.common.status}">状态</th>
             <th class="nowrap" th:text="#{admin.virtualAccounts.col.published}">已发布</th>
             <th th:text="#{admin.species.col}">账号物种定位</th>
+            <th class="nowrap" th:text="#{admin.v140.growth.display.col}">展示等级</th>
             <th th:text="#{admin.virtualAccounts.col.createdBy}">建号人</th>
         </tr>
         </thead>
@@ -69,6 +70,12 @@
         <!--/* ⚠️ 存量为 NULL 时这里显示的是读时默认值 GENERAL —— 界面上分不出「配过 GENERAL」
                与「从没配过」，这是零回填换来的代价（两者对算法效果完全一样）。 */-->
         <td class="nowrap"><code th:text="${a.accountSpecies}">GENERAL</code></td>
+        <!--/* V1.4.0 ① Story 4.4 · J1：展示等级（list() 一次批量读，model displayLevels；无行 / 未初始化 = —）。 */-->
+        <td class="nowrap" data-display-level th:with="dl=${displayLevels != null} ? ${displayLevels.get(a.id)} : null">
+            <th:block th:if="${dl != null}"><span class="tier-dot" th:classappend="'tier-' + ${dl.tier().name()}"></span><span
+                    th:text="'Lv' + ${dl.level()}">Lv7</span></th:block>
+            <span th:if="${dl == null}" class="muted">—</span>
+        </td>
         <td class="muted" th:text="${a.createdBy} ?: '—'">—</td>
     </tr>
 </tbody></table>

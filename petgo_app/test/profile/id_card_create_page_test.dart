@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/id_card_style.dart';
@@ -59,6 +61,17 @@ class _Repo implements IdCardRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// V1.4.0 multi-pet Story 4.2：Diary 当前宠物（不读偏好）。
+class _Current extends CurrentPetIdNotifier {
+  _Current(this.initial);
+  final int? initial;
+  @override
+  int? build() => initial;
+}
+
+/// 单宠物账号（= 改造前的唯一宠物，id 与 [_profile] 一致）。
+const _onlyPet = [PetListItem(id: 1, name: 'Oyen', petType: 'CAT')];
+
 class _Paw extends PawCoinController {
   @override
   Future<PawCoinState> build() async => const PawCoinState(balance: 50000, items: []);
@@ -75,7 +88,19 @@ PetProfile _profile({String? sex = 'FEMALE', String? petType = 'CAT', String? br
       intro: 'manja',
     );
 
-Future<void> _pump(WidgetTester tester, IdCardStyle style, {required _Repo repo, PetProfile? profile}) async {
+/// Story 4.2：数据源由 `petProfileProvider` 改为「宠物列表 + 按 petId 取档案」——[pets] 缺省为单宠物（= 改造前），
+/// [profiles] 按 petId 给档案（缺省一律 [profile]），[failIds] 里的 petId 取档案抛错，[gates] 让按 petId 取档案挂起；
+/// [profileCalls] 记录**按 petId** 取了哪些，[currentProfileCalls] 记录经兼容层 `petProfileProvider` 取的当前宠物。
+Future<void> _pump(WidgetTester tester, IdCardStyle style,
+    {required _Repo repo,
+    PetProfile? profile,
+    List<PetListItem> pets = _onlyPet,
+    int? current,
+    Map<int, PetProfile> profiles = const {},
+    Set<int> failIds = const {},
+    Map<int, Future<PetProfile?>> gates = const {},
+    List<int>? profileCalls,
+    List<int>? currentProfileCalls}) async {
   tester.view.physicalSize = const Size(420, 900);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -95,7 +120,22 @@ Future<void> _pump(WidgetTester tester, IdCardStyle style, {required _Repo repo,
     overrides: [
       idCardRepositoryProvider.overrideWithValue(repo),
       pawCoinProvider.overrideWith(_Paw.new),
-      petProfileProvider.overrideWith((ref) async => profile ?? _profile()),
+      petListProvider.overrideWith((ref) async => pets),
+      currentPetIdProvider.overrideWith(() => _Current(current)),
+      petProfileByIdProvider.overrideWith((ref, id) async {
+        profileCalls?.add(id);
+        if (failIds.contains(id)) throw Exception('boom');
+        if (gates[id] != null) return gates[id]!;
+        return profiles[id] ?? profile ?? _profile();
+      }),
+      // 当前宠物的档案仍走兼容层（code review 4-2 #2：沿用已加载的缓存）；口径同生产（effectivePetIdProvider → 取那只）。
+      petProfileProvider.overrideWith((ref) async {
+        final id = await ref.watch(effectivePetIdProvider.future);
+        if (id == null) return null;
+        currentProfileCalls?.add(id);
+        if (failIds.contains(id)) throw Exception('boom');
+        return profiles[id] ?? profile ?? _profile();
+      }),
     ],
     child: MaterialApp.router(
       routerConfig: router,
@@ -351,6 +391,8 @@ void main() {
       overrides: [
         idCardRepositoryProvider.overrideWithValue(_Repo()),
         pawCoinProvider.overrideWith(_Paw.new),
+        petListProvider.overrideWith((ref) async => _onlyPet),
+        currentPetIdProvider.overrideWith(() => _Current(null)),
         petProfileProvider.overrideWith((ref) => gate.future),
       ],
       child: MaterialApp.router(
@@ -390,5 +432,216 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('detail:9:'), findsOneWidget);
     expect(find.text('Payment could not be completed. Please try again.'), findsOneWidget);
+  });
+
+  /// V1.4.0 multi-pet Story 4.2（UI 稿 I1 ~ I3 · decision-log I2 · AD-8）：KTP 建卡选宠物。
+  group('Story 4.2 选宠物', () {
+    const abu = PetListItem(id: 1, name: 'Abu', petType: 'CAT', isDefault: true);
+    const bobo = PetListItem(id: 2, name: 'Bobo', petType: 'DOG');
+    const cici = PetListItem(id: 3, name: 'Cici', petType: 'CAT', status: PetListItem.statusReadOnly);
+    final profiles = {
+      1: PetProfile(
+          id: 1, name: 'Abu', cardToken: 'a', petType: 'CAT', breed: 'Persia', birthday: DateTime(2023, 1, 5), sex: 'MALE'),
+      2: PetProfile(
+          id: 2, name: 'Bobo', cardToken: 'b', petType: 'DOG', breed: 'Pug', birthday: DateTime(2022, 6, 1), sex: 'FEMALE'),
+      3: PetProfile(
+          id: 3, name: 'Cici', cardToken: 'c', petType: 'CAT', breed: 'Persia', birthday: DateTime(2021, 2, 2), sex: 'FEMALE'),
+    };
+
+    Future<void> openPicker(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('ktpPetRowChange')));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> pickAndUse(WidgetTester tester, int id) async {
+      await tester.tap(find.byKey(ValueKey('petPickerRow-$id')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('petPickerConfirm')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('I2：当前宠物 ACTIVE → 预填它；宠物行「For Bobo · Change」', (tester) async {
+      final repo = _Repo();
+      final calls = <int>[];
+      final current = <int>[];
+      await _pump(tester, IdCardStyle.ktp,
+          repo: repo,
+          pets: const [abu, bobo, cici],
+          current: 2,
+          profiles: profiles,
+          profileCalls: calls,
+          currentProfileCalls: current);
+      expect(find.text('For Bobo'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ktpPetRowChangeLabel')), findsOneWidget);
+      expect(find.text('Change'), findsOneWidget);
+      expect(current, [2], reason: '当前宠物走兼容层缓存（code review #2）');
+      expect(calls, isEmpty, reason: '不按 petId 另取');
+      await _submit(tester);
+      expect(repo.last!.name, 'Bobo');
+      expect(repo.last!.birthday, DateTime(2022, 6, 1));
+      expect(repo.last!.petType, 'DOG');
+    });
+
+    testWidgets('I2：当前宠物只读 → 预填最早创建的正常宠物；只读宠物不取档案', (tester) async {
+      final repo = _Repo();
+      final calls = <int>[];
+      await _pump(tester, IdCardStyle.ktp,
+          repo: repo, pets: const [abu, bobo, cici], current: 3, profiles: profiles, profileCalls: calls);
+      expect(find.text('For Abu'), findsOneWidget);
+      expect(find.text('For Cici'), findsNothing);
+      expect(calls, [1]);
+      await _submit(tester);
+      expect(repo.last!.name, 'Abu');
+    });
+
+    testWidgets('I1：抽屉只列 ACTIVE（只读不出现）、默认选中当前预填；选另一只 → 草稿整体重置', (tester) async {
+      final repo = _Repo();
+      await _pump(tester, IdCardStyle.ktp, repo: repo, pets: const [abu, bobo, cici], current: 2, profiles: profiles);
+      // 先「Ubah info」改名字（已确认的编辑）
+      await _openForm(tester);
+      await tester.enterText(find.byKey(const ValueKey('idCardEditName')), 'Belang');
+      await _done(tester);
+
+      await openPicker(tester);
+      expect(find.text('Choose a pet'), findsOneWidget);
+      expect(find.byKey(const ValueKey('petPickerRow-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('petPickerRow-2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('petPickerRow-3')), findsNothing, reason: '只读宠物不出现（不是置灰）');
+      expect(tester.widget<Icon>(find.byKey(const ValueKey('petPickerRadio-2'))).icon, Icons.check_circle);
+      expect(tester.widget<Icon>(find.byKey(const ValueKey('petPickerRadio-1'))).icon, Icons.radio_button_unchecked);
+      expect(find.text('Use'), findsOneWidget);
+
+      await pickAndUse(tester, 1);
+      expect(find.text('For Abu'), findsOneWidget);
+      await _openForm(tester);
+      expect(find.widgetWithText(TextField, 'Abu'), findsOneWidget, reason: '此前改过的名字被重置为新宠物资料');
+      expect(find.widgetWithText(TextField, 'Belang'), findsNothing);
+      await _done(tester);
+      await _submit(tester);
+      expect(repo.last!.name, 'Abu');
+      expect(repo.last!.birthday, DateTime(2023, 1, 5));
+      expect(repo.last!.petType, 'CAT');
+      expect(repo.last!.breed, 'Persia');
+    });
+
+    testWidgets('I1：拉新宠物档案失败 → toast，草稿与宠物行保持原宠物', (tester) async {
+      final repo = _Repo();
+      await _pump(tester, IdCardStyle.ktp,
+          repo: repo, pets: const [abu, bobo, cici], current: 2, profiles: profiles, failIds: {1});
+      await openPicker(tester);
+      await pickAndUse(tester, 1);
+      expect(find.text('Could not create the card. Please try again.'), findsOneWidget);
+      expect(find.text('For Bobo'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await _submit(tester);
+      expect(repo.last!.name, 'Bobo');
+    });
+
+    testWidgets('I1：选的仍是当前那只 → 不重置、不请求；下滑关闭 = 不换', (tester) async {
+      final calls = <int>[];
+      await _pump(tester, IdCardStyle.ktp,
+          repo: _Repo(), pets: const [abu, bobo], current: 2, profiles: profiles, profileCalls: calls);
+      expect(calls, isEmpty);
+      await _openForm(tester);
+      await tester.enterText(find.byKey(const ValueKey('idCardEditName')), 'Belang');
+      await _done(tester);
+      await openPicker(tester);
+      await tester.tap(find.byKey(const ValueKey('petPickerConfirm')));
+      await tester.pumpAndSettle();
+      expect(calls, isEmpty);
+      await _openForm(tester);
+      expect(find.widgetWithText(TextField, 'Belang'), findsOneWidget);
+      await _done(tester);
+      // 关闭抽屉（点遮罩）→ 不换
+      await openPicker(tester);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(find.text('For Bobo'), findsOneWidget);
+      expect(calls, isEmpty);
+    });
+
+    testWidgets('I3：只 1 只正常宠物 → 「For Abu」无 Change、整行不可点', (tester) async {
+      await _pump(tester, IdCardStyle.ktp, repo: _Repo(), pets: const [abu, cici], current: 3, profiles: profiles);
+      expect(find.text('For Abu'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ktpPetRowChangeLabel')), findsNothing);
+      expect(find.byKey(const ValueKey('ktpPetRowChange')), findsNothing);
+      expect(find.descendant(of: find.byKey(const ValueKey('ktpPetRow')), matching: find.byType(InkWell)), findsNothing);
+    });
+
+    testWidgets('单宠物账号：多一行「For Oyen」、无 Change，预填与改造前一致', (tester) async {
+      final repo = _Repo();
+      await _pump(tester, IdCardStyle.ktp, repo: repo);
+      expect(find.text('For Oyen'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ktpPetRowChange')), findsNothing);
+      await _submit(tester);
+      expect(repo.last!.name, 'Oyen');
+      expect(repo.last!.birthday, DateTime(2024, 3, 10));
+    });
+
+    testWidgets('0 只宠物 → 无宠物行、不取档案、不预填（缺项提示照常）', (tester) async {
+      final calls = <int>[];
+      await _pump(tester, IdCardStyle.ktp, repo: _Repo(), pets: const [], profileCalls: calls);
+      expect(find.byKey(const ValueKey('ktpPetRow')), findsNothing);
+      expect(calls, isEmpty);
+      expect(find.byKey(const ValueKey('idCardCreateMissingHint')), findsOneWidget);
+    });
+
+    testWidgets('列表非空但无 ACTIVE（数据异常）→ 按 0 只处理', (tester) async {
+      final calls = <int>[];
+      await _pump(tester, IdCardStyle.ktp, repo: _Repo(), pets: const [cici], current: 3, profileCalls: calls);
+      expect(find.byKey(const ValueKey('ktpPetRow')), findsNothing);
+      expect(calls, isEmpty);
+    });
+
+    testWidgets('code review #1：换宠物取档案期间「Ubah info」「Ganti foto」「Ganti」「Buat Kartu」全禁用，落定后为新宠物资料', (tester) async {
+      final gate = Completer<PetProfile?>();
+      final repo = _Repo();
+      await _pump(tester, IdCardStyle.ktp,
+          repo: repo, pets: const [abu, bobo], current: 2, profiles: profiles, gates: {1: gate.future});
+      await openPicker(tester);
+      await pickAndUse(tester, 1);
+      VoidCallback? pressed(String key) =>
+          tester.widget<ButtonStyleButton>(find.byKey(ValueKey(key))).onPressed;
+      expect(pressed('idCardEditInfo'), isNull);
+      expect(pressed('idCardEditPhoto'), isNull);
+      expect(pressed('idCardCreateSubmit'), isNull);
+      expect(tester.widget<InkWell>(find.byKey(const ValueKey('ktpPetRowChange'))).onTap, isNull);
+      expect(find.text('For Bobo'), findsOneWidget);
+      gate.complete(profiles[1]);
+      await tester.pumpAndSettle();
+      expect(pressed('idCardEditInfo'), isNotNull);
+      expect(pressed('idCardEditPhoto'), isNotNull);
+      expect(find.text('For Abu'), findsOneWidget);
+      await _submit(tester);
+      expect(repo.last!.name, 'Abu');
+      expect(repo.last!.birthday, DateTime(2023, 1, 5));
+    });
+
+    testWidgets('code review #2：当前宠物档案已加载 → 直接用缓存（不再请求）；按 petId 取的 provider 用完即释放', (tester) async {
+      final calls = <int>[];
+      final current = <int>[];
+      await _pump(tester, IdCardStyle.ktp,
+          repo: _Repo(),
+          pets: const [abu, bobo],
+          current: 2,
+          profiles: profiles,
+          profileCalls: calls,
+          currentProfileCalls: current);
+      final c = ProviderScope.containerOf(tester.element(find.byType(IdCardCreatePage)));
+      // 再次进入建卡页：兼容层缓存仍在 → 不重复请求
+      final router = GoRouter.of(tester.element(find.byType(IdCardCreatePage)));
+      router.pop();
+      await tester.pumpAndSettle();
+      router.push(IdCardCreatePage.locationFor(IdCardStyle.ktp));
+      await tester.pumpAndSettle();
+      expect(current, [2]);
+      expect(find.text('For Bobo'), findsOneWidget);
+      // 换到 A → 按 petId 取；取完 autoDispose（换账号不残留上个账号的宠物资料）
+      await openPicker(tester);
+      await pickAndUse(tester, 1);
+      expect(calls, [1]);
+      expect(c.exists(petProfileByIdProvider(1)), isFalse);
+    });
   });
 }

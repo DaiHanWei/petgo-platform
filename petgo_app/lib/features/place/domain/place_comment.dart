@@ -8,6 +8,8 @@
 /// 无对话需求）。这不是"还没做"：后端 DTO、表结构、端点三层都没有回复的位置。
 library;
 
+import '../../growth/domain/growth_badge.dart';
+
 /// 评论自带的二元态度（AC3）。**没表态 = null**，不是第三个枚举值。
 enum PlaceCommentAttitude {
   recommend('RECOMMEND'),
@@ -61,6 +63,7 @@ class PlaceComment {
     required this.moderation,
     this.authorNickname,
     this.authorAvatarUrl,
+    this.authorBadge,
     this.attitude,
     this.createdAt,
   });
@@ -72,6 +75,9 @@ class PlaceComment {
   final String? authorNickname;
   final String? authorAvatarUrl;
   final bool authorDeleted;
+
+  /// 作者等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? authorBadge;
 
   final String body;
 
@@ -100,6 +106,7 @@ class PlaceComment {
       authorNickname: _blank(json['authorNickname']?.toString()),
       authorAvatarUrl: _blank(json['authorAvatarUrl']?.toString()),
       authorDeleted: json['authorDeleted'] == true,
+      authorBadge: GrowthBadge.fromFlat(json),
       body: json['body']?.toString() ?? '',
       attitude: PlaceCommentAttitude.fromApi(json['attitude']?.toString()),
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),

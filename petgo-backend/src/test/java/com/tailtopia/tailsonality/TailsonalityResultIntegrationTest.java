@@ -104,7 +104,7 @@ class TailsonalityResultIntegrationTest extends ApiIntegrationTest {
         User u = newUser();
         PetProfile p = pet(u, PetType.CAT);
         submit(u, body(0), 201);
-        profileDeletion.deleteByUserId(u.getId());
+        profileDeletion.deleteAllForAccount(u.getId());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tailsonality_results WHERE pet_profile_id = ?",
                 Long.class, p.getId())).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tailsonality_results WHERE user_id = ?",

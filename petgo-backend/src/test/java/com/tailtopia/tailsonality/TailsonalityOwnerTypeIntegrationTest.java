@@ -78,7 +78,7 @@ class TailsonalityOwnerTypeIntegrationTest extends ApiIntegrationTest {
         petProfiles.save(PetProfile.create(u.getId(), PetType.CAT, "Momo", null, null, null, null,
                 "TOK-" + SEQ.incrementAndGet()));
         putType(u, "ISFJ", 200);
-        profileDeletion.deleteByUserId(u.getId());
+        profileDeletion.deleteAllForAccount(u.getId());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tailsonality_owner_types WHERE user_id = ?",
                 Long.class, u.getId())).as("删档不删主人类型（账号级，AD-17）").isOne();
         tailsonalityDeletion.deleteOwnerTypeByUserId(u.getId());

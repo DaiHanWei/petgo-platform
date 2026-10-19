@@ -5,13 +5,14 @@ import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card_detail_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// 假 repo：详情页只用 getCard + 分享奖励展示口径。
 class _FakeIdCardRepo implements IdCardRepository {
   @override
-  Future<int> reportShareForReward(int cardId) async => 0; // Story 18.2：本类不验奖励
+  Future<int> reportShareForReward(int cardId, {int? petId}) async => 0; // Story 18.2：本类不验奖励
   @override
-  Future<int> advertisableShareReward() async => advertise;
+  Future<int> advertisableShareReward({int? petId}) async => advertise;
   _FakeIdCardRepo(this._card, {this.advertise = 0});
   final IdCard _card;
   final int advertise;
@@ -33,17 +34,19 @@ class _FakeIdCardRepo implements IdCardRepository {
   Future<int> hdPrice() async => 5000; // 同步返回不碰 dio（避免 timer 残留）
 
   @override
-  Future<IdCardData?> getMyIdCard() async => null;
+  Future<IdCardData?> getMyIdCard({int? petId}) async => null;
   @override
-  Future<IdCardData> generate() async => const IdCardData(generated: true);
+  Future<IdCardData> generate({int? petId}) async => const IdCardData(generated: true);
   @override
-  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel) async =>
+  Future<HdPurchaseResult> purchaseHd(HdPayChannel channel, {int? petId}) async =>
       const HdPurchaseResult(unlocked: true);
 }
 
 Future<void> _pump(WidgetTester tester, IdCard card, {int advertise = 0}) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
       idCardRepositoryProvider.overrideWithValue(_FakeIdCardRepo(card, advertise: advertise)),
     ],
     child: const MaterialApp(

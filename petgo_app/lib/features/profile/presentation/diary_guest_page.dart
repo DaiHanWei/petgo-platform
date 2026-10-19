@@ -86,7 +86,8 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
                 DiaryHeader(
                   profile: profile.header,
                   happyCount: DiaryDemoData.happyCount,
-                  consultCount: DiaryDemoData.consultCount,
+                  // V1.4.0 gift Story 2.2：示例礼物总价值；游客示例不可点（不传 onOpenGifts）。
+                  giftTotalValue: DiaryDemoData.giftTotalValue,
                   milestoneCompleted: DiaryDemoData.milestoneCompleted,
                   milestoneTotal: DiaryDemoData.milestoneTotal,
                   onEditProfile: () => _startCreateProfile(context, ref, source: 'header_entry'),

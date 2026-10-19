@@ -7,6 +7,8 @@ import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.event.RefundSucceededEvent;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.ShopOrder;
@@ -19,6 +21,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,12 +63,13 @@ public class AdminShopOrderExceptionService {
     private final PawCoinConfigRepository pawcoinConfig;
     private final AdminAuditService audit;
     private final NotificationService notifications;
+    private final ApplicationEventPublisher events;
 
     public AdminShopOrderExceptionService(ShopOrderRepository orders,
             ShopOrderLineRepository orderLines, InventoryMovementService movements,
             com.tailtopia.shop.repository.SkuInventoryRepository inventory,
             PawCoinWalletService wallet, PawCoinConfigRepository pawcoinConfig,
-            AdminAuditService audit, NotificationService notifications) {
+            AdminAuditService audit, NotificationService notifications, ApplicationEventPublisher events) {
         this.orders = orders;
         this.orderLines = orderLines;
         this.movements = movements;
@@ -74,6 +78,7 @@ public class AdminShopOrderExceptionService {
         this.pawcoinConfig = pawcoinConfig;
         this.audit = audit;
         this.notifications = notifications;
+        this.events = events;
     }
 
     // ---------- 入口：标记缺货 ----------
@@ -129,6 +134,12 @@ public class AdminShopOrderExceptionService {
 
         // ② PawCoin 段全额退回 + 补偿溢价
         long coinRefunded = refundCoinSegment(order, remainingCoin(order), "whole");
+        // V1.4.0 ① Story 1.3（AD-9 / P-3）：真退了币段 → 按比例扣回消费返成长值（现金段走 Epic 5，暂无落点，P-10 不扣）。
+        if (coinRefunded > 0) {
+            events.publishEvent(new RefundSucceededEvent("shop-exception:whole:" + order.getPublicToken(),
+                    order.getUserId(), PaymentPurpose.SHOP_ORDER, "SHOP_ORDER", String.valueOf(order.getId()), null,
+                    coinRefunded, order.paidTotal()));
+        }
         long premium = payCompensationPremium(order, coinRefunded, "whole");
 
         // ③ 记账：已退回的部分（现金段待 Epic 5 打款，不在这里记为已退）

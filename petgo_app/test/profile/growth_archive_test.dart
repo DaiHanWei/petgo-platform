@@ -36,10 +36,10 @@ Widget _wrap({required AuthState auth, PetProfile? profile, TimelinePage? page, 
       authControllerProvider.overrideWith(() => _TestAuthController(auth)),
       petProfileProvider.overrideWith((ref) async => profile),
       timelineFirstPageProvider.overrideWith(
-        (ref) async => page ?? const TimelinePage(items: []),
+        (ref, _) async => page ?? const TimelinePage(items: []),
       ),
       archiveStatsProvider.overrideWith(
-        (ref) async =>
+        (ref, _) async =>
             stats ??
             const ArchiveStats(
                 happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30),

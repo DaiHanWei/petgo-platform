@@ -17,6 +17,7 @@ import 'tailsonality_routes.dart';
 import 'widgets/ts_generating_view.dart';
 import 'widgets/ts_image_option_grid.dart';
 import 'widgets/ts_option_tile.dart';
+import '../../profile/data/current_pet_provider.dart';
 
 enum _Phase { answering, submitting, failed }
 
@@ -89,7 +90,9 @@ class _TailsonalityQuizPageState extends ConsumerState<TailsonalityQuizPage> {
     final repo = ref.read(tailsonalityRepositoryProvider);
     final body = {for (final q in kTsQuizPages.expand((p) => p)) q: _answers[q]!};
     try {
-      final submitting = repo.submit(body);
+      // V1.4.0 multi-pet：答题结果记到当前宠物。
+      final petId = await readRequestPetId(ref);
+      final submitting = repo.submit(body, petId: petId);
       await Future.wait<void>([submitting, Future<void>.delayed(widget.minGenerating)]);
       final result = await submitting;
       Analytics.capture('tailsonality_completed', {'role_code': result.typeCode});

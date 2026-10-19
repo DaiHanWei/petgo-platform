@@ -1,3 +1,4 @@
+import '../../features/growth/presentation/growth_popup_coordinator.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -23,6 +24,7 @@ import '../../features/profile/domain/profile_tab_entered_provider.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
 import '../../features/ops/presentation/ops_popup_coordinator.dart';
 import 'bottom_tab_bar.dart';
+import '../../features/profile/data/pet_list_repository.dart';
 
 /// **免门控 Tab 白名单**（Story 1.1 去索引化 · Story 2.4 放行 Diary）。
 ///
@@ -75,6 +77,8 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       final router = GoRouter.maybeOf(context);
       if (router == null) return;
       ref.read(opsPopupCoordinatorProvider).attach(router, ref: ref);
+      // V1.4.0 ① Story 2.3：升级庆祝 / 存量汇总弹窗协调器（冷启动拉取 + 绑定全局触发器）。
+      ref.read(growthPopupCoordinatorProvider).attach(router);
     });
   }
 
@@ -134,6 +138,7 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
         // 不刷新会导致切回后看不到新条目。日历按年月分族，整族失效（含非当前月缓存）。
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
         ref.invalidate(calendarMonthProvider);
         // 曝光信号（PR#34 次要项 3）：分支根保活、initState 只跑一次，重复曝光靠此信号补报
         //（DiaryGuestPage 监听）。仅真实切入才 bump（reTap 时页面本就可见，非新曝光）。

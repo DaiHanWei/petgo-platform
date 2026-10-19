@@ -40,7 +40,7 @@ class ScriptedMilestoneRepository implements MilestoneRepository {
   final reported = <List<String>>[];
 
   @override
-  Future<MilestoneList> getMilestones() {
+  Future<MilestoneList> getMilestones({int? petId}) {
     final v = script[calls < script.length ? calls : script.length - 1];
     calls++;
     if (v is MilestoneList) return Future.value(v);
@@ -49,7 +49,7 @@ class ScriptedMilestoneRepository implements MilestoneRepository {
   }
 
   @override
-  Future<void> reportCelebrations(List<String> codes) async {
+  Future<void> reportCelebrations(List<String> codes, {int? petId}) async {
     reported.add(codes);
   }
 

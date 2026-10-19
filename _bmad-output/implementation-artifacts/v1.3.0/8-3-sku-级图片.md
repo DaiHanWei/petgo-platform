@@ -324,7 +324,7 @@ App 侧：
 - [Source: _bmad-output/planning-artifacts/v1.3.0/validation-2026-09-15-shop-v2/arch-input-extract.md#D.2（`ShopProduct` / `ShopSku` 字段与 publicToken）]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/validation-2026-09-15-shop-v2/arch-input-extract.md#D.10（上传链路、`folder=shop-product`、`AdminSeedImageService` 闸门、公共桶裸 CDN URL）]
 - [Source: _bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md#C5 / #E4 / #E7]
-- [Source: _bmad-output/implementation-artifacts/v1.4.0/HANDOFF.md#三 纪律 3B（路径变量与 `@ModelAttribute` 同名）:111-119]
+- [Source: _bmad-output/implementation-artifacts/v1.4.0-toko-废弃/HANDOFF.md#三 纪律 3B（路径变量与 `@ModelAttribute` 同名）:111-119]
 
 ---
 

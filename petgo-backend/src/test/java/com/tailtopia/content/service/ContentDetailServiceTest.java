@@ -40,9 +40,23 @@ class ContentDetailServiceTest {
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
             mock(com.tailtopia.place.service.PlaceCheckinQueryService.class);
 
+    /** V1.4.0 ④ Story 2.1：详情收藏状态 / 作者视角收藏数。 */
+    private final com.tailtopia.collect.service.CollectStateQuery collectState =
+            mock(com.tailtopia.collect.service.CollectStateQuery.class);
+
     /** V1.3.4 follow Story 2.1：详情头部关注关系读端口。 */
     private com.tailtopia.social.read.FollowReader followReader =
             org.mockito.Mockito.mock(com.tailtopia.social.read.FollowReader.class);
+
+    /** V1.4.0 multi-pet Story 3.1：关联宠物只读口 + 宠物批量读口。 */
+    private final ContentPetQuery contentPetQuery = mock(ContentPetQuery.class);
+    private final com.tailtopia.profile.service.PetQueryService petQuery =
+            mock(com.tailtopia.profile.service.PetQueryService.class);
+    /** V1.4.0 gift Story 2.1：Diary 礼物区端口与只读查询。 */
+    private final com.tailtopia.gift.port.GiftPetDirectory giftPets =
+            mock(com.tailtopia.gift.port.GiftPetDirectory.class);
+    private final com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase =
+            mock(com.tailtopia.gift.service.GiftShowcaseQuery.class);
 
     @BeforeEach
     void setUp() {
@@ -66,7 +80,13 @@ class ContentDetailServiceTest {
                 // V1.3.2 Story 1.5：打卡场所条只读口。
                 placeCheckins,
                 // V1.3.4 follow Story 2.1：详情头部关注关系。
-                followReader);
+                followReader,
+                // V1.4.0 multi-pet Story 3.1：Diary 关联宠物（默认无关联）。
+                contentPetQuery, petQuery,
+                // V1.4.0 gift Story 2.1：Diary 礼物区（宠物只经端口，汇总 / 墙前 3 经只读查询）。
+                giftPets, giftShowcase,
+                // V1.4.0 ④ Story 2.1：收藏状态只读口。
+                collectState);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
@@ -123,6 +143,30 @@ class ContentDetailServiceTest {
         assertThat(d.liked()).isFalse(); // 未 stub existsBy → 未赞
         assertThat(d.isAuthor()).isTrue(); // viewer == author
         assertThat(d.authorNickname()).isEqualTo("Alice");
+    }
+
+    /** V1.4.0 ④ Story 2.1 · AC6：作者看到不计自己的收藏数；非作者无收藏数；游客 collected=false 且不查收藏表。 */
+    @Test
+    void collectFieldsByViewer() {
+        when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
+        when(collectState.collectCountExcludingAuthor(1L, 7L)).thenReturn(2L);
+        when(collectState.isPostCollected(7L, 1L)).thenReturn(true);
+        when(collectState.isPostCollected(8L, 1L)).thenReturn(true);
+
+        ContentDetailResponse guest = service.getDetail(1L, null);
+        assertThat(guest.collected()).isFalse();
+        assertThat(guest.collectCount()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(collectState);
+
+        ContentDetailResponse author = service.getDetail(1L, 7L);
+        assertThat(author.collectCount()).isEqualTo(2L);
+        assertThat(author.collected()).isTrue();
+
+        ContentDetailResponse other = service.getDetail(1L, 8L);
+        assertThat(other.collectCount()).isNull();
+        assertThat(other.collected()).isTrue();
     }
 
     @Test
@@ -261,5 +305,146 @@ class ContentDetailServiceTest {
         assertThat(d.authorFollowState()).isEqualTo(com.tailtopia.social.read.FollowState.NONE);
         org.mockito.Mockito.verify(followReader, org.mockito.Mockito.never())
                 .followState(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    // ===== V1.4.0 multi-pet Story 3.1 · AC8：详情下发关联宠物 =====
+
+    private static ContentPost diaryPost(long id, long authorId) {
+        ContentPost p = ContentPost.publish(authorId, ContentType.GROWTH_MOMENT, 21L, "body", List.of());
+        set(p, "id", id);
+        set(p, "createdAt", Instant.now());
+        return p;
+    }
+
+    private static com.tailtopia.profile.dto.PetView petView(long id, String name,
+            com.tailtopia.profile.domain.PetStatus status) {
+        return new com.tailtopia.profile.dto.PetView(id, 7L, name, "https://cdn/" + id + ".jpg",
+                com.tailtopia.profile.domain.PetType.CAT, status, Instant.parse("2026-01-01T00:00:00Z"));
+    }
+
+    private void stubAuthor() {
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
+    }
+
+    /** Diary 两只 → pets 按关联表顺序（创建顺序），名字头像一次批量取；只读宠物照常列出。 */
+    @Test
+    void diaryDetailListsLinkedPetsInOrder() {
+        stubAuthor();
+        when(posts.findById(5L)).thenReturn(Optional.of(diaryPost(5L, 7L)));
+        when(contentPetQuery.petsOf(5L)).thenReturn(List.of(21L, 22L));
+        when(petQuery.getAll(List.of(21L, 22L))).thenReturn(Map.of(
+                21L, petView(21L, "Mochi", com.tailtopia.profile.domain.PetStatus.ACTIVE),
+                22L, petView(22L, "Bolu", com.tailtopia.profile.domain.PetStatus.READ_ONLY)));
+
+        var pets = service.getDetail(5L, 7L).pets();
+
+        assertThat(pets).extracting(com.tailtopia.content.dto.ContentPetView::petId).containsExactly(21L, 22L);
+        assertThat(pets.get(1).name()).isEqualTo("Bolu"); // 只读照列
+        assertThat(pets.get(0).petType()).isEqualTo("CAT");
+        // 3-1 复审：他人可见的宠物头像走去 EXIF 投递地址（同访客视图 E4）。
+        assertThat(pets.get(0).avatarUrl()).startsWith("https://cdn/21.jpg?x-oss-process=");
+        Mockito.verify(petQuery, Mockito.times(1)).getAll(org.mockito.ArgumentMatchers.anyCollection());
+        Mockito.verify(petQuery, Mockito.never()).get(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** Moment → pets 为 null（不查关联表）。 */
+    @Test
+    void momentDetailHasNoPets() {
+        stubAuthor();
+        when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
+
+        assertThat(service.getDetail(1L, 7L).pets()).isNull();
+        Mockito.verifyNoInteractions(contentPetQuery, petQuery);
+    }
+
+    /** Diary 无关联（宠物已全部删除）→ pets 为 null。 */
+    @Test
+    void diaryWithoutLinksHasNoPets() {
+        stubAuthor();
+        when(posts.findById(6L)).thenReturn(Optional.of(diaryPost(6L, 7L)));
+        when(contentPetQuery.petsOf(6L)).thenReturn(List.of());
+
+        assertThat(service.getDetail(6L, 7L).pets()).isNull();
+        Mockito.verifyNoInteractions(petQuery);
+    }
+
+    // ===== V1.4.0 gift Story 2.1 · AC5：Diary 礼物区 giftPets =====
+
+    private ContentPost typed(long id, ContentType type) {
+        ContentPost p = ContentPost.publish(7L, type, 30L, "body", List.of());
+        set(p, "id", id);
+        set(p, "createdAt", Instant.now());
+        when(posts.findById(id)).thenReturn(Optional.of(p));
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
+        return p;
+    }
+
+    private static com.tailtopia.gift.port.GiftPetDirectory.GiftPet giftPet(long petId) {
+        return new com.tailtopia.gift.port.GiftPetDirectory.GiftPet(petId, 7L, "Mochi", "https://cdn/p.jpg", "CAT",
+                null, true, false);
+    }
+
+    @Test
+    void diaryWithPetCarriesGiftSummaryAndWallPreview() {
+        typed(5L, ContentType.GROWTH_MOMENT);
+        when(giftPets.petsOfPost(5L)).thenReturn(List.of(giftPet(30L)));
+        var cake = new com.tailtopia.gift.service.GiftShowcaseQuery.WallRow(2L, "Cake", "Kue", "https://cdn/c.png",
+                50_000L, 1L);
+        var bone = new com.tailtopia.gift.service.GiftShowcaseQuery.WallRow(1L, "Bone", "Tulang",
+                "https://cdn/b.png", 1_000L, 3L);
+        when(giftShowcase.summariesOf(List.of(30L))).thenReturn(Map.of(30L,
+                new com.tailtopia.gift.service.GiftShowcaseQuery.PetGiftSummary(53_000L, 4L, 5)));
+        when(giftShowcase.wallPreviewOf(List.of(30L), 3)).thenReturn(Map.of(30L, List.of(cake, bone)));
+
+        ContentDetailResponse d = service.getDetail(5L, 99L);
+
+        assertThat(d.giftPets()).hasSize(1);
+        var g = d.giftPets().get(0);
+        assertThat(g.petId()).isEqualTo(30L);
+        assertThat(g.name()).isEqualTo("Mochi");
+        assertThat(g.avatarUrl()).contains("x-oss-process=image/");
+        assertThat(g.totalValue()).isEqualTo(53_000L);
+        assertThat(g.giftCount()).isEqualTo(4L);
+        assertThat(g.kindCount()).isEqualTo(5);
+        assertThat(g.wallPreview()).extracting(com.tailtopia.gift.web.dto.GiftWallItemView::nameEn)
+                .containsExactly("Cake", "Bone");
+    }
+
+    @Test
+    void diaryPetWithoutGiftsStillGetsOneZeroItem() {
+        typed(5L, ContentType.GROWTH_MOMENT);
+        when(giftPets.petsOfPost(5L)).thenReturn(List.of(giftPet(30L)));
+        when(giftShowcase.summariesOf(anyList())).thenReturn(Map.of());
+        when(giftShowcase.wallPreviewOf(anyList(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(Map.of());
+
+        var g = service.getDetail(5L, 99L).giftPets();
+
+        assertThat(g).hasSize(1);
+        assertThat(g.get(0).totalValue()).isZero();
+        assertThat(g.get(0).giftCount()).isZero();
+        assertThat(g.get(0).kindCount()).isZero();
+        assertThat(g.get(0).wallPreview()).isEmpty();
+    }
+
+    @Test
+    void diaryWithoutPetFromPortHasNoGiftArea() {
+        typed(5L, ContentType.GROWTH_MOMENT);
+        when(giftPets.petsOfPost(5L)).thenReturn(List.of());
+
+        assertThat(service.getDetail(5L, 7L).giftPets()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(giftShowcase);
+    }
+
+    @Test
+    void momentAndTipsNeverAskThePort() {
+        typed(6L, ContentType.DAILY);
+        assertThat(service.getDetail(6L, 99L).giftPets()).isNull();
+        typed(8L, ContentType.KNOWLEDGE);
+        assertThat(service.getDetail(8L, 99L).giftPets()).isNull();
+        org.mockito.Mockito.verify(giftPets, org.mockito.Mockito.never())
+                .petsOfPost(org.mockito.ArgumentMatchers.anyLong());
+        org.mockito.Mockito.verifyNoInteractions(giftShowcase);
     }
 }

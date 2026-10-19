@@ -1,0 +1,60 @@
+# generated: 2026-10-18
+# last_updated: 2026-10-18  # 9 条 story（8 条 ready-for-dev 云端批跑；4.1 在对齐分支本地做）
+# project: TailTopia V1.4.0 · 主题 gift（③ 送礼：后端 + 后台 + App）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.4.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.4.0/epics-v1.4.0-gift.md (4 Epic / 9 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.4.0/architecture-v1.4.0-gift-delta.md (AD-1~AD-13 · P-1~P-3)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.4.0/送礼/1-4-0送礼prd.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.4.0/decision-log.md（③ 节）
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.4.0/送礼/ui-1-4-0-gift-integrated-v1.html（App 42 屏）+ ui-admin-…（后台 13 屏）
+# 云端规则: {project-root}/_bmad-output/implementation-artifacts/v1.4.0/cloud-rules-gift.md
+#
+# 🔴 口径优先级：decision-log.md ③ 节 > PRD > 架构增量 > UI 稿。
+# 🔴 同目录还有地基 0-1 与等级线 / 多宠物线等同号 story——只按本文件的完整 key 取。
+# 🔴 与 ①② 并行：取宠物只经 GiftPetDirectory（单宠过渡实现），不引用 ①② 的类。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 依赖 =====
+# 前置：地基 Story 0.1。Epic 1 -> 2 -> 3（功能分支，云端串行）
+# Epic 4（4.1）：对齐分支 feat/1.4.0-gift-align，①②③ 均合入 dev_1.4.0 后本地做；云端不执行
+#
+# ===== 迁移预分配 =====
+# 1.1 V20261018_1700 + V20261018_1701
+#
+# ===== 上线前置（不阻塞开发） =====
+# - PRD OQ-1：送礼税务口径（法务 + 财务）
+# - P-1：QRIS 付款后无法送达退回 PawCoin 的总账口径（CASH_IN → FLOAT_LIABILITY），财务确认
+
+generated: 2026-10-18
+last_updated: 2026-10-19
+project: TailTopia V1.4.0 gift
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.0"
+
+development_status:
+  epic-1: in-progress
+  1-1-礼物目录与送礼后端: review
+  1-2-未送达退回与送礼通知: review
+  1-3-app送礼入口-面板-支付与动效: review
+  epic-1-retrospective: optional
+
+  epic-2: in-progress
+  2-1-礼物展示与统计后端: review
+  2-2-app统计卡礼物格-礼物页-详情礼物区-通知中心: review
+  2-3-我的送礼记录: review
+  epic-2-retrospective: optional
+
+  epic-3: in-progress
+  3-1-后台礼物目录与qris最低金额: review
+  3-2-后台送礼记录与抽屉收送礼记录: review
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-送礼与等级多宠物对齐: review  # 对齐分支本地做，云端不执行
+  epic-4-retrospective: optional

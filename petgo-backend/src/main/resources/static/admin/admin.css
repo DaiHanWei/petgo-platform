@@ -294,6 +294,7 @@ dialog.modal .modal-foot {
 /* 抽屉打开时 toast 挪到抽屉左侧，不再压住抽屉底部的保存钮（OP-10 自测 2026-10-15） */
 body:has(.drawer.is-open) .toast { right: calc(min(480px, 100vw) + 24px); }
 body:has(#user-drawer.drawer.is-open) .toast { right: calc(min(600px, 100vw) + 24px); }
+body:has(#growthbatch-drawer.drawer.is-open) .toast { right: calc(min(600px, 100vw) + 24px); }
 .err { color: var(--danger); font-size: var(--fs-sm); margin: 6px 0; }
 .ok { color: var(--ok); font-size: var(--fs-sm); margin: 6px 0; }
 
@@ -931,12 +932,14 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ===== B7 用户列表 + 五页签抽屉（V1.3.0 Story 8.1）===== */
 .users-table td { vertical-align: middle; }
 .ud-head h2 { margin: 0 0 8px; font-size: var(--fs-md); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-/* 🔴 nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */
-.ud-tabs { margin: 0 0 10px; flex-wrap: nowrap; overflow-x: auto; }
+/* V1.4.0 Story 0.1：页签增至 9 个，600 宽一行放不下 → 按 ① PRD OQ-8 改为换两行（UI 稿 .tabs.w），不再横向滚动。 */
+.ud-tabs { margin: 0 0 10px; flex-wrap: wrap; }
 .ud-tabs .tab { white-space: nowrap; }
 /* V1.3.2 后台 AB-23：用户详情抽屉 480 → 600px（六页签三语都放不下 480，UI 稿 E1 实测）。
    🔴 只放宽这一个抽屉 —— 场所等其余抽屉维持 480 是有意的，不要借此统一加宽。 */
 #user-drawer.drawer { width: 600px; }
+/* V1.4.0 ① Story 4.3 · UI H1：批量发放抽屉 600 宽（同用户抽屉宽度），只放宽这一个 */
+#growthbatch-drawer.drawer { width: 600px; }
 .ud-purchases .ud-card + .ud-card { margin-top: 10px; }
 .ud-pc-title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--fs); }
 .ud-pc-table .num, .ud-pc-table .num-cell { font-variant-numeric: tabular-nums; }
@@ -952,6 +955,13 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ud-pet-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-tint); display: flex; align-items: center; justify-content: center; }
 .ud-pet-name { margin: 0 0 2px; display: flex; gap: 6px; align-items: center; }
 .ud-danger { border-color: var(--danger); }
+/* V1.4.0 ② Story 4.3：「宠物与名额」页签（UI 稿 L1）——名额构成四格 + 已收款未发放的购买行。 */
+.ud-petslots .ud-pc-title { margin-top: 12px; }
+.ud-ps-kv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 4px; }
+.ud-ps-kv-cell { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; }
+.ud-ps-k { color: var(--muted); font-size: var(--fs-xs); }
+.ud-ps-v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ud-ps-exception td { background: var(--danger-bg); }
 .user-drawer .sticky-footer { bottom: 0; }
 
 /* ===== V1.3.0 Story 10.1：A7 Toko 退货审核 / A8 Toko 异常订单（模板 A 右栏） ===== */
@@ -1338,3 +1348,35 @@ dialog.cm-modal .modal-foot .cm-cancel { background: var(--surface); color: var(
 dialog.cm-modal label.cm-typed { display: block; margin: 0; font-size: var(--fs-sm); color: var(--ink); }
 .cm-typed-prompt { display: block; margin-bottom: 6px; }
 .cm-typed-input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+/* ── V1.4.0 ① Story 4.1：成长体系配置页（段位色点 4.2 / 4.4 复用；色值同 App 段位色 §5.6）── */
+.tier-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.tier-NEWBIE { background: #66748C; }
+.tier-BUDDY { background: #0A7FA3; }
+.tier-GUARDIAN { background: #2B4FBF; }
+.tier-STAR { background: linear-gradient(135deg, #4A2E9E, #B5307F); }
+.cm-facts { margin: 10px 0; }
+.cm-fact + .cm-fact { margin-top: 4px; }
+.growth-recalc { margin: 0 0 12px; }
+.growth-levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.growth-levels-grid .inp { width: 140px; }
+.growth-rule-fld { margin-bottom: 12px; }
+.growth-rule-err { color: var(--danger, #C0392B); font-size: 12px; margin: 4px 0 0; }
+
+/* ── V1.4.0 ① Story 4.2：用户抽屉「成长值」页签（I1 ~ I7）── */
+.growth-ov { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+.growth-ov-cell { padding: 8px 10px; border: 1px solid var(--line, #E3E7EE); border-radius: 8px; }
+.growth-ov-val { margin: 4px 0 0; font-size: 16px; }
+.growth-adjust { margin: 12px 0; }
+.growth-adjust .inp[disabled], .growth-adjust input[type=radio][disabled] { opacity: .5; cursor: not-allowed; }
+.growth-ledger { margin-top: 12px; }
+
+/* V1.4.0 ③ gift Story 3.1 · 礼物目录（UI 稿 L1 / L6）：金额列右对齐等宽数字；顶部「送礼 QRIS 最低金额」配置行。 */
+.gift-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gift-cfgline { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; background: var(--surface, #fff); border: 1px solid var(--line, #E6E8EE); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; }
+.gift-cfgline .gift-cfgline-main { flex: 1; min-width: 220px; }
+.gift-cfgline .gift-cfgline-value { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.gift-cfgline .gift-cfgline-form { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.gift-kv { display: grid; grid-template-columns: 132px 1fr; gap: 12px 0; margin: 0; font-size: 13px; }
+.gift-kv dt { color: var(--muted); }
+.gift-kv dd { margin: 0; font-weight: 600; color: var(--ink); word-break: break-word; }

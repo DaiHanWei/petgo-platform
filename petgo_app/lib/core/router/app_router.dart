@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,11 +11,18 @@ import '../analytics/analytics.dart';
 import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
 
+import '../../features/pet_slot/data/pet_slot_repository.dart' show PetSlotOverview;
+import '../../features/pet_slot/presentation/add_pet_flow.dart' show kPetSlotsRoute;
+import '../../features/pet_slot/presentation/pet_slot_page.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/growth/presentation/exp_ledger_page.dart';
+import '../../features/growth/presentation/level_page.dart';
+import '../../features/notify/domain/app_update_controller.dart';
+import '../../features/notify/domain/app_version_check.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
@@ -28,6 +37,9 @@ import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
+import '../../features/gift/presentation/gift_orders_page.dart';
+import '../../features/gift/presentation/gift_page.dart';
+import '../../features/gift/presentation/gift_pet_switch.dart';
 import '../../features/content/presentation/shared_post_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
@@ -82,6 +94,7 @@ import '../../features/consult/presentation/vet_request_confirm_page.dart';
 import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
+import '../../features/notify/presentation/push_settings_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
@@ -190,7 +203,8 @@ Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   // ⚠️ 2026-08-28 v1 版式整体删除，双 UI 并存机制随之移除；此处直接构造 v2 页面。
   AppTab.shop => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
   AppTab.home => const HomePage(),
-  AppTab.me => const MePage(),
+  // V1.4.0 ④ Story 2.4：读 `?saved=post|place`（收藏 Toast「Lihat」落点 → Disimpan 对应子分类）。
+  AppTab.me => MePage(saved: state.uri.queryParameters['saved']),
 };
 
 /// 冷启动深链是否需要**先铺一层底座页再叠上去**（纯函数，L0 可测）。
@@ -258,11 +272,15 @@ String? rawDeepLinkRedirect(Uri uri) {
 /// 对一个「从 WhatsApp 点链接进来」的人来说，那就是一条死路 ——
 /// 而这条链路的全部意义正是把人**引进** App。
 void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
+  // 强制更新期间不导航：基座 go 后下一帧再 push 深链，会盖在重弹的强更弹窗之上（OCR 审查 #1）。
+  if (ref.read(appUpdateControllerProvider).decision == UpdateDecision.forced) return;
   final ctx = rootNavigatorKey.currentContext;
   if (ctx == null || !ctx.mounted) {
     ref.read(routerProvider).go(location); // 极端兜底：拿不到 context 时至少别丢深链
     return;
   }
+  // gift Story 4.1 · AC6.4：收礼推送 → 底座 Diary Tab 先切到被送礼的那只（是自己的才切；异步，切到后 Diary 自行刷新）。
+  unawaited(selectGiftPetIfOwned(ref.read, location));
   _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
 }
 
@@ -270,8 +288,11 @@ void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
 ///
 /// 底座取**落地矩阵目标**而不是写死 `/home`：游客/已建档用户落 Diary、其余落 Social，
 /// 返回后看到的是他本该看到的那一屏，与不点推送直接冷启动完全一致。
-void _goDeepLink(BuildContext ctx, Ref ref, String location) =>
-    _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+void _goDeepLink(BuildContext ctx, Ref ref, String location) {
+  // gift Story 4.1 · AC6.4：同 [goDeepLinkFromLiveApp]（冷启动收礼推送）。
+  unawaited(selectGiftPetIfOwned(ref.read, location));
+  _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+}
 
 /// 冷启动与热启动共用的实现。
 ///
@@ -711,6 +732,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/me/addresses/:token',
         builder: (c, s) => AddressFormPageV2(token: s.pathParameters['token']),
       ),
+      // 名额管理页（V1.4.0 multi-pet Story 1.5 占位；Story 2.4 同路由替换为 D1 ~ D15）。
+      // 🔒 挂在 /me 前缀下 → 自动进 _controlledLocations 受控名单（游客深链回首页）。
+      // V1.4.0 multi-pet Story 2.4：?action=rent（A4「Sewa slot」）/ renew（B4 / E1「Perpanjang」）进页即弹抽屉。
+      GoRoute(
+          path: kPetSlotsRoute,
+          builder: (c, s) => PetSlotPage(action: s.uri.queryParameters['action'])),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
       GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),
@@ -722,7 +749,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
       GoRoute(path: '/onboarding/profile', builder: (c, s) => const ProfileOnboardingPage()),
       // 宠物档案创建表单（Story 2.2）。受控路由（/profile/ 前缀，游客被门控）。
-      GoRoute(path: '/profile/create', builder: (c, s) => const PetProfileCreatePage()),
+      // V1.4.0 multi-pet：extra = 「+」入口取到的名额摘要（推 pet_added.slot_source 用），可缺省。
+      GoRoute(
+        path: '/profile/create',
+        builder: (c, s) => PetProfileCreatePage(
+          slotOverview: s.extra is PetSlotOverview ? s.extra as PetSlotOverview : null,
+          // `?add=1` = 从「+」添加流程进来（不走「已有档案直达」）；存量入口不带。
+          addFlow: s.uri.queryParameters[PetProfileCreatePage.addFlowQuery] == '1',
+        ),
+      ),
       // 建档「创建成功」庆祝页（Story 1.7 R2 · FR-0G · F15）。受控（/profile/ 前缀）。
       // 经 extra 接收刚创建的 PetProfile；主 CTA 串接推送时机（庆祝页后、进首页前，Story 6.4）后进首页。
       GoRoute(
@@ -899,7 +934,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    登录门控不变。`go` 清栈落地后的出路由 TriagePage 自带（顶栏返回 + PopScope，
       //    栈空导向 /home）—— 不在此处包壳，避免 push 入口双顶栏。
       GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),
-      GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
+      // V1.4.0 multi-pet Story 4.1：可选 `?petId=`（入口已选宠物）；缺失由页面补走一次选择。
+      GoRoute(
+        path: '/triage/upload',
+        builder: (c, s) => TriageUploadPage(petId: int.tryParse(s.uri.queryParameters['petId'] ?? '')),
+      ),
       // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。
       GoRoute(
         path: '/triage/result/:id',
@@ -917,7 +956,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // 直连问诊病例填写页（Story F）：症状 + 照片，提交才发起 DIRECT 会话。
-      GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
+      // V1.4.0 multi-pet Story 4.1（H4）：可选 `?petId=`（咨询前所选宠物），缺省 = 后端默认宠物。
+      GoRoute(
+        path: '/consult/case',
+        builder: (c, s) => ConsultCaseFormPage(petId: int.tryParse(s.uri.queryParameters['petId'] ?? '')),
+      ),
       // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
       GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
       // Story 3-3：路径不变，多接一个可选 `?orderToken=` 用来预选关联订单（可改可清空）。
@@ -1005,10 +1048,18 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
       // 二级设置页（Story 7.1 · F8）：语言/退出/注销。受控（/me 前缀，需登录）。
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
+      // V1.4.0 ④ Story 1.3：通知设置页（推送分类开关）。受控（/me 前缀）；shell 外顶层隐 Tab Bar。
+      GoRoute(path: PushSettingsPage.routePath, builder: (c, s) => const PushSettingsPage()),
       // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
+      // V1.4.0 ① Tailrent Level（Story 1.5）：等级页 + EXP 明细页。受控（/me 前缀）；shell 外顶层隐 Tab。
+      GoRoute(path: LevelPage.location, builder: (c, s) => const LevelPage()),
+      GoRoute(path: ExpLedgerPage.location, builder: (c, s) => const ExpLedgerPage()),
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
       GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
+      // 我的送礼记录（V1.4.0 gift Story 2.3 · AC4.1）：钱包页入口 + 退回通知 `GIFT_UNDELIVERED_REFUND` 直达。
+      // 同样 /me 前缀受控（游客自动拦截）+ shell 外隐 Tab。
+      GoRoute(path: GiftOrdersPage.routePath, builder: (c, s) => const GiftOrdersPage()),
       // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
       GoRoute(
         path: '/me/orders',
@@ -1076,6 +1127,18 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    App 内要求登录只会把人推回浏览器）；这条按 petId、**必须登录**（AD-4 Rule 1）。
       // ⚠️ 本路由**故意不进** `_controlledLocations` —— 登录门控在**进入前**由宠物卡
       //    的 `requireLogin` 做（FR-0C 的既有惯例），真正的边界在服务端那条不放行的规则上。
+      // 礼物页（V1.4.0 gift Story 2.2 · AC3.1）：**独立顶层路由**，与访客视图并列。
+      // go_router 按整段匹配 —— `/pets/5/gifts` 不会被下面的 `/pets/:petId` 吃成 petId='5/gifts'
+      // （那条 builder 是 int.parse，会崩；`gift_route_test.dart` 锁住）。
+      // ⚠️ 同访客视图**不进** `_controlledLocations`：登录门控在入口处（requireLogin）+ 服务端（仅 USER）。
+      // `?wall=expanded`：收礼通知深链，墙初始即展开（AC6.4）。petId 非数字 → 0 → 页面直接 E6，不崩。
+      GoRoute(
+        path: GiftPage.routePattern,
+        builder: (c, s) => GiftPage(
+          petId: int.tryParse(s.pathParameters['petId'] ?? '') ?? 0,
+          wallInitiallyExpanded: s.uri.queryParameters['wall'] == GiftPage.wallExpandedQuery,
+        ),
+      ),
       GoRoute(
         path: VisitorArchiveView.inAppRoutePattern,
         builder: (c, s) => VisitorArchiveView(

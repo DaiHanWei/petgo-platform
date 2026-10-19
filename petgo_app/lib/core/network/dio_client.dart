@@ -8,11 +8,13 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/data/google_auth_client.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/auth/domain/login_guide_controller.dart';
+import '../../features/growth/data/growth_action_interceptor.dart';
 import '../l10n/locale_controller.dart';
 import '../router/app_router.dart';
 import '../storage/secure_storage.dart';
 import 'api_log_interceptor.dart';
 import 'auth_interceptor.dart';
+import 'client_info_interceptor.dart';
 
 /// 后端基址（运行时配置；env/--dart-define 注入）。
 /// - release / profile 包：默认线上正式服 [kApiBaseUrlProd]（用户明确指令固定，非明确要求不得改）。
@@ -51,6 +53,8 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 30),
   ));
+  // V1.3.4 起每个 API 请求带 X-App-Version / X-App-Platform（后端据此区分新旧客户端）。
+  dio.interceptors.add(ClientInfoInterceptor());
   dio.interceptors.add(AuthInterceptor(
     dio: dio,
     tokenStore: ref.read(tokenStoreProvider),
@@ -75,6 +79,8 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
       return device == 'id' ? 'id' : 'en';
     },
   ));
+  // V1.4.0 ① Story 2.3：发帖 / 评论 / 点赞 / 打卡成功后触发成长弹窗拉取（只看响应、不改请求，401 重放不受影响）。
+  dio.interceptors.add(GrowthActionInterceptor());
   // 接口日志（仅 debug 输出控制台，脱敏）。置于 auth 之后 → 打印的是最终带鉴权的请求与真实响应。
   if (kDebugMode) {
     dio.interceptors.add(ApiLogInterceptor());

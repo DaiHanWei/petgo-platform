@@ -153,7 +153,7 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
                 null, null, null, null, "KTP", null, null, null));
         String first = passportNo(u.getId());
 
-        profileDeletion.deleteByUserId(u.getId());
+        profileDeletion.deleteAllForAccount(u.getId());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pet_passports WHERE passport_no = ?",
                 Long.class, first)).isZero();
 

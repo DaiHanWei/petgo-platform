@@ -14,6 +14,7 @@ import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 import 'milestone_instant_fakes.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.4 Story 4.3 · AC1 / AC3 / AC4：当场庆祝 helper 的预读 + 短轮询 + 兜底。
 class _Host extends ConsumerStatefulWidget {
@@ -47,6 +48,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, ScriptedMilestoneRepository
   final container = ProviderContainer(overrides: [
     milestoneRepositoryProvider.overrideWithValue(repo),
     milestoneInstantPollDelaysProvider.overrideWithValue(delays),
+    // V1.4.0 multi-pet：里程碑列表按当前宠物分族。
+    effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
   ]);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -258,8 +261,8 @@ void main() {
       instantMilestoneList('C-S17', completed: true),
     ]);
     final c = await _pump(tester, repo);
-    await expectLater(c.read(milestoneListProvider.future), throwsA(isA<StateError>()));
-    expect(c.read(milestoneListProvider).hasError, isTrue);
+    await expectLater(c.read(milestoneListProvider(1).future), throwsA(isA<StateError>()));
+    expect(c.read(milestoneListProvider(1)).hasError, isTrue);
     await _run(tester);
     expect(_celebration, findsOneWidget);
     expect(repo.calls, 2);
@@ -285,6 +288,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       milestoneRepositoryProvider.overrideWithValue(repo),
       milestoneInstantPollDelaysProvider.overrideWithValue(_zeros),
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(

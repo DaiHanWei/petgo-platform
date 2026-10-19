@@ -61,14 +61,33 @@ class ContentDetailAndCommentContractTest {
                 // V1.3.4 follow Story 2.1：作者 token 与关注关系（AD-6 键名）。
                 "t".repeat(32), new com.tailtopia.social.read.FollowState(false, true),
                 // V1.3.4 Story 2.1：每张图的露出位置（与 imageUrls 同序；null 元素原样下发）。
-                java.util.Arrays.asList(1.0, null));
+                java.util.Arrays.asList(1.0, null),
+                // V1.4.0 ① Story 3.1：作者等级三字段。
+                7, "BUDDY", "BASIC",
+                // V1.4.0 multi-pet Story 3.1：Moment 无关联宠物 → null 省略（形态见 diaryPetsKeyShape）。
+                null,
+                // V1.4.0 gift Story 2.1：Diary 礼物区（关联宠物各自的礼物汇总 + 墙前 3 行）。
+                List.of(new com.tailtopia.gift.web.dto.GiftPetSummaryView(30L, "Mochi", null, 53_000L, 4L, 2,
+                        List.of(new com.tailtopia.gift.web.dto.GiftWallItemView("Cake", "Kue", "https://cdn/c.png",
+                                50_000L, 1L)))),
+                // V1.4.0 ④ Story 2.1：是否已收藏（恒下发）+ 作者视角收藏数（非作者为 null → 省略，见下一例）。
+                true, 2L);
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
                 "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState",
-                "imageCropOffsets"));
+                "imageCropOffsets", "authorLevel", "authorTier", "authorFrame", "giftPets",
+                "collected", "collectCount"));
+        assertThat(wire(d)).containsEntry("authorLevel", 7).containsEntry("authorTier", "BUDDY")
+                .containsEntry("authorFrame", "BASIC");
+        assertThat(wire(d)).containsEntry("collected", true).containsEntry("collectCount", 2L);
+        // V1.4.0 gift Story 2.1：礼物区只下发数字与 EN / ID 快照，不下发 owner / sender / 任何 token。
+        @SuppressWarnings("unchecked")
+        Map<String, Object> giftPet = ((List<Map<String, Object>>) wire(d).get("giftPets")).get(0);
+        assertThat(giftPet.keySet()).isEqualTo(Set.of("petId", "name", "totalValue", "giftCount", "kindCount",
+                "wallPreview"));
         @SuppressWarnings("unchecked")
         Map<String, Object> follow = (Map<String, Object>) wire(d).get("authorFollowState");
         assertThat(follow).isEqualTo(Map.of("iFollow", false, "followsMe", true));
@@ -87,12 +106,45 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, false, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
+        // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略。
+        assertThat(wire(d)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
+        // V1.4.0 multi-pet Story 3.1：无关联宠物不下发 pets。
+        assertThat(wire(d)).doesNotContainKey("pets");
+        // V1.4.0 ④ Story 2.1：非作者无 collectCount 键（收藏数不对外展示）；collected 恒下发。
+        assertThat(wire(d)).doesNotContainKey("collectCount").containsEntry("collected", false);
         // V1.3.4：作者已注销 / 封号时 token 与关注关系不下发。
         assertThat(wire(d)).doesNotContainKey("authorToken").doesNotContainKey("authorFollowState");
         // V1.3.4 Story 2.1：存量 / 无超界图的帖不下发露出位置（App 无值即居中）。
         assertThat(wire(d)).doesNotContainKey("imageCropOffsets");
+        // V1.4.0 gift Story 2.1：Moment / Tips / 无关联宠物不下发礼物区。
+        assertThat(wire(d)).doesNotContainKey("giftPets");
+    }
+
+    /** V1.4.0 multi-pet Story 3.1 · AC8：Diary 关联宠物 → {@code pets} 数组，每项四键，顺序原样（第一只在前）。 */
+    @Test
+    void diaryPetsKeyShape() {
+        ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
+                ContentType.GROWTH_MOMENT, "正文", List.of(), null, 0L, 0L, false, false,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
+                null, null, null, null, null,
+                // V1.4.0 ① Story 3.1：作者等级三字段（null → 省略）。
+                null, null, null,
+                List.of(new ContentPetView(21L, "Mochi", "https://cdn/m.jpg", "CAT"),
+                        new ContentPetView(22L, "Bolu", null, "DOG")),
+                // V1.4.0 gift Story 2.1：礼物区不在本例关注范围（null → 省略）。
+                null,
+                // V1.4.0 ④ Story 2.1：收藏态不在本例关注范围。
+                false, null);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> pets = (List<Map<String, Object>>) wire(d).get("pets");
+        assertThat(pets).hasSize(2);
+        assertThat(pets.get(0).keySet()).isEqualTo(Set.of("petId", "name", "avatarUrl", "petType"));
+        assertThat(((Number) pets.get(0).get("petId")).longValue()).isEqualTo(21L);
+        assertThat(pets.get(0)).containsEntry("petType", "CAT");
+        // NON_NULL：没头像的那只省略 avatarUrl 键。
+        assertThat(pets.get(1).keySet()).isEqualTo(Set.of("petId", "name", "petType"));
     }
 
     @Test
@@ -106,12 +158,14 @@ class ContentDetailAndCommentContractTest {
                 // V1.3.0 Story 2.4：点赞数与已赞状态恒下发（实时聚合，库里没有计数列）。
                 5L, true,
                 // V1.3.0 batch-b1 Story 3.3：评论里的 @。
-                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)),
+                // V1.4.0 ① Story 3.1：作者等级（无框 → authorFrame 省略）。
+                3, "NEWBIE", null);
 
         assertThat(wire(top).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "body", "createdAt", "replyCount", "replies", "moderationStatus",
-                "likeCount", "liked", "mentions"));
+                "likeCount", "liked", "mentions", "authorLevel", "authorTier"));
     }
 
     @Test
@@ -128,6 +182,8 @@ class ContentDetailAndCommentContractTest {
         assertThat(wire(reply)).doesNotContainKey("replyCount");
         // Story 3.3：没 @ 人的评论整列省略（存量评论恒如此）。
         assertThat(wire(reply)).doesNotContainKey("mentions");
+        // V1.4.0 ① Story 3.1：growth == null（14 参兼容构造）→ 等级三字段整体省略。
+        assertThat(wire(reply)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
     }
 
     @Test

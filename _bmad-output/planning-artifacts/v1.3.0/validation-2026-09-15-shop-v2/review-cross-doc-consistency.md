@@ -2,7 +2,7 @@
 
 - 评审对象：`_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-shop-v2.md`（draft，2026-09-14/15）
 - 评审日期：2026-09-15
-- 对照源：v1.4.0 规划五件套（PRD / 后台 PRD / decision-log / epics / architecture delta / README / Roadmap 建议 / UX）、`implementation-artifacts/v1.4.0/HANDOFF.md` 与 `sprint-status-v1.4.0.yaml`、`deferred-work.md`、`CROSS-STORY-DECISIONS.md`、根 `CLAUDE.md`、v1.3.0 README，以及三个同版本主题分支上的产物：`origin/feat/1.3.0-ops-ui-refactor`（admin）、`origin/feat/1.3.0-batch-a-content-fixes`（batch-a）、`origin/feat/1.3.0-batch-b1-places-social`（batch-b1）。凡涉及代码事实的地方都在 HEAD 上抽查过。
+- 对照源：v1.4.0 规划五件套（PRD / 后台 PRD / decision-log / epics / architecture delta / README / Roadmap 建议 / UX）、`implementation-artifacts/v1.4.0-toko-废弃/HANDOFF.md` 与 `sprint-status-v1.4.0.yaml`、`deferred-work.md`、`CROSS-STORY-DECISIONS.md`、根 `CLAUDE.md`、v1.3.0 README，以及三个同版本主题分支上的产物：`origin/feat/1.3.0-ops-ui-refactor`（admin）、`origin/feat/1.3.0-batch-a-content-fixes`（batch-a）、`origin/feat/1.3.0-batch-b1-places-social`（batch-b1）。凡涉及代码事实的地方都在 HEAD 上抽查过。
 - 评审性质：只读评审，没有改动任何源文件
 
 ## 结论
@@ -84,7 +84,7 @@
 ### F-07 · high · 把 S-4 当成「可选的另一条路」，实际上它是已拍板、但漏实现的风控决策
 
 - **位置**：FR-116（L322）「若走加频次限制方案，等于现在才补 S-4」；D-22（L484）
-- **证据**：`decision-log.md:49` S-4 已经决议：「同用户 90 日内最多 2 次质量问题补偿溢价；超出后仍全额退款但不再发溢价」。`implementation-artifacts/v1.4.0/5-6-开封判定判例库.md:21-23` 写着「S-4 的频次上限尚未在任何 story 中落地，已在 HANDOFF 登记」。它是 v1.4.0 的交付欠账，不是 shop-v2 可以任选的方案。
+- **证据**：`decision-log.md:49` S-4 已经决议：「同用户 90 日内最多 2 次质量问题补偿溢价；超出后仍全额退款但不再发溢价」。`implementation-artifacts/v1.4.0-toko-废弃/5-6-开封判定判例库.md:21-23` 写着「S-4 的频次上限尚未在任何 story 中落地，已在 HANDOFF 登记」。它是 v1.4.0 的交付欠账，不是 shop-v2 可以任选的方案。
 - **建议**：在 PRD 里把 S-4 列为独立的补齐项（交付缺口），不再挂在 D-22 名下作为「备选」。它与 F-06 合在一起，才构成完整的反套利门。
 
 ### F-08 · high · 删掉退货进度页后，S-8④、S-10 和 UX-DR5 的申诉入口没有着陆点，§1.4「见 §8」是悬空引用

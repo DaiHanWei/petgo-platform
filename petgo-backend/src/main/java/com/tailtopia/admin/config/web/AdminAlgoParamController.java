@@ -74,7 +74,7 @@ public class AdminAlgoParamController {
     /** 抽屉每页条数（AC3）。 */
     static final int PAGE_SIZE = 20;
 
-    /** 变更记录里的参数列名 → 表单字段名 / 标签 key（14 项，与 {@link FeedRankForm} 一一对应；PRD 写 11 项以代码为准）。 */
+    /** 变更记录里的参数列名 → 表单字段名 / 标签 key（15 项，与 {@link FeedRankForm} 一一对应；PRD 写 11 项以代码为准；V1.4.0 ① Story 3.4 加作者等级加权）。 */
     public record AlgoField(String column, String name, String labelKey) {
     }
 
@@ -85,6 +85,7 @@ public class AdminAlgoParamController {
             new AlgoField("exposure_decay", "exposureDecay", "admin.algo.exposureDecay"),
             new AlgoField("shuffle_strength", "shuffleStrength", "admin.algo.shuffleStrength"),
             new AlgoField("throttle_factor", "throttleFactor", "admin.algo.throttleFactor"),
+            new AlgoField("author_level_boost", "authorLevelBoost", "admin.algo.authorLevelBoost"),
             new AlgoField("seen_window_days", "seenWindowDays", "admin.algo.seenWindowDays"),
             new AlgoField("window_size", "windowSize", "admin.algo.windowSize"),
             new AlgoField("attr_fun_quota", "attrFunQuota", "admin.algo.attrFunQuota"),
@@ -102,6 +103,7 @@ public class AdminAlgoParamController {
             + "\"admin.err.config.exposureDecayRange\":\"exposureDecay\","
             + "\"admin.err.config.shuffleStrengthRange\":\"shuffleStrength\","
             + "\"admin.err.config.throttleFactorRange\":\"throttleFactor\","
+            + "\"admin.err.config.authorLevelBoostRange\":\"authorLevelBoost\","
             + "\"admin.err.config.seenWindowDaysMin\":\"seenWindowDays\","
             + "\"admin.err.config.attrWindowTooSmall\":\"windowSize\","
             + "\"admin.err.config.attrQuotaNegative\":\"attrFunQuota,attrEduQuota,attrLifeQuota\","
@@ -154,14 +156,16 @@ public class AdminAlgoParamController {
             @RequestParam double freshnessWeight, @RequestParam double interactionWeight,
             @RequestParam double commentWeight, @RequestParam double exposureDecay,
             @RequestParam double shuffleStrength,
-            @RequestParam double throttleFactor, @RequestParam int seenWindowDays,
+            @RequestParam double throttleFactor, @RequestParam double authorLevelBoost,
+            @RequestParam int seenWindowDays,
             @RequestParam int windowSize, @RequestParam int attrFunQuota,
             @RequestParam int attrEduQuota, @RequestParam int attrLifeQuota,
             @RequestParam int speciesMainQuota, @RequestParam int speciesOtherQuota,
             @RequestParam int speciesGeneralQuota, HxRequest hx, Model model, HttpServletResponse response,
             RedirectAttributes flash) {
         FeedRankForm form = new FeedRankForm(freshnessWeight, interactionWeight, commentWeight,
-                exposureDecay, shuffleStrength, throttleFactor, seenWindowDays, windowSize, attrFunQuota,
+                exposureDecay, shuffleStrength, throttleFactor, authorLevelBoost, seenWindowDays, windowSize,
+                attrFunQuota,
                 attrEduQuota, attrLifeQuota, speciesMainQuota, speciesOtherQuota, speciesGeneralQuota);
         if (hx.isHtmx()) {
             write.updateFeedRank(form, admin.getAdminAccountId());

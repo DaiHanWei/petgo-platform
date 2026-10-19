@@ -137,6 +137,8 @@ public final class AuditActions {
     // ===== 用户账号治理补充 =====
     /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
     public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
+    /** 运营补发宠物名额（V1.4.0 ② Story 4.3 · AB-34.2；summary 含天数/到期/原因/幂等键，不落 PII）。 */
+    public static final String PET_SLOT_GRANTED = "PET_SLOT_GRANTED";
 
     // ===== 内容审核补充规范 story 8（后台审核增强）=====
     /** 调整人工审核队列项优先级（story 8，§5.1，含旧→新优先级）。 */
@@ -255,6 +257,38 @@ public final class AuditActions {
     public static final String SHOP_RETURN_REFUNDED = "SHOP_RETURN_REFUNDED";
     /** 开封判定判例沉淀（AB-12D）。⚠️ 一致性工具，非风控工具（SPEC-24）。 */
     public static final String SHOP_RETURN_PRECEDENT_ADDED = "SHOP_RETURN_PRECEDENT_ADDED";
+
+    // ── V1.4.0 ① AB-32 · Story 4.1：成长体系配置（摘要写改前 → 改后；不写 config_change_logs）──────────
+    /** 改一条成长值规则（分值 / 每日上限 / 合计上限 / 每 Rp / 启停用）。target = 规则代码。 */
+    public static final String GROWTH_RULE_UPDATED = "GROWTH_RULE_UPDATED";
+    /** 改消费换算（两档比例 + 支付用途归档）。target = {@code spend}。 */
+    public static final String GROWTH_SPEND_CONFIG_UPDATED = "GROWTH_SPEND_CONFIG_UPDATED";
+    /** 改等级表（门槛 / 末尾追加一级），并入库一次全量重算任务。target = {@code levels}。 */
+    public static final String GROWTH_LEVEL_TABLE_UPDATED = "GROWTH_LEVEL_TABLE_UPDATED";
+    /** 失败 / 僵死的重算任务重新执行。target = 新任务 id。 */
+    public static final String GROWTH_RECALC_RETRIED = "GROWTH_RECALC_RETRIED";
+    /** 后台对单个用户调整 EXP / 发运营活动（V1.4.0 ① Story 4.2 · AB-33）。target = {@code USER} / userId；幂等命中不写。 */
+    public static final String GROWTH_USER_ADJUSTED = "GROWTH_USER_ADJUSTED";
+    /** 批量发放活动 EXP（V1.4.0 ① Story 4.3）。target = {@code growth_batch} / 批次号；纯重放不写。 */
+    public static final String GROWTH_BATCH_GRANTED = "GROWTH_BATCH_GRANTED";
+    /** 改虚拟号 / 官方号的展示等级（V1.4.0 ① Story 4.4）。target = {@code user} / userId；值未变不写。 */
+    public static final String GROWTH_DISPLAY_LEVEL_CHANGED = "GROWTH_DISPLAY_LEVEL_CHANGED";
+
+    // ===== 礼物目录（V1.4.0 ③ gift Story 3.1，AB-35）=====
+    /** 新建礼物。摘要记名称 / 价格 / 类型 / 等级 / 物种 / 排序（不记图标 URL）。 */
+    public static final String GIFT_CATALOG_CREATED = "GIFT_CATALOG_CREATED";
+    /** 编辑礼物。摘要记改前 → 改后（换图只记 {@code icon changed}）；无真变化不写。 */
+    public static final String GIFT_CATALOG_UPDATED = "GIFT_CATALOG_UPDATED";
+    /** 下线礼物（只下线不物理删除，已收到的按订单快照照常展示）。 */
+    public static final String GIFT_CATALOG_OFFLINED = "GIFT_CATALOG_OFFLINED";
+    /** 重新上线礼物。 */
+    public static final String GIFT_CATALOG_ONLINED = "GIFT_CATALOG_ONLINED";
+    /** 改送礼 QRIS 最低金额（{@code pricing_config.gift_qris_min_amount}，只对送礼生效）。 */
+    public static final String GIFT_QRIS_MIN_UPDATED = "GIFT_QRIS_MIN_UPDATED";
+
+    // ===== 送礼记录（V1.4.0 ③ gift Story 3.2，AB-36）=====
+    /** 按当前筛选导出送礼记录 xlsx。摘要记行数 / 是否截断 / 全部筛选条件（查看列表与抽屉页签不写审计）。 */
+    public static final String GIFT_ORDER_LIST_EXPORTED = "GIFT_ORDER_LIST_EXPORTED";
 
     private AuditActions() {
     }
