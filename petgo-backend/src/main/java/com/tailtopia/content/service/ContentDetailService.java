@@ -57,6 +57,8 @@ public class ContentDetailService {
 
     /** 详情礼物区每只宠物展示的礼物种类数（UI 稿 A3「单价最高的 3 种」）。 */
     static final int GIFT_PREVIEW_KINDS = 3;
+    /** V1.4.0 ④ Story 2.1：详情的收藏状态 / 作者视角收藏数（只读口，不依赖 CollectService，避免 Bean 环）。 */
+    private final com.tailtopia.collect.service.CollectStateQuery collectState;
 
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
@@ -68,11 +70,13 @@ public class ContentDetailService {
             ContentPetQuery contentPetQuery,
             com.tailtopia.profile.service.PetQueryService petQuery,
             com.tailtopia.gift.port.GiftPetDirectory giftPetDirectory,
-            com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase) {
+            com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase,
+            com.tailtopia.collect.service.CollectStateQuery collectState) {
         this.contentPetQuery = contentPetQuery;
         this.petQuery = petQuery;
         this.giftPetDirectory = giftPetDirectory;
         this.giftShowcase = giftShowcase;
+        this.collectState = collectState;
         this.placeCheckins = placeCheckins;
         this.followReader = followReader;
         this.contentTags = contentTags;
@@ -140,6 +144,9 @@ public class ContentDetailService {
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。
         long likeCount = likes.countByPostId(postId);
         boolean liked = viewerId != null && likes.existsByPostIdAndUserId(postId, viewerId);
+        // V1.4.0 ④ Story 2.1（AD-10）：是否已收藏（游客 false、不查）；收藏数只给作者看、不计作者自己。
+        boolean collected = viewerId != null && collectState.isPostCollected(viewerId, postId);
+        Long collectCount = isAuthor ? collectState.collectCountExcludingAuthor(postId, post.getAuthorId()) : null;
         // V1.1.6 Story 5.2：装饰标签（三处展示位之一）。单条也走批量方法 ——
         // 仓储刻意不提供逐条取法，免得别处照着写成逐条查。
         var decorations = contentTags.findVisibleTags(java.util.List.of(postId), java.time.Instant.now())
@@ -164,7 +171,7 @@ public class ContentDetailService {
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
                 decorations, sizes, mentions, checkinPlace, authorToken, followState, linkedPets(post),
-                giftPets(post));
+                giftPets(post), collected, collectCount);
     }
 
     /**

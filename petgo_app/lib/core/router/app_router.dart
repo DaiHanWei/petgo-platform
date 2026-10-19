@@ -91,6 +91,7 @@ import '../../features/consult/presentation/vet_request_confirm_page.dart';
 import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
+import '../../features/notify/presentation/push_settings_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
@@ -199,7 +200,8 @@ Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   // ⚠️ 2026-08-28 v1 版式整体删除，双 UI 并存机制随之移除；此处直接构造 v2 页面。
   AppTab.shop => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
   AppTab.home => const HomePage(),
-  AppTab.me => const MePage(),
+  // V1.4.0 ④ Story 2.4：读 `?saved=post|place`（收藏 Toast「Lihat」落点 → Disimpan 对应子分类）。
+  AppTab.me => MePage(saved: state.uri.queryParameters['saved']),
 };
 
 /// 冷启动深链是否需要**先铺一层底座页再叠上去**（纯函数，L0 可测）。
@@ -1038,6 +1040,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
       // 二级设置页（Story 7.1 · F8）：语言/退出/注销。受控（/me 前缀，需登录）。
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
+      // V1.4.0 ④ Story 1.3：通知设置页（推送分类开关）。受控（/me 前缀）；shell 外顶层隐 Tab Bar。
+      GoRoute(path: PushSettingsPage.routePath, builder: (c, s) => const PushSettingsPage()),
       // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
       // V1.4.0 ① Tailrent Level（Story 1.5）：等级页 + EXP 明细页。受控（/me 前缀）；shell 外顶层隐 Tab。

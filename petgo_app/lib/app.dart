@@ -39,6 +39,8 @@ import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
+import 'package:tailtopia/features/notify/data/push_settings_repository.dart';
+import 'package:tailtopia/features/collect/presentation/collection_list_controller.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'features/profile/data/current_pet_provider.dart';
 import 'features/pet_slot/data/pet_slot_repository.dart';
@@ -399,5 +401,9 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
   ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）
   ref.invalidate(tailsonalityOwnerTypeProvider); // V1.3.2：Tailsonality 主人类型（账号级常驻）
+  ref.invalidate(pushSettingsProvider); // V1.4.0 ④：推送分类设置（账号级，换账号不得沿用上一账号的开关）
+  // V1.4.0 ④ Disimpan：「我的」页常驻，Disimpan 可见时 autoDispose 不回收，不登记 = 换账号看到上个账号的收藏（隐私）。
+  ref.invalidate(collectedPostsProvider);
+  ref.invalidate(collectedPlacesProvider);
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

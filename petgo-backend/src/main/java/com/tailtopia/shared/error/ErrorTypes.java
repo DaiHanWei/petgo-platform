@@ -118,6 +118,12 @@ public final class ErrorTypes {
     /** V1.4.0 gift Story 1.1（FR-148）：礼物不存在或已下线（409）。 */
     public static final URI GIFT_UNAVAILABLE = URI.create(BASE + "gift-unavailable");
 
+    /** V1.4.0 ④ Story 1.1：试图关闭「订单与账号」类推送（422，该分类不可关）。 */
+    public static final URI PUSH_CATEGORY_LOCKED = URI.create(BASE + "push-category-locked");
+
+    /** V1.4.0 ④ Story 2.1：收藏私密帖（422，收藏只限公开帖 P-2）。 */
+    public static final URI COLLECT_NOT_PUBLIC = URI.create(BASE + "collect-not-public");
+
     private ErrorTypes() {
     }
 }

@@ -128,6 +128,10 @@ class ApiPaths {
   /// 「我的发布」三类混合时间线（Story 7.1，FR-36）。
   static const String mePosts = '$base/me/posts';
 
+  /// V1.4.0 ④ Story 2.4：我的收藏列表（仅本人，role=USER）。`?cursor=` 分页，每页 20。
+  static const String meCollectionPosts = '$base/me/collections/posts';
+  static const String meCollectionPlaces = '$base/me/collections/places';
+
   /// 6 个新手任务进度 + Lulus Pemula 解锁态（Story 7.3，FR-47）。
   static const String meNewbieTasks = '$base/me/newbie-tasks';
 
@@ -232,6 +236,9 @@ class ApiPaths {
 
   /// Tailsonality 主人四字母类型（V1.3.2 Story 2.5）：账号级 GET / PUT；未设置 → `{}`。仅 role=USER。
   static const String meTailsonalityOwnerType = '$base/me/tailsonality/owner-type';
+
+  /// V1.4.0 ④ Story 1.3：推送分类开关，GET / PATCH `{categories:{CODE:bool}}`（部分更新），仅 role=USER。
+  static const String mePushSettings = '$base/me/push-settings';
 
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
@@ -364,6 +371,9 @@ class ApiPaths {
   /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
   static String contentPostLike(int id) => '$base/content-posts/$id/like';
 
+  /// V1.4.0 ④ Story 2.3：帖子收藏 POST / 取消 DELETE → `{collected}`。仅 role=USER；私密帖 422 `collect-not-public`。
+  static String contentPostCollect(int id) => '$base/content-posts/$id/collect';
+
   /// 单条内容分享链接（V1.1.6 Story 9.3）。作者本人 POST，回不可枚举 shareToken。
   static String contentPostShareLink(int id) => '$base/content-posts/$id/share-link';
 
@@ -495,6 +505,9 @@ class ApiPaths {
   /// 场所列表是「这个功能里已经攒了些什么地方」的展示面，用登录墙拦它没有意义。
   /// ⚠️ Story 1.2 会加 `?lat=&lng=` 走距离分支；排序路径由服务端下发的 `sortMode` 说明。
   static const String places = '$base/places';
+
+  /// V1.4.0 ④ Story 2.3：场所收藏 POST / 取消 DELETE → `{collected}`。仅 role=USER；token 按保留场所解析（P-6）。
+  static String placeCollect(String token) => '$places/${Uri.encodeComponent(token)}/collect';
 
   /// 场所评论的删除端点（Story 1.7 AC7）。
   ///

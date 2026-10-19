@@ -103,7 +103,14 @@ public record ContentDetailResponse(
          * 宠物有关联但 0 礼物 → 照常一项（数值 0、{@code wallPreview} 空表）。
          * 字段顺序 {@code …, pets, giftPets}（gift Story 4.1 · AC3.2：两列表并存，不并进 {@code ContentPetView}）。
          */
-        List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets) {
+        List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets,
+        /** 当前用户是否已收藏（V1.4.0 ④ Story 2.1 · AD-10）。游客恒 false；<b>恒下发</b>。四线合并后排在 {@code giftPets} 之后（push-collect 3.1 · AC3.2）。 */
+        boolean collected,
+        /**
+         * 收藏数（V1.4.0 ④ Story 2.1 · AD-10 · PRD AC10）：<b>仅作者本人看时</b>下发，不计作者自己；
+         * 非作者为 null → NON_NULL 省略该键（收藏数不对外展示）。
+         */
+        Long collectCount) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -116,10 +123,10 @@ public record ContentDetailResponse(
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
             List<com.tailtopia.mention.dto.MentionView> mentions) {
         return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
-                null, null, null, null, null);
+                null, null, null, null, null, false, null);
     }
 
-    /** 带打卡场所条的完整工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。不带关联宠物 / 礼物区。 */
+    /** 带打卡场所条的工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。不带关联宠物 / 礼物区 / 收藏态。 */
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
             long commentCount, boolean liked, boolean isAuthor,
             List<ContentTagView> decorationTags,
@@ -129,12 +136,13 @@ public record ContentDetailResponse(
             String authorToken,
             com.tailtopia.social.read.FollowState authorFollowState) {
         return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
-                checkinPlace, authorToken, authorFollowState, null, null);
+                checkinPlace, authorToken, authorFollowState, null, null, false, null);
     }
 
     /**
-     * 带关联宠物与礼物区的完整工厂（V1.4.0 multi-pet Story 3.1 + gift Story 2.1）。
-     * {@code pets} 为 null / 空，或帖子不是 Diary → 省略该键；{@code giftPets} 为 null 或空表 = 不下发礼物区。
+     * 完整工厂（V1.4.0 multi-pet Story 3.1 + gift Story 2.1 + ④ Story 2.1）。
+     * {@code pets} 为 null / 空，或帖子不是 Diary → 省略该键；{@code giftPets} 为 null 或空表 = 不下发礼物区；
+     * {@code collectCount} 为 null = 非作者（省略该键）。
      */
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
             long commentCount, boolean liked, boolean isAuthor,
@@ -145,7 +153,9 @@ public record ContentDetailResponse(
             String authorToken,
             com.tailtopia.social.read.FollowState authorFollowState,
             List<ContentPetView> pets,
-            List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets) {
+            List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets,
+            boolean collected,
+            Long collectCount) {
         List<ContentPetView> linkedPets = p.getType() == ContentType.GROWTH_MOMENT
                 && pets != null && !pets.isEmpty() ? List.copyOf(pets) : null;
         return new ContentDetailResponse(
@@ -157,6 +167,7 @@ public record ContentDetailResponse(
                 p.getCreatedAt(), mentions, checkinPlace,
                 author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets(),
                 author.badgeLevel(), author.badgeTier(), author.badgeFrame(), linkedPets,
-                (giftPets == null || giftPets.isEmpty()) ? null : giftPets);
+                (giftPets == null || giftPets.isEmpty()) ? null : giftPets,
+                collected, collectCount);
     }
 }

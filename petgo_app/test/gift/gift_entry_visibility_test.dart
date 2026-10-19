@@ -158,11 +158,12 @@ void main() {
       });
     }
 
-    testWidgets('底栏 _actions() 仍只有点赞 + 分享（不加送礼按钮）', (tester) async {
+    testWidgets('底栏 _actions() 不加送礼按钮（四线合并后 = 点赞 · 分享 · 收藏）', (tester) async {
       await pump(tester, detail());
       final row = tester.widget<Row>(find.byKey(const ValueKey('detailBottomActions')));
-      // 点赞热区 + 间距 + 分享热区。
-      expect(row.children, hasLength(3));
+      // 四线合并记账（push-collect 3.1 · AC5.1）：点赞热区 + 间距 + 分享热区 + 间距 + ④ 收藏热区 = 5
+      // （③ 合入时为 3；公开帖才有收藏，本例 detail() 为公开帖）。送礼仍不进操作栏。
+      expect(row.children, hasLength(5));
       expect(
           find.descendant(
               of: find.byKey(const ValueKey('detailBottomActions')), matching: find.byIcon(Icons.redeem)),

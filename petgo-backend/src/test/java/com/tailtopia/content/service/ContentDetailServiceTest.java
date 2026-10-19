@@ -40,6 +40,10 @@ class ContentDetailServiceTest {
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
             mock(com.tailtopia.place.service.PlaceCheckinQueryService.class);
 
+    /** V1.4.0 ④ Story 2.1：详情收藏状态 / 作者视角收藏数。 */
+    private final com.tailtopia.collect.service.CollectStateQuery collectState =
+            mock(com.tailtopia.collect.service.CollectStateQuery.class);
+
     /** V1.3.4 follow Story 2.1：详情头部关注关系读端口。 */
     private com.tailtopia.social.read.FollowReader followReader =
             org.mockito.Mockito.mock(com.tailtopia.social.read.FollowReader.class);
@@ -80,7 +84,9 @@ class ContentDetailServiceTest {
                 // V1.4.0 multi-pet Story 3.1：Diary 关联宠物（默认无关联）。
                 contentPetQuery, petQuery,
                 // V1.4.0 gift Story 2.1：Diary 礼物区（宠物只经端口，汇总 / 墙前 3 经只读查询）。
-                giftPets, giftShowcase);
+                giftPets, giftShowcase,
+                // V1.4.0 ④ Story 2.1：收藏状态只读口。
+                collectState);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
@@ -137,6 +143,30 @@ class ContentDetailServiceTest {
         assertThat(d.liked()).isFalse(); // 未 stub existsBy → 未赞
         assertThat(d.isAuthor()).isTrue(); // viewer == author
         assertThat(d.authorNickname()).isEqualTo("Alice");
+    }
+
+    /** V1.4.0 ④ Story 2.1 · AC6：作者看到不计自己的收藏数；非作者无收藏数；游客 collected=false 且不查收藏表。 */
+    @Test
+    void collectFieldsByViewer() {
+        when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
+        when(collectState.collectCountExcludingAuthor(1L, 7L)).thenReturn(2L);
+        when(collectState.isPostCollected(7L, 1L)).thenReturn(true);
+        when(collectState.isPostCollected(8L, 1L)).thenReturn(true);
+
+        ContentDetailResponse guest = service.getDetail(1L, null);
+        assertThat(guest.collected()).isFalse();
+        assertThat(guest.collectCount()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(collectState);
+
+        ContentDetailResponse author = service.getDetail(1L, 7L);
+        assertThat(author.collectCount()).isEqualTo(2L);
+        assertThat(author.collected()).isTrue();
+
+        ContentDetailResponse other = service.getDetail(1L, 8L);
+        assertThat(other.collectCount()).isNull();
+        assertThat(other.collected()).isTrue();
     }
 
     @Test

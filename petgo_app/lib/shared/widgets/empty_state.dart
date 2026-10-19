@@ -20,6 +20,7 @@ class EmptyState extends StatelessWidget {
     this.onSecondary,
     this.hideIcon = false,
     this.iconBackground,
+    this.iconColor,
   });
 
   final String title;
@@ -28,6 +29,9 @@ class EmptyState extends StatelessWidget {
 
   /// 可选图标圆形底盘（原型 notif/通知空态：80×80 浅紫圆底包裹图标）。null=裸图标。
   final Color? iconBackground;
+
+  /// 图标颜色（V1.4.0 ④ Story 2.4：收藏空态书签为紫色）。null = 原 `textTertiary`。
+  final Color? iconColor;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -53,10 +57,10 @@ class EmptyState extends StatelessWidget {
                   height: 80,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(color: iconBackground, shape: BoxShape.circle),
-                  child: Icon(icon ?? Icons.pets_rounded, size: 36, color: AppColors.textTertiary),
+                  child: Icon(icon ?? Icons.pets_rounded, size: 36, color: iconColor ?? AppColors.textTertiary),
                 )
               else
-                Icon(icon ?? Icons.pets_rounded, size: 48, color: AppColors.textTertiary),
+                Icon(icon ?? Icons.pets_rounded, size: 48, color: iconColor ?? AppColors.textTertiary),
               const SizedBox(height: AppSpacing.md),
             ],
             Text(title, style: AppTypography.title, textAlign: TextAlign.center),

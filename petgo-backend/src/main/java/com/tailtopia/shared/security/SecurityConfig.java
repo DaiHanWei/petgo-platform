@@ -193,6 +193,9 @@ public class SecurityConfig {
                         // V1.3.4 点赞人列表：仅 role=USER（游客 401、兽医 403）。
                         // ⚠️ 必须排在下方 GET /api/v1/content-posts/** permitAll 之前，否则被通配吞掉。
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts/*/likers").hasRole("USER")
+                        // V1.4.0 ④ Story 2.1：帖子收藏 / 取消（POST + DELETE），仅 role=USER（controller 把 jwt.sub 当 users.id 用，
+                        // 兽医 token 的 sub=vetId 会以同号用户名义收藏）。不带 HttpMethod，两种方法一并覆盖；精确路径。
+                        .requestMatchers("/api/v1/content-posts/*/collect").hasRole("USER")
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts").permitAll()
                         // 内容详情 + 评论只读对游客可见（Story 3.3）：GET 详情/评论/回复放行（写仍需 JWT）
@@ -277,6 +280,8 @@ public class SecurityConfig {
                         // 场所打卡（V1.3.2 Story 1.1）：**仅 role=USER**，同举报的理由（controller 把 jwt.sub
                         // 当 users.id 用）。仍然精确路径，不写 `/places/**` 通配。
                         .requestMatchers(HttpMethod.POST, "/api/v1/places/*/checkins").hasRole("USER")
+                        // V1.4.0 ④ Story 2.1：场所收藏 / 取消（POST + DELETE），仅 role=USER，同上理由；精确路径，不写 `/places/**`。
+                        .requestMatchers("/api/v1/places/*/collect").hasRole("USER")
                         // 场所评论列表（Story 1.7）：同详情，GET 对游客放行。
                         // ⚠️ 这条**必须写在** `GET /api/v1/places/*` 之后也无妨（两者路径形状不同，
                         //    `/*` 只匹配一段），但绝不能省 —— 省了它游客拉评论会 401，
@@ -373,6 +378,14 @@ public class SecurityConfig {
                         // 兽医 token 的 sub 与 users.id 撞号会被误判成主人 → 只给 USER。精确路径，不影响 /api/v1/pets/*/visitor/**。
                         .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts/supporters").hasRole("USER")
+                        // V1.4.0 ④ Story 1.1：推送分类设置，仅 role=USER（controller 把 jwt.sub 当 users.id 用；
+                        // 兽医 token 的 sub=vetId 与 users.id 撞号，落 anyRequest().authenticated() 会以同号用户名义读写推送设置）。精确路径，不写 /api/v1/me/** 通配。
+                        .requestMatchers("/api/v1/me/push-settings").hasRole("USER")
+                        // V1.4.0 ④ Story 2.2：我的收藏列表，仅 role=USER（同上：controller 把 jwt.sub 当 users.id 用，
+                        // 兽医 token 落 anyRequest().authenticated() 会以同号用户名义读别人的收藏）。精确路径；
+                        // 不限 HttpMethod（只限 GET 的话 HEAD 会落到兜底规则、照样执行 GET 处理器）。
+                        .requestMatchers("/api/v1/me/collections/posts",
+                                "/api/v1/me/collections/places").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

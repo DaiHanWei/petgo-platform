@@ -35,7 +35,9 @@ class PlaceDetailResponseContractTest {
             "latitude", "longitude", "distanceMeters", "markedBy",
             "commentCount", "recommendCount", "notRecommendCount", "photoSlotsRemaining",
             // V1.3.2 Story 1.1：登录用户的「今日已打卡」（游客省略，见下方专例）。
-            "checkedInToday");
+            "checkedInToday",
+            // V1.4.0 ④ Story 2.1：是否已收藏（primitive，恒下发；游客 false）。
+            "collected");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -102,8 +104,8 @@ class PlaceDetailResponseContractTest {
         Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7, true));
 
         for (String excluded : List.of(
-                // 收藏
-                "favorited", "favorite", "favoriteCount", "bookmarked",
+                // 收藏：V1.4.0 起只有 collected 一个键；收藏数仍不展示（PRD：场所收藏数本版本不展示）
+                "favorited", "favorite", "favoriteCount", "bookmarked", "collectCount",
                 // 评分打星
                 "rating", "ratingAvg", "score", "stars",
                 // 营业时间 / 电话等商户字段

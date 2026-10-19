@@ -246,4 +246,14 @@ public class AppException extends RuntimeException {
     public static AppException giftUnavailable(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.GIFT_UNAVAILABLE, detail);
     }
+
+    /** V1.4.0 ④ Story 1.1：关闭「订单与账号」类推送 → 422 {@code push-category-locked}。 */
+    public static AppException pushCategoryLocked(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.PUSH_CATEGORY_LOCKED, detail);
+    }
+
+    /** V1.4.0 ④ Story 2.1：收藏私密帖 → 422 {@code collect-not-public}。 */
+    public static AppException collectNotPublic(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.COLLECT_NOT_PUBLIC, detail);
+    }
 }

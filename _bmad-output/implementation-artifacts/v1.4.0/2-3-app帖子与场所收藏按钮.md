@@ -1,6 +1,6 @@
 # Story 2.3: App 帖子与场所收藏按钮
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 push-collect · 分支 `feat/1.4.0-push-collect`
 > 口径优先级：`decision-log.md` ④ 节 > `推送开关与收藏/1-4-0推送开关与收藏prd.md` > `architecture-v1.4.0-push-collect-delta.md` > UI 稿 `推送开关与收藏/ui-1-4-0-push-collect-integrated-v1.html`（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。云端执行另守 `cloud-rules-push-collect.md`。
@@ -92,14 +92,14 @@ so that 操作顺手、状态清楚，以后能在「我的」页再找到它们
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：对照 2.1 实际提交核实——两个端点路径与响应体键名（预期 `collected`）、`ContentDetailResponse.collected` / `collectCount` 的 JSON 名与「非作者为 null 还是省略」、`PlaceDetailResponse.collected`、私密帖错误码 `collect-not-public`；核实 1.3 是否已建 `pushCollectInventory`、已加哪些 arb / 守卫条目。有出入先改本文件并在 Completion Notes 记一句
-- [ ] **T1 数据层**（AC1）：`collect_target.dart`、`collect_repository.dart`、`collect_providers.dart`、`ApiPaths` 两条、`ContentDetail` / `PlaceDetail` 新字段（含 `withFollowEpoch`）
-- [ ] **T2 `CollectButton`**（AC2.2-2.3 / AC3 / AC4 / AC5 / AC6.2 / AC7.1）：`.post` / `.place` 两个命名构造共用一套状态机
-- [ ] **T3 帖子详情接入**（AC2.1 / AC2.4 / AC5.1）：`_actions()` 加按钮与间距、私密帖隐藏、`visibility` 注释补例外
-- [ ] **T4 场所详情接入**（AC6）：`_scaffold` 参数 + actions 顺序 + 头注释更新
-- [ ] **T5 埋点守卫与清单**（AC7.2 / AC7.3）
-- [ ] **T6 arb 两份**（AC8）+ `flutter gen-l10n`
-- [ ] **T7 测试**：新增 + 更新既有（AC9.1）；`flutter analyze` + 相关 `flutter test`；Completion Notes 标「L2 待本地验收（还原度 ≥ 95%）」
+- [x] **T0 开工核对**：对照 2.1 实际提交核实——两个端点路径与响应体键名（预期 `collected`）、`ContentDetailResponse.collected` / `collectCount` 的 JSON 名与「非作者为 null 还是省略」、`PlaceDetailResponse.collected`、私密帖错误码 `collect-not-public`；核实 1.3 是否已建 `pushCollectInventory`、已加哪些 arb / 守卫条目。有出入先改本文件并在 Completion Notes 记一句
+- [x] **T1 数据层**（AC1）：`collect_target.dart`、`collect_repository.dart`、`collect_providers.dart`、`ApiPaths` 两条、`ContentDetail` / `PlaceDetail` 新字段（含 `withFollowEpoch`）
+- [x] **T2 `CollectButton`**（AC2.2-2.3 / AC3 / AC4 / AC5 / AC6.2 / AC7.1）：`.post` / `.place` 两个命名构造共用一套状态机
+- [x] **T3 帖子详情接入**（AC2.1 / AC2.4 / AC5.1）：`_actions()` 加按钮与间距、私密帖隐藏、`visibility` 注释补例外
+- [x] **T4 场所详情接入**（AC6）：`_scaffold` 参数 + actions 顺序 + 头注释更新
+- [x] **T5 埋点守卫与清单**（AC7.2 / AC7.3）
+- [x] **T6 arb 两份**（AC8）+ `flutter gen-l10n`
+- [x] **T7 测试**：新增 + 更新既有（AC9.1）；`flutter analyze` + 相关 `flutter test`；Completion Notes 标「L2 待本地验收（还原度 ≥ 95%）」
 
 ## Dev Notes
 
@@ -197,10 +197,39 @@ so that 操作顺手、状态清楚，以后能在「我的」页再找到它们
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程）
+
 ### Debug Log References
+
+- `flutter analyze` 零警告；`flutter gen-l10n` 已跑。
+- 新增 / 改动相关测试全绿；全量 `flutter test` 3457 例全绿（1 skipped 为存量）。
+- 未整文件 `dart format`。
 
 ### Completion Notes List
 
+- **🔴 L2 待本地验收（还原度 ≥ 95%）**：Android 模拟器连 2.1 后端，逐屏对照 UI 稿 C1 → C2（Toast → Lihat）→ C1、C3 游客、C4 作者数字锁、C5 断网失败、D1 ~ D4；360dp 宽设备底栏（输入框 + 三图标 + 作者数字锁）不溢出。本 story 无 L1。
+- T0 核对：2.1 实际契约一致（`{collected}`、`ContentDetailResponse.collected` 恒下发 / `collectCount` 非作者省略、`PlaceDetailResponse.collected`、422 `collect-not-public`）；1.3 已建 `pushCollectInventory`，本 story 追加四条。
+- 拍板点复述：① 数据层建在 `features/collect/`（`CollectTarget`、`CollectRepository`、`collectionsRevisionProvider`），2.4 在同一处续写；测试 fake 用 `extends Fake implements CollectRepository`；② 失败文案各建各的键（`collectSaveFailed` / `collectRemoveFailed`）；③ 作者 0 也显示「0 + 锁」；④ 新增 `collectActionLabel`（tooltip / Semantics）；⑤ 埋点只在成功后报；⑥ 清单在 `v140_push_collect_events_test.dart`。
+- 实现细节：底栏图标间距公式抽成 `_CommentComposerState._actionGap` 常量，点赞→分享、分享→收藏两段共用（数值不变）；私密帖判断用既有常量 `kVisibilityPrivate`。
+- 「Lihat」落点 `/me?saved=post|place`：2.4 合入前 `MePage` 不读参数，落在「我的」页默认态，属预期（2.4 解析）。
+- **code-review 修复（CONFIRMED）**：① 成功埋点只在服务端确认的状态与本次意图一致时报（之前按意图报，异常响应体 `{collected:false}` 也会报 `content_collected`）；② 帖子收藏按钮 `Semantics` 加 `toggled`（读屏能听出是否已收藏）；③ 私密帖判断改用 `kVisibilityPrivate`；④ 两处新 import 挪到同类 `../../` 导入里。
+- code-review 未采纳：按 422 / 404 区分失败 Toast（AC3.4 明定任何异常同一组 Toast）；状态未变也 bump 信号（AC3.5 定「成功即 bump」，无副作用）；`?saved=` 无人解析（2.4 范围）。
+
 ### File List
 
+- `petgo_app/lib/features/collect/domain/collect_target.dart`（新）
+- `petgo_app/lib/features/collect/data/collect_repository.dart`（新）
+- `petgo_app/lib/features/collect/data/collect_providers.dart`（新）
+- `petgo_app/lib/features/collect/presentation/collect_button.dart`（新）
+- `petgo_app/lib/core/network/api_paths.dart`（改：`contentPostCollect` / `placeCollect`）
+- `petgo_app/lib/features/content/domain/content_detail.dart`（改：`collected` / `collectCount` + `withFollowEpoch` + `visibility` 注释例外）
+- `petgo_app/lib/features/place/domain/place_detail.dart`（改：`collected` + 头注释）
+- `petgo_app/lib/features/content/presentation/comment_composer.dart`（改：底栏收藏按钮）
+- `petgo_app/lib/features/place/presentation/place_detail_page.dart`（改：顶栏收藏按钮 + 头注释）
+- `petgo_app/lib/l10n/app_en.arb` / `app_id.arb`（改：5 个 `collect*` 键）
+- 测试（新）：`test/collect/collect_repository_test.dart`、`test/collect/collect_button_test.dart`、`test/content/content_detail_collect_test.dart`、`test/place/place_detail_collect_test.dart`
+- 测试（改）：`test/content/share_entry_and_landing_test.dart`（底栏三个图标）、`test/place/place_detail_wire_contract_test.dart`（收藏只有 `collected`，禁用名单保留）、`test/analytics/v112_events_test.dart`（词尾 `_collected` / `_uncollected` + 三个属性名）、`test/analytics/v140_push_collect_events_test.dart`（追加四条）
+
 ### Change Log
+
+- 2026-10-18：实现 Story 2.3（收藏数据层、帖子底栏 / 场所顶栏收藏按钮、Toast 与落点、埋点、arb）；code-review 后修 4 项。状态 → review。

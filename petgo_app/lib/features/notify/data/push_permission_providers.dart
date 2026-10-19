@@ -37,7 +37,7 @@ final pushPermissionGateProvider = FutureProvider<PushPermissionGate>((ref) asyn
 /// 是否当前已授予通知权限（设置页开关真相源 / 引导可见性判定，L2 真机）。
 Future<bool> isPushPermissionGranted() async => (await ph.Permission.notification.status).isGranted;
 
-/// 申请通知权限（设置页开关用）。`notDetermined` 会弹系统窗；已拒绝则立即返回 false（不打扰）。
+/// 申请通知权限（V1.4.0 起：通知设置页状态卡「Buka Pengaturan」先申请一次，没拿到再去系统设置）。`notDetermined` 会弹系统窗；已拒绝则立即返回 false（不打扰）。
 Future<bool> requestPushPermission() async =>
     (await ph.Permission.notification.request()).isGranted;
 

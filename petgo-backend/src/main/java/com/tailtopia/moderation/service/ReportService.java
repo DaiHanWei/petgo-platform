@@ -91,6 +91,18 @@ public class ReportService {
         return reports.existsByPostIdAndReporterId(postId, reporterId);
     }
 
+    /**
+     * 批量版 {@link #hasReported}（V1.4.0 ④ Story 2.1）：这批帖子里该用户举报过的 postId（一次查询；空集不发查询）。
+     * 同样经 service 暴露，collect 不直读 moderation repo（模块边界）。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> reportedPostIds(long reporterId, java.util.Collection<Long> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(reports.findReportedPostIds(reporterId, postIds));
+    }
+
     @Transactional(readOnly = true)
     public List<ContentReport> pendingQueue(int limit) {
         return reports.findByStatusOrderByCreatedAtDesc(ReportStatus.PENDING, PageRequest.of(0, limit));

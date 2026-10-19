@@ -7,7 +7,8 @@ import 'place_summary.dart';
 /// 线上契约由 `test/place/place_detail_wire_contract_test.dart` 守着。
 ///
 /// <h2>🔴 这里**没有**的字段（FR-112.6 / AC6 反向验收）</h2>
-/// 没有收藏、没有评分打星、没有营业时间/电话、没有「可编辑」标记。
+/// 没有评分打星、没有营业时间/电话、没有「可编辑」标记。
+/// 收藏：V1.4.0 ④ 起有收藏（只有 [collected] 一个字段、不展示计数）。
 /// 打卡只有**一个**字段 [checkedInToday]（V1.3.2 Story 1.1）—— 没有打卡次数 / 能否打卡这类字段。
 /// 这不是「还没做」，是**明确不做** —— 后端 DTO 里也没有（那侧有契约测试钉着）。
 class PlaceDetail {
@@ -29,7 +30,12 @@ class PlaceDetail {
     this.distanceMeters,
     this.checkedInToday,
     this.checkedInPetIds,
+    this.collected = false,
   });
+
+  /// 当前用户是否已收藏（V1.4.0 ④ Story 2.3）。游客 / 老后端 → false（没登录就不可能收藏过）。
+  /// 🔴 字段名只能叫 `collected`（`favorited` 等仍在契约测试禁用名单里）。
+  final bool collected;
 
   /// 不可枚举对外标识。
   final String token;
@@ -109,6 +115,7 @@ class PlaceDetail {
       notRecommendCount: _nonNegInt(json['notRecommendCount']),
       checkedInToday: json['checkedInToday'] is bool ? json['checkedInToday'] as bool : null,
       checkedInPetIds: _intListOrNull(json['checkedInPetIds']),
+      collected: json['collected'] == true,
       photoSlotsRemaining: json.containsKey('photoSlotsRemaining')
           ? _nonNegInt(json['photoSlotsRemaining'])
           : _estimateSlots(_photos(json['photos'])),
