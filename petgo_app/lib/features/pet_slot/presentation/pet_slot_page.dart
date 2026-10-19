@@ -489,10 +489,15 @@ class _Cell extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink))
         else
-          Text(l10n.petSlotCellAvailable,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500, color: AppColors.muted, height: 1.25)),
+          // 稿：「Bisa / disewa」两行，标签宽度收在圆圈附近（不随格宽摊成一行）。
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 48),
+            child: Text(l10n.petSlotCellAvailable,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 10.5, fontWeight: FontWeight.w500, color: AppColors.muted, height: 1.25)),
+          ),
         if (tag != null) ...[const SizedBox(height: 4), tag],
       ],
     );

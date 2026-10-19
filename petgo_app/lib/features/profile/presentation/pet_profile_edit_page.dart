@@ -361,7 +361,8 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             controller: _nameController,
             maxLength: 20,
             onChanged: (_) => setState(() {}),
-            decoration: _inputDeco(),
+            // 稿 C1：字数「4/20」在框内右侧。
+            decoration: _inputDeco(counter: '${_nameController.text.characters.length}/20'),
           ),
           const SizedBox(height: 16),
           // JENIS HEWAN（F6 编辑态锁定）：灰底锁定字段，「🔒 Tidak bisa diubah」红字在框内右侧（稿 C1）。
@@ -455,16 +456,12 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             key: const ValueKey('petProfileEditIntroField'),
             controller: _introController,
             maxLength: _kBioMax,
-            maxLines: 3,
+            // 稿 C1：单行高起步、随内容长高；字数「18/200」在框内右侧。
+            minLines: 1,
+            maxLines: 4,
             onChanged: (_) => setState(() {}),
-            decoration: _inputDeco(),
-          ),
-          // BIO 字数计数（原型 pet-edit：右下「x / 200」）。
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text('${_introController.text.characters.length} / $_kBioMax',
-                style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+            decoration:
+                _inputDeco(counter: '${_introController.text.characters.length}/$_kBioMax'),
           ),
           const SizedBox(height: AppSpacing.lg),
           // 危险区：删除档案（bug 20260702-237 / 决策 F18）。保存按钮在右上角 AppBar（原型 P-32）。
@@ -507,8 +504,16 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
         ),
       );
 
-  InputDecoration _inputDeco() => InputDecoration(
+  InputDecoration _inputDeco({String? counter}) => InputDecoration(
         isDense: true,
+        // 用 suffixIcon 而非 suffixText：后者在未聚焦且为空时不显示，稿里计数常显。
+        suffixIcon: counter == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Text(counter, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              ),
+        suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         counterText: '',
         enabledBorder: OutlineInputBorder(

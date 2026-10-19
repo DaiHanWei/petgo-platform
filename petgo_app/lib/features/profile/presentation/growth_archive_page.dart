@@ -645,13 +645,14 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 
   /// Timeline / Kalender 药丸切换（paspor.html 双按钮）。
   Widget _viewToggleRow(AppLocalizations l10n) {
+    // 稿 `.vtog`：左对齐的紧凑胶囊（L2 还原度，原为两枚等分通栏按钮）。
     return Row(
       children: [
-        Expanded(child: _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
-            () => _switchView(_ArchiveView.timeline), const ValueKey('archiveViewTimeline'))),
-        const SizedBox(width: 7),
-        Expanded(child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
-            () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
+        _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
+            () => _switchView(_ArchiveView.timeline), const ValueKey('archiveViewTimeline')),
+        const SizedBox(width: 8),
+        _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
+            () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar')),
       ],
     );
   }
@@ -728,20 +729,25 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 
   Widget _toggleBtn(String label, bool on, VoidCallback onTap, Key key) => GestureDetector(
         key: key,
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
+        // 视觉 ~30 高胶囊，点击热区补到 44。
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          constraints: const BoxConstraints(minHeight: 44),
           alignment: Alignment.center,
+          child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: on ? AppColors.mint : AppColors.card,
-            borderRadius: BorderRadius.circular(10),
-            border: on ? null : Border.all(color: AppColors.line, width: 1.5),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: on ? AppColors.mint : AppColors.line, width: 1.5),
           ),
           child: Text(label,
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: on ? AppColors.onAccent : AppColors.ink2)),
+          ),
         ),
       );
 
