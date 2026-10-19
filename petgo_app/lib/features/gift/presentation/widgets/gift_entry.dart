@@ -107,6 +107,7 @@ class GiftDetailZone extends ConsumerStatefulWidget {
     this.pets = const [],
     this.linkedPets = const [],
     this.showSendButton = true,
+    this.isOwner = false,
   });
 
   final int postId;
@@ -119,6 +120,9 @@ class GiftDetailZone extends ConsumerStatefulWidget {
 
   /// 「Kirim Hadiah」显隐（1.3 规则：他人的 Diary 且作者未注销）。
   final bool showSendButton;
+
+  /// 自己的 Diary（A6）：0 礼物行用主人口径副标题（不劝主人「当第一个送礼的人」，V1.4.0 L2 P1-4）。
+  final bool isOwner;
 
   @override
   ConsumerState<GiftDetailZone> createState() => _GiftDetailZoneState();
@@ -194,21 +198,25 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.mintTint2,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(l10n.giftZoneTitle.toUpperCase(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
+            child: Text(l10n.giftZoneTitle.toUpperCase(),
               key: const ValueKey('giftZoneTitle'),
               style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
                   color: AppColors.muted)),
+          ),
           for (final pet in widget.pets) ...[
             const SizedBox(height: 8),
-            _GiftPetRow(pet: pet, lang: lang, onTap: () => _openPet(pet.petId)),
+            _GiftPetRow(
+                pet: pet, lang: lang, isOwner: widget.isOwner, onTap: () => _openPet(pet.petId)),
           ],
           if (widget.showSendButton) ...[
             const SizedBox(height: 8),
@@ -235,37 +243,60 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
   }
 }
 
-/// 详情礼物区的一只宠物（白色小卡，整行可点）。
+/// 详情礼物区的一只宠物（有礼物：白色小卡；0 礼物：稿 `.gz-r.empty` 无底无影，整行仍可点）。
 class _GiftPetRow extends StatelessWidget {
-  const _GiftPetRow({required this.pet, required this.lang, required this.onTap});
+  const _GiftPetRow(
+      {required this.pet, required this.lang, required this.onTap, this.isOwner = false});
 
   final GiftPetSummary pet;
   final String lang;
   final VoidCallback onTap;
+  final bool isOwner;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final empty = pet.giftCount <= 0;
     final avatar = AppImage.provider(pet.avatarUrl, thumbWidth: 120);
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: empty ? Colors.transparent : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: empty
+            ? null
+            : const [BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8)],
+      ),
+      child: Material(
+      type: MaterialType.transparency,
       child: InkWell(
         key: ValueKey('giftPetRow_${pet.petId}'),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: empty
+                ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
+                : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: GiftStyle.avatarBg,
-                  backgroundImage: avatar,
-                  child: avatar == null ? const Text('🐾', style: TextStyle(fontSize: 14)) : null,
+                // 头像 32：白 2 + 淡紫 1.5 双环（稿 `.gz-r .pet-av`）。
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: AppColors.dashedViolet, spreadRadius: 3.5),
+                      BoxShadow(color: Colors.white, spreadRadius: 2),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: GiftStyle.avatarBg,
+                    backgroundImage: avatar,
+                    child: avatar == null ? const Text('🐾', style: TextStyle(fontSize: 14)) : null,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -277,7 +308,10 @@ class _GiftPetRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                      Text(empty ? l10n.giftDetailEmpty : l10n.giftDetailCount(pet.giftCount),
+                      Text(
+                          empty
+                              ? (isOwner ? l10n.giftDetailEmptyOwner : l10n.giftDetailEmpty)
+                              : l10n.giftDetailCount(pet.giftCount),
                           key: ValueKey('giftPetRowCount_${pet.petId}'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -302,6 +336,7 @@ class _GiftPetRow extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

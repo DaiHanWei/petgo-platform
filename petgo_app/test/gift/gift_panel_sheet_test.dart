@@ -256,6 +256,21 @@ void main() {
     expect(repo.catalogCalls, 2);
   });
 
+  testWidgets('目录为空（接口成功、tiers 全空）→ 空态，不显示失败与「Coba lagi」（L2 P1-2）', (tester) async {
+    repo.catalog = GiftCatalog(
+      recipient: const GiftRecipient(petId: 42, name: 'Mochi'),
+      qrisMinAmount: 10000,
+      tiers: const [],
+      exclusiveGroups: const [],
+    );
+    await open(tester);
+    expect(find.byKey(const ValueKey('giftPanelEmpty')), findsOneWidget);
+    expect(find.text('Belum ada hadiah tersedia'), findsOneWidget);
+    expect(find.byKey(const ValueKey('giftPanelFailed')), findsNothing);
+    expect(find.byKey(const ValueKey('giftPanelRetry')), findsNothing);
+    expect(find.text('Gagal memuat hadiah'), findsNothing);
+  });
+
   testWidgets('目录 gift-blocked → 关面板返回 CannotSend（不进 B7）', (tester) async {
     repo.catalogError = problem('gift-blocked', status: 403);
     await open(tester);

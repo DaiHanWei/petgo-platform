@@ -7,6 +7,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/pay_channel_picker.dart' show formatIdrAmount;
+import '../../growth/presentation/level_page.dart';
 import '../data/pet_slot_repository.dart';
 
 /// 名额管理页路由（Story 1.5 占位；Story 2.4 已在同一路由、同一文件里替换为 D1 ~ D15）。
@@ -43,7 +44,9 @@ Future<void> startAddPet(BuildContext context, WidgetRef ref, {required String s
 }
 
 /// A4 名额已满抽屉（AC4.2）。弹出一次上报一次 `pet_slot_full_shown {source, action}`：
-/// 点主按钮「Sewa slot」→ `rent`（进名额管理页并直接弹 D5 租用抽屉，Story 2.4 `?action=rent`）；关闭 / 次按钮 → `close`。
+/// 点主按钮「Sewa slot」→ `rent`（进名额管理页并直接弹 D5 租用抽屉，Story 2.4 `?action=rent`）；
+/// 次按钮「Lihat Level Saya」→ `upgrade`（进 ① 等级页 `/me/growth`，story 1-5 待拍板 1 的跨线次按钮）；
+/// 点遮罩 / 下拉关闭 → `close`。
 Future<void> showPetSlotFullSheet(
   BuildContext context,
   PetSlotFullInfo info, {
@@ -51,7 +54,7 @@ Future<void> showPetSlotFullSheet(
 }) async {
   final l10n = AppLocalizations.of(context);
   final router = GoRouter.maybeOf(context);
-  // TODO(v1.4.0-multi-pet: ① 合入后加次按钮 growthViewMyLevel → context.push('/me/growth')，pet_slot_full_shown.action = upgrade)
+  var upgrade = false;
   final rent = await showConfirmSheet(
     context,
     title: l10n.petSlotFullTitle,
@@ -61,17 +64,22 @@ Future<void> showPetSlotFullSheet(
       'Rp${formatIdrAmount(info.unitPrice)}',
     ),
     confirmLabel: l10n.petSlotFullRent,
-    cancelLabel: l10n.commonClose,
+    cancelLabel: l10n.growthViewMyLevel,
     icon: Icons.pets,
     confirmKey: const ValueKey('petSlotFullRent'),
-    cancelKey: const ValueKey('petSlotFullClose'),
+    cancelKey: const ValueKey('petSlotFullViewLevel'),
+    onCancel: () => upgrade = true,
   );
   // 埋点属性只有枚举值，不带宠物名 / 金额（§5）。
   Analytics.capture('pet_slot_full_shown', {
     'source': source,
-    'action': rent ? 'rent' : 'close',
+    'action': rent ? 'rent' : (upgrade ? 'upgrade' : 'close'),
   });
-  if (rent) router?.push('$kPetSlotsRoute?action=rent');
+  if (rent) {
+    router?.push('$kPetSlotsRoute?action=rent');
+  } else if (upgrade) {
+    router?.push(LevelPage.location);
+  }
 }
 
 /// A4b 已达 5 只上限（AC4.3）：同一个确认抽屉，唯一按钮「Oke」。

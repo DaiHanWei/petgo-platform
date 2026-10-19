@@ -137,8 +137,9 @@ class _GiftPanelSheetState extends ConsumerState<GiftPanelSheet> {
       final catalog = async.requireValue;
       final items = catalog.orderedItems;
       if (items.isEmpty) {
-        // Q6：礼物全下线不画空态，B7 兜底。
-        body = _failed(l10n, title: null);
+        // 接口成功、目录为空（礼物全下线 / 尚未上架）≠ 加载失败：给空态、不给「重试」。
+        // V1.4.0 L2 P1-2 推翻原 Q6「不画空态、B7 兜底」——B7 让用户反复重试一个必然为空的结果。
+        body = _empty(l10n);
       } else {
         _reportShown(catalog);
         body = _loaded(l10n, catalog, items);
@@ -215,6 +216,46 @@ class _GiftPanelSheetState extends ConsumerState<GiftPanelSheet> {
                     child: Text(l10n.commonRetry),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ],
+      );
+
+  /// 目录为空：标题行 + 80 圆底礼物图标 + 说明（与礼物页 E3/E4 EmptyState 同一视觉）。
+  Widget _empty(AppLocalizations l10n) => Column(
+        key: const ValueKey('giftPanelEmpty'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _handle(),
+          _plainTitle(l10n.giftPayTitle),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                          shape: BoxShape.circle, color: GiftStyle.tint),
+                      child: const Icon(Icons.redeem, size: 36, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(l10n.giftCatalogEmptyTitle,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    const SizedBox(height: 6),
+                    Text(l10n.giftCatalogEmptyHint,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 13, height: 1.5, color: AppColors.textSecondary)),
+                  ],
+                ),
               ),
             ),
           ),

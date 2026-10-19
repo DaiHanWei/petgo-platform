@@ -298,7 +298,7 @@ void main() {
 
     test('满 1 个月起 → 恢复年 + 月', () {
       final now = DateTime(2026, 8, 4);
-      expect(formatPetAge(l10n, DateTime(2025, 6, 2), now: now), '1th 2bln');
+      expect(formatPetAge(l10n, DateTime(2025, 6, 2), now: now), '1 thn 2 bln');
     });
 
     test('无生日 → null', () {
