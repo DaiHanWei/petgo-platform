@@ -57,6 +57,46 @@ class PushExitStructureTest {
         assertThat(ops).contains("prefs.mutedAmong(");
     }
 
+    /**
+     * V1.4.0 push-collect 3.1 · AC1.3：方法级白名单（类#方法）。四线合并后的出口：④ 的三条闸门路径 + ③ 收礼
+     * {@code sendGiftReceived}（提交后直接推、不去抖，自带 {@code pushAllowed}）+ ④ 运营批推。
+     * 新增调用点 → 红：见 CROSS-STORY-DECISIONS「2026-10-18 · 推送分类开关（④）」——新出口必须先经
+     * {@code PushPreferenceService}，再把方法加进这里。
+     */
+    private static final Set<String> PUSHER_CALLER_METHODS = Set.of(
+            "NotificationService#write",
+            "NotificationService#pushInteraction",
+            "NotificationService#sendWithCopy",
+            "NotificationService#sendGiftReceived",
+            "OpsNotificationDispatcher#push");
+
+    private static final Pattern METHOD_DECL = Pattern.compile(
+            "^    (?:public|protected|private)[^=;(]*?\\s(\\w+)\\s*\\(");
+
+    @Test
+    @DisplayName("pushToUser / pushToUserNow 调用点只在白名单「类#方法」里（④ 三条闸门路径 + ③ sendGiftReceived + 运营批推）")
+    void pusherCalledOnlyFromWhitelistedMethods() {
+        Set<String> found = new java.util.TreeSet<>();
+        for (String f : PUSHER_CALLERS) {
+            String cls = f.substring(f.lastIndexOf('/') + 1, f.length() - ".java".length());
+            String method = null;
+            for (String line : stripComments(read(MAIN.resolve(f))).split("\n")) {
+                var m = METHOD_DECL.matcher(line);
+                if (m.find()) {
+                    method = m.group(1);
+                }
+                if (PUSHER_CALL.matcher(line).find()) {
+                    found.add(cls + "#" + method);
+                }
+            }
+        }
+        assertThat(found)
+                .as("新推送出口：先调 PushPreferenceService（CROSS-STORY-DECISIONS「推送分类开关（④）」），再加进白名单")
+                .isNotEmpty()
+                .isSubsetOf(PUSHER_CALLER_METHODS);
+        assertThat(found).contains("NotificationService#sendGiftReceived");
+    }
+
     @Test
     @DisplayName("TencentImClient.pushOffline* 只在 NotificationPusher 里被调用")
     void imOfflinePushOnlyFromPusher() {

@@ -213,4 +213,72 @@ class NotificationServicePushGateTest {
         verify(pusher).pushToVet(eq(3L), any(), any(), eq("NEW_CONSULT_REQUEST"), any(), any());
         verify(pusher, never()).pushToUser(anyLong(), any(), any(), any(), any(), any());
     }
+
+    // ===== V1.4.0 push-collect Story 3.1 · AC1.2：③ sendGiftReceived 直接 pushToUser 出口的闸门 =====
+
+    private void giftUpsert(long actorId, boolean inserted, boolean newActor) {
+        when(aggregates.upsertAggregate(eq(9L), eq(NotificationType.PET_GIFT_RECEIVED), anyString(), anyString(),
+                anyString(), anyString(), eq("70"), eq("GIFT:PET:70"), any(), any()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", inserted));
+        when(aggregates.addActor(100L, actorId)).thenReturn(newActor);
+    }
+
+    @Test
+    void mutedGiftStillWritesAndBadgesButDoesNotPush() {
+        when(prefs.isEnabled(9L, NotificationType.PET_GIFT_RECEIVED)).thenReturn(false);
+        giftUpsert(2L, true, true);
+
+        Notification n = service.sendGiftReceived(9L, 2L, 70L, "Andi mengirim Tulang untuk Mochi");
+
+        assertThat(n).isNotNull();
+        verify(aggregates).addActor(100L, 2L);
+        verify(valueOps).increment("notify:unread:9");
+        verify(prefs).isEnabled(9L, NotificationType.PET_GIFT_RECEIVED);
+        verifyNoInteractions(pusher);
+    }
+
+    /** T-29 分支：同一送礼人未读期间再送 → touch 照常；关了 Hadiah 仍不推。 */
+    @Test
+    void mutedSameSenderAgainTouchesButDoesNotPush() {
+        when(prefs.isEnabled(9L, NotificationType.PET_GIFT_RECEIVED)).thenReturn(false);
+        giftUpsert(2L, false, false);
+
+        service.sendGiftReceived(9L, 2L, 70L, "Andi mengirim Tulang untuk Mochi");
+
+        verify(aggregates).touch(100L);
+        verifyNoInteractions(pusher);
+    }
+
+    @Test
+    void enabledGiftPushesOnceAndQueriesOnlyGiftType() {
+        giftUpsert(2L, false, false);
+
+        service.sendGiftReceived(9L, 2L, 70L, "Andi mengirim Tulang untuk Mochi");
+
+        verify(pusher, times(1)).pushToUser(9L, "Andi mengirim Tulang untuk Mochi", "", "PET_GIFT_RECEIVED", "tok",
+                "70");
+        verify(prefs, times(1)).isEnabled(9L, NotificationType.PET_GIFT_RECEIVED);
+        verify(prefs, never()).isEnabled(anyLong(), eq(NotificationType.CONTENT_LIKED));
+    }
+
+    /** 虚拟号 / 官方号的既有跳过保留，且在闸门之前（不查偏好）。 */
+    @Test
+    void giftToOfficialRecipientSkipsBeforeGate() {
+        when(accountQuery.isOfficialAccount(9L)).thenReturn(true);
+        giftUpsert(2L, true, true);
+
+        service.sendGiftReceived(9L, 2L, 70L, "x");
+
+        verifyNoInteractions(prefs, pusher);
+    }
+
+    @Test
+    void giftPrefsFailureFallsBackToPush() {
+        when(prefs.isEnabled(anyLong(), any())).thenThrow(new IllegalStateException("db"));
+        giftUpsert(2L, true, true);
+
+        service.sendGiftReceived(9L, 2L, 70L, "x");
+
+        verify(pusher, times(1)).pushToUser(eq(9L), eq("x"), eq(""), eq("PET_GIFT_RECEIVED"), eq("tok"), eq("70"));
+    }
 }

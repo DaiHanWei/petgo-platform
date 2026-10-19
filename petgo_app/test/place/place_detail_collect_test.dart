@@ -104,4 +104,12 @@ void main() {
     expect(find.byKey(const ValueKey('placeDetailCollect')), findsNothing);
     expect(find.byKey(const ValueKey('placeDetailMore')), findsNothing);
   });
+
+  // V1.4.0 push-collect Story 3.1 · AC5.5：② 3.3 打卡按钮（逐宠物入参）与 ④ 顶栏收藏合并后并存。
+  testWidgets('3.1 AC5.5：顶栏收藏 + 正文打卡按钮同屏', (tester) async {
+    await _pump(tester, _Repo());
+    expect(find.descendant(of: find.byType(AppBar), matching: find.byKey(const ValueKey('placeDetailCollect'))),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('placeCheckinButton')), findsOneWidget);
+  });
 }
