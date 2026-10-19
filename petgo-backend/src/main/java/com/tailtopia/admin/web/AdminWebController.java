@@ -51,18 +51,13 @@ public class AdminWebController {
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
-    /** 专题线 video Story 3.1：举报下架 / 驳回（解除预处置）后事务外即时对账。 */
-    private final com.tailtopia.content.service.MediaAclReconciler mediaAcl;
-
     public AdminWebController(AdminContentService adminContentService,
             AdminModerationService adminModerationService,
             AdminVetService adminVetService,
             AdminVirtualAccountService virtualAccountService,
             Messages msg,
             AdminPublishIdentityService publishIdentityService,
-            com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService reviewWorkbench,
-            com.tailtopia.content.service.MediaAclReconciler mediaAcl) {
-        this.mediaAcl = mediaAcl;
+            com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService reviewWorkbench) {
         this.reviewWorkbench = reviewWorkbench;
         this.adminContentService = adminContentService;
         this.adminModerationService = adminModerationService;
@@ -128,13 +123,9 @@ public class AdminWebController {
             // Story 2.4 AC5：工作台 htmx 分支 → 处置 fragment（不 try/catch，422/403 由 advice 出 fragment）
             long postId = reviewWorkbench.postIdOfReport(id).orElse(id);
             adminModerationService.takedown(id, admin);
-            // 专题线 video Story 3.1：事务外即时对账（查不到帖子 id 就交给定时任务，不拿工单 id 冒充）。
-            mediaAcl.reconcileQuietly(reviewWorkbench.postIdOfReport(id).orElse(null));
             return reportDone(hx, postId, msg.get("admin.flash.review.takenDown"), model, response);
         }
-        Long reportPostId = reviewWorkbench.postIdOfReport(id).orElse(null);
         adminModerationService.takedown(id, admin);
-        mediaAcl.reconcileQuietly(reportPostId);
         // 回内容举报现在的所在页（拆分后是「人工复核」）。回 /admin/tickets 等于把人甩到另一个
         // 页面，且刚处置的那条根本不在那儿 —— 运营会以为操作没生效。
         return "redirect:/admin/manual-review";
@@ -147,14 +138,11 @@ public class AdminWebController {
         if (hx.isHtmx()) {
             long postId = reviewWorkbench.postIdOfReport(id).orElse(id);
             adminModerationService.dismiss(id, admin);
-            // 专题线 video Story 3.1：驳回 = 解除 P0 预处置（帖子恢复可见）→ 事务外即时对账。
-            mediaAcl.reconcileQuietly(reviewWorkbench.postIdOfReport(id).orElse(null));
             return reportDone(hx, postId, msg.get("admin.flash.review.dismissedOne"), model, response);
         }
         // ⚠️ gate 对齐 dismiss-all / 批量驳回的 content.takedown（评审三轮 #2）：驳回是处置动作，
         // 挂查看权上等于让只读审核员逐条 POST 绕过处置权限（等价被禁的 dismiss-all）。
         adminModerationService.dismiss(id, admin);
-        mediaAcl.reconcileQuietly(reviewWorkbench.postIdOfReport(id).orElse(null));
         return "redirect:/admin/manual-review";
     }
 
@@ -173,12 +161,9 @@ public class AdminWebController {
             org.springframework.web.servlet.mvc.support.RedirectAttributes flash) {
         if (hx.isHtmx()) {
             int n0 = adminModerationService.dismissAllForPost(postId, admin);
-            // 专题线 video Story 3.1：整帖驳回 = 解除 P0 预处置 → 事务外即时对账。
-            mediaAcl.reconcileQuietly(postId);
             return reportDone(hx, postId, msg.get("admin.flash.review.dismissedAll", n0), model, response);
         }
         int n = adminModerationService.dismissAllForPost(postId, admin);
-        mediaAcl.reconcileQuietly(postId);
         flash.addFlashAttribute("notice", msg.get("admin.flash.review.dismissedAll", n));
         // 内容举报现在的所在页是「人工复核」（2026-08-19 拆分）。
         return "redirect:/admin/manual-review";
@@ -202,7 +187,6 @@ public class AdminWebController {
             org.springframework.web.servlet.mvc.support.RedirectAttributes flash) {
         boolean takedown = "takedown".equals(action);
         AdminModerationService.BatchResult result = adminModerationService.batch(reportIds, takedown, admin);
-        // 专题线 video Story 3.1 AC5：批量处置不逐条即时对账，定时任务 1 分钟内兜底。
         flash.addFlashAttribute("notice",
                 msg.get("admin.flash.seed.batchDone", result.ok(), result.failedCount()));
         return "redirect:/admin/manual-review";

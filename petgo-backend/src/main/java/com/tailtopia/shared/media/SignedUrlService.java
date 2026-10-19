@@ -58,31 +58,6 @@ public class SignedUrlService {
         }
     }
 
-    /**
-     * 指定桶与有效期签名（专题线 video Story 1.4 · AD-8）：视频与封面在公开桶里但可能是私有 ACL，
-     * 作者看自己审核中的帖子、后台预览都要走这里。现有 {@link #sign(String)} 写死私有桶，单桶环境下用法一样，
-     * 但这里显式传桶名。无凭证时同样打桩。
-     */
-    public String sign(String bucket, String objectKey, java.time.Duration ttl) {
-        if (!ossClient.hasCredentials()) {
-            return stub(objectKey);
-        }
-        Date expiration = new Date(System.currentTimeMillis() + ttl.toMillis());
-        OSS oss = null; // 同 sign(key)：buildClient 也必须在 try 里
-        try {
-            oss = ossClient.buildClient();
-            return oss.generatePresignedUrl(bucket, stripLeadingSlash(objectKey), expiration, HttpMethod.GET)
-                    .toString();
-        } catch (RuntimeException e) {
-            log.warn("Signed URL generation failed: {}", e.getClass().getSimpleName());
-            throw AppException.mediaCredential("私密图访问凭证暂不可用");
-        } finally {
-            if (oss != null) {
-                oss.shutdown();
-            }
-        }
-    }
-
     /** 批量签名（健康历史多图）。复用单个 OSS 客户端，减少重复构建。 */
     public List<String> signAll(List<String> objectKeys) {
         if (!ossClient.hasCredentials()) {

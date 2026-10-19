@@ -47,18 +47,13 @@ public class ContentDetailService {
     /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
 
-    /** 专题线 video Story 2.1：媒体投影（视频地址 / 作者签名地址）。 */
-    private final PostMediaResolver postMedia;
-
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            com.tailtopia.social.read.FollowReader followReader,
-            PostMediaResolver postMedia) {
-        this.postMedia = postMedia;
+            com.tailtopia.social.read.FollowReader followReader) {
         this.placeCheckins = placeCheckins;
         this.followReader = followReader;
         this.contentTags = contentTags;
@@ -79,16 +74,6 @@ public class ContentDetailService {
      */
     @Transactional(readOnly = true)
     public ContentPost requireVisiblePost(long postId, Long viewerId) {
-        // 写接口（点赞、评论等）与内部调用：不按客户端能力过滤（AD-7：旧版本来看不到视频帖）。
-        return requireVisiblePost(postId, viewerId, true);
-    }
-
-    /**
-     * 同上，并按客户端能力过滤（专题线 video Story 2.2 · AD-7）：{@code includeVideo=false}（旧版）遇到视频帖 →
-     * 与「已删除」同一个 404，不暴露它是视频帖。
-     */
-    @Transactional(readOnly = true)
-    public ContentPost requireVisiblePost(long postId, Long viewerId, boolean includeVideo) {
         // 可见性（内容审核 story 2 · D-CM2）：PUBLISHED 对所有人可见；UNDER_REVIEW 挂起帖仅作者本人可见
         // （审核中作者无感知，可正常点入详情），对他人 404 防枚举；拒绝即软删（deletedAt），对所有人隐藏。
         ContentPost post = posts.findById(postId)
@@ -97,9 +82,6 @@ public class ContentDetailService {
                         || (p.getStatus() == PostStatus.UNDER_REVIEW
                                 && viewerId != null && viewerId.equals(p.getAuthorId())))
                 .orElseThrow(() -> AppException.notFound(GONE_DETAIL));
-        if (!includeVideo && post.getMediaType() == com.tailtopia.content.domain.MediaType.VIDEO) {
-            throw AppException.notFound(GONE_DETAIL);
-        }
 
         // 内容审核 cm-6 §5.4：举报者对该帖视同不可见——返回统一 404（与 ReportService.isVisible 语义一致，防枚举）。
         if (viewerId != null && reportService.hasReported(postId, viewerId)) {
@@ -123,11 +105,10 @@ public class ContentDetailService {
      *
      * @param postId   内容 id
      * @param viewerId 当前用户 id（游客为 null，用于 isAuthor / liked）
-     * @param includeVideo 客户端是否声明了视频能力（Story 2.2；Controller 解析后显式传入）
      */
     @Transactional(readOnly = true)
-    public ContentDetailResponse getDetail(long postId, Long viewerId, boolean includeVideo) {
-        ContentPost post = requireVisiblePost(postId, viewerId, includeVideo);
+    public ContentDetailResponse getDetail(long postId, Long viewerId) {
+        ContentPost post = requireVisiblePost(postId, viewerId);
 
         AuthorView author = accountQueryService.findAuthorViews(List.of(post.getAuthorId()))
                 .get(post.getAuthorId());
@@ -163,7 +144,6 @@ public class ContentDetailService {
                 ? com.tailtopia.social.read.FollowState.NONE
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace, authorToken, followState,
-                postMedia.resolve(post, viewerId));
+                decorations, sizes, mentions, checkinPlace, authorToken, followState);
     }
 }

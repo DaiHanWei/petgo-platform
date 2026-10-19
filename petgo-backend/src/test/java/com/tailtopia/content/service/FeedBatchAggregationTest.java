@@ -74,7 +74,7 @@ class FeedBatchAggregationTest {
                         Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
                         Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)),
                 // V1.3.4 follow Story 2.1：作者关注关系（整页一次批量）。
-                followReader, com.tailtopia.content.service.PostMediaFixtures.passthrough());
+                followReader);
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
@@ -92,7 +92,7 @@ class FeedBatchAggregationTest {
             rows.add(p);
         }
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class)))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any(Pageable.class)))
                 .thenReturn(rows);
     }
 
@@ -115,7 +115,7 @@ class FeedBatchAggregationTest {
     void newFieldsAreQueriedOncePerPageNotPerItem() {
         stubPage(20);
 
-        service.loadFeed("DAILY", null, 99L, null, true);
+        service.loadFeed("DAILY", null, 99L, null);
 
         verify(likes, times(1)).findLikedPostIds(anyLong(), anyList());
         verify(comments, times(1)).countVisibleForViewerIn(anyList(), any());
@@ -133,7 +133,7 @@ class FeedBatchAggregationTest {
     void guestSkipsTheLikedQueryEntirely() {
         stubPage(5);
 
-        FeedPageResponse page = service.loadFeed("DAILY", null, null, null, true);
+        FeedPageResponse page = service.loadFeed("DAILY", null, null, null);
 
         verify(likes, never()).findLikedPostIds(anyLong(), anyList());
         assertThat(page.items()).isNotEmpty();
@@ -145,7 +145,7 @@ class FeedBatchAggregationTest {
     void emptyPageIssuesNoAggregationQueries() {
         stubPage(0);
 
-        service.loadFeed("DAILY", null, 99L, null, true);
+        service.loadFeed("DAILY", null, 99L, null);
 
         verify(likes, never()).findLikedPostIds(anyLong(), anyList());
         verify(comments, never()).countVisibleForViewerIn(anyList(), any());
@@ -158,10 +158,10 @@ class FeedBatchAggregationTest {
         ContentPost p = ContentPost.publish(7L, ContentType.DAILY, null, "t", null, null);
         setId(p, 1L);
         rows.add(p);
-        when(posts.findMyPosts(anyLong(), any(Boolean.class), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class)))
+        when(posts.findMyPosts(anyLong(), any(Boolean.class), any(), any(), any(Pageable.class)))
                 .thenReturn(rows);
 
-        service.myPosts(7L, null, true);
+        service.myPosts(7L, null);
 
         verify(likes, times(1)).findLikedPostIds(anyLong(), anyList());
         verify(comments, times(1)).countVisibleForViewerIn(anyList(), any());
@@ -207,7 +207,7 @@ class FeedBatchAggregationTest {
             rows.add(p);
         }
         when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
-                any(Boolean.class), any(), any(), any(Boolean.class), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class)))
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any(Pageable.class)))
                 .thenReturn(rows);
         when(accounts.publicTokensOf(anyList())).thenAnswer(inv -> {
             java.util.Collection<Long> ids = inv.getArgument(0);
@@ -217,7 +217,7 @@ class FeedBatchAggregationTest {
                 101L, new com.tailtopia.social.read.FollowState(true, false),
                 102L, new com.tailtopia.social.read.FollowState(false, true)));
 
-        FeedPageResponse page = service.loadFeed("DAILY", null, 99L, null, true);
+        FeedPageResponse page = service.loadFeed("DAILY", null, 99L, null);
 
         verify(accounts, times(1)).publicTokensOf(anyList());
         verify(followReader, times(1)).followStates(org.mockito.ArgumentMatchers.eq(99L), anyList());
@@ -239,7 +239,7 @@ class FeedBatchAggregationTest {
         stubPage(5);
         when(accounts.publicTokensOf(anyList())).thenReturn(java.util.Map.of(7L, "tok7"));
 
-        FeedPageResponse page = service.loadFeed("DAILY", null, null, null, true);
+        FeedPageResponse page = service.loadFeed("DAILY", null, null, null);
 
         verify(followReader, never()).followStates(anyLong(), anyList());
         assertThat(page.items()).allSatisfy(i -> assertThat(i.authorFollowState())
@@ -247,7 +247,7 @@ class FeedBatchAggregationTest {
 
         org.mockito.Mockito.clearInvocations(followReader);
         stubPage(0);
-        service.loadFeed("DAILY", null, 99L, null, true);
+        service.loadFeed("DAILY", null, 99L, null);
         verify(followReader, never()).followStates(anyLong(), anyList());
     }
 
@@ -257,12 +257,12 @@ class FeedBatchAggregationTest {
         stubPage(3); // 作者恒为 7
         when(accounts.publicTokensOf(anyList())).thenReturn(java.util.Map.of());
 
-        FeedPageResponse page = service.loadFeed("DAILY", null, 99L, null, true);
+        FeedPageResponse page = service.loadFeed("DAILY", null, 99L, null);
         verify(followReader, never()).followStates(anyLong(), anyList());
         assertThat(page.items()).allSatisfy(i -> assertThat(i.authorToken()).isNull());
 
         when(accounts.publicTokensOf(anyList())).thenReturn(java.util.Map.of(7L, "tok7"));
-        page = service.loadFeed("DAILY", null, 7L, null, true);
+        page = service.loadFeed("DAILY", null, 7L, null);
         verify(followReader, never()).followStates(anyLong(), anyList());
         assertThat(page.items()).allSatisfy(i -> assertThat(i.authorFollowState())
                 .isEqualTo(com.tailtopia.social.read.FollowState.NONE));
@@ -275,10 +275,10 @@ class FeedBatchAggregationTest {
         ContentPost p = ContentPost.publish(7L, ContentType.DAILY, null, "t", null, null);
         setId(p, 1L);
         rows.add(p);
-        when(posts.findMyPosts(anyLong(), any(Boolean.class), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(Pageable.class)))
+        when(posts.findMyPosts(anyLong(), any(Boolean.class), any(), any(), any(Pageable.class)))
                 .thenReturn(rows);
 
-        FeedPageResponse page = service.myPosts(7L, null, true);
+        FeedPageResponse page = service.myPosts(7L, null);
 
         verify(accounts, never()).publicTokensOf(anyList());
         verify(followReader, never()).followStates(anyLong(), anyList());

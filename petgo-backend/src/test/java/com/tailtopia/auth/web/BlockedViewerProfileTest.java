@@ -151,11 +151,11 @@ class BlockedViewerProfileTest {
     void aBlockedViewerGetsAnEmptyPageIdenticalToTheNoContentEnvelope() {
         when(hideRelations.isBlocked(OWNER, VIEWER)).thenReturn(true);
 
-        FeedPageResponse page = profileController.posts(viewer(VIEWER), OWNER, null, "video");
+        FeedPageResponse page = profileController.posts(viewer(VIEWER), OWNER, null);
 
         assertThat(page).isEqualTo(new FeedPageResponse(List.of(), null, false, null));
         // 🛡 一次库都不打：形状本来就与空结果一样，查了再丢弃没有意义。
-        verify(feed, never()).userPublicPosts(anyLong(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(feed, never()).userPublicPosts(anyLong(), any(), any());
     }
 
     /**
@@ -169,7 +169,7 @@ class BlockedViewerProfileTest {
     void aMalformedCursorFailsTheSameWayForABlockedViewer() {
         when(hideRelations.isBlocked(OWNER, VIEWER)).thenReturn(true);
 
-        assertThatThrownBy(() -> profileController.posts(viewer(VIEWER), OWNER, "@@@not-a-cursor", "video"))
+        assertThatThrownBy(() -> profileController.posts(viewer(VIEWER), OWNER, "@@@not-a-cursor"))
                 .as("被拉黑者不能因为「反正也是空页」就吃下一个非法游标")
                 .isInstanceOf(RuntimeException.class);
     }

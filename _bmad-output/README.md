@@ -10,7 +10,7 @@
 | `implementation-artifacts/` | 实现层：story、sprint-status、评审记录、spec —— **按版本一个子目录**，与规划层同名 |
 | `_archive/` | 一次性验收截图、V1.0 保真工程、H5 原型页 —— 只读，不再维护 |
 
-两层都用同一套版本目录名：`v1.0.0` `v1.1.0` `v1.1.2` `v1.1.4` `v1.1.6` `v1.3.0` `v1.3.2` `v1.3.4` `v1.4.0`，另有三个专题线 `admin-backend`（运营后台，2026-06）、`bug-system`（Bug 同步工具，仅规划层）和 `video`（短视频，暂不定版本）。
+两层都用同一套版本目录名：`v1.0.0` `v1.1.0` `v1.1.2` `v1.1.4` `v1.1.6` `v1.3.0` `v1.3.2` `v1.3.4` `v1.4.0`，另有两个专题线 `admin-backend`（运营后台，2026-06）和 `bug-system`（Bug 同步工具，仅规划层）。
 
 ## 一个版本的五件套
 
@@ -38,4 +38,3 @@
 | v1.3.4 | 推荐算法校准 / 原图上传 / 版本更新提醒 / 里程碑两项 / 运营弹窗与通知 / KTP 样式迭代 / 用户关注与通知中心，集成分支 `dev_1.3.4` | `planning-artifacts/v1.3.4/` | app、ktp、follow 三主题已实现并合入 `dev_1.3.4`（2026-10-13） |
 | v1.4.0 | 精选自营电商（Toko） | `planning-artifacts/v1.4.0/` | 开发中（并行线） |
 | admin-backend | 运营后台重构（Lark 登录 / 审计 / 兽医·用户·内容管理） | `planning-artifacts/admin-backend/` | 已上线 |
-| video | 短视频第一版（官方号发视频 + 全屏播放 + 会员等级 + 视频免审名单），暂不定版本，分支 `feat/video` | `planning-artifacts/video/` | PRD / 架构 / epics / 排期已完成（2026-10-16），开发中 |

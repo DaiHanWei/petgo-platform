@@ -1,7 +1,5 @@
 package com.tailtopia.admin.dailyreport;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -13,21 +11,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "petgo.daily-report")
 public class DailyReportProperties {
 
-    /**
-     * 飞书群自定义机器人 webhook（env {@code LARK_DAILY_REPORT_WEBHOOK_URL}）。空 = 不推送。
-     * 多个群用英文逗号分隔，每个群各推一份。
-     */
+    /** 飞书群自定义机器人 webhook（env {@code LARK_DAILY_REPORT_WEBHOOK_URL}）。空 = 不推送。 */
     private String webhookUrl = "";
 
-    /**
-     * 签名校验密钥（env {@code LARK_DAILY_REPORT_SECRET}）。空 = 机器人未开签名校验，payload 不带 sign。
-     * 多个群时按位置与 {@link #webhookUrl} 一一对应（逗号分隔，某个群没开签名就留空位，如 {@code s1,,s3}）。
-     */
+    /** 签名校验密钥（env {@code LARK_DAILY_REPORT_SECRET}）。空 = 机器人未开签名校验，payload 不带 sign。 */
     private String secret = "";
-
-    /** 一个推送目标（一个群）。 */
-    public record Target(String webhookUrl, String secret) {
-    }
 
     /** HTTP 超时秒数。 */
     private int timeoutSeconds = 10;
@@ -74,25 +62,7 @@ public class DailyReportProperties {
     }
 
     public boolean isEnabled() {
-        return !targets().isEmpty();
-    }
-
-    /** 解析出的推送目标，按配置顺序；空白地址跳过，缺的密钥视为未开签名。 */
-    public List<Target> targets() {
-        List<Target> out = new ArrayList<>();
-        if (webhookUrl == null || webhookUrl.isBlank()) {
-            return out;
-        }
-        String[] urls = webhookUrl.split(",", -1);
-        String[] secrets = secret == null ? new String[0] : secret.split(",", -1);
-        for (int i = 0; i < urls.length; i++) {
-            String url = urls[i].trim();
-            if (url.isEmpty()) {
-                continue;
-            }
-            out.add(new Target(url, i < secrets.length ? secrets[i].trim() : ""));
-        }
-        return out;
+        return webhookUrl != null && !webhookUrl.isBlank();
     }
 
     public String getWebhookUrl() {

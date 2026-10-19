@@ -69,15 +69,10 @@ public class AdminContentManageController {
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
-    /** 专题线 video Story 3.1：下架 / 恢复后事务外即时对账。 */
-    private final com.tailtopia.content.service.MediaAclReconciler mediaAcl;
-
     public AdminContentManageController(AdminContentManageService contentManage,
             Messages msg,
             com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead,
-            com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail,
-            com.tailtopia.content.service.MediaAclReconciler mediaAcl) {
-        this.mediaAcl = mediaAcl;
+            com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail) {
         this.contentManage = contentManage;
         this.msg = msg;
         this.throttleRead = throttleRead;
@@ -332,12 +327,10 @@ public class AdminContentManageController {
         // htmx（抽屉操作条）：成功回抽屉 + oob 行 + toast；原因为空之类的业务错由 advice 出 422 行内 err。
         if (hx.isHtmx()) {
             contentManage.takedown(postId, reason, admin.getAdminAccountId());
-            mediaAcl.reconcileQuietly(postId); // 专题线 video Story 3.1：事务外即时对账（视频文件改私有）
             return afterAction(postId, msg.get("admin.flash.content.takenDown"), model, response);
         }
         try {
             contentManage.takedown(postId, reason, admin.getAdminAccountId());
-            mediaAcl.reconcileQuietly(postId);
             flash.addFlashAttribute("notice", msg.get("admin.flash.content.takenDown"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
@@ -352,11 +345,9 @@ public class AdminContentManageController {
             jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             contentManage.restore(postId, admin.getAdminAccountId());
-            mediaAcl.reconcileQuietly(postId); // 专题线 video Story 3.1：事务外即时对账（视频文件改回公开）
             return afterAction(postId, msg.get("admin.flash.content.restored"), model, response);
         }
         contentManage.restore(postId, admin.getAdminAccountId());
-        mediaAcl.reconcileQuietly(postId);
         flash.addFlashAttribute("notice", msg.get("admin.flash.content.restored"));
         return "redirect:/admin/content";
     }

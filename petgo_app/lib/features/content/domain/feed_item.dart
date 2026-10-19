@@ -1,7 +1,6 @@
 import '../../auth/domain/user_tag.dart';
 import '../../mention/domain/mention_view.dart';
 import '../../social/domain/follow_state.dart';
-import '../video/video_info.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 
@@ -109,21 +108,10 @@ class FeedItem {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
-    this.mediaType = kMediaTypeImage,
-    this.video,
   });
 
   final int id;
   final int authorId;
-
-  /// 媒体类型线格式（专题线 video Story 2.3）：`IMAGE` / `VIDEO`；缺省 / 未知 → 按图文。
-  final String mediaType;
-
-  /// 视频信息（只在视频帖下发）。⚠️ 判断视频帖用 [isVideo]，不要用 `video != null`。
-  final VideoInfo? video;
-
-  /// 是否视频帖：以 `mediaType` 为准；万一缺了 `video` 字段按图文降级（不崩、不显示角标）。
-  bool get isVideo => isVideoMediaType(mediaType) && video != null;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）：关注接口用。作者已注销 / 封号 / 老后端 /
   /// 「我的发布」等不展示关注按钮的出口 → null（按钮不渲染）。
@@ -250,8 +238,6 @@ class FeedItem {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: followEpoch ?? this.followEpoch,
-        mediaType: mediaType,
-        video: video,
       );
 
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
@@ -282,9 +268,6 @@ class FeedItem {
         // V1.3.4 follow Story 2.1：缺失 / null 都按默认（老后端、「我的发布」不下发）。
         authorToken: json['authorToken'] as String?,
         authorFollowState: FollowState.fromJson(json['authorFollowState']),
-        // 专题线 video Story 2.3：老后端不下发 → IMAGE。
-        mediaType: (json['mediaType'] as String?) ?? kMediaTypeImage,
-        video: VideoInfo.fromJson(json['video']),
       );
 }
 

@@ -1,8 +1,5 @@
 package com.tailtopia.content.dto;
 
-import com.tailtopia.auth.dto.AuthorView;
-import com.tailtopia.content.domain.ContentPost;
-import com.tailtopia.content.domain.MediaType;
 import java.time.Instant;
 import java.util.List;
 
@@ -26,28 +23,5 @@ public record SharedPostResponse(
         String type,
         String body,
         List<String> imageUrls,
-        Instant createdAt,
-        /** 媒体类型（专题线 video Story 2.1）：恒下发。 */
-        MediaType mediaType,
-        /** 视频信息（Story 2.1）：只在视频帖下发；分享页是匿名访问，恒为公开地址。 */
-        VideoView video) {
-
-    /**
-     * 唯一组装点（专题线 video Story 2.1 · 一致性规则 4）。
-     *
-     * <p>🛡 仍然<b>不放任何 id</b>（见类注释）：视频信息只有地址、时长、宽高。
-     */
-    public static SharedPostResponse of(ContentPost post, AuthorView author, PostMedia media) {
-        List<String> images = media.imageUrls() == null ? List.of() : List.copyOf(media.imageUrls());
-        return new SharedPostResponse(
-                author.nickname(),
-                author.avatarUrl(),
-                author.deleted(),
-                post.getType().name(),
-                post.getText(),
-                images,
-                post.getCreatedAt(),
-                media.mediaType(),
-                media.video());
-    }
+        Instant createdAt) {
 }

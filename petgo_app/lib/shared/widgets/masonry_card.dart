@@ -6,7 +6,6 @@ import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_image_layout.dart';
 import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
-import '../../features/content/video/video_card_badge.dart';
 import '../../features/mention/domain/mention_context.dart';
 import '../../features/mention/presentation/mention_text.dart';
 import '../../features/social/presentation/widgets/follow_button.dart';
@@ -120,14 +119,6 @@ class MasonryCard extends StatelessWidget {
     if (d.inHours < 1) return l10n.timeMinutesAgo(d.inMinutes);
     if (d.inDays < 1) return l10n.timeHoursAgo(d.inHours);
     return l10n.timeDaysAgo(d.inDays);
-  }
-
-  /// 视频帖（专题线 video Story 2.3 · FR-14）：封面上叠播放角标与时长。叠在 [FeedImage] **外层**，
-  /// 不改图片区结构（AD-8 Rule 6）；列表不自动播放（V-18）。图文帖原样返回。
-  Widget _withVideoBadge(Widget image) {
-    final video = item.video;
-    if (!item.isVideo || video == null) return image;
-    return Stack(children: [image, Positioned.fill(child: VideoCardBadge(durationMs: video.durationMs))]);
   }
 
   @override
@@ -274,7 +265,7 @@ class MasonryCard extends StatelessWidget {
                 // ⚠️ 这里此前是写死的 4:3 —— FR-71 起改为按实际比例，
                 // 卡片高度**从齐整变为不齐整**是产品已知并接受的代价（保构图 > 保版面）。
                 if (item.hasImage)
-                  _withVideoBadge(FeedImage(
+                  FeedImage(
                     urls: item.images,
                     type: item.type,
                     declaredSize: item.firstImageSize,
@@ -293,7 +284,7 @@ class MasonryCard extends StatelessWidget {
                         (item.decorationTags.isEmpty
                             ? null
                             : ContentTagChip.overlay(tag: item.decorationTags.first, position: 'feed')),
-                  )),
+                  ),
               ],
             ),
           ),

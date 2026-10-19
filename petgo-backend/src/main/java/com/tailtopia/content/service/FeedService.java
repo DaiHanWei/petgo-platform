@@ -4,7 +4,6 @@ import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.domain.ContentPin;
 import com.tailtopia.content.domain.ContentPost;
-import com.tailtopia.content.domain.MediaType;
 import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.PinObjectType;
 import com.tailtopia.content.domain.PostStatus;
@@ -84,9 +83,7 @@ public class FeedService {
             ContentTagQueryService contentTags, UserHideRelationReader hideRelations,
             FeedRecommendationService recommendations,
             com.tailtopia.mention.service.MentionViewService mentionViews,
-            com.tailtopia.social.read.FollowReader followReader,
-            PostMediaResolver postMedia) {
-        this.postMedia = postMedia;
+            com.tailtopia.social.read.FollowReader followReader) {
         this.mentionViews = mentionViews;
         this.followReader = followReader;
         this.posts = posts;
@@ -104,9 +101,6 @@ public class FeedService {
 
     /** V1.3.4 follow Story 2.1：卡片作者的关注关系（只读端口，同 hideRelations 的模块边界）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
-
-    /** 专题线 video Story 2.1：媒体投影（视频地址 / 作者看未公开视频帖时的签名地址）。 */
-    private final PostMediaResolver postMedia;
 
     /**
      * 一页作者的 token 与关注关系（V1.3.4 follow Story 2.1 · AD-6 / AD-16）—— <b>整页各一次查询</b>。
@@ -162,16 +156,13 @@ public class FeedService {
      * 代价是那一次可能出现重复展示 —— 明确接受，比整个首页 500 好得多。
      * 这一处最容易漏：大家通常只想到"坑位端点挂了客户端不显示"，忘了首页内部也查了一次。
      */
-    private Long pinnedContentIdToYield(String cursor, boolean includeVideo) {
+    private Long pinnedContentIdToYield(String cursor) {
         if (cursor != null && !cursor.isBlank()) {
             return null; // 只首屏让位
         }
         try {
             return pins.activePin(ContentPin.SLOT_HOME_FEED, Instant.now())
                     .map(ContentPin::getContentId)   // 推广卡片没有内容 id，天然不参与排除
-                    // 专题线 video Story 2.2（AD-7 顶置例外）：旧版看不到顶置的视频帖（坑位为空），
-                    // 首页也就不该为它让位 —— 否则那条视频在旧版里凭空少了一个位置。
-                    .filter(id -> includeVideo || !isVideo(id))
                     .orElse(null);
         } catch (RuntimeException e) {
             log.warn("查顶置失败，本次首页不让位（降级）", e);
@@ -240,16 +231,15 @@ public class FeedService {
      * @param cursor   上一批末尾游标 token；null = 首批
      * @param viewerId 当前登录用户 id（游客为 null）；非空则排除「本人已举报的帖」（内容审核 cm-6 §5.4）
      * @param anonSessionId 游客的匿名会话 id（推荐序缓存键用；登录用户忽略）
-     * @param includeVideo  客户端是否声明了视频能力（专题线 video Story 2.2 · AD-7；由 Controller 解析后显式传入）
      */
     @Transactional(readOnly = true)
     public FeedPageResponse loadFeed(String category, String cursor, Long viewerId,
-            String anonSessionId, boolean includeVideo) {
+            String anonSessionId) {
         FeedCategory cat = FeedCategory.parse(category);
         if (cat == FeedCategory.ALL) {
-            return recommendedFeed(cursor, viewerId, anonSessionId, includeVideo);
+            return recommendedFeed(cursor, viewerId, anonSessionId);
         }
-        return chronoFeed(cat, cursor, viewerId, includeVideo);
+        return chronoFeed(cat, cursor, viewerId);
     }
 
     /**
@@ -270,19 +260,18 @@ public class FeedService {
      * 解得成 chrono 就让这次会话<b>继续走时序流</b>（nextCursor 也回 chrono 格式，整个会话自洽）；
      * 两种格式都解不开才是真正的非法游标 → 422。
      */
-    private FeedPageResponse recommendedFeed(String cursor, Long viewerId, String anonSessionId,
-            boolean includeVideo) {
+    private FeedPageResponse recommendedFeed(String cursor, Long viewerId, String anonSessionId) {
         if (cursor != null && !cursor.isBlank() && rankCursorOrNull(cursor) == null) {
             if (chronoCursorOrNull(cursor) == null) {
                 throw AppException.validation("游标无效"); // 两种格式都解不开才 422
             }
             // 老客户端（≤v1.1.4）的时序流会话：整个会话继续 chrono，游标自洽。
-            return chronoFeed(FeedCategory.ALL, cursor, viewerId, includeVideo);
+            return chronoFeed(FeedCategory.ALL, cursor, viewerId);
         }
         try {
-            Long yieldId = pinnedContentIdToYield(cursor, includeVideo);
+            Long yieldId = pinnedContentIdToYield(cursor);
             FeedRecommendationService.RankedPage ranked =
-                    recommendations.page(viewerId, anonSessionId, cursor, PAGE_SIZE, yieldId, includeVideo);
+                    recommendations.page(viewerId, anonSessionId, cursor, PAGE_SIZE, yieldId);
             return assemble(ranked.posts(), viewerId, ranked.nextCursor(), ranked.hasMore(),
                     FeedPageResponse.RANK_MODE_RECOMMEND);
         } catch (AppException e) {
@@ -294,7 +283,7 @@ public class FeedService {
             //   （chrono 格式已在方法开头分流），而 chronoFeed 读不懂 rank 游标 ——
             //   原样透传会让降级路径自己 422（Redis 抖动时页 ≥2 全挂）。
             //   降级为返回 chrono 首页：丢的是阅读进度，保住的是可用性。
-            return chronoFeed(FeedCategory.ALL, null, viewerId, includeVideo);
+            return chronoFeed(FeedCategory.ALL, null, viewerId);
         }
     }
 
@@ -321,14 +310,13 @@ public class FeedService {
      * 🔴 过滤全在 SQL WHERE 内（{@code PAGE_SIZE+1} / hasMore / 游标契约），组装复用 {@link #assemble}。
      */
     @Transactional(readOnly = true)
-    public FeedPageResponse loadFollowingFeed(long viewerId, String cursor, boolean includeVideo) {
+    public FeedPageResponse loadFollowingFeed(long viewerId, String cursor) {
         FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
         List<ContentPost> rows = posts.findFollowingFeed(
                 viewerId,
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
-                includeVideo,
                 PageRequest.of(0, PAGE_SIZE + 1));
 
         boolean hasMore = rows.size() > PAGE_SIZE;
@@ -346,13 +334,12 @@ public class FeedService {
     static final String RANK_FALLBACK_MARKER = "feed-rank-fallback-to-chrono";
 
     /** 非 ALL Tab 与级别 4 回落：纯时间倒序（FR-17 既有逻辑，🛡 一行未动）。 */
-    private FeedPageResponse chronoFeed(FeedCategory cat, String cursor, Long viewerId,
-            boolean includeVideo) {
+    private FeedPageResponse chronoFeed(FeedCategory cat, String cursor, Long viewerId) {
         ContentType type = cat.toContentType();
         boolean requirePet = cat.requiresPet();
 
         FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
-        Long yieldId = pinnedContentIdToYield(cursor, includeVideo);
+        Long yieldId = pinnedContentIdToYield(cursor);
 
         // 多取一条以判定 hasMore（不漏不重）。
         // 过滤口径（AD-4 Rule 2）：**一切消费公开内容的查询统一按 visibility = PUBLIC**，
@@ -364,7 +351,6 @@ public class FeedService {
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
                 yieldId != null, yieldId,
-                includeVideo,
                 PageRequest.of(0, PAGE_SIZE + 1));
 
         boolean hasMore = rows.size() > PAGE_SIZE;
@@ -412,8 +398,7 @@ public class FeedService {
                         com.tailtopia.mention.service.MentionViewService.pick(
                                 p.getMentionedUserIds(), mentions),
                         follow.tokens().get(p.getAuthorId()),
-                        follow.stateOf(p.getAuthorId()),
-                        postMedia.resolve(p, viewerId)))
+                        follow.stateOf(p.getAuthorId())))
                 .toList();
         return new FeedPageResponse(items, nextCursor, hasMore, rankMode);
     }
@@ -429,7 +414,7 @@ public class FeedService {
      * Story 4.1 的下架联动会即时结束排期，这里再兜一道，防止事件与查询之间的窗口。
      */
     @Transactional(readOnly = true)
-    public PinnedSlotResponse loadPinnedSlot(String slot, Long viewerId, boolean includeVideo) {
+    public PinnedSlotResponse loadPinnedSlot(String slot, Long viewerId) {
         ContentPin pin = pins.activePin(slot, Instant.now()).orElse(null);
         if (pin == null) {
             return new PinnedSlotResponse(null);
@@ -446,10 +431,6 @@ public class FeedService {
         }
         ContentPost post = posts.findById(pin.getContentId()).orElse(null);
         if (post == null || !isDisplayable(post)) {
-            return new PinnedSlotResponse(null);
-        }
-        // 专题线 video Story 2.2（AD-7 唯一例外：按 id 取单条，取出后判断）：旧版遇到视频帖 → 视为没有顶置。
-        if (!includeVideo && post.getMediaType() == MediaType.VIDEO) {
             return new PinnedSlotResponse(null);
         }
         // 🔴 Story 4.4：作者被**当前查看者**隐藏 → 对该查看者视为坑位为空。
@@ -484,7 +465,7 @@ public class FeedService {
                 decorationTags(one).get(post.getId()),
                 com.tailtopia.mention.service.MentionViewService.pick(
                         post.getMentionedUserIds(), mentionsFor(one, viewerId)),
-                token, followState, postMedia.resolve(post, viewerId));
+                token, followState);
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
@@ -495,11 +476,6 @@ public class FeedService {
      */
     private static boolean isDisplayable(ContentPost post) {
         return ContentDisplayability.isDisplayable(post);
-    }
-
-    /** 按 id 判断是否视频帖（只用于顶置这一处按 id 取单条的例外，AD-7 / 一致性规则 3）。 */
-    private boolean isVideo(long postId) {
-        return posts.findById(postId).map(p -> p.getMediaType() == MediaType.VIDEO).orElse(false);
     }
 
     /**
@@ -529,7 +505,7 @@ public class FeedService {
      *                 以及上面那两条隐藏排除；**不影响 PUBLIC/PUBLISHED 这层可见范围**
      */
     @Transactional(readOnly = true)
-    public FeedPageResponse userPublicPosts(long authorId, Long viewerId, String cursor, boolean includeVideo) {
+    public FeedPageResponse userPublicPosts(long authorId, Long viewerId, String cursor) {
         FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
         List<ContentPost> rows = posts.findPublicPostsByAuthor(
                 authorId,
@@ -541,7 +517,6 @@ public class FeedService {
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
-                includeVideo,
                 PageRequest.of(0, PAGE_SIZE + 1));
 
         boolean hasMore = rows.size() > PAGE_SIZE;
@@ -563,7 +538,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null, postMedia.resolve(p, viewerId)))
+                        null, null))
                 .toList();
 
         String nextCursor = null;
@@ -581,14 +556,13 @@ public class FeedService {
      * 经本 service 接口供 me 端点调用（禁 profile/auth 直 join content repository）。
      */
     @Transactional(readOnly = true)
-    public FeedPageResponse myPosts(long userId, String cursor, boolean includeVideo) {
+    public FeedPageResponse myPosts(long userId, String cursor) {
         FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
         List<ContentPost> rows = posts.findMyPosts(
                 userId,
                 decoded != null,
                 decoded == null ? null : decoded.createdAt(),
                 decoded == null ? null : decoded.id(),
-                includeVideo,
                 PageRequest.of(0, PAGE_SIZE + 1));
 
         boolean hasMore = rows.size() > PAGE_SIZE;
@@ -614,7 +588,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null, postMedia.resolve(p, userId)))
+                        null, null))
                 .toList();
 
         String nextCursor = null;

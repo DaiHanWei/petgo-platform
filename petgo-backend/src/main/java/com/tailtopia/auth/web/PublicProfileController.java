@@ -16,7 +16,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -163,9 +162,7 @@ public class PublicProfileController {
     @GetMapping("/api/v1/users/{userId}/posts")
     public FeedPageResponse posts(@AuthenticationPrincipal Jwt jwt,
             @PathVariable long userId,
-            @RequestParam(required = false) String cursor,
-            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false)
-            String capabilities) {
+            @RequestParam(required = false) String cursor) {
         Long viewerId = viewerId(jwt);
         if (viewerId != null && hideRelations.isBlocked(viewerId, userId)) {
             throw AppException.blockedUser("你已拉黑该用户");
@@ -192,9 +189,7 @@ public class PublicProfileController {
             }
             return new FeedPageResponse(List.of(), null, false, null);
         }
-        // 专题线 video Story 2.2：能力只在 Controller 解析，显式传下去。
-        return feedService.userPublicPosts(userId, viewerId, cursor,
-                com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
+        return feedService.userPublicPosts(userId, viewerId, cursor);
     }
 
     /** 登录<b>用户</b> id（游客 / 无效 JWT / 非 USER 角色 → null）。见类注释。 */

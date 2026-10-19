@@ -64,13 +64,4 @@ public class NotificationAggregateDao {
     public void touch(long notificationId) {
         jdbc.update("UPDATE notifications SET created_at = now(), updated_at = now() WHERE id = ?", notificationId);
     }
-
-    /**
-     * 注销级联（D1/D2）：删掉该用户<b>作为触发人</b>的全部记录（他赞过 / 评论过 / 关注过谁）。
-     * 注销是就地匿名化、不删 users 行，{@code actor_user_id} 上的 FK CASCADE 永远不触发，必须显式删。
-     * 通知行本身属于收件人，保留；没有触发人的行按存量规则回落旧文案。
-     */
-    public int deleteActorRowsByUserId(long actorUserId) {
-        return jdbc.update("DELETE FROM notification_actors WHERE actor_user_id = ?", actorUserId);
-    }
 }

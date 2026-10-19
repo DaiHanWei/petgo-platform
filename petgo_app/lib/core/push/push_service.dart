@@ -10,8 +10,6 @@ import 'package:tencent_cloud_chat_push/tencent_cloud_chat_push.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
 
 import '../../features/auth/domain/auth_state.dart';
-import '../../features/notify/domain/app_update_controller.dart';
-import '../../features/notify/domain/app_version_check.dart';
 import '../../features/notify/domain/notification_deep_link.dart';
 import '../analytics/analytics.dart';
 import '../im/im_service.dart';
@@ -273,9 +271,6 @@ class PushService {
       _ref.read(pendingDeepLinkProvider.notifier).set(location);
       return;
     }
-    // 强制更新期间不导航：push 会把新页盖在根 Navigator 的强更弹窗之上，弹窗不返回也就不重弹，
-    // 等于点一条推送就绕过了强更（OCR 审查 #1）。强更下 App 本就不可用，直接丢弃该跳转。
-    if (_ref.read(appUpdateControllerProvider).decision == UpdateDecision.forced) return;
     if (DeepLinkRoutes.isShellTabRoot(location) || location.startsWith('/vet')) {
       ctx.go(location);
     } else if (redirectWouldRewrite(_ref.read(authControllerProvider), location)) {

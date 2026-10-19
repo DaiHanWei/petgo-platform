@@ -1,7 +1,6 @@
 import '../../auth/domain/user_tag.dart';
 import '../../mention/domain/mention_view.dart';
 import '../../social/domain/follow_state.dart';
-import '../video/video_info.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
@@ -31,18 +30,7 @@ class ContentDetail {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
-    this.mediaType = kMediaTypeImage,
-    this.video,
   });
-
-  /// 媒体类型线格式（专题线 video Story 2.3）；缺省 / 未知 → 按图文。
-  final String mediaType;
-
-  /// 视频信息（只在视频帖下发）。判断视频帖用 [isVideo]。
-  final VideoInfo? video;
-
-  /// 是否视频帖：以 `mediaType` 为准；缺 `video` 时按图文降级。
-  bool get isVideo => isVideoMediaType(mediaType) && video != null;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
   final String? authorToken;
@@ -78,8 +66,6 @@ class ContentDetail {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: epoch,
-        mediaType: mediaType,
-        video: video,
       );
 
   final int id;
@@ -171,8 +157,6 @@ class ContentDetail {
       // V1.3.4 follow Story 2.1：缺失 / null 都按默认。
       authorToken: json['authorToken'] as String?,
       authorFollowState: FollowState.fromJson(json['authorFollowState']),
-      mediaType: (json['mediaType'] as String?) ?? kMediaTypeImage,
-      video: VideoInfo.fromJson(json['video']),
     );
   }
 }

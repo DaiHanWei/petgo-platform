@@ -206,26 +206,22 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         hdPurchase(u.getId(), student, "PAWCOIN", null, T0.plus(1, ChronoUnit.HOURS));
         long sim = typedCard(u.getId(), base + 2, "SIM", null, "TX600324020003");
         hdPurchase(u.getId(), sim, "PAWCOIN", null, T0.plus(2, ChronoUnit.HOURS));
-        // V95 前老卡：无身份码，流水号补零到 4 位（如 42 → 0042）。流水号取库里空闲的 1–999（保留补零断言）——
-        // 写死 42 会和同库其他测试建的卡撞 uq_id_cards_serial（CI 全量跑时稳定复现）。
-        long legacySerial = jdbc.queryForObject("SELECT s FROM generate_series(1, 999) s "
-                + "WHERE NOT EXISTS (SELECT 1 FROM id_cards c WHERE c.serial_id = s) LIMIT 1", Long.class);
-        String legacyNo = String.format("%04d", legacySerial);
+        // V95 前老卡：无身份码，流水号 42 → 0042
         long legacy = jdbc.queryForObject("INSERT INTO id_cards (user_id, serial_id, name, hd_unlocked) "
-                + "VALUES (?, ?, 'Mochi', true) RETURNING id", Long.class, u.getId(), legacySerial);
+                + "VALUES (?, 42, 'Mochi', true) RETURNING id", Long.class, u.getId());
         hdPurchase(u.getId(), legacy, "PAWCOIN", null, T0.plus(3, ChronoUnit.HOURS));
 
         UserPurchasesView v = query.forUser(u.getId());
         assertThat(v.ktpCards()).extracting(UserPurchasesView.KtpCard::styleKey)
                 .containsExactly("KTP", "SIM", "STUDENT.CERIA", "PASSPORT");
         assertThat(v.ktpCards()).extracting(UserPurchasesView.KtpCard::displayNo)
-                .containsExactly(legacyNo, "TX600324020003", "TX600324020002", "TX600324020001");
+                .containsExactly("0042", "TX600324020003", "TX600324020002", "TX600324020001");
 
         String html = drawer(u.getId());
         assertThat(html).contains("护照 · No. TX600324020001 · Mochi")
                 .contains("学生卡 Ceria · No. TX600324020002 · Mochi")
                 .contains("SIM 驾照 · No. TX600324020003 · Mochi")
-                .contains("KTP · No. " + legacyNo + " · Mochi")
+                .contains("KTP · No. 0042 · Mochi")
                 .doesNotContain("KTP #");
     }
 

@@ -8,13 +8,8 @@ import 'feed_controller.dart';
 /// 关注流控制器（V1.3.4 following 流）。与 [FeedController] 同签名同语义，
 /// 只是取数改调 [FeedRepository.getFollowingFeed]（无分类 Tab、无宠物状态联动）。
 class FollowingFeedController extends AsyncNotifier<FeedState> {
-  /// build 代际：build 重跑（刷新 / 换账号 invalidate）后，在途 loadMore 的迟到结果据此丢弃，
-  /// 否则会把旧列表 + 旧游标写回、覆盖新首屏（OCR 审查 #2，同 PostLikersController）。
-  int _gen = 0;
-
   @override
   Future<FeedState> build() async {
-    _gen++;
     // 同 FeedController：发请求前读全局关注版本号写进快照（Story 2.1 AC3.3）。
     final epoch = ref.read(followStateProvider.notifier).currentEpoch;
     final page = await ref.read(feedRepositoryProvider).getFollowingFeed();
@@ -37,10 +32,8 @@ class FollowingFeedController extends AsyncNotifier<FeedState> {
       }
       state = AsyncData(current.copyWith(loadingMore: true, loadMoreFailed: false));
       final epoch = ref.read(followStateProvider.notifier).currentEpoch;
-      final gen = _gen;
       try {
         final page = await ref.read(feedRepositoryProvider).getFollowingFeed(cursor: current.nextCursor);
-        if (!ref.mounted || gen != _gen) return;
         state = AsyncData(current.copyWith(
           items: [...current.items, for (final i in page.items) i.copyWith(followEpoch: epoch)],
           nextCursor: page.nextCursor,
@@ -51,7 +44,6 @@ class FollowingFeedController extends AsyncNotifier<FeedState> {
           rankMode: RankMode.merge(current.rankMode, page.rankMode),
         ));
       } catch (_) {
-        if (!ref.mounted || gen != _gen) return;
         state = AsyncData(current.copyWith(loadingMore: false, loadMoreFailed: true));
         return;
       }

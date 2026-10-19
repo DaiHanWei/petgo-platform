@@ -42,8 +42,7 @@ class AdminUserAccessControlTest {
         @Bean
         AdminUserController controller(AdminUserService s) {
             return new AdminUserController(s, TestMessages.real(),
-                    mock(com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery.class),
-                    mock(com.tailtopia.admin.usermgmt.service.AdminUserVideoService.class));
+                    mock(com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery.class));
         }
     }
 

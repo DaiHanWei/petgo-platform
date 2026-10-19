@@ -27,7 +27,7 @@ class _FakeRepo implements MediaRepository {
   MediaScope? lastScope;
 
   @override
-  Future<UploadTicket> requestUploadTicket(MediaScope scope, {String? contentType, String? purpose}) async {
+  Future<UploadTicket> requestUploadTicket(MediaScope scope, {String? contentType}) async {
     lastScope = scope;
     return const UploadTicket(
       uploadUrl: 'https://tailtopia.oss/public/42/obj.jpg?sig',

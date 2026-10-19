@@ -35,7 +35,6 @@ class CommentSection extends ConsumerStatefulWidget {
     this.currentUserId,
     this.postAuthorId,
     this.isContentAuthor = false,
-    this.onPostAuthorHidden,
   });
 
   final int postId;
@@ -45,11 +44,6 @@ class CommentSection extends ConsumerStatefulWidget {
   /// （停在服务端已 404 的详情页上是明显穿帮）。
   final int? postAuthorId;
   final bool isContentAuthor;
-
-  /// 拉黑 / 举报的恰好是**帖主**时的收尾（专题线 video Story 2.5）：评论区放在弹层里时
-  /// （视频页评论抽屉），本区的 context 只能 pop 掉弹层，退不回列表 —— 由宿主自己先关弹层再退页。
-  /// 缺省（图文详情页）沿用 `onAuthorHidden(popContext: 本区 context)`。
-  final void Function(int authorId)? onPostAuthorHidden;
 
   @override
   ConsumerState<CommentSection> createState() => _CommentSectionState();
@@ -265,11 +259,6 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final bool isPostAuthor =
         widget.postAuthorId != null && authorId == widget.postAuthorId;
     return () {
-      final hostHandler = widget.onPostAuthorHidden;
-      if (isPostAuthor && hostHandler != null) {
-        hostHandler(authorId);
-        return;
-      }
       onAuthorHidden(
         ref,
         authorId,

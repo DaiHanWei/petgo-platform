@@ -13,7 +13,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,26 +24,17 @@ class LarkWebhookClientTest {
     private HttpServer server;
     private final AtomicReference<String> received = new AtomicReference<>();
 
-    private final Map<String, String> receivedBy = new ConcurrentHashMap<>();
-
     private String serve(int status, String body) throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.start();
-        return route("/hook", status, body);
-    }
-
-    /** 在同一假服务器上再挂一个路径（模拟另一个群的 webhook）。 */
-    private String route(String path, int status, String body) {
-        server.createContext(path, ex -> {
-            String req = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            received.set(req);
-            receivedBy.put(path, req);
+        server.createContext("/hook", ex -> {
+            received.set(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] out = body.getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(status, out.length);
             ex.getResponseBody().write(out);
             ex.close();
         });
-        return "http://127.0.0.1:" + server.getAddress().getPort() + path;
+        server.start();
+        return "http://127.0.0.1:" + server.getAddress().getPort() + "/hook";
     }
 
     @AfterEach
@@ -122,48 +112,5 @@ class LarkWebhookClientTest {
 
         assertThatThrownBy(() -> client(url, "").send(Map.of()))
                 .isInstanceOf(LarkWebhookClient.LarkWebhookException.class);
-    }
-
-    @Test
-    @DisplayName("多个群（逗号分隔）→ 每个群各发一份，密钥按位置对应，空位 = 该群不签名")
-    void multipleTargets() throws Exception {
-        String a = serve(200, "{\"code\":0}");
-        String b = route("/hook2", 200, "{\"code\":0}");
-        client(a + " , " + b, "test-secret,").send(Map.of("msg_type", "interactive"));
-
-        JsonNode sentA = new ObjectMapper().readTree(receivedBy.get("/hook"));
-        JsonNode sentB = new ObjectMapper().readTree(receivedBy.get("/hook2"));
-        assertThat(sentA.get("sign").asText()).isEqualTo("wSds2BzzFIIGf/WrhUO+NI1q/9j+FRJd3JNHKAq0NZY=");
-        assertThat(sentB.has("sign")).isFalse();
-        assertThat(sentB.get("msg_type").asText()).isEqualTo("interactive");
-    }
-
-    @Test
-    @DisplayName("🔴 多个群里一个失败 → 其余群照发，最后抛汇总异常标明群序号，不含 URL")
-    void oneTargetFailsOthersStillSent() throws Exception {
-        String a = serve(500, "oops");
-        String b = route("/hook2", 200, "{\"code\":0}");
-
-        assertThatThrownBy(() -> client(a + "," + b, "").send(Map.of("msg_type", "interactive")))
-                .isInstanceOf(LarkWebhookClient.LarkWebhookException.class)
-                .hasMessageContaining("群#1")
-                .hasMessageNotContaining("群#2")
-                .hasMessageNotContaining(a);
-        assertThat(receivedBy).containsKey("/hook2");
-    }
-
-    @Test
-    @DisplayName("targets 解析：空白地址跳过、缺的密钥视为未签名、全空 = 未启用")
-    void targetsParsing() {
-        DailyReportProperties p = new DailyReportProperties();
-        p.setWebhookUrl("http://a, ,http://b");
-        p.setSecret("s1");
-        assertThat(p.targets()).containsExactly(
-                new DailyReportProperties.Target("http://a", "s1"),
-                new DailyReportProperties.Target("http://b", ""));
-        assertThat(p.isEnabled()).isTrue();
-
-        p.setWebhookUrl(" , ");
-        assertThat(p.isEnabled()).isFalse();
     }
 }

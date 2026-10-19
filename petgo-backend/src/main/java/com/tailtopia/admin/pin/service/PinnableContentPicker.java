@@ -30,17 +30,10 @@ public class PinnableContentPicker {
 
     private final ContentPostRepository posts;
     private final AccountQueryService accountQuery;
-    /**
-     * 专题线 video Story 3.3：视频帖缩略图用签名封面 —— 发布后到对账完成之间（或对账失败时）封面仍是私有，
-     * 原地址会 403 显示成坏图（code review）。图文帖原样。
-     */
-    private final com.tailtopia.content.service.PostMediaResolver postMedia;
 
-    public PinnableContentPicker(ContentPostRepository posts, AccountQueryService accountQuery,
-            com.tailtopia.content.service.PostMediaResolver postMedia) {
+    public PinnableContentPicker(ContentPostRepository posts, AccountQueryService accountQuery) {
         this.posts = posts;
         this.accountQuery = accountQuery;
-        this.postMedia = postMedia;
     }
 
     @Transactional(readOnly = true)
@@ -72,12 +65,12 @@ public class PinnableContentPicker {
         return ids.isEmpty() ? Map.of() : accountQuery.findAuthorViews(ids);
     }
 
-    private PinnableContentRow toRow(ContentPost p, AuthorView author) {
-        String thumb = postMedia.resolveForAdmin(p).firstImageUrl();
+    private static PinnableContentRow toRow(ContentPost p, AuthorView author) {
+        List<String> images = p.getImageUrls();
+        String thumb = images == null || images.isEmpty() ? null : images.get(0);
         return new PinnableContentRow(p.getId(), p.getType().name(), truncate(p.getText()), p.getCreatedAt(),
                 p.getAuthorId(), author == null || author.deleted() ? null : author.nickname(),
-                author != null && author.deleted(), thumb,
-                p.getMediaType() == com.tailtopia.content.domain.MediaType.VIDEO);
+                author != null && author.deleted(), thumb);
     }
 
     static String truncate(String text) {

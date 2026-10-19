@@ -35,8 +35,6 @@ import '../data/public_profile_pet_repository.dart';
 import '../data/public_profile_repository.dart';
 import 'public_user_posts_controller.dart';
 import '../../profile/data/pet_recommendation_repository.dart';
-import '../../content/video/video_nav.dart';
-import '../../content/video/video_card_impression.dart';
 
 /// 用户在主页上对目标用户做成了什么 —— 主页 pop 时回给调用方的**收尾信号**。
 ///
@@ -628,7 +626,7 @@ class _PostGrid extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(l10n),
-            VideoImpressionScope(child: GridView.count(
+            GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -636,17 +634,15 @@ class _PostGrid extends ConsumerWidget {
               crossAxisSpacing: 7,
               children: [
                 for (final post in page.items)
-                  _videoImpression(post.isVideo, post.id, VideoSource.profile, PostGridTile(
+                  PostGridTile(
                     postId: post.id,
                     type: post.type,
                     firstImageUrl: post.firstImageUrl,
                     // 他人主页永远不会有私密内容（服务端就没给），这里不传。
-                    videoDurationMs: post.isVideo ? post.video!.durationMs : null,
-                    onTap: () =>
-                        pushContentDetail(context, post.id, isVideo: post.isVideo, source: VideoSource.profile),
-                  )),
+                    onTap: () => context.push('/content/${post.id}'),
+                  ),
               ],
-            )),
+            ),
             if (page.hasMore)
               TextButton(
                 key: const ValueKey('profilePostsLoadMore'),
@@ -907,11 +903,3 @@ class _EmptyState extends StatelessWidget {
         ),
       );
 }
-
-/// 视频帖网格格子包一层曝光检测（专题线 video Story 2.3）；图文帖原样返回。
-/// 去重实例取自页面级 [VideoImpressionScope]（加载更多不重复上报）。
-Widget _videoImpression(bool isVideo, int postId, VideoSource source, Widget tile) => isVideo
-    ? Builder(
-        builder: (context) => VideoCardImpression(
-            postId: postId, source: source, tracker: VideoImpressionScope.of(context), child: tile))
-    : tile;

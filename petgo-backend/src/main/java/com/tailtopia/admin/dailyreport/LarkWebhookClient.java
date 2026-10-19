@@ -10,9 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -27,9 +25,6 @@ import org.springframework.stereotype.Component;
  *
  * <p>🔴 成功判据要<b>两个都满足</b>：HTTP 200 <b>且</b> body 里 {@code code == 0}。飞书对签名错误、
  * 关键词不匹配、频率超限都回 HTTP 200 + 非 0 code，只看状态码会把失败当成功。
- *
- * <p>多个群（{@link DailyReportProperties#targets()}）逐个发送，一个群失败不影响其余群；
- * 全部发完后若有失败，抛一个汇总异常，用「群#序号」（配置顺序，从 1 起）标明是哪个群。
  *
  * <p>🔒 webhook URL 含 token，<b>任何异常信息与日志都不带 URL</b>。
  */
@@ -63,23 +58,8 @@ public class LarkWebhookClient {
     }
 
     public void send(Map<String, Object> payload) {
-        List<DailyReportProperties.Target> targets = props.targets();
-        List<String> failures = new ArrayList<>();
-        for (int i = 0; i < targets.size(); i++) {
-            try {
-                sendOne(targets.get(i), payload);
-            } catch (LarkWebhookException e) {
-                failures.add(targets.size() > 1 ? "群#" + (i + 1) + " " + e.getMessage() : e.getMessage());
-            }
-        }
-        if (!failures.isEmpty()) {
-            throw new LarkWebhookException(String.join("；", failures));
-        }
-    }
-
-    private void sendOne(DailyReportProperties.Target target, Map<String, Object> payload) {
         Map<String, Object> body = new LinkedHashMap<>();
-        String secret = target.secret();
+        String secret = props.getSecret();
         if (secret != null && !secret.isBlank()) {
             String ts = String.valueOf(clock.instant().getEpochSecond());
             body.put("timestamp", ts);
@@ -89,7 +69,7 @@ public class LarkWebhookClient {
 
         HttpResponse<String> resp;
         try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(target.webhookUrl()))
+            HttpRequest req = HttpRequest.newBuilder(URI.create(props.getWebhookUrl()))
                     .timeout(Duration.ofSeconds(props.getTimeoutSeconds()))
                     .header("Content-Type", "application/json; charset=utf-8")
                     .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body), StandardCharsets.UTF_8))

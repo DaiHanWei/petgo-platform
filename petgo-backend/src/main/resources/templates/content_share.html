@@ -42,17 +42,6 @@
         .body { font-size: 15px; line-height: 1.6; margin-top: 12px; white-space: pre-wrap;
                 word-break: break-word; }
         .shot { width: 100%; display: block; }
-        /* 专题线 video Story 2.6：视频帖封面 + 播放角标 + 时长（网页内不播放）。 */
-        .vcover { position: relative; background: #000; }
-        .vcover img { width: 100%; display: block; }
-        .vplay { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
-                 border-radius: 50%; background: rgba(0,0,0,.45); }
-        .vplay::after { content: ""; position: absolute; left: 22px; top: 17px; border-style: solid;
-                        border-width: 11px 0 11px 18px; border-color: transparent transparent transparent #fff; }
-        .vdur { position: absolute; right: 8px; bottom: 8px; padding: 1px 6px; border-radius: 4px;
-                background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-weight: 600; }
-        .vnotice { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: #FFF6E5;
-                   color: #8A5A00; font-size: 13px; line-height: 1.4; }
         .shots img + img { margin-top: 2px; }
         .cta {
             position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px;
@@ -72,11 +61,6 @@
     <img class="brand" src="/brand/wordmark_brand.svg" alt="TailTopia"/>
 
     <div class="card">
-        <div class="vcover" id="videoCover" th:if="${isVideo}">
-            <img th:if="${videoCoverUrl != null}" th:src="${videoCoverUrl}" alt=""/>
-            <span class="vplay"></span>
-            <span class="vdur" th:text="${videoDurationLabel}">0:00</span>
-        </div>
         <div class="shots" th:if="${hasImages}">
             <img class="shot" th:each="img : ${images}" th:src="${img}" alt=""/>
         </div>
@@ -91,7 +75,6 @@
                 <div class="chip" th:text="${typeLabel}" th:style="'color:' + ${typeColor}">—</div>
             </div>
             <div class="body" th:if="${hasBody}" th:text="${body}">—</div>
-            <div class="vnotice" id="videoNotice" th:if="${isVideo}">Perbarui TailTopia ke versi terbaru untuk menonton video ini.</div>
         </div>
     </div>
 

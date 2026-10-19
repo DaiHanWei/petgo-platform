@@ -66,7 +66,7 @@ class ContentDetailServiceTest {
                 // V1.3.2 Story 1.5：打卡场所条只读口。
                 placeCheckins,
                 // V1.3.4 follow Story 2.1：详情头部关注关系。
-                followReader, com.tailtopia.content.service.PostMediaFixtures.passthrough());
+                followReader);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
@@ -105,8 +105,8 @@ class ContentDetailServiceTest {
                 com.tailtopia.place.domain.PlaceAvailability.UNAVAILABLE);
         when(placeCheckins.findCheckinPlace(900L)).thenReturn(Optional.of(view));
 
-        assertThat(service.getDetail(3L, 7L, true).checkinPlace()).isEqualTo(view);
-        assertThat(service.getDetail(1L, 7L, true).checkinPlace()).isNull();
+        assertThat(service.getDetail(3L, 7L).checkinPlace()).isEqualTo(view);
+        assertThat(service.getDetail(1L, 7L).checkinPlace()).isNull();
         org.mockito.Mockito.verify(placeCheckins, org.mockito.Mockito.times(1)).findCheckinPlace(900L);
     }
 
@@ -116,7 +116,7 @@ class ContentDetailServiceTest {
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/av.jpg", false, java.util.List.of())));
 
-        ContentDetailResponse d = service.getDetail(1L, 7L, true);
+        ContentDetailResponse d = service.getDetail(1L, 7L);
         assertThat(d.imageUrls()).containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg");
         assertThat(d.commentCount()).isEqualTo(5L);
         assertThat(d.likeCount()).isEqualTo(2L); // Story 3.4 真实计数
@@ -130,19 +130,19 @@ class ContentDetailServiceTest {
         when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
-        assertThat(service.getDetail(1L, null, true).isAuthor()).isFalse();
+        assertThat(service.getDetail(1L, null).isAuthor()).isFalse();
     }
 
     @Test
     void missingPostIsNotFound() {
         when(posts.findById(99L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.getDetail(99L, null, true)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getDetail(99L, null)).isInstanceOf(AppException.class);
     }
 
     @Test
     void softDeletedPostIsNotFound() {
         when(posts.findById(2L)).thenReturn(Optional.of(post(2L, 7L, Instant.now())));
-        assertThatThrownBy(() -> service.getDetail(2L, null, true)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getDetail(2L, null)).isInstanceOf(AppException.class);
     }
 
     @Test
@@ -150,7 +150,7 @@ class ContentDetailServiceTest {
         // 内容审核 cm-6 §5.4：举报者对该帖视同不可见 → 404（即使帖仍 PUBLISHED）。
         when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
         when(reportService.hasReported(4L, 88L)).thenReturn(true);
-        assertThatThrownBy(() -> service.getDetail(4L, 88L, true)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getDetail(4L, 88L)).isInstanceOf(AppException.class);
     }
 
     /**
@@ -163,7 +163,7 @@ class ContentDetailServiceTest {
     void hiddenAuthorPostIsNotFoundForViewer() {
         when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
         when(hideRelations.isHidden(88L, 7L)).thenReturn(true); // 88 隐藏了作者 7
-        assertThatThrownBy(() -> service.getDetail(4L, 88L, true)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getDetail(4L, 88L)).isInstanceOf(AppException.class);
     }
 
     /** Story 1.1 AC10：游客不查隐藏关系，行为完全不变。 */
@@ -173,7 +173,7 @@ class ContentDetailServiceTest {
         when(accounts.findAuthorViews(org.mockito.ArgumentMatchers.anyList()))
                 .thenReturn(java.util.Map.of(7L, new com.tailtopia.auth.dto.AuthorView(7L, "A", null, false, java.util.List.of())));
 
-        service.getDetail(4L, null, true);
+        service.getDetail(4L, null);
 
         org.mockito.Mockito.verify(hideRelations, org.mockito.Mockito.never())
                 .isHidden(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
@@ -191,7 +191,7 @@ class ContentDetailServiceTest {
         when(posts.findById(5L)).thenReturn(Optional.of(underReview(5L, 7L)));
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
-        ContentDetailResponse d = service.getDetail(5L, 7L, true);
+        ContentDetailResponse d = service.getDetail(5L, 7L);
         assertThat(d.isAuthor()).isTrue();
     }
 
@@ -199,8 +199,8 @@ class ContentDetailServiceTest {
     void othersGetNotFoundForUnderReviewPost() {
         // 挂起帖对他人（含游客）零泄漏 → 统一 404 防枚举。
         when(posts.findById(5L)).thenReturn(Optional.of(underReview(5L, 7L)));
-        assertThatThrownBy(() -> service.getDetail(5L, 88L, true)).isInstanceOf(AppException.class);
-        assertThatThrownBy(() -> service.getDetail(5L, null, true)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getDetail(5L, 88L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.getDetail(5L, null)).isInstanceOf(AppException.class);
     }
 
     @Test
@@ -208,7 +208,7 @@ class ContentDetailServiceTest {
         when(posts.findById(3L)).thenReturn(Optional.of(post(3L, 8L, null)));
         when(accounts.findAuthorViews(anyList())).thenReturn(Map.of(8L, AuthorView.anonymized(8L)));
 
-        ContentDetailResponse d = service.getDetail(3L, null, true);
+        ContentDetailResponse d = service.getDetail(3L, null);
         assertThat(d.authorDeleted()).isTrue(); // 非 404，匿名化保留
         assertThat(d.authorNickname()).isNull();
         assertThat(d.authorId()).isEqualTo(8L);
@@ -229,7 +229,7 @@ class ContentDetailServiceTest {
         when(followReader.followState(99L, 7L))
                 .thenReturn(new com.tailtopia.social.read.FollowState(false, true));
 
-        ContentDetailResponse d = service.getDetail(1L, 99L, true);
+        ContentDetailResponse d = service.getDetail(1L, 99L);
 
         assertThat(d.authorToken()).isEqualTo("tok7");
         assertThat(d.authorFollowState()).isEqualTo(new com.tailtopia.social.read.FollowState(false, true));
@@ -241,9 +241,9 @@ class ContentDetailServiceTest {
         stubAuthor7();
         when(accounts.publicTokensOf(anyList())).thenReturn(Map.of(7L, "tok7"));
 
-        assertThat(service.getDetail(1L, null, true).authorFollowState())
+        assertThat(service.getDetail(1L, null).authorFollowState())
                 .isEqualTo(com.tailtopia.social.read.FollowState.NONE);
-        assertThat(service.getDetail(1L, 7L, true).authorFollowState())
+        assertThat(service.getDetail(1L, 7L).authorFollowState())
                 .isEqualTo(com.tailtopia.social.read.FollowState.NONE);
         org.mockito.Mockito.verify(followReader, org.mockito.Mockito.never())
                 .followState(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
@@ -255,28 +255,11 @@ class ContentDetailServiceTest {
         stubAuthor7();
         when(accounts.publicTokensOf(anyList())).thenReturn(Map.of());
 
-        ContentDetailResponse d = service.getDetail(1L, 99L, true);
+        ContentDetailResponse d = service.getDetail(1L, 99L);
 
         assertThat(d.authorToken()).isNull();
         assertThat(d.authorFollowState()).isEqualTo(com.tailtopia.social.read.FollowState.NONE);
         org.mockito.Mockito.verify(followReader, org.mockito.Mockito.never())
                 .followState(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
-    }
-
-    /** 专题线 video Story 2.2（AD-7）：旧版看视频帖详情 → 与已删除同一个 404；新版照常。 */
-    @Test
-    void oldClientGetsGone404ForVideoPost() {
-        ContentPost v = post(9L, 7L, null);
-        v.attachVideo("video/7/k.mp4", 5000, 720, 1280, 10L);
-        when(posts.findById(9L)).thenReturn(Optional.of(v));
-        when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
-
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getDetail(9L, 8L, false))
-                .isInstanceOfSatisfying(com.tailtopia.shared.error.AppException.class,
-                        e -> assertThat(e.getMessage()).isEqualTo(ContentDetailService.GONE_DETAIL));
-        assertThat(service.getDetail(9L, 8L, true).id()).isEqualTo(9L);
-        // 写接口走的 2 参版本不按能力过滤（旧版本来看不到视频帖）。
-        assertThat(service.requireVisiblePost(9L, 8L)).isSameAs(v);
     }
 }

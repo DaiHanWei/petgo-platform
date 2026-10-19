@@ -308,9 +308,7 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
         User virtual = newUser();
         jdbc.update("UPDATE users SET deleted_at = now() WHERE id = ?", deleted.getId());
         jdbc.update("UPDATE users SET status = 'DEACTIVATED' WHERE id = ?", banned.getId());
-        // 虚拟号 sub 前缀须同步改成 virtual:，否则留下一行脏数据让 SyntheticAccountParityTest 全表护栏变红。
-        jdbc.update("UPDATE users SET account_type = 'VIRTUAL', google_sub = 'virtual:' || google_sub WHERE id = ?",
-                virtual.getId());
+        jdbc.update("UPDATE users SET account_type = 'VIRTUAL' WHERE id = ?", virtual.getId());
         String csv = "﻿user_id,name\r\n" + ok.getId() + ",Budi\r\n" + deleted.getId() + "\r\n"
                 + banned.getId() + "\r\n" + virtual.getId() + "\r\n999999999999\r\n=cmd\r\n";
         MockMultipartFile file = new MockMultipartFile("file", "ids.csv", "text/csv",

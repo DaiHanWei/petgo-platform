@@ -138,7 +138,7 @@ class OfficialAutoFollowIntegrationTest extends ApiIntegrationTest {
 
     private User newVirtualUser() {
         long n = SEQ.incrementAndGet();
-        User v = users.save(User.newVirtual("virtual:sub-" + n, "马甲" + n, null, 1L)); // 虚拟号 sub 前缀须是 virtual:（SyntheticAccountParityTest 全表护栏）
+        User v = users.save(User.newVirtual("virtual-sub-" + n, "马甲" + n, null, 1L));
         return v;
     }
 

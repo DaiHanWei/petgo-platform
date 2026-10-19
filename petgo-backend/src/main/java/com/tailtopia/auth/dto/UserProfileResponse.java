@@ -54,12 +54,7 @@ public record UserProfileResponse(
         /** 我关注的人数（冗余列直读，加载时快照）。 */
         int followingCount,
         /** 关注我的人数（同上）。 */
-        int followerCount,
-        /**
-         * 会员等级（专题线 video Story 1.1 · FR-3）。App 据此决定是否显示「视频」入口（≥ 10），
-         * 服务端发视频时另行校验（FR-4），不依赖客户端。实体只读映射直读，零额外查询。
-         */
-        int vipLevel) {
+        int followerCount) {
 
     /** 登录响应用：不带帖子统计（{@code postCount} / {@code likeCount} 为 null，T-6）。 */
     public static UserProfileResponse from(User u, boolean hasPetProfile) {
@@ -91,7 +86,6 @@ public record UserProfileResponse(
                 postCount,
                 likeCount,
                 u.getFollowingCount(),
-                u.getFollowerCount(),
-                u.getVipLevel());
+                u.getFollowerCount());
     }
 }
