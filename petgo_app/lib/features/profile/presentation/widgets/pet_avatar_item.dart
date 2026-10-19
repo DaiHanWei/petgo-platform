@@ -189,15 +189,18 @@ class PetAvatarItem extends StatelessWidget {
               Padding(
                 // 左右各让 3：相邻两只都被省略时，两段「…」之间仍留出间隔，不糊成一串。
                 padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: Text(
-                  meta,
-                  key: metaKey,
-                  style: const TextStyle(fontSize: 11, color: AppColors.ink2),
-                  // 稿 A2 / J0：副标题**单行**，放不下尾部省略（L2 第二轮：原先两行会把一排头像撑得高低不齐）。
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
+                // 稿 A2 / J0：副标题**单行**（L2 第二轮：原先两行会把一排头像撑得高低不齐）；
+                // 放不下时整体缩小而不是省略（L2 第三轮：省略会把年龄截掉）。
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    meta,
+                    key: metaKey,
+                    style: const TextStyle(fontSize: 11, color: AppColors.ink2),
+                    maxLines: 1,
+                    softWrap: false,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
           ],

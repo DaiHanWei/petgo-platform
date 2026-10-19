@@ -22,6 +22,8 @@ import '../../ops/presentation/open_ops_target.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/presentation/widgets/milestone_badge.dart';
+import '../../profile/data/current_pet_provider.dart';
+import '../../profile/data/pet_list_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification_deep_link.dart';
@@ -592,7 +594,13 @@ class _NotificationCenterPageState
     // 组内保持服务端顺序；翻页加载的条目按同一函数并入对应分组；空组不显示。
     // V1.1.6 Story 6.1：S/M 里程碑通知要显示**具体是哪一条**，文案里带 `{name}` 占位符。
     // V1 单宠物，取当前档案的名字；拿不到就退化成简短标题（仍然具体）。
-    final petName = ref.watch(petProfileProvider).asData?.value?.name;
+    // V1.4.0 多宠物：通知不带宠物 id，一律按第一只（默认）宠物取名，不随当前切换的宠物变（L2 第三轮拍板）；
+    // 宠物列表取不到时退回当前档案的名字。
+    final pets = ref.watch(petListProvider).asData?.value;
+    final firstPetId = pets == null ? null : resolveEffectivePetId(pets, null);
+    final petName = firstPetId != null
+        ? pets!.firstWhere((p) => p.id == firstPetId).name
+        : ref.watch(petProfileProvider).asData?.value?.name;
     final now = DateTime.now();
     final groups = <NotificationGroup, List<NotificationItem>>{};
     for (final it in items) {

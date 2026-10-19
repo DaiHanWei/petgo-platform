@@ -30,13 +30,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  // L2 第二轮（稿 A2 / J0）：副标题改为**单行**、放不下尾部省略（原先允许两行，会把一排头像撑得高低不齐）。
-  testWidgets('物种 · 年龄单行显示，放不下尾部省略（稿 A2 / J0）', (tester) async {
+  // L2 第二轮（稿 A2 / J0）：副标题改为**单行**（原先允许两行，会把一排头像撑得高低不齐）；
+  // L2 第三轮：放不下时整体缩小、不省略（省略会截掉年龄）。
+  testWidgets('物种 · 年龄单行显示，放不下整体缩小不省略（稿 A2 / J0）', (tester) async {
     await pump(tester, const Locale('id'));
     final text = tester.widget<Text>(find.byKey(const ValueKey('meta')));
     expect(text.maxLines, 1);
-    expect(text.overflow, TextOverflow.ellipsis);
+    expect(text.overflow, isNot(TextOverflow.ellipsis));
     expect(text.data, startsWith('Anjing · '));
+    expect(find.ancestor(of: find.byKey(const ValueKey('meta')), matching: find.byType(FittedBox)), findsOneWidget);
     final para = tester.renderObject<RenderParagraph>(find.byKey(const ValueKey('meta')));
     expect(para.size.height, lessThan(20), reason: '只占一行');
   });

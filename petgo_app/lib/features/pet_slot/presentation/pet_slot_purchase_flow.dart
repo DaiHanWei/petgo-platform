@@ -6,6 +6,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../keepsake/domain/keepsake_purchase_result.dart';
@@ -128,8 +129,12 @@ Future<PetSlotFlowOutcome> _runPetSlotPurchase(
   final repo = ref.read(petSlotRepositoryProvider);
   final store = ref.read(petSlotAttemptStoreProvider);
   final l10n = AppLocalizations.of(context);
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  void snack(String msg) => messenger?.showSnackBar(SnackBar(content: Text(msg)));
+  // 提示挂在顶部 Toast（L2 第三轮：底部 SnackBar 会盖住名额页吸底的「Perpanjang」）；
+  // await 之后 context 可能已失效，先取好根 Overlay（同送礼流程）。
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  void snack(String msg) {
+    if (overlay != null && overlay.mounted) showAppToastOnOverlay(overlay, msg, top: true);
+  }
   String? attemptId;
   String? idempotencyKey;
   String? purchaseToken;
