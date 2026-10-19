@@ -187,6 +187,9 @@ public class ContentDetailService {
             return null;
         }
         var views = petQuery.getAll(petIds);
+        // L2 第二轮：生日供 A7 选宠物行显示年龄（与访客视图同口径对外）；取不到不影响其余字段。
+        java.util.Map<Long, java.time.LocalDate> birthdays = petQuery.birthdaysOf(petIds);
+        java.util.Map<Long, java.time.LocalDate> bd = birthdays == null ? java.util.Map.of() : birthdays;
         List<com.tailtopia.content.dto.ContentPetView> out = petIds.stream()
                 .map(views::get)
                 .filter(java.util.Objects::nonNull)
@@ -194,7 +197,7 @@ public class ContentDetailService {
                 .map(v -> new com.tailtopia.content.dto.ContentPetView(v.id(), v.name(),
                         v.avatarUrl() == null ? null
                                 : com.tailtopia.shared.media.AliyunOssClient.exifStrippedDeliveryUrl(v.avatarUrl()),
-                        v.petType() == null ? null : v.petType().name()))
+                        v.petType() == null ? null : v.petType().name(), bd.get(v.id())))
                 .toList();
         return out.isEmpty() ? null : out;
     }

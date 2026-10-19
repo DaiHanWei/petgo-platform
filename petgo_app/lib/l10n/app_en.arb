@@ -228,6 +228,8 @@
   "growthArchiveNonOwnerTitle": "The diary is for pet owners. Change your pet status to unlock it.",
   "growthArchiveChangeStatus": "Change status",
   "growthArchiveTimelineEmpty": "Record {name}'s first diary entry",
+  "growthArchiveReadOnlyTimelineEmpty": "No diary entries for {name} yet",
+  "@growthArchiveReadOnlyTimelineEmpty": {"description": "V1.4.0 multi-pet L2 r2: Diary empty state for a READ-ONLY pet (slot expired). Must not invite writing - the publish page does not offer read-only pets.", "placeholders": {"name": {"type": "String"}}},
   "growthArchiveVisitorTimelineEmpty": "{name} has no public diary entries yet",
   "@growthArchiveVisitorTimelineEmpty": {"description": "Pet archive, VISITOR view: empty timeline. Must not invite the visitor to write - it is someone else's pet.", "placeholders": {"name": {"type": "String"}}},
   "@growthArchiveTimelineEmpty": {

@@ -75,6 +75,26 @@ public class InteractionActorResolver {
         return out;
     }
 
+    /**
+     * 指定触发人并入各条通知的时刻（{@code notification_actors.acted_at}；V1.4.0 gift L2 第二轮：收礼条目按它圈出
+     * 「本条通知期间送的礼」）。一次查询；查不到的通知不出现。空入参不发查询。
+     *
+     * @param actorByNotification 通知 id → 触发人 id
+     */
+    public Map<Long, java.time.Instant> actedAt(Map<Long, Long> actorByNotification) {
+        if (actorByNotification.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, java.time.Instant> out = new HashMap<>();
+        for (NotificationActor a : actorRepo.findByNotificationIds(actorByNotification.keySet())) {
+            Long want = actorByNotification.get(a.getId().getNotificationId());
+            if (want != null && want == a.getId().getActorUserId() && a.getActedAt() != null) {
+                out.put(a.getId().getNotificationId(), a.getActedAt());
+            }
+        }
+        return out;
+    }
+
     /** 某人未读的、带触发人行的互动通知 id（角标口径扣除的候选）。 */
     public List<Long> unreadInteractionIds(long userId) {
         return repo.findUnreadInteractionIdsWithActors(userId, INTERACTION_TYPE_NAMES);

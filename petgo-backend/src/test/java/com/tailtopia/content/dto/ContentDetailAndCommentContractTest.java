@@ -122,7 +122,7 @@ class ContentDetailAndCommentContractTest {
         assertThat(wire(d)).doesNotContainKey("giftPets");
     }
 
-    /** V1.4.0 multi-pet Story 3.1 · AC8：Diary 关联宠物 → {@code pets} 数组，每项四键，顺序原样（第一只在前）。 */
+    /** V1.4.0 multi-pet Story 3.1 · AC8：Diary 关联宠物 → {@code pets} 数组，每项四键（L2 第二轮追加可空 birthday），顺序原样。 */
     @Test
     void diaryPetsKeyShape() {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
@@ -131,7 +131,8 @@ class ContentDetailAndCommentContractTest {
                 null, null, null, null, null,
                 // V1.4.0 ① Story 3.1：作者等级三字段（null → 省略）。
                 null, null, null,
-                List.of(new ContentPetView(21L, "Mochi", "https://cdn/m.jpg", "CAT"),
+                List.of(new ContentPetView(21L, "Mochi", "https://cdn/m.jpg", "CAT",
+                                java.time.LocalDate.of(2024, 3, 1)),
                         new ContentPetView(22L, "Bolu", null, "DOG")),
                 // V1.4.0 gift Story 2.1：礼物区不在本例关注范围（null → 省略）。
                 null,
@@ -140,7 +141,9 @@ class ContentDetailAndCommentContractTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> pets = (List<Map<String, Object>>) wire(d).get("pets");
         assertThat(pets).hasSize(2);
-        assertThat(pets.get(0).keySet()).isEqualTo(Set.of("petId", "name", "avatarUrl", "petType"));
+        // L2 第二轮：追加 birthday（ISO 日期串；null → 省略）。
+        assertThat(pets.get(0).keySet()).isEqualTo(Set.of("petId", "name", "avatarUrl", "petType", "birthday"));
+        assertThat(pets.get(0)).containsEntry("birthday", "2024-03-01");
         assertThat(((Number) pets.get(0).get("petId")).longValue()).isEqualTo(21L);
         assertThat(pets.get(0)).containsEntry("petType", "CAT");
         // NON_NULL：没头像的那只省略 avatarUrl 键。

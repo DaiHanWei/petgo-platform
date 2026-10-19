@@ -351,6 +351,8 @@ class _DetailScaffold extends ConsumerWidget {
                               linkedPets: detail.pets,
                               showSendButton: _showGiftZone(detail),
                               isOwner: detail.isAuthor,
+                              // L2 第二轮 P1-1：送达后重拉详情（giftPets 随详情下发）。
+                              onDelivered: () => ref.invalidate(detailProvider(postId)),
                             ),
                           const SizedBox(height: AppSpacing.md),
                           const Divider(height: AppSpacing.xl, color: AppColors.divider),

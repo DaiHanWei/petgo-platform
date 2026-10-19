@@ -152,4 +152,15 @@ void main() {
     expect(find.text('Rp15.000'), findsNWidgets(2));
     expect(find.text(l10n.idCardHdPawcoinSub('20.000', '15.000')), findsOneWidget);
   });
+
+  testWidgets('L2 r2 D11：条目区一个都没勾 → 金额 Rp0、确认置灰，PawCoin 选中不被切到 QRIS', (tester) async {
+    await pump(tester, itemsArea: const SizedBox(height: 10), itemsTotal: 0);
+    expect(find.text('…'), findsNothing);
+    expect(find.text('pay:0'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const ValueKey('hdPayConfirm'))).onPressed, isNull);
+    final selected = find.byIcon(Icons.check_circle);
+    expect(selected, findsOneWidget);
+    expect(tester.getCenter(selected).dy, lessThan(tester.getCenter(find.text('QRIS')).dy),
+        reason: '选中的是上面的 PawCoin 行，不是 QRIS');
+  });
 }

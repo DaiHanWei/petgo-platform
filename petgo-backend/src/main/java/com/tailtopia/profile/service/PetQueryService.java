@@ -60,6 +60,28 @@ public class PetQueryService {
         return out;
     }
 
+    /**
+     * 批量取生日（V1.4.0 L2 第二轮：内容详情关联宠物行显示年龄）：{@code petId → 生日}；无生日 / 已删的不在 Map 里。
+     * 追加方法，不改 {@link PetView} 的定死签名。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, java.time.LocalDate> birthdaysOf(Collection<Long> petIds) {
+        if (petIds == null || petIds.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> ids = petIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, java.time.LocalDate> out = new HashMap<>();
+        for (PetProfile p : profiles.findAllById(ids)) {
+            if (p.getBirthday() != null) {
+                out.put(p.getId(), p.getBirthday());
+            }
+        }
+        return out;
+    }
+
     private static PetView toView(PetProfile p) {
         return new PetView(p.getId(), p.getOwnerId(), p.getName(), p.getAvatarUrl(), p.getPetType(),
                 p.getStatus(), p.getCreatedAt());

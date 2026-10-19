@@ -268,18 +268,19 @@ class _GiftPageState extends ConsumerState<GiftPage> {
           padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
           sliver: SliverList.list(children: [
             _SummaryCard(data: data),
-            const SizedBox(height: AppSpacing.xl),
+            // 稿 `.sec2.ttl`：上 20 下 4（墙 / 榜与标题之间再各留一点呼吸）。
+            const SizedBox(height: 20),
             _sectionHeader(l10n.giftWallTitle, l10n.giftWallKinds(data.wall.length),
                 key: const ValueKey('giftWallHeader')),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 8),
             _wall(l10n, data.wall, lang),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: 20),
             KeyedSubtree(
               key: _supportersKey,
               child: _sectionHeader(l10n.giftSupportersTitle, l10n.giftSupportersCount(data.supporterCount),
                   key: const ValueKey('giftSupportersHeader')),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 4),
           ]),
         ),
         ..._supporterSlivers(l10n, supporters),
@@ -288,13 +289,23 @@ class _GiftPageState extends ConsumerState<GiftPage> {
     );
   }
 
-  Widget _sectionHeader(String title, String trailing, {Key? key}) => Row(
+  /// 稿 `.sec2.ttl`：标题 15 / w700 居左，计数 12 / w500 muted **靠右**（L2 第二轮：原为「· N」紧跟标题）。
+  Widget _sectionHeader(String title, String trailing, {Key? key}) => Padding(
         key: key,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
-          const SizedBox(width: 6),
-          Text('· $trailing', style: const TextStyle(fontSize: 13, color: AppColors.muted)),
-        ],
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            ),
+            const SizedBox(width: 8),
+            Text(trailing,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.muted)),
+          ],
+        ),
       );
 
   Widget _wall(AppLocalizations l10n, List<GiftWallItem> wall, String lang) {
@@ -400,20 +411,34 @@ class _SummaryCard extends StatelessWidget {
       'DOG' => '🐶',
       _ => '🐾',
     };
+    // 稿 `.ghero`：135° #F3EDFF → #FBF8FF、r20、内边距 16；头像 56 带「2 白 + 2 #C2B0EC」双圈描边（`.pic-av`）。
     return Container(
       key: const ValueKey('giftSummaryCard'),
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.mintTint2,
-        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF3EDFF), Color(0xFFFBF8FF)],
+        ),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: GiftStyle.avatarBg,
-            backgroundImage: avatar,
-            child: avatar == null ? Text(emoji, style: const TextStyle(fontSize: 26)) : null,
+          Container(
+            key: const ValueKey('giftSummaryAvatarRing'),
+            padding: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Color(0xFFC2B0EC), spreadRadius: 2)],
+            ),
+            child: CircleAvatar(
+              radius: 28,
+              backgroundColor: GiftStyle.avatarBg,
+              backgroundImage: avatar,
+              child: avatar == null ? Text(emoji, style: const TextStyle(fontSize: 26)) : null,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -423,7 +448,8 @@ class _SummaryCard extends StatelessWidget {
                 Text('Rp${formatIdrAmount(data.totalValue)}',
                     key: const ValueKey('giftSummaryTotal'),
                     style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 28,
+                        height: 1.1,
                         fontWeight: FontWeight.w800,
                         color: AppColors.ink,
                         fontFeatures: [FontFeature.tabularFigures()])),
@@ -449,12 +475,14 @@ class _WallCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 稿 `.gw>div`：白底 + 1px #F0EDF5、r14、上 10 下 8；图标坐在 40 浅紫圆（#F8F6FF）里；
+    // 「×N」浅紫胶囊（#F8F2FF 底 / #845EC9 字）**收在格子内**右上 6/6（L2 第二轮：原先格子按内容收窄、角标溢出到格外）。
     return Stack(
-      clipBehavior: Clip.none,
       children: [
         Container(
+          width: double.infinity,
           height: 92,
-          padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
+          padding: const EdgeInsets.fromLTRB(2, 10, 2, 8),
           decoration: BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.circular(14),
@@ -462,24 +490,37 @@ class _WallCell extends StatelessWidget {
           ),
           child: Column(
             children: [
-              giftIcon(item.iconUrl, size: 36),
-              const SizedBox(height: 6),
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(color: AppColors.mintTint2, shape: BoxShape.circle),
+                child: giftIcon(item.iconUrl, size: 28),
+              ),
+              const SizedBox(height: 5),
               Text(item.nameFor(lang),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11, height: 1.2, color: AppColors.ink2)),
+                  style: const TextStyle(fontSize: 10.5, height: 1.2, color: AppColors.ink2)),
             ],
           ),
         ),
         Positioned(
-          top: 4,
-          right: 4,
+          top: 6,
+          right: 6,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(999)),
+            key: const ValueKey('giftWallCellCount'),
+            height: 17,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: const Color(0xFFF8F2FF), borderRadius: BorderRadius.circular(999)),
             child: Text('×${item.count}',
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.mint,
+                    fontFeatures: [FontFeature.tabularFigures()])),
           ),
         ),
       ],
@@ -507,20 +548,22 @@ class _SupporterRow extends StatelessWidget {
     final lang = Localizations.localeOf(context).languageCode;
     final podium = podiumColor(row.rank);
     final name = row.deleted ? l10n.feedDeletedUser : (row.nickname ?? '');
-    return Padding(
+    // 稿 `.fan`：上下 10 + 底部 1px 分隔线；排名圆 26（第 4 名起 #F7F7F7 底）。
+    return Container(
       key: ValueKey('giftSupporterRow_${row.rank}'),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.line2))),
       child: Row(
         children: [
           Container(
             key: ValueKey('giftRankBadge_${row.rank}'),
-            width: 24,
-            height: 24,
+            width: 26,
+            height: 26,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: podium ?? AppColors.line2, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: podium ?? const Color(0xFFF7F7F7), shape: BoxShape.circle),
             child: Text('${row.rank}',
                 style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: podium != null ? Colors.white : AppColors.muted)),
           ),
@@ -535,7 +578,7 @@ class _SupporterRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                         color: row.deleted ? AppColors.muted : AppColors.ink)),
                 const SizedBox(height: 2),
@@ -558,7 +601,7 @@ class _SupporterRow extends StatelessWidget {
 
   /// 「[图标]×n · [图标]×n」（后端已截到最多 3 种）+「+moreKinds」。
   Widget _giftsLine(String lang) {
-    const style = TextStyle(fontSize: 11.5, color: AppColors.ink2);
+    const style = TextStyle(fontSize: 12, letterSpacing: 0.2, color: AppColors.muted);
     final parts = <Widget>[];
     for (var i = 0; i < row.gifts.length && i < 3; i++) {
       final g = row.gifts[i];

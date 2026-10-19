@@ -47,7 +47,12 @@ class DiaryHeader extends StatelessWidget {
     this.readOnly = false,
     this.hideEditButton = false,
     this.avatarKey,
+    this.belowTitle,
   });
+
+  /// 标题行与宠物信息卡之间的插槽（V1.4.0 multi-pet B4：只读横幅放这里，稿 `.dh` 之后、`.pic` 之前）。
+  /// 默认 null = 改动前外观。
+  final Widget? belowTitle;
 
   /// 当前宠物只读（V1.4.0 multi-pet Story 2.4 · AC5.2 / B4）：**只**隐藏编辑铅笔；入口两栏、里程碑、分享照常。
   /// 与访客态 [readOnly]（整块移除入口网格）是两回事，默认 false = 改动前外观。
@@ -143,7 +148,12 @@ class DiaryHeader extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 14),
+        if (belowTitle != null) ...[
+          const SizedBox(height: 10),
+          belowTitle!,
+          const SizedBox(height: 12),
+        ] else
+          const SizedBox(height: 14),
         PetInfoCard(
           profile: profile,
           happyCount: happyCount,

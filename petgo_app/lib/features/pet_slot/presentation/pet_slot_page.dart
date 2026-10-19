@@ -503,13 +503,17 @@ class _Cell extends StatelessWidget {
     );
   }
 
-  static Widget _tag(String text, Color fg, Color bg) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-        child: Text(text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: fg)),
+  /// 来源 / 只读胶囊。窄屏下格宽放不下「Hanya-baca」时**整体等比缩小**而不是截成「Hanya-b…」（L2 第二轮 D13）。
+  static Widget _tag(String text, Color fg, Color bg) => FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+          child: Text(text,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: fg)),
+        ),
       );
 }
 

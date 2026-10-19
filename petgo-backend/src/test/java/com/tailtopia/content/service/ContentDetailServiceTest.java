@@ -337,9 +337,14 @@ class ContentDetailServiceTest {
                 21L, petView(21L, "Mochi", com.tailtopia.profile.domain.PetStatus.ACTIVE),
                 22L, petView(22L, "Bolu", com.tailtopia.profile.domain.PetStatus.READ_ONLY)));
 
+        when(petQuery.birthdaysOf(List.of(21L, 22L))).thenReturn(Map.of(21L, java.time.LocalDate.of(2024, 3, 1)));
+
         var pets = service.getDetail(5L, 7L).pets();
 
         assertThat(pets).extracting(com.tailtopia.content.dto.ContentPetView::petId).containsExactly(21L, 22L);
+        // L2 第二轮：生日随行下发（A7 选宠物行显示年龄）；没生日的那只为 null（NON_NULL 省略）。
+        assertThat(pets.get(0).birthday()).isEqualTo(java.time.LocalDate.of(2024, 3, 1));
+        assertThat(pets.get(1).birthday()).isNull();
         assertThat(pets.get(1).name()).isEqualTo("Bolu"); // 只读照列
         assertThat(pets.get(0).petType()).isEqualTo("CAT");
         // 3-1 复审：他人可见的宠物头像走去 EXIF 投递地址（同访客视图 E4）。

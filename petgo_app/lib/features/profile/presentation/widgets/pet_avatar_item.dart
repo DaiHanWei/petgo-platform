@@ -186,16 +186,20 @@ class PetAvatarItem extends StatelessWidget {
                 ),
               ),
             if (!compact)
-            Text(
-              meta,
-              key: metaKey,
-              style: const TextStyle(fontSize: 11, color: AppColors.ink2),
-              // 验收 2026-10-15：84 宽单行放不下「Anjing · 1th 0bln」被截成「…」→ 允许两行，
-              // 年龄内用不换行空格，只在「·」处折行
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-            ),
+              Padding(
+                // 左右各让 3：相邻两只都被省略时，两段「…」之间仍留出间隔，不糊成一串。
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Text(
+                  meta,
+                  key: metaKey,
+                  style: const TextStyle(fontSize: 11, color: AppColors.ink2),
+                  // 稿 A2 / J0：副标题**单行**，放不下尾部省略（L2 第二轮：原先两行会把一排头像撑得高低不齐）。
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
           ],
         ),
       ),

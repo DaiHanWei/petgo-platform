@@ -8,6 +8,7 @@ import 'package:tailtopia/features/gift/domain/gift_catalog.dart';
 import 'package:tailtopia/features/gift/domain/gift_send_result.dart';
 import 'package:tailtopia/features/gift/presentation/gift_send_animation.dart';
 import 'package:tailtopia/features/gift/presentation/gift_send_flow.dart';
+import 'package:tailtopia/features/growth/domain/growth_popup_trigger.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -21,8 +22,13 @@ void main() {
   late List<(String, Map<String, Object>?)> events;
   late int delivered;
   late List<String> pushed;
+  late List<GrowthPullReason> growthPulls;
+
+  void growthSink(GrowthPullReason r) => growthPulls.add(r);
 
   setUp(() {
+    growthPulls = [];
+    growthPopupTrigger.bind(growthSink);
     repo = FakeGiftRepository();
     pawBuilds = [];
     balance = 100000;
@@ -31,7 +37,10 @@ void main() {
     pushed = [];
     Analytics.debugCaptureSink = (e, p) => events.add((e, p));
   });
-  tearDown(() => Analytics.debugCaptureSink = null);
+  tearDown(() {
+    Analytics.debugCaptureSink = null;
+    growthPopupTrigger.resetForTest();
+  });
 
   Future<void> start(WidgetTester tester,
       {GiftRecipientRef recipient = const GiftRecipientRef.pet(42),
@@ -176,6 +185,7 @@ void main() {
     await rereadBalance(tester);
     expect(pawBuilds.length, greaterThan(buildsBefore), reason: '送达后失效余额（重读时重建）');
     expect(delivered, 1);
+    expect(growthPulls, [GrowthPullReason.afterAction], reason: 'L2 r2 P1-2：送达即触发升级庆祝拉取');
 
     final s = repo.sends.single;
     expect([s.petId, s.giftToken, s.quantity, s.channel, s.source, s.postId],
@@ -404,6 +414,7 @@ void main() {
       expect(purchase['af_revenue'], 10000);
       expect(purchase['af_content_id'], 'GIFT');
       expect(purchase['af_order_id'], 'PAY-1');
+      expect(growthPulls, [GrowthPullReason.afterAction], reason: 'QRIS 到账同样触发升级庆祝拉取');
       await tester.pump(const Duration(seconds: 3));
     });
   });

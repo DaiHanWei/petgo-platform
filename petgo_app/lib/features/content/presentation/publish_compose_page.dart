@@ -788,14 +788,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 const SizedBox(height: 16),
                 _imageRow(controller, l10n),
                 const SizedBox(height: 14),
-                // —— 文字 ——（原型 textarea-wrap：1.5px #E6E6E6 外框 + 圆角11 + 内部右下字数）
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: AppColors.line, width: 1.5),
-                  ),
-                  padding: const EdgeInsets.all(11),
+                // —— 文字 ——（V1.4.0 稿 F1 `.ptxt / .pcount`：**无外框**，正文直接铺在页面上，右下弱色字数；
+                // L2 第二轮起取代原型 textarea-wrap 的 1.5px 外框。Diary 时下方紧跟带上分隔线的事件日期行）
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -855,7 +851,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                   _CheckinPlaceStrip(place: widget.placeCheckinPlace!),
                 ],
                 if (growthSelected) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
                   _eventDateRow(controller, l10n),
                 ],
                 if (controller.hasFailed) ...[
@@ -1012,12 +1008,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 「转为私密」入口 —— 让内容不再被他人看到的唯一途径是删除该条。
   Widget _syncSwitch(PublishController controller, AppLocalizations l10n) {
     final on = controller.syncToMoment;
+    // V1.4.0 稿 F1 `.syncr`：白底 + 1px #F0F0F0 描边、r12、内边距 9/12（L2 第二轮起取代淡紫填充底）。
     return Container(
       key: const ValueKey('publishSyncSwitch'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: AppColors.cream2,
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line2),
       ),
       child: Row(
         children: [
@@ -1036,17 +1034,21 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             ),
           ),
           const SizedBox(width: 8),
-          Switch(
-            key: const ValueKey('publishSyncToggle'),
-            value: on,
-            activeThumbColor: AppColors.onAccent,
-            activeTrackColor: AppColors.mint,
-            onChanged: (value) {
-              // T-9 publish_page_sync_to_moment_toggled：**本版本最关键的产品假设验证** ——
-              // 到底有多少人真的想把 Diary 只留给自己。属性只记开关值，不记内容。
-              Analytics.capture('publish_page_sync_to_moment_toggled', {'enabled': value});
-              controller.setSyncToMoment(value);
-            },
+          // 稿 `.sw` 38×22 小开关：Material Switch 等比缩到 0.75（布局占位不变）。
+          Transform.scale(
+            scale: 0.75,
+            child: Switch(
+              key: const ValueKey('publishSyncToggle'),
+              value: on,
+              activeThumbColor: AppColors.onAccent,
+              activeTrackColor: AppColors.mint,
+              onChanged: (value) {
+                // T-9 publish_page_sync_to_moment_toggled：**本版本最关键的产品假设验证** ——
+                // 到底有多少人真的想把 Diary 只留给自己。属性只记开关值，不记内容。
+                Analytics.capture('publish_page_sync_to_moment_toggled', {'enabled': value});
+                controller.setSyncToMoment(value);
+              },
+            ),
           ),
         ],
       ),
@@ -1218,45 +1220,26 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 成长日历事件日期字段（F9）：禁选未来，默认今天/格子日期。点击开日期选择器。
   Widget _eventDateRow(PublishController controller, AppLocalizations l10n) {
     final date = controller.eventDate ?? DateTime.now();
-    // 原型 daterow：「Tanggal momen: 15 Jun 2026」（本地化月份）+ chevron。
+    // V1.4.0 稿 F1 `.pdate`：上分隔线 1px #F0F0F0 + 上下 10 留白，一行弱色字「Tanggal kejadian: 13 Okt 2026」；
+    // 整行仍可点开日历（L2 第二轮起取代原型 daterow 的紫底描边框 + 图标 + chevron）。
     return GestureDetector(
       key: const ValueKey('publishEventDate'),
       behavior: HitTestBehavior.opaque,
       onTap: () => _pickEventDate(controller),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.mintTint2, // 原型紫浅底 #F8F6FF
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.lineViolet, width: 1.5),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.line2)),
         ),
-        child: Row(
-          children: [
-            const Icon(Icons.event_rounded, size: 18, color: AppColors.mint),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  text: '${l10n.publishEventDate}: ',
-                  style: const TextStyle(fontSize: 13, color: AppColors.ink),
-                  children: [
-                    TextSpan(
-                      text: formatDayMonthYear(context, date),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.mint,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: AppColors.mint700,
-            ),
-          ],
+        child: Text.rich(
+          TextSpan(
+            text: '${l10n.publishEventDate}: ',
+            style: const TextStyle(fontSize: 12.5, color: AppColors.ink2),
+            children: [
+              TextSpan(text: formatDayMonthYear(context, date)),
+            ],
+          ),
         ),
       ),
     );
@@ -1441,17 +1424,18 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         key: const ValueKey('publishAddImage'),
         // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
         onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
+        // V1.4.0 稿 F1 `.imgs i.add`：白底 + 1.5px 灰虚线、r10，「＋ / Tambah」弱色（L2 第二轮起取代淡紫底紫虚线）。
         child: CustomPaint(
           painter: DashedRRectPainter(
-            color: AppColors.dashedViolet,
-            radius: 9,
+            color: AppColors.line,
+            radius: 10,
             dash: 5,
             gap: 4,
           ),
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.cream2,
-              borderRadius: BorderRadius.circular(9),
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
             child: dragging
@@ -1459,14 +1443,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
+                      const Icon(Icons.add_rounded, size: 22, color: AppColors.muted),
                       const SizedBox(height: 3),
                       Text(
                         l10n.tabAdd,
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: AppColors.mint,
+                          color: AppColors.muted,
                         ),
                       ),
                     ],
