@@ -126,9 +126,9 @@ void main() {
     expect(GiftOrderStatus.expired.isUndelivered, isFalse);
   });
 
-  test('GiftRecipientRef：值相等（family provider 的 key）', () {
+  test('GiftRecipientRef：值相等（family provider 的 key）；gift 4.1 起只有按宠物一种形态', () {
     expect(const GiftRecipientRef.pet(1), const GiftRecipientRef.pet(1));
-    expect(const GiftRecipientRef.pet(1) == const GiftRecipientRef.post(1), isFalse);
-    expect(const GiftRecipientRef.post(5).hashCode, const GiftRecipientRef.post(5).hashCode);
+    expect(const GiftRecipientRef.pet(1) == const GiftRecipientRef.pet(2), isFalse);
+    expect(const GiftRecipientRef.pet(5).hashCode, const GiftRecipientRef.pet(5).hashCode);
   });
 }

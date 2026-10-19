@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +39,7 @@ import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
 import '../../features/gift/presentation/gift_orders_page.dart';
 import '../../features/gift/presentation/gift_page.dart';
+import '../../features/gift/presentation/gift_pet_switch.dart';
 import '../../features/content/presentation/shared_post_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
@@ -276,6 +279,8 @@ void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
     ref.read(routerProvider).go(location); // 极端兜底：拿不到 context 时至少别丢深链
     return;
   }
+  // gift Story 4.1 · AC6.4：收礼推送 → 底座 Diary Tab 先切到被送礼的那只（是自己的才切；异步，切到后 Diary 自行刷新）。
+  unawaited(selectGiftPetIfOwned(ref.read, location));
   _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
 }
 
@@ -283,8 +288,11 @@ void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
 ///
 /// 底座取**落地矩阵目标**而不是写死 `/home`：游客/已建档用户落 Diary、其余落 Social，
 /// 返回后看到的是他本该看到的那一屏，与不点推送直接冷启动完全一致。
-void _goDeepLink(BuildContext ctx, Ref ref, String location) =>
-    _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+void _goDeepLink(BuildContext ctx, Ref ref, String location) {
+  // gift Story 4.1 · AC6.4：同 [goDeepLinkFromLiveApp]（冷启动收礼推送）。
+  unawaited(selectGiftPetIfOwned(ref.read, location));
+  _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+}
 
 /// 冷启动与热启动共用的实现。
 ///

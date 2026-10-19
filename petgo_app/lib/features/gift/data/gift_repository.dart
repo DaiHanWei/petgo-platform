@@ -14,7 +14,7 @@ class GiftRepository {
 
   final Dio dio;
 
-  /// 礼物目录：`petId` / `postId` 二选一。
+  /// 礼物目录：`petId` / `postId` 二选一（App 一律传 `petId`；`postId` 为后端已弃用的单宠过渡入口，gift Story 4.1）。
   Future<GiftCatalog> fetchCatalog({int? petId, int? postId}) async {
     final res = await dio.get<Map<String, dynamic>>(ApiPaths.giftCatalog, queryParameters: {
       'petId': ?petId,
@@ -81,7 +81,7 @@ final giftRepositoryProvider =
 final giftCatalogProvider = FutureProvider.autoDispose.family<GiftCatalog, GiftRecipientRef>(
   (ref, recipient) => ref
       .read(giftRepositoryProvider)
-      .fetchCatalog(petId: recipient.petId, postId: recipient.postId),
+      .fetchCatalog(petId: recipient.petId),
   retry: (_, _) => null,
 );
 

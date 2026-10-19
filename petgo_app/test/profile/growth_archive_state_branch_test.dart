@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -247,7 +248,8 @@ void main() {
       failingTimeline = {};
     });
 
-    Future<ProviderContainer> pump(WidgetTester tester, {List<PetListItem> list = pets}) async {
+    Future<ProviderContainer> pump(WidgetTester tester,
+        {List<PetListItem> list = pets, Map<int, int>? giftValues, List<String>? pushed}) async {
       tester.view.physicalSize = const Size(1080, 3200);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.reset);
@@ -261,19 +263,43 @@ void main() {
           if (failingTimeline.contains(petId)) throw StateError('offline');
           return const TimelinePage(items: []);
         }),
-        archiveStatsProvider.overrideWith((ref, _) async => const ArchiveStats(
-            happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
+        archiveStatsProvider.overrideWith((ref, petId) async => ArchiveStats(
+            happyMomentCount: 1,
+            consultCount: 0,
+            milestoneCompleted: 0,
+            milestoneTotal: 30,
+            giftTotalValue: giftValues?[petId] ?? 0)),
         shareFabAnimatedShownProvider.overrideWith((ref) async => true),
       ]);
       addTearDown(c.dispose);
+      final router = pushed == null
+          ? null
+          : GoRouter(routes: [
+              GoRoute(path: '/', builder: (_, _) => const GrowthArchivePage()),
+              GoRoute(
+                path: '/pets/:petId/gifts',
+                builder: (_, s) {
+                  pushed.add(s.uri.toString());
+                  return const Scaffold(body: Text('gift page'));
+                },
+              ),
+            ]);
+      if (router != null) addTearDown(router.dispose);
       await tester.pumpWidget(UncontrolledProviderScope(
         container: c,
-        child: const MaterialApp(
-          locale: Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: GrowthArchivePage(),
-        ),
+        child: router == null
+            ? const MaterialApp(
+                locale: Locale('en'),
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: GrowthArchivePage(),
+              )
+            : MaterialApp.router(
+                routerConfig: router,
+                locale: const Locale('en'),
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+              ),
       ));
       await tester.pumpAndSettle();
       return c;
@@ -340,6 +366,24 @@ void main() {
       expect(timelineFetches[1], greaterThan(before1));
       expect(timelineFetches[2], isNull, reason: '不连带别的宠物');
       expect(find.byKey(const ValueKey('timelineError')), findsNothing);
+    });
+
+    // V1.4.0 gift Story 4.1 · AC6.1 / AC6.2：礼物格取当前宠物的统计；切换后随之变，点进的是当前宠物的礼物页。
+    testWidgets('gift 4.1：切换 A → B 礼物格数值随之变、点礼物格进 B 的礼物页', (tester) async {
+      final pushed = <String>[];
+      await pump(tester, giftValues: const {1: 53000, 2: 5000}, pushed: pushed);
+      String giftText() =>
+          tester.widget<Text>(find.byKey(const ValueKey('petInfoGiftValue'))).textSpan!.toPlainText();
+      expect(giftText(), 'Rp53rb');
+
+      await tester.tap(find.byKey(const ValueKey('petSwitcherItem-2')));
+      await tester.pumpAndSettle();
+      expect(title('Kopi'), findsOneWidget);
+      expect(giftText(), 'Rp5rb');
+
+      await tester.tap(find.byKey(const ValueKey('petInfoGiftStat')));
+      await tester.pumpAndSettle();
+      expect(pushed, ['/pets/2/gifts']);
     });
 
     testWidgets('B5：只有 1 只 → 切换器 = 1 个头像 +「+」', (tester) async {

@@ -201,8 +201,9 @@ public class ContentDetailService {
 
     /**
      * Diary 礼物区（V1.4.0 gift Story 2.1 · AC5）。只对 {@code GROWTH_MOMENT} 调端口；Moment / Tips 直接 null。
-     * 端口返回空（无宠物 / 私密 / 审核中 / 举报隐藏，1.1 过渡实现口径）→ null。批量两次查询（汇总 + 墙前 3），
-     * 不按宠物逐个查 —— 为多宠（对齐 story 4.1 只换端口实现）留好形状。可见性不另做：已过 {@link #requireVisiblePost}。
+     * 端口返回空（无宠物 / 私密 / 审核中 / 举报隐藏）→ null。gift Story 4.1 起端口为多宠实现：全部关联宠物、
+     * 与 {@code pets} 同序（宠物创建顺序），只读宠物照列。批量两次查询（汇总 + 墙前 3），不按宠物逐个查。
+     * 可见性不另做：已过 {@link #requireVisiblePost}。
      */
     private List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets(ContentPost post) {
         if (post.getType() != com.tailtopia.content.domain.ContentType.GROWTH_MOMENT) {

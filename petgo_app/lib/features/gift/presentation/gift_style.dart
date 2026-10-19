@@ -26,24 +26,25 @@ abstract final class GiftStyle {
   /// 面板遮罩 rgba(20,16,25,.45)。
   static const Color barrier = Color(0x73141019);
 
-  // ① 段位色，对齐时改用 ① 的 token（本分支 ① 不存在，先作私有常量）。
-  static const Color levelTeal = Color(0xFF0A7FA3); // Lv5–9
-  static const Color levelBlue = Color(0xFF2B4FBF); // Lv10–14
-  static const List<Color> levelTop = [Color(0xFF4A2E9E), Color(0xFFB5307F)]; // Lv15+
+  // 段位色一律取 ① 的 token（`AppColors.tier*`，gift Story 4.1 · AC7.2）：Lv5–9 Sahabat、Lv10–14 Penjaga、
+  // Lv15+ Bintang 渐变。专属礼物门槛只出现在这三段，不含 Pemula。
 
   /// 段位底色（标签 / 锁圈外环）：Lv15+ 为渐变，其余纯色。
   static Gradient levelGradient(int level) {
     if (level >= 15) {
       return const LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight, colors: levelTop);
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.tierBintangStart, AppColors.tierBintangEnd]);
     }
-    final c = level >= 10 ? levelBlue : levelTeal;
+    final c = levelRing(level);
     return LinearGradient(colors: [c, c]);
   }
 
   /// 锁圈外环（纯色；Lv15+ 取渐变起点色）。
-  static Color levelRing(int level) =>
-      level >= 15 ? levelTop.first : (level >= 10 ? levelBlue : levelTeal);
+  static Color levelRing(int level) => level >= 15
+      ? AppColors.tierBintangStart
+      : (level >= 10 ? AppColors.tierPenjaga : AppColors.tierSahabat);
 
   /// 专属格图标底渐变（160deg）。
   static Gradient exclusiveIconBg(int level) => LinearGradient(

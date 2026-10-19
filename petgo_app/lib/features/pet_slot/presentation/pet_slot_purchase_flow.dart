@@ -221,7 +221,7 @@ Future<PetSlotFlowOutcome> _runPetSlotPurchase(
       case null:
         break; // 关抽屉 / 关面板 / 失败（失败 SnackBar 已由 runKeepsakePurchase 给出）
       case 'EXPIRED':
-        snack(l10n.petSlotPaymentExpired); // D10b：只在名额流程补提示
+        snack(l10n.paymentExpiredRetry); // D10b：只在名额流程补提示
       case kPetSlotAbortPaidNeedsSupport:
         snack(l10n.petSlotPaymentProcessing);
       default:

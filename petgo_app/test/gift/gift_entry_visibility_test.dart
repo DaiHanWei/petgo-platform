@@ -177,6 +177,18 @@ void main() {
       final divider = src.indexOf('const Divider(height: AppSpacing.xl, color: AppColors.divider)');
       expect(gift, greaterThan(strip));
       expect(divider, greaterThan(gift));
+      // gift Story 4.1 · AC5.1：与 ② 关联宠物胶囊并存 —— 首图胶囊（F6）与无图胶囊（F6b）都在礼物区之前。
+      final f6 = src.indexOf('ContentLinkedPetsCapsule(pets: widget.linkedPets, dark: true)');
+      final f6b = src.indexOf('ContentLinkedPetsCapsule(pets: linkedPets, dark: false)');
+      final carousel = src.indexOf('_ImageCarousel(');
+      expect(f6, greaterThan(0));
+      expect(carousel, lessThan(f6b));
+      expect(f6b, lessThan(strip));
+      // 礼物区拿到全部 giftPets 与 ② 的 pets（A7 物种），不再按 postId 送礼。
+      expect(src.substring(gift, divider), contains('pets: detail.giftPets'));
+      expect(src.substring(gift, divider), contains('linkedPets: detail.pets'));
+      expect(File('lib/features/gift/presentation/widgets/gift_entry.dart').readAsStringSync(),
+          isNot(contains('GiftRecipientRef.post')));
     });
   });
 }

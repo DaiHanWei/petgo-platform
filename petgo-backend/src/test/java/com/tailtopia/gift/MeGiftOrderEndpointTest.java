@@ -106,8 +106,8 @@ class MeGiftOrderEndpointTest extends ApiIntegrationTest {
     void threeStatusesNewestFirstAndQrisBecomesDeliveredAfterPayment() throws Exception {
         User sender = newUser();
         User owner = newUser();
-        // 本分支是单宠物模型（uq_pet_profiles_owner_id：一主人一只）→ 「付款前被删的宠物」挂另一位主人。
-        PetProfile goneLater = newPet(newUser());
+        // 多宠物（gift Story 4.1）：「付款前被删的宠物」与在用的宠物同属一位主人。
+        PetProfile goneLater = newPet(owner);
         PetProfile pet = newPet(owner);
 
         GiftSendResponse refunded = send(sender, goneLater, PayChannel.QRIS, 1);

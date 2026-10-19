@@ -7,7 +7,6 @@ import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
-import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../data/gift_repository.dart';
 import '../domain/gift_catalog.dart';
@@ -34,6 +33,11 @@ sealed class GiftPanelResult {
 class GiftPanelSend extends GiftPanelResult {
   const GiftPanelSend(this.selection);
   final GiftSelection selection;
+}
+
+/// 点了锁区块（B1 / B2，gift Story 4.1 · AC7.1）：面板已关，调用方进 ① 等级页 `/me/growth`。
+class GiftPanelOpenLevelPage extends GiftPanelResult {
+  const GiftPanelOpenLevelPage();
 }
 
 /// 目录接口拒绝（`gift-pet-gone` / `gift-own-pet` / `gift-blocked`）：调用方关面板 + C9 Toast，不进 B7。
@@ -395,7 +399,7 @@ class _GiftPanelSheetState extends ConsumerState<GiftPanelSheet> {
     );
   }
 
-  /// B1 / B2：锁区块（本分支点击只出 Toast，面板不关；对齐 story 4.1 改跳 ① 等级页）。
+  /// B1 / B2：锁区块。点击 → 上报 → 关面板 → 调用方进 ① 等级页（gift Story 4.1 · AC7.1；不再出 Toast）。
   Widget _lockBlock(AppLocalizations l10n, int level) => Padding(
         padding: const EdgeInsets.fromLTRB(0, 14, 0, 4),
         child: Material(
@@ -405,9 +409,7 @@ class _GiftPanelSheetState extends ConsumerState<GiftPanelSheet> {
             borderRadius: BorderRadius.circular(16),
             onTap: () {
               Analytics.capture('gift_locked_block_tapped', {'required_level': level});
-              // 挂根 Overlay：面板是底部抽屉，挂页面层会被它盖住。
-              final overlay = Overlay.maybeOf(context, rootOverlay: true);
-              if (overlay != null) showAppToastOnOverlay(overlay, l10n.giftLockToast(level));
+              Navigator.of(context).pop(const GiftPanelOpenLevelPage());
             },
             child: Ink(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

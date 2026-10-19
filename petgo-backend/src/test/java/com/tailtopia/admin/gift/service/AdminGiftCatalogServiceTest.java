@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.growth.service.GrowthDisplayLevelService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.gift.dto.GiftCatalogForm;
 import com.tailtopia.admin.gift.dto.GiftCatalogRow;
@@ -57,6 +58,9 @@ class AdminGiftCatalogServiceTest {
     private PricingConfigRepository pricing;
     private ConfigChangeLogRepository changeLogs;
     private AdminAuditService audit;
+    private GrowthDisplayLevelService growthLevels;
+    /** ① seed 等级表最高级（Lv20）。 */
+    private static final int MAX_LEVEL = 20;
     private AdminGiftCatalogService service;
     private PricingConfig pricingRow;
 
@@ -82,7 +86,9 @@ class AdminGiftCatalogServiceTest {
         });
         pricingRow = newPricing(10_000L);
         when(pricing.findById(PricingConfig.SINGLETON_ID)).thenReturn(Optional.of(pricingRow));
-        service = new AdminGiftCatalogService(catalog, orders, tokens, icons, pricing, changeLogs, audit);
+        growthLevels = mock(GrowthDisplayLevelService.class);
+        when(growthLevels.maxLevel()).thenReturn(MAX_LEVEL);
+        service = new AdminGiftCatalogService(catalog, orders, tokens, icons, pricing, changeLogs, audit, growthLevels);
     }
 
     // ——————————————————— 夹具 ———————————————————
@@ -133,69 +139,80 @@ class AdminGiftCatalogServiceTest {
 
     @Test
     void priceBoundsAreHundredToHundredMillion() {
-        assertCode(() -> AdminGiftCatalogService.validate(form("99", "NORMAL", null, null)),
+        assertCode(() -> AdminGiftCatalogService.validate(form("99", "NORMAL", null, null), MAX_LEVEL),
                 "admin.err.gift.priceRange");
-        assertCode(() -> AdminGiftCatalogService.validate(form("100000001", "NORMAL", null, null)),
+        assertCode(() -> AdminGiftCatalogService.validate(form("100000001", "NORMAL", null, null), MAX_LEVEL),
                 "admin.err.gift.priceRange");
-        assertCode(() -> AdminGiftCatalogService.validate(form("12.5", "NORMAL", null, null)),
+        assertCode(() -> AdminGiftCatalogService.validate(form("12.5", "NORMAL", null, null), MAX_LEVEL),
                 "admin.err.gift.priceRange");
-        assertCode(() -> AdminGiftCatalogService.validate(form("", "NORMAL", null, null)),
+        assertCode(() -> AdminGiftCatalogService.validate(form("", "NORMAL", null, null), MAX_LEVEL),
                 "admin.err.gift.priceRange");
-        assertThat(AdminGiftCatalogService.validate(form("100", "NORMAL", null, null)).price()).isEqualTo(100L);
-        assertThat(AdminGiftCatalogService.validate(form("100000000", "NORMAL", null, null)).price())
+        assertThat(AdminGiftCatalogService.validate(form("100", "NORMAL", null, null), MAX_LEVEL).price()).isEqualTo(100L);
+        assertThat(AdminGiftCatalogService.validate(form("100000000", "NORMAL", null, null), MAX_LEVEL).price())
                 .isEqualTo(100_000_000L);
     }
 
     @Test
     void namesMustBePresentAndAtMostFortyChars() {
         assertCode(() -> AdminGiftCatalogService.validate(
-                new GiftCatalogForm("  ", "Tulang", "1000", false, false, false, "NORMAL", null, null)),
+                new GiftCatalogForm("  ", "Tulang", "1000", false, false, false, "NORMAL", null, null), MAX_LEVEL),
                 "admin.err.gift.nameRequired");
         assertCode(() -> AdminGiftCatalogService.validate(
-                new GiftCatalogForm("Bone", null, "1000", false, false, false, "NORMAL", null, null)),
+                new GiftCatalogForm("Bone", null, "1000", false, false, false, "NORMAL", null, null), MAX_LEVEL),
                 "admin.err.gift.nameRequired");
         String n41 = "x".repeat(41);
         assertCode(() -> AdminGiftCatalogService.validate(
-                new GiftCatalogForm(n41, "Tulang", "1000", false, false, false, "NORMAL", null, null)),
+                new GiftCatalogForm(n41, "Tulang", "1000", false, false, false, "NORMAL", null, null), MAX_LEVEL),
                 "admin.err.gift.nameTooLong");
         // trim 后计长：40 个字 + 两侧空白放行
         var ok = AdminGiftCatalogService.validate(
                 new GiftCatalogForm("  " + "y".repeat(40) + " ", "Tulang", "1000", false, false, false, null, null,
-                        null));
+                        null), MAX_LEVEL);
         assertThat(ok.nameEn()).hasSize(40);
         assertThat(ok.kind()).as("缺省类型 = 普通").isEqualTo(GiftKind.NORMAL);
     }
 
+    /** gift Story 4.1 · AC7.4：上限来自 ① 等级表当前最高级（不再是常量 20），等级表追加后随之变长。 */
+    @Test
+    void minLevelUpperBoundComesFromGrowthLevelTable() {
+        assertThat(service.maxMinLevel()).isEqualTo(MAX_LEVEL);
+        when(growthLevels.maxLevel()).thenReturn(30);
+        assertThat(service.maxMinLevel()).isEqualTo(30);
+        assertThat(AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "25", null), 30).minLevel()).isEqualTo(25);
+        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "31", null), 30),
+                "admin.err.gift.minLevelRange");
+    }
+
     @Test
     void exclusiveNeedsMinLevelWithinOneToTwenty() {
-        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", null, null)),
+        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", null, null), MAX_LEVEL),
                 "admin.err.gift.minLevelRange");
-        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "0", null)),
+        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "0", null), MAX_LEVEL),
                 "admin.err.gift.minLevelRange");
-        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "21", null)),
+        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "21", null), MAX_LEVEL),
                 "admin.err.gift.minLevelRange");
-        assertThatThrownBy(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "21", null)))
+        assertThatThrownBy(() -> AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "21", null), MAX_LEVEL))
                 .satisfies(t -> assertThat(((AppException) t).getMessageArgs())
-                        .as("上限作为参数带出").containsExactly(GiftCatalogRules.MAX_LEVEL_FALLBACK));
-        assertThat(AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "20", null)).minLevel()).isEqualTo(20);
-        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "SPECIAL", null, null)),
+                        .as("上限作为参数带出").containsExactly(MAX_LEVEL));
+        assertThat(AdminGiftCatalogService.validate(form("1000", "EXCLUSIVE", "20", null), MAX_LEVEL).minLevel()).isEqualTo(20);
+        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "SPECIAL", null, null), MAX_LEVEL),
                 "admin.err.gift.kindInvalid");
     }
 
     @Test
     void normalGiftIgnoresSubmittedMinLevel() {
-        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", "5", null)).minLevel())
+        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", "5", null), MAX_LEVEL).minLevel())
                 .as("普通礼物落 NULL（满足 ck_gift_catalog_exclusive_level）").isNull();
     }
 
     @Test
     void sortOrderBlankMeansZeroAndMustBeWithinRange() {
-        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", null, "")).sortOrder()).isZero();
-        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", null, null)).sortOrder()).isZero();
-        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", null, "9999")).sortOrder()).isEqualTo(9999);
-        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "NORMAL", null, "10000")),
+        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", null, ""), MAX_LEVEL).sortOrder()).isZero();
+        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", null, null), MAX_LEVEL).sortOrder()).isZero();
+        assertThat(AdminGiftCatalogService.validate(form("1000", "NORMAL", null, "9999"), MAX_LEVEL).sortOrder()).isEqualTo(9999);
+        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "NORMAL", null, "10000"), MAX_LEVEL),
                 "admin.err.gift.sortOrderRange");
-        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "NORMAL", null, "-1")),
+        assertCode(() -> AdminGiftCatalogService.validate(form("1000", "NORMAL", null, "-1"), MAX_LEVEL),
                 "admin.err.gift.sortOrderRange");
     }
 

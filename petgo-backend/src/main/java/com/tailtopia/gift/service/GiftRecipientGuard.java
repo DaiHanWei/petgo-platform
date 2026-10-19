@@ -37,7 +37,10 @@ public class GiftRecipientGuard {
         return check(senderId, pet);
     }
 
-    /** 按内容 id 取收礼宠物（单宠过渡：取第一只）并校验；内容不可送礼（非公开 Diary / 无宠物）同 404。 */
+    /**
+     * 按内容 id 取收礼宠物（取<b>第一只</b>，= 宠物创建顺序）并校验；内容不可送礼（非公开 Diary / 无宠物）同 404。
+     * 只服务已弃用的目录 {@code ?postId=}（gift Story 4.1 · AC3.4，兼容 1.4.0 早期包）。
+     */
     public GiftPet requireRecipientOfPost(long senderId, long postId) {
         GiftPet pet = pets.petsOfPost(postId).stream()
                 .findFirst()

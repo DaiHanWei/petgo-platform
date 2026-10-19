@@ -17,6 +17,7 @@ import com.tailtopia.gift.domain.GiftKind;
 import com.tailtopia.gift.repository.GiftCatalogRepository;
 import com.tailtopia.gift.repository.GiftOrderRepository;
 import com.tailtopia.gift.service.GiftTokenGenerator;
+import com.tailtopia.growth.service.GrowthDisplayLevelService;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -83,10 +84,11 @@ public class AdminGiftCatalogService {
     private final PricingConfigRepository pricing;
     private final ConfigChangeLogRepository changeLogs;
     private final AdminAuditService audit;
+    private final GrowthDisplayLevelService growthLevels;
 
     public AdminGiftCatalogService(GiftCatalogRepository catalog, GiftOrderRepository orders,
             GiftTokenGenerator tokens, AdminTagIconService icons, PricingConfigRepository pricing,
-            ConfigChangeLogRepository changeLogs, AdminAuditService audit) {
+            ConfigChangeLogRepository changeLogs, AdminAuditService audit, GrowthDisplayLevelService growthLevels) {
         this.catalog = catalog;
         this.orders = orders;
         this.tokens = tokens;
@@ -94,6 +96,16 @@ public class AdminGiftCatalogService {
         this.pricing = pricing;
         this.changeLogs = changeLogs;
         this.audit = audit;
+        this.growthLevels = growthLevels;
+    }
+
+    /**
+     * 专属礼物「最低等级」的上限 = ① 等级表当前最高级（gift Story 4.1 · AC7.4，取代 3.1 的常量 20）。
+     * 只读 ① 的公开读口 {@link GrowthDisplayLevelService#maxLevel}，等级表追加后上限自动变长。
+     */
+    @Transactional(readOnly = true)
+    public int maxMinLevel() {
+        return growthLevels.maxLevel();
     }
 
     // ——————————————————— 读 ———————————————————
@@ -159,7 +171,7 @@ public class AdminGiftCatalogService {
      */
     @Transactional
     public long create(long adminId, GiftCatalogForm form, MultipartFile iconFile) {
-        Parsed p = validate(form);
+        Parsed p = validate(form, maxMinLevel());
         if (iconFile == null || iconFile.isEmpty()) {
             throw AppException.validation("新建礼物必须上传图标。").code("admin.err.gift.iconRequired");
         }
@@ -187,7 +199,7 @@ public class AdminGiftCatalogService {
     @Transactional
     public boolean update(long adminId, long id, GiftCatalogForm form, MultipartFile iconFile) {
         GiftCatalogItem g = require(id);
-        Parsed p = validate(form);
+        Parsed p = validate(form, maxMinLevel());
         String newIcon = icons.uploadOrKeep(iconFile, IconPurpose.GIFT);
 
         List<String> changes = new ArrayList<>();
@@ -273,7 +285,7 @@ public class AdminGiftCatalogService {
     // ——————————————————— 校验 ———————————————————
 
     /** 礼物字段校验（AC4.3）：全部抛 422 + 文案码，抽屉不关、错误落行内槽。 */
-    static Parsed validate(GiftCatalogForm form) {
+    static Parsed validate(GiftCatalogForm form, int maxLevel) {
         String nameEn = trim(form.nameEn());
         String nameId = trim(form.nameId());
         require(!nameEn.isEmpty() && !nameId.isEmpty(), "请填写 EN 与 ID 名称", "admin.err.gift.nameRequired");
@@ -299,9 +311,9 @@ public class AdminGiftCatalogService {
         Integer minLevel = null;
         if (kind == GiftKind.EXCLUSIVE) {
             Long lv = parseLong(form.minLevel());
-            require(lv != null && lv >= 1 && lv <= GiftCatalogRules.MAX_LEVEL_FALLBACK,
-                    "专属礼物须填写最低等级（Lv1 ~ Lv" + GiftCatalogRules.MAX_LEVEL_FALLBACK + "）",
-                    "admin.err.gift.minLevelRange", GiftCatalogRules.MAX_LEVEL_FALLBACK);
+            require(lv != null && lv >= 1 && lv <= maxLevel,
+                    "专属礼物须填写最低等级（Lv1 ~ Lv" + maxLevel + "）",
+                    "admin.err.gift.minLevelRange", maxLevel);
             minLevel = lv.intValue();
         }
         // NORMAL：忽略提交的 minLevel，落 NULL（满足 ck_gift_catalog_exclusive_level）。

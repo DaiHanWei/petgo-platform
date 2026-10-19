@@ -17,16 +17,17 @@ import org.junit.jupiter.api.Test;
  *
  * <ol>
  *   <li>不 import 别的模块的仓储（{@code pay} / {@code profile} / {@code content}）—— 钱只经钱包 / 意图服务，宠物只经自有端口；</li>
- *   <li>除单宠过渡实现 {@code SinglePetGiftPetDirectory} 外不出现 {@code pet_profiles} / {@code content_posts} 表名 ——
- *       对齐 story 4.1 时只换那一个实现；</li>
+ *   <li>送礼包内一律不出现 {@code pet_profiles} 字面量，不出现读 {@code content_posts.pet_id} 的写法；
+ *       {@code content_posts} 只允许多宠实现 {@code MultiPetGiftPetDirectory} 判帖子可送礼（只读状态列，Story 4.1 · AC1.2）；</li>
  *   <li>标识符与注释不出现 {@code transfer}（PawCoin 不可转让，§5：守卫可能扩面到钱包以外）；</li>
- *   <li>不引用 ② 的 {@code ContentPetQuery} / {@code PetQueryService}（本分支不存在，也不许自造）。</li>
+ *   <li>② 的 {@code ContentPetQuery} / {@code PetQueryService} 只允许 {@code MultiPetGiftPetDirectory} 引用；</li>
+ *   <li>主代码里 {@code GiftPetDirectory} 的实现类恰好 1 个（不 {@code @Primary} 双实现并存，Story 4.1 · AC1.2）。</li>
  * </ol>
  */
 class GiftModuleBoundaryGuardTest {
 
     private static final Path GIFT = Path.of("src/main/java/com/tailtopia/gift");
-    private static final String DIRECTORY_IMPL = "SinglePetGiftPetDirectory.java";
+    private static final String DIRECTORY_IMPL = "MultiPetGiftPetDirectory.java";
 
     private static List<Path> javaFiles() throws IOException {
         try (Stream<Path> s = Files.walk(GIFT)) {
@@ -64,18 +65,23 @@ class GiftModuleBoundaryGuardTest {
     }
 
     @Test
-    void onlyTheSinglePetDirectoryTouchesPetAndContentTables() throws IOException {
+    void noPetTableAndContentPostsOnlyInTheDirectory() throws IOException {
         List<String> offenders = new ArrayList<>();
         for (Path p : javaFiles()) {
-            if (p.getFileName().toString().equals(DIRECTORY_IMPL)) {
-                continue;
-            }
+            String name = p.getFileName().toString();
             String src = read(p);
-            if (src.contains("pet_profiles") || src.contains("content_posts")) {
-                offenders.add(p.getFileName().toString());
+            if (src.contains("pet_profiles")) {
+                offenders.add(name + " → pet_profiles");
+            }
+            if (src.contains("content_posts")) {
+                if (!name.equals(DIRECTORY_IMPL)) {
+                    offenders.add(name + " → content_posts");
+                } else if (src.contains("pet_id")) {
+                    offenders.add(name + " → content_posts.pet_id（关联宠物只经 ContentPetQuery）");
+                }
             }
         }
-        assertThat(offenders).as("取宠物只经 GiftPetDirectory（对齐 4.1 只换实现）").isEmpty();
+        assertThat(offenders).as("取宠物只经 GiftPetDirectory；多宠实现只读帖子状态列").isEmpty();
     }
 
     @Test
@@ -94,11 +100,28 @@ class GiftModuleBoundaryGuardTest {
         List<String> offenders = new ArrayList<>();
         for (Path p : javaFiles()) {
             String src = read(p);
+            if (p.getFileName().toString().equals(DIRECTORY_IMPL)) {
+                continue;
+            }
             if (src.contains("ContentPetQuery") || src.contains("PetQueryService")) {
                 offenders.add(p.getFileName().toString());
             }
         }
-        assertThat(offenders).as("② 的接口本分支不存在，禁止引用或自造（P-3）").isEmpty();
+        assertThat(offenders).as("② 的读口只经 GiftPetDirectory 的多宠实现（AD-5）").isEmpty();
+    }
+
+    /** Story 4.1 · AC1.2：主代码里 {@code GiftPetDirectory} 恰好一个实现（单宠过渡实现已删，不并存）。 */
+    @Test
+    void exactlyOneGiftPetDirectoryImplementation() throws IOException {
+        List<String> impls = new ArrayList<>();
+        try (Stream<Path> s = Files.walk(Path.of("src/main/java"))) {
+            for (Path p : s.filter(f -> f.toString().endsWith(".java")).toList()) {
+                if (read(p).matches("(?s).*\\bimplements\\s+([\\w.]+\\s*,\\s*)*(\\w+\\.)*GiftPetDirectory\\b.*")) {
+                    impls.add(p.getFileName().toString());
+                }
+            }
+        }
+        assertThat(impls).containsExactly(DIRECTORY_IMPL);
     }
 
     /**

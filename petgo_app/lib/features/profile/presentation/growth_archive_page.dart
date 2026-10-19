@@ -527,7 +527,10 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             happyCount: stats?.happyMomentCount,
             // V1.4.0 gift Story 2.2 · A2：中间格礼物总价值，点进本宠物礼物页（E2）。
             giftTotalValue: stats?.giftTotalValue,
-            onOpenGifts: () => context.push(GiftPage.routeFor(widget.profile.id)),
+            // gift Story 4.1 · AC6.2：进**当前宠物**的礼物页 —— 只从 effectivePetIdProvider 读（② §5 页面不自存 petId）；
+            // 本组件只在当前宠物 = 本档案时渲染，取不到时回落本档案。
+            onOpenGifts: () => context.push(
+                GiftPage.routeFor(ref.read(effectivePetIdProvider).value ?? widget.petId)),
             milestoneCompleted: stats?.milestoneCompleted,
             milestoneTotal: stats?.milestoneTotal,
             healthRecordCount: stats?.healthRecordCount,

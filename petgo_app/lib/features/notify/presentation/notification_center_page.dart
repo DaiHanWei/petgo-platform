@@ -14,6 +14,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../content/data/detail_repository.dart';
+import '../../gift/presentation/gift_pet_switch.dart';
 import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
@@ -370,8 +371,11 @@ class _NotificationCenterPageState
     // V1.4.0 gift Story 2.2 · AC6.3：收礼「进 Diary Tab 并展开礼物墙」—— 先 go Diary Tab 根（Tab 根只能 go），
     // **下一帧**再 push 礼物页（照 `_goDeepLinkWith` 的 post-frame 写法：go 的解析是异步的，同帧 push 会被吃掉），
     // 返回即回到 Diary Tab。go 会收掉本页，故先取 router 实例。
+    // gift Story 4.1 · AC6.4：多宠物下 Diary Tab 显示「当前宠物」—— go 之前先把被送礼的那只切为当前宠物
+    // （是自己的才切；已删 / 已转手不切，照原逻辑）。
     if (item.type == 'PET_GIFT_RECEIVED' && location.startsWith('/pets/')) {
       final router = GoRouter.of(context);
+      await selectGiftPetIfOwned(ref.read, location);
       router.go(DeepLinkRoutes.growthArchive);
       WidgetsBinding.instance.addPostFrameCallback((_) => router.push(location));
       return;

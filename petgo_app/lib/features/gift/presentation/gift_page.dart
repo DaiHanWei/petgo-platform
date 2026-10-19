@@ -24,7 +24,8 @@ import 'gift_supporters_controller.dart';
 /// 🛡 客户端**不做任何过滤**：主人隐藏的送礼人由服务端剔除；403（我拉黑了主人）/ 404（宠物已删 /
 /// 主人拉黑了我）一律 E6，不区分原因、不提示「你被拉黑」。
 ///
-/// ⚠️ 本 story 单宠：礼物墙随宠物切换（A7 / AC13）在对齐 story 4.1 做。
+/// 多宠物（gift Story 4.1 · AC6.2）：本页只认路由里的 `petId`（墙 / 榜 provider 均按 petId 分族），
+/// Diary Tab 入口取当前宠物（`effectivePetIdProvider`），切换宠物后进来的就是新那只。
 class GiftPage extends ConsumerStatefulWidget {
   const GiftPage({super.key, required this.petId, this.wallInitiallyExpanded = false});
 

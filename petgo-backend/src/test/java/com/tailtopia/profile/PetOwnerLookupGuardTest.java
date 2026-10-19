@@ -55,9 +55,6 @@ class PetOwnerLookupGuardTest {
             "admin/moderation/service/UnifiedTicketQueryService.java",
             "admin/usermgmt/service/AdminUserPurchasesQuery.java",
             "auth/service/OpsAudienceSql.java",
-            // V1.4.0 ③ 送礼线合入（2026-10-19）：按 pet id 取（WHERE p.id = :petId），owner_id 只作 JOIN users 的列，
-            //     不是按主人取单行。单宠过渡实现，gift Story 4-1 AC1.2 删除该类时同步移出白名单。
-            "gift/port/SinglePetGiftPetDirectory.java",
             "passport/service/BoardingPassDuplicateQuery.java",
             "profile/domain/PetProfile.java");
 

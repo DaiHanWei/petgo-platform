@@ -182,7 +182,7 @@ void main() {
     testWidgets('D10b QRIS 过期 → 「Pembayaran kedaluwarsa. Coba lagi.」', (tester) async {
       final repo = await qrisFlow(tester, const [PetSlotPurchaseStatus(status: PetSlotPurchaseStatus.expired)]);
       expect(repo.statusQueries, ['p9']);
-      expect(find.text(l10n.petSlotPaymentExpired), findsOneWidget);
+      expect(find.text(l10n.paymentExpiredRetry), findsOneWidget);
       expect(events.where((e) => e.$1 == 'pet_slot_rent_paid'), isEmpty);
     });
 
