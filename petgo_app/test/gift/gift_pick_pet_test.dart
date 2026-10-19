@@ -33,7 +33,7 @@ void main() {
   ];
 
   Future<void> pump(WidgetTester tester, List<GiftPetSummary> pets,
-      {bool showSend = true, VoidCallback? onDelivered}) async {
+      {bool showSend = true, VoidCallback? onDelivered, List<ContentPetRef> linkedPets = linked}) async {
     tester.view.physicalSize = const Size(1600, 2600);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
@@ -52,7 +52,7 @@ void main() {
             child: GiftDetailZone(
                 postId: 77,
                 pets: pets,
-                linkedPets: linked,
+                linkedPets: linkedPets,
                 showSendButton: showSend,
                 onDelivered: onDelivered),
           ),
@@ -105,6 +105,18 @@ void main() {
     expect(repo.catalogArgs.single, (petId: 22, postId: null), reason: '按所选 petId 取目录');
     expect(events.where((e) => e.$1 == 'gift_panel_opened').single.$2,
         {'source': 'content_detail', 'pet_id': 22, 'is_multi_pet_post': true});
+  });
+
+  testWidgets('L2 r2 A7：详情 pets 带生日 → 行副标题「物种 · 年龄」', (tester) async {
+    final twoYearsAgo = DateTime.now().subtract(const Duration(days: 365 * 2 + 10));
+    await pump(tester, const [a, b], linkedPets: [
+      ContentPetRef(petId: 11, name: 'Aaa', petType: 'CAT', birthday: twoYearsAgo),
+      const ContentPetRef(petId: 22, name: 'Bbb', petType: 'DOG'),
+    ]);
+    await tester.tap(sendButton());
+    await tester.pumpAndSettle();
+    expect(find.text('Kucing · 2 thn'), findsOneWidget);
+    expect(find.text('Anjing'), findsOneWidget, reason: '没生日 → 只有物种');
   });
 
   testWidgets('A7 下滑关闭 = 不送（不开面板、不取目录）', (tester) async {

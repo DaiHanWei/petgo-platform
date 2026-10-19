@@ -11,7 +11,7 @@ import 'pet_slot_pet_row.dart';
 /// D13 改选「保持正常」的宠物（V1.4.0 multi-pet Story 2.4 · AC4）：**只**从名额管理页「Ubah pilihan ›」进
 /// （2026-10-15 拍板：B4 横幅 / E1 抽屉不放改选入口）。
 ///
-/// 骨架参照 `place_list_page.dart` 的 `_FilterSheet`：把手 → 粗体标题 → 说明 → 勾选行 → 底部「{n} / {total}」+「Simpan」。
+/// 骨架：把手 → 粗体标题 → 说明 → 描边卡片勾选行 →「{n} / {total} dipilih」小字 → 整宽「Simpan」（稿 D13）。
 /// 默认勾当前 ACTIVE 的宠物；勾满名额数后其余行不可再勾；未选满 Simpan 禁用。
 /// 保存成功 → 关抽屉、返回 true（调用方刷新 + Toast D-32）；失败 → 抽屉保持、顶部 Toast 可重试。
 Future<bool> showActiveSelectionSheet(
@@ -76,6 +76,40 @@ class _ActiveSelectionSheetState extends ConsumerState<ActiveSelectionSheet> {
     }
   }
 
+  /// 稿 D13 `.sheet .crow`：描边卡片（1.5px #F0F0F0、r14、内边距 11/12、行距 8）；勾上 = 紫边 + 浅紫底。
+  Widget _row(PetListItem p) {
+    final checked = _selected.contains(p.id);
+    final enabled = (checked || !_full) && !_saving;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('petSlotSelectRow-${p.id}'),
+          borderRadius: BorderRadius.circular(14),
+          onTap: enabled ? () => _toggle(p.id) : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: checked ? AppColors.mintTint2 : AppColors.card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: checked ? AppColors.mint : AppColors.line2, width: 1.5),
+            ),
+            child: PetSlotPetRow(
+              pet: p,
+              showLock: false,
+              trailing: Icon(
+                checked ? Icons.check_box : Icons.check_box_outline_blank,
+                key: ValueKey('petSlotSelectCheck-${p.id}'),
+                color: checked ? AppColors.mint : (_full ? AppColors.line : AppColors.ink2),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -106,54 +140,34 @@ class _ActiveSelectionSheetState extends ConsumerState<ActiveSelectionSheet> {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    for (final p in widget.pets)
-                      InkWell(
-                        key: ValueKey('petSlotSelectRow-${p.id}'),
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: (_selected.contains(p.id) || !_full) && !_saving ? () => _toggle(p.id) : null,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: PetSlotPetRow(
-                            pet: p,
-                            showLock: false,
-                            trailing: Icon(
-                              _selected.contains(p.id) ? Icons.check_box : Icons.check_box_outline_blank,
-                              key: ValueKey('petSlotSelectCheck-${p.id}'),
-                              color: _selected.contains(p.id)
-                                  ? AppColors.mint
-                                  : (_full ? AppColors.line : AppColors.ink2),
-                            ),
-                          ),
-                        ),
-                      ),
+                    for (final p in widget.pets) _row(p),
                   ],
                 ),
               ),
             ),
+            // 稿 D13：计数小字单独一行（左），下方整宽「Simpan」。
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(l10n.petSlotSelectCount(_selected.length, widget.slotTotal),
+                  key: const ValueKey('petSlotSelectCount'),
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+            ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(l10n.petSlotSelectCount(_selected.length, widget.slotTotal),
-                      key: const ValueKey('petSlotSelectCount'),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink2)),
-                ),
-                FilledButton(
-                  key: const ValueKey('petSlotSelectSave'),
-                  onPressed: canSave ? _save : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.mint,
-                    foregroundColor: AppColors.onAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onAccent))
-                      : Text(l10n.commonSave),
-                ),
-              ],
+            FilledButton(
+              key: const ValueKey('petSlotSelectSave'),
+              onPressed: canSave ? _save : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                foregroundColor: AppColors.onAccent,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onAccent))
+                  : Text(l10n.commonSave, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ),
           ],
         ),

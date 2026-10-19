@@ -127,9 +127,12 @@ void main() {
     expect(find.text('Rp188.000'), findsOneWidget);
     expect(find.text('21 hadiah dari 9 pendukung'), findsOneWidget);
     expect(find.text('Koleksi hadiah'), findsOneWidget);
-    expect(find.text('· 12 jenis'), findsOneWidget);
+    // L2 第二轮（稿 `.sec2.ttl`）：计数靠右、不带「·」。
+    expect(find.text('12 jenis'), findsOneWidget);
+    expect(tester.getTopRight(find.text('12 jenis')).dx,
+        greaterThan(tester.getTopRight(find.text('Koleksi hadiah')).dx + 100));
     expect(find.text('Pendukung'), findsOneWidget);
-    expect(find.text('· 9 orang'), findsOneWidget);
+    expect(find.text('9 orang'), findsOneWidget);
     expect(_send(), findsOneWidget);
     expect(find.text('Kirim Hadiah'), findsOneWidget);
   });
@@ -170,7 +173,7 @@ void main() {
     expect(_badge(tester, 1).color, AppColors.gold);
     expect(_badge(tester, 2).color, AppColors.rankSilver);
     expect(_badge(tester, 3).color, AppColors.rankBronze);
-    expect(_badge(tester, 4).color, AppColors.line2);
+    expect(_badge(tester, 4).color, const Color(0xFFF7F7F7)); // 稿 `.fan .rk`
     Text rankText(int r) => tester.widget<Text>(
         find.descendant(of: find.byKey(ValueKey('giftRankBadge_$r')), matching: find.byType(Text)));
     expect(rankText(1).style!.color, Colors.white);
@@ -227,6 +230,17 @@ void main() {
       expect(find.text('Rp188.000'), findsOneWidget);
     });
   }
+
+  testWidgets('L2 r2 E1/E2：×N 角标收在格子内（格子撑满列宽，角标右缘不越过格子）', (tester) async {
+    await _pump(tester, _Repo(showcase: _showcase(), pages: {null: _firstPage}));
+    final cell = tester.getRect(find.byKey(const ValueKey('giftWallCell_0')));
+    final badge = tester.getRect(
+        find.descendant(of: find.byKey(const ValueKey('giftWallCell_0')), matching: find.byKey(const ValueKey('giftWallCellCount'))));
+    expect(badge.right, lessThanOrEqualTo(cell.right));
+    expect(badge.top, greaterThanOrEqualTo(cell.top));
+    final cell1 = tester.getRect(find.byKey(const ValueKey('giftWallCell_1')));
+    expect(cell1.left - cell.right, closeTo(8, 0.5), reason: '四列等宽、间距 8');
+  });
 
   testWidgets('E7 下一页失败：行内「Gagal memuat · Coba lagi」，已加载行保留；点击只重试下一页', (tester) async {
     final repo = _Repo(showcase: _showcase(), pages: {

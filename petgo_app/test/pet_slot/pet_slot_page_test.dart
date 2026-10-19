@@ -352,6 +352,9 @@ void main() {
       await tester.pump();
       expect(check(2).icon, Icons.check_box_outline_blank);
       expect(tester.widget<FilledButton>(find.byKey(const ValueKey('petSlotRenewConfirm'))).onPressed, isNull);
+      // L2 第二轮：一个都不勾 → 金额按 Rp0 显示（不出「…」占位）。
+      expect(find.text('…'), findsNothing);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('payTotalAmount'))).data, 'Rp0');
     });
 
     testWidgets('4.4 AC3：升级拿到永久名额后默认少勾一个；正常宠物 ≤ 永久名额 → 默认不勾、主按钮禁用、抽屉不关', (tester) async {

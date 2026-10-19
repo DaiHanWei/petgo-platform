@@ -32,20 +32,25 @@ Timer? _timer;
 /// （举报提交失败 → 抽屉保持打开让用户重试）。toast 挂 root Overlay 所以 z 序在抽屉之上不会被遮，
 /// 但默认那个 `bottom + 90` 的位置正好压在抽屉的按钮区上，用户会以为提示是按钮的一部分。
 /// **默认 false 时行为与改动前逐字节一致**，既有 30+ 处调用零影响。
+///
+/// [extraBottom]（V1.4.0 L2 第二轮，收藏 C2）：底部变体再往上抬多少（默认 0 = 与改动前逐字节一致）。
+/// 只给「页面自带较高底栏、默认位置会贴着底栏」的个别场景用，不改全局位置。
 void showAppToast(BuildContext context, String message,
     {Duration duration = const Duration(milliseconds: 2600),
     bool top = false,
+    double extraBottom = 0,
     String? actionLabel,
     VoidCallback? onAction}) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
   showAppToastOnOverlay(overlay, message,
-      duration: duration, top: top, actionLabel: actionLabel, onAction: onAction);
+      duration: duration, top: top, extraBottom: extraBottom, actionLabel: actionLabel, onAction: onAction);
 }
 
 void showAppToastOnOverlay(OverlayState overlay, String message,
     {Duration duration = const Duration(milliseconds: 2600),
     bool top = false,
+    double extraBottom = 0,
     String? actionLabel,
     VoidCallback? onAction}) {
   _dismiss();
@@ -54,6 +59,7 @@ void showAppToastOnOverlay(OverlayState overlay, String message,
       message: message,
       duration: duration,
       top: top,
+      extraBottom: extraBottom,
       actionLabel: actionLabel,
       // 点完动作立刻收起 —— 动作已经执行，提示条再挂 5 秒只是挡视线。
       onAction: onAction == null
@@ -82,6 +88,7 @@ class _ToastWidget extends StatefulWidget {
     required this.message,
     required this.duration,
     this.top = false,
+    this.extraBottom = 0,
     this.actionLabel,
     this.onAction,
   });
@@ -91,6 +98,9 @@ class _ToastWidget extends StatefulWidget {
 
   /// true = 贴屏幕顶部（避开正开着的底部抽屉）；false = 既有的底部位置。
   final bool top;
+
+  /// 底部变体额外上抬（默认 0）。
+  final double extraBottom;
 
   /// 动作位文案（如「撤销」）。与 [onAction] 同时给才渲染。
   final String? actionLabel;
@@ -127,7 +137,7 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
     // 底距 = 安全区 + 键盘高度(viewInsets) + 90。键盘弹起时(如评论区)必须叠加 viewInsets.bottom，
     // 否则 toast 停在固定低位被键盘/输入框盖住看不见（bug 20260702-232）；键盘收起时 viewInsets=0，行为不变。
     final mq = MediaQuery.of(context);
-    final bottom = mq.padding.bottom + mq.viewInsets.bottom + 90;
+    final bottom = mq.padding.bottom + mq.viewInsets.bottom + 90 + widget.extraBottom;
     final onAction = widget.onAction;
     final actionLabel = widget.actionLabel;
     final hasAction = onAction != null && actionLabel != null;

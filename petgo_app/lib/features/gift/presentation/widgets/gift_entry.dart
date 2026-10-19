@@ -177,12 +177,18 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
   /// A7：选择送给哪只（单选 + 吸底「Lanjut」，默认第一只；只读宠物不置灰）。关闭 → null。
   Future<int?> _pickPet(List<GiftPetSummary> pets) async {
     final l10n = AppLocalizations.of(context);
-    final types = {for (final p in widget.linkedPets) p.petId: p.petType};
+    final linked = {for (final p in widget.linkedPets) p.petId: p};
     final ids = await showPetPickerSheet(
       context,
       pets: [
         for (final p in pets)
-          PetListItem(id: p.petId, name: p.name, avatarUrl: p.avatarUrl, petType: types[p.petId]),
+          // 副标题「物种 · 年龄」：物种与生日都取详情 `pets`（`giftPets` 不带；L2 第二轮补年龄）。
+          PetListItem(
+              id: p.petId,
+              name: p.name,
+              avatarUrl: p.avatarUrl,
+              petType: linked[p.petId]?.petType,
+              birthday: linked[p.petId]?.birthday),
       ],
       title: l10n.giftPickPetTitle,
       body: l10n.giftPickPetSubtitle,

@@ -79,7 +79,8 @@ class PayChannelPicker extends StatefulWidget {
     this.onTopUp,
   });
 
-  final Widget header;
+  /// 抽屉顶部的商品头卡；null = 不画（V1.4.0 multi-pet D11 续租稿无头卡，标题直接起）。
+  final Widget? header;
   final String title;
   final String body;
   final AsyncValue<int> price;
@@ -170,11 +171,16 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
     final priceAsync = widget.price;
     final int? unitIdr = priceAsync.value;
     final qtyCfg = widget.itemsArea == null ? widget.quantity : null;
-    // 本次应付总额：条目区 → 调用方算好的总价（没选 = null）；数量步进器 → 单价 × 数量；否则 = 价格本身。
+    // 条目区一个都没勾（D11）：金额按 0 显示（不出「…」占位）、确认置灰；渠道选择**原样保留**
+    // （L2 第二轮：原先按「没价格」处理 → PawCoin 判为余额不足 → 默认渠道被悄悄切到 QRIS）。
+    final bool nothingChosen = widget.itemsArea != null && unitIdr != null && (widget.itemsTotal ?? 0) <= 0;
+    // 本次应付总额：条目区 → 调用方算好的总价（没勾 = 0）；数量步进器 → 单价 × 数量；否则 = 价格本身。
     final int? priceIdr = widget.itemsArea != null
-        ? (unitIdr == null || (widget.itemsTotal ?? 0) <= 0 ? null : widget.itemsTotal)
+        ? (unitIdr == null ? null : (nothingChosen ? 0 : widget.itemsTotal))
         : (qtyCfg != null && unitIdr != null ? unitIdr * _qty : unitIdr);
-    final enoughCoin = priceIdr != null && widget.balance >= priceIdr;
+    // 没勾时按「一个名额」判余额够不够：勾上第一个时默认渠道不跳（余额够 → 一直 PawCoin，不够 → 一直 QRIS）。
+    final int? coinBasis = nothingChosen ? unitIdr : priceIdr;
+    final enoughCoin = coinBasis != null && widget.balance >= coinBasis;
     final qrisDisabled = widget.qrisDisabledReason != null;
     // 默认：余额够 → PawCoin，否则 QRIS；QRIS 被禁用且余额不足 → **无选中**、确认置灰（送礼 C4）。
     // 显式选过 PawCoin、但金额随后涨过余额（数量 + / 勾选更多名额 / 价格重取）→ 回落 QRIS（QRIS 被禁则无选中）：
@@ -200,8 +206,10 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
               ),
             ),
             const SizedBox(height: 16),
-            widget.header,
-            const SizedBox(height: 16),
+            if (widget.header != null) ...[
+              widget.header!,
+              const SizedBox(height: 16),
+            ],
             Text(widget.title,
                 style: const TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
@@ -287,7 +295,7 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
               key: widget.confirmKey,
               // 价格未取到（加载中/失败）禁付款：用户必须先看到本次费用（417 同类无兜底）。
               // 无选中（送礼 C4）同样禁；扣款中（C5）按钮保持紫底、点击无效。
-              onPressed: priceIdr == null || selected == null
+              onPressed: priceIdr == null || selected == null || nothingChosen
                   ? null
                   : _busy
                       ? () {}

@@ -13,6 +13,9 @@ import '../data/collect_providers.dart';
 import '../data/collect_repository.dart';
 import '../domain/collect_target.dart';
 
+/// 收藏成功 Toast 比全局默认位置再上抬的距离（稿 C2：与详情页底栏留出约 36 的间隔，默认只有约 16）。
+const double kCollectToastLift = 20;
+
 /// 收藏按钮（V1.4.0 ④ Story 2.3 · AD-15 · UI 稿 C1–C5 / D1–D4）。
 ///
 /// 状态机照 `LikeButton`（乐观更新、`_inFlight` 防连点、`requireLogin` 门控、跟随外部数据），
@@ -109,7 +112,9 @@ class _CollectButtonState extends ConsumerState<CollectButton> {
       // 只在服务端确认的状态与本次意图一致时报（P-8「服务端确认成功后」）。
       if (result.collected == collecting) _reportSuccess(collecting);
       if (collecting && result.collected) {
+        // 稿 C2：Toast 离开详情页底栏一截（默认位置会贴着评论栏，L2 第二轮）——只抬收藏这一处，不动全局位置。
         showAppToast(context, l10n.collectSavedToast,
+            extraBottom: kCollectToastLift,
             actionLabel: l10n.collectSavedToastAction,
             onAction: () => router?.go(CollectTarget.savedLocation(widget.target)));
       }
