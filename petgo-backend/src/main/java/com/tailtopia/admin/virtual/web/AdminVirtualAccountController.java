@@ -211,7 +211,7 @@ public class AdminVirtualAccountController {
             // ⚠️ 上传失败（对象存储未配置 / 凭证异常）在这条路上**不能吞成成功**：
             //    交给 AdminBusinessExceptionAdvice 回 422 落进抽屉的行内错误槽。
             long id = doCreate(admin, nickname, avatarUrl, avatarFile, accountSpecies);
-            AdminFragmentResponses.trigger(response, AdminHxEvents.DRAWER_OPEN,
+            AdminFragmentResponses.triggerWithPayload(response, AdminHxEvents.DRAWER_OPEN,
                     "{\"url\":\"/admin/virtual-accounts/" + id + "/drawer\",\"id\":" + id + "}");
             AdminFragmentResponses.trigger(response, AdminHxEvents.VIRTUAL_ACCOUNT_LIST_REFRESH);
             model.addAttribute("toast", msg.get("admin.flash.virtualAccount.created", id));
