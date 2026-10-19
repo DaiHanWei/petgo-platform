@@ -18,6 +18,7 @@ import 'package:tailtopia/features/profile/domain/share_service.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
 import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/pet_info_card.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/pet_avatar_item.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
@@ -474,7 +475,7 @@ void main() {
     });
 
     // ===== V1.4.0 multi-pet Story 2.4 · AC5.2（UI 稿 B4）=====
-    testWidgets('B4：当前宠物只读 → 页头前插只读横幅、编辑铅笔隐藏、上报 pet_readonly_banner_shown（无宠物名）',
+    testWidgets('B4：当前宠物只读 → 标题下插只读横幅、编辑铅笔隐藏、上报 pet_readonly_banner_shown（无宠物名）',
         (tester) async {
       final events = <(String, Map<String, Object>?)>[];
       Analytics.debugCaptureSink = (e, p) => events.add((e, p));
@@ -489,8 +490,14 @@ void main() {
       expect(find.text(l10n.petReadonlyBannerTitle), findsOneWidget);
       expect(find.text(l10n.petReadonlyBannerBody), findsOneWidget);
       expect(find.byKey(const ValueKey('petReadonlyBannerRenew')), findsOneWidget);
-      expect(tester.getRect(banner).bottom, lessThanOrEqualTo(tester.getRect(title('Orenji')).top),
-          reason: '横幅在 DiaryHeader 之前');
+      // L2 第二轮（稿 B4）：横幅在标题行「Diary {name}」之下、宠物信息卡之上。
+      expect(tester.getRect(banner).top, greaterThanOrEqualTo(tester.getRect(title('Orenji')).bottom),
+          reason: '横幅在标题行之下');
+      expect(tester.getRect(banner).bottom,
+          lessThanOrEqualTo(tester.getRect(find.byType(PetInfoCard)).top),
+          reason: '横幅在宠物卡之上');
+      // L2 第二轮 P2-4：只读宠物空态不引导发帖。
+      expect(find.byKey(const ValueKey('timelineEmptyCta')), findsNothing);
       expect(find.byKey(const ValueKey('editProfileButton')), findsNothing);
       final shown = events.where((e) => e.$1 == 'pet_readonly_banner_shown').toList();
       expect(shown, hasLength(1));

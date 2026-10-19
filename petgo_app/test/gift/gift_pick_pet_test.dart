@@ -32,7 +32,8 @@ void main() {
     ContentPetRef(petId: 22, name: 'Bbb', petType: 'DOG'),
   ];
 
-  Future<void> pump(WidgetTester tester, List<GiftPetSummary> pets, {bool showSend = true}) async {
+  Future<void> pump(WidgetTester tester, List<GiftPetSummary> pets,
+      {bool showSend = true, VoidCallback? onDelivered}) async {
     tester.view.physicalSize = const Size(1600, 2600);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
@@ -48,7 +49,12 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
-            child: GiftDetailZone(postId: 77, pets: pets, linkedPets: linked, showSendButton: showSend),
+            child: GiftDetailZone(
+                postId: 77,
+                pets: pets,
+                linkedPets: linked,
+                showSendButton: showSend,
+                onDelivered: onDelivered),
           ),
         ),
       ),
@@ -130,6 +136,19 @@ void main() {
     expect(repo.catalogArgs.single, (petId: 11, postId: null));
     expect(events.where((e) => e.$1 == 'gift_panel_opened').single.$2,
         {'source': 'content_detail', 'pet_id': 11, 'is_multi_pet_post': false});
+  });
+
+  testWidgets('L2 r2 P1-1：送达 → 回调 onDelivered（详情页据此重拉、礼物区刷新）', (tester) async {
+    var delivered = 0;
+    await pump(tester, const [a], onDelivered: () => delivered++);
+    await tester.tap(sendButton());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('giftSendButton')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hdPayConfirm')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
+    expect(delivered, 1);
   });
 
   testWidgets('自己的 Diary（A6）→ 无「Kirim Hadiah」，宠物行照常', (tester) async {

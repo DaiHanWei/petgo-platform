@@ -332,7 +332,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                         child: _uploading
                             ? const CircularProgressIndicator()
                             : (_avatarUrl == null
-                                ? const Text('🐱', style: TextStyle(fontSize: 38))
+                                // 按物种占位（同 PetInfoCard 口径；原先恒为 🐱，狗也顶着猫脸，L2 第二轮 P3-6）。
+                                ? Text(
+                                    switch (_petType) { 'CAT' => '🐱', 'DOG' => '🐶', _ => '🐾' },
+                                    style: const TextStyle(fontSize: 38))
                                 : null),
                       ),
                     ),

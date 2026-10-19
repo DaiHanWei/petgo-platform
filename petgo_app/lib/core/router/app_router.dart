@@ -809,6 +809,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                   .report([s1Code]);
               if (c.mounted) c.go('/publish');
             },
+            // 次链接「Lihat profil dulu」（V1.4.0 L2 第二轮 P3-7）：只去 Diary Tab（新建的这只已在建档页
+            // 设为当前宠物），不拉起发布。S1 同样算已在本页庆祝过 → 一并回报。
+            onViewProfile: () async {
+              ref
+                  .read(locallyCelebratedMilestonesProvider.notifier)
+                  .report([s1Code]);
+              if (c.mounted) c.go('/profile');
+            },
           );
         },
       ),
