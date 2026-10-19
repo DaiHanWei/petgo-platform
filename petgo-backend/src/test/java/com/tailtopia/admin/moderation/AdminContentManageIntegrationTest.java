@@ -202,12 +202,12 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         long oldPost = newPost(ContentType.DAILY, "postingan lama yang tiba-tiba viral");
         backdate(oldPost, Instant.now().minus(90, java.time.temporal.ChronoUnit.DAYS));
 
-        // 窗口外的一个赞（90 天前）+ 窗口内的两个赞（今天）
-        likeAt(oldPost, Instant.now().minus(90, java.time.temporal.ChronoUnit.DAYS));
-        likeAt(oldPost, Instant.now().minusSeconds(3600));
-        likeAt(oldPost, Instant.now().minusSeconds(1800));
+        LocalDate today = LocalDate.now(WIB);
 
-        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"));
+        // 窗口外的一个赞（90 天前）+ 窗口内的两个赞（今天 WIB）
+        likeAt(oldPost, Instant.now().minus(90, java.time.temporal.ChronoUnit.DAYS));
+        likeAt(oldPost, earlierToday(today, 3600));
+        likeAt(oldPost, earlierToday(today, 1800));
 
         // ① 按发布时间：这条 90 天前的帖子不在今天的结果里。
         assertThat(contentManage.browse(null, null, today, today, null, null, 0)
@@ -229,14 +229,14 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
     @Test
     void likeWindowRowsCarryTheSameCommentCountAsDetail() {
         long p = newPost(ContentType.KNOWLEDGE, "tips merawat anabul");
-        likeAt(p, Instant.now().minusSeconds(600));
+        LocalDate today = LocalDate.now(WIB);
+        likeAt(p, earlierToday(today, 600));
         long commenter = newUser().getId();
         comments.save(Comment.create(p, null, commenter, "a"));
         comments.save(Comment.create(p, null, commenter, "b"));
         Comment gone = comments.save(Comment.create(p, null, commenter, "c"));
         gone.softDelete();
         comments.save(gone);
-        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"));
 
         AdminContentRow inWindow = contentManage.browseByLikeWindow(null, null, today, today, null, null, 0)
                 .rows().stream().filter(r -> r.id() == p).findFirst().orElseThrow();
@@ -251,8 +251,8 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
     @Test
     void exportFollowsTheLikeWindowBasis() {
         long p = newPost(ContentType.DAILY, "kucing menang lomba");
-        likeAt(p, Instant.now().minusSeconds(600));
-        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"));
+        LocalDate today = LocalDate.now(WIB);
+        likeAt(p, earlierToday(today, 600));
 
         String csv = contentManage.exportCsv(828100L + SEQ.incrementAndGet(), null, null,
                 today, today, null, null, "liked");
@@ -281,6 +281,23 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
                 .getId();
         jdbc.update("update content_likes set created_at = ? where id = ?",
                 java.sql.Timestamp.from(at), id);
+    }
+
+    private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
+
+    /**
+     * 「今天（WIB）稍早」的一个时刻：{@code now - secondsAgo}，但**不早于 {@code today} 的 WIB 零点**。
+     *
+     * <p>⚠️ 不能直接用 {@code Instant.now().minusSeconds(n)}：窗口按 WIB 自然日切，
+     * WIB 零点后 n 秒内（= UTC 17:00 起，CI 常在这个点跑）那个时刻落在**昨天**，
+     * 「今天」窗口里便一个赞都没有 —— 2026-10-18 17:10 UTC 的 CI 正是这么红的。
+     * 另外 {@code today} 由调用方先取、窗口查询也用它，两边不会因跨零点而各说各的「今天」。
+     */
+    private static Instant earlierToday(LocalDate today, long secondsAgo) {
+        Instant startOfToday = today.atStartOfDay(WIB).toInstant();
+        Instant candidate = Instant.now().minusSeconds(secondsAgo);
+        // 零点后不足 secondsAgo 秒：钳到零点后 1 秒（仍在「今天」窗口 [今天 0 点, 明天 0 点) 内）。
+        return candidate.isBefore(startOfToday) ? startOfToday.plusSeconds(1) : candidate;
     }
 
     /** 同上：把内容的发布时间挪到过去（{@code created_at} 同样 updatable=false）。 */
