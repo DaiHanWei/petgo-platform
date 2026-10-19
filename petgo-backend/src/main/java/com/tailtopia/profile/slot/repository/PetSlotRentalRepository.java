@@ -44,9 +44,16 @@ public interface PetSlotRentalRepository extends JpaRepository<PetSlotRental, Lo
     List<PetSlotRental> findByUserIdAndStatusAndExpiresAtLessThanEqualOrderByIdAsc(long userId,
             PetSlotRentalStatus status, Instant now);
 
-    /** 有提醒候选（未提醒、{@code now < expires_at <= until}）名额的用户，按 userId 升序取一批。 */
+    /**
+     * 有提醒候选（未提醒、{@code now < expires_at <= until}）名额的用户，按 userId 升序取一批。
+     * <b>排除已注销 / 已提交注销的账号</b>（OCR #2 双保险）：注销级联会把名额置 EXPIRED，但注销作业排队 / 重试期间、
+     * 或注销后才到账的租赁都可能留下 ACTIVE 行 —— 不能给已注销的人写通知 / 发推送。
+     */
     @Query("SELECT DISTINCT r.userId FROM PetSlotRental r WHERE r.status = :status AND r.remindedAt IS NULL"
-            + " AND r.expiresAt > :now AND r.expiresAt <= :until ORDER BY r.userId")
+            + " AND r.expiresAt > :now AND r.expiresAt <= :until"
+            + " AND NOT EXISTS (SELECT 1 FROM User u WHERE u.id = r.userId AND u.deletedAt IS NOT NULL)"
+            + " AND NOT EXISTS (SELECT 1 FROM AccountDeletion ad WHERE ad.userId = r.userId)"
+            + " ORDER BY r.userId")
     List<Long> findUserIdsWithDueReminder(@Param("status") PetSlotRentalStatus status, @Param("now") Instant now,
             @Param("until") Instant until, Pageable page);
 
@@ -74,4 +81,14 @@ public interface PetSlotRentalRepository extends JpaRepository<PetSlotRental, Lo
             + " AND r.remindedAt IS NULL AND r.expiresAt > :now AND r.expiresAt <= :until")
     int markReminded(@Param("id") long id, @Param("status") PetSlotRentalStatus status, @Param("now") Instant now,
             @Param("until") Instant until);
+
+    /**
+     * 账号注销（OCR #2）：该用户全部 ACTIVE 名额置 EXPIRED。名额是付费记录（关联 {@code pet_slot_purchases}），
+     * 照交易记录口径<b>保留行、只终止</b>，不物理删。返回置位条数。
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE PetSlotRental r SET r.status = :expired, r.expiredAt = :now WHERE r.userId = :userId"
+            + " AND r.status = :active")
+    int expireAllOfUser(@Param("userId") long userId, @Param("active") PetSlotRentalStatus active,
+            @Param("expired") PetSlotRentalStatus expired, @Param("now") Instant now);
 }
