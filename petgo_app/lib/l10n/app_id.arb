@@ -2986,5 +2986,6 @@
   "collectEmptyPlacesHint": "Ketuk ikon simpan di halaman tempat untuk menyimpannya di sini.",
   "collectLoadFailedTitle": "Gagal memuat",
   "collectLoadFailedHint": "Periksa koneksi lalu coba lagi.",
-  "collectLoadMore": "Muat lagi"
+  "collectLoadMore": "Muat lagi",
+  "petSlotCelebrationPermanentHint": "Slot ini permanen. Mulai perpanjangan berikutnya, kamu bisa sewa 1 slot lebih sedikit."
 }

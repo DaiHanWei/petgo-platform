@@ -88,17 +88,25 @@ public class PetSlotService {
         return levelSlots(growth.getLevel(userId));
     }
 
-    private static int levelSlots(GrowthLevel level) {
-        if (level == null || !level.participating()) {
-            return 0;
-        }
+    /**
+     * 某个等级带来的等级名额数（[Lv≥5] + [Lv≥10]，按等级本身算、不判参与）。供升级庆祝的永久名额提示比较
+     * from / to 两个等级（Story 4.4 · AD-16）；本类内唯一一处门槛口径，{@link #quotaOf} 同样经它。
+     */
+    public static int levelSlotsAtLevel(int level) {
         int n = 0;
         for (int threshold : LEVEL_SLOT_THRESHOLDS) {
-            if (level.level() >= threshold) {
+            if (level >= threshold) {
                 n++;
             }
         }
         return n;
+    }
+
+    private static int levelSlots(GrowthLevel level) {
+        if (level == null || !level.participating()) {
+            return 0;
+        }
+        return levelSlotsAtLevel(level.level());
     }
 
     private static Integer nextLevelSlot(GrowthLevel level) {

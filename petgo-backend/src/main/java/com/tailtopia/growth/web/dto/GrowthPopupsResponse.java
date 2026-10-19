@@ -22,10 +22,12 @@ public record GrowthPopupsResponse(CelebrationView celebration, BackfillView bac
      * @param tierUp           from 与 to 段位不同（跨段位 → App 用全屏形态）
      * @param unlockedBenefits 跨段位时为最终段位的权益代码；段位内为空
      * @param frameAction      {@code NONE} / {@code AUTO}（已自动戴上）/ {@code OFFER_NEW_FRAME}（手动选过，提示戴新框）
+     * @param petSlotHint      本次升级获得等级名额（跨 Lv5 / Lv10）且此刻有生效中的月租名额（V1.4.0 multi-pet Story 4.4 ·
+     *                         AD-16，<b>末尾追加</b>；读时计算、不落库）→ App 在「+1 slot hewan」行下显示永久名额说明
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record CelebrationView(int fromLevel, int toLevel, boolean tierUp, GrowthTier toTier, long lifetimeTotal,
-            List<GrowthBenefit> unlockedBenefits, FrameAction frameAction) {
+            List<GrowthBenefit> unlockedBenefits, FrameAction frameAction, boolean petSlotHint) {
     }
 
     /** 存量补算汇总（Story 2.2 填充）。 */

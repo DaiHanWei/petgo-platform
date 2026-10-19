@@ -15,7 +15,11 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,26 +31,38 @@ import org.springframework.transaction.annotation.Transactional;
  * 不碰累计与等级；写之前锁账户行（与入账串行）。
  *
  * <p>读时校正：降级后才拉到的待弹按 {@code min(to, 当前等级)} 计算；不高于 from 视为无待弹并清掉两列（降级不弹窗）。
+ *
+ * <p>{@code petSlotHint}（multi-pet Story 4.4 · AD-16）：经可选的 {@link CelebrationPetSlotHint}（多宠物线实现）按校正后的
+ * from / to 读时计算；缺实现或判定抛错 → {@code false}（提示只是锦上添花，不得挡住庆祝弹窗）。
  */
 @Service
 public class GrowthPopupService {
 
+    private static final Logger log = LoggerFactory.getLogger(GrowthPopupService.class);
+
     private final GrowthAccountRepository accounts;
     private final GrowthLevelDefRepository levels;
     private final GrowthPageQuery page;
+    private final Supplier<CelebrationPetSlotHint> petSlotHint;
     private final Clock clock;
 
     @Autowired
     public GrowthPopupService(GrowthAccountRepository accounts, GrowthLevelDefRepository levels,
-            GrowthPageQuery page) {
-        this(accounts, levels, page, Clock.systemUTC());
+            GrowthPageQuery page, ObjectProvider<CelebrationPetSlotHint> petSlotHint) {
+        this(accounts, levels, page, petSlotHint::getIfAvailable, Clock.systemUTC());
     }
 
     GrowthPopupService(GrowthAccountRepository accounts, GrowthLevelDefRepository levels, GrowthPageQuery page,
             Clock clock) {
+        this(accounts, levels, page, () -> null, clock);
+    }
+
+    GrowthPopupService(GrowthAccountRepository accounts, GrowthLevelDefRepository levels, GrowthPageQuery page,
+            Supplier<CelebrationPetSlotHint> petSlotHint, Clock clock) {
         this.accounts = accounts;
         this.levels = levels;
         this.page = page;
+        this.petSlotHint = petSlotHint;
         this.clock = clock;
     }
 
@@ -97,7 +113,21 @@ public class GrowthPopupService {
         boolean tierUp = fromTier != toTier;
         List<GrowthBenefit> benefits = tierUp ? GrowthPageQuery.BENEFITS.getOrDefault(toTier, List.of()) : List.of();
         return new CelebrationView(from, effectiveTo, tierUp, toTier, a.getLifetimeTotal(), benefits,
-                frameAction(tierUp, toTier, a.getFrameChoice()));
+                frameAction(tierUp, toTier, a.getFrameChoice()), petSlotHint(a.getUserId(), from, effectiveTo));
+    }
+
+    /** 用校正后的 from / to（与返回的 fromLevel / toLevel 同一对数）。 */
+    private boolean petSlotHint(long userId, int from, int to) {
+        CelebrationPetSlotHint hint = petSlotHint.get();
+        if (hint == null) {
+            return false;
+        }
+        try {
+            return hint.petSlotHint(userId, from, to);
+        } catch (RuntimeException ex) {
+            log.warn("celebration petSlotHint failed: userId={} error={}", userId, ex.getClass().getSimpleName());
+            return false;
+        }
     }
 
     static FrameAction frameAction(boolean tierUp, GrowthTier toTier, FrameChoice choice) {

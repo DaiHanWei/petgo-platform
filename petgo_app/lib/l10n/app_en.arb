@@ -4667,5 +4667,7 @@
   "collectLoadFailedHint": "Check your connection and try again.",
   "@collectLoadFailedHint": {"description": "Saved tab load failed hint (V1.4.0)"},
   "collectLoadMore": "Load more",
-  "@collectLoadMore": {"description": "Saved list load more (V1.4.0)"}
+  "@collectLoadMore": {"description": "Saved list load more (V1.4.0)"},
+  "petSlotCelebrationPermanentHint": "This slot is permanent. From your next renewal, you can rent 1 fewer slot.",
+  "@petSlotCelebrationPermanentHint": {"description": "V1.4.0 multi-pet Story 4.4（K2 / K-5）：升级庆祝「+1 slot hewan」行下的永久名额说明，仅有生效中月租时显示"}
 }

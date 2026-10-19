@@ -135,4 +135,85 @@ void main() {
         findsOneWidget);
     expect(tester.binding.hasScheduledFrame, isFalse, reason: '不跑动画');
   });
+
+  // ---- V1.4.0 multi-pet Story 4.4 · AC2（K2 / K3）：「+1 slot hewan」行下的永久名额说明 ----
+  group('永久名额说明（multi-pet 4.4）', () {
+    const hintKey = ValueKey('growthCelebrationPetSlotHint');
+    const hintText = 'Slot ini permanen. Mulai perpanjangan berikutnya, kamu bisa sewa 1 slot lebih sedikit.';
+    const buddy = ['PET_SLOT_PLUS_ONE', 'FRAME_BASIC', 'EXCLUSIVE_GIFTS_BATCH1'];
+
+    testWidgets('K2：BUDDY 全屏 + petSlotHint → 说明挂在「+1 slot hewan」行下、下一项之上，不另起卡', (tester) async {
+      await _pump(
+          tester,
+          const GrowthCelebration(
+            fromLevel: 4,
+            toLevel: 5,
+            tierUp: true,
+            toTier: GrowthTier.buddy,
+            unlockedBenefits: buddy,
+            frameAction: GrowthFrameAction.auto,
+            petSlotHint: true,
+          ),
+          still: true);
+      expect(find.byKey(const ValueKey('growthCelebrationFull')), findsOneWidget);
+      expect(find.byKey(hintKey), findsOneWidget);
+      expect(find.text(hintText), findsOneWidget);
+      final slot = tester.getRect(find.text('+1 slot hewan'));
+      final hint = tester.getRect(find.byKey(hintKey));
+      final next = tester.getRect(find.text('Bingkai avatar Dasar'));
+      expect(hint.top, greaterThanOrEqualTo(slot.bottom));
+      expect(hint.bottom, lessThanOrEqualTo(next.top));
+      expect(hint.left, slot.left, reason: '与权益文字左对齐（同一行内）');
+      final style = tester.widget<Text>(find.byKey(hintKey)).style!;
+      expect(style.fontSize, 12);
+      // 文案方向：只说正向（AC13a）
+      for (final bad in ['menganggur', 'sia-sia', 'refund', 'tidak dikembalikan']) {
+        expect(hintText.toLowerCase().contains(bad), isFalse);
+      }
+    });
+
+    testWidgets('K3：petSlotHint = false → 不出现说明（与 ① 定稿 D2 一致）', (tester) async {
+      await _pump(
+          tester,
+          const GrowthCelebration(
+            fromLevel: 4,
+            toLevel: 5,
+            tierUp: true,
+            toTier: GrowthTier.buddy,
+            unlockedBenefits: buddy,
+            frameAction: GrowthFrameAction.auto,
+          ),
+          still: true);
+      expect(find.text('+1 slot hewan'), findsOneWidget);
+      expect(find.byKey(hintKey), findsNothing);
+      expect(find.text(hintText), findsNothing);
+    });
+
+    testWidgets('STAR（无 PET_SLOT_PLUS_ONE 行）+ petSlotHint → 不出现', (tester) async {
+      await _pump(
+          tester,
+          const GrowthCelebration(
+            fromLevel: 14,
+            toLevel: 15,
+            tierUp: true,
+            toTier: GrowthTier.star,
+            unlockedBenefits: ['FEED_BOOST', 'FRAME_ANIMATED', 'EXCLUSIVE_GIFTS_BATCH2'],
+            frameAction: GrowthFrameAction.auto,
+            petSlotHint: true,
+          ),
+          still: true);
+      expect(find.byKey(const ValueKey('growthCelebrationFull')), findsOneWidget);
+      expect(find.byKey(hintKey), findsNothing);
+    });
+
+    testWidgets('段位内卡片形态 + petSlotHint → 不出现（无权益列表可挂靠）', (tester) async {
+      await _pump(
+          tester,
+          const GrowthCelebration(
+              fromLevel: 6, toLevel: 7, tierUp: false, toTier: GrowthTier.buddy, petSlotHint: true));
+      expect(find.byKey(const ValueKey('growthCelebrationCard')), findsOneWidget);
+      expect(find.byKey(hintKey), findsNothing);
+    });
+  });
 }
+

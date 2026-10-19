@@ -13,6 +13,7 @@ import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../profile/data/pet_list_repository.dart';
 import '../../profile/domain/id_card.dart';
 import '../data/pet_slot_repository.dart';
+import '../domain/default_renew_selection.dart';
 import '../domain/pet_slot_purchase.dart';
 
 /// 名额流程里 `QrPaymentAborted.category` 的第三种取值：钱已到账、名额交人工（ORPHAN_PAID / OVERPAID）。
@@ -289,9 +290,18 @@ class PetSlotSheetHeader extends StatelessWidget {
 class PetSlotRenewSelection {
   PetSlotRenewSelection(this.max, Iterable<String> initial) : tokens = <String>{...initial};
 
-  /// 默认勾选：全部生效中的月租名额，但最多 `renewableMax` 个（本期升级拿到永久名额时自然少勾一个）。
-  factory PetSlotRenewSelection.defaultFor(PetSlotOverview o) =>
-      PetSlotRenewSelection(o.renewableMax, o.rentals.take(o.renewableMax).map((r) => r.token));
+  /// 默认勾选（multi-pet 4.4 · AC3，见 [defaultRenewSelection]）：只勾正常宠物超出永久名额（默认 + 等级）的那几个，
+  /// 最多 `renewableMax` 个、从最早到期的开始勾——升级拿到永久名额后下次续租默认少勾一个。
+  factory PetSlotRenewSelection.defaultFor(PetSlotOverview o) => PetSlotRenewSelection(
+      o.renewableMax,
+      defaultRenewSelection(
+        rentals: o.rentals,
+        renewableMax: o.renewableMax,
+        defaultSlots: o.defaultSlots,
+        levelSlots: o.levelSlots,
+        petCount: o.petCount,
+        readOnlyCount: o.readOnlyCount,
+      ));
 
   /// 最多可勾几个（后端 `renewableMax`）。
   final int max;
