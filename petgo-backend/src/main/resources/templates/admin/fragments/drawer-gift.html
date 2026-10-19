@@ -40,16 +40,19 @@
             </label>
             <p class="hint" data-notice="gift-icon-spec" th:text="${iconSpecEdit}">不选文件即保留原图标。</p>
 
-            <label class="field field-full">
-                <span th:text="#{admin.v140.gift.form.nameEn}">名称 EN</span>
-                <input type="text" name="nameEn" class="inp field-full" maxlength="40" required th:value="${g.nameEn}"
-                       th:placeholder="#{admin.v140.gift.form.nameEnPh}"/>
-            </label>
-            <label class="field field-full">
-                <span th:text="#{admin.v140.gift.form.nameId}">名称 ID</span>
-                <input type="text" name="nameId" class="inp field-full" maxlength="40" required th:value="${g.nameId}"
-                       th:placeholder="#{admin.v140.gift.form.nameIdPh}"/>
-            </label>
+            <!--/* UI L2：名称 EN / ID 并排两栏 */-->
+            <div class="cfg-grid-2">
+                <label class="field field-full">
+                    <span th:text="#{admin.v140.gift.form.nameEn}">名称 EN</span>
+                    <input type="text" name="nameEn" class="inp field-full" maxlength="40" required th:value="${g.nameEn}"
+                           th:placeholder="#{admin.v140.gift.form.nameEnPh}"/>
+                </label>
+                <label class="field field-full">
+                    <span th:text="#{admin.v140.gift.form.nameId}">名称 ID</span>
+                    <input type="text" name="nameId" class="inp field-full" maxlength="40" required th:value="${g.nameId}"
+                           th:placeholder="#{admin.v140.gift.form.nameIdPh}"/>
+                </label>
+            </div>
 
             <label class="field field-full">
                 <span th:text="#{admin.v140.gift.form.price}">价格</span>
@@ -58,18 +61,22 @@
             </label>
             <p class="hint" th:text="#{admin.v140.gift.form.priceHintEdit}">整数，≥ Rp100。改价只影响之后的新订单。</p>
 
-            <fieldset class="field field-full">
+            <fieldset class="gift-fset">
                 <legend th:text="#{admin.v140.gift.form.species}">适用物种</legend>
-                <label><input type="checkbox" name="forCat" value="true" th:checked="${g.forCat}"/> <span th:text="#{admin.v140.gift.species.cat}">猫</span></label>
-                <label><input type="checkbox" name="forDog" value="true" th:checked="${g.forDog}"/> <span th:text="#{admin.v140.gift.species.dog}">狗</span></label>
-                <label><input type="checkbox" name="forOther" value="true" th:checked="${g.forOther}"/> <span th:text="#{admin.v140.gift.species.other}">其他</span></label>
+                <div class="opsp-rad">
+                    <label><input type="checkbox" name="forCat" value="true" th:checked="${g.forCat}"/> <span th:text="#{admin.v140.gift.species.cat}">猫</span></label>
+                    <label><input type="checkbox" name="forDog" value="true" th:checked="${g.forDog}"/> <span th:text="#{admin.v140.gift.species.dog}">狗</span></label>
+                    <label><input type="checkbox" name="forOther" value="true" th:checked="${g.forOther}"/> <span th:text="#{admin.v140.gift.species.other}">其他</span></label>
+                </div>
             </fieldset>
             <p class="hint" th:text="#{admin.v140.gift.form.speciesHint}">都不选 = 通用。</p>
 
-            <fieldset class="field field-full">
+            <fieldset class="gift-fset">
                 <legend th:text="#{admin.v140.gift.form.kind}">类型</legend>
-                <label><input type="radio" name="kind" value="NORMAL" data-gift-kind th:checked="${!g.exclusive()}"/> <span th:text="#{admin.v140.gift.kind.NORMAL}">普通</span></label>
-                <label><input type="radio" name="kind" value="EXCLUSIVE" data-gift-kind th:checked="${g.exclusive()}"/> <span th:text="#{admin.v140.gift.kind.EXCLUSIVE}">专属</span></label>
+                <div class="opsp-rad">
+                    <label><input type="radio" name="kind" value="NORMAL" data-gift-kind th:checked="${!g.exclusive()}"/> <span th:text="#{admin.v140.gift.kind.NORMAL}">普通</span></label>
+                    <label><input type="radio" name="kind" value="EXCLUSIVE" data-gift-kind th:checked="${g.exclusive()}"/> <span th:text="#{admin.v140.gift.kind.EXCLUSIVE}">专属</span></label>
+                </div>
             </fieldset>
 
             <!--/* 最低等级：只在「专属」时显示（下方脚本按单选切 hidden）；无脚本时始终显示、由服务端判 */-->
@@ -168,16 +175,19 @@
         <!--/* 🔴 规格说明常驻在上传控件旁 */-->
         <p class="hint" data-notice="gift-icon-spec" th:text="${iconSpecCreate}">推荐 112×112 像素……</p>
 
-        <label class="field field-full">
-            <span th:text="#{admin.v140.gift.form.nameEn}">名称 EN</span>
-            <input type="text" name="nameEn" class="inp field-full" maxlength="40" required
-                   th:placeholder="#{admin.v140.gift.form.nameEnPh}"/>
-        </label>
-        <label class="field field-full">
-            <span th:text="#{admin.v140.gift.form.nameId}">名称 ID</span>
-            <input type="text" name="nameId" class="inp field-full" maxlength="40" required
-                   th:placeholder="#{admin.v140.gift.form.nameIdPh}"/>
-        </label>
+        <!--/* UI L2：名称 EN / ID 并排两栏 */-->
+        <div class="cfg-grid-2">
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.nameEn}">名称 EN</span>
+                <input type="text" name="nameEn" class="inp field-full" maxlength="40" required
+                       th:placeholder="#{admin.v140.gift.form.nameEnPh}"/>
+            </label>
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.nameId}">名称 ID</span>
+                <input type="text" name="nameId" class="inp field-full" maxlength="40" required
+                       th:placeholder="#{admin.v140.gift.form.nameIdPh}"/>
+            </label>
+        </div>
 
         <label class="field field-full">
             <span th:text="#{admin.v140.gift.form.price}">价格</span>
@@ -185,18 +195,22 @@
         </label>
         <p class="hint" th:text="#{admin.v140.gift.form.priceHint}">整数，≥ Rp100。</p>
 
-        <fieldset class="field field-full">
+        <fieldset class="gift-fset">
             <legend th:text="#{admin.v140.gift.form.species}">适用物种</legend>
-            <label><input type="checkbox" name="forCat" value="true"/> <span th:text="#{admin.v140.gift.species.cat}">猫</span></label>
-            <label><input type="checkbox" name="forDog" value="true"/> <span th:text="#{admin.v140.gift.species.dog}">狗</span></label>
-            <label><input type="checkbox" name="forOther" value="true"/> <span th:text="#{admin.v140.gift.species.other}">其他</span></label>
+            <div class="opsp-rad">
+                <label><input type="checkbox" name="forCat" value="true"/> <span th:text="#{admin.v140.gift.species.cat}">猫</span></label>
+                <label><input type="checkbox" name="forDog" value="true"/> <span th:text="#{admin.v140.gift.species.dog}">狗</span></label>
+                <label><input type="checkbox" name="forOther" value="true"/> <span th:text="#{admin.v140.gift.species.other}">其他</span></label>
+            </div>
         </fieldset>
         <p class="hint" th:text="#{admin.v140.gift.form.speciesHint}">都不选 = 通用。</p>
 
-        <fieldset class="field field-full">
+        <fieldset class="gift-fset">
             <legend th:text="#{admin.v140.gift.form.kind}">类型</legend>
-            <label><input type="radio" name="kind" value="NORMAL" data-gift-kind checked/> <span th:text="#{admin.v140.gift.kind.NORMAL}">普通</span></label>
-            <label><input type="radio" name="kind" value="EXCLUSIVE" data-gift-kind/> <span th:text="#{admin.v140.gift.kind.EXCLUSIVE}">专属</span></label>
+            <div class="opsp-rad">
+                <label><input type="radio" name="kind" value="NORMAL" data-gift-kind checked/> <span th:text="#{admin.v140.gift.kind.NORMAL}">普通</span></label>
+                <label><input type="radio" name="kind" value="EXCLUSIVE" data-gift-kind/> <span th:text="#{admin.v140.gift.kind.EXCLUSIVE}">专属</span></label>
+            </div>
         </fieldset>
 
         <div data-gift-minlevel>

@@ -249,6 +249,7 @@ public class AdminPublishIdentityService {
                 u.isEnabled(), !u.isEnabled(), published, deleted, s.guess(), s.source());
     }
 
+    /** {@code source} 是推导来源代码（NONE / PROFILE / PROFILE_MULTI），文案由模板按 admin.publishIdentity.speciesSource.* 取。 */
     private record Species(String guess, String source) {
     }
 
@@ -271,12 +272,12 @@ public class AdminPublishIdentityService {
             }
         }
         if (species.isEmpty()) {
-            return new Species("—", "推不出（该账号未建宠物档案）");
+            return new Species("—", "NONE");
         }
         if (species.size() == 1) {
-            return new Species(species.iterator().next(), "宠物档案");
+            return new Species(species.iterator().next(), "PROFILE");
         }
-        return new Species("GENERAL", "宠物档案（多物种）");
+        return new Species("GENERAL", "PROFILE_MULTI");
     }
 
     private static Optional<Long> parseId(String digits) {

@@ -50,13 +50,13 @@ class AdminGiftOrderExportServiceTest {
 
     private static GiftOrderAdminRow delivered() {
         return new GiftOrderAdminRow(Instant.parse("2026-10-17T06:20:00Z"), 10233L, "Andi", false, 10241L, "Rina",
-                false, "Mochi", false, "Salmon", "Ikan salmon", 5000L, 2, 10000L, "QRIS", "DELIVERED", null, 0, null,
+                false, "Mochi", false, "Salmon", "Ikan salmon", "https://cdn.example/gift.png", 5000L, 2, 10000L, "QRIS", "DELIVERED", null, 0, null,
                 "pi8d0aZ9kLmN3a3b");
     }
 
     private static GiftOrderAdminRow anomaly(String status, String reason, int attempts, Instant refundedAt) {
         return new GiftOrderAdminRow(Instant.parse("2026-10-16T13:10:00Z"), 10233L, null, true, 10301L, "Dewi",
-                false, "Boba", true, "Tennis ball", "Bola tenis", 10000L, 2, 20000L, "QRIS", status, reason, attempts,
+                false, "Boba", true, "Tennis ball", "Bola tenis", "https://cdn.example/gift.png", 10000L, 2, 20000L, "QRIS", status, reason, attempts,
                 refundedAt, "piXXXXXXXXXXXXXX");
     }
 

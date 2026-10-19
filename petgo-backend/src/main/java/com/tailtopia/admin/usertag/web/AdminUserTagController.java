@@ -175,7 +175,7 @@ public class AdminUserTagController {
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             long id = doCreate(admin, name, iconFile, description);
-            AdminFragmentResponses.trigger(response, AdminHxEvents.DRAWER_OPEN,
+            AdminFragmentResponses.triggerWithPayload(response, AdminHxEvents.DRAWER_OPEN,
                     "{\"url\":\"/admin/user-tags/" + id + "/drawer?tab=assignments\",\"id\":" + id + "}");
             AdminFragmentResponses.trigger(response, AdminHxEvents.USER_TAG_LIST_REFRESH);
             model.addAttribute("toast", msg.get("admin.flash.userTag.created"));

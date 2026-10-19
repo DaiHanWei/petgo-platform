@@ -164,12 +164,15 @@ public class AdminGrowthBatchService {
         }
         Result result = new Result(p.batchNo(), p.campaign(), p.expPerUser(), granted, already, invalid, p.excluded(),
                 failed, operatorName(adminId));
-        if (granted > 0 || failed > 0) {
+        // 有入账 / 失败 → GRANTED；同批次重提全部命中幂等 → REPLAYED（重复提交也要留痕，L2 第三轮）；都没有 → 不写
+        String action = granted > 0 || failed > 0 ? AuditActions.GROWTH_BATCH_GRANTED
+                : already > 0 ? AuditActions.GROWTH_BATCH_REPLAYED : null;
+        if (action != null) {
             String summary = "活动=" + p.campaign() + "；每人=" + p.expPerUser() + "；入账=" + granted + "；合计="
                     + result.totalExp() + "；无效=" + invalid + "；虚拟号/官方号=" + p.excluded() + "；已发过=" + already
                     + "；失败=" + failed;
             try {
-                perUser.executeWithoutResult(s -> audit.record(adminId, AuditActions.GROWTH_BATCH_GRANTED,
+                perUser.executeWithoutResult(s -> audit.record(adminId, action,
                         "growth_batch", p.batchNo(), summary));
             } catch (RuntimeException e) {
                 // 入账已逐人提交：审计失败不把结果改报成「发放失败」（否则运营重试 = 纯重放，审计反而永远补不上）

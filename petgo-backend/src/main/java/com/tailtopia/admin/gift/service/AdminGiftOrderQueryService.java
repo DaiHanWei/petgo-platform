@@ -104,7 +104,7 @@ public class AdminGiftOrderQueryService {
     /** 列表 / 抽屉共用的 SELECT（一行取齐名字与 token，宠物名取快照）。 */
     static final String SELECT_ROWS = """
             SELECT o.created_at, o.sender_id, o.owner_id, o.pet_id, o.pet_name,
-                   o.gift_name_en, o.gift_name_id, o.unit_price, o.quantity, o.total, o.channel, o.status,
+                   o.gift_name_en, o.gift_name_id, o.gift_icon_url, o.unit_price, o.quantity, o.total, o.channel, o.status,
                    o.undelivered_reason, o.refund_attempts, o.refunded_at,
                    (s.id IS NULL OR s.deleted_at IS NOT NULL) AS s_deleted, COALESCE(s.nickname, s.display_name) AS s_name,
                    (w.id IS NULL OR w.deleted_at IS NOT NULL) AS w_deleted, COALESCE(w.nickname, w.display_name) AS w_name,
@@ -221,6 +221,7 @@ public class AdminGiftOrderQueryService {
                 rs.getObject("pet_id") == null,
                 rs.getString("gift_name_en"),
                 rs.getString("gift_name_id"),
+                rs.getString("gift_icon_url"),
                 rs.getLong("unit_price"),
                 rs.getInt("quantity"),
                 rs.getLong("total"),

@@ -130,7 +130,7 @@ class AdminGrowthBatchIntegrationTest extends ApiIntegrationTest {
         assertThat(count("SELECT COUNT(*) FROM admin_audit_logs WHERE action_type = 'GROWTH_BATCH_GRANTED' "
                 + "AND target_id = ?", batchNo)).isEqualTo(audits + 1);
 
-        // 同一批次重提：0 新行、「已发放过」、审计不增
+        // 同一批次重提：0 新行、「已发放过」、GRANTED 审计不增、另记一条 REPLAYED
         String again = mvc.perform(htmx(post("/admin/growth/batch").with(authentication(op)).with(csrf())
                         .param("batchNo", batchNo).param("campaign", "周年庆")
                         .param("expPerUser", String.valueOf(threshold)).param("userIds", normalized), "confirm-modal-err"))
@@ -139,6 +139,8 @@ class AdminGrowthBatchIntegrationTest extends ApiIntegrationTest {
         assertThat(count("SELECT COUNT(*) FROM growth_ledger WHERE batch_no = ?", batchNo)).isEqualTo(5);
         assertThat(count("SELECT COUNT(*) FROM admin_audit_logs WHERE action_type = 'GROWTH_BATCH_GRANTED' "
                 + "AND target_id = ?", batchNo)).isEqualTo(audits + 1);
+        assertThat(count("SELECT COUNT(*) FROM admin_audit_logs WHERE action_type = 'GROWTH_BATCH_REPLAYED' "
+                + "AND target_id = ?", batchNo)).isEqualTo(1);
 
         // 跨级升级者有 GROWTH_LEVEL_UP 通知
         long uid = real.get(0).getId();
