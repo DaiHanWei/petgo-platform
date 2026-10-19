@@ -267,6 +267,40 @@ class PetSlotRentalIntegrationTest extends ApiIntegrationTest {
         assertThat(overview(u.getId()).get("total").asInt()).isEqualTo(1);
     }
 
+    /**
+     * stag 复验：网关出码失败（stag GemPay 恒 P04）→ 不再 500：200 + 无载荷，意图 / 购买行 FAILED 留档；
+     * App 收到 200 无载荷时保留键也无妨 —— 同键第 2 次点击即另起新意图（新 request_id）、新行，真正重下。
+     */
+    @Test
+    void qrisGatewayChargeFailureIsNot500AndSameKeyRetryReordersWithNewIntent() throws Exception {
+        User u = newUser();
+        when(gateway.createCharge(any(ChargeRequest.class)))
+                .thenThrow(new com.tailtopia.shared.pay.PayException("支付网关收款失败"))
+                .thenAnswer(inv -> {
+                    ChargeRequest r = inv.getArgument(0);
+                    return new ChargeResult("gw-" + r.orderId(), "QR-" + r.orderId(), Map.of());
+                });
+
+        JsonNode a = body(rent(u.getId(), 1, "QRIS", "gwf").andExpect(status().isOk())
+                .andExpect(jsonPath("$.unlocked").value(false))
+                .andExpect(jsonPath("$.payload").doesNotExist())
+                .andExpect(jsonPath("$.payment").doesNotExist()));
+        String failedPurchase = a.get("purchaseToken").asString();
+        assertThat(purchaseStatus(failedPurchase)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("""
+                SELECT i.status FROM payment_intents i JOIN pet_slot_purchases p ON p.payment_intent_id = i.id
+                WHERE p.public_token = ?""", String.class, failedPurchase)).isEqualTo("FAILED");
+
+        JsonNode b = body(rent(u.getId(), 1, "QRIS", "gwf").andExpect(status().isOk())
+                .andExpect(jsonPath("$.unlocked").value(false)));
+        String retryIntent = b.get("payment").get("token").asString();
+        assertThat(b.get("payload").asString()).isEqualTo("QR-" + retryIntent);
+        assertThat(b.get("purchaseToken").asString()).isNotEqualTo(failedPurchase);
+        assertThat(purchaseStatus(b.get("purchaseToken").asString())).isEqualTo("PENDING");
+        assertThat(purchaseStatus(failedPurchase)).isEqualTo("FAILED");
+        assertThat(rentalCount(u.getId())).isZero();
+    }
+
     @Test
     void lazyExpiryViaStatusEndpointSelfHeals() throws Exception {
         User u = newUser();

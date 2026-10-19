@@ -391,6 +391,44 @@ void main() {
     });
   }
 
+  testWidgets('网关出码失败首次即回 200 FAILED（后端原样 JSON）→ 提示支付失败，第 2 次点击就换新 requestId 出码',
+      (tester) async {
+    // 后端 GiftSendService.chargeOrFailed 的响应形状（与重放旧 FAILED 单一致）：不再 500。
+    // 以前 500 被视为结果未知、保留 requestId → 第 2 次重放旧单才拿到 FAILED，第 3 次才真正重下。
+    repo.catalog = sampleCatalog(qrisMinAmount: 1000);
+    repo.sendResults = [
+      GiftSendResult.fromJson({
+        'delivered': false,
+        'payment': null,
+        'payload': null,
+        'orderToken': 'ord-gw-fail',
+        'status': 'FAILED',
+      }),
+      const GiftSendResult(
+        delivered: false,
+        paymentToken: 'pi-3',
+        paymentDisplayNo: 'PAY-3',
+        payload: '00020101021226',
+        orderToken: 'ord-3',
+        status: GiftOrderStatus.pending,
+      ),
+    ];
+    await start(tester);
+    await kirim(tester);
+    await tester.tap(find.text('QRIS'));
+    await tester.pumpAndSettle();
+    await confirm(tester);
+    expect(find.text('Pembayaran gagal. Coba lagi.'), findsOneWidget);
+    expect(picker(), findsOneWidget, reason: '抽屉保留可重试');
+    await tester.pump(const Duration(seconds: 3));
+    await confirm(tester); // 第 2 次点击
+    expect(repo.sends, hasLength(2));
+    expect(repo.sends[1].requestId, isNot(repo.sends[0].requestId));
+    expect(find.textContaining('PAY-3'), findsWidgets, reason: '第 2 次点击即出码');
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 3));
+  });
+
   testWidgets('OCR #4：仍待付但无码（非已关单）→ 同渠道重试仍复用 requestId', (tester) async {
     repo.catalog = sampleCatalog(qrisMinAmount: 1000);
     repo.sendResults = [const GiftSendResult(delivered: false, orderToken: 'ord-p', status: GiftOrderStatus.pending)];
