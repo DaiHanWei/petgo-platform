@@ -557,6 +557,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             petName: petName,
             shareText: shareText,
             collection: collection,
+            petId: listPetId, // 与打卡同一只（进页时的当前宠物），不随之后切换的当前宠物走
           ),
           // onSeeAll 省略：庆祝关闭后统一在下方先关 sheet 再跳列表（否则 sheet 挡住跳转）。
         );

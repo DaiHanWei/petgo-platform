@@ -150,6 +150,7 @@ Future<void> _celebrate(BuildContext context, WidgetRef ref, MilestoneList list,
       petName: petName,
       shareText: shareText,
       collection: collection,
+      petId: petId, // OCR #5：逐只庆祝时分享这只宠物的里程碑，不是当前宠物
     ),
     // push 而非 go：返回键回到成功页 / 结果页；带 justCelebrated 防列表页在回报落库前连弹。
     onSeeAll: router == null
