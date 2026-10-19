@@ -52,6 +52,11 @@ public class FeedRankEngine {
             Set<Long> honoredContentIds,
             /** 限流系数（Epic 17 供）。缺省 = 1.0；本 story 一律传空。 */
             Map<Long, Double> throttleFactors,
+            /**
+             * 作者等级系数（V1.4.0 ① AD-15 · Story 3.4）。⚠️ <b>按 authorId 键</b>（与按 postId 键的
+             * {@link #throttleFactors} 不同）；缺省 = 1.0（不加权的作者不放进 Map）。
+             */
+            Map<Long, Double> authorFactors,
             Instant now,
             RankParams params,
             /**
@@ -108,13 +113,14 @@ public class FeedRankEngine {
             double honor = in.honoredContentIds() != null && in.honoredContentIds().contains(c.id())
                     ? p.honorBoost() : 1.0;
             double throttle = factor(in.throttleFactors(), c.id());
+            double author = factor(in.authorFactors(), c.authorId());
             // 刷新抖动（2026-09-01）：最终分再乘一个 (1-幅度, 1] 区间的确定性系数。
             // ⚠️ 系数由（种子, id）经 SplitMix64 终混确定性算出，不用不可重放的随机 ——
             //    同一种子必须算出同一序列（续算、级别 3 降级重算都依赖这一点）。
             //    FR-135（2026-09-30）：旧实现 Random(种子×常数+id) 让相邻 id 系数只差约 1e-4，首条刷不动。
             double jitter = jitterFactor(in.shuffleSeed(), c.id(), p.shuffleStrength());
             pool.add(new Scored(c, SpeciesBucket.of(c.species(), in.mainSpecies()),
-                    FeedRankScorer.finalScore(c, now, p, decay, honor, throttle) * jitter));
+                    FeedRankScorer.finalScore(c, now, p, decay, honor, throttle, author) * jitter));
         }
         // 一次排好序，后面每个槽位顺序扫、取第一个合格的 —— 天然就是「分最高的那条」。
         // ⚠️ 分数与槽位无关，所以只排一次；每槽重算是纯浪费。

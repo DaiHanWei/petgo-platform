@@ -1,3 +1,4 @@
+import '../../features/growth/presentation/growth_popup_coordinator.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -75,6 +76,8 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       final router = GoRouter.maybeOf(context);
       if (router == null) return;
       ref.read(opsPopupCoordinatorProvider).attach(router, ref: ref);
+      // V1.4.0 ① Story 2.3：升级庆祝 / 存量汇总弹窗协调器（冷启动拉取 + 绑定全局触发器）。
+      ref.read(growthPopupCoordinatorProvider).attach(router);
     });
   }
 

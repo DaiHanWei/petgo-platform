@@ -39,7 +39,7 @@ class AdminRoleTest {
             assertThat(role.isTemplated()).isTrue();
         }
         assertThat(AdminRole.OPS_MANAGER.isTableBacked()).isFalse();
-        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(41);
+        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(42); // V1.4.0 P-5：+ growth.user_adjust
         assertThat(AdminRole.SUPER_ADMIN.isTableBacked()).isFalse();
         assertThat(AdminRole.CUSTOM.isTableBacked()).isFalse();
     }
@@ -54,7 +54,23 @@ class AdminRoleTest {
                     .doesNotContain(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST)
                     // V1.3.4 返工清单 §1：四个新码同样不预授予任何预置角色（超管隐式拥有）
                     .doesNotContain(AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
-                            AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND);
+                            AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND)
+                    // V1.4.0 ① Story 4.1：成长体系配置两码不预授（超管隐式拥有）
+                    .doesNotContain(AdminPermissions.GROWTH_CONFIG_VIEW, AdminPermissions.GROWTH_CONFIG_EDIT);
+        }
+    }
+
+    /** V1.4.0 ① Story 4.2 · P-5：growth.user_adjust 按 PRD 只预授 OPS_MANAGER，其余预置角色一律没有。 */
+    @Test
+    void growthUserAdjustPreGrantedOnlyToOpsManager() {
+        assertThat(AdminPermissions.isValid(AdminPermissions.GROWTH_USER_ADJUST)).isTrue();
+        for (AdminRole role : AdminRole.values()) {
+            if (role == AdminRole.OPS_MANAGER) {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).contains(AdminPermissions.GROWTH_USER_ADJUST);
+            } else {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).as(role.name())
+                        .doesNotContain(AdminPermissions.GROWTH_USER_ADJUST);
+            }
         }
     }
 

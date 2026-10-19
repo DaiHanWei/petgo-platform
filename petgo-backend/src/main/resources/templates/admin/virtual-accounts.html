@@ -81,6 +81,16 @@
                  th:text="#{admin.v130.publishIdentity.drawer.title}">虚拟账号详情</div>
         </div>
 
+        <!--/* ===================== 官方号 · 展示等级（V1.4.0 ① Story 4.4 · P-7） =====================
+               2026-10-19 用户拍板落点：官方号（role = ADMIN）展示等级在本页设置，不放开用户抽屉。
+               对本页可见者都能看；改需 virtual_account.manage（无权限只读 + 提示），与虚拟号展示等级同门。
+               🔴 只有展示等级卡：官方号没有启停 / 物种定位等虚拟号专属操作。 */-->
+        <h2 th:text="#{admin.v140.growth.official.title}">官方号</h2>
+        <p class="hint" th:text="#{admin.v140.growth.official.hint}">官方号不参与成长值，这里只设置展示等级。</p>
+        <div th:replace="~{admin/fragments/official-accounts :: rows(false)}"></div>
+        <!--/* 保存的 422 落点：无条件渲染在表外，表整块换掉也不丢。 */-->
+        <p id="official-inline-err" class="lst-inline-error" aria-live="polite"></p>
+
         <!--/* ===================== 区块二 · 运营真实账号 =====================
                整区门控 seed.publish_as_real，与 virtual_account.manage 完全解耦。
                🛡 本表达式与控制器 @PreAuthorize(REAL_AUTH) 必须逐字一致。

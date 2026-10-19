@@ -1,6 +1,6 @@
 # Story 4.3: 批量发放活动 EXP
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 tailrent-level · 分支 `feat/1.4.0-tailrent-level`
 > 口径优先级：`decision-log.md` ① 节 > `Tailrent等级/1-4-0Tailrent等级prd.md`（§3.4 AB-33「运营活动发放 · 批量」）> `architecture-v1.4.0-tailrent-level-delta.md`（AD-2 / AD-5 / AD-6 / AD-17、§5.2、§5.4）> `Tailrent等级/ui-admin-1-4-0-tailrent-level-integrated-v1.html`（H1 ~ H5）（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。
@@ -67,14 +67,14 @@ so that 能做站内活动奖励而不用逐个调整。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：Story 4.2 的 `AdminAdjustCommand` / `adjust` 实际签名与返回值；`GrowthIdemKeys` 是否已有 `batch(...)`；Story 1.1 的参与判定方法名（单个 + 批量）；`growth_ledger.batch_no` 列宽；Story 4.1 的页面门常量与只读渲染开关
-- [ ] **T1 入口门扩展**（AC1.3）：`AdminGrowthConfigController` 页面门 + `AdminPageCatalog.growth.navCodes` 同改；只持 USER_ADJUST 时只读渲染
-- [ ] **T2 解析 / 归类**：`admin.growth.service.GrowthBatchParser`（纯函数，可单测）+ growth 模块批量参与判定（若 1.1 没有批量版则在 growth 模块加，后台只调用）
-- [ ] **T3 服务 `admin.growth.service.AdminGrowthBatchService`**：`preview` / `prepareConfirm` / `execute`（逐人 `REQUIRES_NEW`）/ 批次号生成 / 审计
-- [ ] **T4 Controller `admin.growth.web.AdminGrowthBatchController`**：`GET /admin/growth/batch/drawer`、`GET /admin/growth/batch/template.csv`、`POST /admin/growth/batch/form`、`POST /admin/growth/batch/preview`、`POST /admin/growth/batch/confirm`、`POST /admin/growth/batch`
-- [ ] **T5 模板**：`growth.html` 标题行加按钮 + 抽屉壳；`fragments/drawer-growth-batch.html`（`fill` / `preview` / `result` / `failed` 四个片段）；`admin.css` 一行宽度
-- [ ] **T6 审计常量 + 文案四份**
-- [ ] **T7 测试**
+- [x] **T0 开工核对**：Story 4.2 的 `AdminAdjustCommand` / `adjust` 实际签名与返回值；`GrowthIdemKeys` 是否已有 `batch(...)`；Story 1.1 的参与判定方法名（单个 + 批量）；`growth_ledger.batch_no` 列宽；Story 4.1 的页面门常量与只读渲染开关
+- [x] **T1 入口门扩展**（AC1.3）：`AdminGrowthConfigController` 页面门 + `AdminPageCatalog.growth.navCodes` 同改；只持 USER_ADJUST 时只读渲染
+- [x] **T2 解析 / 归类**：`admin.growth.service.GrowthBatchParser`（纯函数，可单测）+ growth 模块批量参与判定（若 1.1 没有批量版则在 growth 模块加，后台只调用）
+- [x] **T3 服务 `admin.growth.service.AdminGrowthBatchService`**：`preview` / `prepareConfirm` / `execute`（逐人 `REQUIRES_NEW`）/ 批次号生成 / 审计
+- [x] **T4 Controller `admin.growth.web.AdminGrowthBatchController`**：`GET /admin/growth/batch/drawer`、`GET /admin/growth/batch/template.csv`、`POST /admin/growth/batch/form`、`POST /admin/growth/batch/preview`、`POST /admin/growth/batch/confirm`、`POST /admin/growth/batch`
+- [x] **T5 模板**：`growth.html` 标题行加按钮 + 抽屉壳；`fragments/drawer-growth-batch.html`（`fill` / `preview` / `result` / `failed` 四个片段）；`admin.css` 一行宽度
+- [x] **T6 审计常量 + 文案四份**
+- [x] **T7 测试**
 
 ## Dev Notes
 
@@ -220,10 +220,40 @@ so that 能做站内活动奖励而不用逐个调整。
 
 ### Agent Model Used
 
+Claude（云端 headless，L0）
+
 ### Debug Log References
+
+- `check-admin-permission-consistency.sh` 只解析同文件常量：批量 Controller 引用 `AdminGrowthUserController.GROWTH_ADJUST_AUTH` 被读成拼错的码 → 在本类同值再声明一次，L0 测试钉住两常量相等。
+- Spring 7 的 `MockMultipartHttpServletRequestBuilder` 不再是 `MockHttpServletRequestBuilder` 子类 → L1 测试 multipart 请求内联 htmx 头。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**（云端无 Docker）：`AdminGrowthBatchIntegrationTest`（已写、能编译）、`AdminPagesRenderSmokeTest.everySidebarLinkMatchesItsPageGate`、`AdminNavPermissionMatrixTest`（入口门扩展后）、`AdminGrowthConfigIntegrationTest` 回归；L2 后台 H1 ~ H5 三语（H5 可停本地 postgres 复现）、被发放用户 App 等级页 / EXP 明细看到活动名。
+- **迁移**：无。
+- **T0 结论**：4.2 的 `AdminAdjustCommand` 追加第 7 个字段 `batchNo` + `batch(...)` 工厂 + `idemKey()`（4.2 的 6 参构造保留、既有调用不变）；`GrowthIdemKeys.batch(batchNo, u)` = `BATCH:{batchNo}:{u}` 新增；`growth_ledger.batch_no VARCHAR(32)`（批次号 22 字符）；1.1 无批量参与判定 → 在 growth 模块 `GrowthLedgerService.classify(ids)` 新增（一次 SQL / 每 1000 个一块，谓词直接复用 `GrowthParticipation.ACTIVE_REGULAR_USER` + 注销已提交，与 4.2 `requireAdjustable` 同口径）。
+- **入口门扩展**（AC1.3，按推荐方案）：`AdminGrowthConfigController.VIEW_AUTH` 与目录 `growth` 页 `navCodes` 同加 `growth.user_adjust`；4.1 模板按 `growth.config_edit` 判可编辑，只持 USER_ADJUST = 三页签只读、写端点仍 403（审查确认含规则抽屉）。
+- **拍板落地**：官方号（role ≠ USER）与虚拟号一样计入「已排除」一栏（不计无效）；该栏文案改为「虚拟号 / 官方号（已排除）」，原因列分别「虚拟号，自动排除 / 不参与成长值，自动排除」；审计摘要字段相应写「虚拟号/官方号=」（偏离 AC7.2 原文「虚拟号=」）。
+- **逐人事务**：用 `TransactionTemplate(PROPAGATION_REQUIRES_NEW)` 包每人一次 `GrowthLedgerService.adjust`（与 `SeedBatchPublishService` 经 self 代理的 `REQUIRES_NEW` 语义相同、更易单测）；审计在循环后另开一个 REQUIRES_NEW。
+- **H5 失败页**返回 422（admin-core.js 只对 422 / 403 / 404 swap），不伪装 200 成功；日志只记批次号与异常类名。
+- **code-review 修复**：①CSV 单元格含空白的格式错误 token（「10001 alice」）折叠成 `10001_alice`，确认 / 执行重新解析不会冒出预览里没有的有效 ID；②沿用已有批次号但换了活动名或每人 EXP → 422 `batchMismatch`（`GrowthLedgerService.batchMatches`）；③审计写失败只记 ERROR、照常返回结果（入账已提交，不改报「发放失败」）；④执行中途 `OPS_CAMPAIGN` 被停用 → 计「失败」（可重试）而非「无效」；⑤文案 / 摘要改「虚拟号/官方号」；⑥选中 CSV 后显示文件名（`admin.v140.growth.batch.noFile`）。
+- **待确认**（保守处理，未做）：重试时，若某用户在首发后被停用，classify 先把他归为无效、不会走到 adjust 的幂等识别，结果页把他计入「无效」而非「已发过」（计数口径差异，不会重复发放）。
+- 新增文案键（表外）：`admin.err.growth.batch.batchNoInvalid` / `.batchMismatch`、`admin.audit.action.GROWTH_BATCH_GRANTED`；`idsHint` 原文含 `user_id` 标识串被 `AdminMessagesParityTest` 禁止 → 改写为「单列用户 ID，可带表头」。
+- **L0 结果**：`./mvnw -B clean package -DskipTests` 绿；后端回归清单（含新增 4 个测试类）全绿；四个 CI 脚本绿。
+
 ### File List
 
+- petgo-backend/src/main/java/com/tailtopia/growth/service/{GrowthLedgerService,AdminAdjustCommand,GrowthIdemKeys}.java
+- petgo-backend/src/main/java/com/tailtopia/admin/growth/service/GrowthBatchParser.java（新）、AdminGrowthBatchService.java（新）
+- petgo-backend/src/main/java/com/tailtopia/admin/growth/web/AdminGrowthBatchController.java（新）、AdminGrowthConfigController.java
+- petgo-backend/src/main/java/com/tailtopia/admin/shared/AdminPageCatalog.java、admin/audit/service/AuditActions.java
+- petgo-backend/src/main/resources/templates/admin/growth.html、fragments/drawer-growth-batch.html（新）
+- petgo-backend/src/main/resources/static/admin/admin.css、i18n/messages{,_zh_CN,_en,_id}.properties
+- petgo-backend/src/test/java/com/tailtopia/admin/growth/service/{GrowthBatchParserTest,AdminGrowthBatchServiceTest}.java（新）
+- petgo-backend/src/test/java/com/tailtopia/admin/growth/web/{AdminGrowthBatchRenderTest,AdminGrowthBatchAccessControlTest}.java（新）
+- petgo-backend/src/test/java/com/tailtopia/admin/growth/AdminGrowthBatchIntegrationTest.java（新，L1）
+- petgo-backend/src/test/java/com/tailtopia/growth/service/GrowthLedgerServiceAdjustTest.java
+
 ### Change Log
+
+- 2026-10-18：实现 Story 4.3（L0 绿；L1/L2 待本地验收），code-review 6 项修复。

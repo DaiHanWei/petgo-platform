@@ -10,7 +10,9 @@ import java.util.List;
  *
  * <p>{@code petIds}：本次打卡选中的宠物（已校验归属、去重、保持请求顺序），供里程碑逐宠达成
  * （V1.3.4 Story 4.2）；<b>不进埋点</b>。
+ *
+ * <p>{@code checkinId}（V1.4.0 ① Story 1.1 追加）：本次打卡行 id，成长值 {@code PLACE_CHECKIN} 按它幂等；<b>不进埋点</b>。
  */
 public record PlaceCheckedInEvent(long userId, String placeToken, PlaceType placeType,
-        boolean isNewStamp, int stampCount, List<Long> petIds) {
+        boolean isNewStamp, int stampCount, List<Long> petIds, long checkinId) {
 }

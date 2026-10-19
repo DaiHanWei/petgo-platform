@@ -256,6 +256,22 @@ public final class AuditActions {
     /** 开封判定判例沉淀（AB-12D）。⚠️ 一致性工具，非风控工具（SPEC-24）。 */
     public static final String SHOP_RETURN_PRECEDENT_ADDED = "SHOP_RETURN_PRECEDENT_ADDED";
 
+    // ── V1.4.0 ① AB-32 · Story 4.1：成长体系配置（摘要写改前 → 改后；不写 config_change_logs）──────────
+    /** 改一条成长值规则（分值 / 每日上限 / 合计上限 / 每 Rp / 启停用）。target = 规则代码。 */
+    public static final String GROWTH_RULE_UPDATED = "GROWTH_RULE_UPDATED";
+    /** 改消费换算（两档比例 + 支付用途归档）。target = {@code spend}。 */
+    public static final String GROWTH_SPEND_CONFIG_UPDATED = "GROWTH_SPEND_CONFIG_UPDATED";
+    /** 改等级表（门槛 / 末尾追加一级），并入库一次全量重算任务。target = {@code levels}。 */
+    public static final String GROWTH_LEVEL_TABLE_UPDATED = "GROWTH_LEVEL_TABLE_UPDATED";
+    /** 失败 / 僵死的重算任务重新执行。target = 新任务 id。 */
+    public static final String GROWTH_RECALC_RETRIED = "GROWTH_RECALC_RETRIED";
+    /** 后台对单个用户调整 EXP / 发运营活动（V1.4.0 ① Story 4.2 · AB-33）。target = {@code USER} / userId；幂等命中不写。 */
+    public static final String GROWTH_USER_ADJUSTED = "GROWTH_USER_ADJUSTED";
+    /** 批量发放活动 EXP（V1.4.0 ① Story 4.3）。target = {@code growth_batch} / 批次号；纯重放不写。 */
+    public static final String GROWTH_BATCH_GRANTED = "GROWTH_BATCH_GRANTED";
+    /** 改虚拟号 / 官方号的展示等级（V1.4.0 ① Story 4.4）。target = {@code user} / userId；值未变不写。 */
+    public static final String GROWTH_DISPLAY_LEVEL_CHANGED = "GROWTH_DISPLAY_LEVEL_CHANGED";
+
     private AuditActions() {
     }
 }

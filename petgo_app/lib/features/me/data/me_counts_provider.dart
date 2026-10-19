@@ -2,12 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/login_response.dart';
+import '../../growth/domain/growth_models.dart';
 
 /// 我的页四格数据（V1.3.4 follow · Story 1.4 · AC1）：Postingan / Suka / Mengikuti / Pengikut。
 ///
 /// 值为 null = 还不知道（T-14：数字位显示「–」，不闪 0）。
 class MeCounts {
-  const MeCounts({this.postCount, this.likeCount, this.followingCount, this.followerCount});
+  const MeCounts({this.postCount, this.likeCount, this.followingCount, this.followerCount, this.growth});
 
   /// 我的**全部**帖子（含私密 / 仅自己可见、本人待审帖，D-5 / T-5），与下方网格同源。
   final int? postCount;
@@ -17,11 +18,15 @@ class MeCounts {
   final int? followingCount;
   final int? followerCount;
 
+  /// V1.4.0 ① Story 1.5：「我的」页等级胶囊（与四格同一取数路径，不新增 `/me` 请求）。null = 不显示胶囊。
+  final GrowthBrief? growth;
+
   factory MeCounts.fromProfile(UserProfile? p) => MeCounts(
         postCount: p?.postCount,
         likeCount: p?.likeCount,
         followingCount: p?.followingCount,
         followerCount: p?.followerCount,
+        growth: p?.growth,
       );
 }
 

@@ -6,6 +6,7 @@ import com.tailtopia.consult.domain.ConsultRequestState;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.dto.ConsultPayResponse;
+import com.tailtopia.consult.event.ConsultPaidByPawCoinEvent;
 import com.tailtopia.consult.event.ConsultRequestFailedEvent;
 import com.tailtopia.consult.repository.ConsultRequestRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
@@ -139,6 +140,8 @@ public class ConsultPayService {
             throw AppException.serviceUnavailable("系统繁忙，请稍后重试");
         }
         ConsultOrder order = buildOrderAndConvert(req, PayChannel.PAWCOIN, null, conv);
+        // V1.4.0 ① Story 1.3：纯币问诊以订单 id 记消费返（debit 的 refId 是随即被删的请求 id，退款侧反查不到）。
+        events.publishEvent(new ConsultPaidByPawCoinEvent(userId, order.getId(), order.getAmount()));
         return ConsultPayResponse.done(order);
     }
 

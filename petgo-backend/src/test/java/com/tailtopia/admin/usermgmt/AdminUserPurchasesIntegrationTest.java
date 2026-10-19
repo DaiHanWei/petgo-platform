@@ -186,7 +186,10 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         String html = drawer(buyer.getId());
         assertThat(html).contains("data-utab=\"purchases\"").contains("已购解锁").contains("ESTP-L")
                 .contains("data-utab-panel=\"purchases\"");
-        String panel = html.substring(html.indexOf("data-utab-panel=\"purchases\""), html.indexOf("id=\"user-drawer-err\""));
+        // 截到下一个页签面板为止：V1.4.0 起 ⑥ 之后还有 ⑦ 成长值等面板（带自己的查询表单），不属于本页签。
+        int start = html.indexOf("data-utab-panel=\"purchases\"");
+        int next = html.indexOf("data-utab-panel=", start + 1);
+        String panel = html.substring(start, next > 0 ? next : html.indexOf("id=\"user-drawer-err\""));
         assertThat(panel).as("只读：不得出现任何按钮 / 表单").doesNotContain("<button").doesNotContain("<form");
 
         assertThat(drawer(nobody.getId())).contains("该用户还没有任何已购解锁");

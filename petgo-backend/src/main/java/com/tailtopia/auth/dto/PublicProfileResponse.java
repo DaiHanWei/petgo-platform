@@ -46,6 +46,9 @@ import java.util.List;
  * @param followsMe   对方是否关注了我（同上）
  * @param official    是否官方内容账号（{@code role = ADMIN} 的作者 shim）。<b>只在 true 时下发</b>（装箱，平时 null → NON_NULL 省略，
  *                    普通用户与游客的 key 集合不变）。2026-10-13 决定：官方号主页不显示「···」（不可拉黑 / 举报）
+ * @param level       等级展示（V1.4.0 ① Story 3.1 · AD-14）；停用 / 无等级时省略。{@link #deactivated()} 恒省略
+ * @param tier        段位（{@code GrowthTier} 名）
+ * @param frame       生效头像框（BASIC / UPGRADED / ANIMATED），无框省略
  */
 public record PublicProfileResponse(
         String nickname,
@@ -63,7 +66,10 @@ public record PublicProfileResponse(
         long followerCount,
         boolean iFollow,
         boolean followsMe,
-        Boolean official) {
+        Boolean official,
+        Integer level,
+        String tier,
+        String frame) {
 
     /**
      * 已注销：不暴露任何身份信息（AC5 / NFR-8）。
@@ -73,7 +79,7 @@ public record PublicProfileResponse(
      */
     public static PublicProfileResponse deactivated() {
         return new PublicProfileResponse(null, null, null, List.of(), null, 0, 0, false, true, null,
-                null, 0, 0, false, false, null);
+                null, 0, 0, false, false, null, null, null, null);
     }
 
     /**
@@ -100,6 +106,9 @@ public record PublicProfileResponse(
                 followerCount,
                 follow.iFollow(),
                 follow.followsMe(),
-                official ? Boolean.TRUE : null);
+                official ? Boolean.TRUE : null,
+                author.badgeLevel(),
+                author.badgeTier(),
+                author.badgeFrame());
     }
 }

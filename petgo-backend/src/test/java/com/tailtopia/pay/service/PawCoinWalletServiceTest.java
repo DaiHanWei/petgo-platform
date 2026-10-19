@@ -40,9 +40,11 @@ class PawCoinWalletServiceTest {
     LedgerService ledgerService;
     @Mock
     IdempotencyService idempotency;
+    @Mock
+    org.springframework.context.ApplicationEventPublisher events;
 
     private PawCoinWalletService service() {
-        return new PawCoinWalletService(wallets, txns, ledger, ledgerService, idempotency);
+        return new PawCoinWalletService(wallets, txns, ledger, ledgerService, idempotency, events);
     }
 
     private void stubTxnSave() {
@@ -63,6 +65,7 @@ class PawCoinWalletServiceTest {
 
         verify(ledgerService, never()).post(anyString(), any(), anyString());
         verify(txns, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -78,6 +81,7 @@ class PawCoinWalletServiceTest {
         verify(ledgerService).post(anyString(), any(List.class), eq("k"));
         verify(txns).save(any(PawCoinTransaction.class));
         verify(idempotency).store(eq("wallet:k"), anyLong());
+        verify(events, never()).publishEvent(any(Object.class)); // 入账（充值 / 退回）不是消费
     }
 
     @Test
@@ -91,6 +95,19 @@ class PawCoinWalletServiceTest {
         verify(wallets).applyDelta(1L, -3000L);
         verify(ledgerService).post(anyString(), any(List.class), eq("k"));
         verify(txns).save(any(PawCoinTransaction.class));
+        // V1.4.0 ① Story 1.3：SPEND 扣款成功 → 同事务发一次 PawCoinSpentEvent（成长值消费返）。
+        verify(events, org.mockito.Mockito.times(1)).publishEvent(
+                new com.tailtopia.pay.event.PawCoinSpentEvent(1L, 3000L, "AI", 3L, "k"));
+    }
+
+    @Test
+    void debitReplayDoesNotPublishSpentEvent() {
+        when(idempotency.findResourceId("wallet:k")).thenReturn(Optional.of(9L));
+
+        service().debit(1L, 3000L, PawCoinTxnType.SPEND, "AI", 3L, "k");
+
+        verify(wallets, never()).applyDelta(anyLong(), anyLong());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test

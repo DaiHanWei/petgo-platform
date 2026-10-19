@@ -413,6 +413,17 @@ public class ShopOrder {
         return shippingDiscount;
     }
 
+    /**
+     * 订单实付总额（V1.4.0 ① Story 1.3）：PawCoin 段 + 现金段；未固化拆分（两段皆空）时退回订单总额。
+     * 电商消费返成长值与退款扣回的分母取同一口径。
+     */
+    public long paidTotal() {
+        if (coinAmount == null && cashAmount == null) {
+            return totalAmount;
+        }
+        return (coinAmount == null ? 0L : coinAmount) + (cashAmount == null ? 0L : cashAmount);
+    }
+
     public long getTotalAmount() {
         return totalAmount;
     }

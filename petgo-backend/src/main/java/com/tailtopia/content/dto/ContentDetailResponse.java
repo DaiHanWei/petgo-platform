@@ -82,7 +82,14 @@ public record ContentDetailResponse(
          * 元素为 {@code [0, 1]} 或 {@code null}（原样下发）。存量 / 无超界图为 null → 省略；App 无值即居中。
          * 与 {@code FeedItemResponse.imageCropOffsets()} 同口径。
          */
-        List<Double> imageCropOffsets) {
+        List<Double> imageCropOffsets,
+        /**
+         * 作者等级展示（V1.4.0 ① Story 3.1 · AD-14）：等级 / 段位（{@code GrowthTier} 名）/ 生效头像框（无框省略）。
+         * 作者已注销 / 已停用 / 不展示等级时三者均为 null（NON_NULL 省略）。与 {@code FeedItemResponse} 同口径。
+         */
+        Integer authorLevel,
+        String authorTier,
+        String authorFrame) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -114,6 +121,7 @@ public record ContentDetailResponse(
                 p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
                 p.getCreatedAt(), mentions, checkinPlace,
-                author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets());
+                author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets(),
+                author.badgeLevel(), author.badgeTier(), author.badgeFrame());
     }
 }

@@ -10,7 +10,7 @@ import java.time.Instant;
  *   内容分 = freshnessWeight × 新鲜度 + interactionWeight × 互动度
  *   新鲜度 = 1 / (1 + Δt / 半衰期)  半衰期：EDU = 配置（默认 720），其余 24   Δt = 发布至今小时数
  *   互动度 = ln(1 + 赞 + commentWeight × 评) / ln(1 + P95)
- *   最终分 = 内容分 × 曝光衰减 × 荣誉加成 × 限流系数
+ *   最终分 = 内容分 × 曝光衰减 × 荣誉加成 × 限流系数 × 作者系数
  * </pre>
  *
  * <p>🛡 <b>不使用浏览量</b>（AC4）—— 已核实 {@code content_posts} 无该字段，
@@ -73,9 +73,10 @@ final class FeedRankScorer {
      * @param decay    曝光衰减（16.1 供；未曝光 = 1.0）
      * @param honor    荣誉加成（带生效中装饰标签 = honorBoost，否则 1.0）
      * @param throttle 限流系数（Epic 17 供；本 story 恒 1.0）
+     * @param author   作者等级系数（V1.4.0 ① AD-15：Lv15 及以上真实作者 = 配置的加权，否则 1.0）
      */
     static double finalScore(RankCandidate c, Instant now, RankParams p,
-            double decay, double honor, double throttle) {
-        return contentScore(c, now, p) * decay * honor * throttle;
+            double decay, double honor, double throttle, double author) {
+        return contentScore(c, now, p) * decay * honor * throttle * author;
     }
 }

@@ -1,3 +1,4 @@
+import '../../growth/domain/growth_popup_trigger.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -76,6 +77,7 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
     if (res.unlocked) {
       // PawCoin 即时扣款：失效余额缓存，防他处读到旧余额（bug 20260806 同类）。
       ref.invalidate(pawCoinProvider);
+      growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
       return KeepsakeFlowOutcome.unlocked;
     }
     final payload = res.payload;
@@ -87,6 +89,7 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
     if (paid) {
       // 投放归因：QRIS 现金到账（PawCoin 当场成交走上面的 unlocked 分支，不计——钱在充值时已计）。
       Analytics.capturePurchase(amountIdr: cashPriceIdr(), purpose: purchasePurpose, orderRef: res.paymentRef);
+      growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
     }
     if (!paid || !context.mounted) return KeepsakeFlowOutcome.notCompleted;
     ref.invalidate(pawCoinProvider);

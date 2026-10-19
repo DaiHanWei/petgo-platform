@@ -1,6 +1,6 @@
 # Story 1.5: 「我的」页等级胶囊、等级页与 EXP 明细页（App）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 tailrent-level · 分支 `feat/1.4.0-tailrent-level`
 > 口径优先级：`decision-log.md` ① 节 > `Tailrent等级/1-4-0Tailrent等级prd.md` > `architecture-v1.4.0-tailrent-level-delta.md` > UI 稿 `Tailrent等级/ui-1-4-0-tailrent-level-integrated-v1.html`（A6、B1 ~ B8，定稿 2026-10-14；均在 `_bmad-output/planning-artifacts/v1.4.0/`）。
@@ -96,15 +96,15 @@ so that 我知道自己在哪一级、离下一级还差多少、EXP 是怎么�
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：确认 Story 1.4 已合入，按其实际 JSON 字段名写 `fromJson`（有出入以后端为准、Completion Notes 记）；核对 Dev Notes「现状」行号
-- [ ] **T1 颜色**（AC7）：`colors.dart` 加常量 + `growthLevelColor`
-- [ ] **T2 arb**（AC8）：两份 arb 加键 + 生成；grep 防重名
-- [ ] **T3 数据层**（AC6）：模型、`GrowthRepository`、`ApiPaths`、`UserProfile.growth`、`MeCounts.growth`、provider（+ 必要时登记换账号清理）
-- [ ] **T4 「我的」页胶囊**（AC1）+ 埋点（AC9）
-- [ ] **T5 等级页**（AC2 ~ AC4）：等级卡、进度条组件 `GrowthProgressBar`、权益、规则、最近 3 条
-- [ ] **T6 明细页**（AC5）：`GrowthLedgerTile`、WIB 分组、分页、空态、失败与加载更多失败
-- [ ] **T7 路由**：`app_router.dart` 加 `/me/growth`、`/me/growth/history`（放在 `/me/settings`、`/me/pawcoin` 附近）
-- [ ] **T8 测试**（见「测试」）；`flutter analyze`；Completion Notes 标「L2 待本地验收」
+- [x] **T0 开工核对**：确认 Story 1.4 已合入，按其实际 JSON 字段名写 `fromJson`（有出入以后端为准、Completion Notes 记）；核对 Dev Notes「现状」行号
+- [x] **T1 颜色**（AC7）：`colors.dart` 加常量 + `growthLevelColor`
+- [x] **T2 arb**（AC8）：两份 arb 加键 + 生成；grep 防重名
+- [x] **T3 数据层**（AC6）：模型、`GrowthRepository`、`ApiPaths`、`UserProfile.growth`、`MeCounts.growth`、provider（+ 必要时登记换账号清理）
+- [x] **T4 「我的」页胶囊**（AC1）+ 埋点（AC9）
+- [x] **T5 等级页**（AC2 ~ AC4）：等级卡、进度条组件 `GrowthProgressBar`、权益、规则、最近 3 条
+- [x] **T6 明细页**（AC5）：`GrowthLedgerTile`、WIB 分组、分页、空态、失败与加载更多失败
+- [x] **T7 路由**：`app_router.dart` 加 `/me/growth`、`/me/growth/history`（放在 `/me/settings`、`/me/pawcoin` 附近）
+- [x] **T8 测试**（见「测试」）；`flutter analyze`；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -250,10 +250,38 @@ so that 我知道自己在哪一级、离下一级还差多少、EXP 是怎么�
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程手工执行）
+
 ### Debug Log References
+
+- L0：`flutter analyze` 0 issue；`flutter test` 全量 3441 用例（首轮 2 个失败：D-3 同形词登记、改测试时并发跑的一例，修后复跑相关目录全绿）；新增 `test/growth/*` 与 `test/me/me_page_test.dart` 胶囊用例、`test/a11y/contrast_test.dart` 段位色白字对比度用例均绿。
+- 未对整文件跑 `dart format`；未写 golden。
 
 ### Completion Notes List
 
+- **🔴 L2 待本地验收**：Android 模拟器上「我的」页胶囊（A6）、等级页 B1 / B2 / B3、断网失败 B5、明细页 B6 / B7 / B8 逐屏对照 UI 稿（还原度 ≥ 95%）；印尼语 / 英语各看一遍千分位与文案。L1 无。
+- T0：按 Story 1.4 实际 JSON 写 `fromJson`（`participating / level / tier / lifetimeTotal / currentThreshold / nextLevel / nextThreshold / levels / frames{effective,manual,options[]} / rules[] / passiveGroup / tierBenefits[] / recentLedger[]`；明细 `items[] / nextCursor`；`/me.growth{level,tier,frame,lifetimeTotal,nextThreshold}`）。后端全局 NON_NULL：满级时 `nextLevel / nextThreshold` 字段缺省 → 解析为 null。与 story 一致。
+- 段位色 / 浅底 / 20 个逐级色只在 `colors.dart`；`growthLevelColor` 查表（段位按 `levels` 的 tier 决定，段内第 n 级取第 n 色，Lv21+ 取段末色；等级表为空按初始分段兜底）。**进度条两端胶囊用段位色**（code-review：浅色逐级色上的白字对比度只有 ~1.6:1，且 §5.6 规定逐级色只用于进度条本身），逐级色只用于轨道与填充渐变。新增 `contrast_test` 断言段位色白字 ≥ 4.5:1。
+- arb：新增 77 个 `growthLevel* / growthTier* / growthRule* / growthExp* / growthBenefit*` 键（EN / ID），未复用 Diary 的 `growth*` 旧键；复用 `feedErrorBody`、`notificationLoadRetry`（「Coba lagi」，与通知中心一致）、`notifyLoadMoreRetry`、`notifyGroup*`。**另加 1 个 story 表外的键 `growthExpPostPlain`（Posting / Post）**：AC5 要求帖子类型未知时显示「Posting」，表里没有对应键（☆，交付时提醒运营复核）。表中 ☆ 暂定文案照 story 填入。
+- Provider：`growthPageProvider`（autoDispose，只在等级页内使用）与明细页列表状态（页面 State 持有）都不常驻 → **未登记** `resetUserScopedCaches`；胶囊走既有 `meCountsProvider`（已登记）。
+- 胶囊取数：`/me` 已加载就以其 `growth` 为准（null = 不显示），只在 `/me` 还没拿到（加载中 / 失败）时回落登录态 `profile.growth`（code-review：避免不参与后仍显示旧胶囊）。
+- 文案守卫 `test/l10n/microcopy_rules_test.dart` D-3 的同形词表登记 `tailrent / level / lv / exp / event / tips`（产品专名与 UI 稿 EN / ID 同写的借词，带注释说明理由，不是放宽规则）。
+- 埋点：`growth_level_page_viewed {source: me_page}`；`v112_events_test.dart` 的 `allowedPrefixes` 新增 `'growth_'`（新模块入表，未放宽规则）。
+- 明细分页：列表末尾加载行被构建即拉下一页；空页带游标时停止翻页（code-review：防无限请求）；加载更多失败显示 `notifyLoadMoreRetry` 行，重试同一游标、已加载条目保留。
+- 时间：明细与等级页预览都按 WIB（UTC+7）自然日，复用 `notification_grouping.localDayDiff`；今天 / 昨天 `HH.mm`，更早 `d MMM`。
+
+#### 与架构 / UI 稿的出入（照 story「与架构 / UI 稿的出入」实现）
+
+- 逐级色按 UI 稿 20 个常量查表（不插值）；明细五段分组；时间口径如上；B2 无上限规则行样式按说明推出。
+- 进度条两端胶囊颜色：story 未明说，取段位色（理由见上）。
+
 ### File List
 
+- 新增：`petgo_app/lib/features/growth/data/growth_repository.dart`、`domain/{growth_models,growth_level_color}.dart`、`presentation/{level_page,exp_ledger_page,level_capsule,growth_progress_bar,growth_ledger_tile,growth_labels,growth_tier_style}.dart`
+- 修改：`petgo_app/lib/core/theme/colors.dart`、`lib/core/network/api_paths.dart`、`lib/core/router/app_router.dart`、`lib/features/auth/domain/login_response.dart`、`lib/features/me/data/me_counts_provider.dart`、`lib/features/me/presentation/me_page.dart`、`lib/l10n/app_en.arb`、`lib/l10n/app_id.arb`
+- 测试新增：`petgo_app/test/growth/{growth_models_test,growth_level_color_test,level_page_test,exp_ledger_page_test,growth_fixtures}.dart`
+- 测试修改：`petgo_app/test/me/me_page_test.dart`、`test/analytics/v112_events_test.dart`、`test/a11y/contrast_test.dart`
+
 ### Change Log
+
+- 2026-10-18：实现 Story 1.5（「我的」页等级胶囊 + 等级页 + EXP 明细页）；L0 绿，L2 待本地验收；状态 → review。

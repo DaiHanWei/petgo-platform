@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../growth/domain/growth_badge.dart';
 import '../../mention/domain/mention_view.dart';
 /// 评论（对应后端 `CommentResponse`）。两级：一级含 [replyCount] + 内嵌前 3 条 [replies]；
 /// 二级回复 [replyCount]/[replies] 为 null。
@@ -11,6 +12,7 @@ class Comment {
     required this.createdAt,
     this.authorNickname,
     this.authorTags = const [],
+    this.authorBadge,
     this.authorAvatarUrl,
     this.replyCount,
     this.replies,
@@ -32,6 +34,9 @@ class Comment {
   /// ⚠️ 评论区是最容易退化成逐条查的地方，但取数在后端的作者投影里整批完成，
   /// 这里只是把结果读出来。
   final List<UserTag> authorTags;
+
+  /// 作者等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? authorBadge;
   final String? authorAvatarUrl;
 
   /// 一级评论的二级回复总数（二级回复为 null）。
@@ -69,6 +74,7 @@ class Comment {
         createdAt: createdAt,
         authorNickname: authorNickname,
         authorTags: authorTags,
+        authorBadge: authorBadge,
         authorAvatarUrl: authorAvatarUrl,
         replyCount: replyCount,
         replies: replies ?? this.replies,
@@ -101,6 +107,7 @@ class Comment {
       createdAt: DateTime.parse(json['createdAt'] as String),
       authorNickname: json['authorNickname'] as String?,
       authorTags: UserTag.listFromJson(json['authorTags']),
+      authorBadge: GrowthBadge.fromFlat(json),
       authorAvatarUrl: json['authorAvatarUrl'] as String?,
       replyCount: json['replyCount'] as int?,
       replies: rawReplies is List

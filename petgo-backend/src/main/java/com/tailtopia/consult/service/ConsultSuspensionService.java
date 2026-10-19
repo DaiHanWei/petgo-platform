@@ -11,6 +11,8 @@ import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.event.RefundSucceededEvent;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
@@ -115,9 +117,15 @@ public class ConsultSuspensionService {
             // 退回 PawCoin（credit 内部记 FLOAT_LIABILITY 分录 + 幂等）；全额=用户实付 amount。
             wallet.credit(order.getUserId(), order.getAmount(), PawCoinTxnType.REFUND,
                     "CONSULT_ORDER", order.getId(), idem);
-            orders.markRefunded(order.getId()); // REFUNDING→REFUNDED
+            boolean refundedNow = orders.markRefunded(order.getId()) == 1; // REFUNDING→REFUNDED
             billing.appendStageEvent(order.getId(), ConsultStageEvent.REFUND_COMPLETED, now,
                     "封禁挂起自动退款（PawCoin 全额退回）");
+            // V1.4.0 ① Story 1.3（AD-9 / P-3）：真退了钱 → 全额扣回消费返成长值。QRIS 分支只留 REFUNDING，不发（P-10）。
+            if (refundedNow) {
+                events.publishEvent(new RefundSucceededEvent(idem, order.getUserId(), PaymentPurpose.VET_CONSULT,
+                        "CONSULT_ORDER", String.valueOf(order.getId()), order.getPaymentIntentId(), order.getAmount(),
+                        order.getAmount()));
+            }
         } else {
             // QRIS/现金：订单留 REFUNDING，实际 Midtrans Iris 打款由 Epic 4 完成（本 story 不记 ledger 避免双记）。
             billing.appendStageEvent(order.getId(), ConsultStageEvent.REFUND_REQUESTED, now,

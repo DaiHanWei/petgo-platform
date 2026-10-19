@@ -10,6 +10,8 @@ import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.domain.PayChannel;
+import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.event.RefundSucceededEvent;
 import com.tailtopia.pay.refund.domain.ApprovalStatus;
 import com.tailtopia.pay.refund.domain.NeedDecision;
 import com.tailtopia.pay.refund.domain.PayoutChannel;
@@ -29,6 +31,7 @@ import com.tailtopia.shared.pay.PaymentGateway;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,11 +58,12 @@ public class RefundService {
     private final PaymentGateway gateway;
     private final LedgerService ledger;
     private final PlatformConfigService platformConfig;
+    private final ApplicationEventPublisher events;
 
     public RefundService(RefundRequestRepository refunds, ConsultOrderRepository orders,
             CardTokenGenerator tokenGenerator, AdminAuditService audit, RefundAuditRecorder auditRecorder,
             NotificationService notifications, PawCoinWalletService wallet, PaymentGateway gateway,
-            LedgerService ledger, PlatformConfigService platformConfig) {
+            LedgerService ledger, PlatformConfigService platformConfig, ApplicationEventPublisher events) {
         this.refunds = refunds;
         this.orders = orders;
         this.tokenGenerator = tokenGenerator;
@@ -70,6 +74,7 @@ public class RefundService {
         this.gateway = gateway;
         this.ledger = ledger;
         this.platformConfig = platformConfig;
+        this.events = events;
     }
 
     /**
@@ -272,8 +277,11 @@ public class RefundService {
             wallet.credit(userId, bonus, PawCoinTxnType.BONUS,
                     "refund_request", r.getId(), "refund-pawcoin-bonus-" + refundToken);
         }
-        orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
+        boolean refundedNow = orders.markRefunded(order.getId()) == 1; // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
         r.markInstantPawCoinRefunded();
+        if (refundedNow) {
+            publishConsultRefunded(refundToken, order); // 只在本次真推进为 REFUNDED 时扣回，已被别路退过的不再发
+        }
         return new RefundPawcoinResult(base, bonus, base + bonus, wallet.balanceOf(userId));
     }
 
@@ -380,7 +388,9 @@ public class RefundService {
             throw AppException.serviceUnavailable("退款出款未即时完成，请稍后重试");
         }
         r.completePayout(payerAdminId, res.disbursementRef(), payoutProofKey);
-        orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
+        if (orders.markRefunded(order.getId()) == 1) { // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
+            publishConsultRefunded(refundToken, order);
+        }
         // REFUND_OUT 双分录（真钱退款流出）：DEBIT REFUND_OUT net / CREDIT CASH_IN net。借贷平 + 幂等键。
         ledger.post(UUID.randomUUID().toString(), List.of(
                 LedgerLine.debit(LedgerAccount.REFUND_OUT, r.getNetAmount(), null, "refund_request", r.getId()),
@@ -389,6 +399,16 @@ public class RefundService {
         audit.record(payerAdminId, AuditActions.REFUND_PAYOUT_RECORDED, "refund_request", refundToken,
                 "退款打款完成（Iris ref=" + res.disbursementRef() + "）"
                         + (payoutProofKey == null || payoutProofKey.isBlank() ? "" : " 凭证=" + payoutProofKey));
+    }
+
+    /**
+     * V1.4.0 ① Story 1.3（AD-9）：咨询退款成功 → 扣回消费返成长值。咨询一律整单退：按 {@code order.getAmount()} 全额扣回
+     * （打款的净额扣了手续费，但对用户是「这单退了」，不留零头 EXP）。同事务发布，① AFTER_COMMIT 消费。
+     */
+    private void publishConsultRefunded(String refundToken, ConsultOrder order) {
+        events.publishEvent(new RefundSucceededEvent(refundToken, order.getUserId(), PaymentPurpose.VET_CONSULT,
+                "CONSULT_ORDER", String.valueOf(order.getId()), order.getPaymentIntentId(), order.getAmount(),
+                order.getAmount()));
     }
 
     private void requirePendingApproval(RefundRequest r) {

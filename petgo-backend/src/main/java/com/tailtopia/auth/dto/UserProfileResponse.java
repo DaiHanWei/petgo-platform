@@ -54,19 +54,34 @@ public record UserProfileResponse(
         /** 我关注的人数（冗余列直读，加载时快照）。 */
         int followingCount,
         /** 关注我的人数（同上）。 */
-        int followerCount) {
+        int followerCount,
+        /**
+         * 成长值摘要（V1.4.0 ① Story 1.4）：「我的」页等级胶囊。⚠️ 登录响应与不参与者为 null（NON_NULL 省略）；
+         * {@code GET} 与 {@code PATCH /me} 都必须带，否则 App 用 PATCH 响应覆盖 profile 后胶囊会消失。
+         */
+        com.tailtopia.growth.web.dto.MeGrowthBrief growth) {
 
-    /** 登录响应用：不带帖子统计（{@code postCount} / {@code likeCount} 为 null，T-6）。 */
+    /** 登录响应用：不带帖子统计（{@code postCount} / {@code likeCount} 为 null，T-6）与成长值摘要。 */
     public static UserProfileResponse from(User u, boolean hasPetProfile) {
-        return build(u, hasPetProfile, null, null);
+        return build(u, hasPetProfile, null, null, null);
     }
 
-    /** {@code GET / PATCH /me} 用：带全部五个新字段（PATCH 响应缺计数会让 App 四格被清空）。 */
+    /**
+     * 带帖子统计、不带成长值摘要（保留的旧签名）。⚠️ {@code GET / PATCH /me} 自 V1.4.0 起用下面带 {@code growth} 的重载
+     * ——用这个会让 App 的等级胶囊在 PATCH 后消失。
+     */
     public static UserProfileResponse from(User u, boolean hasPetProfile, long postCount, long likeCount) {
-        return build(u, hasPetProfile, postCount, likeCount);
+        return build(u, hasPetProfile, postCount, likeCount, null);
     }
 
-    private static UserProfileResponse build(User u, boolean hasPetProfile, Long postCount, Long likeCount) {
+    /** {@code GET / PATCH /me} 用（V1.4.0 ① Story 1.4）：另带成长值摘要（不参与者传 null）。 */
+    public static UserProfileResponse from(User u, boolean hasPetProfile, long postCount, long likeCount,
+            com.tailtopia.growth.web.dto.MeGrowthBrief growth) {
+        return build(u, hasPetProfile, postCount, likeCount, growth);
+    }
+
+    private static UserProfileResponse build(User u, boolean hasPetProfile, Long postCount, Long likeCount,
+            com.tailtopia.growth.web.dto.MeGrowthBrief growth) {
         return new UserProfileResponse(
                 u.getId(),
                 u.getNickname(),
@@ -86,6 +101,7 @@ public record UserProfileResponse(
                 postCount,
                 likeCount,
                 u.getFollowingCount(),
-                u.getFollowerCount());
+                u.getFollowerCount(),
+                growth);
     }
 }

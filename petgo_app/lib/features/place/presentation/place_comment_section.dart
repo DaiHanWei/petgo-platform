@@ -156,7 +156,8 @@ class _CommentRow extends StatelessWidget {
                 name: name,
                 url: comment.authorAvatarUrl,
                 deleted: comment.authorDeleted,
-                size: 30),
+                size: 30,
+                growth: comment.authorBadge),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(

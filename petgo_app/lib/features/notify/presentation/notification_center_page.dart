@@ -1,3 +1,5 @@
+import '../../growth/domain/growth_popups.dart';
+import '../../growth/presentation/growth_tier_style.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -301,6 +303,10 @@ class _NotificationCenterPageState
     }
     if (_opening) return;
     Analytics.capture('app_notification_item_tapped', props);
+    // V1.4.0 ① Story 2.3：升级通知 → 等级页（深链表固定目标），进页来源 = notification。
+    if (item.type == 'GROWTH_LEVEL_UP') {
+      Analytics.capture('growth_level_page_viewed', {'source': 'notification'});
+    }
     final token = item.deepLinkToken;
     if (token != null && token.isNotEmpty && !item.read) {
       setState(() {
@@ -772,6 +778,12 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.triageGreen,
       AppColors.momenBadgeBg,
     ),
+    // V1.4.0 ① Story 2.3（UI 稿 F1 / F2）：升级通知。
+    'GROWTH_LEVEL_UP' => (
+      Icons.workspace_premium_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
     // V1.1.6 Story 6.1：S/M 级里程碑（只留痕、不推送）。与 L 级同族但换一个更轻的图标 ——
     // 同族是因为落点一样（都进里程碑列表），轻一档是因为它本就是"小成就"。
     'MILESTONE_SM_NODE' => (
@@ -869,6 +881,17 @@ class _NotificationTileState extends State<_NotificationTile> {
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
+  /// 升级通知标题 / 正文按 `targetRef = "{toLevel}:{TIER}"` 本地化（App 不渲染后端显示串）；解析失败退回系统兜底。
+  String _growthLevelUpTitle(AppLocalizations l10n) {
+    final ref = parseLevelUpRef(widget.item.targetRef);
+    return ref == null ? l10n.notifyTypeSystem : l10n.notifyTypeGrowthLevelUp(ref.level);
+  }
+
+  String _growthLevelUpBody(AppLocalizations l10n) {
+    final ref = parseLevelUpRef(widget.item.targetRef);
+    return ref == null ? l10n.notifyBodySystem : l10n.notifyBodyGrowthLevelUp(GrowthTierStyle.name(l10n, ref.tier));
+  }
+
   String _typeLabel(AppLocalizations l10n) => switch (widget.item.type) {
     'VET_REPLY' => l10n.notifyTypeVetReply,
     'CONSULT_CLOSED' => l10n.notifyTypeConsultClosed,
@@ -878,6 +901,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyTypePetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyTypeCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyTypeMilestoneNode,
+    'GROWTH_LEVEL_UP' => _growthLevelUpTitle(l10n),
     // 🔴 S/M 必须写明**是哪一条里程碑**（AC4 明令禁止"你完成了一个里程碑"这类泛化文案）。
     'MILESTONE_SM_NODE' => _milestoneCopy(context).title,
     'TICKET_RESOLVED' => l10n.notifyTypeTicketResolved,
@@ -917,6 +941,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => l10n.notifyBodyPetBirthday,
     'COMPANION_ANNIVERSARY' => l10n.notifyBodyCompanionAnniversary,
     'MILESTONE_NODE' => l10n.notifyBodyMilestoneNode,
+    'GROWTH_LEVEL_UP' => _growthLevelUpBody(l10n),
     'MILESTONE_SM_NODE' => _milestoneCopy(context).body,
     'TICKET_RESOLVED' => l10n.notifyBodyTicketResolved,
     'CSAT_SURVEY' => l10n.notifyBodyCsatSurvey,

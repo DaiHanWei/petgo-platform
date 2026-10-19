@@ -15,6 +15,7 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/growth_avatar_decoration.dart';
 import '../../../shared/widgets/post_grid_tile.dart';
 import '../../../shared/widgets/profile_stats_row.dart';
 import '../../../shared/widgets/user_tag_row.dart';
@@ -254,25 +255,30 @@ class PublicProfilePage extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
       children: [
         Center(
-          // UI 稿 A2 `.av.person`：无头像 = 白底 + 1px line 描边（border-box 84）+ 实心 person 52 muted。
-          child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
-              ? Container(
-                  key: const ValueKey('profileAvatar'),
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.line),
+          // V1.4.0 ① Story 3.2（A4）：外包等级角标（26）+ 头像框；`profileAvatar` key 留在原控件上。
+          child: GrowthAvatarDecoration(
+            badge: p.badge,
+            diameter: 84,
+            // UI 稿 A2 `.av.person`：无头像 = 白底 + 1px line 描边（border-box 84）+ 实心 person 52 muted。
+            child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
+                ? Container(
+                    key: const ValueKey('profileAvatar'),
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: const Icon(Icons.person_rounded, size: 52, color: AppColors.muted),
+                  )
+                : CircleAvatar(
+                    key: const ValueKey('profileAvatar'),
+                    radius: 42,
+                    backgroundColor: AppColors.border,
+                    backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
                   ),
-                  child: const Icon(Icons.person_rounded, size: 52, color: AppColors.muted),
-                )
-              : CircleAvatar(
-                  key: const ValueKey('profileAvatar'),
-                  radius: 42,
-                  backgroundColor: AppColors.border,
-                  backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
-                ),
+          ),
         ),
         const SizedBox(height: 12),
         // 运营标签的第五处展示位（前四处：feed / detail / comment / mini_profile）。

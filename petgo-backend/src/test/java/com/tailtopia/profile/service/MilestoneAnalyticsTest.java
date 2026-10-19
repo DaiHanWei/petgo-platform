@@ -117,7 +117,7 @@ class MilestoneAnalyticsTest {
             RecordingClient client = new RecordingClient();
             new MilestoneAnalyticsListener(client).onMilestoneCompleted(
                     new MilestoneCompletedEvent(42L, "C-M5", MilestoneLevel.M, "第一次看兽医",
-                            MilestoneCompletionSource.SYSTEM_AUTO));
+                            MilestoneCompletionSource.SYSTEM_AUTO, 3L));
 
             assertThat(client.captured).hasSize(1);
             RecordingClient.Captured c = client.captured.getFirst();
@@ -133,7 +133,7 @@ class MilestoneAnalyticsTest {
             RecordingClient client = new RecordingClient();
             new MilestoneAnalyticsListener(client).onMilestoneCompleted(
                     new MilestoneCompletedEvent(42L, "C-S1", MilestoneLevel.S, "档案创建",
-                            MilestoneCompletionSource.SYSTEM_AUTO));
+                            MilestoneCompletionSource.SYSTEM_AUTO, 3L));
 
             String id = client.captured.getFirst().distinctId();
             assertThat(id).isEqualTo(AnalyticsDistinctId.of(42L)).hasSize(64).doesNotContain("42");

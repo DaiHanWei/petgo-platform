@@ -55,7 +55,9 @@ class FeedResponseContractTest {
             // V1.3.4 follow Story 2.1（AD-6）：作者 token 与相对查看者的关注关系。
             "authorToken", "authorFollowState",
             // V1.3.4 Story 2.1（AD-5）：每张图的露出位置。存量 / 无超界图省略；App 无值即居中（2.2 读）。
-            "imageCropOffsets");
+            "imageCropOffsets",
+            // V1.4.0 ① Story 3.1（AD-14）：作者等级展示。注销 / 停用 / 无等级时整体省略；无框时省略 authorFrame。
+            "authorLevel", "authorTier", "authorFrame");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
@@ -89,9 +91,13 @@ class FeedResponseContractTest {
                 // V1.3.4 follow Story 2.1：作者 token 与关注关系（AD-6 键名）。
                 "t".repeat(32), new com.tailtopia.social.read.FollowState(true, false),
                 // V1.3.4 Story 2.1：露出位置，null 占位与 imageSizes 同理（用 Arrays.asList）。
-                java.util.Arrays.asList(0.0, null));
+                java.util.Arrays.asList(0.0, null),
+                // V1.4.0 ① Story 3.1：作者等级三字段。
+                12, "GUARDIAN", "UPGRADED");
 
         Map<String, Object> m = wire(item);
+        assertThat(m).containsEntry("authorLevel", 12).containsEntry("authorTier", "GUARDIAN")
+                .containsEntry("authorFrame", "UPGRADED");
         assertThat(m.keySet())
                 .as("FeedItemResponse 对外字段集必须与 App FeedItem.fromJson 完全一致（C5）")
                 .isEqualTo(ITEM_FIELDS);
@@ -108,7 +114,8 @@ class FeedResponseContractTest {
                 42L, 7L, null, null, true, null, null,
                 ContentType.GROWTH_MOMENT, null, null, 0L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
-                null, null, false, 0L, null, null, null, null);
+                null, null, false, 0L, null, null, null, null,
+                null, null, null); // Story 3.1：无等级
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -125,6 +132,8 @@ class FeedResponseContractTest {
         assertThat(m).doesNotContainKey("mentions");
         // V1.3.4 Story 2.1：存量 / 无超界图的帖整列省略（App 无值即居中）。
         assertThat(m).doesNotContainKey("imageCropOffsets");
+        // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略（老 App 不受影响）。
+        assertThat(m).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
     }
 
     /**
@@ -140,7 +149,8 @@ class FeedResponseContractTest {
                 List.of("https://cdn.petgo/p/a.jpg", "https://cdn.petgo/p/b.jpg"),
                 null, false, 0L, null,
                 null, null, // follow：authorToken / authorFollowState
-                Arrays.asList(0.0, null));
+                Arrays.asList(0.0, null),
+                null, null, null);
 
         Map<String, Object> m = wire(item);
         assertThat(m.get("imageCropOffsets")).isEqualTo(Arrays.asList(0.0, null));

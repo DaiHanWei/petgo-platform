@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'features/growth/domain/growth_popup_trigger.dart';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
@@ -196,6 +197,8 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
     // ⚠️ 不做轮询：只在"用户回到 App"这个明确时点拉一次，不为角标烧流量和电。
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(unreadCountProvider);
+      // V1.4.0 ① Story 2.3：回前台拉一次待弹的升级庆祝 / 存量汇总（未 attach 时空操作）。
+      growthPopupTrigger.request(GrowthPullReason.resumed);
       // 回前台版本检查（V1.3.4 Story 3.2 · AC6.2）：距上次检查 < 6h、或冷启动检查尚未发出时
       // 由控制器直接空转，不产生网络调用。
       unawaited(_onResumeUpdateCheck());

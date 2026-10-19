@@ -89,6 +89,17 @@ void main() {
       );
     });
 
+    test('V1.4.0 ① 2.3：升级推送（有 token）→ 直达等级页，不去通知中心', () {
+      expect(
+        pushClickLocation(hasToken: true, deepLink: '/me/growth', type: 'GROWTH_LEVEL_UP'),
+        '/me/growth',
+      );
+      expect(
+        pushClickLocation(hasToken: true, deepLink: '/me/growth', type: 'CONTENT_LIKED'),
+        DeepLinkRoutes.notificationsCenter,
+      );
+    });
+
     test('IM 类但深链已兜底成通知中心 → 按原样返回', () {
       expect(
         pushClickLocation(hasToken: false, deepLink: DeepLinkRoutes.notificationsCenter),

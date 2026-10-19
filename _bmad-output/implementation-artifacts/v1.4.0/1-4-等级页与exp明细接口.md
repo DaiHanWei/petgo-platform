@@ -1,6 +1,6 @@
 # Story 1.4: 等级页与 EXP 明细接口
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.0 · 主题 tailrent-level · 分支 `feat/1.4.0-tailrent-level`
 > 口径优先级：`decision-log.md` ① 节 > `Tailrent等级/1-4-0Tailrent等级prd.md` > `architecture-v1.4.0-tailrent-level-delta.md` > UI 稿 `Tailrent等级/ui-1-4-0-tailrent-level-integrated-v1.html`（均在 `_bmad-output/planning-artifacts/v1.4.0/`）。
@@ -77,13 +77,13 @@ so that App 能展示我的等级、进度、今天能涨多少和历史流水�
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：确认 1.1 ~ 1.3 已合入；核对 1.1 实际的 `ref_type` 值（`CONTENT_POST` 等）与 1.2 `GrowthFrameResolver` 方法名
-- [ ] **T1 DTO**：`GrowthPageResponse`、`GrowthLedgerRow`、`GrowthLedgerPage`、`MeGrowthBrief`（`growth.web.dto`）；`GrowthBenefit` 常量
-- [ ] **T2 `GrowthPageQuery`**（AC1 / AC2）+ 明细分页查询（AC3，含 `detailCode` 批量补充）
-- [ ] **T3 `MeGrowthController`** + `SecurityConfig` 规则（AC1 / AC3 / AC4）
-- [ ] **T4 `/me` 摘要**（AC5）：`UserProfileResponse` 追加字段、`MeService.withStats` 填充、`AuthService` 登录路径传 null
-- [ ] **T5 测试**：L0 全部；L1 写好能编译
-- [ ] **T6** `mvn -B clean package`；Completion Notes 标「L1 待本地验收」
+- [x] **T0 开工核对**：确认 1.1 ~ 1.3 已合入；核对 1.1 实际的 `ref_type` 值（`CONTENT_POST` 等）与 1.2 `GrowthFrameResolver` 方法名
+- [x] **T1 DTO**：`GrowthPageResponse`、`GrowthLedgerRow`、`GrowthLedgerPage`、`MeGrowthBrief`（`growth.web.dto`）；`GrowthBenefit` 常量
+- [x] **T2 `GrowthPageQuery`**（AC1 / AC2）+ 明细分页查询（AC3，含 `detailCode` 批量补充）
+- [x] **T3 `MeGrowthController`** + `SecurityConfig` 规则（AC1 / AC3 / AC4）
+- [x] **T4 `/me` 摘要**（AC5）：`UserProfileResponse` 追加字段、`MeService.withStats` 填充、`AuthService` 登录路径传 null
+- [x] **T5 测试**：L0 全部；L1 写好能编译
+- [x] **T6** `mvn -B clean package`；Completion Notes 标「L1 待本地验收」
 
 ## Dev Notes
 
@@ -151,10 +151,35 @@ so that App 能展示我的等级、进度、今天能涨多少和历史流水�
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程手工执行）
+
 ### Debug Log References
+
+- L0：`./mvnw -B clean package -DskipTests` 绿；`./mvnw -B test -Dtest=GrowthPageQueryTest,GrowthLedgerPageQueryTest,MeGrowthControllerTest,MeServiceTest` 全绿（32）。无迁移。
 
 ### Completion Notes List
 
+- **🔴 L1/L2 待本地验收**：`growth/MeGrowthControllerEndpointTest`（45 条三页 20/20/5、`LIKE_GIVEN` 5 次已满、游客 401 / 兽医 403、非法游标 400）与 `auth/web/MeControllerEndpointTest#getAndPatchMe_carryGrowthBrief` 已写好能编译，云端未跑；AC7「`mvn -B clean package` 绿」云端不验。
+- T0 核对：1.1 实际 ref_type 为 `CONTENT_POST` / `PLACE_CHECKIN` / `MILESTONE` / `GIFT_ORDER`，1.3 的 `SPEND_*` ref_type = 支付用途名；1.2 的方法为 `GrowthFrameResolver.availableFrames / effectiveFrame / isManual`（静态）。与 story 一致，未改 story 文字。
+- `/me` 摘要：`MeService` 注入 `GrowthPageQuery`（`brief(userId)`），`UserProfileResponse` 末尾追加 `growth` 并新增 5 参工厂；登录两处仍走 2 参工厂 → `growth = null`。4 参旧工厂保留（签名不动），Javadoc 标明 `/me` 已改用 5 参。
+- `GrowthPageQuery` 与 `GrowthLedgerPageQuery` 分开：明细分页供 1.5 / 4.2 复用查询（不复用 DTO）；最近 3 条走同一查询。无账户行的用户不查流水、不写库。
+- 非法游标：story AC3.1 要求 400 ProblemDetail，而 `KeysetCursor.decodeOrNull` 的约定与其他列表是「坏游标当首页」。**照 story 写 400**（`AppException(BAD_REQUEST, VALIDATION)`；`AppException.validation` 是 422 不合用）。
+- `detailCode`：`POST_PUBLISHED` 读 `content_posts.type`（含软删帖，只有物理删除才 null，与 story「帖已物理删除则 null」一致）。
+- code-review：修了测试 Javadoc 错位与旧工厂文档；`/api/v1/me` 本身未限 `ROLE_USER`（兽医 token 撞号可读同号用户 profile）属存量问题、超出本 story，已另起任务建议，未在此改。
+
+#### 待确认
+
+- 非法游标 400 与仓内「坏游标降级首页」惯例相反（见上），按 story 实现；如需统一改为降级首页，只改 `GrowthLedgerPageQuery.page` 一处。
+
 ### File List
 
+- `petgo-backend/src/main/java/com/tailtopia/growth/domain/GrowthBenefit.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/growth/service/{GrowthPageQuery,GrowthLedgerPageQuery}.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/growth/web/MeGrowthController.java`、`growth/web/dto/{GrowthPageResponse,GrowthLedgerRow,GrowthLedgerPage,MeGrowthBrief}.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/auth/dto/UserProfileResponse.java`、`auth/service/MeService.java`、`shared/security/SecurityConfig.java`
+- 测试（新）：`growth/service/{GrowthPageQueryTest,GrowthLedgerPageQueryTest}`、`growth/web/MeGrowthControllerTest`、`growth/MeGrowthControllerEndpointTest`（L1）
+- 测试（改）：`auth/service/MeServiceTest`、`auth/web/MeControllerEndpointTest`（L1）
+
 ### Change Log
+
+- 2026-10-18：实现 Story 1.4（等级页 / EXP 明细接口 + `/me` 摘要）；L0 绿，L1/L2 待本地验收；状态 → review。

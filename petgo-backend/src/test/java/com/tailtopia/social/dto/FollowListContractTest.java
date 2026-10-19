@@ -45,4 +45,18 @@ class FollowListContractTest {
         FollowListPage page = new FollowListPage(List.of(), null, false);
         assertThat(wire(page).keySet()).isEqualTo(Set.of("items", "hasMore"));
     }
+
+    /** V1.4.0 ① Story 3.1：带等级的行多 level / tier / frame；无等级（9 参构造）三者省略（见上两例的键集）。 */
+    @Test
+    void growthFieldsOnRow() {
+        com.tailtopia.auth.dto.AuthorView author = new com.tailtopia.auth.dto.AuthorView(7L, "Rina", null, false,
+                List.of()).withGrowth(new com.tailtopia.growth.domain.GrowthBadge(15,
+                        com.tailtopia.growth.domain.GrowthTier.STAR, com.tailtopia.growth.domain.FrameChoice.ANIMATED));
+        FollowListItem row = new FollowListItem(7L, "t".repeat(32), "Rina", null, false, false, false, false, false,
+                author);
+        assertThat(wire(row)).containsEntry("level", 15).containsEntry("tier", "STAR")
+                .containsEntry("frame", "ANIMATED");
+        assertThat(wire(new FollowListItem(7L, null, null, null, false, false, false, false, false)))
+                .doesNotContainKeys("level", "tier", "frame");
+    }
 }

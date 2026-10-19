@@ -69,6 +69,16 @@ void main() {
     expect(_count(code, 'StartupPopupKind.'), 1);
   });
 
+  test('V1.4.0 ① 2.3 growth_popup_coordinator：庆祝 / 汇总登记各恰好一处，且在各自 show 之前', () {
+    final code = _code(_src('lib/features/growth/presentation/growth_popup_coordinator.dart'));
+    const cel = 'StartupPopupLedger.instance.record(StartupPopupKind.growthCelebration);';
+    const bf = 'StartupPopupLedger.instance.record(StartupPopupKind.growthBackfill);';
+    expect(_count(code, cel), 1);
+    expect(_count(code, bf), 1);
+    expect(code.indexOf(cel), lessThan(code.indexOf('await _showCelebration(')));
+    expect(code.indexOf(bf), lessThan(code.indexOf('await _showBackfill(')));
+  });
+
   test('其余登记点各恰好一次', () {
     expect(
         _count(_code(_src('lib/features/notify/domain/push_permission_bootstrap.dart')),

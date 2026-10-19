@@ -9,6 +9,7 @@ import com.tailtopia.auth.service.AuthAccountDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.ContentShareService;
+import com.tailtopia.growth.service.GrowthAccountDeletionService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
 import com.tailtopia.ops.popup.service.OpsPopupImpressionDeletionService;
@@ -79,6 +80,8 @@ public class AccountDeletionService {
     private final FollowService followService;
     /** V1.3.4 Story 5.1：运营弹窗曝光（登录用户的频次记录，纯个人数据，物理删）。 */
     private final OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
+    /** V1.4.0 ① Story 1.2：成长值账户 / 流水 / 每日额度（AD-18，物理删）。 */
+    private final GrowthAccountDeletionService growthDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -94,7 +97,8 @@ public class AccountDeletionService {
             PlaceCommentService placeCommentService, PlacePhotoService placePhotoService,
             MentionCandidateMaintenanceService mentionCandidateMaintenance,
             TailsonalityDeletionService tailsonalityDeletion, FollowService followService,
-            OpsPopupImpressionDeletionService opsPopupImpressionDeletion) {
+            OpsPopupImpressionDeletionService opsPopupImpressionDeletion,
+            GrowthAccountDeletionService growthDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -118,6 +122,7 @@ public class AccountDeletionService {
         this.tailsonalityDeletion = tailsonalityDeletion;
         this.followService = followService;
         this.opsPopupImpressionDeletion = opsPopupImpressionDeletion;
+        this.growthDeletion = growthDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -200,6 +205,10 @@ public class AccountDeletionService {
         // V1.3.2 Story 2.5：Tailsonality 主人类型是账号级个人数据（AD-17），须在 user 行删除前物理删除
         // （tailsonality_owner_types.user_id 对 users 有 FK、无 ON DELETE）。宠物级的结果行已随上面的 profileDeletion 删掉。
         tailsonalityDeletion.deleteOwnerTypeByUserId(userId);
+        // V1.4.0 ① Story 1.2：成长值账户 / 流水 / 每日额度物理删除（AD-18、PRD AC10）。
+        // ⚠️ users 行只匿名化不删，growth_accounts 对 users 的 FK 永不触发 CASCADE —— 必须显式删；
+        //    放在 tailsonality 之后、PawCoin 作废之前（架构 AD-18 定的位置）。
+        growthDeletion.deleteByUserId(userId);
 
         // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
         pawCoinDeletion.voidBalanceAndPurge(userId);

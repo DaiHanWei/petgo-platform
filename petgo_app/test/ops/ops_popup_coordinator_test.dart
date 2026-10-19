@@ -51,6 +51,7 @@ class _Env {
   Completer<bool>? precacheGate;
   Completer<void>? authGate;
   int authReadyCalls = 0;
+  Completer<void>? beforeLedgerGate;
   final List<ImageProvider> precached = [];
 
   int showCalls = 0;
@@ -142,6 +143,7 @@ Future<_Harness> _pump(WidgetTester tester, _Env env, {String initial = '/home',
     rootContext: () => navKey.currentContext,
     rootCanPop: () => env.canPop,
     isResumed: () => env.resumed,
+    beforeLedgerCheck: env.beforeLedgerGate == null ? null : () => env.beforeLedgerGate!.future,
   );
   addTearDown(c.dispose);
   c.attach(router);
@@ -348,6 +350,35 @@ void main() {
     await tester.pump(const Duration(milliseconds: 4999));
     expect(env.fetchCalls, 0);
     await tester.pump(const Duration(milliseconds: 2));
+    await _settleRun(tester);
+    expect(env.fetchCalls, 1);
+    expect(env.showCalls, 1);
+  });
+
+  testWidgets('V1.4.0 ① 2.3：等成长弹窗冷启动拉取期间它登记了 ledger → 运营弹窗让路、定局', (tester) async {
+    env
+      ..auth = _user
+      ..beforeLedgerGate = Completer<void>();
+    final h = await _pump(tester, env);
+    await _release(tester);
+    expect(env.fetchCalls, 0, reason: '还在等成长弹窗的结论');
+    StartupPopupLedger.instance.record(StartupPopupKind.growthCelebration);
+    env.beforeLedgerGate!.complete();
+    await _settleRun(tester);
+    expect(env.fetchCalls, 0);
+    expect(env.showCalls, 0);
+    expect(h.coordinator.settled, isTrue);
+  });
+
+  testWidgets('V1.4.0 ① 2.3：成长弹窗拉取超过 3s 无结论 → 照常判定', (tester) async {
+    env
+      ..auth = _user
+      ..beforeLedgerGate = Completer<void>();
+    await _pump(tester, env);
+    await _release(tester); // 一帧 + 500ms 后开始等成长弹窗
+    await tester.pump(const Duration(milliseconds: 2400));
+    expect(env.fetchCalls, 0);
+    await tester.pump(const Duration(milliseconds: 200));
     await _settleRun(tester);
     expect(env.fetchCalls, 1);
     expect(env.showCalls, 1);

@@ -29,7 +29,7 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
 /**
- * L1（V1.3.0 Story 6.4 · D3 套模板 D + 变更记录抽屉）：整页单卡 14 项 + 页头「变更记录」按钮、无页尾常驻表；抽屉 fragment 200 / 403 / 非 htmx 302；
+ * L1（V1.3.0 Story 6.4 · D3 套模板 D + 变更记录抽屉）：整页单卡 15 项（V1.4.0 ① Story 3.4 加作者等级加权） + 页头「变更记录」按钮、无页尾常驻表；抽屉 fragment 200 / 403 / 非 htmx 302；
  * 按参数与 WIB 时间段筛选命中；操作人显示名；分页每页 20；{@code POST /admin/algo-params} 回归（htmx 成功回卡、校验码不变 422、PRG 不变）。
  */
 class AdminAlgoParamDrawerIntegrationTest extends ApiIntegrationTest {
@@ -72,11 +72,11 @@ class AdminAlgoParamDrawerIntegrationTest extends ApiIntegrationTest {
                 .contains("data-drawer-open=\"/admin/algo-params/changes/drawer\"").contains("id=\"algo-drawer\"")
                 .contains("data-notice=\"algo-not-for-ops\"").contains("data-notice=\"algo-no-ab\"").contains("data-notice=\"algo-scope\"")
                 .contains("cfg-grid-2").doesNotContain("data-section=\"algo-changelog\"").doesNotContain("FR-95").doesNotContain("打分参数");
-        for (String name : new String[] {"freshnessWeight", "interactionWeight", "commentWeight", "exposureDecay", "shuffleStrength", "throttleFactor",
+        for (String name : new String[] {"freshnessWeight", "interactionWeight", "commentWeight", "exposureDecay", "shuffleStrength", "throttleFactor", "authorLevelBoost",
                 "seenWindowDays", "windowSize", "attrFunQuota", "attrEduQuota", "attrLifeQuota", "speciesMainQuota", "speciesOtherQuota", "speciesGeneralQuota"}) {
             assertThat(html).as(name).contains("name=\"" + name + "\"");
         }
-        assertThat(html.split(q("class=\"field\""), -1).length - 1).isEqualTo(14);
+        assertThat(html.split(q("class=\"field\""), -1).length - 1).isEqualTo(15);
         // 只看不改：输入禁用 + 只读注释
         String ro = mvc.perform(get("/admin/algo-params").param("lang", "zh_CN").with(authentication(staffWith(AdminPermissions.CONFIG_ALGO_PARAM_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -127,6 +127,12 @@ class AdminAlgoParamDrawerIntegrationTest extends ApiIntegrationTest {
 
     /** 13 个不变参数（限流系数由各用例单独给）；每次 perform 新建 builder——MockHttpServletRequestBuilder.param 是就地累加的（复审 #1）。 */
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder saveReq(AdminAccount actor, FeedRankConfig fr, String throttle) {
+        return saveReq(actor, fr, throttle, String.valueOf(fr.getAuthorLevelBoost()));
+    }
+
+    /** V1.4.0 ① Story 3.4：作者等级加权单独给。 */
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder saveReq(AdminAccount actor, FeedRankConfig fr, String throttle,
+            String boost) {
         return post("/admin/algo-params").with(authentication(auth(actor))).with(csrf())
                 .param("freshnessWeight", String.valueOf(fr.getFreshnessWeight())).param("interactionWeight", String.valueOf(fr.getInteractionWeight()))
                 .param("commentWeight", String.valueOf(fr.getCommentWeight())).param("exposureDecay", String.valueOf(fr.getExposureDecay()))
@@ -134,7 +140,7 @@ class AdminAlgoParamDrawerIntegrationTest extends ApiIntegrationTest {
                 .param("windowSize", String.valueOf(fr.getWindowSize())).param("attrFunQuota", String.valueOf(fr.getAttrFunQuota()))
                 .param("attrEduQuota", String.valueOf(fr.getAttrEduQuota())).param("attrLifeQuota", String.valueOf(fr.getAttrLifeQuota()))
                 .param("speciesMainQuota", String.valueOf(fr.getSpeciesMainQuota())).param("speciesOtherQuota", String.valueOf(fr.getSpeciesOtherQuota()))
-                .param("speciesGeneralQuota", String.valueOf(fr.getSpeciesGeneralQuota())).param("throttleFactor", throttle).param("lang", "zh_CN");
+                .param("speciesGeneralQuota", String.valueOf(fr.getSpeciesGeneralQuota())).param("throttleFactor", throttle).param("authorLevelBoost", boost).param("lang", "zh_CN");
     }
 
     @Test
@@ -166,6 +172,40 @@ class AdminAlgoParamDrawerIntegrationTest extends ApiIntegrationTest {
                     .andExpect(status().isOk());
         } finally {
             mvc.perform(saveReq(actor, fr, String.valueOf(original))).andExpect(status().is3xxRedirection()); // 还原共享单行
+        }
+    }
+
+    /** V1.4.0 ① Story 3.4 · AC4.3：作者等级加权改 1.0 → 抽屉按 author_level_boost 筛出一行；0.99 / 2.01 → 422 行内高亮、库值不变。 */
+    @Test
+    void authorLevelBoostSaveLogsAndValidates() throws Exception {
+        AdminAccount actor = superAccount();
+        FeedRankConfig fr = read.feedRank();
+        String throttle = String.valueOf(fr.getThrottleFactor());
+        double original = fr.getAuthorLevelBoost();
+        try {
+            // 共享库：先确保起点是 1.05（上次中途失败可能留下 1.0，那样这次保存不产生新记录、断言会靠历史行蒙混过关）。
+            if (original != 1.05) {
+                mvc.perform(saveReq(actor, fr, throttle, "1.05")).andExpect(status().is3xxRedirection());
+            }
+            long before = jdbc.queryForObject("SELECT count(*) FROM config_change_logs WHERE field = 'author_level_boost'"
+                    + " AND old_value = '1.05' AND new_value = '1.0'", Long.class);
+            mvc.perform(saveReq(actor, fr, throttle, "1.0").header("HX-Request", "true").header("HX-Target", "cfg-algo-err"))
+                    .andExpect(status().isOk());
+            assertThat(read.feedRank().getAuthorLevelBoost()).isEqualTo(1.0);
+            String drawer = mvc.perform(get("/admin/algo-params/changes/drawer").param("field", "author_level_boost")
+                            .with(authentication(auth(actor))).header("HX-Request", "true"))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertThat(drawer).contains("<b>1.0</b>");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM config_change_logs WHERE field = 'author_level_boost'"
+                    + " AND old_value = '1.05' AND new_value = '1.0'", Long.class)).isEqualTo(before + 1);
+            for (String bad : new String[] {"0.99", "2.01"}) {
+                String err = mvc.perform(saveReq(actor, fr, throttle, bad).header("HX-Request", "true").header("HX-Target", "cfg-algo-err"))
+                        .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
+                assertThat(err).contains("data-code=\"admin.err.config.authorLevelBoostRange\"");
+            }
+            assertThat(read.feedRank().getAuthorLevelBoost()).isEqualTo(1.0);
+        } finally {
+            mvc.perform(saveReq(actor, fr, throttle, String.valueOf(original))).andExpect(status().is3xxRedirection());
         }
     }
 }

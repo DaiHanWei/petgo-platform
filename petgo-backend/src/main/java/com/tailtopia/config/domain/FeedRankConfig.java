@@ -91,6 +91,13 @@ public class FeedRankConfig {
     private double throttleFactor;
 
     /**
+     * 作者等级加权（V1.4.0 ① AD-15 · Story 3.4，默认 1.05）：Lv15 及以上真实作者的帖子在首页推荐打分末尾乘它。
+     * 表级 CHECK {@code [1, 2]}；1 = 不加权。Lv15 门槛写死在 {@code FeedRecommendationService}。
+     */
+    @Column(name = "author_level_boost", nullable = false)
+    private double authorLevelBoost;
+
+    /**
      * 科普（KNOWLEDGE / EDU）新鲜度半衰期（小时，V1.3.4 FR-122.3，默认 720 = 30 天）。
      *
      * <p>🔴 <b>不在后台露出</b>（PRD OQ-1）：工程直接改库，下一次生成推荐序列即生效。
@@ -158,6 +165,14 @@ public class FeedRankConfig {
 
     public void setThrottleFactor(double v) {
         this.throttleFactor = v;
+    }
+
+    public double getAuthorLevelBoost() {
+        return authorLevelBoost;
+    }
+
+    public void setAuthorLevelBoost(double v) {
+        this.authorLevelBoost = v;
     }
 
     /** 科普新鲜度半衰期（小时，默认 720）。 */

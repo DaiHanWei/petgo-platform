@@ -14,6 +14,8 @@ import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/growth/presentation/exp_ledger_page.dart';
+import '../../features/growth/presentation/level_page.dart';
 import '../../features/notify/domain/app_update_controller.dart';
 import '../../features/notify/domain/app_version_check.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
@@ -1011,6 +1013,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
       // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
+      // V1.4.0 ① Tailrent Level（Story 1.5）：等级页 + EXP 明细页。受控（/me 前缀）；shell 外顶层隐 Tab。
+      GoRoute(path: LevelPage.location, builder: (c, s) => const LevelPage()),
+      GoRoute(path: ExpLedgerPage.location, builder: (c, s) => const ExpLedgerPage()),
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
       GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
       // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。

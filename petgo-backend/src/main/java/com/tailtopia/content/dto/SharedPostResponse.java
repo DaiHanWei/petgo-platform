@@ -15,6 +15,8 @@ import java.util.List;
  *
  * <p>同理没有 likeCount / commentCount / liked：那些是站内互动，
  * 未登录访客既看不到也不该看到。
+ *
+ * <p>V1.4.0 ① Story 3.1：加作者等级三字段（只是等级值，不是把手，不破坏上述边界）；注销 / 停用 / 无等级时省略。
  */
 public record SharedPostResponse(
         String authorNickname,
@@ -23,5 +25,8 @@ public record SharedPostResponse(
         String type,
         String body,
         List<String> imageUrls,
-        Instant createdAt) {
+        Instant createdAt,
+        Integer authorLevel,
+        String authorTier,
+        String authorFrame) {
 }

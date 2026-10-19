@@ -212,4 +212,24 @@ class PlaceDetailResponseContractTest {
         assertThat(m).doesNotContainKey("description");
         assertThat(m.get("photos")).isEqualTo(List.of());
     }
+
+    /**
+     * V1.4.0 ① Story 3.1（已核对的副作用）：{@code markedBy} 直接序列化 {@code AuthorView} → 有等级时多出嵌套
+     * {@code growth:{level,tier,frame}}；无等级时整体缺失。{@code badgeLevel()} 等辅助方法不带 get 前缀、不进 JSON。
+     */
+    @Test
+    void markedByCarriesNestedGrowthOnlyWhenPresent() {
+        AuthorView withGrowth = marker().withGrowth(new com.tailtopia.growth.domain.GrowthBadge(
+                12, com.tailtopia.growth.domain.GrowthTier.GUARDIAN, com.tailtopia.growth.domain.FrameChoice.UPGRADED));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> markedBy = (Map<String, Object>) wire(
+                PlaceDetailResponse.of(place(), withGrowth, TWO_PHOTOS, null, 0L, 0L, 0L, 7)).get("markedBy");
+        assertThat(markedBy.get("growth")).isEqualTo(Map.of("level", 12, "tier", "GUARDIAN", "frame", "UPGRADED"));
+        assertThat(markedBy).doesNotContainKeys("badgeLevel", "badgeTier", "badgeFrame");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> plain = (Map<String, Object>) wire(
+                PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L, 7)).get("markedBy");
+        assertThat(plain).doesNotContainKeys("growth", "badgeLevel", "badgeTier", "badgeFrame");
+    }
 }

@@ -55,6 +55,8 @@ public class AdminVirtualAccountController {
     private final AdminVirtualAccountService service;
     private final AdminPublishIdentityService identities;
     private final com.tailtopia.admin.seed.service.AdminSeedImageService images;
+    /** V1.4.0 ① Story 4.4：展示等级的读（列表 / 抽屉）；写经 service。 */
+    private final com.tailtopia.growth.service.GrowthDisplayLevelService growthDisplayLevels;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
@@ -62,11 +64,13 @@ public class AdminVirtualAccountController {
     public AdminVirtualAccountController(AdminVirtualAccountService service,
             Messages msg,
             AdminPublishIdentityService identities,
-            com.tailtopia.admin.seed.service.AdminSeedImageService images) {
+            com.tailtopia.admin.seed.service.AdminSeedImageService images,
+            com.tailtopia.growth.service.GrowthDisplayLevelService growthDisplayLevels) {
         this.service = service;
         this.msg = msg;
         this.identities = identities;
         this.images = images;
+        this.growthDisplayLevels = growthDisplayLevels;
     }
 
     /**
@@ -100,6 +104,9 @@ public class AdminVirtualAccountController {
         var rows = service.list(species, vq);
         model.addAttribute("accounts", rows);
         model.addAttribute("summary", service.summary(rows));
+        // V1.4.0 ① Story 4.4 · J1：当页全部虚拟号的展示等级一次批量读（不改 VirtualAccountRow）
+        model.addAttribute("displayLevels", growthDisplayLevels.displayLevels(
+                rows.stream().map(com.tailtopia.admin.virtual.dto.VirtualAccountRow::id).toList()));
         // 🔴🔴 区块二的数据**必须自己判权限**，不能靠模板上那句 sec:authorize 遮。
         //    整页上遮得住，但下面的 section 分流是**独立的 fragment 端点**，模板那层遮挡不存在：
         //    只持 virtual_account.view 的人请求 ?section=identities 就能拿到整个真实账号身份池
@@ -126,6 +133,7 @@ public class AdminVirtualAccountController {
                 default -> "admin/fragments/virtual-accounts-list :: rows(oob=true)";
             };
         }
+        populateOfficials(model); // 官方号区块只在整页里（htmx 分流的三块都不含它）
         return "admin/virtual-accounts";
     }
 
@@ -160,6 +168,20 @@ public class AdminVirtualAccountController {
         model.addAttribute("active", "virtual-accounts");
         model.addAttribute("a", service.one(id));
         model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
+        // V1.4.0 ① Story 4.4 · J2：展示等级卡（下拉 Lv1 ~ 等级表最高级，随追加自动变长）
+        model.addAttribute("displayLevel", growthDisplayLevels.displayLevels(List.of(id)).get(id));
+        model.addAttribute("displayLevelOptions", growthDisplayLevels.levelOptions());
+    }
+
+    /**
+     * 官方号区块（V1.4.0 ① Story 4.4 · P-7，2026-10-19 拍板落点）：官方号列表 + 一次批量读展示等级 + 下拉选项。
+     */
+    private void populateOfficials(Model model) {
+        var officials = service.listOfficial();
+        model.addAttribute("officials", officials);
+        model.addAttribute("officialDisplayLevels", growthDisplayLevels.displayLevels(
+                officials.stream().map(com.tailtopia.admin.virtual.dto.OfficialAccountRow::id).toList()));
+        model.addAttribute("displayLevelOptions", growthDisplayLevels.levelOptions());
     }
 
     /** 抽屉内处置成功统一响应：抽屉重渲染 + toast + 列表整表重拉（摘要条三格都要跟着变）。 */
@@ -245,6 +267,49 @@ public class AdminVirtualAccountController {
             service.setAccountSpecies(id, accountSpecies, admin.getAdminAccountId());
             flash.addFlashAttribute("notice",
                     msg.get("admin.flash.virtualAccount.speciesUpdated"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/virtual-accounts";
+    }
+
+    /** 改展示等级（V1.4.0 ① Story 4.4 · J2）：与物种定位同门、同写法（原生确认 + htmx / 非 htmx 两支）。 */
+    @PostMapping("/admin/virtual-accounts/{id}/display-level")
+    @PreAuthorize(AUTH)
+    public String setDisplayLevel(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, @RequestParam(value = "displayLevel", required = false) String displayLevel,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());
+            return afterAction(id, msg.get("admin.flash.growth.displayLevelSaved"), model, response);
+        }
+        try {
+            service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.growth.displayLevelSaved"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/virtual-accounts";
+    }
+
+    /**
+     * 改官方号展示等级（V1.4.0 ① Story 4.4 · P-7，2026-10-19 拍板落点）：与虚拟号展示等级同门、同一服务方法
+     * （目标须是虚拟号 / 官方号，真实用户 422；注销已提交 422；越界 422）。成功 → 官方号区块整块 oob + toast。
+     */
+    @PostMapping("/admin/virtual-accounts/official/{id}/display-level")
+    @PreAuthorize(AUTH)
+    public String setOfficialDisplayLevel(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable long id, @RequestParam(value = "displayLevel", required = false) String displayLevel,
+            HxRequest hx, Model model, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());
+            populateOfficials(model);
+            model.addAttribute("toast", msg.get("admin.flash.growth.displayLevelSaved"));
+            return "admin/fragments/official-accounts :: saved";
+        }
+        try {
+            service.setDisplayLevel(id, displayLevel, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.growth.displayLevelSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }

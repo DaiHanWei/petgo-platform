@@ -179,4 +179,9 @@ public class AppException extends RuntimeException {
     public static AppException followBlocked(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.FOLLOW_BLOCKED, detail);
     }
+
+    /** 头像框未解锁（V1.4.0 ① Story 3.3）：{@code detail} 只写英文技术说明，不含用户数据。 */
+    public static AppException frameLocked(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.FRAME_LOCKED, detail);
+    }
 }

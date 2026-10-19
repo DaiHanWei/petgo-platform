@@ -56,11 +56,16 @@ public class AdminUserController {
     /** V1.3.2 后台 AB-23：已购解锁页签取数（随抽屉同一次渲染，切页签不再请求）。 */
     private final com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases;
 
+    /** V1.4.0 ① Story 4.2：「成长值」页签取数（随抽屉同一次渲染）。 */
+    private final com.tailtopia.admin.growth.service.AdminGrowthUserService growth;
+
     public AdminUserController(AdminUserService adminUserService,
-            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases) {
+            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases,
+            com.tailtopia.admin.growth.service.AdminGrowthUserService growth) {
         this.adminUserService = adminUserService;
         this.msg = msg;
         this.purchases = purchases;
+        this.growth = growth;
     }
 
     @GetMapping("/admin/users")
@@ -129,6 +134,9 @@ public class AdminUserController {
         model.addAttribute("purchases", purchases.forUser(userId));
         // 赠币表单一次性幂等 token（bug 20260728-389）：防双击/回退重提交重复入账。
         model.addAttribute("grantToken", java.util.UUID.randomUUID().toString());
+        // 第七页签「成长值」（V1.4.0 ① Story 4.2）：概览 + 明细第 1 页；调整表单另用一枚一次性 token（幂等键 ADMIN:{token}）。
+        model.addAttribute("growthTab", growth.tab(userId));
+        model.addAttribute("growthGrantToken", java.util.UUID.randomUUID().toString());
     }
 
     /**

@@ -25,13 +25,17 @@ class AdminVirtualAccountServiceTest {
 
     private UserRepository users;
     private AdminAuditService audit;
+    private com.tailtopia.growth.service.GrowthDisplayLevelService displayLevels;
+    private com.tailtopia.account.repository.AccountDeletionRepository deletions;
     private AdminVirtualAccountService svc;
 
     @BeforeEach
     void setUp() {
         users = Mockito.mock(UserRepository.class);
         audit = Mockito.mock(AdminAuditService.class);
-        svc = new AdminVirtualAccountService(users, audit);
+        displayLevels = Mockito.mock(com.tailtopia.growth.service.GrowthDisplayLevelService.class);
+        deletions = Mockito.mock(com.tailtopia.account.repository.AccountDeletionRepository.class);
+        svc = new AdminVirtualAccountService(users, audit, displayLevels, deletions);
     }
 
     @Test
@@ -55,6 +59,8 @@ class AdminVirtualAccountServiceTest {
         long id = svc.create("汪星人", "https://x/a.jpg", 7L);
         assertThat(id).isEqualTo(42L);
         verify(audit).record(eq(7L), eq("VIRTUAL_ACCOUNT_CREATE"), anyString(), eq("42"), anyString());
+        // V1.4.0 ① Story 2.2 · AC4：新建虚拟号随机展示等级（表单不加字段）。
+        verify(displayLevels).assignInitial(42L);
     }
 
     private static void setId(User u, long id) {
@@ -71,6 +77,7 @@ class AdminVirtualAccountServiceTest {
     void createRejectsBlankNickname() {
         assertThatThrownBy(() -> svc.create("  ", null, 7L)).isInstanceOf(AppException.class);
         verify(users, never()).save(any());
+        verify(displayLevels, never()).assignInitial(org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test
@@ -103,5 +110,119 @@ class AdminVirtualAccountServiceTest {
         svc.setEnabled(5L, true, 7L); // 已启用
         verify(users, never()).save(any());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    // ------------------------------------------------------------------ V1.4.0 ① Story 4.4 展示等级
+
+    private User virtual(long id) {
+        User u = User.newVirtual("virtual:x" + id, "喵星人", null, 7L);
+        setId(u, id);
+        when(users.findById(id)).thenReturn(java.util.Optional.of(u));
+        return u;
+    }
+
+    @Test
+    void setDisplayLevelWritesThroughGrowthAndAudits() {
+        virtual(5L);
+        when(displayLevels.set(5L, 12)).thenReturn(new com.tailtopia.growth.service.GrowthDisplayLevelService.Change(7, 12,
+                true));
+
+        svc.setDisplayLevel(5L, "12", 99L);
+
+        verify(displayLevels).set(5L, 12);
+        verify(audit).record(99L, com.tailtopia.admin.audit.service.AuditActions.GROWTH_DISPLAY_LEVEL_CHANGED, "user",
+                "5", "displayLevel 7→12");
+    }
+
+    @Test
+    void setDisplayLevelFromUninitializedAuditsDash() {
+        virtual(5L);
+        when(displayLevels.set(5L, 3)).thenReturn(new com.tailtopia.growth.service.GrowthDisplayLevelService.Change(null, 3,
+                true));
+        svc.setDisplayLevel(5L, "3", 99L);
+        verify(audit).record(eq(99L), anyString(), eq("user"), eq("5"), eq("displayLevel —→3"));
+    }
+
+    @Test
+    void unchangedDisplayLevelWritesNoAudit() {
+        virtual(5L);
+        when(displayLevels.set(5L, 7)).thenReturn(new com.tailtopia.growth.service.GrowthDisplayLevelService.Change(7, 7,
+                false));
+        svc.setDisplayLevel(5L, "7", 99L);
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void displayLevelOnlyForVirtualOfficialAndExistingAccounts() {
+        User real = User.newGoogleUser("g-1", "a@b.c", "Ana", null);
+        setId(real, 6L);
+        when(users.findById(6L)).thenReturn(java.util.Optional.of(real));
+        assertThatThrownBy(() -> svc.setDisplayLevel(6L, "5", 99L))
+                .satisfies(t -> assertThat(((com.tailtopia.shared.error.AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.display.syntheticOnly"));
+        when(users.findById(8L)).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> svc.setDisplayLevel(8L, "5", 99L))
+                .satisfies(t -> assertThat(((com.tailtopia.shared.error.AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.virtualAccount.accountNotFound"));
+        verify(displayLevels, never()).set(anyLong(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void nonNumericDisplayLevelIsRangeChecked() {
+        virtual(5L);
+        when(displayLevels.set(5L, 0)).thenThrow(com.tailtopia.shared.error.AppException.validation("x")
+                .code("admin.err.growth.display.outOfRange", 20));
+        assertThatThrownBy(() -> svc.setDisplayLevel(5L, "Lv3", 99L))
+                .satisfies(t -> assertThat(((com.tailtopia.shared.error.AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.display.outOfRange"));
+    }
+
+    // ------------------------------------------------------------------ P-7 官方号（2026-10-19 拍板：落「运营发布身份」页）
+
+    private User official(long id) {
+        User u = User.newAdmin("official-" + id + "@t.test", "TailUs", "{bcrypt}x");
+        setId(u, id);
+        when(users.findById(id)).thenReturn(java.util.Optional.of(u));
+        return u;
+    }
+
+    @Test
+    void officialDisplayLevelWritesAndAudits() {
+        official(9L);
+        when(displayLevels.set(9L, 12)).thenReturn(new com.tailtopia.growth.service.GrowthDisplayLevelService.Change(7,
+                12, true));
+        svc.setDisplayLevel(9L, "12", 99L);
+        verify(displayLevels).set(9L, 12);
+        verify(audit).record(99L, com.tailtopia.admin.audit.service.AuditActions.GROWTH_DISPLAY_LEVEL_CHANGED, "user",
+                "9", "displayLevel 7→12");
+    }
+
+    @Test
+    void vetIsNotOfficialAndGets422() {
+        User vet = User.newGoogleUser("g-vet", "v@b.c", "Vet", null);
+        setId(vet, 10L);
+        org.springframework.test.util.ReflectionTestUtils.setField(vet, "role", com.tailtopia.auth.domain.Role.VET);
+        when(users.findById(10L)).thenReturn(java.util.Optional.of(vet));
+        assertThatThrownBy(() -> svc.setDisplayLevel(10L, "5", 99L))
+                .satisfies(t -> assertThat(((com.tailtopia.shared.error.AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.display.syntheticOnly"));
+        verify(displayLevels, never()).set(anyLong(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void deletionSubmittedOrDeletedIsRejected() {
+        official(9L);
+        when(deletions.findByUserId(9L)).thenReturn(java.util.Optional.of(
+                com.tailtopia.account.domain.AccountDeletion.request(9L)));
+        assertThatThrownBy(() -> svc.setDisplayLevel(9L, "5", 99L))
+                .satisfies(t -> assertThat(((com.tailtopia.shared.error.AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.userInactive"));
+
+        User gone = official(11L);
+        gone.anonymizeForDeletion(java.time.Instant.now());
+        assertThatThrownBy(() -> svc.setDisplayLevel(11L, "5", 99L))
+                .satisfies(t -> assertThat(((com.tailtopia.shared.error.AppException) t).getMessageCode())
+                        .isEqualTo("admin.err.growth.userInactive"));
+        verify(displayLevels, never()).set(anyLong(), org.mockito.ArgumentMatchers.anyInt());
     }
 }

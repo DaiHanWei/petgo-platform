@@ -14,6 +14,7 @@ import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.LikeResponse;
 import com.tailtopia.content.event.ContentLikedEvent;
+import com.tailtopia.content.event.ContentUnlikedEvent;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.shared.error.AppException;
@@ -79,7 +80,7 @@ class LikeServiceTest {
 
         service.like(1L, 7L); // 自赞
         verify(likes).save(any(ContentLike.class));
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -92,7 +93,7 @@ class LikeServiceTest {
         assertThat(r.liked()).isTrue();
         assertThat(r.likeCount()).isEqualTo(1L);
         verify(likes, never()).save(any());
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -104,7 +105,29 @@ class LikeServiceTest {
         assertThat(r.liked()).isFalse();
         assertThat(r.likeCount()).isZero();
         verify(likes, times(1)).deleteByPostIdAndUserId(1L, 9L);
-        verify(events, never()).publishEvent(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    /** V1.4.0 ① Story 1.1 · AD-7：真删到行且非自赞 → 发 ContentUnlikedEvent（扣回点赞成长值）。 */
+    @Test
+    void unlikeThatDeletedARowPublishesUnlikedEvent() {
+        postBy(1L, 7L);
+        when(likes.deleteByPostIdAndUserId(1L, 9L)).thenReturn(1);
+
+        service.unlike(1L, 9L);
+
+        verify(events, times(1)).publishEvent(new ContentUnlikedEvent(1L, 9L, 7L));
+    }
+
+    /** 自赞后取消：本就没有点赞事件，取消也不发。 */
+    @Test
+    void unlikeOwnPostDoesNotPublish() {
+        postBy(1L, 7L);
+        when(likes.deleteByPostIdAndUserId(1L, 7L)).thenReturn(1);
+
+        service.unlike(1L, 7L);
+
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test

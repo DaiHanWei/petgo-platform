@@ -13,6 +13,7 @@ import static com.tailtopia.admin.account.domain.AdminPermissions.CONTENT_RESTOR
 import static com.tailtopia.admin.account.domain.AdminPermissions.CONTENT_TAKEDOWN;
 import static com.tailtopia.admin.account.domain.AdminPermissions.CONTENT_VIEW;
 import static com.tailtopia.admin.account.domain.AdminPermissions.CONTENT_VIEW_REPORTS;
+import static com.tailtopia.admin.account.domain.AdminPermissions.GROWTH_USER_ADJUST;
 import static com.tailtopia.admin.account.domain.AdminPermissions.ORDER_EDIT;
 import static com.tailtopia.admin.account.domain.AdminPermissions.ORDER_EXPORT;
 import static com.tailtopia.admin.account.domain.AdminPermissions.ORDER_VIEW;
@@ -96,6 +97,9 @@ public enum AdminRole {
      * 库存变更、订单履约、审计与账号只读。
      *
      * <p>⚠️ 无 {@code shop.cost_edit}，故「采购入库」（须填进货单价，S-9）做不了，只能做报损/盘点调整。
+     *
+     * <p>V1.4.0 P-5：{@code growth.user_adjust}（调整用户 EXP）按 PRD 预授，偏离「新码不预授」惯例（Story 4.2）。
+     * OPS_MANAGER 不在 {@code admin_roles} 表里（D-13），预授只能落在这里，不建迁移。
      */
     OPS_MANAGER(List.of(
             CONTENT_VIEW_REPORTS, CONTENT_VIEW, CONTENT_TAKEDOWN, CONTENT_RESTORE,
@@ -113,7 +117,8 @@ public enum AdminRole {
             SHOP_PRODUCT_VIEW, SHOP_PRODUCT_EDIT,
             SHOP_INVENTORY_VIEW, SHOP_INVENTORY_EDIT,
             SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL,
-            ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS)),
+            ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
+            GROWTH_USER_ADJUST)), // V1.4.0 P-5：按 PRD 预授，偏离『新码不预授』惯例（Story 4.2）
 
     /**
      * 运营专员：内容审核、商品与活动维护、社区与用户只读。

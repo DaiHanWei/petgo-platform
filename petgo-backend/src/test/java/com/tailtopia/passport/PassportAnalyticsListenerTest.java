@@ -30,7 +30,7 @@ class PassportAnalyticsListenerTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     void newStampEmitsCheckinAndStamped() {
         listener.onCheckedIn(new PlaceCheckedInEvent(7L, "tok".repeat(10), PlaceType.PARK, true, 3,
-                java.util.List.of(5L)));
+                java.util.List.of(5L), 11L));
 
         ArgumentCaptor<Map> checkin = ArgumentCaptor.forClass(Map.class);
         verify(analytics).capture(anyString(), eq("place_checkin"), checkin.capture());
@@ -50,7 +50,7 @@ class PassportAnalyticsListenerTest {
     @Test
     void repeatVisitDoesNotEmitStamped() {
         listener.onCheckedIn(new PlaceCheckedInEvent(7L, "t".repeat(32), PlaceType.CAFE, false, 3,
-                java.util.List.of(5L)));
+                java.util.List.of(5L), 11L));
         verify(analytics, never()).capture(anyString(), eq("passport_stamped"), anyMap());
     }
 

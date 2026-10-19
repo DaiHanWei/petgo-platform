@@ -109,16 +109,30 @@ class _AvatarItem extends StatelessWidget {
         width: FollowingStrip._itemWidth,
         child: Column(
           children: [
-            Container(
-              width: FollowingStrip._outer,
-              height: FollowingStrip._outer,
-              padding: const EdgeInsets.all(FollowingStrip._gap),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.mint, width: FollowingStrip._ring),
+            // V1.4.0 ① Story 3.2（A8）：戴框 → 头像框替代紫色装饰环（66 格内居中）；没戴框 → 紫环原样 + 数字角标。
+            if (user.badge?.frame != null)
+              SizedBox(
+                key: const ValueKey('followingStripFramed'),
+                width: FollowingStrip._outer,
+                height: FollowingStrip._outer,
+                child: Center(
+                  child: LetterAvatar(
+                      url: user.avatarUrl, name: name, size: FollowingStrip._avatar, growth: user.badge),
+                ),
+              )
+            else
+              Container(
+                key: const ValueKey('followingStripRing'),
+                width: FollowingStrip._outer,
+                height: FollowingStrip._outer,
+                padding: const EdgeInsets.all(FollowingStrip._gap),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.mint, width: FollowingStrip._ring),
+                ),
+                child: LetterAvatar(
+                    url: user.avatarUrl, name: name, size: FollowingStrip._avatar, growth: user.badge),
               ),
-              child: LetterAvatar(url: user.avatarUrl, name: name, size: FollowingStrip._avatar),
-            ),
             const SizedBox(height: 8),
             Text(
               name,

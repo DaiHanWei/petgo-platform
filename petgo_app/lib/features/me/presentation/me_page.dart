@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -13,6 +14,10 @@ import '../../../shared/widgets/post_grid_tile.dart';
 import '../../../shared/widgets/profile_stats_row.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_response.dart';
+import '../../growth/domain/growth_badge.dart';
+import '../../growth/domain/growth_models.dart';
+import '../../growth/presentation/level_capsule.dart';
+import '../../growth/presentation/level_page.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/pet_profile.dart';
@@ -80,6 +85,9 @@ class MePage extends ConsumerWidget {
           _ProfileHeadCard(
             profile: profile,
             onAvatarTap: () => changeAvatar(context, ref),
+            // V1.4.0 ① Story 1.5：等级胶囊与四格同一取数路径（meCountsProvider，回落登录态）；null → 不显示。
+            //    `/me` 已加载就以它为准（null = 不参与 → 不显示），只在还没拿到时回落登录态。
+            growth: _growthOf(ref.watch(meCountsProvider(profile?.id)).value, profile),
           ),
           const SizedBox(height: AppSpacing.md),
           // ② 四格（AC2.2）。Mengikuti / Pengikut 本 story 不可点（Story 2.2 接关注列表）。
@@ -106,6 +114,9 @@ class MePage extends ConsumerWidget {
   }
 
 }
+
+GrowthBrief? _growthOf(MeCounts? counts, UserProfile? profile) =>
+    counts != null ? counts.growth : profile?.growth;
 
 /// 小节标题（V1.3.4 Story 1.4）：12 / w700 / 大写 / letterSpacing 0.6 / `muted` ——
 /// 与他人主页的 Hewan / Postingan 同款。
@@ -433,10 +444,13 @@ class _ActivitySection extends StatelessWidget {
 /// ⚠️ **邮箱不再展示**（PRD OQ-6 / UI 稿 A1）；`UserProfile.email` 字段与 `/me` 接口不动。
 /// 宠物区已移出为独立小节「Hewanku」（[_PetZone]）。
 class _ProfileHeadCard extends StatelessWidget {
-  const _ProfileHeadCard({required this.profile, this.onAvatarTap});
+  const _ProfileHeadCard({required this.profile, this.onAvatarTap, this.growth});
 
   final UserProfile? profile;
   final VoidCallback? onAvatarTap; // Story B：点头像换图(上传)
+
+  /// V1.4.0 ① Story 1.5：等级胶囊数据；null（不参与 / 旧后端 / 还没被 `/me` 刷新）→ 不显示、不占位、不闪「Lv1」。
+  final GrowthBrief? growth;
 
   @override
   Widget build(BuildContext context) {
@@ -450,7 +464,13 @@ class _ProfileHeadCard extends StatelessWidget {
           onTap: onAvatarTap,
           child: Stack(
             children: [
-              InitialAvatar(avatarUrl: profile?.avatarUrl, nickname: name, radius: 42),
+              // V1.4.0 ① Story 3.2（A6）：只戴框、不放等级角标（等级看下方胶囊）；相机角标仍在最上层。
+              InitialAvatar(
+                  avatarUrl: profile?.avatarUrl,
+                  nickname: name,
+                  radius: 42,
+                  growth: GrowthBadge.fromBrief(growth),
+                  showLevelBadge: false),
               Positioned(
                 right: 0,
                 bottom: 0,
@@ -475,6 +495,17 @@ class _ProfileHeadCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
         ),
+        // V1.4.0 ① Story 1.5 · AC1：昵称下方、签名上方的等级胶囊（「我的」页头像本 story 不加框）。
+        if (growth != null) ...[
+          const SizedBox(height: 6),
+          GrowthLevelCapsule(
+            brief: growth!,
+            onTap: () {
+              Analytics.capture('growth_level_page_viewed', {'source': 'me_page'});
+              context.push(LevelPage.location);
+            },
+          ),
+        ],
         // 一句话个性签名（bug 20260721-327）。
         if (signature.isNotEmpty) ...[
           const SizedBox(height: 4),

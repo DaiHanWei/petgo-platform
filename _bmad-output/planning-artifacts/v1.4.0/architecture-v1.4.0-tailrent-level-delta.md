@@ -245,6 +245,23 @@ code_baseline: dev_1.4.0 @ 81005da7（= main 5ec8a2e4 + 地基 Story 0.1）
 - 被动合计与日额度有并发测试（两线程同时入账不超上限）。
 - 退款扣回覆盖：部分退款、多次累计不超扣、原流水未入账不扣。
 
+**5.8 消费返 / 退款扣回 ref 口径表（Story 1.3 核对代码后定稿，2026-10-18）**
+
+| 用途 | 付款路径 | 消费信号 | 消费流水 ref / 幂等键 | 退款发布点 | 退款定位 |
+|---|---|---|---|---|---|
+| `VET_CONSULT` | QRIS | `PaymentIntentPaidEvent` | (`VET_CONSULT`, intentId) / `SPEND:PI:{intentId}` | `RefundService.refundToPawCoin` / `payoutRefund`、`ConsultSuspensionService`（仅 PawCoin 分支） | `paymentIntentId` → `SPEND:PI` |
+| `VET_CONSULT` | 纯币 | `ConsultPaidByPawCoinEvent`（新增；`PawCoinSpentEvent` 排除 `VET_CONSULT`） | (`VET_CONSULT`, consultOrderId) / `SPEND:COIN:vet-consult-order:{id}` | 同上 | (`VET_CONSULT`, consultOrderId) |
+| `AI_UNLOCK` | QRIS / 纯币 | PI / `PawCoinSpentEvent` | (`AI_UNLOCK`, intentId) / (`AI_UNLOCK`, taskId) | 无退款路径 | — |
+| `ID_HD` | QRIS / 纯币 | PI / Coin | (`ID_HD`, intentId) / (`ID_HD`, cardId 或 petProfileId) | 无 | — |
+| `TAILSONALITY` / `PASSPORT_SNAP` / `BOARDING_PASS` / `TS_MATCH` | QRIS / 纯币 | PI / Coin | (purpose, intentId) / (sku, refId) | 无 | — |
+| `SHOP_ORDER` | QRIS / MIXED / 纯币 | `ShopOrderPaidEvent`（`paidTotal` = 币段 + 现金段） | (`SHOP_ORDER`, shopOrderId) / `SPEND:SHOP:{id}` | `RefundExecutionService.execute`（含 TO_BANK，置 REFUNDED 即扣）、`AdminShopOrderExceptionService.cancelWholeOrder`（仅币段） | (`SHOP_ORDER`, shopOrderId) |
+| `PET_SLOT_RENT`（②） | 由 ② 定 | PI / Coin（refType 须为 `PET_SLOT_RENT`） | 自动按 DIGITAL | ② 若有退款须发 `RefundSucceededEvent` | — |
+| `PAWCOIN_TOPUP` | QRIS | 过滤 | — | — | — |
+| `GIFT`（③） | QRIS / 纯币 | 过滤（③ 的 `debit` refType 须为 `GIFT`） | 走 `GiftSentEvent` | 不退款 | — |
+
+- 扣回幂等键 `REV:{原流水 id}:REFUND:{refundKey}`；咨询退款一律按 `order.amount` 全额扣回（打款净额含手续费差额不计）。
+- 已知缺口（P-10）：问诊中断 QRIS 分支只置 REFUNDING、电商异常单整单取消的现金段无退款成功落点 → 暂不扣回。
+
 ## 6. 项目结构与边界
 
 **6.1 后端新增**（`petgo-backend/src/main/java/com/tailtopia/`）

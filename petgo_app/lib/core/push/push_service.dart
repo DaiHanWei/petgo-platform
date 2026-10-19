@@ -1,3 +1,4 @@
+import '../../features/growth/domain/growth_popup_trigger.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -58,8 +59,11 @@ void reportOpsNotificationOpenedFromPush(PushPayload p) {
 ///
 /// - [hasToken] 为真 ⇒ 通知类（通知中心有对应行）⇒ 落通知中心。
 /// - 否则 ⇒ IM 会话消息（中心无条目）⇒ 落其深链目标（会话）；深链本身兜底为通知中心时按原样返回。
-String pushClickLocation({required bool hasToken, required String deepLink}) =>
-    hasToken ? DeepLinkRoutes.notificationsCenter : deepLink;
+/// - **单类型例外**（V1.4.0 ① P-8，UI 稿 F2）：`GROWTH_LEVEL_UP` 直达深链目标（等级页）。
+String pushClickLocation({required bool hasToken, required String deepLink, String? type}) {
+  if (type == 'GROWTH_LEVEL_UP') return deepLink;
+  return hasToken ? DeepLinkRoutes.notificationsCenter : deepLink;
+}
 
 /// 是否可以注册离线推送（纯判定，L0 可测）。
 ///
@@ -249,7 +253,7 @@ class PushService {
           targetRef: p.targetRef,
         );
         location = pushClickLocation(
-            hasToken: p.token != null && p.token!.isNotEmpty, deepLink: deepLink);
+            hasToken: p.token != null && p.token!.isNotEmpty, deepLink: deepLink, type: p.type);
       } catch (_) {
         // 标记已读/映射失败 → 兜底通知中心。
         location = DeepLinkRoutes.notificationsCenter;
@@ -258,6 +262,11 @@ class PushService {
         _navigate(location);
       } catch (_) {
         // 导航失败吞掉（router 未就绪等极端态）。
+      }
+      // V1.4.0 ① Story 2.3：升级推送直达等级页 → 上报来源 + 拉一次待弹庆祝。
+      if (p.type == 'GROWTH_LEVEL_UP' && location != DeepLinkRoutes.notificationsCenter) {
+        Analytics.capture('growth_level_page_viewed', {'source': 'notification'});
+        growthPopupTrigger.request(GrowthPullReason.pushClicked);
       }
     });
   }

@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
@@ -125,8 +126,16 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
             @Param("ts") Instant ts, @Param("lastId") long lastId,
             org.springframework.data.domain.Pageable pageable);
 
+    /**
+     * 取消点赞：返回删除行数（V1.4.0 ① Story 1.1：0 = 本就未赞，不发 {@code ContentUnlikedEvent}）。
+     *
+     * <p>⚠️ 单条 bulk DELETE，不用派生删除：派生删除是「先 load 再 remove」，双击并发时两边都 load 到行，
+     * 后 flush 的一方删 0 行会抛 {@code StaleStateException} → 500，破坏幂等语义。
+     */
     @Transactional
-    void deleteByPostIdAndUserId(long postId, long userId);
+    @Modifying
+    @Query("delete from ContentLike l where l.postId = :postId and l.userId = :userId")
+    int deleteByPostIdAndUserId(@Param("postId") long postId, @Param("userId") long userId);
 
     /** 内容删除级联：物理清该帖全部点赞（点赞无保留价值，Story 3.6）。 */
     @Transactional
