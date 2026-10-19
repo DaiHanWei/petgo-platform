@@ -120,11 +120,11 @@
                       hx-target="#user-drawer-err" hx-swap="innerHTML">
                     <!--/* 一次性幂等 token：每次渲染本页签都换一个新的（补发成功后面板重渲染 = 新 token）。 */-->
                     <input type="hidden" name="grantToken" th:value="${petSlotGrantToken}"/>
-                    <input type="number" name="days" class="inp" min="1" max="365" step="1"
+                    <input type="number" name="days" class="inp ps-days" min="1" max="365" step="1"
                            th:placeholder="#{admin.v140.petSlots.grant.days}" th:disabled="${ps.full()}" required/>
                     <input type="text" name="reason" class="inp" maxlength="200"
                            th:placeholder="#{admin.v140.petSlots.grant.reason}" th:disabled="${ps.full()}" required/>
-                    <button type="submit" class="btn" th:disabled="${ps.full()}"
+                    <button type="submit" class="btn btn-primary" th:disabled="${ps.full()}"
                             th:text="#{admin.v140.petSlots.grant.submit}">补发</button>
                 </form>
                 <p class="hint" th:if="${ps.full()}" th:text="#{admin.v140.petSlots.grant.full}">已达 5 个名额上限，不能再补发</p>
@@ -135,9 +135,9 @@
                  sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('user.pet_slot_adjust'))">
                 <h3 th:text="#{admin.v140.petSlots.grant.title}">补发名额</h3>
                 <div class="inline">
-                    <input type="number" class="inp" disabled th:placeholder="#{admin.v140.petSlots.grant.days}"/>
+                    <input type="number" class="inp ps-days" disabled th:placeholder="#{admin.v140.petSlots.grant.days}"/>
                     <input type="text" class="inp" disabled th:placeholder="#{admin.v140.petSlots.grant.reason}"/>
-                    <button type="button" class="btn" disabled
+                    <button type="button" class="btn btn-primary" disabled
                             th:title="#{admin.v130.err.forbidden(#{perm.user.pet_slot_adjust})}"
                             th:text="#{admin.v140.petSlots.grant.submit}">补发</button>
                 </div>

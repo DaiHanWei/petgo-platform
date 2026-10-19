@@ -37,7 +37,7 @@ class AdminGiftOrderQueryServiceTest {
 
     static GiftOrderAdminRow row(String status, String channel, String intentToken) {
         return new GiftOrderAdminRow(Instant.parse("2026-10-17T06:20:00Z"), 10233L, "Andi", false, 10241L, "Rina",
-                false, "Mochi", false, "Salmon", "Salmon ID", 5000L, 2, 10000L, channel, status, null, 0, null,
+                false, "Mochi", false, "Salmon", "Salmon ID", "https://cdn.example/gift.png", 5000L, 2, 10000L, channel, status, null, 0, null,
                 intentToken);
     }
 

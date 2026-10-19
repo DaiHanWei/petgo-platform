@@ -36,7 +36,8 @@
                 <span th:case="*" th:text="${r.dailyCap != null} ? #{admin.v140.growth.cell.times(${r.dailyCap})} : #{admin.v140.growth.cell.unlimited}">不限</span>
             </td>
             <td th:text="${r.capGroup == 'PASSIVE'} ? #{admin.v140.growth.cell.passiveGroup(${rules.passiveGroupCap})} : '—'">—</td>
-            <td th:text="${r.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</td>
+            <td><span class="badge" th:classappend="${r.enabled} ? 'badge-ok' : 'badge-muted'"
+                      th:text="${r.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</span></td>
             <td>
                 <th:block th:if="${r.editable()}">
                     <button type="button" class="btn btn-neutral btn-sm" th:if="${canEdit}"

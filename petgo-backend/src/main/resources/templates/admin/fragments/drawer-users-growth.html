@@ -67,17 +67,22 @@
                   hx-target="#user-drawer-err" hx-swap="innerHTML">
                 <!--/* 一次性幂等 token：调整成功后本面板重渲染 = 新 token（幂等键 ADMIN:{token}）。 */-->
                 <input type="hidden" name="grantToken" th:value="${growthGrantToken}"/>
-                <label><input type="radio" name="type" value="ADMIN_ADJUST" checked th:disabled="${off}"
-                              th:attr="data-placeholder=#{admin.v140.growth.adjust.reason}"/>
-                    <span th:text="#{admin.v140.growth.adjust.type.ADMIN_ADJUST}">普通调整</span></label>
-                <label><input type="radio" name="type" value="OPS_CAMPAIGN" th:disabled="${off}"
-                              th:attr="data-placeholder=#{admin.v140.growth.adjust.campaign}"/>
-                    <span th:text="#{admin.v140.growth.adjust.type.OPS_CAMPAIGN}">运营活动</span></label>
-                <input type="number" name="delta" class="inp" step="1" required th:disabled="${off}"
-                       th:placeholder="#{admin.v140.growth.adjust.delta}"/>
-                <input type="text" name="note" class="inp" maxlength="200" required th:disabled="${off}"
-                       th:placeholder="#{admin.v140.growth.adjust.reason}" data-growth-note/>
-                <button type="submit" class="btn" th:disabled="${off}" th:text="#{admin.v140.growth.adjust.submit}">调整</button>
+                <!--/* UI I1：单选横排（复用运营弹窗 .opsp-rad 圆环样式），输入框 + 紫色「调整」同一行。 */-->
+                <div class="opsp-rad growth-adjust-types">
+                    <label><input type="radio" name="type" value="ADMIN_ADJUST" checked th:disabled="${off}"
+                                  th:attr="data-placeholder=#{admin.v140.growth.adjust.reason}"/>
+                        <span th:text="#{admin.v140.growth.adjust.type.ADMIN_ADJUST}">普通调整</span></label>
+                    <label><input type="radio" name="type" value="OPS_CAMPAIGN" th:disabled="${off}"
+                                  th:attr="data-placeholder=#{admin.v140.growth.adjust.campaign}"/>
+                        <span th:text="#{admin.v140.growth.adjust.type.OPS_CAMPAIGN}">运营活动</span></label>
+                </div>
+                <div class="growth-adjust-row">
+                    <input type="number" name="delta" class="inp" step="1" required th:disabled="${off}"
+                           th:placeholder="#{admin.v140.growth.adjust.delta}"/>
+                    <input type="text" name="note" class="inp" maxlength="200" required th:disabled="${off}"
+                           th:placeholder="#{admin.v140.growth.adjust.reason}" data-growth-note/>
+                    <button type="submit" class="btn btn-primary" th:disabled="${off}" th:text="#{admin.v140.growth.adjust.submit}">调整</button>
+                </div>
             </form>
             <p class="hint" th:unless="${canAdjust}" data-growth-adjust-forbidden
                th:text="#{admin.v130.err.forbidden(#{perm.growth.user_adjust})}">需要「调整用户 EXP」权限</p>

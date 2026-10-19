@@ -16,6 +16,7 @@ import java.util.Set;
  * <p>🔴 不带 {@code payment_intent_id} 数字（不外露自增 id）：QRIS 单只带 {@code payment_intents.public_token}；
  * 不带 {@code refund_error}（可能含内部异常类名，AC3.1）。
  *
+ * @param giftIconUrl 下单时的礼物图标快照 {@code gift_orders.gift_icon_url}（同样不读目录当前图，UI M1「礼物」列图标）
  * @param intentToken QRIS 单的支付意图对外 token；PawCoin 单为 {@code null}
  */
 public record GiftOrderAdminRow(
@@ -30,6 +31,7 @@ public record GiftOrderAdminRow(
         boolean petDeleted,
         String giftNameEn,
         String giftNameId,
+        String giftIconUrl,
         long unitPrice,
         int quantity,
         long total,

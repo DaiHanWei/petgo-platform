@@ -16,15 +16,32 @@
     <span th:fragment="gspend-title" th:text="#{admin.v140.growth.tab.spend}">消费换算</span>
     <div th:fragment="gspend-form" data-section="growth-spend">
       <h3 th:text="#{admin.v140.growth.spend.ratioTitle}">换算比例</h3>
-      <div class="cfg-grid-2">
-        <label class="field"><span th:text="#{admin.v140.growth.spend.digital} + ' · ' + #{admin.v140.growth.drawer.unitAmount}">数字服务 · 每 Rp</span>
-          <input class="inp field-full" type="number" min="1" step="1" name="digitalUnit" th:value="${spend.digitalUnit}" th:disabled="${!canEdit}"/></label>
-        <label class="field"><span th:text="#{admin.v140.growth.spend.digital} + ' · EXP'">数字服务 · EXP</span>
-          <input class="inp field-full" type="number" min="1" step="1" name="digitalPoints" th:value="${spend.digitalPoints}" th:disabled="${!canEdit}"/></label>
-        <label class="field"><span th:text="#{admin.v140.growth.spend.toko} + ' · ' + #{admin.v140.growth.drawer.unitAmount}">Toko · 每 Rp</span>
-          <input class="inp field-full" type="number" min="1" step="1" name="tokoUnit" th:value="${spend.tokoUnit}" th:disabled="${!canEdit}"/></label>
-        <label class="field"><span th:text="#{admin.v140.growth.spend.toko} + ' · EXP'">Toko · EXP</span>
-          <input class="inp field-full" type="number" min="1" step="1" name="tokoPoints" th:value="${spend.tokoPoints}" th:disabled="${!canEdit}"/></label>
+      <!--/* UI G4：每档一行「每 Rp [__] = [__] EXP」。每个输入仍包在 label 里、首个 span（hidden）= diff 复述用的字段名。 */-->
+      <div class="cfg-grid-2 growth-ratio">
+        <div>
+          <div class="growth-ratio-lbl" th:text="#{admin.v140.growth.spend.digital}">数字服务</div>
+          <div class="growth-ratio-line">
+            <label><span hidden th:text="#{admin.v140.growth.spend.digital} + ' · ' + #{admin.v140.growth.drawer.unitAmount}">数字服务 · 每 Rp</span><span
+                  th:text="#{admin.v140.growth.drawer.unitAmount}">每 Rp</span>
+              <input class="inp" type="number" min="1" step="1" name="digitalUnit" th:value="${spend.digitalUnit}" th:disabled="${!canEdit}"/></label>
+            <span>=</span>
+            <label><span hidden th:text="#{admin.v140.growth.spend.digital} + ' · EXP'">数字服务 · EXP</span>
+              <input class="inp" type="number" min="1" step="1" name="digitalPoints" th:value="${spend.digitalPoints}" th:disabled="${!canEdit}"/>
+              <span>EXP</span></label>
+          </div>
+        </div>
+        <div>
+          <div class="growth-ratio-lbl" th:text="#{admin.v140.growth.spend.toko}">Toko</div>
+          <div class="growth-ratio-line">
+            <label><span hidden th:text="#{admin.v140.growth.spend.toko} + ' · ' + #{admin.v140.growth.drawer.unitAmount}">Toko · 每 Rp</span><span
+                  th:text="#{admin.v140.growth.drawer.unitAmount}">每 Rp</span>
+              <input class="inp" type="number" min="1" step="1" name="tokoUnit" th:value="${spend.tokoUnit}" th:disabled="${!canEdit}"/></label>
+            <span>=</span>
+            <label><span hidden th:text="#{admin.v140.growth.spend.toko} + ' · EXP'">Toko · EXP</span>
+              <input class="inp" type="number" min="1" step="1" name="tokoPoints" th:value="${spend.tokoPoints}" th:disabled="${!canEdit}"/>
+              <span>EXP</span></label>
+          </div>
+        </div>
       </div>
 
       <h3 th:text="#{admin.v140.growth.spend.purposeTitle}">支付用途归档</h3>

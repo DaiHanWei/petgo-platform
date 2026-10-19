@@ -469,7 +469,9 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                     child: _avatarUrl == null
                         ? (_uploading
                             ? const CircularProgressIndicator()
-                            : const Text('🐱', style: TextStyle(fontSize: 38)))
+                            // 按物种占位（同编辑页口径；原先恒为 🐱，L2 第三轮 P3）。
+                            : Text(switch (_petType) { 'DOG' => '🐶', 'OTHER' => '🐾', _ => '🐱' },
+                                style: const TextStyle(fontSize: 38)))
                         : ClipOval(
                             child: AppImage.widget(_avatarUrl!,
                                 width: 88, height: 88, fit: BoxFit.cover, thumbWidth: 280)),

@@ -51,11 +51,13 @@ void main() {
       // 价格 / 天数取后端（无本地兜底）。
       expect(find.text(l10n.petSlotRentCta('Rp5.000', 30)), findsOneWidget);
       expect(rentButton(tester).onPressed, isNotNull);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('价格不写死：单价 7000 / 31 天 → CTA 跟随', (tester) async {
       await pumpSlotPage(tester, overviews: [overview(petCount: 2, unitPrice: 7000, days: 31)], pets: twoPets);
       expect(find.text(l10n.petSlotRentCta('Rp7.000', 31)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('D2 有月租：Slot sewa 小节 + 到期日 + Perpanjang 次按钮', (tester) async {
@@ -69,6 +71,7 @@ void main() {
       expect(find.text(l10n.petSlotSourceRent), findsOneWidget);
       expect(find.byKey(const ValueKey('petSlotRenewButton')), findsOneWidget);
       expect(find.text(l10n.petSlotRenew), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('D3 有只读：锁格「Hanya-baca」、状态胶囊、Ubah pilihan ›、缺名额说明', (tester) async {
@@ -80,6 +83,7 @@ void main() {
       expect(find.byKey(const ValueKey('petSlotChangeSelection')), findsOneWidget);
       expect(find.text(l10n.petReadonlyShortNote(1)), findsOneWidget);
       expect(find.text(l10n.petSlotUsedSuffix(2)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('D4 已到 5：主按钮置灰「Sudah maksimal 5 slot」，续租照常；≤ 3 天提醒色文案', (tester) async {
@@ -97,6 +101,7 @@ void main() {
       // 空名额格：「Kosong」+ 来源小胶囊「Sewa」（与已占用的月租格同款，L2 还原度）。
       expect(find.text(l10n.petSlotCellEmpty), findsOneWidget);
       expect(find.text(l10n.petSlotSourceRent), findsNWidgets(2));
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('D15 加载失败：cloud_off + Gagal memuat slot hewan + Coba lagi → 重取恢复', (tester) async {
@@ -110,6 +115,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(l10n.petSlotLoadError), findsNothing);
       expect(find.text(l10n.petSlotUsedSuffix(2)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
   });
 
@@ -146,6 +152,7 @@ void main() {
       expect(succeeded, [
         {'count': 2, 'is_renewal': false, 'channel': 'pawcoin'},
       ]);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('步进器上限 = rentable、下限 1', (tester) async {
@@ -163,6 +170,7 @@ void main() {
         await tester.pump();
       }
       expect(tester.widget<Text>(find.byKey(const ValueKey('payQtyValue'))).data, '2');
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     Future<FakePetSlotRepo> qrisFlow(WidgetTester tester, List<PetSlotPurchaseStatus> statuses) async {
@@ -187,17 +195,20 @@ void main() {
       expect(repo.statusQueries, ['p9']);
       expect(find.text(l10n.paymentExpiredRetry), findsOneWidget);
       expect(events.where((e) => e.$1 == 'pet_slot_rent_paid'), isEmpty);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('D10 QRIS 失败 → 「Pembayaran gagal. Coba lagi.」', (tester) async {
       await qrisFlow(tester, const [PetSlotPurchaseStatus(status: PetSlotPurchaseStatus.failed)]);
       expect(find.text(l10n.idCardHdPurchaseError), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('ORPHAN_PAID / OVERPAID → 「付款已收到、处理中 / 联系客服」，不说支付失败', (tester) async {
       await qrisFlow(tester, const [PetSlotPurchaseStatus(status: PetSlotPurchaseStatus.overpaid)]);
       expect(find.text(l10n.petSlotPaymentProcessing), findsOneWidget);
       expect(find.text(l10n.idCardHdPurchaseError), findsNothing);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('QRIS 到账 → D9（日期取购买查询的 expiresAt）+ succeeded{channel: qris}', (tester) async {
@@ -207,6 +218,7 @@ void main() {
       expect(find.text(l10n.petSlotRentSuccess(1, '20 Nov 2026')), findsOneWidget);
       expect(events.where((e) => e.$1 == 'pet_slot_rent_paid').single.$2,
           {'count': 1, 'is_renewal': false, 'channel': 'qris'});
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('409 pet-slot-rent-unavailable（rentable 0：待付单占位）→ 具体提示（非「支付失败」）+ 页面重取',
@@ -224,6 +236,7 @@ void main() {
       expect(find.text(l10n.idCardHdPurchaseError), findsNothing);
       // 重取到「名额已 5」→ 主按钮置灰。
       expect(find.text(l10n.petSlotMaxReached), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('409 pet-slot-rent-unavailable（rentable 1）→「只能租 1 个」；业务拒绝后下次换新键', (tester) async {
@@ -245,6 +258,7 @@ void main() {
       await attempt();
       expect(repo.rents, hasLength(2));
       expect(repo.rents[1].key, isNot(repo.rents[0].key), reason: '4xx 业务拒绝 = 意图结束');
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     group('幂等键跨重试（code review #1）', () {
@@ -275,6 +289,7 @@ void main() {
         // 成交后清键：再买一次 = 新键。
         await attempt(tester);
         expect(repo.rents[2].key, isNot(repo.rents[1].key));
+        await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
       });
 
       testWidgets('换了数量 → 新键', (tester) async {
@@ -284,6 +299,7 @@ void main() {
         await attempt(tester, plus: 1);
         expect(repo.rents.map((r) => r.quantity), [1, 2]);
         expect(repo.rents[1].key, isNot(repo.rents[0].key));
+        await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
       });
 
       testWidgets('QRIS 关掉面板未付 → 再付沿用同键（复用原意图，不出第二张码）', (tester) async {
@@ -301,6 +317,7 @@ void main() {
         }
         expect(repo.rents, hasLength(2));
         expect(repo.rents[1].key, repo.rents[0].key);
+        await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
       });
     });
   });
@@ -332,6 +349,7 @@ void main() {
       expect(find.text(l10n.petSlotRenewSuccess('30 Nov 2026')), findsOneWidget);
       expect(events.where((e) => e.$1 == 'pet_slot_rent_started').single.$2,
           {'count': 2, 'is_renewal': true, 'channel': 'pawcoin'});
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('超过 renewableMax 的行不可勾（默认勾最早到期的）；一个都不勾 → 主按钮禁用', (tester) async {
@@ -355,6 +373,7 @@ void main() {
       // L2 第二轮：一个都不勾 → 金额按 Rp0 显示（不出「…」占位）。
       expect(find.text('…'), findsNothing);
       expect(tester.widget<Text>(find.byKey(const ValueKey('payTotalAmount'))).data, 'Rp0');
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('4.4 AC3：升级拿到永久名额后默认少勾一个；正常宠物 ≤ 永久名额 → 默认不勾、主按钮禁用、抽屉不关', (tester) async {
@@ -373,6 +392,7 @@ void main() {
       await tester.pump();
       expect(tester.widget<Icon>(find.byKey(const ValueKey('petSlotRenewCheck-1'))).icon, Icons.check_box,
           reason: '用户可手动再勾');
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('409 pet-slot-renew-invalid → D10 文案', (tester) async {
@@ -386,6 +406,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('petSlotRenewConfirm')));
       await tester.pumpAndSettle();
       expect(find.text(l10n.idCardHdPurchaseError), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
   });
 
@@ -394,6 +415,7 @@ void main() {
       await pumpSlotPage(tester, overviews: [overview(petCount: 2)], pets: twoPets, action: 'rent');
       expect(find.text(l10n.petSlotRentSheetTitle), findsOneWidget);
       expect(tester.widget<Text>(find.byKey(const ValueKey('payQtyValue'))).data, '1');
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('action=renew + 有生效中月租 → D11', (tester) async {
@@ -402,6 +424,7 @@ void main() {
           pets: [...twoPets, pet(3, 'Boba')],
           action: 'renew');
       expect(find.text(l10n.petSlotRenewSheetTitle), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
     testWidgets('action=renew + 无生效中月租（已全过期）→ D5 新租、数量默认 = shortBy', (tester) async {
@@ -411,6 +434,7 @@ void main() {
           action: 'renew');
       expect(find.text(l10n.petSlotRentSheetTitle), findsOneWidget);
       expect(tester.widget<Text>(find.byKey(const ValueKey('payQtyValue'))).data, '2');
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
   });
 

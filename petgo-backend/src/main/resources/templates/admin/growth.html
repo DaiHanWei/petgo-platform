@@ -21,7 +21,7 @@
          是「置灰不隐藏」惯例的唯一例外，UI G7）；端点另有 403。 */-->
     <div class="wb-title-row">
         <h1 th:text="#{admin.v140.growth.title}">成长体系</h1>
-        <button type="button" class="btn btn-sm" data-growth-batch-open
+        <button type="button" class="btn btn-primary btn-sm" data-growth-batch-open
                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('growth.user_adjust')"
                 th:attr="data-drawer-open=@{/admin/growth/batch/drawer}" data-drawer-res="growthbatch"
                 th:text="#{admin.v140.growth.batch.open}">批量发放</button>

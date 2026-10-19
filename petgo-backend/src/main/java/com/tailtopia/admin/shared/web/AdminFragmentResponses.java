@@ -39,9 +39,13 @@ public final class AdminFragmentResponses {
      * 追加一个<b>带载荷</b>的事件（htmx 的 {@code HX-Trigger} 支持 {@code {"evt":{...}}}，
      * 载荷进 {@code event.detail}）。Story 7.4 用它把新建好的标签抽屉 URL 交给前端。
      *
+     * <p>⚠️ 故意不叫 {@code trigger}：曾与 {@code trigger(response, String...)} 同名重载，
+     * {@code trigger(resp, "a", "b")} 两个事件名会优先命中这个 3 参数版本，第二个事件名被当成载荷原样拼进去，
+     * 产出非法 JSON {@code {"a":b}}，htmx 解析失败、两个事件都不触发（V1.4.0 L2：新建礼物后抽屉不关、列表不刷新）。
+     *
      * @param payloadJson 一个 JSON 对象字面量（如 {@code {"url":"/admin/..."}}）；null / 空按 {@code {}} 处理
      */
-    public static void trigger(HttpServletResponse response, String event, String payloadJson) {
+    public static void triggerWithPayload(HttpServletResponse response, String event, String payloadJson) {
         if (event == null || event.isBlank()) {
             return;
         }
