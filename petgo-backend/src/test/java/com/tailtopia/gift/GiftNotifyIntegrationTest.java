@@ -152,8 +152,10 @@ class GiftNotifyIntegrationTest extends ApiIntegrationTest {
 
         assertThat(unreadGiftRows(owner, mochi)).isEqualTo(1L);
         assertThat(unreadGiftRows(owner, kopi)).isEqualTo(1L);
+        // 单人单种礼物 → 带礼物名（数量 1 不带 ×1）。原先期望通用文案，是因为送礼人 id ≥128 时
+        // InteractionActorResolver 的 Long 引用比较恒 false、礼物名查不到（OCR #1）。
         assertThat(giftItems(owner)).extracting(NotificationItem::title).containsExactlyInAnyOrder(
-                a.getNickname() + " mengirim hadiah untuk Mochi", a.getNickname() + " mengirim hadiah untuk Kopi");
+                a.getNickname() + " mengirim Tulang untuk Mochi", a.getNickname() + " mengirim Tulang untuk Kopi");
     }
 
     @Test

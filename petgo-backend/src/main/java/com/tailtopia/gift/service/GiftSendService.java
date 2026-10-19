@@ -32,6 +32,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +63,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class GiftSendService {
 
     /** QRIS 付款窗（照 Keepsake）。 */
+    private static final Logger log = LoggerFactory.getLogger(GiftSendService.class);
+
     public static final Duration PAY_WINDOW = Duration.ofMinutes(60);
 
     /**
@@ -202,24 +206,53 @@ public class GiftSendService {
     }
 
     /**
-     * 幂等重放取回（AC7.3）：同键再 {@code createIntent}。返回的意图就是订单那笔 → 返回它与已存载荷；
-     * 不是（旧意图已过窗被懒过期，且懒过期不发失败事件）→ 订单置 EXPIRED 并返回 EXPIRED，<b>不把新意图挂到旧订单上</b>
-     * （App 换新 requestId 重发）。
+     * 幂等重放取回（AC7.3）：认订单<b>自己挂着的</b>那笔意图（{@code payment_intent_id}），不再同键 {@code createIntent}。
+     *
+     * <p>OCR #7：原先靠幂等键映射「取回」意图，取回的不是订单那笔（映射过期 / 丢失，或旧意图已过窗被懒过期）就把订单置
+     * EXPIRED —— 但映射丢失时旧意图仍是 PENDING、旧码仍可付，付了之后到账监听看到订单已 EXPIRED 直接丢弃：收了钱不送达也不退。
+     * 现在：
+     * <ul>
+     *   <li>意图状态先经支付模块 {@code statusOf}（PENDING 且过窗 → 就地置 EXPIRED，走意图状态机，不绕过）；</li>
+     *   <li>PENDING（窗内）→ 返回同一笔的已存载荷（没有就补下单），旧码继续有效、到账照常交付；</li>
+     *   <li>PAID → 交付由到账监听在回调事务里完成，这里只回报订单当前状态，不再出码；</li>
+     *   <li>EXPIRED / FAILED（意图已终态、订单却还 PENDING：漏了失败事件，如 {@code statusOf} 懒过期不发事件）→
+     *       订单随意图置 EXPIRED / FAILED。意图先终态、订单后标，之后该码的回调在支付层即被「已终态」拦下。</li>
+     * </ul>
+     * 不再建第二笔意图，也就不会再有「孤儿意图 / 订单与意图对不上」。App 收到 EXPIRED / FAILED 换新 requestId 重发。
      */
     private GiftSendResponse replayQris(GiftOrder order) {
-        PaymentIntent intent = createQrisIntent(order);
-        if (!Long.valueOf(intent.getId()).equals(order.getPaymentIntentId())) {
+        PaymentIntent intent = order.getPaymentIntentId() == null ? null
+                : paymentIntents.findById(order.getPaymentIntentId()).orElse(null);
+        if (intent == null) {
+            // 防御：QRIS 订单与意图同事务落库，不应发生。按过期收口，让 App 换新 requestId。
+            log.warn("gift qris replay without intent orderId={}", order.getId());
             order.markExpired();
             orders.saveAndFlush(order);
-            return GiftSendResponse.ofStatus(order.getPublicToken(), GiftOrderStatus.EXPIRED);
+            return GiftSendResponse.ofStatus(order.getPublicToken(), order.getStatus());
         }
-        if (intent.getStatus() == PaymentStatus.PAID) {
-            // 已到账：交付由到账监听在回调事务里完成，这里只回报订单当前状态，不再出码。
-            return new GiftSendResponse(false, PaymentIntentResponse.of(intent), null, order.getPublicToken(),
-                    order.getStatus().name());
+        PaymentStatus status = paymentIntents.statusOf(order.getSenderId(), intent.getPublicToken());
+        switch (status) {
+            case PAID -> {
+                // 已到账：交付由到账监听在回调事务里完成，这里只回报订单当前状态，不再出码。
+                return new GiftSendResponse(false, PaymentIntentResponse.of(intent), null, order.getPublicToken(),
+                        order.getStatus().name());
+            }
+            case PENDING -> {
+                String payload = ensureCharge(intent);
+                return GiftSendResponse.paymentRequired(PaymentIntentResponse.of(intent), payload,
+                        order.getPublicToken());
+            }
+            case EXPIRED, FAILED -> {
+                if (status == PaymentStatus.FAILED) {
+                    order.markFailed();
+                } else {
+                    order.markExpired();
+                }
+                orders.saveAndFlush(order);
+                return GiftSendResponse.ofStatus(order.getPublicToken(), order.getStatus());
+            }
+            default -> throw new IllegalStateException("未知支付状态 " + status);
         }
-        String payload = ensureCharge(intent);
-        return GiftSendResponse.paymentRequired(PaymentIntentResponse.of(intent), payload, order.getPublicToken());
     }
 
     private PaymentIntent createQrisIntent(GiftOrder order) {

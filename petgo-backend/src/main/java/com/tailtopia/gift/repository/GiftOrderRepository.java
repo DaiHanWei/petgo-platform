@@ -62,6 +62,18 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
     int markUndeliveredIfPending(@Param("id") long id, @Param("reason") String reason);
 
     /**
+     * 已关单（EXPIRED / FAILED）的订单又到账了（OCR #7）→ UNDELIVERED_REFUND_PENDING，走与「付款后无法送达」同一条退回路径
+     * （退 PawCoin，Story 1.2）。{@code undelivered_reason} 留空：三个既有原因都不对口，加新值要重建 CHECK，这里不值得；
+     * 后台列表对空原因显示空白，WARN 日志可追溯。返回受影响行数（0 = 已被并发处理 / 状态不对）。
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE gift_orders SET status = 'UNDELIVERED_REFUND_PENDING'
+             WHERE id = :id AND status IN ('EXPIRED', 'FAILED')
+            """, nativeQuery = true)
+    int markRefundPendingIfClosed(@Param("id") long id);
+
+    /**
      * 后台礼物抽屉的收送统计（V1.4.0 gift Story 3.1 · AC6.4）：该礼物 {@code DELIVERED} 订单的数量之和与订单数，
      * 一行两列 {@code [received, sent]}。只读；{@code gift_id} 无专门索引，礼物百级 / 订单千级顺序扫可接受。
      */
@@ -74,11 +86,12 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
 
     /**
      * 通知列表「送的是什么」（V1.4.0 gift L2 第二轮，{@code GiftNotificationGiftLines}）：一页涉及的宠物 × 送礼人、
-     * 自 {@code since} 起已送达的订单。结果在内存里再按每条通知的条件归属；一页 ≤ 20 条通知，量很小。
+     * 在 [{@code since}, {@code until}] 内已送达的订单。结果在内存里再按每条通知的条件归属；一页 ≤ 20 条通知，量很小。
      */
     @Query("select o from GiftOrder o where o.petId in :petIds and o.senderId in :senderIds "
-            + "and o.status = :status and o.deliveredAt >= :since order by o.deliveredAt asc, o.id asc")
+            + "and o.status = :status and o.deliveredAt >= :since and o.deliveredAt <= :until "
+            + "order by o.deliveredAt asc, o.id asc")
     List<GiftOrder> findDeliveredForNotify(@Param("petIds") java.util.Collection<Long> petIds,
             @Param("senderIds") java.util.Collection<Long> senderIds, @Param("status") GiftOrderStatus status,
-            @Param("since") java.time.Instant since);
+            @Param("since") java.time.Instant since, @Param("until") java.time.Instant until);
 }

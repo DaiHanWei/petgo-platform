@@ -6,6 +6,7 @@ import 'package:tailtopia/features/profile/data/milestone_celebration_reporter.d
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/domain/milestone_instant_codes.dart';
+import 'package:tailtopia/features/profile/domain/share_service.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_instant_celebration.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -18,6 +19,19 @@ class _PerPetRepo implements MilestoneRepository {
   final reported = <(List<String>, int?)>[];
   final celebrated = <int>{};
   final calls = <int?>[];
+  final sharedFor = <int?>[];
+
+  @override
+  Future<String> createShare(String code,
+      {required String title,
+      required String body,
+      required String locale,
+      required String collectionLevels,
+      required List<String> collectionCodes,
+      int? petId}) async {
+    sharedFor.add(petId);
+    return 'tok';
+  }
 
   @override
   Future<MilestoneList> getMilestones({int? petId}) async {
@@ -38,6 +52,7 @@ class _PerPetRepo implements MilestoneRepository {
 
 ProviderContainer _container(_PerPetRepo repo) {
   final c = ProviderContainer(overrides: [
+    shareServiceProvider.overrideWithValue((text, {sharePositionOrigin}) async {}),
     milestoneRepositoryProvider.overrideWithValue(repo),
     milestoneInstantPollDelaysProvider.overrideWithValue(const [Duration.zero]),
     effectivePetIdProvider.overrideWithValue(const AsyncData(1)), // 当前宠物 = 1
@@ -134,5 +149,28 @@ void main() {
     expect(repo.reported.map((r) => '${r.$1.join(',')}@${r.$2}'), ['C-S17@2', 'C-S17@3']);
     // 当前宠物（1）的 state 未被别的宠物污染。
     expect(c.read(locallyCelebratedMilestonesProvider), isEmpty);
+  });
+
+  testWidgets('OCR #5：逐只庆祝里点分享 → 建分享按被庆祝的那只宠物（不是当前宠物 1）', (tester) async {
+    final repo = _PerPetRepo();
+    final c = _container(repo);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(
+        locale: Locale('id'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: _Host([2]),
+      ),
+    ));
+    await tester.tap(find.byKey(const ValueKey('go')));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('milestoneShare')));
+    await tester.tap(find.byKey(const ValueKey('milestoneShare')));
+    await tester.pumpAndSettle();
+    expect(repo.sharedFor, [2]);
   });
 }

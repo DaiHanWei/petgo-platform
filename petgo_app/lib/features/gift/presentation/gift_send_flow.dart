@@ -260,6 +260,11 @@ class _GiftSendFlow {
             outcome = _QrisPending(r);
             return true;
           }
+          if (r.status == GiftOrderStatus.failed || r.status == GiftOrderStatus.expired) {
+            // 这笔单已关（如网关出码失败置 FAILED）：同 requestId 重放只会拿回这笔无码的单，
+            // 重试恒失败 → 下次确认换新 requestId 重新下单（OCR #4，后端幂等键 GIFT:{sender}:{requestId}）。
+            requestId = null;
+          }
           _toast(l10n.idCardHdPurchaseError, top: true);
           return false;
         } on DioException catch (e) {
