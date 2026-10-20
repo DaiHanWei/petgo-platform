@@ -328,8 +328,9 @@ void main() {
     expect(tester.getSize(card).width, 84);
     expect(find.descendant(of: find.byKey(const ValueKey('mePetDiaryTag')), matching: find.text('12')),
         findsOneWidget);
-    // 无头像 → 宠物图标占位（与他人主页一致，不是昵称首字母）。
-    expect(find.descendant(of: card, matching: find.byIcon(Icons.pets)), findsOneWidget);
+    // 无头像 → 按物种 emoji 占位（bug 593；与他人主页一致，不是昵称首字母，也不再是通用爪印）。
+    expect(find.descendant(of: card, matching: find.text('🐱')), findsOneWidget);
+    expect(find.descendant(of: card, matching: find.byIcon(Icons.pets)), findsNothing);
     expect(find.textContaining(l10n.meViewArchive), findsNothing);
   });
 

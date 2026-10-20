@@ -144,6 +144,10 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
     if (!requireLogin(ref, context, entrySource: 'gift')) return;
     final pets = widget.pets;
     if (pets.isEmpty) return;
+    // 详情页底部有评论框：用户点过评论框、按返回收起键盘后焦点仍留在框里，
+    // 选宠物 / 面板 / 选渠道抽屉关闭时路由会把焦点还给它 → 送完礼键盘自己弹出来。
+    // 开流程前先放掉焦点（UnfocusDisposition.scope 会清掉页面焦点历史，抽屉关闭后无可恢复）。
+    FocusManager.instance.primaryFocus?.unfocus();
     _running = true;
     try {
       final multi = pets.length >= 2;

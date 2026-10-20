@@ -173,6 +173,7 @@ Future<ProviderContainer> pumpSlotPage(
       GoRoute(path: '/', builder: (_, s) => PetSlotPage(action: s.uri.queryParameters['action'])),
       GoRoute(path: '/me/pawcoin/recharge', builder: (_, _) => const Scaffold(body: Text('recharge'))),
       GoRoute(path: kPetSlotsRoute, builder: (_, _) => const Scaffold(body: Text('slots'))),
+      GoRoute(path: '/profile/create', builder: (_, _) => const Scaffold(body: Text('create'))),
     ],
   );
   addTearDown(router.dispose);

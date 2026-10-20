@@ -168,6 +168,47 @@ void main() {
     expect(sendButton(), findsNothing);
     expect(find.byKey(const ValueKey('giftPetRow_22')), findsOneWidget);
   });
+
+  testWidgets('评论框留着焦点 → 点「Kirim Hadiah」先放掉焦点，弹层关闭后不还给评论框（不再弹键盘）', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2600);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    final commentFocus = FocusNode();
+    addTearDown(commentFocus.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        authControllerProvider.overrideWith(() => _Auth()),
+        giftRepositoryProvider.overrideWithValue(repo),
+        pawCoinProvider.overrideWith(() => FakePawCoin(() => 100000, [])),
+      ],
+      child: MaterialApp(
+        locale: const Locale('id'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Column(children: [
+            const GiftDetailZone(postId: 77, pets: [a], linkedPets: linked, showSendButton: true),
+            TextField(key: const ValueKey('comment'), focusNode: commentFocus),
+          ]),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // 用户点过评论框（返回键收键盘不会放掉 Flutter 焦点）。
+    commentFocus.requestFocus();
+    await tester.pump();
+    expect(commentFocus.hasFocus, isTrue);
+
+    await tester.tap(sendButton());
+    await tester.pumpAndSettle();
+    expect(panel(), findsOneWidget);
+    await tester.tapAt(const Offset(400, 20)); // 下滑 / 点遮罩关面板
+    await tester.pumpAndSettle();
+
+    expect(panel(), findsNothing);
+    expect(commentFocus.hasFocus, isFalse, reason: '面板关闭后焦点不能回到评论框');
+  });
 }
 
 class _Auth extends AuthController {

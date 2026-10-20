@@ -54,6 +54,22 @@ void main() {
       await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
     });
 
+    testWidgets('bug 592：空名额格（Kosong）可点 → 走添加宠物入口进建档页', (tester) async {
+      await pumpSlotPage(tester, overviews: [overview(levelSlots: 2, petCount: 1)], pets: [pet(1, 'Ys')]);
+      expect(find.text(l10n.petSlotCellEmpty), findsNWidgets(2));
+      await tester.tap(find.byKey(const ValueKey('petSlotEmptyCellTap')).first);
+      await tester.pumpAndSettle();
+      expect(find.text('create'), findsOneWidget);
+    });
+
+    testWidgets('bug 593：无头像宠物按物种出 emoji 占位（名额格 + Hewanku 行），不再是通用爪印', (tester) async {
+      await pumpSlotPage(tester, overviews: [overview(petCount: 2)], pets: twoPets);
+      expect(find.text('🐱'), findsNWidgets(2));
+      expect(find.text('🐶'), findsNWidgets(2));
+      expect(find.byIcon(Icons.pets), findsNothing);
+      await tester.pump(const Duration(seconds: 3)); // 收掉提示 Toast 的计时器
+    });
+
     testWidgets('价格不写死：单价 7000 / 31 天 → CTA 跟随', (tester) async {
       await pumpSlotPage(tester, overviews: [overview(petCount: 2, unitPrice: 7000, days: 31)], pets: twoPets);
       expect(find.text(l10n.petSlotRentCta('Rp7.000', 31)), findsOneWidget);
