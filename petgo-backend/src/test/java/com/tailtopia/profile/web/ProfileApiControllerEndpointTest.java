@@ -179,13 +179,41 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                         .content(createBody("旺财")))
                 .andExpect(status().isCreated());
 
-        // V1.4.0 multi-pet Story 1.4：名额（Lv1 占位下 = 1）已满 → 409 pet-slot-full（原 profile-exists，规则按设计改变）。
+        // V1.4.0 multi-pet Story 1.4：新版 App（≥1.4.0）名额（Lv1 占位下 = 1）已满 → 409 pet-slot-full。
         mvc.perform(post("/api/v1/pet-profiles")
                         .header(HttpHeaders.AUTHORIZATION, token)
+                        .header("X-App-Version", "1.4.0")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody("小黑")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type").value("https://petgo/errors/pet-slot-full"));
+    }
+
+    /**
+     * 旧版兼容（V1.4.0 上线前兼容检查）：旧版 App（缺头 / &lt; 1.4.0）账号已有宠物时再建 → 409 profile-exists
+     * （与 V1.3.4 原样一致），名额够也不建；首只照常建。
+     */
+    @Test
+    void legacyClientCannotCreateSecondPetEvenWithFreeSlot() throws Exception {
+        User owner = newUser();
+        String token = userBearer(owner.getId());
+        mvc.perform(post("/api/v1/pet-profiles")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("旺财")))
+                .andExpect(status().isCreated());
+        for (String version : new String[] {null, "1.3.4", "1.3.9-stag"}) {
+            var req = post("/api/v1/pet-profiles")
+                    .header(HttpHeaders.AUTHORIZATION, token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody("小黑"));
+            if (version != null) {
+                req = req.header("X-App-Version", version);
+            }
+            mvc.perform(req)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.type").value("https://petgo/errors/profile-exists"));
+        }
     }
 
     // ---------- 查询自己的档案 ----------

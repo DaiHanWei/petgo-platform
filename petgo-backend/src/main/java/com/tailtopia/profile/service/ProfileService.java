@@ -81,8 +81,24 @@ public class ProfileService {
      */
     @Transactional
     public PetProfileResponse create(long ownerId, PetProfileCreateRequest req) {
+        return create(ownerId, req, true);
+    }
+
+    /**
+     * 同 {@link #create(long, PetProfileCreateRequest)}；{@code multiPetClient = false}（旧版 App，见 {@link ClientAppVersion}）
+     * 时账号已有宠物 → 409 {@code profile-exists}（与 V1.3.4 后端原样一致，旧版 App 提示「已有档案」）。
+     *
+     * <p>🔴 V1.4.0 上线前旧版兼容检查：旧版 App 在档案页加载出错 / 未知推送落点时仍可进建档页，放开后会在名额内悄悄建出
+     * 第二只（旧版 App 里看不到、也管不了），并让纯旧版用户变成多宠账号（编辑 / 删除随之被 {@code pet-id-required} 拦下）。
+     * 旧版客户端一律维持「一账号一宠」。
+     */
+    @Transactional
+    public PetProfileResponse create(long ownerId, PetProfileCreateRequest req, boolean multiPetClient) {
         petSlotLock.lockUser(ownerId);
         long count = profiles.countByOwnerId(ownerId);
+        if (!multiPetClient && count >= 1) {
+            throw AppException.profileExists("已有宠物档案，请升级到最新版本后添加更多宠物");
+        }
         if (count >= PetSlotService.MAX_PETS) {
             throw new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_LIMIT_REACHED, "已达宠物数量上限");
         }
