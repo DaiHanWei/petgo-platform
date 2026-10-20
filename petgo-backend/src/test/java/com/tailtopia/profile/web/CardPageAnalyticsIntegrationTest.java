@@ -67,7 +67,7 @@ class CardPageAnalyticsIntegrationTest extends ApiIntegrationTest {
                                 {"petType":"CAT","name":"Momo","birthday":"2024-03-10"}
                                 """))
                 .andExpect(status().isCreated());
-        return profiles.findByOwnerId(owner.getId()).orElseThrow().getCardToken();
+        return profiles.findDefault(owner.getId()).orElseThrow().getCardToken();
     }
 
     private static CapturingAnalytics.Captured only(String event) {

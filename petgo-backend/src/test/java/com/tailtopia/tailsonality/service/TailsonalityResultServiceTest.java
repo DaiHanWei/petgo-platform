@@ -44,6 +44,9 @@ class TailsonalityResultServiceTest {
     private TailsonalityResultService service;
     private com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository badges;
     private final List<TailsonalityResult> stored = new ArrayList<>();
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
 
     @BeforeEach
     void setUp() {
@@ -51,7 +54,8 @@ class TailsonalityResultServiceTest {
         pets = mock(PetProfileQueryService.class);
         tokens = mock(TailsonalityTokenGenerator.class);
         when(tokens.generate()).thenReturn("t".repeat(32));
-        when(pets.findOwnedPet(USER)).thenReturn(Optional.of(new OwnedPetRef(PET, PetType.CAT)));
+        when(pets.findOwnedPet(USER, null)).thenReturn(Optional.of(new OwnedPetRef(PET, PetType.CAT)));
+        when(pets.ownsPet(USER, PET)).thenReturn(true);
         when(repo.save(any())).thenAnswer(inv -> {
             TailsonalityResult r = inv.getArgument(0);
             ReflectionTestUtils.setField(r, "id", (long) stored.size() + 1);
@@ -62,7 +66,7 @@ class TailsonalityResultServiceTest {
         badges = mock(com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository.class);
         when(badges.findResultIdByPetProfileId(PET)).thenReturn(Optional.empty());
         service = new TailsonalityResultService(repo, pets, tokens, badges,
-                mock(TailsonalityUpgradePricing.class), Clock.fixed(Instant.parse("2026-09-30T08:00:00Z"), ZoneOffset.UTC));
+                mock(TailsonalityUpgradePricing.class), petWriteGuard, Clock.fixed(Instant.parse("2026-09-30T08:00:00Z"), ZoneOffset.UTC));
     }
 
     private static Map<String, Object> body(int idx) {
@@ -78,7 +82,7 @@ class TailsonalityResultServiceTest {
 
     @Test
     void submitScoresAndPersistsOneRow() {
-        TailsonalityResultResponse r = service.submit(USER, body(0));
+        TailsonalityResultResponse r = service.submit(USER, null, body(0));
         assertThat(r.typeCode()).isEqualTo("ENFJ-H");
         assertThat(r.letters()).isEqualTo("ENFJ");
         assertThat(r.energy()).isEqualTo("H");
@@ -96,24 +100,24 @@ class TailsonalityResultServiceTest {
 
     @Test
     void otherPetUsesGeneralSet() {
-        when(pets.findOwnedPet(USER)).thenReturn(Optional.of(new OwnedPetRef(PET, PetType.OTHER)));
-        assertThat(service.submit(USER, body(3)).questionSet()).isEqualTo("GENERAL");
+        when(pets.findOwnedPet(USER, null)).thenReturn(Optional.of(new OwnedPetRef(PET, PetType.OTHER)));
+        assertThat(service.submit(USER, null, body(3)).questionSet()).isEqualTo("GENERAL");
     }
 
     @Test
     void keySetMustBeExactly18() {
         Map<String, Object> missing = body(0);
         missing.remove("P3");
-        assert422(() -> service.submit(USER, missing));
+        assert422(() -> service.submit(USER, null, missing));
 
         Map<String, Object> extra = body(0);
         extra.put("questionSet", 0);
-        assert422(() -> service.submit(USER, extra));
+        assert422(() -> service.submit(USER, null, extra));
 
         Map<String, Object> unknown = body(0);
         unknown.remove("Q1");
         unknown.put("Q16", 0);
-        assert422(() -> service.submit(USER, unknown));
+        assert422(() -> service.submit(USER, null, unknown));
         verify(repo, never()).save(any());
     }
 
@@ -122,7 +126,7 @@ class TailsonalityResultServiceTest {
         for (Object bad : new Object[] {-1, 4, 1.5, "1", null, true}) {
             Map<String, Object> b = body(0);
             b.put("Q5", bad);
-            assert422(() -> service.submit(USER, b));
+            assert422(() -> service.submit(USER, null, b));
         }
         verify(repo, never()).save(any());
     }
@@ -131,26 +135,26 @@ class TailsonalityResultServiceTest {
     void invalidAnswersDetailDoesNotEchoValues() {
         Map<String, Object> b = body(0);
         b.put("Q5", 99);
-        assertThatThrownBy(() -> service.submit(USER, b)).hasMessageNotContaining("99").hasMessageNotContaining("Q5");
+        assertThatThrownBy(() -> service.submit(USER, null, b)).hasMessageNotContaining("99").hasMessageNotContaining("Q5");
     }
 
     @Test
     void noPetIs404() {
-        when(pets.findOwnedPet(USER)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.submit(USER, body(0))).isInstanceOfSatisfying(AppException.class,
+        when(pets.findOwnedPet(USER, null)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.submit(USER, null, body(0))).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
-        assertThatThrownBy(() -> service.list(USER)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.list(USER, null)).isInstanceOf(AppException.class);
     }
 
     @Test
     void retakeAddsARowAndListIsNewestFirstWithAscendingIndex() {
         when(tokens.generate()).thenReturn("a".repeat(32), "b".repeat(32), "c".repeat(32));
-        service.submit(USER, body(0));
-        service.submit(USER, body(3));
-        TailsonalityResultResponse third = service.submit(USER, body(0));
+        service.submit(USER, null, body(0));
+        service.submit(USER, null, body(3));
+        TailsonalityResultResponse third = service.submit(USER, null, body(0));
         assertThat(third.resultIndex()).isEqualTo(3);
 
-        var items = service.list(USER).items();
+        var items = service.list(USER, null).items();
         assertThat(items).extracting(TailsonalityResultResponse::token)
                 .containsExactly("c".repeat(32), "b".repeat(32), "a".repeat(32));
         assertThat(items).extracting(TailsonalityResultResponse::resultIndex).containsExactly(3, 2, 1);
@@ -169,19 +173,19 @@ class TailsonalityResultServiceTest {
             rows.add(0, concurrent);
             return rows;
         });
-        assertThat(service.submit(USER, body(0)).resultIndex()).isEqualTo(1);
+        assertThat(service.submit(USER, null, body(0)).resultIndex()).isEqualTo(1);
     }
 
     @Test
     void getComputesIndexAndForeignOrUnknownTokenIs404() {
         when(tokens.generate()).thenReturn("a".repeat(32), "b".repeat(32));
-        service.submit(USER, body(0));
-        service.submit(USER, body(0));
+        service.submit(USER, null, body(0));
+        service.submit(USER, null, body(0));
         TailsonalityResult first = stored.get(1);
-        when(repo.findByPublicTokenAndPetProfileId("a".repeat(32), PET)).thenReturn(Optional.of(first));
+        when(repo.findByPublicToken("a".repeat(32))).thenReturn(Optional.of(first));
         assertThat(service.get(USER, "a".repeat(32)).resultIndex()).isEqualTo(1);
 
-        when(repo.findByPublicTokenAndPetProfileId("z".repeat(32), PET)).thenReturn(Optional.empty());
+        when(repo.findByPublicToken("z".repeat(32))).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.get(USER, "z".repeat(32))).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
     }
@@ -196,14 +200,74 @@ class TailsonalityResultServiceTest {
     /** V1.3.2 Story 3.3 · AC2.5：列表与单条的 equipped = 佩戴行 result_id 等于本结果 id。 */
     @Test
     void equippedFlagFollowsBadgeRow() {
-        service.submit(USER, body(0));
-        service.submit(USER, body(1));
+        service.submit(USER, null, body(0));
+        service.submit(USER, null, body(1));
         long firstId = stored.get(1).getId();
         when(badges.findResultIdByPetProfileId(PET)).thenReturn(Optional.of(firstId));
-        var items = service.list(USER).items();
+        var items = service.list(USER, null).items();
         assertThat(items.get(0).equipped()).isFalse();
         assertThat(items.get(1).equipped()).isTrue();
-        when(repo.findByPublicTokenAndPetProfileId("x", PET)).thenReturn(Optional.of(stored.get(1)));
+        when(repo.findByPublicToken("x")).thenReturn(Optional.of(stored.get(1)));
         assertThat(service.get(USER, "x").equipped()).isTrue();
+    }
+
+    // ===== V1.4.0 multi-pet Story 1.2 · X12 =====
+
+    /** token 寻址：结果行上的宠物不属于本人 → 同一个 404（不依赖 petId）。 */
+    @Test
+    void foreignTokenIs404() {
+        TailsonalityResult foreign = TailsonalityResult.create("f".repeat(32), 99L, 8L, TailsonalityQuestionSet.CAT,
+                Map.of(), new TailsonalityCode("ENTJ", "H"), 1, Instant.EPOCH);
+        ReflectionTestUtils.setField(foreign, "id", 500L);
+        when(repo.findByPublicToken("f".repeat(32))).thenReturn(Optional.of(foreign));
+        when(pets.ownsPet(USER, 99L)).thenReturn(false);
+        assertThatThrownBy(() -> service.get(USER, "f".repeat(32))).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    /** petId=B：提交挂到 B、列表只含 B 的结果；token 读 B 的结果按 B 的序号。 */
+    @Test
+    void secondPetSubmitAndListStayOnThatPet() {
+        long petB = 71L;
+        List<TailsonalityResult> storedB = new ArrayList<>();
+        when(pets.findOwnedPet(USER, petB)).thenReturn(Optional.of(new OwnedPetRef(petB, PetType.DOG)));
+        when(pets.ownsPet(USER, petB)).thenReturn(true);
+        when(badges.findResultIdByPetProfileId(petB)).thenReturn(Optional.empty());
+        when(repo.findByPetProfileIdOrderByCreatedAtDescIdDesc(petB)).thenAnswer(inv -> List.copyOf(storedB));
+        // doAnswer 而不是 when(...)：setUp 里已有 save 的 answer，when 会带 null 参数先调一次旧 answer。
+        org.mockito.Mockito.doAnswer(inv -> {
+            TailsonalityResult r = inv.getArgument(0);
+            ReflectionTestUtils.setField(r, "id", 900L + storedB.size());
+            if (r.getPetProfileId() == petB) {
+                storedB.add(0, r);
+            } else {
+                stored.add(0, r);
+            }
+            return r;
+        }).when(repo).save(any());
+
+        service.submit(USER, null, body(0)); // 默认宠物 A
+        TailsonalityResultResponse b1 = service.submit(USER, petB, body(3));
+
+        assertThat(b1.questionSet()).isEqualTo("DOG");
+        assertThat(service.list(USER, petB).items()).hasSize(1);
+        assertThat(service.list(USER, null).items()).hasSize(1);
+        when(repo.findByPublicToken("tokB")).thenReturn(Optional.of(storedB.get(0)));
+        assertThat(service.get(USER, "tokB").resultIndex()).isEqualTo(1);
+        when(pets.findOwnedPet(USER, 99L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.list(USER, 99L)).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #8 · 待确认 2 默认拦）：只读宠物提交测试 → 409 pet-read-only，不写结果行。 */
+    @Test
+    void submitOnReadOnlyPetRejected409WithoutRow() {
+        org.mockito.Mockito.doThrow(AppException.petReadOnly(PET)).when(petWriteGuard).requireWritable(PET);
+        assertThatThrownBy(() -> service.submit(USER, null, body(0)))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(repo, never()).save(any());
     }
 }

@@ -22,5 +22,18 @@ public interface GeminiClient {
      * @return 结构化解析结果
      * @throws GeminiException 调用失败（超时 / 非 2xx / 响应不可解析），可重试
      */
-    GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls, String responseLocale);
+    default GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls, String responseLocale) {
+        return analyze(symptomText, signedImageUrls, responseLocale, null);
+    }
+
+    /**
+     * 同 {@link #analyze(String, List, String)}，另带所选宠物的只读上下文（V1.4.0 multi-pet Story 4.1 · P-1）。
+     *
+     * <p>上下文只拼进<b>用户侧内容</b>、绝不改系统指令；{@code null} 或三字段全空时请求与不带上下文<b>逐字相同</b>。
+     * 调用方负责上下文不落日志。
+     *
+     * @param petContext 宠物只读上下文（可空 = 不带）
+     */
+    GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls, String responseLocale,
+            TriagePetContext petContext);
 }

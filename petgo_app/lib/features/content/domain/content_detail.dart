@@ -1,9 +1,12 @@
 import '../../auth/domain/user_tag.dart';
+import '../../growth/domain/growth_badge.dart';
 import '../../mention/domain/mention_view.dart';
 import '../../social/domain/follow_state.dart';
+import 'content_pet_ref.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
+import '../../gift/domain/gift_showcase.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
 class ContentDetail {
   const ContentDetail({
@@ -18,6 +21,7 @@ class ContentDetail {
     required this.createdAt,
     this.authorNickname,
     this.authorTags = const [],
+    this.authorBadge,
     this.decorationTags = const [],
     this.authorAvatarUrl,
     this.body,
@@ -30,7 +34,24 @@ class ContentDetail {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
+    this.pets = const [],
+    this.giftPets = const [],
+    this.collected = false,
+    this.collectCount,
   });
+
+  /// Diary 关联的宠物（V1.4.0 multi-pet Story 3.3 · AC4.1），按创建顺序；Moment / Tips / 无关联 → 空表。
+  final List<ContentPetRef> pets;
+
+  /// Diary 礼物区（V1.4.0 gift Story 2.1 下发 / 2.2 使用）：这条 Diary 关联的宠物各自收到的礼物汇总 + 墙前 3 行。
+  /// 缺键（Moment / Tips / 无关联宠物 / 老后端）→ 空表 → 不渲染礼物区。
+  final List<GiftPetSummary> giftPets;
+
+  /// 当前用户是否已收藏（V1.4.0 ④ Story 2.3 · AD-10）。游客 / 老后端缺键 → false。
+  final bool collected;
+
+  /// 收藏数（不计作者自己）：**仅作者本人看时**后端才下发；非作者 / 游客 / 老后端 → null（不显示）。
+  final int? collectCount;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
   final String? authorToken;
@@ -54,6 +75,7 @@ class ContentDetail {
         createdAt: createdAt,
         authorNickname: authorNickname,
         authorTags: authorTags,
+        authorBadge: authorBadge,
         decorationTags: decorationTags,
         authorAvatarUrl: authorAvatarUrl,
         body: body,
@@ -66,6 +88,11 @@ class ContentDetail {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: epoch,
+        pets: pets,
+        giftPets: giftPets,
+        // 🔴 V1.4.0 ④：漏拷 → 进详情收藏态恒为 false、作者看不到收藏数。
+        collected: collected,
+        collectCount: collectCount,
       );
 
   final int id;
@@ -83,6 +110,9 @@ class ContentDetail {
 
   /// 作者的运营标签（V1.1.6 Story 5.1）。最多 3 个；注销作者恒为空。
   final List<UserTag> authorTags;
+
+  /// 作者等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? authorBadge;
 
   /// 内容装饰标签（V1.1.6 Story 5.2）。有图叠首图角落 / 无图置正文下方。
   final List<ContentTag> decorationTags;
@@ -117,6 +147,8 @@ class ContentDetail {
   ///
   /// 只有一个用处：埋点 E-11 的 `is_private_diary`。**不要拿它当权限判据** ——
   /// 私密内容照样允许用户自己分享（AD-15 Rule 6），拿它去藏分享按钮就改了产品规则。
+  /// 例外（V1.4.0 ④ P-2）：收藏按钮按 P-2 对 PRIVATE 隐藏 —— 这是产品规则（只收藏公开帖），不是权限判据；
+  /// 分享仍不得据此隐藏。
   final String visibility;
 
   /// 正文里的 @（V1.3.0 batch-b1 Story 3.3）。
@@ -145,6 +177,7 @@ class ContentDetail {
       createdAt: DateTime.parse(json['createdAt'] as String),
       authorNickname: json['authorNickname'] as String?,
       authorTags: UserTag.listFromJson(json['authorTags']),
+      authorBadge: GrowthBadge.fromFlat(json),
       decorationTags: ContentTag.listFromJson(json['decorationTags']),
       authorAvatarUrl: json['authorAvatarUrl'] as String?,
       body: json['body'] as String?,
@@ -157,6 +190,12 @@ class ContentDetail {
       // V1.3.4 follow Story 2.1：缺失 / null 都按默认。
       authorToken: json['authorToken'] as String?,
       authorFollowState: FollowState.fromJson(json['authorFollowState']),
+      // V1.4.0 multi-pet Story 3.1 / 3.3：缺省 = 空表。
+      pets: ContentPetRef.listFromJson(json['pets']),
+      giftPets: GiftPetSummary.listFromJson(json['giftPets']),
+      // V1.4.0 ④ Story 2.3：缺键（游客 / 老后端 / 非作者的 collectCount）按默认。
+      collected: json['collected'] == true,
+      collectCount: json['collectCount'] is int ? json['collectCount'] as int : null,
     );
   }
 }

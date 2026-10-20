@@ -56,10 +56,13 @@ class NotificationServiceOpsTest {
     InteractionCopyRenderer copy;
     @Mock
     InteractionActorResolver unreadResolver;
+    /** V1.4.0 ④ Story 1.2：运营公告写库路径不经推送闸门（闸门在 dispatcher）。 */
+    @Mock
+    com.tailtopia.notify.preference.PushPreferenceService prefs;
 
     private NotificationService service() {
         return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy,
-                unreadResolver);
+                unreadResolver, prefs);
     }
 
     private static OpsNotificationCampaign campaign() {
@@ -99,7 +102,7 @@ class NotificationServiceOpsTest {
         for (long id = 1; id <= 6; id++) {
             verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + id);
         }
-        verifyNoInteractions(pusher, messageSource, accountQuery);
+        verifyNoInteractions(pusher, messageSource, accountQuery, prefs);
     }
 
     @Test

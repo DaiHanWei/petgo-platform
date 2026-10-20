@@ -101,7 +101,7 @@
 
 ## 6. Downstream usability — adequate
 
-提升明显。`SHOP-FR` / `SHOP-NFR` / `SHOP-R` / `OD` / `ACT` 五套编号连续、无重号，头注专门声明了「v1.3.0 目录内 `FR-111~121`、`D-n` 已被其它主题占用，勿混用」。§3 合并成了单一 FR 表，首轮「§3 能力表与 §4 FR 表脱节」的问题不存在了。仓外来源的处理方式是「本文需要的结论已内联，BUG / OPS / APP / MKT 仅作来源标记」，是正确做法。`HANDOFF.md` 的路径也已经可以解析（`implementation-artifacts/v1.4.0/HANDOFF.md` 存在）。
+提升明显。`SHOP-FR` / `SHOP-NFR` / `SHOP-R` / `OD` / `ACT` 五套编号连续、无重号，头注专门声明了「v1.3.0 目录内 `FR-111~121`、`D-n` 已被其它主题占用，勿混用」。§3 合并成了单一 FR 表，首轮「§3 能力表与 §4 FR 表脱节」的问题不存在了。仓外来源的处理方式是「本文需要的结论已内联，BUG / OPS / APP / MKT 仅作来源标记」，是正确做法。`HANDOFF.md` 的路径也已经可以解析（`implementation-artifacts/v1.4.0-toko-废弃/HANDOFF.md` 存在）。
 
 剩下的问题都会让 epic 拆分与排序的人产生歧义。
 

@@ -44,9 +44,11 @@ class ConsultSessionServiceTest {
     com.tailtopia.vet.service.VetPresenceService presence;
     @Mock
     com.tailtopia.vet.service.VetAccountService vetAccounts;
+    @Mock
+    com.tailtopia.consult.repository.ConsultOrderRepository orders;
 
     private ConsultSessionService service() {
-        return new ConsultSessionService(repo, queue, triageService, events, presence, vetAccounts);
+        return new ConsultSessionService(repo, queue, triageService, events, presence, vetAccounts, orders);
     }
 
     @Test
@@ -110,7 +112,7 @@ class ConsultSessionServiceTest {
         when(repo.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any()))
                 .thenReturn(Optional.empty());
         when(triageService.getResultForUpgrade(7L, 99L)).thenReturn(
-                new TriageUpgradeContext(99L, DangerLevel.YELLOW, "呕吐两次", List.of("k1", "k2")));
+                new TriageUpgradeContext(99L, DangerLevel.YELLOW, "呕吐两次", List.of("k1", "k2"), null));
         when(repo.save(any(ConsultSession.class))).thenAnswer(inv -> {
             ConsultSession s = inv.getArgument(0);
             ReflectionTestUtils.setField(s, "id", 21L);
@@ -133,7 +135,7 @@ class ConsultSessionServiceTest {
         when(repo.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any()))
                 .thenReturn(Optional.empty());
         when(triageService.getResultForUpgrade(7L, 99L)).thenReturn(
-                new TriageUpgradeContext(99L, DangerLevel.RED, "抽搐", List.of()));
+                new TriageUpgradeContext(99L, DangerLevel.RED, "抽搐", List.of(), null));
 
         assertThatThrownBy(() -> service().createWaitingFromUpgrade(7L, 99L))
                 .isInstanceOf(AppException.class);
@@ -202,5 +204,44 @@ class ConsultSessionServiceTest {
         assertThat(peer.avatarUrl()).isEqualTo("https://cdn/v2.jpg");
         assertThat(peer.online()).isTrue();
         verify(vetAccounts).getById(2L);
+    }
+
+    // ---- V1.4.0 multi-pet Story 4.1 · AC5：会话所属宠物只在读路径富化 ----
+
+    @Test
+    void petIdOfReturnsPetOnSessionOrder() {
+        ConsultSession s = ConsultSession.startWaiting(7L, ConsultSource.DIRECT);
+        ReflectionTestUtils.setField(s, "id", 11L);
+        com.tailtopia.consult.domain.ConsultOrder order =
+                org.mockito.Mockito.mock(com.tailtopia.consult.domain.ConsultOrder.class);
+        when(order.getPetProfileId()).thenReturn(21L);
+        when(orders.findFirstByConsultSessionIdOrderByIdDesc(11L)).thenReturn(Optional.of(order));
+
+        assertThat(service().petIdOf(s)).isEqualTo(21L);
+    }
+
+    @Test
+    void petIdOfIsNullForLegacySessionWithoutOrder() {
+        ConsultSession s = ConsultSession.startWaiting(7L, ConsultSource.DIRECT);
+        ReflectionTestUtils.setField(s, "id", 12L);
+        when(orders.findFirstByConsultSessionIdOrderByIdDesc(12L)).thenReturn(Optional.empty());
+
+        assertThat(service().petIdOf(s)).isNull();
+        assertThat(service().petIdOf(null)).isNull();
+    }
+
+    @Test
+    void writePathDoesNotQueryOrders() {
+        when(repo.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any()))
+                .thenReturn(Optional.empty());
+        when(repo.save(any(ConsultSession.class))).thenAnswer(inv -> {
+            ConsultSession saved = inv.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 13L);
+            return saved;
+        });
+
+        service().createWaiting(7L, ConsultSource.DIRECT);
+
+        org.mockito.Mockito.verifyNoInteractions(orders);
     }
 }

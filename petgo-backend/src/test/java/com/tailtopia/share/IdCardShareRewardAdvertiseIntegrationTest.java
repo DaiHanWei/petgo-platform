@@ -45,7 +45,7 @@ class IdCardShareRewardAdvertiseIntegrationTest extends ApiIntegrationTest {
     @Test
     void nothingIsAdvertisedWhenRewardIsNotConfigured() {
         configure(true, 0, 0);
-        assertThat(rewards.advertisableCoins(1L))
+        assertThat(rewards.advertisableCoins(1L, java.util.Optional.of(1L)))
                 .as("🔴 没配奖励却把「分享可得 PawCoin」讲出去 = 承诺了却不发")
                 .isZero();
     }
@@ -54,7 +54,7 @@ class IdCardShareRewardAdvertiseIntegrationTest extends ApiIntegrationTest {
     @Test
     void nothingIsAdvertisedWhenTheMasterSwitchIsOff() {
         configure(false, 20, 3);
-        assertThat(rewards.advertisableCoins(1L))
+        assertThat(rewards.advertisableCoins(1L, java.util.Optional.of(1L)))
                 .as("总开关关了文案还在 ⇒ 关掉开关反而变成「承诺了却不发」")
                 .isZero();
     }
@@ -66,14 +66,14 @@ class IdCardShareRewardAdvertiseIntegrationTest extends ApiIntegrationTest {
     @Test
     void nothingIsAdvertisedWhenDailyCapIsZero() {
         configure(true, 20, 0);
-        assertThat(rewards.advertisableCoins(1L)).isZero();
+        assertThat(rewards.advertisableCoins(1L, java.util.Optional.of(1L))).isZero();
     }
 
     /** 配好了、但这个用户没有宠物档案 → 本来就不发（AC4），别承诺。 */
     @Test
     void nothingIsAdvertisedWithoutAPetProfile() {
         configure(true, 20, 3);
-        assertThat(rewards.advertisableCoins(999_999L))
+        assertThat(rewards.advertisableCoins(999_999L, java.util.Optional.empty()))
                 .as("无档案本来就不发（AC4）")
                 .isZero();
     }

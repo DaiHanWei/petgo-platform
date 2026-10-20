@@ -126,6 +126,13 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     @Query("select p from Place p where p.publicToken = :publicToken and p.deletedAt is null")
     Optional<Place> findUndeletedByPublicToken(@Param("publicToken") String publicToken);
 
+    /**
+     * 按 token 取，<b>含下架与软删</b>（V1.4.0 ④ Story 2.1）：只给「取消收藏」用 —— 用户要能从收藏里移除已不可见的场所。
+     * 🔴 面向展示的入口一律用 {@link #resolveForView}。
+     */
+    @Query("select p from Place p where p.publicToken = :publicToken")
+    Optional<Place> findAnyByPublicToken(@Param("publicToken") String publicToken);
+
     /** 按 id 取「对用户可见」的场所（ACTIVE 且未软删）。合并跳转只跳一层：目标不可见就按不存在处理。 */
     @Query("select p from Place p where p.id = :id "
             + "and p.status = com.tailtopia.place.domain.PlaceStatus.ACTIVE and p.deletedAt is null")

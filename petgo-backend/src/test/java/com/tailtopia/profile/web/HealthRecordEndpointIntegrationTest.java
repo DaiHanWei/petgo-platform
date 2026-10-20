@@ -214,7 +214,7 @@ class HealthRecordEndpointIntegrationTest extends ApiIntegrationTest {
         assertThat(records.findByPetProfileIdOrderByEventDateDescIdDesc(petId)).isNotEmpty();
 
         // 删档级联硬删健康记录（PDP）。
-        profileDeletion.deleteByUserId(u.getId());
+        profileDeletion.deleteAllForAccount(u.getId());
         assertThat(records.findByPetProfileIdOrderByEventDateDescIdDesc(petId)).isEmpty();
     }
 }

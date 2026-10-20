@@ -17,6 +17,7 @@ import '../domain/id_card_style.dart';
 import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_ui_style.dart';
 import 'id_card/id_card_watermark.dart';
+import '../data/current_pet_provider.dart';
 
 /// 单张身份证卡详情（Story 6-7）。渲染冻结快照卡面 + 按卡付费解锁 HD + 保存到相册/分享。
 /// 快照不可编辑（建卡时定格）；下载/解锁按本卡 [cardId] 走多卡端点。
@@ -267,7 +268,10 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
       Analytics.capture('id_card_share_sent', {'channel': channel});
       int coins = 0;
       try {
-        coins = await ref.read(idCardRepositoryProvider).reportShareForReward(card.id);
+        // V1.4.0 multi-pet：奖励按宠物，记到当前宠物（卡本身仍只挂账号）。
+        coins = await ref
+            .read(idCardRepositoryProvider)
+            .reportShareForReward(card.id, petId: await readRequestPetId(ref));
       } catch (_) {
         // 🛡 发放上报失败 = 当作没发。分享本身已经成功，绝不因此报错给用户。
         coins = 0;

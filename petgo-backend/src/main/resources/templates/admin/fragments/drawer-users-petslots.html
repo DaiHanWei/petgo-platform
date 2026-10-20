@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  用户抽屉 ⑧「宠物与名额」页签（V1.4.0 ② Story 4.3 · AD-15 · AB-34，UI 稿 L1–L6）。
+  🔴 根元素即地基容器：data-utab-panel="petSlots" 由 Story 0.1 地基定义，名字与页签头一律不许改；本片段只填内容。
+  自上而下五块：名额构成四格 → 宠物状态表 → 月租名额表 → 购买记录表 → 补发名额卡。
+
+  model：petSlotsTab（AdminPetSlotTabService.Tab）、petSlotGrantToken（每次渲染新 UUID）。
+  readOnly：抽屉里 th:with 的局部变量（已注销 / 注销已提交）；补发成功后单独渲染本片段时不存在 → 视为 false
+  （能补发成功说明账号未注销）。
+  ⚠️ 补发卡的 sec:authorize 表达式与 AdminPetSlotController.PET_SLOT_ADJUST_AUTH 逐字一致；无权限置灰不隐藏（L5）。
+  ⚠️ 二次确认 = 浏览器原生 confirm（L3）：data-confirm 文案的 {1} 由 admin-core.js 取 data-confirm-input="days" 的当前值；
+     模板里 #{…} 不传参数输出，花括号原样保留。
+  ⚠️ hx-target 指带 id 的 #user-drawer-err（422 错误落这里，表单不清空）；成功时服务端 HX-Retarget 到本面板 outerHTML。
+*/-->
+<body>
+<section th:fragment="panel(visible)" class="card card-full ud-card ud-petslots" data-utab-panel="petSlots"
+         id="user-petslots-panel" th:hidden="${!visible}"
+         th:with="ps=${petSlotsTab}, psReadOnly=${readOnly == true or petSlotsTab.deletionPending()}">
+
+    <!--/* 已注销：宠物已随注销删除，名额数据不再展示，无补发卡（AC3.4）。 */-->
+    <p class="muted" th:if="${ps.deleted()}" th:text="#{admin.v140.petSlots.deleted}">账号已注销，名额数据已清理</p>
+
+    <th:block th:unless="${ps.deleted()}">
+        <!--/* ① 名额构成四格：数字只取 quotaOf 的构成；「月租（生效中）」是实际持有行数（含运营补发）。 */-->
+        <div class="ud-ps-kv">
+            <div class="ud-ps-kv-cell"><div class="ud-ps-k" th:text="#{admin.v140.petSlots.quota.total}">当前名额</div>
+                <div class="ud-ps-v" th:text="${ps.quotaTotal()}">3</div></div>
+            <div class="ud-ps-kv-cell"><div class="ud-ps-k" th:text="#{admin.v140.petSlots.quota.defaultLevel}">默认 / 等级</div>
+                <div class="ud-ps-v" th:text="${ps.defaultSlots()} + ' / ' + ${ps.levelSlots()}">1 / 1</div></div>
+            <div class="ud-ps-kv-cell"><div class="ud-ps-k" th:text="#{admin.v140.petSlots.quota.rentActive}">月租（生效中）</div>
+                <div class="ud-ps-v" th:text="${ps.rentedActive()}">1</div></div>
+            <div class="ud-ps-kv-cell"><div class="ud-ps-k" th:text="#{admin.v140.petSlots.quota.petCount}">已建宠物</div>
+                <div class="ud-ps-v" th:text="${ps.petCount()}">3</div></div>
+        </div>
+
+        <!--/* ② 宠物状态表（created_at ASC, id ASC，同「宠物档案」页签）。 */-->
+        <h3 class="ud-pc-title" th:text="#{admin.v140.petSlots.pets.title}">宠物状态</h3>
+        <p class="muted" th:if="${#lists.isEmpty(ps.pets())}" th:text="#{admin.userdetail.none}">无</p>
+        <table class="ud-table ud-pc-table" th:unless="${#lists.isEmpty(ps.pets())}">
+            <thead><tr><th th:text="#{admin.v140.petSlots.pets.col.pet}">宠物</th>
+                <th th:text="#{admin.v140.petSlots.pets.col.id}">档案 ID</th>
+                <th class="num" th:text="#{admin.v140.petSlots.pets.col.createdAt}">创建时间</th>
+                <th th:text="#{admin.v140.petSlots.pets.col.status}">状态</th></tr></thead>
+            <tbody><tr th:each="pt : ${ps.pets()}" data-ps-pet>
+                <td th:text="${pt.name()}">Orenji</td>
+                <td class="muted" th:text="${pt.id()}">5521</td>
+                <td class="num" th:text="${pt.createdAtWibDate()}">2026-06-12</td>
+                <td><span class="badge" th:classappend="${pt.status() == 'READ_ONLY'} ? 'badge-warn' : 'badge-ok'"
+                          th:text="${#messages.msg('admin.v140.petSlots.pets.status.' + pt.status())}">正常</span></td>
+            </tr></tbody>
+        </table>
+
+        <!--/* ③ 月租名额表：生效中在前（到期升序）、已到期在后（到期降序）；序号是本表显示序，不外露名额主键 / token。 */-->
+        <h3 class="ud-pc-title"><span th:text="#{admin.v140.petSlots.rentals.title(${ps.rentedActive()})}">月租名额 1</span></h3>
+        <p class="empty ud-empty" th:if="${#lists.isEmpty(ps.rentals())}"
+           th:text="#{admin.v140.petSlots.rentals.empty}">该用户还没有任何月租名额</p>
+        <table class="ud-table ud-pc-table" th:unless="${#lists.isEmpty(ps.rentals())}">
+            <thead><tr><th th:text="#{admin.v140.petSlots.rentals.col.seq}">序号</th>
+                <th class="num" th:text="#{admin.v140.petSlots.rentals.col.startsAt}">生效（WIB）</th>
+                <th class="num" th:text="#{admin.v140.petSlots.rentals.col.expiresAt}">到期（WIB）</th>
+                <th th:text="#{admin.v140.petSlots.rentals.col.status}">状态</th></tr></thead>
+            <tbody><tr th:each="r : ${ps.rentals()}" data-ps-rental>
+                <td th:text="${r.seq()}">1</td>
+                <td class="num" th:text="${r.startsAtWib()}">2026-10-01 10:12</td>
+                <td class="num" th:text="${r.expiresAtWib()}">2026-10-31 10:12</td>
+                <td><span class="badge" th:classappend="${r.active()} ? 'badge-ok' : 'badge-muted'"
+                          th:text="${r.active()} ? #{admin.v140.petSlots.rentals.status.ACTIVE} : #{admin.v140.petSlots.rentals.status.EXPIRED}">生效中</span></td>
+            </tr></tbody>
+        </table>
+
+        <!--/* ④ 购买记录：无记录整块不显示（L6）。已收款未发放（ORPHAN_PAID / OVERPAID）标红交运营补发或退款。 */-->
+        <th:block th:unless="${#lists.isEmpty(ps.purchases())}">
+            <h3 class="ud-pc-title" th:text="#{admin.v140.petSlots.purchases.title}">购买记录</h3>
+            <table class="ud-table ud-pc-table">
+                <thead><tr><th class="num" th:text="#{admin.v140.petSlots.purchases.col.time}">时间（WIB）</th>
+                    <th th:text="#{admin.v140.petSlots.purchases.col.kind}">类型</th>
+                    <th class="num" th:text="#{admin.v140.petSlots.purchases.col.qty}">数量</th>
+                    <th class="num" th:text="#{admin.v140.petSlots.purchases.col.amount}">金额</th>
+                    <th th:text="#{admin.v140.petSlots.purchases.col.channel}">方式</th>
+                    <th th:text="#{admin.v140.petSlots.purchases.col.intent}">payment_intent</th></tr></thead>
+                <tbody><tr th:each="pu : ${ps.purchases()}" data-ps-purchase
+                           th:classappend="${pu.exception()} ? 'ud-ps-exception' : ''">
+                    <td class="num" th:text="${pu.createdAtWib()}">2026-10-01 10:12</td>
+                    <td><span th:text="${pu.kind() == 'ADMIN_GRANT'}
+                                ? #{admin.v140.petSlots.purchases.kind.ADMIN_GRANT(${pu.operatorName()}, ${pu.days()})}
+                                : ${#messages.msg('admin.v140.petSlots.purchases.kind.' + pu.kind())}">租用</span>
+                        <span class="badge badge-danger" th:if="${pu.exception()}"
+                              th:text="${#messages.msg('admin.v140.petSlots.purchases.status.' + pu.status())}">已到账 · 名额发放失败（待人工处理）</span></td>
+                    <td class="num" th:text="${pu.quantity()}">1</td>
+                    <td class="num" th:text="${pu.totalOrNull() != null} ? 'Rp' + ${#numbers.formatInteger(pu.totalOrNull(), 1, 'POINT')} : '—'">Rp5.000</td>
+                    <td th:text="${pu.channelOrNull() != null} ? ${#messages.msg('admin.v140.petSlots.purchases.channel.' + pu.channelOrNull())} : '—'">PawCoin</td>
+                    <td class="muted">
+                        <!--/* 链接只给能看支付单的人（门控同 AdminPaymentController.VIEW_AUTH），其余只显示缩写文本。 */-->
+                        <a th:if="${pu.intentTokenOrNull() != null}" target="_blank" rel="noopener"
+                           sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.view')"
+                           th:href="@{/admin/payments/{t}/drawer(t=${pu.intentTokenOrNull()})}"
+                           th:text="${pu.intentTokenShort()}">pi_8f2…a91</a>
+                        <span th:if="${pu.intentTokenOrNull() != null}"
+                              sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('payment.view'))"
+                              th:text="${pu.intentTokenShort()}">pi_8f2…a91</span>
+                        <span th:if="${pu.intentTokenOrNull() == null}">—</span>
+                    </td>
+                </tr></tbody>
+            </table>
+            <p class="hint" th:if="${ps.purchasesTruncated()}" th:text="#{admin.v140.petSlots.purchases.truncated}">仅显示最近 20 条</p>
+            <p class="hint err" th:if="${ps.hasPurchaseExceptions()}"
+               th:text="#{admin.v140.petSlots.purchases.exceptionHint}">标红的记录已收款但没有发放名额，请按客诉补发名额或走退款。</p>
+        </th:block>
+
+        <!--/* ⑤ 补发名额卡（L2 / L3）。已注销 / 注销已提交（readOnly）不渲染；已满 5 置灰 + 提示（服务端同时 422）。 */-->
+        <th:block th:unless="${psReadOnly}">
+            <div class="card card-full ud-card" data-ps-grant
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.pet_slot_adjust')">
+                <h3 th:text="#{admin.v140.petSlots.grant.title}">补发名额</h3>
+                <form class="inline"
+                      th:attr="hx-post=@{/admin/users/{id}/pet-slots/grant(id=${ps.userId()})},
+                               data-confirm=#{admin.v140.petSlots.grant.confirm}"
+                      data-confirm-input="days"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <!--/* 一次性幂等 token：每次渲染本页签都换一个新的（补发成功后面板重渲染 = 新 token）。 */-->
+                    <input type="hidden" name="grantToken" th:value="${petSlotGrantToken}"/>
+                    <input type="number" name="days" class="inp ps-days" min="1" max="365" step="1"
+                           th:placeholder="#{admin.v140.petSlots.grant.days}" th:disabled="${ps.full()}" required/>
+                    <input type="text" name="reason" class="inp" maxlength="200"
+                           th:placeholder="#{admin.v140.petSlots.grant.reason}" th:disabled="${ps.full()}" required/>
+                    <button type="submit" class="btn btn-primary" th:disabled="${ps.full()}"
+                            th:text="#{admin.v140.petSlots.grant.submit}">补发</button>
+                </form>
+                <p class="hint" th:if="${ps.full()}" th:text="#{admin.v140.petSlots.grant.full}">已达 5 个名额上限，不能再补发</p>
+                <p class="hint" th:unless="${ps.full()}" th:text="#{admin.v140.petSlots.grant.privacyHint}">原因会写入操作审计，请勿填写用户隐私（手机号、地址等）。</p>
+            </div>
+            <!--/* 无权限：置灰不隐藏（L5），注明所缺权限。 */-->
+            <div class="card card-full ud-card" data-ps-grant-denied
+                 sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('user.pet_slot_adjust'))">
+                <h3 th:text="#{admin.v140.petSlots.grant.title}">补发名额</h3>
+                <div class="inline">
+                    <input type="number" class="inp ps-days" disabled th:placeholder="#{admin.v140.petSlots.grant.days}"/>
+                    <input type="text" class="inp" disabled th:placeholder="#{admin.v140.petSlots.grant.reason}"/>
+                    <button type="button" class="btn btn-primary" disabled
+                            th:title="#{admin.v130.err.forbidden(#{perm.user.pet_slot_adjust})}"
+                            th:text="#{admin.v140.petSlots.grant.submit}">补发</button>
+                </div>
+                <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.user.pet_slot_adjust})}">需要「补发宠物名额」权限</p>
+            </div>
+        </th:block>
+    </th:block>
+</section>
+
+<!--/* 补发成功（L4）：本面板 outerHTML（HX-Retarget #user-petslots-panel）+ 清掉错误槽 + toast oob。
+       只换本页签：整体重渲染会把页签切回「基本信息」。 */-->
+<th:block th:fragment="afterGrant">
+    <section th:replace="~{admin/fragments/drawer-users-petslots :: panel(true)}"></section>
+    <div id="user-drawer-err" hx-swap-oob="innerHTML"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已补发 1 个宠物名额（7 天）</div>
+    </div>
+</th:block>
+</body>
+</html>

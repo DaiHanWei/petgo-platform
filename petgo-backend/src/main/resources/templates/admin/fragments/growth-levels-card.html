@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  成长体系 · 「等级表」页签（V1.4.0 ① Story 4.1 · UI G5 / G6 · AD-12）。模型：${levels}（LevelsView）、${latestJob}、
+  ${recalcRetryable}、${appendTierOptions}。
+  🔴 保存不用原生 confirm：卡的 hxPost 指向预检端点（只校验 + 按新表算升 / 降级人数，不写库），由它回服务端确认弹层到
+     #confirm-host（同 App 版本卡 AB-22）；弹层内「确认保存」再 POST /admin/growth/levels。
+  Lv1 门槛固定 0（禁用、不提交）；段位只读；「＋ 追加等级」只能在末尾追加一级。
+  card 也是保存 / 重新执行成功的返回片段（:: saved，HX-Retarget #cfg-growth-levels 原位替换）。
+*/-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/growth/levels/confirm},hxPost=@{/admin/growth/levels/confirm},cardId='cfg-growth-levels',
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.growth.config_edit})},
+                   half=${(#lists.size(levels.rows) + 1) / 2},
+                   cfgFootSlot=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''growth.config_edit'')')} ? ~{admin/fragments/growth-levels-card :: levelsAppend} : null">
+<div id="cfg-growth-levels-wrap">
+  <!-- 最近一次重算（AC7.4 / 7.5） -->
+  <div class="growth-recalc card" data-section="growth-recalc">
+    <b th:text="#{admin.v140.growth.recalc.title}">最近一次重算</b>:
+    <span th:if="${latestJob == null}" th:text="#{admin.v140.growth.recalc.none}">尚未重算过</span>
+    <th:block th:if="${latestJob != null}">
+      <span th:attr="data-recalc-status=${latestJob.status.name()}"
+            th:text="#{${'admin.v140.growth.recalc.status.' + latestJob.status.name()}}">已完成</span>
+      <span th:if="${latestJob.status.name() == 'DONE'}"
+            th:text="#{admin.v140.growth.recalc.summary(${latestJob.upgraded}, ${latestJob.downgraded}, ${@adminTime.wib(latestJob.finishedAt)})}">升级 3 人 · 降级 0 人</span>
+    </th:block>
+    <form th:if="${canEdit and recalcRetryable}" method="post" th:action="@{/admin/growth/levels/recalc}"
+          th:attr="hx-post=@{/admin/growth/levels/recalc}" hx-target="#cfg-growth-levels-err" hx-swap="innerHTML" style="display:inline">
+      <button type="submit" class="btn btn-neutral btn-sm" data-recalc-retry th:text="#{admin.v140.growth.recalc.retry}">重新执行重算</button>
+    </form>
+  </div>
+
+  <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::glevels-title}, ~{::glevels-form}, #{admin.v140.growth.levels.save})}">
+    <span th:fragment="glevels-title" th:text="#{admin.v140.growth.levels.title}">等级表</span>
+    <div th:fragment="glevels-form" data-section="growth-levels">
+      <p class="hint" th:text="#{admin.v140.growth.levels.hint}">按历史累计成长值定级。</p>
+      <div class="growth-levels-grid">
+        <table class="tbl" th:each="col : ${ {0, 1} }"
+               th:with="slice=${col == 0} ? ${levels.rows.subList(0, half)} : ${levels.rows.subList(half, #lists.size(levels.rows))}">
+          <thead>
+          <tr>
+            <th th:text="#{admin.v140.growth.levels.col.level}">等级</th>
+            <th th:text="#{admin.v140.growth.levels.col.threshold}">累计成长值门槛</th>
+            <th th:text="#{admin.v140.growth.levels.col.tier}">段位</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr th:each="r : ${slice}" th:attr="data-level=${r.level}">
+            <td th:text="'Lv' + ${r.level}">Lv1</td>
+            <td>
+              <!--/* Lv1 门槛固定 0：禁用且不提交（服务端也按 0）。label 首个 span = diff 复述用的字段名。 */-->
+              <!--/* UI G5：门槛千分位显示（text + inputmode=numeric）；提交回来由 levelsForm 还原成纯数字再校验。 */-->
+              <label th:if="${r.level == 1}"><span hidden th:text="'Lv' + ${r.level}">Lv1</span>
+                <input class="inp" type="text" value="0" disabled/></label>
+              <label th:unless="${r.level == 1}"><span hidden th:text="'Lv' + ${r.level}">Lv2</span>
+                <input class="inp" type="text" inputmode="numeric" pattern="[0-9]{1,3}(,[0-9]{3})*|[0-9]+" data-grouped
+                       th:name="'lv.' + ${r.level}" th:value="${#numbers.formatInteger(r.threshold, 1, 'COMMA')}" th:disabled="${!canEdit}"/></label>
+            </td>
+            <td><span class="tier-dot" th:classappend="'tier-' + ${r.tier.name()}"></span><span
+                    th:text="#{${'admin.v140.growth.tier.' + r.tier.name()}}">Newbie</span></td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!--/* ＋ 追加等级：按 UI G5 放在卡片页脚「保存等级表」左侧（configCard 的 cfgFootSlot，见下方 levelsAppend）。 */-->
+      <script>
+        (function () {
+          // 门槛框失焦时补千分位（只改显示；提交时服务端还原纯数字）。不合规输入原样保留，交给 pattern / 服务端 422。
+          var card = document.getElementById('cfg-growth-levels');
+          if (!card || card.dataset.groupedBound) { return; }
+          card.dataset.groupedBound = '1';
+          card.addEventListener('focusout', function (e) {
+            var el = e.target;
+            if (!el.matches || !el.matches('[data-grouped]')) { return; }
+            var raw = el.value.replace(/,/g, '').trim();
+            if (/^[0-9]+$/.test(raw)) { el.value = Number(raw).toLocaleString('en-US'); el.dispatchEvent(new Event('input', { bubbles: true })); }
+          });
+        })();
+      </script>
+    </div>
+  </div>
+</div>
+</th:block>
+
+<!--/* 「＋ 追加等级」（只能末尾一级；只读用户不渲染）：插在配置卡页脚、保存钮左侧（UI G5）；展开后表单整行落到页脚上方。 */-->
+<details th:fragment="levelsAppend" class="pl-inline growth-level-append" data-level-append>
+  <summary class="btn btn-neutral btn-sm" th:text="#{admin.v140.growth.levels.append}">＋ 追加等级</summary>
+  <div class="cfg-grid-2">
+    <p><b th:text="'Lv' + ${levels.nextLevel}">Lv21</b></p>
+    <label class="field"><span th:text="#{admin.v140.growth.levels.col.threshold}">累计成长值门槛</span>
+      <input class="inp field-full" type="text" inputmode="numeric" pattern="[0-9]{1,3}(,[0-9]{3})*|[0-9]+" data-grouped name="appendThreshold"/></label>
+    <label class="field"><span th:text="#{admin.v140.growth.levels.col.tier}">段位</span>
+      <select class="inp field-full" name="appendTier">
+        <option th:each="t : ${appendTierOptions}" th:value="${t.name()}"
+                th:text="#{${'admin.v140.growth.tier.' + t.name()}}">Star</option>
+      </select></label>
+  </div>
+</details>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/growth-levels-card :: card}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

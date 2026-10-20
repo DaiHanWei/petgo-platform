@@ -32,6 +32,9 @@ class _FakeMediaUseCase extends MediaUploadUseCase {
 class _FakeTriageRepo implements TriageRepository {
   final List<String> submittedKeys = <String>[];
 
+  /// V1.4.0 multi-pet Story 4.1：每次提交带的 petId。
+  final List<int?> submittedPetIds = <int?>[];
+
   @override
   Future<int> submitTriage({
     String? symptomText,
@@ -42,6 +45,7 @@ class _FakeTriageRepo implements TriageRepository {
     submittedKeys
       ..clear()
       ..addAll(imageObjectKeys);
+    submittedPetIds.add(petId);
     return 1;
   }
 
@@ -136,5 +140,43 @@ void main() {
     ctrl.reset();
     expect(c.read(triageUploadProvider).images, isEmpty);
     expect(c.read(triageUploadProvider).symptomText, '');
+  });
+
+  // ---- V1.4.0 multi-pet Story 4.1 · AC7.4：草稿 petId 传给 submitTriage ----
+
+  test('草稿 petId（入口所选 / 单宠物那只）→ submitTriage(petId:)；重提交沿用', () async {
+    final triage = _FakeTriageRepo();
+    final c = _container(_FakeMediaUseCase(), triage);
+    final ctrl = c.read(triageUploadProvider.notifier);
+    ctrl.setPetId(8);
+    ctrl.setSymptom('muntah');
+
+    await ctrl.submit();
+    await ctrl.submit(); // 失败重提交复用同一草稿
+
+    expect(triage.submittedPetIds, [8, 8]);
+    expect(c.read(triageUploadProvider).petId, 8);
+  });
+
+  test('未选宠物（0 只）→ 不带 petId；reset 清掉所选', () async {
+    final triage = _FakeTriageRepo();
+    final c = _container(_FakeMediaUseCase(), triage);
+    final ctrl = c.read(triageUploadProvider.notifier);
+    ctrl.setPetId(8);
+    ctrl.reset();
+    ctrl.setSymptom('muntah');
+
+    await ctrl.submit();
+
+    expect(triage.submittedPetIds, [null]);
+  });
+
+  test('setSymptom / addImage 不丢所选宠物', () {
+    final c = _container(_FakeMediaUseCase(), _FakeTriageRepo());
+    final ctrl = c.read(triageUploadProvider.notifier);
+    ctrl.setPetId(9);
+    ctrl.setSymptom('x');
+    ctrl.addImage(bytes(1));
+    expect(c.read(triageUploadProvider).petId, 9);
   });
 }

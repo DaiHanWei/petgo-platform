@@ -23,6 +23,13 @@ public interface TailsonalityResultRepository extends JpaRepository<Tailsonality
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<TailsonalityResult> findForUpdateByPublicTokenAndPetProfileId(String publicToken, long petProfileId);
 
+    /** V1.4.0 multi-pet（Story 1.2 · X12 / X14）：按 token 取结果，归属由调用方按结果行上的宠物校验。 */
+    Optional<TailsonalityResult> findByPublicToken(String publicToken);
+
+    /** V1.4.0 multi-pet（Story 1.2 · X13）：解锁发起按 token 加锁读，归属由调用方按结果行上的宠物校验。 */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<TailsonalityResult> findForUpdateByPublicToken(String publicToken);
+
     /** 删档 / 注销（AC7.2）。 */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from TailsonalityResult r where r.petProfileId = :petId")

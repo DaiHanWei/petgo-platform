@@ -26,6 +26,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
 import '../keepsake/fake_share_reward_repos.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.2 Story 4.3：登机牌卡分享（L0 部分）。
 
@@ -63,6 +64,8 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       retry: (_, _) => null,
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         passportShareRewardRepositoryProvider.overrideWithValue(shareReward),
         boardingPassRepositoryProvider.overrideWithValue(
             _Repo(BoardingPassDetail.fromJson(detailJson(unlocked: unlocked, status: status)))),
@@ -223,7 +226,7 @@ class _Repo implements BoardingPassRepository {
   final BoardingPassDetail current;
 
   @override
-  Future<BoardingPassList> list() async => BoardingPassList.fromJson({
+  Future<BoardingPassList> list({int? petId}) async => BoardingPassList.fromJson({
         'petName': 'Momo',
         'passportNo': 'TT02P2600128',
         'items': [
@@ -233,7 +236,7 @@ class _Repo implements BoardingPassRepository {
       });
 
   @override
-  Future<BoardingPassDetail> detail(String placeToken) async => current;
+  Future<BoardingPassDetail> detail(String placeToken, {int? petId}) async => current;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

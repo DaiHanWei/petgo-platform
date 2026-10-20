@@ -55,8 +55,10 @@ class PublicProfilePet {
 }
 
 abstract class PublicProfilePetRepository {
-  /// @return 没建过档案 / 主人注销或被封 → null（服务端 204）
-  Future<PublicProfilePet?> fetch(int userId);
+  /// 该用户的全部宠物（V1.4.0 multi-pet Story 1.5 · AC6 · `GET /users/{userId}/pets`）。
+  ///
+  /// @return 空数组 = 没有宠物（没建过档案 / 主人注销或被封）—— 正常状态，不是错误。
+  Future<List<PublicProfilePet>> fetchAll(int userId);
 }
 
 class DioPublicProfilePetRepository implements PublicProfilePetRepository {
@@ -65,11 +67,12 @@ class DioPublicProfilePetRepository implements PublicProfilePetRepository {
   final Dio dio;
 
   @override
-  Future<PublicProfilePet?> fetch(int userId) async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.userPublicPet(userId));
-    // 🛡 204 时 dio 给的是 null body —— 「这个人没建过档案」是正常状态，不是错误。
-    final data = resp.data;
-    return data == null || data.isEmpty ? null : PublicProfilePet.fromJson(data);
+  Future<List<PublicProfilePet>> fetchAll(int userId) async {
+    final resp = await dio.get<List<dynamic>>(ApiPaths.userPublicPets(userId));
+    // 🛡 空数组 / 空 body —— 「这个人没有宠物」是正常状态，不是错误。
+    return (resp.data ?? const [])
+        .map((e) => PublicProfilePet.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
   }
 }
 
@@ -77,12 +80,13 @@ final Provider<PublicProfilePetRepository> publicProfilePetRepositoryProvider =
     Provider<PublicProfilePetRepository>(
         (ref) => DioPublicProfilePetRepository(ref.read(dioProvider)));
 
-/// 某个用户主页上的宠物卡（family：userId）。
+/// 某个用户主页上的宠物列表（family：userId · V1.4.0 multi-pet Story 1.5 · AC6）。
 ///
 /// ⚠️ `isAutoDispose: true` + 关掉自动重试，理由同 `publicProfileProvider`
 /// （Riverpod 3 的 family 默认 keep-alive；换账号会串数据，失败态还会自己横跳）。
-final publicProfilePetProvider = FutureProvider.family<PublicProfilePet?, int>(
-  (ref, userId) => ref.read(publicProfilePetRepositoryProvider).fetch(userId),
+/// 取代旧单只 `publicProfilePetProvider`（`/users/{userId}/pet`，已无引用、删除）。
+final publicProfilePetsProvider = FutureProvider.family<List<PublicProfilePet>, int>(
+  (ref, userId) => ref.read(publicProfilePetRepositoryProvider).fetchAll(userId),
   retry: (_, _) => null,
   isAutoDispose: true,
 );

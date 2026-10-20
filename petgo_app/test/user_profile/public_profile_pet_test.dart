@@ -74,6 +74,7 @@ class _Nav {
 Future<_Nav> _pump(
   WidgetTester tester, {
   PublicProfilePet? pet,
+  List<PublicProfilePet>? pets,
   bool loggedIn = true,
 }) async {
   final nav = _Nav();
@@ -104,7 +105,8 @@ Future<_Nav> _pump(
   final container = ProviderContainer(overrides: [
     publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
     publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
-    publicProfilePetProvider(_kTargetId).overrideWith((ref) async => pet),
+    publicProfilePetsProvider(_kTargetId)
+        .overrideWith((ref) async => pets ?? (pet == null ? const [] : [pet])),
     authControllerProvider.overrideWith(loggedIn ? _LoggedInAuth.new : _GuestAuth.new),
   ]);
   addTearDown(container.dispose);
@@ -201,6 +203,67 @@ void main() {
       final nav = await _pump(tester, pet: _pet(), loggedIn: false);
 
       await tester.tap(find.byKey(const ValueKey('profilePetCard')));
+      await tester.pumpAndSettle();
+
+      expect(nav.visitedPetId, isNull);
+    });
+  });
+
+  /// V1.4.0 multi-pet Story 1.5 · AC6（J0 ~ J3）：数据源换成 `GET /users/{userId}/pets`。
+  group('AC6：他人主页宠物列表', () {
+    List<PublicProfilePet> six() => [
+          for (var i = 0; i < 6; i++)
+            PublicProfilePet(
+              petId: 100 + i,
+              name: 'Pet$i',
+              avatarUrl: null,
+              petType: 'CAT',
+              birthday: DateTime.utc(2024, 6, 1),
+              diaryCount: i,
+              tailsonalityBadge: null,
+            ),
+        ];
+
+    testWidgets('J2：6 只全部渲染，且在横滑容器里', (tester) async {
+      await _pump(tester, pets: six());
+
+      expect(find.byKey(const ValueKey('profilePetCard')), findsOneWidget);
+      for (var i = 1; i < 6; i++) {
+        expect(find.byKey(ValueKey('profilePetCard-$i')), findsOneWidget);
+      }
+      final scroll = find.ancestor(
+          of: find.byKey(const ValueKey('profilePetCard-5')),
+          matching: find.byType(SingleChildScrollView));
+      expect(tester.widget<SingleChildScrollView>(scroll.first).scrollDirection, Axis.horizontal);
+    });
+
+    testWidgets('空数组 → 宠物区整块不渲染', (tester) async {
+      await _pump(tester, pets: const []);
+
+      expect(find.byKey(const ValueKey('profilePetCard')), findsNothing);
+      expect(find.text(l10n.profilePetsSection.toUpperCase()), findsNothing);
+    });
+
+    testWidgets('访客视角不显示只读锁标', (tester) async {
+      await _pump(tester, pets: six());
+
+      expect(find.byIcon(Icons.lock), findsNothing);
+    });
+
+    testWidgets('J3：点第 3 只 → 登录门控后进该只的站内访客视图', (tester) async {
+      final nav = await _pump(tester, pets: six());
+
+      await tester.ensureVisible(find.byKey(const ValueKey('profilePetCard-2')));
+      await tester.tap(find.byKey(const ValueKey('profilePetCard-2')));
+      await tester.pumpAndSettle();
+
+      expect(nav.visitedPetId, 102);
+    });
+
+    testWidgets('J3：游客点任一只 → 登录引导，不进访客视图', (tester) async {
+      final nav = await _pump(tester, pets: six(), loggedIn: false);
+
+      await tester.tap(find.byKey(const ValueKey('profilePetCard-1')));
       await tester.pumpAndSettle();
 
       expect(nav.visitedPetId, isNull);

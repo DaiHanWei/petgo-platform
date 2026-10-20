@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  礼物目录的摘要条 / 表格 / 单行（V1.4.0 ③ gift Story 3.1 · AC3，模板 B，UI 稿 L1）。
+    sumbar(oob) — 三格：在线礼物 · 其中专属 · 已下线（全目录口径，不随筛选变）
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(g, oob) — 单行；点行开抽屉（编辑 / 上下线都在抽屉里，行内无按钮）
+  ⚠️ 图标是裸图（24 高、等比，不加底色）—— 后台看到的就是 App 礼物格里的那张图。
+  ⚠️ 金额一律千分位逗号（后台惯例），与 App 侧点号千分位无关。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="gift-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v140.gift.summary.online}">在线礼物</div>
+        <div class="sum-value" data-sum="online" th:text="${summary.online}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v140.gift.summary.exclusive}">其中专属</div>
+        <div class="sum-value" data-sum="exclusive" th:text="${summary.exclusive}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v140.gift.summary.offline}">已下线</div>
+        <div class="sum-value" data-sum="offline" th:text="${summary.offline}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/gift-catalog-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(gifts)}" class="gift-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.v140.gift.col.icon}">图标</th>
+            <th th:text="#{admin.v140.gift.col.name}">名称（EN / ID）</th>
+            <th class="num" th:text="#{admin.v140.gift.col.price}">价格</th>
+            <th th:text="#{admin.v140.gift.col.species}">适用物种</th>
+            <th th:text="#{admin.v140.gift.col.kind}">类型</th>
+            <th class="nowrap" th:text="#{admin.v140.gift.col.minLevel}">最低等级</th>
+            <th class="num" th:text="#{admin.v140.gift.col.sortOrder}">排序</th>
+            <th th:text="#{admin.v140.gift.col.status}">状态</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="g : ${gifts}"><tr th:replace="~{admin/fragments/gift-catalog-list :: row(${g}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <!--/* 空态两种：目录本身为空（引导新建）/ 筛选无结果 */-->
+    <div class="empty" th:if="${#lists.isEmpty(gifts) and catalogEmpty}" data-empty="catalog">
+        <span class="empty-emoji">🎁</span>
+        <p th:text="#{admin.v140.gift.empty}">还没有任何礼物，点右上角「新建礼物」开始。</p>
+    </div>
+    <div class="empty" th:if="${#lists.isEmpty(gifts) and !catalogEmpty}" data-empty="filtered">
+        <p th:text="#{admin.v140.gift.emptyFiltered}">没有符合筛选条件的礼物</p>
+    </div>
+</th:block>
+
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(g, oob)" th:id="'gift-row-' + ${g.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${g.id}" th:data-drawer-url="@{/admin/gift-catalog/{id}/drawer(id=${g.id})}" tabindex="0"
+        th:classappend="${g.offline()} ? 'row-muted'">
+        <td class="nowrap">
+            <img th:src="${g.iconUrl}" alt="" style="height:24px;width:auto;max-width:72px;vertical-align:middle"/>
+        </td>
+        <td>
+            <div th:text="${g.nameEn}">Bone</div>
+            <div class="muted" style="font-size:12px" th:text="${g.nameId}">Tulang</div>
+        </td>
+        <td class="num nowrap" th:text="'Rp' + ${#numbers.formatInteger(g.price, 1, 'COMMA')}">Rp1,000</td>
+        <td class="nowrap">
+            <span th:if="${g.universal()}" th:text="#{admin.v140.gift.species.all}">通用</span>
+            <th:block th:unless="${g.universal()}" th:each="sp, st : ${g.species()}"><span th:text="#{'admin.v140.gift.species.' + ${sp}}">猫</span><th:block th:unless="${st.last}"> · </th:block></th:block>
+        </td>
+        <td class="nowrap">
+            <span class="badge" th:classappend="${g.exclusive()} ? 'badge-info' : 'badge-muted'"
+                  th:text="#{'admin.v140.gift.kind.' + ${g.kind}}">普通</span>
+        </td>
+        <td class="nowrap" th:text="${g.exclusive()} ? 'Lv' + ${g.minLevel} : '—'">—</td>
+        <td class="num nowrap" th:text="${g.sortOrder}">0</td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${g.offline()} ? 'dot--done' : 'dot--ok'"></span>
+            <span class="badge" th:classappend="${g.offline()} ? 'badge-muted' : 'badge-ok'"
+                  th:text="#{'admin.v140.gift.status.' + ${g.status}}">在线</span>
+        </td>
+    </tr>
+</tbody></table>
+</body>
+</html>

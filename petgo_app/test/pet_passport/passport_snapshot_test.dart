@@ -16,6 +16,7 @@ import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/presentation/pet_insights_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.2 Story 3.4 · L0：B2b 吸底购买 / 已买禁用态、B7「Nanti」不发请求、水印按版本态、已购版本入口与回看。
 void main() {
@@ -50,6 +51,8 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       retry: (_, _) => null,
       overrides: [
+        // V1.4.0 multi-pet：页面按当前宠物取数（family 键 petId）。
+        effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
         petPassportRepositoryProvider.overrideWithValue(repo),
         keepsakePricingProvider.overrideWith((ref) async => const KeepsakePricing(
             ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
@@ -196,13 +199,13 @@ class _Repo implements PetPassportRepository {
   }
 
   @override
-  Future<PetPassport> fetch() async {
+  Future<PetPassport> fetch({int? petId}) async {
     fetches++;
     return current;
   }
 
   @override
-  Future<KeepsakePurchaseResult> startSnapshot(HdPayChannel channel) async {
+  Future<KeepsakePurchaseResult> startSnapshot(HdPayChannel channel, {int? petId}) async {
     starts.add(channel);
     if (qris) {
       return const KeepsakePurchaseResult(unlocked: false, paymentToken: 'pi', payload: '00020101021226', purchaseToken: 'kp');
@@ -217,7 +220,7 @@ class _Repo implements PetPassportRepository {
   }
 
   @override
-  Future<List<PassportSnapshotItem>> snapshots() async =>
+  Future<List<PassportSnapshotItem>> snapshots({int? petId}) async =>
       [PassportSnapshotItem(snapshotToken: 'snap1', paidAt: DateTime.utc(2026, 9, 20), stampCount: 1)];
 
   @override

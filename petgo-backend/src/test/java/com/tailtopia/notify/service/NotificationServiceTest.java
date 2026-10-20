@@ -14,6 +14,8 @@ import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.repository.NotificationAggregateDao;
 import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.notify.preference.PushPreferenceService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -47,6 +49,15 @@ class NotificationServiceTest {
     InteractionCopyRenderer copy;
     @Mock
     InteractionActorResolver resolver;
+    /** V1.4.0 ④ Story 1.2：推送闸门。默认「全开」（Mockito 对 boolean 默认 false，不桩会让所有推送断言变红）。 */
+    @Mock
+    PushPreferenceService prefs;
+
+    @BeforeEach
+    void allPushCategoriesEnabled() {
+        org.mockito.Mockito.lenient().when(prefs.isEnabled(org.mockito.ArgumentMatchers.anyLong(), any()))
+                .thenReturn(true);
+    }
 
     private NotificationService service() {
         // push 文案本地化（bug 20260625-105）：mock MessageSource 回退到传入原文案，保持既有推送文本断言。
@@ -54,7 +65,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(2));
         when(accountQuery.localeOf(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(java.util.Locale.forLanguageTag("id"));
-        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
     }
 
     @Test
@@ -101,7 +112,7 @@ class NotificationServiceTest {
         // 而本路径**根本不发推送**、用不到它们 —— 严格 stub 模式下会报 UnnecessaryStubbing。
         // 这本身就是"没发推送"的一个旁证。
         NotificationService svc =
-                new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+                new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
         Notification n = svc.sendWithoutPush(7L, NotificationType.MILESTONE_SM_NODE,
                 "留痕标题", "留痕正文", NotificationType.MILESTONE_NODE.name(), "C-S14");
 
@@ -124,7 +135,7 @@ class NotificationServiceTest {
         when(redis.opsForValue()).thenReturn(valueOps);
         when(accountQuery.isVirtual(7L)).thenReturn(true);
         // 不走 service()：推送文案/语言根本用不到（严格 stub 下即为"没推送"的旁证）。
-        NotificationService svc = new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+        NotificationService svc = new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
 
         svc.send(7L, NotificationType.CONTENT_LIKED, "a", "b", "X", "r");
         svc.sendWithCopy(7L, NotificationType.CONTENT_LIKED, "K", null, "a", "b", "r");
@@ -141,7 +152,7 @@ class NotificationServiceTest {
 
     /** 互动路径用的服务：不 stub 旧 pushText（严格 stub 下多余 stub 会报错）。 */
     private NotificationService interactionService() {
-        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs);
     }
 
     private void stubPushRendering() {
@@ -412,10 +423,122 @@ class NotificationServiceTest {
         when(valueOps.increment(NotificationService.UNREAD_KEY_PREFIX + "7")).thenReturn(1L);
         when(resolver.effectiveUnreadCount(7L)).thenReturn(4L);
 
-        new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver)
+        new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver, prefs)
                 .sendWithoutPush(7L, NotificationType.MILESTONE_SM_NODE, "t", "b", "MILESTONE_NODE", "C-S1");
 
         verify(valueOps).set(NotificationService.UNREAD_KEY_PREFIX + "7", "4");
         verify(repo, never()).countByRecipientUserIdAndReadIsFalse(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    // ===== V1.4.0 gift Story 1.2 · AC5：sendGiftReceived =====
+
+    private static Notification giftPersisted(long id, String token) {
+        Notification n = Notification.interaction(9L, NotificationType.PET_GIFT_RECEIVED, "t", "b",
+                NotificationType.PET_GIFT_RECEIVED.name(), token, "70", "GIFT:PET:70", null, null);
+        org.springframework.test.util.ReflectionTestUtils.setField(n, "id", id);
+        return n;
+    }
+
+    @Test
+    void interactionTypesIncludeGiftReceivedAndResolverFollows() {
+        assertThat(NotificationService.INTERACTION_TYPES).containsExactlyInAnyOrder(NotificationType.CONTENT_LIKED,
+                NotificationType.CONTENT_COMMENTED, NotificationType.USER_FOLLOWED, NotificationType.PLACE_COMMENTED,
+                NotificationType.PET_GIFT_RECEIVED);
+        assertThat(InteractionActorResolver.INTERACTION_TYPE_NAMES).contains("PET_GIFT_RECEIVED").hasSize(5);
+    }
+
+    @Test
+    void giftAggregateKeyIsNeverDebounced() {
+        assertThat(NotificationService.debounceKey("GIFT:PET:1")).isNull();
+    }
+
+    @Test
+    void firstGiftCreatesAggregateRowBumpsBadgeAndPushesWithoutDebounce() {
+        when(aggregates.upsertAggregate(eq(9L), eq(NotificationType.PET_GIFT_RECEIVED), anyString(), anyString(),
+                eq("PET_GIFT_RECEIVED"), anyString(), eq("70"), eq("GIFT:PET:70"), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", true));
+        when(aggregates.addActor(100L, 2L)).thenReturn(true);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(giftPersisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+
+        Notification n = interactionService().sendGiftReceived(9L, 2L, 70L, "Andi mengirim Tulang ×5 untuk Mochi");
+
+        assertThat(n.getId()).isEqualTo(100L);
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
+        verify(aggregates, never()).touch(org.mockito.ArgumentMatchers.anyLong());
+        verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(java.time.Duration.class));
+        verify(pusher).pushToUser(9L, "Andi mengirim Tulang ×5 untuk Mochi", "", "PET_GIFT_RECEIVED", "tok", "70");
+        org.mockito.Mockito.verifyNoInteractions(copy);
+    }
+
+    /** AC6.8：同一人未读期间连送 → 不新增触发人（actorCount 不变），但刷新时间并照样推送（与点赞 T-29 相反）。 */
+    @Test
+    void sameSenderAgainOnUnreadGiftTouchesAndStillPushes() {
+        when(aggregates.upsertAggregate(eq(9L), eq(NotificationType.PET_GIFT_RECEIVED), anyString(), anyString(),
+                anyString(), anyString(), eq("70"), eq("GIFT:PET:70"), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", false));
+        when(aggregates.addActor(100L, 2L)).thenReturn(false);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(giftPersisted(100L, "tok")));
+
+        interactionService().sendGiftReceived(9L, 2L, 70L, "Andi mengirim Tulang untuk Mochi");
+
+        verify(aggregates).touch(100L);
+        org.mockito.Mockito.verifyNoInteractions(redis);
+        verify(pusher).pushToUser(9L, "Andi mengirim Tulang untuk Mochi", "", "PET_GIFT_RECEIVED", "tok", "70");
+    }
+
+    @Test
+    void mergedNewGiftSenderTouchesOnceWithoutBadgeAndPushes() {
+        when(aggregates.upsertAggregate(eq(9L), any(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), eq("GIFT:PET:70"), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", false));
+        when(aggregates.addActor(100L, 3L)).thenReturn(true);
+        when(actors.findActorIdsNewestFirst(100L)).thenReturn(java.util.List.of(3L, 2L));
+        when(copy.resolve(eq(9L), eq(java.util.List.of(2L)))).thenReturn(java.util.Optional.of(SUMMARY));
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(giftPersisted(100L, "tok")));
+
+        interactionService().sendGiftReceived(9L, 3L, 70L, "Budi mengirim Tulang untuk Mochi");
+
+        verify(aggregates, org.mockito.Mockito.times(1)).touch(100L);
+        org.mockito.Mockito.verifyNoInteractions(redis);
+        verify(pusher).pushToUser(9L, "Budi mengirim Tulang untuk Mochi", "", "PET_GIFT_RECEIVED", "tok", "70");
+    }
+
+    @Test
+    void giftWithoutPushTitleStillWritesButNeverPushes() {
+        when(aggregates.upsertAggregate(eq(9L), any(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", true));
+        when(aggregates.addActor(100L, 2L)).thenReturn(true);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(giftPersisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+
+        interactionService().sendGiftReceived(9L, 2L, 70L, null);
+
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
+
+    @Test
+    void giftToVirtualOrOfficialRecipientIsNotPushed() {
+        when(aggregates.upsertAggregate(eq(9L), any(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", true));
+        when(aggregates.addActor(100L, 2L)).thenReturn(true);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(giftPersisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(accountQuery.isOfficialAccount(9L)).thenReturn(true);
+
+        interactionService().sendGiftReceived(9L, 2L, 70L, "x");
+
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
+
+    @Test
+    void sendInteractionStillRejectsGiftType() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> interactionService().sendInteraction(9L,
+                NotificationType.PET_GIFT_RECEIVED, 2L, "GIFT:PET:70", "70", null, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.mockito.Mockito.verifyNoInteractions(repo, aggregates, redis, pusher);
     }
 }

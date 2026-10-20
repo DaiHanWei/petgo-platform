@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../growth/domain/growth_badge.dart';
 
 /// 关注头像排的一个人（V1.3.4 following 流）。
 class FollowingStripUser {
@@ -11,6 +12,7 @@ class FollowingStripUser {
     required this.userToken,
     this.nickname,
     this.avatarUrl,
+    this.badge,
   });
 
   final int userId;
@@ -18,11 +20,15 @@ class FollowingStripUser {
   final String? nickname;
   final String? avatarUrl;
 
+  /// 等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? badge;
+
   factory FollowingStripUser.fromJson(Map<String, dynamic> json) => FollowingStripUser(
         userId: (json['userId'] as num).toInt(),
         userToken: json['userToken'] as String,
         nickname: json['nickname'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
+        badge: GrowthBadge.fromFlat(json, prefix: ''),
       );
 }
 

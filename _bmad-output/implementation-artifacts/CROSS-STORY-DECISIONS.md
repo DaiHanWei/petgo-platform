@@ -214,3 +214,27 @@
 - 去留：整单取消、联系用户后继续 → 清标记离开工作台；部分取消 → **保留**（一单缺多行要逐行处理）。
 - 右栏库存列（实际 / 已锁定）保留为对照参考，不再是判据；「缺货」行标只剩「该 SKU 无库存记录」一种含义。
 - 未做（未拍板）：盘点时记录缺口自动判定（方案 B）。真实超卖来源仍是盘点 / 报损没跟上实物，文案照写。
+
+## 2026-10-18 V1.4.0 四条线共用地基（Story v1.4.0/0-1）
+
+**背景**：V1.4.0 四条线（① Tailrent Level / ② 多宠物 / ③ 送礼 / ④ 推送开关与收藏）用四个功能分支并行开发，合并顺序 ① → ② → ③ → ④。②③ 依赖 ① 的等级接口，① 监听 ③④ 的事件，四条线共用两条 CHECK 约束。为避免并行开发时各自造替身、私改约束，跨分支的东西由**地基 Story 0.1** 先落进 `dev_1.4.0`，四个功能分支都从地基之后切出。
+
+**归属与禁改（违反即返工）**
+
+| 东西 | 由谁定义 | 其他分支 |
+|---|---|---|
+| `ck_notifications_type`（39 值，`V20261018_1400`） | 地基 | ①②③④ **一律不改**。确需新增类型 → 回到集成分支单独起一条重建迁移，不在功能分支里改 |
+| `ck_payment_intents_purpose`（11 值，`V20261018_1401`） | 地基 | 同上 |
+| `NotificationType` 新增 5 值 / `PaymentPurpose` 新增 `GIFT`、`PET_SLOT_RENT` | 地基 | 只用，不增删、不改顺序 |
+| `growth.service.GrowthQueryService`（`getLevel` / `getLevels`）、`growth.domain.GrowthLevel` / `GrowthTier` | 地基（占位实现） | **① 只替换方法体，不改签名 / 包名**；②③ 只调用，**禁止替身或自写等级判断**；`participating=false` 一律不给权益 |
+| `growth.event.GrowthLevelChangedEvent` | 地基 | ① 发布、② 监听；不改字段 |
+| `gift.event.GiftSentEvent` | 地基 | ③ 发布、① 监听；不改字段、不在别处重定义 |
+| `content.event.ContentCollectedEvent` / `ContentUncollectedEvent` | 地基 | ④ 发布、① 监听；不改字段 |
+| 后台用户抽屉页签头 `growth` / `petSlots` / `gifts` 及空容器 | 地基 | ①②③ 只往各自 `data-utab-panel` 里填内容，**不改页签头与 data-utab 名** |
+
+**其他口径**
+- ① 成长值流水的「关联宠物」在 ② 合并前取 `content_posts.pet_id` 单值，② 合并后改为写入全部关联宠物（① PRD §6.4）。
+- 功能分支与 `dev_1.4.0` 冲突时**不反向合并 dev 进功能分支**，从 dev 切对齐分支处理。
+- **详情页礼物数据形态（gift Story 4.1，2026-10-19）**：`ContentDetailResponse` 末尾两个独立列表 `…, pets, giftPets` 并存、同序（宠物创建顺序），礼物汇总**不**并进 ② 的 `ContentPetView`（取代 ② 3.1 AC8.4 的原设想）。送礼取宠物只经 `gift.port.GiftPetDirectory`，唯一实现 `MultiPetGiftPetDirectory`（接 ② 的 `PetQueryService` / `ContentPetQuery`）；App 一律按 `petId` 送礼，目录 `?postId=` 已弃用、仅兼容 1.4.0 早期包。
+- **短视频线 `vip_level`**（`feat/video`，已上 stag、未进 main）是 Tailrent Level 的先行版。视频功能不早于等级上线；上线前视频发布门槛改读 `GrowthQueryService`，`vip_level` 字段与后台入口由视频线自行退场。stag 上的相关数据届时直接覆盖，不做迁移兼容。合并视频线时注意它也改了后台用户抽屉、`AdminPermissions`、`AuditActions`，以地基 + 四条线合并后的版本为基准解冲突。
+- **推送分类开关（④，2026-10-18 规划）**：每个 `NotificationType` 必须在 `notify.preference.PushCategory.of` 指定分类（穷尽 `switch` 无 `default`，漏了编译失败）。**任何新增的推送出口**（不经 `NotificationService.send` / `sendWithCopy` / `sendInteraction` 三条已加闸门路径、直接调 `NotificationPusher` 或 IM 离线推送的）必须先调 `PushPreferenceService.isEnabled(userId, type)`，「订单与账号」类除外。①③ 新增的推送出口在 ④ 对齐 story 3.1 统一核查。直接或间接调用 `NotificationPusher.pushToUser` / `pushToUserNow`、`TencentImClient.pushOffline*` 或带 `OfflinePushInfo` 的 IM 消息都算推送出口；批量场景用 `PushPreferenceService.mutedAmong(userIds, category)`（先例：`OpsNotificationDispatcher` 按批预取 `PROMO`）。结构守卫 `notify/PushExitStructureTest` 会在新出口绕过闸门时变红（Story 1.2 落地核对，类名 / 方法名与代码一致）。

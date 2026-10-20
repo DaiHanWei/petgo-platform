@@ -37,44 +37,45 @@ class HealthMilestoneAutoPathTest {
     @BeforeEach
     void setUp() {
         completion = Mockito.mock(MilestoneCompletionService.class);
-        listener = new MilestoneAutoCompleteListener(completion);
+        listener = new MilestoneAutoCompleteListener(completion,
+            org.mockito.Mockito.mock(com.tailtopia.content.service.ContentService.class));
     }
 
     // ===== AC1 类型映射 =====
 
     @Test
     void neuterRecordCompletesM9() {
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER));
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER, 70L));
 
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_NEUTER,
+        verify(completion).completeForPet(70L, MilestoneAutoEvent.HEALTH_RECORD_NEUTER,
                 MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test
     void vaccineAndDewormKeepExistingMapping() {
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.VACCINE));
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.DEWORM));
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.VACCINE, 70L));
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.DEWORM, 70L));
 
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_VACCINE,
+        verify(completion).completeForPet(70L, MilestoneAutoEvent.HEALTH_RECORD_VACCINE,
                 MilestoneCompletionSource.SYSTEM_AUTO);
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_DEWORM,
+        verify(completion).completeForPet(70L, MilestoneAutoEvent.HEALTH_RECORD_DEWORM,
                 MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test
     void menstruationAndCustomMapToNothing() {
         listener.onHealthRecordCreated(
-                new HealthRecordCreatedEvent(7L, HealthRecordType.MENSTRUATION));
-        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.CUSTOM));
+                new HealthRecordCreatedEvent(7L, HealthRecordType.MENSTRUATION, 70L));
+        listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.CUSTOM, 70L));
 
         // PRD 明确：这两类无对应里程碑节点 —— 只应触发「Lulus Pemula」聚合尝试，不完成任何里程碑。
-        verify(completion, never()).completeForOwner(
+        verify(completion, never()).completeForPet(
                 anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_VACCINE), Mockito.any());
-        verify(completion, never()).completeForOwner(
+        verify(completion, never()).completeForPet(
                 anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_DEWORM), Mockito.any());
-        verify(completion, never()).completeForOwner(
+        verify(completion, never()).completeForPet(
                 anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_NEUTER), Mockito.any());
-        verify(completion, never()).completeForOwner(
+        verify(completion, never()).completeForPet(
                 anyLong(), eq(MilestoneAutoEvent.CONSULT_CLOSED), Mockito.any());
     }
 
@@ -85,7 +86,8 @@ class HealthMilestoneAutoPathTest {
         listener.onConsultClosed(new ConsultClosedEvent(1L, 7L, 42L, 9L, "im-1", List.of(), true,
                 LocalDate.of(2026, 8, 4), "摘要", "GREEN", "建议"));
 
-        verify(completion).completeForOwner(7L, MilestoneAutoEvent.CONSULT_CLOSED,
+        // V1.4.0 multi-pet（Story 1.3 · P-7）：归问诊单上的宠物（事件 petId = 9L）。
+        verify(completion).completeForPetOrDefault(7L, 9L, MilestoneAutoEvent.CONSULT_CLOSED,
                 MilestoneCompletionSource.SYSTEM_AUTO);
     }
 

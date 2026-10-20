@@ -134,6 +134,26 @@ public class SeedBatchService {
     }
 
     /**
+     * 改计划时间（排期中的行；状态校验在调用方 {@code AdminContentScheduleController#doReschedule}）。
+     *
+     * <p>落库与审计同一事务：排期 / 取消都留审计，改时间原先漏记（L2 收尾补）——运营改了发布时间却查不到是谁改的。
+     *
+     * <p>🔴 <b>条件更新，不整行 save</b>（OCR #3）：调用方查到的 {@code r} 可能已过时 —— 到点扫描刚把它置 PUBLISHED，
+     * 整行写回会覆盖回 SCHEDULED，下一轮扫描再发一次（重复发帖）。这里只在库里仍是 SCHEDULED 时改时间；
+     * 影响 0 行 → 422 {@code admin.err.schedule.notReschedulable}，审计不写（只记真正生效的改动）。
+     */
+    @Transactional
+    public void reschedule(SeedBatchRow r, Instant at, long adminAccountId) {
+        Instant from = r.getScheduledAt();
+        if (rows.rescheduleIfInStatus(r.getId(), SeedBatchRowStatus.SCHEDULED, at, Instant.now()) == 0) {
+            throw AppException.validation("这一行已不在排期中（已发布或已取消排期），不能再改计划时间")
+                    .code("admin.err.schedule.notReschedulable");
+        }
+        audit.record(adminAccountId, "SEED_ROW_RESCHEDULE", "seed_batch_row", String.valueOf(r.getId()),
+                "from=" + from + ";to=" + at);
+    }
+
+    /**
      * 取消排期 → 回退草稿（AC1）。
      *
      * <p>⚠️ 回退时**清掉计划时间**（在 {@code transitionTo} 里做）：

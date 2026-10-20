@@ -56,21 +56,27 @@ class PassportSnapshotServiceTest {
     private final PetProfileQueryService pets = mock(PetProfileQueryService.class);
     private final KeepsakePurchaseService purchases = mock(KeepsakePurchaseService.class);
     private final PassportTokenGenerator tokens = mock(PassportTokenGenerator.class);
+    /** V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =
+            mock(com.tailtopia.profile.service.PetWriteGuard.class);
     private final PassportSnapshotService service = new PassportSnapshotService(passports, passportRows, snapshots,
-            stamps, places, new PlaceSetHash(places), pets, purchases, tokens);
+            stamps, places, new PlaceSetHash(places), pets, purchases, tokens, petWriteGuard);
 
-    private final PetPassportSubject subject = new PetPassportSubject(PET, "Momo", "CAT", Instant.EPOCH);
+    private final PetPassportSubject subject = new PetPassportSubject(PET, "Momo", "CAT", Instant.EPOCH, null);
     private PetPassport passport;
 
     @BeforeEach
     void setUp() {
         passport = org.springframework.beans.BeanUtils.instantiateClass(PetPassport.class);
         ReflectionTestUtils.setField(passport, "passportNo", "TT02P2600001");
-        when(passports.ensureIssuedForOwner(USER))
+        when(passports.ensureIssuedFor(USER, null))
                 .thenReturn(Optional.of(new PetPassportService.IssuedPassport(subject, passport)));
         when(passportRows.findForUpdateByPetProfileId(PET)).thenReturn(Optional.of(passport));
         when(passportRows.findByPetProfileId(PET)).thenReturn(Optional.of(passport));
-        when(pets.findPassportSubject(USER)).thenReturn(Optional.of(subject));
+        when(pets.findPassportSubject(USER, null)).thenReturn(Optional.of(subject));
+        // V1.4.0 multi-pet：快照回看按 token 反查宠物 + 归属校验。
+        when(pets.ownsPet(USER, PET)).thenReturn(true);
+        when(pets.findPassportSubjectByPetId(PET)).thenReturn(Optional.of(subject));
         when(places.resolveFinal(anyCollection())).thenAnswer(inv -> {
             Map<Long, Long> out = new HashMap<>();
             for (Object o : (java.util.Collection<?>) inv.getArgument(0)) {
@@ -95,7 +101,7 @@ class PassportSnapshotServiceTest {
     @Test
     void firstStartFreezesStampsAndDelegates() {
         currentStamps(1, 2);
-        var resp = service.start(USER, PayChannel.PAWCOIN);
+        var resp = service.start(USER, null, PayChannel.PAWCOIN);
         assertThat(resp.snapshotToken()).isEqualTo("n".repeat(32));
         assertThat(resp.unlocked()).isTrue();
         ArgumentCaptor<PassportSnapshot> saved = ArgumentCaptor.forClass(PassportSnapshot.class);
@@ -116,7 +122,7 @@ class PassportSnapshotServiceTest {
         ReflectionTestUtils.setField(unpaid, "paidAt", null);
         ReflectionTestUtils.setField(unpaid, "id", 5L);
         when(snapshots.findByPetProfileIdAndPaidAtIsNullOrderByCreatedAtDescIdDesc(PET)).thenReturn(List.of(unpaid));
-        service.start(USER, PayChannel.QRIS);
+        service.start(USER, null, PayChannel.QRIS);
         verify(snapshots, never()).saveAndFlush(any());
         ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
         verify(purchases).start(eq(USER), ref.capture(), eq(PayChannel.QRIS));
@@ -129,7 +135,7 @@ class PassportSnapshotServiceTest {
         PassportSnapshot unpaid = PassportVersionQueryTest.paid(1, 2);
         ReflectionTestUtils.setField(unpaid, "paidAt", null);
         when(snapshots.findByPetProfileIdAndPaidAtIsNullOrderByCreatedAtDescIdDesc(PET)).thenReturn(List.of(unpaid));
-        service.start(USER, PayChannel.QRIS);
+        service.start(USER, null, PayChannel.QRIS);
         verify(snapshots).saveAndFlush(any());
     }
 
@@ -138,7 +144,7 @@ class PassportSnapshotServiceTest {
         currentStamps(1, 2);
         when(snapshots.findByPetProfileIdAndPaidAtIsNotNullOrderByPaidAtDescIdDesc(PET))
                 .thenReturn(List.of(PassportVersionQueryTest.paid(1, 2)));
-        assertThatThrownBy(() -> service.start(USER, PayChannel.PAWCOIN)).isInstanceOfSatisfying(AppException.class,
+        assertThatThrownBy(() -> service.start(USER, null, PayChannel.PAWCOIN)).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getType()).isEqualTo(ErrorTypes.KEEPSAKE_ALREADY_UNLOCKED));
         verify(purchases, never()).start(anyLong(), any(), any());
     }
@@ -146,10 +152,10 @@ class PassportSnapshotServiceTest {
     @Test
     void noStampsIs422AndNoPetIs404() {
         currentStamps();
-        assertThatThrownBy(() -> service.start(USER, PayChannel.PAWCOIN)).isInstanceOfSatisfying(AppException.class,
+        assertThatThrownBy(() -> service.start(USER, null, PayChannel.PAWCOIN)).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
-        when(passports.ensureIssuedForOwner(8L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.start(8L, PayChannel.PAWCOIN)).isInstanceOfSatisfying(AppException.class,
+        when(passports.ensureIssuedFor(8L, null)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.start(8L, null, PayChannel.PAWCOIN)).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
     }
 
@@ -157,7 +163,7 @@ class PassportSnapshotServiceTest {
     void listOnlyPaid() {
         when(snapshots.findByPetProfileIdAndPaidAtIsNotNullOrderByPaidAtDescIdDesc(PET))
                 .thenReturn(List.of(PassportVersionQueryTest.paid(1, 2)));
-        var items = service.list(USER).items();
+        var items = service.list(USER, null).items();
         assertThat(items).hasSize(1);
         assertThat(items.get(0).stampCount()).isEqualTo(2);
     }
@@ -165,7 +171,7 @@ class PassportSnapshotServiceTest {
     @Test
     void detailUsesFrozenStampsWithCurrentStampArtAndNeverExposesPlaceId() {
         PassportSnapshot s = PassportVersionQueryTest.paid(1, 2);
-        when(snapshots.findByPublicTokenAndPetProfileId("tok", PET)).thenReturn(Optional.of(s));
+        when(snapshots.findByPublicToken("tok")).thenReturn(Optional.of(s));
         when(places.stampUrlsOf(anyCollection())).thenReturn(Map.of(2L, "https://cdn/s2.png"));
         var d = service.get(USER, "tok");
         assertThat(d.petName()).isEqualTo("Momo");
@@ -182,10 +188,56 @@ class PassportSnapshotServiceTest {
     void unpaidOrUnknownDetailIs404() {
         PassportSnapshot s = PassportVersionQueryTest.paid(1);
         ReflectionTestUtils.setField(s, "paidAt", null);
-        when(snapshots.findByPublicTokenAndPetProfileId("u", PET)).thenReturn(Optional.of(s));
+        when(snapshots.findByPublicToken("u")).thenReturn(Optional.of(s));
         assertThatThrownBy(() -> service.get(USER, "u")).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
         assertThatThrownBy(() -> service.get(USER, "x")).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    /** V1.4.0 multi-pet（Story 1.2 · X11）：快照 token 属于他人宠物 → 同一个 404；属于本人第二只 → 该宠物名。 */
+    @Test
+    void snapshotTokenIsResolvedByItsPetAndForeignIs404() {
+        PassportSnapshot s = PassportVersionQueryTest.paid(1);
+        when(snapshots.findByPublicToken("other")).thenReturn(Optional.of(s));
+        when(pets.ownsPet(8L, PET)).thenReturn(false);
+        assertThatThrownBy(() -> service.get(8L, "other")).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+
+        long petB = 71L;
+        PassportSnapshot sb = PassportSnapshot.freeze("b".repeat(32), petB, s.frozenStamps(), "x".repeat(64),
+                Instant.EPOCH);
+        ReflectionTestUtils.setField(sb, "paidAt", Instant.EPOCH);
+        when(snapshots.findByPublicToken("mineB")).thenReturn(Optional.of(sb));
+        when(pets.ownsPet(USER, petB)).thenReturn(true);
+        when(pets.findPassportSubjectByPetId(petB))
+                .thenReturn(Optional.of(new PetPassportSubject(petB, "Bobo", "DOG", Instant.EPOCH, null)));
+        assertThat(service.get(USER, "mineB").petName()).isEqualTo("Bobo");
+    }
+
+    @Test
+    void listForSecondPetOnlyListsThatPet() {
+        long petB = 71L;
+        when(pets.findPassportSubject(USER, petB))
+                .thenReturn(Optional.of(new PetPassportSubject(petB, "Bobo", "DOG", Instant.EPOCH, null)));
+        when(snapshots.findByPetProfileIdAndPaidAtIsNotNullOrderByPaidAtDescIdDesc(petB)).thenReturn(List.of());
+        assertThat(service.list(USER, petB).items()).isEmpty();
+        verify(snapshots, never()).findByPetProfileIdAndPaidAtIsNotNullOrderByPaidAtDescIdDesc(PET);
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（AC7 #9）：只读宠物买护照快照 → 409 pet-read-only，不冻结快照、不进付款。 */
+    @Test
+    void startOnReadOnlyPetRejected409WithoutSnapshot() {
+        currentStamps(1, 2);
+        org.mockito.Mockito.doThrow(com.tailtopia.shared.error.AppException.petReadOnly(PET))
+                .when(petWriteGuard).requireWritable(PET);
+        assertThatThrownBy(() -> service.start(USER, null, PayChannel.PAWCOIN))
+                .isInstanceOfSatisfying(com.tailtopia.shared.error.AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(409);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
+                });
+        verify(snapshots, never()).saveAndFlush(any());
+        verify(passportRows, never()).findForUpdateByPetProfileId(anyLong());
+        verify(purchases, never()).start(anyLong(), any(), any());
     }
 }

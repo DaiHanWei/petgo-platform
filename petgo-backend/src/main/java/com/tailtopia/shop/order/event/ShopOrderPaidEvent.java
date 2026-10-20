@@ -16,6 +16,9 @@ package com.tailtopia.shop.order.event;
  *
  * <p>🔴 消费方一律用 {@code @TransactionalEventListener}（默认 AFTER_COMMIT）：外层事务回滚时
  * 监听器根本不会跑，因此不会为一张最终没付成的单留下孤儿提醒行（复审 #13）。
+ *
+ * <p>V1.4.0 ① Story 1.3 末尾追加 {@code userId} / {@code paidTotal}（现金 + PawCoin 实付总额，IDR）：电商消费返成长值
+ * 只经此一处（QRIS / MIXED / 纯币三种付法），MIXED 的币段与现金段不会各算一次。
  */
-public record ShopOrderPaidEvent(long shopOrderId, String orderToken) {
+public record ShopOrderPaidEvent(long shopOrderId, String orderToken, long userId, long paidTotal) {
 }

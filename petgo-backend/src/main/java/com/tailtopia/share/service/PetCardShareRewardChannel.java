@@ -2,13 +2,11 @@ package com.tailtopia.share.service;
 
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.service.PlatformConfigService;
-import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -27,7 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <b>不是渠道注册表</b>（代码核对报告 §1：渠道不是注册表）。
  *
  * <h2>🔴 顺序（AC2.1），不可换</h2>
- * ① 本人唯一宠物（无档案 → 0）→ ② 资格校验 → ③ 宠物 × 卡类型已拿过 → 0 → ④ 渠道单次额（≤0 → 0）
+ * ① 请求的宠物（V1.4.0 multi-pet：控制器经 PetResolver 解析；无档案 → 0）→ ② 资格校验 → ③ 宠物 × 卡类型已拿过 → 0 → ④ 渠道单次额（≤0 → 0）
  * → ⑤ 渠道日上限（WIB 日，复用 {@link IdCardShareRewardService#shareDateOf}；先按用户取 advisory 锁再数）
  * → ⑥ {@code saveAndFlush} 留痕（撞唯一键 → 整体回滚）→ ⑦ 登记「非提交则删 Redis 幂等键」同步器
  * → ⑧ {@link ShareRewardService#tryReward}（总开关 + 月度上限），false → 回滚留痕。
@@ -110,11 +108,14 @@ abstract class PetCardShareRewardChannel<C extends Enum<C>> {
     /**
      * 分享成功后试着发奖励。⚠️ 只应在 App 拿到系统分享面板成功回调之后调用（取消面板 ⇒ 不调 ⇒ 不发）。
      *
+     * <p>V1.4.0 multi-pet（Story 1.2 · X17）：去重 = 宠物 × 卡类型，宠物按请求解析。
+     *
+     * @param petId 控制器经 {@code PetResolver.resolveOptional} 解析出的宠物 id；null = 无档案 ⇒ 0
      * @return 真的发了多少枚；{@code 0} = 没发（任一层拦下）
      */
-    public long rewardAfterShare(long userId, C cardType, Instant at) {
+    public long rewardAfterShare(long userId, Long petId, C cardType, Instant at) {
         try {
-            Long coins = tx.execute(status -> attempt(userId, cardType, at));
+            Long coins = tx.execute(status -> attempt(userId, petId, cardType, at));
             return coins == null ? 0 : coins;
         } catch (AlreadyRewarded | NotGranted expected) {
             return 0;
@@ -125,13 +126,12 @@ abstract class PetCardShareRewardChannel<C extends Enum<C>> {
         }
     }
 
-    long attempt(long userId, C cardType, Instant at) {
-        // ① 本人唯一宠物（V1 单账号单宠物）。无档案 ⇒ 不发。
-        Optional<PetProfile> profile = profiles.findByOwnerId(userId);
-        if (profile.isEmpty()) {
+    long attempt(long userId, Long requestedPetId, C cardType, Instant at) {
+        // ① 请求的宠物（V1.4.0 multi-pet）。无档案 ⇒ 不发；归属已由控制器校验，这里按 id + owner 再兜一次。
+        if (requestedPetId == null || !profiles.existsByIdAndOwnerId(requestedPetId, userId)) {
             return 0;
         }
-        long petId = profile.get().getId();
+        long petId = requestedPetId;
 
         // ② 资格：没生成过这种卡的前提数据就不发（防刷接口）。
         if (!eligible(userId, petId, cardType)) {

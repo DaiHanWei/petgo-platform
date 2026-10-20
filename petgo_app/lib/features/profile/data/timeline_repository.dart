@@ -19,22 +19,27 @@ import '../domain/visitor_profile.dart';
 abstract class TimelineRepository {
   /// [diaryOnly]（2026-10-06「只看 Diary」开关）：只取主人自己发的内容，由服务端筛（分页才准）；
   /// 仅作者态有意义，访客态忽略。
+  ///
+  /// V1.4.0 multi-pet（Story 1.5 · AC7）：作者态四个方法的 [petId] 指定哪只宠物（`?petId=`），
+  /// null = 后端默认宠物；**访客态忽略**（访客按 token / 路径里的 petId 寻址）。
   Future<TimelinePage> getTimeline({
     String? cursor,
     int limit = 20,
     ArchiveScope scope = const ArchiveScope.me(),
     bool diaryOnly = false,
+    int? petId,
   });
 
   /// 日历月视图（按 event_date 聚合有记录日）。
   Future<CalendarMonth> getCalendar(int year, int month,
-      {ArchiveScope scope = const ArchiveScope.me()});
+      {ArchiveScope scope = const ArchiveScope.me(), int? petId});
 
   /// 当天详情（某事件日期当天条目，created_at 正序）。
-  Future<DayDetail> getDay(DateTime date, {ArchiveScope scope = const ArchiveScope.me()});
+  Future<DayDetail> getDay(DateTime date,
+      {ArchiveScope scope = const ArchiveScope.me(), int? petId});
 
   /// 统计栏（快乐时刻数 / 问诊数 / 里程碑零态）。
-  Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me()});
+  Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me(), int? petId});
 
   /// 访客看到的宠物档案（**只有访客态有**：作者态走 `ProfileRepository.getMyProfile`）。
   Future<VisitorProfile> getVisitorProfile(String token);
@@ -63,6 +68,7 @@ class DioTimelineRepository implements TimelineRepository {
     int limit = 20,
     ArchiveScope scope = const ArchiveScope.me(),
     bool diaryOnly = false,
+    int? petId,
   }) async {
     if (scope.isVisitor) {
       // ⚠️ 访客侧**不分页**：服务端只给「最近 N 条」（访客是看一眼别人的宠物，
@@ -82,7 +88,7 @@ class DioTimelineRepository implements TimelineRepository {
     if (cursor != null) query['cursor'] = cursor;
     if (diaryOnly) query['diaryOnly'] = true;
     final resp = await dio.get<Map<String, dynamic>>(
-      ApiPaths.petProfileTimeline,
+      ApiPaths.withPet(ApiPaths.petProfileTimeline, petId),
       queryParameters: query,
     );
     return TimelinePage.fromJson(resp.data!);
@@ -90,13 +96,15 @@ class DioTimelineRepository implements TimelineRepository {
 
   @override
   Future<CalendarMonth> getCalendar(int year, int month,
-      {ArchiveScope scope = const ArchiveScope.me()}) async {
+      {ArchiveScope scope = const ArchiveScope.me(), int? petId}) async {
     final resp = await dio.get<Map<String, dynamic>>(
       // ⚠️ 站内访客态**没有**日历端点（访客视图没有日历，两次拍板不做）——
       // 这里只可能是分享 token 态或作者态。`token!` 是**刻意的 fail-fast**：
       // 真有人从站内态调到这儿，当场抛比拼一个 `//` 的畸形 URL（或者更糟，
       // 悄悄回落到作者态看到自己的档案）都容易发现。
-      scope.isVisitor ? ApiPaths.sharedPetCalendar(scope.token!) : ApiPaths.petProfileCalendar,
+      scope.isVisitor
+          ? ApiPaths.sharedPetCalendar(scope.token!)
+          : ApiPaths.withPet(ApiPaths.petProfileCalendar, petId),
       queryParameters: {
         'year': year,
         'month': month,
@@ -108,25 +116,28 @@ class DioTimelineRepository implements TimelineRepository {
 
   @override
   Future<DayDetail> getDay(DateTime date,
-      {ArchiveScope scope = const ArchiveScope.me()}) async {
+      {ArchiveScope scope = const ArchiveScope.me(), int? petId}) async {
     final iso = '${date.year}-${date.month.toString().padLeft(2, '0')}'
         '-${date.day.toString().padLeft(2, '0')}';
     final resp = await dio.get<Map<String, dynamic>>(
       // token! 同上：站内态没有某天详情，走到这儿就该当场炸。
-      scope.isVisitor ? ApiPaths.sharedPetDay(scope.token!) : ApiPaths.petProfileDay,
+      scope.isVisitor
+          ? ApiPaths.sharedPetDay(scope.token!)
+          : ApiPaths.withPet(ApiPaths.petProfileDay, petId),
       queryParameters: {'date': iso, if (!scope.isVisitor) 'supports': kTimelineSupports},
     );
     return DayDetail.fromJson(resp.data!);
   }
 
   @override
-  Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me()}) async {
+  Future<ArchiveStats> getStats(
+      {ArchiveScope scope = const ArchiveScope.me(), int? petId}) async {
     final resp = await dio.get<Map<String, dynamic>>(
       scope.isInApp
           ? ApiPaths.inAppPetStats(scope.petId!)
           : scope.isVisitor
               ? ApiPaths.sharedPetStats(scope.token!)
-              : ApiPaths.petProfileArchiveStats,
+              : ApiPaths.withPet(ApiPaths.petProfileArchiveStats, petId),
     );
     return ArchiveStats.fromJson(resp.data!);
   }
@@ -147,10 +158,18 @@ class DioTimelineRepository implements TimelineRepository {
 final Provider<TimelineRepository> timelineRepositoryProvider =
     Provider<TimelineRepository>((ref) => DioTimelineRepository(ref.read(dioProvider)));
 
-/// 首屏时间线（AsyncValue）。无限滚动的后续页由页面控制器追加。
+// ===== V1.4.0 multi-pet（Story 1.5 · AC3.7）：作者态 provider 按 petId 分族 =====
+//
+// 切换宠物 = 换族键，旧键缓存保留（再切回来不白等）；发布 / 编辑 / 删除后的既有
+// `ref.invalidate(xxxProvider)` 对整族失效，写法不变。petId 一律取 `effectivePetIdProvider`
+// （无宠物时页面已走空态分支，不会构造这些 provider）。
+
+/// 首屏时间线（AsyncValue，family：petId）。无限滚动的后续页由页面控制器追加。
 /// 跟随 [diaryOnlyProvider]：开关一拨，第一页换成新实例 → 页面据此丢掉已翻的页重来。
-final FutureProvider<TimelinePage> timelineFirstPageProvider = FutureProvider<TimelinePage>(
-  (ref) => ref.read(timelineRepositoryProvider).getTimeline(diaryOnly: ref.watch(diaryOnlyProvider)),
+final timelineFirstPageProvider = FutureProvider.family<TimelinePage, int>(
+  (ref, petId) => ref
+      .read(timelineRepositoryProvider)
+      .getTimeline(diaryOnly: ref.watch(diaryOnlyProvider), petId: petId),
 );
 
 /// Diary 页「只看 Diary」开关（2026-10-06 产品）：开 = 只看主人自己发的帖子；关 = banner + 帖子全部。
@@ -188,20 +207,20 @@ class DiaryOnlyNotifier extends Notifier<bool> {
   }
 }
 
-/// 档案统计栏（AC5）。状态切换/发布后失效刷新。
-final FutureProvider<ArchiveStats> archiveStatsProvider = FutureProvider<ArchiveStats>(
-  (ref) => ref.read(timelineRepositoryProvider).getStats(),
+/// 档案统计栏（AC5，family：petId）。状态切换/发布后失效刷新。
+final archiveStatsProvider = FutureProvider.family<ArchiveStats, int>(
+  (ref, petId) => ref.read(timelineRepositoryProvider).getStats(petId: petId),
 );
 
-/// 日历月视图（family：(year, month)）。
+/// 日历月视图（family：(petId, year, month)）。
 final calendarMonthProvider =
-    FutureProvider.family<CalendarMonth, ({int year, int month})>(
-  (ref, ym) => ref.read(timelineRepositoryProvider).getCalendar(ym.year, ym.month),
+    FutureProvider.family<CalendarMonth, ({int petId, int year, int month})>(
+  (ref, k) => ref.read(timelineRepositoryProvider).getCalendar(k.year, k.month, petId: k.petId),
 );
 
-/// 当天详情（family：DateTime 取年月日）。
-final dayDetailProvider = FutureProvider.family<DayDetail, DateTime>(
-  (ref, date) => ref.read(timelineRepositoryProvider).getDay(date),
+/// 当天详情（family：(petId, DateTime 取年月日)）。
+final dayDetailProvider = FutureProvider.family<DayDetail, ({int petId, DateTime date})>(
+  (ref, k) => ref.read(timelineRepositoryProvider).getDay(k.date, petId: k.petId),
 );
 
 // ===== V1.1.6 Story 2.3：访客态数据源 =====
@@ -268,14 +287,17 @@ final visitorDayDetailProvider =
 // **自己不判断作用域**。作者态与访客态的分叉因此只存在于这一处，
 // 而不是散落在每个 `ref.watch` 旁边。
 
-FutureProvider<ArchiveStats> archiveStatsProviderFor(ArchiveScope scope) =>
-    scope.isVisitor ? visitorStatsProvider(scope) : archiveStatsProvider;
+// V1.4.0 multi-pet：作者态分支多收 [ownerPetId]（当前宠物，取 `effectivePetIdProvider`）；访客分支不变、忽略它。
 
-FutureProvider<TimelinePage> timelineFirstPageProviderFor(ArchiveScope scope) =>
-    scope.isVisitor ? visitorTimelineProvider(scope) : timelineFirstPageProvider;
+FutureProvider<ArchiveStats> archiveStatsProviderFor(ArchiveScope scope, int ownerPetId) =>
+    scope.isVisitor ? visitorStatsProvider(scope) : archiveStatsProvider(ownerPetId);
+
+FutureProvider<TimelinePage> timelineFirstPageProviderFor(ArchiveScope scope, int ownerPetId) =>
+    scope.isVisitor ? visitorTimelineProvider(scope) : timelineFirstPageProvider(ownerPetId);
 
 FutureProvider<CalendarMonth> calendarMonthProviderFor(
   ArchiveScope scope,
+  int ownerPetId,
   int year,
   int month,
 ) =>
@@ -283,12 +305,13 @@ FutureProvider<CalendarMonth> calendarMonthProviderFor(
     // 那比悄悄回落到作者态（看到自己的档案）好。
     scope.isVisitor
         ? visitorCalendarProvider((token: scope.token!, year: year, month: month))
-        : calendarMonthProvider((year: year, month: month));
+        : calendarMonthProvider((petId: ownerPetId, year: year, month: month));
 
 FutureProvider<DayDetail> dayDetailProviderFor(
   ArchiveScope scope,
+  int ownerPetId,
   DateTime date,
 ) =>
     scope.isVisitor
         ? visitorDayDetailProvider((token: scope.token!, date: date))
-        : dayDetailProvider(date);
+        : dayDetailProvider((petId: ownerPetId, date: date));

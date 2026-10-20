@@ -116,7 +116,7 @@ class InAppVisitorEntryTest {
     @Test
     void theRenderedPetCardCarriesNoTokenValue() {
         when(accounts.isActive(OWNER)).thenReturn(true);
-        when(profiles.findByOwnerId(OWNER)).thenReturn(Optional.of(pet()));
+        when(profiles.findDefault(OWNER)).thenReturn(Optional.of(pet()));
         when(visitors.diaryCount(any())).thenReturn(42L);
 
         var resp = petCard.pet(null, OWNER);
@@ -144,7 +144,7 @@ class InAppVisitorEntryTest {
     @Test
     void everyInAppEndpointGoesThroughTheSharedProjection() {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
-        when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30));
+        when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30, 0L));
         when(visitors.timeline(any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of());
 
         inApp.profile(user(VIEWER), PET_ID);
@@ -279,7 +279,7 @@ class InAppVisitorEntryTest {
     @Test
     void aUserWithoutAPetGetsNoContentRatherThan404() {
         when(accounts.isActive(OWNER)).thenReturn(true);
-        when(profiles.findByOwnerId(OWNER)).thenReturn(Optional.empty());
+        when(profiles.findDefault(OWNER)).thenReturn(Optional.empty());
 
         var resp = petCard.pet(user(VIEWER), OWNER);
 
@@ -295,7 +295,7 @@ class InAppVisitorEntryTest {
         when(accounts.isActive(OWNER)).thenReturn(false);
 
         assertThat(petCard.pet(user(VIEWER), OWNER).getStatusCode().value()).isEqualTo(204);
-        verify(profiles, never()).findByOwnerId(anyLong());
+        verify(profiles, never()).findDefault(anyLong());
     }
 
     /** 🔴 宠物卡同样拦拉黑 —— 三个端点各拦一次，只拦一个等于留两个绕过口。 */
@@ -308,14 +308,14 @@ class InAppVisitorEntryTest {
                 .satisfies(e -> assertThat(((AppException) e).getType())
                         .isEqualTo(ErrorTypes.BLOCKED_USER));
 
-        verify(profiles, never()).findByOwnerId(anyLong());
+        verify(profiles, never()).findDefault(anyLong());
     }
 
     /** 游客照常看得到宠物卡（点头像看这人是谁不需要登录，看他养了只什么也一样）。 */
     @Test
     void aGuestSeesThePetCardAndNoHideLookupHappens() {
         when(accounts.isActive(OWNER)).thenReturn(true);
-        when(profiles.findByOwnerId(OWNER)).thenReturn(Optional.of(pet()));
+        when(profiles.findDefault(OWNER)).thenReturn(Optional.of(pet()));
         when(visitors.diaryCount(any())).thenReturn(42L);
 
         assertThat(petCard.pet(null, OWNER).getBody()).isNotNull();

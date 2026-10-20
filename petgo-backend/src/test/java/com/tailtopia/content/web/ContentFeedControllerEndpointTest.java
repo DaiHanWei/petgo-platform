@@ -21,6 +21,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.JsonNode;
 
 /**
  * L1 集成：Feed 读取端点 {@code GET /api/v1/content-posts}（{@link ContentFeedController}）。
@@ -132,8 +133,7 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
                 //    在没有任何测试造过纯图片帖之前一直成立；Story 11.1 补的
                 //    contentPickerIncludesPostsWithoutText 造了一条，这里当场 NPE。
                 //    （Feed 是全局的：任何测试造的公开帖都会流到这里来。）
-                var bodyNode = item.get("body");
-                String body = (bodyNode == null || bodyNode.isNull()) ? null : bodyNode.asText();
+                String body = bodyOf(item);
                 if (body != null && body.startsWith(marker)) {
                     collected.add(body);
                 }
@@ -166,7 +166,7 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         // 该 Tab 返回的本测试帖只应是 KNOWLEDGE，绝不含 DAILY 标记。
         boolean sawKnow = false;
         for (var item : items) {
-            String body = item.get("body").asText(null);
+            String body = bodyOf(item);
             if (daily.equals(body)) {
                 Assertions.fail("KNOWLEDGE Tab 不应返回 DAILY 帖");
             }
@@ -200,7 +200,7 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         boolean sawGrowth = false;
         boolean sawDaily = false;
         for (var item : items) {
-            String body = item.get("body").asText(null);
+            String body = bodyOf(item);
             if (growth.equals(body)) {
                 sawGrowth = true;
                 // 每条都恒带 visibility（契约字段，Story 4.1 AC7）
@@ -232,7 +232,7 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         var items = json.readTree(res.getResponse().getContentAsString()).get("items");
         boolean found = false;
         for (var item : items) {
-            if (marker.equals(item.get("body").asText(null))) {
+            if (marker.equals(bodyOf(item))) {
                 found = true;
                 Assertions.assertThat(item.get("authorDeleted").asBoolean()).isTrue();
                 // 匿名化：昵称/头像不外泄（Jackson NON_NULL → 字段缺省或 null）。
@@ -242,5 +242,15 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
             }
         }
         Assertions.assertThat(found).as("应在首批 Feed 中看到注销作者的帖").isTrue();
+    }
+
+    /**
+     * 取 Feed 条目正文：纯图片帖正文为 NULL，序列化时 {@code body} 字段整个被省略 → 返回 null。
+     * 🔴 不能写 {@code item.get("body").asText(null)}：Feed 是全局的，任何测试造的纯图片帖都会流进来，
+     * 测试执行顺序一变（新增测试类）就可能落进本用例翻的页里 → NPE（2026-10-20 PR#44 CI 红）。
+     */
+    private static String bodyOf(JsonNode item) {
+        JsonNode node = item.get("body");
+        return (node == null || node.isNull()) ? null : node.asText();
     }
 }

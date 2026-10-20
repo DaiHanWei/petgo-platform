@@ -208,4 +208,44 @@ class AdminTagIconServiceTest {
                 .as("🔴 两页又共用同一段规格文案了 —— 它讲不出各自的实际显示尺寸")
                 .isNotEqualTo(service.specText("userTag"));
     }
+
+    // ── V1.4.0 gift Story 3.1 · AC5：礼物用途复用同一套校验，只换目录与文案 ─────────────
+
+    /** 礼物图标进自己的 OSS 子目录 {@code public/gift-icon/}，不和标签图标混放。 */
+    @Test
+    void giftPurposeUploadsUnderGiftIconFolder() {
+        assertThat(service.uploadOrKeep(file("a.png", "image/png", png(112, 112)), IconPurpose.GIFT))
+                .startsWith("https://cdn.example/petgo/public/gift-icon/");
+        assertThat(service.uploadOrKeep(file("a.webp", "image/webp", png(112, 112)), IconPurpose.TAG))
+                .as("显式 TAG 与单参方法同目录")
+                .startsWith("https://cdn.example/petgo/public/tag-icon/");
+    }
+
+    /** 礼物版报错走 {@code admin.gifticon.*}：JPEG / 尺寸 / 大小都换成「礼物图标」文案，规则不变。 */
+    @Test
+    void giftPurposeReportsGiftWording() {
+        assertThatThrownBy(() -> service.uploadOrKeep(file("icon.jpg", "image/jpeg", png(128, 128)), IconPurpose.GIFT))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("admin.gifticon.noJpeg");
+        assertThatThrownBy(() -> service.uploadOrKeep(file("a.gif", "image/gif", png(128, 128)), IconPurpose.GIFT))
+                .hasMessageContaining("admin.gifticon.badType");
+        assertThatThrownBy(() -> service.uploadOrKeep(file("a.png", "image/png", png(41, 42)), IconPurpose.GIFT))
+                .hasMessageContaining("admin.gifticon.tooSmall").hasMessageContaining("41");
+        assertThatThrownBy(() -> service.uploadOrKeep(file("a.png", "image/png", new byte[600 * 1024]),
+                IconPurpose.GIFT))
+                .hasMessageContaining("admin.gifticon.tooLarge").hasMessageContaining("512");
+        assertThat(service.uploadOrKeep(null, IconPurpose.GIFT)).as("空文件 = 保留原图标").isNull();
+    }
+
+    /** 礼物版「必须上传」与规格说明（新建 / 编辑两段，都带最小边与大小上限）；单参旧方法行为不变。 */
+    @Test
+    void giftPurposeTextsAndLegacyDefaultsAreUnchanged() {
+        assertThat(service.iconRequiredMessage(IconPurpose.GIFT)).isEqualTo("admin.gifticon.required");
+        assertThat(service.iconRequiredMessage()).isEqualTo("admin.tagicon.required");
+        assertThat(service.specText(IconPurpose.GIFT, "create")).isEqualTo("admin.gifticon.spec.create|42|512");
+        assertThat(service.specText(IconPurpose.GIFT, "edit")).isEqualTo("admin.gifticon.spec.edit|42|512");
+        assertThat(service.specText("userTag")).isEqualTo("admin.tagicon.spec.userTag|42|512");
+        assertThatThrownBy(() -> service.uploadOrKeep(file("icon.jpg", "image/jpeg", png(128, 128))))
+                .hasMessageContaining("admin.tagicon.noJpeg");
+    }
 }

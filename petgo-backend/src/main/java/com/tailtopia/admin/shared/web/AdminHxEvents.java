@@ -99,6 +99,9 @@ public final class AdminHxEvents {
      */
     public static final String DRAWER_OPEN = "admin:drawer-open";
 
+    /** 礼物目录列表刷新（V1.4.0 ③ gift Story 3.1）：抽屉内新建 / 编辑 / 上下线成功后按当前筛选重拉表格与摘要条。 */
+    public static final String GIFT_CATALOG_LIST_REFRESH = "admin:gift-catalog-list-refresh";
+
     private AdminHxEvents() {
     }
 }

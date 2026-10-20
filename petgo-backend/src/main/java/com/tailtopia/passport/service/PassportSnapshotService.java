@@ -15,6 +15,7 @@ import com.tailtopia.place.service.PlaceIdentityQuery;
 import com.tailtopia.place.service.PlaceStampQueryService;
 import com.tailtopia.profile.dto.PetPassportSubject;
 import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.profile.service.PetWriteGuard;
 import com.tailtopia.purchase.domain.KeepsakeRef;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.service.KeepsakePurchaseService;
@@ -46,20 +47,24 @@ public class PassportSnapshotService {
     private final PetProfileQueryService pets;
     private final KeepsakePurchaseService purchases;
     private final PassportTokenGenerator tokens;
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可购买护照快照（409，不冻结快照、不建意图）。 */
+    private final PetWriteGuard petWriteGuard;
     private final Clock clock;
 
     @Autowired
     public PassportSnapshotService(PetPassportService passports, PetPassportRepository passportRows,
             PassportSnapshotRepository snapshots, PlaceStampQueryService stamps, PlaceIdentityQuery places,
             PlaceSetHash hash, PetProfileQueryService pets, KeepsakePurchaseService purchases,
-            PassportTokenGenerator tokens) {
-        this(passports, passportRows, snapshots, stamps, places, hash, pets, purchases, tokens, Clock.systemUTC());
+            PassportTokenGenerator tokens, PetWriteGuard petWriteGuard) {
+        this(passports, passportRows, snapshots, stamps, places, hash, pets, purchases, tokens, petWriteGuard,
+                Clock.systemUTC());
     }
 
     PassportSnapshotService(PetPassportService passports, PetPassportRepository passportRows,
             PassportSnapshotRepository snapshots, PlaceStampQueryService stamps, PlaceIdentityQuery places,
             PlaceSetHash hash, PetProfileQueryService pets, KeepsakePurchaseService purchases,
-            PassportTokenGenerator tokens, Clock clock) {
+            PassportTokenGenerator tokens, PetWriteGuard petWriteGuard, Clock clock) {
+        this.petWriteGuard = petWriteGuard;
         this.passports = passports;
         this.passportRows = passportRows;
         this.snapshots = snapshots;
@@ -80,10 +85,13 @@ public class PassportSnapshotService {
      */
     // noRollbackFor 与 KeepsakePurchaseService.start 一致：网关下单失败时意图 FAILED 行要随事务提交留档。
     @Transactional(noRollbackFor = PayException.class)
-    public PassportSnapshotPurchaseResponse start(long userId, PayChannel channel) {
-        long petId = passports.ensureIssuedForOwner(userId)
+    public PassportSnapshotPurchaseResponse start(long userId, Long requestedPetId, PayChannel channel) {
+        // V1.4.0 multi-pet（Story 1.2 · X7）：指定宠物（控制器经 PetResolver 校验）；null = 默认宠物。
+        long petId = passports.ensureIssuedFor(userId, requestedPetId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"))
                 .subject().petId();
+        // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、冻结快照之前校验可写；409 整笔回滚（含上面的幂等签发）。
+        petWriteGuard.requireWritable(petId);
         passportRows.findForUpdateByPetProfileId(petId)
                 .orElseThrow(() -> new IllegalStateException("护照签发后回读为空"));
         List<PlaceStampRef> current = stamps.stampRefsOf(petId);
@@ -106,10 +114,10 @@ public class PassportSnapshotService {
         return PassportSnapshotPurchaseResponse.of(purchases.start(userId, ref, channel), snap.getPublicToken());
     }
 
-    /** 已购版本（AC7.1）：只列已付。无宠物 → 404。 */
+    /** 已购版本（AC7.1）：只列已付。无宠物 → 404。V1.4.0 multi-pet：只列指定宠物（null = 默认宠物）。 */
     @Transactional(readOnly = true)
-    public PassportSnapshotListResponse list(long userId) {
-        long petId = requirePet(userId).petId();
+    public PassportSnapshotListResponse list(long userId, Long requestedPetId) {
+        long petId = requirePet(userId, requestedPetId).petId();
         return new PassportSnapshotListResponse(
                 snapshots.findByPetProfileIdAndPaidAtIsNotNullOrderByPaidAtDescIdDesc(petId).stream()
                         .map(s -> new PassportSnapshotListResponse.Item(s.getPublicToken(), s.getPaidAt(),
@@ -117,12 +125,19 @@ public class PassportSnapshotService {
                         .toList());
     }
 
-    /** 回看（AC7.2）：非本人 / 未付 / 不存在 → 同一个 404。读快照 JSON，不读实时打卡。 */
+    /**
+     * 回看（AC7.2）：非本人 / 未付 / 不存在 → 同一个 404。读快照 JSON，不读实时打卡。
+     *
+     * <p>V1.4.0 multi-pet（Story 1.2 · X11，token 寻址）：由快照行的 {@code pet_profile_id} 反查宠物并校验属于本人，
+     * 不要求 petId。
+     */
     @Transactional(readOnly = true)
     public PassportSnapshotDetailResponse get(long userId, String token) {
-        PetPassportSubject pet = requirePet(userId);
-        PassportSnapshot s = snapshots.findByPublicTokenAndPetProfileId(token, pet.petId())
+        PassportSnapshot s = snapshots.findByPublicToken(token)
                 .filter(x -> x.getPaidAt() != null)
+                .filter(x -> x.getPetProfileId() != null && pets.ownsPet(userId, x.getPetProfileId()))
+                .orElseThrow(() -> AppException.notFound("版本不存在"));
+        PetPassportSubject pet = pets.findPassportSubjectByPetId(s.getPetProfileId())
                 .orElseThrow(() -> AppException.notFound("版本不存在"));
         List<FrozenStamp> frozen = s.frozenStamps();
         Map<Long, Long> finalOf = places.resolveFinal(frozen.stream().map(FrozenStamp::placeId).toList());
@@ -136,8 +151,9 @@ public class PassportSnapshotService {
                 passportNo, views);
     }
 
-    private PetPassportSubject requirePet(long userId) {
-        return pets.findPassportSubject(userId).orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    private PetPassportSubject requirePet(long userId, Long petId) {
+        return pets.findPassportSubject(userId, petId)
+                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
     }
 
     private static FrozenStamp freeze(PlaceStampRef r) {

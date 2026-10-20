@@ -671,3 +671,23 @@ class TimelineItemTile extends StatelessWidget {
     );
   }
 }
+
+
+/// 时间线月份分组标题（稿 `.tlm`：11 / w700 / 大写 / 字距 0.6 / muted，如「OKTOBER 2026」）。
+/// 主人态与访客态共用（V1.4.0 L2：访客态原先缺这一行）。
+class TimelineMonthHeader extends StatelessWidget {
+  const TimelineMonthHeader({super.key, required this.date, this.first = false});
+
+  final DateTime date;
+
+  /// 第一个分组：上方不留白。
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.only(top: first ? 0 : 6, bottom: 8),
+        child: Text(formatMonthYear(context, date).toUpperCase(),
+            style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.muted)),
+      );
+}

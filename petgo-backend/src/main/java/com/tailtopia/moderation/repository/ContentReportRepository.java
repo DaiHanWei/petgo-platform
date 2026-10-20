@@ -14,6 +14,12 @@ public interface ContentReportRepository extends JpaRepository<ContentReport, Lo
 
     boolean existsByPostIdAndReporterId(long postId, long reporterId);
 
+    /** 批量版（V1.4.0 ④ Story 2.1）：这批帖子里该用户举报过的那些（一次查询）。 */
+    @org.springframework.data.jpa.repository.Query(
+            "select r.postId from ContentReport r where r.reporterId = :reporterId and r.postId in :postIds")
+    List<Long> findReportedPostIds(@org.springframework.data.repository.query.Param("reporterId") long reporterId,
+            @org.springframework.data.repository.query.Param("postIds") java.util.Collection<Long> postIds);
+
     /** Admin 队列：按状态列举（PENDING 优先），created_at 倒序分页。 */
     List<ContentReport> findByStatusOrderByCreatedAtDesc(ReportStatus status, Pageable pageable);
 

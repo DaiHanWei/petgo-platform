@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,10 +14,14 @@ import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/content/presentation/publish_landing_page.dart';
 import 'package:tailtopia/features/content/presentation/publish_result_page.dart';
+import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 
 /// 发布请求抛注入异常的 fake（模拟审核 422）。
 class _ThrowRepo implements ContentRepository {
@@ -26,6 +32,7 @@ class _ThrowRepo implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
@@ -55,6 +62,7 @@ class _OkRepo implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
@@ -70,7 +78,7 @@ class _OkRepo implements ContentRepository {
 
 class _FakeProfileRepo implements ProfileRepository {
   @override
-  Future<void> deleteMyProfile() async {}
+  Future<void> deleteMyProfile({int? petId}) async {}
 
   @override
   Future<PetProfile> create({
@@ -88,7 +96,7 @@ class _FakeProfileRepo implements ProfileRepository {
       PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
 
   @override
-  Future<PetProfile?> getMyProfile() async => null;
+  Future<PetProfile?> getMyProfile({int? petId}) async => null;
 
   @override
   Future<PetProfile> update({
@@ -100,6 +108,7 @@ class _FakeProfileRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    int? petId,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }
@@ -107,7 +116,7 @@ class _FakeProfileRepo implements ProfileRepository {
 /// 有宠物档案的档案仓库：成长日历发布必带 pet_id（bug 564 成功路径用）。
 class _WithPetProfileRepo extends _FakeProfileRepo {
   @override
-  Future<PetProfile?> getMyProfile() async =>
+  Future<PetProfile?> getMyProfile({int? petId}) async =>
       const PetProfile(id: 1, name: 'Oyen', cardToken: 'T');
 }
 
@@ -347,6 +356,8 @@ void main() {
       publishControllerProvider.overrideWithValue(controller),
       profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
       authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+      // V1.4.0 multi-pet Story 3.3：Diary 宠物 chips 读宠物列表（只 1 只 → F4 自动选中）。
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 1, name: 'Oyen')]),
     ]);
     addTearDown(container.dispose);
 
@@ -554,6 +565,8 @@ void main() {
         publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
         profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
         authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+      // V1.4.0 multi-pet Story 3.3：Diary 宠物 chips 读宠物列表（只 1 只 → F4 自动选中）。
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 1, name: 'Oyen')]),
       ]);
 
   testWidgets('bug 520: 里程碑去发布 → ✕ 放弃 → 回里程碑列表（不留白屏）', (tester) async {
@@ -670,7 +683,11 @@ void main() {
       publishControllerProvider
           .overrideWithValue(_controller(_OkRepo())..setText('Oyen sehat hari ini')),
       profileRepositoryProvider.overrideWithValue(_WithPetProfileRepo()),
+      // V1.4.0 multi-pet：发布页按当前宠物取档案（requestPetIdProvider ← effectivePetIdProvider）。
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
       authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+      // V1.4.0 multi-pet Story 3.3：Diary 宠物 chips 读宠物列表（只 1 只 → F4 自动选中）。
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 1, name: 'Oyen')]),
     ]);
     addTearDown(container.dispose);
     final router = calendarPublishRouter('/profile');
@@ -694,5 +711,398 @@ void main() {
     expect(find.byType(PublishLandingPage), findsNothing);
     expect(find.text('diary-calendar'), findsOneWidget);
     expect(router.routerDelegate.currentConfiguration.uri.path, '/profile');
+  });
+
+  _multiPetGroup();
+}
+
+// ===== V1.4.0 multi-pet Story 3.3：Diary 发布页宠物 chips（F1 / F2 / F4）· 预选 · 请求体 · 409 只读 =====
+
+/// 记录请求的 fake；[readOnlyPetId] 非空 → 抛 409 pet-read-only（带 petId）。
+class _PetRecordingRepo implements ContentRepository {
+  _PetRecordingRepo({this.readOnlyPetId});
+  final int? readOnlyPetId;
+  List<int>? lastPetIds;
+  int? lastPetId;
+  int calls = 0;
+
+  @override
+  Future<int> publish({
+    required ContentType type,
+    int? petId,
+    List<int> petIds = const [],
+    String? text,
+    List<String> imageUrls = const [],
+    List<ImageSize?> imageSizes = const [],
+    List<double?> imageCropOffsets = const [],
+    DateTime? eventDate,
+    required String idempotencyKey,
+    bool syncToMoment = true,
+    List<int> mentionedUserIds = const [],
+    String? placeCheckinToken,
+  }) async {
+    calls++;
+    lastPetIds = petIds;
+    lastPetId = petId;
+    if (readOnlyPetId != null) {
+      final ro = RequestOptions(path: '/api/v1/content-posts');
+      throw DioException(
+        requestOptions: ro,
+        type: DioExceptionType.badResponse,
+        response: Response(
+          requestOptions: ro,
+          statusCode: 409,
+          data: {'type': 'https://petgo/errors/pet-read-only', 'status': 409, 'petId': readOnlyPetId},
+        ),
+      );
+    }
+    return 42;
+  }
+}
+
+/// 按 petId 返回档案的仓库（F3：分享取第一只关联宠物）。
+class _ByIdProfileRepo extends _FakeProfileRepo {
+  final requested = <int?>[];
+  @override
+  Future<PetProfile?> getMyProfile({int? petId}) async {
+    requested.add(petId);
+    return PetProfile(id: petId ?? 0, name: 'Pet$petId', cardToken: 'card-$petId');
+  }
+}
+
+/// 记录里程碑回填打卡（抛错 = best-effort 失败，发布照常走成功页）。
+class _MilestoneRecorder implements MilestoneRepository {
+  final checkIns = <String>[];
+
+  @override
+  Future<MilestoneItem> checkIn(String code, int contentId, {int? petId}) async {
+    checkIns.add('$code@$petId');
+    throw StateError('not needed');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+const _orenji = PetListItem(id: 1, name: 'Orenji');
+const _kopi = PetListItem(id: 2, name: 'Kopi');
+const _mochi = PetListItem(id: 3, name: 'Mochi');
+const _lockedPet = PetListItem(id: 4, name: 'Bubu', status: PetListItem.statusReadOnly);
+
+void _multiPetGroup() {
+  group('V1.4.0 multi-pet Story 3.3 · 发布页选宠物', () {
+    late int listFetches;
+
+    ProviderContainer container0(
+      PublishController c, {
+      List<PetListItem> pets = const [_orenji, _kopi, _mochi, _lockedPet],
+      ProfileRepository? profiles,
+      int? currentPetId,
+    }) {
+      listFetches = 0;
+      final container = ProviderContainer(overrides: [
+        publishControllerProvider.overrideWithValue(c),
+        profileRepositoryProvider.overrideWithValue(profiles ?? _FakeProfileRepo()),
+        authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+        petListProvider.overrideWith((ref) async {
+          listFetches++;
+          return pets;
+        }),
+        if (currentPetId != null) effectivePetIdProvider.overrideWithValue(AsyncData(currentPetId)),
+      ]);
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    Widget app(ProviderContainer container, PublishComposePage page) => UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: Scaffold(body: page),
+          ),
+        );
+
+    bool submitEnabled(WidgetTester tester) =>
+        tester.widget<FilledButton>(find.byKey(const ValueKey('publishSubmit'))).onPressed != null;
+
+    String hintOf(WidgetTester tester) =>
+        tester.widget<TextField>(find.byKey(const ValueKey('publishText'))).decoration!.hintText!;
+
+    testWidgets('F1：3 只 ACTIVE + 1 只只读 → 3 个 chip（只读不出现）；默认不选、Bagikan 置灰、占位 F-1', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      await tester.pumpWidget(app(container0(c), const PublishComposePage(preset: ContentType.growthMoment)));
+      await tester.pumpAndSettle();
+      final l10n = await _en();
+
+      expect(find.byKey(const ValueKey('publishPetChips')), findsOneWidget);
+      for (final id in [1, 2, 3]) {
+        expect(find.byKey(ValueKey('publishPetChip-$id')), findsOneWidget);
+      }
+      expect(find.byKey(const ValueKey('publishPetChip-4')), findsNothing);
+      expect(find.text('Bubu'), findsNothing);
+      expect(c.petIds, isEmpty);
+      expect(submitEnabled(tester), isFalse);
+      expect(hintOf(tester), l10n.diaryPetsComposeHint);
+    });
+
+    testWidgets('F2：选 2 只 → 按创建顺序存、占位「Orenji & Kopi」、Bagikan 可点；✓ 只出在选中的', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      await tester.pumpWidget(app(container0(c), const PublishComposePage(preset: ContentType.growthMoment)));
+      await tester.pumpAndSettle();
+      final l10n = await _en();
+
+      // 先点 Kopi 再点 Orenji：存的仍是创建顺序。
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-2')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-1')));
+      await tester.pump();
+      expect(c.petIds, [1, 2]);
+      expect(hintOf(tester), l10n.publishHintGrowth('Orenji & Kopi'));
+      expect(submitEnabled(tester), isTrue);
+      expect(find.byKey(const ValueKey('publishPetChipCheck')), findsNWidgets(2));
+
+      // ≥ 3 只：第一只 + dkk.（en：and others）
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-3')));
+      await tester.pump();
+      expect(hintOf(tester), l10n.publishHintGrowth(l10n.diaryPetsMany('Orenji')));
+    });
+
+    testWidgets('F4：只 1 只正常宠物 → 自动选中、Bagikan 可点；取消后回 F1 置灰', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      await tester.pumpWidget(app(container0(c, pets: const [_orenji, _lockedPet]),
+          const PublishComposePage(preset: ContentType.growthMoment)));
+      await tester.pumpAndSettle();
+      final l10n = await _en();
+
+      expect(c.petIds, [1]);
+      expect(submitEnabled(tester), isTrue);
+      expect(hintOf(tester), l10n.publishHintGrowth('Orenji'));
+
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-1')));
+      await tester.pump();
+      expect(c.petIds, isEmpty);
+      expect(submitEnabled(tester), isFalse);
+    });
+
+    testWidgets('F5：Moment / Tips 不出 chips 行；切回 Diary 已选保留', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      await tester.pumpWidget(app(container0(c), const PublishComposePage(preset: ContentType.growthMoment)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-2')));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('seg_DAILY')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('publishPetChips')), findsNothing);
+      expect(submitEnabled(tester), isTrue); // Moment 不受宠物条件影响
+      await tester.tap(find.byKey(const ValueKey('seg_KNOWLEDGE')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('publishPetChips')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('seg_GROWTH_MOMENT')));
+      await tester.pumpAndSettle();
+      expect(c.petIds, [2]);
+    });
+
+    testWidgets('AC1.7：initialPetIds 预选（过滤掉只读 / 不存在的）', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      await tester.pumpWidget(app(container0(c),
+          const PublishComposePage(preset: ContentType.growthMoment, initialPetIds: [3, 4, 99, 1])));
+      await tester.pumpAndSettle();
+      expect(c.petIds, [1, 3]);
+    });
+
+    testWidgets('AC1.7：里程碑「去发布」→ 预选 Diary Tab 当前宠物', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      await tester.pumpWidget(app(container0(c, currentPetId: 2),
+          const PublishComposePage(preset: ContentType.growthMoment, milestoneCode: 'C-S1')));
+      await tester.pumpAndSettle();
+      expect(c.petIds, [2]);
+    });
+
+    testWidgets('AC1.7：里程碑入口当前宠物只读 → 不预选', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      await tester.pumpWidget(app(container0(c, currentPetId: 4),
+          const PublishComposePage(preset: ContentType.growthMoment, milestoneCode: 'C-S1')));
+      await tester.pumpAndSettle();
+      expect(c.petIds, isEmpty);
+    });
+
+    testWidgets('code review #2：里程碑预选在等当前宠物期间用户已点 chip → 不覆盖用户选择', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      final current = Completer<int?>();
+      final container = ProviderContainer(overrides: [
+        publishControllerProvider.overrideWithValue(c),
+        profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+        authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+        petListProvider.overrideWith((ref) async => const [_orenji, _kopi, _mochi]),
+        effectivePetIdProvider.overrideWith((ref) => current.future),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(app(container,
+          const PublishComposePage(preset: ContentType.growthMoment, milestoneCode: 'C-S1')));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-3')));
+      await tester.pump();
+      current.complete(2); // 当前宠物这时才解析出来
+      await tester.pumpAndSettle();
+      expect(c.petIds, [3]);
+    });
+
+    Future<_MilestoneRecorder> publishFromMilestone(WidgetTester tester, {required bool untickMilestonePet}) async {
+      _tallView(tester);
+      final milestones = _MilestoneRecorder();
+      final c = _controller(_PetRecordingRepo())..setText('hari ini');
+      final container = ProviderContainer(overrides: [
+        publishControllerProvider.overrideWithValue(c),
+        profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+        authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+        petListProvider.overrideWith((ref) async => const [_orenji, _kopi]),
+        effectivePetIdProvider.overrideWithValue(const AsyncData(2)),
+        milestoneRepositoryProvider.overrideWithValue(milestones),
+      ]);
+      addTearDown(container.dispose);
+      final router = GoRouter(initialLocation: '/home', routes: [
+        GoRoute(path: '/home', builder: (ctx, st) => const Scaffold(body: Text('home'))),
+        GoRoute(
+            path: '/compose',
+            builder: (ctx, st) => const Scaffold(
+                body: PublishComposePage(preset: ContentType.growthMoment, milestoneCode: 'C-S1'))),
+        GoRoute(path: '/publish/done', builder: (ctx, st) => PublishDonePage(args: st.extra as PublishResultArgs)),
+      ]);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      router.push('/compose');
+      await tester.pumpAndSettle();
+      expect(c.petIds, [2]); // 预选里程碑宠物
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-1')));
+      if (untickMilestonePet) await tester.tap(find.byKey(const ValueKey('publishPetChip-2')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      return milestones;
+    }
+
+    testWidgets('code review #2：里程碑宠物仍在所选 → 按它回填打卡', (tester) async {
+      final m = await publishFromMilestone(tester, untickMilestonePet: false);
+      expect(m.checkIns, ['C-S1@2']);
+    });
+
+    testWidgets('code review #2：用户取消了里程碑宠物 → 不回填（帖子没关联它，后端会拒）', (tester) async {
+      final m = await publishFromMilestone(tester, untickMilestonePet: true);
+      expect(m.checkIns, isEmpty);
+    });
+
+    testWidgets('AC1.8：宠物列表失败 → 行内重试；点重试重新拉', (tester) async {
+      _tallView(tester);
+      final c = _controller(_OkRepo())..setText('hari ini');
+      var fail = true;
+      var fetches = 0;
+      final container = ProviderContainer(overrides: [
+        publishControllerProvider.overrideWithValue(c),
+        profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+        authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+        petListProvider.overrideWith((ref) async {
+          fetches++;
+          if (fail) throw StateError('offline');
+          return const [_orenji, _kopi];
+        }),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(app(container, const PublishComposePage(preset: ContentType.growthMoment)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('publishPetChipsRetry')), findsOneWidget);
+      fail = false;
+      await tester.tap(find.byKey(const ValueKey('publishPetChipsRetry')));
+      await tester.pumpAndSettle();
+      expect(fetches, greaterThanOrEqualTo(2));
+      expect(find.byKey(const ValueKey('publishPetChip-2')), findsOneWidget);
+    });
+
+    testWidgets('AC3.1 / F3：发布带 petIds（创建顺序）+ petId 第一只；成功页分享取第一只宠物', (tester) async {
+      _tallView(tester);
+      final repo = _PetRecordingRepo();
+      final profiles = _ByIdProfileRepo();
+      final c = _controller(repo)..setText('hari ini');
+      final container = container0(c, profiles: profiles);
+      final router = GoRouter(initialLocation: '/home', routes: [
+        GoRoute(path: '/home', builder: (ctx, st) => const Scaffold(body: Text('home'))),
+        GoRoute(
+            path: '/compose',
+            builder: (ctx, st) => const Scaffold(body: PublishComposePage(preset: ContentType.growthMoment))),
+        GoRoute(path: '/publish/done', builder: (ctx, st) => PublishDonePage(args: st.extra as PublishResultArgs)),
+      ]);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      router.push('/compose');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-3')));
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-2')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(repo.lastPetIds, [2, 3]);
+      expect(repo.lastPetId, 2);
+      expect(profiles.requested.last, 2); // F3：第一只关联宠物
+      final l10n = await _en();
+      expect(find.text(l10n.publishDoneShareGrowthBookNamed('Pet2')), findsOneWidget);
+    });
+
+    testWidgets('AC3.2：409 pet-read-only → Toast 只读文案 + 刷新宠物列表 + 去掉该 chip 选中，不进成功页', (tester) async {
+      _tallView(tester);
+      final repo = _PetRecordingRepo(readOnlyPetId: 2);
+      final c = _controller(repo)..setText('hari ini');
+      final container = container0(c);
+      await tester.pumpWidget(app(container, const PublishComposePage(preset: ContentType.growthMoment)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-1')));
+      await tester.tap(find.byKey(const ValueKey('publishPetChip-2')));
+      await tester.pump();
+      final before = listFetches;
+
+      await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      final l10n = await _en();
+      expect(find.text(l10n.petReadonlyBlockTitle('Kopi')), findsOneWidget);
+      expect(c.petIds, [1]);
+      expect(listFetches, greaterThan(before));
+      expect(find.byType(PublishDonePage), findsNothing);
+      expect(find.byKey(const ValueKey('publishPetChips')), findsOneWidget); // 仍在编辑页
+      await tester.pump(const Duration(seconds: 4)); // toast 计时器走完
+    });
   });
 }

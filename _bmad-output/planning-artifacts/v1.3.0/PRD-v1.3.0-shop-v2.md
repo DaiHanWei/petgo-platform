@@ -14,7 +14,7 @@ updated: 2026-09-15
 > **附录** `PRD-v1.3.0-shop-v2-addendum.md`：下一版才做的 WhatsApp 双向工作台全文、税务约束。
 > **校验记录** `validation-2026-09-15-shop-v2/`：两轮评审报告、代码事实核查、2026-09-14 草稿原文备份。
 >
-> **称谓约定**：已上线的第一期电商称「**电商一期**」，其规划文档在 `planning-artifacts/v1.4.0/`（目录名为历史遗留，不代表版本号；SD-11）。
+> **称谓约定**：已上线的第一期电商称「**电商一期**」，其规划文档在 `planning-artifacts/v1.4.0-toko-废弃/`（目录名为历史遗留，不代表版本号；SD-11）。
 > **编号约定**：需求 `SHOP-FR-n` / `SHOP-NFR-n`，风险 `SHOP-R-n`，开放项 `OD-n`，行动项 `ACT-x`。v1.3.0 目录内 `FR-111~121`、`D-n` 已被其它主题占用，勿混用。编号在修订中保持稳定，删除的条目留「已移出」行，不重排。
 > **原始输入**：需求梳理（2026-09-11）、东南亚宠物电商调研、WhatsApp 接入调研均未入库；本文需要的结论已内联，`BUG-n / OPS-n / APP-n / MKT-n` 仅作来源标记。
 
@@ -340,7 +340,7 @@ updated: 2026-09-15
 
 ## 9 · 实现时须遵守的既有纪律
 
-> 来源 `implementation-artifacts/v1.4.0/HANDOFF.md §三` 与根目录 `CLAUDE.md`。
+> 来源 `implementation-artifacts/v1.4.0-toko-废弃/HANDOFF.md §三` 与根目录 `CLAUDE.md`。
 
 | 纪律 | 被哪些需求触发 |
 |---|---|

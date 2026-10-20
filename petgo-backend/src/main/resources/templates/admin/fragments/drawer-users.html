@@ -31,10 +31,13 @@
             <span th:unless="${user.deleted()}" class="badge"
                   th:classappend="${user.deactivated()} ? 'badge-danger' : 'badge-ok'"
                   th:text="${user.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span>
+            <!--/* V1.4.0 ① Story 4.2 · I6：虚拟号徽章（判定取成长值页签视图，不改 AdminUserDetailView） */-->
+            <span th:if="${growthTab != null and growthTab.virtual()}" class="badge badge-muted" data-virtual-badge
+                  th:text="#{admin.v140.growth.virtual.badge}">虚拟号</span>
         </h2>
     </header>
 
-    <!--/* 页签条。⚠️ nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */-->
+    <!--/* 页签条。V1.4.0 起共 9 个，600 宽放不下，按 ① PRD OQ-8 换成两行（抽屉宽度不变）。 */-->
     <div class="tabs ud-tabs" role="tablist" data-user-tabs>
         <button type="button" class="tab tab--on" role="tab" data-utab="basic"
                 th:text="#{admin.v130.users.tab.basic}">基本信息</button>
@@ -48,6 +51,13 @@
                 th:text="#{admin.v130.users.tab.actions}">处置</button>
         <button type="button" class="tab" role="tab" data-utab="purchases"
                 th:text="#{admin.v132.users.tab.purchases}">已购解锁</button>
+        <!--/* V1.4.0 Story 0.1 地基：三个新页签头。🔴 页签头与 data-utab 名由地基定义，①②③ 不许改。 */-->
+        <button type="button" class="tab" role="tab" data-utab="growth"
+                th:text="#{admin.v140.users.tab.growth}">成长值</button>
+        <button type="button" class="tab" role="tab" data-utab="petSlots"
+                th:text="#{admin.v140.users.tab.petSlots}">宠物与名额</button>
+        <button type="button" class="tab" role="tab" data-utab="gifts"
+                th:text="#{admin.v140.users.tab.gifts}">收送礼记录</button>
     </div>
 
     <!--/* ① 基本信息 */-->
@@ -334,6 +344,19 @@
             </div>
         </th:block>
     </section>
+
+    <!--/* ⑦ 成长值（V1.4.0 Story 0.1 地基容器，① Story 4.2 填充）：页签头与 data-utab-panel 名不许改。
+           片段根元素仍是 data-utab-panel="growth" 的 section（加 id 供调整成功后只换本页签）。 */-->
+    <section th:replace="~{admin/fragments/drawer-users-growth :: panel(false)}"></section>
+
+    <!--/* ⑧ 宠物与名额（V1.4.0 Story 0.1 空容器）：由 ② feat/1.4.0-multi-pet 填充，页签头与 data-utab-panel 名不许改。
+           Story 4.3：内容在独立片段里，根元素仍是 data-utab-panel="petSlots"（id user-petslots-panel，补发成功只换它）。 */-->
+    <section th:replace="~{admin/fragments/drawer-users-petslots :: panel(false)}"></section>
+
+    <!--/* ⑨ 收送礼记录（V1.4.0 Story 0.1 空容器）：由 ③ feat/1.4.0-gift 填充，页签头与 data-utab-panel 名不许改。
+           ③ Story 3.2：内容在独立片段 drawer-users-gifts :: panel（根元素仍是 data-utab-panel="gifts" 的 section，
+           胶囊切换 / 翻页只换这一块）。 */-->
+    <section th:replace="~{admin/fragments/drawer-users-gifts :: panel(false)}"></section>
 
     <div id="user-drawer-err" class="lst-inline-error" aria-live="polite"></div>
 

@@ -12,26 +12,29 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 class _FakeRepo extends ConsultRepository {
   _FakeRepo() : super(dio: Dio());
   final List<String?> calls = [];
+  final List<int?> petIds = [];
 
   @override
   Future<int> vetConsultPrice() async => 59000;
 
   @override
-  Future<ConsultRequest> createRequest({String? symptomText, List<String>? imageObjectKeys}) async {
+  Future<ConsultRequest> createRequest(
+      {String? symptomText, List<String>? imageObjectKeys, int? petId}) async {
     calls.add(symptomText);
+    petIds.add(petId);
     // 抛网络错走页面既有失败分支（toast），避免测试里触发路由跳转。
     throw DioException(requestOptions: RequestOptions(path: '/x'));
   }
 }
 
-Future<void> _pump(WidgetTester tester, _FakeRepo repo) async {
+Future<void> _pump(WidgetTester tester, _FakeRepo repo, {int? petId}) async {
   tester.platformDispatcher.localesTestValue = const [Locale('en')];
   await tester.pumpWidget(ProviderScope(
     overrides: [consultRepositoryProvider.overrideWithValue(repo)],
-    child: const MaterialApp(
+    child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: ConsultCaseFormPage(),
+      home: ConsultCaseFormPage(petId: petId),
     ),
   ));
   await tester.pump();
@@ -73,5 +76,26 @@ void main() {
     await tester.pump();
     expect(repo.calls, ['Muntah sejak pagi']);
     await tester.pump(const Duration(seconds: 5)); // 让失败 toast 计时器走完
+  });
+
+  // V1.4.0 multi-pet Story 4.1 · AC7.5（H4）：所选宠物随入队提交；不带 = 旧行为（后端默认宠物）。
+  testWidgets('petId from route is sent with createRequest; absent → null', (tester) async {
+    final repo = _FakeRepo();
+    await _pump(tester, repo, petId: 8);
+    await tester.enterText(find.byKey(const ValueKey('consultCaseSymptom')), 'Muntah');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('consultCaseSubmit')));
+    await tester.pump();
+    expect(repo.petIds, [8]);
+    await tester.pump(const Duration(seconds: 5));
+
+    final legacy = _FakeRepo();
+    await _pump(tester, legacy);
+    await tester.enterText(find.byKey(const ValueKey('consultCaseSymptom')), 'Muntah');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('consultCaseSubmit')));
+    await tester.pump();
+    expect(legacy.petIds, [null]);
+    await tester.pump(const Duration(seconds: 5));
   });
 }

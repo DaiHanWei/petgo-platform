@@ -14,13 +14,18 @@ class ProfileCreatedCelebrationPage extends StatelessWidget {
     super.key,
     required this.petName,
     required this.onStartExplore,
+    this.onViewProfile,
     this.avatarUrl,
   });
 
   final String petName;
 
-  /// 进入 App 的动作：路由侧注入「触发推送权限时机 → 进首页」。主/次 CTA 共用。
+  /// 主 CTA「Rekam Momen Pertama」：路由侧注入（现为直接拉起内容发布）。
   final Future<void> Function() onStartExplore;
+
+  /// 次链接「Lihat profil dulu」：只去档案（Diary Tab），**不**拉起发布（V1.4.0 L2 第二轮 P3-7）。
+  /// 未注入时回落 [onStartExplore]（旧行为）。
+  final Future<void> Function()? onViewProfile;
 
   final String? avatarUrl;
 
@@ -95,11 +100,11 @@ class ProfileCreatedCelebrationPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 13),
-                    // 次链接「Lihat profil dulu」（同样进 App）。
+                    // 次链接「Lihat profil dulu」：只去档案页，不开发布。
                     GestureDetector(
                       key: const ValueKey('celebrationViewProfile'),
                       behavior: HitTestBehavior.opaque,
-                      onTap: onStartExplore,
+                      onTap: onViewProfile ?? onStartExplore,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                         child: Text(l10n.profileCreatedViewProfile,

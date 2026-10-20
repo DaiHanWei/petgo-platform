@@ -251,7 +251,7 @@ class BoardingPassIntegrationTest extends ApiIntegrationTest {
         checkIn(o, a);
         String body = unlock(o, a, "QRIS").andReturn().getResponse().getContentAsString();
         String intent = json.readTree(body).path("payment").path("token").asText();
-        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteByUserId(o.user().getId()));
+        new TransactionTemplate(txManager).executeWithoutResult(s -> profileDeletion.deleteAllForAccount(o.user().getId()));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM boarding_pass_unlocks WHERE pet_profile_id = ?",
                 Long.class, o.pet().getId())).isZero();
         paymentIntents.applyCallback(new PaymentCallback(intent, "gw-" + SEQ.incrementAndGet(), GatewayStatus.PAID,

@@ -43,16 +43,16 @@ class TailsonalityBadgeServiceTest {
 
     @Test
     void equipUnlockedUpserts() {
-        when(pets.findOwnedPet(7L)).thenReturn(Optional.of(new OwnedPetRef(3L, PetType.CAT)));
-        when(results.findByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(row(Instant.EPOCH)));
+        when(pets.ownsPet(7L, 3L)).thenReturn(true);
+        when(results.findByPublicToken("tok")).thenReturn(Optional.of(row(Instant.EPOCH)));
         service.equip(7L, "tok");
         verify(badges).upsert(3L, 42L);
     }
 
     @Test
     void equipLockedIs422WithDedicatedType() {
-        when(pets.findOwnedPet(7L)).thenReturn(Optional.of(new OwnedPetRef(3L, PetType.CAT)));
-        when(results.findByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(row(null)));
+        when(pets.ownsPet(7L, 3L)).thenReturn(true);
+        when(results.findByPublicToken("tok")).thenReturn(Optional.of(row(null)));
         assertThatThrownBy(() -> service.equip(7L, "tok")).isInstanceOfSatisfying(AppException.class, e -> {
             assertThat(e.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
             assertThat(e.getType()).isEqualTo(ErrorTypes.TAILSONALITY_BADGE_LOCKED);
@@ -62,18 +62,54 @@ class TailsonalityBadgeServiceTest {
 
     @Test
     void equipUnknownOrForeignIs404() {
-        when(pets.findOwnedPet(7L)).thenReturn(Optional.of(new OwnedPetRef(3L, PetType.CAT)));
-        when(results.findByPublicTokenAndPetProfileId("x", 3L)).thenReturn(Optional.empty());
+        when(pets.ownsPet(7L, 3L)).thenReturn(true);
+        when(results.findByPublicToken("x")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.equip(7L, "x")).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
     }
 
     @Test
     void unequipIsIdempotentDelete() {
-        when(pets.findOwnedPet(7L)).thenReturn(Optional.of(new OwnedPetRef(3L, PetType.CAT)));
-        service.unequip(7L);
-        service.unequip(7L);
+        when(pets.findOwnedPet(7L, null)).thenReturn(Optional.of(new OwnedPetRef(3L, PetType.CAT)));
+        service.unequip(7L, null);
+        service.unequip(7L, null);
         verify(badges, org.mockito.Mockito.times(2)).deleteByPetProfileId(3L);
+    }
+
+    // ===== V1.4.0 multi-pet Story 1.2 · X14 =====
+
+    @Test
+    void equipForeignTokenIs404() {
+        // 结果行属于别人的宠物（3L 不属于 7L）→ 同一个 404，不佩戴。
+        when(pets.ownsPet(7L, 3L)).thenReturn(false);
+        when(results.findByPublicToken("tok")).thenReturn(Optional.of(row(Instant.EPOCH)));
+        assertThatThrownBy(() -> service.equip(7L, "tok")).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(badges, never()).upsert(anyLong(), anyLong());
+    }
+
+    @Test
+    void equipTargetsThePetOnTheResultRowNotTheDefault() {
+        // 结果属于第二只宠物 B（id 4）：佩戴到 B，不需要 petId，也不查默认宠物。
+        TailsonalityResult r = TailsonalityResult.create("tokB", 4L, 7L, TailsonalityQuestionSet.CAT, Map.of(),
+                new TailsonalityCode("ENTJ", "H"), 1, Instant.EPOCH);
+        ReflectionTestUtils.setField(r, "id", 43L);
+        ReflectionTestUtils.setField(r, "unlockedAt", Instant.EPOCH);
+        when(results.findByPublicToken("tokB")).thenReturn(Optional.of(r));
+        when(pets.ownsPet(7L, 4L)).thenReturn(true);
+        service.equip(7L, "tokB");
+        verify(badges).upsert(4L, 43L);
+        verify(pets, never()).findOwnedPet(anyLong(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void unequipSpecificPet() {
+        when(pets.findOwnedPet(7L, 4L)).thenReturn(Optional.of(new OwnedPetRef(4L, PetType.DOG)));
+        service.unequip(7L, 4L);
+        verify(badges).deleteByPetProfileId(4L);
+        when(pets.findOwnedPet(7L, 999L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.unequip(7L, 999L)).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
     }
 
     @Test

@@ -94,7 +94,7 @@ public class AdminContentScheduleController {
             @RequestParam(required = false) Long authorId,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
-            doReschedule(rowId, scheduledAt);
+            doReschedule(rowId, scheduledAt, admin.getAdminAccountId());
             // ⚠️ 不做单行 oob：表按**计划时间升序**，改完时间那一行的位置会变 ——
             //    原位换掉只会让它停在旧位置，看起来像「改了但没排上」。整表按当前筛选重拉。
             AdminFragmentResponses.trigger(response, AdminHxEvents.SCHEDULE_LIST_REFRESH,
@@ -103,7 +103,7 @@ public class AdminContentScheduleController {
             return "admin/fragments/schedules-tab :: afterAction";
         }
         try {
-            doReschedule(rowId, scheduledAt);
+            doReschedule(rowId, scheduledAt, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.schedule.timeUpdated"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
@@ -111,7 +111,7 @@ public class AdminContentScheduleController {
         return redirect(authorId);
     }
 
-    private void doReschedule(long rowId, String scheduledAt) {
+    void doReschedule(long rowId, String scheduledAt, long adminAccountId) {
         Instant at = requireFuture(scheduledAt);
         var row = rows.findById(rowId)
                 .orElseThrow(() -> AppException.notFound("排期不存在")
@@ -123,8 +123,14 @@ public class AdminContentScheduleController {
             throw AppException.validation("这一行已发布失败，请先回工作台修好再重新提交")
                     .code("admin.err.schedule.failedRowFixFirst");
         }
-        row.setScheduledAt(at);
-        rows.save(row);
+        if (row.getStatus() != SeedBatchRowStatus.SCHEDULED) {
+            // 🔴 只有「排期中」能改时间。已发布（终态，内容已对外）改时间只会让后台与线上事实不一致；
+            //    已取消排期（回到草稿）/ 草稿 / 待确认的行不在排期表里，改出一个 scheduled_at 也不会被扫描发布，
+            //    却会让人以为它「又排上了」。抽屉可能是旧的（别人刚发布 / 刚取消）→ 服务端兜底拒绝，不信前端按钮态。
+            throw AppException.validation("这一行已不在排期中（已发布或已取消排期），不能再改计划时间")
+                    .code("admin.err.schedule.notReschedulable");
+        }
+        stateMachine.reschedule(row, at, adminAccountId);
     }
 
     /** 取消排期 → 回退草稿，不发布（AC4）。 */

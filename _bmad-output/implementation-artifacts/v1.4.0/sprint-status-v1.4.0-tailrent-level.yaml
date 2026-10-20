@@ -1,0 +1,66 @@
+# generated: 2026-10-18
+# last_updated: 2026-10-18  # 16 条 story 全部生成（ready-for-dev），云端批跑
+# project: TailTopia V1.4.0 · 主题 tailrent-level（① Tailrent Level：后端 + 后台 + App）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.4.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.4.0/epics-v1.4.0-tailrent-level.md (4 Epic / 16 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.4.0/architecture-v1.4.0-tailrent-level-delta.md (AD-1~AD-18 · P-1~P-6 · V-1~V-4)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.4.0/Tailrent等级/1-4-0Tailrent等级prd.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.4.0/decision-log.md（① 节）
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.4.0/Tailrent等级/ui-1-4-0-tailrent-level-integrated-v1.html（App 30 屏）+ ui-admin-…（后台 22 屏）
+# 云端规则: {project-root}/_bmad-output/implementation-artifacts/v1.4.0/cloud-rules-tailrent-level.md
+# 跨分支契约: {project-root}/_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md「2026-10-18」节
+#
+# 🔴 口径优先级：decision-log.md ① 节 > PRD > 架构增量 > UI 稿。
+# 🔴 同目录还有地基 0-1 与其他主题（multi-pet / gift / push-collect）的同号 story——只按本文件的完整 key 取。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+#
+# ===== 依赖（全后向，无环；云端单会话串行） =====
+# 前置：地基 Story 0.1（已合入 dev_1.4.0）
+# Epic 1 -> Epic 2 -> Epic 3 -> Epic 4
+#
+# ===== 迁移预分配（5 个，不得另取号） =====
+# 1.1 V20261018_1500  1.3 V20261018_1504  2.2 V20261018_1503
+# 3.4 V20261018_1501  4.1 V20261018_1505
+# V20261018_1502 作废不复用（4.2 改为在 AdminRole 枚举加权限码）
+
+generated: 2026-10-18
+last_updated: 2026-10-18
+project: TailTopia V1.4.0 tailrent-level
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.0"
+
+development_status:
+  epic-1: in-progress
+  1-1-成长值账本与日常行为入账: review
+  1-2-等级变化与注销清理: review
+  1-3-消费返成长值与退款扣回: review
+  1-4-等级页与exp明细接口: review
+  1-5-我的页等级胶囊-等级页与exp明细页: review
+  epic-1-retrospective: optional
+
+  epic-2: in-progress
+  2-1-升级通知与弹窗接口: review
+  2-2-存量用户补算与虚拟号展示等级初始化: review
+  2-3-升级庆祝-存量汇总弹窗与通知中心: review
+  epic-2-retrospective: optional
+
+  epic-3: in-progress
+  3-1-作者等级批量下发: review
+  3-2-头像等级角标与头像框: review
+  3-3-选择头像框: review
+  3-4-推荐流作者等级加权: review
+  epic-3-retrospective: optional
+
+  epic-4: in-progress
+  4-1-成长体系配置页: review
+  4-2-用户抽屉成长值页签与手动调整: review
+  4-3-批量发放活动exp: review
+  4-4-虚拟号展示等级设置: review
+  epic-4-retrospective: optional

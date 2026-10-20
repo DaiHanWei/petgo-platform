@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
@@ -7,6 +8,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../data/id_card_repository.dart';
+import '../data/pet_list_repository.dart';
 import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
 import 'id_card/id_card_hd_flow.dart';
@@ -79,12 +81,26 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
   }
 
   void _onStyleTap(IdCardStyle style) {
+    // V1.4.0 multi-pet Story 2.4 · AC5.5 + Story 4.2（AD-8「KTP 创建只列正常宠物，卡不挂宠物」/ decision-log I2）：
+    // 当前宠物只读但账号还有正常宠物 → 照常进建卡页（预填最早创建的正常宠物）；只有**一只正常宠物都没有**才弹 E1。
+    if (!_guardKtpEntry()) return;
     // AD-12 / T-12：wire 值大写；非学生卡不带 card_variant 键。
     Analytics.capture('id_card_style_tapped', {
       'card_type': style.cardType,
       if (style.cardVariant != null) 'card_variant': style.cardVariant!,
     });
     context.push(IdCardCreatePage.locationFor(style));
+  }
+
+  /// 建卡入口的只读拦截（Story 4.2）：当前宠物只读 **且** 已加载的宠物列表里没有任何 ACTIVE → 弹 E1、返回 false；
+  /// 其余（当前宠物可写 / 还有正常宠物可预填 / 列表未加载 = 不知道）→ 放行。
+  bool _guardKtpEntry() {
+    final pet = currentPetIfLoaded(ref);
+    if (pet == null || !pet.isReadOnly) return true;
+    final pets = ref.read(petListProvider).value ?? const <PetListItem>[];
+    if (pets.any((p) => !p.isReadOnly)) return true;
+    showPetReadonlyBlockSheet(context, ref, pet);
+    return false;
   }
 
   @override

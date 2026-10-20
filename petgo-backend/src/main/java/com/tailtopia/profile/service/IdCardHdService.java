@@ -189,8 +189,9 @@ public class IdCardHdService {
     // noRollbackFor：GemPay 下单失败时 failChargeAttempt 已把意图置 FAILED，这一行必须随事务提交留档
     // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
     @Transactional(noRollbackFor = PayException.class)
-    public HdPurchaseResponse purchase(long userId, PayChannel channel) {
-        PetProfile pet = profiles.findByOwnerId(userId)
+    public HdPurchaseResponse purchase(long userId, long petId, PayChannel channel) {
+        // V1.4.0 multi-pet（Story 1.2 · P4）：按指定宠物（控制器经 PetResolver 解析）；已购判定仍按账号。
+        PetProfile pet = profiles.findByIdAndOwnerId(petId, userId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
         // 入口短路（任何扣费之前）：已购买 → 已解锁，绝不二次扣费/二次建行（AC1 幂等）。
         if (purchases.existsPaidByUserId(userId)) {
@@ -262,7 +263,9 @@ public class IdCardHdService {
         if (purchases.existsPaidByUserId(userId)) {
             return; // 幂等：回调/轮询重放
         }
-        Long petProfileId = profiles.findByOwnerId(userId).map(PetProfile::getId).orElse(null);
+        // V1.4.0 multi-pet（Story 1.2 · P5）：回调里拿不到下单时的 petId → 取默认宠物 id。该列仅留痕、可空
+        // （V75 ON DELETE SET NULL），永久解锁按账号成立，与具体哪只宠物无关。
+        Long petProfileId = profiles.findDefault(userId).map(PetProfile::getId).orElse(null);
         purchases.save(IdCardHdPurchase.of(userId, petProfileId, null, channel, paymentIntentId));
         log.info("身份证高清图现金到账解锁 user={} intent={}", userId, paymentIntentId);
     }

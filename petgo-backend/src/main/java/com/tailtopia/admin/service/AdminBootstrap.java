@@ -7,6 +7,7 @@ import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.growth.service.GrowthDisplayLevelService;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,16 +42,20 @@ public class AdminBootstrap implements ApplicationRunner {
     private final PasswordEncoder passwordEncoder;
     private final String bootstrapEmail;
     private final String bootstrapPassword;
+    /** V1.4.0 ① Story 2.2 · P-7：官方号同虚拟号，新建时随机展示等级 6–8。 */
+    private final GrowthDisplayLevelService growthDisplayLevels;
 
     public AdminBootstrap(AdminAccountRepository adminAccounts, UserRepository users,
             PasswordEncoder passwordEncoder,
             @Value("${ADMIN_BOOTSTRAP_EMAIL:}") String bootstrapEmail,
-            @Value("${ADMIN_BOOTSTRAP_PASSWORD:}") String bootstrapPassword) {
+            @Value("${ADMIN_BOOTSTRAP_PASSWORD:}") String bootstrapPassword,
+            GrowthDisplayLevelService growthDisplayLevels) {
         this.adminAccounts = adminAccounts;
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.bootstrapEmail = bootstrapEmail;
         this.bootstrapPassword = bootstrapPassword;
+        this.growthDisplayLevels = growthDisplayLevels;
     }
 
     @Override
@@ -91,7 +96,9 @@ public class AdminBootstrap implements ApplicationRunner {
             // 已存在则不动（其 password_hash 旧列保留停用，无需重置）
             log.info("ADMIN bootstrap：官方内容作者 users 行已存在");
         }, () -> {
-            users.save(User.newAdmin(bootstrapEmail, "TailTopia 运营", hash));
+            User official = users.save(User.newAdmin(bootstrapEmail, "TailTopia 运营", hash));
+            // V1.4.0 ① P-7：迁移 V20261018_1503 之后新建的官方号同样随机展示等级（存量由迁移分配）。
+            growthDisplayLevels.assignInitial(official.getId());
             log.info("ADMIN bootstrap：已创建官方内容作者 users 行");
         });
     }

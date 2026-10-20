@@ -37,6 +37,8 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private AdminAccountRepository adminAccounts;
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Autowired
     private com.tailtopia.profile.repository.PetProfileRepository pets;
@@ -142,6 +144,25 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
                 .contains("data-utab=\"posts\"").contains("data-utab=\"consults\"")
                 .contains("data-utab=\"actions\"")
                 .contains("data-utab-panel=\"basic\"").contains("data-utab-panel=\"actions\"");
+        assertThat(html).as("V1.4.0 Story 0.1：三个新页签头 + 空容器（内容由 ①②③ 填充）")
+                .contains("data-utab=\"growth\"").contains("data-utab=\"petSlots\"").contains("data-utab=\"gifts\"")
+                .contains("data-utab-panel=\"growth\"").contains("data-utab-panel=\"petSlots\"")
+                .contains("data-utab-panel=\"gifts\"")
+                .contains("成长值").contains("宠物与名额").contains("收送礼记录");
+        assertThat(html).as("V1.4.0 ① Story 4.2：成长值面板已填充（概览 + 明细），不再是地基占位")
+                .contains("id=\"user-growth-panel\"").contains("data-growth-state=\"REAL\"")
+                .contains("id=\"user-growth-ledger\"").contains("该用户还没有成长值记录");
+        assertThat(html).as("V1.4.0 ② Story 4.3：petSlots 容器已由「宠物与名额」页签片段填充，不再是占位")
+                .contains("id=\"user-petslots-panel\"").contains("当前名额").contains("宠物状态");
+        String petSlotsPanel = html.substring(html.indexOf("id=\"user-petslots-panel\""),
+                html.indexOf("data-utab-panel=\"gifts\""));
+        assertThat(petSlotsPanel).doesNotContain("暂无数据");
+        assertThat(html).as("V1.4.0 ③ Story 3.2：收送礼记录面板已填内容（不再是「暂无数据」），两边为空时胶囊为 0、子列表「无」")
+                .contains("id=\"user-gifts-panel\"").contains("送出 · 0").contains("收到 · 0");
+        // 2026-10-19 ③ 送礼线合入：①②③ 三个地基容器都已各自填充，「暂无数据」地基占位不应再出现在三个面板里。
+        String giftsPanel = html.substring(html.indexOf("data-utab-panel=\"gifts\""),
+                html.indexOf("id=\"user-drawer-err\""));
+        assertThat(giftsPanel).doesNotContain("暂无数据");
         assertThat(html).as("🔴 err 槽必须带 id：htmx 只在目标带 id 时才发 HX-Target 头")
                 .contains("id=\"user-drawer-err\"");
         assertThat(html).as("历史问诊那句「仅元数据」不可省 —— 少了它运营会来要聊天记录")
@@ -376,5 +397,52 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get("/admin/users/" + u.getId() + "/drawer").header("HX-Request", "true")
                         .with(authentication(outsider)))
                 .andExpect(status().isForbidden());
+    }
+
+    // ——————————————————— V1.4.0 ③ Story 3.2：收送礼记录页签 ———————————————————
+
+    /** 胶囊切换只回本面板（不含页签头）；注销送礼人在「收到」子表显示「（已注销）#id」；送出计数含全部状态。 */
+    @Test
+    void giftsTabSwapsOnlyItsOwnPanel() throws Exception {
+        User owner = newUser();
+        User ghost = newUser();
+        jdbc.update("UPDATE users SET nickname = 'Ghost', deleted_at = now() WHERE id = ?", ghost.getId());
+        long gift = jdbc.queryForObject("""
+                INSERT INTO gift_catalog (public_token, name_en, name_id, icon_url, price, kind, status)
+                VALUES (?, 'Salmon', 'Salmon ID', 'https://cdn.test/g.png', 5000, 'NORMAL', 'ONLINE') RETURNING id
+                """, Long.class, "gc" + SEQ.incrementAndGet());
+        for (String status : java.util.List.of("DELIVERED", "EXPIRED")) {
+            jdbc.update("""
+                    INSERT INTO gift_orders (public_token, sender_id, pet_id, owner_id, pet_name, gift_id, gift_name_en,
+                        gift_name_id, gift_icon_url, unit_price, quantity, total, channel, status, source, idem_key)
+                    VALUES (?, ?, NULL, ?, 'Pipi', ?, 'Salmon', 'Salmon ID', 'https://cdn.test/g.png', 5000, 1, 5000,
+                        'PAWCOIN', ?, 'gift_page', ?)
+                    """, "go" + SEQ.incrementAndGet(), ghost.getId(), owner.getId(), gift, status,
+                    "GIFT:" + ghost.getId() + ":" + SEQ.incrementAndGet());
+        }
+
+        String drawer = body(mvc.perform(get("/admin/users/" + owner.getId() + "/drawer")
+                        .param("lang", "zh_CN").header("HX-Request", "true")
+                        .with(authentication(superAdmin()))).andReturn());
+        assertThat(drawer).contains("送出 · 0").contains("收到 · 1");
+
+        String received = body(mvc.perform(get("/admin/users/" + owner.getId() + "/gifts")
+                        .param("dir", "received").param("lang", "zh_CN").header("HX-Request", "true")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(received).contains("id=\"user-gifts-panel\"").contains("data-utab-panel=\"gifts\"")
+                .as("只换本页签：不含页签头").doesNotContain("data-utab=\"basic\"")
+                .contains("（已注销）#" + ghost.getId()).doesNotContain("Ghost")
+                .contains("（已删除）Pipi").contains("宠物 Pipi 收到");
+
+        String ghostSent = body(mvc.perform(get("/admin/users/" + ghost.getId() + "/gifts")
+                        .param("lang", "zh_CN").header("HX-Request", "true")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(ghostSent).as("送出计数含全部状态").contains("送出 · 2").contains("收到 · 0");
+
+        mvc.perform(get("/admin/users/" + owner.getId() + "/gifts").with(authentication(superAdmin())))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .redirectedUrl("/admin/users?open=" + owner.getId()));
     }
 }

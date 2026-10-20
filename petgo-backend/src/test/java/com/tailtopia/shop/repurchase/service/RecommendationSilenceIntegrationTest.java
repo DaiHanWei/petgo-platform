@@ -60,7 +60,7 @@ class RecommendationSilenceIntegrationTest extends ApiIntegrationTest {
                 VALUES (?, 'CAT', 'Miko', ?, ?, ?, now(), now())
                 """, ownerId, LocalDate.of(2025, 12, 1), "sc" + SEQ.incrementAndGet(),
                 new BigDecimal("3.4"));
-        return profiles.findByOwnerId(ownerId).orElseThrow().getId();
+        return profiles.findDefault(ownerId).orElseThrow().getId();
     }
 
     /** 记一条绝育（= 目前唯一能落库的「手术」类型）。 */

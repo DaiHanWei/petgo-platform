@@ -55,6 +55,9 @@ class AppColors {
   static const Color menstruationRed = Color(0xFFB03060);
   static const Color healthEventText = Color(0xFFC4263C); // 健康事件深红文字（原型 hentry #C4263C）
   static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
+  // V1.4.0 gift Story 2.2：礼物页粉丝榜前三名排名圆（金用 [gold]；不用 🥇🥈🥉 emoji，UI 稿 E1）。
+  static const Color rankSilver = Color(0xFFA7A7A7);
+  static const Color rankBronze = Color(0xFFC98A5A);
   // V1.3.2 Story 1.6 · Diary 打卡条目专属底色（青蓝，与里程碑 S/M/L 金紫、身份证紫区分）
   static const Color checkinTint = Color(0xFFE6F5F7);
   static const Color checkinBorder = Color(0xFFB7DFE5);
@@ -178,4 +181,81 @@ class AppColors {
 
   /// 点赞红心 —— 迁为 coral。
   static const Color likeHeart = coral;
+
+  // ============================================================
+  // V1.4.0 ① Tailrent Level 段位色（架构 §5.6，UI 稿 A1「白天到星夜」，OQ-12）
+  // ============================================================
+  // 🔴 段位色只在这里定义：角标 / 段位名 / 等级胶囊一律用段位色；逐级色只用于等级页进度条。
+  // 刻意避开里程碑 S·M·L 三色（绿 #1F9E6A / 紫 #845EC9 / 金 #F6A609，OQ-6）。
+
+  static const Color tierPemula = Color(0xFF66748C);
+  static const Color tierSahabat = Color(0xFF0A7FA3);
+  static const Color tierPenjaga = Color(0xFF2B4FBF);
+
+  /// Bintang 为渐变（Start → End）；纯色场景取 Start。
+  static const Color tierBintangStart = Color(0xFF4A2E9E);
+  static const Color tierBintangEnd = Color(0xFFB5307F);
+
+  // 段位浅色底（等级卡 / 胶囊外底）。
+  static const Color tierPemulaTint = Color(0xFFEEF1F5);
+  static const Color tierSahabatTint = Color(0xFFE1F2F8);
+  static const Color tierPenjagaTint = Color(0xFFE7ECFB);
+  static const Color tierBintangTint = Color(0xFFEFE9FB);
+
+  // 头像框三档（V1.4.0 ① Story 3.2，UI 稿 `.avw.fr-b|fr-u|fr-p`）：框色随档位、不随佩戴者段位。
+  // 深端复用段位色（Sahabat / Penjaga / Bintang）。
+  static const Color frameBasicStart = Color(0xFF3FB3D6);
+  static const Color frameUpgradedStart = Color(0xFF7D93EA);
+  static const Color frameUpgradedEnd = Color(0xFF1A2F80);
+  static const Color frameUpgradedOuter = Color(0xFFAEBCF0);
+  static const Color frameAnimatedHighlight = Color(0xFFF09BC4);
+  static const Color frameAnimatedGlow = Color(0x596E2E9E); // rgba(110,46,158,.35)
+
+  // 选框（V1.4.0 ① Story 3.3）：切换中转圈底圈 `.spin`、庆祝页「已戴上」按钮底 `.pbtn.done`（字色复用 mint700）。
+  static const Color growthFrameSpinTrack = Color(0xFFE4DCF5);
+  static const Color growthFrameAppliedFill = Color(0xFFF1EEF7);
+
+  /// 升级庆祝卡进度环底轨 `#ECEEF2`、EXP 胶囊底 `#F6F6F9`、等级页 / 庆祝权益卡行分隔 `#F3F3F6`（V1.4.0 L2 还原度）。
+  static const Color growthRingTrack = Color(0xFFECEEF2);
+  static const Color growthChipBg = Color(0xFFF6F6F9);
+  static const Color growthDivider = Color(0xFFF3F3F6);
+
+  /// 存量汇总弹窗小账单分隔线 `#E6E2EE`（行间虚线 / 合计上实线）。
+  static const Color growthReceiptLine = Color(0xFFE6E2EE);
+
+  /// 等级页（UI 稿 B1 / B2 / B6）：规则卡行分隔 `#F4F2F8`、今日进度小条底轨 `#EEEAF5`、未解锁段位卡底 `#FAFAFB`、
+  /// 「Terbuka di LvN」灰胶囊底 `#F0F0F0`（同 line2）、加分绿字 `#0E7A4D`（同 Momen 绿）。
+  static const Color growthRowDivider = Color(0xFFF4F2F8);
+  static const Color growthQuotaTrack = Color(0xFFEEEAF5);
+  static const Color growthLockedCard = Color(0xFFFAFAFB);
+  static const Color growthGain = Color(0xFF0E7A4D);
+  static const Color growthGainTint = Color(0xFFE7F8F0);
+
+  // V1.4.0 多宠物名额页（UI 稿 D1 / D2）：名额卡淡紫渐变起点 `#F3EDFF`、可租格底 `#F4F3F8` + 锁 `#B8B3C6`、
+  // 月租将到期字色 `#C4870B`；「Aktif」绿胶囊复用 [growthGainTint] / [growthGain]。
+  static const Color petSlotCardTop = Color(0xFFF3EDFF);
+  static const Color petSlotCellOff = Color(0xFFF4F3F8);
+  static const Color petSlotCellLock = Color(0xFFB8B3C6);
+  static const Color petSlotWarn = Color(0xFFC4870B);
+
+  /// Diary 资料卡（UI 稿 `.pic`）：135° `#F3EDFF` → `#FBF8FF` 渐变；「Diary saja」小开关关闭态底轨 `#E3E0EC`。
+  static const Color diaryCardTop = Color(0xFFF3EDFF);
+  static const Color diaryCardEnd = Color(0xFFFBF8FF);
+  static const Color diaryToggleOff = Color(0xFFE3E0EC);
+
+  /// 角标阴影 `0 1px 3px rgba(20,16,40,.18)`。
+  static const Color growthBadgeShadow = Color(0x2E141028);
+
+  /// 逐级色（UI 稿 A1 色条）：段内浅 → 深、跨段换色相。Lv1–20 依次；Lv21+ 由 `growthLevelColor` 兜底。
+  static const List<Color> growthLevelColors = [
+    // Pemula Lv1–4
+    Color(0xFFC5CCD8), Color(0xFF9CA4B3), Color(0xFF737D8D), Color(0xFF4A5568),
+    // Sahabat Lv5–9
+    Color(0xFF8ED3EA), Color(0xFF6CB5CD), Color(0xFF4A96B0), Color(0xFF287892), Color(0xFF065A75),
+    // Penjaga Lv10–14
+    Color(0xFFA8B8F2), Color(0xFF8597DA), Color(0xFF6276C2), Color(0xFF3F56A9), Color(0xFF1C3591),
+    // Bintang Lv15–20
+    Color(0xFFB9A6EE), Color(0xFFB38CD3), Color(0xFFAD72B8), Color(0xFFA6589E), Color(0xFFA03E83),
+    Color(0xFF9A2468),
+  ];
 }

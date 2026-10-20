@@ -1,3 +1,5 @@
+import '../../growth/domain/growth_models.dart';
+
 /// 登录响应模型（对应后端 `LoginResponse`）。
 class LoginResponse {
   const LoginResponse({
@@ -49,6 +51,7 @@ class UserProfile {
     this.likeCount,
     this.followingCount,
     this.followerCount,
+    this.growth,
   });
 
   /// 当前用户 id（Story 3.5：评论删除入口可见性判定）。
@@ -99,6 +102,9 @@ class UserProfile {
   /// 关注我的人数（可空 = 不知道）。
   final int? followerCount;
 
+  /// 成长值摘要（V1.4.0 ① Story 1.4 / 1.5）：「我的」页等级胶囊。登录响应 / 不参与者 / 旧后端为 null（不显示胶囊）。
+  final GrowthBrief? growth;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
         id: json['id'] as int?,
         nickname: json['nickname'] as String?,
@@ -119,6 +125,7 @@ class UserProfile {
         likeCount: (json['likeCount'] as num?)?.toInt(),
         followingCount: (json['followingCount'] as num?)?.toInt(),
         followerCount: (json['followerCount'] as num?)?.toInt(),
+        growth: GrowthBrief.fromJson(json['growth']),
       );
 
   UserProfile copyWith({
@@ -139,6 +146,7 @@ class UserProfile {
     int? likeCount,
     int? followingCount,
     int? followerCount,
+    GrowthBrief? growth,
   }) =>
       UserProfile(
         id: id ?? this.id,
@@ -158,5 +166,6 @@ class UserProfile {
         likeCount: likeCount ?? this.likeCount,
         followingCount: followingCount ?? this.followingCount,
         followerCount: followerCount ?? this.followerCount,
+        growth: growth ?? this.growth,
       );
 }

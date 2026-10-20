@@ -48,4 +48,17 @@ public interface SeedBatchRowRepository extends JpaRepository<SeedBatchRow, Long
     /** 按发布账号过滤（12-1 的移出提示会带 authorId 跳进来）。 */
     List<SeedBatchRow> findByStatusInAndAuthorUserIdOrderByScheduledAtAsc(
             java.util.Collection<SeedBatchRowStatus> statuses, long authorUserId);
+
+    /**
+     * 改计划时间的<b>条件更新</b>（OCR #3）：只在行仍是 {@code SCHEDULED} 时改 {@code scheduled_at} / {@code updated_at}。
+     * 原先「先查后整行 save」：查完到写回之间到点扫描已把行置 PUBLISHED，整行写回会把它覆盖回 SCHEDULED → 重复发帖。
+     * 返回 1 = 已改；0 = 行已不在排期中（被发布 / 取消 / 置失败）或不存在。
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @org.springframework.data.jpa.repository.Query("UPDATE SeedBatchRow r SET r.scheduledAt = :at, r.updatedAt = :now"
+            + " WHERE r.id = :id AND r.status = :status")
+    int rescheduleIfInStatus(@org.springframework.data.repository.query.Param("id") long id,
+            @org.springframework.data.repository.query.Param("status") SeedBatchRowStatus status,
+            @org.springframework.data.repository.query.Param("at") Instant at,
+            @org.springframework.data.repository.query.Param("now") Instant now);
 }

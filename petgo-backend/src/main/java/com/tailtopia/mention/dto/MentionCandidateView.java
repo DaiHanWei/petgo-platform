@@ -15,6 +15,10 @@ package com.tailtopia.mention.dto;
  * @param userId    候选人 id
  * @param nickname  当前昵称（渲染用；<b>不要持久化它</b>）
  * @param avatarUrl 头像，可空
+ * @param level     等级展示（V1.4.0 ① Story 3.1 · AD-14）；无等级时省略（App 3.2 只解析）
+ * @param tier      段位（{@code GrowthTier} 名）
+ * @param frame     生效头像框，无框省略
  */
-public record MentionCandidateView(long userId, String nickname, String avatarUrl) {
+public record MentionCandidateView(long userId, String nickname, String avatarUrl,
+        Integer level, String tier, String frame) {
 }

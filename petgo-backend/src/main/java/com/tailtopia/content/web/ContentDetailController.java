@@ -69,9 +69,18 @@ public class ContentDetailController {
         return commentQueryService.replies(parentId, cursor, viewerId(jwt));
     }
 
-    /** 登录用户 id（游客 null）。 */
+    /**
+     * 登录用户 id（游客 null）。
+     *
+     * <p>V1.4.0 ④ Story 2.1：非 USER 角色（兽医 / 运营）一律按游客读 —— 他们的 sub 不是 users.id，
+     * 只看 sub 会把同号用户「仅本人可见」的 {@code collected}（作者视角还有 {@code collectCount}）下发给兽医 token。
+     * 与 {@code PlaceController.optionalUserId} 同口径。
+     */
     private static Long viewerId(Jwt jwt) {
         if (jwt == null || jwt.getSubject() == null) {
+            return null;
+        }
+        if (!"USER".equals(jwt.getClaimAsString("role"))) {
             return null;
         }
         try {

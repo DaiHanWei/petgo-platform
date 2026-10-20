@@ -18,6 +18,7 @@ import '../../domain/pet_passport.dart';
 import '../passport_layout.dart';
 import '../passport_page_face.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
+import '../../../profile/data/current_pet_provider.dart';
 
 /// 护照分享卡的纯数据（V1.3.2 Story 4.3）：实时护照与已购快照两种来源都转成它，卡面不直接依赖接口 DTO。
 class PassportShareData {
@@ -210,7 +211,10 @@ Future<void> openPassportSharePreview(BuildContext context, WidgetRef ref,
         // 待确认 4.6（2026-10-02）：加 card_type 区分护照卡 / 登机牌卡。
         Analytics.capture('passport_card_shared', {'card_type': 'page', 'stamp_count': data.stampCount});
         unawaited(claimKeepsakeShareReward(routeCtx, ref,
-            () => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(PassportShareRewardRepository.page)));
+            () async => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(
+                PassportShareRewardRepository.page,
+                // V1.4.0 multi-pet：奖励记到当前宠物。
+                petId: await readRequestPetId(ref))));
       },
     ),
   ));

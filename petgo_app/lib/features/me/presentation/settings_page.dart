@@ -21,6 +21,7 @@ import '../../notify/domain/app_update_bootstrap.dart';
 import '../../notify/domain/app_update_controller.dart';
 import '../../notify/domain/push_permission_change_reporter.dart';
 import '../../notify/presentation/app_update_presenter.dart';
+import '../../notify/presentation/push_settings_page.dart';
 import '../../social/data/blocked_users_repository.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
@@ -30,7 +31,10 @@ import '../../social/data/blocked_users_repository.dart';
 /// ZONA BAHAYA（退出/注销，红字，始终在最后）。
 /// 语言逻辑在 7.2、退出/注销逻辑在 7.3（双重确认 + 短语校验，PDP 数据主体权利可达）。
 class SettingsPage extends ConsumerStatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.isNotificationGrantedForTest});
+
+  /// 仅供测试注入（widget test 里没有权限插件的平台实现）。V1.4.0 ④ Story 1.3。
+  final Future<bool> Function()? isNotificationGrantedForTest;
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -40,9 +44,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
   // V1 占位开关（无后端持久化）：公开档案默认开。（深色模式下版本再做，暂隐藏）
   bool _petPublic = true;
 
-  /// 通知开关（2026-08-07 改为真开关）：**真相源是系统权限**，不是本地存储——
-  /// App 无法代替用户开关系统通知，只能如实反映 + 引导。进页面与从系统设置返回时刷新。
-  bool _notif = false;
+  /// 系统通知权限（入口行右值）：**真相源是系统权限**，不是本地存储。进页面与从系统设置返回时刷新。
+  /// V1.4.0 ④ Story 1.3：改为 `bool?`，null = 尚未读到（首帧不显示右值，免得先闪红色「nonaktif」）。
+  /// 「Notifikasi」从开关改为通知设置页入口，不再从这里申请权限（首次申请归软引导，去系统设置归通知设置页状态卡）。
+  bool? _notif;
 
   static const Color _danger = AppColors.popRed;
 
@@ -73,11 +78,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshNotifStatus();
+    // V1.4.0 ④：被通知设置页盖住时不刷（那页自己刷、跃迁归因记 push_settings_page；返回时 push().then 再刷一次）。
+    if (state == AppLifecycleState.resumed && (ModalRoute.of(context)?.isCurrent ?? true)) {
+      _refreshNotifStatus();
+    }
   }
 
   Future<void> _refreshNotifStatus() async {
-    final granted = await isPushPermissionGranted();
+    final granted = await (widget.isNotificationGrantedForTest ?? isPushPermissionGranted)();
     // 🔴 Story 9.3：从系统设置返回是撤销的第二个可观测时机（第一个是冷启动）。
     //    reporter 只在真的发生跃迁时上报，重复刷新不会灌水。
     await PushPermissionChangeReporter.record(granted, fromScreen: 'settings_page');
@@ -88,49 +96,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
       final isVet = ref.read(authControllerProvider).isVet;
       ref.read(pushServiceProvider).syncRegistration(isVet: isVet);
     }
-  }
-
-  /// 通知开关：App 只能**申请**权限、不能代关。
-  /// - 开：未申请过 → 弹系统权限窗；已被拒 → 引导去系统设置（此时 App 已在设置列表里）。
-  /// - 关：一律引导去系统设置（系统权限只能用户自己撤）。
-  Future<void> _onNotifToggle(bool want) async {
-    final l10n = AppLocalizations.of(context);
-    if (!want) {
-      await _showOpenSettingsDialog(l10n);
-      await _refreshNotifStatus(); // 用户可能真去关了
-      return;
-    }
-    // request()：notDetermined 会弹系统窗；已 denied/永久拒绝则立即返回 denied（不打扰）。
-    final granted = await requestPushPermission();
-    if (!mounted) return;
-    if (granted) {
-      setState(() => _notif = true);
-      final isVet = ref.read(authControllerProvider).isVet;
-      ref.read(pushServiceProvider).syncRegistration(isVet: isVet);
-      return;
-    }
-    await _showOpenSettingsDialog(l10n);
-    await _refreshNotifStatus();
-  }
-
-  Future<void> _showOpenSettingsDialog(AppLocalizations l10n) async {
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        key: const ValueKey('notifOpenSettingsDialog'),
-        title: Text(l10n.pushEnableGuideTitle),
-        content: Text(l10n.pushEnableGuideBody),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text(l10n.pushSoftGuideLater)),
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text(l10n.mediaOpenSettings)),
-        ],
-      ),
-    );
-    if (go ?? false) await openPushSettings();
   }
 
   @override
@@ -166,8 +131,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
               // ⚠️ 「宠物证件卡 / 健康记录」两项 2026-08-16 从设置页移除：它们是**内容功能**、
               // 不是设置项，正主入口在 Diary 的成长档案页（`growth_archive_page`），这里是重复入口。
               // 路由与页面照旧存在，删的只是这个入口。
-              _toggleRow(l10n.notificationCenterTitle, _notif, _onNotifToggle,
-                  key: const ValueKey('meNotifToggle')),
+              // V1.4.0 ④ Story 1.3：入口行 → 通知设置页；右值按系统权限（关 = 红字 + 红点）。
+              _navRow(l10n.notificationCenterTitle,
+                  value: switch (_notif) {
+                    true => l10n.pushSettingsValueOn,
+                    false => l10n.pushSettingsSystemOff,
+                    null => null,
+                  },
+                  valueColor: _notif == false ? _danger : null,
+                  valueDot: _notif == false,
+                  // 返回后再刷一次：用户可能在通知设置页里去系统设置开了权限。
+                  onTap: () => context.push(PushSettingsPage.routePath).then((_) => _refreshNotifStatus()),
+                  key: const ValueKey('meNotifEntry')),
               _divider(),
               _navRow(l10n.meLanguage, value: langValue,
                   onTap: () => context.push('/me/language'), key: const ValueKey('meLanguage')),
@@ -274,14 +249,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
       const Divider(height: 1, thickness: 1, color: AppColors.line2, indent: 16, endIndent: 16);
 
   Widget _navRow(String label,
-      {String? value, bool danger = false, required VoidCallback onTap, Key? key}) {
+      {String? value,
+      Color? valueColor,
+      bool valueDot = false,
+      bool danger = false,
+      required VoidCallback onTap,
+      Key? key}) {
     final color = danger ? _danger : AppColors.ink;
     return InkWell(
       key: key,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
+        child: LayoutBuilder(builder: (context, c) => Row(
           children: [
             Expanded(
               child: Text(label,
@@ -291,12 +271,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
                       color: color)),
             ),
             if (value != null) ...[
-              Text(value, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+              if (valueDot) ...[
+                Container(
+                  key: const ValueKey('meNotifOffDot'),
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(color: valueColor ?? AppColors.muted, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 5),
+              ],
+              // V1.4.0 ④：右值最多占行宽 55%、超出省略 ——「Notifikasi sistem nonaktif」在 360dp 窄屏会顶出行。
+              // 既有短右值（语言 / 手机号 / 计数）远小于上限，外观不变。
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: c.maxWidth * 0.55),
+                child: Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, color: valueColor ?? AppColors.muted)),
+              ),
               const SizedBox(width: 6),
             ],
             Icon(Icons.chevron_right, size: 20, color: danger ? _danger : AppColors.muted),
           ],
-        ),
+        )),
       ),
     );
   }

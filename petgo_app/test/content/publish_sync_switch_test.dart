@@ -20,6 +20,7 @@ class _RecordingRepo implements ContentRepository {
   Future<int> publish({
     required ContentType type,
     int? petId,
+    List<int> petIds = const [],
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
@@ -50,7 +51,7 @@ void main() {
         ..setText('文字');
 
       expect(c.syncToMoment, isTrue, reason: 'AC1：默认开启');
-      await c.publish(petId: 9, idempotencyKey: 'k1');
+      await c.publish(petIds: [9], idempotencyKey: 'k1');
       expect(repo.lastSync, isTrue);
     });
 
@@ -61,7 +62,7 @@ void main() {
         ..setText('文字')
         ..setSyncToMoment(false);
 
-      await c.publish(petId: 9, idempotencyKey: 'k2');
+      await c.publish(petIds: [9], idempotencyKey: 'k2');
       expect(repo.lastSync, isFalse);
     });
 

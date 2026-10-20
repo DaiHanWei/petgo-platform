@@ -9,6 +9,7 @@ import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../place/domain/checkin_place_ref.dart';
 import '../../place/presentation/place_detail_page.dart';
+import '../../gift/presentation/widgets/gift_entry.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
 import '../domain/content_tag.dart';
@@ -43,6 +44,9 @@ import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'report_sheet.dart';
 import 'share_card/open_share_card.dart';
+import '../../profile/data/pet_list_repository.dart';
+import '../domain/content_pet_ref.dart';
+import 'widgets/content_linked_pets.dart';
 
 /// 内容详情页（Story 3.3，FR-28）。只读容器：正文 + 多图左右滑 + 互动栏占位 + 评论区 + 底部评论框。
 ///
@@ -184,6 +188,11 @@ class _DetailDwellTrackerState extends State<_DetailDwellTracker>
   Widget build(BuildContext context) => widget.child;
 }
 
+/// 详情页「Kirim Hadiah」显示条件（V1.4.0 gift Story 1.3 · AC1.2 / AC1.3；2.2 起礼物区本身按 `giftPets` 显示）：只有**他人的 Diary**（`GROWTH_MOMENT`），
+/// 且作者未注销。主人拉黑我时照常显示（PRD AC9）；我拉黑主人时详情页本就 404，进不来。
+bool _showGiftZone(ContentDetail detail) =>
+    detail.type == ContentType.growthMoment.wire && !detail.isAuthor && !detail.authorDeleted;
+
 class _DetailScaffold extends ConsumerWidget {
   const _DetailScaffold({
     required this.postId,
@@ -195,10 +204,15 @@ class _DetailScaffold extends ConsumerWidget {
   final ContentDetail detail;
   final bool focusComments;
 
+  /// 关联宠物胶囊的显示条件（AC4.2）：只 Diary 且 `pets` 非空（1 只也显示）。Feed 卡片不加。
+  List<ContentPetRef> get _linkedPets =>
+      detail.type == ContentType.growthMoment.wire ? detail.pets : const <ContentPetRef>[];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final currentUserId = ref.watch(authControllerProvider).profile?.id;
+    final linkedPets = _linkedPets;
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(
@@ -252,6 +266,8 @@ class _DetailScaffold extends ConsumerWidget {
                         cropOffsets: detail.imageCropOffsets,
                         viewportHeight: viewport.maxHeight,
                         decorationTags: detail.decorationTags,
+                        // V1.4.0 multi-pet Story 3.3 · F6：首图左下深色胶囊（滑动轮播时固定不动）。
+                        linkedPets: linkedPets,
                         // 前缀带上帖子 id：同一屏里不会有第二个同 tag 的 Hero。
                         heroTagPrefix: 'content_detail_${detail.id}',
                       ),
@@ -301,6 +317,16 @@ class _DetailScaffold extends ConsumerWidget {
                         ),
                       ),
                     ],
+                    // V1.4.0 multi-pet Story 3.3 · F6b：无图 → 正文 / 装饰标签之后、打卡场所条之前，左对齐浅色胶囊
+                    // （上 12 下 2）。有图时胶囊叠在首图上（F6），这里不再出。
+                    if (detail.imageUrls.isEmpty && linkedPets.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(AppSpacing.screenEdge, 12, AppSpacing.screenEdge, 2),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ContentLinkedPetsCapsule(pets: linkedPets, dark: false),
+                        ),
+                      ),
                     // 图片之下的所有内容仍按原来的横向留白排版，与改版前一致。
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
@@ -315,6 +341,19 @@ class _DetailScaffold extends ConsumerWidget {
                             const SizedBox(height: AppSpacing.md),
                             _DetailCheckinPlaceStrip(place: detail.checkinPlace!),
                           ],
+                          // V1.4.0 gift Story 1.3 / 2.2 · A3 ~ A6：Diary 礼物区（打卡场所条之后、分隔线之前）。
+                          // 有 giftPets 才渲染（Moment / Tips / 无关联宠物不渲染）；自己的 Diary（A6）照常展示、
+                          // 无「Kirim Hadiah」—— 按钮显隐仍是 1.3 的 [_showGiftZone]。
+                          if (detail.giftPets.isNotEmpty)
+                            GiftDetailZone(
+                              postId: detail.id,
+                              pets: detail.giftPets,
+                              linkedPets: detail.pets,
+                              showSendButton: _showGiftZone(detail),
+                              isOwner: detail.isAuthor,
+                              // L2 第二轮 P1-1：送达后重拉详情（giftPets 随详情下发）。
+                              onDelivered: () => ref.invalidate(detailProvider(postId)),
+                            ),
                           const SizedBox(height: AppSpacing.md),
                           const Divider(height: AppSpacing.xl, color: AppColors.divider),
                           // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
@@ -377,6 +416,7 @@ class _DetailScaffold extends ConsumerWidget {
           name: name,
           deleted: detail.authorDeleted,
           size: 36,
+          growth: detail.authorBadge,
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
@@ -563,6 +603,7 @@ class _DetailScaffold extends ConsumerWidget {
       if (detail.type == ContentType.growthMoment.wire) {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
         ref.invalidate(calendarMonthProvider);
         ref.invalidate(dayDetailProvider);
       }
@@ -584,7 +625,11 @@ class _ImageCarousel extends StatefulWidget {
     required this.viewportHeight,
     required this.heroTagPrefix,
     this.decorationTags = const [],
+    this.linkedPets = const [],
   });
+
+  /// V1.4.0 multi-pet Story 3.3 · F6：Diary 关联的宠物（空 = 不出胶囊，装饰标签位置不变）。
+  final List<ContentPetRef> linkedPets;
 
   final List<String> urls;
 
@@ -611,6 +656,9 @@ class _ImageCarousel extends StatefulWidget {
 }
 
 class _ImageCarouselState extends State<_ImageCarousel> {
+  /// 关联宠物胶囊距首图左 / 下边（UI 稿 `.pkchip.dark` left / bottom 12）。
+  static const double _petsCapsuleInset = 12;
+
   final PageController _controller = PageController();
   int _current = 0;
 
@@ -689,14 +737,30 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             ),
         ),
         // 装饰标签：左下角，与右上角的页码角标分处两角、互不遮挡。
+        // V1.4.0 multi-pet Story 3.3：有关联宠物时胶囊占左下 12 / 12，装饰标签上移到胶囊正上方
+        // （同左边距、间距 8）；无关联宠物时位置不变（AC5 回归保护）。
         if (widget.decorationTags.isNotEmpty)
           Positioned(
-            left: AppSpacing.sm,
-            bottom: AppSpacing.sm,
+            key: const ValueKey('detailDecorationTagOverlay'),
+            left: widget.linkedPets.isEmpty ? AppSpacing.sm : _petsCapsuleInset,
+            bottom: widget.linkedPets.isEmpty
+                ? AppSpacing.sm
+                : _petsCapsuleInset + kLinkedPetsCapsuleHeight + 8,
             right: AppSpacing.xl,
             child: Align(
               alignment: Alignment.centerLeft,
               child: ContentTagChip.overlay(tag: widget.decorationTags.first, position: 'detail'),
+            ),
+          ),
+        // F6：放在 PageView 外层 Stack → 滑动轮播时胶囊固定不动；最大宽 = 图宽 − 24。
+        if (widget.linkedPets.isNotEmpty)
+          Positioned(
+            left: _petsCapsuleInset,
+            bottom: _petsCapsuleInset,
+            right: _petsCapsuleInset,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ContentLinkedPetsCapsule(pets: widget.linkedPets, dark: true),
             ),
           ),
         if (widget.urls.length > 1)

@@ -27,6 +27,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
 
 import '../profile/milestone_instant_fakes.dart';
+import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 
 /// V1.3.2 Story 3.2 · L0：锁态购买入口（AC4）、已解锁付费区（AC5）、挽留弹窗（AC7）、App 埋点（AC8）。
 void main() {
@@ -82,6 +83,8 @@ void main() {
         // V1.3.4 Story 4.3：解锁成功后会检测当场庆祝；默认 const [] = 不检测（免真实网络与挂起计时器）。
         milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
         if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
+        // V1.4.0 multi-pet：里程碑列表按当前宠物分族，当场庆祝要先知道是哪只。
+        if (milestones != null) effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
       ],
       child: MaterialApp(
         locale: const Locale('id'),
@@ -338,7 +341,7 @@ class _Repo implements TailsonalityRepository {
   Future<TailsonalityResult> fetchResult(String token) async => current;
 
   @override
-  Future<List<TailsonalityResult>> fetchResults() async => [current];
+  Future<List<TailsonalityResult>> fetchResults({int? petId}) async => [current];
 
   @override
   Future<KeepsakePurchaseResult> unlock(String token, HdPayChannel channel) async {

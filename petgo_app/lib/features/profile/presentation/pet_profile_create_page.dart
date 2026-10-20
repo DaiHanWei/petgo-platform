@@ -16,7 +16,11 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../../pet_slot/data/pet_slot_repository.dart';
+import '../../pet_slot/presentation/add_pet_flow.dart';
+import '../data/current_pet_provider.dart';
 import '../data/health_event_repository.dart';
+import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pending_archive.dart';
@@ -25,10 +29,25 @@ import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
 ///
-/// 含「已有档案直达」守卫（F3）：进入即读 [petProfileProvider]，已存在 → 跳档案 Tab，不渲染表单。
+/// V1.4.0 multi-pet（Story 1.5 · AC4.5）：**去掉**「已有档案直达」守卫（F3）—— 多宠物下有档案也能再建一只；
+/// 名额 / 上限由「+」入口先判（`startAddPet`），建档 409 `pet-slot-full` / `pet-limit-reached` 兜底弹 A4 / A4b。
 /// 头像复用 Story 2.1 媒体工具；名字 ≤20 / 介绍 ≤30 实时计数；服务端为权威校验。
 class PetProfileCreatePage extends ConsumerStatefulWidget {
-  const PetProfileCreatePage({super.key});
+  const PetProfileCreatePage({super.key, this.slotOverview, this.addFlow = false});
+
+  /// 路由 query 里表示「从添加宠物流程（`startAddPet` 的「+」）进来」的键：`/profile/create?add=1`。
+  static const String addFlowQuery = 'add';
+
+  /// 是否从「+」添加流程进来（code review 2026-10-18 #3）。
+  ///
+  /// - true：多宠物新流程 —— 已有宠物也渲染表单（名额已由「+」入口先判，409 兜底）；
+  /// - false（**存量入口**：深链默认 push、游客页 / 示例页 / Toko 建档按钮、Diary 失败兜底…）：
+  ///   保留改版前的「已有档案直达」守卫（F3），已有宠物 → 跳 Diary Tab，不给一张注定 409 的空表单。
+  final bool addFlow;
+
+  /// 「+」入口取到的名额摘要（建档**前**的口径，经路由 extra 带进来）；直接进本页（引导卡等）为 null。
+  /// 只用于推 `pet_added.slot_source` / `pet_index`。
+  final PetSlotOverview? slotOverview;
 
   @override
   ConsumerState<PetProfileCreatePage> createState() => _PetProfileCreatePageState();
@@ -97,6 +116,8 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
     // species 为受控枚举（CAT/DOG/OTHER），供归因分发（AppsFlyer P1）；不传宠物名等自由文本。
     Analytics.capture('pet_profile_create_submitted', {'species': petType});
     setState(() => _submitting = true);
+    // 建档**前**取只数（建完列表会被失效重取）。
+    final petIndex = _petIndexAfterCreate();
     try {
       final created = await ref.read(profileRepositoryProvider).create(
             petType: petType,
@@ -108,6 +129,11 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             intro: _emptyToNull(_introController.text),
             idempotencyKey: 'create-${DateTime.now().microsecondsSinceEpoch}',
           );
+      // V1.4.0 multi-pet（Story 1.5 · AC4.6）：新建的这只成为当前宠物；列表 / 名额摘要失效。
+      _reportPetAdded(petIndex);
+      ref.read(currentPetIdProvider.notifier).select(created.id);
+      ref.invalidate(petListProvider);
+      ref.invalidate(petSlotOverviewProvider);
       ref.invalidate(petProfileProvider);
       _markProfileCreated();
       if (!mounted) return;
@@ -134,7 +160,18 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
       }
     } on DioException catch (e) {
       final pd = ProblemDetail.fromDioException(e);
-      if (pd?.typeSlug == 'profile-exists' || pd?.status == 409) {
+      final slug = pd?.typeSlug;
+      if (slug == kPetSlotFullSlug) {
+        // V1.4.0 multi-pet（AC4.5）：名额已满 → A4（只用扩展成员里的数字，不渲染后端显示串）。
+        // 不 await：抽屉开着时提交按钮要先复位（finally），不能一直转圈。
+        if (mounted) {
+          showPetSlotFullSheet(context, PetSlotFullInfo.fromProblemBody(e.response?.data),
+              source: 'add_pet');
+        }
+      } else if (slug == kPetLimitReachedSlug) {
+        // 已达 5 只上限 → A4b。
+        if (mounted) showPetLimitSheet(context);
+      } else if (slug == 'profile-exists' || pd?.status == 409) {
         // 并发双开窗：已存在 → 同步登录态后提示并直达档案（避免提示条残留）。
         _markProfileCreated();
         setState(() => _leavingAfterCreate = true);
@@ -177,20 +214,35 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   /// 这是「是否已建档」的权威源之一（Diary 分支判定、发布页宠物绑定等多处读它）；
   /// 不回填就要等下次冷启动重拉 `/me` 才更新。
   /// （V1.1.2 Story 2.3：原先这里还要关闭 FR-0H 首页提示条，该提示条已整条废止。）
-  /// 建档成功、已经在往下一屏走了（bug 20260826）。
-  ///
-  /// 🔴 置位后 [build] **不再走「已有档案直达」**。原因：`_submit` 在跳转前会
-  /// `invalidate(petProfileProvider)`，重新拉到的正是刚建好的档案；而路由转场有动画，
-  /// 本页在那几百毫秒里仍在树上、仍会 build ⇒ 直达分支照常触发，把刚跳过去的
-  /// **庆祝页顶掉**，人被送回 Diary。实机现象就是「庆祝页闪一下就没了」。
-  ///
-  /// ⚠️ 「已有档案直达」本身要留着 —— 它守的是另一件事：用户绕开入口直接敲
-  /// `/profile/create` 而档案已存在（F3）。两者的区别只有「这次档案是不是我刚建的」，
-  /// 所以只能靠这个标志区分，不能改直达分支的判据。
   /// 性别（bug 20260827，选填）。取值 MALE / FEMALE，与编辑页一致。
   String? _sex;
 
+  /// 建档成功、已经在往下一屏走了（bug 20260826）。置位后 [build] **不再走「已有档案直达」**：
+  /// `_submit` 跳转前会 invalidate 档案，重拉到的正是刚建好的那只；转场动画期间本页仍在树上 build，
+  /// 不挡住就会把刚跳过去的庆祝页顶掉。（仅存量入口有守卫，见 [PetProfileCreatePage.addFlow]。）
   bool _leavingAfterCreate = false;
+
+  /// 建档后的宠物只数（V1.4.0 multi-pet `pet_added.pet_index`）：优先用「+」入口带来的名额摘要，
+  /// 否则用已加载的宠物列表；都没有 → 视为第 1 只。
+  int _petIndexAfterCreate() {
+    final before = widget.slotOverview?.petCount ?? ref.read(petListProvider).value?.length ?? 0;
+    return before + 1;
+  }
+
+  /// `pet_added {pet_index, slot_source}`（PRD §4）：slot_source 按建档**前**的名额摘要推 ——
+  /// 第 1 只 → default；`pet_index ≤ defaultSlots + levelSlots` → level；否则 rent；取不到摘要 → default。
+  void _reportPetAdded(int petIndex) {
+    final o = widget.slotOverview;
+    final String slotSource;
+    if (o == null || petIndex <= 1) {
+      slotSource = 'default';
+    } else if (petIndex <= o.defaultSlots + o.levelSlots) {
+      slotSource = 'level';
+    } else {
+      slotSource = 'rent';
+    }
+    Analytics.capture('pet_added', {'pet_index': petIndex, 'slot_source': slotSource});
+  }
 
   void _markProfileCreated() {
     final profile = ref.read(authControllerProvider).profile;
@@ -223,11 +275,15 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 订阅宠物列表只为建档成功时算 `pet_added.pet_index`（不影响渲染）。
+    ref.watch(petListProvider);
+    // V1.4.0 multi-pet（AC4.5）：「+」添加流程不再「已有档案直达」—— 直接渲染表单。
+    if (widget.addFlow) return _form(context, l10n);
+    // 存量入口：保留改版前的「已有档案直达」守卫（F3，code review 2026-10-18 #3）。
     final existing = ref.watch(petProfileProvider);
-
     return existing.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, stack) => _form(context, l10n), // 查询失败时仍允许创建（服务端单宠物兜底）
+      error: (err, stack) => _form(context, l10n), // 查询失败时仍允许创建（服务端兜底）
       data: (profile) {
         if (profile != null && !_leavingAfterCreate) {
           // 已有档案直达（F3）：跳档案 Tab，不渲染表单。
@@ -413,7 +469,9 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                     child: _avatarUrl == null
                         ? (_uploading
                             ? const CircularProgressIndicator()
-                            : const Text('🐱', style: TextStyle(fontSize: 38)))
+                            // 按物种占位（同编辑页口径；原先恒为 🐱，L2 第三轮 P3）。
+                            : Text(switch (_petType) { 'DOG' => '🐶', 'OTHER' => '🐾', _ => '🐱' },
+                                style: const TextStyle(fontSize: 38)))
                         : ClipOval(
                             child: AppImage.widget(_avatarUrl!,
                                 width: 88, height: 88, fit: BoxFit.cover, thumbWidth: 280)),

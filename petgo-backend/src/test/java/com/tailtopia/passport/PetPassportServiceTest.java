@@ -66,8 +66,11 @@ class PetPassportServiceTest {
     }
 
     private void subject(String petType) {
-        when(pets.findPassportSubject(USER))
-                .thenReturn(Optional.of(new PetPassportSubject(PET, "Momo", petType, PET_CREATED)));
+        PetPassportSubject s = new PetPassportSubject(PET, "Momo", petType, PET_CREATED, null);
+        when(pets.findPassportSubject(USER, null)).thenReturn(Optional.of(s));
+        // V1.4.0 multi-pet：按 petId 签发 = 按 id 取摘要 + 归属校验。
+        when(pets.findPassportSubjectByPetId(PET)).thenReturn(Optional.of(s));
+        when(pets.ownsPet(USER, PET)).thenReturn(true);
     }
 
     @BeforeEach
@@ -148,11 +151,52 @@ class PetPassportServiceTest {
         assertThatThrownBy(() -> service.ensureIssued(999L, USER)).isInstanceOf(IllegalStateException.class);
     }
 
+    // ===== V1.4.0 multi-pet Story 1.2 · X6 / X7 =====
+
+    @Test
+    void ensureIssuedForSecondPetIssuesThatPetOnly() {
+        long petB = 71L;
+        PetPassportSubject b = new PetPassportSubject(petB, "Bobo", "DOG", PET_CREATED, null);
+        when(pets.ownsPet(USER, petB)).thenReturn(true);
+        when(pets.findPassportSubjectByPetId(petB)).thenReturn(Optional.of(b));
+        PetPassport rowB = row("TT01P2600002", PassportSource.ISSUED);
+        when(repo.findByPetProfileId(petB)).thenReturn(Optional.of(rowB));
+
+        assertThat(service.ensureIssued(petB, USER)).isSameAs(rowB);
+        verify(repo, never()).findByPetProfileId(PET);
+    }
+
+    @Test
+    void ensureIssuedForSomeoneElsesPetIsRejectedEvenIfPetExists() {
+        when(pets.ownsPet(USER, 99L)).thenReturn(false);
+        when(pets.findPassportSubjectByPetId(99L))
+                .thenReturn(Optional.of(new PetPassportSubject(99L, "X", "CAT", PET_CREATED, null)));
+        assertThatThrownBy(() -> service.ensureIssued(99L, USER)).isInstanceOf(IllegalStateException.class);
+        verify(repo, never()).insertIfAbsent(anyLong(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void pageForSpecificPetUsesThatPet() {
+        long petB = 71L;
+        when(pets.findPassportSubject(USER, petB))
+                .thenReturn(Optional.of(new PetPassportSubject(petB, "Bobo", "DOG", PET_CREATED, null)));
+        when(repo.findByPetProfileId(petB)).thenReturn(Optional.of(row("TT01P2600002", PassportSource.ISSUED)));
+        when(stamps.stampRefsOf(petB)).thenReturn(List.of());
+        when(versions.stateOf(petB, List.of())).thenReturn(new PassportVersionQuery.VersionState(false, 0));
+
+        var page = service.pageFor(USER, petB);
+
+        assertThat(page.petName()).isEqualTo("Bobo");
+        verify(stamps, never()).stampRefsOf(PET);
+        when(pets.findPassportSubject(USER, 99L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.pageFor(USER, 99L)).isInstanceOf(AppException.class);
+    }
+
     @Test
     void pageForOwnerWithoutPetIs404() {
-        when(pets.findPassportSubject(USER)).thenReturn(Optional.empty());
+        when(pets.findPassportSubject(USER, null)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.pageFor(USER)).isInstanceOf(AppException.class)
+        assertThatThrownBy(() -> service.pageFor(USER, null)).isInstanceOf(AppException.class)
                 .hasMessageContaining("宠物档案");
     }
 
@@ -170,7 +214,7 @@ class PetPassportServiceTest {
         when(stamps.stampRefsOf(PET)).thenReturn(refs);
         when(versions.stateOf(PET, refs)).thenReturn(new PassportVersionQuery.VersionState(true, 2));
 
-        var page = service.pageFor(USER);
+        var page = service.pageFor(USER, null);
 
         assertThat(page.currentVersionUnlocked()).isTrue();
         assertThat(page.purchasedVersionCount()).isEqualTo(2);

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  礼物抽屉（V1.4.0 ③ gift Story 3.1 · AC4 / AC6 / AC7 / AC9，480px 抽屉体 res=gift，UI 稿 L2 / L3 / L5 / L7）。四种渲染：
+    drawer      — 礼物详情：抽屉头 + 编辑表单（无编辑权限 → 只读字段）+ 底部操作条（收送统计 · 下线 / 重新上线）
+    createForm  — 新建礼物（图标必传）
+    created     — 新建成功：只回 toast；HX-Trigger 关抽屉 + 列表刷新
+    afterAction — 编辑 / 上下线成功：抽屉体 oob 重渲染 + toast（列表由 HX-Trigger 按原筛选重拉）
+  ⚠️ hx-target 一律指带 id 的 #gift-drawer-err（htmx 只在目标带 id 时才发 HX-Target 头，
+     AdminBusinessExceptionAdvice 按它 Retarget）；错误槽放在提交钮正上方（422 落表单顶部时早已滚出 480px 视口）。
+  🔴 没有删除按钮（只下线不物理删除，AD-1）。下线用浏览器原生 confirm（data-confirm，decision-log ③）。
+  🔴 改价 / 改名 / 换图 / 下线只影响之后的新订单；已发起未付款的 QRIS 订单按原价、照常交付（AD-2 / AD-7）。
+  ⚠️ 礼物编码只读展示 gift-<id>（与用户标签 ut-<id> 同口径），不落库、不对外；App 只见 public_token。
+*/-->
+<body>
+<div th:fragment="drawer" id="gift-drawer-panel" class="tag-drawer" th:attr="data-gift-id=${g.id}"
+     th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''gift.catalog_edit'')')}">
+
+    <!--/* ① 抽屉头：裸图 + 名称 EN + 灰色编码 + 状态徽章（+ 专属徽章） */-->
+    <section class="card card-full tag-card" data-section="gift-head">
+        <h2>
+            <img th:src="${g.iconUrl}" alt="" style="height:28px;width:auto;max-width:96px;vertical-align:middle"/>
+            <span th:text="${g.nameEn}">Bone</span>
+            <span class="muted" th:text="${g.code()}">gift-1</span>
+            <span class="badge" th:classappend="${g.offline()} ? 'badge-muted' : 'badge-ok'"
+                  th:text="#{'admin.v140.gift.status.' + ${g.status}}">在线</span>
+            <span class="badge badge-info" th:if="${g.exclusive()}" th:text="#{admin.v140.gift.kind.EXCLUSIVE}">专属</span>
+        </h2>
+    </section>
+
+    <!--/* ② 编辑（有编辑权限） */-->
+    <section class="card card-full tag-card" data-section="gift-edit">
+        <form id="giftEditForm" th:if="${canEdit}" data-gift-form data-gift-edit-form
+              th:attr="hx-post=@{/admin/gift-catalog/{id}/edit(id=${g.id})}"
+              hx-encoding="multipart/form-data" hx-target="#gift-drawer-err" hx-swap="innerHTML">
+            <!--/* 🛡 编辑时图标不设 required：不选文件 = 保留原图标 */-->
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.iconChange}">更换图标</span>
+                <input type="file" name="iconFile" accept="image/png,image/webp"/>
+            </label>
+            <p class="hint" data-notice="gift-icon-spec" th:text="${iconSpecEdit}">不选文件即保留原图标。</p>
+
+            <!--/* UI L2：名称 EN / ID 并排两栏 */-->
+            <div class="cfg-grid-2">
+                <label class="field field-full">
+                    <span th:text="#{admin.v140.gift.form.nameEn}">名称 EN</span>
+                    <input type="text" name="nameEn" class="inp field-full" maxlength="40" required th:value="${g.nameEn}"
+                           th:placeholder="#{admin.v140.gift.form.nameEnPh}"/>
+                </label>
+                <label class="field field-full">
+                    <span th:text="#{admin.v140.gift.form.nameId}">名称 ID</span>
+                    <input type="text" name="nameId" class="inp field-full" maxlength="40" required th:value="${g.nameId}"
+                           th:placeholder="#{admin.v140.gift.form.nameIdPh}"/>
+                </label>
+            </div>
+
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.price}">价格</span>
+                <span class="gift-money"><span class="gift-money-cur" aria-hidden="true">Rp</span><input type="number" name="price" class="gift-money-val" required step="1"
+                                th:attr="min=${minPrice},max=${maxPrice}" th:value="${g.price}"/></span>
+            </label>
+            <p class="hint" th:text="#{admin.v140.gift.form.priceHintEdit}">整数，≥ Rp100。改价只影响之后的新订单。</p>
+
+            <fieldset class="gift-fset">
+                <legend th:text="#{admin.v140.gift.form.species}">适用物种</legend>
+                <div class="opsp-rad">
+                    <label><input type="checkbox" name="forCat" value="true" th:checked="${g.forCat}"/> <span th:text="#{admin.v140.gift.species.cat}">猫</span></label>
+                    <label><input type="checkbox" name="forDog" value="true" th:checked="${g.forDog}"/> <span th:text="#{admin.v140.gift.species.dog}">狗</span></label>
+                    <label><input type="checkbox" name="forOther" value="true" th:checked="${g.forOther}"/> <span th:text="#{admin.v140.gift.species.other}">其他</span></label>
+                </div>
+            </fieldset>
+            <p class="hint" th:text="#{admin.v140.gift.form.speciesHint}">都不选 = 通用。</p>
+
+            <fieldset class="gift-fset">
+                <legend th:text="#{admin.v140.gift.form.kind}">类型</legend>
+                <div class="opsp-rad">
+                    <label><input type="radio" name="kind" value="NORMAL" data-gift-kind th:checked="${!g.exclusive()}"/> <span th:text="#{admin.v140.gift.kind.NORMAL}">普通</span></label>
+                    <label><input type="radio" name="kind" value="EXCLUSIVE" data-gift-kind th:checked="${g.exclusive()}"/> <span th:text="#{admin.v140.gift.kind.EXCLUSIVE}">专属</span></label>
+                </div>
+            </fieldset>
+
+            <!--/* 最低等级：只在「专属」时显示（下方脚本按单选切 hidden）；无脚本时始终显示、由服务端判 */-->
+            <div data-gift-minlevel>
+                <label class="field field-full">
+                    <span th:text="#{admin.v140.gift.form.minLevel}">最低等级</span>
+                    <span>Lv <input type="number" name="minLevel" class="inp" step="1"
+                                    th:attr="min=${minLevel},max=${maxLevel}" th:value="${g.minLevel}"/></span>
+                </label>
+                <p class="hint" th:text="#{admin.v140.gift.form.minLevelHint}">送礼人等级达到才能看到、才能送。</p>
+            </div>
+
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.sortOrder}">排序</span>
+                <input type="number" name="sortOrder" class="inp" min="0" step="1"
+                       th:attr="max=${maxSortOrder}" th:value="${g.sortOrder}"/>
+            </label>
+            <p class="hint" th:text="#{admin.v140.gift.form.sortOrderHint}">数字小的在前</p>
+
+            <div id="gift-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+            <!--/* 未修改时保存禁用：disabled 由下方脚本加上，不写死在 HTML（脚本失效时退化成「总能点」，同用户标签抽屉） */-->
+            <button type="submit" class="btn btn-primary" data-gift-save th:text="#{admin.v140.gift.save}">保存</button>
+        </form>
+
+        <!--/* 只读（L7）：字段换成只读展示 + 所缺权限 */-->
+        <dl class="gift-kv" th:unless="${canEdit}" data-gift-readonly>
+            <dt th:text="#{admin.v140.gift.col.name}">名称（EN / ID）</dt>
+            <dd th:text="${g.nameEn} + ' / ' + ${g.nameId}">Golden ribbon / Pita emas</dd>
+            <dt th:text="#{admin.v140.gift.col.price}">价格</dt>
+            <dd th:text="'Rp' + ${#numbers.formatInteger(g.price, 1, 'COMMA')}">Rp1,000</dd>
+            <dt th:text="#{admin.v140.gift.col.species}">适用物种</dt>
+            <dd>
+                <span th:if="${g.universal()}" th:text="#{admin.v140.gift.species.all}">通用</span>
+                <th:block th:unless="${g.universal()}" th:each="sp, st : ${g.species()}"><span th:text="#{'admin.v140.gift.species.' + ${sp}}">猫</span><th:block th:unless="${st.last}"> · </th:block></th:block>
+            </dd>
+            <dt th:text="#{admin.v140.gift.col.kind}">类型</dt>
+            <dd th:if="${g.exclusive()}" th:text="#{admin.v140.gift.readonly.kindLevel(#{admin.v140.gift.kind.EXCLUSIVE}, ${g.minLevel})}">专属 · Lv5</dd>
+            <dd th:unless="${g.exclusive()}" th:text="#{admin.v140.gift.kind.NORMAL}">普通</dd>
+            <dt th:text="#{admin.v140.gift.col.sortOrder}">排序</dt>
+            <dd th:text="${g.sortOrder}">0</dd>
+        </dl>
+        <p class="hint" th:unless="${canEdit}"
+           th:text="#{admin.v130.err.forbidden(#{perm.gift.catalog_edit})}">需要「编辑礼物目录」权限</p>
+    </section>
+
+    <!--/* ③ 操作条：左收送统计，右下线 / 重新上线 */-->
+    <section class="pl-actions sticky-footer" data-gift-actions>
+        <span class="muted" data-gift-stats th:text="#{admin.v140.gift.stats(${received}, ${sent})}">已收到 0 个 · 送出 0 次</span>
+        <form class="inline" th:if="${canEdit}"
+              th:attr="hx-post=@{/admin/gift-catalog/{id}/status(id=${g.id})},
+                       data-confirm=${g.offline()} ? null : #{admin.v140.gift.offlineConfirm(${g.nameEn})}"
+              hx-target="#gift-drawer-err" hx-swap="innerHTML">
+            <input type="hidden" name="online" th:value="${g.offline()}"/>
+            <button type="submit" class="btn btn-sm" th:classappend="${g.offline()} ? '' : 'btn-danger'"
+                    th:text="${g.offline()} ? #{admin.v140.gift.online} : #{admin.v140.gift.offline}">下线</button>
+        </form>
+        <button type="button" class="btn btn-sm" th:classappend="${g.offline()} ? '' : 'btn-danger'" disabled th:unless="${canEdit}"
+                th:title="#{admin.v130.err.forbidden(#{perm.gift.catalog_edit})}"
+                th:text="${g.offline()} ? #{admin.v140.gift.online} : #{admin.v140.gift.offline}">下线</button>
+    </section>
+
+    <script>
+        (function () {
+            var t = document.querySelector('#gift-drawer .drawer-title');
+            if (t && t.hasAttribute('data-default-title')) { t.textContent = t.getAttribute('data-default-title'); }
+        })();
+    </script>
+    <script>
+        (function () {
+            var form = document.querySelector('[data-gift-edit-form]');
+            if (!form) { return; }
+            var save = form.querySelector('[data-gift-save]');
+            function snapshot() {
+                var fd = new FormData(form);
+                var out = [];
+                fd.forEach(function (v, k) { if (k !== 'iconFile') { out.push(k + '=' + v); } });
+                return out.join('&');
+            }
+            var initial = snapshot();
+            function sync() {
+                if (!save) { return; }
+                var f = form.querySelector('input[type=file]');
+                save.disabled = !(snapshot() !== initial || (f && f.files && f.files.length));
+            }
+            form.addEventListener('input', sync);
+            form.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
+    <script th:replace="~{admin/fragments/drawer-gift :: kindToggle}"></script>
+</div>
+
+<!--/* 新建礼物（AC4.2）：multipart；字段自上而下同 UI L2 */-->
+<div th:fragment="createForm" class="tag-create" id="gift-create" th:attr="data-drawer-title=#{admin.v140.gift.drawer.newTitle}">
+    <form th:attr="hx-post=@{/admin/gift-catalog}" hx-encoding="multipart/form-data"
+          hx-target="#gift-drawer-err" hx-swap="innerHTML" id="giftCreateForm" data-gift-form>
+        <label class="field field-full">
+            <span th:text="#{admin.v140.gift.form.icon}">图标</span>
+            <input type="file" name="iconFile" accept="image/png,image/webp" required/>
+        </label>
+        <!--/* 🔴 规格说明常驻在上传控件旁 */-->
+        <p class="hint" data-notice="gift-icon-spec" th:text="${iconSpecCreate}">推荐 112×112 像素……</p>
+
+        <!--/* UI L2：名称 EN / ID 并排两栏 */-->
+        <div class="cfg-grid-2">
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.nameEn}">名称 EN</span>
+                <input type="text" name="nameEn" class="inp field-full" maxlength="40" required
+                       th:placeholder="#{admin.v140.gift.form.nameEnPh}"/>
+            </label>
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.nameId}">名称 ID</span>
+                <input type="text" name="nameId" class="inp field-full" maxlength="40" required
+                       th:placeholder="#{admin.v140.gift.form.nameIdPh}"/>
+            </label>
+        </div>
+
+        <label class="field field-full">
+            <span th:text="#{admin.v140.gift.form.price}">价格</span>
+            <!--/* UI L2：Rp 作为输入框前缀（同 ② 运营配置金额框） */-->
+            <span class="gift-money"><span class="gift-money-cur" aria-hidden="true">Rp</span><input type="number" name="price" class="gift-money-val" required step="1" th:attr="min=${minPrice},max=${maxPrice}"/></span>
+        </label>
+        <p class="hint" th:text="#{admin.v140.gift.form.priceHint}">整数，≥ Rp100。</p>
+
+        <fieldset class="gift-fset">
+            <legend th:text="#{admin.v140.gift.form.species}">适用物种</legend>
+            <div class="opsp-rad">
+                <label><input type="checkbox" name="forCat" value="true"/> <span th:text="#{admin.v140.gift.species.cat}">猫</span></label>
+                <label><input type="checkbox" name="forDog" value="true"/> <span th:text="#{admin.v140.gift.species.dog}">狗</span></label>
+                <label><input type="checkbox" name="forOther" value="true"/> <span th:text="#{admin.v140.gift.species.other}">其他</span></label>
+            </div>
+        </fieldset>
+        <p class="hint" th:text="#{admin.v140.gift.form.speciesHint}">都不选 = 通用。</p>
+
+        <fieldset class="gift-fset">
+            <legend th:text="#{admin.v140.gift.form.kind}">类型</legend>
+            <div class="opsp-rad">
+                <label><input type="radio" name="kind" value="NORMAL" data-gift-kind checked/> <span th:text="#{admin.v140.gift.kind.NORMAL}">普通</span></label>
+                <label><input type="radio" name="kind" value="EXCLUSIVE" data-gift-kind/> <span th:text="#{admin.v140.gift.kind.EXCLUSIVE}">专属</span></label>
+            </div>
+        </fieldset>
+
+        <div data-gift-minlevel>
+            <label class="field field-full">
+                <span th:text="#{admin.v140.gift.form.minLevel}">最低等级</span>
+                <span>Lv <input type="number" name="minLevel" class="inp" step="1" th:attr="min=${minLevel},max=${maxLevel}"/></span>
+            </label>
+            <p class="hint" th:text="#{admin.v140.gift.form.minLevelHint}">送礼人等级达到才能看到、才能送。</p>
+        </div>
+
+        <!--/* UI L2：排序说明作为占位文字放进输入框（不再单列一行 hint） */-->
+        <label class="field field-full">
+            <span th:text="#{admin.v140.gift.form.sortOrder}">排序</span>
+            <input type="number" name="sortOrder" class="inp gift-sort" min="0" step="1" th:attr="max=${maxSortOrder}"
+                   th:placeholder="#{admin.v140.gift.form.sortOrderHint}"/>
+        </label>
+
+        <!--/* UI L2：保存钮在抽屉页脚（右下）；错误槽同排靠左，紧挨按钮 */-->
+        <div class="gift-create-foot">
+            <div id="gift-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.v140.gift.save}">保存</button>
+        </div>
+    </form>
+    <script>
+        (function () {
+            // 抽屉头标题：新建 =「新建礼物」；详情 / 编辑抽屉体加载时由 drawer 片段恢复成页面给的默认标题。
+            var t = document.querySelector('#gift-drawer .drawer-title');
+            var f = document.getElementById('gift-create');
+            if (!t || !f) { return; }
+            if (!t.hasAttribute('data-default-title')) { t.setAttribute('data-default-title', t.textContent); }
+            t.textContent = f.getAttribute('data-drawer-title');
+        })();
+    </script>
+    <script th:replace="~{admin/fragments/drawer-gift :: kindToggle}"></script>
+</div>
+
+<!--/* 类型单选 → 最低等级显隐（专属时显示并必填）。无脚本时始终显示，由服务端判。 */-->
+<script th:fragment="kindToggle">
+    (function () {
+        document.querySelectorAll('[data-gift-form]').forEach(function (form) {
+            var box = form.querySelector('[data-gift-minlevel]');
+            if (!box) { return; }
+            var input = box.querySelector('input[name=minLevel]');
+            function sync() {
+                var picked = form.querySelector('[data-gift-kind]:checked');
+                var exclusive = !!picked && picked.value === 'EXCLUSIVE';
+                box.hidden = !exclusive;
+                if (input) { input.required = exclusive; }
+            }
+            form.querySelectorAll('[data-gift-kind]').forEach(function (r) { r.addEventListener('change', sync); });
+            sync();
+        });
+    })();
+</script>
+
+<th:block th:fragment="created">
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+
+<th:block th:fragment="afterAction">
+    <div id="gift-drawer-body-oob" hx-swap-oob="innerHTML:#gift-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-gift :: drawer}"></div>
+    </div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

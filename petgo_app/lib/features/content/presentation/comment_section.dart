@@ -796,6 +796,7 @@ class _CommentTile extends StatelessWidget {
                 name: name,
                 deleted: comment.authorDeleted,
                 size: isReply ? 24 : 30,
+                growth: comment.authorBadge,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),

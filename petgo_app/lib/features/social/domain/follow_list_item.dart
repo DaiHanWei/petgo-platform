@@ -1,3 +1,4 @@
+import '../../growth/domain/growth_badge.dart';
 import 'follow_state.dart';
 
 /// 关注 / 粉丝列表的 Tab（V1.3.4 follow · Story 2.2）。
@@ -23,6 +24,7 @@ class FollowListItem {
     this.userToken,
     this.nickname,
     this.avatarUrl,
+    this.badge,
     this.followState = FollowState.none,
     this.blockedByMe = false,
     this.self = false,
@@ -38,6 +40,9 @@ class FollowListItem {
   final String? userToken;
   final String? nickname;
   final String? avatarUrl;
+
+  /// 等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? badge;
 
   /// 已注销：显示「已注销用户」+ 默认头像，不可点、无按钮。
   final bool deleted;
@@ -66,6 +71,7 @@ class FollowListItem {
         userToken: userToken,
         nickname: nickname,
         avatarUrl: avatarUrl,
+        badge: badge,
         followState: followState,
         blockedByMe: blockedByMe,
         self: self,
@@ -81,6 +87,7 @@ class FollowListItem {
         userToken: json['userToken'] as String?,
         nickname: json['nickname'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
+        badge: GrowthBadge.fromFlat(json, prefix: ''),
         followState: FollowState.fromJson(json),
         blockedByMe: (json['blockedByMe'] ?? false) as bool,
         self: (json['self'] ?? false) as bool,

@@ -12,8 +12,10 @@ import java.util.Map;
  */
 public class StubGeminiClient implements GeminiClient {
 
+    /** 宠物上下文（V1.4.0 multi-pet Story 4.1）对桩无影响：忽略，输出与不带上下文完全相同。 */
     @Override
-    public GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls, String responseLocale) {
+    public GeminiTriageResult analyze(String symptomText, List<String> signedImageUrls, String responseLocale,
+            TriagePetContext petContext) {
         Map<String, Object> raw = Map.of(
                 "stub", true,
                 "model", "stub-gemini",

@@ -7,15 +7,18 @@ import '../../../core/network/dio_client.dart';
 import '../domain/health_list_item.dart';
 
 /// 健康记录数据层（Story 7.1/7.2）。混排列表 GET + 结构化记录 CRUD。抽象便于测试注入 fake。
+///
+/// V1.4.0 multi-pet（Story 1.5 · AC7）：[petId] 指定哪只宠物（`?petId=`），null = 后端默认宠物；
+/// 记录须属于所选宠物，否则后端 404。
 abstract class HealthRecordRepository {
   /// 混排列表：结构化记录（可编辑）+ 问诊存档（只读）按 event_date 倒序。无档案 → 空/抛。
-  Future<List<HealthListItem>> list();
+  Future<List<HealthListItem>> list({int? petId});
 
-  Future<void> create(HealthRecordDraft draft);
+  Future<void> create(HealthRecordDraft draft, {int? petId});
 
-  Future<void> update(int id, HealthRecordDraft draft);
+  Future<void> update(int id, HealthRecordDraft draft, {int? petId});
 
-  Future<void> delete(int id);
+  Future<void> delete(int id, {int? petId});
 }
 
 class DioHealthRecordRepository implements HealthRecordRepository {
@@ -24,26 +27,28 @@ class DioHealthRecordRepository implements HealthRecordRepository {
   final Dio dio;
 
   @override
-  Future<List<HealthListItem>> list() async {
-    final res = await dio.get<List<dynamic>>(ApiPaths.healthRecords);
+  Future<List<HealthListItem>> list({int? petId}) async {
+    final res = await dio.get<List<dynamic>>(ApiPaths.withPet(ApiPaths.healthRecords, petId));
     return (res.data ?? const [])
         .map((e) => HealthListItem.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   @override
-  Future<void> create(HealthRecordDraft draft) async {
-    await dio.post<Map<String, dynamic>>(ApiPaths.healthRecords, data: draft.toJson());
+  Future<void> create(HealthRecordDraft draft, {int? petId}) async {
+    await dio.post<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.healthRecords, petId),
+        data: draft.toJson());
   }
 
   @override
-  Future<void> update(int id, HealthRecordDraft draft) async {
-    await dio.patch<Map<String, dynamic>>('${ApiPaths.healthRecords}/$id', data: draft.toJson());
+  Future<void> update(int id, HealthRecordDraft draft, {int? petId}) async {
+    await dio.patch<Map<String, dynamic>>(ApiPaths.withPet('${ApiPaths.healthRecords}/$id', petId),
+        data: draft.toJson());
   }
 
   @override
-  Future<void> delete(int id) async {
-    await dio.delete<void>('${ApiPaths.healthRecords}/$id');
+  Future<void> delete(int id, {int? petId}) async {
+    await dio.delete<void>(ApiPaths.withPet('${ApiPaths.healthRecords}/$id', petId));
   }
 }
 
@@ -55,8 +60,10 @@ final Provider<HealthRecordRepository> healthRecordRepositoryProvider =
 /// ⚠️ `retry: healthListRetry`：Riverpod 3 默认对抛错的 provider 指数退避重试（最多 10 次、约 15s 才落
 /// AsyncError）。无宠物档案时后端返回确定性 404（「尚未创建宠物档案」），重试只会让页面转圈 15 秒才出
 /// 「先建档」空态（如从运营通知 APP_PAGE=HEALTH 跳入）。4xx 不重试、立即进错误态；网络错误 / 5xx 仍走默认重试。
-final FutureProvider<List<HealthListItem>> healthListProvider = FutureProvider<List<HealthListItem>>(
-  (ref) => ref.read(healthRecordRepositoryProvider).list(),
+///
+/// V1.4.0 multi-pet（Story 1.5）：family 键 = petId（`effectivePetIdProvider`）。
+final healthListProvider = FutureProvider.family<List<HealthListItem>, int>(
+  (ref, petId) => ref.read(healthRecordRepositoryProvider).list(petId: petId),
   retry: healthListRetry,
 );
 

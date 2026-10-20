@@ -3,7 +3,6 @@ package com.tailtopia.content.rank;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +15,7 @@ import org.springframework.stereotype.Component;
  * 打分与配比引擎（V1.1.6 Story 16.2）。
  *
  * <h2>🔴 为什么它刻意不碰数据库、不碰 HTTP</h2>
- * 输入是「候选内容列表 + 用户主物种 + 曝光/荣誉/限流系数 + 参数」，输出是「排好的序列」。
+ * 输入是「候选内容列表 + 用户物种权重 + 曝光/荣誉/限流系数 + 参数」，输出是「排好的序列」。
  * 这样配比与打分能在<b>纯单测里穷举</b>。
  *
  * <p>理由：配比算错的表现是「刷起来节奏怪」、打分算错的表现是「排序看着有点怪」——
@@ -41,17 +40,26 @@ import org.springframework.stereotype.Component;
 @Component
 public class FeedRankEngine {
 
-    /** 引擎输入。 */
+    /**
+     * 引擎输入。
+     *
+     * <p>V1.4.0 multi-pet Story 3.2（AD-11）：单值主物种 {@code mainSpecies} 换成物种权重
+     * {@link #viewerSpecies}（放在末位 —— 与旧 9 参构造同位次同为 String / Map 时 {@code null} 实参会二义，
+     * 移到末位后旧调用只命中兼容构造器）。① 线的 {@link #authorFactors} 排在 throttle 之后（合并两线后的规范构造 10 参）。
+     */
     public record Input(
             List<RankCandidate> candidates,
-            /** 查看者主物种；{@code null} = 拿不到物种信号（无宠物档案 / 游客）。 */
-            String mainSpecies,
             /** 曝光衰减系数（16.1 供）。缺省 = 1.0。 */
             Map<Long, Double> exposureDecay,
             /** 带<b>生效中</b>装饰标签的内容 id。标签到期即不在此集合内 ⇒ 加成自动回落 1.0。 */
             Set<Long> honoredContentIds,
             /** 限流系数（Epic 17 供）。缺省 = 1.0；本 story 一律传空。 */
             Map<Long, Double> throttleFactors,
+            /**
+             * 作者等级系数（V1.4.0 ① AD-15 · Story 3.4）。⚠️ <b>按 authorId 键</b>（与按 postId 键的
+             * {@link #throttleFactors} 不同）；缺省 = 1.0（不加权的作者不放进 Map）。
+             */
+            Map<Long, Double> authorFactors,
             Instant now,
             RankParams params,
             /**
@@ -69,7 +77,38 @@ public class FeedRankEngine {
              * （种子 + 内容 id）确定的抖动系数：<b>同一种子内排序稳定</b>（翻页快照契约不变、
              * 续算不重复），换种子即换排序。{@code null} = 不抖动（既有单测全部走这里，行为一字不变）。
              */
-            String shuffleSeed) {
+            String shuffleSeed,
+            /**
+             * 查看者物种权重：物种 → 宠物数（含只读、不含已删；V1.4.0 multi-pet Story 3.2）。
+             * 空 / {@code null} = 拿不到物种信号（无宠物档案 / 游客）⇒ 物种维度不生效。
+             * 用整数宠物数而非 {@code Double}：等价且分配时无浮点舍入。
+             */
+            Map<String, Integer> viewerSpecies) {
+
+        /**
+         * 兼容旧签名（单值主物种）：{@code mainSpecies == null} → 空权重，否则 {@code {mainSpecies: 1}} ——
+         * 单宠物与改造前逐条相同（MAIN 配额整份给这一个物种）。
+         */
+        public Input(List<RankCandidate> candidates, String mainSpecies,
+                Map<Long, Double> exposureDecay, Set<Long> honoredContentIds,
+                Map<Long, Double> throttleFactors, Instant now, RankParams params,
+                AttributeSchedule schedule, String shuffleSeed) {
+            this(candidates, mainSpecies, exposureDecay, honoredContentIds, throttleFactors, Map.of(),
+                    now, params, schedule, shuffleSeed);
+        }
+
+        /**
+         * 兼容 ① 线签名（单值主物种 + 作者等级系数，合并 multi-pet 时保留）：主物种口径同上，
+         * {@code authorFactors} 原样透传（{@code null} 与空 Map 一样 = 不加权）。
+         */
+        public Input(List<RankCandidate> candidates, String mainSpecies,
+                Map<Long, Double> exposureDecay, Set<Long> honoredContentIds,
+                Map<Long, Double> throttleFactors, Map<Long, Double> authorFactors, Instant now,
+                RankParams params, AttributeSchedule schedule, String shuffleSeed) {
+            this(candidates, exposureDecay, honoredContentIds, throttleFactors, authorFactors, now, params,
+                    schedule, shuffleSeed,
+                    mainSpecies == null ? Map.of() : Map.of(mainSpecies, 1));
+        }
     }
 
     /**
@@ -98,6 +137,21 @@ public class FeedRankEngine {
         RankParams p = in.params();
         Instant now = in.now();
 
+        // 查看者名下的物种都算 MAIN；MAIN 配额按宠物数拆给各物种（Story 3.2 · P-6：只拆主物种配额）。
+        Map<String, Integer> viewerSpecies = new HashMap<>();
+        if (in.viewerSpecies() != null) {
+            in.viewerSpecies().forEach((k, v) -> {
+                if (k != null && v != null && v > 0) {
+                    viewerSpecies.put(k, v);
+                }
+            });
+        }
+        Set<String> owned = Set.copyOf(viewerSpecies.keySet());
+        boolean speciesActive = !owned.isEmpty();
+        // 参数整批共用 ⇒ 每个窗口的拆分结果相同，算一次即可。
+        Map<String, Integer> mainAlloc =
+                SpeciesSlotAllocator.allocate(p.mainSpeciesQuota(), viewerSpecies);
+
         // 属性为 null 的候选剔掉（非公开的 GROWTH_MOMENT；正常路径不会出现）。
         List<Scored> pool = new ArrayList<>();
         for (RankCandidate c : in.candidates()) {
@@ -108,13 +162,15 @@ public class FeedRankEngine {
             double honor = in.honoredContentIds() != null && in.honoredContentIds().contains(c.id())
                     ? p.honorBoost() : 1.0;
             double throttle = factor(in.throttleFactors(), c.id());
+            double author = factor(in.authorFactors(), c.authorId());
             // 刷新抖动（2026-09-01）：最终分再乘一个 (1-幅度, 1] 区间的确定性系数。
             // ⚠️ 系数由（种子, id）经 SplitMix64 终混确定性算出，不用不可重放的随机 ——
             //    同一种子必须算出同一序列（续算、级别 3 降级重算都依赖这一点）。
             //    FR-135（2026-09-30）：旧实现 Random(种子×常数+id) 让相邻 id 系数只差约 1e-4，首条刷不动。
             double jitter = jitterFactor(in.shuffleSeed(), c.id(), p.shuffleStrength());
-            pool.add(new Scored(c, SpeciesBucket.of(c.species(), in.mainSpecies()),
-                    FeedRankScorer.finalScore(c, now, p, decay, honor, throttle) * jitter));
+            SpeciesBucket bucket = SpeciesBucket.ofOwned(c.species(), owned);
+            pool.add(new Scored(c, bucket, quotaKey(bucket, c.species()),
+                    FeedRankScorer.finalScore(c, now, p, decay, honor, throttle, author) * jitter));
         }
         // 一次排好序，后面每个槽位顺序扫、取第一个合格的 —— 天然就是「分最高的那条」。
         // ⚠️ 分数与槽位无关，所以只排一次；每槽重算是纯浪费。
@@ -127,7 +183,8 @@ public class FeedRankEngine {
         int speciesRelaxed = 0;
         int antiClumpOverridden = 0;
 
-        Map<SpeciesBucket, Integer> speciesUsed = new EnumMap<>(SpeciesBucket.class);
+        // 配额计数按「配额键」：MAIN 按具体物种（MAIN:CAT / MAIN:DOG），OTHER / GENERAL 按桶。
+        Map<String, Integer> speciesUsed = new HashMap<>();
         Map<Long, Integer> authorInWindow = new HashMap<>();
         AttributeSchedule schedule = in.schedule();
         int window = schedule.window();
@@ -138,10 +195,9 @@ public class FeedRankEngine {
                 authorInWindow.clear();
             }
             FeedAttribute wantedAttr = schedule.at(slot);
-            boolean speciesActive = in.mainSpecies() != null;
 
             Predicate<Scored> quotaOk = s -> !speciesActive
-                    || speciesUsed.getOrDefault(s.bucket(), 0) < quotaOf(s.bucket(), p);
+                    || speciesUsed.getOrDefault(s.quotaKey(), 0) < quotaOf(s, mainAlloc, p);
 
             // 五级放宽，顺序见类注释。
             List<Predicate<Scored>> attempts = List.of(
@@ -194,7 +250,7 @@ public class FeedRankEngine {
 
             picked.add(chosen.candidate());
             pool.remove(chosen);
-            speciesUsed.merge(chosen.bucket(), 1, Integer::sum);
+            speciesUsed.merge(chosen.quotaKey(), 1, Integer::sum);
             authorInWindow.merge(chosen.candidate().authorId(), 1, Integer::sum);
         }
         return new Result(List.copyOf(picked), attributeRelaxed, speciesRelaxed,
@@ -240,9 +296,15 @@ public class FeedRankEngine {
         return n;
     }
 
-    private static int quotaOf(SpeciesBucket bucket, RankParams p) {
-        return switch (bucket) {
-            case MAIN -> p.mainSpeciesQuota();
+    /** 配额键：MAIN 桶按具体物种拆（{@code MAIN:CAT}），OTHER / GENERAL 仍按桶。 */
+    private static String quotaKey(SpeciesBucket bucket, String species) {
+        return bucket == SpeciesBucket.MAIN ? "MAIN:" + species : bucket.name();
+    }
+
+    /** MAIN → 该物种分到的主物种配额（{@link SpeciesSlotAllocator}）；OTHER / GENERAL 照旧。 */
+    private static int quotaOf(Scored s, Map<String, Integer> mainAlloc, RankParams p) {
+        return switch (s.bucket()) {
+            case MAIN -> mainAlloc.getOrDefault(s.candidate().species(), 0);
             case OTHER -> p.otherSpeciesQuota();
             case GENERAL -> p.generalQuota();
         };
@@ -286,7 +348,8 @@ public class FeedRankEngine {
         return v == null ? 1.0 : v;
     }
 
-    /** 池内一项：候选 + 相对查看者的物种桶 + 最终分。 */
-    private record Scored(RankCandidate candidate, SpeciesBucket bucket, double score) {
+    /** 池内一项：候选 + 相对查看者的物种桶 + 配额键 + 最终分。 */
+    private record Scored(RankCandidate candidate, SpeciesBucket bucket, String quotaKey,
+            double score) {
     }
 }

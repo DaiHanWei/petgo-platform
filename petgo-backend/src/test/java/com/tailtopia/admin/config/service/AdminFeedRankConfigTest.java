@@ -53,6 +53,7 @@ class AdminFeedRankConfigTest {
         set(c, "exposureDecay", 0.3);
         set(c, "shuffleStrength", 0.8); // 2026-09-01 刷新抖动
         set(c, "throttleFactor", 0.2); // Story 17.1
+        set(c, "authorLevelBoost", 1.05); // V1.4.0 ① Story 3.4
         set(c, "eduFreshnessHalfLifeHours", 360d); // V1.3.4 Story 1.2：非默认值，好证明后台保存不动它
 
         set(c, "seenWindowDays", 7);
@@ -93,15 +94,21 @@ class AdminFeedRankConfigTest {
      */
     private static final double VALID_THROTTLE = 0.2;
     private static final double VALID_SHUFFLE = 0.8;
+    /** V1.4.0 ① Story 3.4：作者等级加权默认值；单独的用例用 {@link #formWithBoost} 验。 */
+    private static final double VALID_BOOST = 1.05;
 
     private static FeedRankForm form(double fw, double iw, double cw, double decay, int days,
             int window, int fun, int edu, int life, int main, int other, int general) {
-        return new FeedRankForm(fw, iw, cw, decay, VALID_SHUFFLE, VALID_THROTTLE, days, window, fun, edu, life,
+        return new FeedRankForm(fw, iw, cw, decay, VALID_SHUFFLE, VALID_THROTTLE, VALID_BOOST, days, window, fun, edu, life,
                 main, other, general);
     }
 
     private static FeedRankForm formWithThrottle(double throttle) {
-        return new FeedRankForm(0.7, 0.3, 3, 0.2, VALID_SHUFFLE, throttle, 14, 10, 5, 3, 2, 6, 2, 2);
+        return new FeedRankForm(0.7, 0.3, 3, 0.2, VALID_SHUFFLE, throttle, VALID_BOOST, 14, 10, 5, 3, 2, 6, 2, 2);
+    }
+
+    private static FeedRankForm formWithBoost(double boost) {
+        return new FeedRankForm(0.6, 0.4, 2.0, 0.3, VALID_SHUFFLE, VALID_THROTTLE, boost, 7, 10, 5, 3, 2, 6, 2, 2);
     }
 
     private static FeedRankForm valid() {
@@ -194,6 +201,47 @@ class AdminFeedRankConfigTest {
                 .hasMessageContaining("限流系数");
         assertThatThrownBy(() -> svc.updateFeedRank(formWithThrottle(-0.1), 7L))
                 .hasMessageContaining("限流系数");
+        Mockito.verifyNoInteractions(changeLogs, audit);
+    }
+
+    // ── V1.4.0 ① Story 3.4 · AC3 / AC4.3：作者等级加权 ────────────────
+
+    @Test
+    void authorLevelBoostBothEndsAreSaved() {
+        svc.updateFeedRank(formWithBoost(1.0), 7L);
+        assertThat(cfg.getAuthorLevelBoost()).isEqualTo(1.0);
+        svc.updateFeedRank(formWithBoost(2.0), 7L);
+        assertThat(cfg.getAuthorLevelBoost()).isEqualTo(2.0);
+    }
+
+    @Test
+    void authorLevelBoostChangeLogsOneDiff() {
+        svc.updateFeedRank(formWithBoost(1.0), 7L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ConfigChangeLog>> logs = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(changeLogs).saveAll(logs.capture());
+        assertThat(logs.getValue()).extracting(ConfigChangeLog::getField).containsExactly("author_level_boost");
+        assertThat(logs.getValue().get(0).getOldValue()).isEqualTo("1.05");
+        assertThat(logs.getValue().get(0).getNewValue()).isEqualTo("1.0");
+    }
+
+    @Test
+    void authorLevelBoostUnchangedWritesNothing() {
+        svc.updateFeedRank(formWithBoost(1.05), 7L);
+        Mockito.verifyNoInteractions(changeLogs, audit);
+    }
+
+    @Test
+    void authorLevelBoostOutOfRangeIsRejectedAndUnchanged() {
+        for (double bad : new double[] {0.99, 2.01}) {
+            assertThatThrownBy(() -> svc.updateFeedRank(formWithBoost(bad), 7L))
+                    .isInstanceOf(com.tailtopia.shared.error.AppException.class)
+                    .hasMessageContaining("作者等级加权")
+                    .satisfies(e -> assertThat(((com.tailtopia.shared.error.AppException) e).getMessageCode())
+                            .isEqualTo("admin.err.config.authorLevelBoostRange"));
+        }
+        assertThat(cfg.getAuthorLevelBoost()).isEqualTo(1.05);
         Mockito.verifyNoInteractions(changeLogs, audit);
     }
 

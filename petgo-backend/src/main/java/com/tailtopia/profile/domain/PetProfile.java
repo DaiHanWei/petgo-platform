@@ -21,6 +21,9 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "pet_profiles")
+// V1.4.0 multi-pet（2.1 复审）：只写脏列。否则编辑档案 / reconcile 各自按整行回写，会把并发改过的
+// status / keep_active（或审核重置的名字 / 头像）用旧值覆盖回去。
+@org.hibernate.annotations.DynamicUpdate
 public class PetProfile {
 
     @Id
@@ -93,6 +96,18 @@ public class PetProfile {
     @Enumerated(EnumType.STRING)
     @Column(name = "neuter_status", length = 16)
     private NeuterStatus neuterStatus;
+
+    /**
+     * 宠物状态（V1.4.0 multi-pet Story 2.1 · AD-4）。新建默认 {@link PetStatus#ACTIVE}；
+     * 🔴 只经 {@code PetSlotStateService.reconcile} 改（{@code PetStatusSingleEntryGuardTest} 守卫）。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    private PetStatus status = PetStatus.ACTIVE;
+
+    /** 用户在名额管理页「Ubah pilihan」选为保持正常（Story 2.1 · D13）；只由改选写。 */
+    @Column(name = "keep_active", nullable = false)
+    private boolean keepActive = false;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -252,6 +267,37 @@ public class PetProfile {
             throw new IllegalStateException("流水号已分配，不可覆盖：" + this.serialId);
         }
         this.serialId = serial;
+    }
+
+    /** 宠物状态（Story 2.1）；读口随意，写只经 {@code PetSlotStateService}。 */
+    public PetStatus getStatus() {
+        return status;
+    }
+
+    public boolean isReadOnly() {
+        return status == PetStatus.READ_ONLY;
+    }
+
+    public boolean isKeepActive() {
+        return keepActive;
+    }
+
+    /**
+     * 置只读（Story 2.1）。🔴 仅 {@code com.tailtopia.profile.slot.PetSlotStateService} 可调用：
+     * 实体与状态服务不在同一包，Java 无法表达「仅该类可见」，改由源码守卫 {@code PetStatusSingleEntryGuardTest} 保证。
+     */
+    public void markReadOnly() {
+        this.status = PetStatus.READ_ONLY;
+    }
+
+    /** 恢复正常（Story 2.1）。🔴 同 {@link #markReadOnly()}，仅 {@code PetSlotStateService} 可调用。 */
+    public void markActive() {
+        this.status = PetStatus.ACTIVE;
+    }
+
+    /** 「保持正常」选择（Story 2.1 · D13）。🔴 同 {@link #markReadOnly()}，仅 {@code PetSlotStateService} 可调用。 */
+    public void setKeepActive(boolean keepActive) {
+        this.keepActive = keepActive;
     }
 
     public Instant getCreatedAt() {

@@ -267,7 +267,8 @@ public class ShopOrderPaymentService {
         //    待提醒登记对整条纯币路径完全失效（用户付了钱、运营收不到发货信号）。
         //    消费方用 @TransactionalEventListener（AFTER_COMMIT）：本事务若回滚，
         //    监听器根本不跑，也就不会为一张没付成的单留下孤儿提醒行。
-        events.publishEvent(new ShopOrderPaidEvent(order.getId(), order.getPublicToken()));
+        events.publishEvent(new ShopOrderPaidEvent(order.getId(), order.getPublicToken(), order.getUserId(),
+                order.paidTotal()));
         return true;
     }
 

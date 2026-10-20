@@ -18,7 +18,6 @@ import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.mention.service.MentionSanitizer;
-import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import java.time.Instant;
@@ -40,7 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 内容发布 + 删除服务（Story 2.3 / 3.6）。三类发布 + 成长日历绑宠物校验 + Idempotency-Key 去重；
  * 软删（作者删 / 运营下架复用）+ 级联清评论点赞。
  *
- * <p>模块边界：成长日历归属校验经 {@link ProfileService}（**禁 content 直接读 pet_profiles 表**）。
+ * <p>模块边界：成长日历归属校验经 {@link com.tailtopia.profile.service.PetResolver}、可写校验经
+ * {@link com.tailtopia.profile.service.PetWriteGuard}（**禁 content 直接读 pet_profiles 表**；V1.4.0 multi-pet Story 3.1
+ * 起不再经 {@code ProfileService.ownsPet}）。
  * {@code authorId} 一律取自 JWT，不信任客户端。
  */
 @Service
@@ -51,7 +52,6 @@ public class ContentService {
     private final ContentPostRepository posts;
     private final CommentRepository comments;
     private final ContentLikeRepository likes;
-    private final ProfileService profileService;
     private final IdempotencyService idempotency;
     private final ContentModerationService moderation;
     private final ApplicationEventPublisher events;
@@ -75,18 +75,37 @@ public class ContentService {
     /** V1.3.4 Story 2.1：每张图露出位置的严格校验（长度不符 / 越界 → 422，不整组作废）。 */
     private final ImageCropOffsetValidator cropOffsets;
 
+    /** V1.4.0 multi-pet Story 2.1（AD-8）：Diary 关联只读宠物 → 409 {@code pet-read-only}（可写校验单一入口）。 */
+    private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard;
+
+    /** V1.4.0 multi-pet Story 3.1（§5 单一入口）：Diary 关联宠物逐只归属校验（不属于本人 / 不存在 → 404）。 */
+    private final com.tailtopia.profile.service.PetResolver petResolver;
+
+    /** V1.4.0 multi-pet Story 3.1（AD-10）：内容 ↔ 宠物关联写入（正常 + 挂起两条分支）。 */
+    private final com.tailtopia.content.repository.ContentPetRepository contentPets;
+
+    /** V1.4.0 multi-pet Story 3.1（AD-10）：关联宠物只读口（过审时取 {@code petIds}）。 */
+    private final ContentPetQuery contentPetQuery;
+
     public ContentService(ContentPostRepository posts, CommentRepository comments,
-            ContentLikeRepository likes, ProfileService profileService,
+            ContentLikeRepository likes,
             IdempotencyService idempotency, ContentModerationService moderation,
             ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
             ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
             ContentPinService pins, MentionSanitizer mentions,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            ImageCropOffsetValidator cropOffsets) {
+            ImageCropOffsetValidator cropOffsets,
+            com.tailtopia.profile.service.PetWriteGuard petWriteGuard,
+            com.tailtopia.profile.service.PetResolver petResolver,
+            com.tailtopia.content.repository.ContentPetRepository contentPets,
+            ContentPetQuery contentPetQuery) {
+        this.petWriteGuard = petWriteGuard;
+        this.petResolver = petResolver;
+        this.contentPets = contentPets;
+        this.contentPetQuery = contentPetQuery;
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
-        this.profileService = profileService;
         this.idempotency = idempotency;
         this.moderation = moderation;
         this.events = events;
@@ -344,8 +363,11 @@ public class ContentService {
                         ? posts.countByAuthorIdAndTypeAndDeletedAtIsNullAndStatus(
                                 p.getAuthorId(), ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED)
                         : 0L;
+                // V1.4.0 multi-pet Story 3.1（AC4）：挂起时已写 content_pets，过审此刻读回全部关联宠物。
+                List<Long> petIds = p.getType() == ContentType.GROWTH_MOMENT
+                        ? contentPetQuery.petsOf(p.getId()) : List.of();
                 events.publishEvent(new ContentPublishedEvent(p.getId(), p.getAuthorId(), p.getType(),
-                        p.getPetId(), growthCount, p.getVisibility(), p.getCreatedAt()));
+                        p.getPetId(), growthCount, p.getVisibility(), p.getCreatedAt(), petIds));
                 // Story 3.4：挂起帖过审 → **此刻**才发 @ 通知（提交那一刻发就是点进去 404）。
                 publishMentioned(p, null, p.getAuthorId());
             }
@@ -489,18 +511,13 @@ public class ContentService {
                     .orElseThrow(() -> AppException.postCheckinInvalid("打卡关联无效"));
         }
 
-        Long petId = req.petId();
+        Long petId = null;
+        List<Long> petIds = List.of();
         LocalDate eventDate = null;
         if (req.type() == ContentType.GROWTH_MOMENT) {
-            // 成长日历必须绑定属于当前用户的宠物档案。
-            if (petId == null) {
-                throw AppException.validation("成长日历快乐时刻需绑定宠物档案")
-                        .code("admin.err.seed.growthNeedsPet");
-            }
-            if (!profileService.ownsPet(authorId, petId)) {
-                throw AppException.validation("无法绑定该宠物档案")
-                        .code("admin.err.seed.petNotOwned");
-            }
+            // V1.4.0 multi-pet Story 3.1（AD-10 · AC3）：Diary 关联一只或多只本人宠物。
+            petIds = resolveGrowthMomentPets(authorId, req);
+            petId = petIds.get(0); // 「第一只」（宠物创建顺序）= content_posts.pet_id 兼容字段
             // AC5（R2 · F9）：事件日期仅 GROWTH_MOMENT 有值；缺省取今天；不可未来。
             // 「今天」按印尼业务时区 WIB（Asia/Jakarta, UTC+7）判定，勿用 UTC——否则 WIB 00:00~07:00
             // 用户本地已是新一天、App 默认取本地今天，会被 UTC 的昨天误判为「未来」而拒发（prod 事故 2026-07-20）。
@@ -511,7 +528,7 @@ public class ContentService {
                         .code("admin.err.seed.eventDateFuture");
             }
         } else {
-            // 普通类型不绑宠物、不写事件日期，忽略客户端误传的 petId/eventDate。
+            // 普通类型不绑宠物、不写事件日期，忽略客户端误传的 petId / petIds / eventDate（AC15）。
             petId = null;
         }
 
@@ -559,6 +576,9 @@ public class ContentService {
                 // 只写正常分支的话，审核挂起的帖过审后 Diary 会把同一件事拆成「打卡条目 + 帖子」两条。
                 pendingPost.setPlaceCheckinId(placeCheckinId);
                 ContentPost pending = posts.save(pendingPost);
+                // V1.4.0 multi-pet Story 3.1：🔴 挂起分支**同样要写 content_pets**（与尺寸 / @ 名单 / 打卡关联同一个坑）——
+                // 漏了的话挂起帖过审后只剩 pet_id 那一只。
+                linkPets(pending.getId(), petIds);
                 scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
                 manualReviewGate.enqueue(pending.getId());
@@ -590,6 +610,7 @@ public class ContentService {
         post.setMentionedUserIds(mentionedUserIds);
         post.setPlaceCheckinId(placeCheckinId); // V1.3.2 Story 1.5（AD-10）
         ContentPost saved = posts.save(post);
+        linkPets(saved.getId(), petIds); // V1.4.0 multi-pet Story 3.1（AD-10）
         scheduleSizeBackfill(saved, sizes);
 
         idempotency.store(idempotencyKey, saved.getId());
@@ -601,10 +622,64 @@ public class ContentService {
                         authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED)
                 : 0L;
         events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), petId,
-                growthCount, saved.getVisibility(), saved.getCreatedAt()));
+                growthCount, saved.getVisibility(), saved.getCreatedAt(), petIds));
         // Story 3.4：@ 通知。发布时机 = **这条内容变成别人看得见的那一刻**（本分支就是）。
         publishMentioned(saved, null, authorId);
         return ContentPostResponse.from(saved);
+    }
+
+    /**
+     * Diary 关联宠物解析（V1.4.0 multi-pet Story 3.1 · AC3）：去重 → 逐只归属（404）→ 逐只可写（409）→ 按宠物创建顺序排序。
+     *
+     * <p>{@code petIds} 为空时兼容旧版 App 与后台种子：{@code petId} 非空视为 {@code [petId]}；两者都空 → 422。
+     * 不属于本人与不存在同一个 404（NFR5，不泄露存在性）；保留 {@code admin.err.seed.petNotOwned} 码供后台回显。
+     * 全部在三方审核之前完成（本地可判死的请求不花审核往返）。
+     *
+     * @return 非空、已去重、按「第一只」口径（{@code created_at ASC, id ASC}）排序的宠物 id
+     */
+    private List<Long> resolveGrowthMomentPets(long authorId, ContentPostCreateRequest req) {
+        java.util.LinkedHashSet<Long> requested = new java.util.LinkedHashSet<>();
+        if (req.petIds() != null) {
+            req.petIds().stream().filter(java.util.Objects::nonNull).forEach(requested::add);
+        }
+        if (requested.isEmpty() && req.petId() != null) {
+            requested.add(req.petId());
+        }
+        if (requested.isEmpty()) {
+            throw AppException.validation("成长日历快乐时刻需绑定宠物档案")
+                    .code("admin.err.seed.growthNeedsPet");
+        }
+        if (requested.size() > 5) { // DTO @Size 之外的服务层兜底（后台种子等不经 @Valid 的路径）
+            throw AppException.validation("最多关联 5 只宠物");
+        }
+        List<com.tailtopia.profile.domain.PetProfile> pets = new ArrayList<>(requested.size());
+        for (Long id : requested) {
+            com.tailtopia.profile.domain.PetProfile pet;
+            try {
+                pet = petResolver.resolve(authorId, id);
+            } catch (AppException notOwned) {
+                throw AppException.notFound("无法绑定该宠物档案").code("admin.err.seed.petNotOwned");
+            }
+            pets.add(pet);
+        }
+        // 先全部归属（404）再逐只可写（409）：不让只读校验泄露他人宠物存在性（AD-8）。
+        pets.forEach(pet -> petWriteGuard.requireWritable(pet.getId()));
+        return pets.stream()
+                .sorted(Comparator.comparing(com.tailtopia.profile.domain.PetProfile::getCreatedAt,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(com.tailtopia.profile.domain.PetProfile::getId))
+                .map(com.tailtopia.profile.domain.PetProfile::getId)
+                .toList();
+    }
+
+    /** 落库后写 content_pets 每只一行（Moment / Tips 为空表，不建关联）。 */
+    private void linkPets(long postId, List<Long> petIds) {
+        if (petIds.isEmpty()) {
+            return;
+        }
+        contentPets.saveAll(petIds.stream()
+                .map(id -> com.tailtopia.content.domain.ContentPet.of(postId, id))
+                .toList());
     }
 
     /**
@@ -680,7 +755,7 @@ public class ContentService {
         idempotency.store(idempotencyKey, saved.getId());
         // 与 publish 同口径发布事件（非 GROWTH_MOMENT → growthCount=0）。
         events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), null,
-                0L, saved.getVisibility(), saved.getCreatedAt()));
+                0L, saved.getVisibility(), saved.getCreatedAt(), List.of()));
         return ContentPostResponse.from(saved);
     }
 
@@ -839,6 +914,30 @@ public class ContentService {
     }
 
     /**
+     * 某作者某宠物<b>已发布</b>的成长日历条数（V1.4.0 multi-pet Story 1.3 · AD-12：Diary 计数类里程碑
+     * 1 / 10 / 30 条按这只宠物判）。口径同改造前的里程碑计数（只数 PUBLISHED，不含审核中），只是加了宠物维度。
+     * Story 3.1：按 {@code content_pets} 计（一条关联 A、B 的帖分别计入 A、B）。
+     */
+    @Transactional(readOnly = true)
+    public long countPublishedGrowthMomentsOfPet(long authorId, long petId) {
+        return posts.countPublishedGrowthMomentsOfPet(
+                authorId, petId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED);
+    }
+
+    /**
+     * 帖子关联的全部宠物（V1.4.0 multi-pet Story 1.3 · P-7 → Story 3.1 多宠：被赞 / 被评论等内容触发的里程碑归帖子
+     * 关联的<b>每一只</b>宠物），按宠物创建顺序。仅 Diary（{@code GROWTH_MOMENT}）有值；Moment / Tips、已解除全部关联
+     * 或帖子不存在 → 空表（调用方回落默认宠物）。
+     */
+    @Transactional(readOnly = true)
+    public List<Long> growthMomentPetIdsOf(long postId) {
+        return posts.findById(postId)
+                .filter(p -> p.getType() == ContentType.GROWTH_MOMENT)
+                .map(p -> contentPetQuery.petsOf(p.getId()))
+                .orElse(List.of());
+    }
+
+    /**
      * 推荐池的 content 侧一半（V1.3.0 batch-b1 Story 4.1 · AC1/AC2）。
      *
      * <p>经 service 暴露，<b>不让 profile 直读 content_posts 表</b>（架构边界，同
@@ -944,6 +1043,16 @@ public class ContentService {
                         && p.getDeletedAt() == null
                         && p.getStatus() == PostStatus.PUBLISHED)
                 .orElse(false);
+    }
+
+    /**
+     * 同 {@link #isOwnGrowthMoment}，且帖子关联的是 {@code petId} 这只宠物（V1.4.0 multi-pet Story 1.3 · AD-12：
+     * 里程碑打卡只能关联该宠物的成长日历内容）。Story 3.1：查 {@code content_pets}——帖子关联 A、B 时 A、B 都可用。
+     */
+    @Transactional(readOnly = true)
+    public boolean isOwnGrowthMomentOfPet(long ownerId, long petId, long postId) {
+        return isOwnGrowthMoment(ownerId, postId)
+                && contentPets.existsById(new com.tailtopia.content.domain.ContentPet.Key(postId, petId));
     }
 
     /**

@@ -19,6 +19,7 @@ import '../../domain/tailsonality_result.dart';
 import '../widgets/ts_result_card.dart';
 import 'ts_share_owner_name.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
+import '../../../profile/data/current_pet_provider.dart';
 
 /// 结果分享卡画布（2026-10-05 设计稿 `share- example.png`，1217×1081）：横版，**不是**通用骨架的 9:16。
 ///
@@ -238,7 +239,10 @@ Future<void> openResultSharePreview(BuildContext context, WidgetRef ref, Tailson
           'is_unlocked': result.unlocked,
         });
         unawaited(claimKeepsakeShareReward(routeCtx, ref,
-            () => ref.read(tailsonalityShareRewardRepositoryProvider).reportShareForReward(TailsonalityShareRewardRepository.result)));
+            () async => ref.read(tailsonalityShareRewardRepositoryProvider).reportShareForReward(
+                TailsonalityShareRewardRepository.result,
+                // V1.4.0 multi-pet：奖励记到当前宠物。
+                petId: await readRequestPetId(ref))));
       },
     ),
   ));

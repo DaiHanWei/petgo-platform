@@ -98,15 +98,15 @@ class FeedRankScorerTest {
         RankCandidate c = at(NOW, 0, 0);
         double base = FeedRankScorer.contentScore(c, NOW, P);
 
-        assertThat(FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.0, 1.0)).isEqualTo(base);
-        assertThat(FeedRankScorer.finalScore(c, NOW, P, 0.3, 1.0, 1.0))
+        assertThat(FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.0, 1.0, 1.0)).isEqualTo(base);
+        assertThat(FeedRankScorer.finalScore(c, NOW, P, 0.3, 1.0, 1.0, 1.0))
                 .isCloseTo(base * 0.3, org.assertj.core.data.Offset.offset(1e-12));
-        assertThat(FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.3, 1.0))
+        assertThat(FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.3, 1.0, 1.0))
                 .isCloseTo(base * 1.3, org.assertj.core.data.Offset.offset(1e-12));
-        assertThat(FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.0, 0.2))
+        assertThat(FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.0, 0.2, 1.0))
                 .isCloseTo(base * 0.2, org.assertj.core.data.Offset.offset(1e-12));
         // 四个一起
-        assertThat(FeedRankScorer.finalScore(c, NOW, P, 0.3, 1.3, 0.2))
+        assertThat(FeedRankScorer.finalScore(c, NOW, P, 0.3, 1.3, 0.2, 1.0))
                 .isCloseTo(base * 0.3 * 1.3 * 0.2, org.assertj.core.data.Offset.offset(1e-12));
     }
 
@@ -167,5 +167,14 @@ class FeedRankScorerTest {
         assertThat(at720).isGreaterThan(at360);
         assertThat(FeedRankScorer.freshness(k.createdAt(), NOW, 360))
                 .isCloseTo(1.0 / 7, org.assertj.core.data.Offset.offset(1e-9));
+    }
+
+    /** V1.4.0 ① Story 3.4 · AC4.1：作者系数 1.05 → 最终分恰为 1.05 倍（同条件两帖：Lv15 vs Lv14）。 */
+    @Test
+    void authorFactorMultipliesLast() {
+        RankCandidate c = at(NOW, 3, 1);
+        double lv14 = FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.0, 1.0, 1.0);
+        double lv15 = FeedRankScorer.finalScore(c, NOW, P, 1.0, 1.0, 1.0, 1.05);
+        assertThat(lv15).isCloseTo(lv14 * 1.05, org.assertj.core.data.Offset.offset(1e-9));
     }
 }

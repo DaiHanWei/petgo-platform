@@ -169,7 +169,7 @@ public class AdminContentTagController {
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             long id = doCreate(admin, name, iconFile, description, badgeStyle);
-            AdminFragmentResponses.trigger(response, AdminHxEvents.DRAWER_OPEN,
+            AdminFragmentResponses.triggerWithPayload(response, AdminHxEvents.DRAWER_OPEN,
                     "{\"url\":\"/admin/content-tags/" + id + "/drawer?tab=assignments\",\"id\":" + id + "}");
             AdminFragmentResponses.trigger(response, AdminHxEvents.TAG_LIST_REFRESH);
             model.addAttribute("toast", msg.get("admin.flash.contentTag.created"));

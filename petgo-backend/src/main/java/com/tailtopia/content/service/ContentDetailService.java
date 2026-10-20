@@ -47,13 +47,36 @@ public class ContentDetailService {
     /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
 
+    /** V1.4.0 multi-pet Story 3.1（AC8）：Diary 关联宠物（关联表只读口 + 宠物名字头像批量读口）。 */
+    private final ContentPetQuery contentPetQuery;
+    private final com.tailtopia.profile.service.PetQueryService petQuery;
+    /** V1.4.0 gift Story 2.1：Diary 礼物区 —— 宠物只经送礼模块端口取（不直接读 post.getPetId()，AD-5）。 */
+    private final com.tailtopia.gift.port.GiftPetDirectory giftPetDirectory;
+    /** V1.4.0 gift Story 2.1：礼物区汇总 + 墙前 3 行（读汇总表的只读查询）。 */
+    private final com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase;
+
+    /** 详情礼物区每只宠物展示的礼物种类数（UI 稿 A3「单价最高的 3 种」）。 */
+    static final int GIFT_PREVIEW_KINDS = 3;
+    /** V1.4.0 ④ Story 2.1：详情的收藏状态 / 作者视角收藏数（只读口，不依赖 CollectService，避免 Bean 环）。 */
+    private final com.tailtopia.collect.service.CollectStateQuery collectState;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            ContentPetQuery contentPetQuery,
+            com.tailtopia.profile.service.PetQueryService petQuery,
+            com.tailtopia.gift.port.GiftPetDirectory giftPetDirectory,
+            com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase,
+            com.tailtopia.collect.service.CollectStateQuery collectState) {
+        this.contentPetQuery = contentPetQuery;
+        this.petQuery = petQuery;
+        this.giftPetDirectory = giftPetDirectory;
+        this.giftShowcase = giftShowcase;
+        this.collectState = collectState;
         this.placeCheckins = placeCheckins;
         this.followReader = followReader;
         this.contentTags = contentTags;
@@ -121,6 +144,9 @@ public class ContentDetailService {
         // Story 3.4：真实点赞计数 + 当前用户是否已赞（游客 false）。
         long likeCount = likes.countByPostId(postId);
         boolean liked = viewerId != null && likes.existsByPostIdAndUserId(postId, viewerId);
+        // V1.4.0 ④ Story 2.1（AD-10）：是否已收藏（游客 false、不查）；收藏数只给作者看、不计作者自己。
+        boolean collected = viewerId != null && collectState.isPostCollected(viewerId, postId);
+        Long collectCount = isAuthor ? collectState.collectCountExcludingAuthor(postId, post.getAuthorId()) : null;
         // V1.1.6 Story 5.2：装饰标签（三处展示位之一）。单条也走批量方法 ——
         // 仓储刻意不提供逐条取法，免得别处照着写成逐条查。
         var decorations = contentTags.findVisibleTags(java.util.List.of(postId), java.time.Instant.now())
@@ -144,6 +170,58 @@ public class ContentDetailService {
                 ? com.tailtopia.social.read.FollowState.NONE
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace, authorToken, followState);
+                decorations, sizes, mentions, checkinPlace, authorToken, followState, linkedPets(post),
+                giftPets(post), collected, collectCount);
+    }
+
+    /**
+     * Diary 关联宠物（V1.4.0 multi-pet Story 3.1 · AC8）：按「第一只」口径排序，名字头像一次批量取（禁逐只查）。
+     * 只读宠物照常列出；Moment / Tips / 无关联 → null（省略键）。
+     */
+    private List<com.tailtopia.content.dto.ContentPetView> linkedPets(ContentPost post) {
+        if (post.getType() != com.tailtopia.content.domain.ContentType.GROWTH_MOMENT) {
+            return null;
+        }
+        List<Long> petIds = contentPetQuery.petsOf(post.getId());
+        if (petIds.isEmpty()) {
+            return null;
+        }
+        var views = petQuery.getAll(petIds);
+        // L2 第二轮：生日供 A7 选宠物行显示年龄（与访客视图同口径对外）；取不到不影响其余字段。
+        java.util.Map<Long, java.time.LocalDate> birthdays = petQuery.birthdaysOf(petIds);
+        java.util.Map<Long, java.time.LocalDate> bd = birthdays == null ? java.util.Map.of() : birthdays;
+        List<com.tailtopia.content.dto.ContentPetView> out = petIds.stream()
+                .map(views::get)
+                .filter(java.util.Objects::nonNull)
+                // 3-1 复审：给他人看的宠物头像走去 EXIF 的投递地址（同访客视图 E4，防 GPS 泄漏）。
+                .map(v -> new com.tailtopia.content.dto.ContentPetView(v.id(), v.name(),
+                        v.avatarUrl() == null ? null
+                                : com.tailtopia.shared.media.AliyunOssClient.exifStrippedDeliveryUrl(v.avatarUrl()),
+                        v.petType() == null ? null : v.petType().name(), bd.get(v.id())))
+                .toList();
+        return out.isEmpty() ? null : out;
+    }
+
+    /**
+     * Diary 礼物区（V1.4.0 gift Story 2.1 · AC5）。只对 {@code GROWTH_MOMENT} 调端口；Moment / Tips 直接 null。
+     * 端口返回空（无宠物 / 私密 / 审核中 / 举报隐藏）→ null。gift Story 4.1 起端口为多宠实现：全部关联宠物、
+     * 与 {@code pets} 同序（宠物创建顺序），只读宠物照列。批量两次查询（汇总 + 墙前 3），不按宠物逐个查。
+     * 可见性不另做：已过 {@link #requireVisiblePost}。
+     */
+    private List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets(ContentPost post) {
+        if (post.getType() != com.tailtopia.content.domain.ContentType.GROWTH_MOMENT) {
+            return null;
+        }
+        var pets = giftPetDirectory.petsOfPost(post.getId());
+        if (pets.isEmpty()) {
+            return null;
+        }
+        List<Long> petIds = pets.stream().map(com.tailtopia.gift.port.GiftPetDirectory.GiftPet::petId).toList();
+        var summaries = giftShowcase.summariesOf(petIds);
+        var previews = giftShowcase.wallPreviewOf(petIds, GIFT_PREVIEW_KINDS);
+        return pets.stream()
+                .map(pet -> com.tailtopia.gift.web.dto.GiftPetSummaryView.of(pet,
+                        summaries.get(pet.petId()), previews.get(pet.petId())))
+                .toList();
     }
 }

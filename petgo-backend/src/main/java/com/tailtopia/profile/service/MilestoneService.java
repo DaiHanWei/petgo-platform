@@ -11,7 +11,6 @@ import com.tailtopia.profile.dto.MilestoneItemResponse;
 import com.tailtopia.profile.dto.MilestoneListResponse;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
-import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,13 +35,13 @@ public class MilestoneService {
     private static final List<MilestoneLevel> DISPLAY_ORDER = List.of(
             MilestoneLevel.L, MilestoneLevel.M, MilestoneLevel.S);
 
-    private final PetProfileRepository profiles;
+    private final PetResolver petResolver;
     private final PetMilestoneRepository milestones;
     private final MilestoneCompletionRepository completions;
 
-    public MilestoneService(PetProfileRepository profiles, PetMilestoneRepository milestones,
+    public MilestoneService(PetResolver petResolver, PetMilestoneRepository milestones,
             MilestoneCompletionRepository completions) {
-        this.profiles = profiles;
+        this.petResolver = petResolver;
         this.milestones = milestones;
         this.completions = completions;
     }
@@ -87,8 +86,13 @@ public class MilestoneService {
     /** 当前用户里程碑列表（无档案 → 404）。读路径若 roster 缺失（存量档案）则 lazy 物化兜底。 */
     @Transactional
     public MilestoneListResponse getMilestones(long ownerId) {
-        PetProfile pet = profiles.findByOwnerId(ownerId)
-                .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+        return getMilestones(ownerId, null);
+    }
+
+    /** V1.4.0 multi-pet：指定宠物（null = 默认宠物）的里程碑列表；不属于本人 → 404。 */
+    @Transactional
+    public MilestoneListResponse getMilestones(long ownerId, Long petId) {
+        PetProfile pet = petResolver.resolve(ownerId, petId);
         long petProfileId = pet.getId();
 
         List<PetMilestone> roster = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId);

@@ -11,6 +11,7 @@ import com.tailtopia.profile.dto.MilestoneShareResponse;
 import com.tailtopia.profile.service.MilestoneCelebrationService;
 import com.tailtopia.profile.service.MilestoneCheckInService;
 import com.tailtopia.profile.service.MilestoneService;
+import com.tailtopia.profile.service.PetResolver;
 import com.tailtopia.profile.service.MilestoneShareService;
 import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -37,10 +39,12 @@ public class MilestoneController {
     private final MilestoneCheckInService checkInService;
     private final MilestoneShareService shareService;
     private final MilestoneCelebrationService celebrationService;
+    private final PetResolver petResolver;
 
     public MilestoneController(MilestoneService milestoneService,
             MilestoneCheckInService checkInService, MilestoneShareService shareService,
-            MilestoneCelebrationService celebrationService) {
+            MilestoneCelebrationService celebrationService, PetResolver petResolver) {
+        this.petResolver = petResolver;
         this.milestoneService = milestoneService;
         this.checkInService = checkInService;
         this.shareService = shareService;
@@ -49,16 +53,20 @@ public class MilestoneController {
 
     /** 当前用户里程碑列表（L/M/S 分区 + 完成状态 + 进度）。无档案 → 404。 */
     @GetMapping
-    public MilestoneListResponse list(@AuthenticationPrincipal Jwt jwt) {
-        return milestoneService.getMilestones(currentUserId(jwt));
+    public MilestoneListResponse list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        return milestoneService.getMilestones(currentUserId(jwt), petId);
     }
 
     /**
      * 用户打卡「已打卡」内容关联选择器候选（Story 8.4）：本人成长日历内容，已关联其它里程碑的标 linked。
      */
     @GetMapping("/checkin-candidates")
-    public MilestoneCheckinCandidateResponse.Page checkinCandidates(@AuthenticationPrincipal Jwt jwt) {
-        return checkInService.candidates(currentUserId(jwt));
+    public MilestoneCheckinCandidateResponse.Page checkinCandidates(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId) {
+        long ownerId = currentUserId(jwt);
+        long pid = petResolver.resolve(ownerId, petId).getId();
+        return checkInService.candidates(ownerId, pid);
     }
 
     /**
@@ -67,8 +75,11 @@ public class MilestoneController {
      */
     @PostMapping("/{code}/check-in")
     public MilestoneItemResponse checkIn(@AuthenticationPrincipal Jwt jwt,
-            @PathVariable String code, @Valid @RequestBody MilestoneCheckinRequest req) {
-        return checkInService.checkIn(currentUserId(jwt), code, req.contentId());
+            @PathVariable String code, @RequestParam(name = "petId", required = false) Long petId,
+            @Valid @RequestBody MilestoneCheckinRequest req) {
+        long ownerId = currentUserId(jwt);
+        // 宠物在服务层解析（健康类里程碑先拒 422，再解析宠物），保持无档案账号的旧行为。
+        return checkInService.checkIn(ownerId, petId, code, req.contentId());
     }
 
     /**
@@ -78,8 +89,11 @@ public class MilestoneController {
      */
     @PostMapping("/{code}/shares")
     public MilestoneShareResponse createShare(@AuthenticationPrincipal Jwt jwt,
-            @PathVariable String code, @Valid @RequestBody MilestoneShareRequest req) {
-        return shareService.createOrRefresh(currentUserId(jwt), code, req);
+            @PathVariable String code, @RequestParam(name = "petId", required = false) Long petId,
+            @Valid @RequestBody MilestoneShareRequest req) {
+        long ownerId = currentUserId(jwt);
+        long pid = petResolver.resolve(ownerId, petId).getId();
+        return shareService.createOrRefresh(ownerId, pid, code, req);
     }
 
     /**
@@ -96,8 +110,11 @@ public class MilestoneController {
      */
     @PostMapping("/celebrations")
     public MilestoneCelebrationReportResponse reportCelebrations(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId,
             @Valid @RequestBody MilestoneCelebrationReportRequest req) {
-        return celebrationService.reportCelebrated(currentUserId(jwt), req.codes());
+        long ownerId = currentUserId(jwt);
+        long pid = petResolver.resolve(ownerId, petId).getId();
+        return celebrationService.reportCelebrated(ownerId, pid, req.codes());
     }
 
     private static long currentUserId(Jwt jwt) {

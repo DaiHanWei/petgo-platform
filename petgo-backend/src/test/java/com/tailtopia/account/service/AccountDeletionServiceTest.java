@@ -61,6 +61,14 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.social.service.FollowService followService;
     /** V1.3.4 Story 5.1：运营弹窗曝光随注销物理删除。 */
     @Mock com.tailtopia.ops.popup.service.OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
+    /** V1.4.0 ① Story 1.2：成长值数据随注销物理删除。 */
+    @Mock com.tailtopia.growth.service.GrowthAccountDeletionService growthDeletion;
+    /** V1.4.0 ④ Story 1.1：推送分类开关随注销物理删除。 */
+    @Mock com.tailtopia.notify.preference.PushPreferenceService pushPreferences;
+    /** V1.4.0 ④ Story 2.1：收藏随注销物理删除。 */
+    @Mock com.tailtopia.collect.service.CollectDeletionService collectDeletion;
+    /** OCR #2：宠物名额随注销终止。 */
+    @Mock com.tailtopia.profile.slot.PetSlotAccountDeletionService petSlotDeletion;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -69,7 +77,8 @@ class AccountDeletionServiceTest {
                 contentService, reviewService, violationCountService,
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
-                followService, opsPopupImpressionDeletion);
+                followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion,
+                petSlotDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -82,7 +91,7 @@ class AccountDeletionServiceTest {
     void executeRunsFullCascadeAndMarksDone() {
         AccountDeletion d = pending(1L, 7L);
         when(deletions.findById(1L)).thenReturn(Optional.of(d));
-        when(profileDeletion.deleteByUserId(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("h1")));
+        when(profileDeletion.deleteAllForAccount(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("h1")));
         when(triageDeletion.deleteByUserId(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("t1", "t2")));
         when(consultAnonymization.anonymizeByUserId(7L)).thenReturn(PersonalMedia.ofPrivate(List.of("c1")));
         when(authDeletion.deleteByUserId(7L))
@@ -91,10 +100,16 @@ class AccountDeletionServiceTest {
         service().execute(1L);
 
         // 删除/匿名化各模块均被调用
-        verify(profileDeletion).deleteByUserId(7L);
+        verify(profileDeletion).deleteAllForAccount(7L);
         verify(triageDeletion).deleteByUserId(7L);
         verify(consultAnonymization).anonymizeByUserId(7L);
         verify(notificationDeletion).deleteByUserId(7L);
+        // OCR #2：名额在宠物删除之后、通知删除之前终止（否则到期扫描还会给已注销账号写通知 / 推送）。
+        org.mockito.InOrder slotOrder = org.mockito.Mockito.inOrder(profileDeletion, petSlotDeletion,
+                notificationDeletion);
+        slotOrder.verify(profileDeletion).deleteAllForAccount(7L);
+        slotOrder.verify(petSlotDeletion).expireAllForAccount(7L);
+        slotOrder.verify(notificationDeletion).deleteByUserId(7L);
         // PawCoin 余额作废纳入级联（Story 1.6），且在删 user 行前。
         verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         // 1.1.6 电商/分享注销联动：shop 清理 + 内容分享行删除 + 分享奖励留痕删除。
@@ -106,6 +121,13 @@ class AccountDeletionServiceTest {
         verify(onboardingMarkDeletion).deleteByUserId(7L);
         // V1.3.2 Story 2.5：Tailsonality 主人类型（账号级）也在级联里，且在 user 行删除之前。
         verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
+        // V1.4.0 ① Story 1.2 · AC7：成长值三张表在 tailsonality 之后、PawCoin 作废之前删除（AD-18）。
+        verify(growthDeletion).deleteByUserId(7L);
+        org.mockito.InOrder growthOrder = org.mockito.Mockito.inOrder(tailsonalityDeletion, growthDeletion,
+                pawCoinDeletion);
+        growthOrder.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
+        growthOrder.verify(growthDeletion).deleteByUserId(7L);
+        growthOrder.verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         org.mockito.InOrder beforeUserRow = org.mockito.Mockito.inOrder(tailsonalityDeletion, authDeletion);
         beforeUserRow.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
         beforeUserRow.verify(authDeletion).deleteByUserId(7L);
@@ -114,6 +136,16 @@ class AccountDeletionServiceTest {
         org.mockito.InOrder popupBeforeUserRow = org.mockito.Mockito.inOrder(opsPopupImpressionDeletion, authDeletion);
         popupBeforeUserRow.verify(opsPopupImpressionDeletion).deleteByUserId(7L);
         popupBeforeUserRow.verify(authDeletion).deleteByUserId(7L);
+        // V1.4.0 ④ Story 1.1 · AC7：推送设置显式删（users 行只匿名化，FK CASCADE 不触发），且在 user 行处理之前。
+        verify(pushPreferences).deleteByUserId(7L);
+        org.mockito.InOrder pushBeforeUserRow = org.mockito.Mockito.inOrder(pushPreferences, authDeletion);
+        pushBeforeUserRow.verify(pushPreferences).deleteByUserId(7L);
+        pushBeforeUserRow.verify(authDeletion).deleteByUserId(7L);
+        // V1.4.0 ④ Story 2.1 · AC9：本人收藏显式删，且在 user 行处理之前。
+        verify(collectDeletion).deleteByUserId(7L);
+        org.mockito.InOrder collectBeforeUserRow = org.mockito.Mockito.inOrder(collectDeletion, authDeletion);
+        collectBeforeUserRow.verify(collectDeletion).deleteByUserId(7L);
+        collectBeforeUserRow.verify(authDeletion).deleteByUserId(7L);
         // V1.3.0 场所评论注销联动（NFR-8 / D1/D2）：独立表，content 那条级联碰不到它 ——
         // 漏了的话注销用户的场所评论会继续挂着身份对所有人可见。
         verify(placeCommentService).deactivateAuthorComments(7L);
@@ -153,6 +185,6 @@ class AccountDeletionServiceTest {
 
         service().execute(1L);
 
-        verify(profileDeletion, org.mockito.Mockito.never()).deleteByUserId(anyLong());
+        verify(profileDeletion, org.mockito.Mockito.never()).deleteAllForAccount(anyLong());
     }
 }

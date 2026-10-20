@@ -8,11 +8,16 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../../shared/widgets/app_image.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../data/current_pet_provider.dart';
 import '../data/id_card_repository.dart';
+import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
+import '../domain/ktp_prefill_pet.dart';
+import '../domain/pet_profile.dart';
 import 'id_card/id_card_form.dart';
 import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_pet_type_fields.dart';
@@ -20,6 +25,7 @@ import 'id_card/id_card_ui_style.dart';
 import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_fields.dart';
 import 'id_card_detail_page.dart';
+import 'widgets/pet_picker_sheet.dart';
 
 /// 独立建卡器（Story 6-7，决策④）——预览优先版。
 ///
@@ -51,27 +57,139 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   bool _prefilled = false;
   bool _busy = false; // 上传/创建中
 
+  /// V1.4.0 multi-pet Story 4.2：本次会话选中的预填宠物（只用于宠物行显示与抽屉默认选中）。
+  /// **不回写** `currentPetIdProvider`（AD-14：在 KTP 里换宠物不切换 Diary Tab 当前宠物）。null = 不显示宠物行。
+  PetListItem? _pet;
+
+  /// 可选的宠物：只列 ACTIVE（AD-8「KTP 创建只列正常宠物」，只读宠物不出现、不是置灰）。
+  List<PetListItem> _activePets = const [];
+
+  /// 换宠物后正在取新宠物档案（「Ganti」与「Buat Kartu」暂禁，避免提交新旧混合的草稿）。
+  bool _switching = false;
+
   IdCardStyle get _style => widget.initialStyle;
 
   @override
   void initState() {
     super.initState();
-    // 预填当前档案值（会话级，可改；FR-142C.2）：名字 / 物种 / 品种 / 生日 / 性别 / 头像。
-    // 档案无值不预选（性别 null、物种 null）；不再预填一句话介绍。失败则留空。
-    ref.read(petProfileProvider.future).then((p) {
-      if (!mounted || _prefilled || p == null) return;
+    _initPrefill();
+  }
+
+  /// 预填所选宠物的档案值（会话级，可改；FR-142C.2）：名字 / 物种 / 品种 / 生日 / 性别 / 头像。
+  /// 档案无值不预选（性别 null、物种 null）；不再预填一句话介绍。失败则留空。
+  ///
+  /// V1.4.0 multi-pet Story 4.2 · AC1（decision-log I2）：预填哪只由 [resolveKtpPrefillPetId] 决定
+  /// （Diary 当前宠物 ACTIVE → 它；否则最早创建的 ACTIVE；没有 → 不预填、不显示宠物行）。
+  /// 宠物列表取不到 → 退回旧口径（不带 petId = 后端默认宠物，同 `petProfileProvider` 的回退），不显示宠物行。
+  Future<void> _initPrefill() async {
+    final List<PetListItem> pets;
+    try {
+      pets = await ref.read(petListProvider.future);
+    } catch (_) {
+      try {
+        final p = await ref.read(profileRepositoryProvider).getMyProfile();
+        if (mounted && !_prefilled && p != null) setState(() => _applyProfile(p));
+      } catch (_) {}
+      return;
+    }
+    if (!mounted) return;
+    final id = resolveKtpPrefillPetId(currentPetId: ref.read(currentPetIdProvider), pets: pets);
+    if (id == null) return;
+    final active = [
+      for (final p in pets)
+        if (!p.isReadOnly) p,
+    ];
+    setState(() {
+      _activePets = active;
+      _pet = active.firstWhere((p) => p.id == id);
+    });
+    try {
+      final isCurrent = resolveEffectivePetId(pets, ref.read(currentPetIdProvider)) == id;
+      final p = await _initialProfileOf(id, isCurrent: isCurrent);
+      // 迟到预填不覆盖用户已确认的编辑（_prefilled），也不覆盖期间已换成的别的宠物。
+      if (!mounted || _prefilled || _pet?.id != id || p == null) return;
+      setState(() => _applyProfile(p));
+    } catch (_) {}
+  }
+
+  /// 首屏预填的档案（code review 4-2 #2）：要预填的就是 Diary 当前宠物 → 沿用改造前的
+  /// `petProfileProvider`（已加载则直接用缓存，新鲜度与改造前相同，单宠物用户不多等一次请求）；
+  /// 别的宠物（当前宠物只读）或缓存不是这只 → 按 petId 取。
+  Future<PetProfile?> _initialProfileOf(int id, {required bool isCurrent}) async {
+    if (isCurrent) {
+      try {
+        final p = await ref.read(petProfileProvider.future);
+        if (p != null && p.id == id) return p;
+      } catch (_) {}
+    }
+    return _fetchPetProfile(id);
+  }
+
+  /// 按 petId 取完整档案。provider 是 autoDispose（换账号不残留上个账号的宠物资料）：
+  /// 取数期间挂一个监听保活，取完即释放 → 下次再取就是最新档案。
+  Future<PetProfile?> _fetchPetProfile(int id) async {
+    final sub = ref.listenManual(petProfileByIdProvider(id), (_, _) {});
+    try {
+      return await ref.read(petProfileByIdProvider(id).future);
+    } finally {
+      sub.close();
+    }
+  }
+
+  /// 草稿**整体**重置为 [p] 的档案值（调用方包在 setState 里）。
+  void _applyProfile(PetProfile p) {
+    _draft = IdCardFormDraft(
+      name: p.name,
+      petType: p.petType,
+      breed: p.breed ?? '',
+      birthday: p.birthday,
+      gender: idCardGenderFromPetSex(p.sex),
+    );
+    _avatarUrl = p.avatarUrl;
+    _prefilled = true;
+  }
+
+  /// 换宠物（Story 4.2 · AC3 · UI 稿 I1）：复用 3.3 / 4.1 的 [showPetPickerSheet] 单选 + 吸底确认模式，
+  /// 只列 ACTIVE，默认选中当前预填的那只；下滑 / 返回 = 不换。
+  /// 选了另一只 → 拉它的完整档案 → 草稿整体重置（含此前「Ubah info」「Ganti foto」改过的）；
+  /// 拉取失败 → toast，草稿与宠物行保持原宠物。选的仍是当前那只 → 不重置、不请求。
+  Future<void> _changePet() async {
+    final current = _pet;
+    if (current == null || _activePets.length < 2) return;
+    final l10n = AppLocalizations.of(context);
+    final picked = await showPetPickerSheet(
+      context,
+      pets: _activePets,
+      title: l10n.petPickerChooseTitle,
+      multiSelect: false,
+      confirmLabel: l10n.petPickerUse,
+      initialSelectedId: current.id,
+    );
+    if (!mounted || picked == null || picked.isEmpty) return;
+    final id = picked.first;
+    if (id == _pet?.id) return;
+    PetListItem? next;
+    for (final p in _activePets) {
+      if (p.id == id) next = p;
+    }
+    if (next == null) return;
+    setState(() => _switching = true);
+    try {
+      final p = await _fetchPetProfile(id);
+      if (!mounted) return;
+      if (p == null) {
+        _toast(l10n.idCardCreateError);
+        return;
+      }
       setState(() {
-        _draft = IdCardFormDraft(
-          name: p.name,
-          petType: p.petType,
-          breed: p.breed ?? '',
-          birthday: p.birthday,
-          gender: idCardGenderFromPetSex(p.sex),
-        );
-        _avatarUrl = p.avatarUrl;
-        _prefilled = true;
+        _pet = next;
+        _applyProfile(p);
       });
-    }).catchError((_) {});
+    } catch (_) {
+      if (mounted) _toast(l10n.idCardCreateError);
+    } finally {
+      if (mounted) setState(() => _switching = false);
+    }
   }
 
   /// 会话级预览数据（未落库，序号未分配 → 客户端拼占位号，创建后以后端号为准）。
@@ -110,20 +228,31 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     final double radius = style.canvasRadius;
     final Widget cardFront = style.buildFront(_preview);
     final missingText = idCardMissingText(l10n, idCardMissingFields(style, _draft));
+    // V1.4.0 稿 I2 / I3：白底、宠物行 + 卡面 + 两个描边按钮**顶部对齐**（L2 还原度；原淡紫底、整组垂直居中，
+    // 上方留大片空白）；主按钮单独吸底。
     return Scaffold(
-      backgroundColor: AppColors.cream2,
+      backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.idCardCreateTitle)),
       body: SafeArea(
         child: Column(
           children: [
-            // 稿 C1：卡面 + 两个描边按钮为一组，在剩余空间内垂直居中；主按钮单独吸底。
             Expanded(
-              child: Center(
+              child: Align(
+                alignment: Alignment.topCenter,
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Story 4.2 · AC2（UI 稿 I2 / I3）：卡面上方「Untuk {name}」宠物行；0 只宠物不显示（= 现状）。
+                      if (_pet != null) ...[
+                        _KtpPetRow(
+                          pet: _pet!,
+                          canChange: _activePets.length > 1,
+                          onChange: (_busy || _switching) ? null : _changePet,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                       AspectRatio(
                         aspectRatio: canvas.width / canvas.height,
                         // 防截图水印（bug 20260728-383）：建卡预览未付费即可见完整卡面，同样恒盖水印。
@@ -139,22 +268,20 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
                       Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OutlinedButton(
                               key: const ValueKey('idCardEditInfo'),
-                              onPressed: _busy ? null : _editInfo,
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              label: Text(l10n.idCardEditInfo),
-                              style: idCardOutlineButtonStyle(),
+                              onPressed: (_busy || _switching) ? null : _editInfo,
+                              style: _plainOutline,
+                              child: Text(l10n.idCardEditInfo),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: OutlinedButton.icon(
+                            child: OutlinedButton(
                               key: const ValueKey('idCardEditPhoto'),
-                              onPressed: _busy ? null : _editPhoto,
-                              icon: const Icon(Icons.image_outlined, size: 18),
-                              label: Text(l10n.idCardEditPhoto),
-                              style: idCardOutlineButtonStyle(),
+                              onPressed: (_busy || _switching) ? null : _editPhoto,
+                              style: _plainOutline,
+                              child: Text(l10n.idCardEditPhoto),
                             ),
                           ),
                         ],
@@ -190,7 +317,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
                   key: const ValueKey('idCardCreateSubmit'),
                   // 提交中保持紫底 + 白色转圈（稿 C2），只禁点。
                   style: idCardPrimaryButtonStyle(busy: _busy),
-                  onPressed: (missingText != null || _busy) ? null : _create,
+                  onPressed: (missingText != null || _busy || _switching) ? null : _create,
                   child: _busy
                       ? const SizedBox(
                           width: 20,
@@ -209,6 +336,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   /// 修改信息（会话级）：按卡款字段集渲染的底部表单，确认后更新预览。**不落库**。
   Future<void> _editInfo() async {
     Analytics.capture('id_card_form_opened', {'card_type': _style.cardType});
+    final petAtOpen = _pet?.id;
     final result = await showModalBottomSheet<IdCardFormDraft>(
       context: context,
       isScrollControlled: true,
@@ -217,7 +345,9 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => _EditInfoSheet(style: _style, initial: _draft),
     );
-    if (result != null) {
+    // code review 4-2 #1：抽屉打开期间宠物已换（或换宠物还在取档案）→ 结果基于旧宠物草稿，丢弃，
+    // 否则会造出「For A」配 B 的名字 / 生日的混合卡。
+    if (result != null && mounted && _pet?.id == petAtOpen && !_switching) {
       setState(() {
         _draft = result;
         _prefilled = true; // 用户已确认的编辑优先：迟到的档案预填不得再覆盖
@@ -229,12 +359,14 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   Future<void> _editPhoto() async {
     final l10n = AppLocalizations.of(context);
     final useCase = ref.read(mediaUploadUseCaseProvider);
+    final petAtOpen = _pet?.id;
     setState(() => _busy = true);
     try {
       final bytes = await useCase.pickAndProcess(source: MediaSource.gallery, context: context);
       if (bytes == null) return; // 取消/权限拒
       final res = await useCase.uploadBytes(scope: MediaScope.public, bytes: bytes);
-      if (mounted) setState(() => _avatarUrl = res.publicUrl ?? res.objectKey);
+      // code review 4-2 #1：上传期间宠物已换 → 丢弃旧宠物这次换的照片。
+      if (mounted && _pet?.id == petAtOpen && !_switching) setState(() => _avatarUrl = res.publicUrl ?? res.objectKey);
     } catch (_) {
       if (mounted) _toast(l10n.idCardCreateError);
     } finally {
@@ -292,10 +424,96 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         IdCardDetailPage.locationFor(card.id, autoExport: result == IdCardHdFlowResult.unlocked));
   }
 
+  /// 稿 I2 / I3「Ubah info」「Ganti foto」：白底浅灰描边、深灰字、无图标（只用于本页；详情页仍用共享样式）。
+  static final ButtonStyle _plainOutline = OutlinedButton.styleFrom(
+    minimumSize: const Size.fromHeight(52),
+    backgroundColor: AppColors.card,
+    foregroundColor: AppColors.ink2,
+    side: const BorderSide(color: AppColors.line, width: 1.5),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+  );
+
   void _toast(String msg) {
     if (!mounted) return;
     // 页面有 48 高吸底主按钮（+12 间距）：浮动条抬到按钮之上
     ScaffoldMessenger.of(context).showSnackBar(idCardSnackBar(msg, bottom: 76));
+  }
+}
+
+/// KTP 建卡页宠物行（V1.4.0 multi-pet Story 4.2 · AC2 · UI 稿 I2 / I3）：圆形头像 +「Untuk {name}」+ 右侧「Ganti ›」。
+///
+/// [canChange] = 有 ≥ 2 只 ACTIVE 宠物：整行可点（热区 ≥ 44）打开换宠物抽屉；否则（I3，只 1 只）无「Ganti」、整行不可点。
+/// [onChange] 为 null（上传 / 创建 / 换宠物取档案中）→「Ganti」禁用。
+/// ⚠️ 宠物名只用于界面渲染，不进日志 / 埋点（§5）。
+class _KtpPetRow extends StatelessWidget {
+  const _KtpPetRow({required this.pet, required this.canChange, required this.onChange});
+
+  final PetListItem pet;
+  final bool canChange;
+  final VoidCallback? onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final hasAvatar = pet.avatarUrl != null && pet.avatarUrl!.isNotEmpty;
+    final enabled = canChange && onChange != null;
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: AppColors.border,
+              backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 96),
+              child: hasAvatar ? null : const Icon(Icons.pets, size: 16, color: AppColors.textTertiary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              // 稿 I2 / I3：「Untuk」常规灰字，只有宠物名加粗。
+              child: Text.rich(
+                  _nameBold(l10n.petPickerForName(pet.name), pet.name),
+                  key: const ValueKey('ktpPetRowName'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13.5, color: AppColors.ink2)),
+            ),
+            if (canChange) ...[
+              const SizedBox(width: 8),
+              Text(l10n.petPickerChange,
+                  key: const ValueKey('ktpPetRowChangeLabel'),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: enabled ? AppColors.mint : AppColors.muted)),
+              Icon(Icons.chevron_right_rounded, size: 18, color: enabled ? AppColors.mint : AppColors.muted),
+            ],
+          ],
+        ),
+      ),
+    );
+    // 稿 I2 / I3：无底无框的文字行（L2 还原度，原为白色描边卡）。
+    return Material(
+      key: const ValueKey('ktpPetRow'),
+      type: MaterialType.transparency,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: canChange
+          ? InkWell(key: const ValueKey('ktpPetRowChange'), onTap: onChange, child: content)
+          : content,
+    );
+  }
+
+  static TextSpan _nameBold(String full, String name) {
+    final i = full.indexOf(name);
+    if (i < 0 || name.isEmpty) return TextSpan(text: full);
+    return TextSpan(children: [
+      TextSpan(text: full.substring(0, i)),
+      TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+      TextSpan(text: full.substring(i + name.length)),
+    ]);
   }
 }
 

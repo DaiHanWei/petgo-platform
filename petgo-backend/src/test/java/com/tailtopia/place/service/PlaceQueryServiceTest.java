@@ -41,6 +41,8 @@ class PlaceQueryServiceTest {
     private PlaceQueryService service;
     private final com.tailtopia.place.service.PlaceCheckinService checkins =
             Mockito.mock(com.tailtopia.place.service.PlaceCheckinService.class);
+    private final com.tailtopia.collect.service.CollectStateQuery collectState =
+            Mockito.mock(com.tailtopia.collect.service.CollectStateQuery.class);
 
     @BeforeEach
     void setUp() {
@@ -67,7 +69,9 @@ class PlaceQueryServiceTest {
                 new com.tailtopia.place.service.PlacePhotoService(places, photos, null,
                         com.tailtopia.place.PlaceTestSupport.oss()),
                 // V1.3.2 Story 1.1：详情「今日已打卡」。
-                checkins);
+                checkins,
+                // V1.4.0 ④ Story 2.1：详情「是否已收藏」。
+                collectState);
     }
 
     /** 游客不查打卡表；登录用户按服务结果下发（V1.3.2 Story 1.1 AC3）。 */
@@ -75,11 +79,87 @@ class PlaceQueryServiceTest {
     void checkedInTodayOnlyForSignedInViewers() {
         Place p = place("kopi", JKT_LAT, JKT_LNG);
         when(places.resolveForView("kopi")).thenReturn(java.util.Optional.of(p));
-        when(checkins.checkedInToday(42L, p.getId())).thenReturn(true);
+        when(checkins.checkedInToday(42L, p.getId()))
+                .thenReturn(new CheckinTodayStatus(true, java.util.List.of(70L)));
 
         assertThat(service.detail("kopi", null, null, null).checkedInToday()).isNull();
         Mockito.verifyNoInteractions(checkins);
         assertThat(service.detail("kopi", null, null, 42L).checkedInToday()).isTrue();
+    }
+
+    /** V1.4.0 multi-pet Story 1.3 · AC4.1：checkedInToday = 全部宠物都已打；另下发已打的 petId；游客两键都为 null。 */
+    @Test
+    void checkedInPetIdsForSignedInViewersOnly() {
+        Place p = place("kopi", JKT_LAT, JKT_LNG);
+        when(places.resolveForView("kopi")).thenReturn(java.util.Optional.of(p));
+        when(checkins.checkedInToday(42L, p.getId()))
+                .thenReturn(new CheckinTodayStatus(false, java.util.List.of(70L)));
+
+        var guest = service.detail("kopi", null, null, null);
+        assertThat(guest.checkedInToday()).isNull();
+        assertThat(guest.checkedInPetIds()).isNull();
+        var me = service.detail("kopi", null, null, 42L);
+        assertThat(me.checkedInToday()).isFalse();
+        assertThat(me.checkedInPetIds()).containsExactly(70L);
+    }
+
+    /** V1.4.0 ④ Story 2.1 · AC6.4：登录用户按解析后的场所 id 查「是否已收藏」；游客 false、不查。 */
+    @Test
+    void collectedOnlyForSignedInViewersByResolvedId() {
+        Place p = place("kopi2", JKT_LAT, JKT_LNG);
+        when(places.resolveForView("kopi2")).thenReturn(java.util.Optional.of(p));
+        when(collectState.isPlaceCollected(42L, p.getId())).thenReturn(true);
+
+        assertThat(service.detail("kopi2", null, null, null).collected()).isFalse();
+        Mockito.verifyNoInteractions(collectState);
+        assertThat(service.detail("kopi2", null, null, 42L).collected()).isTrue();
+        Mockito.verify(collectState).isPlaceCollected(42L, p.getId());
+    }
+
+    // ===== V1.4.0 ④ Story 2.2：我的收藏场所卡片 =====
+
+    private static void setField(Place p, String field, Object value) {
+        try {
+            var f = Place.class.getDeclaredField(field);
+            f.setAccessible(true);
+            f.set(p, value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void collectedCardsVisibilityAndCoverOnlyForVisible() {
+        Place active = place("act", JKT_LAT, JKT_LNG);
+        Place delisted = place("del", JKT_LAT, JKT_LNG);
+        setField(delisted, "status", PlaceStatus.DELISTED);
+        Place soft = place("soft", JKT_LAT, JKT_LNG);
+        setField(soft, "deletedAt", java.time.Instant.now());
+        when(places.findAllById(any())).thenReturn(List.of(active, delisted, soft));
+        var photo = com.tailtopia.place.domain.PlacePhoto.contributed(active.getId(), 1L, "places/a.jpg", 0);
+        when(photos.findVisibleForPlaces(List.of(active.getId()))).thenReturn(List.of(photo));
+
+        var cards = service.collectedCards(List.of(active.getId(), delisted.getId(), soft.getId()));
+
+        assertThat(cards.get(active.getId()).visible()).isTrue();
+        assertThat(cards.get(active.getId()).coverUrl()).contains("x-oss-process=image/resize,w_320/format,jpg");
+        assertThat(cards.get(delisted.getId()).visible()).isFalse();
+        assertThat(cards.get(delisted.getId()).coverUrl()).isNull();
+        assertThat(cards.get(delisted.getId()).name()).isEqualTo("Tempat del");
+        assertThat(cards.get(soft.getId()).visible()).isFalse();
+        Mockito.verify(photos).findVisibleForPlaces(List.of(active.getId()));
+        Mockito.verify(places, Mockito.never()).resolveForView(Mockito.anyString());
+        Mockito.verify(places, Mockito.never()).findVisibleById(Mockito.any());
+    }
+
+    @Test
+    void collectedCardsSkipPhotoQueryWhenNoneVisible() {
+        Place delisted = place("del2", JKT_LAT, JKT_LNG);
+        setField(delisted, "status", PlaceStatus.DELISTED);
+        when(places.findAllById(any())).thenReturn(List.of(delisted));
+        service.collectedCards(List.of(delisted.getId()));
+        Mockito.verify(photos, Mockito.never()).findVisibleForPlaces(Mockito.anyList());
+        assertThat(service.collectedCards(List.of())).isEmpty();
     }
 
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */

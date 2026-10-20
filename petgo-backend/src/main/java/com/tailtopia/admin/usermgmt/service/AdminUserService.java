@@ -17,7 +17,7 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.profile.domain.PetProfile;
-import com.tailtopia.profile.service.ProfileService;
+import com.tailtopia.profile.service.PetResolver;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminUserService {
 
     private final AccountQueryService accountQuery;
-    private final ProfileService profileService;
+    private final PetResolver petResolver;
     private final ContentService contentService;
     private final ConsultHistoryService consultHistory;
     private final AuthService authService;
@@ -55,7 +55,7 @@ public class AdminUserService {
     /** 导出表头与状态文案随当前 locale（Story 8.1 走 AdminExportWriter 之后）。 */
     private final com.tailtopia.shared.i18n.Messages msg;
 
-    public AdminUserService(AccountQueryService accountQuery, ProfileService profileService,
+    public AdminUserService(AccountQueryService accountQuery, PetResolver petResolver,
             ContentService contentService, ConsultHistoryService consultHistory,
             AuthService authService, ConsultInterruptService consultInterrupt,
             AdminAuditService auditService, AccountDeletionService accountDeletionService,
@@ -63,7 +63,7 @@ public class AdminUserService {
             org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc,
             com.tailtopia.shared.i18n.Messages msg) {
         this.accountQuery = accountQuery;
-        this.profileService = profileService;
+        this.petResolver = petResolver;
         this.contentService = contentService;
         this.consultHistory = consultHistory;
         this.authService = authService;
@@ -395,10 +395,10 @@ public class AdminUserService {
         User u = accountQuery.findUserById(userId)
                 .orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
 
-        List<AdminUserDetailView.PetRow> pets = profileService.findByOwnerId(userId)
+        // V1.4.0 multi-pet（Story 1.2 · X29）：「宠物档案」块列账号全部宠物（按创建时间）。
+        List<AdminUserDetailView.PetRow> pets = petResolver.listOwned(userId).stream()
                 .map(AdminUserService::toPetRow)
-                .map(List::of)
-                .orElseGet(List::of);
+                .toList();
 
         boolean deleted = u.getDeletedAt() != null;
         // 已注销：显示名/邮箱取注销前快照列（仅后台展示）；未注销：昵称优先（同 toRow）。

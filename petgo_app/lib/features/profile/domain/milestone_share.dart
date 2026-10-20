@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics.dart';
+import '../data/current_pet_provider.dart';
 import '../data/milestone_repository.dart';
 import 'card_link.dart';
 import 'milestone.dart';
@@ -13,6 +14,8 @@ import 'share_service.dart';
 ///
 /// 后端建分享失败（网络 / 后端不可用）→ **退化为纯文案分享，不阻断用户**（沿用 signalCardShared 的静默风格）。
 /// 提交给后端的 [title]/[body] 取客户端已本地化的庆祝文案（与弹层显示一致），杜绝后端中文泄漏。
+///
+/// [petId]：这条里程碑所属宠物（多宠物打卡逐只庆祝时必须传，OCR #5）；不传 = 当前宠物（原口径）。
 Future<void> shareMilestoneWithLink(
   WidgetRef ref, {
   required MilestoneItem item,
@@ -20,6 +23,7 @@ Future<void> shareMilestoneWithLink(
   required String petName,
   required String shareText,
   List<MilestoneItem> collection = const [],
+  int? petId,
 }) async {
   var message = shareText;
   final lang = locale.languageCode == 'id' ? 'id' : 'en';
@@ -30,6 +34,8 @@ Future<void> shareMilestoneWithLink(
   final collectionCodes = unlocked.map((m) => m.code).toList();
   try {
     final copy = localizedMilestoneCelebration(item.code, locale, petName);
+    // V1.4.0 multi-pet（Story 1.5）：默认分享当前宠物的里程碑；调用方给了 petId（逐只庆祝）就按它。
+    final sharePetId = petId ?? await readRequestPetId(ref);
     final token = await ref.read(milestoneRepositoryProvider).createShare(
           item.code,
           title: copy.title,
@@ -37,6 +43,7 @@ Future<void> shareMilestoneWithLink(
           locale: lang,
           collectionLevels: collectionLevels,
           collectionCodes: collectionCodes,
+          petId: sharePetId,
         );
     message = '$shareText\n${milestoneShareUrl(token)}';
     Analytics.capture('milestone_share_created', {'code': item.code, 'level': item.level.name});

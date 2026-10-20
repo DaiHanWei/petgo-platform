@@ -11,7 +11,7 @@
 </head>
 <body>
 <!--/* D3「算法参数」独立页（2026-08-26 产品决定，原属 Story 16.4 的运营配置页一块）→ V1.3.0 Story 6.4 套模板 D（AD-11 / D-10）：
-     单卡「算法参数」14 项一行一项两栏排布（PRD 写 11 项，以代码 14 个输入为准），保存 = 确认弹层复述改前改后（6.3 同款三态）、校验错误行内；
+     单卡「算法参数」15 项一行一项两栏排布（PRD 写 11 项，以代码 15 个输入为准；V1.4.0 ① 加作者等级加权），保存 = 确认弹层复述改前改后（6.3 同款三态）、校验错误行内；
      页尾常驻变更表删除 → 页头「变更记录」按钮开抽屉（fragments/drawer-algo-changes.html，按参数 / 时间段筛选，每页 20）。
      🔴 从「运营配置」搬出来单独成页，是因为它是打分公式内部参数，改了之后没有任何机制能判定对错（无 A/B 实验基建）。
      🛡 权限独立（config.algo_param_view / _edit），不给运营，留给产品做校准；POST /admin/algo-params 与全部校验不变。 */-->
@@ -49,7 +49,7 @@
             <span th:text="${feedRank.p95RecomputedAt} != null ? ${@adminTime.wib(feedRank.p95RecomputedAt)} : #{admin.algo.p95Never}">-</span>
           </p>
 
-          <!-- AC2：14 项一行一项、两栏排布填满卡宽（.cfg-grid-2） -->
+          <!-- AC2：15 项一行一项、两栏排布填满卡宽（.cfg-grid-2） -->
           <div class="cfg-grid-2">
             <label class="field"><span th:text="#{admin.algo.freshnessWeight}">新鲜度权重（默认 0.6）</span>
               <input class="inp field-full" type="number" step="0.01" min="0" name="freshnessWeight" th:value="${feedRank.freshnessWeight}" th:disabled="${!canEdit}"/></label>
@@ -64,6 +64,9 @@
               <input class="inp field-full" type="number" step="0.05" min="0" max="1" name="shuffleStrength" th:value="${feedRank.shuffleStrength}" th:disabled="${!canEdit}"/></label>
             <label class="field"><span th:text="#{admin.algo.throttleFactor}">限流系数（0–1 两端不取，默认 0.2）</span>
               <input class="inp field-full" type="number" step="0.05" min="0.05" max="0.95" name="throttleFactor" th:value="${feedRank.throttleFactor}" th:disabled="${!canEdit}"/></label>
+            <!-- V1.4.0 ① Story 3.4（K1）：作者等级加权，1–2 两端可取（1 = 不加权），默认 1.05；Lv15 门槛写死在代码 -->
+            <label class="field"><span th:text="#{admin.algo.authorLevelBoost}">作者等级加权（Lv15 及以上作者，默认 1.05；1 = 不加权）</span>
+              <input class="inp field-full" type="number" step="0.01" min="1" max="2" name="authorLevelBoost" th:value="${feedRank.authorLevelBoost}" th:disabled="${!canEdit}"/></label>
             <label class="field"><span th:text="#{admin.algo.seenWindowDays}">曝光窗口（天，默认 7）</span>
               <input class="inp field-full" type="number" min="1" name="seenWindowDays" th:value="${feedRank.seenWindowDays}" th:disabled="${!canEdit}"/></label>
             <label class="field"><span th:text="#{admin.algo.windowSize}">配比窗口（条，默认 10）</span>
@@ -82,7 +85,7 @@
               <input class="inp field-full" type="number" min="0" name="speciesOtherQuota" th:value="${feedRank.speciesOtherQuota}" th:disabled="${!canEdit}"/></label>
             <label class="field"><span th:text="#{admin.algo.speciesGeneralQuota}">物种配比 · 通用（默认 2）</span>
               <input class="inp field-full" type="number" min="0" name="speciesGeneralQuota" th:value="${feedRank.speciesGeneralQuota}" th:disabled="${!canEdit}"/></label>
-            <!-- AC1：右栏底部「不对普通运营开放 / 生效范围」提醒（占右栏一格，紧跟 14 项之后） -->
+            <!-- AC1：右栏底部「不对普通运营开放 / 生效范围」提醒（占右栏一格，紧跟 15 项之后） -->
             <p class="hint cfg-grid-right" data-notice="algo-scope" th:utext="#{admin.v130.algo.scope}">🛡 不对普通运营开放；改这里无需发版，下一次刷新即生效。</p>
           </div>
           <p class="hint" data-notice="throttle-factor" th:utext="#{admin.algo.throttleNote}">🛡 限流系数是被限流内容在打分时乘的那个数。</p>

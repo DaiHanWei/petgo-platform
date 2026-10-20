@@ -1,3 +1,4 @@
+import '../../growth/domain/growth_popup_trigger.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -10,6 +11,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import '../../profile/domain/id_card.dart';
 import '../domain/keepsake_purchase_result.dart';
 
@@ -36,6 +38,16 @@ enum KeepsakeFlowOutcome {
 ///
 /// 🔴 错误按 `ProblemDetail.typeSlug` 分流，**不要**「409 一律当余额不足」：
 /// `keepsake-already-unlocked` 也是 409，把它说成余额不足会让已付款用户去充值。
+/// V1.4.0 multi-pet Story 2.4 · AC5.6：409 `pet-read-only`（当前宠物刚变只读）→ 统一弹 E1 拦截抽屉，不报支付失败。
+///
+/// [onQrAborted]（V1.4.0 multi-pet Story 2.4 · AC2.5，可选）：原样透传给 `showQrPaymentSheet(onAborted:)` ——
+/// 只在 [pollPaid] 抛 `QrPaymentAborted`（付款已不可能完成）时回调；**不传 = 行为与改动前一致**（现有 4 处调用不传）。
+///
+/// [onProblem]（V1.4.0 multi-pet Story 2.4 code review #3，可选）：发起失败带 ProblemDetail 时先交给调用方，
+/// 返回 true = 调用方已给出提示（本流程不再报通用失败文案）；不传 / 返回 false = 照旧分流。
+///
+/// [notify]（V1.4.0 L2 第四轮，可选）：失败 / 余额不足等提示交给调用方显示（名额页走顶部 Toast，
+/// 底部 SnackBar 会盖住吸底「Perpanjang」）。**不传 = 照旧底部 SnackBar**，其余调用方零影响。
 Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   required BuildContext context,
   required WidgetRef ref,
@@ -45,6 +57,9 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   required String purchasePurpose,
   required int? Function() cashPriceIdr,
   void Function(HdPayChannel channel)? onChannelConfirmed,
+  void Function(QrPaymentAborted abort)? onQrAborted,
+  bool Function(ProblemDetail problem)? onProblem,
+  void Function(String message)? notify,
 }) async {
   int balance = 0;
   try {
@@ -67,6 +82,10 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   onChannelConfirmed?.call(channel);
   final l10n = AppLocalizations.of(context);
   void toast(String msg) {
+    if (notify != null) {
+      notify(msg);
+      return;
+    }
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -76,6 +95,7 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
     if (res.unlocked) {
       // PawCoin 即时扣款：失效余额缓存，防他处读到旧余额（bug 20260806 同类）。
       ref.invalidate(pawCoinProvider);
+      growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
       return KeepsakeFlowOutcome.unlocked;
     }
     final payload = res.payload;
@@ -83,18 +103,24 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
       toast(l10n.idCardHdPurchaseError);
       return KeepsakeFlowOutcome.notCompleted;
     }
-    final paid = await showQrPaymentSheet(context, payload: payload, orderRef: res.paymentRef, pollPaid: pollPaid);
+    final paid = await showQrPaymentSheet(context,
+        payload: payload, orderRef: res.paymentRef, pollPaid: pollPaid, onAborted: onQrAborted);
     if (paid) {
       // 投放归因：QRIS 现金到账（PawCoin 当场成交走上面的 unlocked 分支，不计——钱在充值时已计）。
       Analytics.capturePurchase(amountIdr: cashPriceIdr(), purpose: purchasePurpose, orderRef: res.paymentRef);
+      growthPopupTrigger.afterAction(); // V1.4.0 ①：消费返成长值后可能升级
     }
     if (!paid || !context.mounted) return KeepsakeFlowOutcome.notCompleted;
     ref.invalidate(pawCoinProvider);
     return KeepsakeFlowOutcome.unlocked;
   } on DioException catch (e) {
-    switch (ProblemDetail.fromDioException(e)?.typeSlug) {
+    final pd = ProblemDetail.fromDioException(e);
+    if (pd != null && onProblem != null && onProblem(pd)) return KeepsakeFlowOutcome.notCompleted;
+    switch (pd?.typeSlug) {
       case 'keepsake-already-unlocked':
         return KeepsakeFlowOutcome.alreadyUnlocked;
+      case 'pet-read-only':
+        if (context.mounted) handlePetReadOnly(context, ref, pd!);
       case 'pawcoin-insufficient':
         toast(l10n.idCardHdInsufficientBalance);
       default:

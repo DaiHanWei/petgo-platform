@@ -115,6 +115,42 @@ class ConsultCloseServiceTest {
         verify(events, never()).publishEvent(any());
     }
 
+    /** V1.4.0 multi-pet Story 1.3 · AC6：事件 petId = 本会话订单上的宠物。 */
+    @Test
+    void closedEventCarriesTheOrdersPet() {
+        ConsultSession s = inProgress(11L, 3L);
+        s.endByVet();
+        when(sessions.findById(11L)).thenReturn(Optional.of(s));
+        when(ratings.existsBySessionId(11L)).thenReturn(false);
+        com.tailtopia.consult.domain.ConsultOrder order =
+                org.mockito.Mockito.mock(com.tailtopia.consult.domain.ConsultOrder.class);
+        when(order.getPetProfileId()).thenReturn(55L);
+        when(orders.findFirstByConsultSessionIdOrderByIdDesc(11L)).thenReturn(Optional.of(order));
+
+        service().submitRating(7L, 11L, 5, null);
+
+        org.mockito.ArgumentCaptor<ConsultClosedEvent> ev = org.mockito.ArgumentCaptor.forClass(ConsultClosedEvent.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue().petId()).isEqualTo(55L);
+        assertThat(ev.getValue().userId()).isEqualTo(7L);
+    }
+
+    /** 无订单的旧会话（V1.0 免费直连）→ petId 仍为 null（profile 侧回落默认宠物）。 */
+    @Test
+    void closedEventWithoutOrderHasNullPet() {
+        ConsultSession s = inProgress(11L, 3L);
+        s.endByVet();
+        when(sessions.findById(11L)).thenReturn(Optional.of(s));
+        when(ratings.existsBySessionId(11L)).thenReturn(false);
+        when(orders.findFirstByConsultSessionIdOrderByIdDesc(11L)).thenReturn(Optional.empty());
+
+        service().submitRating(7L, 11L, 5, null);
+
+        org.mockito.ArgumentCaptor<ConsultClosedEvent> ev = org.mockito.ArgumentCaptor.forClass(ConsultClosedEvent.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue().petId()).isNull();
+    }
+
     @Test
     void closeExpiredGatesClosesUnratedAndMarksPromptPending() {
         ConsultSession s = inProgress(11L, 3L);

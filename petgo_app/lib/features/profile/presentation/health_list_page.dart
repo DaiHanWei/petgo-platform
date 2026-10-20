@@ -13,6 +13,7 @@ import '../../../core/theme/colors.dart';
 import '../../../shared/boundary/triage_category_jump.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../data/current_pet_provider.dart';
 import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
 import '../data/timeline_repository.dart';
@@ -24,6 +25,9 @@ import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
 import '../data/milestone_celebration_reporter.dart';
 import 'widgets/milestone_celebration.dart';
+import '../data/pet_list_repository.dart';
+import '../../../core/network/problem_detail.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 
 /// 健康记录列表页 `p-health-list`（Story 7.2 · FR-45B/45C · UX-DR10）。结构化记录（可编辑）+ 问诊存档
 /// （🏥 只读）混排，`editable` 区分可点。新增/编辑结构化记录；创建 VACCINE/DEWORM 联动里程碑第四路径。
@@ -128,12 +132,24 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final l10n = AppLocalizations.of(context);
-    final async = ref.watch(healthListProvider);
+    // V1.4.0 multi-pet（Story 1.5）：健康记录按当前宠物（family 键 petId）。
+    final petAsync = watchEffectivePetId(ref);
+    final petId = petAsync.value;
+    final async = petId == null ? null : ref.watch(healthListProvider(petId));
+    // V1.4.0 multi-pet Story 2.4 · AC5.8（E3）：多宠时标题带宠物名；当前宠物只读时「+」/「Tambah catatan」带锁、点了弹 E1。
+    final pets = ref.watch(petListProvider).value ?? const <PetListItem>[];
+    PetListItem? currentPet;
+    for (final p in pets) {
+      if (p.id == petId) currentPet = p;
+    }
+    final readOnly = currentPet?.isReadOnly ?? false;
     return Scaffold(
       backgroundColor: AppColors.cream2,
       // 0711：AppBar 右上「+」入口（与底部整宽按钮双入口，取代原 FAB）。
       appBar: AppBar(
-        title: Text(l10n.healthListTitle),
+        title: Text(pets.length > 1 && currentPet != null
+            ? l10n.petSlotHealthTitleNamed(currentPet.name)
+            : l10n.healthListTitle),
         actions: [
           // 🔴 DEP-1 闭合（2026-08-21）：Health 让出底栏 Tab 位给 Toko 后，
           //    「发起问诊」失去全部界面入口——本页此前只**展示**问诊存档（_HealthCat CONSULT），
@@ -147,13 +163,20 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
           ),
           IconButton(
             key: const ValueKey('healthAddTop'),
-            icon: const Icon(Icons.add, color: AppColors.ink),
+            icon: readOnly
+                ? const _LockedIcon(icon: Icons.add, key: ValueKey('healthAddTopLocked'))
+                : const Icon(Icons.add, color: AppColors.ink),
             onPressed: () => _openForm(context, ref),
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: async.when(
+      body: async == null
+          // 当前宠物还没定下来 / 取不到 / 没有宠物（与后端 404「尚未创建宠物档案」同一空态）。
+          ? (petAsync.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _empty(petAsync.hasError ? l10n.healthLoadError : l10n.healthNoProfile))
+          : async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
           if (e is DioException && e.response?.statusCode == 404) {
@@ -163,7 +186,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
         },
         data: (items) {
           _handleFocusOnce(items);
-          return _dataView(context, ref, l10n, items);
+          return _dataView(context, ref, l10n, items, readOnly: readOnly);
         },
       ),
     );
@@ -174,8 +197,9 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
-    List<HealthListItem> items,
-  ) {
+    List<HealthListItem> items, {
+    bool readOnly = false,
+  }) {
     return Column(
       children: [
         Expanded(
@@ -214,7 +238,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
             ],
           ),
         ),
-        _bottomAddBar(context, ref, l10n),
+        _bottomAddBar(context, ref, l10n, readOnly: readOnly),
       ],
     );
   }
@@ -233,6 +257,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
   );
 
   /// 6 类分类卡网格（app 六 type 一一对应；最近日期前端按 items 聚合，无则「Belum ada」）。
+  /// V1.4.0 multi-pet Story 2.4：UI 稿 E3 的「{n} catatan」条数口径**未采用**（单宠用户不得有变化，code review #5，待确认）。
   Widget _categoryGrid(
     BuildContext context,
     WidgetRef ref,
@@ -331,7 +356,8 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     return latest;
   }
 
-  Widget _bottomAddBar(BuildContext context, WidgetRef ref, AppLocalizations l10n) => SafeArea(
+  Widget _bottomAddBar(BuildContext context, WidgetRef ref, AppLocalizations l10n,
+          {bool readOnly = false}) => SafeArea(
     top: false,
     child: Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -341,7 +367,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
         child: FilledButton.icon(
           key: const ValueKey('healthAddBottom'),
           onPressed: () => _openForm(context, ref),
-          icon: const Icon(Icons.add),
+          icon: Icon(readOnly ? Icons.lock_outline : Icons.add),
           label: Text(l10n.healthAddTitle),
         ),
       ),
@@ -555,6 +581,9 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     HealthListItem? existing,
     String? presetType,
   }) async {
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 新增前端先拦（不发请求），弹 E1。
+    // 打开**已有**记录不拦（AD-8：查看永不受限，code review #4）——拦在表单的保存 / 删除上。
+    if (existing == null && !guardPetWritable(context, ref)) return;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -571,6 +600,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       // 日历仍是旧快照（口径同 pet_profile_edit_page._deleteProfile 的失效链）。
       ref.invalidate(timelineFirstPageProvider);
       ref.invalidate(archiveStatsProvider);
+      ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       ref.invalidate(calendarMonthProvider);
       ref.invalidate(dayDetailProvider);
     }
@@ -595,6 +625,9 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   late final TextEditingController _note;
   bool _busy = false;
 
+  /// 本次保存落到的宠物（V1.4.0 multi-pet）；里程碑庆祝检测按它取列表。
+  int? _petId;
+
   @override
   void initState() {
     super.initState();
@@ -616,6 +649,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
+    // V1.4.0 multi-pet Story 2.4（code review #4）：只读宠物的已有记录可看，保存时才弹 E1。
+    if (!guardPetWritable(context, ref)) return;
     final name = _name.text.trim();
     if (_type == 'CUSTOM' && name.isEmpty) {
       ScaffoldMessenger.of(
@@ -633,8 +668,11 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
     );
     try {
       final repo = ref.read(healthRecordRepositoryProvider);
+      // V1.4.0 multi-pet（Story 1.5）：记录落到当前宠物（列表取不到 → null = 后端默认宠物）。
+      final petId = await readRequestPetId(ref);
+      _petId = petId;
       if (widget.existing != null) {
-        await repo.update(widget.existing!.id, draft);
+        await repo.update(widget.existing!.id, draft, petId: petId);
         if (!mounted) return;
         Navigator.of(context).pop(true);
         return;
@@ -643,9 +681,13 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       // 弱网/测试环境挂起时放弃庆祝检测，不拖慢保存主流程）。
       MilestoneList? before;
       try {
-        before = await ref.read(milestoneListProvider.future).timeout(const Duration(seconds: 2));
+        if (petId != null) {
+          before = await ref
+              .read(milestoneListProvider(petId).future)
+              .timeout(const Duration(seconds: 2));
+        }
       } catch (_) {}
-      await repo.create(draft);
+      await repo.create(draft, petId: petId);
       // bug 20260729-405：解锁瞬间自动弹庆祝层（此前只有 SnackBar 提示，用户需自己去里程碑页才看到）。
       final unlocked = await _pollNewlyUnlocked(before);
       if (!mounted) return;
@@ -658,9 +700,12 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       // 每存一次都弹一次，带奖杯的措辞让人误以为又解锁了一个节点。真解锁走上面的庆祝层，
       // 这里静默即可（表单关闭 + 列表新增一条已是足够反馈）。**别再加回"顺带提一句"的提示。**
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
+        // V1.4.0 multi-pet Story 2.4 · AC5.6：后端兜底 409 `pet-read-only` → 统一弹 E1，不报保存失败。
+        final pd = e is DioException ? ProblemDetail.fromDioException(e) : null;
+        if (pd != null && handlePetReadOnly(context, ref, pd)) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.healthSaveError)));
       }
     }
@@ -672,7 +717,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   /// 尚未落库，须延时重拉。仅当存在解锁候选才轮询（否则每次保存都白等 ~2.5s）；
   /// [before] 拉取失败（null）时无法可靠 diff，宁可不弹也不误弹旧里程碑。
   Future<MilestoneItem?> _pollNewlyUnlocked(MilestoneList? before) async {
-    if (before == null || !_mayUnlockMilestone(before)) return null;
+    final petId = _petId;
+    if (petId == null || before == null || !_mayUnlockMilestone(before)) return null;
     final beforeCodes = <String>{
       for (final g in before.groups)
         for (final it in g.items)
@@ -683,7 +729,7 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       ref.invalidate(milestoneListProvider);
       try {
         final now = await ref
-            .read(milestoneListProvider.future)
+            .read(milestoneListProvider(petId).future)
             .timeout(const Duration(seconds: 2));
         // Story 5.2 · AC3：一次保存可能同时点亮多条（如首针疫苗 → M3 + 聚合「Lulus Pemula」）。
         // 收集**全部**新解锁，取**级别最高**的一条去庆祝（只弹一次），其余由弹层底部的
@@ -709,7 +755,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   Future<void> _celebrate(MilestoneItem done) async {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
-    final listData = ref.read(milestoneListProvider).asData?.value;
+    final petId = _petId;
+    final listData = petId == null ? null : ref.read(milestoneListProvider(petId)).asData?.value;
     final petName = listData?.petName ?? '';
     final collection = listData == null
         ? const <MilestoneItem>[]
@@ -738,9 +785,11 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
   }
 
   Future<void> _delete() async {
+    if (!guardPetWritable(context, ref)) return;
     setState(() => _busy = true);
     try {
-      await ref.read(healthRecordRepositoryProvider).delete(widget.existing!.id);
+      final petId = await readRequestPetId(ref);
+      await ref.read(healthRecordRepositoryProvider).delete(widget.existing!.id, petId: petId);
       if (mounted) Navigator.of(context).pop(true);
     } catch (_) {
       if (mounted) {
@@ -906,4 +955,28 @@ bool mayUnlockHealthMilestone(String type, MilestoneList list) {
   final sPrereqsDone = ['S1', 'S2', 'S3', 'S4', 'S5'].every(completed);
   final lulus = sPrereqsDone && (uncompleted('S16') || uncompleted('S9'));
   return direct || lulus;
+}
+
+/// 「带锁」的图标（E3：只读时右上「+」叠一个小锁）。
+class _LockedIcon extends StatelessWidget {
+  const _LockedIcon({super.key, required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 26,
+        height: 26,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(child: Icon(icon, color: AppColors.muted)),
+            const Positioned(
+              right: -2,
+              bottom: -2,
+              child: Icon(Icons.lock, size: 12, color: AppColors.ink2),
+            ),
+          ],
+        ),
+      );
 }

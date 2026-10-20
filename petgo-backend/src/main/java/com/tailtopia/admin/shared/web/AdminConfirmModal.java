@@ -36,7 +36,16 @@ import java.util.Map;
 public record AdminConfirmModal(String title, String danger, List<DiffLine> diffs, String note,
         String typedPromptHtml, String typedName, String typedExpected,
         String actionPath, Map<String, String> hidden, String confirmLabel, boolean dangerButton,
-        boolean warnBanner) {
+        boolean warnBanner, List<Fact> facts) {
+
+    /** 12 参（V1.3.4 黄色警示条），无 facts。 */
+    public AdminConfirmModal(String title, String danger, List<DiffLine> diffs, String note,
+            String typedPromptHtml, String typedName, String typedExpected,
+            String actionPath, Map<String, String> hidden, String confirmLabel, boolean dangerButton,
+            boolean warnBanner) {
+        this(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath, hidden,
+                confirmLabel, dangerButton, warnBanner, List.of());
+    }
 
     /** 红色警示条（G3 / G4 / H8–H10 的既有形态）。 */
     public AdminConfirmModal(String title, String danger, List<DiffLine> diffs, String note,
@@ -50,8 +59,15 @@ public record AdminConfirmModal(String title, String danger, List<DiffLine> diff
     public record DiffLine(String label, String oldValue, String newValue) {
     }
 
+    /**
+     * 一行「标签：值」（V1.4.0 ① Story 4.1，如 G6「升级 N 人」）；渲染在 diffs 上方。4.2 / 4.3 复用。
+     */
+    public record Fact(String label, String value) {
+    }
+
     public AdminConfirmModal {
         diffs = diffs == null ? List.of() : List.copyOf(diffs);
+        facts = facts == null ? List.of() : List.copyOf(facts);
         hidden = hidden == null ? Map.of() : java.util.Collections.unmodifiableMap(new LinkedHashMap<>(hidden));
         if (typedPromptHtml != null && (typedName == null || typedExpected == null)) {
             throw new IllegalArgumentException("输入确认须同时给出 typedName 与 typedExpected");

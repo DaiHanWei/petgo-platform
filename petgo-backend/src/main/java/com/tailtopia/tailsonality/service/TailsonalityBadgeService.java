@@ -31,22 +31,23 @@ public class TailsonalityBadgeService {
     /** 非本人 / 不存在 → 404（同 {@code GET …/results/{token}} 口径）；未解锁 → 422 {@code tailsonality-badge-locked}。 */
     @Transactional
     public void equip(long userId, String resultToken) {
-        OwnedPetRef pet = requirePet(userId);
-        TailsonalityResult r = results.findByPublicTokenAndPetProfileId(resultToken, pet.petId())
+        // V1.4.0 multi-pet（Story 1.2 · X14，token 寻址）：由结果行反查宠物 + 归属校验，佩戴到该宠物。
+        TailsonalityResult r = results.findByPublicToken(resultToken)
+                .filter(x -> x.getPetProfileId() != null && pets.ownsPet(userId, x.getPetProfileId()))
                 .orElseThrow(() -> AppException.notFound("结果不存在"));
         if (r.getUnlockedAt() == null) {
             throw AppException.tailsonalityBadgeLocked("结果未解锁，不能佩戴");
         }
-        badges.upsert(pet.petId(), r.getId());
+        badges.upsert(r.getPetProfileId(), r.getId());
     }
 
-    /** 卸下：幂等，无佩戴也成功。 */
+    /** 卸下：幂等，无佩戴也成功。V1.4.0 multi-pet：指定宠物（null = 默认宠物）。 */
     @Transactional
-    public void unequip(long userId) {
-        badges.deleteByPetProfileId(requirePet(userId).petId());
+    public void unequip(long userId, Long petId) {
+        badges.deleteByPetProfileId(requirePet(userId, petId).petId());
     }
 
-    private OwnedPetRef requirePet(long userId) {
-        return pets.findOwnedPet(userId).orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    private OwnedPetRef requirePet(long userId, Long petId) {
+        return pets.findOwnedPet(userId, petId).orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
     }
 }

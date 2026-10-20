@@ -28,6 +28,7 @@
 + POST /admin/warm-replies/{id:\d+}/read   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
 + POST /admin/warm-replies/{id:\d+}/reply   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
 + POST /admin/shop/orders/{token}/flag-shortage   # 异常订单判据改为运营手工标记缺货（库存不变式 locked<=actual 下账面缺货不可能出现，2026-09-18 拍板）
++ POST /admin/users/{userId}/pet-slots/grant   # V1.4.0 ② multi-pet Story 4.3（AB-34.2 运营补发宠物名额，user.pet_slot_adjust）
 
 # ===== 允许新增 · GET（抽屉片段 / 模板 A 工作台片段 / 本版新页面）=====
 + GET /admin/accounts/new/drawer   # Story 6.5（B24 后台账号抽屉 / 创建账号）

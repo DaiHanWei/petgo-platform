@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../auth/domain/user_tag.dart';
+import '../../growth/domain/growth_badge.dart';
 import '../../social/domain/follow_state.dart';
 
 /// 用户公开主页投影（对应后端 `PublicProfileResponse`）。
@@ -23,6 +24,7 @@ class PublicProfile {
     required this.self,
     this.nickname,
     this.avatarUrl,
+    this.badge,
     this.signature,
     this.joinedAt,
     this.reported = false,
@@ -56,6 +58,9 @@ class PublicProfile {
 
   final String? nickname;
   final String? avatarUrl;
+
+  /// 等级角标 + 头像框（V1.4.0 ① Story 3.2）；注销 / 停用 / 字段缺失为 null（不显示）。
+  final GrowthBadge? badge;
 
   /// 个性签名（既有字段，直接复用）。未设置 / 已注销 → null。
   final String? signature;
@@ -104,6 +109,7 @@ class PublicProfile {
         self: self,
         nickname: nickname,
         avatarUrl: avatarUrl,
+        badge: badge,
         signature: signature,
         joinedAt: joinedAt,
         reported: reported,
@@ -127,6 +133,7 @@ class PublicProfile {
         self: (json['self'] ?? false) as bool,
         nickname: json['nickname'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
+        badge: GrowthBadge.fromFlat(json, prefix: ''),
         signature: json['signature'] as String?,
         // 后端是 UTC Instant（ISO-8601 带 Z）；展示前各页自己 toLocal()。
         joinedAt: DateTime.tryParse((json['joinedAt'] ?? '') as String? ?? ''),

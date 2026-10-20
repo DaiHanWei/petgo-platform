@@ -30,6 +30,8 @@ public final class AdminPermissions {
     public static final String USER_DELETE = "user.delete";
     /** 后台赠送 PawCoin（bug 20260728-389：运营向指定账户入账 BONUS）。 */
     public static final String USER_GRANT_PAWCOIN = "user.grant_pawcoin";
+    /** V1.4.0 ② AB-34：运营补发宠物名额（Story 4.3 · AD-15；预授 OPS_MANAGER，见 {@link AdminRole}）。 */
+    public static final String USER_PET_SLOT_ADJUST = "user.pet_slot_adjust";
     /**
      * 用户标签管理（V1.1.6 Story 11.3 · AB-12A）。查看 / 编辑分两码。
      * ⚠️ 编辑权限**不要下放得比其它模块更宽** —— 该页的分配支持批量，
@@ -202,6 +204,28 @@ public final class AdminPermissions {
     public static final String CONFIG_ALGO_PARAM_EDIT = "config.algo_param_edit";
 
     /**
+     * 查看「成长体系」配置页（V1.4.0 ① AB-32 · Story 4.1：成长值规则 / 消费换算 / 等级表）。
+     *
+     * <p>不预授任何预置角色（超管隐式拥有）。
+     */
+    public static final String GROWTH_CONFIG_VIEW = "growth.config_view";
+
+    /**
+     * 改「成长体系」配置（V1.4.0 ① AB-32 · Story 4.1）。改等级表会触发全量等级重算；每次修改写操作审计。
+     *
+     * <p>不预授任何预置角色（超管隐式拥有）。
+     */
+    public static final String GROWTH_CONFIG_EDIT = "growth.config_edit";
+
+    /**
+     * 调整单个用户的 EXP（V1.4.0 ① AB-33 · Story 4.2：用户抽屉「成长值」页签的普通调整 / 运营活动发放）。
+     * 入账走 {@code GrowthLedgerService.adjust}（幂等键 {@code ADMIN:{token}}），每次写操作审计。
+     *
+     * <p>⚠️ 按 PRD P-5 <b>预授 {@code OPS_MANAGER}</b>（见 {@code AdminRole}），偏离「新码不预授」惯例；四个表驱动岗位不授。
+     */
+    public static final String GROWTH_USER_ADJUST = "growth.user_adjust";
+
+    /**
      * 查看分享奖励配置与当月消耗（V1.1.6 Story 18.3 · AC5）。
      *
      * <p>🛡 与 {@link #CONFIG_VIEW} 分开：分享奖励是增长侧的数，
@@ -235,6 +259,18 @@ public final class AdminPermissions {
     public static final String OPS_NOTIFY_VIEW = "ops_notify.view";
     /** 新建 / 取消系统通知发送（AB-31；发送与查看分权，一次可触达全量用户）。 */
     public static final String OPS_NOTIFY_SEND = "ops_notify.send";
+
+    // V1.4.0 ③ AB-35，不预授 —— 礼物目录（G_CONFIG，照用户标签页）。超管隐式拥有，需要时在角色页勾选。
+    /** 查看礼物目录页（列表 / 抽屉 / QRIS 最低金额当前值）。 */
+    public static final String GIFT_CATALOG_VIEW = "gift.catalog_view";
+    /** 编辑礼物目录：新建 / 编辑 / 上下线礼物、改送礼 QRIS 最低金额（写审计）。 */
+    public static final String GIFT_CATALOG_EDIT = "gift.catalog_edit";
+    // V1.4.0 ③ AB-36，不预授 —— 送礼记录（G_ORDERS，照支付记录页）。超管隐式拥有，需要时在角色页勾选。
+    /**
+     * 查看送礼记录：全站列表 / 「已付款未送达」异常单 / 按当前筛选导出 xlsx（导出写审计）。只读，后台不改单。
+     * PRD 只定义这一个码，导出不另设码（Story 3.2「待确认」1）。
+     */
+    public static final String GIFT_ORDER_VIEW = "gift.order_view";
 
     // 兽医分成月结对账（V1.1 Epic 9，Story 9-5）
     /** 月结对账查看。 */
@@ -328,12 +364,12 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
                     SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW,
-                    OPS_NOTIFY_VIEW)),
+                    OPS_NOTIFY_VIEW, GROWTH_CONFIG_VIEW, GIFT_CATALOG_VIEW, GIFT_ORDER_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
                     CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
-                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_TAG_MANAGE,
+                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST, USER_TAG_MANAGE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
@@ -343,7 +379,8 @@ public final class AdminPermissions {
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
                     SHOP_ORDER_FULFILL,
                     PLACE_MANAGE, COMMENT_VIRTUAL_POST,
-                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND)));
+                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND, GROWTH_CONFIG_EDIT,
+                    GROWTH_USER_ADJUST, GIFT_CATALOG_EDIT)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。

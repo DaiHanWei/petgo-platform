@@ -7,6 +7,8 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../l10n/app_localizations.dart';
+import '../data/current_pet_provider.dart';
+import '../data/pet_list_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
@@ -36,13 +38,38 @@ class DayDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final dayKey = DateTime(date.year, date.month, date.day);
-    final async = ref.watch(dayDetailProviderFor(_scope, dayKey));
+    // V1.4.0 multi-pet（Story 1.5）：作者态按当前宠物取（family 键 petId）；访客态不用它。
+    final AsyncValue<int?> petAsync =
+        token == null ? watchEffectivePetId(ref) : const AsyncData<int?>(0);
+    final appBar = AppBar(title: Text(_title), backgroundColor: AppColors.cream);
+    if (!petAsync.hasValue) {
+      return Scaffold(
+        backgroundColor: AppColors.cream,
+        appBar: appBar,
+        body: petAsync.hasError
+            ? _DayError(onRetry: () => ref.invalidate(petListProvider))
+            : const Center(child: CircularProgressIndicator()),
+      );
+    }
+    final ownerPetId = petAsync.value;
+    if (ownerPetId == null) {
+      // 没有宠物（删光了）却停在某天详情：按空日处理。
+      return Scaffold(
+        backgroundColor: AppColors.cream,
+        appBar: appBar,
+        body: Center(
+            child: Text(l10n.growthDayDetailEmpty,
+                style: const TextStyle(color: AppColors.textTertiary))),
+      );
+    }
+    final async = ref.watch(dayDetailProviderFor(_scope, ownerPetId, dayKey));
     return Scaffold(
       backgroundColor: AppColors.cream,
-      appBar: AppBar(title: Text(_title), backgroundColor: AppColors.cream),
+      appBar: appBar,
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _DayError(onRetry: () => ref.invalidate(dayDetailProviderFor(_scope, dayKey))),
+        error: (e, _) => _DayError(
+            onRetry: () => ref.invalidate(dayDetailProviderFor(_scope, ownerPetId, dayKey))),
         data: (detail) {
           if (detail.items.isEmpty) {
             return Center(

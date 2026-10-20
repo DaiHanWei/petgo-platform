@@ -1,7 +1,6 @@
 package com.tailtopia.share.service;
 
 import com.tailtopia.config.service.PlatformConfigService;
-import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.share.domain.IdCardShareReward;
@@ -124,11 +123,15 @@ public class IdCardShareRewardService {
      * <p>⚠️ 只应在 App 侧拿到系统分享面板 {@code ShareResultStatus.success} 之后调用（AC5）。
      * 用户取消面板 ⇒ App 不调本接口 ⇒ 不发币。这一层<b>不做也无法做</b>那个判断。
      *
+     * <p>V1.4.0 multi-pet（Story 1.2 · X16，P-3）：奖励归属按请求的宠物（{@code id_cards} 不挂宠物），
+     * 每只宠物各一次；账号级月度上限沿用 {@link ShareRewardService}。
+     *
+     * @param petId 控制器经 {@code PetResolver.resolveOptional} 解析出的宠物 id；null = 无档案 ⇒ 0
      * @return 真的发了多少枚；{@code 0} = 没发（任一层拦下）
      */
-    public long rewardAfterShare(long userId, long cardId, Instant at) {
+    public long rewardAfterShare(long userId, long cardId, Long petId, Instant at) {
         try {
-            return tx.execute(status -> attempt(userId, cardId, at));
+            return tx.execute(status -> attempt(userId, cardId, petId, at));
         } catch (AlreadyRewarded | NotGranted expected) {
             // 两个**正常分支**：档案已拿过 / 被上限或总开关拦下。都只是"没发"，不是故障。
             return 0;
@@ -161,7 +164,11 @@ public class IdCardShareRewardService {
      * 所以文案必须写「首次分享」。写成「每次分享」在第二次分享时就是假话，
      * 而用户不会去读我们的规则，只会觉得被骗了一次。
      */
-    public long advertisableCoins(long userId) {
+    /**
+     * @param petId V1.4.0 multi-pet（Story 1.2 · X15）：控制器经 {@code PetResolver.resolveOptional} 解析的宠物；
+     *     empty = 无档案 ⇒ 0
+     */
+    public long advertisableCoins(long userId, Optional<Long> petId) {
         try {
             var cfg = platformConfig.pawcoin();
             if (!cfg.isShareRewardEnabled()
@@ -172,11 +179,10 @@ public class IdCardShareRewardService {
                     || cfg.getShareRewardMonthlyCap() < cfg.getIdCardShareReward()) {
                 return 0; // 没配好 —— 一个字都不要提
             }
-            Optional<PetProfile> profile = profiles.findByOwnerId(userId);
-            if (profile.isEmpty()) {
+            if (petId == null || petId.isEmpty()) {
                 return 0; // AC4：无档案本来就不发，别承诺
             }
-            if (rewards.findByPetProfileId(profile.get().getId()).isPresent()) {
+            if (rewards.findByPetProfileId(petId.get()).isPresent()) {
                 return 0; // 这只宠物已经领过（一次性），再提就是假话
             }
             return cfg.getIdCardShareReward();
@@ -194,17 +200,17 @@ public class IdCardShareRewardService {
      * <p>⚠️ 独立事务而不是复用外层：撞唯一键会让事务进入 rollback-only，
      * 若与分享链路共用事务，「已发过」这个**正常分支**会连带把外层一起弄脏。
      */
-    long attempt(long userId, long cardId, Instant at) {
+    long attempt(long userId, long cardId, Long petId, Instant at) {
         // ① 卡必须属于本人 —— 否则可以拿别人的卡 id 来刷。
         if (cards.findByIdAndUserId(cardId, userId).isEmpty()) {
             return 0;
         }
-        // ② 🛡 AC4：没有宠物档案 ⇒ 不发（无档案的卡可无限造）。
-        Optional<PetProfile> profile = profiles.findByOwnerId(userId);
-        if (profile.isEmpty()) {
+        // ② 🛡 AC4：没有宠物档案 ⇒ 不发（无档案的卡可无限造）。V1.4.0 multi-pet：按请求宠物，
+        //    归属已由控制器校验，这里再按 id + owner 兜一次（不属于本人 ⇒ 不发）。
+        if (petId == null || !profiles.existsByIdAndOwnerId(petId, userId)) {
             return 0;
         }
-        long profileId = profile.get().getId();
+        long profileId = petId;
 
         // ③ 第一层：档案首次。已发过直接返回（省掉后面两层的写事务）。
         if (rewards.findByPetProfileId(profileId).isPresent()) {

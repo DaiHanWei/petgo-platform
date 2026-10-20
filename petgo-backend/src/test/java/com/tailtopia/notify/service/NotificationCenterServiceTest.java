@@ -27,6 +27,8 @@ import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.notify.port.NotificationGiftLines;
+import com.tailtopia.notify.port.NotificationPetNames;
 import com.tailtopia.ops.target.OpsTargetType;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.paging.KeysetCursor;
@@ -52,6 +54,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -88,6 +92,28 @@ class NotificationCenterServiceTest {
     @Mock
     OpsNotificationCampaignRepository campaigns;
 
+    /** 收礼宠物名端口（V1.4.0 gift Story 1.2）；null = 缺 bean（切片测试场景）。 */
+    NotificationPetNames petNamesPort;
+
+    private ObjectProvider<NotificationPetNames> petNamesProvider() {
+        StaticListableBeanFactory bf = new StaticListableBeanFactory();
+        if (petNamesPort != null) {
+            bf.addBean("notificationPetNames", petNamesPort);
+        }
+        return bf.getBeanProvider(NotificationPetNames.class);
+    }
+
+    /** 收礼单人条目「送的是什么」端口（V1.4.0 gift L2 第二轮）；null = 缺 bean。 */
+    NotificationGiftLines giftLinesPort;
+
+    private ObjectProvider<NotificationGiftLines> giftLinesProvider() {
+        StaticListableBeanFactory bf = new StaticListableBeanFactory();
+        if (giftLinesPort != null) {
+            bf.addBean("notificationGiftLines", giftLinesPort);
+        }
+        return bf.getBeanProvider(NotificationGiftLines.class);
+    }
+
     private NotificationCenterService service() {
         ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
         source.setBasename("classpath:i18n/messages");
@@ -95,7 +121,8 @@ class NotificationCenterServiceTest {
         source.setFallbackToSystemLocale(false);
         InteractionCopyRenderer copy = new InteractionCopyRenderer(accounts, hideRelations, source);
         InteractionActorResolver resolver = new InteractionActorResolver(repo, actorRepo, accounts, hideRelations);
-        return new NotificationCenterService(repo, redis, resolver, accounts, comments, followReader, copy, campaigns);
+        return new NotificationCenterService(repo, redis, resolver, accounts, comments, followReader, copy, campaigns,
+                petNamesProvider(), giftLinesProvider());
     }
 
     @Test
@@ -542,5 +569,184 @@ class NotificationCenterServiceTest {
         verifyNoInteractions(campaigns);
         assertThat(item.opsTarget().type()).isEqualTo("NONE");
         assertThat(item.opsTarget().value()).isNull();
+    }
+
+    // ===== V1.4.0 gift Story 1.2 · AC5.4：收礼条目带宠物名，一页一次批量取 =====
+
+    private Notification giftRow(long petId) {
+        Notification n = Notification.interaction(ME, NotificationType.PET_GIFT_RECEIVED, "兜底标题", "点击查看",
+                NotificationType.PET_GIFT_RECEIVED.name(), "tok" + seq, String.valueOf(petId), "GIFT:PET:" + petId,
+                null, null);
+        ReflectionTestUtils.setField(n, "id", seq++);
+        ReflectionTestUtils.setField(n, "createdAt", Instant.parse("2026-10-11T00:00:00Z"));
+        return n;
+    }
+
+    @Test
+    void giftRowsFetchPetNamesOnceAndRenderOneManyAndNoPet() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        Notification one = giftRow(70L);
+        Notification many = giftRow(70L);
+        Notification gone = giftRow(71L);
+
+        List<NotificationItem> items = page(List.of(one, many, gone),
+                Map.of(one.getId(), List.of(2L), many.getId(), List.of(3L, 4L, 5L), gone.getId(), List.of(6L)),
+                Set.of(), Set.of());
+
+        assertThat(items).extracting(NotificationItem::title).containsExactly(
+                "u2 mengirim hadiah untuk Mochi",
+                "u3 dan 2 lainnya mengirim hadiah untuk Mochi",
+                "u6 mengirim hadiah untuk hewanmu");
+        assertThat(items.get(1).actorCount()).isEqualTo(3);
+        assertThat(items.get(0).body()).as("收礼条目 body = null").isNull();
+        assertThat(items.get(0).targetRef()).isEqualTo("70");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
+        verify(petNamesPort, times(1)).namesOf(ids.capture());
+        assertThat(ids.getValue()).containsExactlyInAnyOrder(70L, 71L);
+        verify(actorRepo, times(1)).findByNotificationIds(anyCollection());
+        verify(accounts, times(1)).findActorViews(anyCollection());
+    }
+
+    @Test
+    void missingPetNamesPortRendersNoPetCopy() {
+        petNamesPort = null;
+        Notification many = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(many), Map.of(many.getId(), List.of(3L, 4L)), Set.of(),
+                Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u3 dan 1 lainnya mengirim hadiah untuk hewanmu");
+    }
+
+    @Test
+    void pageWithoutGiftRowsNeverCallsPetNamesPort() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        Notification like = row(NotificationType.CONTENT_LIKED, null, null);
+
+        page(List.of(like), Map.of(like.getId(), List.of(2L)), Set.of(), Set.of());
+
+        verifyNoInteractions(petNamesPort);
+    }
+
+    @Test
+    void giftRowWhoseSendersAreAllHiddenIsHiddenAndPetNamesNotFetched() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        Notification gift = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(2L)), Set.of(2L), Set.of());
+
+        assertThat(items).isEmpty();
+        verifyNoInteractions(petNamesPort);
+    }
+
+    @Test
+    void petNamesPortFailureFallsBackToNoPetCopy() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenThrow(new IllegalStateException("boom"));
+        Notification gift = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(2L)), Set.of(), Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u2 mengirim hadiah untuk hewanmu");
+    }
+
+    // ===== V1.4.0 gift L2 第二轮：单人收礼条目带礼物名与数量（PRD「XX 给你的 Mochi 送了 Tulang ×5」，P-4 用名称）=====
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void singleSenderGiftRowShowsGiftLabelManyRowStaysGeneric() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        Notification five = giftRow(70L);
+        Notification single = giftRow(70L);
+        Notification many = giftRow(70L);
+        Notification noPet = giftRow(71L);
+        when(giftLinesPort.linesOf(any())).thenReturn(Map.of(
+                five.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 5),
+                single.getId(), new NotificationGiftLines.GiftLine("Cake", "Kue", 1),
+                noPet.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 2)));
+
+        List<NotificationItem> items = page(List.of(five, single, many, noPet),
+                Map.of(five.getId(), List.of(2L), single.getId(), List.of(3L), many.getId(), List.of(4L, 5L),
+                        noPet.getId(), List.of(6L)),
+                Set.of(), Set.of());
+
+        assertThat(items).extracting(NotificationItem::title).containsExactly(
+                "u2 mengirim Tulang ×5 untuk Mochi",
+                "u3 mengirim Kue untuk Mochi",
+                "u4 dan 1 lainnya mengirim hadiah untuk Mochi",
+                "u6 mengirim Tulang ×2 untuk hewanmu");
+        ArgumentCaptor<Map<Long, NotificationGiftLines.Query>> q = ArgumentCaptor.forClass(Map.class);
+        verify(giftLinesPort, times(1)).linesOf(q.capture());
+        assertThat(q.getValue()).as("多人合并条目不查礼物").containsOnlyKeys(five.getId(), single.getId(), noPet.getId());
+        NotificationGiftLines.Query fq = q.getValue().get(five.getId());
+        assertThat(fq.petId()).isEqualTo(70L);
+        assertThat(fq.senderId()).isEqualTo(2L);
+        assertThat(fq.since()).as("送礼人并入时刻 − 容差")
+                .isEqualTo(Instant.parse("2026-10-11T00:00:00Z").minus(NotificationCenterService.GIFT_SINCE_TOLERANCE));
+        assertThat(fq.until()).as("上界 = 本条 created_at（OCR #6）").isEqualTo(five.getCreatedAt());
+    }
+
+    /**
+     * OCR #1：送礼人 id ≥ 128 时 {@code actedAt} 的 Long 引用比较恒 false → 曾拿不到条件、恒显示通用文案。
+     * 两份 Long 刻意用不同实例（与线上一致：一份来自 ActorSummary 的 long 重新装箱）。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void singleSenderWithLargeIdStillGetsGiftLabel() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        Notification gift = giftRow(70L);
+        when(giftLinesPort.linesOf(any())).thenAnswer(inv -> {
+            Map<Long, NotificationGiftLines.Query> q = inv.getArgument(0);
+            return q.containsKey(gift.getId())
+                    ? Map.of(gift.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 5)) : Map.of();
+        });
+        long big = 100_000L;
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(Long.valueOf(big))), Set.of(),
+                Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u100000 mengirim Tulang ×5 untuk Mochi");
+        ArgumentCaptor<Map<Long, NotificationGiftLines.Query>> q = ArgumentCaptor.forClass(Map.class);
+        verify(giftLinesPort, times(1)).linesOf(q.capture());
+        assertThat(q.getValue().get(gift.getId()).senderId()).isEqualTo(big);
+    }
+
+    @Test
+    void englishAccountGetsEnglishGiftName() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        Notification gift = giftRow(70L);
+        when(giftLinesPort.linesOf(any())).thenReturn(
+                Map.of(gift.getId(), new NotificationGiftLines.GiftLine("Bone", "Tulang", 5)));
+        when(repo.findPageBefore(eq(ME), any(), anyLong(), any(Pageable.class))).thenReturn(List.of(gift));
+        when(actorRepo.findByNotificationIds(anyCollection())).thenReturn(List.of(actor(gift.getId(), 2L)));
+        when(accounts.findActorViews(anyCollection())).thenAnswer(inv -> {
+            Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().collect(Collectors.toMap(id -> id, id -> view(id)));
+        });
+        when(hideRelations.hiddenByHolder(eq(ME), anyCollection())).thenReturn(Set.of());
+        when(accounts.localeOf(ME)).thenReturn(Locale.ENGLISH);
+
+        assertThat(service().list(ME, CURSOR, 20).items().get(0).title()).isEqualTo("u2 sent Bone ×5 to Mochi");
+    }
+
+    @Test
+    void giftLinesMissingOrFailingFallsBackToGenericCopy() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi"));
+        giftLinesPort = org.mockito.Mockito.mock(NotificationGiftLines.class);
+        when(giftLinesPort.linesOf(any())).thenThrow(new IllegalStateException("boom"));
+        Notification gift = giftRow(70L);
+
+        List<NotificationItem> items = page(List.of(gift), Map.of(gift.getId(), List.of(2L)), Set.of(), Set.of());
+
+        assertThat(items.get(0).title()).isEqualTo("u2 mengirim hadiah untuk Mochi");
     }
 }

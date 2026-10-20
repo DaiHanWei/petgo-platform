@@ -109,16 +109,30 @@ class _AvatarItem extends StatelessWidget {
         width: FollowingStrip._itemWidth,
         child: Column(
           children: [
-            Container(
-              width: FollowingStrip._outer,
-              height: FollowingStrip._outer,
-              padding: const EdgeInsets.all(FollowingStrip._gap),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.mint, width: FollowingStrip._ring),
+            // V1.4.0 ① Story 3.2（A8）：戴框 → 头像框替代紫色装饰环（66 格内居中）；没戴框 → 紫环原样 + 数字角标。
+            if (user.badge?.frame != null)
+              SizedBox(
+                key: const ValueKey('followingStripFramed'),
+                width: FollowingStrip._outer,
+                height: FollowingStrip._outer,
+                child: Center(
+                  child: LetterAvatar(
+                      url: user.avatarUrl, name: name, size: FollowingStrip._avatar, growth: user.badge),
+                ),
+              )
+            else
+              Container(
+                key: const ValueKey('followingStripRing'),
+                width: FollowingStrip._outer,
+                height: FollowingStrip._outer,
+                padding: const EdgeInsets.all(FollowingStrip._gap),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.mint, width: FollowingStrip._ring),
+                ),
+                child: LetterAvatar(
+                    url: user.avatarUrl, name: name, size: FollowingStrip._avatar, growth: user.badge),
               ),
-              child: LetterAvatar(url: user.avatarUrl, name: name, size: FollowingStrip._avatar),
-            ),
             const SizedBox(height: 8),
             Text(
               name,
@@ -154,8 +168,9 @@ class _MoreItem extends StatelessWidget {
               width: FollowingStrip._outer,
               height: FollowingStrip._outer,
               child: CustomPaint(
-                painter: _DashedCirclePainter(color: AppColors.muted),
-                child: const Center(child: Icon(Icons.add_rounded, size: 26, color: AppColors.ink2)),
+                // V1.4.0 稿 A8 `.fsi .more`：淡紫虚线圈 + 紫色「···」，标签紫色（L2 还原度，原灰色「+」）。
+                painter: _DashedCirclePainter(color: AppColors.dashedViolet),
+                child: const Center(child: Icon(Icons.more_horiz_rounded, size: 22, color: AppColors.mint)),
               ),
             ),
             const SizedBox(height: 8),
@@ -164,7 +179,7 @@ class _MoreItem extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.muted),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.mint),
             ),
           ],
         ),

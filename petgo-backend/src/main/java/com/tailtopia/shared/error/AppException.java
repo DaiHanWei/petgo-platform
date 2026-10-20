@@ -165,6 +165,34 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.KEEPSAKE_ALREADY_UNLOCKED, detail);
     }
 
+    /**
+     * V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可写 → 409 {@code pet-read-only}，扩展成员 {@code petId}。
+     * 只由 {@code PetWriteGuard} 抛（可写校验单一入口）。
+     */
+    public static AppException petReadOnly(long petId) {
+        return new PetReadOnlyException(petId);
+    }
+
+    /** V1.4.0 multi-pet Story 2.1（D13）：宠物数 ≤ 名额时改选 → 409 {@code pet-selection-not-needed}。 */
+    public static AppException petSelectionNotNeeded(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_SELECTION_NOT_NEEDED, detail);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：可租数不足 → 409 {@code pet-slot-rent-unavailable}（扩展成员 {@code rentable}）。 */
+    public static AppException petSlotRentUnavailable(int rentable) {
+        return new PetSlotRentUnavailableException(rentable, null);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：续租个数超上限 → 409 {@code pet-slot-rent-unavailable}（另带 {@code renewableMax}）。 */
+    public static AppException petSlotRenewOverLimit(int rentable, int renewableMax) {
+        return new PetSlotRentUnavailableException(rentable, renewableMax);
+    }
+
+    /** V1.4.0 multi-pet Story 2.2：所选名额不在生效中 → 409 {@code pet-slot-renew-invalid}。 */
+    public static AppException petSlotRenewInvalid(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_SLOT_RENEW_INVALID, detail);
+    }
+
     /** V1.3.2 Story 3.3：佩戴未解锁结果 → 422 {@code tailsonality-badge-locked}。 */
     public static AppException tailsonalityBadgeLocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.TAILSONALITY_BADGE_LOCKED, detail);
@@ -178,5 +206,54 @@ public class AppException extends RuntimeException {
      */
     public static AppException followBlocked(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.FOLLOW_BLOCKED, detail);
+    }
+
+    /** 头像框未解锁（V1.4.0 ① Story 3.3）：{@code detail} 只写英文技术说明，不含用户数据。 */
+    public static AppException frameLocked(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.FRAME_LOCKED, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC1）：给自己的宠物送礼 → 422 {@code gift-own-pet}。 */
+    public static AppException giftOwnPet(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_OWN_PET, detail);
+    }
+
+    /**
+     * V1.4.0 gift Story 1.1（FR-148 / PRD AC9）：送礼人拉黑了主人 → 403 {@code gift-blocked}。
+     *
+     * <p>只在 {@code isBlocked(sender, owner)} 时抛；主人拉黑送礼人<b>不抛</b>（不暴露被拉黑）。
+     */
+    public static AppException giftBlocked(String detail) {
+        return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.GIFT_BLOCKED, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC3）：专属礼物未解锁 → 403 {@code gift-locked}。 */
+    public static AppException giftLocked(String detail) {
+        return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.GIFT_LOCKED, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148 / PRD AC4）：QRIS 低于送礼最低金额 → 422 {@code gift-qris-below-min}。 */
+    public static AppException giftQrisBelowMin(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_QRIS_BELOW_MIN, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148）：收礼宠物不存在 / 主人已注销 → 404 {@code gift-pet-gone}。 */
+    public static AppException giftPetGone(String detail) {
+        return new AppException(HttpStatus.NOT_FOUND, ErrorTypes.GIFT_PET_GONE, detail);
+    }
+
+    /** V1.4.0 gift Story 1.1（FR-148）：礼物不存在 / 已下线 → 409 {@code gift-unavailable}。 */
+    public static AppException giftUnavailable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.GIFT_UNAVAILABLE, detail);
+    }
+
+    /** V1.4.0 ④ Story 1.1：关闭「订单与账号」类推送 → 422 {@code push-category-locked}。 */
+    public static AppException pushCategoryLocked(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.PUSH_CATEGORY_LOCKED, detail);
+    }
+
+    /** V1.4.0 ④ Story 2.1：收藏私密帖 → 422 {@code collect-not-public}。 */
+    public static AppException collectNotPublic(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.COLLECT_NOT_PUBLIC, detail);
     }
 }

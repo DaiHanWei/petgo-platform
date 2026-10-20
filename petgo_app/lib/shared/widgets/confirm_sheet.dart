@@ -16,6 +16,16 @@ import '../../core/theme/colors.dart';
 ///   持有提交态——提交中主按钮与取消**一并禁用且抽屉不关**，回调返回 true 才 `pop(true)`，
 ///   返回 false 抽屉**保持打开**让用户直接重试（失败提示由回调自己给）。
 ///
+/// **V1.4.0 multi-pet Story 1.5 加 [showCancel]**（默认 true = 原行为）：「已达 5 只上限」抽屉只有一个
+/// 「Oke」按钮（UI 稿 A4b），传 false 不渲染次按钮。
+///
+/// **V1.4.0 L2 加 [onCancel]**（默认 null = 原行为）：次按钮不是「取消」而是另一个去向时（名额已满抽屉的
+/// 「Lihat Level Saya」），调用方需区分「点了次按钮」与「点遮罩 / 下拉关闭」——两者都返回 false，
+/// 点次按钮时额外先回调一次 [onCancel]。
+///
+/// **V1.4.0 L2 加 [dangerColor]**：danger 态默认仍为 Pop Art 红；删宠物档案（稿 C2 `.btn-p.danger`）传橙红
+/// [AppColors.danger]，其余调用方不变。
+///
 /// ⚠️ 为什么不另写一个平行的确认抽屉：手柄 36×4、圆角 24、内边距 22/12/22/30、主按钮 radius 14…
 /// 两套同义视觉规格日后必然漂移。要什么就往这里加可选参数。
 Future<bool> showConfirmSheet(
@@ -30,6 +40,9 @@ Future<bool> showConfirmSheet(
   Future<bool> Function()? onConfirm,
   Key? confirmKey,
   Key? cancelKey,
+  bool showCancel = true,
+  VoidCallback? onCancel,
+  Color? dangerColor,
 }) async {
   final result = await showModalBottomSheet<bool>(
     context: context,
@@ -49,6 +62,9 @@ Future<bool> showConfirmSheet(
       onConfirm: onConfirm,
       confirmKey: confirmKey,
       cancelKey: cancelKey,
+      showCancel: showCancel,
+      onCancel: onCancel,
+      dangerColor: dangerColor,
     ),
   );
   return result ?? false;
@@ -66,6 +82,9 @@ class _ConfirmSheet extends StatefulWidget {
     required this.onConfirm,
     required this.confirmKey,
     required this.cancelKey,
+    this.showCancel = true,
+    this.onCancel,
+    this.dangerColor,
   });
 
   final String title;
@@ -78,6 +97,9 @@ class _ConfirmSheet extends StatefulWidget {
   final Future<bool> Function()? onConfirm;
   final Key? confirmKey;
   final Key? cancelKey;
+  final bool showCancel;
+  final VoidCallback? onCancel;
+  final Color? dangerColor;
 
   @override
   State<_ConfirmSheet> createState() => _ConfirmSheetState();
@@ -116,7 +138,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = danger ? AppColors.popRed : AppColors.mint;
+    final accent = danger ? (widget.dangerColor ?? AppColors.popRed) : AppColors.mint;
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -182,6 +204,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               ),
             ),
+            if (widget.showCancel) ...[
             const SizedBox(height: 10),
             // 次按钮（取消，描边）
             SizedBox(
@@ -189,7 +212,12 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
               child: OutlinedButton(
                 key: cancelKey ?? const ValueKey('confirmSheetCancel'),
                 // 提交中取消**一并禁用**：请求在飞时关掉抽屉会让成功/失败提示落在没有上下文的界面上。
-                onPressed: _submitting ? null : () => Navigator.of(context).pop(false),
+                onPressed: _submitting
+                    ? null
+                    : () {
+                        widget.onCancel?.call();
+                        Navigator.of(context).pop(false);
+                      },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
                   side: const BorderSide(color: AppColors.line, width: 1.5),
@@ -200,6 +228,7 @@ class _ConfirmSheetState extends State<_ConfirmSheet> {
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               ),
             ),
+            ],
           ],
         ),
       ),

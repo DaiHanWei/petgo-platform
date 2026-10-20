@@ -52,6 +52,22 @@ class FollowIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private EntityManagerFactory emf;
 
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("applicationTaskExecutor")
+    private org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor asyncExecutor;
+
+    /** 等业务 {@code @Async} 池无在跑任务且队列为空（最多 10s）。 */
+    private void awaitAsyncIdle() throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 10_000;
+        java.util.concurrent.ThreadPoolExecutor pool = asyncExecutor.getThreadPoolExecutor();
+        while (pool.getActiveCount() > 0 || !pool.getQueue().isEmpty()) {
+            if (System.currentTimeMillis() > deadline) {
+                throw new AssertionError("业务异步池 10s 内未排空");
+            }
+            Thread.sleep(20);
+        }
+    }
+
     private ResultActions follow(User viewer, String token) throws Exception {
         return mvc.perform(put("/api/v1/users/" + token + "/follow")
                 .header(HttpHeaders.AUTHORIZATION, userBearer(viewer.getId())));
@@ -341,6 +357,9 @@ class FollowIntegrationTest extends ApiIntegrationTest {
         User z = newUser();
         follow(me, x.getPublicToken()).andExpect(status().isOk());
         follow(y, me.getPublicToken()).andExpect(status().isOk());
+        // V1.4.0 ① Story 1.1 起，请求经 UserActivityFilter 发 UserDailyActiveEvent → @Async 记每日登录成长值。
+        // Hibernate Statistics 是 SessionFactory 全局计数，后台线程的语句会被一并算进来——先等业务异步池排空再计数。
+        awaitAsyncIdle();
 
         Statistics stats = emf.unwrap(SessionFactory.class).getStatistics();
         stats.setStatisticsEnabled(true);

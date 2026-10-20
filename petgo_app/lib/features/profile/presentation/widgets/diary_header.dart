@@ -6,7 +6,6 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/count_badge.dart';
 import '../../domain/pet_header_info.dart';
 import 'pet_info_card.dart';
-import 'insight_entry_card.dart';
 
 /// Diary 页头**共用组件**（V1.1.2 Story 2.2 · FR-80/82）。
 ///
@@ -32,7 +31,8 @@ class DiaryHeader extends StatelessWidget {
     super.key,
     required this.profile,
     this.happyCount,
-    this.consultCount,
+    this.giftTotalValue,
+    this.onOpenGifts,
     this.milestoneCompleted,
     this.milestoneTotal,
     this.milestoneUncelebrated = 0,
@@ -45,7 +45,22 @@ class DiaryHeader extends StatelessWidget {
     this.onOpenMilestones,
     this.insightsEntryAnchor,
     this.readOnly = false,
+    this.hideEditButton = false,
+    this.avatarKey,
+    this.belowTitle,
   });
+
+  /// 标题行与宠物信息卡之间的插槽（V1.4.0 multi-pet B4：只读横幅放这里，稿 `.dh` 之后、`.pic` 之前）。
+  /// 默认 null = 改动前外观。
+  final Widget? belowTitle;
+
+  /// 当前宠物只读（V1.4.0 multi-pet Story 2.4 · AC5.2 / B4）：**只**隐藏编辑铅笔；入口两栏、里程碑、分享照常。
+  /// 与访客态 [readOnly]（整块移除入口网格）是两回事，默认 false = 改动前外观。
+  final bool hideEditButton;
+
+  /// 宠物信息卡头像的位置锚点，原样透传给 [PetInfoCard]（V1.4.0 gift Story 1.3 送出动效落点）。
+  /// 默认 null 行为不变。
+  final GlobalKey? avatarKey;
 
   /// 综合入口卡的**位置锚点**（V1.3.0 Story 5.4）。
   ///
@@ -67,7 +82,12 @@ class DiaryHeader extends StatelessWidget {
 
   /// 三列统计（未就绪传 null → 显占位「·」，沿用现状）。
   final int? happyCount;
-  final int? consultCount;
+
+  /// 中间格：礼物总价值（V1.4.0 gift Story 2.2；原 consultCount）。原样透传 [PetInfoCard]。
+  final int? giftTotalValue;
+
+  /// 点礼物格进礼物页。⚠️ 与访客只读三态判定无关：访客态同样可点（UI 稿 A1）。
+  final VoidCallback? onOpenGifts;
 
   /// 里程碑进度；任一为 null → 不渲染进度条（沿用现状：统计未就绪时该条不出现）。
   final int? milestoneCompleted;
@@ -115,7 +135,7 @@ class DiaryHeader extends StatelessWidget {
               titleAction!,
               const SizedBox(width: 8),
             ],
-            if (!readOnly)
+            if (!readOnly && !hideEditButton)
               _iconBtn(
                 key: const ValueKey('editProfileButton'),
                 onTap: onEditProfile,
@@ -128,13 +148,20 @@ class DiaryHeader extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 14),
+        if (belowTitle != null) ...[
+          const SizedBox(height: 10),
+          belowTitle!,
+          const SizedBox(height: 12),
+        ] else
+          const SizedBox(height: 14),
         PetInfoCard(
           profile: profile,
           happyCount: happyCount,
-          consultCount: consultCount,
+          giftTotalValue: giftTotalValue,
+          onOpenGifts: onOpenGifts,
           milestoneCount: milestoneCompleted,
           topRight: petCardAction,
+          avatarKey: avatarKey,
         ),
         // 🛡 入口网格（健康记录 / 身份证）整块移除，不是「留个锁」——
         // 健康记录不对访客开放；身份证入口跳的是当前登录用户自己的卡，点进去必然出错。
@@ -230,8 +257,35 @@ class DiaryHeader extends StatelessWidget {
     required IconData icon,
     required String title,
     required String sub,
-  }) =>
-      InsightEntryCard(inkKey: key, onTap: onTap, icon: icon, title: title, sub: sub);
+  }) {
+    // V1.4.0 稿 B5 / A2 `.ent2`：白底 1px 浅描边、圆角 14、无图标的纯文字两栏（L2 还原度）。
+    // 只改 Diary 页头这一处；聚合页仍用共享的 [InsightEntryCard]（带图标）。[icon] 保留参数位不渲染。
+    return Material(
+      color: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.line2),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: key,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              const SizedBox(height: 2),
+              Text(sub, style: const TextStyle(fontSize: 11, height: 1.35, color: AppColors.ink2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   /// 里程碑进度卡（msbar）：「🏆 Pencapaian {name}」+ "X / N" 紫色 + 进度槽。
   ///
@@ -263,14 +317,13 @@ class DiaryHeader extends StatelessWidget {
     return GestureDetector(
       key: const ValueKey('archiveMilestoneBar'),
       onTap: onOpenMilestones,
+      // 稿 `.msb`：白底 1px 浅描边、圆角 14；计数深灰；进度槽 6 高浅灰底。
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
-          ],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.line2),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,20 +336,23 @@ class DiaryHeader extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.ink)),
+                          fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.ink)),
                 ),
                 Text('$completed / $total',
                     style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.mint)),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                        color: AppColors.ink2)),
               ],
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
                 value: ratio,
-                minHeight: 5,
-                backgroundColor: AppColors.cream2,
+                minHeight: 6,
+                backgroundColor: AppColors.line2,
                 color: AppColors.mint,
               ),
             ),

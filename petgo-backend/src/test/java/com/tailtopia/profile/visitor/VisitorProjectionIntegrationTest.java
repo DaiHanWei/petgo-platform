@@ -17,6 +17,7 @@ import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.profile.service.TimelineService;
+import com.tailtopia.profile.support.MultiPetDbFixture;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -69,7 +70,7 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
                                  "birthday":"2024-03-10","intro":"Suka tidur"}
                                 """))
                 .andExpect(status().isCreated());
-        return profiles.findByOwnerId(owner.getId()).orElseThrow();
+        return profiles.findDefault(owner.getId()).orElseThrow();
     }
 
     /** 一条结构化健康记录（疫苗 / 驱虫这类）。归属键是 <b>petProfileId</b>，不是 ownerId。 */
@@ -124,6 +125,8 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
                 """,
                 ownerId, petId, text, status, visibility, daysAgo,
                 softDeleted ? java.sql.Timestamp.from(Instant.now()) : null);
+        // V1.4.0 multi-pet Story 3.1：按宠物的读口改读 content_pets，直插的帖同步补关联（同迁移回填）。
+        com.tailtopia.content.support.ContentPetsTestFixture.backfillFromPetId(jdbc);
     }
 
     private String render(String token) throws Exception {
@@ -263,13 +266,15 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
         assertThat(visitor.consultCount()).isEqualTo(author.consultCount());
         assertThat(visitor.milestoneCompleted()).isEqualTo(author.milestoneCompleted());
         assertThat(visitor.milestoneTotal()).isEqualTo(author.milestoneTotal());
+        // V1.4.0 gift Story 2.1：礼物总价值同源（复用作者态同一次计算）
+        assertThat(visitor.giftTotalValue()).isEqualTo(author.giftTotalValue());
 
         // 作者侧确实数到了健康记录（证明上面的 fixture 真的落库了，不是空断言）
         assertThat(author.healthRecordCount()).isEqualTo(2);
         // 🛡 访客侧连这个字段都没有 —— 装不下就不可能填错
         assertThat(VisitorStats.class.getRecordComponents())
                 .as("VisitorStats 多出了字段，检查是不是把 healthRecordCount 加回来了")
-                .hasSize(4);
+                .hasSize(5); // V1.4.0 gift Story 2.1：+ giftTotalValue
         assertThat(render(pet.getCardToken()))
                 .as("页面上不得出现健康记录条数")
                 .doesNotContain("Catatan kesehatan");
@@ -380,5 +385,37 @@ class VisitorProjectionIntegrationTest extends ApiIntegrationTest {
                 .as("投影层出现了「查看者」参数 —— 一旦按查看者做差异化，AD-1 Rule 9 就可能被悄悄推翻，"
                         + "且这种泄露是静默的。若确需引入，请先回到架构 AD-1 改规则。")
                 .isFalse();
+    }
+
+    // ===================== V1.4.0 multi-pet Story 1.3 · AC3：按宠物统计 =====================
+
+    /** 同账号 A、B：B 的访客统计只数 B 的 Diary，A 的帖子不进 B 的统计；名片 H5 也按 B。 */
+    @Test
+    void visitorStatsArePerPet() throws Exception {
+        boolean dropped = MultiPetDbFixture.dropOwnerUniqueIfPresent(jdbc);
+        List<Long> pets = new java.util.ArrayList<>();
+        try {
+            User owner = newUser();
+            Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+            long a = MultiPetDbFixture.insertPet(jdbc, owner.getId(), "Aaa", "CAT", t0);
+            long b = MultiPetDbFixture.insertPet(jdbc, owner.getId(), "Bbb", "DOG", t0.plusSeconds(3600));
+            pets.add(a);
+            pets.add(b);
+            seedMoment(owner.getId(), a, "a-1", "PUBLISHED", "PUBLIC", false, 1);
+            seedMoment(owner.getId(), a, "a-2", "PUBLISHED", "PUBLIC", false, 2);
+            seedMoment(owner.getId(), b, "b-1", "PUBLISHED", "PUBLIC", false, 1);
+
+            PetProfile petB = profiles.findById(b).orElseThrow();
+            PetProfile petA = profiles.findById(a).orElseThrow();
+            assertThat(visitors.stats(petB).happyMomentCount()).isEqualTo(1L);
+            assertThat(visitors.stats(petA).happyMomentCount()).isEqualTo(2L);
+            assertThat(visitors.completedMilestones(petB, visitors.stats(petB).milestoneCompleted()))
+                    .allMatch(m -> m.code().startsWith("D-"));
+
+            String html = render(petB.getCardToken());
+            assertThat(html).doesNotContain("a-1").doesNotContain("a-2");
+        } finally {
+            MultiPetDbFixture.restoreOwnerUnique(jdbc, dropped, pets);
+        }
     }
 }

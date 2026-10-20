@@ -176,7 +176,7 @@ public final class AdminPageCatalog {
             //    ⚠️ 目录里**不再留条目** —— 留一个没有页面的条目就是侧栏上的死链。
             // 👥 用户
             page("users", G_USERS, "/admin/users",
-                    List.of(USER_VIEW), List.of(), List.of(USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN)).nav("admin.nav.users", "users", USER_VIEW),
+                    List.of(USER_VIEW), List.of(), List.of(USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST)).nav("admin.nav.users", "users", USER_VIEW),
             page("user-phone", G_USERS, null,
                     List.of(USER_PHONE_VIEW), List.of(), List.of(USER_PHONE_EXPORT)),
             page("user-tags", G_USERS, "/admin/user-tags",
@@ -189,6 +189,9 @@ public final class AdminPageCatalog {
             shared("ai-orders", G_ORDERS, "/admin/ai-orders", List.of(ORDER_VIEW, ORDER_EXPORT)).nav("admin.nav.aiOrders", "ai-orders", ORDER_VIEW),
             page("payments", G_ORDERS, "/admin/payments",
                     List.of(PAYMENT_VIEW), List.of(), List.of(PAYMENT_LIST_EXPORT)).nav("admin.nav.payments", "payments", PAYMENT_VIEW),
+            // V1.4.0 ③ AB-36：送礼记录（照支付记录页，模板 B 只读）；导出同用 gift.order_view（PRD 只定义一个只读码）。
+            page("gift-orders", G_ORDERS, "/admin/gift-orders",
+                    List.of(GIFT_ORDER_VIEW), List.of(), List.of()).nav("admin.nav.giftOrders", "gift-orders", GIFT_ORDER_VIEW),
             page("settlements", G_ORDERS, "/admin/settlements",
                     List.of(SETTLEMENT_VIEW), List.of(), List.of(SETTLEMENT_PAYOUT)).nav("admin.nav.settlements", "settlements", SETTLEMENT_VIEW),
             page("red-overage", G_ORDERS, "/admin/red-overage",
@@ -247,6 +250,12 @@ public final class AdminPageCatalog {
                     List.of(OPS_NOTIFY_VIEW), List.of(OPS_NOTIFY_SEND), List.of()).nav("admin.nav.opsNotifications", "ops-notifications", OPS_NOTIFY_VIEW, OPS_NOTIFY_SEND),
             page("algo-params", G_CONFIG, "/admin/algo-params",
                     List.of(CONFIG_ALGO_PARAM_VIEW), List.of(CONFIG_ALGO_PARAM_EDIT), List.of()).nav("admin.nav.algoParams", "algo-params", CONFIG_ALGO_PARAM_VIEW),
+            // V1.4.0 ① AB-32 · Story 4.1：成长体系配置（规则 / 消费换算 / 等级表）。不预授；入口门 = VIEW 或 EDIT。
+            page("growth", G_CONFIG, "/admin/growth",
+                    List.of(GROWTH_CONFIG_VIEW), List.of(GROWTH_CONFIG_EDIT), List.of(GROWTH_USER_ADJUST)).nav("admin.nav.growth", "growth", GROWTH_CONFIG_VIEW, GROWTH_CONFIG_EDIT, GROWTH_USER_ADJUST),
+            // V1.4.0 ③ AB-35：礼物目录（照用户标签页；顶部送礼 QRIS 最低金额）。与 ① 合并时顺序 algo-params → growth → gift-catalog。
+            page("gift-catalog", G_CONFIG, "/admin/gift-catalog",
+                    List.of(GIFT_CATALOG_VIEW), List.of(GIFT_CATALOG_EDIT), List.of()).nav("admin.nav.giftCatalog", "gift-catalog", GIFT_CATALOG_VIEW, GIFT_CATALOG_EDIT),
             page("share-reward", G_CONFIG, null,
                     List.of(CONFIG_SHARE_REWARD_VIEW), List.of(CONFIG_SHARE_REWARD_EDIT), List.of()),
             page("audit-logs", G_CONFIG, "/admin/audit-logs",

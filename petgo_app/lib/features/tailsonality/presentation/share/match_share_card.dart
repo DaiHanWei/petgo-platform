@@ -20,6 +20,7 @@ import '../../domain/ts_match_share_data.dart';
 import '../widgets/ts_match_card.dart';
 import 'ts_share_owner_name.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
+import '../../../profile/data/current_pet_provider.dart';
 
 /// 配型分享卡画布（2026-10-05 设计稿 `5-level-match-cards/example.png`，1080×1441）：
 /// 上 1:1 配型卡（1080×1080）、一条浅紫横条、下深紫信息栏。**不是**通用骨架的 9:16。
@@ -193,7 +194,10 @@ Future<void> openMatchSharePreview(
         });
         // Story 4.5：同一时机上报领奖（MATCH），失败当 0、没发静默。
         unawaited(claimKeepsakeShareReward(routeCtx, ref,
-            () => ref.read(tailsonalityShareRewardRepositoryProvider).reportShareForReward(TailsonalityShareRewardRepository.match)));
+            () async => ref.read(tailsonalityShareRewardRepositoryProvider).reportShareForReward(
+                TailsonalityShareRewardRepository.match,
+                // V1.4.0 multi-pet：奖励记到当前宠物。
+                petId: await readRequestPetId(ref))));
       },
     ),
   ));

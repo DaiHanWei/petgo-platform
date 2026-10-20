@@ -21,6 +21,9 @@ public interface PassportSnapshotRepository extends JpaRepository<PassportSnapsh
 
     Optional<PassportSnapshot> findByPublicTokenAndPetProfileId(String publicToken, long petProfileId);
 
+    /** V1.4.0 multi-pet（Story 1.2 · X11）：按 token 取快照，归属由调用方按快照上的宠物校验。 */
+    Optional<PassportSnapshot> findByPublicToken(String publicToken);
+
     /** 删档（AC9）。 */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from PassportSnapshot s where s.petProfileId = :petId")

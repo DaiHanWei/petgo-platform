@@ -122,7 +122,7 @@ class SerialAllocationIntegrationTest extends ApiIntegrationTest {
         petProfiles.save(pet);
 
         // 级联删除（复用注销 / 主动删档同一路径）→ 号回收入池，同事务原子。
-        profileDeletion.deleteByUserId(owner.getId());
+        profileDeletion.deleteAllForAccount(owner.getId());
 
         List<Long> inPool = jdbc.queryForList("SELECT serial_id FROM pet_serial_pool", Long.class);
         assertThat(inPool).contains(serial);

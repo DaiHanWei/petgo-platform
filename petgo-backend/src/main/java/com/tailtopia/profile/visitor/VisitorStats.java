@@ -24,10 +24,14 @@ package com.tailtopia.profile.visitor;
  * @param consultCount       问诊次数（只是计数，不含任何问诊内容）
  * @param milestoneCompleted 已完成里程碑数
  * @param milestoneTotal     里程碑总数（按物种：猫 33 / 狗 33 / 通用 18）
+ * @param giftTotalValue     收到的礼物总价值（IDR，V1.4.0 gift Story 2.1 · AD-10）。与作者态
+ *                           {@code ArchiveStatsResponse.giftTotalValue} 同名同值（复用同一次计算）。
+ *                           ⚠️ {@code consultCount} 保留给旧版 App，新版 App 中间格改显示本字段
  */
 public record VisitorStats(
         long happyMomentCount,
         long consultCount,
         long milestoneCompleted,
-        int milestoneTotal) {
+        int milestoneTotal,
+        long giftTotalValue) {
 }

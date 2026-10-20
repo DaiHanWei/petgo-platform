@@ -12,7 +12,7 @@ inputDocuments:
   - _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-shop-v2.md
   - _bmad-output/planning-artifacts/v1.3.0/决策日志-shop-v2.md
   - _bmad-output/planning-artifacts/architecture.md
-  - _bmad-output/planning-artifacts/v1.4.0/architecture-v1.4.0-delta.md
+  - _bmad-output/planning-artifacts/v1.4.0-toko-废弃/architecture-v1.4.0-delta.md
   - _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md (origin/feat/1.3.0-ops-ui-refactor)
   - _bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md
   - _bmad-output/planning-artifacts/v1.3.0/validation-2026-09-15-shop-v2/arch-input-extract.md

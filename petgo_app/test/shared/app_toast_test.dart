@@ -131,4 +131,38 @@ void main() {
     expect(find.text('第二条'), findsOneWidget);
     await drain(tester);
   });
+
+  group('顶部变体 extraTop（V1.4.0 L2 第四轮）', () {
+    Widget topHost({double extraTop = 0}) => MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () => showAppToast(ctx, '顶部', top: true, extraTop: extraTop),
+                  child: const Text('show'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    double toastTop(WidgetTester tester) =>
+        tester.widget<Positioned>(find.ancestor(of: find.text('顶部'), matching: find.byType(Positioned)).first).top!;
+
+    testWidgets('不传 = 原位置（安全区 + 16）', (tester) async {
+      await tester.pumpWidget(topHost());
+      await tester.tap(find.text('show'));
+      await tester.pumpAndSettle();
+      expect(toastTop(tester), 16);
+      await drain(tester);
+    });
+
+    testWidgets('传 kToolbarHeight → 再下压一个 AppBar 高度', (tester) async {
+      await tester.pumpWidget(topHost(extraTop: kToolbarHeight));
+      await tester.tap(find.text('show'));
+      await tester.pumpAndSettle();
+      expect(toastTop(tester), 16 + kToolbarHeight);
+      await drain(tester);
+    });
+  });
 }

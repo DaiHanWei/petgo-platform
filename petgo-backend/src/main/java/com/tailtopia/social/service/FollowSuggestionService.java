@@ -3,6 +3,7 @@ package com.tailtopia.social.service;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.service.DefaultPetPolicy;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.social.dto.FollowListItem;
 import com.tailtopia.social.dto.FollowSuggestionsResponse;
@@ -11,7 +12,6 @@ import com.tailtopia.social.read.FollowState;
 import com.tailtopia.social.repository.UserFollowRepository;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,11 +64,10 @@ public class FollowSuggestionService {
         Map<Long, AuthorView> views = accounts.findAuthorViewsWithoutTags(ids);
         Map<Long, String> tokens = accounts.publicTokensOf(ids);
         Map<Long, FollowState> states = followReader.followStates(viewerId, ids);
-        // 宠物档案按 owner 批量一次查（V1 每人一只；pet_profiles 无软删列，物理删除）。
-        Map<Long, PetProfile> petByOwner = new HashMap<>();
-        for (PetProfile p : pets.findByOwnerIdIn(ids)) {
-            petByOwner.putIfAbsent(p.getOwnerId(), p);
-        }
+        // 宠物档案按 owner 批量一次查（pet_profiles 无软删列，物理删除）。V1.4.0 multi-pet（Story 1.2 · X28）：
+        // 多宠账号确定性取默认宠物（DefaultPetPolicy），不再依赖无序遍历。
+        Map<Long, PetProfile> petByOwner =
+                DefaultPetPolicy.pickPerOwner(pets.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(ids));
         // 查询与补字段之间对方恰好注销 / 封号 → 拿不到 token，丢掉这一行（没有 token 就没法关注）。
         List<FollowListItem> items = ids.stream()
                 .filter(tokens::containsKey)
@@ -79,7 +78,8 @@ public class FollowSuggestionService {
                     return new FollowListItem(id, tokens.get(id), v.nickname(), v.avatarUrl(),
                             false, false, s.followsMe(), false, false,
                             pet == null || pet.getPetType() == null ? null : pet.getPetType().name(),
-                            pet == null ? null : pet.getBirthday());
+                            pet == null ? null : pet.getBirthday(),
+                            v.badgeLevel(), v.badgeTier(), v.badgeFrame());
                 })
                 .toList();
         return new FollowSuggestionsResponse(items);

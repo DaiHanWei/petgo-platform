@@ -14,6 +14,8 @@ import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/content_detail.dart';
 import '../domain/detail_bottom_bar.dart';
+import '../domain/feed_item.dart';
+import '../../collect/presentation/collect_button.dart';
 import '../../mention/data/mention_candidate_repository.dart';
 import '../../mention/domain/mention_context.dart';
 import '../../mention/domain/mention_draft.dart';
@@ -467,18 +469,30 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         ),
         // iconGap 是**可见**间距：两个 44 热区各自已带 (44-19)/2 的透明边，
         // 再整段垫 22 会让可见间距变成 ~47（2026-09-21 对稿发现）。只补不足的部分。
-        const SizedBox(
-          width:
-              DetailBarMetrics.iconGap >
-                  DetailBarMetrics.minTapTarget - DetailBarMetrics.iconSize
-              ? DetailBarMetrics.iconGap -
-                    (DetailBarMetrics.minTapTarget - DetailBarMetrics.iconSize)
-              : 0,
-        ),
+        const SizedBox(width: _actionGap),
         _tapTarget(DetailShareCardButton(detail: detail)),
+        // V1.4.0 ④ Story 2.3：点赞 · 分享卡 · 收藏（decision-log ④ Q2）。私密帖不显示（P-2：只收藏公开帖）。
+        // 作者本人看到收藏数（不计自己）+ 锁。
+        if (detail.visibility != kVisibilityPrivate) ...[
+          const SizedBox(width: _actionGap),
+          _tapTarget(
+            CollectButton.post(
+              postId: detail.id,
+              wireType: detail.type,
+              initialCollected: detail.collected,
+              ownerCount: detail.isAuthor ? detail.collectCount : null,
+            ),
+          ),
+        ],
       ],
     );
   }
+
+  /// 底栏图标间的补足间距（见 [_actions] 注释）：只补 iconGap 超出两个 44 热区自带透明边的部分。
+  static const double _actionGap =
+      DetailBarMetrics.iconGap > DetailBarMetrics.minTapTarget - DetailBarMetrics.iconSize
+          ? DetailBarMetrics.iconGap - (DetailBarMetrics.minTapTarget - DetailBarMetrics.iconSize)
+          : 0;
 
   /// 把一个小图标包进 44×44 的透明命中框（可见大小不变）。
   Widget _tapTarget(Widget child) => ConstrainedBox(

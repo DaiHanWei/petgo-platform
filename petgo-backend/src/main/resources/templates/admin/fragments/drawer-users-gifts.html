@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  用户抽屉「收送礼记录」页签内容（V1.4.0 ③ gift Story 3.2 · AC5，UI 稿 M4 ~ M6）。填进地基容器，只读。
+    panel(visible) — 根元素仍是地基的 <section data-utab-panel="gifts">（加 id="user-gifts-panel"）；visible=false 时带 hidden。
+  🔴 页签头与 data-utab-panel 名由地基定义，不许改。
+  🔴 胶囊切换 / 翻页 = GET /admin/users/{id}/gifts，htmx outerHTML 只换本面板（不整体重渲染抽屉，否则页签会跳回「基本信息」）。
+     页签切换脚本在点击时 querySelectorAll('[data-utab-panel]')，换进来的新面板自动纳入。
+  显示口径同送礼记录页：宠物名 / 礼物名取订单快照；宠物已删「（已删除）{名}」；送礼人已注销「（已注销）#id」。
+  空态（M6）：子列表为空只显示灰字「无」（抽屉惯例）。没有任何操作按钮。
+*/-->
+<body>
+<section th:fragment="panel(visible)" class="card card-full ud-card" data-utab-panel="gifts" id="user-gifts-panel"
+         th:attr="hidden=${visible} ? null : 'hidden'" th:with="t=${giftsTab}">
+    <!--/* 防御：渲染路径漏装 giftsTab 时只留空容器，不让整张抽屉 500。 */-->
+    <th:block th:if="${t != null}">
+    <div class="chips" role="tablist">
+        <button type="button" class="chip" th:classappend="${t.isSent()} ? 'chip--on'" role="tab"
+                th:attr="aria-selected=${t.isSent()},hx-get=@{/admin/users/{id}/gifts(id=${t.userId()},dir='sent')}"
+                hx-target="#user-gifts-panel" hx-swap="outerHTML" data-gifts-dir="sent"
+                th:text="#{admin.v140.users.gifts.sent(${'' + t.sentCount()})}">送出 · 0</button>
+        <button type="button" class="chip" th:classappend="${!t.isSent()} ? 'chip--on'" role="tab"
+                th:attr="aria-selected=${!t.isSent()},hx-get=@{/admin/users/{id}/gifts(id=${t.userId()},dir='received')}"
+                hx-target="#user-gifts-panel" hx-swap="outerHTML" data-gifts-dir="received"
+                th:text="#{admin.v140.users.gifts.received(${'' + t.receivedCount()})}">收到 · 0</button>
+    </div>
+
+    <p class="muted" th:if="${#lists.isEmpty(t.rows())}" th:text="#{admin.userdetail.none}">无</p>
+
+    <th:block th:unless="${#lists.isEmpty(t.rows())}">
+        <!--/* 送出（M4） */-->
+        <th:block th:if="${t.isSent()}">
+            <div class="sum">
+                <div class="sum-item">
+                    <div class="sum-label" th:text="#{admin.v140.users.gifts.sentTotal}">累计送出</div>
+                    <div class="sum-value" data-sum="sent-total" th:text="'Rp' + ${#numbers.formatInteger(t.sentTotal(), 1, 'COMMA')}">Rp0</div>
+                </div>
+                <div class="sum-item">
+                    <div class="sum-label" th:text="#{admin.v140.users.gifts.sentCount}">笔数</div>
+                    <div class="sum-value" data-sum="sent-count" th:text="${#numbers.formatInteger(t.sentCount(), 1, 'COMMA')}">0</div>
+                </div>
+            </div>
+            <table class="ud-table ud-pc-table">
+                <thead><tr>
+                    <th th:text="#{admin.v140.giftOrders.col.time}">时间（WIB）</th>
+                    <th th:text="#{admin.v140.giftOrders.col.pet}">收礼宠物</th>
+                    <th th:text="#{admin.v140.giftOrders.col.gift}">礼物</th>
+                    <th class="num" th:text="#{admin.v140.giftOrders.col.total}">总价</th>
+                    <th th:text="#{admin.v140.giftOrders.col.channel}">渠道</th>
+                    <th th:text="#{admin.v140.giftOrders.col.status}">状态</th>
+                </tr></thead>
+                <tbody><tr th:each="r : ${t.rows()}">
+                    <td class="num-cell" th:text="${@adminTime.fmt(r.createdAt())}">2026-10-17 13:20</td>
+                    <td><th:block th:replace="~{admin/fragments/gift-orders-list :: pet(${r})}"></th:block></td>
+                    <td th:text="#{admin.v140.users.gifts.giftQty(${r.giftName(#locale)}, ${'' + r.quantity()})}">Salmon × 1</td>
+                    <td class="num" th:text="${r.totalText()}">Rp25,000</td>
+                    <td th:text="#{'admin.v140.giftOrders.channel.' + ${r.channel()}}">QRIS</td>
+                    <td><th:block th:replace="~{admin/fragments/gift-orders-list :: status(${r})}"></th:block></td>
+                </tr></tbody>
+            </table>
+        </th:block>
+
+        <!--/* 收到（M5）：只列名下宠物收到的 DELIVERED 订单（含已删宠物的历史行） */-->
+        <th:block th:unless="${t.isSent()}">
+            <div class="sum">
+                <div class="sum-item">
+                    <div class="sum-label" th:if="${t.receivedOnePet()}"
+                         th:text="#{admin.v140.users.gifts.receivedOnePet(${t.receivedPetName()})}">宠物 Pipi 收到</div>
+                    <div class="sum-label" th:unless="${t.receivedOnePet()}"
+                         th:text="#{admin.v140.users.gifts.receivedManyPets(${'' + t.receivedPets()})}">2 只宠物共收到</div>
+                    <div class="sum-value" data-sum="received-qty"
+                         th:text="#{admin.v140.users.gifts.receivedQty(${#numbers.formatInteger(t.receivedQty(), 1, 'COMMA')})}">0 个</div>
+                </div>
+                <div class="sum-item">
+                    <div class="sum-label" th:text="#{admin.v140.users.gifts.senders}">送礼人</div>
+                    <div class="sum-value" data-sum="received-senders" th:text="${#numbers.formatInteger(t.receivedSenders(), 1, 'COMMA')}">0</div>
+                </div>
+            </div>
+            <table class="ud-table ud-pc-table">
+                <thead><tr>
+                    <th th:text="#{admin.v140.giftOrders.col.time}">时间（WIB）</th>
+                    <th th:text="#{admin.v140.giftOrders.col.pet}">收礼宠物</th>
+                    <th th:text="#{admin.v140.giftOrders.col.sender}">送礼人</th>
+                    <th th:text="#{admin.v140.giftOrders.col.gift}">礼物</th>
+                    <th class="num" th:text="#{admin.v140.giftOrders.col.total}">总价</th>
+                    <th th:text="#{admin.v140.giftOrders.col.channel}">渠道</th>
+                </tr></thead>
+                <tbody><tr th:each="r : ${t.rows()}">
+                    <td class="num-cell" th:text="${@adminTime.fmt(r.createdAt())}">2026-10-16 09:15</td>
+                    <td><th:block th:replace="~{admin/fragments/gift-orders-list :: pet(${r})}"></th:block></td>
+                    <td><th:block th:replace="~{admin/fragments/gift-orders-list :: who(${r.senderName()}, ${r.senderIdText()}, ${r.senderDeleted()})}"></th:block></td>
+                    <td th:text="#{admin.v140.users.gifts.giftQty(${r.giftName(#locale)}, ${'' + r.quantity()})}">Salmon × 1</td>
+                    <td class="num" th:text="${r.totalText()}">Rp10,000</td>
+                    <td th:text="#{'admin.v140.giftOrders.channel.' + ${r.channel()}}">QRIS</td>
+                </tr></tbody>
+            </table>
+        </th:block>
+
+        <div class="pager" th:if="${t.totalPages() > 0}">
+            <button type="button" class="btn btn-sm" th:if="${t.hasPrev()}"
+                    th:attr="hx-get=@{/admin/users/{id}/gifts(id=${t.userId()},dir=${t.dir()},page=${t.page() - 1})}"
+                    hx-target="#user-gifts-panel" hx-swap="outerHTML"
+                    th:text="#{admin.audit.prev}">← 上一页</button>
+            <span th:text="#{admin.v140.users.gifts.page(${'' + (t.page() + 1)}, ${'' + t.totalPages()})}">第 1 / 1 页</span>
+            <button type="button" class="btn btn-sm" th:if="${t.hasNext()}"
+                    th:attr="hx-get=@{/admin/users/{id}/gifts(id=${t.userId()},dir=${t.dir()},page=${t.page() + 1})}"
+                    hx-target="#user-gifts-panel" hx-swap="outerHTML"
+                    th:text="#{admin.audit.next}">下一页 →</button>
+        </div>
+    </th:block>
+    </th:block>
+</section>
+</body>
+</html>

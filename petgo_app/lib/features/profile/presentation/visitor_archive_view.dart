@@ -7,6 +7,9 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../gift/presentation/gift_page.dart';
+import '../../gift/presentation/widgets/gift_entry.dart';
+import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
@@ -68,6 +71,9 @@ class VisitorArchiveView extends ConsumerStatefulWidget {
 }
 
 class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
+  /// 宠物信息卡头像锚点（V1.4.0 gift Story 1.3：送出动效落点）。
+  final GlobalKey _avatarKey = GlobalKey(debugLabel: 'visitorPetAvatar');
+
   @override
   void initState() {
     super.initState();
@@ -106,9 +112,15 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
                 profile: profile.header,
                 // 🛡 只读：编辑铅笔与入口网格两张卡整块不渲染。
                 readOnly: true,
-                // titleAction 不传 → 分享按钮整块消失（访客不得二次转发）。
+                // 分享按钮不传（访客不得二次转发）。V1.4.0 gift Story 1.3 · A1：标题行右侧放送礼胶囊
+                // （只站内入口、且不是自己的宠物；见 [_giftPill]）。
+                titleAction: _giftPill(),
+                avatarKey: _avatarKey,
                 happyCount: stats?.happyMomentCount,
-                consultCount: stats?.consultCount,
+                // V1.4.0 gift Story 2.2 · A1：中间格礼物总价值。只读态同样可点（站内入口才有 petId）；
+                // 分享 token 态拿不到 petId → 只显示数值、不可点（待确认，同 1.3 送礼胶囊）。
+                giftTotalValue: stats?.giftTotalValue,
+                onOpenGifts: _openGifts(),
                 milestoneCompleted: stats?.milestoneCompleted,
                 milestoneTotal: stats?.milestoneTotal,
                 // 里程碑进度条只展示，不跳转（跳的是当前登录用户自己的里程碑页）。
@@ -129,6 +141,34 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
         ),
       ),
     );
+  }
+
+  /// A1 送礼胶囊（V1.4.0 gift Story 1.3 · AC1.1 / AC1.5）。
+  ///
+  /// - 只有**站内入口**有 petId；分享链接（`/pet/:token`）拿不到 petId → 本分支不显示（待确认）。
+  /// - 自己的宠物不显示；`petProfileProvider` 加载中 / 失败时**也不显示**（防自己的宠物闪现一下送礼按钮）。
+  /// - 只在档案加载成功的分支里调（失效页不去读当前用户的宠物档案）。
+  Widget? _giftPill() {
+    final petId = widget.scope.petId;
+    if (!widget.scope.isInApp || petId == null) return null;
+    final mine = ref.watch(petProfileProvider);
+    if (!mine.hasValue || mine.isLoading || mine.hasError) return null;
+    if (mine.value?.id == petId) return null;
+    return GiftSendPill(
+      petId: petId,
+      flightTargetKey: _avatarKey,
+      // 送达后失效统计 → 礼物格（Story 2.2）的总价值随之刷新。
+      onDelivered: () {
+        if (mounted) ref.invalidate(visitorStatsProvider(widget.scope));
+      },
+    );
+  }
+
+  /// 礼物格点击（V1.4.0 gift Story 2.2 · AC2.4 / AC2.6）：站内入口 → 该宠物礼物页（E1）；分享 token 态 null。
+  VoidCallback? _openGifts() {
+    final petId = widget.scope.petId;
+    if (!widget.scope.isInApp || petId == null) return null;
+    return () => context.push(GiftPage.routeFor(petId));
   }
 
   /// 返回（UI 稿 P1 的 `.ro-titlerow` 左侧箭头）。
@@ -209,18 +249,26 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
             ),
           );
         }
-        return Column(
-          children: [
-            for (int i = 0; i < page.items.length; i++)
-              TimelineItemTile(
-                item: page.items[i],
-                petName: petName,
-                thumbIndex: i,
-                onTap: _tapFor(page.items[i]),
-                // 🛡 徽章不可点：它在作者态跳的是当前登录用户自己的里程碑页。
-              ),
-          ],
-        );
+        // 按月分组标题（与主人态同一组件，稿 A1「OKTOBER 2026」）。
+        final tiles = <Widget>[];
+        String? lastMonthKey;
+        for (int i = 0; i < page.items.length; i++) {
+          final d = page.items[i].displayDate;
+          final monthKey = '${d.year}-${d.month}';
+          if (monthKey != lastMonthKey) {
+            tiles.add(TimelineMonthHeader(
+                key: ValueKey('visitorMonth-$monthKey'), date: d, first: lastMonthKey == null));
+            lastMonthKey = monthKey;
+          }
+          tiles.add(TimelineItemTile(
+            item: page.items[i],
+            petName: petName,
+            thumbIndex: i,
+            onTap: _tapFor(page.items[i]),
+            // 🛡 徽章不可点：它在作者态跳的是当前登录用户自己的里程碑页。
+          ));
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: tiles);
       },
     );
   }

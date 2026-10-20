@@ -27,7 +27,8 @@ class HealthMilestoneCheckInRefusedTest {
                 Mockito.mock(com.tailtopia.profile.repository.PetMilestoneRepository.class),
                 Mockito.mock(com.tailtopia.profile.repository.MilestoneCompletionRepository.class),
                 Mockito.mock(MilestoneCompletionService.class),
-                Mockito.mock(com.tailtopia.content.service.ContentService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentService.class),
+                Mockito.mock(PetWriteGuard.class));
     }
 
     @Test
@@ -37,7 +38,7 @@ class HealthMilestoneCheckInRefusedTest {
         //    不存在的 code（旧实现按后缀判才会"命中"）。通用宠物真正的健康类是 G-M1 / G-M2。
         for (String code : List.of("C-M3", "C-M4", "C-M5", "C-M9", "D-M3", "D-M9",
                 "G-M1", "G-M2")) {
-            assertThatThrownBy(() -> svc.checkIn(7L, code, 1L))
+            assertThatThrownBy(() -> svc.checkIn(7L, 10L, code, 1L))
                     .as("%s 只能自动点亮，打卡必须被显式拒绝（NFR-11）", code)
                     .isInstanceOf(AppException.class)
                     .hasMessageContaining("自动点亮");
@@ -49,7 +50,7 @@ class HealthMilestoneCheckInRefusedTest {
         // 非健康类不受护栏影响：会继续往下走（此处因 mock 无档案而抛「尚未创建宠物档案」，
         // 说明它**通过了**护栏、进入了正常流程 —— 与「被护栏拒绝」是两种不同的错误）。
         MilestoneCheckInService svc = service();
-        assertThatThrownBy(() -> svc.checkIn(7L, "C-S6", 1L))
+        assertThatThrownBy(() -> svc.checkIn(7L, 10L, "C-S6", 1L))
                 .isInstanceOf(AppException.class)
                 .hasMessageNotContaining("自动点亮");
     }
@@ -63,7 +64,7 @@ class HealthMilestoneCheckInRefusedTest {
     void genericPetNonHealthMilestonesStillPassTheGuard() {
         MilestoneCheckInService svc = service();
         for (String code : List.of("G-M3", "G-M4")) {
-            assertThatThrownBy(() -> svc.checkIn(7L, code, 1L))
+            assertThatThrownBy(() -> svc.checkIn(7L, 10L, code, 1L))
                     .as("%s 不是健康类，不该被护栏拦下", code)
                     .isInstanceOf(AppException.class)
                     .hasMessageNotContaining("自动点亮");

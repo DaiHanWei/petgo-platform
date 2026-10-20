@@ -42,7 +42,8 @@ class AdminBootstrapTest {
         when(users.findByEmailAndRole(anyString(), any(Role.class)))
                 .thenReturn(Optional.of(mock(User.class)));
         when(adminAccounts.save(any(AdminAccount.class))).thenAnswer(inv -> inv.getArgument(0));
-        bootstrap = new AdminBootstrap(adminAccounts, users, encoder, "boot@tailtopia.id", "pw");
+        bootstrap = new AdminBootstrap(adminAccounts, users, encoder, "boot@tailtopia.id", "pw",
+                org.mockito.Mockito.mock(com.tailtopia.growth.service.GrowthDisplayLevelService.class));
     }
 
     private AdminAccount account(long id, AdminAccountStatus status) {

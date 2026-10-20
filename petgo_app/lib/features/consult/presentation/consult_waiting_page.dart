@@ -10,6 +10,8 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/case_image_viewer.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../profile/presentation/widgets/pet_pick_for_consult.dart';
+import '../../triage/presentation/triage_upload_page.dart' show triageUploadLocation;
 import '../data/consult_repository.dart';
 import '../domain/consult_case.dart';
 
@@ -159,13 +161,16 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     });
   }
 
-  void _useAi() {
+  Future<void> _useAi() async {
     // 原 WAITING 请求保留（不取消）；跳分诊上传页，提示兽医接单后会通知。
     // 显式保留请求 → 退出时不自动取消（与 AC7 退出取消区分）。
     _exitCancelDisabled = true;
     final l10n = AppLocalizations.of(context);
     showAppToast(context, l10n.consultUseAiKeptHint);
-    context.push('/triage/upload');
+    // V1.4.0 multi-pet Story 4.1：AI 问诊入口同样先选宠物（≥2 只弹 H1，取消则留在等待页）。
+    final pick = await pickPetForConsult(context, ref, purpose: PetPickPurpose.triage);
+    if (pick == null || !mounted) return;
+    context.push(triageUploadLocation(pick.petId));
     // 留在等待页（返回时仍可见）；继续保留请求不轮询，避免重复弹。
   }
 

@@ -294,6 +294,7 @@ dialog.modal .modal-foot {
 /* 抽屉打开时 toast 挪到抽屉左侧，不再压住抽屉底部的保存钮（OP-10 自测 2026-10-15） */
 body:has(.drawer.is-open) .toast { right: calc(min(480px, 100vw) + 24px); }
 body:has(#user-drawer.drawer.is-open) .toast { right: calc(min(600px, 100vw) + 24px); }
+body:has(#growthbatch-drawer.drawer.is-open) .toast { right: calc(min(600px, 100vw) + 24px); }
 .err { color: var(--danger); font-size: var(--fs-sm); margin: 6px 0; }
 .ok { color: var(--ok); font-size: var(--fs-sm); margin: 6px 0; }
 
@@ -931,12 +932,14 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ===== B7 用户列表 + 五页签抽屉（V1.3.0 Story 8.1）===== */
 .users-table td { vertical-align: middle; }
 .ud-head h2 { margin: 0 0 8px; font-size: var(--fs-md); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-/* 🔴 nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */
-.ud-tabs { margin: 0 0 10px; flex-wrap: nowrap; overflow-x: auto; }
+/* V1.4.0 Story 0.1：页签增至 9 个，600 宽一行放不下 → 按 ① PRD OQ-8 改为换两行（UI 稿 .tabs.w），不再横向滚动。 */
+.ud-tabs { margin: 0 0 10px; flex-wrap: wrap; }
 .ud-tabs .tab { white-space: nowrap; }
 /* V1.3.2 后台 AB-23：用户详情抽屉 480 → 600px（六页签三语都放不下 480，UI 稿 E1 实测）。
    🔴 只放宽这一个抽屉 —— 场所等其余抽屉维持 480 是有意的，不要借此统一加宽。 */
 #user-drawer.drawer { width: 600px; }
+/* V1.4.0 ① Story 4.3 · UI H1：批量发放抽屉 600 宽（同用户抽屉宽度），只放宽这一个 */
+#growthbatch-drawer.drawer { width: 600px; }
 .ud-purchases .ud-card + .ud-card { margin-top: 10px; }
 .ud-pc-title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--fs); }
 .ud-pc-table .num, .ud-pc-table .num-cell { font-variant-numeric: tabular-nums; }
@@ -952,6 +955,13 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ud-pet-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-tint); display: flex; align-items: center; justify-content: center; }
 .ud-pet-name { margin: 0 0 2px; display: flex; gap: 6px; align-items: center; }
 .ud-danger { border-color: var(--danger); }
+/* V1.4.0 ② Story 4.3：「宠物与名额」页签（UI 稿 L1）——名额构成四格 + 已收款未发放的购买行。 */
+.ud-petslots .ud-pc-title { margin-top: 12px; }
+.ud-ps-kv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 4px; }
+.ud-ps-kv-cell { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; }
+.ud-ps-k { color: var(--muted); font-size: var(--fs-xs); }
+.ud-ps-v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ud-ps-exception td { background: var(--danger-bg); }
 .user-drawer .sticky-footer { bottom: 0; }
 
 /* ===== V1.3.0 Story 10.1：A7 Toko 退货审核 / A8 Toko 异常订单（模板 A 右栏） ===== */
@@ -1338,3 +1348,131 @@ dialog.cm-modal .modal-foot .cm-cancel { background: var(--surface); color: var(
 dialog.cm-modal label.cm-typed { display: block; margin: 0; font-size: var(--fs-sm); color: var(--ink); }
 .cm-typed-prompt { display: block; margin-bottom: 6px; }
 .cm-typed-input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+/* ── V1.4.0 ① Story 4.1：成长体系配置页（段位色点 4.2 / 4.4 复用；色值同 App 段位色 §5.6）── */
+.tier-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.tier-NEWBIE { background: #66748C; }
+.tier-BUDDY { background: #0A7FA3; }
+.tier-GUARDIAN { background: #2B4FBF; }
+.tier-STAR { background: linear-gradient(135deg, #4A2E9E, #B5307F); }
+.cm-facts { margin: 10px 0; }
+.cm-fact + .cm-fact { margin-top: 4px; }
+.growth-recalc { margin: 0 0 12px; }
+.growth-levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.growth-levels-grid .inp { width: 140px; }
+.growth-rule-fld { margin-bottom: 12px; }
+.growth-rule-err { color: var(--danger, #C0392B); font-size: 12px; margin: 4px 0 0; }
+
+/* ── V1.4.0 ① Story 4.2：用户抽屉「成长值」页签（I1 ~ I7）── */
+.growth-ov { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+.growth-ov-cell { padding: 8px 10px; border: 1px solid var(--line, #E3E7EE); border-radius: 8px; }
+.growth-ov-val { margin: 4px 0 0; font-size: 16px; }
+.growth-adjust { margin: 12px 0; }
+.growth-adjust .inp[disabled], .growth-adjust input[type=radio][disabled] { opacity: .5; cursor: not-allowed; }
+.growth-ledger { margin-top: 12px; }
+
+/* V1.4.0 ③ gift Story 3.1 · 礼物目录（UI 稿 L1 / L6）：金额列右对齐等宽数字；顶部「送礼 QRIS 最低金额」配置行。 */
+.gift-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gift-cfgline { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; background: var(--surface, #fff); border: 1px solid var(--line, #E6E8EE); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; }
+.gift-cfgline .gift-cfgline-main { flex: 1; min-width: 220px; }
+.gift-cfgline .gift-cfgline-value { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.gift-cfgline .gift-cfgline-form { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.gift-kv { display: grid; grid-template-columns: 132px 1fr; gap: 12px 0; margin: 0; font-size: 13px; }
+.gift-kv dt { color: var(--muted); }
+.gift-kv dd { margin: 0; font-weight: 600; color: var(--ink); word-break: break-word; }
+
+/* ── V1.4.0 L2 第三轮还原度（成长体系 G1/G4/G5 · 用户抽屉 I1 / L1 · 礼物目录 L1/L2 · 送礼记录 M1）── */
+/* G1/G4/G5：三个页签的卡片撑满内容区（.card 默认 680 上限会把 7 列规则表挤到折行） */
+[data-gtab-panel] .card { max-width: none; }
+/* 表格里的输入 / 下拉：.card label 默认 block + 上边距，会把控件挤到单元格第二行 → 行内、无边距 */
+[data-gtab-panel] .tbl label { display: inline; margin: 0; }
+[data-gtab-panel] .tbl td { vertical-align: middle; }
+.growth-levels-grid .tbl .inp { width: 120px; }
+/* G4：「每 Rp [__] = [__] EXP」一行 */
+.growth-ratio { row-gap: 12px; margin-bottom: 8px; }
+.growth-ratio-lbl { font-size: var(--fs-sm); color: var(--ink-2); margin: 8px 0 6px; }
+.growth-ratio-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--ink-2); }
+.growth-ratio-line label { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.growth-ratio-line .inp { width: 110px; }
+/* I1：调整类型单选横排 + 输入框与「调整」同一行 */
+.growth-adjust-types { margin: 6px 0 10px; }
+.growth-adjust-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.growth-adjust-row input[name=delta] { width: 140px; }
+.growth-adjust-row input[name=note] { flex: 1; min-width: 160px; }
+/* 宠物与名额 L1：补发天数占位「补发天数（正整数）」不截断 */
+.ps-days { width: 220px; }
+/* 礼物目录 L1：「修改」在金额右侧；展开后表单整行落到下方（同 .wb-title-row 的 pl-inline） */
+.gift-cfgline > details.pl-inline[open] { flex-basis: 100%; }
+#gift-summary { grid-template-columns: repeat(3, minmax(140px, 200px)); }
+/* 礼物抽屉 L2：分组不用浏览器默认 fieldset 边框，标签在上、选项横排（.opsp-rad） */
+.gift-fset { border: 0; padding: 0; margin: 12px 0 4px; min-width: 0; }
+.gift-fset > legend { padding: 0; margin-bottom: 6px; font-size: var(--fs-sm); color: var(--ink-2); }
+[data-gift-form] label.field > span:first-child { display: block; margin-bottom: 4px; }
+[data-gift-form] .cfg-grid-2 > .field { margin: 12px 0 4px; }
+/* 送礼记录 M1：礼物列图标（订单快照图） */
+.gift-ico { height: 20px; width: auto; max-width: 48px; vertical-align: middle; margin-right: 6px; }
+/* 全局 input 带 7px 9px 内边距，会把 .opsp-rad 的 14px 圆环撑成椭圆 → 这两处复用时清零 */
+.growth-adjust-types input[type=radio], .gift-fset input[type=radio], .gift-fset input[type=checkbox] { padding: 0; }
+
+/* ── V1.4.0 L2 第四轮还原度（批量发放 H1/H2/H4 · 用户抽屉成长值 I1 · 等级表 G5 · 礼物抽屉 L2）── */
+/* H1~H5：步骤体撑满抽屉，按钮落到抽屉页脚（UI 稿 .dw-foot：上边线、右对齐，「上一步」靠左） */
+#growthbatch-drawer .drawer-body { display: flex; flex-direction: column; padding-bottom: 0; }
+#growthbatch-drawer [data-growth-batch-step], #growthbatch-drawer .gb-step-form { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#growthbatch-drawer .gb-foot { margin-top: auto; position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 10px 0 14px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+#growthbatch-drawer .gb-foot form.inline { margin-top: 0; margin-bottom: 0; }
+#growthbatch-drawer .gb-foot .gb-foot-l { margin-right: auto; }
+#growthbatch-drawer .gb-exp { width: 140px; display: block; margin-top: 4px; }
+#growthbatch-drawer .gb-file-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; }
+#growthbatch-drawer .gb-file-row .muted { font-size: var(--fs-xs); }
+label.field.gb-req > span:first-child::after { content: " *"; color: var(--danger); font-weight: 700; }
+/* H2：汇总三格一行；无效 ID > 0 标红 */
+#growthbatch-drawer .sum.gb-sum { grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 14px; }
+#growthbatch-drawer .gb-sum .sum-item { padding: 8px 10px; }
+#growthbatch-drawer .gb-sum .gb-bad { color: var(--danger); }
+/* H2 / H4：键值两列对齐（UI 稿 .kv：120px 灰键 + 加粗值） */
+.gb-kv { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; margin: 0 0 14px; font-size: 13px; }
+.gb-kv dt { color: var(--muted); }
+.gb-kv dd { margin: 0; font-weight: 700; color: var(--ink); word-break: break-word; }
+.gb-kv .num { font-variant-numeric: tabular-nums; }
+#growthbatch-drawer .gb-problems { margin-bottom: 10px; }
+#growthbatch-drawer .gb-problems td { font-variant-numeric: tabular-nums; }
+#growthbatch-drawer .gb-note { margin: 0 0 12px; }
+#growthbatch-drawer .banner.ok { margin-bottom: 14px; }
+/* H4：toast 落在抽屉右下、页脚上方（稿上在右下角；抬高一截不压「完成」） */
+body:has(#growthbatch-drawer.drawer.is-open) .toast { right: 24px; bottom: 76px; }
+/* I1：明细筛选一行（无底框），规则下拉收窄；时间列紧凑 MM-dd HH:mm；关联对象紫色链接 */
+.growth-ledger .growth-ledger-fbar { background: none; border: 0; padding: 0; margin: 0 0 10px; flex-wrap: nowrap; align-items: center; gap: 8px; }
+.growth-ledger .growth-ledger-rule { width: 160px; min-width: 0; }
+.growth-ledger .growth-ledger-date { width: 136px; }
+.growth-ledger-table td.num { font-variant-numeric: tabular-nums; }
+.growth-ledger-table a.growth-ref-link { color: var(--brand-strong); font-weight: 600; text-decoration: none; }
+.growth-ledger-table a.growth-ref-link:hover { text-decoration: underline; }
+/* G5：禁用的门槛框（Lv1 固定 0 / 只读）灰底；门槛等宽数字；「＋ 追加等级」在页脚保存钮左侧（展开后整行落到按钮上方） */
+.growth-levels-grid .tbl .inp { font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, monospace; }
+.growth-levels-grid .tbl .inp[disabled] { background: #F1F2F5; color: var(--muted); cursor: not-allowed; }
+#cfg-growth-levels .cfg-foot { flex-wrap: wrap; }
+#cfg-growth-levels .growth-level-append > summary.btn { cursor: pointer; font-weight: 600; background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); padding: 6px 12px; }
+#cfg-growth-levels .growth-level-append[open] { order: -1; flex-basis: 100%; }
+#cfg-growth-levels .growth-level-append[open] > summary.btn { margin-bottom: 8px; }
+#cfg-growth-levels .growth-level-append .cfg-grid-2 { align-items: end; }
+/* L2：金额框 Rp 前缀（UI 稿 .money）；排序框窄；新建礼物保存钮落在抽屉页脚 */
+.gift-money { display: inline-flex; align-items: stretch; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; width: 180px; margin-top: 4px; }
+.gift-money:focus-within { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-tint); }
+.gift-money .gift-money-cur { padding: 6px 9px; background: #F7F8FA; border-right: 1px solid var(--line); color: var(--muted); font-size: 12.5px; font-weight: 600; display: flex; align-items: center; }
+.gift-money .gift-money-val { flex: 1; min-width: 0; border: 0; border-radius: 0; outline: 0; box-shadow: none; padding: 6px 12px; text-align: right; font-variant-numeric: tabular-nums; }
+[data-gift-form] .gift-sort { width: 180px; }
+#gift-drawer .drawer-body:has(#gift-create) { display: flex; flex-direction: column; padding-bottom: 0; }
+#gift-create, #gift-create > form { flex: 1; display: flex; flex-direction: column; }
+#gift-create .gift-create-foot { margin-top: auto; position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 10px 0 14px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+#gift-create .gift-create-foot .lst-inline-error { flex: 1; margin: 0; }
+/* G1：规则「编辑」紫色文字链接（UI 稿 .tbl a：brand-strong · 600）；L1：礼物目录筛选为无标签下拉条（.fbar 无底框） */
+.growth-rule-edit { background: none; border: 0; padding: 0; margin: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--brand-strong); cursor: pointer; }
+.growth-rule-edit:hover { text-decoration: underline; }
+.filter-bar.gift-fbar { background: none; border: 0; padding: 0; margin-bottom: 14px; align-items: center; }
+#growthbatch-drawer .gb-problems .gb-ids { font-family: ui-monospace, Menlo, monospace; }
+/* I1：调整卡加边框（稿上是独立白卡）；分页右对齐 */
+.growth-adjust { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.growth-adjust > h3 { margin: 0 0 4px; font-size: 12.5px; color: var(--ink-2); }
+.growth-ledger .pager { display: flex; justify-content: flex-end; align-items: center; gap: 12px; font-size: 12.5px; margin-top: 8px; }

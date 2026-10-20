@@ -17,6 +17,7 @@ class PlaceCheckinResult {
     this.passportNo,
     this.stampCount,
     this.stampImageUrl,
+    this.pets = const [],
   });
 
   /// 本次打卡的不可枚举标识（Story 1.5 顺手发帖时关联用）。
@@ -47,6 +48,10 @@ class PlaceCheckinResult {
   /// 场所专属章（Story 1.4）；null = 按类型用默认章。
   final String? stampImageUrl;
 
+  /// 本次选中的每只宠物各自的章（V1.4.0 multi-pet Story 1.3 下发 / 3.3 G3 消费），顺序同后端（按宠物顺序）。
+  /// 上面的顶层单宠字段 = 第一只（兼容旧版）。老后端不下发 → 空表（成功页按顶层字段降级）。
+  final List<PlaceCheckinPetStamp> pets;
+
   factory PlaceCheckinResult.fromJson(Map<String, dynamic> json) {
     final count = json['visitCount'];
     return PlaceCheckinResult(
@@ -60,8 +65,44 @@ class PlaceCheckinResult {
       passportNo: _blankToNull(json['passportNo']?.toString()),
       stampCount: json['stampCount'] is num ? (json['stampCount'] as num).toInt() : null,
       stampImageUrl: _blankToNull(json['stampImageUrl']?.toString()),
+      pets: PlaceCheckinPetStamp.listFromJson(json['pets']),
     );
   }
 
   static String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
+}
+
+/// 单只宠物的章（后端 `PlaceCheckinResponse.PetStamp`：`petId / isNewStamp / visitCount / passportNo / stampCount`）。
+class PlaceCheckinPetStamp {
+  const PlaceCheckinPetStamp({
+    required this.petId,
+    required this.isNewStamp,
+    required this.visitCount,
+    this.passportNo,
+    this.stampCount,
+  });
+
+  final int petId;
+  final bool isNewStamp;
+  final int visitCount;
+  final String? passportNo;
+  final int? stampCount;
+
+  static List<PlaceCheckinPetStamp> listFromJson(Object? raw) {
+    if (raw is! List) return const [];
+    final out = <PlaceCheckinPetStamp>[];
+    for (final e in raw) {
+      if (e is! Map || e['petId'] is! num) continue;
+      final count = e['visitCount'];
+      final passport = e['passportNo']?.toString();
+      out.add(PlaceCheckinPetStamp(
+        petId: (e['petId'] as num).toInt(),
+        isNewStamp: e['isNewStamp'] == true,
+        visitCount: count is num && count > 0 ? count.toInt() : 1,
+        passportNo: (passport == null || passport.isEmpty) ? null : passport,
+        stampCount: e['stampCount'] is num ? (e['stampCount'] as num).toInt() : null,
+      ));
+    }
+    return List.unmodifiable(out);
+  }
 }

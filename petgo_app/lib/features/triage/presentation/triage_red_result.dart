@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/red_alert_overlay.dart';
+import '../../profile/data/pet_list_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/triage_repository.dart';
+import '../domain/triage_archive.dart' show triageSubmittedPetId;
 import '../domain/triage_result_controller.dart';
 import '../domain/triage_upload_controller.dart';
 
@@ -39,14 +41,31 @@ class _TriageRedResultState extends ConsumerState<TriageRedResult> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlayOnce());
   }
 
+  /// 标题宠物名（V1.4.0 multi-pet Story 4.1 · AC8.2）：本次提交所选的宠物；无选择（历史回看 / 旧路径）
+  /// 或列表里找不到 → 沿用现状的当前宠物。名字只渲染，不进日志。
+  Future<String?> _petName() async {
+    final triageId = widget.triageId;
+    final petId = triageId == null ? null : triageSubmittedPetId(ref, triageId);
+    if (petId != null) {
+      try {
+        for (final p in await ref.read(petListProvider.future)) {
+          if (p.id == petId) return p.name;
+        }
+      } catch (_) {
+        // 列表取不到 → 沿用现状。
+      }
+    }
+    final pet = await ref.read(petProfileProvider.future);
+    return pet?.name;
+  }
+
   Future<void> _showOverlayOnce() async {
     if (_shown || !mounted) return;
     _shown = true;
-    final pet = await ref.read(petProfileProvider.future);
+    final petName = await _petName();
     if (!mounted) return;
     final l10n = AppLocalizations.of(context);
-    final title =
-        pet?.name != null ? l10n.triageRedTitle(pet!.name) : l10n.triageRedTitleNoPet;
+    final title = petName != null ? l10n.triageRedTitle(petName) : l10n.triageRedTitleNoPet;
     // GEJALA TERDETEKSI：优先 AI 摘要，回退用户输入的症状文本。
     final symptom = (widget.result.symptomSummary?.trim().isNotEmpty ?? false)
         ? widget.result.symptomSummary!.trim()

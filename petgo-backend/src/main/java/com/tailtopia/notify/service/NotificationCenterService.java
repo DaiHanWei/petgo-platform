@@ -9,6 +9,8 @@ import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.dto.NotificationPage;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
+import com.tailtopia.notify.port.NotificationGiftLines;
+import com.tailtopia.notify.port.NotificationPetNames;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.notify.service.InteractionCopyRenderer.ActorSummary;
 import com.tailtopia.ops.target.OpsTargetType;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,10 +71,23 @@ public class NotificationCenterService {
     private final FollowReader followReader;
     private final InteractionCopyRenderer copy;
     private final OpsNotificationCampaignRepository campaigns;
+    /** 收礼条目的宠物名（V1.4.0 gift Story 1.2 · AC5.4）；缺 bean（切片测试）时按 noPet 文案渲染。 */
+    private final ObjectProvider<NotificationPetNames> petNames;
+    /** 收礼单人条目「送的是什么」（V1.4.0 gift L2 第二轮）；缺 bean / 异常时按「mengirim hadiah」渲染。 */
+    private final ObjectProvider<NotificationGiftLines> giftLines;
+
+    /**
+     * 圈「本条通知期间送的礼」时的容差：送达时刻（送达事务的 {@code now()}）早于送礼人并入通知的时刻
+     * （提交后监听器里另起事务的 {@code now()}），差的是一个事务的时长。
+     */
+    static final java.time.Duration GIFT_SINCE_TOLERANCE = java.time.Duration.ofSeconds(10);
 
     public NotificationCenterService(NotificationRepository repo, StringRedisTemplate redis,
             InteractionActorResolver actors, AccountQueryService accounts, CommentQueryService comments,
-            FollowReader followReader, InteractionCopyRenderer copy, OpsNotificationCampaignRepository campaigns) {
+            FollowReader followReader, InteractionCopyRenderer copy, OpsNotificationCampaignRepository campaigns,
+            ObjectProvider<NotificationPetNames> petNames, ObjectProvider<NotificationGiftLines> giftLines) {
+        this.petNames = petNames;
+        this.giftLines = giftLines;
         this.repo = repo;
         this.redis = redis;
         this.actors = actors;
@@ -217,6 +233,8 @@ public class NotificationCenterService {
         // ④ 评论快照：只对有可显示触发人的评论条目；⑤ 新粉丝关系：只对有可显示触发人的新粉丝条目
         Set<Long> commentIds = new LinkedHashSet<>();
         Set<Long> followerIds = new LinkedHashSet<>();
+        Set<Long> giftPetIds = new LinkedHashSet<>();
+        Map<Long, Long> giftSingleSender = new java.util.HashMap<>();
         boolean anyVisible = false;
         for (Notification n : pageRows) {
             Optional<ActorSummary> s = summaries.get(n.getId());
@@ -228,13 +246,26 @@ public class NotificationCenterService {
                 commentIds.add(n.getCommentId());
             } else if (n.getType() == NotificationType.USER_FOLLOWED) {
                 followerIds.add(s.get().latestActorId());
+            } else if (n.getType() == NotificationType.PET_GIFT_RECEIVED) {
+                Long petId = giftPetId(n);
+                if (petId != null) {
+                    giftPetIds.add(petId);
+                    if (s.get().others() == 0) {
+                        giftSingleSender.put(n.getId(), s.get().latestActorId());
+                    }
+                }
             }
         }
         Map<Long, NotificationCommentSnapshot> snapshots = commentIds.isEmpty() ? Map.of()
                 : comments.notificationSnapshots(commentIds);
         Map<Long, FollowState> states = followerIds.isEmpty() ? Map.of()
                 : followReader.followStates(userId, followerIds);
+        // ⑥ 收礼条目的宠物名：本页有收礼条目才查，一次批量（V1.4.0 gift Story 1.2 · AC5.4）
+        Map<Long, String> names = giftPetIds.isEmpty() ? Map.of() : petNamesOf(giftPetIds);
         Locale locale = anyVisible ? accounts.localeOf(userId) : null;
+        // ⑦ 收礼单人条目送的是什么（L2 第二轮）：本页有才查，触发人并入时刻一次 + 订单一次
+        Map<Long, String> giftLabels = giftSingleSender.isEmpty() ? Map.of()
+                : giftLabelsOf(pageRows, giftSingleSender, locale);
 
         List<NotificationItem> items = new ArrayList<>(pageRows.size());
         for (Notification n : pageRows) {
@@ -243,16 +274,84 @@ public class NotificationCenterService {
             if (s == null) {
                 items.add(plain(n, opsTargets)); // 非互动类型（含运营通知），或上线前的存量（无触发人行）
             } else if (s.isPresent()) {
-                items.add(render(n, s.get(), locale, snapshots, states));
+                items.add(render(n, s.get(), locale, snapshots, states, names, giftLabels));
             }
             // s.isEmpty()：触发人全被过滤 → 从列表隐藏（T-36）
         }
         return new Rendered(items, summaries);
     }
 
+    /** 收礼条目的 targetRef = 宠物 id（{@code NotificationService.sendGiftReceived}）；坏值按查不到处理。 */
+    private static Long giftPetId(Notification n) {
+        if (n.getTargetRef() == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(n.getTargetRef());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 收礼单人条目的礼物片段（「Tulang ×5」）。端口缺失或异常 → 空（按「mengirim hadiah」渲染，不拖垮通知中心）。
+     *
+     * @param senderByNotification 通知 id → 唯一可显示的送礼人
+     */
+    private Map<Long, String> giftLabelsOf(List<Notification> pageRows, Map<Long, Long> senderByNotification,
+            Locale locale) {
+        NotificationGiftLines port = giftLines.getIfAvailable();
+        if (port == null) {
+            return Map.of();
+        }
+        try {
+            Map<Long, Instant> since = actors.actedAt(senderByNotification);
+            Map<Long, NotificationGiftLines.Query> queries = new java.util.HashMap<>();
+            for (Notification n : pageRows) {
+                Long sender = senderByNotification.get(n.getId());
+                Long petId = giftPetId(n);
+                Instant at = since.get(n.getId());
+                if (sender != null && petId != null && at != null && n.getCreatedAt() != null) {
+                    // 上界 = 本条 created_at：送达（delivered_at = 交付事务的 now()）先于收礼通知事务（AFTER_COMMIT 后才写，
+                    // created_at = 其 now()），本条期间的每一单都 ≤ 它；本条已读后再送的落在新条目上、送达时刻 > 它
+                    queries.put(n.getId(), new NotificationGiftLines.Query(petId, sender,
+                            at.minus(GIFT_SINCE_TOLERANCE), n.getCreatedAt()));
+                }
+            }
+            if (queries.isEmpty()) {
+                return Map.of();
+            }
+            Map<Long, String> out = new java.util.HashMap<>();
+            port.linesOf(queries).forEach((id, line) -> out.put(id,
+                    InteractionCopyRenderer.giftLabel(line.nameEn(), line.nameId(), line.quantity(), locale)));
+            return out;
+        } catch (RuntimeException e) {
+            log.warn("通知列表取礼物失败（按通用收礼文案渲染）cause={}", e.getClass().getSimpleName());
+            return Map.of();
+        }
+    }
+
+    /** 宠物名一次批量取；端口缺失或异常 → 空（按 noPet 文案渲染，不拖垮通知中心）。 */
+    private Map<Long, String> petNamesOf(Set<Long> petIds) {
+        NotificationPetNames port = petNames.getIfAvailable();
+        if (port == null) {
+            return Map.of();
+        }
+        try {
+            Map<Long, String> m = port.namesOf(petIds);
+            return m == null ? Map.of() : m;
+        } catch (RuntimeException e) {
+            log.warn("通知列表取宠物名失败（按无宠物名渲染）cause={}", e.getClass().getSimpleName());
+            return Map.of();
+        }
+    }
+
     private NotificationItem render(Notification n, ActorSummary s, Locale locale,
-            Map<Long, NotificationCommentSnapshot> snapshots, Map<Long, FollowState> states) {
-        String title = copy.title(n.getType(), n.getVariant(), s, locale);
+            Map<Long, NotificationCommentSnapshot> snapshots, Map<Long, FollowState> states, Map<Long, String> names,
+            Map<Long, String> giftLabels) {
+        String title = n.getType() == NotificationType.PET_GIFT_RECEIVED
+                ? copy.title(n.getType(), n.getVariant(), s, locale, petNameOf(n, names), giftLabels.get(n.getId()))
+                : copy.title(n.getType(), n.getVariant(), s, locale);
         String body = null;
         Boolean iFollow = null;
         Boolean followsMe = null;
@@ -268,6 +367,11 @@ public class NotificationCenterService {
         }
         return NotificationItem.rendered(n, title, body, s.latestActorId(), s.latestNickname(), s.latestToken(),
                 s.total(), iFollow, followsMe, bodyDeleted);
+    }
+
+    private static String petNameOf(Notification n, Map<Long, String> names) {
+        Long petId = giftPetId(n);
+        return petId == null ? null : names.get(petId);
     }
 
     /** 标记单条已读（token 定位，仅本人，否则 404 防枚举）+ 角标递减（不低于 0）。 */

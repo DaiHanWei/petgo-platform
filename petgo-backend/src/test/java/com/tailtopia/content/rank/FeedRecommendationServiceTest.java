@@ -46,6 +46,7 @@ class FeedRecommendationServiceTest {
     private FeedSeenStore seen;
     private FeedSequenceStore sequences;
     private com.tailtopia.moderation.throttle.service.RankThrottleService throttles;
+    private com.tailtopia.growth.service.GrowthQueryService growth;
     private FeedRecommendationService service;
     private com.tailtopia.config.domain.FeedRankConfig cfg;
     private com.tailtopia.config.service.PlatformConfigService platformConfig;
@@ -65,7 +66,7 @@ class FeedRecommendationServiceTest {
         when(comments.countVisibleForViewerIn(anyList(), any())).thenReturn(List.of());
         when(tags.findVisibleTags(any(), any())).thenReturn(Map.of());
         when(species.resolveAll(anyList())).thenReturn(Map.of());
-        when(pets.findByOwnerId(org.mockito.ArgumentMatchers.anyLong()))
+        when(pets.findDefault(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(java.util.Optional.empty());
         when(seen.decayFactors(any(), anyList(), any())).thenReturn(Map.of());
         when(sequences.newSeed(any())).thenReturn("s-seed-1");
@@ -94,9 +95,12 @@ class FeedRecommendationServiceTest {
         throttles = mock(com.tailtopia.moderation.throttle.service.RankThrottleService.class);
         when(throttles.factorsFor(anyList(), any())).thenReturn(Map.of());
 
+        // V1.4.0 ① Story 3.4：mock 的 cfg 作者加权为 0 ⇒ 不加权、不查等级（既有用例行为不变）。
+        growth = mock(com.tailtopia.growth.service.GrowthQueryService.class);
+
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
-                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles);
+                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles, growth);
     }
 
     private static ContentPost post(long id, long authorId) {
@@ -436,6 +440,136 @@ class FeedRecommendationServiceTest {
         assertThat(p.posts()).isNotEmpty();
     }
 
+    /**
+     * V1.4.0 multi-pet（Story 1.2 · X26，V-1）的「多宠不抛异常、照常出页（不退回时间倒序）」意图保留；
+     * 「主物种 = 默认宠物物种」的过渡断言按 Story 3.2（AD-11 · AC2.4）<b>按设计改写</b>为：
+     * 传给引擎的是全部宠物的物种计数。
+     */
+    @Test
+    void multiPetViewerPassesSpeciesCountsToEngine() {
+        java.time.Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 90L, com.tailtopia.profile.domain.PetType.DOG, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 91L, com.tailtopia.profile.domain.PetType.CAT,
+                        t0.plusSeconds(60))));
+
+        RankRun run = runThroughSpyEngine(9L, Map.of());
+
+        assertThat(run.page().posts()).isNotEmpty();
+        assertThat(run.input().viewerSpecies()).isEqualTo(Map.of("DOG", 1, "CAT", 1));
+    }
+
+    /** 引擎实参与出页结果。 */
+    private record RankRun(FeedRankEngine.Input input, FeedRecommendationService.RankedPage page) {
+    }
+
+    /** 走一次生成（50 条池，likes 可选），用 spy 引擎截下传给引擎的 Input。 */
+    private RankRun runThroughSpyEngine(Long viewerId, Map<Long, Long> likeCounts) {
+        when(sequences.length(any(), any())).thenReturn(0L);
+        when(sequences.read(any(), any(), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
+                .thenReturn(List.of());
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 50; i++) {
+            pool.add(post(i, i));
+        }
+        List<ContentLikeRepository.PostLikeCount> lc = new ArrayList<>();
+        likeCounts.forEach((id, n) -> lc.add(new ContentLikeRepository.PostLikeCount() {
+            @Override
+            public Long getPostId() {
+                return id;
+            }
+
+            @Override
+            public long getLikeCount() {
+                return n;
+            }
+        }));
+        when(likes.countByPostIdIn(anyList())).thenReturn(lc);
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
+            Collection<Long> asked = inv.getArgument(0);
+            List<ContentPost> out = new ArrayList<>();
+            if (asked == null) {
+                return out; // 二次打桩时 Mockito 会以 null 实参调一次上一个 answer
+            }
+            for (Long id : asked) {
+                out.add(post(id, id));
+            }
+            return out;
+        });
+        FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
+        FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
+                seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles,
+                growth);
+
+        FeedRecommendationService.RankedPage p = svc.page(viewerId, null, null, 20, null);
+
+        org.mockito.ArgumentCaptor<FeedRankEngine.Input> in = org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
+        verify(engine, org.mockito.Mockito.atLeastOnce()).rank(in.capture(), anyInt());
+        return new RankRun(in.getValue(), p);
+    }
+
+    /** Story 3.2 AC2：2 猫 1 狗（其中一只只读）→ {CAT:2, DOG:1}；只读计入；首页不读任何 petId。 */
+    @Test
+    void viewerSpeciesCountsIncludeReadOnlyPets() {
+        java.time.Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        var readOnlyCat = com.tailtopia.profile.support.PetFixtures.pet(9L, 92L,
+                com.tailtopia.profile.domain.PetType.CAT, t0.plusSeconds(120));
+        org.springframework.test.util.ReflectionTestUtils.setField(readOnlyCat, "status",
+                com.tailtopia.profile.domain.PetStatus.READ_ONLY);
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 90L, com.tailtopia.profile.domain.PetType.CAT, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 91L, com.tailtopia.profile.domain.PetType.DOG,
+                        t0.plusSeconds(60)),
+                readOnlyCat));
+
+        RankRun run = runThroughSpyEngine(9L, Map.of());
+
+        assertThat(run.input().viewerSpecies()).isEqualTo(Map.of("CAT", 2, "DOG", 1));
+        // 只按账号取全部宠物 —— 不按宠物 id / 默认宠物取（首页不跟随 Diary Tab）
+        verify(pets, never()).findById(org.mockito.ArgumentMatchers.anyLong());
+        verify(pets, never()).findDefault(org.mockito.ArgumentMatchers.anyLong());
+        verify(pets, never()).findByIdAndOwnerId(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** Story 3.2 AC2：游客 / 无宠物 → 空 Map（物种维度不生效，与改造前 null 等价）。 */
+    @Test
+    void guestAndPetlessViewerGetEmptySpeciesWeights() {
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of());
+
+        assertThat(runThroughSpyEngine(9L, Map.of()).input().viewerSpecies()).isEmpty();
+        assertThat(runThroughSpyEngine(null, Map.of()).input().viewerSpecies()).isEmpty();
+    }
+
+    /**
+     * Story 3.2 AC4.8（PRD AC5）：多宠账号照常按打分排序，<b>不退回时间倒序</b>——
+     * 老帖互动高时，返回序列 ≠ 按 created_at 倒序的那份。
+     */
+    @Test
+    void multiPetViewerStillGetsScoredOrderNotTimeDesc() {
+        java.time.Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        when(pets.findAllByOwnerIdOrderByCreatedAtAscIdAsc(9L)).thenReturn(List.of(
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 90L, com.tailtopia.profile.domain.PetType.CAT, t0),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 91L, com.tailtopia.profile.domain.PetType.CAT,
+                        t0.plusSeconds(30)),
+                com.tailtopia.profile.support.PetFixtures.pet(9L, 92L, com.tailtopia.profile.domain.PetType.DOG,
+                        t0.plusSeconds(60))));
+        Map<Long, Long> lk = new java.util.HashMap<>();
+        for (long i = 1; i <= 50; i++) {
+            lk.put(i, i * 10); // id 越大越老、互动越高
+        }
+
+        RankRun run = runThroughSpyEngine(9L, lk);
+
+        List<Long> got = run.page().posts().stream().map(ContentPost::getId).toList();
+        List<Long> timeDesc = run.page().posts().stream()
+                .sorted(java.util.Comparator.comparing(ContentPost::getCreatedAt).reversed())
+                .map(ContentPost::getId).toList();
+        assertThat(got).isNotEmpty().isNotEqualTo(timeDesc);
+        assertThat(run.input().viewerSpecies()).isEqualTo(Map.of("CAT", 2, "DOG", 1));
+    }
+
     /** 空池 → 空页 + 无游标，不抛错。 */
     @Test
     void emptyPoolYieldsEmptyPage() {
@@ -610,10 +744,15 @@ class FeedRecommendationServiceTest {
 
     /** 用 spy 引擎重建服务，跑一次生成，取传进引擎的 RankParams。 */
     private RankParams paramsReachingTheEngine() {
+        return inputReachingTheEngine().params();
+    }
+
+    /** 同上，取整个引擎输入（V1.4.0 ① Story 3.4：作者系数 Map）。 */
+    private FeedRankEngine.Input inputReachingTheEngine() {
         FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
         FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags,
                 species, pets, seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000),
-                platformConfig, throttles);
+                platformConfig, throttles, growth);
         generationPath(Map.of());
         List<ContentPost> pool = new ArrayList<>();
         for (long i = 1; i <= 30; i++) {
@@ -626,7 +765,7 @@ class FeedRecommendationServiceTest {
         org.mockito.ArgumentCaptor<FeedRankEngine.Input> input =
                 org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
         verify(engine).rank(input.capture(), anyInt());
-        return input.getValue().params();
+        return input.getValue();
     }
 
     @Test
@@ -783,5 +922,55 @@ class FeedRecommendationServiceTest {
         assertThat(FeedSequenceStore.seedTime("s-seed-1")).isNull();
         assertThat(FeedSequenceStore.seedTime("x123")).isNull();
         assertThat(FeedSequenceStore.seedTime(null)).isNull();
+    }
+
+    // ── V1.4.0 ① Story 3.4：作者等级加权 ────────────────────────────
+
+    private static RankCandidate cand(long id, long authorId) {
+        return new RankCandidate(id, authorId, FeedAttribute.FUN, null, java.time.Instant.EPOCH, 0, 0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void authorFactorsOnlyForParticipatingLv15AuthorsWithOneDedupedLevelsCall() {
+        when(growth.getLevels(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(Map.of(
+                15L, com.tailtopia.growth.domain.GrowthLevel.of(15, com.tailtopia.growth.domain.GrowthTier.STAR),
+                14L, com.tailtopia.growth.domain.GrowthLevel.of(14, com.tailtopia.growth.domain.GrowthTier.GUARDIAN),
+                99L, com.tailtopia.growth.domain.GrowthLevel.NOT_PARTICIPATING)); // 虚拟号：展示等级再高也不吃
+
+        Map<Long, Double> f = service.authorFactors(
+                List.of(cand(1, 15), cand(2, 15), cand(3, 14), cand(4, 99)), 1.05);
+
+        assertThat(f).isEqualTo(Map.of(15L, 1.05));
+        org.mockito.ArgumentCaptor<java.util.Collection<Long>> ids =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        org.mockito.Mockito.verify(growth, org.mockito.Mockito.times(1)).getLevels(ids.capture());
+        assertThat(ids.getValue()).containsExactlyInAnyOrder(15L, 14L, 99L);
+        org.mockito.Mockito.verify(growth, org.mockito.Mockito.never())
+                .getBadges(org.mockito.ArgumentMatchers.anyCollection());
+    }
+
+    /** 生成路径真的把作者系数 Map 传进了引擎（而不是只在辅助方法里算对）。 */
+    @Test
+    void authorFactorsReachTheEngineOnGeneration() {
+        when(cfg.getAuthorLevelBoost()).thenReturn(1.05);
+        when(growth.getLevels(org.mockito.ArgumentMatchers.anyCollection())).thenAnswer(inv -> {
+            java.util.Collection<Long> ids = inv.getArgument(0);
+            Map<Long, com.tailtopia.growth.domain.GrowthLevel> out = new java.util.HashMap<>();
+            for (Long id : ids) {
+                out.put(id, id == 7L
+                        ? com.tailtopia.growth.domain.GrowthLevel.of(15, com.tailtopia.growth.domain.GrowthTier.STAR)
+                        : com.tailtopia.growth.domain.GrowthLevel.of(3, com.tailtopia.growth.domain.GrowthTier.NEWBIE));
+            }
+            return out;
+        });
+
+        assertThat(inputReachingTheEngine().authorFactors()).isEqualTo(Map.of(7L, 1.05));
+    }
+
+    @Test
+    void boostOfOneMeansEmptyMapAndNoLevelQuery() {
+        assertThat(service.authorFactors(List.of(cand(1, 15)), 1.0)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(growth);
     }
 }

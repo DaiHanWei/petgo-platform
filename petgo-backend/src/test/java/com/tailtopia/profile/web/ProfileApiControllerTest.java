@@ -45,16 +45,20 @@ class ProfileApiControllerTest {
             mock(com.tailtopia.share.service.TailsonalityShareRewardService.class);
     private final com.tailtopia.share.service.PassportShareRewardService passportShareRewards =
             mock(com.tailtopia.share.service.PassportShareRewardService.class);
+    /** V1.4.0 multi-pet：控制器取宠物只经 PetResolver；不带 petId 的入口校验返回 empty 即放行。 */
+    private final com.tailtopia.profile.service.PetResolver petResolver =
+            mock(com.tailtopia.profile.service.PetResolver.class);
     private final ProfileApiController controller = new ProfileApiController(
             service, timelineService, cardRerenderService, idCardService, idCardHdService,
-            rateLimiter, idCardShareRewards, ageCardShareRewards, tailsonalityShareRewards, passportShareRewards);
+            rateLimiter, idCardShareRewards, ageCardShareRewards, tailsonalityShareRewards, passportShareRewards,
+            petResolver, mock(com.tailtopia.profile.service.PetListService.class));
 
     @Test
     void tailsonalityShareRewardDelegatesWithJwtUserAndRateLimits() {
-        when(tailsonalityShareRewards.rewardAfterShare(eq(77L),
+        when(tailsonalityShareRewards.rewardAfterShare(eq(77L), ArgumentMatchers.isNull(),
                 eq(com.tailtopia.share.service.TailsonalityShareRewardService.CardType.MATCH),
                 ArgumentMatchers.any())).thenReturn(15L);
-        var resp = controller.rewardTailsonalityShare(jwt("77"),
+        var resp = controller.rewardTailsonalityShare(jwt("77"), null,
                 new com.tailtopia.share.dto.TailsonalityShareRewardRequest("MATCH"));
         assertThat(resp.coins()).isEqualTo(15L);
         verify(rateLimiter).check(eq("rl:profile:tsshare:77"), anyInt(), ArgumentMatchers.any());
@@ -62,10 +66,10 @@ class ProfileApiControllerTest {
 
     @Test
     void passportShareRewardDelegatesWithJwtUserAndRateLimits() {
-        when(passportShareRewards.rewardAfterShare(eq(77L),
+        when(passportShareRewards.rewardAfterShare(eq(77L), ArgumentMatchers.isNull(),
                 eq(com.tailtopia.share.service.PassportShareRewardService.CardType.BOARDING),
                 ArgumentMatchers.any())).thenReturn(0L);
-        var resp = controller.rewardPassportShare(jwt("77"),
+        var resp = controller.rewardPassportShare(jwt("77"), null,
                 new com.tailtopia.share.dto.PassportShareRewardRequest("BOARDING"));
         assertThat(resp.coins()).isZero();
         verify(rateLimiter).check(eq("rl:profile:ppshare:77"), anyInt(), ArgumentMatchers.any());
@@ -100,16 +104,16 @@ class ProfileApiControllerTest {
     void myProfileDelegatesWithJwtUser() {
         PetProfileResponse stub = new PetProfileResponse(
                 5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
-        when(service.getMyProfile(77L)).thenReturn(stub);
-        assertThat(controller.myProfile(jwt("77")).cardToken()).isEqualTo("TOK");
+        when(service.getMyProfile(77L, null)).thenReturn(stub);
+        assertThat(controller.myProfile(jwt("77"), null).cardToken()).isEqualTo("TOK");
     }
 
     @Test
     void timelineDelegatesWithJwtUserAndParams() {
         TimelinePageResponse stub = new TimelinePageResponse(List.of(), null, false);
-        when(timelineService.getTimeline(77L, "CUR", 20,
+        when(timelineService.getTimeline(77L, null, "CUR", 20,
                 com.tailtopia.profile.service.TimelineCapabilities.none(), false)).thenReturn(stub);
-        TimelinePageResponse resp = controller.timeline(jwt("77"), "CUR", 20, null, false);
+        TimelinePageResponse resp = controller.timeline(jwt("77"), "CUR", 20, null, false, null);
         assertThat(resp.hasMore()).isFalse();
     }
 
@@ -118,14 +122,14 @@ class ProfileApiControllerTest {
         // 参数序：id, avatarUrl, petType, name, breed, birthday, sex, intro, cardToken, isSystemDefaultName, createdAt
         PetProfileResponse updated = new PetProfileResponse(
                 5L, null, "CAT", "Momo2", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
-        when(service.update(eq(77L), ArgumentMatchers.any())).thenReturn(updated);
+        when(service.update(eq(77L), ArgumentMatchers.isNull(), ArgumentMatchers.any())).thenReturn(updated);
 
         // 参数序：avatarUrl, name, breed, birthday, sex, intro, weightKg, neuterStatus
         PetProfileResponse resp = controller.update(
-                jwt("77"), new PetProfileUpdateRequest(null, "Momo2", null, null, null, null, null, null));
+                jwt("77"), null, new PetProfileUpdateRequest(null, "Momo2", null, null, null, null, null, null));
 
         assertThat(resp.name()).isEqualTo("Momo2");
-        verify(service).update(eq(77L), ArgumentMatchers.any());
+        verify(service).update(eq(77L), ArgumentMatchers.isNull(), ArgumentMatchers.any());
         // 编辑联动：异步触发 OG 重渲染
         verify(cardRerenderService).scheduleRerender(5L);
     }

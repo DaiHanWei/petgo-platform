@@ -155,7 +155,8 @@ class MasonryCard extends StatelessWidget {
                             url: item.authorDeleted ? null : item.authorAvatarUrl,
                             name: name,
                             deleted: item.authorDeleted,
-                            size: 32),
+                            size: 32,
+                            growth: item.authorBadge),
                         const SizedBox(width: 9),
                         // 名字一行、发布时间一行，两行都与头像右侧对齐。
                         //

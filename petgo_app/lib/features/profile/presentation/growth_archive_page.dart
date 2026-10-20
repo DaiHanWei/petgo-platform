@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../gift/presentation/gift_page.dart';
 import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,15 +13,17 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pet_status_selector.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/user_state.dart';
 import '../../content/domain/home_refresh_provider.dart';
+import '../../pet_slot/presentation/pet_readonly_banner.dart';
 import '../data/milestone_repository.dart';
 import '../data/pet_recommendation_repository.dart';
+import '../data/current_pet_provider.dart';
+import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/card_link.dart';
@@ -36,6 +39,7 @@ import 'visitor_archive_view.dart';
 import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/pet_recommendation_grid.dart';
+import 'widgets/pet_switcher.dart';
 import 'widgets/recommended_pet_card.dart'
     show kPetRecommendFromDiaryEmpty, kPetRecommendFromDiaryNonOwner;
 import 'widgets/place_checkin_tap.dart';
@@ -153,7 +157,11 @@ class GrowthArchivePage extends ConsumerWidget {
     // 正好打破「点分享链接不要求登录」这条（否则会把用户推回浏览器）。
     final ownerPath = auth.isLoggedIn && (petStatus == null || petStatus == 'HAS_PET');
     final profileAsync = ownerPath ? ref.watch(petProfileProvider) : null;
-    final myProfile = profileAsync?.asData?.value;
+    // V1.4.0 multi-pet（Story 1.5 · B2）：切换宠物时 petProfileProvider 因依赖变化而 reload，
+    // 那期间是带着上一只档案的 AsyncLoading —— `asData` 会给 null，整页掉回「无档案」再转圈。
+    // 这里改取 `value`（reload / refresh 期间保留上一份）；**出错仍按无值**，与改版前同口径。
+    final myProfile =
+        (profileAsync == null || profileAsync.hasError) ? null : profileAsync.value;
 
     // ===== AD-15：全页唯一的用户状态判定 + 分发 =====
     final state = resolveDiaryUserState(
@@ -175,7 +183,7 @@ class GrowthArchivePage extends ConsumerWidget {
         VisitorArchiveView(scope: ArchiveScope.visitor(visitorToken!)),
       DiaryUserState.ownerWithoutProfile ||
       DiaryUserState.ownerWithProfile =>
-        _ownerBranch(context, ref, profileAsync!, state),
+        _ownerBranch(context, ref, profileAsync!, myProfile, state),
     };
   }
 
@@ -183,27 +191,70 @@ class GrowthArchivePage extends ConsumerWidget {
   ///
   /// 分享名片按钮**不再是右下悬浮 FAB**（2026-08-04 用户要求）—— 它会盖住时间线与日历
   /// 右下角的内容；改为页头标题行里编辑铅笔旁的小图标，由 [_ArchiveBody] 注入。
+  ///
+  /// V1.4.0 multi-pet（Story 1.5 · AC3）：已建档时顶部加宠物切换器；当前宠物由
+  /// [resolveEffectivePetId]（宠物列表 + `currentPetIdProvider`）**同步**算出 ——
+  /// 点另一只后切换器立即高亮、标题行立即换名（名字取列表项，不等档案请求），
+  /// 下方数据区显示骨架 + 转圈（B2），不再整页居中转圈。宠物列表取不到时不渲染切换器
+  /// （档案仍按旧口径落默认宠物，见 `petProfileProvider`）。
   Widget _ownerBranch(
     BuildContext context,
     WidgetRef ref,
     AsyncValue<PetProfile?> profileAsync,
+    PetProfile? myProfile,
     DiaryUserState state,
   ) {
+    final petsAsync = ref.watch(petListProvider);
+    // code review 2026-10-18 #4：换账号时宠物列表因依赖变化而 reload，期间 `value` 仍是上个账号的；
+    // 档案（派生层）也还留着上个账号那只 —— 这段时间**什么都不渲染**（整页转圈），
+    // 不让上个账号的宠物出现、也不拿它的 petId 发按宠物的请求。
+    if (petsAsync.isReloading) {
+      return const Scaffold(
+        backgroundColor: AppColors.cream,
+        body: Center(child: CircularProgressIndicator(key: ValueKey('diaryAccountSwitching'))),
+      );
+    }
+    final pets = petsAsync.value;
+    final targetId =
+        pets == null ? null : resolveEffectivePetId(pets, ref.watch(currentPetIdProvider));
+    final profile = myProfile;
+    // state 与本次 build 的 myProfile 同源，故 ownerWithProfile ⟺ profile != null；
+    // 判空仅为空安全，不构成第二处状态判定。
+    if (state == DiaryUserState.ownerWithProfile && profile != null) {
+      final showSwitcher = pets != null && pets.isNotEmpty;
+      // 手上的档案不在本账号的宠物列表里（刚删 / 刚换号后列表已到、档案还没重取）→ 不渲染它。
+      if (pets != null && targetId == null && !pets.any((p) => p.id == profile.id)) {
+        return const Scaffold(
+          backgroundColor: AppColors.cream,
+          body: Center(child: CircularProgressIndicator()),
+        );
+      }
+      if (targetId != null && targetId != profile.id) {
+        // B2 切换中：档案还是上一只（或正在取），按列表项先换名 + 数据区骨架。
+        final target = pets!.firstWhere((p) => p.id == targetId);
+        return Scaffold(
+          backgroundColor: AppColors.cream,
+          body: _SwitchingBody(pets: pets, currentId: targetId, petName: target.name),
+        );
+      }
+      return Scaffold(
+        backgroundColor: AppColors.cream,
+        body: _ArchiveBody(
+          key: ValueKey('archiveBody-${profile.id}'),
+          profile: profile,
+          petId: profile.id,
+          switcher: showSwitcher ? PetSwitcher(pets: pets, currentId: profile.id) : null,
+          onEditProfile: () => context.push('/profile/edit'),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => _EmptyProfileView(onCreate: () => context.push('/profile/create')),
-        data: (profile) {
-          // state 与本次 build 的 asData 同源，故 ownerWithProfile ⟺ profile != null；
-          // 判空仅为空安全，不构成第二处状态判定。
-          if (state == DiaryUserState.ownerWithProfile && profile != null) {
-            return _ArchiveBody(
-              profile: profile,
-              onEditProfile: () => context.push('/profile/edit'),
-            );
-          }
-          // 状态 A 未建档 → 建档引导态（Story 2.3 按 A2 稿补齐副文案；仍复用 FR-0G 既有引导）。
+        data: (_) {
+          // 状态 A 未建档（B6 / C6：不渲染切换器） → 建档引导态（Story 2.3 按 A2 稿补齐副文案；仍复用 FR-0G 既有引导）。
           return _EmptyProfileView(
             onCreate: () => context.push('/profile/create'),
             onChangeStatus: () => _openStatusEditor(context, ref),
@@ -267,6 +318,7 @@ class GrowthArchivePage extends ConsumerWidget {
       ref.invalidate(petProfileProvider);
       ref.invalidate(timelineFirstPageProvider);
       ref.invalidate(archiveStatsProvider);
+      ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
       return true;
     } catch (_) {
       if (context.mounted) {
@@ -282,10 +334,22 @@ class GrowthArchivePage extends ConsumerWidget {
 enum _ArchiveView { timeline, calendar }
 
 class _ArchiveBody extends ConsumerStatefulWidget {
-  const _ArchiveBody({required this.profile, required this.onEditProfile});
+  const _ArchiveBody({
+    super.key,
+    required this.profile,
+    required this.petId,
+    required this.onEditProfile,
+    this.switcher,
+  });
 
   final PetProfile profile;
+
+  /// 当前宠物 id（= [profile].id）：本页所有按宠物的 family provider 都用它做键（V1.4.0 multi-pet）。
+  final int petId;
   final VoidCallback onEditProfile;
+
+  /// 宠物切换器（ListView 第一项，标题行之上）；宠物列表取不到时为 null。
+  final Widget? switcher;
 
   @override
   ConsumerState<_ArchiveBody> createState() => _ArchiveBodyState();
@@ -425,13 +489,17 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final stats = ref.watch(archiveStatsProvider).asData?.value;
+    final stats = ref.watch(archiveStatsProvider(widget.petId)).asData?.value;
+    // V1.4.0 multi-pet Story 2.4 · AC5.2（B4）：当前宠物只读 → 标题行下插横幅、隐藏编辑铅笔；其余照常可看可分享。
+    final petReadOnly = ref.watch(petListProvider.select((a) =>
+        a.value?.any((p) => p.id == widget.petId && p.isReadOnly) ?? false));
     _bumpIfViewportNotScrollable();
     return RefreshIndicator(
       color: AppColors.mint,
       onRefresh: () async {
         ref.invalidate(timelineFirstPageProvider);
         ref.invalidate(archiveStatsProvider);
+        ref.invalidate(petListProvider); // V1.4.0 multi-pet：「我的」页 diary 角标取宠物列表的 diaryCount
         // bug 20260727-365：日历视图的数据在 calendarMonthProvider（按年月分族），漏失效会导致
         // 日历 tab 下拉刷新只走动画不刷数据；整族失效（含非当前月缓存），照 pet_profile_edit_page 先例。
         ref.invalidate(calendarMonthProvider);
@@ -442,12 +510,22 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         // 滚到底时最后一个元素（引导卡的 CTA 最明显）会被压住（2026-08-04 实机确认）。
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 38, AppSpacing.lg, 92),
         children: [
+          // V1.4.0 multi-pet（Story 1.5 · AC3.1）：切换器在页面最顶部、标题行「Diary {name}」之上。
+          if (widget.switcher != null) ...[
+            widget.switcher!,
+            const SizedBox(height: 10),
+          ],
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
           // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
           DiaryHeader(
             profile: widget.profile.header,
             happyCount: stats?.happyMomentCount,
-            consultCount: stats?.consultCount,
+            // V1.4.0 gift Story 2.2 · A2：中间格礼物总价值，点进本宠物礼物页（E2）。
+            giftTotalValue: stats?.giftTotalValue,
+            // gift Story 4.1 · AC6.2：进**当前宠物**的礼物页 —— 只从 effectivePetIdProvider 读（② §5 页面不自存 petId）；
+            // 本组件只在当前宠物 = 本档案时渲染，取不到时回落本档案。
+            onOpenGifts: () => context.push(
+                GiftPage.routeFor(ref.read(effectivePetIdProvider).value ?? widget.petId)),
             milestoneCompleted: stats?.milestoneCompleted,
             milestoneTotal: stats?.milestoneTotal,
             healthRecordCount: stats?.healthRecordCount,
@@ -459,6 +537,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             // 迁移引导蒙层的高亮框位置从这里量（Story 5.4）。只量位置，不改行为。
             insightsEntryAnchor: _insightsEntryAnchor,
             onEditProfile: widget.onEditProfile,
+            hideEditButton: petReadOnly,
+            // B4：只读横幅在标题行之下、宠物卡之上（稿 B4；第二轮 L2 前是插在标题行上方）。
+            belowTitle: petReadOnly ? const PetReadonlyBanner() : null,
             // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
             // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由
             // 与它只差一个字母，替换会误伤（AD-A17.7）。
@@ -497,6 +578,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           Offstage(
             offstage: _view != _ArchiveView.timeline,
             child: _TimelineView(
+              petId: widget.petId,
               petName: widget.profile.name,
               loadMoreTick: _loadMoreTick,
               onContentChanged: _bumpIfViewportNotScrollable,
@@ -535,7 +617,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         //    所以任何档案都 ≥ 1 —— 按 `> 0` 判会让这个属性**恒为 true**、彻底没用。
         //    1-2 在 H5 的 `page_state` 上正是踩过这个坑（见 CardPageAnalytics 的注释）。
         //    这里用页头已经加载好的统计数，不额外发请求。
-        final done = ref.read(archiveStatsProvider).asData?.value.milestoneCompleted;
+        final done = ref.read(archiveStatsProvider(widget.petId)).asData?.value.milestoneCompleted;
         Analytics.capture('pet_card_share_tapped', {
           'entry': 'archive_header',
           'has_milestone': (done ?? 0) > 1,
@@ -550,7 +632,10 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           if (mounted) showAppToast(context, l10n.shareFailed);
         }
         // 名片分享信号 → 里程碑 C-S3 自动完成（Story 8.3，fire-and-forget，失败静默）。
-        ref.read(milestoneRepositoryProvider).signalCardShared().catchError((_) {});
+        ref
+            .read(milestoneRepositoryProvider)
+            .signalCardShared(petId: widget.petId)
+            .catchError((_) {});
         ref.invalidate(milestoneListProvider);
       },
     );
@@ -558,45 +643,78 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 
   /// Timeline / Kalender 药丸切换（paspor.html 双按钮）。
   Widget _viewToggleRow(AppLocalizations l10n) {
+    // 稿 `.vtog`：左对齐的紧凑胶囊（L2 还原度，原为两枚等分通栏按钮）。
     return Row(
       children: [
-        Expanded(child: _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
-            () => _switchView(_ArchiveView.timeline), const ValueKey('archiveViewTimeline'))),
-        const SizedBox(width: 7),
-        Expanded(child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
-            () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
+        _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
+            () => _switchView(_ArchiveView.timeline), const ValueKey('archiveViewTimeline')),
+        const SizedBox(width: 8),
+        _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
+            () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar')),
       ],
     );
   }
 
-  /// 「只看 Diary」开关（宠物卡右上角，竖排「开关 / 标签」）。开 = 只看自己发的帖子（服务端筛，见
-  /// diaryOnlyProvider）；关 = 各类 banner + 帖子全部。开关只作用于时间线：在日历视图拨动时顺带切回时间线。
+  /// 「只看 Diary」开关：宠物卡右上白色胶囊「Diary saja ⬭」（稿 `.tg`，L2 还原度；原为竖排「开关 / 标签」）。
+  /// 开 = 只看自己发的帖子（服务端筛，见 diaryOnlyProvider）；关 = 各类 banner + 帖子全部。
+  /// 开关只作用于时间线：在日历视图拨动时顺带切回时间线。
   Widget _diaryOnlyToggle(AppLocalizations l10n) {
     final on = ref.watch(diaryOnlyProvider);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Transform.scale(
-          scale: 0.75,
-          alignment: Alignment.centerRight,
-          child: Switch(
-            key: const ValueKey('diaryOnlySwitch'),
-            value: on,
-            activeThumbColor: AppColors.onAccent,
-            activeTrackColor: AppColors.mint,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            onChanged: (v) {
-              // 2026-10-06 产品：看有多少人用「只看 Diary」、开还是关（docs/reference/analytics-posthog-tracking.md §12.1）。
-              Analytics.capture('diary_only_toggled', {'on': v});
-              ref.read(diaryOnlyProvider.notifier).set(v);
-              if (_view != _ArchiveView.timeline) _switchView(_ArchiveView.timeline);
-            },
+    void toggle() {
+      final v = !on;
+      // 2026-10-06 产品：看有多少人用「只看 Diary」、开还是关（docs/reference/analytics-posthog-tracking.md §12.1）。
+      Analytics.capture('diary_only_toggled', {'on': v});
+      ref.read(diaryOnlyProvider.notifier).set(v);
+      if (_view != _ArchiveView.timeline) _switchView(_ArchiveView.timeline);
+    }
+
+    return Semantics(
+      toggled: on,
+      label: l10n.diaryOnlyToggle,
+      excludeSemantics: true,
+      child: GestureDetector(
+        key: const ValueKey('diaryOnlySwitch'),
+        behavior: HitTestBehavior.opaque,
+        onTap: toggle,
+        // 视觉 ~22 高胶囊，点击热区补到 44。
+        child: SizedBox(
+          height: 44,
+          child: Align(
+            alignment: Alignment.topRight,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
+              decoration: const BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.all(Radius.circular(999)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.diaryOnlyToggle,
+                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.ink2)),
+                  const SizedBox(width: 4),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 24,
+                    height: 14,
+                    padding: const EdgeInsets.all(2),
+                    alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      color: on ? AppColors.mint : AppColors.diaryToggleOff,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        Text(l10n.diaryOnlyToggle,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink2)),
-      ],
+      ),
     );
   }
 
@@ -609,25 +727,31 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 
   Widget _toggleBtn(String label, bool on, VoidCallback onTap, Key key) => GestureDetector(
         key: key,
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
+        // 视觉 ~30 高胶囊，点击热区补到 44。
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          constraints: const BoxConstraints(minHeight: 44),
           alignment: Alignment.center,
+          child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: on ? AppColors.mint : AppColors.card,
-            borderRadius: BorderRadius.circular(10),
-            border: on ? null : Border.all(color: AppColors.line, width: 1.5),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: on ? AppColors.mint : AppColors.line, width: 1.5),
           ),
           child: Text(label,
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: on ? AppColors.onAccent : AppColors.ink2)),
+          ),
         ),
       );
 
   Widget _calendarView() {
     return ArchiveCalendar(
+      ownerPetId: widget.petId,
       onOpenDay: (date) => context.push(
           '/profile/day?date=${date.year}-${_two(date.month)}-${_two(date.day)}'),
       onAddOnDate: (date) => context.push(
@@ -638,16 +762,66 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   static String _two(int n) => n.toString().padLeft(2, '0');
 }
 
+/// 切换中（V1.4.0 multi-pet Story 1.5 · UI 稿 B2）：切换器（已高亮新宠物、仍可点）+ 标题行（新名字）
+/// + 数据区骨架 + 转圈。**不是**整页居中转圈。
+class _SwitchingBody extends StatelessWidget {
+  const _SwitchingBody({required this.pets, required this.currentId, required this.petName});
+
+  final List<PetListItem> pets;
+  final int currentId;
+  final String petName;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    Widget skel(double h) => Container(
+          height: h,
+          margin: const EdgeInsets.only(top: 10),
+          decoration: BoxDecoration(
+            color: AppColors.cream2,
+            borderRadius: BorderRadius.circular(12),
+          ),
+        );
+    return ListView(
+      key: const ValueKey('diarySwitching'),
+      // 与 [_ArchiveBody] 同一套页边距，切换前后切换器与标题行不跳位。
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 38, AppSpacing.lg, 92),
+      children: [
+        PetSwitcher(pets: pets, currentId: currentId),
+        const SizedBox(height: 10),
+        Text(l10n.growthArchivePassportTitle(petName),
+            key: const ValueKey('diarySwitchingTitle'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        const SizedBox(height: 4),
+        skel(140),
+        skel(64),
+        skel(52),
+        const Padding(
+          padding: EdgeInsets.only(top: 30),
+          child: Center(child: CircularProgressIndicator(key: ValueKey('diarySwitchingSpinner'))),
+        ),
+      ],
+    );
+  }
+}
+
 /// 时间线视图（五类条目倒序；首条显 🌟；加载失败可重试）。
 ///
 /// Story 3.3：条目渲染改走 **Story 2.2 建立的共用组件** [TimelineItemTile]，与游客示例本同一份实现
 /// （NFR-7）；本视图只负责**按 itemType 注入真实态的点击语义**——组件自身不持有任何跳转。
 class _TimelineView extends ConsumerStatefulWidget {
   const _TimelineView({
+    required this.petId,
     required this.petName,
     required this.loadMoreTick,
     this.onContentChanged,
   });
+
+  /// 当前宠物（时间线 family 键 + 翻页请求的 `?petId=`）。
+  final int petId;
 
   /// 宠物名（类③ 庆祝文案与类⑤ 证件卡标题需要）。
   final String petName;
@@ -750,7 +924,8 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
     try {
       final page = await ref
           .read(timelineRepositoryProvider)
-          .getTimeline(cursor: _cursor, diaryOnly: ref.read(diaryOnlyProvider));
+          .getTimeline(
+              cursor: _cursor, diaryOnly: ref.read(diaryOnlyProvider), petId: widget.petId);
       if (!mounted) return;
       // 期间第一页被 invalidate 过 → 这份响应是**旧快照**的下一页。接上去会漏掉刷新边界那条日记，
       // 覆盖游标还会让它再也翻不回来。整份丢弃，一个字段都不改。
@@ -859,7 +1034,10 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final timelineAsync = ref.watch(timelineFirstPageProvider);
+    final timelineAsync = ref.watch(timelineFirstPageProvider(widget.petId));
+    // V1.4.0 multi-pet L2 第二轮：只读宠物的空态不引导发帖（发布页里只读宠物根本不可选）。
+    final readOnly = ref.watch(petListProvider.select((a) =>
+        a.value?.any((p) => p.id == widget.petId && p.isReadOnly) ?? false));
     // 第一页的身份变了就重置分页状态（provider 被 invalidate → 新的 TimelinePage 实例）。
     final firstPage = timelineAsync.asData?.value;
     if (firstPage != null && (!_cursorInitialized || !identical(firstPage, _lastFirstPage))) {
@@ -882,7 +1060,8 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
             const SizedBox(height: 8),
             TextButton(
               key: const ValueKey('timelineRetry'),
-              onPressed: () => ref.invalidate(timelineFirstPageProvider),
+              // B3：只重取**当前宠物**这一页（family 单键），不连带别的宠物的缓存。
+              onPressed: () => ref.invalidate(timelineFirstPageProvider(widget.petId)),
               child: Text(l10n.growthLoadRetry),
             ),
           ],
@@ -892,7 +1071,7 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         if (page.items.isEmpty && _extra.isEmpty) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(0, 18, 0, AppSpacing.xl),
-            child: _FirstMomentGuideCard(petName: widget.petName),
+            child: _FirstMomentGuideCard(petName: widget.petName, readOnly: readOnly),
           );
         }
         final items = <TimelineItem>[...page.items, ..._extra];
@@ -923,19 +1102,15 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         // 引导卡「记下第一条 Diary」放在**所有条目最上面**（2026-10-06 产品：主人还没发过内容时，
         // 它是这一页最该被看到的东西，压在一串 banner 底下等于没有）。
         // 判据：统计栏的内容数为 0（不必翻到底），或已翻到底且确实没有快乐时刻。
-        final noPosts = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount == 0;
+        final noPosts =
+            ref.watch(archiveStatsProvider(widget.petId)).asData?.value.happyMomentCount == 0;
         String? lastMonthKey;
         for (var i = 0; i < items.length; i++) {
           final item = items[i];
           final d = item.displayDate;
           final monthKey = '${d.year}-${d.month}';
           if (monthKey != lastMonthKey) {
-            tiles.add(Padding(
-              padding: EdgeInsets.only(top: lastMonthKey == null ? 0 : 6, bottom: 10),
-              child: Text(formatMonthYear(context, d),
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
-            ));
+            tiles.add(TimelineMonthHeader(date: d, first: lastMonthKey == null));
             lastMonthKey = monthKey;
           }
           final bool isHappy = item.resolvedType == TimelineItemType.happyMoment ||
@@ -968,7 +1143,7 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
               0,
               Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _FirstMomentGuideCard(petName: widget.petName),
+                child: _FirstMomentGuideCard(petName: widget.petName, readOnly: readOnly),
               ));
         }
         // 底部翻页页脚：加载中转圈 / 失败给重试 / 没有更多则什么都不加。
@@ -1020,10 +1195,14 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
 /// 出现条件是「**还没有任何快乐时刻**」，不是「时间线为空」—— 建档完成里程碑 banner
 /// 会一直占着一条，按「为空」判定这张卡永远不出现（2026-08-04 实机确认）。
 /// 已建档真实态与整条为空两种情形共用本卡，不再各写一套。
+///
+/// [readOnly]（V1.4.0 multi-pet L2 第二轮）：当前宠物只读 → 只留一句「还没有 Diary」，不出劝写正文与
+/// 「+ Tambah ke Diary」（发布页里只读宠物不可选；续租入口在页头横幅里，这里不重复）。
 class _FirstMomentGuideCard extends StatelessWidget {
-  const _FirstMomentGuideCard({required this.petName});
+  const _FirstMomentGuideCard({required this.petName, this.readOnly = false});
 
   final String petName;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1043,27 +1222,32 @@ class _FirstMomentGuideCard extends StatelessWidget {
         children: [
           const Text('📸', style: TextStyle(fontSize: 26)),
           const SizedBox(height: 8),
-          Text(l10n.growthArchiveTimelineEmpty(petName),
+          Text(
+              readOnly
+                  ? l10n.growthArchiveReadOnlyTimelineEmpty(petName)
+                  : l10n.growthArchiveTimelineEmpty(petName),
               textAlign: TextAlign.center,
               style: const TextStyle(
                   fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
-          const SizedBox(height: 5),
-          Text(l10n.growthArchiveTimelineEmptyBody,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, height: 1.5, color: AppColors.ink2)),
-          const SizedBox(height: 14),
-          FilledButton(
-            key: const ValueKey('timelineEmptyCta'),
-            onPressed: () => context.push('/publish?preset=growth-calendar'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.mint,
-              foregroundColor: AppColors.onAccent,
-              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          if (!readOnly) ...[
+            const SizedBox(height: 5),
+            Text(l10n.growthArchiveTimelineEmptyBody,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, height: 1.5, color: AppColors.ink2)),
+            const SizedBox(height: 14),
+            FilledButton(
+              key: const ValueKey('timelineEmptyCta'),
+              onPressed: () => context.push('/publish?preset=growth-calendar'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint,
+                foregroundColor: AppColors.onAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              ),
+              child: Text('+ ${l10n.growthArchiveRecordFirstMoment}',
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
             ),
-            child: Text('+ ${l10n.growthArchiveRecordFirstMoment}',
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-          ),
+          ],
         ],
       ),
     );

@@ -22,6 +22,10 @@
     <form class="cm-form" th:attr="hx-post=@{${cm.actionPath}}" hx-target="#confirm-modal-err" hx-swap="innerHTML">
         <div class="modal-body">
             <div class="cm-banner" role="alert" th:if="${cm.danger != null}" th:classappend="${cm.warnBanner} ? 'cm-banner-warn'" th:text="${cm.danger}"></div>
+            <!--/* V1.4.0 ① Story 4.1：「标签：值」事实行（如 G6 升 / 降级人数），渲染在 diffs 上方；无 facts 时不输出。 */-->
+            <div class="cm-facts" th:unless="${#lists.isEmpty(cm.facts)}" data-confirm-facts>
+                <div class="cm-fact" th:each="f : ${cm.facts}"><span th:text="#{admin.confirm.diffLabel(${f.label})}">标签：</span><b th:text="${f.value}"></b></div>
+            </div>
             <div class="cm-diff" th:unless="${#lists.isEmpty(cm.diffs)}" data-confirm-diff-list>
                 <div class="cm-diff-line" th:each="d : ${cm.diffs}"><span th:text="#{admin.confirm.diffLabel(${d.label})}">字段：</span><s th:text="${#strings.isEmpty(d.oldValue)} ? #{admin.confirm.emptyValue} : ${d.oldValue}"></s><span class="cm-arrow" aria-hidden="true">→</span><b th:text="${#strings.isEmpty(d.newValue)} ? #{admin.confirm.emptyValue} : ${d.newValue}"></b></div>
             </div>

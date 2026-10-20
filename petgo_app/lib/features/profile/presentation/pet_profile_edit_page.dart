@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:date_picker_plus/date_picker_plus.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -5,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
+import '../../../core/network/problem_detail.dart';
+import '../../pet_slot/presentation/pet_readonly_block.dart';
 import '../../../core/theme/colors.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../../core/theme/spacing.dart';
@@ -15,7 +18,9 @@ import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../data/health_record_repository.dart';
+import '../data/current_pet_provider.dart';
 import '../data/milestone_repository.dart';
+import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pet_profile.dart';
@@ -53,6 +58,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   bool _deleting = false;
   bool _prefilled = false;
 
+  /// 正在编辑的那只（V1.4.0 multi-pet Story 1.5）：保存 / 删除都只作用于它（`?petId=`）。
+  int? _petId;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -65,6 +73,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   void _prefill(PetProfile p) {
     if (_prefilled) return;
     _prefilled = true;
+    _petId = p.id;
     _nameController.text = p.name;
     _breedController.text = p.breed ?? '';
     _introController.text = p.intro ?? '';
@@ -105,9 +114,16 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
+    // V1.4.0 multi-pet Story 2.4 · AC5.5：正在编辑的那只是只读 → 前端先拦（不发请求），弹 E1。
+    final editing = _editingPetIfLoaded();
+    if (editing != null && editing.isReadOnly) {
+      showPetReadonlyBlockSheet(context, ref, editing);
+      return;
+    }
     setState(() => _submitting = true);
     try {
       await ref.read(profileRepositoryProvider).update(
+            petId: _petId,
             name: _nameController.text.trim(),
             avatarUrl: _avatarUrl,
             breed: _emptyToNull(_breedController.text),
@@ -118,12 +134,28 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             weightKg: double.tryParse(_weightController.text.trim()),
           );
       ref.invalidate(petProfileProvider);
+      // V1.4.0 multi-pet：名字 / 头像也显示在宠物列表（我的页 / Diary 切换器）里。
+      ref.invalidate(petListProvider);
       if (mounted) context.go('/profile');
-    } catch (_) {
-      if (mounted) _toast(l10n.petProfileSaveFailed);
+    } catch (e) {
+      if (!mounted) return;
+      // 后端兜底 409 `pet-read-only`（AC5.6）→ 统一弹 E1，不报保存失败。
+      final pd = e is DioException ? ProblemDetail.fromDioException(e) : null;
+      if (pd != null && handlePetReadOnly(context, ref, pd)) return;
+      _toast(l10n.petProfileSaveFailed);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// 正在编辑的那只在宠物列表里的项（列表未加载 → null，放行由后端兜底）。
+  PetListItem? _editingPetIfLoaded() {
+    final id = _petId;
+    if (id == null || !ref.exists(petListProvider)) return null;
+    for (final p in ref.read(petListProvider).value ?? const <PetListItem>[]) {
+      if (p.id == id) return p;
+    }
+    return null;
   }
 
   /// 删除档案（bug 20260702-237 / 决策 F18）：二次确认 → DELETE /pet-profiles/me →
@@ -131,26 +163,39 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   Future<void> _confirmDelete() async {
     final l10n = AppLocalizations.of(context);
     final petName = _nameController.text.trim();
+    // V1.4.0 multi-pet（Story 1.5 · C2）：删的不是最后一只 → 新正文（其他宠物不受影响、名额可再用）；
+    // 删最后一只 → 沿用原正文。
+    final isLast = _isLastPet();
     // 二次确认改用底部抽屉（P-02 统一样式，替换原中间 AlertDialog；bug 20260707）。
     final confirmed = await showConfirmSheet(
       context,
-      title: l10n.petProfileDeleteConfirmTitle,
-      message: l10n.petProfileDeleteConfirmBody(petName),
+      title: l10n.petProfileDeleteConfirmTitle(petName),
+      message: isLast
+          ? l10n.petProfileDeleteConfirmBody(petName)
+          : l10n.petDeleteConfirmBodyOther(petName),
       confirmLabel: l10n.petProfileDeleteConfirmYes,
       cancelLabel: l10n.commonCancel,
       icon: Icons.delete_outline_rounded,
       danger: true,
+      dangerColor: AppColors.danger,
       confirmKey: const ValueKey('petProfileDeleteConfirm'),
     );
     if (!confirmed) return;
-    await _deleteProfile();
+    await _deleteProfile(isLast: isLast, petName: petName);
   }
 
-  Future<void> _deleteProfile() async {
+  /// 是不是最后一只：宠物列表还没取到 / 取不到时按「最后一只」处理（= 改版前的单宠口径，最保守）。
+  bool _isLastPet() => (ref.read(petListProvider).value?.length ?? 1) <= 1;
+
+  Future<void> _deleteProfile({required bool isLast, required String petName}) async {
     final l10n = AppLocalizations.of(context);
     setState(() => _deleting = true);
     try {
-      await ref.read(profileRepositoryProvider).deleteMyProfile();
+      await ref.read(profileRepositoryProvider).deleteMyProfile(petId: _petId);
+      // V1.4.0 multi-pet（C4）：当前宠物回落 —— 清掉记忆，effectivePetIdProvider 自动落到默认宠物
+      // （最早创建的正常宠物）；宠物列表少一只。
+      ref.read(currentPetIdProvider.notifier).clear();
+      ref.invalidate(petListProvider);
       ref.invalidate(petProfileProvider);
       // 删除成功须同步清除成长日记的宠物维度缓存（时间线/统计/日历/日详情/里程碑），
       // 否则删后重建新档案，成长日记仍显示上一只宠物的缓存内容、要手动刷新才消失。
@@ -166,13 +211,21 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       // PR#34 finding #12：auth 里的 hasPetProfile 只在建档时置 true、删档必须对称置 false——
       // 否则本会话内发布页「无 preset 默认类型」仍读到 true，默认落 Diary 且 chip 可点，
       // 用户写完点分享才被「先建档」拒绝（与建档页 applyProfile(hasPetProfile: true) 成对）。
+      // V1.4.0 multi-pet：只有删的是最后一只才置 false（还剩宠物就仍是「已建档」）。
       final authProfile = ref.read(authControllerProvider).profile;
-      if (authProfile != null && authProfile.hasPetProfile) {
+      if (isLast && authProfile != null && authProfile.hasPetProfile) {
         ref
             .read(authControllerProvider.notifier)
             .applyProfile(authProfile.copyWith(hasPetProfile: false));
       }
-      if (mounted) context.go('/profile');
+      if (!mounted) return;
+      // 跳转前先拿根 Overlay：go 之后本页即销毁，context 不能再用。
+      final overlay = Overlay.maybeOf(context, rootOverlay: true);
+      context.go('/profile');
+      // C4：非最后一只 → 回 Diary Tab（已切到剩余宠物）+ Toast；C6 删最后一只 → 现状，无 Toast。
+      if (!isLast && overlay != null) {
+        showAppToastOnOverlay(overlay, l10n.petDeleteSuccess(petName));
+      }
     } catch (_) {
       if (mounted) _toast(l10n.petProfileDeleteFailed);
     } finally {
@@ -199,7 +252,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       backgroundColor: AppColors.base,
       appBar: AppBar(
         backgroundColor: AppColors.base,
-        centerTitle: true,
+        // 稿 C1：标题左对齐（L2 还原度，原居中）。
+        centerTitle: false,
+        titleSpacing: 0,
         leading: IconButton(
           icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
@@ -277,7 +332,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                         child: _uploading
                             ? const CircularProgressIndicator()
                             : (_avatarUrl == null
-                                ? const Text('🐱', style: TextStyle(fontSize: 38))
+                                // 按物种占位（同 PetInfoCard 口径；原先恒为 🐱，狗也顶着猫脸，L2 第二轮 P3-6）。
+                                ? Text(
+                                    switch (_petType) { 'CAT' => '🐱', 'DOG' => '🐶', _ => '🐾' },
+                                    style: const TextStyle(fontSize: 38))
                                 : null),
                       ),
                     ),
@@ -306,29 +364,18 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             controller: _nameController,
             maxLength: 20,
             onChanged: (_) => setState(() {}),
-            decoration: _inputDeco(),
+            // 稿 C1：字数「4/20」在框内右侧。
+            decoration: _inputDeco(counter: '${_nameController.text.characters.length}/20'),
           ),
           const SizedBox(height: 16),
-          // JENIS HEWAN（F6 编辑态锁定）：标签左 + 红「锁 + tidak bisa diubah」右 + 灰底锁定下拉。
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _sectionLabel(l10n.petProfileTypeLabel),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.lock_outline, size: 11, color: AppColors.popRed),
-                  const SizedBox(width: 4),
-                  Text(l10n.petTypeLockedHint,
-                      style: const TextStyle(
-                          color: AppColors.popRed, fontSize: 10, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ],
-          ),
+          // JENIS HEWAN（F6 编辑态锁定）：灰底锁定字段，「🔒 Tidak bisa diubah」红字在框内右侧（稿 C1）。
+          _sectionLabel(l10n.petProfileTypeLabel),
           const SizedBox(height: 6),
           SpeciesField(
-              key: const ValueKey('petProfileEditTypeReadonly'), petType: _petType, locked: true),
+              key: const ValueKey('petProfileEditTypeReadonly'),
+              petType: _petType,
+              locked: true,
+              lockedHint: l10n.petTypeLockedHint),
           const SizedBox(height: 16),
           // RAS（品种）+ KELAMIN（性别）两列（原型 pet-edit）。
           Row(
@@ -412,16 +459,12 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             key: const ValueKey('petProfileEditIntroField'),
             controller: _introController,
             maxLength: _kBioMax,
-            maxLines: 3,
+            // 稿 C1：单行高起步、随内容长高；字数「18/200」在框内右侧。
+            minLines: 1,
+            maxLines: 4,
             onChanged: (_) => setState(() {}),
-            decoration: _inputDeco(),
-          ),
-          // BIO 字数计数（原型 pet-edit：右下「x / 200」）。
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text('${_introController.text.characters.length} / $_kBioMax',
-                style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+            decoration:
+                _inputDeco(counter: '${_introController.text.characters.length}/$_kBioMax'),
           ),
           const SizedBox(height: AppSpacing.lg),
           // 危险区：删除档案（bug 20260702-237 / 决策 F18）。保存按钮在右上角 AppBar（原型 P-32）。
@@ -430,15 +473,16 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           TextButton.icon(
             key: const ValueKey('petProfileDeleteButton'),
             onPressed: _deleting ? null : _confirmDelete,
+            // 稿 `.delbtn`：橙红 #E5604D（= AppColors.danger），非 Pop Art 玫红。
             style: TextButton.styleFrom(
-              foregroundColor: AppColors.popRed,
+              foregroundColor: AppColors.danger,
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
             icon: _deleting
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.popRed))
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.danger))
                 : const Icon(Icons.delete_outline, size: 20),
             label: Text(l10n.petProfileDeleteButton(_nameController.text.trim()),
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -456,14 +500,23 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
               letterSpacing: 0.5,
               color: AppColors.ink2),
           children: [
-            TextSpan(text: text),
-            if (required) const TextSpan(text: ' *', style: TextStyle(color: AppColors.popRed)),
+            // 稿 `.fl`：标签一律大写（arb 里「Berat badan (kg)」未大写，L2 还原度）。
+            TextSpan(text: text.toUpperCase()),
+            if (required) const TextSpan(text: ' *'),
           ],
         ),
       );
 
-  InputDecoration _inputDeco() => InputDecoration(
+  InputDecoration _inputDeco({String? counter}) => InputDecoration(
         isDense: true,
+        // 用 suffixIcon 而非 suffixText：后者在未聚焦且为空时不显示，稿里计数常显。
+        suffixIcon: counter == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Text(counter, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              ),
+        suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         counterText: '',
         enabledBorder: OutlineInputBorder(
