@@ -57,6 +57,7 @@ class PetSlotCreateIntegrationTest extends ApiIntegrationTest {
     private ResultActions create(User owner, String name) throws Exception {
         return mvc.perform(post("/api/v1/pet-profiles")
                 .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                .header("X-App-Version", "1.4.0")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"name":"%s","petType":"DOG","birthday":"2022-01-01"}

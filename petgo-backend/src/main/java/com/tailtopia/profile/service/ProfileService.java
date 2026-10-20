@@ -81,8 +81,24 @@ public class ProfileService {
      */
     @Transactional
     public PetProfileResponse create(long ownerId, PetProfileCreateRequest req) {
+        return create(ownerId, req, true);
+    }
+
+    /**
+     * 同 {@link #create(long, PetProfileCreateRequest)}；{@code multiPetClient = false}（旧版 App，见 {@link ClientAppVersion}）
+     * 时账号已有宠物 → 409 {@code profile-exists}（与 V1.3.4 后端原样一致，旧版 App 提示「已有档案」）。
+     *
+     * <p>🔴 V1.4.0 上线前旧版兼容检查：旧版 App 在档案页加载出错 / 未知推送落点时仍可进建档页，放开后会在名额内悄悄建出
+     * 第二只（旧版 App 里看不到、也管不了），并让纯旧版用户变成多宠账号（编辑 / 删除随之被 {@code pet-id-required} 拦下）。
+     * 旧版客户端一律维持「一账号一宠」。
+     */
+    @Transactional
+    public PetProfileResponse create(long ownerId, PetProfileCreateRequest req, boolean multiPetClient) {
         petSlotLock.lockUser(ownerId);
         long count = profiles.countByOwnerId(ownerId);
+        if (!multiPetClient && count >= 1) {
+            throw AppException.profileExists("已有宠物档案，请升级到最新版本后添加更多宠物");
+        }
         if (count >= PetSlotService.MAX_PETS) {
             throw new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_LIMIT_REACHED, "已达宠物数量上限");
         }
@@ -160,6 +176,7 @@ public class ProfileService {
      * 他人 / 不存在的 petId 与无档案一样 404。不再给身份证打标（按账号打标只在注销路径）。
      */
     public void deleteMyProfile(long ownerId, Long petId) {
+        requirePetIdIfMultiPet(ownerId, petId);
         PetProfile pet = petResolver.resolve(ownerId, petId);
         PersonalMedia media = profileDeletion.deleteByPetId(ownerId, pet.getId());
         mediaDeletion.deletePrivateKeys(media.privateKeys());
@@ -177,6 +194,7 @@ public class ProfileService {
     /** V1.4.0 multi-pet：编辑指定宠物（petId 为 null = 默认宠物）。不属于本人 → 404。 */
     @Transactional
     public PetProfileResponse update(long ownerId, Long petId, PetProfileUpdateRequest req) {
+        requirePetIdIfMultiPet(ownerId, petId);
         PetProfile profile = petResolver.resolve(ownerId, petId);
         // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、任何改动之前校验可写；409 时控制器不触发名片重渲染。
         petWriteGuard.requireWritable(profile);
@@ -348,5 +366,17 @@ public class ProfileService {
 
     private static String blankToNull(String s) {
         return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    /**
+     * 旧版兼容（V1.4.0 上线前兼容检查）：不带 petId 的编辑 / 删除只允许单宠物账号（旧版 App 的唯一用法）。
+     * 🔴 旧版 App 不带 petId 且整会话缓存「默认宠物」；多宠账号的默认宠物会中途变化（改选保持正常、月租到期、
+     * 删掉一只），此时按默认宠物落地会把另一只的资料整体覆盖、或删错宠物（不可恢复）。多宠账号一律 409
+     * {@code pet-id-required}，引导升级；新版 App 恒带 petId，不受影响。无宠物 → 放行，由 {@link PetResolver} 照旧 404。
+     */
+    private void requirePetIdIfMultiPet(long ownerId, Long petId) {
+        if (petId == null && profiles.countByOwnerId(ownerId) > 1) {
+            throw AppException.petIdRequired();
+        }
     }
 }

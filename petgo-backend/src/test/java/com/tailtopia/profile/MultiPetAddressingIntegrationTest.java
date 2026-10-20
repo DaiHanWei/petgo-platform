@@ -164,6 +164,29 @@ class MultiPetAddressingIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$[1].isDefault").value(false));
     }
 
+    /**
+     * 旧版兼容（V1.4.0 上线前兼容检查）：多宠账号不带 petId 的 PATCH / DELETE /me → 409 pet-id-required，
+     * 两只宠物都原样保留（旧版 App 缓存的默认宠物可能已过期，按默认宠物落地会改错 / 删错）。
+     */
+    @Test
+    void multiPetWriteWithoutPetIdRejectedAndNothingChanges() throws Exception {
+        mvc.perform(patch("/api/v1/pet-profiles/me").header(HttpHeaders.AUTHORIZATION, auth)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Overwrite\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value(org.hamcrest.Matchers.endsWith("pet-id-required")));
+        mvc.perform(delete("/api/v1/pet-profiles/me").header(HttpHeaders.AUTHORIZATION, auth))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value(org.hamcrest.Matchers.endsWith("pet-id-required")));
+
+        Long left = jdbc.queryForObject("SELECT count(*) FROM pet_profiles WHERE owner_id = ?", Long.class, owner);
+        org.assertj.core.api.Assertions.assertThat(left).isEqualTo(2L);
+        mvc.perform(get("/api/v1/pet-profiles/me").header(HttpHeaders.AUTHORIZATION, auth))
+                .andExpect(jsonPath("$.name").value("Aaa"));
+        mvc.perform(get("/api/v1/pet-profiles/me").param("petId", String.valueOf(petB))
+                        .header(HttpHeaders.AUTHORIZATION, auth))
+                .andExpect(jsonPath("$.name").value("Bbb"));
+    }
+
     /** ProblemDetail 的 instance / traceId 每次不同，比较前去掉。 */
     private static String stripVolatile(String body) {
         return body.replaceAll("\"(instance|traceId)\"\\s*:\\s*\"[^\"]*\"", "");

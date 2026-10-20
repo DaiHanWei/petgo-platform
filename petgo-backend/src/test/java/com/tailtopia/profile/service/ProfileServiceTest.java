@@ -230,6 +230,24 @@ class ProfileServiceTest {
         Mockito.verify(profileDeletion).deleteByPetId(1L, 10L);
     }
 
+    /** 旧版兼容：多宠账号不带 petId 的编辑 / 删除一律 409 pet-id-required，且不落任何改动（不解析默认宠物、不删）。 */
+    @Test
+    void multiPetWithoutPetIdUpdateAndDeleteRejected() {
+        when(profiles.countByOwnerId(1L)).thenReturn(2L);
+
+        assertThatThrownBy(() -> service.update(1L, null, new com.tailtopia.profile.dto.PetProfileUpdateRequest(
+                "X", null, null, null, null, null, null, null)))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_ID_REQUIRED));
+        assertThatThrownBy(() -> service.deleteMyProfile(1L, null))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_ID_REQUIRED));
+
+        Mockito.verify(profiles, Mockito.never()).findDefault(Mockito.anyLong());
+        Mockito.verify(profiles, Mockito.never()).save(any(PetProfile.class));
+        Mockito.verify(profileDeletion, Mockito.never()).deleteByPetId(Mockito.anyLong(), Mockito.anyLong());
+    }
+
     @Test
     void blankOptionalFieldsNormalizedToNull() {
         when(profiles.countByOwnerId(1L)).thenReturn(0L);
