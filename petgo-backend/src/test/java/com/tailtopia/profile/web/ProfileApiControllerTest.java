@@ -83,20 +83,34 @@ class ProfileApiControllerTest {
     void createUsesOwnerFromJwtAndRateLimits() {
         PetProfileResponse stub = new PetProfileResponse(
                 5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
-        when(service.create(eq(77L), org.mockito.ArgumentMatchers.any())).thenReturn(stub);
+        when(service.create(eq(77L), org.mockito.ArgumentMatchers.any(), eq(true))).thenReturn(stub);
 
         PetProfileResponse resp = controller.create(
-                jwt("77"), new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null));
+                jwt("77"), "1.4.0", new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null));
 
         assertThat(resp.name()).isEqualTo("Momo");
         verify(rateLimiter).check(eq("rl:profile:create:77"), anyInt(), org.mockito.ArgumentMatchers.any());
-        verify(service).create(eq(77L), org.mockito.ArgumentMatchers.any());
+        verify(service).create(eq(77L), org.mockito.ArgumentMatchers.any(), eq(true));
+    }
+
+    /** 旧版兼容：缺 X-App-Version（≤1.3.3）/ 1.3.4 → 以旧版客户端调用 service（multiPetClient = false）。 */
+    @Test
+    void createPassesLegacyFlagForOldOrMissingVersion() {
+        PetProfileResponse stub = new PetProfileResponse(
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
+        when(service.create(eq(77L), org.mockito.ArgumentMatchers.any(), eq(false))).thenReturn(stub);
+        var req = new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null);
+
+        controller.create(jwt("77"), null, req);
+        controller.create(jwt("77"), "1.3.4", req);
+
+        verify(service, org.mockito.Mockito.times(2)).create(eq(77L), org.mockito.ArgumentMatchers.any(), eq(false));
     }
 
     @Test
     void rejectsMissingJwt() {
         assertThatThrownBy(() -> controller.create(
-                null, new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null)))
+                null, null, new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null)))
                 .isInstanceOf(AppException.class);
     }
 

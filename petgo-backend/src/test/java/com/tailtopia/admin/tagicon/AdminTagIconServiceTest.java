@@ -221,6 +221,29 @@ class AdminTagIconServiceTest {
                 .startsWith("https://cdn.example/petgo/public/tag-icon/");
     }
 
+    /**
+     * 真实 WebP 文件（不是改了类型的 PNG）能通过尺寸校验并上传，扩展名为 .webp；PRD AB-35 写明图标支持 PNG / WebP。
+     * 🔴 此前 JDK ImageIO 读不了 WebP，真 WebP 一律被判「测不出尺寸」拒收，旧测试拿 PNG 字节冒充 WebP 没发现。
+     */
+    @Test
+    void realWebpIconsAreAcceptedAndTooSmallStillRejected() throws Exception {
+        for (String name : new String[] {"alpha-336x336.webp", "lossy-112x96.webp", "lossless-300x200.webp",
+                "animated-64x48.webp"}) {
+            assertThat(service.uploadOrKeep(file(name, "image/webp", webp(name)), IconPurpose.GIFT))
+                    .as(name).startsWith("https://cdn.example/petgo/public/gift-icon/").endsWith(".webp");
+        }
+        assertThatThrownBy(() -> service.uploadOrKeep(file("s.webp", "image/webp", webp("alpha-40x40.webp")),
+                IconPurpose.GIFT))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("admin.gifticon.tooSmall").hasMessageContaining("40");
+    }
+
+    private static byte[] webp(String name) throws java.io.IOException {
+        try (var in = AdminTagIconServiceTest.class.getResourceAsStream("/fixtures/webp/" + name)) {
+            return in.readAllBytes();
+        }
+    }
+
     /** 礼物版报错走 {@code admin.gifticon.*}：JPEG / 尺寸 / 大小都换成「礼物图标」文案，规则不变。 */
     @Test
     void giftPurposeReportsGiftWording() {

@@ -1,5 +1,7 @@
 package com.tailtopia.profile.web;
 
+import org.springframework.web.bind.annotation.RequestHeader;
+import com.tailtopia.profile.service.ClientAppVersion;
 import com.tailtopia.profile.dto.ArchiveStatsResponse;
 import com.tailtopia.profile.dto.CalendarMonthResponse;
 import com.tailtopia.profile.dto.DayDetailResponse;
@@ -98,10 +100,12 @@ public class ProfileApiController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PetProfileResponse create(@AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(name = ClientAppVersion.HEADER, required = false) String appVersion,
             @Valid @RequestBody PetProfileCreateRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:create:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
-        return profileService.create(ownerId, req);
+        // 旧版 App（< 1.4.0 / 缺头）维持一账号一宠：已有宠物 → 409 profile-exists（V1.4.0 上线前旧版兼容检查）。
+        return profileService.create(ownerId, req, ClientAppVersion.supportsMultiPet(appVersion));
     }
 
     @GetMapping("/me")
