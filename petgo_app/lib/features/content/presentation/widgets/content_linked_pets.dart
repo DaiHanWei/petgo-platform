@@ -169,6 +169,7 @@ class _LinkedPetsSheet extends StatelessWidget {
                       PetCardRow(
                         key: ValueKey('detailLinkedPetRow-${p.petId}'),
                         avatarUrl: p.avatarUrl,
+                        petType: p.petType,
                         name: p.name,
                         // 详情响应只有物种（无生日）→ 副标题只出物种。
                         subtitle: petSpeciesLabel(l10n, p.petType) ?? '',

@@ -127,6 +127,8 @@ class AdminGrowthBatchRenderTest {
                 .contains("accept=\".csv,text/csv\"").contains("/admin/growth/batch/template.csv")
                 .contains("data-field-error=\"expPerUser\"").contains("每人 EXP 须为正整数")
                 .contains("id=\"growthbatch-err\"").contains("data-drawer-close").doesNotContain("??");
+        // bug 594：data-batch-file 被 admin-core.js 种子帖上传的全局 change 监听占用（选完即清空文件框）。
+        assertThat(html).contains("data-growth-batch-file").doesNotContain("data-batch-file");
         String general = render("fill", fill(Map.of(), "「运营活动」规则已停用"));
         assertThat(general).contains("banner err").contains("「运营活动」规则已停用");
     }
