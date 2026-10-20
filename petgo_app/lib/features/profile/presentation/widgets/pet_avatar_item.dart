@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../../../shared/widgets/app_image.dart';
 import '../../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart';
 import '../../domain/pet_age.dart';
+import 'pet_species_avatar.dart';
 
 /// 宠物圆形头像项（V1.3.4 UI 稿 A2 宠物方案 B）—— 他人主页「Hewan」与我的页「Hewanku」**共用**。
 ///
@@ -79,17 +79,14 @@ class PetAvatarItem extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     // 0 篇不画「0」角标（V1.4.0 L2 J0：稿只在有 Diary 时显示数字）。
     final count = (diaryCount ?? 0) > 0 ? diaryCount : null;
-    final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
     final meta = _meta(l10n);
-    Widget avatar = CircleAvatar(
+    Widget avatar = PetSpeciesAvatar(
       // key 随 URL 变：换头像后强制重建，杜绝旧图不重绘。
       key: ValueKey('petAvatar-$avatarUrl'),
-      radius: size / 2,
-      backgroundColor: AppColors.border,
-      backgroundImage: AppImage.provider(avatarUrl, thumbWidth: 200),
-      child: hasAvatar
-          ? null
-          : Icon(Icons.pets, size: size * 0.44, color: AppColors.textTertiary),
+      avatarUrl: avatarUrl,
+      petType: petType,
+      size: size,
+      thumbWidth: 200,
     );
     if (readOnly) avatar = ColorFiltered(colorFilter: _greyscale, child: avatar);
     return GestureDetector(

@@ -6,14 +6,15 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
-import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../profile/data/pet_list_repository.dart';
+import '../../profile/presentation/widgets/pet_species_avatar.dart';
 import '../data/pet_slot_repository.dart';
 import '../domain/pet_slot_purchase.dart';
 import 'active_selection_sheet.dart';
+import 'add_pet_flow.dart';
 import 'pet_readonly_block.dart';
 import 'pet_slot_pet_row.dart';
 import 'pet_slot_purchase_flow.dart';
@@ -404,7 +405,6 @@ class _Cell extends StatelessWidget {
     switch (cell.kind) {
       case PetSlotCellKind.pet:
         final pet = cell.pet!;
-        final hasAvatar = pet.avatarUrl != null && pet.avatarUrl!.isNotEmpty;
         final (ring, tint) = _sourceColors();
         Widget avatar = Container(
           width: size,
@@ -418,12 +418,7 @@ class _Cell extends StatelessWidget {
                     const BoxShadow(color: Colors.white, spreadRadius: 2),
                   ],
           ),
-          child: CircleAvatar(
-            radius: size / 2,
-            backgroundColor: AppColors.border,
-            backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 120),
-            child: hasAvatar ? null : const Icon(Icons.pets, size: 20, color: AppColors.textTertiary),
-          ),
+          child: PetSpeciesAvatar(avatarUrl: pet.avatarUrl, petType: pet.petType, size: size),
         );
         if (pet.isReadOnly) avatar = ColorFiltered(colorFilter: _greyscale, child: avatar);
         circle = Stack(
@@ -478,7 +473,7 @@ class _Cell extends StatelessWidget {
           child: const Icon(Icons.lock, size: 16, color: AppColors.petSlotCellLock),
         );
     }
-    return Column(
+    final column = Column(
       children: [
         circle,
         const SizedBox(height: 4),
@@ -501,6 +496,8 @@ class _Cell extends StatelessWidget {
         if (tag != null) ...[const SizedBox(height: 4), tag],
       ],
     );
+    // bug 592：空名额格（已拥有未占用）点了要能加宠物，与「我的」页 / 切换器的「+」同走 [startAddPet]。
+    return cell.kind == PetSlotCellKind.empty ? _EmptyCellTap(child: column) : column;
   }
 
   /// 来源 / 只读胶囊。窄屏下格宽放不下「Hanya-baca」时**整体等比缩小**而不是截成「Hanya-b…」（L2 第二轮 D13）。
@@ -514,6 +511,38 @@ class _Cell extends StatelessWidget {
               softWrap: false,
               style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: fg)),
         ),
+      );
+}
+
+/// 空名额格的点击层：走 [startAddPet]（判定名额 / 上限 → 建档页），取摘要期间防连点（同 [AddPetTile]）。
+class _EmptyCellTap extends ConsumerStatefulWidget {
+  const _EmptyCellTap({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_EmptyCellTap> createState() => _EmptyCellTapState();
+}
+
+class _EmptyCellTapState extends ConsumerState<_EmptyCellTap> {
+  bool _busy = false;
+
+  Future<void> _tap() async {
+    if (_busy) return;
+    _busy = true;
+    try {
+      await startAddPet(context, ref, source: 'add_pet');
+    } finally {
+      _busy = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        key: const ValueKey('petSlotEmptyCellTap'),
+        behavior: HitTestBehavior.opaque,
+        onTap: _tap,
+        child: widget.child,
       );
 }
 

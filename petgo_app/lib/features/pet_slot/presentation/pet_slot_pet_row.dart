@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/app_image.dart';
 import '../../profile/data/pet_list_repository.dart';
 import '../../profile/domain/pet_age.dart';
+import '../../profile/presentation/widgets/pet_species_avatar.dart';
 
 /// 名额管理页 Hewanku 行 / D13 改选行共用：头像 40 + 名字 + 「物种 · 年龄」+ 右侧 [trailing]。
 ///
@@ -32,13 +32,7 @@ class PetSlotPetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locked = showLock && pet.isReadOnly;
-    final hasAvatar = pet.avatarUrl != null && pet.avatarUrl!.isNotEmpty;
-    Widget avatar = CircleAvatar(
-      radius: avatarSize / 2,
-      backgroundColor: AppColors.border,
-      backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 120),
-      child: hasAvatar ? null : const Icon(Icons.pets, size: 18, color: AppColors.textTertiary),
-    );
+    Widget avatar = PetSpeciesAvatar(avatarUrl: pet.avatarUrl, petType: pet.petType, size: avatarSize);
     if (locked) avatar = ColorFiltered(colorFilter: _greyscale, child: avatar);
     final meta = [
       ?petSpeciesLabel(l10n, pet.petType),

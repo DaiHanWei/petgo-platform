@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../../../shared/widgets/app_image.dart';
 import '../../data/pet_list_repository.dart';
 import '../../domain/pet_age.dart';
+import 'pet_species_avatar.dart';
 
 /// 选宠物底部抽屉（V1.4.0 multi-pet Story 3.3 · AC5.2 · UI 稿 G1 / G2 `.sheet .crow`）。
 ///
@@ -252,6 +252,7 @@ class _PetPickerSheetState extends State<PetPickerSheet> {
     return PetCardRow(
       key: ValueKey('petPickerRow-${p.id}'),
       avatarUrl: p.avatarUrl,
+      petType: p.petType,
       name: p.name,
       subtitle: subtitle,
       trailing: trailing,
@@ -271,6 +272,7 @@ class PetCardRow extends StatelessWidget {
   const PetCardRow({
     super.key,
     required this.avatarUrl,
+    this.petType,
     required this.name,
     required this.subtitle,
     required this.trailing,
@@ -281,6 +283,9 @@ class PetCardRow extends StatelessWidget {
   });
 
   final String? avatarUrl;
+
+  /// 无头像时按物种出 emoji 占位（bug 593）；null → 中性爪印。
+  final String? petType;
   final String name;
   final String subtitle;
   final Widget trailing;
@@ -297,13 +302,7 @@ class PetCardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
-    Widget avatar = CircleAvatar(
-      radius: 20,
-      backgroundColor: AppColors.border,
-      backgroundImage: AppImage.provider(avatarUrl, thumbWidth: 120),
-      child: hasAvatar ? null : const Icon(Icons.pets, size: 18, color: AppColors.textTertiary),
-    );
+    Widget avatar = PetSpeciesAvatar(avatarUrl: avatarUrl, petType: petType, size: 40);
     Widget nameText = Text(name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
