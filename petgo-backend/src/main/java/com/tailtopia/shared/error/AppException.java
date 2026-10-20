@@ -173,6 +173,12 @@ public class AppException extends RuntimeException {
         return new PetReadOnlyException(petId);
     }
 
+    /** 多宠物账号编辑 / 删除宠物档案未带 petId → 409 {@code pet-id-required}（见 {@link ErrorTypes#PET_ID_REQUIRED}）。 */
+    public static AppException petIdRequired() {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_ID_REQUIRED,
+                "多宠物账号请升级到最新版本后再编辑或删除宠物");
+    }
+
     /** V1.4.0 multi-pet Story 2.1（D13）：宠物数 ≤ 名额时改选 → 409 {@code pet-selection-not-needed}。 */
     public static AppException petSelectionNotNeeded(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.PET_SELECTION_NOT_NEEDED, detail);

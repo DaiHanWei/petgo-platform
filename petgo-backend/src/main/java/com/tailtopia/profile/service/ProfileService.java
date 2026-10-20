@@ -160,6 +160,7 @@ public class ProfileService {
      * 他人 / 不存在的 petId 与无档案一样 404。不再给身份证打标（按账号打标只在注销路径）。
      */
     public void deleteMyProfile(long ownerId, Long petId) {
+        requirePetIdIfMultiPet(ownerId, petId);
         PetProfile pet = petResolver.resolve(ownerId, petId);
         PersonalMedia media = profileDeletion.deleteByPetId(ownerId, pet.getId());
         mediaDeletion.deletePrivateKeys(media.privateKeys());
@@ -177,6 +178,7 @@ public class ProfileService {
     /** V1.4.0 multi-pet：编辑指定宠物（petId 为 null = 默认宠物）。不属于本人 → 404。 */
     @Transactional
     public PetProfileResponse update(long ownerId, Long petId, PetProfileUpdateRequest req) {
+        requirePetIdIfMultiPet(ownerId, petId);
         PetProfile profile = petResolver.resolve(ownerId, petId);
         // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、任何改动之前校验可写；409 时控制器不触发名片重渲染。
         petWriteGuard.requireWritable(profile);
@@ -348,5 +350,17 @@ public class ProfileService {
 
     private static String blankToNull(String s) {
         return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    /**
+     * 旧版兼容（V1.4.0 上线前兼容检查）：不带 petId 的编辑 / 删除只允许单宠物账号（旧版 App 的唯一用法）。
+     * 🔴 旧版 App 不带 petId 且整会话缓存「默认宠物」；多宠账号的默认宠物会中途变化（改选保持正常、月租到期、
+     * 删掉一只），此时按默认宠物落地会把另一只的资料整体覆盖、或删错宠物（不可恢复）。多宠账号一律 409
+     * {@code pet-id-required}，引导升级；新版 App 恒带 petId，不受影响。无宠物 → 放行，由 {@link PetResolver} 照旧 404。
+     */
+    private void requirePetIdIfMultiPet(long ownerId, Long petId) {
+        if (petId == null && profiles.countByOwnerId(ownerId) > 1) {
+            throw AppException.petIdRequired();
+        }
     }
 }

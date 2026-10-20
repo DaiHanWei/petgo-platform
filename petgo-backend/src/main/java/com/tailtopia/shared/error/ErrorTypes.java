@@ -36,6 +36,12 @@ public final class ErrorTypes {
      */
     public static final URI PET_READ_ONLY = URI.create(BASE + "pet-read-only");
 
+    /**
+     * V1.4.0 上线前旧版兼容检查：多宠物账号编辑 / 删除宠物档案未带 {@code petId}（409）。旧版 App 只认「默认宠物」且整会话缓存，
+     * 默认宠物中途变化时会改错 / 删错另一只 —— 多宠账号必须显式指定，只能经新版 App（恒带 petId）操作。
+     */
+    public static final URI PET_ID_REQUIRED = URI.create(BASE + "pet-id-required");
+
     /** V1.4.0 multi-pet Story 2.1（D13）：账号宠物数 ≤ 名额，无需选择保持正常的宠物（409）。 */
     public static final URI PET_SELECTION_NOT_NEEDED = URI.create(BASE + "pet-selection-not-needed");
 
