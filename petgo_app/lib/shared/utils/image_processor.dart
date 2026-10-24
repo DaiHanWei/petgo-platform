@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
@@ -19,6 +20,12 @@ class ImageProcessingException implements Exception {
 /// 因为是从像素重编码并显式清空元数据，**定位信息（GPS）必被剥离**（G-4）。纯 Dart，headless 可单测。
 class ImageProcessor {
   const ImageProcessor();
+
+  /// 同 [process]，在后台 isolate 跑。**App 内上传一律走这个**：纯 Dart 解码 / 编码一张 2048px 图
+  /// 在低端机（Itel / Infinix）要好几秒，放主 isolate 会卡死 UI 触发 ANR（Play 后台堆栈
+  /// `JpegEncoder._calculateYUV / _fDCTQuant`）。[ImageProcessingException] 原样抛回调用方。
+  Future<Uint8List> processInBackground(Uint8List input, {int maxBytes = kMaxUploadBytes}) =>
+      Isolate.run(() => const ImageProcessor().process(input, maxBytes: maxBytes));
 
   Uint8List process(Uint8List input, {int maxBytes = kMaxUploadBytes}) {
     img.Image? decoded;
