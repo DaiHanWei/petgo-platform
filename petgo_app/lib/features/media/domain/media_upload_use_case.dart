@@ -49,7 +49,7 @@ class MediaUploadUseCase {
     if (picked == null) return null;
 
     final raw = await picked.readAsBytes();
-    final processed = processor.process(raw);
+    final processed = await processor.processInBackground(raw);
     return uploadBytes(scope: scope, bytes: processed);
   }
 
@@ -70,7 +70,7 @@ class MediaUploadUseCase {
     final picked = await _pick(source);
     if (picked == null) return null;
     final raw = await picked.readAsBytes();
-    return processor.process(raw);
+    return processor.processInBackground(raw);
   }
 
   Future<List<Uint8List>> pickMultiAndProcess({
@@ -92,7 +92,7 @@ class MediaUploadUseCase {
     final files = picked.take(limit);
     final result = <Uint8List>[];
     for (final file in files) {
-      result.add(processor.process(await file.readAsBytes()));
+      result.add(await processor.processInBackground(await file.readAsBytes()));
     }
     return result;
   }
