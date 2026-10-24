@@ -55,6 +55,13 @@ public class ShopSku {
     @Column(name = "cost_price")
     private Long costPrice;
 
+    /**
+     * 批发价（V1.4.1 商家平台对接，最小币种单位）。门店按它进货；返佣差价 = 下单单价 − 批发价。
+     * {@code null} = 不对门店供货。门店能看到，不属于进货价那类商业敏感字段。
+     */
+    @Column(name = "wholesale_price")
+    private Long wholesalePrice;
+
     /** 可空 = 继承商品级（FR-94A）。 */
     @Enumerated(EnumType.STRING)
     @Column(name = "return_policy", length = 24)
@@ -93,6 +100,15 @@ public class ShopSku {
      */
     public void applyCostPrice(Long costPrice) {
         this.costPrice = costPrice;
+    }
+
+    /** 设置批发价（{@code null} = 不对门店供货）。 */
+    public void applyWholesalePrice(Long wholesalePrice) {
+        this.wholesalePrice = wholesalePrice;
+    }
+
+    public Long getWholesalePrice() {
+        return wholesalePrice;
     }
 
     @PrePersist

@@ -43,6 +43,7 @@ public final class PaymentDisplayNo {
             // V1.4.0 Story 0.1：送礼 / 宠物名额月租。
             case GIFT -> "PAYGIFT";
             case PET_SLOT_RENT -> "PAYSLOT";
+            case MERCHANT_PO -> "PAYPO";
         };
         return prefix + "-" + p.getCreatedAt().atZone(WIB).format(YMD)
                 + "-" + String.format("%06d", p.getId());

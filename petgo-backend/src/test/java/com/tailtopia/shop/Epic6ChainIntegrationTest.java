@@ -135,7 +135,8 @@ class Epic6ChainIntegrationTest extends ApiIntegrationTest {
         payments.pay(uid, o.getPublicToken(), null);
         fulfillment.ship(o.getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 0L);
         fulfillment.markDeliveredByAdmin(o.getPublicToken());
-        jdbc.update("UPDATE shop_orders SET delivered_at = ? WHERE public_token = ?",
+        jdbc.update("UPDATE shop_orders o SET delivered_at = v.t, return_window_ends_at = v.t + INTERVAL '7 days' "
+                + "FROM (SELECT CAST(? AS timestamptz) AS t) v WHERE o.public_token = ?",
                 java.sql.Timestamp.from(
                         java.time.Instant.now().minus(deliveredDaysAgo, ChronoUnit.DAYS)),
                 o.getPublicToken());

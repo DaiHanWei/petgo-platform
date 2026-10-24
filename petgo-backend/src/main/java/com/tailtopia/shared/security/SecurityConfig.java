@@ -55,6 +55,25 @@ public class SecurityConfig {
     }
 
     /**
+     * 商家平台进货内部接口链（V1.4.1，tailtopia-contract.md 5.1）：{@code /internal/**} 无会话、无 CSRF、不走 JWT。
+     *
+     * <p>🔴 <b>放行不等于不设防</b>：来源（独立内网端口、拒收带 {@code CF-Connecting-IP} 的请求）与共享密钥
+     * 由 {@code InternalApiGuardFilter} 在 Spring Security 之前判定，没过守卫的请求到不了这里。
+     * 本链只负责让它不落进下方 api 链的 JWT 门控。
+     */
+    @Bean
+    @Order(0)
+    public SecurityFilterChain merchantInternalFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/internal/**")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .requestCache(rc -> rc.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
+    }
+
+    /**
      * Admin 后台链（Story 3.1）：{@code /admin/**} 表单登录 + 会话 + CSRF，要求 {@code ROLE_ADMIN}。
      * 优先级高于 api 链，独占 {@code /admin/**}，故 api 链不会触达后台路由。
      */
@@ -226,6 +245,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/followers").permitAll()
                         // V1.3.4 follow Story 2.3：推荐关注，仅 role=USER（controller 把 sub 当 users.id 用，同 /me 端点）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/me/follow-suggestions").hasRole("USER")
+                        // V1.4.1 商家平台：填门店邀请码，仅 role=USER（controller 把 sub 当 users.id 用）。精确路径。
+                        .requestMatchers("/api/v1/me/merchant-binding").hasRole("USER")
                         // V1.3.4 following 流：关注头像排，仅 role=USER。
                         .requestMatchers(HttpMethod.GET, "/api/v1/me/following-strip").hasRole("USER")
                         // 关注流：同上，不加则兽医 token 以同号用户名义读到关注流。
