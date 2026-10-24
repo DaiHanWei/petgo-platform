@@ -174,4 +174,54 @@ class AdminShopProductServiceTest {
         f.setNetWeightG(0L);
         assertThatThrownBy(() -> service.validateSku(f)).isInstanceOf(AppException.class);
     }
+
+    // ---------- 批发价（门店进货价，商家平台契约第 2 节） ----------
+
+    @Test
+    @DisplayName("批发价：可空，负数拒绝并挂 admin.err.product.wholesaleNegative")
+    void wholesalePriceValidation() {
+        ShopSkuForm f = new ShopSkuForm();
+        f.setSpecName("3 kg");
+        f.setPrice(1000L);
+        assertThatCode(() -> service.validateSku(f)).doesNotThrowAnyException();
+        f.setWholesalePrice(0L);
+        assertThatCode(() -> service.validateSku(f)).doesNotThrowAnyException();
+        f.setWholesalePrice(-1L);
+        assertThatThrownBy(() -> service.validateSku(f))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.product.wholesaleNegative"));
+    }
+
+    @Test
+    @DisplayName("批发价变化才额外写一条 SHOP_SKU_WHOLESALE_UPDATED，摘要 old=… new=…；不变不写")
+    void wholesaleChangeIsAuditedOnlyWhenChanged() {
+        ShopProductRepository products = Mockito.mock(ShopProductRepository.class);
+        ShopSkuRepository skus = Mockito.mock(ShopSkuRepository.class);
+        AdminAuditService audit = Mockito.mock(AdminAuditService.class);
+        AdminShopProductService svc = new AdminShopProductService(products, skus,
+                Mockito.mock(InventoryService.class), new ShopTokenGenerator(), audit);
+        Mockito.when(products.findById(7L)).thenReturn(
+                java.util.Optional.of(Mockito.mock(com.tailtopia.shop.domain.ShopProduct.class)));
+        com.tailtopia.shop.domain.ShopSku existing = com.tailtopia.shop.domain.ShopSku.create(
+                "tok", 7L, "3 kg", 1000L, null, null);
+        existing.applyWholesalePrice(800L);
+        Mockito.when(skus.findById(11L)).thenReturn(java.util.Optional.of(existing));
+
+        ShopSkuForm f = new ShopSkuForm();
+        f.setId(11L);
+        f.setSpecName("3 kg");
+        f.setPrice(1000L);
+        f.setWholesalePrice(800L);
+        svc.upsertSku(7L, f, 1L);
+        Mockito.verify(audit, Mockito.never()).record(Mockito.anyLong(),
+                Mockito.eq(com.tailtopia.admin.audit.service.AuditActions.SHOP_SKU_WHOLESALE_UPDATED),
+                Mockito.any(), Mockito.any(), Mockito.any());
+
+        f.setWholesalePrice(750L);
+        svc.upsertSku(7L, f, 1L);
+        assertThat(existing.getWholesalePrice()).isEqualTo(750L);
+        Mockito.verify(audit).record(1L,
+                com.tailtopia.admin.audit.service.AuditActions.SHOP_SKU_WHOLESALE_UPDATED,
+                "SHOP_SKU", "tok", "old=800 new=750");
+    }
 }
