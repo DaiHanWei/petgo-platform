@@ -423,6 +423,10 @@ class ApiPaths {
   static const String meBlockedUsers = '$base/me/blocked-users';
   static String meBlockedUser(int userId) => '$meBlockedUsers/$userId';
 
+  /// V1.4.1 门店邀请码（商家平台对接 FR-7）。GET → `{bound, inviteCode, boundAt}`；POST `{code}` 绑定。
+  /// 仅 role=USER；码无效 / 门店停用 422 `merchant-code-invalid`，已绑定 409 `merchant-already-bound`，限流 429。
+  static const String meMerchantBinding = '$base/me/merchant-binding';
+
   /// 问诊存档（Story 2.5）。
   static const String healthArchiveDecisions = '$base/health-events/archive-decisions';
   static const String healthDecision = '$base/health-events/decision';
