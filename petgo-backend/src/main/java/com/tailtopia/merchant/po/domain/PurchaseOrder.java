@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 门店进货单（契约第 2、5 节）。门店向 TailTopia 按批发价下的单，与 Toko 订单（{@code shop_orders}）分表 ——
@@ -141,7 +142,8 @@ public class PurchaseOrder {
         o.shipKodePos = ship.kodePos();
         o.storeNameSnapshot = storeName;
         o.storePhoneSnapshot = storePhone;
-        o.paymentDeadline = now.plus(PAYMENT_WINDOW);
+        // 截到微秒 = Postgres timestamptz 精度：否则落库四舍五入可能进位，读回的截止与建单返回值不一致
+        o.paymentDeadline = now.plus(PAYMENT_WINDOW).truncatedTo(ChronoUnit.MICROS);
         o.createdAt = now;
         o.updatedAt = now;
         return o;
