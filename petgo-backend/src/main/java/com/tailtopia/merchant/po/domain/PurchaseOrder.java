@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 门店进货单（契约第 2、5 节）。门店向 TailTopia 按批发价下的单，与 Toko 订单（{@code shop_orders}）分表 ——
@@ -125,6 +126,8 @@ public class PurchaseOrder {
     public static PurchaseOrder place(String publicToken, String orderNo, long merchantStoreId,
             PoShippingMethod shippingMethod, long goodsAmount, AddressSnapshot ship,
             String storeName, String storePhone, Instant now) {
+        // timestamptz 只存到微秒且四舍五入：先截到微秒，建单响应与之后读出的 payment_deadline 才逐位一致
+        now = now.truncatedTo(ChronoUnit.MICROS);
         PurchaseOrder o = new PurchaseOrder();
         o.publicToken = publicToken;
         o.orderNo = orderNo;
