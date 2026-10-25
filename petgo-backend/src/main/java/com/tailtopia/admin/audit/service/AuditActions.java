@@ -295,6 +295,14 @@ public final class AuditActions {
     /** 按当前筛选导出送礼记录 xlsx。摘要记行数 / 是否截断 / 全部筛选条件（查看列表与抽屉页签不写审计）。 */
     public static final String GIFT_ORDER_LIST_EXPORTED = "GIFT_ORDER_LIST_EXPORTED";
 
+    // ===== 商家平台门店进货单（V1.4.1，tailtopia-contract.md 第 5 节）=====
+    /** 🔒 进货单录入包裹。摘要只记单号；收货人与门店电话严禁写入。 */
+    public static final String MERCHANT_PO_SHIPMENT_ADDED = "MERCHANT_PO_SHIPMENT_ADDED";
+    /** 进货单手工标记送达。 */
+    public static final String MERCHANT_PO_DELIVERED = "MERCHANT_PO_DELIVERED";
+    /** 编辑 SKU 批发价（门店进货价）。摘要记新旧值 —— 批发价门店本就看得到，不属于进货价那类敏感字段。 */
+    public static final String SHOP_SKU_WHOLESALE_UPDATED = "SHOP_SKU_WHOLESALE_UPDATED";
+
     private AuditActions() {
     }
 }

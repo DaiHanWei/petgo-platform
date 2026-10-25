@@ -53,6 +53,7 @@ import '../../features/profile/presentation/pet_recommendation_list_page.dart';
 import '../../features/profile/presentation/visitor_archive_view.dart';
 import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
+import '../../features/merchant_binding/presentation/merchant_code_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
 import '../../features/user_profile/presentation/public_profile_page.dart';
 import '../../features/social/domain/follow_list_item.dart';
@@ -1103,6 +1104,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 黑名单管理（V1.1.4 Story 1.5 · FR-94）。受控（/me 前缀已在 _controlledLocations，游客深链自动 redirect）。
       // ⚠️ 放顶层而非 shell 分支：push 时要隐藏底部 Tab Bar。
       GoRoute(path: '/me/blocked-users', builder: (c, s) => const BlockedUsersPage()),
+      // V1.4.1 门店邀请码（商家平台对接 FR-7）。受控（/me 前缀）；shell 外顶层，push 时隐藏 Tab Bar。
+      GoRoute(path: MerchantCodePage.routePath, builder: (c, s) => const MerchantCodePage()),
       // 宠物聚会 Gath（TailTopia Prototype 占位页）。shell 外 push。
       GoRoute(path: '/gath', builder: (c, s) => const GathPage()),
       // 宠物名片 H5 预览（FR-14）。shell 外 push（全屏浏览器外壳观感）。

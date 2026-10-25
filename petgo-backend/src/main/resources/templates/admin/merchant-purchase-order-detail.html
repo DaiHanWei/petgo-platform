@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  门店进货单详情（商家平台契约 5.2 / 5.3）：① 基本信息 + 时间节点 ② 明细行 ③ 门店快照 ④ 收货信息（PII）
+  ⑤ 包裹表 ⑥ 录入包裹 / 标记送达（整页表单 + PRG，成功 / 失败都回本页 flash）。
+  🔒 本页是进货单收货人 / 电话 / 地址的唯一出口 —— 列表不带、日志不记、审计摘要只记单号（领域服务写）。
+  权限：页面 = shop.order_view 或 shop.order_fulfill；写 = shop.order_fulfill（sec:authorize 与控制器 FULFILL_AUTH 逐字一致）。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.merchantPo.detail.title}">进货单详情</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.merchantPo.detail.title}">进货单详情</h1>
+            <a th:href="@{/admin/merchant/purchase-orders}" class="btn btn-neutral btn-sm"
+               th:text="#{admin.common.back}">返回列表</a>
+        </div>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!-- ① 基本信息 -->
+        <section class="card card-full">
+            <h2 th:text="#{admin.merchantPo.section.summary}">基本信息</h2>
+            <table>
+                <tr><th th:text="#{admin.merchantPo.col.orderNo}">进货单号</th>
+                    <td th:text="${po.orderNo}">PO-261021-0042</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.status}">状态</th>
+                    <td><span class="badge" th:classappend="${po.status.name() == 'PAID'} ? 'badge-warn'
+                             : (${po.status.name() == 'DELIVERED' or po.status.name() == 'COMPLETED'} ? 'badge-ok' : 'badge-neutral')"
+                              th:text="#{'admin.merchantPo.status.' + ${po.status}}">待发货</span></td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.goodsAmount}">商品金额</th>
+                    <td th:text="${#numbers.formatInteger(po.goodsAmount, 0, 'COMMA')}">1,250,000</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.shippingMethod}">运费方式</th>
+                    <td th:text="#{'admin.merchantPo.shipping.' + ${po.shippingMethod}}">包邮</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.createdAt}">下单时间</th>
+                    <td th:text="${@adminTime.wib(po.createdAt)}">—</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.paymentDeadline}">付款截止</th>
+                    <td th:text="${@adminTime.wib(po.paymentDeadline)}">—</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.paidAt}">付款时间</th>
+                    <td th:text="${@adminTime.wib(po.paidAt)}">—</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.shippedAt}">发货时间</th>
+                    <td th:text="${@adminTime.wib(po.shippedAt)}">—</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.deliveredAt}">签收时间</th>
+                    <td><span th:text="${@adminTime.wib(po.deliveredAt)}">—</span>
+                        <span class="muted" th:if="${po.deliverySource != null}"
+                              th:text="' · ' + #{'admin.merchantPo.deliverySource.' + ${po.deliverySource}}">运营标记送达</span></td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.completedAt}">完成时间</th>
+                    <td th:text="${@adminTime.wib(po.completedAt)}">—</td></tr>
+                <tr th:if="${po.cancelledAt != null}"><th th:text="#{admin.merchantPo.col.cancelledAt}">取消时间</th>
+                    <td><span th:text="${@adminTime.wib(po.cancelledAt)}">—</span>
+                        <span class="muted" th:if="${po.cancelReason != null}"
+                              th:text="' · ' + #{'admin.merchantPo.cancelReason.' + ${po.cancelReason}}">超时未付款自动取消</span></td></tr>
+            </table>
+        </section>
+
+        <!-- ② 明细行（建单时快照，之后不改） -->
+        <section class="card card-full">
+            <h2 th:text="#{admin.merchantPo.section.lines}">明细</h2>
+            <table>
+                <thead><tr>
+                    <th th:text="#{admin.merchantPo.col.product}">商品</th>
+                    <th th:text="#{admin.merchantPo.col.spec}">规格</th>
+                    <th class="num" th:text="#{admin.merchantPo.col.wholesalePrice}">批发价</th>
+                    <th class="num" th:text="#{admin.merchantPo.col.qty}">数量</th>
+                    <th class="num" th:text="#{admin.merchantPo.col.subtotal}">小计</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="l : ${lines}">
+                    <td th:text="${l.productName}">Royal Canin</td>
+                    <td th:text="${l.specName}">3 kg</td>
+                    <td class="num" th:text="${#numbers.formatInteger(l.wholesalePrice, 0, 'COMMA')}">250,000</td>
+                    <td class="num" th:text="${l.qty}">5</td>
+                    <td class="num" th:text="${#numbers.formatInteger(l.subtotal, 0, 'COMMA')}">1,250,000</td>
+                </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- ③ 门店（下单时快照） -->
+        <section class="card card-full">
+            <h2 th:text="#{admin.merchantPo.section.store}">门店</h2>
+            <table>
+                <tr><th th:text="#{admin.merchantPo.col.storeName}">门店名称</th>
+                    <td th:text="${po.storeNameSnapshot}">Toko Budi</td></tr>
+                <tr><th th:text="#{admin.merchantPo.col.storePhone}">门店电话</th>
+                    <td th:text="${po.storePhoneSnapshot}">+628…</td></tr>
+            </table>
+        </section>
+
+        <!-- ④ 🔒 收货信息：含三项 PII，建单时定格。照 Toko 订单抽屉的收货信息卡。 -->
+        <section class="card card-full">
+            <h2 th:text="#{admin.merchantPo.section.shipTo}">收货信息</h2>
+            <p class="hint" th:text="#{admin.shop.order.shipTo.hint}">以下信息含个人数据，仅用于履约与客服核对。</p>
+            <table>
+                <tr><th th:text="#{admin.shop.order.col.receiver}">收件人</th>
+                    <td th:text="${shipTo.receiverName}">Budi</td></tr>
+                <tr><th th:text="#{admin.shop.order.col.phone}">电话</th>
+                    <td th:text="${shipTo.receiverPhone}">+628…</td></tr>
+                <tr><th th:text="#{admin.shop.order.col.address}">地址</th>
+                    <td th:text="${shipTo.addressLine} + ', ' + ${shipTo.kecamatan} + ', '
+                                 + ${shipTo.kotaKabupaten} + ', ' + ${shipTo.provinsi} + ' '
+                                 + ${shipTo.kodePos}">Jl. …</td></tr>
+            </table>
+        </section>
+
+        <!-- ⑤ 包裹（按发出时间升序） -->
+        <section class="card card-full">
+            <h2 th:text="#{admin.merchantPo.section.shipments}">包裹</h2>
+            <table>
+                <thead><tr>
+                    <th th:text="#{admin.merchantPo.col.carrier}">快递公司</th>
+                    <th th:text="#{admin.merchantPo.col.trackingNo}">快递单号</th>
+                    <th th:text="#{admin.merchantPo.col.trackingUrl}">查询链接</th>
+                    <th class="nowrap" th:text="#{admin.merchantPo.col.shippedAt}">发货时间</th>
+                </tr></thead>
+                <tbody>
+                <tr th:each="s : ${shipments}">
+                    <td th:text="${s.carrier}">JNE REG</td>
+                    <td th:text="${s.trackingNo}">JP123</td>
+                    <td>
+                        <a th:if="${s.trackingUrl != null}" th:href="${s.trackingUrl}" th:text="${s.trackingUrl}"
+                           target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">https://…</a>
+                        <span th:if="${s.trackingUrl == null}" class="muted">—</span>
+                    </td>
+                    <td class="nowrap" th:text="${@adminTime.wib(s.shippedAt)}">—</td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(shipments)}">
+                    <td colspan="4" th:text="#{admin.merchantPo.shipments.empty}">尚未发货。</td>
+                </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- ⑥ 操作：录入包裹（PAID / SHIPPED / DELIVERED）、标记送达（仅 SHIPPED，带确认） -->
+        <section class="card card-full" th:if="${shippable or markable}">
+            <h2 th:text="#{admin.merchantPo.section.actions}">发货操作</h2>
+            <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill')">
+                <form th:if="${shippable}" method="post" data-requires-form
+                      th:action="@{/admin/merchant/purchase-orders/{t}/shipments(t=${po.publicToken})}">
+                    <p class="hint" th:if="${po.status.name() == 'PAID'}"
+                       th:text="#{admin.merchantPo.ship.firstHint}">录入第一个包裹后，进货单转为「已发货」。</p>
+                    <label class="field" for="po-carrier" th:text="#{admin.merchantPo.col.carrier}">快递公司</label>
+                    <input id="po-carrier" type="text" name="carrier" class="inp" required maxlength="32"
+                           data-requires-text th:placeholder="#{admin.merchantPo.ship.carrierHint}"/>
+                    <label class="field" for="po-tracking" th:text="#{admin.merchantPo.col.trackingNo}">快递单号</label>
+                    <input id="po-tracking" type="text" name="trackingNo" class="inp" required maxlength="64"
+                           data-requires-text/>
+                    <label class="field" for="po-url" th:text="#{admin.merchantPo.col.trackingUrl}">查询链接</label>
+                    <input id="po-url" type="url" name="trackingUrl" class="inp field-full" maxlength="512"
+                           th:placeholder="#{admin.merchantPo.ship.trackingUrlHint}"/>
+                    <button type="submit" class="btn btn-primary" disabled data-requires-target
+                            th:text="#{admin.merchantPo.btn.addShipment}">录入包裹</button>
+                </form>
+                <form th:if="${markable}" method="post" class="inline"
+                      th:action="@{/admin/merchant/purchase-orders/{t}/mark-delivered(t=${po.publicToken})}"
+                      th:attr="data-confirm=#{admin.merchantPo.confirm.markDelivered(${po.orderNo})}">
+                    <button type="submit" class="btn btn-neutral"
+                            th:text="#{admin.merchantPo.btn.markDelivered}">标记送达</button>
+                </form>
+            </th:block>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill'))"
+               th:text="#{admin.v130.err.forbidden(#{perm.shop.order_fulfill})}">需要权限</p>
+        </section>
+    </div>
+</div>
+</body>
+</html>

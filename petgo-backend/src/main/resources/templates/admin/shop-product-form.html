@@ -251,21 +251,33 @@
                     <thead><tr>
                         <th th:text="#{admin.shop.sku.specName}">规格名</th>
                         <th class="s-col-num" th:text="#{admin.shop.sku.price}">售价</th>
+                        <!-- 批发价（门店进货价）：门店本就看得到，不受 shop.cost_view 门控（与下面的进货价 cost_price 不是一回事） -->
+                        <th class="s-col-num" th:text="#{admin.shop.sku.wholesalePrice}">批发价</th>
                         <th class="s-col-num" th:text="#{admin.shop.sku.netWeight}">净含量(g)</th>
                         <th th:text="#{admin.shop.col.returnPolicy}">退货规则</th>
                         <th class="s-col-num" th:text="#{admin.shop.sku.available}">可售库存</th>
                         <!-- 🔒 无 shop.cost_view 时 canViewCost 为 false，整列不渲染；且 costBySku 根本不在 model 中 -->
                         <th th:if="${canViewCost}" class="s-col-num" th:text="#{admin.shop.sku.costPrice}">进货价</th>
+                        <th th:text="#{admin.common.action}">操作</th>
                     </tr></thead>
                     <tbody>
                     <tr th:each="s : ${skus}">
                         <td th:text="${s.specName}">3 kg</td>
                         <td class="s-col-num" th:text="${#numbers.formatInteger(s.price, 0, 'COMMA')}">285.000</td>
+                        <td class="s-col-num"
+                            th:text="${s.wholesalePrice} != null ? ${#numbers.formatInteger(s.wholesalePrice, 0, 'COMMA')} : '—'">250.000</td>
                         <td class="s-col-num" th:text="${s.netWeightG} ?: '—'">3000</td>
                         <td th:text="${s.returnPolicy} != null ? #{'admin.v130.shopOrders.returnPolicy.' + ${s.returnPolicy}} : #{admin.shop.sku.inherit}">继承商品级</td>
                         <td class="s-col-num" th:text="${availableBySku[s.id]} ?: 0">0</td>
                         <td th:if="${canViewCost}" class="s-col-num"
                         th:text="${costBySku[s.id]} != null ? ${#numbers.formatInteger(costBySku[s.id], 0, 'COMMA')} : '—'">—</td>
+                        <!--/* 「编辑」把该行回填进下面的 SKU 表单（含 id ⇒ 保存走更新而不是新建）。
+                               🔒 进货价不回填：留空 = 不改（控制器对 null 跳过），避免无改动也写一条进货价审计。 */-->
+                        <td>
+                            <button type="button" class="btn btn-sm btn-neutral" data-sku-edit
+                                    th:attr="data-id=${s.id},data-spec=${s.specName},data-price=${s.price},data-wholesale=${s.wholesalePrice},data-net=${s.netWeightG},data-rp=${s.returnPolicy}"
+                                    th:text="#{admin.shop.sku.edit}">编辑</button>
+                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -276,7 +288,7 @@
 
             <!-- 🔴 SKU 是**第二个独立 form**（AC2 明确「两个 form 结构不动」）：
                  它的写端点是 POST products/{productId}/skus，与商品主体完全无关。 -->
-            <form method="post" data-config-card
+            <form method="post" data-config-card data-sku-form
                   th:action="@{'/admin/shop/products/' + ${productId} + '/skus'}">
                 <div class="s-card">
                     <div class="s-card-head cfg-head">
@@ -295,6 +307,13 @@
                             <div class="s-ctl">
                                 <input id="sku-price" type="number" name="price" min="0" required/>
                                 <p class="hint" th:text="#{admin.shop.sku.price}">售价（最小币种单位，IDR 无小数）</p>
+                            </div>
+                        </div>
+                        <div class="s-form-row">
+                            <label class="s-label" for="sku-wholesale" th:text="#{admin.shop.sku.wholesalePrice}">批发价</label>
+                            <div class="s-ctl">
+                                <input id="sku-wholesale" type="number" name="wholesalePrice" min="0" step="1"/>
+                                <p class="hint" th:text="#{admin.shop.sku.wholesaleHint}">门店进货价，IDR 整数；留空 = 不对门店供货</p>
                             </div>
                         </div>
                         <div class="s-form-row">
@@ -323,6 +342,28 @@
                     </div>
                 </div>
             </form>
+            <!--/* 行「编辑」→ 回填 SKU 表单。派发 input 让配置卡脏检查放开保存钮。不写任何可见文案（文案全在 #{}）。 */-->
+            <script>
+                document.addEventListener('click', function (e) {
+                    var b = e.target && e.target.closest ? e.target.closest('button[data-sku-edit]') : null;
+                    if (!b) { return; }
+                    var form = document.querySelector('form[data-sku-form]');
+                    if (!form) { return; }
+                    function put(name, v) {
+                        var el = form.querySelector('[name="' + name + '"]');
+                        if (el) { el.value = v == null ? '' : v; }
+                    }
+                    put('id', b.getAttribute('data-id'));
+                    put('specName', b.getAttribute('data-spec'));
+                    put('price', b.getAttribute('data-price'));
+                    put('wholesalePrice', b.getAttribute('data-wholesale'));
+                    put('netWeightG', b.getAttribute('data-net'));
+                    put('returnPolicy', b.getAttribute('data-rp'));
+                    put('costPrice', '');
+                    var spec = form.querySelector('[name="specName"]');
+                    if (spec) { spec.dispatchEvent(new Event('input', { bubbles: true })); spec.focus(); }
+                });
+            </script>
         </div>
     </div>
 </div>

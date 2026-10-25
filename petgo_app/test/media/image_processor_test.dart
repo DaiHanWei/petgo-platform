@@ -46,4 +46,20 @@ void main() {
       throwsA(isA<ImageProcessingException>()),
     );
   });
+
+  test('ANR 修复：后台 isolate 版产物与同步版一致（剥 GPS、尺寸保留）', () async {
+    final input = jpegWithGps();
+    final output = await processor.processInBackground(input);
+    expect(output, processor.process(input));
+    final after = img.decodeJpg(output)!;
+    expect(after.exif.gpsIfd.isEmpty, isTrue);
+    expect(after.width, 128);
+  });
+
+  test('ANR 修复：后台 isolate 版解不开时仍抛 ImageProcessingException（调用方按类型 catch）', () async {
+    await expectLater(
+      processor.processInBackground(Uint8List.fromList([1, 2, 3, 4])),
+      throwsA(isA<ImageProcessingException>()),
+    );
+  });
 }

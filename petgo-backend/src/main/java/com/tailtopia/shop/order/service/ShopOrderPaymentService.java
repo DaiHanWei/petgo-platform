@@ -259,7 +259,8 @@ public class ShopOrderPaymentService {
         for (ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
             inventory.commit(line.getSkuId(), line.getQty());
         }
-        order.transitionTo(ShopOrderStatus.PENDING_SHIPMENT);
+        // paid_at 与状态迁移同一事务写入（商家平台返佣记账的扫描游标，契约第 2 节）。
+        order.markPaid(Instant.now());
         orders.save(order);
         // 🔴 复审 #6 / #13：「该发货了」这个事实的**唯一发点**。
         //    挂在状态迁移上而不是支付方式上 —— 纯 PawCoin 单走 settlePureCoin，

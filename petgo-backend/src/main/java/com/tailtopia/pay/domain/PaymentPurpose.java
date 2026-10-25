@@ -38,5 +38,13 @@ public enum PaymentPurpose {
      * V1.4.0 ② 宠物名额月租（Story 0.1 地基占位，业务由 {@code feat/1.4.0-multi-pet} 实现）。🔴 末尾追加。
      * 成长值按数字服务档自动入账（① 负责），② 不写成长值逻辑。DB 侧 CHECK 见 V20261018_1401。
      */
-    PET_SLOT_RENT
+    PET_SLOT_RENT,
+    /**
+     * V1.4.1 商家平台门店进货单（tailtopia-contract.md 第 2、5 节）。🔴 末尾追加。DB 侧 CHECK 全量重建见 V20261024_2133。
+     *
+     * <p>🔴 <b>付款人是门店，不是 App 用户</b>：意图 {@code user_id} 存 {@code -merchant_store_id}
+     * （{@code PurchaseOrderPayer}），负数与任何 {@code users.id} 都不相交；成长值档位 NONE + locked，
+     * {@code GrowthSpendListener} 另有代码层排除。到账唯一消费者 = {@code PurchaseOrderPaidHandler}。
+     */
+    MERCHANT_PO
 }

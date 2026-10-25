@@ -118,6 +118,7 @@ public class AdminShopProductService {
         products.findById(productId).orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
         ShopSku sku;
         boolean created = false;
+        Long oldWholesale = null;
         if (form.getId() == null) {
             sku = ShopSku.create(tokens.generate(), productId, form.getSpecName().trim(),
                     form.getPrice(), form.getNetWeightG(), form.getReturnPolicy());
@@ -129,9 +130,12 @@ public class AdminShopProductService {
                 // 越权改他商品的 SKU：按 404 处理，不泄露存在性
                 throw AppException.notFound("规格不存在").code("admin.err.product.skuNotFound");
             }
+            oldWholesale = sku.getWholesalePrice();
             sku.apply(form.getSpecName().trim(), form.getPrice(), form.getNetWeightG(),
                     form.getReturnPolicy());
         }
+        // 批发价（门店进货价）：可空 = 不对门店供货；不受 shop.cost_edit 门控（那是 cost_price）
+        sku.applyWholesalePrice(form.getWholesalePrice());
         skus.save(sku);
         if (created) {
             // 建库存行：下单锁定（1.2 lock）在无行时会返回影响 0 行 = 售罄，故必须先建
@@ -140,6 +144,12 @@ public class AdminShopProductService {
         audit.record(actorAccountId, AuditActions.SHOP_SKU_UPSERTED,
                 "SHOP_SKU", sku.getPublicToken(),
                 (created ? "新建规格：" : "更新规格：") + sku.getSpecName());
+        if (!java.util.Objects.equals(oldWholesale, sku.getWholesalePrice())) {
+            // 摘要语言中立 key=value，可写数值 —— 批发价门店本就看得到，不属于进货价那类敏感字段
+            audit.record(actorAccountId, AuditActions.SHOP_SKU_WHOLESALE_UPDATED,
+                    "SHOP_SKU", sku.getPublicToken(),
+                    "old=" + oldWholesale + " new=" + sku.getWholesalePrice());
+        }
         return sku;
     }
 
@@ -235,6 +245,9 @@ public class AdminShopProductService {
         }
         if (f.getNetWeightG() != null && f.getNetWeightG() <= 0) {
             throw AppException.validation("净含量必须为正").code("admin.err.product.netWeightPositive");
+        }
+        if (f.getWholesalePrice() != null && f.getWholesalePrice() < 0) {
+            throw AppException.validation("批发价不能为负").code("admin.err.product.wholesaleNegative");
         }
     }
 

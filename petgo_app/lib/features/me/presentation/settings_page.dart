@@ -22,6 +22,8 @@ import '../../notify/domain/app_update_controller.dart';
 import '../../notify/domain/push_permission_change_reporter.dart';
 import '../../notify/presentation/app_update_presenter.dart';
 import '../../notify/presentation/push_settings_page.dart';
+import '../../merchant_binding/data/merchant_binding_repository.dart';
+import '../../merchant_binding/presentation/merchant_code_page.dart';
 import '../../social/data/blocked_users_repository.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
@@ -154,6 +156,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
                   value: PhoneMask.mask(phone) ?? l10n.phoneNotSet,
                   onTap: () => PhoneEditSheet.open(context, entry: 'me_page'),
                   key: const ValueKey('mePhoneEntry')),
+              _divider(),
+              // V1.4.1 门店邀请码（商家平台对接 FR-7）：右值 未绑定 → 「Masukkan」/ 已绑定 → 邀请码；
+              // 读取中或失败不显示右值（同「Notifikasi」未读到时）。返回时刷新：可能刚绑定成功。
+              _navRow(l10n.merchantCodeTitle,
+                  value: switch (ref.watch(merchantBindingProvider).value) {
+                    final MerchantBinding b when b.bound => b.inviteCode,
+                    MerchantBinding() => l10n.merchantCodeEnter,
+                    null => null,
+                  },
+                  onTap: () => context
+                      .push(MerchantCodePage.routePath)
+                      .then((_) => ref.invalidate(merchantBindingProvider)),
+                  key: const ValueKey('meMerchantCode')),
             ]),
             const SizedBox(height: 22),
 

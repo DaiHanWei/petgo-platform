@@ -66,6 +66,48 @@ jobs:
       - name: 🔴 Guard — 问诊与商品的边界（FR-110 + PawCoin 封闭币规则 6）
         run: ./mvnw -B test -Dtest=ConsultShopBoundaryTest -DfailIfNoTests=true
 
+      # V1.4.1 商家平台对接（tailtopia-merchant docs/integration/tailtopia-contract.md 第 6 节）：
+      #   本仓库填码校验只读商家平台的 merchant_stores，CI 先跑完本仓库迁移，再稀疏检出商家仓库的迁移、
+      #   用独立记录表 flyway_schema_history_merchant 执行（与商家仓库 scripts/ci/apply-tt-migrations.sh 对称）。
+      #   商家平台改了契约列，这里的测试会变红。
+      #   🔴 商家仓库是私有库：需在本仓库 Secrets 配 MERCHANT_REPO_TOKEN（对 DaiHanWei/tailtopia-merchant
+      #      只读 Contents 的 fine-grained token）。未配置时跳过并打警告，测试改用自建的同形表（MerchantStoresFixture）。
+      - name: Detect merchant repo token
+        id: merchant
+        env:
+          MERCHANT_REPO_TOKEN: ${{ secrets.MERCHANT_REPO_TOKEN }}
+        run: |
+          if [ -n "$MERCHANT_REPO_TOKEN" ]; then echo "enabled=true" >> "$GITHUB_OUTPUT"; else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::未配置 MERCHANT_REPO_TOKEN，跳过商家平台迁移（契约第 6 节的 CI 校验未生效）"
+          fi
+
+      - name: Checkout merchant migrations (sparse)
+        if: steps.merchant.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: DaiHanWei/tailtopia-merchant
+          token: ${{ secrets.MERCHANT_REPO_TOKEN }}
+          path: merchant-repo
+          sparse-checkout: src/main/resources/db/migration
+          sparse-checkout-cone-mode: false
+
+      # 先用与后端同大版本的 Flyway 跑完本仓库迁移（同一记录表 + out-of-order，口径与后端启动一致），
+      # 再跑商家迁移（独立记录表；共用库非空，故 baseline 到 0）。之后 mvn 测试启动时 Flyway 只做校验。
+      - name: Apply TailTopia + merchant migrations
+        if: steps.merchant.outputs.enabled == 'true'
+        working-directory: ${{ github.workspace }}
+        run: |
+          URL="-url=jdbc:postgresql://localhost:5432/petgo -user=petgo -password=petgo"
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE/petgo-backend/src/main/resources/db/migration:/flyway/sql:ro" \
+            flyway/flyway:11 $URL -locations=filesystem:/flyway/sql \
+            -table=flyway_schema_history -outOfOrder=true migrate
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE/merchant-repo/src/main/resources/db/migration:/flyway/sql:ro" \
+            flyway/flyway:11 $URL -locations=filesystem:/flyway/sql \
+            -table=flyway_schema_history_merchant -outOfOrder=true -baselineOnMigrate=true -baselineVersion=0 migrate
+
       # 使用项目级 .mvn/settings.xml（直连 Maven Central，见 maven.config）。含测试 → 出 jar。
       - name: Build & test (mvn package)
         run: ./mvnw -B package

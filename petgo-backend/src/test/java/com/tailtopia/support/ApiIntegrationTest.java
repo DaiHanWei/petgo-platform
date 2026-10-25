@@ -80,6 +80,13 @@ import tools.jackson.databind.ObjectMapper;
             // V1.4.0 multi-pet Story 2.3：名额到期每小时扫描会把共享库里别的测试遗留的过期名额置 EXPIRED、给其用户发通知
             // （「未读数 = N」类断言随机红）。"-" = 关闭；扫描由 PetSlotExpiryScanIntegrationTest 直接调 scan(now) 验证。
             "petgo.pet-slot.expiry-scan-cron=-",
+            // V1.4.1 商家平台进货内部接口：MOCK web 环境不起 Tomcat，端口只用于守卫按 localPort 分区；
+            // 放在基类而不是各测试类的 @TestPropertySource —— 多一份属性差异就多一个上下文、多一个连接池。
+            "petgo.merchant.internal.port=18095",
+            "petgo.merchant.internal.secret=test-internal-secret",
+            // 进货单扫描器（默认首轮即跑）会取消共享库里别的测试遗留的过期进货单；扫描逻辑由测试直接调用验证。
+            "petgo.merchant.po-expiry-scan-ms=86400000",
+            "petgo.merchant.po-fulfillment-scan-ms=86400000",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
