@@ -35,6 +35,14 @@ class PurchaseOrderDomainTest {
     }
 
     @Test
+    @DisplayName("付款截止截到微秒（与 Postgres timestamptz 同精度），落库前后一致")
+    void deadlineTruncatedToMicros() {
+        Instant withNanos = Instant.parse("2026-10-25T06:30:51.386419859Z");
+        PurchaseOrder po = PurchaseOrder.place("tok", "PO-261025-ABCDEF", 42L, PoShippingMethod.COD_SHIPPING, 90_000, new AddressSnapshot("n", "+6281", "p", "k", "c", "a", "12345"), "Toko", "+6281", withNanos);
+        assertThat(po.getPaymentDeadline()).isEqualTo(Instant.parse("2026-10-25T07:30:51.386419Z"));
+    }
+
+    @Test
     @DisplayName("超时取消：cancelled_at = payment_deadline，原因 PAYMENT_TIMEOUT，之后不能再付")
     void timeoutCancel() {
         PurchaseOrder po = newOrder();
