@@ -3,7 +3,6 @@ import '../../growth/domain/growth_badge.dart';
 import '../../mention/domain/mention_view.dart';
 import '../../social/domain/follow_state.dart';
 import 'content_pet_ref.dart';
-import '../video/video_info.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
@@ -39,8 +38,6 @@ class ContentDetail {
     this.giftPets = const [],
     this.collected = false,
     this.collectCount,
-    this.mediaType = kMediaTypeImage,
-    this.video,
   });
 
   /// Diary 关联的宠物（V1.4.0 multi-pet Story 3.3 · AC4.1），按创建顺序；Moment / Tips / 无关联 → 空表。
@@ -55,15 +52,6 @@ class ContentDetail {
 
   /// 收藏数（不计作者自己）：**仅作者本人看时**后端才下发；非作者 / 游客 / 老后端 → null（不显示）。
   final int? collectCount;
-
-  /// 媒体类型线格式（专题线 video Story 2.3）；缺省 / 未知 → 按图文。
-  final String mediaType;
-
-  /// 视频信息（只在视频帖下发）。判断视频帖用 [isVideo]。
-  final VideoInfo? video;
-
-  /// 是否视频帖：以 `mediaType` 为准；缺 `video` 时按图文降级。
-  bool get isVideo => isVideoMediaType(mediaType) && video != null;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
   final String? authorToken;
@@ -105,8 +93,6 @@ class ContentDetail {
         // 🔴 V1.4.0 ④：漏拷 → 进详情收藏态恒为 false、作者看不到收藏数。
         collected: collected,
         collectCount: collectCount,
-        mediaType: mediaType,
-        video: video,
       );
 
   final int id;
@@ -210,8 +196,6 @@ class ContentDetail {
       // V1.4.0 ④ Story 2.3：缺键（游客 / 老后端 / 非作者的 collectCount）按默认。
       collected: json['collected'] == true,
       collectCount: json['collectCount'] is int ? json['collectCount'] as int : null,
-      mediaType: (json['mediaType'] as String?) ?? kMediaTypeImage,
-      video: VideoInfo.fromJson(json['video']),
     );
   }
 }

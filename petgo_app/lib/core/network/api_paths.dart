@@ -167,9 +167,6 @@ class ApiPaths {
   /// 媒体 STS 上传凭证（Story 2.1）。
   static const String mediaUploadUrl = '$base/media/upload-url';
 
-  /// 视频 PostObject 上传策略（专题线 video Story 1.2 / 1.6）：等级 ≥ 10 才签发，每 WIB 日 50 次。
-  static const String mediaVideoUploadPolicy = '$base/media/video-upload-policy';
-
   /// 宠物档案（Story 2.2）。
   static const String petProfiles = '$base/pet-profiles';
   static const String petProfileMe = '$base/pet-profiles/me';

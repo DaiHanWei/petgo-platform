@@ -69,8 +69,6 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.collect.service.CollectDeletionService collectDeletion;
     /** OCR #2：宠物名额随注销终止。 */
     @Mock com.tailtopia.profile.slot.PetSlotAccountDeletionService petSlotDeletion;
-    /** 专题线 video Story 1.1：注销时移出视频免审名单。 */
-    @Mock com.tailtopia.admin.usermgmt.service.VideoTrustedPublisherAdminService videoTrustedPublishers;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -80,7 +78,7 @@ class AccountDeletionServiceTest {
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
                 followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion,
-                petSlotDeletion, videoTrustedPublishers);
+                petSlotDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -162,8 +160,6 @@ class AccountDeletionServiceTest {
         org.mockito.InOrder afterUserRow = org.mockito.Mockito.inOrder(authDeletion, followService);
         afterUserRow.verify(authDeletion).deleteByUserId(7L);
         afterUserRow.verify(followService).purgeUser(7L);
-        // 专题线 video Story 1.1：注销账号移出视频免审名单（users 行不删，FK CASCADE 不触发）。
-        verify(videoTrustedPublishers).purgeForAccountDeletion(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());
         verify(mediaDeletion).deletePublicByUrls(anyList());

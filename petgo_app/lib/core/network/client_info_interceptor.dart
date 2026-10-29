@@ -7,8 +7,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 ///
 /// - `X-App-Version`：真机包版本（`PackageInfo.version`，如 `1.3.4`；stag 包可能带 `-stag` 后缀，原样上报）。
 /// - `X-App-Platform`：`android` / `ios`。
-/// - `X-App-Capabilities`：本版能显示的新内容类型（逗号分隔小写，专题线 video Story 2.2 · 决策 V-36）。
-///   目前只有 `video`。后端没收到声明就当旧版，不下发视频帖 —— **不比较版本号**（stag 包有 `-stag` 后缀）。
 ///
 /// 为什么要有：1.3.3 及以前的请求不带任何版本信息，后端无法区分新旧客户端，
 /// 新增枚举 / 里程碑编码等只能「全量下发、旧版显示降级」。从 1.3.4 起带上，后端以后可按版本兜底
@@ -23,10 +21,6 @@ class ClientInfoInterceptor extends Interceptor {
 
   static const String versionHeader = 'X-App-Version';
   static const String platformHeader = 'X-App-Platform';
-  static const String capabilitiesHeader = 'X-App-Capabilities';
-
-  /// 本版声明的能力（专题线 video Story 2.2）。新增能力往后追加，逗号分隔。
-  static const String capabilities = 'video';
 
   final Future<String?> Function() _loadVersion;
   final String? _platform;
@@ -52,7 +46,6 @@ class ClientInfoInterceptor extends Interceptor {
     final version = await _versionOnce();
     if (version != null) options.headers[versionHeader] = version;
     if (_platform != null) options.headers[platformHeader] = _platform;
-    options.headers[capabilitiesHeader] = capabilities;
     handler.next(options);
   }
 }

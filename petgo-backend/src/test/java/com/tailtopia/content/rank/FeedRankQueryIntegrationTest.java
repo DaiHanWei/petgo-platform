@@ -117,14 +117,13 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
         posts.save(p);
 
         List<Long> pool = posts.findRankCandidatePool(true, author.getId(),
-                true,
                 PageRequest.of(0, 200)).stream().map(ContentPost::getId).toList();
         assertThat(pool).doesNotContain(p.getId());
 
         // 但单独那条路取得到，且只取到本人的
-        assertThat(posts.findOwnPendingPosts(author.getId(), true, PageRequest.of(0, 10)))
+        assertThat(posts.findOwnPendingPosts(author.getId(), PageRequest.of(0, 10)))
                 .extracting(ContentPost::getId).contains(p.getId());
-        assertThat(posts.findOwnPendingPosts(newUser().getId(), true, PageRequest.of(0, 10)))
+        assertThat(posts.findOwnPendingPosts(newUser().getId(), PageRequest.of(0, 10)))
                 .extracting(ContentPost::getId).doesNotContain(p.getId());
     }
 
@@ -137,7 +136,7 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
         p.softDelete();
         posts.save(p);
 
-        assertThat(posts.findOwnPendingPosts(author.getId(), true, PageRequest.of(0, 10)))
+        assertThat(posts.findOwnPendingPosts(author.getId(), PageRequest.of(0, 10)))
                 .extracting(ContentPost::getId).doesNotContain(p.getId());
     }
 
@@ -177,7 +176,7 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
         publish(author.getId(), ContentType.DAILY);
         publish(author.getId(), ContentType.KNOWLEDGE);
 
-        List<ContentPost> pool = posts.findRankCandidatePool(false, null, true, PageRequest.of(0, 200));
+        List<ContentPost> pool = posts.findRankCandidatePool(false, null, PageRequest.of(0, 200));
 
         assertThat(pool.stream().map(ContentPost::getType).distinct())
                 .contains(ContentType.DAILY, ContentType.KNOWLEDGE);
@@ -188,7 +187,7 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
     void poolIsBoundedAndTakesTheMostRecent() {
         publish(newUser().getId(), ContentType.DAILY);
 
-        List<ContentPost> pool = posts.findRankCandidatePool(false, null, true, PageRequest.of(0, 5));
+        List<ContentPost> pool = posts.findRankCandidatePool(false, null, PageRequest.of(0, 5));
 
         assertThat(pool).hasSizeLessThanOrEqualTo(5);
         for (int i = 1; i < pool.size(); i++) {
@@ -212,7 +211,7 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
 
     private List<Long> eduPool(Long viewerId) {
         return posts.findEduCandidatePool(viewerId != null, viewerId,
-                Instant.now().minus(Duration.ofDays(90)), true, PageRequest.of(0, 100_000)).stream()
+                Instant.now().minus(Duration.ofDays(90)), PageRequest.of(0, 100_000)).stream()
                 .map(ContentPost::getId).toList();
     }
 
@@ -235,7 +234,7 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
 
         List<Long> edu = eduPool(null);
         assertThat(edu).contains(k60.getId(), k5.getId()).doesNotContain(k91.getId(), d5.getId());
-        List<Long> main = posts.findRankCandidatePool(false, null, true, PageRequest.of(0, 60)).stream()
+        List<Long> main = posts.findRankCandidatePool(false, null, PageRequest.of(0, 60)).stream()
                 .map(ContentPost::getId).toList();
         assertThat(main).doesNotContain(k60.getId());
     }

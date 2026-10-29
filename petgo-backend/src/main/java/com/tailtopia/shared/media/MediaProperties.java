@@ -17,7 +17,6 @@ public class MediaProperties {
 
     private final Oss oss = new Oss();
     private final SignedUrl signedUrl = new SignedUrl();
-    private final Video video = new Video();
 
     public String getAccessKeyId() {
         return accessKeyId;
@@ -41,10 +40,6 @@ public class MediaProperties {
 
     public SignedUrl getSignedUrl() {
         return signedUrl;
-    }
-
-    public Video getVideo() {
-        return video;
     }
 
     /** OSS 双桶寻址。雅加达 region {@code ap-southeast-5}。 */
@@ -152,83 +147,6 @@ public class MediaProperties {
 
         public void setUploadTtlSeconds(long uploadTtlSeconds) {
             this.uploadTtlSeconds = uploadTtlSeconds;
-        }
-    }
-
-    /** 专题线 video（Story 1.2 · AD-3）：视频 PostObject 上传策略。前缀 {@code media.video}。 */
-    public static class Video {
-        /** 策略有效期（秒），默认 1800。OSS 只在请求开始时检查过期（NFR-7：100MB @ 5Mbps 上行）。 */
-        private long uploadTtlSeconds = 1800;
-        /** 单个视频体积上限（字节），默认 100MB（决策 V-30）。 */
-        private long maxBytes = 104_857_600L;
-        /** 每账号每 WIB 自然日可申请的策略次数，默认 50。 */
-        private int dailyPolicyLimit = 50;
-        /**
-         * 视频 CDN 域名（Story 1.4 · AD-11），如 {@code https://v.tailtopia.id}。空 = 不走 CDN，
-         * 下发 OSS 源站地址、不刷新缓存（stag 可以不配；生产必须配）。
-         */
-        private String cdnBaseUrl = "";
-        /** 文件公开对账的 cron（默认每分钟）。{@code -} = 关闭（测试环境）。 */
-        private String aclReconcileCron = "0 * * * * *";
-        /** 每轮对账最多处理的帖子数。 */
-        private int aclReconcileBatch = 100;
-        /** 期望状态变化后超过这么多秒仍未生效 → ERROR 告警。 */
-        private long aclStuckAfterSeconds = 300;
-
-        public String getCdnBaseUrl() {
-            return cdnBaseUrl;
-        }
-
-        public void setCdnBaseUrl(String cdnBaseUrl) {
-            this.cdnBaseUrl = cdnBaseUrl;
-        }
-
-        public String getAclReconcileCron() {
-            return aclReconcileCron;
-        }
-
-        public void setAclReconcileCron(String aclReconcileCron) {
-            this.aclReconcileCron = aclReconcileCron;
-        }
-
-        public int getAclReconcileBatch() {
-            return aclReconcileBatch;
-        }
-
-        public void setAclReconcileBatch(int aclReconcileBatch) {
-            this.aclReconcileBatch = aclReconcileBatch;
-        }
-
-        public long getAclStuckAfterSeconds() {
-            return aclStuckAfterSeconds;
-        }
-
-        public void setAclStuckAfterSeconds(long aclStuckAfterSeconds) {
-            this.aclStuckAfterSeconds = aclStuckAfterSeconds;
-        }
-
-        public long getUploadTtlSeconds() {
-            return uploadTtlSeconds;
-        }
-
-        public void setUploadTtlSeconds(long uploadTtlSeconds) {
-            this.uploadTtlSeconds = uploadTtlSeconds;
-        }
-
-        public long getMaxBytes() {
-            return maxBytes;
-        }
-
-        public void setMaxBytes(long maxBytes) {
-            this.maxBytes = maxBytes;
-        }
-
-        public int getDailyPolicyLimit() {
-            return dailyPolicyLimit;
-        }
-
-        public void setDailyPolicyLimit(int dailyPolicyLimit) {
-            this.dailyPolicyLimit = dailyPolicyLimit;
         }
     }
 }

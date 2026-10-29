@@ -102,7 +102,7 @@ class MyCollectionsEndpointTest extends ApiIntegrationTest {
         List<CollectedPostRow> out = new ArrayList<>();
         String cursor = null;
         do {
-            CollectionPage<CollectedPostRow> page = query.posts(u.getId(), cursor, true);
+            CollectionPage<CollectedPostRow> page = query.posts(u.getId(), cursor);
             out.addAll(page.items());
             cursor = page.nextCursor();
         } while (cursor != null);
@@ -129,10 +129,10 @@ class MyCollectionsEndpointTest extends ApiIntegrationTest {
         jdbc.update("UPDATE content_collections SET created_at = '2026-01-01T00:00:00Z' WHERE user_id = ? AND post_id IN (?, ?, ?)",
                 me.getId(), ids.get(4), ids.get(5), ids.get(6));
 
-        CollectionPage<CollectedPostRow> first = query.posts(me.getId(), null, true);
+        CollectionPage<CollectedPostRow> first = query.posts(me.getId(), null);
         assertThat(first.items()).hasSize(20);
         assertThat(first.hasMore()).isTrue();
-        CollectionPage<CollectedPostRow> second = query.posts(me.getId(), first.nextCursor(), true);
+        CollectionPage<CollectedPostRow> second = query.posts(me.getId(), first.nextCursor());
         assertThat(second.items()).hasSize(5);
         assertThat(second.hasMore()).isFalse();
         assertThat(second.nextCursor()).isNull();
@@ -216,7 +216,7 @@ class MyCollectionsEndpointTest extends ApiIntegrationTest {
         mvc.perform(delete("/api/v1/content-posts/" + p + "/collect")
                 .header(HttpHeaders.AUTHORIZATION, userBearer(me.getId()))).andExpect(status().isOk());
         assertThat(query.places(me.getId(), null).items()).isEmpty();
-        assertThat(query.posts(me.getId(), null, true).items()).isEmpty();
+        assertThat(query.posts(me.getId(), null).items()).isEmpty();
         assertThat(events.stream(ContentUncollectedEvent.class).filter(e -> e.postId() == p).count()).isZero();
     }
 
@@ -226,7 +226,7 @@ class MyCollectionsEndpointTest extends ApiIntegrationTest {
         User me = newUser();
         User other = newUser();
         collect(other, newPost(newUser()));
-        assertThat(query.posts(me.getId(), null, true).items()).isEmpty();
+        assertThat(query.posts(me.getId(), null).items()).isEmpty();
         String vet = vetBearer(vets.newActiveVet("my-collections-it").getId());
         for (String url : List.of("/api/v1/me/collections/posts", "/api/v1/me/collections/places")) {
             mvc.perform(get(url)).andExpect(status().isUnauthorized());
@@ -255,10 +255,10 @@ class MyCollectionsEndpointTest extends ApiIntegrationTest {
         Statistics stats = emf.unwrap(SessionFactory.class).getStatistics();
         stats.setStatisticsEnabled(true);
         stats.clear();
-        query.posts(small.getId(), null, true);
+        query.posts(small.getId(), null);
         long s5 = stats.getPrepareStatementCount();
         stats.clear();
-        query.posts(big.getId(), null, true);
+        query.posts(big.getId(), null);
         long s20 = stats.getPrepareStatementCount();
         for (int i = 0; i < 3; i++) {
             collectPlace(big, PlaceCollectIntegrationTest.newPlace(places, big).getPublicToken());

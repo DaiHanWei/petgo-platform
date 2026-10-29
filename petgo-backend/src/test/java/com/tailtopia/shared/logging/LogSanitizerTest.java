@@ -35,18 +35,6 @@ class LogSanitizerTest {
         assertThat(out).doesNotContain("a@b.com");
     }
 
-    /** 专题线 video Story 1.2 · AC4（code review）：视频上传策略的 policy / signature 不进 INFO 日志。 */
-    @Test
-    void masksVideoUploadPolicyFields() {
-        String out = sanitizeJson("{\"host\":\"h\",\"key\":\"video/9/k.mp4\","
-                + "\"fields\":{\"policy\":\"eyJ4Ijox\",\"OSSAccessKeyId\":\"AKID\",\"signature\":\"s\"}}");
-        assertThat(out).contains("\"policy\":\"***\"");
-        assertThat(out).contains("\"signature\":\"***\"");
-        assertThat(out).contains("\"OSSAccessKeyId\":\"***\"");
-        assertThat(out).doesNotContain("eyJ4Ijox").doesNotContain("AKID");
-        assertThat(out).contains("\"key\":\"video/9/k.mp4\"");
-    }
-
     @Test
     void masksHealthSymptomFields() {
         String out = sanitizeJson("{\"symptomText\":\"muntah dan lemas\",\"petId\":7}");

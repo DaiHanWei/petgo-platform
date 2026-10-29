@@ -92,7 +92,7 @@ class ProfileDeletionMultiPetContentIntegrationTest extends ApiIntegrationTest {
             assertThat(contentService.findGrowthMomentsOnDate(uid, c, day)).extracting(g -> g.id())
                     .containsExactlyInAnyOrder(twoPets.getId(), threePets.getId());
             // 作者「我的发布」照常有它。
-            assertThat(posts.findMyPosts(uid, false, null, null, true, PageRequest.of(0, 50)))
+            assertThat(posts.findMyPosts(uid, false, null, null, PageRequest.of(0, 50)))
                     .extracting(ContentPost::getId).contains(onlyA.getId(), twoPets.getId());
             assertThat(jdbc.queryForObject("SELECT count(*) FROM content_pets WHERE pet_profile_id = ?",
                     Long.class, a)).isZero();

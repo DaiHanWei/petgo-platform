@@ -11,10 +11,9 @@ package com.tailtopia.admin.pin.dto;
  * @param authorName  顶置内容的作者昵称（注销者为空，由 {@code authorDeleted} 区分）
  * @param promoImage  推广卡片图（可空）
  * @param promoLink   推广卡片跳转目标（可空 —— 建卡时本就允许不填）
- * @param postVideo   顶置内容是视频帖（专题线 video Story 3.3）：{@code postImage} 为签名封面
  */
 public record PinDetail(PinRow row, String postImage, String authorName, boolean authorDeleted,
-        String promoImage, String promoTitle, String promoLink, boolean postVideo) {
+        String promoImage, String promoTitle, String promoLink) {
 
     /** 推广卡片型。 */
     public boolean promo() {

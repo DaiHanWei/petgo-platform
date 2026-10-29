@@ -31,19 +31,19 @@ class ContentDetailViewCountParamTest {
         controller = new ContentDetailController(detailService, mock(CommentQueryService.class), viewStats);
         ContentDetailResponse resp = mock(ContentDetailResponse.class);
         when(resp.isAuthor()).thenReturn(false);
-        when(detailService.getDetail(anyLong(), any(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(resp);
+        when(detailService.getDetail(anyLong(), any())).thenReturn(resp);
     }
 
     @Test
     void defaultCountsView() {
-        controller.detail(null, 55L, "anon", true, "video");
+        controller.detail(null, 55L, "anon", true);
         verify(viewStats).recordView(55L, null, "anon");
     }
 
     @Test
     void probeDoesNotCountViewButStillRunsVisibilityChecks() {
-        controller.detail(null, 55L, "anon", false, "video");
-        verify(detailService).getDetail(55L, null, true);
+        controller.detail(null, 55L, "anon", false);
+        verify(detailService).getDetail(55L, null);
         verify(viewStats, never()).recordView(anyLong(), any(), any());
     }
 
@@ -52,12 +52,12 @@ class ContentDetailViewCountParamTest {
     void nonUserRoleIsTreatedAsGuest() {
         org.springframework.security.oauth2.jwt.Jwt vet = org.springframework.security.oauth2.jwt.Jwt
                 .withTokenValue("t").header("alg", "none").subject("7").claim("role", "VET").build();
-        controller.detail(vet, 55L, "anon", false, "video");
-        verify(detailService).getDetail(55L, null, true);
+        controller.detail(vet, 55L, "anon", false);
+        verify(detailService).getDetail(55L, null);
 
         org.springframework.security.oauth2.jwt.Jwt user = org.springframework.security.oauth2.jwt.Jwt
                 .withTokenValue("t").header("alg", "none").subject("7").claim("role", "USER").build();
-        controller.detail(user, 56L, "anon", false, "video");
-        verify(detailService).getDetail(56L, 7L, true);
+        controller.detail(user, 56L, "anon", false);
+        verify(detailService).getDetail(56L, 7L);
     }
 }

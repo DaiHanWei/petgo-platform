@@ -110,11 +110,7 @@ public record ContentDetailResponse(
          * 收藏数（V1.4.0 ④ Story 2.1 · AD-10 · PRD AC10）：<b>仅作者本人看时</b>下发，不计作者自己；
          * 非作者为 null → NON_NULL 省略该键（收藏数不对外展示）。
          */
-        Long collectCount,
-        /** 媒体类型（专题线 video Story 2.1）：恒下发；与 {@code FeedItemResponse.mediaType()} 同口径。 */
-        com.tailtopia.content.domain.MediaType mediaType,
-        /** 视频信息（Story 2.1）：只在视频帖下发（NON_NULL）。 */
-        VideoView video) {
+        Long collectCount) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -125,9 +121,9 @@ public record ContentDetailResponse(
             long commentCount, boolean liked, boolean isAuthor,
             List<ContentTagView> decorationTags,
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
-            List<com.tailtopia.mention.dto.MentionView> mentions, PostMedia media) {
+            List<com.tailtopia.mention.dto.MentionView> mentions) {
         return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
-                null, null, null, null, null, false, null, media);
+                null, null, null, null, null, false, null);
     }
 
     /** 带打卡场所条的工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。不带关联宠物 / 礼物区 / 收藏态。 */
@@ -138,10 +134,9 @@ public record ContentDetailResponse(
             List<com.tailtopia.mention.dto.MentionView> mentions,
             com.tailtopia.place.dto.CheckinPlaceView checkinPlace,
             String authorToken,
-            com.tailtopia.social.read.FollowState authorFollowState,
-            PostMedia media) {
+            com.tailtopia.social.read.FollowState authorFollowState) {
         return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
-                checkinPlace, authorToken, authorFollowState, null, null, false, null, media);
+                checkinPlace, authorToken, authorFollowState, null, null, false, null);
     }
 
     /**
@@ -160,20 +155,19 @@ public record ContentDetailResponse(
             List<ContentPetView> pets,
             List<com.tailtopia.gift.web.dto.GiftPetSummaryView> giftPets,
             boolean collected,
-            Long collectCount,
-            PostMedia media) {
+            Long collectCount) {
         List<ContentPetView> linkedPets = p.getType() == ContentType.GROWTH_MOMENT
                 && pets != null && !pets.isEmpty() ? List.copyOf(pets) : null;
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
-                p.getType(), p.getText(), media.imageUrls(), imageSizes,
+                p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
                 p.getCreatedAt(), mentions, checkinPlace,
                 author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets(),
                 author.badgeLevel(), author.badgeTier(), author.badgeFrame(), linkedPets,
                 (giftPets == null || giftPets.isEmpty()) ? null : giftPets,
-                collected, collectCount, media.mediaType(), media.video());
+                collected, collectCount);
     }
 }

@@ -6,7 +6,6 @@ import com.tailtopia.shared.error.AppException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,9 +24,8 @@ public class FollowingFeedController {
 
     @GetMapping("/api/v1/me/following-feed")
     public FeedPageResponse followingFeed(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(value = "cursor", required = false) String cursor,
-            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
-        return feedService.loadFollowingFeed(currentUserId(jwt), cursor, com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
+            @RequestParam(value = "cursor", required = false) String cursor) {
+        return feedService.loadFollowingFeed(currentUserId(jwt), cursor);
     }
 
     private static long currentUserId(Jwt jwt) {

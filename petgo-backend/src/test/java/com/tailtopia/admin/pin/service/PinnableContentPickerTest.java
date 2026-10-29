@@ -27,16 +27,7 @@ class PinnableContentPickerTest {
 
     private final ContentPostRepository posts = mock(ContentPostRepository.class);
     private final AccountQueryService accounts = mock(AccountQueryService.class);
-    private final PinnableContentPicker picker = new PinnableContentPicker(posts, accounts,
-            mediaPassthrough());
-
-    /** 图文帖原样（resolveForAdmin 对图文帖不签名）。 */
-    private static com.tailtopia.content.service.PostMediaResolver mediaPassthrough() {
-        var r = org.mockito.Mockito.mock(com.tailtopia.content.service.PostMediaResolver.class);
-        org.mockito.Mockito.when(r.resolveForAdmin(org.mockito.ArgumentMatchers.any()))
-                .thenAnswer(inv -> com.tailtopia.content.dto.PostMedia.image(inv.getArgument(0)));
-        return r;
-    }
+    private final PinnableContentPicker picker = new PinnableContentPicker(posts, accounts);
 
     private static ContentPost post(long id, long authorId, String text, List<String> images) {
         ContentPost p = ContentPost.publish(authorId, ContentType.KNOWLEDGE, null, text, images);

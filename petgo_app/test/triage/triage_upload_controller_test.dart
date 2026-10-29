@@ -14,7 +14,7 @@ import 'package:tailtopia/features/triage/domain/triage_upload_controller.dart';
 
 class _FakeRepo implements MediaRepository {
   @override
-  Future<UploadTicket> requestUploadTicket(MediaScope scope, {String? contentType, String? purpose}) =>
+  Future<UploadTicket> requestUploadTicket(MediaScope scope, {String? contentType}) =>
       throw UnimplementedError();
 }
 

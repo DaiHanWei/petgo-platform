@@ -101,14 +101,7 @@ public record FeedItemResponse(
          */
         Integer authorLevel,
         String authorTier,
-        String authorFrame,
-        /**
-         * 媒体类型（专题线 video Story 2.1 · AD-8）：恒下发 {@code IMAGE} / {@code VIDEO}。
-         * App 一律按它判断视频帖，<b>不要</b>用 {@code video != null} 判断。
-         */
-        com.tailtopia.content.domain.MediaType mediaType,
-        /** 视频信息（Story 2.1）：只在视频帖下发（NON_NULL）；视频帖的封面就是 {@code imageUrls[0]} / {@code firstImageUrl}。 */
-        VideoView video) {
+        String authorFrame) {
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
@@ -121,10 +114,9 @@ public record FeedItemResponse(
     public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount,
             boolean liked, long commentCount, List<ContentTagView> decorationTags,
             List<com.tailtopia.mention.dto.MentionView> mentions, String authorToken,
-            com.tailtopia.social.read.FollowState authorFollowState, PostMedia media) {
-        // 专题线 video Story 2.1：图片地址取媒体投影（作者看未公开的视频帖时封面为签名 URL；图文帖原样）。
-        List<String> images = media.imageUrls();
-        String firstImage = media.firstImageUrl();
+            com.tailtopia.social.read.FollowState authorFollowState) {
+        List<String> images = p.getImageUrls();
+        String firstImage = (images != null && !images.isEmpty()) ? images.get(0) : null;
         return new FeedItemResponse(
                 p.getId(),
                 p.getAuthorId(),
@@ -150,8 +142,6 @@ public record FeedItemResponse(
                 p.getImageCropOffsets(),
                 author.badgeLevel(),
                 author.badgeTier(),
-                author.badgeFrame(),
-                media.mediaType(),
-                media.video());
+                author.badgeFrame());
     }
 }

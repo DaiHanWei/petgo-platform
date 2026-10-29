@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -17,7 +18,6 @@ import 'following_feed_controller.dart';
 import 'report_sheet.dart';
 import 'widgets/following_empty_view.dart';
 import 'widgets/following_strip.dart';
-import '../video/video_nav.dart';
 
 /// Social → Following 页（V1.3.4 following 流 · spec §2.2 ~ §2.4）。
 ///
@@ -71,7 +71,6 @@ class FollowingTabView extends ConsumerWidget {
         return FeedMasonryView(
           header: const FollowingStrip(),
           feedTab: 'following',
-          videoSource: VideoSource.following,
           rankMode: state.rankMode,
           followSurfacePrefix: 'following',
           autoLoadMore: true,
@@ -83,9 +82,7 @@ class FollowingTabView extends ConsumerWidget {
           deletedUserLabel: l10n.feedDeletedUser,
           onLoadMore: () => ref.read(followingFeedProvider.notifier).loadMore(),
           onRefresh: () => _refresh(ref),
-          onTapItem: (item) =>
-              pushContentDetail(context, item.id,
-                  isVideo: item.isVideo, source: VideoSource.following, coverUrl: item.firstImageUrl, video: item.video),
+          onTapItem: (item) => context.push('/content/${item.id}'),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () => onReported(item)),
           onAuthorTap: (item) => openUserProfile(
             context,
@@ -102,12 +99,7 @@ class FollowingTabView extends ConsumerWidget {
             onBlocked: _hideAuthor(ref, userId),
             onReported: _hideAuthor(ref, userId),
           ),
-          onCommentItem: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo,
-              source: VideoSource.following,
-              focusComments: true,
-              coverUrl: item.firstImageUrl,
-              video: item.video),
+          onCommentItem: (item) => context.push('/content/${item.id}?focus=comments'),
           onMoreItem: (item) => openReport(context, ref, item.id, onReported: () => onReported(item)),
         );
       },

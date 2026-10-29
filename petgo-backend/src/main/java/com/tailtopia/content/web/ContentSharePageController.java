@@ -62,7 +62,7 @@ public class ContentSharePageController {
         // 🛡 **在成功/失效分叉之前报**：失效也是要看的数（见 PostSharePageAnalytics 注释）。
         analytics.linkOpened(visitorId, request);
 
-        Optional<SharedPostResponse> opt = shareService.findSharedPost(shareToken, true) /* H5 页：视频帖显示封面 + 升级提示（Story 2.6），不按能力过滤 */;
+        Optional<SharedPostResponse> opt = shareService.findSharedPost(shareToken);
         if (opt.isEmpty()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             model.addAttribute("downloadUrl", downloadUrl);
@@ -81,19 +81,11 @@ public class ContentSharePageController {
         model.addAttribute("typeColor", typeColor(post.type()));
         model.addAttribute("body", post.body() == null ? "" : post.body());
         model.addAttribute("hasBody", post.body() != null && !post.body().isBlank());
-        // 专题线 video Story 2.6（FR-19 · V-14）：视频帖只显示封面 + 播放角标 + 「需更新到最新版 App 观看」，
-        // 网页内不播放 —— 视频地址**不进页面**。图文帖的属性与改动前一致。
-        boolean isVideo = post.mediaType() == com.tailtopia.content.domain.MediaType.VIDEO && post.video() != null;
-        model.addAttribute("isVideo", isVideo);
-        if (isVideo) {
-            model.addAttribute("videoCoverUrl", post.imageUrls().isEmpty() ? null : post.imageUrls().get(0));
-            model.addAttribute("videoDurationLabel", durationLabel(post.video().durationMs()));
-        }
         model.addAttribute("images", post.imageUrls());
-        model.addAttribute("hasImages", !isVideo && !post.imageUrls().isEmpty());
+        model.addAttribute("hasImages", !post.imageUrls().isEmpty());
         model.addAttribute("dateLabel", dateLabel(post));
         model.addAttribute("ogTitle", "TailTopia");
-        model.addAttribute("downloadCta", isVideo ? "Tonton di aplikasi" : "Buat arsip untuk hewanku");
+        model.addAttribute("downloadCta", "Buat arsip untuk hewanku");
         model.addAttribute("downloadUrl", downloadUrl);
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
@@ -113,12 +105,6 @@ public class ContentSharePageController {
             case "KNOWLEDGE" -> "Edukasi & Tips";
             default -> "Momen";
         };
-    }
-
-    /** 视频时长「分:秒」（与 App 卡片角标同口径：秒数四舍五入）。 */
-    static String durationLabel(Integer durationMs) {
-        long s = Math.round((durationMs == null ? 0 : durationMs) / 1000.0);
-        return (s / 60) + ":" + String.format("%02d", s % 60);
     }
 
     /** 类型配色（与 App 一致：Diary 绿 / Tips 黄 / Momen 紫）。 */
