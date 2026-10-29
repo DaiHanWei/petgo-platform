@@ -32,7 +32,6 @@ import 'publish_compose_page.dart';
 import 'report_sheet.dart';
 import 'social_tab.dart';
 import '../../notify/data/notification_repository.dart';
-import '../video/video_nav.dart';
 
 /// 首页 Beranda（TailTopia Prototype 全面换肤）。
 ///
@@ -255,13 +254,10 @@ class HomePage extends ConsumerWidget {
           // 🔴 rank_mode 由**服务端下发**（state.rankMode）而不是按 category 自己推 ——
           // 降级链级别 4 会让 ALL Tab 也走时间倒序，那对客户端完全无感。
           feedTab: category.analyticsTab,
-          videoSource: _videoSource(category),
           rankMode: state.rankMode,
           // 顶置坑位（V1.1.6 Story 4.2）：取数失败或无生效配置 → null → 什么都不渲染。
           pinned: pinnedAsync.value,
-          onTapPinned: (item) =>
-              pushContentDetail(context, item.id,
-                  isVideo: item.isVideo, source: VideoSource.pinned, coverUrl: item.firstImageUrl, video: item.video),
+          onTapPinned: (item) => context.push('/content/${item.id}'),
           onTapPromo: (promo) => openPromoTarget(context, promo),
           autoLoadMore: true,
           footer: null,
@@ -285,8 +281,7 @@ class HomePage extends ConsumerWidget {
             ref.invalidate(petRecommendationsProvider);
             await ref.read(feedProvider.notifier).refresh();
           },
-          onTapItem: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo, source: _videoSource(category), coverUrl: item.firstImageUrl, video: item.video),
+          onTapItem: (item) => context.push('/content/${item.id}'),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
             // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
             // V1.3.4：关注流里同一张卡一并移除。
@@ -319,18 +314,8 @@ class HomePage extends ConsumerWidget {
           ),
           // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
           // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。
-          onCommentItem: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo,
-              source: _videoSource(category),
-              focusComments: true,
-              coverUrl: item.firstImageUrl,
-              video: item.video),
-          onCommentPinned: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo,
-              source: VideoSource.pinned,
-              focusComments: true,
-              coverUrl: item.firstImageUrl,
-              video: item.video),
+          onCommentItem: (item) =>
+              context.push('/content/${item.id}?focus=comments'),
           // 「···」：Feed 此前只有长按举报，没有显式入口；两者走同一个动作。
           onMoreItem: (item) => openReport(
             context,
@@ -368,10 +353,6 @@ class HomePage extends ConsumerWidget {
 /// ⚠️ AppBar（品牌标 + 通知铃）、分类 chips、瀑布流、底部 Tab **一处不改**。
 /// Epic 4 的宠物横滑行将加在场所入口行**之下**，本 story **不为它预留占位**。
 /// V1.3.4 Story 3.3：场所入口行之上加推荐更新横幅（不满足条件时不占位）。
-/// 视频埋点 source（专题线 video Story 2.3）：推荐流 ALL = `feed`，分类 Tab = `category`。
-VideoSource _videoSource(FeedCategory category) =>
-    category == FeedCategory.all ? VideoSource.feed : VideoSource.category;
-
 class _BerandaTop extends StatelessWidget {
   const _BerandaTop({
     required this.selectedCategory,

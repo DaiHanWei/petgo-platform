@@ -5,7 +5,6 @@ import com.tailtopia.account.domain.DeletionStatus;
 import com.tailtopia.account.event.AccountDeletionRequestedEvent;
 import com.tailtopia.account.repository.AccountDeletionRepository;
 import com.tailtopia.admin.moderation.service.ManualReviewService;
-import com.tailtopia.admin.usermgmt.service.VideoTrustedPublisherAdminService;
 import com.tailtopia.auth.service.AuthAccountDeletionService;
 import com.tailtopia.collect.service.CollectDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
@@ -92,8 +91,6 @@ public class AccountDeletionService {
     private final CollectDeletionService collectDeletion;
     /** OCR #2：宠物名额 ACTIVE → EXPIRED（保留付费记录），否则到期扫描继续给已注销账号写通知 / 推送。 */
     private final PetSlotAccountDeletionService petSlotDeletion;
-    /** 专题线 video Story 1.1：注销时移出视频免审名单。 */
-    private final VideoTrustedPublisherAdminService videoTrustedPublishers;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -112,8 +109,7 @@ public class AccountDeletionService {
             OpsPopupImpressionDeletionService opsPopupImpressionDeletion,
             GrowthAccountDeletionService growthDeletion,
             PushPreferenceService pushPreferences, CollectDeletionService collectDeletion,
-            PetSlotAccountDeletionService petSlotDeletion,
-            VideoTrustedPublisherAdminService videoTrustedPublishers) {
+            PetSlotAccountDeletionService petSlotDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -141,7 +137,6 @@ public class AccountDeletionService {
         this.pushPreferences = pushPreferences;
         this.collectDeletion = collectDeletion;
         this.petSlotDeletion = petSlotDeletion;
-        this.videoTrustedPublishers = videoTrustedPublishers;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -247,10 +242,6 @@ public class AccountDeletionService {
         // ⚠️ 放在 authDeletion **之后**：此时 deleted_at 已写，findActiveByPublicToken 已拒绝新的关注，
         //    清理后不会再长出新行（放在之前会有一个「清完又被人关注」的窗口）。幂等可重跑。
         followService.purgeUser(userId);
-        // 专题线 video Story 1.1：移出视频免审名单（D1/D2）。
-        // 🔴 同上，不能靠 FK CASCADE（users 行不删）。漏掉的后果：已注销账号永久留在名单里，
-        //    而注销后用户抽屉只读、运营在后台无从移出（code-review 2026-10-16）。幂等可重跑。
-        videoTrustedPublishers.purgeForAccountDeletion(userId);
 
         // OSS 个人图：2026-08-19 起保留不删（F21，快照引用保护；MediaDeletionService 只记账）。
         mediaDeletion.deletePrivateKeys(media.privateKeys());

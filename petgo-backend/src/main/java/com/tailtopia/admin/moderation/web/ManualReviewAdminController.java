@@ -85,14 +85,9 @@ public class ManualReviewAdminController {
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
-    /** 专题线 video Story 3.1 / 3.2：审核通过 / 拒绝后事务外即时对账（通过 → 视频文件公开）。 */
-    private final com.tailtopia.content.service.MediaAclReconciler mediaAcl;
-
     public ManualReviewAdminController(ManualReviewService reviewService,
             AdminSettingsService settingsService, UnifiedTicketQueryService ticketQuery,
-            ManualReviewWorkbenchService workbench, Messages msg,
-            com.tailtopia.content.service.MediaAclReconciler mediaAcl) {
-        this.mediaAcl = mediaAcl;
+            ManualReviewWorkbenchService workbench, Messages msg) {
         this.reviewService = reviewService;
         this.settingsService = settingsService;
         this.ticketQuery = ticketQuery;
@@ -181,11 +176,11 @@ public class ManualReviewAdminController {
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             // Story 2.4 AC5：htmx 分支不 try/catch（422/403 由 AdminBusinessExceptionAdvice 出 fragment）
-            mediaAcl.reconcileQuietly(reviewService.approve(itemId, admin.getAdminAccountId()));
+            reviewService.approve(itemId, admin.getAdminAccountId());
             return done(hx, ReviewTab.SUBMISSION, itemId, msg.get("admin.flash.review.approved"), model, response);
         }
         try {
-            mediaAcl.reconcileQuietly(reviewService.approve(itemId, admin.getAdminAccountId()));
+            reviewService.approve(itemId, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.review.approved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
@@ -200,12 +195,12 @@ public class ManualReviewAdminController {
             @RequestParam(value = "note", required = false) String note,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
-            mediaAcl.reconcileQuietly(reviewService.reject(itemId, admin.getAdminAccountId(), new ModerationDecision(category, note)));
+            reviewService.reject(itemId, admin.getAdminAccountId(), new ModerationDecision(category, note));
             return done(hx, ReviewTab.SUBMISSION, itemId, msg.get("admin.flash.review.rejected"), model, response);
         }
         try {
             // story 8 §5.2：判定依据 + 备注折叠进 append-only 审计（service 内落，无内容原文）。
-            mediaAcl.reconcileQuietly(reviewService.reject(itemId, admin.getAdminAccountId(), new ModerationDecision(category, note)));
+            reviewService.reject(itemId, admin.getAdminAccountId(), new ModerationDecision(category, note));
             flash.addFlashAttribute("notice", msg.get("admin.flash.review.rejected"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));

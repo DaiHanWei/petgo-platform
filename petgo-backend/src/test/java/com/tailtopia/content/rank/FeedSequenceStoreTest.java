@@ -55,7 +55,7 @@ class FeedSequenceStoreTest {
     @Test
     void readReturnsCachedSliceForGivenOffset() {
         FeedRankCacheKey key = FeedRankCacheKey.forUser(1L);
-        when(list.range("feed:seq:u:1:v1:seed1", 20L, 39L))
+        when(list.range("feed:seq:u:1:seed1", 20L, 39L))
                 .thenReturn(List.of("101", "102", "103"));
 
         assertThat(store.read(key, "seed1", 20, 20)).containsExactly(101L, 102L, 103L);
@@ -65,8 +65,8 @@ class FeedSequenceStoreTest {
     @Test
     void differentSeedIsADifferentKey() {
         FeedRankCacheKey key = FeedRankCacheKey.forUser(1L);
-        when(list.range("feed:seq:u:1:v1:seedA", 0L, 19L)).thenReturn(List.of("1", "2"));
-        when(list.range("feed:seq:u:1:v1:seedB", 0L, 19L)).thenReturn(List.of());
+        when(list.range("feed:seq:u:1:seedA", 0L, 19L)).thenReturn(List.of("1", "2"));
+        when(list.range("feed:seq:u:1:seedB", 0L, 19L)).thenReturn(List.of());
 
         assertThat(store.read(key, "seedA", 0, 20)).containsExactly(1L, 2L);
         assertThat(store.read(key, "seedB", 0, 20)).isEmpty();
@@ -76,13 +76,13 @@ class FeedSequenceStoreTest {
     void appendPushesAllAndRefreshesTtl() {
         store.append(FeedRankCacheKey.forUser(2L), "s", List.of(7L, 8L));
 
-        verify(list).rightPushAll("feed:seq:u:2:v1:s", List.of("7", "8"));
-        verify(redis).expire("feed:seq:u:2:v1:s", Duration.ofMinutes(30));
+        verify(list).rightPushAll("feed:seq:u:2:s", List.of("7", "8"));
+        verify(redis).expire("feed:seq:u:2:s", Duration.ofMinutes(30));
     }
 
     @Test
     void lengthReportsCachedSize() {
-        when(list.size("feed:seq:u:3:v1:s")).thenReturn(42L);
+        when(list.size("feed:seq:u:3:s")).thenReturn(42L);
         assertThat(store.length(FeedRankCacheKey.forUser(3L), "s")).isEqualTo(42L);
     }
 
@@ -92,17 +92,7 @@ class FeedSequenceStoreTest {
     void guestStillUsesSequenceSnapshot() {
         FeedRankCacheKey guest = FeedRankCacheKey.forGuest("sess");
         store.append(guest, "s", List.of(1L));
-        verify(list).rightPushAll("feed:seq:a:sess:v1:s", List.of("1"));
-    }
-
-    /** 专题线 video Story 2.2：序列键按视频能力分开（v0 旧版 / v1 新版），namespace 不变 → 曝光记录不拆。 */
-    @Test
-    void sequenceKeyIsSplitByVideoCapabilityButNamespaceIsNot() {
-        FeedRankCacheKey newClient = FeedRankCacheKey.forUser(4L);
-        FeedRankCacheKey oldClient = newClient.withVideo(false);
-        assertThat(FeedSequenceStore.key(newClient, "s")).isEqualTo("feed:seq:u:4:v1:s");
-        assertThat(FeedSequenceStore.key(oldClient, "s")).isEqualTo("feed:seq:u:4:v0:s");
-        assertThat(oldClient.namespace()).isEqualTo(newClient.namespace());
+        verify(list).rightPushAll("feed:seq:a:sess:s", List.of("1"));
     }
 
     // ── AC5：Redis 不可用 ───────────────────────────────────────────

@@ -42,12 +42,9 @@ public class ContentFeedController {
     public FeedPageResponse feed(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(value = "cursor", required = false) String cursor,
             @RequestParam(value = "category", required = false) String category,
-            @RequestHeader(value = ANON_SESSION_HEADER, required = false) String anonSession,
-            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
+            @RequestHeader(value = ANON_SESSION_HEADER, required = false) String anonSession) {
         // 内容审核 cm-6 §5.4：登录用户传 viewerId → 后端权威排除本人已举报的帖；游客 null = 不过滤。
-        // 专题线 video Story 2.2：能力只在 Controller 解析，显式传下去（一致性规则 2）。
-        return feedService.loadFeed(category, cursor, viewerId(jwt), anonSession,
-                com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
+        return feedService.loadFeed(category, cursor, viewerId(jwt), anonSession);
     }
 
     /**
@@ -60,9 +57,8 @@ public class ContentFeedController {
      */
     @GetMapping("/api/v1/content-posts/pinned")
     public PinnedSlotResponse pinnedSlot(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(value = "slot", defaultValue = ContentPin.SLOT_HOME_FEED) String slot,
-            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
-        return feedService.loadPinnedSlot(slot, viewerId(jwt), com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
+            @RequestParam(value = "slot", defaultValue = ContentPin.SLOT_HOME_FEED) String slot) {
+        return feedService.loadPinnedSlot(slot, viewerId(jwt));
     }
 
     /** 登录用户 id（游客 / 无效 JWT → null）。 */

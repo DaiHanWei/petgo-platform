@@ -283,9 +283,7 @@ void main() {
         .join('\n');
     expect(feed.contains('ContentLinkedPetsCapsule'), isFalse);
     final src = File('lib/features/content/presentation/content_detail_page.dart').readAsStringSync();
-    // 专题线 video Story 2.5 把作者行抽成 ContentAuthorRow、更多抽屉抽成顶层 showContentMoreSheet。
-    final authorRow = src.substring(
-        src.indexOf('class ContentAuthorRow extends'), src.indexOf('void showContentMoreSheet('));
+    final authorRow = src.substring(src.indexOf('Widget _authorRow('), src.indexOf('void _showMoreSheet('));
     expect(authorRow.contains('ContentLinkedPetsCapsule'), isFalse);
   });
 }

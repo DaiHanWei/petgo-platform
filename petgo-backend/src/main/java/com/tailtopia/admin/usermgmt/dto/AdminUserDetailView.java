@@ -28,8 +28,6 @@ public record AdminUserDetailView(
          */
         String phone,
         long pawcoinBalance,
-        /** 会员等级（专题线 video Story 1.1，FR-2；≥ 10 可发视频）。 */
-        int vipLevel,
         List<PetRow> pets,
         List<PostSummary> posts,
         List<SessionMeta> sessions) {

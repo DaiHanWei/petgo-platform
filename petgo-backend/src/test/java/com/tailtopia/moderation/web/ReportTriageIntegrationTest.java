@@ -79,7 +79,7 @@ class ReportTriageIntegrationTest extends ApiIntegrationTest {
      * <p>（{@code petStatus} 形参已删除，Story 16.3 · AC3。）
      */
     private boolean feedContains(long viewerId, long postId) {
-        FeedPageResponse page = feedService.loadFeed("DAILY", null, viewerId, null, true);
+        FeedPageResponse page = feedService.loadFeed("DAILY", null, viewerId, null);
         return page.items().stream().anyMatch(i -> i.id() != null && i.id() == postId);
     }
 
@@ -150,7 +150,7 @@ class ReportTriageIntegrationTest extends ApiIntegrationTest {
         // 他人不可见（Feed 仅 PUBLISHED），作者本人仍可见（findMyPosts 放行 UNDER_REVIEW）。
         assertThat(feedContains(newUser().getId(), p.getId())).isFalse();
         long pid = p.getId();
-        assertThat(feedService.myPosts(author.getId(), null, true).items().stream()
+        assertThat(feedService.myPosts(author.getId(), null).items().stream()
                 .anyMatch(i -> i.id() != null && i.id() == pid)).isTrue();
         // 预处置不推送：作者无任何通知。
         assertThat(authorNotifications(author.getId())).isEmpty();

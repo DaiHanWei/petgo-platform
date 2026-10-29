@@ -148,7 +148,7 @@ class CommentQueryServiceTest {
                 .thenReturn(rows);
         when(comments.findRepliesForParents(anyList(), anyBoolean(), any(), anyLong())).thenReturn(List.of());
 
-        CommentPageResponse page = service.topLevel(1L, null, null, true);
+        CommentPageResponse page = service.topLevel(1L, null, null);
         assertThat(page.items()).hasSize(10);
         assertThat(page.hasMore()).isTrue();
         assertThat(page.nextCursor()).isNotNull();
@@ -170,7 +170,7 @@ class CommentQueryServiceTest {
                 .toList();
         when(comments.findRepliesForParents(anyList(), anyBoolean(), any(), anyLong())).thenReturn(replies);
 
-        CommentPageResponse page = service.topLevel(1L, null, null, true);
+        CommentPageResponse page = service.topLevel(1L, null, null);
         assertThat(page.items()).hasSize(1);
         assertThat(page.items().get(0).replyCount()).isEqualTo(8); // 总数
         assertThat(page.items().get(0).replies()).hasSize(3); // 内嵌前 3
@@ -189,7 +189,7 @@ class CommentQueryServiceTest {
                 anyLong(), any(Pageable.class)))
                 .thenReturn(rows);
 
-        CommentPageResponse page = service.replies(1L, null, null, true);
+        CommentPageResponse page = service.replies(1L, null, null);
         assertThat(page.items()).hasSize(10);
         assertThat(page.hasMore()).isTrue();
         // 二级回复 replyCount/replies 为 null。
@@ -200,7 +200,7 @@ class CommentQueryServiceTest {
     @Test
     void commentsOnInvisiblePostAreNotFound() {
         when(posts.findById(99L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.topLevel(99L, null, null, true)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.topLevel(99L, null, null)).isInstanceOf(AppException.class);
     }
 
     // ===== V1.1.4 Story 1.3：R1 / R2 在 service 这一层的两件事 =====
@@ -215,7 +215,7 @@ class CommentQueryServiceTest {
         when(comments.findRepliesForParents(anyList(), anyBoolean(), any(), anyLong()))
                 .thenReturn(List.of());
 
-        service.topLevel(1L, null, 88L, true);
+        service.topLevel(1L, null, 88L);
 
         // visiblePost() 的作者是 7；hasViewer 随 viewerId 是否为 null 走。
         verify(comments).findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), eq(true), eq(88L),
@@ -229,7 +229,7 @@ class CommentQueryServiceTest {
         when(comments.findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), anyBoolean(), any(),
                 anyLong(), any(Pageable.class))).thenReturn(List.of());
 
-        service.topLevel(1L, null, null, true);
+        service.topLevel(1L, null, null);
 
         verify(comments).findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), eq(false), eq(null),
                 eq(7L), any(Pageable.class));
@@ -242,7 +242,7 @@ class CommentQueryServiceTest {
         when(comments.findById(1L)).thenReturn(Optional.of(comment(1, null, 50, base)));
         when(hideRelations.isHidden(88L, 50L)).thenReturn(true); // 查看者 88 隐藏了父作者 50
 
-        CommentPageResponse page = service.replies(1L, null, 88L, true);
+        CommentPageResponse page = service.replies(1L, null, 88L);
 
         assertThat(page.items()).isEmpty();
         assertThat(page.hasMore()).isFalse();
@@ -257,7 +257,7 @@ class CommentQueryServiceTest {
         when(comments.findById(1L)).thenReturn(Optional.of(comment(1, null, 50, base)));
         when(hideRelations.isHidden(7L, 50L)).thenReturn(true); // 内容作者 7 隐藏了父作者 50
 
-        assertThat(service.replies(1L, null, 88L, true).items()).isEmpty();
+        assertThat(service.replies(1L, null, 88L).items()).isEmpty();
     }
 
     /**
@@ -274,7 +274,7 @@ class CommentQueryServiceTest {
                 .thenReturn(List.of(comment(100, 1L, 200, base.plusSeconds(1))));
 
         // viewer 就是父评论作者本人（50）
-        CommentPageResponse page = service.replies(1L, null, 50L, true);
+        CommentPageResponse page = service.replies(1L, null, 50L);
 
         assertThat(page.items()).hasSize(1);
     }
@@ -283,6 +283,6 @@ class CommentQueryServiceTest {
     @Test
     void repliesReturnEmptyWhenParentMissing() {
         when(comments.findById(9L)).thenReturn(Optional.empty());
-        assertThat(service.replies(9L, null, 88L, true).items()).isEmpty();
+        assertThat(service.replies(9L, null, 88L).items()).isEmpty();
     }
 }

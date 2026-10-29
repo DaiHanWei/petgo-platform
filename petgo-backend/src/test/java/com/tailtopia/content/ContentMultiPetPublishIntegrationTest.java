@@ -131,7 +131,7 @@ class ContentMultiPetPublishIntegrationTest extends ApiIntegrationTest {
 
         // Feed（不按宠物过滤）只出现一次。
         long inFeed = posts.findFeed(ContentType.GROWTH_MOMENT, true, false, null, false, null, null,
-                        false, null, true, PageRequest.of(0, 200)).stream()
+                        false, null, PageRequest.of(0, 200)).stream()
                 .filter(p -> p.getId() == postId).count();
         assertThat(inFeed).isEqualTo(1L);
 

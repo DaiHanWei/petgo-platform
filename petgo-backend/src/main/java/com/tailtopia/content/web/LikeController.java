@@ -5,7 +5,6 @@ import com.tailtopia.content.service.LikeService;
 import com.tailtopia.content.service.PostLikersService;
 import com.tailtopia.social.dto.FollowListPage;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.tailtopia.shared.error.AppException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -33,9 +32,8 @@ public class LikeController {
     /** 点赞人列表（V1.3.4）：仅 role=USER；帖子不可见 → 404。 */
     @GetMapping("/api/v1/content-posts/{id}/likers")
     public FollowListPage likers(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
-            @RequestParam(required = false) String cursor,
-            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
-        return likersService.likers(id, currentUserId(jwt), cursor, com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
+            @RequestParam(required = false) String cursor) {
+        return likersService.likers(id, currentUserId(jwt), cursor);
     }
 
     @PostMapping("/api/v1/content-posts/{id}/like")

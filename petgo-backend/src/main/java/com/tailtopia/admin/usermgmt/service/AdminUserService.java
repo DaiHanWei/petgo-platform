@@ -408,7 +408,7 @@ public class AdminUserService {
                 u.getId(), name, u.getNickname(), email, u.getCreatedAt(),
                 deactivated(u), deleted,
                 includePhone ? u.getPhone() : null,
-                pawCoinWallet.balanceOf(userId), u.getVipLevel(), pets,
+                pawCoinWallet.balanceOf(userId), pets,
                 contentService.listByAuthorForAdmin(userId),
                 consultHistory.adminSessionMetadata(userId));
     }
