@@ -129,6 +129,8 @@ Future<IdCardHdFlowResult> openIdCardHdPaywall(
         context,
         payload: res.payload!,
         orderRef: res.paymentRef,
+        amountIdr: res.paymentAmount ?? priceIdr,
+        expiresAt: res.paymentExpiresAt,
         pollPaid: () async {
           final c = await container.refresh(idCardDetailProvider(card.id).future);
           return c.hdUnlocked;

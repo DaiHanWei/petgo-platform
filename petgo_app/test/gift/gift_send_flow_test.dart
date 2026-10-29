@@ -132,7 +132,11 @@ void main() {
 
   Future<void> confirm(WidgetTester tester) async {
     await tester.tap(picker());
-    await tester.pumpAndSettle();
+    // V1.4.1 QRIS 支付页：二维码抽屉里有常驻的「等待中」转圈，pumpAndSettle 会一路推进假时钟
+    // 直到轮询把抽屉关掉；这里只推进到抽屉弹出（< 1 个轮询周期）。
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
   }
 
   /// 点抽屉上方遮罩 = 下滑 / 点遮罩关闭。

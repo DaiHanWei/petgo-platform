@@ -40,6 +40,7 @@ class TopupResult {
     required this.coins,
     this.payload,
     this.expiresAt,
+    this.displayNo,
   });
 
   final String intentToken;
@@ -52,6 +53,12 @@ class TopupResult {
   /// 前端据此显剩余倒计时（不重置），过期即为「已过期」。null=无过期（后端旧行为）。
   final DateTime? expiresAt;
 
+  /// 可读支付号（V1.4.1 QRIS 支付页「Nomor Pesanan」；旧后端为 null 退 [intentToken]）。
+  final String? displayNo;
+
+  /// 展示用支付号：优先可读号，缺省退 token。
+  String get paymentRef => displayNo ?? intentToken;
+
   factory TopupResult.fromJson(Map<String, dynamic> j) => TopupResult(
         intentToken: (j['intentToken'] ?? '') as String,
         channel: (j['channel'] ?? '') as String,
@@ -59,5 +66,6 @@ class TopupResult {
         coins: (j['coins'] as num?)?.toInt() ?? 0,
         payload: j['payload'] as String?,
         expiresAt: j['expiresAt'] == null ? null : DateTime.parse(j['expiresAt'] as String).toUtc(),
+        displayNo: j['displayNo'] as String?,
       );
 }

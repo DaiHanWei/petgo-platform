@@ -70,7 +70,8 @@ public class PaymentIntent {
     private Map<String, Object> gatewayMeta;
 
     /**
-     * 付款窗过期时刻（V85）。仅 PAWCOIN_TOPUP 建单时填 now+60min；其余 purpose 留 null=无时间过期。
+     * 付款窗过期时刻（V85）。QRIS 现金意图建单时按各业务付款窗填（充值 / 送礼 / 身份证高清 / AI 解锁 /
+     * 纪念品 / 名额 60min，问诊 5min，商城跟订单剩余窗）；PawCoin 扣币即时成交的留 null=无时间过期。
      * 服务端权威：懒过期（statusOf/复用查询）+ 定时扫描据此置 EXPIRED。
      */
     @Column(name = "expires_at")

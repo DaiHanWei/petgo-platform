@@ -303,12 +303,21 @@ enum HdPayChannel {
 /// HD 购买结果（Story 6.3）。[unlocked] 同步已解锁（PawCoin/已购买）；否则 [paymentToken] 为 QRIS 待支付订单号。
 class HdPurchaseResult {
   const HdPurchaseResult(
-      {required this.unlocked, this.paymentToken, this.paymentDisplayNo, this.payload});
+      {required this.unlocked,
+      this.paymentToken,
+      this.paymentDisplayNo,
+      this.payload,
+      this.paymentAmount,
+      this.paymentExpiresAt});
 
   final bool unlocked;
   final String? paymentToken;
   final String? paymentDisplayNo; // 可读支付号（bug 326，PAYHD-日期-序号；旧后端为 null 退 token）
   final String? payload; // QRIS 二维码串（EMVCo，本地生成二维码；对齐后端 HdPurchaseResponse.payload）
+
+  /// 现金金额（IDR）与付款窗过期时刻（V1.4.1 QRIS 支付页金额 / 倒计时；旧后端无 expiresAt 为 null）。
+  final int? paymentAmount;
+  final DateTime? paymentExpiresAt;
 
   /// 展示用支付号：优先可读号，旧后端无 displayNo 退 token。
   String? get paymentRef => paymentDisplayNo ?? paymentToken;
@@ -320,6 +329,8 @@ class HdPurchaseResult {
       paymentToken: payment?['token'] as String?,
       paymentDisplayNo: payment?['displayNo'] as String?,
       payload: json['payload'] as String?,
+      paymentAmount: (payment?['amount'] as num?)?.toInt(),
+      paymentExpiresAt: DateTime.tryParse(payment?['expiresAt'] as String? ?? ''),
     );
   }
 }

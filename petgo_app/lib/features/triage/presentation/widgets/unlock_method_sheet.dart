@@ -186,6 +186,8 @@ Future<void> runAiUnlockFlow(
       context,
       payload: st.payload!,
       orderRef: st.payment?.displayNo ?? st.payment?.token, // bug 326：可读支付号（旧后端退 token）
+      amountIdr: st.payment?.amount ?? priceIdr ?? kAiUnlockPriceIdr,
+      expiresAt: st.payment?.expiresAt,
       pollPaid: () async {
         final TriageResult r = await ref
             .read(triageRepositoryProvider)

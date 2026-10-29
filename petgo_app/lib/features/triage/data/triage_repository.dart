@@ -172,6 +172,7 @@ class PaymentInfo {
     required this.amount,
     required this.status,
     this.displayNo,
+    this.expiresAt,
   });
 
   final String token;
@@ -180,12 +181,16 @@ class PaymentInfo {
   final String status;
   final String? displayNo; // 可读支付号（bug 326，PAYAI-日期-序号；旧后端为 null 退 token）
 
+  /// 付款窗过期时刻（V1.4.1 QRIS 支付页倒计时；旧后端为 null）。
+  final DateTime? expiresAt;
+
   factory PaymentInfo.fromJson(Map<String, dynamic> json) => PaymentInfo(
         token: json['token'] as String? ?? '',
         channel: json['channel'] as String? ?? '',
         amount: (json['amount'] as num?)?.toInt() ?? 0,
         status: json['status'] as String? ?? '',
         displayNo: json['displayNo'] as String?,
+        expiresAt: DateTime.tryParse(json['expiresAt'] as String? ?? ''),
       );
 }
 

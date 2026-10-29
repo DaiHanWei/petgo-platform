@@ -9,6 +9,8 @@ class GiftSendResult {
     this.payload,
     this.orderToken,
     this.status = GiftOrderStatus.unknown,
+    this.paymentAmount,
+    this.paymentExpiresAt,
   });
 
   /// true = 已送达（PawCoin 当场成交 / 幂等重放时订单已送达）。
@@ -23,6 +25,10 @@ class GiftSendResult {
   final String? orderToken;
   final GiftOrderStatus status;
 
+  /// 现金金额（IDR）与付款窗过期时刻（V1.4.1 QRIS 支付页金额 / 倒计时；旧后端无 expiresAt 为 null）。
+  final int? paymentAmount;
+  final DateTime? paymentExpiresAt;
+
   /// 展示用支付号：优先可读号，缺省退 token。
   String? get paymentRef => paymentDisplayNo ?? paymentToken;
 
@@ -36,6 +42,8 @@ class GiftSendResult {
       payload: json['payload'] as String?,
       orderToken: json['orderToken'] as String?,
       status: GiftOrderStatus.fromWire(json['status'] as String?),
+      paymentAmount: (p?['amount'] as num?)?.toInt(),
+      paymentExpiresAt: DateTime.tryParse(p?['expiresAt'] as String? ?? ''),
     );
   }
 }

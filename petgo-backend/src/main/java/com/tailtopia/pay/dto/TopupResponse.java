@@ -13,8 +13,9 @@ import java.time.Instant;
  * @param coins       到账 koin（1:1）
  * @param payload     付款载荷（二维码串 / deeplink；stub 为伪串）
  * @param expiresAt   付款窗过期时刻（V85，60min；服务端权威，前端倒计时/过期判定据此。null=无过期）
+ * @param displayNo   可读支付号（V1.4.1 QRIS 支付页「Nomor Pesanan」，仅展示；查询键仍是 intentToken）
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record TopupResponse(String intentToken, String channel, long amount, long coins, String payload,
-        Instant expiresAt) {
+        Instant expiresAt, String displayNo) {
 }
