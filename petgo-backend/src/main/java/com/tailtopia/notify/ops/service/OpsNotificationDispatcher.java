@@ -36,7 +36,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * <h2>流程</h2>
  * 抢占 → 按<b>实际发送时刻</b>解析人群 → 每 500 人一批：写通知中心（整批一事务，失败按 1s/2s/4s 重试 3 次，
- * 仍失败整批计 failed 且跳过推送）→ 逐人同步推送（失败的人按 1s/2s/4s 重推 3 轮，成功的人不重推）→
+ * 仍失败整批计 failed 且跳过推送）→ 逐人同步推送（<b>失败不重推</b>，只计数，防重复收到，bug 604）→
  * 批间等 1 秒 → 收尾。
  *
  * <p>V1.4.0 ④ Story 1.2（AD-5 / P-4）：每批写入通知中心之后、推送之前，一次查出本批里关闭了「活动与优惠」（PROMO）的人，
@@ -225,28 +225,8 @@ public class OpsNotificationDispatcher {
                 return abort(id, toPush.size() - succeeded);
             }
         }
-        // 只重推失败的人（成功的人不重推，防重复打扰）。
-        List<Duration> backoffs = params.retryBackoffs();
-        for (int round = 0; round < backoffs.size() && !failed.isEmpty(); round++) {
-            if (!pause(backoffs.get(round))) {
-                return abort(id, toPush.size() - succeeded);
-            }
-            List<Notification> still = new ArrayList<>();
-            for (Notification n : failed) {
-                if (Thread.currentThread().isInterrupted()) {
-                    return abort(id, toPush.size() - succeeded);
-                }
-                if (push(n, campaign)) {
-                    succeeded++;
-                } else {
-                    still.add(n);
-                }
-                if (!tick(id, pushed)) {
-                    return abort(id, toPush.size() - succeeded);
-                }
-            }
-            failed = still;
-        }
+        // 推送失败一律不重推（bug 604，2026-10-29 拍板）：超时 / 连接断开时腾讯可能已投递，
+        // 重推会让用户收到两条——重复收到比没收到更糟。失败只计数；通知中心那条已写入，用户仍能看到。
         if (!failed.isEmpty()) {
             if (repo.addFailed(id, failed.size(), clock.instant()) == 0) {
                 return null;

@@ -93,6 +93,16 @@ class LiveTencentImClientPushResultTest {
         assertThat(c.pushOfflineChecked("u_7", "t", "b", "OPS_ANNOUNCEMENT", "tok", "camp")).isFalse();
     }
 
+    /** bug 604：撞限频（60007）也只发一次、按失败返回——不重推，防用户收到两条。 */
+    @Test
+    void rateLimitedPushIsNotRetried() throws IOException {
+        LiveTencentImClient c = client(fakeTencent(
+                "{\"ActionStatus\":\"FAIL\",\"ErrorCode\":60007,\"ErrorInfo\":\"Please slow down\"}"));
+        assertThat(c.pushOfflineChecked("u_7", "t", "b", "OPS_ANNOUNCEMENT", "tok", "camp")).isFalse();
+        c.pushOffline("u_9", "t", "b", "LIKE", "tok", null);
+        assertThat(bodies).hasSize(2); // 每次调用恰好一次请求
+    }
+
     @Test
     void errorCodeZeroIsSuccess() {
         assertThat(LiveTencentImClient.isSuccess(Map.of("ErrorCode", 0, "ActionStatus", "OK"))).isTrue();

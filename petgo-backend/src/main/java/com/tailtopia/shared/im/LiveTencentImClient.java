@@ -41,6 +41,7 @@ public class LiveTencentImClient implements TencentImClient {
     private final ImProperties props;
     private final Clock clock;
     private final RestClient rest;
+    private final PushRateLimiter pushLimiter;
 
     public LiveTencentImClient(ImProperties props) {
         this(props, Clock.systemUTC());
@@ -48,8 +49,14 @@ public class LiveTencentImClient implements TencentImClient {
 
     /** 测试用：注入固定 {@link Clock} 断言 UserSig 签名确定性（L0）。 */
     LiveTencentImClient(ImProperties props, Clock clock) {
+        this(props, clock, new PushRateLimiter(props.getPushRatePerSecond()));
+    }
+
+    /** 测试用：注入限速器（免真睡）。 */
+    LiveTencentImClient(ImProperties props, Clock clock, PushRateLimiter pushLimiter) {
         this.props = props;
         this.clock = clock;
+        this.pushLimiter = pushLimiter;
         SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
         rf.setConnectTimeout(java.time.Duration.ofSeconds(5));
         rf.setReadTimeout(java.time.Duration.ofSeconds(5));
@@ -206,25 +213,30 @@ public class LiveTencentImClient implements TencentImClient {
         // 推送接入（2026-08-07）：/v4/timpush/batch 指定 UserID 推送（1~500/批，此处单收件人）。
         // 不进 IM 会话、默认不增未读；离线经厂商通道（FCM 证书 9088 / APNs 17703·17704）落通知栏。
         // 前置：收件人须已注册过 TIMPush（客户端 registerPush）；未注册用户腾讯侧静默不投，无副作用。
-        postRest("/v4/timpush/batch",
-                buildBatchPushBody(props.getAdminIdentifier(),
-                        ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
-                        imUserId, title, body, deepLinkType, deepLinkToken, targetRef),
-                "pushOffline");
+        pushLimited(buildBatchPushBody(props.getAdminIdentifier(),
+                ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
+                imUserId, title, body, deepLinkType, deepLinkToken, targetRef));
     }
 
     /**
      * 同 {@link #pushOffline}（请求体<b>完全相同</b>，单收件人 {@code /v4/timpush/batch}），但返回是否投递成功
-     * （V1.3.4 Story 6.2：运营通知逐人推送 + 失败重试，D-19）。日志行为与 {@link #pushOffline} 一致。
+     * （V1.3.4 Story 6.2：运营通知逐人推送 + 失败计数；bug 604 起失败不重推）。日志行为与 {@link #pushOffline} 一致。
      */
     @Override
     public boolean pushOfflineChecked(String imUserId, String title, String body, String deepLinkType,
             String deepLinkToken, String targetRef) {
-        return postRest("/v4/timpush/batch",
-                buildBatchPushBody(props.getAdminIdentifier(),
-                        ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
-                        imUserId, title, body, deepLinkType, deepLinkToken, targetRef),
-                "pushOffline");
+        return pushLimited(buildBatchPushBody(props.getAdminIdentifier(),
+                ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
+                imUserId, title, body, deepLinkType, deepLinkToken, targetRef));
+    }
+
+    /**
+     * 限速推送（bug 604）：每次发送先过全局 {@link PushRateLimiter}，只发一次。
+     * <b>任何失败都不重推</b>（含 60007 限频）：超时 / 断连时腾讯可能已投递，重推会让用户收到两条——
+     * 重复收到比没收到更糟（2026-10-29 拍板）。线程被中断 → 放弃，返回失败。
+     */
+    private boolean pushLimited(Map<String, Object> body) {
+        return pushLimiter.acquire() && postRest("/v4/timpush/batch", body, "pushOffline");
     }
 
     /**
