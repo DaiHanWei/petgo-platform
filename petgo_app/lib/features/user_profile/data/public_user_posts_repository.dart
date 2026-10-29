@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../content/video/video_info.dart';
 
 /// 他人主页内容网格里的一条（对应后端 `FeedItemResponse` 的子集）。
 /// V1.3.0 batch-b1 Story 2.2 · FR-118.2。
@@ -14,7 +15,22 @@ import '../../../core/network/dio_client.dart';
 /// ⚠️ **没有 `visibility` 字段**：这个列表服务端只给 PUBLIC（NFR-2），
 /// 「仅自己可见」角标在他人主页上永远不该出现。
 class PublicUserPost {
-  const PublicUserPost({required this.id, required this.type, this.firstImageUrl});
+  const PublicUserPost({
+    required this.id,
+    required this.type,
+    this.firstImageUrl,
+    this.mediaType = kMediaTypeImage,
+    this.video,
+  });
+
+  /// 媒体类型线格式（专题线 video Story 2.3）；缺省 / 未知 → 按图文。
+  final String mediaType;
+
+  /// 视频信息（只在视频帖下发）。判断视频帖用 [isVideo]。
+  final VideoInfo? video;
+
+  /// 是否视频帖：以 `mediaType` 为准；缺 `video` 时按图文降级。
+  bool get isVideo => isVideoMediaType(mediaType) && video != null;
 
   final int id;
 
@@ -27,6 +43,8 @@ class PublicUserPost {
         id: (json['id'] as num).toInt(),
         type: (json['type'] ?? '') as String,
         firstImageUrl: json['firstImageUrl'] as String?,
+        mediaType: (json['mediaType'] as String?) ?? kMediaTypeImage,
+        video: VideoInfo.fromJson(json['video']),
       );
 }
 

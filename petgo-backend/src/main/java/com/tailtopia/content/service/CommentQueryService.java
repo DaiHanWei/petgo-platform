@@ -113,10 +113,10 @@ public class CommentQueryService {
      * 「已渲染的列表不重排」由客户端承担，服务端不留状态。
      */
     @Transactional(readOnly = true)
-    public CommentPageResponse topLevel(long postId, String cursor, Long viewerId) {
+    public CommentPageResponse topLevel(long postId, String cursor, Long viewerId, boolean includeVideo) {
         // Story 1.3：这次要接住返回值——R2 的判据是**内容作者**，必须把 authorId 传进查询（AD-3）。
         // 原来它是 private void、把查出的实体直接扔了；改成返回实体是**零额外查询**。
-        long postAuthorId = requireVisiblePost(postId).getAuthorId();
+        long postAuthorId = requireVisiblePost(postId, includeVideo).getAuthorId();
         CommentHotCursor decoded = decodeHot(cursor);
 
         List<Comment> rows = comments.findTopLevelByHot(postId,
@@ -190,16 +190,20 @@ public class CommentQueryService {
      * R2 要 {@code postAuthorId}，所以这里必须反查两跳：parent → postId → post.authorId。
      */
     @Transactional(readOnly = true)
-    public CommentPageResponse replies(long parentId, String cursor, Long viewerId) {
+    public CommentPageResponse replies(long parentId, String cursor, Long viewerId, boolean includeVideo) {
         Comment parent = comments.findById(parentId).orElse(null);
         if (parent == null || parent.getDeletedAt() != null) {
             return new CommentPageResponse(List.of(), null, false);
         }
         // ⚠️ 这里刻意**不**补「帖子是否仍可见」的校验：该分支原本就不校验（帖被下架后凭 parentId 仍能拉到回复），
         // 那是一个既有缺口，改它属于既有行为变更、不在本 story 范围内（已在 story 里记为待 PO 确认）。
-        long postAuthorId = posts.findById(parent.getPostId())
-                .map(ContentPost::getAuthorId)
-                .orElse(NO_POST_AUTHOR);
+        java.util.Optional<ContentPost> post = posts.findById(parent.getPostId());
+        // 专题线 video Story 2.2（AD-7）：先取 parent 所属帖子，旧版遇到视频帖 → 与详情同一个 404。
+        if (!includeVideo && post.map(p -> p.getMediaType() == com.tailtopia.content.domain.MediaType.VIDEO)
+                .orElse(false)) {
+            throw AppException.notFound(ContentDetailService.GONE_DETAIL);
+        }
+        long postAuthorId = post.map(ContentPost::getAuthorId).orElse(NO_POST_AUTHOR);
 
         // AC4：父被隐藏 → 整串不展示（不出现「回复了某条看不见的评论」的孤儿回复）。
         // 父只有一个，在这里判一次即可；写进 SQL 会对每一行重复判定同一个父。
@@ -256,10 +260,12 @@ public class CommentQueryService {
     /** 帖子已不存在时的 postAuthorId 占位：不匹配任何 users.id，R2 恒不命中。 */
     private static final long NO_POST_AUTHOR = -1L;
 
-    private ContentPost requireVisiblePost(long postId) {
+    private ContentPost requireVisiblePost(long postId, boolean includeVideo) {
         return posts.findById(postId)
                 .filter(p -> p.getDeletedAt() == null)
                 .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
+                // 专题线 video Story 2.2：旧版遇到视频帖 → 同一个 404。
+                .filter(p -> includeVideo || p.getMediaType() != com.tailtopia.content.domain.MediaType.VIDEO)
                 .orElseThrow(() -> AppException.notFound(ContentDetailService.GONE_DETAIL));
     }
 

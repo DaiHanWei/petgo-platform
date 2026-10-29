@@ -49,4 +49,24 @@ class SignedUrlServiceTest {
         // 不应出现双斜杠的对象路径
         assertThat(url).doesNotContain("petgo-private//");
     }
+
+    // 专题线 video Story 1.4：指定桶与有效期的签名重载。
+
+    @Test
+    void signWithExplicitBucketAndTtl() {
+        long before = System.currentTimeMillis() / 1000;
+        String url = service.sign("petgo-public", "video/7/k.mp4", java.time.Duration.ofMinutes(15));
+        assertThat(url).contains("petgo-public").contains("video/7/k.mp4").contains("Signature=");
+        long expires = Long.parseLong(url.replaceAll(".*Expires=(\\d+).*", "$1"));
+        assertThat(expires - before).isBetween(899L, 901L);
+    }
+
+    @Test
+    void explicitBucketSignStubsWithoutCredentials() {
+        MediaProperties props = new MediaProperties();
+        props.getOss().setCdnBaseUrl("https://cdn.test");
+        String url = new SignedUrlService(new AliyunOssClient(props), props)
+                .sign("b", "video/7/k.mp4", java.time.Duration.ofMinutes(15));
+        assertThat(url).isEqualTo("https://cdn.test/video/7/k.mp4");
+    }
 }

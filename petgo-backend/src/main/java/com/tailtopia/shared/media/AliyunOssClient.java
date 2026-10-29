@@ -48,24 +48,155 @@ public class AliyunOssClient {
      * 生成预签名 PUT URL（客户端凭此直传 OSS，**真 key 始终只在后端**）。
      *
      * <p>用 env 注入的 AccessKey 现签，无需 STS/RAM 角色。{@code contentType} 计入签名——客户端 PUT
-     * 时必须发同名 {@code Content-Type} 头，否则 SignatureDoesNotMatch。{@code publicRead=true}（公开域）
-     * 时把 {@code x-oss-object-acl:public-read} 签入，客户端须同发该头，对象落桶即公开可读。
+     * 时必须发同名 {@code Content-Type} 头，否则 SignatureDoesNotMatch。{@code objectAcl} 非空时把
+     * {@code x-oss-object-acl} 签入（公开域 {@code public-read}；视频封面 {@code private}），客户端须同发该头。
      *
+     * <p>🔴 一律签入 {@link #FORBID_OVERWRITE_HEADER}{@code : true}（专题线 video Story 1.2 · FR-23）：
+     * 同一张票据不能覆盖已存在的对象，防止「审核通过后偷换内容」。客户端同样必须原样带上这个头。
+     *
+     * @param objectAcl 对象 ACL（{@code public-read} / {@code private}）；null = 不签 ACL，沿用桶默认
      * @return 预签名上传 URL 字符串
      */
     public String presignedPutUrl(String bucket, String objectKey, String contentType,
-            long ttlSeconds, boolean publicRead) {
+            long ttlSeconds, String objectAcl) {
         OSS client = buildClient();
         try {
-            GeneratePresignedUrlRequest req =
-                    new GeneratePresignedUrlRequest(bucket, stripLeadingSlash(objectKey), HttpMethod.PUT);
-            req.setExpiration(new Date(System.currentTimeMillis() + ttlSeconds * 1000L));
-            req.setContentType(contentType);
-            if (publicRead) {
-                req.addHeader("x-oss-object-acl", "public-read");
-            }
-            URL url = client.generatePresignedUrl(req);
+            URL url = client.generatePresignedUrl(
+                    presignPutRequest(bucket, objectKey, contentType, ttlSeconds, objectAcl));
             return url.toString();
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /** 预签名 PUT 请求（签入哪些头）。抽出来让「forbid-overwrite 有没有签进去」可被 L0 直接断言。 */
+    static GeneratePresignedUrlRequest presignPutRequest(String bucket, String objectKey, String contentType,
+            long ttlSeconds, String objectAcl) {
+        GeneratePresignedUrlRequest req =
+                new GeneratePresignedUrlRequest(bucket, stripLeadingSlash(objectKey), HttpMethod.PUT);
+        req.setExpiration(new Date(System.currentTimeMillis() + ttlSeconds * 1000L));
+        req.setContentType(contentType);
+        if (objectAcl != null) {
+            req.addHeader(PUBLIC_READ_HEADER, objectAcl);
+        }
+        req.addHeader(FORBID_OVERWRITE_HEADER, "true");
+        return req;
+    }
+
+    /** PostObject 策略签名结果（{@link #signPostPolicy}）。 */
+    public record PostPolicySignature(String policyBase64, String signature, String accessKeyId) {
+    }
+
+    /**
+     * 签一份 PostObject 策略（OSS V1，专题线 video Story 1.2 · AD-3）。本地计算，不发网络请求。
+     *
+     * <p>⚠️ {@code calculatePostSignature} 的入参是策略 <b>JSON 原文</b>（SDK 内部自行 base64 再 HMAC）；
+     * 表单里的 {@code policy} 字段才放 base64(原文)。两者混用即 SignatureDoesNotMatch。
+     *
+     * <p>签名必须用真 AccessKey，无凭证时不打桩，直接 502。
+     */
+    public PostPolicySignature signPostPolicy(java.util.Date expiration,
+            com.aliyun.oss.model.PolicyConditions conditions) {
+        if (!hasCredentials()) {
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储未配置，请联系运营");
+        }
+        OSS client = buildClient();
+        try {
+            String policyJson = client.generatePostPolicy(expiration, conditions);
+            String policyBase64 = java.util.Base64.getEncoder()
+                    .encodeToString(policyJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            String signature = client.calculatePostSignature(policyJson);
+            return new PostPolicySignature(policyBase64, signature, props.getAccessKeyId());
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /** HEAD 结果（{@link #headObject}）。 */
+    public record ObjectHead(String contentType, long contentLength) {
+    }
+
+    /**
+     * HEAD 一个对象（专题线 video Story 1.3：发视频帖前核实对象存在、类型、大小）。L2 真实网络。
+     *
+     * <p>🔴 一次外网往返 —— <b>禁止在数据库事务内调用</b>（一致性规则 7）。
+     * <p>不存在 → empty；其他异常 → 502（不外泄原始错误）。无凭证不打桩：这是安全校验，打桩等于本地放行任意 key。
+     */
+    public java.util.Optional<ObjectHead> headObject(String bucket, String objectKey) {
+        if (!hasCredentials()) {
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储未配置，请联系运营");
+        }
+        OSS client = buildClient();
+        try {
+            com.aliyun.oss.model.ObjectMetadata meta =
+                    client.getObjectMetadata(bucket, stripLeadingSlash(objectKey));
+            return java.util.Optional.of(new ObjectHead(meta.getContentType(), meta.getContentLength()));
+        } catch (com.aliyun.oss.OSSException e) {
+            if ("NoSuchKey".equals(e.getErrorCode()) || "404".equals(e.getErrorCode())) {
+                return java.util.Optional.empty();
+            }
+            log.warn("OSS HEAD 失败 errorCode={}", e.getErrorCode());
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储暂不可用，请稍后重试");
+        } catch (com.aliyun.oss.ClientException e) {
+            log.warn("OSS HEAD 客户端异常 errorCode={}", e.getErrorCode());
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储暂不可用，请稍后重试");
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /**
+     * 对象 ACL 是否为私有（专题线 video Story 1.3 code review：封面必须是 VIDEO_COVER 签出的私有对象，
+     * 不能拿已公开的图文图片 / 头像充当封面 —— 否则视频帖下架时对账器会把那张图一并改私有）。
+     *
+     * <p>🔴 外网往返 —— 禁止在数据库事务内调用（一致性规则 7）。
+     *
+     * @return empty = 对象不存在；{@code true} = ACL 显式为 private
+     */
+    public java.util.Optional<Boolean> isObjectPrivate(String bucket, String objectKey) {
+        if (!hasCredentials()) {
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储未配置，请联系运营");
+        }
+        OSS client = buildClient();
+        try {
+            com.aliyun.oss.model.ObjectAcl acl = client.getObjectAcl(bucket, stripLeadingSlash(objectKey));
+            return java.util.Optional.of(acl.getPermission() == com.aliyun.oss.model.ObjectPermission.Private);
+        } catch (com.aliyun.oss.OSSException e) {
+            if ("NoSuchKey".equals(e.getErrorCode())) {
+                return java.util.Optional.empty();
+            }
+            log.warn("OSS GetObjectAcl 失败 errorCode={}", e.getErrorCode());
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储暂不可用，请稍后重试");
+        } catch (com.aliyun.oss.ClientException e) {
+            log.warn("OSS GetObjectAcl 客户端异常 errorCode={}", e.getErrorCode());
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储暂不可用，请稍后重试");
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    /**
+     * 设置对象 ACL（专题线 video Story 1.4：视频与封面的公开 / 私有切换，仅由对账器调用）。L2 真实网络。
+     *
+     * <p>🔴 外网往返 —— 禁止在数据库事务内调用（一致性规则 7）。
+     *
+     * @return {@code false} = 对象不存在（NoSuchKey）；其他异常原样抛给调用方按「单条失败」处理
+     */
+    public boolean setObjectAcl(String bucket, String objectKey, boolean publicRead) {
+        if (!hasCredentials()) {
+            throw com.tailtopia.shared.error.AppException.mediaCredential("媒体存储未配置，请联系运营");
+        }
+        OSS client = buildClient();
+        try {
+            client.setObjectAcl(bucket, stripLeadingSlash(objectKey), publicRead
+                    ? com.aliyun.oss.model.CannedAccessControlList.PublicRead
+                    : com.aliyun.oss.model.CannedAccessControlList.Private);
+            return true;
+        } catch (com.aliyun.oss.OSSException e) {
+            if ("NoSuchKey".equals(e.getErrorCode()) || "404".equals(e.getErrorCode())) {
+                return false;
+            }
+            throw e;
         } finally {
             client.shutdown();
         }
@@ -219,6 +350,9 @@ public class AliyunOssClient {
     static final String PUBLIC_READ_HEADER = "x-oss-object-acl";
 
     static final String PUBLIC_READ_VALUE = "public-read";
+
+    /** 禁止覆盖同名对象的头名（预签名 PUT 签入 + PostObject 表单字段，专题线 video Story 1.2）。 */
+    public static final String FORBID_OVERWRITE_HEADER = "x-oss-forbid-overwrite";
 
     /**
      * 公开桶对象的元数据。抽出来是为了让「ACL 到底有没有带」可被 L0 直接断言 ——

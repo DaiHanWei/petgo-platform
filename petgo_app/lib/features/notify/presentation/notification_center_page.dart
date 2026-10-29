@@ -32,6 +32,7 @@ import '../domain/notification_item.dart';
 import '../domain/push_permission_prompt.dart';
 import '../../../core/storage/prefs.dart';
 import '../data/push_permission_providers.dart';
+import '../../content/video/video_nav.dart';
 
 /// 通知中心列表页（Story 6.6 F2/F3，FR-34）。倒序六(~七)类 + 空态 + 点击标记已读并深链跳目标。
 /// 🔄 PRD V1.0.0 修订（F2 · 2026-06-08）：展示类型由四类扩到六(~七)类（加生日/纪念日/里程碑节点）。
@@ -387,7 +388,8 @@ class _NotificationCenterPageState
       // → GlobalKey 撞车白屏 + 此后该 Tab 永久失效（bug 20260729）。go 同时收掉本页栈。
       context.go(location);
     } else {
-      context.push(location);
+      // 专题线 video Story 2.4：进帖子详情时带上埋点来源（视频帖的播放埋点 source=notification）。
+      context.push(withVideoSource(location, VideoSource.notification));
     }
   }
 

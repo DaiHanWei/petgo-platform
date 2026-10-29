@@ -1,8 +1,11 @@
 package com.tailtopia.content.web;
 
+import com.tailtopia.content.domain.MediaType;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.MediaAclReconciler;
+import com.tailtopia.content.service.VideoPostValidator;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
@@ -24,20 +27,30 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>{@code POST}：JWT；201 + {@link ContentPostResponse}；{@code Idempotency-Key} 头去重；写端点限流。
  * author 取自 JWT，不信任客户端。
+ *
+ * <p>视频帖（专题线 video Story 1.3）：先在<b>本层（事务外）</b>做 {@link VideoPostValidator#verifyObjects}
+ * （等级、归属、OSS HEAD），再进 {@code @Transactional} 的 {@code publish} —— HEAD 不许在事务里发（一致性规则 7）。
  */
 @RestController
 @RequestMapping("/api/v1/content-posts")
 public class ContentApiController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ContentApiController.class);
 
     private static final int PUBLISH_LIMIT = 20;
     private static final Duration PUBLISH_WINDOW = Duration.ofMinutes(1);
 
     private final ContentService contentService;
     private final RedisRateLimiter rateLimiter;
+    private final VideoPostValidator videoPostValidator;
+    private final MediaAclReconciler mediaAclReconciler;
 
-    public ContentApiController(ContentService contentService, RedisRateLimiter rateLimiter) {
+    public ContentApiController(ContentService contentService, RedisRateLimiter rateLimiter,
+            VideoPostValidator videoPostValidator, MediaAclReconciler mediaAclReconciler) {
         this.contentService = contentService;
         this.rateLimiter = rateLimiter;
+        this.videoPostValidator = videoPostValidator;
+        this.mediaAclReconciler = mediaAclReconciler;
     }
 
     @PostMapping
@@ -47,6 +60,19 @@ public class ContentApiController {
             @Valid @RequestBody ContentPostCreateRequest req) {
         long authorId = currentUserId(jwt);
         rateLimiter.check("rl:content:publish:" + authorId, PUBLISH_LIMIT, PUBLISH_WINDOW);
+        if (req.mediaTypeOrImage() == MediaType.VIDEO) {
+            VideoPostValidator.VerifiedVideo verified = videoPostValidator.verifyObjects(authorId, req);
+            ContentPostResponse resp = contentService.publish(authorId, req, idempotencyKey, verified);
+            // Story 1.4（AD-6）：发布事务此刻已提交 → 事务外尽力即时对账，让封面和视频马上可见；
+            // 失败不影响发布结果，定时任务每分钟兜底。
+            try {
+                mediaAclReconciler.reconcileOne(resp.id());
+            } catch (RuntimeException e) {
+                log.warn("video_acl_reconcile_inline_failed postId={} cause={}",
+                        resp.id(), e.getClass().getSimpleName());
+            }
+            return resp;
+        }
         return contentService.publish(authorId, req, idempotencyKey);
     }
 
@@ -58,6 +84,8 @@ public class ContentApiController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         contentService.deleteByAuthor(id, currentUserId(jwt));
+        // 专题线 video Story 3.1：事务已提交，视频帖立即把文件改回私有（失败由定时任务兜底）。
+        mediaAclReconciler.reconcileQuietly(id);
     }
 
     private static long currentUserId(Jwt jwt) {

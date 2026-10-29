@@ -45,7 +45,8 @@ class AdminUserAccessControlTest {
                     mock(com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery.class),
                     mock(com.tailtopia.admin.growth.service.AdminGrowthUserService.class),
                     mock(com.tailtopia.admin.petslot.service.AdminPetSlotTabService.class),
-                    mock(com.tailtopia.admin.gift.service.AdminUserGiftsService.class));
+                    mock(com.tailtopia.admin.gift.service.AdminUserGiftsService.class),
+                    mock(com.tailtopia.admin.usermgmt.service.AdminUserVideoService.class));
         }
     }
 

@@ -80,7 +80,7 @@
                 <img th:if="${c.thumbUrl != null}" th:src="${c.thumbUrl}" alt="" loading="lazy"/>
             </span>
             <span class="pick-body">
-                <span class="pick-meta"><b th:text="'#' + ${c.id}">#1</b> · <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span></span>
+                <span class="pick-meta"><b th:text="'#' + ${c.id}">#1</b> · <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span><th:block th:if="${c.video}"> · <span class="badge badge-muted" th:text="#{admin.video.badge}">视频</span></th:block></span>
                 <span class="pick-summary" th:text="${c.summary}">摘要</span>
                 <span class="pick-meta muted">
                     <span th:if="${c.authorDeleted}" th:text="#{admin.contentdetail.deletedUser}">已注销用户</span>

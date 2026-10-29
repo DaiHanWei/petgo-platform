@@ -148,6 +148,15 @@ public class User {
     @Column(name = "follower_count", insertable = false, updatable = false)
     private int followerCount;
 
+    /**
+     * 会员等级（专题线 video FR-1，默认 1，取值 1–99；≥ 10 可发视频）。
+     *
+     * <p>🔴 <b>只读映射，不可改成可更新</b>：理由同 {@link #followerCount} —— 整行 save 的路径会把加载时的旧等级
+     * 写回去，覆盖运营刚在后台改的值。只能由 {@code VipLevelService} 的 native UPDATE 改；新建行由 DB 默认值 1 兜底。
+     */
+    @Column(name = "vip_level", insertable = false, updatable = false)
+    private int vipLevel = 1;
+
     /** 注销前 email 快照，仅运营后台展示（原 {@code email} 注销后置空）。业务/公开/vet 侧不读。 */
     @Column(name = "deleted_email", length = 320)
     private String deletedEmail;
@@ -275,6 +284,11 @@ public class User {
     /** 关注我的人数（加载时快照，见字段注释）。 */
     public int getFollowerCount() {
         return followerCount;
+    }
+
+    /** 会员等级（加载时快照，见字段注释）。 */
+    public int getVipLevel() {
+        return vipLevel;
     }
 
     public String getGoogleSub() {

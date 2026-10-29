@@ -35,8 +35,9 @@ public class PostLikersService {
     }
 
     @Transactional(readOnly = true)
-    public FollowListPage likers(long postId, long viewerId, String cursor) {
-        ContentPost post = detail.requireVisiblePost(postId, viewerId);
+    public FollowListPage likers(long postId, long viewerId, String cursor, boolean includeVideo) {
+        // 专题线 video Story 2.2：旧版看视频帖的点赞人 → 与详情同一个 404。
+        ContentPost post = detail.requireVisiblePost(postId, viewerId, includeVideo);
         // 详情页本身不拦私密帖（他人拿不到入口）；点赞人列表按 spec 对非作者一律 404。
         if (post.getVisibility() == ContentVisibility.PRIVATE && !post.getAuthorId().equals(viewerId)) {
             throw AppException.notFound(ContentDetailService.GONE_DETAIL);

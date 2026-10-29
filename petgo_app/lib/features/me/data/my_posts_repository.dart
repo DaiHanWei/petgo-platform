@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../content/video/video_info.dart';
 
 /// 「我的发布」条目（对应后端 `GET /api/v1/me/posts` 的 FeedItemResponse 子集，Story 7.1）。
 class MyPost {
@@ -12,7 +13,18 @@ class MyPost {
     this.text,
     this.firstImageUrl,
     this.visibility = 'PUBLIC',
+    this.mediaType = kMediaTypeImage,
+    this.video,
   });
+
+  /// 媒体类型线格式（专题线 video Story 2.3）；缺省 / 未知 → 按图文。
+  final String mediaType;
+
+  /// 视频信息（只在视频帖下发）。判断视频帖用 [isVideo]。
+  final VideoInfo? video;
+
+  /// 是否视频帖：以 `mediaType` 为准；缺 `video` 时按图文降级。
+  bool get isVideo => isVideoMediaType(mediaType) && video != null;
 
   final int id;
   final String type;
@@ -30,6 +42,8 @@ class MyPost {
         text: json['body'] as String?,
         firstImageUrl: json['firstImageUrl'] as String?,
         visibility: (json['visibility'] ?? 'PUBLIC') as String,
+        mediaType: (json['mediaType'] as String?) ?? kMediaTypeImage,
+        video: VideoInfo.fromJson(json['video']),
       );
 }
 

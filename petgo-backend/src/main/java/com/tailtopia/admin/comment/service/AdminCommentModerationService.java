@@ -139,8 +139,9 @@ public class AdminCommentModerationService {
         if (rows.isEmpty()) {
             return List.of();
         }
-        Map<Long, AdminContentRow> posts = contentService
-                .adminRowsByIds(rows.stream().map(Comment::getPostId).distinct().toList()).stream()
+        // 专题线 video Story 3.3：所属帖是视频帖时缩略图用签名封面（AC3）。
+        Map<Long, AdminContentRow> posts = contentService.adminMedia(contentService
+                .adminRowsByIds(rows.stream().map(Comment::getPostId).distinct().toList())).stream()
                 .collect(Collectors.toMap(AdminContentRow::id, r -> r, (a, b) -> a));
         Map<Long, AuthorView> authors = authorViews(rows.stream().map(Comment::getAuthorId).toList());
         List<CommentInspectRow> out = new ArrayList<>();

@@ -57,7 +57,9 @@ class FeedResponseContractTest {
             // V1.3.4 Story 2.1（AD-5）：每张图的露出位置。存量 / 无超界图省略；App 无值即居中（2.2 读）。
             "imageCropOffsets",
             // V1.4.0 ① Story 3.1（AD-14）：作者等级展示。注销 / 停用 / 无等级时整体省略；无框时省略 authorFrame。
-            "authorLevel", "authorTier", "authorFrame");
+            "authorLevel", "authorTier", "authorFrame",
+            // 专题线 video Story 2.1（AD-8）：媒体类型恒下发；video 只在视频帖下发（App 解析见 Story 2.3）。
+            "mediaType", "video");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
@@ -93,7 +95,10 @@ class FeedResponseContractTest {
                 // V1.3.4 Story 2.1：露出位置，null 占位与 imageSizes 同理（用 Arrays.asList）。
                 java.util.Arrays.asList(0.0, null),
                 // V1.4.0 ① Story 3.1：作者等级三字段。
-                12, "GUARDIAN", "UPGRADED");
+                12, "GUARDIAN", "UPGRADED",
+                // 专题线 video Story 2.1：完整形态用视频帖（两个新键都出现）。
+                com.tailtopia.content.domain.MediaType.VIDEO,
+                new VideoView("https://v.cdn/video/7/k.mp4", 75_000, 720, 1280));
 
         Map<String, Object> m = wire(item);
         assertThat(m).containsEntry("authorLevel", 12).containsEntry("authorTier", "GUARDIAN")
@@ -115,7 +120,8 @@ class FeedResponseContractTest {
                 ContentType.GROWTH_MOMENT, null, null, 0L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
                 null, null, false, 0L, null, null, null, null,
-                null, null, null); // Story 3.1：无等级
+                null, null, null, // Story 3.1：无等级
+                com.tailtopia.content.domain.MediaType.IMAGE, null);
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -123,7 +129,9 @@ class FeedResponseContractTest {
                 // V1.1.6 Story 3.1：liked / commentCount 是原始类型，**恒下发**（NON_NULL 不省略）；
                 // imageUrls / imageSizes 可空 → 无图卡里应被省略。
                 .isEqualTo(Set.of("id", "authorId", "authorDeleted", "type", "likeCount", "createdAt",
-                        "visibility", "liked", "commentCount"));
+                        "visibility", "liked", "commentCount",
+                        // 专题线 video Story 2.1：mediaType 恒下发；图文帖不下发 video。
+                        "mediaType"));
         assertThat(m).doesNotContainKey("authorNickname"); // 注销不外泄 PII
         assertThat(m).doesNotContainKey("firstImageUrl");   // 纯文字卡，App hasImage=false
         assertThat(m).doesNotContainKey("imageUrls");        // 同上：无图即整列省略
@@ -150,10 +158,31 @@ class FeedResponseContractTest {
                 null, false, 0L, null,
                 null, null, // follow：authorToken / authorFollowState
                 Arrays.asList(0.0, null),
-                null, null, null);
+                null, null, null,
+                com.tailtopia.content.domain.MediaType.IMAGE, null);
 
         Map<String, Object> m = wire(item);
         assertThat(m.get("imageCropOffsets")).isEqualTo(Arrays.asList(0.0, null));
+    }
+
+    /** 专题线 video Story 2.1（AD-8）：视频信息的线格式；mediaType 落 UPPER_SNAKE。 */
+    @Test
+    void videoPostWireShape() {
+        FeedItemResponse item = new FeedItemResponse(
+                42L, 7L, "小明", null, false, null, null,
+                ContentType.KNOWLEDGE, null, "https://cdn.petgo/public/7/c.jpg", 0L,
+                Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PUBLIC,
+                List.of("https://cdn.petgo/public/7/c.jpg"), List.of(new ImageSize(720, 1280)), false, 0L, null,
+                null, null, null,
+                // V1.4.0 ① Story 3.1：无等级
+                null, null, null,
+                com.tailtopia.content.domain.MediaType.VIDEO,
+                new VideoView("https://v.cdn/video/7/k.mp4", 48_000, 720, 1280));
+
+        Map<String, Object> m = wire(item);
+        assertThat(m.get("mediaType")).isEqualTo("VIDEO");
+        assertThat(m.get("video")).isEqualTo(Map.of(
+                "url", "https://v.cdn/video/7/k.mp4", "durationMs", 48_000, "width", 720, "height", 1280));
     }
 
     @Test

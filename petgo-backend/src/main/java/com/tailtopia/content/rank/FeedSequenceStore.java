@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>数据结构：
  * <pre>
- *   LIST feed:seq:{namespace}:{seed}   按推荐序排好的 contentId，下标即位次
+ *   LIST feed:seq:{namespace}:v{0|1}:{seed}   按推荐序排好的 contentId，下标即位次（v = 视频能力，Story 2.2）
  * </pre>
  * 用 LIST 而不是 STRING+JSON：翻页要按游标读一段，{@code LRANGE} 正好是「按下标取区间」，
  * 不必把整条序列取回来再切。
@@ -40,7 +40,8 @@ public class FeedSequenceStore {
     }
 
     static String key(FeedRankCacheKey cacheKey, String seed) {
-        return KEY_PREFIX + cacheKey.namespace() + ":" + seed;
+        // 专题线 video Story 2.2：按视频能力分开（v1 新版 / v0 旧版），namespace 不变。
+        return KEY_PREFIX + cacheKey.namespace() + ":v" + (cacheKey.includeVideo() ? 1 : 0) + ":" + seed;
     }
 
     /**

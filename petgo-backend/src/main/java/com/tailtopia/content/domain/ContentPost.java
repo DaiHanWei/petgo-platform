@@ -171,6 +171,47 @@ public class ContentPost {
     @Column(name = "species_override", length = 20)
     private String speciesOverride;
 
+    // ---------- 专题线 video（Story 1.3 · AD-1 / AD-2 / AD-6） ----------
+
+    /** 媒体类型；存量与图文帖恒为 IMAGE。视频帖 {@code imageUrls=[封面]}。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "media_type", nullable = false, length = 8)
+    private MediaType mediaType = MediaType.IMAGE;
+
+    @Column(name = "video_object_key", length = 256)
+    private String videoObjectKey;
+
+    @Column(name = "video_duration_ms")
+    private Integer videoDurationMs;
+
+    /** 显示宽（按显示方向，不下发旋转角）。 */
+    @Column(name = "video_width")
+    private Integer videoWidth;
+
+    @Column(name = "video_height")
+    private Integer videoHeight;
+
+    /** 发布时 HEAD 取得的实际大小。 */
+    @Column(name = "video_size_bytes")
+    private Long videoSizeBytes;
+
+    /** 期望公开状态。🔴 只由 {@link #recomputeMediaAcl()} 写（一致性规则 1）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "media_acl_desired", length = 8)
+    private MediaAcl mediaAclDesired;
+
+    /**
+     * 已生效公开状态。🔴 {@code updatable = false}：只在 INSERT 时写 PRIVATE，之后只能由对账器（Story 1.4）
+     * 用条件单列 UPDATE 改 —— 实体的任何一次整行 save（审核、恢复、计数……）都不许把它写回旧值。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "media_acl_applied", length = 8, updatable = false)
+    private MediaAcl mediaAclApplied;
+
+    /** desired 最近一次<b>变化</b>的时刻：对账卡住告警的计时起点（值不变不刷新）。 */
+    @Column(name = "media_acl_desired_at")
+    private Instant mediaAclDesiredAt;
+
     public String getSpeciesOverride() {
         return speciesOverride;
     }
@@ -232,10 +273,14 @@ public class ContentPost {
     /** Story 4.3：运营审核通过——UNDER_REVIEW → PUBLISHED，重回公开口径。 */
     public void approveReview() {
         this.status = PostStatus.PUBLISHED;
+        recomputeMediaAcl();
     }
 
     /** P0 举报预处置来源标记（cm-6）：review_reason=REPORT_P0，配合 report_hidden_at 供后台队列区分来源。 */
     static final String REVIEW_REASON_REPORT_P0 = "REPORT_P0";
+
+    /** 名单外视频帖强制人工审核（专题线 video · AD-5）。不受人工审核总开关影响。 */
+    public static final String REVIEW_REASON_VIDEO_FORCED = "VIDEO_FORCED";
 
     /**
      * 举报驱动 P0 自动预处置（cm-6 §5.2）：已发布帖翻回「仅作者可见待判」挂起态。
@@ -246,6 +291,7 @@ public class ContentPost {
         this.status = PostStatus.UNDER_REVIEW;
         this.reportHiddenAt = Instant.now();
         this.reviewReason = REVIEW_REASON_REPORT_P0;
+        recomputeMediaAcl();
     }
 
     /**
@@ -256,6 +302,7 @@ public class ContentPost {
         this.status = PostStatus.PUBLISHED;
         this.reportHiddenAt = null;
         this.reviewReason = null;
+        recomputeMediaAcl();
     }
 
     /** 是否处于举报驱动 P0 预处置挂起（cm-6：reportHiddenAt 非空即已预处置）。 */
@@ -276,11 +323,13 @@ public class ContentPost {
     /** 软删（Story 3.6 作者删除 / 3.7 运营下架 / 7.3 注销级联）。不物理删，保留行结构。 */
     public void softDelete() {
         this.deletedAt = Instant.now();
+        recomputeMediaAcl();
     }
 
     /** Story 4.2：运营恢复已下架内容——清 deletedAt 重回公开口径（评论保持软删、点赞已物删不还原）。 */
     public void restore() {
         this.deletedAt = null;
+        recomputeMediaAcl();
     }
 
     @PrePersist
@@ -383,6 +432,85 @@ public class ContentPost {
     /** 仅由「发布页同步开关」与作者本人的可见范围变更调用（Story 4.2）。 */
     public void setVisibility(ContentVisibility visibility) {
         this.visibility = visibility == null ? ContentVisibility.PUBLIC : visibility;
+        recomputeMediaAcl();
+    }
+
+    /**
+     * 文件公开状态推导（AD-6，纯函数）：只有「已发布 + 未删 + 公开」才 PUBLIC，其余一律 PRIVATE。
+     * 按状态推导而不是按操作推导 —— 例如恢复一条仍在审核中的帖子，结果自然是 PRIVATE。
+     */
+    public static MediaAcl desiredOf(PostStatus status, Instant deletedAt, ContentVisibility visibility) {
+        return deletedAt == null && status == PostStatus.PUBLISHED && visibility == ContentVisibility.PUBLIC
+                ? MediaAcl.PUBLIC : MediaAcl.PRIVATE;
+    }
+
+    /**
+     * 在每个会改变可见性的状态方法末尾调用（一致性规则 1）。只对视频帖生效；值变化才刷新 desiredAt。
+     */
+    private void recomputeMediaAcl() {
+        if (mediaType != MediaType.VIDEO) {
+            return;
+        }
+        MediaAcl next = desiredOf(status, deletedAt, visibility);
+        if (next != mediaAclDesired) {
+            this.mediaAclDesired = next;
+            this.mediaAclDesiredAt = Instant.now();
+        }
+    }
+
+    /**
+     * 把这条帖子变成视频帖（发布时调用一次）。
+     *
+     * <p>尺寸由服务端用视频显示宽高写（AD-1，不采信客户端 imageSizes）；露出位置必须为 null；
+     * 文件先私有（applied=PRIVATE），desired 按当前状态推导。
+     */
+    public void attachVideo(String objectKey, int durationMs, int width, int height, long sizeBytes) {
+        this.mediaType = MediaType.VIDEO;
+        this.videoObjectKey = objectKey;
+        this.videoDurationMs = durationMs;
+        this.videoWidth = width;
+        this.videoHeight = height;
+        this.videoSizeBytes = sizeBytes;
+        this.imageSizes = List.of(new ImageSize(width, height));
+        this.imageCropOffsets = null;
+        this.mediaAclApplied = MediaAcl.PRIVATE;
+        recomputeMediaAcl();
+    }
+
+    public MediaType getMediaType() {
+        return mediaType;
+    }
+
+    public String getVideoObjectKey() {
+        return videoObjectKey;
+    }
+
+    public Integer getVideoDurationMs() {
+        return videoDurationMs;
+    }
+
+    public Integer getVideoWidth() {
+        return videoWidth;
+    }
+
+    public Integer getVideoHeight() {
+        return videoHeight;
+    }
+
+    public Long getVideoSizeBytes() {
+        return videoSizeBytes;
+    }
+
+    public MediaAcl getMediaAclDesired() {
+        return mediaAclDesired;
+    }
+
+    public MediaAcl getMediaAclApplied() {
+        return mediaAclApplied;
+    }
+
+    public Instant getMediaAclDesiredAt() {
+        return mediaAclDesiredAt;
     }
 
     public String getDangerLevel() {

@@ -134,17 +134,19 @@ class AdminPermissionMatrixStaticTest {
      * + V1.4.0 ① Story 4.2 一码（`growth.user_adjust`）= 81
      * + V1.4.0 ② Story 4.3 一码（`user.pet_slot_adjust`）= 82（① 等级线 +3、② 多宠物线 +1，两线合入后实测）
      * + V1.4.0 ③ gift Story 3.1 两码（`gift.catalog_view` / `gift.catalog_edit`）= 84
-     * + V1.4.0 ③ gift Story 3.2 一码（`gift.order_view`）= 85（③ 送礼线合入 dev_1.4.0 后实测）。
+     * + V1.4.0 ③ gift Story 3.2 一码（`gift.order_view`）= 85（③ 送礼线合入 dev_1.4.0 后实测）
+     * + 专题线 video Story 1.1 两码（`user.vip_level.edit` / `video.trusted.manage`）= 87（video 线合入 dev_1.4.1 后）。
      */
     @Test
-    void thePermissionRegisterHasExactlyEightyFiveCodes() {
-        assertThat(AdminPermissions.ALL).hasSize(85);
+    void thePermissionRegisterHasExactlyEightySevenCodes() {
+        assertThat(AdminPermissions.ALL).hasSize(87);
         assertThat(AdminPermissions.ALL)
                 .contains(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST,
                         AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
                         AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND,
                         AdminPermissions.USER_PET_SLOT_ADJUST,
                         AdminPermissions.GIFT_CATALOG_VIEW, AdminPermissions.GIFT_CATALOG_EDIT,
-                        AdminPermissions.GIFT_ORDER_VIEW);
+                        AdminPermissions.GIFT_ORDER_VIEW,
+                        AdminPermissions.USER_VIP_LEVEL_EDIT, AdminPermissions.VIDEO_TRUSTED_MANAGE);
     }
 }

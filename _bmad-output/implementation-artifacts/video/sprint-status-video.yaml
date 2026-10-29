@@ -1,0 +1,51 @@
+# generated: 2026-10-16
+# last_updated: 2026-10-16
+# project: TailTopia 专题线 video（短视频第一版，暂不定版本）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/video
+#
+# 规划来源：_bmad-output/planning-artifacts/video/epics-video.md
+# 权威顺序：决策日志-video.md > PRD-video.md > architecture-video-delta.md > epics-video.md > addendum-video.md（只有 A/B 两节有效）
+# 执行顺序：Epic 1 → Epic 2 / Epic 3（两者都只依赖 Epic 1，可以并行）。
+#   Epic 1 内部：1.1 → 1.2 → 1.3 → 1.4（后端）→ 1.5 → 1.6（App）
+#   Story 3.4（CDN）的 L2 验收依赖阿里云企业认证：会阻塞生产上线，不阻塞开发和 stag 验收。
+# 分支：从最新 main 切出 feat/video-<主题>；暂不定版本，定下版本后合入对应的 dev_<版本>。
+#
+# Story Status: backlog → ready-for-dev → in-progress → review → done
+# Epic Status: backlog → in-progress → done；Retrospective: optional ↔ done
+# 云端只跑到 L0；L1 / L2 留在本地做，Completion Notes 里写「L1/L2 待本地验收」
+
+generated: 2026-10-16
+last_updated: 2026-10-16
+project: TailTopia 专题线 video
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/video"
+
+development_status:
+  # ===== Epic 1：官方号能在 App 里发布视频帖 =====
+  epic-1: in-progress
+  1-1-后台设置会员等级与视频免审名单: done
+  1-2-上传链路加固与视频上传策略: review
+  1-3-视频帖发布接口-校验与审核路由: review
+  1-4-视频文件公开对账-发布路径: review
+  1-5-app视频入口与规格检查: review
+  1-6-app封面-上传与发布: review
+  epic-1-retrospective: optional
+  # ===== Epic 2：用户能刷到并观看视频 =====
+  epic-2: in-progress
+  2-1-帖子接口下发视频信息与签名地址: review
+  2-2-视频能力声明与旧版过滤: review
+  2-3-列表里的视频卡片: review
+  2-4-全屏播放页: review
+  2-5-播放页上的互动: review
+  2-6-视频帖的h5分享页: review
+  epic-2-retrospective: optional
+  # ===== Epic 3：视频帖的管理与文件安全闭环 =====
+  epic-3: in-progress
+  3-1-所有可见性变化都带动文件公开状态: review
+  3-2-名单外视频帖的审核超时: review
+  3-3-后台预览与识别视频帖: review
+  3-4-视频cdn接入: review
+  epic-3-retrospective: optional

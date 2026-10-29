@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * App 用户与门店的绑定（契约第 2 节，FR-7）。一个用户一行，<b>永不更新</b>：绑定后不能换店、不能解绑。
@@ -33,7 +34,8 @@ public class UserMerchantBinding {
         UserMerchantBinding b = new UserMerchantBinding();
         b.userId = userId;
         b.merchantStoreId = merchantStoreId;
-        b.boundAt = boundAt;
+        // timestamptz 只存到微秒且四舍五入：先截到微秒，绑定响应与之后读出的 bound_at 才逐位一致
+        b.boundAt = boundAt.truncatedTo(ChronoUnit.MICROS);
         return b;
     }
 

@@ -59,7 +59,12 @@ public record UserProfileResponse(
          * 成长值摘要（V1.4.0 ① Story 1.4）：「我的」页等级胶囊。⚠️ 登录响应与不参与者为 null（NON_NULL 省略）；
          * {@code GET} 与 {@code PATCH /me} 都必须带，否则 App 用 PATCH 响应覆盖 profile 后胶囊会消失。
          */
-        com.tailtopia.growth.web.dto.MeGrowthBrief growth) {
+        com.tailtopia.growth.web.dto.MeGrowthBrief growth,
+        /**
+         * 会员等级（专题线 video Story 1.1 · FR-3）。App 据此决定是否显示「视频」入口（≥ 10），
+         * 服务端发视频时另行校验（FR-4），不依赖客户端。实体只读映射直读，零额外查询。
+         */
+        int vipLevel) {
 
     /** 登录响应用：不带帖子统计（{@code postCount} / {@code likeCount} 为 null，T-6）与成长值摘要。 */
     public static UserProfileResponse from(User u, boolean hasPetProfile) {
@@ -102,6 +107,7 @@ public record UserProfileResponse(
                 likeCount,
                 u.getFollowingCount(),
                 u.getFollowerCount(),
-                growth);
+                growth,
+                u.getVipLevel());
     }
 }

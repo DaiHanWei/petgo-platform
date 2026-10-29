@@ -87,6 +87,12 @@ public final class AuditActions {
     public static final String USER_DEACTIVATED = "USER_DEACTIVATED";
     /** 用户账号被重新激活（Story 3.2）。 */
     public static final String USER_REACTIVATED = "USER_REACTIVATED";
+    /** 会员等级被修改（专题线 video Story 1.1，摘要 {@code vip_level old→new}）。 */
+    public static final String USER_VIP_LEVEL_CHANGE = "USER_VIP_LEVEL_CHANGE";
+    /** 用户被加入视频免审名单（专题线 video Story 1.1，FR-22）。 */
+    public static final String VIDEO_TRUSTED_ADD = "VIDEO_TRUSTED_ADD";
+    /** 用户被移出视频免审名单（专题线 video Story 1.1，FR-22）。 */
+    public static final String VIDEO_TRUSTED_REMOVE = "VIDEO_TRUSTED_REMOVE";
     /** 用户账号被删除（Story 3.3，D1 注销 / D2 违规）。 */
     public static final String USER_DELETED = "USER_DELETED";
     /** 失败请求标记已跟进（Story 2.9）。 */
