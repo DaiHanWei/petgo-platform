@@ -66,6 +66,8 @@ petgo:
     # IM 账号环境前缀（bug 519/521）：stag 与生产共用 SDKAppID，stag 设 stg_ 隔离账号；生产必须留空（与改前逐字一致）。
     # 只允许 [a-z0-9_]{0,8}，非法启动即失败。
     account-prefix: ${IM_ACCOUNT_PREFIX:}
+    # 离线推送全局限速（人/秒，bug 604）：腾讯 timpush 按 SDKAppID 限 30 人/秒，stag 与生产共用额度，勿调到 30 以上。
+    push-rate-per-second: ${IM_PUSH_RATE_PER_SECOND:25}
   # 商家平台（tailtopia-merchant）进货内部接口（V1.4.1，契约 docs/integration/tailtopia-contract.md 第 5 节）。
   # 🔴 /internal/** 只在独立端口上提供：该端口只在 docker 网络 jbp-net 内可达，部署时【不要】给它 -p 映射、
   #    不要接 Cloudflare Tunnel。port=0（默认）= 关闭，内部接口整体 404。secret 共享给商家平台，env 注入，绝不入库/落日志。

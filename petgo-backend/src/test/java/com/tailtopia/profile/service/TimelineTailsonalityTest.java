@@ -121,8 +121,9 @@ class TimelineTailsonalityTest {
 
         List<TimelineItemResponse> items = service.getTimeline(OWNER, null, 20, TS).items();
 
+        // 同日从新到旧（bug 599）：09-30 12:00 帖子 → 09-30 09:00 解锁 → 09-28 解锁。
         assertThat(items).extracting(TimelineItemResponse::kind).containsExactly(
-                TimelineItemResponse.TAILSONALITY, TimelineItemResponse.HAPPY_MOMENT, TimelineItemResponse.TAILSONALITY);
+                TimelineItemResponse.HAPPY_MOMENT, TimelineItemResponse.TAILSONALITY, TimelineItemResponse.TAILSONALITY);
     }
 
     /** 2026-10-06「只看 Diary」：只剩主人自己发的内容；Tailsonality / 健康 / 身份证源连查都不查。 */

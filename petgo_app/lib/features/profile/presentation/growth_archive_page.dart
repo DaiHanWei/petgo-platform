@@ -960,7 +960,7 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
   /// - 类④ → 问诊存档走既有结果页深链；结构化健康记录 → 健康记录列表页
   /// - 类⑤ → 身份证页
   /// `a` 是否比 `b` 更早：先比展示用的事件日期，同日再比创建时间。
-  /// 「第一条快乐时刻」认的是**最早那条**，而同日内后端是正序下发的，所以不能靠列表位置推。
+  /// 「第一条快乐时刻」认的是**最早那条**，不能靠列表位置推（同日顺序由后端定，bug 599 起改为从新到旧）。
   static bool _isEarlier(TimelineItem a, TimelineItem b) {
     final byDate = a.displayDate.compareTo(b.displayDate);
     return byDate != 0 ? byDate < 0 : a.date.isBefore(b.date);

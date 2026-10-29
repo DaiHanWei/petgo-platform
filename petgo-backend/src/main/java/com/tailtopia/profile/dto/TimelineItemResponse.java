@@ -15,7 +15,7 @@ import java.util.List;
  * </ul>
  * 同一个 {@code HAPPY_MOMENT} 源可能是类① 也可能是类②，故两者不可互相替代。
  *
- * <p>排序：时间线按 {@code effectiveDate} 倒序、**同日按发布/完成时刻正序**（FR-82 / Story 3.2 AC5）；
+ * <p>排序：时间线按 {@code effectiveDate} 倒序、**同日按发布/完成时刻倒序**（bug 599 改口径，原 AC5 同日正序作废）；
  * 当天详情按 {@code date}(createdAt) 正序。{@code date} 兼作同日排序键与游标分量。
  * Jackson NON_NULL：非本类字段省略。时间 ISO-8601 UTC / 日期 ISO LocalDate。
  *

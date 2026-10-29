@@ -39,7 +39,7 @@ public interface TencentImClient {
     void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
             String targetRef);
 
-    /** 同 pushOffline，但返回是否投递成功（HTTP 成功且 ErrorCode == 0）。运营通知重试用（V1.3.4 Story 6.2）。 */
+    /** 同 pushOffline，但返回是否投递成功（HTTP 成功且 ErrorCode == 0）。运营通知失败计数用（V1.3.4 Story 6.2；bug 604 起失败不重推）。 */
     default boolean pushOfflineChecked(String imUserId, String title, String body, String deepLinkType,
             String deepLinkToken, String targetRef) {
         pushOffline(imUserId, title, body, deepLinkType, deepLinkToken, targetRef);

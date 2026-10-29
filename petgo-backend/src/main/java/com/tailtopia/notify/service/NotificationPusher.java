@@ -36,7 +36,7 @@ public class NotificationPusher {
         deliver(ImAccountMapper.vetImId(vetId), title, body, deepLinkType, deepLinkToken, targetRef);
     }
 
-    /** 同步推送并返回是否成功（运营通知逐人推送 + 重试用）。异常吞掉返回 false，日志同 deliver。 */
+    /** 同步推送并返回是否成功（运营通知逐人推送 + 失败计数用，失败不重推）。异常吞掉返回 false，日志同 deliver。 */
     public boolean pushToUserNow(long userId, String title, String body, String deepLinkType,
             String deepLinkToken, String targetRef) {
         try {
