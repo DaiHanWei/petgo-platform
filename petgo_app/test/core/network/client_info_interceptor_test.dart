@@ -38,4 +38,10 @@ void main() {
     expect(headers.containsKey(ClientInfoInterceptor.versionHeader), isFalse);
     expect(headers[ClientInfoInterceptor.platformHeader], 'ios');
   });
+
+  test('每个请求声明视频能力 X-App-Capabilities: video（专题线 video Story 2.2）', () async {
+    final dio = _dio(ClientInfoInterceptor(loadVersion: () async => null, platform: null));
+    final headers = (await dio.get<Map<String, dynamic>>('/x')).data!;
+    expect(headers[ClientInfoInterceptor.capabilitiesHeader], 'video');
+  });
 }

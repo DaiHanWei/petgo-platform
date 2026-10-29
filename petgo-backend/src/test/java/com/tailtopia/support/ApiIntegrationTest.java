@@ -87,6 +87,10 @@ import tools.jackson.databind.ObjectMapper;
             // 进货单扫描器（默认首轮即跑）会取消共享库里别的测试遗留的过期进货单；扫描逻辑由测试直接调用验证。
             "petgo.merchant.po-expiry-scan-ms=86400000",
             "petgo.merchant.po-fulfillment-scan-ms=86400000",
+            // 专题线 video Story 1.4：视频文件公开对账每分钟跑一次，会去改共享库里**别的测试**造的视频帖
+            // （改 OSS ACL 的桩、回写 applied），让「发布后 applied 仍是 PRIVATE」类断言随机红。
+            // "-" = Scheduled.CRON_DISABLED；对账逻辑由 MediaAclReconcilerIntegrationTest 直接调用验证。
+            "media.video.acl-reconcile-cron=-",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")

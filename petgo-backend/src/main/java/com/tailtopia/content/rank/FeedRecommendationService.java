@@ -146,15 +146,17 @@ public class FeedRecommendationService {
      * @param cursor        上一页游标；null = 首屏 / 下拉刷新
      * @param pageSize      每页条数
      * @param yieldId       首屏要让位的顶置内容 id；null = 不让位
+     * @param includeVideo  客户端是否声明了视频能力（专题线 video Story 2.2 · AD-7）：false 时候选池 / 科普池 /
+     *                      本人置顶插入都在 SQL 里排除视频帖，序列键按能力分开
      */
     // 🔴 REQUIRES_NEW：本方法在 FeedService.loadFeed 的只读事务里被 try/catch 包着做降级。
     //    若加入外层事务，任何 RuntimeException 穿过本代理都会把外层标成 rollback-only，
     //    降级查询跑完外层提交仍抛 UnexpectedRollbackException → 500，「用户无感」落空。
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public RankedPage page(Long viewerId, String anonSessionId, String cursor, int pageSize,
-            Long yieldId) {
+            Long yieldId, boolean includeVideo) {
         Instant now = Instant.now();
-        FeedRankCacheKey key = FeedRankCacheKey.of(viewerId, anonSessionId);
+        FeedRankCacheKey key = FeedRankCacheKey.of(viewerId, anonSessionId).withVideo(includeVideo);
         boolean firstPage = (cursor == null || cursor.isBlank());
         FeedRankCursor rc = firstPage
                 ? new FeedRankCursor(sequenceStore.newSeed(now), 0)
@@ -172,7 +174,7 @@ public class FeedRecommendationService {
         Instant anchor = recentAnchor(rc.seed(), firstPage ? now : null);
         Set<Long> pinnedOwn = new LinkedHashSet<>();
         if (firstPage && viewerId != null) {
-            for (ContentPost recent : ownRecent(viewerId, anchor)) {
+            for (ContentPost recent : ownRecent(viewerId, anchor, includeVideo)) {
                 // 🛡 被运营顶置的恰好是自己的帖：顶置位已经在展示它，首屏让位口径不变
                 if (yieldId != null && yieldId.equals(recent.getId())) {
                     continue;
@@ -184,7 +186,7 @@ public class FeedRecommendationService {
             // 🔴 AC2：作者本人的挂起帖首屏置顶，**不占算法槽位、不参与配比与打分**。
             // 候选池只收 PUBLISHED，所以它们压根没进引擎；这里单独取、单独插。
             // ⚠️ 只首屏插 —— 后续页来自序列，序列里没有它们，天然不会重复。
-            for (ContentPost pending : posts.findOwnPendingPosts(viewerId,
+            for (ContentPost pending : posts.findOwnPendingPosts(viewerId, includeVideo,
                     PageRequest.of(0, MAX_OWN_PENDING))) {
                 // ⚠️ 记进 served 是为了**去重**：一条帖可能在排序时还是 PUBLISHED、之后才被挂起，
                 //    而按 id 读回来的那个查询允许作者看自己的挂起帖 ⇒ 同一条会从"置顶"和"序列"
@@ -197,7 +199,7 @@ public class FeedRecommendationService {
             }
         } else if (viewerId != null && anchor != null) {
             // 后续页：首屏插过的那几条记进 served，序列里再遇到就跳过（消费照算，见下方循环）。
-            for (ContentPost recent : ownRecent(viewerId, anchor)) {
+            for (ContentPost recent : ownRecent(viewerId, anchor, includeVideo)) {
                 served.add(recent.getId());
             }
         }
@@ -258,11 +260,11 @@ public class FeedRecommendationService {
     }
 
     /** 本人在 {@code (anchor - 窗口, anchor]} 内发布的公开帖，最新在前，至多 {@link #MAX_OWN_RECENT} 条。 */
-    private List<ContentPost> ownRecent(long viewerId, Instant anchor) {
+    private List<ContentPost> ownRecent(long viewerId, Instant anchor, boolean includeVideo) {
         if (anchor == null) {
             return List.of();
         }
-        return posts.findOwnRecentPosts(viewerId, anchor.minus(OWN_RECENT_WINDOW), anchor,
+        return posts.findOwnRecentPosts(viewerId, anchor.minus(OWN_RECENT_WINDOW), anchor, includeVideo,
                 PageRequest.of(0, MAX_OWN_RECENT));
     }
 
@@ -320,11 +322,12 @@ public class FeedRecommendationService {
      */
     private List<Long> generate(FeedRankCacheKey key, String seed, Long viewerId,
             Set<Long> exclude, int wanted, Instant now) {
-        List<ContentPost> pool = posts.findRankCandidatePool(viewerId != null, viewerId,
+        // 专题线 video Story 2.2：旧版（key.includeVideo()=false）在候选池 SQL 里排除视频帖（一致性规则 3）。
+        List<ContentPost> pool = posts.findRankCandidatePool(viewerId != null, viewerId, key.includeVideo(),
                 PageRequest.of(0, props.candidatePoolSize()));
         // V1.3.4 FR-122：教育类槽位另取近 90 天全部 KNOWLEDGE（不受主池「最近 N 条」截断），与主池按 id 合并。
         List<ContentPost> eduPool = posts.findEduCandidatePool(viewerId != null, viewerId,
-                now.minus(FeedRankProperties.EDU_POOL_WINDOW), PageRequest.of(0, props.eduPoolSize()));
+                now.minus(FeedRankProperties.EDU_POOL_WINDOW), key.includeVideo(), PageRequest.of(0, props.eduPoolSize()));
         Map<Long, ContentPost> merged = new LinkedHashMap<>();
         for (ContentPost p : pool) {
             merged.putIfAbsent(p.getId(), p);

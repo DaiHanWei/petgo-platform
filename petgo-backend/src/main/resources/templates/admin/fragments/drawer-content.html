@@ -41,7 +41,12 @@
         </h2>
         <div th:if="${d.post().text() != null}" class="pl-desc" th:text="${d.post().text()}">正文</div>
         <p class="muted" th:if="${d.post().text() == null}" th:text="#{admin.contentdetail.noText}">（无文字）</p>
-        <div class="rv-images" th:if="${d.post().imageUrls() != null and !#lists.isEmpty(d.post().imageUrls())}">
+        <!--/* 专题线 video Story 3.3：视频帖播放签名地址（AD-8 forAdmin），封面作 poster；不再渲染图片轮播 */-->
+        <!--/* ⚠️ th:replace 先于 th:if 执行，条件必须放外层 th:block */-->
+        <th:block th:if="${d.post().isVideo() and d.post().videoUrl() != null}"><div
+             th:replace="~{admin/fragments/video-preview :: player(${d.post().videoUrl()},
+                          ${#lists.isEmpty(d.post().imageUrls()) ? null : d.post().imageUrls()[0]})}"></div></th:block>
+        <div class="rv-images" th:if="${!(d.post().isVideo() and d.post().videoUrl() != null) and d.post().imageUrls() != null and !#lists.isEmpty(d.post().imageUrls())}">
             <img th:each="img : ${d.post().imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox class="rv-img"/>
         </div>
     </section>

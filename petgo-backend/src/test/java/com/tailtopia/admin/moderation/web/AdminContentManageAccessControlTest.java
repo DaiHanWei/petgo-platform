@@ -71,7 +71,7 @@ class AdminContentManageAccessControlTest {
                 com.tailtopia.admin.throttle.service.AdminThrottleReadService t,
                 com.tailtopia.admin.moderation.service.AdminContentDetailService d) {
             // 2026-09-02 内容详情页：控制器新增 AdminContentDetailService 注入。
-            return new AdminContentManageController(s, TestMessages.real(), t, d);
+            return new AdminContentManageController(s, TestMessages.real(), t, d, org.mockito.Mockito.mock(com.tailtopia.content.service.MediaAclReconciler.class));
         }
     }
 

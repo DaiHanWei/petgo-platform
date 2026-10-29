@@ -85,6 +85,11 @@
         <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')">
             <span th:text="#{admin.userdetail.pawcoinBalance}">PawCoin 余额</span>:
             <b th:text="${#numbers.formatInteger(user.pawcoinBalance(), 0, 'COMMA')}">0</b></p>
+        <!--/* 专题线 video Story 1.1：会员等级与视频免审名单（只读展示；修改在「处置」页签） */-->
+        <p><span th:text="#{admin.userdetail.vipLevel}">会员等级</span>:
+            <b th:text="${user.vipLevel()}">1</b></p>
+        <p><span th:text="#{admin.userdetail.videoTrusted}">视频免审名单</span>:
+            <span th:text="${videoTrusted} ? #{admin.userdetail.videoTrusted.yes} : #{admin.userdetail.videoTrusted.no}">否</span></p>
     </section>
 
     <!--/* ② 宠物档案：一宠一卡。性别 / 生日是 PRD §5 ③ 第 2 条例外（纯读展示）。 */-->
@@ -210,6 +215,56 @@
                         th:title="#{admin.v130.err.forbidden(#{perm.user.deactivate})}"
                         th:text="#{admin.userdetail.deactivate}">停用账号</button>
                 <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.user.deactivate})}">需要「停用用户」权限</p>
+            </div>
+
+            <!--/* 会员等级（专题线 video Story 1.1 · FR-2，user.vip_level.edit 门控；表达式须与 AdminUserController.VIP_LEVEL_AUTH 逐字一致） */-->
+            <div class="card card-full ud-card"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.vip_level.edit')">
+                <h3 th:text="#{admin.userdetail.vipLevel}">会员等级</h3>
+                <p class="hint" th:text="#{admin.userdetail.vipLevel.hint}">等级 ≥ 10 可发视频。取值 1–99。</p>
+                <form class="inline"
+                      th:attr="hx-post=@{/admin/users/{id}/vip-level(id=${user.id()})},
+                               data-confirm=#{admin.userdetail.vipLevel.confirm}"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <input type="number" name="level" class="inp" min="1" max="99" required
+                           th:value="${user.vipLevel()}"/>
+                    <button type="submit" class="btn btn-neutral" th:text="#{admin.userdetail.vipLevel.save}">保存等级</button>
+                </form>
+            </div>
+            <div class="card card-full ud-card"
+                 sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('user.vip_level.edit'))">
+                <h3 th:text="#{admin.userdetail.vipLevel}">会员等级</h3>
+                <button type="button" class="btn btn-neutral" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.user.vip_level.edit})}"
+                        th:text="#{admin.userdetail.vipLevel.save}">保存等级</button>
+                <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.user.vip_level.edit})}">需要「修改会员等级」权限</p>
+            </div>
+
+            <!--/* 视频免审名单（专题线 video Story 1.1 · FR-22，video.trusted.manage 门控；与 VIDEO_TRUSTED_AUTH 逐字一致） */-->
+            <div class="card card-full ud-card"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('video.trusted.manage')">
+                <h3 th:text="#{admin.userdetail.videoTrusted}">视频免审名单</h3>
+                <p class="hint" th:text="#{admin.userdetail.videoTrusted.hint}">名单内账号发视频免审、直接公开；名单外但等级 ≥ 10 的账号发视频需人工审核。</p>
+                <form class="inline" th:if="${!videoTrusted}"
+                      th:attr="hx-post=@{/admin/users/{id}/video-trusted(id=${user.id()},action='add')},
+                               data-confirm=#{admin.userdetail.videoTrusted.addConfirm}"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-neutral" th:text="#{admin.userdetail.videoTrusted.add}">加入名单</button>
+                </form>
+                <form class="inline" th:if="${videoTrusted}"
+                      th:attr="hx-post=@{/admin/users/{id}/video-trusted(id=${user.id()},action='remove')},
+                               data-confirm=#{admin.userdetail.videoTrusted.removeConfirm}"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-danger" th:text="#{admin.userdetail.videoTrusted.remove}">移出名单</button>
+                </form>
+            </div>
+            <div class="card card-full ud-card"
+                 sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('video.trusted.manage'))">
+                <h3 th:text="#{admin.userdetail.videoTrusted}">视频免审名单</h3>
+                <button type="button" class="btn btn-neutral" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.video.trusted.manage})}"
+                        th:text="#{admin.userdetail.videoTrusted.add}">加入名单</button>
+                <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.video.trusted.manage})}">需要「维护视频免审名单」权限</p>
             </div>
 
             <!-- 赠送 PawCoin（bug 20260728-389，user.grant_pawcoin 门控）。 -->

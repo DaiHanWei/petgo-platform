@@ -257,7 +257,7 @@ class PublicProfileControllerTest {
     void thePostsEndpointBlocksTheSameWayTheProfileDoes() {
         when(hideRelations.isBlocked(5L, 9L)).thenReturn(true);
 
-        assertThatThrownBy(() -> controller.posts(viewer(5L), 9L, null))
+        assertThatThrownBy(() -> controller.posts(viewer(5L), 9L, null, "video"))
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> {
                     AppException ex = (AppException) e;
@@ -265,33 +265,33 @@ class PublicProfileControllerTest {
                     assertThat(ex.getType()).isEqualTo(ErrorTypes.BLOCKED_USER);
                 });
 
-        verify(feed, never()).userPublicPosts(anyLong(), any(), any());
+        verify(feed, never()).userPublicPosts(anyLong(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     /** 游客（无 viewer）照常读得到，且**不查隐藏关系**。 */
     @Test
     void aGuestReadsThePostsWithoutAnyViewerScopedLookup() {
         FeedPageResponse page = new FeedPageResponse(List.of(), null, false, null);
-        when(feed.userPublicPosts(9L, null, null)).thenReturn(page);
+        when(feed.userPublicPosts(9L, null, null, true)).thenReturn(page);
 
-        assertThat(controller.posts(guest(), 9L, null)).isSameAs(page);
+        assertThat(controller.posts(guest(), 9L, null, "video")).isSameAs(page);
         verify(hideRelations, never()).isBlocked(anyLong(), anyLong());
     }
 
     /** viewer 与 cursor 原样透传（viewer 只影响「我赞过没」，**不影响可见范围**）。 */
     @Test
     void viewerAndCursorArePassedThrough() {
-        controller.posts(viewer(5L), 9L, "c2");
+        controller.posts(viewer(5L), 9L, "c2", "video");
 
-        verify(feed).userPublicPosts(9L, 5L, "c2");
+        verify(feed).userPublicPosts(9L, 5L, "c2", true);
     }
 
     /** 🔴 兽医 token 在内容区同样按游客走（{@code sub=vetId} 与 {@code users.id} 会碰撞）。 */
     @Test
     void aVetTokenReadsThePostsAsAGuest() {
-        controller.posts(vet(5L), 9L, null);
+        controller.posts(vet(5L), 9L, null, "video");
 
-        verify(feed).userPublicPosts(9L, null, null);
+        verify(feed).userPublicPosts(9L, null, null, true);
         verify(hideRelations, never()).isBlocked(anyLong(), anyLong());
     }
 
@@ -399,10 +399,10 @@ class PublicProfileControllerTest {
     void deactivatedAccountPostsAreAnEmptyPage() {
         when(accounts.isActive(9L)).thenReturn(false);
 
-        FeedPageResponse page = controller.posts(viewer(5L), 9L, null);
+        FeedPageResponse page = controller.posts(viewer(5L), 9L, null, "video");
 
         assertThat(page.items()).isEmpty();
-        verify(feed, never()).userPublicPosts(anyLong(), any(), any());
+        verify(feed, never()).userPublicPosts(anyLong(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     private void stubActive(long userId, String nickname, String avatarUrl, List<UserTagView> tags,

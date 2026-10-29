@@ -19,6 +19,8 @@ public interface AutoCommentLogRepository extends JpaRepository<AutoCommentLog, 
      *   <li><b>零评论</b>：没有未删的 VISIBLE 或 UNDER_REVIEW 评论——审核中的也算，
      *       否则上一轮刚发、还在审的那条会让本轮再评一次；</li>
      *   <li>没有留档，或留档是 FAILED 且尝试次数未到上限。</li>
+     *   <li><b>只评图文帖</b>（专题线 video Story 1.3 · FR-10 · 一致性规则 5）：视频帖的 image_urls 是一张私有封面，
+     *       Gemini 拉不到，也不该把封面当照片评。</li>
      * </ul>
      */
     @Query(value = """
@@ -26,6 +28,7 @@ public interface AutoCommentLogRepository extends JpaRepository<AutoCommentLog, 
             JOIN users u ON u.id = p.author_id
             WHERE p.created_at >= :since AND p.created_at <= :cutoff
               AND p.status = 'PUBLISHED' AND p.visibility = 'PUBLIC' AND p.deleted_at IS NULL
+              AND p.media_type = 'IMAGE'
               AND u.account_type = 'REAL' AND u.role = 'USER' AND u.deleted_at IS NULL
               AND NOT EXISTS (SELECT 1 FROM comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL
                               AND c.moderation_status IN ('VISIBLE', 'UNDER_REVIEW'))

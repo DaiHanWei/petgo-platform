@@ -43,7 +43,9 @@ class AdminRoleSeedParityTest extends ApiIntegrationTest {
                             AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND)
                     // V1.4.0 ③ AB-35：礼物目录两码同样不预授
                     .doesNotContain(AdminPermissions.GIFT_CATALOG_VIEW, AdminPermissions.GIFT_CATALOG_EDIT)
-                    .doesNotContain(AdminPermissions.GIFT_ORDER_VIEW);
+                    .doesNotContain(AdminPermissions.GIFT_ORDER_VIEW)
+                    // 专题线 video Story 1.1：会员等级 / 视频免审名单两码同样不预授予
+                    .doesNotContain(AdminPermissions.USER_VIP_LEVEL_EDIT, AdminPermissions.VIDEO_TRUSTED_MANAGE);
             assertThat(inDb).allSatisfy(c -> assertThat(AdminPermissions.isValid(c)).isTrue());
         }
         assertThat(roles.findByCode("OPS_MANAGER")).as("OPS_MANAGER 不迁移（D-13）").isEmpty();

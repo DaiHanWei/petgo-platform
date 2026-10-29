@@ -42,6 +42,12 @@ import '../domain/content_type.dart';
 import '../domain/publish_checkin_place.dart';
 import '../domain/image_exposure.dart';
 import '../domain/publish_controller.dart';
+import '../video/video_cover_service.dart';
+import '../video/video_draft_tile.dart';
+import '../video/video_post_repository.dart';
+import '../video/video_picker.dart';
+import '../video/video_spec.dart';
+import '../video/video_spec_error_card.dart';
 import 'publish_exposure_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
@@ -57,6 +63,7 @@ final publishControllerProvider = Provider.autoDispose<PublishController>((
   final useCase = ref.read(mediaUploadUseCaseProvider);
   final controller = PublishController(
     repository: ref.read(contentRepositoryProvider),
+    videoRepository: ref.read(videoPostRepositoryProvider),
     uploadOne: (bytes) async {
       final result = await useCase.uploadBytes(
         scope: MediaScope.public,
@@ -82,6 +89,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.initialText,
     this.initialImages,
     this.initialPetIds,
+    this.videoEntryAllowed = true,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -111,6 +119,11 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// 预选时过滤掉已不在可选列表（ACTIVE）里的 id。null = 不预选（只 1 只正常宠物时仍自动选中，F4）。
   final List<int>? initialPetIds;
 
+  /// 入口是否允许出现「视频」（专题线 video FR-5）。成长日历语境（`/publish?preset=growth-calendar`
+  /// 着陆页）传 false；底栏「＋」即使在 Diary Tab（preset=growthMoment）也保持 true —— 用户切到
+  /// Momen / Edukasi 后照样能选视频。
+  final bool videoEntryAllowed;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
@@ -122,6 +135,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     String? initialText,
     List<Uint8List>? initialImages,
     List<int>? initialPetIds,
+    bool videoEntryAllowed = true,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -147,6 +161,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
           initialText: initialText,
           initialImages: initialImages,
           initialPetIds: initialPetIds,
+          videoEntryAllowed: videoEntryAllowed,
         ),
       ),
     );
@@ -230,6 +245,15 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 选图/处理中（拍照返回 → 解码压缩剥 EXIF）：网格显占位 loading，避免「拍完没反应」。
   bool _addingImage = false;
+
+  /// 视频规格检查进行中（专题线 video Story 1.5）：期间禁止再次选择。
+  bool _checkingVideo = false;
+
+  /// 视频选择器打开中（专题线 video Story 1.5 code review：防连点）。
+  bool _pickingVideo = false;
+
+  /// 最近一次不合格的检查结果；有值时显示逐条提示卡。
+  VideoSpecResult? _videoSpecError;
 
   /// 拖拽重排的**仅 UI 层**预览态（V1.3.0 Story 4.1 · U2「其余格实时让位」）。
   ///
@@ -368,6 +392,186 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     return [for (final id in c.petIds) ?byId[id]];
   }
 
+  /// 是否显示「视频」入口（专题线 video Story 1.5 · FR-5）。
+  ///
+  /// 只有等级 ≥ 10 的账号能看到，且**按当前选中的类型**判断：Diary（成长日记）下隐藏，Momen / Edukasi
+  /// 下显示 —— 视频帖只能是日常或科普（FR-10）。底栏「＋」无论在哪个 Tab 按下规则都一样（FR-5）；
+  /// 只有成长日历、打卡后发帖、晒图预填这几条「图文 + 宠物」专用入口整页不出现视频。
+  bool _videoEntryVisible(PublishController controller) {
+    final profile = ref.read(authControllerProvider).profile;
+    return (profile?.canPublishVideo ?? false) &&
+        widget.videoEntryAllowed &&
+        controller.type != ContentType.growthMoment &&
+        widget.placeCheckinToken == null &&
+        widget.initialImages == null;
+  }
+
+  /// 选视频 → 规格检查（专题线 video Story 1.5 · FR-6 / FR-7）。只拿文件路径，不读进内存。
+  Future<void> _pickVideo(PublishController controller) async {
+    if (_pickingVideo || _checkingVideo || _addingImage || !controller.canPickVideo) return;
+    // 选择器打开期间也锁住入口：连点会让 image_picker 抛 already_active（code review）。
+    setState(() => _pickingVideo = true);
+    String? path;
+    try {
+      path = await ref.read(videoPickerProvider)();
+    } catch (_) {
+      path = null; // 选择器异常（already_active / 读文件失败）：按取消处理，不向 UI 抛
+    } finally {
+      if (mounted) setState(() => _pickingVideo = false);
+    }
+    if (path == null || !mounted) return; // 取消：什么都不变
+    setState(() {
+      _checkingVideo = true;
+      _videoSpecError = null;
+    });
+    final result = await ref.read(videoSpecCheckerProvider).check(path);
+    // FR-21：每次规格检查都报（不带路径 / 文件名）。
+    Analytics.capture('video_spec_check_completed', {
+      'ok': result.ok,
+      'failed_items': result.failures.map((f) => f.analyticsCode).join(','),
+    });
+    if (!mounted) return;
+    setState(() => _checkingVideo = false);
+    if (!result.ok) {
+      setState(() => _videoSpecError = result);
+      return;
+    }
+    final draft = VideoDraft(
+      path: path,
+      durationMs: result.durationMs!,
+      width: result.displayWidth!,
+      height: result.displayHeight!,
+      sizeBytes: result.sizeBytes!,
+    );
+    // setVideo 内部会把「成长日记」切回「日常」（视频帖只能是日常或科普）。
+    controller.setVideo(draft);
+    // 被拒（例如检查期间已有图片入列）就不启动上传与取帧（code review）。
+    if (!identical(controller.video, draft)) return;
+    _onVideoAccepted(draft);
+  }
+
+  /// 视频通过规格检查之后（专题线 video Story 1.6）：默认封面（第 1 秒）与视频上传并行开始。
+  void _onVideoAccepted(VideoDraft draft) {
+    final controller = ref.read(publishControllerProvider);
+    unawaited(controller.startVideoUpload());
+    unawaited(() async {
+      final cover = await ref.read(videoCoverServiceProvider).defaultCover(draft);
+      if (!mounted || !identical(controller.video, draft)) return;
+      if (cover == null) {
+        controller.markCoverMissing(); // 取帧失败：等用户从相册选
+      } else {
+        await controller.setVideoCover(cover);
+      }
+    }());
+  }
+
+  /// 从相册换封面（复用现有选图链路：去 EXIF、压缩）→ 缩到短边 720 → 上传。
+  Future<void> _changeCover(PublishController controller) async {
+    final bytes = await ref
+        .read(mediaUploadUseCaseProvider)
+        .pickAndProcess(source: MediaSource.gallery, context: context);
+    if (bytes == null || !mounted) return;
+    final cover = coverToJpeg720(bytes);
+    if (cover == null) return;
+    await controller.setVideoCover(cover);
+  }
+
+  /// 上传中关闭：先确认（AC5）。返回 true = 可以关。
+  /// 已选视频时关闭发帖页先确认（上传中、上传完成都算 —— 视频与文案一关就丢，没有草稿）。
+  Future<bool> _confirmDiscardVideo(PublishController controller, AppLocalizations l10n) async {
+    if (controller.video == null) return true;
+    final uploading = controller.videoUploading;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('videoDiscardDialog'),
+        title: Text(uploading ? l10n.videoDiscardTitle : l10n.videoDiscardPostTitle),
+        content: Text(uploading ? l10n.videoDiscardBody : l10n.videoDiscardPostBody),
+        actions: [
+          TextButton(
+            key: const ValueKey('videoDiscardKeep'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.videoDiscardKeep),
+          ),
+          TextButton(
+            key: const ValueKey('videoDiscardConfirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.videoDiscardConfirm),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      if (uploading) controller.cancelVideoUpload();
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _close(PublishController controller, AppLocalizations l10n) async {
+    if (await _confirmDiscardVideo(controller, l10n) && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  /// 视频入口 + 检查中 + 不合格提示（专题线 video Story 1.5）。有视频时由 [_imageRow] 显示预览格。
+  Widget _videoSection(PublishController controller, AppLocalizations l10n) {
+    if (!_videoEntryVisible(controller) || controller.video != null) return const SizedBox.shrink();
+    // 图片处理中（拍照解码 / 压缩）也不可选视频：否则图片稍后入列失败会被静默丢掉（code review）。
+    final enabled = controller.canPickVideo && !_checkingVideo && !_pickingVideo && !_addingImage;
+    // 已选了图片而置灰：点一下说明原因（视频与图片不能同发），其余置灰（处理中）点了无反应。
+    final blockedByImages = controller.items.isNotEmpty;
+    final error = _videoSpecError;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Opacity(
+              opacity: enabled ? 1 : 0.5,
+              child: OutlinedButton.icon(
+                key: const ValueKey('publishAddVideo'),
+                onPressed: enabled
+                    ? () => _pickVideo(controller)
+                    : blockedByImages
+                        ? () => showAppToast(context, l10n.publishVideoBlockedByImages)
+                        : null,
+                icon: _checkingVideo
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint),
+                      )
+                    : const Icon(Icons.videocam_outlined, size: 18, color: AppColors.mint),
+                label: Text(
+                  _checkingVideo ? l10n.videoSpecChecking : l10n.publishAddVideo,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink2),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                ),
+              ),
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            VideoSpecErrorCard(
+              result: error,
+              onDismiss: () => setState(() => _videoSpecError = null),
+              onRepick: () {
+                setState(() => _videoSpecError = null);
+                _pickVideo(controller);
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _addImage(
     PublishController controller, {
     MediaSource source = MediaSource.gallery,
@@ -457,6 +661,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     String? blockSlug; // content-text-blocked / content-image-blocked（F10 审核拦截）
     int? readOnlyPetId; // 409 pet-read-only：选中的宠物在提交瞬间变只读（AC3.2）
     var readOnly = false;
+    var videoDenied = false; // 专题线 video：403 video-permission-denied
     try {
       id = await controller.publish(
           idempotencyKey: key, placeCheckinToken: widget.placeCheckinToken);
@@ -468,6 +673,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       } else if (slug == kPetReadOnlySlug) {
         readOnly = true;
         readOnlyPetId = (pd?.extensions['petId'] as num?)?.toInt();
+      } else if (slug == 'video-permission-denied') {
+        videoDenied = true;
       }
     }
     // 「审核中」至少展示 ~900ms，避免一闪而过（faithful verifying affordance）。
@@ -604,6 +811,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       ref.invalidate(petListProvider);
       setState(() => _reviewing = false);
       _toast(l10n.petReadonlyBlockTitle(name));
+    } else if (videoDenied) {
+      // 等级在编辑期间被降：留在编辑页、内容保留（AD-9）。
+      setState(() => _reviewing = false);
+      _toast(l10n.videoPermissionDenied);
     } else {
       // 其它失败（网络/图片上传）：退出审核中覆盖层，留在编辑页保留草稿，提示重试。
       setState(() => _reviewing = false);
@@ -634,6 +845,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // 抓手 2：有档案才有成长册可分享；为空时成功页不渲染分享 CTA。
       cardToken: _linkedPet?.cardToken,
       petName: _linkedPet?.name,
+      videoDurationMs: controller.video?.durationMs,
+      videoCover: controller.video == null ? null : controller.coverBytes,
     );
   }
 
@@ -651,7 +864,15 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final controller = ref.watch(publishControllerProvider);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => _body(context, l10n, controller),
+      // 专题线 video Story 1.6：视频上传中按系统返回 → 先确认放弃。
+      builder: (context, _) => PopScope(
+        canPop: controller.video == null,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          await _close(controller, l10n);
+        },
+        child: _body(context, l10n, controller),
+      ),
     );
   }
 
@@ -694,7 +915,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                       label: l10n.publishCancel,
                       child: InkWell(
                         key: const ValueKey('publishClose'),
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: () => _close(controller, l10n),
                         customBorder: const CircleBorder(),
                         child: Container(
                           width: 34,
@@ -788,6 +1009,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 ],
                 const SizedBox(height: 16),
                 _imageRow(controller, l10n),
+                _videoSection(controller, l10n),
                 const SizedBox(height: 14),
                 // —— 文字 ——（V1.4.0 稿 F1 `.ptxt / .pcount`：**无外框**，正文直接铺在页面上，右下弱色字数；
                 // L2 第二轮起取代原型 textarea-wrap 的 1.5px 外框。Diary 时下方紧跟带上分隔线的事件日期行）
@@ -982,6 +1204,16 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   }
 
   Widget _growthChip(AppLocalizations l10n, PublishController controller) {
+    // 专题线 video Story 1.5：已选视频时「成长日记」不可选（视频帖只能是日常或科普）。
+    if (controller.video != null) {
+      return _TypeChip(
+        keyValue: 'seg_GROWTH_MOMENT',
+        label: '${l10n.publishSegmentGrowth} 🌟',
+        selected: false,
+        enabled: false,
+        onTap: () {},
+      );
+    }
     final enabled = _hasPetProfile;
     return _TypeChip(
       keyValue: 'seg_GROWTH_MOMENT',
@@ -1261,8 +1493,18 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 照片区：原型 3 列网格，首格为虚线「Tambah」添加格，其后为缩略图（带上传态/删除）。
   Widget _imageRow(PublishController controller, AppLocalizations l10n) {
+    // 专题线 video Story 1.5：媒体互斥 —— 有视频时整块换成视频预览格，不再出现「添加图片」。
+    final video = controller.video;
+    if (video != null) {
+      return VideoDraftTile(
+        draft: video,
+        controller: controller,
+        onRemove: controller.clearVideo,
+        onChangeCover: () => _changeCover(controller),
+      );
+    }
     final items = controller.items;
-    final showAdd = items.length < kMaxImages;
+    final showAdd = controller.canAddImage;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1424,7 +1666,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       child: GestureDetector(
         key: const ValueKey('publishAddImage'),
         // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
-        onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
+        // 视频选择 / 检查进行中不可加图：检查合格后 setVideo 会因已有图片被拒，视频被静默丢掉（code review）。
+        onTap: (_addingImage || _checkingVideo || _pickingVideo)
+            ? null
+            : () => _pickImageSource(controller, l10n),
         // V1.4.0 稿 F1 `.imgs i.add`：白底 + 1.5px 灰虚线、r10，「＋ / Tambah」弱色（L2 第二轮起取代淡紫底紫虚线）。
         child: CustomPaint(
           painter: DashedRRectPainter(

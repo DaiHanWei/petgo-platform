@@ -52,6 +52,7 @@ class UserProfile {
     this.followingCount,
     this.followerCount,
     this.growth,
+    this.vipLevel = 1,
   });
 
   /// 当前用户 id（Story 3.5：评论删除入口可见性判定）。
@@ -105,6 +106,13 @@ class UserProfile {
   /// 成长值摘要（V1.4.0 ① Story 1.4 / 1.5）：「我的」页等级胶囊。登录响应 / 不参与者 / 旧后端为 null（不显示胶囊）。
   final GrowthBrief? growth;
 
+  /// 会员等级 1–99（专题线 video Story 1.5 · FR-3）。后台改等级后，最晚下次冷启动或刷新个人信息时生效。
+  /// 缺省 / null → 1（老后端、旧缓存）。
+  final int vipLevel;
+
+  /// 能否发视频帖（FR-4 / FR-5：等级 ≥ 10）。只决定入口是否显示，权限以服务端校验为准。
+  bool get canPublishVideo => vipLevel >= 10;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
         id: json['id'] as int?,
         nickname: json['nickname'] as String?,
@@ -126,6 +134,7 @@ class UserProfile {
         followingCount: (json['followingCount'] as num?)?.toInt(),
         followerCount: (json['followerCount'] as num?)?.toInt(),
         growth: GrowthBrief.fromJson(json['growth']),
+        vipLevel: (json['vipLevel'] as num?)?.toInt() ?? 1,
       );
 
   UserProfile copyWith({
@@ -147,6 +156,7 @@ class UserProfile {
     int? followingCount,
     int? followerCount,
     GrowthBrief? growth,
+    int? vipLevel,
   }) =>
       UserProfile(
         id: id ?? this.id,
@@ -167,5 +177,6 @@ class UserProfile {
         followingCount: followingCount ?? this.followingCount,
         followerCount: followerCount ?? this.followerCount,
         growth: growth ?? this.growth,
+        vipLevel: vipLevel ?? this.vipLevel,
       );
 }

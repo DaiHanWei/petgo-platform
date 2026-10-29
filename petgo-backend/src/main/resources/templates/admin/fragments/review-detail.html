@@ -27,7 +27,12 @@
             <blockquote class="rv-comment" th:if="${d.commentBody != null}" th:text="${d.commentBody}">评论正文</blockquote>
             <div th:if="${d.post != null}">
                 <p class="rv-text" th:text="${d.post.text}">帖子全文</p>
-                <div class="rv-images">
+                <!--/* 专题线 video Story 3.3：视频帖播放签名地址（AD-8 forAdmin），封面作 poster */-->
+                <!--/* ⚠️ th:replace 先于 th:if 执行，条件必须放外层 th:block */-->
+                <th:block th:if="${d.post.isVideo() and d.post.videoUrl != null}"><div
+                     th:replace="~{admin/fragments/video-preview :: player(${d.post.videoUrl},
+                                  ${#lists.isEmpty(d.post.imageUrls) ? null : d.post.imageUrls[0]})}"></div></th:block>
+                <div class="rv-images" th:unless="${d.post.isVideo() and d.post.videoUrl != null}">
                     <img th:each="u : ${d.post.imageUrls}" th:src="${u}" alt="" loading="lazy" data-lightbox class="rv-img"/>
                 </div>
                 <a th:if="${d.contentRefId != null}" target="_blank" th:href="@{/admin/content(open=${d.contentRefId})}"

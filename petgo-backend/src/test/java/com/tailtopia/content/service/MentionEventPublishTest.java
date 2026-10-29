@@ -104,7 +104,11 @@ class MentionEventPublishTest {
                 // V1.4.0 multi-pet Story 3.1：本类只发 DAILY，不碰宠物关联。
                 Mockito.mock(com.tailtopia.profile.service.PetResolver.class),
                 Mockito.mock(com.tailtopia.content.repository.ContentPetRepository.class),
-                Mockito.mock(ContentPetQuery.class));
+                Mockito.mock(ContentPetQuery.class),
+                Mockito.mock(VideoTrustedPublisherService.class),
+                Mockito.mock(com.tailtopia.auth.service.VipLevelService.class),
+                new VideoPostValidator(null, null, null),
+                Mockito.mock(PostMediaResolver.class));
     }
 
     private static void setId(ContentPost p, long id) {

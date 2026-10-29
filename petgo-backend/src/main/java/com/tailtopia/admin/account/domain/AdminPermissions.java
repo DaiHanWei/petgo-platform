@@ -272,6 +272,20 @@ public final class AdminPermissions {
      */
     public static final String GIFT_ORDER_VIEW = "gift.order_view";
 
+    // 专题线 video（Story 1.1）——不预授予任何预置角色，超管隐式拥有
+    /**
+     * 修改用户会员等级（FR-2）。等级 ≥ 10 即获得发视频权限，名单外的等级 10 账号发的视频会强制进人工审核。
+     *
+     * <p>🔴 单独成码、不并入 {@link #USER_DEACTIVATE} 等处置码：发视频是对外分发能力，授予要有专人把关。
+     * ⚠️ 码中有两个点，{@code AdminPermissionWiringTest} 的字面量正则匹配不到 —— 门控处一律引用本常量。
+     */
+    public static final String USER_VIP_LEVEL_EDIT = "user.vip_level.edit";
+    /**
+     * 维护视频免审名单（FR-22，决策 V-25）：查看名单页 + 在用户抽屉加入 / 移出。
+     * 名单内账号发视频免审、直接公开 —— 单独成码，不预授予。
+     */
+    public static final String VIDEO_TRUSTED_MANAGE = "video.trusted.manage";
+
     // 兽医分成月结对账（V1.1 Epic 9，Story 9-5）
     /** 月结对账查看。 */
     public static final String SETTLEMENT_VIEW = "settlement.view";
@@ -380,7 +394,8 @@ public final class AdminPermissions {
                     SHOP_ORDER_FULFILL,
                     PLACE_MANAGE, COMMENT_VIRTUAL_POST,
                     CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND, GROWTH_CONFIG_EDIT,
-                    GROWTH_USER_ADJUST, GIFT_CATALOG_EDIT)));
+                    GROWTH_USER_ADJUST, GIFT_CATALOG_EDIT,
+                    USER_VIP_LEVEL_EDIT, VIDEO_TRUSTED_MANAGE)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。

@@ -65,6 +65,25 @@ class ShareCardTemplate extends StatelessWidget {
     return data.hasImage ? _imageLayout(l10n) : _textLayout(l10n);
   }
 
+  /// 视频帖封面居中叠播放角标（与列表卡片 `VideoCardBadge` 同样式：半透明黑圆 + 白色播放三角），
+  /// 按画布单位缩放，导出的 1080 大图上也是同一比例。卡面是静态图，不印时长。
+  Widget _withVideoBadge(Widget cover) {
+    if (!data.isVideo) return cover;
+    final size = _u * 0.16;
+    return Stack(fit: StackFit.expand, children: [
+      cover,
+      Center(
+        child: Container(
+          key: const ValueKey('shareCardVideoBadge'),
+          width: size,
+          height: size,
+          decoration: const BoxDecoration(color: Color(0x66000000), shape: BoxShape.circle),
+          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: size * 0.7),
+        ),
+      ),
+    ]);
+  }
+
   // ——— SH2 图文模板 ———
   ///
   /// 🔴 **品牌段固定、上面按内容伸缩**（产品 2026-08-28 二次拍板，取舍见 [ShareCardMetrics]）：
@@ -79,7 +98,7 @@ class ShareCardTemplate extends StatelessWidget {
       // key 供回归测试量占比 —— 没有它就只能靠人眼看截图。
       mainAreaKey: const ValueKey(shareCardImageAreaKey),
       infoAreaKey: const ValueKey(shareCardContentAreaKey),
-      main: AppImage.widget(
+      main: _withVideoBadge(AppImage.widget(
         data.imageUrl!,
         fit: BoxFit.cover,
         // 🔴 缩略图宽度按**画布宽度**取，不是按预览宽度。
@@ -87,7 +106,7 @@ class ShareCardTemplate extends StatelessWidget {
         // —— 与二维码那条是同一个坑的两种表现。
         thumbWidth: canvas.width.round(),
         errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.mintTint),
-      ),
+      )),
       info: Padding(
         padding: EdgeInsets.fromLTRB(_pad, _pad * 0.55, _pad, _pad * 0.4),
         child: Column(

@@ -51,7 +51,7 @@ class FeedPinnedFollowTest {
                 pins, mock(ContentTagQueryService.class), hide,
                 mock(com.tailtopia.content.rank.FeedRecommendationService.class),
                 new com.tailtopia.mention.service.MentionViewService(mock(AccountQueryService.class), hide),
-                followReader);
+                followReader, com.tailtopia.content.service.PostMediaFixtures.passthrough());
         ContentPin pin = ContentPin.ofContent(ContentPin.SLOT_HOME_FEED, 42L,
                 Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(pin, "id", 1L);
@@ -65,7 +65,7 @@ class FeedPinnedFollowTest {
     }
 
     private FeedItemResponse pinnedItem(Long viewer) {
-        return service.loadPinnedSlot(ContentPin.SLOT_HOME_FEED, viewer).pin().item();
+        return service.loadPinnedSlot(ContentPin.SLOT_HOME_FEED, viewer, true).pin().item();
     }
 
     @Test

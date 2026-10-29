@@ -185,7 +185,7 @@ class MyCollectionQueryPostsTest {
         seed(1, Set.of(1L));
         ContentPost p = post(1L, 101L, "text 1", List.of("https://cdn/1.jpg"));
         FeedItemResponse feed = FeedItemResponse.of(p, new AuthorView(101L, "Rina", null, false, List.of()), 0L, false,
-                0L, null, null, null, null);
+                0L, null, null, null, null, com.tailtopia.content.dto.PostMedia.image(p));
         assertThat(query().posts(ME, null).items().get(0).post().coverUrl()).isEqualTo(feed.firstImageUrl());
     }
 }

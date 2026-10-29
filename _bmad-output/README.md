@@ -10,7 +10,7 @@
 | `implementation-artifacts/` | 实现层：story、sprint-status、评审记录、spec —— **按版本一个子目录**，与规划层同名 |
 | `_archive/` | 一次性验收截图、V1.0 保真工程、H5 原型页 —— 只读，不再维护 |
 
-两层都用同一套版本目录名：`v1.0.0` `v1.1.0` `v1.1.2` `v1.1.4` `v1.1.6` `v1.3.0` `v1.3.2` `v1.3.4` `v1.4.0`（旧 Toko 规划已改名归档为 `v1.4.0-toko-废弃`），另有两个专题线 `admin-backend`（运营后台，2026-06）和 `bug-system`（Bug 同步工具，仅规划层）。
+两层都用同一套版本目录名：`v1.0.0` `v1.1.0` `v1.1.2` `v1.1.4` `v1.1.6` `v1.3.0` `v1.3.2` `v1.3.4` `v1.4.0`（旧 Toko 规划已改名归档为 `v1.4.0-toko-废弃`），另有三个专题线 `admin-backend`（运营后台，2026-06）、`bug-system`（Bug 同步工具，仅规划层）和 `video`（短视频，暂不定版本）。
 
 ## 一个版本的五件套
 
@@ -39,3 +39,4 @@
 | v1.4.0 | 四条线并行：① Tailrent Level 等级 / ② 多宠物 / ③ 送礼 / ④ 推送开关与收藏，集成分支 `dev_1.4.0`；先做共用地基 Story 0.1 | `planning-artifacts/v1.4.0/` | 规划入库（2026-10-18），地基 story 待开发 |
 | v1.4.0-toko-废弃 | ~~精选自营电商（Toko）~~ 旧 V1.4.0 规划 | `planning-artifacts/v1.4.0-toko-废弃/` | ⛔ 已废除（2026-10-18），勿参考，仅历史留存 |
 | admin-backend | 运营后台重构（Lark 登录 / 审计 / 兽医·用户·内容管理） | `planning-artifacts/admin-backend/` | 已上线 |
+| video | 短视频第一版（官方号发视频 + 全屏播放 + 会员等级 + 视频免审名单），暂不定版本，分支 `feat/video` | `planning-artifacts/video/` | PRD / 架构 / epics / 排期已完成（2026-10-16），开发中 |

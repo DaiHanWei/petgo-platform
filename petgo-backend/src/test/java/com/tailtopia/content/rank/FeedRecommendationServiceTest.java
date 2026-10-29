@@ -71,7 +71,7 @@ class FeedRecommendationServiceTest {
         when(seen.decayFactors(any(), anyList(), any())).thenReturn(Map.of());
         when(sequences.newSeed(any())).thenReturn("s-seed-1");
         // 默认无挂起帖（AC2 那条单独用例自己打桩）
-        when(posts.findOwnPendingPosts(org.mockito.ArgumentMatchers.anyLong(), any()))
+        when(posts.findOwnPendingPosts(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of());
 
         // Story 16.4：打分参数来自配置表（本类不验参数取值，给默认种子值）
@@ -176,7 +176,7 @@ class FeedRecommendationServiceTest {
         sequenceIs(seq, id -> id > 5); // id 1..5 已不合格（被删 / 被拉黑…）
 
         FeedRecommendationService.RankedPage page =
-                service.page(9L, null, null, 20, null);
+                service.page(9L, null, null, 20, null, true);
 
         assertThat(page.posts()).hasSize(20); // 🛡 补齐到满页，不是 15 条
         assertThat(page.posts().stream().map(ContentPost::getId))
@@ -195,7 +195,7 @@ class FeedRecommendationServiceTest {
     void viewerScopedFiltersAreActuallyPassedToTheQuery() {
         sequenceIs(List.of(1L, 2L));
 
-        service.page(42L, null, null, 20, null);
+        service.page(42L, null, null, 20, null, true);
 
         verify(posts).findRankableByIds(any(), eq(true), eq(42L));
     }
@@ -205,7 +205,7 @@ class FeedRecommendationServiceTest {
     void guestPassesNoViewerToTheQuery() {
         sequenceIs(List.of(1L, 2L));
 
-        service.page(null, "anon", null, 20, null);
+        service.page(null, "anon", null, 20, null, true);
 
         verify(posts).findRankableByIds(any(), eq(false), org.mockito.ArgumentMatchers.isNull());
     }
@@ -219,7 +219,7 @@ class FeedRecommendationServiceTest {
         }
         sequenceIs(seq, id -> id > 5);
 
-        FeedRecommendationService.RankedPage p1 = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p1 = service.page(9L, null, null, 20, null, true);
         FeedRankCursor c = FeedRankCursor.decode(p1.nextCursor());
 
         // 25 = 20 条展示 + 5 条被丢弃；用「页码 × 20」会得到 20，下一页就会重复读到 21..25
@@ -239,7 +239,7 @@ class FeedRecommendationServiceTest {
         List<Long> all = new ArrayList<>();
         String cursor = null;
         for (int i = 0; i < 3; i++) {
-            FeedRecommendationService.RankedPage p = service.page(9L, null, cursor, 20, null);
+            FeedRecommendationService.RankedPage p = service.page(9L, null, cursor, 20, null, true);
             all.addAll(p.posts().stream().map(ContentPost::getId).toList());
             cursor = p.nextCursor();
         }
@@ -263,9 +263,9 @@ class FeedRecommendationServiceTest {
             seq.add(i);
         }
         sequenceIs(seq);
-        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(999L, 9L)));
+        when(posts.findOwnPendingPosts(eq(9L), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(post(999L, 9L)));
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null, true);
 
         assertThat(p.posts().get(0).getId()).as("挂起帖应在首屏最前").isEqualTo(999L);
         assertThat(p.posts()).hasSize(20); // 页大小不变
@@ -281,10 +281,10 @@ class FeedRecommendationServiceTest {
             seq.add(i);
         }
         sequenceIs(seq);
-        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(999L, 9L)));
+        when(posts.findOwnPendingPosts(eq(9L), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(post(999L, 9L)));
 
         String cursor = new FeedRankCursor("s-seed-1", 20).encode();
-        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, null);
+        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, null, true);
 
         assertThat(later.posts().stream().map(ContentPost::getId)).doesNotContain(999L);
     }
@@ -298,9 +298,9 @@ class FeedRecommendationServiceTest {
     @Test
     void aPostHeldAfterRankingIsNotShownTwice() {
         sequenceIs(List.of(5L, 6L, 7L));
-        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(5L, 9L)));
+        when(posts.findOwnPendingPosts(eq(9L), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(post(5L, 9L)));
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null, true);
 
         assertThat(p.posts().stream().map(ContentPost::getId)).doesNotHaveDuplicates();
         assertThat(p.posts().stream().map(ContentPost::getId)).containsExactly(5L, 6L, 7L);
@@ -310,9 +310,9 @@ class FeedRecommendationServiceTest {
     @Test
     void ownPendingPostIsNotMarkedAsSeen() {
         sequenceIs(List.of(1L, 2L));
-        when(posts.findOwnPendingPosts(eq(9L), any())).thenReturn(List.of(post(999L, 9L)));
+        when(posts.findOwnPendingPosts(eq(9L), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(post(999L, 9L)));
 
-        service.page(9L, null, null, 20, null);
+        service.page(9L, null, null, 20, null, true);
 
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<Collection<Long>> captor =
@@ -326,9 +326,9 @@ class FeedRecommendationServiceTest {
     void guestNeverQueriesPendingPosts() {
         sequenceIs(List.of(1L));
 
-        service.page(null, "anon", null, 20, null);
+        service.page(null, "anon", null, 20, null, true);
 
-        verify(posts, never()).findOwnPendingPosts(org.mockito.ArgumentMatchers.anyLong(), any());
+        verify(posts, never()).findOwnPendingPosts(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     // ── 顶置首屏让位（沿用 Story 4.2 口径） ──────────────────────────
@@ -342,12 +342,12 @@ class FeedRecommendationServiceTest {
         }
         sequenceIs(seq);
 
-        FeedRecommendationService.RankedPage first = service.page(9L, null, null, 20, 3L);
+        FeedRecommendationService.RankedPage first = service.page(9L, null, null, 20, 3L, true);
         assertThat(first.posts().stream().map(ContentPost::getId)).doesNotContain(3L);
 
         // 后续页（带游标）不让位 —— 传同一个 yieldId 也不生效
         String cursor = new FeedRankCursor("s-seed-1", 0).encode();
-        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, 3L);
+        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, 3L, true);
         assertThat(later.posts().stream().map(ContentPost::getId)).contains(3L);
     }
 
@@ -357,7 +357,7 @@ class FeedRecommendationServiceTest {
     void servedContentIsMarkedAsSeen() {
         sequenceIs(List.of(1L, 2L, 3L));
 
-        service.page(9L, null, null, 20, null);
+        service.page(9L, null, null, 20, null, true);
 
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<Collection<Long>> captor =
@@ -371,7 +371,7 @@ class FeedRecommendationServiceTest {
     void guestUsesAnonSessionKeyspace() {
         sequenceIs(List.of(1L));
 
-        service.page(null, "abc", null, 20, null);
+        service.page(null, "abc", null, 20, null, true);
 
         org.mockito.ArgumentCaptor<FeedRankCacheKey> key =
                 org.mockito.ArgumentCaptor.forClass(FeedRankCacheKey.class);
@@ -393,7 +393,7 @@ class FeedRecommendationServiceTest {
         for (long i = 1; i <= 50; i++) {
             pool.add(post(i, i));
         }
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(pool);
         when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
             Collection<Long> asked = inv.getArgument(0);
             List<ContentPost> out = new ArrayList<>();
@@ -403,7 +403,7 @@ class FeedRecommendationServiceTest {
             return out;
         });
 
-        service.page(9L, null, null, 20, null);
+        service.page(9L, null, null, 20, null, true);
 
         verify(likes, times(1)).countByPostIdIn(anyList());
         verify(comments, times(1)).countVisibleForViewerIn(anyList(), any());
@@ -425,7 +425,7 @@ class FeedRecommendationServiceTest {
         for (long i = 1; i <= 50; i++) {
             pool.add(post(i, i));
         }
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(pool);
         when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
             Collection<Long> asked = inv.getArgument(0);
             List<ContentPost> out = new ArrayList<>();
@@ -435,7 +435,7 @@ class FeedRecommendationServiceTest {
             return out;
         });
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null, true);
 
         assertThat(p.posts()).isNotEmpty();
     }
@@ -485,7 +485,7 @@ class FeedRecommendationServiceTest {
             }
         }));
         when(likes.countByPostIdIn(anyList())).thenReturn(lc);
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findRankCandidatePool(anyBoolean(), any(), anyBoolean(), any())).thenReturn(pool);
         when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
             Collection<Long> asked = inv.getArgument(0);
             List<ContentPost> out = new ArrayList<>();
@@ -502,7 +502,7 @@ class FeedRecommendationServiceTest {
                 seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles,
                 growth);
 
-        FeedRecommendationService.RankedPage p = svc.page(viewerId, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = svc.page(viewerId, null, null, 20, null, true);
 
         org.mockito.ArgumentCaptor<FeedRankEngine.Input> in = org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
         verify(engine, org.mockito.Mockito.atLeastOnce()).rank(in.capture(), anyInt());
@@ -576,9 +576,9 @@ class FeedRecommendationServiceTest {
         when(sequences.length(any(), any())).thenReturn(0L);
         when(sequences.read(any(), any(), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
                 .thenReturn(List.of());
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(List.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of());
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null, true);
 
         assertThat(p.posts()).isEmpty();
         assertThat(p.nextCursor()).isNull();
@@ -589,7 +589,7 @@ class FeedRecommendationServiceTest {
     @Test
     void invalidCursorIsRejected() {
         org.assertj.core.api.Assertions
-                .assertThatThrownBy(() -> service.page(9L, null, "!!!not-base64!!!", 20, null))
+                .assertThatThrownBy(() -> service.page(9L, null, "!!!not-base64!!!", 20, null, true))
                 .isInstanceOf(com.tailtopia.shared.error.AppException.class);
     }
 
@@ -598,7 +598,7 @@ class FeedRecommendationServiceTest {
     void loggedInViewerIgnoresAnonSessionId() {
         sequenceIs(List.of(1L));
 
-        service.page(9L, "some-anon", null, 20, null);
+        service.page(9L, "some-anon", null, 20, null, true);
 
         org.mockito.ArgumentCaptor<FeedRankCacheKey> key =
                 org.mockito.ArgumentCaptor.forClass(FeedRankCacheKey.class);
@@ -650,16 +650,16 @@ class FeedRecommendationServiceTest {
     @Test
     void eduPoolIsQueriedWithViewerScopeAndNinetyDayWindow() {
         generationPath(Map.of());
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(List.of(post(1, 1)));
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(post(1, 1)));
 
         Instant before = Instant.now();
-        service.page(42L, null, null, 20, null);
+        service.page(42L, null, null, 20, null, true);
         Instant after = Instant.now();
 
         org.mockito.ArgumentCaptor<Instant> since = org.mockito.ArgumentCaptor.forClass(Instant.class);
         org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
                 org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
-        verify(posts).findEduCandidatePool(eq(true), eq(42L), since.capture(), pageable.capture());
+        verify(posts).findEduCandidatePool(eq(true), eq(42L), since.capture(), org.mockito.ArgumentMatchers.anyBoolean(), pageable.capture());
         java.time.Duration window = java.time.Duration.ofDays(90);
         assertThat(since.getValue())
                 .isAfterOrEqualTo(before.minus(window).minusSeconds(1))
@@ -671,11 +671,11 @@ class FeedRecommendationServiceTest {
     @Test
     void guestQueriesEduPoolWithoutViewer() {
         generationPath(Map.of());
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(List.of(post(1, 1)));
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(post(1, 1)));
 
-        service.page(null, "abc", null, 20, null);
+        service.page(null, "abc", null, 20, null, true);
 
-        verify(posts).findEduCandidatePool(eq(false), org.mockito.ArgumentMatchers.isNull(), any(), any());
+        verify(posts).findEduCandidatePool(eq(false), org.mockito.ArgumentMatchers.isNull(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     /** 主池里没有的科普（60 天前）经教育池进入序列。 */
@@ -694,10 +694,10 @@ class FeedRecommendationServiceTest {
         for (long i = 1; i <= 30; i++) {
             pool.add(post(i, i));
         }
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
-        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(edu);
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(edu);
 
-        service.page(9L, null, null, 20, null);
+        service.page(9L, null, null, 20, null, true);
 
         assertThat(appendedSequence()).contains(101L, 102L, 103L);
     }
@@ -712,10 +712,10 @@ class FeedRecommendationServiceTest {
         for (long i = 1; i <= 30; i++) {
             pool.add(i == 7 ? shared : post(i, i));
         }
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
-        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(List.of(shared));
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(shared));
 
-        service.page(9L, null, null, 20, null);
+        service.page(9L, null, null, 20, null, true);
 
         List<Long> seq = appendedSequence();
         assertThat(seq).doesNotHaveDuplicates().contains(7L);
@@ -732,10 +732,10 @@ class FeedRecommendationServiceTest {
         for (long i = 1; i <= 50; i++) {
             pool.add(post(i, i));
         }
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
-        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(List.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of());
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null, true);
 
         assertThat(p.posts()).hasSize(20);
     }
@@ -758,9 +758,9 @@ class FeedRecommendationServiceTest {
         for (long i = 1; i <= 30; i++) {
             pool.add(post(i, i));
         }
-        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findRankCandidatePool(anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(pool);
 
-        svc.page(9L, null, null, 20, null);
+        svc.page(9L, null, null, 20, null, true);
 
         org.mockito.ArgumentCaptor<FeedRankEngine.Input> input =
                 org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
@@ -812,10 +812,10 @@ class FeedRecommendationServiceTest {
     @Test
     void ownRecentPostIsFirstOnFirstPageAndNotDuplicated() {
         sequenceIs(range(1, 40));
-        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of(post(17L, 9L)));
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null, true);
 
         assertThat(p.posts().get(0).getId()).isEqualTo(17L);
         assertThat(p.posts()).hasSize(20);
@@ -830,12 +830,12 @@ class FeedRecommendationServiceTest {
         when(sequences.newSeed(any())).thenReturn(seed);
         sequenceIs(seed, range(1, 5), id -> true);
 
-        service.page(9L, null, null, 20, null);
+        service.page(9L, null, null, 20, null, true);
 
         org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
                 org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
         verify(posts).findOwnRecentPosts(eq(9L), eq(anchor.minus(java.time.Duration.ofMinutes(10))),
-                eq(anchor), pageable.capture());
+                eq(anchor), org.mockito.ArgumentMatchers.anyBoolean(), pageable.capture());
         assertThat(pageable.getValue().getPageSize()).isEqualTo(3);
         assertThat(FeedRecommendationService.OWN_RECENT_WINDOW).isEqualTo(java.time.Duration.ofMinutes(10));
         assertThat(FeedRecommendationService.MAX_OWN_RECENT).isEqualTo(3);
@@ -851,10 +851,10 @@ class FeedRecommendationServiceTest {
         String seed = seedAt(anchor);
         sequenceIs(seed, range(1, 60), id -> true);
         when(posts.findOwnRecentPosts(eq(9L), eq(anchor.minus(java.time.Duration.ofMinutes(10))),
-                eq(anchor), any())).thenReturn(List.of(post(25L, 9L)));
+                eq(anchor), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(post(25L, 9L)));
 
         String cursor = new FeedRankCursor(seed, 19).encode();
-        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, null);
+        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, null, true);
 
         assertThat(later.posts().stream().map(ContentPost::getId)).doesNotContain(25L);
         assertThat(later.posts()).hasSize(20);
@@ -864,12 +864,12 @@ class FeedRecommendationServiceTest {
     @Test
     void ownRecentComesBeforeOlderPendingAndIsDeduped() {
         sequenceIs(range(1, 40));
-        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of(post(900L, 9L), post(901L, 9L)));
-        when(posts.findOwnPendingPosts(eq(9L), any()))
+        when(posts.findOwnPendingPosts(eq(9L), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of(post(901L, 9L), post(800L, 9L)));
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null, true);
 
         assertThat(p.posts().stream().limit(3).map(ContentPost::getId))
                 .containsExactly(900L, 901L, 800L);
@@ -880,10 +880,10 @@ class FeedRecommendationServiceTest {
     @Test
     void ownRecentPostThatIsPinnedYieldsOnFirstPage() {
         sequenceIs(range(1, 40));
-        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of(post(500L, 9L)));
 
-        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, 500L);
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, 500L, true);
 
         assertThat(p.posts().stream().map(ContentPost::getId)).doesNotContain(500L);
     }
@@ -892,10 +892,10 @@ class FeedRecommendationServiceTest {
     @Test
     void ownRecentPostIsNotMarkedAsSeen() {
         sequenceIs(List.of(1L, 2L));
-        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
                 .thenReturn(List.of(post(999L, 9L)));
 
-        service.page(9L, null, null, 20, null);
+        service.page(9L, null, null, 20, null, true);
 
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<Collection<Long>> captor =
@@ -909,10 +909,10 @@ class FeedRecommendationServiceTest {
     void guestNeverQueriesOwnRecentPosts() {
         sequenceIs(List.of(1L));
 
-        service.page(null, "anon", null, 20, null);
+        service.page(null, "anon", null, 20, null, true);
 
         verify(posts, never()).findOwnRecentPosts(org.mockito.ArgumentMatchers.anyLong(), any(),
-                any(), any());
+                any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     @Test

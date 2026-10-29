@@ -6,6 +6,7 @@ import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.domain.ImageSize;
+import com.tailtopia.content.domain.MediaType;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
@@ -17,6 +18,7 @@ import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.auth.service.VipLevelService;
 import com.tailtopia.mention.service.MentionSanitizer;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
@@ -87,6 +89,15 @@ public class ContentService {
     /** V1.4.0 multi-pet Story 3.1（AD-10）：关联宠物只读口（过审时取 {@code petIds}）。 */
     private final ContentPetQuery contentPetQuery;
 
+    /** 专题线 video Story 1.3：免审只认这份名单（一致性规则 6，不用 isOfficialAccount / role）。 */
+    private final VideoTrustedPublisherService videoTrustedPublishers;
+    /** 专题线 video Story 1.3：事务内实时复核发视频权限（AD-5：等级校验在事务内）。 */
+    private final VipLevelService vipLevels;
+    /** 专题线 video Story 1.3：事务内只用它的纯函数 {@code validateShape}；HEAD 在 Controller 事务外做。 */
+    private final VideoPostValidator videoPostValidator;
+    /** 专题线 video Story 3.3：后台列表 / 详情的视频帖一律换签名地址（AD-8 forAdmin）。 */
+    private final PostMediaResolver postMedia;
+
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes,
             IdempotencyService idempotency, ContentModerationService moderation,
@@ -98,7 +109,9 @@ public class ContentService {
             com.tailtopia.profile.service.PetWriteGuard petWriteGuard,
             com.tailtopia.profile.service.PetResolver petResolver,
             com.tailtopia.content.repository.ContentPetRepository contentPets,
-            ContentPetQuery contentPetQuery) {
+            ContentPetQuery contentPetQuery,
+            VideoTrustedPublisherService videoTrustedPublishers, VipLevelService vipLevels,
+            VideoPostValidator videoPostValidator, PostMediaResolver postMedia) {
         this.petWriteGuard = petWriteGuard;
         this.petResolver = petResolver;
         this.contentPets = contentPets;
@@ -116,6 +129,10 @@ public class ContentService {
         this.mentions = mentions;
         this.placeCheckins = placeCheckins;
         this.cropOffsets = cropOffsets;
+        this.videoTrustedPublishers = videoTrustedPublishers;
+        this.vipLevels = vipLevels;
+        this.videoPostValidator = videoPostValidator;
+        this.postMedia = postMedia;
     }
 
     /**
@@ -240,6 +257,22 @@ public class ContentService {
         return likes.sumLikesOnOwnPostsByAuthor(authorId);
     }
 
+    /**
+     * 是否<b>仍在审核中</b>的名单外强制审核视频帖（专题线 video Story 3.2，AD-5）：帖子存在、未删、
+     * {@code status=UNDER_REVIEW} 且 {@code review_reason=VIDEO_FORCED}。供审核超时扫描判断「不受人工审核总开关影响」，
+     * 经 service 暴露给 moderation，不让其直读 content 表。
+     *
+     * <p>⚠️ 必须同时判状态与删除态（code review）：作者自删 / 运营下架不会关闭审核队列项，只看 reason
+     * 会让总开关关着时 3 天后对已删帖误发超时通知、重复记违规；审核通过后 reason 也不清。
+     */
+    @Transactional(readOnly = true)
+    public boolean isVideoForcedReview(long postId) {
+        return posts.findById(postId)
+                .map(p -> p.getDeletedAt() == null && p.getStatus() == PostStatus.UNDER_REVIEW
+                        && ContentPost.REVIEW_REASON_VIDEO_FORCED.equals(p.getReviewReason()))
+                .orElse(false);
+    }
+
     /** 内容是否存在且可见（Story 3.7：举报前校验，经 service 暴露给 moderation，不让其直读 content 表）。 */
     @Transactional(readOnly = true)
     public boolean isVisible(long postId) {
@@ -295,22 +328,62 @@ public class ContentService {
     }
 
     /**
+     * 专题线 video Story 3.3：把<b>要展示的</b>后台行里的视频帖换成签名视频 + 签名封面（AD-8 forAdmin）；
+     * 图文帖原样、不多查库。视频帖一次 {@code IN} 查回实体再签。
+     *
+     * <p>⚠️ {@link #adminSearch} / {@link #adminRow} / {@link #adminRowsByIds} 本身<b>不签名</b>（code review）：
+     * 导出（最多 5000 行）、按点赞时间的候选池（最多 2000 条）、批量改物种只读 authorId —— 这些路径逐行签名
+     * 纯属浪费（每次签名都新建一个 OSS 客户端）。只有真正渲染到页面的那一页 / 那一行由调用方显式调本方法。
+     */
+    @Transactional(readOnly = true)
+    public List<com.tailtopia.content.dto.AdminContentRow> adminMedia(
+            List<com.tailtopia.content.dto.AdminContentRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return rows == null ? List.of() : rows;
+        }
+        List<Long> videoIds = rows.stream().filter(com.tailtopia.content.dto.AdminContentRow::isVideo)
+                .map(com.tailtopia.content.dto.AdminContentRow::id).toList();
+        if (videoIds.isEmpty()) {
+            return rows;
+        }
+        java.util.Map<Long, ContentPost> byId = posts.findAllById(videoIds).stream()
+                .collect(java.util.stream.Collectors.toMap(ContentPost::getId, p -> p));
+        return rows.stream().map(r -> {
+            ContentPost p = r.isVideo() ? byId.get(r.id()) : null;
+            return p == null ? r : r.withMedia(postMedia.resolveForAdmin(p));
+        }).toList();
+    }
+
+    /**
      * 后台内容详情投影（2026-09-02 内容详情页）：**全文**（列表行是截断预览）+ 状态 + 可见性，
      * 含已删/审核挂起 —— 复核场景恰恰要看这些。content 模块对外只读 DTO，admin 不拿实体。
      */
     public record AdminPostDetail(long id, ContentType type, Long authorId, Long petId,
             String text, List<String> imageUrls, boolean deleted, PostStatus status,
             com.tailtopia.content.domain.ContentVisibility visibility, Instant createdAt,
-            String speciesOverride) {
+            String speciesOverride,
+            /** 专题线 video Story 3.3：媒体类型；视频帖 {@code imageUrls} = [签名封面]。 */
+            com.tailtopia.content.domain.MediaType mediaType,
+            /** 专题线 video Story 3.3：签名视频地址（只视频帖有；勿入日志）。 */
+            String videoUrl) {
+
+        /** 是否视频帖（模板用）。 */
+        public boolean isVideo() {
+            return mediaType == com.tailtopia.content.domain.MediaType.VIDEO;
+        }
     }
 
     /** 后台内容详情（2026-09-02）；不存在返回 empty。 */
     @Transactional(readOnly = true)
     public Optional<AdminPostDetail> adminDetail(long postId) {
-        return posts.findById(postId).map(p -> new AdminPostDetail(p.getId(), p.getType(),
-                p.getAuthorId(), p.getPetId(), p.getText(), p.getImageUrls(),
-                p.getDeletedAt() != null, p.getStatus(), p.getVisibility(), p.getCreatedAt(),
-                p.getSpeciesOverride()));
+        return posts.findById(postId).map(p -> {
+            com.tailtopia.content.dto.PostMedia media = postMedia.resolveForAdmin(p);
+            return new AdminPostDetail(p.getId(), p.getType(),
+                    p.getAuthorId(), p.getPetId(), p.getText(), media.imageUrls(),
+                    p.getDeletedAt() != null, p.getStatus(), p.getVisibility(), p.getCreatedAt(),
+                    p.getSpeciesOverride(), media.mediaType(),
+                    media.video() == null ? null : media.video().url());
+        });
     }
 
     /**
@@ -334,7 +407,7 @@ public class ContentService {
                 .map(p -> new com.tailtopia.content.dto.AdminContentRow(p.getId(), p.getType(),
                         p.getAuthorId(), p.getText(), p.getDeletedAt() != null, p.getCreatedAt(),
                         p.getImageUrls(), p.getSpeciesOverride(),
-                        commentCounts.getOrDefault(p.getId(), 0L)))
+                        commentCounts.getOrDefault(p.getId(), 0L), p.getMediaType(), null))
                 .toList();
     }
 
@@ -470,8 +543,19 @@ public class ContentService {
                 authorId, petId, ContentType.GROWTH_MOMENT, checkinIds));
     }
 
+    /** 图文帖发布（App 图文、后台种子 / 批量发布等既有调用方）。视频帖必须走 4 参版本。 */
     @Transactional
     public ContentPostResponse publish(long authorId, ContentPostCreateRequest req, String idempotencyKey) {
+        return publish(authorId, req, idempotencyKey, null);
+    }
+
+    /**
+     * 发布。{@code verifiedVideo} 是视频帖在<b>事务外</b>经 {@link VideoPostValidator#verifyObjects} 校验
+     * （含 OSS HEAD）的结果；图文帖传 null。
+     */
+    @Transactional
+    public ContentPostResponse publish(long authorId, ContentPostCreateRequest req, String idempotencyKey,
+            VideoPostValidator.VerifiedVideo verifiedVideo) {
         // 幂等重放：同 key 已落一条则取回，不重复创建。
         Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
         if (existing.isPresent()) {
@@ -479,6 +563,12 @@ public class ContentService {
                     .map(ContentPostResponse::from)
                     .orElseThrow(() -> AppException.notFound("内容不存在")
                             .code("admin.err.seed.postNotFound"));
+        }
+
+        // 专题线 video Story 1.3：图文帖带了 video → 混发；视频帖整条走独立分支（不穿插进图文逻辑）。
+        videoPostValidator.validateShape(req);
+        if (req.mediaTypeOrImage() == MediaType.VIDEO) {
+            return publishVideo(authorId, req, idempotencyKey, verifiedVideo);
         }
 
         String text = blankToNull(req.text());
@@ -683,6 +773,73 @@ public class ContentService {
     }
 
     /**
+     * 视频帖分支（专题线 video Story 1.3 · AD-5）。形状已由 {@code validateShape} 校验。
+     *
+     * <ul>
+     *   <li><b>名单内</b>：跳过 {@code moderation.evaluate}（文本、图片都不审），直接 PUBLISHED；
+     *       desired=PUBLIC、applied=PRIVATE，由对账器（Story 1.4）把文件改公开。</li>
+     *   <li><b>名单外</b>：只审文本（L1 硬拦截照常 422；封面是私有的，三方拉不到，不审图）；
+     *       其余结果一律 {@code UNDER_REVIEW + VIDEO_FORCED} 并入队 —— <b>不判人工审核总开关</b>。</li>
+     * </ul>
+     * 两条分支都<b>不排尺寸兜底测量</b>（尺寸由服务端用视频宽高写；封面私有，匿名也测不到），
+     * 也<b>不走 {@link #publishTrusted}</b>（它不写 @ 名单，且只给运营内容源）。
+     */
+    private ContentPostResponse publishVideo(long authorId, ContentPostCreateRequest req, String idempotencyKey,
+            VideoPostValidator.VerifiedVideo verified) {
+        if (verified == null || !verified.objectKey().equals(req.video().objectKey())) {
+            // 没经过事务外校验（例如后台调用方误传了 VIDEO）——不允许绕过 HEAD 与归属校验。
+            throw AppException.videoObjectInvalid("视频无效，请重新上传");
+        }
+        // AD-5：等级在事务内实时复核（事务外校验与此刻之间可能已被后台降级）。
+        if (!vipLevels.canPublishVideo(authorId)) {
+            throw AppException.videoPermissionDenied("当前账号不能发布视频");
+        }
+        // code review：一个视频对象只能属于一条帖子 —— 否则删其中一条，对账器会把另一条的视频改成私有。
+        // 并发由唯一索引 uq_content_posts_video_object_key 兜底。
+        if (posts.existsByVideoObjectKey(verified.objectKey())) {
+            throw AppException.videoObjectInvalid("视频已被使用，请重新上传");
+        }
+        String text = blankToNull(req.text());
+        List<String> imageUrls = List.of(req.imageUrls().get(0));
+        List<Long> mentionedUserIds = mentions.sanitize(authorId, req.mentionedUserIds());
+        var v = req.video();
+
+        if (videoTrustedPublishers.isTrusted(authorId)) {
+            ContentPost post = ContentPost.publish(authorId, req.type(), null, text, imageUrls);
+            // 视频帖一律公开（AD-5：忽略请求里的 visibility）。
+            post.setVisibility(ContentVisibility.PUBLIC);
+            post.attachVideo(verified.objectKey(), v.durationMs(), v.width(), v.height(), verified.sizeBytes());
+            post.setMentionedUserIds(mentionedUserIds);
+            ContentPost saved = posts.save(post);
+            idempotency.store(idempotencyKey, saved.getId());
+            events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), null,
+                    0L, saved.getVisibility(), saved.getCreatedAt()));
+            publishMentioned(saved, null, authorId);
+            return ContentPostResponse.from(saved);
+        }
+
+        ModerationOutcome outcome = moderation.evaluate(text, List.of());
+        if (outcome.verdict() == ContentModerationService.Verdict.TEXT_BLOCKED) {
+            throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试")
+                    .code("admin.err.seed.textBlocked");
+        }
+        java.math.BigDecimal riskScore = outcome.riskScore() >= 0
+                ? java.math.BigDecimal.valueOf(outcome.riskScore()).setScale(3, java.math.RoundingMode.HALF_UP)
+                : null;
+        ContentPost pendingPost = ContentPost.pendingReview(authorId, req.type(), null, text, imageUrls, null,
+                riskScore, ContentPost.REVIEW_REASON_VIDEO_FORCED);
+        pendingPost.setVisibility(ContentVisibility.PUBLIC);
+        pendingPost.attachVideo(verified.objectKey(), v.durationMs(), v.width(), v.height(), verified.sizeBytes());
+        // 挂起分支同样要写 @ 名单（过审后在 approveReview 里才发 @ 通知）。
+        pendingPost.setMentionedUserIds(mentionedUserIds);
+        ContentPost pending = posts.save(pendingPost);
+        idempotency.store(idempotencyKey, pending.getId());
+        // 🔴 无条件入队：名单外视频帖不受人工审核总开关影响（AD-5 / V-40）。
+        manualReviewGate.enqueue(pending.getId());
+        return ContentPostResponse.from(pending);
+    }
+
+    /**
      * 发「有人被 @ 了」事件（Story 3.4）。
      *
      * <h2>🔴 两道门，缺一条就是骚扰</h2>
@@ -712,6 +869,9 @@ public class ContentService {
      * （运营=可信主体，先例见兽医头像 {@code AdminVetService.updateAvatar}）。
      * 幂等键、内容门槛校验、发布事件（里程碑联动）全部保留。仅支持非 GROWTH_MOMENT
      * 类型（运营内容不绑宠物档案）——传 GROWTH_MOMENT 直接拒。
+     *
+     * <p>⚠️ 视频帖<b>不走这里</b>：免审视频帖一律走 {@link #publish} + 视频免审名单（专题线 video · AD-5）——
+     * 本方法不写 @ 名单、不做视频归属与 HEAD 校验。
      */
     @Transactional
     public ContentPostResponse publishTrusted(long authorId, ContentPostCreateRequest req,

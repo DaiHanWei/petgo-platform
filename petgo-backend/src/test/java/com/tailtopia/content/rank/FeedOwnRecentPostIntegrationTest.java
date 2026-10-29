@@ -93,6 +93,7 @@ class FeedOwnRecentPostIntegrationTest extends ApiIntegrationTest {
         Instant now = Instant.now().plusSeconds(1);
         List<Long> got = posts.findOwnRecentPosts(me.getId(),
                 now.minus(FeedRecommendationService.OWN_RECENT_WINDOW), now,
+                true,
                 PageRequest.of(0, 10)).stream().map(ContentPost::getId).toList();
 
         assertThat(got).contains(fresh.getId(), pending.getId())

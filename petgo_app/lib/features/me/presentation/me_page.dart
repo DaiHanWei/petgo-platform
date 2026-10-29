@@ -29,6 +29,8 @@ import '../../social/presentation/follow_list_page.dart';
 import '../data/me_counts_provider.dart';
 import '../data/my_posts_repository.dart';
 import 'profile_edit_sheet.dart';
+import '../../content/video/video_nav.dart';
+import '../../content/video/video_card_impression.dart';
 
 /// 「我的」页面（Story 7.1，FR-20 · F8 信息架构重组）。
 ///
@@ -746,7 +748,7 @@ class _MyPostsList extends ConsumerWidget {
           );
         }
         // 2 列方形裸网格（原型 pgrid，无卡边框）：封面图（无图→彩块）+ 左上类型 badge；保留后端 created_at 倒序。
-        return GridView.count(
+        return VideoImpressionScope(child: GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -756,16 +758,26 @@ class _MyPostsList extends ConsumerWidget {
             for (final p in items)
               // V1.3.0 batch-b1 Story 2.2：这一格抽成了公共组件，与他人公开主页共用
               // （复制一份的话，圆角 / badge 配色 / 首图降级会各改各的）。
-              PostGridTile(
+              _videoImpression(p.isVideo, p.id, VideoSource.myPosts, PostGridTile(
                 postId: p.id,
                 type: p.type,
                 firstImageUrl: p.firstImageUrl,
                 isPrivate: p.isPrivate,
-                onTap: () => context.push('/content/${p.id}'),
-              ),
+                videoDurationMs: p.isVideo ? p.video!.durationMs : null,
+                onTap: () => pushContentDetail(context, p.id,
+                    isVideo: p.isVideo, source: VideoSource.myPosts, coverUrl: p.firstImageUrl, video: p.video),
+              )),
           ],
-        );
+        ));
       },
     );
   }
 }
+
+/// 视频帖网格格子包一层曝光检测（专题线 video Story 2.3）；图文帖原样返回。
+/// 去重实例取自页面级 [VideoImpressionScope]（加载更多不重复上报）。
+Widget _videoImpression(bool isVideo, int postId, VideoSource source, Widget tile) => isVideo
+    ? Builder(
+        builder: (context) => VideoCardImpression(
+            postId: postId, source: source, tracker: VideoImpressionScope.of(context), child: tile))
+    : tile;

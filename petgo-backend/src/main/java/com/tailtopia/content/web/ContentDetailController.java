@@ -46,9 +46,10 @@ public class ContentDetailController {
     public ContentDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
             @RequestHeader(value = ContentFeedController.ANON_SESSION_HEADER, required = false)
             String anonSession,
-            @RequestParam(name = "countView", defaultValue = "true") boolean countView) {
+            @RequestParam(name = "countView", defaultValue = "true") boolean countView,
+            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
         Long viewerId = viewerId(jwt);
-        ContentDetailResponse resp = detailService.getDetail(id, viewerId);
+        ContentDetailResponse resp = detailService.getDetail(id, viewerId, com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
         // 浏览统计（2026-08-31）：详情成功返回才算「一次浏览」（404/不可见路径在上一行已抛）。
         // 作者本人不计 —— isAuthor 详情本来就要算，不为统计再查一遍。异步落库，不拖慢本请求。
         if (countView && !resp.isAuthor()) {
@@ -59,14 +60,16 @@ public class ContentDetailController {
 
     @GetMapping("/api/v1/content-posts/{id}/comments")
     public CommentPageResponse comments(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
-            @RequestParam(value = "cursor", required = false) String cursor) {
-        return commentQueryService.topLevel(id, cursor, viewerId(jwt));
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
+        return commentQueryService.topLevel(id, cursor, viewerId(jwt), com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
     }
 
     @GetMapping("/api/v1/comments/{parentId}/replies")
     public CommentPageResponse replies(@AuthenticationPrincipal Jwt jwt, @PathVariable long parentId,
-            @RequestParam(value = "cursor", required = false) String cursor) {
-        return commentQueryService.replies(parentId, cursor, viewerId(jwt));
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
+        return commentQueryService.replies(parentId, cursor, viewerId(jwt), com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities));
     }
 
     /**

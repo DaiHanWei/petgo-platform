@@ -14,6 +14,8 @@ import '../domain/pinned_slot.dart';
 import 'pinned_badge.dart';
 import 'promo_pinned_card.dart';
 import 'share_card/open_share_card.dart';
+import '../video/video_card_impression.dart';
+import '../video/video_nav.dart';
 import '../domain/home_refresh_provider.dart';
 
 /// Feed 单列视图（原型 feed.html：单列全宽卡片，非 2 列瀑布）。
@@ -47,7 +49,16 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.followSurfacePrefix = 'feed',
     this.focusItemId,
     this.onFocusHandled,
+    this.videoSource = VideoSource.feed,
+    this.onCommentPinned,
   });
+
+  /// 顶置卡的评论按钮（专题线 video Story 2.3：埋点来源要记 `pinned`）。缺省回落 [onCommentItem]。
+  final void Function(FeedItem item)? onCommentPinned;
+
+  /// 视频卡片曝光埋点的 `source`（专题线 video Story 2.3）：推荐流 `feed`、分类 Tab `category`、关注流 `following`。
+  /// 顶置卡固定报 `pinned`。
+  final VideoSource videoSource;
 
   final List<FeedItem> items;
   final bool hasMore;
@@ -123,6 +134,20 @@ class FeedMasonryView extends ConsumerStatefulWidget {
 
 class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   final ScrollController _controller = ScrollController();
+
+  /// 视频卡片曝光去重（一次刷新一个实例，专题线 video Story 2.3）。
+  VideoImpressionTracker _videoImpressions = VideoImpressionTracker();
+
+  /// 下拉刷新完成 = 新的一次刷新：视频卡片曝光重新计（专题线 video Story 2.3）。
+  Future<void> _refresh() async {
+    await widget.onRefresh();
+    if (mounted) setState(() => _videoImpressions = VideoImpressionTracker());
+  }
+
+  /// 视频帖卡片包一层曝光检测；图文帖原样返回。
+  Widget _withVideoImpression(FeedItem item, VideoSource source, Widget card) => item.isVideo
+      ? VideoCardImpression(postId: item.id, source: source, tracker: _videoImpressions, child: card)
+      : card;
 
   /// 回到顶部（bug 20260709-278）：已在首页再点 Home → 信号 +1 → 动画滚回顶。
   void _scrollToTop() {
@@ -226,6 +251,11 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   @override
   void didUpdateWidget(covariant FeedMasonryView old) {
     super.didUpdateWidget(old);
+    // 专题线 video Story 2.3：切 Tab / 换来源 = 新的一次刷新，视频曝光重新计（下拉刷新见 [_refresh]）。
+    // ⚠️ 不按数据长相猜（首条变没变、条数少没少）：乐观删卡、隐藏作者都会让条数变少，却仍是同一次刷新。
+    if (old.feedTab != widget.feedTab || old.videoSource != widget.videoSource) {
+      _videoImpressions = VideoImpressionTracker();
+    }
     if (old.pinned?.pinConfigId != widget.pinned?.pinConfigId) {
       _pinExposureReported = false;
       _duplicateReported.clear();
@@ -413,7 +443,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                   bottom: BorderSide(color: AppColors.line2, width: 1),
                 ),
               ),
-              child: MasonryCard(
+              child: _withVideoImpression(pinnedItem, VideoSource.pinned, MasonryCard(
                 key: const ValueKey('feedPinnedCard'),
                 item: pinnedItem,
                 // V1.3.4 Story 2.1：顶置卡与普通卡的关注按钮位置键必须不同（同一帖可能同屏出现两次）。
@@ -437,9 +467,10 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                   });
                   widget.onTapPinned?.call(pinnedItem);
                 },
-                onComment: widget.onCommentItem == null
+                // 专题线 video Story 2.3：顶置卡点评论的来源是 pinned，有专用回调就用它。
+                onComment: (widget.onCommentPinned ?? widget.onCommentItem) == null
                     ? null
-                    : () => widget.onCommentItem!(pinnedItem),
+                    : () => (widget.onCommentPinned ?? widget.onCommentItem)!(pinnedItem),
                 onAuthorTap:
                     widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(pinnedItem),
                 onTapMention: widget.onTapMention,
@@ -452,7 +483,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                 onMore: widget.onMoreItem == null
                     ? null
                     : () => widget.onMoreItem!(pinnedItem),
-              ),
+              )),
             ),
           for (var i = 0; i < widget.items.length; i++)
             // 通栏版式（V1.1.6 Story 3.2 · FR-93）：条目之间 1px 分隔线 + 上下 12px；
@@ -474,7 +505,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                         bottom: BorderSide(color: AppColors.line2, width: 1),
                       ),
               ),
-              child: MasonryCard(
+              child: _withVideoImpression(widget.items[i], widget.videoSource, MasonryCard(
                 item: widget.items[i],
                 followSurfaceKey: '${widget.followSurfacePrefix}:item:${widget.items[i].id}',
                 deletedUserLabel: widget.deletedUserLabel,
@@ -504,7 +535,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                     ? null
                     : () => widget.onMoreItem!(widget.items[i]),
                 maxImageHeight: maxImageHeight,
-              ),
+              )),
             ),
         ];
 
@@ -512,7 +543,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
           onNotification: _anchorScroll,
           child: RefreshIndicator(
             color: AppColors.accentGrowth,
-            onRefresh: widget.onRefresh,
+            onRefresh: _refresh,
             child: SingleChildScrollView(
               controller: _controller,
               physics: const AlwaysScrollableScrollPhysics(),

@@ -71,7 +71,10 @@ class ContentDetailAndCommentContractTest {
                         List.of(new com.tailtopia.gift.web.dto.GiftWallItemView("Cake", "Kue", "https://cdn/c.png",
                                 50_000L, 1L)))),
                 // V1.4.0 ④ Story 2.1：是否已收藏（恒下发）+ 作者视角收藏数（非作者为 null → 省略，见下一例）。
-                true, 2L);
+                true, 2L,
+                // 专题线 video Story 2.1（AD-8）：完整形态用视频帖。
+                com.tailtopia.content.domain.MediaType.VIDEO,
+                new VideoView("https://v.cdn/video/7/k.mp4", 75_000, 720, 1280));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
@@ -79,7 +82,8 @@ class ContentDetailAndCommentContractTest {
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
                 "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState",
                 "imageCropOffsets", "authorLevel", "authorTier", "authorFrame", "giftPets",
-                "collected", "collectCount"));
+                "collected", "collectCount", "mediaType", "video"));
+        assertThat(wire(d)).containsEntry("mediaType", "VIDEO");
         assertThat(wire(d)).containsEntry("authorLevel", 7).containsEntry("authorTier", "BUDDY")
                 .containsEntry("authorFrame", "BASIC");
         assertThat(wire(d)).containsEntry("collected", true).containsEntry("collectCount", 2L);
@@ -106,7 +110,8 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null, null, null, null, null, null, null, null, null, false, null);
+                null, null, null, null, null, null, null, null, null, null, false, null,
+                com.tailtopia.content.domain.MediaType.IMAGE, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
         // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略。
         assertThat(wire(d)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
@@ -114,6 +119,8 @@ class ContentDetailAndCommentContractTest {
         assertThat(wire(d)).doesNotContainKey("pets");
         // V1.4.0 ④ Story 2.1：非作者无 collectCount 键（收藏数不对外展示）；collected 恒下发。
         assertThat(wire(d)).doesNotContainKey("collectCount").containsEntry("collected", false);
+        // 专题线 video Story 2.1：图文帖 mediaType=IMAGE 恒下发，不下发 video。
+        assertThat(wire(d)).containsEntry("mediaType", "IMAGE").doesNotContainKey("video");
         // V1.3.4：作者已注销 / 封号时 token 与关注关系不下发。
         assertThat(wire(d)).doesNotContainKey("authorToken").doesNotContainKey("authorFollowState");
         // V1.3.4 Story 2.1：存量 / 无超界图的帖不下发露出位置（App 无值即居中）。
@@ -137,7 +144,9 @@ class ContentDetailAndCommentContractTest {
                 // V1.4.0 gift Story 2.1：礼物区不在本例关注范围（null → 省略）。
                 null,
                 // V1.4.0 ④ Story 2.1：收藏态不在本例关注范围。
-                false, null);
+                false, null,
+                // 专题线 video Story 2.1：图文帖。
+                com.tailtopia.content.domain.MediaType.IMAGE, null);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> pets = (List<Map<String, Object>>) wire(d).get("pets");
         assertThat(pets).hasSize(2);

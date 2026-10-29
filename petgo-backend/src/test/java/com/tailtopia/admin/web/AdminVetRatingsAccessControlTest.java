@@ -52,7 +52,7 @@ class AdminVetRatingsAccessControlTest {
             return new AdminWebController(c, m, v,
                     mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class),
                     TestMessages.real(),
-                    mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class), mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class));
+                    mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class), mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class), org.mockito.Mockito.mock(com.tailtopia.content.service.MediaAclReconciler.class));
         }
     }
 
