@@ -88,15 +88,21 @@ void main() {
           expiresAt: DateTime.now().add(const Duration(minutes: 59, seconds: 43, milliseconds: 500)));
     });
 
-    final sheetH = tester.getSize(find.byKey(const ValueKey('qrPayScroll'))).height +
-        tester.getSize(find.byType(QrPayBottomBar)).height;
-    expect(sheetH, closeTo(860 * 0.6, 1));
+    // 抽屉总高（含拖拽条）= 60% 屏高 ⇒ 顶边落在 40% 处。
+    expect(tester.getTopLeft(find.byType(BottomSheet)).dy, closeTo(860 * 0.4, 1));
     expect(find.text('Rp52.000'), findsOneWidget);
     expect(find.text('59:43'), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
     expect(find.textContaining('PAYGIFT-20261029-000042'), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayCopy')), findsOneWidget);
     expect(find.byType(Image), findsNWidgets(kQrPayLogos.length));
+    // logo 是并排小标签（稿 `.lg`），不能每个撑满一行。
+    for (final img in find.byType(Image).evaluate()) {
+      expect(tester.getSize(find.byWidget(img.widget)).width, lessThan(120));
+    }
+    final first = tester.getTopLeft(find.byType(Image).at(0));
+    final second = tester.getTopLeft(find.byType(Image).at(1));
+    expect(second.dy, first.dy, reason: '前两个 logo 同一行');
     expect(find.text('+ lainnya'), findsOneWidget);
     expect(find.text('Cara bayar'), findsOneWidget);
     expect(find.textContaining('Kode QR berlaku sampai'), findsOneWidget);

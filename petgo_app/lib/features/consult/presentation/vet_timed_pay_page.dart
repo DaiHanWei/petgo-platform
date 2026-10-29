@@ -11,6 +11,7 @@ import '../../../shared/widgets/qr_payment/qr_pay_save.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
@@ -286,6 +287,8 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           backgroundColor: AppColors.base,
           elevation: 0,
           automaticallyImplyLeading: false,
+          // 无返回键时主题的 titleSpacing（为返回键留的 0）会让标题贴着屏幕左边；按稿 C0 / C1 给 16 页边距。
+          titleSpacing: AppSpacing.lg,
           title: Text(
             l10n.vetPayTitle,
           ),

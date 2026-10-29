@@ -179,8 +179,9 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    // 抽屉固定 60% 屏高（稿 A1），内容在内部滚动，按钮区吸底。
-    final double height = MediaQuery.sizeOf(context).height * 0.6;
+    // 抽屉固定 60% 屏高（稿 A1，含顶部拖拽条），内容在内部滚动，按钮区吸底。
+    // showDragHandle 的拖拽条占 kMinInteractiveDimension（48）高，在本 SizedBox 之外，这里扣掉。
+    final double height = MediaQuery.sizeOf(context).height * 0.6 - kMinInteractiveDimension;
     return SizedBox(
       height: height,
       child: Column(
