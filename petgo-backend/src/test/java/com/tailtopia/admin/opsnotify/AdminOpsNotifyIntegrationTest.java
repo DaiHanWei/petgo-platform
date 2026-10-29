@@ -411,6 +411,33 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("V1.4.1 四维条件：新建页有等级 / 活跃档 / 付费下拉；付一笔钱 → 付过钱 +1、没付过 −1；非法值 422")
+    void v141TargetingDropdownsCount() throws Exception {
+        Authentication ed = sender();
+        String page = mvc.perform(get(BASE + "/new").param("lang", "zh_CN").with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(page).contains("name=\"levelTier\"").contains("name=\"activity\"").contains("name=\"paid\"")
+                .contains("15 天以上没打开过").contains("15–20 级").doesNotContain("name=\"activeWithin\"");
+
+        User u = newUser();
+        long paid = estimate(ed, "audienceMode", "FILTER", "paid", "true");
+        long unpaid = estimate(ed, "audienceMode", "FILTER", "paid", "false");
+        jdbc.update("INSERT INTO payment_intents (public_token, user_id, purpose, channel, amount, currency, status,"
+                + " version, created_at, updated_at) VALUES (?, ?, 'PAWCOIN_TOPUP', 'QRIS', 10000, 'IDR', 'PAID', 0,"
+                + " now(), now())", "opsn-paid-" + SEQ.incrementAndGet(), u.getId());
+        assertThat(estimate(ed, "audienceMode", "FILTER", "paid", "true")).isEqualTo(paid + 1);
+        assertThat(estimate(ed, "audienceMode", "FILTER", "paid", "false")).isEqualTo(unpaid - 1);
+        assertThat(estimate(ed, "audienceMode", "FILTER", "levelTier", "NEWBIE", "activity", "OTHER"))
+                .isGreaterThanOrEqualTo(1); // 新建号没有成长账户（NEWBIE）、从没打开过（OTHER）
+
+        MvcResult bad = mvc.perform(htmx(form(post(BASE + "/preview"), "", "audienceMode", "FILTER",
+                        "activity", "WITHIN_30D"), "opsn-estimate").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isUnprocessableEntity()).andReturn();
+        assertThat(bad.getResponse().getContentAsString())
+                .contains("data-code=\"admin.err.ops-notify.audience.invalid\"");
+    }
+
+    @Test
     @DisplayName("I8：全部用户须手输人数（定时 + 立刻取消，绝不立即发）：缺 → 输入确认弹层且不落库；不等 → 422；相等 → 建成")
     void typedCountModalRequiredForAll() throws Exception {
         Authentication ed = sender();

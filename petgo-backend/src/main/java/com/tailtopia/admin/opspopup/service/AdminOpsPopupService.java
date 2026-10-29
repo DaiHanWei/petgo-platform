@@ -5,6 +5,9 @@ import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.ops.AdminOpsTargetValidator;
 import com.tailtopia.admin.opspopup.dto.OpsPopupForm;
 import com.tailtopia.admin.opspopup.service.OpsPopupValidationException.FieldError;
+import com.tailtopia.growth.domain.GrowthTier;
+import com.tailtopia.ops.audience.ActivityBand;
+import com.tailtopia.ops.audience.AudienceFilters;
 import com.tailtopia.ops.popup.domain.OpsPopup;
 import com.tailtopia.ops.popup.domain.OpsPopupAudience;
 import com.tailtopia.ops.popup.domain.OpsPopupFrequency;
@@ -13,6 +16,7 @@ import com.tailtopia.ops.popup.repository.OpsPopupImpressionRepository;
 import com.tailtopia.ops.popup.repository.OpsPopupRepository;
 import com.tailtopia.ops.target.OpsTargetPolicy;
 import com.tailtopia.ops.target.OpsTargetType;
+import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import java.time.Instant;
@@ -23,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -127,6 +132,7 @@ public class AdminOpsPopupService {
         OpsPopup p = OpsPopup.create(v.name, v.startsAt, v.endsAt, v.priority, v.audience, v.newUserDays,
                 v.frequency, v.imageUrlId, v.imageUrlEn, v.titleId, v.titleEn, v.bodyId, v.bodyEn,
                 v.buttonTextId, v.buttonTextEn, v.targetType, v.targetValue);
+        p.setAudienceFilters(v.filters);
         p.activate();
         popups.save(p);
         audit.record(actorAccountId, AuditActions.OPS_POPUP_CREATED, "OPS_POPUP", p.getPublicToken(),
@@ -148,6 +154,7 @@ public class AdminOpsPopupService {
         p.update(v.name, v.startsAt, v.endsAt, v.priority, v.audience, v.newUserDays, v.frequency,
                 v.imageUrlId, v.imageUrlEn, v.titleId, v.titleEn, v.bodyId, v.bodyEn,
                 v.buttonTextId, v.buttonTextEn, v.targetType, v.targetValue);
+        p.setAudienceFilters(v.filters);
         popups.save(p);
         audit.record(actorAccountId, AuditActions.OPS_POPUP_UPDATED, "OPS_POPUP", token,
                 "编辑运营弹窗「" + v.name + "」；跳转 " + targetSummary(v));
@@ -210,7 +217,7 @@ public class AdminOpsPopupService {
             OpsPopupAudience audience, int newUserDays, OpsPopupFrequency frequency,
             String imageUrlId, String imageUrlEn, String titleId, String titleEn,
             String bodyId, String bodyEn, String buttonTextId, String buttonTextEn,
-            OpsTargetType targetType, String targetValue) {
+            OpsTargetType targetType, String targetValue, AudienceFilters filters) {
     }
 
     /** 收集器：同一槽可有多条（汇总条按槽计数）。 */
@@ -364,6 +371,16 @@ public class AdminOpsPopupService {
             }
         }
 
+        // V1.4.1 四维人群条件（单选下拉，空 = 不限）：与运营通知同口径；设了任一条件，游客就不弹（候选服务处理）
+        AudienceFilters filters = AudienceFilters.none();
+        try {
+            filters = new AudienceFilters(one(f.getLevelTier(), GrowthTier.class), one(f.getSpecies(), PetType.class),
+                    one(f.getActivity(), ActivityBand.class), triState(f.getPaid()));
+        } catch (IllegalArgumentException ex) {
+            e.add("filters", "admin.err.opsPopup.filters",
+                    List.of("levelTier", "species", "activity", "paid"));
+        }
+
         int priority = 0;
         String rawPriority = norm(f.getPriority());
         if (rawPriority == null) {
@@ -382,7 +399,26 @@ public class AdminOpsPopupService {
         }
         return new Validated(name, priority, startsAt, endsAt, audience, newUserDays, frequency,
                 imageUrlId, imageUrlEn, titleId, titleEn, bodyId, bodyEn, buttonTextId, buttonTextEn,
-                targetType, targetValue);
+                targetType, targetValue, filters);
+    }
+
+    /** 单选下拉：空 = 不限；非枚举值 → {@link IllegalArgumentException}（由调用方转成字段错误）。 */
+    private static <E extends Enum<E>> Set<E> one(String raw, Class<E> type) {
+        String v = norm(raw);
+        return v == null ? null : java.util.EnumSet.of(Enum.valueOf(type, v));
+    }
+
+    /** 三态：空 = 不限；true / false；其余 → {@link IllegalArgumentException}。 */
+    private static Boolean triState(String raw) {
+        String v = norm(raw);
+        if (v == null) {
+            return null;
+        }
+        return switch (v) {
+            case "true" -> Boolean.TRUE;
+            case "false" -> Boolean.FALSE;
+            default -> throw new IllegalArgumentException("paid");
+        };
     }
 
     /**

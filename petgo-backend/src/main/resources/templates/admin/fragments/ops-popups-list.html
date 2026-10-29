@@ -41,10 +41,14 @@
                       th:text="#{'admin.opsPopups.state.' + ${p.state}}">进行中</span></td>
             <td class="opsp-window" th:text="${p.window}">10/10 00:00 – 10/13 23:59</td>
             <td th:text="#{'admin.opsPopups.frequency.' + ${p.frequency}}">每天最多一次</td>
-            <td th:switch="${p.audience}">
-                <span th:case="'NEW'" th:text="#{admin.opsPopups.audienceList.NEW(${p.newUserDays})}">新用户（7 天内）</span>
-                <span th:case="'OLD'" th:text="#{admin.opsPopups.audienceList.OLD(${p.newUserDays})}">老用户（7 天以上）</span>
-                <span th:case="*" th:text="#{admin.opsPopups.audience.ALL}">全部用户</span>
+            <td>
+                <th:block th:switch="${p.audience}">
+                    <span th:case="'NEW'" th:text="#{admin.opsPopups.audienceList.NEW(${p.newUserDays})}">新用户（7 天内）</span>
+                    <span th:case="'OLD'" th:text="#{admin.opsPopups.audienceList.OLD(${p.newUserDays})}">老用户（7 天以上）</span>
+                    <span th:case="*" th:text="#{admin.opsPopups.audience.ALL}">全部用户</span>
+                </th:block>
+                <!--/* V1.4.1 四维人群条件摘要 */-->
+                <div class="muted" th:if="${p.filters != null}" th:text="${p.filters}">1–4 级 · 猫</div>
             </td>
             <td class="opsp-num" th:text="${p.priority}">20</td>
             <td class="opsp-acts">

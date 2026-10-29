@@ -1,11 +1,14 @@
 package com.tailtopia.auth.service;
 
 import com.tailtopia.notify.ops.domain.AudienceSpec;
+import com.tailtopia.ops.audience.ActivityBand;
+import com.tailtopia.ops.audience.AudienceFilters;
 import com.tailtopia.profile.domain.PetType;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +30,10 @@ import java.util.Map;
  * <p>相对键（V1.3.4 后台返工清单 §0-5）：{@code registeredWithinDays = N} → {@code created_at >= now − N 天}，
  * {@code activeWithinDays = N} → {@code last_active_at >= now − N 天}；{@code now} = <b>实际发送 / 预估的那一刻</b>，
  * 由调用方传入（纯函数不自己取钟）。
+ *
+ * <h2>四维人群条件（V1.4.1，{@link AudienceFilters}）</h2>
+ * 等级档 / 宠物类型 / 活跃档 / 付费，<b>运营通知与开屏弹窗共用 {@link #appendTargeting}</b>（弹窗按单个用户判定，
+ * 见 {@link #matchesUser}）——两处口径不能各写一份。
  *
  * <h2>IDS</h2>
  * 只取子表 {@code ops_notification_campaign_targets} 里的 id + 基础过滤；其余筛选键忽略
@@ -59,6 +66,12 @@ public final class OpsAudienceSql {
     private static final String HAS_PAID_ORDER =
             "EXISTS (SELECT 1 FROM shop_orders o WHERE o.user_id = u.id AND o.status IN ("
                     + "'" + String.join("','", PAID_ORDER_STATUSES) + "'))";
+    /** 用户等级档：成长等级所在段位（以 growth_levels.tier 为准，不硬编码边界）；没有成长账户 = NEWBIE。 */
+    private static final String LEVEL_TIER_IN = "COALESCE((SELECT gl.tier FROM growth_accounts g "
+            + "JOIN growth_levels gl ON gl.level = g.level WHERE g.user_id = u.id), 'NEWBIE') IN (:levelTiers)";
+    /** 付过钱 = 有过一笔成功的真钱支付（QRIS / 混合）；纯 PawCoin 不算。 */
+    private static final String HAS_PAID = "EXISTS (SELECT 1 FROM payment_intents pi WHERE pi.user_id = u.id "
+            + "AND pi.status = 'PAID' AND pi.channel IN ('QRIS', 'MIXED'))";
     private static final String HAS_PHONE = "(u.phone IS NOT NULL AND btrim(u.phone) <> '')";
     private static final String NO_PHONE = "(u.phone IS NULL OR btrim(u.phone) = '')";
     private static final String IN_TARGETS = "u.id IN (SELECT t.user_id FROM ops_notification_campaign_targets t "
@@ -162,16 +175,65 @@ public final class OpsAudienceSql {
         if (spec.hasPet() != null) {
             where.append(spec.hasPet() ? " AND " : " AND NOT ").append(HAS_PET);
         }
-        if (spec.species() != null && !spec.species().isEmpty()) {
-            where.append(" AND ").append(HAS_SPECIES);
-            params.put("species", spec.species().stream().map(PetType::name).sorted().toList());
-        }
+        appendTargeting(spec.filters(), now, where, params);
         if (spec.hasShopOrder() != null) {
             where.append(spec.hasShopOrder() ? " AND " : " AND NOT ").append(HAS_PAID_ORDER);
         }
         if (spec.hasPhone() != null) {
             where.append(" AND ").append(spec.hasPhone() ? HAS_PHONE : NO_PHONE);
         }
+    }
+
+    /**
+     * 四维人群条件（V1.4.1）拼进 WHERE：维度之间「且」，同维多选「或」，不筛的维度不出现。
+     * {@code now} = 实际发送 / 判定的那一刻（活跃档按它往前推 N×24h）。
+     */
+    public static void appendTargeting(AudienceFilters f, Instant now, StringBuilder where,
+            Map<String, Object> params) {
+        if (f.levelTiers() != null) {
+            where.append(" AND ").append(LEVEL_TIER_IN);
+            params.put("levelTiers", f.levelTiers().stream().map(Enum::name).sorted().toList());
+        }
+        if (f.species() != null) {
+            where.append(" AND ").append(HAS_SPECIES);
+            params.put("species", f.species().stream().map(PetType::name).sorted().toList());
+        }
+        if (f.activity() != null) {
+            List<String> or = new ArrayList<>();
+            for (ActivityBand b : f.activity()) {
+                switch (b) {
+                    case WITHIN_7D -> {
+                        or.add("u.last_active_at >= :act7");
+                        params.put("act7", now.minus(Duration.ofDays(7)));
+                    }
+                    case WITHIN_15D -> {
+                        or.add("u.last_active_at >= :act15");
+                        params.put("act15", now.minus(Duration.ofDays(15)));
+                    }
+                    case OTHER -> {
+                        or.add("(u.last_active_at IS NULL OR u.last_active_at < :act15)");
+                        params.put("act15", now.minus(Duration.ofDays(15)));
+                    }
+                }
+            }
+            where.append(" AND (").append(String.join(" OR ", or)).append(')');
+        }
+        if (f.paid() != null) {
+            where.append(f.paid() ? " AND " : " AND NOT ").append(HAS_PAID);
+        }
+    }
+
+    /**
+     * 开屏弹窗（V1.4.1）：单个用户是否命中四维条件。基础过滤与运营通知同口径（虚拟号 / 兽医 / 封号 / 注销不命中）。
+     * 返回单列 boolean 的查询；参数含 {@code uid}。
+     */
+    public static Query matchesUser(long userId, AudienceFilters f, Instant now) {
+        StringBuilder where = new StringBuilder(BASE_FILTER).append(" AND u.id = :uid");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("uid", userId);
+        appendTargeting(f, now, where, params);
+        return new Query("SELECT EXISTS (SELECT 1 FROM users u WHERE " + where + ")",
+                Collections.unmodifiableMap(params));
     }
 
     private static Instant startOf(LocalDate day, ZoneId wib) {

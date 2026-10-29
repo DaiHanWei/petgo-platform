@@ -57,21 +57,22 @@ public class FollowService {
     private final RedisRateLimiter rateLimiter;
     private final ApplicationEventPublisher events;
     private final OfficialFollowOptoutRepository optouts;
+    private final AutoFollowTargets autoFollowTargets;
     private final Clock clock;
 
     @Autowired
     public FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
             FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events,
-            OfficialFollowOptoutRepository optouts) {
+            OfficialFollowOptoutRepository optouts, AutoFollowTargets autoFollowTargets) {
         this(follows, counters, accounts, hideRelations, followReader, rateLimiter, events, optouts,
-                Clock.systemUTC());
+                autoFollowTargets, Clock.systemUTC());
     }
 
     FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
             FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events,
-            OfficialFollowOptoutRepository optouts, Clock clock) {
+            OfficialFollowOptoutRepository optouts, AutoFollowTargets autoFollowTargets, Clock clock) {
         this.follows = follows;
         this.counters = counters;
         this.accounts = accounts;
@@ -80,6 +81,7 @@ public class FollowService {
         this.rateLimiter = rateLimiter;
         this.events = events;
         this.optouts = optouts;
+        this.autoFollowTargets = autoFollowTargets;
         this.clock = clock;
     }
 
@@ -127,8 +129,8 @@ public class FollowService {
         requireNotSelf(viewerId, targetId);
         if (follows.deleteRelation(viewerId, targetId) == 1) {
             counters.applyUnfollow(viewerId, targetId);
-            // 官方号：用户主动取关后记 optout，之后不再被自动关注（V1.3.4 following 流）。
-            if (target.getRole() == Role.ADMIN) {
+            // 官方号 / 自动关注目标（V1.4.1 TailUs）：用户主动取关后记 optout，之后不再被自动关注回来。
+            if (target.getRole() == Role.ADMIN || autoFollowTargets.contains(targetId)) {
                 optouts.insertIfAbsent(viewerId, targetId);
             }
         }

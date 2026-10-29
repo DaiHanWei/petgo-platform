@@ -2,6 +2,7 @@ package com.tailtopia.ops.popup.service;
 
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.auth.service.OpsAudienceQuery;
 import com.tailtopia.ops.popup.domain.OpsPopup;
 import com.tailtopia.ops.popup.domain.OpsPopupAudience;
 import com.tailtopia.ops.popup.domain.OpsPopupFrequency;
@@ -33,6 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>过滤：ACTIVE + 时间窗 {@code [starts_at, ends_at)} + 人群 + 跳转目标可用 + ID 图可解析
  * + （仅登录用户）频次未满。排序 {@code priority DESC, created_at DESC, id DESC}（仓储层）。
  *
+ * <p>V1.4.1 四维人群条件（等级档 / 宠物类型 / 活跃档 / 付费，{@link com.tailtopia.ops.audience.AudienceFilters}）：
+ * 设了任一条件的弹窗<b>游客不弹</b>；登录用户按 {@link OpsAudienceQuery#matches} 判定（与运营通知同一段 SQL）。
+ *
  * <p>🔴 {@code viewerUserId} 只能是 {@code role=USER} 的 users.id；游客 / VET 由 controller 传 null。
  * 游客不做频次过滤（频次在设备本地，AD-15），也<b>不碰曝光表</b>。
  */
@@ -49,22 +53,25 @@ public class OpsPopupCandidateService {
     private final OpsTargetPolicy targetPolicy;
     private final ShopImageUrlResolver imageUrls;
     private final AccountQueryService accounts;
+    private final OpsAudienceQuery audienceQuery;
     private final Clock clock;
 
     @Autowired
     public OpsPopupCandidateService(OpsPopupRepository popups, OpsPopupImpressionRepository impressions,
-            OpsTargetPolicy targetPolicy, ShopImageUrlResolver imageUrls, AccountQueryService accounts) {
-        this(popups, impressions, targetPolicy, imageUrls, accounts, Clock.systemUTC());
+            OpsTargetPolicy targetPolicy, ShopImageUrlResolver imageUrls, AccountQueryService accounts,
+            OpsAudienceQuery audienceQuery) {
+        this(popups, impressions, targetPolicy, imageUrls, accounts, audienceQuery, Clock.systemUTC());
     }
 
     OpsPopupCandidateService(OpsPopupRepository popups, OpsPopupImpressionRepository impressions,
             OpsTargetPolicy targetPolicy, ShopImageUrlResolver imageUrls, AccountQueryService accounts,
-            Clock clock) {
+            OpsAudienceQuery audienceQuery, Clock clock) {
         this.popups = popups;
         this.impressions = impressions;
         this.targetPolicy = targetPolicy;
         this.imageUrls = imageUrls;
         this.accounts = accounts;
+        this.audienceQuery = audienceQuery;
         this.clock = clock;
     }
 
@@ -81,8 +88,14 @@ public class OpsPopupCandidateService {
 
         // ① 人群 → ② 频次（便宜的过滤先做，缩小后面的商品查询范围）→ ③ 跳转目标 → ④ ID 图。
         List<OpsPopup> eligible = live;
-        if (viewer != null) {
-            eligible = live.stream().filter(p -> audienceMatches(p, viewer.getCreatedAt(), now)).toList();
+        if (viewer == null) {
+            // 设了四维条件的弹窗不对游客展示（游客没有等级 / 宠物 / 付费数据可判）
+            eligible = live.stream().filter(p -> p.getAudienceFilters().isEmpty()).toList();
+        } else {
+            eligible = live.stream()
+                    .filter(p -> audienceMatches(p, viewer.getCreatedAt(), now))
+                    .filter(p -> audienceQuery.matches(viewer.getId(), p.getAudienceFilters(), now))
+                    .toList();
             if (!eligible.isEmpty()) {
                 eligible = dropExhausted(eligible, viewer.getId(), now);
             }

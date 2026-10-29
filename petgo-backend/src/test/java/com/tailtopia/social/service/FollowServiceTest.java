@@ -57,8 +57,12 @@ class FollowServiceTest {
     @Mock com.tailtopia.social.repository.OfficialFollowOptoutRepository optouts;
 
     private FollowService service(Instant now) {
+        return service(now, "");
+    }
+
+    private FollowService service(Instant now, String autoFollowIds) {
         return new FollowService(follows, counters, accounts, hideRelations, followReader, rateLimiter, events,
-                optouts, Clock.fixed(now, ZoneOffset.UTC));
+                optouts, new AutoFollowTargets(autoFollowIds), Clock.fixed(now, ZoneOffset.UTC));
     }
 
     private void targetExists() {
@@ -215,6 +219,23 @@ class FollowServiceTest {
         FollowResultResponse r = service(Instant.now()).unfollow(ME, TOKEN);
         verify(counters).applyUnfollow(ME, TARGET);
         assertThat(r.iFollow()).isFalse();
+    }
+
+    /** V1.4.1：取关自动关注目标（TailUs，普通 USER 角色）也记 optout，之后不会被自动关注回来。 */
+    @Test
+    void unfollowAutoFollowTargetRecordsOptout() {
+        targetExists();
+        when(follows.deleteRelation(ME, TARGET)).thenReturn(1);
+        service(Instant.now(), "99, " + TARGET).unfollow(ME, TOKEN);
+        verify(optouts).insertIfAbsent(ME, TARGET);
+    }
+
+    @Test
+    void unfollowOrdinaryUserRecordsNoOptout() {
+        targetExists();
+        when(follows.deleteRelation(ME, TARGET)).thenReturn(1);
+        service(Instant.now(), "99").unfollow(ME, TOKEN);
+        verify(optouts, never()).insertIfAbsent(anyLong(), anyLong());
     }
 
     /** T-1：关注与取关共用一个限流桶。 */

@@ -52,17 +52,20 @@ class OpsPopupCandidateServiceTest {
     private final ShopProductRepository products = mock(ShopProductRepository.class);
     private final ShopImageUrlResolver imageUrls = mock(ShopImageUrlResolver.class);
     private final AccountQueryService accounts = mock(AccountQueryService.class);
+    private final com.tailtopia.auth.service.OpsAudienceQuery audienceQuery =
+            mock(com.tailtopia.auth.service.OpsAudienceQuery.class);
     private final AtomicLong ids = new AtomicLong(100);
 
     @BeforeEach
     void defaults() {
         when(impressions.findShownPopupIds(anyLong(), anyCollection())).thenReturn(Set.of());
         when(impressions.findShownPopupIds(anyLong(), anyCollection(), any(Instant.class))).thenReturn(Set.of());
+        when(audienceQuery.matches(anyLong(), any(), any())).thenReturn(true);
     }
 
     private OpsPopupCandidateService service(Instant now) {
         return new OpsPopupCandidateService(popups, impressions, new OpsTargetPolicy(products), imageUrls, accounts,
-                Clock.fixed(now, ZoneOffset.UTC));
+                audienceQuery, Clock.fixed(now, ZoneOffset.UTC));
     }
 
     private OpsPopup popup(OpsPopupAudience audience, OpsPopupFrequency frequency) {
@@ -107,6 +110,40 @@ class OpsPopupCandidateServiceTest {
         assertThat(queriedAudiences()).containsExactlyInAnyOrder(OpsPopupAudience.ALL);
         verifyNoInteractions(impressions);
         verifyNoInteractions(accounts);
+    }
+
+    // ===== V1.4.1 四维人群条件 =====
+
+    private static com.tailtopia.ops.audience.AudienceFilters catOwners() {
+        return new com.tailtopia.ops.audience.AudienceFilters(null,
+                Set.of(com.tailtopia.profile.domain.PetType.CAT), null, null);
+    }
+
+    @Test
+    void guestNeverGetsPopupWithAudienceFilters() {
+        OpsPopup plain = popup(OpsPopupAudience.ALL, OpsPopupFrequency.ONCE);
+        OpsPopup targeted = popup(OpsPopupAudience.ALL, OpsPopupFrequency.ONCE);
+        targeted.setAudienceFilters(catOwners());
+        when(popups.findLiveCandidates(eq(NOW), anyCollection())).thenReturn(List.of(targeted, plain));
+
+        assertThat(tokens(service(NOW).candidates(null))).containsExactly(plain.getPublicToken());
+        verifyNoInteractions(audienceQuery);
+    }
+
+    @Test
+    void loggedInUserGetsTargetedPopupOnlyWhenMatching() {
+        loggedInRegisteredAt(NOW.minus(Duration.ofDays(30)));
+        OpsPopup plain = popup(OpsPopupAudience.ALL, OpsPopupFrequency.ONCE);
+        OpsPopup targeted = popup(OpsPopupAudience.ALL, OpsPopupFrequency.ONCE);
+        targeted.setAudienceFilters(catOwners());
+        when(popups.findLiveCandidates(eq(NOW), anyCollection())).thenReturn(List.of(targeted, plain));
+
+        when(audienceQuery.matches(eq(USER_ID), eq(catOwners()), eq(NOW))).thenReturn(true);
+        assertThat(tokens(service(NOW).candidates(USER_ID)))
+                .containsExactly(targeted.getPublicToken(), plain.getPublicToken());
+
+        when(audienceQuery.matches(eq(USER_ID), eq(catOwners()), eq(NOW))).thenReturn(false);
+        assertThat(tokens(service(NOW).candidates(USER_ID))).containsExactly(plain.getPublicToken());
     }
 
     @Test

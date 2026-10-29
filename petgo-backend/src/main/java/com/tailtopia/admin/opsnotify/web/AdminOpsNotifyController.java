@@ -209,6 +209,8 @@ public class AdminOpsNotifyController {
         model.addAttribute("form", f);
         model.addAttribute("withinPresets", AdminOpsNotifyService.WITHIN_PRESETS);
         model.addAttribute("speciesValues", PetType.values());
+        model.addAttribute("levelTierValues", com.tailtopia.growth.domain.GrowthTier.values());
+        model.addAttribute("activityValues", com.tailtopia.ops.audience.ActivityBand.values());
         model.addAttribute("targetTypes", OpsTargetType.values());
         model.addAttribute("categories", ProductCategory.values());
         model.addAttribute("appPages", OpsAppPage.values());
@@ -379,6 +381,9 @@ public class AdminOpsNotifyController {
         put(hidden, "species", f.getSpecies());
         put(hidden, "hasShopOrder", f.getHasShopOrder());
         put(hidden, "hasPhone", f.getHasPhone());
+        put(hidden, "levelTier", f.getLevelTier());
+        put(hidden, "activity", f.getActivity());
+        put(hidden, "paid", f.getPaid());
         put(hidden, "userIds", f.getUserIds());
         put(hidden, "idsSource", f.getIdsSource());
         put(hidden, "sendMode", f.getSendMode());
