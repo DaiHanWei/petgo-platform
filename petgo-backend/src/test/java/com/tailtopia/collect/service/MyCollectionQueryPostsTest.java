@@ -23,6 +23,7 @@ import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.FeedItemResponse;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.service.PostMediaResolver;
 import com.tailtopia.place.service.PlaceQueryService;
 import com.tailtopia.shared.paging.KeysetCursor;
 import java.time.Instant;
@@ -55,12 +56,13 @@ class MyCollectionQueryPostsTest {
     @Mock CollectVisibility visibility;
     @Mock AccountQueryService accounts;
     @Mock PlaceQueryService placeCards;
+    @Mock PostMediaResolver postMedia;
 
     private static final long ME = 7L;
     private static final Instant T0 = Instant.parse("2026-10-18T05:00:00.123456Z");
 
     private MyCollectionQuery query() {
-        return new MyCollectionQuery(contentCollections, placeCollections, posts, visibility, accounts, placeCards);
+        return new MyCollectionQuery(contentCollections, placeCollections, posts, visibility, accounts, placeCards, postMedia);
     }
 
     private static ContentCollection row(long id, long postId, Instant at) {
@@ -101,7 +103,7 @@ class MyCollectionQueryPostsTest {
     @Test
     void invisibleRowsKeepPlaceButHaveNoPost() {
         seed(3, Set.of(1L, 3L));
-        CollectionPage<CollectedPostRow> page = query().posts(ME, null);
+        CollectionPage<CollectedPostRow> page = query().posts(ME, null, true);
 
         assertThat(page.items()).extracting(CollectedPostRow::postId).containsExactly(1L, 2L, 3L);
         CollectedPostRow hidden = page.items().get(1);
@@ -127,7 +129,7 @@ class MyCollectionQueryPostsTest {
         when(posts.findAllById(any())).thenReturn(List.of());
         when(visibility.visiblePostIds(eq(ME), any())).thenReturn(Set.of());
 
-        CollectedPostRow only = query().posts(ME, null).items().get(0);
+        CollectedPostRow only = query().posts(ME, null, true).items().get(0);
         assertThat(only.available()).isFalse();
         assertThat(only.post()).isNull();
         verify(accounts, never()).findAuthorViewsWithoutTags(any());
@@ -137,7 +139,7 @@ class MyCollectionQueryPostsTest {
     void fullPageUsesOneBatchQueryEach() {
         Set<Long> all = new HashSet<>(LongStream.rangeClosed(1, 21).boxed().toList());
         seed(21, all);
-        CollectionPage<CollectedPostRow> page = query().posts(ME, null);
+        CollectionPage<CollectedPostRow> page = query().posts(ME, null, true);
 
         assertThat(page.items()).hasSize(20);
         assertThat(page.hasMore()).isTrue();
@@ -155,7 +157,7 @@ class MyCollectionQueryPostsTest {
     @Test
     void emptyPageMakesNoBatchCalls() {
         when(contentCollections.findPage(eq(ME), any(), anyLong(), any(Pageable.class))).thenReturn(List.of());
-        CollectionPage<CollectedPostRow> page = query().posts(ME, "garbage");
+        CollectionPage<CollectedPostRow> page = query().posts(ME, "garbage", true);
         assertThat(page.items()).isEmpty();
         assertThat(page.hasMore()).isFalse();
         verifyNoInteractions(posts, visibility, accounts);
@@ -164,7 +166,7 @@ class MyCollectionQueryPostsTest {
     @Test
     void badCursorIsFirstPage() {
         when(contentCollections.findPage(eq(ME), any(), anyLong(), any(Pageable.class))).thenReturn(List.of());
-        query().posts(ME, "%%%not-a-cursor");
+        query().posts(ME, "%%%not-a-cursor", true);
         verify(contentCollections).findPage(eq(ME), any(), eq(Long.MAX_VALUE), any(Pageable.class));
     }
 
@@ -186,6 +188,39 @@ class MyCollectionQueryPostsTest {
         ContentPost p = post(1L, 101L, "text 1", List.of("https://cdn/1.jpg"));
         FeedItemResponse feed = FeedItemResponse.of(p, new AuthorView(101L, "Rina", null, false, List.of()), 0L, false,
                 0L, null, null, null, null, com.tailtopia.content.dto.PostMedia.image(p));
-        assertThat(query().posts(ME, null).items().get(0).post().coverUrl()).isEqualTo(feed.firstImageUrl());
+        assertThat(query().posts(ME, null, true).items().get(0).post().coverUrl()).isEqualTo(feed.firstImageUrl());
+    }
+
+    /** 专题线 video：把第 1 条收藏改成视频帖（封面原地址 cdn/1.jpg）。 */
+    private void seedOneVideo() {
+        seed(2, Set.of(1L, 2L));
+        List<ContentPost> ps = posts.findAllById(List.of());
+        ReflectionTestUtils.setField(ps.get(0), "mediaType", com.tailtopia.content.domain.MediaType.VIDEO);
+    }
+
+    @Test
+    void oldClientSeesVideoPostAsUnavailablePlaceholder() {
+        seedOneVideo();
+        CollectionPage<CollectedPostRow> page = query().posts(ME, null, false);
+
+        assertThat(page.items()).extracting(CollectedPostRow::postId).containsExactly(1L, 2L);
+        assertThat(page.items().get(0).available()).isFalse();
+        assertThat(page.items().get(0).post()).isNull();
+        assertThat(page.items().get(1).available()).isTrue();
+        verifyNoInteractions(postMedia);
+    }
+
+    @Test
+    void newClientGetsVideoCoverFromMediaResolver() {
+        seedOneVideo();
+        when(postMedia.resolve(any(), eq(ME))).thenReturn(new com.tailtopia.content.dto.PostMedia(
+                com.tailtopia.content.domain.MediaType.VIDEO, null, List.of("https://cdn/signed-cover.jpg")));
+        CollectionPage<CollectedPostRow> page = query().posts(ME, null, true);
+
+        assertThat(page.items().get(0).available()).isTrue();
+        assertThat(page.items().get(0).post().coverUrl()).isEqualTo("https://cdn/signed-cover.jpg");
+        // 图文帖不经解析器，封面仍是首图原样。
+        assertThat(page.items().get(1).post().coverUrl()).isEqualTo("https://cdn/2.jpg");
+        verify(postMedia, times(1)).resolve(any(), eq(ME));
     }
 }
