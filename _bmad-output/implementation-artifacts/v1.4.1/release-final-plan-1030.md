@@ -93,3 +93,6 @@
 - 10-30 02:10 · 步骤1 视频回滚 · a651782f + d68b5d97（合 dev）· 无冲突，analyze/test-compile 绿
 - 10-30 02:40 · 步骤2 Diary 页头 · ffc111c8（合 dev）· test/profile 757 全绿
 - 10-30 03:30 · 步骤3 QRIS 支付页 · feat/1.4.1-qr-payment（合 dev）· 支付相关 App 测试 1663 + 后端 97 绿
+- 10-30 04:10 · 步骤4 banner 曝光+点击 · feat/1.4.1-banner-tracking（合 dev）
+- 10-30 05:00 · 步骤5 全量检查 · App 4108 绿（名额页 6 个用例适配抽屉转圈 004c3026）；后端 7176：修 1 个文案规则失败，剩 2 个已知 nanoTime 旧错；flyway-guard OK
+- 10-30 · 步骤0 复查 Bug：仍 3 条（599/600/604 均已修），无新 bug
