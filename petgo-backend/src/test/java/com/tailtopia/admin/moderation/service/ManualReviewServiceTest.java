@@ -155,45 +155,6 @@ class ManualReviewServiceTest {
         verify(violationCountService).record(44L, ViolationType.POST);
     }
 
-    // ===== 专题线 video Story 3.2：名单外视频帖超时不受总开关影响 =====
-
-    @Test
-    void scanTimeoutsDiscardsVideoForcedPostEvenWhenDisabled() {
-        when(settingsService.isManualReviewEnabled()).thenReturn(false);
-        ManualReviewItem video = ManualReviewItem.pending(700L, Instant.now().minusSeconds(86400 * 4));
-        ManualReviewItem plain = ManualReviewItem.pending(701L, Instant.now().minusSeconds(86400 * 4));
-        when(queue.findByStatusAndSubmittedAtBefore(eq(ReviewStatus.PENDING), any()))
-                .thenReturn(List.of(video, plain));
-        when(contentService.isVideoForcedReview(700L)).thenReturn(true);
-        when(contentService.isVideoForcedReview(701L)).thenReturn(false);
-        stubSummary(700L, 45L);
-
-        int n = service.scanTimeouts(Instant.now());
-
-        assertThat(n).isEqualTo(1);
-        verify(contentService).discardReview(700L);
-        verify(contentService, never()).discardReview(701L);
-        assertThat(video.getStatus()).isEqualTo(ReviewStatus.TIMED_OUT);
-        assertThat(plain.getStatus()).isEqualTo(ReviewStatus.PENDING);
-        verify(notifications).send(eq(45L), eq(NotificationType.CONTENT_REVIEW_TIMED_OUT), any(), any(), any(), any());
-        verify(auditService).record(eq(null), eq(AuditActions.CONTENT_REVIEW_TIMED_OUT), eq("CONTENT_POST"),
-                eq("700"), any());
-        verify(violationCountService).record(45L, ViolationType.POST);
-    }
-
-    @Test
-    void scanTimeoutsWhenEnabledHandlesAllPostsWithoutVideoLookup() {
-        when(settingsService.isManualReviewEnabled()).thenReturn(true);
-        ManualReviewItem plain = ManualReviewItem.pending(702L, Instant.now().minusSeconds(86400 * 4));
-        when(queue.findByStatusAndSubmittedAtBefore(eq(ReviewStatus.PENDING), any()))
-                .thenReturn(List.of(plain));
-        stubSummary(702L, 46L);
-
-        assertThat(service.scanTimeouts(Instant.now())).isEqualTo(1);
-        verify(contentService).discardReview(702L);
-        verify(contentService, never()).isVideoForcedReview(anyLong()); // 开关开时短路，不多查一次
-    }
-
     // ===== story 3：评论多态分派（AC-B4/B5/B8） =====
 
     @Test

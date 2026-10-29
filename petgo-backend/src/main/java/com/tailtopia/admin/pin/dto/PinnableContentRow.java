@@ -9,14 +9,7 @@ import java.time.Instant;
  * @param authorName    作者昵称；未知 / 注销为 null
  * @param authorDeleted 作者已注销 —— 模板显示本地化「已注销用户」
  * @param thumbUrl      首图（公开 CDN 全 URL，与内容列表缩略图同源）；纯文字帖为 null
- * @param video         视频帖（专题线 video Story 3.3）：{@code thumbUrl} 为签名封面
  */
 public record PinnableContentRow(long id, String type, String summary, Instant createdAt,
-        Long authorId, String authorName, boolean authorDeleted, String thumbUrl, boolean video) {
-
-    /** 兼容旧调用（图文帖）。 */
-    public PinnableContentRow(long id, String type, String summary, Instant createdAt,
-            Long authorId, String authorName, boolean authorDeleted, String thumbUrl) {
-        this(id, type, summary, createdAt, authorId, authorName, authorDeleted, thumbUrl, false);
-    }
+        Long authorId, String authorName, boolean authorDeleted, String thumbUrl) {
 }

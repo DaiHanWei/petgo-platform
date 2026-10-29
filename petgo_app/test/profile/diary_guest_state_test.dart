@@ -329,7 +329,7 @@ void main() {
   });
 
   group('页头入口区按 A3 双栏（2026-08-04 对稿修正：身份证从标题行挪到入口区）', () {
-    testWidgets('健康记录 / 身份证两卡并排等宽，且都在信息卡下方（不在标题行）', (tester) async {
+    testWidgets('健康记录 / 综合入口合成一张卡上下两行，且都在信息卡下方（不在标题行）', (tester) async {
       await _pumpTall(tester, const DiaryGuestPage());
 
       final health = find.byKey(const ValueKey('diaryHealthEntry'));
@@ -339,28 +339,27 @@ void main() {
 
       final h = tester.getRect(health);
       final i = tester.getRect(idCard);
-      // 并排：同一行（顶边一致）
-      expect((h.top - i.top).abs() < 1, isTrue, reason: '两卡应并排在同一行，实测差 ${h.top - i.top}');
-      // 等宽（1fr 1fr）
-      expect((h.width - i.width).abs() < 1, isTrue, reason: '两卡应等宽，实测 ${h.width} vs ${i.width}');
-      // 左健康、右身份证
-      expect(h.left < i.left, isTrue);
+      // V1.4.1 Diary 页头修复 ①：一张卡两行 —— 健康在上、综合入口在下，同宽同左边。
+      expect(h.bottom <= i.top + 1, isTrue, reason: '健康行应在综合入口行上方');
+      expect((h.left - i.left).abs() < 1, isTrue);
+      expect((h.width - i.width).abs() < 1, isTrue);
       // 身份证入口不再位于标题行：它应落在宠物信息卡下方
       final infoCard = tester.getRect(find.byKey(const ValueKey('petInfoCard')));
-      expect(i.top > infoCard.bottom, isTrue,
-          reason: '身份证入口应在信息卡下方的入口区，而不是标题行的图标按钮');
-      // 编辑铅笔仍在标题行（在信息卡上方）
+      expect(h.top > infoCard.bottom, isTrue,
+          reason: '入口应在信息卡下方的入口区，而不是标题行的图标按钮');
+      // 游客态仍有标题行：编辑铅笔在信息卡上方
       final edit = tester.getRect(find.byKey(const ValueKey('editProfileButton')));
       expect(edit.bottom < infoCard.top, isTrue);
     });
 
-    testWidgets('综合入口卡按 V1.4.0 稿为纯文字卡（无图标），且不渲染编号（编号可空）', (tester) async {
+    testWidgets('综合入口有图标，且不渲染编号（编号可空）', (tester) async {
       await _pumpTall(tester, const DiaryGuestPage());
-      // V1.4.0 L2 还原度：1.4.0 稿 `.ent2` 两栏入口为无图标纯文字卡（取代 V1.3.0 稿 P1 的星芒图标）。
+      // V1.4.1 Diary 页头修复 ①：入口行恢复星芒图标（V1.4.0 稿这块的无图标示意作废）。
       expect(
           find.descendant(
-              of: find.byKey(const ValueKey('diaryIdCardButton')), matching: find.byType(Icon)),
-          findsNothing);
+              of: find.byKey(const ValueKey('diaryIdCardButton')),
+              matching: find.byIcon(Icons.auto_awesome_outlined)),
+          findsOneWidget);
 
       // V1.3.0 Story 5.1：这一格从「宠物身份证」改成了「Know Your Pet」聚合入口
       // （身份证成为聚合页里的一张卡），图标按 UI 稿 P1 用星芒（2026-09-21 对稿由爪印改来：

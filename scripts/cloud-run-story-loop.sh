@@ -40,11 +40,6 @@ impl_dir="_bmad-output/implementation-artifacts/${VER}"
 plan_dir="_bmad-output/planning-artifacts/${VER}"
 status_file="$impl_dir/sprint-status-${VER}-${THEME}.yaml"
 rules_file="$impl_dir/cloud-rules-${THEME}.md"
-# 专题线（不挂版本号，如 video）只有 sprint-status-<专题>.yaml，没有主题后缀：回退到它。
-# 用法：scripts/cloud-run-story-loop.sh video video feat/video
-if [ ! -f "${status_file}" ] && [ -f "$impl_dir/sprint-status-${VER}.yaml" ]; then
-  status_file="$impl_dir/sprint-status-${VER}.yaml"
-fi
 
 # ---- 1. 校验 ---------------------------------------------------------------
 [ -f "${status_file}" ] || { echo "FATAL: 找不到 ${status_file}（先跑 sprint-planning 生成）"; exit 1; }

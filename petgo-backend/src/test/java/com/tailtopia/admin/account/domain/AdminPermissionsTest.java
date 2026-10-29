@@ -135,10 +135,7 @@ class AdminPermissionsTest {
         // 2026-10-18（V1.4.0 ③ gift Story 3.1）：gift.catalog_view / gift.catalog_edit（不预授）⇒ 82 + 2 = 84。
         // 2026-10-18（V1.4.0 ③ gift Story 3.2）：送礼记录 gift.order_view（导出同码，不另设，不预授）⇒ 84 + 1 = 85
         //     （2026-10-19 ③ 送礼线合入 dev_1.4.0 后实测：① +3、② +1、③ +3）。
-        // 2026-10-16（专题线 video Story 1.1）：改会员等级 user.vip_level.edit、视频免审名单 video.trusted.manage
-        //     （发视频是对外分发能力，两码均不预授予）⇒ 78 + 2 = 80；
-        //     2026-10-29 video 线合入 dev_1.4.1 后 ⇒ 85 + 2 = 87。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(87);
+        assertThat(all).hasSize(85);
     }
 }

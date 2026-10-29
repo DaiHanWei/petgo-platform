@@ -18,7 +18,7 @@ class RankPoolFilterSharedTest {
     @Test
     void mainPoolUsesTheSharedFilter() throws NoSuchMethodException {
         Query q = ContentPostRepository.class
-                .getMethod("findRankCandidatePool", boolean.class, Long.class, boolean.class, Pageable.class)
+                .getMethod("findRankCandidatePool", boolean.class, Long.class, Pageable.class)
                 .getAnnotation(Query.class);
         assertThat(q.value()).contains(ContentPostRepository.RANK_POOL_FILTER);
     }
@@ -26,7 +26,7 @@ class RankPoolFilterSharedTest {
     @Test
     void eduPoolUsesTheSharedFilter() throws NoSuchMethodException {
         Query q = ContentPostRepository.class
-                .getMethod("findEduCandidatePool", boolean.class, Long.class, Instant.class, boolean.class,
+                .getMethod("findEduCandidatePool", boolean.class, Long.class, Instant.class,
                         Pageable.class)
                 .getAnnotation(Query.class);
         assertThat(q.value()).contains(ContentPostRepository.RANK_POOL_FILTER)

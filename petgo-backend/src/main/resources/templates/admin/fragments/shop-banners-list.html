@@ -18,6 +18,7 @@
         <thead><tr>
             <th th:text="#{admin.shop.banners.col.preview}">预览</th>
             <th th:text="#{admin.shop.banners.col.size}">原始尺寸</th>
+            <th th:text="#{admin.shop.banners.col.target}">点击跳转</th>
             <th class="s-col-num" th:text="#{admin.shop.banners.col.weight}">权重</th>
             <th th:text="#{admin.shop.banners.col.status}">状态</th>
             <th class="s-col-act" th:text="#{admin.common.actions}">操作</th>
@@ -37,6 +38,13 @@
                       th:text="${b.w} + ' × ' + ${b.h}">1200 × 400</span>
                 <span th:if="${b.w == null or b.h == null}" class="muted"
                       th:text="#{admin.shop.banners.sizeUnknown}">未知</span>
+            </td>
+            <td>
+                <!-- V1.4.1：跳转目标 + 埋点 banner_id（运营对 PostHog 看板时按这个 id 找 banner）。 -->
+                <span th:text="#{'admin.shop.banners.target.' + ${b.targetType}}">不可点</span>
+                <div th:if="${b.targetValue != null}" class="s-mono" style="max-width:240px;word-break:break-all"
+                     th:text="${b.targetValue}">https://…</div>
+                <div class="muted s-mono" th:text="'banner_id ' + ${b.publicToken}">banner_id …</div>
             </td>
             <td class="s-col-num" th:text="${b.sortWeight}">0</td>
             <td>

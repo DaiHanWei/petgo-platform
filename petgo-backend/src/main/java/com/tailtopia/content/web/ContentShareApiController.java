@@ -10,7 +10,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -45,10 +44,9 @@ public class ContentShareApiController {
     }
 
     @GetMapping("/api/v1/public/shared-posts/{shareToken}")
-    public SharedPostResponse sharedPost(@PathVariable String shareToken,
-            @RequestHeader(value = com.tailtopia.shared.web.ClientCapabilities.HEADER, required = false) String capabilities) {
+    public SharedPostResponse sharedPost(@PathVariable String shareToken) {
         // 失效一律 404 同一文案：不区分"没这个 token" / "内容已删" / "作者注销"（防枚举）。
-        return shareService.findSharedPost(shareToken, com.tailtopia.shared.web.ClientCapabilities.includesVideo(capabilities))
+        return shareService.findSharedPost(shareToken)
                 .orElseThrow(() -> AppException.notFound("这条内容已不存在"));
     }
 

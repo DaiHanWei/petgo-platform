@@ -246,11 +246,6 @@ public class VirtualCommentService {
     private ContentPost requirePost(long postId, boolean mustBePublished) {
         ContentPost post = posts.findById(postId).filter(p -> p.getDeletedAt() == null)
                 .orElseThrow(() -> AppException.notFound("帖子不存在或已删除").code("admin.err.virtualComment.postGone"));
-        // 专题线 video Story 1.3：视频帖不发暖评（FR-10）。分发列表已排除，这里挡直接按 id 发评论；
-        // 只拦「发」（mustBePublished），不拦打开抽屉看评论。
-        if (mustBePublished && post.getMediaType() == com.tailtopia.content.domain.MediaType.VIDEO) {
-            throw AppException.validation("视频帖不能发暖评").code("admin.err.virtualComment.videoPost");
-        }
         if (mustBePublished && post.getStatus() != PostStatus.PUBLISHED) {
             throw AppException.notFound("帖子不可见，不能评论").code("admin.err.virtualComment.postHidden");
         }

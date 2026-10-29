@@ -40,12 +40,9 @@ public class ContentShareService {
     private final ContentShareRepository shares;
     private final CardTokenGenerator tokenGenerator;
     private final AccountQueryService accounts;
-    /** 专题线 video Story 2.1：媒体投影（分享页匿名 → 公开地址）。 */
-    private final PostMediaResolver postMedia;
 
     public ContentShareService(ContentPostRepository posts, ContentShareRepository shares,
-            CardTokenGenerator tokenGenerator, AccountQueryService accounts, PostMediaResolver postMedia) {
-        this.postMedia = postMedia;
+            CardTokenGenerator tokenGenerator, AccountQueryService accounts) {
         this.posts = posts;
         this.shares = shares;
         this.tokenGenerator = tokenGenerator;
@@ -114,15 +111,13 @@ public class ContentShareService {
      * 由调用方收敛到失效页 —— <b>绝不区分原因</b>，否则这个端点就成了内容状态探测器。
      */
     @Transactional(readOnly = true)
-    public Optional<SharedPostResponse> findSharedPost(String shareToken, boolean includeVideo) {
+    public Optional<SharedPostResponse> findSharedPost(String shareToken) {
         return shares.findByShareToken(shareToken)
                 .flatMap(s -> posts.findById(s.getContentPostId()))
                 .filter(p -> p.getDeletedAt() == null)
                 .filter(p -> p.getStatus() == PostStatus.PUBLISHED)
                 .filter(p -> p.getReportHiddenAt() == null)
                 .filter(p -> accounts.isActive(p.getAuthorId()))
-                // 专题线 video Story 2.2（AD-7）：旧版 App 内打开视频帖的分享链接 → 与失效同一个结果（404）。
-                .filter(p -> includeVideo || p.getMediaType() != com.tailtopia.content.domain.MediaType.VIDEO)
                 // 🔴 这里**没有** visibility 过滤，是刻意的（AD-15 Rule 6，见类注释）。
                 .map(this::project);
     }
@@ -144,7 +139,17 @@ public class ContentShareService {
         // 注销匿名化也在那一层，本处不重复实现。
         AuthorView author = accounts.findAuthorViews(List.of(post.getAuthorId()))
                 .getOrDefault(post.getAuthorId(), AuthorView.anonymized(post.getAuthorId()));
-        // 专题线 video Story 2.1：分享页匿名访问 → 查看者 null，视频恒为公开地址。
-        return SharedPostResponse.of(post, author, postMedia.resolve(post, null));
+        List<String> images = post.getImageUrls() == null ? List.of() : List.copyOf(post.getImageUrls());
+        return new SharedPostResponse(
+                author.nickname(),
+                author.avatarUrl(),
+                author.deleted(),
+                post.getType().name(),
+                post.getText(),
+                images,
+                post.getCreatedAt(),
+                author.badgeLevel(),
+                author.badgeTier(),
+                author.badgeFrame());
     }
 }

@@ -2,13 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/qr_payment/qr_pay_parts.dart';
+import '../../../shared/widgets/qr_payment/qr_pay_save.dart';
 import '../data/pawcoin_repository.dart';
 import '../domain/topup.dart';
 import 'pawcoin_controller.dart';
@@ -296,71 +297,58 @@ class _RechargePageState extends ConsumerState<RechargePage> {
   }
 
   // ---- 支付中（载荷 + 轮询）----
+  // V1.4.1 QRIS 支付页 B1：原有标题 / 二维码 / 倒计时 / 等待中全部保留（扫码提示并入步骤 2），
+  // 新增金额卡（含到账 koin）、订单号、付款 App、付款步骤、吸底「Simpan Kode QR」。
+  // 充值页原本没有取消按钮（返回即离开），本次不加。B6：后端没给 payload（测试环境）→ 占位框、保存置灰。
   Widget _payingView(AppLocalizations l10n) {
-    final payload = _topup?.payload;
-    // GemPay 返回 QRIS/EMVCo 串（qrcode），本地生成二维码渲染（不是图片 URL）。
-    // 兼容历史：若 payload 恰是 http(s) 图片链接则回退 Image.network；空则占位框。
+    final t = _topup;
+    final payload = t?.payload;
     final hasPayload = payload != null && payload.isNotEmpty;
-    final isHttp = hasPayload && (payload.startsWith('http://') || payload.startsWith('https://'));
-    return ListView(
+    return Column(
       key: const ValueKey('rechargePaying'),
-      padding: const EdgeInsets.all(AppSpacing.screenEdge),
       children: [
-        Text(l10n.rechargePayingTitle,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
-        const SizedBox(height: AppSpacing.lg),
-        Center(
-          child: !hasPayload
-              ? _stubQrBox(l10n)
-              : isHttp
-                  ? Image.network(payload, width: 220, height: 220, fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => _stubQrBox(l10n))
-                  : Container(
-                      width: 220,
-                      height: 220,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.line),
-                      ),
-                      child: QrImageView(
-                        data: payload,
-                        version: QrVersions.auto,
-                        backgroundColor: Colors.white,
-                        errorStateBuilder: (_, _) => _stubQrBox(l10n),
-                      ),
-                    ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Center(child: Text(l10n.rechargeScanHint, style: const TextStyle(fontSize: 13, color: AppColors.ink2))),
-        const SizedBox(height: AppSpacing.lg),
-        // 60min 付款窗倒计时（服务端权威 expiresAt；重开不重置）。
-        Center(
-          child: Text(
-            l10n.rechargeExpiresIn(_fmtRemaining(_remaining)),
-            key: const ValueKey('rechargeCountdown'),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(2, 2, 2, 12),
+                child: Text(l10n.rechargePayingTitle,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              ),
+              // 60min 付款窗倒计时（服务端权威 expiresAt；重开不重置）。
+              QrPaySummary(
+                density: QrPayDensity.page,
+                amountIdr: t?.amount,
+                coins: t?.coins,
+                remaining: _remaining,
+                expiresAt: t?.expiresAt,
+                countdownKey: const ValueKey('rechargeCountdown'),
+              ),
+              const SizedBox(height: 12),
+              QrPayCodeCard(
+                density: QrPayDensity.page,
+                payload: payload,
+                orderRef: t?.paymentRef,
+                stubHint: l10n.rechargeStubHint,
+                qrKey: const ValueKey('rechargeQr'),
+              ),
+              QrPayGuide(expiresAt: t?.expiresAt),
+            ],
           ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-          const SizedBox(width: AppSpacing.md),
-          Text(l10n.rechargeWaiting, style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
-        ]),
+        QrPayBottomBar(
+          density: QrPayDensity.page,
+          onSave: !hasPayload
+              ? null
+              : () => saveQrPaymentImage(context,
+                  payload: payload,
+                  amountIdr: t?.amount,
+                  orderRef: t?.paymentRef,
+                  expiresAt: t?.expiresAt),
+        ),
       ],
     );
-  }
-
-  /// mm:ss（≥1h 显示 h:mm:ss）。
-  static String _fmtRemaining(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    final mm = m.toString().padLeft(2, '0');
-    final ss = s.toString().padLeft(2, '0');
-    return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
   }
 
   Widget _expiredView(AppLocalizations l10n) => Center(
@@ -390,26 +378,6 @@ class _RechargePageState extends ConsumerState<RechargePage> {
               ),
             ],
           ),
-        ),
-      );
-
-  Widget _stubQrBox(AppLocalizations l10n) => Container(
-        width: 220,
-        height: 220,
-        decoration: BoxDecoration(
-          color: AppColors.cream2,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.line),
-        ),
-        alignment: Alignment.center,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.qr_code_2, size: 64, color: AppColors.mint),
-            const SizedBox(height: AppSpacing.sm),
-            Text(l10n.rechargeStubHint,
-                textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-          ]),
         ),
       );
 

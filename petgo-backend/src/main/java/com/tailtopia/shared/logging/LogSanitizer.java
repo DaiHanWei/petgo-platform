@@ -45,11 +45,7 @@ public class LogSanitizer {
             // 位置坐标（NFR-4，batch-b1 复审）：`POST /places` 请求体带的是用户标记时的设备 GPS
             // （表单默认取当前定位）。query 里的 lat/lng 已由 ApiAccessLoggingFilter.redactQuery 打码，
             // 请求体这一半此前是明文落盘的。响应里的场所坐标同样来自标记人的 GPS，一并打码。
-            "lat", "lng", "latitude", "longitude",
-            // 视频上传策略（专题线 video Story 1.2 · AC4，code review）：响应 fields.policy 是 base64
-            // 的 PostObject 策略（含完整 key 与条件），与 signature 一起才能直传；AC4 要求不进 INFO 日志。
-            // OSSAccessKeyId 不是 Secret，但属半敏感运维信息，一并打码。全仓无其他同名 JSON 键。
-            "policy", "ossaccesskeyid");
+            "lat", "lng", "latitude", "longitude");
 
     /**
      * <b>仅请求体</b>打码的字段名：用户自由文本，可含第三者 PII / 指控原文（如账号举报的

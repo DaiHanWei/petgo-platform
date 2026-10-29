@@ -159,7 +159,6 @@ class ContentApiControllerEndpointTest extends ApiIntegrationTest {
 
         // 拦截路径不落库（AC8）。
         long count = posts.findMyPosts(author.getId(), false, null, null,
-                        true,
                         org.springframework.data.domain.PageRequest.of(0, 50))
                 .size();
         org.assertj.core.api.Assertions.assertThat(count).isZero();
@@ -260,7 +259,6 @@ class ContentApiControllerEndpointTest extends ApiIntegrationTest {
         // 同 key 重放 → 取回既有资源，不重复落库。
         org.assertj.core.api.Assertions.assertThat(secondId).isEqualTo(firstId);
         long count = posts.findMyPosts(author.getId(), false, null, null,
-                        true,
                         org.springframework.data.domain.PageRequest.of(0, 50))
                 .stream().filter(p -> p.getType() == ContentType.KNOWLEDGE).count();
         org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1L);

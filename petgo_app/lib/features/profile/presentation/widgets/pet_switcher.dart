@@ -29,7 +29,7 @@ class PetSwitcher extends ConsumerWidget {
       key: const ValueKey('petSwitcher'),
       scrollDirection: Axis.horizontal,
       // 锁标向左下溢出 4，留出位置不被裁。
-      padding: const EdgeInsets.only(left: 4, bottom: 4),
+      padding: const EdgeInsets.only(left: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

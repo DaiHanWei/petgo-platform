@@ -1,8 +1,6 @@
 package com.tailtopia.shared.media;
 
 import com.tailtopia.shared.error.AppException;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.List;
 
 /**
@@ -32,16 +30,7 @@ import java.util.List;
  */
 public final class MediaObjectKeys {
 
-    private static final SecureRandom RNG = new SecureRandom();
-
     private MediaObjectKeys() {
-    }
-
-    /** 16 字节随机 → URL-safe base64，无填充（22 字符）。对外标识不可枚举（架构 §Enforcement）。 */
-    public static String randomToken() {
-        byte[] b = new byte[16];
-        RNG.nextBytes(b);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 
     /** 该 key 是否是这个用户在该隐私域下直传产生的。 */

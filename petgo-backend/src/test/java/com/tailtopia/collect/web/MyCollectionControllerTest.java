@@ -47,7 +47,7 @@ class MyCollectionControllerTest {
     @Test
     void missingJwtIsUnauthorized() {
         MyCollectionController c = new MyCollectionController(query);
-        AppException e = catchThrowableOfType(AppException.class, () -> c.posts(null, null, null));
+        AppException e = catchThrowableOfType(AppException.class, () -> c.posts(null, null));
         assertThat(e.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verifyNoInteractions(query);
     }
@@ -55,14 +55,8 @@ class MyCollectionControllerTest {
     @Test
     void acceptsNoUserIdParameter() {
         for (Method m : MyCollectionController.class.getDeclaredMethods()) {
-            if (m.getName().equals("places")) {
+            if (m.getName().equals("posts") || m.getName().equals("places")) {
                 assertThat(m.getParameterTypes()).containsExactly(Jwt.class, String.class);
-            }
-            // 帖子收藏多一个 X-App-Capabilities 请求头（专题线 video：旧版隐藏视频帖），仍不接受任何 userId。
-            if (m.getName().equals("posts")) {
-                assertThat(m.getParameterTypes()).containsExactly(Jwt.class, String.class, String.class);
-                assertThat(m.getParameters()[2].getAnnotation(
-                        org.springframework.web.bind.annotation.RequestHeader.class)).isNotNull();
             }
         }
     }
@@ -71,12 +65,12 @@ class MyCollectionControllerTest {
     @SuppressWarnings("unchecked")
     void postPageShape() {
         Instant t = Instant.parse("2026-10-18T05:00:00Z");
-        when(query.posts(7L, null, false)).thenReturn(new CollectionPage<>(List.of(
+        when(query.posts(7L, null)).thenReturn(new CollectionPage<>(List.of(
                 new CollectedPostRow(1L, t, true, new CollectedPostRow.Post(ContentType.DAILY, "hi", "https://cdn/1.jpg",
                         new CollectedPostRow.Author("Rina", null))),
                 new CollectedPostRow(2L, t, false, null)), null, false));
 
-        Map<String, Object> page = wire(new MyCollectionController(query).posts(user(7L), null, null));
+        Map<String, Object> page = wire(new MyCollectionController(query).posts(user(7L), null));
         assertThat(page.keySet()).containsExactlyInAnyOrder("items", "hasMore");
         List<Map<String, Object>> items = (List<Map<String, Object>>) page.get("items");
         assertThat(items.get(0).keySet()).containsExactlyInAnyOrder("postId", "collectedAt", "available", "post");

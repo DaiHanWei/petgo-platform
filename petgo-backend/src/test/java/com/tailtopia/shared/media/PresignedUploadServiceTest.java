@@ -6,18 +6,12 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.shared.error.AppException;
-import com.tailtopia.shared.error.ErrorTypes;
 import com.tailtopia.shared.media.dto.UploadUrlResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -40,7 +34,7 @@ class PresignedUploadServiceTest {
         props.getOss().setCdnBaseUrl("https://cdn.example");
         props.getSignedUrl().setUploadTtlSeconds(600);
         service = new PresignedUploadService(ossClient, props);
-        when(ossClient.presignedPutUrl(anyString(), anyString(), anyString(), anyLong(), Mockito.nullable(String.class)))
+        when(ossClient.presignedPutUrl(anyString(), anyString(), anyString(), anyLong(), Mockito.anyBoolean()))
                 .thenReturn("https://signed.example/put");
     }
 
@@ -51,15 +45,14 @@ class PresignedUploadServiceTest {
         assertThat(r.method()).isEqualTo("PUT");
         assertThat(r.objectKey()).startsWith("public/42/").endsWith(".jpg");
         assertThat(r.headers()).containsEntry("Content-Type", "image/jpeg")
-                .containsEntry("x-oss-object-acl", "public-read")
-                .containsEntry("x-oss-forbid-overwrite", "true");
+                .containsEntry("x-oss-object-acl", "public-read");
         assertThat(r.publicUrl()).isEqualTo("https://cdn.example/" + r.objectKey());
 
-        // 现签时传入 ACL=public-read、桶=tailtopia、TTL=600。
-        ArgumentCaptor<String> acl = ArgumentCaptor.forClass(String.class);
+        // 现签时传入 publicRead=true、桶=tailtopia、TTL=600。
+        ArgumentCaptor<Boolean> pub = ArgumentCaptor.forClass(Boolean.class);
         verify(ossClient).presignedPutUrl(eq("tailtopia"), eq(r.objectKey()), eq("image/jpeg"),
-                eq(600L), acl.capture());
-        assertThat(acl.getValue()).isEqualTo("public-read");
+                eq(600L), pub.capture());
+        assertThat(pub.getValue()).isTrue();
     }
 
     @Test
@@ -71,8 +64,7 @@ class PresignedUploadServiceTest {
                 .doesNotContainKey("x-oss-object-acl");
         // 私密域绝不给公开 URL（读走签名 URL）。
         assertThat(r.publicUrl()).isNull();
-        assertThat(r.headers()).containsEntry("x-oss-forbid-overwrite", "true");
-        verify(ossClient).presignedPutUrl(anyString(), anyString(), anyString(), anyLong(), Mockito.isNull());
+        verify(ossClient).presignedPutUrl(anyString(), anyString(), anyString(), anyLong(), eq(false));
     }
 
     @Test
@@ -82,54 +74,11 @@ class PresignedUploadServiceTest {
         assertThat(k1).isNotEqualTo(k2);
     }
 
-    @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {"  ", "application/octet-stream", "video/mp4", "text/html", "image/jpg", "image/gif"})
-    void nonImageContentTypeIsRejectedBeforeAnyOssCall(String ct) {
-        Mockito.reset(ossClient);
-        for (MediaScope scope : MediaScope.values()) {
-            assertThatThrownBy(() -> service.issue(scope, 7L, ct))
-                    .isInstanceOfSatisfying(AppException.class, e -> {
-                        assertThat(e.getStatus().value()).isEqualTo(422);
-                        assertThat(e.getType()).isEqualTo(ErrorTypes.UPLOAD_CONTENT_TYPE_NOT_ALLOWED);
-                    });
-        }
-        verifyNoInteractions(ossClient);
-    }
-
-    @ParameterizedTest
-    @CsvSource({"image/jpeg,jpg", "image/png,png", "image/webp,webp", "image/heic,heic", " IMAGE/JPEG ,jpg"})
-    void whitelistedImageTypesMapToExtensionCaseInsensitive(String ct, String ext) {
-        UploadUrlResponse r = service.issue(MediaScope.PRIVATE, 7L, ct);
-        assertThat(r.objectKey()).endsWith("." + ext);
-        assertThat(r.headers().get("Content-Type")).isEqualTo(ct.strip().toLowerCase());
-    }
-
     @Test
-    void videoCoverSignsPrivateAclUnderPublicPrefix() {
-        UploadUrlResponse r = service.issue(MediaScope.PUBLIC, 42L, "image/jpeg", UploadPurpose.VIDEO_COVER);
-
-        assertThat(r.objectKey()).startsWith("public/42/").endsWith(".jpg");
-        assertThat(r.headers()).containsEntry("x-oss-object-acl", "private")
-                .containsEntry("x-oss-forbid-overwrite", "true");
-        // publicUrl 照给：发布后对账器改公开才能匿名访问。
-        assertThat(r.publicUrl()).isEqualTo("https://cdn.example/" + r.objectKey());
-        verify(ossClient).presignedPutUrl(eq("tailtopia"), eq(r.objectKey()), eq("image/jpeg"), eq(600L),
-                eq("private"));
-    }
-
-    @Test
-    void videoCoverMustBePublicScope() {
-        assertThatThrownBy(() -> service.issue(MediaScope.PRIVATE, 42L, "image/jpeg", UploadPurpose.VIDEO_COVER))
-                .isInstanceOfSatisfying(AppException.class,
-                        e -> assertThat(e.getType()).isEqualTo(ErrorTypes.VALIDATION));
-    }
-
-    @Test
-    void videoCoverMustBeJpeg() {
-        assertThatThrownBy(() -> service.issue(MediaScope.PUBLIC, 42L, "image/png", UploadPurpose.VIDEO_COVER))
-                .isInstanceOfSatisfying(AppException.class,
-                        e -> assertThat(e.getType()).isEqualTo(ErrorTypes.UPLOAD_CONTENT_TYPE_NOT_ALLOWED));
+    void blankContentTypeFallsBackToOctetStream() {
+        UploadUrlResponse r = service.issue(MediaScope.PRIVATE, 7L, null);
+        assertThat(r.headers()).containsEntry("Content-Type", "application/octet-stream");
+        assertThat(r.objectKey()).endsWith(".bin");
     }
 
     @Test

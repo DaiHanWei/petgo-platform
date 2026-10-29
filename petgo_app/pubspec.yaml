@@ -69,12 +69,6 @@ dependencies:
   # 直接依赖 Android 实现包，用于开启 Android Photo Picker（否则无 GMS 华为机相册会弹成文档选择器）。
   image_picker_android: ^0.8.13
   image_picker_platform_interface: ^2.10.0
-  # 专题线 video Story 1.6：视频帖默认封面取第 1 秒画面（系统接口：Android MediaMetadataRetriever /
-  # iOS AVAssetImageGenerator；支持 SwiftPM 与 Built-in Kotlin）。架构 AD-9 规定的两个视频依赖之一。
-  fc_native_video_thumbnail: ^3.0.1
-  # 专题线 video Story 2.4：全屏播放（系统 ExoPlayer / AVPlayer）。架构 AD-10 规定的另一个视频依赖；
-  # 不加缓存库（FR-15：第一期不做磁盘缓存）。
-  video_player: ^2.14.1
   permission_handler: ^11.3.1
   # 相册权限需按 Android SDK 分流（≤12 用 READ_EXTERNAL_STORAGE，13+ 用 READ_MEDIA_IMAGES），
   # 取 androidInfo.version.sdkInt 判定；否则 Android 12 设备请求 photos 恒 permanentlyDenied（死循环）。
@@ -199,6 +193,8 @@ flutter:
     # V1.3.2 Story 1.2：场所默认章（7 款类型兜底）。素材已入库（7 款齐）；
     # 同名覆盖即换图，缺失时 App 画代码占位章。
     - assets/place_stamp/
+    # V1.4.1 QRIS 支付页「Bisa dibayar pakai」9 个付款 App 官方 logo（源：ui-1-4-1-qr-payment 稿 assets/pay-logos/web，400 宽）。
+    - assets/payment/
     # V1.3.2 登机牌卡面（2026-10-06 设计稿：票面底 1754×780 / 邮票相框 / 字标）。
     - assets/boarding_pass/
     # V1.3.2 护照本页面（2026-10-06 设计稿 stamp-place：护照本底 828×1587 / 章位 / 次数框 / 翻页箭头 / 定位 / 字标）。

@@ -8,19 +8,16 @@ package com.tailtopia.content.rank;
  * 硬要按它记曝光，只会得到「同一台设备换个会话就全忘」的假记录。序列快照对游客照常生效
  * （它解决的是同一次会话内的翻页重复，与跨会话无关）。
  *
- * @param namespace    Redis 键中间段，已规范化
- * @param guest        是否游客（决定曝光记录是否生效）
- * @param includeVideo 客户端是否声明了视频能力（专题线 video Story 2.2 · AD-7）。<b>只进序列键</b>
- *                     （{@code feed:seq:{ns}:v{0|1}:{seed}}，新旧版序列互不串用），<b>不进 namespace</b>
- *                     —— 曝光记录 {@code feed:seen:{ns}} 不拆分。
+ * @param namespace Redis 键中间段，已规范化
+ * @param guest     是否游客（决定曝光记录是否生效）
  */
-public record FeedRankCacheKey(String namespace, boolean guest, boolean includeVideo) {
+public record FeedRankCacheKey(String namespace, boolean guest) {
 
     /** 匿名会话 id 允许的最大长度 —— 超出即截断。 */
     static final int MAX_ANON_LENGTH = 64;
 
     public static FeedRankCacheKey forUser(long userId) {
-        return new FeedRankCacheKey("u:" + userId, false, true);
+        return new FeedRankCacheKey("u:" + userId, false);
     }
 
     /**
@@ -38,16 +35,11 @@ public record FeedRankCacheKey(String namespace, boolean guest, boolean includeV
         if (cleaned.length() > MAX_ANON_LENGTH) {
             cleaned = cleaned.substring(0, MAX_ANON_LENGTH);
         }
-        return new FeedRankCacheKey("a:" + (cleaned.isEmpty() ? "anon" : cleaned), true, true);
+        return new FeedRankCacheKey("a:" + (cleaned.isEmpty() ? "anon" : cleaned), true);
     }
 
     /** 登录则按用户、否则按匿名会话（调用方统一入口，免得两边各判一次 null）。 */
     public static FeedRankCacheKey of(Long viewerId, String anonSessionId) {
         return viewerId == null ? forGuest(anonSessionId) : forUser(viewerId);
-    }
-
-    /** 同一键空间、指定视频能力维度（专题线 video Story 2.2）。 */
-    public FeedRankCacheKey withVideo(boolean includeVideo) {
-        return new FeedRankCacheKey(namespace, guest, includeVideo);
     }
 }

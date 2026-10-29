@@ -176,12 +176,9 @@ public final class AdminPageCatalog {
             //    ⚠️ 目录里**不再留条目** —— 留一个没有页面的条目就是侧栏上的死链。
             // 👥 用户
             page("users", G_USERS, "/admin/users",
-                    List.of(USER_VIEW), List.of(), List.of(USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST, USER_VIP_LEVEL_EDIT)).nav("admin.nav.users", "users", USER_VIEW),
+                    List.of(USER_VIEW), List.of(), List.of(USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST)).nav("admin.nav.users", "users", USER_VIEW),
             page("user-phone", G_USERS, null,
                     List.of(USER_PHONE_VIEW), List.of(), List.of(USER_PHONE_EXPORT)),
-            // 专题线 video Story 1.1：视频免审名单页。查看即管理，单一码 video.trusted.manage（照 ops-popups 先例不预授予）。
-            page("video-trusted", G_USERS, "/admin/video-trusted",
-                    List.of(VIDEO_TRUSTED_MANAGE), List.of(), List.of()).nav("admin.nav.videoTrusted", "video-trusted", VIDEO_TRUSTED_MANAGE),
             page("user-tags", G_USERS, "/admin/user-tags",
                     List.of(USER_TAG_VIEW), List.of(USER_TAG_MANAGE), List.of()).nav("admin.nav.userTags", "user-tags", USER_TAG_VIEW),
             shared("virtual-accounts", G_USERS, "/admin/virtual-accounts",

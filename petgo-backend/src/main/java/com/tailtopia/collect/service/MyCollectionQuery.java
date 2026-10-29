@@ -9,9 +9,7 @@ import com.tailtopia.collect.dto.CollectionPage;
 import com.tailtopia.collect.repository.ContentCollectionRepository;
 import com.tailtopia.collect.repository.PlaceCollectionRepository;
 import com.tailtopia.content.domain.ContentPost;
-import com.tailtopia.content.domain.MediaType;
 import com.tailtopia.content.repository.ContentPostRepository;
-import com.tailtopia.content.service.PostMediaResolver;
 import com.tailtopia.place.service.PlaceQueryService;
 import com.tailtopia.place.service.PlaceQueryService.CollectedPlaceCard;
 import com.tailtopia.shared.paging.KeysetCursor;
@@ -36,9 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code ContentUncollectedEvent} 是同一个判断，P-7），不在这里另写条件。不可见行照样占位、照样计入页大小。
  *
  * <p>🔴 批量组装、零 N+1：帖子页至多 5 条查询，场所页至多 3 条，与页大小无关。
- *
- * <p>视频帖（专题线 video · AD-7）：没声明视频能力的旧版客户端看到的是<b>不可用占位</b>（与 Feed / 详情页对旧版
- * 隐藏视频帖同口径，旧版没法播）；新版的封面经 {@link PostMediaResolver} 取（作者看自己未公开的视频帖时是签名地址）。
  */
 @Service
 public class MyCollectionQuery {
@@ -56,23 +51,20 @@ public class MyCollectionQuery {
     private final CollectVisibility visibility;
     private final AccountQueryService accounts;
     private final PlaceQueryService placeCards;
-    private final PostMediaResolver postMedia;
 
     public MyCollectionQuery(ContentCollectionRepository contentCollections,
             PlaceCollectionRepository placeCollections, ContentPostRepository posts, CollectVisibility visibility,
-            AccountQueryService accounts, PlaceQueryService placeCards, PostMediaResolver postMedia) {
+            AccountQueryService accounts, PlaceQueryService placeCards) {
         this.contentCollections = contentCollections;
         this.placeCollections = placeCollections;
         this.posts = posts;
         this.visibility = visibility;
         this.accounts = accounts;
         this.placeCards = placeCards;
-        this.postMedia = postMedia;
     }
 
-    /** {@code includeVideo}：客户端是否声明了视频能力（Controller 解析请求头后显式传入）。 */
     @Transactional(readOnly = true)
-    public CollectionPage<CollectedPostRow> posts(long me, String cursor, boolean includeVideo) {
+    public CollectionPage<CollectedPostRow> posts(long me, String cursor) {
         KeysetCursor c = cursorOrFirst(cursor);
         List<ContentCollection> rows = contentCollections.findPage(me, c.createdAt(), c.id(),
                 PageRequest.of(0, PAGE_SIZE + 1));
@@ -83,10 +75,7 @@ public class MyCollectionQuery {
         }
         Map<Long, ContentPost> byId = posts.findAllById(page.stream().map(ContentCollection::getPostId).toList())
                 .stream().collect(Collectors.toMap(ContentPost::getId, Function.identity()));
-        Set<Long> visible = new java.util.HashSet<>(visibility.visiblePostIds(me, byId.values()));
-        if (!includeVideo) {
-            byId.values().stream().filter(p -> p.getMediaType() == MediaType.VIDEO).forEach(p -> visible.remove(p.getId()));
-        }
+        Set<Long> visible = visibility.visiblePostIds(me, byId.values());
         List<Long> authorIds = byId.values().stream()
                 .filter(p -> visible.contains(p.getId()))
                 .map(ContentPost::getAuthorId)
@@ -102,9 +91,7 @@ public class MyCollectionQuery {
             CollectedPostRow.Post post = null;
             if (available) {
                 AuthorView a = authors.get(p.getAuthorId());
-                List<String> images = p.getMediaType() == MediaType.VIDEO
-                        ? postMedia.resolve(p, me).imageUrls() : p.getImageUrls();
-                post = new CollectedPostRow.Post(p.getType(), excerpt(p.getText()), firstImage(images),
+                post = new CollectedPostRow.Post(p.getType(), excerpt(p.getText()), firstImage(p.getImageUrls()),
                         a == null ? null : new CollectedPostRow.Author(a.nickname(), a.avatarUrl()));
             }
             items.add(new CollectedPostRow(row.getPostId(), row.getCreatedAt(), available, post));

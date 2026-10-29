@@ -17,7 +17,6 @@ import com.tailtopia.collect.repository.ContentCollectionRepository;
 import com.tailtopia.collect.repository.PlaceCollectionRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.place.domain.PlaceType;
-import com.tailtopia.content.service.PostMediaResolver;
 import com.tailtopia.place.service.PlaceQueryService;
 import com.tailtopia.place.service.PlaceQueryService.CollectedPlaceCard;
 import com.tailtopia.shared.paging.KeysetCursor;
@@ -41,13 +40,12 @@ class MyCollectionQueryPlacesTest {
     @Mock CollectVisibility visibility;
     @Mock AccountQueryService accounts;
     @Mock PlaceQueryService placeCards;
-    @Mock PostMediaResolver postMedia;
 
     private static final long ME = 7L;
     private static final Instant T0 = Instant.parse("2026-10-18T05:00:00.123456Z");
 
     private MyCollectionQuery query() {
-        return new MyCollectionQuery(contentCollections, placeCollections, posts, visibility, accounts, placeCards, postMedia);
+        return new MyCollectionQuery(contentCollections, placeCollections, posts, visibility, accounts, placeCards);
     }
 
     @Test

@@ -4,7 +4,6 @@ import '../../core/theme/colors.dart';
 import '../../l10n/app_localizations.dart';
 import 'app_image.dart';
 import 'post_cover.dart';
-import '../../features/content/video/video_card_badge.dart';
 
 /// 2 列内容网格里的一格（原型 `pgrid` 的一个 cell）。
 ///
@@ -27,11 +26,7 @@ class PostGridTile extends StatelessWidget {
     required this.onTap,
     this.firstImageUrl,
     this.isPrivate = false,
-    this.videoDurationMs,
   });
-
-  /// 视频帖时长（专题线 video Story 2.3 · FR-14）：非空 = 视频帖，封面上叠播放角标与时长。
-  final int? videoDurationMs;
 
   final int postId;
 
@@ -81,8 +76,6 @@ class PostGridTile extends StatelessWidget {
                         PostCoverPlaceholder(type: type, emojiSize: 30),
                   )
                 : PostCoverPlaceholder(type: type, emojiSize: 30),
-            if (videoDurationMs != null)
-              Positioned.fill(child: VideoCardBadge(durationMs: videoDurationMs!, compact: true)),
             // 私密标识：放右上角与左上角的类型 badge 分开，两者可同时出现
             // （一条内容既是 Diary 又是私密）。
             if (isPrivate)

@@ -200,7 +200,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(l10n.triageUnlockTopupFirst), findsOneWidget, reason: 'D6：PawCoin 行置灰 + 去充值');
       await tester.tap(find.byKey(const ValueKey('petSlotRentConfirm')));
-      await tester.pumpAndSettle();
+      // V1.4.1 QRIS 支付页：二维码抽屉里有常驻的「等待中」转圈，pumpAndSettle 会一路推进假时钟
+      // 直到轮询把抽屉关掉、Toast 也已消失；这里只推进到抽屉弹出，再走一个轮询周期。
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
       return repo;
@@ -352,7 +356,10 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('petSlotRentButton')));
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('petSlotRentConfirm')));
-        await tester.pumpAndSettle();
+        // 二维码抽屉的「等待中」转圈常驻，pumpAndSettle 等不到静止 —— 只推进到抽屉弹出。
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
         expect(repo.rents, hasLength(2));
         expect(repo.rents[1].key, isNot(repo.rents[0].key), reason: '已失败的意图不再沿用旧键');
         expect(find.text(l10n.vetPayCancel), findsOneWidget, reason: '第 2 次点击即出码');
@@ -370,7 +377,9 @@ void main() {
           await tester.tap(find.byKey(const ValueKey('petSlotRentButton')));
           await tester.pumpAndSettle();
           await tester.tap(find.byKey(const ValueKey('petSlotRentConfirm')));
-          await tester.pumpAndSettle();
+          for (var j = 0; j < 10; j++) {
+            await tester.pump(const Duration(milliseconds: 100));
+          }
           await tester.tap(find.text(l10n.vetPayCancel));
           await tester.pumpAndSettle();
         }

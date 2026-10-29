@@ -16,6 +16,28 @@ public class ShopBannerForm {
     private Integer imageH;
     private int sortWeight;
 
+    /** 点击跳转类型（V1.4.1）：NONE / PRODUCT / CATEGORY / EXTERNAL；空 = NONE。 */
+    private String targetType;
+
+    /** 跳转目标：商品 token / 品类字面量 / https 链接。 */
+    private String targetValue;
+
+    public String getTargetType() {
+        return targetType;
+    }
+
+    public void setTargetType(String targetType) {
+        this.targetType = targetType;
+    }
+
+    public String getTargetValue() {
+        return targetValue;
+    }
+
+    public void setTargetValue(String targetValue) {
+        this.targetValue = targetValue;
+    }
+
     public String getImageKey() {
         return imageKey;
     }

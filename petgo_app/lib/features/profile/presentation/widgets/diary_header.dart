@@ -48,7 +48,15 @@ class DiaryHeader extends StatelessWidget {
     this.hideEditButton = false,
     this.avatarKey,
     this.belowTitle,
+    this.showTitleRow = true,
   });
+
+  /// 是否画「Diary {name}」标题行（含右侧分享 / 编辑按钮）。
+  ///
+  /// V1.4.1 Diary 页头修复 ⑤：作者态有宠物切换器时由页面传 false —— 宠物名在切换器高亮和宠物卡里
+  /// 已各出现一次，标题行多余；分享 / 编辑按钮由页面挪到切换器同一行（见 [DiaryIconButton]）。
+  /// 游客页 / 访客页不传，行为不变。
+  final bool showTitleRow;
 
   /// 标题行与宠物信息卡之间的插槽（V1.4.0 multi-pet B4：只读横幅放这里，稿 `.dh` 之后、`.pic` 之前）。
   /// 默认 null = 改动前外观。
@@ -122,37 +130,33 @@ class DiaryHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // 标题行（paspor.html appbar）：Paspor {name} + 身份证 + 编辑铅笔
-        Row(
-          children: [
-            Expanded(
-              child: Text(l10n.growthArchivePassportTitle(profile.name),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
-            ),
-            if (titleAction != null) ...[
-              titleAction!,
-              const SizedBox(width: 8),
-            ],
-            if (!readOnly && !hideEditButton)
-              _iconBtn(
-                key: const ValueKey('editProfileButton'),
-                onTap: onEditProfile,
-                child: SvgPicture.asset(
-                  'assets/brand/ic_edit.svg',
-                  width: 18,
-                  height: 18,
-                  colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
-                ),
+        if (showTitleRow)
+          Row(
+            children: [
+              Expanded(
+                child: Text(l10n.growthArchivePassportTitle(profile.name),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
               ),
-          ],
-        ),
+              if (titleAction != null) ...[
+                titleAction!,
+                const SizedBox(width: 8),
+              ],
+              if (!readOnly && !hideEditButton)
+                DiaryIconButton(
+                  inkKey: const ValueKey('editProfileButton'),
+                  onTap: onEditProfile,
+                  child: const DiaryEditIcon(),
+                ),
+            ],
+          ),
         if (belowTitle != null) ...[
-          const SizedBox(height: 10),
+          if (showTitleRow) const SizedBox(height: 10),
           belowTitle!,
           const SizedBox(height: 12),
-        ] else
+        ] else if (showTitleRow)
           const SizedBox(height: 14),
         PetInfoCard(
           profile: profile,
@@ -179,109 +183,108 @@ class DiaryHeader extends StatelessWidget {
     );
   }
 
-  /// appbar 图标按钮（ibtn：白底 rounded-11 + 柔阴影）。[onTap] 为空 → 不可点（游客态由调用方决定）。
-  Widget _iconBtn({required Key key, required VoidCallback? onTap, required Widget child}) =>
-      Material(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(11),
-        elevation: 0,
-        child: InkWell(
-          key: key,
-          borderRadius: BorderRadius.circular(11),
-          onTap: onTap,
-          child: Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(11),
-              // 原型 .ibtn 阴影：0 2px 8px rgba(22,34,51,.07)（蓝灰，非棕）。
-              boxShadow: const [
-                BoxShadow(color: Color(0x12162233), offset: Offset(0, 2), blurRadius: 8),
-              ],
-            ),
-            child: child,
-          ),
+  /// 入口区（V1.4.1 Diary 页头修复 ①）：**一张白卡、上下两行**——健康记录 → 分隔线 → 「Kenali Hewanmu」聚合入口。
+  ///
+  /// 取代 V1.4.0 L2 还原度时改出的左右两栏无图标文字卡（那版照着 1.4.0 背景示意画的，1.4.1 稿已作废）。
+  /// 卡：白底 r14 + 柔阴影、无描边；行间 1px 分隔线左缩进 54（对齐文字）。
+  Widget _entryGrid(AppLocalizations l10n) => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+          ],
         ),
-      );
-
-  /// 入口区两栏（A3 `entry-grid`：1fr 1fr、间距 10）。等高由 [IntrinsicHeight] 保证 ——
-  /// 两卡文案行数不同（健康记录副文案较长会折行），不拉等高会一高一低。
-  Widget _entryGrid(AppLocalizations l10n) => IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _entryCard(
+        child: Material(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _entryRow(
                 key: const ValueKey('diaryHealthEntry'),
                 onTap: onOpenHealth,
                 icon: Icons.check_circle_outline,
                 title: l10n.diaryHealthEntryTitle,
                 // A4 近空态：一条记录都没有时，别用「疫苗 · 驱虫 · 病历」这种
-                // 读起来像「里面已经有东西」的描述；顺带这条短文案不再折两行撑高整行。
+                // 读起来像「里面已经有东西」的描述。
                 sub: healthRecordCount == 0
                     ? l10n.diaryHealthEntrySubEmpty
                     : l10n.diaryHealthEntrySub,
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              // 引导蒙层的锚点挂在**外层**：给 _entryCard 换 key 会动到它自己的
-              // ValueKey('diaryIdCardButton')，那把既有测试与埋点对照一起弄断。
-              key: insightsEntryAnchor,
-              child: _entryCard(
-                // key 沿用（原为标题行的图标按钮，后为身份证入口）——
-                // V1.3.0 Story 5.1 起它指向「Know Your Pet」聚合页，身份证是其中一张卡。
-                // key 不改：入口在这一格的语义没变，改了会白白弄断既有测试与埋点对照。
-                key: const ValueKey('diaryIdCardButton'),
-                onTap: onOpenIdCard,
-                // UI 稿 P1：综合入口用星芒图标（原 pets 爪印与「宠物」语义重复、看不出是聚合入口）。
-                icon: Icons.auto_awesome_outlined,
-                title: l10n.petInsightsTitle,
-                // 副文案沿用现成 key，**不新写**（AC1）。
-                sub: l10n.timelineIdCardTapToView,
+              const Padding(
+                padding: EdgeInsets.only(left: 54),
+                child: Divider(height: 1, thickness: 1, color: AppColors.line2),
               ),
-            ),
-          ],
+              // 引导蒙层的锚点挂在**外层**：给行本身换 key 会动到它自己的
+              // ValueKey('diaryIdCardButton')，那把既有测试与埋点对照一起弄断。
+              KeyedSubtree(
+                key: insightsEntryAnchor,
+                child: _entryRow(
+                  // key 沿用（V1.3.0 Story 5.1 起指向「Know Your Pet」聚合页，身份证是其中一张卡）。
+                  key: const ValueKey('diaryIdCardButton'),
+                  onTap: onOpenIdCard,
+                  // UI 稿 P1：综合入口用星芒图标（爪印与「宠物」语义重复、看不出是聚合入口）。
+                  icon: Icons.auto_awesome_outlined,
+                  title: l10n.petInsightsTitle,
+                  // 副文案沿用现成 key，**不新写**（AC1）。
+                  sub: l10n.timelineIdCardTapToView,
+                ),
+              ),
+            ],
+          ),
         ),
       );
 
-  /// 入口卡（A3 `entry-card`）：白底 r14 + 柔阴影 + **横向**「左图标 → 右文字」。
+  /// 入口行：32×32 mintTint 图标块 → 标题 + 单行副标题 → 右箭头；整行可点。
   ///
-  /// V1.3.0 Story 5.1 · AC1：由纵向改横向，与聚合页两张卡同一套样式 ——
-  /// 两处长得一样，用户才看得出「点进去是同一类东西」。
-  Widget _entryCard({
+  /// ⚠️ 仍不渲染 `#00842` 编号（编号可空，见类注释）。
+  Widget _entryRow({
     required Key key,
     required VoidCallback? onTap,
     required IconData icon,
     required String title,
     required String sub,
   }) {
-    // V1.4.0 稿 B5 / A2 `.ent2`：白底 1px 浅描边、圆角 14、无图标的纯文字两栏（L2 还原度）。
-    // 只改 Diary 页头这一处；聚合页仍用共享的 [InsightEntryCard]（带图标）。[icon] 保留参数位不渲染。
-    return Material(
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.line2),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: key,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              const SizedBox(height: 2),
-              Text(sub, style: const TextStyle(fontSize: 11, height: 1.35, color: AppColors.ink2)),
-            ],
-          ),
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.mintTint,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(icon, size: 18, color: AppColors.mint),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13, height: 1.3, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, height: 1.35, color: AppColors.muted)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, size: 16, color: AppColors.muted),
+          ],
         ),
       ),
     );
@@ -317,13 +320,14 @@ class DiaryHeader extends StatelessWidget {
     return GestureDetector(
       key: const ValueKey('archiveMilestoneBar'),
       onTap: onOpenMilestones,
-      // 稿 `.msb`：白底 1px 浅描边、圆角 14；计数深灰；进度槽 6 高浅灰底。
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.line2),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,23 +340,23 @@ class DiaryHeader extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.ink)),
+                          fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.ink)),
                 ),
                 Text('$completed / $total',
                     style: const TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 13,
+                        fontSize: 12,
                         fontFeatures: [FontFeature.tabularFigures()],
-                        color: AppColors.ink2)),
+                        color: AppColors.mint)),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
                 value: ratio,
-                minHeight: 6,
-                backgroundColor: AppColors.line2,
+                minHeight: 5,
+                backgroundColor: AppColors.cream2,
                 color: AppColors.mint,
               ),
             ),
@@ -361,4 +365,55 @@ class DiaryHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 编辑铅笔图标（`ic_edit.svg`，18、ink 色）。标题行与作者态切换器行共用。
+class DiaryEditIcon extends StatelessWidget {
+  const DiaryEditIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) => SvgPicture.asset(
+        'assets/brand/ic_edit.svg',
+        width: 18,
+        height: 18,
+        colorFilter: const ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
+      );
+}
+
+/// Diary 页头图标按钮（ibtn：38×38 白底 rounded-11 + 柔阴影）。[onTap] 为空 → 不可点。
+///
+/// V1.4.1 ⑤ 起作者态的分享 / 编辑按钮放在切换器那一行，由页面直接用它；[inkKey] 落在 InkWell 上（沿用既有 key）。
+class DiaryIconButton extends StatelessWidget {
+  const DiaryIconButton({super.key, this.inkKey, required this.onTap, required this.child});
+
+  /// 落在 InkWell 上的 key（沿用既有测试 / 埋点对照的 key，如 `editProfileButton`）。
+  final Key? inkKey;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(11),
+        elevation: 0,
+        child: InkWell(
+          key: inkKey,
+          borderRadius: BorderRadius.circular(11),
+          onTap: onTap,
+          child: Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(11),
+              // 原型 .ibtn 阴影：0 2px 8px rgba(22,34,51,.07)（蓝灰，非棕）。
+              boxShadow: const [
+                BoxShadow(color: Color(0x12162233), offset: Offset(0, 2), blurRadius: 8),
+              ],
+            ),
+            child: child,
+          ),
+        ),
+      );
 }

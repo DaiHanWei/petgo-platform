@@ -252,7 +252,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
-              AND (:includeVideo = true OR p.mediaType = com.tailtopia.content.domain.MediaType.IMAGE)
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findPublicPostsByAuthor(
@@ -262,7 +261,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
-            @Param("includeVideo") boolean includeVideo,
             Pageable pageable);
 
     /** 概览看板（bug 20260731-442）：仅真实用户发的帖（剔除虚拟/种子账号铺量内容）。 */
@@ -597,7 +595,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
-              AND (:includeVideo = true OR p.mediaType = com.tailtopia.content.domain.MediaType.IMAGE)
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findMyPosts(
@@ -605,7 +602,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
-            @Param("includeVideo") boolean includeVideo,
             Pageable pageable);
 
     /**
@@ -659,7 +655,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
-              AND (:includeVideo = true OR p.mediaType = com.tailtopia.content.domain.MediaType.IMAGE)
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findFeed(
@@ -672,7 +667,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("cursorId") Long cursorId,
             @Param("hasExclude") boolean hasExclude,
             @Param("excludeId") Long excludeId,
-            @Param("includeVideo") boolean includeVideo,
             Pageable pageable);
 
     /**
@@ -700,7 +694,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
-              AND (:includeVideo = true OR p.mediaType = com.tailtopia.content.domain.MediaType.IMAGE)
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findFollowingFeed(
@@ -708,7 +701,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("hasCursor") boolean hasCursor,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
-            @Param("includeVideo") boolean includeVideo,
             Pageable pageable);
 
     /**
@@ -725,7 +717,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND (:hasViewer = false
                    OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
                                   WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
-              AND (:includeVideo = true OR p.mediaType = com.tailtopia.content.domain.MediaType.IMAGE)
             """;
 
     /**
@@ -758,7 +749,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> findRankCandidatePool(
             @Param("hasViewer") boolean hasViewer,
             @Param("viewerId") Long viewerId,
-            @Param("includeVideo") boolean includeVideo,
             Pageable pageable);
 
     /**
@@ -775,7 +765,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("hasViewer") boolean hasViewer,
             @Param("viewerId") Long viewerId,
             @Param("since") Instant since,
-            @Param("includeVideo") boolean includeVideo,
             Pageable pageable);
 
     /**
@@ -826,11 +815,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND p.deletedAt IS NULL
               AND p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW
               AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
-              AND (:includeVideo = true OR p.mediaType = com.tailtopia.content.domain.MediaType.IMAGE)
             ORDER BY p.createdAt DESC, p.id DESC
             """)
-    List<ContentPost> findOwnPendingPosts(@Param("authorId") long authorId,
-            @Param("includeVideo") boolean includeVideo, Pageable pageable);
+    List<ContentPost> findOwnPendingPosts(@Param("authorId") long authorId, Pageable pageable);
 
     /**
      * 查看者<b>本人</b>在 {@code (since, until]} 内发布的公开帖（bug 20261012-586）——
@@ -851,12 +838,10 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
               AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
               AND p.createdAt > :since
               AND p.createdAt <= :until
-              AND (:includeVideo = true OR p.mediaType = com.tailtopia.content.domain.MediaType.IMAGE)
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findOwnRecentPosts(@Param("authorId") long authorId,
-            @Param("since") Instant since, @Param("until") Instant until,
-            @Param("includeVideo") boolean includeVideo, Pageable pageable);
+            @Param("since") Instant since, @Param("until") Instant until, Pageable pageable);
 
     /**
      * 近期公开内容的 id（V1.1.6 Story 16.4）—— 供 P95 重算统计互动量分布。
@@ -875,19 +860,11 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     /**
      * 注销联动（内容审核 story 9，§5.5.1）：把注销用户仍在公开/挂起口径的帖子置 {@code AUTHOR_DEACTIVATED}
      * （对他人隐藏；内容保留 {@code deletedAt IS NULL}，与匿名化并存）。仅动 PUBLISHED/UNDER_REVIEW（幂等）。
-     *
-     * <p>专题线 video Story 3.1（AD-6）：批量 UPDATE 绕过实体的 desired 重算 → 视频帖在这里**显式**写
-     * {@code media_acl_desired='PRIVATE'} 与 {@code media_acl_desired_at}（图文帖这两列保持 NULL）；对账器随后改私有。
      */
     @Modifying
     @Query("""
             UPDATE ContentPost p
-               SET p.status = com.tailtopia.content.domain.PostStatus.AUTHOR_DEACTIVATED, p.updatedAt = :now,
-                   p.mediaAclDesired = CASE WHEN p.mediaType = com.tailtopia.content.domain.MediaType.VIDEO
-                                            THEN com.tailtopia.content.domain.MediaAcl.PRIVATE
-                                            ELSE p.mediaAclDesired END,
-                   p.mediaAclDesiredAt = CASE WHEN p.mediaType = com.tailtopia.content.domain.MediaType.VIDEO
-                                              THEN :now ELSE p.mediaAclDesiredAt END
+               SET p.status = com.tailtopia.content.domain.PostStatus.AUTHOR_DEACTIVATED, p.updatedAt = :now
              WHERE p.authorId = :authorId
                AND p.deletedAt IS NULL
                AND p.status IN (com.tailtopia.content.domain.PostStatus.PUBLISHED,
@@ -911,42 +888,4 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     @Query("UPDATE ContentPost p SET p.imageSizes = :sizes, p.updatedAt = :now WHERE p.id = :id")
     int updateImageSizes(@Param("id") long id, @Param("sizes") List<ImageSize> sizes,
             @Param("now") Instant now);
-
-    /**
-     * 待对账的视频帖（专题线 video Story 1.4 · AD-6）：期望 ≠ 已生效。按 id 升序，命中部分索引
-     * {@code idx_content_posts_media_acl_pending}。
-     */
-    @Query("SELECT p FROM ContentPost p WHERE p.mediaType = com.tailtopia.content.domain.MediaType.VIDEO "
-            + "AND p.mediaAclDesired <> p.mediaAclApplied ORDER BY p.id")
-    List<ContentPost> findMediaAclPending(Pageable pageable);
-
-    /** 专题线 video Story 1.3 code review：视频对象是否已被某条帖子使用（唯一索引兜并发）。 */
-    boolean existsByVideoObjectKey(String videoObjectKey);
-
-    /**
-     * 对账回写（专题线 video Story 1.4 · AD-6）：<b>条件单列 UPDATE</b>，只有「刚应用的就是当前期望」才算完成；
-     * 影响 0 行 = desired 在此期间被改了，留到下一轮。
-     *
-     * <p>🔴 用 native：{@code mediaAclApplied} 映射为 {@code updatable=false}（防实体整行 save 覆盖），
-     * 不依赖 Hibernate 在 HQL 批量更新里如何对待该标记。禁止改成 load → set → save。
-     */
-    @Transactional
-    @Modifying
-    @Query(value = "UPDATE content_posts SET media_acl_applied = :acl WHERE id = :id AND media_acl_desired = :acl",
-            nativeQuery = true)
-    int markMediaAclApplied(@Param("id") long id, @Param("acl") String acl);
-
-    /**
-     * 对账漂移标记（专题线 video Story 1.4 code review）：OSS 可能已按 {@code attempted} 改过，但条件回写没成功
-     * （期间 desired 被并发改掉 / 封面那步抛异常）。若此刻 desired 已不等于 attempted，就把 applied 记成
-     * attempted —— applied 本义是「OSS 实际状态」，这样 desired ≠ applied，下一轮必然重新选中并纠正。
-     * 否则（desired 又被改回 = applied）这条帖子会被当成一致，OSS 上的公开状态永远没人纠正。
-     *
-     * <p>desired 仍等于 attempted 时影响 0 行，原有「下一轮重试」路径不变。同样是条件单列 native UPDATE。
-     */
-    @Transactional
-    @Modifying
-    @Query(value = "UPDATE content_posts SET media_acl_applied = :attempted "
-            + "WHERE id = :id AND media_acl_desired <> :attempted", nativeQuery = true)
-    int markMediaAclDrifted(@Param("id") long id, @Param("attempted") String attempted);
 }
