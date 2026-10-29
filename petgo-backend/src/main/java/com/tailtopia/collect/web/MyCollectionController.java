@@ -5,11 +5,9 @@ import com.tailtopia.collect.dto.CollectedPostRow;
 import com.tailtopia.collect.dto.CollectionPage;
 import com.tailtopia.collect.service.MyCollectionQuery;
 import com.tailtopia.shared.error.AppException;
-import com.tailtopia.shared.web.ClientCapabilities;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,9 +28,8 @@ public class MyCollectionController {
 
     @GetMapping("/posts")
     public CollectionPage<CollectedPostRow> posts(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(required = false) String cursor,
-            @RequestHeader(value = ClientCapabilities.HEADER, required = false) String capabilities) {
-        return query.posts(currentUserId(jwt), cursor, ClientCapabilities.includesVideo(capabilities));
+            @RequestParam(required = false) String cursor) {
+        return query.posts(currentUserId(jwt), cursor);
     }
 
     @GetMapping("/places")
