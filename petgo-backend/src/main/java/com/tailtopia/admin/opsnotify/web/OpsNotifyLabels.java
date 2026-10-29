@@ -54,6 +54,16 @@ public class OpsNotifyLabels {
         if (s.activeFrom() != null || s.activeTo() != null) {
             parts.add(msg.get("admin.opsNotify.cond.activeRange", day(s.activeFrom()), day(s.activeTo())));
         }
+        if (s.activity() != null) {
+            for (var a : s.activity()) {
+                parts.add(msg.get("admin.opsNotify.activity." + a.name()));
+            }
+        }
+        if (s.levelTiers() != null) {
+            for (var t : s.levelTiers()) {
+                parts.add(msg.get("admin.opsNotify.levelTier." + t.name()));
+            }
+        }
         if (s.hasPet() != null) {
             parts.add(msg.get("admin.opsNotify.cond.hasPet." + s.hasPet()));
         }
@@ -67,6 +77,9 @@ public class OpsNotifyLabels {
         }
         if (s.hasPhone() != null) {
             parts.add(msg.get("admin.opsNotify.cond.hasPhone." + s.hasPhone()));
+        }
+        if (s.paid() != null) {
+            parts.add(msg.get("admin.opsNotify.cond.paid." + s.paid()));
         }
         return parts.isEmpty() ? msg.get("admin.opsNotify.audience.filterNone") : String.join(" · ", parts);
     }
