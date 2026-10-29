@@ -643,7 +643,11 @@ class _PostGrid extends ConsumerWidget {
                     // 他人主页永远不会有私密内容（服务端就没给），这里不传。
                     videoDurationMs: post.isVideo ? post.video!.durationMs : null,
                     onTap: () =>
-                        pushContentDetail(context, post.id, isVideo: post.isVideo, source: VideoSource.profile),
+                        pushContentDetail(context, post.id,
+                            isVideo: post.isVideo,
+                            source: VideoSource.profile,
+                            coverUrl: post.firstImageUrl,
+                            video: post.video),
                   )),
               ],
             )),

@@ -7,6 +7,8 @@ library;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import 'video_info.dart';
+
 /// 进入播放页的来源（埋点 `source` 取值，AD-10）。
 enum VideoSource {
   feed('feed'),
@@ -32,10 +34,20 @@ enum VideoSource {
 
 /// 路由 `extra`：已知是视频帖时由列表带进来。
 class VideoRouteExtra {
-  const VideoRouteExtra({required this.source});
+  const VideoRouteExtra({required this.source, this.coverUrl, this.aspectRatio});
 
   final VideoSource source;
+
+  /// 列表里已经显示过的封面：详情还没拉到时先铺上它，进页不黑屏（L2 走查遗留）。
+  final String? coverUrl;
+
+  /// 画面宽高比（宽 / 高）；未知为 null，按竖屏 9:16 占位。
+  final double? aspectRatio;
 }
+
+/// 视频宽高比（宽 / 高）；宽高缺失为 null。
+double? videoAspectOf(VideoInfo? video) =>
+    video != null && video.width > 0 && video.height > 0 ? video.width / video.height : null;
 
 /// 详情路由位置。视频帖带 `src`，图文帖与改动前一致。
 String contentDetailLocation(int id, {bool isVideo = false, VideoSource? source, bool focusComments = false}) {
@@ -54,8 +66,18 @@ String withVideoSource(String location, VideoSource source) {
 }
 
 /// 打开帖子详情：视频帖带 `src` 与 [VideoRouteExtra]，图文帖与改动前一致（`/content/:id`，无 extra）。
+/// [coverUrl] / [video]：列表手里的封面与视频信息，供播放页加载期间先显示封面。
 Future<void> pushContentDetail(BuildContext context, int id,
-    {required bool isVideo, required VideoSource source, bool focusComments = false}) {
+    {required bool isVideo,
+    required VideoSource source,
+    bool focusComments = false,
+    String? coverUrl,
+    VideoInfo? video}) {
   final location = contentDetailLocation(id, isVideo: isVideo, source: source, focusComments: focusComments);
-  return isVideo ? context.push(location, extra: VideoRouteExtra(source: source)) : context.push(location);
+  if (!isVideo) return context.push(location);
+  return context.push(location,
+      extra: VideoRouteExtra(
+          source: source,
+          coverUrl: (coverUrl ?? '').isEmpty ? null : coverUrl,
+          aspectRatio: videoAspectOf(video)));
 }

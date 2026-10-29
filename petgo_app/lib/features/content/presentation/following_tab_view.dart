@@ -84,7 +84,8 @@ class FollowingTabView extends ConsumerWidget {
           onLoadMore: () => ref.read(followingFeedProvider.notifier).loadMore(),
           onRefresh: () => _refresh(ref),
           onTapItem: (item) =>
-              pushContentDetail(context, item.id, isVideo: item.isVideo, source: VideoSource.following),
+              pushContentDetail(context, item.id,
+                  isVideo: item.isVideo, source: VideoSource.following, coverUrl: item.firstImageUrl, video: item.video),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () => onReported(item)),
           onAuthorTap: (item) => openUserProfile(
             context,
@@ -102,7 +103,11 @@ class FollowingTabView extends ConsumerWidget {
             onReported: _hideAuthor(ref, userId),
           ),
           onCommentItem: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo, source: VideoSource.following, focusComments: true),
+              isVideo: item.isVideo,
+              source: VideoSource.following,
+              focusComments: true,
+              coverUrl: item.firstImageUrl,
+              video: item.video),
           onMoreItem: (item) => openReport(context, ref, item.id, onReported: () => onReported(item)),
         );
       },

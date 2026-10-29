@@ -27,7 +27,6 @@ class LikeButton extends ConsumerStatefulWidget {
     this.rankMode,
     this.onSettled,
     this.expandCountHitArea = true,
-    this.onDark = false,
   });
 
   final int postId;
@@ -68,9 +67,6 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 是否放大数字热区（右 12dp + 上下 6.9dp）。Feed 小卡上数字很小，需要放大（默认 true）；
   /// 详情页底栏已有 44dp 的外层命中框，传 false 以保持爱心 + 数字原有位置。
   final bool expandCountHitArea;
-
-  /// 压在深色画面上（视频播放页）：未赞态用白色 + 阴影，已赞仍是红心。
-  final bool onDark;
 
   /// 埋点 `feed_tab`（V1.1.6 Story 16.5）。只有从 Feed 卡片来时才有值。
   final String? feedTab;
@@ -177,8 +173,7 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
 
   @override
   Widget build(BuildContext context) {
-    final color = _liked ? AppColors.likeHeart : (widget.onDark ? Colors.white : AppColors.textSecondary);
-    final shadows = widget.onDark ? const [Shadow(color: Color(0x66000000), blurRadius: 6)] : null;
+    final color = _liked ? AppColors.likeHeart : AppColors.textSecondary;
     // V1.3.4：爱心与数字是**两个互不重叠**的热区 —— 爱心 = 点赞（行为与拆分前一致），
     // 数字 = 点赞人列表。数字热区吃掉原先图标与数字之间的空隙并向右多出
     // [LikeButton.countTrailingHitExtent]（Feed 小卡上数字很小，不放大点不准）。
@@ -195,7 +190,6 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
             size: LikeButton.heartSize,
             // 点赞红心（设计稿）：激活态用暖红 likeHeart，与 Feed 卡片点赞一致。
             color: color,
-            shadows: shadows,
           ),
         )),
         GestureDetector(
@@ -212,7 +206,7 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
                 : const EdgeInsets.only(left: AppSpacing.xs),
             // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
             // 看上去像"没点上"。
-            child: _countHitHeight(Text('$_count', style: AppTypography.caption.copyWith(color: color, shadows: shadows))),
+            child: _countHitHeight(Text('$_count', style: AppTypography.caption.copyWith(color: color))),
           ),
         ),
       ],

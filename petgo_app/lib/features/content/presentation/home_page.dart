@@ -260,7 +260,8 @@ class HomePage extends ConsumerWidget {
           // 顶置坑位（V1.1.6 Story 4.2）：取数失败或无生效配置 → null → 什么都不渲染。
           pinned: pinnedAsync.value,
           onTapPinned: (item) =>
-              pushContentDetail(context, item.id, isVideo: item.isVideo, source: VideoSource.pinned),
+              pushContentDetail(context, item.id,
+                  isVideo: item.isVideo, source: VideoSource.pinned, coverUrl: item.firstImageUrl, video: item.video),
           onTapPromo: (promo) => openPromoTarget(context, promo),
           autoLoadMore: true,
           footer: null,
@@ -285,7 +286,7 @@ class HomePage extends ConsumerWidget {
             await ref.read(feedProvider.notifier).refresh();
           },
           onTapItem: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo, source: _videoSource(category)),
+              isVideo: item.isVideo, source: _videoSource(category), coverUrl: item.firstImageUrl, video: item.video),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
             // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
             // V1.3.4：关注流里同一张卡一并移除。
@@ -319,9 +320,17 @@ class HomePage extends ConsumerWidget {
           // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
           // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。
           onCommentItem: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo, source: _videoSource(category), focusComments: true),
+              isVideo: item.isVideo,
+              source: _videoSource(category),
+              focusComments: true,
+              coverUrl: item.firstImageUrl,
+              video: item.video),
           onCommentPinned: (item) => pushContentDetail(context, item.id,
-              isVideo: item.isVideo, source: VideoSource.pinned, focusComments: true),
+              isVideo: item.isVideo,
+              source: VideoSource.pinned,
+              focusComments: true,
+              coverUrl: item.firstImageUrl,
+              video: item.video),
           // 「···」：Feed 此前只有长按举报，没有显式入口；两者走同一个动作。
           onMoreItem: (item) => openReport(
             context,

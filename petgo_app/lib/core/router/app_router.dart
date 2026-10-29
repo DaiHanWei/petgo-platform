@@ -1070,6 +1070,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             postId: int.parse(s.pathParameters['id']!),
             focusComments: s.uri.queryParameters['focus'] == 'comments',
             knownVideo: extra != null,
+            videoCoverUrl: extra?.coverUrl,
+            videoAspectRatio: extra?.aspectRatio,
             videoSource: extra?.source ?? VideoSource.parse(s.uri.queryParameters['src']),
           );
         },

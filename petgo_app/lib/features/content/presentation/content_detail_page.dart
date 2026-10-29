@@ -57,6 +57,8 @@ class ContentDetailPage extends ConsumerWidget {
     this.focusComments = false,
     this.knownVideo = false,
     this.videoSource = VideoSource.other,
+    this.videoCoverUrl,
+    this.videoAspectRatio,
   });
 
   final int postId;
@@ -64,6 +66,10 @@ class ContentDetailPage extends ConsumerWidget {
   /// 列表已知是视频帖（路由 `extra` 带了 [VideoRouteExtra]，专题线 video Story 2.4）：
   /// 加载期间直接显示黑底播放页骨架，跳过图文详情的白底加载态。
   final bool knownVideo;
+
+  /// 列表带进来的封面与画面比例（[VideoRouteExtra]）：加载期间先铺封面，进页不黑屏。
+  final String? videoCoverUrl;
+  final double? videoAspectRatio;
 
   /// 进入来源（埋点 `source`）：`extra.source` → query `src` → `other`。
   final VideoSource videoSource;
@@ -105,7 +111,7 @@ class ContentDetailPage extends ConsumerWidget {
       postId: postId,
       child: detailAsync.when(
         loading: () => knownVideo
-            ? const VideoPostLoading()
+            ? VideoPostLoading(coverUrl: videoCoverUrl, aspectRatio: videoAspectRatio)
             : _shell(context, body: const Center(
                 child: CircularProgressIndicator(color: AppColors.accentGrowth))),
         error: (err, _) => _shell(context, body: _errorBody(context, ref, l10n, err)),

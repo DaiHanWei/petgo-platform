@@ -34,6 +34,7 @@ class VideoPlayerView extends ConsumerStatefulWidget {
     this.coverUrl,
     this.overlay,
     this.compact,
+    this.initialAspectRatio,
   });
 
   /// 帖子 id（埋点用）；App 内分享页没有 id → null。
@@ -44,6 +45,10 @@ class VideoPlayerView extends ConsumerStatefulWidget {
   final int durationMs;
   final VideoSource source;
   final String? coverUrl;
+
+  /// 播放器初始化前画面区的宽高比（宽 / 高，来自帖子的视频宽高）；null 按 9:16。
+  /// 让首帧前的封面就落在最终位置，初始化后不跳。
+  final double? initialAspectRatio;
 
   /// 叠加层（作者、正文、互动 —— Story 2.5）。叠在画面之上、控件之下。
   final Widget? overlay;
@@ -258,7 +263,7 @@ class _VideoPlayerViewState extends ConsumerState<VideoPlayerView> with WidgetsB
             onTap: _failed ? _retry : _togglePlay,
             child: Center(
               child: AspectRatio(
-                aspectRatio: s.aspectRatio,
+                aspectRatio: s.initialized ? s.aspectRatio : (widget.initialAspectRatio ?? s.aspectRatio),
                 child: Stack(fit: StackFit.expand, children: [
                   if (_controller != null && s.initialized) _controller!.buildView(),
                   if (showCover && widget.coverUrl != null)

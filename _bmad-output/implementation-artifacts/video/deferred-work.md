@@ -14,3 +14,13 @@
 - H5 分享页提示「Perbarui TailTopia ke versi terbaru」面向的是网页访客（多半没装 App），措辞不对；分享页无 `og:image`（图文帖同样存在，存量问题）。
 - 进入播放页先黑屏约 0.3 秒再出封面，可沿用列表封面过渡。
 - 未测项：他人视角（举报 / 关注 / 关注流）、有声播放（样片无音轨）、断网下的加载失败重试与 15 秒超时、运营顶置视频卡片。
+
+## 2026-10-29 · 上述遗留已修（feat/video）
+
+- ✅ 播放页点赞改竖排：新增 `video/video_like_action.dart`（不复用 `LikeButton`，行为逐项一致），已删 `LikeButton.onDark`。
+- ✅ Video 按钮因已选图片置灰时，点一下提示原因（`publishVideoBlockedByImages`）。
+- ✅ 分享卡：视频帖封面正中加播放角标（`ShareCardData.isVideo`）。
+  - ⏸ 按钮文案「Bagikan ke Diary」**未改**：2026-10-06 产品已拍板帖子卡与纪念卡统一用这一句，改需产品重新拍板。
+- ✅ H5 分享页视频提示改为「Tonton video ini di aplikasi TailTopia.」（面向未装 App 的网页访客）。`og:image` 缺失属存量（图文帖同样），不在本次。
+- ✅ 进播放页不先黑屏：列表经 `VideoRouteExtra` 带封面 + 画面比例，加载态先铺封面；播放器初始化前按帖子视频宽高占位，首帧前后画面不跳。
+- 未测项仍待 stag：他人视角（举报 / 关注 / 关注流）、有声播放、断网重试与 15 秒超时、运营顶置视频卡片。

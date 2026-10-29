@@ -13,6 +13,7 @@ class ShareCardData {
     this.authorDeleted = false,
     this.body,
     this.imageUrl,
+    this.isVideo = false,
   });
 
   final String authorName;
@@ -28,8 +29,11 @@ class ShareCardData {
   final bool authorDeleted;
   final String? body;
 
-  /// 首图。为空 ⇒ 走纯文字模板。
+  /// 首图。为空 ⇒ 走纯文字模板。视频帖为视频封面。
   final String? imageUrl;
+
+  /// 视频帖：封面上叠居中播放角标，让人一眼看出点开是视频（专题线 video · L2 走查遗留）。
+  final bool isVideo;
 
   /// 🛡 **有没有图，是选模板的唯一判据**（AD-15 Rule 3）。
   bool get hasImage => (imageUrl ?? '').isNotEmpty;
@@ -57,6 +61,7 @@ class ShareCardData {
       // 只取首图：分享卡是一张静态图，多图轮播在卡上没有意义。
       imageUrl: detail.imageUrls.isEmpty ? null : detail.imageUrls.first,
       shareUrl: shareUrl,
+      isVideo: detail.isVideo,
     );
   }
 }

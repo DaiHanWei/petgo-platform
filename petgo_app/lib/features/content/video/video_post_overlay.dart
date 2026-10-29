@@ -16,14 +16,14 @@ import '../presentation/comment_section.dart';
 import '../presentation/content_detail_page.dart';
 import '../presentation/detail_providers.dart';
 import '../presentation/feed_controller.dart';
-import '../presentation/like_button.dart';
+import 'video_like_action.dart';
 import 'video_player_view.dart';
 
 /// 播放页叠加层（专题线 video Story 2.5 · FR-16 · AD-10）：作者区、正文、点赞 / 点赞人、评论抽屉、分享、举报或删除。
 ///
-/// 规则与图文帖详情页一致（V-13），组件一律复用：`LikeButton`、`FollowButton`、`CommentSection`、
+/// 规则与图文帖详情页一致（V-13），组件复用：`FollowButton`、`CommentSection`、
 /// `CommentComposer`、`DetailShareCardButton`、`showContentMoreSheet`、`openUserProfile`。
-/// 游客的登录墙由这些组件自己处理。叠在画面之上、播放器控件（静音 / 进度条）之下。
+/// 点赞是竖排的 [VideoLikeAction]（行为同 `LikeButton`，排法不同，见该类）。游客的登录墙由这些组件自己处理。叠在画面之上、播放器控件（静音 / 进度条）之下。
 class VideoPostOverlay extends ConsumerStatefulWidget {
   const VideoPostOverlay({super.key, required this.detail, this.focusComments = false, this.commentsOpen});
 
@@ -126,13 +126,11 @@ class _VideoPostOverlayState extends ConsumerState<VideoPostOverlay> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LikeButton(
+                // 竖排点赞（图标在上、数字在下），与下面的评论同一排法；不复用横排的 LikeButton。
+                VideoLikeAction(
                   postId: d.id,
                   initialLiked: d.liked,
                   initialCount: d.likeCount,
-                  source: 'detail',
-                  likersSource: 'content_detail',
-                  onDark: true,
                   onSettled: (liked, count) => syncFeedCounts(ref, d.id, liked: liked, likeCount: count),
                 ),
                 const SizedBox(height: 12),

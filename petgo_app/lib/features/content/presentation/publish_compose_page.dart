@@ -439,6 +439,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (!_videoEntryVisible(controller) || controller.video != null) return const SizedBox.shrink();
     // 图片处理中（拍照解码 / 压缩）也不可选视频：否则图片稍后入列失败会被静默丢掉（code review）。
     final enabled = controller.canPickVideo && !_checkingVideo && !_pickingVideo && !_addingImage;
+    // 已选了图片而置灰：点一下说明原因（视频与图片不能同发），其余置灰（处理中）点了无反应。
+    final blockedByImages = controller.items.isNotEmpty;
     final error = _videoSpecError;
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -451,7 +453,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               opacity: enabled ? 1 : 0.5,
               child: OutlinedButton.icon(
                 key: const ValueKey('publishAddVideo'),
-                onPressed: enabled ? () => _pickVideo(controller) : null,
+                onPressed: enabled
+                    ? () => _pickVideo(controller)
+                    : blockedByImages
+                        ? () => showAppToast(context, l10n.publishVideoBlockedByImages)
+                        : null,
                 icon: _checkingVideo
                     ? const SizedBox(
                         width: 14,

@@ -2607,6 +2607,7 @@
   "postLikersEmpty": "Belum ada yang menyukai",
   "postLikersLoadFailed": "Gagal memuat daftar",
   "publishAddVideo": "Video",
+  "publishVideoBlockedByImages": "Video tidak bisa digabung dengan foto. Hapus foto dulu untuk menambahkan video.",
   "videoSpecChecking": "Memeriksa video…",
   "videoSpecPassed": "Video siap",
   "videoSpecFailedTitle": "Video ini belum bisa diposting. Ekspor ulang sesuai spesifikasi video resmi:",

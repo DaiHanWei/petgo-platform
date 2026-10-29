@@ -4007,6 +4007,8 @@
   "@postLikersLoadFailed": {"description": "Post likers bottom sheet load-failed title (V1.3.4)"},
   "publishAddVideo": "Video",
   "@publishAddVideo": {"description": "Publish compose: add a video (only for accounts allowed to post videos; video story 1.5) (video story 1.5)"},
+  "publishVideoBlockedByImages": "Videos can't be combined with photos. Remove the photos first to add a video.",
+  "@publishVideoBlockedByImages": {"description": "Publish compose: toast when tapping the dimmed Video button while photos are already selected (video L2 follow-up)"},
   "videoSpecChecking": "Checking the video…",
   "@videoSpecChecking": {"description": "Publish compose: video spec check in progress (video story 1.5)"},
   "videoSpecPassed": "Video is ready",

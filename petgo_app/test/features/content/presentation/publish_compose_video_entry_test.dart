@@ -140,12 +140,22 @@ void main() {
     expect(entry, findsNothing);
   });
 
-  testWidgets('已有图片时入口禁用', (tester) async {
-    final c = await pump(tester, preset: ContentType.daily);
+  testWidgets('已有图片时入口置灰：点了不选视频，只提示原因（L2 走查遗留）', (tester) async {
+    var picked = 0;
+    final c = await pump(tester, preset: ContentType.daily, picker: () async {
+      picked++;
+      return null;
+    });
     c.addImage(Uint8List.fromList([1, 2, 3]));
     await tester.pump();
-    final btn = tester.widget<ButtonStyleButton>(entry);
-    expect(btn.onPressed, isNull);
+    final opacity = tester.widget<Opacity>(find.ancestor(of: entry, matching: find.byType(Opacity)).first);
+    expect(opacity.opacity, 0.5);
+    await tester.tap(entry);
+    await tester.pump();
+    expect(picked, 0);
+    expect(c.video, isNull);
+    expect(find.text('Videos can\'t be combined with photos. Remove the photos first to add a video.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('选到合规视频：出现预览格，成长日记 chip 禁用', (tester) async {

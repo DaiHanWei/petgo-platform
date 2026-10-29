@@ -537,7 +537,8 @@ class _MyPostsList extends ConsumerWidget {
                 firstImageUrl: p.firstImageUrl,
                 isPrivate: p.isPrivate,
                 videoDurationMs: p.isVideo ? p.video!.durationMs : null,
-                onTap: () => pushContentDetail(context, p.id, isVideo: p.isVideo, source: VideoSource.myPosts),
+                onTap: () => pushContentDetail(context, p.id,
+                    isVideo: p.isVideo, source: VideoSource.myPosts, coverUrl: p.firstImageUrl, video: p.video),
               )),
           ],
         ));

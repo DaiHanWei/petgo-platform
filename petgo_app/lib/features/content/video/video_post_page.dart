@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/app_image.dart';
 import '../domain/content_detail.dart';
 import 'video_nav.dart';
 import 'video_post_overlay.dart';
@@ -57,6 +58,7 @@ class _VideoPostPageState extends State<VideoPostPage> {
         source: widget.source,
         compact: _commentsOpen,
         coverUrl: detail.imageUrls.isEmpty ? null : detail.imageUrls.first,
+        initialAspectRatio: videoAspectOf(video),
         overlay: Stack(children: [
           overlayBuilder != null
               ? overlayBuilder(context, detail)
@@ -85,16 +87,34 @@ class VideoBackButton extends StatelessWidget {
 }
 
 /// 已知是视频帖、详情还没拉到时的加载态（从列表进来跳过图文详情的白底加载骨架）。
+///
+/// 有列表带来的封面就先铺上（与 [VideoPlayerView] 首帧前的封面同一位置、同一比例），
+/// 详情到达后换成播放页时画面不跳、不先黑一下（L2 走查遗留）。
 class VideoPostLoading extends StatelessWidget {
-  const VideoPostLoading({super.key});
+  const VideoPostLoading({super.key, this.coverUrl, this.aspectRatio});
+
+  final String? coverUrl;
+
+  /// 宽 / 高；null 按竖屏 9:16（与播放器初始化前的占位比例一致）。
+  final double? aspectRatio;
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
-        key: ValueKey('videoPostLoading'),
+  Widget build(BuildContext context) => Scaffold(
+        key: const ValueKey('videoPostLoading'),
         backgroundColor: Colors.black,
         body: Stack(children: [
-          Center(child: CircularProgressIndicator(color: Colors.white)),
-          VideoBackButton(),
+          if (coverUrl != null)
+            Center(
+              child: AspectRatio(
+                aspectRatio: aspectRatio ?? 9 / 16,
+                child: AppImage.widget(coverUrl!,
+                    key: const ValueKey('videoPostLoadingCover'),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const SizedBox.shrink()),
+              ),
+            ),
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+          const VideoBackButton(),
         ]),
       );
 }
