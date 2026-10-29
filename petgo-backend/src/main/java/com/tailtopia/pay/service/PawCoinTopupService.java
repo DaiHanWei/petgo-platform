@@ -7,6 +7,7 @@ import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.CreateTopupRequest;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
 import com.tailtopia.pay.dto.TopupOptions;
+import com.tailtopia.pay.dto.PaymentDisplayNo;
 import com.tailtopia.pay.dto.TopupResponse;
 import com.tailtopia.pay.dto.TopupTierDto;
 import com.tailtopia.shared.error.AppException;
@@ -119,7 +120,7 @@ public class PawCoinTopupService {
     private static TopupResponse toResponse(PaymentIntent intent, PayChannel channel, long amount,
             long coins, String payload) {
         return new TopupResponse(intent.getPublicToken(), channel.name(), amount, coins, payload,
-                intent.getExpiresAt());
+                intent.getExpiresAt(), PaymentDisplayNo.of(intent));
     }
 
     /** 仅允许外部收款渠道 QRIS；PAWCOIN（站内余额）/非法值 → 422。 */

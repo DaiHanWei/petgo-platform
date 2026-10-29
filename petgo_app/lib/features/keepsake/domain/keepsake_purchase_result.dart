@@ -10,6 +10,8 @@ class KeepsakePurchaseResult {
     this.paymentDisplayNo,
     this.payload,
     this.purchaseToken,
+    this.paymentAmount,
+    this.paymentExpiresAt,
   });
 
   /// true = 已解锁（PawCoin 当场成交 / 此前已付款）。
@@ -23,6 +25,10 @@ class KeepsakePurchaseResult {
   /// 购买记录 token（订单中心用）；无购买行时 null。
   final String? purchaseToken;
 
+  /// 现金金额（IDR）与付款窗过期时刻（V1.4.1 QRIS 支付页）。
+  final int? paymentAmount;
+  final DateTime? paymentExpiresAt;
+
   /// 展示用支付号：优先可读号，缺省退 token。
   String? get paymentRef => paymentDisplayNo ?? paymentToken;
 
@@ -34,6 +40,8 @@ class KeepsakePurchaseResult {
       paymentDisplayNo: base.paymentDisplayNo,
       payload: base.payload,
       purchaseToken: json['purchaseToken'] as String?,
+      paymentAmount: base.paymentAmount,
+      paymentExpiresAt: base.paymentExpiresAt,
     );
   }
 }

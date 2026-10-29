@@ -373,6 +373,9 @@ class _GiftSendFlow {
       context,
       payload: r.payload!,
       orderRef: r.paymentRef,
+      // V1.4.1 QRIS 支付页：金额取本次支付单（后端权威），缺省退选中总价。
+      amountIdr: r.paymentAmount ?? sel.total,
+      expiresAt: r.paymentExpiresAt,
       pollPaid: () async {
         final status = await repo.orderStatus(orderToken);
         switch (status) {

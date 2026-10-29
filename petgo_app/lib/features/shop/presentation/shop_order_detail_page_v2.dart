@@ -805,7 +805,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       final paid = await showQrPaymentSheet(
         context,
         payload: result.payload!,
-        orderRef: order.orderToken,
+        // V1.4.1 QRIS 支付页：展示可读订单号（TOKO-…），不再是 22 位内部 token。
+        orderRef: order.displayNo.isNotEmpty ? order.displayNo : order.orderToken,
+        amountIdr: _cashSegment(order),
+        expiresAt: order.expiresAt,
         onAborted: (abort) {
           abortSignalled = true;
           aborted = ShopPaymentFailure.fromApi(abort.category);
