@@ -306,19 +306,27 @@ void main() {
       return c;
     }
 
-    Finder title(String name) => find.text("$name's Diary");
+    // V1.4.1 Diary 页头修复 ⑤：作者态有切换器时不再画「{name}'s Diary」标题行，
+    // 当前宠物改由宠物信息卡里的名字识别。
+    Finder title(String name) =>
+        find.descendant(of: find.byType(PetInfoCard), matching: find.text(name));
+    Finder titleRow(String name) => find.text("$name's Diary");
 
-    testWidgets('B1：切换器在页面最顶部、标题行之上；默认宠物高亮', (tester) async {
+    testWidgets('B1：切换器在页面最顶部、无标题行，分享 / 编辑在切换器同一行右侧；默认宠物高亮', (tester) async {
       await pump(tester);
 
       final switcher = find.byKey(const ValueKey('petSwitcher'));
       expect(switcher, findsOneWidget);
       expect(title('Orenji'), findsOneWidget);
+      expect(titleRow('Orenji'), findsNothing, reason: 'V1.4.1 ⑤ 作者态去掉标题行');
       expect(tester.getRect(switcher).bottom, lessThanOrEqualTo(tester.getRect(title('Orenji')).top));
+      final edit = tester.getRect(find.byKey(const ValueKey('editProfileButton')));
+      expect(edit.left, greaterThan(tester.getRect(switcher).right - 1), reason: '编辑按钮在切换器右侧');
+      expect(edit.top, lessThan(tester.getRect(switcher).bottom), reason: '与切换器同一行');
       expect(tester.widget<PetAvatarItem>(find.byKey(const ValueKey('petSwitcherItem-1'))).selected, isTrue);
     });
 
-    testWidgets('B2：点另一只 → 立即高亮 + 标题行立即换名 + 数据区骨架；切换器仍可点', (tester) async {
+    testWidgets('B2：点另一只 → 立即高亮 + 数据区骨架（无标题行）；切换器仍可点', (tester) async {
       final c = await pump(tester);
       repo.hold(2); // Kopi 的档案请求挂起，停在「切换中」
 
@@ -328,7 +336,9 @@ void main() {
 
       expect(c.read(currentPetIdProvider), 2);
       expect(find.byKey(const ValueKey('diarySwitching')), findsOneWidget);
-      expect(title('Kopi'), findsOneWidget, reason: '名字取列表项，不等档案请求');
+      // V1.4.1 ⑤：过渡态不再显示目标宠物名标题行。
+      expect(find.byKey(const ValueKey('diarySwitchingTitle')), findsNothing);
+      expect(titleRow('Kopi'), findsNothing);
       expect(find.byKey(const ValueKey('diarySwitchingSpinner')), findsOneWidget);
       expect(tester.widget<PetAvatarItem>(find.byKey(const ValueKey('petSwitcherItem-2'))).selected, isTrue);
       // 不是整页居中转圈：切换器还在、可点。
@@ -490,9 +500,10 @@ void main() {
       expect(find.text(l10n.petReadonlyBannerTitle), findsOneWidget);
       expect(find.text(l10n.petReadonlyBannerBody), findsOneWidget);
       expect(find.byKey(const ValueKey('petReadonlyBannerRenew')), findsOneWidget);
-      // L2 第二轮（稿 B4）：横幅在标题行「Diary {name}」之下、宠物信息卡之上。
-      expect(tester.getRect(banner).top, greaterThanOrEqualTo(tester.getRect(title('Orenji')).bottom),
-          reason: '横幅在标题行之下');
+      // 稿 B4 + V1.4.1 ⑤：作者态无标题行，横幅在切换器之下、宠物信息卡之上。
+      expect(tester.getRect(banner).top,
+          greaterThanOrEqualTo(tester.getRect(find.byKey(const ValueKey('petSwitcher'))).bottom),
+          reason: '横幅在切换器之下');
       expect(tester.getRect(banner).bottom,
           lessThanOrEqualTo(tester.getRect(find.byType(PetInfoCard)).top),
           reason: '横幅在宠物卡之上');
