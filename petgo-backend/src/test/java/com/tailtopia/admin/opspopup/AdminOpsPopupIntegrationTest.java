@@ -402,6 +402,42 @@ class AdminOpsPopupIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("V1.4.1 四维人群条件：保存落 JSON → 游客候选不可见 → 编辑抽屉回填 → 列表显示摘要；非法值 422 标红")
+    void audienceFiltersSaveRenderAndHideFromGuests() throws Exception {
+        Authentication ed = editor();
+        String name = "opsp-filter-" + SEQ.incrementAndGet();
+        mvc.perform(htmx(form(post(BASE), name, "levelTier", "BUDDY", "paid", "true", "species", "",
+                        "activity", "")).with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk());
+        String token = (String) rowByName(name).get("public_token");
+        assertThat(jdbc.queryForObject("SELECT audience_filter FROM ops_popups WHERE public_token = ?", String.class,
+                token)).isEqualTo("{\"levelTiers\":[\"BUDDY\"],\"paid\":true}");
+        assertThat(candidates()).extracting(n -> n.get("token").asText()).doesNotContain(token);
+
+        String drawer = mvc.perform(get(BASE).param("open", token).param("lang", "zh_CN").header("HX-Request", "true")
+                        .with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(drawer).contains("更多筛选（可选）").containsPattern("<option value=\"BUDDY\" selected=\"selected\">5–9 级")
+                .containsPattern("<option value=\"true\" selected=\"selected\">付过钱");
+        String list = mvc.perform(get(BASE).param("lang", "zh_CN").with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(list).contains("5–9 级 · 付过钱");
+
+        // 改成不筛 → 列存 NULL，游客重新可见
+        mvc.perform(htmx(form(post(BASE + "/" + token), name)).with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT audience_filter FROM ops_popups WHERE public_token = ?", String.class,
+                token)).isNull();
+        assertThat(candidates()).extracting(n -> n.get("token").asText()).contains(token);
+
+        MvcResult bad = mvc.perform(htmx(form(post(BASE), name + "-bad", "levelTier", "GOLD")).param("lang", "zh_CN")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isUnprocessableEntity()).andReturn();
+        assertThat(bad.getResponse().getContentAsString()).contains("筛选条件不合法，请重新选择")
+                .containsPattern("id=\"opsp-err-filters\" hx-swap-oob=\"innerHTML\"");
+    }
+
+    @Test
     @DisplayName("H7：抽屉保存校验失败 → 一次 422（汇总条 + 各槽 oob 红字 + 标红名单）；不换表、不落库")
     void validationErrorsAreCollectedInOne422() throws Exception {
         String name = "opsp-422-" + SEQ.incrementAndGet();

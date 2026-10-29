@@ -167,4 +167,38 @@ class AudienceSpecTest {
         assertThat(ids.toJson()).isEqualTo("{\"mode\":\"IDS\"}");
         assertThat(AudienceSpec.parse("{\"mode\":\"FILTER\"}").noFilter()).isTrue();
     }
+
+    // ===== V1.4.1 四维人群条件 =====
+
+    @Test
+    @DisplayName("V1.4.1：levelTiers / activity / paid 往返；ALL / IDS 丢弃；filters() 带上 species")
+    void v141TargetingKeysRoundTrip() {
+        AudienceSpec s = AudienceSpec.parse("{\"mode\":\"FILTER\",\"levelTiers\":[\"STAR\",\"NEWBIE\"],"
+                + "\"activity\":[\"OTHER\"],\"paid\":false,\"species\":[\"CAT\"]}");
+        assertThat(s.levelTiers()).containsExactlyInAnyOrder(com.tailtopia.growth.domain.GrowthTier.NEWBIE,
+                com.tailtopia.growth.domain.GrowthTier.STAR);
+        assertThat(s.activity()).containsExactly(com.tailtopia.ops.audience.ActivityBand.OTHER);
+        assertThat(s.paid()).isFalse();
+        assertThat(s.noFilter()).isFalse();
+        assertThat(AudienceSpec.parse(s.toJson())).isEqualTo(s);
+        assertThat(s.filters().species()).containsExactly(PetType.CAT);
+        assertThat(s.filters().paid()).isFalse();
+
+        AudienceSpec all = AudienceSpec.parse("{\"mode\":\"ALL\",\"paid\":true,\"levelTiers\":[\"STAR\"]}");
+        assertThat(all.toJson()).isEqualTo("{\"mode\":\"ALL\"}");
+        assertThat(AudienceSpec.parse("{\"mode\":\"FILTER\",\"activity\":[]}").noFilter()).isTrue();
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "{\"mode\":\"FILTER\",\"levelTiers\":[\"GOLD\"]}",
+        "{\"mode\":\"FILTER\",\"levelTiers\":\"NEWBIE\"}",
+        "{\"mode\":\"FILTER\",\"activity\":[\"WITHIN_30D\"]}",
+        "{\"mode\":\"FILTER\",\"paid\":\"true\"}"
+    })
+    @DisplayName("V1.4.1：新键非法值 → 422 + 人群错误码")
+    void v141InvalidValuesRejected(String json) {
+        assertThatThrownBy(() -> AudienceSpec.parse(json)).isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getMessageCode()).isEqualTo(AudienceSpec.INVALID_CODE);
+    }
 }

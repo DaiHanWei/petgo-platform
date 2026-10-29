@@ -1149,6 +1149,8 @@ tr.is-muted td { opacity: .55; }
 .opsp-fld textarea.inp { resize: vertical; min-height: 34px; line-height: 20px; }
 .opsp-fld .inp::placeholder { color: #C4C7CF; }
 .opsp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* V1.4.1 弹窗四维人群条件：每个下拉上方一行小标题 */
+.opsp-flt { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
 .opsp-two [data-show-when][hidden] { display: none; }
 .opsp-tval input[readonly] { background: var(--surface); }
 .opsp-fld .opsp-prio { width: 120px; }

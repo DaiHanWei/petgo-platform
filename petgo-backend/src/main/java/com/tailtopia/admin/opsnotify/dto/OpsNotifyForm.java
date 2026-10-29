@@ -11,6 +11,8 @@ package com.tailtopia.admin.opsnotify.dto;
  *   <li>② 选择用户：{@code audienceMode} = ALL / FILTER / IDS；
  *       FILTER 六个下拉 —— {@code registeredWithin / activeWithin}（空 = 不限，7 / 30 / 90 = 近 N 天，§0-5）、
  *       {@code hasPet / hasShopOrder / hasPhone}（空 = 不限，true / false）、{@code species}（单选 CAT / DOG / OTHER，§0-6）；
+ *       V1.4.1 加 {@code levelTier}（NEWBIE / BUDDY / GUARDIAN / STAR）、{@code activity}（WITHIN_7D / WITHIN_15D / OTHER，
+ *       取代页面上的 {@code activeWithin} 下拉，字段保留兼容）、{@code paid}（true / false），均为空 = 不限；
  *       IDS —— {@code userIds}（一行一个 ID，粘贴或由 CSV 读入）+ {@code idsSource}（PASTE / CSV）；</li>
  *   <li>③ 发送时间：{@code sendMode} = NOW / SCHEDULED；{@code scheduledAt}（{@code datetime-local}，按 WIB 解释）；</li>
  *   <li>④ 确认：{@code previewCount}（确认页上的预计人数，服务端重算比对）、{@code confirmCount}（大范围发送时 I8
@@ -31,6 +33,9 @@ public class OpsNotifyForm {
     private String species;
     private String hasShopOrder;
     private String hasPhone;
+    private String levelTier;
+    private String activity;
+    private String paid;
     private String userIds;
     private String idsSource;
     private String targetType;
@@ -199,5 +204,29 @@ public class OpsNotifyForm {
 
     public void setSubmitKey(String submitKey) {
         this.submitKey = submitKey;
+    }
+
+    public String getLevelTier() {
+        return levelTier;
+    }
+
+    public void setLevelTier(String levelTier) {
+        this.levelTier = levelTier;
+    }
+
+    public String getActivity() {
+        return activity;
+    }
+
+    public void setActivity(String activity) {
+        this.activity = activity;
+    }
+
+    public String getPaid() {
+        return paid;
+    }
+
+    public void setPaid(String paid) {
+        this.paid = paid;
     }
 }

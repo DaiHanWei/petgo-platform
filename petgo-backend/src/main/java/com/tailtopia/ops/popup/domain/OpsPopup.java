@@ -104,6 +104,10 @@ public class OpsPopup {
     @Column(name = "target_value", length = 512)
     private String targetValue;
 
+    /** V1.4.1 四维人群条件 JSON（{@link com.tailtopia.ops.audience.AudienceFilters}）；null = 不筛。 */
+    @Column(name = "audience_filter", length = 512)
+    private String audienceFilter;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -277,6 +281,16 @@ public class OpsPopup {
 
     public String getTargetValue() {
         return targetValue;
+    }
+
+    /** 四维人群条件（V1.4.1）；未设 = {@link com.tailtopia.ops.audience.AudienceFilters#none()}。 */
+    public com.tailtopia.ops.audience.AudienceFilters getAudienceFilters() {
+        return com.tailtopia.ops.audience.AudienceFilters.parse(audienceFilter);
+    }
+
+    /** 新建 / 编辑时写入（全不筛 → 列存 NULL）。 */
+    public void setAudienceFilters(com.tailtopia.ops.audience.AudienceFilters filters) {
+        this.audienceFilter = filters == null ? null : filters.toJsonOrNull();
     }
 
     public Instant getCreatedAt() {

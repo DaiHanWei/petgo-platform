@@ -102,9 +102,14 @@
                                 <option th:each="d : ${withinPresets}" th:value="${d}" th:text="#{admin.opsNotify.within(${d})}">近 30 天</option>
                             </select></label>
                         <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.active}">最近活跃时间</span>
-                            <select class="inp" name="activeWithin" disabled>
+                            <select class="inp" name="activity" disabled>
                                 <option value="" th:text="#{admin.opsNotify.any}">不限</option>
-                                <option th:each="d : ${withinPresets}" th:value="${d}" th:text="#{admin.opsNotify.within(${d})}">近 30 天</option>
+                                <option th:each="a : ${activityValues}" th:value="${a}" th:text="#{'admin.opsNotify.activity.' + ${a}}">7 天内打开过 App</option>
+                            </select></label>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.levelTier}">用户等级</span>
+                            <select class="inp" name="levelTier" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option th:each="t : ${levelTierValues}" th:value="${t}" th:text="#{'admin.opsNotify.levelTier.' + ${t}}">1–4 级</option>
                             </select></label>
                         <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.hasPet}">是否建了宠物档案</span>
                             <select class="inp" name="hasPet" disabled>
@@ -122,6 +127,12 @@
                                 <option value="" th:text="#{admin.opsNotify.any}">不限</option>
                                 <option value="true" th:text="#{admin.opsNotify.yes}">是</option>
                                 <option value="false" th:text="#{admin.opsNotify.no}">否</option>
+                            </select></label>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.paid}">付费状态</span>
+                            <select class="inp" name="paid" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option value="true" th:text="#{admin.opsNotify.paid.true}">付过钱</option>
+                                <option value="false" th:text="#{admin.opsNotify.paid.false}">没付过钱</option>
                             </select></label>
                         <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.hasPhone}">是否填写手机号</span>
                             <select class="inp" name="hasPhone" disabled>

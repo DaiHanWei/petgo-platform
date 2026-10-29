@@ -78,6 +78,14 @@ public class AccountQueryService {
         return users.findActiveOfficialIds();
     }
 
+    /** 账号是否有效（存在、未注销、未封号；不限角色）。V1.4.1 自动关注目标校验用。 */
+    @Transactional(readOnly = true)
+    public boolean isActiveAccount(long userId) {
+        return users.findById(userId)
+                .map(u -> u.getDeletedAt() == null && u.getStatus() == UserStatus.ACTIVE)
+                .orElse(false);
+    }
+
     /** 该账号是否「有效的真实普通用户」（role=USER、account_type=REAL、未注销、未封号；VIRTUAL 马甲不算）。 */
     @Transactional(readOnly = true)
     public boolean isActiveRegularUser(long userId) {

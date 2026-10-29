@@ -6,12 +6,14 @@ import com.tailtopia.admin.ops.AdminOpsTargetValidator;
 import com.tailtopia.admin.opsnotify.dto.OpsNotifyForm;
 import com.tailtopia.auth.service.OpsAudienceQuery;
 import com.tailtopia.auth.service.OpsAudienceQuery.IdStatus;
+import com.tailtopia.growth.domain.GrowthTier;
 import com.tailtopia.notify.ops.domain.AudienceSpec;
 import com.tailtopia.notify.ops.domain.OpsCampaignDraft;
 import com.tailtopia.notify.ops.domain.OpsCampaignStatus;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.ops.service.OpsNotificationCampaignService;
+import com.tailtopia.ops.audience.ActivityBand;
 import com.tailtopia.ops.target.OpsTargetType;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.shared.error.AppException;
@@ -488,7 +490,9 @@ public class AdminOpsNotifyService {
                     null, null, null, null,
                     bool(f.getHasPet()), species(f.getSpecies()),
                     bool(f.getHasShopOrder()), bool(f.getHasPhone()),
-                    within(f.getRegisteredWithin()), within(f.getActiveWithin())), null, null);
+                    within(f.getRegisteredWithin()), within(f.getActiveWithin()),
+                    one(f.getLevelTier(), GrowthTier.class), one(f.getActivity(), ActivityBand.class),
+                    bool(f.getPaid())), null, null);
         };
     }
 
@@ -570,6 +574,19 @@ public class AdminOpsNotifyService {
         }
         try {
             return Set.of(PetType.valueOf(v));
+        } catch (IllegalArgumentException e) {
+            throw invalidAudience();
+        }
+    }
+
+    /** V1.4.1 单选下拉（等级档 / 活跃档）：空 = 不限；非枚举值 → 422。 */
+    private static <E extends Enum<E>> Set<E> one(String raw, Class<E> type) {
+        String v = norm(raw);
+        if (v == null) {
+            return null;
+        }
+        try {
+            return java.util.EnumSet.of(Enum.valueOf(type, v));
         } catch (IllegalArgumentException e) {
             throw invalidAudience();
         }

@@ -12,12 +12,16 @@ import com.tailtopia.admin.shared.web.AdminConfirmModal;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
 import com.tailtopia.admin.shared.web.AdminHxEvents;
 import com.tailtopia.admin.shared.web.HxRequest;
+import com.tailtopia.growth.domain.GrowthTier;
+import com.tailtopia.ops.audience.ActivityBand;
+import com.tailtopia.ops.audience.AudienceFilters;
 import com.tailtopia.ops.popup.domain.OpsPopup;
 import com.tailtopia.ops.popup.domain.OpsPopupAudience;
 import com.tailtopia.ops.popup.domain.OpsPopupFrequency;
 import com.tailtopia.ops.popup.service.OpsPopupCandidateService;
 import com.tailtopia.ops.target.OpsAppPage;
 import com.tailtopia.ops.target.OpsTargetType;
+import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
 import com.tailtopia.shop.domain.ProductCategory;
@@ -72,7 +76,7 @@ public class AdminOpsPopupController {
     private static final DateTimeFormatter SHORT = DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(AdminTime.ZONE);
     /** 抽屉里贴错的槽（与模板 drawer-ops-popup 的 {@code opsp-err-<slot>} 一一对应；422 时全部 oob 刷一遍）。 */
     static final List<String> ERROR_SLOTS = List.of("name", "image", "title", "body", "button", "target",
-            "window", "frequency", "audience", "priority");
+            "window", "frequency", "audience", "filters", "priority");
 
     private final AdminOpsPopupService service;
     private final OpsPopupCandidateService candidates;
@@ -141,6 +145,11 @@ public class AdminOpsPopupController {
             f.setButtonTextEn(p.getButtonTextEn());
             f.setTargetType(p.getTargetType().name());
             f.setTargetValue(p.getTargetValue());
+            AudienceFilters af = p.getAudienceFilters();
+            f.setLevelTier(first(af.levelTiers()));
+            f.setSpecies(first(af.species()));
+            f.setActivity(first(af.activity()));
+            f.setPaid(af.paid() == null ? null : af.paid().toString());
         }
         // ⚠️ 库里存的是 objectKey，直接塞 <img> 显示不出来；拼不出 URL（CDN 未配）就不出缩略图 ——
         //    key 仍在隐藏字段里，不换图照样保留（同 Banner 抽屉）。
@@ -153,6 +162,35 @@ public class AdminOpsPopupController {
         model.addAttribute("categories", ProductCategory.values());
         model.addAttribute("appPages", OpsAppPage.values());
         model.addAttribute("maxImageBytes", MAX_IMAGE_BYTES);
+        model.addAttribute("levelTierValues", GrowthTier.values());
+        model.addAttribute("speciesValues", PetType.values());
+        model.addAttribute("activityValues", ActivityBand.values());
+    }
+
+    /** 后台是单选下拉：取集合里的那一个（集合为多选留的余地，目前最多一个）。 */
+    private static String first(java.util.Set<? extends Enum<?>> s) {
+        return s == null || s.isEmpty() ? null : s.iterator().next().name();
+    }
+
+    /** 列表「目标人群」下方的条件摘要：「1–4 级 · 猫 · 7 天内打开过 App · 付过钱」；不筛 = null。 */
+    private String filtersSummary(AudienceFilters f) {
+        if (f.isEmpty()) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>();
+        if (f.levelTiers() != null) {
+            f.levelTiers().forEach(t -> parts.add(msg.get("admin.opsNotify.levelTier." + t.name())));
+        }
+        if (f.species() != null) {
+            f.species().forEach(t -> parts.add(msg.get("admin.opsNotify.species." + t.name())));
+        }
+        if (f.activity() != null) {
+            f.activity().forEach(a -> parts.add(msg.get("admin.opsNotify.activity." + a.name())));
+        }
+        if (f.paid() != null) {
+            parts.add(msg.get("admin.opsNotify.paid." + f.paid()));
+        }
+        return String.join(" · ", parts);
     }
 
     private void populateList(Model model, String status, String q) {
@@ -172,6 +210,7 @@ public class AdminOpsPopupController {
             m.put("priority", p.getPriority());
             m.put("audience", p.getAudience().name());
             m.put("newUserDays", p.getNewUserDays());
+            m.put("filters", filtersSummary(p.getAudienceFilters()));
             m.put("frequency", p.getFrequency().name());
             // 行内链接按状态（H1）：编辑恒有；停用 = 进行中 / 未开始；启用 = 已停用；删除 = 未开始且从未曝光（§0-2）
             m.put("canDeactivate", state == OpsPopupState.RUNNING || state == OpsPopupState.PENDING);

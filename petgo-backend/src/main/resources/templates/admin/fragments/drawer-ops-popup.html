@@ -115,6 +115,35 @@
             <div class="opsp-h" th:text="#{admin.opsPopups.form.audienceHint}">只有「全部用户」会对未登录游客展示。</div>
             <div class="opsp-ferr" id="opsp-err-audience"></div>
         </div>
+        <!--/* V1.4.1 四维人群条件：与运营通知同口径；都不选 = 不筛。设了任一条件，游客就看不到（服务端过滤）。 */-->
+        <div class="opsp-fld" data-error-name="filters">
+            <span class="opsp-l" th:text="#{admin.opsPopups.form.filters}">更多筛选（可选）</span>
+            <div class="opsp-two">
+                <label class="opsp-flt"><span th:text="#{admin.opsNotify.form.levelTier}"></span>
+                    <select class="inp" th:field="*{levelTier}">
+                        <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                        <option th:each="t : ${levelTierValues}" th:value="${t}" th:text="#{'admin.opsNotify.levelTier.' + ${t}}">1–4 级</option>
+                    </select></label>
+                <label class="opsp-flt"><span th:text="#{admin.opsNotify.form.species}"></span>
+                    <select class="inp" th:field="*{species}">
+                        <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                        <option th:each="t : ${speciesValues}" th:value="${t}" th:text="#{'admin.opsNotify.species.' + ${t}}">猫</option>
+                    </select></label>
+                <label class="opsp-flt"><span th:text="#{admin.opsNotify.form.active}"></span>
+                    <select class="inp" th:field="*{activity}">
+                        <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                        <option th:each="t : ${activityValues}" th:value="${t}" th:text="#{'admin.opsNotify.activity.' + ${t}}">7 天内打开过 App</option>
+                    </select></label>
+                <label class="opsp-flt"><span th:text="#{admin.opsNotify.form.paid}"></span>
+                    <select class="inp" th:field="*{paid}">
+                        <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                        <option value="true" th:text="#{admin.opsNotify.paid.true}">付过钱</option>
+                        <option value="false" th:text="#{admin.opsNotify.paid.false}">没付过钱</option>
+                    </select></label>
+            </div>
+            <div class="opsp-h" th:text="#{admin.opsPopups.form.filtersHint}">条件之间为「且」。设了任一条件后，未登录游客看不到这个弹窗。</div>
+            <div class="opsp-ferr" id="opsp-err-filters"></div>
+        </div>
         <div class="opsp-fld">
             <label class="opsp-l" for="f-opsp-priority"><span th:text="#{admin.opsPopups.form.priority}">优先级</span><i> *</i></label>
             <input id="f-opsp-priority" type="number" min="-100000" max="100000" step="1" class="inp opsp-prio" th:field="*{priority}"/>
