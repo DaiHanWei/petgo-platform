@@ -132,7 +132,7 @@ class QrPaySummary extends StatelessWidget {
 
     final row = Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: page ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [Flexible(child: left), const SizedBox(width: 10), right],
     );
     if (!page) {
@@ -237,10 +237,14 @@ class QrPayCodeCard extends StatelessWidget {
                     children: [
                       const Icon(Icons.timer_off_outlined, size: 30, color: AppColors.muted),
                       const SizedBox(height: 6),
-                      Text(l10n.rechargeExpiredTitle,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      // 稿 `.qrexp b` 单行（white-space: nowrap）：二维码只有 168 宽，放不下时等比缩小而不是折行。
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(l10n.rechargeExpiredTitle,
+                            maxLines: 1,
+                            style: const TextStyle(
+                                fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      ),
                       const SizedBox(height: 2),
                       Text(l10n.qrPayExpiredBody,
                           textAlign: TextAlign.center,
@@ -357,16 +361,19 @@ class QrPayGuide extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             for (final name in kQrPayLogos)
+              // ⚠️ 不能给 Container 设 alignment：在 Wrap 里会撑满整行（每个 logo 独占一行）。
               Container(
                 height: 30,
                 padding: const EdgeInsets.symmetric(horizontal: 9),
-                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.card,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.line2),
                 ),
-                child: Image.asset('assets/payment/$name.png', height: 15, semanticLabel: name),
+                child: Center(
+                  widthFactor: 1,
+                  child: Image.asset('assets/payment/$name.png', height: 15, semanticLabel: name),
+                ),
               ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
