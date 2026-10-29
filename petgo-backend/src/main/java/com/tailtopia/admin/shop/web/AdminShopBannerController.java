@@ -105,6 +105,8 @@ public class AdminShopBannerController {
         f.setImageW(b.getImageW());
         f.setImageH(b.getImageH());
         f.setSortWeight(b.getSortWeight());
+        f.setTargetType(b.getTargetType().name());
+        f.setTargetValue(b.getTargetValue());
         model.addAttribute("form", f);
         model.addAttribute("bannerId", id);
         // ⚠️ CDN 未配时 publicUrl 返 null —— 不能 String.valueOf 成字符串 "null"，
@@ -148,6 +150,10 @@ public class AdminShopBannerController {
             m.put("active", b.isActive());
             m.put("sortWeight", b.getSortWeight());
             m.put("state", AdminShopBannerService.stateOf(b, liveId));
+            // V1.4.1：跳转目标（NONE = 不可点）与埋点 banner_id，列表里给运营核对用。
+            m.put("targetType", b.getTargetType().name());
+            m.put("targetValue", b.getTargetValue());
+            m.put("publicToken", b.getPublicToken());
             view.add(m);
         }
         model.addAttribute("banners", view);

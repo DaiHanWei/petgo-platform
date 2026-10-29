@@ -56,6 +56,7 @@ public class ShopBannerController {
         if (url == null || url.isBlank()) {
             return ResponseEntity.noContent().build();
         }
-        return ResponseEntity.ok(new ShopBannerView(url, b.getImageW(), b.getImageH()));
+        return ResponseEntity.ok(new ShopBannerView(url, b.getImageW(), b.getImageH(), b.getPublicToken(),
+                b.getTargetType().name(), b.getTargetValue()));
     }
 }

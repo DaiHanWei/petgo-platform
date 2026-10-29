@@ -164,11 +164,16 @@ void main() {
       //   设计文档要求区分这两处的转化率（记录里的卡 vs 商城里的卡效果差很多），
       //   与个人无关。⚠️ 名字**刻意不叫 `source`**：那个词太泛，看板上分不清
       //   它说的是「卡片在哪」还是「用户从哪来」（后者是 entry_source）。
+      // V1.4.1 Toko banner 曝光 / 点击新增三项，已逐个确认：
+      // - banner_id：banner 的不可枚举 token（后台配置的运营素材），与个人无关
+      // - position：第几张（本版恒 1，不做轮播），整数
+      // - target_type：受控词表 product_detail / category_list / external_link，与个人无关
       expect(props, {
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
         'trigger_type', 'product_id',
         'items', 'sku_id', 'qty', 'entry_source', 'attribution_source',
         'card_source',
+        'banner_id', 'position', 'target_type',
       });
     });
 

@@ -9,7 +9,8 @@
      「?open= 的那条已被并发删掉」（404）都会把**整张表换成一行红字**，而且那行字还被遮罩盖着：
      运营看到的是「点了没反应」，关掉抽屉才发现表格没了，只能 F5。指抽屉体就落在他正看着的地方。
      成功时 Controller 用 oob 刷列表 + HX-Trigger: admin:drawer-close 关抽屉（三档状态是全表相对的，必须整表重拉）。
-  🔴 Banner **纯展示、不可点击跳转**：库里只有图 + 权重两个字段，这里不加任何跳转配置（AC4）。
+  V1.4.1：加点击跳转配置（不可点 / 商品详情 / 品类 / 外部链接）。合法性在 service 层校验
+  （商品须已上架、品类须合法、外链只允许 https），模板只做输入。
   upload-host: shop-banners.html
     ↑ 本片段的上传控件走 fetch，需要 CSRF meta；片段没有自己的 <head>，meta 来自宿主页。
 -->
@@ -63,6 +64,20 @@
         <div class="s-ctl">
             <input id="f-bannerWeight" type="number" class="inp" th:field="*{sortWeight}"/>
             <p class="hint" th:text="#{admin.v130.shopBanners.weightHint}">越大越优先；同权重取后建的那张。</p>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label" for="f-bannerTargetType" th:text="#{admin.shop.banners.form.target.label}">点击跳转</label>
+        <div class="s-ctl">
+            <select id="f-bannerTargetType" class="inp" th:field="*{targetType}">
+                <option value="NONE" th:text="#{admin.shop.banners.target.NONE}">不可点</option>
+                <option value="PRODUCT" th:text="#{admin.shop.banners.target.PRODUCT}">商品详情</option>
+                <option value="CATEGORY" th:text="#{admin.shop.banners.target.CATEGORY}">品类</option>
+                <option value="EXTERNAL" th:text="#{admin.shop.banners.target.EXTERNAL}">外部链接</option>
+            </select>
+            <input id="f-bannerTargetValue" type="text" class="inp" style="margin-top:6px" maxlength="512"
+                   th:field="*{targetValue}" th:placeholder="#{admin.shop.banners.form.target.placeholder}"/>
+            <p class="hint" th:text="#{admin.shop.banners.form.target.hint}">商品填商品 token；品类填 MAKANAN / OBAT_VITAMIN / CAMILAN / PERAWATAN；外部链接只支持 https。</p>
         </div>
     </div>
     <div class="sticky-footer">

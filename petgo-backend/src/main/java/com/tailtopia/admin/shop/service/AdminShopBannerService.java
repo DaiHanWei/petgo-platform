@@ -4,8 +4,11 @@ import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.shop.dto.ShopBannerForm;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.domain.BannerTargetType;
+import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopBanner;
 import com.tailtopia.shop.repository.ShopBannerRepository;
+import com.tailtopia.shop.repository.ShopProductRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,10 +23,13 @@ public class AdminShopBannerService {
 
     private final ShopBannerRepository banners;
     private final AdminAuditService audit;
+    private final ShopProductRepository products;
 
-    public AdminShopBannerService(ShopBannerRepository banners, AdminAuditService audit) {
+    public AdminShopBannerService(ShopBannerRepository banners, AdminAuditService audit,
+            ShopProductRepository products) {
         this.banners = banners;
         this.audit = audit;
+        this.products = products;
     }
 
     // ---------- V1.3.0 Story 10.3：三档状态（AC3） ----------
@@ -65,8 +71,10 @@ public class AdminShopBannerService {
     @Transactional
     public ShopBanner create(ShopBannerForm form, long actorAccountId) {
         validate(form);
+        Target target = target(form);
         ShopBanner b = ShopBanner.create(form.getImageKey().trim(), form.getImageW(),
                 form.getImageH(), form.getSortWeight());
+        b.retarget(target.type(), target.value());
         banners.save(b);
         audit.record(actorAccountId, AuditActions.SHOP_BANNER_CREATED, "SHOP_BANNER",
                 String.valueOf(b.getId()), "新建 banner（默认未上架）");
@@ -76,9 +84,11 @@ public class AdminShopBannerService {
     @Transactional
     public void update(long id, ShopBannerForm form, long actorAccountId) {
         validate(form);
+        Target target = target(form);
         ShopBanner b = require(id);
         b.apply(form.getImageKey().trim(), form.getImageW(), form.getImageH(),
                 form.getSortWeight());
+        b.retarget(target.type(), target.value());
         banners.save(b);
         audit.record(actorAccountId, AuditActions.SHOP_BANNER_UPDATED, "SHOP_BANNER",
                 String.valueOf(id), "编辑 banner");
@@ -135,6 +145,62 @@ public class AdminShopBannerService {
         return banners.findById(id)
                 .orElseThrow(() -> AppException.notFound("banner 不存在")
                         .code("admin.err.banner.notFound"));
+    }
+
+    record Target(BannerTargetType type, String value) {
+    }
+
+    /**
+     * 点击跳转校验（V1.4.1）。🔴 每类都校验到「App 点下去一定能落地」：
+     * 商品须存在且已上架（下架商品点进去是空页）；品类须是合法字面量；外链只允许 https（不让运营配出
+     * http / javascript: / 自定义 scheme —— App 会把它交给系统浏览器打开）。
+     */
+    Target target(ShopBannerForm f) {
+        String raw = f.getTargetType() == null ? "" : f.getTargetType().trim();
+        BannerTargetType type;
+        try {
+            type = raw.isEmpty() ? BannerTargetType.NONE : BannerTargetType.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("跳转类型不合法").code("admin.err.banner.targetInvalid");
+        }
+        String value = f.getTargetValue() == null ? "" : f.getTargetValue().trim();
+        switch (type) {
+            case NONE -> {
+                return new Target(BannerTargetType.NONE, null);
+            }
+            case PRODUCT -> {
+                if (value.isEmpty() || products.findByPublicTokenAndActiveTrue(value).isEmpty()) {
+                    throw AppException.validation("商品不存在或未上架")
+                            .code("admin.err.banner.targetProduct");
+                }
+            }
+            case CATEGORY -> {
+                try {
+                    value = ProductCategory.valueOf(value).name();
+                } catch (IllegalArgumentException e) {
+                    throw AppException.validation("品类不合法").code("admin.err.banner.targetCategory");
+                }
+            }
+            case EXTERNAL -> {
+                if (!isHttpsUrl(value)) {
+                    throw AppException.validation("外部链接须为 https 地址")
+                            .code("admin.err.banner.targetUrl");
+                }
+            }
+        }
+        return new Target(type, value);
+    }
+
+    static boolean isHttpsUrl(String v) {
+        if (v == null || v.isBlank() || v.length() > 512) {
+            return false;
+        }
+        try {
+            java.net.URI u = new java.net.URI(v);
+            return "https".equalsIgnoreCase(u.getScheme()) && u.getHost() != null && !u.getHost().isBlank();
+        } catch (java.net.URISyntaxException e) {
+            return false;
+        }
     }
 
     /** 🔴 校验在 service 层，与商品同范式 —— 模板里的 required 绕得过，这里绕不过。 */
