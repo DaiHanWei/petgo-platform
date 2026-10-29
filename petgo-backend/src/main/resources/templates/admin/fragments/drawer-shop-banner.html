@@ -77,7 +77,9 @@
             </select>
             <input id="f-bannerTargetValue" type="text" class="inp" style="margin-top:6px" maxlength="512"
                    th:field="*{targetValue}" th:placeholder="#{admin.shop.banners.form.target.placeholder}"/>
-            <p class="hint" th:text="#{admin.shop.banners.form.target.hint}">商品填商品 token；品类填 MAKANAN / OBAT_VITAMIN / CAMILAN / PERAWATAN；外部链接只支持 https。</p>
+            <p class="hint" th:text="#{admin.shop.banners.form.target.hint}">商品填商品 token；品类填下方代码之一；外部链接只支持 https。</p>
+            <!-- 品类代码就是后端 ProductCategory 字面量（模板直出，不进文案：文案值里禁止出现枚举标识串）。 -->
+            <p class="hint s-mono">MAKANAN · OBAT_VITAMIN · CAMILAN · PERAWATAN</p>
         </div>
     </div>
     <div class="sticky-footer">
