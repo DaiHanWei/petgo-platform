@@ -33,6 +33,7 @@ void main() {
     List<ShopProductSummary> products, {
     Size size = const Size(411, 891), // Pixel 9：溢出正是在这个宽度上出现的
     double textScale = 1,
+    double statusBar = 0, // 状态栏高度（MediaQuery.padding.top），bug 600 用例才设
     ShopBanner? banner,
     int cartCount = 0,
     List<ShopProductsQuery>? seen, // 搜索用例用它观察页面到底按什么族键取数
@@ -65,6 +66,7 @@ void main() {
         home: MediaQuery(
           data: MediaQueryData(
             size: size,
+            padding: EdgeInsets.only(top: statusBar),
             textScaler: TextScaler.linear(textScale),
           ),
           child: const TokoPageV2(),
@@ -374,6 +376,31 @@ void main() {
   ///
   /// ⚠️ 这组用例守的是**几何关系**，不是控件是否存在 —— 缺陷正是「三个控件都在、
   /// 位置全错」那一类，只断言 findsOneWidget 抓不住。
+  /// bug 600（2026-10-29）：展开态盒子比图高出一个状态栏 → BoxFit.cover 等比放大，图左右被裁。
+  /// 盒子（含状态栏）必须恰好是 屏宽 × 屏宽/图比例，cover 才不放大。
+  group('🔴 banner 不被放大裁切（bug 600）', () {
+    const url = 'https://example.test/b169.jpg';
+    const banner = ShopBanner(imageUrl: url, imageW: 1600, imageH: 900);
+    final bannerImage = find.byWidgetPredicate(
+        (w) => w is Image && w.image is NetworkImage && (w.image as NetworkImage).url == url);
+
+    for (final statusBar in [0.0, 24.0, 48.0]) {
+      testWidgets('状态栏 ${statusBar.toInt()}dp：图区比例 = 图比例，从屏幕最上沿开始', (tester) async {
+        tester.view.physicalSize = const Size(411, 891); // 真实布局宽与 MediaQuery 一致
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(host([p('a', price: 185000)], banner: banner, statusBar: statusBar));
+        await tester.pumpAndSettle();
+
+        final rect = tester.getRect(bannerImage);
+        expect(rect.top, 0, reason: 'banner 要到顶显示（状态栏压在图上）');
+        expect(rect.width, 411);
+        expect(rect.height, closeTo(411 * 900 / 1600, 0.01),
+            reason: '盒子比图高 → cover 放大 → 左右被裁（bug 600）');
+      });
+    }
+  });
+
   group('🔴 有 banner：筛选行在图下方，滚到顶再吸住', () {
     const banner = ShopBanner(
         imageUrl: 'https://example.test/b.jpg', imageW: 1200, imageH: 400);

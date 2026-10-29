@@ -26,6 +26,8 @@
 ///   全仓没有 key→URL 的拼装（v1 版式压根没画图，所以一直没暴露）。此处一律走占位斜纹。
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -455,6 +457,10 @@ class _StickyFilterBar extends SliverPersistentHeaderDelegate {
 /// 上方不留纯色条 —— 这正是产品要的"banner 到顶显示"。
 /// 代价是图的最上面一条会被状态栏文字压住，由下面的渐变兜底。
 ///
+/// 🔴 所以 `expandedHeight` 必须**扣掉状态栏**：展开态总高 = 屏宽 ÷ 图比例，盒子比例与图一致，
+/// [BoxFit.cover] 才不放大。bug 600（2026-10-29）：原先 expandedHeight 直接取 屏宽 ÷ 图比例，
+/// 盒子比图高出一个状态栏，cover 只能等比放大去填，左右两边被裁掉（「GRATIS ONGKIR」只剩半截）。
+///
 /// ## 🔴 渐变不是装饰，是可读性的唯一保障
 /// banner 图的内容完全由运营决定，浅色图上白色的标题与按钮会直接看不见。
 /// 顶部压一层从半透明黑到全透明的渐变，让文字始终有足够对比度。
@@ -494,17 +500,19 @@ class _BannerAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     final width = MediaQuery.sizeOf(context).width;
-    // 图按自身比例铺满屏宽；状态栏高度由 SliverAppBar 自己补（见类注释）。
+    // 图按自身比例铺满屏宽，展开态总高（含状态栏）恰好等于图高 —— 状态栏由 SliverAppBar 自己补，
+    // 这里先扣掉（见类注释 bug 600）。图矮到连顶栏都放不下时以顶栏为下限（此时 cover 才会裁）。
     final imageHeight = width / banner.aspect;
+    final expandedHeight = math.max(imageHeight - topInset, kShopAppBarHeight);
     final gradientHeight = topInset + kShopAppBarHeight + _gradientExtra;
     // 与 SliverAppBar 内部算法保持一致，供 _scrimOpacity 用。
     final minExtent = topInset + kShopAppBarHeight;
-    final maxExtent = topInset + imageHeight > minExtent ? topInset + imageHeight : minExtent;
+    final maxExtent = topInset + expandedHeight;
 
     return SliverAppBar(
       // 🔴 pinned：标题、金币余额、购物车是页面级入口，图滚走了它们也得在。
       pinned: true,
-      expandedHeight: imageHeight,
+      expandedHeight: expandedHeight,
       toolbarHeight: kShopAppBarHeight,
       backgroundColor: colors.background,
       foregroundColor: colors.foreground,
