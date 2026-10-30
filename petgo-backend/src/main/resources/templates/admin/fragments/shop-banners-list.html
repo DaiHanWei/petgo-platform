@@ -42,8 +42,10 @@
             <td>
                 <!-- V1.4.1：跳转目标 + 埋点 banner_id（运营对 PostHog 看板时按这个 id 找 banner）。 -->
                 <span th:text="#{'admin.shop.banners.target.' + ${b.targetType}}">不可点</span>
-                <div th:if="${b.targetValue != null}" class="s-mono" style="max-width:240px;word-break:break-all"
-                     th:text="${b.targetValue}">https://…</div>
+                <div th:if="${b.targetValue != null and b.targetType == 'CATEGORY'}"
+                     th:text="#{'admin.v130.shopProducts.category.' + ${b.targetValue}}">主粮</div>
+                <div th:if="${b.targetValue != null and b.targetType != 'CATEGORY'}" class="s-mono"
+                     style="max-width:240px;word-break:break-all" th:text="${b.targetValue}">https://…</div>
                 <div class="muted s-mono" th:text="'banner_id ' + ${b.publicToken}">banner_id …</div>
             </td>
             <td class="s-col-num" th:text="${b.sortWeight}">0</td>

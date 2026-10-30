@@ -73,6 +73,11 @@ void main() {
     expect(const ShopBanner(imageUrl: 'u', target: ShopBannerTarget.external, targetValue: 'https://a.b').tappable,
         isTrue);
     expect(const ShopBanner(imageUrl: 'u', target: ShopBannerTarget.product).tappable, isFalse);
+    // 品类本包不认识（后端新增了品类）→ 不可点，免得点了没反应却记一次点击。
+    expect(const ShopBanner(imageUrl: 'u', target: ShopBannerTarget.category, targetValue: 'BARU').tappable,
+        isFalse);
+    expect(const ShopBanner(imageUrl: 'u', target: ShopBannerTarget.category, targetValue: 'CAMILAN').tappable,
+        isTrue);
   });
 
   testWidgets('露出即报一次 shown（banner_id + position=1）；来回滚动不重复', (t) async {
@@ -114,6 +119,36 @@ void main() {
     expect(tapped().toList(), [
       {'banner_id': 'bnTok123', 'target_type': 'category_list', 'position': 1}
     ]);
+  });
+
+  testWidgets('扁图收起后再回到页面：图已不在可视区 → 不报 shown（露出按图本身算，不含顶栏）', (t) async {
+    // 10:1 扁图：展开高 80、收起只剩 48 高的顶栏。旧算法 48/80 = 0.6 > 0.5，会误报。
+    const flat = ShopBanner(
+        imageUrl: 'https://cdn.example/b.jpg', imageW: 1000, imageH: 100, bannerId: 'bnFlat');
+    final ticker = ValueNotifier(true);
+    await t.pumpWidget(wrap(flat, ticker: ticker));
+    await t.pump();
+    await t.pump();
+    expect(shown(), hasLength(1));
+    await t.drag(find.byType(CustomScrollView), const Offset(0, -600));
+    await t.pump();
+    ticker.value = false;
+    await t.pump();
+    ticker.value = true;
+    await t.pump();
+    await t.pump();
+    expect(shown(), hasLength(1));
+  });
+
+  testWidgets('快速双击只算一次点击', (t) async {
+    await t.pumpWidget(wrap(banner));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.byKey(const ValueKey('tokoBannerImage')));
+    await t.pump(const Duration(milliseconds: 100));
+    await t.tap(find.byKey(const ValueKey('tokoBannerImage')));
+    await t.pump();
+    expect(tapped(), hasLength(1));
   });
 
   testWidgets('不可点的 banner：点了不报 tapped', (t) async {

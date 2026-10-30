@@ -5,6 +5,8 @@
 /// 「领券」没有对应功能，后端不会下发这一类，这里也不建枚举值。
 library;
 
+import 'shop_product.dart';
+
 /// banner 点击跳转类型（后端 `BannerTargetType`）。未知值一律按 [none]（不可点）—— 新后端加了新类型，
 /// 旧包不认识就别让它可点，否则点了没反应。
 enum ShopBannerTarget {
@@ -52,14 +54,16 @@ class ShopBanner {
   /// 跳转目标值：商品 token / 品类字面量 / https 链接。
   final String? targetValue;
 
-  /// 是否可点：类型可识别且目标值非空；外链额外要求 https（后台已校验，这里兜底）。
+  /// 是否可点：类型可识别且目标值非空；外链额外要求 https（后台已校验，这里兜底）；
+  /// 品类要求本包认识（后端新增了品类、旧包不认识 → 不可点，免得点了没反应却记一次点击）。
   bool get tappable {
     final v = targetValue ?? '';
     if (v.isEmpty) return false;
     return switch (target) {
       ShopBannerTarget.none => false,
       ShopBannerTarget.external => (Uri.tryParse(v)?.scheme ?? '') == 'https',
-      _ => true,
+      ShopBannerTarget.category => ShopCategory.fromApi(v) != null,
+      ShopBannerTarget.product => true,
     };
   }
 

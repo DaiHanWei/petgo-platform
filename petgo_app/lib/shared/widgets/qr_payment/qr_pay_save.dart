@@ -49,7 +49,27 @@ const double kQrPaySaveWidth = 1080;
 /// - 成功 → Toast「Tersimpan ke galeri」；抽屉 / 页面不关，轮询继续。
 /// - 没有相册权限 → 先走系统申请；仍被拒 → App 内「Perlu izin」对话框（只换正文，「Buka Pengaturan」跳系统设置，稿 A3）。
 /// - 其他失败 → Toast「Gagal menyimpan…」。
+/// - 保存进行中再点：直接忽略（连点会叠出多个权限对话框 / 往相册写多张图）。
 Future<void> saveQrPaymentImage(
+  BuildContext context, {
+  required String payload,
+  int? amountIdr,
+  String? orderRef,
+  DateTime? expiresAt,
+}) async {
+  if (_saving) return;
+  _saving = true;
+  try {
+    await _save(context, payload: payload, amountIdr: amountIdr, orderRef: orderRef, expiresAt: expiresAt);
+  } finally {
+    _saving = false;
+  }
+}
+
+/// 同一时刻全 App 只有一个支付二维码界面，单个标志即可（抽屉 / 充值页 / 问诊页共用）。
+bool _saving = false;
+
+Future<void> _save(
   BuildContext context, {
   required String payload,
   int? amountIdr,

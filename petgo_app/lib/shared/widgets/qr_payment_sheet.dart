@@ -126,8 +126,11 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
 
   void _expire() {
     _expired = true;
-    _poll?.cancel();
     _clock?.cancel();
+    // 🔴 过期后**不停**查到账，只降频：最后几秒扫码付款时，网关回调可能晚于截止时刻才到；
+    //    停了就会出现「钱已到账、抽屉却一直显示已过期」。查到已付照常 pop(true) 进成功态。
+    _poll?.cancel();
+    _poll = Timer.periodic(const Duration(seconds: 10), (_) => _tick());
     if (mounted) setState(() {});
   }
 
@@ -141,7 +144,7 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
   bool _inFlight = false;
 
   Future<void> _tick() async {
-    if (_closing || _inFlight || _expired) return; // 慢网时不让多次轮询并发堆叠
+    if (_closing || _inFlight) return; // 慢网时不让多次轮询并发堆叠
     _inFlight = true;
     try {
       final bool paid = await widget.pollPaid();

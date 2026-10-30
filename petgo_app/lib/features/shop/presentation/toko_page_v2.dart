@@ -128,8 +128,15 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
     });
   }
 
+  /// 上一次点 banner 的时刻：快速双击只算一次（否则商品详情会被连推两层）。
+  DateTime? _lastBannerTap;
+
   /// `toko_banner_tapped` + 跳转。position 恒为 1（同一时间只展示一张，不做轮播）。
   Future<void> _onBannerTap(ShopBanner b) async {
+    final now = DateTime.now();
+    final last = _lastBannerTap;
+    if (last != null && now.difference(last) < const Duration(milliseconds: 800)) return;
+    _lastBannerTap = now;
     final value = b.targetValue ?? '';
     Analytics.capture('toko_banner_tapped', {
       if (b.bannerId != null) 'banner_id': b.bannerId!,
@@ -609,8 +616,14 @@ class _BannerAppBar extends StatelessWidget {
       flexibleSpace: LayoutBuilder(
         // maxHeight 即顶栏当前高度（收起过程中从 maxExtent 递减到 minExtent）。
         builder: (context, constraints) {
-          // 图用 pin 往上走：露出部分 = 当前顶栏高度 / 展开态总高。
-          onVisibleFraction?.call(maxExtent <= 0 ? 0 : (constraints.maxHeight / maxExtent).clamp(0.0, 1.0));
+          // 图的露出比例按「可收起的那段」算：展开 = 1，收到只剩顶栏 = 0。
+          // 🔴 不能用「当前高度 / 展开高度」：收起后剩下的状态栏 + 顶栏也算进去了，
+          //    扁图（如 3:1）banner 已经滚没了，比值仍 > 0.5，曝光名存实亡。
+          final h = constraints.maxHeight;
+          final visible = maxExtent <= minExtent ? 1.0 : ((h - minExtent) / (maxExtent - minExtent)).clamp(0.0, 1.0);
+          onVisibleFraction?.call(visible);
+          // 图淡出完（与渐变同一条曲线）就不再可点：此时顶栏下面已经没有图，点空白处不该跳转。
+          final imageShown = _scrimOpacity(h, minExtent, maxExtent) > 0;
           return Stack(
           fit: StackFit.expand,
           children: [
@@ -621,7 +634,7 @@ class _BannerAppBar extends StatelessWidget {
               background: GestureDetector(
                 key: const ValueKey('tokoBannerImage'),
                 behavior: HitTestBehavior.opaque,
-                onTap: onTap,
+                onTap: imageShown ? onTap : null,
                 child: Image.network(
                   banner.imageUrl,
                   fit: BoxFit.cover,
