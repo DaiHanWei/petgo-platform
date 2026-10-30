@@ -3,8 +3,9 @@ package com.tailtopia.shop.dto;
 /**
  * Toko 顶部 banner 视图（2026-08-27）。
  *
- * <p>🔴 <b>不含任何跳转字段</b>：本版本 banner 纯展示、不可点。加一个恒为 null 的
- * link 会让客户端写出永远走不到的分支 —— 要跳转时再加字段，那是明确的契约变更。
+ * <p>V1.4.1 契约变更：加 {@code bannerId}（不可枚举 token，埋点 banner_id）与点击跳转
+ * {@code targetType}（NONE / PRODUCT / CATEGORY / EXTERNAL）+ {@code targetValue}（NONE 时为 null）。
+ * 旧版客户端忽略这三个字段，仍按纯展示渲染。
  *
  * <p>{@code imageW / imageH} 是原始像素，客户端按屏宽算高度，避免图到达前后布局跳动。
  * 🔴 与商品同一口径：只给原始宽高，不给比例、不给算好的高度 ——
@@ -13,5 +14,6 @@ package com.tailtopia.shop.dto;
  *
  * <p>{@code imageUrl} 为公开桶 CDN 全 URL；CDN base 未配置时为 null，客户端须降级为不渲染。
  */
-public record ShopBannerView(String imageUrl, Integer imageW, Integer imageH) {
+public record ShopBannerView(String imageUrl, Integer imageW, Integer imageH, String bannerId,
+        String targetType, String targetValue) {
 }

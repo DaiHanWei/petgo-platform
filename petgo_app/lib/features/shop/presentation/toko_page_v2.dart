@@ -26,7 +26,10 @@
 ///   全仓没有 key→URL 的拼装（v1 版式压根没画图，所以一直没暴露）。此处一律走占位斜纹。
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -81,6 +84,82 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
     super.didUpdateWidget(oldWidget);
     if (widget.initialCategory != oldWidget.initialCategory && widget.initialCategory != null) {
       setState(() => _selected = ShopCategory.fromApi(widget.initialCategory));
+    }
+  }
+
+  // ---------------------------------------------------------------- banner 曝光 / 点击（V1.4.1）
+
+  /// 本次进入 Toko 已报过曝光的 banner（按 banner_id）。离开页面再进来清空、重新计。
+  final Set<String> _bannerShown = {};
+
+  /// banner 最近一次的露出比例（重新进入页面时 sliver 不会重新布局，靠它补判一次）。
+  double _bannerFraction = 0;
+  ShopBanner? _lastBanner;
+  bool _tickerOn = true;
+
+  /// 「离开页面」= 本页所在分支不在前台（切到别的 Tab，或被详情页等盖住）：
+  /// indexedStack 与 Overlay 都会把看不见的页面放进 `TickerMode(enabled: false)`。
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final on = TickerMode.valuesOf(context).enabled;
+    if (on == _tickerOn) return;
+    _tickerOn = on;
+    if (!on) {
+      _bannerShown.clear();
+      return;
+    }
+    final b = _lastBanner;
+    if (b != null) _onBannerFraction(b, _bannerFraction);
+  }
+
+  /// `toko_banner_shown`：露出超过 50% 时上报；一次进入页面内同一张只报一次（来回滚动不重复）。
+  void _onBannerFraction(ShopBanner b, double fraction) {
+    _lastBanner = b;
+    _bannerFraction = fraction;
+    final id = b.bannerId;
+    if (!_tickerOn || id == null || id.isEmpty || fraction <= 0.5 || _bannerShown.contains(id)) {
+      return;
+    }
+    _bannerShown.add(id);
+    // 回调来自布局期（LayoutBuilder），埋点挪到帧后，不在 build 里产生副作用。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Analytics.capture('toko_banner_shown', {'banner_id': id, 'position': 1});
+    });
+  }
+
+  /// 上一次点 banner 的时刻：快速双击只算一次（否则商品详情会被连推两层）。
+  DateTime? _lastBannerTap;
+
+  /// `toko_banner_tapped` + 跳转。position 恒为 1（同一时间只展示一张，不做轮播）。
+  Future<void> _onBannerTap(ShopBanner b) async {
+    final now = DateTime.now();
+    final last = _lastBannerTap;
+    if (last != null && now.difference(last) < const Duration(milliseconds: 800)) return;
+    _lastBannerTap = now;
+    final value = b.targetValue ?? '';
+    Analytics.capture('toko_banner_tapped', {
+      if (b.bannerId != null) 'banner_id': b.bannerId!,
+      'target_type': b.target.analytics ?? 'none',
+      'position': 1,
+    });
+    switch (b.target) {
+      case ShopBannerTarget.product:
+        context.push('/shop/products/${Uri.encodeComponent(value)}?from=BANNER');
+      case ShopBannerTarget.category:
+        final c = ShopCategory.fromApi(value);
+        if (c != null) setState(() => _selected = c);
+      case ShopBannerTarget.external:
+        final uri = Uri.tryParse(value);
+        if (uri != null && uri.scheme == 'https') {
+          try {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } catch (_) {
+            // 打不开（无浏览器等）静默：banner 是锦上添花的入口，不弹错误打断逛店。
+          }
+        }
+      case ShopBannerTarget.none:
+        break;
     }
   }
 
@@ -191,6 +270,8 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
                 banner: banner,
                 colors: bar,
                 actions: barActions,
+                onTap: banner.tappable ? () => _onBannerTap(banner) : null,
+                onVisibleFraction: (f) => _onBannerFraction(banner, f),
               ),
               // 🔴 筛选行吸的是**顶栏下沿**，不是屏幕顶：pinned sliver 排在
               //    [_BannerAppBar] 之后，初始就落在 banner 图下方、跟着内容往上走，
@@ -455,6 +536,10 @@ class _StickyFilterBar extends SliverPersistentHeaderDelegate {
 /// 上方不留纯色条 —— 这正是产品要的"banner 到顶显示"。
 /// 代价是图的最上面一条会被状态栏文字压住，由下面的渐变兜底。
 ///
+/// 🔴 所以 `expandedHeight` 必须**扣掉状态栏**：展开态总高 = 屏宽 ÷ 图比例，盒子比例与图一致，
+/// [BoxFit.cover] 才不放大。bug 600（2026-10-29）：原先 expandedHeight 直接取 屏宽 ÷ 图比例，
+/// 盒子比图高出一个状态栏，cover 只能等比放大去填，左右两边被裁掉（「GRATIS ONGKIR」只剩半截）。
+///
 /// ## 🔴 渐变不是装饰，是可读性的唯一保障
 /// banner 图的内容完全由运营决定，浅色图上白色的标题与按钮会直接看不见。
 /// 顶部压一层从半透明黑到全透明的渐变，让文字始终有足够对比度。
@@ -468,10 +553,18 @@ class _BannerAppBar extends StatelessWidget {
     required this.banner,
     required this.colors,
     required this.actions,
+    this.onTap,
+    this.onVisibleFraction,
   });
 
   final String title;
   final ShopBanner banner;
+
+  /// 点击图片（V1.4.1）；null = 不可点。
+  final VoidCallback? onTap;
+
+  /// banner 图当前露出比例（0–1，随滚动收起递减），用于曝光埋点。
+  final ValueChanged<double>? onVisibleFraction;
 
   /// 顶栏配色，由页面按 tone 取（[ShopAppBar.colorsOf]）—— 本组件不自己配色。
   final ShopAppBarColors colors;
@@ -494,17 +587,19 @@ class _BannerAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     final width = MediaQuery.sizeOf(context).width;
-    // 图按自身比例铺满屏宽；状态栏高度由 SliverAppBar 自己补（见类注释）。
+    // 图按自身比例铺满屏宽，展开态总高（含状态栏）恰好等于图高 —— 状态栏由 SliverAppBar 自己补，
+    // 这里先扣掉（见类注释 bug 600）。图矮到连顶栏都放不下时以顶栏为下限（此时 cover 才会裁）。
     final imageHeight = width / banner.aspect;
+    final expandedHeight = math.max(imageHeight - topInset, kShopAppBarHeight);
     final gradientHeight = topInset + kShopAppBarHeight + _gradientExtra;
     // 与 SliverAppBar 内部算法保持一致，供 _scrimOpacity 用。
     final minExtent = topInset + kShopAppBarHeight;
-    final maxExtent = topInset + imageHeight > minExtent ? topInset + imageHeight : minExtent;
+    final maxExtent = topInset + expandedHeight;
 
     return SliverAppBar(
       // 🔴 pinned：标题、金币余额、购物车是页面级入口，图滚走了它们也得在。
       pinned: true,
-      expandedHeight: imageHeight,
+      expandedHeight: expandedHeight,
       toolbarHeight: kShopAppBarHeight,
       backgroundColor: colors.background,
       foregroundColor: colors.foreground,
@@ -520,19 +615,33 @@ class _BannerAppBar extends StatelessWidget {
       actions: actions,
       flexibleSpace: LayoutBuilder(
         // maxHeight 即顶栏当前高度（收起过程中从 maxExtent 递减到 minExtent）。
-        builder: (context, constraints) => Stack(
+        builder: (context, constraints) {
+          // 图的露出比例按「可收起的那段」算：展开 = 1，收到只剩顶栏 = 0。
+          // 🔴 不能用「当前高度 / 展开高度」：收起后剩下的状态栏 + 顶栏也算进去了，
+          //    扁图（如 3:1）banner 已经滚没了，比值仍 > 0.5，曝光名存实亡。
+          final h = constraints.maxHeight;
+          final visible = maxExtent <= minExtent ? 1.0 : ((h - minExtent) / (maxExtent - minExtent)).clamp(0.0, 1.0);
+          onVisibleFraction?.call(visible);
+          // 图淡出完（与渐变同一条曲线）就不再可点：此时顶栏下面已经没有图，点空白处不该跳转。
+          final imageShown = _scrimOpacity(h, minExtent, maxExtent) > 0;
+          return Stack(
           fit: StackFit.expand,
           children: [
             FlexibleSpaceBar(
               // 🔴 pin：图随滚动**往上走**，就像它本来就是流里的一块。
               //    默认的 parallax 会让图以 1/4 速度慢慢挪，banner 看着像在打滑。
               collapseMode: CollapseMode.pin,
-              background: Image.network(
-                banner.imageUrl,
-                fit: BoxFit.cover,
-                // 🔴 高度已由 expandedHeight 定死（比例来自服务端下发的宽高），
-                //    所以图到达前后布局不变，不会把下方内容顶开。
-                errorBuilder: (_, _, _) => const ColoredBox(color: ShopColors.ink),
+              background: GestureDetector(
+                key: const ValueKey('tokoBannerImage'),
+                behavior: HitTestBehavior.opaque,
+                onTap: imageShown ? onTap : null,
+                child: Image.network(
+                  banner.imageUrl,
+                  fit: BoxFit.cover,
+                  // 🔴 高度已由 expandedHeight 定死（比例来自服务端下发的宽高），
+                  //    所以图到达前后布局不变，不会把下方内容顶开。
+                  errorBuilder: (_, _, _) => const ColoredBox(color: ShopColors.ink),
+                ),
               ),
             ),
             // 顶部渐变遮罩：保证标题与右上角按钮在任何图上都可读。
@@ -566,7 +675,8 @@ class _BannerAppBar extends StatelessWidget {
               ),
             ),
           ],
-        ),
+          );
+        },
       ),
     );
   }

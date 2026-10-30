@@ -161,6 +161,29 @@ public class ShopOrder {
      * {@code PENDING_PAYMENT} 时，后提交者在同一行上撞版本号整体回滚 ——
      * 这是「{@code inventory.commit} 与 {@code inventory.release} 不会双双落库」的库级裁决。
      */
+    // ---------- 商家平台返佣（V1.4.1，tailtopia-contract.md 第 2 节） ----------
+
+    /**
+     * 下单时用户绑定的门店（{@code merchant_stores.id}，跨仓库无外键）；未绑定为 null。
+     *
+     * <p>🔴 <b>只按绑定关系写入，不看门店状态</b>（AD-19）：停用门店的返佣照常累积。建单后不改。
+     */
+    @Column(name = "referrer_merchant_id", updatable = false)
+    private Long referrerMerchantId;
+
+    /**
+     * 付款成功时刻：离开 {@code PENDING_PAYMENT} 的同一事务写入，之后不改（FR-18、AD-18）。
+     *
+     * <p>🔴 取<b>写入时刻</b>，不取网关回调里的时间：商家平台按 {@code (paid_at, id)} keyset 前进、
+     * 只留 2 分钟安全延迟，早于写入时刻太多的值会被游标越过而漏记返佣。
+     */
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
+    /** 退货期截止 = 签收时刻 + {@link #RETURN_WINDOW}，签收同一处写入（AD-7）；商家平台只读这一列判断「退货期已过」。 */
+    @Column(name = "return_window_ends_at")
+    private Instant returnWindowEndsAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -184,7 +207,16 @@ public class ShopOrder {
      */
     public static ShopOrder place(String publicToken, String displayNo, Instant now, long userId,
             long goodsSubtotal, long shippingFee, long shippingDiscount, AddressSnapshot ship) {
+        return place(publicToken, displayNo, now, userId, goodsSubtotal, shippingFee, shippingDiscount,
+                ship, null);
+    }
+
+    /** 建单并记下归属门店（{@code referrerMerchantId} 为下单这一刻的绑定门店，可空）。 */
+    public static ShopOrder place(String publicToken, String displayNo, Instant now, long userId,
+            long goodsSubtotal, long shippingFee, long shippingDiscount, AddressSnapshot ship,
+            Long referrerMerchantId) {
         ShopOrder o = new ShopOrder();
+        o.referrerMerchantId = referrerMerchantId;
         o.publicToken = publicToken;
         o.displayNo = displayNo;
         o.userId = userId;
@@ -248,6 +280,25 @@ public class ShopOrder {
         this.updatedAt = Instant.now();
     }
 
+    /**
+     * 付款成功：转 {@code PENDING_SHIPMENT} 并写 {@code paid_at}（同一事务，之后不改）。
+     * 支付回调与纯 PawCoin 结清两条路径都经这里。
+     */
+    public void markPaid(Instant at) {
+        transitionTo(ShopOrderStatus.PENDING_SHIPMENT);
+        if (this.paidAt == null) {
+            this.paidAt = at;
+        }
+    }
+
+    public Instant getPaidAt() {
+        return paidAt;
+    }
+
+    public Long getReferrerMerchantId() {
+        return referrerMerchantId;
+    }
+
     // ---------- 履约段（Story 4.1） ----------
 
     /**
@@ -283,6 +334,8 @@ public class ShopOrder {
         transitionTo(ShopOrderStatus.DELIVERED);
         this.deliveredAt = at;
         this.deliverySource = source;
+        // 商家平台据此判断「退货期已过」（AD-7）；窗口规则只在本类一处，写入后不回改。
+        this.returnWindowEndsAt = at.plus(RETURN_WINDOW);
     }
 
     /**
@@ -301,8 +354,11 @@ public class ShopOrder {
         this.completionSource = source;
     }
 
-    /** 退货窗口截止（Epic 5 用）。未签收则无窗口。 */
+    /** 退货窗口截止（Epic 5 用）。未签收则无窗口。以签收时写入的列为准（存量签收单由迁移回填）。 */
     public Instant returnWindowEndsAt() {
+        if (returnWindowEndsAt != null) {
+            return returnWindowEndsAt;
+        }
         return deliveredAt == null ? null : deliveredAt.plus(RETURN_WINDOW);
     }
 

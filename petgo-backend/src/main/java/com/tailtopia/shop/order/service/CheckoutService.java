@@ -65,6 +65,8 @@ public class CheckoutService {
     private final ShopTokenGenerator tokens;
     private final ShopOrderDisplayNoGenerator displayNos;
     private final IdempotencyService idempotency;
+    /** V1.4.1 商家平台：下单写归属门店（{@code shop_orders.referrer_merchant_id}）。 */
+    private final com.tailtopia.merchant.binding.service.MerchantBindingService merchantBindings;
 
     public CheckoutService(CartService carts, ShippingAddressService addresses,
             ShippingQuoteService quotes, InventoryService inventory, ShopSkuRepository skus,
@@ -72,7 +74,8 @@ public class CheckoutService {
             ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             ShopPawcoinRulesRepository rules, PawCoinWalletService wallet,
             ShopTokenGenerator tokens, ShopOrderDisplayNoGenerator displayNos,
-            IdempotencyService idempotency) {
+            IdempotencyService idempotency,
+            com.tailtopia.merchant.binding.service.MerchantBindingService merchantBindings) {
         this.carts = carts;
         this.addresses = addresses;
         this.quotes = quotes;
@@ -86,6 +89,7 @@ public class CheckoutService {
         this.tokens = tokens;
         this.displayNos = displayNos;
         this.idempotency = idempotency;
+        this.merchantBindings = merchantBindings;
     }
 
     /**
@@ -251,8 +255,10 @@ public class CheckoutService {
         //    唯一冲突会把当前事务打成 aborted，同一事务内重试必然再失败。
         Instant now = Instant.now();
         String displayNo = displayNos.generateUnique(now, orders::existsByDisplayNo);
+        // 🔴 归属门店取下单这一刻的绑定，只看绑定不看门店状态（AD-19：停用门店的返佣照常累积）。
         ShopOrder order = orders.save(ShopOrder.place(tokens.generate(), displayNo, now, userId,
-                cart.selectedSubtotal(), quote.fee(), quote.discount(), snapshotOf(addr)));
+                cart.selectedSubtotal(), quote.fee(), quote.discount(), snapshotOf(addr),
+                merchantBindings.referrerOf(userId)));
 
         Map<String, ShopSku> skuByToken = skusOf(cart);
         for (CartView.CartLine line : selected) {

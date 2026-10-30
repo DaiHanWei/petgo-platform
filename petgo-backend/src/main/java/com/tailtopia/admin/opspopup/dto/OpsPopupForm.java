@@ -20,6 +20,11 @@ public class OpsPopupForm {
     private String endsAt;
     private String audience;
     private String newUserDays;
+    /** V1.4.1 四维人群条件（单选下拉，空 = 不限）：等级档 / 宠物类型 / 活跃档 / 付费 true|false。 */
+    private String levelTier;
+    private String species;
+    private String activity;
+    private String paid;
     private String frequency;
     private String imageUrlId;
     private String imageUrlEn;
@@ -166,5 +171,37 @@ public class OpsPopupForm {
 
     public void setTargetValue(String targetValue) {
         this.targetValue = targetValue;
+    }
+
+    public String getLevelTier() {
+        return levelTier;
+    }
+
+    public void setLevelTier(String levelTier) {
+        this.levelTier = levelTier;
+    }
+
+    public String getSpecies() {
+        return species;
+    }
+
+    public void setSpecies(String species) {
+        this.species = species;
+    }
+
+    public String getActivity() {
+        return activity;
+    }
+
+    public void setActivity(String activity) {
+        this.activity = activity;
+    }
+
+    public String getPaid() {
+        return paid;
+    }
+
+    public void setPaid(String paid) {
+        this.paid = paid;
     }
 }

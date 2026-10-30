@@ -190,4 +190,42 @@ class OpsAudienceSqlTest {
             assertThat(sql).contains(col);
         }
     }
+
+    // ===== V1.4.1 四维人群条件 =====
+
+    @Test
+    @DisplayName("V1.4.1：等级档按 growth_levels.tier、缺账户算 NEWBIE；付费只认 QRIS / MIXED 的 PAID")
+    void levelTierAndPaid() {
+        OpsAudienceSql.Query q = build("{\"mode\":\"FILTER\",\"levelTiers\":[\"STAR\",\"BUDDY\"],\"paid\":true}");
+        assertThat(q.sql()).contains("JOIN growth_levels gl ON gl.level = g.level")
+                .contains("'NEWBIE') IN (:levelTiers)")
+                .contains(" AND EXISTS (SELECT 1 FROM payment_intents pi WHERE pi.user_id = u.id "
+                        + "AND pi.status = 'PAID' AND pi.channel IN ('QRIS', 'MIXED'))");
+        assertThat(q.params().get("levelTiers")).isEqualTo(List.of("BUDDY", "STAR"));
+        assertThat(build("{\"mode\":\"FILTER\",\"paid\":false}").sql()).contains(" AND NOT EXISTS (SELECT 1 FROM payment_intents");
+    }
+
+    @Test
+    @DisplayName("V1.4.1：活跃档多选为「或」，OTHER 含从没打开过；按发送时刻往前推")
+    void activityBandsAreOred() {
+        Instant now = Instant.parse("2026-10-29T00:00:00Z");
+        OpsAudienceSql.Query q = OpsAudienceSql.build(
+                AudienceSpec.parse("{\"mode\":\"FILTER\",\"activity\":[\"WITHIN_7D\",\"OTHER\"]}"), 0L, WIB, now);
+        assertThat(q.sql()).contains(" AND (u.last_active_at >= :act7 OR (u.last_active_at IS NULL OR u.last_active_at < :act15))");
+        assertThat(q.params().get("act7")).isEqualTo(Instant.parse("2026-10-22T00:00:00Z"));
+        assertThat(q.params().get("act15")).isEqualTo(Instant.parse("2026-10-14T00:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("V1.4.1：开屏弹窗单用户判定与运营通知同一段条件 + 基础过滤")
+    void matchesUserSharesFragments() {
+        Instant now = Instant.parse("2026-10-29T00:00:00Z");
+        AudienceSpec spec = AudienceSpec.parse("{\"mode\":\"FILTER\",\"species\":[\"CAT\"],\"paid\":true}");
+        OpsAudienceSql.Query one = OpsAudienceSql.matchesUser(7L, spec.filters(), now);
+        String notifyWhere = OpsAudienceSql.build(spec, 0L, WIB, now).sql()
+                .replace("SELECT u.id, u.locale FROM users u WHERE " + BASE, "").replace(" ORDER BY u.id ASC", "");
+        assertThat(one.sql()).startsWith("SELECT EXISTS (SELECT 1 FROM users u WHERE " + BASE + " AND u.id = :uid")
+                .endsWith(notifyWhere + ")");
+        assertThat(one.params()).containsEntry("uid", 7L).containsEntry("species", List.of("CAT"));
+    }
 }

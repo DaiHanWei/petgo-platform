@@ -12,6 +12,9 @@ import com.tailtopia.shop.domain.ReturnPolicy;
  * 无权限时该字段在服务端就被忽略（不是前端隐藏）。
  *
  * <p>{@code returnPolicy} 可空 = 继承商品级（FR-94A）。
+ *
+ * <p>{@code wholesalePrice} 批发价（门店进货价，整型 IDR），可空 = 不对门店供货。
+ * 门店本就看得到它，<b>不受</b> {@code shop.cost_edit} 门控（别和 {@code costPrice} 混）。
  */
 public class ShopSkuForm {
 
@@ -21,6 +24,7 @@ public class ShopSkuForm {
     private Long netWeightG;
     private Long costPrice;
     private ReturnPolicy returnPolicy;
+    private Long wholesalePrice;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -34,4 +38,6 @@ public class ShopSkuForm {
     public void setCostPrice(Long costPrice) { this.costPrice = costPrice; }
     public ReturnPolicy getReturnPolicy() { return returnPolicy; }
     public void setReturnPolicy(ReturnPolicy v) { this.returnPolicy = v; }
+    public Long getWholesalePrice() { return wholesalePrice; }
+    public void setWholesalePrice(Long wholesalePrice) { this.wholesalePrice = wholesalePrice; }
 }

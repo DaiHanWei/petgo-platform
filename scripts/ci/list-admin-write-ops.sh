@@ -66,7 +66,7 @@ group_of() {
     /admin/seed-post*|/admin/seed-batch*|/admin/seed-assist*|/admin/content*|/admin/comments*|/admin/throttles*|/admin/places*) echo "内容" ;;
     /admin/users*|/admin/user-tags*|/admin/virtual-accounts*|/admin/publish-identities*) echo "用户" ;;
     /admin/consult-orders*|/admin/ai-orders*|/admin/payments*|/admin/settlements*|/admin/red-overage*) echo "订单与资金" ;;
-    /admin/shop/*) echo "商城" ;;
+    /admin/shop/*|/admin/merchant/*) echo "商城" ;;
     /admin/vets*|/admin/failed-requests*|/admin/ratings*|/admin/consult-sessions*) echo "兽医与问诊" ;;
     /admin/config*|/admin/algo-params*|/admin/audit-logs*|/admin/accounts*|/admin/roles*) echo "配置与安全" ;;
     /admin/login*|/admin/oauth*|/admin/logout*|/admin/denied*|/admin/lang*|/admin/nav/*) echo "登录与壳" ;;

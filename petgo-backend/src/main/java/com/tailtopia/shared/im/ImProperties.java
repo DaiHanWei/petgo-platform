@@ -40,6 +40,11 @@ public class ImProperties {
      * 只允许 {@code [a-z0-9_]{0,8}}，非法启动即失败（见 {@link ImAccountMapper#configure}）。
      */
     private String accountPrefix = "";
+    /**
+     * 离线推送全局限速（人/秒，bug 604）。腾讯 {@code timpush} 按 SDKAppID 限 30 人/秒，<b>stag 与生产共用额度</b>；
+     * 默认 25 留余量，不要调到 30 以上。
+     */
+    private int pushRatePerSecond = 25;
 
     public String getMode() {
         return mode;
@@ -103,5 +108,13 @@ public class ImProperties {
 
     public void setAccountPrefix(String accountPrefix) {
         this.accountPrefix = accountPrefix;
+    }
+
+    public int getPushRatePerSecond() {
+        return pushRatePerSecond;
+    }
+
+    public void setPushRatePerSecond(int pushRatePerSecond) {
+        this.pushRatePerSecond = pushRatePerSecond;
     }
 }

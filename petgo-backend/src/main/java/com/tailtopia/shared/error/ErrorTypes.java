@@ -130,6 +130,12 @@ public final class ErrorTypes {
     /** V1.4.0 ④ Story 2.1：收藏私密帖（422，收藏只限公开帖 P-2）。 */
     public static final URI COLLECT_NOT_PUBLIC = URI.create(BASE + "collect-not-public");
 
+    /** V1.4.1 商家平台：填的门店邀请码不存在或门店已停用（422，契约 FR-7 / FR-40 —— 停用门店的码同样提示无效）。 */
+    public static final URI MERCHANT_CODE_INVALID = URI.create(BASE + "merchant-code-invalid");
+
+    /** V1.4.1 商家平台：用户已绑定过门店，不能再填码（409，FR-7 —— 绑定永久，不能换店）。 */
+    public static final URI MERCHANT_ALREADY_BOUND = URI.create(BASE + "merchant-already-bound");
+
     private ErrorTypes() {
     }
 }

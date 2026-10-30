@@ -149,9 +149,9 @@ class TimelinePlaceCheckinTest {
 
         List<TimelineItemResponse> items = service.getTimeline(OWNER, null, 20, CHECKIN).items();
 
-        // 同日按发布 / 完成时刻正序：09:00 打卡在前，12:00 帖子在后。
+        // 同日按发布 / 完成时刻倒序（bug 599）：12:00 帖子在前，09:00 打卡在后。
         assertThat(items).extracting(TimelineItemResponse::kind)
-                .containsExactly(TimelineItemResponse.PLACE_CHECKIN, TimelineItemResponse.HAPPY_MOMENT);
+                .containsExactly(TimelineItemResponse.HAPPY_MOMENT, TimelineItemResponse.PLACE_CHECKIN);
     }
 
     /** 取满时照源④更新地板（用去重前的原始末条）：分页不会把同日条目拆开。 */

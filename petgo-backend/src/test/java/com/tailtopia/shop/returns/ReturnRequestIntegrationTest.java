@@ -443,7 +443,8 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
     void outsideReturnWindowRejected() {
         Ctx c = deliveredOrder(500_000L, List.of(seedSku(10, 100_000L, "RETURNABLE")));
         long lineId = linesOf(c.order()).get(0).getId();
-        jdbc.update("UPDATE shop_orders SET delivered_at = ? WHERE public_token = ?",
+        jdbc.update("UPDATE shop_orders o SET delivered_at = v.t, return_window_ends_at = v.t + INTERVAL '7 days' "
+                + "FROM (SELECT CAST(? AS timestamptz) AS t) v WHERE o.public_token = ?",
                 java.sql.Timestamp.from(
                         java.time.Instant.now().minus(8, java.time.temporal.ChronoUnit.DAYS)),
                 c.order().getPublicToken());

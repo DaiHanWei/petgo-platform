@@ -176,32 +176,24 @@ class OpsNotificationDispatcherTest {
         verify(repo).finish(ID, OpsCampaignStatus.DONE, NOW);
     }
 
+    /** bug 604：推送失败一律不重推（防重复收到），失败人数照计，批间等待不变。 */
     @Test
-    void retriesOnlyFailedPushesWithBackoffAndCountsPeople() {
+    void failedPushesAreNeverRetriedButCounted() {
         audienceOf(600); // 2 批：500 / 100
-        Set<Long> firstFail = Set.of(510L, 520L, 530L); // 第 2 批中 3 人首推失败
+        Set<Long> fail = Set.of(510L, 520L, 530L);
         Map<Long, Integer> calls = new HashMap<>();
         doAnswer(inv -> {
             long uid = inv.getArgument(0);
-            int k = calls.merge(uid, 1, Integer::sum);
-            if (!firstFail.contains(uid)) {
-                return true;
-            }
-            if (uid == 530L) {
-                return false; // 3 轮后仍失败
-            }
-            return k >= 2; // 第 1 轮重试即成功
+            calls.merge(uid, 1, Integer::sum);
+            return !fail.contains(uid);
         }).when(pusher).pushToUserNow(anyLong(), any(), any(), any(), any(), any());
 
         dispatcher.dispatch(ID);
 
-        assertThat(sleeps).containsExactly(S1, S1, S2, S4); // 批间 1s；第 2 批重试轮次前 1s / 2s / 4s
-        assertThat(calls.get(1L)).isEqualTo(1);
-        assertThat(calls.get(599L)).isEqualTo(1); // 成功的人只推一次
-        assertThat(calls.get(510L)).isEqualTo(2);
-        assertThat(calls.get(520L)).isEqualTo(2);
-        assertThat(calls.get(530L)).isEqualTo(4); // 首推 + 3 轮
-        verify(repo).addFailed(ID, 1, NOW);
+        assertThat(sleeps).containsExactly(S1); // 只有批间 1s，没有重试退避
+        assertThat(calls.values()).allMatch(k -> k == 1); // 每人恰好推一次
+        assertThat(calls).hasSize(600);
+        verify(repo).addFailed(ID, 3, NOW);
         verify(repo).finish(ID, OpsCampaignStatus.PARTIAL_FAILED, NOW);
     }
 
@@ -394,7 +386,7 @@ class OpsNotificationDispatcherTest {
 
         verify(pusher, never()).pushToUserNow(eq(1L), any(), any(), any(), any(), any());
         verify(pusher, never()).pushToUserNow(eq(2L), any(), any(), any(), any(), any());
-        verify(pusher, times(4)).pushToUserNow(eq(3L), any(), any(), any(), any(), any()); // 首推 + 3 轮
+        verify(pusher, times(1)).pushToUserNow(eq(3L), any(), any(), any(), any(), any()); // 失败不重推（bug 604）
         verify(repo).addFailed(ID, 1, NOW);
         verify(repo).finish(ID, OpsCampaignStatus.PARTIAL_FAILED, NOW);
     }

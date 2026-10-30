@@ -230,11 +230,11 @@ class GrowthArchivePage extends ConsumerWidget {
         );
       }
       if (targetId != null && targetId != profile.id) {
-        // B2 切换中：档案还是上一只（或正在取），按列表项先换名 + 数据区骨架。
-        final target = pets!.firstWhere((p) => p.id == targetId);
+        // B2 切换中：档案还是上一只（或正在取），切换器先高亮目标 + 数据区骨架
+        // （V1.4.1 ⑤ 起不再显示目标宠物名标题行）。
         return Scaffold(
           backgroundColor: AppColors.cream,
-          body: _SwitchingBody(pets: pets, currentId: targetId, petName: target.name),
+          body: _SwitchingBody(pets: pets!, currentId: targetId),
         );
       }
       return Scaffold(
@@ -508,12 +508,32 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         controller: _scroll,
         // 底部留白要**避开凸起的「＋」**：它比底栏高出一截，48 只够躲开底栏本身，
         // 滚到底时最后一个元素（引导卡的 CTA 最明显）会被压住（2026-08-04 实机确认）。
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 38, AppSpacing.lg, 92),
+        // V1.4.1 Diary 页头修复 ④：顶部按状态栏实际高度让位（灵动岛 / 刘海 / 普通 Android 各不同），
+        // 原先写死 38 会在灵动岛 iPhone 上压住时间。[_SwitchingBody] 必须同一套，否则切宠物跳位。
+        padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg, MediaQuery.paddingOf(context).top + 8, AppSpacing.lg, 92),
         children: [
-          // V1.4.0 multi-pet（Story 1.5 · AC3.1）：切换器在页面最顶部、标题行「Diary {name}」之上。
+          // V1.4.0 multi-pet（Story 1.5 · AC3.1）：切换器在页面最顶部。
+          // V1.4.1 ⑤：有切换器时去掉「Diary {name}」标题行，分享 / 编辑挪到切换器同一行右侧；
+          // 宠物多时头像在 Expanded 区内横滑，不会滑到按钮下面。
           if (widget.switcher != null) ...[
-            widget.switcher!,
-            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: widget.switcher!),
+                if (_shareButton() case final share?) ...[
+                  share,
+                  const SizedBox(width: 8),
+                ],
+                if (!petReadOnly)
+                  DiaryIconButton(
+                    inkKey: const ValueKey('editProfileButton'),
+                    onTap: widget.onEditProfile,
+                    child: const DiaryEditIcon(),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
           ],
           // 页头（标题行 + 信息卡 + 健康记录入口 + 里程碑进度）走 Story 2.2 抽出的共用组件，
           // 与游客态同一份实现（3.3 要求两态页头一致）。入口跳转由本页注入。
@@ -531,7 +551,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             healthRecordCount: stats?.healthRecordCount,
             // 未庆祝角标（V1.3.0 Story 1.5）：搭 stats 这一次请求，不为它多发一次。
             milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
-            titleAction: _shareButton(),
+            showTitleRow: widget.switcher == null,
+            titleAction: widget.switcher == null ? _shareButton() : null,
             // 「只看 Diary」开关放宠物卡右上空白处（2026-10-06 产品）。
             petCardAction: _diaryOnlyToggle(l10n),
             // 迁移引导蒙层的高亮框位置从这里量（Story 5.4）。只量位置，不改行为。
@@ -643,14 +664,14 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 
   /// Timeline / Kalender 药丸切换（paspor.html 双按钮）。
   Widget _viewToggleRow(AppLocalizations l10n) {
-    // 稿 `.vtog`：左对齐的紧凑胶囊（L2 还原度，原为两枚等分通栏按钮）。
+    // V1.4.1 Diary 页头修复 ③：恢复两枚等分通栏按钮（V1.4.0 L2 还原度改成的左对齐小胶囊作废）。
     return Row(
       children: [
-        _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
-            () => _switchView(_ArchiveView.timeline), const ValueKey('archiveViewTimeline')),
-        const SizedBox(width: 8),
-        _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
-            () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar')),
+        Expanded(child: _toggleBtn('⏱ ${l10n.growthArchiveViewTimeline}', _view == _ArchiveView.timeline,
+            () => _switchView(_ArchiveView.timeline), const ValueKey('archiveViewTimeline'))),
+        const SizedBox(width: 7),
+        Expanded(child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
+            () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
       ],
     );
   }
@@ -729,22 +750,24 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         key: key,
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        // 视觉 ~30 高胶囊，点击热区补到 44。
+        // 视觉 ~38 高，点击热区补到 44。
         child: Container(
           constraints: const BoxConstraints(minHeight: 44),
           alignment: Alignment.center,
           child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: on ? AppColors.mint : AppColors.card,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: on ? AppColors.mint : AppColors.line, width: 1.5),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: on ? AppColors.onAccent : AppColors.ink2)),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? AppColors.mint : AppColors.card,
+              borderRadius: BorderRadius.circular(10),
+              border: on ? null : Border.all(color: AppColors.line, width: 1.5),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: on ? AppColors.onAccent : AppColors.ink2)),
           ),
         ),
       );
@@ -765,15 +788,13 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
 /// 切换中（V1.4.0 multi-pet Story 1.5 · UI 稿 B2）：切换器（已高亮新宠物、仍可点）+ 标题行（新名字）
 /// + 数据区骨架 + 转圈。**不是**整页居中转圈。
 class _SwitchingBody extends StatelessWidget {
-  const _SwitchingBody({required this.pets, required this.currentId, required this.petName});
+  const _SwitchingBody({required this.pets, required this.currentId});
 
   final List<PetListItem> pets;
   final int currentId;
-  final String petName;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     Widget skel(double h) => Container(
           height: h,
           margin: const EdgeInsets.only(top: 10),
@@ -784,18 +805,21 @@ class _SwitchingBody extends StatelessWidget {
         );
     return ListView(
       key: const ValueKey('diarySwitching'),
-      // 与 [_ArchiveBody] 同一套页边距，切换前后切换器与标题行不跳位。
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 38, AppSpacing.lg, 92),
+      // 与 [_ArchiveBody] 同一套页边距与第一行结构，切换前后切换器与按钮位不跳位。
+      padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg, MediaQuery.paddingOf(context).top + 8, AppSpacing.lg, 92),
       children: [
-        PetSwitcher(pets: pets, currentId: currentId),
-        const SizedBox(height: 10),
-        Text(l10n.growthArchivePassportTitle(petName),
-            key: const ValueKey('diarySwitchingTitle'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
-        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: PetSwitcher(pets: pets, currentId: currentId)),
+            // 过渡态按钮置灰占位（尺寸与 [_ArchiveBody] 第一行相同），切换完成后不跳位。
+            const DiaryIconButton(onTap: null, child: Icon(Icons.link, size: 18, color: AppColors.muted)),
+            const SizedBox(width: 8),
+            const DiaryIconButton(onTap: null, child: Icon(Icons.edit_outlined, size: 18, color: AppColors.muted)),
+          ],
+        ),
+        const SizedBox(height: 2),
         skel(140),
         skel(64),
         skel(52),
@@ -960,7 +984,7 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
   /// - 类④ → 问诊存档走既有结果页深链；结构化健康记录 → 健康记录列表页
   /// - 类⑤ → 身份证页
   /// `a` 是否比 `b` 更早：先比展示用的事件日期，同日再比创建时间。
-  /// 「第一条快乐时刻」认的是**最早那条**，而同日内后端是正序下发的，所以不能靠列表位置推。
+  /// 「第一条快乐时刻」认的是**最早那条**，不能靠列表位置推（同日顺序由后端定，bug 599 起改为从新到旧）。
   static bool _isEarlier(TimelineItem a, TimelineItem b) {
     final byDate = a.displayDate.compareTo(b.displayDate);
     return byDate != 0 ? byDate < 0 : a.date.isBefore(b.date);

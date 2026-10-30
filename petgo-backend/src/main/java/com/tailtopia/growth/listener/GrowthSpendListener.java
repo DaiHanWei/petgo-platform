@@ -42,7 +42,9 @@ public class GrowthSpendListener {
     private static final Logger log = LoggerFactory.getLogger(GrowthSpendListener.class);
 
     private static final Set<PaymentPurpose> PI_EXCLUDED =
-            Set.of(PaymentPurpose.SHOP_ORDER, PaymentPurpose.PAWCOIN_TOPUP, PaymentPurpose.GIFT);
+            Set.of(PaymentPurpose.SHOP_ORDER, PaymentPurpose.PAWCOIN_TOPUP, PaymentPurpose.GIFT,
+                    // V1.4.1 门店进货单：付款人是门店，意图 user_id 不是 App 用户（见 PurchaseOrderPayer），绝不加成长值。
+                    PaymentPurpose.MERCHANT_PO);
     private static final Set<String> COIN_EXCLUDED = Set.of(PaymentPurpose.SHOP_ORDER.name(),
             PaymentPurpose.GIFT.name(), PaymentPurpose.VET_CONSULT.name());
 

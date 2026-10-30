@@ -131,7 +131,8 @@ class ShopOrderFulfillmentIntegrationTest extends ApiIntegrationTest {
     }
 
     private void backdateDelivered(String token, int days) {
-        jdbc.update("UPDATE shop_orders SET delivered_at = ? WHERE public_token = ?",
+        jdbc.update("UPDATE shop_orders o SET delivered_at = v.t, return_window_ends_at = v.t + INTERVAL '7 days' "
+                + "FROM (SELECT CAST(? AS timestamptz) AS t) v WHERE o.public_token = ?",
                 java.sql.Timestamp.from(Instant.now().minus(days, ChronoUnit.DAYS)), token);
     }
 

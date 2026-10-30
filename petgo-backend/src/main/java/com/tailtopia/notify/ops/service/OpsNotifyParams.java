@@ -9,7 +9,7 @@ import java.util.List;
  *
  * @param batchSize       每批人数
  * @param batchInterval   批与批之间间隔（最后一批之后不等）
- * @param retryBackoffs   单批失败重试的退避（次数 = 列表长度）
+ * @param retryBackoffs   写通知中心失败重试的退避（次数 = 列表长度）；推送失败不重推（bug 604）
  * @param progressEvery   每推送多少人刷新一次 {@code last_progress_at}
  * @param stallTimeout    SENDING 超过多久无进展 → PARTIAL_FAILED（不自动重发）
  * @param scanLimit       一轮到期扫描最多投递多少个活动

@@ -5,11 +5,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../shared/widgets/qr_payment/qr_pay_parts.dart';
+import '../../../shared/widgets/qr_payment/qr_pay_save.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
@@ -285,6 +287,8 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           backgroundColor: AppColors.base,
           elevation: 0,
           automaticallyImplyLeading: false,
+          // 无返回键时主题的 titleSpacing（为返回键留的 0）会让标题贴着屏幕左边；按稿 C0 / C1 给 16 页边距。
+          titleSpacing: AppSpacing.lg,
           title: Text(
             l10n.vetPayTitle,
           ),
@@ -519,83 +523,55 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
     );
   }
 
+  // V1.4.1 QRIS 支付页 C1：原有 5 项（等待中 / 扫码提示→并入步骤 2 / 二维码 / 订单号 / 取消）全部保留，
+  // 新增金额 + 倒计时（5 分钟窗、红色强调；口径 = 服务端 payDeadlineAt，与选渠道页同一个倒计时）、
+  // 付款 App、付款步骤、吸底「Simpan Kode QR」。过期仍照旧：轮询 404 → Toast 后离开（C3 不改）。
   Widget _buildAwaitingCash(AppLocalizations l10n) {
     final payload = _qrPayload;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-      child: Column(
-        key: const ValueKey('vetPayAwaitingCash'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.vetPayProcessing,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
+    final hasPayload = payload != null && payload.isNotEmpty;
+    return Column(
+      key: const ValueKey('vetPayAwaitingCash'),
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                QrPaySummary(
+                  density: QrPayDensity.page,
+                  amountIdr: _cashAmount,
+                  remaining: Duration(seconds: _remaining.clamp(0, _windowSeconds)),
+                  expiresAt: _deadline,
+                  urgent: true,
+                  countdownKey: const ValueKey('vetPayAwaitingCountdown'),
+                ),
+                const SizedBox(height: 12),
+                QrPayCodeCard(
+                  density: QrPayDensity.page,
+                  payload: payload,
+                  orderRef: _payRef,
+                  qrKey: const ValueKey('vetPayQr'),
+                  orderRefKey: const ValueKey('vetPayOrderRef'),
+                ),
+                QrPayGuide(expiresAt: _deadline),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.vetPayScanHint,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: AppColors.muted),
-          ),
-          const SizedBox(height: 24),
-          // QRIS 二维码：后端返回的 EMVCo 串本地生成（照 recharge_page 范式）；无载荷时兜底 spinner。
-          Center(
-            child: (payload != null && payload.isNotEmpty)
-                ? Container(
-                    width: 240,
-                    height: 240,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.line),
-                    ),
-                    child: QrImageView(
-                      key: const ValueKey('vetPayQr'),
-                      data: payload,
-                      version: QrVersions.auto,
-                      backgroundColor: Colors.white,
-                    ),
-                  )
-                : const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator(color: AppColors.mint),
-                  ),
-          ),
-          if ((_payRef ?? '').isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Center(
-              child: SelectableText(
-                  '${AppLocalizations.of(context).orderNumberLabel}: $_payRef',
-                  key: const ValueKey('vetPayOrderRef'),
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-            ),
-          ],
-          const SizedBox(height: 28),
+        ),
+        QrPayBottomBar(
+          density: QrPayDensity.page,
+          // 归零后到离开页面之间不让再存：那张图已付不了，图上却还写着「有效至 …」。
+          onSave: (!hasPayload || _remaining <= 0)
+              ? null
+              : () => saveQrPaymentImage(context,
+                  payload: payload, amountIdr: _cashAmount, orderRef: _payRef, expiresAt: _deadline),
           // 主动取消 → 后端删 request + 置 intent FAILED（彻底结束，不残留后台列表）。
-          OutlinedButton(
-            key: const ValueKey('vetPayCancel'),
-            onPressed: _navigating ? null : _cancelPay,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.danger,
-              side: const BorderSide(color: AppColors.danger),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            child: Text(
-              l10n.vetPayCancel,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
+          onCancel: _navigating ? null : _cancelPay,
+          cancelLabel: l10n.vetPayCancel,
+          cancelKey: const ValueKey('vetPayCancel'),
+        ),
+      ],
     );
   }
 }

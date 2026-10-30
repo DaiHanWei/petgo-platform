@@ -205,6 +205,9 @@ public final class AdminPageCatalog {
                     List.of(SHOP_ORDER_VIEW), List.of(SHOP_ORDER_FULFILL), List.of(SHOP_ORDER_PHONE_SEARCH)).nav("admin.nav.shopOrders", "shopOrders", SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL),
             shared("shop-order-exceptions", G_SHOP, "/admin/shop/order-exceptions",
                     List.of(SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL)).nav("admin.nav.shopOrderExceptions", "shopOrderExceptions", SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL),
+            // 商家平台对接：门店进货单（契约第 2、5 节）。沿用 Toko 订单履约两个码，不新增权限码。
+            shared("merchant-purchase-orders", G_SHOP, "/admin/merchant/purchase-orders",
+                    List.of(SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL)).nav("admin.nav.merchantPurchaseOrders", "merchantPurchaseOrders", SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL),
             shared("shop-returns", G_SHOP, "/admin/shop/returns",
                     List.of(REFUND_VIEW, REFUND_APPROVE, REFUND_PAYOUT)).nav("admin.nav.shopReturns", "shopReturns", REFUND_VIEW, REFUND_APPROVE, REFUND_PAYOUT),
             shared("return-precedents", G_SHOP, "/admin/shop/return-precedents",

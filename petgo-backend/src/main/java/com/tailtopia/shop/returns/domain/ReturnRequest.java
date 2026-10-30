@@ -388,6 +388,8 @@ public class ReturnRequest {
     }
 
     public void markRefunded() {
+        // 🔴 商家平台按 (refunded_at, id) keyset 扫描扣返佣、只留 2 分钟安全延迟：取写入时刻，之后不改，
+        //    绝不取支付渠道回调里的时间（契约第 2 节）。库级 ck_return_requests_refunded_at 保证 REFUNDED 时非空。
         this.refundedAt = Instant.now();
         transitionTo(ReturnStatus.REFUNDED);
     }

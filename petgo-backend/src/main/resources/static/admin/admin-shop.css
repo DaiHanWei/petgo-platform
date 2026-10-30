@@ -326,6 +326,8 @@ main [class*="s-col-num"] { letter-spacing: normal; }
     gap: 14px;
     padding: 9px 0;
 }
+/* display:flex 会盖掉 UA 的 [hidden]（同 .perm-groups[hidden] 的坑）：按跳转类型显隐的行（banner 抽屉）要靠这条真藏起来。 */
+.s-form-row[hidden] { display: none; }
 
 /* 🔴 标签列定宽右对齐 —— 这是本次改版最实际的一处收益。
    原来标签内联跟在输入框旁边，长短不一时会各自换行，

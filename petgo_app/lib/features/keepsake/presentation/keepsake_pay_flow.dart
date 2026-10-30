@@ -104,7 +104,12 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
       return KeepsakeFlowOutcome.notCompleted;
     }
     final paid = await showQrPaymentSheet(context,
-        payload: payload, orderRef: res.paymentRef, pollPaid: pollPaid, onAborted: onQrAborted);
+        payload: payload,
+        orderRef: res.paymentRef,
+        pollPaid: pollPaid,
+        onAborted: onQrAborted,
+        amountIdr: res.paymentAmount ?? cashPriceIdr(),
+        expiresAt: res.paymentExpiresAt);
     if (paid) {
       // 投放归因：QRIS 现金到账（PawCoin 当场成交走上面的 unlocked 分支，不计——钱在充值时已计）。
       Analytics.capturePurchase(amountIdr: cashPriceIdr(), purpose: purchasePurpose, orderRef: res.paymentRef);

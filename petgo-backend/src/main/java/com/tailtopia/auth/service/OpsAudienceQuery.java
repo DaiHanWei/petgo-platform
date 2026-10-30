@@ -108,6 +108,19 @@ public class OpsAudienceQuery {
         return out;
     }
 
+    /**
+     * 开屏弹窗（V1.4.1）：该用户此刻是否命中四维人群条件。条件为空 → true（不筛）。
+     * 口径与运营通知同一份（{@link OpsAudienceSql#appendTargeting}）。
+     */
+    @Transactional(readOnly = true)
+    public boolean matches(long userId, com.tailtopia.ops.audience.AudienceFilters filters, Instant now) {
+        if (filters.isEmpty()) {
+            return true;
+        }
+        OpsAudienceSql.Query q = OpsAudienceSql.matchesUser(userId, filters, now);
+        return Boolean.TRUE.equals(jdbc.queryForObject(q.sql(), bind(q.params()), Boolean.class));
+    }
+
     /** timestamptz 精确绑定：Instant → UTC OffsetDateTime（不依赖 JVM 默认时区）。 */
     private static MapSqlParameterSource bind(Map<String, Object> raw) {
         MapSqlParameterSource params = new MapSqlParameterSource();

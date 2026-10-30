@@ -22,7 +22,6 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import org.springframework.data.domain.PageRequest;
@@ -50,12 +49,11 @@ public class TimelineService {
     private static final int MAX_FETCH = 500;
 
     /**
-     * 时间线**取数/游标序**（AD-1）：事件日期倒序 → 同日发布/完成时刻倒序。
+     * 时间线**取数/游标序 = 对外展示序**（AD-1）：事件日期倒序 → 同日发布/完成时刻倒序（从新到旧）。
      *
-     * <p>⚠️ 这是**内部序**，不等于对外展示序。FR-82 / Story 3.2 AC5 要求「整体按事件日期倒序、
-     * **同日按发布或完成时间正序**」，实现方式是**页内重排**（见 {@link #withinDayAscending}）而非改本比较器：
-     * 游标语义依赖「同日倒序 + 严格小于锚点」，若把比较器改成同日正序，取下一页时会把该日较晚的条目
-     * 再取一遍（重复）。同日条目不跨页（Rule 3）保证了页内重排绝对安全。
+     * <p>bug 599（2026-10-29 产品改口径）：原 FR-82 / Story 3.2 AC5「同日按发布或完成时间正序」作废，
+     * 同日也从新到旧——刚发的帖子排在当天最上面。原先的页内正序重排（withinDayAscending）已删除。
+     * ⚠️ 游标语义依赖「同日倒序 + 严格小于锚点」，本比较器的同日方向不可再改成正序（取下一页会重复）。
      */
     private static final Comparator<TimelineItemResponse> TIMELINE_ORDER =
             Comparator.comparing(TimelineItemResponse::effectiveDate)
@@ -174,15 +172,14 @@ public class TimelineService {
         }
 
         List<TimelineItemResponse> page = cut.page();
-        // 游标取**内部序**（同日倒序）的末条：它是本页最后一天里最早的一条，
-        // 「严格小于它」正好跳过整个已输出的日期区间（重排后再取会重复，见 withinDayAscending）。
+        // 游标取末条：它是本页最后一天里最早的一条，「严格小于它」正好跳过整个已输出的日期区间。
         String nextCursor = null;
         if (cut.hasMore() && !page.isEmpty()) {
             TimelineItemResponse last = page.get(page.size() - 1);
             nextCursor = new TimelineAnchor(last.effectiveDate(), last.date()).encode();
         }
         return new TimelinePageResponse(
-                attachDecorationTags(withinDayAscending(page)), nextCursor, cut.hasMore());
+                attachDecorationTags(page), nextCursor, cut.hasMore());
     }
 
 
@@ -381,28 +378,6 @@ public class TimelineService {
         }
         merged.sort(TIMELINE_ORDER);
         return new Batch(merged, allKnown, floor);
-    }
-
-    /**
-     * 页内重排：日期倒序不变，**同日内改为发布/完成时间正序**（AC5）。
-     *
-     * <p>为什么放在最后做：游标与截断都依赖「同日倒序」的内部序（见 {@link #TIMELINE_ORDER}），
-     * 而同日条目不跨页（AD-1 Rule 3）意味着重排只发生在页内、绝不影响页边界与游标。
-     * ⚠️ 因此 {@code nextCursor} 必须在重排**之前**用内部序的末条算出（重排后末条是该日最早的一条，
-     * 拿它当锚点会把该日较晚的条目再取一遍）。
-     */
-    private static List<TimelineItemResponse> withinDayAscending(List<TimelineItemResponse> page) {
-        Map<LocalDate, List<TimelineItemResponse>> byDay = new LinkedHashMap<>();
-        for (TimelineItemResponse item : page) {
-            byDay.computeIfAbsent(item.effectiveDate(), d -> new ArrayList<>()).add(item);
-        }
-        List<TimelineItemResponse> out = new ArrayList<>(page.size());
-        for (List<TimelineItemResponse> sameDay : byDay.values()) {
-            List<TimelineItemResponse> asc = new ArrayList<>(sameDay);
-            asc.sort(Comparator.comparing(TimelineItemResponse::date));
-            out.addAll(asc);
-        }
-        return List.copyOf(out);
     }
 
     private static TimelineAnchor anchorOf(TimelineItemResponse item) {
