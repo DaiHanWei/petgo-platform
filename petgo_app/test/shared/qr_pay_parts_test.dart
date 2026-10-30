@@ -124,7 +124,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   });
 
-  testWidgets('A4：倒计时归零 → 二维码蒙白提示过期、停轮询、只剩「Tutup」，点了 resolve false', (tester) async {
+  testWidgets('A4：倒计时归零 → 二维码蒙白提示过期、轮询降频、只剩「Tutup」，点了 resolve false', (tester) async {
     var polls = 0;
     bool? outcome;
     await pumpHost(tester, (ctx) async {
@@ -148,10 +148,49 @@ void main() {
     expect(find.byKey(const ValueKey('qrPayCancel')), findsNothing);
     final before = polls;
     await tester.pump(const Duration(seconds: 6));
-    expect(polls, before, reason: '过期后停轮询');
+    expect(polls, before, reason: '过期后降为 10 秒一次，6 秒内不该再查');
+    await tester.pump(const Duration(seconds: 5));
+    expect(polls, before + 1, reason: '过期后仍查到账（网关回调可能晚于截止时刻）');
     await tester.tap(find.byKey(const ValueKey('qrPayClose')));
     await tester.pump(const Duration(milliseconds: 500));
     expect(outcome, isFalse);
+  });
+
+  testWidgets('过期后才到账（最后几秒扫码付款）→ 仍自动关闭并 resolve true', (tester) async {
+    var paid = false;
+    bool? outcome;
+    await pumpHost(tester, (ctx) async {
+      outcome = await showQrPaymentSheet(ctx,
+          payload: 'QR',
+          pollPaid: () async => paid,
+          amountIdr: 1000,
+          expiresAt: DateTime.now().add(const Duration(seconds: 2)));
+    });
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 2100)));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const ValueKey('qrPayExpiredOverlay')), findsOneWidget);
+    paid = true;
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(outcome, isTrue);
+    expect(find.byKey(const ValueKey('qrPayExpiredOverlay')), findsNothing);
+  });
+
+  testWidgets('连点「Simpan」只弹一个权限对话框（保存进行中再点忽略）', (tester) async {
+    final g = _FakeGallery(access: false, grant: false);
+    qrPayGallery = g;
+    addTearDown(() => qrPayGallery = const GalQrPayGallery());
+    await pumpHost(tester, (ctx) => showQrPaymentSheet(ctx, payload: 'QR', pollPaid: () async => false));
+    await tester.tap(find.byKey(const ValueKey('qrPaySave')));
+    await tester.tap(find.byKey(const ValueKey('qrPaySave')), warnIfMissed: false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(g.requests, 1);
+    expect(find.byKey(const ValueKey('qrPayPermissionDialog')), findsOneWidget);
+    await tester.tap(find.byType(TextButton).last);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.pump(const Duration(milliseconds: 500));
   });
 
   testWidgets('A3：没有相册权限且申请被拒 → App 内对话框（只换正文），点「Buka Pengaturan」跳设置', (tester) async {

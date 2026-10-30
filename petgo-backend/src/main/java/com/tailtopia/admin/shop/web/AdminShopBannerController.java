@@ -10,6 +10,7 @@ import com.tailtopia.admin.shop.dto.ShopBannerForm;
 import com.tailtopia.admin.shop.service.AdminShopBannerService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
+import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopBanner;
 import com.tailtopia.shop.service.ShopImageUrlResolver;
 import java.util.ArrayList;
@@ -85,10 +86,12 @@ public class AdminShopBannerController {
             model.addAttribute("form", new ShopBannerForm());
             model.addAttribute("bannerId", null);
             model.addAttribute("existingImage", null);
+            model.addAttribute("categories", ProductCategory.values());
             return "admin/fragments/drawer-shop-banner :: form";
         }
         if (hx.isHtmx() && open != null) {
             populateEditForm(open, model);
+            model.addAttribute("categories", ProductCategory.values());
             return "admin/fragments/drawer-shop-banner :: form";
         }
         populateList(model);

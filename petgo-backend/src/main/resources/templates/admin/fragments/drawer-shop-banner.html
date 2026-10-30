@@ -9,8 +9,9 @@
      「?open= 的那条已被并发删掉」（404）都会把**整张表换成一行红字**，而且那行字还被遮罩盖着：
      运营看到的是「点了没反应」，关掉抽屉才发现表格没了，只能 F5。指抽屉体就落在他正看着的地方。
      成功时 Controller 用 oob 刷列表 + HX-Trigger: admin:drawer-close 关抽屉（三档状态是全表相对的，必须整表重拉）。
-  V1.4.1：加点击跳转配置（不可点 / 商品详情 / 品类 / 外部链接）。合法性在 service 层校验
-  （商品须已上架、品类须合法、外链只允许 https），模板只做输入。
+  V1.4.1：加点击跳转配置（不可点 / 商品详情 / 品类 / 外部链接），按类型换控件，品类是下拉。
+  合法性在 service 层校验（商品须已上架、品类须合法、外链只允许 https），模板只做输入。
+  需要宿主 model：form、bannerId、existingImage、categories（ProductCategory）。
   upload-host: shop-banners.html
     ↑ 本片段的上传控件走 fetch，需要 CSRF meta；片段没有自己的 <head>，meta 来自宿主页。
 -->
@@ -66,22 +67,47 @@
             <p class="hint" th:text="#{admin.v130.shopBanners.weightHint}">越大越优先；同权重取后建的那张。</p>
         </div>
     </div>
+    <!-- 🔴 跳转目标按类型换控件（与运营弹窗 ops-target-fields 同一套显隐，admin-core.js data-show-switch）：
+         隐藏的那格同时 disabled 不提交，三个同名 targetValue 只有可见的那一个生效；NONE 时不提交 targetValue。
+         品类只给下拉不让手填：值必须是 ProductCategory 枚举名，手填大小写一错就永远跳不过去。 -->
+    <th:block th:with="tt=${form.targetType == null or form.targetType == '' ? 'NONE' : form.targetType}">
     <div class="s-form-row">
         <label class="s-label" for="f-bannerTargetType" th:text="#{admin.shop.banners.form.target.label}">点击跳转</label>
         <div class="s-ctl">
-            <select id="f-bannerTargetType" class="inp" th:field="*{targetType}">
-                <option value="NONE" th:text="#{admin.shop.banners.target.NONE}">不可点</option>
-                <option value="PRODUCT" th:text="#{admin.shop.banners.target.PRODUCT}">商品详情</option>
-                <option value="CATEGORY" th:text="#{admin.shop.banners.target.CATEGORY}">品类</option>
-                <option value="EXTERNAL" th:text="#{admin.shop.banners.target.EXTERNAL}">外部链接</option>
+            <select id="f-bannerTargetType" class="inp" name="targetType" data-show-switch>
+                <option th:each="t : ${ {'NONE','PRODUCT','CATEGORY','EXTERNAL'} }" th:value="${t}"
+                        th:selected="${tt == t}"
+                        th:text="#{'admin.shop.banners.target.' + ${t}}">不可点</option>
             </select>
-            <input id="f-bannerTargetValue" type="text" class="inp" style="margin-top:6px" maxlength="512"
-                   th:field="*{targetValue}" th:placeholder="#{admin.shop.banners.form.target.placeholder}"/>
-            <p class="hint" th:text="#{admin.shop.banners.form.target.hint}">商品填商品 token；品类填下方代码之一；外部链接只支持 https。</p>
-            <!-- 品类代码就是后端 ProductCategory 字面量（模板直出，不进文案：文案值里禁止出现枚举标识串）。 -->
-            <p class="hint s-mono">MAKANAN · OBAT_VITAMIN · CAMILAN · PERAWATAN</p>
         </div>
     </div>
+    <div class="s-form-row" data-show-when="targetType:PRODUCT" th:hidden="${tt != 'PRODUCT'}">
+        <label class="s-label s-req" for="f-bannerTargetProduct" th:text="#{admin.opsPopups.form.targetProduct}">商品 token</label>
+        <div class="s-ctl">
+            <input id="f-bannerTargetProduct" type="text" class="inp" name="targetValue" maxlength="32"
+                   th:value="${tt == 'PRODUCT'} ? ${form.targetValue} : ''" th:disabled="${tt != 'PRODUCT'}"/>
+            <p class="hint" th:text="#{admin.opsPopups.form.targetProductHint}">填商品的 token；商品须存在且在售。</p>
+        </div>
+    </div>
+    <div class="s-form-row" data-show-when="targetType:CATEGORY" th:hidden="${tt != 'CATEGORY'}">
+        <label class="s-label s-req" for="f-bannerTargetCategory" th:text="#{admin.opsPopups.form.targetCategory}">商品分类</label>
+        <div class="s-ctl">
+            <select id="f-bannerTargetCategory" class="inp" name="targetValue" th:disabled="${tt != 'CATEGORY'}">
+                <option th:each="c : ${categories}" th:value="${c}"
+                        th:selected="${tt == 'CATEGORY' and form.targetValue == c.name()}"
+                        th:text="#{'admin.v130.shopProducts.category.' + ${c}}">主粮</option>
+            </select>
+        </div>
+    </div>
+    <div class="s-form-row" data-show-when="targetType:EXTERNAL" th:hidden="${tt != 'EXTERNAL'}">
+        <label class="s-label s-req" for="f-bannerTargetExternal" th:text="#{admin.opsPopups.form.targetExternal}">外部链接</label>
+        <div class="s-ctl">
+            <input id="f-bannerTargetExternal" type="url" class="inp" name="targetValue" maxlength="512" placeholder="https://"
+                   th:value="${tt == 'EXTERNAL'} ? ${form.targetValue} : ''" th:disabled="${tt != 'EXTERNAL'}"/>
+            <p class="hint" th:text="#{admin.shop.banners.form.target.hint}">只支持 https。</p>
+        </div>
+    </div>
+    </th:block>
     <div class="sticky-footer">
         <button type="submit" class="btn btn-primary" disabled data-requires-target
                 th:text="${bannerId} == null ? #{admin.shop.banners.btn.add} : #{admin.common.save}">新增</button>

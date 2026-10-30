@@ -28,7 +28,7 @@ class PetSwitcher extends ConsumerWidget {
     return SingleChildScrollView(
       key: const ValueKey('petSwitcher'),
       scrollDirection: Axis.horizontal,
-      // 锁标向左下溢出 4，留出位置不被裁。
+      // 锁标向左溢出 4，左边留出位置不被裁；它向下只溢出 2，落在头像与名字之间的空隙里，碰不到滚动区底边。
       padding: const EdgeInsets.only(left: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -2,7 +2,9 @@ package com.tailtopia.shop.web;
 
 import com.tailtopia.shop.domain.ShopBanner;
 import com.tailtopia.shop.dto.ShopBannerView;
+import com.tailtopia.shop.domain.BannerTargetType;
 import com.tailtopia.shop.repository.ShopBannerRepository;
+import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.service.ShopImageUrlResolver;
 import java.util.Optional;
 import org.springframework.http.ResponseEntity;
@@ -24,10 +26,13 @@ public class ShopBannerController {
 
     private final ShopBannerRepository banners;
     private final ShopImageUrlResolver imageUrls;
+    private final ShopProductRepository products;
 
-    public ShopBannerController(ShopBannerRepository banners, ShopImageUrlResolver imageUrls) {
+    public ShopBannerController(ShopBannerRepository banners, ShopImageUrlResolver imageUrls,
+            ShopProductRepository products) {
         this.banners = banners;
         this.imageUrls = imageUrls;
+        this.products = products;
     }
 
     /**
@@ -56,7 +61,16 @@ public class ShopBannerController {
         if (url == null || url.isBlank()) {
             return ResponseEntity.noContent().build();
         }
+        // 🔴 商品是否在售只在后台保存 banner 时校验过一次；之后商品下架 / 删除，banner 不会跟着改。
+        //    这里每次下发前复查：不在售就按「不可点」下发，免得用户点进一个已下架的商品。
+        BannerTargetType type = b.getTargetType();
+        String value = b.getTargetValue();
+        if (type == BannerTargetType.PRODUCT
+                && (value == null || products.findByPublicTokenAndActiveTrue(value).isEmpty())) {
+            type = BannerTargetType.NONE;
+            value = null;
+        }
         return ResponseEntity.ok(new ShopBannerView(url, b.getImageW(), b.getImageH(), b.getPublicToken(),
-                b.getTargetType().name(), b.getTargetValue()));
+                type.name(), value));
     }
 }

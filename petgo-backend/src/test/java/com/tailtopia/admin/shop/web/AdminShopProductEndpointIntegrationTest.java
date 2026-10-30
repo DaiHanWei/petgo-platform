@@ -451,6 +451,32 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         assertThat(edit).as("编辑态要回填权重，否则一保存就把它冲成 0").contains("value=\"7\"");
         assertThat(edit).as("提交要打到 update 端点而不是 create").contains("/admin/shop/banners/" + id);
+
+        // V1.4.1：品类目标是下拉（枚举名只能选不能手填）；编辑态回填选中项，非当前类型的输入 disabled 不提交。
+        String catKey = "shop-banner/c" + SEQ.incrementAndGet() + ".jpg";
+        mvc.perform(post("/admin/shop/banners").with(authentication(editor)).with(csrf())
+                        .param("imageKey", catKey).param("sortWeight", "0")
+                        .param("targetType", "CATEGORY").param("targetValue", "CAMILAN"))
+                .andExpect(status().is3xxRedirection());
+        Long catId = jdbc.queryForObject(
+                "SELECT id FROM shop_banners WHERE image_key = ?", Long.class, catKey);
+        assertThat(create).as("新建态默认不可点：品类下拉在但 disabled")
+                .contains("value=\"MAKANAN\"")
+                .containsPattern("<select id=\"f-bannerTargetCategory\"[^>]*disabled");
+        String catEdit = mvc.perform(get("/admin/shop/banners").param("open", String.valueOf(catId))
+                        .header("HX-Request", "true").with(authentication(editor)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(catEdit).containsPattern("<option value=\"CAMILAN\"[^>]*selected");
+        assertThat(catEdit).containsPattern("<select id=\"f-bannerTargetCategory\"(?![^>]*disabled)");
+        assertThat(catEdit).containsPattern("<input id=\"f-bannerTargetProduct\"[^>]*disabled");
+
+        // 切回「不可点」：隐藏格 disabled 不提交 targetValue，库里目标值清空（CHECK：NONE ⇔ value IS NULL）。
+        mvc.perform(post("/admin/shop/banners/" + catId).with(authentication(editor)).with(csrf())
+                        .param("imageKey", catKey).param("sortWeight", "0").param("targetType", "NONE"))
+                .andExpect(status().is3xxRedirection());
+        assertThat(jdbc.queryForMap("SELECT target_type, target_value FROM shop_banners WHERE id = ?", catId))
+                .containsEntry("target_type", "NONE").containsEntry("target_value", null);
     }
 
     @Test

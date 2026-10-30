@@ -561,7 +561,8 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
         ),
         QrPayBottomBar(
           density: QrPayDensity.page,
-          onSave: !hasPayload
+          // 归零后到离开页面之间不让再存：那张图已付不了，图上却还写着「有效至 …」。
+          onSave: (!hasPayload || _remaining <= 0)
               ? null
               : () => saveQrPaymentImage(context,
                   payload: payload, amountIdr: _cashAmount, orderRef: _payRef, expiresAt: _deadline),
