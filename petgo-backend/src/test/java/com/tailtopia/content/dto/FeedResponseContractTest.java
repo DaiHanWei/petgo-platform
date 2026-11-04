@@ -97,7 +97,9 @@ class FeedResponseContractTest {
                 // V1.4.0 ① Story 3.1：作者等级三字段。
                 12, "GUARDIAN", "UPGRADED",
                 // V1.4.2 social-topic Story 1.3：关注流 reason。
-                "followed_user");
+                "followed_user",
+                // V1.4.2 social-topic Story 4.1：topicNames 空 → 省略（App 4.3 / 4.4 接入后再并入契约字段集）。
+                null);
 
         Map<String, Object> m = wire(item);
         assertThat(m).containsEntry("authorLevel", 12).containsEntry("authorTier", "GUARDIAN")
@@ -120,7 +122,8 @@ class FeedResponseContractTest {
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
                 null, null, false, 0L, null, null, null, null,
                 null, null, null, // Story 3.1：无等级
-                null); // V1.4.2 Story 1.3：非关注流出口无 reason
+                null, // V1.4.2 Story 1.3：非关注流出口无 reason
+                null); // V1.4.2 Story 4.1：无话题 → topicNames 省略
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -158,7 +161,8 @@ class FeedResponseContractTest {
                 null, null, // follow：authorToken / authorFollowState
                 Arrays.asList(0.0, null),
                 null, null, null,
-                null); // V1.4.2 Story 1.3：reason
+                null, // V1.4.2 Story 1.3：reason
+                null); // V1.4.2 Story 4.1：topicNames
 
         Map<String, Object> m = wire(item);
         assertThat(m.get("imageCropOffsets")).isEqualTo(Arrays.asList(0.0, null));

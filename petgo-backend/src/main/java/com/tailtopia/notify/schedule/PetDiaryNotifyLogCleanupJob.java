@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
  * 追更日提醒去重日志的每日清理（V1.4.2 social-topic · Story 1.2 · AC4.4 · D-5）：删除 {@code wib_date < 今天(WIB) − 30 天}
  * 的行。删宠 / 注销后的残留行（表不建 FK）也由这里带走。
  *
- * <p>⚠️ 架构 D-5 写「随按天浏览一起清理」，按天浏览表在 Story 4.1 才建 —— 本 story 先自建，4.1 可合并进同一任务。
+ * <p>⚠️ 架构 D-5 写「随按天浏览一起清理」；Story 4.1 已决定<b>不合并</b>（避免 content→notify 循环依赖），
+ * 与 {@code ContentViewDayCleanupJob} 各自每日清理。
  * 失败只记日志（异常类名），不重试；下一天自然补删。日期一律 {@link ScheduleWindow#WIB}（P-6）。
  */
 @Component

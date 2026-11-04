@@ -1,0 +1,647 @@
+{
+  "version": 1,
+  "note": "P-1 话题名规则共用样例（V1.4.2 social-topic Story 4.1 建，App Story 4.4 的 Dart 测试按相对路径读同一份）。ranges 为 effective 话题在 input 中的 [start, end)（UTF-16 下标，含 #），同一话题多次出现每处都列；topics/norms 为前 5 个不同话题（首次写法 / 标准名）。dartSkip=true 的条目只在 Java 断言（Dart 无 NFC / 特殊大小写映射）。",
+  "cases": [
+    {
+      "id": "basic",
+      "input": "#KucingLucu hari ini",
+      "topics": [
+        "KucingLucu"
+      ],
+      "norms": [
+        "kucinglucu"
+      ],
+      "ranges": [
+        [
+          0,
+          11
+        ]
+      ]
+    },
+    {
+      "id": "case_dup",
+      "input": "#KucingLucu dan #kucinglucu",
+      "topics": [
+        "KucingLucu"
+      ],
+      "norms": [
+        "kucinglucu"
+      ],
+      "ranges": [
+        [
+          0,
+          11
+        ],
+        [
+          16,
+          27
+        ]
+      ]
+    },
+    {
+      "id": "digits_only",
+      "input": "#2024 tahun baru",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "digit_one",
+      "input": "#1",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "punct_comma",
+      "input": "#kucing, lucu",
+      "topics": [
+        "kucing"
+      ],
+      "norms": [
+        "kucing"
+      ],
+      "ranges": [
+        [
+          0,
+          7
+        ]
+      ]
+    },
+    {
+      "id": "punct_mixed",
+      "input": "#anabul! #lucu? #kucing.",
+      "topics": [
+        "anabul",
+        "lucu",
+        "kucing"
+      ],
+      "norms": [
+        "anabul",
+        "lucu",
+        "kucing"
+      ],
+      "ranges": [
+        [
+          0,
+          7
+        ],
+        [
+          9,
+          14
+        ],
+        [
+          16,
+          23
+        ]
+      ]
+    },
+    {
+      "id": "len_1",
+      "input": "#a dan #b",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "len_2",
+      "input": "#ab",
+      "topics": [
+        "ab"
+      ],
+      "norms": [
+        "ab"
+      ],
+      "ranges": [
+        [
+          0,
+          3
+        ]
+      ]
+    },
+    {
+      "id": "len_30",
+      "input": "#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "topics": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "norms": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "ranges": [
+        [
+          0,
+          31
+        ]
+      ]
+    },
+    {
+      "id": "len_31",
+      "input": "#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "topics": [],
+      "norms": [],
+      "ranges": [],
+      "note": "超长整段不算、不截断"
+    },
+    {
+      "id": "latin_accent",
+      "input": "#Café enak",
+      "topics": [
+        "Café"
+      ],
+      "norms": [
+        "café"
+      ],
+      "ranges": [
+        [
+          0,
+          5
+        ]
+      ]
+    },
+    {
+      "id": "cjk",
+      "input": "#猫咪日常 今天",
+      "topics": [
+        "猫咪日常"
+      ],
+      "norms": [
+        "猫咪日常"
+      ],
+      "ranges": [
+        [
+          0,
+          5
+        ]
+      ]
+    },
+    {
+      "id": "devanagari_marks",
+      "input": "#बिल्ली प्यारी",
+      "topics": [
+        "बिल्ली"
+      ],
+      "norms": [
+        "बिल्ली"
+      ],
+      "ranges": [
+        [
+          0,
+          7
+        ]
+      ],
+      "note": "组合附标 \\p{M} 计入话题字符"
+    },
+    {
+      "id": "emoji_end",
+      "input": "#kucing😹 lucu",
+      "topics": [
+        "kucing"
+      ],
+      "norms": [
+        "kucing"
+      ],
+      "ranges": [
+        [
+          0,
+          7
+        ]
+      ]
+    },
+    {
+      "id": "emoji_only",
+      "input": "#😹",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "underscore",
+      "input": "#kucing_lucu #2024_",
+      "topics": [
+        "kucing_lucu",
+        "2024_"
+      ],
+      "norms": [
+        "kucing_lucu",
+        "2024_"
+      ],
+      "ranges": [
+        [
+          0,
+          12
+        ],
+        [
+          13,
+          19
+        ]
+      ]
+    },
+    {
+      "id": "alnum",
+      "input": "#cat2024",
+      "topics": [
+        "cat2024"
+      ],
+      "norms": [
+        "cat2024"
+      ],
+      "ranges": [
+        [
+          0,
+          8
+        ]
+      ]
+    },
+    {
+      "id": "six_limit",
+      "input": "#a1 #b2 #c3 #d4 #e5 #f6",
+      "topics": [
+        "a1",
+        "b2",
+        "c3",
+        "d4",
+        "e5"
+      ],
+      "norms": [
+        "a1",
+        "b2",
+        "c3",
+        "d4",
+        "e5"
+      ],
+      "ranges": [
+        [
+          0,
+          3
+        ],
+        [
+          4,
+          7
+        ],
+        [
+          8,
+          11
+        ],
+        [
+          12,
+          15
+        ],
+        [
+          16,
+          19
+        ]
+      ]
+    },
+    {
+      "id": "dup_no_quota",
+      "input": "#aa #AA #bb #cc #dd #ee #ff",
+      "topics": [
+        "aa",
+        "bb",
+        "cc",
+        "dd",
+        "ee"
+      ],
+      "norms": [
+        "aa",
+        "bb",
+        "cc",
+        "dd",
+        "ee"
+      ],
+      "ranges": [
+        [
+          0,
+          3
+        ],
+        [
+          4,
+          7
+        ],
+        [
+          8,
+          11
+        ],
+        [
+          12,
+          15
+        ],
+        [
+          16,
+          19
+        ],
+        [
+          20,
+          23
+        ]
+      ]
+    },
+    {
+      "id": "digits_no_quota",
+      "input": "#2024 #aa #bb #cc #dd #ee",
+      "topics": [
+        "aa",
+        "bb",
+        "cc",
+        "dd",
+        "ee"
+      ],
+      "norms": [
+        "aa",
+        "bb",
+        "cc",
+        "dd",
+        "ee"
+      ],
+      "ranges": [
+        [
+          6,
+          9
+        ],
+        [
+          10,
+          13
+        ],
+        [
+          14,
+          17
+        ],
+        [
+          18,
+          21
+        ],
+        [
+          22,
+          25
+        ]
+      ]
+    },
+    {
+      "id": "overflow_dup_stays_plain",
+      "input": "#a1 #b2 #c3 #d4 #e5 #f6 #F6",
+      "topics": [
+        "a1",
+        "b2",
+        "c3",
+        "d4",
+        "e5"
+      ],
+      "norms": [
+        "a1",
+        "b2",
+        "c3",
+        "d4",
+        "e5"
+      ],
+      "ranges": [
+        [
+          0,
+          3
+        ],
+        [
+          4,
+          7
+        ],
+        [
+          8,
+          11
+        ],
+        [
+          12,
+          15
+        ],
+        [
+          16,
+          19
+        ]
+      ],
+      "note": "第 6 个话题的重复出现同样是普通文字"
+    },
+    {
+      "id": "mid_word",
+      "input": "abc#def",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "paren",
+      "input": "(#kucing)",
+      "topics": [
+        "kucing"
+      ],
+      "norms": [
+        "kucing"
+      ],
+      "ranges": [
+        [
+          1,
+          8
+        ]
+      ]
+    },
+    {
+      "id": "double_hash",
+      "input": "##kucing",
+      "topics": [
+        "kucing"
+      ],
+      "norms": [
+        "kucing"
+      ],
+      "ranges": [
+        [
+          1,
+          8
+        ]
+      ]
+    },
+    {
+      "id": "glued_hash",
+      "input": "#kucing#lucu",
+      "topics": [
+        "kucing"
+      ],
+      "norms": [
+        "kucing"
+      ],
+      "ranges": [
+        [
+          0,
+          7
+        ]
+      ]
+    },
+    {
+      "id": "newline",
+      "input": "hari ini\n#Kucing",
+      "topics": [
+        "Kucing"
+      ],
+      "norms": [
+        "kucing"
+      ],
+      "ranges": [
+        [
+          9,
+          16
+        ]
+      ]
+    },
+    {
+      "id": "with_mention",
+      "input": "@Rara #kucing dan #lucu@budi",
+      "topics": [
+        "kucing",
+        "lucu"
+      ],
+      "norms": [
+        "kucing",
+        "lucu"
+      ],
+      "ranges": [
+        [
+          6,
+          13
+        ],
+        [
+          18,
+          23
+        ]
+      ]
+    },
+    {
+      "id": "fullwidth_hash",
+      "input": "＃kucing",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "hash_space",
+      "input": "# kucing",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "nfc_decomposed",
+      "input": "#Café",
+      "topics": [
+        "Café"
+      ],
+      "norms": [
+        "café"
+      ],
+      "ranges": [
+        [
+          0,
+          6
+        ]
+      ],
+      "dartSkip": true,
+      "note": "NFC 标准化；长度按 NFC 码点计（Dart 无内置 NFC）"
+    },
+    {
+      "id": "display_case",
+      "input": "#MyPet keren",
+      "topics": [
+        "MyPet"
+      ],
+      "norms": [
+        "mypet"
+      ],
+      "ranges": [
+        [
+          0,
+          6
+        ]
+      ]
+    },
+    {
+      "id": "no_topic",
+      "input": "hari ini cerah",
+      "topics": [],
+      "norms": [],
+      "ranges": []
+    },
+    {
+      "id": "url_anchor",
+      "input": "lihat https://a.co/#promo",
+      "topics": [
+        "promo"
+      ],
+      "norms": [
+        "promo"
+      ],
+      "ranges": [
+        [
+          19,
+          25
+        ]
+      ],
+      "note": "已知取舍：/ 后的 # 按规则成立"
+    },
+    {
+      "id": "underscore_only",
+      "input": "#__",
+      "topics": [
+        "__"
+      ],
+      "norms": [
+        "__"
+      ],
+      "ranges": [
+        [
+          0,
+          3
+        ]
+      ],
+      "note": "纯下划线按规则合法"
+    },
+    {
+      "id": "lowercase_grows_over_30",
+      "input": "#İaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "topics": [],
+      "norms": [],
+      "ranges": [],
+      "dartSkip": true,
+      "note": "U+0130 小写后变 2 码点，标准名 31 码点超长 → 整段不算"
+    },
+    {
+      "id": "astral_letters",
+      "input": "#𠀀𠀁猫 lucu",
+      "topics": [
+        "𠀀𠀁猫"
+      ],
+      "norms": [
+        "𠀀𠀁猫"
+      ],
+      "ranges": [
+        [
+          0,
+          6
+        ]
+      ],
+      "note": "BMP 之外的字母（CJK 扩展 B，UTF-16 代理对）：按码点判字母、按码点计长度（3 码点）；ranges 仍为 UTF-16 下标"
+    },
+    {
+      "id": "han_30",
+      "input": "#猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫 hari ini",
+      "topics": [
+        "猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫"
+      ],
+      "norms": [
+        "猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫"
+      ],
+      "ranges": [
+        [
+          0,
+          31
+        ]
+      ],
+      "note": "正好 30 个汉字：长度上界（含）"
+    }
+  ]
+}

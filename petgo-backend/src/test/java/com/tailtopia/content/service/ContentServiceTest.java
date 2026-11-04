@@ -84,7 +84,10 @@ class ContentServiceTest {
                 // V1.4.0 multi-pet Story 2.1：可写校验（默认 mock 放行；只读用例显式 doThrow）。
                 petWriteGuard,
                 // V1.4.0 multi-pet Story 3.1：归属 / 关联写入 / 关联只读口。
-                petResolver, contentPets, contentPetQuery);
+                petResolver, contentPets, contentPetQuery,
+                // V1.4.2 social-topic Story 4.1：话题写入 / 只读口（mock 默认无话题）。
+                org.mockito.Mockito.mock(com.tailtopia.topic.service.TopicService.class),
+                org.mockito.Mockito.mock(com.tailtopia.topic.service.TopicQueryService.class));
     }
 
     private final com.tailtopia.profile.service.PetWriteGuard petWriteGuard =

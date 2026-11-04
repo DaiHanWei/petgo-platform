@@ -53,7 +53,9 @@ class FeedPinnedFollowTest {
                 new com.tailtopia.mention.service.MentionViewService(mock(AccountQueryService.class), hide),
                 followReader,
                 // V1.4.2 social-topic Story 1.3：关注流首页追更计数（本类不验）。
-                org.mockito.Mockito.mock(com.tailtopia.social.read.PetFollowReader.class));
+                org.mockito.Mockito.mock(com.tailtopia.social.read.PetFollowReader.class),
+                // V1.4.2 social-topic Story 4.1：话题名批量口（mock 默认无话题）。
+                org.mockito.Mockito.mock(com.tailtopia.topic.service.TopicQueryService.class));
         ContentPin pin = ContentPin.ofContent(ContentPin.SLOT_HOME_FEED, 42L,
                 Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(pin, "id", 1L);

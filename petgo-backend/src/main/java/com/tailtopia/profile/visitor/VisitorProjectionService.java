@@ -156,12 +156,13 @@ public class VisitorProjectionService {
         List<GrowthMomentView> moments = contentService.findRecentGrowthMomentsByEventDate(
                 profile.getOwnerId(), profile.getId(), limit);
 
+        Map<Long, List<String>> topicNames = topicNamesOf(moments);
         List<VisitorTimelineItem> out = new ArrayList<>(moments.size());
         for (GrowthMomentView m : moments) {
             if (!includePrivate && !m.openableByVisitor()) {
                 continue;
             }
-            out.add(toVisitorItem(m));
+            out.add(toVisitorItem(m, topicNames.get(m.id())));
         }
         return out;
     }
@@ -174,7 +175,7 @@ public class VisitorProjectionService {
      * 类型恒为 {@code HAPPY_MOMENT}：访客侧<b>永远不产出</b> {@code HEALTH_RECORD}
      * （那是类④，整类剔除）。
      */
-    private static VisitorTimelineItem toVisitorItem(GrowthMomentView m) {
+    private static VisitorTimelineItem toVisitorItem(GrowthMomentView m, List<String> topicNames) {
         return new VisitorTimelineItem(
                 TimelineItemType.HAPPY_MOMENT,
                 m.createdAt(),
@@ -183,7 +184,22 @@ public class VisitorProjectionService {
                 strippedImages(m.imageUrls()),
                 m.text(),
                 null, null, null,
-                m.openableByVisitor());
+                m.openableByVisitor(),
+                // V1.4.2 social-topic Story 4.1（D-13）：私密 Diary 不写话题关联，天然为空；空表不下发。
+                (topicNames == null || topicNames.isEmpty()) ? null : topicNames);
+    }
+
+    /**
+     * 一批快乐时刻的话题标准名（V1.4.2 social-topic Story 4.1 · D-13）—— <b>一次批量</b>，经 {@code ContentService}
+     * 取（访客层不直接持有 topic 读口）。仅 ACTIVE / HIDDEN；无话题的帖不在 Map 里。
+     */
+    private Map<Long, List<String>> topicNamesOf(List<GrowthMomentView> moments) {
+        if (moments.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<String>> names = contentService.topicNamesOf(
+                moments.stream().map(GrowthMomentView::id).toList());
+        return names == null ? Map.of() : names;
     }
 
     /**
@@ -241,9 +257,10 @@ public class VisitorProjectionService {
     public List<VisitorTimelineItem> dayDetail(PetProfile profile, LocalDate date) {
         List<GrowthMomentView> moments = contentService.findPublishedGrowthMomentsOnDate(
                 profile.getOwnerId(), profile.getId(), date);
+        Map<Long, List<String>> topicNames = topicNamesOf(moments);
         List<VisitorTimelineItem> out = new ArrayList<>(moments.size());
         for (GrowthMomentView m : moments) {
-            out.add(toVisitorItem(m));
+            out.add(toVisitorItem(m, topicNames.get(m.id())));
         }
         return out;
     }

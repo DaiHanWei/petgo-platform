@@ -84,7 +84,9 @@ public class FeedService {
             FeedRecommendationService recommendations,
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.social.read.FollowReader followReader,
-            com.tailtopia.social.read.PetFollowReader petFollowReader) {
+            com.tailtopia.social.read.PetFollowReader petFollowReader,
+            com.tailtopia.topic.service.TopicQueryService topicQuery) {
+        this.topicQuery = topicQuery;
         this.mentionViews = mentionViews;
         this.followReader = followReader;
         this.petFollowReader = petFollowReader;
@@ -106,6 +108,14 @@ public class FeedService {
 
     /** V1.4.2 social-topic Story 1.3：关注流首页的 {@code followingPetCount}（只读端口，同上模块边界）。 */
     private final com.tailtopia.social.read.PetFollowReader petFollowReader;
+
+    /** V1.4.2 social-topic Story 4.1（D-13）：卡片 {@code topicNames}，<b>整页一次批量</b>（同 @ / 装饰标签）。 */
+    private final com.tailtopia.topic.service.TopicQueryService topicQuery;
+
+    /** 一页内容各自的话题标准名（整页一次；空页不发查询）。 */
+    private Map<Long, List<String>> topicNamesFor(List<ContentPost> page) {
+        return topicQuery.topicNamesFor(page.stream().map(ContentPost::getId).toList());
+    }
 
     /**
      * 一页作者的 token 与关注关系（V1.3.4 follow Story 2.1 · AD-6 / AD-16）—— <b>整页各一次查询</b>。
@@ -417,6 +427,8 @@ public class FeedService {
         var mentions = mentionsFor(page, viewerId);
         // V1.3.4 follow Story 2.1：作者 token 与关注关系，整页各一次（推荐序与时间倒序共用这一处）。
         AuthorFollow follow = authorFollow(page, viewerId);
+        // V1.4.2 social-topic Story 4.1：话题名整页一次（推荐序 / 分类 Tab / 关注流 / 4.2 话题页共用这一处）。
+        Map<Long, List<String>> topicNames = topicNamesFor(page);
 
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
@@ -427,7 +439,8 @@ public class FeedService {
                         com.tailtopia.mention.service.MentionViewService.pick(
                                 p.getMentionedUserIds(), mentions),
                         follow.tokens().get(p.getAuthorId()),
-                        follow.stateOf(p.getAuthorId())))
+                        follow.stateOf(p.getAuthorId()),
+                        topicNames.get(p.getId())))
                 .toList();
         return new FeedPageResponse(items, nextCursor, hasMore, rankMode);
     }
@@ -494,7 +507,7 @@ public class FeedService {
                 decorationTags(one).get(post.getId()),
                 com.tailtopia.mention.service.MentionViewService.pick(
                         post.getMentionedUserIds(), mentionsFor(one, viewerId)),
-                token, followState);
+                token, followState, topicNamesFor(one).get(post.getId()));
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
@@ -557,6 +570,7 @@ public class FeedService {
         Set<Long> liked = likedIds(page, viewerId);
         Map<Long, Long> commentCounts = commentCounts(page, viewerId);
         var mentions = mentionsFor(page, viewerId);
+        Map<Long, List<String>> topicNames = topicNamesFor(page); // V1.4.2 Story 4.1
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
@@ -567,7 +581,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null))
+                        null, null, topicNames.get(p.getId())))
                 .toList();
 
         String nextCursor = null;
@@ -607,6 +621,7 @@ public class FeedService {
         // ⚠️「我的发布」**不是** FR-75 列的三处展示位之一，故不查装饰标签 ——
         // 为一个不展示它的页面多发一次查询没有意义。真要展示时把这里换成 decorationTags(page) 即可。
         var mentions = mentionsFor(page, userId);
+        Map<Long, List<String>> topicNames = topicNamesFor(page); // V1.4.2 Story 4.1
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
@@ -617,7 +632,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null))
+                        null, null, topicNames.get(p.getId())))
                 .toList();
 
         String nextCursor = null;

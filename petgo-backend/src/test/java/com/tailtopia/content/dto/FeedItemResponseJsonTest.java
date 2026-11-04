@@ -39,7 +39,7 @@ class FeedItemResponseJsonTest {
         }
         AuthorView author = new AuthorView(7L, "u7", null, false, List.of());
         return FeedItemResponse.of(p, author, 0L, false, 0L, null, null, "t".repeat(32),
-                com.tailtopia.social.read.FollowState.NONE);
+                com.tailtopia.social.read.FollowState.NONE, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -78,7 +78,9 @@ class FeedItemResponseJsonTest {
     void reasonIsTheLastRecordComponent() {
         // 末尾追加，不打乱既有字段顺序。
         var comps = FeedItemResponse.class.getRecordComponents();
-        assertThat(comps[comps.length - 1].getName()).isEqualTo("reason");
-        assertThat(comps[comps.length - 2].getName()).isEqualTo("authorFrame");
+        // V1.4.2 Story 4.1：topicNames 追加在 reason 之后（仍是末尾追加）。
+        assertThat(comps[comps.length - 1].getName()).isEqualTo("topicNames");
+        assertThat(comps[comps.length - 2].getName()).isEqualTo("reason");
+        assertThat(comps[comps.length - 3].getName()).isEqualTo("authorFrame");
     }
 }

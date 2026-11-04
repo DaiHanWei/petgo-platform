@@ -71,7 +71,9 @@ class ContentDetailAndCommentContractTest {
                         List.of(new com.tailtopia.gift.web.dto.GiftWallItemView("Cake", "Kue", "https://cdn/c.png",
                                 50_000L, 1L)))),
                 // V1.4.0 ④ Story 2.1：是否已收藏（恒下发）+ 作者视角收藏数（非作者为 null → 省略，见下一例）。
-                true, 2L);
+                true, 2L,
+                // V1.4.2 social-topic Story 4.1：topicNames 空 → 省略（App 4.3 / 4.4 接入后再并入契约字段集）。
+                null);
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
@@ -106,7 +108,7 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null, null, null, null, null, null, null, null, null, false, null);
+                null, null, null, null, null, null, null, null, null, null, false, null, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
         // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略。
         assertThat(wire(d)).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
@@ -137,7 +139,7 @@ class ContentDetailAndCommentContractTest {
                 // V1.4.0 gift Story 2.1：礼物区不在本例关注范围（null → 省略）。
                 null,
                 // V1.4.0 ④ Story 2.1：收藏态不在本例关注范围。
-                false, null);
+                false, null, null);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> pets = (List<Map<String, Object>>) wire(d).get("pets");
         assertThat(pets).hasSize(2);
