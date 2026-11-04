@@ -11,6 +11,7 @@ import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/presentation/content_detail_page.dart';
 import 'package:tailtopia/features/gift/domain/gift_showcase.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_scope.dart';
@@ -27,7 +28,7 @@ void main() {
     const visitor = VisitorProfile(name: 'Mochi', petType: 'CAT', ownerNickname: 'Rina');
 
     Future<void> pump(WidgetTester tester, ArchiveScope scope,
-        {required FutureOr<PetProfile?> Function() mine}) async {
+        {required FutureOr<PetProfile?> Function() mine, Future<List<PetListItem>> Function()? myPets}) async {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           authControllerProvider.overrideWith(() => _Auth()),
@@ -36,6 +37,8 @@ void main() {
               happyMomentCount: 1, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
           visitorTimelineProvider(scope).overrideWith((ref) async => const TimelinePage(items: [])),
           petProfileProvider.overrideWith((ref) => mine()),
+          // V1.4.2 social-topic 1.4 复审：「自己的宠物」同时比对我名下全部宠物（多宠）。
+          petListProvider.overrideWith((ref) => myPets?.call() ?? Future.value(const <PetListItem>[])),
         ],
         child: MaterialApp(
           locale: const Locale('id'),
@@ -46,6 +49,8 @@ void main() {
       ));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
+      // petListProvider 在档案就绪的分支里才首次被 watch → 再给一帧让它落值。
+      await tester.pump();
     }
 
     PetProfile pet(int id) => PetProfile(id: id, name: 'Mine', cardToken: 'ct');
@@ -71,6 +76,20 @@ void main() {
     testWidgets('petProfileProvider 加载中 → 不显示（防自己的宠物闪现）', (tester) async {
       final never = Completer<PetProfile?>();
       await pump(tester, const ArchiveScope.inAppVisitor(42), mine: () => never.future);
+      expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
+      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+    });
+
+    testWidgets('多宠：我名下另一只宠物（当前宠物不是它）→ 不显示', (tester) async {
+      await pump(tester, const ArchiveScope.inAppVisitor(42),
+          mine: () async => pet(7),
+          myPets: () async => const [PetListItem(id: 7, name: 'A'), PetListItem(id: 42, name: 'B')]);
+      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+    });
+
+    testWidgets('petListProvider 加载中 → 不显示', (tester) async {
+      final never = Completer<List<PetListItem>>();
+      await pump(tester, const ArchiveScope.inAppVisitor(42), mine: () async => pet(7), myPets: () => never.future);
       expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
     });

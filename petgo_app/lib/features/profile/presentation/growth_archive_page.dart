@@ -551,6 +551,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             healthRecordCount: stats?.healthRecordCount,
             // 未庆祝角标（V1.3.0 Story 1.5）：搭 stats 这一次请求，不为它多发一次。
             milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
+            // V1.4.2 social-topic Story 1.4 · A4：第 4 格追更人数（只显示人数、无按钮、不可点）；缺字段 → 3 格。
+            followerCount: stats?.followerCount,
             showTitleRow: widget.switcher == null,
             titleAction: widget.switcher == null ? _shareButton() : null,
             // 「只看 Diary」开关放宠物卡右上空白处（2026-10-06 产品）。

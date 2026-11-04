@@ -8,6 +8,8 @@ class ArchiveStats {
     this.healthRecordCount = 0,
     this.milestoneUncelebrated = 0,
     this.giftTotalValue = 0,
+    this.followerCount,
+    this.followEpoch = 0,
   });
 
   final int happyMomentCount;
@@ -35,6 +37,27 @@ class ArchiveStats {
   /// 主人与访客同一数值；缺键（老后端）按 0。⚠️ [consultCount] 保留（`/card/preview` 旧页还在读）。
   final int giftTotalValue;
 
+  /// 追更这只宠物的人数（V1.4.2 social-topic · Story 1.1 / 1.4 · D-8）：统计条第 4 格「N Pengikut」。
+  /// 🔴 **缺键 = null**（不给 0）：旧后端 / 游客示例页据此维持 3 格，不误显「0 Pengikut」。
+  final int? followerCount;
+
+  /// 发请求前读到的追更全局版本号（V1.4.2 1.4 复审）：本会话里比它新的追更覆盖才盖过 [followerCount]。
+  /// **客户端字段**，不来自 JSON（缺省 0）。
+  final int followEpoch;
+
+  /// 记上快照版本号（由 `visitorStatsProvider` 在取数前读、取数后贴）。
+  ArchiveStats withFollowEpoch(int epoch) => ArchiveStats(
+        happyMomentCount: happyMomentCount,
+        consultCount: consultCount,
+        milestoneCompleted: milestoneCompleted,
+        milestoneTotal: milestoneTotal,
+        healthRecordCount: healthRecordCount,
+        milestoneUncelebrated: milestoneUncelebrated,
+        giftTotalValue: giftTotalValue,
+        followerCount: followerCount,
+        followEpoch: epoch,
+      );
+
   factory ArchiveStats.fromJson(Map<String, dynamic> json) => ArchiveStats(
         happyMomentCount: (json['happyMomentCount'] ?? 0) as int,
         consultCount: (json['consultCount'] ?? 0) as int,
@@ -43,5 +66,6 @@ class ArchiveStats {
         healthRecordCount: (json['healthRecordCount'] ?? 0) as int,
         milestoneUncelebrated: (json['milestoneUncelebrated'] ?? 0) as int,
         giftTotalValue: (json['giftTotalValue'] as num?)?.toInt() ?? 0,
+        followerCount: (json['followerCount'] as num?)?.toInt(),
       );
 }

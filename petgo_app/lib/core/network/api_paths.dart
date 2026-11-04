@@ -411,6 +411,10 @@ class ApiPaths {
   /// 关注头像排：`GET /me/following-strip`，最多 20 人。
   static const String meFollowingStrip = '$base/me/following-strip';
 
+  /// 追更宠物（V1.4.2 social-topic · Story 1.1 / 1.4 · D-8）：`POST` 追更、`DELETE` 取消，两者幂等，需登录。
+  /// `petId` 与站内访客路由 `/pets/{petId}` 同一标识。返回 `{iFollow, followerCount}`。
+  static String mePetFollow(int petId) => '$base/me/pet-follows/$petId';
+
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
   static String userPublicPosts(int userId) => '$base/users/$userId/posts';

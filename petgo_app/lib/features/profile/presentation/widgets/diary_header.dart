@@ -49,7 +49,20 @@ class DiaryHeader extends StatelessWidget {
     this.avatarKey,
     this.belowTitle,
     this.showTitleRow = true,
+    this.leading,
+    this.followerCount,
+    this.infoCardBottom,
   });
+
+  /// 标题行最前的控件（V1.4.2 social-topic · Story 1.4 · AC3：访客页把返回键并进标题行）。
+  /// 主人 Diary Tab 不传 → 零影响。
+  final Widget? leading;
+
+  /// 统计条第 4 格追更人数，原样透传 [PetInfoCard.followerCount]。null → 3 格（改动前外观）。
+  final int? followerCount;
+
+  /// 信息卡内统计条下方的整宽动作（访客页追更按钮），原样透传 [PetInfoCard.bottomAction]。
+  final Widget? infoCardBottom;
 
   /// 是否画「Diary {name}」标题行（含右侧分享 / 编辑按钮）。
   ///
@@ -133,6 +146,7 @@ class DiaryHeader extends StatelessWidget {
         if (showTitleRow)
           Row(
             children: [
+              ?leading,
               Expanded(
                 child: Text(l10n.growthArchivePassportTitle(profile.name),
                     maxLines: 1,
@@ -166,6 +180,8 @@ class DiaryHeader extends StatelessWidget {
           milestoneCount: milestoneCompleted,
           topRight: petCardAction,
           avatarKey: avatarKey,
+          followerCount: followerCount,
+          bottomAction: infoCardBottom,
         ),
         // 🛡 入口网格（健康记录 / 身份证）整块移除，不是「留个锁」——
         // 健康记录不对访客开放；身份证入口跳的是当前登录用户自己的卡，点进去必然出错。

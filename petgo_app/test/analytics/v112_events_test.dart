@@ -470,6 +470,11 @@ void main() {
         // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
         '_followed',
         '_unfollowed',
+        // 追更宠物 / 取消追更（V1.4.2 social-topic · Story 1.4 · PRD §4 定死 `pet_follow` / `pet_unfollow`）：
+        // **服务端确认成功后**才报（失败、游客拦截不报），描述结果而非点击。`pet_unfollow` 不以 `_follow` 结尾，
+        // 两个都要登记。⚠️ 只放这两个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_set` / `_paid` 先例）。
+        '_follow',
+        '_unfollow',
         // 收藏 / 取消收藏（V1.4.0 ④ push-collect · P-8，PRD §4 定死 `content_collected` 等四个名字）：过去式，
         // **服务端确认成功后**才报。`*_uncollected` 不以 `_collected` 结尾，两个都要登记。扩表、不改名。
         '_collected',
@@ -501,6 +506,12 @@ void main() {
         expect(allowedSuffixes.any(e.endsWith), isTrue,
             reason: '$e 的动作词不明确（动作要落在词尾，如 _tapped / _viewed）');
       }
+    });
+
+    /// V1.4.2 social-topic Story 1.4（复审）：`pet_follow` / `pet_unfollow` 必须是守卫正则扫得到的字面量
+    /// （写成三元式 `capture(c ? 'a' : 'b')` 时一个都提取不到，命名守卫等于没守）。
+    test('V1.4.2 追更埋点 pet_follow / pet_unfollow 被守卫提取到', () {
+      expect(eventNamesInSource(), containsAll(<String>['pet_follow', 'pet_unfollow']));
     });
 
     test('本版本清单 T-1~T-12 的事件在源码里确实存在（声明与实现不许脱节）', () {

@@ -169,50 +169,16 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
     }
   }
 
-  /// UI 稿 `.fbtn`（列表行）：高 30、圆角 8、12 号字、最小宽 88。
-  Widget _listCompact(String label, {required bool following}) {
-    final filled = widget.filledIdle && !following;
-    final h = filled ? 36.0 : 30.0;
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(filled ? 18 : 8));
-    final text = Text(label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: filled ? 13 : 12, fontWeight: filled ? FontWeight.w700 : FontWeight.w600));
-    final constraints = BoxConstraints(minWidth: filled ? 78 : 88, minHeight: h, maxHeight: h);
-    return ConstrainedBox(
-      key: ValueKey('followList_$_surfaceKey'),
-      constraints: constraints,
-      child: following
-          ? OutlinedButton(
-              onPressed: _onTap,
-              style: OutlinedButton.styleFrom(
-                backgroundColor: AppColors.surface,
-                foregroundColor: AppColors.ink2,
-                side: const BorderSide(color: AppColors.line, width: 1.5),
-                shape: shape,
-                minimumSize: const Size(88, 30),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: text,
-            )
-          : FilledButton(
-              onPressed: _onTap,
-              style: FilledButton.styleFrom(
-                backgroundColor: filled ? AppColors.mint : (widget.idleBackground ?? AppColors.violet100),
-                foregroundColor: filled ? Colors.white : AppColors.mint,
-                side: widget.idleBorderColor == null
-                    ? null
-                    : BorderSide(color: widget.idleBorderColor!, width: 1.5),
-                shape: shape,
-                minimumSize: Size(filled ? 78 : 88, h),
-                padding: EdgeInsets.symmetric(horizontal: filled ? 16 : 12),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: text,
-            ),
-    );
-  }
+  /// UI 稿 `.fbtn`（列表行）：高 30、圆角 8、12 号字、最小宽 88。外观见 [followListCompactButton]。
+  Widget _listCompact(String label, {required bool following}) => followListCompactButton(
+        key: ValueKey('followList_$_surfaceKey'),
+        label: label,
+        following: following,
+        onPressed: _onTap,
+        filledIdle: widget.filledIdle,
+        idleBackground: widget.idleBackground,
+        idleBorderColor: widget.idleBorderColor,
+      );
 
   /// UI 稿 `.fc-btn .fbtn`：「+ Ikuti」紫 13 / w600（「+」w700、间隔 3，T-16 前缀单独渲染）；
   /// 「Mengikuti」muted w500、无「+」。无底色无边框；可点区域宽 ≥ 44、高 32，视觉尺寸不变。
@@ -258,45 +224,12 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
     );
   }
 
-  Widget _profileFull(String label, bool following) {
-    final text = Text(
-      label,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-    );
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
-    const size = Size.fromHeight(40);
-    return SizedBox(
-      key: const ValueKey('followButton'),
-      width: double.infinity,
-      height: 40,
-      child: following
-          ? OutlinedButton(
-              onPressed: _onTap,
-              style: OutlinedButton.styleFrom(
-                backgroundColor: AppColors.surface,
-                foregroundColor: AppColors.ink,
-                side: const BorderSide(color: AppColors.line, width: 1.5),
-                shape: shape,
-                minimumSize: size,
-                padding: EdgeInsets.zero,
-              ),
-              child: text,
-            )
-          : FilledButton(
-              onPressed: _onTap,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.mint,
-                foregroundColor: Colors.white,
-                shape: shape,
-                minimumSize: size,
-                padding: EdgeInsets.zero,
-              ),
-              child: text,
-            ),
-    );
-  }
+  Widget _profileFull(String label, bool following) => followProfileFullButton(
+        key: const ValueKey('followButton'),
+        label: label,
+        following: following,
+        onPressed: _onTap,
+      );
 
   Future<void> _onTap() async {
     if (_inFlight) return;
@@ -357,4 +290,108 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
       _inFlight = false;
     }
   }
+}
+
+// ===== 外观（V1.4.2 social-topic Story 1.4 · T2）=====
+//
+// 用户关注按钮与宠物追更按钮（`PetFollowButton`）**共用这两套外观**，保证像素一致。
+// ⚠️ 只抽外观；点击逻辑各自一份（覆盖表键 / 接口 / 埋点都不同）。
+
+/// 主页整宽主按钮（UI 稿 `.wbtn` / `.wbtn.ghost2`）：整宽 × 40、圆角 12、14 / w700；
+/// 未关注 `mint` 实心白字，已关注 `surface` 底 + 1.5 `line` 灰框 + `ink` 字。
+Widget followProfileFullButton({
+  Key? key,
+  required String label,
+  required bool following,
+  required VoidCallback? onPressed,
+}) {
+  final text = Text(
+    label,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+  );
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+  const size = Size.fromHeight(40);
+  return SizedBox(
+    key: key,
+    width: double.infinity,
+    height: 40,
+    child: following
+        ? OutlinedButton(
+            onPressed: onPressed,
+            style: OutlinedButton.styleFrom(
+              backgroundColor: AppColors.surface,
+              foregroundColor: AppColors.ink,
+              side: const BorderSide(color: AppColors.line, width: 1.5),
+              shape: shape,
+              minimumSize: size,
+              padding: EdgeInsets.zero,
+            ),
+            child: text,
+          )
+        : FilledButton(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.mint,
+              foregroundColor: Colors.white,
+              shape: shape,
+              minimumSize: size,
+              padding: EdgeInsets.zero,
+            ),
+            child: text,
+          ),
+  );
+}
+
+/// 列表行小按钮（UI 稿 `.fbtn`）：高 30、圆角 8、12 号字、最小宽 88；
+/// [filledIdle] 时未关注态为实心品牌紫胶囊（高 36、圆角 18、白字 w700）。
+Widget followListCompactButton({
+  Key? key,
+  required String label,
+  required bool following,
+  required VoidCallback? onPressed,
+  bool filledIdle = false,
+  Color? idleBackground,
+  Color? idleBorderColor,
+}) {
+  final filled = filledIdle && !following;
+  final h = filled ? 36.0 : 30.0;
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(filled ? 18 : 8));
+  final text = Text(label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: filled ? 13 : 12, fontWeight: filled ? FontWeight.w700 : FontWeight.w600));
+  final constraints = BoxConstraints(minWidth: filled ? 78 : 88, minHeight: h, maxHeight: h);
+  return ConstrainedBox(
+    key: key,
+    constraints: constraints,
+    child: following
+        ? OutlinedButton(
+            onPressed: onPressed,
+            style: OutlinedButton.styleFrom(
+              backgroundColor: AppColors.surface,
+              foregroundColor: AppColors.ink2,
+              side: const BorderSide(color: AppColors.line, width: 1.5),
+              shape: shape,
+              minimumSize: const Size(88, 30),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: text,
+          )
+        : FilledButton(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: filled ? AppColors.mint : (idleBackground ?? AppColors.violet100),
+              foregroundColor: filled ? Colors.white : AppColors.mint,
+              side: idleBorderColor == null ? null : BorderSide(color: idleBorderColor, width: 1.5),
+              shape: shape,
+              minimumSize: Size(filled ? 78 : 88, h),
+              padding: EdgeInsets.symmetric(horizontal: filled ? 16 : 12),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: text,
+          ),
+  );
 }

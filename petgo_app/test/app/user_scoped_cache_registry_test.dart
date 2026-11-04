@@ -34,6 +34,8 @@ const _mustReset = <String>[
   'pushSettingsProvider',
   'collectedPostsProvider',
   'collectedPlacesProvider',
+  // V1.4.2 social-topic Story 1.4：追更覆盖表（换账号不清 = B 看到 A 的追更态）
+  'petFollowStateProvider',
 ];
 
 void main() {

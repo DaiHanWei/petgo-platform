@@ -7,12 +7,18 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/empty_state.dart';
+import '../../social/domain/pet_follow_state.dart';
+import '../../social/presentation/widgets/pet_follow_button.dart';
 import '../../gift/presentation/gift_page.dart';
 import '../../gift/presentation/widgets/gift_entry.dart';
+import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/archive_scope.dart';
+import '../domain/archive_stats.dart';
 import '../domain/timeline_item.dart';
+import '../domain/visitor_profile.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/timeline_item_tile.dart';
 
@@ -97,19 +103,24 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
       body: SafeArea(
         child: profileAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          // 失效（token 不存在 / 档案已删 / 主人注销或被封）走同一条 —— 服务端不区分，这里也不猜。
-          error: (_, _) => _Gone(key: const ValueKey('visitorGone'), l10n: l10n),
+          // V1.4.2 social-topic Story 1.4 · AC4 / AC5：失效分两屏 —— 服务端明确「不存在」→ A14（无按钮）；
+          // 没拿到明确结论（断网 / 超时 / 5xx）→ A15（可重试）。分类在数据层（[VisitorLoadError]）。
+          // 🛡 A14 内部不再细分：宠物已删 / 主人注销或被封 / 拉黑 / 链接失效走同一屏 —— 服务端不区分，这里也不猜。
+          error: (e, _) => e is VisitorLoadError && e.kind == VisitorLoadErrorKind.gone
+              ? _VisitorUnavailable(key: const ValueKey('visitorGone'), l10n: l10n, gone: true)
+              : _VisitorUnavailable(
+                  key: const ValueKey('visitorLoadFailed'), l10n: l10n, gone: false, onRetry: _retry),
           data: (profile) => ListView(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 40),
             children: [
-              _backRow(context),
-              // AC4：**站内入口不渲染来源横幅** —— 从别人主页点宠物卡进来时，
-              // 「谁分享的」这个前提根本不成立（B1-D1 / AD-4 Rule 5）。
-              // 从分享链接进来时照旧显示。
-              if (!widget.scope.isInApp) _banner(l10n, profile.ownerNickname),
-              const SizedBox(height: 12),
+              // V1.4.2 social-topic Story 1.4 · AC3：返回键并进标题行（一行 44 高，原先返回行 40 + 间隔 12 + 标题行）。
               DiaryHeader(
                 profile: profile.header,
+                leading: const _VisitorBackButton(),
+                // AC4：**站内入口不渲染来源横幅** —— 从别人主页点宠物卡进来时，
+                // 「谁分享的」这个前提根本不成立（B1-D1 / AD-4 Rule 5）。
+                // 从分享链接进来时照旧显示，位置在合并后的标题行**之下**（1.4 · AC3.3）。
+                belowTitle: _hasBanner(profile.ownerNickname) ? _banner(l10n, profile.ownerNickname!) : null,
                 // 🛡 只读：编辑铅笔与入口网格两张卡整块不渲染。
                 readOnly: true,
                 // 分享按钮不传（访客不得二次转发）。V1.4.0 gift Story 1.3 · A1：标题行右侧放送礼胶囊
@@ -124,6 +135,9 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
                 milestoneCompleted: stats?.milestoneCompleted,
                 milestoneTotal: stats?.milestoneTotal,
                 // 里程碑进度条只展示，不跳转（跳的是当前登录用户自己的里程碑页）。
+                // V1.4.2 social-topic Story 1.4 · AC2：第 4 格追更人数（缺字段 → 3 格）；站内他人宠物带追更按钮。
+                followerCount: _followerCount(stats),
+                infoCardBottom: _followButton(profile, stats),
               ),
               // ⚠️ **访客态不做日历屏**，只保留时间线 —— 因此这里没有「时间线 / 日历」切换行。
               // 只有一种视图时给个切换器是噪音。
@@ -149,11 +163,8 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
   /// - 自己的宠物不显示；`petProfileProvider` 加载中 / 失败时**也不显示**（防自己的宠物闪现一下送礼按钮）。
   /// - 只在档案加载成功的分支里调（失效页不去读当前用户的宠物档案）。
   Widget? _giftPill() {
-    final petId = widget.scope.petId;
-    if (!widget.scope.isInApp || petId == null) return null;
-    final mine = ref.watch(petProfileProvider);
-    if (!mine.hasValue || mine.isLoading || mine.hasError) return null;
-    if (mine.value?.id == petId) return null;
+    final petId = _othersInAppPetId();
+    if (petId == null) return null;
     return GiftSendPill(
       petId: petId,
       flightTargetKey: _avatarKey,
@@ -164,6 +175,62 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
     );
   }
 
+  /// 站内入口、且确定**不是自己的**宠物 → 返回 petId；否则 null（送礼胶囊与追更按钮同一判定）。
+  ///
+  /// 「自己的」= 当前宠物档案（`petProfileProvider`）**或**我名下全部宠物（`petListProvider`，多宠用户看自己
+  /// 另一只宠物时当前宠物对不上 —— 1.4 复审）。任一加载中 / 失败也返回 null（防自己的宠物闪现一下按钮）。
+  int? _othersInAppPetId() {
+    final petId = widget.scope.petId;
+    if (!widget.scope.isInApp || petId == null) return null;
+    final mine = ref.watch(petProfileProvider);
+    if (!mine.hasValue || mine.isLoading || mine.hasError) return null;
+    if (mine.value?.id == petId) return null;
+    final myPets = ref.watch(petListProvider);
+    if (!myPets.hasValue || myPets.isLoading || myPets.hasError) return null;
+    if (myPets.value!.any((p) => p.id == petId)) return null;
+    return petId;
+  }
+
+  /// 统计条第 4 格人数（V1.4.2 social-topic Story 1.4 · AC2.4）：stats 没有该字段（旧后端）→ null = 3 格；
+  /// 否则本次会话里改过的追更覆盖优先（乐观 ±1 / 成功写回），保证与按钮同步。
+  int? _followerCount(ArchiveStats? stats) {
+    final server = stats?.followerCount;
+    final petId = widget.scope.petId;
+    if (server == null || petId == null) return server;
+    // 覆盖只在比这份 stats 快照新时生效（1.4 复审：重取到的服务端人数要能接管）。
+    return resolvePetFollowerCount(ref.watch(petFollowStateProvider)[petId], server,
+        snapshotEpoch: stats!.followEpoch);
+  }
+
+  /// A1 / A2 追更按钮（V1.4.2 social-topic Story 1.4 · AC1）：只站内他人宠物（同 [_giftPill] 判定）；
+  /// 分享 token 落地态、自己的宠物不显示。
+  Widget? _followButton(VisitorProfile profile, ArchiveStats? stats) {
+    final petId = _othersInAppPetId();
+    if (petId == null) return null;
+    return PetFollowButton(
+      petId: petId,
+      initialFollow: profile.iFollow ?? false,
+      serverFollowerCount: stats?.followerCount,
+      followSnapshotEpoch: profile.followEpoch,
+      countSnapshotEpoch: stats?.followEpoch ?? 0,
+      ownerToken: profile.ownerToken,
+      iFollowOwner: profile.iFollowOwner,
+      style: PetFollowButtonStyle.profileFull,
+      source: 'pet_visitor',
+      // 接口回 404（宠物 / 主人刚失效）→ 重取档案，落 A14。
+      onNotFound: () {
+        if (mounted) ref.invalidate(visitorProfileProvider(widget.scope));
+      },
+    );
+  }
+
+  /// A15「Coba lagi」：三个 provider 一起重取，回到居中转圈。
+  void _retry() {
+    ref.invalidate(visitorProfileProvider(widget.scope));
+    ref.invalidate(visitorStatsProvider(widget.scope));
+    ref.invalidate(visitorTimelineProvider(widget.scope));
+  }
+
   /// 礼物格点击（V1.4.0 gift Story 2.2 · AC2.4 / AC2.6）：站内入口 → 该宠物礼物页（E1）；分享 token 态 null。
   VoidCallback? _openGifts() {
     final petId = widget.scope.petId;
@@ -171,34 +238,13 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
     return () => context.push(GiftPage.routeFor(petId));
   }
 
-  /// 返回（UI 稿 P1 的 `.ro-titlerow` 左侧箭头）。
-  ///
-  /// 🔴 **这是访客回到 App 的唯一可见出口**：访客视图在 Tab 之外，没有底部导航。
-  /// 缺了它，从 WhatsApp 点链接进来的人就落进一条死路 ——
-  /// 而这条链路的全部意义正是把人**引进** App（2026-08-18 L2 实测补）。
-  ///
-  /// 栈里没有上一页时（例如深链直达）回落到首页，而不是让返回变成空操作。
-  Widget _backRow(BuildContext context) => Align(
-        alignment: Alignment.centerLeft,
-        child: IconButton(
-          key: const ValueKey('visitorBackButton'),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-        ),
-      );
+  /// 只有分享链接落地态、且查得到昵称才显示来源横幅。
+  bool _hasBanner(String? ownerNickname) =>
+      !widget.scope.isInApp && ownerNickname != null && ownerNickname.isNotEmpty;
 
   /// 顶部来源横幅：「由 {昵称} 分享 · 仅可查看」（UI 稿 P1 的 `.ro-banner`）。
-  /// 昵称查不到时整条不渲染 —— 比渲染一句「由 分享」体面。
-  Widget _banner(AppLocalizations l10n, String? ownerNickname) {
-    if (ownerNickname == null || ownerNickname.isEmpty) return const SizedBox.shrink();
+  /// 昵称查不到时整条不渲染（见 [_hasBanner]）—— 比渲染一句「由 分享」体面。
+  Widget _banner(AppLocalizations l10n, String ownerNickname) {
     return Container(
       key: const ValueKey('visitorSharedBanner'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -300,24 +346,73 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
 
 }
 
-/// 链接失效（token 不存在 / 档案已删 / 主人注销或被封）。
+/// 返回键（UI 稿 P1 `.ro-titlerow` 左侧箭头；V1.4.2 social-topic 1.4 起并进标题行，A14 / A15 左上同一组件）。
 ///
-/// 🛡 **四种情况共用这一屏**，与服务端同口径 —— 分开写文案等于告诉扫描者
-/// 「这个 token 曾经存在」或「这个人被封了」。
-class _Gone extends StatelessWidget {
-  const _Gone({super.key, required this.l10n});
-
-  final AppLocalizations l10n;
+/// 🔴 **这是访客回到 App 的唯一可见出口**：访客视图在 Tab 之外，没有底部导航。
+/// 缺了它，从 WhatsApp 点链接进来的人就落进一条死路 ——
+/// 而这条链路的全部意义正是把人**引进** App（2026-08-18 L2 实测补）。
+///
+/// 栈里没有上一页时（例如深链直达）回落到首页，而不是让返回变成空操作。
+/// 热区 44×44、`chevron_left_rounded` 28 `ink`。
+class _VisitorBackButton extends StatelessWidget {
+  const _VisitorBackButton();
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Text(
-            l10n.growthLoadFailed,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: AppColors.ink2),
-          ),
+  Widget build(BuildContext context) => SizedBox(
+        width: 44,
+        height: 44,
+        child: IconButton(
+          key: const ValueKey('visitorBackButton'),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+          icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
         ),
+      );
+}
+
+/// 访客页打不开（V1.4.2 social-topic Story 1.4 · AC4 / AC5）：左上返回键 + 通用空态，返回行以下垂直居中。
+///
+/// - [gone] = true → **A14**「Konten ini sudah tidak ada」，**不放任何按钮**（重试无用）。
+///   🛡 宠物已删 / 主人注销或被封 / 拉黑 / 链接失效**共用这一屏**，与服务端同口径 ——
+///   分开写文案等于告诉扫描者「这个 token 曾经存在」或「这个人被封了」。
+/// - [gone] = false → **A15**「Gagal memuat, silakan coba lagi」+「Coba lagi」重试。
+class _VisitorUnavailable extends StatelessWidget {
+  const _VisitorUnavailable({super.key, required this.l10n, required this.gone, this.onRetry});
+
+  final AppLocalizations l10n;
+  final bool gone;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 0),
+            child: Align(alignment: Alignment.centerLeft, child: _VisitorBackButton()),
+          ),
+          Expanded(
+            child: gone
+                ? EmptyState(
+                    icon: Icons.search_off_rounded,
+                    iconColor: AppColors.muted,
+                    title: l10n.detailGoneTitle,
+                  )
+                : EmptyState(
+                    icon: Icons.cloud_off_rounded,
+                    iconColor: AppColors.muted,
+                    title: l10n.detailNetworkError,
+                    actionLabel: l10n.commonRetry,
+                    onAction: onRetry,
+                  ),
+          ),
+        ],
       );
 }
