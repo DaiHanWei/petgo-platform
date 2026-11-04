@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
@@ -11,13 +13,16 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../pet_slot/presentation/pet_readonly_block.dart';
+import '../data/account_celebration_pets.dart';
 import '../data/current_pet_provider.dart';
 import '../data/milestone_celebration_reporter.dart';
 import '../data/pet_list_repository.dart';
 import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
 import '../data/timeline_repository.dart';
+import '../domain/celebration_pet.dart';
 import '../domain/milestone.dart';
+import '../domain/milestone_account_codes.dart';
 import '../domain/health_milestones.dart';
 import '../domain/milestone_catchup.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
@@ -108,10 +113,18 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     _catchupDone = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      final item = catchup.toCelebrate!;
+      // 依赖在弹出前取好（回报落库时本页 / 庆祝层可能都已销毁）。
+      final container = ProviderScope.containerOf(context, listen: false);
+      // V1.4.2 Story 2.3 · B2：账号级编码弹出前取好账号 ACTIVE 宠物（≥ 2 只 → 多宠布局）。
+      // 先取数据、再记本地：等待期间页面被销毁就什么都不记（不留下「没弹却已记」的本地标记）。
+      final accountPets = isAccountMilestone(item.code)
+          ? await readAccountCelebrationPets(container)
+          : const <CelebrationPet>[];
+      if (!mounted) return;
       // 弹出前先记本地：回报要等弹窗关掉才发，这期间列表若被重拉不能再补一次。
       // ⚠️ 必须在帧后记：本方法从 build 里调用，build 期间改 provider 会直接抛。
       markMilestonesCelebrating(ref, catchup.codesToReport);
-      final item = catchup.toCelebrate!;
       final l10n = AppLocalizations.of(context);
       final locale = Localizations.localeOf(context);
       final collection = [for (final g in data.groups) ...g.items];
@@ -124,6 +137,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
         petName: data.petName,
         path: MilestoneCelebrationPath.catchup,
         collection: collection,
+        accountPets: accountPets,
         onShare: () => shareMilestoneWithLink(ref,
             item: item,
             locale: locale,
@@ -131,7 +145,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
             shareText: shareText,
             collection: collection),
       );
-      _reportCelebrated(catchup.codesToReport);
+      _reportCelebrated(catchup.codesToReport, container);
     });
   }
 
@@ -140,8 +154,18 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   /// ⚠️ 刻意不 `await`、不弹错、不重试。失败的代价只是下次进本页再补弹一次，可接受；
   /// **不得**为了「保证落库」把它改成同步 —— 那会让庆祝页（乃至发布流程）卡在一个可失败的写上。
   /// 回报成功后刷新列表，让本页与档案 Tab 的角标口径立刻一致。
-  void _reportCelebrated(List<String> codes) {
+  ///
+  /// [container]：弹出前取好的 ProviderContainer（庆祝页关闭后不再经 context 取）。
+  void _reportCelebrated(List<String> codes, ProviderContainer container) {
+    // V1.4.2 Story 2.3 · AC5.2：含账号级编码 → 后端已把账号下其他宠物的同一条也置为已庆祝，
+    // 整族失效里程碑列表与档案头未庆祝角标，否则切宠物后读到旧缓存会误弹。
+    // ⚠️ 用 container（provider 侧）而非本页 WidgetRef：回报落库时本页可能已销毁。
+    final hasAccount = codes.any(isAccountMilestone);
     reportMilestoneCelebrated(ref, codes, onDone: () {
+      if (hasAccount) {
+        container.invalidate(milestoneListProvider);
+        container.invalidate(archiveStatsProvider);
+      }
       if (!mounted) return;
       // 回报落库后刷新（列表已由 reporter 统一刷新），让档案 Tab 的角标口径立刻一致。
       ref.invalidate(archiveStatsProvider);
@@ -687,10 +711,40 @@ void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
   final collection = data == null ? const <MilestoneItem>[] : [for (final g in data.groups) ...g.items];
   final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
   final router = GoRouter.maybeOf(context);
-  showMilestoneCelebration(
+  // 防重入：账号级编码要先异步取宠物列表，这段空档里再点一次不得叠出第二个庆祝页。
+  if (_revisitOpening) return;
+  _revisitOpening = true;
+  // V1.4.2 Story 2.3 · B2：账号级编码重温同样按账号 ACTIVE 宠物数切多宠布局（弹出前取好）。
+  final Future<List<CelebrationPet>> pets = isAccountMilestone(item.code)
+      ? readAccountCelebrationPets(ProviderScope.containerOf(context, listen: false))
+      : Future.value(const <CelebrationPet>[]);
+  // 弹层一旦挂上，其遮罩就挡住后续点击，所以闸门只需覆盖「取数据 → 挂上弹层」这段空档；
+  // 不等弹层关闭才放开（宿主 Navigator 被销毁时那个 Future 可能永不完成，闸门会卡死）。
+  unawaited(pets.then((pets) {
+    if (!context.mounted) return;
+    unawaited(_openCelebration(context, ref, item, petName, collection, shareText, router, locale, pets));
+  }).whenComplete(() => _revisitOpening = false));
+}
+
+/// 重温庆祝「正在打开」（防重入，见 [_showCelebration]）。
+bool _revisitOpening = false;
+
+Future<void> _openCelebration(
+  BuildContext context,
+  WidgetRef ref,
+  MilestoneItem item,
+  String petName,
+  List<MilestoneItem> collection,
+  String shareText,
+  GoRouter? router,
+  Locale locale,
+  List<CelebrationPet> accountPets,
+) {
+  return showMilestoneCelebration(
     context,
     item,
     petName: petName,
+    accountPets: accountPets,
     // AC5 重温：正常展示庆祝，但**不改写 celebrated_at、不产生回报**（AD-A3.3）——
     // 这里刻意没有 _reportCelebrated 调用。埋点仍上报（埋点与回报是两件事）。
     path: MilestoneCelebrationPath.revisit,

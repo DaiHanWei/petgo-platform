@@ -6,11 +6,15 @@ import 'package:flutter/material.dart';
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/startup/startup_popup_ledger.dart';
 import '../../../../core/theme/colors.dart';
+import '../../../../core/theme/spacing.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/haptics.dart';
+import '../../domain/celebration_pet.dart';
 import '../../domain/milestone.dart';
+import '../../domain/milestone_account_codes.dart';
 import '../../domain/milestone_celebration_copy.dart';
 import 'milestone_badge.dart';
+import 'pet_species_avatar.dart';
 
 /// 里程碑解锁庆祝（Story 8.5 · FR-42）：**统一全屏页**（不分级仪式，决策 D-11），mint 风格、无第三方动画包。
 /// 徽章走 [MilestoneBadge]（V1.3.2 Story 5.1：素材到了显示该枚专属徽章，没到回落紫渐变奖杯）。
@@ -43,6 +47,7 @@ Future<void> showMilestoneCelebration(
   FutureOr<void> Function()? onShare,
   VoidCallback? onSeeAll,
   List<MilestoneItem> collection = const [],
+  List<CelebrationPet> accountPets = const [],
 }) {
   // 入口统一登记本次冷启动功能弹窗（V1.3.4 Story 5.3 · AD-12），覆盖全部调用方。
   StartupPopupLedger.instance.record(StartupPopupKind.milestoneCelebration);
@@ -62,7 +67,12 @@ Future<void> showMilestoneCelebration(
     barrierColor: Colors.black.withValues(alpha: 0.6),
     transitionDuration: const Duration(milliseconds: 240),
     pageBuilder: (_, _, _) => _MilestoneCelebrationView(
-        item: item, petName: petName, onShare: onShare, onSeeAll: onSeeAll, collection: collection),
+        item: item,
+        petName: petName,
+        onShare: onShare,
+        onSeeAll: onSeeAll,
+        collection: collection,
+        accountPets: accountPets),
   );
 }
 
@@ -72,7 +82,8 @@ class _MilestoneCelebrationView extends StatefulWidget {
       required this.petName,
       this.onShare,
       this.onSeeAll,
-      this.collection = const []});
+      this.collection = const [],
+      this.accountPets = const []});
 
   final MilestoneItem item;
   final String petName;
@@ -81,6 +92,10 @@ class _MilestoneCelebrationView extends StatefulWidget {
 
   /// 全部里程碑（用于「已解锁合集」预览）；为空则不显示该区。
   final List<MilestoneItem> collection;
+
+  /// 账号下 ACTIVE 宠物（V1.4.2 Story 2.3 · B2，调用方弹出前取好，最多 5 只）。
+  /// 账号级编码且 ≥ 2 只 → 多宠布局：宠物行 + 日期胶囊只写日期 + 不显示 KOLEKSI。
+  final List<CelebrationPet> accountPets;
 
   @override
   State<_MilestoneCelebrationView> createState() => _MilestoneCelebrationViewState();
@@ -135,9 +150,13 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
     final copy = localizedMilestoneCelebration(widget.item.code, locale, widget.petName);
-    final dateText = widget.item.completedAt == null
-        ? widget.petName
-        : '${widget.petName} · ${_formatLongDate(widget.item.completedAt!, locale)}';
+    // V1.4.2 Story 2.3 · B2：账号级里程碑 + 账号 ≥ 2 只 ACTIVE 宠物 → 全部宠物一起完成的多宠布局。
+    final multiPet = isAccountMilestone(widget.item.code) && widget.accountPets.length >= 2;
+    final dateText = multiPet
+        ? (widget.item.completedAt == null ? '' : _formatLongDate(widget.item.completedAt!, locale))
+        : widget.item.completedAt == null
+            ? widget.petName
+            : '${widget.petName} · ${_formatLongDate(widget.item.completedAt!, locale)}';
     // 整页纯深色（#141019），非半透明遮罩——与原型一致。
     return Material(
       color: AppColors.splashInk,
@@ -215,8 +234,15 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
                           color: Colors.white.withValues(alpha: 0.6), fontSize: 13, height: 1.6)),
                 ],
                 const SizedBox(height: 20),
-                // 宠物 + 日期胶囊。
+                // B2 宠物行（正文 → 宠物行 20、宠物行 → 日期胶囊 12）。
+                if (multiPet) ...[
+                  _petRow(),
+                  const SizedBox(height: 12),
+                ],
+                // 宠物 + 日期胶囊（B2：只写日期，无物种 emoji、无名字）。
+                if (!multiPet || dateText.isNotEmpty)
                 Container(
+                  key: const ValueKey('milestoneCelebrationDateChip'),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.07),
@@ -225,15 +251,17 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(_speciesEmoji(widget.item.code), style: const TextStyle(fontSize: 16)),
-                      const SizedBox(width: 8),
+                      if (!multiPet) ...[
+                        Text(_speciesEmoji(widget.item.code), style: const TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                      ],
                       Text(dateText,
                           style: TextStyle(
                               fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
                     ],
                   ),
                 ),
-                if (widget.collection.isNotEmpty) ...[
+                if (widget.collection.isNotEmpty && !multiPet) ...[
                   const SizedBox(height: 24),
                   _collection(l10n),
                 ],
@@ -275,6 +303,43 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       ),
     );
   }
+
+  // B2 宠物行：全部 ACTIVE 宠物（建档顺序，最多 5 只，调用方已截断）头像 40 + 名字 11（单行省略），间距 12；
+  // 头像 2px splashInk 描边 + 白 25% 外圈。
+  Widget _petRow() => Wrap(
+        key: const ValueKey('milestoneCelebrationPetRow'),
+        alignment: WrapAlignment.center,
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.md,
+        children: [
+          for (final p in widget.accountPets.take(5))
+            SizedBox(
+              width: 48,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.splashInk,
+                      boxShadow: [
+                        BoxShadow(color: Colors.white.withValues(alpha: 0.25), spreadRadius: 2),
+                      ],
+                    ),
+                    child: PetSpeciesAvatar(avatarUrl: p.avatarUrl, petType: p.petType, size: 40),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.7))),
+                ],
+              ),
+            ),
+        ],
+      );
 
   // 物种 emoji（按 code 前缀：C=猫 / D=狗 / 其余=通用）。
   String _speciesEmoji(String code) => switch (code.isEmpty ? '' : code[0]) {

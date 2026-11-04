@@ -19,6 +19,7 @@ import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 import '../../ops/presentation/open_ops_target.dart';
+import '../../profile/domain/milestone_account_codes.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/presentation/widgets/milestone_badge.dart';
@@ -351,6 +352,12 @@ class _NotificationCenterPageState
     _opening = true;
     final String location;
     try {
+      // V1.4.2 Story 2.3 · AC7（G-2）：账号级里程碑通知进「当前宠物」的列表补弹；当前宠物只读
+      // （账号级里程碑不在只读宠物上完成）→ 先切到账号下第一只 ACTIVE 再进列表。
+      if (item.type == 'MILESTONE_SM_NODE' && isAccountMilestone(item.targetRef ?? '')) {
+        await _selectActivePetForAccountMilestone();
+        if (!mounted) return;
+      }
       location = await NotificationDeepLink.open(
         ref,
         type: item.deepLinkType,
@@ -396,6 +403,24 @@ class _NotificationCenterPageState
       context.go(location);
     } else {
       context.push(location);
+    }
+  }
+
+  /// G-2：当前有效宠物为 READ_ONLY → `select` 账号下第一只 ACTIVE（与用户在档案页手动切换等价）。
+  /// 宠物列表取不到 / 3 秒超时 / 没有 ACTIVE → 不切，照常进列表。
+  Future<void> _selectActivePetForAccountMilestone() async {
+    try {
+      // 列表最多等 3 秒（同 gift_pet_switch.dart），超时按不切宠物处理。
+      final pets = await ref.read(petListProvider.future).timeout(const Duration(seconds: 3));
+      if (!mounted) return;
+      final currentId = resolveEffectivePetId(pets, ref.read(currentPetIdProvider));
+      final current = pets.where((p) => p.id == currentId).firstOrNull;
+      if (current == null || !current.isReadOnly) return;
+      final firstActive = pets.where((p) => !p.isReadOnly).firstOrNull;
+      if (firstActive == null) return;
+      await ref.read(currentPetIdProvider.notifier).select(firstActive.id);
+    } catch (_) {
+      // best-effort：切不成照常进列表（只读宠物列表里这两枚是锁定态，不会误弹）。
     }
   }
 
@@ -758,6 +783,9 @@ class _NotificationTileState extends State<_NotificationTile> {
     if (code == null || code.isEmpty) {
       return (title: AppLocalizations.of(context).notifyTypeMilestoneNode, body: '');
     }
+    // V1.4.2 Story 2.3 · R-4：账号级编码（第一次关注 / 收藏）文案本身不含 `{name}`，
+    // 无论有没有宠物名都直接用庆祝标题 + 正文，**不拼宠物名**。
+    if (isAccountMilestone(code)) return localizedMilestoneCelebration(code, locale, '');
     final name = widget.petName;
     if (name == null || name.isEmpty) {
       return (title: localizedMilestoneTitle(code, locale), body: '');
