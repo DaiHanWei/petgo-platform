@@ -1,0 +1,84 @@
+# generated: 2026-11-04
+# last_updated: 2026-11-04  # 20 条 story 文件已生成，均 ready-for-dev（云端批跑）
+# project: TailTopia V1.4.2 · 主题 social-topic（追更宠物 · 新 S 级里程碑 · 内容话题 · 里程碑发社区 · @ 范围 · 通知变量 · 隐藏入口：后端 + App + 后台）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.4.2
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.4.2/epics-v1.4.2-social-topic.md (7 Epic / 20 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.4.2/architecture-v1.4.2-social-topic-delta.md (D-1~D-23 · P-1~P-12 · G-1~G-7)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.4.2/追更话题/1-4-2追更宠物·里程碑·话题prd.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.4.2/决策日志-social-topic.md（R-1~R-5）
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.4.2/追更话题/ui-1-4-2-social-topic-integrated-v1.html（App 43 屏）
+#     {project-root}/_bmad-output/planning-artifacts/v1.4.2/追更话题/ui-admin-1-4-2-social-topic-integrated-v1.html（后台 19 屏）
+# 就绪度: {project-root}/_bmad-output/planning-artifacts/v1.4.2/readiness-v1.4.2-social-topic.md（READY）
+#
+# 🔴 口径优先级：决策日志 > PRD > 架构增量 > UI 稿。
+# 🔴 同一版本目录后续会有电商线 story，可能同号——只按本文件的完整 key 取。
+# 🔴 分支 feat/1.4.2-social-topic（从 dev_1.4.2 切出），全部 story 同一分支、云端单会话串行。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 依赖 =====
+# 串行 Epic 1 -> 7；每个 epic 内按序号。E3 多宠卡用 E2；E5 复用 4.4 解析器与贴键盘面板；E6 依赖 4.1 / 4.2。
+#
+# ===== 迁移预分配（时间戳制，排在 V20261030_0330 之后）=====
+# 1.1 V20261104_2000 pet_follows + pet_profiles.follower_count（①）
+# 1.2 V20261104_2010 rebuild ck_notifications_type + ck_user_push_mutes_category（⑦，值取当前树最后一次重建的全集 + 2）
+# 1.2 V20261104_2020 pet_diary_notify_log（④）
+# 2.1 V20261104_2030 user_milestone_flags + 新编码 roster 行（⑤）
+# 2.2 V20261104_2040 账号级里程碑存量补算（⑥）
+# 4.1 V20261104_2050 topics + content_topics（②）
+# 4.1 V20261104_2060 content_post_view_days（③）
+# 7.1 V20261104_2070 ops_notification_campaigns.skipped_no_pet_count（⑧）
+# 若实现时发现与其他分支撞号，按 CLAUDE.md 取创建时刻重新取号，并回写本表。
+
+generated: 2026-11-04
+last_updated: 2026-11-04
+project: TailTopia V1.4.2 social-topic
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.2"
+
+development_status:
+  epic-1: in-progress
+  1-1-追更关系与接口: ready-for-dev
+  1-2-追更通知与推送分类: ready-for-dev
+  1-3-关注流合并追更与宠物推荐改造: ready-for-dev
+  1-4-app宠物访客页追更与失效修复: ready-for-dev
+  1-5-app关注列表关注流空态与通知推送设置: ready-for-dev
+  epic-1-retrospective: optional
+
+  epic-2: in-progress
+  2-1-账号级里程碑后端: ready-for-dev
+  2-2-存量用户补算: ready-for-dev
+  2-3-app新里程碑展示与补庆祝: ready-for-dev
+  epic-2-retrospective: optional
+
+  epic-3: in-progress
+  3-1-app里程碑卡与发帖入口扩参: ready-for-dev
+  3-2-app庆祝页重构与两个分享按钮: ready-for-dev
+  epic-3-retrospective: optional
+
+  epic-4: in-progress
+  4-1-话题建模发帖写关联与按天浏览: ready-for-dev
+  4-2-话题查询接口与热度任务: ready-for-dev
+  4-3-app话题详情页首页话题行与隐藏入口: ready-for-dev
+  4-4-app正文与输入框高亮及井号联想: ready-for-dev
+  epic-4-retrospective: optional
+
+  epic-5: in-progress
+  5-1-at候选范围扩大后端: ready-for-dev
+  5-2-app-at面板改造: ready-for-dev
+  epic-5-retrospective: optional
+
+  epic-6: in-progress
+  6-1-后台话题管理页: ready-for-dev
+  6-2-后台话题页顶置: ready-for-dev
+  epic-6-retrospective: optional
+
+  epic-7: in-progress
+  7-1-通知变量替换与人群计算: ready-for-dev
+  7-2-后台通知编辑器与确认页: ready-for-dev
+  epic-7-retrospective: optional
