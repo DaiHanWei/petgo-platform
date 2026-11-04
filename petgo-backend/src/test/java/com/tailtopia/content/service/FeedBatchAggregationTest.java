@@ -74,7 +74,9 @@ class FeedBatchAggregationTest {
                         Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
                         Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)),
                 // V1.3.4 follow Story 2.1：作者关注关系（整页一次批量）。
-                followReader);
+                followReader,
+                // V1.4.2 social-topic Story 1.3：关注流首页追更计数（本类不验）。
+                org.mockito.Mockito.mock(com.tailtopia.social.read.PetFollowReader.class));
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(

@@ -14,6 +14,7 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.social.read.PetFollowReader;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,6 +47,8 @@ class PetRecommendationPagingTest {
     private PetProfileRepository profiles;
     private AccountQueryService accounts;
     private UserHideRelationReader hideRelations;
+    /** V1.4.2 social-topic Story 1.3：已追更的宠物不推（默认什么都没追更）。 */
+    private PetFollowReader petFollows;
     private PetRecommendationService service;
 
     @BeforeEach
@@ -54,7 +57,9 @@ class PetRecommendationPagingTest {
         profiles = mock(PetProfileRepository.class);
         accounts = mock(AccountQueryService.class);
         hideRelations = mock(UserHideRelationReader.class);
-        service = new PetRecommendationService(content, profiles, accounts, hideRelations);
+        petFollows = mock(PetFollowReader.class);
+        service = new PetRecommendationService(content, profiles, accounts, hideRelations, petFollows);
+        when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(Set.of());
         when(hideRelations.hiddenEitherWay(anyLong(), anyCollection())).thenReturn(Set.of());
         when(content.findLatestPublicCovers(anyCollection())).thenReturn(Map.of());
         when(accounts.activeIdsAmong(anyCollection()))
@@ -289,5 +294,22 @@ class PetRecommendationPagingTest {
         service.pageFor(VIEWER, 3, new PetRecommendCursor(1L, NOW, 9L), NOW);
         verify(accounts).activeIdsAmong(anyCollection());
         verify(hideRelations).hiddenEitherWay(anyLong(), anyCollection());
+    }
+
+    // ===== V1.4.2 social-topic Story 1.3 · AC6.3：排除已追更后游标仍取「最后看过」的候选 =====
+
+    @Test
+    void 已追更的宠物被越过时游标仍取最后看过的候选() {
+        // 候选 10、11、12、13；追更了 11 → 要 2 张卡：10、12，游标落在 12（最后看过的那一行）。
+        List<ContentService.RecommendablePet> rows = rows(4);
+        candidates(rows);
+        withProfilesFor(rows);
+        when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(Set.of(11L));
+
+        RecommendedPetResponse.Page page = service.pageFor(VIEWER, 2, null, NOW);
+
+        assertThat(page.items()).extracting(RecommendedPetResponse::petId).containsExactly(10L, 12L);
+        assertThat(page.hasMore()).isTrue();
+        assertThat(PetRecommendCursor.decodeOrNull(page.nextCursor()).petId()).isEqualTo(12L);
     }
 }

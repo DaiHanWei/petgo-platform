@@ -15,6 +15,7 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.social.read.PetFollowReader;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -48,6 +49,8 @@ class PetRecommendationServiceTest {
     private PetProfileRepository profiles;
     private AccountQueryService accounts;
     private UserHideRelationReader hideRelations;
+    /** V1.4.2 social-topic Story 1.3：已追更的宠物不推（默认什么都没追更）。 */
+    private PetFollowReader petFollows;
     private PetRecommendationService service;
 
     @BeforeEach
@@ -56,7 +59,9 @@ class PetRecommendationServiceTest {
         profiles = mock(PetProfileRepository.class);
         accounts = mock(AccountQueryService.class);
         hideRelations = mock(UserHideRelationReader.class);
-        service = new PetRecommendationService(content, profiles, accounts, hideRelations);
+        petFollows = mock(PetFollowReader.class);
+        service = new PetRecommendationService(content, profiles, accounts, hideRelations, petFollows);
+        when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(Set.of());
         when(hideRelations.hiddenEitherWay(anyLong(), anyCollection())).thenReturn(Set.of());
         when(content.findLatestPublicCovers(anyCollection())).thenReturn(Map.of());
         // 默认：这批 owner 全部有效（未注销、未封号）。
@@ -155,6 +160,7 @@ class PetRecommendationServiceTest {
         verify(profiles, times(1)).findAllById(anyCollection());
         verify(accounts, times(1)).activeIdsAmong(anyCollection());
         verify(hideRelations, times(1)).hiddenEitherWay(anyLong(), anyCollection());
+        verify(petFollows, times(1)).followedAmong(anyLong(), anyCollection());
         verify(content, times(1)).findLatestPublicCovers(anyCollection());
     }
 
@@ -164,6 +170,7 @@ class PetRecommendationServiceTest {
         assertThat(service.recommendFor(VIEWER, 10, NOW)).isEmpty();
         verify(profiles, never()).findAllById(anyCollection());
         verify(hideRelations, never()).hiddenEitherWay(anyLong(), anyCollection());
+        verify(petFollows, never()).followedAmong(anyLong(), anyCollection());
     }
 
     // ===== AC3：推荐池边界 =====
@@ -283,6 +290,91 @@ class PetRecommendationServiceTest {
                 .findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(),
                         poolSize.capture(), org.mockito.ArgumentMatchers.any());
         assertThat(poolSize.getAllValues()).allSatisfy(v -> assertThat(v).isLessThan(1000));
+    }
+
+    // ===== V1.4.2 social-topic Story 1.3 · AC6：已追更的宠物不再推荐（D-17） =====
+
+    @Test
+    void 已追更的宠物不入页() {
+        candidates(List.of(10L, 20L, 30L));
+        withProfiles(pet(10L, 110L, "a10", NOW), pet(20L, 120L, "a20", NOW),
+                pet(30L, 130L, "a30", NOW));
+        when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(Set.of(20L));
+
+        assertThat(service.recommendFor(VIEWER, 10, NOW))
+                .extracting(RecommendedPetResponse::petId).containsExactly(10L, 30L);
+    }
+
+    @Test
+    void 追更判定对本页候选只批量查一次且入参就是本页候选() {
+        candidates(List.of(30L, 10L, 20L));
+        withProfiles(pet(10L, 110L, "a10", NOW), pet(20L, 120L, "a20", NOW),
+                pet(30L, 130L, "a30", NOW));
+
+        service.recommendFor(VIEWER, 10, NOW);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Collection<Long>> ids = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(petFollows, times(1)).followedAmong(org.mockito.ArgumentMatchers.eq(VIEWER), ids.capture());
+        assertThat(ids.getValue()).containsExactly(30L, 10L, 20L);
+        verify(petFollows, never()).isFollowing(anyLong(), anyLong());
+    }
+
+    @Test
+    void 本页候选全被追更排除时带游标回空页() {
+        // 候选池给满（= poolSize）却全被排除 → 后面可能还有，hasMore=true 且带游标。
+        List<Long> ids = new ArrayList<>();
+        List<PetProfile> pets = new ArrayList<>();
+        for (long i = 1; i <= PetRecommendationService.MIN_CANDIDATE_POOL; i++) {
+            ids.add(i);
+            pets.add(pet(i, 1000 + i, "a" + i, NOW));
+        }
+        candidates(ids);
+        withProfiles(pets.toArray(new PetProfile[0]));
+        when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(new java.util.HashSet<>(ids));
+
+        RecommendedPetResponse.Page page = service.pageFor(VIEWER, 6, null, NOW);
+
+        assertThat(page.items()).isEmpty();
+        assertThat(page.hasMore()).isTrue();
+        assertThat(PetRecommendCursor.decodeOrNull(page.nextCursor()).petId())
+                .isEqualTo((long) PetRecommendationService.MIN_CANDIDATE_POOL);
+    }
+
+    @Test
+    void 候选不足一池且全被追更排除时是末页() {
+        candidates(List.of(10L, 20L));
+        withProfiles(pet(10L, 110L, "a10", NOW), pet(20L, 120L, "a20", NOW));
+        when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(Set.of(10L, 20L));
+
+        RecommendedPetResponse.Page page = service.pageFor(VIEWER, 6, null, NOW);
+
+        assertThat(page.items()).isEmpty();
+        assertThat(page.hasMore()).isFalse();
+    }
+
+    @Test
+    void 未追更任何宠物时与改前一致() {
+        candidates(List.of(10L, 20L));
+        withProfiles(pet(10L, 110L, "a10", NOW), pet(20L, 120L, "a20", NOW));
+        assertThat(service.recommendFor(VIEWER, 10, NOW))
+                .extracting(RecommendedPetResponse::petId).containsExactly(10L, 20L);
+    }
+
+    @Test
+    void 互动量只数近14天的点赞且用的是入选窗口同一个参数() {
+        // D-17：liked CTE 加 l.created_at >= :since —— 与 candidates 的 MAX(created_at) >= :since 同一个值。
+        String src = readSource("src/main/java/com/tailtopia/content/repository/"
+                + "ContentPostRepository.java");
+        int start = src.indexOf("WITH candidates AS (");
+        String sql = src.substring(start, src.indexOf("findRecommendablePets", start));
+        int liked = sql.indexOf("liked AS (");
+        String likedPart = sql.substring(liked, sql.indexOf("SELECT c.pet_id", liked));
+        assertThat(likedPart).contains("l.created_at >= :since");
+        assertThat(sql.substring(0, liked)).contains("MAX(p.created_at) >= :since");
+        // 排序结构不变：WIB 日期桶 DESC → 互动量 DESC → 最后发帖时刻 DESC → petId DESC。
+        assertThat(sql).contains("ORDER BY date(c.last_at AT TIME ZONE 'Asia/Jakarta') DESC, interactions DESC,")
+                .contains("c.last_at DESC, c.pet_id DESC");
     }
 
     // ===== AC4：卡片字段 =====

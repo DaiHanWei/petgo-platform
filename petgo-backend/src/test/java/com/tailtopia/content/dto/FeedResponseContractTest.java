@@ -57,7 +57,9 @@ class FeedResponseContractTest {
             // V1.3.4 Story 2.1（AD-5）：每张图的露出位置。存量 / 无超界图省略；App 无值即居中（2.2 读）。
             "imageCropOffsets",
             // V1.4.0 ① Story 3.1（AD-14）：作者等级展示。注销 / 停用 / 无等级时整体省略；无框时省略 authorFrame。
-            "authorLevel", "authorTier", "authorFrame");
+            "authorLevel", "authorTier", "authorFrame",
+            // V1.4.2 social-topic Story 1.3（D-9 / P-5）：只在关注流出口下发（App 1.5 读）；其余出口省略。
+            "reason");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
@@ -93,7 +95,9 @@ class FeedResponseContractTest {
                 // V1.3.4 Story 2.1：露出位置，null 占位与 imageSizes 同理（用 Arrays.asList）。
                 java.util.Arrays.asList(0.0, null),
                 // V1.4.0 ① Story 3.1：作者等级三字段。
-                12, "GUARDIAN", "UPGRADED");
+                12, "GUARDIAN", "UPGRADED",
+                // V1.4.2 social-topic Story 1.3：关注流 reason。
+                "followed_user");
 
         Map<String, Object> m = wire(item);
         assertThat(m).containsEntry("authorLevel", 12).containsEntry("authorTier", "GUARDIAN")
@@ -115,7 +119,8 @@ class FeedResponseContractTest {
                 ContentType.GROWTH_MOMENT, null, null, 0L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
                 null, null, false, 0L, null, null, null, null,
-                null, null, null); // Story 3.1：无等级
+                null, null, null, // Story 3.1：无等级
+                null); // V1.4.2 Story 1.3：非关注流出口无 reason
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -134,6 +139,8 @@ class FeedResponseContractTest {
         assertThat(m).doesNotContainKey("imageCropOffsets");
         // V1.4.0 ① Story 3.1：growth == null → 等级三字段整体省略（老 App 不受影响）。
         assertThat(m).doesNotContainKeys("authorLevel", "authorTier", "authorFrame");
+        // V1.4.2 Story 1.3：非关注流出口 reason 为 null → 省略。
+        assertThat(m).doesNotContainKey("reason");
     }
 
     /**
@@ -150,7 +157,8 @@ class FeedResponseContractTest {
                 null, false, 0L, null,
                 null, null, // follow：authorToken / authorFollowState
                 Arrays.asList(0.0, null),
-                null, null, null);
+                null, null, null,
+                null); // V1.4.2 Story 1.3：reason
 
         Map<String, Object> m = wire(item);
         assertThat(m.get("imageCropOffsets")).isEqualTo(Arrays.asList(0.0, null));

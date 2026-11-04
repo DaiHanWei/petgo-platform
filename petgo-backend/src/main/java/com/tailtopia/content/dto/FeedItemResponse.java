@@ -101,7 +101,33 @@ public record FeedItemResponse(
          */
         Integer authorLevel,
         String authorTier,
-        String authorFrame) {
+        String authorFrame,
+        /**
+         * 这条为什么出现在关注流（V1.4.2 social-topic Story 1.3 · D-9 / P-5）：
+         * {@value #REASON_FOLLOWED_USER}（作者在我的关注名单中）/ {@value #REASON_FOLLOWED_PET}（经追更宠物进流）。
+         *
+         * <p>🔴 <b>只在关注流出口填值</b>（{@link #withReason}）；Discover / 我的发布 / 他人主页恒为 null，
+         * NON_NULL 不下发 —— 那些出口的 key 集合不变。
+         */
+        String reason) {
+
+    /** 关注流 reason：作者在我的关注名单中（同时命中两路也记这个）。 */
+    public static final String REASON_FOLLOWED_USER = "followed_user";
+
+    /** 关注流 reason：经追更宠物一路进流（作者不在我的关注名单中）。 */
+    public static final String REASON_FOLLOWED_PET = "followed_pet";
+
+    /**
+     * 同一个投影、只换 {@code reason}（关注流出口专用）。
+     *
+     * <p>⚠️ 不是另一个工厂：字段全部来自 {@link #of} 的结果，只覆盖最后一列 —— 口径不分叉（AD-7 Rule 4）。
+     */
+    public FeedItemResponse withReason(String reason) {
+        return new FeedItemResponse(id, authorId, authorNickname, authorAvatarUrl, authorDeleted,
+                authorTags, decorationTags, type, body, firstImageUrl, likeCount, createdAt, visibility,
+                imageUrls, imageSizes, liked, commentCount, mentions, authorToken, authorFollowState,
+                imageCropOffsets, authorLevel, authorTier, authorFrame, reason);
+    }
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
@@ -142,6 +168,7 @@ public record FeedItemResponse(
                 p.getImageCropOffsets(),
                 author.badgeLevel(),
                 author.badgeTier(),
-                author.badgeFrame());
+                author.badgeFrame(),
+                null); // reason：只有关注流出口经 withReason 填值
     }
 }

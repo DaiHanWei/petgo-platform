@@ -83,9 +83,11 @@ public class FeedService {
             ContentTagQueryService contentTags, UserHideRelationReader hideRelations,
             FeedRecommendationService recommendations,
             com.tailtopia.mention.service.MentionViewService mentionViews,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            com.tailtopia.social.read.PetFollowReader petFollowReader) {
         this.mentionViews = mentionViews;
         this.followReader = followReader;
+        this.petFollowReader = petFollowReader;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
@@ -101,6 +103,9 @@ public class FeedService {
 
     /** V1.3.4 follow Story 2.1：卡片作者的关注关系（只读端口，同 hideRelations 的模块边界）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
+
+    /** V1.4.2 social-topic Story 1.3：关注流首页的 {@code followingPetCount}（只读端口，同上模块边界）。 */
+    private final com.tailtopia.social.read.PetFollowReader petFollowReader;
 
     /**
      * 一页作者的 token 与关注关系（V1.3.4 follow Story 2.1 · AD-6 / AD-16）—— <b>整页各一次查询</b>。
@@ -306,8 +311,16 @@ public class FeedService {
     }
 
     /**
-     * 关注流（V1.3.4）：我关注的人的公开帖，纯时间倒序，登录专属。
+     * 关注流（V1.3.4；V1.4.2 social-topic Story 1.3 · D-9 合并追更宠物）：我关注的人 ∪ 我追更的宠物的公开 Diary，
+     * 纯时间倒序，登录专属。
      * 🔴 过滤全在 SQL WHERE 内（{@code PAGE_SIZE+1} / hasMore / 游标契约），组装复用 {@link #assemble}。
+     *
+     * <p>关注流出口另填两样（其余出口不填）：
+     * <ul>
+     *   <li>每条 {@code reason}：作者在我的关注名单中 → {@code followed_user}，否则 → {@code followed_pet}。
+     *       直接用 {@code assemble} 已算好的 {@code authorFollowState.iFollow}，<b>不再加查询</b>；</li>
+     *   <li>首页（cursor 为空）两个计数 {@code followingUserCount} / {@code followingPetCount}，后续页不下发。</li>
+     * </ul>
      */
     @Transactional(readOnly = true)
     public FeedPageResponse loadFollowingFeed(long viewerId, String cursor) {
@@ -327,7 +340,23 @@ public class FeedService {
             ContentPost last = page.get(page.size() - 1);
             nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
         }
-        return assemble(page, viewerId, nextCursor, hasMore, FeedPageResponse.RANK_MODE_CHRONO);
+        FeedPageResponse assembled =
+                assemble(page, viewerId, nextCursor, hasMore, FeedPageResponse.RANK_MODE_CHRONO);
+        List<FeedItemResponse> items = assembled.items().stream()
+                .map(item -> item.withReason(reasonOf(item)))
+                .toList();
+        boolean firstPage = decoded == null;
+        return new FeedPageResponse(items, assembled.nextCursor(), assembled.hasMore(),
+                assembled.rankMode(),
+                firstPage ? accountQueryService.followingCountOf(viewerId) : null,
+                firstPage ? petFollowReader.countFollowingOf(viewerId) : null);
+    }
+
+    /** 关注流 reason 判据（D-9 / 拍板点 ①）：同时命中两路记 followed_user。 */
+    private static String reasonOf(FeedItemResponse item) {
+        return item.authorFollowState() != null && item.authorFollowState().iFollow()
+                ? FeedItemResponse.REASON_FOLLOWED_USER
+                : FeedItemResponse.REASON_FOLLOWED_PET;
     }
 
     /** 告警锚点串（降级链级别 4）。🛡 改动即等于改动告警配置。 */

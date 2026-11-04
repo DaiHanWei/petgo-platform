@@ -39,7 +39,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *
      * <h2>🔴 排序：最近更新倒序，**同日**按互动量（AC1）</h2>
      * 「同日」是按 {@code created_at} 的日期截断分桶 —— 不截断的话同一天里先发的永远排后面，
-     * 互动量那一半就永远用不上。互动量取该宠物<b>入池的那些帖子</b>的点赞总数。
+     * 互动量那一半就永远用不上。互动量取该宠物<b>入池的那些帖子</b>的点赞总数，<b>只数近 14 天的点赞</b>
+     * （{@code l.created_at >= :since}，与入选窗口同一个值；V1.4.2 social-topic Story 1.3 · D-17 ——
+     * 否则累计高赞的老宠物永远压着近期活跃的新宠物）。
      *
      * <h3>⚠️ 「同日」必须按 **WIB（Asia/Jakarta）** 截断，不能用会话时区</h3>
      * {@code date(timestamptz)} 隐式吃数据库会话时区（生产容器里是 UTC），于是雅加达
@@ -108,6 +110,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                    AND p.visibility = 'PUBLIC'
                    AND p.status = 'PUBLISHED'
                    AND p.deleted_at IS NULL
+                   AND l.created_at >= :since
                  GROUP BY cp.pet_profile_id
             )
             SELECT c.pet_id                AS pet_id,
@@ -670,11 +673,23 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /**
-     * 关注流（V1.3.4 Following 流）：仅「我关注的人」的公开帖，时间倒序游标分页。
+     * 关注流（V1.3.4 Following 流；V1.4.2 social-topic Story 1.3 · D-9 合并追更宠物）：
+     * 「我关注的人」∪「我追更的宠物的公开 Diary」，时间倒序游标分页。
      *
-     * <p>🔴 过滤口径与 {@link #findFeed} 一致（deleted / PUBLISHED / PUBLIC / 举报帖 / 账号级隐藏 / 游标），
+     * <p>🔴 公共过滤口径与 {@link #findFeed} 一致（deleted / PUBLISHED / PUBLIC / 举报帖 / 账号级隐藏 / 游标），
      * 去掉：UNDER_REVIEW 本人例外（关注流只含他人帖）、类型 / 宠物 / 顶置让位。
-     * 另加：作者在我的关注名单内，且作者未注销（{@code deletedAt IS NULL}）、状态 ACTIVE。
+     * 另加：作者未注销（{@code deletedAt IS NULL}）、状态 ACTIVE。两路<b>共用</b>这组公共条件
+     * （可见性四件套：举报过的帖、我隐藏的作者〔不分来源〕、作者已注销、作者非 ACTIVE —— P-2；
+     * 话题页 4.2 照抄本查询的可见性写法）。
+     *
+     * <p>来源两路 OR —— <b>一条查询天然按帖去重</b>，游标与排序不变：
+     * <ol>
+     *   <li><b>关注的人</b>：作者在我的关注名单内 —— 维持 1.3.4 现状，<b>一个谓词都不加</b>；</li>
+     *   <li><b>追更的宠物</b>：{@code GROWTH_MOMENT} 帖关联了我追更的任一宠物，且<b>作者没有 BLOCK 我</b>
+     *       （决策 R-1：「作者拉黑了我」<b>只在这一路</b>排除；我同时关注作者本人时，
+     *       其宠物 Diary 仍从第 ① 路出现 —— 拉黑只删 A→B 的关注，B→A 保留，不让被拉黑方察觉）。</li>
+     * </ol>
+     * 口径与 1.2 {@code PET_DIARY_POSTED} 扇出的排除（追更者隐藏了作者 / 作者 BLOCK 了追更者）对应，改一边核另一边。
      * 登录专属，故无 hasViewer 门控。排序 {@code created_at DESC, id DESC}（id 作 tie-breaker 保游标稳定）。
      * Discover 查询不受影响。
      */
@@ -683,7 +698,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             WHERE p.deletedAt IS NULL
               AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
               AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
-              AND p.authorId IN (SELECT f.followeeId FROM UserFollow f WHERE f.followerId = :viewerId)
               AND p.authorId IN (SELECT u.id FROM User u
                                  WHERE u.deletedAt IS NULL
                                    AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
@@ -691,6 +705,17 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                               WHERE r.postId = p.id AND r.reporterId = :viewerId)
               AND NOT EXISTS (SELECT 1 FROM UserHideRelation h
                               WHERE h.holderId = :viewerId AND h.targetId = p.authorId)
+              AND (
+                    p.authorId IN (SELECT f.followeeId FROM UserFollow f WHERE f.followerId = :viewerId)
+                 OR (p.type = com.tailtopia.content.domain.ContentType.GROWTH_MOMENT
+                     AND EXISTS (SELECT 1 FROM ContentPet cp, PetFollow pf
+                                 WHERE cp.id.postId = p.id
+                                   AND pf.petProfileId = cp.id.petProfileId
+                                   AND pf.followerId = :viewerId)
+                     AND NOT EXISTS (SELECT 1 FROM UserHideRelation hb
+                                     WHERE hb.holderId = p.authorId AND hb.targetId = :viewerId
+                                       AND hb.source = com.tailtopia.social.domain.HideSource.BLOCK))
+              )
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
