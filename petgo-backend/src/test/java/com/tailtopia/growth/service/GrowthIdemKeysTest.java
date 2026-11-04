@@ -39,6 +39,18 @@ class GrowthIdemKeysTest {
         assertThat(GrowthIdemKeys.reverse(123L, "REFUND:rf_xxx")).isEqualTo("REV:123:REFUND:rf_xxx");
     }
 
+    /** V1.4.2 Story 2.1（P-7 定死）：账号级里程碑键 = 账号 + flag，与物种 / 宠物无关。 */
+    @Test
+    void milestoneAccountKeyIsUserAndFlag() {
+        assertThat(GrowthIdemKeys.milestoneAccount(7L, "FIRST_FOLLOW_USER")).isEqualTo("MILESTONE_ACCT:7:FIRST_FOLLOW_USER");
+        assertThat(GrowthIdemKeys.milestoneAccount(7L, "FIRST_COLLECT_CONTENT"))
+                .isEqualTo("MILESTONE_ACCT:7:FIRST_COLLECT_CONTENT");
+        // 与按宠物键不同前缀，互不相撞。
+        assertThat(GrowthIdemKeys.milestoneAccount(7L, "C-S19")).doesNotStartWith("MILESTONE:");
+        assertThat(GrowthIdemKeys.milestoneAccount(Long.MAX_VALUE, "X".repeat(32)).length())
+                .isLessThanOrEqualTo(GrowthIdemKeys.MAX_LENGTH);
+    }
+
     @Test
     void longestKeysFitTheColumn() {
         String longest = GrowthIdemKeys.milestone(Long.MAX_VALUE, "X".repeat(32), Long.MAX_VALUE);

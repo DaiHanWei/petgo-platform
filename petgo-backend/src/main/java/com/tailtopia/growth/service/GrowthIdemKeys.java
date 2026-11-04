@@ -62,6 +62,14 @@ public final class GrowthIdemKeys {
         return "MILESTONE:" + userId + ":" + code + ":" + (petId == null ? 0L : petId);
     }
 
+    /**
+     * 账号级里程碑（V1.4.2 Story 2.1 · P-7）：按账号 + flag 一次，与宠物数无关。
+     * 格式 {@code MILESTONE_ACCT:{userId}:{flagKey}}（定死，存量补算 2.2 复用同一键防重复给分）。
+     */
+    public static String milestoneAccount(long userId, String flagKey) {
+        return "MILESTONE_ACCT:" + userId + ":" + flagKey;
+    }
+
     public static String giftSent(long giftOrderId) {
         return "GIFT_SENT:" + giftOrderId;
     }

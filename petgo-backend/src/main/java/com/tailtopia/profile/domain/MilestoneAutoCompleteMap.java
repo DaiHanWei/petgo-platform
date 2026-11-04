@@ -80,6 +80,9 @@ public final class MilestoneAutoCompleteMap {
         // V1.3.4 FR-126（AD-18）：清单末尾追加的两项，三物种都有节点。
         put(t, MilestoneAutoEvent.PLACE_CHECKED_IN, "C-S17", "D-S17", "G-S10");
         put(t, MilestoneAutoEvent.TAILSONALITY_UNLOCKED, "C-S18", "D-S18", "G-S11");
+        // V1.4.2 FR-154（D-4；决策日志 B1）：账号级两项。🔴 通用清单是 G-S12 / G-S13，不是 S19 / S20。
+        put(t, MilestoneAutoEvent.FIRST_FOLLOW_USER, "C-S19", "D-S19", "G-S12");
+        put(t, MilestoneAutoEvent.FIRST_COLLECT_CONTENT, "C-S20", "D-S20", "G-S13");
         return Map.copyOf(t);
     }
 

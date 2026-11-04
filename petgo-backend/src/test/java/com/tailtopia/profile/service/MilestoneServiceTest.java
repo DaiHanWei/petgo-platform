@@ -24,7 +24,55 @@ class MilestoneServiceTest {
     private final PetResolver petResolver = mock(PetResolver.class);
     private final PetMilestoneRepository milestones = mock(PetMilestoneRepository.class);
     private final MilestoneCompletionRepository completions = mock(MilestoneCompletionRepository.class);
-    private final MilestoneService service = new MilestoneService(petResolver, milestones, completions);
+    private final AccountMilestoneService accountMilestones = mock(AccountMilestoneService.class);
+    private final MilestoneService service =
+            new MilestoneService(petResolver, milestones, completions, accountMilestones);
+
+    /** V1.4.2 Story 2.1 T6.1：真正物化 roster 后调账号级钩子。 */
+    @Test
+    void assignRosterAppliesAccountFlagsAfterMaterialising() {
+        when(milestones.existsByPetProfileId(10L)).thenReturn(false);
+
+        service.assignRoster(10L, com.tailtopia.profile.domain.PetType.CAT);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(milestones, accountMilestones);
+        order.verify(milestones).saveAll(org.mockito.ArgumentMatchers.anyList());
+        order.verify(accountMilestones).applyExistingFlagsToPet(10L);
+    }
+
+    /** V1.4.2 Story 2.1 T6.1：已有 roster 的短路分支不调钩子（存量宠物走触发 / reconcile 路径）。 */
+    @Test
+    void assignRosterShortCircuitDoesNotApplyAccountFlags() {
+        when(milestones.existsByPetProfileId(10L)).thenReturn(true);
+
+        service.assignRoster(10L, com.tailtopia.profile.domain.PetType.CAT);
+
+        verify(accountMilestones, never()).applyExistingFlagsToPet(anyLong());
+    }
+
+    /** V1.4.2 Story 2.1 T6.1：并发兜底（唯一约束冲突）分支不调钩子 —— 赢的那个事务已调过。 */
+    @Test
+    void assignRosterConcurrentLoserDoesNotApplyAccountFlags() {
+        when(milestones.existsByPetProfileId(10L)).thenReturn(false);
+        when(milestones.saveAll(org.mockito.ArgumentMatchers.anyList()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
+
+        service.assignRoster(10L, com.tailtopia.profile.domain.PetType.CAT);
+
+        verify(accountMilestones, never()).applyExistingFlagsToPet(anyLong());
+    }
+
+    /** V1.4.2 Story 2.1 AC1.5：分母随清单 —— 猫 / 狗 35、其他 20。 */
+    @Test
+    void progressDenominatorFollowsCatalog() {
+        when(milestones.findByPetProfileIdOrderBySortOrderAsc(anyLong())).thenReturn(List.of());
+        org.assertj.core.api.Assertions.assertThat(
+                service.getProgress(10L, com.tailtopia.profile.domain.PetType.CAT).total()).isEqualTo(35);
+        org.assertj.core.api.Assertions.assertThat(
+                service.getProgress(10L, com.tailtopia.profile.domain.PetType.DOG).total()).isEqualTo(35);
+        org.assertj.core.api.Assertions.assertThat(
+                service.getProgress(10L, com.tailtopia.profile.domain.PetType.OTHER).total()).isEqualTo(20);
+    }
 
     @Test
     void petIdBReadsOnlyBsRoster() {

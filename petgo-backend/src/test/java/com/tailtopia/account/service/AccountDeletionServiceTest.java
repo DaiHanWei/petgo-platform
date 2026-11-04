@@ -71,6 +71,8 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.profile.slot.PetSlotAccountDeletionService petSlotDeletion;
     /** V1.4.2 social-topic Story 1.1：追更者一侧追更行清理。 */
     @Mock com.tailtopia.social.service.PetFollowService petFollowService;
+    /** V1.4.2 social-topic Story 2.1：账号级里程碑 flag 清理。 */
+    @Mock com.tailtopia.profile.service.AccountMilestoneService accountMilestones;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -80,7 +82,7 @@ class AccountDeletionServiceTest {
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
                 followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion,
-                petSlotDeletion, petFollowService);
+                petSlotDeletion, petFollowService, accountMilestones);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -125,6 +127,7 @@ class AccountDeletionServiceTest {
         verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
         // V1.4.0 ① Story 1.2 · AC7：成长值三张表在 tailsonality 之后、PawCoin 作废之前删除（AD-18）。
         verify(growthDeletion).deleteByUserId(7L);
+        verify(accountMilestones).deleteByUserId(7L); // V1.4.2 Story 2.1 AC10
         org.mockito.InOrder growthOrder = org.mockito.Mockito.inOrder(tailsonalityDeletion, growthDeletion,
                 pawCoinDeletion);
         growthOrder.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);

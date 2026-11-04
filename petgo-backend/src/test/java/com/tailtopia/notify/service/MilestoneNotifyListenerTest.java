@@ -84,4 +84,28 @@ class MilestoneNotifyListenerTest {
         verify(notificationService).sendWithoutPush(anyLong(), any(), any(), any(),
                 eq(NotificationType.MILESTONE_NODE.name()), any());
     }
+
+    /**
+     * V1.4.2 Story 2.1（D-12 / R-4）：账号级不论几只宠物完成只 1 条 S 级留痕、不推送；targetRef = 第一只 ACTIVE 宠物编码。
+     */
+    @Test
+    void accountMilestoneWritesOneCenterEntryWithFirstActivePetCode() {
+        listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(7L,
+                "FIRST_FOLLOW_USER", java.util.List.of(3L, 4L), java.util.List.of("C-S19", "D-S19"), "C-S19"));
+
+        verify(notificationService, never()).send(anyLong(), any(), any(), any(), any(), any());
+        verify(notificationService, org.mockito.Mockito.times(1)).sendWithoutPush(eq(7L),
+                eq(NotificationType.MILESTONE_SM_NODE), any(), any(), eq(NotificationType.MILESTONE_NODE.name()),
+                eq("C-S19"));
+    }
+
+    /** V1.4.2 Story 2.1 AC5.1：没写任何完成行（无 ACTIVE 宠物）→ 不通知。 */
+    @Test
+    void accountMilestoneWithoutCompletedPetsSendsNothing() {
+        listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(7L,
+                "FIRST_COLLECT_CONTENT", java.util.List.of(), java.util.List.of(), null));
+
+        verify(notificationService, never()).send(anyLong(), any(), any(), any(), any(), any());
+        verify(notificationService, never()).sendWithoutPush(anyLong(), any(), any(), any(), any(), any());
+    }
 }

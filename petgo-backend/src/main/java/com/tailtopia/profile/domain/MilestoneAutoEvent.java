@@ -50,4 +50,11 @@ public enum MilestoneAutoEvent {
     PLACE_CHECKED_IN,
     /** Tailsonality 完整解读解锁成功（sku=TAILSONALITY，含补差价升级；配型单买 TS_MATCH 不算）。 */
     TAILSONALITY_UNLOCKED,
+    /**
+     * 账号内第一次手动关注一个人（V1.4.2 FR-154，账号级：经 {@code AccountMilestoneService} 扇到所有 ACTIVE 宠物，
+     * 不走按宠物的 {@code MilestoneCompletionService.complete}）。
+     */
+    FIRST_FOLLOW_USER,
+    /** 账号内第一次收藏帖子（V1.4.2 FR-154，账号级；自收藏也算，场所收藏不算）。 */
+    FIRST_COLLECT_CONTENT,
 }

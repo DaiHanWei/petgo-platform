@@ -94,6 +94,8 @@ public class AccountDeletionService {
     private final PetSlotAccountDeletionService petSlotDeletion;
     /** V1.4.2 social-topic Story 1.1：追更者一侧的追更行 + 宠物计数（users 行只匿名化，FK CASCADE 不触发）。 */
     private final PetFollowService petFollowService;
+    /** V1.4.2 social-topic Story 2.1：账号级里程碑 flag 随注销物理删除。 */
+    private final com.tailtopia.profile.service.AccountMilestoneService accountMilestones;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -113,7 +115,8 @@ public class AccountDeletionService {
             GrowthAccountDeletionService growthDeletion,
             PushPreferenceService pushPreferences, CollectDeletionService collectDeletion,
             PetSlotAccountDeletionService petSlotDeletion,
-            PetFollowService petFollowService) {
+            PetFollowService petFollowService,
+            com.tailtopia.profile.service.AccountMilestoneService accountMilestones) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -142,6 +145,7 @@ public class AccountDeletionService {
         this.collectDeletion = collectDeletion;
         this.petSlotDeletion = petSlotDeletion;
         this.petFollowService = petFollowService;
+        this.accountMilestones = accountMilestones;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -234,6 +238,8 @@ public class AccountDeletionService {
         // ⚠️ users 行只匿名化不删，growth_accounts 对 users 的 FK 永不触发 CASCADE —— 必须显式删；
         //    放在 tailsonality 之后、PawCoin 作废之前（架构 AD-18 定的位置）。
         growthDeletion.deleteByUserId(userId);
+        // V1.4.2 social-topic Story 2.1（AC10）：账号级里程碑 flag 物理删（users 行只匿名化，FK CASCADE 在注销路径不触发）。
+        accountMilestones.deleteByUserId(userId);
         // V1.4.0 ④ Story 2.1：本人的帖子 / 场所收藏物理删（users 行只匿名化，FK CASCADE 不触发），在 authDeletion 之前。
         // ⚠️ 他人收藏的、指向本人帖子的行不删：帖子置 AUTHOR_DEACTIVATED 后列表读时显示不可见，由对方自行移除。
         collectDeletion.deleteByUserId(userId);

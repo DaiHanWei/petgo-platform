@@ -42,6 +42,8 @@ const Map<String, ({String en, String id})> kMilestoneTitles = {
   'C-S16': (en: 'Beginner graduate 🎓', id: 'Lulus Pemula 🎓'),
   'C-S17': (en: 'First check-in', id: 'Check-in pertama'),
   'C-S18': (en: 'Personality revealed', id: 'Kenal kepribadian'),
+  'C-S19': (en: 'First friend', id: 'Teman pertama'),
+  'C-S20': (en: 'First save', id: 'Simpan pertama'),
 
   // ===== DOG (D) =====
   'D-S1': (en: 'Profile created', id: 'Profil dibuat'),
@@ -77,6 +79,8 @@ const Map<String, ({String en, String id})> kMilestoneTitles = {
   'D-S16': (en: 'Beginner graduate 🎓', id: 'Lulus Pemula 🎓'),
   'D-S17': (en: 'First check-in', id: 'Check-in pertama'),
   'D-S18': (en: 'Personality revealed', id: 'Kenal kepribadian'),
+  'D-S19': (en: 'First friend', id: 'Teman pertama'),
+  'D-S20': (en: 'First save', id: 'Simpan pertama'),
 
   // ===== OTHER (G) =====
   'G-S1': (en: 'Profile created', id: 'Profil dibuat'),
@@ -97,6 +101,8 @@ const Map<String, ({String en, String id})> kMilestoneTitles = {
   'G-S9': (en: 'Beginner graduate 🎓', id: 'Lulus Pemula 🎓'),
   'G-S10': (en: 'First check-in', id: 'Check-in pertama'),
   'G-S11': (en: 'Personality revealed', id: 'Kenal kepribadian'),
+  'G-S12': (en: 'First friend', id: 'Teman pertama'),
+  'G-S13': (en: 'First save', id: 'Simpan pertama'),
 };
 
 /// 按 code + locale 返回本地化里程碑标题。未知 code 兜底返回 code（绝不显示中文）。
