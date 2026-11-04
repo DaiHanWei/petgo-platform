@@ -16,14 +16,25 @@ import 'share_service.dart';
 /// 提交给后端的 [title]/[body] 取客户端已本地化的庆祝文案（与弹层显示一致），杜绝后端中文泄漏。
 ///
 /// [petId]：这条里程碑所属宠物（多宠物打卡逐只庆祝时必须传，OCR #5）；不传 = 当前宠物（原口径）。
-Future<void> shareMilestoneWithLink(
-  WidgetRef ref, {
+///
+/// V1.4.2 social-topic Story 3.2（架构 §1.2 第 7 条 · D-21）：
+/// - 经弹出时取好的 [ProviderContainer] 读依赖，**不再接收宿主 `WidgetRef`**（宿主已销毁时 `ref.read` 会抛，
+///   分享面板不出、庆祝页也不关 = 「点了没反应」的根因）；
+/// - 拉起分享面板也在 try 保护内：分享服务抛错 → [onFailed]`('open_sheet')`，不抛出；
+/// - 建链失败 → [onFailed]`('create_link')`，退化纯文案、**照常拉起面板**；
+/// - [sharePositionOrigin]：iOS 必传（iPad 缺失会崩，见 `share_service.dart` 头注释），透传给分享服务。
+///
+/// 返回分享面板是否成功拉起（false = 分享服务抛错，调用方据此恢复按钮、不关庆祝页）。
+Future<bool> shareMilestoneWithLink(
+  ProviderContainer c, {
   required MilestoneItem item,
   required Locale locale,
   required String petName,
   required String shareText,
   List<MilestoneItem> collection = const [],
   int? petId,
+  Rect? sharePositionOrigin,
+  void Function(String stage)? onFailed,
 }) async {
   var message = shareText;
   final lang = locale.languageCode == 'id' ? 'id' : 'en';
@@ -35,8 +46,8 @@ Future<void> shareMilestoneWithLink(
   try {
     final copy = localizedMilestoneCelebration(item.code, locale, petName);
     // V1.4.0 multi-pet（Story 1.5）：默认分享当前宠物的里程碑；调用方给了 petId（逐只庆祝）就按它。
-    final sharePetId = petId ?? await readRequestPetId(ref);
-    final token = await ref.read(milestoneRepositoryProvider).createShare(
+    final sharePetId = petId ?? await readRequestPetIdFrom(c);
+    final token = await c.read(milestoneRepositoryProvider).createShare(
           item.code,
           title: copy.title,
           body: copy.body,
@@ -49,6 +60,13 @@ Future<void> shareMilestoneWithLink(
     Analytics.capture('milestone_share_created', {'code': item.code, 'level': item.level.name});
   } catch (_) {
     // 退化：仅分享文案（无链接），不阻断。
+    onFailed?.call('create_link');
   }
-  await ref.read(shareServiceProvider)(message);
+  try {
+    await c.read(shareServiceProvider)(message, sharePositionOrigin: sharePositionOrigin);
+    return true;
+  } catch (_) {
+    onFailed?.call('open_sheet');
+    return false;
+  }
 }

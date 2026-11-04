@@ -21,8 +21,6 @@ import '../../profile/data/milestone_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/milestone.dart';
-import '../../profile/domain/milestone_share.dart';
-import '../../profile/domain/milestone_titles.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../profile/data/milestone_celebration_reporter.dart';
 import '../../profile/presentation/widgets/milestone_celebration.dart';
@@ -539,7 +537,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // 回填成功 → 先弹 P-35 解锁庆祝（与「去打卡」路径一致，修复「去发布」无完成弹框）。
       if (completedMilestone != null) {
         final done = completedMilestone;
-        final locale = Localizations.localeOf(context);
         final listPetId = _milestonePetId;
         final listData =
             listPetId == null ? null : ref.read(milestoneListProvider(listPetId)).asData?.value;
@@ -550,44 +547,57 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 for (final g in listData.groups)
                   for (final it in g.items) it.code == done.code ? done : it,
               ];
-        final shareText = l10n.milestoneShareText(
-          localizedMilestoneTitle(done.code, locale),
-        );
         final router = GoRouter.maybeOf(context);
+        // V1.4.2 Story 3.2 · D-21：弹出前取好 container —— 回报 / 收尾时本 sheet 可能已关、ref 已销毁。
+        final container = ProviderScope.containerOf(context, listen: false);
         // 弹出前先记本地：下面那个列表页可能在庆祝期间被重拉并自行补弹。
         markMilestonesCelebrating(ref, [done.code]);
+        var handedOff = false;
+        // 里程碑路径收尾：回报 → 关闭发布 sheet → 跳回里程碑列表（不叠加通用「发布成功」页）。
+        // 两种时机只做一次：①「Bagikan ke Komunitas」打开新发布页**之前**（beforeCompose）；②其余关闭方式在庆祝关闭后。
+        // 🔴 ①必须先关本 sheet：`publishControllerProvider` 是全局单例，两个发布页并存会共用同一个 controller，
+        //    新页的预填会写进本条帖子的草稿（Story 3.2 · T5.2）。
+        void finish() {
+          if (handedOff) return;
+          handedOff = true;
+          // 回报本次庆祝（best-effort，不 await）——「去发布」也是一次真实庆祝，不报的话
+          // 这条会在下面跳到的列表页被当成"未庆祝"再弹一遍。
+          reportMilestoneCelebratedIn(container, [done.code]);
+          if (!mounted) return;
+          Navigator.of(context).pop();
+          // 🔴 把「刚庆祝过」的 code 随导航带过去（AD-A2.3c）。上面那次回报是**异步**的，
+          //    列表页极可能在它落库前就读到 celebratedAt == null → 两秒内连弹两次同一条。
+          //    抑制必须落在客户端、**不依赖回报是否已落库**；也不得把回报改成同步来绕开
+          //    （那会让发布流程卡在一个可失败的写上）。
+          // push 而非 go：保留发布前页作前驱，里程碑页 canPop→iOS 边缘侧滑可返回（修 20260701-190）。
+          // pushReplacement：本 sheet 开在 /publish 空白着陆页之上，普通 push 会把着陆页压在
+          // 里程碑列表下面，返回时再白屏一次（bug 20260922-520）。替换掉着陆页，前驱仍是发布前页。
+          router?.pushReplacement(DeepLinkRoutes.milestoneList,
+              extra: <String>{done.code});
+        }
         await showMilestoneCelebration(
           context,
           done,
           petName: petName,
           path: MilestoneCelebrationPath.instant,
           collection: collection,
-          onShare: () => shareMilestoneWithLink(
-            ref,
-            item: done,
-            locale: locale,
-            petName: petName,
-            shareText: shareText,
-            collection: collection,
-            petId: listPetId, // 与打卡同一只（进页时的当前宠物），不随之后切换的当前宠物走
-          ),
+          petId: listPetId, // 与打卡同一只（进页时的当前宠物），不随之后切换的当前宠物走
+          beforeCompose: () async {
+            finish();
+            // 等本 sheet 真正销毁、单例 controller 随 autoDispose 释放后再开新发布页（否则 pop 退场动画期间
+            // 旧页仍在监听，新页 read 到的还是这条帖子的 controller）。最多等 ~3s，超时照开（best-effort）。
+            for (var i = 0; i < 60 && container.exists(publishControllerProvider); i++) {
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+            }
+          },
           // onSeeAll 省略：庆祝关闭后统一在下方先关 sheet 再跳列表（否则 sheet 挡住跳转）。
         );
-        // 回报本次庆祝（best-effort，不 await）——「去发布」也是一次真实庆祝，不报的话
-        // 这条会在下面跳到的列表页被当成"未庆祝"再弹一遍。
-        reportMilestoneCelebrated(ref, [done.code]);
-        if (!mounted) return;
-        // 里程碑路径：庆祝即成功反馈 → 关闭发布 sheet → 跳回里程碑列表（不叠加通用「发布成功」页）。
-        Navigator.of(context).pop();
-        // 🔴 把「刚庆祝过」的 code 随导航带过去（AD-A2.3c）。上面那次回报是**异步**的，
-        //    列表页极可能在它落库前就读到 celebratedAt == null → 两秒内连弹两次同一条。
-        //    抑制必须落在客户端、**不依赖回报是否已落库**；也不得把回报改成同步来绕开
-        //    （那会让发布流程卡在一个可失败的写上）。
-        // push 而非 go：保留发布前页作前驱，里程碑页 canPop→iOS 边缘侧滑可返回（修 20260701-190）。
-        // pushReplacement：本 sheet 开在 /publish 空白着陆页之上，普通 push 会把着陆页压在
-        // 里程碑列表下面，返回时再白屏一次（bug 20260922-520）。替换掉着陆页，前驱仍是发布前页。
-        router?.pushReplacement(DeepLinkRoutes.milestoneList,
-            extra: <String>{done.code});
+        // 「发到社区」已在 beforeCompose 里收尾（此时本 sheet 早已关闭）→ 不重复 pop / 跳转。
+        if (handedOff || !mounted) {
+          if (!handedOff) reportMilestoneCelebratedIn(container, [done.code]);
+          return;
+        }
+        finish();
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet

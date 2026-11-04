@@ -332,6 +332,10 @@
   "@milestoneCelebrateShare": {
     "description": "P-35 celebration: share-to-community CTA"
   },
+  "milestoneCelebrateShareOutside": "Share to other apps",
+  "@milestoneCelebrateShareOutside": {
+    "description": "V1.4.2 Story 3.2 · D1: celebration secondary (outlined) CTA — share to other apps via system share sheet"
+  },
   "milestoneCelebrateSeeAll": "See all milestones →",
   "@milestoneCelebrateSeeAll": {
     "description": "P-35 celebration: link to the milestone list page"

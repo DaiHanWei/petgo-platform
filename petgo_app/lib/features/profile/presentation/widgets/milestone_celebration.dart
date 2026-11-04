@@ -1,19 +1,32 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/analytics/analytics.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/startup/startup_popup_ledger.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/card_render/card_frame.dart';
 import '../../../../shared/utils/haptics.dart';
+import '../../../../shared/widgets/app_toast.dart';
+import '../../../content/domain/content_type.dart';
+import '../../../content/presentation/brag_post_entry.dart';
+import '../../data/current_pet_provider.dart';
+import '../../data/pet_list_repository.dart';
 import '../../domain/celebration_pet.dart';
 import '../../domain/milestone.dart';
 import '../../domain/milestone_account_codes.dart';
 import '../../domain/milestone_celebration_copy.dart';
+import '../../domain/milestone_compose_preset.dart';
+import '../../domain/milestone_share.dart';
+import '../../domain/milestone_titles.dart';
 import 'milestone_badge.dart';
+import 'milestone_share_card.dart';
 import 'pet_species_avatar.dart';
 
 /// 里程碑解锁庆祝（Story 8.5 · FR-42）：**统一全屏页**（不分级仪式，决策 D-11），mint 风格、无第三方动画包。
@@ -39,16 +52,40 @@ enum MilestoneCelebrationPath {
   String get wire => name;
 }
 
+/// 庆祝页的退出方式（V1.4.2 social-topic Story 3.2 · T2.3）：只有「Bagikan ke Komunitas」成功出图时带回 JPEG，
+/// 由 [showMilestoneCelebration] 在 dialog 关闭**之后**打开发布页；其余关闭方式（✕ / 滑动 / 遮罩 / 站外分享 /
+/// 查看全部）都是 null。
+class _CelebrationExit {
+  const _CelebrationExit.compose(this.jpeg);
+  final Uint8List jpeg;
+}
+
+/// `milestone_share_failed {code, stage}`（PRD §4 FR-156）：`stage ∈ render_card / open_compose / create_link / open_sheet`。
+/// ⚠️ 事件名写字面量 —— 埋点清单测试按 `Analytics.capture('…'` 字面量对账。只带 code / stage，无 PII。
+void _reportShareFailed(String code, String stage) =>
+    Analytics.capture('milestone_share_failed', {'code': code, 'stage': stage});
+
+/// 统一庆祝页入口（6 处生产弹出点 + debug 钩子）。
+///
+/// V1.4.2 social-topic Story 3.2（D-21 · 架构 §1.2 第 7 条）：依赖一律**弹出前**取好 ——
+/// [ProviderContainer] / l10n / locale / 分享文案；按钮里不读宿主 `WidgetRef`（宿主页可能已销毁 / 被盖住）。
+///
+/// - [petId]：这条里程碑所属宠物（站外建链、发布页预选、卡面宠物）；null = 当前宠物（原口径）。
+/// - [beforeCompose]：「Bagikan ke Komunitas」在庆祝页关闭后、打开发布页**之前**调用 ——
+///   给「去发布」宿主先关旧发布 sheet（`publishControllerProvider` 是全局单例，两页并存会共用草稿）。
+/// - 「Bagikan ke Komunitas」的发布页由本函数打开并 **await 到它关闭**才返回：调用方 `await` 之后的收尾
+///   （回报、pop、跳转）一定发生在发布页关闭之后，不会把刚打开的发布页 pop 掉。
 Future<void> showMilestoneCelebration(
   BuildContext context,
   MilestoneItem item, {
   required String petName,
   required MilestoneCelebrationPath path,
-  FutureOr<void> Function()? onShare,
-  VoidCallback? onSeeAll,
+  int? petId,
   List<MilestoneItem> collection = const [],
   List<CelebrationPet> accountPets = const [],
-}) {
+  VoidCallback? onSeeAll,
+  Future<void> Function()? beforeCompose,
+}) async {
   // 入口统一登记本次冷启动功能弹窗（V1.3.4 Story 5.3 · AD-12），覆盖全部调用方。
   StartupPopupLedger.instance.record(StartupPopupKind.milestoneCelebration);
   // AC6：展示即上报，携带 code / level / path。
@@ -60,7 +97,12 @@ Future<void> showMilestoneCelebration(
     'level': item.level.name.toUpperCase(),
     'path': path.wire,
   });
-  return showGeneralDialog<void>(
+  // Story 3.2 · T2.2：弹出前取好（照 milestone_instant_celebration「在 show 之前取好」）。
+  final container = ProviderScope.containerOf(context, listen: false);
+  final l10n = AppLocalizations.of(context);
+  final locale = Localizations.localeOf(context);
+  final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
+  final exit = await showGeneralDialog<_CelebrationExit>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'milestone-celebration',
@@ -69,25 +111,70 @@ Future<void> showMilestoneCelebration(
     pageBuilder: (_, _, _) => _MilestoneCelebrationView(
         item: item,
         petName: petName,
-        onShare: onShare,
+        petId: petId,
+        container: container,
+        locale: locale,
+        shareText: shareText,
         onSeeAll: onSeeAll,
         collection: collection,
         accountPets: accountPets),
   );
+  if (exit == null) return;
+  // ---- 「Bagikan ke Komunitas」：庆祝页已关 → 打开预填发布页（AC4.2）。----
+  try {
+    int? pid = petId;
+    if (pid == null) {
+      try {
+        pid = await readRequestPetIdFrom(container).timeout(const Duration(seconds: 3));
+      } catch (_) {
+        pid = null; // 取不到 → 不预选（发布页按默认宠物）
+      }
+    }
+    // milestoneComposePreset 要一个 int：取不到当前宠物时用占位 0，随后从预选里滤掉（宠物 id 恒为正）。
+    final preset = milestoneComposePreset(
+        item: item, petId: pid ?? 0, petName: petName, accountPets: accountPets, l10n: l10n, locale: locale);
+    final petIds = [for (final id in preset.petIds) if (id > 0) id];
+    await beforeCompose?.call();
+    // 根导航上打开（宿主页此时可能已关 / 已被 beforeCompose 关掉，不用宿主 context）；根导航不可用 → open_compose。
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) throw StateError('root navigator unavailable');
+    await BragPostEntry.openPrepared(ctx,
+        jpeg: exit.jpeg,
+        text: preset.text,
+        preset: ContentType.growthMoment,
+        petIds: petIds.isEmpty ? null : petIds,
+        source: BragPostSource.milestoneCelebration);
+  } catch (_) {
+    // AC4.4：root context 不可用等 → 上报后静默结束（庆祝页此时已关，不再弹回）。
+    _reportShareFailed(item.code, 'open_compose');
+  }
 }
+
+/// 两个分享按钮同一时刻只允许一个动作（AC3.3）。
+enum _Busy { community, outside }
 
 class _MilestoneCelebrationView extends StatefulWidget {
   const _MilestoneCelebrationView(
       {required this.item,
       required this.petName,
-      this.onShare,
+      required this.container,
+      required this.locale,
+      required this.shareText,
+      this.petId,
       this.onSeeAll,
       this.collection = const [],
       this.accountPets = const []});
 
   final MilestoneItem item;
   final String petName;
-  final FutureOr<void> Function()? onShare;
+  final int? petId;
+
+  /// 弹出前取好的 container（D-21）：按钮里一切 provider 读取都走它，不持有宿主 `WidgetRef`。
+  final ProviderContainer container;
+  final Locale locale;
+
+  /// 站外分享文案（`milestoneShareText`，弹出前取好）。
+  final String shareText;
   final VoidCallback? onSeeAll;
 
   /// 全部里程碑（用于「已解锁合集」预览）；为空则不显示该区。
@@ -105,6 +192,18 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
+  /// 屏外预挂的里程碑卡截图区（3.1 交接：弹出即挂载预热，点按钮时图片已加载）。
+  final GlobalKey _cardKey = GlobalKey();
+
+  /// 「Bagikan ke luar」按钮（取全局矩形作 iOS `sharePositionOrigin`）。
+  final GlobalKey _outsideKey = GlobalKey();
+
+  late final List<CelebrationPet> _cardPets;
+  late final DateTime _cardDate;
+
+  /// 正在处理的动作（null = 空闲）。
+  _Busy? _busy;
+
   @override
   void initState() {
     super.initState();
@@ -112,8 +211,30 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
+    _cardPets = _resolveCardPets();
+    // 重温旧数据可能没有完成时间 → 用今天。
+    _cardDate = widget.item.completedAt ?? DateTime.now();
     // 解锁瞬间一次振动反馈（弹框一打开即触发，方便测）。
     celebrationVibrate();
+  }
+
+  /// 卡面宠物（T3.2）：账号级且取到了账号宠物 → 全部；否则这一只 —— 名字 / 头像 / 物种从**已加载的**宠物列表按
+  /// petId 取（不为此新发列表请求），取不到 → [petName] + 按编码前缀的物种默认头像。
+  List<CelebrationPet> _resolveCardPets() {
+    if (isAccountMilestone(widget.item.code) && widget.accountPets.isNotEmpty) return widget.accountPets;
+    final c = widget.container;
+    PetListItem? hit;
+    if (c.exists(petListProvider)) {
+      final pets = c.read(petListProvider).asData?.value ?? const <PetListItem>[];
+      final id = widget.petId ?? (c.exists(effectivePetIdProvider) ? c.read(effectivePetIdProvider).asData?.value : null);
+      hit = pets.where((p) => p.id == id).firstOrNull;
+    }
+    if (hit != null) {
+      return [CelebrationPet(name: hit.name, avatarUrl: hit.avatarUrl, petType: hit.petType, id: hit.id)];
+    }
+    final code = widget.item.code;
+    final type = code.startsWith('C') ? 'CAT' : code.startsWith('D') ? 'DOG' : null;
+    return [CelebrationPet(name: widget.petName, petType: type, id: widget.petId)];
   }
 
   @override
@@ -122,21 +243,89 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
     super.dispose();
   }
 
+  /// 已发起关闭（✕ / 滑动 / 查看全部 / 站外分享后 / 发到社区带图退出）。
+  bool _closed = false;
+
+  /// 庆祝层已不该再操作导航（复审 3-2 CONFIRMED）：已发起关闭、已卸载，或本路由已不是栈顶 ——
+  /// 例如出图期间点了 ✕，截图恰好在 240ms 退场动画内完成：此时 `mounted` 仍为 true，再 `pop` 会弹掉**下面的宿主路由**
+  /// （「去发布」连弹两层、健康记录连带关掉列表页）。遮罩点击 / 系统返回不经 [_close]，靠 `isCurrent` 兜住。
+  bool get _gone => !mounted || _closed || ModalRoute.of(context)?.isCurrent != true;
+
   void _close() {
-    if (mounted && Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
+    if (_gone) return;
+    _closed = true;
+    Navigator.of(context).pop();
+  }
+
+  /// 「Bagikan ke Komunitas」（AC4）：截卡 → 转 JPEG → 带图关闭庆祝页（发布页由 [showMilestoneCelebration] 打开）。
+  Future<void> _onCommunityPressed() async {
+    if (_busy != null || _gone) return;
+    final code = widget.item.code;
+    // AC4.1：点击当下上报（截图 / 转码失败也算一次点击）。
+    BragPostEntry.reportTap(BragPostSource.milestoneCelebration,
+        extra: {'code': code, 'level': widget.item.level.name.toUpperCase()});
+    setState(() => _busy = _Busy.community);
+    Uint8List? jpeg;
+    // prepare 转码失败时自己弹过 toast（不重复弹）。
+    var toasted = false;
+    try {
+      final png = await captureMilestoneShareCard(_cardKey);
+      // 用户在出图期间关掉了庆祝页（含退场动画中）→ 放弃，不再碰导航、不算失败。
+      if (!mounted || _gone) return;
+      if (png != null) {
+        jpeg = await BragPostEntry.prepare(context, png, toastExtraBottom: 96);
+        if (!mounted || _gone) return;
+        toasted = jpeg == null;
+      }
+    } catch (_) {
+      // 复审 3-2 PLAUSIBLE(a)：截图 / 转码抛异常按「出图失败」处理，按钮不能卡在转圈。
+      jpeg = null;
+    }
+    if (!mounted || _gone) return;
+    if (jpeg == null) {
+      // D3：截图超时 / 失败 → 轻提示（抬到吸底栏上沿之上，不用 top：会压住 ✕）。
+      if (!toasted) showAppToast(context, AppLocalizations.of(context).shareCardExportError, extraBottom: 96);
+      _reportShareFailed(code, 'render_card');
+      setState(() => _busy = null); // 不关庆祝页、按钮恢复可重试
+      return;
+    }
+    _closed = true;
+    Navigator.of(context).pop(_CelebrationExit.compose(jpeg));
+  }
+
+  /// 「Bagikan ke luar」（AC5）：建链 → 系统分享面板 → 面板返回后关闭庆祝页；面板没能拉起 → 按钮恢复。
+  Future<void> _onOutsidePressed() async {
+    if (_busy != null || _gone) return;
+    // AC5.4：iOS 分享面板定位用按钮全局矩形（iPad 不传会崩）。
+    final box = _outsideKey.currentContext?.findRenderObject() as RenderBox?;
+    final origin = box == null || !box.hasSize ? null : box.localToGlobal(Offset.zero) & box.size;
+    setState(() => _busy = _Busy.outside);
+    var opened = false;
+    try {
+      opened = await shareMilestoneWithLink(widget.container,
+          item: widget.item,
+          locale: widget.locale,
+          petName: widget.petName,
+          shareText: widget.shareText,
+          collection: widget.collection,
+          petId: widget.petId,
+          sharePositionOrigin: origin,
+          onFailed: (stage) => _reportShareFailed(widget.item.code, stage));
+    } catch (_) {
+      _reportShareFailed(widget.item.code, 'open_sheet'); // 兜底：任何异常都不让按钮卡死
+    }
+    // 面板期间庆祝页已被关掉（✕ / 遮罩 / 返回）→ 不再碰导航（[_close] 内同样有此判断）。
+    if (!mounted || _gone) return;
+    if (opened) {
+      _close();
+    } else {
+      setState(() => _busy = null);
     }
   }
 
-  Future<void> _onSharePressed() async {
-    if (widget.onShare != null) {
-      await widget.onShare!.call();
-    }
-    _close();
-  }
-
-  // 查看全部里程碑：先关庆祝层，再跳里程碑列表（由调用方注入跳转）。
+  // 查看全部里程碑：先关庆祝层，再跳里程碑列表（由调用方注入跳转）。处理中不可点（AC3 / T3.4）。
   void _seeAll() {
+    if (_busy != null || _gone) return;
     _close();
     widget.onSeeAll?.call();
   }
@@ -145,7 +334,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
   Widget build(BuildContext context) => _celebration(context);
 
   // ---- P-35 统一解锁庆祝（不分级别，原型 milestone-unlock）：纯深色全屏页 + 渐变大徽章
-  //      + 解锁标头 + 标题/正文 + 宠物·日期 + 分享到社区 + 查看全部 ----
+  //      + 解锁标头 + 标题/正文 + 宠物·日期；V1.4.2 Story 3.2 · D1：按钮组吸底（发到社区 / 站外分享 / 查看全部）----
   Widget _celebration(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
@@ -170,22 +359,29 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
         children: [
           // 掉落彩纸（纯自绘，不挡交互）。
           const Positioned.fill(child: IgnorePointer(child: _Confetti())),
-          // 右上角关闭按钮（始终有明确出口，配合滑动关闭）。
+          // Story 3.2 · T3.2：里程碑卡屏外预挂（移出可视区；不用 Offstage / Visibility / Opacity —— 它们不绘制，截出空图）。
           Positioned(
-            top: 4,
-            right: 4,
-            child: SafeArea(
-              child: IconButton(
-                key: const ValueKey('milestoneCelebrationClose'),
-                icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 26),
-                onPressed: _close,
+            left: -2000,
+            top: 0,
+            width: 360,
+            child: IgnorePointer(
+              child: CardFrame(
+                boundaryKey: _cardKey,
+                canvas: kMilestoneShareCanvas,
+                child: MilestoneShareCard(item: widget.item, pets: _cardPets, completedAt: _cardDate),
               ),
             ),
           ),
           SafeArea(
-            child: Center(
-              key: const ValueKey('milestoneCelebration'),
-              child: SingleChildScrollView(
+            child: Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Center(
+                          key: const ValueKey('milestoneCelebration'),
+                          child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -265,41 +461,135 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
                   const SizedBox(height: 24),
                   _collection(l10n),
                 ],
-                const SizedBox(height: 28),
-                if (widget.onShare != null)
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      key: const ValueKey('milestoneShare'),
-                      onPressed: _onSharePressed,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: Text(l10n.milestoneCelebrateShare),
-                    ),
-                  ),
-                const SizedBox(height: 14),
-                // 查看全部里程碑 → 跳转列表页。
-                GestureDetector(
-                  key: const ValueKey('milestoneCelebrateSeeAll'),
-                  onTap: _seeAll,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(l10n.milestoneCelebrateSeeAll,
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45), fontSize: 13)),
-                  ),
-                ),
               ],
             ),
           ),
-        ),
-      ),
+                        ),
+                      ),
+                      // D1 上沿渐隐：吸底栏上方 32 高、splashInk 0 → 100%，叠在滚动区底部、不占布局、不挡交互。
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: 32,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const ValueKey('milestoneCelebrationFade'),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [AppColors.splashInk.withValues(alpha: 0), AppColors.splashInk],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _actionBar(l10n),
+              ],
+            ),
+          ),
+          // 右上角关闭按钮（始终有明确出口，配合滑动关闭；处理中仍可点 = 放弃）。放最上层，不被滚动区挡住。
+          Positioned(
+            top: 4,
+            right: 4,
+            child: SafeArea(
+              child: IconButton(
+                key: const ValueKey('milestoneCelebrationClose'),
+                icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 26),
+                onPressed: _close,
+              ),
+            ),
+          ),
         ],
       ),
+      ),
+    );
+  }
+
+  /// D1 吸底栏（不随内容滚动，底色 splashInk）：16 + 主按钮 52 + 12 + 描边次按钮 52 + 14 + 查看全部（+ 底部安全区，外层 SafeArea）。
+  /// D2：处理中的按钮自己转圈（宽高不变），其余按钮 40%、链接 50% 不透明度且不可点。
+  Widget _actionBar(AppLocalizations l10n) {
+    final busy = _busy;
+    const spinner = SizedBox(
+      key: ValueKey('milestoneShareBusy'),
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+    );
+    const btnText = TextStyle(fontSize: 14, fontWeight: FontWeight.w700);
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    Widget dim(bool on, double opacity, Widget child) =>
+        on ? IgnorePointer(child: Opacity(opacity: opacity, child: child)) : child;
+    return ColoredBox(
+      color: AppColors.splashInk,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dim(
+              busy == _Busy.outside,
+              0.4,
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const ValueKey('milestoneShare'),
+                  // 处理中保持紫底（onPressed 不置 null，否则变禁用灰），点击由 _busy 拦下。
+                  onPressed: _onCommunityPressed,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    textStyle: btnText,
+                    shape: shape,
+                  ),
+                  child: busy == _Busy.community ? spinner : Text(l10n.milestoneCelebrateShare),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            dim(
+              busy == _Busy.community,
+              0.4,
+              SizedBox(
+                key: _outsideKey,
+                width: double.infinity,
+                child: OutlinedButton(
+                  key: const ValueKey('milestoneShareOutside'),
+                  onPressed: _onOutsidePressed,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    foregroundColor: Colors.white,
+                    textStyle: btnText,
+                    shape: shape,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.35), width: 1.5),
+                  ),
+                  child: busy == _Busy.outside
+                      ? spinner
+                      : Text(l10n.milestoneCelebrateShareOutside),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            // 查看全部里程碑 → 跳转列表页。
+            dim(
+              busy != null,
+              0.5,
+              GestureDetector(
+                key: const ValueKey('milestoneCelebrateSeeAll'),
+                onTap: _seeAll,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(l10n.milestoneCelebrateSeeAll,
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 13)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

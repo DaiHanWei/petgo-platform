@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,49 +63,40 @@ const _item = MilestoneItem(
   completed: true,
 );
 
-Future<String?> _runShare(WidgetTester tester, _FakeRepo repo, {int? petId}) async {
+const _collection = [
+  MilestoneItem(code: 'C-L1', title: 'x', level: MilestoneLevel.l, trigger: MilestoneTrigger.systemAuto, completed: true),
+  MilestoneItem(code: 'C-S5', title: 'x', level: MilestoneLevel.s, trigger: MilestoneTrigger.userCheckin, completed: true),
+  MilestoneItem(
+      code: 'C-S6',
+      title: 'x',
+      level: MilestoneLevel.s,
+      trigger: MilestoneTrigger.userCheckin,
+      completed: false), // 未完成 → 不计入合集串
+];
+
+/// V1.4.2 Story 3.2：改为经 [ProviderContainer] 调（不再要宿主 WidgetRef）。
+Future<String?> _runShare(WidgetTester tester, _FakeRepo repo,
+    {int? petId, Rect? origin, List<String>? stages, List<Rect?>? origins, bool shareThrows = false, List<bool>? results}) async {
   String? captured;
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      milestoneRepositoryProvider.overrideWithValue(repo),
-      shareServiceProvider.overrideWithValue((text, {sharePositionOrigin}) async => captured = text),
-    ],
-    child: MaterialApp(
-      home: Consumer(builder: (context, ref, _) {
-        return ElevatedButton(
-          onPressed: () => shareMilestoneWithLink(ref,
-              item: _item,
-              locale: const Locale('id'),
-              petName: 'Momo',
-              shareText: 'SHARE_TEXT',
-              petId: petId,
-              collection: const [
-                MilestoneItem(
-                    code: 'C-L1',
-                    title: 'x',
-                    level: MilestoneLevel.l,
-                    trigger: MilestoneTrigger.systemAuto,
-                    completed: true),
-                MilestoneItem(
-                    code: 'C-S5',
-                    title: 'x',
-                    level: MilestoneLevel.s,
-                    trigger: MilestoneTrigger.userCheckin,
-                    completed: true),
-                MilestoneItem(
-                    code: 'C-S6',
-                    title: 'x',
-                    level: MilestoneLevel.s,
-                    trigger: MilestoneTrigger.userCheckin,
-                    completed: false), // 未完成 → 不计入合集串
-              ]),
-          child: const Text('go'),
-        );
-      }),
-    ),
-  ));
-  await tester.tap(find.text('go'));
-  await tester.pumpAndSettle();
+  final c = ProviderContainer(overrides: [
+    milestoneRepositoryProvider.overrideWithValue(repo),
+    shareServiceProvider.overrideWithValue((text, {sharePositionOrigin}) async {
+      origins?.add(sharePositionOrigin);
+      if (shareThrows) throw StateError('share sheet failed');
+      captured = text;
+    }),
+  ]);
+  addTearDown(c.dispose);
+  final ok = await shareMilestoneWithLink(c,
+      item: _item,
+      locale: const Locale('id'),
+      petName: 'Momo',
+      shareText: 'SHARE_TEXT',
+      petId: petId,
+      sharePositionOrigin: origin,
+      onFailed: stages?.add,
+      collection: _collection);
+  results?.add(ok);
   return captured;
 }
 
@@ -134,5 +127,41 @@ void main() {
     final repo = _FakeRepo(token: 'Ab3xK9');
     await _runShare(tester, repo, petId: 77);
     expect(repo.lastPetId, 77);
+  });
+
+  // ---- V1.4.2 social-topic Story 3.2 · AC5 / T6.4 ----
+
+  testWidgets('建链失败 → 纯文案分享 + onFailed(create_link)，照常拉起面板', (tester) async {
+    final stages = <String>[];
+    final results = <bool>[];
+    final shared = await _runShare(tester, _FakeRepo(fail: true), stages: stages, results: results);
+    expect(shared, 'SHARE_TEXT');
+    expect(stages, ['create_link']);
+    expect(results, [true]);
+  });
+
+  testWidgets('分享服务抛错 → 不抛出、onFailed(open_sheet)、返回 false', (tester) async {
+    final stages = <String>[];
+    final results = <bool>[];
+    await _runShare(tester, _FakeRepo(token: 'Ab3xK9'), stages: stages, shareThrows: true, results: results);
+    expect(stages, ['open_sheet']);
+    expect(results, [false]);
+  });
+
+  testWidgets('sharePositionOrigin 原样透传给分享服务（iOS 必传）', (tester) async {
+    final origins = <Rect?>[];
+    const rect = Rect.fromLTWH(28, 700, 334, 52);
+    await _runShare(tester, _FakeRepo(token: 'Ab3xK9'), origin: rect, origins: origins);
+    expect(origins, [rect]);
+  });
+
+  test('源码：shareMilestoneWithLink 不再有 WidgetRef 调用方（T4.2）', () {
+    final hits = <String>[];
+    for (final f in Directory('lib').listSync(recursive: true).whereType<File>()) {
+      if (!f.path.endsWith('.dart')) continue;
+      final src = f.readAsStringSync();
+      if (RegExp(r'shareMilestoneWithLink\(\s*ref\b').hasMatch(src)) hits.add(f.path);
+    }
+    expect(hits, isEmpty);
   });
 }

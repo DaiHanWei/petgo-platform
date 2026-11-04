@@ -47,6 +47,9 @@ MilestoneItem _ms(String code, MilestoneLevel level, {bool celebrated = false}) 
 PetListItem _pet(int id, String name, {String status = PetListItem.statusActive, String petType = 'CAT'}) =>
     PetListItem(id: id, name: name, petType: petType, status: status);
 
+/// V1.4.2 Story 3.2：庆祝层屏外预挂了里程碑卡（同样画宠物头像 / 名字 / 标题）→ 庆祝页可见内容的断言限定在内容区内。
+Finder _inView(Finder f) => find.descendant(of: find.byKey(const ValueKey('milestoneCelebration')), matching: f);
+
 void main() {
   // ===== T1 账号级编码判定 =====
   group('T1 kAccountMilestoneCodes', () {
@@ -197,7 +200,8 @@ void main() {
     }) async {
       await tester.binding.setSurfaceSize(const Size(500, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(MaterialApp(
+      // V1.4.2 Story 3.2：庆祝页弹出时取 ProviderContainer（D-21）→ 宿主需在 ProviderScope 下。
+      await tester.pumpWidget(ProviderScope(child: MaterialApp(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -215,7 +219,7 @@ void main() {
             ),
           ),
         ),
-      ));
+      )));
       await tester.tap(find.text('go'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -227,11 +231,11 @@ void main() {
       const id = Locale('id');
       await open(tester, _ms('C-S19', MilestoneLevel.s),
           pets: const [CelebrationPet(name: 'Momo', petType: 'CAT')], locale: id);
-      expect(find.text('Teman pertama! 🤝'), findsOneWidget);
-      expect(find.text('Kamu mulai mengikuti seseorang — makin seru bareng sesama pecinta anabul.'), findsOneWidget,
+      expect(_inView(find.text('Teman pertama! 🤝')), findsOneWidget);
+      expect(_inView(find.text('Kamu mulai mengikuti seseorang — makin seru bareng sesama pecinta anabul.')), findsOneWidget,
           reason: '标题 / 正文不含宠物名');
-      expect(find.text('🐱'), findsOneWidget);
-      expect(find.text('Momo · 1 Juni 2026'), findsOneWidget);
+      expect(_inView(find.text('🐱')), findsOneWidget);
+      expect(_inView(find.text('Momo · 1 Juni 2026')), findsOneWidget);
       expect(find.textContaining(collectionLabel(id)), findsOneWidget);
       expect(find.byKey(const ValueKey('milestoneCelebrationPetRow')), findsNothing);
     });
@@ -243,16 +247,16 @@ void main() {
         CelebrationPet(name: 'Bobby', petType: 'DOG'),
         CelebrationPet(name: 'Kiki', petType: 'OTHER'),
       ]);
-      expect(find.text('First save! 🔖'), findsOneWidget);
-      expect(find.byType(PetSpeciesAvatar), findsNWidgets(3));
-      expect(find.byType(PetSpeciesAvatar), findsNWidgets(3));
+      expect(_inView(find.text('First save! 🔖')), findsOneWidget);
+      expect(_inView(find.byType(PetSpeciesAvatar)), findsNWidgets(3));
+      expect(_inView(find.byType(PetSpeciesAvatar)), findsNWidgets(3));
       for (final n in ['Momo', 'Bobby', 'Kiki']) {
-        expect(find.text(n), findsOneWidget);
+        expect(_inView(find.text(n)), findsOneWidget);
       }
-      final avatar = tester.widget<PetSpeciesAvatar>(find.byType(PetSpeciesAvatar).first);
+      final avatar = tester.widget<PetSpeciesAvatar>(_inView(find.byType(PetSpeciesAvatar)).first);
       expect(avatar.size, 40);
       final ring = tester.widget<Container>(find.ancestor(
-          of: find.byType(PetSpeciesAvatar).first, matching: find.byType(Container)).first);
+          of: _inView(find.byType(PetSpeciesAvatar)).first, matching: find.byType(Container)).first);
       final deco = ring.decoration! as BoxDecoration;
       expect(deco.color, AppColors.splashInk);
       expect(ring.padding, const EdgeInsets.all(2));
@@ -271,8 +275,8 @@ void main() {
       await open(tester, _ms('G-S12', MilestoneLevel.s), pets: [
         for (var i = 0; i < 6; i++) CelebrationPet(name: 'P$i', petType: 'CAT'),
       ]);
-      expect(find.byType(PetSpeciesAvatar), findsNWidgets(5));
-      expect(find.text('P5'), findsNothing);
+      expect(_inView(find.byType(PetSpeciesAvatar)), findsNWidgets(5));
+      expect(_inView(find.text('P5')), findsNothing);
     });
 
     testWidgets('B2：名字超长单行省略', (tester) async {
@@ -280,7 +284,7 @@ void main() {
         CelebrationPet(name: 'Supercalifragilistic Momo', petType: 'CAT'),
         CelebrationPet(name: 'Bobby', petType: 'DOG'),
       ]);
-      final t = tester.widget<Text>(find.text('Supercalifragilistic Momo'));
+      final t = tester.widget<Text>(_inView(find.text('Supercalifragilistic Momo')));
       expect(t.maxLines, 1);
       expect(t.overflow, TextOverflow.ellipsis);
       expect(t.style!.fontSize, 11);
@@ -293,7 +297,7 @@ void main() {
           CelebrationPet(name: 'Bobby', petType: 'DOG'),
         ]);
         expect(find.byKey(const ValueKey('milestoneCelebrationPetRow')), findsNothing);
-        expect(find.text('🐱'), findsOneWidget);
+        expect(_inView(find.text('🐱')), findsOneWidget);
         expect(find.textContaining('Momo · 1 '), findsOneWidget);
         expect(find.textContaining(collectionLabel(locale)), findsOneWidget);
       });
@@ -341,6 +345,8 @@ void main() {
       int petId = 1,
       List<PetListItem>? pets,
       int Function()? statsCounter,
+      GlobalKey<NavigatorState>? navKey,
+      bool coverBeforeData = false,
     }) async {
       final seen = <String>[];
       Analytics.debugCaptureSink = (e, p) {
@@ -363,12 +369,17 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
+        child: MaterialApp(
+          navigatorKey: navKey,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: MilestoneListPage(),
+          home: const MilestoneListPage(),
         ),
       ));
+      // 数据回来之前就被别的页盖住（模拟「去发布 → 发到社区」后新发布页叠在里程碑列表上）。
+      if (coverBeforeData) {
+        navKey!.currentState!.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('cover'))));
+      }
       await tester.pump();
       await tester.pump();
       await tester.pump();
@@ -426,12 +437,28 @@ void main() {
       expect(repo.reported.single.toSet(), {'C-M8', 'C-S19', 'C-S20'});
     });
 
+    testWidgets('复审 3-2 (b)：本页被盖住时不补弹；盖住的页关掉、本页重新成为栈顶 → 照常补弹一次', (tester) async {
+      final nav = GlobalKey<NavigatorState>();
+      final repo = _CountingRepo(listOf([_ms('C-S5', MilestoneLevel.s)]));
+      final (_, _, seen) = await pumpList(tester, repo: repo, navKey: nav, coverBeforeData: true);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('cover'), findsOneWidget);
+      expect(seen, isEmpty, reason: '被盖住不弹');
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsNothing);
+      nav.currentState!.pop();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(seen, ['C-S5'], reason: '重新成为栈顶 → 补弹');
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
+    });
+
     testWidgets('账号级 + 1 只 ACTIVE（另一只只读）→ B1', (tester) async {
       final repo = _CountingRepo(listOf([_ms('C-S19', MilestoneLevel.s)]));
       await pumpList(tester,
           repo: repo, pets: [_pet(1, 'Momo'), _pet(2, 'Bobby', status: PetListItem.statusReadOnly)]);
       expect(find.byKey(const ValueKey('milestoneCelebrationPetRow')), findsNothing);
-      expect(find.text('🐱'), findsOneWidget);
+      expect(_inView(find.text('🐱')), findsOneWidget);
     });
 
     /// 🔴 AC5.3（复审 CONFIRMED-1）：走真实路径 —— 猫列表补弹 C-S19、回报在途（未落库），

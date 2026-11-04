@@ -27,6 +27,15 @@ void reportMilestoneCelebrated(WidgetRef ref, List<String> codes, {void Function
   ref.read(locallyCelebratedMilestonesProvider.notifier).report(codes, onDone: onDone, petId: petId);
 }
 
+/// [reportMilestoneCelebrated] 的 [ProviderContainer] 版（V1.4.2 social-topic Story 3.2 · T5.3）：语义逐条相同。
+///
+/// 庆祝页关闭时宿主页可能已销毁（如「Bagikan ke Komunitas」后发布页才关），在其 `WidgetRef` 上 read 会抛
+/// `StateError` —— 调用方弹出前取好 container（`ProviderScope.containerOf(context, listen: false)`）走这里。
+void reportMilestoneCelebratedIn(ProviderContainer c, List<String> codes, {void Function()? onDone, int? petId}) {
+  if (codes.isEmpty) return;
+  c.read(locallyCelebratedMilestonesProvider.notifier).report(codes, onDone: onDone, petId: petId);
+}
+
 /// 在回报前**先**把 code 记进本地集合（见 [locallyCelebratedMilestonesProvider]）。
 ///
 /// 用于「庆祝已经/即将弹出、但回报要等弹窗关掉才发」的那段空档：这段时间里列表若被重拉，

@@ -26,7 +26,6 @@ import '../domain/milestone_account_codes.dart';
 import '../domain/health_milestones.dart';
 import '../domain/milestone_catchup.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
-import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
 import '../domain/newbie_task_labels.dart';
 import '../domain/newbie_tasks.dart';
@@ -101,6 +100,10 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   /// 既有的即时庆祝路径与 500/800/1200ms 三次短轮询**全部保留** —— 补庆祝是兜底，不是替代。
   void _maybeCatchUp(MilestoneList data) {
     if (_catchupDone) return;
+    // V1.4.2 Story 3.2 复审 PLAUSIBLE(b)：本页被别的路由盖住（如「去发布 → 发到社区」跳到本页后新发布页叠在上面）
+    // 时不补弹（同即时庆祝 `_hostIsCurrent` 口径：盖在当前页上才弹）。本方法在 build 里调用，`ModalRoute.of` 会登记依赖 ——
+    // 本页重新成为栈顶时 isCurrent 变化触发 rebuild，再判一次、照常补弹。
+    if (ModalRoute.of(context)?.isCurrent != true) return;
     final catchup = resolveCatchup(
       [for (final g in data.groups) ...g.items],
       // 本次导航带来的 + 本 App 会话内已在本机弹过的（回报在途/已落库）一并扣除。
@@ -113,6 +116,11 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     _catchupDone = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      // 帧后再判一次：同一帧里可能刚被盖住 → 放开闸门，等重新成为栈顶时 rebuild 再来。
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        _catchupDone = false;
+        return;
+      }
       final item = catchup.toCelebrate!;
       // 依赖在弹出前取好（回报落库时本页 / 庆祝层可能都已销毁）。
       final container = ProviderScope.containerOf(context, listen: false);
@@ -122,13 +130,16 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
           ? await readAccountCelebrationPets(container)
           : const <CelebrationPet>[];
       if (!mounted) return;
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        _catchupDone = false; // 取宠物期间被盖住：同上，交给重新成为栈顶时的 rebuild
+        return;
+      }
       // 弹出前先记本地：回报要等弹窗关掉才发，这期间列表若被重拉不能再补一次。
       // ⚠️ 必须在帧后记：本方法从 build 里调用，build 期间改 provider 会直接抛。
       markMilestonesCelebrating(ref, catchup.codesToReport);
-      final l10n = AppLocalizations.of(context);
-      final locale = Localizations.localeOf(context);
       final collection = [for (final g in data.groups) ...g.items];
-      final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
+      // V1.4.2 Story 3.2：当前列表宠物（站外建链 / 发到社区预选 / 卡面）。
+      final listPetId = ref.read(effectivePetIdProvider).value;
       // 先回报再展示还是先展示再回报？——**先展示**（AD-A3.1：展示成功后才回报）。
       // 回报失败的代价只是下次再补弹一次，而「没弹却已置位」会让用户永远看不到这次庆祝。
       await showMilestoneCelebration(
@@ -138,12 +149,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
         path: MilestoneCelebrationPath.catchup,
         collection: collection,
         accountPets: accountPets,
-        onShare: () => shareMilestoneWithLink(ref,
-            item: item,
-            locale: locale,
-            petName: data.petName,
-            shareText: shareText,
-            collection: collection),
+        petId: listPetId,
       );
       _reportCelebrated(catchup.codesToReport, container);
     });
@@ -161,7 +167,8 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     // 整族失效里程碑列表与档案头未庆祝角标，否则切宠物后读到旧缓存会误弹。
     // ⚠️ 用 container（provider 侧）而非本页 WidgetRef：回报落库时本页可能已销毁。
     final hasAccount = codes.any(isAccountMilestone);
-    reportMilestoneCelebrated(ref, codes, onDone: () {
+    // V1.4.2 Story 3.2 · T5.3：「发到社区」后发布页关闭才回到这里，本页可能已销毁 → 经 container 回报。
+    reportMilestoneCelebratedIn(container, codes, onDone: () {
       if (hasAccount) {
         container.invalidate(milestoneListProvider);
         container.invalidate(archiveStatsProvider);
@@ -704,12 +711,11 @@ MilestoneList? _currentMilestones(WidgetRef ref) {
 /// 徽章点击弹层（FR-42）：系统类→说明文案、打卡类未完成→「已打卡 / 去发布」两入口。
 /// 点击已完成徽章 → 重温 P-35 解锁庆祝动效（L 级附分享卡）。
 void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
-  final l10n = AppLocalizations.of(context);
-  final locale = Localizations.localeOf(context);
   final data = _currentMilestones(ref);
   final petName = data?.petName ?? '';
   final collection = data == null ? const <MilestoneItem>[] : [for (final g in data.groups) ...g.items];
-  final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
+  // V1.4.2 Story 3.2：当前列表宠物（站外建链 / 发到社区预选 / 卡面）。
+  final petId = ref.read(effectivePetIdProvider).value;
   final router = GoRouter.maybeOf(context);
   // 防重入：账号级编码要先异步取宠物列表，这段空档里再点一次不得叠出第二个庆祝页。
   if (_revisitOpening) return;
@@ -722,7 +728,7 @@ void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
   // 不等弹层关闭才放开（宿主 Navigator 被销毁时那个 Future 可能永不完成，闸门会卡死）。
   unawaited(pets.then((pets) {
     if (!context.mounted) return;
-    unawaited(_openCelebration(context, ref, item, petName, collection, shareText, router, locale, pets));
+    unawaited(_openCelebration(context, item, petName, collection, petId, router, pets));
   }).whenComplete(() => _revisitOpening = false));
 }
 
@@ -731,13 +737,11 @@ bool _revisitOpening = false;
 
 Future<void> _openCelebration(
   BuildContext context,
-  WidgetRef ref,
   MilestoneItem item,
   String petName,
   List<MilestoneItem> collection,
-  String shareText,
+  int? petId,
   GoRouter? router,
-  Locale locale,
   List<CelebrationPet> accountPets,
 ) {
   return showMilestoneCelebration(
@@ -749,8 +753,7 @@ Future<void> _openCelebration(
     // 这里刻意没有 _reportCelebrated 调用。埋点仍上报（埋点与回报是两件事）。
     path: MilestoneCelebrationPath.revisit,
     collection: collection,
-    onShare: () => shareMilestoneWithLink(ref,
-        item: item, locale: locale, petName: petName, shareText: shareText, collection: collection),
+    petId: petId,
     onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
   );
 }
@@ -1069,7 +1072,6 @@ class _CandidateTile extends ConsumerWidget {
 
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
-    final locale = Localizations.localeOf(context);
     final overlay = Overlay.of(context, rootOverlay: true);
     final navigator = Navigator.of(context);
     final router = GoRouter.maybeOf(context);
@@ -1077,9 +1079,12 @@ class _CandidateTile extends ConsumerWidget {
       // 庆祝卡片文案需替换 {name} → 宠物名（列表已加载，取当前值即可）。
       final listData = _currentMilestones(ref);
       final petName = listData?.petName ?? '';
+      final petId = ref.read(effectivePetIdProvider).value;
+      // V1.4.2 Story 3.2 · T5.3：picker 一 pop 本 widget 的 ref 就失效 → 回报经弹出前取好的 container。
+      final container = ProviderScope.containerOf(context, listen: false);
       final completed = await ref.read(milestoneRepositoryProvider).checkIn(
           milestoneCode, candidate.contentId,
-          petId: ref.read(effectivePetIdProvider).value);
+          petId: petId);
       // 🔴 必须在 invalidate 之前记本地：重拉回来这条仍是 celebratedAt == null，
       //    而回报要等下面的庆祝弹窗关掉才发 —— 不先记，列表页会在即时庆祝之上再补弹一次。
       markMilestonesCelebrating(ref, [completed.code]);
@@ -1091,8 +1096,6 @@ class _CandidateTile extends ConsumerWidget {
               for (final g in listData.groups)
                 for (final it in g.items) it.code == completed.code ? completed : it,
             ];
-      // L 级分享卡文案（捕获 l10n / locale，避免 pop 后失效）。标题按 locale 本地化（杜绝后端中文）。
-      final shareText = l10n.milestoneShareText(localizedMilestoneTitle(completed.code, locale));
       navigator.pop(); // 关 picker
       if (!context.mounted) return;
       // 完成后触发统一 P-35 庆祝动效（Story 8.5）；L 级分享卡复用 2-6 分享通道（8.6）。
@@ -1102,16 +1105,11 @@ class _CandidateTile extends ConsumerWidget {
         petName: petName,
         path: MilestoneCelebrationPath.instant,
         collection: collection,
-        onShare: () => shareMilestoneWithLink(ref,
-            item: completed,
-            locale: locale,
-            petName: petName,
-            shareText: shareText,
-            collection: collection),
+        petId: petId,
         onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
       );
       // 即时庆祝也要回报，否则这一条会在下次进列表页时被当成"未庆祝"再弹一遍（AD-A3.1）。
-      reportMilestoneCelebrated(ref, [completed.code]);
+      reportMilestoneCelebratedIn(container, [completed.code]);
     } catch (_) {
       showAppToastOnOverlay(overlay, l10n.milestoneCheckinFailed);
     }
