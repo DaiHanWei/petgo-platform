@@ -140,6 +140,31 @@ public final class TopicNameRules {
         return norm.codePointCount(0, norm.length()) <= MAX_LENGTH;
     }
 
+    /**
+     * 联想入参（V1.4.2 Story 4.2 · AC3）：是否可能是某个合法话题名的<b>前缀</b> —— 全部为话题字符、
+     * NFC 后 1–30 码点（打 1 个字也要出联想；不要求「不全为数字」，{@code 12} 可能是 {@code 12kucing} 的前缀），
+     * 标准名同样不超过 30。不通过 → 调用方直接返回空表、不查库。
+     */
+    public static boolean isValidPrefix(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return false;
+        }
+        String nfc = Normalizer.normalize(raw, Normalizer.Form.NFC);
+        int count = nfc.codePointCount(0, nfc.length());
+        if (count < 1 || count > MAX_LENGTH) {
+            return false;
+        }
+        for (int k = 0; k < nfc.length(); ) {
+            int cp = nfc.codePointAt(k);
+            if (!isTopicChar(cp)) {
+                return false;
+            }
+            k += Character.charCount(cp);
+        }
+        String norm = nfc.toLowerCase(Locale.ROOT);
+        return norm.codePointCount(0, norm.length()) <= MAX_LENGTH;
+    }
+
     /** 话题字符：{@code [\p{L}\p{M}\p{Nd}_]}。 */
     static boolean isTopicChar(int cp) {
         if (cp == '_') {

@@ -729,6 +729,102 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /**
+     * 话题页 · Terbaru（V1.4.2 social-topic · Story 4.2 · AC2 · P-2）：某话题下公开内容时间倒序游标分页。
+     *
+     * <p>🔴 <b>可见性四件套与 {@link #findFollowingFeed} 逐条一致</b>（改一边核另一边）：
+     * <ol>
+     *   <li>作者已注销（{@code u.deletedAt IS NULL}）—— 与人无关，<b>游客也套</b>；</li>
+     *   <li>作者非 ACTIVE（{@code u.status = ACTIVE}）—— 同上，游客也套；</li>
+     *   <li>我举报过的帖 —— 登录才套（{@code :hasViewer} 门控，同 {@link #findFeed}，防 42P18）；</li>
+     *   <li>我隐藏的作者（不分 BLOCK / REPORT）—— 登录才套，同上。</li>
+     * </ol>
+     * 公共条件：deleted / PUBLISHED / PUBLIC（私密 / 审核中 / 下架都不出）。
+     * <b>不加</b>「作者 BLOCK 了我」（R-1 / P-2：只在追更宠物一路）；<b>不读</b> {@code rank_throttles}。
+     * 「作者在关注名单」换成「帖子关联了该话题」。顶置让位 {@code hasExclude} 只首屏传（同 {@link #findFeed}）。
+     * 过滤全在 WHERE 内（{@code PAGE_SIZE+1} / hasMore / 游标契约，AD-5）。
+     * JPQL 引用 topic 模块实体 {@code ContentTopic} 与引用 {@code ContentReport} / {@code UserHideRelation} 同属既定破例。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND EXISTS (SELECT 1 FROM ContentTopic ct WHERE ct.postId = p.id AND ct.topicId = :topicId)
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+              AND (:hasExclude = false OR p.id <> :excludeId)
+              AND (:hasCursor = false
+                   OR p.createdAt < :cursorTs
+                   OR (p.createdAt = :cursorTs AND p.id < :cursorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findTopicFeed(
+            @Param("topicId") long topicId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            @Param("hasExclude") boolean hasExclude,
+            @Param("excludeId") Long excludeId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
+    /**
+     * 话题页 · Populer（V1.4.2 social-topic · Story 4.2 · AC2.3）：按「累计赞 + {@code :w} × 累计评论」倒序，
+     * 并列 {@code created_at DESC, id DESC}；页码分页（{@code LIMIT :limit OFFSET :offset}，调用方多取 1 判 hasMore）。
+     *
+     * <p>🔴 可见性四件套与 {@link #findTopicFeed} / {@link #findFollowingFeed} 逐条一致（作者 join 两条游客也套；
+     * 举报 / 隐藏两条 {@code :hasViewer} 门控）。游客时 {@code viewerId} / {@code excludeId} 传 {@code -1}
+     * 占位（布尔门控已短路，避免 NULL 参数 42P18）。
+     *
+     * <p>评论计数 = <b>平台口径</b>（CROSS-STORY 2026-08-16）：未删 + VISIBLE；R1 不套；
+     * <b>R2 影子评论必须排</b>（帖子作者隐藏了评论者的评论，及父评论是影子评论的回复）。与热度任务同口径。
+     *
+     * @return 帖子 id（按排名顺序）；调用方 {@code findAllById} 后须按此顺序重排
+     */
+    @Query(value = """
+            SELECT p.id
+            FROM content_posts p
+            JOIN content_topics ct ON ct.post_id = p.id AND ct.topic_id = :topicId
+            JOIN users u ON u.id = p.author_id AND u.deleted_at IS NULL AND u.status = 'ACTIVE'
+            LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM content_likes l WHERE l.post_id = p.id) lk ON true
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS n FROM comments c
+                WHERE c.post_id = p.id AND c.deleted_at IS NULL AND c.moderation_status = 'VISIBLE'
+                  AND NOT EXISTS (SELECT 1 FROM user_hide_relations h
+                                  WHERE h.holder_id = p.author_id AND h.target_id = c.author_id)
+                  AND (c.parent_id IS NULL OR NOT EXISTS (
+                          SELECT 1 FROM comments pc JOIN user_hide_relations h2
+                            ON h2.holder_id = p.author_id AND h2.target_id = pc.author_id
+                          WHERE pc.id = c.parent_id))
+            ) cm ON true
+            WHERE p.deleted_at IS NULL AND p.status = 'PUBLISHED' AND p.visibility = 'PUBLIC'
+              AND (:hasViewer = false OR NOT EXISTS (SELECT 1 FROM content_reports r
+                                                     WHERE r.post_id = p.id AND r.reporter_id = :viewerId))
+              AND (:hasViewer = false OR NOT EXISTS (SELECT 1 FROM user_hide_relations h3
+                                                     WHERE h3.holder_id = :viewerId AND h3.target_id = p.author_id))
+              AND (:hasExclude = false OR p.id <> :excludeId)
+            ORDER BY (lk.n + CAST(:w AS double precision) * cm.n) DESC, p.created_at DESC, p.id DESC
+            LIMIT :limit OFFSET :offset
+            """, nativeQuery = true)
+    List<Number> findTopicPopularIds(
+            @Param("topicId") long topicId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") long viewerId,
+            @Param("hasExclude") boolean hasExclude,
+            @Param("excludeId") long excludeId,
+            @Param("w") double commentWeight,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
+
+    /**
      * 推荐序候选池的过滤口径 —— 主池 {@link #findRankCandidatePool} 与教育池 {@link #findEduCandidatePool} 共用
      * （V1.3.4 FR-122.2 / NFR3：任何池子都不得绕过）。🔴 不要复制一份给新池子，加池子就拼这个常量。
      */

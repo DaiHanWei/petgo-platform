@@ -32,6 +32,19 @@ public class ContentPin {
     /** 本版本唯一的坑位：首页 Feed 顶部。 */
     public static final String SLOT_HOME_FEED = "HOME_FEED";
 
+    /**
+     * 话题页坑位前缀（V1.4.2 social-topic · Story 4.2 · D-6）：坑位值 = {@code "TOPIC:" + topics.id}。
+     *
+     * <p>🔴 内部值，<b>不对外</b>：App 只能经 {@code GET /content-posts/pinned?topic=<标准名>} 访问，
+     * {@code ?slot=TOPIC:…} 一律返回空坑位（防按自增 id 枚举）。6.1 / 6.2 一律调 {@link #topicSlot}，不各自拼字符串。
+     */
+    public static final String SLOT_TOPIC_PREFIX = "TOPIC:";
+
+    /** 话题坑位值（{@code "TOPIC:" + id}，long 最长 19 位 → 最长 25 字符，落得进 {@code slot VARCHAR(32)}）。 */
+    public static String topicSlot(long topicId) {
+        return SLOT_TOPIC_PREFIX + topicId;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

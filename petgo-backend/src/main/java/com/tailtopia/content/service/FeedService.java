@@ -85,8 +85,10 @@ public class FeedService {
             com.tailtopia.mention.service.MentionViewService mentionViews,
             com.tailtopia.social.read.FollowReader followReader,
             com.tailtopia.social.read.PetFollowReader petFollowReader,
-            com.tailtopia.topic.service.TopicQueryService topicQuery) {
+            com.tailtopia.topic.service.TopicQueryService topicQuery,
+            com.tailtopia.config.service.PlatformConfigService platformConfig) {
         this.topicQuery = topicQuery;
+        this.platformConfig = platformConfig;
         this.mentionViews = mentionViews;
         this.followReader = followReader;
         this.petFollowReader = petFollowReader;
@@ -111,6 +113,12 @@ public class FeedService {
 
     /** V1.4.2 social-topic Story 4.1（D-13）：卡片 {@code topicNames}，<b>整页一次批量</b>（同 @ / 装饰标签）。 */
     private final com.tailtopia.topic.service.TopicQueryService topicQuery;
+
+    /**
+     * V1.4.2 social-topic Story 4.2（D-14 · §1.2 第 17 条）：话题页 Populer 每请求读一次 {@code comment_weight}
+     * （单行直读无缓存，运营改参数即时生效）。
+     */
+    private final com.tailtopia.config.service.PlatformConfigService platformConfig;
 
     /** 一页内容各自的话题标准名（整页一次；空页不发查询）。 */
     private Map<Long, List<String>> topicNamesFor(List<ContentPost> page) {
@@ -172,15 +180,23 @@ public class FeedService {
      * 这一处最容易漏：大家通常只想到"坑位端点挂了客户端不显示"，忘了首页内部也查了一次。
      */
     private Long pinnedContentIdToYield(String cursor) {
-        if (cursor != null && !cursor.isBlank()) {
+        return pinnedContentIdToYield(ContentPin.SLOT_HOME_FEED, cursor == null || cursor.isBlank());
+    }
+
+    /**
+     * 同上，按坑位（V1.4.2 social-topic Story 4.2 · AC6.4 抽参数）：首页传 {@link ContentPin#SLOT_HOME_FEED}，
+     * 话题页传 {@link ContentPin#topicSlot}。非首屏 → null；查顶置出错 → null（按无顶置继续，不连带列表 500）。
+     */
+    private Long pinnedContentIdToYield(String slot, boolean firstPage) {
+        if (!firstPage) {
             return null; // 只首屏让位
         }
         try {
-            return pins.activePin(ContentPin.SLOT_HOME_FEED, Instant.now())
+            return pins.activePin(slot, Instant.now())
                     .map(ContentPin::getContentId)   // 推广卡片没有内容 id，天然不参与排除
                     .orElse(null);
         } catch (RuntimeException e) {
-            log.warn("查顶置失败，本次首页不让位（降级）", e);
+            log.warn("查顶置失败，本次不让位（降级） slot={}", slot, e);
             return null;
         }
     }
@@ -360,6 +376,91 @@ public class FeedService {
                 assembled.rankMode(),
                 firstPage ? accountQueryService.followingCountOf(viewerId) : null,
                 firstPage ? petFollowReader.countFollowingOf(viewerId) : null);
+    }
+
+    /** 话题页排序：最新（缺省）。 */
+    public static final String TOPIC_SORT_LATEST = "latest";
+
+    /** 话题页排序：热门。 */
+    public static final String TOPIC_SORT_POPULAR = "popular";
+
+    /** 话题页 Populer 页码上限（防深翻全表聚合；4.2 自定阈值，见 story 待确认第 5 条）。 */
+    public static final int TOPIC_POPULAR_MAX_PAGE = 50;
+
+    /**
+     * 话题页帖子（V1.4.2 social-topic Story 4.2 · AC2 · P-2）。{@code topicId} 由调用方经
+     * {@code TopicQueryService.requireVisible} 解析（content → topic 单向依赖）。
+     *
+     * <ul>
+     *   <li>{@code latest}（缺省）：时间倒序 + {@link FeedCursor}，写法同 {@link #loadFollowingFeed}；</li>
+     *   <li>{@code popular}：「赞 + comment_weight × 评」倒序，页码分页（1 起、≤ {@value #TOPIC_POPULAR_MAX_PAGE}），
+     *       {@code nextCursor} 恒 null；</li>
+     *   <li>非法 sort / 页码 → 422。</li>
+     * </ul>
+     * 顶置让位（AC6.4）：latest 只首屏（无游标）排除该话题坑位当前生效的内容顶置，后续页照常可出现；
+     * popular <b>每一页都排除</b>（复审 CONFIRMED-1：页码分页下若只首页排除，OFFSET 会让原第 21 名在第 1、2 页各出现一次，
+     * 且顶置帖再也不出现——无法既不重复又包含它，故顶置期间整个热门列表都不含它）。
+     * 组装复用 {@link #assemble}（AD-7 Rule 4），{@code rankMode} 省略（不是首页 Feed 出口）。
+     */
+    @Transactional(readOnly = true)
+    public FeedPageResponse loadTopicPosts(long topicId, String sort, String cursor, Integer page,
+            Long viewerId) {
+        String s = (sort == null || sort.isBlank()) ? TOPIC_SORT_LATEST : sort.trim().toLowerCase(java.util.Locale.ROOT);
+        if (TOPIC_SORT_LATEST.equals(s)) {
+            return topicLatest(topicId, cursor, viewerId);
+        }
+        if (TOPIC_SORT_POPULAR.equals(s)) {
+            int p = page == null ? 1 : page;
+            if (p < 1 || p > TOPIC_POPULAR_MAX_PAGE) {
+                throw AppException.validation("页码无效");
+            }
+            return topicPopular(topicId, p, viewerId);
+        }
+        throw AppException.validation("排序无效");
+    }
+
+    private FeedPageResponse topicLatest(long topicId, String cursor, Long viewerId) {
+        FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
+        Long yieldId = pinnedContentIdToYield(ContentPin.topicSlot(topicId), decoded == null);
+        List<ContentPost> rows = posts.findTopicFeed(
+                topicId,
+                viewerId != null, viewerId,
+                yieldId != null, yieldId,
+                decoded != null,
+                decoded == null ? null : decoded.createdAt(),
+                decoded == null ? null : decoded.id(),
+                PageRequest.of(0, PAGE_SIZE + 1));
+
+        boolean hasMore = rows.size() > PAGE_SIZE;
+        List<ContentPost> pageRows = hasMore ? rows.subList(0, PAGE_SIZE) : rows;
+        String nextCursor = null;
+        if (hasMore && !pageRows.isEmpty()) {
+            ContentPost last = pageRows.get(pageRows.size() - 1);
+            nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
+        }
+        return assemble(pageRows, viewerId, nextCursor, hasMore, null);
+    }
+
+    private FeedPageResponse topicPopular(long topicId, int page, Long viewerId) {
+        // 每页都查同一个顶置并排除（OFFSET 分页下各页口径必须一致，否则错位重复）。
+        Long yieldId = pinnedContentIdToYield(ContentPin.topicSlot(topicId), true);
+        double commentWeight = platformConfig.feedRank().getCommentWeight();
+        List<Long> ids = posts.findTopicPopularIds(
+                topicId,
+                viewerId != null, viewerId == null ? -1L : viewerId,
+                yieldId != null, yieldId == null ? -1L : yieldId,
+                commentWeight,
+                PAGE_SIZE + 1,
+                (page - 1) * PAGE_SIZE).stream().map(Number::longValue).toList();
+
+        boolean hasMore = ids.size() > PAGE_SIZE;
+        List<Long> pageIds = hasMore ? ids.subList(0, PAGE_SIZE) : ids;
+        // findAllById 不保序：按排名 id 顺序重排（缺失的——两次查询之间被删——直接跳过）。
+        Map<Long, ContentPost> byId = pageIds.isEmpty() ? Map.of()
+                : posts.findAllById(pageIds).stream()
+                        .collect(Collectors.toMap(ContentPost::getId, p -> p, (a, b) -> a));
+        List<ContentPost> pageRows = pageIds.stream().map(byId::get).filter(java.util.Objects::nonNull).toList();
+        return assemble(pageRows, viewerId, null, hasMore, null);
     }
 
     /** 关注流 reason 判据（D-9 / 拍板点 ①）：同时命中两路记 followed_user。 */
