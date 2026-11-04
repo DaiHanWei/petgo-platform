@@ -9,6 +9,7 @@ import com.tailtopia.content.service.FeedCursor;
 import com.tailtopia.content.service.FeedService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.read.FollowReader;
+import com.tailtopia.social.read.PetFollowReader;
 import com.tailtopia.social.read.FollowState;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.List;
@@ -63,14 +64,18 @@ public class PublicProfileController {
     private final UserHideRelationReader hideRelations;
     /** V1.3.4 follow Story 1.2：主页的关注关系（AD-6）。 */
     private final FollowReader followReader;
+    /** V1.4.2 social-topic Story 1.1：主页「Hewan N」追更宠物数（只经 social.read 端口，不引 social.repository）。 */
+    private final PetFollowReader petFollowReader;
 
     public PublicProfileController(AccountQueryService accounts, ContentService contentService,
-            FeedService feedService, UserHideRelationReader hideRelations, FollowReader followReader) {
+            FeedService feedService, UserHideRelationReader hideRelations, FollowReader followReader,
+            PetFollowReader petFollowReader) {
         this.accounts = accounts;
         this.contentService = contentService;
         this.feedService = feedService;
         this.hideRelations = hideRelations;
         this.followReader = followReader;
+        this.petFollowReader = petFollowReader;
     }
 
     @GetMapping("/api/v1/users/{userId}/profile")
@@ -132,7 +137,9 @@ public class PublicProfileController {
                 owner == null ? 0L : owner.getFollowerCount(),
                 followState(viewerId, userId),
                 // 2026-10-13 决定：官方内容账号主页不给拉黑 / 举报入口 → App 据此隐藏「···」。
-                owner != null && owner.getRole() == com.tailtopia.auth.domain.Role.ADMIN);
+                owner != null && owner.getRole() == com.tailtopia.auth.domain.Role.ADMIN,
+                // V1.4.2 social-topic Story 1.1：追更宠物数，同关注计数口径 —— 被拉黑方视角也给真实值。
+                petFollowReader.countFollowingOf(userId));
     }
 
     /** 游客 / 兽医（viewerId=null）/ 本人视角恒 NONE，且不查库（AC2.1）。 */

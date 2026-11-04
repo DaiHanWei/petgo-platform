@@ -56,7 +56,9 @@ class PetOwnerLookupGuardTest {
             "admin/usermgmt/service/AdminUserPurchasesQuery.java",
             "auth/service/OpsAudienceSql.java",
             "passport/service/BoardingPassDuplicateQuery.java",
-            "profile/domain/PetProfile.java");
+            "profile/domain/PetProfile.java",
+            // V1.4.2 social-topic Story 1.1：拉黑联动删「holder 对 owner 名下<b>所有</b>宠物」的追更行（按 owner 批量，非取单行）。
+            "social/repository/PetFollowRepository.java");
 
     private static List<Path> sources() throws IOException {
         try (Stream<Path> s = Files.walk(MAIN)) {

@@ -91,8 +91,9 @@ class CardPageControllerTest {
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false, java.util.List.of())));
         // 第 6 个字段是 V1.3.0 Story 1.4 的「未庆祝」角标数；访客页不展示它，给 0。
         // 第 7 个字段是 V1.4.0 gift Story 2.1 的礼物总价值（票根 Hadiah 列）；多宠物线起按名片那只宠物（10L）取。
+        // 第 8 个字段是 V1.4.2 social-topic Story 1.1 的追更人数；H5 名片不展示它，给 0。
         when(timelineService.getStats(7L, 10L))
-                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0, giftTotalValue));
+                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0, giftTotalValue, 0));
     }
 
     @Test

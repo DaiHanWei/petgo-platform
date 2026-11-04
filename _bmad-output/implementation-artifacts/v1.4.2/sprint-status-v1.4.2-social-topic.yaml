@@ -43,7 +43,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.2"
 
 development_status:
   epic-1: in-progress
-  1-1-追更关系与接口: ready-for-dev
+  1-1-追更关系与接口: review
   1-2-追更通知与推送分类: ready-for-dev
   1-3-关注流合并追更与宠物推荐改造: ready-for-dev
   1-4-app宠物访客页追更与失效修复: ready-for-dev

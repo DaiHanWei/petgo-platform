@@ -69,6 +69,8 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.collect.service.CollectDeletionService collectDeletion;
     /** OCR #2：宠物名额随注销终止。 */
     @Mock com.tailtopia.profile.slot.PetSlotAccountDeletionService petSlotDeletion;
+    /** V1.4.2 social-topic Story 1.1：追更者一侧追更行清理。 */
+    @Mock com.tailtopia.social.service.PetFollowService petFollowService;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -78,7 +80,7 @@ class AccountDeletionServiceTest {
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
                 followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion,
-                petSlotDeletion);
+                petSlotDeletion, petFollowService);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -160,6 +162,12 @@ class AccountDeletionServiceTest {
         org.mockito.InOrder afterUserRow = org.mockito.Mockito.inOrder(authDeletion, followService);
         afterUserRow.verify(authDeletion).deleteByUserId(7L);
         afterUserRow.verify(followService).purgeUser(7L);
+        // V1.4.2 social-topic Story 1.1 · AC7.3：追更者一侧同样显式清理，紧挨 followService.purgeUser 之后。
+        verify(petFollowService).purgeFollower(7L);
+        org.mockito.InOrder petFollowOrder = org.mockito.Mockito.inOrder(authDeletion, followService, petFollowService);
+        petFollowOrder.verify(authDeletion).deleteByUserId(7L);
+        petFollowOrder.verify(followService).purgeUser(7L);
+        petFollowOrder.verify(petFollowService).purgeFollower(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());
         verify(mediaDeletion).deletePublicByUrls(anyList());

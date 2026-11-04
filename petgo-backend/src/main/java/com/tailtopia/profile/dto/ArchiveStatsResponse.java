@@ -22,6 +22,8 @@ package com.tailtopia.profile.dto;
  * @param giftTotalValue 这只宠物收到的礼物总价值（IDR，V1.4.0 gift Story 2.1 · AD-10）：Diary 统计卡中间格
  *        「Hadiah」。只含已送达（读汇总表 {@code gift_pet_wall}），<b>按宠物算</b>。
  *        ⚠️ {@code consultCount} <b>保留</b>：旧版 App 仍在读，不随统计卡换格删除
+ * @param followerCount 追更这只宠物的人数（V1.4.2 social-topic Story 1.1 · D-8，{@code pet_profiles.follower_count} 直读）。
+ *        访客态 {@code VisitorStats.followerCount} 同名同值
  */
 public record ArchiveStatsResponse(
         long happyMomentCount,
@@ -30,5 +32,6 @@ public record ArchiveStatsResponse(
         int milestoneTotal,
         long healthRecordCount,
         long milestoneUncelebrated,
-        long giftTotalValue) {
+        long giftTotalValue,
+        long followerCount) {
 }

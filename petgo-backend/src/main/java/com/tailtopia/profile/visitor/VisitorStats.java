@@ -27,11 +27,14 @@ package com.tailtopia.profile.visitor;
  * @param giftTotalValue     收到的礼物总价值（IDR，V1.4.0 gift Story 2.1 · AD-10）。与作者态
  *                           {@code ArchiveStatsResponse.giftTotalValue} 同名同值（复用同一次计算）。
  *                           ⚠️ {@code consultCount} 保留给旧版 App，新版 App 中间格改显示本字段
+ * @param followerCount      追更这只宠物的人数（V1.4.2 social-topic Story 1.1 · D-8）。与作者态
+ *                           {@code ArchiveStatsResponse.followerCount} 同名同值
  */
 public record VisitorStats(
         long happyMomentCount,
         long consultCount,
         long milestoneCompleted,
         int milestoneTotal,
-        long giftTotalValue) {
+        long giftTotalValue,
+        long followerCount) {
 }

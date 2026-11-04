@@ -1,8 +1,12 @@
 package com.tailtopia.profile.visitor;
 
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.social.read.FollowReader;
+import com.tailtopia.social.read.PetFollowReader;
 import com.tailtopia.social.read.UserHideRelationReader;
+import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,19 +70,40 @@ public class InAppVisitorPetController {
 
     private final VisitorProjectionService visitors;
     private final UserHideRelationReader hideRelations;
+    /** V1.4.2 social-topic Story 1.1：访客页「追更」按钮态（D-8）。 */
+    private final PetFollowReader petFollows;
+    /** V1.4.2 social-topic Story 1.1：访客页「关注主人」态（R-2 {@code iFollowOwner}）。 */
+    private final FollowReader follows;
+    /** V1.4.2 social-topic Story 1.1：主人公开 token（R-2 埋点 {@code owner_id}）。 */
+    private final AccountQueryService accounts;
 
     public InAppVisitorPetController(VisitorProjectionService visitors,
-            UserHideRelationReader hideRelations) {
+            UserHideRelationReader hideRelations, PetFollowReader petFollows, FollowReader follows,
+            AccountQueryService accounts) {
         this.visitors = visitors;
         this.hideRelations = hideRelations;
+        this.petFollows = petFollows;
+        this.follows = follows;
+        this.accounts = accounts;
     }
 
-    /** 访客看到的宠物档案。🛡 白名单 record，里面没有 cardToken（AC2）。 */
+    /**
+     * 访客看到的宠物档案。🛡 白名单 record，里面没有 cardToken（AC2）。
+     *
+     * <p>V1.4.2 social-topic Story 1.1：站内入口额外带 {@code iFollow} / {@code iFollowOwner} / {@code ownerToken}
+     * （分享 token 公开路径不带）。非 USER 角色 / 本人视角两个布尔恒 false、不查库。
+     */
     @GetMapping("/profile")
     public VisitorProfileResponse profile(@AuthenticationPrincipal Jwt jwt,
             @PathVariable long petId) {
         PetProfile pet = requireVisible(jwt, petId);
-        return VisitorProfileResponse.of(pet, visitors.ownerNickname(pet));
+        Long viewerId = viewerId(jwt);
+        long ownerId = pet.getOwnerId();
+        boolean other = viewerId != null && viewerId != ownerId;
+        boolean iFollow = other && petFollows.isFollowing(viewerId, pet.getId());
+        boolean iFollowOwner = other && follows.followState(viewerId, ownerId).iFollow();
+        String ownerToken = accounts.publicTokensOf(List.of(ownerId), true).get(ownerId);
+        return VisitorProfileResponse.of(pet, visitors.ownerNickname(pet), iFollow, iFollowOwner, ownerToken);
     }
 
     /** 访客统计条三列。🛡 健康记录条数不在其中（{@link VisitorStats} 里根本没有那个字段）。 */

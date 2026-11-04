@@ -639,8 +639,9 @@ public class TimelineService {
         // V1.4.0 gift Story 2.1（AD-10）：礼物总价值 —— 按<b>这只宠物</b>算（不按主人汇总：多宠合入后会混算）。
         // 主人 / 站内访客 / 分享 token / H5 名片四处都出自这一句。
         long giftTotalValue = giftShowcase.totalValueOfPet(profile.getId());
+        // V1.4.2 social-topic Story 1.1：追更人数从已取到的 profile 直读，不加查询。
         return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total(),
-                healthRecordCount, uncelebrated, giftTotalValue);
+                healthRecordCount, uncelebrated, giftTotalValue, profile.getFollowerCount());
     }
 
     /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2 &gt; 场所打卡=3（V1.3.2）。 */
