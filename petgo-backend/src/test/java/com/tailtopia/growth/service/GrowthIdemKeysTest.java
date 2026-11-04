@@ -51,6 +51,22 @@ class GrowthIdemKeysTest {
                 .isLessThanOrEqualTo(GrowthIdemKeys.MAX_LENGTH);
     }
 
+    /** V1.4.2 Story 2.2（P-7 定死）：存量补算键，迁移 V20261104_2040 以 SQL 写同一格式。 */
+    @Test
+    void backfillAccountMilestoneKeyIsUserAndFlag() {
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(7L, "FIRST_FOLLOW_USER"))
+                .isEqualTo("BACKFILL142:7:FIRST_FOLLOW_USER");
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(7L, "FIRST_COLLECT_CONTENT"))
+                .isEqualTo("BACKFILL142:7:FIRST_COLLECT_CONTENT");
+        // 与 1.4.0 补算键 BACKFILL:{u}、运行时键 MILESTONE_ACCT:{u}:{flag} 互不相撞。
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(7L, "FIRST_FOLLOW_USER"))
+                .isNotEqualTo(GrowthIdemKeys.backfill(7L))
+                .doesNotStartWith(GrowthIdemKeys.backfill(7L) + ":")
+                .isNotEqualTo(GrowthIdemKeys.milestoneAccount(7L, "FIRST_FOLLOW_USER"));
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(Long.MAX_VALUE, "X".repeat(32)).length())
+                .isLessThanOrEqualTo(GrowthIdemKeys.MAX_LENGTH);
+    }
+
     @Test
     void longestKeysFitTheColumn() {
         String longest = GrowthIdemKeys.milestone(Long.MAX_VALUE, "X".repeat(32), Long.MAX_VALUE);

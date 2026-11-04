@@ -103,6 +103,14 @@ public final class GrowthIdemKeys {
         return "BACKFILL:" + userId;
     }
 
+    /**
+     * 账号级里程碑存量补算（V1.4.2 Story 2.2 · P-7；迁移 V20261104_2040 里以 SQL 写同一格式）：
+     * {@code BACKFILL142:{u}:{flagKey}}，按（账号, flag）一次。前缀与 {@link #backfill} 的 {@code BACKFILL:} 不同，互不冲突。
+     */
+    public static String backfillAccountMilestone(long userId, String flagKey) {
+        return "BACKFILL142:" + userId + ":" + flagKey;
+    }
+
     /** 后台单个调整 / 运营活动（Story 4.2）：{@code ADMIN:{grantToken}}，token 为页面渲染时生成的一次性 UUID。 */
     public static String admin(String grantToken) {
         return "ADMIN:" + grantToken;
