@@ -19,7 +19,7 @@ Future<List<CelebrationPet>> readAccountCelebrationPets(
     final pets = await c.read(petListProvider.future).timeout(timeout);
     return [
       for (final p in pets.where((p) => !p.isReadOnly).take(kCelebrationPetsMax))
-        CelebrationPet(name: p.name, avatarUrl: p.avatarUrl, petType: p.petType),
+        CelebrationPet(name: p.name, avatarUrl: p.avatarUrl, petType: p.petType, id: p.id),
     ];
   } catch (_) {
     return const [];

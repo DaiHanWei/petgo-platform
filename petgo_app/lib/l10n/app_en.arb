@@ -4772,5 +4772,9 @@
   "followingFeedNoNewTitle": "No new posts yet",
   "@followingFeedNoNewTitle": {"description": "V1.4.2 social-topic Story 1.5"},
   "followingFeedNoNewBody": "New posts from people and pets you follow will show up here.",
-  "@followingFeedNoNewBody": {"description": "V1.4.2 social-topic Story 1.5"}
+  "@followingFeedNoNewBody": {"description": "V1.4.2 social-topic Story 1.5"},
+  "milestoneShareComposeSingle": "{name} just unlocked the \"{title}\" milestone! 🎉",
+  "@milestoneShareComposeSingle": {"description": "V1.4.2 social-topic Story 3.1 (FR-156): publish page prefill from milestone celebration, single pet", "placeholders": {"name": {"type": "String"}, "title": {"type": "String"}}},
+  "milestoneShareComposeMulti": "We just unlocked the \"{title}\" milestone! 🎉",
+  "@milestoneShareComposeMulti": {"description": "V1.4.2 social-topic Story 3.1 (FR-156): publish page prefill from milestone celebration, account-level milestone with 2+ ACTIVE pets", "placeholders": {"title": {"type": "String"}}}
 }

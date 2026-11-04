@@ -3045,5 +3045,7 @@
   "petFollowPushDesc": "Diary baru dari hewan yang kamu ikuti",
   "petFollowPushFollowerPetDesc": "Seseorang mulai mengikuti hewanmu",
   "followingFeedNoNewTitle": "Belum ada postingan baru",
-  "followingFeedNoNewBody": "Postingan baru dari orang dan hewan yang kamu ikuti akan muncul di sini."
+  "followingFeedNoNewBody": "Postingan baru dari orang dan hewan yang kamu ikuti akan muncul di sini.",
+  "milestoneShareComposeSingle": "{name} baru membuka tonggak \"{title}\"! 🎉",
+  "milestoneShareComposeMulti": "Kami baru membuka tonggak \"{title}\"! 🎉"
 }

@@ -113,3 +113,8 @@ String? milestoneBadgeKeyOf(String code) => kMilestoneBadgeKeys[code];
 
 /// 语义键 → 素材路径。**全仓库唯一出现该目录字面量的地方**；同一张图等比缩放，没有大小两套。
 String milestoneBadgeAssetPath(String key) => 'assets/milestone/$key.webp';
+
+/// 里程碑卡奖章花结 SVG（V1.4.2 social-topic Story 3.1 · **待素材**）：按级别三色三份
+/// `rosette_l.svg` / `rosette_m.svg` / `rosette_s.svg`；设计交付后放入同目录即自动切换（manifest 判存在），不改代码。
+/// [levelKey] = `MilestoneLevel.name`（`l` / `m` / `s`）。
+String milestoneRosetteAssetPath(String levelKey) => 'assets/milestone/rosette_$levelKey.svg';

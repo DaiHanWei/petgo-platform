@@ -42,6 +42,7 @@ import '../domain/content_type.dart';
 import '../domain/publish_checkin_place.dart';
 import '../domain/image_exposure.dart';
 import '../domain/publish_controller.dart';
+import 'brag_post_entry.dart' show BragPostSource;
 import 'publish_exposure_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
@@ -82,6 +83,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.initialText,
     this.initialImages,
     this.initialPetIds,
+    this.entrySource,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -111,6 +113,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// 预选时过滤掉已不在可选列表（ACTIVE）里的 id。null = 不预选（只 1 只正常宠物时仍自动选中，F4）。
   final List<int>? initialPetIds;
 
+  /// 「Pamer di postingan」入口来源（V1.4.2 social-topic Story 3.1 · G-6）：仅用于发布成功埋点 ——
+  /// [BragPostSource.milestoneCelebration] 时 `diary_published` 追加 `source`；不影响任何发布逻辑。
+  final BragPostSource? entrySource;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
@@ -122,6 +128,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     String? initialText,
     List<Uint8List>? initialImages,
     List<int>? initialPetIds,
+    BragPostSource? entrySource,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -147,6 +154,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
           initialText: initialText,
           initialImages: initialImages,
           initialPetIds: initialPetIds,
+          entrySource: entrySource,
         ),
       ),
     );
@@ -481,7 +489,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // V1.4.0 multi-pet Story 3.3 · AC7（PRD §4）：Diary 发布成功报 `diary_published`，属性只有关联宠物数；
       // 🛡 不带宠物名 / petId / 正文。Moment / Tips 不报。
       if (controller.type == ContentType.growthMoment) {
-        Analytics.capture('diary_published', {'pet_count': controller.petIds.length});
+        // V1.4.2 Story 3.1（PRD §4 FR-156）：仅里程碑庆祝页来源追加 source；其余来源仍只有 pet_count。
+        Analytics.capture('diary_published', {
+          'pet_count': controller.petIds.length,
+          if (widget.entrySource == BragPostSource.milestoneCelebration) 'source': 'milestone_celebration',
+        });
       }
       // V1.3.2 Story 1.5 · AC6：打卡后顺手发帖成功。place_id 键装 token 值（沿用 place_detail_viewed 约定）；
       // 🛡 不带宠物名 / 正文 / 坐标。
