@@ -110,9 +110,14 @@ class FeedItem {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
+    this.reason,
   });
 
   final int id;
+
+  /// 关注流里这条为什么出现（V1.4.2 social-topic · Story 1.3 下发 / 1.5 读 · D-9）：
+  /// `followed_user` / `followed_pet`；只在关注流出口下发，其余出口与旧后端缺键 → null。只喂埋点。
+  final String? reason;
   final int authorId;
 
   /// 作者对外 token（V1.3.4 follow · Story 2.1）：关注接口用。作者已注销 / 封号 / 老后端 /
@@ -244,6 +249,7 @@ class FeedItem {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: followEpoch ?? this.followEpoch,
+        reason: reason,
       );
 
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
@@ -275,6 +281,8 @@ class FeedItem {
         // V1.3.4 follow Story 2.1：缺失 / null 都按默认（老后端、「我的发布」不下发）。
         authorToken: json['authorToken'] as String?,
         authorFollowState: FollowState.fromJson(json['authorFollowState']),
+        // V1.4.2 social-topic Story 1.3：只关注流下发，缺键 null。
+        reason: json['reason'] as String?,
       );
 }
 
@@ -289,11 +297,18 @@ class FeedPage {
     this.nextCursor,
     this.hasMore = false,
     this.rankMode = RankMode.unknown,
+    this.followingUserCount,
+    this.followingPetCount,
   });
 
   final List<FeedItem> items;
   final String? nextCursor;
   final bool hasMore;
+
+  /// 关注流**首页**的「我关注的人数 / 我追更的宠物数」（V1.4.2 social-topic · Story 1.3 · D-9）：
+  /// App 据此区分两种空态（1.5 AC5）。后续页、非关注流出口、旧后端缺键 → null。
+  final int? followingUserCount;
+  final int? followingPetCount;
 
   /// 本页实际用的排序路径（V1.1.6 Story 16.5）。见 [RankMode]。
   final String rankMode;
@@ -307,6 +322,8 @@ class FeedPage {
       nextCursor: json['nextCursor'] as String?,
       hasMore: (json['hasMore'] ?? false) as bool,
       rankMode: RankMode.parse(json['rankMode']),
+      followingUserCount: (json['followingUserCount'] as num?)?.toInt(),
+      followingPetCount: (json['followingPetCount'] as num?)?.toInt(),
     );
   }
 }

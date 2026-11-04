@@ -151,6 +151,19 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('V1.4.2 Story 1.5：小卡公共化后首页仍 65 宽、无追更按钮、key 不变、from=explore_strip', (tester) async {
+      await pumpHome(tester, _FakeRepo([for (int i = 1; i <= 3; i++) _pet(i)]));
+      final strip = find.byKey(const ValueKey('petRecommendationStrip'));
+      final tile = find.descendant(of: strip, matching: find.byType(PetStripTile)).first;
+      expect(tester.widget<PetStripTile>(tile).width, 65);
+      expect(tester.widget<PetStripTile>(tile).bottom, isNull);
+      expect(tester.widget<PetStripTile>(tile).from, kPetRecommendFromExploreStrip);
+      expect(tester.getSize(find.byKey(const ValueKey('recommendedPet_1'))).width, 65);
+      expect(find.descendant(of: strip, matching: find.byType(FilledButton)), findsNothing);
+      expect(tester.getSize(find.descendant(of: strip, matching: find.byType(ListView))).height,
+          PetRecommendationStrip.rowHeight);
+    });
+
     testWidgets('bug 20260922-522: 缩到 65/92 后 1.3 倍字号也不溢出', (tester) async {
       // 行高按 65 + 8 + 11×1.3×1.3 ≈ 91.6 算的，这里用字号上限钉住「92 够放」。
       tester.platformDispatcher.textScaleFactorTestValue = 1.3;
@@ -276,14 +289,16 @@ void main() {
       expect(captured.firstWhere((e) => e.$1 == 'pet_card_tapped').$2!.keys, ['from']);
     });
 
-    test('四个位置的 from 两两不同', () {
+    test('五个位置的 from 两两不同（V1.4.2 Story 1.5 +follow_list_empty）', () {
       final values = {
         kPetRecommendFromDiaryEmpty,
         kPetRecommendFromDiaryNonOwner,
         kPetRecommendFromExploreGrid,
         kPetRecommendFromExploreStrip,
+        kPetRecommendFromFollowListEmpty,
       };
-      expect(values, hasLength(4));
+      expect(values, hasLength(5));
+      expect(kPetRecommendFromFollowListEmpty, 'follow_list_empty');
       expect(kPetRecommendFromExploreStrip, 'explore_strip');
     });
   });

@@ -12,6 +12,7 @@ import '../../../profile/data/timeline_repository.dart';
 import '../../../user_profile/data/public_profile_repository.dart';
 import '../../data/pet_follow_repository.dart';
 import '../../domain/pet_follow_state.dart';
+import '../followed_pet_list_controller.dart';
 import 'follow_button.dart';
 
 /// 追更按钮的外观（V1.4.2 social-topic · Story 1.4 / 1.5）。外观与用户关注按钮共用（[followProfileFullButton] 等），
@@ -46,6 +47,8 @@ class PetFollowButton extends ConsumerStatefulWidget {
     this.ownerToken,
     this.iFollowOwner,
     this.onNotFound,
+    this.invalidatesFollowedPetList = true,
+    this.hitHeight,
   });
 
   /// 宠物 id（覆盖表的键 / 接口路径 / 埋点 `pet_id`，与站内访客路由 `/pets/{petId}` 同一标识）。
@@ -78,6 +81,15 @@ class PetFollowButton extends ConsumerStatefulWidget {
   /// 接口回 404（宠物 / 主人刚失效）时的额外动作：访客页据此重取档案 → 落 A14。
   final VoidCallback? onNotFound;
 
+  /// 成功后是否失效「追更宠物列表」（Story 1.5 · AC9.3）。访客页（缺省 true）追更 / 取消后列表重取；
+  /// **Hewan 列表行与空态推荐卡传 false**：那两处要「行 / 卡保留、下拉刷新才更新」（AC2.3 / AC4.5），
+  /// 当场失效会让刚取消的行立刻消失。
+  final bool invalidatesFollowedPetList;
+
+  /// 热区高度（Story 1.5 · AC4.4 推荐卡：按钮 30 高、热区上下各扩 7 到 44）。null = 热区即按钮本身。
+  /// 按钮外的那一圈透明区域同样触发追更（外层 GestureDetector 接住按钮没吃掉的点击）。
+  final double? hitHeight;
+
   @override
   ConsumerState<PetFollowButton> createState() => _PetFollowButtonState();
 }
@@ -91,7 +103,7 @@ class _PetFollowButtonState extends ConsumerState<PetFollowButton> {
     final following = resolvePetFollow(ref.watch(petFollowStateProvider)[widget.petId], widget.initialFollow,
         snapshotEpoch: widget.followSnapshotEpoch);
     final label = following ? l10n.followActionFollowing : l10n.followActionFollow;
-    return switch (widget.style) {
+    final button = switch (widget.style) {
       PetFollowButtonStyle.profileFull => followProfileFullButton(
           key: const ValueKey('petFollowButton'),
           label: label,
@@ -105,6 +117,14 @@ class _PetFollowButtonState extends ConsumerState<PetFollowButton> {
           onPressed: _onTap,
         ),
     };
+    final h = widget.hitHeight;
+    if (h == null) return button;
+    return GestureDetector(
+      key: ValueKey('petFollowHit_${widget.petId}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: _onTap,
+      child: SizedBox(height: h, child: Center(widthFactor: 1, child: button)),
+    );
   }
 
   Future<void> _onTap() async {
@@ -152,7 +172,8 @@ class _PetFollowButtonState extends ConsumerState<PetFollowButton> {
       // AC1.7：本宠物 Pengikut 数（整族失效，访客页两种作用域都覆盖）+ 我自己公开主页的「Hewan N」胶囊。
       container.invalidate(visitorStatsProvider);
       if (accountAtTap != null) container.invalidate(publicProfileProvider(accountAtTap));
-      // TODO(v1.4.2 Story 1.5): 我的追更宠物列表 provider 建好后在此 `container.invalidate(...)`。
+      // Story 1.5 · AC9.3：我（及任何人）的追更宠物列表重取；列表行 / 推荐卡自己不失效（见 [invalidatesFollowedPetList]）。
+      if (widget.invalidatesFollowedPetList) container.invalidate(followedPetListControllerProvider);
     } catch (e) {
       if (!sameAccount()) return;
       notifier.restore(petId, before);

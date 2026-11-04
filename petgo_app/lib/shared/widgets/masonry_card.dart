@@ -366,6 +366,8 @@ class MasonryCard extends StatelessWidget {
                   // V1.1.6 Story 16.5：FR-95 的效果归因靠这两个属性区分排序路径。
                   feedTab: feedTab,
                   rankMode: rankMode,
+                  // V1.4.2 social-topic Story 1.5 · AC5.5：关注流卡片带 reason（Discover 不带）。
+                  reason: feedTab == 'following' ? item.reason : null,
                 ),
                 // 可见间距仍是 18：点赞数字的透明热区已向右占掉一段（V1.3.4）。
                 const SizedBox(width: 18 - LikeButton.countTrailingHitExtent),

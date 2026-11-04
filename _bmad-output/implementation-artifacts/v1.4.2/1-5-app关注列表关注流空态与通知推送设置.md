@@ -1,6 +1,6 @@
 # Story 1.5: 关注列表、关注流空态、通知与推送设置（App，A5–A13）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`
 > 口径优先级：`决策日志-social-topic.md`（R-2、I5）> PRD §3.1「列表 / 追更了能看到什么 / 主人一侧」、AC6 ~ AC8、AC12、§4、§7 > 架构增量 D-8、D-9、D-10、D-17、D-23、G-1、§1.2 第 12 条、P-4、P-9 ~ P-12 > **UI 定稿 `追更话题/ui-1-4-2-social-topic-integrated-v1.html` 的 A5–A13 每屏下方说明**（数值照说明里写的代码出处取，不从截图量像素；「原有模块照线上」不改样式）。
@@ -114,15 +114,15 @@ so that 追更关系清楚可控。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：分支；1.1 ~ 1.4 已在本分支；后端 JSON 与「接口契约」逐字段核对；Dev Notes 行号未漂移
-- [ ] **T1 数据层**：`ApiPaths.userPetFollows(token)`；`FollowedPet` 模型 + `FollowedPetPage`；`PublicProfile.petFollowingCount`；`FeedItem.reason`、`FeedPage` 两个计数；`NotificationItem.petName`；`PushCategoryCode.petDiary`
-- [ ] **T2 关注列表**（AC1 ~ AC4、AC9）：筛选胶囊（抽 `_Tab` 为公共组件）；Hewan 分页列表 + `FollowedPetRow`；自己 / 别人两态；A8 空态 + 推荐卡（`_StripPetTile` 公共化 + 宽度 / 底部插槽）
-- [ ] **T3 关注流**（AC5）：控制器读计数；`FollowingEmptyView` 加变体；`reason` 进埋点
-- [ ] **T4 通知中心 + 深链**（AC6）
-- [ ] **T5 推送设置**（AC7）
-- [ ] **T6 文案**（AC8）：两份 arb + `flutter gen-l10n`
-- [ ] **T7 测试**（见「测试」）
-- [ ] **T8** `flutter analyze` + `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」（L2 还原度打分在本地模拟器做）
+- [x] **T0 开工核对**：分支；1.1 ~ 1.4 已在本分支；后端 JSON 与「接口契约」逐字段核对；Dev Notes 行号未漂移
+- [x] **T1 数据层**：`ApiPaths.userPetFollows(token)`；`FollowedPet` 模型 + `FollowedPetPage`；`PublicProfile.petFollowingCount`；`FeedItem.reason`、`FeedPage` 两个计数；`NotificationItem.petName`；`PushCategoryCode.petDiary`
+- [x] **T2 关注列表**（AC1 ~ AC4、AC9）：筛选胶囊（抽 `_Tab` 为公共组件）；Hewan 分页列表 + `FollowedPetRow`；自己 / 别人两态；A8 空态 + 推荐卡（`_StripPetTile` 公共化 + 宽度 / 底部插槽）
+- [x] **T3 关注流**（AC5）：控制器读计数；`FollowingEmptyView` 加变体；`reason` 进埋点
+- [x] **T4 通知中心 + 深链**（AC6）
+- [x] **T5 推送设置**（AC7）
+- [x] **T6 文案**（AC8）：两份 arb + `flutter gen-l10n`
+- [x] **T7 测试**（见「测试」）
+- [x] **T8** `flutter analyze` + `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」（L2 还原度打分在本地模拟器做）
 
 ## Dev Notes
 
@@ -135,8 +135,8 @@ so that 追更关系清楚可控。
 | `A/features/social/presentation/follow_list_page.dart` | 路由 `/users/:userId/follows?tab=`；`publicProfileProvider(userId)` 取 token / self / 昵称；两 Tab `TabBarView`；`_FollowListTabView`（keep-alive、首页到达报 `follow_list_viewed`、下拉刷新连推荐一起拉）；我自己的 Mengikuti = 常驻（`_persistent`:217）；`_selfEmpty`（:316，Pengguna 为空的提示条 + 推荐关注）；`_empty`（:350-364，顶距 120 / 图标 48 / 标题 `AppTypography.title`）；`_ListError`（:368） | Mengikuti Tab 内加筛选与 Hewan 列表、A8 / A9 | Pengikut Tab、Pengguna 列表全部行为；「绝不把请求错误画成空态」 |
 | `A/features/social/presentation/widgets/follow_user_row.dart` | 用户行（`FollowListItem`，头像 40、昵称 15 / w600、`subtitle` 12、按钮） | 只参照数值，新写 `FollowedPetRow` | — |
 | `A/features/social/presentation/widgets/follow_button.dart` | `_listCompact`（:173-215）外观 | 1.4 已抽外观函数，本 story 复用 | — |
-| `A/features/content/presentation/feed_tab_row.dart` | `_Tab`（:51-80）私有：内边距 13 / 7、圆角 999、12 / w600、间距 7 | 抽公共胶囊组件（可带数字） | Discover 外观 |
-| `A/features/profile/presentation/widgets/pet_recommendation_strip.dart` | `_StripPetTile`（:134-216）私有，宽 `PetRecommendationStrip.cardWidth`（65） | 公共化，加 `width`、`bottom` 插槽 | 首页 65 宽、无按钮、key `recommendedPet_{petId}` |
+| `A/features/content/presentation/feed_tab_row.dart` | `_Tab`（:51-80）私有：内边距 13 / 7、圆角 999、12 / w600、间距 7 | 抽公共胶囊组件（可带数字）→ 实际为 `A/shared/widgets/pill_tab.dart` `PillTab` | Discover 外观 |
+| `A/features/profile/presentation/widgets/pet_recommendation_strip.dart` | `_StripPetTile`（:134-216）私有，宽 `PetRecommendationStrip.cardWidth`（65） | 公共化为 `PetStripTile`，加 `width`、`bottom` 插槽与 `from` | 首页 65 宽、无按钮、key `recommendedPet_{petId}` |
 | `A/features/profile/presentation/widgets/recommended_pet_card.dart` | `from` 常量（:15-45）、`openRecommendedPet`（:233，同一落点 / 埋点 / 登录门控） | 加 `kPetRecommendFromFollowListEmpty` | 既有取值 |
 | `A/features/profile/data/pet_recommendation_repository.dart` | `petRecommendationsProvider`（:142，autoDispose） | 复用 | — |
 | `A/features/content/presentation/following_tab_view.dart` | `state.isEmpty` → `FollowingEmptyView`（:61）；有帖 → `FeedMasonryView(header: FollowingStrip, feedTab: 'following', …)` | 空态分两种 | 头像排只列用户 |
@@ -190,7 +190,7 @@ so that 追更关系清楚可控。
 - `test/social/followed_pet_empty_test.dart`（新）：自己空 → 空态文案 + 推荐区（标题、卡宽 88、Ikuti 按钮）；推荐空 / 失败 → 整块隐藏；别人空 → 只空态、无推荐；推荐卡点按钮 = 追更（`source=pet_recommendation`）且卡不移除；点卡片 = `openRecommendedPet(from: 'follow_list_empty')`。
 - `test/profile/pet_recommendation_strip_test.dart`（补）：首页小卡仍 65 宽、无按钮、key 不变。
 - `test/content/following_tab_view_test.dart`（补）：计数都 0 → 现有空态（`followingEmptyTitle`）；`followingPetCount=1` 且无帖 → A11 文案 + 图标 `schedule` + 推荐关注 + Jelajahi Discover；计数缺失 → 现有空态；有帖 → 列表（无新元素）。
-- `test/content/following_feed_controller_test.dart`（补）：首页解析两个计数、`reason`；加载更多不覆盖首页计数。
+- `test/social/following_feed_controller_test.dart`（补；原写 `test/content/`，以仓库实际路径为准）：首页解析两个计数、`reason`；加载更多不覆盖首页计数。
 - `test/notify/pet_follow_notification_test.dart`（新）：`PET_FOLLOWED` 标题加粗昵称与宠物名、图标 `person_add_rounded`/`violet100`、**无回关按钮**、点击进 `openUserProfile(actorUserId)`；`PET_DIARY_POSTED` 加粗宠物名、图标 `pets_rounded`/`violet100`、点击进 `/content/{id}`、帖子已删 → toast 不跳；无 `actorName` → 读后端 `title` 兜底；`_notifTypeForAnalytics` 两个取值。
 - `test/notify/deep_link_routes_test.dart`（补）：`PET_DIARY_POSTED` 数字 / 非数字；`PET_FOLLOWED` 数字 → 追更者主页 / 非数字 → 通知中心。
 - 推送设置测试（补，现有文件名以仓库为准）：10 行、新行在「Pengikut baru」之后、图标 / 文案、默认开、切换发 PATCH `{PET_DIARY:false}`；「Pengikut baru」两行说明。
@@ -230,10 +230,88 @@ so that 追更关系清楚可控。
 
 ### Agent Model Used
 
+Claude
+
 ### Debug Log References
+
+- `flutter gen-l10n`：成功（生成产物 `lib/l10n/app_localizations*.dart` 在 .gitignore，不入库）。
+- `flutter analyze`：No issues found。
+- `flutter test`（全量，复审修正后一轮）：`+4222 ~1: All other tests passed!`（1 skip 为存量 `startup_popup_ledger_test`，非本 story）。首轮全量暴露 3 条按设计打破的推送设置断言（9 项 → 10 项），已更新断言表达新规则（不删不 skip）。
 
 ### Completion Notes List
 
 - Ultimate context engine analysis completed - comprehensive developer guide created
+- **T0 名字核对 / 对 story 文件的修订**：
+  - `test/content/following_feed_controller_test.dart` 实际在 `test/social/`，已改 story 测试清单路径。
+  - `_Tab` 抽成 `lib/shared/widgets/pill_tab.dart` 的 `PillTab`（跨 feature 复用走 shared）；`_StripPetTile` 公共化为 `PetStripTile`（多一个必填 `from`，首页传 `explore_strip`）。已在 Dev Notes 表内注明。
+  - 1.3 的 `FeedResponseContractTest` 注释提到的 `petgo_app/lib/core/mock/mock_backend.dart` **仓库里已不存在**，故只同步 `feed_item.dart`（`FeedItem.reason`、`FeedPage.followingUserCount / followingPetCount`）；后端契约测试未改（`reason` 已在 ITEM_FIELDS，两个计数由 `FeedPageResponseJsonTest` 钉）。
+  - `PetFollowButton` 无 `persistent` 参数（1.4 实现即「常驻两态」）；「别人的列表无按钮」由 `FollowedPetRow.showButton` 控制。
+  - 后端 `/users/{token}/pet-follows`、`/profile.petFollowingCount`、通知 `petName` / `deepLinkType = type.name()`、`PushCategory` 声明顺序（`FOLLOWER` 后 `PET_DIARY`）逐字段核对一致。
+- **拍板点复述**：① 宠物行新写 `FollowedPetRow`；胶囊抽 `PillTab`、推荐小卡抽 `PetStripTile`，首页 / Discover 调用像素不变（`feed_test` / `pet_recommendation_strip_test` 各加回归）。② 「Hewan N」取主页 `petFollowingCount`；Hewan 列表首页到达后以信封 `petFollowingCount` 为准（因此在列表里取消后胶囊要**下拉刷新**才 −1，与「行刷新后才消失」一致）。③ `PET_FOLLOWED` 推送 / 列表点击都进追更者主页。④ `reason` 只挂在已有 `post_like_tapped`（关注流卡片 `feed_tab == 'following'` 时带），未新增事件名。
+- **AC1.3 缺字段**：旧后端无 `petFollowingCount` → Hewan 胶囊**不带数字**（`PublicProfile.petFollowingCount` 为 `int?`）。
+- **AC9.3**：1.4 预留的 TODO 已接上 —— `PetFollowButton` 新增 `invalidatesFollowedPetList`（缺省 true = 访客页行为：成功后 `invalidate(followedPetListControllerProvider)`）；Hewan 列表行与空态推荐卡传 false（否则刚取消的行会立刻消失，违反 AC2.3 / AC4.5）。另加 `hitHeight`（推荐卡按钮 30 高、热区 44，外圈点击同样触发）。
+- **AC9.1 / 9.2**：`followedPetListControllerProvider`（autoDispose family by token，`retry: null`，失败停错误态不画空态）已登记 `resetUserScopedCaches`（并加入 `user_scoped_cache_registry_test` 清单）；列表页登录态切换监听里补 invalidate。
+- **通知兜底**：`PET_DIARY_POSTED` 无 `actorName` → `_typeLabel` 读后端 `title`（`_storedTitle`），`_typeBody` 返回空串；兜底布局在正文为空时不留正文行（仅对空正文生效，其余类型布局不变）。`PET_FOLLOWED` 无 `actorUserId` → 不跳转。
+- **复审修正（2026-11-04，两条 PLAUSIBLE）**：
+  1. `_serverTitle` 加粗：名字的命中与已加粗区间重叠时改为 `indexOf(name, at + 1)` 继续往后找（昵称「Mochi Lover」+ 宠物名「Mochi」→ 句末 Mochi 也加粗）；`pet_follow_notification_test` 补用例。
+  2. 列表页 `publicProfileProvider` 的 `async.when` 加 `skipError: true`：页内操作（Hewan 列表取消追更后按钮 invalidate 主页）引发的重取失败时继续用已有主页数据，不把整页切成 `_profileError`（AC2.3 行保留）；首次加载失败（无已有值）仍走错误分支。选页面侧而非「列表里不重取主页」：同样兜住 Pengguna 列表里关注按钮触发的重取失败，且不改 1.4 按钮的失效语义。`followed_pet_list_test` 补用例（已验证去掉 `skipError` 时该用例红）。
+- **L1/L2 待本地验收**：
+  - L1（连本地 / stag 后端）：真实 Hewan 列表翻页、取消后下拉刷新消失与胶囊 −1；只追更未关注的账号关注流显示 A11；通知中心 `PET_FOLLOWED` / `PET_DIARY_POSTED` 真实条目（标题加粗、宠物已删兜底）；推送设置 `PET_DIARY` PATCH 生效。本 story 只动 App，无新增后端集成测试类。
+  - L2（Android 模拟器 / 真机）：A5 / A6 / A7 / A8 / A9 / A10 / A11 / A12 / A13 逐屏还原度 ≥ 95% 打分（云端无法打分，未填）；真机两类系统推送到达与点击落点（`PET_DIARY_POSTED` → 帖子；`PET_FOLLOWED` → 追更者主页）；关闭「Hewan yang kamu ikuti」后不再推送但通知中心照收。
+  - 无 golden（按云端规则）；无待素材项。
+
+#### 待确认
+
+1. （沿用 story「待确认」1）关注流曝光 / 点击事件不存在，`reason` 只挂在 `post_like_tapped`；是否新增 `following_post_viewed` / `_tapped` 待主会话拍板。
+2. **推荐卡追更埋点缺 `owner_id` / `is_following_owner`**：推荐接口 `RecommendedPetResponse` 不下发主人 token / 关注主人关系（1.3 未加），本 story 只动 App，按 1.4 按钮既有规则「缺失则省略属性、不报 null」处理。若看板需要，需后端在推荐接口补 `ownerToken` / `iFollowOwner`。
+3. 胶囊字号按代码 12（story 待确认 3）；数字按 UI 稿 `.lA-chips span b` 用 w700；筛选行内边距取稿 `.lA-chips` 的 12 / 16 / 4。
+4. Hewan 列表未单独报 `follow_list_viewed`（PRD 未要求新属性值，未擅自扩展）；Pengguna 子列表仍按原逻辑报（tab=following）。
 
 ### File List
+
+- petgo_app/lib/app.dart
+- petgo_app/lib/core/network/api_paths.dart
+- petgo_app/lib/core/router/deep_link_routes.dart
+- petgo_app/lib/features/content/domain/feed_item.dart
+- petgo_app/lib/features/content/presentation/feed_controller.dart
+- petgo_app/lib/features/content/presentation/feed_tab_row.dart
+- petgo_app/lib/features/content/presentation/following_feed_controller.dart
+- petgo_app/lib/features/content/presentation/following_tab_view.dart
+- petgo_app/lib/features/content/presentation/like_button.dart
+- petgo_app/lib/features/content/presentation/widgets/following_empty_view.dart
+- petgo_app/lib/features/notify/domain/notification_item.dart
+- petgo_app/lib/features/notify/domain/push_settings.dart
+- petgo_app/lib/features/notify/presentation/notification_center_page.dart
+- petgo_app/lib/features/notify/presentation/push_settings_page.dart
+- petgo_app/lib/features/profile/presentation/widgets/pet_recommendation_strip.dart
+- petgo_app/lib/features/profile/presentation/widgets/recommended_pet_card.dart
+- petgo_app/lib/features/social/data/followed_pet_repository.dart（新）
+- petgo_app/lib/features/social/domain/followed_pet.dart（新）
+- petgo_app/lib/features/social/presentation/follow_list_page.dart
+- petgo_app/lib/features/social/presentation/followed_pet_list_controller.dart（新）
+- petgo_app/lib/features/social/presentation/widgets/followed_pet_row.dart（新）
+- petgo_app/lib/features/social/presentation/widgets/pet_follow_button.dart
+- petgo_app/lib/features/user_profile/data/public_profile_repository.dart
+- petgo_app/lib/l10n/app_en.arb
+- petgo_app/lib/l10n/app_id.arb
+- petgo_app/lib/shared/widgets/masonry_card.dart
+- petgo_app/lib/shared/widgets/pill_tab.dart（新）
+- petgo_app/test/app/user_scoped_cache_registry_test.dart
+- petgo_app/test/content/feed_test.dart
+- petgo_app/test/content/following_tab_view_test.dart
+- petgo_app/test/content/like_button_reason_test.dart（新）
+- petgo_app/test/notify/deep_link_routes_test.dart
+- petgo_app/test/notify/pet_follow_notification_test.dart（新）
+- petgo_app/test/notify/push_settings_page_test.dart
+- petgo_app/test/notify/push_settings_test.dart
+- petgo_app/test/profile/pet_recommendation_strip_test.dart
+- petgo_app/test/social/follow_list_pet_filter_test.dart（新）
+- petgo_app/test/social/followed_pet_empty_test.dart（新）
+- petgo_app/test/social/followed_pet_harness.dart（新，测试夹具）
+- petgo_app/test/social/followed_pet_list_test.dart（新）
+- petgo_app/test/social/following_feed_controller_test.dart
+
+### Change Log
+
+- 2026-11-04：实现 Story 1.5（App）—— 关注列表 Pengguna / Hewan 筛选与 Hewan 列表（A5–A9）、关注流 A11 空态与 `reason` 埋点、通知中心 `PET_FOLLOWED` / `PET_DIARY_POSTED`（A12）、推送设置 `PET_DIARY`（A13）、EN / ID 文案；接上 1.4 预留的列表失效调用点。Status → review。
+- 2026-11-04：复审修正 —— 通知标题加粗处理「昵称包含宠物名」重叠；关注列表页主页重取失败保留已有数据（skipError）；补两条测试。

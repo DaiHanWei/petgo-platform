@@ -415,6 +415,10 @@ class ApiPaths {
   /// `petId` 与站内访客路由 `/pets/{petId}` 同一标识。返回 `{iFollow, followerCount}`。
   static String mePetFollow(int petId) => '$base/me/pet-follows/$petId';
 
+  /// 某用户追更的宠物列表（V1.4.2 social-topic · Story 1.1 / 1.5 · D-8）：`?cursor=` 不透明游标，游客可读。
+  /// 首页信封带 `petFollowingCount`（「Hewan N」胶囊校准）。
+  static String userPetFollows(String userToken) => '$base/users/$userToken/pet-follows';
+
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
   static String userPublicPosts(int userId) => '$base/users/$userId/posts';

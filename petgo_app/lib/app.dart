@@ -18,6 +18,7 @@ import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/content/presentation/following_feed_controller.dart';
 import 'package:tailtopia/features/social/data/following_strip_repository.dart';
 import 'package:tailtopia/features/social/domain/pet_follow_state.dart';
+import 'package:tailtopia/features/social/presentation/followed_pet_list_controller.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
@@ -388,6 +389,8 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(followingStripProvider);
   // V1.4.2 social-topic Story 1.4 · AC1.8：追更覆盖表是账号维度 —— 换账号必须清，否则 B 看到 A 的追更态。
   ref.invalidate(petFollowStateProvider);
+  // V1.4.2 social-topic Story 1.5 · AC9.1：追更宠物列表的 iFollow / iFollowOwner 相对查看者 → 换账号重取。
+  ref.invalidate(followedPetListControllerProvider);
   // V1.3.4 follow Story 2.1（code-review #2）：顶置卡带查看者相关的关注 / 点赞快照，换账号不重取会串号。
   ref.invalidate(pinnedSlotProvider);
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）

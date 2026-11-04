@@ -3034,5 +3034,16 @@
   "qrPayExpiredBody": "Buat pembayaran baru untuk melanjutkan.",
   "qrPayExpired": "Kedaluwarsa",
   "qrPaySavedValidUntil": "Berlaku sampai {time}",
-  "@qrPaySavedValidUntil": {"placeholders": {"time": {"type": "String"}}}
+  "@qrPaySavedValidUntil": {"placeholders": {"time": {"type": "String"}}},
+  "petFollowFilterPeople": "Pengguna",
+  "petFollowFilterPets": "Hewan",
+  "petFollowOwnedBy": "milik @{name}",
+  "@petFollowOwnedBy": {"placeholders": {"name": {"type": "String"}}},
+  "petFollowListEmptySelf": "Kamu belum mengikuti hewan apa pun",
+  "petFollowListEmpty": "Belum mengikuti hewan apa pun",
+  "petFollowPushTitle": "Hewan yang kamu ikuti",
+  "petFollowPushDesc": "Diary baru dari hewan yang kamu ikuti",
+  "petFollowPushFollowerPetDesc": "Seseorang mulai mengikuti hewanmu",
+  "followingFeedNoNewTitle": "Belum ada postingan baru",
+  "followingFeedNoNewBody": "Postingan baru dari orang dan hewan yang kamu ikuti akan muncul di sini."
 }

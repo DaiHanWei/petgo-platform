@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../shared/widgets/pill_tab.dart';
 import '../domain/feed_item.dart';
 
 /// 首页分类 Tab Row（Story 3.2 · 原型 feed.html chips 换肤）。
@@ -31,7 +31,8 @@ class FeedTabRow extends StatelessWidget {
           // bug 510（产品新决策）：首页加回 Diary(GROWTH_MOMENT) 筛选，按枚举顺序
           // Semua · Momen · Diary · Edukasi & Tips。
           for (final category in FeedCategory.values) ...[
-            _Tab(
+            // V1.4.2 social-topic Story 1.5：外观抽成公共 [PillTab]（关注列表 Pengguna / Hewan 筛选复用），像素不变。
+            PillTab(
               label: labels[category] ?? category.wire,
               active: category == selected,
               onTap: () => onSelected(category),
@@ -39,42 +40,6 @@ class FeedTabRow extends StatelessWidget {
             const SizedBox(width: 7),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _Tab extends StatelessWidget {
-  const _Tab({required this.label, required this.active, required this.onTap});
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      selected: active,
-      button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-          decoration: BoxDecoration(
-            color: active ? AppColors.mint : AppColors.card,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: active ? AppColors.mint : AppColors.line, width: 1.5),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: active ? Colors.white : AppColors.textSecondary,
-            ),
-          ),
-        ),
       ),
     );
   }

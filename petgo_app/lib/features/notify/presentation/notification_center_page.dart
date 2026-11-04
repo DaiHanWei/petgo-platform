@@ -281,6 +281,9 @@ class _NotificationCenterPageState
     // V1.4.0 multi-pet Story 2.4 · AC6.1：名额到期两类（显式登记，取值与线格式小写同形）。
     'PET_SLOT_EXPIRING' => 'pet_slot_expiring',
     'PET_SLOT_EXPIRED' => 'pet_slot_expired',
+    // V1.4.2 social-topic Story 1.5 · AC6.8：被追更 / 追更宠物新 Diary（显式登记）。
+    'PET_FOLLOWED' => 'pet_followed',
+    'PET_DIARY_POSTED' => 'pet_diary_posted',
     _ => type.toLowerCase(),
   };
 
@@ -338,9 +341,13 @@ class _NotificationCenterPageState
     }
     // 列表点击与系统推送直跳共用 NotificationDeepLink.open（标记已读 + 角标重算 + 算 location）。
     // V1.3.4 Story 3.4 · AC7.2：新粉丝用 actorUserId 进对方主页（推送点击只有 targetRef，T-34 同为关注者 id）。
-    final targetRef = item.type == 'USER_FOLLOWED' && item.actorUserId != null
-        ? item.actorUserId.toString()
-        : item.targetRef;
+    // V1.4.2 social-topic Story 1.5 · AC6.5：被追更同样用 actorUserId 进追更者主页；**无 actorUserId → 不跳转**
+    // （落通知中心本身，已读照标）。
+    final targetRef = item.type == 'PET_FOLLOWED'
+        ? item.actorUserId?.toString()
+        : item.type == 'USER_FOLLOWED' && item.actorUserId != null
+            ? item.actorUserId.toString()
+            : item.targetRef;
     _opening = true;
     final String location;
     try {
@@ -365,7 +372,8 @@ class _NotificationCenterPageState
       _opening = false;
     }
     // 3.4 code-review F1 / T-21：进他人主页一律走 openUserProfile —— 那里才报 `user_profile_viewed`（from=avatar）。
-    final profileId = item.type == 'USER_FOLLOWED' ? int.tryParse(targetRef ?? '') : null;
+    final profileId =
+        item.type == 'USER_FOLLOWED' || item.type == 'PET_FOLLOWED' ? int.tryParse(targetRef ?? '') : null;
     if (profileId != null && location == '${PublicProfilePage.routeBase}/$profileId') {
       unawaited(openUserProfile(context, ref, profileId));
       return;
@@ -392,9 +400,10 @@ class _NotificationCenterPageState
   }
 
   /// 点赞 / 评论类条目对应的帖子是否已删除（详情接口 404）。
+  /// V1.4.2 social-topic Story 1.5 · AC6.5：追更宠物新 Diary（`PET_DIARY_POSTED`）同样先探。
   Future<bool> _postGone(NotificationItem item) async {
     final type = item.deepLinkType;
-    if (type != 'CONTENT_LIKED' && type != 'CONTENT_COMMENTED') return false;
+    if (type != 'CONTENT_LIKED' && type != 'CONTENT_COMMENTED' && type != 'PET_DIARY_POSTED') return false;
     final postId = int.tryParse(item.targetRef ?? '');
     if (postId == null) return false;
     try {
@@ -794,6 +803,10 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => (Icons.cake_rounded, AppColors.gold, AppColors.goldTint),
     // V1.4.0 gift Story 2.2 · AC5.2（UI 稿 G1）：收礼金色礼物（同 PET_BIRTHDAY 金 / 金浅底，decision-log ③ #F6A609）。
     'PET_GIFT_RECEIVED' => (Icons.redeem_rounded, AppColors.gold, AppColors.goldTint),
+    // V1.4.2 social-topic Story 1.5 · AC6.3（UI 稿 A12）：被追更 = 与 USER_FOLLOWED 完全相同；
+    // 追更宠物新 Diary = 紫色爪印。两者底色都用 violet100（**不用 cream2**：未读条目底色就是 cream2，图标块会「消失」）。
+    'PET_FOLLOWED' => (Icons.person_add_rounded, AppColors.mint, AppColors.violet100),
+    'PET_DIARY_POSTED' => (Icons.pets_rounded, AppColors.mint, AppColors.violet100),
     // UI 稿 G3：退回用紫色钱包（钱回来了）—— **不用** REFUND_REJECTED 的红色。
     'GIFT_UNDELIVERED_REFUND' => (
       Icons.account_balance_wallet_rounded,
@@ -971,6 +984,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
     // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 title，理由见 [_storedTitle]。
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedTitle(l10n),
+    // V1.4.2 social-topic Story 1.5 · AC6.7：宠物已删（无 actorName）→ 读后端写入时按收件人语言渲染的整句，同上理由。
+    'PET_DIARY_POSTED' => _storedTitle(l10n),
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：继运营通知后又一个读后端 title 的类型，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundTitle(l10n),
     // 收礼无 actorName（送礼人已注销 / 封号）→ 本地兜底；有 actorName 走「后端文案条目」分支。
@@ -1030,6 +1045,8 @@ class _NotificationTileState extends State<_NotificationTile> {
         : l10n.notifyBodyContentMentionedPost,
     // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 body，理由见 [_storedTitle]。
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedBody(l10n),
+    // V1.4.2 social-topic Story 1.5 · AC6.2：无正文 → 空串，不留正文行（见下方兜底布局）。
+    'PET_DIARY_POSTED' => '',
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3）：读后端 body，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundBody(l10n),
     'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedBody,
@@ -1094,19 +1111,34 @@ class _NotificationTileState extends State<_NotificationTile> {
 
   /// 后端文案条目的标题（V1.3.4 Story 3.4 · AC3.3）：整句常规字重，**只有** actorName 加粗；
   /// actorName 在标题里找不到 → 整句常规字重，不崩。
+  ///
+  /// V1.4.2 social-topic Story 1.5 · AC6.2：另加粗 `petName`（被追更的宠物 / 发 Diary 的宠物）。两段各自在标题里找、
+  /// 按出现位置切分拼接；找不到的片段忽略（防后端语序变化），同名（`PET_DIARY_POSTED` 的 actorName == petName）只加粗一次。
+  /// 命中与已加粗区间重叠（如昵称「Mochi Lover」包含宠物名「Mochi」）→ 从下一个位置接着找，直到找到不重叠的一处或找完（1.5 复审）。
   Widget _serverTitle() {
     final title = widget.item.title ?? '';
-    final name = widget.item.actorName ?? '';
-    final at = name.isEmpty ? -1 : title.indexOf(name);
+    final spans = <(int, int)>[];
+    for (final name in {widget.item.actorName ?? '', widget.item.petName ?? ''}) {
+      if (name.isEmpty) continue;
+      var at = title.indexOf(name);
+      while (at >= 0 && spans.any((r) => at < r.$2 && at + name.length > r.$1)) {
+        at = title.indexOf(name, at + 1);
+      }
+      if (at < 0) continue;
+      spans.add((at, at + name.length));
+    }
+    spans.sort((a, b) => a.$1.compareTo(b.$1));
+    final children = <TextSpan>[];
+    var cursor = 0;
+    for (final (start, end) in spans) {
+      if (start > cursor) children.add(TextSpan(text: title.substring(cursor, start)));
+      children.add(TextSpan(text: title.substring(start, end), style: const TextStyle(fontWeight: FontWeight.w700)));
+      cursor = end;
+    }
+    if (cursor < title.length) children.add(TextSpan(text: title.substring(cursor)));
     return Text.rich(
       key: ValueKey('notificationTitle_${widget.item.deepLinkToken ?? widget.item.type}'),
-      at < 0
-          ? TextSpan(text: title)
-          : TextSpan(children: [
-              TextSpan(text: title.substring(0, at)),
-              TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700)),
-              TextSpan(text: title.substring(at + name.length)),
-            ]),
+      spans.isEmpty ? TextSpan(text: title) : TextSpan(children: children),
       style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400, color: AppColors.ink),
     );
   }
@@ -1290,6 +1322,8 @@ class _NotificationTileState extends State<_NotificationTile> {
                             color: AppColors.ink,
                           ),
                         ),
+                        // V1.4.2 social-topic Story 1.5：正文为空（`PET_DIARY_POSTED` 兜底）→ 不留正文行。
+                        if (_typeBody(l10n).isNotEmpty) ...[
                         const SizedBox(height: 3),
                         Text(
                           _typeBody(l10n),
@@ -1299,6 +1333,7 @@ class _NotificationTileState extends State<_NotificationTile> {
                               : TextOverflow.ellipsis,
                           style: bodyStyle,
                         ),
+                        ],
                         const SizedBox(height: 6),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,

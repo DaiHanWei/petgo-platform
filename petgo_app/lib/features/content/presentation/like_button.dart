@@ -25,6 +25,7 @@ class LikeButton extends ConsumerStatefulWidget {
     required this.likersSource,
     this.feedTab,
     this.rankMode,
+    this.reason,
     this.onSettled,
     this.expandCountHitArea = true,
   });
@@ -76,6 +77,10 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 🛡 两个都做成可选：详情页的点赞没有"哪个 Tab、哪条排序路径"这回事，
   /// 硬填一个值会在看板上造出不存在的 Feed 会话。
   final String? rankMode;
+
+  /// 埋点 `reason`（V1.4.2 social-topic Story 1.5 · AC5.5 · PRD §4）：只在关注流卡片上带
+  /// （`followed_user` / `followed_pet`，服务端下发）；其余位置 null → 不带该属性。
+  final String? reason;
 
   /// 点赞/取消以后端真值落定后的回调（bug 20260923-538）：详情页据此把点赞态写回 Feed 快照。
   /// 失败回滚不回调（UI 回到原值，快照本就没变）。
@@ -132,6 +137,7 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
       // 那时 feed_tab=all 但 rank_mode=chrono，把它算进推荐序的效果里就是错的。
       if (widget.feedTab != null) 'feed_tab': widget.feedTab!,
       if (widget.rankMode != null) 'rank_mode': widget.rankMode!,
+      if (widget.reason != null) 'reason': widget.reason!,
     });
     final prevLiked = _liked;
     final prevCount = _count;

@@ -58,7 +58,15 @@ class FollowingTabView extends ConsumerWidget {
         ),
       ),
       data: (state) {
-        if (state.isEmpty) return scrollable(const FollowingEmptyView());
+        if (state.isEmpty) {
+          // V1.4.2 social-topic Story 1.5 · AC5.3（D-9）：靠首页两个计数区分两种空态；
+          // 任一 > 0 → A11「暂无新动态」；都为 0 或计数缺失（旧后端）→ 现有空态。
+          final users = state.followingUserCount;
+          final pets = state.followingPetCount;
+          final noNew = users != null && pets != null && (users > 0 || pets > 0);
+          return scrollable(FollowingEmptyView(
+              variant: noNew ? FollowingEmptyVariant.noNewPosts : FollowingEmptyVariant.noFollows));
+        }
         void onReported(FeedItem item) {
           removeFeedPost(ref, item.id);
           if (context.mounted) {
