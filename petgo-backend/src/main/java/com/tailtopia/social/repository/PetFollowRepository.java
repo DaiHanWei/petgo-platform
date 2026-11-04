@@ -64,6 +64,14 @@ public interface PetFollowRepository extends JpaRepository<PetFollow, PetFollow.
             @Param("petIds") Collection<Long> petIds);
 
     /**
+     * 追更了这批宠物中任一只的 {@code (follower_id, pet_profile_id)} 对（V1.4.2 Story 1.2 追更日提醒扇出）——
+     * 一条 SQL，走 {@code pet_follows} 的宠物侧索引。调用方保证 {@code petIds} 非空。
+     */
+    @Query("SELECT f.followerId, f.petProfileId FROM PetFollow f WHERE f.petProfileId IN :petIds "
+            + "ORDER BY f.followerId")
+    List<Object[]> findFollowerPetPairsAmong(@Param("petIds") Collection<Long> petIds);
+
+    /**
      * 某人追更的宠物一页：keyset {@code created_at DESC, pet_profile_id DESC}，行值比较
      * （同 {@code UserFollowRepository#findFollowingPage}，走 {@code idx_pet_follows_follower_created}）。
      * 调用方传 {@code limit + 1} 判 hasMore。

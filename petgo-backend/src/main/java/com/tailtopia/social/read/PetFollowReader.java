@@ -21,4 +21,13 @@ public interface PetFollowReader {
 
     /** 某用户追更的宠物数（注销后其追更行已清空 → 0）。 */
     long countFollowingOf(long userId);
+
+    /**
+     * 追更了这批宠物中任一只的人，及其各自命中的宠物（V1.4.2 social-topic Story 1.2 · 追更日提醒扇出用；
+     * 即 1.1 story 计划的 {@code followerIdsOfAny} 的等价批量方法）—— <b>一次查询</b>。
+     *
+     * <p>返回 {@code followerId → 命中的宠物 id}，每个列表按入参 {@code petIds} 的顺序（宠物创建顺序）排列；
+     * 追更者按 id 升序（结果稳定，便于分批）。空入参返回空表、不查库。
+     */
+    java.util.Map<Long, java.util.List<Long>> followersOfAny(Collection<Long> petIds);
 }

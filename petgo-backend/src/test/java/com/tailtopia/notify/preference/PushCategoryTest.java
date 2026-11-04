@@ -17,13 +17,15 @@ import org.junit.jupiter.api.Test;
  */
 class PushCategoryTest {
 
-    /** 照 PRD §3.1 / story AC2 表抄的期望映射（39 条）。 */
+    /** 照 PRD §3.1 / story AC2 表抄的期望映射（41 条；V1.4.2 social-topic Story 1.2 +PET_FOLLOWED / PET_DIARY_POSTED）。 */
     private static final Map<NotificationType, PushCategory> EXPECTED = Map.ofEntries(
             Map.entry(CONTENT_LIKED, PushCategory.LIKE),
             Map.entry(CONTENT_COMMENTED, PushCategory.COMMENT),
             Map.entry(PLACE_COMMENTED, PushCategory.COMMENT),
             Map.entry(CONTENT_MENTIONED, PushCategory.MENTION),
             Map.entry(USER_FOLLOWED, PushCategory.FOLLOWER),
+            Map.entry(PET_FOLLOWED, PushCategory.FOLLOWER),
+            Map.entry(PET_DIARY_POSTED, PushCategory.PET_DIARY),
             Map.entry(PET_GIFT_RECEIVED, PushCategory.GIFT),
             Map.entry(PET_BIRTHDAY, PushCategory.PET_REMINDER),
             Map.entry(COMPANION_ANNIVERSARY, PushCategory.PET_REMINDER),
@@ -61,7 +63,7 @@ class PushCategoryTest {
 
     @Test
     void everyTypeMapsToACategory() {
-        assertThat(NotificationType.values()).hasSize(39);
+        assertThat(NotificationType.values()).hasSize(41);
         for (NotificationType t : NotificationType.values()) {
             assertThat(PushCategory.of(t)).as(t.name()).isNotNull();
         }
@@ -85,7 +87,8 @@ class PushCategoryTest {
                 Map.entry(PushCategory.LIKE, 1L),
                 Map.entry(PushCategory.COMMENT, 2L),
                 Map.entry(PushCategory.MENTION, 1L),
-                Map.entry(PushCategory.FOLLOWER, 1L),
+                Map.entry(PushCategory.FOLLOWER, 2L),
+                Map.entry(PushCategory.PET_DIARY, 1L),
                 Map.entry(PushCategory.GIFT, 1L),
                 Map.entry(PushCategory.PET_REMINDER, 2L),
                 Map.entry(PushCategory.ACHIEVEMENT, 3L),
@@ -97,7 +100,7 @@ class PushCategoryTest {
     void declarationOrderIsResponseOrderAndOnlyOrderAccountIsLocked() {
         assertThat(PushCategory.values()).containsExactly(
                 PushCategory.LIKE, PushCategory.COMMENT, PushCategory.MENTION, PushCategory.FOLLOWER,
-                PushCategory.GIFT, PushCategory.PET_REMINDER, PushCategory.ACHIEVEMENT, PushCategory.PROMO,
+                PushCategory.PET_DIARY, PushCategory.GIFT, PushCategory.PET_REMINDER, PushCategory.ACHIEVEMENT, PushCategory.PROMO,
                 PushCategory.ORDER_ACCOUNT);
         for (PushCategory c : PushCategory.values()) {
             assertThat(c.lockable()).as(c.name()).isEqualTo(c != PushCategory.ORDER_ACCOUNT);
@@ -114,5 +117,9 @@ class PushCategoryTest {
         assertThat(PushCategory.of(CONTENT_COMMENTED)).isEqualTo(PushCategory.COMMENT);
         assertThat(PushCategory.of(MILESTONE_SM_NODE)).isEqualTo(PushCategory.ACHIEVEMENT);
         assertThat(PushCategory.of(NEW_CONSULT_REQUEST)).isEqualTo(PushCategory.ORDER_ACCOUNT);
+        // V1.4.2 social-topic Story 1.2：被追更跟新粉丝走；追更宠物新 Diary 单独一类（可关）
+        assertThat(PushCategory.of(PET_FOLLOWED)).isEqualTo(PushCategory.FOLLOWER);
+        assertThat(PushCategory.of(PET_DIARY_POSTED)).isEqualTo(PushCategory.PET_DIARY);
+        assertThat(PushCategory.PET_DIARY.lockable()).isTrue();
     }
 }

@@ -91,7 +91,7 @@ class PushPreferenceServiceTest {
     // ---------- get ----------
 
     @Test
-    void getReturnsNineItemsInOrder() {
+    void getReturnsTenItemsInOrder() {
         when(dao.mutedCategories(7L)).thenReturn(List.of("LIKE", "FOLLOWER"));
         PushSettingsView v = service().get(7L);
         assertThat(v.categories()).extracting(PushSettingsView.Item::code)
@@ -134,7 +134,7 @@ class PushPreferenceServiceTest {
         PushSettingsView v = service().update(7L, changes);
         verify(dao).mute(7L, PushCategory.LIKE);
         verify(dao).unmute(7L, PushCategory.GIFT);
-        assertThat(v.categories()).hasSize(9);
+        assertThat(v.categories()).hasSize(10); // V1.4.2 +PET_DIARY
     }
 
     @Test
