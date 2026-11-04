@@ -66,7 +66,8 @@
                 </div>
                 <ul class="rv-entries" th:if="${!#lists.isEmpty(d.place.comments.items)}" th:with="canEdit=${d.pending() and d.place.status.name() != 'MERGED'}">
                     <li th:each="c, st : ${d.place.comments.items}" th:if="${st.index < 5}" th:attr="data-comment-id=${c.id}">
-                        <span th:text="${c.attitude.name() == 'RECOMMEND'} ? '👍' : '👎'">👍</span>
+                        <!-- 态度可空（V20260918_2110：App 允许只写文字不表态），同 drawer-places 判空；不判空整页 500 -->
+                        <span th:if="${c.attitude != null}" th:text="${c.attitude.name() == 'RECOMMEND'} ? '👍' : '👎'">👍</span>
                         <span th:text="${c.authorName}">作者</span>
                         <span th:text="${c.body}">正文</span>
                         <span class="muted" th:text="${@adminTime.wib(c.createdAt)}">-</span>

@@ -18,11 +18,14 @@ import com.tailtopia.admin.account.service.AdminAccountService;
 import com.tailtopia.admin.audit.repository.AdminAuditLogRepository;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.places.domain.Place;
+import com.tailtopia.admin.places.domain.PlaceAttitude;
+import com.tailtopia.admin.places.domain.PlaceComment;
 import com.tailtopia.admin.places.domain.PlacePhoto;
 import com.tailtopia.admin.places.domain.PlaceReport;
 import com.tailtopia.admin.places.domain.PlaceReportReason;
 import com.tailtopia.admin.places.domain.PlaceReportStatus;
 import com.tailtopia.admin.places.domain.PlaceStatus;
+import com.tailtopia.admin.places.repository.PlaceCommentRepository;
 import com.tailtopia.admin.places.repository.PlacePhotoRepository;
 import com.tailtopia.admin.places.repository.PlaceReportRepository;
 import com.tailtopia.admin.places.repository.PlaceRepository;
@@ -61,6 +64,8 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
     private PlacePhotoRepository photos;
     @Autowired
     private PlaceReportRepository reports;
+    @Autowired
+    private PlaceCommentRepository comments;
     @Autowired
     private PlaceTokenGenerator tokens;
     @Autowired
@@ -259,6 +264,21 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
         assertThat(page).contains("坐标不在雅加达都会区");
         // 无权限 403
         mvc.perform(createReq(admin(AdminPermissions.CONTENT_VIEW), "X", marker.getId(), "-6.2", "106.8")).andExpect(status().isForbidden());
+    }
+
+    /** 生产 2026-11-04：评论未表态（attitude=null）时审核详情 SpEL 空指针整页 500，驳回举报无入口。 */
+    @Test
+    void placeReportDetailRendersWhenACommentHasNoAttitude() throws Exception {
+        AdminUserDetails ops = admin(AdminPermissions.PLACE_MANAGE, AdminPermissions.CONTENT_TAKEDOWN);
+        User marker = virtualMarker("Marker " + SEQ.incrementAndGet() % 1_000_000);
+        Place p = place(marker, "NoAttitude " + UUID.randomUUID());
+        comments.save(PlaceComment.create(p.getId(), newUser().getId(), "cuma komentar", null));
+        comments.save(PlaceComment.create(p.getId(), newUser().getId(), "mantap", PlaceAttitude.RECOMMEND));
+        reports.save(PlaceReport.create(p.getId(), newUser().getId(), PlaceReportReason.MISINFO));
+
+        String detail = mvc.perform(get("/admin/manual-review/" + p.getId() + "/detail").param("tab", "place").param("lang", "zh_CN").with(user(ops)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(detail).contains("cuma komentar").contains("mantap").contains("/admin/places/" + p.getId() + "/reports/dismiss-all");
     }
 
     @Test
