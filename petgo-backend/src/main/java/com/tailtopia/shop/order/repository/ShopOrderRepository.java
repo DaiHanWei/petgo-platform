@@ -253,11 +253,16 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
      *
      * <p>🔴 {@code shippedAt IS NOT NULL} 不是冗余条件：本列上线前若已有 {@code SHIPPED} 订单
      * （历史数据 / 手工改库），它们没有起算点，不该被"自动送达"。
+     *
+     * <p>v1.4.2 shop 5.2 AC2.1（D-13）：排除带物流异常标记的订单；清除后从 {@code timer_resumed_at} 重新计时（两条件合起来
+     * 即 {@code max(起点, timer_resumed_at) < threshold}，不用 {@code GREATEST}，避免方言差异）。自动完成同理。
      */
     @Query("""
             SELECT o FROM ShopOrder o
             WHERE o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.SHIPPED
               AND o.shippedAt IS NOT NULL AND o.shippedAt < :threshold
+              AND o.logisticsException IS NULL
+              AND (o.timerResumedAt IS NULL OR o.timerResumedAt < :threshold)
             ORDER BY o.shippedAt ASC
             """)
     List<ShopOrder> findAutoDeliverDue(@Param("threshold") Instant threshold, Pageable pageable);
@@ -267,9 +272,37 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             SELECT o FROM ShopOrder o
             WHERE o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.DELIVERED
               AND o.deliveredAt IS NOT NULL AND o.deliveredAt < :threshold
+              AND o.logisticsException IS NULL
+              AND (o.timerResumedAt IS NULL OR o.timerResumedAt < :threshold)
             ORDER BY o.deliveredAt ASC
             """)
     List<ShopOrder> findAutoCompleteDue(@Param("threshold") Instant threshold, Pageable pageable);
+
+    // ---------- v1.4.2 shop Story 5.2 物流异常（后台线只读列表，走 ix_shop_orders_logistics_exception） ----------
+
+    /** 带物流异常标记的订单（{@code type} 为 null 不筛类型），按标记时刻倒序。 */
+    @Query(value = """
+            SELECT o FROM ShopOrder o
+            WHERE o.logisticsException IS NOT NULL
+              AND (:type IS NULL OR o.logisticsException = :type)
+            ORDER BY o.logisticsExceptionAt DESC, o.id DESC
+            """,
+            countQuery = """
+            SELECT count(o) FROM ShopOrder o
+            WHERE o.logisticsException IS NOT NULL
+              AND (:type IS NULL OR o.logisticsException = :type)
+            """)
+    org.springframework.data.domain.Page<ShopOrder> findLogisticsExceptionOpen(
+            @Param("type") com.tailtopia.shop.order.domain.LogisticsException type, Pageable pageable);
+
+    /** 待索赔（{@code claim_pending = true}），按最近更新倒序。 */
+    @Query(value = """
+            SELECT o FROM ShopOrder o
+            WHERE o.claimPending = true
+            ORDER BY o.updatedAt DESC, o.id DESC
+            """,
+            countQuery = "SELECT count(o) FROM ShopOrder o WHERE o.claimPending = true")
+    org.springframework.data.domain.Page<ShopOrder> findClaimPending(Pageable pageable);
 
     /**
      * 账号注销级联（Story 7.3，照 consult_orders 口径）：<b>订单行保留</b>（交易/财务记录），

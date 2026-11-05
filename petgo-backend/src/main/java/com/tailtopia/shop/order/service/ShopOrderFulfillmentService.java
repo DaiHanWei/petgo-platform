@@ -6,6 +6,7 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.Carrier;
 import com.tailtopia.shop.order.domain.CompletionSource;
 import com.tailtopia.shop.order.domain.DeliverySource;
+import com.tailtopia.shop.order.domain.LogisticsException;
 import com.tailtopia.shop.order.domain.Shipment;
 import com.tailtopia.shop.order.domain.Shipments;
 import com.tailtopia.shop.order.domain.ShippedSource;
@@ -49,13 +50,15 @@ public class ShopOrderFulfillmentService {
     private final ShipmentRepository shipments;
     private final ApplicationEventPublisher events;
     private final AdminAuditService audit;
+    private final ShopPaymentAlerts alerts;
 
     public ShopOrderFulfillmentService(ShopOrderRepository orders, ShipmentRepository shipments,
-            ApplicationEventPublisher events, AdminAuditService audit) {
+            ApplicationEventPublisher events, AdminAuditService audit, ShopPaymentAlerts alerts) {
         this.orders = orders;
         this.shipments = shipments;
         this.events = events;
         this.audit = audit;
+        this.alerts = alerts;
     }
 
     // ---------- 读 ----------
@@ -103,6 +106,27 @@ public class ShopOrderFulfillmentService {
         // 🔒 单号非 PII 可记；同上下文的收件人姓名/电话/地址严禁记录（NFR-5）
         log.info("电商订单发货 token={} carrier={} trackingNo={}", order.getPublicToken(),
                 c, shipment.getTrackingNo());
+        return shipment;
+    }
+
+    /**
+     * 手工运单发货 + 审计 + 发货通知（v1.4.2 shop 5.2 复审 3，供揽收失败「转手工运单」）：委托 {@link #ship}；
+     * 订单原为 {@code PENDING_SHIPMENT} → 同事务发布 {@link ShopOrderShippedEvent}（提交后由
+     * {@code ShopOrderShippedNotifyListener} 推送，事务回滚则不发）；审计 {@code SHOP_ORDER_SHIPPED} 摘要与
+     * {@code AdminShopOrderService#ship} 同格式（只记承运商 + 单号，🔒 不记收件人）。
+     */
+    @Transactional
+    public Shipment shipManualWithAudit(String orderToken, Carrier carrier, String trackingNo, long carrierCost,
+            Long actorAccountId) {
+        ShopOrder before = requireOrder(orderToken);
+        boolean firstShip = before.getStatus() == ShopOrderStatus.PENDING_SHIPMENT;
+        Shipment shipment = ship(orderToken, carrier, trackingNo, carrierCost);
+        audit.record(actorAccountId, AuditActions.SHOP_ORDER_SHIPPED, "SHOP_ORDER", orderToken,
+                "发货：承运商=%s 物流单号=%s".formatted(carrier.name(), shipment.getTrackingNo()));
+        if (firstShip) {
+            ShopOrder order = requireOrder(orderToken);
+            events.publishEvent(new ShopOrderShippedEvent(order.getId(), order.getUserId(), order.getPublicToken()));
+        }
         return shipment;
     }
 
@@ -206,8 +230,20 @@ public class ShopOrderFulfillmentService {
             order.markDelivered(now, DeliverySource.USER_CONFIRM);
         }
         order.markCompleted(now, CompletionSource.USER_CONFIRM);
+        // v1.4.2 shop 5.2 AC6：任何物流异常下确认收货照常可点（不阻拦）；完成后清标记并提醒运营，claim_pending 保留
+        LogisticsException exception = order.getLogisticsException();
+        if (exception != null) {
+            order.clearLogisticsException(now);
+        }
         orders.save(order);
         log.info("电商订单用户确认收货 token={}", order.getPublicToken());
+        if (exception != null) {
+            // 运营提醒落点（AC6.3）：4.1 无可复用的持久化提醒 → WARN 日志 + 飞书（提交后发）。🔒 只用展示号
+            log.info("物流异常订单用户确认收货 token={} exception={}", order.getPublicToken(), exception);
+            log.warn("物流异常订单被用户确认收货，请运营核对 order={} exception={} claimPending={}",
+                    order.getDisplayNo(), exception, order.isClaimPending());
+            alerts.alert("[物流] 订单 " + order.getDisplayNo() + " 在 " + exception + " 下被用户确认收货，请核对 / 撤回索赔");
+        }
         return order;
     }
 

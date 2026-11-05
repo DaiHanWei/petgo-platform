@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tailtopia.shop.order.domain.AddressSnapshot;
 import com.tailtopia.shop.order.domain.Carrier;
 import com.tailtopia.shop.order.domain.CheckoutSource;
+import com.tailtopia.shop.order.domain.LogisticsException;
 import com.tailtopia.shop.order.domain.Shipment;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.pricing.ShippingDiscountSource;
@@ -94,5 +95,75 @@ class ShopOrderDetailViewLogisticsTest {
         assertThat(v.logistics()).isNull();
         assertThat(v.packages()).hasSize(1);
         assertThat(v.packages().get(0).status()).isEqualTo("CANCELLED");
+    }
+
+    // ---------- v1.4.2 shop Story 5.2 AC5：exception / exceptionType ----------
+
+    private static ShopOrderDetailView.Logistics logisticsOf(ShopOrder o, List<Shipment> shipments) {
+        return ShopOrderDetailView.of(o, List.of(), shipments, Map.of(), null, T).logistics();
+    }
+
+    private static ShopOrder shippedOrder() {
+        ShopOrder o = order();
+        o.transitionTo(com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_SHIPMENT);
+        o.markShipped(T);
+        return o;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = LogisticsException.class,
+            names = {"RETURNED", "LOST", "DAMAGED"})
+    @DisplayName("已确认的退回 / 丢件 / 破损 + SHIPPED → DELIVERY_ISSUE + 类型；statusKey 照常下发")
+    void deliveryIssue(LogisticsException type) {
+        ShopOrder o = shippedOrder();
+        o.flagLogisticsException(type, T);
+        o.confirmLogisticsException(type, true, T);
+        Shipment s = bs(1L, "bs_1");
+        s.applyProviderStatus("return_in_transit", T.plusSeconds(5), "in_transit");
+        ShopOrderDetailView.Logistics l = logisticsOf(o, List.of(s));
+        assertThat(l.exception()).isEqualTo("DELIVERY_ISSUE");
+        assertThat(l.exceptionType()).isEqualTo(type.name());
+        assertThat(l.statusKey()).isEqualTo("in_transit");
+    }
+
+    @Test
+    @DisplayName("PICKUP_FAILED / STALLED / 未确认的 RETURNED → 两者都为 null，statusKey 不受影响")
+    void hiddenCases() {
+        for (LogisticsException type : List.of(LogisticsException.PICKUP_FAILED, LogisticsException.STALLED,
+                LogisticsException.RETURNED)) {
+            ShopOrder o = shippedOrder();
+            o.flagLogisticsException(type, T);
+            ShopOrderDetailView.Logistics l = logisticsOf(o, List.of(bs(1L, "bs_1")));
+            assertThat(l.exception()).as(type.name()).isNull();
+            assertThat(l.exceptionType()).as(type.name()).isNull();
+            assertThat(l.statusKey()).isEqualTo("awaiting_pickup");
+        }
+    }
+
+    @Test
+    @DisplayName("订单已完成 → 不再显示配送异常；手工运单同口径显示")
+    void completedHiddenManualShown() {
+        ShopOrder done = shippedOrder();
+        done.markDelivered(T, com.tailtopia.shop.order.domain.DeliverySource.ADMIN_MARK);
+        done.confirmLogisticsException(LogisticsException.DAMAGED, true, T);
+        done.markCompleted(T.plusSeconds(1), com.tailtopia.shop.order.domain.CompletionSource.USER_CONFIRM);
+        assertThat(logisticsOf(done, List.of(bs(1L, "bs_1"))).exception()).isNull();
+
+        ShopOrder manual = shippedOrder();
+        manual.confirmLogisticsException(LogisticsException.LOST, true, T);
+        Shipment m = Shipment.ship(1L, Carrier.JNE, "JN1", 0L);
+        ReflectionTestUtils.setField(m, "id", 3L);
+        ShopOrderDetailView.Logistics l = logisticsOf(manual, List.of(m));
+        assertThat(l.exception()).isEqualTo("DELIVERY_ISSUE");
+        assertThat(l.exceptionType()).isEqualTo("LOST");
+        assertThat(l.statusKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("AC5.3：无运单但带异常 → logistics 仍为 null，不另造对象")
+    void noShipmentWithException() {
+        ShopOrder o = shippedOrder();
+        o.confirmLogisticsException(LogisticsException.LOST, true, T);
+        assertThat(logisticsOf(o, List.of())).isNull();
     }
 }

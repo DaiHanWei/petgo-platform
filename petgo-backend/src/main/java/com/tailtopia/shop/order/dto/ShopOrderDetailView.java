@@ -116,11 +116,15 @@ public record ShopOrderDetailView(
      * @param waybillId          Biteship：{@code waybill_id}（可空，尚未分配）；手工：{@code tracking_no}
      * @param trackingUrl        手工：承运商官网；Biteship：{@code tracking_url}（可空）
      * @param statusKey          手工恒 null（不显示物流状态）；Biteship：{@code user_status_key}
-     * @param exception          Story 5.2 填；本 story 恒 null
-     * @param exceptionType      Story 5.2 填；本 story 恒 null
+     * @param exception          Story 5.2：{@link ShopOrder#hasUserVisibleDeliveryIssue()} 为真 → {@code DELIVERY_ISSUE}，否则 null
+     *                           （揽收失败、停滞、未确认的退回、订单已不在待收货一律 null；{@code statusKey} 不受影响）
+     * @param exceptionType      同上为真时 {@code RETURNED | LOST | DAMAGED}（C-6），否则 null
      */
     public record Logistics(String provider, String courierName, String courierServiceName, String waybillId,
             String trackingUrl, String statusKey, String exception, String exceptionType) {
+
+        /** 用户侧配送异常（5.2 AC5.1）。 */
+        public static final String DELIVERY_ISSUE = "DELIVERY_ISSUE";
 
         /** 最新活动运单 → 物流块；无活动运单 → null。 */
         public static Logistics of(ShopOrder o, List<Shipment> shipments) {
@@ -129,14 +133,18 @@ public record ShopOrderDetailView(
                             java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
                     .orElse(null);
             if (latest == null) {
-                return null;
+                return null;    // 5.2 AC5.3：无运单时不另造对象（用户侧本就不提示揽收失败）
             }
+            boolean issue = o.hasUserVisibleDeliveryIssue();
+            String exception = issue ? DELIVERY_ISSUE : null;
+            String exceptionType = issue ? o.getLogisticsException().name() : null;
             if (latest.isBiteship()) {
                 return new Logistics(latest.getProvider().name(), o.getCourierName(), o.getCourierServiceName(),
-                        latest.getWaybillId(), latest.trackingUrl(), latest.getUserStatusKey(), null, null);
+                        latest.getWaybillId(), latest.trackingUrl(), latest.getUserStatusKey(), exception,
+                        exceptionType);
             }
             return new Logistics(latest.getProvider().name(), latest.carrierDisplayName(), null,
-                    latest.getTrackingNo(), latest.trackingUrl(), null, null, null);
+                    latest.getTrackingNo(), latest.trackingUrl(), null, exception, exceptionType);
         }
     }
 

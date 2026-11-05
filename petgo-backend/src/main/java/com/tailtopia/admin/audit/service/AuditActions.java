@@ -267,6 +267,14 @@ public final class AuditActions {
     public static final String SHOP_WAYBILL_FAILED = "SHOP_WAYBILL_FAILED";
     public static final String SHOP_WAYBILL_CANCELLED = "SHOP_WAYBILL_CANCELLED";
     public static final String SHOP_ORDER_MARKED_SHIPPED = "SHOP_ORDER_MARKED_SHIPPED";
+    /**
+     * 物流异常处置（v1.4.2 shop Story 5.2 AC7.6）：确认（退回原因 / 丢件 / 破损）、清除、揽收失败处置（重下 / 手工运单 / 取消）、
+     * 索赔提醒变更。target = 订单 token；摘要只记异常类型、处置方式。🔒 <b>不记收件人任何字段</b>。
+     */
+    public static final String SHOP_LOGISTICS_EXCEPTION_CONFIRMED = "SHOP_LOGISTICS_EXCEPTION_CONFIRMED";
+    public static final String SHOP_LOGISTICS_EXCEPTION_CLEARED = "SHOP_LOGISTICS_EXCEPTION_CLEARED";
+    public static final String SHOP_LOGISTICS_PICKUP_FAILURE_RESOLVED = "SHOP_LOGISTICS_PICKUP_FAILURE_RESOLVED";
+    public static final String SHOP_LOGISTICS_CLAIM_PENDING_CHANGED = "SHOP_LOGISTICS_CLAIM_PENDING_CHANGED";
 
     // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
     /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */

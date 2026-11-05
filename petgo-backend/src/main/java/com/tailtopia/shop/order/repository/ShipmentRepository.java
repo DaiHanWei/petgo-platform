@@ -45,4 +45,21 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
             ORDER BY s.providerStatusAt ASC NULLS FIRST, s.id ASC
             """)
     List<Shipment> findBiteshipInFlight(Pageable pageable);
+
+    /**
+     * 停滞候选（v1.4.2 shop 5.2 AC3.2，走 {@code ix_shipments_biteship_active}）：Biteship 活动运单在 {@code cutoff} 之前就没有新状态，
+     * 且所属订单待发货 / 已发货、无物流异常；已有其他处置的 Biteship 状态不参与。手工运单（{@code MANUAL}）不参与。
+     * 5.2 复审 2：判据为 {@code max(provider_status_at, 订单 timer_resumed_at) < cutoff}——运营清除停滞后重新等满阈值才会再标。
+     */
+    @Query(value = """
+            SELECT DISTINCT o.id FROM shipments s JOIN shop_orders o ON o.id = s.shop_order_id
+            WHERE s.provider = 'BITESHIP' AND s.superseded_at IS NULL AND s.status IN ('CREATED','SHIPPED')
+              AND s.provider_status_at < :cutoff
+              AND (s.provider_status IS NULL OR s.provider_status NOT IN
+                   ('cancelled','rejected','disposed','returned','courier_not_found'))
+              AND o.status IN ('PENDING_SHIPMENT','SHIPPED') AND o.logistics_exception IS NULL
+              AND (o.timer_resumed_at IS NULL OR o.timer_resumed_at < :cutoff)
+            ORDER BY o.id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findStallCandidateOrderIds(@Param("cutoff") java.time.Instant cutoff, @Param("limit") int limit);
 }

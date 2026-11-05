@@ -322,6 +322,14 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
                 throw AppException.conflict("该订单没有活动的 Biteship 运单");
             }
         }
+        requireWaybillData(order);
+    }
+
+    /**
+     * 下运单的数据前提（快递编码快照、收件信息未清）——与运单现状无关的那部分 precheck。5.2 揽收失败「重下运单」在取消旧运单
+     * <b>之前</b>先调它（复审 5），避免旧运单已取消、新运单却因数据缺失建不出来。不过则 409。
+     */
+    public void requireWaybillData(ShopOrder order) {
         if (isBlank(order.getCourierCode()) || isBlank(order.getCourierServiceCode())) {
             throw AppException.conflict("存量订单请走手工运单");
         }
@@ -394,9 +402,16 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         switch (out) {
             case CancelOutcome.Cancelled c ->
                     tx.executeWithoutResult(s -> cancelLocally(target.getId(), reasonCode, actorAccountId));
-            case CancelOutcome.NotCancellable n -> throw AppException.conflict(
-                    "Biteship 运单已在 " + (n.providerStatus() == null ? "unknown" : n.providerStatus())
-                            + "，无法取消");
+            case CancelOutcome.NotCancellable n -> {
+                // 5.2 复审 4：Biteship 明确拒绝 → 运单仍有效，复位「本地已发起取消」（Unknown 保留，结果不明）
+                tx.executeWithoutResult(s -> shipments.findById(target.getId()).ifPresent(sh -> {
+                    sh.clearCancelRequested(clock.instant());
+                    shipments.save(sh);
+                }));
+                throw AppException.conflict(
+                        "Biteship 运单已在 " + (n.providerStatus() == null ? "unknown" : n.providerStatus())
+                                + "，无法取消");
+            }
             case CancelOutcome.Unknown u -> {
                 log.warn("Biteship 取消运单结果不确定 biteshipOrderId={} cause={}", target.getBiteshipOrderId(),
                         u.cause());

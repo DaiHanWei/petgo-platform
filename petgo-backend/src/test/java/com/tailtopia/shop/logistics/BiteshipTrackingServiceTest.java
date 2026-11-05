@@ -278,4 +278,85 @@ class BiteshipTrackingServiceTest {
         verify(alerts, never()).alert(anyString());
         verify(client, never()).getOrder(anyString());
     }
+
+    // ---------- v1.4.2 shop Story 5.2 AC4 / AC9 ----------
+
+    @Test
+    @DisplayName("5.2 AC4.1：STALLED 订单收到新状态 → 清除停滞、timer_resumed_at = now，再按状态推进")
+    void stalledClearedByNewStatus() {
+        order.flagLogisticsException(LogisticsException.STALLED, NOW);
+        service.applySnapshot(1L, snap("picked", NOW.plusSeconds(60)));
+        assertThat(order.getLogisticsException()).isNull();
+        assertThat(order.getTimerResumedAt()).isEqualTo(NOW.plusSeconds(7200));
+        assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.SHIPPED);
+        verify(orders).save(order);
+    }
+
+    @Test
+    @DisplayName("5.2 AC4.1：STALLED 后收到 courier_not_found → 先清停滞，再写入 PICKUP_FAILED 并告警")
+    void stalledThenCourierNotFound() {
+        order.flagLogisticsException(LogisticsException.STALLED, NOW);
+        service.applySnapshot(1L, snap("courier_not_found", NOW.plusSeconds(60)));
+        assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.PICKUP_FAILED);
+        assertThat(order.getLogisticsExceptionAt()).isEqualTo(NOW.plusSeconds(7200));
+        assertThat(order.getTimerResumedAt()).isNotNull();
+        verify(alerts).alert(anyString());
+    }
+
+    @Test
+    @DisplayName("5.2 AC4.1：STALLED 下状态无变化（只更新运单号等）→ 不清停滞")
+    void stalledNotClearedWithoutStatusChange() {
+        order.flagLogisticsException(LogisticsException.STALLED, NOW);
+        service.applySnapshot(1L, new BiteshipOrderSnapshot("bs_1", "confirmed", "WB2", null, "jne", "reg", 10_000L,
+                null, NOW.plusSeconds(60)));
+        assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.STALLED);
+        assertThat(order.getTimerResumedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("5.2 AC4.3：PICKUP_FAILED 订单收到 picked → 订单照常 SHIPPED，标记保留（自动送达仍暂停）")
+    void pickupFailedThenPickedKeepsFlag() {
+        order.flagLogisticsException(LogisticsException.PICKUP_FAILED, NOW);
+        service.applySnapshot(1L, snap("picked", NOW.plusSeconds(60)));
+        assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.SHIPPED);
+        assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.PICKUP_FAILED);
+        assertThat(order.isAutoDeliverDue(NOW.plus(java.time.Duration.ofDays(60)))).isFalse();
+    }
+
+    @Test
+    @DisplayName("5.2 AC4.2 / AC9.3：RETURNED 标记后收到 in_transit 等正向状态 → 不自动清除")
+    void returnedNotClearedByForwardStatus() {
+        order.markShipped(NOW);
+        shipment.markPicked(NOW);
+        order.flagLogisticsException(LogisticsException.RETURNED, NOW);
+        service.applySnapshot(1L, snap("in_transit", NOW.plusSeconds(60)));
+        assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.RETURNED);
+        assertThat(order.getTimerResumedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("5.2 AC9.2：LOST / DAMAGED 订单收到 delivered → 订单不推进、用户态不写")
+    void deliveredBlockedByLostDamaged() {
+        order.markShipped(NOW);
+        shipment.markPicked(NOW);
+        service.applySnapshot(1L, snap("in_transit", NOW.plusSeconds(30)));
+        for (LogisticsException t : List.of(LogisticsException.LOST, LogisticsException.DAMAGED)) {
+            ReflectionTestUtils.setField(order, "logisticsException", t);
+            service.applySnapshot(1L, snap("delivered", NOW.plusSeconds(60)));
+            assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.SHIPPED);
+            assertThat(shipment.getUserStatusKey()).isEqualTo("in_transit");
+            assertThat(order.getLogisticsException()).isEqualTo(t);
+        }
+    }
+
+    @Test
+    @DisplayName("5.2 AC9.1：已确认的 RETURNED 不被随后的 courier_not_found 冲掉")
+    void confirmedReturnedNotOverridden() {
+        order.flagLogisticsException(LogisticsException.RETURNED, NOW);
+        order.confirmLogisticsException(LogisticsException.RETURNED, true, NOW);
+        service.applySnapshot(1L, snap("courier_not_found", NOW.plusSeconds(60)));
+        assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.RETURNED);
+        assertThat(order.isLogisticsExceptionConfirmed()).isTrue();
+        verify(alerts, never()).alert(anyString());
+    }
 }

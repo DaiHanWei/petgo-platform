@@ -216,6 +216,14 @@ public class BiteshipTrackingService {
         ShopOrder order = statusChanged && s.isActive()
                 ? orders.findById(s.getShopOrderId()).orElseThrow(() -> new IllegalStateException("ORDER_NOT_FOUND"))
                 : null;
+        // v1.4.2 shop 5.2 AC4（决策 m7）：活动运单状态变化 → 停滞标记自动清除（写 timer_resumed_at），再执行该状态本身的映射
+        // （如 courier_not_found 随后写入 PICKUP_FAILED）。其他异常类型不会被新物流状态自动清除（AC4.2）。
+        boolean stallCleared = order != null && order.getLogisticsException() == LogisticsException.STALLED
+                && order.clearLogisticsException(now);
+        if (stallCleared) {
+            log.info("Biteship 新物流状态清除停滞标记 order={} status={} biteshipOrderId={}", order.getDisplayNo(), raw,
+                    s.getBiteshipOrderId());
+        }
         // 复审修复：退回 / 丢件 / 破损标记下的 delivered 被拦时，provider_status 与 user_status_key 都不写——
         // 否则 App 显示「已送达」，且此后回查判「无变化」永远不再处理（含 5.2 清标记后、AC12 重发新运单签收）。
         boolean deliverBlocked = order != null && mapping.action() == BiteshipStatusMapper.OrderAction.DELIVER

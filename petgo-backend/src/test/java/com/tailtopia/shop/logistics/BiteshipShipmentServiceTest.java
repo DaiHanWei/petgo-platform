@@ -267,6 +267,22 @@ class BiteshipShipmentServiceTest {
     }
 
     @Test
+    @DisplayName("5.2 复审 4：NotCancellable → 复位 cancel_requested_at；Unknown → 保留")
+    void notCancellableResetsCancelRequested() {
+        created("bs_1");
+        service.createWaybill(ORDER_ID, 1L);
+        Shipment s = store.get(0);
+        when(client.cancelOrder("bs_1", "others")).thenReturn(new CancelOutcome.Unknown("NETWORK"));
+        assertThatThrownBy(() -> service.cancelWaybill(ORDER_ID, "others", 1L)).isInstanceOf(AppException.class);
+        assertThat(s.getCancelRequestedAt()).as("结果不明，保留").isNotNull();
+
+        when(client.cancelOrder("bs_1", "others")).thenReturn(new CancelOutcome.NotCancellable("picked"));
+        assertThatThrownBy(() -> service.cancelWaybill(ORDER_ID, "others", 1L)).isInstanceOf(AppException.class);
+        assertThat(s.getCancelRequestedAt()).as("Biteship 明确拒绝，运单仍有效").isNull();
+        assertThat(s.getStatus()).isEqualTo(ShipmentStatus.CREATED);
+    }
+
+    @Test
     @DisplayName("retryWaybill：计数达 10 告警一次，第 11 次不重复告警；Redis 异常不影响重试")
     void retryCounterAlertsOnce() {
         when(client.createOrder(any())).thenReturn(new CreateOutcome.Rejected("400", "x"));

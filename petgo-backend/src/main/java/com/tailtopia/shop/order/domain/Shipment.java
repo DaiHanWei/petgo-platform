@@ -239,6 +239,17 @@ public class Shipment {
         }
     }
 
+    /**
+     * 复位「本地已发起取消」（v1.4.2 shop 5.2 复审 4）：Biteship 明确拒绝取消（{@code NotCancellable}）时调用——运单仍有效，
+     * 否则之后 Biteship 推 {@code cancelled} 会被误判为预期取消、不告警。结果不确定（{@code Unknown}）时不复位。
+     */
+    public void clearCancelRequested(Instant at) {
+        if (cancelRequestedAt != null) {
+            this.cancelRequestedAt = null;
+            this.updatedAt = at;
+        }
+    }
+
     /** 被快递原因重发的新运单取代（FR-172.8）：只写一次。 */
     public void supersede(Instant at) {
         if (supersededAt == null) {

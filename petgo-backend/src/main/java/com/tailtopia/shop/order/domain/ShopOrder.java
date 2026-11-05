@@ -581,8 +581,9 @@ public class ShopOrder {
     }
 
     /**
-     * 写物流异常标记（v1.4.2 shop 5.1 AC8.2：Biteship 回传 courier_not_found / returned）：仅当当前无标记或为
-     * {@code STALLED} 时写入，已有其他异常不覆盖。暂停计时 / 确认 / 清除归 Story 5.2。
+     * 写物流异常标记（v1.4.2 shop 5.1 AC8.2 / 5.2 AC1.1）：当前无标记 → 写入（未确认）；当前为 {@code STALLED} 且新类型非
+     * {@code STALLED} → 覆盖（更严重的取代停滞，5.2 拍板①）；当前为其他类型 → 不覆盖、返回 false（调用方 WARN）。
+     * 只改订单头列，不改订单状态（D-13）。
      *
      * @return 是否写入
      */
@@ -598,6 +599,65 @@ public class ShopOrder {
         this.logisticsExceptionConfirmed = false;
         this.updatedAt = Instant.now();
         return true;
+    }
+
+    /**
+     * 确认物流异常（v1.4.2 shop 5.2 AC1.2，运营）：当前异常须 = {@code type}；当前为空 / {@code STALLED} 时直接写入该
+     * {@code type}（运营手工标记丢件 / 破损，写入时刻 = {@code at}）。置 {@code logistics_exception_confirmed = true}；
+     * {@code claimPending = true} 时置 {@code claim_pending}（🔴 只置位不清除，AC8）。
+     *
+     * @param type 只允许 {@code RETURNED / LOST / DAMAGED}（C-6）；揽收失败 / 停滞用户侧本就不提示，不需要确认
+     * @throws AppException 类型不允许 422；当前为其他异常 409
+     */
+    public void confirmLogisticsException(LogisticsException type, boolean claimPending, Instant at) {
+        if (type == null || !type.userVisibleWhenConfirmed()) {
+            throw AppException.validation("只有退回 / 丢件 / 破损需要确认");
+        }
+        if (logisticsException == null || logisticsException == LogisticsException.STALLED) {
+            this.logisticsException = type;
+            this.logisticsExceptionAt = at;
+        } else if (logisticsException != type) {
+            throw AppException.conflict("订单当前物流异常为 " + logisticsException + "，不能按 " + type + " 确认");
+        }
+        this.logisticsExceptionConfirmed = true;
+        if (claimPending) {
+            this.claimPending = true;
+        }
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 清除物流异常（v1.4.2 shop 5.2 AC1.3）：清空类型 / 时刻、{@code confirmed = false}，<b>{@code timer_resumed_at = at}</b>
+     * （自动送达 / 完成从此重新计时）；🔴 {@code claim_pending} 不动（已在索赔的由运营自行撤回）。
+     *
+     * @return 是否有标记被清除（无标记幂等返回 false）
+     */
+    public boolean clearLogisticsException(Instant at) {
+        if (logisticsException == null) {
+            return false;
+        }
+        this.logisticsException = null;
+        this.logisticsExceptionAt = null;
+        this.logisticsExceptionConfirmed = false;
+        this.timerResumedAt = at;
+        this.updatedAt = Instant.now();
+        return true;
+    }
+
+    /** 索赔提醒（v1.4.2 shop 5.2 AC1.4）。置 false 的唯一入口是运营（AC8.2）。 */
+    public void setClaimPending(boolean pending) {
+        this.claimPending = pending;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 用户侧「配送异常」唯一判据（v1.4.2 shop 5.2 AC1.6 / C-6）：已确认的 {@code RETURNED / LOST / DAMAGED}，且订单仍在
+     * {@code SHIPPED / DELIVERED}（进入退款 / 取消 / 完成后状态头已有更准确的文案）。详情、列表（6.2）、埋点都只看它。
+     */
+    public boolean hasUserVisibleDeliveryIssue() {
+        return logisticsExceptionConfirmed && logisticsException != null
+                && logisticsException.userVisibleWhenConfirmed()
+                && (status == ShopOrderStatus.SHIPPED || status == ShopOrderStatus.DELIVERED);
     }
 
     /**
@@ -647,16 +707,25 @@ public class ShopOrder {
         return end != null && !now.isAfter(end);
     }
 
-    /** 发货起已超 M 日仍无任何送达标记 → 该由 {@code @Scheduled} 兜底置送达。 */
+    /**
+     * 发货起已超 M 日仍无任何送达标记 → 该由 {@code @Scheduled} 兜底置送达。
+     *
+     * <p>v1.4.2 shop 5.2 AC1.5（D-13）：🔴 带任一物流异常标记 → 不到期；计时起点 = {@code max(shippedAt, timer_resumed_at)}
+     * （{@code timer_resumed_at} 为空时等同原逻辑）。
+     */
     public boolean isAutoDeliverDue(Instant now) {
-        return status == ShopOrderStatus.SHIPPED && shippedAt != null
-                && now.isAfter(shippedAt.plus(AUTO_DELIVER_AFTER));
+        return status == ShopOrderStatus.SHIPPED && shippedAt != null && logisticsException == null
+                && now.isAfter(timerStart(shippedAt).plus(AUTO_DELIVER_AFTER));
     }
 
-    /** 送达起已超 7 日用户仍未确认 → 自动完成（FR-102）。 */
+    /** 送达起已超 7 日用户仍未确认 → 自动完成（FR-102）。5.2 AC1.5：同上，带异常不到期、起点取 {@code max(deliveredAt, timer_resumed_at)}。 */
     public boolean isAutoCompleteDue(Instant now) {
-        return status == ShopOrderStatus.DELIVERED && deliveredAt != null
-                && now.isAfter(deliveredAt.plus(AUTO_COMPLETE_AFTER));
+        return status == ShopOrderStatus.DELIVERED && deliveredAt != null && logisticsException == null
+                && now.isAfter(timerStart(deliveredAt).plus(AUTO_COMPLETE_AFTER));
+    }
+
+    private Instant timerStart(Instant base) {
+        return timerResumedAt != null && timerResumedAt.isAfter(base) ? timerResumedAt : base;
     }
 
     public Instant getShippedAt() {
