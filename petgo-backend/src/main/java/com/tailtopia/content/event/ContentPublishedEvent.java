@@ -25,6 +25,8 @@ import java.util.List;
  * @param createdAt               发布时间（UTC）
  * @param petIds                  关联的全部宠物 id（V1.4.0 multi-pet Story 3.1 · AD-10，<b>末尾追加</b>），按宠物创建顺序；
  *                                不为 null，Moment / Tips 与未关联宠物的 Diary 为空表。① 成长值流水在 ② 合并后改取本字段
+ * @param topicIds                本帖写入的话题 id（V1.4.2 social-topic Story 4.1 · D-13，<b>末尾追加</b>）：不为 null，无话题 / 私密为空表；
+ *                                挂起帖过审时从 {@code content_topics} 读回（只取非 DISABLED）。<b>只在进程内</b>，不得下发
  */
 public record ContentPublishedEvent(
         long postId,
@@ -34,10 +36,21 @@ public record ContentPublishedEvent(
         long authorGrowthMomentCount,
         ContentVisibility visibility,
         Instant createdAt,
-        List<Long> petIds) {
+        List<Long> petIds,
+        List<Long> topicIds) {
 
     public ContentPublishedEvent {
         petIds = petIds == null ? List.of() : List.copyOf(petIds);
+        topicIds = topicIds == null ? List.of() : List.copyOf(topicIds);
+    }
+
+    /**
+     * 8 参兼容构造器（V1.4.2 Story 4.1 前的形态）：{@code topicIds = List.of()}。<b>只供既有测试</b>，
+     * main 代码一律用全参构造（传真实话题关联）。
+     */
+    public ContentPublishedEvent(long postId, long authorId, ContentType type, Long petId,
+            long authorGrowthMomentCount, ContentVisibility visibility, Instant createdAt, List<Long> petIds) {
+        this(postId, authorId, type, petId, authorGrowthMomentCount, visibility, createdAt, petIds, List.of());
     }
 
     /**
@@ -47,6 +60,6 @@ public record ContentPublishedEvent(
     public ContentPublishedEvent(long postId, long authorId, ContentType type, Long petId,
             long authorGrowthMomentCount, ContentVisibility visibility, Instant createdAt) {
         this(postId, authorId, type, petId, authorGrowthMomentCount, visibility, createdAt,
-                petId == null ? List.of() : List.of(petId));
+                petId == null ? List.of() : List.of(petId), List.of());
     }
 }

@@ -14,6 +14,9 @@ import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.error.ErrorTypes;
+import com.tailtopia.social.read.FollowReader;
+import com.tailtopia.social.read.FollowState;
+import com.tailtopia.social.read.PetFollowReader;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
@@ -45,6 +48,8 @@ class InAppVisitorEntryTest {
     private VisitorProjectionService visitors;
     private UserHideRelationReader hideRelations;
     private InAppVisitorPetController inApp;
+    private PetFollowReader petFollows;
+    private FollowReader follows;
 
     private ProfileService profiles;
     private AccountQueryService accounts;
@@ -54,10 +59,13 @@ class InAppVisitorEntryTest {
     void setUp() {
         visitors = mock(VisitorProjectionService.class);
         hideRelations = mock(UserHideRelationReader.class);
-        inApp = new InAppVisitorPetController(visitors, hideRelations);
+        petFollows = mock(PetFollowReader.class);
+        follows = mock(FollowReader.class);
+        when(follows.followState(anyLong(), anyLong())).thenReturn(FollowState.NONE);
+        accounts = mock(AccountQueryService.class);
+        inApp = new InAppVisitorPetController(visitors, hideRelations, petFollows, follows, accounts);
 
         profiles = mock(ProfileService.class);
-        accounts = mock(AccountQueryService.class);
         petCard = new PublicProfilePetController(profiles, visitors, accounts, hideRelations,
                 mock(com.tailtopia.tailsonality.service.TailsonalityBadgeQuery.class));
     }
@@ -144,7 +152,7 @@ class InAppVisitorEntryTest {
     @Test
     void everyInAppEndpointGoesThroughTheSharedProjection() {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
-        when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30, 0L));
+        when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30, 0L, 0L));
         when(visitors.timeline(any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of());
 
         inApp.profile(user(VIEWER), PET_ID);
@@ -320,6 +328,62 @@ class InAppVisitorEntryTest {
 
         assertThat(petCard.pet(null, OWNER).getBody()).isNotNull();
         verify(hideRelations, never()).isBlocked(anyLong(), anyLong());
+    }
+
+    // ===== V1.4.2 social-topic Story 1.1 · AC9.1：追更字段 =====
+
+    /** 站内入口带 iFollow / iFollowOwner / ownerToken（R-2）。 */
+    @Test
+    void inAppProfileCarriesFollowFieldsAndOwnerToken() {
+        when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
+        when(visitors.ownerNickname(any())).thenReturn("Aurel");
+        when(petFollows.isFollowing(VIEWER, PET_ID)).thenReturn(true);
+        when(follows.followState(VIEWER, OWNER)).thenReturn(new FollowState(true, false));
+        when(accounts.publicTokensOf(List.of(OWNER), true)).thenReturn(java.util.Map.of(OWNER, "owner-token"));
+
+        VisitorProfileResponse r = inApp.profile(user(VIEWER), PET_ID);
+
+        assertThat(r.iFollow()).isTrue();
+        assertThat(r.iFollowOwner()).isTrue();
+        assertThat(r.ownerToken()).isEqualTo("owner-token");
+        assertThat(r.ownerNickname()).isEqualTo("Aurel");
+    }
+
+    /** 主人拉黑了我：访客页本就 404（requireVisible），追更字段无从下发。 */
+    @Test
+    void ownerBlockedMeStill404BeforeFollowFields() {
+        when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
+        when(hideRelations.isBlocked(OWNER, VIEWER)).thenReturn(true);
+
+        assertThatThrownBy(() -> inApp.profile(user(VIEWER), PET_ID)).isInstanceOf(AppException.class);
+        verify(petFollows, never()).isFollowing(anyLong(), anyLong());
+    }
+
+    /** 本人看自己的宠物 / 兽医 token：两个布尔恒 false 且不查追更表；ownerToken 照给。 */
+    @Test
+    void selfOrNonUserViewerGetsFalseWithoutLookup() {
+        when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
+        when(accounts.publicTokensOf(List.of(OWNER), true)).thenReturn(java.util.Map.of(OWNER, "owner-token"));
+
+        VisitorProfileResponse self = inApp.profile(user(OWNER), PET_ID);
+        Jwt vet = Jwt.withTokenValue("t").header("alg", "none").subject(String.valueOf(VIEWER))
+                .claim("role", "VET").build();
+        VisitorProfileResponse asVet = inApp.profile(vet, PET_ID);
+
+        assertThat(self.iFollow()).isFalse();
+        assertThat(self.iFollowOwner()).isFalse();
+        assertThat(asVet.iFollow()).isFalse();
+        assertThat(asVet.ownerToken()).isEqualTo("owner-token");
+        verify(petFollows, never()).isFollowing(anyLong(), anyLong());
+    }
+
+    /** 🔴 分享 token 公开路径（原 {@code of(pet, nick)}）三个新字段为 null → NON_NULL 不下发，key 集合不变。 */
+    @Test
+    void publicPathFactoryLeavesFollowFieldsNull() {
+        VisitorProfileResponse r = VisitorProfileResponse.of(pet(), "Aurel");
+        assertThat(r.iFollow()).isNull();
+        assertThat(r.iFollowOwner()).isNull();
+        assertThat(r.ownerToken()).isNull();
     }
 
     // ===== helpers =====

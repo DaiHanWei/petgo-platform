@@ -46,7 +46,12 @@ public record NotificationItem(
         @JsonProperty("actorFollowsMe") Boolean actorFollowsMe,
         OpsTargetView opsTarget,
         /** 评论条目的评论已被删除（body 为「评论已删除」占位文案）；App 据此按稿显示灰色斜体。其余为 null（不下发）。 */
-        @JsonProperty("bodyDeleted") Boolean bodyDeleted) {
+        @JsonProperty("bodyDeleted") Boolean bodyDeleted,
+        /**
+         * V1.4.2 social-topic Story 1.2：宠物现名 —— 只对 {@code PET_FOLLOWED}（被追更的宠物）/ {@code PET_DIARY_POSTED}
+         * （发 Diary 的宠物）填，供 App 把宠物名也加粗（UI 稿 A12）；其余类型或宠物已删 / 查不到为 null（不下发）。
+         */
+        @JsonProperty("petName") String petName) {
 
     /** 原样返回（系统类 / 存量）：title / body 照搬库值，触发人字段为空。 */
     public static NotificationItem from(Notification n) {
@@ -56,7 +61,7 @@ public record NotificationItem(
     public static NotificationItem from(Notification n, OpsTargetView opsTarget) {
         return new NotificationItem(n.getType().name(), n.getTitle(), n.getBody(),
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
-                null, 0, null, null, null, null, opsTarget, null);
+                null, 0, null, null, null, null, opsTarget, null, null);
     }
 
     /**
@@ -68,9 +73,28 @@ public record NotificationItem(
     public static NotificationItem rendered(Notification n, String title, String body, long actorUserId,
             String actorName, String actorToken, int actorCount, Boolean iFollow, Boolean followsMe,
             boolean bodyDeleted) {
+        return rendered(n, title, body, actorUserId, actorName, actorToken, actorCount, iFollow, followsMe,
+                bodyDeleted, null);
+    }
+
+    /** 同上，另带宠物名（V1.4.2 Story 1.2：只 {@code PET_FOLLOWED} 传值）。 */
+    public static NotificationItem rendered(Notification n, String title, String body, long actorUserId,
+            String actorName, String actorToken, int actorCount, Boolean iFollow, Boolean followsMe,
+            boolean bodyDeleted, String petName) {
         return new NotificationItem(n.getType().name(), title, body,
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
                 actorName, actorCount, actorUserId, actorToken, iFollow, followsMe, null,
-                bodyDeleted ? Boolean.TRUE : null);
+                bodyDeleted ? Boolean.TRUE : null, petName);
+    }
+
+    /**
+     * 追更宠物新 Diary 条目（V1.4.2 social-topic Story 1.2 · AC6.7）：{@code title} 用宠物现名按当前语言重渲染，
+     * {@code actorName = petName =} 宠物现名，{@code actorUserId / actorToken} 为 null（不是「人」触发的），
+     * {@code actorCount = 0}；{@code body} 照库值（空串）。
+     */
+    public static NotificationItem petDiary(Notification n, String title, String petName) {
+        return new NotificationItem(n.getType().name(), title, n.getBody(),
+                n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
+                petName, 0, null, null, null, null, null, null, petName);
     }
 }

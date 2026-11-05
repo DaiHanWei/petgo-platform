@@ -1,6 +1,6 @@
 # Story 3.1: 里程碑卡与发帖入口扩参（App，D4–D7）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`
 > 口径优先级：`决策日志-social-topic.md` > PRD §3.6（FR-156「交互」「里程碑卡图」）+ §4（FR-156 埋点）+ §7 文案 > 架构 D-21、G-6 > UI 稿 D4 / D5 / D6 / D7 逐屏说明。
@@ -46,40 +46,40 @@ When 以里程碑来源打开发布页，Then：
 
 ## Tasks / Subtasks
 
-- [ ] **T1 里程碑卡组件**（AC1；D-21、UI D6 / D7）
-  - [ ] 1.1 新建 `lib/features/profile/presentation/widgets/milestone_share_card.dart`：`MilestoneShareCard({required MilestoneItem item, required List<CelebrationPet> pets, required DateTime completedAt})`，`build` 直接按 1080 画布坐标排版（被 `CardFrame` 包住，`CardFrame` 负责 `FittedBox` 缩放；`CardRenderPipeline.capture` 按画布宽反算倍率）。
-  - [ ] 1.2 画布坐标（D6，照稿说明，非 App token）：字标白色宽 200 @ (72, 76)（`assets/brand/wordmark_brand.svg`，`ColorFilter.mode(Colors.white, BlendMode.srcIn)`）→ 标头 `milestoneCelebrateUnlocked` 大写 28px、白 72% @ top 222 → 级别芯片 28px @ top 276（`milestoneLevelChipS/M/L`）→ 花结 440×620 右 40 上 28（外圈 24 瓣白 + 级别色环 16 + 白环 + 徽章 276）→ 标题 92 / w800 / 行高 1.04 / 字距 −2、左对齐、最多 3 行、距页脚 52 → 白色页脚高 208。
-  - [ ] 1.3 页脚（D7）：1 只——头像 112 + 名字 40 / w700 + 日期 28 muted；2–5 只——头像 88 叠放（每只向左 −22，白 6 描边）+ 名字一句（`names[0..n-2].join(', ')` 再用现有 `l10n.diaryPetsPair(head, last)` 得「Orenji, Kopi & Boba」；**不用 `dkk.`**）2 只 40px、≥3 只 34px、最多 2 行省略；日期 28 muted（`AppColors.muted`）。
-  - [ ] 1.4 徽章用 `MilestoneBadge(code, size: 276, level, fallback: 紫渐变奖杯)`（与庆祝页回落一致）；新编码 `first_friend` / `first_save` 素材未到 → 回落，不报错。
-  - [ ] 1.5 **花结素材兜底**：正式 SVG（24 瓣外圈 + 级别色环 + 两条飘带，按 L / M / S 三色或单色 + 代码着色）未到前，用「白色外圆 + 级别色环 16 + 白环 + 徽章」的简化同心圆兜底（不画瓣与飘带），素材路径预留 `assets/milestone/rosette.svg`（或三色三份，按设计交付命名），用 `AssetManifest` 判存在后切换（同 `MilestoneBadgeAssets` 做法）。🔴 稿中花结是示意绘制，**不要照稿手写 CustomPainter 定稿**（UI D6 说明）。
-  - [ ] 1.6 短日期：新增 `formatMilestoneShortDate(DateTime, Locale)`（id：Jan Feb Mar Apr Mei Jun Jul Agu Sep Okt Nov Des；en：Jan … Dec），手写月份表，照 `milestone_celebration.dart` `_formatLongDate`（:286-299）的做法，不依赖 intl locale 数据。
-  - [ ] 1.7 字体：卡面用 App 主题字体（Poppins，UI D6），不另引字体包。
-- [ ] **T2 等画上屏与截图**（AC2；D-21、参考 `c496e3c3`）
-  - [ ] 2.1 新建 `lib/shared/card_render/card_painted_image.dart`（或放 `features/profile/presentation/widgets/`，二选一，说明理由）：`CardPaintedImage` 包装 `Image.asset` / `Image.network`（`AppImage` 的 provider），`frameBuilder` 首帧 → `_painted.complete(true)`、`errorBuilder` → 回落图并 complete(true)（回落图有内容）；静态 `waitPainted(BuildContext boundary, {Duration timeout = const Duration(seconds: 8)})` 遍历子树收集全部 `CardPaintedImage` 状态（写法照 `ts_remote_art_image.dart`:33-50）。
-  - [ ] 2.2 SVG（字标 / 花结）：截图前预加载进 flutter_svg 缓存——`final loader = SvgAssetLoader(path); svg.cache.putIfAbsent(loader.cacheKey(null), () => loader.loadBytes(null));` 并 await；挂载后再等一帧。L2 必须核对导出图里字标在。
-  - [ ] 2.3 新建 `Future<Uint8List?> captureMilestoneShareCard(GlobalKey boundaryKey)`：`waitPainted` 为 false → null；否则 `CardRenderPipeline.capture(boundaryKey: …, canvas: CardCanvas.square)`。测试缝 `@visibleForTesting static Future<Uint8List?> Function(GlobalKey)? captureForTest`（照 `TailsonalityResultPage.captureForTest`，`tailsonality_result_page.dart`:206-208）。
-  - [ ] 2.4 屏外挂载示例（供 3.2 用）：`Positioned(left: -2000, top: 0, width: 360, child: CardFrame(boundaryKey: k, canvas: CardCanvas.square, child: MilestoneShareCard(...)))`，放在庆祝层 `Stack` 内、`IgnorePointer` 包住。宽 360 逻辑像素即可（导出按画布宽 1080 反算倍率）。
-- [ ] **T3 `BragPostEntry` 扩参**（AC3、AC5；D-21、G-6）
-  - [ ] 3.1 `lib/features/content/presentation/brag_post_entry.dart`：加枚举值；`reportTap` 加 `extra`；拆 `prepare` / `openPrepared`；`open` 加三个可选参数并委托。`openPrepared` 内 `PublishComposePage.open(context, preset: preset, initialText: text, initialImages: [jpeg], initialPetIds: petIds, entrySource: source)`。
-  - [ ] 3.2 `prepare` 失败 toast 带 `extraBottom` 参数（3.2 的 D3 要传 96，见 `app_toast.dart`:36-45）；默认 0 = 原位置不变。
-  - [ ] 3.3 类注释更新：新增第 5 个来源「里程碑庆祝页」，仍「不自建发布流程」。
-- [ ] **T4 发布页来源透传**（AC4；G-6）
-  - [ ] 4.1 `lib/features/content/presentation/publish_compose_page.dart`：构造与 `open`（:115-157）加 `BragPostSource? entrySource`；`_publish` 成功分支（:481-485）`diary_published` 属性：`{'pet_count': n, if (widget.entrySource == BragPostSource.milestoneCelebration) 'source': 'milestone_celebration'}`。其余逻辑不动（`initialPetIds` 已支持预选并过滤非 ACTIVE，:330-332）。
-  - [ ] 4.2 ⚠️ 本文件会被 4.4 / 5.2 继续改不同区域：本 story 只改构造参数与 `_publish` 成功分支两处，不重排、不格式化。
-- [ ] **T5 预填文案与宠物**（AC4；PRD §7、UI D4 / D5）
-  - [ ] 5.1 ARB（`app_id.arb` / `app_en.arb`，前缀 `milestoneShare*`，P-10）：
+- [x] **T1 里程碑卡组件**（AC1；D-21、UI D6 / D7）
+  - [x] 1.1 新建 `lib/features/profile/presentation/widgets/milestone_share_card.dart`：`MilestoneShareCard({required MilestoneItem item, required List<CelebrationPet> pets, required DateTime completedAt})`，`build` 直接按 1080 画布坐标排版（被 `CardFrame` 包住，`CardFrame` 负责 `FittedBox` 缩放；`CardRenderPipeline.capture` 按画布宽反算倍率）。
+  - [x] 1.2 画布坐标（D6，照稿说明，非 App token）：字标白色宽 200 @ (72, 76)（`assets/brand/wordmark_brand.svg`，`ColorFilter.mode(Colors.white, BlendMode.srcIn)`）→ 标头 `milestoneCelebrateUnlocked` 大写 28px、白 72% @ top 222 → 级别芯片 28px @ top 276（`milestoneLevelChipS/M/L`）→ 花结 440×620 右 40 上 28（外圈 24 瓣白 + 级别色环 16 + 白环 + 徽章 276）→ 标题 92 / w800 / 行高 1.04 / 字距 −2、左对齐、最多 3 行、距页脚 52 → 白色页脚高 208。
+  - [x] 1.3 页脚（D7）：1 只——头像 112 + 名字 40 / w700 + 日期 28 muted；2–5 只——头像 88 叠放（每只向左 −22，白 6 描边）+ 名字一句（`names[0..n-2].join(', ')` 再用现有 `l10n.diaryPetsPair(head, last)` 得「Orenji, Kopi & Boba」；**不用 `dkk.`**）2 只 40px、≥3 只 34px、最多 2 行省略；日期 28 muted（`AppColors.muted`）。
+  - [x] 1.4 徽章用 `MilestoneBadge(code, size: 276, level, fallback: 紫渐变奖杯)`（与庆祝页回落一致）；新编码 `first_friend` / `first_save` 素材未到 → 回落，不报错。**（dev 修订：复用 `MilestoneBadgeAssets` 素材判定、图片节点改 `CardPaintedImage`，因 `MilestoneBadge` 无首帧回调；见 Completion Notes）**
+  - [x] 1.5 **花结素材兜底**：正式 SVG（24 瓣外圈 + 级别色环 + 两条飘带，按 L / M / S 三色或单色 + 代码着色）未到前，用「白色外圆 + 级别色环 16 + 白环 + 徽章」的简化同心圆兜底（不画瓣与飘带），素材路径预留 `assets/milestone/rosette.svg`（或三色三份，按设计交付命名），用 `AssetManifest` 判存在后切换（同 `MilestoneBadgeAssets` 做法）。🔴 稿中花结是示意绘制，**不要照稿手写 CustomPainter 定稿**（UI D6 说明）。**（dev 修订：路径定为 `assets/milestone/rosette_{l,m,s}.svg`，函数 `milestoneRosetteAssetPath` 在 `milestone_badge_assets.dart`；兜底加画简化飘带以满足 AC1.2，见「待确认」1）**
+  - [x] 1.6 短日期：新增 `formatMilestoneShortDate(DateTime, Locale)`（id：Jan Feb Mar Apr Mei Jun Jul Agu Sep Okt Nov Des；en：Jan … Dec），手写月份表，照 `milestone_celebration.dart` `_formatLongDate`（:286-299）的做法，不依赖 intl locale 数据。
+  - [x] 1.7 字体：卡面用 App 主题字体（Poppins，UI D6），不另引字体包。
+- [x] **T2 等画上屏与截图**（AC2；D-21、参考 `c496e3c3`）
+  - [x] 2.1 新建 `lib/shared/card_render/card_painted_image.dart`（或放 `features/profile/presentation/widgets/`，二选一，说明理由）：`CardPaintedImage` 包装 `Image.asset` / `Image.network`（`AppImage` 的 provider），`frameBuilder` 首帧 → `_painted.complete(true)`、`errorBuilder` → 回落图并 complete(true)（回落图有内容）；静态 `waitPainted(BuildContext boundary, {Duration timeout = const Duration(seconds: 8)})` 遍历子树收集全部 `CardPaintedImage` 状态（写法照 `ts_remote_art_image.dart`:33-50）。
+  - [x] 2.2 SVG（字标 / 花结）：截图前预加载进 flutter_svg 缓存——`final loader = SvgAssetLoader(path); svg.cache.putIfAbsent(loader.cacheKey(null), () => loader.loadBytes(null));` 并 await；挂载后再等一帧。L2 必须核对导出图里字标在。
+  - [x] 2.3 新建 `Future<Uint8List?> captureMilestoneShareCard(GlobalKey boundaryKey)`：`waitPainted` 为 false → null；否则 `CardRenderPipeline.capture(boundaryKey: …, canvas: CardCanvas.square)`。测试缝 `@visibleForTesting static Future<Uint8List?> Function(GlobalKey)? captureForTest`（照 `TailsonalityResultPage.captureForTest`，`tailsonality_result_page.dart`:206-208）。
+  - [x] 2.4 屏外挂载示例（供 3.2 用）：`Positioned(left: -2000, top: 0, width: 360, child: CardFrame(boundaryKey: k, canvas: CardCanvas.square, child: MilestoneShareCard(...)))`，放在庆祝层 `Stack` 内、`IgnorePointer` 包住。宽 360 逻辑像素即可（导出按画布宽 1080 反算倍率）。
+- [x] **T3 `BragPostEntry` 扩参**（AC3、AC5；D-21、G-6）
+  - [x] 3.1 `lib/features/content/presentation/brag_post_entry.dart`：加枚举值；`reportTap` 加 `extra`；拆 `prepare` / `openPrepared`；`open` 加三个可选参数并委托。`openPrepared` 内 `PublishComposePage.open(context, preset: preset, initialText: text, initialImages: [jpeg], initialPetIds: petIds, entrySource: source)`。
+  - [x] 3.2 `prepare` 失败 toast 带 `extraBottom` 参数（3.2 的 D3 要传 96，见 `app_toast.dart`:36-45）；默认 0 = 原位置不变。
+  - [x] 3.3 类注释更新：新增第 5 个来源「里程碑庆祝页」，仍「不自建发布流程」。
+- [x] **T4 发布页来源透传**（AC4；G-6）
+  - [x] 4.1 `lib/features/content/presentation/publish_compose_page.dart`：构造与 `open`（:115-157）加 `BragPostSource? entrySource`；`_publish` 成功分支（:481-485）`diary_published` 属性：`{'pet_count': n, if (widget.entrySource == BragPostSource.milestoneCelebration) 'source': 'milestone_celebration'}`。其余逻辑不动（`initialPetIds` 已支持预选并过滤非 ACTIVE，:330-332）。
+  - [x] 4.2 ⚠️ 本文件会被 4.4 / 5.2 继续改不同区域：本 story 只改构造参数与 `_publish` 成功分支两处，不重排、不格式化。
+- [x] **T5 预填文案与宠物**（AC4；PRD §7、UI D4 / D5）
+  - [x] 5.1 ARB（`app_id.arb` / `app_en.arb`，前缀 `milestoneShare*`，P-10）：
     - `milestoneShareComposeSingle`：ID `{name} baru membuka tonggak "{title}"! 🎉` / EN `{name} just unlocked the "{title}" milestone! 🎉`（placeholders: name, title）
     - `milestoneShareComposeMulti`：ID `Kami baru membuka tonggak "{title}"! 🎉` / EN `We just unlocked the "{title}" milestone! 🎉`（placeholder: title）
     改完 `flutter gen-l10n`；不改生成的 `app_localizations_*.dart`。
-  - [ ] 5.2 新建 `lib/features/profile/domain/milestone_compose_preset.dart`：`({String text, List<int> petIds}) milestoneComposePreset({required MilestoneItem item, required int petId, required String petName, required List<CelebrationPet> accountPets, required AppLocalizations l10n, required Locale locale})`——非账号级：`[petId]` + Single；账号级：`accountPets` 的 id（≥2 → Multi，=1 → Single 用那只的名字）。`CelebrationPet` 需带 `id`（2.3 定义时若无 id，本 story 补上）。
-- [ ] **T6 测试**（全部 AC；P-12）
-  - [ ] 6.1 `test/profile/milestone_share_card_test.dart`：S / M / L 三级各渲染一次（M 级飘带色 `mint600` + 白描边存在，用 key 找节点）；1 / 2 / 3 / 5 只宠物页脚分支（头像尺寸 112 / 88、名字字号 40 / 34、名字句式「A & B」「A, B & C」、无 `dkk.`）；无二维码 / 无水印（找不到 `CardQr` / `CardWatermark` 类型）；花结素材缺失走兜底；徽章素材缺失走回落。
-  - [ ] 6.2 `test/profile/milestone_share_card_capture_test.dart`（参考 `test/tailsonality/ts_remote_art_painted_test.dart`）：全部就绪 → 非空；网络头像一直不回 → 超时 null（用 fake clock / 短 timeout）；boundary 未挂载 → null；头像 404 → 回落物种图且返回非空。
-  - [ ] 6.3 `test/content/brag_post_test.dart` 扩：`open` 默认参数仍 `preset: daily`、不带 petIds（回归，4 来源）；`openPrepared` 带 `growthMoment` + petIds + `entrySource`；`prepare` 失败 → toast、返回 null、不开发布页；`reportTap` 带 extra 时属性合并、不带时只有 source。
-  - [ ] 6.4 `test/content/publish_diary_published_analytics_test.dart` 扩：`entrySource = milestoneCelebration` 发 Diary 成功 → `{pet_count, source: 'milestone_celebration'}`；无来源仍只有 `pet_count`（原用例不变）。
-  - [ ] 6.5 `milestoneComposePreset` 单测：单宠 / 账号级 3 宠（Multi）/ 账号级 1 宠（Single）、id / en、文本不含 `#`。
-  - [ ] 6.6 `test/analytics/v112_events_test.dart`：`brag_` 前缀已登记，无新事件名；确认绿。
-  - [ ] 6.7 现有 `flutter test` 全绿。
+  - [x] 5.2 新建 `lib/features/profile/domain/milestone_compose_preset.dart`：`({String text, List<int> petIds}) milestoneComposePreset({required MilestoneItem item, required int petId, required String petName, required List<CelebrationPet> accountPets, required AppLocalizations l10n, required Locale locale})`——非账号级：`[petId]` + Single；账号级：`accountPets` 的 id（≥2 → Multi，=1 → Single 用那只的名字）。`CelebrationPet` 需带 `id`（2.3 定义时若无 id，本 story 补上）。
+- [x] **T6 测试**（全部 AC；P-12）
+  - [x] 6.1 `test/profile/milestone_share_card_test.dart`：S / M / L 三级各渲染一次（M 级飘带色 `mint600` + 白描边存在，用 key 找节点）；1 / 2 / 3 / 5 只宠物页脚分支（头像尺寸 112 / 88、名字字号 40 / 34、名字句式「A & B」「A, B & C」、无 `dkk.`）；无二维码 / 无水印（找不到 `CardQr` / `CardWatermark` 类型）；花结素材缺失走兜底；徽章素材缺失走回落。
+  - [x] 6.2 `test/profile/milestone_share_card_capture_test.dart`（参考 `test/tailsonality/ts_remote_art_painted_test.dart`）：全部就绪 → 非空；网络头像一直不回 → 超时 null（用 fake clock / 短 timeout）；boundary 未挂载 → null；头像 404 → 回落物种图且返回非空。
+  - [x] 6.3 `test/content/brag_post_test.dart` 扩：`open` 默认参数仍 `preset: daily`、不带 petIds（回归，4 来源）；`openPrepared` 带 `growthMoment` + petIds + `entrySource`；`prepare` 失败 → toast、返回 null、不开发布页；`reportTap` 带 extra 时属性合并、不带时只有 source。
+  - [x] 6.4 `test/content/publish_diary_published_analytics_test.dart` 扩：`entrySource = milestoneCelebration` 发 Diary 成功 → `{pet_count, source: 'milestone_celebration'}`；无来源仍只有 `pet_count`（原用例不变）。
+  - [x] 6.5 `milestoneComposePreset` 单测：单宠 / 账号级 3 宠（Multi）/ 账号级 1 宠（Single）、id / en、文本不含 `#`。
+  - [x] 6.6 `test/analytics/v112_events_test.dart`：`brag_` 前缀已登记，无新事件名；确认绿。
+  - [x] 6.7 现有 `flutter test` 全绿。
 - [ ] **T7 L2**：在模拟器用 debug 钩子（或 3.2 完成后的真实入口）导出 S / M / L、1 / 3 / 5 只宠物共 ≥ 6 张卡，对 D6 / D7 打还原度 ≥ 95%；确认 Feed 瀑布流约 170px 宽时标题仍可读、无白图。
 
 ## Dev Notes
@@ -123,16 +123,67 @@ When 以里程碑来源打开发布页，Then：
 
 ### Agent Model Used
 
-（实现时填写）
+Claude
 
 ### Debug Log References
+
+- `flutter gen-l10n`：OK（生成产物在 .gitignore，未手改）。
+- `flutter analyze`：No issues found。
+- `flutter test`（全量）：+4296 ~1（skip 为存量用例），All tests passed。
+- 复审修复后复跑：`flutter analyze` No issues found；`flutter test`（全量）+4299 ~1，All tests passed。
+- 首轮全量红 1 条：`test/profile/milestone_badge_test.dart`「assets/milestone/ 只在映射文件里出现」——花结路径字面量最初写在卡组件里；已移到 `milestone_badge_assets.dart`（`milestoneRosetteAssetPath`），守卫未改、未放宽。
+- 截图测试：`toImage` 是真实引擎异步，用「pump 推帧 + runAsync 让真实异步推进」交替驱动；「头像一直不回」用 `debugNetworkImageHttpClientProvider` 注入永不回应的 HttpClient（测试内复位）。
 
 ### Completion Notes List
 
 - create-story：上下文分析完成，已生成完整开发指引（2026-11-04）。
-- 实现完成时必须写明：「云端只跑 L0；L1/L2 待本地验收」。
+- **云端只跑 L0；L1/L2 待本地验收。** 待本地验收项：
+  - T7 L2：模拟器导出 S / M / L、1 / 3 / 5 只宠物共 ≥ 6 张卡，对 D6 / D7 打还原度 ≥ 95%；Feed 瀑布流约 170px 宽时标题可读、无白图；**核对导出图里字标在**（SVG 预加载链路只在真机/模拟器能完整验证）。
+  - 本 story 只交付零件，真实入口（庆祝页按钮）在 3.2 接线，接线后再做端到端导出。
+  - 无 L1 集成测试类（本 story 只 App，不动后端）。
+- **待素材**：奖章花结正式 SVG（按级别三份 `assets/milestone/rosette_{l,m,s}.svg`，`AssetManifest` 判存在即切换，不改代码）；新徽章 `first_friend` / `first_save`（走紫渐变奖杯回落，测试覆盖 C-S19）。
+- 名字核对 / 对 story 的修订：
+  - `CelebrationPet`（2.3）无 `id` → 本 story 补 **可选** `int? id`（不改 2.3 已有构造调用，`readAccountCelebrationPets` 现填 `id: p.id`）；预选时跳过 null。
+  - T1.4「徽章用 `MilestoneBadge` 组件」→ 改为复用其**素材判定**（`MilestoneBadgeAssets` + `milestoneBadgeKeyOf` / `milestoneBadgeAssetPath`），图片节点换成 `CardPaintedImage`：`MilestoneBadge` 内部 `Image.asset` 不暴露首帧回调，无法满足 AC2「等画上屏」；回落外观与庆祝页紫渐变奖杯一致。素材清单未读完时徽章节点标 `pending`（不算就绪），读完换真节点后 `waitPainted` 重新收集。
+  - T1.5 花结路径：story 写「`assets/milestone/rosette.svg`（或三色三份）」→ 选三色三份 `rosette_{l,m,s}.svg`（免代码着色多段）；路径函数 `milestoneRosetteAssetPath` 放在 `milestone_badge_assets.dart`（存量守卫要求 `assets/milestone/` 字面量只出现在映射文件）。
+  - T1.3 页脚头像不直接用 `PetSpeciesAvatar`（`CircleAvatar.backgroundImage` 无首帧回调），改为 `CardPaintedImage(AppImage.provider(url, thumbWidth: 240))`，加载失败回落 `PetSpeciesAvatar(avatarUrl: null)`（物种默认图）。
+  - T2.1 放在 `lib/shared/card_render/card_painted_image.dart`：它与「分享卡」无关，任何走 `CardRenderPipeline` 的卡面都能用（AD-15 Rule 1c）；SVG 预加载 `CardPaintedImage.precacheSvgAssets` 也放这里（测试缝 `precacheSvgForTest`）。
+  - T2.3 测试缝：顶层函数无法挂 static，`captureForTest` 挂在 `MilestoneShareCardCapture`，`captureMilestoneShareCard(GlobalKey, {timeout})` 优先走它。
+- 拍板点复述：①发帖成功来源落在 `diary_published`（仅 `milestoneCelebration` 追加 `source`；用户改 Moment 不上报，测试钉住）；②拆 `prepare` / `openPrepared`，`open` = 两者组合，原 4 个来源调用点未改一行，`_busy` 防重入保留；③花结兜底为简化同心圆（白外圆 380 + 级别色环 + 白环 300 + 徽章 276），不写 CustomPainter 定稿。
+- `reportTap(source, {extra})`：`extra` 合并、`source` 键以枚举为准；原 4 处调用不传 extra，属性仍只有 `source`（`brag_entries_test.dart` 断言保持绿）。`BragPostEntry` 全程不收也不传 `milestoneCode`（测试断言 `milestoneCode == null`）。
+- `v112_events_test.dart`：无新事件名（`brag_` 已登记），全绿。
+- **复审修复（2026-11-04）**：
+  - PLAUSIBLE-1：截卡链路上的每个 `endOfFrame`（`CardPaintedImage.waitPainted` 两处、`captureMilestoneShareCard` 里的等帧）都改走 `CardPaintedImage.endOfFrameWithin(剩余时间)`。超时就返回 false / null，App 进后台不出帧时不会一直挂住。`captureMilestoneShareCard` 从 SVG 预加载到截图共用一个截止时刻（默认 8s）。测试缝是 `CardPaintedImage.endOfFrameForTest`；新增 3 条单测证明超时会返回：`endOfFrameWithin` 本身、`waitPainted`、`captureMilestoneShareCard`。
+  - PLAUSIBLE-2（字标 SVG 时序）：`waitPainted` 之后**已加多等一帧**（代价低，同样受超时约束）。
+  - **交给 3.2**：卡片要在庆祝层弹出时就屏外挂载预热（不要在点击按钮时才挂载），让字标 / 花结 SVG 与头像有时间加载；点击后再调 `captureMilestoneShareCard`。L2 核对导出图里字标在。
+
+#### 待确认
+
+1. **兜底花结画了简化飘带**：T1.5 写「兜底不画瓣与飘带」，但 AC1.2（及 PRD 2026-11-03 拍板）要求「M 级飘带 mint600 + 12px 白描边」、T6.1 要求用 key 找到 M 级飘带节点。按 AC/PRD 优先：兜底版画两条圆角长条飘带（`milestoneShareRibbonL/R`，M 级 mint600 + 12 白描边，L/S 级别色无描边），仍不画 24 瓣、非定稿；正式 SVG 到货后整块由 SVG 取代。需设计确认兜底期是否接受。
+2. 花结素材命名（三色三份 `rosette_{l,m,s}.svg`）需设计交付时确认；若改为单份 + 代码着色，只需改 `milestoneRosetteAssetPath` 与 `_MilestoneRosette`。
+3. 标头 `milestoneCelebrateUnlocked` 文案带「!」（「Tonggak terbuka!」），卡面照 D6 大写显示，未另加卡面专用文案。
 
 ### File List
+
+- petgo_app/lib/features/content/presentation/brag_post_entry.dart（改）
+- petgo_app/lib/features/content/presentation/publish_compose_page.dart（改：构造/open 加 `entrySource`、`_publish` 成功分支）
+- petgo_app/lib/features/profile/domain/celebration_pet.dart（改：补可选 `id`）
+- petgo_app/lib/features/profile/data/account_celebration_pets.dart（改：填 `id`）
+- petgo_app/lib/features/profile/domain/milestone_badge_assets.dart（改：`milestoneRosetteAssetPath`）
+- petgo_app/lib/features/profile/domain/milestone_compose_preset.dart（新：`milestoneComposePreset`、`formatMilestoneShortDate`）
+- petgo_app/lib/features/profile/presentation/widgets/milestone_share_card.dart（新：`MilestoneShareCard`、`captureMilestoneShareCard`、`MilestoneShareCardCapture`）
+- petgo_app/lib/shared/card_render/card_painted_image.dart（新：`CardPaintedImage`、`waitPainted`、`precacheSvgAssets`）
+- petgo_app/lib/l10n/app_en.arb、app_id.arb（改：`milestoneShareComposeSingle` / `milestoneShareComposeMulti`）
+- petgo_app/test/profile/milestone_share_card_test.dart（新）
+- petgo_app/test/profile/milestone_share_card_capture_test.dart（新）
+- petgo_app/test/profile/milestone_compose_preset_test.dart（新）
+- petgo_app/test/content/brag_post_test.dart（扩）
+- petgo_app/test/content/publish_diary_published_analytics_test.dart（扩）
+
+### Change Log
+
+- 2026-11-04：复审修复：等帧受超时约束（`endOfFrameWithin`）+ waitPainted 后多等一帧；3.2 交接事项写入 Completion Notes。
+- 2026-11-04：实现 Story 3.1（里程碑卡 + 等画上屏截图 + `BragPostEntry` 扩参 / 拆步 + 发布页来源透传 + 预填文案与宠物）；L0 全绿，Status → review。
 
 ## 待确认 / 发现的规划冲突
 

@@ -43,6 +43,8 @@ class PublicProfileControllerTest {
     private FeedService feed;
     private UserHideRelationReader hideRelations;
     private com.tailtopia.social.read.FollowReader followReader;
+    /** V1.4.2 social-topic Story 1.1：主页追更宠物数端口。 */
+    private com.tailtopia.social.read.PetFollowReader petFollowReader;
     private PublicProfileController controller;
 
     @BeforeEach
@@ -54,8 +56,9 @@ class PublicProfileControllerTest {
         followReader = mock(com.tailtopia.social.read.FollowReader.class);
         when(followReader.followState(anyLong(), anyLong()))
                 .thenReturn(com.tailtopia.social.read.FollowState.NONE);
+        petFollowReader = mock(com.tailtopia.social.read.PetFollowReader.class);
         controller = new PublicProfileController(accounts, content, feed, hideRelations,
-                followReader);
+                followReader, petFollowReader);
         // V1.3.4 Story 1.2：主页 / 内容区先判 isActive（封号按不存在）；默认按有效账号走。
         when(accounts.isActive(anyLong())).thenReturn(true);
     }

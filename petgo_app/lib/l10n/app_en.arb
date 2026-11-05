@@ -332,6 +332,10 @@
   "@milestoneCelebrateShare": {
     "description": "P-35 celebration: share-to-community CTA"
   },
+  "milestoneCelebrateShareOutside": "Share to other apps",
+  "@milestoneCelebrateShareOutside": {
+    "description": "V1.4.2 Story 3.2 · D1: celebration secondary (outlined) CTA — share to other apps via system share sheet"
+  },
   "milestoneCelebrateSeeAll": "See all milestones →",
   "@milestoneCelebrateSeeAll": {
     "description": "P-35 celebration: link to the milestone list page"
@@ -420,7 +424,7 @@
   "@mentionEmptyTitle": {
     "description": "Empty state of the @ picker when the candidate list is empty (Story 3.2 AC3); the filter field is hidden in this state"
   },
-  "mentionEmptyHint": "Comment or like first, then you can mention people",
+  "mentionEmptyHint": "Follow someone first, then you can mention them here",
   "@mentionEmptyHint": {
     "description": "Second line of the @ picker empty state: how to get candidates"
   },
@@ -4752,5 +4756,51 @@
   "qrPayExpired": "Expired",
   "@qrPayExpired": {"description": "V1.4.1 QRIS payment page"},
   "qrPaySavedValidUntil": "Valid until {time}",
-  "@qrPaySavedValidUntil": {"description": "V1.4.1 QRIS payment page", "placeholders": {"time": {"type": "String"}}}
+  "@qrPaySavedValidUntil": {"description": "V1.4.1 QRIS payment page", "placeholders": {"time": {"type": "String"}}},
+  "petFollowFilterPeople": "People",
+  "@petFollowFilterPeople": {"description": "V1.4.2 social-topic Story 1.5"},
+  "petFollowFilterPets": "Pets",
+  "@petFollowFilterPets": {"description": "V1.4.2 social-topic Story 1.5"},
+  "petFollowOwnedBy": "owned by @{name}",
+  "@petFollowOwnedBy": {"description": "V1.4.2 social-topic Story 1.5", "placeholders": {"name": {"type": "String"}}},
+  "petFollowListEmptySelf": "You're not following any pets yet",
+  "@petFollowListEmptySelf": {"description": "V1.4.2 social-topic Story 1.5"},
+  "petFollowListEmpty": "Not following any pets yet",
+  "@petFollowListEmpty": {"description": "V1.4.2 social-topic Story 1.5"},
+  "petFollowPushTitle": "Pets you follow",
+  "@petFollowPushTitle": {"description": "V1.4.2 social-topic Story 1.5"},
+  "petFollowPushDesc": "New Diary from pets you follow",
+  "@petFollowPushDesc": {"description": "V1.4.2 social-topic Story 1.5"},
+  "petFollowPushFollowerPetDesc": "Someone started following your pet",
+  "@petFollowPushFollowerPetDesc": {"description": "V1.4.2 social-topic Story 1.5"},
+  "followingFeedNoNewTitle": "No new posts yet",
+  "@followingFeedNoNewTitle": {"description": "V1.4.2 social-topic Story 1.5"},
+  "followingFeedNoNewBody": "New posts from people and pets you follow will show up here.",
+  "@followingFeedNoNewBody": {"description": "V1.4.2 social-topic Story 1.5"},
+  "milestoneShareComposeSingle": "{name} just unlocked the \"{title}\" milestone! 🎉",
+  "@milestoneShareComposeSingle": {"description": "V1.4.2 social-topic Story 3.1 (FR-156): publish page prefill from milestone celebration, single pet", "placeholders": {"name": {"type": "String"}, "title": {"type": "String"}}},
+  "milestoneShareComposeMulti": "We just unlocked the \"{title}\" milestone! 🎉",
+  "@milestoneShareComposeMulti": {"description": "V1.4.2 social-topic Story 3.1 (FR-156): publish page prefill from milestone celebration, account-level milestone with 2+ ACTIVE pets", "placeholders": {"title": {"type": "String"}}},
+  "topicEmptyTitle": "No posts in this topic yet",
+  "@topicEmptyTitle": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicEmptyBody": "Be the first to share here!",
+  "@topicEmptyBody": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicEmptyCta": "Create Post",
+  "@topicEmptyCta": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicRelatedTitle": "Other popular topics",
+  "@topicRelatedTitle": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicNotFoundTitle": "Topic not found",
+  "@topicNotFoundTitle": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicNotFoundBody": "This topic is no longer available",
+  "@topicNotFoundBody": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicSortLatest": "Latest",
+  "@topicSortLatest": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicSortPopular": "Popular",
+  "@topicSortPopular": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicOfficialBadge": "Official",
+  "@topicOfficialBadge": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicNewLabel": "New topic",
+  "@topicNewLabel": {"description": "V1.4.2 social-topic Story 4.4 · # suggestion panel: second line of the 'create this topic' row (C3)"},
+  "topicLimitReached": "Up to 5 topics per post",
+  "@topicLimitReached": {"description": "V1.4.2 social-topic Story 4.4 · toast at top when typing # with 5 topics already (C4)"}
 }

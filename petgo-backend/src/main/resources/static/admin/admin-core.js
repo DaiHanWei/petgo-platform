@@ -1426,3 +1426,21 @@ document.addEventListener('click', function (e) {
         });
     });
 })();
+
+// ===== 整行可点的整页跳转（V1.4.2 social-topic · Story 6.2 · G1a 话题页顶置列表）=====
+// <tr data-href="<url>">：点行（排除 a / button / input / label / select / textarea / summary / details / [data-no-drawer]）
+// 或在行上按 Enter → location.href。行尾仍保留真正的 <a>，键盘与无 JS 照样可用。
+// 与 admin-drawer.js 的 tr[data-drawer-url]（开抽屉）互不重叠：一行只挂其中一种。
+(function () {
+    function go(tr) { if (tr && tr.dataset.href) { window.location.href = tr.dataset.href; } }
+    document.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) { return; }
+        if (t.closest('a, button, input, label, select, textarea, summary, details, [data-no-drawer]')) { return; }
+        go(t.closest('tr[data-href]'));
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || !e.target || !e.target.matches || !e.target.matches('tr[data-href]')) { return; }
+        go(e.target);
+    });
+})();

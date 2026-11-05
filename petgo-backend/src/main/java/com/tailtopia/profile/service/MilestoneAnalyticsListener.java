@@ -1,8 +1,12 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.MilestoneCompletionSource;
+import com.tailtopia.profile.domain.MilestoneLevel;
+import com.tailtopia.profile.event.AccountMilestoneCompletedEvent;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
 import com.tailtopia.shared.analytics.AnalyticsDistinctId;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -48,5 +52,22 @@ public class MilestoneAnalyticsListener {
                         "code", event.code(),
                         "level", event.level().name(),
                         "path", MilestoneAnalyticsPath.of(event.code(), event.source())));
+    }
+
+    /**
+     * 账号级里程碑（V1.4.2 Story 2.1，拍板点 2）：按<b>去重后的物种编码</b>各报一次（1 猫 1 狗 → C-S19、D-S19 两条；
+     * 2 猫 → 1 条），既保留「新编码自动覆盖」，又不按宠物数放大。无 ACTIVE 宠物（codes 为空）不报。
+     */
+    @TransactionalEventListener
+    public void onAccountMilestone(AccountMilestoneCompletedEvent event) {
+        for (String code : new LinkedHashSet<>(event.codes())) {
+            analytics.capture(
+                    AnalyticsDistinctId.of(event.userId()),
+                    EVENT_MILESTONE_ACHIEVED,
+                    Map.of(
+                            "code", code,
+                            "level", MilestoneLevel.S.name(),
+                            "path", MilestoneAnalyticsPath.of(code, MilestoneCompletionSource.SYSTEM_AUTO)));
+        }
     }
 }

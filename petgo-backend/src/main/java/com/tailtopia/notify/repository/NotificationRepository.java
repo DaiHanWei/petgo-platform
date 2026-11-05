@@ -66,6 +66,23 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("actorId") long actorId, @Param("since") Instant since);
 
     /**
+     * 被追更通知 24 小时去重（V1.4.2 social-topic Story 1.2 · AC5 · D-10）：{@code since} 之后是否已有
+     * 「{@code actorId} 追更了 {@code recipientId} 的这只宠物」的通知行 —— 维度「接收人 × 追更者 × 宠物」，
+     * 宠物 id 存在 {@code variant}（{@code NotificationService#sendPetFollowed}）。不同宠物分别通知。
+     * 同 {@link #existsFollowedNotificationSince} 走 {@code ix_notification_actors_actor} + 通知主键。
+     */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM notifications n
+                             JOIN notification_actors a ON a.notification_id = n.id
+                            WHERE n.recipient_user_id = :recipientId AND n.type = 'PET_FOLLOWED'
+                              AND n.variant = :petIdVariant
+                              AND a.actor_user_id = :actorId AND n.created_at > :since)
+            """, nativeQuery = true)
+    boolean existsPetFollowedNotificationSince(@Param("recipientId") long recipientId,
+            @Param("actorId") long actorId, @Param("petIdVariant") String petIdVariant,
+            @Param("since") Instant since);
+
+    /**
      * 某人的<b>未读</b>、带触发人行的互动通知 id（Story 3.3 · ⚠️ T-36：触发人全被过滤的条目不计入未读角标，
      * 角标校准时据此找出要扣掉的那些）。{@code types} 由 {@code InteractionActorResolver.INTERACTION_TYPE_NAMES} 传入，
      * 与 {@code NotificationService.INTERACTION_TYPES} 同一事实源（3.3 code-review F9）。

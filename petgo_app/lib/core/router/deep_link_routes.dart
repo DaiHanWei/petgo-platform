@@ -180,6 +180,15 @@ class DeepLinkRoutes {
       case 'PET_GIFT_RECEIVED':
         final id = int.tryParse(targetRef);
         return id == null ? notificationsCenter : '/pets/$id/gifts?wall=expanded';
+      // V1.4.2 social-topic Story 1.5 · AC6.6（D-10 / D-23）：被追更 → 追更者主页（targetRef = 追更者 user id，
+      // 同 USER_FOLLOWED）；非数字落通知中心（防 int.parse 崩）。
+      case 'PET_FOLLOWED':
+        final id = int.tryParse(targetRef);
+        return id == null ? notificationsCenter : '/users/$id';
+      // 追更宠物新 Diary → 帖子详情（targetRef = 帖子 id）；非数字落通知中心。
+      case 'PET_DIARY_POSTED':
+        final id = int.tryParse(targetRef);
+        return id == null ? notificationsCenter : '/content/$id';
       default:
         // CONTENT_REVIEW_REJECTED / CONTENT_REVIEW_TIMED_OUT / REPORT_REVIEWED：
         // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。

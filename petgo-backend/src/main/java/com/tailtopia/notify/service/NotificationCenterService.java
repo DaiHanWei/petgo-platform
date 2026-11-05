@@ -225,11 +225,13 @@ public class NotificationCenterService {
         }
         batch.addAll(extraIds);
         Map<String, OpsTargetView> opsTargets = opsTargetsOf(pageRows);
-        if (batch.isEmpty()) {
+        // V1.4.2 Story 1.2：追更宠物新 Diary 条目（不是带触发人的互动类型）也要现查宠物名
+        boolean anyPetDiary = pageRows.stream().anyMatch(n -> n.getType() == NotificationType.PET_DIARY_POSTED);
+        if (batch.isEmpty() && !anyPetDiary) {
             return new Rendered(pageRows.stream().map(n -> plain(n, opsTargets)).toList(), Map.of());
         }
         // ① ② ③ 各一次
-        Map<Long, Optional<ActorSummary>> summaries = actors.summarize(userId, batch);
+        Map<Long, Optional<ActorSummary>> summaries = batch.isEmpty() ? Map.of() : actors.summarize(userId, batch);
         // ④ 评论快照：只对有可显示触发人的评论条目；⑤ 新粉丝关系：只对有可显示触发人的新粉丝条目
         Set<Long> commentIds = new LinkedHashSet<>();
         Set<Long> followerIds = new LinkedHashSet<>();
@@ -237,6 +239,14 @@ public class NotificationCenterService {
         Map<Long, Long> giftSingleSender = new java.util.HashMap<>();
         boolean anyVisible = false;
         for (Notification n : pageRows) {
+            if (n.getType() == NotificationType.PET_DIARY_POSTED) {
+                Long petId = variantPetId(n);
+                if (petId != null) {
+                    giftPetIds.add(petId); // 与收礼 / 被追更同批取宠物名（一页一次）
+                }
+                anyVisible = true;
+                continue;
+            }
             Optional<ActorSummary> s = summaries.get(n.getId());
             if (s == null || s.isEmpty()) {
                 continue;
@@ -254,13 +264,19 @@ public class NotificationCenterService {
                         giftSingleSender.put(n.getId(), s.get().latestActorId());
                     }
                 }
+            } else if (n.getType() == NotificationType.PET_FOLLOWED) {
+                Long petId = variantPetId(n);
+                if (petId != null) {
+                    giftPetIds.add(petId);
+                }
             }
         }
         Map<Long, NotificationCommentSnapshot> snapshots = commentIds.isEmpty() ? Map.of()
                 : comments.notificationSnapshots(commentIds);
         Map<Long, FollowState> states = followerIds.isEmpty() ? Map.of()
                 : followReader.followStates(userId, followerIds);
-        // ⑥ 收礼条目的宠物名：本页有收礼条目才查，一次批量（V1.4.0 gift Story 1.2 · AC5.4）
+        // ⑥ 收礼 / 被追更 / 追更宠物新 Diary 条目的宠物名：本页有才查，三类合并一次批量（V1.4.0 gift Story 1.2 · AC5.4、
+        //    V1.4.2 social-topic Story 1.2 · AC5.5 / AC6.7）
         Map<Long, String> names = giftPetIds.isEmpty() ? Map.of() : petNamesOf(giftPetIds);
         Locale locale = anyVisible ? accounts.localeOf(userId) : null;
         // ⑦ 收礼单人条目送的是什么（L2 第二轮）：本页有才查，触发人并入时刻一次 + 订单一次
@@ -269,6 +285,10 @@ public class NotificationCenterService {
 
         List<NotificationItem> items = new ArrayList<>(pageRows.size());
         for (Notification n : pageRows) {
+            if (n.getType() == NotificationType.PET_DIARY_POSTED) {
+                items.add(renderPetDiary(n, names, locale));
+                continue;
+            }
             Optional<ActorSummary> s = NotificationService.INTERACTION_TYPES.contains(n.getType())
                     ? summaries.get(n.getId()) : null;
             if (s == null) {
@@ -291,6 +311,31 @@ public class NotificationCenterService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** 被追更 / 追更宠物新 Diary 条目的宠物 id 存在 {@code variant}（V1.4.2 Story 1.2）；坏值按查不到处理。 */
+    private static Long variantPetId(Notification n) {
+        if (n.getVariant() == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(n.getVariant());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 追更宠物新 Diary 条目（V1.4.2 Story 1.2 · AC6.7）：取到宠物现名 → 按当前语言重渲染标题、{@code actorName = petName};
+     * 宠物已删 / 取不到名 → 原样返回库值（App 按存储标题兜底）。不改未读角标口径（它不是互动类型）。
+     */
+    private NotificationItem renderPetDiary(Notification n, Map<Long, String> names, Locale locale) {
+        Long petId = variantPetId(n);
+        String petName = petId == null ? null : names.get(petId);
+        if (petName == null) {
+            return NotificationItem.from(n);
+        }
+        return NotificationItem.petDiary(n, copy.petDiaryPostedTitle(petName, locale), petName);
     }
 
     /**
@@ -349,9 +394,12 @@ public class NotificationCenterService {
     private NotificationItem render(Notification n, ActorSummary s, Locale locale,
             Map<Long, NotificationCommentSnapshot> snapshots, Map<Long, FollowState> states, Map<Long, String> names,
             Map<Long, String> giftLabels) {
+        String petName = n.getType() == NotificationType.PET_FOLLOWED ? petNameOfVariant(n, names) : null;
         String title = n.getType() == NotificationType.PET_GIFT_RECEIVED
                 ? copy.title(n.getType(), n.getVariant(), s, locale, petNameOf(n, names), giftLabels.get(n.getId()))
-                : copy.title(n.getType(), n.getVariant(), s, locale);
+                : n.getType() == NotificationType.PET_FOLLOWED
+                        ? copy.title(n.getType(), null, s, locale, petName)
+                        : copy.title(n.getType(), n.getVariant(), s, locale);
         String body = null;
         Boolean iFollow = null;
         Boolean followsMe = null;
@@ -365,8 +413,14 @@ public class NotificationCenterService {
             iFollow = f.iFollow();
             followsMe = f.followsMe();
         }
+        // PET_FOLLOWED 不带回关字段（actorIFollow / actorFollowsMe 只对 USER_FOLLOWED），App 据此不显示回关按钮
         return NotificationItem.rendered(n, title, body, s.latestActorId(), s.latestNickname(), s.latestToken(),
-                s.total(), iFollow, followsMe, bodyDeleted);
+                s.total(), iFollow, followsMe, bodyDeleted, petName);
+    }
+
+    private static String petNameOfVariant(Notification n, Map<Long, String> names) {
+        Long petId = variantPetId(n);
+        return petId == null ? null : names.get(petId);
     }
 
     private static String petNameOf(Notification n, Map<Long, String> names) {

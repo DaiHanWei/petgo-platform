@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  话题抽屉（V1.4.2 Story 6.1 · UI 稿 F2–F7，480px 抽屉体 res=topic）。片段：
+    drawer      — 编辑：头部卡（名称 + 类型 + 状态；帖子数【实时】/ 热度 / 首页话题行 / 创建或禁用时间 WIB）
+                  → 编辑区（显示写法只改大小写；官方话题可改说明 ID / EN；用户话题无说明框）
+                  →「话题页顶置」区块（6.2）→ 吸底操作条（隐藏 / 禁用 / 恢复为正常）
+    createForm  — 新建官方话题（# 前缀输入、说明 ID / EN 选填、300ms 防抖查重）
+    nameCheck   — 查重结果：黄条（升级，带 confirm 文案）/ 行内错误（不合规、已有官方、同名用户话题已禁用）
+    toastOnly   — 只回一个 toast（新建成功 / 首页话题行开关、序号）
+    afterAction — 抽屉体 oob 重渲染 + toast（列表由 HX-Trigger admin:topic-list-refresh 重拉）
+  ⚠️ hx-target 一律指带 id 的错误槽（AdminBusinessExceptionAdvice 按 HX-Target 头回填 422）。
+  🛡 写控件门控与 AdminTopicController.MANAGE 逐字一致。二次确认一律原生 confirm（data-confirm，admin-core.js）。
+*/-->
+<body>
+<div th:fragment="drawer" id="topic-drawer-panel" class="topic-drawer" th:attr="data-topic-id=${t.id}"
+     th:with="canManage=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''content.topic_manage'')')}">
+
+    <!--/* ① 头部卡 */-->
+    <section class="card card-full tag-card" data-section="topic-head">
+        <h2>
+            <span th:text="'#' + ${t.nameDisplay}">#KucingLucu</span>
+            <span class="tag topic-type" th:classappend="${t.official()} ? 'topic-type--official' : 'topic-type--user'"
+                  th:text="${t.official()} ? #{admin.topics.type.OFFICIAL} : #{admin.common.user}">官方</span>
+            <span class="topic-status">
+                <span class="dot" th:classappend="${t.active()} ? 'dot--ok' : (${t.hidden()} ? 'dot--wait' : 'dot--hot')"></span>
+                <span class="badge" th:classappend="${t.active()} ? 'badge-ok' : (${t.hidden()} ? 'badge-warn' : 'badge-danger')"
+                      th:text="${t.active()} ? #{admin.topics.status.ACTIVE} : (${t.hidden()} ? #{admin.topics.status.HIDDEN} : #{admin.common.disabled})">正常</span>
+            </span>
+        </h2>
+        <dl class="topic-meta">
+            <div>
+                <dt th:text="#{admin.dashboard.m.posts}">帖子数</dt>
+                <!--/* 实时：content_topics ⋈ content_posts，口径同热度任务 post_count（AC7.2） */-->
+                <dd class="num" data-live-posts th:text="${livePosts}">0</dd>
+            </div>
+            <div>
+                <dt th:text="#{admin.topics.col.heat}">近 7 天热度</dt>
+                <dd class="num" th:text="${t.disabled()} ? '—' : ${t.heatText()}">0.0</dd>
+            </div>
+            <div>
+                <dt th:text="#{admin.topics.meta.featured}">首页话题行</dt>
+                <dd th:text="${t.featured()} ? #{admin.topics.meta.featuredPos(${t.featuredOrder})} : #{admin.common.no}">否</dd>
+            </div>
+            <div th:unless="${t.disabled()}">
+                <dt th:text="#{admin.topics.col.createdAt}">创建时间（WIB）</dt>
+                <dd th:text="${@adminTime.fmt(t.createdAt)}">2026-11-10 10:00</dd>
+            </div>
+            <div th:if="${t.disabled()}">
+                <dt th:text="#{admin.topics.meta.disabledAt}">禁用时间</dt>
+                <dd><span th:text="${@adminTime.fmt(t.disabledAt)}">2026-11-14 09:00</span> <span class="muted">WIB</span></dd>
+            </div>
+        </dl>
+    </section>
+
+    <!--/* ② 编辑区 */-->
+    <section class="card card-full tag-card" data-section="topic-edit">
+        <form id="topicEditForm" th:if="${canManage}" data-topic-edit-form
+              th:attr="hx-post=@{/admin/topics/{id}/edit(id=${t.id})}"
+              hx-target="#topic-drawer-err" hx-swap="innerHTML">
+            <label class="field req" for="topicDisplayName"><span th:text="#{admin.topics.displayName}">显示写法</span></label>
+            <span class="price-inp topic-name-inp">
+                <span class="price-inp-prefix">#</span>
+                <input id="topicDisplayName" type="text" name="displayName" class="price-inp-field" required maxlength="30"
+                       autocomplete="off" data-topic-display th:value="${t.nameDisplay}"
+                       th:attr="data-original=${t.nameDisplay}"/>
+            </span>
+            <p class="hint" th:text="#{admin.topics.displayNameHint}">只能改大小写……</p>
+
+            <th:block th:if="${t.official()}">
+                <label class="field" for="topicDescId"><span th:text="#{admin.topics.descId}">说明 ID</span></label>
+                <textarea id="topicDescId" name="descId" class="inp field-full topic-desc" maxlength="500"
+                          th:placeholder="#{admin.topics.descPlaceholder}" th:text="${t.descId}"></textarea>
+                <label class="field" for="topicDescEn"><span th:text="#{admin.topics.descEn}">说明 EN</span></label>
+                <textarea id="topicDescEn" name="descEn" class="inp field-full topic-desc" maxlength="500"
+                          th:placeholder="#{admin.topics.descPlaceholder}" th:text="${t.descEn}"></textarea>
+                <p class="hint" th:text="#{admin.topics.descHint}">说明只在官方话题页显示……</p>
+            </th:block>
+            <!--/* F5：用户话题只有「显示写法」一个可编辑字段，无说明框（服务端也忽略说明参数） */-->
+            <p class="hint" th:unless="${t.official()}" data-notice="user-desc"
+               th:text="#{admin.topics.userDescHint}">用户话题不能填写说明……</p>
+
+            <!--/* 错误槽在「保存」正上方：前端 case-only 即时提示 + 服务端 422 都落这里 */-->
+            <p class="err" hidden data-topic-caseonly th:text="#{admin.err.topics.caseOnly}">只能修改字母大小写……</p>
+            <div id="topic-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+            <!--/* 未改动时禁用：disabled 由 admin-topics.js 加（同内容标签 dirty 脚本的理由：脚本失效时退化成总能点） */-->
+            <button type="submit" class="btn btn-primary topic-save" data-topic-save
+                    th:text="#{admin.common.save}">保存</button>
+        </form>
+
+        <!--/* 只读账号：只看不改 */-->
+        <th:block th:unless="${canManage}">
+            <label class="field"><span th:text="#{admin.topics.displayName}">显示写法</span></label>
+            <p th:text="'#' + ${t.nameDisplay}">#KucingLucu</p>
+            <th:block th:if="${t.official()}">
+                <label class="field"><span th:text="#{admin.topics.descId}">说明 ID</span></label>
+                <p class="topic-desc-ro" th:text="${t.descId} ?: '—'">—</p>
+                <label class="field"><span th:text="#{admin.topics.descEn}">说明 EN</span></label>
+                <p class="topic-desc-ro" th:text="${t.descEn} ?: '—'">—</p>
+            </th:block>
+            <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.content.topic_manage})}">需要「编辑话题」权限</p>
+        </th:block>
+    </section>
+
+    <!--/* ③「话题页顶置」区块（V1.4.2 Story 6.2 · AC8，UI F4 / F5）：官方 / 用户 / 隐藏话题有，禁用话题（F7）没有；
+           无顶置查看权限不显示（控制器也不取 topicPins）。只看和新建 —— 改时间 / 提前结束在 G1b 做；与 G1b 同一份数据。
+           「＋ 新建顶置」把 G2 表单载入**同一个**话题抽屉（data-drawer-res="topic"，替换抽屉体，不叠第二层）。 */-->
+    <section class="card card-full pin-card topic-pins" data-section="topic-pins"
+             th:if="${topicPins != null and !t.disabled()}"
+             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')">
+        <h3 th:text="#{admin.topics.pins.title}">话题页顶置</h3>
+        <dl class="topic-pins-dl">
+            <div>
+                <dt th:text="#{admin.pins.phase.active}">生效中</dt>
+                <dd th:with="a=${topicPins.active}">
+                    <th:block th:if="${a != null}">
+                        <span class="muted" th:text="${a.objectType == 'PROMO'} ? #{admin.pins.type.promo} : #{admin.pins.type.content}">推广卡片</span>
+                        <span class="topic-pins-sum" th:text="${a.summary} ?: '—'">标题摘要</span>
+                    </th:block>
+                    <span class="muted" th:if="${a == null}">—</span>
+                </dd>
+            </div>
+            <div>
+                <dt th:text="#{admin.pins.phase.pending}">排期中</dt>
+                <dd>
+                    <span class="muted" th:if="${#lists.isEmpty(topicPins.pending)}">—</span>
+                    <div class="topic-pins-item" th:each="p : ${topicPins.pending}">
+                        <span class="muted" th:text="${p.objectType == 'PROMO'} ? #{admin.pins.type.promo} : #{admin.pins.type.content}">推广卡片</span>
+                        <span class="topic-pins-sum" th:text="${p.summary} ?: '—'">标题摘要</span>
+                        <span class="muted nowrap">
+                            <span th:text="${@adminTime.fmt(p.startsAt)}">2026-11-23 00:00</span>
+                            –
+                            <span th:text="${@adminTime.fmt(p.endsAt)}">2026-11-30 23:59</span>
+                            WIB
+                        </span>
+                    </div>
+                </dd>
+            </div>
+        </dl>
+        <div class="topic-pins-acts">
+            <button type="button" class="btn btn-neutral btn-sm" data-drawer-res="topic"
+                    th:attr="data-drawer-open=@{/admin/content-pins/new/drawer(slot='TOPIC_PAGE',topicId=${t.id},from='topic')}"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_manage')"
+                    th:text="#{admin.pins.new}">＋ 新建顶置</button>
+            <a th:href="@{/admin/content-pins/topics/{id}(id=${t.id})}" data-no-drawer
+               th:text="#{admin.topics.pins.viewAll}">查看全部排期 →</a>
+        </div>
+    </section>
+
+    <!--/* ④ 吸底操作条：隐藏直接生效；禁用 / 恢复禁用走原生 confirm；恢复隐藏不确认（PRD §3.4 二次确认规则） */-->
+    <section class="pl-actions sticky-footer topic-actions" th:if="${canManage}" data-topic-actions>
+        <div id="topic-action-err" class="lst-inline-error" aria-live="polite"></div>
+        <form class="inline" th:if="${t.active()}" th:attr="hx-post=@{/admin/topics/{id}/hide(id=${t.id})}"
+              hx-target="#topic-action-err" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-sm btn-neutral" th:text="#{admin.topics.hide}">隐藏</button>
+        </form>
+        <form class="inline" th:if="${!t.active()}" th:attr="hx-post=@{/admin/topics/{id}/restore(id=${t.id})}"
+              th:data-confirm="${t.disabled()} ? #{admin.topics.restoreConfirm(${t.nameDisplay}, ${livePosts})} : null"
+              hx-target="#topic-action-err" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-sm btn-primary" th:text="#{admin.content.restore}">恢复为正常</button>
+        </form>
+        <form class="inline" th:if="${!t.disabled()}" th:attr="hx-post=@{/admin/topics/{id}/disable(id=${t.id})}"
+              th:data-confirm="#{admin.topics.disableConfirm(${t.nameDisplay})}"
+              hx-target="#topic-action-err" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-sm btn-danger" th:text="#{admin.common.disable}">禁用</button>
+        </form>
+    </section>
+</div>
+
+<!--/* F2 新建官方话题。官方话题不做封面（PRD 不做项）。 */-->
+<div th:fragment="createForm" class="topic-create" id="topic-create">
+    <form id="topicCreateForm" data-topic-create th:attr="hx-post=@{/admin/topics}"
+          hx-target="#topic-drawer-err" hx-swap="innerHTML">
+        <h3 th:text="#{admin.topics.drawer.new}">新建话题</h3>
+        <label class="field req" for="topicName"><span th:text="#{admin.tags.name}">名称</span></label>
+        <span class="price-inp topic-name-inp">
+            <span class="price-inp-prefix">#</span>
+            <!--/* 输入不含 #；300ms 防抖查重（F3 黄条）。服务端保存时仍按 TopicNameRules 与现状重判。 */-->
+            <input id="topicName" type="text" name="name" class="price-inp-field" required maxlength="30"
+                   autocomplete="off" data-topic-name
+                   th:attr="hx-get=@{/admin/topics/name-check}"
+                   hx-trigger="input changed delay:300ms" hx-target="#topic-name-check" hx-swap="innerHTML"/>
+        </span>
+        <div id="topic-name-check" class="topic-name-check" aria-live="polite"></div>
+        <p class="hint" th:text="#{admin.topics.nameHint}">2–30 个字符……</p>
+        <!--/* 运营在 confirm 里确认升级的名字（admin-topics.js 在黄条出现时写入；改名即清空） */-->
+        <input type="hidden" name="upgradeConfirmed" value="" data-topic-upgrade-confirmed/>
+
+        <label class="field" for="topicNewDescId"><span th:text="#{admin.topics.descId}">说明 ID</span></label>
+        <textarea id="topicNewDescId" name="descId" class="inp field-full topic-desc" maxlength="500"
+                  th:placeholder="#{admin.topics.descPlaceholder}"></textarea>
+        <label class="field" for="topicNewDescEn"><span th:text="#{admin.topics.descEn}">说明 EN</span></label>
+        <textarea id="topicNewDescEn" name="descEn" class="inp field-full topic-desc" maxlength="500"
+                  th:placeholder="#{admin.topics.descPlaceholder}"></textarea>
+        <p class="hint" th:text="#{admin.topics.descHint}">说明只在官方话题页显示……</p>
+
+        <div id="topic-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+        <button type="submit" class="btn btn-primary topic-save" th:text="#{admin.common.save}">保存</button>
+    </form>
+</div>
+
+<!--/* 查重结果（GET /admin/topics/name-check）。check == null（空输入）→ 空片段 */-->
+<th:block th:fragment="nameCheck">
+    <th:block th:if="${check != null}">
+        <div th:if="${check.upgrade()}" class="banner warn topic-upgrade-warn" data-upgrade="true"
+             th:data-upgrade-name="${checkedName}"
+             th:data-upgrade-confirm="#{admin.topics.upgradeConfirm(${check.nameDisplay}, ${check.livePostCount})}"
+             th:text="#{admin.topics.upgradeWarn(${check.nameDisplay}, ${check.livePostCount})}">已有用户话题……</div>
+        <p th:if="${check.kind.name() == 'INVALID'}" class="err" th:text="#{admin.err.topics.nameInvalid}">名称不符合规则……</p>
+        <p th:if="${check.kind.name() == 'OFFICIAL_EXISTS'}" class="err"
+           th:text="#{admin.err.topics.officialExists(${check.nameDisplay})}">已有同名官方话题……</p>
+        <p th:if="${check.kind.name() == 'DISABLED_CONFLICT'}" class="err"
+           th:text="#{admin.err.topics.upgradeDisabled(${check.nameDisplay})}">同名用户话题已被禁用……</p>
+    </th:block>
+</th:block>
+
+<th:block th:fragment="toastOnly">
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+
+<th:block th:fragment="afterAction">
+    <div id="topic-drawer-body-oob" hx-swap-oob="innerHTML:#topic-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-topic :: drawer}"></div>
+    </div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

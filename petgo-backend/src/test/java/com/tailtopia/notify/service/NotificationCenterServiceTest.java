@@ -749,4 +749,94 @@ class NotificationCenterServiceTest {
 
         assertThat(items.get(0).title()).isEqualTo("u2 mengirim hadiah untuk Mochi");
     }
+
+    // ===== V1.4.2 social-topic Story 1.2 · AC5.5 / AC6.7：被追更 / 追更宠物新 Diary 条目 =====
+
+    private Notification petFollowedRow(long followerId, String petVariant) {
+        Notification n = Notification.interaction(ME, NotificationType.PET_FOLLOWED, "有人追更了你的宠物", "点击查看",
+                NotificationType.PET_FOLLOWED.name(), "tok" + seq, String.valueOf(followerId), null, null, petVariant);
+        ReflectionTestUtils.setField(n, "id", seq++);
+        ReflectionTestUtils.setField(n, "createdAt", Instant.parse("2026-10-11T00:00:00Z"));
+        return n;
+    }
+
+    private Notification petDiaryRow(long postId, String petVariant) {
+        Notification n = Notification.interaction(ME, NotificationType.PET_DIARY_POSTED, "Lama punya cerita baru", "",
+                NotificationType.PET_DIARY_POSTED.name(), "tok" + seq, String.valueOf(postId), null, null, petVariant);
+        ReflectionTestUtils.setField(n, "id", seq++);
+        ReflectionTestUtils.setField(n, "createdAt", Instant.parse("2026-10-11T00:00:00Z"));
+        return n;
+    }
+
+    @Test
+    void giftPetFollowedAndPetDiaryRowsShareOnePetNamesCall() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of(70L, "Mochi", 80L, "Kopi", 90L, "Lulu"));
+        Notification gift = giftRow(70L);
+        Notification followed = petFollowedRow(2L, "80");
+        Notification diary = petDiaryRow(555L, "90");
+
+        List<NotificationItem> items = page(List.of(gift, followed, diary),
+                Map.of(gift.getId(), List.of(3L), followed.getId(), List.of(2L)), Set.of(), Set.of());
+
+        assertThat(items).hasSize(3);
+        // 被追更：「B mulai mengikuti Kopi」、带 petName、无回关字段
+        NotificationItem f = items.get(1);
+        assertThat(f.type()).isEqualTo("PET_FOLLOWED");
+        assertThat(f.title()).isEqualTo("u2 mulai mengikuti Kopi");
+        assertThat(f.actorName()).isEqualTo("u2");
+        assertThat(f.actorUserId()).isEqualTo(2L);
+        assertThat(f.petName()).isEqualTo("Kopi");
+        assertThat(f.actorIFollow()).isNull();
+        assertThat(f.actorFollowsMe()).isNull();
+        assertThat(f.targetRef()).isEqualTo("2");
+        // 追更宠物新 Diary：现名重渲染、actorName = petName、无触发人
+        NotificationItem d = items.get(2);
+        assertThat(d.type()).isEqualTo("PET_DIARY_POSTED");
+        assertThat(d.title()).isEqualTo("Lulu punya cerita baru");
+        assertThat(d.actorName()).isEqualTo("Lulu");
+        assertThat(d.petName()).isEqualTo("Lulu");
+        assertThat(d.actorUserId()).isNull();
+        assertThat(d.actorToken()).isNull();
+        assertThat(d.targetRef()).isEqualTo("555");
+        // 收礼不带 petName 字段
+        assertThat(items.get(0).petName()).isNull();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
+        verify(petNamesPort, times(1)).namesOf(ids.capture());
+        assertThat(ids.getValue()).containsExactlyInAnyOrder(70L, 80L, 90L);
+        verify(followReader, never()).followStates(anyLong(), anyCollection());
+    }
+
+    @Test
+    void petDiaryRowWithMissingPetReturnsStoredValuesAndPageWithOnlyDiaryRowsStillFetchesNames() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of());
+        Notification gone = petDiaryRow(555L, "90");
+        Notification bad = petDiaryRow(556L, "x");
+
+        List<NotificationItem> items = page(List.of(gone, bad), Map.of(), Set.of(), Set.of());
+
+        assertThat(items).extracting(NotificationItem::title)
+                .containsExactly("Lama punya cerita baru", "Lama punya cerita baru");
+        assertThat(items).extracting(NotificationItem::petName).containsOnlyNulls();
+        assertThat(items).extracting(NotificationItem::actorName).containsOnlyNulls();
+        verify(petNamesPort, times(1)).namesOf(anyCollection());
+        verify(actorRepo, never()).findByNotificationIds(anyCollection());
+    }
+
+    @Test
+    void petFollowedRowWithDeletedPetUsesNoPetCopyAndHiddenFollowerHidesRow() {
+        petNamesPort = org.mockito.Mockito.mock(NotificationPetNames.class);
+        when(petNamesPort.namesOf(anyCollection())).thenReturn(Map.of());
+        Notification gonePet = petFollowedRow(2L, "80");
+        Notification hidden = petFollowedRow(3L, "80");
+
+        List<NotificationItem> items = page(List.of(gonePet, hidden),
+                Map.of(gonePet.getId(), List.of(2L), hidden.getId(), List.of(3L)), Set.of(3L), Set.of());
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).title()).isEqualTo("u2 mulai mengikuti hewanmu");
+        assertThat(items.get(0).petName()).isNull();
+    }
 }

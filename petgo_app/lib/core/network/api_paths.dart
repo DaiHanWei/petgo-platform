@@ -359,6 +359,25 @@ class ApiPaths {
   /// 顶置坑位（V1.1.6 Story 4.2）。**独立取数**，与首页分页互不影响。
   static const String contentPinnedSlot = '$base/content-posts/pinned';
 
+  // ===== 话题（V1.4.2 social-topic · Story 4.2 接口 / 4.3 接入 · D-13 / D-20）=====
+  // 🔴 路径段一律用**标准名**并 `Uri.encodeComponent`（话题名可含任何语言的字母）；对外不出自增 id。
+  // 话题坑位顶置不另开路径：`GET contentPinnedSlot?topic=<标准名>`（见 `TopicRepository.getPinnedSlot`）。
+
+  /// 话题详情：`{name, displayName, official, description?}`；不存在 / 禁用 → 404。游客可读。
+  static String topicDetail(String name) => '$base/topics/${Uri.encodeComponent(name)}';
+
+  /// 话题帖子：`?sort=latest&cursor=` / `?sort=popular&page=`（page 1..50），信封同 Feed（`FeedPage`）。
+  static String topicPosts(String name) => '$base/topics/${Uri.encodeComponent(name)}/posts';
+
+  /// 空态推荐话题（≤10，**裸 JSON 数组**）。
+  static String topicRelated(String name) => '$base/topics/${Uri.encodeComponent(name)}/related';
+
+  /// Discover 首页话题行（≤5，**裸 JSON 数组**，项带 `featured`）。
+  static const String topicHomeRow = '$base/topics/home-row';
+
+  /// 发布页 # 联想（Story 4.4 用；仅 role=USER；**裸 JSON 数组**）。路径不是 `/topics/suggest`（4.2 待确认第 1 条）。
+  static const String topicSuggestions = '$base/topic-suggestions';
+
   /// 内容详情（Story 3.3）。
   static String contentPostDetail(int id) => '$base/content-posts/$id';
 
@@ -410,6 +429,14 @@ class ApiPaths {
 
   /// 关注头像排：`GET /me/following-strip`，最多 20 人。
   static const String meFollowingStrip = '$base/me/following-strip';
+
+  /// 追更宠物（V1.4.2 social-topic · Story 1.1 / 1.4 · D-8）：`POST` 追更、`DELETE` 取消，两者幂等，需登录。
+  /// `petId` 与站内访客路由 `/pets/{petId}` 同一标识。返回 `{iFollow, followerCount}`。
+  static String mePetFollow(int petId) => '$base/me/pet-follows/$petId';
+
+  /// 某用户追更的宠物列表（V1.4.2 social-topic · Story 1.1 / 1.5 · D-8）：`?cursor=` 不透明游标，游客可读。
+  /// 首页信封带 `petFollowingCount`（「Hewan N」胶囊校准）。
+  static String userPetFollows(String userToken) => '$base/users/$userToken/pet-follows';
 
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。

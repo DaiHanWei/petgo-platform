@@ -25,6 +25,9 @@ class FollowingFeedController extends AsyncNotifier<FeedState> {
       hasMore: page.hasMore,
       pagesLoaded: 1,
       rankMode: page.rankMode,
+      // V1.4.2 social-topic Story 1.5 · AC5.2：首页两个计数（缺键 null → 空态回落现有样式）。
+      followingUserCount: page.followingUserCount,
+      followingPetCount: page.followingPetCount,
     );
   }
 

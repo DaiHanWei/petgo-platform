@@ -55,5 +55,10 @@ public record VisitorTimelineItem(
          * <p>⚠️ {@code false} 时前端<b>不得跳转</b>，只给一句解释性提示 ——
          * 私密内容因此始终不越出分享链接的边界。
          */
-        boolean openable) {
+        boolean openable,
+        /**
+         * 正文里可点的话题标准名（V1.4.2 social-topic Story 4.1 · D-13，仅 ACTIVE / HIDDEN）。
+         * 访客有权看到：它只是正文 {@code #话题} 的「可点」结论，正文本身已下发。空表 / 无话题为 null（不下发）。
+         */
+        List<String> topicNames) {
 }

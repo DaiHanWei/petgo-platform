@@ -54,6 +54,8 @@ void main() {
       // （code-review 2026-09-15）。
       const sites = [
         'lib/features/mention/presentation/mention_text.dart',
+        // V1.4.2 Story 4.4（D-19）：mention_tapped 的上报点随切片逻辑搬进 RichBodyText（MentionText 成薄包装）。
+        'lib/shared/rich_text/rich_body_text.dart',
         'lib/features/content/presentation/comment_composer.dart',
         'lib/features/content/presentation/publish_compose_page.dart',
       ];

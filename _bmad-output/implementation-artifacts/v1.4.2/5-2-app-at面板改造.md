@@ -1,6 +1,6 @@
 # Story 5.2: @ 面板改造（App，E1–E6）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`
 > 口径优先级：`_bmad-output/planning-artifacts/v1.4.2/决策日志-social-topic.md` > PRD `追更话题/1-4-2追更宠物·里程碑·话题prd.md` §3.7 FR-157、§4、§7 > `architecture-v1.4.2-social-topic-delta.md`（§2.1、D-15、D-19、P-9、P-10、P-12，§1.2 第 8 条）> UI 定稿 `追更话题/ui-1-4-2-social-topic-integrated-v1.html` **E1–E6**（及 C2 / C4 的面板改造点，与 @ 同一组件）。
@@ -57,28 +57,28 @@ so that 不用在过滤框和正文之间来回切。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**（全部 AC）
+- [x] **T0 开工核对**（全部 AC）
   - [ ] 确认 5.1 已合入：本地或 stag 后端 `GET /me/mention-candidates?q=a` 返回带 `relation` 的项
-  - [ ] 确认 4.4 已合入：找到发布页 `#` 面板的承载位（类名 / 参数），记下接口；核对 Dev Notes「现状」行号未漂移
-- [ ] **T1 数据层**（AC1 / AC4）
-  - [ ] `lib/features/mention/domain/mention_relation.dart`（新）：`enum MentionRelation { following('following'), follower('follower'), interacted('interacted') }`，`wire` 字段 + `static MentionRelation parse(String?)`（未知 / null → `interacted`）
-  - [ ] `MentionCandidate` 加 `relation` 字段，`fromJson` 解析
-  - [ ] `MentionCandidateRepository` 加 `Future<List<MentionCandidate>> search(String keyword, {CancelToken? cancelToken})`：`dio.get(ApiPaths.meMentionCandidates, queryParameters: {'q': keyword}, cancelToken: …)`；改写接口注释（删「不接受任何关键词参数」，写「只在关注 / 粉丝 / 互动三类范围内查，不是全局搜索」）
-  - [ ] 三个测试假仓储（`test/mention/mention_candidates_lifecycle_test.dart`:9、`mention_entry_test.dart`:29、`mention_picker_test.dart`:14）补 `search` 实现
-- [ ] **T2 `MentionPicker` 改造**（AC1 / AC3，UI E1–E6）
-  - [ ] 删 `_filter` / `_filterField` / `_matches` 第二条件 / `mentionFilterHint` 的使用；类注释改为「正文 @ 后的字是唯一筛选条件；接口只在三类范围内查」
-  - [ ] 关键词为空 → `ref.watch(mentionCandidatesProvider)`（快捷列表，保持 autoDispose、不重试）；关键词非空 → 组件内 300ms 防抖 + 请求序号 / `CancelToken` 丢弃旧结果（见 Dev Notes「查询状态机」）
-  - [ ] 六态渲染（E1–E6），新增 widget key：`mentionPickerLoading`、`mentionPickerError`、`mentionPickerRetry`；保留 `mentionPicker`、`mentionCandidate_<userId>`、`mentionPickerEmpty`
-  - [ ] 新增构造参数：`docked`（发布页通栏样式：无圆角无四周描边、上沿 1px border + 向上阴影）与 `rowHorizontalPadding`（发布页 20 / 评论 16）；默认值保持评论框现状外观
-- [ ] **T3 发布页接入**（AC2.1 / AC2.3 / AC4，D-19）
-  - [ ] 删 `publish_compose_page.dart`:828-834 内联 `MentionPicker`；把 @ 面板放进 4.4 的贴键盘承载位（与 # 面板互斥）
-  - [ ] `_onMentionSelected`（:261-293）埋点改为 `Analytics.capture('mention_inserted', {'context': MentionContext.post.wire, 'relation': candidate.relation.wire, 'from_quick_list': query.keyword.isEmpty});`（一行写，见 AC4.2）
-- [ ] **T4 评论框接入**（AC2.2 / AC4）
-  - [ ] `comment_composer.dart`:349-353 传 `rowHorizontalPadding: 16`（不传 `docked`）
-  - [ ] `_onMentionSelected`（:127-166）埋点同 T3（`MentionContext.comment.wire`）
-- [ ] **T5 文案**（AC3 E6，P-10，NFR5）
-  - [ ] `app_id.arb` / `app_en.arb` 改 `mentionEmptyHint` 的值为 PRD §7 定稿句（不新增 key）；`flutter gen-l10n`
-- [ ] **T6 测试**（AC 全部，NFR8）：见「测试」；`flutter analyze` 零警告、`flutter test` 全绿
+  - [x] 确认 4.4 已合入：找到发布页 `#` 面板的承载位（类名 / 参数），记下接口；核对 Dev Notes「现状」行号未漂移
+- [x] **T1 数据层**（AC1 / AC4）
+  - [x] `lib/features/mention/domain/mention_relation.dart`（新）：`enum MentionRelation { following('following'), follower('follower'), interacted('interacted') }`，`wire` 字段 + `static MentionRelation parse(String?)`（未知 / null → `interacted`）
+  - [x] `MentionCandidate` 加 `relation` 字段，`fromJson` 解析
+  - [x] `MentionCandidateRepository` 加 `Future<List<MentionCandidate>> search(String keyword, {CancelToken? cancelToken})`：`dio.get(ApiPaths.meMentionCandidates, queryParameters: {'q': keyword}, cancelToken: …)`；改写接口注释（删「不接受任何关键词参数」，写「只在关注 / 粉丝 / 互动三类范围内查，不是全局搜索」）
+  - [x] 三个测试假仓储（`test/mention/mention_candidates_lifecycle_test.dart`:9、`mention_entry_test.dart`:29、`mention_picker_test.dart`:14）补 `search` 实现
+- [x] **T2 `MentionPicker` 改造**（AC1 / AC3，UI E1–E6）
+  - [x] 删 `_filter` / `_filterField` / `_matches` 第二条件 / `mentionFilterHint` 的使用；类注释改为「正文 @ 后的字是唯一筛选条件；接口只在三类范围内查」
+  - [x] 关键词为空 → `ref.watch(mentionCandidatesProvider)`（快捷列表，保持 autoDispose、不重试）；关键词非空 → 组件内 300ms 防抖 + 请求序号 / `CancelToken` 丢弃旧结果（见 Dev Notes「查询状态机」）
+  - [x] 六态渲染（E1–E6），新增 widget key：`mentionPickerLoading`、`mentionPickerError`、`mentionPickerRetry`；保留 `mentionPicker`、`mentionCandidate_<userId>`、`mentionPickerEmpty`
+  - [x] 新增构造参数：`docked`（发布页通栏样式：无圆角无四周描边、上沿 1px border + 向上阴影）与 `rowHorizontalPadding`（发布页 20 / 评论 16）；默认值保持评论框现状外观
+- [x] **T3 发布页接入**（AC2.1 / AC2.3 / AC4，D-19）
+  - [x] 删 `publish_compose_page.dart`:828-834 内联 `MentionPicker`；把 @ 面板放进 4.4 的贴键盘承载位（与 # 面板互斥）
+  - [x] `_onMentionSelected`（:261-293）埋点改为 `Analytics.capture('mention_inserted', {'context': MentionContext.post.wire, 'relation': candidate.relation.wire, 'from_quick_list': query.keyword.isEmpty});`（一行写，见 AC4.2）
+- [x] **T4 评论框接入**（AC2.2 / AC4）
+  - [x] `comment_composer.dart`:349-353 传 `rowHorizontalPadding: 16`（不传 `docked`）
+  - [x] `_onMentionSelected`（:127-166）埋点同 T3（`MentionContext.comment.wire`）
+- [x] **T5 文案**（AC3 E6，P-10，NFR5）
+  - [x] `app_id.arb` / `app_en.arb` 改 `mentionEmptyHint` 的值为 PRD §7 定稿句（不新增 key）；`flutter gen-l10n`
+- [x] **T6 测试**（AC 全部，NFR8）：见「测试」；`flutter analyze` 零警告、`flutter test` 全绿
 - [ ] **T7 L2**（本地）：Android 模拟器连真后端走 E1–E6 + 评论框；还原度逐屏打分 ≥ 95%
 
 ## Dev Notes
@@ -194,13 +194,55 @@ didUpdateWidget     → 只在 keyword 真变化时重置；dispose 时 cancel T
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude
 
 ### Debug Log References
+
+- `flutter gen-l10n`：OK
+- `flutter analyze`：No issues found
+- `flutter test test/mention test/content/publish_mention_panel_dock_test.dart`：全绿
+- `flutter test`（全量）：All tests passed（+4485，~3 skipped 为存量）
+- 调试记录：widget test 中 `pump(duration)` 先推进时钟再跑帧 → 关键词变更后需先 `pump()` 让防抖计时器建立再 `pump(300ms)`；同一 testWidgets 内二次 `pumpWidget` 换掉 ProviderContainer 会留 Riverpod dispose 计时器 → 422 / 500 拆成两条用例。
 
 ### Completion Notes List
 
 - Ultimate context engine analysis completed - comprehensive developer guide created
-- 🔴 L2 待本地验收（云端只跑 L0）；还原度评分待本地补记
+- **名字核对（T0）**：4.4 实际交付的贴键盘外壳是 `lib/shared/widgets/keyboard_suggest_panel.dart` 的 `KeyboardSuggestPanel`（描边 / 阴影 / 最高 220 在外壳上），承载位是发布页 `Stack` 里 `Positioned(left: 0, right: 0, bottom: 0)` + `KeyedSubtree(_topicPanelKey)`，高度量测 `_afterTopicPanelFrame` / `_topicPanelHeight`。本 story 照此接入：新增 `_dockPanelVisible`（@ 或 # 任一可见），承载位内容按 `_mentionQuery != null` 在 `MentionPicker(docked: true, rowHorizontalPadding: 20)` 与 `TopicSuggestPanel` 间二选一；@ 与 # 互斥沿用 4.4 `_syncTopicQuery` 的「start 更靠近光标者胜」。`MentionPicker.docked` 直接用 `KeyboardSuggestPanel` 作外壳（不重复画阴影）。Dev Notes 行号（publish_compose_page :828-834 等）因 4.4 合入已漂移，以实际代码为准，名字无出入、未改 story 其它文字。
+- **5.1 契约核对**：后端 `MentionCandidatesResponse(items)`、每项 `relation` 小写，与 App 解析一致（T0 中「stag 实测带 relation」属 L2，未勾）。
+- @ 面板内部状态（转圈 → 列表）变化不重建发布页，故用 `SizeChangedLayoutNotifier` + `NotificationListener` 通知发布页重量面板高度，保证 `scrollPadding.bottom = 面板实际高度 + 20`。
+- 快捷列表在面板存活期间一直 `watch`（autoDispose、不重试不变），删回 `@` 后为空直接回 E1、不另发请求；带 `q` 的查询为组件内状态（Timer 300ms + 请求序号 + `CancelToken`），未新增全局 provider，`resetUserScopedCaches` / `user_scoped_cache_registry_test` 无需改。
+- **复审修复（CONFIRMED）**：E2 转圈外层 `Center` 未设 `heightFactor`，被 `Flexible` 包住后撑满 220（docked / 非 docked / 评论框都有）→ 改 `Center(heightFactor: 1, …)`；补用例「请求挂起时 `mentionPicker` 高约 42、远小于 220」docked 与非 docked 各一条（`test/mention/mention_picker_test.dart`）。
+- **顺带修复 4.4 同类问题**：`topic_suggest_panel.dart` 加载态同样写法，实测面板高 220（新用例修复前红）→ 同样改 `heightFactor: 1`；补 `test/topic/topic_suggest_panel_loading_test.dart`（加载中面板约 43 高）。
+- 「评论框面板在输入条上方、无过滤框、行左右 16」用例并入既有 `test/mention/mention_entry_test.dart`（未另建 `test/content/comment_composer_mention_test.dart`）。
+- E5 重试按钮：`minimumSize: Size(0, 33)` + `tapTargetSize: padded`（热区 48，测试断言 ≥ 44）。
+- 埋点：两处 `mention_inserted` 均一行字面量 `{'context': …, 'relation': candidate.relation.wire, 'from_quick_list': query.keyword.isEmpty}`；`relation` / `from_quick_list` 不命中 PII 黑名单。
+- 文案：仅改 `mentionEmptyHint` 的 EN / ID 值为 PRD §7 定稿句；`mentionFilterHint` 键已不再被代码引用，**ARB 键保留待清理**（其 `@description` 仍描述旧过滤框，一并待清理）。
+- 🔴 **L1/L2 待本地验收**（本 story 无 L1）：
+  - L2：Android 模拟器连真后端（stag / `api.tailtopia.id`）逐屏对照 UI 稿 E1–E6 与评论框面板，还原度 ≥ 95% 打分待本地补记；
+  - L2：300ms 防抖手感、长正文时光标行不被面板遮挡、@ 插入后高亮；
+  - L2：T0 第一项（stag `GET /me/mention-candidates?q=a` 返回带 `relation`）。
+- 待确认：
+  1. 快捷列表失败也落 E5（story 待确认第 2 条的推荐做法，已照做）。
+  2. `relation` 缺失兜底 `interacted`（story 待确认第 3 条，已照做）。
 
 ### File List
+
+- petgo_app/lib/features/mention/domain/mention_relation.dart（新）
+- petgo_app/lib/features/mention/data/mention_candidate_repository.dart
+- petgo_app/lib/features/mention/presentation/mention_picker.dart
+- petgo_app/lib/features/content/presentation/publish_compose_page.dart
+- petgo_app/lib/features/content/presentation/comment_composer.dart
+- petgo_app/lib/l10n/app_en.arb
+- petgo_app/lib/l10n/app_id.arb
+- petgo_app/test/mention/mention_picker_test.dart
+- petgo_app/test/mention/mention_entry_test.dart
+- petgo_app/test/mention/mention_candidates_lifecycle_test.dart
+- petgo_app/test/mention/mention_relation_test.dart（新）
+- petgo_app/test/content/publish_mention_panel_dock_test.dart（新）
+- petgo_app/lib/features/topic/presentation/widgets/topic_suggest_panel.dart（复审顺带修复 4.4 加载态高度）
+- petgo_app/test/topic/topic_suggest_panel_loading_test.dart（新）
+
+### Change Log
+
+- 2026-11-05：实现 Story 5.2（@ 面板去过滤框、打字即查 300ms 防抖、六态、发布页贴键盘承载位、评论框行距 16、埋点加 relation / from_quick_list、空态提示改文案）；Status → review。
+- 2026-11-05：复审修复——E2 加载态 `Center(heightFactor: 1)`（@ 面板与 4.4 # 面板），补高度用例。

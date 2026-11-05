@@ -100,6 +100,12 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
      * 合法表单（指定 ID 模式、立即发送）；{@code overrides} 成对给出「字段, 值」。
      * ⚠️ 不能在外面再 {@code .param(同名)}：MockMvc 是追加不是覆盖。
      */
+    /**
+     * 只读调用（/review、/review/sample）用的印尼语标题：/review 与新建同一套校验，titleId 留空会先报
+     * {@code text.blank}，后面的变量 / 人数断言就走不到了。只读、不落库。
+     */
+    private static final String REVIEW_TITLE = "opsn-review";
+
     private MockHttpServletRequestBuilder form(MockHttpServletRequestBuilder b, String title, String... overrides) {
         Map<String, String> f = new LinkedHashMap<>();
         f.put("titleId", title);
@@ -603,5 +609,208 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
         if (page.contains("opsn-table")) {
             assertThat(page).contains("内容摘要").contains("人群").contains("发送时间（WIB）").contains("触达人数");
         }
+    }
+
+    // ===== V1.4.2 Story 7.1 · AB-37 变量与净人数（L1，待本地验收）=====
+
+    private void addPet(long ownerId, String name) {
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at) "
+                + "VALUES (?, ?, 'CAT', ?, now(), now())", ownerId, name, "opsn-var-" + SEQ.incrementAndGet());
+    }
+
+    @Test
+    @DisplayName("AB-37：/preview 净人数 + excludedNoPet；/review 净 0 → 200 + 错误槽 no-pet；新建净 0 → 422；"
+            + "手打 → var.typed；115 字 + 变量 → too-long；/review/sample 换人；estimated_count 存净人数；列表摘要显示变量名")
+    void variablesAndNetCount() throws Exception {
+        Authentication ed = sender();
+        User withPet = newUser();
+        jdbc.update("UPDATE users SET nickname = 'hexit' WHERE id = ?", withPet.getId());
+        addPet(withPet.getId(), "tuotuo");
+        User noPet = newUser();
+        String ids = withPet.getId() + "\n" + noPet.getId();
+        String pet = "Hi {{petName}}";
+
+        // ② 预估：用宠物变量 → 净 1
+        assertThat(estimate(ed, "userIds", ids, "titleEn", pet)).isEqualTo(1);
+        assertThat(estimate(ed, "userIds", ids, "titleEn", "Hi {{nickname}}")).isEqualTo(2);
+
+        // ④ 确认：只有无宠用户 + 宠物变量 → 200，主体是 no-pet 错误
+        String blockedTitle = "opsn-nopet-" + SEQ.incrementAndGet();
+        String blocked = mvc.perform(htmx(form(post(BASE + "/review"), blockedTitle, "userIds",
+                        String.valueOf(noPet.getId()), "titleEn", pet), "opsn-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(blocked).contains("data-code=\"admin.err.ops-notify.audience-empty-no-pet\"")
+                .contains("opsn-pv-pane").doesNotContain("excludeUserId");
+        MvcResult create0 = mvc.perform(htmx(form(post(BASE), blockedTitle, "userIds",
+                        String.valueOf(noPet.getId()), "titleEn", pet, "previewCount", "0"), "opsn-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isUnprocessableEntity()).andReturn();
+        assertThat(create0.getResponse().getContentAsString())
+                .contains("data-code=\"admin.err.ops-notify.audience-empty-no-pet\"");
+        assertThat(rowsWithTitle(blockedTitle)).isZero();
+
+        // ① 手打 / 超长
+        for (String[] c : List.of(new String[] {"titleEn", "Hi {用户昵称}", "admin.err.ops-notify.var.typed"},
+                new String[] {"titleEn", "x".repeat(115) + "{{nickname}}", "admin.err.ops-notify.text.too-long"})) {
+            String body = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, c[0], c[1]), "opsn-err")
+                            .with(authentication(ed)).with(csrf()))
+                    .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
+            assertThat(body).contains("data-code=\"" + c[2] + "\"");
+        }
+
+        // 预览：抽到有宠的人（宠物变量），换一个仍只能是他
+        String review = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, "titleEn", pet), "opsn-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(review).contains("#" + withPet.getId()).contains("Hi tuotuo");
+        String again = mvc.perform(htmx(form(post(BASE + "/review/sample"), REVIEW_TITLE, "userIds", ids, "titleEn", pet,
+                        "excludeUserId", String.valueOf(withPet.getId())), "opsn-pv-pane")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(again).contains("#" + withPet.getId());
+        String none = mvc.perform(htmx(form(post(BASE + "/review/sample"), REVIEW_TITLE, "userIds",
+                        String.valueOf(noPet.getId()), "titleEn", pet), "opsn-pv-pane")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(none).contains("扣除后没有可发送的用户").contains("Hi {宠物昵称}");
+
+        // 新建（定时，避免真发）：estimated_count = 净 1；列表摘要显示 {用户昵称}，不含真实昵称
+        String title = "opsn-var-{{nickname}}-" + SEQ.incrementAndGet();
+        mvc.perform(htmx(form(post(BASE), title, "userIds", ids, "titleEn", pet, "sendMode", "SCHEDULED",
+                        "scheduledAt", tomorrowWib()), "opsn-err").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk());
+        assertThat(((Number) rowByTitle(title).get("estimated_count")).intValue()).isEqualTo(1);
+        String list = mvc.perform(get(BASE).param("lang", "zh_CN").with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(list).contains(title.replace("{{nickname}}", "{用户昵称}")).doesNotContain("hexit");
+    }
+
+    // ===== V1.4.2 Story 7.2 · AB-37 编辑器与确认页（L1，待本地验收）=====
+
+    @Test
+    @DisplayName("7.2 I1：四个 contenteditable 编辑区 + 同名隐藏字段 + 8 个变量按钮 + data-var-names；无 maxlength；规则说明句")
+    void v142EditorPageRenders() throws Exception {
+        String page = mvc.perform(get(BASE + "/new").param("lang", "zh_CN").with(authentication(sender())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(Pattern.compile("contenteditable=\"true\"").matcher(page).results().count()).isEqualTo(4);
+        assertThat(Pattern.compile("data-ins-var=\"").matcher(page).results().count()).isEqualTo(8);
+        for (String f : List.of("titleEn", "titleId", "bodyEn", "bodyId")) {
+            assertThat(page).containsPattern("<input type=\"hidden\" name=\"" + f + "\"");
+        }
+        assertThat(page).doesNotContain("maxlength=\"120\"").doesNotContain("maxlength=\"255\"")
+                .contains("＋ 用户昵称").contains("＋ 宠物昵称").contains("示例效果：")
+                .contains("变量只能用输入框下方的按钮插入").contains("data-msg-var-typed=\"请用下方按钮插入变量\"")
+                .contains("用了「宠物昵称」时另排除没有宠物的用户");
+        for (String n : List.of("用户昵称", "宠物昵称", "User nickname", "Pet name", "Nama panggilan pengguna",
+                "Nama hewan")) {
+            assertThat(page).as("data-var-names 含 " + n).contains("&quot;" + n + "&quot;");
+        }
+    }
+
+    @Test
+    @DisplayName("7.2 I2–I6：手打三语显示名 → var.typed；/preview data-total；确认页排除行 / data-blocked；手输按净人数；"
+            + "同一变量两次都替换；列表「跳过 N（没有宠物）」")
+    void v142EditorFlows() throws Exception {
+        Authentication ed = sender();
+        User withPet = newUser();
+        jdbc.update("UPDATE users SET nickname = 'hexit2' WHERE id = ?", withPet.getId());
+        addPet(withPet.getId(), "tuotuo");
+        User noPet = newUser();
+        String ids = withPet.getId() + "\n" + noPet.getId();
+        String pet = "Hi {{petName}}";
+
+        // ① 兜底：三语显示名（半角 / 全角括号、大小写）一律 var.typed
+        for (String typed : List.of("Hi {宠物昵称}", "Hi {Pet name}", "Hi ｛nama hewan｝")) {
+            String body = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, "titleEn", typed), "opsn-err")
+                            .with(authentication(ed)).with(csrf()))
+                    .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
+            assertThat(body).as(typed).contains("data-code=\"admin.err.ops-notify.var.typed\"");
+        }
+
+        // ② data-count = 净、data-total = 扣前
+        String est = mvc.perform(htmx(form(post(BASE + "/preview"), "", "userIds", ids, "titleEn", pet), "opsn-estimate")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(dataCount(est, "data-count")).isEqualTo(1);
+        assertThat(dataCount(est, "data-total")).isEqualTo(2);
+
+        // ④ I4：用宠物变量 → 排除行 + 预览条；不用 → 无排除行；面板 data-blocked="false"
+        String withVar = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, "titleEn", pet), "opsn-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(withVar).contains("已排除 1 位没有宠物的用户").contains("opsn-pv-pane").contains("data-blocked=\"false\"")
+                .contains("<b class=\"opsn-pv-user-n\">hexit2</b>").contains("#" + withPet.getId() + " · 宠物 tuotuo");
+        String noVar = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids), "opsn-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(noVar).doesNotContain("没有宠物的用户").contains("opsn-pv-pane");
+
+        // ④ I6：只剩无宠用户 + 宠物变量 → 200 + 错误槽 + data-blocked="true" + 预览「—」
+        String blocked = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", String.valueOf(noPet.getId()),
+                        "titleEn", pet), "opsn-err").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(blocked).contains("data-code=\"admin.err.ops-notify.audience-empty-no-pet\"")
+                .contains("data-blocked=\"true\"").contains("—（扣除后没有可发送的用户）")
+                .contains("已排除 1 位没有宠物的用户").doesNotContain("换一个");
+
+        // 同一变量两次：收件人两处都替换
+        String twice = "opsn-twice-" + SEQ.incrementAndGet() + " {{nickname}} & {{nickname}}";
+        mvc.perform(htmx(form(post(BASE), twice, "userIds", String.valueOf(withPet.getId()), "titleEn", twice),
+                        "opsn-err").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk());
+        String token = (String) rowByTitle(twice).get("public_token");
+        awaitFinalStatus(token);
+        Map<String, Object> n = jdbc.queryForMap("SELECT title FROM notifications WHERE recipient_user_id = ? "
+                + "AND target_ref = ?", withPet.getId(), token);
+        assertThat((String) n.get("title")).endsWith("hexit2 & hexit2").doesNotContain("{{");
+
+        // I5：DONE + skipped_no_pet_count = 3000 → 「· 跳过 3,000（没有宠物）」；= 0 的行不出现
+        jdbc.update("UPDATE ops_notification_campaigns SET skipped_no_pet_count = 3000 WHERE public_token = ?", token);
+        String list = mvc.perform(get(BASE).param("lang", "zh_CN").param("range", "7").with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int at = list.indexOf("ops-notify-row-" + token);
+        assertThat(at).isGreaterThanOrEqualTo(0);
+        String tr = list.substring(at, list.indexOf("</tr>", at));
+        assertThat(tr).contains("· 跳过 3,000（没有宠物）").contains("{用户昵称} &amp; {用户昵称}").doesNotContain("hexit2");
+        jdbc.update("UPDATE ops_notification_campaigns SET skipped_no_pet_count = 0 WHERE public_token = ?", token);
+        String list0 = mvc.perform(get(BASE).param("lang", "zh_CN").param("range", "7").with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int at0 = list0.indexOf("ops-notify-row-" + token);
+        assertThat(list0.substring(at0, list0.indexOf("</tr>", at0))).doesNotContain("没有宠物");
+    }
+
+    @Test
+    @DisplayName("7.2 AC7：全部用户 + 宠物变量，手输扣前人数 → 422 confirm-count-mismatch；输净人数 → 建成（定时 + 立刻取消）")
+    void v142TypedConfirmUsesNetCount() throws Exception {
+        Authentication ed = sender();
+        newUser(); // 现造一个无宠用户：保证全部用户里扣前 > 扣后，下面的 mismatch 分支必走
+        // 再现造一个有宠用户：保证净人数 > 0（不依赖同库里别的测试碰巧留下的宠物；CI 新库 / 别的执行顺序下
+        // 全部用户里可能一个有宠的都没有 → 新建先报 audience-empty-no-pet，根本走不到 mismatch）
+        addPet(newUser().getId(), "opsn-all-pet");
+        String pet = "Hi {{petName}}";
+        long net = estimate(ed, "audienceMode", "ALL", "userIds", "", "titleEn", pet);
+        long total = estimate(ed, "audienceMode", "ALL", "userIds", "");
+        assertThat(total).isGreaterThan(net);
+        String title = "opsn-all-pet-" + SEQ.incrementAndGet();
+        String[] base = {"audienceMode", "ALL", "userIds", "", "titleEn", pet, "sendMode", "SCHEDULED",
+                "scheduledAt", tomorrowWib(), "previewCount", String.valueOf(net),
+                "submitKey", UUID.randomUUID().toString()};
+        MvcResult mismatch = mvc.perform(htmx(form(post(BASE), title,
+                        concat(base, "confirmCount", String.valueOf(total))), "confirm-modal-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isUnprocessableEntity()).andReturn();
+        assertThat(mismatch.getResponse().getContentAsString())
+                .contains("data-code=\"admin.err.ops-notify.confirm-count-mismatch\"");
+        assertThat(rowsWithTitle(title)).isZero();
+        MvcResult ok = mvc.perform(htmx(form(post(BASE), title, concat(base, "confirmCount", String.valueOf(net))),
+                        "confirm-modal-err").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn();
+        assertThat(ok.getResponse().getHeader("HX-Redirect")).isEqualTo(BASE);
+        String token = (String) rowByTitle(title).get("public_token");
+        mvc.perform(htmx(post(BASE + "/" + token + "/cancel"), "confirm-modal-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk());
+        assertThat(rowByTitle(title).get("status")).isEqualTo("CANCELED");
     }
 }

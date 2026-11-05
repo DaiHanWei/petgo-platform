@@ -62,13 +62,19 @@ void main() {
     expect(find.text('Konsultasi Kilat'), findsNothing);
     expect(find.text('Catat momen hari ini'), findsNothing);
     expect(find.text('Untukmu'), findsNothing);
+    // V1.4.2 FR-165（Story 4.3 · AC6）：场所入口行暂时隐藏（组件保留，place_entry_row_test 照跑）。
+    expect(find.byType(PlaceEntryRow), findsNothing);
   });
 
-  testWidgets('V1.3.4 Story 3.3：默认无推荐更新横幅；bannerVisible=true 时横幅在场所入口行之上', (tester) async {
+  testWidgets('V1.3.4 Story 3.3：默认无推荐更新横幅；bannerVisible=true 时横幅在分类 chips 之上', (tester) async {
     final plain = ProviderContainer();
     addTearDown(plain.dispose);
     await _pumpHome(tester, plain);
     expect(find.byKey(const ValueKey('appUpdateBanner')), findsNothing);
+    // 先卸下第一棵树并冲掉 Riverpod 的 autoDispose 回收任务（首页话题行的 provider 是 autoDispose，
+    // 直接换树时回收计时器会挂到测试结束 → 「Timer is still pending」）。
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
 
     final c = ProviderContainer(overrides: [
       appUpdateControllerProvider.overrideWith(_BannerVisibleController.new),
@@ -78,8 +84,9 @@ void main() {
 
     final banner = find.byKey(const ValueKey('appUpdateBanner'));
     expect(banner, findsOneWidget);
-    expect(find.byType(PlaceEntryRow), findsOneWidget);
+    // V1.4.2 FR-165：场所入口行已隐藏 → 横幅之下直接是（宠物横滑行 /）分类 chips。
+    expect(find.byType(PlaceEntryRow), findsNothing);
     expect(tester.getBottomLeft(banner).dy,
-        lessThanOrEqualTo(tester.getTopLeft(find.byType(PlaceEntryRow)).dy));
+        lessThanOrEqualTo(tester.getTopLeft(find.byType(FeedTabRow)).dy));
   });
 }

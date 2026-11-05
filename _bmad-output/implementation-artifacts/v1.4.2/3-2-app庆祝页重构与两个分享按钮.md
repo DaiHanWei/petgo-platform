@@ -1,6 +1,6 @@
 # Story 3.2: 庆祝页重构与两个分享按钮（App，D1–D3）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`
 > 口径优先级：`决策日志-social-topic.md` > PRD §3.6（FR-156「现状」「交互」「站外分享保留为次入口」「缺陷修复要求」、AC1–AC8）+ §4 + §7 > 架构 §1.2 第 7 条、D-21 > UI 稿 D1 / D2 / D3（及 B1 / B2 的按钮组）逐屏说明。
@@ -53,36 +53,36 @@ so that 不会「点了没反应」。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 庆祝页布局重构**（AC1；UI D1）
-  - [ ] 1.1 `lib/features/profile/presentation/widgets/milestone_celebration.dart` `_celebration`（:134-277）：按 AC1 改结构；按钮区（:240-267）整体搬到吸底栏；内容 Column 保留 2.3 改过的多宠分支。约 30–40 行改动（UI 估算）。
-  - [ ] 1.2 新 ARB key `milestoneCelebrateShareOutside`：ID「Bagikan ke luar」/ EN「Share to other apps」（PRD §7）；`flutter gen-l10n`。新 key 写两份 ARB，不改生成文件。
-  - [ ] 1.3 新增 widget key：`milestoneShareOutside`（次按钮）、`milestoneShareBusy`（转圈）；保留 `milestoneShare` / `milestoneCelebrateSeeAll` / `milestoneCelebrationClose` / `milestoneCelebration` 既有 key（老测试依赖）。
-- [ ] **T2 `showMilestoneCelebration` 签名与 container**（AC2；D-21）
-  - [ ] 2.1 新签名：`Future<void> showMilestoneCelebration(BuildContext context, MilestoneItem item, {required String petName, required MilestoneCelebrationPath path, int? petId, List<MilestoneItem> collection = const [], List<CelebrationPet> accountPets = const [], VoidCallback? onSeeAll, Future<void> Function()? beforeCompose})`——删 `onShare`。
-  - [ ] 2.2 弹出前：`final container = ProviderScope.containerOf(context, listen: false);`、`final l10n = AppLocalizations.of(context)`、`final locale = Localizations.localeOf(context)`、分享文案 `l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale))` 都先取好传进 `_MilestoneCelebrationView`（照 `milestone_instant_celebration.dart`:129-136「在 show 之前取好」）。
-  - [ ] 2.3 「发到社区」的打开发布页放在 **dialog 关闭之后、`showMilestoneCelebration` 返回之前**：`final r = await showGeneralDialog<_CelebrationExit>(…)`；`r` 是 `compose(jpeg, preset)` → `await beforeCompose?.call()` → `final ctx = rootNavigatorKey.currentContext`（`core/router/app_router.dart`:136）→ `await BragPostEntry.openPrepared(ctx, …)`（**await 到发布页关闭**）→ 返回。这样调用方 `await showMilestoneCelebration` 之后的收尾（回报、pop、跳转）一定发生在发布页关闭之后，不会把刚打开的发布页 pop 掉。
-- [ ] **T3 两个按钮的行为**（AC3 ~ AC6）
-  - [ ] 3.1 `_MilestoneCelebrationViewState` 加 `_busy`（`null / community / outside`）；`_onCommunityPressed`：`reportTap` → `setState(busy=community)` → `captureMilestoneShareCard(_cardKey)` → `BragPostEntry.prepare(context, png, toastExtraBottom: 96)` → 失败：`Analytics.capture('milestone_share_failed', {'code': code, 'stage': 'render_card'})` + 复位；成功：`Navigator.of(context).pop(_CelebrationExit.compose(...))`。
-  - [ ] 3.2 卡片屏外挂载：`Stack` 里加 `Positioned(left: -2000, …)` + `IgnorePointer` + `CardFrame(boundaryKey: _cardKey, canvas: CardCanvas.square, child: MilestoneShareCard(item, pets, completedAt))`；`pets` = 账号级 → `accountPets`，否则当前宠物一只（名字 / 头像 / 物种从 `container.read(petListProvider)` 中按 `petId` 取；取不到用 `petName` + 物种默认头像）。`completedAt` 为 null（重温旧数据）时用 `DateTime.now()`。
-  - [ ] 3.3 `_onOutsidePressed`：`setState(busy=outside)` → 取按钮 `RenderBox` 全局矩形 → `await shareMilestoneWithLink(container, …, sharePositionOrigin: rect)` → `_close()`。
-  - [ ] 3.4 「Lihat semua」`_seeAll` 不变（先 `_close()` 再 `onSeeAll`），busy 时不可点。
-- [ ] **T4 `milestone_share.dart` 修复**（AC5；架构 §1.2 第 7 条）
-  - [ ] 4.1 `shareMilestoneWithLink(WidgetRef ref, …)`（`domain/milestone_share.dart`:19-54）改为 `shareMilestoneWithLink(ProviderContainer c, {…, Rect? sharePositionOrigin, void Function(String stage)? onFailed})`：
+- [x] **T1 庆祝页布局重构**（AC1；UI D1）
+  - [x] 1.1 `lib/features/profile/presentation/widgets/milestone_celebration.dart` `_celebration`（:134-277）：按 AC1 改结构；按钮区（:240-267）整体搬到吸底栏；内容 Column 保留 2.3 改过的多宠分支。约 30–40 行改动（UI 估算）。
+  - [x] 1.2 新 ARB key `milestoneCelebrateShareOutside`：ID「Bagikan ke luar」/ EN「Share to other apps」（PRD §7）；`flutter gen-l10n`。新 key 写两份 ARB，不改生成文件。
+  - [x] 1.3 新增 widget key：`milestoneShareOutside`（次按钮）、`milestoneShareBusy`（转圈）；保留 `milestoneShare` / `milestoneCelebrateSeeAll` / `milestoneCelebrationClose` / `milestoneCelebration` 既有 key（老测试依赖）。
+- [x] **T2 `showMilestoneCelebration` 签名与 container**（AC2；D-21）
+  - [x] 2.1 新签名：`Future<void> showMilestoneCelebration(BuildContext context, MilestoneItem item, {required String petName, required MilestoneCelebrationPath path, int? petId, List<MilestoneItem> collection = const [], List<CelebrationPet> accountPets = const [], VoidCallback? onSeeAll, Future<void> Function()? beforeCompose})`——删 `onShare`。
+  - [x] 2.2 弹出前：`final container = ProviderScope.containerOf(context, listen: false);`、`final l10n = AppLocalizations.of(context)`、`final locale = Localizations.localeOf(context)`、分享文案 `l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale))` 都先取好传进 `_MilestoneCelebrationView`（照 `milestone_instant_celebration.dart`:129-136「在 show 之前取好」）。
+  - [x] 2.3 「发到社区」的打开发布页放在 **dialog 关闭之后、`showMilestoneCelebration` 返回之前**：`final r = await showGeneralDialog<_CelebrationExit>(…)`；`r` 是 `compose(jpeg, preset)` → `await beforeCompose?.call()` → `final ctx = rootNavigatorKey.currentContext`（`core/router/app_router.dart`:136）→ `await BragPostEntry.openPrepared(ctx, …)`（**await 到发布页关闭**）→ 返回。这样调用方 `await showMilestoneCelebration` 之后的收尾（回报、pop、跳转）一定发生在发布页关闭之后，不会把刚打开的发布页 pop 掉。
+- [x] **T3 两个按钮的行为**（AC3 ~ AC6）
+  - [x] 3.1 `_MilestoneCelebrationViewState` 加 `_busy`（`null / community / outside`）；`_onCommunityPressed`：`reportTap` → `setState(busy=community)` → `captureMilestoneShareCard(_cardKey)` → `BragPostEntry.prepare(context, png, toastExtraBottom: 96)` → 失败：`Analytics.capture('milestone_share_failed', {'code': code, 'stage': 'render_card'})` + 复位；成功：`Navigator.of(context).pop(_CelebrationExit.compose(...))`。
+  - [x] 3.2 卡片屏外挂载：`Stack` 里加 `Positioned(left: -2000, …)` + `IgnorePointer` + `CardFrame(boundaryKey: _cardKey, canvas: CardCanvas.square, child: MilestoneShareCard(item, pets, completedAt))`；`pets` = 账号级 → `accountPets`，否则当前宠物一只（名字 / 头像 / 物种从 `container.read(petListProvider)` 中按 `petId` 取；取不到用 `petName` + 物种默认头像）。`completedAt` 为 null（重温旧数据）时用 `DateTime.now()`。
+  - [x] 3.3 `_onOutsidePressed`：`setState(busy=outside)` → 取按钮 `RenderBox` 全局矩形 → `await shareMilestoneWithLink(container, …, sharePositionOrigin: rect)` → `_close()`。
+  - [x] 3.4 「Lihat semua」`_seeAll` 不变（先 `_close()` 再 `onSeeAll`），busy 时不可点。
+- [x] **T4 `milestone_share.dart` 修复**（AC5；架构 §1.2 第 7 条）
+  - [x] 4.1 `shareMilestoneWithLink(WidgetRef ref, …)`（`domain/milestone_share.dart`:19-54）改为 `shareMilestoneWithLink(ProviderContainer c, {…, Rect? sharePositionOrigin, void Function(String stage)? onFailed})`：
     - 建链段（:35-51）保持 try：失败 → `onFailed?.call('create_link')`、退化纯文案；
     - **把 :53 的 `ref.read(shareServiceProvider)(message)` 移进第二个 try**：`try { await c.read(shareServiceProvider)(message, sharePositionOrigin: sharePositionOrigin); } catch (_) { onFailed?.call('open_sheet'); }`——修「最后一步在 try 外，宿主 ref 已销毁即抛、面板不出、庆祝页也不关」的根因；
     - `readRequestPetId(ref)`（:38）换成 container 版：在 `current_pet_provider.dart` 增 `Future<int?> readRequestPetIdFrom(ProviderContainer c)`（`c.exists(effectivePetIdProvider) ? c.read(requestPetIdProvider.future) : c.read(currentPetIdProvider)`，语义同 :146-149）。
-  - [ ] 4.2 grep 确认 `shareMilestoneWithLink` 再无 `WidgetRef` 调用方。
-- [ ] **T5 6 处弹出点**（AC2；见 Dev Notes 表）
-  - [ ] 5.1 逐处删 `onShare` 闭包、补 `petId`；补庆祝 / 重温两处传 2.3 的 `accountPets`；即时庆祝那处原有的「show 前取 notifier」保留。
-  - [ ] 5.2 🔴 **「去发布」宿主（`publish_compose_page.dart`:547）必须传 `beforeCompose`**：发布控制器 `publishControllerProvider` 是**全局单例 `Provider.autoDispose`**（`publish_compose_page.dart`:54，不是 family）——旧发布 sheet 还挂着时再开一个发布页，两页会共用同一个 controller，新页的预填会写进上一条帖子的草稿。所以该宿主的 `beforeCompose` 要先做完它原本在庆祝后做的收尾：`reportMilestoneCelebrated`（改用 container）→ `Navigator.of(context).pop()` 关旧 sheet → `router?.pushReplacement(DeepLinkRoutes.milestoneList, extra: {done.code})`；`showMilestoneCelebration` 返回后宿主若已 `!mounted` 直接 return，不再重复 pop / 跳转。其余 5 处宿主没有并存的发布页，不需要 `beforeCompose`。
-  - [ ] 5.3 庆祝回报统一走 container（`container.read(locallyCelebratedMilestonesProvider.notifier).report(...)`），不在已销毁的 `WidgetRef` 上 read（`milestone_celebration_reporter.dart`:22-28）。
-- [ ] **T6 测试（widget，覆盖稿中每种状态）**（全部 AC）
-  - [ ] 6.1 `test/profile/milestone_celebration_test.dart`：D1 默认态（两按钮 + 链接都在、按钮在屏内）；L 级长正文可滚且按钮仍可见（`tester.getRect` 在视口内）；D2 主按钮转圈、次按钮 / 链接不透明度 0.4 / 0.5 且点击无效；次按钮转圈态；连点两次只触发一次（计数 fake）；D3 截图失败 → toast 文案出现、庆祝页仍在、按钮恢复、`milestone_share_failed{stage: render_card}`；B2 多宠态按钮组同样吸底。
-  - [ ] 6.2 发到社区成功：用 `captureMilestoneShareCard` 与 `BragPostEntry.prepareForTest` 测试缝 → 庆祝页关闭 → 发布页出现（找 `PublishComposePage`），preset Diary、预选宠物、1 张图、预填文案（单宠 / 账号级多宠）；`brag_post_tapped{source, code, level}`。
-  - [ ] 6.3 宿主已销毁：在一个页面上弹庆祝后把宿主页 pop 掉（或 dispose 宿主 ProviderScope 外的 widget），再点两个按钮都能工作、不抛 `StateError`。
-  - [ ] 6.4 `test/profile/milestone_share_test.dart`：建链失败 → 纯文案分享且 `stage: create_link`；分享服务抛错 → 不抛出、`stage: open_sheet`；`sharePositionOrigin` 被透传（fake `ShareFn` 记录参数）。
-  - [ ] 6.5 「去发布」宿主（`publish_compose_page` 里程碑路径）：庆祝页点发到社区 → 旧 sheet 被关、跳到里程碑列表、新发布页打开且是**空白草稿 + 预填**（断言新页 controller 文本 = 预填文本，不含上一条的正文 / 图片）。
-  - [ ] 6.6 现有庆祝相关测试改签名后全绿：`milestone_celebration_test`、`milestone_instant_celebration_test`、`milestone_per_pet_celebration_test`、`milestone_checkin_test`、`health_milestone_unlock_test`、`milestone_catchup_test`、`milestone_list_test`。
+  - [x] 4.2 grep 确认 `shareMilestoneWithLink` 再无 `WidgetRef` 调用方。
+- [x] **T5 6 处弹出点**（AC2；见 Dev Notes 表）
+  - [x] 5.1 逐处删 `onShare` 闭包、补 `petId`；补庆祝 / 重温两处传 2.3 的 `accountPets`；即时庆祝那处原有的「show 前取 notifier」保留。
+  - [x] 5.2 🔴 **「去发布」宿主（`publish_compose_page.dart`:547）必须传 `beforeCompose`**：发布控制器 `publishControllerProvider` 是**全局单例 `Provider.autoDispose`**（`publish_compose_page.dart`:54，不是 family）——旧发布 sheet 还挂着时再开一个发布页，两页会共用同一个 controller，新页的预填会写进上一条帖子的草稿。所以该宿主的 `beforeCompose` 要先做完它原本在庆祝后做的收尾：`reportMilestoneCelebrated`（改用 container）→ `Navigator.of(context).pop()` 关旧 sheet → `router?.pushReplacement(DeepLinkRoutes.milestoneList, extra: {done.code})`；`showMilestoneCelebration` 返回后宿主若已 `!mounted` 直接 return，不再重复 pop / 跳转。其余 5 处宿主没有并存的发布页，不需要 `beforeCompose`。
+  - [x] 5.3 庆祝回报统一走 container（`container.read(locallyCelebratedMilestonesProvider.notifier).report(...)`），不在已销毁的 `WidgetRef` 上 read（`milestone_celebration_reporter.dart`:22-28）。
+- [x] **T6 测试（widget，覆盖稿中每种状态）**（全部 AC）
+  - [x] 6.1 `test/profile/milestone_celebration_test.dart`：D1 默认态（两按钮 + 链接都在、按钮在屏内）；L 级长正文可滚且按钮仍可见（`tester.getRect` 在视口内）；D2 主按钮转圈、次按钮 / 链接不透明度 0.4 / 0.5 且点击无效；次按钮转圈态；连点两次只触发一次（计数 fake）；D3 截图失败 → toast 文案出现、庆祝页仍在、按钮恢复、`milestone_share_failed{stage: render_card}`；B2 多宠态按钮组同样吸底。
+  - [x] 6.2 发到社区成功：用 `captureMilestoneShareCard` 与 `BragPostEntry.prepareForTest` 测试缝 → 庆祝页关闭 → 发布页出现（找 `PublishComposePage`），preset Diary、预选宠物、1 张图、预填文案（单宠 / 账号级多宠）；`brag_post_tapped{source, code, level}`。
+  - [x] 6.3 宿主已销毁：在一个页面上弹庆祝后把宿主页 pop 掉（或 dispose 宿主 ProviderScope 外的 widget），再点两个按钮都能工作、不抛 `StateError`。
+  - [x] 6.4 `test/profile/milestone_share_test.dart`：建链失败 → 纯文案分享且 `stage: create_link`；分享服务抛错 → 不抛出、`stage: open_sheet`；`sharePositionOrigin` 被透传（fake `ShareFn` 记录参数）。
+  - [x] 6.5 「去发布」宿主（`publish_compose_page` 里程碑路径）：庆祝页点发到社区 → 旧 sheet 被关、跳到里程碑列表、新发布页打开且是**空白草稿 + 预填**（断言新页 controller 文本 = 预填文本，不含上一条的正文 / 图片）。
+  - [x] 6.6 现有庆祝相关测试改签名后全绿：`milestone_celebration_test`、`milestone_instant_celebration_test`、`milestone_per_pet_celebration_test`、`milestone_checkin_test`、`health_milestone_unlock_test`、`milestone_catchup_test`、`milestone_list_test`。
 - [ ] **T7 L2**（AC7）：本地 Android 模拟器 + stag 后端，逐一触发 6 个弹出点 + 陪伴 100 / 365 天（stag 造数：改宠物 `created_at`）；断网验证站外分享退化；发布后到 Feed / 档案 / 另一账号（追更该宠物）关注流核对；截图对 D1–D3 打分 ≥ 95%。
 
 ## Dev Notes
@@ -143,16 +143,61 @@ so that 不会「点了没反应」。
 
 ### Agent Model Used
 
-（实现时填写）
+Claude
 
 ### Debug Log References
+
+- `flutter gen-l10n`（新增 `milestoneCelebrateShareOutside`，EN / ID 两份 ARB）。
+- `flutter analyze` → No issues found。
+- `flutter test`（全量）→ +4316 ~1（1 个既有 skip），All tests passed；复审修复后 +4320 ~1，All tests passed。
+- 变异自检：把「去发布」宿主 `beforeCompose` 里等待 `publishControllerProvider` 释放的循环去掉 → `publish_milestone_celebration_compose_test` 立刻红（新发布页打不开 / 共用旧 controller），恢复后绿。
 
 ### Completion Notes List
 
 - create-story：上下文分析完成，已生成完整开发指引（2026-11-04）。
-- 实现完成时必须写明：「云端只跑 L0；L1/L2 待本地验收」。
+- **云端只跑 L0；L1/L2 待本地验收**：本 story 无后端、无 L1；L2 待本地 = T7 / AC7 全部 —— 6 处弹出点（「去发布」后、健康记录、打卡 / Tailsonality 即时庆祝、补庆祝、重温、列表页打卡 picker）+ 陪伴满 100 / 365 天逐一点「Bagikan ke Komunitas」打开预填发布页；发布后 Feed / 成长档案 / 追更者关注流可见；断网验证站外分享退化纯文案；iOS 真机（含 iPad）「Bagikan ke luar」面板定位；D1 / D2 / D3 与 B1 / B2 按钮组还原度 ≥ 95%（渐隐、描边、转圈、置灰、toast 位置 extraBottom 96）。花结 SVG 仍待素材（3.1 兜底样式）。
+- 名字核对（对 story 文字的修订，均未改 3.1 / 2.3 已提交契约）：
+  1. `BragPostEntry.prepare` 签名为 `prepare(context, png, {toastExtraBottom})`（与 story 一致）；它只在**转码**失败时自己弹 toast，`captureMilestoneShareCard` 返回 null 时由庆祝页自己 `showAppToast(..., extraBottom: 96)`。
+  2. 卡面画布用 3.1 常量 `kMilestoneShareCanvas`（= `CardCanvas.square`），屏外挂载照 3.1 文档注释 `Positioned(left: -2000, top: 0, width: 360)`。
+  3. 庆祝回报统一走 container：新增 `reportMilestoneCelebratedIn(ProviderContainer, …)`（`milestone_celebration_reporter.dart`，语义同 `reportMilestoneCelebrated`）；即时庆祝那处原有「show 前取 notifier」保持。
+  4. `shareMilestoneWithLink` 返回值由 `Future<void>` 改为 `Future<bool>`（面板是否拉起）：AC5.3 要求分享服务抛错时「按钮恢复」，故返回 false 时不关庆祝页、复位按钮；true 时沿用「await 后 `_close()`」。
+- 拍板点复述：①发布页在 dialog 关闭后由 `showMilestoneCelebration` 自己经 `rootNavigatorKey.currentContext` 打开并 await 到关闭（T2.3）；②「去发布」宿主经 `beforeCompose` 先完成收尾（回报 → pop 旧 sheet → `pushReplacement(milestoneList)`），**并等单例 `publishControllerProvider` 随 autoDispose 释放**（轮询 `container.exists`，50ms × 最多 60 次，超时照开）后再开新页 —— 只 pop 不等时旧 sheet 退场动画期间仍在监听，新页会拿到同一个 controller（测试已证）；③站外分享面板返回后关闭庆祝页，发到社区则先关庆祝页再开发布页。
+- `petId` 为 null 的弹出点（即时庆祝 / 健康记录在当前宠物未解析时）：发布页预选在打开前经 `readRequestPetIdFrom(container)`（3s 超时）取；仍取不到 → 不预选（发布页按自身默认逻辑）。卡面宠物：账号级取 `accountPets`，否则只在宠物列表**已加载**时按 petId 取名字 / 头像，不为此新发列表请求；取不到 → `petName` + 编码前缀物种默认头像。
+- 埋点：`milestone_share_failed {code, stage}` 只在庆祝页一个函数里写字面量（四个 stage 都经它）；`brag_post_tapped` 带 `code` / `level`（大写，同 `milestone_celebration_shown`）/ `source`；用户在出图过程中点 ✕ 放弃不上报失败。
+- 测试宿主改造（按设计打破的既有测试，更新断言、未删未 skip）：庆祝页弹出时 `ProviderScope.containerOf` → `milestone_celebration_test` / `milestone_account_v142_test`（AC6 组）/ `milestone_uncelebrated_badge_test` 宿主补 `ProviderScope`；庆祝层屏外预挂的里程碑卡同样画宠物头像 / 名字 / 物种 emoji → `milestone_account_v142_test` 的 B1/B2 可见内容断言限定在 `milestoneCelebration` 内容区内（`_inView`）；`milestone_per_pet_celebration_test` 的「逐只庆祝点分享建链」改点次按钮 `milestoneShareOutside`（站外建链已从主按钮移到次按钮）。
+
+- **复审修复（2026-11-04）**：
+  - [CONFIRMED] 出图期间点 ✕、截图恰在 240ms 退场动画内完成时 `mounted` 仍为 true，原代码会再 `pop` 一次弹掉宿主路由（「去发布」连弹两层、健康记录连带关列表页）。修：`_close()` 置 `_closed = true`；新增 `_gone`（`!mounted || _closed || ModalRoute.of(context)?.isCurrent != true`），`_close` / `_seeAll` / 两个按钮入口、每个 await 之后、带图 `pop` 之前都判，满足即 return（用户主动放弃不报失败）。测试：「退场动画期间截图完成，宿主仍在」（变异自检：去掉守卫即红）+ 退场期间连点 ✕ / 查看全部只关一次。
+  - [PLAUSIBLE a] `captureMilestoneShareCard` / `prepare` 抛异常时 `_busy` 卡在 community：整段 try/catch，异常按 null 处理（toast + `render_card` + 复位）；`prepare` 自己弹过 toast 时不重复弹。补测试。
+  - [PLAUSIBLE b] `beforeCompose` 跳到里程碑列表后 `_maybeCatchUp` 可能先补弹、新发布页叠在它上面：`_maybeCatchUp` 只在本页 `ModalRoute.of(context)?.isCurrent == true` 时弹（同即时庆祝 `_hostIsCurrent` 口径），build 内判一次（登记依赖）、帧后与取宠物后各再判一次（被盖住则放开 `_catchupDone`）；盖住的页关掉后 isCurrent 变化触发 rebuild，照常补弹。补测试（被盖住不弹 → 揭开后补弹一次；变异自检通过）。
+
+#### 待确认
+
+1. `shareMilestoneWithLink` 改返回 `bool`、分享服务抛错时不关庆祝页（按 AC5.3「按钮恢复」的最保守解读）。
+2. 「去发布」宿主等待 controller 释放的上限 3s（超时照开，极端情况下仍可能共用草稿）；如需更强保证可在 3.x 后续把 `publishControllerProvider` 改 family（本 story 限定只动 publish_compose_page 里程碑路径段，未改）。
+3. 吸底栏左右内边距取 28（与滚动区一致；UI 说明未写明吸底栏水平边距）。
+4. 复审 (b) 仍有一个窗口：「去发布」宿主 `beforeCompose` 在 `pushReplacement(milestoneList)` 后要等旧 controller 释放（约一次 sheet 退场动画）才开新发布页；若里程碑列表在这段时间内已拉到数据且有**其它**未庆祝条目，补庆祝会先弹（此时本页确是栈顶），新发布页随后叠在补庆祝之上。刚庆祝的那条本身已由 `justCelebrated` + 本地标记挡住，不会重复。彻底消除需改导航顺序或发布控制器生命周期，超出本 story 范围。
 
 ### File List
+
+- petgo_app/lib/features/profile/presentation/widgets/milestone_celebration.dart（布局吸底 + 两按钮 + container + 屏外卡 + 打开发布页）
+- petgo_app/lib/features/profile/domain/milestone_share.dart（container 版、分享调用进 try、sharePositionOrigin、onFailed、返回 bool）
+- petgo_app/lib/features/profile/data/current_pet_provider.dart（`readRequestPetIdFrom`）
+- petgo_app/lib/features/profile/data/milestone_celebration_reporter.dart（`reportMilestoneCelebratedIn`）
+- petgo_app/lib/features/content/presentation/publish_compose_page.dart（里程碑路径：petId + beforeCompose）
+- petgo_app/lib/features/profile/presentation/health_list_page.dart
+- petgo_app/lib/features/profile/presentation/milestone_instant_celebration.dart
+- petgo_app/lib/features/profile/presentation/milestone_list_page.dart（补庆祝 / 重温 / picker 三处）
+- petgo_app/lib/l10n/app_en.arb、petgo_app/lib/l10n/app_id.arb（`milestoneCelebrateShareOutside`）
+- petgo_app/test/profile/milestone_celebration_test.dart（改写 + 新增 D1/D2/D3/两按钮/宿主销毁）
+- petgo_app/test/profile/milestone_share_test.dart（container 版 + create_link / open_sheet / origin / 源码扫描）
+- petgo_app/test/content/publish_milestone_celebration_compose_test.dart（新增，T6.5）
+- petgo_app/test/profile/milestone_account_v142_test.dart（宿主 / 断言随新规则更新；复审 (b) 新增「被盖住不补弹」）、petgo_app/test/profile/milestone_uncelebrated_badge_test.dart、petgo_app/test/profile/milestone_per_pet_celebration_test.dart（宿主 / 断言随新规则更新）
+
+### Change Log
+
+- 2026-11-04：复审修复（关闭竞态守卫 `_closed` / `_gone`、出图异常复位、补庆祝只在本页为栈顶时弹）+ 对应测试。
+- 2026-11-04：Story 3.2 实现（庆祝页按钮组吸底、「Bagikan ke Komunitas」/「Bagikan ke luar」两按钮、加载态与失败态、6 处弹出点改 container、站外分享 try 保护 + sharePositionOrigin）。Status → review。
 
 ## 待确认 / 发现的规划冲突
 

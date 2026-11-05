@@ -88,4 +88,50 @@ class PinnableContentPickerTest {
         assertThat(picker.page("77", 0)).isEmpty();
         verify(accounts, never()).findAuthorViews(any());
     }
+
+    // ---------------------------------------------------------------- V1.4.2 Story 6.2：话题页候选
+
+    @Test
+    void withoutTopicTheThreeArgVersionIsTheOldBehaviour() {
+        when(posts.searchPinnable(anyString(), any(Pageable.class))).thenReturn(List.of(post(1, 7, "x", List.of())));
+        when(accounts.findAuthorViews(any())).thenReturn(Map.of());
+
+        assertThat(picker.page(null, 0, null)).extracting(PinnableContentRow::id).containsExactly(1L);
+        verify(posts, never()).searchPinnableInTopic(anyString(), org.mockito.ArgumentMatchers.anyLong(), any(Pageable.class));
+        verify(posts, never()).isInTopic(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void topicCandidatesComeFromTheTopicQueryWithANonNullPattern() {
+        when(posts.searchPinnableInTopic(anyString(), org.mockito.ArgumentMatchers.eq(5L), any(Pageable.class)))
+                .thenReturn(List.of(post(2, 7, "halo #KucingLucu", List.of())));
+        when(accounts.findAuthorViews(any())).thenReturn(Map.of());
+
+        assertThat(picker.page(null, 0, 5L)).extracting(PinnableContentRow::id).containsExactly(2L);
+        verify(posts).searchPinnableInTopic(org.mockito.ArgumentMatchers.eq("%"), org.mockito.ArgumentMatchers.eq(5L), any(Pageable.class));
+        verify(posts, never()).searchPinnable(anyString(), any(Pageable.class));
+    }
+
+    @Test
+    void numericIdHitDoesNotLeakPostsOutsideTheTopic() {
+        ContentPost other = post(4159, 7, "topik lain", List.of());
+        when(posts.searchPinnableInTopic(anyString(), org.mockito.ArgumentMatchers.eq(5L), any(Pageable.class))).thenReturn(List.of());
+        when(posts.findById(4159L)).thenReturn(Optional.of(other));
+        when(posts.isInTopic(4159L, 5L)).thenReturn(false);
+
+        assertThat(picker.page("4159", 0, 5L)).isEmpty();
+        verify(accounts, never()).findAuthorViews(any());
+    }
+
+    @Test
+    void numericIdHitInsideTheTopicIsOfferedFirst() {
+        ContentPost mine = post(4160, 7, "di topik ini", List.of());
+        when(posts.searchPinnableInTopic(anyString(), org.mockito.ArgumentMatchers.eq(5L), any(Pageable.class)))
+                .thenReturn(List.of(post(3, 7, "x 4160", List.of())));
+        when(posts.findById(4160L)).thenReturn(Optional.of(mine));
+        when(posts.isInTopic(4160L, 5L)).thenReturn(true);
+        when(accounts.findAuthorViews(any())).thenReturn(Map.of());
+
+        assertThat(picker.page("4160", 0, 5L)).extracting(PinnableContentRow::id).containsExactly(4160L, 3L);
+    }
 }

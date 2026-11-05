@@ -35,6 +35,7 @@ void main() {
     // 但源分支的本测试还没有下面的「反向」检查，这张表没跟着加 → 合进 dev_1.3.0 后反向检查红。
     'milestone': '里程碑分享页（/m）→ 自己的里程碑列表',
     'place': '场所分享页（/place，Story 1.10）',
+    'topic': '话题详情页（V1.4.2 social-topic Story 4.3 · D-20）',
     'open': '下载引导落地页（/get）+ debug 导航钩子',
   };
 

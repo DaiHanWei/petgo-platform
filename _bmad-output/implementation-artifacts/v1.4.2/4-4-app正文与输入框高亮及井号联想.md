@@ -1,6 +1,6 @@
 # Story 4.4: 正文话题高亮、输入框高亮与 # 联想（App，C2–C5）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`（云端单会话串行）
 > 口径优先级：`决策日志-social-topic.md` > PRD `追更话题/1-4-2追更宠物·里程碑·话题prd.md` > `architecture-v1.4.2-social-topic-delta.md`（**§2.1 输入框高亮选型**、D-13、D-19、P-1、P-9）> UI 稿 `追更话题/ui-1-4-2-social-topic-integrated-v1.html`（C2–C5、E1–E6 说明）。
@@ -105,14 +105,14 @@ so that 带话题发帖不出错。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：4.1 ~ 4.3 已合入；fixtures 文件存在；Dev Notes 行号未漂移；联想路径已定为 `/topic-suggestions`（2026-11-04 主会话拍板）。
-- [ ] **T1 解析器** `body_tokens.dart` + fixture 测试 + 单测（AC1；P-1、D-19）
-- [ ] **T2 展示组件** `rich_body_text.dart`；`MentionText` 改薄包装；`FeedItem` / `ContentDetail` 加 `topicNames`；`MasonryCard` / `FeedMasonryView` / 详情页 / 三个列表调用方接 `onTapTopic`（AC2）
-- [ ] **T3 输入控制器** `topic_mention_text_controller.dart` + 发布页 / 评论框替换（AC3；§2.1）
-- [ ] **T4 联想**：`keyboard_suggest_panel.dart`、`topic_suggest_panel.dart`、`TopicRepository.suggest` + `ApiPaths.topicSuggestions`、发布页 `_syncTopicQuery` / 选中 / 限 5 / scrollPadding（AC4、AC5）
-- [ ] **T5 发布响应与埋点**：`PublishedPost`、`PublishController.lastPublishedTopics`、13 个 fake、`topic_inserted`（AC6）
-- [ ] **T6 文案**（AC8）→ `flutter gen-l10n`
-- [ ] **T7 测试**（见「测试」）→ `flutter analyze` 零告警 + `flutter test` 全绿
+- [x] **T0 开工核对**：4.1 ~ 4.3 已合入；fixtures 文件存在；Dev Notes 行号未漂移；联想路径已定为 `/topic-suggestions`（2026-11-04 主会话拍板）。
+- [x] **T1 解析器** `body_tokens.dart` + fixture 测试 + 单测（AC1；P-1、D-19）
+- [x] **T2 展示组件** `rich_body_text.dart`；`MentionText` 改薄包装；`FeedItem` / `ContentDetail` 加 `topicNames`；`MasonryCard` / `FeedMasonryView` / 详情页 / 三个列表调用方接 `onTapTopic`（AC2）
+- [x] **T3 输入控制器** `topic_mention_text_controller.dart` + 发布页 / 评论框替换（AC3；§2.1）
+- [x] **T4 联想**：`keyboard_suggest_panel.dart`、`topic_suggest_panel.dart`、`TopicRepository.suggest` + `ApiPaths.topicSuggestions`、发布页 `_syncTopicQuery` / 选中 / 限 5 / scrollPadding（AC4、AC5）
+- [x] **T5 发布响应与埋点**：`PublishedPost`、`PublishController.lastPublishedTopics`、13 个 fake、`topic_inserted`（AC6）
+- [x] **T6 文案**（AC8）→ `flutter gen-l10n`
+- [x] **T7 测试**（见「测试」）→ `flutter analyze` 零告警 + `flutter test` 全绿
 - [ ] **T8 本地 L2**（AC9）；Completion Notes 记分数与输入法实测结果
 
 ## Dev Notes
@@ -147,7 +147,7 @@ so that 带话题发帖不出错。
 
 ### 实现提示
 
-- **目录（P-4）**：`lib/shared/rich_text/{body_tokens.dart, rich_body_text.dart, topic_mention_text_controller.dart}`（content / mention / topic 共用）；`lib/shared/widgets/keyboard_suggest_panel.dart`；`lib/features/topic/presentation/widgets/topic_suggest_panel.dart`；`lib/features/topic/domain/topic_suggestion.dart`（`TopicSuggestion{name, displayName, official}`）。
+- **目录（P-4）**：`lib/shared/rich_text/{body_tokens.dart, rich_body_text.dart, topic_mention_text_controller.dart}`（content / mention / topic 共用）；`lib/shared/widgets/keyboard_suggest_panel.dart`；`lib/features/topic/presentation/widgets/topic_suggest_panel.dart`；联想结果模型复用 4.3 的 `TopicSummary`（dev 修订：不另建 `TopicSuggestion`）。
 - **`buildTextSpan` 骨架**（示意，非最终代码）：
   ```dart
   @override
@@ -238,7 +238,7 @@ so that 带话题发帖不出错。
 2. **@ 面板位置在 4.4 与 5.2 之间不一致**：UI 规定 # 与 @ 「同一个组件、同一个位置（贴键盘上沿）」，但 @ 面板挪位与去过滤框归 5.2（FR-157.2）。4.4 完成到 5.2 完成之间，发布页 # 面板贴键盘、@ 面板仍在正文下方带过滤框——同分支串行、不单独发版，可接受；4.4 先把外壳做成共享件，5.2 只需换用。
 3. **输入高亮字重**：UI C4 写「mint600 w600」，架构 §2.1 与 epics 4.4 AC 写「只改颜色、不改字号字重（避免光标 / 选区错位）」。按优先级（架构 > UI）只改颜色；展示侧（Feed / 详情）仍是 mint600 + w600。
 4. **贴键盘的写法与代码结构不符**：UI 写 `Stack + Positioned(bottom: viewInsets.bottom)`，但发布页整页已包 `KeyboardInset`（已垫键盘高度），按代码应 `bottom: 0`。以代码为准。
-5. **Dart 无 NFC**：样例里 `dartSkip` 的一条（分解形式的重音字母）App 与服务端标准名可能不同；展示侧以服务端 `topicNames` 为准，只影响输入高亮这一极端角落。
+5. **Dart 无 NFC**（dev 复审后改写，2026-11-05）：`normalizeTopic` 已补两条与 Java `Locale.ROOT` 对齐的映射（`İ` → `i̇`、Final_Sigma `Σ` → `ς`），对应样例 `final_sigma` / `dotted_I_short` / `lowercase_grows_over_30` 前后端都过、不 dartSkip。剩余差异只有 NFC：分解形式正文（`nfc_decomposed` / `nfd_short` 两条 dartSkip）App norm 是分解形式——**展示侧**由 `matchServerTopicName` 的 NFD 容错对上服务端 NFC 名（高亮可点、跳转用服务端名，`rich_body_text_test` 钉住）；**输入框高亮 / 限 5 计数**仍按 App norm 算，NFD 正文时名额与服务端可能差一格，极长 NFD 话题 App 可能判超长。
 6. **「Topik baru」行点选算 `suggestion` 还是 `typed`**：PRD 定义 suggestion =「从联想选的」、typed =「手打完整话题」。点「Topik baru」行是在面板里确认了自己打的新名字，本 story 记为 `typed`（名字来自用户输入）；若产品要算 `suggestion`，把该分支也加入 `_suggestedTopicNorms` 即可。
 7. **联想接口路径**跟随 4.2 的决定（4.2「待确认」第 1 条：`/topic-suggestions` vs 架构原写 `/topics/suggest`）；本 story 只通过 `ApiPaths.topicSuggestions` 引用，改回只需改一处常量。
 
@@ -246,10 +246,49 @@ so that 带话题发帖不出错。
 
 ### Agent Model Used
 
+Claude
+
 ### Debug Log References
+
+- `flutter test test/shared/rich_text/body_tokens_fixture_test.dart`：初版 35 条通过、2 条 dartSkip；首跑 `library;` 指令位置错误修正。复审修复后 40 条样例：38 条通过、2 条 dartSkip（`nfc_decomposed`、`nfd_short`）。
+- 复审核对：用 `java T.java`（Normalizer NFC + `toLowerCase(Locale.ROOT)`）实测 `ΟΔΟΣ→οδος`、`ΑΣ_→ας_`、`ΑΣΑ→ασα`、`猫Σ→猫σ`、`ΑΣ+U+0301→ας+U+0301`、`İ→i+U+0307`；Dart 原生 `toLowerCase` 得 `οδοσ`、`i`（丢点）。后端 `TopicNameRulesFixtureTest` 42 个用例全过。
+- `publish_topic_suggest_test` 首跑：GoRouter 以 `/compose` 为初始页时发布成功 `pop` 掉最后一页 → 改为 `/home` 起 push `/compose`（同既有 harness）。
+- 控制器测试：越界 composing 在 `TextEditingController.value=` 处即被框架断言拒绝，进不到 `buildTextSpan` → 用例改测能进入的两种无效形态（`TextRange.empty` / 折叠区间）。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：
+  - L1：本 story 无 L1 项（无后端运行时改动）。
+  - L2（本地 Android 模拟器 + 真后端）：AC9 C2–C5 逐屏还原度 ≥ 95%；Gboard（印尼语 / 英语联想）与中文输入法下打 `#kuc` 联想下划线正常、选词后高亮正确、光标不偏；面板贴键盘上沿、长正文时光标行在面板之上（`scrollPadding` + `showOnScreen` 兜底）；Feed 卡 / 详情点话题进话题页（source = feed_card / post_body）、点空白进详情；后台禁用话题后刷新正文不可点；评论框 @ 高亮。T8 未勾。
+- 实现：`body_tokens.dart`（`topicsIn` / `effectiveDistinct` / `normalizeTopic` / `isValidTopicName` / `topicQueryAt` / `mentionRanges` / `mergeMarks`，按码点处理代理对）与后端读同一份样例；`RichBodyText` 取代 `MentionText._spans`，`MentionText` 成薄包装（评论区不解析话题）；`TopicMentionTextController`（只改颜色、composing 下划线合并切段、无高亮直接 `super`）；发布页 # 联想（空关键词立即请求、非空 300ms 防抖、请求序号丢弃旧回包、限 5 顶部 toast 同一 `#` 只一次、贴键盘 Stack、scrollPadding）；`PublishedPost` / `lastPublishedTopics` / `topic_inserted`（发布成功后按服务端 `topics` 上报，R-2）；`FeedItem` / `ContentDetail.topicNames` 接入，后端 `FeedResponseContractTest` / `ContentDetailAndCommentContractTest` 契约字段集并入 `topicNames`。
+- **对 story 文件的名字修订**：
+  1. 不新建 `topic_suggestion.dart` / `TopicSuggestion`：复用 4.3 已声明供 # 联想共用的 `TopicSummary`。
+  2. 「13 个 `ContentRepository` fake」实为 9 个文件 11 处 `publish` 覆写（其余 fake 走 `noSuchMethod`，无需改）。
+  3. `mention_picker.dart:158-180 _emptyState` 无重试按钮；失败态按 E5 结构自写（一行 `detailNetworkError` + `TextButton.icon(refresh, commonRetry)`）。
+  4. `body_tokens.dart` 另加 `mergeMarks`（@ 优先合并，展示与输入两侧共用）；`MarkRange` 带 `userId` / `topicNorm`。
+  5. 「光标未自动滚入」兜底改用 `RenderObject.showOnScreen(rect: 字段 + 面板高 + 20)`：`Scrollable.ensureVisible(keepVisibleAtEnd)` 会把正文对齐到视口底边——正好压在面板下面。
+  6. 测试落点：发布页 # 联想 / 限 5 / 埋点 / scrollPadding 放新文件 `test/content/publish_topic_suggest_test.dart`（`publish_compose_test.dart` 已 800+ 行，harness 同口径）；评论框高亮用例加进 `test/mention/mention_entry_test.dart`（复用其私有 fake），不另建 `comment_composer_mention_highlight_test.dart`；AC7 混排断言放 `topic_mention_text_controller_test.dart`。
+  7. `test/mention/mention_legacy_and_analytics_test.dart` 的「埋点字面量」源码扫描清单追加 `lib/shared/rich_text/rich_body_text.dart`（`mention_tapped` 上报点随切片逻辑搬入，D-19 按设计打破；只加站点、不放宽断言）。`v112_events_test` 属性清单加 `is_official` / `is_new`。
+  8. 交接口径里写的 `TopicRef(name, displayName)` 与代码不符：后端实际为 `TopicRef(name, official, created)`，与本 story AC6 一致，按代码实现。
+- **复审修复（2026-11-05，编排者复审）**：
+  1. `normalizeTopic` 补 `İ` → `i̇` 与 Final_Sigma（前有 cased 字母、后无 cased 字母，跳过组合附标；cased 用「大小写映射至少一边不是自身」近似——Java 实测 `猫Σ` → `σ`，所以不是「前面是字母」）。
+  2. 共用样例新增 `final_sigma`、`dotted_I_short`（不 dartSkip，前后端都过）、`nfd_short`（dartSkip，写明原因）；`lowercase_grows_over_30` 去掉 dartSkip。
+  3. NFD 容错 `matchServerTopicName`（只在 `body_tokens.dart`）：先精确比，不中再按「基字符 + 组合附标」逐簇对齐——App 簇带附标、服务端是单个非 ASCII 码点（预组合字符）即算对上，且须**唯一**命中。⚠️ 没有照字面做「去掉 \p{M} 再比」：服务端 NFC 的 `é`（U+00E9）本身不是附标、删不掉，裸删永远对不上 `e`+U+0301；无分解表时这是能做到的最近似。`RichBodyText` 命中后点击回调给服务端名。
+  4. `_suggestedTopicNorms` 随每次输入收缩为当前正文有效话题；发布时再取「联想记录 ∩ 正文 `effectiveDistinct`」判 `method`；补两条测试（点选→删除→手打同名 = typed；程序化改值后的交集）。
+- **待确认**：
+  1. 见上方「待确认 / 发现的规划冲突」第 5 条（已按复审改写）：剩余差异仅 NFC，展示侧有 NFD 容错兜底；输入框高亮 / 限 5 计数在 NFD 正文时可能与服务端差一格。NFD 容错在同帖两个话题只差一个重音（如 `pé` / `pè`）时按「多个都像 → 不高亮」处理。
+  2. 关键词非空的 300ms 等待期间：若已有上一关键词的结果则继续显示旧结果，否则显示转圈（避免每打一个字闪一下）；L2 看感受，如要求每次都转圈改 `_requestSuggestions` 一处。
+  3. 话题页列表里点**当前话题**仍会 push 一层同名话题页（story 未区分）；如需拦截在 `topic_page.dart` 的 `onTapTopic` 判同名即可。
+  4. 「Topik baru」行按原待确认第 6 条记 `typed`。
+
 ### File List
 
+- 新增：`petgo_app/lib/shared/rich_text/body_tokens.dart`、`petgo_app/lib/shared/rich_text/rich_body_text.dart`、`petgo_app/lib/shared/rich_text/topic_mention_text_controller.dart`、`petgo_app/lib/shared/widgets/keyboard_suggest_panel.dart`、`petgo_app/lib/features/topic/presentation/widgets/topic_suggest_panel.dart`、`petgo_app/lib/features/content/domain/published_post.dart`、`petgo_app/test/shared/rich_text/{body_tokens_fixture_test,body_tokens_test,rich_body_text_test,topic_mention_text_controller_test}.dart`、`petgo_app/test/content/publish_topic_suggest_test.dart`、`petgo_app/test/content/masonry_card_topic_tap_test.dart`
+- 改动（App lib）：`mention_text.dart`、`masonry_card.dart`、`feed_view.dart`、`home_page.dart`、`following_tab_view.dart`、`topic_page.dart`、`content_detail_page.dart`、`feed_item.dart`、`content_detail.dart`、`comment_composer.dart`、`publish_compose_page.dart`、`publish_controller.dart`、`content_repository.dart`、`topic_repository.dart`、`app_en.arb`、`app_id.arb`
+- 改动（App test）：`fake_topic_repository.dart`、`v112_events_test.dart`、`content_detail_checkin_strip_test.dart`、`mention_legacy_and_analytics_test.dart`、`mention_entry_test.dart`、9 个 `ContentRepository` fake 所在文件（`publish_controller_test`、`publish_diary_published_analytics_test`、`publish_sync_switch_test`、`publish_milestone_celebration_compose_test`、`publish_preview_lightbox_test`、`publish_compose_test`、`publish_checkin_link_test`、`publish_reorder_test`、`mention_entry_test`）
+- 改动（后端 test）：`FeedResponseContractTest.java`、`ContentDetailAndCommentContractTest.java`、`src/test/resources/fixtures/topic-parse-cases.json`（复审：+`final_sigma` / `dotted_I_short` / `nfd_short`，`lowercase_grows_over_30` 去 dartSkip）
+
 ### Change Log
+
+- 2026-11-05：实现 Story 4.4（解析器 + 共用样例、RichBodyText、TopicMentionTextController、# 联想面板与限 5、topic_inserted、topicNames 接入与后端契约字段集同步）；Status → review。
+- 2026-11-05：复审修复——`normalizeTopic` 对齐 Java Locale.ROOT（İ / Final_Sigma）、共用样例 +3 条、`matchServerTopicName` NFD 容错、`_suggestedTopicNorms` 收缩与发布时交集。

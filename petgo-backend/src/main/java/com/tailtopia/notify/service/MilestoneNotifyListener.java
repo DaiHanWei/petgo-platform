@@ -2,6 +2,7 @@ package com.tailtopia.notify.service;
 
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.profile.domain.MilestoneLevel;
+import com.tailtopia.profile.event.AccountMilestoneCompletedEvent;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -64,5 +65,22 @@ public class MilestoneNotifyListener {
         notificationService.sendWithoutPush(event.ownerId(), NotificationType.MILESTONE_SM_NODE,
                 "Tonggak tercapai", "Tonggak baru terbuka",
                 NotificationType.MILESTONE_NODE.name(), event.code());
+    }
+
+    /**
+     * 账号级里程碑（V1.4.2 Story 2.1 · D-12 / R-4）：不论几只宠物完成，通知中心<b>只 1 条</b> S 级留痕、不推送。
+     *
+     * <p>{@code targetRef} = 账号下第一只 ACTIVE 宠物物种的编码（混养账号也只放这一个）；App 对这 6 个编码不拼宠物名。
+     * 本次没有任何宠物写完成行（无 ACTIVE 宠物 / roster 缺失）→ 不发：没写完成就不通知。文案同上只是留痕，不含宠物名。
+     */
+    @Async
+    @TransactionalEventListener
+    public void onAccountMilestone(AccountMilestoneCompletedEvent e) {
+        if (e.petIds().isEmpty() || e.targetCode() == null) {
+            return;
+        }
+        notificationService.sendWithoutPush(e.userId(), NotificationType.MILESTONE_SM_NODE,
+                "Tonggak tercapai", "Tonggak baru terbuka",
+                NotificationType.MILESTONE_NODE.name(), e.targetCode());
     }
 }

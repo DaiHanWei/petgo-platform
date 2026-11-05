@@ -6,10 +6,14 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -21,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code shop_orders} 只做只读 {@code EXISTS}。
  *
  * <p>SQL 由纯函数 {@link OpsAudienceSql#build} 生成，本类只执行。结果按 {@code users.id} 升序。
- * 🔒 不 log 任何收件人 id 列表、手机号、语言（调用方只记活动 id 与人数）。
+ * 🔒 不 log 任何收件人 id 列表、手机号、语言、昵称、宠物名（调用方只记活动 id 与人数）。
  */
 @Service
 public class OpsAudienceQuery {
@@ -42,9 +46,28 @@ public class OpsAudienceQuery {
     @Transactional(readOnly = true)
     public List<OpsRecipient> resolve(AudienceSpec spec, long campaignId) {
         OpsAudienceSql.Query q = OpsAudienceSql.build(spec, campaignId, WIB);
-        return jdbc.query(q.sql(), bind(q.params()),
-                (rs, rowNum) -> new OpsRecipient(rs.getLong("id"), rs.getString("locale")));
+        return jdbc.query(q.sql(), bind(q.params()), RECIPIENT);
     }
+
+    /** 收件人四列（V1.4.2 Story 7.1：昵称 / 宠物名随人群一条 SQL 带出，不逐人查）。 */
+    private static final RowMapper<OpsRecipient> RECIPIENT = (rs, rowNum) -> new OpsRecipient(rs.getLong("id"),
+            rs.getString("locale"), rs.getString("nickname"), rs.getString("pet_name"));
+
+    /**
+     * 人数预估结果（V1.4.2 Story 7.1 · D-16）：{@code total} = 基础过滤 + 人群条件；{@code withPet} = 其中有宠物的人
+     * （文案用了宠物变量时的净人数）。
+     */
+    public record Reach(long total, long withPet) {
+
+        public static final Reach EMPTY = new Reach(0, 0);
+
+        Reach plus(Reach o) {
+            return new Reach(total + o.total, withPet + o.withPet);
+        }
+    }
+
+    private static final RowMapper<Reach> REACH = (rs, rowNum) -> new Reach(rs.getLong("total"),
+            rs.getLong("with_pet"));
 
     /**
      * 人数预估（V1.3.4 AB-31）：按<b>当前</b>人群条件实时计数，口径与 {@link #resolve} 一致。
@@ -53,26 +76,72 @@ public class OpsAudienceQuery {
      * @param ids 仅 IDS 模式：运营粘贴的用户 id（可含重复 / 无效 id，去重后分批 {@code IN} 计有效人数）；其余模式忽略
      */
     @Transactional(readOnly = true)
-    public long count(AudienceSpec spec, Collection<Long> ids) {
+    public Reach count(AudienceSpec spec, Collection<Long> ids) {
         if (spec.mode() != AudienceSpec.Mode.IDS) {
             OpsAudienceSql.Query q = OpsAudienceSql.count(spec, WIB);
-            Long n = jdbc.queryForObject(q.sql(), bind(q.params()), Long.class);
-            return n == null ? 0 : n;
+            Reach r = jdbc.queryForObject(q.sql(), bind(q.params()), REACH);
+            return r == null ? Reach.EMPTY : r;
         }
         if (ids == null || ids.isEmpty()) {
-            return 0;
+            return Reach.EMPTY;
         }
         List<Long> distinct = ids.stream().filter(Objects::nonNull).distinct().toList();
         String sql = OpsAudienceSql.countIds();
-        long total = 0;
+        Reach total = Reach.EMPTY;
         // 分批：PostgreSQL 单条语句绑定参数上限 65535，上限 5 万个 id 一把塞不进去
         for (int from = 0; from < distinct.size(); from += ID_CHUNK) {
             List<Long> chunk = distinct.subList(from, Math.min(from + ID_CHUNK, distinct.size()));
-            Long n = jdbc.queryForObject(sql, new MapSqlParameterSource("ids", chunk), Long.class);
-            total += n == null ? 0 : n;
+            Reach r = jdbc.queryForObject(sql, new MapSqlParameterSource("ids", chunk), REACH);
+            total = r == null ? total : total.plus(r);
         }
         return total;
     }
+
+    /**
+     * 后台「预览用户」（V1.4.2 Story 7.1 · AC8）：从<b>本次人群</b>随机取 1 人（含昵称 / 宠物名）。
+     * 尽量避开 {@code excludeUserId}（「换一个」）；只剩他一人时仍返回他；人群 0 人 → empty。只读。
+     *
+     * <p>⚠️ 随机排序 + 取一行在这里拼，而不是写进 {@link OpsAudienceSql}：后者在 {@code PetOwnerLookupGuardTest}
+     * 白名单内，白名单文件禁止取单行写法；这里抽的是<b>用户</b>不是宠物，不违背守卫本意。
+     *
+     * @param ids 仅 IDS 模式：表单里的用户 id（活动未建）；打乱后按 {@value #ID_CHUNK} 一批依次查，命中即返回
+     * @param requirePet 文案用了宠物变量：只抽有宠物的人
+     */
+    @Transactional(readOnly = true)
+    public Optional<OpsRecipient> sample(AudienceSpec spec, Collection<Long> ids, boolean requirePet,
+            Long excludeUserId) {
+        Optional<OpsRecipient> hit = sampleOnce(spec, ids, requirePet, excludeUserId);
+        if (hit.isEmpty() && excludeUserId != null) {
+            hit = sampleOnce(spec, ids, requirePet, null);
+        }
+        return hit;
+    }
+
+    private Optional<OpsRecipient> sampleOnce(AudienceSpec spec, Collection<Long> ids, boolean requirePet,
+            Long excludeUserId) {
+        OpsAudienceSql.Query q = OpsAudienceSql.sampleBase(spec, WIB, Instant.now(), requirePet, excludeUserId);
+        String sql = q.sql() + RANDOM_ONE;
+        if (spec.mode() != AudienceSpec.Mode.IDS) {
+            return jdbc.query(sql, bind(q.params()), RECIPIENT).stream().findFirst();
+        }
+        if (ids == null || ids.isEmpty()) {
+            return Optional.empty();
+        }
+        List<Long> shuffled = new ArrayList<>(ids.stream().filter(Objects::nonNull).distinct().toList());
+        Collections.shuffle(shuffled);
+        for (int from = 0; from < shuffled.size(); from += ID_CHUNK) {
+            MapSqlParameterSource params = bind(q.params());
+            params.addValue("ids", shuffled.subList(from, Math.min(from + ID_CHUNK, shuffled.size())));
+            Optional<OpsRecipient> hit = jdbc.query(sql, params, RECIPIENT).stream().findFirst();
+            if (hit.isPresent()) {
+                return hit;
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** 随机取一人（当前规模几万用户，全表随机排序可接受）。 */
+    private static final String RANDOM_ONE = " ORDER BY random() LIMIT 1";
 
     /** 指定用户 ID 的归类（{@link OpsAudienceSql#classifyIds()}）。 */
     public enum IdStatus {
@@ -85,7 +154,7 @@ public class OpsAudienceQuery {
 
     /**
      * 逐个归类指定用户 ID（V1.3.4 AB-31 返工 · CSV 校验）。库里查不到的 id 记 {@link IdStatus#NOT_FOUND}。
-     * {@code OK} 的个数与 {@link #count} 在 IDS 模式下的结果同口径。
+     * {@code OK} 的个数与 {@link #count} 在 IDS 模式下的 {@code total} 同口径。
      */
     @Transactional(readOnly = true)
     public Map<Long, IdStatus> classify(Collection<Long> ids) {

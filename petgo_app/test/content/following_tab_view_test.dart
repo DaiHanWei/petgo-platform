@@ -41,8 +41,10 @@ class _Auth extends AuthController {
 }
 
 class _FeedRepo implements FeedRepository {
-  _FeedRepo(this.following);
+  _FeedRepo(this.following, {this.userCount, this.petCount});
   final List<FeedItem> following;
+  final int? userCount;
+  final int? petCount;
   int followingCalls = 0;
 
   @override
@@ -55,7 +57,7 @@ class _FeedRepo implements FeedRepository {
   @override
   Future<FeedPage> getFollowingFeed({String? cursor}) async {
     followingCalls++;
-    return FeedPage(items: following);
+    return FeedPage(items: following, followingUserCount: userCount, followingPetCount: petCount);
   }
 }
 
@@ -96,6 +98,8 @@ Future<ProviderContainer> _pump(
   required List<FeedItem> posts,
   required List<FollowingStripUser> strip,
   List<FollowListItem> suggestions = const [],
+  int? userCount,
+  int? petCount,
 }) async {
   final router = GoRouter(
     initialLocation: '/home',
@@ -115,7 +119,7 @@ Future<ProviderContainer> _pump(
   addTearDown(router.dispose);
   final container = ProviderContainer(overrides: [
     authControllerProvider.overrideWith(_Auth.new),
-    feedRepositoryProvider.overrideWithValue(_FeedRepo(posts)),
+    feedRepositoryProvider.overrideWithValue(_FeedRepo(posts, userCount: userCount, petCount: petCount)),
     followingStripRepositoryProvider.overrideWithValue(_StripRepo(strip)),
     followSuggestionRepositoryProvider.overrideWithValue(_SuggestRepo(suggestions)),
   ]);
@@ -287,5 +291,57 @@ void main() {
     expect(find.descendant(of: ring, matching: find.text('6')), findsOneWidget);
     expect(tester.getSize(find.byKey(const ValueKey('followingStripFramed'))),
         tester.getSize(find.byKey(const ValueKey('followingStripRing'))));
+  });
+
+  group('V1.4.2 social-topic Story 1.5 · AC5（UI 稿 A10 / A11）', () {
+    late AppLocalizations l10n;
+    setUpAll(() async => l10n = await AppLocalizations.delegate.load(const Locale('en')));
+
+    testWidgets('两个计数都为 0 → 现有空态', (tester) async {
+      await _pump(tester, posts: const [], strip: const [], userCount: 0, petCount: 0);
+      expect(find.byKey(const ValueKey('followingEmptyView')), findsOneWidget);
+      expect(find.text(l10n.followingEmptyTitle), findsOneWidget);
+      expect(find.byIcon(Icons.person_add_alt_outlined), findsOneWidget);
+      expect(find.byKey(const ValueKey('followingNoNewView')), findsNothing);
+    });
+
+    testWidgets('只追更了宠物（followingPetCount=1）且无帖 → A11：schedule 图标 + 新文案 + 推荐关注 + Jelajahi Discover',
+        (tester) async {
+      await _pump(tester, posts: const [], strip: const [], userCount: 0, petCount: 1,
+          suggestions: [FollowListItem(userId: 30, deleted: false, userToken: 'tok30', nickname: 'sugg30')]);
+      expect(find.byKey(const ValueKey('followingNoNewView')), findsOneWidget);
+      expect(find.byIcon(Icons.schedule), findsOneWidget);
+      expect(find.text(l10n.followingFeedNoNewTitle), findsOneWidget);
+      expect(find.text(l10n.followingFeedNoNewBody), findsOneWidget);
+      expect(find.text(l10n.followingEmptyTitle), findsNothing);
+      expect(find.text('sugg30'), findsOneWidget);
+      expect(find.byKey(const ValueKey('followingExploreDiscover')), findsOneWidget);
+      // 不挂头像排。
+      expect(find.byType(FollowingStrip), findsNothing);
+      // 版式不变：圆 96、标题 20 / w700、说明 14.5 / 1.45。
+      final title = tester.widget<Text>(find.text(l10n.followingFeedNoNewTitle));
+      expect(title.style!.fontSize, 20);
+      expect(title.style!.fontWeight, FontWeight.w700);
+      final body = tester.widget<Text>(find.text(l10n.followingFeedNoNewBody));
+      expect(body.style!.fontSize, 14.5);
+      expect(body.style!.height, 1.45);
+    });
+
+    testWidgets('关注了人（followingUserCount>0）但无帖 → A11', (tester) async {
+      await _pump(tester, posts: const [], strip: const [], userCount: 3, petCount: 0);
+      expect(find.byKey(const ValueKey('followingNoNewView')), findsOneWidget);
+    });
+
+    testWidgets('计数缺失（旧后端）→ 回落现有空态', (tester) async {
+      await _pump(tester, posts: const [], strip: const []);
+      expect(find.byKey(const ValueKey('followingEmptyView')), findsOneWidget);
+      expect(find.text(l10n.followingEmptyTitle), findsOneWidget);
+    });
+
+    testWidgets('有帖 → 列表（无新元素，空态不出现）', (tester) async {
+      await _pump(tester, posts: [_post(1)], strip: [_user(7)], userCount: 1, petCount: 1);
+      expect(find.byType(FollowingEmptyView), findsNothing);
+      expect(find.text('post 1'), findsOneWidget);
+    });
   });
 }

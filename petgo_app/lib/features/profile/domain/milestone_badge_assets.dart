@@ -1,6 +1,6 @@
 /// 里程碑徽章：完整 code → 语义键（V1.3.2 Story 5.1 · AD-15 · 代码核对报告 §3）。
 ///
-/// 84 个 code 各一条、42 个语义键（V1.3.4 FR-126 +`place_checkin` / `tailsonality`）；同一语义跨物种共用一个键（Camilan：C-S8 / D-S8 / G-S6 → `first_treat`）。
+/// 90 个 code 各一条、44 个语义键（V1.3.4 FR-126 +`place_checkin` / `tailsonality`；V1.4.2 FR-154 +`first_friend` / `first_save`）；同一语义跨物种共用一个键（Camilan：C-S8 / D-S8 / G-S6 → `first_treat`）。
 ///
 /// 🔴 **只按完整 code 精确查表**：通用套编号与猫狗不对齐 —— `G-S6` 是零食、`G-S8` 是点赞，
 /// 按后缀寻址会让通用宠物的零食徽章显示成点赞图。本文件与 `milestone_badge.dart` 不得出现任何字符串切分 / 正则
@@ -8,7 +8,7 @@
 ///
 /// 映射是**语义事实**，一次写全、不随素材到货变；「有没有图」看 asset manifest（`MilestoneBadgeAssets`），
 /// 所以往 `assets/milestone/` 放一枚 `<语义键>.webp` 即生效，不改代码。
-/// 后端跨库测试 `MilestoneBadgeMappingTest` 钉住：code 集合 == `MilestoneCatalog` 全集、恰 42 个不同值。
+/// 后端跨库测试 `MilestoneBadgeMappingTest` 钉住：code 集合 == `MilestoneCatalog` 全集、恰 44 个不同值。
 const Map<String, String> kMilestoneBadgeKeys = {
   // ===== CAT (C) =====
   'C-S1': 'profile_created',
@@ -44,6 +44,8 @@ const Map<String, String> kMilestoneBadgeKeys = {
   'C-L5': 'growth_records_30',
   'C-S17': 'place_checkin',
   'C-S18': 'tailsonality',
+  'C-S19': 'first_friend',
+  'C-S20': 'first_save',
   // ===== DOG (D) =====
   'D-S1': 'profile_created',
   'D-S2': 'first_calendar_photo',
@@ -78,6 +80,8 @@ const Map<String, String> kMilestoneBadgeKeys = {
   'D-L5': 'growth_records_30',
   'D-S17': 'place_checkin',
   'D-S18': 'tailsonality',
+  'D-S19': 'first_friend',
+  'D-S20': 'first_save',
   // ===== GENERAL (G) =====
   'G-S1': 'profile_created',
   'G-S2': 'first_calendar_photo',
@@ -97,6 +101,8 @@ const Map<String, String> kMilestoneBadgeKeys = {
   'G-L3': 'together_365_days',
   'G-S10': 'place_checkin',
   'G-S11': 'tailsonality',
+  'G-S12': 'first_friend',
+  'G-S13': 'first_save',
 };
 
 /// 锁定态全局一张（素材清单 §5「D. 锁定态」）：不属于任何 code，**不暴露是哪一枚**。
@@ -107,3 +113,8 @@ String? milestoneBadgeKeyOf(String code) => kMilestoneBadgeKeys[code];
 
 /// 语义键 → 素材路径。**全仓库唯一出现该目录字面量的地方**；同一张图等比缩放，没有大小两套。
 String milestoneBadgeAssetPath(String key) => 'assets/milestone/$key.webp';
+
+/// 里程碑卡奖章花结 SVG（V1.4.2 social-topic Story 3.1 · **待素材**）：按级别三色三份
+/// `rosette_l.svg` / `rosette_m.svg` / `rosette_s.svg`；设计交付后放入同目录即自动切换（manifest 判存在），不改代码。
+/// [levelKey] = `MilestoneLevel.name`（`l` / `m` / `s`）。
+String milestoneRosetteAssetPath(String levelKey) => 'assets/milestone/rosette_$levelKey.svg';

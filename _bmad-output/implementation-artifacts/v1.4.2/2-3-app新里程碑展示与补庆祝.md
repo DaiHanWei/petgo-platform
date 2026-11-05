@@ -1,6 +1,6 @@
 # Story 2.3: 新里程碑的 App 展示与补庆祝（App，B1–B4）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`
 > 口径优先级：`决策日志-social-topic.md`（R-4、B1）> PRD §3.2（FR-154，AC1 / AC7 / AC8 / AC10）+ §7 文案 > 架构 D-12（G-2、R-4）> UI 稿 B1–B4 逐屏说明。
@@ -57,30 +57,30 @@ S 组末尾显示「Teman pertama」「Simpan pertama」两枚（后端 sortOrde
 
 ## Tasks / Subtasks
 
-- [ ] **T1 账号级编码判定（App 侧唯一实现）**（AC2、AC5、AC6、AC7；R-4）
-  - [ ] 1.1 `lib/features/profile/domain/milestone_account_codes.dart`（新）：`const Set<String> kAccountMilestoneCodes = {'C-S19','D-S19','G-S12','C-S20','D-S20','G-S13'};` + `bool isAccountMilestone(String code)`。显式列举、精确匹配，不切后缀；注释指向后端 `AccountMilestoneFlag`（2.1）。
-  - [ ] 1.2 加一条跨库一致性测试（可选，推荐）：后端 `AccountMilestoneFlagTest` 读本文件比对集合，或 App 测试断言集合 == `kMilestoneBadgeKeys` 中值为 `first_friend` / `first_save` 的 key。
-- [ ] **T2 文案**（AC2）
-  - [ ] 2.1 `milestone_celebration_copy.dart`：在 `C-S18`（:127 块）/ `D-S18`（:327 块）/ `G-S11`（:485 块）之后各加两条 `MilestoneCelebrationCopy`（见 AC2.1）。该文件是里程碑文案的既有事实源（Dart 表、en / id 两语，**不是 ARB**）——沿用既有约定，不迁 ARB。
-  - [ ] 2.2 `notification_center_page.dart` `_milestoneCopy`：`if (isAccountMilestone(code)) return localizedMilestoneCelebration(code, locale, '');`（放在 `name == null` 判断之前）。
-- [ ] **T3 多宠庆祝内容区**（AC6；UI B2）
-  - [ ] 3.1 `showMilestoneCelebration`（`milestone_celebration.dart`:38-67）新增可选参数 `List<CelebrationPet> accountPets = const []`（`CelebrationPet(name, avatarUrl, petType)`，放 `profile/domain/`）；`_MilestoneCelebrationView` 据 `isAccountMilestone(item.code) && accountPets.length >= 2` 切 B2 布局。
-  - [ ] 3.2 宠物来源：在弹出前从 `petListProvider` 取（`status != 'READ_ONLY'`，按列表顺序 = 建档顺序，取前 5）。为避免 6 处调用方各写一遍，提供 `Future<List<CelebrationPet>> readAccountCelebrationPets(ProviderContainer c)`（经 `ProviderScope.containerOf(context, listen: false)` 取 container；读失败 → 空表 → 退化为 B1）。本 story 只在**补庆祝**（`_maybeCatchUp`）与**重温**（`_showCelebration`，`milestone_list_page.dart`:684-701）两处传入——账号级编码只会经这两条路径弹出（AC3：无即时弹出点）。
-  - [ ] 3.3 宠物行组件：头像用现有 `PetSpeciesAvatar`（`profile/presentation/widgets/pet_species_avatar.dart`，无头像时物种默认图）；名字 `fontSize: 11`、`maxLines: 1`、`overflow: ellipsis`、白 70%；行 `Wrap` / `Row` 居中，间距 `AppSpacing.md`（12）。
-  - [ ] 3.4 B2 隐藏 KOLEKSI：`if (widget.collection.isNotEmpty && !isMultiPetAccount)`；日期胶囊去物种 emoji 与名字，只留 `_formatLongDate`。
-  - [ ] 3.5 **只改内容 Column**（:171-268 的中段），不碰按钮区与 `_onSharePressed`——3.2 会整体重构布局为吸底按钮组。
-- [ ] **T4 回报后失效**（AC5.2）
-  - [ ] 4.1 `milestone_list_page.dart` `_reportCelebrated`（:135 起）或 `reportMilestoneCelebrated(onDone:)`：`codesToReport.any(isAccountMilestone)` → `onDone` 里 `container.invalidate(milestoneListProvider)`（整族）+ 失效档案头未庆祝角标所在 provider（grep `uncelebrated` 定位）。⚠️ 用 provider 自己的 Ref / container，不要用已销毁的 WidgetRef（`milestone_celebration_reporter.dart`:22-28 注释同一教训）。
-- [ ] **T5 通知点击（G-2）**（AC7）
-  - [ ] 5.1 `notification_center_page.dart` `_onTap`（:297 起）：`item.type == 'MILESTONE_SM_NODE' && isAccountMilestone(item.targetRef ?? '')` → 读 `petListProvider`（已在本页 watch，:600 附近 `pets`）与 `effectivePetIdProvider`；当前有效宠物为 READ_ONLY → `await ref.read(currentPetIdProvider.notifier).select(firstActive.id)`；然后照常 `NotificationDeepLink.open` → `MILESTONE_NODE` → `DeepLinkRoutes.milestoneList`。其余类型不变。
-  - [ ] 5.2 系统推送直跳不涉及（MILESTONE_SM_NODE 不推送）。
-- [ ] **T6 测试（widget / unit，覆盖稿中每种状态）**（全部 AC）
-  - [ ] 6.1 `test/profile/milestone_badge_test.dart`：新 6 条映射与回落（`MilestoneBadgeAssets.debugOverride` 空集 → 回落；含 `assets/milestone/first_friend.webp` → 出图）。
-  - [ ] 6.2 `test/profile/milestone_celebration_test.dart`：B1（账号级 + 1 宠：有 emoji 胶囊、有 KOLEKSI、标题「Teman pertama! 🤝」无宠物名）、B2（账号级 + 3 宠：3 个头像 + 名字、无 KOLEKSI、胶囊只有日期）、5 宠上限、名字超长省略、非账号级回归（id / en 各一次）。
-  - [ ] 6.3 `test/profile/milestone_catchup_test.dart` / `milestone_list_test.dart`：两枚同时未庆祝只弹一次且报两枚；有未庆祝 M → 弹 M、报三枚；回报含账号级 → 整族失效（用 fake repository 计数 fetch 次数）；切宠物后本地已庆祝集合挡住二次补弹。
-  - [ ] 6.4 `test/notify/…`（新建或扩 `notification_center_page_test.dart`）：B4 文案无宠物名（有 petName / 无 petName 两种）；点击当前宠物为 READ_ONLY → 先 select 第一只 ACTIVE 再跳 `/profile/milestones`。
-  - [ ] 6.5 `test/profile/milestone_v134_copy_test.dart` 风格加一条：6 个新编码 id / en 文案均不含 `{name}`。
-  - [ ] 6.6 现有测试全绿（`flutter test`）。
+- [x] **T1 账号级编码判定（App 侧唯一实现）**（AC2、AC5、AC6、AC7；R-4）
+  - [x] 1.1 `lib/features/profile/domain/milestone_account_codes.dart`（新）：`const Set<String> kAccountMilestoneCodes = {'C-S19','D-S19','G-S12','C-S20','D-S20','G-S13'};` + `bool isAccountMilestone(String code)`。显式列举、精确匹配，不切后缀；注释指向后端 `AccountMilestoneFlag`（2.1）。
+  - [x] 1.2 加一条跨库一致性测试（可选，推荐）：后端 `AccountMilestoneFlagTest` 读本文件比对集合，或 App 测试断言集合 == `kMilestoneBadgeKeys` 中值为 `first_friend` / `first_save` 的 key。
+- [x] **T2 文案**（AC2）
+  - [x] 2.1 `milestone_celebration_copy.dart`：在 `C-S18`（:127 块）/ `D-S18`（:327 块）/ `G-S11`（:485 块）之后各加两条 `MilestoneCelebrationCopy`（见 AC2.1）。该文件是里程碑文案的既有事实源（Dart 表、en / id 两语，**不是 ARB**）——沿用既有约定，不迁 ARB。
+  - [x] 2.2 `notification_center_page.dart` `_milestoneCopy`：`if (isAccountMilestone(code)) return localizedMilestoneCelebration(code, locale, '');`（放在 `name == null` 判断之前）。
+- [x] **T3 多宠庆祝内容区**（AC6；UI B2）
+  - [x] 3.1 `showMilestoneCelebration`（`milestone_celebration.dart`:38-67）新增可选参数 `List<CelebrationPet> accountPets = const []`（`CelebrationPet(name, avatarUrl, petType)`，放 `profile/domain/`）；`_MilestoneCelebrationView` 据 `isAccountMilestone(item.code) && accountPets.length >= 2` 切 B2 布局。
+  - [x] 3.2 宠物来源：在弹出前从 `petListProvider` 取（`status != 'READ_ONLY'`，按列表顺序 = 建档顺序，取前 5）。为避免 6 处调用方各写一遍，提供 `Future<List<CelebrationPet>> readAccountCelebrationPets(ProviderContainer c)`（经 `ProviderScope.containerOf(context, listen: false)` 取 container；读失败 → 空表 → 退化为 B1）。本 story 只在**补庆祝**（`_maybeCatchUp`）与**重温**（`_showCelebration`，`milestone_list_page.dart`:684-701）两处传入——账号级编码只会经这两条路径弹出（AC3：无即时弹出点）。
+  - [x] 3.3 宠物行组件：头像用现有 `PetSpeciesAvatar`（`profile/presentation/widgets/pet_species_avatar.dart`，无头像时物种默认图）；名字 `fontSize: 11`、`maxLines: 1`、`overflow: ellipsis`、白 70%；行 `Wrap` / `Row` 居中，间距 `AppSpacing.md`（12）。
+  - [x] 3.4 B2 隐藏 KOLEKSI：`if (widget.collection.isNotEmpty && !isMultiPetAccount)`；日期胶囊去物种 emoji 与名字，只留 `_formatLongDate`。
+  - [x] 3.5 **只改内容 Column**（:171-268 的中段），不碰按钮区与 `_onSharePressed`——3.2 会整体重构布局为吸底按钮组。
+- [x] **T4 回报后失效**（AC5.2）
+  - [x] 4.1 `milestone_list_page.dart` `_reportCelebrated`（:135 起）或 `reportMilestoneCelebrated(onDone:)`：`codesToReport.any(isAccountMilestone)` → `onDone` 里 `container.invalidate(milestoneListProvider)`（整族）+ 失效档案头未庆祝角标所在 provider（grep `uncelebrated` 定位）。⚠️ 用 provider 自己的 Ref / container，不要用已销毁的 WidgetRef（`milestone_celebration_reporter.dart`:22-28 注释同一教训）。
+- [x] **T5 通知点击（G-2）**（AC7）
+  - [x] 5.1 `notification_center_page.dart` `_onTap`（:297 起）：`item.type == 'MILESTONE_SM_NODE' && isAccountMilestone(item.targetRef ?? '')` → 读 `petListProvider`（已在本页 watch，:600 附近 `pets`）与 `effectivePetIdProvider`；当前有效宠物为 READ_ONLY → `await ref.read(currentPetIdProvider.notifier).select(firstActive.id)`；然后照常 `NotificationDeepLink.open` → `MILESTONE_NODE` → `DeepLinkRoutes.milestoneList`。其余类型不变。
+  - [x] 5.2 系统推送直跳不涉及（MILESTONE_SM_NODE 不推送）。
+- [x] **T6 测试（widget / unit，覆盖稿中每种状态）**（全部 AC）
+  - [x] 6.1 `test/profile/milestone_badge_test.dart`：新 6 条映射与回落（`MilestoneBadgeAssets.debugOverride` 空集 → 回落；含 `assets/milestone/first_friend.webp` → 出图）。
+  - [x] 6.2 `test/profile/milestone_celebration_test.dart`：B1（账号级 + 1 宠：有 emoji 胶囊、有 KOLEKSI、标题「Teman pertama! 🤝」无宠物名）、B2（账号级 + 3 宠：3 个头像 + 名字、无 KOLEKSI、胶囊只有日期）、5 宠上限、名字超长省略、非账号级回归（id / en 各一次）。
+  - [x] 6.3 `test/profile/milestone_catchup_test.dart` / `milestone_list_test.dart`：两枚同时未庆祝只弹一次且报两枚；有未庆祝 M → 弹 M、报三枚；回报含账号级 → 整族失效（用 fake repository 计数 fetch 次数）；切宠物后本地已庆祝集合挡住二次补弹。
+  - [x] 6.4 `test/notify/…`（新建或扩 `notification_center_page_test.dart`）：B4 文案无宠物名（有 petName / 无 petName 两种）；点击当前宠物为 READ_ONLY → 先 select 第一只 ACTIVE 再跳 `/profile/milestones`。
+  - [x] 6.5 `test/profile/milestone_v134_copy_test.dart` 风格加一条：6 个新编码 id / en 文案均不含 `{name}`。
+  - [x] 6.6 现有测试全绿（`flutter test`）。
 - [ ] **T7 L2 验收**（AC8）：本地 Android 模拟器 + stag 后端（不连生产）造数：单宠账号 / 3 宠账号第一次关注 → 通知中心 B4 → 点开补弹 B1 / B2 → 关闭后切另一只宠物列表不再弹；截图对稿打分 ≥ 95%。
 
 ## Dev Notes
@@ -133,16 +133,63 @@ S 组末尾显示「Teman pertama」「Simpan pertama」两枚（后端 sortOrde
 
 ### Agent Model Used
 
-（实现时填写）
+Claude
 
 ### Debug Log References
+
+- L0：`flutter analyze` → No issues found；`flutter test`（全量）→ +4251 ~1 All tests passed（新增 2 个测试文件共 29 条）。
+- 复审修订后 L0：`flutter analyze` → No issues found；`flutter test`（全量）→ +4254 ~1 All tests passed（本 story 测试共 32 条）。
+
+- 宠物行每只宠物初版挂了同一个 `ValueKey('milestoneCelebrationPet')` → Wrap 报 Duplicate keys；改为只给行 `milestoneCelebrationPetRow` 挂 key，测试按 `PetSpeciesAvatar` 计数。
+- B2 用例原断言「全页无 🐶」误伤：无头像狗的 `PetSpeciesAvatar` 占位本身是 🐶；改为「日期胶囊内无 emoji」。
 
 ### Completion Notes List
 
 - create-story：上下文分析完成，已生成完整开发指引（2026-11-04）。
-- 实现完成时必须写明：「云端只跑 L0；L1/L2 待本地验收」。
+- **云端只跑 L0；L1/L2 待本地验收**：
+  - L2 视觉：B1（账号级 + 单宠）/ B2（账号级 + 多宠，宠物行头像 40 + 2px splashInk 描边 + 白 25% 外圈、名字 11、间距 12、正文→宠物行 20、宠物行→胶囊 12）/ B3（列表 S 组末尾「Teman pertama」「Simpan pertama」、Header 分母 35 / 20 与通用 20 / 13 来自后端）/ B4（通知中心文案）对 UI 稿逐屏还原度 ≥ 95%（本地 Android 模拟器截图打分，T7 未做）。
+  - L2 联调（stag 后端）：单宠 / 3 宠账号第一次关注 → 通知中心 B4 → 点开补弹 B1 / B2 → 关闭后切另一只宠物列表不再弹（AC5.2 整族失效的真实效果）。
+  - 本 story 无 L1 集成测试（只 App）。
+  - **待素材**：`assets/milestone/first_friend.webp`、`first_save.webp` 未到 → 庆祝页紫渐变奖杯 / 列表级别色圆 / 通知中心 goldTint + `military_tech` 兜底（manifest 检测，素材放进目录即生效，不改代码）。
+- 名字核对（对 2.1 已提交代码）：`kMilestoneBadgeKeys` / `kMilestoneTitles` 已含 6 个新编码（徽章 90 / 44），本 story 只验证未重复加；后端对应类为 `AccountMilestoneFlag` + `MilestoneAutoCompleteMap`（编码登记在后者），App 跨库测试读后者源码比对。Dev Notes 其余名字（`showMilestoneCelebration`、`_maybeCatchUp`、`_reportCelebrated`、`_showCelebration`、`_milestoneCopy`、`_onTap`、`petListProvider`、`currentPetIdProvider.select`、`PetSpeciesAvatar`、`archiveStatsProvider`）与现码一致，story 正文未改；行号有漂移不影响。
+- T3.2：`readAccountCelebrationPets` 放在 `profile/data/account_celebration_pets.dart`（依赖 data 层 `petListProvider`），`CelebrationPet` 在 `profile/domain/celebration_pet.dart`；后端 `listOwned` 按 `created_at, id` 升序 = 建档顺序（已核）。
+- T4：档案头未庆祝角标所在 provider = `archiveStatsProvider`（family，`milestoneUncelebrated` 字段）。回报含账号级编码时在 `onDone` 里用弹出前取好的 `ProviderContainer` 整族失效 `milestoneListProvider` + `archiveStatsProvider`（不依赖本页是否 mounted）；reporter 本身在不带 petId 时也已整族失效列表，两者叠加无副作用。
+- T5（G-2）：按拍板点 2 实现——当前有效宠物（`resolveEffectivePetId(pets, currentPetId)`，与 `effectivePetIdProvider` 同口径）为 READ_ONLY → `currentPetIdProvider.notifier.select(第一只 ACTIVE)`，再照常 `NotificationDeepLink.open`；best-effort，列表取不到 / 无 ACTIVE 不切。
+- T2：文案沿用 Dart 表 `milestone_celebration_copy.dart`（与 PRD §7 FR-154 行逐字核对）；本 story 无新增 UI 字符串，未动 ARB、未跑 gen-l10n。
+- T6：6.1–6.5 集中在新文件 `test/profile/milestone_account_v142_test.dart`（徽章 / 文案 / resolveCatchup / 庆祝页 B1-B2 / 列表补弹与失效 / 本地集合挡二次补弹 / 关注收藏按钮源码扫描）与 `test/notify/milestone_account_notification_test.dart`（B4 文案、G-2 点击），未改既有测试文件。
+- 拍板点复述：① 宠物列表弹出前经 container 读，不在庆祝 widget 内 watch；② G-2 直接切当前宠物（会持久化）；③ 只读宠物上两枚为锁定态，正确。
+- 不碰按钮区与 `_onSharePressed`（留给 3.1 / 3.2）；未新增埋点；关注 / 收藏按钮无庆祝调用。
+
+- **复审修订（2026-11-04）**：
+  - CONFIRMED-1（AC5.3）：`milestone_account_codes.dart` 加 `accountSiblings(code)` / `expandAccountSiblings`（按同 flag 返回三物种编码，显式集合、不切后缀）；`LocallyCelebratedMilestones.add`（`markMilestonesCelebrating` / `report` 共用）按扩展后的全集记，回报失败撤回同一全集；回报给后端的仍只是 `codesToReport`。测试改走真实路径：猫列表补弹 C-S19 → 回报在途 → `select` 狗 → 新列表页读到 D-S19 未庆祝 → 断言不弹（去掉了手工预填；已验证去掉修复时该用例失败）。另加撤回全集单测。
+  - CONFIRMED-2：判定文件注释里的测试路径改为 `test/profile/milestone_account_v142_test.dart`。
+  - (a) `_maybeCatchUp` 改为先取 container 与宠物数据、`!mounted` 校验后再 `markMilestonesCelebrating`，不留下「没弹却已记」的标记。
+  - (b) `_selectActivePetForAccountMilestone`：`petListProvider.future.timeout(3s)`（同 `gift_pet_switch.dart`），超时按不切处理；await 后补 `if (!mounted) return`，`_onTap` 在切宠物之后同样补了 mounted 校验。`readAccountCelebrationPets` 同样加 3 秒超时（超时 → 空表 → B1）。
+  - (c) 重温 `_showCelebration` 加模块级 `_revisitOpening` 防重入闸：覆盖「取宠物数据 → 挂上弹层」这段空档，弹层挂上后由其遮罩挡点击；不等弹层关闭才放开（宿主 Navigator 销毁时该 Future 可能永不完成，闸门会卡死）。加连点两次只弹一个的用例。
+  - (d) `_reportCelebrated(codes, container)`：container 在弹出前取好传入，庆祝页关闭后不再经 context 取。
+
+#### 待确认
+
+- 重温路径（`_showCelebration`）对账号级编码需先异步读一次 `petListProvider` 再弹（通常命中缓存，无感延迟）；若读失败退化为 B1。
+- B2 日期胶囊在 `completedAt == null` 时整枚不显示（只写日期的胶囊没有内容可写）；单宠 / 非账号级保持原行为。
 
 ### File List
+
+- petgo_app/lib/features/profile/domain/milestone_account_codes.dart（新）
+- petgo_app/lib/features/profile/domain/celebration_pet.dart（新）
+- petgo_app/lib/features/profile/data/account_celebration_pets.dart（新）
+- petgo_app/lib/features/profile/domain/milestone_celebration_copy.dart
+- petgo_app/lib/features/profile/presentation/widgets/milestone_celebration.dart
+- petgo_app/lib/features/profile/presentation/milestone_list_page.dart
+- petgo_app/lib/features/profile/data/milestone_celebration_reporter.dart
+- petgo_app/lib/features/notify/presentation/notification_center_page.dart
+- petgo_app/test/profile/milestone_account_v142_test.dart（新）
+- petgo_app/test/notify/milestone_account_notification_test.dart（新）
+
+### Change Log
+
+- 2026-11-04：Story 2.3 实现（App）：账号级编码判定、6 条不拼名庆祝文案、通知中心 R-4 文案、多宠庆祝内容区（B2）、回报后整族失效、通知点击 G-2 切 ACTIVE 宠物；L0 测试。Status → review。
+- 2026-11-04：复审修订（CONFIRMED-1/2 + PLAUSIBLE a–d），见 Completion Notes「复审修订」。
 
 ## 待确认 / 发现的规划冲突
 

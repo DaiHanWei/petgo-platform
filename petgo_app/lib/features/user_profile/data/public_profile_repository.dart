@@ -36,6 +36,7 @@ class PublicProfile {
     this.followsMe = false,
     this.followEpoch = 0,
     this.official = false,
+    this.petFollowingCount,
   });
 
   /// 已发布（未软删）**PUBLIC** 内容数。
@@ -88,6 +89,10 @@ class PublicProfile {
   /// 目标的粉丝数（同上）。
   final int followerCount;
 
+  /// 目标追更的宠物数（V1.4.2 social-topic · Story 1.1 / 1.5 · G-1：关注列表「Hewan N」胶囊数据源）。
+  /// 旧后端缺键 → null（胶囊只显示「Hewan」不带数字）。
+  final int? petFollowingCount;
+
   /// 我是否关注了对方（游客 / 本人视角恒 false）。
   final bool iFollow;
 
@@ -121,6 +126,7 @@ class PublicProfile {
         followsMe: followsMe,
         followEpoch: epoch,
         official: official,
+        petFollowingCount: petFollowingCount,
       );
 
   /// 是否有可展示的签名（空串与纯空白按「没设置」处理）。
@@ -146,6 +152,7 @@ class PublicProfile {
         iFollow: (json['iFollow'] ?? false) as bool,
         followsMe: (json['followsMe'] ?? false) as bool,
         official: (json['official'] ?? false) as bool,
+        petFollowingCount: (json['petFollowingCount'] as num?)?.toInt(),
       );
 }
 

@@ -14,6 +14,7 @@ import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// V1.3.0 批次 A · Story 4.1（L0）：发布页拖拽重排与封面角标（FR-116 · AD-A16 / AD-A27）。
 ///
@@ -25,7 +26,7 @@ class _FakeRepo implements ContentRepository {
   List<ImageSize?>? lastSizes;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -41,7 +42,7 @@ class _FakeRepo implements ContentRepository {
   }) async {
     lastUrls = imageUrls;
     lastSizes = imageSizes;
-    return 123;
+    return const PublishedPost(id: 123);
   }
 }
 

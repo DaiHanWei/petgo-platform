@@ -8,6 +8,7 @@ import '../../pet_slot/presentation/pet_readonly_block.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../pet_passport/presentation/passport_layout.dart';
+import '../../../core/config/feature_flags.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -235,13 +236,15 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                 onTap: ageCardEnabled ? () => context.push(PetInsightsRoutes.ageCard) : null,
               ),
               // V1.3.2 Story 1.2：宠物护照，全物种可点。
-              InsightEntryCard(
-                inkKey: const ValueKey('insightPassport'),
-                icon: Icons.menu_book_outlined,
-                title: l10n.passportEntryTitle,
-                sub: l10n.passportEntrySub,
-                onTap: () => context.push(PetInsightsRoutes.passport),
-              ),
+              // V1.4.2 FR-165（D-22）：入口暂时隐藏（集合 if：去掉的卡不留间距）；路由 / 其它进入路径不变。
+              if (kPassportEntryEnabled)
+                InsightEntryCard(
+                  inkKey: const ValueKey('insightPassport'),
+                  icon: Icons.menu_book_outlined,
+                  title: l10n.passportEntryTitle,
+                  sub: l10n.passportEntrySub,
+                  onTap: () => context.push(PetInsightsRoutes.passport),
+                ),
               // V1.3.2 Story 2.3：Tailsonality，全物种可点（OTHER 走通用题套）。
               KeyedSubtree(
                 key: _tailsonalityAnchor,
@@ -255,13 +258,15 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                 ),
               ),
               // V1.3.2 Story 3.5：登机牌，全物种可点。
-              InsightEntryCard(
-                inkKey: const ValueKey('insightBoardingPass'),
-                icon: Icons.airplane_ticket_outlined,
-                title: l10n.boardingPassEntryTitle,
-                sub: l10n.boardingPassEntrySub,
-                onTap: () => context.push(PetInsightsRoutes.boardingPass),
-              ),
+              // V1.4.2 FR-165（D-22）：同上，入口暂时隐藏。
+              if (kBoardingPassEntryEnabled)
+                InsightEntryCard(
+                  inkKey: const ValueKey('insightBoardingPass'),
+                  icon: Icons.airplane_ticket_outlined,
+                  title: l10n.boardingPassEntryTitle,
+                  sub: l10n.boardingPassEntrySub,
+                  onTap: () => context.push(PetInsightsRoutes.boardingPass),
+                ),
             ]),
           ),
         ),

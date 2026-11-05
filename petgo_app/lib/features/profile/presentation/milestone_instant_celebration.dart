@@ -3,14 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/deep_link_routes.dart';
-import '../../../l10n/app_localizations.dart';
 import '../data/current_pet_provider.dart';
 import '../data/milestone_celebration_reporter.dart';
 import '../data/milestone_repository.dart';
 import '../domain/milestone.dart';
 import '../domain/milestone_instant_codes.dart';
-import '../domain/milestone_share.dart';
-import '../domain/milestone_titles.dart';
 import 'widgets/milestone_celebration.dart';
 
 /// 当场庆祝短轮询间隔（健康页范式）。测试覆盖为 const [] 即完全不检测。
@@ -126,11 +123,8 @@ bool _hostIsCurrent(BuildContext context) =>
 Future<void> _celebrate(BuildContext context, WidgetRef ref, MilestoneList list, MilestoneItem item,
     {int? petId}) async {
   if (!_hostIsCurrent(context)) return;
-  final l10n = AppLocalizations.of(context);
-  final locale = Localizations.localeOf(context);
   final petName = list.petName;
   final collection = [for (final g in list.groups) ...g.items];
-  final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
   final router = GoRouter.maybeOf(context);
   // 在 show 之前取好 notifier：关闭时宿主页可能已销毁，不能再在已销毁的 WidgetRef 上 read。
   final notifier = ref.read(locallyCelebratedMilestonesProvider.notifier);
@@ -143,15 +137,8 @@ Future<void> _celebrate(BuildContext context, WidgetRef ref, MilestoneList list,
     petName: petName,
     path: MilestoneCelebrationPath.instant,
     collection: collection,
-    onShare: () => shareMilestoneWithLink(
-      ref,
-      item: item,
-      locale: locale,
-      petName: petName,
-      shareText: shareText,
-      collection: collection,
-      petId: petId, // OCR #5：逐只庆祝时分享这只宠物的里程碑，不是当前宠物
-    ),
+    // OCR #5：逐只庆祝时分享 / 发帖这只宠物的里程碑，不是当前宠物（V1.4.2 Story 3.2：按钮依赖由庆祝页弹出时取好）。
+    petId: petId,
     // push 而非 go：返回键回到成功页 / 结果页；带 justCelebrated 防列表页在回报落库前连弹。
     onSeeAll: router == null
         ? null

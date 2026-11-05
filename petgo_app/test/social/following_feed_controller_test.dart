@@ -31,6 +31,9 @@ class _Repo implements FeedRepository {
       nextCursor: more ? '${idx + 1}' : null,
       hasMore: more,
       rankMode: 'chrono',
+      // V1.4.2 Story 1.5：计数只首页下发。
+      followingUserCount: cursor == null ? 4 : null,
+      followingPetCount: cursor == null ? 2 : null,
     );
   }
 
@@ -115,5 +118,37 @@ void main() {
     final b = FollowListItem.fromJson({'userId': 2});
     expect(b.petType, isNull);
     expect(b.petBirthday, isNull);
+  });
+
+  test('V1.4.2 Story 1.5 · AC5.2：首页解析两个计数；加载更多不覆盖首页计数', () async {
+    final first = await c.read(followingFeedProvider.future);
+    expect(first.followingUserCount, 4);
+    expect(first.followingPetCount, 2);
+
+    await c.read(followingFeedProvider.notifier).loadMore();
+    final s = c.read(followingFeedProvider).value!;
+    expect(s.items.map((i) => i.id), [1, 2, 3]);
+    expect(s.followingUserCount, 4);
+    expect(s.followingPetCount, 2);
+  });
+
+  test('V1.4.2 Story 1.5：FeedPage / FeedItem 解析 reason 与两个计数；缺键 null；copyWith 保留 reason', () {
+    final page = FeedPage.fromJson({
+      'items': [
+        {'id': 1, 'authorId': 7, 'type': 'DAILY', 'createdAt': '2026-10-01T00:00:00Z', 'reason': 'followed_pet'},
+        {'id': 2, 'authorId': 7, 'type': 'DAILY', 'createdAt': '2026-10-01T00:00:00Z'},
+      ],
+      'hasMore': false,
+      'followingUserCount': 1,
+      'followingPetCount': 0,
+    });
+    expect(page.items.first.reason, 'followed_pet');
+    expect(page.items.first.copyWith(likeCount: 3).reason, 'followed_pet');
+    expect(page.items.last.reason, isNull);
+    expect(page.followingUserCount, 1);
+    expect(page.followingPetCount, 0);
+    final old = FeedPage.fromJson({'items': [], 'hasMore': false});
+    expect(old.followingUserCount, isNull);
+    expect(old.followingPetCount, isNull);
   });
 }

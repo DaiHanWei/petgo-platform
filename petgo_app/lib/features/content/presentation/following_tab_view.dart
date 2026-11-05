@@ -18,6 +18,8 @@ import 'following_feed_controller.dart';
 import 'report_sheet.dart';
 import 'widgets/following_empty_view.dart';
 import 'widgets/following_strip.dart';
+import '../../topic/domain/topic.dart' show TopicEntrySource;
+import '../../topic/presentation/topic_page.dart';
 
 /// Social → Following 页（V1.3.4 following 流 · spec §2.2 ~ §2.4）。
 ///
@@ -58,7 +60,15 @@ class FollowingTabView extends ConsumerWidget {
         ),
       ),
       data: (state) {
-        if (state.isEmpty) return scrollable(const FollowingEmptyView());
+        if (state.isEmpty) {
+          // V1.4.2 social-topic Story 1.5 · AC5.3（D-9）：靠首页两个计数区分两种空态；
+          // 任一 > 0 → A11「暂无新动态」；都为 0 或计数缺失（旧后端）→ 现有空态。
+          final users = state.followingUserCount;
+          final pets = state.followingPetCount;
+          final noNew = users != null && pets != null && (users > 0 || pets > 0);
+          return scrollable(FollowingEmptyView(
+              variant: noNew ? FollowingEmptyVariant.noNewPosts : FollowingEmptyVariant.noFollows));
+        }
         void onReported(FeedItem item) {
           removeFeedPost(ref, item.id);
           if (context.mounted) {
@@ -99,6 +109,8 @@ class FollowingTabView extends ConsumerWidget {
             onBlocked: _hideAuthor(ref, userId),
             onReported: _hideAuthor(ref, userId),
           ),
+          // V1.4.2 social-topic Story 4.4：点正文 #话题 → 话题页（topic_page_viewed.source = feed_card）。
+          onTapTopic: (name) => context.push(TopicPage.routeFor(name, from: TopicEntrySource.feedCard)),
           onCommentItem: (item) => context.push('/content/${item.id}?focus=comments'),
           onMoreItem: (item) => openReport(context, ref, item.id, onReported: () => onReported(item)),
         );

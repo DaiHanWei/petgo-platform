@@ -84,4 +84,27 @@ public interface UserHideRelationReader {
      * @return {@code targetIds} 里被 holder 隐藏的那些 id
      */
     java.util.Set<Long> hiddenByHolder(long holderId, java.util.Collection<Long> targetIds);
+
+    /**
+     * 这批人里，{@code holderId} <b>主动拉黑</b>了哪些 —— <b>只认 {@code BLOCK}</b>（与 {@link #isBlocked} 同口径），<b>一次查询</b>
+     * （V1.4.2 social-topic Story 1.2）。
+     *
+     * <p>用途：追更宠物新 Diary 提醒扇出时排除「作者拉黑了的追更者」（PRD FR-153 AC9 / 决策 R-1：作者拉黑我
+     * 只在追更宠物一路排除，举报隐藏不算）。
+     *
+     * @param targetIds 待判定的一批人（空表直接返回空集，不发查询）
+     * @return {@code targetIds} 里被 holder 拉黑的那些 id
+     */
+    java.util.Set<Long> blockedByHolder(long holderId, java.util.Collection<Long> targetIds);
+
+    /**
+     * 这批人里，哪些<b>隐藏了</b> {@code targetId} —— {@link #hiddenByHolder} 的反方向（holder 批量、target 固定），
+     * <b>不分来源</b>（拉黑与举报隐藏都算，与 {@link #isHidden} 同口径），<b>一次查询</b>（V1.4.2 social-topic Story 1.2）。
+     *
+     * <p>用途：追更宠物新 Diary 提醒扇出时排除「隐藏了作者的追更者」（与关注流「作者在我的隐藏名单」同口径，NFR1）。
+     *
+     * @param holderIds 待判定的一批人（空表直接返回空集，不发查询）
+     * @return {@code holderIds} 里隐藏了 target 的那些 id
+     */
+    java.util.Set<Long> holdersHiding(long targetId, java.util.Collection<Long> holderIds);
 }

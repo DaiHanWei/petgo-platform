@@ -86,7 +86,9 @@ class ContentDetailServiceTest {
                 // V1.4.0 gift Story 2.1：Diary 礼物区（宠物只经端口，汇总 / 墙前 3 经只读查询）。
                 giftPets, giftShowcase,
                 // V1.4.0 ④ Story 2.1：收藏状态只读口。
-                collectState);
+                collectState,
+                // V1.4.2 social-topic Story 4.1：话题名批量口（mock 默认无话题）。
+                org.mockito.Mockito.mock(com.tailtopia.topic.service.TopicQueryService.class));
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);

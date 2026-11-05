@@ -193,6 +193,7 @@ public class TimelineService {
      *
      * <p>所以做成**组装完成后的唯一贴标点**：一个响应一次批量查询。
      * 只有带内容编号的快乐时刻类条目才可能有标签，其余类天然为空。
+     * V1.4.2 Story 4.1：话题标准名（{@code topicNames}）也在这里一并贴（再一次批量）。
      */
     private List<TimelineItemResponse> attachDecorationTags(List<TimelineItemResponse> items) {
         List<Long> postIds = items.stream()
@@ -204,11 +205,21 @@ public class TimelineService {
             return List.copyOf(items);
         }
         var tags = contentTags.findVisibleTags(postIds, Instant.now());
-        if (tags.isEmpty()) {
+        // V1.4.2 social-topic Story 4.1（D-13）：话题标准名同一个贴标点、一次批量（经 ContentService，不直依赖 topic）。
+        var topicNames = contentService.topicNamesOf(postIds);
+        boolean noTags = tags == null || tags.isEmpty();
+        boolean noTopics = topicNames == null || topicNames.isEmpty();
+        if (noTags && noTopics) {
             return List.copyOf(items);
         }
         return items.stream()
-                .map(i -> i.postId() == null ? i : i.withDecorationTags(tags.get(i.postId())))
+                .map(i -> {
+                    if (i.postId() == null) {
+                        return i;
+                    }
+                    TimelineItemResponse out = noTags ? i : i.withDecorationTags(tags.get(i.postId()));
+                    return noTopics ? out : out.withTopicNames(topicNames.get(i.postId()));
+                })
                 .toList();
     }
 
@@ -639,8 +650,9 @@ public class TimelineService {
         // V1.4.0 gift Story 2.1（AD-10）：礼物总价值 —— 按<b>这只宠物</b>算（不按主人汇总：多宠合入后会混算）。
         // 主人 / 站内访客 / 分享 token / H5 名片四处都出自这一句。
         long giftTotalValue = giftShowcase.totalValueOfPet(profile.getId());
+        // V1.4.2 social-topic Story 1.1：追更人数从已取到的 profile 直读，不加查询。
         return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total(),
-                healthRecordCount, uncelebrated, giftTotalValue);
+                healthRecordCount, uncelebrated, giftTotalValue, profile.getFollowerCount());
     }
 
     /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2 &gt; 场所打卡=3（V1.3.2）。 */

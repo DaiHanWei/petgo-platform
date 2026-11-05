@@ -30,8 +30,8 @@
 # 2.1 V20261104_2030 user_milestone_flags + 新编码 roster 行（⑤）
 # 2.2 V20261104_2040 账号级里程碑存量补算（⑥）
 # 4.1 V20261104_2050 topics + content_topics（②）
-# 4.1 V20261104_2060 content_post_view_days（③）
-# 7.1 V20261104_2070 ops_notification_campaigns.skipped_no_pet_count（⑧）
+# 4.1 V20261104_2055 content_post_view_days（③）（原预分配 _2060 分钟位越界，2026-11-05 改号）
+# 7.1 V20261104_2058 ops_notification_campaigns.skipped_no_pet_count（⑧）（原预分配 _2070 分钟位越界，2026-11-05 改号）
 # 若实现时发现与其他分支撞号，按 CLAUDE.md 取创建时刻重新取号，并回写本表。
 
 generated: 2026-11-04
@@ -43,42 +43,42 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.2"
 
 development_status:
   epic-1: in-progress
-  1-1-追更关系与接口: ready-for-dev
-  1-2-追更通知与推送分类: ready-for-dev
-  1-3-关注流合并追更与宠物推荐改造: ready-for-dev
-  1-4-app宠物访客页追更与失效修复: ready-for-dev
-  1-5-app关注列表关注流空态与通知推送设置: ready-for-dev
+  1-1-追更关系与接口: review
+  1-2-追更通知与推送分类: review
+  1-3-关注流合并追更与宠物推荐改造: review
+  1-4-app宠物访客页追更与失效修复: review
+  1-5-app关注列表关注流空态与通知推送设置: review
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-账号级里程碑后端: ready-for-dev
-  2-2-存量用户补算: ready-for-dev
-  2-3-app新里程碑展示与补庆祝: ready-for-dev
+  2-1-账号级里程碑后端: review
+  2-2-存量用户补算: review
+  2-3-app新里程碑展示与补庆祝: review
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-app里程碑卡与发帖入口扩参: ready-for-dev
-  3-2-app庆祝页重构与两个分享按钮: ready-for-dev
+  3-1-app里程碑卡与发帖入口扩参: review
+  3-2-app庆祝页重构与两个分享按钮: review
   epic-3-retrospective: optional
 
   epic-4: in-progress
-  4-1-话题建模发帖写关联与按天浏览: ready-for-dev
-  4-2-话题查询接口与热度任务: ready-for-dev
-  4-3-app话题详情页首页话题行与隐藏入口: ready-for-dev
-  4-4-app正文与输入框高亮及井号联想: ready-for-dev
+  4-1-话题建模发帖写关联与按天浏览: review
+  4-2-话题查询接口与热度任务: review
+  4-3-app话题详情页首页话题行与隐藏入口: review
+  4-4-app正文与输入框高亮及井号联想: review
   epic-4-retrospective: optional
 
   epic-5: in-progress
-  5-1-at候选范围扩大后端: ready-for-dev
-  5-2-app-at面板改造: ready-for-dev
+  5-1-at候选范围扩大后端: review
+  5-2-app-at面板改造: review
   epic-5-retrospective: optional
 
   epic-6: in-progress
-  6-1-后台话题管理页: ready-for-dev
-  6-2-后台话题页顶置: ready-for-dev
+  6-1-后台话题管理页: review
+  6-2-后台话题页顶置: review
   epic-6-retrospective: optional
 
   epic-7: in-progress
-  7-1-通知变量替换与人群计算: ready-for-dev
-  7-2-后台通知编辑器与确认页: ready-for-dev
+  7-1-通知变量替换与人群计算: review
+  7-2-后台通知编辑器与确认页: review
   epic-7-retrospective: optional

@@ -28,6 +28,7 @@ import com.tailtopia.shared.media.MediaDeletionService;
 import com.tailtopia.shared.media.PersonalMedia;
 import com.tailtopia.shop.service.ShopAccountDeletionService;
 import com.tailtopia.social.service.FollowService;
+import com.tailtopia.social.service.PetFollowService;
 import com.tailtopia.tailsonality.service.TailsonalityDeletionService;
 import com.tailtopia.triage.service.TriageDeletionService;
 import java.util.List;
@@ -91,6 +92,10 @@ public class AccountDeletionService {
     private final CollectDeletionService collectDeletion;
     /** OCR #2：宠物名额 ACTIVE → EXPIRED（保留付费记录），否则到期扫描继续给已注销账号写通知 / 推送。 */
     private final PetSlotAccountDeletionService petSlotDeletion;
+    /** V1.4.2 social-topic Story 1.1：追更者一侧的追更行 + 宠物计数（users 行只匿名化，FK CASCADE 不触发）。 */
+    private final PetFollowService petFollowService;
+    /** V1.4.2 social-topic Story 2.1：账号级里程碑 flag 随注销物理删除。 */
+    private final com.tailtopia.profile.service.AccountMilestoneService accountMilestones;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -109,7 +114,9 @@ public class AccountDeletionService {
             OpsPopupImpressionDeletionService opsPopupImpressionDeletion,
             GrowthAccountDeletionService growthDeletion,
             PushPreferenceService pushPreferences, CollectDeletionService collectDeletion,
-            PetSlotAccountDeletionService petSlotDeletion) {
+            PetSlotAccountDeletionService petSlotDeletion,
+            PetFollowService petFollowService,
+            com.tailtopia.profile.service.AccountMilestoneService accountMilestones) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -137,6 +144,8 @@ public class AccountDeletionService {
         this.pushPreferences = pushPreferences;
         this.collectDeletion = collectDeletion;
         this.petSlotDeletion = petSlotDeletion;
+        this.petFollowService = petFollowService;
+        this.accountMilestones = accountMilestones;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -229,6 +238,8 @@ public class AccountDeletionService {
         // ⚠️ users 行只匿名化不删，growth_accounts 对 users 的 FK 永不触发 CASCADE —— 必须显式删；
         //    放在 tailsonality 之后、PawCoin 作废之前（架构 AD-18 定的位置）。
         growthDeletion.deleteByUserId(userId);
+        // V1.4.2 social-topic Story 2.1（AC10）：账号级里程碑 flag 物理删（users 行只匿名化，FK CASCADE 在注销路径不触发）。
+        accountMilestones.deleteByUserId(userId);
         // V1.4.0 ④ Story 2.1：本人的帖子 / 场所收藏物理删（users 行只匿名化，FK CASCADE 不触发），在 authDeletion 之前。
         // ⚠️ 他人收藏的、指向本人帖子的行不删：帖子置 AUTHOR_DEACTIVATED 后列表读时显示不可见，由对方自行移除。
         collectDeletion.deleteByUserId(userId);
@@ -242,6 +253,11 @@ public class AccountDeletionService {
         // ⚠️ 放在 authDeletion **之后**：此时 deleted_at 已写，findActiveByPublicToken 已拒绝新的关注，
         //    清理后不会再长出新行（放在之前会有一个「清完又被人关注」的窗口）。幂等可重跑。
         followService.purgeUser(userId);
+        // V1.4.2 social-topic Story 1.1（D-11）：他追更的宠物计数 −1 + 删他的全部追更行（幂等可重跑）。
+        // 🔴 同样不能靠 fk_pet_follows_follower 的 CASCADE（users 行不删）。
+        // ⚠️ 同理放在 authDeletion **之后**：deleted_at 已写，PetFollowService.follow 的本人 isActive 自检已拒绝
+        //    新追更，清完不会再长出新行。他自己宠物上的追更行已随上面 deleteAllForAccount 物理删宠级联消失。
+        petFollowService.purgeFollower(userId);
 
         // OSS 个人图：2026-08-19 起保留不删（F21，快照引用保护；MediaDeletionService 只记账）。
         mediaDeletion.deletePrivateKeys(media.privateKeys());

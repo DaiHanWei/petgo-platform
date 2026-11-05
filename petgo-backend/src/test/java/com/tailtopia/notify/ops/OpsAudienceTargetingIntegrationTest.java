@@ -141,7 +141,7 @@ class OpsAudienceTargetingIntegrationTest extends ApiIntegrationTest {
                 + "\"activity\":[\"WITHIN_7D\"],\"paid\":true}";
         assertThat(resolve(json)).contains(match.getId()).doesNotContain(wrongPet.getId(), virt.getId());
         AudienceFilters f = AudienceSpec.parse(json).filters();
-        assertThat(audienceQuery.count(AudienceSpec.parse(json), null)).isGreaterThanOrEqualTo(1);
+        assertThat(audienceQuery.count(AudienceSpec.parse(json), null).total()).isGreaterThanOrEqualTo(1);
         assertThat(matches(match, f)).isTrue();
         assertThat(matches(wrongPet, f)).isFalse();
         assertThat(matches(virt, f)).as("虚拟号不在基础过滤内").isFalse();

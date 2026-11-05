@@ -292,6 +292,43 @@ class GrowthActivityListenerTest {
         assertThat(cs.get(2).petIds()).isNull();
     }
 
+    /** V1.4.2 Story 2.1 T7.4（D-12）：账号级 6 个编码走按宠物路径时不入账（防 2 只宠物 = 2 次给分）。 */
+    @Test
+    void perPetMilestoneEventForAccountLevelCodeIsIgnored() {
+        for (String code : List.of("C-S19", "C-S20", "D-S19", "D-S20", "G-S12", "G-S13")) {
+            listener.onMilestone(new MilestoneCompletedEvent(7L, code, MilestoneLevel.S, "t",
+                    MilestoneCompletionSource.SYSTEM_AUTO, 9L));
+        }
+        verify(ledger, never()).accrue(any());
+    }
+
+    /** V1.4.2 Story 2.1 T7.3（P-7）：账号级 1 条 MILESTONE_S，键 = 账号 + flag，refId = flagKey，关联写了完成行的宠物。 */
+    @Test
+    void accountMilestoneAccruesOnceKeyedByUserAndFlag() {
+        listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(7L,
+                "FIRST_FOLLOW_USER", List.of(9L, 10L), List.of("C-S19", "D-S19"), "C-S19"));
+
+        AccrualCommand c = accrued(1).get(0);
+        assertThat(c.userId()).isEqualTo(7L);
+        assertThat(c.rule()).isEqualTo(RuleCode.MILESTONE_S);
+        assertThat(c.idemKey()).isEqualTo("MILESTONE_ACCT:7:FIRST_FOLLOW_USER");
+        assertThat(c.refType()).isEqualTo("MILESTONE");
+        assertThat(c.refId()).isEqualTo("FIRST_FOLLOW_USER");
+        assertThat(c.petIds()).containsExactly(9L, 10L);
+    }
+
+    /** V1.4.2 Story 2.1 AC5.1（G-3）：触发时没有 ACTIVE 宠物，成长值照发，pet_ids 为 NULL。 */
+    @Test
+    void accountMilestoneWithoutPetsStillAccrues() {
+        listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(7L,
+                "FIRST_COLLECT_CONTENT", List.of(), List.of(), null));
+
+        AccrualCommand c = accrued(1).get(0);
+        assertThat(c.idemKey()).isEqualTo("MILESTONE_ACCT:7:FIRST_COLLECT_CONTENT");
+        assertThat(c.refId()).isEqualTo("FIRST_COLLECT_CONTENT");
+        assertThat(c.petIds()).isNull();
+    }
+
     @Test
     void takedownReversesOnlyThePostPoints() {
         listener.onRemoved(new ContentRemovedEvent(5L, 7L, NOW));

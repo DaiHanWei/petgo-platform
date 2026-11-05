@@ -62,7 +62,9 @@ class CommentServiceTest {
         service = new CommentService(comments, posts, accounts, events, moderation, reviewGate,
                 new com.tailtopia.mention.service.MentionSanitizer(accounts,
                         mock(com.tailtopia.social.read.UserHideRelationReader.class),
-                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)),
+                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class),
+                        // V1.4.2 social-topic Story 5.1：范围扩大到「我关注 ∪ 关注我」。
+                        mock(com.tailtopia.social.read.FollowReader.class)),
                 // Story 3.3：@ 渲染投影。同上，没 @ 就不碰依赖。
                 new com.tailtopia.mention.service.MentionViewService(accounts,
                         mock(com.tailtopia.social.read.UserHideRelationReader.class)));

@@ -10,12 +10,14 @@ import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
+import 'package:tailtopia/features/content/presentation/brag_post_entry.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/content/presentation/publish_result_page.dart';
 import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// V1.4.0 multi-pet Story 3.3 · AC7（PRD §4）：`diary_published {pet_count}`。
 ///
@@ -31,7 +33,12 @@ void main() {
   tearDown(() => Analytics.debugCaptureSink = null);
 
   Future<void> publish(WidgetTester tester,
-      {required ContentType preset, List<int> tapPets = const [], bool fail = false, String? failSlug, int? status}) async {
+      {required ContentType preset,
+      List<int> tapPets = const [],
+      bool fail = false,
+      String? failSlug,
+      int? status,
+      BragPostSource? entrySource}) async {
     tester.view.physicalSize = const Size(1200, 3200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -51,7 +58,7 @@ void main() {
     addTearDown(container.dispose);
     final router = GoRouter(initialLocation: '/home', routes: [
       GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('home'))),
-      GoRoute(path: '/compose', builder: (c, s) => Scaffold(body: PublishComposePage(preset: preset))),
+      GoRoute(path: '/compose', builder: (c, s) => Scaffold(body: PublishComposePage(preset: preset, entrySource: entrySource))),
       GoRoute(path: '/publish/done', builder: (c, s) => PublishDonePage(args: s.extra as PublishResultArgs)),
       GoRoute(
           path: '/publish/rejected', builder: (c, s) => PublishRejectedPage(args: s.extra as PublishResultArgs)),
@@ -90,6 +97,23 @@ void main() {
     expect(got.single, {'pet_count': 2});
   });
 
+  // V1.4.2 social-topic Story 3.1 · AC4（PRD §4 FR-156）：里程碑庆祝页来源追加 source。
+  testWidgets('entrySource = milestoneCelebration：Diary 发布成功 → {pet_count, source: milestone_celebration}', (tester) async {
+    await publish(tester,
+        preset: ContentType.growthMoment, tapPets: [1, 2], entrySource: BragPostSource.milestoneCelebration);
+    expect(diaryEvents().single, {'pet_count': 2, 'source': 'milestone_celebration'});
+  });
+
+  testWidgets('其他 Pamer 来源（如 boarding_pass）→ 仍只有 pet_count', (tester) async {
+    await publish(tester, preset: ContentType.growthMoment, tapPets: [1], entrySource: BragPostSource.boardingPass);
+    expect(diaryEvents().single, {'pet_count': 1});
+  });
+
+  testWidgets('里程碑来源但用户改成 Moment 发布 → 不报 diary_published（Moment 无成功事件）', (tester) async {
+    await publish(tester, preset: ContentType.daily, entrySource: BragPostSource.milestoneCelebration);
+    expect(diaryEvents(), isEmpty);
+  });
+
   testWidgets('Moment 发布成功 → 不报 diary_published', (tester) async {
     await publish(tester, preset: ContentType.daily);
     expect(diaryEvents(), isEmpty);
@@ -122,7 +146,7 @@ class _Repo implements ContentRepository {
   final int? status;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -152,7 +176,7 @@ class _Repo implements ContentRepository {
       throw DioException(
           requestOptions: RequestOptions(path: '/api/v1/content-posts'), type: DioExceptionType.connectionError);
     }
-    return 9;
+    return const PublishedPost(id: 9);
   }
 }
 

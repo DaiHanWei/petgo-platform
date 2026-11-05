@@ -119,6 +119,20 @@ public interface OpsNotificationCampaignRepository extends JpaRepository<OpsNoti
             """)
     int setSkipped(@Param("id") long id, @Param("n") int n, @Param("now") Instant now);
 
+    /**
+     * V1.4.2 AB-37（R-3）：用了宠物变量时因没有宠物被排除的人数 + 刷进展（所有人群模式）。
+     * 返回 0 = 已不在 SENDING，须停止。
+     */
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update OpsNotificationCampaign c
+               set c.skippedNoPetCount = :n, c.lastProgressAt = :now, c.updatedAt = :now
+             where c.id = :id
+               and c.status = com.tailtopia.notify.ops.domain.OpsCampaignStatus.SENDING
+            """)
+    int setSkippedNoPet(@Param("id") long id, @Param("n") int n, @Param("now") Instant now);
+
     /** 收尾：SENDING → DONE / PARTIAL_FAILED。已被超时扫描改掉的不覆盖。 */
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)

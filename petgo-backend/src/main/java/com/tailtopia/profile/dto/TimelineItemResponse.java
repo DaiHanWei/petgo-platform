@@ -61,7 +61,14 @@ public record TimelineItemResponse(
         /** 完整代号 {@code ENTJ-H}（仅 {@code TAILSONALITY_BANNER}）。 */
         String tailsonalityCode,
         /** 测试日期（结果 {@code created_at} 的 UTC 日，仅显示用；有效日期是解锁日）。 */
-        LocalDate tailsonalityTestedOn) {
+        LocalDate tailsonalityTestedOn,
+        /**
+         * 正文里可点的话题标准名（V1.4.2 social-topic Story 4.1 · D-13，仅 ACTIVE / HIDDEN）。只有快乐时刻类条目可能有。
+         *
+         * <p>同 {@code decorationTags}：由 {@code TimelineService} 在条目组装完成后<b>统一贴一次</b>（一个响应一次批量），
+         * 各工厂一律传 null；空表不下发（NON_NULL 省略）。
+         */
+        List<String> topicNames) {
 
     /** 打卡条目的场所引用。{@code status} ∈ ACTIVE / UNAVAILABLE（点击能否进场所详情）。 */
     public record CheckinPlace(String placeToken, String name, String status) {
@@ -74,7 +81,16 @@ public record TimelineItemResponse(
                 aiLevel, symptomSummary, sourceType, sourceRef, milestoneCode, milestoneLevel,
                 healthRecordType, healthRecordId, idCardSerial,
                 (tags == null || tags.isEmpty()) ? null : tags, checkinPlace, tailsonalityResultToken,
-                tailsonalityCode, tailsonalityTestedOn);
+                tailsonalityCode, tailsonalityTestedOn, topicNames);
+    }
+
+    /** 贴上话题标准名的副本（V1.4.2 Story 4.1，与 {@link #withDecorationTags} 同一个统一贴标点）。 */
+    public TimelineItemResponse withTopicNames(List<String> names) {
+        return new TimelineItemResponse(kind, itemType, date, eventDate, postId, imageUrls, text,
+                aiLevel, symptomSummary, sourceType, sourceRef, milestoneCode, milestoneLevel,
+                healthRecordType, healthRecordId, idCardSerial, decorationTags, checkinPlace,
+                tailsonalityResultToken, tailsonalityCode, tailsonalityTestedOn,
+                (names == null || names.isEmpty()) ? null : List.copyOf(names));
     }
 
     public static final String HAPPY_MOMENT = "HAPPY_MOMENT";
@@ -94,7 +110,7 @@ public record TimelineItemResponse(
     public static TimelineItemResponse happyMoment(Long postId, Instant date, LocalDate eventDate,
             List<String> imageUrls, String text) {
         return new TimelineItemResponse(HAPPY_MOMENT, TimelineItemType.HAPPY_MOMENT, date, eventDate,
-                postId, imageUrls, text, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                postId, imageUrls, text, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -106,7 +122,7 @@ public record TimelineItemResponse(
             String milestoneLevel) {
         return new TimelineItemResponse(HAPPY_MOMENT, TimelineItemType.HAPPY_MOMENT_MILESTONE, date,
                 eventDate, postId, imageUrls, text, null, null, null, null, milestoneCode,
-                milestoneLevel, null, null, null, null, null, null, null, null);
+                milestoneLevel, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -125,26 +141,26 @@ public record TimelineItemResponse(
             String symptomSummary, String sourceType, String sourceRef) {
         return new TimelineItemResponse(HEALTH_EVENT, TimelineItemType.HEALTH_RECORD, date, eventDate,
                 null, null, null, aiLevel, symptomSummary, sourceType, sourceRef, null, null,
-                "CONSULT", null, null, null, null, null, null, null);
+                "CONSULT", null, null, null, null, null, null, null, null);
     }
 
     /** 类④ 结构化健康记录（疫苗/驱虫/绝育/月经/自定义）的只读镜像。 */
     public static TimelineItemResponse healthRecord(Long recordId, Instant createdAt,
             LocalDate eventDate, String type, String text) {
         return new TimelineItemResponse(HEALTH_RECORD, TimelineItemType.HEALTH_RECORD, createdAt,
-                eventDate, null, null, text, null, null, null, null, null, null, type, recordId, null, null, null, null, null, null);
+                eventDate, null, null, text, null, null, null, null, null, null, type, recordId, null, null, null, null, null, null, null);
     }
 
     /** 类③ 系统自动型里程碑 banner 的只读镜像（无「发布时间」概念 → 取完成时间戳参与同日排序）。 */
     public static TimelineItemResponse milestoneBanner(Instant completedAt, String code, String level) {
         return new TimelineItemResponse(MILESTONE, TimelineItemType.MILESTONE_BANNER, completedAt, null,
-                null, null, null, null, null, null, null, code, level, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, code, level, null, null, null, null, null, null, null, null, null);
     }
 
     /** 类⑤ 身份证首次生成的只读镜像（取生成时间戳参与同日排序）。 */
     public static TimelineItemResponse idCardIssued(Instant createdAt, String serial) {
         return new TimelineItemResponse(ID_CARD, TimelineItemType.ID_CARD_ISSUED, createdAt, null, null,
-                null, null, null, null, null, null, null, null, null, null, serial, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, serial, null, null, null, null, null, null);
     }
 
     /**
@@ -159,7 +175,7 @@ public record TimelineItemResponse(
         return new TimelineItemResponse(PLACE_CHECKIN, TimelineItemType.PLACE_CHECKIN_BANNER, checkedAt,
                 checkedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate(), null, null, null, null, null, null,
                 null, null, null, null, null, null, null, new CheckinPlace(placeToken, placeName, placeStatus),
-                null, null, null);
+                null, null, null, null);
     }
 
     /**
@@ -172,7 +188,7 @@ public record TimelineItemResponse(
             LocalDate testedOn) {
         return new TimelineItemResponse(TAILSONALITY, TimelineItemType.TAILSONALITY_BANNER, unlockedAt,
                 unlockedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate(), null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, resultToken, code, testedOn);
+                null, null, null, null, null, null, null, null, resultToken, code, testedOn, null);
     }
 
     /** 排序/显示有效日期（有 eventDate 取之；否则取 date 的 UTC 日）。 */

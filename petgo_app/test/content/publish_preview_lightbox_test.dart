@@ -13,6 +13,7 @@ import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/media/image_lightbox.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// V1.3.4 Story 2.5（L0）：发帖页点缩略图看大图（FR-139 · AD-9）。
 ///
@@ -21,7 +22,7 @@ import 'package:tailtopia/shared/media/image_lightbox.dart';
 /// ✕ / 长按不误开（AC4）、上传中 / 失败照样能开（AC4/AC5）、键盘规则（AC6）、埋点 source（AC7）。
 class _FakeRepo implements ContentRepository {
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -35,7 +36,7 @@ class _FakeRepo implements ContentRepository {
     List<int> mentionedUserIds = const [],
     String? placeCheckinToken,
   }) async =>
-      123;
+      PublishedPost(id: 123);
 }
 
 /// 灯箱 / 上传中格子都有常转的 spinner，`pumpAndSettle` 等不到安静 ——

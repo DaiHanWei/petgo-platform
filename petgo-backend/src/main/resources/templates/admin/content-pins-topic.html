@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  顶置管理 · 某话题的排期页（V1.4.2 social-topic · Story 6.2 · UI G1b）。
+  面包屑「顶置管理 / 话题页 / #话题」（新写法 .crumbs）→ 标题行（h1 = # + 显示写法 + 官方标签；「返回列表」+「＋ 新建顶置」）
+  → 说明句 → 下方 = 现有顶置列表原样复用：筛选只剩「状态」（坑位由页面决定）、pins-list :: sumbar / rows、分页、
+  点行开「顶置详情」抽屉（res='pin'，改时间 / 提前结束同 Feed）。
+  🔴 分页与刷新链接留在本话题页：model 的 listUrl = /admin/content-pins/topics/{topicId}（pins-list 按 topicId 分流）。
+  话题 DISABLED / 不存在 → 控制器 404（G1a 不列它，也就进不来）。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.pins.title}">顶置管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='pin'">
+        <p class="crumbs">
+            <a th:href="@{/admin/content-pins}" th:text="#{admin.pins.title}">顶置管理</a>
+            <span class="crumbs-sep" aria-hidden="true">/</span>
+            <a th:href="@{/admin/content-pins/topics}" th:text="#{admin.pins.tab.topics}">话题页</a>
+            <span class="crumbs-sep" aria-hidden="true">/</span>
+            <b th:text="'#' + ${topic.nameDisplay}">#KucingLucu</b>
+        </p>
+        <div class="wb-title-row">
+            <h1 class="pin-topic-h1">
+                <span th:text="'#' + ${topic.nameDisplay}">#KucingLucu</span>
+                <span class="tag topic-type topic-type--official" th:if="${topic.official()}" th:text="#{admin.topics.type.OFFICIAL}">官方</span>
+            </h1>
+            <span class="pin-topic-acts">
+                <a class="btn btn-neutral btn-sm" th:href="@{/admin/content-pins/topics}" th:text="#{admin.common.backToList}">返回列表</a>
+                <button type="button" class="btn btn-primary btn-sm"
+                        th:attr="data-drawer-open=@{/admin/content-pins/new/drawer(slot='TOPIC_PAGE',topicId=${topic.id})},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                        data-drawer-res="pin"
+                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_manage')"
+                        th:text="#{admin.pins.new}">＋ 新建顶置</button>
+            </span>
+        </div>
+        <p class="muted" th:text="#{admin.pins.topic.subtitle}">该话题页的顶置排期……</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::pin-topic-filters}, ~{::pin-topic-summary}, ~{::pin-topic-table}, ~{::pin-topic-drawer})}">
+            <form th:fragment="pin-topic-filters" class="filter-bar" data-autosubmit th:action="@{${listUrl}}" method="get"
+                  th:attr="hx-get=@{${listUrl}}" hx-target="#pins-rows" hx-swap="innerHTML" hx-push-url="true">
+                <!--/* 抽屉内新建 / 改时间 / 提前结束成功 → admin:pin-list-refresh：只按当前筛选 + 当前页重拉本话题 */-->
+                <span hidden data-pin-refresh th:attr="hx-get=@{${listUrl}}" hx-include="closest form"
+                      hx-trigger="admin:pin-list-refresh from:body" hx-target="#pins-rows" hx-swap="innerHTML"
+                      hx-vals="js:{page: (document.querySelector('#pins-rows .pager') || {}).getAttribute ? (document.querySelector('#pins-rows .pager').getAttribute('data-page') || 0) : 0}"></span>
+                <label class="field">
+                    <span th:text="#{admin.pins.phase}">状态</span>
+                    <select name="status" class="sel">
+                        <option value="" th:selected="${status == null or status.isEmpty()}" th:text="#{admin.v130.pins.filter.status.all}">全部状态</option>
+                        <option th:each="p : ${phases}" th:value="${p}" th:selected="${status == p}"
+                                th:text="${p == 'ACTIVE'} ? #{admin.pins.phase.active} : (${p == 'PENDING'} ? #{admin.pins.phase.pending} : #{admin.pins.phase.ended})">生效中</option>
+                    </select>
+                </label>
+            </form>
+
+            <div th:fragment="pin-topic-summary" th:replace="~{admin/fragments/pins-list :: sumbar(oob=false)}"></div>
+
+            <div th:fragment="pin-topic-table" id="pins-rows">
+                <div th:replace="~{admin/fragments/pins-list :: rows(oob=false)}"></div>
+            </div>
+
+            <div th:fragment="pin-topic-drawer" class="drawer-title" th:text="#{admin.v130.pins.drawer.title}">顶置详情</div>
+        </div>
+
+        <!--/* ?open=<id> 跨页深链兜底（同 Feed 列表） */-->
+        <span hidden th:if="${open != null}" data-drawer-res="pin"
+              th:attr="data-drawer-deeplink=@{/admin/content-pins/{id}/drawer(id=${open})}"></span>
+    </div>
+
+    <!--/* 本页不另定义 candidates：新建表单引用的是 content-pins :: candidates（片段留在 content 之外的坑见 content-pins.html） */-->
+</div>
+</body>
+</html>

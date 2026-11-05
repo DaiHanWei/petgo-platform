@@ -76,6 +76,66 @@ class MilestoneCelebrationServiceTest {
         return ids;
     }
 
+    // ===== V1.4.2 Story 2.1 AC6：账号级编码按账号回报 =====
+
+    @Nested
+    @DisplayName("V1.4.2 AC6 账号级编码按账号回报")
+    class AccountLevel {
+
+        @Test
+        void reportingAccountCodeMarksSameFlagOnEveryPetOfTheOwner() {
+            var ids = seedRoster("C-S1", "C-S19", "C-S20");
+            // 账号下另两只（狗 / 其他，含只读）的 D-S19 / G-S12 行 id。
+            when(milestones.findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), anyCollection()))
+                    .thenReturn(List.of(ids.get("C-S19"), 501L, 502L));
+            when(completions.markCelebrated(anyCollection(), any())).thenReturn(3);
+
+            service.reportCelebrated(7L, 10L, List.of("C-S19"));
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<String>> codes = ArgumentCaptor.forClass(Collection.class);
+            verify(milestones).findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), codes.capture());
+            assertThat(codes.getValue()).as("同一 flag 的三物种完整 code，不含收藏的 S20 / G-S13")
+                    .containsExactlyInAnyOrder("C-S19", "D-S19", "G-S12");
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<Long>> cap = ArgumentCaptor.forClass(Collection.class);
+            verify(completions).markCelebrated(cap.capture(), any());
+            assertThat(cap.getValue()).as("本宠物 C-S19 + 他宠同 flag 行，去重；C-S1 / C-S20 不在列表里")
+                    .containsExactlyInAnyOrder(ids.get("C-S19"), 501L, 502L);
+        }
+
+        @Test
+        void reportingGenericCodeG_S13ResolvesToCollectFlag() {
+            seedRoster("C-S1");
+            when(milestones.findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), anyCollection()))
+                    .thenReturn(List.of(700L));
+            when(completions.markCelebrated(anyCollection(), any())).thenReturn(1);
+
+            service.reportCelebrated(7L, 10L, List.of("G-S13"));
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<String>> codes = ArgumentCaptor.forClass(Collection.class);
+            verify(milestones).findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), codes.capture());
+            assertThat(codes.getValue()).containsExactlyInAnyOrder("C-S20", "D-S20", "G-S13");
+        }
+
+        @Test
+        void ordinaryCodeStillOnlyMarksThisPet() {
+            var ids = seedRoster("C-S1", "C-S19");
+            when(completions.markCelebrated(anyCollection(), any())).thenReturn(1);
+
+            service.reportCelebrated(7L, 10L, List.of("C-S1"));
+
+            verify(milestones, never()).findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.anyLong(),
+                    anyCollection());
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<Long>> cap = ArgumentCaptor.forClass(Collection.class);
+            verify(completions).markCelebrated(cap.capture(), any());
+            assertThat(cap.getValue()).containsExactly(ids.get("C-S1"));
+        }
+    }
+
     // ===== AC5：置位范围按客户端回传列表 =====
 
     @Nested

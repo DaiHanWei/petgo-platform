@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,9 +16,11 @@ import 'package:tailtopia/features/content/presentation/comment_composer.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
 import 'package:tailtopia/features/mention/domain/mention_draft.dart';
+import 'package:tailtopia/features/mention/domain/mention_relation.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// L0：@ 的**两处触发**与提交形态
 /// （V1.3.0 batch-b1 Story 3.2 · AC1「两处触发」/ AC4 / AC5）。
@@ -33,6 +36,13 @@ class _FakeMentions implements MentionCandidateRepository {
 
   @override
   Future<List<MentionCandidate>> getCandidates() async => candidates;
+
+  /// V1.4.2 Story 5.2：模拟服务端在三类范围内按昵称查（不分大小写，保持接口顺序）。
+  @override
+  Future<List<MentionCandidate>> search(String keyword, {CancelToken? cancelToken}) async =>
+      candidates
+          .where((c) => c.nickname.toLowerCase().contains(keyword.toLowerCase()))
+          .toList(growable: false);
 }
 
 class _RecordingDetailRepo implements DetailRepository {
@@ -99,7 +109,7 @@ class _RecordingContentRepo implements ContentRepository {
   String? lastText;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -115,7 +125,7 @@ class _RecordingContentRepo implements ContentRepository {
   }) async {
     lastMentions = mentionedUserIds;
     lastText = text;
-    return 1;
+    return const PublishedPost(id: 1);
   }
 }
 
@@ -165,8 +175,9 @@ LoginResponse _user(int id) => LoginResponse(
       profile: UserProfile(id: id, onboardingCompleted: true),
     );
 
-MentionCandidate _c(int id, String nickname) =>
-    MentionCandidate(userId: id, nickname: nickname);
+MentionCandidate _c(int id, String nickname,
+        [MentionRelation relation = MentionRelation.following]) =>
+    MentionCandidate(userId: id, nickname: nickname, relation: relation);
 
 void main() {
   // ===== 触发点①：评论 / 回复输入框 =====
@@ -201,6 +212,30 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hai @');
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('mentionPicker')), findsOneWidget);
+    });
+
+    // V1.4.2 social-topic Story 4.4（AC3.4 · D-19）：评论框换成 TopicMentionTextController ——
+    // 点选插入的 @ 高亮；话题不高亮、不弹 # 联想。
+    testWidgets('V1.4.2 4.4：评论框点选 @ 后高亮，#kucing 不高亮，无 # 面板', (tester) async {
+      await pumpComposer(tester, candidates: [_c(42, 'Aurel')]);
+      await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hai @');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('mentionCandidate_42')));
+      await tester.pumpAndSettle();
+      final field = tester.widget<TextField>(find.byKey(const ValueKey('detailCommentInput')));
+      final ctl = field.controller!;
+      ctl.value = const TextEditingValue(
+          text: 'hai @Aurel #kucing', selection: TextSelection.collapsed(offset: 18));
+      await tester.pumpAndSettle();
+      final ctx = tester.element(find.byKey(const ValueKey('detailCommentInput')));
+      final span = ctl.buildTextSpan(context: ctx, withComposing: false);
+      final colored = span.children!
+          .cast<TextSpan>()
+          .where((s) => s.style?.color != null)
+          .map((s) => s.text)
+          .toList();
+      expect(colored, ['@Aurel']);
+      expect(find.byKey(const ValueKey('topicSuggestPanel')), findsNothing);
     });
 
     testWidgets('正文里的邮箱不会误弹浮层', (tester) async {
@@ -252,7 +287,8 @@ void main() {
       expect(detail.lastCommentMentions, isEmpty);
     });
 
-    testWidgets('Story 3.5 AC4：插入成功 → mention_inserted(context=comment)', (tester) async {
+    testWidgets('V1.4.2 5.2 AC4：选中快捷列表的人 → mention_inserted(context=comment, relation, from_quick_list=true)',
+        (tester) async {
       final captured = <(String, Map<String, Object>?)>[];
       Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
       addTearDown(() => Analytics.debugCaptureSink = null);
@@ -263,8 +299,41 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('mentionCandidate_42')));
       await tester.pumpAndSettle();
 
-      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2),
-          [{'context': 'comment'}]);
+      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2), [
+        {'context': 'comment', 'relation': 'following', 'from_quick_list': true}
+      ]);
+    });
+
+    testWidgets('V1.4.2 5.2 AC4：打字查到粉丝后选中 → relation=follower, from_quick_list=false', (tester) async {
+      final captured = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+
+      await pumpComposer(tester, candidates: [_c(7, 'Budi', MentionRelation.follower)]);
+      await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hai @bu');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('mentionCandidate_7')));
+      await tester.pumpAndSettle();
+
+      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2), [
+        {'context': 'comment', 'relation': 'follower', 'from_quick_list': false}
+      ]);
+    });
+
+    testWidgets('V1.4.2 5.2 AC2.2：评论框面板在输入条上方、无过滤框、行左右 16', (tester) async {
+      await pumpComposer(tester, candidates: [_c(42, 'Aurel')]);
+      await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hai @');
+      await tester.pumpAndSettle();
+      final picker = find.byKey(const ValueKey('mentionPicker'));
+      expect(find.descendant(of: picker, matching: find.byType(TextField)), findsNothing);
+      final pickerRect = tester.getRect(picker);
+      final inputRect = tester.getRect(find.byKey(const ValueKey('detailCommentInput')));
+      expect(pickerRect.bottom, lessThanOrEqualTo(inputRect.top));
+      final rowPad = tester.widget<Padding>(find
+          .descendant(of: find.byKey(const ValueKey('mentionCandidate_42')), matching: find.byType(Padding))
+          .first);
+      expect((rowPad.padding as EdgeInsets).left, 16);
+      expect((rowPad.padding as EdgeInsets).right, 16);
     });
 
     testWidgets('🔴 被上限拦住的那次**不**报 mention_inserted（没插进去就不算）', (tester) async {
@@ -396,7 +465,7 @@ void main() {
       expect(controller.mentions.userIdsIn(controller.text), [42]);
     });
 
-    testWidgets('Story 3.5 AC4：插入成功 → mention_inserted(context=post)', (tester) async {
+    testWidgets('Story 3.5 / V1.4.2 5.2 AC4：选中快捷列表的人 → mention_inserted(context=post, relation, from_quick_list=true)', (tester) async {
       final captured = <(String, Map<String, Object>?)>[];
       Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
       addTearDown(() => Analytics.debugCaptureSink = null);
@@ -407,8 +476,25 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('mentionCandidate_42')));
       await tester.pumpAndSettle();
 
-      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2),
-          [{'context': 'post'}]);
+      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2), [
+        {'context': 'post', 'relation': 'following', 'from_quick_list': true}
+      ]);
+    });
+
+    testWidgets('V1.4.2 5.2 AC4：发布页打字查到粉丝后选中 → relation=follower, from_quick_list=false', (tester) async {
+      final captured = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+
+      await pumpCompose(tester, candidates: [_c(7, 'Budi', MentionRelation.follower)]);
+      await tester.enterText(find.byKey(const ValueKey('publishText')), 'hari ini @bu');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('mentionCandidate_7')));
+      await tester.pumpAndSettle();
+
+      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2), [
+        {'context': 'post', 'relation': 'follower', 'from_quick_list': false}
+      ]);
     });
 
     testWidgets('AC5：第 6 个人插不进去并给出提示', (tester) async {

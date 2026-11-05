@@ -39,6 +39,34 @@ class GrowthIdemKeysTest {
         assertThat(GrowthIdemKeys.reverse(123L, "REFUND:rf_xxx")).isEqualTo("REV:123:REFUND:rf_xxx");
     }
 
+    /** V1.4.2 Story 2.1（P-7 定死）：账号级里程碑键 = 账号 + flag，与物种 / 宠物无关。 */
+    @Test
+    void milestoneAccountKeyIsUserAndFlag() {
+        assertThat(GrowthIdemKeys.milestoneAccount(7L, "FIRST_FOLLOW_USER")).isEqualTo("MILESTONE_ACCT:7:FIRST_FOLLOW_USER");
+        assertThat(GrowthIdemKeys.milestoneAccount(7L, "FIRST_COLLECT_CONTENT"))
+                .isEqualTo("MILESTONE_ACCT:7:FIRST_COLLECT_CONTENT");
+        // 与按宠物键不同前缀，互不相撞。
+        assertThat(GrowthIdemKeys.milestoneAccount(7L, "C-S19")).doesNotStartWith("MILESTONE:");
+        assertThat(GrowthIdemKeys.milestoneAccount(Long.MAX_VALUE, "X".repeat(32)).length())
+                .isLessThanOrEqualTo(GrowthIdemKeys.MAX_LENGTH);
+    }
+
+    /** V1.4.2 Story 2.2（P-7 定死）：存量补算键，迁移 V20261104_2040 以 SQL 写同一格式。 */
+    @Test
+    void backfillAccountMilestoneKeyIsUserAndFlag() {
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(7L, "FIRST_FOLLOW_USER"))
+                .isEqualTo("BACKFILL142:7:FIRST_FOLLOW_USER");
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(7L, "FIRST_COLLECT_CONTENT"))
+                .isEqualTo("BACKFILL142:7:FIRST_COLLECT_CONTENT");
+        // 与 1.4.0 补算键 BACKFILL:{u}、运行时键 MILESTONE_ACCT:{u}:{flag} 互不相撞。
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(7L, "FIRST_FOLLOW_USER"))
+                .isNotEqualTo(GrowthIdemKeys.backfill(7L))
+                .doesNotStartWith(GrowthIdemKeys.backfill(7L) + ":")
+                .isNotEqualTo(GrowthIdemKeys.milestoneAccount(7L, "FIRST_FOLLOW_USER"));
+        assertThat(GrowthIdemKeys.backfillAccountMilestone(Long.MAX_VALUE, "X".repeat(32)).length())
+                .isLessThanOrEqualTo(GrowthIdemKeys.MAX_LENGTH);
+    }
+
     @Test
     void longestKeysFitTheColumn() {
         String longest = GrowthIdemKeys.milestone(Long.MAX_VALUE, "X".repeat(32), Long.MAX_VALUE);

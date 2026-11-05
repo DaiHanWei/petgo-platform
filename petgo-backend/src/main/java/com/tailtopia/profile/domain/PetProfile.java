@@ -109,6 +109,14 @@ public class PetProfile {
     @Column(name = "keep_active", nullable = false)
     private boolean keepActive = false;
 
+    /**
+     * 追更这只宠物的人数（V1.4.2 social-topic Story 1.1 · D-1）。🔴 <b>只读映射</b>：
+     * 只经 {@code PetProfileRepository#addFollowerCount} 等 native 条件 UPDATE 改，
+     * 禁止读出来 ±1 再 save（并发丢更新）。
+     */
+    @Column(name = "follower_count", nullable = false, insertable = false, updatable = false)
+    private int followerCount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -298,6 +306,11 @@ public class PetProfile {
     /** 「保持正常」选择（Story 2.1 · D13）。🔴 同 {@link #markReadOnly()}，仅 {@code PetSlotStateService} 可调用。 */
     public void setKeepActive(boolean keepActive) {
         this.keepActive = keepActive;
+    }
+
+    /** 追更人数（加载时快照；写后要最新值用 {@code PetProfileRepository#findFollowerCount}）。 */
+    public int getFollowerCount() {
+        return followerCount;
     }
 
     public Instant getCreatedAt() {

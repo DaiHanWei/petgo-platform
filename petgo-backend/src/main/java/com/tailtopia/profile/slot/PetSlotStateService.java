@@ -3,6 +3,7 @@ package com.tailtopia.profile.slot;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetStatus;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.service.AccountMilestoneService;
 import com.tailtopia.profile.service.PetResolver;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
@@ -44,13 +45,15 @@ public class PetSlotStateService {
     private final PetSlotService slots;
     private final PetSlotLock lock;
     private final PetResolver petResolver;
+    private final AccountMilestoneService accountMilestones;
 
     public PetSlotStateService(PetProfileRepository profiles, PetSlotService slots, PetSlotLock lock,
-            PetResolver petResolver) {
+            PetResolver petResolver, AccountMilestoneService accountMilestones) {
         this.profiles = profiles;
         this.slots = slots;
         this.lock = lock;
         this.petResolver = petResolver;
+        this.accountMilestones = accountMilestones;
     }
 
     /** 按触发原因重算账号全部宠物的状态（加账号锁；须在事务内，锁 MANDATORY）。 */
@@ -139,6 +142,11 @@ public class PetSlotStateService {
         toSave.addAll(restored);
         if (!toSave.isEmpty()) {
             profiles.saveAll(new ArrayList<>(toSave));
+        }
+        // V1.4.2 Story 2.1（D-12 / G-3）：从只读恢复的宠物补账号级里程碑「已完成且已庆祝」（不发事件）。
+        // 同一事务、同一把账号锁内；rearrange 与 restoreUpTo 两条路径的恢复都在 restored 里。
+        for (PetProfile p : restored) {
+            accountMilestones.applyExistingFlagsToPet(p);
         }
         if (!demoted.isEmpty() || !restored.isEmpty()) {
             log.info("宠物状态 reconcile userId={} trigger={} demoted={} restored={}",

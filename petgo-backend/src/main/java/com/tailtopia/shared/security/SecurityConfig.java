@@ -220,6 +220,10 @@ public class SecurityConfig {
                         // 内容详情 + 评论只读对游客可见（Story 3.3）：GET 详情/评论/回复放行（写仍需 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts/**",
                                 "/api/v1/comments/**").permitAll()
+                        // V1.4.2 social-topic Story 4.2（D-13 · G-4）：# 联想仅 role=USER（同 /me/mention-candidates，controller 把 sub 当 users.id 用）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/topic-suggestions").hasRole("USER")
+                        // 话题详情 / 帖子 / 推荐 / 首页话题行：游客可看（D-13 G-4）。只放 GET。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/topics/**").permitAll()
                         // 他人迷你主页只读对游客可见（Story 3.8，FR-26 无登录要求）
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
                         // 公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118）：与迷你卡同一口径 ——
@@ -243,6 +247,11 @@ public class SecurityConfig {
                         // V1.3.4 follow Story 2.2：关注 / 粉丝列表，游客可看（与 /profile 同口径）。精确路径，不写通配。
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/following").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/followers").permitAll()
+                        // V1.4.2 social-topic Story 1.1：追更 / 取消追更宠物（POST / DELETE），只给 USER。精确路径，不写 /me/** 通配。
+                        // ⚠️ 不加这条会落到 anyRequest().authenticated()，兽医 token 的 sub 与 users.id 撞号，会以同号用户名义追更。
+                        .requestMatchers("/api/v1/me/pet-follows/*").hasRole("USER")
+                        // V1.4.2 social-topic Story 1.1：某用户追更的宠物列表，游客可看（与 /following 同口径，viewer 只认 role=USER）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/pet-follows").permitAll()
                         // V1.3.4 follow Story 2.3：推荐关注，仅 role=USER（controller 把 sub 当 users.id 用，同 /me 端点）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/me/follow-suggestions").hasRole("USER")
                         // V1.4.1 商家平台：填门店邀请码，仅 role=USER（controller 把 sub 当 users.id 用）。精确路径。

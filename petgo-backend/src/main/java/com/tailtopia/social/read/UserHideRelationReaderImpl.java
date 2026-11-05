@@ -61,4 +61,24 @@ public class UserHideRelationReaderImpl implements UserHideRelationReader {
         }
         return Set.copyOf(relations.findHiddenTargetIds(holderId, List.copyOf(targetIds)));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> blockedByHolder(long holderId, Collection<Long> targetIds) {
+        if (targetIds == null || targetIds.isEmpty()) {
+            return Set.of(); // 🛡 `IN ()` 在 Postgres 上是语法错误。
+        }
+        // ⚠️ 只认 BLOCK：举报隐藏不算（R-1，同 isBlocked）。
+        return Set.copyOf(relations.findTargetIdsByHolderAndSourceIn(holderId, HideSource.BLOCK,
+                List.copyOf(targetIds)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> holdersHiding(long targetId, Collection<Long> holderIds) {
+        if (holderIds == null || holderIds.isEmpty()) {
+            return Set.of(); // 🛡 `IN ()` 在 Postgres 上是语法错误。
+        }
+        return Set.copyOf(relations.findHolderIdsHidingTarget(targetId, List.copyOf(holderIds)));
+    }
 }

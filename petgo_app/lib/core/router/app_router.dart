@@ -99,6 +99,8 @@ import '../../features/notify/presentation/push_settings_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
+import '../../features/topic/domain/topic.dart';
+import '../../features/topic/presentation/topic_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
 import '../../features/place/presentation/place_stamp_ceremony_page.dart';
 import '../../features/boarding_pass/presentation/boarding_pass_detail_page.dart';
@@ -644,6 +646,18 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             ? null
             : PlaceDetailPage.routeFor(s.pathParameters['token']!),
         builder: (c, s) => PlaceStampCeremonyPage(args: s.extra! as PlaceCheckinSuccessArgs),
+      ),
+
+      // ===== 话题详情页（V1.4.2 social-topic · Story 4.3 · D-20）=====
+      // 🔒 游客可直接进入：靠【不在 _controlledLocations 白名单里】达成（同场所列表），后端 GET 已 permitAll（4.2 AC9）。
+      //    ⚠️ **不要**把 `/topics` 加进 _controlledLocations。shell 外顶层路由：push 时隐藏底部 Tab。
+      // `?from=` 只喂埋点 topic_page_viewed.source；缺省 / 不认识 → 不带 source。
+      GoRoute(
+        path: TopicPage.routePattern,
+        builder: (c, s) => TopicPage(
+          name: s.pathParameters['name']!,
+          source: TopicEntrySource.fromWire(s.uri.queryParameters['from']),
+        ),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====

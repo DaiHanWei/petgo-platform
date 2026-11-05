@@ -11,6 +11,9 @@
   · 🔴 hx-disinherit：表单上的 hx-disabled-elt="find .opsn-submit" 若被预计人数 / ID 校验这些子元素继承，htmx 在子元素里
     find 不到按钮会拿 null 取内部数据直接抛错（预计人数永远停在「—」）。子元素各自声明自己的 target / sync。
   · ② 的预计触达：人群块一变 300ms 防抖自动 hx-post …/preview；指定用户：输入 / 读入 CSV 后 300ms 防抖 hx-post …/ids/check。
+  · V1.4.2 AB-37（Story 7.2 · UI 稿 I1–I3）：① 的四个文案框是 contenteditable 编辑区（整体变量标签），htmx 只收表单控件，
+    所以每个编辑区配同名隐藏字段，脚本每次 input 把编辑区序列化成「纯文本 + {{nickname}} / {{petName}} 令牌」写进去，
+    提交的是隐藏字段（不能 disabled）。422 标红靠编辑区的 data-error-name（admin-core.js 通用逻辑）。
 -->
 <head>
     <meta charset="UTF-8"/>
@@ -33,10 +36,15 @@
                        data-msg-empty=#{admin.err.ops-notify.audience-empty},data-msg-ids=#{admin.err.ops-notify.audience.ids-empty},
                        data-msg-at=#{admin.err.ops-notify.schedule.required},data-msg-past=#{admin.err.ops-notify.schedule.past},
                        data-msg-csv=#{admin.opsNotify.err.csvTooLarge},data-msg-csv-enc=#{admin.opsNotify.err.csvNotUtf8},
-                       data-msg-now=#{admin.opsNotify.send.now}"
+                       data-msg-now=#{admin.opsNotify.send.now},
+                       data-var-names=${varNamesJson},data-msg-var-typed=#{admin.err.ops-notify.var.typed},
+                       data-msg-too-long=#{admin.err.ops-notify.text.too-long},
+                       data-msg-tag-nickname=#{admin.opsNotify.var.tag.nickname},data-msg-tag-petName=#{admin.opsNotify.var.tag.petName}"
+              data-sample-nickname="hex" data-sample-pet="tuotuo"
               hx-target="#opsn-err" hx-swap="innerHTML" hx-sync="this:drop" hx-disabled-elt="find .opsn-submit"
               hx-disinherit="hx-disabled-elt hx-sync hx-target hx-swap"
               data-error-steps='{"admin.err.ops-notify.text.blank":1,"admin.err.ops-notify.text.too-long":1,
+                "admin.err.ops-notify.var.typed":1,"admin.err.ops-notify.audience-empty-no-pet":4,
                 "admin.err.opsPopup.targetTypeRequired":1,"admin.err.opsPopup.targetType":1,
                 "admin.err.opsPopup.targetNoneWithValue":1,"admin.err.opsPopup.targetProduct":1,
                 "admin.err.opsPopup.targetCategory":1,"admin.err.opsPopup.targetAppPage":1,
@@ -47,6 +55,7 @@
                 "admin.err.ops-notify.schedule.format":3,"admin.err.ops-notify.schedule.past":3}'
               data-error-fields='{"admin.err.ops-notify.text.blank":"titleEn,titleId,bodyEn,bodyId",
                 "admin.err.ops-notify.text.too-long":"titleEn,titleId,bodyEn,bodyId",
+                "admin.err.ops-notify.var.typed":"titleEn,titleId,bodyEn,bodyId",
                 "admin.err.opsPopup.targetTypeRequired":"targetType","admin.err.opsPopup.targetType":"targetType",
                 "admin.err.opsPopup.targetNoneWithValue":"targetType","admin.err.opsPopup.targetProduct":"targetValue",
                 "admin.err.opsPopup.targetCategory":"targetValue","admin.err.opsPopup.targetAppPage":"targetValue",
@@ -66,16 +75,45 @@
             <section class="opsn-panel" data-step="1">
                 <div class="opsn-card">
                     <div class="opsn-grid2">
-                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.titleEn}">标题 EN</span> <i>*</i></span><em data-count-of="titleEn">0 / 120</em></span>
-                            <input type="text" class="inp" name="titleEn" maxlength="120" th:value="*{titleEn}" data-max="120"/></label>
-                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.titleId}">标题 ID</span> <i>*</i></span><em data-count-of="titleId">0 / 120</em></span>
-                            <input type="text" class="inp" name="titleId" maxlength="120" th:value="*{titleId}" data-max="120"/></label>
-                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.bodyEn}">正文 EN</span> <i>*</i></span><em data-count-of="bodyEn">0 / 255</em></span>
-                            <textarea class="inp" name="bodyEn" rows="3" maxlength="255" th:text="*{bodyEn}" data-max="255"></textarea></label>
-                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.bodyId}">正文 ID</span> <i>*</i></span><em data-count-of="bodyId">0 / 255</em></span>
-                            <textarea class="inp" name="bodyId" rows="3" maxlength="255" th:text="*{bodyId}" data-max="255"></textarea></label>
+                        <div class="opsn-fld"><span class="opsn-l" id="opsn-l-titleEn"><span><span th:text="#{admin.opsNotify.form.titleEn}">标题 EN</span> <i>*</i></span><em data-count-of="titleEn">0 / 120</em></span>
+                            <div class="inp opsn-ed" contenteditable="true" role="textbox" aria-multiline="false" aria-labelledby="opsn-l-titleEn"
+                                 data-ed="titleEn" data-max="120" data-single-line data-error-name="titleEn" spellcheck="false"></div>
+                            <input type="hidden" name="titleEn" th:value="*{titleEn}"/>
+                            <div class="opsn-var-row">
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="nickname" th:text="#{admin.opsNotify.var.btn.nickname}">＋ 用户昵称</button>
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="petName" th:text="#{admin.opsNotify.var.btn.petName}">＋ 宠物昵称</button>
+                            </div>
+                            <p class="opsn-ex" data-example-of="titleEn" hidden><span th:text="#{admin.opsNotify.var.example}">示例效果：</span> <b data-example-text></b></p></div>
+                        <div class="opsn-fld"><span class="opsn-l" id="opsn-l-titleId"><span><span th:text="#{admin.opsNotify.form.titleId}">标题 ID</span> <i>*</i></span><em data-count-of="titleId">0 / 120</em></span>
+                            <div class="inp opsn-ed" contenteditable="true" role="textbox" aria-multiline="false" aria-labelledby="opsn-l-titleId"
+                                 data-ed="titleId" data-max="120" data-single-line data-error-name="titleId" spellcheck="false"></div>
+                            <input type="hidden" name="titleId" th:value="*{titleId}"/>
+                            <div class="opsn-var-row">
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="nickname" th:text="#{admin.opsNotify.var.btn.nickname}">＋ 用户昵称</button>
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="petName" th:text="#{admin.opsNotify.var.btn.petName}">＋ 宠物昵称</button>
+                            </div>
+                            <p class="opsn-ex" data-example-of="titleId" hidden><span th:text="#{admin.opsNotify.var.example}">示例效果：</span> <b data-example-text></b></p></div>
+                        <div class="opsn-fld"><span class="opsn-l" id="opsn-l-bodyEn"><span><span th:text="#{admin.opsNotify.form.bodyEn}">正文 EN</span> <i>*</i></span><em data-count-of="bodyEn">0 / 255</em></span>
+                            <div class="inp opsn-ed" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="opsn-l-bodyEn"
+                                 data-ed="bodyEn" data-max="255" data-error-name="bodyEn" spellcheck="false"></div>
+                            <input type="hidden" name="bodyEn" th:value="*{bodyEn}"/>
+                            <div class="opsn-var-row">
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="nickname" th:text="#{admin.opsNotify.var.btn.nickname}">＋ 用户昵称</button>
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="petName" th:text="#{admin.opsNotify.var.btn.petName}">＋ 宠物昵称</button>
+                            </div>
+                            <p class="opsn-ex" data-example-of="bodyEn" hidden><span th:text="#{admin.opsNotify.var.example}">示例效果：</span> <b data-example-text></b></p></div>
+                        <div class="opsn-fld"><span class="opsn-l" id="opsn-l-bodyId"><span><span th:text="#{admin.opsNotify.form.bodyId}">正文 ID</span> <i>*</i></span><em data-count-of="bodyId">0 / 255</em></span>
+                            <div class="inp opsn-ed" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="opsn-l-bodyId"
+                                 data-ed="bodyId" data-max="255" data-error-name="bodyId" spellcheck="false"></div>
+                            <input type="hidden" name="bodyId" th:value="*{bodyId}"/>
+                            <div class="opsn-var-row">
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="nickname" th:text="#{admin.opsNotify.var.btn.nickname}">＋ 用户昵称</button>
+                                <button type="button" class="btn btn-neutral btn-sm opsn-varbtn" data-ins-var="petName" th:text="#{admin.opsNotify.var.btn.petName}">＋ 宠物昵称</button>
+                            </div>
+                            <p class="opsn-ex" data-example-of="bodyId" hidden><span th:text="#{admin.opsNotify.var.example}">示例效果：</span> <b data-example-text></b></p></div>
                     </div>
                     <p class="opsn-h" th:text="#{admin.opsNotify.form.langHint}">用户收到哪种语言按其账号语言决定（英文账号看 EN，其余看 ID）。</p>
+                    <p class="opsn-h opsn-var-hint" th:text="#{admin.opsNotify.var.hint}">变量只能用输入框下方的按钮插入，每个变量按 20 字计入字数。……</p>
                     <p class="opsn-ferr" data-ferr="text" hidden></p>
                 </div>
                 <div class="opsn-card">

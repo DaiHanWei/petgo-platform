@@ -1,6 +1,6 @@
 # Story 4.3: 话题详情页、首页话题行与隐藏三个入口（App，C1、C6–C11）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`（云端单会话串行）
 > 口径优先级：`决策日志-social-topic.md` > PRD `追更话题/1-4-2追更宠物·里程碑·话题prd.md` > `architecture-v1.4.2-social-topic-delta.md` > UI 稿 `追更话题/ui-1-4-2-social-topic-integrated-v1.html`（每屏下方说明 = 实现说明，**数值照说明里的代码出处取，不量截图**；标「原有模块照线上」的不改样式）。
@@ -88,16 +88,16 @@ so that 能按兴趣逛内容。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：4.1 / 4.2 已合入；Dev Notes 行号未漂移；`lib/core/config/feature_flags.dart` 不存在（D-22 新建）。
-- [ ] **T1 数据层** `features/topic/data/topic_repository.dart` + `domain/topic.dart`（`TopicDetail`、`TopicSummary`、`TopicEntrySource`、`TopicNotFoundException`）+ `ApiPaths` 注册（AC1、AC3；D-13、D-20）
-- [ ] **T2 共享件** `topic_official_badge.dart`（AC5）
-- [ ] **T3 话题页** `topic_page.dart` + `widgets/topic_empty_view.dart` + providers（AC2、AC3）
-- [ ] **T4 首页话题行** `widgets/home_topic_row.dart` + 接入 `_BerandaTop` / `onRefresh`（AC4）
-- [ ] **T5 路由与深链** `app_router.dart`、`app.dart`、`promo_target.dart`（AC1）
-- [ ] **T6 FR-165** `feature_flags.dart` + `home_page.dart` + `pet_insights_page.dart` + 受影响测试改期望（AC6）
-- [ ] **T7 埋点 + 文案**（AC7、AC8）：ARB 两份 → `flutter gen-l10n`
-- [ ] **T8 测试**（见「测试」）→ `flutter analyze`（零告警）+ `flutter test` 全绿
-- [ ] **T9 本地 L2**：模拟器逐屏还原度 ≥ 95%（AC9）；Completion Notes 记分数
+- [x] **T0 开工核对**：4.1 / 4.2 已合入；Dev Notes 行号未漂移；`lib/core/config/feature_flags.dart` 不存在（D-22 新建）。
+- [x] **T1 数据层** `features/topic/data/topic_repository.dart` + `domain/topic.dart`（`TopicDetail`、`TopicSummary`、`TopicEntrySource`、`TopicNotFoundException`）+ `ApiPaths` 注册（AC1、AC3；D-13、D-20）
+- [x] **T2 共享件** `topic_official_badge.dart`（AC5）
+- [x] **T3 话题页** `topic_page.dart` + `widgets/topic_empty_view.dart` + providers（AC2、AC3）
+- [x] **T4 首页话题行** `widgets/home_topic_row.dart` + 接入 `_BerandaTop` / `onRefresh`（AC4）
+- [x] **T5 路由与深链** `app_router.dart`、`app.dart`、`promo_target.dart`（AC1）
+- [x] **T6 FR-165** `feature_flags.dart` + `home_page.dart` + `pet_insights_page.dart` + 受影响测试改期望（AC6）
+- [x] **T7 埋点 + 文案**（AC7、AC8）：ARB 两份 → `flutter gen-l10n`
+- [x] **T8 测试**（见「测试」）→ `flutter analyze`（零告警）+ `flutter test` 全绿
+- [ ] **T9 本地 L2**（云端不做，待本地）：模拟器逐屏还原度 ≥ 95%（AC9）；Completion Notes 记分数
 
 ## Dev Notes
 
@@ -200,10 +200,77 @@ so that 能按兴趣逛内容。
 
 ### Agent Model Used
 
+Claude
+
 ### Debug Log References
+
+- `flutter gen-l10n`：通过（生成产物 gitignore，不入库）。
+- `flutter analyze`：No issues found。
+- `flutter test`（全量）：+4365 ~1（1 个存量 skip），All tests passed。
+- 复审修复后复跑：`flutter analyze` No issues found；`flutter test` 全量 +4369 ~1，All tests passed。
+- 首轮全量前 `beranda_home_test`「横幅」用例报 `A Timer is still pending`：用例在同一 test 内换第二棵 ProviderScope 树，第一棵树里新加的 `HomeTopicRow`（autoDispose provider）的 Riverpod 回收计时器挂到测试结束。修法：换树前先 `pumpWidget(SizedBox.shrink()) + pump()` 冲掉回收任务（只改测试，不改 provider 口径）。
+- 本 story 未动后端（`FeedItem` 未接 `topicNames`，留 4.4 接 `RichBodyText` 时一并做，届时同步后端 `FeedResponseContractTest` 字段集）→ 无后端 L0 / 无迁移。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：
+  - L1：本 story 无后端改动、无集成测试类。
+  - L2（AC9 / T9）：本地 Android 模拟器 + stag / 正式后端逐屏 C1、C6–C11 还原度 ≥ 95% 打分；首页话题行横滑与点进；官方 / 用户 / 空态 / 不存在（后台禁用后旧链接进）/ 断网失败；Populer 顺序与后台点赞评论一致；话题顶置（stag 直插 `content_pins` slot=`TOPIC:{id}`）按时段显示；**吸顶页签 + 下拉刷新在 NestedScrollView 下的真机手感**（L0 已证吸顶与滚到底自动续拉，`RefreshIndicator` 在 inner 滚动里的拉起与 `_anchorScroll` 锚定补偿在 NestedScrollView 下是否异常需真机看，异常按 Dev Notes「滚动结构」第 3 条退路处理）；Kenali Hewanmu 只剩三张卡且无空位；从帖子打卡地点 / 订单详情仍能进场所 / 护照 / 登机牌页；外部 `tailtopia://topic/xxx` 唤起（安卓清单已加 intent-filter）。
+- **对 story 的名字 / 口径修订（开工核对）**：
+  1. 4.2 实际接口与 story 一致：home-row / related / topic-suggestions 返回**裸 JSON 数组**（`TopicSummary.listFromJson` 按数组解析）；话题帖子为 `FeedPage` 信封、不带 rankMode；Populer 不下发 nextCursor，App 自增 `page`（上限 50 → `kTopicPopularMaxPage`，到 50 页即 hasMore=false，不去撞 422）；顶置 `GET content-posts/pinned?topic=<名>`。ApiPaths 的联想路径按 4.2 实际为 `/topic-suggestions`。
+  2. providers 落在 `lib/features/topic/presentation/topic_providers.dart`（story 只写了 provider 名，未给文件）；另加 `TopicSort` 枚举（`domain/topic.dart`），family 键 `TopicPostsKey = (String, TopicSort)`。
+  3. 顶栏标题显示为 **`#displayName`**（UI 稿 C7/C8/C9 均为「#HariKucingSedunia」、PRD FR-69 AC11「话题页标题显示 `#MyPet`」）；字号取 UI `.lC-tab .t` 18/1.3 w600 = `AppTypography.title`（主题 AppBar 默认 16 w700，按稿覆盖）。
+  4. 吸顶页签高度：照抄 `follow_list_page` `_tabBar` 的 TabBar 实际是 46 + 默认 indicatorWeight 2 = 48（`kTextTabBarHeight`），加底部 1px 线 → `SliverPersistentHeader` extent 49；story 写的「46 高」是 TabBar 内 Tab 的高度。
+  5. C9 空态的渲染方式：空列表时仍用 `FeedMasonryView`（`items: []` + `footer: TopicEmptyView`），这样「顶置照常」直接复用它的顶置渲染与下拉刷新；`TopicEmptyView` 加 `topGap` 参数（FeedMasonryView 自带 16 上边距 + 16 = 页签下 32）。推荐行 Resmi 与话题名间距取 8（稿未给，取 C7 标题同值），序号加 `minWidth 16` 以便 1–10 对齐。
+  6. 测试放置：话题行「在 FeedTabRow 之下 / Following 无 / 下拉刷新重取」写在 `test/topic/home_topic_row_test.dart`（真 HomePage）；`beranda_home_test` 只改 `PlaceEntryRow` 期望（findsNothing、横幅改相对 FeedTabRow 判）。`pet_insights_test` 的五卡用例改为三卡 + 「入口隐藏后路由仍可直接 push 进入」用例（AC6.4）。
+  7. 额外改动（story 未列，深链完整性所需）：`AndroidManifest.xml` 加 `tailtopia://topic` intent-filter，`test/deeplink_manifest_test.dart` 的 host 表加 `topic`（否则外部深链在安卓上唤不起 App）；`app.dart` `resetUserScopedCaches` 登记 `topicPostsProvider` / `topicPinnedProvider`（卡片带查看者相关点赞 / 关注快照，换账号整族重取）。
+  8. `v112_events_test.dart` 前缀登记 `topic_`、`home_topic_`，属性名清单补 `topic_id` / `sort` / `position` / `is_pinned_by_ops`（仅 snake_case 校验）；未删守卫、未放宽正则；三个事件名均为调用点字面量。
+  9. `feed_view.dart` 只加默认 false 的 `usePrimaryScrollController`：true 时 `_effectiveController` = `PrimaryScrollController`（只挂 / 摘监听不 dispose）、不监听 `homeScrollTopProvider`；默认路径唯一差异是 `_onScroll` 多了一个 `hasClients` 判空（无行为变化）。
+- **待确认**：
+  1. story 原「待确认」第 1、2、5 条照 story 选项实现：`Resmi/Official`、`Terbaru/Latest`、`Populer/Popular` 新建 `topic*` 键；推荐行进页 `source=related`（**PRD §4 无此取值，需产品确认或补进决策日志**；若不接受，改为该入口不带 `source`）；预填用显示写法 `#KucingLucu `。
+  2. `pet_insights_page.dart` 类注释写着「连一个 `enabled: false` 的常量都不许留」，与 D-22 / P-11 的 `kPassportEntryEnabled` 开关做法冲突——按决策（架构增量）优先实现开关，类注释未改，建议设计 / 架构侧确认后删改那句。
+  3. 游客点「Buat Postingan」：拉强登录（entrySource `topic_empty`），同时挂 `pendingAction: RouteIntent(onResume: …)`，登录成功后若话题页仍在则续开发布页（预填同上）；若产品只要「拉登录、不续开」，去掉 pendingAction 即可。
+
+- **复审修复（2026-11-04，编排者复审）**：
+  1. [CONFIRMED] `topic_page_viewed` 原在 C10 / C11 判断之前就上报，首屏失败落 C11 仍会报（违反 AC7.1）。已挪到 C10 / C11 分支之后，条件 `detail != null && postsAsync.hasValue`（与 `_shown` 同一判据）。补用例：详情成功 + 首屏失败 → C11 不报、重试成功后报一次；首屏 404 → C10 不报。
+  2. (a) Populer 页码上限测试改为行为断言：fake 第 50 页仍回 `hasMore=true` → 控制器 `hasMore=false`、`nextPage=null`，再 `loadMore` 不发第 51 页。
+  3. (b) 下拉刷新时详情 404（话题刚被禁用）原因有旧值进不了 C10：改为 `detailAsync.error is TopicNotFoundException`（当前页签列表 404 同理）即进 C10；网络错误仍保留旧值、不整页报错。补用例：刷新 404 → C10；刷新网络失败 → 旧内容仍在。
+
 ### File List
 
+新增：
+- `petgo_app/lib/core/config/feature_flags.dart`
+- `petgo_app/lib/features/topic/domain/topic.dart`
+- `petgo_app/lib/features/topic/data/topic_repository.dart`
+- `petgo_app/lib/features/topic/presentation/topic_providers.dart`
+- `petgo_app/lib/features/topic/presentation/topic_page.dart`
+- `petgo_app/lib/features/topic/presentation/widgets/topic_official_badge.dart`
+- `petgo_app/lib/features/topic/presentation/widgets/home_topic_row.dart`
+- `petgo_app/lib/features/topic/presentation/widgets/topic_empty_view.dart`
+- `petgo_app/test/topic/fake_topic_repository.dart`
+- `petgo_app/test/topic/topic_page_test.dart`
+- `petgo_app/test/topic/topic_posts_paging_test.dart`
+- `petgo_app/test/topic/home_topic_row_test.dart`
+- `petgo_app/test/topic/topic_official_badge_test.dart`
+- `petgo_app/test/core/deep_link_topic_test.dart`
+
+修改：
+- `petgo_app/lib/core/network/api_paths.dart`
+- `petgo_app/lib/core/router/app_router.dart`
+- `petgo_app/lib/app.dart`
+- `petgo_app/lib/features/content/presentation/promo_target.dart`
+- `petgo_app/lib/features/content/presentation/feed_view.dart`
+- `petgo_app/lib/features/content/presentation/home_page.dart`
+- `petgo_app/lib/features/profile/presentation/pet_insights_page.dart`
+- `petgo_app/lib/l10n/app_id.arb`、`petgo_app/lib/l10n/app_en.arb`
+- `petgo_app/android/app/src/main/AndroidManifest.xml`
+- `petgo_app/test/analytics/v112_events_test.dart`
+- `petgo_app/test/deeplink_manifest_test.dart`
+- `petgo_app/test/content/beranda_home_test.dart`
+- `petgo_app/test/profile/pet_insights_test.dart`
+- `petgo_app/test/profile/pet_recommendation_strip_test.dart`
+
 ### Change Log
+
+- 2026-11-04：实现 Story 4.3（App）——话题详情页 C6–C11（NestedScrollView + 吸顶页签、两页签各自缓存、话题顶置、空态推荐、404 / 失败态）、Discover 首页话题行 C1、Resmi 共享徽章、`/topics/:name` 路由与 `tailtopia://topic` 深链 + 推广卡 `from=pin`、FR-165 三个入口开关、三个埋点与 9 条 EN/ID 文案；L0 全绿，L2 待本地。
+- 2026-11-04：复审修复——`topic_page_viewed` 挪到 C10/C11 之后（首屏失败不报）；刷新时 404 有旧值也进 C10；Populer 50 页上限改行为测试。

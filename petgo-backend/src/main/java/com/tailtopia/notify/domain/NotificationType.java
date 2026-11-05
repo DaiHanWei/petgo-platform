@@ -230,5 +230,23 @@ public enum NotificationType {
      * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.4.0-gift} 实现。
      * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261018_1400__v140_rebuild_ck_notifications_type.sql}）；四条线不再改该约束。
      */
-    GIFT_UNDELIVERED_REFUND
+    GIFT_UNDELIVERED_REFUND,
+
+    /**
+     * V1.4.2 social-topic Story 1.2（D-10）：有人追更了我的宠物 → 宠物主人。带触发人（追更者），<b>不聚合</b>；
+     * {@code targetRef} = 追更者 user id（同 {@link #USER_FOLLOWED}，点击直达追更者主页），宠物 id 存 {@code variant}。
+     * 推送分类「新粉丝」（{@code FOLLOWER}）。24 小时内同「接收人 × 追更者 × 宠物」不重复。
+     *
+     * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（见 {@code V20261104_2010__rebuild_ck_notifications_type_and_push_mutes.sql}）。
+     */
+    PET_FOLLOWED,
+
+    /**
+     * V1.4.2 social-topic Story 1.2（D-10 / D-5）：我追更的宠物发了新的公开 Diary → 追更者。
+     * {@code targetRef} = 帖子 id，命中的宠物 id 存 {@code variant}；标题写入时按收件人语言渲染落库。
+     * 同一追更者 × 同一宠物 × 同一 WIB 日最多 1 条、一帖一人一条。推送分类「追更宠物」（{@code PET_DIARY}）。
+     *
+     * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（见 {@code V20261104_2010__rebuild_ck_notifications_type_and_push_mutes.sql}）。
+     */
+    PET_DIARY_POSTED
 }

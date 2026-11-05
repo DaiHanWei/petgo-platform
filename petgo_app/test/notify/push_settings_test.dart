@@ -14,9 +14,10 @@ Map<String, dynamic> _json(Map<String, bool> overrides, {Map<String, Object?> lo
     };
 
 void main() {
-  test('9 项全开', () {
+  // V1.4.2 social-topic Story 1.5：新增 PET_DIARY → 10 项（按设计更新断言）。
+  test('10 项全开', () {
     final s = PushSettings.fromJson(_json({}));
-    expect(s.enabled.length, 9);
+    expect(s.enabled.length, 10);
     expect(PushCategoryCode.all.every(s.isEnabled), isTrue);
     expect(s.locked, {PushCategoryCode.orderAccount});
   });
@@ -38,7 +39,7 @@ void main() {
     expect(s.enabled.containsKey('FOO'), isFalse);
     expect(s.isEnabled('LIKE'), isFalse);
     expect(s.isEnabled('GIFT'), isTrue);
-    expect(PushSettings.fromJson(null).enabled.length, 9);
+    expect(PushSettings.fromJson(null).enabled.length, 10);
   });
 
   test('ORDER_ACCOUNT 在服务端 lockable 缺失 / 为 true 时仍锁定且恒开', () {
@@ -54,5 +55,20 @@ void main() {
     expect(s.isEnabled('LIKE'), isFalse);
     expect(s.enabled.values.where((v) => !v).length, 1);
     expect(s.locked, {PushCategoryCode.orderAccount});
+  });
+
+  test('V1.4.2 Story 1.5 · AC7.1：PET_DIARY 紧跟 FOLLOWER（= 后端声明顺序）；认 PET_DIARY、缺失视为开启、可关', () {
+    final all = PushCategoryCode.all;
+    expect(all.indexOf(PushCategoryCode.petDiary), all.indexOf(PushCategoryCode.follower) + 1);
+    expect(PushCategoryCode.petDiary, 'PET_DIARY');
+    final off = PushSettings.fromJson(_json({'PET_DIARY': false}));
+    expect(off.isEnabled(PushCategoryCode.petDiary), isFalse);
+    expect(off.isLocked(PushCategoryCode.petDiary), isFalse);
+    final missing = PushSettings.fromJson({
+      'categories': [
+        {'code': 'LIKE', 'enabled': true, 'lockable': true},
+      ],
+    });
+    expect(missing.isEnabled(PushCategoryCode.petDiary), isTrue);
   });
 }

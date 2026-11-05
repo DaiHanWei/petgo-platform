@@ -1,6 +1,6 @@
 # Story 1.4: 宠物访客页追更与失效修复（App，A1–A4、A14、A15）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 social-topic · 分支 `feat/1.4.2-social-topic`
 > 口径优先级：`决策日志-social-topic.md`（R-2）> PRD §3.1「入口与按钮 / 主人一侧 / 关注关系（失效页修复）」、AC1 / AC2 / AC13、§4、§7 > 架构增量 D-8、D-23、§1.2 第 3 / 9 条、P-9 ~ P-12 > **UI 定稿 `追更话题/ui-1-4-2-social-topic-integrated-v1.html` 的 A1–A4、A14、A15 每屏下方说明**（含文件、行号、数值；数值照说明里写的代码出处取，**不从截图量像素**；标「原有模块照线上」的不改样式）。
@@ -31,7 +31,7 @@ so that 追更顺手、不会卡在死页面。
 5. 游客点 Ikuti → `requireLogin(ref, context, entrySource: 'pet_follow')` 拉起登录，**登录后不自动追更**，不发请求、不埋点。
 6. **不显示按钮的情况**：自己的宠物（与 `_giftPill()` 同一判定：`petProfileProvider` 加载中 / 失败 / 是自己的 → 不显示）；分享链接 `/pet/{token}` 落地态（`!scope.isInApp`）；名片 H5、Feed 卡片、帖子详情一律没有追更按钮（PRD AC2，本 story 不在这些地方加任何东西）。
 7. 成功后失效：本宠物 `visitorStatsProvider(scope)`（Pengikut 数）、我自己的 `publicProfileProvider(myId)`（「Hewan N」胶囊）、我的追更宠物列表 provider（1.5 建；本 story 若先于 1.5 实现，预留 `ref.invalidate` 调用点并在 1.5 接上）。请求返回时页面可能已关 → **先取 `ProviderScope.containerOf(context, listen: false)` 再 await**（照 `FollowButton._onTap`:313 的写法）。
-8. 同一只宠物在多处出现时状态一致：新建 `petFollowStateProvider`（`Notifier<Map<int petId, bool>>` 覆盖表，乐观写 / 回滚 / 成功写回），访客页按钮、1.5 的 Hewan 列表与推荐卡共用；**登记到 `app.dart` 的 `resetUserScopedCaches`**（换账号必须清，否则 B 看到 A 的追更态）。
+8. 同一只宠物在多处出现时状态一致：新建 `petFollowStateProvider`（`Notifier<Map<int petId, PetFollowOverride>>` 覆盖表 —— 值为 `{iFollow, followerCount?}`，人数随乐观 ±1 / 成功写回一并覆盖，乐观写 / 回滚 / 成功写回），访客页按钮、1.5 的 Hewan 列表与推荐卡共用；**登记到 `app.dart` 的 `resetUserScopedCaches`**（换账号必须清，否则 B 看到 A 的追更态）。
 
 ### AC2 — 统计条第 4 格「N Pengikut」 `[L0 widget]` `[L2]`（PRD AC1、UI A1 / A4）
 1. `PetInfoCard` 统计条在礼物格、Milestone 格之后加第 4 格「{N} Pengikut」：数字 16 / w700 `ink`、**加 `FontFeature.tabularFigures()`**（乐观 +1 不跳宽）；标签复用 arb 现有 `followStatFollowers`「Pengikut」（11 号 `ink2`）；**不可点**。
@@ -73,14 +73,14 @@ so that 追更顺手、不会卡在死页面。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：分支；1.1 后端字段是否已在本分支（未在则先按契约写 mock 测试）；Dev Notes「现状」行号未漂移
-- [ ] **T1 数据层**（AC1、AC5.3）：`core/network/api_paths.dart` 注册 `mePetFollow(int petId)`；`features/social/data/pet_follow_repository.dart`（follow / unfollow → `PetFollowResult`）；`features/social/domain/pet_follow_state.dart`（`petFollowStateProvider`）；`VisitorProfile` 加 `iFollow` / `iFollowOwner` / `ownerToken`；`ArchiveStats` 加 `int? followerCount`；访客档案取数抛分类错误
-- [ ] **T2 按钮组件**（AC1、AC6）：`features/social/presentation/widgets/pet_follow_button.dart`（`PetFollowButtonStyle.profileFull` 本 story、`listCompact` 留给 1.5 —— 可一次做完两种外观）；把 `FollowButton` 的 `_profileFull` / `_listCompact` 外观抽成同文件可复用的私有→库内函数（只抽外观、点击逻辑不动），保证两种按钮像素一致
-- [ ] **T3 信息卡与页头**（AC2、AC3）：`PetInfoCard` 加 `followerCount`、`bottomAction`；`DiaryHeader` 加 `leading`、透传 `followerCount` / `bottomAction`；`growth_archive_page.dart` 透传 `followerCount`；`visitor_archive_view.dart` 合并页头、挂按钮
-- [ ] **T4 失效两屏**（AC4、AC5）：重写 `_Gone` 为 `_VisitorGone` / `_VisitorLoadFailed`（或一个带 kind 的组件）
-- [ ] **T5 缓存与埋点**（AC1.8、AC6）：`resetUserScopedCaches` 登记；`v112_events_test.dart` 词尾扩表
-- [ ] **T6 测试**（见「测试」）
-- [ ] **T7** `flutter analyze` + `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」（L2 还原度打分在本地模拟器做）
+- [x] **T0 开工核对**：分支；1.1 后端字段是否已在本分支（未在则先按契约写 mock 测试）；Dev Notes「现状」行号未漂移
+- [x] **T1 数据层**（AC1、AC5.3）：`core/network/api_paths.dart` 注册 `mePetFollow(int petId)`；`features/social/data/pet_follow_repository.dart`（follow / unfollow → `PetFollowResult`）；`features/social/domain/pet_follow_state.dart`（`petFollowStateProvider`）；`VisitorProfile` 加 `iFollow` / `iFollowOwner` / `ownerToken`；`ArchiveStats` 加 `int? followerCount`；访客档案取数抛分类错误
+- [x] **T2 按钮组件**（AC1、AC6）：`features/social/presentation/widgets/pet_follow_button.dart`（`PetFollowButtonStyle.profileFull` 本 story、`listCompact` 留给 1.5 —— 可一次做完两种外观）；把 `FollowButton` 的 `_profileFull` / `_listCompact` 外观抽成同文件可复用的私有→库内函数（只抽外观、点击逻辑不动），保证两种按钮像素一致
+- [x] **T3 信息卡与页头**（AC2、AC3）：`PetInfoCard` 加 `followerCount`、`bottomAction`；`DiaryHeader` 加 `leading`、透传 `followerCount` / `bottomAction`；`growth_archive_page.dart` 透传 `followerCount`；`visitor_archive_view.dart` 合并页头、挂按钮
+- [x] **T4 失效两屏**（AC4、AC5）：重写 `_Gone` 为 `_VisitorGone` / `_VisitorLoadFailed`（或一个带 kind 的组件）
+- [x] **T5 缓存与埋点**（AC1.8、AC6）：`resetUserScopedCaches` 登记；`v112_events_test.dart` 词尾扩表
+- [x] **T6 测试**（见「测试」）
+- [x] **T7** `flutter analyze` + `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」（L2 还原度打分在本地模拟器做）
 
 ## Dev Notes
 
@@ -192,10 +192,67 @@ so that 追更顺手、不会卡在死页面。
 
 ### Agent Model Used
 
+Claude
+
 ### Debug Log References
+
+- 第 0 步自检：remote `origin` → github.com/DaiHanWei/petgo-platform；`feat/1.4.2-social-topic` 与 origin 同步；`git push --dry-run` 通过；Flutter 3.47.9 / Java 21.0.12 可用。
+- 名字核对（对照 1.1 提交 389b99e0）：`POST|DELETE /api/v1/me/pet-follows/{petId}` → `PetFollowResultResponse(iFollow, followerCount)`；`VisitorProfileResponse` 新增 `iFollow` / `iFollowOwner` / `ownerToken`（公开路径 null → NON_NULL 省略）；`ArchiveStatsResponse` / `VisitorStats` 新增 `followerCount`；403 = `blocked-user`、404、422、429 `rate-limited` —— 与本 story「接口契约」一致，无需改契约。
+- `flutter analyze`：No issues found。`flutter test`（全量）：+4162 ~1（1 条为存量 skip），All tests passed。
+- 复审修复后复跑：`flutter analyze` No issues found；`flutter test`（全量）+4170 ~1，All tests passed。
 
 ### Completion Notes List
 
 - Ultimate context engine analysis completed - comprehensive developer guide created
+- **L1/L2 待本地验收**：
+  - L1（连 stag / 本地后端）：真实追更 / 取消、Pengikut 计数与主人 Diary Tab 一致；断网打开访客页落 A15、恢复后「Coba lagi」可加载；删宠后打开落 A14；我拉黑主人后深链打开落 A14。（本 story 只动 App，无后端集成测试类。）
+  - L2（Android 模拟器）：A1 / A2 / A3（含超频底部 toast 态）/ A4 / A14 / A15 逐屏对照 UI 稿打分（还原度 ≥ 95%）、360dp 小屏礼物格 `FittedBox` 缩放效果 —— 均未做，留本地。
+  - L2 待本地确认（复审记录，不改）：统计条 3 格 → 4 格切换时的跳动（stats 到达前 3 格、到达后 4 格）。
+- 名字 / 实现修订（对 story 文件的改动）：
+  - AC1.8 `petFollowStateProvider` 值类型由 `bool` 改为 `PetFollowOverride{iFollow, followerCount?, epoch}`：访客页 Pengikut 格要随乐观 ±1 与成功写回同步，单靠 bool 无法表达人数；成功后同时失效 stats，覆盖里的人数与重取值一致。
+  - 新增 key：按钮 `petFollowButton`（listCompact 为 `petFollowList_{petId}`）、第 4 格 `petInfoFollowerStat` / `petInfoFollowerCount`、A15 屏 `visitorLoadFailed`（A14 沿用 `visitorGone`）。
+  - `DiaryHeader` 新参数：`leading`、`followerCount`、`infoCardBottom`（→ `PetInfoCard.bottomAction`）。
+- 拍板点复述：① 新建 `PetFollowButton`，`FollowButton` 的 `_profileFull` / `_listCompact` 外观抽成库级函数 `followProfileFullButton` / `followListCompactButton`，用户关注点击逻辑未动；② `followerCount` 缺键 = null → 3 格；③ 403 `blocked-user` 落 A14；④ 追更埋点只在服务端确认成功后报。
+- **复审修复（2026-11-04）**：
+  - [CONFIRMED] 覆盖表整会话盖住服务端 → 仿 `FollowStateNotifier` 加版本号：`PetFollowOverride.epoch`（全局计数器 `_petFollowEpochCounter`，换号不归零）；`visitorProfileProvider` / `visitorStatsProvider` 发请求前读 `currentEpoch` 贴进快照（`VisitorProfile.followEpoch` / `ArchiveStats.followEpoch`，客户端字段、不来自 JSON）；覆盖只在 `epoch > snapshotEpoch` 时生效（纯函数 `resolvePetFollow` / `resolvePetFollowerCount`）。效果：同会话再进宠物页，新 stats 134 显示 134、新 profile `iFollow=false` 显示 Ikuti；追更成功后 stats 重取，以服务端人数为准，按钮态仍由覆盖保持（profile 不重取）。`PetFollowButton` 新增 `followSnapshotEpoch` / `countSnapshotEpoch`。
+  - (a) 埋点拆成 `if / else` 两处字面量 `Analytics.capture('pet_follow', …)` / `('pet_unfollow', …)`；`v112_events_test.dart` 新增断言 `eventNamesInSource()` 含这两个名字（已通过）。
+  - (b) 「是不是自己的宠物」同时比对 `petProfileProvider`（当前宠物）与 `petListProvider`（我名下全部宠物）；任一加载中 / 失败按不显示；追更按钮与送礼胶囊共用 `_othersInAppPetId()`。`gift_entry_visibility_test.dart` 的 pump 补 `petListProvider` 覆盖与一帧（宠物列表在档案就绪分支首次被 watch），并补多宠 / 加载中两条。
+- 额外：`visitorProfileProvider` 加 `retry: (_, _) => null`（同 bug 20261006-583 的处理）—— Riverpod 3 默认重试期间是 `AsyncLoading`，A14 / A15 要转圈几十秒才出；失败停失败态、重试由 A15 按钮触发。
+- 追更成功失效：`visitorStatsProvider`（整族）、`publicProfileProvider(我)`；1.5 的追更宠物列表 provider 在 `pet_follow_button.dart` 留了 `TODO(v1.4.2 Story 1.5)` 调用点。
+- 埋点：`pet_follow` / `pet_unfollow` 字面量；属性 `pet_id`、`owner_id`（= `ownerToken`，R-2）、`source: 'pet_visitor'`、`is_following_owner`（= `iFollowOwner`），后两者 / `owner_id` 缺失时省略。`v112_events_test.dart` 的 `allowedSuffixes` 追加 `_follow` / `_unfollow`（附注释）。
+- 文案：无新增 arb 键（全部复用），未跑 gen-l10n（无 ARB 改动）。
+- 分享 token 落地态：stats 新后端同样下发 `followerCount` → 也显示第 4 格（只人数），无追更按钮。
+
+#### 待确认
+
+1. 埋点名 `pet_follow` / `pet_unfollow` 与守卫过去式惯例不一致（见上文「待确认」2），按 PRD 定死扩词尾表实现；如改名需同步改代码与守卫。
+2. 403 `blocked-user` 落 A14（见上文「待确认」3）。
+3. 访客页 `iFollowOwner` 取页面加载时快照；若用户在本次浏览期间去主人主页关注 / 取关后回来再追更，埋点 `is_following_owner` 可能是旧值（profile 不重取）。按最保守做法不跨覆盖表推断。
 
 ### File List
+
+- petgo_app/lib/app.dart（`resetUserScopedCaches` 登记 `petFollowStateProvider`）
+- petgo_app/lib/core/network/api_paths.dart（`mePetFollow`）
+- petgo_app/lib/features/social/data/pet_follow_repository.dart（新）
+- petgo_app/lib/features/social/domain/pet_follow_state.dart（新）
+- petgo_app/lib/features/social/presentation/widgets/pet_follow_button.dart（新）
+- petgo_app/lib/features/social/presentation/widgets/follow_button.dart（外观抽函数）
+- petgo_app/lib/features/profile/data/timeline_repository.dart（访客档案分类错误、retry null、快照贴追更版本号）
+- petgo_app/lib/features/profile/domain/archive_stats.dart（`followerCount`、`followEpoch`）
+- petgo_app/lib/features/profile/domain/visitor_profile.dart（三新字段、`followEpoch`、`VisitorLoadError`）
+- petgo_app/lib/features/profile/presentation/visitor_archive_view.dart（页头合并、追更按钮、A14 / A15）
+- petgo_app/lib/features/profile/presentation/widgets/diary_header.dart（`leading` / `followerCount` / `infoCardBottom`）
+- petgo_app/lib/features/profile/presentation/widgets/pet_info_card.dart（第 4 格、`bottomAction`、礼物格 FittedBox）
+- petgo_app/lib/features/profile/presentation/growth_archive_page.dart（A4 透传 `followerCount`）
+- petgo_app/test/social/pet_follow_button_test.dart（新）
+- petgo_app/test/profile/pet_info_card_follower_stat_test.dart（新）
+- petgo_app/test/profile/visitor_archive_view_test.dart（补）
+- petgo_app/test/profile/visitor_wire_contract_test.dart（补）
+- petgo_app/test/analytics/v112_events_test.dart（词尾扩表）
+- petgo_app/test/app/user_scoped_cache_registry_test.dart（登记 `petFollowStateProvider`）
+- petgo_app/test/gift/gift_entry_visibility_test.dart（复审：petListProvider 覆盖 + 多宠 / 加载中用例）
+
+### Change Log
+
+- 2026-11-04：复审修复 —— 追更覆盖加版本号（服务端新快照接管）、埋点拆字面量、自己的宠物判定加宠物列表；L0 复跑全绿。
+- 2026-11-04：Story 1.4 实现（App）—— 访客页追更按钮 + Pengikut 第 4 格 + 页头合并 + 失效两屏（A14 / A15）+ 埋点；L0 全绿，L1/L2 待本地验收。

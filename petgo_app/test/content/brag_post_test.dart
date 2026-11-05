@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/media/media_scope.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -16,6 +18,7 @@ import 'package:tailtopia/features/content/presentation/brag_post_entry.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/media/data/oss_uploader.dart';
 import 'package:tailtopia/features/media/domain/media_upload_use_case.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/utils/image_processor.dart';
 
@@ -86,6 +89,11 @@ void main() {
         mediaUploadUseCaseProvider.overrideWithValue(media),
         contentRepositoryProvider.overrideWithValue(_OkRepo()),
         authControllerProvider.overrideWith(_Auth.new),
+        // V1.4.2 Story 3.1：里程碑来源以 Diary 打开，宠物 chips 读这里（不打网络）。
+        petListProvider.overrideWith((ref) async => const [
+              PetListItem(id: 1, name: 'Orenji'),
+              PetListItem(id: 2, name: 'Kopi'),
+            ]),
       ]);
       addTearDown(container.dispose);
       await tester.pumpWidget(UncontrolledProviderScope(
@@ -180,6 +188,137 @@ void main() {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       expect(find.text(l10n.shareCardExportError), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
+    });
+
+    // ---- V1.4.2 social-topic Story 3.1 · AC3 / AC4（D-21 · G-6）----
+
+    PublishComposePage page(WidgetTester tester) => tester.widget<PublishComposePage>(find.byType(PublishComposePage));
+
+    testWidgets('回归：open 默认参数 → Moment、不预选宠物、无来源（4 个老来源调用点不改）', (tester) async {
+      BragPostEntry.prepareForTest = (_) async => jpeg();
+      addTearDown(() => BragPostEntry.prepareForTest = null);
+      await pumpOpener(tester);
+      final ctx = tester.element(find.byKey(const ValueKey('openPlain')));
+      BragPostEntry.open(ctx, cardPng: png(10, 10), text: 'Pamer');
+      await tester.pumpAndSettle();
+      expect(page(tester).preset, ContentType.daily);
+      expect(page(tester).initialPetIds, isNull);
+      expect(page(tester).entrySource, isNull);
+      expect(page(tester).milestoneCode, isNull);
+      expect(page(tester).initialImages, hasLength(1));
+    });
+
+    testWidgets('openPrepared：Diary + 预选宠物 + 来源透传；不带 milestoneCode', (tester) async {
+      await pumpOpener(tester);
+      final ctx = tester.element(find.byKey(const ValueKey('openPlain')));
+      final j = jpeg();
+      BragPostEntry.openPrepared(ctx,
+          jpeg: j,
+          text: 'Orenji baru membuka tonggak',
+          preset: ContentType.growthMoment,
+          petIds: const [2],
+          source: BragPostSource.milestoneCelebration);
+      await tester.pumpAndSettle();
+      expect(page(tester).preset, ContentType.growthMoment);
+      expect(page(tester).initialPetIds, [2]);
+      expect(page(tester).entrySource, BragPostSource.milestoneCelebration);
+      expect(page(tester).milestoneCode, isNull, reason: '🔴 绝不传 milestoneCode（否则新帖被关联成打卡内容）');
+      expect(page(tester).initialImages!.single, same(j));
+      expect(controller().type, ContentType.growthMoment);
+      expect(controller().petIds, [2]);
+      expect(fieldText(tester), 'Orenji baru membuka tonggak');
+      expect(controller().items, hasLength(1));
+    });
+
+    testWidgets('open 带新参数 = prepare + openPrepared', (tester) async {
+      BragPostEntry.prepareForTest = (_) async => jpeg();
+      addTearDown(() => BragPostEntry.prepareForTest = null);
+      await pumpOpener(tester);
+      final ctx = tester.element(find.byKey(const ValueKey('openPlain')));
+      BragPostEntry.open(ctx,
+          cardPng: png(10, 10),
+          text: 'x',
+          preset: ContentType.growthMoment,
+          petIds: const [1, 2],
+          source: BragPostSource.milestoneCelebration);
+      await tester.pumpAndSettle();
+      expect(page(tester).preset, ContentType.growthMoment);
+      expect(page(tester).initialPetIds, [1, 2]);
+      expect(page(tester).entrySource, BragPostSource.milestoneCelebration);
+    });
+
+    testWidgets('prepare 成功 → 返回 JPEG、不开发布页', (tester) async {
+      final j = jpeg();
+      BragPostEntry.prepareForTest = (_) async => j;
+      addTearDown(() => BragPostEntry.prepareForTest = null);
+      await pumpOpener(tester);
+      final ctx = tester.element(find.byKey(const ValueKey('openPlain')));
+      final out = await BragPostEntry.prepare(ctx, png(10, 10));
+      await tester.pumpAndSettle();
+      expect(out, same(j));
+      expect(find.byType(PublishComposePage), findsNothing);
+      expect(BragPostEntry.busy, isFalse);
+    });
+
+    testWidgets('prepare 失败 → 轻提示（抬高 extraBottom）、返回 null、不开发布页', (tester) async {
+      BragPostEntry.prepareForTest = (_) async => throw const ImageProcessingException('x');
+      addTearDown(() => BragPostEntry.prepareForTest = null);
+      await pumpOpener(tester);
+      final ctx = tester.element(find.byKey(const ValueKey('openPlain')));
+      Uint8List? out = Uint8List(1);
+      BragPostEntry.prepare(ctx, png(10, 10), toastExtraBottom: 96).then((v) => out = v);
+      await tester.pumpAndSettle();
+      expect(out, isNull);
+      expect(find.byType(PublishComposePage), findsNothing);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.shareCardExportError), findsOneWidget);
+      expect(BragPostEntry.busy, isFalse);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('prepare 进行中再调 → 直接 null（_busy 防重入）', (tester) async {
+      final gate = Completer<Uint8List>();
+      BragPostEntry.prepareForTest = (_) => gate.future;
+      addTearDown(() => BragPostEntry.prepareForTest = null);
+      await pumpOpener(tester);
+      final ctx = tester.element(find.byKey(const ValueKey('openPlain')));
+      final first = BragPostEntry.prepare(ctx, png(10, 10));
+      expect(BragPostEntry.busy, isTrue);
+      expect(await BragPostEntry.prepare(ctx, png(10, 10)), isNull);
+      gate.complete(jpeg());
+      expect(await first, isNotNull);
+      expect(BragPostEntry.busy, isFalse);
+    });
+  });
+
+  group('AC5 reportTap', () {
+    late List<(String, Map<String, Object>?)> events;
+    setUp(() {
+      events = [];
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+    });
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    test('不带 extra → 属性只有 source', () {
+      BragPostEntry.reportTap(BragPostSource.boardingPass);
+      expect(events.single.$1, 'brag_post_tapped');
+      expect(events.single.$2, {'source': 'boarding_pass'});
+    });
+
+    test('里程碑来源带 code / level → 合并进属性', () {
+      BragPostEntry.reportTap(BragPostSource.milestoneCelebration, extra: {'code': 'C-S1', 'level': 'S'});
+      expect(events.single.$1, 'brag_post_tapped');
+      expect(events.single.$2, {'code': 'C-S1', 'level': 'S', 'source': 'milestone_celebration'});
+    });
+
+    test('BragPostSource 值域：原 4 个 + milestone_celebration', () {
+      expect(BragPostSource.values.map((s) => s.wire), [
+        'tailsonality_result',
+        'tailsonality_match',
+        'match_preview',
+        'boarding_pass',
+        'milestone_celebration',
+      ]);
     });
   });
 }

@@ -6,6 +6,7 @@ import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// Story 4.2 · L0：发布页同步开关 → `visibility` 的映射、主按钮文案联动、以及
 /// 「发布后不可更改」这条硬约束。
@@ -17,7 +18,7 @@ class _RecordingRepo implements ContentRepository {
   ContentType? lastType;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -33,7 +34,7 @@ class _RecordingRepo implements ContentRepository {
   }) async {
     lastType = type;
     lastSync = syncToMoment;
-    return 1;
+    return const PublishedPost(id: 1);
   }
 }
 

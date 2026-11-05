@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/place/presentation/place_detail_page.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
@@ -183,5 +185,23 @@ void main() {
   test('礼物页不是 Tab 根：冷启动需要先铺底座再叠（deepLinkNeedsBaseRoute）', () {
     expect(deepLinkNeedsBaseRoute('/pets/12/gifts?wall=expanded'), isTrue);
   });
-}
 
+  // V1.4.2 social-topic Story 1.5 · AC6.6。
+  test('PET_DIARY_POSTED → 帖子详情；非数字 / 空 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_DIARY_POSTED', '88'), '/content/88');
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_DIARY_POSTED', 'x88'), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_DIARY_POSTED', null), DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('PET_FOLLOWED → 追更者主页（targetRef = 追更者 user id）；非数字 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_FOLLOWED', '42'), '${PublicProfilePage.routeBase}/42');
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_FOLLOWED', 'abc'), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_FOLLOWED', ''), DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('两类型在 switch 里显式列出（不靠 default）', () {
+    final src = File('lib/core/router/deep_link_routes.dart').readAsStringSync();
+    expect(src, contains("case 'PET_FOLLOWED':"));
+    expect(src, contains("case 'PET_DIARY_POSTED':"));
+  });
+}
