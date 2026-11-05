@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
@@ -16,6 +17,11 @@ class _Repo implements MentionCandidateRepository {
     if (fail) throw Exception('offline');
     return [MentionCandidate(userId: calls, nickname: 'u$calls')];
   }
+
+  // V1.4.2 Story 5.2：带 q 的查询不走 provider（组件内状态），本文件不验它。
+  @override
+  Future<List<MentionCandidate>> search(String keyword, {CancelToken? cancelToken}) async =>
+      const [];
 }
 
 void main() {

@@ -302,7 +302,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     controller.setText(inserted.text);
     // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
     // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
-    Analytics.capture('mention_inserted', {'context': MentionContext.post.wire});
+    // V1.4.2 Story 5.2 AC4：加 relation / from_quick_list（选中时 @ 后关键词为空 = 来自快捷列表）。
+    Analytics.capture('mention_inserted', {'context': MentionContext.post.wire, 'relation': candidate.relation.wire, 'from_quick_list': query.keyword.isEmpty});
     setState(() => _mentionQuery = null);
   }
 
@@ -466,10 +467,13 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     _closeTopicPanel();
   }
 
+  /// 贴键盘承载位上此刻有没有面板：# 联想或 @ 选择器（V1.4.2 Story 5.2 · D-19：同一承载位，二者互斥）。
+  bool get _dockPanelVisible => _mentionQuery != null || _topicPanelVisible;
+
   /// 面板可见期间：读实测高度（变了才 setState）；刚出现时把光标行滚到面板之上（scrollPadding 只在光标变化时生效，兜底一次）。
   void _afterTopicPanelFrame({required bool justShown}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_topicPanelVisible) return;
+      if (!mounted || !_dockPanelVisible) return;
       final double? h = _topicPanelKey.currentContext?.size?.height;
       if (h != null && h != _topicPanelHeight) setState(() => _topicPanelHeight = h);
       if (justShown) {
@@ -890,8 +894,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       return PublishReviewingView(args: _reviewingArgs!);
     }
     final growthSelected = controller.type == ContentType.growthMoment;
-    // V1.4.2 Story 4.4：# 联想面板可见态（scrollPadding / 列表留白 / Stack 都按它）。
-    final bool panelVisible = _topicPanelVisible;
+    // V1.4.2 Story 4.4 / 5.2：贴键盘面板（# 联想或 @ 选择器）可见态（scrollPadding / 列表留白 / Stack 都按它）。
+    final bool panelVisible = _dockPanelVisible;
     if (panelVisible) _afterTopicPanelFrame(justShown: !_topicPanelWasVisible);
     _topicPanelWasVisible = panelVisible;
     // 键盘弹出时把整个内容区上推键盘高度（固定高度 sheet 走标准件 KeyboardInset，带 120ms 动画 +
@@ -1066,14 +1070,6 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                               ),
                             ),
                           ),
-                          // AC1：输入「@」弹出用户选择器浮层，紧贴正文框下沿展开。
-                          if (_mentionQuery != null) ...[
-                            const SizedBox(height: 7),
-                            MentionPicker(
-                              keyword: _mentionQuery!.keyword,
-                              onSelected: (c) => _onMentionSelected(controller, c),
-                            ),
-                          ],
                           const SizedBox(height: 7),
                           // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
                           Text(
@@ -1151,15 +1147,32 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                     bottom: 0,
                     child: KeyedSubtree(
                       key: _topicPanelKey,
-                      child: TopicSuggestPanel(
-                        keyword: _topicQuery!.keyword,
-                        loading: _suggestLoading,
-                        failed: _suggestFailed,
-                        suggestions: _suggestions,
-                        onSelect: (t) => _onTopicChosen(controller, t.displayName, suggestedNorm: t.name),
-                        onCreate: (k) => _onTopicChosen(controller, k),
-                        onRetry: _retrySuggestions,
-                      ),
+                      // V1.4.2 Story 5.2（AC2.1 / AC2.3）：@ 面板放进同一承载位，与 # 面板互斥（_syncTopicQuery 保证不同时成立）。
+                      // @ 面板的状态在组件内部变（转圈 → 列表），尺寸变化时通知这里重量高度给 scrollPadding。
+                      child: _mentionQuery != null
+                          ? NotificationListener<SizeChangedLayoutNotification>(
+                              onNotification: (_) {
+                                _afterTopicPanelFrame(justShown: false);
+                                return true;
+                              },
+                              child: SizeChangedLayoutNotifier(
+                                child: MentionPicker(
+                                  keyword: _mentionQuery!.keyword,
+                                  docked: true,
+                                  rowHorizontalPadding: 20,
+                                  onSelected: (c) => _onMentionSelected(controller, c),
+                                ),
+                              ),
+                            )
+                          : TopicSuggestPanel(
+                              keyword: _topicQuery!.keyword,
+                              loading: _suggestLoading,
+                              failed: _suggestFailed,
+                              suggestions: _suggestions,
+                              onSelect: (t) => _onTopicChosen(controller, t.displayName, suggestedNorm: t.name),
+                              onCreate: (k) => _onTopicChosen(controller, k),
+                              onRetry: _retrySuggestions,
+                            ),
                     ),
                   ),
               ],

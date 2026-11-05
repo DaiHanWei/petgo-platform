@@ -424,7 +424,7 @@
   "@mentionEmptyTitle": {
     "description": "Empty state of the @ picker when the candidate list is empty (Story 3.2 AC3); the filter field is hidden in this state"
   },
-  "mentionEmptyHint": "Comment or like first, then you can mention people",
+  "mentionEmptyHint": "Follow someone first, then you can mention them here",
   "@mentionEmptyHint": {
     "description": "Second line of the @ picker empty state: how to get candidates"
   },

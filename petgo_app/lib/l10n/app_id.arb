@@ -269,7 +269,7 @@
   "commentModerationBlocked": "Komentar ini tidak sesuai pedoman komunitas, silakan ubah dan coba lagi",
   "mentionFilterHint": "Cari nama…",
   "mentionEmptyTitle": "Belum ada orang yang bisa di-@",
-  "mentionEmptyHint": "Berinteraksi dulu (komentar/suka) baru bisa menyebut orang",
+  "mentionEmptyHint": "Ikuti seseorang dulu, nanti kamu bisa menyebut mereka di sini",
   "mentionNoMatch": "Tidak ada nama yang cocok",
   "mentionLimitReached": "Maksimal menyebut 5 orang",
   "publishTextLimitReached": "Teks maksimal 1000 karakter",

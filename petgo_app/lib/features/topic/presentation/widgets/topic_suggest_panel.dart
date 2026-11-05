@@ -63,7 +63,9 @@ class TopicSuggestPanel extends StatelessWidget {
       content = const Padding(
         key: ValueKey('topicSuggestLoading'),
         padding: EdgeInsets.all(12),
+        // heightFactor: 1 —— 否则被外壳 Flexible 包住会撑满 220（V1.4.2 5.2 复审顺带修复）。
         child: Center(
+          heightFactor: 1,
           child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
         ),
       );
