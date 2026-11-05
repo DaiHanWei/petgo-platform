@@ -6,6 +6,13 @@ import '../../../app.dart';
 import '../../../core/router/deep_link_routes.dart';
 import '../domain/pinned_slot.dart';
 
+/// 推广卡深链落点追加入口来源（V1.4.2 social-topic · Story 4.3 · AC1.3）：
+/// 落 `/topics/…` 时带 `from=pin`（埋点 `topic_page_viewed.source = pin`）；其余落点原样。纯函数，L0 可测。
+String promoLocationWithSource(String location) {
+  if (!location.startsWith('/topics/')) return location;
+  return '$location${location.contains('?') ? '&' : '?'}from=pin';
+}
+
 /// 打开推广卡片的跳转目标（V1.1.6 Story 4.3 · AC1）。
 ///
 /// 🛡 **复用既有深链设施，不新建体系**：
@@ -30,8 +37,9 @@ Future<void> openPromoTarget(BuildContext context, PromoCard promo) async {
         // 静默
       }
     case PromoJumpTarget.deeplink:
-      final location = deepLinkToLocation(uri);
-      if (location == null || !context.mounted) return;
+      final mapped = deepLinkToLocation(uri);
+      if (mapped == null || !context.mounted) return;
+      final location = promoLocationWithSource(mapped);
       // 分支根只能 go（push 会二次构建 shell → GlobalKey 撞车），沿用既有判定。
       if (DeepLinkRoutes.isShellTabRoot(location)) {
         context.go(location);

@@ -108,15 +108,18 @@ void main() {
   }
 
   group('AC1/AC2 位置与布局', () {
-    testWidgets('在场所入口行**之下**、分类 chips **之上**', (tester) async {
+    testWidgets('在顶部（场所入口行隐藏后直接上移）、分类 chips **之上**', (tester) async {
       await pumpHome(tester, _FakeRepo([for (int i = 1; i <= 8; i++) _pet(i)]));
       final strip = find.byKey(const ValueKey('petRecommendationStrip'));
       expect(strip, findsOneWidget);
 
-      final placeY = tester.getBottomLeft(find.byType(PlaceEntryRow)).dy;
+      // V1.4.2 FR-165（Story 4.3 · AC6）：场所入口行隐藏 → 横滑行直接上移，上方无空位
+      // （首页头部 = 8 顶距 + 不满足条件不占位的更新横幅 + 横滑行）。
+      expect(find.byType(PlaceEntryRow), findsNothing);
+      final appBarBottom = tester.getBottomLeft(find.byType(AppBar)).dy;
       final stripY = tester.getTopLeft(strip).dy;
       final chipsY = tester.getTopLeft(find.byType(FeedTabRow)).dy;
-      expect(stripY, greaterThanOrEqualTo(placeY - 1));
+      expect(stripY - appBarBottom, closeTo(8, 1));
       expect(stripY, lessThan(chipsY));
     });
 
@@ -173,9 +176,9 @@ void main() {
       expect(tester.takeException(), isNull); // RenderFlex overflow 会在这里抛出
     });
 
-    testWidgets('AC2 既有顶部区域一处不改（场所入口行 + 分类 chips 都还在）', (tester) async {
+    testWidgets('AC2 既有顶部区域（分类 chips 还在；场所入口行按 V1.4.2 FR-165 隐藏）', (tester) async {
       await pumpHome(tester, _FakeRepo([_pet(1)]));
-      expect(find.byType(PlaceEntryRow), findsOneWidget);
+      expect(find.byType(PlaceEntryRow), findsNothing);
       expect(find.byType(FeedTabRow), findsOneWidget);
       expect(find.byType(SocialTabBar), findsOneWidget); // AppBar 页签栏（V1.3.4 起替代品牌标）
     });
@@ -201,8 +204,8 @@ void main() {
       // 首页最显眼的位置摆一句「暂无推荐」等于告诉用户「这儿什么都没有」。
       await pumpHome(tester, _FakeRepo(const []));
       expect(find.byKey(const ValueKey('petRecommendationStrip')), findsNothing);
-      // 其余顶部区域照旧。
-      expect(find.byType(PlaceEntryRow), findsOneWidget);
+      // 其余顶部区域照旧（场所入口行按 V1.4.2 FR-165 隐藏）。
+      expect(find.byType(PlaceEntryRow), findsNothing);
       expect(find.byType(FeedTabRow), findsOneWidget);
     });
 
@@ -226,9 +229,9 @@ void main() {
       expect(repo.calls, 0);
     });
 
-    testWidgets('游客态首页其余部分照旧（场所入口行对游客开放）', (tester) async {
+    testWidgets('游客态首页其余部分照旧（场所入口行按 V1.4.2 FR-165 隐藏）', (tester) async {
       await pumpHome(tester, _FakeRepo([_pet(1)]), loggedIn: false);
-      expect(find.byType(PlaceEntryRow), findsOneWidget);
+      expect(find.byType(PlaceEntryRow), findsNothing);
       expect(find.byType(FeedTabRow), findsOneWidget);
     });
   });

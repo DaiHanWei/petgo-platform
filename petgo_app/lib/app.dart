@@ -19,6 +19,7 @@ import 'package:tailtopia/features/content/presentation/following_feed_controlle
 import 'package:tailtopia/features/social/data/following_strip_repository.dart';
 import 'package:tailtopia/features/social/domain/pet_follow_state.dart';
 import 'package:tailtopia/features/social/presentation/followed_pet_list_controller.dart';
+import 'package:tailtopia/features/topic/presentation/topic_providers.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
@@ -52,6 +53,7 @@ import 'features/pet_slot/data/pet_slot_repository.dart';
 /// - `tailtopia://card/{token}` → `/pet/{token}`（**被分享的那只宠物**，V1.1.6 Story 2.4）
 /// - `tailtopia://post/{token}` → `/shared-post/{token}`（**只有被分享的那一条内容**，V1.1.6 Story 9.3）
 /// - `tailtopia://milestone` → `/profile/milestones`（**自己的**里程碑列表，2026-09-11 产品定）
+/// - `tailtopia://topic/{name}` → `/topics/{name}`（V1.4.2 Story 4.3 话题页；没名字 → `/home`）
 /// - `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）
 /// - `tailtopia://open/<路径>` → 该路径（🔧 **仅 debug 包**，本地验收导航用；release 恒 `/home`）
 /// - 其它 scheme/host 暂不识别（返回 null，调用方忽略）
@@ -103,6 +105,13 @@ String? deepLinkToLocation(Uri uri) {
     // 用户点的是一条场所链接，给他场所列表至少还在同一个功能里。
     // `?from=share` 只喂埋点（E-5 place_detail_viewed，bug 20260922-528）。
     return token.isEmpty ? '/places' : '/places/$token?from=share';
+  }
+  // 话题页（V1.4.2 social-topic · Story 4.3 · D-20）：`tailtopia://topic/{name}` → `/topics/{name}`。
+  // 名字原样转发（后端按标准化规则查，大小写不敏感）；不带 `from`（推广卡入口由 openPromoTarget 追加 `from=pin`）。
+  // 没名字 → 首页（没有可展示的话题）。
+  if (uri.scheme == 'tailtopia' && uri.host == 'topic') {
+    final name = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    return name.isEmpty ? '/home' : '/topics/${Uri.encodeComponent(name)}';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
@@ -391,6 +400,9 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(petFollowStateProvider);
   // V1.4.2 social-topic Story 1.5 · AC9.1：追更宠物列表的 iFollow / iFollowOwner 相对查看者 → 换账号重取。
   ref.invalidate(followedPetListControllerProvider);
+  // V1.4.2 social-topic Story 4.3：话题页列表 / 顶置卡带查看者相关的点赞 / 关注快照 → 换账号整族重取。
+  ref.invalidate(topicPostsProvider);
+  ref.invalidate(topicPinnedProvider);
   // V1.3.4 follow Story 2.1（code-review #2）：顶置卡带查看者相关的关注 / 点赞快照，换账号不重取会串号。
   ref.invalidate(pinnedSlotProvider);
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）

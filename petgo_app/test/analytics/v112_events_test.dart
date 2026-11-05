@@ -362,6 +362,14 @@ void main() {
         // 映射表见 `v140_gift_events_test.dart`）。模块是「送礼」——入口横跨访客视图、详情页、礼物页三处。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则；不加新后缀。
         'gift_',
+        // V1.4.2 social-topic 话题（Story 4.3 / 4.4 · PRD §4）：模块是「话题」—— 话题页、发布页 # 联想、正文话题链接
+        // 三处界面都在报（topic_page_viewed / topic_sort_switched / topic_inserted），挂任一单页前缀都会误导。
+        // 名字由 PRD §4 定。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'topic_',
+        // V1.4.2 social-topic 首页话题行（Story 4.3 · PRD §4 `home_topic_row_tapped`）：模块是「Discover 首页的话题行」——
+        // 🔴 刻意不并进 `topic_`：那是话题页 / 话题本身，这是首页入口的点击（分母是首页曝光），两组数不是同一漏斗。
+        // 名字由 PRD §4 定。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'home_topic_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -573,6 +581,9 @@ void main() {
         'post_id', 'content_type', 'place_id',
         // V1.4.0 ④ Story 2.4：收藏列表条目点击（不可见条目弹移除抽屉）。'tab' 已在上方。
         'is_unavailable',
+        // V1.4.2 social-topic Story 4.3（PRD §4 · R-2）：topic_id = 话题标准名（不外露自增 id）；sort ∈ latest / popular；
+        // position 从 1 起；is_pinned_by_ops = 首页话题行该项是否运营指定。'source' 已在上方。
+        'topic_id', 'sort', 'position', 'is_pinned_by_ops',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

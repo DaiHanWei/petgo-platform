@@ -3048,5 +3048,14 @@
   "followingFeedNoNewTitle": "Belum ada postingan baru",
   "followingFeedNoNewBody": "Postingan baru dari orang dan hewan yang kamu ikuti akan muncul di sini.",
   "milestoneShareComposeSingle": "{name} baru membuka tonggak \"{title}\"! 🎉",
-  "milestoneShareComposeMulti": "Kami baru membuka tonggak \"{title}\"! 🎉"
+  "milestoneShareComposeMulti": "Kami baru membuka tonggak \"{title}\"! 🎉",
+  "topicEmptyTitle": "Belum ada postingan di topik ini",
+  "topicEmptyBody": "Yuk, jadi yang pertama berbagi di sini!",
+  "topicEmptyCta": "Buat Postingan",
+  "topicRelatedTitle": "Topik populer lainnya",
+  "topicNotFoundTitle": "Topik tidak ditemukan",
+  "topicNotFoundBody": "Topik ini sudah tidak tersedia",
+  "topicSortLatest": "Terbaru",
+  "topicSortPopular": "Populer",
+  "topicOfficialBadge": "Resmi"
 }
