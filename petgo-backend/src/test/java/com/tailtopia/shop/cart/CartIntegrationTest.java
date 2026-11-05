@@ -59,8 +59,8 @@ class CartIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "cs" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)
                 """, sToken, productId, price);
         Long skuId = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
@@ -395,5 +395,58 @@ class CartIntegrationTest extends ApiIntegrationTest {
         assertThat(cols)
                 .as("照搬 Shopee 的多店铺结构会让购物车/结算/订单三处都多出一层永远只有一个元素的嵌套")
                 .isZero();
+    }
+
+    // ---------- v1.4.2 shop Story 1.1：包裹参数不全 = 暂不可售 ----------
+
+    private void clearPackage(String skuToken) {
+        jdbc.update("""
+                UPDATE shop_skus SET package_weight_g = NULL, package_length_cm = NULL,
+                        package_width_cm = NULL, package_height_cm = NULL WHERE public_token = ?
+                """, skuToken);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 1.1：不可售 SKU 加购 / 立即购买 → 422 sku-not-sellable")
+    void notSellableSkuRejectedOnAdd() {
+        long uid = seedUser();
+        String sku = seedSku(10, 1000L);
+        clearPackage(sku);
+
+        assertThatThrownBy(() -> cart.add(uid, sku, 1))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(422);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.SKU_NOT_SELLABLE);
+                });
+        assertThatThrownBy(() -> cart.add(uid, sku, 1, null, null, true))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.SKU_NOT_SELLABLE));
+        assertThat(cart.view(uid).lines()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 1.1：车内行变不可售 → invalidReason=NOT_SELLABLE；加大数量拦、减少不拦；补齐后可加购")
+    void cartLineBecomesNotSellable() {
+        long uid = seedUser();
+        String sku = seedSku(10, 1000L);
+        cart.add(uid, sku, 2);
+        clearPackage(sku);
+
+        CartView v = cart.view(uid);
+        assertThat(v.lines()).isEmpty();
+        assertThat(v.invalidLines()).singleElement()
+                .extracting(CartView.CartLine::invalidReason)
+                .isEqualTo(CartView.REASON_NOT_SELLABLE);
+        assertThat(v.subtotal()).isZero();
+
+        assertThatThrownBy(() -> cart.setQty(uid, sku, 3)).isInstanceOf(AppException.class);
+        assertThat(cart.setQty(uid, sku, 1).invalidLines().getFirst().qty()).isEqualTo(1);
+
+        jdbc.update("""
+                UPDATE shop_skus SET package_weight_g = 1000, package_length_cm = 20,
+                        package_width_cm = 15, package_height_cm = 10 WHERE public_token = ?
+                """, sku);
+        assertThat(cart.add(uid, sku, 1).lines()).singleElement()
+                .extracting(CartView.CartLine::qty).isEqualTo(2);
     }
 }

@@ -107,4 +107,9 @@ public record CartView(
     public static final String REASON_DELISTED = "DELISTED";
     /** 失效原因：该规格已售罄。 */
     public static final String REASON_OUT_OF_STOCK = "OUT_OF_STOCK";
+    /**
+     * 失效原因：该规格包裹参数不全，暂不可售（v1.4.2 shop Story 1.1，D-10）。
+     * 旧版 App 对未知原因降级为通用失效，无需改动。
+     */
+    public static final String REASON_NOT_SELLABLE = "NOT_SELLABLE";
 }

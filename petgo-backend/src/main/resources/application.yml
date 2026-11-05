@@ -212,6 +212,17 @@ petgo:
       quiet-hours-enabled: ${SHOP_ORDER_NOTIFY_QUIET_ENABLED:false}
       quiet-start-hour: ${SHOP_ORDER_NOTIFY_QUIET_START:22}
       quiet-end-hour: ${SHOP_ORDER_NOTIFY_QUIET_END:8}
+    # v1.4.2 shop Story 1.1（D-9 / P-7）：Biteship 询价。🔒 key 只走 env，绝不入库 / 落日志。
+    # 云端与 L0 / L1 一律 stub（确定性、不出网）；prod（非 stag）须 live，否则 ERROR 日志、询价一律 quote-failed（决策 C-5，不拒启动）。
+    biteship:
+      mode: ${BITESHIP_MODE:stub}                 # stub | sandbox | live
+      api-key: ${BITESHIP_API_KEY:}
+      base-url: ${BITESHIP_BASE_URL:https://api.biteship.com}
+      couriers: ${BITESHIP_COURIERS:jne,sicepat,anteraja}
+      connect-timeout-ms: 3000
+      read-timeout-ms: 8000
+    # 报价清理（每日删 2 天前，单次 5,000 行；时区 Asia/Jakarta）
+    shipping-quote-cleanup-cron: ${SHOP_SHIPPING_QUOTE_CLEANUP_CRON:0 30 3 * * *}
 
 # 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
 # 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。

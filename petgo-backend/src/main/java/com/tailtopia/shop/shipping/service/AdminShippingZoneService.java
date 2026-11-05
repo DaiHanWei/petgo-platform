@@ -127,6 +127,94 @@ public class AdminShippingZoneService {
         return settings.save(s);
     }
 
+    // ---------- v1.4.2 shop Story 1.1：发货地 / 免运封顶 / 保价费率 / 区域邮编（后台线 S-2 用） ----------
+
+    /**
+     * 配置发货地（Biteship 询价起点 + 5.1 下运单发件人）。
+     *
+     * <p>🔒 审计只记邮编前 2 位与是否清空，不记联系人 / 电话 / 地址（审计表永久保留）。
+     */
+    @Transactional
+    public ShippingSettings setOrigin(String postalCode, String contactName, String contactPhone,
+            String address, long actorAccountId) {
+        // 长度上限与列宽一致（V20261105_1605）：超长在 service 层拦成 422，不让 DB 报 500
+        requireMaxLength(contactName, ORIGIN_CONTACT_NAME_MAX, "发货联系人不能超过 %d 个字符");
+        requireMaxLength(contactPhone, ORIGIN_CONTACT_PHONE_MAX, "发货联系电话不能超过 %d 个字符");
+        requireMaxLength(address, ORIGIN_ADDRESS_MAX, "发货地址不能超过 %d 个字符");
+        ShippingSettings s = singleton();
+        try {
+            s.applyOrigin(postalCode, contactName, contactPhone, address);
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("发货地邮编须为 5 位数字且首位不为 0");
+        }
+        String pc = s.getOriginPostalCode();
+        audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_SETTINGS_UPDATED,
+                "SHIPPING_SETTINGS", "1",
+                pc == null ? "清空发货地邮编" : "配置发货地（邮编 " + pc.substring(0, 2) + "***，其余内容不入审计）");
+        return settings.save(s);
+    }
+
+    /** 设置免运减免封顶；{@code null} 或 0 = 不封顶。 */
+    @Transactional
+    public ShippingSettings setFreeShippingCap(Long cap, long actorAccountId) {
+        if (cap != null && cap < 0) {
+            throw AppException.validation("免运封顶不能为负");
+        }
+        ShippingSettings s = singleton();
+        Long old = s.getFreeShippingCap();
+        s.applyFreeShippingCap(cap);
+        audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_SETTINGS_UPDATED,
+                "SHIPPING_SETTINGS", "1", "免运封顶：%s → %s".formatted(old, cap));
+        return settings.save(s);
+    }
+
+    /** 设置保价费率（基点，0 ~ 10000；50 = 0.5%）。 */
+    @Transactional
+    public ShippingSettings setInsuranceRateBp(int bp, long actorAccountId) {
+        if (bp < 0 || bp > 10000) {
+            throw AppException.validation("保价费率须在 0 ~ 10000 基点之间");
+        }
+        ShippingSettings s = singleton();
+        int old = s.getInsuranceRateBp();
+        s.applyInsuranceRateBp(bp);
+        audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_SETTINGS_UPDATED,
+                "SHIPPING_SETTINGS", "1", "保价费率(bp)：%d → %d".formatted(old, bp));
+        return settings.save(s);
+    }
+
+    /** 设置区域代表邮编（游客按地区询价用）；空 = 清空（该区游客询价按不支持配送）。 */
+    @Transactional
+    public ShippingZone setZonePostalCode(String kecamatan, String postalCode,
+            long actorAccountId) {
+        ShippingZone z = zones.findByKecamatan(kecamatan)
+                .orElseThrow(() -> AppException.notFound("配送区域不存在"));
+        try {
+            z.applyPostalCode(postalCode);
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("邮编须为 5 位数字且首位不为 0");
+        }
+        audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_ZONE_UPDATED, "SHIPPING_ZONE",
+                kecamatan, "配送区域 %s 代表邮编：%s".formatted(kecamatan,
+                        z.getPostalCode() == null ? "清空" : z.getPostalCode()));
+        return zones.save(z);
+    }
+
+    static final int ORIGIN_CONTACT_NAME_MAX = 60;
+    static final int ORIGIN_CONTACT_PHONE_MAX = 20;
+    static final int ORIGIN_ADDRESS_MAX = 300;
+
+    /** 按去首尾空白后的长度校验（与 {@code ShippingSettings.blankToNull} 落库口径一致）。 */
+    private static void requireMaxLength(String v, int max, String messagePattern) {
+        if (v != null && v.trim().length() > max) {
+            throw AppException.validation(messagePattern.formatted(max));
+        }
+    }
+
+    private ShippingSettings singleton() {
+        return settings.findById(ShippingSettings.SINGLETON_ID)
+                .orElseThrow(() -> AppException.notFound("配送设置未初始化"));
+    }
+
     private static String require(String v, String message) {
         String s = v == null ? "" : v.trim();
         if (s.isEmpty()) {

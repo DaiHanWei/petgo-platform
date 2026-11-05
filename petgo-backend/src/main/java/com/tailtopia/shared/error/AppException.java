@@ -262,4 +262,9 @@ public class AppException extends RuntimeException {
     public static AppException collectNotPublic(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.COLLECT_NOT_PUBLIC, detail);
     }
+
+    /** v1.4.2 shop Story 1.1：SKU 包裹参数不全「暂不可售」→ 422 {@code sku-not-sellable}。 */
+    public static AppException skuNotSellable(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.SKU_NOT_SELLABLE, detail);
+    }
 }

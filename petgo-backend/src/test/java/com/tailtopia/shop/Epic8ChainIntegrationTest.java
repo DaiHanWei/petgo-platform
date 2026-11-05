@@ -128,8 +128,8 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "e8s" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                VALUES (?, ?, '3 kg', ?, ?)""", sToken, pid, price, costPrice);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, ?, 1000, 20, 15, 10)""", sToken, pid, price, costPrice);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 0, 0)", sid);
@@ -366,8 +366,8 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "e8t" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                VALUES (?, ?, '3 kg', 100000, 60000)""", sToken, pid);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', 100000, 60000, 1000, 20, 15, 10)""", sToken, pid);
         return jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
     }

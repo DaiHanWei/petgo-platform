@@ -123,8 +123,8 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "rps" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g)
-                VALUES (?, ?, '3 kg', 100000, ?)""", sToken, pid, netWeightG);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', 100000, ?, 1000, 20, 15, 10)""", sToken, pid, netWeightG);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 100, 0)", sid);
@@ -432,8 +432,8 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "rpns" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g)
-                VALUES (?, ?, 'M', 50000, 3000)""", sToken, pid);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, 'M', 50000, 3000, 1000, 20, 15, 10)""", sToken, pid);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 100, 0)", sid);

@@ -67,6 +67,23 @@ public class ShopSku {
     @Column(name = "return_policy", length = 24)
     private ReturnPolicy returnPolicy;
 
+    /**
+     * 包裹参数（v1.4.2 Story 1.1，D-10；V20261105_1600）：克 / 厘米，与 Biteship
+     * {@code items[].weight / length / width / height} 同单位。四项任一为空 = 「暂不可售」，
+     * 见 {@link #isSellable()}。
+     */
+    @Column(name = "package_weight_g")
+    private Integer packageWeightG;
+
+    @Column(name = "package_length_cm")
+    private Integer packageLengthCm;
+
+    @Column(name = "package_width_cm")
+    private Integer packageWidthCm;
+
+    @Column(name = "package_height_cm")
+    private Integer packageHeightCm;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -109,6 +126,52 @@ public class ShopSku {
 
     public Long getWholesalePrice() {
         return wholesalePrice;
+    }
+
+    /**
+     * 设置包裹参数（v1.4.2 Story 1.1）。四项要么全部为正整数，要么全部为 {@code null}（清空 =
+     * 回到「暂不可售」）；只填一部分或非正 → {@link IllegalArgumentException}。
+     */
+    public void applyPackage(Integer weightG, Integer lengthCm, Integer widthCm, Integer heightCm) {
+        boolean allNull = weightG == null && lengthCm == null && widthCm == null && heightCm == null;
+        if (!allNull) {
+            if (weightG == null || lengthCm == null || widthCm == null || heightCm == null) {
+                throw new IllegalArgumentException("package dimensions must be all set or all null");
+            }
+            if (weightG <= 0 || lengthCm <= 0 || widthCm <= 0 || heightCm <= 0) {
+                throw new IllegalArgumentException("package dimensions must be positive");
+            }
+        }
+        this.packageWeightG = weightG;
+        this.packageLengthCm = lengthCm;
+        this.packageWidthCm = widthCm;
+        this.packageHeightCm = heightCm;
+    }
+
+    /** 包裹参数四项齐全且为正才可售（D-10 / FR-172.5）。 */
+    public boolean isSellable() {
+        return positive(packageWeightG) && positive(packageLengthCm)
+                && positive(packageWidthCm) && positive(packageHeightCm);
+    }
+
+    private static boolean positive(Integer v) {
+        return v != null && v > 0;
+    }
+
+    public Integer getPackageWeightG() {
+        return packageWeightG;
+    }
+
+    public Integer getPackageLengthCm() {
+        return packageLengthCm;
+    }
+
+    public Integer getPackageWidthCm() {
+        return packageWidthCm;
+    }
+
+    public Integer getPackageHeightCm() {
+        return packageHeightCm;
     }
 
     @PrePersist

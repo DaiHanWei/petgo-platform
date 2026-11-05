@@ -198,7 +198,8 @@ public class ShopProductQueryService {
                             s.effectiveReturnPolicy(p.getReturnPolicy()),
                             status,
                             // 🔴 仅低库存时给真实剩余数；售罄/充足给 null（不虚构、不泄露经营数据）
-                            status == StockStatus.LOW_STOCK ? available : null);
+                            status == StockStatus.LOW_STOCK ? available : null,
+                            s.isSellable());
                 })
                 .toList();
         return new ShopProductDetailView(

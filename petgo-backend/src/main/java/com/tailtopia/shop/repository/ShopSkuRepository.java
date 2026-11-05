@@ -17,6 +17,9 @@ public interface ShopSkuRepository extends JpaRepository<ShopSku, Long> {
     /** V1.4.1 进货单建单按报文 {@code sku_token} 批量取 SKU。 */
     List<ShopSku> findByPublicTokenIn(java.util.Collection<String> publicTokens);
 
+    /** v1.4.2 shop Story 1.1：后台按 token 维护包裹参数。 */
+    java.util.Optional<ShopSku> findByPublicToken(String publicToken);
+
     /**
      * 在售 SKU 总数（Story 1.5 / AB-10D 的 C-7 上限判定）。
      *

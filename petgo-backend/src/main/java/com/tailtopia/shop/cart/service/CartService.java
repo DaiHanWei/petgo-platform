@@ -89,6 +89,7 @@ public class CartService {
             String triggerType, boolean buyNow) {
         requirePositive(qty);
         ShopSku sku = requireSku(skuToken);
+        requireSellable(sku);
         ShopCart cart = cartOf(userId);
 
         int existing = items.findByCartIdAndSkuId(cart.getId(), sku.getId())
@@ -124,6 +125,10 @@ public class CartService {
         if (qty <= 0) {
             items.delete(line);
         } else {
+            // v1.4.2 Story 1.1：只拦「加大数量」；减少数量 / 删除不拦，用户得能把不可售行清掉
+            if (qty > line.getQty()) {
+                requireSellable(sku);
+            }
             requireWithinStock(sku, qty);
             line.setQty(qty);
             items.save(line);
@@ -240,6 +245,9 @@ public class CartService {
             String reason = null;
             if (p == null || !p.isActive()) {
                 reason = CartView.REASON_DELISTED;
+            } else if (!sku.isSellable()) {
+                // v1.4.2 Story 1.1：包裹参数不全 → 暂不可售（判定顺序 DELISTED → NOT_SELLABLE → OUT_OF_STOCK）
+                reason = CartView.REASON_NOT_SELLABLE;
             } else if (available <= 0) {
                 reason = CartView.REASON_OUT_OF_STOCK;
             }
@@ -284,6 +292,13 @@ public class CartService {
                 .filter(s -> s.getPublicToken().equals(skuToken))
                 .findFirst()
                 .orElseThrow(() -> AppException.notFound("规格不存在"));
+    }
+
+    /** v1.4.2 Story 1.1（D-10）：包裹参数不全的 SKU 不可加购 / 立即购买（422 sku-not-sellable）。 */
+    private static void requireSellable(ShopSku sku) {
+        if (!sku.isSellable()) {
+            throw AppException.skuNotSellable("该规格暂不可售");
+        }
     }
 
     /** 🔴 上限是可售库存，超出给明确错误——静默截断会让用户以为加进去了。 */

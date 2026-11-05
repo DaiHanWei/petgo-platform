@@ -136,6 +136,12 @@ public final class ErrorTypes {
     /** V1.4.1 商家平台：用户已绑定过门店，不能再填码（409，FR-7 —— 绑定永久，不能换店）。 */
     public static final URI MERCHANT_ALREADY_BOUND = URI.create(BASE + "merchant-already-bound");
 
+    /** v1.4.2 shop Story 1.1（D-10 / FR-172.5）：SKU 包裹参数不全，暂不可售（加购 / 立即购买 422）。 */
+    public static final URI SKU_NOT_SELLABLE = URI.create(BASE + "sku-not-sellable");
+
+    /** v1.4.2 shop Story 1.1（D-9 / C-5）：Biteship 询价失败（503，不回退固定运费，结算不可提交）。 */
+    public static final URI QUOTE_FAILED = URI.create(BASE + "quote-failed");
+
     private ErrorTypes() {
     }
 }

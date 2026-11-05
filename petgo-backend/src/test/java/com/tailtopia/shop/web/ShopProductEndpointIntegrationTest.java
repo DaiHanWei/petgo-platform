@@ -44,8 +44,8 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
     private void seedSku(String productToken, String skuToken, long price, String returnPolicy) {
         jdbc.update("""
                 INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g,
-                        return_policy)
-                SELECT ?, id, '3 kg', ?, 3000, ? FROM shop_products WHERE public_token = ?
+                        return_policy, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                SELECT ?, id, '3 kg', ?, 3000, ?, 1000, 20, 15, 10 FROM shop_products WHERE public_token = ?
                 """, skuToken, price, returnPolicy, productToken);
     }
 
@@ -153,6 +153,22 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.returnPolicy").value("NO_RETURN_AFTER_OPEN"))
                 .andExpect(jsonPath("$.skus[0].returnPolicy").value("NO_RETURN_AFTER_OPEN"))
                 .andExpect(jsonPath("$.skus[1].returnPolicy").value("RETURNABLE"));
+    }
+
+    @Test
+    @DisplayName("v1.4.2 1.1（C-9）：详情规格 sellable —— 包裹参数齐全 true，任一为空 false")
+    void skuSellableFlag() throws Exception {
+        String token = seedProduct(uniq("sl"), "MAKANAN", true, "[]");
+        String ok = uniq("s");
+        String bad = uniq("s");
+        seedSku(token, ok, 165_000L, null);
+        seedSku(token, bad, 285_000L, null);
+        jdbc.update("UPDATE shop_skus SET package_height_cm = NULL WHERE public_token = ?", bad);
+
+        mvc.perform(get(BASE + "/" + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.skus[0].sellable").value(true))
+                .andExpect(jsonPath("$.skus[1].sellable").value(false));
     }
 
     @Test

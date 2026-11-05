@@ -350,7 +350,9 @@ public class CheckoutService {
                 continue;
             }
             out.add(new UnavailableLine(l.skuToken(), l.productName(), l.specName(),
+                    // v1.4.2 Story 1.1：NOT_SELLABLE 对用户语义是「这件买不了」，不能说成库存不足
                     CartView.REASON_DELISTED.equals(l.invalidReason())
+                            || CartView.REASON_NOT_SELLABLE.equals(l.invalidReason())
                             ? UnavailableLine.REASON_DELISTED
                             : UnavailableLine.REASON_INSUFFICIENT_STOCK,
                     l.availableStock() == null ? 0L : l.availableStock(), l.qty()));
