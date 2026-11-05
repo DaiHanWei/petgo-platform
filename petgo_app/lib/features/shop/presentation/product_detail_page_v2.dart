@@ -103,15 +103,8 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
   /// - 有货只看能不能买（LOW_STOCK 也算有货），不比剩余数量；
   /// - 有货里取最低价，同价取 [ShopProductDetail.skus] 里靠前的（= 后台配置顺序）；
   /// - 🔴 全部售罄返回 null：不默认选中售罄规格，页面走整品售罄态（[_isSoldOut] 的 allOut 分支）。
-  static ShopSku? _defaultSku(ShopProductDetail d) {
-    ShopSku? best;
-    for (final s in d.skus) {
-      if (!s.stockStatus.purchasable) continue;
-      // 严格小于：同价不替换，保住靠前的那个
-      if (best == null || s.price < best.price) best = s;
-    }
-    return best;
-  }
+  /// 规则抽成共享函数 [defaultShopSku]（v1.4.2 shop Story 8.1：规格弹层同用）。
+  static ShopSku? _defaultSku(ShopProductDetail d) => defaultShopSku(d.skus);
 
   /// 售罄判定：**已选中的 SKU 售罄**，或**所有 SKU 都售罄**。
   ///

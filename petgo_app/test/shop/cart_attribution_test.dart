@@ -13,7 +13,7 @@ import 'package:tailtopia/features/shop/domain/shop_cart.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
 import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
-import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/toko_page_v3.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
 import 'fake_shop_products.dart';
@@ -113,11 +113,11 @@ void main() {
       await t.pumpAndSettle();
     });
 
-    testWidgets('🔴 Toko 卡片：全部精选与品类页是两个不同的入口', (t) async {
+    testWidgets('🔴 Toko 卡片：品类入口下线后恒为全部精选入口（v1.4.2 shop 8.1 按设计改写）', (t) async {
       await t.pumpWidget(ProviderScope(
         overrides: [
-          // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
-          shopBannerProvider.overrideWith((ref) async => null),
+          // banner / 券 / top 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+          ...tokoHomeOverrides(),
           fakeShopProducts(const [
             ShopProductSummary(
                 token: 'p1', name: 'Produk', brand: 'B', minPrice: 285000),
@@ -128,18 +128,21 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('id'),
           home: Builder(
-            builder: (context) => const TokoPageV2(),
+            builder: (context) => const TokoPageV3(),
           ),
         ),
       ));
       await t.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopProductCard_p1')), findsOneWidget);
 
-      // 未选品类 → 区域④；选了品类 → 品类入口。两者混为一谈就算不出「品类页值不值得做」。
-      // widget 层拿不到 push 的 query，而这条三元分支是「两个入口不同」的唯一实现处。
+      // 原断言「未选品类 → TOKO_ALL_FEATURED / 选了品类 → TOKO_CATEGORY」随品类筛选下线（D-17）改写：
+      // 首页商品流只有「全部」，归因恒为 TOKO_ALL_FEATURED，源码里不再出现 TOKO_CATEGORY。
       final source =
-          File('lib/features/shop/presentation/toko_page_v2.dart').readAsStringSync();
-      expect(source.contains("_selected == null ? 'TOKO_ALL_FEATURED' : 'TOKO_CATEGORY'"), isTrue,
-          reason: '入口来源必须随当前筛选态变化');
+          File('lib/features/shop/presentation/toko_page_v3.dart').readAsStringSync();
+      expect(source.contains("entrySource: 'TOKO_ALL_FEATURED'"), isTrue,
+          reason: '首页商品流的行级归因必须是全部精选入口');
+      expect(source.contains('TOKO_CATEGORY'), isFalse,
+          reason: '品类入口已下线（D-17），不应再有品类归因分支');
     });
   });
 }

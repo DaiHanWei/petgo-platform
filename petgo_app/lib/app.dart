@@ -31,6 +31,7 @@ import 'package:tailtopia/features/notify/domain/app_update_controller.dart';
 import 'package:tailtopia/features/notify/domain/app_version_check.dart';
 import 'package:tailtopia/features/notify/presentation/app_update_presenter.dart';
 import 'package:tailtopia/features/order/presentation/order_list_controller.dart';
+import 'package:tailtopia/features/shop/coupon/data/coupon_repository.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
@@ -414,6 +415,10 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
   ref.invalidate(onboardingMarksProvider); // 一次性引导标记（按账号存：换账号不得沿用上个账号的）
+  // v1.4.2 shop Story 8.1：「给你的券」按当前用户算；进入 Toko 的 60 秒去重是进程级，换账号必须清零
+  //    —— 新账号首次进 Toko 要立刻判新人发券（AC4.1 / AC4.4）。
+  ref.invalidate(couponsForYouProvider);
+  resetShopEntryThrottle();
   ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
   // batch-b1 复审：以下两项都是按当前用户算的（排除自己 / 互相拉黑的人 / 最近互动的人）。
   ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）

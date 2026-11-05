@@ -204,4 +204,10 @@ void main() {
     expect(src, contains("case 'PET_FOLLOWED':"));
     expect(src, contains("case 'PET_DIARY_POSTED':"));
   });
+
+  test('v1.4.2 shop Story 8.1（D-20）：旧复购推送 REPURCHASE_FOOD_LOW → Toko 首页（分支根，须 go）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('REPURCHASE_FOOD_LOW', null), '/shop');
+    expect(DeepLinkRoutes.pushPayloadToLocation('REPURCHASE_FOOD_LOW', 'anything'), '/shop');
+    expect(DeepLinkRoutes.isShellTabRoot('/shop'), isTrue);
+  });
 }

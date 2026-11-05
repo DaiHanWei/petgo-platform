@@ -60,6 +60,7 @@ class ShopSku {
     required this.stockStatus,
     this.netWeightG,
     this.remaining,
+    this.sellable = true,
   });
 
   final String token;
@@ -74,6 +75,10 @@ class ShopSku {
   /// 真实剩余可售数。🔴 展示 `Sisa {n}` 时取它，**不虚构数字**（FR-95）。
   final int? remaining;
 
+  /// 包裹参数齐全才可售（v1.4.2 shop Story 1.1 / C-9）。false → 确认键「Belum bisa dijual」不可点。
+  /// 缺键（旧后端）按 true。
+  final bool sellable;
+
   factory ShopSku.fromJson(Map<String, dynamic> json) {
     final price = json['price'];
     final remaining = json['remaining'];
@@ -86,8 +91,24 @@ class ShopSku {
       stockStatus: StockStatus.fromApi(json['stockStatus']?.toString()),
       netWeightG: weight is num ? weight.toInt() : null,
       remaining: remaining is num ? remaining.toInt() : null,
+      sellable: json['sellable'] != false,
     );
   }
+}
+
+/// 默认规格（2026-09-24 产品拍板）：**有货 > 低价 > 后台顺序**。详情页与规格弹层（8.1 / 8.2）共用。
+///
+/// - 有货只看能不能买（LOW_STOCK 也算有货），不比剩余数量；
+/// - 有货里取最低价，同价取 [skus] 里靠前的（= 后台配置顺序）；
+/// - 🔴 全部售罄返回 null：不默认选中售罄规格。
+ShopSku? defaultShopSku(List<ShopSku> skus) {
+  ShopSku? best;
+  for (final s in skus) {
+    if (!s.stockStatus.purchasable) continue;
+    // 严格小于：同价不替换，保住靠前的那个
+    if (best == null || s.price < best.price) best = s;
+  }
+  return best;
 }
 
 /// 每日建议喂量的一行（区间 → 克/天）。

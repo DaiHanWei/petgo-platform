@@ -230,11 +230,12 @@ void main() {
       await t.tap(find.byKey(const ValueKey('healthCategoryJump_DEWORM')));
       await t.pumpAndSettle();
 
-      // 🔴 落地是 Toko 的品类筛选，URL 里没有、也不可能有 SKU
+      // 🔴 落地是 Toko 首页，URL 里没有、也不可能有 SKU
       // 落点 URI 由 /shop 路由的 builder 现场记下 —— 比读 routerDelegate 的内部形态稳
+      // v1.4.2 shop Story 8.1（D-17）按设计改写：品类筛选下线，原期望 `/shop?category=OBAT_VITAMIN` → `/shop`。
       expect(find.text('toko'), findsOneWidget);
       final loc = _lastShopUri.toString();
-      expect(loc, '/shop?category=OBAT_VITAMIN');
+      expect(loc, '/shop');
       expect(loc.contains('products'), isFalse,
           reason: '🔴 跳转带上了具体商品 —— FR-110 只允许跳到品类');
 

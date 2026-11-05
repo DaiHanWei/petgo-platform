@@ -55,10 +55,12 @@ void main() {
     final repo = File('lib/features/shop/data/cart_repository.dart').readAsStringSync();
     expect(repo, contains('entrySource'),
         reason: '加购不带来源 → 订单行的 entry_source 恒为 null → AB-13B 算不出转化率');
-    final toko = File('lib/features/shop/presentation/toko_page_v2.dart').readAsStringSync();
+    final toko = File('lib/features/shop/presentation/toko_page_v3.dart').readAsStringSync();
     expect(toko, contains('TOKO_ALL_FEATURED'));
-    expect(toko, contains('TOKO_CATEGORY'),
-        reason: '区域④ 与品类页是两个入口，混为一谈就算不出「品类页值不值得做」');
+    // v1.4.2 shop Story 8.1（D-17）按设计改写：品类入口下线，首页只剩「全部」一个入口，
+    // 原「区域④ 与品类页是两个入口」的断言随之反转为「不再有品类归因」。
+    expect(toko, isNot(contains('TOKO_CATEGORY')),
+        reason: '品类筛选已下线，品类归因分支不应再存在');
   });
 
   test('🔒 Epic 3 的事件属性不含 PII / 自由文本（NFR-5）', () {

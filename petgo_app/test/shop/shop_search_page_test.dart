@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
+import 'package:tailtopia/features/shop/data/shop_repurchase_repository.dart';
+import 'package:tailtopia/features/shop/domain/shop_repurchase.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_product_card.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/presentation/shop_search_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -26,9 +31,15 @@ void main() {
     bool hasMore = false,
     List<ShopProductSummary> nextPageItems = const [],
     List<ShopProductsQuery>? loadMoreCalls,
+    Recommendations? reco,
+    List<ShopProductSummary> top = const [],
   }) {
     return ProviderScope(
       overrides: [
+        // v1.4.2 shop Story 8.1：无结果下方的推荐（A7）同样必须 override —— 真 provider 会发请求。
+        ...tokoHomeOverrides(top: top),
+        recommendationsProvider.overrideWith((ref) async =>
+            reco ?? const Recommendations(degraded: true, missing: 'GUEST', items: [])),
         fakeShopProducts(
           products,
           seen: seen,
@@ -76,7 +87,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(seen, isEmpty, reason: '空关键词就发请求 = 把整个目录拉一遍');
-      expect(find.byType(ListView), findsNothing);
+      expect(find.byType(CustomScrollView), findsNothing);
     });
   });
 
@@ -112,7 +123,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('shopSearchClearV2')));
       await tester.pumpAndSettle();
 
-      expect(find.byType(ListView), findsNothing, reason: '清空即回空态');
+      expect(find.byType(CustomScrollView), findsNothing, reason: '清空即回空态');
     });
 
     testWidgets('🔴 清空是立即生效的，不等防抖', (tester) async {
@@ -122,12 +133,12 @@ void main() {
       await tester.enterText(find.byType(TextField), 'royal');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
-      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(CustomScrollView), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('shopSearchClearV2')));
       await tester.pump(); // 一帧，远不到 300ms
 
-      expect(find.byType(ListView), findsNothing,
+      expect(find.byType(CustomScrollView), findsNothing,
           reason: '让它等 300ms 会显得没点上');
     });
 
@@ -160,6 +171,61 @@ void main() {
           reason: '目录空态是另一句话，混用会让用户以为整个店没货');
       expect(find.text(l10n.tokoSearchNoResultHint), findsOneWidget,
           reason: '只说「没找到」是个死胡同，要给下一步');
+      // v1.4.2 shop Story 8.1（A7）：第二句改「Coba kata lain.」（品类入口已下线，去掉「按品类逛」）。
+      expect(l10n.tokoSearchNoResultHint, 'Coba kata lain.');
+      expect(find.byIcon(Icons.search_off), findsOneWidget);
+    });
+
+    Future<void> searchNothing(WidgetTester tester) async {
+      await tester.enterText(find.byType(TextField), 'zzz');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('A7 无档案 / 游客 → 「Mungkin kamu suka」+ 运营权重前 6', (tester) async {
+      await tester.pumpWidget(host(const [], top: [
+        for (var i = 0; i < 8; i++) p('top$i', price: 10000, name: 'Top $i'),
+      ]));
+      await tester.pumpAndSettle();
+      await searchNothing(tester);
+
+      expect(find.text('Mungkin kamu suka'), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopRecoGridTop')), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w.key is ValueKey && '${(w.key as ValueKey).value}'.startsWith('shopRecoCard_top')),
+          findsNWidgets(6));
+    });
+
+    testWidgets('A7 有档案 → 同首页推荐块（栏头「Untuk {pet}」）', (tester) async {
+      await tester.pumpWidget(host(const [],
+          reco: const Recommendations(
+            degraded: false,
+            missing: 'NONE',
+            petName: 'Mochi',
+            profileSummary: ProfileSummary(petName: 'Mochi', species: 'CAT', ageStage: 'PUPPY'),
+            items: [RecommendationItem(productToken: 'r1', name: 'Reco', minPrice: 1000, reason: 'x')],
+          ),
+          top: [p('top0', price: 10000)]));
+      await tester.pumpAndSettle();
+      await searchNothing(tester);
+
+      expect(find.text('Untuk Mochi'), findsOneWidget);
+      expect(find.text('Kucing · muda'), findsOneWidget);
+      expect(find.text('Mungkin kamu suka'), findsNothing);
+    });
+  });
+
+  group('A6 结果卡', () {
+    testWidgets('结果卡换成首页同款商品卡（含「＋」），归因仍 TOKO_SEARCH', (tester) async {
+      await tester.pumpWidget(host([p('a', price: 185000)]));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'royal');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShopProductCard), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopProductCardAdd_a')), findsOneWidget);
+      final src = File('lib/features/shop/presentation/shop_search_page.dart').readAsStringSync();
+      expect(src, contains("entrySource: 'TOKO_SEARCH'"));
     });
   });
 
@@ -184,10 +250,12 @@ void main() {
 
       expect(calls, isEmpty, reason: '还没滚呢');
 
-      await tester.drag(find.byType(ListView), const Offset(0, -5000));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -5000));
       await tester.pumpAndSettle();
 
       expect(calls, isNotEmpty, reason: '滚动接线断了：用户滑到底只会看到空白');
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -5000));
+      await tester.pumpAndSettle();
       expect(find.text('Halaman Dua'), findsOneWidget);
     });
   });

@@ -137,6 +137,25 @@ class AppPrefs {
     return _prefs.setString(kOpsPopupShown, jsonEncode(Map<String, String>.fromEntries(kept)));
   }
 
+  // --- Toko 游客新人券弹窗「已弹过」的活动 token（v1.4.2 shop Story 8.1 · AC4.2 / D-5）---
+  //
+  // 粒度是「设备 × campaignToken」：同设备同一活动只弹一次（关闭后也不再弹），换活动再弹。
+  // 只保留最近 [kShownNewbieCampaignsCap] 个，防无限增长。
+  static const kShownNewbieCampaigns = 'petgo.shown_newbie_campaigns';
+  static const kShownNewbieCampaignsCap = 20;
+
+  Set<String> get shownNewbieCampaigns =>
+      (_prefs.getStringList(kShownNewbieCampaigns) ?? const <String>[]).toSet();
+
+  Future<void> markNewbieCampaignShown(String campaignToken) {
+    final list = [...?_prefs.getStringList(kShownNewbieCampaigns)]..remove(campaignToken);
+    list.add(campaignToken);
+    final kept = list.length > kShownNewbieCampaignsCap
+        ? list.sublist(list.length - kShownNewbieCampaignsCap)
+        : list;
+    return _prefs.setStringList(kShownNewbieCampaigns, kept);
+  }
+
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
   //
   // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。

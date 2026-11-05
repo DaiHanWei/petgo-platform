@@ -103,7 +103,12 @@ class Recommendations {
     required this.items,
     this.missing,
     this.petName,
+    this.profileSummary,
   });
+
+  /// 档案摘要（v1.4.2 shop Story 6.1 AC13）：App 据此本地拼 A1 / A9 栏头依据行。
+  /// 🔒 未建档 / 静默期 / 游客为 null —— 首页推荐块据此整块不显示。
+  final ProfileSummary? profileSummary;
 
   /// 🔴 档案不完整 → 结果已降级为按物种推荐，尾部要展示「补全档案，推荐更准」引导卡。
   final bool degraded;
@@ -129,6 +134,9 @@ class Recommendations {
         degraded: j['degraded'] == true,
         missing: j['missing']?.toString(),
         petName: j['petName']?.toString(),
+        profileSummary: j['profileSummary'] is Map
+            ? ProfileSummary.fromJson(Map<String, dynamic>.from(j['profileSummary'] as Map))
+            : null,
         items: j['items'] is List
             ? (j['items'] as List)
                 .whereType<Map<String, dynamic>>()
@@ -148,6 +156,7 @@ class RecommendationItem {
     this.brand,
     this.mainImageKey,
     this.mainImageUrl,
+    this.promo = false,
   });
 
   final String productToken;
@@ -163,6 +172,9 @@ class RecommendationItem {
 
   final int minPrice;
 
+  /// 「Lagi promo」角标（v1.4.2 shop Story 2.2）；缺键按 false。
+  final bool promo;
+
   /// 🔴 **推荐理由**（如 `Untuk anjing dewasa 10–25 kg`）。由服务端给 ——
   /// 前端自己拼会和实际用上的过滤维度对不上，那种「理由」比没有更糟。
   final String reason;
@@ -175,5 +187,43 @@ class RecommendationItem {
         mainImageUrl: j['mainImageUrl']?.toString(),
         minPrice: (j['minPrice'] as num?)?.toInt() ?? 0,
         reason: j['reason']?.toString() ?? '',
+        promo: j['promo'] == true,
       );
+}
+
+/// 推荐档案摘要（v1.4.2 shop Story 6.1 AC13，后端 `RecommendationView.ProfileSummary`）。
+///
+/// 🔴 只有枚举，不带后端拼好的句子：App 用 arb 词表本地拼「Anjing kecil · dewasa」（D-17，不渲染后端显示串）。
+class ProfileSummary {
+  const ProfileSummary({
+    required this.petName,
+    this.species,
+    this.sizeClass,
+    this.ageStage,
+    this.weightMissing = false,
+  });
+
+  final String petName;
+
+  /// `DOG` / `CAT` / `UNIVERSAL`（其它物种）；未知为 null。
+  final String? species;
+
+  /// `SMALL` / `MEDIUM` / `LARGE`；体重未填为 null。
+  final String? sizeClass;
+
+  /// `PUPPY` / `ADULT` / `SENIOR`；生日缺失为 null。
+  final String? ageStage;
+
+  final bool weightMissing;
+
+  factory ProfileSummary.fromJson(Map<String, dynamic> j) {
+    String? s(Object? v) => (v == null || v.toString().isEmpty) ? null : v.toString();
+    return ProfileSummary(
+      petName: j['petName']?.toString() ?? '',
+      species: s(j['species']),
+      sizeClass: s(j['sizeClass']),
+      ageStage: s(j['ageStage']),
+      weightMissing: j['weightMissing'] == true,
+    );
+  }
 }

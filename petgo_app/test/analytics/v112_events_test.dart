@@ -509,6 +509,10 @@ void main() {
         // 之后才报（权限被拒 / 失败不报），描述「存图成功」这一结果而非点击。
         // ⚠️ 只放这个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_paid` / `_published` 先例）。
         '_saved',
+        // 领券成功（V1.4.2 shop · Story 8.1 · PRD §4 定死 `toko_coupon_claimed {coupon_id, source}`）：`_claimed` =
+        // **服务端已发券**之后才报（已领 / 领完 / 不在发放期不报；新人券由 entry 返回已发放时报），描述结果而非点击。
+        // ⚠️ 只放这个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_saved` / `_paid` 先例）。
+        '_claimed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

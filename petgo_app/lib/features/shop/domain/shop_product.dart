@@ -42,6 +42,7 @@ class ShopProductSummary {
     this.mainImageW,
     this.mainImageH,
     this.minPrice,
+    this.promo = false,
   });
 
   /// 不可枚举对外标识（NFR-3）。🔴 后端不下发自增 id，前端也不该需要。
@@ -77,6 +78,10 @@ class ShopProductSummary {
   /// 起价（最小币种单位，IDR 无小数）。null → 无 SKU。
   final int? minPrice;
 
+  /// 有可用满减 / 免运券覆盖该商品（v1.4.2 shop Story 2.2，FR-133.3）→ 卡片左上角「Lagi promo」。
+  /// 服务端判定；缺键（旧后端）按 false。
+  final bool promo;
+
   factory ShopProductSummary.fromJson(Map<String, dynamic> json) {
     final price = json['minPrice'];
     return ShopProductSummary(
@@ -88,6 +93,7 @@ class ShopProductSummary {
       mainImageW: _posIntOrNull(json['mainImageW']),
       mainImageH: _posIntOrNull(json['mainImageH']),
       minPrice: price is num ? price.toInt() : null,
+      promo: json['promo'] == true,
     );
   }
 
@@ -140,11 +146,15 @@ class ShopProductPage {
     required this.items,
     required this.hasMore,
     this.nextCursor,
+    this.totalCount,
   });
 
   final List<ShopProductSummary> items;
   final String? nextCursor;
   final bool hasMore;
+
+  /// 同筛选条件下在售商品总数（v1.4.2 shop C-9，首页「{n} produk」）。旧后端 / 老数组形态为 null → 不显示件数。
+  final int? totalCount;
 
   static const ShopProductPage empty =
       ShopProductPage(items: [], hasMore: false);
@@ -156,5 +166,6 @@ class ShopProductPage {
             .toList(growable: false),
         nextCursor: j['nextCursor']?.toString(),
         hasMore: j['hasMore'] == true,
+        totalCount: (j['totalCount'] is num) ? (j['totalCount'] as num).toInt() : null,
       );
 }

@@ -401,13 +401,14 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     if (jumpCategory == null) return card;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [card, _categoryJumpRow(context, l10n, item.type, jumpCategory)],
+      children: [card, _categoryJumpRow(context, l10n, item.type)],
     );
   }
 
-  /// 系统生成的品类跳转行。**整行只带一个品类 code**，带不了别的。
+  /// 系统生成的品类跳转行（仅当记录类型映射得到品类时出现）。**跳转不带 SKU**；
+  /// v1.4.2 shop Story 8.1 起落 Toko 首页（品类筛选下线，D-17）。
   Widget _categoryJumpRow(
-      BuildContext context, AppLocalizations l10n, String recordType, String category) {
+      BuildContext context, AppLocalizations l10n, String recordType) {
     return Align(
       alignment: Alignment.centerLeft,
       child: TextButton.icon(
@@ -423,7 +424,8 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
           // ⚠️ 必须 `go` 不能 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
           //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏
           //    （见 deep_link_routes.dart shellTabRoots 注释里的 20260729 事故）。
-          context.go('/shop?category=$category');
+          // v1.4.2 shop Story 8.1（D-17 / FR-133.1）：品类筛选下线，落 Toko 首页；埋点不变。
+          context.go('/shop');
         },
         style: TextButton.styleFrom(
           foregroundColor: AppColors.mint,

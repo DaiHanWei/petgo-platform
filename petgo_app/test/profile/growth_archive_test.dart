@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tailtopia/features/shop/presentation/widgets/repurchase_zones_v2.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_reco_grid.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
@@ -62,8 +62,8 @@ void main() {
   /// 于是 Diary 中段被一屏按年龄段的通用商品占掉 —— 成长记录页被商业内容打断，
   /// 而那一屏并不提供"推荐"的价值。产品决定商业内容全部收到 Toko。
   ///
-  /// ⚠️ 钉的是**展示位**，不是组件：`ProfileRecoZoneV2` 在 Toko 侧照常使用，
-  /// 它自己的用例（test/shop/repurchase_zones_v2_test.dart）一条都没动。
+  /// ⚠️ 钉的是**展示位**，不是组件。v1.4.2 shop Story 8.1：`ProfileRecoZoneV2` 已随 FR-136 / D-17 删除，
+  /// Toko 推荐改由 `ShopRecoGrid` 承担 —— 断言随之改为「Diary 不出现推荐网格 ShopRecoGrid」。
   /// 这一条只保证「它别再长回 Diary 上」—— 而那种回归通常是合并时顺手带回来的，
   /// 不会有人特意去看这一屏。
   /// ⚠️ 2026-08-28：v1 的 ProfileRecoZone 随 repurchase_zones.dart 一并删除，
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpWidget(_wrap(auth: _authA(), profile: profile));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ProfileRecoZoneV2), findsNothing,
+    expect(find.byType(ShopRecoGrid), findsNothing,
         reason: '🔴 商品推荐区又长回 Diary 了');
   });
 

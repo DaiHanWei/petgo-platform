@@ -3,6 +3,8 @@
 /// 两种模式：
 /// - **抽屉单选**（结算页 D10 / D11）：传 [selected] + [onTap]，右侧画单选圆；
 /// - **按钮位**（领券，8.x）：传 [trailing]，右侧放调用方给的按钮。
+/// - **紧凑竖排**（8.1 首页「Kupon buat kamu」横滑，两张占满一行）：[compact] = true，
+///   面额 → 门槛 / 封顶 → 按钮位自上而下；[accent] = 紫底白字（新人券），[badge] = 左上角标。
 ///
 /// 🔴 面额 / 门槛 / 封顶全是服务端值，本组件只格式化（`formatIdr` / `formatIdrAmount`），不算。
 library;
@@ -27,7 +29,19 @@ class CouponCard extends StatelessWidget {
     this.trailing,
     this.reasonText,
     this.disabled = false,
+    this.compact = false,
+    this.accent = false,
+    this.badge,
   });
+
+  /// 紧凑竖排（8.1）。默认 false = 7.1 横排原样。
+  final bool compact;
+
+  /// 紫底白字（新人券，仅 [compact] 生效）。
+  final bool accent;
+
+  /// 左上角标（如「KHUSUS PENGGUNA BARU」，仅 [compact] 生效）。
+  final String? badge;
 
   final CouponOption coupon;
 
@@ -46,6 +60,7 @@ class CouponCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (compact) return _buildCompact(context);
     final l10n = AppLocalizations.of(context);
     final lang = Localizations.localeOf(context).languageCode;
     final isFs = coupon.kind == CouponKind.freeShipping;
@@ -140,6 +155,64 @@ class CouponCard extends StatelessWidget {
       button: true,
       child: ShopPressable(onTap: onTap, child: card),
     );
+  }
+}
+
+extension on CouponCard {
+  Widget _buildCompact(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isFs = coupon.kind == CouponKind.freeShipping;
+    final fg = accent ? ShopColors.surface : ShopColors.purple;
+    final sub = accent ? ShopColors.surface.withValues(alpha: .85) : ShopColors.text3;
+    final card = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: accent ? ShopColors.purple : ShopColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: accent ? null : Border.all(color: ShopColors.border2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (badge != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(badge!,
+                  key: const ValueKey('couponBadge'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.micro.copyWith(
+                      color: fg, fontWeight: FontWeight.w700, letterSpacing: .4)),
+            ),
+          Text(
+            isFs ? l10n.checkoutCouponFreeShipping : formatIdr(coupon.amount ?? 0),
+            key: const ValueKey('couponFace'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.body.copyWith(
+              fontWeight: FontWeight.w700,
+              color: fg,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          // 满减：min. belanja Rp {min}；免运：封顶额（同 7.1 横排口径）。
+          if (isFs && coupon.amount != null)
+            Text(formatIdr(coupon.amount!),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(color: sub))
+          else if ((coupon.minSpend ?? 0) > 0)
+            Text(l10n.couponMinSpend(formatIdrAmount(coupon.minSpend!)),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(color: sub)),
+          if (trailing != null) ...[const SizedBox(height: 8), trailing!],
+        ],
+      ),
+    );
+    if (onTap == null) return card;
+    return Semantics(button: true, child: ShopPressable(onTap: onTap, child: card));
   }
 }
 

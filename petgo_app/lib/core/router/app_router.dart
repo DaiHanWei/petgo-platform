@@ -34,7 +34,9 @@ import '../../features/shop/presentation/product_detail_page_v2.dart';
 import '../../features/shop/presentation/shop_return_unavailable_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
 import '../../features/shop/presentation/shop_pay_success_page.dart';
-import '../../features/shop/presentation/toko_page_v2.dart';
+import '../../features/shop/presentation/toko_page_v3.dart';
+import '../../l10n/app_localizations.dart';
+import '../../shared/widgets/placeholder_scaffold.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
@@ -201,12 +203,13 @@ const Set<String> _controlledExactExceptions = {'/profile'};
 const String _devRoute = String.fromEnvironment('DEV_ROUTE');
 
 /// Tab 分支根页（与 [AppTab] 一一对应；穷尽 switch，新增 Tab 时编译期报错，不会静默漏配）。
-/// Tab 根页。**接收 [GoRouterState]** 而非只接 tab —— Toko 要读 `?category=`
-/// （FR-110 品类跳转注入），无 state 就取不到。其余 Tab 忽略它。
+/// Tab 根页。**接收 [GoRouterState]** 而非只接 tab —— 我的页要读 `?saved=`。
+/// Toko 自 v1.4.2 shop Story 8.1 起不再读 `?category=`（D-17）。
 Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   AppTab.profile => const GrowthArchivePage(),
-  // ⚠️ 2026-08-28 v1 版式整体删除，双 UI 并存机制随之移除；此处直接构造 v2 页面。
-  AppTab.shop => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
+  // v1.4.2 shop Story 8.1（D-17）：品类入口下线，`?category=` 一律忽略 —— URL 带参数也落首页、不报错
+  // （运营推送 CATEGORY 目标 / 旧深链仍会带它）。
+  AppTab.shop => const TokoPageV3(),
   AppTab.home => const HomePage(),
   // V1.4.0 ④ Story 2.4：读 `?saved=post|place`（收藏 Toast「Lihat」落点 → Disimpan 对应子分类）。
   AppTab.me => MePage(saved: state.uri.queryParameters['saved']),
@@ -668,8 +671,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    转化漏斗最上层，用登录墙拦截会直接杀掉转化。登录引导推迟到加购（Epic 3）。
       // 🔴 Tab 位序归 DEP-1 未拍板、图标归 DEP-2 未交付 → 本版本【只挂路由，不动 AppTab 枚举】
       //    （bottom_tab_bar.dart 属并行契约 C 类）。Tab 接入待 DEP-1 闭合后单独处理。
-      // `?category=` 只被 FR-110 的品类跳转注入（Story 9.1）：健康记录类型 → 品类，
-      // 系统生成、无 SKU。非法值由 ShopCategory.fromApi 落回 null（= 全部精选）。
+      // `?category=` 曾由 FR-110 品类跳转注入；v1.4.2 shop Story 8.1（D-17）起 Toko 忽略它、一律落首页。
       // 🔴 双 UI 并存（2026-08-19）：v1 = 逐 story 实现的首发版式，v2 = 电商设计稿版式。
       //    **路由结构一行不改** —— URL、深链、导航栈、受控路由名单全不变，
       //    （2026-08-28 起只有一套版式，此约束自然成立。）
@@ -1096,6 +1098,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: PushSettingsPage.routePath, builder: (c, s) => const PushSettingsPage()),
       // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
+      // v1.4.2 shop Story 8.1 AC3.5：我的券（9.3 实现，先挂占位页；9.3 替换 builder）。受控（/me 前缀，游客深链被拦）。
+      GoRoute(
+        path: '/me/coupons',
+        builder: (c, s) {
+          final l10n = AppLocalizations.of(c);
+          return PlaceholderScaffold(title: l10n.couponMyCoupons, message: l10n.placeholderComingSoon);
+        },
+      ),
       // V1.4.0 ① Tailrent Level（Story 1.5）：等级页 + EXP 明细页。受控（/me 前缀）；shell 外顶层隐 Tab。
       GoRoute(path: LevelPage.location, builder: (c, s) => const LevelPage()),
       GoRoute(path: ExpLedgerPage.location, builder: (c, s) => const ExpLedgerPage()),

@@ -472,9 +472,24 @@ class ApiPaths {
   /// 商品列表（Story 1.1 只读接口，**已对游客放行**）。可选 query：`category`。
   static const String shopProducts = '$base/shop/products';
 
-  /// Toko 顶部 banner（2026-08-27）。🔴 无 banner 时后端回 **204 No Content**，
-  /// 不是 200+null 也不是 404 —— 见 ShopBannerController 的说明。
-  static const String shopBanner = '$base/shop/banner';
+  /// Toko 首页 banner 轮播（v1.4.2 shop Story 6.1 / App 8.1，游客可用）→ `{items: [...]}`，≤ 6 张、已排序、已过滤失效目标。
+  /// ⚠️ 旧单张端点 `/shop/banner` 只留给旧版 App，本 App 不再调用。
+  static const String shopBanners = '$base/shop/banners';
+
+  /// 在售商品按运营权重前 N（v1.4.2 shop Story 6.1，游客可用）：`?limit=6` → 商品摘要数组（带 `promo`）。
+  static const String shopProductsTop = '$base/shop/products/top';
+
+  /// 首页「给你的券」（v1.4.2 shop Story 2.2，仅 role=USER）→ `{items: CouponView[]}`。
+  static const String shopCouponsForYou = '$base/shop/coupons/for-you';
+
+  /// 游客新人券活动（v1.4.2 shop Story 2.2，游客可用）：无活动 → 204。
+  static const String shopNewbieCampaign = '$base/shop/coupons/newbie-campaign';
+
+  /// 🔒 进入 Toko（幂等，满足新人条件则发新人券）→ `{newbieCouponIssued}`。
+  static const String meShopEntry = '$base/me/shop/entry';
+
+  /// 🔒 领券 `{couponToken, source: HOME|BANNER|DETAIL}` → CouponView；409 already-claimed / sold-out / not-in-period。
+  static const String meCouponsClaim = '$base/me/coupons/claim';
   /// 行政区划三级树（Story 2.4，游客可读）。
   static const String shopRegions = '$base/shop/regions';
   /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。

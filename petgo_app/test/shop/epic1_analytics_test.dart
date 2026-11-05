@@ -9,7 +9,7 @@ import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
 import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
-import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/toko_page_v3.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'fake_shop_products.dart';
 
@@ -55,10 +55,10 @@ void main() {
 
   testWidgets('Toko 页：toko_tab_viewed + toko_product_shown(zone)', (t) async {
     await t.pumpWidget(wrap(
-      const TokoPageV2(),
+      const TokoPageV3(),
       [
-        // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
-        shopBannerProvider.overrideWith((ref) async => null),
+        // banner / 券 / top 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+        ...tokoHomeOverrides(),
         fakeShopProducts(const [
           ShopProductSummary(token: 'tok1', name: 'n', brand: 'b', minPrice: 285000),
         ]),
@@ -175,7 +175,14 @@ void main() {
       // - courier：受控词表 `<courierCode>_<serviceCode>` 小写（如 jne_reg），与个人无关
       // - shipping_fee：所选快递运费整数（运费随地址变化，但只是一个区间金额，不可反推地址）
       // - insurance：bool（是否保价）
+      // v1.4.2 shop Story 8.1（领券 / 新人弹窗，PRD §4 定死属性名）新增三项，已逐个确认：
+      // - coupon_id：券**模板** token（不可枚举，运营配置的券，非用户券 token），与个人无关
+      // - source：toko_coupon_claimed 的领券入口，受控词表 home / banner / newbie（PRD §4 定名，非自由文本）
+      // - action：toko_newbie_coupon_popup_tapped 的动作，受控词表 register / close
+      // （同批：banner position 改为实际轮播位次，target_type 词表改为 product_detail / coupon / toko_home /
+      //   external_link / none —— 键名不变。）
       expect(props, {
+        'coupon_id', 'source', 'action',
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
         'trigger_type', 'product_id',
         'items', 'sku_id', 'qty', 'entry_source', 'attribution_source',
