@@ -15,16 +15,21 @@ import org.springframework.transaction.annotation.Transactional;
  * 电商订单到账处理（Story 3.8）。监听 {@code PaymentIntentService.applyCallback} 在
  * {@code PENDING→PAID} 后发布的 {@link PaymentIntentPaidEvent}，只处理 {@code SHOP_ORDER}。
  *
+ * <p>🔴 v1.4.2 shop Story 3.2（S-3）：<b>PawCoin 在提交订单时已扣</b>，新单（{@code checkout_source} 非空）
+ * 到账只做「已付款」迁移（{@code markPaid(order, GATEWAY)}），<b>不再扣币</b> —— 提交后用户把剩余币花光，
+ * 到账也不会因币不足让已到账的回调回滚。存量单（{@code checkout_source IS NULL}，币尚未扣）按旧规则在这里扣
+ * （过渡，{@code TODO(v1.4.3)} 删除）。
+ *
  * <p>🔴 <b>同步 {@link EventListener} + {@code MANDATORY}，与意图推进在同一事务</b>
- * （照 {@code TopupPaidHandler} 的血泪范式）：{@code markPaid}、PawCoin 段扣减、库存扣减、
- * 状态迁移<b>要么一起提交、要么一起回滚</b>。
+ * （照 {@code TopupPaidHandler} 的血泪范式）：{@code markPaid}、库存扣减、状态迁移（及存量单的 PawCoin 段扣减）
+ * <b>要么一起提交、要么一起回滚</b>。
  * <b>绝不用 {@code AFTER_COMMIT} 异步</b> —— notify 曾因此让 INSERT 静默不提交，
  * 资金与库存重蹈会同时丢账和丢货。
  *
  * <p>🔴 <b>幂等三重</b>：① 意图已终态时 {@code applyCallback} 直接返回、根本不发事件；
- * ② {@link ShopOrderPaymentService#fulfillPaid} 见到非待支付状态就返回（回调与轮询同时到达时，
+ * ② {@link ShopOrderPaymentService#markPaid} 见到非待支付状态就返回（回调与轮询同时到达时，
  * 后到者看到的已是 {@code PENDING_SHIPMENT}，一件库存也不会被扣第二次）；
- * ③ PawCoin 扣减走钱包自带的幂等键 {@code shop-order:{orderToken}}。
+ * ③ 存量单的 PawCoin 扣减走钱包自带的幂等键 {@code shop-order:{orderToken}}（与提交时扣同一个键）。
  */
 @Component
 public class ShopOrderPaidHandler {
@@ -57,17 +62,18 @@ public class ShopOrderPaidHandler {
             log.warn("电商到账事件无匹配订单，忽略 intent={}", event.publicToken());
             return;
         }
-        // 🔴 顺序：**先状态迁移、确认订单确实还在待支付，再扣 Coin 段** ——
-        //    fulfillPaid 对非待支付（已被取消/懒过期）静默跳过，若先扣币，
-        //    会留下「币已扣、单是 CANCELLED」的无补偿态。两者仍同事务：
-        //    Coin 段失败（余额被别处花掉）整体回滚，扣币与出库要么全有要么全无；
-        //    与取消事务的真并发由 shop_orders.version 乐观锁裁决（后提交者整体回滚）。
-        if (!payments.fulfillPaid(order)) {
-            log.warn("电商到账事件订单已非待支付（已取消/已处理），跳过扣币 order={} intent={}",
+        // 🔴 顺序：**先状态迁移、确认订单确实还在待支付** —— markPaid 对非待支付（已被取消/懒过期）
+        //    静默跳过；与取消事务的真并发由 shop_orders.version 乐观锁裁决（后提交者整体回滚）。
+        if (!payments.markPaid(order, PaidSource.GATEWAY)) {
+            log.warn("电商到账事件订单已非待支付（已取消/已处理），跳过 order={} intent={}",
                     order.getPublicToken(), event.publicToken());
             return;
         }
-        checkout.settlePawCoinSegment(order);
+        if (!order.isCoinDebitedAtSubmit()) {
+            // TODO(v1.4.3)：上线过渡规则 —— 存量待付款单（checkout_source IS NULL）币尚未扣，到账时按旧规则扣；
+            //    同事务，余额不足整体回滚（存量行为不变）。过渡期 ≤ 75 分钟，下一版本删除。
+            checkout.settlePawCoinSegment(order);
+        }
         log.info("电商订单支付到账 order={} intent={}", order.getPublicToken(), event.publicToken());
         // 🔴 Story 3-4 的「登记待提醒」已于 v1.3.0 shop-v2 复审 #6 / #13 挪走：
         //    改由 ShopOrderPaidNotifyListener 监听 ShopOrderPaidEvent（AFTER_COMMIT）完成。

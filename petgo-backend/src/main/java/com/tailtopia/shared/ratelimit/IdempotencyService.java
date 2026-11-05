@@ -18,6 +18,8 @@ public class IdempotencyService {
 
     private static final String PREFIX = "idem:";
     private static final Duration TTL = Duration.ofHours(24);
+    /** 处理中占位键前缀（v1.4.2 shop Story 3.2 复审修复：同 key 并发提交只放行一个）。 */
+    private static final String CLAIM_PREFIX = "idem-claim:";
 
     private final StringRedisTemplate redis;
 
@@ -59,5 +61,27 @@ public class IdempotencyService {
             return;
         }
         redis.opsForValue().set(PREFIX + idempotencyKey, Long.toString(resourceId), TTL);
+    }
+
+    /**
+     * 抢占「处理中」占位（{@code SET NX} + TTL）。同 key 并发时只有一个调用方拿到 true；
+     * 空 key 视为无需幂等、恒 true。
+     *
+     * <p>Redis 不可用时与本类其它方法一致：不吞异常（调用方请求失败，不降级放行）。
+     */
+    public boolean tryClaim(String idempotencyKey, Duration ttl) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return true;
+        }
+        return Boolean.TRUE.equals(
+                redis.opsForValue().setIfAbsent(CLAIM_PREFIX + idempotencyKey, "1", ttl));
+    }
+
+    /** 释放占位（成功时映射已在提交后写入；失败回滚时释放后可重试）。空 key 为 no-op。 */
+    public void releaseClaim(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return;
+        }
+        redis.delete(CLAIM_PREFIX + idempotencyKey);
     }
 }

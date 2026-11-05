@@ -165,20 +165,34 @@ public class CheckoutQuoteService {
             selection = CouponSelection.auto();
         }
 
-        PricingResult pr = ShopPricingCalculator.price(new PricingInput(
-                priced.stream().map(ResolvedCheckoutLine::toPricingLine).toList(),
-                pricingCoupons, selection, in.rule(),
-                // 无报价：运费未知（计价器按 0 计、shippingKnown=false）
-                selected == null ? null : new ShippingChoice(selected.price(), lowest),
-                insurance, in.insuranceRateBp(),
-                new CoinOptions(useCoin, in.coinBalance(), in.coinCap(), in.coinEnabled(),
-                        in.allowShippingDeduction()),
-                now));
+        PricingResult pr = ShopPricingCalculator.price(
+                pricingInput(in, priced, pricingCoupons, selection, selected, lowest, insurance,
+                        useCoin, now));
 
         return new CheckoutComputation(in, quote, selected, insuranceAvailable, insurance,
                 useCoin, pr, notPlaceableReason(in, quote), now,
                 selection.mode() == CouponSelection.Mode.MANUAL ? selection.discountUserCouponToken() : null,
                 selection.mode() == CouponSelection.Mode.MANUAL ? selection.freeShippingUserCouponToken() : null);
+    }
+
+    /**
+     * 计价器入参装配（试算与 3.2 提交共用，保证两处入参同构；本方法不做任何计算）。
+     *
+     * @param selected 已选快递；null = 运费未知（计价器按 0 计、{@code shippingKnown=false}）
+     * @param lowest   本单最低报价（{@code selected} 非 null 时必填）
+     * @param useCoin  有效值（请求 ∧ 规则开启）
+     */
+    static PricingInput pricingInput(CheckoutInputs in, List<ResolvedCheckoutLine> priced,
+            List<PricingCoupon> pricingCoupons, CouponSelection selection, CourierRate selected,
+            Long lowest, boolean insurance, boolean useCoin, Instant now) {
+        return new PricingInput(
+                priced.stream().map(ResolvedCheckoutLine::toPricingLine).toList(),
+                pricingCoupons, selection, in.rule(),
+                selected == null ? null : new ShippingChoice(selected.price(), lowest),
+                insurance, in.insuranceRateBp(),
+                new CoinOptions(useCoin, in.coinBalance(), in.coinCap(), in.coinEnabled(),
+                        in.allowShippingDeduction()),
+                now);
     }
 
     /** 🔴 事务外。 */

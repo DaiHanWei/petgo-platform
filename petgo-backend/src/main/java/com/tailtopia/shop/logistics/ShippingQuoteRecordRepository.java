@@ -22,13 +22,14 @@ public interface ShippingQuoteRecordRepository extends JpaRepository<ShippingQuo
     /**
      * 删除 {@code created_at < threshold} 的报价，单次最多 {@code limit} 行。
      *
-     * <p>🔴 Story 3.2 加 {@code shop_orders.shipping_quote_id} 后，须在子查询追加
-     * {@code AND NOT EXISTS (SELECT 1 FROM shop_orders o WHERE o.shipping_quote_id = q.id)}（被订单引用的不删）。
+     * <p>🔴 v1.4.2 shop Story 3.2：被订单引用（{@code shop_orders.shipping_quote_id}，订单锁定的报价快照）的不删 ——
+     * 外键无 {@code ON DELETE}，删了会让清理任务整批失败。
      */
     @Modifying
     @Transactional
     @Query(value = "DELETE FROM shipping_quotes WHERE id IN ("
             + "SELECT q.id FROM shipping_quotes q WHERE q.created_at < :threshold "
+            + "AND NOT EXISTS (SELECT 1 FROM shop_orders o WHERE o.shipping_quote_id = q.id) "
             + "ORDER BY q.id LIMIT :limit)", nativeQuery = true)
     int deleteCreatedBefore(@Param("threshold") Instant threshold, @Param("limit") int limit);
 }

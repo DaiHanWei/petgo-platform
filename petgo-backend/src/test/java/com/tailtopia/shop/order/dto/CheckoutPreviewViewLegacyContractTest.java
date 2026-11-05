@@ -71,7 +71,7 @@ class CheckoutPreviewViewLegacyContractTest {
     void shippingDiscountIsNegated() {
         QuoteOutcome ok = new QuoteOutcome(QuoteOutcome.Status.OK, new QuoteResult("q1", true,
                 List.of(), 10_000L, "12160", "h", NOW));
-        var p = new LegacyCheckoutAdapter().toLegacyPreview(computation(ok,
+        var p = new LegacyCheckoutAdapter(null).toLegacyPreview(computation(ok,
                 pricing(10_000L, 10_000L, 100_000L, 7_000L, false)));
 
         assertThat(p.shippingFee()).isEqualTo(10_000L);
@@ -90,7 +90,7 @@ class CheckoutPreviewViewLegacyContractTest {
     void noQuoteShapes() {
         for (QuoteOutcome.Status s : List.of(QuoteOutcome.Status.NO_ADDRESS,
                 QuoteOutcome.Status.QUOTE_FAILED, QuoteOutcome.Status.SKIPPED)) {
-            var p = new LegacyCheckoutAdapter().toLegacyPreview(computation(
+            var p = new LegacyCheckoutAdapter(null).toLegacyPreview(computation(
                     new QuoteOutcome(s, null), pricing(0L, 0L, 100_000L, 7_000L, true)));
             assertThat(p.shippingFee()).isNull();
             assertThat(p.shippingDiscount()).isNull();
@@ -100,7 +100,7 @@ class CheckoutPreviewViewLegacyContractTest {
             assertThat(p.coinCapped()).isFalse();
             assertThat(p.serviceable()).as(s.name()).isTrue();
         }
-        var out = new LegacyCheckoutAdapter().toLegacyPreview(computation(
+        var out = new LegacyCheckoutAdapter(null).toLegacyPreview(computation(
                 new QuoteOutcome(QuoteOutcome.Status.NOT_SERVICEABLE, null),
                 pricing(0L, 0L, 100_000L, 0L, false)));
         assertThat(out.serviceable()).isFalse();
@@ -110,7 +110,7 @@ class CheckoutPreviewViewLegacyContractTest {
     @Test
     @DisplayName("旧结算入参：CART · 最便宜 · 不用券 · useCoin · 不保价；无 token 不回落默认地址")
     void previewCommand() {
-        var cmd = new LegacyCheckoutAdapter().previewCommand(" ");
+        var cmd = new LegacyCheckoutAdapter(null).previewCommand(" ");
         assertThat(cmd.request().sourceValue()).isEqualTo(CheckoutPreviewRequest.Source.CART);
         assertThat(cmd.request().courierKey()).isNull();
         assertThat(cmd.request().insuranceValue()).isFalse();

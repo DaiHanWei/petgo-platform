@@ -184,6 +184,76 @@ public class ShopOrder {
     @Column(name = "return_window_ends_at")
     private Instant returnWindowEndsAt;
 
+    // ---------- v1.4.2 shop Story 3.2：新结算模式（V20261105_1625） ----------
+
+    /** 结算来源；🔴 {@code null} = 本版之前下的单（PawCoin 付款时扣的过渡规则据此判定）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "checkout_source", updatable = false, length = 16)
+    private CheckoutSource checkoutSource;
+
+    /** 满减券抵扣（≥ 0）。存量单为 0。 */
+    @Column(name = "discount_coupon_amount", nullable = false, updatable = false)
+    private long discountCouponAmount;
+
+    /** 实际采用的满减券（{@code user_coupons.id}，不对外）。 */
+    @Column(name = "discount_user_coupon_id", updatable = false)
+    private Long discountUserCouponId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "shipping_discount_source", updatable = false, length = 24)
+    private com.tailtopia.shop.order.pricing.ShippingDiscountSource shippingDiscountSource;
+
+    /** 实际采用的免运券（{@code user_coupons.id}，不对外）；被满额免运胜出时为 null。 */
+    @Column(name = "free_shipping_user_coupon_id", updatable = false)
+    private Long freeShippingUserCouponId;
+
+    @Column(name = "insurance_fee", nullable = false, updatable = false)
+    private long insuranceFee;
+
+    @Column(name = "insurance_selected", nullable = false, updatable = false)
+    private boolean insuranceSelected;
+
+    @Column(name = "courier_code", updatable = false, length = 32)
+    private String courierCode;
+    @Column(name = "courier_service_code", updatable = false, length = 32)
+    private String courierServiceCode;
+    @Column(name = "courier_name", updatable = false, length = 64)
+    private String courierName;
+    @Column(name = "courier_service_name", updatable = false, length = 64)
+    private String courierServiceName;
+    @Column(name = "courier_eta_text", updatable = false, length = 32)
+    private String courierEtaText;
+
+    /** 锁定的 Biteship 报价（{@code shipping_quotes.id}，不对外）。 */
+    @Column(name = "shipping_quote_id", updatable = false)
+    private Long shippingQuoteId;
+
+    /** 用户提交时是否勾选「使用 PawCoin」。存量单为 null。 */
+    @Column(name = "coin_selected", updatable = false)
+    private Boolean coinSelected;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_reason", length = 32)
+    private com.tailtopia.shop.order.refund.CancelReason cancelReason;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    /** 4.2 迟到款重新下单：新单指向原单（本 story 只建列）。 */
+    @Column(name = "reorder_of_order_id", updatable = false)
+    private Long reorderOfOrderId;
+
+    /** 3.3 / 4.2 迟到款三列（同生同灭，库级 CHECK；本 story 只建列）。 */
+    @Column(name = "late_paid_amount")
+    private Long latePaidAmount;
+    @Column(name = "late_paid_at")
+    private Instant latePaidAt;
+    @Column(name = "late_paid_intent_id")
+    private Long latePaidIntentId;
+    /** {@code REORDERED | REFUNDED}（4.2 写入）。 */
+    @Column(name = "late_payment_resolution", length = 16)
+    private String latePaymentResolution;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -238,6 +308,71 @@ public class ShopOrder {
         //    可能永远不会来的付款，是自营模式下最贵的一种沉默损失。
         o.expiresAt = o.createdAt.plus(PAYMENT_WINDOW);
         return o;
+    }
+
+    /**
+     * 新结算模式建单（v1.4.2 shop Story 3.2 AC3.2 第 8 步）。金额全部来自 {@code ShopPricingCalculator}（P-1），
+     * 本方法只搬运并断言应付公式与库级 {@code ck_shop_orders_total_formula} 一致。
+     *
+     * <p>🔴 {@code shippingDiscount} 入参为计价器给出的<b>正数减免额</b>，落库取负（沿用 ≤ 0 的存量口径）。
+     *
+     * @throws IllegalStateException 应付 ≠ 商品金额 − 满减 + 运费 − 运费减免 + 保价费（计价器口径漂移的护栏）
+     */
+    public static ShopOrder placeCheckout(PlaceSnapshot s) {
+        ShopOrder o = place(s.publicToken(), s.displayNo(), s.now(), s.userId(), s.goodsAmount(),
+                s.shippingFee(), Math.negateExact(s.shippingDiscount()), s.ship(),
+                s.referrerMerchantId());
+        o.discountCouponAmount = s.discountCouponAmount();
+        o.insuranceFee = s.insuranceFee();
+        o.insuranceSelected = s.insuranceSelected();
+        o.totalAmount = s.payable();
+        long formula = Math.addExact(Math.addExact(Math.subtractExact(s.goodsAmount(),
+                s.discountCouponAmount()), Math.subtractExact(s.shippingFee(), s.shippingDiscount())),
+                s.insuranceFee());
+        if (formula != s.payable() || s.payable() < 0) {
+            throw new IllegalStateException("应付与订单头金额公式不一致");
+        }
+        o.checkoutSource = s.checkoutSource();
+        o.discountUserCouponId = s.discountUserCouponId();
+        o.shippingDiscountSource = s.shippingDiscountSource();
+        o.freeShippingUserCouponId = s.freeShippingUserCouponId();
+        o.courierCode = s.courierCode();
+        o.courierServiceCode = s.courierServiceCode();
+        o.courierName = s.courierName();
+        o.courierServiceName = s.courierServiceName();
+        o.courierEtaText = s.courierEtaText();
+        o.shippingQuoteId = s.shippingQuoteId();
+        o.coinSelected = s.coinSelected();
+        return o;
+    }
+
+    /**
+     * {@link #placeCheckout} 的入参快照。
+     *
+     * @param shippingDiscount 计价器的运费减免（<b>正数</b>），落库取负
+     * @param payable          计价器应付
+     */
+    public record PlaceSnapshot(String publicToken, String displayNo, Instant now, long userId,
+            AddressSnapshot ship, Long referrerMerchantId, CheckoutSource checkoutSource,
+            long goodsAmount, long discountCouponAmount, long shippingFee, long shippingDiscount,
+            com.tailtopia.shop.order.pricing.ShippingDiscountSource shippingDiscountSource,
+            long insuranceFee, boolean insuranceSelected, long payable,
+            Long discountUserCouponId, Long freeShippingUserCouponId,
+            String courierCode, String courierServiceCode, String courierName,
+            String courierServiceName, String courierEtaText, Long shippingQuoteId,
+            Boolean coinSelected) {
+    }
+
+    /**
+     * 未付款取消（v1.4.2 shop Story 3.2 AC6.3 第 4 步）：写原因与时刻，经唯一入口转 {@code CANCELLED}。
+     * 原因只写第一次（重复取消不改写）。
+     */
+    public void markCancelled(com.tailtopia.shop.order.refund.CancelReason reason, Instant at) {
+        transitionTo(ShopOrderStatus.CANCELLED);
+        if (this.cancelReason == null) {
+            this.cancelReason = reason;
+            this.cancelledAt = at;
+        }
     }
 
     /** 支付窗长度（AD-8）。🔴 与 App 端倒计时同源：客户端只展示服务端给的截止时刻。 */
@@ -409,9 +544,15 @@ public class ShopOrder {
      */
     public void applyPaymentSplit(com.tailtopia.pay.domain.PayChannel channel,
             PaymentSplit split) {
+        applyPaymentSplit(channel, split.coinAmount(), split.cashAmount());
+    }
+
+    /** 同上，两段金额直接取计价器出参（v1.4.2 shop Story 3.2：拆分只在 {@code ShopPricingCalculator}）。 */
+    public void applyPaymentSplit(com.tailtopia.pay.domain.PayChannel channel, long coinAmount,
+            long cashAmount) {
         this.payChannel = channel;
-        this.coinAmount = split.coinAmount();
-        this.cashAmount = split.cashAmount();
+        this.coinAmount = coinAmount;
+        this.cashAmount = cashAmount;
         this.updatedAt = Instant.now();
     }
 
@@ -568,6 +709,97 @@ public class ShopOrder {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    // ---------- v1.4.2 shop Story 3.2 getter ----------
+
+    public CheckoutSource getCheckoutSource() {
+        return checkoutSource;
+    }
+
+    /** 🔴 PawCoin 已在提交时扣（S-3）；false = 本版之前下的单，仍走付款时扣的过渡规则。 */
+    public boolean isCoinDebitedAtSubmit() {
+        return checkoutSource != null;
+    }
+
+    public long getDiscountCouponAmount() {
+        return discountCouponAmount;
+    }
+
+    public Long getDiscountUserCouponId() {
+        return discountUserCouponId;
+    }
+
+    public com.tailtopia.shop.order.pricing.ShippingDiscountSource getShippingDiscountSource() {
+        return shippingDiscountSource;
+    }
+
+    public Long getFreeShippingUserCouponId() {
+        return freeShippingUserCouponId;
+    }
+
+    public long getInsuranceFee() {
+        return insuranceFee;
+    }
+
+    public boolean isInsuranceSelected() {
+        return insuranceSelected;
+    }
+
+    public String getCourierCode() {
+        return courierCode;
+    }
+
+    public String getCourierServiceCode() {
+        return courierServiceCode;
+    }
+
+    public String getCourierName() {
+        return courierName;
+    }
+
+    public String getCourierServiceName() {
+        return courierServiceName;
+    }
+
+    public String getCourierEtaText() {
+        return courierEtaText;
+    }
+
+    public Long getShippingQuoteId() {
+        return shippingQuoteId;
+    }
+
+    public Boolean getCoinSelected() {
+        return coinSelected;
+    }
+
+    public com.tailtopia.shop.order.refund.CancelReason getCancelReason() {
+        return cancelReason;
+    }
+
+    public Instant getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public Long getReorderOfOrderId() {
+        return reorderOfOrderId;
+    }
+
+    public Long getLatePaidAmount() {
+        return latePaidAmount;
+    }
+
+    public Instant getLatePaidAt() {
+        return latePaidAt;
+    }
+
+    public Long getLatePaidIntentId() {
+        return latePaidIntentId;
+    }
+
+    public String getLatePaymentResolution() {
+        return latePaymentResolution;
     }
 
     /** 🔒 不打印任何 PII。 */

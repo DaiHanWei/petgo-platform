@@ -137,7 +137,13 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
                 "pay-topup:" + uid + ":" + SEQ.incrementAndGet());
     }
 
-    /** 下单一单（默认无 PawCoin 抵扣、运费 0）。 */
+    /**
+     * v1.4.2 shop Story 3.2：下单走旧结算模式（旧版 App 入口），运费 = Biteship stub 最便宜一家（JNE 10,000），
+     * {@code shipping_zones.fee} 不再被读取；PawCoin 在<b>提交时</b>扣（S-3）。
+     */
+    private static final long STUB_FEE = 10_000L;
+
+    /** 下单一单（默认无 PawCoin 抵扣；运费 = stub 最低价）。 */
     private ShopOrder placeOrder(long uid, String sku, int qty, long price) {
         zones.setFreeShippingThreshold(0, ACTOR);
         String addr = seedAddress(uid, 0L);
@@ -153,7 +159,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     // ---------- 纯 PawCoin：当场结清 ----------
 
     @Test
-    @DisplayName("🔴 纯 PawCoin 单：不建支付意图，当场扣币 + 扣库存 + 转待发货")
+    @DisplayName("🔴 纯 PawCoin 单：提交即结清（S-3）—— 不建支付意图，扣币 + 扣库存 + 转待发货；旧版 App 再点 /pay 兼容返回")
     void pureCoinSettlesImmediately() {
         long uid = seedUser();
         rules.update(true, true, 1_000_000L, ACTOR);
@@ -161,6 +167,8 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         String sku = seedSku(10, 100_000L);
         ShopOrder order = placeOrder(uid, sku, 1, 100_000L);
         assertThat(order.getPayChannel()).isEqualTo(PayChannel.PAWCOIN);
+        assertThat(order.getStatus()).as("v1.4.2：提交时已结清").isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        assertThat(wallet.balanceOf(uid)).isEqualTo(500_000L - 100_000L - STUB_FEE);
 
         var result = payments.pay(uid, order.getPublicToken(), null);
 
@@ -168,14 +176,14 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         // 没有真钱环节就没有网关意图（与咨询/身份证同范式）
         assertThat(result.paymentIntentToken()).isNull();
         assertThat(result.payload()).isNull();
-        assertThat(wallet.balanceOf(uid)).isEqualTo(400_000L);
+        assertThat(wallet.balanceOf(uid)).isEqualTo(500_000L - 100_000L - STUB_FEE);
         var inv = inventory.findBySkuId(skuId(sku)).orElseThrow();
         assertThat(inv.getActual()).as("支付成功 → 锁定转扣减").isEqualTo(9L);
         assertThat(inv.getLocked()).isZero();
     }
 
     @Test
-    @DisplayName("纯 PawCoin 单重复点支付 → 第二次拿到「已不在待支付状态」，币不会被扣两次")
+    @DisplayName("纯 PawCoin 单重复点支付 → 两次都兼容返回已结清（v1.4.2 AC5.5 不再 409），币不会被扣两次")
     void pureCoinPayTwiceDoesNotDoubleCharge() {
         long uid = seedUser();
         rules.update(true, true, 1_000_000L, ACTOR);
@@ -183,12 +191,12 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         String sku = seedSku(10, 100_000L);
         ShopOrder order = placeOrder(uid, sku, 1, 100_000L);
 
-        payments.pay(uid, order.getPublicToken(), null);
-        assertThatThrownBy(() -> payments.pay(uid, order.getPublicToken(), null))
-                .isInstanceOf(AppException.class)
-                .hasMessageContaining("待支付");
+        assertThat(payments.pay(uid, order.getPublicToken(), null).orderStatus())
+                .isEqualTo("PENDING_SHIPMENT");
+        assertThat(payments.pay(uid, order.getPublicToken(), null).orderStatus())
+                .isEqualTo("PENDING_SHIPMENT");
 
-        assertThat(wallet.balanceOf(uid)).isEqualTo(400_000L);
+        assertThat(wallet.balanceOf(uid)).isEqualTo(500_000L - 100_000L - STUB_FEE);
     }
 
     // ---------- QRIS / 混合：到账推进 ----------
@@ -225,19 +233,21 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         ShopOrder order = placeOrder(uid, sku, 1, 350_000L);
         assertThat(order.getPayChannel()).isEqualTo(PayChannel.MIXED);
         assertThat(order.getCoinAmount()).isEqualTo(60_000L);
-        assertThat(order.getCashAmount()).isEqualTo(290_000L);
+        assertThat(order.getCashAmount()).isEqualTo(350_000L + STUB_FEE - 60_000L);
+        // v1.4.2 S-3：Coin 段在提交时就已扣下
+        assertThat(wallet.balanceOf(uid)).isZero();
 
         var result = payments.pay(uid, order.getPublicToken(), null);
         PaymentIntent intent = paymentIntents.findByToken(result.paymentIntentToken())
                 .orElseThrow();
         assertThat(intent.getChannel()).isEqualTo(PayChannel.MIXED);
         assertThat(intent.getCoinAmount()).isEqualTo(60_000L);
-        assertThat(intent.getCashAmount()).isEqualTo(290_000L);
+        assertThat(intent.getCashAmount()).isEqualTo(350_000L + STUB_FEE - 60_000L);
         assertThat(intent.getCoinAmount() + intent.getCashAmount()).isEqualTo(intent.getAmount());
 
         payCallback(result.paymentIntentToken());
 
-        // Coin 段在到账时才扣（下单时只锁库存不扣款）
+        // v1.4.2 S-3：到账不再扣币（提交时已扣），余额保持 0、不会被扣第二次
         assertThat(wallet.balanceOf(uid)).isZero();
         assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow().getStatus())
                 .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
@@ -264,7 +274,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 fulfillPaid 自身幂等：连调两次仍只扣一次库存（不靠上游意图幂等兜底）")
+    @DisplayName("🔴 markPaid（原 fulfillPaid）自身幂等：连调两次仍只扣一次库存（不靠上游意图幂等兜底）")
     void fulfillPaidIsIdempotentOnItsOwn() {
         // ⚠️ 变异验证 B1 暴露的假绿：上面那条「重复回调」用例即使删掉 fulfillPaid 的状态守卫
         //    也照样全绿 —— 因为 applyCallback 的「已终态即返回」把第二次拦在了更外层。
@@ -275,8 +285,10 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         String sku = seedSku(10, 285_000L);
         ShopOrder order = placeOrder(uid, sku, 1, 285_000L);
 
-        payments.fulfillPaid(orders.findByPublicToken(order.getPublicToken()).orElseThrow());
-        payments.fulfillPaid(orders.findByPublicToken(order.getPublicToken()).orElseThrow());
+        payments.markPaid(orders.findByPublicToken(order.getPublicToken()).orElseThrow(),
+                com.tailtopia.shop.order.service.PaidSource.GATEWAY);
+        payments.markPaid(orders.findByPublicToken(order.getPublicToken()).orElseThrow(),
+                com.tailtopia.shop.order.service.PaidSource.GATEWAY);
 
         var inv = inventory.findBySkuId(skuId(sku)).orElseThrow();
         assertThat(inv.getActual()).as("扣两次就是白送一件货").isEqualTo(9L);
@@ -561,7 +573,70 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_paid");
         assertThat(props.getValue().keySet())
                 .isSubsetOf("order_amount", "pay_channel", "has_pawcoin");
-        assertThat(props.getValue()).containsEntry("order_amount", 285_000L);
+        // v1.4.2 shop Story 3.2：改由 ShopOrderPaidEvent 触发，order_amount = paidTotal（含 stub 运费）
+        assertThat(props.getValue()).containsEntry("order_amount", 285_000L + STUB_FEE);
+    }
+
+    @Test
+    @DisplayName("🔴 v1.4.2 D-23：纯币单提交即结清，同样上报 shop_payment_paid（此前缺口）")
+    void pureCoinEmitsShopPaymentPaid() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        topUp(uid, 500_000L);
+        placeOrder(uid, seedSku(10, 100_000L), 1, 100_000L);
+
+        ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_paid");
+        assertThat(props.getValue()).containsEntry("order_amount", 100_000L + STUB_FEE)
+                .containsEntry("pay_channel", "PAWCOIN");
+    }
+
+    @Test
+    @DisplayName("🔴 S-3 回归：提交后把余额花光，到账仍正常转待发货、意图 PAID（不再因币不足回滚回调）")
+    void spendingCoinsAfterSubmitDoesNotBreakCallback() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        topUp(uid, 100_000L);
+        String sku = seedSku(10, 350_000L);
+        ShopOrder order = placeOrder(uid, sku, 1, 350_000L);
+        assertThat(order.getCoinAmount()).isEqualTo(100_000L);
+        topUp(uid, 5_000L);
+        wallet.debit(uid, 5_000L, PawCoinTxnType.SPEND, "TEST", null, "spend-all:" + uid);
+        assertThat(wallet.balanceOf(uid)).isZero();
+
+        var result = payments.pay(uid, order.getPublicToken(), null);
+        payCallback(result.paymentIntentToken());
+
+        ShopOrder after = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
+        assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        assertThat(paymentIntents.findByToken(result.paymentIntentToken()).orElseThrow()
+                .getStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("🔴 S-3：用户取消待付款单 → 币退回（REFUND / SHOP_ORDER_VOID）、库存释放、cancel_reason；重复取消不重复退")
+    void userCancelRefundsCoinOnce() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        topUp(uid, 60_000L);
+        String sku = seedSku(10, 350_000L);
+        ShopOrder order = placeOrder(uid, sku, 1, 350_000L);
+        assertThat(wallet.balanceOf(uid)).isZero();
+
+        payments.cancel(uid, order.getPublicToken());
+        assertThatThrownBy(() -> payments.cancel(uid, order.getPublicToken()))
+                .isInstanceOf(AppException.class);
+
+        assertThat(wallet.balanceOf(uid)).isEqualTo(60_000L);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM pawcoin_transactions
+                WHERE user_id = ? AND type = 'REFUND' AND ref_type = 'SHOP_ORDER_VOID'
+                """, Integer.class, uid)).isEqualTo(1);
+        ShopOrder after = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
+        assertThat(after.getCancelReason())
+                .isEqualTo(com.tailtopia.shop.order.refund.CancelReason.USER_UNPAID_CANCEL);
+        assertThat(after.getCancelledAt()).isNotNull();
+        assertThat(after.getRefundedTotal()).as("未付款作废不是退款").isZero();
+        assertThat(inventory.findBySkuId(skuId(sku)).orElseThrow().getLocked()).isZero();
     }
 
     @Test
@@ -591,7 +666,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         //    而纯币单走 settlePureCoin —— 既不建意图也不发那个事件，于是整条路径
         //    永不入队：用户付了钱，运营永远收不到这批单的发货信号。
         //    现在登记挂在「订单真的转为待发货」这个事实（ShopOrderPaidEvent）上。
-        //    🎯 把 ShopOrderPaymentService.fulfillPaid 里的 publishEvent 删掉，本条必须红。
+        //    🎯 把 ShopOrderPaidTransition.markPaid 里的 publishEvent 删掉，本条必须红。
         long uid = seedUser();
         rules.update(true, true, 1_000_000L, ACTOR);
         long price = 100_000L;
@@ -601,7 +676,8 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
                 .as("前提：这条用例必须真的走纯币路径，否则它证明不了 #6")
                 .isEqualTo(PayChannel.PAWCOIN);
 
-        payments.pay(uid, order.getPublicToken(), null);   // 当场结清，无网关往返
+        // v1.4.2 S-3：提交即结清；旧版 App 再点 /pay 兼容返回
+        payments.pay(uid, order.getPublicToken(), null);
 
         ShopOrder settled = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
         assertThat(settled.getStatus()).isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);

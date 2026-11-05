@@ -166,6 +166,18 @@ public final class ErrorTypes {
     /** v1.4.2 shop Story 2.2（D-4）：1 小时内输错 10 次，兑换锁定 1 小时（429，G8）。 */
     public static final URI COUPON_REDEEM_LOCKED = URI.create(BASE + "coupon-redeem-locked");
 
+    /**
+     * v1.4.2 shop Story 3.2（P-5 / C-2）：提交订单时有行不可买（409），扩展成员 {@code unavailableLines}
+     * （见 {@code CheckoutUnavailableException}）。旧版 App 按 409 + 该成员识别，不看 type。
+     */
+    public static final URI UNAVAILABLE_LINES = URI.create(BASE + "unavailable-lines");
+
+    /** v1.4.2 shop Story 3.2：无地址 / 区域未开通 / 无可结算行 / 旧结算模式询价 0 家（422）。 */
+    public static final URI NOT_PLACEABLE = URI.create(BASE + "not-placeable");
+
+    /** v1.4.2 shop Story 3.2（I7）：报价不存在 / 已过期 / 未绑定本单地址与商品 / 所选快递不在报价中（409，App 重新试算）。 */
+    public static final URI QUOTE_EXPIRED = URI.create(BASE + "quote-expired");
+
     private ErrorTypes() {
     }
 }

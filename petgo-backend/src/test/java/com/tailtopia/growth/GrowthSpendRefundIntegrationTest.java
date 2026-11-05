@@ -86,7 +86,7 @@ class GrowthSpendRefundIntegrationTest extends ApiIntegrationTest {
     void shopPartialRefundsNeverOverDeduct() throws Exception {
         long u = newUser().getId();
         long order = 7_000_000L + u;
-        publish(new ShopOrderPaidEvent(order, "ord", u, 200_000));
+        publish(new ShopOrderPaidEvent(order, "ord", u, 200_000, "QRIS", "GATEWAY"));
         await(() -> sum(u, "SPEND_SHOP") == 100);
 
         publish(new RefundSucceededEvent("ret-a-" + u, u, PaymentPurpose.SHOP_ORDER, "SHOP_ORDER", String.valueOf(order),

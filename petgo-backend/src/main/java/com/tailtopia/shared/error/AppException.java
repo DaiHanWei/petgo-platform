@@ -297,4 +297,14 @@ public class AppException extends RuntimeException {
     public static AppException couponRedeemLocked(String detail) {
         return new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorTypes.COUPON_REDEEM_LOCKED, detail);
     }
+
+    /** v1.4.2 shop Story 3.2：无地址 / 区域未开通 / 无可结算行 → 422 {@code not-placeable}。 */
+    public static AppException notPlaceable(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.NOT_PLACEABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 3.2（I7）：报价失效或未绑定本单 → 409 {@code quote-expired}。 */
+    public static AppException quoteExpired(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.QUOTE_EXPIRED, detail);
+    }
 }

@@ -260,7 +260,11 @@ public final class ShopPricingCalculator {
         return c.validUntil() == null || now.isBefore(c.validUntil());
     }
 
-    private static boolean inScope(PricingCoupon c, PricingLine l) {
+    /**
+     * 该行是否在券的适用范围内 —— 计算满减 {@code eligible} 与免运范围用的<b>同一段</b>代码。
+     * v1.4.2 Story 3.2 公开给提交写 {@code shop_order_lines.discount_eligible}（不另写一份，避免漂移）。
+     */
+    public static boolean inScope(PricingCoupon c, PricingLine l) {
         PricingScopeType type = c.scopeType() == null ? PricingScopeType.ALL : c.scopeType();
         Set<String> values = c.scopeValues() == null ? Set.of() : c.scopeValues();
         return switch (type) {

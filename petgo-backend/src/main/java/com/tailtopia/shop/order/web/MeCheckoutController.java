@@ -4,10 +4,11 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.dto.CheckoutPreviewRequest;
 import com.tailtopia.shop.order.dto.CheckoutPreviewView;
 import com.tailtopia.shop.order.dto.CheckoutQuoteView;
-import com.tailtopia.shop.order.dto.CheckoutUnavailableException;
+import com.tailtopia.shop.order.dto.PlaceOrderRequest;
 import com.tailtopia.shop.order.dto.ShopOrderDetailView;
 import com.tailtopia.shop.order.dto.ShopOrderView;
 import com.tailtopia.shop.order.service.CheckoutService;
+import com.tailtopia.shop.order.service.PlaceCommand;
 import com.tailtopia.shop.order.service.ShopOrderPaymentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -95,27 +96,33 @@ public class MeCheckoutController {
     }
 
     /**
-     * 下单（只锁库存、不扣款；PawCoin 实扣在支付执行时，Story 3.8）。
+     * 下单（v1.4.2 shop Story 3.2 重写，D-8）。
      *
-     * <p>🔴 有行不可购买时回 <b>409 + {@code unavailableLines} 扩展成员</b>，
-     * 前端据此让用户移除后继续 —— <b>不整单打回</b>（FR-95）。
-     * 笼统的「库存不足，请重试」会让用户在一车 8 件商品里逐个试错。
-     * 映射由 {@link CheckoutUnavailableException} 自己声明（它实现 {@code ProblemExtensions}），
-     * 本控制器<b>不重复拼错误信封</b> —— 自拼会漏掉 traceId，而排障最先看的就是它。
+     * <p>🔴 <b>判别只看 {@code quoteToken}</b>：为空 → 旧结算模式（旧版 App，S-4）——
+     * {@link CheckoutService#placeOrder} 先在事务外询价（{@code LegacyCheckoutAdapter}），再进提交事务；
+     * 非空 → 新结算模式，按报价锁定快递与运费、MANUAL 用券、PawCoin 自选，提交即扣币（S-3）。
      *
-     * <p>🔴 {@code Idempotency-Key} 头去重（与同控制器 pay 端点同款：可选，缺失时不拒 ——
-     * 幂等层对空 key 直接跳过）：同 key 重放取回既有订单，<b>不重复建单、不重复锁库存</b>。
+     * <p>🔴 有行不可购买时回 <b>409 {@code unavailable-lines} + {@code unavailableLines} 扩展成员</b>，
+     * 前端据此让用户移除后继续 —— <b>不整单打回</b>（FR-95）。映射由异常自己声明（{@code ProblemExtensions}），
+     * 本控制器<b>不重复拼错误信封</b>。
+     *
+     * <p>🔴 {@code Idempotency-Key} 头去重（可选）：同 key 重放取回既有订单，<b>不重复建单、不重复扣币</b>。
      */
     @PostMapping("/shop-orders")
     @ResponseStatus(HttpStatus.CREATED)
     public ShopOrderView placeOrder(@AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) PlaceOrderRequest req) {
-        if (req == null || req.addressToken() == null || req.addressToken().isBlank()) {
-            throw AppException.validation("请选择收货地址");
+        long userId = currentUserId(jwt);
+        if (req == null || !req.newCheckoutMode()) {
+            // 旧结算模式：新字段一律忽略；空地址 422 validation「请选择收货地址」（沿用旧文案与码）
+            if (req == null || req.addressToken() == null || req.addressToken().isBlank()) {
+                throw AppException.validation("请选择收货地址");
+            }
+            return ShopOrderView.of(checkout.placeOrder(userId, req.addressToken(),
+                    req.entrySource(), req.triggerType(), idempotencyKey));
         }
-        return ShopOrderView.of(checkout.placeOrder(currentUserId(jwt), req.addressToken(),
-                req.entrySource(), req.triggerType(), idempotencyKey));
+        return ShopOrderView.of(checkout.place(userId, PlaceCommand.of(req), idempotencyKey));
     }
 
     // ===== Story 3.8：待支付订单详情与支付 =====
@@ -171,16 +178,6 @@ public class MeCheckoutController {
         long userId = currentUserId(jwt);
         var order = fulfillment.confirmReceipt(userId, token);
         return detailOf(order);
-    }
-
-    /**
-     * 下单请求体。
-     *
-     * @param entrySource 归因：用户从哪个入口进的商品（区域② 档案推荐 / 区域④ 全部精选 …）
-     * @param triggerType 归因：触发类型（复购提醒 / 主动浏览 …）。两者随订单行落库，
-     *     是 AB-13B 复购看板的<b>服务端权威口径</b>（PostHog 只作交叉验证）。
-     */
-    public record PlaceOrderRequest(String addressToken, String entrySource, String triggerType) {
     }
 
     private static long currentUserId(Jwt jwt) {

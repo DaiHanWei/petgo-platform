@@ -49,6 +49,9 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
 
     List<ShopOrder> findByUserIdOrderByCreatedAtDescIdDesc(long userId);
 
+    /** v1.4.2 shop Story 3.2 复审修复：注销联动取该用户待付款单。 */
+    List<ShopOrder> findByUserIdAndStatus(long userId, ShopOrderStatus status);
+
     /**
      * 订单中心游标分页（Story 3.9）：本人电商订单，游标 {@code (beforeTs, beforeId)} 之后的一页，
      * 排序 {@code created_at DESC, id DESC}。

@@ -5,7 +5,10 @@ import com.tailtopia.shop.cart.repository.ShopCartItemRepository;
 import com.tailtopia.shop.cart.repository.ShopCartRepository;
 import com.tailtopia.shop.coupon.repository.CouponExpiryNotifyLogDao;
 import com.tailtopia.shop.coupon.service.CouponLedgerService;
+import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.domain.ShopOrderStatus;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
+import com.tailtopia.shop.order.service.ShopOrderPaymentService;
 import com.tailtopia.shop.returns.repository.ReturnRequestRepository;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -28,6 +31,12 @@ import org.springframework.transaction.annotation.Transactional;
  *       {@code coupon_expiry_notify_log} 物理删除（避免 2.3 给已注销用户扫出快过期券）。</li>
  * </ul>
  *
+ * <p>🔴 v1.4.2 shop Story 3.2 复审修复（D1/D2，S-3 提交即扣币后）：<b>最先</b>取消该用户全部待付款单
+ * （{@code ShopOrderPaymentService#releaseUnpaidForAccountDeletion}）—— 提交时扣下的币退回钱包、LOCKED 券退回
+ * AVAILABLE、库存释放、意图作废；随后本方法作废可用券，编排里（{@code AccountDeletionService#execute}）更靠后的
+ * {@code PawCoinAccountDeletionService#voidBalanceAndPurge} 把退回的币一并作废。否则超时关单会在注销完成后
+ * 给已注销账号重建钱包、复活券。
+ *
  * <p>幂等可重跑（注销作业半途失败会 FAILED 重试）。日志只记计数，绝不落 PII。
  */
 @Service
@@ -42,11 +51,13 @@ public class ShopAccountDeletionService {
     private final ReturnRequestRepository returns;
     private final CouponLedgerService couponLedger;
     private final CouponExpiryNotifyLogDao couponNotifyLog;
+    private final ShopOrderPaymentService payments;
 
     public ShopAccountDeletionService(ShippingAddressRepository addresses,
             ShopCartRepository carts, ShopCartItemRepository cartItems,
             ShopOrderRepository orders, ReturnRequestRepository returns,
-            CouponLedgerService couponLedger, CouponExpiryNotifyLogDao couponNotifyLog) {
+            CouponLedgerService couponLedger, CouponExpiryNotifyLogDao couponNotifyLog,
+            ShopOrderPaymentService payments) {
         this.addresses = addresses;
         this.carts = carts;
         this.cartItems = cartItems;
@@ -54,10 +65,17 @@ public class ShopAccountDeletionService {
         this.returns = returns;
         this.couponLedger = couponLedger;
         this.couponNotifyLog = couponNotifyLog;
+        this.payments = payments;
     }
 
     @Transactional
     public void deleteByUserId(long userId) {
+        // ⓪ 待付款单先取消（退币、退券、释放库存）—— 必须在可用券作废与 PawCoin 作废之前
+        int pendingCancelled = 0;
+        for (ShopOrder o : orders.findByUserIdAndStatus(userId, ShopOrderStatus.PENDING_PAYMENT)) {
+            payments.releaseUnpaidForAccountDeletion(o);
+            pendingCancelled++;
+        }
         addresses.deleteByUserId(userId);
         carts.findByUserId(userId).ifPresent(cart -> {
             cartItems.deleteByCartId(cart.getId());
@@ -67,7 +85,7 @@ public class ShopAccountDeletionService {
         int payoutsCleared = returns.clearPayoutPiiByUserId(userId);
         int couponsVoided = couponLedger.voidAllAvailableForUser(userId, Instant.now());
         int notifyLogsDeleted = couponNotifyLog.deleteByUserId(userId);
-        log.info("注销联动电商清理 orders={} payouts={} couponsVoided={} couponNotifyLogs={}",
-                ordersAnonymized, payoutsCleared, couponsVoided, notifyLogsDeleted);
+        log.info("注销联动电商清理 pendingCancelled={} orders={} payouts={} couponsVoided={} couponNotifyLogs={}",
+                pendingCancelled, ordersAnonymized, payoutsCleared, couponsVoided, notifyLogsDeleted);
     }
 }

@@ -22,7 +22,8 @@ public class CheckoutUnavailableException extends AppException implements Proble
     private final transient List<UnavailableLine> lines;
 
     public CheckoutUnavailableException(List<UnavailableLine> lines) {
-        super(HttpStatus.CONFLICT, ErrorTypes.CONFLICT, "部分商品已不可购买，请移除后重试");
+        // v1.4.2 shop Story 3.2（P-5）：type 由 conflict 改为 unavailable-lines；HTTP 409 与扩展成员不变
+        super(HttpStatus.CONFLICT, ErrorTypes.UNAVAILABLE_LINES, "部分商品已不可购买，请移除后重试");
         this.lines = List.copyOf(lines);
     }
 

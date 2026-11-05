@@ -15,6 +15,12 @@ import com.tailtopia.shop.coupon.repository.UserCouponRepository;
 import com.tailtopia.shop.coupon.service.CouponAdminService;
 import com.tailtopia.shop.coupon.service.CouponDraft;
 import com.tailtopia.shop.coupon.service.CouponLedgerService;
+import com.tailtopia.account.domain.AccountDeletion;
+import com.tailtopia.account.repository.AccountDeletionRepository;
+import com.tailtopia.pay.domain.PawCoinTxnType;
+import com.tailtopia.pay.service.PawCoinAccountDeletionService;
+import com.tailtopia.pay.service.PawCoinWalletService;
+import com.tailtopia.shop.order.service.ShopOrderPaymentService;
 import com.tailtopia.shop.service.ShopAccountDeletionService;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Duration;
@@ -35,6 +41,31 @@ class ShopAccountDeletionIntegrationTest extends ApiIntegrationTest {
     @Autowired private UserCouponRepository userCoupons;
     @Autowired private TransactionTemplate tx;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private PawCoinWalletService wallet;
+    @Autowired private PawCoinAccountDeletionService pawCoinDeletion;
+    @Autowired private AccountDeletionRepository accountDeletions;
+    @Autowired private ShopOrderPaymentService payments;
+
+    /** 新结算模式下的待付款单（checkout_source=CART，币段 {@code coin}，提交时已扣）。 */
+    private long pendingNewModeOrder(long uid, long coin, boolean debit) {
+        long n = SEQ.incrementAndGet();
+        String token = "dnm" + n;
+        long id = jdbc.queryForObject("""
+                INSERT INTO shop_orders (public_token, display_no, user_id, status, goods_subtotal,
+                        shipping_fee, shipping_discount, total_amount, pay_channel, coin_amount, cash_amount,
+                        checkout_source, expires_at,
+                        ship_receiver_name, ship_receiver_phone, ship_provinsi,
+                        ship_kota_kabupaten, ship_kecamatan, ship_address_line, ship_kode_pos,
+                        created_at, updated_at)
+                VALUES (?, ?, ?, 'PENDING_PAYMENT', 100000, 0, 0, 100000, 'MIXED', ?, ?, 'CART',
+                        now() - interval '1 minute',
+                        'Budi', '08123', 'DKI', 'Jaksel', 'Kebayoran', 'Jl. 1', '12110', now(), now())
+                RETURNING id""", Long.class, token, "TOKO-DN-" + n % 100_000_000, uid, coin, 100_000L - coin);
+        if (debit) {
+            wallet.debit(uid, coin, PawCoinTxnType.SPEND, "SHOP_ORDER", id, "shop-order:" + token);
+        }
+        return id;
+    }
 
     private UserCoupon issue(long uid, ShopCoupon c) {
         return tx.execute(s -> {
@@ -69,8 +100,42 @@ class ShopAccountDeletionIntegrationTest extends ApiIntegrationTest {
         deletion.deleteByUserId(uid);
 
         assertThat(userCoupons.findById(idle.getId()).orElseThrow().getStatus()).isEqualTo(UserCouponStatus.VOIDED);
-        assertThat(userCoupons.findById(held.getId()).orElseThrow().getStatus()).isEqualTo(UserCouponStatus.LOCKED);
+        // v1.4.2 shop Story 3.2 复审修复（D1/D2）：占用它的是【待付款】单 → 注销先取消该单、券退回 AVAILABLE，
+        // 再随可用券一并作废（原断言 LOCKED 随订单保留，只对已付款订单成立）。
+        assertThat(userCoupons.findById(held.getId()).orElseThrow().getStatus()).isEqualTo(UserCouponStatus.VOIDED);
+        assertThat(jdbc.queryForObject("SELECT status FROM shop_orders WHERE id = ?", String.class, order))
+                .isEqualTo("CANCELLED");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM coupon_expiry_notify_log WHERE user_id = ?",
                 Integer.class, uid)).isZero();
+    }
+
+    @Test
+    void deletionCancelsPendingOrderBeforeCoinForfeitAndLateCancelNeverRecreatesWallet() {
+        long uid = newUser().getId();
+        wallet.credit(uid, 50_000L, PawCoinTxnType.TOPUP, "TEST", null, "del-topup:" + SEQ.incrementAndGet());
+        long first = pendingNewModeOrder(uid, 30_000L, true);
+        assertThat(wallet.balanceOf(uid)).isEqualTo(20_000L);
+
+        // 注销编排的顺序：受理（account_deletions 有行）→ shop 联动 → … → PawCoin 作废
+        accountDeletions.save(AccountDeletion.request(uid));
+        deletion.deleteByUserId(uid);
+        assertThat(jdbc.queryForObject("SELECT status FROM shop_orders WHERE id = ?", String.class, first))
+                .isEqualTo("CANCELLED");
+        assertThat(wallet.balanceOf(uid)).as("币先退回，随后随钱包一并作废").isEqualTo(50_000L);
+        pawCoinDeletion.voidBalanceAndPurge(uid);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pawcoin_wallets WHERE user_id = ?",
+                Integer.class, uid)).isZero();
+
+        // 竞态：注销之后才出现（或漏网）的待付款单被超时扫描关掉 —— 不得重建钱包、不得写退币流水
+        //    （币段视为提交时已扣、钱包已随注销作废，故不再造扣币流水）
+        long late = pendingNewModeOrder(uid, 30_000L, false);
+        payments.cancelOneOverdue(late);
+        assertThat(jdbc.queryForObject("SELECT status FROM shop_orders WHERE id = ?", String.class, late))
+                .isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pawcoin_wallets WHERE user_id = ?",
+                Integer.class, uid)).as("🔴 不给已注销账号重建钱包").isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM pawcoin_transactions WHERE user_id = ? AND ref_type = 'SHOP_ORDER_VOID'
+                """, Integer.class, uid)).isZero();
     }
 }
