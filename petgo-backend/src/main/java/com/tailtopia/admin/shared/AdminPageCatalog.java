@@ -161,6 +161,9 @@ public final class AdminPageCatalog {
                     List.of(CONTENT_PIN_VIEW), List.of(CONTENT_PIN_MANAGE), List.of()).nav("admin.nav.contentPins", "content-pins", CONTENT_PIN_VIEW),
             page("content-tags", G_CONTENT, "/admin/content-tags",
                     List.of(CONTENT_TAG_VIEW), List.of(CONTENT_TAG_MANAGE), List.of()).nav("admin.nav.contentTags", "content-tags", CONTENT_TAG_VIEW),
+            // V1.4.2 Story 6.1 · AB-10B：内容组「内容标签」后插入「话题」（D-18；两码均不预授）
+            page("topics", G_CONTENT, "/admin/topics",
+                    List.of(TOPIC_VIEW), List.of(TOPIC_MANAGE), List.of()).nav("admin.nav.topics", "topics", TOPIC_VIEW),
             page("throttles", G_CONTENT, null,
                     List.of(CONTENT_THROTTLE_VIEW), List.of(CONTENT_THROTTLE_MANAGE), List.of()),
             page("seed-batches", G_CONTENT, "/admin/seed-batches",

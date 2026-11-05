@@ -158,6 +158,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 "/admin/manual-review", "/admin/tickets", "/admin/anomalies", "/admin/support-tickets", "/admin/refunds",
                 // 内容组
                 "/admin/content", "/admin/comments", "/admin/content-pins", "/admin/content-tags",
+                "/admin/topics", // V1.4.2 Story 6.1：「内容标签」之后
                 "/admin/seed-batches", "/admin/seed-post",
                 // 用户组
                 "/admin/users", "/admin/user-tags", "/admin/virtual-accounts");
@@ -266,7 +267,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
      * {@link #everyParameterFreeAdminPageIsInTheBilingualSweep()} 会把漏掉的页点名报出来。
      */
     static final java.util.List<String> SWEPT_PAGES = java.util.List.of("/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
-                "/admin/content-pins", "/admin/content-tags", "/admin/user-tags",
+                "/admin/content-pins", "/admin/content-tags", "/admin/topics", "/admin/user-tags",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 // ⛔ /admin/vets/online 已退役（V1.3.0 Story 9.1a：并入兽医列表与抽屉）。
                 // ⛔ /admin/ratings 已退役（V1.3.0 Story 9.1b：并入兽医列表筛选栏与抽屉评分页签）。

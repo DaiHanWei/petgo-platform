@@ -77,6 +77,13 @@ public final class AdminPermissions {
     public static final String CONTENT_TAG_VIEW = "content.tag_view";
     public static final String CONTENT_TAG_MANAGE = "content.tag_manage";
     /**
+     * 话题管理（V1.4.2 AB-10B · 不预授）。查看 / 编辑分两码 —— 编辑能建官方话题、隐藏 / 禁用话题、
+     * 决定 App 首页话题行放哪些，能看不等于能改。超管隐式拥有，需要时在角色页勾选；不做回填迁移。
+     */
+    public static final String TOPIC_VIEW = "content.topic_view";
+    /** 话题管理编辑（V1.4.2 AB-10B · 不预授）：新建 / 升级 / 编辑 / 隐藏 / 禁用 / 恢复 / 首页话题行。 */
+    public static final String TOPIC_MANAGE = "content.topic_manage";
+    /**
      * 统一工单队列（V1.1.4 Story 3.1，AB-3D）：三类工单一个列表。
      *
      * <p>与 {@link #CONTENT_VIEW_REPORTS}（旧的举报队列）分开一个码，是因为统一视图里还有
@@ -353,7 +360,7 @@ public final class AdminPermissions {
     @Deprecated
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
-                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
+                    CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW, TOPIC_VIEW,
                     USER_VIEW, USER_TAG_VIEW, USER_PHONE_VIEW, USER_PHONE_EXPORT,
                     CONTENT_LIST_EXPORT, CONTENT_THROTTLE_VIEW,
                     VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
@@ -368,7 +375,7 @@ public final class AdminPermissions {
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
-                    CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE,
+                    CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE, TOPIC_MANAGE,
                     USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST, USER_TAG_MANAGE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,

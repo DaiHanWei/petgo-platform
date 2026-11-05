@@ -73,6 +73,20 @@ public interface ContentPinRepository extends JpaRepository<ContentPin, Long> {
     int terminateByContent(@Param("contentId") long contentId, @Param("at") Instant at);
 
     /**
+     * 话题禁用联动（V1.4.2 Story 6.1 · AC6.2 · D-6）：把该坑位（{@code ContentPin.topicSlot(id)}）上
+     * 所有尚未结束的排期提前结束 —— 生效中与排期中都结束（恢复话题后不自动重新上线）。
+     * 与 {@link #terminateByContent} 同一套幂等守卫。
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update ContentPin p set p.terminatedAt = :at, p.updatedAt = :at
+             where p.slot = :slot
+               and p.terminatedAt is null
+               and p.endsAt > :at
+            """)
+    int terminateBySlot(@Param("slot") String slot, @Param("at") Instant at);
+
+    /**
      * 注销联动：某作者名下内容全部不再可展示时，一并结束引用它们的排期。
      *
      * <p>⚠️ 注销走的是**批量隐藏**（内容不软删、无逐条 id），拿不到可发事件的粒度，

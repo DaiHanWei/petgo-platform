@@ -303,6 +303,27 @@ public final class AuditActions {
     /** 编辑 SKU 批发价（门店进货价）。摘要记新旧值 —— 批发价门店本就看得到，不属于进货价那类敏感字段。 */
     public static final String SHOP_SKU_WHOLESALE_UPDATED = "SHOP_SKU_WHOLESALE_UPDATED";
 
+    // ===== 话题管理（V1.4.2 social-topic Story 6.1，AB-10B）=====
+    // target = {@code topic} / topicId；summary 只记标准名、状态变化、序号，不记说明全文。
+    /** 后台新建官方话题。 */
+    public static final String TOPIC_CREATED = "TOPIC_CREATED";
+    /** 同名用户话题升级为官方话题（帖子关联不动、状态不变，R-5）。 */
+    public static final String TOPIC_UPGRADED = "TOPIC_UPGRADED";
+    /** 编辑话题（显示写法只改大小写 / 官方话题说明）。 */
+    public static final String TOPIC_UPDATED = "TOPIC_UPDATED";
+    /** 隐藏话题（在首页话题行时一并移出）。 */
+    public static final String TOPIC_HIDDEN = "TOPIC_HIDDEN";
+    /** 禁用话题（移出首页话题行 + 结束话题页坑位全部未结束排期）。 */
+    public static final String TOPIC_DISABLED = "TOPIC_DISABLED";
+    /** 恢复为正常（隐藏 / 禁用 → ACTIVE；首页话题行位置与顶置不恢复）。 */
+    public static final String TOPIC_RESTORED = "TOPIC_RESTORED";
+    /** 放入首页话题行（排到最后）。 */
+    public static final String TOPIC_FEATURED = "TOPIC_FEATURED";
+    /** 移出首页话题行（后面的前移）。 */
+    public static final String TOPIC_UNFEATURED = "TOPIC_UNFEATURED";
+    /** 改首页话题行序号（与原占该位的话题互换）。 */
+    public static final String TOPIC_FEATURE_REORDERED = "TOPIC_FEATURE_REORDERED";
+
     private AuditActions() {
     }
 }

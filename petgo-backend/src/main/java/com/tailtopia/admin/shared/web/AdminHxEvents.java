@@ -32,6 +32,12 @@ public final class AdminHxEvents {
     public static final String TAG_LIST_REFRESH = "admin:tag-list-refresh";
 
     /**
+     * F 屏话题管理：列表按当前筛选 + 当前页重拉（V1.4.2 Story 6.1；新建 / 编辑 / 隐藏 / 禁用 / 恢复都发它，
+     * 新建成功带载荷 {@code {"focus":<id>}} —— 列表翻到新行所在页并高亮）。
+     */
+    public static final String TOPIC_LIST_REFRESH = "admin:topic-list-refresh";
+
+    /**
      * B8 用户标签：列表整表重拉（Story 8.2）。
      *
      * <p>⚠️ 与 {@link #TAG_LIST_REFRESH} **刻意分开**，尽管两页永远不会同时打开：

@@ -62,7 +62,9 @@ class AdminRoleTest {
                     // V1.4.0 ③ AB-35：礼物目录两码不预授（超管隐式拥有）
                     .doesNotContain(AdminPermissions.GIFT_CATALOG_VIEW, AdminPermissions.GIFT_CATALOG_EDIT)
                     // V1.4.0 ③ AB-36：送礼记录查看码不预授（超管隐式拥有）
-                    .doesNotContain(AdminPermissions.GIFT_ORDER_VIEW);
+                    .doesNotContain(AdminPermissions.GIFT_ORDER_VIEW)
+                    // V1.4.2 social-topic Story 6.1（D-18）：话题管理两码不预授（超管隐式拥有）
+                    .doesNotContain(AdminPermissions.TOPIC_VIEW, AdminPermissions.TOPIC_MANAGE);
         }
     }
 

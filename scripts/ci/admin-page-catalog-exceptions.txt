@@ -23,6 +23,7 @@
 # ---- 选择器（弹层里用的候选列表，没有导航入口）----
 /admin/content-pins/pick   # 置顶管理的内容选择器
 /admin/content-tags/pick   # 内容标签的内容选择器
+/admin/topics/name-check   # 话题管理新建抽屉的名称查重片段（V1.4.2 Story 6.1 · F3 黄条），页面是 /admin/topics；门 = content.topic_manage
 /admin/user-tags/pick   # 用户标签的用户选择器
 /admin/seed-post/pets   # 种子发布的宠物选择器
 /admin/ops-notifications/new   # 系统通知发送的四步新建页（V1.3.4 AB-31），从列表「＋ 新建通知」进，侧栏仍归 /admin/ops-notifications；门 = ops_notify.send

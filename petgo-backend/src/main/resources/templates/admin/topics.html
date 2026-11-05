@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  话题管理（V1.4.2 social-topic · Story 6.1 · AB-10B，UI 稿 F1–F9）。模板 B · tpl-b-list，res='topic'。
+  骨架同「内容标签」「顶置管理」：标题行（h1 + 右上「＋ 新建话题」）→ 灰色说明 → 筛选栏 → 摘要条 → 表格 → 分页 → #admin-inline-error。
+  🛡 页面内写按钮的 sec:authorize 必须与 AdminTopicController.MANAGE 逐字一致；侧栏由 AdminPageCatalog.navCodes 驱动，不在这里写。
+  列表刷新（新建 / 编辑 / 状态 / 首页话题行）由 admin-topics.js 监听 admin:topic-list-refresh，
+  按当前筛选 + 当前页（新建时带 focus=新行 id）重拉 #topics-rows —— htmx 1.9 的 hx-vals 拿不到事件载荷，故不用隐形 span。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.topics.title}">话题 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+    <script defer th:src="@{/admin/admin-topics.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='topic'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.topics.title}">话题</h1>
+            <button type="button" class="btn btn-primary btn-sm"
+                    th:attr="data-drawer-open=@{/admin/topics/new/drawer},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    data-drawer-res="topic"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.topic_manage')"
+                    th:text="#{admin.topics.btn.new}">＋ 新建话题</button>
+        </div>
+        <p class="muted" th:text="#{admin.topics.subtitle}">管理用户在帖子里用 # 创建的话题和官方话题。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::topic-filters}, ~{::topic-summary}, ~{::topic-table}, ~{::topic-drawer})}">
+            <form th:fragment="topic-filters" class="filter-bar" data-autosubmit data-topic-filters
+                  th:action="@{/admin/topics}" method="get"
+                  th:attr="hx-get=@{/admin/topics}" hx-target="#topics-rows" hx-swap="innerHTML" hx-push-url="true">
+                <label class="field">
+                    <span th:text="#{admin.content.col.type}">类型</span>
+                    <select name="type" class="sel">
+                        <option value="" th:text="#{admin.content.type.all}">全部类型</option>
+                        <option value="OFFICIAL" th:selected="${type == 'OFFICIAL'}" th:text="#{admin.topics.type.OFFICIAL}">官方</option>
+                        <option value="USER" th:selected="${type == 'USER'}" th:text="#{admin.common.user}">用户</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.common.status}">状态</span>
+                    <select name="status" class="sel">
+                        <option value="" th:text="#{admin.content.status.all}">全部状态</option>
+                        <option value="ACTIVE" th:selected="${status == 'ACTIVE'}" th:text="#{admin.topics.status.ACTIVE}">正常</option>
+                        <option value="HIDDEN" th:selected="${status == 'HIDDEN'}" th:text="#{admin.topics.status.HIDDEN}">隐藏</option>
+                        <option value="DISABLED" th:selected="${status == 'DISABLED'}" th:text="#{admin.common.disabled}">禁用</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.users.search}">搜索</span>
+                    <input type="search" name="q" class="inp" th:value="${q}" maxlength="40"
+                           th:placeholder="#{admin.topics.searchPlaceholder}" placeholder="话题名" style="width:220px"/>
+                </label>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.users.search}">搜索</button>
+            </form>
+
+            <div th:fragment="topic-summary" th:replace="~{admin/fragments/topics-list :: sumbar(oob=false)}"></div>
+
+            <div th:fragment="topic-table" id="topics-rows">
+                <div th:replace="~{admin/fragments/topics-list :: rows(oob=false)}"></div>
+            </div>
+
+            <div th:fragment="topic-drawer" class="drawer-title" th:text="#{admin.topics.drawer.title}">话题详情</div>
+        </div>
+
+        <!--/* ?open=<id> 跨页深链兜底（同内容标签 / 顶置管理） */-->
+        <span hidden th:if="${open != null}" data-drawer-res="topic"
+              th:attr="data-drawer-deeplink=@{/admin/topics/{id}/drawer(id=${open})}"></span>
+    </div>
+</div>
+</body>
+</html>

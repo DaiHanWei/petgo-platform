@@ -174,6 +174,16 @@ public class ContentPinService {
         return pins.terminateByContent(contentId, at);
     }
 
+    /**
+     * 话题禁用联动（V1.4.2 Story 6.1 · D-6）：结束该坑位全部未结束排期（生效中 + 排期中，幂等）。
+     *
+     * @return 本次真正被结束的条数
+     */
+    @Transactional
+    public int terminateForSlot(String slot, Instant at) {
+        return pins.terminateBySlot(slot, at);
+    }
+
     /** 注销联动：某作者名下内容整体不再可展示时一并收手。 */
     @Transactional
     public int terminateForAuthor(long authorId, Instant at) {
