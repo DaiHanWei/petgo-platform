@@ -54,9 +54,14 @@ import 'widgets/shop_pressable.dart';
 import 'widgets/shop_surface.dart';
 
 class ShopOrderDetailPageV2 extends ConsumerStatefulWidget {
-  const ShopOrderDetailPageV2({super.key, required this.orderToken});
+  const ShopOrderDetailPageV2({super.key, required this.orderToken, this.autoPay = false});
 
   final String orderToken;
+
+  /// v1.4.2 shop Story 7.1：结算页提交需扫码单后 `?autopay=1` 进来 → 首次拿到订单数据后自动执行一次
+  /// 现有 [_ShopOrderDetailPageV2State._pay]（现有面板、轮询与四态分派原样）。订单已非待付款 / 已过期不触发。
+  /// 9.1 换 v3 时须保留同等能力。
+  final bool autoPay;
 
   @override
   ConsumerState<ShopOrderDetailPageV2> createState() => _ShopOrderDetailPageV2State();
@@ -74,10 +79,32 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
   /// 倒计时归零后只刷新一次 —— 归零时刻页面还在，得让服务端告诉我们它真的关单了。
   bool _refreshedOnExpiry = false;
 
+  /// autoPay 只触发一次（防重入）。
+  bool _autoPayDone = false;
+
   @override
   void initState() {
     super.initState();
     Analytics.capture('toko_order_detail_viewed');
+    if (widget.autoPay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _payWhenLoaded());
+    }
+  }
+
+  Future<void> _payWhenLoaded() async {
+    if (_autoPayDone || !mounted) return;
+    _autoPayDone = true;
+    final ShopOrderDetail order;
+    try {
+      order = await ref.read(shopOrderDetailProvider(widget.orderToken).future);
+    } catch (_) {
+      return; // 详情加载失败由页面自己的重试态承接
+    }
+    if (!mounted || _busy) return;
+    final expiresAt = order.expiresAt;
+    final expired = expiresAt != null && !expiresAt.isAfter(DateTime.now().toUtc());
+    if (!order.status.isPendingPayment || expired) return;
+    await _pay(AppLocalizations.of(context), order);
   }
 
   @override

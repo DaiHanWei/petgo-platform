@@ -28,10 +28,12 @@ import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
 import '../../features/shop/presentation/shop_search_page.dart';
 import '../../features/shop/presentation/cart_page_v2.dart';
-import '../../features/shop/presentation/checkout_page_v2.dart';
+import '../../features/shop/domain/checkout_preview.dart' show CheckoutSource;
+import '../../features/shop/presentation/checkout_page_v3.dart';
 import '../../features/shop/presentation/product_detail_page_v2.dart';
 import '../../features/shop/presentation/shop_return_unavailable_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
+import '../../features/shop/presentation/shop_pay_success_page.dart';
 import '../../features/shop/presentation/toko_page_v2.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
@@ -699,17 +701,36 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
       //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
+      //    v1.4.2 shop Story 7.1：换一页结算 v3。`?source=buy_now&sku=<skuToken>&qty=<n>` → 立即购买；
+      //    无参数 / `source=cart` → 购物车。buy_now 参数不合法时页面自己给失败态（不退化成 CART）。
       GoRoute(
         path: '/shop/checkout',
-        builder: (c, s) => const CheckoutPageV2(),
+        builder: (c, s) {
+          final q = s.uri.queryParameters;
+          if (q['source'] == 'buy_now') {
+            return CheckoutPageV3(
+              source: CheckoutSource.buyNow,
+              buyNowSkuToken: q['sku'],
+              buyNowQty: int.tryParse(q['qty'] ?? '') ?? 0,
+            );
+          }
+          return const CheckoutPageV3();
+        },
       ),
       // 电商订单详情（Story 3.8）。token 寻址（不可枚举）；越权与不存在同为后端 404。
       GoRoute(
         path: '/shop/orders/:token',
         builder: (c, s) {
           final token = s.pathParameters['token']!;
-          return ShopOrderDetailPageV2(orderToken: token);
+          // v1.4.2 shop Story 7.1：结算页提交需扫码单 → `?autopay=1` 首帧自动拉起支付面板
+          return ShopOrderDetailPageV2(
+              orderToken: token, autoPay: s.uri.queryParameters['autopay'] == '1');
         },
+      ),
+      // 支付成功页（v1.4.2 shop Story 7.1 · E6）：纯币 / 零元单提交即结清直达；7.2 接 QRIS 到账。
+      GoRoute(
+        path: '/shop/orders/:token/paid',
+        builder: (c, s) => ShopPaySuccessPage(orderToken: s.pathParameters['token']!),
       ),
       // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
       // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。

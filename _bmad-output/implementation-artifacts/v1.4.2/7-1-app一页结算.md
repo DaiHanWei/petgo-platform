@@ -1,6 +1,6 @@
 # Story 7.1: 一页结算（App，D1–D18）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`（从 `dev_1.4.2` 切出，全线 25 story 同一分支串行）
 > 口径优先级：`决策日志-shop.md`（S-0 ~ S-9）> PRD `电商/1-4-2电商prd.md`（§3.0 旅程 B / C、§3.2 FR-128、§3.4 FR-130、§3.5 FR-131、§3.10 FR-172、§4、§6 D 组）> `architecture-v1.4.2-shop-delta.md`（D-7、D-8、D-9、D-23、P-1、P-4、P-5、P-9、P-10、P-12）> UI 定稿 `电商/ui-1-4-2-shop-integrated-v1.html` D1–D18 每屏说明（数值照说明，**不从截图量像素**）；跨 story 契约以 `CROSS-STORY-DECISIONS.md` 为准；云端执行以 `cloud-rules-shop.md` 为准。
@@ -22,6 +22,17 @@ I want 在一个页面完成地址、快递、券、PawCoin 的选择并提交,
 so that 提交后马上就能付款。
 
 ## 接口契约（计划名，来自 3.1 / 3.2 / 1.2 / 2.1；**开工前对照前面 story 实际提交的 DTO 核对**，有出入先改本文件并在 Completion Notes 记一句，不改后端已提交的契约）
+
+> ✅ **T0 已对照后端实际代码对齐（2026-11-05，dev 7.1）**：以下「计划名」与 3.1 / 3.2 实际提交的 DTO 有出入，**以本框为准**（App 按此实现，后端契约未改）：
+> - 试算响应 = `CheckoutQuoteView`：`couriers[]` 的服务码字段名是 **`serviceCode`**（非 `courierServiceCode`），另有 **`cheapest`** 布尔；顶层有 **`insuranceAvailable`**（所选快递是否支持保价）与 `insurance`。
+> - **没有独立的 `unavailableLines[]`**：失效行与有效行同在 `lines[]`（`QuoteLine`），失效行带 `unavailableReason ∈ DELISTED|OUT_OF_STOCK|INSUFFICIENT_STOCK|NOT_SELLABLE` 与 `availableStock`；App 解析时拆成 `lines` / `unavailableLines`。
+> - `pricing`（`PricingView`）：`shippingFee` / `shippingDiscount` 无报价时为 null；`payable / coinAmount / cashAmount` **始终下发**但 `shippingIncluded=false` 时不含运费 → App 以 `shippingIncluded ∧ quoteToken≠null` 判「金额位可展示」，否则一律「—」。`shippingDiscount` 为正数。
+> - 券分组为 **`coupons.discount` / `coupons.freeShipping`**，每组 `{selectedToken, available[], unavailable[]}`；`selectedToken` = 计价器**实际采用**值（手选但减免为 0 / 输给满额免运 → null，App 写「Tidak dipakai」）。券项字段：`userCouponToken, couponToken, kind, nameId, nameEn, amount, minSpend, validUntil, expiringSoon, deduction, unavailableReason`（名称分 `nameId` / `nameEn`；原因多一个 **`UNAVAILABLE`** = 手选券被占用 / 已失效，App 按「不显示原因」处理）。
+> - PawCoin 在 **`coin {balance, cap, enabled, useCoin, capReached}`**（非顶层 `coinBalance` / `coinCap`）。
+> - 阻断原因字段名 **`notPlaceableReason`** + `placeable` 布尔，取值 **`NO_LINES | UNAVAILABLE_LINES | NO_ADDRESS | NOT_SERVICEABLE | QUOTE_FAILED`**（比计划多 `NO_LINES`、`UNAVAILABLE_LINES`）。退货政策 `strictestReturnPolicy`（与 `returnPolicyCopyKey` 同值）。
+> - 下单成功 `ShopOrderView` 多 **`paid`** 布尔（已离开待付款且非取消）→ App 以 `paid`（兼容回落：状态非 `PENDING_PAYMENT` / `CANCELLED`）判「直达 E6」；纯 QRIS 单 `cashAmount` 为 null，不能用 `cashAmount==0` 判。
+> - 下单失败另有 409 `conflict`（`Idempotency-Key` 并发抢占「订单正在提交中」）→ 归 `generic` toast；App 在同一份试算结果内复用幂等键，重点提交取回同一张单。
+> - 立即购买请求体 `buyNow {skuToken, qty, entrySource?}`；App 不传 `entrySource`（无来源可带，8.2 再接）。
 
 **试算** `POST /api/v1/me/checkout/preview`（只读；D-8）
 - 请求：`{source: "CART"|"BUY_NOW", buyNow?: {skuToken, qty}, addressToken?, courierKey?, insurance: bool, discountCouponToken?, freeShippingCouponToken?, couponMode: "AUTO"|"MANUAL", useCoin: bool}`。
@@ -130,14 +141,14 @@ so that 提交后马上就能付款。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**（cloud-rules 第 0 步 + 「story 文件是提前写的」条）：对照 3.1 / 3.2 / 1.2 / 2.1 已提交代码核对「接口契约」字段名与 ProblemDetail `type`；有出入先改本文件
-- [ ] **T1 数据层**（AC2）：`api_paths.dart` 加 `meCheckoutPreview`；`checkout_repository.dart` 重写 preview / placeOrder / `CheckoutFailure`；`domain/checkout_preview.dart` 新模型；`domain/free_shipping_progress.dart`；`ShippingAddress.serviceable`
-- [ ] **T2 地址表单抽组件**（AC4.6）：`address_form_body.dart`；`AddressFormPageV2` 改为包装；跑 `test/shop/address/*` 确认不变
-- [ ] **T3 页面骨架**（AC1、AC3、AC8、AC9）：`checkout_page_v3.dart`（配送卡 / 商品折叠 / 优惠卡 / 支付方式 / 金额明细 / 同意 / 底栏）；删 v2；改路由
-- [ ] **T4 抽屉**（AC4.4-4.5、AC5.2、AC6）：地址抽屉、新增地址抽屉、快递抽屉、券抽屉；`coupon/presentation/coupon_card.dart`
-- [ ] **T5 提交与分流**（AC10、AC11）：失败分派；`ShopOrderDetailPageV2(autoPay:)` + 路由 `autopay=1`；`shop_pay_success_page.dart` + 路由 `/shop/orders/:token/paid`
-- [ ] **T6 埋点与文案**（AC12、AC13）：arb 两份 + `flutter gen-l10n`
-- [ ] **T7 测试**（见「测试」）+ `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**（cloud-rules 第 0 步 + 「story 文件是提前写的」条）：对照 3.1 / 3.2 / 1.2 / 2.1 已提交代码核对「接口契约」字段名与 ProblemDetail `type`；有出入先改本文件
+- [x] **T1 数据层**（AC2）：`api_paths.dart` 加 `meCheckoutPreview`；`checkout_repository.dart` 重写 preview / placeOrder / `CheckoutFailure`；`domain/checkout_preview.dart` 新模型；`domain/free_shipping_progress.dart`；`ShippingAddress.serviceable`
+- [x] **T2 地址表单抽组件**（AC4.6）：`address_form_body.dart`；`AddressFormPageV2` 改为包装；跑 `test/shop/address/*` 确认不变
+- [x] **T3 页面骨架**（AC1、AC3、AC8、AC9）：`checkout_page_v3.dart`（配送卡 / 商品折叠 / 优惠卡 / 支付方式 / 金额明细 / 同意 / 底栏）；删 v2；改路由
+- [x] **T4 抽屉**（AC4.4-4.5、AC5.2、AC6）：地址抽屉、新增地址抽屉、快递抽屉、券抽屉；`coupon/presentation/coupon_card.dart`
+- [x] **T5 提交与分流**（AC10、AC11）：失败分派；`ShopOrderDetailPageV2(autoPay:)` + 路由 `autopay=1`；`shop_pay_success_page.dart` + 路由 `/shop/orders/:token/paid`
+- [x] **T6 埋点与文案**（AC12、AC13）：arb 两份 + `flutter gen-l10n`
+- [x] **T7 测试**（见「测试」）+ `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -335,14 +346,81 @@ v2 独有、新页不再引用的 key（如 `checkoutQrisRemainder`、`checkoutP
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless，bmad-dev-story 流程，只到 L0。
+
 ### Debug Log References
+
+- 开工前 `flutter gen-l10n` + `flutter analyze` 基线 No issues found。
+- 首次全量 `flutter test`：唯一失败 `test/shop/epic1_analytics_test.dart`「shop 模块所有埋点属性名」白名单（**按设计打破**：本 story 新增 6 个埋点属性），已逐个确认非 PII 后扩白名单（见该测试注释），不删不 skip。
+- 页面测试里 `Row` 在 Ahem 字体下溢出两处（长文案值列 / 1.3 倍字号底栏按钮固定高度）→ 值列限宽换行、按钮改 `minHeight: 48`。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC3–AC11 的 `[L2]` 逐屏还原度（D1–D18 + E6，≥95%，Android 模拟器）；Dev Notes「测试」L1 段全部（stub 两家报价下 D1 默认最便宜 / 切快递保价行显隐、造券验证默认最优与 D12、币余额 > 上限验证 D13、纯币下单直达 E6 且余额即时减少、需扫码单落订单详情并自动弹面板）。L0 测试类全部绿（见下）。
+- **T0 名字对齐**：「接口契约」节顶部新增「✅ T0 已对照后端实际代码对齐」框，记录 9 处与 3.1 / 3.2 实际 DTO 的出入（`serviceCode`、`cheapest`、`insuranceAvailable`、失效行在 `lines[]` 内、`coupons.discount/freeShipping` 分组与 `selectedToken`、`nameId/nameEn`、`coin{…}`、`notPlaceableReason` 取值、`ShopOrderView.paid`、409 `conflict`）。后端契约未改。
+- **拍板点复述**（按建议实现）：① 需扫码单「提交 → `/shop/orders/{token}?autopay=1` → 订单详情首帧自动执行现有 `_pay`」，结算页不复制四态分派；② E6 支付成功页在本 story 落地（`/shop/orders/:token/paid`），7.2 复用；③ 立即购买遇 `unavailable-lines` 只给「Batal」并 `pop` 回详情；④ 免运进度只画「再买 X」一行，达标不另画。
+- **前序注意事项落实**：
+  - 3.1 失效行：试算 `notPlaceableReason=UNAVAILABLE_LINES` 时页内画「失效商品」卡逐行列出（复用 `checkoutUnavailableTitle / Stock / Delisted`），CART 给「Hapus & lanjut」逐行 `cartProvider.remove` 后重型重算；BUY_NOW 不给移除按钮。提交按钮在 `placeable=false` 时不可点。
+  - MANUAL 手选减免为 0 的券：以服务端 `selectedToken` 为准，未采用写「Tidak dipakai」，下次请求也带 null，不让用户以为已用券。
+  - 共用支付面板 `qr_payment_sheet.dart` **未改**；订单详情只加可选 `autoPay`（默认 false，既有调用点行为不变，`shop_order_detail_page_v2_test` 新增「默认不触发」用例证明）。`showShopConfirm` 的 `confirmLabel` 改为可选（null = 只给取消），既有四处调用方均传值、行为不变。
+  - App 不自算金额：页面只搬运 `pricing` 字段；测试用一组「互相对不上」的数证明未做加减。
+- **其他实现说明**：
+  - 默认地址：首次试算不带 `addressToken`，由服务端取默认地址（无默认取第一条，同 AC4.1 口径），以响应 `address.token` 作为本单选择；页内换地址只改本单状态，不调设默认。
+  - 「最后一次胜出」：自增序号丢弃过期响应；重型试算（首次 / 换地址 / 新增地址 / 移除商品 / 询价失败重试）清金额位、快递区「Menghitung ongkir…」；轻量重算（快递 / 保价 / 券 / 币 / D17 / quote-expired）保留上次金额只禁用提交。
+  - 幂等键：每份试算结果一把，新结果到达即作废；失败重试复用同一把（测试钉住）。单落库后 `_placed` 永不放开按钮；CART 购物车刷新 `unawaited` 且吞错。
+  - 新增 `ShopCard`（`shop_surface.dart`，不改 `ShopSection`）、`ShopColors.saving / savingBg`（别名回 `AppColors.momenBadgeText / momenBadgeBg`，不自造色）。
+  - 埋点：`toko_checkout_page_viewed{entry}`；`toko_order_submitted` 追加 `coupon_ids`（模板 `couponToken`）/ `coin_used` / `courier`（`{courierCode}_{serviceCode}` 小写）/ `shipping_fee` / `insurance`；纯币直达时 `toko_order_payment_succeeded{pay_channel: PAWCOIN}`（`ShopOrderRef` 无 `attribution_source`，按 AC 整键不放）。无新事件名。
+  - 文案：表内 59 个新 key EN / ID 两份 arb 同加；`checkoutCoinCapped`、`checkoutServiceAreaTitle` 改值；复用 key 原文未改；v2 独有旧 key 未删（9.4 统一清理）。
+- **L0 结果**：`flutter analyze` No issues found（与基线一致）；`flutter test` 全量 **+4551 ~3（既有 skip）-0，All tests passed**（复审修复后重跑）（本 story 相关：`checkout_page_v3_test` 61、`checkout_repository_test` 17、`shop_pay_success_page_test` 7、`address_form_body_test` 1、`shop_order_detail_page_v2_test` +3、`test/shop/address/*` 原用例不改全绿、`epic1/epic3_analytics_test`、`v112_events_test`、`microcopy_rules_test` 绿）。
+
+#### 复审修复（2026-11-05，协调者复审 4 条）
+
+1. **[中·资金] 试算失败不回滚选择**：新增「最近一次成功试算的选择」快照（`_committed`，record 结构相等）。任何试算失败（轻量 / 重型）都把地址 / 快递 / 保价 / 券模式 / 两张券 / 币开关**整体回滚**到快照，UI 与下一次请求、提交体一致；提交按钮另加「当前选择 == 快照」条件（当前选择尚未拿到成功试算期间不可提交）。测试：币开关失败后回到「开」且提交体 `useCoin=true`；保价 / 券 / 快递同样回滚。
+2. **[中·资金] 提交期间改选择 / 幂等键作废**：`_locked = _submitting ∨ _placed` 期间地址 / 快递 / 保价 / 券 / 币开关 / 同意位 / 询价重试 / 失效行移除全部不响应（抽屉入口在入口与回调两处都判）。`CheckoutFailure` 新增 `outcomeUnknown`（无响应超时断网、5xx、409 `conflict`）；结果不明确（含非 HTTP 异常）时钉住当前 `Idempotency-Key`，拿到明确结果（成功或明确业务错误）前新试算不作废键。测试：提交中各交互无效；不明确失败 → 改选择 → 再提交仍同一把键；明确业务错误 → 新试算换键；repository 四条 `outcomeUnknown` 判定。
+3. **[低] 已结清分支埋点**：`toko_order_payment_succeeded.pay_channel` 改取 `ShopOrderRef.payChannel`，缺失回落 `PAWCOIN`（测试：缺失 → PAWCOIN；`QRIS` 零元单 → QRIS）。
+4. **[低] BUY_NOW 参数非法失败态**：按钮从 `commonRetry`（行为却是 pop）改为复用已有 `shopOrderCancelConfirmNo`（ID「Kembali」/ EN「Go back」，未新增 key）；`canPop` 兜底，不能 pop（深链直达）则 `go('/shop')`。测试两条。
+
 #### 待确认
 
+1. **立即购买的归因**：`QuoteLine` 不带 `entrySource / triggerType`（旧 `GET /me/checkout` 的行带），新页 `toko_order_submitted.items[].entry_source` 恒为 `unknown`、`trigger_type` 恒为 `none`（服务端行级归因不受影响，以服务端为准）。若看板需要端上这份互校数据，需后端在 `QuoteLine` 追加两字段（App 解析已兼容）。
+2. **快递时效文本**（原待确认 3）：后端 `etaText` 取 Biteship `durationRange`（形如 `2 - 4`），缺失时回落 `durationText`（可能含单位）。App：纯数字区间 → 抽屉「Estimasi {n} hari」；含其他字符原样显示；配送卡快递行按 UI「{courierName} {serviceName} · {etaText}」直接显示原值。单位若非「天」需后端确认。
+3. **D13 判据**：同时认服务端 `coin.capReached` 与 `balance > cap`（AC7.2 原文），二者任一为真且开关开即提醒。
+4. **零元单（C-4，满减 + 免运券抵光）支付方式卡 QRIS 行**：`cashAmount == 0` 且未用币时按 D15 规则画「Bayar penuh lewat QRIS · Rp 0」——金额是服务端真值，但「全额 QRIS 付 Rp 0」读起来别扭；底栏无次行。是否改为「无需付款」类文案需设计确认（PRD §6 无此文案，本 story 不自造）。
+5. 原「待确认」1、2、4–7 维持 story 原文（文案未补入 §6 的按 §6 只用「Termurah / Tanpa asuransi」、币额只显数字、券面有效期复用 `qrPaySavedValidUntil`、免运券只显封顶金额、`coin_used` 取 bool）。
+
+#### 待设计确认
+
+- PRD §6 未列、UI 稿有的文字均**未加**（同原待确认 1）：「Termurah dari N kurir」「Pilihan kamu」「· dipakai Rp X」「Diskon / Ongkir 小标签」「Ongkir Maks.」「s/d」日期格式。
+- 结算页免运进度行位置（优惠卡底部）。
+
 ### File List
+
+前端（`petgo_app/`）
+- 新增 `lib/features/shop/presentation/checkout_page_v3.dart`
+- 新增 `lib/features/shop/presentation/shop_pay_success_page.dart`
+- 新增 `lib/features/shop/presentation/widgets/checkout_sheets.dart`
+- 新增 `lib/features/shop/coupon/presentation/coupon_card.dart`
+- 新增 `lib/features/shop/coupon/presentation/coupon_picker_sheet.dart`
+- 新增 `lib/features/shop/address/presentation/address_form_body.dart`
+- 新增 `lib/features/shop/domain/free_shipping_progress.dart`
+- 删除 `lib/features/shop/presentation/checkout_page_v2.dart`
+- 修改 `lib/features/shop/domain/checkout_preview.dart`（重写 `CheckoutPreview`，新增 `CourierOption / CheckoutPricing / CouponOption / CouponGroup / CheckoutAddress / CheckoutBlockReason / CouponUnavailableReason / CheckoutSource / CheckoutRequest / PlaceOrderRequest`；保留 `CheckoutLine / UnavailableLine / ShopOrderRef`，后者加 `paid / settled`）
+- 修改 `lib/features/shop/data/checkout_repository.dart`（POST 试算、新请求体下单、`CheckoutFailure` 按 typeSlug + `outcomeUnknown`；删 `checkoutPreviewProvider`）
+- 修改 `lib/features/shop/address/domain/shipping_address.dart`（`serviceable`）
+- 修改 `lib/features/shop/address/presentation/address_form_page_v2.dart`（改为包装 `AddressFormBody`）
+- 修改 `lib/features/shop/presentation/shop_order_detail_page_v2.dart`（`autoPay`）
+- 修改 `lib/features/shop/presentation/widgets/shop_surface.dart`（`ShopCard`）
+- 修改 `lib/features/shop/presentation/widgets/shop_dialog.dart`（`confirmLabel` 可选）
+- 修改 `lib/core/theme/shop_tokens.dart`（`saving / savingBg`）
+- 修改 `lib/core/network/api_paths.dart`（`meCheckoutPreview`）
+- 修改 `lib/core/router/app_router.dart`（`/shop/checkout` → v3 + query；`/shop/orders/:token` 读 `autopay`；新增 `/shop/orders/:token/paid`）
+- 修改 `lib/l10n/app_id.arb`、`lib/l10n/app_en.arb`
+- 测试：新增 `test/shop/checkout_page_v3_test.dart`、`test/shop/checkout_repository_test.dart`、`test/shop/shop_pay_success_page_test.dart`、`test/shop/address/address_form_body_test.dart`、`test/shop/address/fill_address_form.dart`（辅助）；删除 `test/shop/checkout_page_v2_test.dart`（用例迁入 v3）；修改 `test/shop/shop_order_detail_page_v2_test.dart`（+autoPay 组）、`test/shop/epic1_analytics_test.dart`（属性白名单 +6）
+
+后端 / 迁移：无。
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev），依据决策日志 S-0 ~ S-9、PRD §6、架构增量、UI 定稿与 `dev_1.4.2` @ 2c507755 代码现状。
+- 2026-11-05：dev 7.1 实现（App 一页结算 D1–D18 + E6），T0 对齐后端实际 DTO（见「接口契约」顶部框），L0 绿，Status → review；L1/L2 待本地验收。
+- 2026-11-05：复审修复 4 条（选择回滚 / 提交中锁交互与幂等键钉住 / 已结清 pay_channel / BUY_NOW 失败态返回），见 Completion Notes「复审修复」。

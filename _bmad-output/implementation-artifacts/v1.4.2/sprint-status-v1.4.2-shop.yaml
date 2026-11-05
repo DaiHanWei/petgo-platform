@@ -77,8 +77,8 @@ development_status:
   6-2-电商订单列表详情扩展与复购下线: review
   epic-6-retrospective: optional
 
-  epic-7: backlog
-  7-1-app一页结算: ready-for-dev
+  epic-7: in-progress
+  7-1-app一页结算: review
   7-2-app支付面板与支付结果: ready-for-dev
   epic-7-retrospective: optional
 

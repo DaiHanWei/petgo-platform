@@ -501,6 +501,10 @@ class ApiPaths {
   /// 🔒 结算试算（Story 3.7）。`?addressToken=`；超服务范围回 `serviceable=false` 而非报错。
   static const String meCheckout = '$base/me/checkout';
 
+  /// 🔒 新结算试算（v1.4.2 shop Story 3.1 / App 7.1）。POST 只因参数多，语义只读：
+  /// 多快递、券、PawCoin 自选、保价。不可下单不是错误，回 `placeable=false` + `notPlaceableReason`。
+  static const String meCheckoutPreview = '$base/me/checkout/preview';
+
   /// 🔒 电商下单（Story 3.7）。409 带 `unavailableLines` 逐行明细（FR-95，不整单打回）。
   /// Story 3.8 追加：`/{token}` 详情 · `/{token}/pay` 发起支付 · `/{token}/cancel` 取消。
   static const String meShopOrders = '$base/me/shop-orders';

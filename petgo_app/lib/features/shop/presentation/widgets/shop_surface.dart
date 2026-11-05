@@ -54,6 +54,34 @@ class ShopSection extends StatelessWidget {
   }
 }
 
+/// 白卡片（v1.4.2 shop Story 7.1 结算页起用：卡片圆角 16、卡间 12、页边 16）。
+///
+/// 🔴 **不替换 [ShopSection]**：订单 v2 / 退款页仍用灰缝版式，两者并存到 9.x 收尾。
+class ShopCard extends StatelessWidget {
+  const ShopCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 12),
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final EdgeInsets margin;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: margin,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: ShopColors.surface,
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+          child: Padding(padding: padding, child: child),
+        ),
+      );
+}
+
 /// 加载失败占位 —— 一句说明 + 一个**可见的重试按钮**。
 ///
 /// 🔴 <b>错误态必须给出口</b>（2026-08-27 审查结论）。此前电商各页的错误分支一律只画一行

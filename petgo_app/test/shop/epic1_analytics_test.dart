@@ -168,12 +168,20 @@ void main() {
       // - banner_id：banner 的不可枚举 token（后台配置的运营素材），与个人无关
       // - position：第几张（本版恒 1，不做轮播），整数
       // - target_type：受控词表 product_detail / category_list / external_link，与个人无关
+      // v1.4.2 shop Story 7.1（一页结算，PRD §4 / D-23）新增六项，已逐个确认：
+      // - entry：toko_checkout_page_viewed 的入口，受控词表 cart / buy_now
+      // - coupon_ids：本单实际使用的券**模板** token 列表（不可枚举，运营配置的券，非用户券），与个人无关
+      // - coin_used：bool（本单是否用了 PawCoin）
+      // - courier：受控词表 `<courierCode>_<serviceCode>` 小写（如 jne_reg），与个人无关
+      // - shipping_fee：所选快递运费整数（运费随地址变化，但只是一个区间金额，不可反推地址）
+      // - insurance：bool（是否保价）
       expect(props, {
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
         'trigger_type', 'product_id',
         'items', 'sku_id', 'qty', 'entry_source', 'attribution_source',
         'card_source',
         'banner_id', 'position', 'target_type',
+        'entry', 'coupon_ids', 'coin_used', 'courier', 'shipping_fee', 'insurance',
       });
     });
 

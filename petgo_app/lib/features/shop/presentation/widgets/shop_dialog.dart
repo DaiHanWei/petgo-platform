@@ -24,7 +24,7 @@ import 'shop_buttons.dart';
 Future<bool> showShopConfirm(
   BuildContext context, {
   required String title,
-  required String confirmLabel,
+  String? confirmLabel,
   required String cancelLabel,
   String? body,
   Widget? content,
@@ -65,13 +65,16 @@ Future<bool> showShopConfirm(
           dense: true,
           onTap: () => Navigator.of(dlgCtx).pop(false),
         ),
-        ShopButton(
-          key: confirmKey,
-          label: confirmLabel,
-          variant: confirmVariant,
-          dense: true,
-          onTap: () => Navigator.of(dlgCtx).pop(true),
-        ),
+        // v1.4.2 shop Story 7.1：confirmLabel 为 null 时只给取消（立即购买遇不可买行：没有车行可删）。
+        // 既有调用方都传了确认文案，行为不变。
+        if (confirmLabel != null)
+          ShopButton(
+            key: confirmKey,
+            label: confirmLabel,
+            variant: confirmVariant,
+            dense: true,
+            onTap: () => Navigator.of(dlgCtx).pop(true),
+          ),
       ],
     ),
   );

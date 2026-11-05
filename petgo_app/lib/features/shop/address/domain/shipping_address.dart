@@ -15,6 +15,7 @@ class ShippingAddress {
     required this.kodePos,
     required this.isDefault,
     this.label,
+    this.serviceable,
   });
 
   final String token;
@@ -28,6 +29,10 @@ class ShippingAddress {
   final String? label;
   final bool isDefault;
 
+  /// v1.4.2 shop Story 3.1（D-9）：地址簿列表的可配送标注。false = 不可配送；true = 可配送；
+  /// null = 未判定（询价失败 / 其他出口不下发）。🔴 只读，[toRequestJson] 不写出。
+  final bool? serviceable;
+
   factory ShippingAddress.fromJson(Map<String, dynamic> j) => ShippingAddress(
         token: j['token']?.toString() ?? '',
         receiverName: j['receiverName']?.toString() ?? '',
@@ -39,6 +44,7 @@ class ShippingAddress {
         kodePos: j['kodePos']?.toString() ?? '',
         label: (j['label']?.toString().isEmpty ?? true) ? null : j['label'].toString(),
         isDefault: j['isDefault'] == true,
+        serviceable: j['serviceable'] is bool ? j['serviceable'] as bool : null,
       );
 
   Map<String, dynamic> toRequestJson() => {

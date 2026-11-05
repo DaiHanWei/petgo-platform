@@ -795,6 +795,69 @@ void main() {
           reason: '显示一个旧格式的号，好过在订单号那一行显示一片空白');
     });
   });
+
+  // ================================================================
+  // v1.4.2 shop Story 7.1：结算页提交需扫码单 → `?autopay=1` 首帧自动拉起现有支付面板
+  // ================================================================
+  group('v1.4.2 Story 7.1 · autoPay', () {
+    Widget autoHost(ShopOrderDetail o, _FakeShopOrderRepo repo, {bool autoPay = true}) =>
+        ProviderScope(
+          overrides: [
+            shopOrderRepositoryProvider.overrideWithValue(repo),
+            shopOrderDetailProvider.overrideWith((ref, token) async => o),
+            returnEligibilityProvider.overrideWith((ref, token) async =>
+                const ReturnEligibility(orderToken: 'ord1', eligible: false, lines: [])),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('id'),
+            home: MediaQuery(
+              data: const MediaQueryData(size: Size(411, 891)),
+              child: ShopOrderDetailPageV2(orderToken: 'ord1', autoPay: autoPay),
+            ),
+          ),
+        );
+
+    testWidgets('autoPay: true → 首帧后自动调用一次 /pay 并出面板', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(autoHost(
+          order(expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30))), repo));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(repo.payCalls, 1);
+      expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
+      // 再 pump 不会重复触发
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(repo.payCalls, 1);
+      // 关掉面板 = 留在待付款详情
+      Navigator.of(tester.element(find.byKey(const ValueKey('qrPayImage')))).pop(false);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsOneWidget);
+    });
+
+    testWidgets('autoPay 但订单已付款 → 不触发', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(autoHost(order(status: ShopOrderStatus.pendingShipment), repo));
+      await tester.pumpAndSettle();
+      expect(repo.payCalls, 0);
+    });
+
+    testWidgets('默认 autoPay=false → 不触发（既有调用点行为不变）', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(autoHost(
+          order(expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30))), repo,
+          autoPay: false));
+      await tester.pumpAndSettle();
+      expect(repo.payCalls, 0);
+    });
+  });
 }
 
 /// 只桩 pay / cancel 两个方法，其余继承真实现（本组用例不会走到）。
