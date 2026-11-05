@@ -23,6 +23,7 @@ import 'package:tailtopia/features/topic/presentation/topic_page.dart';
 import 'package:tailtopia/features/topic/presentation/widgets/topic_empty_view.dart';
 import 'package:tailtopia/features/topic/presentation/widgets/topic_official_badge.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/gone_icon.dart';
 import 'package:tailtopia/shared/widgets/masonry_card.dart';
 
 import '../support/fake_feed_repository.dart';
@@ -248,6 +249,13 @@ void main() {
         expect(find.byKey(ValueKey('topicRelated_topik$i')), findsOneWidget, reason: 'row $i');
         expect(tester.getSize(find.byKey(ValueKey('topicRelated_topik$i'))).height, 44);
       }
+      // 本地验收 2026-11-05：箭头恒贴右，不随名字长短漂移（原 Flexible + Spacer 平分空余）
+      double chevronRight(int i) => tester.getTopRight(find.descendant(
+          of: find.byKey(ValueKey('topicRelated_topik$i')),
+          matching: find.byIcon(Icons.chevron_right_rounded))).dx;
+      for (var i = 2; i <= 10; i++) {
+        expect(chevronRight(i), chevronRight(1), reason: 'row $i 箭头与第 1 行对齐');
+      }
       Color? rankColor(int r) => tester.widget<Text>(find.byKey(ValueKey('topicRelatedRank_$r'))).style!.color;
       expect(rankColor(1), AppColors.mint600);
       expect(rankColor(3), AppColors.mint600);
@@ -303,10 +311,10 @@ void main() {
     });
   });
 
-  testWidgets('C10 不存在：search_off + 两行文案 + Kembali ke Sosial（返回上一页）；不报 topic_page_viewed', (tester) async {
+  testWidgets('C10 不存在：GoneIcon + 两行文案 + Kembali ke Sosial（返回上一页）；不报 topic_page_viewed', (tester) async {
     final repo = FakeTopicRepository()..detailError = const TopicNotFoundException();
     await pumpTopic(tester, repo);
-    expect(find.byIcon(Icons.search_off_rounded), findsOneWidget);
+    expect(find.byType(GoneIcon), findsOneWidget);
     expect(find.text('Topik tidak ditemukan'), findsOneWidget);
     expect(find.text('Topik ini sudah tidak tersedia'), findsOneWidget);
     expect(find.byKey(const ValueKey('topicTabLatest')), findsNothing, reason: '不显示页签');

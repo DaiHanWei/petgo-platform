@@ -23,6 +23,7 @@ import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 import 'package:tailtopia/features/profile/domain/visitor_profile.dart';
 import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/gone_icon.dart';
 
 /// V1.1.6 Story 2.3 · L0/widget：访客只读态渲染（AD-2 Rule 5 · AD-3 · AD-4）。
 ///
@@ -597,7 +598,7 @@ void main() {
       expect(find.byKey(const ValueKey('visitorGone')), findsOneWidget);
       expect(find.byKey(const ValueKey('visitorBackButton')), findsOneWidget);
       expect(find.text(en.detailGoneTitle), findsOneWidget);
-      expect(find.byIcon(Icons.search_off_rounded), findsOneWidget);
+      expect(find.byType(GoneIcon), findsOneWidget);
       expect(find.byType(FilledButton), findsNothing);
       expect(find.byType(TextButton), findsNothing);
       expect(find.text(en.commonRetry), findsNothing);

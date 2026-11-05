@@ -129,19 +129,25 @@ class TopicEmptyView extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Text(
-                  '#${t.displayName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.body,
+              // 名字 + 官方标记占满剩余宽度，箭头恒贴右（UI 稿 C9）；不能用 Flexible + Spacer —— 两者平分空余，箭头随名字长短漂移。
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '#${t.displayName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body,
+                      ),
+                    ),
+                    if (t.official) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      const TopicOfficialBadge(),
+                    ],
+                  ],
                 ),
               ),
-              if (t.official) ...[
-                const SizedBox(width: AppSpacing.sm),
-                const TopicOfficialBadge(),
-              ],
-              const Spacer(),
               const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.muted),
             ],
           ),

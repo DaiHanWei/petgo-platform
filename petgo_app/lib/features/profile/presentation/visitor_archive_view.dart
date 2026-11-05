@@ -8,6 +8,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/gone_icon.dart';
 import '../../social/domain/pet_follow_state.dart';
 import '../../social/presentation/widgets/pet_follow_button.dart';
 import '../../gift/presentation/gift_page.dart';
@@ -401,8 +402,7 @@ class _VisitorUnavailable extends StatelessWidget {
           Expanded(
             child: gone
                 ? EmptyState(
-                    icon: Icons.search_off_rounded,
-                    iconColor: AppColors.muted,
+                    iconWidget: const GoneIcon(),
                     title: l10n.detailGoneTitle,
                   )
                 : EmptyState(

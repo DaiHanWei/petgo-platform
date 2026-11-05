@@ -1520,7 +1520,8 @@ body:has(#growthbatch-drawer.drawer.is-open) .toast { right: 24px; bottom: 76px;
 /* 新建成功定位到新行：高亮约 2 秒 */
 @keyframes topic-row-flash { from { background: var(--brand-line); } to { background: transparent; } }
 .lst-table tr.row-flash td { animation: topic-row-flash 2s ease-out 1; }
-.topics-table td.num, .topics-table th.num, .topic-meta .num { text-align: right; font-variant-numeric: tabular-nums; }
+.topics-table td.num, .topics-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.topic-meta dd.num { text-align: left; font-variant-numeric: tabular-nums; }
 .topics-table .sort-arrow { color: var(--brand); margin-left: 2px; font-size: 10px; }
 .topic-type--official { background: var(--surface); color: var(--brand-strong); border-color: var(--brand); }
 .topic-type--user { background: #F2F1F5; color: var(--ink-2); border-color: var(--line); }
@@ -1535,8 +1536,10 @@ body:has(#growthbatch-drawer.drawer.is-open) .toast { right: 24px; bottom: 76px;
 .topics-empty { background: none; }
 /* 抽屉 */
 .topic-drawer .topic-status { display: inline-flex; align-items: center; gap: 4px; }
-.topic-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin: 8px 0 0; }
-.topic-meta > div { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-sm); }
+/* 话题抽屉头部摘要（UI 稿 F4/F5/F7）：单列「标签 → 值」，标签定宽不换行，值左对齐 */
+.topic-meta { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; }
+.topic-meta > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; font-size: var(--fs-sm); }
+.topic-meta dt { white-space: nowrap; }
 .topic-meta dt { color: var(--muted); }
 .topic-meta dd { margin: 0; color: var(--ink); }
 .topic-name-inp { display: flex; width: 100%; box-sizing: border-box; }

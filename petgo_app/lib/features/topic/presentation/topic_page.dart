@@ -8,6 +8,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/gone_icon.dart';
 import '../../content/domain/feed_item.dart';
 import '../../content/domain/pinned_slot.dart';
 import '../../content/presentation/author_moderation_callbacks.dart';
@@ -173,7 +174,7 @@ class _TopicPageState extends ConsumerState<TopicPage> with SingleTickerProvider
     if (detailAsync.error is TopicNotFoundException || postsAsync.error is TopicNotFoundException) {
       return _shell(EmptyState(
         key: const ValueKey('topicNotFound'),
-        icon: Icons.search_off_rounded,
+        iconWidget: const GoneIcon(),
         title: l10n.topicNotFoundTitle,
         message: l10n.topicNotFoundBody,
         actionLabel: l10n.detailBackToFeed,

@@ -256,3 +256,8 @@ Claude
 
 - 2026-11-04：复审修复 —— 追更覆盖加版本号（服务端新快照接管）、埋点拆字面量、自己的宠物判定加宠物列表；L0 复跑全绿。
 - 2026-11-04：Story 1.4 实现（App）—— 访客页追更按钮 + Pengikut 第 4 格 + 页头合并 + 失效两屏（A14 / A15）+ 埋点；L0 全绿，L1/L2 待本地验收。
+
+### 本地验收（2026-11-05）
+
+- L1 通过；L2 还原度见 `acceptance-v1.4.2-social-topic.md`。
+- 验收修复：A14 失效图标 `search_off` 与稿不符（93 分）→ 新增共享 `shared/widgets/gone_icon.dart`（放大镜 + 实心圆 ×），`EmptyState` 加可选 `iconWidget`；`visitor_archive_view_test` 断言同步改为 `GoneIcon`。

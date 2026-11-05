@@ -274,3 +274,8 @@ Claude
 
 - 2026-11-04：实现 Story 4.3（App）——话题详情页 C6–C11（NestedScrollView + 吸顶页签、两页签各自缓存、话题顶置、空态推荐、404 / 失败态）、Discover 首页话题行 C1、Resmi 共享徽章、`/topics/:name` 路由与 `tailtopia://topic` 深链 + 推广卡 `from=pin`、FR-165 三个入口开关、三个埋点与 9 条 EN/ID 文案；L0 全绿，L2 待本地。
 - 2026-11-04：复审修复——`topic_page_viewed` 挪到 C10/C11 之后（首屏失败不报）；刷新时 404 有旧值也进 C10；Populer 50 页上限改行为测试。
+
+### 本地验收（2026-11-05）
+
+- L1 通过；L2 还原度见 `acceptance-v1.4.2-social-topic.md`。
+- 验收修复：C9「Topik populer lainnya」箭头随名字长短漂移（`Flexible` + `Spacer` 平分空余）→ 名字 + 官方标记包进 `Expanded`，箭头恒贴右，`topic_page_test` 补 10 行箭头对齐断言；C10 图标同 1-4 改用 `GoneIcon`。
