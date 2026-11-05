@@ -8,19 +8,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/shop/data/cart_repository.dart';
-import 'package:tailtopia/features/shop/data/shop_repository.dart';
+import 'package:tailtopia/features/shop/domain/checkout_preview.dart';
 import 'package:tailtopia/features/shop/domain/shop_cart.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
-import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/product_detail_page_v3.dart';
 import 'package:tailtopia/features/shop/presentation/toko_page_v3.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
-import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
 import 'fake_shop_products.dart';
+import 'pdp_fakes.dart';
 
-// v2 详情页加购按钮的印尼语文案（AppLocalizationsId.tokoAddToCartShort）。
-// ⚠️ 两个测试都固定跑 Locale('id')，故直接用字面量；文案改了这里会红，正是想要的信号。
-const String _kAddToCartId = '+ Keranjang';
 
 
 /// Story 3.10：归因链闭合（AB-13B / A-16）。
@@ -70,14 +67,14 @@ void main() {
   });
 
   group('🔴 Toko → 详情页 → 加购：来源一路传下去', () {
-    testWidgets('详情页把路由 ?from= 带进加购请求', (t) async {
+    testWidgets('详情页把路由 ?from= 带进加购请求（v1.4.2 8.2：经规格弹层确认后）', (t) async {
       final repo = _RecordingCartRepo();
       final router = GoRouter(
         initialLocation: '/shop/products/tok?from=TOKO_CATEGORY',
         routes: [
           GoRoute(
             path: '/shop/products/:token',
-            builder: (c, s) => ProductDetailPageV2(
+            builder: (c, s) => ProductDetailPageV3(
               token: s.pathParameters['token']!,
               entrySource: s.uri.queryParameters['from'],
             ),
@@ -91,7 +88,7 @@ void main() {
           authControllerProvider.overrideWith(() => _TestAuthController(
                 const AuthState(status: AuthStatus.authenticated, role: 'USER'),
               )),
-          shopProductDetailProvider.overrideWith((ref, token) async => _detail),
+          ...pdpOverrides(detail: _detail),
           cartRepositoryProvider.overrideWithValue(repo),
         ],
         child: MaterialApp.router(
@@ -103,14 +100,78 @@ void main() {
       ));
       await t.pumpAndSettle();
 
-      // ⚠️ 同上：按文案定位，避免点到旁边的「立即购买」。
-      await t.tap(find.widgetWithText(ShopButton, _kAddToCartId));
+      // v3：胶囊坞加购圆钮 → 规格弹层 → 确认才发请求。
+      await t.tap(find.byKey(const ValueKey('pdpAddToCart')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('skuPickerConfirm')));
       await t.pumpAndSettle();
 
       expect(repo.lastEntrySource, 'TOKO_CATEGORY');
 
       await t.pump(const Duration(seconds: 3));
       await t.pumpAndSettle();
+    });
+
+    testWidgets('🔴 立即购买：路由 ?from= 带进结算路由（v1.4.2 8.2 复审 #1，不写购物车）', (t) async {
+      final repo = _RecordingCartRepo();
+      final router = GoRouter(
+        initialLocation: '/shop/products/tok?from=TOKO_CATEGORY',
+        routes: [
+          GoRoute(
+            path: '/shop/products/:token',
+            builder: (c, s) => ProductDetailPageV3(
+              token: s.pathParameters['token']!,
+              entrySource: s.uri.queryParameters['from'],
+            ),
+          ),
+          GoRoute(
+              path: '/shop/checkout',
+              builder: (c, s) => Scaffold(body: Text('CHECKOUT from=${s.uri.queryParameters['from']}'))),
+        ],
+      );
+      await t.pumpWidget(ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TestAuthController(
+                const AuthState(status: AuthStatus.authenticated, role: 'USER'),
+              )),
+          ...pdpOverrides(detail: _detail),
+          cartRepositoryProvider.overrideWithValue(repo),
+        ],
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+        ),
+      ));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('pdpBuyNow')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('skuPickerConfirm')));
+      await t.pumpAndSettle();
+
+      expect(find.text('CHECKOUT from=TOKO_CATEGORY'), findsOneWidget);
+      expect(repo.lastEntrySource, isNull, reason: '立即购买不碰购物车');
+    });
+
+    test('🔴 BUY_NOW 试算 / 提交请求体带 buyNow.entrySource；null 不发键', () {
+      const preview = CheckoutRequest(
+          source: CheckoutSource.buyNow, buyNowSkuToken: 's', buyNowQty: 1, buyNowEntrySource: 'TOKO_SEARCH');
+      expect(preview.toJson()['buyNow'], {'skuToken': 's', 'qty': 1, 'entrySource': 'TOKO_SEARCH'});
+      const place = PlaceOrderRequest(
+        source: CheckoutSource.buyNow,
+        buyNowSkuToken: 's',
+        buyNowEntrySource: 'TOKO_SEARCH',
+        addressToken: 'a',
+        quoteToken: 'q',
+        courierKey: 'jne:reg',
+        insurance: false,
+        useCoin: false,
+      );
+      expect((place.toJson()['buyNow'] as Map)['entrySource'], 'TOKO_SEARCH');
+      const noSource = CheckoutRequest(source: CheckoutSource.buyNow, buyNowSkuToken: 's');
+      expect((noSource.toJson()['buyNow'] as Map).containsKey('entrySource'), isFalse,
+          reason: '没有来源就不发 —— 编一个值会污染看板');
     });
 
     testWidgets('🔴 Toko 卡片：品类入口下线后恒为全部精选入口（v1.4.2 shop 8.1 按设计改写）', (t) async {

@@ -498,6 +498,7 @@ class CheckoutRequest {
     required this.source,
     this.buyNowSkuToken,
     this.buyNowQty = 1,
+    this.buyNowEntrySource,
     this.addressToken,
     this.courierKey,
     this.insurance = false,
@@ -510,6 +511,9 @@ class CheckoutRequest {
   final CheckoutSource source;
   final String? buyNowSkuToken;
   final int buyNowQty;
+
+  /// BUY_NOW 行的归因来源（v1.4.2 shop 8.2 复审：详情页 `?from=` 一路透传；null = 未知，不发该键）。
+  final String? buyNowEntrySource;
 
   /// null = 服务端用默认地址（没有地址则不询价）。
   final String? addressToken;
@@ -525,7 +529,11 @@ class CheckoutRequest {
   Map<String, dynamic> toJson() => {
         'source': source.api,
         if (source == CheckoutSource.buyNow)
-          'buyNow': {'skuToken': buyNowSkuToken, 'qty': buyNowQty},
+          'buyNow': {
+            'skuToken': buyNowSkuToken,
+            'qty': buyNowQty,
+            'entrySource': ?buyNowEntrySource,
+          },
         'addressToken': ?addressToken,
         'courierKey': ?courierKey,
         'insurance': insurance,
@@ -549,6 +557,7 @@ class PlaceOrderRequest {
     required this.useCoin,
     this.buyNowSkuToken,
     this.buyNowQty = 1,
+    this.buyNowEntrySource,
     this.discountCouponToken,
     this.freeShippingCouponToken,
   });
@@ -556,6 +565,9 @@ class PlaceOrderRequest {
   final CheckoutSource source;
   final String? buyNowSkuToken;
   final int buyNowQty;
+
+  /// BUY_NOW 行的归因来源（v1.4.2 shop 8.2 复审：详情页 `?from=` 一路透传；null = 未知，不发该键）。
+  final String? buyNowEntrySource;
   final String addressToken;
   final String quoteToken;
   final String courierKey;
@@ -567,7 +579,11 @@ class PlaceOrderRequest {
   Map<String, dynamic> toJson() => {
         'source': source.api,
         if (source == CheckoutSource.buyNow)
-          'buyNow': {'skuToken': buyNowSkuToken, 'qty': buyNowQty},
+          'buyNow': {
+            'skuToken': buyNowSkuToken,
+            'qty': buyNowQty,
+            'entrySource': ?buyNowEntrySource,
+          },
         'addressToken': addressToken,
         'quoteToken': quoteToken,
         'courierKey': courierKey,

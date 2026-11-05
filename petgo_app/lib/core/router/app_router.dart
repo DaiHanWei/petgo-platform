@@ -30,7 +30,8 @@ import '../../features/shop/presentation/shop_search_page.dart';
 import '../../features/shop/presentation/cart_page_v2.dart';
 import '../../features/shop/domain/checkout_preview.dart' show CheckoutSource;
 import '../../features/shop/presentation/checkout_page_v3.dart';
-import '../../features/shop/presentation/product_detail_page_v2.dart';
+import '../../features/shop/presentation/product_detail_page_v3.dart';
+import '../../features/shop/presentation/review_list_page.dart';
 import '../../features/shop/presentation/shop_return_unavailable_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
 import '../../features/shop/presentation/shop_pay_success_page.dart';
@@ -682,8 +683,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) {
           final token = s.pathParameters['token']!;
           final from = s.uri.queryParameters['from'];
-          return ProductDetailPageV2(token: token, entrySource: from);
+          // v1.4.2 shop Story 8.2：详情换 v3（B1–B15）。
+          return ProductDetailPageV3(token: token, entrySource: from);
         },
+      ),
+      // 全部评价页（v1.4.2 shop Story 8.2 · B12）。🔒 游客可访问（评价是买前决策信息）。
+      GoRoute(
+        path: '/shop/products/:token/reviews',
+        builder: (c, s) => ReviewListPage(token: s.pathParameters['token']!),
       ),
       // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
       //    （游客渲染「登录后查看」空态 + 软性引导），而不是 redirect 弹走。
@@ -714,6 +721,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
               source: CheckoutSource.buyNow,
               buyNowSkuToken: q['sku'],
               buyNowQty: int.tryParse(q['qty'] ?? '') ?? 0,
+              // v1.4.2 shop 8.2：立即购买的归因来源（详情页 `?from=` 透传）。
+              buyNowEntrySource: q['from'],
             );
           }
           return const CheckoutPageV3();

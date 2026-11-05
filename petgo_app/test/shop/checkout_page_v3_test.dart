@@ -71,6 +71,7 @@ void main() {
                 source: CheckoutSource.buyNow,
                 buyNowSkuToken: q['sku'],
                 buyNowQty: int.tryParse(q['qty'] ?? '') ?? 0,
+                buyNowEntrySource: q['from'],
               );
             }
             return const CheckoutPageV3();
@@ -159,6 +160,12 @@ void main() {
       expect(r.source, CheckoutSource.buyNow);
       expect(r.toJson()['buyNow'], {'skuToken': 'sku9', 'qty': 2});
       expect(propsOf('toko_checkout_page_viewed'), {'entry': 'buy_now'});
+    });
+
+    testWidgets('v1.4.2 8.2 复审：buy_now 带 from → 试算 buyNow.entrySource 透传；无 from 不发该键', (tester) async {
+      await pumpPage(tester, location: '/shop/checkout?source=buy_now&sku=sku9&qty=2&from=TOKO_CATEGORY');
+      expect(repo.requests.first.toJson()['buyNow'],
+          {'skuToken': 'sku9', 'qty': 2, 'entrySource': 'TOKO_CATEGORY'});
     });
 
     testWidgets('🔴 buy_now 参数不合法 → 失败态，不退化成 CART（不发试算）', (tester) async {

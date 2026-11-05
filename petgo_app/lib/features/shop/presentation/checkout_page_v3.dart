@@ -61,6 +61,7 @@ class CheckoutPageV3 extends ConsumerStatefulWidget {
     this.source = CheckoutSource.cart,
     this.buyNowSkuToken,
     this.buyNowQty = 1,
+    this.buyNowEntrySource,
   });
 
   final CheckoutSource source;
@@ -68,6 +69,10 @@ class CheckoutPageV3 extends ConsumerStatefulWidget {
   /// BUY_NOW 的规格 token。
   final String? buyNowSkuToken;
   final int buyNowQty;
+
+  /// BUY_NOW 的归因来源（路由 `?from=`，与加购 `entrySource` 同值域；v1.4.2 shop 8.2 复审补）。
+  /// 透传到试算与提交的 `buyNow.entrySource`；null = 未知，不编默认值。
+  final String? buyNowEntrySource;
 
   @override
   ConsumerState<CheckoutPageV3> createState() => _CheckoutPageV3State();
@@ -162,6 +167,7 @@ class _CheckoutPageV3State extends ConsumerState<CheckoutPageV3> {
         source: widget.source,
         buyNowSkuToken: widget.buyNowSkuToken,
         buyNowQty: widget.buyNowQty,
+        buyNowEntrySource: widget.buyNowEntrySource,
         addressToken: _addressToken,
         courierKey: _courierKey,
         insurance: _insurance,
@@ -1153,6 +1159,7 @@ class _CheckoutPageV3State extends ConsumerState<CheckoutPageV3> {
               source: widget.source,
               buyNowSkuToken: widget.buyNowSkuToken,
               buyNowQty: widget.buyNowQty,
+              buyNowEntrySource: widget.buyNowEntrySource,
               addressToken: address.token,
               quoteToken: quote,
               courierKey: courier.courierKey,
@@ -1237,7 +1244,10 @@ class _CheckoutPageV3State extends ConsumerState<CheckoutPageV3> {
           {
             'sku_id': l.skuToken,
             'qty': l.qty,
-            'entry_source': l.entrySource ?? 'unknown',
+            // v1.4.2 8.2 复审 #1：立即购买的行 QuoteLine 不带来源 → 用路由透传的 buyNowEntrySource 兜底。
+            'entry_source': l.entrySource ??
+                (widget.source == CheckoutSource.buyNow ? widget.buyNowEntrySource : null) ??
+                'unknown',
             'trigger_type': l.triggerType ?? 'none',
           },
       ],

@@ -2,6 +2,7 @@
 library;
 
 import 'shop_product.dart';
+import 'shop_review.dart';
 
 /// 退货规则**三值**（C-13 砍掉换货后收敛）。
 ///
@@ -147,6 +148,8 @@ class ShopProductDetail {
     this.detailHtml,
     this.shelfLifeNote,
     this.feedingGuide = const [],
+    this.reviewSummary,
+    this.reviewListEnabled = false,
   });
 
   final String token;
@@ -165,6 +168,13 @@ class ShopProductDetail {
   final List<FeedingGuideEntry> feedingGuide;
   final List<ShopSku> skus;
 
+  /// v1.4.2 shop Story 6.1 AC11：评价摘要（均分 / 条数只算已发布未隐藏；开关开时带最新 ≤3 条）。
+  /// 旧后端缺键 → null，页面回落独立的 `/reviews` 接口取均分与条数。
+  final ProductReviews? reviewSummary;
+
+  /// v1.4.2 C-9：评价列表展示开关（默认关）。关 → 详情页不出评价区、元信息只显示 ★ 均分与条数。
+  final bool reviewListEnabled;
+
   /// 起价。无 SKU → null。
   int? get minPrice =>
       skus.isEmpty ? null : skus.map((s) => s.price).reduce((a, b) => a < b ? a : b);
@@ -178,6 +188,10 @@ class ShopProductDetail {
 
     final rawSkus = json['skus'];
     final rawFeeding = json['feedingGuide'];
+    final rawSummary = json['reviewSummary'];
+    final summary = rawSummary is Map
+        ? ProductReviews.fromJson(Map<String, dynamic>.from(rawSummary))
+        : null;
     return ShopProductDetail(
       token: json['token']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
@@ -198,6 +212,10 @@ class ShopProductDetail {
       skus: rawSkus is List
           ? rawSkus.whereType<Map<String, dynamic>>().map(ShopSku.fromJson).toList()
           : const [],
+      reviewSummary: summary,
+      // 两处同义（C-9）：任一为 true 即开；都缺 → 关（默认关，宁可少展示）。
+      reviewListEnabled:
+          json['reviewListEnabled'] == true || (summary?.displayEnabled ?? false),
     );
   }
 

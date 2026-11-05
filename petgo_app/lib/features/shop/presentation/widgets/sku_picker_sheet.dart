@@ -56,16 +56,14 @@ Future<void> showSkuPickerSheet(
   required String productToken,
   required SkuPickerMode mode,
   String? entrySource,
+  String? initialSkuToken,
+  ValueChanged<ShopSku>? onSkuChanged,
 }) async {
-  final pick = await showModalBottomSheet<SkuPick>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: AppColors.card,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (_) => SkuPickerSheet(productToken: productToken, mode: mode),
-  );
+  final pick = await pickShopSku(context,
+      productToken: productToken,
+      mode: mode,
+      initialSkuToken: initialSkuToken,
+      onSkuChanged: onSkuChanged);
   if (pick == null || !context.mounted) return;
   final isBuy = mode == SkuPickerMode.buyNow;
   Analytics.capture(isBuy ? 'toko_buy_now_tapped' : 'toko_add_to_cart_tapped', {
@@ -75,8 +73,7 @@ Future<void> showSkuPickerSheet(
   void perform() {
     if (!context.mounted) return;
     if (isBuy) {
-      context.push('/shop/checkout?source=buy_now'
-          '&sku=${Uri.encodeQueryComponent(pick.sku.token)}&qty=${pick.qty}');
+      context.push(buyNowCheckoutLocation(pick.sku.token, pick.qty, entrySource));
     } else {
       _performAdd(context, ref, pick, entrySource);
     }
@@ -94,6 +91,39 @@ Future<void> showSkuPickerSheet(
       );
 }
 
+/// 立即购买直达结算的路由（不写购物车）。[entrySource] 非空时带 `&from=`（归因，同加购 `entrySource` 值域）。
+String buyNowCheckoutLocation(String skuToken, int qty, String? entrySource) =>
+    '/shop/checkout?source=buy_now'
+    '&sku=${Uri.encodeQueryComponent(skuToken)}&qty=$qty'
+    '${entrySource == null || entrySource.isEmpty ? '' : '&from=${Uri.encodeQueryComponent(entrySource)}'}';
+
+/// 只开弹层、返回用户确认的选择（null = 关掉没选）。不埋点、不登录、不执行动作 ——
+/// 详情页（8.2）自己管在途锁与动作（bug 516：请求中胶囊坞按钮转圈、不可重复点）。
+///
+/// [initialSkuToken]：弹层默认选中项（详情页传本页当前规格）；null / 不在列表 → [defaultShopSku]。
+/// [onSkuChanged]：用户点规格 chip 即回调（详情页据此回写本页规格、重估运费）。
+Future<SkuPick?> pickShopSku(
+  BuildContext context, {
+  required String productToken,
+  required SkuPickerMode mode,
+  String? initialSkuToken,
+  ValueChanged<ShopSku>? onSkuChanged,
+}) =>
+    showModalBottomSheet<SkuPick>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SkuPickerSheet(
+        productToken: productToken,
+        mode: mode,
+        initialSkuToken: initialSkuToken,
+        onSkuChanged: onSkuChanged,
+      ),
+    );
+
 Future<void> _performAdd(
     BuildContext context, WidgetRef ref, SkuPick pick, String? entrySource) async {
   final l10n = AppLocalizations.of(context);
@@ -108,17 +138,29 @@ Future<void> _performAdd(
 }
 
 class SkuPickerSheet extends ConsumerStatefulWidget {
-  const SkuPickerSheet({super.key, required this.productToken, required this.mode});
+  const SkuPickerSheet({
+    super.key,
+    required this.productToken,
+    required this.mode,
+    this.initialSkuToken,
+    this.onSkuChanged,
+  });
 
   final String productToken;
   final SkuPickerMode mode;
+
+  /// 默认选中项（8.2 详情页传本页当前规格）；null → [defaultShopSku]。
+  final String? initialSkuToken;
+
+  /// 用户点规格 chip 的回调（8.2 回写详情页规格）。
+  final ValueChanged<ShopSku>? onSkuChanged;
 
   @override
   ConsumerState<SkuPickerSheet> createState() => _SkuPickerSheetState();
 }
 
 class _SkuPickerSheetState extends ConsumerState<SkuPickerSheet> {
-  String? _selectedToken;
+  late String? _selectedToken = widget.initialSkuToken;
   int _qty = 1;
 
   ShopSku? _selected(ShopProductDetail d) {
@@ -243,10 +285,13 @@ class _SkuPickerSheetState extends ConsumerState<SkuPickerSheet> {
                   label: s.specName,
                   selected: s.token == sku?.token,
                   selectedColor: AppColors.mint,
-                  onTap: () => setState(() {
-                    _selectedToken = s.token;
-                    _qty = 1;
-                  }),
+                  onTap: () {
+                    setState(() {
+                      _selectedToken = s.token;
+                      _qty = 1;
+                    });
+                    widget.onSkuChanged?.call(s);
+                  },
                 ),
             ],
           ),

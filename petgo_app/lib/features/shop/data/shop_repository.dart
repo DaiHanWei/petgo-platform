@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/network/problem_detail.dart';
 import '../domain/shop_banner.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_product_detail.dart';
@@ -139,12 +140,36 @@ class ShopRepository {
         .toList(growable: false);
   }
 
-  /// 商品详情（Story 1.7）。未上架/不存在 → 后端 404（`DioException` 抛给页面）。
+  /// 商品详情（Story 1.7）。不存在 → 后端 404（`DioException` 抛给页面）。
   /// 🔒 同样对游客开放，不做登录判断。
+  ///
+  /// v1.4.2 shop Story 8.2（AC8.3）：已下架 → 后端 **410** `product-delisted` → 抛 [ShopProductDelisted]，
+  /// 页面据此画「商品已下架」整页态（B13，不给重试 —— 重试也没用）。404 / 网络失败仍原样抛 [DioException]。
   Future<ShopProductDetail> fetchDetail(String token) async {
-    final resp = await dio.get<Map<String, dynamic>>('${ApiPaths.shopProducts}/$token');
-    return ShopProductDetail.fromJson(resp.data!);
+    try {
+      final resp = await dio.get<Map<String, dynamic>>('${ApiPaths.shopProducts}/$token');
+      return ShopProductDetail.fromJson(resp.data!);
+    } on DioException catch (e) {
+      if (isProductDelistedError(e)) throw const ShopProductDelisted();
+      rethrow;
+    }
   }
+}
+
+/// 商品已下架（详情 410 `product-delisted`）。
+class ShopProductDelisted implements Exception {
+  const ShopProductDelisted();
+
+  @override
+  String toString() => 'ShopProductDelisted';
+}
+
+/// 410 或 ProblemDetail `type` 末段为 `product-delisted`（C-2 连字符风格）。
+bool isProductDelistedError(DioException e) {
+  final pd = ProblemDetail.fromDioException(e);
+  return pd?.status == 410 ||
+      e.response?.statusCode == 410 ||
+      (pd?.typeSlug?.endsWith('product-delisted') ?? false);
 }
 
 final shopRepositoryProvider =

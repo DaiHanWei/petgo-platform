@@ -1,6 +1,6 @@
 # Story 8.2: 商品详情（App，B1–B15）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`
 > 口径优先级：`决策日志-shop.md`（S-0 ~ S-9）> PRD `电商/1-4-2电商prd.md`（§3.0 旅程 A / B、§3.1 FR-127、§3.2「立即购买直达结算」、§3.4「券的入口」、§3.7「商品详情」、§3.10 FR-172「其余细节」、§4、§6 B 组）> `architecture-v1.4.2-shop-delta.md`（D-6、D-9、D-10、D-17、D-23、P-4、P-5、P-9、P-10）> UI 定稿 `电商/ui-1-4-2-shop-integrated-v1.html` B1–B15 每屏说明；云端执行以 `cloud-rules-shop.md` 为准。
@@ -22,14 +22,14 @@ As a 用户,
 I want 在详情页看到能领的券、能不能送到、运费多少、评价,
 so that 下单前心里有数。
 
-## 接口契约（计划名，开工前核对 1.1 / 2.2 / 3.1 / 6.1 实际提交）
+## 接口契约（已按 1.1 / 2.2 / 3.1 / 6.1 实际提交核对，2026-11-05 dev）
 
-- `GET /api/v1/shop/products/{token}`：下架 → **410** ProblemDetail `type` 后缀 `product-delisted`；不存在 → 404。新增 / 依赖字段：`skus[].sellable`（缺包裹参数 = false，见待确认 1）；评价相关 `averageRating`、`reviewCount`、`reviews`（开关开时为前 3 条数组，开关关时缺键 / null，见待确认 2）。
-- `GET /api/v1/shop/products/{token}/coupons` → `[{couponToken, kind, name, amount, minSpend, validUntil, claimed}]`（游客可读，`claimed` 恒 false）。
+- `GET /api/v1/shop/products/{token}`（`ShopProductDetailView`）：下架 → **410** ProblemDetail `type` 末段 `product-delisted`（`ErrorTypes.SHOP_PRODUCT_DELISTED`）；不存在 → 404。字段：`skus[].sellable`（`ShopSkuView`，1.1 已下发）；评价摘要 `reviewSummary{total, averageRating, displayEnabled, items[≤3]}` + 顶层 `reviewListEnabled`（6.1 / C-9；开关关时 `items=[]`，均分与条数照给）。
+- `GET /api/v1/shop/products/{token}/coupons` → `{items: CouponView[]}`（`couponToken, kind, nameId, nameEn, amount, minSpend, validUntil, claimed, …`；游客 / 非 USER `claimed` 恒 false）。
 - `POST /api/v1/me/coupons/claim {couponToken, source: "DETAIL"}`（同 8.1）。
-- `GET /api/v1/shop/products/{token}/shipping-estimate?skuToken=&qty=&addressToken=|regionKecamatanId=` → `{serviceable: bool?, lowestFee: int?, freeShippingProgress: {threshold, remaining}?, quoteFailed: bool}`；游客按地区代表邮编；区域未配邮编按不可配送。
-- `GET /api/v1/shop/regions`（现有）：Kecamatan 节点需带 `id`（见待确认 3）。
-- `GET /api/v1/shop/products/{token}/reviews?cursor=` → `{total, averageRating, items[{…, reviewerName?, specName?}], nextCursor}`（6.1；昵称 / 规格字段见待确认 4）。
+- `GET /api/v1/shop/products/{token}/shipping-estimate?skuToken=&qty=&addressToken=|regionKecamatanId=` → `ShippingEstimateView{serviceable?, lowestFee?, quoteFailed, freeShippingProgress{threshold, remaining}?, reason?}`；`reason ∈ NO_DESTINATION | NOT_SERVICEABLE | QUOTE_FAILED`；**无地址也无地区 → NO_DESTINATION 且不带免运进度**；不可售 SKU → 422 `sku-not-sellable`；限流 30 次 / 分钟。
+- `GET /api/v1/shop/regions`：`RegionTree.Kecamatan(name, serviceable, id)`（3.1 已补 `id`）。
+- `GET /api/v1/shop/products/{token}/reviews?cursor=&limit=` → `ProductReviewsView{total, averageRating, items[{…, nickname?, specName?}], displayEnabled, nextCursor?, hasMore}`（6.1；昵称服务端已打码；下架 → 404）。
 
 ## Acceptance Criteria
 
@@ -102,12 +102,12 @@ so that 下单前心里有数。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：1.1 / 2.2 / 3.1 / 6.1 字段（`sellable`、410 `type`、评价字段、估运费响应、regions 的 kecamatan id）；8.1 的弹层 API；有出入先改本文件
-- [ ] **T1 数据层**：`api_paths.dart`（`shopProductCoupons(token)`、`shopProductShippingEstimate(token)`）；`ShopProductDetail` 评价字段；`fetchDetail` 410 映射；`shipping_estimate.dart` 模型 + provider；`RegionKecamatan.id`；`AppPrefs.shopDeliveryArea`；`ShopReviewRepository.page(token, cursor)`
-- [ ] **T2 页面**：`product_detail_page_v3.dart`（上部顺序、胶囊坞、规格行、券行、送达 / 运费 / 免运）；删 v2；路由
-- [ ] **T3 抽屉与新页**：`delivery_area_sheet.dart`（B6）、`product_coupons_sheet.dart`（B7 / B8）、`review_list_page.dart`（B12）、下架态（B13）
-- [ ] **T4 埋点 / 文案**
-- [ ] **T5 测试** + `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：1.1 / 2.2 / 3.1 / 6.1 字段（`sellable`、410 `type`、评价字段、估运费响应、regions 的 kecamatan id）；8.1 的弹层 API；有出入先改本文件
+- [x] **T1 数据层**：`api_paths.dart`（`shopProductCoupons(token)`、`shopProductShippingEstimate(token)`）；`ShopProductDetail` 评价字段；`fetchDetail` 410 映射；`shipping_estimate.dart` 模型 + provider；`RegionKecamatan.id`；`AppPrefs.shopDeliveryArea`；`ShopReviewRepository.page(token, cursor)`
+- [x] **T2 页面**：`product_detail_page_v3.dart`（上部顺序、胶囊坞、规格行、券行、送达 / 运费 / 免运）；删 v2；路由
+- [x] **T3 抽屉与新页**：`delivery_area_sheet.dart`（B6）、`product_coupons_sheet.dart`（B7 / B8）、`review_list_page.dart`（B12）、下架态（B13）
+- [x] **T4 埋点 / 文案**
+- [x] **T5 测试** + `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -245,14 +245,67 @@ so that 下单前心里有数。
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），bmad-dev-story 流程，云端 headless，只到 L0。
+
 ### Debug Log References
+
+- `flutter gen-l10n` → `flutter analyze`：改动前基线 No issues found；改动后 **No issues found**。
+- `flutter test`（全量）：**4679 通过、3 skip（既有）、0 失败**；复审修复后 **4687 通过、3 skip、0 失败**，`flutter analyze` 仍 No issues found。
+- 本 story 相关：`test/shop/product_detail_page_v3_test.dart` 60 例、`delivery_area_sheet_test.dart` 8 例、`review_list_page_test.dart` 5 例、改写的 `cart_guest_add_test` / `cart_attribution_test` / `epic1_analytics_test`，`test/analytics`、`test/l10n` 全绿。
+- `bash scripts/ci/check-flyway-versions.sh origin/main` → OK（本 story 无迁移、未碰后端）。
+- 调试记录：①`ShopSoldOutOverlay` 自带 `Positioned.fill`，外层再包 Positioned 报 ParentData 冲突 → 去掉外层；②游客在 B7 点 Klaim 时若先置在途，软登录浮层开着期间按钮一直转圈 → 游客分支不置在途（还没发请求）；③`v140_events_inventory_test` 按 `Analytics.capture('<名>'` 提取事件名，三元式事件名会漏 → 详情页加购 / 立即购买埋点改为字面量分支；④go_router `currentConfiguration` 不反映 push 的子路由 → push 类断言改为按目标页断言。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：本 story 云端只验 L0。留待本地：L1（`BITESHIP_MODE=stub`，连本地 / stag 后端）——已登录有地址看到「Mulai Rp X」；游客选地区后运费出现、杀进程再进仍记得地区；某 SKU 包裹参数置空 → B5；下架商品 → B13；评价开关开 / 关两种；领券成功后首页「Kupon buat kamu」同步变「Diklaim」。L2（本地模拟器）——AC1.4 / AC1.5 布局与胶囊坞、AC2–AC4、AC7 各屏、**AC11.2 B1–B15 逐屏还原度 ≥ 95% 打分**（未做，不写 golden）。
+- **T0 名字对齐（改了本文件「接口契约」节）**：评价摘要实际字段是 `reviewSummary{total, averageRating, displayEnabled, items}` + `reviewListEnabled`（非计划的顶层 `averageRating / reviewCount / reviews`）；券列表包在 `{items: […]}` 里、券名是 `nameId / nameEn`；估运费多一个 `reason`；评价昵称字段名是 `nickname`（非 `reviewerName`）；regions 的 kecamatan `id` 3.1 已补；`sellable` 1.1 已下发。待确认 1 / 3 / 4 均已由后端实现，App 无需改后端。
+- **评价开关最终判据**（待确认 2）：`detail.reviewListEnabled == true || reviewSummary.displayEnabled == true` → 开；均分 / 条数取 `reviewSummary`，详情缺 `reviewSummary`（旧后端）时回落 `/reviews`。
+- **拍板点复述**：①送达优先级 本页 B6 选的 > 默认地址 > 本地记住的地区；B6 选择总写本地（`AppPrefs.shopDeliveryArea`，`shopDeliveryAreaProvider` 供 8.3 用）。②详情页估运费 `qty=1`，弹层改数量不重估。③游客 B6 同样只写本地。④「Lihat Alternatif」品类未知也显示，`go('/shop')`（8.1 留下的 v2:549 品类跳转在此收口）。
+- **立即购买**：弹层确认 → `push('/shop/checkout?source=buy_now&sku=&qty=')`，不写购物车（原 v2「先加购 buyNow:true 再跳」已删；`CartRepository.add(buyNow)` 参数与其仓储测试保留）。
+- **bug 516 按设计改写**：胶囊坞按钮只开规格弹层，请求在弹层确认后发出；在途时加购圆钮转圈、立即购买药丸不可点、重复点击不再开弹层、只发一次请求。弹层确认键不转圈（8.1 弹层是「确认即关」的设计，未改其行为），story 原写的「弹层确认键提交中转圈」改由胶囊坞承载。
+- **对 8.1 共享件只加可选参数**（默认值保持现状，8.1 调用点与 `sku_picker_sheet_test` 不受影响）：`showSkuPickerSheet` / `SkuPickerSheet` 加 `initialSkuToken`、`onSkuChanged`；新增 `pickShopSku`（只返回选择、不执行动作，详情页自管在途锁）；`claimCouponWithFeedback` / `claimCouponOrLogin` 加 `topToast`、`onSettled`；`FakeCouponRepository` 加 `productItems`。`RegionKecamatan` 加命名可选 `id`。
+- **410 识别**：`ShopRepository.fetchDetail` 把 `status == 410` 或 `typeSlug` 以 `product-delisted` 结尾映射为 `ShopProductDelisted`（`isProductDelistedError`）；story 实现提示里的 `product.delisted` 是旧写法，按 C-2 连字符风格。
+- 埋点：新事件 `toko_delivery_area_selected{serviceable}`（取该次估运费的 `serviceable`，询价失败 / 未询价时取区域树里该区的）、`toko_coupon_claimed{coupon_id, source:"detail"}`；`epic1_analytics_test` 白名单新增 `serviceable`（已逐项写明非 PII 理由）；`v112_events_test` 未放宽。
+
+#### 复审修复（2026-11-05，协调者复审 6 条）
+
+1. **立即购买丢归因（中）**：结算路由加 `&from=`（与加购 `entrySource` 同值域，`buyNowCheckoutLocation` 统一拼）；`app_router` 把 `from` 传给 `CheckoutPageV3.buyNowEntrySource`，透传到试算 `CheckoutRequest` 与提交 `PlaceOrderRequest` 的 `buyNow.entrySource`（null 不发键；后端 `CheckoutPreviewRequest.BuyNow` / `PlaceOrderRequest` 已收）。详情页立即购买带 `widget.entrySource`；8.1 卡片弹层的立即购买同样带上已有的 `entrySource`（`sku_picker_sheet_test` 断言按设计改写为带 `&from=TOKO_ALL_FEATURED`）。`toko_order_submitted.items[].entry_source` 在 BUY_NOW 下以路由来源兜底（QuoteLine 仍不带来源）。**对 7-1 待确认 1**：服务端行级归因由此补上（此前立即购买的 `buyNow.entrySource` 恒空）；端上埋点 BUY_NOW 也不再恒为 `unknown`；CART 模式端上 `entry_source` 仍取 QuoteLine（不变）。7-1 story 未改。用例：`cart_attribution_test`「立即购买：路由 ?from= 带进结算路由」「BUY_NOW 请求体带 buyNow.entrySource；null 不发键」、`checkout_page_v3_test`「buy_now 带 from → 试算透传」。
+2. **领券在途关抽屉（中低）**：`claimCouponWithFeedback` 改为在 await 前取 `ProviderScope.containerOf(context)`，仓储读取与 `couponsForYouProvider` 失效都走容器（不依赖抽屉 ref / toast context），toast 仍只在 context 挂着时弹；抽屉的 `onSettled` 同样用容器级 `invalidate(productCouponsProvider)`，后续 `ref` 使用前判 `mounted`。用例：v3「领券在途关掉抽屉 → 不抛异常；for-you 与本商品券行照样刷新」。
+3. **bug 516 底色断言（低）**：`cart_guest_add_test` 补「在途时加购圆钮浅紫底、立即购买紫底不变、不出现售罄按钮」。
+4. **送达地区按设备记（低）**：选「退出登录 / 换账号时清」。`app.dart` 的登录态监听在 `leftUserAccount(prevId, nextId)`（此前有用户 id 且变了）时调 `shopDeliveryAreaProvider.notifier.clear()`（清内存 + `AppPrefs.clearShopDeliveryArea`）；冷启动恢复会话不清。用例：`delivery_area_sheet_test`「clear 清内存与本地」「leftUserAccount 真值表」。
+5. **运费行在途（低）**：loading 改由 `AsyncValue.isLoading` 驱动（重试 invalidate 后仍带旧值也算在途），在途禁用「Coba lagi」。用例：v3「重试在途 → Coba lagi 不可点，不重复请求」。
+6. **地址加载中（低）**：已登录且 `addressListProvider` 首次加载中 → 目的地暂不解析（送达值与运费行显示「—」，不询价），地址回来后按默认地址只询价一次。用例：v3「已登录、地址列表加载中 → 运费行「—」」。
+
 #### 待确认
 
+1. **无地区时的免运进度（原待确认 6）**：后端 `ShippingEstimateService` 对「既无地址也无地区」直接返回 `NO_DESTINATION`、**不带 `freeShippingProgress`**。故 B2 不调估运费、也不显示免运进度（UI B2 画了进度）；如需 B2 显示进度，需后端在无收货地时也给进度。
+2. **不可售 SKU 的运费行**：后端对 `sellable=false` 的 SKU 估运费返回 422，App 对不可售 SKU 不询价，送达行照常、运费行不画（B5 稿未画运费行，按最保守处理）。
+3. **询价请求整体失败（网络 / 5xx）**按 B15 显示「Ongkir belum bisa dimuat · Coba lagi」，此时无免运进度可画（只有服务端 200 + `quoteFailed` 才带进度）。
+4. **B6「Alamat saya」快捷组（原待确认 7）**：未做；已登录有默认地址时送达行直接显示默认地址。
+5. **领券成功 toast（原待确认 9）**：按 §6 用长句 `couponClaimedToast`「Kupon diklaim. Cek di Kupon Saya」。
+6. **上部顺序（原待确认 8）**：按 PRD「标题 → 价格」。
+
+#### 待设计确认（C-11：§6 未列、按 UI 原文 / 组合实现）
+
+- 送达行地区文案 `tokoShipToArea`：ID「Kec. {area}」（area = 「区, 市」），EN「{area} district」（D-3 规则不允许 EN 与 ID 同形「Kec.」）。
+- 评价条目「Varian: {规格}」用 `tokoVariantLabel` + 「: 」拼接（未新建 key）。
+- B6「Belum dilayani」复用 `addressNotServiceable`，原文为小写「belum dilayani」。
+- 详情页 / 评价页的星级、相对时间（复用 `formatPublishTime`）、胶囊坞配色与尺寸为结构实现，视觉待 L2。
+
 ### File List
+
+前端（`petgo_app/`）：
+- 新增：`lib/features/shop/presentation/product_detail_page_v3.dart`、`lib/features/shop/presentation/review_list_page.dart`、`lib/features/shop/presentation/widgets/delivery_area_sheet.dart`、`lib/features/shop/presentation/widgets/shop_review_tile.dart`、`lib/features/shop/coupon/presentation/product_coupons_sheet.dart`、`lib/features/shop/domain/shipping_estimate.dart`、`lib/features/shop/data/shipping_estimate_repository.dart`
+- 删除：`lib/features/shop/presentation/product_detail_page_v2.dart`、`test/shop/product_detail_page_v2_test.dart`（用例迁入 v3）
+- 修改：`lib/core/router/app_router.dart`（详情改指 v3、新增 `/shop/products/:token/reviews`）、`lib/core/network/api_paths.dart`、`lib/core/storage/prefs.dart`（`shopDeliveryArea` + `ShopDeliveryArea`）、`lib/features/shop/data/shop_repository.dart`（410 → `ShopProductDelisted`）、`lib/features/shop/data/shop_review_repository.dart`（`page` + `reviewListProvider`）、`lib/features/shop/domain/shop_product_detail.dart`、`lib/features/shop/domain/shop_review.dart`、`lib/features/shop/address/domain/shipping_address.dart`（`RegionKecamatan.id`）、`lib/features/shop/coupon/data/coupon_repository.dart`（`forProduct` + `productCouponsProvider`）、`lib/features/shop/coupon/presentation/coupon_claim.dart`、`lib/features/shop/presentation/widgets/sku_picker_sheet.dart`、`lib/l10n/app_en.arb`、`lib/l10n/app_id.arb`
+- 测试新增：`test/shop/product_detail_page_v3_test.dart`、`test/shop/delivery_area_sheet_test.dart`、`test/shop/review_list_page_test.dart`、`test/shop/pdp_fakes.dart`
+- 测试修改：`test/shop/cart_guest_add_test.dart`、`test/shop/cart_attribution_test.dart`、`test/shop/epic1_analytics_test.dart`、`test/shop/fake_shop_products.dart`
+- 复审修复追加修改：`lib/app.dart`（退出 / 换号清送达地区）、`lib/features/shop/domain/checkout_preview.dart`（`buyNowEntrySource`）、`lib/features/shop/presentation/checkout_page_v3.dart`（`buyNowEntrySource` 透传 + 埋点兜底）、`test/shop/checkout_page_v3_test.dart`、`test/shop/sku_picker_sheet_test.dart`（buyNow 路由断言按设计改写）；并改动上列 `coupon_claim.dart`、`product_coupons_sheet.dart`、`sku_picker_sheet.dart`、`shipping_estimate_repository.dart`、`prefs.dart`、`product_detail_page_v3.dart`、`app_router.dart` 及 `pdp_fakes.dart`、`delivery_area_sheet_test.dart`、`product_detail_page_v3_test.dart`
+
+后端 / 迁移：无。
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev），依据决策日志 S-0 ~ S-9、PRD §6、架构增量、UI 定稿与 `dev_1.4.2` @ 2c507755 代码现状。
+- 2026-11-05：dev 实现（App only）：详情 v3（B1–B15）、B6 地区抽屉、B7/B8 领券抽屉、B12 全部评价页、B13 下架页；接口契约节按后端实际代码对齐；L0 全绿，状态 → review（L1/L2 待本地验收）。
+- 2026-11-05：复审修复 6 条（立即购买归因透传、领券在途关抽屉、bug 516 底色断言、退出 / 换号清送达地区、运费行 isLoading、地址加载中不解析目的地）；L0 全绿（4687 / 0 失败）。

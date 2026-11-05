@@ -32,6 +32,7 @@ import 'package:tailtopia/features/notify/domain/app_version_check.dart';
 import 'package:tailtopia/features/notify/presentation/app_update_presenter.dart';
 import 'package:tailtopia/features/order/presentation/order_list_controller.dart';
 import 'package:tailtopia/features/shop/coupon/data/coupon_repository.dart';
+import 'package:tailtopia/features/shop/data/shipping_estimate_repository.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
@@ -265,6 +266,11 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       final prevId = prev?.profile?.id;
       final nextId = next.profile?.id;
+      // v1.4.2 shop Story 8.2 复审 #4：商品详情 B6「记住的送达地区」按设备存，退出登录 / 换账号时清掉
+      //    （只是区域参考数据、不含地址，但下一个使用者不该继承上一位的选择）。冷启动恢复不清。
+      if (leftUserAccount(prevId, nextId)) {
+        unawaited(ref.read(shopDeliveryAreaProvider.notifier).clear());
+      }
       if (next.status != AuthStatus.guest && nextId != null) {
         // 非 guest 且拿到 id（含 newUserPendingOnboarding 引导期）。仅在 id 变化时上报，避免改资料重复 identify；
         // 直接切到另一用户（中途未过 guest）时先 reset 再 identify，遵守 PostHog「换人先 reset」规约。

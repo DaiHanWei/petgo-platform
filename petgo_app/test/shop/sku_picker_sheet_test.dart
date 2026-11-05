@@ -231,7 +231,8 @@ void main() {
     await t.pump();
     await t.tap(find.text('Beli Sekarang'));
     await t.pumpAndSettle();
-    expect(r.pushed, ['/shop/checkout?source=buy_now&sku=a&qty=2']);
+    // v1.4.2 8.2 复审 #1（按设计改写）：立即购买同样带归因来源 `&from=`（与加购 entrySource 同值域）。
+    expect(r.pushed, ['/shop/checkout?source=buy_now&sku=a&qty=2&from=TOKO_ALL_FEATURED']);
     expect(r.cart.added, isEmpty);
     expect(events.where((e) => e.$1 == 'toko_buy_now_tapped'), hasLength(1));
   });

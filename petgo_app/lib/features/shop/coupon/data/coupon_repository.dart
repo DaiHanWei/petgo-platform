@@ -40,6 +40,18 @@ class CouponRepository {
         .toList(growable: false);
   }
 
+  /// 商品可领的券（v1.4.2 shop Story 8.2 · B1 / B7）。游客可读（`claimed` 恒 false）。
+  Future<List<ShopCoupon>> forProduct(String productToken) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.shopProductCoupons(productToken));
+    final items = resp.data?['items'];
+    if (items is! List) return const [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(ShopCoupon.fromJson)
+        .where((c) => c.couponToken.isNotEmpty)
+        .toList(growable: false);
+  }
+
   /// 游客新人券活动。无活动（204）→ null。
   Future<NewbieCampaign?> newbieCampaign() async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.shopNewbieCampaign);
@@ -66,6 +78,19 @@ final couponsForYouProvider = FutureProvider.autoDispose<List<ShopCoupon>>((ref)
   if (!auth.isLoggedIn) return const [];
   try {
     return await ref.read(couponRepositoryProvider).forYou();
+  } catch (_) {
+    return const [];
+  }
+});
+
+/// 商品详情「可领的券」（8.2 AC4）。空 / 失败 → 空列表（整行不画）。
+///
+/// 🔴 watch 登录态：登录 / 换号后重拉，`claimed` 只取服务端值（不在本地记「已领」，同 8.1 复审 #1）。
+final productCouponsProvider =
+    FutureProvider.autoDispose.family<List<ShopCoupon>, String>((ref, productToken) async {
+  ref.watch(authControllerProvider.select((a) => a.isLoggedIn));
+  try {
+    return await ref.read(couponRepositoryProvider).forProduct(productToken);
   } catch (_) {
     return const [];
   }

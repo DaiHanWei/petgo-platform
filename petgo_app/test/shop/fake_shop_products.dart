@@ -109,9 +109,14 @@ class FakeCouponRepository extends CouponRepository {
     this.campaign,
     this.entryIssued = false,
     this.claimError,
+    this.productItems = const [],
   }) : super(dio: Dio());
 
   List<ShopCoupon> forYouItems;
+
+  /// 商品详情「可领的券」（v1.4.2 shop Story 8.2）。领成功后同样按服务端口径标 claimed。
+  List<ShopCoupon> productItems;
+  int productCalls = 0;
   NewbieCampaign? campaign;
   bool entryIssued;
 
@@ -143,14 +148,30 @@ class FakeCouponRepository extends CouponRepository {
       forYouItems = [
         for (final c in forYouItems) c.couponToken == couponToken ? c.copyWith(claimed: true) : c,
       ];
+      productItems = [
+        for (final c in productItems) c.couponToken == couponToken ? c.copyWith(claimed: true) : c,
+      ];
     }
-    final hit = forYouItems.where((c) => c.couponToken == couponToken).firstOrNull;
+    final hit = [...forYouItems, ...productItems]
+        .where((c) => c.couponToken == couponToken)
+        .firstOrNull;
     return (hit ?? ShopCoupon(couponToken: couponToken, kind: CouponKind.discount, amount: 0, minSpend: 0))
         .copyWith(claimed: true);
   }
 
+  int forYouCalls = 0;
+
   @override
-  Future<List<ShopCoupon>> forYou() async => forYouItems;
+  Future<List<ShopCoupon>> forYou() async {
+    forYouCalls++;
+    return forYouItems;
+  }
+
+  @override
+  Future<List<ShopCoupon>> forProduct(String productToken) async {
+    productCalls++;
+    return productItems;
+  }
 
   @override
   Future<NewbieCampaign?> newbieCampaign() async {

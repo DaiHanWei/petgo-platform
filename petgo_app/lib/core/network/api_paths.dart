@@ -472,6 +472,15 @@ class ApiPaths {
   /// 商品列表（Story 1.1 只读接口，**已对游客放行**）。可选 query：`category`。
   static const String shopProducts = '$base/shop/products';
 
+  /// 商品可领的券（v1.4.2 shop Story 2.2 / App 8.2，游客可读，`claimed` 只对 USER 有意义）→ `{items: CouponView[]}`。
+  static String shopProductCoupons(String productToken) =>
+      '$base/shop/products/$productToken/coupons';
+
+  /// 商品详情运费估算（v1.4.2 shop Story 3.1 / App 8.2，游客可用）：
+  /// `?skuToken=&qty=&addressToken=|regionKecamatanId=` → `{serviceable?, lowestFee?, quoteFailed, freeShippingProgress?, reason?}`。
+  static String shopProductShippingEstimate(String productToken) =>
+      '$base/shop/products/$productToken/shipping-estimate';
+
   /// Toko 首页 banner 轮播（v1.4.2 shop Story 6.1 / App 8.1，游客可用）→ `{items: [...]}`，≤ 6 张、已排序、已过滤失效目标。
   /// ⚠️ 旧单张端点 `/shop/banner` 只留给旧版 App，本 App 不再调用。
   static const String shopBanners = '$base/shop/banners';

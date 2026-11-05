@@ -5,13 +5,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
-import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
-import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/product_detail_page_v3.dart';
 import 'package:tailtopia/features/shop/presentation/toko_page_v3.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'fake_shop_products.dart';
+import 'pdp_fakes.dart';
 
 /// Story 1.8：Epic 1 埋点收口。
 ///
@@ -74,13 +74,13 @@ void main() {
 
   testWidgets('详情页：toko_product_detail_viewed', (t) async {
     await t.pumpWidget(wrap(
-      const ProductDetailPageV2(token: 'tok1'),
-      [
-        shopProductDetailProvider.overrideWith((ref, token) async => ShopProductDetail(
-              token: 'tok1', name: 'n', brand: 'b',
-              returnPolicy: ReturnPolicy.returnable, skus: [sku('3 kg')],
-            )),
-      ],
+      const ProductDetailPageV3(token: 'tok1'),
+      pdpOverrides(
+        detail: ShopProductDetail(
+          token: 'tok1', name: 'n', brand: 'b',
+          returnPolicy: ReturnPolicy.returnable, skus: [sku('3 kg')],
+        ),
+      ),
     ));
     await t.pumpAndSettle();
 
@@ -96,14 +96,14 @@ void main() {
     });
 
     await t.pumpWidget(wrap(
-      const ProductDetailPageV2(token: 'tok1'),
-      [
-        shopProductDetailProvider.overrideWith((ref, token) async => ShopProductDetail(
-              token: 'tok1', name: 'n', brand: 'b',
-              returnPolicy: ReturnPolicy.returnable,
-              skus: [sku('3 kg', stock: StockStatus.outOfStock)],
-            )),
-      ],
+      const ProductDetailPageV3(token: 'tok1'),
+      pdpOverrides(
+        detail: ShopProductDetail(
+          token: 'tok1', name: 'n', brand: 'b',
+          returnPolicy: ReturnPolicy.returnable,
+          skus: [sku('3 kg', stock: StockStatus.outOfStock)],
+        ),
+      ),
     ));
     await t.pumpAndSettle();
 
@@ -181,7 +181,11 @@ void main() {
       // - action：toko_newbie_coupon_popup_tapped 的动作，受控词表 register / close
       // （同批：banner position 改为实际轮播位次，target_type 词表改为 product_detail / coupon / toko_home /
       //   external_link / none —— 键名不变。）
+      // v1.4.2 shop Story 8.2（商品详情，PRD §4）新增一项，已逐个确认：
+      // - serviceable：toko_delivery_area_selected 的 bool（所选地区能否配送）；🔒 刻意不带地区名 / 邮编 / 区域 id。
+      //   （toko_coupon_claimed 的 source 新增取值 detail，键名不变。）
       expect(props, {
+        'serviceable',
         'coupon_id', 'source', 'action',
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
         'trigger_type', 'product_id',
