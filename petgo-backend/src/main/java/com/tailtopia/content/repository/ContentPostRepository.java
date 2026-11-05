@@ -348,6 +348,40 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<ContentPost> searchPinnable(@Param("pattern") String pattern, Pageable pageable);
 
     /**
+     * 话题页顶置的候选（V1.4.2 social-topic · Story 6.2 · AC4.2）：{@link #searchPinnable} 同一组条件
+     * + 该帖挂在话题 {@code :topicId} 下（{@code content_topics} 关联）
+     * + 作者未注销且 ACTIVE（与 4.2 话题帖子列表口径一致：不把封号作者的帖顶到话题页；首页 Feed 的
+     * {@link #searchPinnable} 不动）。{@code pattern} 同样绝不传 null。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND LOWER(COALESCE(p.text, '')) LIKE :pattern
+              AND EXISTS (SELECT 1 FROM ContentTopic ct WHERE ct.postId = p.id AND ct.topicId = :topicId)
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> searchPinnableInTopic(@Param("pattern") String pattern, @Param("topicId") long topicId,
+            Pageable pageable);
+
+    /**
+     * 该帖是否挂在该话题下、且作者未注销并 ACTIVE（Story 6.2：选帖按 id 直达 / 新建话题页内容顶置的服务端校验；
+     * 作者口径同 {@link #searchPinnableInTopic}）。帖子本身的可顶置条件由调用方另判。
+     */
+    @Query("""
+            SELECT COUNT(ct) > 0 FROM ContentTopic ct, ContentPost p
+            WHERE ct.postId = :postId AND ct.topicId = :topicId AND p.id = ct.postId
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+            """)
+    boolean isInTopic(@Param("postId") long postId, @Param("topicId") long topicId);
+
+    /**
      * 成长时间线读：某作者某宠物某类型未删内容，createdAt 倒序游标分页（Story 2.4）。
      * bug 20260721-271：按 petId 过滤——删宠档后 detachPet 把旧帖 pet_id 置 NULL，
      * 不加 petId 会让 NULL 旧帖漏进新宠物档案（串档）。

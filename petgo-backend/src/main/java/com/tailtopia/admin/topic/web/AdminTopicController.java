@@ -1,6 +1,7 @@
 package com.tailtopia.admin.topic.web;
 
 import com.tailtopia.admin.account.domain.AdminPermissions;
+import com.tailtopia.admin.pin.service.AdminContentPinService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
 import com.tailtopia.admin.shared.web.AdminHxEvents;
@@ -13,9 +14,13 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
 import com.tailtopia.topic.domain.TopicNameRules;
 import jakarta.servlet.http.HttpServletResponse;
+import java.time.Instant;
 import java.util.function.Supplier;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,10 +53,13 @@ public class AdminTopicController {
 
     private final AdminTopicService service;
     private final Messages msg;
+    /** 抽屉「话题页顶置」区块（V1.4.2 Story 6.2 · AC8）：与 G1b 同一份数据。 */
+    private final AdminContentPinService pins;
 
-    public AdminTopicController(AdminTopicService service, Messages msg) {
+    public AdminTopicController(AdminTopicService service, Messages msg, AdminContentPinService pins) {
         this.service = service;
         this.msg = msg;
+        this.pins = pins;
     }
 
     // ================================================================ 列表（F1 / F8 / F9）
@@ -121,6 +129,23 @@ public class AdminTopicController {
         model.addAttribute("active", "topics");
         model.addAttribute("t", t);
         model.addAttribute("livePosts", service.livePostCount(id));
+        // Story 6.2（AC8.2）：禁用话题无区块；无顶置查看权限（且非超管）也不取、不显示。
+        if (!t.disabled() && canViewPins()) {
+            model.addAttribute("topicPins", pins.topicPinPreview(id, Instant.now()));
+        }
+    }
+
+    /**
+     * 当前账号能否看顶置 —— 与 {@code AdminContentPinController.VIEW} 同一判据
+     * （{@code SUPER_ADMIN} 或 {@code content.pin_view}）；模板侧再用逐字一致的 {@code sec:authorize} 兜一层。
+     */
+    static boolean canViewPins() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        return auth.getAuthorities().stream().map(GrantedAuthority::getAuthority)
+                .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a) || AdminPermissions.CONTENT_PIN_VIEW.equals(a));
     }
 
     /** 抽屉内处置成功：抽屉重渲染 + toast + 列表按当前筛选 / 当前页重拉。 */

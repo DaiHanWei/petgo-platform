@@ -268,6 +268,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
      */
     static final java.util.List<String> SWEPT_PAGES = java.util.List.of("/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
                 "/admin/content-pins", "/admin/content-tags", "/admin/topics", "/admin/user-tags",
+                "/admin/content-pins/topics", // V1.4.2 Story 6.2：顶置管理「话题页」页签（G1a）
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
                 // ⛔ /admin/vets/online 已退役（V1.3.0 Story 9.1a：并入兽医列表与抽屉）。
                 // ⛔ /admin/ratings 已退役（V1.3.0 Story 9.1b：并入兽医列表筛选栏与抽屉评分页签）。

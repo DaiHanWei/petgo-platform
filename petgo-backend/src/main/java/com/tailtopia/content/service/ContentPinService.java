@@ -135,6 +135,11 @@ public class ContentPinService {
         return pins.findBySlotOrderByStartsAtDesc(slot);
     }
 
+    /** 多个坑位的全部排期（V1.4.2 Story 6.2 · G1a 话题汇总，一次查完；空集合直接回空）。 */
+    public List<ContentPin> listBySlots(java.util.Collection<String> slots) {
+        return slots == null || slots.isEmpty() ? List.of() : pins.findBySlotIn(slots);
+    }
+
     /**
      * 按 id 取一条排期（V1.3.0 Story 7.3 抽屉用）；不存在返回 empty。
      *

@@ -95,11 +95,41 @@ public class AdminTopicStore {
         return rows.stream().findFirst();
     }
 
+    /**
+     * 新建话题页顶置时锁住话题行（V1.4.2 Story 6.2 复审 a）：{@code FOR SHARE} 与 {@link #updateStatus} 的行锁互斥 ——
+     * 禁用先提交 → 这里读到 DISABLED；这里先拿到锁 → 禁用等本事务提交后再 {@code terminateForSlot}，新排期一并结束。
+     * 必须在调用方的写事务里调用。
+     *
+     * @return 当前状态；行不存在 → empty
+     */
+    public Optional<TopicStatus> lockStatusForShare(long id) {
+        List<String> rows = jdbc.queryForList("SELECT status FROM topics WHERE id = :id FOR SHARE",
+                new MapSqlParameterSource("id", id), String.class);
+        return rows.stream().findFirst().map(TopicStatus::valueOf);
+    }
+
     /** 一页列表（多取 1 行判定是否有下一页）。 */
     public TopicPage page(TopicFilter filter, int page) {
         int p = Math.max(page, 0);
         MapSqlParameterSource params = new MapSqlParameterSource();
         String where = where(filter, params);
+        params.addValue("limit", PAGE_SIZE + 1).addValue("offset", (long) p * PAGE_SIZE);
+        List<TopicView> rows = jdbc.query("SELECT " + COLUMNS + " FROM topics" + where + ORDER_BY
+                + " LIMIT :limit OFFSET :offset", params, ROW);
+        boolean hasNext = rows.size() > PAGE_SIZE;
+        return new TopicPage(hasNext ? List.copyOf(rows.subList(0, PAGE_SIZE)) : List.copyOf(rows), p, hasNext);
+    }
+
+    /**
+     * 可配置话题页顶置的话题（V1.4.2 Story 6.2 · G1a / AC5）：只列 ACTIVE 与 HIDDEN（不列禁用），
+     * 按名搜（同列表：去前导 {@code #}、标准化、转义 {@code % _}），默认排序同列表，每页 {@link #PAGE_SIZE}。
+     */
+    public TopicPage pinnablePage(String q, int page) {
+        int p = Math.max(page, 0);
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        String where = where(TopicFilter.of(null, null, q), params);
+        String cond = "status IN ('ACTIVE', 'HIDDEN')";
+        where = where.isEmpty() ? " WHERE " + cond : where + " AND " + cond;
         params.addValue("limit", PAGE_SIZE + 1).addValue("offset", (long) p * PAGE_SIZE);
         List<TopicView> rows = jdbc.query("SELECT " + COLUMNS + " FROM topics" + where + ORDER_BY
                 + " LIMIT :limit OFFSET :offset", params, ROW);

@@ -40,6 +40,9 @@ public interface ContentPinRepository extends JpaRepository<ContentPin, Long> {
     /** 后台列表（Story 11.1）：某坑位全部排期，含已结束的历史，开始时间倒序。 */
     List<ContentPin> findBySlotOrderByStartsAtDesc(String slot);
 
+    /** 后台话题页顶置汇总（V1.4.2 Story 6.2 · G1a）：一次取多个坑位的全部排期（禁逐话题查）。 */
+    List<ContentPin> findBySlotIn(java.util.Collection<String> slots);
+
     /**
      * 与给定窗口重叠的排期（重叠校验用）。
      *

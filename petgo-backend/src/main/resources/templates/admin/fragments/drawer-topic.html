@@ -4,7 +4,7 @@
   话题抽屉（V1.4.2 Story 6.1 · UI 稿 F2–F7，480px 抽屉体 res=topic）。片段：
     drawer      — 编辑：头部卡（名称 + 类型 + 状态；帖子数【实时】/ 热度 / 首页话题行 / 创建或禁用时间 WIB）
                   → 编辑区（显示写法只改大小写；官方话题可改说明 ID / EN；用户话题无说明框）
-                  → [6.2 顶置区块插槽] → 吸底操作条（隐藏 / 禁用 / 恢复为正常）
+                  →「话题页顶置」区块（6.2）→ 吸底操作条（隐藏 / 禁用 / 恢复为正常）
     createForm  — 新建官方话题（# 前缀输入、说明 ID / EN 选填、300ms 防抖查重）
     nameCheck   — 查重结果：黄条（升级，带 confirm 文案）/ 行内错误（不合规、已有官方、同名用户话题已禁用）
     toastOnly   — 只回一个 toast（新建成功 / 首页话题行开关、序号）
@@ -102,7 +102,50 @@
         </th:block>
     </section>
 
-    <!--/* ③ 预留：「话题页顶置」区块插槽 —— Story 6.2 在此填（官方 / 用户 / 隐藏话题有，禁用话题没有）。本 story 不渲染任何内容。 */-->
+    <!--/* ③「话题页顶置」区块（V1.4.2 Story 6.2 · AC8，UI F4 / F5）：官方 / 用户 / 隐藏话题有，禁用话题（F7）没有；
+           无顶置查看权限不显示（控制器也不取 topicPins）。只看和新建 —— 改时间 / 提前结束在 G1b 做；与 G1b 同一份数据。
+           「＋ 新建顶置」把 G2 表单载入**同一个**话题抽屉（data-drawer-res="topic"，替换抽屉体，不叠第二层）。 */-->
+    <section class="card card-full pin-card topic-pins" data-section="topic-pins"
+             th:if="${topicPins != null and !t.disabled()}"
+             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')">
+        <h3 th:text="#{admin.topics.pins.title}">话题页顶置</h3>
+        <dl class="topic-pins-dl">
+            <div>
+                <dt th:text="#{admin.pins.phase.active}">生效中</dt>
+                <dd th:with="a=${topicPins.active}">
+                    <th:block th:if="${a != null}">
+                        <span class="muted" th:text="${a.objectType == 'PROMO'} ? #{admin.pins.type.promo} : #{admin.pins.type.content}">推广卡片</span>
+                        <span class="topic-pins-sum" th:text="${a.summary} ?: '—'">标题摘要</span>
+                    </th:block>
+                    <span class="muted" th:if="${a == null}">—</span>
+                </dd>
+            </div>
+            <div>
+                <dt th:text="#{admin.pins.phase.pending}">排期中</dt>
+                <dd>
+                    <span class="muted" th:if="${#lists.isEmpty(topicPins.pending)}">—</span>
+                    <div class="topic-pins-item" th:each="p : ${topicPins.pending}">
+                        <span class="muted" th:text="${p.objectType == 'PROMO'} ? #{admin.pins.type.promo} : #{admin.pins.type.content}">推广卡片</span>
+                        <span class="topic-pins-sum" th:text="${p.summary} ?: '—'">标题摘要</span>
+                        <span class="muted nowrap">
+                            <span th:text="${@adminTime.fmt(p.startsAt)}">2026-11-23 00:00</span>
+                            –
+                            <span th:text="${@adminTime.fmt(p.endsAt)}">2026-11-30 23:59</span>
+                            WIB
+                        </span>
+                    </div>
+                </dd>
+            </div>
+        </dl>
+        <div class="topic-pins-acts">
+            <button type="button" class="btn btn-neutral btn-sm" data-drawer-res="topic"
+                    th:attr="data-drawer-open=@{/admin/content-pins/new/drawer(slot='TOPIC_PAGE',topicId=${t.id},from='topic')}"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_manage')"
+                    th:text="#{admin.pins.new}">＋ 新建顶置</button>
+            <a th:href="@{/admin/content-pins/topics/{id}(id=${t.id})}" data-no-drawer
+               th:text="#{admin.topics.pins.viewAll}">查看全部排期 →</a>
+        </div>
+    </section>
 
     <!--/* ④ 吸底操作条：隐藏直接生效；禁用 / 恢复禁用走原生 confirm；恢复隐藏不确认（PRD §3.4 二次确认规则） */-->
     <section class="pl-actions sticky-footer topic-actions" th:if="${canManage}" data-topic-actions>

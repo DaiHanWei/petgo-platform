@@ -589,8 +589,8 @@ dialog { z-index: 60; }
 .empty--queue + .empty-elsewhere { margin-top: -32px; padding-bottom: 40px; }
 /* 模板 B 列表 */
 .lst-table table tr { height: 48px; }
-.lst-table tr[data-drawer-url] { cursor: pointer; }
-.lst-table tr[data-drawer-url]:hover { background: var(--brand-tint); }
+.lst-table tr[data-drawer-url], .lst-table tr[data-href] { cursor: pointer; }
+.lst-table tr[data-drawer-url]:hover, .lst-table tr[data-href]:hover { background: var(--brand-tint); }
 .lst-table tr.is-selected { background: var(--brand-tint); box-shadow: inset 3px 0 0 var(--brand); }
 /* 模板 C 报表 */
 .rpt-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -1524,3 +1524,30 @@ body:has(#growthbatch-drawer.drawer.is-open) .toast { right: 24px; bottom: 76px;
 .topic-save { min-width: 88px; }
 .topic-drawer [data-topic-caseonly][hidden] { display: none; }
 .topic-actions .lst-inline-error { flex: 1; margin: 0; }
+
+/* ===== V1.4.2 social-topic · Story 6.2 话题页顶置（UI G1–G2、F4 / F5 区块）===== */
+/* 页签条与说明句、筛选栏之间的间距（UI G1 .lG-tabs margin 4px 0 16px） */
+.pins-tabs { margin: 4px 0 16px; }
+.pins-tabs .tab { font-weight: 700; margin-bottom: -1px; }
+/* 面包屑（新写法，后台此前无面包屑组件）：13px 灰字、链接品牌紫、「/」分隔、末段深色半粗 */
+.crumbs { margin: 0 0 6px; font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.crumbs a { color: var(--brand-strong); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs b { color: var(--ink); font-weight: 600; }
+.pin-topic-h1 { display: flex; align-items: center; gap: 8px; }
+.pin-topic-acts { display: flex; gap: 8px; align-items: center; }
+/* G1a：当前生效的顶置一行截断 */
+.pin-topics-table { table-layout: fixed; width: 100%; }
+.pin-topic-cur { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* G2：坑位只读一行（不用灰底框） */
+.pin-slot-line { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
+.pin-slot-line .muted { margin-right: 8px; }
+.pin-back { margin: 0 0 8px; }
+/* F4 / F5「话题页顶置」区块：白卡 + 13px 灰色半粗小标题（.pin-card h3） */
+.topic-pins-dl { margin: 0 0 8px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.topic-pins-dl > div { display: grid; grid-template-columns: 64px 1fr; gap: 8px; }
+.topic-pins-dl dt { color: var(--muted); }
+.topic-pins-dl dd { margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.topic-pins-item { min-width: 0; }
+.topic-pins-sum { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.topic-pins-acts { display: flex; gap: 12px; align-items: center; }

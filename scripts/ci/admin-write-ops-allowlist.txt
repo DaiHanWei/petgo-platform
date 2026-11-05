@@ -44,6 +44,8 @@
 + GET /admin/topics/new/drawer   # V1.4.2 Story 6.1（AB-10B 新建抽屉）
 + GET /admin/topics/name-check   # V1.4.2 Story 6.1（AB-10B 新建名称查重片段）
 + GET /admin/topics/{id}/drawer   # V1.4.2 Story 6.1（AB-10B 话题抽屉）
++ GET /admin/content-pins/topics   # V1.4.2 Story 6.2（AB-10A G1a 顶置管理「话题页」页签：话题列表）
++ GET /admin/content-pins/topics/{topicId}   # V1.4.2 Story 6.2（AB-10A G1b 话题排期页）
 + GET /admin/merchant/purchase-orders   # 商家平台对接：门店进货单列表（新页面）
 + GET /admin/merchant/purchase-orders/{token}   # 商家平台对接：门店进货单详情（新页面）
 + GET /admin/accounts/new/drawer   # Story 6.5（B24 后台账号抽屉 / 创建账号）
