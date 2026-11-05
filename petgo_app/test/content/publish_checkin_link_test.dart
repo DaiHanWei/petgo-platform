@@ -18,6 +18,7 @@ import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// V1.3.2 Story 1.5 · L0：打卡后顺手发帖 —— 请求体、控制器透传、发帖页场所条、详情模型。
 void main() {
@@ -159,7 +160,7 @@ class _RecordingRepo implements ContentRepository {
   ContentType? lastType;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -175,7 +176,7 @@ class _RecordingRepo implements ContentRepository {
   }) async {
     lastToken = placeCheckinToken;
     lastType = type;
-    return 1;
+    return const PublishedPost(id: 1);
   }
 }
 

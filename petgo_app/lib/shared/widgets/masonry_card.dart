@@ -7,9 +7,9 @@ import '../../features/content/domain/feed_image_layout.dart';
 import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
 import '../../features/mention/domain/mention_context.dart';
-import '../../features/mention/presentation/mention_text.dart';
 import '../../features/social/presentation/widgets/follow_button.dart';
 import '../../l10n/app_localizations.dart';
+import '../rich_text/rich_body_text.dart';
 import 'feed_image.dart';
 import 'content_tag_chip.dart';
 import 'user_tag_row.dart';
@@ -47,6 +47,7 @@ class MasonryCard extends StatelessWidget {
     this.feedTab,
     this.rankMode,
     this.onTapMention,
+    this.onTapTopic,
     this.followSurfaceKey,
   });
 
@@ -77,6 +78,10 @@ class MasonryCard extends StatelessWidget {
   /// 🛡 为空则正文里的 @ 只高亮不可点 —— 本组件是共享件，没有跳转语义的调用方
   /// 不该凭空多一个能点的片段。
   final void Function(int userId)? onTapMention;
+
+  /// 点正文里的 `#话题` → 话题页（V1.4.2 social-topic · Story 4.4 · C5），参数为标准名。
+  /// 为空则话题按普通文字；与 [onTapMention] 都为空 → 正文是纯 [Text]。
+  final void Function(String topicName)? onTapTopic;
 
   /// 关注按钮的位置键（V1.3.4 follow · Story 2.1 · AC5.4）：普通卡 `feed:item:{id}`、顶置卡 `feed:pinned:{id}`。
   /// **不传就不显示关注按钮** —— 「我的发布」等别的调用方完全不受影响。
@@ -317,15 +322,18 @@ class MasonryCard extends StatelessWidget {
                     // 🔴 点 @ 与「整块进详情」是**两个手势**，靠手势竞技场分开 ——
                     //    TextSpan 上的 recognizer 命中更深，同一次点击只会有一个赢家，
                     //    所以点 @ 不会顺带把详情页也推出来（有测试钉着这一条）。
-                    child: onTapMention == null
+                    // V1.4.2 Story 4.4：话题同理（点话题进话题页、点其余区域仍进帖子）。
+                    child: onTapMention == null && onTapTopic == null
                         ? Text(item.body!,
                             style: AppTypography.body,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis)
-                        : MentionText(
+                        : RichBodyText(
                             text: item.body!,
                             mentions: item.mentions,
-                            onTapUser: onTapMention!,
+                            topicNames: item.topicNames,
+                            onTapUser: onTapMention,
+                            onTapTopic: onTapTopic,
                             mentionContext: MentionContext.post,
                             style: AppTypography.body,
                             maxLines: 2,

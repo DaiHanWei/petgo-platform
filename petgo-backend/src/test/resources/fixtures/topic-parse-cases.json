@@ -606,8 +606,7 @@
       "topics": [],
       "norms": [],
       "ranges": [],
-      "dartSkip": true,
-      "note": "U+0130 小写后变 2 码点，标准名 31 码点超长 → 整段不算"
+      "note": "U+0130 小写后变 2 码点，标准名 31 码点超长 → 整段不算（V1.4.2 Story 4.4 起 Dart normalizeTopic 补了 İ → i̇ 映射，不再 dartSkip）"
     },
     {
       "id": "astral_letters",
@@ -642,6 +641,31 @@
         ]
       ],
       "note": "正好 30 个汉字：长度上界（含）"
+    },
+    {
+      "id": "final_sigma",
+      "input": "#ΟΔΟΣ dan #猫Σ #ΑΣΑ",
+      "topics": ["ΟΔΟΣ", "猫Σ", "ΑΣΑ"],
+      "norms": ["οδος", "猫σ", "ασα"],
+      "ranges": [[0, 5], [10, 13], [14, 18]],
+      "note": "Java toLowerCase(Locale.ROOT) 的 Final_Sigma：前有 cased 字母、后无 cased 字母 → ς；猫 不是 cased → σ；词中 → σ（V1.4.2 Story 4.4）"
+    },
+    {
+      "id": "dotted_I_short",
+      "input": "#İzmir lucu",
+      "topics": ["İzmir"],
+      "norms": ["i\u0307zmir"],
+      "ranges": [[0, 6]],
+      "note": "U+0130 在 Locale.ROOT 下小写为 i + U+0307（Dart 原生会丢掉点，normalizeTopic 已补映射）（V1.4.2 Story 4.4）"
+    },
+    {
+      "id": "nfd_short",
+      "input": "#Pe\u0301 ok",
+      "topics": ["Pe\u0301"],
+      "norms": ["p\u00e9"],
+      "ranges": [[0, 4]],
+      "dartSkip": true,
+      "note": "NFD 短话题：服务端标准名为 NFC 的 pé；Dart 无 NFC，App norm 仍是分解形式。展示侧靠 matchServerTopicName 的 NFD 容错对上服务端名（rich_body_text_test 钉住）（V1.4.2 Story 4.4）"
     }
   ]
 }

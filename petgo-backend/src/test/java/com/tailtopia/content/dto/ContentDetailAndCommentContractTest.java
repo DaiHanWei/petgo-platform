@@ -72,8 +72,8 @@ class ContentDetailAndCommentContractTest {
                                 50_000L, 1L)))),
                 // V1.4.0 ④ Story 2.1：是否已收藏（恒下发）+ 作者视角收藏数（非作者为 null → 省略，见下一例）。
                 true, 2L,
-                // V1.4.2 social-topic Story 4.1：topicNames 空 → 省略（App 4.3 / 4.4 接入后再并入契约字段集）。
-                null);
+                // V1.4.2 social-topic Story 4.1 / 4.4：话题标准名（App ContentDetail.topicNames 已接入，并入契约字段集）。
+                List.of("kucinglucu"));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
@@ -81,7 +81,8 @@ class ContentDetailAndCommentContractTest {
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
                 "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState",
                 "imageCropOffsets", "authorLevel", "authorTier", "authorFrame", "giftPets",
-                "collected", "collectCount"));
+                "collected", "collectCount", "topicNames"));
+        assertThat(wire(d)).containsEntry("topicNames", List.of("kucinglucu"));
         assertThat(wire(d)).containsEntry("authorLevel", 7).containsEntry("authorTier", "BUDDY")
                 .containsEntry("authorFrame", "BASIC");
         assertThat(wire(d)).containsEntry("collected", true).containsEntry("collectCount", 2L);

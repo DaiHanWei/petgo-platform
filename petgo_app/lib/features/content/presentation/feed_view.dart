@@ -34,6 +34,7 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.onLongPressItem,
     this.onAuthorTap,
     this.onTapMention,
+    this.onTapTopic,
     this.onCommentItem,
     this.onMoreItem,
     this.header,
@@ -75,6 +76,9 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   /// ⚠️ 与 [onAuthorTap] 分开两个回调：拉黑 / 举报后的收尾都是「把**那个作者**的卡片
   /// 从列表移除」，而被 @ 的人通常**不是**这条卡片的作者 —— 共用一个回调会把错的人清掉。
   final void Function(int userId)? onTapMention;
+
+  /// 点正文里的 `#话题` → 话题页（V1.4.2 social-topic · Story 4.4），参数为标准名；透传到普通卡与内容顶置卡。
+  final void Function(String topicName)? onTapTopic;
 
   /// 可选全幅头部（随 Feed 同滚）。Beranda 用作问候/快捷入口/每日提示区。
   final Widget? header;
@@ -477,6 +481,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                 onAuthorTap:
                     widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(pinnedItem),
                 onTapMention: widget.onTapMention,
+                onTapTopic: widget.onTapTopic,
                 // 🔴 举报入口（长按 + 「···」）**必须一并挂上**：AC 要求"其余部分与普通条目完全一致，
                 // 常规互动入口位置不变"。实机上才发现漏了 —— 只挂点击与评论会让顶置卡少一个入口，
                 // 用户对顶置内容反而没法举报。
@@ -531,6 +536,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                     ? null
                     : () => widget.onAuthorTap!(widget.items[i]),
                 onTapMention: widget.onTapMention,
+                onTapTopic: widget.onTapTopic,
                 onComment: widget.onCommentItem == null
                     ? null
                     : () => widget.onCommentItem!(widget.items[i]),

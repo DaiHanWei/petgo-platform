@@ -59,7 +59,9 @@ class FeedResponseContractTest {
             // V1.4.0 ① Story 3.1（AD-14）：作者等级展示。注销 / 停用 / 无等级时整体省略；无框时省略 authorFrame。
             "authorLevel", "authorTier", "authorFrame",
             // V1.4.2 social-topic Story 1.3（D-9 / P-5）：只在关注流出口下发（App 1.5 读）；其余出口省略。
-            "reason");
+            "reason",
+            // V1.4.2 social-topic Story 4.1 下发 / 4.4 App 接入（FeedItem.topicNames）：本帖关联话题标准名。空表不下发。
+            "topicNames");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
@@ -98,10 +100,11 @@ class FeedResponseContractTest {
                 12, "GUARDIAN", "UPGRADED",
                 // V1.4.2 social-topic Story 1.3：关注流 reason。
                 "followed_user",
-                // V1.4.2 social-topic Story 4.1：topicNames 空 → 省略（App 4.3 / 4.4 接入后再并入契约字段集）。
-                null);
+                // V1.4.2 social-topic Story 4.1 / 4.4：话题标准名（App FeedItem.topicNames 已接入，并入契约字段集）。
+                List.of("kucinglucu"));
 
         Map<String, Object> m = wire(item);
+        assertThat(m).containsEntry("topicNames", List.of("kucinglucu"));
         assertThat(m).containsEntry("authorLevel", 12).containsEntry("authorTier", "GUARDIAN")
                 .containsEntry("authorFrame", "UPGRADED");
         assertThat(m.keySet())

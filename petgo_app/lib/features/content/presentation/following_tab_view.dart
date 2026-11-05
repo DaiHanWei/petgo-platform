@@ -18,6 +18,8 @@ import 'following_feed_controller.dart';
 import 'report_sheet.dart';
 import 'widgets/following_empty_view.dart';
 import 'widgets/following_strip.dart';
+import '../../topic/domain/topic.dart' show TopicEntrySource;
+import '../../topic/presentation/topic_page.dart';
 
 /// Social → Following 页（V1.3.4 following 流 · spec §2.2 ~ §2.4）。
 ///
@@ -107,6 +109,8 @@ class FollowingTabView extends ConsumerWidget {
             onBlocked: _hideAuthor(ref, userId),
             onReported: _hideAuthor(ref, userId),
           ),
+          // V1.4.2 social-topic Story 4.4：点正文 #话题 → 话题页（topic_page_viewed.source = feed_card）。
+          onTapTopic: (name) => context.push(TopicPage.routeFor(name, from: TopicEntrySource.feedCard)),
           onCommentItem: (item) => context.push('/content/${item.id}?focus=comments'),
           onMoreItem: (item) => openReport(context, ref, item.id, onReported: () => onReported(item)),
         );

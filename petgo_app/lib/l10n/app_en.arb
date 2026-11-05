@@ -4798,5 +4798,9 @@
   "topicSortPopular": "Popular",
   "@topicSortPopular": {"description": "V1.4.2 social-topic Story 4.3"},
   "topicOfficialBadge": "Official",
-  "@topicOfficialBadge": {"description": "V1.4.2 social-topic Story 4.3"}
+  "@topicOfficialBadge": {"description": "V1.4.2 social-topic Story 4.3"},
+  "topicNewLabel": "New topic",
+  "@topicNewLabel": {"description": "V1.4.2 social-topic Story 4.4 · # suggestion panel: second line of the 'create this topic' row (C3)"},
+  "topicLimitReached": "Up to 5 topics per post",
+  "@topicLimitReached": {"description": "V1.4.2 social-topic Story 4.4 · toast at top when typing # with 5 topics already (C4)"}
 }

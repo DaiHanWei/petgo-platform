@@ -33,6 +33,8 @@ import 'publish_compose_page.dart';
 import 'report_sheet.dart';
 import 'social_tab.dart';
 import '../../notify/data/notification_repository.dart';
+import '../../topic/domain/topic.dart' show TopicEntrySource;
+import '../../topic/presentation/topic_page.dart';
 import '../../topic/presentation/topic_providers.dart';
 import '../../topic/presentation/widgets/home_topic_row.dart';
 
@@ -317,6 +319,8 @@ class HomePage extends ConsumerWidget {
             onBlocked: onAuthorHidden(ref, userId),
             onReported: onAuthorHidden(ref, userId),
           ),
+          // V1.4.2 social-topic Story 4.4：点正文 #话题 → 话题页（topic_page_viewed.source = feed_card）。
+          onTapTopic: (name) => context.push(TopicPage.routeFor(name, from: TopicEntrySource.feedCard)),
           // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
           // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。
           onCommentItem: (item) =>

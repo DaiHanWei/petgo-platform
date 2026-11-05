@@ -584,6 +584,9 @@ void main() {
         // V1.4.2 social-topic Story 4.3（PRD §4 · R-2）：topic_id = 话题标准名（不外露自增 id）；sort ∈ latest / popular；
         // position 从 1 起；is_pinned_by_ops = 首页话题行该项是否运营指定。'source' 已在上方。
         'topic_id', 'sort', 'position', 'is_pinned_by_ops',
+        // V1.4.2 social-topic Story 4.4（PRD §4 · R-2）：topic_inserted{topic_id, is_official, is_new, method}；
+        // method ∈ suggestion / typed（'method' 已在上方）。
+        'is_official', 'is_new',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

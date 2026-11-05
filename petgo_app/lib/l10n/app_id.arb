@@ -3057,5 +3057,7 @@
   "topicNotFoundBody": "Topik ini sudah tidak tersedia",
   "topicSortLatest": "Terbaru",
   "topicSortPopular": "Populer",
-  "topicOfficialBadge": "Resmi"
+  "topicOfficialBadge": "Resmi",
+  "topicNewLabel": "Topik baru",
+  "topicLimitReached": "Maksimal 5 topik per postingan"
 }

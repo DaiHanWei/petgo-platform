@@ -5,6 +5,7 @@ import '../data/content_repository.dart';
 import 'content_type.dart';
 import 'feed_image_layout.dart';
 import 'image_crop.dart';
+import 'published_post.dart';
 
 /// 单张图片上传状态（AC3 状态机）。
 enum ImageUploadStatus { pending, uploading, success, failed }
@@ -73,6 +74,10 @@ class PublishController extends ChangeNotifier {
 
   final List<ImageUploadItem> items = <ImageUploadItem>[];
   bool publishing = false;
+
+  /// 最近一次发布成功时服务端返回的话题（V1.4.2 Story 4.4 · AC6）；发布页据此报 `topic_inserted`。
+  /// ⚠️ [publish] 对外仍返回 `int?`（不动既有调用方），话题另存这里。每次发布开始时清空。
+  List<PublishedTopic> lastPublishedTopics = const <PublishedTopic>[];
 
   /// 成长日历事件日期（F9）：仅 GROWTH_MOMENT 有意义，决定档案侧显示位置（与发布时间解耦）。
   /// 不可未来——由 UI date picker 与服务端共同守护。
@@ -230,6 +235,7 @@ class PublishController extends ChangeNotifier {
   Future<int?> publish({required String idempotencyKey, List<int>? petIds, String? placeCheckinToken}) async {
     if (petIds != null) this.petIds = List<int>.unmodifiable(petIds);
     if (!canPublish) return null;
+    lastPublishedTopics = const <PublishedTopic>[];
     publishing = true;
     // AC4：状态机从这一刻起接管顺序 —— 重排入口即刻停响应，直到发布成功或整体取消。
     _orderLocked = true;
@@ -246,7 +252,7 @@ class PublishController extends ChangeNotifier {
       final offsets = items.map((i) => i.cropOffset).toList();
       final growth = type == ContentType.growthMoment;
       final trimmed = text.trim();
-      return await repository.publish(
+      final PublishedPost post = await repository.publish(
         type: type,
         // Story 3.3 · AC3.1：Diary 带全部 petIds，并兼容写 petId = 第一只；Moment / Tips 两者都不带。
         petId: growth && this.petIds.isNotEmpty ? this.petIds.first : null,
@@ -264,6 +270,8 @@ class PublishController extends ChangeNotifier {
         syncToMoment: growth ? syncToMoment : true,
         placeCheckinToken: placeCheckinToken,
       );
+      lastPublishedTopics = post.topics;
+      return post.id;
     } finally {
       publishing = false;
       // 走到这里只有两种情形：发布成功，或抛了异常。两者都不该继续锁着 ——

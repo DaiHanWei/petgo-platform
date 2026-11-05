@@ -35,6 +35,11 @@ import '../../mention/data/mention_candidate_repository.dart';
 import '../../mention/domain/mention_context.dart';
 import '../../mention/domain/mention_draft.dart';
 import '../../mention/presentation/mention_picker.dart';
+import '../../topic/data/topic_repository.dart';
+import '../../topic/domain/topic.dart' show TopicSummary;
+import '../../topic/presentation/widgets/topic_suggest_panel.dart';
+import '../../../shared/rich_text/body_tokens.dart';
+import '../../../shared/rich_text/topic_mention_text_controller.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
 import '../domain/publish_checkin_place.dart';
@@ -163,7 +168,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
 }
 
 class _PublishComposePageState extends ConsumerState<PublishComposePage> {
-  final _textController = TextEditingController();
+  /// V1.4.2 social-topic Story 4.4（§2.1 · C4）：前 5 个话题与点选插入的 @ 在输入框里高亮（只改颜色）。
+  /// `ref` 在首次访问（initState 之后的 build）时已可用。
+  late final TopicMentionTextController _textController = TopicMentionTextController(
+      mentionRefs: () => ref.read(publishControllerProvider).mentions.refs);
 
   @override
   void initState() {
@@ -298,8 +306,189 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     setState(() => _mentionQuery = null);
   }
 
+  // ===== # 联想（V1.4.2 social-topic · Story 4.4 · AC4 / AC5 · C2–C4）=====
+
+  /// 光标前正在打的 `#关键词`；非 null 且 [_topicPanelVisible] 即面板可见。与 [_mentionQuery] 互斥。
+  TopicQuery? _topicQuery;
+
+  /// 联想结果（null = 当前查询还没有结果）、加载中、失败。
+  List<TopicSummary>? _suggestions;
+  bool _suggestLoading = false;
+  bool _suggestFailed = false;
+
+  /// 请求序号：回包时序号不等即丢（新请求发出时丢弃上一个未返回的结果）。
+  int _suggestSeq = 0;
+
+  /// 关键词非空时停 300ms 再请求（与 shop_search_page / 5.2 同口径）。
+  Timer? _suggestTimer;
+
+  /// 从联想里点选插入的话题标准名（`topic_inserted.method = suggestion`）。「Topik baru」行不记（待确认第 6 条）。
+  final Set<String> _suggestedTopicNorms = <String>{};
+
+  /// 已就「满 5 个话题」提示过的那个 `#` 的下标：同一个 `#` 只提示一次，删掉重输再提示（AC5）。
+  int? _topicLimitToastedAt;
+
+  /// 面板实测高度（首帧按 220 估）；正文 scrollPadding 与列表底部留白用它。
+  final GlobalKey _topicPanelKey = GlobalKey();
+  final GlobalKey _textFieldKey = GlobalKey();
+  double _topicPanelHeight = 220;
+
+  bool get _topicPanelVisible =>
+      _topicQuery != null &&
+      TopicSuggestPanel.shouldShow(
+        keyword: _topicQuery!.keyword,
+        loading: _suggestLoading,
+        failed: _suggestFailed,
+        suggestions: _suggestions,
+      );
+
+  /// 当前正文里仍有效的话题标准名（前 5 个不同话题）。
+  Set<String> _effectiveTopicNorms(String text) => effectiveDistinct(text).map((t) => t.norm).toSet();
+
+  /// 每次输入重算 # 触发态（在 [_syncMentionQuery] 之后调）。
+  void _syncTopicQuery() {
+    final String text = _textController.text;
+    // 复审 2026-11-05：联想记录只加不减会误报 suggestion（点选后删掉、再手打同名）→ 随正文收缩。
+    if (_suggestedTopicNorms.isNotEmpty) {
+      _suggestedTopicNorms.retainAll(_effectiveTopicNorms(text));
+    }
+    TopicQuery? next = topicQueryAt(text, _textController.selection.baseOffset);
+    // @ 与 # 同时成立：取 start 更靠近光标的那个，另一个置 null（两个面板不同时出现）。
+    if (next != null && _mentionQuery != null) {
+      if (_mentionQuery!.start > next.start) {
+        next = null;
+      } else {
+        setState(() => _mentionQuery = null);
+      }
+    }
+    if (next == null) {
+      _topicLimitToastedAt = null;
+    } else {
+      // AC5：已有 5 个不同有效话题（排除正在输入的这段）→ 不弹面板，顶部提示一次。
+      final String others = text.replaceRange(next.start, next.end, ' ');
+      if (effectiveDistinct(others).length >= kMaxTopicsPerPost) {
+        if (_topicLimitToastedAt != next.start) {
+          _topicLimitToastedAt = next.start;
+          showAppToast(context, AppLocalizations.of(context).topicLimitReached, top: true);
+        }
+        next = null;
+      } else {
+        _topicLimitToastedAt = null;
+      }
+    }
+    if (next?.start == _topicQuery?.start && next?.keyword == _topicQuery?.keyword) return;
+    setState(() => _topicQuery = next);
+    _requestSuggestions(next);
+  }
+
+  void _requestSuggestions(TopicQuery? q) {
+    _suggestTimer?.cancel();
+    final int seq = ++_suggestSeq;
+    if (q == null) {
+      setState(() {
+        _suggestions = null;
+        _suggestLoading = false;
+        _suggestFailed = false;
+      });
+      return;
+    }
+    if (q.keyword.isEmpty) {
+      // 刚打 `#`：不带 q 立即请求（热门，官方在前）。
+      _fetchSuggestions(seq, null);
+    } else {
+      setState(() {
+        _suggestLoading = true;
+        _suggestFailed = false;
+      });
+      _suggestTimer = Timer(const Duration(milliseconds: 300), () => _fetchSuggestions(seq, q.keyword));
+    }
+  }
+
+  Future<void> _fetchSuggestions(int seq, String? q) async {
+    if (!mounted || seq != _suggestSeq) return;
+    setState(() {
+      _suggestLoading = true;
+      _suggestFailed = false;
+    });
+    try {
+      final List<TopicSummary> list = await ref.read(topicRepositoryProvider).suggest(q: q);
+      if (!mounted || seq != _suggestSeq) return;
+      setState(() {
+        _suggestions = list;
+        _suggestLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || seq != _suggestSeq) return;
+      setState(() {
+        _suggestFailed = true;
+        _suggestLoading = false;
+      });
+    }
+  }
+
+  void _retrySuggestions() {
+    final TopicQuery? q = _topicQuery;
+    if (q == null) return;
+    _suggestTimer?.cancel();
+    _fetchSuggestions(++_suggestSeq, q.keyword.isEmpty ? null : q.keyword);
+  }
+
+  void _closeTopicPanel() {
+    _suggestTimer?.cancel();
+    _suggestSeq++;
+    setState(() {
+      _topicQuery = null;
+      _suggestions = null;
+      _suggestLoading = false;
+      _suggestFailed = false;
+    });
+  }
+
+  /// 确定话题：把 `[query.start, query.end)` 换成 `#<写法> `，光标落在空格后。
+  /// [suggestedNorm] 非 null = 从联想里点选（记入 [_suggestedTopicNorms]）。
+  void _onTopicChosen(PublishController controller, String written, {String? suggestedNorm}) {
+    final TopicQuery? q = _topicQuery;
+    if (q == null) return;
+    final String inserted = '#$written ';
+    final String next = _textController.text.replaceRange(q.start, q.end, inserted);
+    // 🔴 插入绕过 maxLength 格式化器：先自己拦（同 _onMentionSelected）。
+    if (next.characters.length > kMaxPostTextLength) {
+      showAppToast(context, AppLocalizations.of(context).publishTextLimitReached);
+      _closeTopicPanel();
+      return;
+    }
+    _textController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: q.start + inserted.length),
+    );
+    controller.setText(next);
+    if (suggestedNorm != null) _suggestedTopicNorms.add(suggestedNorm);
+    _closeTopicPanel();
+  }
+
+  /// 面板可见期间：读实测高度（变了才 setState）；刚出现时把光标行滚到面板之上（scrollPadding 只在光标变化时生效，兜底一次）。
+  void _afterTopicPanelFrame({required bool justShown}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_topicPanelVisible) return;
+      final double? h = _topicPanelKey.currentContext?.size?.height;
+      if (h != null && h != _topicPanelHeight) setState(() => _topicPanelHeight = h);
+      if (justShown) {
+        final RenderObject? field = _textFieldKey.currentContext?.findRenderObject();
+        if (field is RenderBox && field.hasSize) {
+          field.showOnScreen(
+            rect: Offset.zero & Size(field.size.width, field.size.height + (h ?? _topicPanelHeight) + 20),
+            duration: const Duration(milliseconds: 150),
+          );
+        }
+      }
+    });
+  }
+
+  bool _topicPanelWasVisible = false;
+
   @override
   void dispose() {
+    _suggestTimer?.cancel();
     _textController.dispose();
     super.dispose();
   }
@@ -491,6 +680,20 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         Analytics.capture('diary_published', {
           'pet_count': controller.petIds.length,
           if (widget.entrySource == BragPostSource.milestoneCelebration) 'source': 'milestone_celebration',
+        });
+      }
+      // V1.4.2 social-topic Story 4.4 · AC6（R-2 / PRD §4）：发布成功后按**服务端返回的 topics** 逐个上报
+      // （审核挂起也算服务端已接住；拦截 / 失败走不到这里；私密帖服务端不返回 topics 即不报）。
+      // topic_id = 标准名；method：从联想点选 = suggestion，其余 = typed。字面量写在调用点（埋点守卫扫源码）。
+      // method 判据 = 联想记录 ∩ 发布时正文的有效话题（复审 2026-11-05：记录只加不减时会误报）。
+      final Set<String> suggested =
+          _suggestedTopicNorms.intersection(_effectiveTopicNorms(_textController.text));
+      for (final t in controller.lastPublishedTopics) {
+        Analytics.capture('topic_inserted', {
+          'topic_id': t.name,
+          'is_official': t.official,
+          'is_new': t.created,
+          'method': suggested.contains(t.name) ? 'suggestion' : 'typed',
         });
       }
       // V1.3.2 Story 1.5 · AC6：打卡后顺手发帖成功。place_id 键装 token 值（沿用 place_detail_viewed 约定）；
@@ -687,6 +890,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       return PublishReviewingView(args: _reviewingArgs!);
     }
     final growthSelected = controller.type == ContentType.growthMoment;
+    // V1.4.2 Story 4.4：# 联想面板可见态（scrollPadding / 列表留白 / Stack 都按它）。
+    final bool panelVisible = _topicPanelVisible;
+    if (panelVisible) _afterTopicPanelFrame(justShown: !_topicPanelWasVisible);
+    _topicPanelWasVisible = panelVisible;
     // 键盘弹出时把整个内容区上推键盘高度（固定高度 sheet 走标准件 KeyboardInset，带 120ms 动画 +
     // 纳入 keyboard_safe_area 契约测试，bug 20260721-321），使滚动视口底边落在键盘之上 →
     // 被键盘遮住的输入框被判定为「视口外」，EditableText 自动 ensureVisible 滚上来。
@@ -795,133 +1002,166 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
+            // V1.4.2 Story 4.4 AC4.5：# 联想面板贴键盘上沿（整页外层已是 KeyboardInset → bottom: 0 即键盘上沿）。
+            child: Stack(
               children: [
-                // 原型 p-create 顺序：类型 chips → petsel(成长) → 照片 → 文字 → 事件日期 → 公开提示。
-                _segments(controller, l10n),
-                if (growthSelected) ...[
-                  const SizedBox(height: 14),
-                  _petChipsRow(controller, l10n),
-                  _syncSwitch(controller, l10n),
-                ] else ...[
-                  const SizedBox(height: 12),
-                  _publicHint(l10n),
-                ],
-                const SizedBox(height: 16),
-                _imageRow(controller, l10n),
-                const SizedBox(height: 14),
-                // —— 文字 ——（V1.4.0 稿 F1 `.ptxt / .pcount`：**无外框**，正文直接铺在页面上，右下弱色字数；
-                // L2 第二轮起取代原型 textarea-wrap 的 1.5px 外框。Diary 时下方紧跟带上分隔线的事件日期行）
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        key: const ValueKey('publishText'),
-                        controller: _textController,
-                        minLines: 3,
-                        maxLines: 6,
-                        maxLength: kMaxPostTextLength,
-                        onChanged: (v) {
-                          controller.setText(v);
-                          // Story 3.2 AC1：输入「@」弹出用户选择器浮层。
-                          _syncMentionQuery();
-                        },
+                Positioned.fill(child: ListView(
+                  // V1.4.2 Story 4.4：面板可见时底部再让出面板高度，正文能滚到面板之上。
+                  padding: EdgeInsets.fromLTRB(20, 8, 20, 36 + (panelVisible ? _topicPanelHeight : 0)),
+                  children: [
+                    // 原型 p-create 顺序：类型 chips → petsel(成长) → 照片 → 文字 → 事件日期 → 公开提示。
+                    _segments(controller, l10n),
+                    if (growthSelected) ...[
+                      const SizedBox(height: 14),
+                      _petChipsRow(controller, l10n),
+                      _syncSwitch(controller, l10n),
+                    ] else ...[
+                      const SizedBox(height: 12),
+                      _publicHint(l10n),
+                    ],
+                    const SizedBox(height: 16),
+                    _imageRow(controller, l10n),
+                    const SizedBox(height: 14),
+                    // —— 文字 ——（V1.4.0 稿 F1 `.ptxt / .pcount`：**无外框**，正文直接铺在页面上，右下弱色字数；
+                    // L2 第二轮起取代原型 textarea-wrap 的 1.5px 外框。Diary 时下方紧跟带上分隔线的事件日期行）
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          KeyedSubtree(
+                            key: _textFieldKey,
+                            child: TextField(
+                              key: const ValueKey('publishText'),
+                              controller: _textController,
+                              minLines: 3,
+                              maxLines: 6,
+                              maxLength: kMaxPostTextLength,
+                              onChanged: (v) {
+                                controller.setText(v);
+                                // Story 3.2 AC1：输入「@」弹出用户选择器浮层。
+                                _syncMentionQuery();
+                                // V1.4.2 Story 4.4 AC4：输入「#」弹出话题联想（与 @ 互斥）。
+                                _syncTopicQuery();
+                              },
+                              // AC4.6：面板可见期间光标行保持在面板之上（Flutter 默认 all(20)）。
+                              scrollPadding: panelVisible
+                                  ? EdgeInsets.only(left: 20, top: 20, right: 20, bottom: _topicPanelHeight + 20)
+                                  : const EdgeInsets.all(20),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.ink,
+                                height: 1.6,
+                              ),
+                              decoration: InputDecoration(
+                                isCollapsed: true,
+                                hintText: _hint(controller, l10n),
+                                hintStyle: const TextStyle(
+                                  color: AppColors.textTertiary,
+                                  fontSize: 14,
+                                  height: 1.6,
+                                ),
+                                border: InputBorder.none,
+                                counterText: '', // 隐藏默认计数器，改放容器内右下
+                              ),
+                            ),
+                          ),
+                          // AC1：输入「@」弹出用户选择器浮层，紧贴正文框下沿展开。
+                          if (_mentionQuery != null) ...[
+                            const SizedBox(height: 7),
+                            MentionPicker(
+                              keyword: _mentionQuery!.keyword,
+                              onSelected: (c) => _onMentionSelected(controller, c),
+                            ),
+                          ],
+                          const SizedBox(height: 7),
+                          // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
+                          Text(
+                            '${_textController.text.length} / $kMaxPostTextLength',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // V1.3.2 Story 1.5 · AC3：打卡场所条（只读、不可删、不可点）—— 说明「这条帖子会挂在这次打卡上」。
+                    // 切类型不影响（AD-10 任何类型均可）；普通入口不出。
+                    if (widget.placeCheckinToken != null && widget.placeCheckinPlace != null) ...[
+                      const SizedBox(height: 12),
+                      _CheckinPlaceStrip(place: widget.placeCheckinPlace!),
+                    ],
+                    if (growthSelected) ...[
+                      const SizedBox(height: 6),
+                      _eventDateRow(controller, l10n),
+                    ],
+                    if (controller.hasFailed) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          TextButton.icon(
+                            key: const ValueKey('publishRetry'),
+                            icon: const Icon(Icons.refresh, color: AppColors.mint700),
+                            label: Text(
+                              l10n.publishRetry,
+                              style: const TextStyle(color: AppColors.mint700),
+                            ),
+                            onPressed: () => controller.retryFailed(),
+                          ),
+                          // V1.3.0 Story 4.1 · AC5：重试沿用同一份顺序，**不重新读表单状态** ——
+                          // 想改顺序就得从这里整体取消回到可编辑态。
+                          // 没有这个出口的话，一次部分失败会把顺序永久锁死。
+                          if (!controller.canReorder)
+                            TextButton(
+                              key: const ValueKey('publishCancelUpload'),
+                              onPressed: controller.cancelUploadSession,
+                              child: Text(
+                                l10n.publishCancelUpload,
+                                style: const TextStyle(color: AppColors.textSecondary),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    // 原型底部：居中可见性提示，**跟随实际可见范围**（2026-08-05 用户实机反馈）。
+                    // 此前写死「所有人可见」：Diary 关掉同步开关后，这句与开关副标题「没人看得到」
+                    // 在同屏互相打脸。判定统一走 [PublishController.isSharing]（Moment/Tips 恒公开，
+                    // Diary 看开关）—— ⚠️ 别在这里另写一遍类型判断，两处判定迟早走歧。
+                    Center(
+                      child: Text(
+                        controller.isSharing ? l10n.publishPublicNotice : l10n.publishPrivateNotice,
+                        key: const ValueKey('publishVisibilityNotice'),
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.ink,
+                          color: AppColors.textTertiary,
+                          fontSize: 12,
                           height: 1.6,
                         ),
-                        decoration: InputDecoration(
-                          isCollapsed: true,
-                          hintText: _hint(controller, l10n),
-                          hintStyle: const TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 14,
-                            height: 1.6,
-                          ),
-                          border: InputBorder.none,
-                          counterText: '', // 隐藏默认计数器，改放容器内右下
-                        ),
                       ),
-                      // AC1：输入「@」弹出用户选择器浮层，紧贴正文框下沿展开。
-                      if (_mentionQuery != null) ...[
-                        const SizedBox(height: 7),
-                        MentionPicker(
-                          keyword: _mentionQuery!.keyword,
-                          onSelected: (c) => _onMentionSelected(controller, c),
-                        ),
-                      ],
-                      const SizedBox(height: 7),
-                      // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
-                      Text(
-                        '${_textController.text.length} / $kMaxPostTextLength',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textTertiary,
-                        ),
+                    ),
+                  ],
+                )),
+                if (panelVisible)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: KeyedSubtree(
+                      key: _topicPanelKey,
+                      child: TopicSuggestPanel(
+                        keyword: _topicQuery!.keyword,
+                        loading: _suggestLoading,
+                        failed: _suggestFailed,
+                        suggestions: _suggestions,
+                        onSelect: (t) => _onTopicChosen(controller, t.displayName, suggestedNorm: t.name),
+                        onCreate: (k) => _onTopicChosen(controller, k),
+                        onRetry: _retrySuggestions,
                       ),
-                    ],
-                  ),
-                ),
-                // V1.3.2 Story 1.5 · AC3：打卡场所条（只读、不可删、不可点）—— 说明「这条帖子会挂在这次打卡上」。
-                // 切类型不影响（AD-10 任何类型均可）；普通入口不出。
-                if (widget.placeCheckinToken != null && widget.placeCheckinPlace != null) ...[
-                  const SizedBox(height: 12),
-                  _CheckinPlaceStrip(place: widget.placeCheckinPlace!),
-                ],
-                if (growthSelected) ...[
-                  const SizedBox(height: 6),
-                  _eventDateRow(controller, l10n),
-                ],
-                if (controller.hasFailed) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      TextButton.icon(
-                        key: const ValueKey('publishRetry'),
-                        icon: const Icon(Icons.refresh, color: AppColors.mint700),
-                        label: Text(
-                          l10n.publishRetry,
-                          style: const TextStyle(color: AppColors.mint700),
-                        ),
-                        onPressed: () => controller.retryFailed(),
-                      ),
-                      // V1.3.0 Story 4.1 · AC5：重试沿用同一份顺序，**不重新读表单状态** ——
-                      // 想改顺序就得从这里整体取消回到可编辑态。
-                      // 没有这个出口的话，一次部分失败会把顺序永久锁死。
-                      if (!controller.canReorder)
-                        TextButton(
-                          key: const ValueKey('publishCancelUpload'),
-                          onPressed: controller.cancelUploadSession,
-                          child: Text(
-                            l10n.publishCancelUpload,
-                            style: const TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 16),
-                // 原型底部：居中可见性提示，**跟随实际可见范围**（2026-08-05 用户实机反馈）。
-                // 此前写死「所有人可见」：Diary 关掉同步开关后，这句与开关副标题「没人看得到」
-                // 在同屏互相打脸。判定统一走 [PublishController.isSharing]（Moment/Tips 恒公开，
-                // Diary 看开关）—— ⚠️ 别在这里另写一遍类型判断，两处判定迟早走歧。
-                Center(
-                  child: Text(
-                    controller.isSharing ? l10n.publishPublicNotice : l10n.publishPrivateNotice,
-                    key: const ValueKey('publishVisibilityNotice'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                      height: 1.6,
                     ),
                   ),
-                ),
               ],
             ),
           ),

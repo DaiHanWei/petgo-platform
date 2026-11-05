@@ -380,6 +380,8 @@ class _TopicPageState extends ConsumerState<TopicPage> with SingleTickerProvider
         onBlocked: _authorHidden(userId),
         onReported: _authorHidden(userId),
       ),
+      // V1.4.2 Story 4.4：话题页列表 / 顶置卡里的 #话题 同样 source = feed_card。
+      onTapTopic: (name) => context.push(TopicPage.routeFor(name, from: TopicEntrySource.feedCard)),
       onCommentItem: (item) => context.push('/content/${item.id}?focus=comments'),
     );
   }

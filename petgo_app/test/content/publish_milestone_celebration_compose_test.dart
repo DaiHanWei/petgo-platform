@@ -29,6 +29,7 @@ import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.
 import 'package:tailtopia/features/profile/presentation/widgets/milestone_share_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_painted_image.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// V1.4.2 social-topic Story 3.2 · T5.2 / T6.5：里程碑「去发布」→ 发布成功 → 当场庆祝 → 「Bagikan ke Komunitas」。
 ///
@@ -38,7 +39,7 @@ class _ContentRepo implements ContentRepository {
   int publishes = 0;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -52,7 +53,7 @@ class _ContentRepo implements ContentRepository {
     List<int> mentionedUserIds = const [],
     String? placeCheckinToken,
   }) async =>
-      ++publishes;
+      PublishedPost(id: ++publishes);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

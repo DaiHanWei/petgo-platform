@@ -111,9 +111,14 @@ class FeedItem {
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
     this.reason,
+    this.topicNames = const [],
   });
 
   final int id;
+
+  /// 本帖关联的话题标准名（V1.4.2 social-topic · Story 4.1 下发 / 4.4 读）：仅 ACTIVE / HIDDEN；
+  /// 正文里只有命中它的 `#话题` 才高亮可点（`RichBodyText`）。缺键 / 老后端 → 空表。
+  final List<String> topicNames;
 
   /// 关注流里这条为什么出现（V1.4.2 social-topic · Story 1.3 下发 / 1.5 读 · D-9）：
   /// `followed_user` / `followed_pet`；只在关注流出口下发，其余出口与旧后端缺键 → null。只喂埋点。
@@ -250,6 +255,7 @@ class FeedItem {
         authorFollowState: authorFollowState,
         followEpoch: followEpoch ?? this.followEpoch,
         reason: reason,
+        topicNames: topicNames,
       );
 
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
@@ -283,8 +289,14 @@ class FeedItem {
         authorFollowState: FollowState.fromJson(json['authorFollowState']),
         // V1.4.2 social-topic Story 1.3：只关注流下发，缺键 null。
         reason: json['reason'] as String?,
+        // V1.4.2 social-topic Story 4.4：空表时后端省略该键（NON_NULL）。
+        topicNames: topicNamesFromJson(json['topicNames']),
       );
 }
+
+/// 解析 `topicNames`（V1.4.2 Story 4.4）：缺键 / 非数组 → 空表；非字符串元素跳过。
+List<String> topicNamesFromJson(Object? raw) =>
+    raw is List ? raw.whereType<String>().toList(growable: false) : const <String>[];
 
 /// 可见范围线格式常量（与后端 `ContentVisibility` 同名同值；不新建枚举以免与既有 `type` 字符串风格分叉）。
 const String kVisibilityPublic = 'PUBLIC';

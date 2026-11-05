@@ -36,6 +36,17 @@ class FakeTopicRepository implements TopicRepository {
   List<TopicSummary> homeRow;
   bool homeRowFails = false;
 
+  /// # 联想（Story 4.4）：按关键词给结果（键 null = 无 q 的热门）；缺键 → [suggestDefault]。
+  final Map<String?, List<TopicSummary>> suggestions = {};
+  List<TopicSummary> suggestDefault = const [];
+  Object? suggestError;
+
+  /// 某个关键词的请求挂起，直到闸门放行（测「新请求丢弃旧结果」）。
+  final Map<String?, Completer<void>> suggestGates = {};
+
+  /// 每次 suggest 调用的 q（null = 不带 q）。
+  final List<String?> suggestCalls = [];
+
   int detailCalls = 0;
   int pinnedCalls = 0;
   int relatedCalls = 0;
@@ -91,6 +102,15 @@ class FakeTopicRepository implements TopicRepository {
     pinnedCalls++;
     if (pinnedFails) throw Exception('boom');
     return pinned;
+  }
+
+  @override
+  Future<List<TopicSummary>> suggest({String? q}) async {
+    suggestCalls.add(q);
+    final gate = suggestGates[q];
+    if (gate != null) await gate.future;
+    if (suggestError != null) throw suggestError!;
+    return suggestions[q] ?? suggestDefault;
   }
 }
 

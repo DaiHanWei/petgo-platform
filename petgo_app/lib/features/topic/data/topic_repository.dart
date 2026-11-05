@@ -29,6 +29,10 @@ abstract class TopicRepository {
   /// ⚠️ 不经 `FeedRepository.getPinnedSlot`（改它的签名要动 10 个实现类，story「待确认」第 3 条）；
   /// 解析复用同一个 [PinnedSlot.fromJson]。
   Future<PinnedSlot?> getPinnedSlot(String name);
+
+  /// 发布页 # 联想（V1.4.2 Story 4.4 · C2）：`GET /topic-suggestions?q=`，**裸数组**、服务端顺序即官方在前。
+  /// [q] 为空 / null → 不带 `q`（热门）。仅 role=USER（游客到不了发布页，不处理 401）。
+  Future<List<TopicSummary>> suggest({String? q});
 }
 
 class DioTopicRepository implements TopicRepository {
@@ -85,6 +89,15 @@ class DioTopicRepository implements TopicRepository {
       queryParameters: {'topic': name},
     );
     return PinnedSlot.fromJson(resp.data ?? const {});
+  }
+
+  @override
+  Future<List<TopicSummary>> suggest({String? q}) async {
+    final resp = await dio.get<Object>(
+      ApiPaths.topicSuggestions,
+      queryParameters: {if (q != null && q.isNotEmpty) 'q': q},
+    );
+    return TopicSummary.listFromJson(resp.data);
   }
 }
 

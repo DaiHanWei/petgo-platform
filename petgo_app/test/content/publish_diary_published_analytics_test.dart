@@ -17,6 +17,7 @@ import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// V1.4.0 multi-pet Story 3.3 · AC7（PRD §4）：`diary_published {pet_count}`。
 ///
@@ -145,7 +146,7 @@ class _Repo implements ContentRepository {
   final int? status;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -175,7 +176,7 @@ class _Repo implements ContentRepository {
       throw DioException(
           requestOptions: RequestOptions(path: '/api/v1/content-posts'), type: DioExceptionType.connectionError);
     }
-    return 9;
+    return const PublishedPost(id: 9);
   }
 }
 

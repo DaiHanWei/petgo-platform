@@ -24,6 +24,7 @@ import '../data/detail_repository.dart';
 import 'content_detail_page.dart';
 import 'detail_providers.dart';
 import 'feed_controller.dart';
+import '../../../shared/rich_text/topic_mention_text_controller.dart';
 import 'like_button.dart';
 
 /// 详情页**固定底栏**（Story 3.5 起为评论框；V1.3.0 Story 2.3 起合并互动栏，FR-114 · AD-A13）。
@@ -54,7 +55,9 @@ class CommentComposer extends ConsumerStatefulWidget {
 }
 
 class _CommentComposerState extends ConsumerState<CommentComposer> {
-  final TextEditingController _controller = TextEditingController();
+  /// V1.4.2 social-topic Story 4.4（§2.1）：点选插入的 @ 在输入框里高亮；**评论不高亮话题、不弹 # 联想**（D-19）。
+  late final TopicMentionTextController _controller =
+      TopicMentionTextController(mentionRefs: () => _mentions.refs, highlightTopics: false);
   final FocusNode _focusNode = FocusNode();
   static const int _maxLen = 200;
   bool _sending = false;
