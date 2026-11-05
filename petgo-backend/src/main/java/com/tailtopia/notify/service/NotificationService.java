@@ -671,8 +671,11 @@ public class NotificationService {
         java.util.List<Notification> saved = new java.util.ArrayList<>(recipients.size());
         for (com.tailtopia.notify.ops.domain.OpsRecipient r : recipients) {
             boolean en = "en".equalsIgnoreCase(r.locale());
-            String title = en ? campaign.getTitleEn() : campaign.getTitleId();
-            String body = en ? campaign.getBodyEn() : campaign.getBodyId();
+            // V1.4.2 Story 7.1（AB-37）：逐人替换 {{nickname}} / {{petName}}；无令牌的文案原样（推送取本行，天然一致）
+            String title = com.tailtopia.notify.ops.domain.OpsTextVariables.render(
+                    en ? campaign.getTitleEn() : campaign.getTitleId(), r.nickname(), r.petName(), en);
+            String body = com.tailtopia.notify.ops.domain.OpsTextVariables.render(
+                    en ? campaign.getBodyEn() : campaign.getBodyId(), r.nickname(), r.petName(), en);
             saved.add(repo.save(Notification.of(r.userId(), NotificationType.OPS_ANNOUNCEMENT, title, body,
                     NotificationType.OPS_ANNOUNCEMENT.name(), generateToken(), campaign.getPublicToken())));
         }

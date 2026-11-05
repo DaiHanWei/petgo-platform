@@ -78,6 +78,13 @@ public class OpsNotificationCampaign {
     @Column(name = "skipped_count", nullable = false)
     private int skippedCount;
 
+    /**
+     * V1.4.2 AB-37（决策日志 R-3）：标题 / 正文任一语言用了 {@code {{petName}}} 时，因没有宠物被排除的人数
+     * （所有人群模式都写）；不用宠物变量 / 存量行为 0。与 {@link #skippedCount}（IDS 无效 id 数）互不混算。
+     */
+    @Column(name = "skipped_no_pet_count", nullable = false)
+    private int skippedNoPetCount;
+
     /** 后台新建时的预估人数（列表「预计 N」）；存量行为 null（V1.3.4 AB-31 返工）。 */
     @Column(name = "estimated_count")
     private Integer estimatedCount;
@@ -211,6 +218,10 @@ public class OpsNotificationCampaign {
 
     public int getSkippedCount() {
         return skippedCount;
+    }
+
+    public int getSkippedNoPetCount() {
+        return skippedNoPetCount;
     }
 
     public Integer getEstimatedCount() {

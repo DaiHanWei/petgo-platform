@@ -210,4 +210,30 @@ class OpsNotificationCampaignServiceTest {
                 .satisfies(e -> assertThat(((AppException) e).getStatus().value()).isEqualTo(404));
         verify(targets, never()).insertAll(anyLong(), any());
     }
+
+    // ===== V1.4.2 Story 7.1 · AB-37 =====
+
+    @Test
+    void countedLengthTreatsEachVariableAsTwenty() {
+        // 115 字 + 1 变量 = 135 > 120 → 拒（按 length() 只有 127）
+        assertRejected(draft("x".repeat(115) + "{{petName}}", "Isi", AudienceSpec.all(), null, null),
+                "admin.err.ops-notify.text.too-long");
+        // 正文 236 + 1 变量 = 256 > 255 → 拒
+        assertRejected(draft("Judul", "y".repeat(236) + "{{nickname}}", AudienceSpec.all(), null, null),
+                "admin.err.ops-notify.text.too-long");
+        // 100 字 + 1 变量 = 120 → 过
+        service.create(draft("x".repeat(100) + "{{nickname}}", "y".repeat(235) + "{{petName}}",
+                AudienceSpec.all(), null, null), 1L);
+        verify(repo).save(any());
+    }
+
+    @Test
+    void typedVariablesRejectedBeforeLength() {
+        assertRejected(draft("Halo {用户昵称}", "Isi", AudienceSpec.all(), null, null),
+                OpsNotificationCampaignService.ERR_VAR_TYPED);
+        assertRejected(draft("Judul", "Isi {{pet}}", AudienceSpec.all(), null, null),
+                OpsNotificationCampaignService.ERR_VAR_TYPED);
+        assertRejected(draft("{Nama hewan}" + "x".repeat(200), "Isi", AudienceSpec.all(), null, null),
+                OpsNotificationCampaignService.ERR_VAR_TYPED);
+    }
 }

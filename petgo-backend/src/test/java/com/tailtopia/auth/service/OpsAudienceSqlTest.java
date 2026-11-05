@@ -18,15 +18,31 @@ class OpsAudienceSqlTest {
     private static final String BASE = "u.role = 'USER' AND u.account_type = 'REAL' AND u.deleted_at IS NULL "
             + "AND u.enabled = TRUE AND u.status = 'ACTIVE'";
 
+    /** V1.4.2 Story 7.1：收件人选列 + LATERAL 选宠物（无物种筛选）。 */
+    private static final String HEAD = "SELECT u.id, u.locale, NULLIF(btrim(u.nickname), '') AS nickname, "
+            + "pet.name AS pet_name FROM users u LEFT JOIN LATERAL ("
+            + "SELECT DISTINCT ON (p.owner_id) p.name FROM pet_profiles p WHERE p.owner_id = u.id"
+            + " ORDER BY p.owner_id, (p.status = 'READ_ONLY'), p.created_at, p.id) pet ON TRUE WHERE ";
+    private static final String COUNT_HEAD = "SELECT count(*) AS total, count(*) FILTER (WHERE "
+            + "EXISTS (SELECT 1 FROM pet_profiles p WHERE p.owner_id = u.id)) AS with_pet FROM users u WHERE ";
+    private static final String LATERAL_END = ") pet ON TRUE WHERE ";
+
     private static OpsAudienceSql.Query build(String json) {
         return OpsAudienceSql.build(AudienceSpec.parse(json), 42L, WIB);
+    }
+
+    /** 去掉选列 / LATERAL 与 ORDER BY，只剩 WHERE 片段（V1.4.2 起 LATERAL 也含 pet_profiles，筛选断言只看 WHERE）。 */
+    private static String where(OpsAudienceSql.Query q) {
+        String sql = q.sql();
+        int from = sql.indexOf(LATERAL_END) + LATERAL_END.length();
+        return sql.substring(from, sql.length() - " ORDER BY u.id ASC".length());
     }
 
     @Test
     @DisplayName("ALL：只有基础五条件，无参数，按 id 升序")
     void allHasOnlyBaseFilter() {
         OpsAudienceSql.Query q = build("{\"mode\":\"ALL\"}");
-        assertThat(q.sql()).isEqualTo("SELECT u.id, u.locale FROM users u WHERE " + BASE + " ORDER BY u.id ASC");
+        assertThat(q.sql()).isEqualTo(HEAD + BASE + " ORDER BY u.id ASC");
         assertThat(q.params()).isEmpty();
     }
 
@@ -46,7 +62,8 @@ class OpsAudienceSqlTest {
     @DisplayName("IDS：含子表子查询 + 基础过滤，不含任何筛选条件（JSON 里的筛选键由 AudienceSpec 在 IDS 模式下丢弃）")
     void idsUsesTargetsOnly() {
         OpsAudienceSql.Query q = build("{\"mode\":\"IDS\",\"hasPet\":true,\"hasPhone\":false}");
-        assertThat(q.sql()).contains(BASE)
+        assertThat(q.sql()).startsWith(HEAD); // V1.4.2：选列里的 LATERAL 照常带出宠物名（IDS 无物种筛选）
+        assertThat(where(q)).contains(BASE)
                 .contains("u.id IN (SELECT t.user_id FROM ops_notification_campaign_targets t "
                         + "WHERE t.campaign_id = :campaignId)")
                 .doesNotContain("pet_profiles")
@@ -139,9 +156,7 @@ class OpsAudienceSqlTest {
             AudienceSpec spec = AudienceSpec.parse(json);
             OpsAudienceSql.Query send = OpsAudienceSql.build(spec, 42L, WIB);
             OpsAudienceSql.Query count = OpsAudienceSql.count(spec, WIB);
-            String where = send.sql().substring("SELECT u.id, u.locale FROM users u WHERE ".length(),
-                    send.sql().length() - " ORDER BY u.id ASC".length());
-            assertThat(count.sql()).isEqualTo("SELECT count(*) FROM users u WHERE " + where);
+            assertThat(count.sql()).isEqualTo(COUNT_HEAD + where(send));
             assertThat(count.params()).isEqualTo(send.params());
         }
     }
@@ -150,7 +165,7 @@ class OpsAudienceSqlTest {
     @DisplayName("计数：IDS 不走 count(spec)（活动未建、子表无数据），改用 countIds：基础过滤 + u.id IN (:ids)")
     void countIdsUsesBaseFilterOnly() {
         assertThat(OpsAudienceSql.countIds())
-                .isEqualTo("SELECT count(*) FROM users u WHERE " + BASE + " AND u.id IN (:ids)");
+                .isEqualTo(COUNT_HEAD + BASE + " AND u.id IN (:ids)");
         org.assertj.core.api.Assertions.assertThatThrownBy(
                 () -> OpsAudienceSql.count(AudienceSpec.ids(), WIB))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -222,10 +237,98 @@ class OpsAudienceSqlTest {
         Instant now = Instant.parse("2026-10-29T00:00:00Z");
         AudienceSpec spec = AudienceSpec.parse("{\"mode\":\"FILTER\",\"species\":[\"CAT\"],\"paid\":true}");
         OpsAudienceSql.Query one = OpsAudienceSql.matchesUser(7L, spec.filters(), now);
-        String notifyWhere = OpsAudienceSql.build(spec, 0L, WIB, now).sql()
-                .replace("SELECT u.id, u.locale FROM users u WHERE " + BASE, "").replace(" ORDER BY u.id ASC", "");
+        String notifyWhere = where(OpsAudienceSql.build(spec, 0L, WIB, now)).replace(BASE, "");
         assertThat(one.sql()).startsWith("SELECT EXISTS (SELECT 1 FROM users u WHERE " + BASE + " AND u.id = :uid")
                 .endsWith(notifyWhere + ")");
         assertThat(one.params()).containsEntry("uid", 7L).containsEntry("species", List.of("CAT"));
+    }
+
+    // ===== V1.4.2 Story 7.1 · AB-37 昵称 / 宠物名变量 =====
+
+    @Test
+    @DisplayName("V1.4.2：收件人一条 SQL 带出昵称（去空白空串 → NULL）与宠物名（LATERAL + DISTINCT ON，ACTIVE 优先再最早）")
+    void recipientsCarryNicknameAndPet() {
+        String sql = build("{\"mode\":\"ALL\"}").sql();
+        assertThat(sql).contains("NULLIF(btrim(u.nickname), '') AS nickname")
+                .contains("LEFT JOIN LATERAL (")
+                .contains("SELECT DISTINCT ON (p.owner_id) p.name FROM pet_profiles p WHERE p.owner_id = u.id")
+                .contains("ORDER BY p.owner_id, (p.status = 'READ_ONLY'), p.created_at, p.id")
+                .contains("pet.name AS pet_name")
+                .endsWith(" ORDER BY u.id ASC");
+        assertThat(where(build("{\"mode\":\"ALL\"}"))).isEqualTo(BASE);
+    }
+
+    @Test
+    @DisplayName("V1.4.2：有物种筛选时 LATERAL 只在该物种内取（共用 :species 参数），无物种时不出现")
+    void lateralRespectsSpeciesFilter() {
+        OpsAudienceSql.Query cat = build("{\"mode\":\"FILTER\",\"species\":[\"CAT\"]}");
+        String head = cat.sql().substring(0, cat.sql().indexOf(LATERAL_END));
+        assertThat(head).contains("WHERE p.owner_id = u.id AND p.pet_type IN (:species) ORDER BY p.owner_id");
+        assertThat(cat.params().get("species")).isEqualTo(List.of("CAT"));
+        for (String json : List.of("{\"mode\":\"ALL\"}", "{\"mode\":\"FILTER\",\"hasPet\":true}",
+                "{\"mode\":\"IDS\"}")) {
+            OpsAudienceSql.Query q = build(json);
+            assertThat(q.sql().substring(0, q.sql().indexOf(LATERAL_END))).doesNotContain("pet_type");
+        }
+    }
+
+    @Test
+    @DisplayName("V1.4.2：计数同时出 total / with_pet，WHERE 与 build 相同，不带 LATERAL")
+    void countCarriesTotalAndWithPet() {
+        AudienceSpec spec = AudienceSpec.parse("{\"mode\":\"FILTER\",\"species\":[\"DOG\"],\"paid\":true}");
+        Instant now = Instant.parse("2026-11-04T00:00:00Z");
+        OpsAudienceSql.Query count = OpsAudienceSql.count(spec, WIB, now);
+        assertThat(count.sql()).startsWith("SELECT count(*) AS total, count(*) FILTER (WHERE EXISTS (")
+                .contains(") AS with_pet FROM users u WHERE ")
+                .doesNotContain("LATERAL")
+                .isEqualTo(COUNT_HEAD + where(OpsAudienceSql.build(spec, 0L, WIB, now)));
+        assertThat(OpsAudienceSql.countIds()).contains("AS with_pet").doesNotContain("LATERAL");
+    }
+
+    @Test
+    @DisplayName("V1.4.2：抽样基础查询与 build 同选列 / WHERE、无 ORDER BY；requirePet / exclude 追加条件；IDS 用 :ids")
+    void sampleBaseSharesBuild() {
+        Instant now = Instant.parse("2026-11-04T00:00:00Z");
+        AudienceSpec spec = AudienceSpec.parse("{\"mode\":\"FILTER\",\"species\":[\"CAT\"]}");
+        String send = OpsAudienceSql.build(spec, 0L, WIB, now).sql();
+        OpsAudienceSql.Query plain = OpsAudienceSql.sampleBase(spec, WIB, now, false, null);
+        assertThat(plain.sql() + " ORDER BY u.id ASC").isEqualTo(send);
+        assertThat(plain.params()).doesNotContainKey("excludeUserId");
+
+        OpsAudienceSql.Query strict = OpsAudienceSql.sampleBase(spec, WIB, now, true, 9L);
+        assertThat(strict.sql()).endsWith(" AND pet.name IS NOT NULL AND u.id <> :excludeUserId")
+                .doesNotContain("ORDER BY u.id");
+        assertThat(strict.params()).containsEntry("excludeUserId", 9L).containsEntry("species", List.of("CAT"));
+
+        OpsAudienceSql.Query ids = OpsAudienceSql.sampleBase(AudienceSpec.ids(), WIB, now, false, null);
+        assertThat(ids.sql()).endsWith(BASE + " AND u.id IN (:ids)").doesNotContain("campaign_targets");
+    }
+
+    @Test
+    @DisplayName("V1.4.2：全部生成的 SQL 都不含取单行写法（PetOwnerLookupGuardTest 白名单文件禁 LIMIT 1）")
+    void noLimitOneAnywhere() {
+        Instant now = Instant.parse("2026-11-04T00:00:00Z");
+        java.util.regex.Pattern limitOne = java.util.regex.Pattern.compile("(?i)\\bLIMIT\\s+1\\b");
+        for (String json : List.of("{\"mode\":\"ALL\"}", "{\"mode\":\"IDS\"}",
+                "{\"mode\":\"FILTER\",\"species\":[\"CAT\"],\"hasPet\":true}")) {
+            AudienceSpec spec = AudienceSpec.parse(json);
+            assertThat(OpsAudienceSql.build(spec, 1L, WIB, now).sql()).doesNotContainPattern(limitOne);
+            assertThat(OpsAudienceSql.sampleBase(spec, WIB, now, true, 1L).sql()).doesNotContainPattern(limitOne);
+            if (spec.mode() != AudienceSpec.Mode.IDS) {
+                assertThat(OpsAudienceSql.count(spec, WIB, now).sql()).doesNotContainPattern(limitOne);
+            }
+        }
+        assertThat(OpsAudienceSql.countIds()).doesNotContainPattern(limitOne);
+    }
+
+    @Test
+    @DisplayName("V1.4.2：开屏弹窗单用户判定不受影响（不带 LATERAL / 昵称列）")
+    void matchesUserUnchanged() {
+        OpsAudienceSql.Query one = OpsAudienceSql.matchesUser(7L,
+                AudienceSpec.parse("{\"mode\":\"FILTER\",\"species\":[\"CAT\"]}").filters(),
+                Instant.parse("2026-11-04T00:00:00Z"));
+        assertThat(one.sql()).isEqualTo("SELECT EXISTS (SELECT 1 FROM users u WHERE " + BASE
+                + " AND u.id = :uid AND EXISTS (SELECT 1 FROM pet_profiles p WHERE p.owner_id = u.id "
+                + "AND p.pet_type IN (:species)))");
     }
 }

@@ -8,6 +8,7 @@ import com.tailtopia.notify.ops.domain.OpsCampaignReadyEvent;
 import com.tailtopia.notify.ops.domain.OpsCampaignStatus;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
 import com.tailtopia.notify.ops.domain.OpsRecipient;
+import com.tailtopia.notify.ops.domain.OpsTextVariables;
 import com.tailtopia.notify.ops.repository.OpsCampaignTargetDao;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.preference.PushCategory;
@@ -45,7 +46,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <p>本身不加事务；每一步各自短事务（仓储方法自带 / {@code writeOpsAnnouncements} REQUIRES_NEW）。
  * 已写入通知中心的行任何情况下都不回滚、不删除（PRD AC6）。
  *
- * <p>🔒 日志只记活动 id、批次序号、本批写入数、本批失败数、本批被推送开关拦下的人数、最终状态；不记收件人 id、标题、正文、token。
+ * <p>V1.4.2 Story 7.1（AB-37）：文案用了宠物变量时，解析出的人群里没有宠物的人不发，人数写 {@code skipped_no_pet_count}；
+ * 逐人替换在 {@code writeOpsAnnouncements}，推送取该行 title / body，两处天然一致。
+ *
+ * <p>🔒 日志只记活动 id、批次序号、本批写入数、本批失败数、本批被推送开关拦下的人数、无宠排除数、最终状态；
+ * 不记收件人 id、标题、正文（替换前后都不记）、昵称、宠物名、token。
  */
 @Service
 public class OpsNotificationDispatcher {
@@ -127,20 +132,31 @@ public class OpsNotificationDispatcher {
             return;
         }
         AudienceSpec spec = AudienceSpec.parse(campaign.getAudienceSpec());
-        List<OpsRecipient> recipients = audience.resolve(spec, id);
-        log.info("运营通知开始发送 campaignId={} recipients={}", id, recipients.size());
-        // 发送中行「已写入 / 计划」的分母（V1.3.4 AB-31 返工）：按实际发送时刻的人群写入
+        // 按实际发送时刻解析（定时活动的昵称 / 宠物名也取发送那一刻的值，AB-37）
+        List<OpsRecipient> base = audience.resolve(spec, id);
+        // V1.4.2 AB-37（R-3）：任一语言用了 {{petName}} → 排除没有宠物的人，排除数单独记 skipped_no_pet_count
+        boolean usesPet = OpsTextVariables.usesPet(campaign);
+        List<OpsRecipient> recipients = usesPet
+                ? base.stream().filter(r -> r.petName() != null).toList() : base;
+        int noPet = base.size() - recipients.size();
+        log.info("运营通知开始发送 campaignId={} recipients={} noPet={}", id, recipients.size(), noPet);
+        // 发送中行「已写入 / 计划」的分母（V1.3.4 AB-31 返工）：按实际发送时刻的人群写入（排除无宠后的净人数）
         if (repo.setPlanned(id, recipients.size(), clock.instant()) == 0) {
             stopped(id);
             return;
         }
 
         if (spec.mode() == AudienceSpec.Mode.IDS) {
-            int skipped = (int) Math.max(0L, targets.countByCampaign(id) - recipients.size());
+            // 口径不变：子表条数 − 基础过滤命中人数（无宠的有效用户不计入这里）
+            int skipped = (int) Math.max(0L, targets.countByCampaign(id) - base.size());
             if (repo.setSkipped(id, skipped, clock.instant()) == 0) {
                 stopped(id);
                 return;
             }
+        }
+        if (usesPet && repo.setSkippedNoPet(id, noPet, clock.instant()) == 0) {
+            stopped(id);
+            return;
         }
         if (recipients.isEmpty()) {
             finish(id, 0);

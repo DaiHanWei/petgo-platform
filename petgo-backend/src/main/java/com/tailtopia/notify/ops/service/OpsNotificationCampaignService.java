@@ -4,6 +4,7 @@ import com.tailtopia.notify.ops.domain.AudienceSpec;
 import com.tailtopia.notify.ops.domain.OpsCampaignDraft;
 import com.tailtopia.notify.ops.domain.OpsCampaignReadyEvent;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
+import com.tailtopia.notify.ops.domain.OpsTextVariables;
 import com.tailtopia.notify.ops.repository.OpsCampaignTargetDao;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.ops.OpsTokenGenerator;
@@ -36,6 +37,8 @@ public class OpsNotificationCampaignService {
 
     public static final String ERR_TEXT_BLANK = "admin.err.ops-notify.text.blank";
     public static final String ERR_TEXT_TOO_LONG = "admin.err.ops-notify.text.too-long";
+    /** V1.4.2 AB-37：手打的变量（显示名带括号 / 未知 {@code {{…}}}），后台四步页与本核心共用。 */
+    public static final String ERR_VAR_TYPED = "admin.err.ops-notify.var.typed";
     public static final String ERR_AUDIENCE_INVALID = AudienceSpec.INVALID_CODE;
     public static final String ERR_IDS_EMPTY = "admin.err.ops-notify.audience.ids-empty";
     public static final String ERR_SCHEDULE_PAST = "admin.err.ops-notify.schedule.past";
@@ -108,10 +111,12 @@ public class OpsNotificationCampaignService {
         if (blank(d.titleId()) || blank(d.titleEn()) || blank(d.bodyId()) || blank(d.bodyEn())) {
             throw AppException.validation("标题与正文（ID / EN）均不能为空").code(ERR_TEXT_BLANK);
         }
-        if (d.titleId().length() > TITLE_MAX || d.titleEn().length() > TITLE_MAX
-                || d.bodyId().length() > BODY_MAX || d.bodyEn().length() > BODY_MAX) {
-            throw AppException.validation("标题不超过 " + TITLE_MAX + " 字符、正文不超过 " + BODY_MAX + " 字符")
-                    .code(ERR_TEXT_TOO_LONG);
+        if (OpsTextVariables.containsTyped(d.titleId(), d.titleEn(), d.bodyId(), d.bodyEn())) {
+            throw AppException.validation("文案里有手打的变量，请用按钮插入").code(ERR_VAR_TYPED);
+        }
+        if (tooLong(d.titleId(), d.titleEn(), d.bodyId(), d.bodyEn())) {
+            throw AppException.validation("标题不超过 " + TITLE_MAX + " 字符、正文不超过 " + BODY_MAX + " 字符"
+                    + "（每个变量按 " + OpsTextVariables.VAR_WEIGHT + " 计）").code(ERR_TEXT_TOO_LONG);
         }
         if (d.audience() == null) {
             throw AppException.validation("人群规格不合法：为空").code(ERR_AUDIENCE_INVALID);
@@ -128,6 +133,17 @@ public class OpsNotificationCampaignService {
         if (d.targetType() == null || !targetPolicy.isAvailable(d.targetType(), d.targetValue())) {
             throw AppException.validation("跳转目标不可用");
         }
+    }
+
+    /**
+     * 超长判定（V1.4.2 AB-37）：按 {@link OpsTextVariables#countedLength} 计（每个变量按 20）。
+     * 替换后码点数 ≤ 计数值 ≤ 列长（昵称 / 宠物名列 ≤ 20），通知行不会溢出。后台四步页与本核心共用。
+     */
+    public static boolean tooLong(String titleId, String titleEn, String bodyId, String bodyEn) {
+        return OpsTextVariables.countedLength(titleId) > TITLE_MAX
+                || OpsTextVariables.countedLength(titleEn) > TITLE_MAX
+                || OpsTextVariables.countedLength(bodyId) > BODY_MAX
+                || OpsTextVariables.countedLength(bodyEn) > BODY_MAX;
     }
 
     private static boolean blank(String s) {

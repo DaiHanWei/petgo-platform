@@ -58,4 +58,22 @@ class OpsNotificationMigrationTest {
                 .contains("CHECK (ids_source IS NULL OR ids_source IN ('PASTE', 'CSV'))")
                 .doesNotContain("NOT NULL");
     }
+
+    @Test
+    void skippedNoPetCountMigrationAddsIntegerColumnWithCheck() throws IOException {
+        // V1.4.2 Story 7.1（决策日志 R-3 · 迁移 ⑧）：新增 ALTER，INTEGER（实体 int → int4，禁 SMALLINT），默认 0
+        Path f = Path.of(
+                "src/main/resources/db/migration/V20261104_2058__ops_notification_campaigns_skipped_no_pet_count.sql");
+        StringBuilder sb = new StringBuilder();
+        for (String line : Files.readString(f, StandardCharsets.UTF_8).split("\n")) {
+            int c = line.indexOf("--");
+            sb.append(c >= 0 ? line.substring(0, c) : line).append(' ');
+        }
+        String d = sb.toString().replaceAll("\\s+", " ");
+        assertThat(d).contains("ADD COLUMN skipped_no_pet_count INTEGER NOT NULL DEFAULT 0")
+                .contains("ADD CONSTRAINT ck_ops_notification_campaigns_skipped_no_pet_count "
+                        + "CHECK (skipped_no_pet_count >= 0)")
+                .doesNotContain("SMALLINT")
+                .doesNotContain("ck_ops_notification_campaigns_counts");
+    }
 }
