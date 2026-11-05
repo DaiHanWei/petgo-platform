@@ -47,7 +47,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.2"
 development_status:
   epic-1: in-progress
   1-1-sku包裹参数与biteship报价: review
-  1-2-订单计价器: ready-for-dev
+  1-2-订单计价器: review
   epic-1-retrospective: optional
 
   epic-2: backlog
