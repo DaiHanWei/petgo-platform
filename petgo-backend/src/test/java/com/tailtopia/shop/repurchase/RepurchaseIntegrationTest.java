@@ -247,6 +247,21 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
         assertThat(view.degraded()).isTrue();
         assertThat(view.missing()).isEqualTo("PROFILE");
         assertThat(view.items()).isEmpty();
+        // v1.4.2 shop Story 6.1 AC13：未建档无摘要
+        assertThat(view.profileSummary()).isNull();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6.1：/me/shop/recommendations 带 profileSummary（狗 · 成年 · 体重未填）")
+    void recommendationsCarryProfileSummary() {
+        long uid = seedUser();
+        seedPet(uid, "DOG", LocalDate.now().minusYears(3), null);
+        var s = recommendations.recommendFor(uid).profileSummary();
+        assertThat(s).isNotNull();
+        assertThat(s.species()).isEqualTo("DOG");
+        assertThat(s.ageStage()).isEqualTo("ADULT");
+        assertThat(s.sizeClass()).isNull();
+        assertThat(s.weightMissing()).isTrue();
     }
 
     @Test

@@ -100,7 +100,20 @@ public class ShopProductController {
         return ResponseEntity.ok(query.page(parsed, q, cursor, size, viewer));
     }
 
-    /** 商品详情 + 其 SKU 列表（FR-94 / FR-94A）。未上架或不存在 → 404。 */
+    /**
+     * 在售商品按运营权重前 N（v1.4.2 shop Story 6.1 AC12，D-17）：{@code limit} 默认 6、钳位 1 ~ 20；JSON 数组。
+     *
+     * <p>字面路径 {@code /top} 优先于 {@code /{token}}（Spring 按匹配具体度选）；游客可用（既有
+     * {@code GET /api/v1/shop/products/**} permitAll 覆盖）。{@code promo} 与列表同一套批量组装，
+     * viewer 只认 role=USER。
+     */
+    @GetMapping("/top")
+    public List<ShopProductSummaryView> top(@RequestParam(required = false) Integer limit,
+            @AuthenticationPrincipal Jwt jwt) {
+        return query.top(limit, ShopCouponController.userViewerId(jwt));
+    }
+
+    /** 商品详情 + 其 SKU 列表（FR-94 / FR-94A）。不存在 → 404；已下架 → 410 {@code product-delisted}（v1.4.2）。 */
     @GetMapping("/{token}")
     public ShopProductDetailView detail(@PathVariable String token) {
         return query.detail(token);

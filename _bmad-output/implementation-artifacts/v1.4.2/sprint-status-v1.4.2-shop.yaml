@@ -72,8 +72,8 @@ development_status:
   5-2-物流异常: review
   epic-5-retrospective: optional
 
-  epic-6: backlog
-  6-1-banner轮播商品下架与评价: ready-for-dev
+  epic-6: in-progress
+  6-1-banner轮播商品下架与评价: review
   6-2-电商订单列表详情扩展与复购下线: ready-for-dev
   epic-6-retrospective: optional
 

@@ -4,7 +4,9 @@ import com.tailtopia.shop.coupon.domain.ShopCoupon;
 import jakarta.persistence.LockModeType;
 import com.tailtopia.shop.coupon.domain.CouponAcquireType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -69,4 +71,16 @@ public interface ShopCouponRepository extends JpaRepository<ShopCoupon, Long> {
             + "and uc.status = com.tailtopia.shop.coupon.domain.UserCouponStatus.AVAILABLE "
             + "and uc.validFrom <= :now and uc.validUntil > :now)")
     List<ShopCoupon> findHeldAvailableByUser(@Param("userId") Long userId, @Param("now") Instant now);
+
+    /**
+     * banner 领券目标批量判「此刻可领」（v1.4.2 shop Story 6.1 AC4，D-16）：{@code tokens} 中
+     * ACTIVE、CLAIM 类、在发放期内（{@code issue_start_at ≤ now < issue_end_at}）且未领完的模板 token。
+     * 只投影 token，一次查询；是否被当前用户领过不在此判（点击时由领券接口返回 already-claimed）。
+     */
+    @Query("select c.publicToken from ShopCoupon c where c.publicToken in :tokens "
+            + "and c.acquireType = com.tailtopia.shop.coupon.domain.CouponAcquireType.CLAIM "
+            + "and c.status = com.tailtopia.shop.coupon.domain.CouponStatus.ACTIVE "
+            + "and c.issueStartAt <= :now and c.issueEndAt > :now "
+            + "and (c.totalQuantity is null or c.issuedCount < c.totalQuantity)")
+    Set<String> findClaimableTokens(@Param("tokens") Collection<String> tokens, @Param("now") Instant now);
 }

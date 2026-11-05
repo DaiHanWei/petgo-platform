@@ -60,6 +60,13 @@ public class ShopReview {
     @Column(name = "moderation_score", precision = 4, scale = 3)
     private BigDecimal moderationScore;
 
+    /**
+     * 运营隐藏时刻（v1.4.2 shop Story 6.1，D-17）；非空 = 详情页与 /reviews 不展示、不计入均分与条数。
+     * 🔴 隐藏不改 {@link #reviewStatus}（仍是 PUBLISHED，可撤销）；作者「我的评价」不受影响。
+     */
+    @Column(name = "hidden_at")
+    private Instant hiddenAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -106,6 +113,30 @@ public class ShopReview {
 
     public boolean isPublished() {
         return reviewStatus == ReviewStatus.PUBLISHED;
+    }
+
+    /** 隐藏（运营）。已隐藏 → 幂等，不改写原隐藏时刻。 */
+    public void hide(Instant now) {
+        if (this.hiddenAt == null) {
+            this.hiddenAt = now;
+            this.updatedAt = now;
+        }
+    }
+
+    /** 撤销隐藏。未隐藏 → 幂等。 */
+    public void unhide() {
+        if (this.hiddenAt != null) {
+            this.hiddenAt = null;
+            this.updatedAt = Instant.now();
+        }
+    }
+
+    public boolean isHidden() {
+        return hiddenAt != null;
+    }
+
+    public Instant getHiddenAt() {
+        return hiddenAt;
     }
 
     public Long getId() {

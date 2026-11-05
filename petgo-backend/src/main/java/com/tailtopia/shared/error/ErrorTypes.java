@@ -205,6 +205,12 @@ public final class ErrorTypes {
     /** v1.4.2 shop Story 4.2 AC2.5（S-6）：需要扣的 PawCoin 超过用户当前余额，只能退款（409）。 */
     public static final URI REORDER_COIN_INSUFFICIENT = URI.create(BASE + "reorder-coin-insufficient");
 
+    /**
+     * v1.4.2 shop Story 6.1（D-17 / P-5 / C-2）：商品存在但已下架（{@code is_active = false}）→ 410，
+     * App 按 type 分流到 B13「商品已下架」页（不存在仍是 404 {@code not-found}）。
+     */
+    public static final URI SHOP_PRODUCT_DELISTED = URI.create(BASE + "product-delisted");
+
     private ErrorTypes() {
     }
 }

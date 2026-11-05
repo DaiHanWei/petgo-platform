@@ -304,6 +304,71 @@ class ShopReviewIntegrationTest extends ApiIntegrationTest {
         assertThat(reviews.averageRating(productId)).isEqualTo(4.0);
     }
 
+    // ---------- v1.4.2 shop Story 6.1（L1，云端不跑，待本地验收）----------
+
+    @Autowired
+    private com.tailtopia.admin.shop.service.AdminShopReviewService adminReviews;
+    @Autowired
+    private com.tailtopia.shop.review.service.ProductReviewQueryService reviewQuery;
+
+    @Test
+    @DisplayName("v1.4.2 6.1：隐藏后不展示、条数与均分重算；作者「我的评价」仍可见；撤销后恢复")
+    void hiddenReviewIsExcludedButAuthorStillSeesIt() {
+        Ctx first = order(true);
+        long productId = productIdOf(first.skuToken());
+        ShopReview r1 = reviews.submit(first.userId(), first.order().getPublicToken(), first.line().getId(), 5,
+                "pertama", null);
+        long uid2 = seedUser();
+        Ctx second = orderForExistingSku(uid2, first.skuToken());
+        reviews.submit(uid2, second.order().getPublicToken(), second.line().getId(), 3, "kedua", null);
+        assertThat(reviews.averageRating(productId)).isEqualTo(4.0);
+
+        adminReviews.hide(r1.getId(), null);
+        assertThat(reviews.publishedFor(productId, 10)).hasSize(1);
+        assertThat(reviews.publishedCount(productId)).isEqualTo(1);
+        assertThat(reviews.averageRating(productId)).isEqualTo(3.0);
+        assertThat(reviewQuery.summaryFor(productId).total()).isEqualTo(1);
+        assertThat(reviews.myReviews(first.userId())).extracting(ShopReview::getId).contains(r1.getId());
+
+        adminReviews.unhide(r1.getId(), null);
+        assertThat(reviews.publishedCount(productId)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6.1：开关默认关 → 摘要 / 分页 items 空；打开后摘要 ≤3 条、翻页无重无漏")
+    void displayToggleAndPaging() {
+        Ctx first = order(true);
+        long productId = productIdOf(first.skuToken());
+        reviews.submit(first.userId(), first.order().getPublicToken(), first.line().getId(), 5, "a", null);
+        for (int i = 0; i < 4; i++) {
+            long uid = seedUser();
+            Ctx c = orderForExistingSku(uid, first.skuToken());
+            reviews.submit(uid, c.order().getPublicToken(), c.line().getId(), 4, "r" + i, null);
+        }
+        boolean before = adminReviews.isDisplayEnabled();
+        try {
+            adminReviews.setDisplayEnabled(false, null);
+            assertThat(reviewQuery.summaryFor(productId).items()).isEmpty();
+            assertThat(reviewQuery.pageFor(productId, null, 2).items()).isEmpty();
+            assertThat(reviewQuery.pageFor(productId, null, 2).total()).isEqualTo(5);
+
+            adminReviews.setDisplayEnabled(true, null);
+            assertThat(reviewQuery.summaryFor(productId).items()).hasSize(3);
+            java.util.Set<Long> seen = new java.util.HashSet<>();
+            String cursor = null;
+            int pages = 0;
+            do {
+                var page = reviewQuery.pageFor(productId, cursor, 2);
+                page.items().forEach(v -> assertThat(seen.add(v.id())).as("翻页不重").isTrue());
+                cursor = page.nextCursor();
+                pages++;
+            } while (cursor != null && pages < 10);
+            assertThat(seen).as("翻页不漏").hasSize(5);
+        } finally {
+            adminReviews.setDisplayEnabled(before, null);
+        }
+    }
+
     // ---------- 辅助 ----------
 
     /** 让另一个用户买同一个 SKU 并完成订单。 */

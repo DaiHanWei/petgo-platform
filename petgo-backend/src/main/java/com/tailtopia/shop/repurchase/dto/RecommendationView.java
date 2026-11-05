@@ -14,7 +14,24 @@ public record RecommendationView(
         /** 缺了什么（WEIGHT / AGE / BOTH / NONE），供引导卡决定提示补什么。 */
         String missing,
         String petName,
-        List<Item> items) {
+        List<Item> items,
+        /**
+         * v1.4.2 shop Story 6.1 AC13（D-17，PRD A1 / A9 栏头）：档案摘要枚举，App 用 arb 词表拼本地化文案，后端不拼句子。
+         * 🔒 未建档与<b>静默期</b>为 null（不能让客户端从摘要推断出静默态）。
+         */
+        ProfileSummary profileSummary) {
+
+    /**
+     * 档案摘要（取值只来自推荐理由用的同一份 {@code ProfileFacts}）。
+     *
+     * @param species       CAT / DOG / UNIVERSAL（{@code PetType.OTHER} → UNIVERSAL）
+     * @param sizeClass     SMALL / MEDIUM / LARGE；体重未填 → null
+     * @param ageStage      PUPPY / ADULT / SENIOR；生日缺失 → null
+     * @param weightMissing 体重未填
+     */
+    public record ProfileSummary(String petName, String species, String sizeClass, String ageStage,
+            boolean weightMissing) {
+    }
 
     /**
      * 一条推荐。
@@ -27,7 +44,8 @@ public record RecommendationView(
             String mainImageUrl, long minPrice, String reason, boolean promo) {
     }
 
+    /** 空结果（未建档 / 静默期）：{@code profileSummary = null}。 */
     public static RecommendationView empty(String petName, boolean degraded, String missing) {
-        return new RecommendationView(degraded, missing, petName, List.of());
+        return new RecommendationView(degraded, missing, petName, List.of(), null);
     }
 }

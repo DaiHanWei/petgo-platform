@@ -56,6 +56,13 @@ public class ShippingSettings {
     @Column(name = "insurance_rate_bp", nullable = false)
     private int insuranceRateBp = DEFAULT_INSURANCE_RATE_BP;
 
+    /**
+     * 商品评价列表展示开关（v1.4.2 shop Story 6.1，D-17；V20261105_1650，默认关）。
+     * 关闭时详情与 /reviews 只给均分与条数，不给评价条目；运营过完历史评价后打开。
+     */
+    @Column(name = "review_display_enabled", nullable = false)
+    private boolean reviewDisplayEnabled;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -160,6 +167,15 @@ public class ShippingSettings {
 
     public int getInsuranceRateBp() {
         return insuranceRateBp;
+    }
+
+    public boolean isReviewDisplayEnabled() {
+        return reviewDisplayEnabled;
+    }
+
+    public void setReviewDisplayEnabled(boolean enabled) {
+        this.reviewDisplayEnabled = enabled;
+        this.updatedAt = Instant.now();
     }
 
     private static void requireMaxLength(String v, int max, String field) {

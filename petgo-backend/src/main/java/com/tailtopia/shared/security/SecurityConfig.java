@@ -276,6 +276,8 @@ public class SecurityConfig {
                         // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
                         // 只读；配置走 /admin/shop/banners，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
+                        // v1.4.2 shop Story 6.1（D-16）：首页多张轮播，同上游客可见；精确路径。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/banners").permitAll()
                         // v1.4.2 shop Story 2.2（D-5）：游客新人券弹窗活动，permitAll；精确路径。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/coupons/newbie-campaign").permitAll()
                         // v1.4.2 shop Story 2.2（D-6）：首页「给你的券」带本人领取状态，仅 role=USER；

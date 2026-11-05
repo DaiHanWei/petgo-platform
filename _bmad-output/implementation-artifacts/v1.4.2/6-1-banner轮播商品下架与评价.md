@@ -1,6 +1,6 @@
 # Story 6.1: banner 轮播与领券跳转、商品下架与评价（后端）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`（从 `dev_1.4.2` 切出，全线 25 story 同一分支、云端单会话串行）
 > 口径优先级：`决策日志-shop.md`（S-0 ~ S-9）> PRD `电商/1-4-2电商prd.md`（§3.6 FR-132、§3.7 FR-133「找商品 / 商品详情」、§3.0 旅程 E 第 2 条、§4 banner 埋点）> `architecture-v1.4.2-shop-delta.md`（D-16、D-17、§1.2 第 12 / 14 条、P-5 / P-8 ⑤⑥）> UI 稿（A1 / A2 / A5 / A7 / A9 / B1 / B13 / B14 说明）；跨 story 契约以 `CROSS-STORY-DECISIONS.md` 为准；云端执行以 `cloud-rules-shop.md` 为准。
@@ -142,14 +142,14 @@ COMMENT ON COLUMN shipping_settings.review_display_enabled IS '商品评价列�
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：对照 2.1 / 2.2 **已提交代码**核对 `ShopCoupon` 字段名（`acquireType / status / issueStartAt / issueEndAt / totalQuantity / issuedCount / publicToken`）、`ShopCouponRepository`、promo 组件名；无 `V20261105_1645 / _1650` 撞号；有出入先改本文件并在 Completion Notes 记一句
-- [ ] **T1 迁移 + 实体**（AC1 ~ AC3）
-- [ ] **T2 banner**（AC4 ~ AC7）：`ShopBannerQueryService`、两个端点、`SecurityConfig` 一条、后台 service 扩展 + messages
-- [ ] **T3 下架 410**（AC8）：仓库方法、`ErrorTypes` / `AppException` 新工厂
-- [ ] **T4 评价**（AC9 ~ AC11）：仓库条件与游标、`AdminShopReviewService`、`/reviews` 扩展、详情摘要
-- [ ] **T5 top 与推荐摘要**（AC12、AC13）
-- [ ] **T6 测试**：L0 全写并跑绿；L1 写好能编译（云端不跑）
-- [ ] **T7** `./mvnw -B clean package -DskipTests` + 指定 L0；Completion Notes 标「**L1 待本地验收**」
+- [x] **T0 开工核对**：对照 2.1 / 2.2 **已提交代码**核对 `ShopCoupon` 字段名（`acquireType / status / issueStartAt / issueEndAt / totalQuantity / issuedCount / publicToken`）、`ShopCouponRepository`、promo 组件名；无 `V20261105_1645 / _1650` 撞号；有出入先改本文件并在 Completion Notes 记一句
+- [x] **T1 迁移 + 实体**（AC1 ~ AC3）
+- [x] **T2 banner**（AC4 ~ AC7）：`ShopBannerQueryService`、两个端点、`SecurityConfig` 一条、后台 service 扩展 + messages
+- [x] **T3 下架 410**（AC8）：仓库方法、`ErrorTypes` / `AppException` 新工厂
+- [x] **T4 评价**（AC9 ~ AC11）：仓库条件与游标、`AdminShopReviewService`、`/reviews` 扩展、详情摘要
+- [x] **T5 top 与推荐摘要**（AC12、AC13）
+- [x] **T6 测试**：L0 全写并跑绿；L1 写好能编译（云端不跑）
+- [x] **T7** `./mvnw -B clean package -DskipTests` + 指定 L0；Completion Notes 标「**L1 待本地验收**」
 
 ## Dev Notes
 
@@ -204,7 +204,7 @@ COMMENT ON COLUMN shipping_settings.review_display_enabled IS '商品评价列�
   ```
   `tokensOf` 为空时不发查询（直接空集）。
 - 候选查询 JPQL：`WHERE b.active = true AND (b.startAt IS NULL OR b.startAt <= :now) AND (b.endAt IS NULL OR b.endAt > :now) ORDER BY b.sortWeight DESC, b.id DESC`。
-- 评价游标：`Base64Url("<epochMillis>:<id>")`，解析失败按首页（同 `OrderCenterCursor` / social 列表的坏游标口径）。
+- 评价游标：复用 `shared.paging.KeysetCursor`（`Base64Url("<epochMicros>:<id>")`，**微秒**——毫秒截断会跳过同毫秒评价），解析失败按首页（同 `OrderCenterCursor` / social 列表的坏游标口径）。〔6.1 实现对齐〕
 - `ProfileSummary` 由 `ProfileRecommendationService.recommend(facts)` 内组装（`facts` 已在手）；`recommendFor` 的两个 `empty` 分支传 null。
 - 410 工厂：`new AppException(HttpStatus.GONE, ErrorTypes.SHOP_PRODUCT_DELISTED, detail)`，`ErrorTypes.SHOP_PRODUCT_DELISTED = URI.create(BASE + "product-delisted")`（P-5 后缀）。
 
@@ -243,7 +243,7 @@ COMMENT ON COLUMN shipping_settings.review_display_enabled IS '商品评价列�
 - `shop/review/ShopReviewIntegrationTest`（补）：隐藏后列表与 `total / averageRating` 重算；开关默认关 → 详情 `reviewSummary.items` 空、`/reviews` `items` 空；打开后详情 3 条、`/reviews` 翻页无重无漏；作者「我的评价」仍能看到被隐藏的评价。
 - `shop/repurchase/RepurchaseIntegrationTest`（补）：`/me/shop/recommendations` 带 `profileSummary`；未建档为 null。
 - 迁移：`ddl-auto=validate` 启动通过；存量 banner 排期为 NULL 仍生效。
-- 云端只跑 L0：`./mvnw -B test -Dtest='ShopBannerQueryServiceTest,ShopBannerControllerTest,AdminShopBannerTargetTest,AdminShopBannerStateTest,ShopProductQueryServiceTest,ShopReviewControllerTest,AdminShopReviewServiceTest,ShopReviewHiddenTest,ShopTopProductsTest,ProfileSummaryTest,ShopBannerScheduleMigrationTest,ShopReviewHiddenMigrationTest,MeRepurchaseControllerTest,RepurchaseScanServiceTest' -Dsurefire.failIfNoSpecifiedTests=false`（`LANG=C.UTF-8 LC_ALL=C.UTF-8`）。Completion Notes 标「**L1 待本地验收**」。
+- 云端只跑 L0：`./mvnw -B test -Dtest='ShopBannerQueryServiceTest,ShopBannerControllerTest,AdminShopBannerTargetTest,AdminShopBannerStateTest,ShopProductQueryServiceTest,ShopReviewControllerTest,AdminShopReviewServiceTest,ShopReviewHiddenTest,ShopTopProductsTest,ProfileSummaryTest,ShopBannerScheduleMigrationTest,ShopReviewHiddenMigrationTest,MeRepurchaseControllerTest,RepurchaseScanServiceTest,ReviewerNameMaskerTest,ShopProductPagingTest,ShopProductListLegacyShapeTest,AuditActionLabelsTest,ShopSharedFileGuardTest,AdminMessagesExternalizedTest' -Dsurefire.failIfNoSpecifiedTests=false`（复审修复后列表；后 6 个为受影响的既有守卫 / 新增打码单测）（`LANG=C.UTF-8 LC_ALL=C.UTF-8`）。Completion Notes 标「**L1 待本地验收**」。
 
 ### Project Structure Notes
 
@@ -272,12 +272,96 @@ COMMENT ON COLUMN shipping_settings.review_display_enabled IS '商品评价列�
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless，L0 only。
+
 ### Debug Log References
+
+- `./mvnw -B clean package -DskipTests`：BUILD SUCCESS。
+- story 列 L0（+ 受影响的 `ShopProductPagingTest`、`ShopProductListLegacyShapeTest`、`AuditActionLabelsTest`、`ShopSharedFileGuardTest`）18 类 107 用例全绿。
+- 全量非集成单测（`unit-tests.sh`，747 类）：5971 用例，0 失败 / 0 错误 / 10 skipped（既有）。
+- 复审修复后重跑：`clean package -DskipTests` 绿；L0 列表 20 类 118 用例全绿；全量非集成单测 748 类 5977 用例 0 失败 / 0 错误 / 10 skipped；flyway-guard OK。首轮 `AdminMessagesExternalizedTest` 红（`AdminShopReviewService` 两处 `AppException` 未挂码）→ 补 `admin.err.shopReview.notFound / settingsMissing` 三语后转绿。
+- `bash scripts/ci/check-flyway-versions.sh origin/main`：OK。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：本 story 全部 `[L1]` AC（AC1~AC13 的 L1 半边：`ddl-auto=validate`、迁移落库、HTTP 410 序列化、JPQL 构造表达式与游标查询实跑）未在云端验证。留待本地的测试类：`ShopBannerEndpointIntegrationTest`（新）、`ShopProductEndpointIntegrationTest`（改 410 + 新增 `/top`、`reviewSummary`、`totalCount`）、`ShopReviewIntegrationTest`（新增隐藏重算 / 开关 / 翻页无重无漏）、`RepurchaseIntegrationTest`（新增 `profileSummary`）、`AdminShopListingEndpointIntegrationTest` 与 `Epic1ChainIntegrationTest`（下架详情 404 → 410 按设计改断言）。L2 本 story 无。
+- **名字对齐（story 文字 → 实际代码）**：
+  - 详情评价摘要与 `/reviews` 分页的组装放在新类 `shop/review/service/ProductReviewQueryService`（story 未命名）；`ShopProductQueryService` 构造器加该依赖，`ShopReviewController` 改为只依赖它 + `ShopProductRepository`。
+  - 条数 + 均分合并查询为 `ShopReviewRepository.visibleStats` → 顶层投影 `shop/review/repository/ShopReviewStats`（JPQL 构造表达式）。
+  - 评价游标复用 `shared.paging.KeysetCursor`（微秒精度），而非 story 写的 epochMillis 自拼串。
+  - `ShopBannerController` 构造器改为 `(ShopBannerQueryService)`（另有包内 `(…, Clock)` 供测试）。
+  - 2.1 券字段名与 story 一致（`acquireType / status / issueStartAt / issueEndAt / totalQuantity / issuedCount / publicToken`）；`issue_end_at` 实为 NOT NULL，「为空或 > now」中的空分支恒不成立，照写无害。2.x 无等价方法，新增 `ShopCouponRepository.findClaimableTokens`。
+  - 测试类名按 story；新增审计 i18n / 错误码 i18n 进四个 `messages*.properties`。
+- **C-9 落地**：评价条目 `ShopReviewView` 末尾加 `nickname`（`AccountQueryService.findActorViews` 取社区昵称后**经 `ReviewerNameMasker` 打码**，见「复审修复」；注销 / 封号 → null）与 `specName`（订单行 `spec_name` 快照），整页各一次批量查；详情加 `reviewListEnabled`（= `reviewSummary.displayEnabled`）；分页信封 `ShopProductPageResponse` 加 `totalCount`（同筛选条件在售总数，四条 count 查询与列表过滤逐字一致；旧版无分页参数的数组形态无法加字段，不变）。商品详情规格 `sellable` 已由 1.1 提供。
+- **C-2**：`ErrorTypes.SHOP_PRODUCT_DELISTED = product-delisted` + `AppException.productDelisted`（410）已登记。
+- 拍板点 ①~⑤ 照 story 实现：开关放 `shipping_settings.review_display_enabled`；旧 `/shop/banner` = 新列表第一张、COUPON → NONE、CATEGORY 保持；`/reviews` 开关关时照给条数与均分；banner 券只允许 CLAIM（且 ACTIVE、未过 `issue_end_at`；发放期尚未开始的允许绑定，便于预排期）；`active=false` 一律 410。
+- 排期非法：`ShopBanner.schedule` 抛 422 并挂码 `admin.err.banner.scheduleInvalid`；后台表单 `ShopBannerForm.startAt/endAt` 为 `Instant`，页面控件与绑定格式由后台线补。
+- 旧索引 `ix_shop_reviews_product` 保留；迁移无 SMALLINT；`ck_shop_banners_target_type` 按 V20261030_0330 原 4 值 + COUPON 重建。迁移 ⑤ 额外重写了 `target_type` 的列注释（加 COUPON）。
+- `AdminShopBannerStateTest` 的同源守卫改为断言 `liveId()` 调 `liveQuery.liveBanners(` 且不再调 `findFirstByActiveTrue…`（反向断言保留）；`ShopBannerControllerTest.delistedProductIsServedAsNotTappable` 保留方法名、改断言为「整张剔除、轮到下一张」；`AdminShopBannerTargetTest.unknownTypeRejected` 原用 COUPON 作非法值，改用 `TOKO_HOME` / 小写 `coupon`。
+
+#### 复审修复（2026-11-05）
+
+1. **评价公开昵称打码（隐私）**：Google 注册时 `nickname` 初始化为 Google displayName（多为真名），原样公开 = 「真名 + 购买处方粮」对游客可见。新增纯函数 `shop/review/service/ReviewerNameMasker.mask`：「首词 + 末词首字符.」（`Dewi Sartika` / `Dewi Ayu Sartika` → `Dewi S.`；单词名只保留该词；null / 全空白 → null）；分隔按 Unicode 空白（含 NBSP、全角空格、零宽空格），首字符按字素簇取（组合重音、emoji、ZWJ 序列不劈开）。评价出参只用打码值（`ProductReviewQueryService.toPublicViews`），社区原样昵称串不出现在评价接口。L0 `ReviewerNameMaskerTest`（多词 / 单字名 / 空白 / Unicode 空白 / 字素簇边界），`ShopReviewControllerTest` 改为喂原名 `Dewi Ayu Sartika` 断言下发 `Dewi S.`。
+2. **审计不再因无操作人跳过**：`AdminShopReviewService.hide / unhide / setDisplayEnabled` 一律 `audit.record`（actor 可为 null，`AdminAuditService` 支持）；`AdminShopReviewServiceTest.nullActorStillAudits` 钉住。
+
+#### 待确认
+
+1. （沿用正文「待确认」1~6，均按拍板点实现。）
+2. **评价公开昵称打码格式需产品确认并入决策日志**：C-9 要求下发 `nickname`，与 Story 7.3「不下发评价者身份」冲突；复审后按最保守做法服务端打码为「首词 + 末词首字母.」（对齐 UI 稿「Dewi S.」）。单词名会完整保留（印尼常见单名，可能即真名）；不下发头像与用户 token。
+3. **详情摘要查询数**：AC11.3「只多两次查询」——计数 + 均分 1 条、列表 1 条；开关开且有评价时为补 C-9 的昵称 / 规格名再各多 1 条批量查询（共 4 条，无 N+1）。
+4. **`totalCount` 的放置**：只加在分页信封（`cursor` / `size` 任一出现时）；不带分页参数的旧数组形态与 `/top` 不带总数。
+
 ### File List
+
+后端 · 迁移
+- `petgo-backend/src/main/resources/db/migration/V20261105_1645__shop_banner_schedule_and_coupon_target.sql`（新）
+- `petgo-backend/src/main/resources/db/migration/V20261105_1650__shop_review_hidden_and_display_flag.sql`（新）
+
+后端 · 主代码
+- `petgo-backend/src/main/java/com/tailtopia/shop/service/ShopBannerQueryService.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/shop/dto/ShopBannerListView.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/service/ProductReviewQueryService.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/repository/ShopReviewStats.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/service/ReviewerNameMasker.java`（新，复审修复）
+- `petgo-backend/src/main/java/com/tailtopia/admin/shop/service/AdminShopReviewService.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/BannerTargetType.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/domain/ShopBanner.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/repository/ShopBannerRepository.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/repository/ShopProductRepository.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/web/ShopBannerController.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/web/ShopProductController.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/service/ShopProductQueryService.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/dto/ShopProductDetailView.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/dto/ShopProductPageResponse.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/coupon/repository/ShopCouponRepository.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/domain/ShopReview.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/dto/ProductReviewsView.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/dto/ShopReviewView.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/repository/ShopReviewRepository.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/service/ShopReviewService.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/review/web/ShopReviewController.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/shipping/domain/ShippingSettings.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/repurchase/dto/RecommendationView.java`
+- `petgo-backend/src/main/java/com/tailtopia/shop/repurchase/service/ProfileRecommendationService.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/shop/service/AdminShopBannerService.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/shop/dto/ShopBannerForm.java`
+- `petgo-backend/src/main/java/com/tailtopia/admin/audit/service/AuditActions.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/error/ErrorTypes.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/error/AppException.java`
+- `petgo-backend/src/main/java/com/tailtopia/shared/security/SecurityConfig.java`
+- `petgo-backend/src/main/resources/i18n/messages.properties`、`messages_en.properties`、`messages_id.properties`、`messages_zh_CN.properties`
+
+后端 · 测试（L0 新）
+- `shop/service/ShopBannerQueryServiceTest`、`shop/review/service/ReviewerNameMaskerTest`（复审修复）、`shop/web/ShopTopProductsTest`、`shop/review/ShopReviewControllerTest`、`shop/review/ShopReviewHiddenTest`、`shop/review/ShopReviewHiddenMigrationTest`、`shop/ShopBannerScheduleMigrationTest`、`shop/repurchase/service/ProfileSummaryTest`、`admin/shop/service/AdminShopReviewServiceTest`
+
+后端 · 测试（L0 改）
+- `shop/web/ShopBannerControllerTest`、`admin/shop/service/AdminShopBannerTargetTest`、`admin/shop/service/AdminShopBannerStateTest`、`shop/service/ShopProductQueryServiceTest`、`shop/service/ShopProductPagingTest`
+
+后端 · 测试（L1，写好能编译，云端不跑）
+- `shop/web/ShopBannerEndpointIntegrationTest`（新）、`shop/web/ShopProductEndpointIntegrationTest`、`shop/review/ShopReviewIntegrationTest`、`shop/repurchase/RepurchaseIntegrationTest`、`admin/shop/web/AdminShopListingEndpointIntegrationTest`、`shop/Epic1ChainIntegrationTest`
 
 ### Change Log
 
 - 2026-11-05：创建 story 文件（ready-for-dev）。
+- 2026-11-05：dev-story 实现（后端，L0 绿），Status → review；名字对齐见 Completion Notes。
+- 2026-11-05：复审修复——评价昵称服务端打码（`ReviewerNameMasker`）、评价运营审计不因无 actor 跳过；L0 重跑全绿。

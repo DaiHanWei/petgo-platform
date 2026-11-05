@@ -130,7 +130,21 @@ public class ProfileRecommendationService {
                     promoTokens.contains(p.getPublicToken())));
         }
         return new RecommendationView(!facts.isComplete(), facts.missing(), facts.petName(),
-                items);
+                items, summaryOf(facts));
+    }
+
+    /**
+     * 档案摘要（v1.4.2 shop Story 6.1 AC13）：只从已算好的 {@code facts} 取，不重复推算。
+     * 调用方只有「已建档且非静默期」的分支走到这里（两个 {@code empty} 分支为 null）。
+     */
+    static RecommendationView.ProfileSummary summaryOf(ProfileFacts facts) {
+        Species sp = facts.species() == null ? Species.UNIVERSAL : facts.species();
+        return new RecommendationView.ProfileSummary(
+                facts.petName(),
+                sp.name(),
+                facts.bodySize() == null || facts.bodySize() == BodySize.UNIVERSAL ? null : facts.bodySize().name(),
+                facts.ageStage() == null || facts.ageStage() == AgeStage.UNIVERSAL ? null : facts.ageStage().name(),
+                facts.weightKg() == null);
     }
 
     /**

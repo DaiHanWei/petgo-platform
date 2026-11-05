@@ -137,13 +137,13 @@ class AdminShopListingEndpointIntegrationTest extends ApiIntegrationTest {
     // ---------- AC1：对外可见性 ----------
 
     @Test
-    @DisplayName("上架 → 对外列表与详情可见；下架 → 两者都查不到")
+    @DisplayName("上架 → 对外列表与详情可见；下架 → 列表查不到、详情 410")
     void listingControlsPublicVisibility() throws Exception {
         long[] ids = seedProduct(0, 5, 0);
         String token = publicToken(ids[0]);
 
-        // 未上架：详情 404、列表不含
-        mvc.perform(get("/api/v1/shop/products/" + token)).andExpect(status().isNotFound());
+        // 未上架：详情 410 product-delisted（v1.4.2 shop Story 6.1，原为 404）、列表不含
+        mvc.perform(get("/api/v1/shop/products/" + token)).andExpect(status().isGone());
 
         listing.list(ids[0], ACTOR);
         mvc.perform(get("/api/v1/shop/products/" + token)).andExpect(status().isOk());
@@ -151,7 +151,7 @@ class AdminShopListingEndpointIntegrationTest extends ApiIntegrationTest {
                 .getResponse().getContentAsString()).contains(token);
 
         listing.delist(ids[0], ACTOR);
-        mvc.perform(get("/api/v1/shop/products/" + token)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/shop/products/" + token)).andExpect(status().isGone());
         assertThat(mvc.perform(get("/api/v1/shop/products")).andReturn()
                 .getResponse().getContentAsString()).doesNotContain(token);
     }

@@ -340,6 +340,15 @@ public final class AuditActions {
     /** 为券模板生成兑换码（摘要只记通用 / 一次性与数量，不记码）。 */
     public static final String SHOP_COUPON_CODES_CREATED = "SHOP_COUPON_CODES_CREATED";
 
+    // ===== 商品评价运营（v1.4.2 shop Story 6.1，D-17；S-2 service 归 shop 线，后台线只做页面）=====
+    // target = {@code SHOP_REVIEW} / 评价 id。🔒 summary 只记评价 id 与商品 token，绝不记评价正文。
+    /** 隐藏一条评价（不展示、不计入均分与条数）。 */
+    public static final String SHOP_REVIEW_HIDDEN = "SHOP_REVIEW_HIDDEN";
+    /** 撤销隐藏。 */
+    public static final String SHOP_REVIEW_UNHIDDEN = "SHOP_REVIEW_UNHIDDEN";
+    /** 切换商品评价列表展示开关（target = {@code SHIPPING_SETTINGS}；摘要记开 / 关）。 */
+    public static final String SHOP_REVIEW_DISPLAY_TOGGLED = "SHOP_REVIEW_DISPLAY_TOGGLED";
+
     // ===== 话题管理（V1.4.2 social-topic Story 6.1，AB-10B）=====
     // target = {@code topic} / topicId；summary 只记标准名、状态变化、序号，不记说明全文。
     /** 后台新建官方话题。 */

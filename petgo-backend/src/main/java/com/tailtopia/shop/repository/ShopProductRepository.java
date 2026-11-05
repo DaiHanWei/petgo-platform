@@ -17,6 +17,9 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
     /** 对外一律按 token 寻址，绝不按自增 id（CLAUDE.md 护栏）。 */
     Optional<ShopProduct> findByPublicTokenAndActiveTrue(String publicToken);
 
+    /** 含已下架（v1.4.2 shop Story 6.1 AC8）：详情区分「不存在 404」与「已下架 410」。 */
+    Optional<ShopProduct> findByPublicToken(String publicToken);
+
     /**
      * 批量版「在售」判定：{@code tokens} 中存在且 {@code is_active = true} 的商品 token（V1.3.4 Story 5.1，
      * 运营弹窗候选过滤一次查完，避免逐条查实体的 N+1）。只投影 token，不加载实体。
@@ -124,4 +127,22 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
     List<ShopProduct> pageSearchActiveByCategory(@Param("pattern") String pattern,
             @Param("category") ProductCategory category,
             @Param("sw") int sortWeight, @Param("id") long id, Pageable pageable);
+
+    // ---------- 列表总数（v1.4.2 shop C-9：首页「{n} produk」）----------
+    // 🔴 过滤口径与上面的列表 / 搜索逐字一致（只数在售；搜索同样 name + brand、同一 escape）。
+
+    long countByActiveTrue();
+
+    long countByActiveTrueAndCategory(ProductCategory category);
+
+    @Query("select count(p) from ShopProduct p where p.active = true "
+            + "and (lower(p.name) like :pattern escape '\\' "
+            + "  or lower(p.brand) like :pattern escape '\\')")
+    long countSearchActive(@Param("pattern") String pattern);
+
+    @Query("select count(p) from ShopProduct p where p.active = true and p.category = :category "
+            + "and (lower(p.name) like :pattern escape '\\' "
+            + "  or lower(p.brand) like :pattern escape '\\')")
+    long countSearchActiveByCategory(@Param("pattern") String pattern,
+            @Param("category") ProductCategory category);
 }

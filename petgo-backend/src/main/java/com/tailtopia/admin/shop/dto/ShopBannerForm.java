@@ -16,11 +16,33 @@ public class ShopBannerForm {
     private Integer imageH;
     private int sortWeight;
 
-    /** 点击跳转类型（V1.4.1）：NONE / PRODUCT / CATEGORY / EXTERNAL；空 = NONE。 */
+    /** 点击跳转类型（V1.4.1）：NONE / PRODUCT / CATEGORY / EXTERNAL / COUPON（v1.4.2）；空 = NONE。 */
     private String targetType;
 
-    /** 跳转目标：商品 token / 品类字面量 / https 链接。 */
+    /** 跳转目标：商品 token / 品类字面量 / https 链接 / 券模板 public_token（v1.4.2 COUPON）。 */
     private String targetValue;
+
+    /** 排期起（含），null = 不限（v1.4.2 shop Story 6.1，D-16）。页面控件由后台线补。 */
+    private java.time.Instant startAt;
+
+    /** 排期止（不含），null = 不限。 */
+    private java.time.Instant endAt;
+
+    public java.time.Instant getStartAt() {
+        return startAt;
+    }
+
+    public void setStartAt(java.time.Instant startAt) {
+        this.startAt = startAt;
+    }
+
+    public java.time.Instant getEndAt() {
+        return endAt;
+    }
+
+    public void setEndAt(java.time.Instant endAt) {
+        this.endAt = endAt;
+    }
 
     public String getTargetType() {
         return targetType;

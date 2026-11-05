@@ -37,6 +37,7 @@ class ShopProductQueryServiceTest {
     private SkuInventoryRepository inventoryRepo;
     private InventoryService inventory;
     private ShopProductQueryService service;
+    private com.tailtopia.shop.review.service.ProductReviewQueryService reviewQuery;
 
     @BeforeEach
     void setUp() {
@@ -52,7 +53,11 @@ class ShopProductQueryServiceTest {
                 new ShopImageUrlResolver(mediaProps),
                 // v1.4.2 shop Story 2.2：promo 判定（mock 仓库无生效券 → promo 恒 false）
                 new com.tailtopia.shop.coupon.service.PromoResolver(
-                        Mockito.mock(com.tailtopia.shop.coupon.repository.ShopCouponRepository.class)));
+                        Mockito.mock(com.tailtopia.shop.coupon.repository.ShopCouponRepository.class)),
+                reviewQuery = Mockito.mock(com.tailtopia.shop.review.service.ProductReviewQueryService.class));
+        // v1.4.2 shop Story 6.1：评价摘要默认「无评价、开关关」
+        when(reviewQuery.summaryFor(ArgumentMatchers.anyLong()))
+                .thenReturn(new ShopProductDetailView.ReviewSummary(0, null, false, List.of()));
     }
 
     private ShopProduct product(long id, String token, ProductCategory category) {
@@ -68,6 +73,7 @@ class ShopProductQueryServiceTest {
         ReflectionTestUtils.setField(p, "detailHtml", "<p>成分表</p>");
         ReflectionTestUtils.setField(p, "shelfLifeNote", "18 bulan");
         ReflectionTestUtils.setField(p, "returnPolicy", ReturnPolicy.NO_RETURN_AFTER_OPEN);
+        ReflectionTestUtils.setField(p, "active", true);
         return p;
     }
 
@@ -142,7 +148,7 @@ class ShopProductQueryServiceTest {
     @DisplayName("详情：SKU 级 returnPolicy 为空时继承商品级（FR-94A）")
     void detailInheritsReturnPolicy() {
         ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
-        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
         when(skus.findByProductIdOrderByIdAsc(1L)).thenReturn(List.of(
                 sku(11L, 1L, 285_000L, null),
                 sku(12L, 1L, 165_000L, ReturnPolicy.RETURNABLE)));
@@ -166,7 +172,7 @@ class ShopProductQueryServiceTest {
         ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
         ReflectionTestUtils.setField(p, "galleryKeys",
                 List.of("shop/p/1/g2.jpg", "shop/p/1/g1.jpg"));
-        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
         when(skus.findByProductIdOrderByIdAsc(1L))
                 .thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
 
@@ -196,7 +202,7 @@ class ShopProductQueryServiceTest {
         // `[mainImageUrl, ...galleryUrls]` 直接炸在展开上；这里必须收敛成空列表。
         ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
         assertThat((Object) ReflectionTestUtils.getField(p, "galleryKeys")).isNull();
-        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
         when(skus.findByProductIdOrderByIdAsc(1L))
                 .thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
 
@@ -218,7 +224,7 @@ class ShopProductQueryServiceTest {
         // R-2 的现象「看不到滑动效果」正是这一支：模型与端上都就绪，缺的只是数据。
         ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
         ReflectionTestUtils.setField(p, "galleryKeys", List.of());
-        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
         when(skus.findByProductIdOrderByIdAsc(1L))
                 .thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
 
@@ -231,7 +237,7 @@ class ShopProductQueryServiceTest {
     @Test
     @DisplayName("详情：未知 token → 404（notFound），不是 403 —— 防枚举探测")
     void detailUnknownTokenIsNotFound() {
-        when(products.findByPublicTokenAndActiveTrue("nope")).thenReturn(Optional.empty());
+        when(products.findByPublicToken("nope")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.detail("nope"))
                 .isInstanceOf(AppException.class)
@@ -242,7 +248,7 @@ class ShopProductQueryServiceTest {
     @DisplayName("详情：无库存行的 SKU 视为售罄，remaining 为 null（Story 1.2）")
     void detailWithoutInventoryRowIsOutOfStock() {
         ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
-        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
         when(skus.findByProductIdOrderByIdAsc(1L)).thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
         when(inventoryRepo.findBySkuIdIn(ArgumentMatchers.anyList())).thenReturn(List.of());
 
@@ -256,7 +262,7 @@ class ShopProductQueryServiceTest {
     @DisplayName("🔒 对外视图不含自增 id —— 只暴露 publicToken（NFR-3）")
     void viewsNeverExposeInternalId() {
         ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
-        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
         when(skus.findByProductIdOrderByIdAsc(1L)).thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
 
         ShopProductDetailView view = service.detail("tokA");
@@ -315,5 +321,55 @@ class ShopProductQueryServiceTest {
         assertThat(ShopProductQueryService.likePattern("a\\b")).isEqualTo("%a\\\\b%");
         assertThat(ShopProductQueryService.likePattern("  ")).isNull();
         assertThat(ShopProductQueryService.likePattern(null)).isNull();
+    }
+
+    // ---------- v1.4.2 shop Story 6.1：下架 410 + 评价摘要 ----------
+
+    @Test
+    @DisplayName("v1.4.2 6.1：存在但已下架 → 410 product-delisted；不查 SKU、不组装评价摘要")
+    void delistedProductIsGone() {
+        ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
+        ReflectionTestUtils.setField(p, "active", false);
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
+
+        assertThatThrownBy(() -> service.detail("tokA"))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(org.springframework.http.HttpStatus.GONE);
+                    assertThat(e.getType().toString()).isEqualTo("https://petgo/errors/product-delisted");
+                });
+        Mockito.verifyNoInteractions(skus, reviewQuery);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6.1：不存在仍是 404 not-found（不是 410）")
+    void unknownTokenStill404() {
+        when(products.findByPublicToken("nope")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.detail("nope"))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus())
+                        .isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND));
+        Mockito.verifyNoInteractions(reviewQuery);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6.1：在售详情带评价摘要，reviewListEnabled 与摘要开关一致")
+    void detailCarriesReviewSummary() {
+        ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
+        when(products.findByPublicToken("tokA")).thenReturn(Optional.of(p));
+        when(skus.findByProductIdOrderByIdAsc(1L)).thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
+
+        ShopProductDetailView off = service.detail("tokA");
+        assertThat(off.reviewSummary().total()).isZero();
+        assertThat(off.reviewSummary().averageRating()).isNull();
+        assertThat(off.reviewSummary().items()).isEmpty();
+        assertThat(off.reviewListEnabled()).isFalse();
+
+        var item = new com.tailtopia.shop.review.dto.ShopReviewView(9L, 5, "ok", List.of(),
+                java.time.Instant.EPOCH, null, "Dewi", "3 kg");
+        when(reviewQuery.summaryFor(1L))
+                .thenReturn(new ShopProductDetailView.ReviewSummary(24, 4.8, true, List.of(item)));
+        ShopProductDetailView on = service.detail("tokA");
+        assertThat(on.reviewListEnabled()).isTrue();
+        assertThat(on.reviewSummary().total()).isEqualTo(24);
+        assertThat(on.reviewSummary().items()).containsExactly(item);
     }
 }

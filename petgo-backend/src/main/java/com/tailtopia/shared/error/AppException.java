@@ -347,4 +347,9 @@ public class AppException extends RuntimeException {
     public static AppException reorderCoinInsufficient(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.REORDER_COIN_INSUFFICIENT, detail);
     }
+
+    /** v1.4.2 shop Story 6.1（D-17）：商品已下架 → 410 {@code product-delisted}。 */
+    public static AppException productDelisted(String detail) {
+        return new AppException(HttpStatus.GONE, ErrorTypes.SHOP_PRODUCT_DELISTED, detail);
+    }
 }
