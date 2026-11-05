@@ -30,8 +30,8 @@
 # 2.1 V20261104_2030 user_milestone_flags + 新编码 roster 行（⑤）
 # 2.2 V20261104_2040 账号级里程碑存量补算（⑥）
 # 4.1 V20261104_2050 topics + content_topics（②）
-# 4.1 V20261104_2060 content_post_view_days（③）
-# 7.1 V20261104_2070 ops_notification_campaigns.skipped_no_pet_count（⑧）
+# 4.1 V20261104_2055 content_post_view_days（③）（原预分配 _2060 分钟位越界，2026-11-05 改号）
+# 7.1 V20261104_2058 ops_notification_campaigns.skipped_no_pet_count（⑧）（原预分配 _2070 分钟位越界，2026-11-05 改号）
 # 若实现时发现与其他分支撞号，按 CLAUDE.md 取创建时刻重新取号，并回写本表。
 
 generated: 2026-11-04

@@ -11,7 +11,7 @@
 - **只按 `sprint-status-v1.4.2-social-topic.yaml` 里的完整 key 取 story**，不按 `<epic>-<n>` 前缀通配——同版本目录之后会有电商线的同号 story，别拿错。
 - **执行顺序**：Epic 1 → 7 串行，epic 内按编号串行。
 - **🔴 story 文件是一次性提前写好的，引用的是「计划中的」类名 / 接口 / 字段**。每条 story 开工前，先对照**前面 story 实际提交的代码**核对本 story Dev Notes 里引用的名字；有出入 → **先改本 story 文件**（在 Completion Notes 记一句改了什么），再写代码。不得为了迁就 story 文字去改前面 story 已提交的对外契约。
-- **迁移版本号已预分配，不得另取**（见 sprint-status 头注释）：1.1 `V20261104_2000`；1.2 `V20261104_2010`、`V20261104_2020`；2.1 `V20261104_2030`；2.2 `V20261104_2040`；4.1 `V20261104_2050`、`V20261104_2060`；7.1 `V20261104_2070`。提交前跑 `bash scripts/ci/check-flyway-versions.sh origin/main`。
+- **迁移版本号已预分配，不得另取**（见 sprint-status 头注释）：1.1 `V20261104_2000`；1.2 `V20261104_2010`、`V20261104_2020`；2.1 `V20261104_2030`；2.2 `V20261104_2040`；4.1 `V20261104_2050`、`V20261104_2055`；7.1 `V20261104_2058`。提交前跑 `bash scripts/ci/check-flyway-versions.sh origin/main`。
 - **🔴 `ck_notifications_type` 重建（1.2）**：DROP + ADD 重列全集，值必须取**当前树里最后一条重建它的迁移**的原文全集再加 `PET_FOLLOWED`、`PET_DIARY_POSTED`，不写死数量、不凭记忆抄；`PushCategoryTest`、`MentionNotifyTest` 同 story 内一起改。
 - **🔴 写库监听纪律**：有写库动作的事件监听一律 `@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`（否则写入静默不提交，线上出过事故）；扇出再加 `@Async`。
 - **🔴 话题名规则只有一份实现**：后端 `TopicNameRules`、App `shared/rich_text/body_tokens.dart`，两边测试读同一份 `petgo-backend/src/test/resources/fixtures/topic-parse-cases.json`；禁止在别处另写话题正则。

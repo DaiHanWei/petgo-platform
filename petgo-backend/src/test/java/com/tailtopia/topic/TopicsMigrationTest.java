@@ -14,7 +14,7 @@ class TopicsMigrationTest {
     private static final Path TOPICS =
             Path.of("src/main/resources/db/migration/V20261104_2050__create_topics_and_content_topics.sql");
     private static final Path VIEW_DAYS =
-            Path.of("src/main/resources/db/migration/V20261104_2060__create_content_post_view_days.sql");
+            Path.of("src/main/resources/db/migration/V20261104_2055__create_content_post_view_days.sql");
 
     /** 去掉 {@code --} 注释并压缩空白。 */
     private static String ddl(Path file) throws IOException {
