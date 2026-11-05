@@ -76,7 +76,9 @@ class ContentServiceTest {
                 new com.tailtopia.mention.service.MentionSanitizer(
                         Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
                         Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class),
-                        Mockito.mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)),
+                        Mockito.mock(com.tailtopia.mention.repository.MentionCandidateRepository.class),
+                        // V1.4.2 social-topic Story 5.1：范围扩大到「我关注 ∪ 关注我」。
+                        Mockito.mock(com.tailtopia.social.read.FollowReader.class)),
                 // V1.3.2 Story 1.5：打卡关联只读口（本类按需 stub）。
                 placeCheckins,
                 // V1.3.4 Story 2.1：露出位置校验用真实实现（纯函数、无 IO）。
