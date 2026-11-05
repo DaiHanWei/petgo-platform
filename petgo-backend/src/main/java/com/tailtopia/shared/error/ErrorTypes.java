@@ -148,6 +148,24 @@ public final class ErrorTypes {
      */
     public static final URI COUPON_INVALID = URI.create(BASE + "coupon-invalid");
 
+    /** v1.4.2 shop Story 2.2（P-5 / C-2）：兑换码不存在；领券时券 token 不存在或不是可领券（404，G7「Kode kupon tidak valid」）。 */
+    public static final URI COUPON_NOT_FOUND = URI.create(BASE + "coupon-not-found");
+
+    /** v1.4.2 shop Story 2.2：一次性兑换码已被使用（409，G7「Kode ini sudah dipakai」）。 */
+    public static final URI COUPON_CODE_USED = URI.create(BASE + "coupon-code-used");
+
+    /** v1.4.2 shop Story 2.2：发放期未开始 / 已结束，或券已停用（409，G7「Kode ini tidak dalam masa berlaku」）。 */
+    public static final URI COUPON_NOT_IN_PERIOD = URI.create(BASE + "coupon-not-in-period");
+
+    /** v1.4.2 shop Story 2.2：已达每人限领（409，A5 / G7「Kamu sudah klaim kupon ini」）。 */
+    public static final URI COUPON_ALREADY_CLAIMED = URI.create(BASE + "coupon-already-claimed");
+
+    /** v1.4.2 shop Story 2.2：发放总量已领完（409，G7「Kupon sudah habis」）。 */
+    public static final URI COUPON_SOLD_OUT = URI.create(BASE + "coupon-sold-out");
+
+    /** v1.4.2 shop Story 2.2（D-4）：1 小时内输错 10 次，兑换锁定 1 小时（429，G8）。 */
+    public static final URI COUPON_REDEEM_LOCKED = URI.create(BASE + "coupon-redeem-locked");
+
     private ErrorTypes() {
     }
 }

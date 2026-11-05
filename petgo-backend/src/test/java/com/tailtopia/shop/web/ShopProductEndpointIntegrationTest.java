@@ -241,4 +241,36 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
             return true;
         }
     }
+
+    // ---------- v1.4.2 shop Story 2.2 AC7 / AC9（L1，云端不跑） ----------
+
+    @Test
+    @DisplayName("v1.4.2 2.2：列表两种形态都有 promo；商品可领券游客可读、登录带 claimed")
+    void promoAndProductCoupons() throws Exception {
+        String token = seedProduct(uniq("pc"), "MAKANAN", true, null);
+        seedSku(token, uniq("sc"), 100_000L, null);
+        java.time.Instant now = java.time.Instant.now();
+        jdbc.update("""
+                INSERT INTO shop_coupons (public_token, kind, name_id, name_en, amount, min_spend, scope_type,
+                        scope_values, acquire_type, issue_start_at, issue_end_at, valid_mode, valid_days,
+                        per_user_limit, status, created_at, updated_at)
+                VALUES (?, 'DISCOUNT', 'Diskon', 'Discount', 10000, 50000, 'PRODUCT', ?::jsonb, 'CLAIM',
+                        ?, ?, 'RELATIVE', 7, 1, 'ACTIVE', now(), now())""",
+                uniq("cp"), "[\"" + token + "\"]", java.sql.Timestamp.from(now.minusSeconds(3600)),
+                java.sql.Timestamp.from(now.plusSeconds(86_400)));
+
+        mvc.perform(get(BASE)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.token == '" + token + "')].promo").value(true));
+        mvc.perform(get(BASE).param("size", "100")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.token == '" + token + "')].promo").value(true));
+
+        mvc.perform(get(BASE + "/" + token + "/coupons")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].claimed").value(false));
+        long uid = newUser().getId();
+        mvc.perform(get(BASE + "/" + token + "/coupons").header("Authorization", userBearer(uid)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].claimed").value(false));
+        mvc.perform(get(BASE + "/definitelyNotARealToken/coupons")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0));
+    }
 }

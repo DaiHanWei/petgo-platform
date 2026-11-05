@@ -2,7 +2,9 @@ package com.tailtopia.shop.coupon.repository;
 
 import com.tailtopia.shop.coupon.domain.ShopCoupon;
 import jakarta.persistence.LockModeType;
+import com.tailtopia.shop.coupon.domain.CouponAcquireType;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -46,4 +48,25 @@ public interface ShopCouponRepository extends JpaRepository<ShopCoupon, Long> {
             + "and c.status = com.tailtopia.shop.coupon.domain.CouponStatus.ACTIVE "
             + "and c.issueStartAt < :newEnd and c.issueEndAt > :newStart")
     boolean existsActiveNewbieOverlapping(@Param("newStart") Instant newStart, @Param("newEnd") Instant newEnd);
+
+    /**
+     * 当前发放中的某类模板（Story 2.2）：ACTIVE 且 {@code issue_start_at ≤ now < issue_end_at}，
+     * 按 {@code issue_start_at} 倒序（同刻按 id 倒序）。CLAIM 用于首页 / 详情 / promo，NEWBIE 用于新人券。
+     * 不按总量过滤（是否领完由调用方按 {@code issuedCount / totalQuantity} 判断）。
+     */
+    @Query("select c from ShopCoupon c where c.acquireType = :type "
+            + "and c.status = com.tailtopia.shop.coupon.domain.CouponStatus.ACTIVE "
+            + "and c.issueStartAt <= :now and c.issueEndAt > :now "
+            + "order by c.issueStartAt desc, c.id desc")
+    List<ShopCoupon> findIssuable(@Param("type") CouponAcquireType type, @Param("now") Instant now);
+
+    /**
+     * 该用户持有的 AVAILABLE 且在有效期内（{@code valid_from ≤ now < valid_until}，同 {@code UserCoupon.isUsableAt}）的用户券所属模板（Story 2.2 promo，D-6）——
+     * <b>一次查询</b>（子查询），不逐券查模板。
+     */
+    @Query("select c from ShopCoupon c where c.id in (select uc.couponId from UserCoupon uc "
+            + "where uc.userId = :userId "
+            + "and uc.status = com.tailtopia.shop.coupon.domain.UserCouponStatus.AVAILABLE "
+            + "and uc.validFrom <= :now and uc.validUntil > :now)")
+    List<ShopCoupon> findHeldAvailableByUser(@Param("userId") Long userId, @Param("now") Instant now);
 }

@@ -49,7 +49,10 @@ class ShopProductQueryServiceTest {
                 new com.tailtopia.shared.media.MediaProperties();
         mediaProps.getOss().setCdnBaseUrl("https://cdn.test");
         service = new ShopProductQueryService(products, skus, inventory,
-                new ShopImageUrlResolver(mediaProps));
+                new ShopImageUrlResolver(mediaProps),
+                // v1.4.2 shop Story 2.2：promo 判定（mock 仓库无生效券 → promo 恒 false）
+                new com.tailtopia.shop.coupon.service.PromoResolver(
+                        Mockito.mock(com.tailtopia.shop.coupon.repository.ShopCouponRepository.class)));
     }
 
     private ShopProduct product(long id, String token, ProductCategory category) {

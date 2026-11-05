@@ -30,6 +30,12 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
      */
     boolean existsByDisplayNo(String displayNo);
 
+    /**
+     * 是否有过<b>已支付</b>的电商订单（v1.4.2 shop Story 2.2 新人判定，D-5）：{@code paid_at} 一旦写入不改，
+     * 之后取消 / 退款仍算付过；下单未付、超时取消的不算。
+     */
+    boolean existsByUserIdAndPaidAtIsNotNull(Long userId);
+
     /** 后台按用户报出来的新号搜单（Story 4-3 AC4）。 */
     Optional<ShopOrder> findByDisplayNo(String displayNo);
 

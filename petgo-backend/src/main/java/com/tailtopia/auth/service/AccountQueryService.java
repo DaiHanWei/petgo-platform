@@ -106,6 +106,12 @@ public class AccountQueryService {
                 .orElse(false);
     }
 
+    /** 注册时间（{@code users.created_at}，v1.4.2 shop Story 2.2 新人券判定）；用户不存在 → empty。 */
+    @Transactional(readOnly = true)
+    public Optional<Instant> createdAtOf(long userId) {
+        return users.findById(userId).map(User::getCreatedAt);
+    }
+
     /**
      * {@link #isActive} 的**批量**版：这批 id 里哪些账号对外有效（未注销 + 未封号）。
      *

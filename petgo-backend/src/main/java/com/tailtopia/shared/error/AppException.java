@@ -267,4 +267,34 @@ public class AppException extends RuntimeException {
     public static AppException skuNotSellable(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.SKU_NOT_SELLABLE, detail);
     }
+
+    /** v1.4.2 shop Story 2.2：兑换码 / 可领券不存在 → 404 {@code coupon-not-found}。 */
+    public static AppException couponNotFound(String detail) {
+        return new AppException(HttpStatus.NOT_FOUND, ErrorTypes.COUPON_NOT_FOUND, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：一次性码已被使用 → 409 {@code coupon-code-used}。 */
+    public static AppException couponCodeUsed(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_CODE_USED, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：不在发放期 / 已停用 → 409 {@code coupon-not-in-period}。 */
+    public static AppException couponNotInPeriod(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_NOT_IN_PERIOD, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：已达每人限领 → 409 {@code coupon-already-claimed}。 */
+    public static AppException couponAlreadyClaimed(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_ALREADY_CLAIMED, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：发放总量已领完 → 409 {@code coupon-sold-out}。 */
+    public static AppException couponSoldOut(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_SOLD_OUT, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：兑换锁定中 → 429 {@code coupon-redeem-locked}。 */
+    public static AppException couponRedeemLocked(String detail) {
+        return new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorTypes.COUPON_REDEEM_LOCKED, detail);
+    }
 }

@@ -273,6 +273,11 @@ public class SecurityConfig {
                         // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
                         // 只读；配置走 /admin/shop/banners，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
+                        // v1.4.2 shop Story 2.2（D-5）：游客新人券弹窗活动，permitAll；精确路径。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/coupons/newbie-campaign").permitAll()
+                        // v1.4.2 shop Story 2.2（D-6）：首页「给你的券」带本人领取状态，仅 role=USER；
+                        // 🔴 精确路径，不写 /api/v1/shop/coupons/** 通配。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/coupons/for-you").hasRole("USER")
                         // 运营弹窗（V1.3.4 Story 5.1，AD-14）：候选列表游客可读（ALL 人群弹窗面向游客）；
                         // controller 只认 role=USER 识别登录用户，VET token 按游客处理。
                         // 曝光上报只给登录用户：游客频次在设备本地（AD-15）；兽医 token 的 sub=vetId
@@ -369,6 +374,8 @@ public class SecurityConfig {
                                 "/api/v1/me/shipping-addresses", "/api/v1/me/shipping-addresses/**",
                                 "/api/v1/me/shop-reviews", "/api/v1/me/shop-reviews/**",
                                 "/api/v1/me/shop-returns", "/api/v1/me/shop-returns/**",
+                                // v1.4.2 shop Story 2.2（AC10）：领券 / 兑换 / 我的券
+                                "/api/v1/me/coupons", "/api/v1/me/coupons/**",
                                 "/api/v1/me/shop/**").hasRole("USER")
                         // 宠物护照（V1.3.2 Story 1.2）：GET 里会签发（写）且 controller 把 jwt.sub 当 users.id 用 ——
                         // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。

@@ -52,7 +52,7 @@ development_status:
 
   epic-2: in-progress
   2-1-券数据与券账本: review
-  2-2-领券兑换码新人券与券查询: ready-for-dev
+  2-2-领券兑换码新人券与券查询: review
   2-3-通知类型与券快过期推送: ready-for-dev
   epic-2-retrospective: optional
 

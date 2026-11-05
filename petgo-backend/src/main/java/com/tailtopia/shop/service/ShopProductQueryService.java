@@ -1,6 +1,7 @@
 package com.tailtopia.shop.service;
 
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.coupon.service.PromoResolver;
 import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopProduct;
 import com.tailtopia.shop.domain.ShopSku;
@@ -11,9 +12,11 @@ import com.tailtopia.shop.dto.ShopSkuView;
 import com.tailtopia.shop.domain.StockStatus;
 import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import java.util.stream.Collectors;
@@ -37,13 +40,15 @@ public class ShopProductQueryService {
     private final ShopSkuRepository skus;
     private final InventoryService inventory;
     private final ShopImageUrlResolver imageUrls;
+    private final PromoResolver promos;
 
     public ShopProductQueryService(ShopProductRepository products, ShopSkuRepository skus,
-            InventoryService inventory, ShopImageUrlResolver imageUrls) {
+            InventoryService inventory, ShopImageUrlResolver imageUrls, PromoResolver promos) {
         this.products = products;
         this.skus = skus;
         this.inventory = inventory;
         this.imageUrls = imageUrls;
+        this.promos = promos;
     }
 
     /**
@@ -68,6 +73,16 @@ public class ShopProductQueryService {
      */
     @Transactional(readOnly = true)
     public List<ShopProductSummaryView> list(ProductCategory category, String query) {
+        return list(category, query, null);
+    }
+
+    /**
+     * 同 {@link #list(ProductCategory, String)}，并按查看者算 {@code promo}（v1.4.2 shop Story 2.2 AC9）。
+     *
+     * @param viewerUserId 只认 {@code role=USER} 的登录用户；游客 / 非 USER → null（只算 CLAIM 模板）
+     */
+    @Transactional(readOnly = true)
+    public List<ShopProductSummaryView> list(ProductCategory category, String query, Long viewerUserId) {
         String pattern = likePattern(query);
         List<ShopProduct> rows;
         if (pattern == null) {
@@ -79,7 +94,7 @@ public class ShopProductQueryService {
                     ? products.searchActive(pattern)
                     : products.searchActiveByCategory(pattern, category);
         }
-        return toViews(rows);
+        return toViews(rows, viewerUserId);
     }
 
     /**
@@ -88,11 +103,15 @@ public class ShopProductQueryService {
      * <p>🔴 <b>全量与分页共用这一处组装</b>：两处各拼一遍，迟早出现「不翻页时有图、
      * 翻页后没图」这种只在某一条路径上出现的差异。
      */
-    private List<ShopProductSummaryView> toViews(List<ShopProduct> rows) {
+    private List<ShopProductSummaryView> toViews(List<ShopProduct> rows, Long viewerUserId) {
         if (rows.isEmpty()) {
             return List.of();
         }
         Map<Long, Long> minPriceByProduct = minPriceByProduct(rows);
+        // promo 批量算（Story 2.2 AC9）：整页两次查询，不逐商品查库
+        Set<String> promoTokens = promos.resolve(rows.stream()
+                .map(p -> new PromoResolver.ProductRef(p.getPublicToken(), p.getCategory())).toList(),
+                viewerUserId, Instant.now());
         List<ShopProductSummaryView> out = new ArrayList<>(rows.size());
         for (ShopProduct p : rows) {
             out.add(new ShopProductSummaryView(
@@ -105,7 +124,8 @@ public class ShopProductQueryService {
                     p.getMainImageW(),
                     p.getMainImageH(),
                     p.getSpecies(),
-                    minPriceByProduct.get(p.getId())));
+                    minPriceByProduct.get(p.getId()),
+                    promoTokens.contains(p.getPublicToken())));
         }
         return out;
     }
@@ -133,6 +153,13 @@ public class ShopProductQueryService {
     @Transactional(readOnly = true)
     public ShopProductPageResponse page(ProductCategory category, String query, String cursor,
             Integer size) {
+        return page(category, query, cursor, size, null);
+    }
+
+    /** 同 {@link #page(ProductCategory, String, String, Integer)}，并按查看者算 {@code promo}（Story 2.2 AC9）。 */
+    @Transactional(readOnly = true)
+    public ShopProductPageResponse page(ProductCategory category, String query, String cursor,
+            Integer size, Long viewerUserId) {
         int limit = normalizeSize(size);
         ShopProductCursor from = ShopProductCursor.decode(cursor);
         String pattern = likePattern(query);
@@ -159,7 +186,7 @@ public class ShopProductQueryService {
             return new ShopProductPageResponse(List.of(), null, false);
         }
         ShopProduct last = page.get(page.size() - 1);
-        return new ShopProductPageResponse(toViews(page),
+        return new ShopProductPageResponse(toViews(page, viewerUserId),
                 // 末页 nextCursor 为 null → NON_NULL 下整键省略（与 Feed 信封同款）
                 hasMore ? new ShopProductCursor(last.getSortWeight(), last.getId()).encode() : null,
                 hasMore);

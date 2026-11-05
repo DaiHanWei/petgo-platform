@@ -21,9 +21,10 @@ public record RecommendationView(
      *
      * @param reason 🔴 <b>推荐理由文本</b>（如 {@code Untuk anjing dewasa 10–25 kg}）——
      *     不可解释的推荐在信任驱动的产品里是负资产
+     * @param promo  v1.4.2 shop Story 2.2（FR-133.3「Lagi promo」，{@code PromoResolver}）；只加字段
      */
     public record Item(String productToken, String name, String brand, String mainImageKey,
-            String mainImageUrl, long minPrice, String reason) {
+            String mainImageUrl, long minPrice, String reason, boolean promo) {
     }
 
     public static RecommendationView empty(String petName, boolean degraded, String missing) {
