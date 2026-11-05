@@ -125,8 +125,12 @@ class AdminTopicIntegrationTest extends ApiIntegrationTest {
         return mvc.perform(req).andReturn().getResponse().getStatus();
     }
 
-    private String page(Authentication who, String query) throws Exception {
-        return mvc.perform(get("/admin/topics" + query).with(authentication(who)))
+    /**
+     * {@code query} 是 URI 模板（MockMvc 会再 encode 一次：直接写 {@code %23} 会变成字面 {@code %23}）；
+     * 含 {@code #} / {@code %} 的搜索词走 {@code uriVars}（如 {@code page(m, "?q={q}", "#x")}）才会按原值到达控制器。
+     */
+    private String page(Authentication who, String query, Object... uriVars) throws Exception {
+        return mvc.perform(get("/admin/topics" + query, uriVars).with(authentication(who)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
     }
 
@@ -164,11 +168,11 @@ class AdminTopicIntegrationTest extends ApiIntegrationTest {
         long hot = topic(base + "Hot", "OFFICIAL", "ACTIVE", 900);
         long cold = topic(base + "Cold", "USER", "HIDDEN", 1);
         Authentication m = manager();
-        String all = page(m, "?q=%23" + base);
+        String all = page(m, "?q={q}", "#" + base);
         assertThat(all.indexOf(base + "Hot")).isPositive().isLessThan(all.indexOf(base + "Cold"));
         String hiddenOnly = page(m, "?status=HIDDEN&q=" + base);
         assertThat(hiddenOnly).contains(base + "Cold").doesNotContain(base + "Hot");
-        assertThat(page(m, "?q=%25")).contains("topics-empty"); // "%" 不当通配
+        assertThat(page(m, "?q={q}", "%")).contains("topics-empty"); // "%" 不当通配
         String summaryAll = all.substring(all.indexOf("id=\"topics-summary\""), all.indexOf("id=\"topics-rows\""));
         String summaryFiltered = hiddenOnly.substring(hiddenOnly.indexOf("id=\"topics-summary\""),
                 hiddenOnly.indexOf("id=\"topics-rows\""));

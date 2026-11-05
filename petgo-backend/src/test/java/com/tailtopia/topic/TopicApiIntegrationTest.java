@@ -13,6 +13,7 @@ import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.content.service.ContentPinService;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import com.tailtopia.topic.service.TopicHeatJob;
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -47,6 +48,10 @@ class TopicApiIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** VET token 须对应库里一条 active vet 行（BannedVetFilter 先查库，查不到 → 401，测不到 403 的角色门）。 */
+    @Autowired
+    private VetTestSupport vets;
 
     @Autowired
     private ContentPostRepository posts;
@@ -317,7 +322,8 @@ class TopicApiIntegrationTest extends ApiIntegrationTest {
             jdbc.update("UPDATE feed_rank_config SET comment_weight = ? WHERE id = 1", original);
         }
         JsonNode p = posts(name, null, "popular", null, null);
-        assertThat(p.get("nextCursor").isNull() || !p.has("nextCursor")).isTrue();
+        // 全局 NON_NULL：无下一页时 nextCursor 整个省略（先判 has 再取值，避免 get 返回 null 的 NPE）
+        assertThat(!p.has("nextCursor") || p.get("nextCursor").isNull()).isTrue();
     }
 
     @Test
@@ -349,7 +355,7 @@ class TopicApiIntegrationTest extends ApiIntegrationTest {
     @Test
     void suggestionsAuthPrefixAndUnderscore() throws Exception {
         mvc.perform(get("/api/v1/topic-suggestions")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/topic-suggestions").header(HttpHeaders.AUTHORIZATION, vetBearer(1L)))
+        mvc.perform(get("/api/v1/topic-suggestions").header(HttpHeaders.AUTHORIZATION, vetBearer(vets.newActiveVet("topic-it").getId())))
                 .andExpect(status().isForbidden());
 
         String stem = uniq("sg");

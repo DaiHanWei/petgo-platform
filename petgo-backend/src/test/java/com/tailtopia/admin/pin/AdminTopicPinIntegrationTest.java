@@ -139,8 +139,9 @@ class AdminTopicPinIntegrationTest extends ApiIntegrationTest {
         return mvc.perform(req).andReturn().getResponse();
     }
 
-    private String html(Authentication who, String url, boolean htmx) throws Exception {
-        var req = get(url).with(authentication(who));
+    /** {@code url} 是 URI 模板：含 {@code #} / {@code %} 的搜索词走 {@code uriVars}（直接写 {@code %23} 会被 MockMvc 二次编码）。 */
+    private String html(Authentication who, String url, boolean htmx, Object... uriVars) throws Exception {
+        var req = get(url, uriVars).with(authentication(who));
         if (htmx) {
             req = req.header("HX-Request", "true");
         }
@@ -168,7 +169,7 @@ class AdminTopicPinIntegrationTest extends ApiIntegrationTest {
         futurePromo(ContentPin.topicSlot(a), 3, "Pending1");
         futurePromo(ContentPin.topicSlot(a), 5, "Pending2");
 
-        String page = html(superAdmin(), "/admin/content-pins/topics?q=%23" + key, false);
+        String page = html(superAdmin(), "/admin/content-pins/topics?q={q}", false, "#" + key);
 
         assertThat(page).contains("#" + key + "Aa").contains("#" + key + "Bb").doesNotContain("#" + key + "Cc");
         assertThat(page).contains("PromoLiveNow").contains("/admin/content-pins/topics/" + a)
@@ -182,7 +183,7 @@ class AdminTopicPinIntegrationTest extends ApiIntegrationTest {
         for (int i = 0; i < 21; i++) {
             topic(key + "x" + (char) ('a' + i), "USER", "ACTIVE", 100 - i);
         }
-        assertThat(html(superAdmin(), "/admin/content-pins/topics?q=%25", false)).contains("empty");
+        assertThat(html(superAdmin(), "/admin/content-pins/topics?q={q}", false, "%")).contains("empty");
         String p0 = html(superAdmin(), "/admin/content-pins/topics?q=" + key, false);
         String p1 = html(superAdmin(), "/admin/content-pins/topics?q=" + key + "&page=1", true);
         assertThat(p0).contains("page=1");
@@ -242,7 +243,8 @@ class AdminTopicPinIntegrationTest extends ApiIntegrationTest {
 
         long empty = topic(key + "Cc", "USER", "ACTIVE", 1);
         assertThat(html(superAdmin(), "/admin/content-pins/pick?topicId=" + empty, true))
-                .contains("pick-list").doesNotContain("pick-card");
+                // /pick 只回 candidates 片段（.pick-list 容器在抽屉里，不在片段内）：空话题 → 话题版空态文案、无卡片
+                .contains("该话题下还没有可顶置的公开内容").doesNotContain("pick-card");
     }
 
     @Test
@@ -376,10 +378,15 @@ class AdminTopicPinIntegrationTest extends ApiIntegrationTest {
         jdbc.update("UPDATE topics SET status = 'HIDDEN' WHERE id = ?", t);
         assertThat(hasPin(pinned(name))).as("HIDDEN 仍返回").isTrue();
 
-        pinService.terminateNow(live.getId(), Instant.now());
+        Instant stoppedAt = Instant.now();
+        pinService.terminateNow(live.getId(), stoppedAt);
         assertThat(hasPin(pinned(name))).as("提前结束 → 空").isFalse();
 
-        livePromo(ContentPin.topicSlot(t), "Again");
+        // 被提前结束的那条仍占着 [startsAt, terminatedAt)（findOverlapping 按生效结束时刻判重叠）——
+        // 新排期必须从结束时刻起排，不能再用 livePromo 的「一小时前开始」，否则与前一条的生效窗重叠被拦。
+        pinService.schedule(ContentPin.ofPromo(ContentPin.topicSlot(t), "https://cdn/p.jpg", "Again", null,
+                stoppedAt, stoppedAt.plus(2, ChronoUnit.HOURS)));
+        assertThat(hasPin(pinned(name))).as("结束后重新排一条 → 又有顶置").isTrue();
         jdbc.update("UPDATE topics SET status = 'DISABLED', disabled_at = now() WHERE id = ?", t);
         assertThat(hasPin(pinned(name))).as("DISABLED 不返回").isFalse();
     }

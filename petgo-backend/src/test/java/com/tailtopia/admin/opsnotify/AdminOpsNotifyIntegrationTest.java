@@ -100,6 +100,12 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
      * 合法表单（指定 ID 模式、立即发送）；{@code overrides} 成对给出「字段, 值」。
      * ⚠️ 不能在外面再 {@code .param(同名)}：MockMvc 是追加不是覆盖。
      */
+    /**
+     * 只读调用（/review、/review/sample）用的印尼语标题：/review 与新建同一套校验，titleId 留空会先报
+     * {@code text.blank}，后面的变量 / 人数断言就走不到了。只读、不落库。
+     */
+    private static final String REVIEW_TITLE = "opsn-review";
+
     private MockHttpServletRequestBuilder form(MockHttpServletRequestBuilder b, String title, String... overrides) {
         Map<String, String> f = new LinkedHashMap<>();
         f.put("titleId", title);
@@ -647,23 +653,23 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
         // ① 手打 / 超长
         for (String[] c : List.of(new String[] {"titleEn", "Hi {用户昵称}", "admin.err.ops-notify.var.typed"},
                 new String[] {"titleEn", "x".repeat(115) + "{{nickname}}", "admin.err.ops-notify.text.too-long"})) {
-            String body = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids, c[0], c[1]), "opsn-err")
+            String body = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, c[0], c[1]), "opsn-err")
                             .with(authentication(ed)).with(csrf()))
                     .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
             assertThat(body).contains("data-code=\"" + c[2] + "\"");
         }
 
         // 预览：抽到有宠的人（宠物变量），换一个仍只能是他
-        String review = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids, "titleEn", pet), "opsn-err")
+        String review = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, "titleEn", pet), "opsn-err")
                         .with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(review).contains("#" + withPet.getId()).contains("Hi tuotuo");
-        String again = mvc.perform(htmx(form(post(BASE + "/review/sample"), "", "userIds", ids, "titleEn", pet,
+        String again = mvc.perform(htmx(form(post(BASE + "/review/sample"), REVIEW_TITLE, "userIds", ids, "titleEn", pet,
                         "excludeUserId", String.valueOf(withPet.getId())), "opsn-pv-pane")
                         .with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(again).contains("#" + withPet.getId());
-        String none = mvc.perform(htmx(form(post(BASE + "/review/sample"), "", "userIds",
+        String none = mvc.perform(htmx(form(post(BASE + "/review/sample"), REVIEW_TITLE, "userIds",
                         String.valueOf(noPet.getId()), "titleEn", pet), "opsn-pv-pane")
                         .with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -716,7 +722,7 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
 
         // ① 兜底：三语显示名（半角 / 全角括号、大小写）一律 var.typed
         for (String typed : List.of("Hi {宠物昵称}", "Hi {Pet name}", "Hi ｛nama hewan｝")) {
-            String body = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids, "titleEn", typed), "opsn-err")
+            String body = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, "titleEn", typed), "opsn-err")
                             .with(authentication(ed)).with(csrf()))
                     .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
             assertThat(body).as(typed).contains("data-code=\"admin.err.ops-notify.var.typed\"");
@@ -730,18 +736,18 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
         assertThat(dataCount(est, "data-total")).isEqualTo(2);
 
         // ④ I4：用宠物变量 → 排除行 + 预览条；不用 → 无排除行；面板 data-blocked="false"
-        String withVar = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids, "titleEn", pet), "opsn-err")
+        String withVar = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids, "titleEn", pet), "opsn-err")
                         .with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(withVar).contains("已排除 1 位没有宠物的用户").contains("opsn-pv-pane").contains("data-blocked=\"false\"")
                 .contains("<b class=\"opsn-pv-user-n\">hexit2</b>").contains("#" + withPet.getId() + " · 宠物 tuotuo");
-        String noVar = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids), "opsn-err")
+        String noVar = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", ids), "opsn-err")
                         .with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(noVar).doesNotContain("没有宠物的用户").contains("opsn-pv-pane");
 
         // ④ I6：只剩无宠用户 + 宠物变量 → 200 + 错误槽 + data-blocked="true" + 预览「—」
-        String blocked = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", String.valueOf(noPet.getId()),
+        String blocked = mvc.perform(htmx(form(post(BASE + "/review"), REVIEW_TITLE, "userIds", String.valueOf(noPet.getId()),
                         "titleEn", pet), "opsn-err").with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(blocked).contains("data-code=\"admin.err.ops-notify.audience-empty-no-pet\"")
@@ -779,6 +785,9 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
     void v142TypedConfirmUsesNetCount() throws Exception {
         Authentication ed = sender();
         newUser(); // 现造一个无宠用户：保证全部用户里扣前 > 扣后，下面的 mismatch 分支必走
+        // 再现造一个有宠用户：保证净人数 > 0（不依赖同库里别的测试碰巧留下的宠物；CI 新库 / 别的执行顺序下
+        // 全部用户里可能一个有宠的都没有 → 新建先报 audience-empty-no-pet，根本走不到 mismatch）
+        addPet(newUser().getId(), "opsn-all-pet");
         String pet = "Hi {{petName}}";
         long net = estimate(ed, "audienceMode", "ALL", "userIds", "", "titleEn", pet);
         long total = estimate(ed, "audienceMode", "ALL", "userIds", "");

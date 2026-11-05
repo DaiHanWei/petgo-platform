@@ -14,6 +14,7 @@ import com.tailtopia.account.service.AccountDeletionService;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.social.service.UserHideRelationService;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,10 @@ class PetFollowIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** VET token 须对应库里一条 active vet 行（BannedVetFilter 先查库，查不到 → 401，测不到 403 的角色门）。 */
+    @Autowired
+    private VetTestSupport vets;
 
     @Autowired
     private UserHideRelationService hideService;
@@ -366,7 +371,7 @@ class PetFollowIntegrationTest extends ApiIntegrationTest {
     @Test
     void vetTokenIs403AndNoTokenIs401() throws Exception {
         long pet = newPet(newUser());
-        mvc.perform(post("/api/v1/me/pet-follows/" + pet).header(HttpHeaders.AUTHORIZATION, vetBearer(1L)))
+        mvc.perform(post("/api/v1/me/pet-follows/" + pet).header(HttpHeaders.AUTHORIZATION, vetBearer(vets.newActiveVet("pet-follow-it").getId())))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/me/pet-follows/" + pet)).andExpect(status().isUnauthorized());
         mvc.perform(delete("/api/v1/me/pet-follows/" + pet)).andExpect(status().isUnauthorized());

@@ -565,7 +565,7 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.giftTotalValue").value(0)) // V1.4.0 gift Story 2.1：无礼物 → 0
                 // 8-3 自动完成：2 条成长瞬间跨过 onGrowthMomentCount>=1 阈值，完成「首条成长记录」里程碑
                 .andExpect(jsonPath("$.milestoneCompleted").value(1))
-                .andExpect(jsonPath("$.milestoneTotal").value(33)); // DOG = 33（7-3 加 D-S16 Lulus Pemula；V1.3.4 +D-S17/D-S18）
+                .andExpect(jsonPath("$.milestoneTotal").value(35)); // DOG = 35（7-3 加 D-S16 Lulus Pemula；V1.3.4 +D-S17/D-S18；V1.4.2 +D-S19/D-S20 账号级）
     }
 
     @Test

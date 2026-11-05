@@ -192,7 +192,8 @@ class MentionScopeIntegrationTest extends ApiIntegrationTest {
     void systemFollowedOfficialAccountIsInTheQuickList() throws Exception {
         User me = newUser();
         User official = newUser();
-        jdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", official.getId());
+        // 造数与生产形态一致：官方号（role=ADMIN）的 google_sub 必带 admin: 前缀（否则污染 SyntheticAccountParityTest 全表护栏）
+        jdbc.update("UPDATE users SET role = 'ADMIN', google_sub = 'admin:' || google_sub WHERE id = ?", official.getId());
         follow(me, official, now, "SYSTEM");
 
         JsonNode items = items(me, null);
@@ -442,7 +443,8 @@ class MentionScopeIntegrationTest extends ApiIntegrationTest {
     void officialAuthorCanMentionAnyAutoFollower() {
         // AC3.2：官方号不特殊处理 —— 自动关注了它的人都是它的粉丝，自然在范围内。
         User official = newUser();
-        jdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", official.getId());
+        // 造数与生产形态一致：官方号（role=ADMIN）的 google_sub 必带 admin: 前缀（否则污染 SyntheticAccountParityTest 全表护栏）
+        jdbc.update("UPDATE users SET role = 'ADMIN', google_sub = 'admin:' || google_sub WHERE id = ?", official.getId());
         User fan = newUser();
         User stranger = newUser();
         follow(fan, official, now, "SYSTEM");
