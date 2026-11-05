@@ -262,28 +262,28 @@ class _RecordingCartRepo implements CartRepository {
   Dio get dio => throw UnimplementedError();
 
   @override
-  Future<CartView> view() async => CartView.empty;
+  Future<CartView> view({int? regionKecamatanId}) async => CartView.empty;
 
   @override
   Future<CartView> add(String skuToken,
-      {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async {
+      {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false, int? regionKecamatanId}) async {
     lastEntrySource = entrySource;
     return CartView.empty;
   }
 
   @override
-  Future<CartView> setQty(String skuToken, int qty) async => CartView.empty;
+  Future<CartView> setQty(String skuToken, int qty, {int? regionKecamatanId}) async => CartView.empty;
 
   @override
-  Future<CartView> remove(String skuToken) async => CartView.empty;
+  Future<CartView> remove(String skuToken, {int? regionKecamatanId}) async => CartView.empty;
 
   @override
-  Future<CartView> clearInvalid() async => CartView.empty;
+  Future<CartView> clearInvalid({int? regionKecamatanId}) async => CartView.empty;
 
   // Story 4-2：行选择。本类只关心归因，选择端点不参与断言。
   @override
-  Future<CartView> setSelected(String skuToken, bool selected) async => CartView.empty;
+  Future<CartView> setSelected(String skuToken, bool selected, {int? regionKecamatanId}) async => CartView.empty;
 
   @override
-  Future<CartView> setAllSelected(bool selected) async => CartView.empty;
+  Future<CartView> setAllSelected(bool selected, {int? regionKecamatanId}) async => CartView.empty;
 }

@@ -270,33 +270,33 @@ class _FakeCartRepo implements CartRepository {
   Dio get dio => throw UnimplementedError();
 
   @override
-  Future<CartView> view() async {
+  Future<CartView> view({int? regionKecamatanId}) async {
     calls.add('view');
     return next;
   }
 
   @override
   Future<CartView> add(String skuToken,
-          {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async =>
+          {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false, int? regionKecamatanId}) async =>
       _write('add:$skuToken:$qty${entrySource == null ? '' : ':$entrySource'}');
 
   @override
-  Future<CartView> setQty(String skuToken, int qty) async => _write('setQty:$skuToken:$qty');
+  Future<CartView> setQty(String skuToken, int qty, {int? regionKecamatanId}) async => _write('setQty:$skuToken:$qty');
 
   @override
-  Future<CartView> remove(String skuToken) async => _write('remove:$skuToken');
+  Future<CartView> remove(String skuToken, {int? regionKecamatanId}) async => _write('remove:$skuToken');
 
   // Story 4-2：行选择。同样记进 calls，便于断言「取消勾选没走 remove」。
   @override
-  Future<CartView> setSelected(String skuToken, bool selected) async =>
+  Future<CartView> setSelected(String skuToken, bool selected, {int? regionKecamatanId}) async =>
       _write('setSelected:$skuToken:$selected');
 
   @override
-  Future<CartView> setAllSelected(bool selected) async =>
+  Future<CartView> setAllSelected(bool selected, {int? regionKecamatanId}) async =>
       _write('setAllSelected:$selected');
 
   @override
-  Future<CartView> clearInvalid() async => _write('clearInvalid');
+  Future<CartView> clearInvalid({int? regionKecamatanId}) async => _write('clearInvalid');
 
   Future<CartView> _write(String call) async {
     calls.add(call);

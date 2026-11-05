@@ -959,30 +959,30 @@ class _FakeCartRepo implements CartRepository {
   Dio get dio => throw UnimplementedError();
 
   @override
-  Future<CartView> view() async {
+  Future<CartView> view({int? regionKecamatanId}) async {
     calls.add('view');
     return CartView.empty;
   }
 
   @override
   Future<CartView> add(String skuToken,
-          {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async =>
+          {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false, int? regionKecamatanId}) async =>
       _write('add:$skuToken:$qty');
 
   @override
-  Future<CartView> setQty(String skuToken, int qty) async => _write('setQty');
+  Future<CartView> setQty(String skuToken, int qty, {int? regionKecamatanId}) async => _write('setQty');
 
   @override
-  Future<CartView> remove(String skuToken) async => _write('remove');
+  Future<CartView> remove(String skuToken, {int? regionKecamatanId}) async => _write('remove');
 
   @override
-  Future<CartView> setSelected(String skuToken, bool selected) async => _write('setSelected');
+  Future<CartView> setSelected(String skuToken, bool selected, {int? regionKecamatanId}) async => _write('setSelected');
 
   @override
-  Future<CartView> setAllSelected(bool selected) async => _write('setAllSelected');
+  Future<CartView> setAllSelected(bool selected, {int? regionKecamatanId}) async => _write('setAllSelected');
 
   @override
-  Future<CartView> clearInvalid() async => _write('clearInvalid');
+  Future<CartView> clearInvalid({int? regionKecamatanId}) async => _write('clearInvalid');
 
   Future<CartView> _write(String call) async {
     calls.add(call);

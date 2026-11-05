@@ -1987,7 +1987,7 @@
   "cartRemoveLine": "Hapus produk",
   "cartSelectAll": "Pilih semua",
   "cartSelectLine": "Pilih {name}",
-  "cartSelectNoneHint": "Pilih minimal satu produk untuk checkout",
+  "cartSelectNoneHint": "Pilih produk dulu",
   "cartRemovedUndo": "\u201C{name}\u201D dihapus",
   "cartUndo": "Urungkan",
   "cartMaxStock": "Sisa stok {count}",
@@ -3211,5 +3211,13 @@
   "tokoDelistedBody": "Lihat produk lain di Toko.",
   "@tokoDelistedBody": {"description": "v1.4.2 shop Story 8.2 product detail (PRD §6 B)"},
   "tokoDelistedCta": "Ke Toko",
-  "@tokoDelistedCta": {"description": "v1.4.2 shop Story 8.2 product detail (PRD §6 B)"}
+  "@tokoDelistedCta": {"description": "v1.4.2 shop Story 8.2 product detail (PRD §6 B)"},
+  "cartShipTo": "Dikirim ke Kec. {x}",
+  "@cartShipTo": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)", "placeholders": {"x": {"type": "String"}}},
+  "cartChooseAddressForShipping": "Pilih alamat untuk hitung ongkir",
+  "@cartChooseAddressForShipping": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)"},
+  "cartEstimatedTotal": "Estimasi total",
+  "@cartEstimatedTotal": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)"},
+  "cartShippingNotIncluded": "Belum termasuk ongkir",
+  "@cartShippingNotIncluded": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)"}
 }

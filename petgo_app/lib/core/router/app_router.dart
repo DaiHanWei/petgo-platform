@@ -27,7 +27,7 @@ import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
 import '../../features/shop/presentation/shop_search_page.dart';
-import '../../features/shop/presentation/cart_page_v2.dart';
+import '../../features/shop/presentation/cart_page_v3.dart';
 import '../../features/shop/domain/checkout_preview.dart' show CheckoutSource;
 import '../../features/shop/presentation/checkout_page_v3.dart';
 import '../../features/shop/presentation/product_detail_page_v3.dart';
@@ -706,7 +706,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/shop/cart',
-        builder: (c, s) => const CartPageV2(),
+        builder: (c, s) => const CartPageV3(),
       ),
       // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
       //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。

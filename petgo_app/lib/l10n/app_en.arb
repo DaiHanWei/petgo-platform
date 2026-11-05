@@ -2952,7 +2952,7 @@
   "@cartSelectAll": {"description": "Cart bottom bar: toggle that selects or clears every valid line (Story 4-2, SHOP-FR-04). Invalid lines are excluded from the toggle's checked state, otherwise a single sold-out row would make it impossible to ever show as fully selected."},
   "cartSelectLine": "Select {name}",
   "@cartSelectLine": {"description": "Accessibility label for a cart row checkbox. Without it a screen reader only announces \"checked\" and the user cannot tell which product is selected.", "placeholders": {"name": {"type": "String"}}},
-  "cartSelectNoneHint": "Select at least one item to check out",
+  "cartSelectNoneHint": "Select items first",
   "@cartSelectNoneHint": {"description": "Cart bottom bar hint shown when nothing is selected. The checkout button is disabled at the same time, so the user is never told this by a server 422 after tapping."},
   "cartRemovedUndo": "Removed \u201C{name}\u201D",
   "@cartRemovedUndo": {"description": "Cart: snackbar shown right after a line is deleted, paired with the Undo action. Names the product so the user can tell whether the wrong one went.", "placeholders": {"name": {"type": "String"}}},
@@ -5007,5 +5007,13 @@
   "tokoDelistedBody": "See other products in Toko.",
   "@tokoDelistedBody": {"description": "v1.4.2 shop Story 8.2 product detail (PRD §6 B)"},
   "tokoDelistedCta": "Go to Toko",
-  "@tokoDelistedCta": {"description": "v1.4.2 shop Story 8.2 product detail (PRD §6 B)"}
+  "@tokoDelistedCta": {"description": "v1.4.2 shop Story 8.2 product detail (PRD §6 B)"},
+  "cartShipTo": "Ship to {x}",
+  "@cartShipTo": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)", "placeholders": {"x": {"type": "String"}}},
+  "cartChooseAddressForShipping": "Choose an address to calculate shipping",
+  "@cartChooseAddressForShipping": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)"},
+  "cartEstimatedTotal": "Estimated total",
+  "@cartEstimatedTotal": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)"},
+  "cartShippingNotIncluded": "Shipping not included",
+  "@cartShippingNotIncluded": {"description": "v1.4.2 shop Story 8.3 cart (PRD §6 C)"}
 }
