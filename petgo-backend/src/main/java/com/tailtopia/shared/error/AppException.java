@@ -312,4 +312,19 @@ public class AppException extends RuntimeException {
     public static AppException shopOrderNotPayable(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.SHOP_ORDER_NOT_PAYABLE, detail);
     }
+
+    /** v1.4.2 shop Story 4.1 AC4.3：退款单当前状态不可选 / 改选现金去向 → 409 {@code refund-destination-locked}。 */
+    public static AppException refundDestinationLocked(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.REFUND_DESTINATION_LOCKED, detail);
+    }
+
+    /** v1.4.2 shop Story 4.1 AC2.6 / AC4.5：现金段不高于所选渠道手续费 → 422 {@code refund-below-payout-fee}。 */
+    public static AppException refundBelowPayoutFee(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.REFUND_BELOW_PAYOUT_FEE, detail);
+    }
+
+    /** v1.4.2 shop Story 4.1：订单已无可退金额（剩余应付为 0 或按原因算出的退款为 0）→ 409 {@code nothing-to-refund}。 */
+    public static AppException nothingToRefund(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.NOTHING_TO_REFUND, detail);
+    }
 }

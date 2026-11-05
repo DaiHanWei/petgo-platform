@@ -88,7 +88,12 @@ public record ShopOrderDetailView(
         /** 现在还能不能点「去支付」：与 {@code /pay} 放行同一判定（{@code ShopOrderPaymentService#canPay}）。 */
         boolean canPay,
         /** 付款截止时刻 = 订单 {@code expires_at}（App 倒计时；不是码失效时刻）。 */
-        Instant paymentDeadline) {
+        Instant paymentDeadline,
+        // ---------- v1.4.2 shop Story 4.1 取消退款单（D-15 / C-9，末尾追加） ----------
+        /**
+         * 取消退款单（按创建时间升序，无则空数组）。🔒 收款账号只给末 4 位，内部 id 不出现。6.2 复用本字段。
+         */
+        List<ShopOrderRefundView> refunds) {
 
     /**
      * 包裹（S-2）。
@@ -146,9 +151,16 @@ public record ShopOrderDetailView(
         return of(o, lines, shipments, imageUrlBySkuId, intent, Instant.now());
     }
 
-    /** v1.4.2 shop Story 3.3：显式传入判定时刻（L0 注入时刻用）。 */
+    /** v1.4.2 shop Story 3.3：显式传入判定时刻（L0 注入时刻用）。无退款单（{@code refunds = []}）。 */
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
             List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent, Instant now) {
+        return of(o, lines, shipments, imageUrlBySkuId, intent, now, List.of());
+    }
+
+    /** v1.4.2 shop Story 4.1：带取消退款单（{@code ShopOrderRefundService#refundViewsOf}）。 */
+    public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
+            List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent, Instant now,
+            List<ShopOrderRefundView> refunds) {
         var ship = o.shipTo();
         PaymentFailureCategory failureCategory = PaymentFailureCategory.of(intent);
         return new ShopOrderDetailView(
@@ -188,7 +200,8 @@ public record ShopOrderDetailView(
                 failureCategory == null ? null : failureCategory.name(),
                 o.displayStatusAt(now).name(),
                 ShopOrderPaymentService.canPay(o, intent, now),
-                o.getExpiresAt());
+                o.getExpiresAt(),
+                refunds == null ? List.of() : List.copyOf(refunds));
     }
 
     /**

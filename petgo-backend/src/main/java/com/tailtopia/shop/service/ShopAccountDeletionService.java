@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       {@code shop_carts} + 车行（个人偏好数据，无留存价值）；</li>
  *   <li><b>匿名化保留</b>：{@code shop_orders} 照 consult_orders 例保留交易/财务记录，
  *       只剥收货地址快照三项 PII；{@code return_requests} 流程记录保留，
- *       🔒 加密收款账号/户名置空。</li>
+ *       🔒 加密收款账号/户名置空；{@code shop_order_refunds}（v1.4.2 shop 4.1）同样只清加密收款账号/户名。</li>
  *   <li><b>作废保留</b>（v1.4.2 shop Story 2.1 AC7）：{@code user_coupons} 可用券 AVAILABLE → VOIDED
  *       （经 {@code CouponLedgerService}，用户券无 PII，行保留供订单追溯；LOCKED / USED 随订单保留不动），
  *       {@code coupon_expiry_notify_log} 物理删除（避免 2.3 给已注销用户扫出快过期券）。</li>
@@ -52,12 +52,14 @@ public class ShopAccountDeletionService {
     private final CouponLedgerService couponLedger;
     private final CouponExpiryNotifyLogDao couponNotifyLog;
     private final ShopOrderPaymentService payments;
+    private final com.tailtopia.shop.order.refund.ShopOrderRefundRepository orderRefunds;
 
     public ShopAccountDeletionService(ShippingAddressRepository addresses,
             ShopCartRepository carts, ShopCartItemRepository cartItems,
             ShopOrderRepository orders, ReturnRequestRepository returns,
             CouponLedgerService couponLedger, CouponExpiryNotifyLogDao couponNotifyLog,
-            ShopOrderPaymentService payments) {
+            ShopOrderPaymentService payments,
+            com.tailtopia.shop.order.refund.ShopOrderRefundRepository orderRefunds) {
         this.addresses = addresses;
         this.carts = carts;
         this.cartItems = cartItems;
@@ -66,6 +68,7 @@ public class ShopAccountDeletionService {
         this.couponLedger = couponLedger;
         this.couponNotifyLog = couponNotifyLog;
         this.payments = payments;
+        this.orderRefunds = orderRefunds;
     }
 
     @Transactional
@@ -83,6 +86,8 @@ public class ShopAccountDeletionService {
         });
         int ordersAnonymized = orders.anonymizeShipSnapshotByUserId(userId);
         int payoutsCleared = returns.clearPayoutPiiByUserId(userId);
+        // v1.4.2 shop Story 4.1：取消退款单的加密收款账号 / 户名同样置空（行保留供财务追溯）
+        payoutsCleared += orderRefunds.clearPayoutPiiByUserId(userId);
         int couponsVoided = couponLedger.voidAllAvailableForUser(userId, Instant.now());
         int notifyLogsDeleted = couponNotifyLog.deleteByUserId(userId);
         log.info("注销联动电商清理 pendingCancelled={} orders={} payouts={} couponsVoided={} couponNotifyLogs={}",

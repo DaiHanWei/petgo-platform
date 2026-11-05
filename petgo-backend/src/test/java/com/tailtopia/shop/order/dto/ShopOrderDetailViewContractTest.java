@@ -57,7 +57,30 @@ class ShopOrderDetailViewContractTest {
             "returnWindowEndsAt", "packages", "attributionSource",
             "paymentStatus", "paymentFailureCategory",
             // v1.4.2 shop Story 3.3（S-7）：末尾追加
-            "displayStatus", "canPay", "paymentDeadline");
+            "displayStatus", "canPay", "paymentDeadline",
+            // v1.4.2 shop Story 4.1（D-15 / C-9）：末尾追加
+            "refunds");
+
+    /** v1.4.2 shop Story 4.1 AC6.1 + C-9：退款单条目键集（全字段非 null 时）。 */
+    private static final Set<String> REFUND_KEYS = Set.of(
+            "refundToken", "scope", "reason", "status", "totalRefund", "coinRefund", "cashRefund",
+            "compensationAmount", "payoutFee", "payoutChannel", "payoutAccountLast4", "canChooseDestination",
+            "payoutFailed", "paidOutAt", "createdAt", "cashDestination", "destinationChosenAt", "compensate",
+            "compensationIfPawcoin");
+
+    /** 已选银行并打款完成的退款单（账号 1234567890 / 户名 Budi Santoso 为加密列明文）。 */
+    static ShopOrderRefundView paidOutBankRefund() {
+        com.tailtopia.shop.order.refund.ShopOrderRefund r = com.tailtopia.shop.order.refund.ShopOrderRefund.create(
+                "rf-tok-1", 1L, new com.tailtopia.shop.order.pricing.RefundQuote(
+                        com.tailtopia.shop.order.refund.RefundScope.WHOLE, null, null,
+                        com.tailtopia.shop.order.refund.CancelReason.OUT_OF_STOCK, 315_000L, 13_000L, 1_575L,
+                        329_575L, 100_000L, 229_575L, false),
+                7L, Instant.parse("2026-11-05T10:00:00Z"));
+        r.chooseToBank(com.tailtopia.pay.refund.domain.PayoutChannel.OVO, "1234567890", "Budi Santoso",
+                Instant.parse("2026-11-05T11:00:00Z"));
+        r.markPaidOut(Instant.parse("2026-11-06T11:00:00Z"));
+        return ShopOrderRefundView.of(r, 0L);
+    }
 
     /** 全字段非 null 的样本 —— 只有它能把「字段集」钉全（NON_NULL 下 null 字段整键消失）。 */
     private ShopOrderDetailView fullyPopulated(String paymentStatus, String failureCategory) {
@@ -72,11 +95,11 @@ class ShopOrderDetailViewContractTest {
                 t, t, t, t,
                 List.of(new ShopOrderDetailView.Package("JNE", "JNE", "JN1", "https://jne/JN1",
                         "DELIVERED", t, t)),
-                "unknown", paymentStatus, failureCategory, "COMPLETED", false, t);
+                "unknown", paymentStatus, failureCategory, "COMPLETED", false, t, List.of(paidOutBankRefund()));
     }
 
     @Test
-    @DisplayName("顶层字段集恰好 26 个，displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
+    @DisplayName("顶层字段集恰好 27 个，displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
     void fullOrderHasExactlyTheContractFields() {
         assertThat(wire(fullyPopulated("FAILED", "GATEWAY_DECLINED")).keySet())
                 .isEqualTo(TOP_LEVEL_KEYS);
@@ -131,7 +154,7 @@ class ShopOrderDetailViewContractTest {
         // NON_NULL：不是「键在、值为 null」，而是键根本不出现。
         // App 侧 j['paymentStatus']?.toString() 对缺键与 null 同样得到 null —— 两端在此对齐。
         assertThat(w).doesNotContainKeys("paymentStatus", "paymentFailureCategory");
-        // 其余 24 个键一个不少 —— 省的只能是这两个。
+        // 其余 25 个键一个不少 —— 省的只能是这两个。
         assertThat(w.keySet()).containsExactlyInAnyOrderElementsOf(TOP_LEVEL_KEYS.stream()
                 .filter(k -> !k.equals("paymentStatus") && !k.equals("paymentFailureCategory"))
                 .toList());
@@ -169,5 +192,38 @@ class ShopOrderDetailViewContractTest {
                 Instant.parse("2026-09-16T10:05:00Z"));
         assertThat(inWindow.displayStatus()).isEqualTo("PENDING_PAYMENT");
         assertThat(inWindow.canPay()).isTrue();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 shop 4.1：refunds[] 条目键名齐全；无明文账号 / 户名；payoutAccountLast4 只有 4 位；无内部 id")
+    @SuppressWarnings("unchecked")
+    void refundsOnTheWire() {
+        Map<String, Object> w = wire(fullyPopulated("PAID", null));
+        List<Map<String, Object>> refunds = (List<Map<String, Object>>) w.get("refunds");
+        assertThat(refunds).hasSize(1);
+        Map<String, Object> r = refunds.get(0);
+        assertThat(r.keySet()).isEqualTo(REFUND_KEYS);
+        assertThat(r).containsEntry("refundToken", "rf-tok-1").containsEntry("scope", "WHOLE")
+                .containsEntry("reason", "OUT_OF_STOCK").containsEntry("status", "COMPLETED")
+                .containsEntry("payoutChannel", "OVO").containsEntry("cashDestination", "TO_BANK")
+                .containsEntry("canChooseDestination", false).containsEntry("payoutFailed", false);
+        assertThat(String.valueOf(r.get("payoutAccountLast4"))).isEqualTo("7890").hasSize(4);
+        assertThat(((Number) r.get("payoutFee")).longValue()).isEqualTo(2_500L);
+
+        String out = json.writeValueAsString(fullyPopulated("PAID", null));
+        assertThat(out).doesNotContain("1234567890").doesNotContain("Budi Santoso")
+                .doesNotContain("orderLineId").doesNotContain("orderId\"").doesNotContain("payoutAccount\"");
+    }
+
+    @Test
+    @DisplayName("v1.4.2 shop 4.1：无退款单 → refunds 为空数组（键在、不省略）")
+    void emptyRefundsIsEmptyArray() {
+        com.tailtopia.shop.order.domain.ShopOrder o = com.tailtopia.shop.order.domain.ShopOrder.place(
+                "ord-e", "TOKO-20260916-7M4KQ4", Instant.parse("2026-09-16T10:00:00Z"), 9L, 200_000L, 20_000L,
+                0L, new com.tailtopia.shop.order.domain.AddressSnapshot("Budi", "+628123", "DKI", "Jaksel",
+                        "Kebayoran", "Jl. 1", "12160"));
+        Map<String, Object> w = wire(ShopOrderDetailView.of(o, List.of(), List.of(), Map.of(), null,
+                Instant.parse("2026-09-16T10:05:00Z")));
+        assertThat(w).containsEntry("refunds", List.of());
     }
 }

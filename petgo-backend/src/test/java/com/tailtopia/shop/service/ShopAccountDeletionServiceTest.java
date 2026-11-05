@@ -38,13 +38,17 @@ class ShopAccountDeletionServiceTest {
         when(carts.findByUserId(5L)).thenReturn(Optional.empty());
         when(orders.findByUserIdAndStatus(5L, ShopOrderStatus.PENDING_PAYMENT)).thenReturn(List.of());
 
+        com.tailtopia.shop.order.refund.ShopOrderRefundRepository orderRefunds =
+                mock(com.tailtopia.shop.order.refund.ShopOrderRefundRepository.class);
         new ShopAccountDeletionService(addresses, carts, cartItems, orders, returns, ledger, notifyLog,
-                payments).deleteByUserId(5L);
+                payments, orderRefunds).deleteByUserId(5L);
 
-        InOrder order = inOrder(addresses, orders, returns, ledger, notifyLog);
+        InOrder order = inOrder(addresses, orders, returns, orderRefunds, ledger, notifyLog);
         order.verify(addresses).deleteByUserId(5L);
         order.verify(orders).anonymizeShipSnapshotByUserId(5L);
         order.verify(returns).clearPayoutPiiByUserId(5L);
+        // v1.4.2 shop Story 4.1（D1/D2）：取消退款单的加密收款账号 / 户名同样置空
+        order.verify(orderRefunds).clearPayoutPiiByUserId(5L);
         order.verify(ledger).voidAllAvailableForUser(eq(5L), any(Instant.class));
         order.verify(notifyLog).deleteByUserId(5L);
     }
@@ -64,7 +68,7 @@ class ShopAccountDeletionServiceTest {
 
         new ShopAccountDeletionService(addresses, carts, mock(ShopCartItemRepository.class), orders,
                 mock(ReturnRequestRepository.class), ledger, mock(CouponExpiryNotifyLogDao.class),
-                payments).deleteByUserId(5L);
+                payments, mock(com.tailtopia.shop.order.refund.ShopOrderRefundRepository.class)).deleteByUserId(5L);
 
         InOrder order = inOrder(payments, addresses, ledger);
         order.verify(payments).releaseUnpaidForAccountDeletion(a);

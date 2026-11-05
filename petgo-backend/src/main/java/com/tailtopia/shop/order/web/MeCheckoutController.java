@@ -5,6 +5,9 @@ import com.tailtopia.shop.order.dto.CheckoutPreviewRequest;
 import com.tailtopia.shop.order.dto.CheckoutPreviewView;
 import com.tailtopia.shop.order.dto.CheckoutQuoteView;
 import com.tailtopia.shop.order.dto.PlaceOrderRequest;
+import com.tailtopia.shop.order.dto.RefundDestinationRequest;
+import com.tailtopia.shop.order.dto.ShopOrderRefundView;
+import com.tailtopia.shop.order.refund.ShopOrderRefundService;
 import com.tailtopia.shop.order.dto.ShopOrderDetailView;
 import com.tailtopia.shop.order.dto.ShopOrderView;
 import com.tailtopia.shop.order.service.CheckoutService;
@@ -42,17 +45,20 @@ public class MeCheckoutController {
     private final ShopOrderPaymentService payments;
     private final com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment;
     private final com.tailtopia.shop.service.ShopLineImageResolver lineImages;
+    private final ShopOrderRefundService refunds;
 
     public MeCheckoutController(CheckoutService checkout,
             com.tailtopia.shop.order.service.CheckoutQuoteService quotes,
             ShopOrderPaymentService payments,
             com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment,
-            com.tailtopia.shop.service.ShopLineImageResolver lineImages) {
+            com.tailtopia.shop.service.ShopLineImageResolver lineImages,
+            ShopOrderRefundService refunds) {
         this.checkout = checkout;
         this.quotes = quotes;
         this.payments = payments;
         this.fulfillment = fulfillment;
         this.lineImages = lineImages;
+        this.refunds = refunds;
     }
 
     /**
@@ -65,7 +71,7 @@ public class MeCheckoutController {
         return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()),
                 lineImages.mainImageUrlBySkuId(lines.stream()
                         .map(com.tailtopia.shop.order.domain.ShopOrderLine::getSkuId).toList()),
-                payments.intentOf(order).orElse(null));
+                payments.intentOf(order).orElse(null), java.time.Instant.now(), refunds.refundViewsOf(order));
     }
 
     /**
@@ -188,6 +194,22 @@ public class MeCheckoutController {
         long userId = currentUserId(jwt);
         var order = fulfillment.confirmReceipt(userId, token);
         return detailOf(order);
+    }
+
+    // ===== v1.4.2 shop Story 4.1：取消退款单选择现金去向 =====
+
+    /**
+     * 选择取消退款单现金段的去向（AC4，D-15 / FR-134.4）：{@code TO_PAWCOIN} 即时入账（平台原因另给补偿，只对现金段）；
+     * {@code TO_BANK} 渠道费后端算、账户加密落库 → 待财务打款。
+     *
+     * <p>🔴 请求里<b>没有「PawCoin 段去哪」参数</b>（能力缺席，FR-100A 规则 1），也不收手续费。
+     * 订单非本人 / 退款单不属于该订单 → 404（不区分）；已不可选 → 409 {@code refund-destination-locked}。
+     */
+    @PostMapping("/shop-orders/{token}/refunds/{refundToken}/destination")
+    public ShopOrderRefundView chooseRefundDestination(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token, @PathVariable String refundToken,
+            @RequestBody(required = false) RefundDestinationRequest req) {
+        return refunds.chooseDestination(currentUserId(jwt), token, refundToken, req);
     }
 
     private static long currentUserId(Jwt jwt) {

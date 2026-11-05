@@ -375,6 +375,19 @@ public class ShopOrder {
         }
     }
 
+    /**
+     * 已付款订单的整单取消（v1.4.2 shop Story 4.1 AC3 第 2 步）：写原因与时刻，经唯一入口转 {@code REFUNDING}；
+     * 全部退款单完成后由 {@code ShopOrderRefundService#settleOrderIfDone} 转 {@code REFUNDED}。
+     * 🔴 不能用 {@link #markCancelled}（那是未付款取消转 {@code CANCELLED}）。原因只写第一次。
+     */
+    public void markRefunding(com.tailtopia.shop.order.refund.CancelReason reason, Instant at) {
+        transitionTo(ShopOrderStatus.REFUNDING);
+        if (this.cancelReason == null) {
+            this.cancelReason = reason;
+            this.cancelledAt = at;
+        }
+    }
+
     /** 支付窗长度（AD-8）。🔴 与 App 端倒计时同源：客户端只展示服务端给的截止时刻。 */
     public static final java.time.Duration PAYMENT_WINDOW = java.time.Duration.ofMinutes(60);
 

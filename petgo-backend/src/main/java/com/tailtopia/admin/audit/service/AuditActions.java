@@ -247,6 +247,13 @@ public final class AuditActions {
     public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
     /** 运营标记缺货，订单进入异常订单工作台（A8 判据，V20260918_2243）。 */
     public static final String SHOP_ORDER_SHORTAGE_FLAGGED = "SHOP_ORDER_SHORTAGE_FLAGGED";
+    /**
+     * 取消退款处置（v1.4.2 shop Story 4.1）：整单取消 / 部分取消 / 退回入库确认 / 签收后赔付 / 迟到款退款。
+     * 摘要记退款单 token、范围、原因与各段金额。🔒 <b>不记收款账号 / 户名</b>。
+     */
+    public static final String SHOP_ORDER_REFUND_HANDLED = "SHOP_ORDER_REFUND_HANDLED";
+    /** 财务标记取消退款单已打款 / 打款失败（v1.4.2 shop Story 4.1 AC5）。🔒 只记渠道与金额，不记账号 / 户名。 */
+    public static final String SHOP_ORDER_REFUND_PAYOUT_MARKED = "SHOP_ORDER_REFUND_PAYOUT_MARKED";
 
     // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
     /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */
