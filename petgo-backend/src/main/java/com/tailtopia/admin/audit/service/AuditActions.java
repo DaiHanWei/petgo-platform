@@ -303,6 +303,15 @@ public final class AuditActions {
     /** 编辑 SKU 批发价（门店进货价）。摘要记新旧值 —— 批发价门店本就看得到，不属于进货价那类敏感字段。 */
     public static final String SHOP_SKU_WHOLESALE_UPDATED = "SHOP_SKU_WHOLESALE_UPDATED";
 
+    // ===== 优惠券（v1.4.2 shop Story 2.1，D-1 ~ D-4；S-2 service 归 shop 线，后台线只做页面）=====
+    // target = {@code SHOP_COUPON} / 券模板 public_token。🔴 summary 绝不含兑换码明文。
+    /** 新建券模板（摘要记类型、获取方式、面额、门槛、范围类型、总量、每人限领）。 */
+    public static final String SHOP_COUPON_CREATED = "SHOP_COUPON_CREATED";
+    /** 停用券模板（摘要记是否作废已领未用及作废张数）。 */
+    public static final String SHOP_COUPON_STOPPED = "SHOP_COUPON_STOPPED";
+    /** 为券模板生成兑换码（摘要只记通用 / 一次性与数量，不记码）。 */
+    public static final String SHOP_COUPON_CODES_CREATED = "SHOP_COUPON_CODES_CREATED";
+
     // ===== 话题管理（V1.4.2 social-topic Story 6.1，AB-10B）=====
     // target = {@code topic} / topicId；summary 只记标准名、状态变化、序号，不记说明全文。
     /** 后台新建官方话题。 */

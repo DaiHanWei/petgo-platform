@@ -142,6 +142,12 @@ public final class ErrorTypes {
     /** v1.4.2 shop Story 1.1（D-9 / C-5）：Biteship 询价失败（503，不回退固定运费，结算不可提交）。 */
     public static final URI QUOTE_FAILED = URI.create(BASE + "quote-failed");
 
+    /**
+     * v1.4.2 shop Story 2.1（D-3 / P-5 / C-2）：提交订单时所选用户券已不可用（被占用 / 过期 / 作废 / 非本人，409），
+     * 扩展成员 {@code userCouponTokens}，见 {@code CouponInvalidException}。App 走 D17「券已失效、已为你重新选择」。
+     */
+    public static final URI COUPON_INVALID = URI.create(BASE + "coupon-invalid");
+
     private ErrorTypes() {
     }
 }

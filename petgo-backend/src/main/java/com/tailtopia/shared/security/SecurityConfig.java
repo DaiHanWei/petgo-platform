@@ -147,6 +147,9 @@ public class SecurityConfig {
                         // htmx 请求 HX-Redirect 整页跳转，其余照旧 302 登录页。
                         .authenticationEntryPoint(new com.tailtopia.admin.account.web.AdminLoginEntryPoint()));
         // CSRF 保持开启（表单链默认即开）；会话按需创建（表单登录态）。
+        // v1.4.2 shop Story 2.1（D-24）：唯独 /admin/stag/** 免 CSRF —— 这些端点只在 stag profile 注册（@StagOnly），
+        // 仍要求后台会话 + SUPER_ADMIN，免 CSRF 只为验收时带会话 cookie 用 curl 调用。生产无此路由。
+        http.csrf(csrf -> csrf.ignoringRequestMatchers("/admin/stag/**"));
         return http.build();
     }
 

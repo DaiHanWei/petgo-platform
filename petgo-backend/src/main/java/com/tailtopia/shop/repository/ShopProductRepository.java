@@ -24,6 +24,13 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
     @Query("select p.publicToken from ShopProduct p where p.publicToken in :tokens and p.active = true")
     Set<String> findActivePublicTokens(@Param("tokens") Collection<String> tokens);
 
+    /**
+     * 批量版「存在」判定（含已下架）：{@code tokens} 中存在的商品 token（v1.4.2 shop Story 2.1，
+     * 券 PRODUCT 范围校验——下架商品允许写进券范围）。只投影 token，不加载实体。
+     */
+    @Query("select p.publicToken from ShopProduct p where p.publicToken in :tokens")
+    Set<String> findExistingPublicTokens(@Param("tokens") Collection<String> tokens);
+
     /** 稳定排序：运营权重降序，id 降序兜底（避免同权重时分页漂移）。 */
     List<ShopProduct> findByActiveTrueOrderBySortWeightDescIdDesc();
 
