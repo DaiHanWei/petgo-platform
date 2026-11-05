@@ -33,7 +33,7 @@ import '../../features/shop/presentation/checkout_page_v3.dart';
 import '../../features/shop/presentation/product_detail_page_v3.dart';
 import '../../features/shop/presentation/review_list_page.dart';
 import '../../features/shop/presentation/shop_return_unavailable_page.dart';
-import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
+import '../../features/shop/presentation/shop_order_detail_page_v3.dart';
 import '../../features/shop/presentation/shop_pay_success_page.dart';
 import '../../features/shop/presentation/toko_page_v3.dart';
 import '../../l10n/app_localizations.dart';
@@ -734,7 +734,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) {
           final token = s.pathParameters['token']!;
           // v1.4.2 shop Story 7.1：结算页提交需扫码单 → `?autopay=1` 首帧自动拉起支付面板
-          return ShopOrderDetailPageV2(
+          // v1.4.2 shop Story 9.1：改指 v3（v2 同 story 删除，P-4）。
+          return ShopOrderDetailPageV3(
               orderToken: token, autoPay: s.uri.queryParameters['autopay'] == '1');
         },
       ),

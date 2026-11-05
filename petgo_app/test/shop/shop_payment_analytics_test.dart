@@ -11,7 +11,7 @@ import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_order_detail.dart';
 import 'package:tailtopia/features/shop/domain/shop_return.dart';
-import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v3.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/qr_payment/qr_pay_save.dart';
 
@@ -96,7 +96,7 @@ void main() {
         locale: const Locale('id'),
         home: const MediaQuery(
           data: MediaQueryData(size: Size(411, 891)),
-          child: ShopOrderDetailPageV2(orderToken: 'ord1'),
+          child: ShopOrderDetailPageV3(orderToken: 'ord1'),
         ),
       ),
     );

@@ -28,6 +28,13 @@ class CouponRepository {
     return ShopCoupon.fromJson(resp.data ?? const {});
   }
 
+  /// 可用券张数（`GET /me/coupons/summary` → `{availableCount}`）。
+  Future<int> availableCount() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.meCouponsSummary);
+    final v = resp.data?['availableCount'];
+    return v is num ? v.toInt() : 0;
+  }
+
   /// 首页「给你的券」（新人券已由服务端置顶）。
   Future<List<ShopCoupon>> forYou() async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.shopCouponsForYou);
@@ -67,6 +74,16 @@ class CouponRepository {
     return resp.data?['newbieCouponIssued'] == true;
   }
 }
+
+/// 我的券入口计数（v1.4.2 shop Story 9.1 AC2.4，后端 2.2 AC8.4 `GET /me/coupons/summary`）。
+/// 🔴 失败 → null：入口只显示「Kupon Saya」，不显示「0 bisa dipakai」。
+final couponSummaryProvider = FutureProvider.autoDispose<int?>((ref) async {
+  try {
+    return await ref.read(couponRepositoryProvider).availableCount();
+  } catch (_) {
+    return null;
+  }
+});
 
 final couponRepositoryProvider =
     Provider<CouponRepository>((ref) => CouponRepository(dio: ref.read(dioProvider)));

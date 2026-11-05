@@ -285,6 +285,8 @@ class _NotificationCenterPageState
     // V1.4.2 social-topic Story 1.5 · AC6.8：被追更 / 追更宠物新 Diary（显式登记）。
     'PET_FOLLOWED' => 'pet_followed',
     'PET_DIARY_POSTED' => 'pet_diary_posted',
+    // v1.4.2 shop Story 9.1 · AC6.4：迟到款重新下单（显式登记）。
+    'SHOP_ORDER_REORDERED' => 'shop_order_reordered',
     _ => type.toLowerCase(),
   };
 
@@ -835,6 +837,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     // 追更宠物新 Diary = 紫色爪印。两者底色都用 violet100（**不用 cream2**：未读条目底色就是 cream2，图标块会「消失」）。
     'PET_FOLLOWED' => (Icons.person_add_rounded, AppColors.mint, AppColors.violet100),
     'PET_DIARY_POSTED' => (Icons.pets_rounded, AppColors.mint, AppColors.violet100),
+    // v1.4.2 shop Story 9.1 · AC6.4（UI F22）：重新下单 = 紫色货车（violet100 底，同上理由不用 cream2）。
+    'SHOP_ORDER_REORDERED' => (Icons.local_shipping_rounded, AppColors.mint, AppColors.violet100),
     // UI 稿 G3：退回用紫色钱包（钱回来了）—— **不用** REFUND_REJECTED 的红色。
     'GIFT_UNDELIVERED_REFUND' => (
       Icons.account_balance_wallet_rounded,
@@ -1016,6 +1020,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_DIARY_POSTED' => _storedTitle(l10n),
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：继运营通知后又一个读后端 title 的类型，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundTitle(l10n),
+    // v1.4.2 shop Story 9.1 · AC6.4（F22）：读后端整句（正文带新单号，App 无从本地拼），空则本地兜底。
+    'SHOP_ORDER_REORDERED' => _reorderedTitle(l10n),
     // 收礼无 actorName（送礼人已注销 / 封号）→ 本地兜底；有 actorName 走「后端文案条目」分支。
     'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedTitle,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
@@ -1077,6 +1083,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_DIARY_POSTED' => '',
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3）：读后端 body，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundBody(l10n),
+    'SHOP_ORDER_REORDERED' => _reorderedBody(l10n),
     'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedBody,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
@@ -1109,6 +1116,18 @@ class _NotificationTileState extends State<_NotificationTile> {
   String _refundBody(AppLocalizations l10n) {
     final b = widget.item.body?.trim() ?? '';
     return b.isEmpty ? l10n.giftNotifyRefundBodyFallback : b;
+  }
+
+  /// 重新下单（v1.4.2 shop Story 9.1 · F22）：同 [_refundTitle] 范式 —— 后端按收件人语言渲染整句（含新单号），
+  /// 任一为空回落本地兜底（正文兜底句去掉单号，待确认 7）。
+  String _reorderedTitle(AppLocalizations l10n) {
+    final t = widget.item.title?.trim() ?? '';
+    return t.isEmpty ? l10n.shopOrderReorderedNotifyTitle : t;
+  }
+
+  String _reorderedBody(AppLocalizations l10n) {
+    final b = widget.item.body?.trim() ?? '';
+    return b.isEmpty ? l10n.shopOrderReorderedNotifyBodyFallback : b;
   }
 
   /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。

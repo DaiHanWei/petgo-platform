@@ -53,51 +53,61 @@ class SupportWhatsAppButton extends ConsumerWidget {
       width: double.infinity,
       child: OutlinedButton.icon(
         key: const ValueKey('supportWhatsappCta'),
-        onPressed: () => _open(context, ref, l10n),
+        onPressed: () => openSupportWhatsApp(context, ref, orderNo: orderNo, screen: screen),
         icon: const Icon(Icons.chat_outlined, size: 18),
         label: Text(l10n.supportWhatsappCta),
       ),
     );
   }
+}
 
-  Future<void> _open(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
-    Analytics.buttonTapped(ButtonId.supportWhatsapp, screen: screen);
+/// 打开客服 WhatsApp（v1.4.2 shop Story 9.1 由 [SupportWhatsAppButton] 抽出：订单详情状态头 / 列表卡的
+/// 「Hubungi CS」与页底按钮**同一入口**，埋点、号码来源、失败兜底一字不改）。
+///
+/// 🔒 订单号只进深链预填，不进埋点（事件只带 `button_id` + `screen`）。
+Future<void> openSupportWhatsApp(
+  BuildContext context,
+  WidgetRef ref, {
+  required String orderNo,
+  required String screen,
+}) async {
+  final l10n = AppLocalizations.of(context);
+  Analytics.buttonTapped(ButtonId.supportWhatsapp, screen: screen);
 
-    // 🔴 `await ...future` 而不是读同步快照：build 里 watch 过了，通常已就绪即刻返回；
-    //    万一还在飞（点得快 / 网慢），这里会等它落地，而不是拿一个 Loading 当"没有"。
-    //    provider 内部已吞掉全部异常（永不进 error 态），catch 只是最后一道保险。
-    SupportContact contact;
-    try {
-      contact = await ref.read(supportContactProvider.future);
-    } catch (_) {
-      contact = kFallbackSupportContact;
-    }
-    if (!context.mounted) return;
-    final uri = buildSupportWhatsAppUri(
-      whatsappE164: contact.whatsappE164,
-      text: buildSupportWhatsAppText(orderNo: orderNo, l10n: l10n),
-    );
-
-    bool ok = false;
-    try {
-      ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      ok = false;
-    }
-    if (ok || !context.mounted) return;
-
-    // 打不开时给一条**能自己走下去**的路：把号码复制走，手动去 WhatsApp 找。
-    // 🔴 复制的是展示形态 081290906953，不是 E.164 —— 印尼人往通讯录里粘的是前者。
-    showAppToast(
-      context,
-      l10n.supportWhatsappOpenFailed,
-      actionLabel: l10n.supportWhatsappCopyNumber,
-      onAction: () async {
-        await Clipboard.setData(ClipboardData(text: contact.whatsappNumber));
-        if (context.mounted) {
-          showAppToast(context, l10n.supportWhatsappNumberCopied);
-        }
-      },
-    );
+  // 🔴 `await ...future` 而不是读同步快照：build 里 watch 过了，通常已就绪即刻返回；
+  //    万一还在飞（点得快 / 网慢），这里会等它落地，而不是拿一个 Loading 当"没有"。
+  //    provider 内部已吞掉全部异常（永不进 error 态），catch 只是最后一道保险。
+  SupportContact contact;
+  try {
+    contact = await ref.read(supportContactProvider.future);
+  } catch (_) {
+    contact = kFallbackSupportContact;
   }
+  if (!context.mounted) return;
+  final uri = buildSupportWhatsAppUri(
+    whatsappE164: contact.whatsappE164,
+    text: buildSupportWhatsAppText(orderNo: orderNo, l10n: l10n),
+  );
+
+  bool ok = false;
+  try {
+    ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    ok = false;
+  }
+  if (ok || !context.mounted) return;
+
+  // 打不开时给一条**能自己走下去**的路：把号码复制走，手动去 WhatsApp 找。
+  // 🔴 复制的是展示形态 081290906953，不是 E.164 —— 印尼人往通讯录里粘的是前者。
+  showAppToast(
+    context,
+    l10n.supportWhatsappOpenFailed,
+    actionLabel: l10n.supportWhatsappCopyNumber,
+    onAction: () async {
+      await Clipboard.setData(ClipboardData(text: contact.whatsappNumber));
+      if (context.mounted) {
+        showAppToast(context, l10n.supportWhatsappNumberCopied);
+      }
+    },
+  );
 }

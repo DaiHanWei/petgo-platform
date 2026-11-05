@@ -184,7 +184,11 @@ void main() {
       // v1.4.2 shop Story 8.2（商品详情，PRD §4）新增一项，已逐个确认：
       // - serviceable：toko_delivery_area_selected 的 bool（所选地区能否配送）；🔒 刻意不带地区名 / 邮编 / 区域 id。
       //   （toko_coupon_claimed 的 source 新增取值 detail，键名不变。）
+      // v1.4.2 shop Story 9.1（订单详情配送异常，PRD §4 定死属性名）新增一项，已逐个确认：
+      // - exception_type：toko_delivery_exception_shown / _cs_tapped 的异常类型，受控词表
+      //   returned / lost / damaged / unknown（C-6），与个人无关；🔒 刻意不带运单号 / 订单号。
       expect(props, {
+        'exception_type',
         'serviceable',
         'coupon_id', 'source', 'action',
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',

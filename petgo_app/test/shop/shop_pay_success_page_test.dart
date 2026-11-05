@@ -8,7 +8,7 @@ import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_order_detail.dart';
 import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_return.dart';
-import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v3.dart';
 import 'package:tailtopia/features/shop/presentation/shop_pay_success_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -124,7 +124,7 @@ void main() {
       routes: [
         GoRoute(
             path: '/shop/orders/:token',
-            builder: (c, s) => ShopOrderDetailPageV2(orderToken: s.pathParameters['token']!)),
+            builder: (c, s) => ShopOrderDetailPageV3(orderToken: s.pathParameters['token']!)),
         GoRoute(
             path: '/shop/orders/:token/paid',
             builder: (c, s) => ShopPaySuccessPage(orderToken: s.pathParameters['token']!)),

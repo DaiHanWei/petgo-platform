@@ -32,6 +32,7 @@ import 'package:tailtopia/features/notify/domain/app_version_check.dart';
 import 'package:tailtopia/features/notify/presentation/app_update_presenter.dart';
 import 'package:tailtopia/features/order/presentation/order_list_controller.dart';
 import 'package:tailtopia/features/shop/coupon/data/coupon_repository.dart';
+import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
 import 'package:tailtopia/features/shop/data/shipping_estimate_repository.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
@@ -426,6 +427,9 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(couponsForYouProvider);
   resetShopEntryThrottle();
   ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
+  // v1.4.2 shop Story 9.1：「Belanja」二级标签角标与「我的券」入口计数（按当前用户算）。
+  ref.invalidate(shopOrderCountsProvider);
+  ref.invalidate(couponSummaryProvider);
   // batch-b1 复审：以下两项都是按当前用户算的（排除自己 / 互相拉黑的人 / 最近互动的人）。
   ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
   ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）

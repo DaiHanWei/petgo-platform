@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/shop_order_detail.dart';
+import '../domain/shop_order_summary.dart';
 
 /// 电商订单数据层（Story 3.8）。
 ///
@@ -12,6 +13,21 @@ class ShopOrderRepository {
   ShopOrderRepository({required this.dio});
 
   final Dio dio;
+
+  /// 电商订单列表（v1.4.2 shop Story 6.2 / App 9.1）：按 `displayStatus` 分组（S-7），游标分页。
+  Future<ShopOrderListPage> list({ShopOrderGroup group = ShopOrderGroup.all, String? cursor}) async {
+    final resp = await dio.get<Map<String, dynamic>>(
+      ApiPaths.meShopOrders,
+      queryParameters: {'group': group.api, 'cursor': ?cursor},
+    );
+    return ShopOrderListPage.fromJson(resp.data ?? const {});
+  }
+
+  /// 角标计数 `{pendingPayment, toReceive}`（D-18）。
+  Future<ShopOrderCounts> counts() async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.meShopOrderCounts);
+    return ShopOrderCounts.fromJson(resp.data ?? const {});
+  }
 
   Future<ShopOrderDetail> detail(String orderToken) async {
     final resp =
@@ -64,4 +80,14 @@ final Provider<ShopOrderRepository> shopOrderRepositoryProvider =
 final shopOrderDetailProvider = FutureProvider.autoDispose
     .family<ShopOrderDetail, String>((ref, token) async {
   return ref.read(shopOrderRepositoryProvider).detail(token);
+});
+
+/// 「购物」二级标签角标（v1.4.2 shop Story 9.1 AC2.2）。🔴 失败 → null（不显示角标、不报错）。
+/// 已登记 `resetUserScopedCaches`（换账号不沿用上个账号的计数）。
+final shopOrderCountsProvider = FutureProvider.autoDispose<ShopOrderCounts?>((ref) async {
+  try {
+    return await ref.read(shopOrderRepositoryProvider).counts();
+  } catch (_) {
+    return null;
+  }
 });

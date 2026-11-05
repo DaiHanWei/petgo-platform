@@ -210,4 +210,22 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('REPURCHASE_FOOD_LOW', 'anything'), '/shop');
     expect(DeepLinkRoutes.isShellTabRoot('/shop'), isTrue);
   });
+
+  // v1.4.2 shop Story 9.1 · AC6.4（F22）：重新下单 → 新订单详情；空 / 含非法字符 → 通知中心。
+  test('SHOP_ORDER_REORDERED → /shop/orders/{token}；空 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', 'aB3xY9_k-Q'),
+        '/shop/orders/aB3xY9_k-Q');
+    expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', null),
+        DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', ''),
+        DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('SHOP_ORDER_REORDERED targetRef 不符白名单 ^[A-Za-z0-9_-]+\$ → 通知中心（不拼非法路由）', () {
+    for (final bad in ['a/b', 'tok?x=1', 'tok#f', '../paid', 'tok en', 'tok.x', 'tök', 'tok%2F', 'a&b']) {
+      expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', bad),
+          DeepLinkRoutes.notificationsCenter,
+          reason: bad);
+    }
+  });
 }

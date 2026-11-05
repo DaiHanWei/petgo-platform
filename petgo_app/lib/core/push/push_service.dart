@@ -55,13 +55,19 @@ void reportOpsNotificationOpenedFromPush(PushPayload p) {
   Analytics.capture('ops_notification_opened', {'campaign_id': id, 'source': 'push'});
 }
 
+/// 推送点击直达深链目标的通知类型（其余通知类推送仍落通知中心，2026-08-07 产品口径）。
+/// v1.4.2 shop 9.3 加 `COUPON_EXPIRING` 时并入本集合。
+const Set<String> kPushDirectTypes = {'GROWTH_LEVEL_UP', 'SHOP_ORDER_REORDERED'};
+
 /// 推送点击落点分流（纯函数，L0 可测）。见 [PushService._onNotificationClicked] 的决策说明。
 ///
 /// - [hasToken] 为真 ⇒ 通知类（通知中心有对应行）⇒ 落通知中心。
 /// - 否则 ⇒ IM 会话消息（中心无条目）⇒ 落其深链目标（会话）；深链本身兜底为通知中心时按原样返回。
-/// - **单类型例外**（V1.4.0 ① P-8，UI 稿 F2）：`GROWTH_LEVEL_UP` 直达深链目标（等级页）。
+/// - **直达例外**（[kPushDirectTypes]）：`GROWTH_LEVEL_UP`（V1.4.0 ① P-8，UI 稿 F2）→ 等级页；
+///   `SHOP_ORDER_REORDERED`（v1.4.2 shop Story 9.1 · UI F22 / C-10）→ 新订单详情。
+///   深链本身兜底为通知中心时照旧落通知中心。
 String pushClickLocation({required bool hasToken, required String deepLink, String? type}) {
-  if (type == 'GROWTH_LEVEL_UP') return deepLink;
+  if (kPushDirectTypes.contains(type)) return deepLink;
   return hasToken ? DeepLinkRoutes.notificationsCenter : deepLink;
 }
 

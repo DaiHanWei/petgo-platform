@@ -100,6 +100,21 @@ void main() {
       );
     });
 
+    test('v1.4.2 shop 9.1：重新下单推送（有 token）→ 直达新订单，深链兜底时仍落通知中心', () {
+      expect(
+        pushClickLocation(
+            hasToken: true, deepLink: '/shop/orders/newTok', type: 'SHOP_ORDER_REORDERED'),
+        '/shop/orders/newTok',
+      );
+      expect(
+        pushClickLocation(
+            hasToken: true,
+            deepLink: DeepLinkRoutes.notificationsCenter,
+            type: 'SHOP_ORDER_REORDERED'),
+        DeepLinkRoutes.notificationsCenter,
+      );
+    });
+
     test('IM 类但深链已兜底成通知中心 → 按原样返回', () {
       expect(
         pushClickLocation(hasToken: false, deepLink: DeepLinkRoutes.notificationsCenter),

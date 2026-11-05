@@ -5,19 +5,23 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/theme/shop_tokens.dart';
 import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_order_detail.dart';
 import 'package:tailtopia/features/shop/domain/shop_return.dart';
-import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v3.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_surface.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_countdown.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_decor.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
-/// 电商订单详情 · **设计稿版式**（V1.4.0 第 2 批）。
+/// 电商订单详情 v3（v1.4.2 shop Story 9.1；由 `shop_order_detail_page_v2_test.dart` 迁来，
+/// 仍成立的断言保留、按 9.1 新规则改写的用例逐条注明）。
+///
+/// 原 V1.4.0 第 2 批说明：
 ///
 /// ⚠️ 2026-08-28：v1 版式整体删除，`shop_order_detail_page_test.dart` 与
 /// `shop_order_fulfillment_page_test.dart` 一并移除；其中在 v2 下仍成立的用例已迁入本文件。
@@ -53,7 +57,7 @@ void main() {
         locale: const Locale('id'),
         home: MediaQuery(
           data: MediaQueryData(size: size, textScaler: TextScaler.linear(textScale)),
-          child: const ShopOrderDetailPageV2(orderToken: 'ord1'),
+          child: const ShopOrderDetailPageV3(orderToken: 'ord1'),
         ),
       ),
     );
@@ -199,23 +203,27 @@ void main() {
       expect(total.style?.color, isNot(ShopColors.accent));
     });
 
-    testWidgets('🔴 已支付订单保留 PawCoin 分段 —— 退款拆分的用户侧依据', (tester) async {
+    // v1.4.2 Story 9.1 按设计改写：PawCoin 分段不再挂在合计行（`+ PawCoin` 小字删除，FR-131.3），
+    // 改由「支付方式」卡单列 —— 退款拆分的用户侧依据仍在，只是换了位置。
+    testWidgets('🔴 已支付订单在支付方式卡保留 PawCoin 段 —— 退款拆分的用户侧依据', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
         packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
       )));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsOneWidget,
-          reason: '不显示分段，用户就无从知道退款会怎么拆');
+      expect(find.byKey(const ValueKey('shopOrderCoinRowV2')), findsOneWidget,
+          reason: '不显示币段，用户就无从知道退款会怎么拆');
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsNothing,
+          reason: '9.1：合计行不再带 + PawCoin 小字');
     });
   });
 
-  group('🔴 混合支付的金额语义：币段只能出现一次', () {
-    // 设计稿 02 §3 的原文是 `Dibayar Rp 154.000 + 50.000 PawCoin` —— 现金 + 币。
-    // 夹具正是这组数：total 204.000 = cash 154.000 + coin 50.000。
-    testWidgets('已支付 → 金额行给**现金段**，不给总额（否则和 `+ PawCoin` 行把币算两遍）',
-        (tester) async {
+  /// v1.4.2 Story 9.1 按设计改写（原「币段只能出现一次」组）：**合计行恒为应付 `totalAmount`**，
+  /// 币 / 现金只在支付方式卡出现，金额明细不出现 PawCoin（FR-131.3、P-1）。
+  /// 「去支付」按钮金额仍是现金段（D-4 的那条不变式保留：按钮与支付方式卡里的 QRIS 段同数）。
+  group('🔴 9.1：合计恒为应付，币 / 现金只在支付方式卡', () {
+    testWidgets('已支付 → 合计行给订单总额 204.000，金额区无 PawCoin 小字', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
         packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
@@ -223,110 +231,45 @@ void main() {
       await tester.pumpAndSettle();
 
       final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
-      expect(total.data, contains('154.000'));
-      expect(total.data, isNot(contains('204.000')),
-          reason: '204.000 已含 50.000 币，再跟一行「+ 50.000 PawCoin」就是重复计币');
-    });
-
-    // 🔴 这条原先断言的是**反过来的**：「待支付 → 金额行仍是总额（此时标题是
-    //    Total bayar，语义正确）」。那个理由只在印尼语下成立 —— 同一个 ARB key
-    //    (`checkoutPayable`) 的英文是 **Total due**（现在还欠多少），而币段下单时已冻结。
-    //    2026-09-02 stag 用英文 locale 实测（D-4，P0）：同屏「Total due Rp 305.000」
-    //    配按钮「Pay now Rp 304.001」，那 999 的差额页面上无处可解释，
-    //    且该页明细区连 PawCoin 那一行都没有。已支付态本就按现金段显示 ⇒ 同页两态口径打架。
-    testWidgets('🔴 D-4：待支付 → 金额行也给**现金段**，与支付按钮同数', (tester) async {
-      await tester.pumpWidget(host(order(
-        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
-      )));
-      await tester.pumpAndSettle();
-
-      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
-      expect(total.data, contains('154.000'));
-      expect(total.data, isNot(contains('204.000')),
-          reason: '204.000 含 50.000 币段；按钮写 154.000，合计写 204.000 就是同屏自相矛盾');
-
-      final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2')));
-      expect(btn.label, contains('154.000'), reason: '合计与按钮必须是同一个数');
-    });
-
-    testWidgets('🔴 D-4：待支付也必须列出 PawCoin 分段 —— 否则差额无从解释', (tester) async {
-      await tester.pumpWidget(host(order(
-        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
-      )));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsOneWidget,
-          reason: '合计从 204.000 变成 154.000，页面必须说清那 50.000 去哪了');
-    });
-
-    testWidgets('待支付 · 纯现金单 → 金额行仍是总额（无币段可拆）', (tester) async {
-      await tester.pumpWidget(host(order(
-        coinAmount: 0,
-        cashAmount: 204000,
-        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
-      )));
-      await tester.pumpAndSettle();
-
-      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
-      expect(total.data, contains('204.000'));
+      expect(total.data, 'Rp 204.000');
       expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsNothing);
     });
 
-    testWidgets('🔴 支付按钮上的金额是**现在真要付的现金**，不是订单总额', (tester) async {
+    testWidgets('待支付 → 合计行仍是应付总额；按钮是现金段，与 QRIS 行同数', (tester) async {
       await tester.pumpWidget(host(order(
         expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
       )));
       await tester.pumpAndSettle();
 
+      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
+      expect(total.data, 'Rp 204.000');
       final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2')));
       expect(btn.label, contains('154.000'),
-          reason: '币段下单时已冻结；按钮写总额会让用户以为币白冻了、还要再付一次全款');
+          reason: '币段下单时已冻结；按钮写总额会让用户以为还要再付一次全款');
       expect(btn.label, isNot(contains('204.000')));
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('shopOrderCashRow')), matching: find.text('Rp 154.000')),
+          findsOneWidget,
+          reason: '按钮金额必须能在支付方式卡里找到出处');
     });
 
-    /// 🔴 D-4 **最极端形态**（2026-09-02 复测，指定为回归验收用例）：
-    /// PawCoin 余额够覆盖全单 ⇒ 现金段为 0。实测同一屏：
-    /// 明细区「Total due Rp 70.000」，正下方按钮「**Pay now Rp 0**」——
-    /// 按钮自己写着付 0，上方却称应付 70.000。差的不再是 999 而是**全额**，
-    /// 用户会以为还要再付 70.000 而放弃下单。
-    testWidgets('🔴 D-4 极端形态：全额抵扣 → Total due 为 0，与 Pay now 同数',
-        (tester) async {
+    testWidgets('🔴 D-4 极端形态：全额抵扣 → 按钮 Rp 0，合计仍是应付，币段在支付方式卡', (tester) async {
       await tester.pumpWidget(host(order(
-        coinAmount: 204000, // 币段覆盖全单
+        coinAmount: 204000,
         cashAmount: 0,
         expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
       )));
       await tester.pumpAndSettle();
 
-      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
-      expect(total.data, contains('0'));
-      expect(total.data, isNot(contains('204.000')),
-          reason: '一分现金都不欠，却写着应付 204.000 —— 用户会以为还要再付一次全款');
-
       final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2')));
-      expect(btn.label, contains('Rp 0'), reason: '按钮与合计必须是同一个数');
-
-      // 那 204.000 去哪了必须有交代，否则合计从总额掉到 0 无从解释
-      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsOneWidget);
+      expect(btn.label, contains('Rp 0'));
+      expect(find.byKey(const ValueKey('shopOrderCoinRowV2')), findsOneWidget,
+          reason: '那 204.000 去哪了必须有交代 —— 支付方式卡的 PawCoin 行');
+      expect(find.byKey(const ValueKey('shopOrderCashRow')), findsNothing);
     });
 
-    testWidgets('🔴 已支付的纯币单仍显总额 —— 「Dibayar Rp 0」读起来像没付钱',
-        (tester) async {
-      // 两态判据不同是刻意的：待支付问「还欠多少」，已支付说「付了多少」。
-      await tester.pumpWidget(host(order(
-        status: ShopOrderStatus.shipped,
-        coinAmount: 204000,
-        cashAmount: 0,
-        packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
-      )));
-      await tester.pumpAndSettle();
-
-      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
-      expect(total.data, contains('204.000'));
-      expect(total.data, isNot(contains('Rp 0')));
-    });
-
-    testWidgets('纯币单（cashAmount 为 null）→ 不显示「Dibayar Rp 0」', (tester) async {
+    testWidgets('纯币单（cashAmount 为 null）→ 不显示「Rp 0」的 QRIS 行', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
         coinAmount: 204000,
@@ -335,6 +278,7 @@ void main() {
       )));
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const ValueKey('shopOrderCashRow')), findsNothing);
       final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
       expect(total.data, isNot(contains('Rp 0')));
     });
@@ -346,20 +290,21 @@ void main() {
   /// 顶部那行大字紫色标签仍写「On the way」，而同页下方 Delivery history 的当前态、
   /// 订单列表卡、后台订单状态**全是 Delivered**。
   /// 它是 shipped/delivered 订单的**第一个区块** —— 用户第一眼读到的就是错的那个。
-  group('🔴 D-6：履约区标题必须跟着订单状态走', () {
-    testWidgets('已发货 → On the way', (tester) async {
+  // v1.4.2 Story 9.1：标题由履约区移到状态头（F7「Sedang dikirim」/ F9「Paket sudah diterima」），
+  // D-6 的不变式（标题跟着订单状态走）保留。
+  group('🔴 D-6：状态头标题必须跟着订单状态走', () {
+    testWidgets('已发货 → Sedang dikirim', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
         packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
       )));
       await tester.pumpAndSettle();
 
-      final title =
-          tester.widget<Text>(find.byKey(const ValueKey('shopOrderFulfillmentTitleV2')));
+      final title = tester.widget<Text>(find.byKey(const ValueKey('shopOrderHeaderTitle')));
       expect(title.data, 'Sedang dikirim');
     });
 
-    testWidgets('已送达 → 改「Terkirim / Delivered」，与下方时间线同一个词', (tester) async {
+    testWidgets('已送达 → Paket sudah diterima', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.delivered,
         packages: [pkg(
@@ -369,10 +314,8 @@ void main() {
       )));
       await tester.pumpAndSettle();
 
-      final title =
-          tester.widget<Text>(find.byKey(const ValueKey('shopOrderFulfillmentTitleV2')));
-      expect(title.data, 'Terkirim',
-          reason: '后台已 DELIVERED、时间线当前态也是 Terkirim，顶部标签不能还停在运输中');
+      final title = tester.widget<Text>(find.byKey(const ValueKey('shopOrderHeaderTitle')));
+      expect(title.data, 'Paket sudah diterima');
       expect(title.data, isNot('Sedang dikirim'), reason: 'D-6 的原形');
     });
   });
@@ -431,25 +374,30 @@ void main() {
     });
   });
 
-  group('🔴 物流：非自动追踪的免责行不可省', () {
-    testWidgets('已发货且有时间线 → 免责行必须在', (tester) async {
+  // v1.4.2 Story 9.1 按设计改写：接入 Biteship 后不再人工更新 → 人工时间线与免责行删除（F7 说明）；
+  // BITESHIP 无异常画 5 段，MANUAL / 存量不画。
+  group('物流卡（9.1：人工时间线与免责行删除）', () {
+    testWidgets('存量单（只有 packages）→ 不画 5 段、不出现免责行，快递与运单号仍在', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
         packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
       )));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('shopOrderManualTrackingNoticeV2')), findsOneWidget,
-          reason: '不接承运商 API 却不明示，用户会按实时追踪的精度预期 —— 一滞后就是投诉');
+      expect(find.byKey(const ValueKey('shopOrderManualTrackingNoticeV2')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderLogisticsTimeline')), findsNothing);
+      expect(find.text('JP1234567890'), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderTrackSiteV2')), findsOneWidget);
     });
 
-    testWidgets('无任何物流时刻 → 整块不渲染（不画一条空时间线）', (tester) async {
+    testWidgets('运单无任何时刻也照样给出快递信息（不再整块隐藏）', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
         packages: [pkg()],
       )));
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const ValueKey('shopOrderLogisticsCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('shopOrderManualTrackingNoticeV2')), findsNothing);
     });
 
@@ -513,7 +461,8 @@ void main() {
       expect(find.byKey(const ValueKey('shopOrderPayV2')), findsOneWidget);
     });
 
-    testWidgets('已发货 → Lacak + Barang Diterima', (tester) async {
+    // v1.4.2 Story 9.1 按设计改写：底栏只剩「Konfirmasi terima」，「Lacak」在物流卡（F7 说明）。
+    testWidgets('已发货 → 底栏只有 Konfirmasi terima（Lacak 移到物流卡）', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
         packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
@@ -521,7 +470,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('shopOrderConfirmReceiptV2')), findsOneWidget);
-      expect(find.byKey(const ValueKey('shopOrderTrackV2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderTrackV2')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderTrackSiteV2')), findsOneWidget);
     });
 
     /// 🔴 V1.3.0 · SD-5：本条原先断言「已有进行中的退货申请 → 入口置灰而不是隐藏」。
@@ -615,7 +565,7 @@ void main() {
           locale: const Locale('id'),
           home: const MediaQuery(
             data: MediaQueryData(size: Size(411, 891)),
-            child: ShopOrderDetailPageV2(orderToken: 'ord1'),
+            child: ShopOrderDetailPageV3(orderToken: 'ord1'),
           ),
         ),
       );
@@ -821,7 +771,7 @@ void main() {
             locale: const Locale('id'),
             home: MediaQuery(
               data: const MediaQueryData(size: Size(411, 891)),
-              child: ShopOrderDetailPageV2(orderToken: 'ord1', autoPay: autoPay),
+              child: ShopOrderDetailPageV3(orderToken: 'ord1', autoPay: autoPay),
             ),
           ),
         );
@@ -876,7 +826,7 @@ void main() {
               path: '/shop/orders/:token',
               builder: (c, s) => MediaQuery(
                     data: const MediaQueryData(size: Size(411, 891)),
-                    child: ShopOrderDetailPageV2(orderToken: s.pathParameters['token']!),
+                    child: ShopOrderDetailPageV3(orderToken: s.pathParameters['token']!),
                   )),
           GoRoute(
               path: '/shop/orders/:token/paid',
@@ -1028,7 +978,7 @@ void main() {
           locale: const Locale('id'),
           home: const MediaQuery(
             data: MediaQueryData(size: Size(411, 891)),
-            child: ShopOrderDetailPageV2(orderToken: 'ord1'),
+            child: ShopOrderDetailPageV3(orderToken: 'ord1'),
           ),
         ),
       ));
@@ -1071,6 +1021,469 @@ void main() {
       expect(PaymentCheckResult.fromJson({'paid': true, 'status': 'PENDING_SHIPMENT'}).paid, isTrue);
       expect(PaymentCheckResult.fromJson({'status': 'PENDING_PAYMENT'}).paid, isFalse);
       expect(PaymentCheckResult.fromJson({'paid': 'true'}).paid, isFalse);
+    });
+  });
+
+  // ================================================================
+  // v1.4.2 shop Story 9.1：状态头 / 金额明细 / 支付方式 / 物流 / 部分取消 / 重新下单
+  // ================================================================
+  group('v1.4.2 Story 9.1 · 详情 v3', () {
+    late List<(String, Map<String, Object>?)> events;
+    setUp(() {
+      events = [];
+      Analytics.debugCaptureSink = (e, props) => events.add((e, props));
+    });
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    String? headerTitle(WidgetTester t) =>
+        t.widget<Text>(find.byKey(const ValueKey('shopOrderHeaderTitle'))).data;
+    String? headerHint(WidgetTester t) {
+      final w = t.widget(find.byKey(const ValueKey('shopOrderHeaderHint')));
+      return w is Text ? (w.data ?? w.textSpan?.toPlainText()) : null;
+    }
+
+    /// UI 稿示例数：349.000 / −20.000 / 10.000 / −10.000 / 329.000；币 12.000 / QRIS 317.000。
+    Map<String, dynamic> v3({
+      String status = 'SHIPPED',
+      String? displayStatus,
+      Map<String, dynamic>? logistics,
+      Map<String, dynamic>? paymentMethods,
+      Map<String, Object?> extra = const {},
+    }) =>
+        {
+          ..._json(),
+          'status': status,
+          'displayStatus': displayStatus ?? status,
+          'canPay': status == 'PENDING_PAYMENT' && (displayStatus ?? status) == 'PENDING_PAYMENT',
+          'lines': const [
+            {'productName': 'Royal Canin', 'specName': '3 kg', 'unitPrice': 289000, 'qty': 1, 'lineTotal': 289000},
+            {'productName': 'Snack', 'specName': '100 g', 'unitPrice': 60000, 'qty': 1, 'lineTotal': 60000},
+          ],
+          'amounts': const {
+            'goodsAmount': 349000,
+            'discountCouponAmount': 20000,
+            'shippingFee': 10000,
+            'shippingDiscount': 10000,
+            'shippingDiscountSource': 'COUPON',
+            'insuranceFee': 0,
+            'payable': 329000,
+            'courierName': 'JNE',
+            'courierServiceName': 'REG',
+          },
+          'paymentMethods': paymentMethods ??
+              const {'coinAmount': 12000, 'coinStatus': 'PAID', 'cashAmount': 317000, 'cashStatus': 'PAID'},
+          'logistics': ?logistics,
+          ...extra,
+        };
+
+    const biteship = {
+      'provider': 'BITESHIP',
+      'courierName': 'JNE',
+      'courierServiceName': 'REG',
+      'waybillId': 'WB123',
+      'trackingUrl': 'https://track.test/WB123',
+      'statusKey': 'in_transit',
+    };
+
+    Widget routed(ShopOrderDetail o, {_FakeShopOrderRepo? repo}) {
+      final router = GoRouter(
+        initialLocation: '/shop/orders/ord1',
+        routes: [
+          GoRoute(
+            path: '/shop/orders/:token',
+            builder: (c, s) => s.pathParameters['token'] == 'ord1'
+                ? const MediaQuery(
+                    data: MediaQueryData(size: Size(411, 891)),
+                    child: ShopOrderDetailPageV3(orderToken: 'ord1'))
+                : Scaffold(body: Text('ORDER ${s.pathParameters['token']}')),
+          ),
+        ],
+      );
+      return ProviderScope(
+        overrides: [
+          shopOrderRepositoryProvider.overrideWithValue(repo ?? _FakeShopOrderRepo()),
+          shopOrderDetailProvider.overrideWith((ref, token) async => o),
+        ],
+        child: MaterialApp.router(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          routerConfig: router,
+        ),
+      );
+    }
+
+    Finder inItems(String text) =>
+        find.descendant(of: find.byKey(const ValueKey('shopOrderItemsCard')), matching: find.text(text));
+
+    testWidgets('F4 金额明细逐行（服务端值）且不出现 PawCoin；合计 = 应付；按钮 = QRIS 段', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        status: 'PENDING_PAYMENT',
+        paymentMethods: const {
+          'coinAmount': 12000, 'coinStatus': 'HELD', 'cashAmount': 317000, 'cashStatus': 'AWAITING'
+        },
+      ))));
+      await tester.pumpAndSettle();
+
+      expect(inItems('Rp 349.000'), findsOneWidget);
+      expect(inItems('Diskon belanja'), findsOneWidget);
+      expect(inItems('−Rp 20.000'), findsOneWidget);
+      expect(inItems('Ongkos kirim (JNE)'), findsOneWidget);
+      expect(inItems('Rp 10.000'), findsOneWidget);
+      expect(inItems('Kupon gratis ongkir'), findsOneWidget);
+      expect(inItems('−Rp 10.000'), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderAmountInsurance')), findsNothing, reason: '保价 0 不显示');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2'))).data, 'Rp 329.000');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalLabelV2'))).data, 'Total bayar');
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('shopOrderItemsCard')), matching: find.textContaining('PawCoin')),
+          findsNothing,
+          reason: 'FR-131.3：金额明细不出现 PawCoin');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderCoinStatusV2'))).data,
+          'Sudah ditahan · dikembalikan jika batal');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderCashStatus'))).data, 'Menunggu');
+      expect(tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2'))).label,
+          'Bayar Sekarang Rp 317.000');
+      expect(find.byKey(const ValueKey('shopOrderLogisticsCard')), findsNothing, reason: '待付款不显示物流卡');
+    });
+
+    testWidgets('F6 待发货：状态头 + 副句；无物流卡、无底栏', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(status: 'PENDING_SHIPMENT'))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Menunggu dikirim');
+      expect(headerHint(tester), 'Pesanan sedang disiapkan. Kami kabari saat sudah dikirim.');
+      expect(find.byKey(const ValueKey('shopOrderLogisticsCard')), findsNothing);
+      expect(find.byType(ShopBottomBarActions), findsNothing);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalLabelV2'))).data, 'Total dibayar');
+    });
+
+    testWidgets('F7 BITESHIP：5 段时间轴，in_transit = 第 3 段亮', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(logistics: biteship))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Sedang dikirim');
+      expect(find.byKey(const ValueKey('shopOrderLogisticsTimeline')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderLogisticsStep_0_done')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderLogisticsStep_2_on')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderLogisticsStep_4_todo')), findsOneWidget);
+      expect(find.text('JNE · REG'), findsOneWidget);
+      expect(find.text('WB123'), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderManualTrackingNoticeV2')), findsNothing);
+    });
+
+    testWidgets('MANUAL 运单 / 未知 statusKey → 不画 5 段，快递与运单号仍在', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(logistics: const {
+        'provider': 'MANUAL', 'courierName': 'SiCepat', 'waybillId': 'SC1', 'trackingUrl': 'https://x'
+      }))));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderLogisticsTimeline')), findsNothing);
+      expect(find.text('SC1'), findsOneWidget);
+
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(
+          v3(logistics: {...biteship, 'statusKey': 'weird_new_key'}))));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderLogisticsTimeline')), findsNothing);
+    });
+
+    testWidgets('F9 已送达：状态头；5 段全亮', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(
+          v3(status: 'DELIVERED', logistics: {...biteship, 'statusKey': 'delivered'}))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Paket sudah diterima');
+      expect(headerHint(tester),
+          'Konfirmasi terima kalau semua barang sudah sesuai. Otomatis selesai dalam 7 hari.');
+      expect(find.byKey(const ValueKey('shopOrderLogisticsStep_4_on')), findsOneWidget);
+    });
+
+    testWidgets('F10 配送异常：状态头 + Hubungi CS；不画 5 段；埋点 _shown 只报一次；确认收货降为次按钮',
+        (tester) async {
+      final o = ShopOrderDetail.fromJson(v3(
+          logistics: {...biteship, 'exception': 'DELIVERY_ISSUE', 'exceptionType': 'LOST'}));
+      await tester.pumpWidget(host(o));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Pengiriman bermasalah');
+      expect(find.byKey(const ValueKey('shopOrderHeaderContactCs')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderLogisticsTimeline')), findsNothing);
+      expect(find.text('WB123'), findsOneWidget);
+      final confirm = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderConfirmReceiptV2')));
+      expect(confirm.variant, ShopButtonVariant.outlineMuted);
+
+      // 刷新（同一页面实例重建）不重复报
+      final c = ProviderScope.containerOf(tester.element(find.byType(ShopOrderDetailPageV3)));
+      c.invalidate(shopOrderDetailProvider('ord1'));
+      await tester.pumpAndSettle();
+      final shown = events.where((e) => e.$1 == 'toko_delivery_exception_shown').toList();
+      expect(shown, hasLength(1));
+      expect(shown.single.$2, {'exception_type': 'lost'});
+
+      await tester.tap(find.byKey(const ValueKey('shopOrderHeaderContactCs')));
+      await tester.pump();
+      final cs = events.where((e) => e.$1 == 'toko_delivery_exception_cs_tapped').toList();
+      expect(cs.single.$2, {'exception_type': 'lost'});
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('F11 已完成：状态头感谢语；物流卡仍显示（改线上）', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(
+          v3(status: 'COMPLETED', logistics: {...biteship, 'statusKey': 'delivered'}))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Selesai');
+      expect(headerHint(tester), 'Terima kasih sudah belanja di TailTopia.');
+      expect(find.byKey(const ValueKey('shopOrderLogisticsCard')), findsOneWidget);
+    });
+
+    testWidgets('F12 超时取消：超时副句 + 券与币退回说明条；合计标签 Total pesanan', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        status: 'CANCELLED',
+        paymentMethods: const {
+          'coinAmount': 12000, 'coinStatus': 'RETURNED', 'cashAmount': 317000, 'cashStatus': 'UNPAID'
+        },
+        extra: const {'cancelReason': 'PAYMENT_TIMEOUT', 'couponReturn': 'RETURNED'},
+      ))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Dibatalkan');
+      expect(headerHint(tester), 'Waktu pembayaran habis, pesanan dibatalkan otomatis.');
+      expect(find.text('PawCoin Rp 12.000 dan kupon sudah dikembalikan ke akunmu.'), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderCashStatus'))).data, 'Tidak dibayar');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalLabelV2'))).data, 'Total pesanan');
+      expect(find.byType(ShopBottomBarActions), findsNothing);
+    });
+
+    testWidgets('F12 券已过期 / 其余原因：无说明条、只给标题', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        status: 'CANCELLED',
+        paymentMethods: const {'coinAmount': 12000, 'coinStatus': 'RETURNED'},
+        extra: const {'cancelReason': 'USER_UNPAID_CANCEL', 'couponReturn': 'EXPIRED'},
+      ))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Dibatalkan');
+      expect(find.byKey(const ValueKey('shopOrderHeaderHint')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderCoinCouponReturned')), findsNothing);
+    });
+
+    testWidgets('S-7 宽限期：原始待支付 · 展示已取消 → 已取消 + 超时副句，无倒计时、无底栏', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        status: 'PENDING_PAYMENT',
+        displayStatus: 'CANCELLED',
+        paymentMethods: const {'coinAmount': 12000, 'coinStatus': 'HELD', 'cashAmount': 317000, 'cashStatus': 'UNPAID'},
+      ))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Dibatalkan');
+      expect(headerHint(tester), 'Waktu pembayaran habis, pesanan dibatalkan otomatis.');
+      expect(find.byType(ShopCountdown), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsNothing);
+      expect(find.byType(ShopBottomBarActions), findsNothing);
+    });
+
+    testWidgets('F17 部分取消：行标 + 降权；合计下两行取服务端值（60.333 = 2.200 + 58.133）', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        status: 'PENDING_SHIPMENT',
+        extra: const {
+          'cancelledLines': [
+            {'lineIndex': 1, 'productName': 'Snack', 'specName': '100 g', 'cancelledQty': 1, 'refundAmount': 60333}
+          ],
+          'refunds': [
+            {'refundToken': 'r1', 'scope': 'LINE', 'reason': 'OUT_OF_STOCK', 'totalRefund': 60333,
+              'coinRefund': 2200, 'cashRefund': 58133}
+          ],
+        },
+      ))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Menunggu dikirim', reason: '原状态标题不变');
+      expect(headerHint(tester), '1 produk dibatalkan karena stok habis. Produk lain tetap dikirim.');
+      expect(find.byKey(const ValueKey('shopOrderLineCancelledTag_1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderLineCancelledTag_0')), findsNothing);
+      expect(find.text('Dibatalkan · stok habis'), findsOneWidget);
+      expect(
+          find.ancestor(
+              of: find.byKey(const ValueKey('shopOrderLine_1')), matching: find.byType(Opacity)),
+          findsOneWidget);
+      expect(find.text('Dikembalikan (1 produk dibatalkan)'), findsOneWidget);
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('shopOrderPartialRefundTotal')), matching: find.text('Rp 60.333')),
+          findsOneWidget);
+      expect(find.text('PawCoin Rp 2.200 + QRIS Rp 58.133'), findsOneWidget);
+    });
+
+    testWidgets('复审：整单取消已付单（cancelledLines 含全部行 + WHOLE 退款）→ 不画 F17 两行、不画行标 / 降权',
+        (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        status: 'CANCELLED',
+        paymentMethods: const {'coinAmount': 12000, 'coinStatus': 'PAID', 'cashAmount': 317000, 'cashStatus': 'PAID'},
+        extra: const {
+          'cancelReason': 'OUT_OF_STOCK',
+          'cancelledLines': [
+            {'lineIndex': 0, 'cancelledQty': 1, 'refundAmount': 0},
+            {'lineIndex': 1, 'cancelledQty': 1, 'refundAmount': 0},
+          ],
+          'refunds': [
+            {'refundToken': 'w1', 'scope': 'WHOLE', 'reason': 'OUT_OF_STOCK', 'totalRefund': 329000,
+              'coinRefund': 12000, 'cashRefund': 317000}
+          ],
+        },
+      ))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Dibatalkan · stok habis');
+      expect(find.byKey(const ValueKey('shopOrderPartialRefundTotal')), findsNothing,
+          reason: '否则会画出「Dikembalikan (2 produk dibatalkan) Rp 0」');
+      expect(find.byKey(const ValueKey('shopOrderPartialRefundSplit')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderLineCancelledTag_0')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderLineCancelledTag_1')), findsNothing);
+      expect(
+          find.ancestor(of: find.byKey(const ValueKey('shopOrderLine_0')), matching: find.byType(Opacity)),
+          findsNothing);
+    });
+
+    testWidgets('复审：有 logistics 时 Lacak 不回落 packages（logistics 无 trackingUrl → 不出 Lacak）', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        logistics: const {'provider': 'BITESHIP', 'courierName': 'JNE', 'waybillId': 'WB9', 'statusKey': 'picked'},
+        extra: const {
+          'packages': [
+            {'carrier': 'JNE', 'trackingNo': 'OLD1', 'trackingUrl': 'https://old.test', 'superseded': true}
+          ],
+        },
+      ))));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderTrackSiteV2')), findsNothing);
+      expect(find.text('WB9'), findsOneWidget);
+      expect(find.text('OLD1'), findsNothing);
+    });
+
+    testWidgets('复审：存量单回落 packages → 取未被取代的最后一条', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson({
+        ..._json(),
+        'status': 'SHIPPED',
+        'packages': const [
+          {'carrier': 'JNE', 'carrierName': 'JNE', 'trackingNo': 'OLD1', 'trackingUrl': 'https://old', 'superseded': true},
+          {'carrier': 'SICEPAT', 'carrierName': 'SiCepat', 'trackingNo': 'NEW2', 'trackingUrl': 'https://new', 'superseded': false},
+          {'carrier': 'JNE', 'carrierName': 'JNE', 'trackingNo': 'OLD3', 'trackingUrl': 'https://old3', 'superseded': true},
+        ],
+      })));
+      await tester.pumpAndSettle();
+      expect(find.text('NEW2'), findsOneWidget);
+      expect(find.text('SiCepat'), findsOneWidget);
+      expect(find.text('OLD1'), findsNothing);
+      expect(find.text('OLD3'), findsNothing);
+    });
+
+    testWidgets('F20 原单已重下：标题 + 副句 +「Lihat pesanan baru」跳新单；不出 F12 说明条', (tester) async {
+      await tester.pumpWidget(routed(ShopOrderDetail.fromJson(v3(
+        status: 'CANCELLED',
+        paymentMethods: const {'coinAmount': 12000, 'coinStatus': 'RETURNED'},
+        extra: const {
+          'cancelReason': 'LATE_PAYMENT', 'couponReturn': 'RETURNED', 'reorderedToOrderToken': 'newOrd'
+        },
+      ))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Dibatalkan · sudah dipesan ulang');
+      expect(headerHint(tester),
+          'Pembayaranmu masuk setelah waktu habis. Kami sudah membuat pesanan baru untukmu.');
+      expect(find.byKey(const ValueKey('shopOrderCoinCouponReturned')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('shopOrderViewNewOrder')));
+      await tester.pumpAndSettle();
+      expect(find.text('ORDER newOrd'), findsOneWidget);
+    });
+
+    testWidgets('F21 新订单：副句带原单号，点单号回原单（C-9）', (tester) async {
+      await tester.pumpWidget(routed(ShopOrderDetail.fromJson(v3(
+        status: 'PENDING_SHIPMENT',
+        extra: const {'reorderedFromOrderNo': 'TOKO-20261105-OLD111', 'reorderedFromOrderToken': 'oldOrd'},
+      ))));
+      await tester.pumpAndSettle();
+      expect(headerTitle(tester), 'Menunggu dikirim');
+      expect(headerHint(tester), 'Pesanan ini dibuat ulang dari pesanan TOKO-20261105-OLD111.');
+      await tester.tap(find.byKey(const ValueKey('shopOrderReorderedFromLink')));
+      await tester.pumpAndSettle();
+      expect(find.text('ORDER oldOrd'), findsOneWidget);
+    });
+
+    testWidgets('F21 无原单 token → 单号只展示不可点', (tester) async {
+      await tester.pumpWidget(host(ShopOrderDetail.fromJson(v3(
+        status: 'PENDING_SHIPMENT',
+        extra: const {'reorderedFromOrderNo': 'TOKO-1'},
+      ))));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderReorderedFromLink')), findsNothing);
+      expect(headerHint(tester), contains('TOKO-1'));
+    });
+
+    testWidgets('确认收货：点即调接口、**无二次确认弹窗**；toast + 埋点', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(routed(ShopOrderDetail.fromJson(v3(logistics: biteship)), repo: repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('shopOrderConfirmReceiptV2')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('shopOrderConfirmReceiptDialogV2')), findsNothing);
+      await tester.pumpAndSettle();
+      expect(repo.confirmCalls, 1);
+      expect(find.text('Terima kasih, pesanan selesai'), findsOneWidget);
+      expect(events.map((e) => e.$1),
+          containsAllInOrder(['toko_order_receipt_confirm_tapped', 'toko_order_receipt_confirm_succeeded']));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('F5 取消确认：有币段 → 正文追加「PawCoin dan kupon akan dikembalikan.」', (tester) async {
+      await tester.pumpWidget(host(order(
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('shopOrderCancelV2')));
+      await tester.pumpAndSettle();
+      expect(
+          find.text('Stok akan dilepas dan pesanan tidak bisa dilanjutkan. '
+              'PawCoin dan kupon akan dikembalikan.'),
+          findsOneWidget);
+      await tester.tap(find.text('Kembali'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('F5 无币段、未用券 → 只用原正文', (tester) async {
+      await tester.pumpWidget(host(order(
+        coinAmount: 0,
+        cashAmount: 204000,
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('shopOrderCancelV2')));
+      await tester.pumpAndSettle();
+      expect(find.text('Stok akan dilepas dan pesanan tidak bisa dilanjutkan.'), findsOneWidget);
+      await tester.tap(find.text('Kembali'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('订单号可复制：写入 displayNo，toast「Tersalin」', (tester) async {
+      String? copied;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String?;
+        return null;
+      });
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+      await tester.pumpWidget(host(order(status: ShopOrderStatus.completed)));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('shopOrderCopyOrderNo')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('shopOrderCopyOrderNo')));
+      await tester.pumpAndSettle();
+      expect(copied, 'TOKO-20260916-7M4KQ2');
+      expect(find.text('Tersalin'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 2700));
+    });
+
+    testWidgets('存量单（新字段全 null）降级：只显示 subtotal / 运费 / 合计', (tester) async {
+      await tester.pumpWidget(host(order(status: ShopOrderStatus.completed)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderAmountSubtotal')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderAmountShipping')), findsOneWidget);
+      expect(find.byKey(const ValueKey('shopOrderAmountCoupon')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderAmountShipDiscount')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderAmountInsurance')), findsNothing);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2'))).data, 'Rp 204.000');
+      expect(tester.takeException(), isNull);
     });
   });
 }
@@ -1132,6 +1545,14 @@ class _FakeShopOrderRepo extends ShopOrderRepository {
   Future<ShopOrderDetail> cancel(String orderToken) async {
     cancelCalls++;
     throw UnimplementedError('本组用例不该调到取消接口');
+  }
+
+  int confirmCalls = 0;
+
+  @override
+  Future<ShopOrderDetail> confirmReceipt(String orderToken) async {
+    confirmCalls++;
+    return ShopOrderDetail.fromJson({..._json(), 'status': 'COMPLETED'});
   }
 }
 

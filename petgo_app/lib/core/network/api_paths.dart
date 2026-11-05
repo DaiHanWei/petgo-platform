@@ -499,6 +499,9 @@ class ApiPaths {
 
   /// 🔒 领券 `{couponToken, source: HOME|BANNER|DETAIL}` → CouponView；409 already-claimed / sold-out / not-in-period。
   static const String meCouponsClaim = '$base/me/coupons/claim';
+
+  /// 🔒 我的券入口计数 `{availableCount}`（v1.4.2 shop Story 2.2 AC8.4，App 9.1 订单页「Kupon Saya · n」）。
+  static const String meCouponsSummary = '$base/me/coupons/summary';
   /// 行政区划三级树（Story 2.4，游客可读）。
   static const String shopRegions = '$base/shop/regions';
   /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。
@@ -537,6 +540,10 @@ class ApiPaths {
   /// 服务端 10 秒节流，App 不再做客户端节流。
   static String meShopOrderPaymentCheck(String orderToken) =>
       '$meShopOrders/$orderToken/payment-check';
+
+  /// v1.4.2 shop Story 6.2 / App 9.1：电商订单角标计数 `{pendingPayment, toReceive}`（D-18）。
+  /// 列表本身是 [meShopOrders] 的 GET（`?group=&cursor=`）。字面路径，后端优先于 `/{token}`。
+  static const String meShopOrderCounts = '$meShopOrders/counts';
 
   /// 退货申请页数据（Story 5.7）。🔴 不可退的行照样下发（带置灰原因），不由前端过滤。
   static String meReturnEligibility(String orderToken) =>

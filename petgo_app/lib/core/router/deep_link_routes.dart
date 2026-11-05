@@ -192,12 +192,22 @@ class DeepLinkRoutes {
       case 'PET_DIARY_POSTED':
         final id = int.tryParse(targetRef);
         return id == null ? notificationsCenter : '/content/$id';
+      // v1.4.2 shop Story 9.1 · AC6.4（F22）：迟到款已重新下单 → 新订单详情（targetRef = 新单 token，4.2）。
+      // token 非数字不做 int.tryParse；🛡 白名单 `^[A-Za-z0-9_-]+$`（订单 token 字符集），不符落通知中心，
+      // 绝不拼出非法路由。
+      case 'SHOP_ORDER_REORDERED':
+        return _orderTokenPattern.hasMatch(targetRef)
+            ? '/shop/orders/$targetRef'
+            : notificationsCenter;
       default:
         // CONTENT_REVIEW_REJECTED / CONTENT_REVIEW_TIMED_OUT / REPORT_REVIEWED：
         // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。
         return notificationsCenter;
     }
   }
+  /// 订单 token 白名单（v1.4.2 shop Story 9.1 复审）。
+  static final RegExp _orderTokenPattern = RegExp(r'^[A-Za-z0-9_-]+$');
+
   /// 从 `POST:{postId}` / `COMMENT:{postId}` 里取出 postId；认不出来返回 null。
   ///
   /// ⚠️ 刻意不接受裸数字：那说明后端换了 targetRef 口径而客户端没跟上，

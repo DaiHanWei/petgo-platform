@@ -1,6 +1,6 @@
 # Story 9.1: 电商订单列表与订单详情（App，F1–F12、F17、F18、F20–F22）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`（从 `dev_1.4.2` 切出，全线 25 story 同一分支、串行）
 > 口径优先级：`决策日志-shop.md`（S-0 ~ S-9 + 评审更正）> PRD `电商/1-4-2电商prd.md`（§3.0「订单状态在用户侧的显示」、FR-133 订单、FR-134 ②③、FR-172 物流异常、§4、§6 F 组）> `architecture-v1.4.2-shop-delta.md`（D-11 宽限期、D-13、D-18、D-19、D-21、P-1、P-4、P-9、P-10、P-12）> UI 稿 `电商/ui-1-4-2-shop-integrated-v1.html` F 组每屏下方说明（数值照说明与全局规范取，**不从截图量像素**）。跨 story 契约以 `_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md` 为准。云端执行须知 `cloud-rules-shop.md` 优先于本文件的通用步骤。
@@ -26,7 +26,7 @@ so that 不用问客服也知道订单情况。
 - `GET /api/v1/me/shop-orders?group=all|pending_payment|pending_shipment|to_receive|completed|cancelled&cursor=` → `{items[], nextCursor, hasMore}`；分组按 `displayStatus`（宽限期待支付归 `cancelled`，S-7）。每项（6.2 story AC1.4 `ShopOrderListItem`）：`orderToken`、`displayNo`、`status`（原始）、`displayStatus`、`totalAmount`（列表金额统一为订单总额，UI F1 说明）、`createdAt`、`thumbnailUrl`、`itemTitle`、`itemCount`、`paymentDeadline`（仅 `displayStatus=PENDING_PAYMENT` 时下发）、`canPay`、`logisticsStatusKey`（`awaiting_pickup | picked | in_transit | out_for_delivery | delivered`，手工运单 / 无运单为 null）、`deliveryIssue`（bool）、`refundActionRequired`（bool，本 story 不用，9.2 可用于列表提示）；null 字段按全局 NON_NULL 不下发。
 - `GET /api/v1/me/shop-orders/counts` → `{pendingPayment, toReceive}`（D-18）。
 - `GET /api/v1/me/coupons/summary` → `{availableCount}`（2.2 story AC8.4 补的接口，专供「我的券」入口计数）。
-- `GET /api/v1/me/shop-orders/{token}`（D-19，6.2 story AC3.2 表；原 22 个字段保留，新字段在末尾，存量订单为 null）：`displayStatus`、`paymentDeadline`、`canPay`、`paidAt`、`cancelledAt`、`cancelReason`（4.1 `CancelReason` 名）、`amounts {goodsAmount, discountCouponAmount, shippingFee, shippingDiscount, shippingDiscountSource (NONE|FREE_SHIPPING_RULE|COUPON), insuranceFee, payable, courierName, courierServiceName}`、`paymentMethods {coinAmount, coinStatus (HELD|PAID|RETURNED), cashAmount, cashStatus (AWAITING|PAID|UNPAID)}`（金额 0 的一项为 null）、`logistics {provider (MANUAL|BITESHIP), courierName, waybillId, statusKey, trackingUrl, exception, exceptionType}`（5.1 / 5.2：已确认的退回 / 丢件破损 → `exception = DELIVERY_ISSUE`、`exceptionType ∈ RETURNED | LOST_DAMAGED`，其余两者 null）、`refunds[] {refundToken, scope, reason, status, totalRefund, coinRefund, cashRefund, compensationAmount, cashDestination, payoutChannel, canChooseDestination, payoutFailed}`（本 story 只读 `scope=LINE` 的金额做 F17 合计；其余归 9.2）、`cancelledLines[] {lineIndex, productName, specName, cancelledQty, refundAmount}`、`couponReturn`（`RETURNED | EXPIRED | NOT_RETURNED`，未取消或未用券为 null）、`reorderedToOrderToken`、`reorderedFromOrderNo`（无原单 token，见「待确认」3）、`lateCashPaid`；旧字段 `goodsSubtotal / shippingFee / shippingDiscount / totalAmount / coinAmount / cashAmount / packages[]` 仍在，作存量 / 旧后端降级。
+- `GET /api/v1/me/shop-orders/{token}`（D-19，6.2 story AC3.2 表；原 22 个字段保留，新字段在末尾，存量订单为 null）：`displayStatus`、`paymentDeadline`、`canPay`、`paidAt`、`cancelledAt`、`cancelReason`（4.1 `CancelReason` 名）、`amounts {goodsAmount, discountCouponAmount, shippingFee, shippingDiscount, shippingDiscountSource (NONE|FREE_SHIPPING_RULE|COUPON), insuranceFee, payable, courierName, courierServiceName}`、`paymentMethods {coinAmount, coinStatus (HELD|PAID|RETURNED), cashAmount, cashStatus (AWAITING|PAID|UNPAID)}`（金额 0 的一项为 null）、`logistics {provider (MANUAL|BITESHIP), courierName, waybillId, statusKey, trackingUrl, exception, exceptionType}`（5.1 / 5.2：已确认的退回 / 丢件 / 破损 → `exception = DELIVERY_ISSUE`、`exceptionType ∈ RETURNED | LOST | DAMAGED`（C-6，已按 5.2 实际代码对齐），其余两者 null）、`refunds[] {refundToken, scope, reason, status, totalRefund, coinRefund, cashRefund, compensationAmount, cashDestination, payoutChannel, canChooseDestination, payoutFailed}`（本 story 只读 `scope=LINE` 的金额做 F17 合计；其余归 9.2）、`cancelledLines[] {lineIndex, productName, specName, cancelledQty, refundAmount}`、`couponReturn`（`RETURNED | EXPIRED | NOT_RETURNED`，未取消或未用券为 null）、`reorderedToOrderToken`、`reorderedFromOrderNo`、`reorderedFromOrderToken`（C-9，4.2 已下发）、`latePayment {amount, paidAt, resolution}`（实际字段名；原文 `lateCashPaid` 不存在，本 story 未使用）、`paymentDeadline`；`refunds[]` 实际还有 `payoutAccountLast4 / compensate / compensationIfPawcoin / payoutFee / paidOutAt / createdAt / destinationChosenAt`（9.2 用）；旧字段 `goodsSubtotal / shippingFee / shippingDiscount / totalAmount / coinAmount / cashAmount / packages[]` 仍在，作存量 / 旧后端降级。
 - `POST /api/v1/me/shop-orders/{token}/confirm-receipt`、`/cancel`、`/pay`、`/payment-check`（7.2）不变。
 
 ## Acceptance Criteria
@@ -158,15 +158,15 @@ EN / ID 两份 arb 同时加；新 key 前缀 `shopOrder*`。下表「复用」�
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：分支 `feat/1.4.2-shop` 与 origin 同步；对照 6.2 / 5.1 / 5.2 / 4.1 / 4.2 / 2.3 / 7.1 / 7.2 **已提交代码**核对「接口契约」字段名、7.1 新建的金额明细 key 名（`Diskon belanja` / `Kupon gratis ongkir` / `Potongan otomatis` / `Asuransi pengiriman` / `Metode pembayaran`）、7.2 的「去支付」入口函数名、`/me/coupons` 路由是否已注册；有出入先改本文件（Completion Notes 记），不改前面 story 的对外契约
-- [ ] **T1 数据层**（AC2、AC3）：`api_paths.dart` 加 `meShopOrderCounts`（`$meShopOrders/counts`）；`ShopOrderRepository` 加 `list({group, cursor})`、`counts()`；新 domain `ShopOrderSummary`（列表项）、`ShopOrderGroup` 枚举（6 值 ↔ API 小写串）、`ShopOrderCounts`；`ShopOrderDetail` 加 AC 契约字段（全部可空、缺键容错）+ `ShopLogistics`、`ShopCancelledLine`、`ShopOrderRefundSummary`（9.2 再扩）、`CancelReason` 枚举（未知值 → `unknown`）
-- [ ] **T2 列表页**（AC2）：`OrderListController` 增 `shopGroup` 状态（只在 `filter == ecommerce` 时生效，切一级标签时重置为 `all`）与 shop 分支取数；新 `shopOrderCountsProvider`（autoDispose；**登记 `app.dart` `resetUserScopedCaches`**）；`_ShopGroupTabs`、`_CouponEntryBar`、`ShopOrderCard`；F3 / F18 / 加载更多失败
-- [ ] **T3 详情页 v3**（AC3、AC4、AC5）：新建 `shop_order_detail_page_v3.dart`（状态头 / 物流卡 / 商品与金额明细 / 支付方式 / 地址 / 单号 / 客服 / 底栏）；从 v2 搬入 7.2 支付逻辑、取消、复制、打开承运商站点；删 v2 文件；路由改指 v3
-- [ ] **T4 部分取消与重下单**（AC6）：F17 行标与合计、F20 / F21；深链 `SHOP_ORDER_REORDERED`；通知中心标题 / 正文 / 图标 / 埋点映射
-- [ ] **T5 文案**（AC7）：两份 arb、`flutter gen-l10n`
-- [ ] **T6 埋点**（AC4.4）：`toko_delivery_exception_shown` / `_cs_tapped` 字面量；`v112_events_test.dart` 不需扩后缀（`_shown` / `_tapped` 已在白名单）
-- [ ] **T7 测试**（AC8，见 Dev Notes「测试」）；迁移 v2 详情测试
-- [ ] **T8** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：分支 `feat/1.4.2-shop` 与 origin 同步；对照 6.2 / 5.1 / 5.2 / 4.1 / 4.2 / 2.3 / 7.1 / 7.2 **已提交代码**核对「接口契约」字段名、7.1 新建的金额明细 key 名（`Diskon belanja` / `Kupon gratis ongkir` / `Potongan otomatis` / `Asuransi pengiriman` / `Metode pembayaran`）、7.2 的「去支付」入口函数名、`/me/coupons` 路由是否已注册；有出入先改本文件（Completion Notes 记），不改前面 story 的对外契约
+- [x] **T1 数据层**（AC2、AC3）：`api_paths.dart` 加 `meShopOrderCounts`（`$meShopOrders/counts`）；`ShopOrderRepository` 加 `list({group, cursor})`、`counts()`；新 domain `ShopOrderSummary`（列表项）、`ShopOrderGroup` 枚举（6 值 ↔ API 小写串）、`ShopOrderCounts`；`ShopOrderDetail` 加 AC 契约字段（全部可空、缺键容错）+ `ShopLogistics`、`ShopCancelledLine`、`ShopOrderRefundSummary`（9.2 再扩）、`CancelReason` 枚举（未知值 → `unknown`）
+- [x] **T2 列表页**（AC2）：`OrderListController` 增 `shopGroup` 状态（只在 `filter == ecommerce` 时生效，切一级标签时重置为 `all`）与 shop 分支取数；新 `shopOrderCountsProvider`（autoDispose；**登记 `app.dart` `resetUserScopedCaches`**）；`_ShopGroupTabs`、`_CouponEntryBar`、`ShopOrderCard`；F3 / F18 / 加载更多失败
+- [x] **T3 详情页 v3**（AC3、AC4、AC5）：新建 `shop_order_detail_page_v3.dart`（状态头 / 物流卡 / 商品与金额明细 / 支付方式 / 地址 / 单号 / 客服 / 底栏）；从 v2 搬入 7.2 支付逻辑、取消、复制、打开承运商站点；删 v2 文件；路由改指 v3
+- [x] **T4 部分取消与重下单**（AC6）：F17 行标与合计、F20 / F21；深链 `SHOP_ORDER_REORDERED`；通知中心标题 / 正文 / 图标 / 埋点映射
+- [x] **T5 文案**（AC7）：两份 arb、`flutter gen-l10n`
+- [x] **T6 埋点**（AC4.4）：`toko_delivery_exception_shown` / `_cs_tapped` 字面量；`v112_events_test.dart` 不需扩后缀（`_shown` / `_tapped` 已在白名单）
+- [x] **T7 测试**（AC8，见 Dev Notes「测试」）；迁移 v2 详情测试
+- [x] **T8** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -267,14 +267,55 @@ EN / ID 两份 arb 同时加；新 key 前缀 `shopOrder*`。下表「复用」�
 
 ### Agent Model Used
 
+claude-opus-5-5（Claude Code，云端 headless，bmad-dev-story）
+
 ### Debug Log References
+
+- `flutter gen-l10n` 后基线 `flutter analyze`：No issues found；完成后仍为 No issues found。
+- 中途容器重启一次：工作区改动完整保留，重跑 gen-l10n 后从列表页继续。
+- 迁移 v2 详情测试时 4-3 组用例因 `ListView` 惰性构建找不到页底单号 → 详情 v3 改为 `SingleChildScrollView + Column`（卡片固定 ≤ 7 张，非惰性无性能问题）。
+- `epic1_analytics_test` PII 白名单因新增 `exception_type` 属性变红 → 按其注释逐项确认后登记（受控词表，与个人无关）。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC1（全局视觉规范、顶栏、字号间距）、AC2–AC6 的模拟器视觉与还原度打分（≥95）、AC8.3 还原度；10.1 真后端联调（宽限期、迟到款重下单、配送异常、`/me/coupons/summary`、`/me/shop-orders/counts` 真数据）。云端只跑到 L0。
+- 对 story 文件的名字对齐（T0）：① `logistics.exceptionType` 取值按 5.2 实际为 `RETURNED | LOST | DAMAGED`（C-6），AC4.4 埋点映射相应为 `returned / lost / damaged`（缺字段 / 认不出 → `unknown`）；② 后端已下发 `reorderedFromOrderToken`（C-9），F21 单号可点回原单，「待确认」3 已由后端解决；③ 原文 `lateCashPaid` 实际为 `latePayment {amount, paidAt, resolution}`，本 story 不用；④「我的券」标题 key 实为 `couponMyCoupons`（8.1 已建），不是 `couponMyTitle`；⑤ `/me/coupons` 路由 8.1 已注册（占位页），入口照常渲染；⑥ 7.1 金额明细 key 实际名：`checkoutCouponDiscount`（Diskon belanja）/ `checkoutFreeShippingCouponRow`（Kupon gratis ongkir）/ `checkoutAutoShipDiscount`（Potongan otomatis）/ `checkoutInsuranceTitle`（Asuransi pengiriman）/ `checkoutPaymentMethod`（Metode pembayaran）；⑦ 7.2 拉起函数 `launchShopPayment(context, ref, order, {required isRetry})`（`shop_payment_launcher.dart`）。
+- 列表上下文「去支付」取详情用 `shopOrderRepositoryProvider.detail(token)` 直调（而非 `ref.read(shopOrderDetailProvider(token).future)`）：后者是 autoDispose 且列表页无监听者，飞行中可能被回收；语义相同，之后照样 invalidate 该 provider。
+- 详情 v3 的 ValueKey 沿用 v2 的 `…V2` 名（`shopOrderPayV2`、`shopOrderCancelV2`、`shopOrderCountdownV2` 等）：它们是 7.2 支付 / 埋点 / E6 测试的稳定钩子。7.1 autoPay、7.2 启动器、`_lastPaymentDeclined`、E6 `pushReplacement`、兜底 catch 全部原样搬入，相关测试（`shop_order_detail_page_v3_test` Story 1-3 / 7.1 / 7.2 组、`shop_payment_analytics_test`、`shop_pay_success_page_test`）全绿。
+- `SupportWhatsAppButton` 抽出顶层 `openSupportWhatsApp(context, ref, {orderNo, screen})`（按钮改调它，埋点 / 号码来源 / 失败兜底一字不改），供状态头与列表卡「Hubungi CS」复用；列表卡 `screen` 传 `order_list`。
+- 推送直达：`pushClickLocation` 的单类型判断改为 `kPushDirectTypes = {GROWTH_LEVEL_UP, SHOP_ORDER_REORDERED}`，9.3 加 `COUPON_EXPIRING` 时并入此集合。
+- 换号重置：`shopOrderCountsProvider`、`couponSummaryProvider` 登记 `resetUserScopedCaches` 并在 `user_scoped_cache_registry_test` 补断言；电商列表状态在 `orderListProvider` 内（已登记）。
+- 拍板点 1–5 按 story 建议实现：Belanja 走 `/me/shop-orders` + `ShopOrderCard`、Semua 混排 `OrderCardV2` 不改；F12 只用超时 / 缺货两句；F22 读后端整句 + 本地兜底；确认收货 toast 复用 `shopOrderReceiptConfirmed`；退款态通用标题留 9.2 覆盖（扩展点：`resolveShopOrderHeader` 最前插分支）。
+- App 不算钱（P-1）：金额明细、合计、F17 退款额全部取服务端字段；F17 仅对同类服务端字段（`refunds[scope=LINE]` 的 total / coin / cash、`cancelledLines.cancelledQty`）求和展示，不分摊不取整；「去支付」金额取 `paymentMethods.cashAmount`，旧后端回落既有 `shopCashSegment`。
+
+#### 复审修复（2026-11-05）
+
+1. **整单取消误画 F17**（金额展示）：后端 `fillRefundedQty` 让整单取消的已付单 `cancelledLines` 含全部行 → 原实现画出「Dikembalikan (N produk dibatalkan) Rp 0」与全行降透明。新增 `isPartialCancel(d)`（`shop_order_header.dart`）：有取消行 + 订单仍有效（`_isLiveKind`）+ **无 `scope=WHOLE` 退款单** + 非重下原单；F17 副句、行标、降权、两行合计统一走它。整单取消时**不画行标**（story AC6.1 行标属 F17 部分取消；整单取消由状态头「Dibatalkan · stok habis」表达）。补用例「整单取消 + cancelledLines 全行 + WHOLE 退款」与状态头表一行。
+2. **列表控制器竞态**：`OrderListController` 加请求代次 `_generation`（`build` / `setFilter` / `setShopGroup` / `refresh` 经 `build` 自增），回来时代次不一致丢弃；`_load(filter, group)` 在 await 前快照；`loadMore` 回写前校验代次与 filter / shopGroup 未变。新增 `test/order/order_list_controller_race_test.dart`（快速切分组旧结果后到；加载更多中切分组）。
+3. **列表倒计时归零刷新**：改为按订单 token 记已刷新集合（`markExpiryRefreshed`，记在控制器里，列表重建也保留），同一单只刷一次；补 widget 用例。
+4. `coupon_repository.dart` 的「给你的券」注释移回 `forYou` 上方。
+5. 深链 `SHOP_ORDER_REORDERED` 的 targetRef 改白名单 `^[A-Za-z0-9_-]+$`，不符落通知中心；测试补 `.`、空格、非 ASCII、`%2F`、`&` 等。
+6. 物流卡：`logistics` 存在时只用它（含 Lacak 的 trackingUrl），不回落 `packages`；存量单回落时取**未被取代的最后一条**（`ShopOrderPackage` 补解析 5.1 的 `superseded`）。补两例。
+
 #### 待确认
 
+1. **顶栏白底（AC1.1）未切**：7.1 / 8.x 已交付的电商页（结算、购物车、商品详情）仍用紫底 `ShopAppBar`；订单列表还是五类订单共享壳，一级标签是紫底白字样式。为保持电商各页一致、不动共享壳，本 story 沿用紫底顶栏；二级标签行、卡片、字号间距按新规范。需设计 L2 时统一确认后一次性切。
+2. **列表卡「Hubungi CS」埋点 `exception_type` 恒为 `unknown`**：6.2 `ShopOrderListItem` 只下发 `deliveryIssue: bool`，没有异常类型。若要区分，需后端在列表项加 `exceptionType`。
+3. **F17 行标文案**：行级退款单 `reason = OUT_OF_STOCK` 时显示「Dibatalkan · stok habis」，否则只显示「Dibatalkan」；§6「1 produk dibatalkan…」写死数字 1 的问题同原「待确认」8。
+4. **待设计确认（PRD §6 未列、按 UI 稿原文实现）**：`shopOrderMulaiBelanja`「Mulai belanja」、`shopOrderShippedTitle`「Sedang dikirim」、`shopOrderTotalPaid`「Total dibayar」、`shopOrderQrisWaiting2`「Menunggu」、`shopOrderQrisUnpaid`「Tidak dibayar」；英文为草拟。
+5. 原「待确认」1（埋点两值）已因 C-6 失效（后端已拆 LOST / DAMAGED）；原「待确认」3 已由后端 `reorderedFromOrderToken` 解决；其余原「待确认」2、4、6、7、8、9、10 照原文仍待产品确认。
+
 ### File List
+
+前端（`petgo_app/`）：
+- 新增：`lib/features/shop/domain/shop_order_summary.dart`、`lib/features/shop/presentation/shop_order_detail_page_v3.dart`、`lib/features/shop/presentation/shop_order_header.dart`、`lib/features/order/presentation/widgets/shop_order_card.dart`
+- 修改：`lib/app.dart`、`lib/core/network/api_paths.dart`、`lib/core/push/push_service.dart`、`lib/core/router/app_router.dart`、`lib/core/router/deep_link_routes.dart`、`lib/features/notify/presentation/notification_center_page.dart`、`lib/features/order/presentation/order_list_controller.dart`、`lib/features/order/presentation/order_list_page_v2.dart`、`lib/features/shop/coupon/data/coupon_repository.dart`、`lib/features/shop/data/shop_order_repository.dart`、`lib/features/shop/domain/shop_order_detail.dart`、`lib/features/support/presentation/support_whatsapp_button.dart`、`lib/l10n/app_en.arb`、`lib/l10n/app_id.arb`
+- 删除：`lib/features/shop/presentation/shop_order_detail_page_v2.dart`
+- 测试新增：`test/order/order_list_controller_race_test.dart`（复审）、`test/order/order_list_shop_groups_test.dart`、`test/order/shop_order_card_test.dart`、`test/shop/shop_order_header_test.dart`、`test/shop/shop_order_detail_model_test.dart`、`test/notify/shop_reorder_notification_test.dart`
+- 测试迁移 / 修改：`test/shop/shop_order_detail_page_v2_test.dart` → `test/shop/shop_order_detail_page_v3_test.dart`、`test/shop/shop_pay_success_page_test.dart`、`test/shop/shop_payment_analytics_test.dart`、`test/notify/deep_link_routes_test.dart`、`test/notify/push_payload_test.dart`、`test/app/user_scoped_cache_registry_test.dart`、`test/shop/epic1_analytics_test.dart`
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev）。
+- 2026-11-05：实现完成（App 订单列表「Belanja」二级分组 / 计数 / 我的券入口 / 电商订单卡；详情 v3 取代 v2；F17 / F20 / F21 / F22；深链与推送直达）；L0 绿，Status → review。
+- 2026-11-05：复审修复 6 项（整单取消不画 F17、列表控制器竞态、倒计时按单刷新、注释、深链白名单、物流卡不回落旧运单）；L0 绿。
