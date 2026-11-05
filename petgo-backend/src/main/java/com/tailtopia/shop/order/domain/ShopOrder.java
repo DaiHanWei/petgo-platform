@@ -347,6 +347,45 @@ public class ShopOrder {
     }
 
     /**
+     * 迟到款重新下单建新单（v1.4.2 shop Story 4.2 AC4.1，D-11 / 架构 §3.6 第 5 条「不重新询价」）。
+     *
+     * <p>复制原单的地址快照、全部订单头金额（商品金额 / 满减 / 运费 / 运费减免（≤ 0 口径原样）/ 保价 / 应付）、
+     * 减免来源、两个用户券 id、快递五列、报价 id、{@code coin_selected}、归属门店（购买决定发生在原单那一刻）；
+     * 写 {@code checkout_source = REORDER}、{@code reorder_of_order_id = original.id}；状态 {@code PENDING_PAYMENT}、
+     * {@code expires_at = now + 60 分钟}（调用方随即在同一事务内转待发货）。🔴 不挂支付意图、不写拆分（由调用方
+     * 按计价器 {@code reorderSettlement} 出参 {@code applyPaymentSplit}）。
+     */
+    public static ShopOrder placeReorder(ShopOrder original, String publicToken, String displayNo, Instant now) {
+        if (original.getId() == null) {
+            throw new IllegalStateException("原单未持久化");
+        }
+        ShopOrder o = place(publicToken, displayNo, now, original.userId, original.goodsSubtotal,
+                original.shippingFee, original.shippingDiscount, original.shipTo(), original.referrerMerchantId);
+        o.discountCouponAmount = original.discountCouponAmount;
+        o.insuranceFee = original.insuranceFee;
+        o.insuranceSelected = original.insuranceSelected;
+        o.totalAmount = original.totalAmount;
+        long formula = original.goodsSubtotal - original.discountCouponAmount + original.shippingFee
+                + original.shippingDiscount + original.insuranceFee;
+        if (formula != original.totalAmount || original.totalAmount <= 0) {
+            throw new IllegalStateException("原单应付与订单头金额公式不一致");
+        }
+        o.checkoutSource = CheckoutSource.REORDER;
+        o.reorderOfOrderId = original.getId();
+        o.discountUserCouponId = original.discountUserCouponId;
+        o.shippingDiscountSource = original.shippingDiscountSource;
+        o.freeShippingUserCouponId = original.freeShippingUserCouponId;
+        o.courierCode = original.courierCode;
+        o.courierServiceCode = original.courierServiceCode;
+        o.courierName = original.courierName;
+        o.courierServiceName = original.courierServiceName;
+        o.courierEtaText = original.courierEtaText;
+        o.shippingQuoteId = original.shippingQuoteId;
+        o.coinSelected = original.coinSelected;
+        return o;
+    }
+
+    /**
      * {@link #placeCheckout} 的入参快照。
      *
      * @param shippingDiscount 计价器的运费减免（<b>正数</b>），落库取负

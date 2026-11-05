@@ -327,4 +327,24 @@ public class AppException extends RuntimeException {
     public static AppException nothingToRefund(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.NOTHING_TO_REFUND, detail);
     }
+
+    /** v1.4.2 shop Story 4.2 AC1 → 409 {@code late-payment-already-resolved}。 */
+    public static AppException latePaymentAlreadyResolved(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.LATE_PAYMENT_ALREADY_RESOLVED, detail);
+    }
+
+    /** v1.4.2 shop Story 4.2 AC2.1 → 409 {@code late-payment-not-reorderable}。 */
+    public static AppException latePaymentNotReorderable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.LATE_PAYMENT_NOT_REORDERABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 4.2 AC2.4 → 409 {@code reorder-coupon-unavailable}。 */
+    public static AppException reorderCouponUnavailable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.REORDER_COUPON_UNAVAILABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 4.2 AC2.5 → 409 {@code reorder-coin-insufficient}。 */
+    public static AppException reorderCoinInsufficient(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.REORDER_COIN_INSUFFICIENT, detail);
+    }
 }

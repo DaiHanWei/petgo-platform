@@ -104,6 +104,25 @@ public class CouponLedgerService {
         }
     }
 
+    /**
+     * 迟到款重新下单：把原单用过的券重新锁到新单（v1.4.2 shop Story 4.2 AC2.4，D-3 / P-2）。
+     * 仅该用户券 {@code AVAILABLE} 时成功 → {@code LOCKED}、{@code locked_order_id = newOrderId}；
+     * 🔴 <b>不校验有效期</b>（已过期仍可用于这张新订单，PRD FR-134.2）；不新建用户券行。
+     *
+     * @throws CouponInvalidException 影响 0 行（LOCKED / USED 被别单占用或用掉、VOIDED 运营作废、非本人），带该券 token；
+     *         调用方整个重下单事务随之回滚
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void relockForReorder(long userId, long userCouponId, long newOrderId, Instant now) {
+        if (dao.relockForReorder(userCouponId, userId, newOrderId, now) == 0) {
+            // 🔴 对外只给 token；读不回（理论上不会）给空列表，不拿内部 id 充数
+            List<String> tokens = userCoupons.findById(userCouponId)
+                    .map(uc -> List.of(uc.getPublicToken())).orElse(List.of());
+            log.info("重下单锁券失败 userCouponId={} newOrderId={}", userCouponId, newOrderId);
+            throw new CouponInvalidException(tokens);
+        }
+    }
+
     /** 付款成功：该单 LOCKED → USED。幂等（重复调用影响 0 行不报错）；🔴 不校验有效期（付款前过期不影响本单）。 */
     @Transactional(propagation = Propagation.MANDATORY)
     public int markUsed(long orderId, Instant now) {

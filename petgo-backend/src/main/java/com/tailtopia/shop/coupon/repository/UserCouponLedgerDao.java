@@ -41,6 +41,16 @@ public class UserCouponLedgerDao {
             UPDATE user_coupons SET status = 'USED', used_order_id = :orderId, updated_at = :now
              WHERE locked_order_id = :orderId AND status = 'LOCKED'""";
 
+    /**
+     * 迟到款重新下单重新锁券（v1.4.2 shop Story 4.2 AC2.4，D-3「不新建行，直接把原行重新 LOCKED 到新订单」）：
+     * 仅 AVAILABLE → LOCKED 到新单；🔴 <b>不校验有效期</b>（PRD FR-134.2「券已过期仍可用于这张新订单」）。
+     * LOCKED / USED（被别单占用或用掉）、VOIDED（运营停用作废）均影响 0 行。
+     */
+    public static final String RELOCK_FOR_REORDER_SQL = """
+            UPDATE user_coupons SET status = 'LOCKED', locked_order_id = :orderId, used_order_id = NULL,
+                                    updated_at = :now
+             WHERE id = :id AND user_id = :userId AND status = 'AVAILABLE'""";
+
     /** 退回（D-3）：模板已停用且选了作废 → VOIDED，否则 → AVAILABLE；两种都清订单字段。 */
     private static final String RELEASE_RETURN_SQL = """
             UPDATE user_coupons uc SET
@@ -91,6 +101,16 @@ public class UserCouponLedgerDao {
                 .setParameter("orderId", orderId)
                 .setParameter("now", now)
                 .setParameter("token", publicToken)
+                .setParameter("userId", userId)
+                .executeUpdate();
+    }
+
+    /** 重新下单重新锁券（见 {@link #RELOCK_FOR_REORDER_SQL}）。返回影响行数（0 = 非 AVAILABLE 或非本人）。 */
+    public int relockForReorder(long userCouponId, long userId, long orderId, Instant now) {
+        return em.createNativeQuery(RELOCK_FOR_REORDER_SQL)
+                .setParameter("orderId", orderId)
+                .setParameter("now", now)
+                .setParameter("id", userCouponId)
                 .setParameter("userId", userId)
                 .executeUpdate();
     }

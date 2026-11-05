@@ -46,19 +46,22 @@ public class MeCheckoutController {
     private final com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment;
     private final com.tailtopia.shop.service.ShopLineImageResolver lineImages;
     private final ShopOrderRefundService refunds;
+    private final com.tailtopia.shop.order.service.LatePaymentService latePayments;
 
     public MeCheckoutController(CheckoutService checkout,
             com.tailtopia.shop.order.service.CheckoutQuoteService quotes,
             ShopOrderPaymentService payments,
             com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment,
             com.tailtopia.shop.service.ShopLineImageResolver lineImages,
-            ShopOrderRefundService refunds) {
+            ShopOrderRefundService refunds,
+            com.tailtopia.shop.order.service.LatePaymentService latePayments) {
         this.checkout = checkout;
         this.quotes = quotes;
         this.payments = payments;
         this.fulfillment = fulfillment;
         this.lineImages = lineImages;
         this.refunds = refunds;
+        this.latePayments = latePayments;
     }
 
     /**
@@ -71,7 +74,8 @@ public class MeCheckoutController {
         return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()),
                 lineImages.mainImageUrlBySkuId(lines.stream()
                         .map(com.tailtopia.shop.order.domain.ShopOrderLine::getSkuId).toList()),
-                payments.intentOf(order).orElse(null), java.time.Instant.now(), refunds.refundViewsOf(order));
+                payments.intentOf(order).orElse(null), java.time.Instant.now(), refunds.refundViewsOf(order),
+                latePayments.linksOf(order));
     }
 
     /**

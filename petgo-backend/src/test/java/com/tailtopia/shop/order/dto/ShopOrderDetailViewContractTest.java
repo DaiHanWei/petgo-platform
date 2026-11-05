@@ -59,7 +59,9 @@ class ShopOrderDetailViewContractTest {
             // v1.4.2 shop Story 3.3（S-7）：末尾追加
             "displayStatus", "canPay", "paymentDeadline",
             // v1.4.2 shop Story 4.1（D-15 / C-9）：末尾追加
-            "refunds");
+            "refunds",
+            // v1.4.2 shop Story 4.2（D-11 / D-19 / C-9）：末尾追加
+            "reorderedToOrderToken", "reorderedFromOrderNo", "reorderedFromOrderToken", "latePayment");
 
     /** v1.4.2 shop Story 4.1 AC6.1 + C-9：退款单条目键集（全字段非 null 时）。 */
     private static final Set<String> REFUND_KEYS = Set.of(
@@ -95,11 +97,13 @@ class ShopOrderDetailViewContractTest {
                 t, t, t, t,
                 List.of(new ShopOrderDetailView.Package("JNE", "JNE", "JN1", "https://jne/JN1",
                         "DELIVERED", t, t)),
-                "unknown", paymentStatus, failureCategory, "COMPLETED", false, t, List.of(paidOutBankRefund()));
+                "unknown", paymentStatus, failureCategory, "COMPLETED", false, t, List.of(paidOutBankRefund()),
+                "new-tok-1", "TOKO-20260915-AAAAAA", "orig-tok-1",
+                new ShopOrderDetailView.LatePayment(229_575L, t, "REORDERED"));
     }
 
     @Test
-    @DisplayName("顶层字段集恰好 27 个，displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
+    @DisplayName("顶层字段集恰好 31 个，displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
     void fullOrderHasExactlyTheContractFields() {
         assertThat(wire(fullyPopulated("FAILED", "GATEWAY_DECLINED")).keySet())
                 .isEqualTo(TOP_LEVEL_KEYS);
@@ -154,7 +158,7 @@ class ShopOrderDetailViewContractTest {
         // NON_NULL：不是「键在、值为 null」，而是键根本不出现。
         // App 侧 j['paymentStatus']?.toString() 对缺键与 null 同样得到 null —— 两端在此对齐。
         assertThat(w).doesNotContainKeys("paymentStatus", "paymentFailureCategory");
-        // 其余 25 个键一个不少 —— 省的只能是这两个。
+        // 其余键一个不少 —— 省的只能是这两个。
         assertThat(w.keySet()).containsExactlyInAnyOrderElementsOf(TOP_LEVEL_KEYS.stream()
                 .filter(k -> !k.equals("paymentStatus") && !k.equals("paymentFailureCategory"))
                 .toList());
@@ -225,5 +229,54 @@ class ShopOrderDetailViewContractTest {
         Map<String, Object> w = wire(ShopOrderDetailView.of(o, List.of(), List.of(), Map.of(), null,
                 Instant.parse("2026-09-16T10:05:00Z")));
         assertThat(w).containsEntry("refunds", List.of());
+    }
+
+    private static com.tailtopia.shop.order.domain.ShopOrder plainOrder(String token) {
+        return com.tailtopia.shop.order.domain.ShopOrder.place(
+                token, "TOKO-20260916-7M4KQ5", Instant.parse("2026-09-16T10:00:00Z"), 9L, 200_000L, 20_000L,
+                0L, new com.tailtopia.shop.order.domain.AddressSnapshot("Budi", "+628123", "DKI", "Jaksel",
+                        "Kebayoran", "Jl. 1", "12160"));
+    }
+
+    @Test
+    @DisplayName("v1.4.2 shop 4.2：存量订单（无迟到款、无重下单关联）→ 四个新键整键省略")
+    void plainOrderOmitsReorderKeys() {
+        Map<String, Object> w = wire(ShopOrderDetailView.of(plainOrder("ord-p"), List.of(), List.of(), Map.of(),
+                null, Instant.parse("2026-09-16T10:05:00Z"), List.of()));
+        assertThat(w).doesNotContainKeys("reorderedToOrderToken", "reorderedFromOrderNo",
+                "reorderedFromOrderToken", "latePayment");
+    }
+
+    @Test
+    @DisplayName("v1.4.2 shop 4.2：原单带 reorderedToOrderToken 与 latePayment{amount,paidAt,resolution}；新单带原单展示号与 token")
+    @SuppressWarnings("unchecked")
+    void reorderLinksAndLatePaymentOnTheWire() {
+        com.tailtopia.shop.order.domain.ShopOrder original = plainOrder("ord-o");
+        org.springframework.test.util.ReflectionTestUtils.setField(original, "latePaidAmount", 229_575L);
+        org.springframework.test.util.ReflectionTestUtils.setField(original, "latePaidAt",
+                Instant.parse("2026-09-16T11:10:00Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(original, "latePaymentResolution", "REORDERED");
+        Map<String, Object> w = wire(ShopOrderDetailView.of(original, List.of(), List.of(), Map.of(), null,
+                Instant.parse("2026-09-16T12:00:00Z"), List.of(),
+                new ShopOrderDetailView.ReorderLinks("ord-n", null, null)));
+        assertThat(w).containsEntry("reorderedToOrderToken", "ord-n")
+                .doesNotContainKeys("reorderedFromOrderNo", "reorderedFromOrderToken");
+        Map<String, Object> late = (Map<String, Object>) w.get("latePayment");
+        assertThat(late.keySet()).containsExactlyInAnyOrder("amount", "paidAt", "resolution");
+        assertThat(((Number) late.get("amount")).longValue()).isEqualTo(229_575L);
+        assertThat(late).containsEntry("resolution", "REORDERED");
+
+        // 待处理的迟到款：resolution 为 null → 键省略，amount / paidAt 仍在
+        org.springframework.test.util.ReflectionTestUtils.setField(original, "latePaymentResolution", null);
+        Map<String, Object> pending = (Map<String, Object>) wire(ShopOrderDetailView.of(original, List.of(),
+                List.of(), Map.of(), null, Instant.parse("2026-09-16T12:00:00Z"), List.of())).get("latePayment");
+        assertThat(pending.keySet()).containsExactlyInAnyOrder("amount", "paidAt");
+
+        Map<String, Object> n = wire(ShopOrderDetailView.of(plainOrder("ord-n"), List.of(), List.of(), Map.of(),
+                null, Instant.parse("2026-09-16T12:00:00Z"), List.of(),
+                new ShopOrderDetailView.ReorderLinks(null, "TOKO-20260916-7M4KQ5", "ord-o")));
+        assertThat(n).containsEntry("reorderedFromOrderNo", "TOKO-20260916-7M4KQ5")
+                .containsEntry("reorderedFromOrderToken", "ord-o")
+                .doesNotContainKeys("reorderedToOrderToken", "latePayment");
     }
 }

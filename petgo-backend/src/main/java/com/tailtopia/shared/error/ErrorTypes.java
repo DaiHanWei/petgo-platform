@@ -193,6 +193,18 @@ public final class ErrorTypes {
     /** v1.4.2 shop Story 4.1：订单已无可退金额，不生成 0 元取消退款单（409）。 */
     public static final URI NOTHING_TO_REFUND = URI.create(BASE + "nothing-to-refund");
 
+    /** v1.4.2 shop Story 4.2 AC1（D-11）：该笔迟到款已处置（已重下单 / 已退款）或订单无迟到款（409）。 */
+    public static final URI LATE_PAYMENT_ALREADY_RESOLVED = URI.create(BASE + "late-payment-already-resolved");
+
+    /** v1.4.2 shop Story 4.2 AC2.1：原单不是已取消（如重复付款单正在履约），只能退款不能重新下单（409）。 */
+    public static final URI LATE_PAYMENT_NOT_REORDERABLE = URI.create(BASE + "late-payment-not-reorderable");
+
+    /** v1.4.2 shop Story 4.2 AC2.4（D-3）：原单用过的券已被别单占用 / 用掉 / 作废，不能重新下单（409）。 */
+    public static final URI REORDER_COUPON_UNAVAILABLE = URI.create(BASE + "reorder-coupon-unavailable");
+
+    /** v1.4.2 shop Story 4.2 AC2.5（S-6）：需要扣的 PawCoin 超过用户当前余额，只能退款（409）。 */
+    public static final URI REORDER_COIN_INSUFFICIENT = URI.create(BASE + "reorder-coin-insufficient");
+
     private ErrorTypes() {
     }
 }

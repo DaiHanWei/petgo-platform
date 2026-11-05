@@ -93,7 +93,36 @@ public record ShopOrderDetailView(
         /**
          * 取消退款单（按创建时间升序，无则空数组）。🔒 收款账号只给末 4 位，内部 id 不出现。6.2 复用本字段。
          */
-        List<ShopOrderRefundView> refunds) {
+        List<ShopOrderRefundView> refunds,
+        // ---------- v1.4.2 shop Story 4.2 迟到款处置（D-11 / D-19 / C-9，末尾追加；存量订单均为 null，NON_NULL 不下发） ----------
+        /** 本单是被重新下单的原单时 = 新单 token（App F20「查看新订单」）。 */
+        String reorderedToOrderToken,
+        /** 本单是重新下单所建新单时 = 原单展示号 {@code display_no}（App F21「由订单 {no} 重新下单」）。 */
+        String reorderedFromOrderNo,
+        /** 本单是重新下单所建新单时 = 原单 token（C-9：新单可点回原单）。 */
+        String reorderedFromOrderToken,
+        /** 取消后到账（{@code late_paid_*}）及处理结果；无迟到款为 null。 */
+        LatePayment latePayment) {
+
+    /**
+     * 迟到款（v1.4.2 shop Story 4.2 AC7.3）。
+     *
+     * @param resolution {@code null}（待处理）| {@code REORDERED} | {@code REFUNDED}
+     */
+    public record LatePayment(long amount, Instant paidAt, String resolution) {
+
+        static LatePayment of(ShopOrder o) {
+            return o.getLatePaidAmount() == null ? null
+                    : new LatePayment(o.getLatePaidAmount(), o.getLatePaidAt(), o.getLatePaymentResolution());
+        }
+    }
+
+    /** 重新下单的前后关联（{@code LatePaymentService#linksOf} 装配）；无关联为 {@link #NONE}。 */
+    public record ReorderLinks(String reorderedToOrderToken, String reorderedFromOrderNo,
+            String reorderedFromOrderToken) {
+
+        public static final ReorderLinks NONE = new ReorderLinks(null, null, null);
+    }
 
     /**
      * 包裹（S-2）。
@@ -157,10 +186,18 @@ public record ShopOrderDetailView(
         return of(o, lines, shipments, imageUrlBySkuId, intent, now, List.of());
     }
 
-    /** v1.4.2 shop Story 4.1：带取消退款单（{@code ShopOrderRefundService#refundViewsOf}）。 */
+    /** v1.4.2 shop Story 4.1：带取消退款单（{@code ShopOrderRefundService#refundViewsOf}）；无重下单关联。 */
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
             List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent, Instant now,
             List<ShopOrderRefundView> refunds) {
+        return of(o, lines, shipments, imageUrlBySkuId, intent, now, refunds, ReorderLinks.NONE);
+    }
+
+    /** v1.4.2 shop Story 4.2：带重新下单关联（{@code LatePaymentService#linksOf}）；{@code latePayment} 取自订单本身。 */
+    public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
+            List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent, Instant now,
+            List<ShopOrderRefundView> refunds, ReorderLinks links) {
+        ReorderLinks rl = links == null ? ReorderLinks.NONE : links;
         var ship = o.shipTo();
         PaymentFailureCategory failureCategory = PaymentFailureCategory.of(intent);
         return new ShopOrderDetailView(
@@ -201,7 +238,11 @@ public record ShopOrderDetailView(
                 o.displayStatusAt(now).name(),
                 ShopOrderPaymentService.canPay(o, intent, now),
                 o.getExpiresAt(),
-                refunds == null ? List.of() : List.copyOf(refunds));
+                refunds == null ? List.of() : List.copyOf(refunds),
+                rl.reorderedToOrderToken(),
+                rl.reorderedFromOrderNo(),
+                rl.reorderedFromOrderToken(),
+                LatePayment.of(o));
     }
 
     /**

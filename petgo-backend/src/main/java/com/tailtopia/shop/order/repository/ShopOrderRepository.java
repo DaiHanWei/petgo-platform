@@ -130,6 +130,25 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     int recordLatePayment(@Param("orderId") long orderId, @Param("amount") long amount,
             @Param("now") Instant now, @Param("intentId") long intentId);
 
+    /**
+     * 抢占迟到款处理权（v1.4.2 shop Story 4.2 AC1，D-11「同一笔迟到款只能处理一次」）：条件更新，仅在有迟到款且
+     * 尚未处置时写 {@code late_payment_resolution}。重下单与退款并发时恰好一个影响 1 行。
+     *
+     * <p>⚠️ native 更新绕过一级缓存：调用方随后必须重读订单（{@code entityManager.refresh}），否则托管实体的旧
+     * {@code version} 会在后续 flush 时撞乐观锁（{@code clearAutomatically} 已清掉一级缓存，重读即得新版本）。
+     *
+     * @return 受影响行数；0 = 无迟到款 / 已处置 / 订单不存在
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE shop_orders SET late_payment_resolution = :resolution, updated_at = now(), version = version + 1
+             WHERE id = :orderId AND late_paid_amount IS NOT NULL AND late_payment_resolution IS NULL
+            """, nativeQuery = true)
+    int claimLatePayment(@Param("orderId") long orderId, @Param("resolution") String resolution);
+
+    /** 由某原单重新下单所建的新单（v1.4.2 shop Story 4.2 AC7.1；库级部分唯一索引保证至多一张）。 */
+    Optional<ShopOrder> findByReorderOfOrderId(Long reorderOfOrderId);
+
     /** 后台订单列表（Story 4.2，按下单时间倒序）。 */
     List<ShopOrder> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
 

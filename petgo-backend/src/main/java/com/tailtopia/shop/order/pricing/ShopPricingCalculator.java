@@ -274,6 +274,46 @@ public final class ShopPricingCalculator {
         };
     }
 
+    /**
+     * 迟到款重新下单的多退少补（v1.4.2 shop Story 4.2 AC3，决策 S-6）。新单应付沿用原单 {@code total}（不重新询价）：
+     * <ul>
+     *   <li>{@code cashNeed = total − originalCoin}；</li>
+     *   <li>{@code lateCash ≥ cashNeed} → 现金 = {@code cashNeed}、币 = {@code originalCoin}、多出 = {@code lateCash − cashNeed}
+     *       （多出退为 PawCoin）；</li>
+     *   <li>{@code lateCash < cashNeed} → 现金 = {@code lateCash}、币 = {@code total − lateCash}（原币 + 差额，差额用币补）、多出 = 0。</li>
+     * </ul>
+     *
+     * @param total        原单应付（{@code shop_orders.total_amount}）
+     * @param originalCoin 原单币段（{@code coin_amount}，null 由调用方视为 0）
+     * @param lateCash     原单迟到款（{@code late_paid_amount}，网关实收现金）
+     * @throws IllegalArgumentException {@code lateCash ≤ 0}、{@code total ≤ 0}、或 {@code originalCoin} 不在 {@code [0, total]}
+     */
+    public static ReorderSettlement reorderSettlement(long total, long originalCoin, long lateCash) {
+        if (lateCash <= 0) {
+            throw new IllegalArgumentException("迟到款必须为正");
+        }
+        if (total <= 0 || originalCoin < 0 || originalCoin > total) {
+            throw new IllegalArgumentException("原单金额非法");
+        }
+        long cashNeed = Math.subtractExact(total, originalCoin);
+        long coin;
+        long cash;
+        long excess;
+        if (lateCash >= cashNeed) {
+            cash = cashNeed;
+            coin = originalCoin;
+            excess = Math.subtractExact(lateCash, cashNeed);
+        } else {
+            cash = lateCash;
+            coin = Math.subtractExact(total, lateCash);
+            excess = 0L;
+        }
+        if (Math.addExact(coin, cash) != total || coin < 0 || cash < 0 || excess < 0) {
+            throw new IllegalStateException("多退少补拆分不平");
+        }
+        return new ReorderSettlement(coin, cash, excess);
+    }
+
     private static boolean isHardUnavailable(Eval e) {
         return !e.usable && e.reason != CouponUnavailableReason.RULE_BETTER;
     }
