@@ -70,7 +70,9 @@ public class AnalyticsEventGuard {
             // ---- V1.3.2 Story 3.4：护照快照解锁成功（事件名暂定，待产品确认）----
             com.tailtopia.passport.service.PassportSnapshotAnalyticsListener.EVENT_UNLOCKED,
             // ---- V1.3.2 Story 3.5：登机牌单张解锁成功（事件名暂定，待产品确认）----
-            com.tailtopia.passport.service.BoardingPassAnalyticsListener.EVENT_UNLOCKED);
+            com.tailtopia.passport.service.BoardingPassAnalyticsListener.EVENT_UNLOCKED,
+            // ---- V1.4.2 shop Story 2.3：券快过期提醒确实推送时（服务端报，PRD §4；事件名字面量 P-9）----
+            "toko_coupon_expiry_push_sent");
 
     /**
      * 属性键白名单。
@@ -106,7 +108,9 @@ public class AnalyticsEventGuard {
             "result_index",                     // int，该宠物第几次测试
             // ---- V1.3.4 ktp Story 1.8：ktp_unlock_succeeded 补卡种。值为枚举名，🛡 不带卡号 / 宠物名 ----
             "card_type",                        // KTP / PASSPORT / KITAS / SIM / STUDENT
-            "card_variant");                    // 学生卡配色 BINTANG / MALAM / CERIA / KLASIK
+            "card_variant",                     // 学生卡配色 BINTANG / MALAM / CERIA / KLASIK
+            // ---- V1.4.2 shop Story 2.3：toko_coupon_expiry_push_sent。int，本次提醒的券张数 ----
+            "coupon_count");
 
     /**
      * 字符串属性值的长度上限。

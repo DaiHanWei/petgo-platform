@@ -223,6 +223,9 @@ petgo:
       read-timeout-ms: 8000
     # 报价清理（每日删 2 天前，单次 5,000 行；时区 Asia/Jakarta）
     shipping-quote-cleanup-cron: ${SHOP_SHIPPING_QUOTE_CLEANUP_CRON:0 30 3 * * *}
+    # v1.4.2 shop Story 2.3（D-22）：券快过期提醒（每天 WIB 10:00，窗口 (now, now+48h]）。"-" = 关闭。
+    coupon:
+      expiry-reminder-cron: ${SHOP_COUPON_EXPIRY_REMINDER_CRON:0 0 10 * * *}
 
 # 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
 # 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。

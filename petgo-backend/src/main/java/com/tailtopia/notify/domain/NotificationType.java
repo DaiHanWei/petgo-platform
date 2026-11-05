@@ -248,5 +248,24 @@ public enum NotificationType {
      *
      * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（见 {@code V20261104_2010__rebuild_ck_notifications_type_and_push_mutes.sql}）。
      */
-    PET_DIARY_POSTED
+    PET_DIARY_POSTED,
+
+    /**
+     * V1.4.2 shop Story 2.3（D-21 / D-22 / I8）：券到期前 48 小时提醒 → 本人。按用户每 WIB 日合并 1 条
+     * （{@code coupon_expiry_notify_log}），每张券只提醒一次（{@code user_coupons.expiry_notified_at}）。
+     * {@code targetRef} = 本次提醒的券张数（十进制字符串，App 推送点开埋点取张数）；标题 / 正文写入时按收件人语言渲染落库。
+     * 推送分类「促销与活动」（{@code PROMO}，可关）；App 深链我的券（9.3）。
+     *
+     * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（见 {@code V20261105_1620__rebuild_ck_notifications_type_shop_coupon_reorder.sql}）。
+     */
+    COUPON_EXPIRING,
+
+    /**
+     * V1.4.2 shop（D-21）：关单后到账、客服已为你重新下单 → 本人。<b>4.2 发送</b>（文案 PRD §6 F22 同 4.2 加），
+     * App 深链新订单详情（9.1）。{@code targetRef} = 新订单 {@code public_token}。
+     * 推送分类「订单与账号」（{@code ORDER_ACCOUNT}，不可关）。本 story（2.3）只占位：枚举值 + 分类 + 约束。
+     *
+     * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（见 {@code V20261105_1620__rebuild_ck_notifications_type_shop_coupon_reorder.sql}）。
+     */
+    SHOP_ORDER_REORDERED
 }

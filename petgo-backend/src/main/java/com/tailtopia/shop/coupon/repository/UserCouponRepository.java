@@ -77,4 +77,14 @@ public interface UserCouponRepository extends Repository<UserCoupon, Long> {
             + "and uc.status = com.tailtopia.shop.coupon.domain.UserCouponStatus.AVAILABLE "
             + "and uc.validFrom <= :now and uc.validUntil > :now")
     long countUsable(@Param("userId") Long userId, @Param("now") Instant now);
+
+    /**
+     * 快过期提醒候选用户（Story 2.3 AC5.4，走部分索引 {@code idx_user_coupons_expiry_scan}）：有 AVAILABLE、未提醒过、
+     * 到期落在 {@code (now, until]} 的券的用户；按 {@code user_id} keyset 分批（{@code afterUserId} 起，不含）。
+     */
+    @Query(value = "SELECT DISTINCT user_id FROM user_coupons WHERE status = 'AVAILABLE' AND expiry_notified_at IS NULL "
+            + "AND valid_until > :now AND valid_until <= :until AND user_id > :afterUserId "
+            + "ORDER BY user_id LIMIT :limit", nativeQuery = true)
+    List<Long> findExpiryReminderUserIds(@Param("now") Instant now, @Param("until") Instant until,
+            @Param("afterUserId") long afterUserId, @Param("limit") int limit);
 }

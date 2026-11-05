@@ -133,6 +133,18 @@ public class CouponLedgerService {
         return n;
     }
 
+    /**
+     * 快过期提醒置位（Story 2.3 AC5.5.2，I8「每张券只提醒一次」）：该用户 AVAILABLE、未提醒过、到期落在
+     * {@code (now, until]} 的券条件置 {@code expiry_notified_at = now}。连续两天都落在 48 小时窗口的券第二天不会再被数进去。
+     * 🔴 {@code MANDATORY}：调用方（{@code CouponExpiryReminderService}）在逐用户独立事务里与提醒日志同一事务。
+     *
+     * @return 本次置位的券的到期时刻（无则空列表）
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<Instant> markExpiryNotified(long userId, Instant now, Instant until) {
+        return dao.markExpiryNotified(userId, now, until);
+    }
+
     /** 注销联动（AC7）：该用户 AVAILABLE → VOIDED；LOCKED / USED 不动（订单匿名化保留）。 */
     @Transactional
     public int voidAllAvailableForUser(long userId, Instant now) {

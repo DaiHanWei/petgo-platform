@@ -217,4 +217,14 @@ class AnalyticsEventGuardTest {
         props.put("pet_name", "Momo"); // 不在白名单 → 丢弃
         assertThat(guard.filterProperties(props)).containsOnlyKeys("card_type", "card_variant");
     }
+
+    @Test
+    @DisplayName("V1.4.2 shop Story 2.3：toko_coupon_expiry_push_sent 放行、coupon_count 保留")
+    void allowsCouponExpiryPushSent() {
+        assertThat(guard.allowsEvent("toko_coupon_expiry_push_sent")).isTrue();
+        Map<String, Object> props = new HashMap<>();
+        props.put("coupon_count", 3);
+        props.put("coupon_token", "abc"); // 不在白名单 → 丢弃
+        assertThat(guard.filterProperties(props)).containsOnlyKeys("coupon_count").containsEntry("coupon_count", 3);
+    }
 }

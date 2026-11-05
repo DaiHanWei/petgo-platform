@@ -2,7 +2,11 @@ package com.tailtopia.shop.coupon.repository;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -52,6 +56,16 @@ public class UserCouponLedgerDao {
     private static final String VOID_AVAILABLE_BY_USER_SQL = """
             UPDATE user_coupons SET status = 'VOIDED', updated_at = :now
              WHERE user_id = :userId AND status = 'AVAILABLE'""";
+
+    /**
+     * 快过期提醒置位（Story 2.3 AC5.5.2，I8「每张券只提醒一次」）：该用户 AVAILABLE、未提醒过、
+     * 到期落在 {@code (now, until]} 的券置 {@code expiry_notified_at = now}，返回本次置位的到期时刻。
+     */
+    private static final String MARK_EXPIRY_NOTIFIED_SQL = """
+            UPDATE user_coupons SET expiry_notified_at = :now, updated_at = :now
+             WHERE user_id = :userId AND status = 'AVAILABLE' AND expiry_notified_at IS NULL
+               AND valid_until > :now AND valid_until <= :until
+            RETURNING valid_until""";
 
     @PersistenceContext
     private EntityManager em;
@@ -107,6 +121,34 @@ public class UserCouponLedgerDao {
                 .setParameter("userId", userId)
                 .setParameter("now", now)
                 .executeUpdate();
+    }
+
+    /** 快过期提醒置位（见 {@link #MARK_EXPIRY_NOTIFIED_SQL}）。返回本次置位的券的到期时刻（无则空列表）。 */
+    public List<Instant> markExpiryNotified(long userId, Instant now, Instant until) {
+        List<?> rows = em.createNativeQuery(MARK_EXPIRY_NOTIFIED_SQL)
+                .setParameter("userId", userId)
+                .setParameter("now", now)
+                .setParameter("until", until)
+                .getResultList();
+        List<Instant> out = new ArrayList<>(rows.size());
+        for (Object row : rows) {
+            out.add(toInstant(row));
+        }
+        return out;
+    }
+
+    /** 原生查询的时间列可能给回 Instant / OffsetDateTime / Timestamp（驱动与 Hibernate 版本决定），都收。 */
+    static Instant toInstant(Object value) {
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof OffsetDateTime odt) {
+            return odt.toInstant();
+        }
+        if (value instanceof Timestamp ts) {
+            return ts.toInstant();
+        }
+        throw new IllegalStateException("无法识别的时间类型: " + (value == null ? "null" : value.getClass()));
     }
 
     /** 原生更新后同事务要再读 {@code UserCoupon} 时调用，避免读到一级缓存里的旧状态。 */

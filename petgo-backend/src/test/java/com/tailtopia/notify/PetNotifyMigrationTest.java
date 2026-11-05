@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test;
  *   <li>⑦ 两条约束都是 {@code DROP CONSTRAINT IF EXISTS} + {@code ADD CONSTRAINT}；推送分类 9 值、不含 ORDER_ACCOUNT；
  *       <b>推送分类约束在通知类型约束之前</b>（MentionNotifyTest 从通知类型 ADD 处扫到文件尾）；
  *       通知类型 = 上一次重建（V20261018_1400）全集 + 两值。</li>
+ *   <li>V1.4.2 shop Story 2.3 之后枚举又 + 电商两值（由 {@code V20261105_1620} 重建）：本类改为表达历史事实——
+ *       枚举全集 = 本迁移的值 ∪ 电商两值（最新重建与枚举的比对归 {@code ShopNotifyMigrationTest} / {@code MentionNotifyTest}）。</li>
  *   <li>④ 主键三列、日期索引、无 FK。</li>
  * </ul>
  */
@@ -87,8 +89,12 @@ class PetNotifyMigrationTest {
         expected.add("PET_FOLLOWED");
         expected.add("PET_DIARY_POSTED");
         assertThat(now).isEqualTo(expected);
-        assertThat(now).isEqualTo(Arrays.stream(NotificationType.values()).map(Enum::name)
-                .collect(Collectors.toSet()));
+        // V1.4.2 shop Story 2.3：枚举在本迁移之后又加了电商两值（V20261105_1620 重建）。
+        Set<String> enumAfterShop = new LinkedHashSet<>(now);
+        enumAfterShop.add("COUPON_EXPIRING");
+        enumAfterShop.add("SHOP_ORDER_REORDERED");
+        assertThat(Arrays.stream(NotificationType.values()).map(Enum::name)
+                .collect(Collectors.toSet())).isEqualTo(enumAfterShop);
     }
 
     @Test
