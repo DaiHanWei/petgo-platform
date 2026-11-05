@@ -27,6 +27,15 @@ public class BiteshipProperties {
     private String couriers = "jne,sicepat,anteraja";
     private int connectTimeoutMs = 3000;
     private int readTimeoutMs = 8000;
+    /**
+     * Webhook 路径密钥（v1.4.2 shop Story 5.1，env {@code BITESHIP_WEBHOOK_SECRET}）。为空 → Webhook 一律 404（fail closed）。
+     * 🔒 绝不落日志。
+     */
+    private String webhookSecret = "";
+    /** 下运单 {@code delivery_type}：{@code now} | {@code scheduled}（Story 5.1）。 */
+    private String deliveryType = "now";
+    /** Webhook 收件行最大处理次数（达到即告警 / 放弃，Story 5.1 AC7.3）。 */
+    private int webhookMaxAttempts = 10;
 
     /**
      * 规范化后的快递列表：小写、去空格、去重、保序，并剔除 {@link #FORBIDDEN_COURIERS}。
@@ -99,11 +108,37 @@ public class BiteshipProperties {
         this.readTimeoutMs = readTimeoutMs;
     }
 
-    /** 🔒 不含 key。 */
+    public String getWebhookSecret() {
+        return webhookSecret;
+    }
+
+    public void setWebhookSecret(String webhookSecret) {
+        this.webhookSecret = webhookSecret;
+    }
+
+    public String getDeliveryType() {
+        return deliveryType;
+    }
+
+    public void setDeliveryType(String deliveryType) {
+        this.deliveryType = deliveryType;
+    }
+
+    public int getWebhookMaxAttempts() {
+        return webhookMaxAttempts;
+    }
+
+    public void setWebhookMaxAttempts(int webhookMaxAttempts) {
+        this.webhookMaxAttempts = webhookMaxAttempts;
+    }
+
+    /** 🔒 不含 key / Webhook 密钥。 */
     @Override
     public String toString() {
         return "BiteshipProperties{mode=" + mode + ", baseUrl=" + baseUrl
                 + ", couriers=" + couriersCsv() + ", apiKeySet=" + (apiKey != null && !apiKey.isBlank())
-                + ", connectTimeoutMs=" + connectTimeoutMs + ", readTimeoutMs=" + readTimeoutMs + "}";
+                + ", connectTimeoutMs=" + connectTimeoutMs + ", readTimeoutMs=" + readTimeoutMs
+                + ", webhookSecretSet=" + (webhookSecret != null && !webhookSecret.isBlank())
+                + ", deliveryType=" + deliveryType + ", webhookMaxAttempts=" + webhookMaxAttempts + "}";
     }
 }

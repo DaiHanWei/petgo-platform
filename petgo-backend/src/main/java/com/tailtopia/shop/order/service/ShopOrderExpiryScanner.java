@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  *       关单前最后查单、查询失败不关（{@code ShopOrderPaymentService#closeOverdue}）→ 取消并<b>释放库存</b>。
  *       读详情 / 点支付不再懒关单（宽限期显示已取消）。🔴 这一条比意图过期扫描重要得多：
  *       支付意图滞留 PENDING 只是脏数据，而订单滞留 PENDING_PAYMENT 会一直占着别人想买的货。</li>
- *   <li><b>自动置送达</b>（10min）：SPEC-2 出口③，发货起 M=7 日无任何标记则置 {@code DELIVERED}。</li>
+ *   <li><b>自动置送达</b>（10min）：SPEC-2 出口③，发货起 M 日（v1.4.2 起 M=14，D-12）无任何标记则置 {@code DELIVERED}。</li>
  *   <li><b>自动确认收货</b>（10min）：送达起 7 日未确认则置 {@code COMPLETED}（FR-102）。</li>
  *   <li><b>退货寄回超时</b>（10min）：S-7，超 7 日未寄回则关闭申请并回退订单状态。</li>
  *   <li><b>评价审核重试</b>（10min）：Story 7.1，三方不可用时评价落 PENDING，这里收敛。</li>

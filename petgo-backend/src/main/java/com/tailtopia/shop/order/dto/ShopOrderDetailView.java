@@ -102,7 +102,43 @@ public record ShopOrderDetailView(
         /** 本单是重新下单所建新单时 = 原单 token（C-9：新单可点回原单）。 */
         String reorderedFromOrderToken,
         /** 取消后到账（{@code late_paid_*}）及处理结果；无迟到款为 null。 */
-        LatePayment latePayment) {
+        LatePayment latePayment,
+        // ---------- v1.4.2 shop Story 5.1 物流（D-19 物流部分 / F7，末尾追加） ----------
+        /** 最新活动运单的物流块；无运单或运单全被取消为 null（NON_NULL 不下发）。 */
+        Logistics logistics) {
+
+    /**
+     * 物流块（v1.4.2 shop Story 5.1 AC13）：取<b>最新活动运单</b>（未被取代、未取消）。
+     *
+     * @param provider           {@code MANUAL} | {@code BITESHIP}
+     * @param courierName        Biteship：订单 {@code courier_name} 快照；手工：承运商展示名
+     * @param courierServiceName Biteship：订单 {@code courier_service_name} 快照；手工：null
+     * @param waybillId          Biteship：{@code waybill_id}（可空，尚未分配）；手工：{@code tracking_no}
+     * @param trackingUrl        手工：承运商官网；Biteship：{@code tracking_url}（可空）
+     * @param statusKey          手工恒 null（不显示物流状态）；Biteship：{@code user_status_key}
+     * @param exception          Story 5.2 填；本 story 恒 null
+     * @param exceptionType      Story 5.2 填；本 story 恒 null
+     */
+    public record Logistics(String provider, String courierName, String courierServiceName, String waybillId,
+            String trackingUrl, String statusKey, String exception, String exceptionType) {
+
+        /** 最新活动运单 → 物流块；无活动运单 → null。 */
+        public static Logistics of(ShopOrder o, List<Shipment> shipments) {
+            Shipment latest = shipments.stream().filter(Shipment::isActive)
+                    .max(java.util.Comparator.comparing(Shipment::getId,
+                            java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                    .orElse(null);
+            if (latest == null) {
+                return null;
+            }
+            if (latest.isBiteship()) {
+                return new Logistics(latest.getProvider().name(), o.getCourierName(), o.getCourierServiceName(),
+                        latest.getWaybillId(), latest.trackingUrl(), latest.getUserStatusKey(), null, null);
+            }
+            return new Logistics(latest.getProvider().name(), latest.carrierDisplayName(), null,
+                    latest.getTrackingNo(), latest.trackingUrl(), null, null, null);
+        }
+    }
 
     /**
      * 迟到款（v1.4.2 shop Story 4.2 AC7.3）。
@@ -131,7 +167,15 @@ public record ShopOrderDetailView(
      * 不接承运商 API、不在 App 内渲染物流轨迹（FR-103）。
      */
     public record Package(String carrier, String carrierName, String trackingNo,
-            String trackingUrl, String status, Instant shippedAt, Instant deliveredAt) {
+            String trackingUrl, String status, Instant shippedAt, Instant deliveredAt,
+            // v1.4.2 shop Story 5.1（末尾追加）：来源与是否被快递原因重发取代
+            String provider, boolean superseded) {
+
+        static Package of(Shipment s) {
+            return new Package(s.getCarrier(), s.carrierDisplayName(), s.getTrackingNo(), s.trackingUrl(),
+                    s.getStatus().name(), s.getShippedAt(), s.getDeliveredAt(), s.getProvider().name(),
+                    s.getSupersededAt() != null);
+        }
     }
 
     /** 收货信息快照（下单时定格，不随地址簿改动）。🔒 含 PII，只下发给订单主人。 */
@@ -228,9 +272,9 @@ public record ShopOrderDetailView(
                 o.getCompletedAt(),
                 o.returnWindowEndsAt(),
                 shipments.stream()
-                        .map(s -> new Package(s.getCarrier().name(), s.getCarrier().displayName(),
-                                s.getTrackingNo(), s.getCarrier().trackingUrl(),
-                                s.getStatus().name(), s.getShippedAt(), s.getDeliveredAt()))
+                        .sorted(java.util.Comparator.comparing(Shipment::getId,
+                                java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                        .map(Package::of)
                         .toList(),
                 attributionSourceOf(lines),
                 intent == null || intent.getStatus() == null ? null : intent.getStatus().name(),
@@ -242,7 +286,8 @@ public record ShopOrderDetailView(
                 rl.reorderedToOrderToken(),
                 rl.reorderedFromOrderNo(),
                 rl.reorderedFromOrderToken(),
-                LatePayment.of(o));
+                LatePayment.of(o),
+                Logistics.of(o, shipments));
     }
 
     /**

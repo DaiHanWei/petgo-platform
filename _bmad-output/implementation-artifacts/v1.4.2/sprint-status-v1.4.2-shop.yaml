@@ -67,8 +67,8 @@ development_status:
   4-2-迟到款重新下单与退款: review
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-biteship运单webhook与物流状态: ready-for-dev
+  epic-5: in-progress
+  5-1-biteship运单webhook与物流状态: review
   5-2-物流异常: ready-for-dev
   epic-5-retrospective: optional
 

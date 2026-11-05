@@ -61,7 +61,9 @@ class ShopOrderDetailViewContractTest {
             // v1.4.2 shop Story 4.1（D-15 / C-9）：末尾追加
             "refunds",
             // v1.4.2 shop Story 4.2（D-11 / D-19 / C-9）：末尾追加
-            "reorderedToOrderToken", "reorderedFromOrderNo", "reorderedFromOrderToken", "latePayment");
+            "reorderedToOrderToken", "reorderedFromOrderNo", "reorderedFromOrderToken", "latePayment",
+            // v1.4.2 shop Story 5.1（D-19 物流 / F7）：末尾追加
+            "logistics");
 
     /** v1.4.2 shop Story 4.1 AC6.1 + C-9：退款单条目键集（全字段非 null 时）。 */
     private static final Set<String> REFUND_KEYS = Set.of(
@@ -96,14 +98,16 @@ class ShopOrderDetailViewContractTest {
                         100_000L, "NO_RETURN", "https://cdn.example/x.jpg")),
                 t, t, t, t,
                 List.of(new ShopOrderDetailView.Package("JNE", "JNE", "JN1", "https://jne/JN1",
-                        "DELIVERED", t, t)),
+                        "DELIVERED", t, t, "BITESHIP", false)),
                 "unknown", paymentStatus, failureCategory, "COMPLETED", false, t, List.of(paidOutBankRefund()),
                 "new-tok-1", "TOKO-20260915-AAAAAA", "orig-tok-1",
-                new ShopOrderDetailView.LatePayment(229_575L, t, "REORDERED"));
+                new ShopOrderDetailView.LatePayment(229_575L, t, "REORDERED"),
+                new ShopOrderDetailView.Logistics("BITESHIP", "JNE", "Reguler", "JN1", "https://jne/JN1",
+                        "delivered", "RETURNED", "returned"));
     }
 
     @Test
-    @DisplayName("顶层字段集恰好 31 个，displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
+    @DisplayName("顶层字段集恰好 32 个（5.1 加 logistics），displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
     void fullOrderHasExactlyTheContractFields() {
         assertThat(wire(fullyPopulated("FAILED", "GATEWAY_DECLINED")).keySet())
                 .isEqualTo(TOP_LEVEL_KEYS);

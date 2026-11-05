@@ -221,6 +221,13 @@ petgo:
       couriers: ${BITESHIP_COURIERS:jne,sicepat,anteraja}
       connect-timeout-ms: 3000
       read-timeout-ms: 8000
+      # v1.4.2 shop Story 5.1：Webhook 路径密钥（空 = Webhook 一律 404，fail closed）、下运单 delivery_type、
+      # 收件行最大处理次数、收件重试间隔（毫秒）、在途回查 cron（UTC）。🔒 密钥只经 env 注入。
+      webhook-secret: ${BITESHIP_WEBHOOK_SECRET:}
+      delivery-type: ${BITESHIP_DELIVERY_TYPE:now}
+      webhook-max-attempts: 10
+      webhook-retry-ms: ${SHOP_BITESHIP_WEBHOOK_RETRY_MS:300000}
+      poll-cron: ${SHOP_BITESHIP_POLL_CRON:0 0 */6 * * *}
     # 报价清理（每日删 2 天前，单次 5,000 行；时区 Asia/Jakarta）
     shipping-quote-cleanup-cron: ${SHOP_SHIPPING_QUOTE_CLEANUP_CRON:0 30 3 * * *}
     # v1.4.2 shop Story 2.3（D-22）：券快过期提醒（每天 WIB 10:00，窗口 (now, now+48h]）。"-" = 关闭。

@@ -120,18 +120,21 @@ class ShopOrderFulfillmentStateMachineTest {
     }
 
     @Test
-    @DisplayName("🔴 SPEC-2 出口③：发货起 M=7 日无标记则到期，第 6 天不到期")
+    @DisplayName("🔴 SPEC-2 出口③：发货起 M=14 日（v1.4.2 D-12）无标记则到期，第 13 天 / 第 14 天整不到期")
     void exitThreeAutoDeliverAfterSevenDays() {
         ShopOrder o = paidOrder();
         Instant shipped = Instant.parse("2026-08-01T00:00:00Z");
         o.markShipped(shipped);
 
-        assertThat(o.isAutoDeliverDue(shipped.plus(6, ChronoUnit.DAYS)))
-                .as("第 6 天不该自动置送达").isFalse();
-        assertThat(o.isAutoDeliverDue(shipped.plus(7, ChronoUnit.DAYS)))
-                .as("整 7 日尚未超过，不到期").isFalse();
+        assertThat(ShopOrder.AUTO_DELIVER_AFTER).isEqualTo(java.time.Duration.ofDays(14));
         assertThat(o.isAutoDeliverDue(shipped.plus(7, ChronoUnit.DAYS).plusSeconds(1)))
-                .as("超过 7 日才到期").isTrue();
+                .as("v1.4.2 起 7 天已不再到期").isFalse();
+        assertThat(o.isAutoDeliverDue(shipped.plus(13, ChronoUnit.DAYS)))
+                .as("第 13 天不该自动置送达").isFalse();
+        assertThat(o.isAutoDeliverDue(shipped.plus(14, ChronoUnit.DAYS)))
+                .as("整 14 日尚未超过，不到期").isFalse();
+        assertThat(o.isAutoDeliverDue(shipped.plus(14, ChronoUnit.DAYS).plusSeconds(1)))
+                .as("超过 14 日才到期").isTrue();
     }
 
     @Test

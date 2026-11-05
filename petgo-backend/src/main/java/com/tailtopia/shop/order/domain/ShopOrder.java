@@ -254,6 +254,31 @@ public class ShopOrder {
     @Column(name = "late_payment_resolution", length = 16)
     private String latePaymentResolution;
 
+    // ---------- v1.4.2 shop Story 5.1：发货来源 / 运单失败 / 物流异常（异常组由 5.2 使用） ----------
+    /** 转 SHIPPED 的来源（只后台可见）；1.4.2 前的存量已发货订单为 null。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "shipped_source", length = 24)
+    private ShippedSource shippedSource;
+    @Column(name = "waybill_failed_at")
+    private Instant waybillFailedAt;
+    /** {@code <类别>:<Biteship 错误码或简述>}，≤ 200 字。🔒 不含地址 / 电话 / 姓名。 */
+    @Column(name = "waybill_fail_reason", length = 200)
+    private String waybillFailReason;
+    /** 下运单调用次数（每次调用前 +1 并提交，reference_id 序号来源）。 */
+    @Column(name = "waybill_attempts", nullable = false)
+    private int waybillAttempts;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "logistics_exception", length = 24)
+    private LogisticsException logisticsException;
+    @Column(name = "logistics_exception_at")
+    private Instant logisticsExceptionAt;
+    @Column(name = "logistics_exception_confirmed", nullable = false)
+    private boolean logisticsExceptionConfirmed;
+    @Column(name = "claim_pending", nullable = false)
+    private boolean claimPending;
+    @Column(name = "timer_resumed_at")
+    private Instant timerResumedAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -506,23 +531,73 @@ public class ShopOrder {
     // ---------- 履约段（Story 4.1） ----------
 
     /**
-     * 自动确认收货的两段时长（S-1 已定 M = 7）。
+     * 自动确认收货的两段时长。
      *
-     * <p>标准快递 2–4 日 + 3 日冗余。最坏路径：D7 置 {@code DELIVERED} → D14 置 {@code COMPLETED}，
-     * 退货窗口 D7–D14。
+     * <p>v1.4.2 shop Story 5.1（D-12，PRD 旅程 D 第 6 条）：发货起自动送达兜底由 7 天改为 <b>14 天</b>
+     * （Biteship 回传签收是主路径，本兜底只管回传丢失；存量手工发货订单同样按 14 天）；送达后自动完成仍 7 天。
+     * 最坏路径：D14 置 {@code DELIVERED} → D21 置 {@code COMPLETED}，退货窗口 D14–D21。
      */
-    public static final java.time.Duration AUTO_DELIVER_AFTER = java.time.Duration.ofDays(7);
+    public static final java.time.Duration AUTO_DELIVER_AFTER = java.time.Duration.ofDays(14);
     public static final java.time.Duration AUTO_COMPLETE_AFTER = java.time.Duration.ofDays(7);
     /** 🔴 Epic 5 退货窗口长度，自「签收」（进入 {@code DELIVERED}）起算。 */
     public static final java.time.Duration RETURN_WINDOW = java.time.Duration.ofDays(7);
 
-    /** 首个包裹发出：订单转 {@code SHIPPED} 并记录发货时刻（M 日自动送达以此起算）。 */
+    /** 首个包裹发出（后台手工运单）：委托 {@link #markShipped(Instant, ShippedSource)}，来源 {@code MANUAL}。 */
     public void markShipped(Instant at) {
+        markShipped(at, ShippedSource.MANUAL);
+    }
+
+    /**
+     * 订单转 {@code SHIPPED} 并记录发货时刻与来源（M 日自动送达以此起算）。
+     * 🔴 一单多包 / Biteship 重复回传：已 SHIPPED 时不再改写发货时刻与来源。
+     */
+    public void markShipped(Instant at, ShippedSource source) {
         if (status == ShopOrderStatus.SHIPPED) {
             return;     // 一单多包：第二个包裹不再改写发货时刻
         }
         transitionTo(ShopOrderStatus.SHIPPED);
         this.shippedAt = at;
+        this.shippedSource = source;
+    }
+
+    /** 下运单前 +1（v1.4.2 shop 5.1 AC4.2）：返回 +1 后的次数，作 {@code reference_id} 序号。 */
+    public int incrementWaybillAttempts() {
+        this.waybillAttempts = Math.addExact(this.waybillAttempts, 1);
+        this.updatedAt = Instant.now();
+        return this.waybillAttempts;
+    }
+
+    /** 记运单失败（订单状态不变）。原因截断至 200 字。 */
+    public void recordWaybillFailure(Instant at, String reason) {
+        this.waybillFailedAt = at;
+        String r = reason == null ? "UNKNOWN" : reason;
+        this.waybillFailReason = r.length() > 200 ? r.substring(0, 200) : r;
+        this.updatedAt = Instant.now();
+    }
+
+    public void clearWaybillFailure() {
+        this.waybillFailedAt = null;
+        this.waybillFailReason = null;
+    }
+
+    /**
+     * 写物流异常标记（v1.4.2 shop 5.1 AC8.2：Biteship 回传 courier_not_found / returned）：仅当当前无标记或为
+     * {@code STALLED} 时写入，已有其他异常不覆盖。暂停计时 / 确认 / 清除归 Story 5.2。
+     *
+     * @return 是否写入
+     */
+    public boolean flagLogisticsException(LogisticsException type, Instant at) {
+        if (logisticsException != null && logisticsException != LogisticsException.STALLED) {
+            return false;
+        }
+        if (logisticsException == type) {
+            return false;
+        }
+        this.logisticsException = type;
+        this.logisticsExceptionAt = at;
+        this.logisticsExceptionConfirmed = false;
+        this.updatedAt = Instant.now();
+        return true;
     }
 
     /**
@@ -869,6 +944,42 @@ public class ShopOrder {
 
     public String getLatePaymentResolution() {
         return latePaymentResolution;
+    }
+
+    public ShippedSource getShippedSource() {
+        return shippedSource;
+    }
+
+    public Instant getWaybillFailedAt() {
+        return waybillFailedAt;
+    }
+
+    public String getWaybillFailReason() {
+        return waybillFailReason;
+    }
+
+    public int getWaybillAttempts() {
+        return waybillAttempts;
+    }
+
+    public LogisticsException getLogisticsException() {
+        return logisticsException;
+    }
+
+    public Instant getLogisticsExceptionAt() {
+        return logisticsExceptionAt;
+    }
+
+    public boolean isLogisticsExceptionConfirmed() {
+        return logisticsExceptionConfirmed;
+    }
+
+    public boolean isClaimPending() {
+        return claimPending;
+    }
+
+    public Instant getTimerResumedAt() {
+        return timerResumedAt;
     }
 
     /** 🔒 不打印任何 PII。 */

@@ -2,11 +2,13 @@ package com.tailtopia.shop.order.repository;
 
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +22,14 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     Optional<ShopOrder> findByPublicTokenAndUserId(String publicToken, long userId);
 
     Optional<ShopOrder> findByPublicToken(String publicToken);
+
+    /**
+     * 订单行写锁（v1.4.2 shop Story 5.1 复审：下运单落结果的短事务②，防并发写两条活动运单）。
+     * 🔴 持锁区间内不得有外部调用。
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM ShopOrder o WHERE o.id = :id")
+    Optional<ShopOrder> findByIdForUpdate(@Param("id") long id);
 
     /**
      * 展示号查重（Story 4-3）。

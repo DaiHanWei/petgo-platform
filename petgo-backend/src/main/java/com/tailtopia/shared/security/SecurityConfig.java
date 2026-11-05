@@ -199,6 +199,9 @@ public class SecurityConfig {
                         .requestMatchers("/im/callback").permitAll()
                         // 支付网关回调（Midtrans 外部来源，内部 SHA-512 签名校验，Story 1.1）
                         .requestMatchers("/pay/callback").permitAll()
+                        // Biteship 物流 Webhook（v1.4.2 shop Story 5.1，D-12 / I14）：外部来源无鉴权。路径密钥（常量时间比较，
+                        // 不符 404）+ 回查 GET /v1/orders/:id —— 载荷只当通知，不据其改状态。access log 中路径密钥打码。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/biteship/*").permitAll()
                         // IM UserSig 签发（Story 5.5）：显式要求已认证；用户态 MAU 闸门（非 VET 须有活跃会话）
                         // 在 ImUserSigController 内做（403），此处仅收口鉴权（401）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/im/usersig").authenticated()

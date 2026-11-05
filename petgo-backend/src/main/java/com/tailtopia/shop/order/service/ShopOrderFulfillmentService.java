@@ -1,18 +1,24 @@
 package com.tailtopia.shop.order.service;
 
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.Carrier;
 import com.tailtopia.shop.order.domain.CompletionSource;
 import com.tailtopia.shop.order.domain.DeliverySource;
 import com.tailtopia.shop.order.domain.Shipment;
+import com.tailtopia.shop.order.domain.Shipments;
+import com.tailtopia.shop.order.domain.ShippedSource;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import com.tailtopia.shop.order.event.ShopOrderShippedEvent;
 import com.tailtopia.shop.order.repository.ShipmentRepository;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,11 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <ol>
  *   <li>{@link #markDeliveredByAdmin} —— 运营在后台手动置位（AB-11B）；</li>
  *   <li>{@link #confirmReceipt} —— 用户在<b>已发货</b>态就能确认收货，不必等系统标记送达；</li>
- *   <li>{@link #autoDeliverOverdue} —— 发货起 M=7 日无任何标记则自动置位。</li>
+ *   <li>{@link #autoDeliverOverdue} —— 发货起 M 日（v1.4.2 起 M=14，D-12）无任何标记则自动置位。</li>
  * </ol>
  *
- * <p>🔴 <b>S-2 一单多包</b>：订单转 {@code DELIVERED} 需<b>所有</b>包裹都送达；
- * 7 日自动确认以<b>最后一个</b>包裹送达为起点。
+ * <p>🔴 <b>S-2 一单多包</b>：订单转 {@code DELIVERED} 需<b>所有活动</b>包裹都送达（v1.4.2 shop 5.1：被取代 /
+ * 已取消的运单不计，三条出口也只处理活动运单）；7 日自动完成以<b>最后一个</b>包裹送达为起点。
  *
  * <p>🔴 <b>不碰 Epic 3 的既有支付逻辑</b>，只加履约段自己的边。
  */
@@ -41,10 +47,15 @@ public class ShopOrderFulfillmentService {
 
     private final ShopOrderRepository orders;
     private final ShipmentRepository shipments;
+    private final ApplicationEventPublisher events;
+    private final AdminAuditService audit;
 
-    public ShopOrderFulfillmentService(ShopOrderRepository orders, ShipmentRepository shipments) {
+    public ShopOrderFulfillmentService(ShopOrderRepository orders, ShipmentRepository shipments,
+            ApplicationEventPublisher events, AdminAuditService audit) {
         this.orders = orders;
         this.shipments = shipments;
+        this.events = events;
+        this.audit = audit;
     }
 
     // ---------- 读 ----------
@@ -75,20 +86,47 @@ public class ShopOrderFulfillmentService {
         if (c == null) {
             throw AppException.validation("请选择承运商");
         }
+        // v1.4.2 shop 5.1 AC10.1：已有活动 Biteship 运单时不得再登记手工运单（先由 5.2 的处置取消再转手工）
+        if (Shipments.hasActiveBiteship(shipments.findByShopOrderIdOrderByIdAsc(order.getId()))) {
+            throw AppException.conflict("该订单已有 Biteship 运单，请先取消");
+        }
         String no = trackingNo == null ? "" : trackingNo.trim();
-        shipments.findByCarrierAndTrackingNo(c, no).ifPresent(existing -> {
+        shipments.findByCarrierAndTrackingNo(c.name(), no).ifPresent(existing -> {
             // 库级唯一索引兜底，这里只是把它翻译成运营看得懂的话。
             // 重复录入会让同一笔承运成本被计两次，直接污染 AB-13A 的毛利。
             throw AppException.conflict("该承运商的这个物流单号已录入过");
         });
 
         Shipment shipment = shipments.save(Shipment.ship(order.getId(), c, no, carrierCost));
-        order.markShipped(shipment.getShippedAt());
+        order.markShipped(shipment.getShippedAt(), ShippedSource.MANUAL);
         orders.save(order);
         // 🔒 单号非 PII 可记；同上下文的收件人姓名/电话/地址严禁记录（NFR-5）
         log.info("电商订单发货 token={} carrier={} trackingNo={}", order.getPublicToken(),
                 c, shipment.getTrackingNo());
         return shipment;
+    }
+
+    /**
+     * 「标记已发货」（v1.4.2 shop 5.1 AC10.2，供后台线；PRD 旅程 D：运营确认打包后标记）：订单须
+     * {@code PENDING_SHIPMENT} 且存在活动的 Biteship 运单；订单 → {@code SHIPPED}、{@code shipped_source = MANUAL}；
+     * <b>运单状态不动</b>（等 Biteship 回传 {@code picked}，不登记第二个运单）；提交后发 {@code SHOP_ORDER_SHIPPED}；审计。
+     */
+    @Transactional
+    public ShopOrder markShippedWithoutWaybill(String orderToken, Long actorAccountId) {
+        ShopOrder order = requireOrder(orderToken);
+        if (order.getStatus() != ShopOrderStatus.PENDING_SHIPMENT) {
+            throw AppException.conflict("该订单当前状态不可标记发货：" + order.getStatus());
+        }
+        if (!Shipments.hasActiveBiteship(shipments.findByShopOrderIdOrderByIdAsc(order.getId()))) {
+            throw AppException.conflict("该订单没有 Biteship 运单，请先下运单或登记手工运单");
+        }
+        order.markShipped(Instant.now(), ShippedSource.MANUAL);
+        orders.save(order);
+        events.publishEvent(new ShopOrderShippedEvent(order.getId(), order.getUserId(), order.getPublicToken()));
+        audit.record(actorAccountId, AuditActions.SHOP_ORDER_MARKED_SHIPPED, "SHOP_ORDER", orderToken,
+                "标记已发货（Biteship 运单待揽收）");
+        log.info("电商订单标记已发货（无新运单）token={}", order.getPublicToken());
+        return order;
     }
 
     // ---------- 出口①：后台标记送达 ----------
@@ -104,10 +142,7 @@ public class ShopOrderFulfillmentService {
         ShopOrder order = requireOrder(orderToken);
         requireShipped(order);
         Instant now = Instant.now();
-        for (Shipment s : shipments.findByShopOrderIdOrderByIdAsc(order.getId())) {
-            s.markDelivered(now);
-            shipments.save(s);
-        }
+        markActiveDelivered(order.getId(), now);
         order.markDelivered(now, DeliverySource.ADMIN_MARK);
         orders.save(order);
         log.info("电商订单标记送达（后台）token={}", order.getPublicToken());
@@ -126,16 +161,18 @@ public class ShopOrderFulfillmentService {
         Shipment target = shipments.findById(shipmentId)
                 .filter(s -> s.getShopOrderId().equals(order.getId()))
                 .orElseThrow(() -> AppException.notFound("包裹不存在"));
+        if (!target.isActive()) {
+            throw AppException.conflict("该运单已被取代或已取消，不能标记送达");
+        }
         target.markDelivered(Instant.now());
         shipments.save(target);
 
         List<Shipment> all = shipments.findByShopOrderIdOrderByIdAsc(order.getId());
-        if (all.stream().anyMatch(s -> !s.isDelivered())) {
+        if (!Shipments.allActiveDelivered(all)) {
             return false;   // 还有包裹在路上
         }
-        // 以最后一个包裹的送达时刻为签收时刻（S-2：7 日自动确认以此起算）
-        Instant last = all.stream().map(Shipment::getDeliveredAt)
-                .max(Instant::compareTo).orElse(Instant.now());
+        // 以最后一个活动包裹的送达时刻为签收时刻（S-2：7 日自动确认以此起算）
+        Instant last = Shipments.lastActiveDeliveredAt(all).orElse(Instant.now());
         order.markDelivered(last, DeliverySource.SHIPMENTS_ALL_DELIVERED);
         orders.save(order);
         return true;
@@ -165,10 +202,7 @@ public class ShopOrderFulfillmentService {
         }
         Instant now = Instant.now();
         if (order.getStatus() == ShopOrderStatus.SHIPPED) {
-            for (Shipment s : shipments.findByShopOrderIdOrderByIdAsc(order.getId())) {
-                s.markDelivered(now);
-                shipments.save(s);
-            }
+            markActiveDelivered(order.getId(), now);
             order.markDelivered(now, DeliverySource.USER_CONFIRM);
         }
         order.markCompleted(now, CompletionSource.USER_CONFIRM);
@@ -180,7 +214,7 @@ public class ShopOrderFulfillmentService {
     // ---------- 出口③ + 自动完成：定时兜底 ----------
 
     /**
-     * 出口③：发货起 M=7 日无任何标记 → 自动置 {@code DELIVERED}（S-1）。
+     * 出口③：发货起 M 日（v1.4.2 起 M=14，D-12）无任何标记 → 自动置 {@code DELIVERED}（S-1）。
      *
      * <p>逐笔独立事务，单笔失败不阻断其余。
      *
@@ -210,10 +244,7 @@ public class ShopOrderFulfillmentService {
         if (order == null || !order.isAutoDeliverDue(now)) {
             return false;   // 并发已推进
         }
-        for (Shipment s : shipments.findByShopOrderIdOrderByIdAsc(orderId)) {
-            s.markDelivered(now);
-            shipments.save(s);
-        }
+        markActiveDelivered(orderId, now);
         order.markDelivered(now, DeliverySource.AUTO_TIMEOUT);
         orders.save(order);
         return true;
@@ -255,6 +286,20 @@ public class ShopOrderFulfillmentService {
     }
 
     // ---------- 内部 ----------
+
+    /**
+     * 三条出口逐运单置送达：🔴 只处理活动运单（v1.4.2 shop 5.1 AC11.2）—— 跳过 superseded / CANCELLED，
+     * 否则 {@code CANCELLED → DELIVERED} 违反领域规则。
+     */
+    private void markActiveDelivered(long orderId, Instant now) {
+        for (Shipment s : shipments.findByShopOrderIdOrderByIdAsc(orderId)) {
+            if (!s.isActive()) {
+                continue;
+            }
+            s.markDelivered(now);
+            shipments.save(s);
+        }
+    }
 
     private ShopOrder requireOrder(String orderToken) {
         return orders.findByPublicToken(orderToken)

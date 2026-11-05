@@ -214,12 +214,8 @@ class LiveBiteshipClientTest {
     }
 
     @Test
-    @DisplayName("providerMode 原样返回；运单方法留给 Story 5.1")
+    @DisplayName("providerMode 原样返回（运单三方法已由 Story 5.1 实现，见 LiveBiteshipClientWaybillTest）")
     void modeAndUnimplemented() {
         assertThat(client.providerMode()).isEqualTo("SANDBOX");
-        assertThatThrownBy(() -> client.getOrder("x")).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> client.cancelOrder("x", "others"))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> client.createOrder(null)).isInstanceOf(UnsupportedOperationException.class);
     }
 }

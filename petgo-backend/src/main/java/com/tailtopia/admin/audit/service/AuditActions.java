@@ -259,6 +259,14 @@ public final class AuditActions {
      * 🔒 不记地址 / 手机号。迟到款退款走 {@link #SHOP_ORDER_REFUND_HANDLED}（4.1 {@code createLatePaymentRefund} 内记）。
      */
     public static final String SHOP_ORDER_LATE_PAYMENT_REORDERED = "SHOP_ORDER_LATE_PAYMENT_REORDERED";
+    /**
+     * Biteship 运单（v1.4.2 shop Story 5.1）：下运单成功 / 失败 / 取消运单 / 标记已发货。target = 订单 token；
+     * 摘要只记 referenceId、Biteship 订单 id、快递码、失败原因码。🔒 <b>不记收件人任何字段</b>。
+     */
+    public static final String SHOP_WAYBILL_CREATED = "SHOP_WAYBILL_CREATED";
+    public static final String SHOP_WAYBILL_FAILED = "SHOP_WAYBILL_FAILED";
+    public static final String SHOP_WAYBILL_CANCELLED = "SHOP_WAYBILL_CANCELLED";
+    public static final String SHOP_ORDER_MARKED_SHIPPED = "SHOP_ORDER_MARKED_SHIPPED";
 
     // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
     /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */

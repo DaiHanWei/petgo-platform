@@ -2,6 +2,14 @@ package com.tailtopia.shop.stag;
 
 import com.tailtopia.admin.shared.StagOnly;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.logistics.biteship.BiteshipStubScript;
+import com.tailtopia.shop.logistics.BiteshipShipmentService;
+import com.tailtopia.shop.logistics.BiteshipTrackingService;
+import com.tailtopia.shop.logistics.WaybillResult;
+import com.tailtopia.shop.order.domain.Shipment;
+import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.repository.ShipmentRepository;
+import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.order.dto.ShopOrderRefundView;
 import com.tailtopia.shop.order.refund.CancelReason;
 import com.tailtopia.shop.order.refund.RefundScope;
@@ -9,6 +17,7 @@ import com.tailtopia.shop.order.refund.ShopOrderRefund;
 import com.tailtopia.shop.order.refund.ShopOrderRefundService;
 import com.tailtopia.shop.order.service.LatePaymentService;
 import com.tailtopia.shop.order.service.ReorderOutcome;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +36,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>v1.4.2 shop Story 4.2 AC8：追加迟到款「重新下单」（D-24 原列）与「迟到款退款」（D-24 未列，10.1「另一例退款」需要）
  * 两个入口，薄包装 {@link LatePaymentService}。造迟到款用现有支付模拟对已关单订单的意图模拟到账（走 {@code applyResult}）。
+ *
+ * <p>v1.4.2 shop Story 5.1 AC10.5：追加「下运单」（薄包装 {@link BiteshipShipmentService#createWaybill}）与「推进 stub 状态」
+ * （仅 {@code BITESHIP_MODE=stub} 时可用：{@link BiteshipStubScript#setStatus} 后立即回查推进），供 App story 与 stag 验收造数。
  */
 @RestController
 @StagOnly
@@ -36,10 +48,59 @@ public class ShopStagController {
 
     private final ShopOrderRefundService refunds;
     private final LatePaymentService latePayments;
+    private final BiteshipShipmentService waybills;
+    private final BiteshipTrackingService tracking;
+    private final ShopOrderRepository orders;
+    private final ShipmentRepository shipments;
+    private final ObjectProvider<BiteshipStubScript> stubScript;
 
-    public ShopStagController(ShopOrderRefundService refunds, LatePaymentService latePayments) {
+    public ShopStagController(ShopOrderRefundService refunds, LatePaymentService latePayments,
+            BiteshipShipmentService waybills, BiteshipTrackingService tracking, ShopOrderRepository orders,
+            ShipmentRepository shipments, ObjectProvider<BiteshipStubScript> stubScript) {
         this.refunds = refunds;
         this.latePayments = latePayments;
+        this.waybills = waybills;
+        this.tracking = tracking;
+        this.orders = orders;
+        this.shipments = shipments;
+        this.stubScript = stubScript;
+    }
+
+    public record StubStatusRequest(String status) {
+    }
+
+    /** 推进 stub 状态的结果：运单原始状态 / 用户侧状态 / 订单状态。 */
+    public record StubStatusResponse(String providerStatus, String userStatusKey, String orderStatus) {
+    }
+
+    @PostMapping("/admin/stag/shop/orders/{token}/waybill")
+    @PreAuthorize(AUTH)
+    public WaybillResult createWaybill(@PathVariable String token) {
+        return waybills.createWaybill(requireOrder(token).getId(), null);
+    }
+
+    @PostMapping("/admin/stag/shop/orders/{token}/waybill/stub-status")
+    @PreAuthorize(AUTH)
+    public StubStatusResponse stubStatus(@PathVariable String token, @RequestBody StubStatusRequest req) {
+        BiteshipStubScript script = stubScript.getIfAvailable();
+        if (script == null) {
+            throw AppException.conflict("仅 BITESHIP_MODE=stub 时可用");
+        }
+        if (req == null || req.status() == null || req.status().isBlank()) {
+            throw AppException.validation("status 必填");
+        }
+        ShopOrder order = requireOrder(token);
+        Shipment s = shipments.findActiveByShopOrderId(order.getId()).stream().filter(Shipment::isBiteship)
+                .findFirst().orElseThrow(() -> AppException.conflict("该订单没有活动的 Biteship 运单"));
+        script.setStatus(s.getBiteshipOrderId(), req.status().trim());
+        tracking.refresh(s.getId());
+        Shipment after = shipments.findById(s.getId()).orElseThrow();
+        return new StubStatusResponse(after.getProviderStatus(), after.getUserStatusKey(),
+                requireOrder(token).getStatus().name());
+    }
+
+    private ShopOrder requireOrder(String token) {
+        return orders.findByPublicToken(token).orElseThrow(() -> AppException.notFound("订单不存在"));
     }
 
     /** 迟到款退款结果：退款单 token 与金额（现金 = 迟到款、币 0）。 */

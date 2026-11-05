@@ -34,6 +34,21 @@ public enum Carrier {
     }
 
     /**
+     * 按快递码查（v1.4.2 shop Story 5.1）：大小写不敏感，未知码返回空，<b>不抛错</b>
+     * （Biteship 运单的 {@code carrier} 列存的是任意 Biteship 快递码大写，不一定是三家之一）。
+     */
+    public static java.util.Optional<Carrier> fromCode(String code) {
+        if (code != null) {
+            for (Carrier c : values()) {
+                if (c.name().equalsIgnoreCase(code.trim())) {
+                    return java.util.Optional.of(c);
+                }
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
      * 宽松解析（后台表单 / 历史数据）。
      *
      * <p>🔴 <b>未知值抛错而非默认到某一家</b> —— 与「未知枚举降级到最保守档」不同：

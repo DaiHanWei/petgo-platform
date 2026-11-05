@@ -38,6 +38,16 @@ public class BiteshipConfig {
         return build(props, env, RestClient.builder(), true);
     }
 
+    /**
+     * 桩测试钩子（v1.4.2 shop Story 5.1 AC3.2）：<b>仅当实际装配的是桩客户端时</b>才有实例；live / sandbox / 不可用
+     * 时本方法返回 null（容器登记为空 bean，{@code ObjectProvider#getIfAvailable} 得 null）。
+     * 🔴 {@link BiteshipStubScript} 不实现 {@link BiteshipClient}，避免按类型注入出现两个候选。
+     */
+    @Bean
+    public BiteshipStubScript biteshipStubScript(BiteshipClient client) {
+        return client instanceof StubBiteshipClient stub ? new BiteshipStubScript(stub) : null;
+    }
+
     /** 包级可见：测试可注入绑定了 {@code MockRestServiceServer} 的 builder。 */
     BiteshipClient build(BiteshipProperties props, Environment env, RestClient.Builder builder,
             boolean applyTimeouts) {
