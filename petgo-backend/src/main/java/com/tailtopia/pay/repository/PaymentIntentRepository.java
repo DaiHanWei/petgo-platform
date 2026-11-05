@@ -65,4 +65,27 @@ public interface PaymentIntentRepository extends JpaRepository<PaymentIntent, Lo
 
     /** 定时过期扫描（V85）：PENDING 且 expires_at < now 的一批（充值 60min 窗超时置 EXPIRED）。 */
     List<PaymentIntent> findByStatusAndExpiresAtBefore(PaymentStatus status, Instant now, Pageable pageable);
+
+    /** v1.4.2 shop Story 3.3：某电商订单的全部意图（一单多意图，关单判据与迟到款找回订单用）。 */
+    List<PaymentIntent> findByShopOrderIdOrderByIdAsc(Long shopOrderId);
+
+    /**
+     * v1.4.2 shop Story 3.3 AC8.3：定时查单候选 —— 已出码（{@code gateway_ref} 非空）且建单满 3 分钟的电商意图，
+     * 仍 PENDING，或因关单 / 扫描置为 FAILED / EXPIRED 不足 24 小时（找回迟到款）。
+     *
+     * <p>🔴 复审修复：筛选口径与 story AC8.3 一致；<b>只调整排序</b> —— PENDING 优先，再按 {@code created_at} 升序。
+     * 原「纯按 created_at 升序 LIMIT 100」下，24 小时窗内积压的终态意图（更早建单）会长期占满名额，
+     * 真正在等回调的 PENDING 意图被饿死。
+     */
+    String SHOP_RECONCILE_CANDIDATES_SQL = """
+            SELECT * FROM payment_intents
+             WHERE purpose = 'SHOP_ORDER' AND gateway_ref IS NOT NULL
+               AND created_at <= CAST(:now AS timestamptz) - INTERVAL '3 minutes'
+               AND ( status = 'PENDING'
+                  OR (status IN ('FAILED','EXPIRED') AND updated_at > CAST(:now AS timestamptz) - INTERVAL '24 hours') )
+             ORDER BY (status = 'PENDING') DESC, created_at ASC LIMIT 100
+            """;
+
+    @Query(value = SHOP_RECONCILE_CANDIDATES_SQL, nativeQuery = true)
+    List<PaymentIntent> findShopReconcileCandidates(@Param("now") Instant now);
 }

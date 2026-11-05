@@ -62,7 +62,10 @@ class ShopOrderUnpaidCancelTest {
     void setUp() {
         ObjectProvider<ShopOrderPaymentService> self = mock(ObjectProvider.class);
         service = new ShopOrderPaymentService(orders, orderLines, inventory, checkout, intents,
-                gateway, self, events, transition, coupons, wallet, accountDeletions);
+                gateway, self, events, transition, coupons, wallet, accountDeletions,
+                mock(com.tailtopia.pay.service.PaymentReconciliationService.class),
+                mock(org.springframework.data.redis.core.StringRedisTemplate.class),
+                mock(ShopPaymentAlerts.class));
         when(accountDeletions.findByUserId(anyLong())).thenReturn(Optional.empty());
         when(self.getObject()).thenReturn(service);
         when(orders.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -132,7 +135,7 @@ class ShopOrderUnpaidCancelTest {
                 java.time.Instant.now().minusSeconds(5));
         when(orders.findById(5L)).thenReturn(Optional.of(o));
 
-        service.cancelOneOverdue(5L);
+        service.closeOne(5L);   // v1.4.2 shop 3.3：关单唯一收口（无意图 → 订单窗过即可关）
 
         assertThat(o.getCancelReason()).isEqualTo(CancelReason.PAYMENT_TIMEOUT);
         verify(wallet).credit(UID, 10_000L, PawCoinTxnType.REFUND, "SHOP_ORDER_VOID", 5L,
@@ -168,7 +171,7 @@ class ShopOrderUnpaidCancelTest {
     // ---------- 复审修复（D1/D2）：注销与待付款单 ----------
 
     @Test
-    @DisplayName("🔴 账号已受理注销 → 常规取消（超时 / 懒过期 / 用户取消竞态）不退币、不退券；库存照放、单照取消、意图照作废")
+    @DisplayName("🔴 账号已受理注销 → 常规取消（超时关单 / 用户取消竞态）不退币、不退券；库存照放、单照取消、意图照作废")
     void deletedAccountSkipsCoinAndCouponReturn() {
         ShopOrder o = ShopOrderTestOrders.newModeOrder(8L, UID, 30_000L, CheckoutSource.CART);
         o.attachPaymentIntent("pi-8");

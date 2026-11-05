@@ -55,7 +55,9 @@ class ShopOrderDetailViewContractTest {
             "totalAmount", "payChannel", "coinAmount", "cashAmount", "expiresAt", "createdAt",
             "paymentIntentToken", "shipTo", "lines", "shippedAt", "deliveredAt", "completedAt",
             "returnWindowEndsAt", "packages", "attributionSource",
-            "paymentStatus", "paymentFailureCategory");
+            "paymentStatus", "paymentFailureCategory",
+            // v1.4.2 shop Story 3.3（S-7）：末尾追加
+            "displayStatus", "canPay", "paymentDeadline");
 
     /** 全字段非 null 的样本 —— 只有它能把「字段集」钉全（NON_NULL 下 null 字段整键消失）。 */
     private ShopOrderDetailView fullyPopulated(String paymentStatus, String failureCategory) {
@@ -70,11 +72,11 @@ class ShopOrderDetailViewContractTest {
                 t, t, t, t,
                 List.of(new ShopOrderDetailView.Package("JNE", "JNE", "JN1", "https://jne/JN1",
                         "DELIVERED", t, t)),
-                "unknown", paymentStatus, failureCategory);
+                "unknown", paymentStatus, failureCategory, "COMPLETED", false, t);
     }
 
     @Test
-    @DisplayName("顶层字段集恰好 23 个，displayNo / paymentStatus / paymentFailureCategory 在列")
+    @DisplayName("顶层字段集恰好 26 个，displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
     void fullOrderHasExactlyTheContractFields() {
         assertThat(wire(fullyPopulated("FAILED", "GATEWAY_DECLINED")).keySet())
                 .isEqualTo(TOP_LEVEL_KEYS);
@@ -129,7 +131,7 @@ class ShopOrderDetailViewContractTest {
         // NON_NULL：不是「键在、值为 null」，而是键根本不出现。
         // App 侧 j['paymentStatus']?.toString() 对缺键与 null 同样得到 null —— 两端在此对齐。
         assertThat(w).doesNotContainKeys("paymentStatus", "paymentFailureCategory");
-        // 其余 21 个键一个不少 —— 省的只能是这两个。
+        // 其余 24 个键一个不少 —— 省的只能是这两个。
         assertThat(w.keySet()).containsExactlyInAnyOrderElementsOf(TOP_LEVEL_KEYS.stream()
                 .filter(k -> !k.equals("paymentStatus") && !k.equals("paymentFailureCategory"))
                 .toList());
@@ -141,5 +143,31 @@ class ShopOrderDetailViewContractTest {
         Map<String, Object> w = wire(fullyPopulated("FAILED", "EXPIRED"));
         assertThat(w).containsEntry("paymentStatus", "FAILED")
                 .containsEntry("paymentFailureCategory", "EXPIRED");
+    }
+
+    @Test
+    @DisplayName("v1.4.2 shop 3.3：宽限期待支付单 → displayStatus=CANCELLED、canPay=false、paymentDeadline=expiresAt")
+    void gracePeriodFieldsOnTheWire() {
+        com.tailtopia.shop.order.domain.ShopOrder o = com.tailtopia.shop.order.domain.ShopOrder.place(
+                "ord-g", "TOKO-20260916-7M4KQ3", Instant.parse("2026-09-16T10:00:00Z"), 9L, 200_000L, 20_000L,
+                0L, new com.tailtopia.shop.order.domain.AddressSnapshot("Budi", "+628123", "DKI", "Jaksel",
+                        "Kebayoran", "Jl. 1", "12160"));
+        org.springframework.test.util.ReflectionTestUtils.setField(o, "createdAt",
+                Instant.parse("2026-09-16T10:00:00Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(o, "expiresAt",
+                Instant.parse("2026-09-16T11:00:00Z"));
+        ShopOrderDetailView v = ShopOrderDetailView.of(o, List.of(), List.of(), Map.of(), null,
+                Instant.parse("2026-09-16T11:02:00Z"));
+        Map<String, Object> w = wire(v);
+        assertThat(w).containsEntry("status", "PENDING_PAYMENT")
+                .containsEntry("displayStatus", "CANCELLED")
+                .containsEntry("canPay", false)
+                .containsKey("paymentDeadline");
+        assertThat(v.paymentDeadline()).isEqualTo(Instant.parse("2026-09-16T11:00:00Z"));
+
+        ShopOrderDetailView inWindow = ShopOrderDetailView.of(o, List.of(), List.of(), Map.of(), null,
+                Instant.parse("2026-09-16T10:05:00Z"));
+        assertThat(inWindow.displayStatus()).isEqualTo("PENDING_PAYMENT");
+        assertThat(inWindow.canPay()).isTrue();
     }
 }

@@ -14,9 +14,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>三段各自独立 try/catch、各自独立节奏：
  * <ol>
- *   <li><b>支付窗超时</b>（1min）：{@code PENDING_PAYMENT} 且 {@code expires_at < now}
- *       → 取消并<b>释放库存</b>。用户可见的正确性由<b>懒过期</b>承担（读详情 / 点支付时就地判定），
- *       本扫描是兜底 —— 无人查看的订单不该永远锁着库存。🔴 这一条比意图过期扫描重要得多：
+ *   <li><b>支付窗超时</b>（1min）：v1.4.2 shop Story 3.3 起<b>关单唯一入口</b>——订单窗已过且该单所有码已失效，
+ *       关单前最后查单、查询失败不关（{@code ShopOrderPaymentService#closeOverdue}）→ 取消并<b>释放库存</b>。
+ *       读详情 / 点支付不再懒关单（宽限期显示已取消）。🔴 这一条比意图过期扫描重要得多：
  *       支付意图滞留 PENDING 只是脏数据，而订单滞留 PENDING_PAYMENT 会一直占着别人想买的货。</li>
  *   <li><b>自动置送达</b>（10min）：SPEC-2 出口③，发货起 M=7 日无任何标记则置 {@code DELIVERED}。</li>
  *   <li><b>自动确认收货</b>（10min）：送达起 7 日未确认则置 {@code COMPLETED}（FR-102）。</li>
@@ -57,9 +57,10 @@ public class ShopOrderExpiryScanner {
     @Scheduled(fixedDelayString = "${petgo.shop.order-expiry-scan-ms:60000}")
     public void scan() {
         try {
-            int cancelled = payments.cancelOverdue(BATCH_LIMIT);
+            // v1.4.2 shop Story 3.3（S-1）：等码失效并最后查单才关单；每单可能一次网关往返，批量 50。
+            int cancelled = payments.closeOverdue(ShopOrderPaymentService.CLOSE_BATCH_LIMIT);
             if (cancelled > 0) {
-                log.info("电商订单支付超时取消并释放库存 count={}", cancelled);
+                log.info("电商订单支付超时关单并释放库存 count={}", cancelled);
             }
         } catch (RuntimeException e) {
             log.warn("电商订单超时扫描失败 cause={}", e.getClass().getSimpleName());

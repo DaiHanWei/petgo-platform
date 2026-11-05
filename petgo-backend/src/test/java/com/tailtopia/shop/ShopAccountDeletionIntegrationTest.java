@@ -129,7 +129,7 @@ class ShopAccountDeletionIntegrationTest extends ApiIntegrationTest {
         // 竞态：注销之后才出现（或漏网）的待付款单被超时扫描关掉 —— 不得重建钱包、不得写退币流水
         //    （币段视为提交时已扣、钱包已随注销作废，故不再造扣币流水）
         long late = pendingNewModeOrder(uid, 30_000L, false);
-        payments.cancelOneOverdue(late);
+        payments.closeOne(late);   // v1.4.2 shop Story 3.3：关单唯一收口（无意图的单直接可关）
         assertThat(jdbc.queryForObject("SELECT status FROM shop_orders WHERE id = ?", String.class, late))
                 .isEqualTo("CANCELLED");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pawcoin_wallets WHERE user_id = ?",

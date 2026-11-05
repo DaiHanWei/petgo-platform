@@ -312,7 +312,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     // ---------- 🔴 AD-8 超时：必须把库存还回去 ----------
 
     @Test
-    @DisplayName("🔴 支付窗过期 → 读详情时就地取消并释放库存（懒过期，不等扫描）")
+    @DisplayName("🔴 v1.4.2 shop 3.3（B1 ④）：订单窗过后读详情【不关单】—— 仍 PENDING_PAYMENT、显示 CANCELLED、库存仍锁、/pay 409")
     void lazyExpiryReleasesStock() {
         long uid = seedUser();
         rules.update(true, true, 1_000_000L, ACTOR);
@@ -323,11 +323,16 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         expireOrder(order.getPublicToken());
 
         ShopOrder read = payments.requireOwn(uid, order.getPublicToken());
+        var view = detailOf(uid, order.getPublicToken());
 
-        assertThat(read.getStatus()).isEqualTo(ShopOrderStatus.CANCELLED);
-        var inv = inventory.findBySkuId(skuId(sku)).orElseThrow();
-        assertThat(inv.getLocked()).as("超时必须把库存还给别人").isZero();
-        assertThat(inv.getActual()).as("释放不是扣减").isEqualTo(10L);
+        assertThat(read.getStatus()).isEqualTo(ShopOrderStatus.PENDING_PAYMENT);
+        assertThat(view.displayStatus()).isEqualTo(ShopOrderStatus.CANCELLED.name());
+        assertThat(view.canPay()).isFalse();
+        assertThat(inventory.findBySkuId(skuId(sku)).orElseThrow().getLocked())
+                .as("关单只由扫描执行，读单不释放").isEqualTo(1L);
+        assertThatThrownBy(() -> payments.pay(uid, order.getPublicToken(), null))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.SHOP_ORDER_NOT_PAYABLE));
     }
 
     @Test
@@ -339,7 +344,8 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         ShopOrder order = placeOrder(uid, sku, 1, 285_000L);
         expireOrder(order.getPublicToken());
 
-        int cancelled = payments.cancelOverdue(50);
+        // v1.4.2 shop 3.3：无意图（从未出码）的单订单窗一过即可关
+        int cancelled = payments.closeOverdue(50);
 
         assertThat(cancelled).isPositive();
         assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow().getStatus())
@@ -356,9 +362,11 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         ShopOrder order = placeOrder(uid, sku, 1, 285_000L);
         expireOrder(order.getPublicToken());
 
+        // v1.4.2 shop 3.3（S-7）：宽限期 / 订单窗已过 → 409 shop-order-not-payable
         assertThatThrownBy(() -> payments.pay(uid, order.getPublicToken(), null))
-                .isInstanceOf(AppException.class)
-                .hasMessageContaining("待支付");
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.SHOP_ORDER_NOT_PAYABLE))
+                .hasMessageContaining("超过付款时间");
         assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
                 .getPaymentIntentToken()).isNull();
     }
@@ -373,6 +381,13 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         assertThat(order.getExpiresAt()).isNotNull();
         long minutes = ChronoUnit.MINUTES.between(order.getCreatedAt(), order.getExpiresAt());
         assertThat(minutes).isEqualTo(60);
+
+        // v1.4.2 shop 3.3（B1 ①）：意图有效期 = 码失效时刻 ≈ 出码 + 65 分钟，不跟订单窗
+        var paid = payments.pay(uid, order.getPublicToken(), null);
+        var intent = paymentIntents.findByToken(paid.paymentIntentToken()).orElseThrow();
+        assertThat(intent.getProviderExpiresAt()).isEqualTo(intent.getExpiresAt());
+        assertThat(ChronoUnit.MINUTES.between(Instant.now(), intent.getProviderExpiresAt())).isBetween(64L, 65L);
+        assertThat(intent.getShopOrderId()).isEqualTo(order.getId());
     }
 
     // ---------- 用户取消 ----------
@@ -466,8 +481,10 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         long uid = seedUser();
         ShopOrder order = payableOrder(uid);
         expireOrder(order.getPublicToken());
+        expireCodes(order.getPublicToken());
 
-        // 懒过期：读一次详情即触发 releaseAndCancel(order, "TIMEOUT")
+        // v1.4.2 shop 3.3：走新关单路径（stub 查单 EXPIRED → 意图 EXPIRED → releaseUnpaid(PAYMENT_TIMEOUT)）
+        payments.closeOverdue(50);
         var view = detailOf(uid, order.getPublicToken());
 
         assertThat(view.status()).isEqualTo(ShopOrderStatus.CANCELLED.name());
@@ -497,8 +514,10 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         String intentToken = orders.findByPublicToken(order.getPublicToken()).orElseThrow()
                 .getPaymentIntentToken();
 
-        // 把意图的付款窗拨到过去，让 PaymentIntentExpiryScanner 那条路先把它置 EXPIRED。
-        jdbc.update("UPDATE payment_intents SET expires_at = ? WHERE public_token = ?",
+        // 把意图的付款窗与码失效时刻拨到过去，让 PaymentIntentExpiryScanner 那条路先把它置 EXPIRED
+        // （v1.4.2 shop 3.3：电商意图码未失效前全局扫描不动它）。
+        jdbc.update("UPDATE payment_intents SET expires_at = ?, provider_expires_at = ? WHERE public_token = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(60)),
                 java.sql.Timestamp.from(Instant.now().minusSeconds(60)), intentToken);
         paymentIntents.expireOverduePending(10);
         assertThat(paymentIntents.findByToken(intentToken).orElseThrow().getStatus())
@@ -506,7 +525,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
 
         // 订单侧随后取消 —— failByToken 因「已终态即 no-op」写不进 reason，meta 仍无 reason 键。
         expireOrder(order.getPublicToken());
-        payments.cancelOneOverdue(
+        payments.closeOne(
                 orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId());
 
         var view = detailOf(uid, order.getPublicToken());
@@ -749,6 +768,15 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     /** 把支付窗拨到过去（真等 60 分钟不现实；服务端时刻仍是唯一判定依据）。 */
     private void expireOrder(String orderToken) {
         jdbc.update("UPDATE shop_orders SET expires_at = ? WHERE public_token = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(60)), orderToken);
+    }
+
+    /** v1.4.2 shop 3.3：把该单全部意图的码失效时刻拨到过去（关单判据的另一半）。 */
+    private void expireCodes(String orderToken) {
+        jdbc.update("""
+                UPDATE payment_intents SET provider_expires_at = ?, expires_at = ?
+                 WHERE shop_order_id = (SELECT id FROM shop_orders WHERE public_token = ?)
+                """, java.sql.Timestamp.from(Instant.now().minusSeconds(60)),
                 java.sql.Timestamp.from(Instant.now().minusSeconds(60)), orderToken);
     }
 }

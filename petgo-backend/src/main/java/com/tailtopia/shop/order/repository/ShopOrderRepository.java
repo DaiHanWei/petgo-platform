@@ -94,9 +94,41 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     List<ShopOrder> findOverdue(@Param("status") ShopOrderStatus status,
             @Param("now") Instant now, Pageable pageable);
 
-    default List<ShopOrder> findOverduePendingPayment(Instant now, Pageable pageable) {
-        return findOverdue(ShopOrderStatus.PENDING_PAYMENT, now, pageable);
-    }
+    /**
+     * 可关单候选（v1.4.2 shop Story 3.3 AC3 路径⑤，S-1 / B1）：订单窗已过，且该单每一个已出码（{@code gateway_ref}
+     * 非空）的意图码都已失效（{@code COALESCE(provider_expires_at, created_at + 65 分钟) < now}）。
+     * 未出码的意图从未把码交到用户手上，不参与判据。候选仍须经 {@code isClosable} 复核与关单前查单。
+     */
+    String CLOSABLE_CANDIDATES_SQL = """
+            SELECT o.id FROM shop_orders o
+             WHERE o.status = 'PENDING_PAYMENT' AND o.expires_at < :now
+               AND NOT EXISTS (
+                   SELECT 1 FROM payment_intents pi
+                    WHERE pi.shop_order_id = o.id AND pi.gateway_ref IS NOT NULL
+                      AND COALESCE(pi.provider_expires_at, pi.created_at + INTERVAL '65 minutes') >= :now)
+             ORDER BY o.expires_at ASC
+             LIMIT :limit
+            """;
+
+    @Query(value = CLOSABLE_CANDIDATES_SQL, nativeQuery = true)
+    List<Long> findClosableCandidateIds(@Param("now") Instant now, @Param("limit") int limit);
+
+    /**
+     * 记迟到款（v1.4.2 shop Story 3.3 AC6.2）：条件更新，只在尚无迟到款时写；<b>不改订单状态</b>。
+     *
+     * <p>🔴 native 条件更新而不是读实体再 save：与 {@code markPaid} 抢同一行时不会因 {@code @Version}
+     * 把整个到账回调事务打回（那会连同意图 PAID 一起回滚，才是真丢账）。
+     *
+     * @return 受影响行数；0 = 已有迟到款（或订单不存在）
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = """
+            UPDATE shop_orders SET late_paid_amount = :amount, late_paid_at = :now, late_paid_intent_id = :intentId,
+                                   updated_at = :now, version = version + 1
+             WHERE id = :orderId AND late_paid_intent_id IS NULL
+            """, nativeQuery = true)
+    int recordLatePayment(@Param("orderId") long orderId, @Param("amount") long amount,
+            @Param("now") Instant now, @Param("intentId") long intentId);
 
     /** 后台订单列表（Story 4.2，按下单时间倒序）。 */
     List<ShopOrder> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);

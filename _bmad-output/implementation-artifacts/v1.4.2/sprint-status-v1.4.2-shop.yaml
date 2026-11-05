@@ -59,7 +59,7 @@ development_status:
   epic-3: in-progress
   3-1-结算试算与运费估算: review
   3-2-提交订单: review
-  3-3-付款窗口主动查单与关单后到账: ready-for-dev
+  3-3-付款窗口主动查单与关单后到账: review
   epic-3-retrospective: optional
 
   epic-4: backlog

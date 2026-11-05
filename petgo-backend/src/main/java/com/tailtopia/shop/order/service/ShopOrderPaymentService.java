@@ -5,16 +5,21 @@ import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.domain.PaymentStatus;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
+import com.tailtopia.pay.service.PaymentReconciliationService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.pay.ChargeQueryResult;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PaymentCallback;
 import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.shop.coupon.service.CouponLedgerService;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import com.tailtopia.shop.order.dto.PaymentCheckView;
 import com.tailtopia.shop.order.event.ShopPaymentIntentCreatedEvent;
 import com.tailtopia.shop.order.refund.CancelReason;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
@@ -22,13 +27,16 @@ import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.service.InventoryService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,8 +52,15 @@ import org.springframework.transaction.annotation.Transactional;
  *       网关只收现金段，Coin 段在到账时扣。</li>
  * </ul>
  *
- * <p>🔴 <b>支付窗到期即取消并释放库存</b>（AD-8）。用户可见的正确性由<b>懒过期</b>承担
- * （读详情 / 点支付时就地判定），定时扫描只是兜底 —— 无人查看的订单不至于永远锁着库存。
+ * <p>🔴 v1.4.2 shop Story 3.3（S-1 / S-7 / B1 / I3）—— <b>等码失效并最后查单才关单</b>：
+ * <ul>
+ *   <li>订单窗 {@code expires_at} = 建单 + 60 分钟（App 倒计时，不变）；GemPay 码失效 = 出码 + 65 分钟
+ *       （{@link #PROVIDER_CODE_TTL}，固定不可调）；两者之间是<b>宽限期</b>：显示已取消、不可支付，期间到账转待发货。</li>
+ *   <li>关单判据唯一实现 {@link #isClosable}：订单窗已过 <b>且</b>该单每个已出码意图的码都已失效；关单前对仍未付的
+ *       意图逐个查单，<b>查询失败不关单</b>（{@link #closeOverdue}）。读单 / 点支付 / 用户取消一律不关单。</li>
+ *   <li>出码只在建单后 {@link #QR_ISSUE_WINDOW}（10 分钟）内 ⇒ <b>关单最晚 = 建单 + 10 + 65 = 建单 + 75 分钟</b>
+ *       （防第 55 分钟出码把库存与券占到 120 分钟）。</li>
+ * </ul>
  *
  * <p>🔴 <b>仅 QRIS 一种真钱渠道</b>（FR-100）：不支持 GoPay/OVO 直连，不支持银行转账/VA。
  *
@@ -79,7 +94,7 @@ public class ShopOrderPaymentService {
     /**
      * ⚠️ 自引用代理（照 {@code AccountDisposalService} 范式）。
      *
-     * <p><b>无事务方法（{@link #pay} / {@link #cancelOverdue}）调本类事务方法必须经它</b>，
+     * <p><b>无事务方法（{@link #pay} / {@link #closeOverdue} / {@link #paymentCheck}）调本类事务方法必须经它</b>，
      * 不能 {@code this.xxx(...)} —— 后者绕过 Spring 代理，{@code @Transactional} 直接不生效：
      * 纯 PawCoin 的「扣币 + 出库 + 状态迁移同一事务」会退化成三步各自提交的假原子，
      * 超时扫描的「逐笔独立事务」同样名存实亡。
@@ -89,13 +104,34 @@ public class ShopOrderPaymentService {
     /** 领域事件发布（Story 1-2：支付漏斗入口）。Spring 原生，不引任何 MQ。 */
     private final ApplicationEventPublisher events;
 
+    /** v1.4.2 shop Story 3.3：事务外查单（三态）。 */
+    private final PaymentReconciliationService reconciliation;
+    /** v1.4.2 shop Story 3.3：关单查单失败计数、「我已付款」节流（沿用现有 Redis，与 IdempotencyService 同级用法）。 */
+    private final StringRedisTemplate redis;
+    /** v1.4.2 shop Story 3.3：连续查单失败的飞书告警。 */
+    private final ShopPaymentAlerts alerts;
+
+    /** GemPay 码固定有效期（出码 + 65 分钟）。🔴 <b>不做成可配</b>：误配短于 65 分钟就会在码仍有效时关单。 */
+    public static final Duration PROVIDER_CODE_TTL = PaymentIntent.PROVIDER_CODE_TTL;
+    /** 出码窗口（I3）：建单后 10 分钟内才可出新码；之后只能复用仍有效的码。 */
+    public static final Duration QR_ISSUE_WINDOW = Duration.ofMinutes(10);
+    /** 关单批量上限：每单可能一次网关往返，由 200 降到 50。 */
+    public static final int CLOSE_BATCH_LIMIT = 50;
+    /** 连续查单失败计数键前缀（24 小时 TTL）。 */
+    static final String CLOSE_FAIL_KEY_PREFIX = "shop:close-query-fail:";
+    static final Duration CLOSE_FAIL_TTL = Duration.ofHours(24);
+    /** 「我已付款」节流键前缀（10 秒）。 */
+    static final String PAYMENT_CHECK_KEY_PREFIX = "shop:payment-check:";
+    static final Duration PAYMENT_CHECK_THROTTLE = Duration.ofSeconds(10);
+
     public ShopOrderPaymentService(ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             InventoryService inventory, CheckoutService checkout,
             PaymentIntentService paymentIntents, PaymentGateway gateway,
             org.springframework.beans.factory.ObjectProvider<ShopOrderPaymentService> selfProvider,
             ApplicationEventPublisher events, ShopOrderPaidTransition paidTransition,
             CouponLedgerService coupons, PawCoinWalletService wallet,
-            AccountDeletionRepository accountDeletions) {
+            AccountDeletionRepository accountDeletions, PaymentReconciliationService reconciliation,
+            StringRedisTemplate redis, ShopPaymentAlerts alerts) {
         this.orders = orders;
         this.orderLines = orderLines;
         this.inventory = inventory;
@@ -108,21 +144,26 @@ public class ShopOrderPaymentService {
         this.coupons = coupons;
         this.wallet = wallet;
         this.accountDeletions = accountDeletions;
+        this.reconciliation = reconciliation;
+        this.redis = redis;
+        this.alerts = alerts;
     }
 
     // ---------- 读 ----------
 
     /**
-     * 读本人订单（懒过期）。
+     * 读本人订单（<b>只读</b>）。
      *
      * <p>🔴 越权与不存在<b>同为 404</b>：403 会泄漏「这个 token 确实存在」，而 token 本就是防枚举的。
+     *
+     * <p>🔴 v1.4.2 shop Story 3.3（B1 路径④）：<b>读单不再懒关单</b>。原先用户在第 60 分 01 秒打开详情或点支付就把单关了、
+     * 意图置 FAILED，而码要到 65 分钟才失效 —— 那 5 分钟内的付款全成了迟到款。宽限期改由
+     * {@link ShopOrder#displayStatusAt} 显示已取消；关单<b>只</b>由 {@link #closeOverdue} 执行。
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public ShopOrder requireOwn(long userId, String orderToken) {
-        ShopOrder order = orders.findByPublicTokenAndUserId(orderToken, userId)
+        return orders.findByPublicTokenAndUserId(orderToken, userId)
                 .orElseThrow(() -> AppException.notFound("订单不存在"));
-        expireIfOverdue(order);
-        return order;
     }
 
     @Transactional(readOnly = true)
@@ -167,15 +208,31 @@ public class ShopOrderPaymentService {
         }
         requirePayable(order);
 
-        long cash = order.getCashAmount() == null ? order.getTotalAmount() : order.getCashAmount();
-        if (cash <= 0) {
+        // v1.4.2 shop Story 3.3 AC2.4 新判序（与详情 canPay 同一判定 payGate，不复制）
+        Instant now = Instant.now();
+        PaymentIntent current = self.intentOf(order).orElse(null);
+        PayGate gate = payGate(order, current, now);
+        switch (gate) {
+            case WINDOW_CLOSED -> throw AppException.shopOrderNotPayable("订单已超过付款时间");
+            case ISSUE_CLOSED -> throw AppException.shopOrderNotPayable("订单已无法支付");
+            case NOT_PENDING -> throw AppException.conflict("该订单已不在待支付状态");
+            case REUSE -> {
+                // 码仍有效 → 直接返回同一个码，不向网关再下单
+                return new PayResult(order.getStatus().name(), current.getPublicToken(), payloadOf(current),
+                        order.getExpiresAt());
+            }
+            default -> { /* PURE_COIN / ISSUE_NEW 往下走 */ }
+        }
+
+        if (gate == PayGate.PURE_COIN) {
             // 纯 PawCoin：站内即时扣 + 当场结清（无网关往返，无意图）
             self.settlePureCoin(userId, orderToken);
             ShopOrder settled = self.requireOwn(userId, orderToken);
             return new PayResult(settled.getStatus().name(), null, null, null);
         }
+        long cash = cashOf(order);
 
-        // 有现金段：QRIS（纯现金）或 MIXED（两段都有）
+        // 有现金段：QRIS（纯现金）或 MIXED（两段都有）。首次出码失败（E7）在 10 分钟内可重试。
         PaymentIntent intent = self.ensureIntent(userId, order, idempotencyKey);
         String payload = payloadOf(intent);
         if (intent.getGatewayRef() == null) {
@@ -199,7 +256,8 @@ public class ShopOrderPaymentService {
             if (charge.payload() != null) {
                 meta.put("payload", charge.payload());
             }
-            paymentIntents.attachCharge(intent.getPublicToken(), charge.gatewayRef(), meta);
+            // 🔴 意图有效期 = 码失效时刻（出码 + 65 分钟），不再跟订单剩余窗（B1 路径①）
+            paymentIntents.attachCharge(intent.getPublicToken(), charge.gatewayRef(), meta, PROVIDER_CODE_TTL);
             payload = charge.payload();
         }
         return new PayResult(order.getStatus().name(), intent.getPublicToken(), payload,
@@ -216,7 +274,8 @@ public class ShopOrderPaymentService {
         //    🔴 客户端 key 一律【不采信】：订单 token 已唯一标识「这个用户的这一单」，
         //    采信任意字符串会让 B 用 A 的 key 取回 A 的意图并挂到 B 单上（回调按 token 回找订单命中两行）。
         String key = "shop-order-pay:" + order.getPublicToken();
-        Duration ttl = remainingWindow(order);
+        // v1.4.2 shop Story 3.3（B1 路径①）：TTL = 码有效期 65 分钟；出码成功时 attachCharge 再按网关返回时刻校准。
+        Duration ttl = PROVIDER_CODE_TTL;
 
         var response = coin > 0
                 ? paymentIntents.createMixedIntent(userId, PaymentPurpose.SHOP_ORDER,
@@ -224,6 +283,8 @@ public class ShopOrderPaymentService {
                 : paymentIntents.createIntent(userId, PaymentPurpose.SHOP_ORDER, PayChannel.QRIS,
                         order.getTotalAmount(), CURRENCY, key, ttl);
 
+        // 一单多意图关联（关单判据「所有意图码已失效」与迟到款找回订单都靠它）；仅当为空时写
+        paymentIntents.bindShopOrder(response.token(), order.getId());
         PaymentIntent entity = paymentIntents.findByToken(response.token())
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         ShopOrder managed = orders.findById(order.getId()).orElseThrow();
@@ -285,7 +346,12 @@ public class ShopOrderPaymentService {
 
     // ---------- 取消 / 超时 ----------
 
-    /** 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。 */
+    /**
+     * 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。
+     *
+     * <p>🔴 v1.4.2 shop Story 3.3（拍板④）：<b>宽限期（订单窗已过）内 no-op</b>，关单交给扫描 —— 否则用户在宽限期点取消，
+     * 会把一笔即将正常到账的付款人为变成迟到款。详情此时已显示已取消。
+     */
     @Transactional
     public void cancel(long userId, String orderToken) {
         ShopOrder order = orders.findByPublicTokenAndUserId(orderToken, userId)
@@ -293,56 +359,300 @@ public class ShopOrderPaymentService {
         if (order.getStatus() != ShopOrderStatus.PENDING_PAYMENT) {
             throw AppException.conflict("该订单已不能取消");
         }
+        if (order.isPaymentExpiredAt(Instant.now())) {
+            return;
+        }
         releaseUnpaid(order, CancelReason.USER_UNPAID_CANCEL);
     }
 
-    /**
-     * 懒过期：读到一个已过窗的待支付订单就地取消。
-     *
-     * <p>🔴 用户看到的正确性靠这里，不靠定时扫描 —— 扫描有最长一分钟的延迟，
-     * 而用户会在窗口刚过的那一秒点「去支付」。
-     */
-    @Transactional
-    public void expireIfOverdue(ShopOrder order) {
-        if (order.getStatus() == ShopOrderStatus.PENDING_PAYMENT
-                && order.isPaymentExpiredAt(Instant.now())) {
-            releaseUnpaid(order, CancelReason.PAYMENT_TIMEOUT);
-        }
-    }
+    // ---------- 关单（v1.4.2 shop Story 3.3 AC3 / AC4） ----------
 
     /**
-     * 定时扫描兜底：批量取消过窗待支付订单并释放库存。
-     *
-     * <p>逐笔独立事务，单笔失败不阻断其余（一个坏订单不该让整批库存都释放不了）。
-     *
-     * @return 实际取消的笔数
+     * 关单判据的<b>唯一实现</b>（B1）：{@code PENDING_PAYMENT} 且订单窗已过，且该单每一个已出码（{@code gateway_ref}
+     * 非空）的意图都已过码失效时刻（{@code COALESCE(provider_expires_at, created_at + 65 分钟)}）。未出码的意图从未
+     * 把码交到用户手上，不参与判据。
      */
-    public int cancelOverdue(int limit) {
-        // 🔴 经 self 代理逐笔调用：this.cancelOneOverdue() 自调用会绕过代理，
-        //    @Transactional 不生效 → 「逐笔独立事务、单笔失败不阻断」就没了。
-        ShopOrderPaymentService self = selfProvider.getObject();
-        int cancelled = 0;
-        for (ShopOrder order : orders.findOverduePendingPayment(Instant.now(),
-                org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)))) {
-            try {
-                self.cancelOneOverdue(order.getId());
-                cancelled++;
-            } catch (RuntimeException e) {
-                log.warn("超时订单取消失败 orderId={} cause={}", order.getId(),
-                        e.getClass().getSimpleName());
+    public static boolean isClosable(ShopOrder order, List<PaymentIntent> intents, Instant now) {
+        if (order == null || order.getStatus() != ShopOrderStatus.PENDING_PAYMENT
+                || !order.isPaymentExpiredAt(now)) {
+            return false;
+        }
+        for (PaymentIntent pi : intents) {
+            if (pi.getGatewayRef() != null && !PaymentIntentService.isProviderExpired(pi, now)) {
+                return false;
             }
         }
-        return cancelled;
+        return true;
     }
 
-    @Transactional
-    public void cancelOneOverdue(long orderId) {
+    /** 关单上下文：订单 + 其全部意图（含 {@code payment_intent_token} 指向但未绑定的存量意图）。 */
+    public record CloseContext(ShopOrder order, List<PaymentIntent> intents) {
+
+        /** 已出码且未付的意图：关单前要逐个查单的那些。 */
+        public List<PaymentIntent> chargedUnpaidIntents() {
+            return intents.stream()
+                    .filter(pi -> pi.getGatewayRef() != null && pi.getStatus() != PaymentStatus.PAID)
+                    .toList();
+        }
+    }
+
+    private enum Verdict { CLOSE, PAID, HOLD }
+
+    /**
+     * 定时关单（取代 {@code cancelOverdue}，{@link ShopOrderExpiryScanner} 调）。
+     *
+     * <p>🔴 <b>方法本身无事务</b>，事务段全经 {@code self}：网关查单必须在事务外（P-7）。对每个候选订单：
+     * <ol>
+     *   <li>{@link #closeContext}（只读）：重读订单与全部意图，已推进 / 不可关 → 跳过；</li>
+     *   <li>已出码未付的意图一个都没有 → 直接 {@link #closeOne}；</li>
+     *   <li>否则逐个<b>事务外</b>查单：任一 PAID → {@code applyResult}（订单此时仍待支付，正常转待发货），本单不关；
+     *       全部网关明确 FAILED / EXPIRED → 先逐个 {@code applyResult} 推进意图终态，再 {@link #closeOne}；
+     *       任一 UNKNOWN 或网关仍 PENDING → <b>本轮不关</b>（S-1：查询失败不关单），失败计数 +1，每满 10 次告警。</li>
+     * </ol>
+     * 单笔异常不阻断其余。
+     *
+     * @return 实际关单笔数
+     */
+    public int closeOverdue(int limit) {
+        ShopOrderPaymentService self = selfProvider.getObject();
+        int closed = 0;
+        int batchLimit = Math.max(1, limit);
+        int held = 0;
+        List<Long> candidateIds = orders.findClosableCandidateIds(Instant.now(), batchLimit);
+        for (Long orderId : candidateIds) {
+            try {
+                CloseContext ctx = self.closeContext(orderId);
+                if (ctx == null) {
+                    continue;   // 已推进 / 不可关
+                }
+                if (ctx.intents().stream().anyMatch(pi -> pi.getStatus() == PaymentStatus.PAID)) {
+                    // 意图已 PAID 而订单仍待支付：到账没能推进订单（不应出现）。宁可不关、交人工，绝不把付了钱的单关掉。
+                    log.error("电商订单有已到账意图但仍待支付，跳过关单 displayNo={}", ctx.order().getDisplayNo());
+                    bumpCloseFail(ctx.order());
+                    held++;
+                    continue;
+                }
+                Verdict v = Verdict.CLOSE;
+                List<PaymentCallback> pendingTerminal = new ArrayList<>();
+                for (PaymentIntent pi : ctx.chargedUnpaidIntents()) {
+                    ChargeQueryResult r = reconciliation.query(pi);        // 事务外
+                    if (r.outcome() == ChargeQueryResult.Outcome.PAID) {
+                        paymentIntents.applyResult(r.callback());
+                        v = Verdict.PAID;
+                        break;
+                    }
+                    if (!r.isTerminalNotPaid()) {
+                        v = Verdict.HOLD;                                   // UNKNOWN / 网关仍 PENDING
+                    } else if (v == Verdict.CLOSE) {
+                        pendingTerminal.add(r.callback());
+                    }
+                }
+                switch (v) {
+                    case PAID -> clearCloseFail(orderId);
+                    case HOLD -> {
+                        bumpCloseFail(ctx.order());
+                        held++;
+                    }
+                    case CLOSE -> {
+                        pendingTerminal.forEach(paymentIntents::applyResult);
+                        if (self.closeOne(orderId)) {
+                            closed++;
+                            clearCloseFail(orderId);
+                        }
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.warn("关单失败 orderId={} cause={}", orderId, e.getClass().getSimpleName());
+            }
+        }
+        // 复审修复②：候选 SQL 按 expires_at 升序取前 limit 单，若这一批全部查单未决（HOLD），后面可关的单本轮
+        // 一张也轮不到 —— 关单队列可能被长期未决的单堵住。额外告警一次（是否加退避待规划层定）。
+        if (held > 0 && held == batchLimit && candidateIds.size() == batchLimit) {
+            log.error("电商关单队列可能被堵：本批 {} 单全部查单未决", held);
+            alerts.alert("电商关单队列可能被堵：本批 " + held + " 单全部查单未决（GemPay 查单失败 / 仍 Pending），"
+                    + "后续可关订单本轮未处理，请检查 GemPay");
+        }
+        return closed;
+    }
+
+    /** 关单上下文（只读事务）：订单已非待支付或不可关 → null。 */
+    @Transactional(readOnly = true)
+    public CloseContext closeContext(long orderId) {
         ShopOrder order = orders.findById(orderId).orElse(null);
-        if (order == null || order.getStatus() != ShopOrderStatus.PENDING_PAYMENT
-                || !order.isPaymentExpiredAt(Instant.now())) {
-            return;     // 并发已推进
+        if (order == null || order.getStatus() != ShopOrderStatus.PENDING_PAYMENT) {
+            return null;
+        }
+        List<PaymentIntent> intents = intentsOfOrder(order);
+        if (!isClosable(order, intents, Instant.now())) {
+            return null;
+        }
+        return new CloseContext(order, intents);
+    }
+
+    /**
+     * 关一单（独立事务）：重读订单，仍待支付且 {@link #isClosable} → {@link #releaseUnpaid}（{@code PAYMENT_TIMEOUT}：
+     * 回补库存、退币、退券、写原因、作废该单全部未终态意图）。并发已推进 → no-op（{@code @Version} 兜底）。
+     *
+     * @return 是否真的关了
+     */
+    @Transactional
+    public boolean closeOne(long orderId) {
+        ShopOrder order = orders.findById(orderId).orElse(null);
+        if (order == null) {
+            return false;
+        }
+        List<PaymentIntent> intents = intentsOfOrder(order);
+        if (intents.stream().anyMatch(pi -> pi.getStatus() == PaymentStatus.PAID)) {
+            // 复审修复③：事务内重读到已 PAID 的意图（查单与关单之间到账）→ 绝不关单，交到账链路推进
+            return false;
+        }
+        if (!isClosable(order, intents, Instant.now())) {
+            return false;   // 并发已推进 / 码仍有效
         }
         releaseUnpaid(order, CancelReason.PAYMENT_TIMEOUT);
+        return true;
+    }
+
+    /** 该单全部意图：{@code shop_order_id} 绑定的 + {@code payment_intent_token} 指向的（存量未回填时兜底）。 */
+    private List<PaymentIntent> intentsOfOrder(ShopOrder order) {
+        List<PaymentIntent> list = new ArrayList<>(paymentIntents.findByShopOrderId(order.getId()));
+        String token = order.getPaymentIntentToken();
+        if (token != null && list.stream().noneMatch(pi -> token.equals(pi.getPublicToken()))) {
+            paymentIntents.findByToken(token).ifPresent(list::add);
+        }
+        return list;
+    }
+
+    /** 查单未决：失败计数 +1（首次设 24 小时 TTL）；恰为 10 及其后每满 10 → ERROR + 飞书。Redis 异常不影响关单流程。 */
+    private void bumpCloseFail(ShopOrder order) {
+        try {
+            Long n = redis.opsForValue().increment(CLOSE_FAIL_KEY_PREFIX + order.getId());
+            if (n == null) {
+                return;
+            }
+            if (n == 1L) {
+                redis.expire(CLOSE_FAIL_KEY_PREFIX + order.getId(), CLOSE_FAIL_TTL);
+            }
+            if (n % 10 == 0) {
+                log.error("电商订单关单前查单连续失败 displayNo={} count={}（多单同时出现时关单队列可能被堵）",
+                        order.getDisplayNo(), n);
+                alerts.alert("电商订单关单前查单连续失败 " + n + " 次：" + order.getDisplayNo()
+                        + "，请检查 GemPay（多单同时出现时关单队列可能被堵）");
+            }
+        } catch (RuntimeException e) {
+            log.warn("关单查单失败计数异常 orderId={} cause={}", order.getId(), e.getClass().getSimpleName());
+        }
+    }
+
+    private void clearCloseFail(long orderId) {
+        try {
+            redis.delete(CLOSE_FAIL_KEY_PREFIX + orderId);
+        } catch (RuntimeException e) {
+            log.warn("关单查单失败计数清理异常 orderId={} cause={}", orderId, e.getClass().getSimpleName());
+        }
+    }
+
+    // ---------- 「我已付款」（v1.4.2 shop Story 3.3 AC9） ----------
+
+    /**
+     * 「我已付款」主动查单。非本人 404；非待支付 → 不查网关直接返回；10 秒节流内 → 不查网关直接返回当前状态（200，不报 429）；
+     * 否则对该单已出码且未付的意图逐个对账（事务外查、{@code applyResult} 落），再重读订单。查单失败不报错（{@code paid=false}）。
+     */
+    public PaymentCheckView paymentCheck(long userId, String orderToken) {
+        ShopOrderPaymentService self = selfProvider.getObject();
+        ShopOrder order = self.requireOwn(userId, orderToken);
+        if (order.getStatus() != ShopOrderStatus.PENDING_PAYMENT) {
+            return PaymentCheckView.of(order, Instant.now());
+        }
+        Boolean first;
+        try {
+            first = redis.opsForValue().setIfAbsent(PAYMENT_CHECK_KEY_PREFIX + orderToken, "1",
+                    PAYMENT_CHECK_THROTTLE);
+        } catch (RuntimeException e) {
+            first = Boolean.FALSE;  // Redis 不可用：宁可不查网关，也不让用户狂点打爆网关
+        }
+        if (!Boolean.TRUE.equals(first)) {
+            return PaymentCheckView.of(order, Instant.now());
+        }
+        for (PaymentIntent pi : self.chargedUnpaidIntentsOf(order.getId())) {
+            try {
+                reconciliation.reconcile(pi.getPublicToken());
+            } catch (RuntimeException e) {
+                log.warn("我已付款查单失败 orderId={} cause={}", order.getId(), e.getClass().getSimpleName());
+            }
+        }
+        return PaymentCheckView.of(self.requireOwn(userId, orderToken), Instant.now());
+    }
+
+    /** 某单已出码且未付的意图（只读）。 */
+    @Transactional(readOnly = true)
+    public List<PaymentIntent> chargedUnpaidIntentsOf(long orderId) {
+        ShopOrder order = orders.findById(orderId).orElse(null);
+        if (order == null) {
+            return List.of();
+        }
+        return new CloseContext(order, intentsOfOrder(order)).chargedUnpaidIntents();
+    }
+
+    // ---------- 支付判定（pay 与详情 canPay 共用） ----------
+
+    /** {@link #payGate} 的结果。 */
+    public enum PayGate {
+        /** 非待支付。 */
+        NOT_PENDING,
+        /** 订单窗已过（含宽限期，S-7）。 */
+        WINDOW_CLOSED,
+        /** 存量纯币待付款单：站内结清。 */
+        PURE_COIN,
+        /** 当前意图的码仍有效：复用。 */
+        REUSE,
+        /** 建单 10 分钟内：可出新码。 */
+        ISSUE_NEW,
+        /** 建单已超 10 分钟且无可复用的码（I3）。 */
+        ISSUE_CLOSED;
+
+        public boolean canPay() {
+            return this == PURE_COIN || this == REUSE || this == ISSUE_NEW;
+        }
+    }
+
+    /**
+     * 支付判定（AC2.4 / AC7.2 同一方法）：{@code /pay} 的放行与详情 {@code canPay} 都据此，不复制。
+     *
+     * @param current 订单当前挂着的意图（{@code payment_intent_token}），无则 null
+     */
+    public static PayGate payGate(ShopOrder order, PaymentIntent current, Instant now) {
+        if (order.getStatus() != ShopOrderStatus.PENDING_PAYMENT) {
+            return PayGate.NOT_PENDING;
+        }
+        if (order.isPaymentExpiredAt(now)) {
+            return PayGate.WINDOW_CLOSED;
+        }
+        if (cashOf(order) <= 0) {
+            return PayGate.PURE_COIN;
+        }
+        if (isReusable(current, now)) {
+            return PayGate.REUSE;
+        }
+        if (order.getCreatedAt() != null && now.isAfter(order.getCreatedAt().plus(QR_ISSUE_WINDOW))) {
+            return PayGate.ISSUE_CLOSED;
+        }
+        return PayGate.ISSUE_NEW;
+    }
+
+    /** 当前意图可复用 = PENDING 且已出码且码未失效。 */
+    static boolean isReusable(PaymentIntent intent, Instant now) {
+        return intent != null && intent.getStatus() == PaymentStatus.PENDING && intent.getGatewayRef() != null
+                && !PaymentIntentService.isProviderExpired(intent, now);
+    }
+
+    /** 详情 {@code canPay}（AC7.2）：与 {@link #pay} 放行同一判定。 */
+    public static boolean canPay(ShopOrder order, PaymentIntent current, Instant now) {
+        return payGate(order, current, now).canPay();
+    }
+
+    private static long cashOf(ShopOrder order) {
+        return order.getCashAmount() == null ? order.getTotalAmount() : order.getCashAmount();
     }
 
     /**
@@ -396,9 +706,19 @@ public class ShopOrderPaymentService {
         }
         order.markCancelled(reason, now);
         orders.save(order);
-        // 支付意图一并作废，免得它继续挂在后台支付列表里等一个不会到的付款（纯 DB 写，无网关调用）
-        String intentToken = order.getPaymentIntentToken();
-        if (intentToken != null) {
+        // 支付意图一并作废，免得它继续挂在后台支付列表里等一个不会到的付款（纯 DB 写，无网关调用）。
+        // v1.4.2 shop Story 3.3 AC4.2：作废该单【全部】未终态意图（shop_order_id 绑定的 + 当前 token 指向的），
+        // 不只 payment_intent_token 那一个；failByToken 对已终态 no-op。
+        LinkedHashSet<String> tokens = new LinkedHashSet<>();
+        for (PaymentIntent pi : paymentIntents.findByShopOrderId(order.getId())) {
+            if (pi.getStatus() == PaymentStatus.PENDING) {
+                tokens.add(pi.getPublicToken());
+            }
+        }
+        if (order.getPaymentIntentToken() != null) {
+            tokens.add(order.getPaymentIntentToken());
+        }
+        for (String intentToken : tokens) {
             paymentIntents.failByToken(intentToken, intentFailReason(reason));
         }
         log.info("电商订单取消 token={} reason={} assetsReturned={}", order.getPublicToken(), reason,
@@ -422,15 +742,6 @@ public class ShopOrderPaymentService {
         if (order.getStatus() != ShopOrderStatus.PENDING_PAYMENT) {
             throw AppException.conflict("该订单已不在待支付状态");
         }
-    }
-
-    /** 意图付款窗跟着订单走：订单一过窗，二维码也不该还能付。 */
-    private static Duration remainingWindow(ShopOrder order) {
-        if (order.getExpiresAt() == null) {
-            return ShopOrder.PAYMENT_WINDOW;
-        }
-        Duration left = Duration.between(Instant.now(), order.getExpiresAt());
-        return left.isNegative() ? Duration.ZERO : left;
     }
 
     private static String payloadOf(PaymentIntent intent) {

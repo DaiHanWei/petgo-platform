@@ -95,6 +95,22 @@ public class PaymentIntent {
     @Column(name = "coin_ratio", updatable = false)
     private java.math.BigDecimal coinRatio;
 
+    /**
+     * 网关码失效时刻（v1.4.2 shop Story 3.3，D-11）。电商意图出码成功时写入（出码 + 65 分钟，GemPay 固定），
+     * 并同步给 {@link #expiresAt}。存量意图为空 → 判据按 {@code created_at + 65 分钟} 兜底，见
+     * {@link #effectiveProviderExpiry()}。
+     */
+    @Column(name = "provider_expires_at")
+    private Instant providerExpiresAt;
+
+    /** 关单后到账标记（v1.4.2 shop Story 3.3，I1）：仅 SHOP_ORDER，库级 CHECK 强制。不新增意图状态。 */
+    @Column(name = "paid_after_close", nullable = false)
+    private boolean paidAfterClose;
+
+    /** 所属电商订单（v1.4.2 shop Story 3.3）：一单多意图的关联；仅 SHOP_ORDER，库级 CHECK 强制。 */
+    @Column(name = "shop_order_id")
+    private Long shopOrderId;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -213,6 +229,63 @@ public class PaymentIntent {
         }
     }
 
+    /**
+     * GemPay 码固定有效期（出码 + 65 分钟，不可调）。仅用于存量意图（{@code provider_expires_at} 为空）的兜底：
+     * 按 {@code created_at + 65 分钟} 估算，早于真实失效时刻不会出现（出码一定晚于建意图）。
+     */
+    public static final java.time.Duration PROVIDER_CODE_TTL = java.time.Duration.ofMinutes(65);
+
+    /** 码失效时刻：{@code COALESCE(provider_expires_at, created_at + 65 分钟)}（v1.4.2 shop Story 3.3 B1 判据）。 */
+    public Instant effectiveProviderExpiry() {
+        if (providerExpiresAt != null) {
+            return providerExpiresAt;
+        }
+        return createdAt == null ? null : createdAt.plus(PROVIDER_CODE_TTL);
+    }
+
+    /**
+     * 出码成功后写码失效时刻（v1.4.2 shop Story 3.3 AC2.3）：{@code provider_expires_at} 与 {@code expires_at}
+     * <b>同一值</b>（取网关返回之后的时刻，≥ GemPay 真实失效时刻，偏保守）。仅 PENDING。
+     */
+    public void markProviderIssued(Instant providerExpiresAt) {
+        requireStatus(PaymentStatus.PENDING, "仅待支付意图可写码失效时刻");
+        this.providerExpiresAt = providerExpiresAt;
+        this.expiresAt = providerExpiresAt;
+    }
+
+    /** 绑定所属电商订单（v1.4.2 shop Story 3.3 AC2.2）：仅当为空时写；非 SHOP_ORDER 调用即抛。 */
+    public void bindShopOrder(long orderId) {
+        if (purpose != PaymentPurpose.SHOP_ORDER) {
+            throw new IllegalStateException("仅电商意图可绑定订单");
+        }
+        if (this.shopOrderId == null) {
+            this.shopOrderId = orderId;
+        }
+    }
+
+    /**
+     * 关单后到账（v1.4.2 shop Story 3.3 AC6.1，I1）：{@code FAILED | EXPIRED → PAID}，置 {@code paid_after_close}；
+     * {@code gateway_ref} 为空时顺带写入。<b>只对 SHOP_ORDER</b>，其余业务线终态后到账仍按原逻辑忽略。
+     *
+     * @throws IllegalStateException 非电商意图，或当前状态不是 FAILED / EXPIRED
+     */
+    public void markPaidAfterClose(String gatewayRef, Map<String, Object> meta) {
+        if (purpose != PaymentPurpose.SHOP_ORDER) {
+            throw new IllegalStateException("仅电商意图可记关单后到账");
+        }
+        if (status != PaymentStatus.FAILED && status != PaymentStatus.EXPIRED) {
+            throw new IllegalStateException("仅已失败 / 已过期的电商意图可记关单后到账");
+        }
+        this.status = PaymentStatus.PAID;
+        this.paidAfterClose = true;
+        if (this.gatewayRef == null && gatewayRef != null) {
+            this.gatewayRef = gatewayRef;
+        }
+        if (meta != null) {
+            this.gatewayMeta = meta;
+        }
+    }
+
     private void requireStatus(PaymentStatus expected, String message) {
         if (this.status != expected) {
             throw AppException.conflict(message);
@@ -285,5 +358,17 @@ public class PaymentIntent {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public Instant getProviderExpiresAt() {
+        return providerExpiresAt;
+    }
+
+    public boolean isPaidAfterClose() {
+        return paidAfterClose;
+    }
+
+    public Long getShopOrderId() {
+        return shopOrderId;
     }
 }

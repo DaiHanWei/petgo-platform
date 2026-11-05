@@ -128,8 +128,8 @@ public class MeCheckoutController {
     // ===== Story 3.8：待支付订单详情与支付 =====
 
     /**
-     * 订单详情。🔴 **读的时候就地判过期**（懒过期）——用户会在窗口刚过的那一秒打开这一页，
-     * 等定时扫描（最长 1 分钟延迟）会让他看到一个其实已经作废的倒计时。
+     * 订单详情。v1.4.2 shop Story 3.3：读单<b>不再懒关单</b>（码要到出码 + 65 分钟才失效）；
+     * 宽限期由 {@code displayStatus=CANCELLED} / {@code canPay=false} 表达，用户刷新即见，关单交给扫描。
      */
     @GetMapping("/shop-orders/{token}")
     public ShopOrderDetailView detail(@AuthenticationPrincipal Jwt jwt,
@@ -151,7 +151,17 @@ public class MeCheckoutController {
         return payments.pay(currentUserId(jwt), token, idempotencyKey);
     }
 
-    /** 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。 */
+    /**
+     * 「我已付款」（v1.4.2 shop Story 3.3 AC9，FR-128.8 / FR-134.1）：主动向网关查一次（10 秒节流，节流内不调网关、
+     * 直接回当前状态）。查单失败不报错，回 {@code paid=false}。
+     */
+    @PostMapping("/shop-orders/{token}/payment-check")
+    public com.tailtopia.shop.order.dto.PaymentCheckView paymentCheck(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token) {
+        return payments.paymentCheck(currentUserId(jwt), token);
+    }
+
+    /** 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。宽限期内 no-op，直接回当前详情。 */
     @PostMapping("/shop-orders/{token}/cancel")
     public ShopOrderDetailView cancel(@AuthenticationPrincipal Jwt jwt,
             @PathVariable String token) {

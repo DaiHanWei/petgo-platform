@@ -90,7 +90,9 @@ class PetSlotExpiryScanIntegrationTest extends ApiIntegrationTest {
         });
         when(gateway.queryCharge(anyString())).thenAnswer(inv -> {
             String ref = inv.getArgument(0);
-            return Optional.of(new PaymentCallback(ref.substring(3), ref, GatewayStatus.PAID, Map.of()));
+            // v1.4.2 shop Story 3.3：queryCharge 改三态
+            return com.tailtopia.shared.pay.ChargeQueryResult.paid(
+                    new PaymentCallback(ref.substring(3), ref, GatewayStatus.PAID, Map.of()));
         });
     }
 

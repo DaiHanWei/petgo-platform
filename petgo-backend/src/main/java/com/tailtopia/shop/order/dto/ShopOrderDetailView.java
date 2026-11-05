@@ -5,6 +5,7 @@ import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.shop.order.domain.Shipment;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
+import com.tailtopia.shop.order.service.ShopOrderPaymentService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -77,7 +78,17 @@ public record ShopOrderDetailView(
          * <p>🔒 分类落在后端一处，<b>不让 App 解析 {@code gateway_meta}</b>——meta 是网关回调原文，
          * 随时可能含 PII。它一个字节都不进本 DTO。
          */
-        String paymentFailureCategory) {
+        String paymentFailureCategory,
+        // ---------- v1.4.2 shop Story 3.3 付款窗口（S-7） ----------
+        /**
+         * 对用户展示的状态：宽限期（订单窗已过、尚未关单）的待支付单为 {@code CANCELLED}，其余同 {@code status}
+         * （{@link ShopOrder#displayStatusAt} 唯一实现）。
+         */
+        String displayStatus,
+        /** 现在还能不能点「去支付」：与 {@code /pay} 放行同一判定（{@code ShopOrderPaymentService#canPay}）。 */
+        boolean canPay,
+        /** 付款截止时刻 = 订单 {@code expires_at}（App 倒计时；不是码失效时刻）。 */
+        Instant paymentDeadline) {
 
     /**
      * 包裹（S-2）。
@@ -132,6 +143,12 @@ public record ShopOrderDetailView(
      */
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
             List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent) {
+        return of(o, lines, shipments, imageUrlBySkuId, intent, Instant.now());
+    }
+
+    /** v1.4.2 shop Story 3.3：显式传入判定时刻（L0 注入时刻用）。 */
+    public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
+            List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent, Instant now) {
         var ship = o.shipTo();
         PaymentFailureCategory failureCategory = PaymentFailureCategory.of(intent);
         return new ShopOrderDetailView(
@@ -168,7 +185,10 @@ public record ShopOrderDetailView(
                         .toList(),
                 attributionSourceOf(lines),
                 intent == null || intent.getStatus() == null ? null : intent.getStatus().name(),
-                failureCategory == null ? null : failureCategory.name());
+                failureCategory == null ? null : failureCategory.name(),
+                o.displayStatusAt(now).name(),
+                ShopOrderPaymentService.canPay(o, intent, now),
+                o.getExpiresAt());
     }
 
     /**

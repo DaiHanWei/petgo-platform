@@ -178,6 +178,12 @@ public final class ErrorTypes {
     /** v1.4.2 shop Story 3.2（I7）：报价不存在 / 已过期 / 未绑定本单地址与商品 / 所选快递不在报价中（409，App 重新试算）。 */
     public static final URI QUOTE_EXPIRED = URI.create(BASE + "quote-expired");
 
+    /**
+     * v1.4.2 shop Story 3.3（S-7 / I3）：订单已超过付款时间（含 60~65 分钟宽限期），或已过出码窗口（建单 10 分钟后
+     * 且无可复用的码）→ 409，App 显示「付款超时·订单已取消」。
+     */
+    public static final URI SHOP_ORDER_NOT_PAYABLE = URI.create(BASE + "shop-order-not-payable");
+
     private ErrorTypes() {
     }
 }

@@ -23,7 +23,11 @@ class ShopOrderPaidHandlerTest {
     private final ShopOrderRepository orders = mock(ShopOrderRepository.class);
     private final ShopOrderPaymentService payments = mock(ShopOrderPaymentService.class);
     private final CheckoutService checkout = mock(CheckoutService.class);
-    private final ShopOrderPaidHandler handler = new ShopOrderPaidHandler(orders, payments, checkout);
+    private final com.tailtopia.pay.service.PaymentIntentService paymentIntents =
+            mock(com.tailtopia.pay.service.PaymentIntentService.class);
+    private final ShopPaymentAlerts alerts = mock(ShopPaymentAlerts.class);
+    private final ShopOrderPaidHandler handler = new ShopOrderPaidHandler(orders, payments, checkout,
+            paymentIntents, alerts);
 
     private static PaymentIntentPaidEvent paid(PaymentPurpose purpose) {
         return new PaymentIntentPaidEvent(1L, "pi-1", 9L, purpose, PayChannel.MIXED, 220_000L, "IDR");
@@ -55,14 +59,15 @@ class ShopOrderPaidHandlerTest {
     }
 
     @Test
-    @DisplayName("订单已非待支付（已取消 / 已处理）→ 不扣币")
+    @DisplayName("订单已非待支付（已取消 / 已处理）→ 不扣币（v1.4.2 shop 3.3：改记迟到款，见 ShopOrderPaidHandlerLateTest）")
     void alreadyHandledSkips() {
         ShopOrder o = ShopOrderTestOrders.legacyStockOrder(3L, 9L, 30_000L);
+        o.markCancelled(com.tailtopia.shop.order.refund.CancelReason.PAYMENT_TIMEOUT, java.time.Instant.now());
         when(orders.findByPaymentIntentToken("pi-1")).thenReturn(Optional.of(o));
-        when(payments.markPaid(o, PaidSource.GATEWAY)).thenReturn(false);
 
         handler.onPaid(paid(PaymentPurpose.SHOP_ORDER));
 
+        verify(payments, never()).markPaid(any(), any());
         verify(checkout, never()).settlePawCoinSegment(any());
     }
 
@@ -75,5 +80,6 @@ class ShopOrderPaidHandlerTest {
         when(orders.findByPaymentIntentToken("pi-1")).thenReturn(Optional.empty());
         handler.onPaid(paid(PaymentPurpose.SHOP_ORDER));
         verifyNoInteractions(payments, checkout);
+        verify(alerts).alert(org.mockito.ArgumentMatchers.contains("intentId=1"));
     }
 }

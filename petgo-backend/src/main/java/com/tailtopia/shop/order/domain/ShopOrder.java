@@ -378,9 +378,26 @@ public class ShopOrder {
     /** 支付窗长度（AD-8）。🔴 与 App 端倒计时同源：客户端只展示服务端给的截止时刻。 */
     public static final java.time.Duration PAYMENT_WINDOW = java.time.Duration.ofMinutes(60);
 
-    /** 是否已过支付窗（无窗的历史订单恒 false —— 它们不参与超时扫描）。 */
+    /**
+     * 是否已过订单支付窗（无窗的历史订单恒 false）。
+     *
+     * <p>🔴 v1.4.2 shop Story 3.3（S-1 / B1）：<b>只用于 {@link #displayStatusAt} / {@code canPay} / {@code /pay} 拒绝</b>。
+     * <b>任何关单分支都不得直接用它</b> —— 订单窗（60 分钟）早于 GemPay 码失效（出码 + 65 分钟），按它关单会把
+     * 60~65 分钟内的付款变成迟到款。关单一律走 {@code ShopOrderPaymentService#isClosable}。
+     */
     public boolean isPaymentExpiredAt(Instant now) {
         return expiresAt != null && now.isAfter(expiresAt);
+    }
+
+    /**
+     * 对用户展示的状态（v1.4.2 shop Story 3.3 AC7.1，S-7）：宽限期（订单窗已过、码尚未失效、尚未关单）的待支付单
+     * <b>直接显示已取消</b>；期间到账则转待发货，用户刷新即见。<b>唯一实现</b>：详情、订单中心与 6.2 列表分组都复用它。
+     */
+    public ShopOrderStatus displayStatusAt(Instant now) {
+        if (status == ShopOrderStatus.PENDING_PAYMENT && isPaymentExpiredAt(now)) {
+            return ShopOrderStatus.CANCELLED;
+        }
+        return status;
     }
 
     public Instant getExpiresAt() {

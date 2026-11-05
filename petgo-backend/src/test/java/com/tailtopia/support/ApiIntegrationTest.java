@@ -90,6 +90,9 @@ import tools.jackson.databind.ObjectMapper;
             // 进货单扫描器（默认首轮即跑）会取消共享库里别的测试遗留的过期进货单；扫描逻辑由测试直接调用验证。
             "petgo.merchant.po-expiry-scan-ms=86400000",
             "petgo.merchant.po-fulfillment-scan-ms=86400000",
+            // V1.4.2 shop Story 3.3：电商定时查单会把共享库里别的测试遗留的电商意图按 stub 查单推进（EXPIRED）；
+            // 首延 1 天 = 测试期内不自动跑，由 ShopPaymentWindowIntegrationTest 直接调 run() 验证。
+            "petgo.shop.payment-reconcile-initial-delay-ms=86400000",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")

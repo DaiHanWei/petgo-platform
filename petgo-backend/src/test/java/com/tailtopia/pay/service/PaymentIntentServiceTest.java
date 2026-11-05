@@ -301,4 +301,202 @@ class PaymentIntentServiceTest {
         service().attachCharge("tok-ok", "gw-2", java.util.Map.of());
         assertThat(p.getGatewayRef()).isEqualTo("gw-1");
     }
+
+    // ===== v1.4.2 shop Story 3.3：码失效判据 / 关单后到账 / attachCharge 重载 =====
+
+    /** 带建单时刻的意图（created_at 由 @PrePersist 写，L0 用反射拨）。 */
+    private PaymentIntent persistedAt(long id, PaymentPurpose purpose, String token, java.time.Instant createdAt,
+            java.time.Instant expiresAt) {
+        PaymentIntent p = PaymentIntent.create(7L, purpose, PayChannel.QRIS, 10000L, "IDR", token, expiresAt);
+        ReflectionTestUtils.setField(p, "id", id);
+        ReflectionTestUtils.setField(p, "createdAt", createdAt);
+        return p;
+    }
+
+    private void stubDedup(boolean fresh) {
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(fresh);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("🔴 电商意图先 FAILED（关单）后收到 PAID —— 即使 Redis 去重键已被 FAILED 回调占用 → PAID + paid_after_close + 发 PaidEvent")
+    void applyResultShopFailedThenPaidMarksPaidAfterClose() {
+        PaymentIntent intent = persisted(300L, PaymentPurpose.SHOP_ORDER, "tok-300");
+        intent.attachGatewayRef("gw-300", null);
+        intent.markFailed(Map.of("reason", "TIMEOUT"));
+        when(intents.findByGatewayRef("gw-300")).thenReturn(Optional.of(intent));
+        when(intents.saveAndFlush(any(PaymentIntent.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(redis.opsForValue()).thenReturn(valueOps);
+        org.mockito.Mockito.lenient().when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+                .thenReturn(false);   // 去重键已存在
+
+        service().applyResult(new PaymentCallback("tok-300", "gw-300", GatewayStatus.PAID, Map.of("s", "ok")));
+
+        assertThat(intent.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.PAID);
+        assertThat(intent.isPaidAfterClose()).isTrue();
+        verify(events).publishEvent(any(PaymentIntentPaidEvent.class));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("电商 EXPIRED + PAID（gateway_ref 为空，按 order_id 找到）→ 顺带写入 gateway_ref")
+    void applyResultShopExpiredThenPaidFillsGatewayRef() {
+        PaymentIntent intent = persisted(301L, PaymentPurpose.SHOP_ORDER, "tok-301");
+        intent.markExpired(null);
+        when(intents.findByGatewayRef("gw-301")).thenReturn(Optional.empty());
+        when(intents.findByPublicToken("tok-301")).thenReturn(Optional.of(intent));
+        when(intents.saveAndFlush(any(PaymentIntent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service().applyResult(new PaymentCallback("tok-301", "gw-301", GatewayStatus.PAID, Map.of()));
+
+        assertThat(intent.getGatewayRef()).isEqualTo("gw-301");
+        assertThat(intent.isPaidAfterClose()).isTrue();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("电商终态意图收到 FAILED / EXPIRED 回调 → 仍按原逻辑短路")
+    void applyResultShopTerminalIgnoresNonPaid() {
+        PaymentIntent intent = persisted(302L, PaymentPurpose.SHOP_ORDER, "tok-302");
+        intent.attachGatewayRef("gw-302", null);
+        intent.markFailed(null);
+        when(intents.findByGatewayRef("gw-302")).thenReturn(Optional.of(intent));
+        stubDedup(false);
+
+        service().applyResult(new PaymentCallback("tok-302", "gw-302", GatewayStatus.EXPIRED, Map.of()));
+
+        verify(intents, never()).saveAndFlush(any());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("AC10.1：GIFT 意图 EXPIRED 后收到 PAID → 不推进、不发事件")
+    void applyResultIgnoresTerminalGiftIntent() {
+        PaymentIntent intent = persisted(303L, PaymentPurpose.GIFT, "tok-303");
+        intent.attachGatewayRef("gw-303", null);
+        intent.markExpired(null);
+        when(intents.findByGatewayRef("gw-303")).thenReturn(Optional.of(intent));
+        stubDedup(true);
+
+        service().applyResult(new PaymentCallback("tok-303", "gw-303", GatewayStatus.PAID, Map.of()));
+
+        assertThat(intent.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.EXPIRED);
+        assertThat(intent.isPaidAfterClose()).isFalse();
+        verify(intents, never()).saveAndFlush(any());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("AC10.2：PAWCOIN_TOPUP 意图 FAILED 后收到 PAID → 不推进、不发事件")
+    void applyResultIgnoresTerminalTopupIntent() {
+        PaymentIntent intent = persisted(304L, PaymentPurpose.PAWCOIN_TOPUP, "tok-304");
+        intent.attachGatewayRef("gw-304", null);
+        intent.markFailed(null);
+        when(intents.findByGatewayRef("gw-304")).thenReturn(Optional.of(intent));
+        stubDedup(false);
+
+        service().applyResult(new PaymentCallback("tok-304", "gw-304", GatewayStatus.PAID, Map.of()));
+
+        assertThat(intent.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.FAILED);
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("applyCallback 是 applyResult 的一行委托（回调控制器 / 支付模拟不改）")
+    void applyCallbackDelegatesToApplyResult() {
+        PaymentIntentService spy = org.mockito.Mockito.spy(service());
+        PaymentCallback cb = new PaymentCallback("t", "r", GatewayStatus.PENDING, Map.of());
+        spy.applyCallback(cb);
+        verify(spy).applyResult(cb);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("🔴 B1 ②：SHOP_ORDER 意图 expires_at 已过但 created_at+65 未到 → 全局扫描不动")
+    void expireSkipsShopIntentBeforeProviderExpiry() {
+        java.time.Instant now = java.time.Instant.now();
+        PaymentIntent shop = persistedAt(310L, PaymentPurpose.SHOP_ORDER, "tok-310",
+                now.minus(Duration.ofMinutes(61)), now.minus(Duration.ofMinutes(1)));
+        when(intents.findByStatusAndExpiresAtBefore(any(), any(), any())).thenReturn(java.util.List.of(shop));
+
+        assertThat(service().expireOverduePending(10)).isZero();
+        assertThat(shop.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.PENDING);
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("AC10.2 回归：PAWCOIN_TOPUP 61 分钟 → EXPIRED（充值 60 分钟窗口不变）")
+    void expireStillExpiresTopupAt60Min() {
+        java.time.Instant now = java.time.Instant.now();
+        PaymentIntent topup = persistedAt(311L, PaymentPurpose.PAWCOIN_TOPUP, "tok-311",
+                now.minus(Duration.ofMinutes(61)), now.minus(Duration.ofMinutes(1)));
+        when(intents.findByStatusAndExpiresAtBefore(any(), any(), any())).thenReturn(java.util.List.of(topup));
+
+        assertThat(service().expireOverduePending(10)).isEqualTo(1);
+        assertThat(topup.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.EXPIRED);
+        verify(events).publishEvent(any(PaymentIntentFailedEvent.class));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SHOP_ORDER 意图码已失效（provider_expires_at 已过）→ 全局扫描置 EXPIRED")
+    void expireShopIntentAfterProviderExpiry() {
+        java.time.Instant now = java.time.Instant.now();
+        PaymentIntent shop = persistedAt(312L, PaymentPurpose.SHOP_ORDER, "tok-312",
+                now.minus(Duration.ofMinutes(70)), now.minus(Duration.ofMinutes(10)));
+        shop.attachGatewayRef("gw-312", null);
+        shop.markProviderIssued(now.minus(Duration.ofMinutes(1)));
+        when(intents.findByStatusAndExpiresAtBefore(any(), any(), any())).thenReturn(java.util.List.of(shop));
+
+        assertThat(service().expireOverduePending(10)).isEqualTo(1);
+        assertThat(shop.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.EXPIRED);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("🔴 B1 ③：statusOf 对 SHOP_ORDER 只读 —— 过窗也不置 EXPIRED")
+    void statusOfIsReadOnlyForShopIntent() {
+        java.time.Instant now = java.time.Instant.now();
+        PaymentIntent shop = persistedAt(320L, PaymentPurpose.SHOP_ORDER, "tok-320",
+                now.minus(Duration.ofMinutes(61)), now.minus(Duration.ofMinutes(1)));
+        when(intents.findByPublicToken("tok-320")).thenReturn(Optional.of(shop));
+
+        assertThat(service().statusOf(7L, "tok-320")).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.PENDING);
+        verify(intents, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("回归：statusOf 对 PAWCOIN_TOPUP 仍就地懒过期")
+    void statusOfStillExpiresTopupLazily() {
+        java.time.Instant now = java.time.Instant.now();
+        PaymentIntent topup = persistedAt(321L, PaymentPurpose.PAWCOIN_TOPUP, "tok-321",
+                now.minus(Duration.ofMinutes(61)), now.minus(Duration.ofMinutes(1)));
+        when(intents.findByPublicToken("tok-321")).thenReturn(Optional.of(topup));
+
+        assertThat(service().statusOf(7L, "tok-321")).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.EXPIRED);
+        verify(intents).saveAndFlush(topup);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("AC2.3：attachCharge(…, providerTtl) → provider_expires_at = expires_at ≈ now + 65 分钟")
+    void attachChargeWithProviderTtlSetsBothExpiries() {
+        java.time.Instant now = java.time.Instant.now();
+        PaymentIntent p = persistedAt(330L, PaymentPurpose.SHOP_ORDER, "tok-330", now, now.plus(Duration.ofMinutes(65)));
+        when(intents.findByPublicToken("tok-330")).thenReturn(Optional.of(p));
+
+        service().attachCharge("tok-330", "gw-330", Map.of("payload", "QR"), Duration.ofMinutes(65));
+
+        assertThat(p.getGatewayRef()).isEqualTo("gw-330");
+        assertThat(p.getProviderExpiresAt()).isNotNull().isEqualTo(p.getExpiresAt());
+        assertThat(Duration.between(now, p.getProviderExpiresAt()).toMinutes()).isBetween(64L, 65L);
+        verify(intents).saveAndFlush(p);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("三参 attachCharge 行为不变：不写 provider_expires_at、不改 expires_at")
+    void attachChargeThreeArgUnchanged() {
+        java.time.Instant exp = java.time.Instant.now().plus(Duration.ofMinutes(60));
+        PaymentIntent p = persistedAt(331L, PaymentPurpose.PAWCOIN_TOPUP, "tok-331", java.time.Instant.now(), exp);
+        when(intents.findByPublicToken("tok-331")).thenReturn(Optional.of(p));
+
+        service().attachCharge("tok-331", "gw-331", Map.of());
+
+        assertThat(p.getProviderExpiresAt()).isNull();
+        assertThat(p.getExpiresAt()).isEqualTo(exp);
+    }
 }

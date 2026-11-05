@@ -307,4 +307,9 @@ public class AppException extends RuntimeException {
     public static AppException quoteExpired(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.QUOTE_EXPIRED, detail);
     }
+
+    /** v1.4.2 shop Story 3.3（S-7 / I3）：订单不可再支付 → 409 {@code shop-order-not-payable}。 */
+    public static AppException shopOrderNotPayable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.SHOP_ORDER_NOT_PAYABLE, detail);
+    }
 }
