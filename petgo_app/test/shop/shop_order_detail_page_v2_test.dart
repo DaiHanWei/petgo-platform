@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/theme/shop_tokens.dart';
 import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
@@ -724,8 +725,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
 
-      // 服务端状态一个字没变 —— 用户只是点了面板上的取消。
-      await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+      // 服务端状态一个字没变 —— 用户只是点了面板上的关闭。
+      // v1.4.2 Story 7.2 按设计打破：电商面板不再有红色 qrPayCancel，只剩标题行 ×（qrPayCloseX，语义同原取消）。
+      await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
@@ -858,20 +860,272 @@ void main() {
       expect(repo.payCalls, 0);
     });
   });
+
+  // ================================================================
+  // v1.4.2 shop Story 7.2：支付启动器 + E6 / E7 + canPay 门控
+  // ================================================================
+  group('v1.4.2 Story 7.2 · 支付面板与支付结果', () {
+    late ShopOrderDetail current;
+
+    Widget routerHost(ShopOrderDetail initial, _FakeShopOrderRepo repo) {
+      current = initial;
+      final router = GoRouter(
+        initialLocation: '/shop/orders/ord1',
+        routes: [
+          GoRoute(
+              path: '/shop/orders/:token',
+              builder: (c, s) => MediaQuery(
+                    data: const MediaQueryData(size: Size(411, 891)),
+                    child: ShopOrderDetailPageV2(orderToken: s.pathParameters['token']!),
+                  )),
+          GoRoute(
+              path: '/shop/orders/:token/paid',
+              builder: (c, s) => Scaffold(body: Text('PAID ${s.pathParameters['token']}'))),
+        ],
+      );
+      return ProviderScope(
+        overrides: [
+          shopOrderRepositoryProvider.overrideWithValue(repo),
+          shopOrderDetailProvider.overrideWith((ref, token) async => current),
+          returnEligibilityProvider.overrideWith((ref, token) async =>
+              const ReturnEligibility(orderToken: 'ord1', eligible: false, lines: [])),
+        ],
+        child: MaterialApp.router(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          routerConfig: router,
+        ),
+      );
+    }
+
+    ShopOrderDetail payable({bool? canPay}) => ShopOrderDetail.fromJson({
+          ..._json(),
+          'canPay': ?canPay,
+        });
+
+    Future<void> openSheet(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('shopOrderPayV2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    testWidgets('AC6 · QRIS 轮询到账 → 跳 E6（/shop/orders/ord1/paid），不再弹 shopOrderPaid toast',
+        (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(routerHost(payable(), repo));
+      await tester.pumpAndSettle();
+      await openSheet(tester);
+      expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
+
+      current = ShopOrderDetail.fromJson({..._json(), 'status': 'PENDING_SHIPMENT'});
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.text('PAID ord1'), findsOneWidget);
+      expect(find.text(l10n.shopOrderPaid), findsNothing, reason: '按设计改写：成功 toast 换成 E6 页');
+    });
+
+    testWidgets('AC4/AC6 · 「Saya sudah bayar」查到已付 → 跳 E6', (tester) async {
+      final repo = _FakeShopOrderRepo()..checkPaid = true;
+      await tester.pumpWidget(routerHost(payable(), repo));
+      await tester.pumpAndSettle();
+      await openSheet(tester);
+
+      await tester.tap(find.byKey(const ValueKey('qrPayPaidCheck')));
+      await tester.pumpAndSettle();
+      expect(repo.checkCalls, 1);
+      expect(find.text('PAID ord1'), findsOneWidget);
+    });
+
+    testWidgets('纯币当场结清 → 也进 E6（UI E6「纯币单也到此」）', (tester) async {
+      final repo = _FakeShopOrderRepo()..payload = null;
+      await tester.pumpWidget(routerHost(payable(), repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('shopOrderPayV2')));
+      await tester.pumpAndSettle();
+      expect(find.text('PAID ord1'), findsOneWidget);
+    });
+
+    testWidgets('AC7 · /pay 5xx → E7 面板（不再只弹 shopOrderPayFailed）；Coba lagi 成功切回二维码',
+        (tester) async {
+      final repo = _FakeShopOrderRepo()..payErrors.add(_httpError(502));
+      await tester.pumpWidget(routerHost(payable(), repo));
+      await tester.pumpAndSettle();
+      await openSheet(tester);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.byKey(const ValueKey('qrPayCodeFailed')), findsOneWidget);
+      expect(find.text(l10n.shopOrderPayFailed), findsNothing, reason: '按设计改写');
+      expect(find.byKey(const ValueKey('qrPayPaidCheck')), findsNothing);
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('qrPaySave'))).onPressed, isNull);
+      expect(find.byKey(const ValueKey('qrPayCountdown')), findsOneWidget, reason: '倒计时照走');
+
+      await tester.tap(find.byKey(const ValueKey('qrPayRetryCode')));
+      await tester.pump();
+      await tester.pump();
+      expect(repo.payCalls, 2);
+      expect(find.byKey(const ValueKey('qrPayCodeFailed')), findsNothing);
+      expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
+      expect(find.byKey(const ValueKey('qrPayPaidCheck')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('AC7.3 · /pay 409 shop-order-not-payable（超 10 分钟不再出码）→ E7 且无「Coba lagi」',
+        (tester) async {
+      final repo = _FakeShopOrderRepo()..payErrors.add(_httpError(409, type: 'shop-order-not-payable'));
+      await tester.pumpWidget(routerHost(payable(), repo));
+      await tester.pumpAndSettle();
+      await openSheet(tester);
+
+      expect(find.byKey(const ValueKey('qrPayCodeFailed')), findsOneWidget);
+      expect(find.byKey(const ValueKey('qrPayRetryCode')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('qrPayCodeFailed')), findsNothing);
+    });
+
+    testWidgets('其他 /pay 错误（如 409 非 not-payable）→ 仍是原 shopOrderPayFailed toast，不开面板',
+        (tester) async {
+      final repo = _FakeShopOrderRepo()..payErrors.add(_httpError(409, type: 'conflict'));
+      await tester.pumpWidget(routerHost(payable(), repo));
+      await tester.pumpAndSettle();
+      await openSheet(tester);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.byKey(const ValueKey('qrPayCodeFailed')), findsNothing);
+      expect(find.text(l10n.shopOrderPayFailed), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('_pay 兜底 catch：启动器外的意外异常 → 仍弹 shopOrderPayFailed、按钮恢复', (tester) async {
+      current = payable();
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          // 取 repo 即抛：发生在启动器内部 try 之外，只有页面的兜底能接住。
+          shopOrderRepositoryProvider.overrideWith((ref) => throw StateError('boom')),
+          shopOrderDetailProvider.overrideWith((ref, token) async => current),
+          returnEligibilityProvider.overrideWith((ref, token) async =>
+              const ReturnEligibility(orderToken: 'ord1', eligible: false, lines: [])),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          home: const MediaQuery(
+            data: MediaQueryData(size: Size(411, 891)),
+            child: ShopOrderDetailPageV2(orderToken: 'ord1'),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('shopOrderPayV2')));
+      await tester.pump();
+      await tester.pump();
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.text(l10n.shopOrderPayFailed), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsOneWidget);
+    });
+
+    testWidgets('AC8.3 · canPay: false → 无「Bayar Sekarang」', (tester) async {
+      await tester.pumpWidget(routerHost(payable(canPay: false), _FakeShopOrderRepo()));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsNothing);
+    });
+
+    testWidgets('AC8.3 · canPay 缺键（旧后端）→ 行为同改动前：未过期待付款仍给支付按钮', (tester) async {
+      await tester.pumpWidget(routerHost(payable(), _FakeShopOrderRepo()));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsOneWidget);
+    });
+
+    test('AC8.4 · canPay / displayStatus 解析；缺键为 null', () {
+      final o = ShopOrderDetail.fromJson(
+          {..._json(), 'canPay': false, 'displayStatus': 'CANCELLED'});
+      expect(o.canPay, isFalse);
+      expect(o.displayStatus, 'CANCELLED');
+      expect(o.status, ShopOrderStatus.pendingPayment, reason: '原始 status 不被 displayStatus 覆盖');
+      final legacy = ShopOrderDetail.fromJson(_json());
+      expect(legacy.canPay, isNull);
+      expect(legacy.displayStatus, isNull);
+    });
+
+    test('PaymentCheckResult 解析：缺键 / 非布尔按未到账', () {
+      expect(PaymentCheckResult.fromJson({'paid': true, 'status': 'PENDING_SHIPMENT'}).paid, isTrue);
+      expect(PaymentCheckResult.fromJson({'status': 'PENDING_PAYMENT'}).paid, isFalse);
+      expect(PaymentCheckResult.fromJson({'paid': 'true'}).paid, isFalse);
+    });
+  });
 }
 
-/// 只桩 pay / cancel 两个方法，其余继承真实现（本组用例不会走到）。
+/// 详情 JSON（后端 `ShopOrderDetailView` 形态，最小集）。
+Map<String, dynamic> _json() => {
+      'orderToken': 'ord1',
+      'displayNo': 'TOKO-20260916-7M4KQ2',
+      'status': 'PENDING_PAYMENT',
+      'goodsSubtotal': 189000,
+      'shippingFee': 15000,
+      'shippingDiscount': 0,
+      'totalAmount': 204000,
+      'payChannel': 'MIXED',
+      'coinAmount': 50000,
+      'cashAmount': 154000,
+      'expiresAt': DateTime.now().toUtc().add(const Duration(minutes: 30)).toIso8601String(),
+      'lines': const [],
+      'shipTo': const {'receiverName': 'Budi'},
+      'attributionSource': 'TOKO_ALL_FEATURED',
+    };
+
+/// 只桩 pay / cancel / paymentCheck，其余继承真实现（本组用例不会走到）。
 class _FakeShopOrderRepo extends ShopOrderRepository {
   _FakeShopOrderRepo() : super(dio: Dio());
 
   int payCalls = 0;
   int cancelCalls = 0;
+  int checkCalls = 0;
+
+  /// v1.4.2 Story 7.2：依次消费的 `/pay` 错误（null = 正常出码）。
+  final List<Object?> payErrors = [];
+
+  /// `/pay` 正常时的 payload（null = 纯币当场结清）。
+  String? payload = 'QR-DATA';
+
+  bool checkPaid = false;
 
   @override
   Future<ShopPayResult> pay(String orderToken) async {
     payCalls++;
-    return const ShopPayResult(
-        orderStatus: 'PENDING_PAYMENT', paymentIntentToken: 'pi-1', payload: 'QR-DATA');
+    if (payErrors.isNotEmpty) {
+      final e = payErrors.removeAt(0);
+      if (e != null) throw e;
+    }
+    return ShopPayResult(
+        orderStatus: payload == null ? 'PENDING_SHIPMENT' : 'PENDING_PAYMENT',
+        paymentIntentToken: 'pi-1',
+        payload: payload);
+  }
+
+  @override
+  Future<PaymentCheckResult> paymentCheck(String orderToken) async {
+    checkCalls++;
+    return PaymentCheckResult(paid: checkPaid, status: checkPaid ? 'PENDING_SHIPMENT' : 'PENDING_PAYMENT');
   }
 
   @override
@@ -879,4 +1133,17 @@ class _FakeShopOrderRepo extends ShopOrderRepository {
     cancelCalls++;
     throw UnimplementedError('本组用例不该调到取消接口');
   }
+}
+
+DioException _httpError(int status, {String? type}) {
+  final req = RequestOptions(path: '/api/v1/me/shop-orders/ord1/pay');
+  return DioException(
+    requestOptions: req,
+    type: DioExceptionType.badResponse,
+    response: Response<Object?>(
+      requestOptions: req,
+      statusCode: status,
+      data: type == null ? null : {'type': 'https://petgo/errors/$type', 'status': status},
+    ),
+  );
 }

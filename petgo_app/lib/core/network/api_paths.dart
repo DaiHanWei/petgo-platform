@@ -509,6 +509,11 @@ class ApiPaths {
   /// Story 3.8 追加：`/{token}` 详情 · `/{token}/pay` 发起支付 · `/{token}/cancel` 取消。
   static const String meShopOrders = '$base/me/shop-orders';
 
+  /// v1.4.2 shop Story 3.3 / 7.2：「我已付款」主动查单（`PaymentCheckView {paid, status, displayStatus}`）。
+  /// 服务端 10 秒节流，App 不再做客户端节流。
+  static String meShopOrderPaymentCheck(String orderToken) =>
+      '$meShopOrders/$orderToken/payment-check';
+
   /// 退货申请页数据（Story 5.7）。🔴 不可退的行照样下发（带置灰原因），不由前端过滤。
   static String meReturnEligibility(String orderToken) =>
       '$meShopOrders/$orderToken/return-eligibility';

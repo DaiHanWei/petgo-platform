@@ -505,6 +505,10 @@ void main() {
         // 后才报（PawCoin 扣币成功 / QRIS 回调 PAID），描述结果而非点击；与 `pet_slot_rent_started`（发起）配对。
         // 名字由 PRD 定死，扩表、不改名（同 `_played` / `_published` 先例）。
         '_paid',
+        // 二维码存图成功（V1.4.2 shop · Story 7.2 · PRD §4 定死 `toko_payment_qr_saved`）：`_saved` = **写入相册成功**
+        // 之后才报（权限被拒 / 失败不报），描述「存图成功」这一结果而非点击。
+        // ⚠️ 只放这个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_paid` / `_published` 先例）。
+        '_saved',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

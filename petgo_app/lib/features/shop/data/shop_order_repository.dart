@@ -29,6 +29,14 @@ class ShopOrderRepository {
     return ShopPayResult.fromJson(resp.data!);
   }
 
+  /// 「我已付款」主动查单（v1.4.2 shop Story 7.2 · E3/E4；后端 3.3 `payment-check`）。
+  ///
+  /// 🔴 到账判定以服务端为准（P-3）：`paid` 由后端按订单真实状态算出，App 不自行推断。
+  Future<PaymentCheckResult> paymentCheck(String orderToken) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.meShopOrderPaymentCheck(orderToken));
+    return PaymentCheckResult.fromJson(resp.data!);
+  }
+
   Future<ShopOrderDetail> cancel(String orderToken) async {
     final resp = await dio.post<Map<String, dynamic>>(
         '${ApiPaths.meShopOrders}/$orderToken/cancel');

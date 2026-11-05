@@ -3130,5 +3130,15 @@
   "@shopOrderCoinCashSplit": {"placeholders": {"a": {"type": "String"}, "b": {"type": "String"}}},
   "shopPaySuccessPreparing": "Pesanan kamu sedang disiapkan untuk dikirim.",
   "shopPaySuccessViewOrder": "Lihat pesanan",
-  "shopPaySuccessContinue": "Lanjut belanja"
+  "shopPaySuccessContinue": "Lanjut belanja",
+  "qrPaySheetTitle": "Pembayaran",
+  "qrPayViaQrisLabel": "Bayar via QRIS",
+  "qrPayCoinHeld": "+ PawCoin Rp {x} sudah ditahan",
+  "@qrPayCoinHeld": {"placeholders": {"x": {"type": "String"}}},
+  "qrPayPaidCheck": "Saya sudah bayar",
+  "qrPayPaidChecking": "Mengecek pembayaran…",
+  "qrPayGuideToggle": "Cara bayar & aplikasi yang didukung",
+  "qrPaySavedOpenWallet": "Tersimpan ke galeri. Buka e-wallet atau m-banking, lalu pindai dari galeri.",
+  "qrPayNotPaidYet": "Pembayaran belum masuk. Kalau sudah bayar, tunggu sebentar lalu cek lagi.",
+  "qrPayCodeFailed": "Kode QR gagal dibuat"
 }

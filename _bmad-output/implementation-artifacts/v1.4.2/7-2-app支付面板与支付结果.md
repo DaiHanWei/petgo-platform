@@ -1,6 +1,6 @@
 # Story 7.2: 支付面板与支付结果（App，E1–E7）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`
 > 口径优先级：`决策日志-shop.md`（S-1、S-7）> PRD `电商/1-4-2电商prd.md`（§3.0 旅程 C 4–7、§3.2「支付面板」、§3.8 FR-134 ①、§4、§6 E 组）> `architecture-v1.4.2-shop-delta.md`（D-11、D-19、P-3、P-9、P-10、P-11）> UI 定稿 `电商/ui-1-4-2-shop-integrated-v1.html` E1–E7 每屏说明与「共用组件」说明；云端执行以 `cloud-rules-shop.md` 为准。
@@ -20,6 +20,8 @@ I want 支付面板只显示我要扫码付的金额、付完能主动确认,
 so that 付款不迷惑、不用干等。
 
 ## 接口契约（计划名，开工前核对 3.3 / 6.2 实际提交）
+
+> **T0 已核对实际后端代码（2026-11-05）**：① `payment-check` 实际返回 `PaymentCheckView {paid, status, displayStatus}`（多一个 `displayStatus`，App 解析为可空字段）；② 「不再出码」实际为 **409 `https://petgo/errors/shop-order-not-payable`**（`AppException.shopOrderNotPayable`），建单超 10 分钟无可用码（`ISSUE_CLOSED`）与已过付款时间（`WINDOW_CLOSED`）**共用同一 type**、只靠 `detail` 区分 → App 两者同按「E7 不给重试」处理；③ 详情 `canPay: boolean`、`displayStatus`、`paymentDeadline` 均已在 `ShopOrderDetailView`（3.3 加，非 6.2）；④ 7.1 的 E6 路由 `/shop/orders/:token/paid`、`ShopOrderDetailPageV2.autoPay` 与 story 描述一致。行号随 7.1 有偏移（`_pay` 现 :799-888、`_onPaymentAborted` :905-945、`_bottomBar` :673），不影响实现。
 
 - `POST /api/v1/me/shop-orders/{token}/pay`（现有）→ `ShopPayResult {orderStatus, paymentIntentToken, payload}`；3.3 后：已有可用码时复用同一码；订单创建超过 10 分钟仍无可用码 → 拒绝出码（ProblemDetail，计划 `type` 后缀 `payment-window-closed`，**以 3.3 实际为准**）；网关取码失败 → 5xx。
 - `POST /api/v1/me/shop-orders/{token}/payment-check`（3.3 新）→ `{paid: bool, status: String}`；同订单 10 秒内重复调用服务端不再查网关（直接返回上次结果）。
@@ -83,7 +85,7 @@ so that 付款不迷惑、不用干等。
 4. 测试环境 payload 为空串的「Mode uji」占位（`QrPayCodeCard` stub，:199）行为不变——那是成功拿到空码，不是失败。
 
 ### AC8 — 支付启动器（单一入口）与「去支付」 `[L0]`（PRD §3.7「待付款可直接去支付，拉起与结算页相同的面板」、epics 7.2）
-1. 把 `ShopOrderDetailPageV2._pay`（:772-859）与 `_onPaymentAborted`（:877-917）的逻辑**原样搬到** `A/features/shop/presentation/shop_payment_launcher.dart`：`Future<ShopPaymentOutcome> launchShopPayment(BuildContext context, WidgetRef ref, ShopOrderDetail order, {required bool isRetry})`，`ShopPaymentOutcome ∈ {settledByCoin, paid, dismissed, declined, expired, userCancelled, abortedUnknown, failed}`；所有既有埋点（`toko_order_pay_tapped`、`toko_payment_retry_tapped`、`toko_payment_qr_shown`、`toko_payment_sheet_dismissed`、`toko_payment_declined_shown`、`toko_payment_expired_shown`、`toko_order_payment_failed_shown`、`toko_order_payment_succeeded`）**事件名、属性、触发条件一律不变**，toast 文案不变（成功 toast 除外，见 AC6）。
+1. 把 `ShopOrderDetailPageV2._pay`（:772-859）与 `_onPaymentAborted`（:877-917）的逻辑**原样搬到** `A/features/shop/presentation/shop_payment_launcher.dart`：`Future<ShopPaymentOutcome> launchShopPayment(BuildContext context, WidgetRef ref, ShopOrderDetail order, {required bool isRetry})`，`ShopPaymentOutcome ∈ {settledByCoin, paid, dismissed, declined, expired, userCancelled, abortedUnknown, abortedUnknownCategory, failed}`（复审对齐：拆出未知类别中止）；所有既有埋点（`toko_order_pay_tapped`、`toko_payment_retry_tapped`、`toko_payment_qr_shown`、`toko_payment_sheet_dismissed`、`toko_payment_declined_shown`、`toko_payment_expired_shown`、`toko_order_payment_failed_shown`、`toko_order_payment_succeeded`）**事件名、属性、触发条件一律不变**，toast 文案不变（成功 toast 除外，见 AC6）。
 2. `ShopOrderDetailPageV2._pay` 改为调用启动器并按结果做本页的事（`_lastPaymentDeclined` 记账、到账跳 E6、invalidate）；`autoPay`（7.1）走同一入口。
 3. 订单详情 v2 底栏「Bayar Sekarang」（:646-683）显示条件加一条：`order.canPay != false`（null = 旧后端，回落到现有 `expiresAt` 判断）。订单列表「去支付」由 9.1 调用同一启动器，本 story 不改列表。
 4. `ShopOrderDetail` 解析新增可空字段 `canPay`、`displayStatus`（缺键 null；9.1 再补其余 D-19 字段）；`ShopOrderRepository` 加 `paymentCheck(String orderToken) → PaymentCheckResult {bool paid, String? status}`。
@@ -107,13 +109,13 @@ so that 付款不迷惑、不用干等。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：3.3 的 `payment-check` 响应字段与「不再出码」错误 `type`；6.2 的 `canPay` / `displayStatus`；7.1 的 E6 路由与 `autoPay` 实际实现；有出入先改本文件
-- [ ] **T1 共用组件参数**（AC1、AC9.3）：`qr_payment_sheet.dart`、`qr_pay_parts.dart`、`qr_pay_save.dart`；先写 `qr_payment_sheet_defaults_test.dart` 钉住默认行为
-- [ ] **T2 电商面板形态**（AC2–AC5、AC7）：标题 / 金额标签 / 冻结行 / 我已付款 / 折叠指引 / 自适应高度 / E7 态
-- [ ] **T3 启动器**（AC8）：`shop_payment_launcher.dart` 搬迁 `_pay` + `_onPaymentAborted`；订单详情改调；`paymentCheck` repo；`ShopOrderDetail.canPay/displayStatus`
-- [ ] **T4 E6 接入**（AC6）
-- [ ] **T5 埋点与文案**（AC10、AC11）：`v112_events_test.dart` 扩 `_saved`
-- [ ] **T6 测试** + `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：3.3 的 `payment-check` 响应字段与「不再出码」错误 `type`；6.2 的 `canPay` / `displayStatus`；7.1 的 E6 路由与 `autoPay` 实际实现；有出入先改本文件
+- [x] **T1 共用组件参数**（AC1、AC9.3）：`qr_payment_sheet.dart`、`qr_pay_parts.dart`、`qr_pay_save.dart`；先写 `qr_payment_sheet_defaults_test.dart` 钉住默认行为
+- [x] **T2 电商面板形态**（AC2–AC5、AC7）：标题 / 金额标签 / 冻结行 / 我已付款 / 折叠指引 / 自适应高度 / E7 态
+- [x] **T3 启动器**（AC8）：`shop_payment_launcher.dart` 搬迁 `_pay` + `_onPaymentAborted`；订单详情改调；`paymentCheck` repo；`ShopOrderDetail.canPay/displayStatus`
+- [x] **T4 E6 接入**（AC6）
+- [x] **T5 埋点与文案**（AC10、AC11）：`v112_events_test.dart` 扩 `_saved`
+- [x] **T6 测试** + `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -230,14 +232,60 @@ so that 付款不迷惑、不用干等。
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless，bmad-dev-story 流程，只到 L0。
+
 ### Debug Log References
+
+- `flutter gen-l10n` 后基线 `flutter analyze` = No issues found；完成后仍为 No issues found。
+- `flutter test` 全量：+4591 ~3（3 个 skip 为既有 `skip:`，非本 story），All other tests passed；复审修复后 +4602 ~3 全绿。
+- 新/改测试单跑：`qr_payment_sheet_defaults_test` 3、`qr_payment_sheet_shop_mode_test` 13、`shop_payment_launcher_test` 11、`shop_order_detail_page_v2_test` 55、`shop_payment_analytics_test` 16、`shop_pay_success_page_test` 8、`v112_events_test` 22，全绿。
+- `bash scripts/ci/check-flyway-versions.sh origin/main` → OK（本 story 无迁移）。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC2 / AC12.2 的 E1–E7 逐屏还原度 ≥ 95%（Android 模拟器，L2）；送礼与宠物名额月租面板外观与改动前截图对比（L2）；Dev Notes「L1」全部场景（GemPay stag：扫码后点「我已付款」立即进 E6、未付出 E4、60 分钟后列表显示已取消、65 分钟内到账转待发货、关单后再开同单复用同一码、建单超 10 分钟进 E7 无重试）。本 story 无 L1 测试类。
+- 名字对齐（story 文件已改）：见「接口契约」顶部 T0 核对块（payment-check 多 `displayStatus`；不再出码 = 409 `shop-order-not-payable`，两种关窗共用 type）。
+- AC1：`showQrPaymentSheet` 只追加 14 个具名可选参数（名称同表），默认值 = 现状；返回类型仍 `Future<bool>`，`QrPaymentAborted` 无参 const 构造保留。parts：`QrPaySummary{label, coinHeldIdr}`、`QrPayCodeCard{expiredBody, failed, onRetry}`、`QrPayGuide{collapsible}`（改为 StatefulWidget，const 构造与默认平铺不变）、`QrPayBottomBar{paidCheckLabel, onPaidCheck, paidCheckBusy}`，另加 **`docked`（默认 true=吸底现状）**——自适应高度时按钮要排在内容里、折叠指引在按钮下方（UI E1 版式），故追加此可选参数；`saveQrPaymentImage{savedMessage, onSaved}`。共用组件内零埋点。
+- AC9：送礼 / AI 解锁 / 身份证高清 / keepsake（一次性解锁 / 月租）调用点、充值页、兽医计时支付页源码零改动（`git diff` 对这些目录为空）；AC9.2 列出的十个既有测试文件未改、全绿；新增 `qr_payment_sheet_defaults_test.dart` 钉住默认行为。
+- AC8：`_pay` / `_onPaymentAborted` 原样搬到 `shop_payment_launcher.dart`（注释四态表与「两个变量缺一不可」逐行保留），`launchShopPayment(context, ref, order, {required isRetry}) → ShopPaymentOutcome`（原 8 值；复审后加 `abortedUnknownCategory` 共 9 值）；`_payProps` 改为公开 `shopPayProps`、现金段改为公开 `shopCashSegment`（详情页 `_cashSegment` 委托它）。订单详情 `_pay` 改调启动器，autoPay 走同一入口（且 `canPay == false` 时不触发）；底栏「Bayar Sekarang」加 `order.canPay != false`。`ShopOrderDetail` 加可空 `canPay` / `displayStatus`；`ShopOrderRepository.paymentCheck` → `PaymentCheckResult{paid, status, displayStatus}`（`paid` 缺键/非布尔按 false）；端点登记 `ApiPaths.meShopOrderPaymentCheck`。
+- AC6：QRIS 到账（轮询或「我已付款」）与纯币结清都 `context.pushReplacement('/shop/orders/{token}/paid')`，不再弹 `shopOrderPaid` toast；`capturePurchase` / `growthPopupTrigger.afterAction()` / `toko_order_payment_succeeded` 属性不变。
+- AC7：`/pay` 抛 DioException 且为网络层失败（无响应、非 cancel）或 5xx → E7 带「Coba lagi」；409 `shop-order-not-payable` → E7 不带重试；其余错误（含非 Dio 异常、其他 4xx）→ 维持原 `toko_order_payment_failed_shown` + `shopOrderPayFailed` toast。E7 打开时发 `toko_order_payment_failed_shown`；重试出码成功补发 `toko_payment_qr_shown`；E7 从未出码就关面板 → outcome `failed`、**不发** `toko_payment_sheet_dismissed`（没出过码就谈不上「出码后自己走掉」）。
+- AC5：`pollPaid` 中止判据仍用原始 `status`（未用 `displayStatus`）；v2 详情页宽限期本就按 `expiresAt` 已过显示「Waktu pembayaran habis. Pesanan dibatalkan.」且无支付入口，另有 `canPay` 门控；`displayStatus` 全面用于展示留 9.1 v3。
+- 拍板点复述：①电商面板关闭入口 = 标题行 ×（`qrPayCloseX`，同原取消，`isDismissible` 仍 false）；②「我已付款」异常与未到账同一 toast；③E5 过期关面板维持现状（发 `toko_payment_sheet_dismissed`、不弹 toast）；④超 10 分钟不再出码复用 E7 无重试；⑤启动器只返回结果，不跳路由。
+- AC10：`toko_payment_qr_saved` 字面量由电商 `onSaved` 回调发（存图成功才报，权限被拒不报）；`v112_events_test` `allowedSuffixes` 扩 `'_saved'` 带注释；`shop_payment_analytics_test` appsflyer 检查列表加入该事件。
+- 按设计打破并改写的断言：`shop_payment_analytics_test` 全部 `qrPayCancel` 点击 → `qrPayCloseX`（事件断言一字未改）；`shop_order_detail_page_v2_test` AC5 关面板改点 `qrPayCloseX`；新增用例改写「到账弹 shopOrderPaid」→ 跳 E6、「/pay 5xx 弹 shopOrderPayFailed」→ E7。
+
+#### 复审修复（2026-11-05）
+
+1. `toko_payment_retry_tapped` 触发条件与原实现逐字一致：`ShopPaymentOutcome` 新增第 9 值 `abortedUnknownCategory`（中止且带 App 不认识的类别，仍发 `toko_order_payment_failed_shown` + `shopOrderPayFailed`），详情页对它把 `_lastPaymentDeclined` 清为 false；`/pay` 抛错与 E7（`failed`）保持原值。`shop_payment_analytics_test` 补两例（未知类别清记忆 / `/pay` 抛错不清）。
+2. `shop_payment_launcher_test` 补：409 `shop-order-not-payable` → E7 无重试；`connectionError`（无 response）→ 有重试；普通 409 conflict → `shopOrderPayFailed` toast；未知类别 → `abortedUnknownCategory`。
+3. `qr_payment_sheet_defaults_test` 补断言：默认下 `qrPaySave` / `qrPayCancel` 不在 `qrPayScroll` 内（钉住 `docked` 默认吸底）。
+4. E7「Coba lagi」重试 `/pay` 遇 409 not-payable → 切到无重试的 E7：`showQrPaymentSheet` 追加可选回调 `isRetryClosed(Object error)`（null = 现状：任何错误都保持可重试），电商传 `_codeIssueOf(e) == closed`；shop_mode / launcher 测试各补用例（含 5xx 重试失败仍可重试、不传回调时默认可重试）。
+5. `ShopOrderDetailPageV2._pay` 补 `catch` 兜底：启动器外的意外异常仍发 `toko_order_payment_failed_shown` + 弹 `shopOrderPayFailed`（与搬迁前同处置），补测试。
+- 复审后 L0：`flutter analyze` No issues found；`flutter test` 全量 +4602 ~3（3 为既有 skip），全绿。
+
 #### 待确认
 
+1. 「订单已无法支付」无 §6 文案：409 `shop-order-not-payable` 复用 E7「Kode QR gagal dibuat」且不给重试（同原「待确认」1）；后端该 type 同时覆盖「已过付款时间」，App 无法区分，两者同处置。
+2. ~~`_lastPaymentDeclined` 记账差异~~ —— 复审已修，见「复审修复」1。
+3. 纯币单从订单详情 `/pay` 当场结清（3.2 后仅旧单可能走到）也改跳 E6（UI E6「纯币单也到此」），不再弹 `shopOrderPaid` toast；若产品只要求 QRIS 路径跳 E6，可在 `_pay` 里把 `settledByCoin` 改回 toast。
+4. 待设计确认（PRD §6 未列、按实现取值）：× 的无障碍 tooltip 复用 `commonClose`；E3 转圈期间按钮保持薄荷色描边（不置灰）。
+
 ### File List
+
+前端（`petgo_app/`）：
+- 新增 `lib/features/shop/presentation/shop_payment_launcher.dart`
+- 修改 `lib/shared/widgets/qr_payment_sheet.dart`、`lib/shared/widgets/qr_payment/qr_pay_parts.dart`、`lib/shared/widgets/qr_payment/qr_pay_save.dart`
+- 修改 `lib/features/shop/presentation/shop_order_detail_page_v2.dart`、`lib/features/shop/data/shop_order_repository.dart`、`lib/features/shop/domain/shop_order_detail.dart`、`lib/core/network/api_paths.dart`
+- 修改 `lib/l10n/app_en.arb`、`lib/l10n/app_id.arb`（9 个新 key：`qrPaySheetTitle`、`qrPayViaQrisLabel`、`qrPayCoinHeld`、`qrPayPaidCheck`、`qrPayPaidChecking`、`qrPayGuideToggle`、`qrPaySavedOpenWallet`、`qrPayNotPaidYet`、`qrPayCodeFailed`）
+- （复审修复涉及：`shop_payment_launcher.dart`、`qr_payment_sheet.dart`、`shop_order_detail_page_v2.dart` 及下列测试，未新增文件）
+- 新增测试 `test/shared/qr_payment_sheet_defaults_test.dart`、`test/shared/qr_payment_sheet_shop_mode_test.dart`、`test/shop/shop_payment_launcher_test.dart`
+- 修改测试 `test/shop/shop_order_detail_page_v2_test.dart`、`test/shop/shop_payment_analytics_test.dart`、`test/shop/shop_pay_success_page_test.dart`、`test/analytics/v112_events_test.dart`
+
+文档：本 story 文件。后端 / 迁移：无。
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev），依据决策日志 S-0 ~ S-9、PRD §6、架构增量、UI 定稿与 `dev_1.4.2` @ 2c507755 代码现状。
+- 2026-11-05：dev-story 实现（L0 绿：analyze 0 issue、flutter test 全量 4591 通过）；T0 对齐实际后端契约；Status → review。L1/L2 待本地验收。
+- 2026-11-05：复审低项修复 5 条（`abortedUnknownCategory` 结局、E7 重试关窗 `isRetryClosed`、`_pay` 兜底 catch、补测试）；L0 全绿（4602）。

@@ -190,6 +190,8 @@ class ShopOrderDetail {
     this.attributionSource = 'unknown',
     this.paymentStatus,
     this.paymentFailureCategory,
+    this.canPay,
+    this.displayStatus,
   });
 
   final String orderToken;
@@ -266,6 +268,16 @@ class ShopOrderDetail {
   ShopPaymentFailure? get paymentFailure =>
       ShopPaymentFailure.fromApi(paymentFailureCategory);
 
+  // ---------- v1.4.2 shop Story 3.3 / 7.2 付款窗口（S-7） ----------
+
+  /// 现在还能不能点「去支付」（与服务端 `/pay` 放行同一判定 `payGate`）。
+  /// 缺键 = 旧后端 → null，调用方回落到既有 `expiresAt` 判断。
+  final bool? canPay;
+
+  /// 对用户展示的状态原文（宽限期待支付为 `CANCELLED`，S-7）。缺键 → null。
+  /// 🔴 只用于**展示**；支付面板的中止判据仍看原始 [status]（宽限期到账要能接住）。
+  final String? displayStatus;
+
   bool get isMixed => (coinAmount ?? 0) > 0 && (cashAmount ?? 0) > 0;
 
   /// 剩余支付时间。🔴 只用于**渲染**；「是否已过期」的判定权在服务端。
@@ -300,6 +312,8 @@ class ShopOrderDetail {
       // 缺键 → null（老后端）。不做任何值的归一化或兜底，见字段注释。
       paymentStatus: j['paymentStatus']?.toString(),
       paymentFailureCategory: j['paymentFailureCategory']?.toString(),
+      canPay: j['canPay'] is bool ? j['canPay'] as bool : null,
+      displayStatus: j['displayStatus']?.toString(),
       packages: j['packages'] is List
           ? (j['packages'] as List)
               .whereType<Map<String, dynamic>>()
@@ -341,6 +355,23 @@ class ShopPayResult {
         orderStatus: j['orderStatus']?.toString() ?? '',
         paymentIntentToken: j['paymentIntentToken']?.toString(),
         payload: j['payload']?.toString(),
+      );
+}
+
+/// 「我已付款」查单结果（后端 `PaymentCheckView`，v1.4.2 shop Story 3.3）。
+class PaymentCheckResult {
+  const PaymentCheckResult({required this.paid, this.status, this.displayStatus});
+
+  /// 服务端判定已到账（订单不在待支付 / 已取消）。
+  final bool paid;
+  final String? status;
+  final String? displayStatus;
+
+  factory PaymentCheckResult.fromJson(Map<String, dynamic> j) => PaymentCheckResult(
+        // 缺键 / 非布尔一律按未到账：宁可让用户再查一次，也不把没到账说成到账。
+        paid: j['paid'] == true,
+        status: j['status']?.toString(),
+        displayStatus: j['displayStatus']?.toString(),
       );
 }
 

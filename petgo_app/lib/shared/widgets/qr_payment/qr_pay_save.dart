@@ -50,17 +50,30 @@ const double kQrPaySaveWidth = 1080;
 /// - 没有相册权限 → 先走系统申请；仍被拒 → App 内「Perlu izin」对话框（只换正文，「Buka Pengaturan」跳系统设置，稿 A3）。
 /// - 其他失败 → Toast「Gagal menyimpan…」。
 /// - 保存进行中再点：直接忽略（连点会叠出多个权限对话框 / 往相册写多张图）。
+///
+/// v1.4.2 shop Story 7.2（只加可选参数，默认 = 现状）：
+/// - [savedMessage]：成功 toast 换成调用方文案（电商 E2 扩写）；null = `cardSavedToGallery`。
+/// - [onSaved]：**写入相册成功后**回调一次（电商在里面埋 `toko_payment_qr_saved`）；
+///   权限被拒 / 失败不回调。🔴 本组件内部不埋点 —— 共用组件里埋点会给其他线凭空多出事件。
 Future<void> saveQrPaymentImage(
   BuildContext context, {
   required String payload,
   int? amountIdr,
   String? orderRef,
   DateTime? expiresAt,
+  String? savedMessage,
+  VoidCallback? onSaved,
 }) async {
   if (_saving) return;
   _saving = true;
   try {
-    await _save(context, payload: payload, amountIdr: amountIdr, orderRef: orderRef, expiresAt: expiresAt);
+    await _save(context,
+        payload: payload,
+        amountIdr: amountIdr,
+        orderRef: orderRef,
+        expiresAt: expiresAt,
+        savedMessage: savedMessage,
+        onSaved: onSaved);
   } finally {
     _saving = false;
   }
@@ -75,6 +88,8 @@ Future<void> _save(
   int? amountIdr,
   String? orderRef,
   DateTime? expiresAt,
+  String? savedMessage,
+  VoidCallback? onSaved,
 }) async {
   final l10n = AppLocalizations.of(context);
   final locale = Localizations.localeOf(context).languageCode;
@@ -97,7 +112,8 @@ Future<void> _save(
     );
     await gallery.putImageBytes(bytes,
         name: 'tailtopia_qris_${(orderRef ?? '').isEmpty ? DateTime.now().millisecondsSinceEpoch : orderRef}');
-    showAppToastOnOverlay(overlay, l10n.cardSavedToGallery, extraBottom: 40);
+    showAppToastOnOverlay(overlay, savedMessage ?? l10n.cardSavedToGallery, extraBottom: 40);
+    onSaved?.call();
   } on GalException catch (e) {
     if (e.type == GalExceptionType.accessDenied && context.mounted) {
       await _showPermissionDialog(context, l10n, gallery);

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_order_detail.dart';
+import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
+import 'package:tailtopia/features/shop/domain/shop_return.dart';
+import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v2.dart';
 import 'package:tailtopia/features/shop/presentation/shop_pay_success_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -111,4 +115,80 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('DETAIL ord1'), findsOneWidget);
   });
+
+  testWidgets('v1.4.2 Story 7.2 · 从 QRIS 路径进入（详情页轮询到账）→ E6 显示「PawCoin + QRIS」拆分',
+      (tester) async {
+    var current = order(coin: 12000, cash: 317000).copyStatus(ShopOrderStatus.pendingPayment);
+    final r = GoRouter(
+      initialLocation: '/shop/orders/ord1',
+      routes: [
+        GoRoute(
+            path: '/shop/orders/:token',
+            builder: (c, s) => ShopOrderDetailPageV2(orderToken: s.pathParameters['token']!)),
+        GoRoute(
+            path: '/shop/orders/:token/paid',
+            builder: (c, s) => ShopPaySuccessPage(orderToken: s.pathParameters['token']!)),
+      ],
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        shopOrderRepositoryProvider.overrideWithValue(_QrisRepo()),
+        shopOrderDetailProvider.overrideWith((ref, token) async => current),
+        returnEligibilityProvider.overrideWith((ref, token) async =>
+            const ReturnEligibility(orderToken: 'ord1', eligible: false, lines: [])),
+      ],
+      child: MaterialApp.router(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('id'),
+        routerConfig: r,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('shopOrderPayV2')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
+
+    current = order(coin: 12000, cash: 317000); // 服务端推进到待发货
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ShopPaySuccessPage), findsOneWidget);
+    expect(find.text('PawCoin Rp 12.000 + QRIS Rp 317.000'), findsOneWidget);
+  });
+}
+
+extension on ShopOrderDetail {
+  ShopOrderDetail copyStatus(ShopOrderStatus s) => ShopOrderDetail(
+        orderToken: orderToken,
+        displayNo: displayNo,
+        status: s,
+        goodsSubtotal: goodsSubtotal,
+        shippingFee: shippingFee,
+        shippingDiscount: shippingDiscount,
+        totalAmount: totalAmount,
+        payChannel: 'MIXED',
+        coinAmount: coinAmount,
+        cashAmount: cashAmount,
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+        lines: lines,
+        packages: packages,
+        receiverName: receiverName,
+        receiverPhone: receiverPhone,
+        addressText: addressText,
+      );
+}
+
+class _QrisRepo extends ShopOrderRepository {
+  _QrisRepo() : super(dio: Dio());
+
+  @override
+  Future<ShopPayResult> pay(String orderToken) async => const ShopPayResult(
+      orderStatus: 'PENDING_PAYMENT', paymentIntentToken: 'pi-1', payload: 'QR-DATA');
 }
