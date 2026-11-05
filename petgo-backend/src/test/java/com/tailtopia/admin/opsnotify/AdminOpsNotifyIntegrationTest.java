@@ -679,4 +679,129 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(list).contains(title.replace("{{nickname}}", "{用户昵称}")).doesNotContain("hexit");
     }
+
+    // ===== V1.4.2 Story 7.2 · AB-37 编辑器与确认页（L1，待本地验收）=====
+
+    @Test
+    @DisplayName("7.2 I1：四个 contenteditable 编辑区 + 同名隐藏字段 + 8 个变量按钮 + data-var-names；无 maxlength；规则说明句")
+    void v142EditorPageRenders() throws Exception {
+        String page = mvc.perform(get(BASE + "/new").param("lang", "zh_CN").with(authentication(sender())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(Pattern.compile("contenteditable=\"true\"").matcher(page).results().count()).isEqualTo(4);
+        assertThat(Pattern.compile("data-ins-var=\"").matcher(page).results().count()).isEqualTo(8);
+        for (String f : List.of("titleEn", "titleId", "bodyEn", "bodyId")) {
+            assertThat(page).containsPattern("<input type=\"hidden\" name=\"" + f + "\"");
+        }
+        assertThat(page).doesNotContain("maxlength=\"120\"").doesNotContain("maxlength=\"255\"")
+                .contains("＋ 用户昵称").contains("＋ 宠物昵称").contains("示例效果：")
+                .contains("变量只能用输入框下方的按钮插入").contains("data-msg-var-typed=\"请用下方按钮插入变量\"")
+                .contains("用了「宠物昵称」时另排除没有宠物的用户");
+        for (String n : List.of("用户昵称", "宠物昵称", "User nickname", "Pet name", "Nama panggilan pengguna",
+                "Nama hewan")) {
+            assertThat(page).as("data-var-names 含 " + n).contains("&quot;" + n + "&quot;");
+        }
+    }
+
+    @Test
+    @DisplayName("7.2 I2–I6：手打三语显示名 → var.typed；/preview data-total；确认页排除行 / data-blocked；手输按净人数；"
+            + "同一变量两次都替换；列表「跳过 N（没有宠物）」")
+    void v142EditorFlows() throws Exception {
+        Authentication ed = sender();
+        User withPet = newUser();
+        jdbc.update("UPDATE users SET nickname = 'hexit2' WHERE id = ?", withPet.getId());
+        addPet(withPet.getId(), "tuotuo");
+        User noPet = newUser();
+        String ids = withPet.getId() + "\n" + noPet.getId();
+        String pet = "Hi {{petName}}";
+
+        // ① 兜底：三语显示名（半角 / 全角括号、大小写）一律 var.typed
+        for (String typed : List.of("Hi {宠物昵称}", "Hi {Pet name}", "Hi ｛nama hewan｝")) {
+            String body = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids, "titleEn", typed), "opsn-err")
+                            .with(authentication(ed)).with(csrf()))
+                    .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
+            assertThat(body).as(typed).contains("data-code=\"admin.err.ops-notify.var.typed\"");
+        }
+
+        // ② data-count = 净、data-total = 扣前
+        String est = mvc.perform(htmx(form(post(BASE + "/preview"), "", "userIds", ids, "titleEn", pet), "opsn-estimate")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(dataCount(est, "data-count")).isEqualTo(1);
+        assertThat(dataCount(est, "data-total")).isEqualTo(2);
+
+        // ④ I4：用宠物变量 → 排除行 + 预览条；不用 → 无排除行；面板 data-blocked="false"
+        String withVar = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids, "titleEn", pet), "opsn-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(withVar).contains("已排除 1 位没有宠物的用户").contains("opsn-pv-pane").contains("data-blocked=\"false\"")
+                .contains("<b class=\"opsn-pv-user-n\">hexit2</b>").contains("#" + withPet.getId() + " · 宠物 tuotuo");
+        String noVar = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", ids), "opsn-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(noVar).doesNotContain("没有宠物的用户").contains("opsn-pv-pane");
+
+        // ④ I6：只剩无宠用户 + 宠物变量 → 200 + 错误槽 + data-blocked="true" + 预览「—」
+        String blocked = mvc.perform(htmx(form(post(BASE + "/review"), "", "userIds", String.valueOf(noPet.getId()),
+                        "titleEn", pet), "opsn-err").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(blocked).contains("data-code=\"admin.err.ops-notify.audience-empty-no-pet\"")
+                .contains("data-blocked=\"true\"").contains("—（扣除后没有可发送的用户）")
+                .contains("已排除 1 位没有宠物的用户").doesNotContain("换一个");
+
+        // 同一变量两次：收件人两处都替换
+        String twice = "opsn-twice-" + SEQ.incrementAndGet() + " {{nickname}} & {{nickname}}";
+        mvc.perform(htmx(form(post(BASE), twice, "userIds", String.valueOf(withPet.getId()), "titleEn", twice),
+                        "opsn-err").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk());
+        String token = (String) rowByTitle(twice).get("public_token");
+        awaitFinalStatus(token);
+        Map<String, Object> n = jdbc.queryForMap("SELECT title FROM notifications WHERE recipient_user_id = ? "
+                + "AND target_ref = ?", withPet.getId(), token);
+        assertThat((String) n.get("title")).endsWith("hexit2 & hexit2").doesNotContain("{{");
+
+        // I5：DONE + skipped_no_pet_count = 3000 → 「· 跳过 3,000（没有宠物）」；= 0 的行不出现
+        jdbc.update("UPDATE ops_notification_campaigns SET skipped_no_pet_count = 3000 WHERE public_token = ?", token);
+        String list = mvc.perform(get(BASE).param("lang", "zh_CN").param("range", "7").with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int at = list.indexOf("ops-notify-row-" + token);
+        assertThat(at).isGreaterThanOrEqualTo(0);
+        String tr = list.substring(at, list.indexOf("</tr>", at));
+        assertThat(tr).contains("· 跳过 3,000（没有宠物）").contains("{用户昵称} &amp; {用户昵称}").doesNotContain("hexit2");
+        jdbc.update("UPDATE ops_notification_campaigns SET skipped_no_pet_count = 0 WHERE public_token = ?", token);
+        String list0 = mvc.perform(get(BASE).param("lang", "zh_CN").param("range", "7").with(authentication(ed)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int at0 = list0.indexOf("ops-notify-row-" + token);
+        assertThat(list0.substring(at0, list0.indexOf("</tr>", at0))).doesNotContain("没有宠物");
+    }
+
+    @Test
+    @DisplayName("7.2 AC7：全部用户 + 宠物变量，手输扣前人数 → 422 confirm-count-mismatch；输净人数 → 建成（定时 + 立刻取消）")
+    void v142TypedConfirmUsesNetCount() throws Exception {
+        Authentication ed = sender();
+        newUser(); // 现造一个无宠用户：保证全部用户里扣前 > 扣后，下面的 mismatch 分支必走
+        String pet = "Hi {{petName}}";
+        long net = estimate(ed, "audienceMode", "ALL", "userIds", "", "titleEn", pet);
+        long total = estimate(ed, "audienceMode", "ALL", "userIds", "");
+        assertThat(total).isGreaterThan(net);
+        String title = "opsn-all-pet-" + SEQ.incrementAndGet();
+        String[] base = {"audienceMode", "ALL", "userIds", "", "titleEn", pet, "sendMode", "SCHEDULED",
+                "scheduledAt", tomorrowWib(), "previewCount", String.valueOf(net),
+                "submitKey", UUID.randomUUID().toString()};
+        MvcResult mismatch = mvc.perform(htmx(form(post(BASE), title,
+                        concat(base, "confirmCount", String.valueOf(total))), "confirm-modal-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isUnprocessableEntity()).andReturn();
+        assertThat(mismatch.getResponse().getContentAsString())
+                .contains("data-code=\"admin.err.ops-notify.confirm-count-mismatch\"");
+        assertThat(rowsWithTitle(title)).isZero();
+        MvcResult ok = mvc.perform(htmx(form(post(BASE), title, concat(base, "confirmCount", String.valueOf(net))),
+                        "confirm-modal-err").with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk()).andReturn();
+        assertThat(ok.getResponse().getHeader("HX-Redirect")).isEqualTo(BASE);
+        String token = (String) rowByTitle(title).get("public_token");
+        mvc.perform(htmx(post(BASE + "/" + token + "/cancel"), "confirm-modal-err")
+                        .with(authentication(ed)).with(csrf()))
+                .andExpect(status().isOk());
+        assertThat(rowByTitle(title).get("status")).isEqualTo("CANCELED");
+    }
 }

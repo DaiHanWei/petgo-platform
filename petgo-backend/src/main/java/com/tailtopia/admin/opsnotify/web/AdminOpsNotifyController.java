@@ -54,6 +54,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.support.RequestContextUtils;
 import org.springframework.web.util.HtmlUtils;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 「系统通知发送」页（V1.3.4 AB-31 · FR-138；按后台返工清单 §4 对齐 UI 稿 I1–I11）：
@@ -87,6 +88,12 @@ public class AdminOpsNotifyController {
      * （10MB）——改这里要同步看那边。
      */
     static final long MAX_CSV_BYTES = 4L * 1024 * 1024;
+    /**
+     * V1.4.2 AB-37（Story 7.2）：变量三语显示名 JSON（= {@link OpsTextVariables#DISPLAY_NAMES}），新建页
+     * {@code data-var-names} 下发给 admin-ops-notify.js 做第 ① 步手打检测（服务端 containsTyped 兜底）。
+     */
+    static final String VAR_NAMES_JSON = JsonMapper.builder().build()
+            .writeValueAsString(OpsTextVariables.DISPLAY_NAMES);
 
     private final AdminOpsNotifyService service;
     private final OpsNotifyLabels labels;
@@ -230,6 +237,7 @@ public class AdminOpsNotifyController {
         model.addAttribute("nowWib", adminTime.fmt(Instant.now()));
         model.addAttribute("minScheduleWib", adminTime.nowWibForInput());
         model.addAttribute("maxCsvBytes", MAX_CSV_BYTES);
+        model.addAttribute("varNamesJson", VAR_NAMES_JSON);
         return "admin/ops-notification-new";
     }
 
@@ -369,6 +377,15 @@ public class AdminOpsNotifyController {
             // #{1} 是用户 id：传字符串，避免 MessageFormat 渲染出千分位（10,234）
             model.addAttribute("previewUserLabel", msg.get("admin.opsNotify.review.previewUserValue",
                     dash(s.nickname()), String.valueOf(s.userId()), dash(s.petName())));
+            // 7.2 · UI 稿 I4：昵称常规色、「#id · 宠物 X」降灰——按 {0} 位置把同一句拆成三段（三语句式都由文案决定）
+            String marker = "\u0000";
+            String whole = msg.get("admin.opsNotify.review.previewUserValue", marker, String.valueOf(s.userId()),
+                    dash(s.petName()));
+            int at = whole.indexOf(marker);
+            model.addAttribute("previewUserBefore", at < 0 ? "" : whole.substring(0, at));
+            model.addAttribute("previewUserName", at < 0 ? "" : dash(s.nickname()));
+            model.addAttribute("previewUserMeta", at < 0 ? model.getAttribute("previewUserLabel")
+                    : whole.substring(at + marker.length()));
             model.addAttribute("pvTitleId", s.titleId());
             model.addAttribute("pvBodyId", s.bodyId());
             model.addAttribute("pvTitleEn", s.titleEn());

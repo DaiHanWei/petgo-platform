@@ -10,6 +10,11 @@
 // · 预计触达：人群块一变 → 对 #opsn-estimate 触发 opsn-refresh（元素上 hx-trigger 带 delay:300ms 防抖）。
 // · 指定用户：textarea 输入即 300ms 防抖校验；「上传 CSV」用 FileReader 读进 textarea（idsSource=CSV），再触发同一校验；
 //   手动改动 textarea → idsSource 回到 PASTE。「导出跳过清单」临时建一个普通表单 POST 下载（带 CSRF）。
+// · V1.4.2 AB-37（Story 7.2 · UI 稿 I1–I6）：① 的四个文案框是 contenteditable 编辑区，变量是不可编辑的整体标签
+//   span.opsn-var[data-var]；每次 input 把编辑区序列化成「纯文本 + {{nickname}} / {{petName}} 令牌」写进同名隐藏字段
+//   （htmx hx-include 只收表单控件）。字数每个变量按 20 计；纯文本里手打的 {{ / 变量显示名在 ① 就拦（服务端兜底）。
+//   ② 净 0 但扣前 > 0（只因宠物变量）放行到 ④，由确认页 I6 拦：面板 data-blocked="true" →「确认发送」置灰。
+//   🔒 XSS：编辑区只经 DOM API 建节点，示例效果一律 textContent，粘贴 / 拖放只收 text/plain，绝不 innerHTML 拼用户输入。
 // 文案一律来自 form 上的 data-msg-*（三语由服务端渲染），本文件不写死任何用户可见文字。
 (function () {
     'use strict';
@@ -30,6 +35,7 @@
         var steps = {};
         try { steps = JSON.parse(form.getAttribute('data-error-steps') || '{}'); } catch (e) { steps = {}; }
         var state = { estimate: 'idle', ids: 'idle' };
+        var submitBtn = $(form, '.opsn-submit');
 
         function msg(k) { return form.getAttribute('data-msg-' + k) || ''; }
         function val(name) {
@@ -57,8 +63,15 @@
             $(form, '[data-opsn-cancel]').hidden = n !== 1;
             $(form, '[data-opsn-prev]').hidden = n === 1;
             $(form, '[data-opsn-next]').hidden = n === 4;
-            $(form, '.opsn-submit').hidden = n !== 4;
+            submitBtn.hidden = n !== 4;
+            // I6：确认面板 data-blocked="true"（扣除没有宠物的人后净 0）→「确认发送」置灰；离开 ④ 即解除
+            submitBtn.disabled = n === 4 && reviewBlocked();
             window.scrollTo(0, 0);
+        }
+
+        function reviewBlocked() {
+            var panel = form.querySelector('#opsn-review [data-blocked]');
+            return !!panel && panel.getAttribute('data-blocked') === 'true';
         }
 
         function showErr(key, text, inputs) {
@@ -90,9 +103,17 @@
             clearErrs();
             if (n === 1) {
                 var ok = true;
-                var blank = ['titleEn', 'titleId', 'bodyEn', 'bodyId'].filter(function (k) { return !val(k); });
+                syncAll();
+                // 与服务端同序：空 → 手打变量 → 超长；标红落在编辑区（隐藏字段不标）
+                var blank = TEXT_FIELDS.filter(function (k) { return !val(k); });
+                var typed = TEXT_FIELDS.filter(function (k) { return typedIn(edOf(k)); });
+                var over = TEXT_FIELDS.filter(function (k) { return isOver(edOf(k)); });
                 if (blank.length) {
-                    ok = showErr('text', msg('text'), blank.map(function (k) { return form.querySelector('[name="' + k + '"]'); }));
+                    ok = showErr('text', msg('text'), blank.map(edOf));
+                } else if (typed.length) {
+                    ok = showErr('text', msg('var-typed'), typed.map(edOf));
+                } else if (over.length) {
+                    ok = showErr('text', msg('too-long'), over.map(edOf));
                 }
                 var type = val('targetType');
                 var tv = val('targetValue');
@@ -120,7 +141,11 @@
                 }
                 if (state.estimate === 'pending' || state.estimate === 'idle') { return showErr('audience', msg('pending')); }
                 var c = estimate && estimate.querySelector('[data-count]');
-                if (!c || parseInt(c.getAttribute('data-count'), 10) <= 0) { return showErr('audience', msg('empty')); }
+                if (!c) { return showErr('audience', msg('empty')); }
+                // AB-37 拍板 ①：净 0 但扣前 > 0（只因用了宠物变量）→ 放行，由 ④ 确认页 I6 拦；扣前也是 0 → 当前人群 0 人
+                var net = parseInt(c.getAttribute('data-count'), 10);
+                var total = parseInt(c.getAttribute('data-total'), 10);
+                if (!(net > 0) && !(total > 0)) { return showErr('audience', msg('empty')); }
                 return true;
             }
             if (n === 3) {
@@ -154,16 +179,311 @@
                 if (k < current) { clearErrs(); go(k); }
                 return;
             }
+            var ins = t.closest('[data-ins-var]');
+            if (ins) {
+                e.preventDefault();
+                var fld = ins.closest('.opsn-fld');
+                var target = fld && fld.querySelector('[data-ed]');
+                if (target) { insertVar(target, ins.getAttribute('data-ins-var')); }
+                return;
+            }
             if (t.closest('[data-opsn-upload]')) { e.preventDefault(); $(form, '[data-opsn-file]').click(); return; }
             if (t.closest('[data-opsn-export]')) { e.preventDefault(); exportSkipped(); }
         });
 
-        // ---------- 文案字数 ----------
-        function count(el) {
-            var c = form.querySelector('[data-count-of="' + el.name + '"]');
-            if (c) { c.textContent = (el.value || '').length + ' / ' + el.getAttribute('data-max'); }
+        // ---------- 文案编辑区（V1.4.2 AB-37 · Story 7.2：contenteditable + 整体变量标签）----------
+        var TEXT_FIELDS = ['titleEn', 'titleId', 'bodyEn', 'bodyId'];
+        var TOKENS = { nickname: '{{nickname}}', petName: '{{petName}}' };
+        var TOKEN_RE = /\{\{(nickname|petName)\}\}/g;
+        var VAR_WEIGHT = 20; // = OpsTextVariables.VAR_WEIGHT
+        var ZW = '\u200B';   // 光标锚点：标签后放一个，计数 / 序列化 / 手打检测 / 示例都去掉
+        var ZW_RE = /\u200B/g;
+        var saved = {};      // 每个编辑区最近一次的选区（变量按钮插在这里）
+        var typedRe = buildTypedRe();
+        var lastUsesPet = null;
+
+        function edOf(name) { return form.querySelector('[data-ed="' + name + '"]'); }
+        function hiddenOf(ed) { return form.querySelector('input[type="hidden"][name="' + ed.getAttribute('data-ed') + '"]'); }
+        function single(ed) { return ed.hasAttribute('data-single-line'); }
+        function isVar(n) { return !!n && n.nodeType === 1 && n.hasAttribute('data-var'); }
+        function noZw(s) { return String(s || '').replace(ZW_RE, ''); }
+        function clean(s) { return noZw(s).replace(/\u00A0/g, ' '); }
+        function zwOnly(n) { return !!n && n.nodeType === 3 && noZw(n.nodeValue) === ''; }
+        function varAncestor(n, ed) {
+            for (; n && n !== ed; n = n.parentNode) { if (isVar(n)) { return n; } }
+            return null;
         }
-        $$(form, '[data-max]').forEach(count);
+        function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+        // 与 OpsTextVariables.TYPED_DISPLAY 同口径：显示名带半角 / 全角花括号，忽略大小写、括号内首尾空白，词间任意空白
+        function buildTypedRe() {
+            var names = [];
+            try { names = JSON.parse(form.getAttribute('data-var-names') || '[]'); } catch (e) { names = []; }
+            var alt = names.filter(Boolean).map(function (n) {
+                return n.split(' ').map(escRe).join('[\\s\\u3000]+');
+            });
+            return alt.length ? new RegExp('[{\\uFF5B][\\s\\u3000]*(?:' + alt.join('|') + ')[\\s\\u3000]*[}\\uFF5D]', 'i') : null;
+        }
+
+        // 编辑区 → 片段序列：{text} / {v: 变量名}。<br> 与块元素（DIV / P 前置）在正文里是换行、在标题里忽略；
+        // 块元素里作为最后一个子节点的 <br> 是浏览器的空行占位（<div><br></div>），跳过，免得空行多算一行。
+        // 其它元素（粘贴 / 浏览器包出来的 span 等）一律递归——里面的变量标签照样识别为令牌，不会被压成显示名文字。
+        function walk(node, line, out) {
+            var block = node.nodeType === 1 && (node.tagName === 'DIV' || node.tagName === 'P') && !node.hasAttribute('data-ed');
+            for (var c = node.firstChild; c; c = c.nextSibling) {
+                if (c.nodeType === 3) { out.push({ text: clean(c.nodeValue) }); continue; }
+                if (c.nodeType !== 1) { continue; }
+                if (isVar(c)) { out.push({ v: c.getAttribute('data-var') }); continue; }
+                if (c.tagName === 'BR') {
+                    if (!line && !(block && !c.nextSibling)) { out.push({ text: '\n' }); }
+                    continue;
+                }
+                if ((c.tagName === 'DIV' || c.tagName === 'P') && !line) { out.push({ text: '\n' }); }
+                walk(c, line, out);
+            }
+            return out;
+        }
+        function parts(ed) { return walk(ed, single(ed), []); }
+        function serialize(ed) {
+            return parts(ed).map(function (p) { return p.v ? (TOKENS[p.v] || '') : p.text; }).join('').trim();
+        }
+        // 字数：与服务端 OpsTextVariables.countedLength 同口径（对 trim 后的令牌文本计，每个令牌按 20）
+        function counted(text) {
+            var n = text.length;
+            text.replace(TOKEN_RE, function (m) { n += VAR_WEIGHT - m.length; return m; });
+            return n;
+        }
+        function isOver(ed) { return !!ed && counted(serialize(ed)) > parseInt(ed.getAttribute('data-max'), 10); }
+        // 手打检测只看纯文本节点（标签不算）；标签处断开，避免「{」+ 标签 +「…}」被拼成一处
+        function typedIn(ed) {
+            if (!ed) { return false; }
+            var text = parts(ed).map(function (p) { return p.v ? '\n' : p.text; }).join('');
+            return text.indexOf('{{') >= 0 || (!!typedRe && typedRe.test(text));
+        }
+
+        function makeTag(name) {
+            var s = document.createElement('span');
+            s.className = 'opsn-var';
+            s.setAttribute('contenteditable', 'false');
+            s.setAttribute('data-var', name);
+            s.textContent = msg('tag-' + name);
+            return s;
+        }
+        // 隐藏字段（令牌文本）→ 编辑区（页面加载 / 浏览器回填时）
+        function fill(ed, text) {
+            while (ed.firstChild) { ed.removeChild(ed.firstChild); }
+            function addText(seg) {
+                seg.split('\n').forEach(function (line, i) {
+                    if (i > 0) { ed.appendChild(single(ed) ? document.createTextNode(' ') : document.createElement('br')); }
+                    if (line) { ed.appendChild(document.createTextNode(line)); }
+                });
+            }
+            var last = 0;
+            var m;
+            TOKEN_RE.lastIndex = 0;
+            while ((m = TOKEN_RE.exec(text)) !== null) {
+                addText(text.slice(last, m.index));
+                ed.appendChild(makeTag(m[1]));
+                ed.appendChild(document.createTextNode(ZW));
+                last = TOKEN_RE.lastIndex;
+            }
+            addText(text.slice(last));
+        }
+
+        // 序列化写隐藏字段 + 计数 + 超长红字 + 示例效果；宠物变量用没用发生变化 → 重算预计触达（AC4.3）
+        function sync(ed) {
+            var text = serialize(ed);
+            var hidden = hiddenOf(ed);
+            if (hidden) { hidden.value = text; }
+            var name = ed.getAttribute('data-ed');
+            var max = parseInt(ed.getAttribute('data-max'), 10);
+            var n = counted(text);
+            var c = form.querySelector('[data-count-of="' + name + '"]');
+            if (c) {
+                c.textContent = n + ' / ' + max;
+                c.classList.toggle('is-over', n > max);
+            }
+            ed.classList.toggle('is-over', n > max);
+            var ex = form.querySelector('[data-example-of="' + name + '"]');
+            if (ex) {
+                var sampleNick = form.getAttribute('data-sample-nickname') || '';
+                var samplePet = form.getAttribute('data-sample-pet') || '';
+                var out = parts(ed).map(function (p) {
+                    return p.v ? (p.v === 'petName' ? samplePet : sampleNick) : p.text;
+                }).join('').trim();
+                var box = ex.querySelector('[data-example-text]');
+                if (box) { box.textContent = out; } // 🔒 textContent，不用 innerHTML
+                ex.hidden = !text;
+            }
+            var pet = TEXT_FIELDS.some(function (k) {
+                var h = form.querySelector('input[type="hidden"][name="' + k + '"]');
+                return !!h && h.value.indexOf(TOKENS.petName) >= 0;
+            });
+            if (lastUsesPet !== null && pet !== lastUsesPet && (mode() === 'ALL' || mode() === 'FILTER')) { refreshEstimate(); }
+            lastUsesPet = pet;
+        }
+        function syncAll() { $$(form, '[data-ed]').forEach(sync); }
+
+        // 光标记录：选区落在某编辑区内就存一份（变量按钮 mousedown 不抢焦点，靠它插回原处）。
+        // 选区离开该编辑区（blur / 选到别处）后，记下的选区折叠到末尾：用户已看不到的选中文字不能被插入动作删掉。
+        function collapseSaved(name) { if (saved[name]) { saved[name].collapse(false); } }
+        function rememberSelection() {
+            var sel = window.getSelection();
+            var ed = null;
+            if (sel && sel.rangeCount) {
+                var n = sel.anchorNode;
+                var el = n && (n.nodeType === 1 ? n : n.parentNode);
+                ed = el && el.closest ? el.closest('[data-ed]') : null;
+                if (ed && !form.contains(ed)) { ed = null; }
+            }
+            var cur = ed ? ed.getAttribute('data-ed') : null;
+            Object.keys(saved).forEach(function (k) { if (k !== cur) { collapseSaved(k); } });
+            if (cur) { saved[cur] = sel.getRangeAt(0).cloneRange(); }
+        }
+        document.addEventListener('selectionchange', rememberSelection);
+
+        function placeCaret(r) {
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+        }
+        function insertVar(ed, name) {
+            if (!TOKENS[name]) { return; }
+            ed.focus();
+            var r = saved[ed.getAttribute('data-ed')];
+            if (!r || !ed.contains(r.startContainer) || !ed.contains(r.endContainer)) {
+                r = document.createRange();
+                r.selectNodeContents(ed);
+                r.collapse(false); // 没有光标记录 → 插到末尾
+            }
+            var inside = varAncestor(r.startContainer, ed) || varAncestor(r.endContainer, ed);
+            if (inside) { r = document.createRange(); r.setStartAfter(inside); r.collapse(true); }
+            r.deleteContents();
+            var zw = document.createTextNode(ZW);
+            r.insertNode(zw);
+            r.insertNode(makeTag(name)); // insertNode 插在区间起点：标签在前、锚点在后
+            var after = document.createRange();
+            after.setStart(zw, 1);
+            after.collapse(true);
+            placeCaret(after);
+            saved[ed.getAttribute('data-ed')] = after.cloneRange();
+            ed.dispatchEvent(new Event('input', { bubbles: true })); // 计数 / 示例 / 序列化 / 清错误统一走 input
+        }
+
+        // Backspace / Delete 整体删标签（跳过只含锚点的文本）；删后派发 input
+        function adjacentVar(ed, r, back) {
+            var c = r.startContainer;
+            var o = r.startOffset;
+            var n;
+            if (c.nodeType === 3) {
+                var rest = back ? c.nodeValue.slice(0, o) : c.nodeValue.slice(o);
+                if (noZw(rest) !== '') { return null; }
+                n = back ? c.previousSibling : c.nextSibling;
+            } else {
+                n = back ? c.childNodes[o - 1] : c.childNodes[o];
+            }
+            while (zwOnly(n)) { n = back ? n.previousSibling : n.nextSibling; }
+            return isVar(n) && ed.contains(n) ? n : null;
+        }
+        function onKeydown(e) {
+            if (e.isComposing || e.keyCode === 229) { return; } // 输入法组字中（印尼 / 中文 IME）：交给浏览器
+            var ed = e.currentTarget;
+            if (e.key === 'Enter' && single(ed)) { e.preventDefault(); return; }
+            if (e.key !== 'Backspace' && e.key !== 'Delete') { return; }
+            var sel = window.getSelection();
+            if (!sel || !sel.rangeCount || !sel.isCollapsed) { return; } // 跨标签选区交给浏览器整块删
+            var r = sel.getRangeAt(0);
+            var tag = adjacentVar(ed, r, e.key === 'Backspace');
+            if (!tag) { return; }
+            e.preventDefault();
+            var next = tag.nextSibling;
+            if (zwOnly(next)) { next.parentNode.removeChild(next); } // 连同其后的锚点
+            var at = document.createRange();
+            at.setStartBefore(tag);
+            at.collapse(true);
+            tag.parentNode.removeChild(tag);
+            placeCaret(at);
+            ed.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        // 粘贴 / 拖放只收纯文本（粘进来的「{用户昵称}」永远是文字，会被手打检测拦住——预期）。
+        // 自己按 \n 建文本节点与 <br> 插入，不走 insertText 的分段逻辑（多段带空行会被包成 <div><br></div>）。
+        function plainNodes(ed, t) {
+            var nodes = [];
+            t.split('\n').forEach(function (line, i) {
+                if (i > 0) { nodes.push(document.createElement('br')); }
+                if (line) { nodes.push(document.createTextNode(line)); }
+            });
+            return nodes;
+        }
+        function insertPlain(ed, text) {
+            var t = String(text || '').replace(/\r\n?/g, '\n');
+            if (single(ed)) { t = t.replace(/\n/g, ' '); }
+            if (!t) { return; }
+            var sel = window.getSelection();
+            var r = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+            if (!r || !ed.contains(r.startContainer) || !ed.contains(r.endContainer)) {
+                r = document.createRange();
+                r.selectNodeContents(ed);
+                r.collapse(false);
+            }
+            var inside = varAncestor(r.startContainer, ed) || varAncestor(r.endContainer, ed);
+            if (inside) { r = document.createRange(); r.setStartAfter(inside); r.collapse(true); }
+            r.deleteContents();
+            var nodes = plainNodes(ed, t);
+            var frag = document.createDocumentFragment();
+            nodes.forEach(function (n) { frag.appendChild(n); });
+            var last = nodes[nodes.length - 1];
+            r.insertNode(frag);
+            // 以 <br> 结尾且后面没东西：补一个占位 <br>，光标才落得到新行（序列化时首尾 trim 掉）
+            if (last.nodeName === 'BR' && !last.nextSibling) { last.parentNode.appendChild(document.createElement('br')); }
+            var after = document.createRange();
+            after.setStartAfter(last);
+            after.collapse(true);
+            placeCaret(after);
+            saved[ed.getAttribute('data-ed')] = after.cloneRange();
+            ed.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        function onPaste(e) {
+            e.preventDefault();
+            var cd = e.clipboardData || window.clipboardData;
+            insertPlain(e.currentTarget, cd ? cd.getData('text/plain') || cd.getData('Text') : '');
+        }
+        function onDrop(e) {
+            e.preventDefault();
+            var ed = e.currentTarget;
+            var text = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+            if (!text) { return; }
+            var r = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+            ed.focus();
+            if (r && ed.contains(r.startContainer) && !varAncestor(r.startContainer, ed)) { placeCaret(r); }
+            insertPlain(ed, text);
+        }
+        // 禁富文本格式化（Ctrl+B / I / U）；标题禁回车；正文回车统一产出 <br>（序列化为 \n）
+        function onBeforeInput(e) {
+            var ed = e.currentTarget;
+            var it = e.inputType || '';
+            if (it.indexOf('format') === 0) { e.preventDefault(); return; }
+            // 撤销 / 重做禁用：标签插入、整体删除、粘贴都是脚本改 DOM，不在浏览器撤销栈里，撤销会把编辑区还原成错乱状态
+            if (it === 'historyUndo' || it === 'historyRedo') { e.preventDefault(); return; }
+            if (it === 'insertParagraph' || it === 'insertLineBreak') {
+                if (single(ed)) { e.preventDefault(); return; }
+                if (it === 'insertParagraph') { e.preventDefault(); document.execCommand('insertLineBreak'); }
+            }
+        }
+        $$(form, '[data-ed]').forEach(function (ed) {
+            var hidden = hiddenOf(ed);
+            if (hidden && hidden.value) { fill(ed, hidden.value); }
+            ed.addEventListener('keydown', onKeydown);
+            ed.addEventListener('paste', onPaste);
+            ed.addEventListener('drop', onDrop);
+            ed.addEventListener('beforeinput', onBeforeInput);
+            ed.addEventListener('blur', function () { collapseSaved(ed.getAttribute('data-ed')); });
+            ed.addEventListener('dragstart', function (e) { if (varAncestor(e.target, ed)) { e.preventDefault(); } });
+        });
+        // 变量按钮：mousedown 不抢焦点、不丢选区（超长时仍可点：允许插入、提示超长、不能下一步，I3）
+        $$(form, '[data-ins-var]').forEach(function (b) {
+            b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        });
+        syncAll();
 
         // ---------- 人群 ----------
         function setPanel(box, show) {
@@ -202,7 +522,8 @@
         });
         form.addEventListener('input', function (e) {
             var t = e.target;
-            if (t.hasAttribute && t.hasAttribute('data-max')) { count(t); }
+            var ed = t.closest && t.closest('[data-ed]');
+            if (ed) { sync(ed); }
             if (t === ids) {
                 if (e.isTrusted && idsSource) { idsSource.value = 'PASTE'; }
                 state.ids = ids.value.trim() ? 'pending' : 'idle';
@@ -265,6 +586,10 @@
             if (elt === ids) { state.ids = 'error'; }
         });
         document.body.addEventListener('opsn:reviewed', function () { go(4); });
+        // I6 兜底：确认面板被拦（净 0）时不发「确认发送」请求（按钮已置灰；防其它途径触发表单提交）
+        document.body.addEventListener('htmx:beforeRequest', function (e) {
+            if (e.detail && e.detail.elt === form && current === 4 && reviewBlocked()) { e.preventDefault(); }
+        });
 
         // ---------- 「现在是 WIB …」每 30 秒走一次 ----------
         var nowEl = $(form, '[data-now-wib]');

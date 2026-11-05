@@ -1226,11 +1226,11 @@ tr.is-muted td { opacity: .55; }
 #ops-notify-rows .opsn-table th { background: #F0F1F5; font-weight: 600; color: var(--ink-2); text-align: left; padding: 11px 12px; }
 #ops-notify-rows .opsn-table td { padding: 9px 12px; border-top: 1px solid var(--line); height: 48px; color: var(--ink); font-variant-numeric: tabular-nums; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ops-notify-rows .opsn-table .opsp-window { color: var(--muted); }
-#ops-notify-rows .opsn-c-sum { width: 25%; }
+#ops-notify-rows .opsn-c-sum { width: 22%; } /* V1.4.2 AB-37 · I5：25 → 22，让出位置给「· 跳过 N（没有宠物）」 */
 #ops-notify-rows .opsn-c-aud { width: 22.5%; }
-#ops-notify-rows .opsn-c-at { width: 18.5%; }
+#ops-notify-rows .opsn-c-at { width: 16.5%; }
 #ops-notify-rows .opsn-c-st { width: 11%; }
-#ops-notify-rows .opsn-c-reach { width: 15.5%; }
+#ops-notify-rows .opsn-c-reach { width: 20.5%; }
 #ops-notify-rows .opsn-reach.muted, #ops-notify-rows .opsn-reach .muted { color: var(--muted); }
 #ops-notify-rows .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; }
 #ops-notify-rows .badge-muted { background: #F1F2F5; color: var(--muted); }
@@ -1256,6 +1256,7 @@ tr.is-muted td { opacity: .55; }
 .opsn-wiz textarea.s-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; min-height: 96px; }
 .opsn-wiz .inp.is-invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
 .opsn-h { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 8px 0 0; }
+.opsn-h.opsn-var-hint { margin-top: 4px; }
 .opsn-ferr { color: var(--danger); font-size: 12px; margin: 8px 0 0; }
 .opsn-ferr[hidden] { display: none; }
 .opsn-wiz .opsp-two { margin-top: 0; }
@@ -1271,6 +1272,23 @@ tr.is-muted td { opacity: .55; }
 .opsn-ids-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .opsn-ids-row .opsn-h { margin: 0; }
 .opsn-upload { background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-weight: 600; }
+/* V1.4.2 AB-37 · Story 7.2（UI 稿 I1–I3）：contenteditable 编辑区 + 整体变量标签 + 插入按钮 + 示例效果 */
+.opsn-wiz .opsn-ed { cursor: text; outline: 0; word-break: break-word; }
+.opsn-wiz .opsn-ed[data-single-line] { line-height: 20px; white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.opsn-wiz .opsn-ed[data-single-line]::-webkit-scrollbar { display: none; }
+.opsn-wiz .opsn-ed:not([data-single-line]) { height: auto; min-height: 70px; line-height: 1.5; white-space: pre-wrap; }
+.opsn-ed:focus { outline: 2px solid var(--brand-line); border-color: var(--brand); }
+.opsn-wiz .opsn-ed.is-over { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.opsn-var { display: inline-block; background: var(--brand-tint); color: var(--brand-strong); border: 1px solid var(--brand-line);
+  border-radius: 4px; padding: 0 4px; margin: 0 1px; font-size: 13px; font-weight: 600; line-height: 18px; white-space: nowrap;
+  cursor: default; -webkit-user-select: all; user-select: all; }
+.opsn-var-row { display: flex; align-items: center; gap: 8px; }
+.opsn-wiz .opsn-varbtn { background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-size: 12px; font-weight: 600;
+  height: 26px; padding: 0 10px; border-radius: 6px; line-height: 1; }
+.opsn-ex { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 0; word-break: break-word; }
+.opsn-ex[hidden] { display: none; }
+.opsn-ex b { color: var(--ink-2); font-weight: 600; white-space: pre-wrap; }
+.opsn-l em.is-over { color: var(--danger); font-weight: 600; }
 .opsn-ids-result:empty { display: none; }
 .opsn-ids-banner { margin-top: 14px; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 10px 14px; font-size: 13px; }
 .opsn-ids-banner .opsp-lnk { margin: 0 0 0 8px; color: var(--brand-strong); }
@@ -1294,6 +1312,14 @@ tr.is-muted td { opacity: .55; }
 .opsn-kv { display: grid; grid-template-columns: 132px 1fr; gap: 12px 0; margin: 0; font-size: 13px; }
 .opsn-kv dt { color: var(--muted); }
 .opsn-kv dd { margin: 0; font-weight: 600; color: var(--ink); word-break: break-word; }
+/* V1.4.2 AB-37 · 7.2（UI 稿 I4 / I6）：预计触达下一行「已排除 N 位没有宠物的用户」；预览用户条 */
+.opsn-kv .opsn-excl { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--warn); }
+.opsn-pv-user { display: flex; align-items: center; gap: 8px; min-height: 34px; box-sizing: border-box; margin: 0 0 16px;
+  padding: 4px 6px 4px 12px; font-size: 13px; color: var(--ink-2); background: #F7F8FA; border: 1px solid var(--line); border-radius: 6px; }
+.opsn-pv-user-n { color: var(--ink); font-weight: 600; }
+.opsn-pv-user-v { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opsn-pv-user .opsp-lnk { margin: 0 0 0 auto; padding: 4px 6px; border-radius: 4px; flex-shrink: 0; }
+.opsn-pv-user .opsp-lnk[disabled] { opacity: .5; cursor: progress; }
 .opsn-foot { position: fixed; left: 210px; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line);
   padding: 14px 32px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 .opsn-foot [hidden] { display: none; }
