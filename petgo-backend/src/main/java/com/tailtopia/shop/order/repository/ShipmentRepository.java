@@ -35,6 +35,27 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
         return findActiveByShopOrderId(shopOrderId).stream().findFirst();
     }
 
+    /** v1.4.2 shop Story 6.2：一页订单的活动运单一次批量取，按订单、id 倒序。 */
+    @Query("""
+            SELECT s FROM Shipment s
+            WHERE s.shopOrderId IN :orderIds AND s.supersededAt IS NULL
+              AND s.status <> com.tailtopia.shop.order.domain.ShipmentStatus.CANCELLED
+            ORDER BY s.shopOrderId ASC, s.id DESC
+            """)
+    List<Shipment> findActiveByShopOrderIdIn(@Param("orderIds") java.util.Collection<Long> orderIds);
+
+    /** 订单 id → 最新活动运单（订单列表 {@code logisticsStatusKey}）；无活动运单的订单不在结果里。 */
+    default java.util.Map<Long, Shipment> findLatestActiveByOrderIds(java.util.Collection<Long> orderIds) {
+        java.util.Map<Long, Shipment> out = new java.util.HashMap<>();
+        if (orderIds == null || orderIds.isEmpty()) {
+            return out;
+        }
+        for (Shipment s : findActiveByShopOrderIdIn(orderIds)) {
+            out.putIfAbsent(s.getShopOrderId(), s);
+        }
+        return out;
+    }
+
     /** 在途回查（AC7.5）：Biteship 活动且未签收 / 未取消的运单，按状态时刻升序（最久未更新的先查）。 */
     @Query("""
             SELECT s FROM Shipment s

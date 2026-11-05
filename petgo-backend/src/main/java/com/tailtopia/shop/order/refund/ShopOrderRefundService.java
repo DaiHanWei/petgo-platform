@@ -443,6 +443,34 @@ public class ShopOrderRefundService {
         return list.stream().map(r -> viewOf(r, config)).toList();
     }
 
+    /**
+     * 订单详情收口（v1.4.2 shop Story 6.2 AC3）：退款单出参 + 行级（{@code LINE}）退款合计，<b>一次查询</b>。
+     *
+     * @param views              同 {@link #refundViewsOf}（按创建时间升序）
+     * @param lineRefundTotals   订单行 id → 该行全部 {@code LINE} 级退款单 {@code total_refund} 之和（只搬运，不重算，P-1）
+     */
+    public record DetailRefunds(List<ShopOrderRefundView> views, java.util.Map<Long, Long> lineRefundTotals) {
+
+        public static final DetailRefunds NONE = new DetailRefunds(List.of(), java.util.Map.of());
+    }
+
+    /** 见 {@link DetailRefunds}。 */
+    @Transactional(readOnly = true)
+    public DetailRefunds detailRefundsOf(ShopOrder order) {
+        List<ShopOrderRefund> list = refunds.findByOrderIdOrderByCreatedAtAscIdAsc(order.getId());
+        if (list.isEmpty()) {
+            return DetailRefunds.NONE;
+        }
+        PawCoinConfig config = config();
+        java.util.Map<Long, Long> lineTotals = new java.util.HashMap<>();
+        for (ShopOrderRefund r : list) {
+            if (r.getScope() == RefundScope.LINE && r.getOrderLineId() != null) {
+                lineTotals.merge(r.getOrderLineId(), r.getTotalRefund(), Long::sum);
+            }
+        }
+        return new DetailRefunds(list.stream().map(r -> viewOf(r, config)).toList(), lineTotals);
+    }
+
     /** 现金段超 7 天未选去向的退款单（只读，供后台线展示；不论是否已提醒）。 */
     @Transactional(readOnly = true)
     public List<ShopOrderRefund> findAwaitingDestinationOverdue() {

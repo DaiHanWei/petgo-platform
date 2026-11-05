@@ -87,6 +87,74 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             @Param("beforeTs") Instant beforeTs,
             @Param("beforeId") long beforeId, Pageable pageable);
 
+    // ---------- v1.4.2 shop Story 6.2：电商订单列表（D-18，按 displayStatus 归组，走 ix_shop_orders_user） ----------
+    //
+    // 🔴 共享同一排序 {@code created_at DESC, id DESC} 与 (created_at, id) 行比较游标；首页由调用方传哨兵游标。
+    // 归组边界与 ShopOrder#displayStatusAt 一致（now > expires_at 才算过窗）：待付款 expires_at >= :now，宽限期 expires_at < :now。
+
+    /** 全部（无状态条件）。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyShopOrderPage(@Param("userId") long userId, @Param("beforeTs") Instant beforeTs,
+            @Param("beforeId") long beforeId, Pageable pageable);
+
+    /** 待发货 / 待收货 / 已完成：原始状态 ∈ {@code statuses}。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId AND o.status IN :statuses
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyShopOrderPageByStatuses(@Param("userId") long userId,
+            @Param("statuses") java.util.Collection<ShopOrderStatus> statuses, @Param("beforeTs") Instant beforeTs,
+            @Param("beforeId") long beforeId, Pageable pageable);
+
+    /** 待付款：未过订单窗（含无窗的历史单）。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId
+              AND o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_PAYMENT
+              AND (o.expiresAt IS NULL OR o.expiresAt >= :now)
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyPendingPaymentPage(@Param("userId") long userId, @Param("now") Instant now,
+            @Param("beforeTs") Instant beforeTs, @Param("beforeId") long beforeId, Pageable pageable);
+
+    /** 已取消：已取消 / 退款中 / 已退款，或宽限期待支付（S-7）。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId
+              AND (o.status IN (com.tailtopia.shop.order.domain.ShopOrderStatus.CANCELLED,
+                                com.tailtopia.shop.order.domain.ShopOrderStatus.REFUNDING,
+                                com.tailtopia.shop.order.domain.ShopOrderStatus.REFUNDED)
+                   OR (o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_PAYMENT
+                       AND o.expiresAt < :now))
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyCancelledPage(@Param("userId") long userId, @Param("now") Instant now,
+            @Param("beforeTs") Instant beforeTs, @Param("beforeId") long beforeId, Pageable pageable);
+
+    /**
+     * 角标计数（AC2）：一条 SQL 两个条件计数，口径同上两组。返回单行 {@code [pendingPayment, toReceive]}
+     * （{@code SUM} 无行时为 null，调用方按 0）。
+     */
+    @Query("""
+            SELECT SUM(CASE WHEN o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_PAYMENT
+                                 AND (o.expiresAt IS NULL OR o.expiresAt >= :now) THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN o.status IN (com.tailtopia.shop.order.domain.ShopOrderStatus.SHIPPED,
+                                              com.tailtopia.shop.order.domain.ShopOrderStatus.DELIVERED)
+                            THEN 1 ELSE 0 END)
+            FROM ShopOrder o
+            WHERE o.userId = :userId
+            """)
+    List<Object[]> countMyShopOrderBadges(@Param("userId") long userId, @Param("now") Instant now);
+
     /** 按当前支付意图 token 回找订单（到账事件用，Story 3.8）。 */
     Optional<ShopOrder> findByPaymentIntentToken(String paymentIntentToken);
 

@@ -44,38 +44,34 @@ public class MeCheckoutController {
     private final com.tailtopia.shop.order.service.CheckoutQuoteService quotes;
     private final ShopOrderPaymentService payments;
     private final com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment;
-    private final com.tailtopia.shop.service.ShopLineImageResolver lineImages;
     private final ShopOrderRefundService refunds;
-    private final com.tailtopia.shop.order.service.LatePaymentService latePayments;
+    private final com.tailtopia.shop.order.service.ShopOrderDetailAssembler details;
+    private final com.tailtopia.shop.order.service.ShopOrderListService orderList;
 
     public MeCheckoutController(CheckoutService checkout,
             com.tailtopia.shop.order.service.CheckoutQuoteService quotes,
             ShopOrderPaymentService payments,
             com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment,
-            com.tailtopia.shop.service.ShopLineImageResolver lineImages,
             ShopOrderRefundService refunds,
-            com.tailtopia.shop.order.service.LatePaymentService latePayments) {
+            com.tailtopia.shop.order.service.ShopOrderDetailAssembler details,
+            com.tailtopia.shop.order.service.ShopOrderListService orderList) {
         this.checkout = checkout;
         this.quotes = quotes;
         this.payments = payments;
         this.fulfillment = fulfillment;
-        this.lineImages = lineImages;
         this.refunds = refunds;
-        this.latePayments = latePayments;
+        this.details = details;
+        this.orderList = orderList;
     }
 
     /**
-     * 订单详情的三个出口共用：装配前先批量取一次主图（2026-09-03）。
+     * 订单详情的出口共用（详情 / 取消 / 确认收货）：v1.4.2 shop Story 6.2 起统一经
+     * {@link com.tailtopia.shop.order.service.ShopOrderDetailAssembler}（批量取行、主图、运单、意图、退款单、重下单关联、券退回）。
      *
-     * <p>🔴 三处各写一遍必然漏掉其中一处 —— 「下单后全链路无图」本就是这么攒出来的。
+     * <p>🔴 各处各写一遍必然漏掉其中一处 —— 「下单后全链路无图」本就是这么攒出来的。
      */
     private ShopOrderDetailView detailOf(com.tailtopia.shop.order.domain.ShopOrder order) {
-        var lines = payments.linesOf(order);
-        return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()),
-                lineImages.mainImageUrlBySkuId(lines.stream()
-                        .map(com.tailtopia.shop.order.domain.ShopOrderLine::getSkuId).toList()),
-                payments.intentOf(order).orElse(null), java.time.Instant.now(), refunds.refundViewsOf(order),
-                latePayments.linksOf(order));
+        return details.assemble(order, java.time.Instant.now());
     }
 
     /**
@@ -136,6 +132,24 @@ public class MeCheckoutController {
     }
 
     // ===== Story 3.8：待支付订单详情与支付 =====
+
+    /**
+     * 电商订单列表（v1.4.2 shop Story 6.2 AC1，D-18）：按 {@code displayStatus} 分组（S-7），游标分页每页 20。
+     * {@code group} ∈ {@code all | pending_payment | pending_shipment | to_receive | completed | cancelled}，非法 422；
+     * 坏游标按首页。通用 {@code /api/v1/orders} 不动。
+     */
+    @GetMapping("/shop-orders")
+    public com.tailtopia.shop.order.dto.ShopOrderListPage list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String group,
+            @RequestParam(required = false) String cursor) {
+        return orderList.list(currentUserId(jwt), group, cursor);
+    }
+
+    /** 角标计数（AC2，F1）：{@code {pendingPayment, toReceive}}，口径与列表分组一致。字面路径优先于 {@code /{token}}。 */
+    @GetMapping("/shop-orders/counts")
+    public com.tailtopia.shop.order.dto.ShopOrderCounts counts(@AuthenticationPrincipal Jwt jwt) {
+        return orderList.counts(currentUserId(jwt));
+    }
 
     /**
      * 订单详情。v1.4.2 shop Story 3.3：读单<b>不再懒关单</b>（码要到出码 + 65 分钟才失效）；

@@ -164,6 +164,58 @@ public class CouponLedgerService {
         return dao.markExpiryNotified(userId, now, until);
     }
 
+    /**
+     * 已取消订单用过的券的退回结果（v1.4.2 shop Story 6.2 AC3.3，P-2：券状态只经本账本读）。<b>只读</b>，一次批量查询。
+     *
+     * <p>判定（每张券）：{@code mode = KEEP} → 不退；仍 LOCKED / USED 在本单 → 未退；VOIDED → 未退（模板停用作废）；
+     * AVAILABLE → 过期（现算，D-2）为 {@code EXPIRED}，否则 {@code RETURNED}；LOCKED / USED 在别的订单（退回后又被用掉，
+     * 含迟到款重下单重新锁券）→ {@code RETURNED}。多张券：任一 {@code EXPIRED} → {@code EXPIRED}；否则任一 {@code RETURNED}
+     * → {@code RETURNED}；否则 {@code NOT_RETURNED}。
+     *
+     * @param userCouponIds 订单头的满减券 / 免运券 id（可含 null）
+     * @return 未用券为 null
+     */
+    @Transactional(readOnly = true)
+    public com.tailtopia.shop.coupon.domain.CouponReturnStatus couponReturnStatusOf(long orderId,
+            Collection<Long> userCouponIds, CouponReleaseMode mode, Instant now) {
+        List<Long> ids = userCouponIds == null ? List.of()
+                : userCouponIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return null;
+        }
+        if (mode == CouponReleaseMode.KEEP) {
+            return com.tailtopia.shop.coupon.domain.CouponReturnStatus.NOT_RETURNED;
+        }
+        boolean anyReturned = false;
+        boolean anyExpired = false;
+        for (UserCoupon uc : userCoupons.findByIdIn(ids)) {
+            switch (uc.getStatus()) {
+                case AVAILABLE -> {
+                    if (uc.isExpiredAt(now)) {
+                        anyExpired = true;
+                    } else {
+                        anyReturned = true;
+                    }
+                }
+                case LOCKED, USED -> {
+                    boolean stillHere = Long.valueOf(orderId).equals(uc.getLockedOrderId())
+                            || Long.valueOf(orderId).equals(uc.getUsedOrderId());
+                    if (!stillHere) {
+                        anyReturned = true;
+                    }
+                }
+                case VOIDED -> {
+                    // 退回时模板已停用作废：对用户等于没退
+                }
+            }
+        }
+        if (anyExpired) {
+            return com.tailtopia.shop.coupon.domain.CouponReturnStatus.EXPIRED;
+        }
+        return anyReturned ? com.tailtopia.shop.coupon.domain.CouponReturnStatus.RETURNED
+                : com.tailtopia.shop.coupon.domain.CouponReturnStatus.NOT_RETURNED;
+    }
+
     /** 注销联动（AC7）：该用户 AVAILABLE → VOIDED；LOCKED / USED 不动（订单匿名化保留）。 */
     @Transactional
     public int voidAllAvailableForUser(long userId, Instant now) {

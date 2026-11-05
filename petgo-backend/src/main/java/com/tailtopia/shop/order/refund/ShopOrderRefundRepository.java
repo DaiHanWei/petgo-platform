@@ -28,6 +28,16 @@ public interface ShopOrderRefundRepository extends JpaRepository<ShopOrderRefund
     List<ShopOrderRefund> findByStatusAndCreatedAtBeforeOrderByCreatedAtAsc(ShopRefundStatus status,
             Instant threshold);
 
+    /**
+     * v1.4.2 shop Story 6.2：一页订单里有待用户处理退款单（{@code AWAITING_DESTINATION} / {@code PAYOUT_FAILED}）的订单 id。
+     */
+    @Query("""
+            SELECT DISTINCT r.orderId FROM ShopOrderRefund r
+            WHERE r.orderId IN :orderIds
+              AND r.status IN (com.tailtopia.shop.order.refund.ShopRefundStatus.AWAITING_DESTINATION,
+                               com.tailtopia.shop.order.refund.ShopRefundStatus.PAYOUT_FAILED)
+            """)
+    List<Long> findOrderIdsNeedingUserAction(@Param("orderIds") java.util.Collection<Long> orderIds);
 
     /**
      * 🔒 注销（D1/D2）：该用户全部退款单的加密收款账号 / 户名置空（行保留供财务追溯），同 {@code return_requests}。

@@ -492,4 +492,38 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
         List<ShopProduct> all = products.findByActiveTrueOrderBySortWeightDescIdDesc();
         assertThat(all).noneMatch(p -> p.getPublicToken().equals(productToken));
     }
+
+    // ---------- v1.4.2 shop Story 6.2 复购下线（FR-136 / D-20） ----------
+
+    @Autowired
+    private com.tailtopia.shop.order.service.ShopOrderExpiryScanner expiryScanner;
+
+    @Test
+    @DisplayName("v1.4.2 复购下线：有活动触发器也返回 []；推荐接口不受影响；默认配置下扫描器不产生新触发与通知")
+    void repurchaseRetired() throws Exception {
+        long uid = seedUser();
+        seedPet(uid, "DOG", LocalDate.now().minusYears(3), new BigDecimal("15"));
+        String sku = seedFoodSku(Species.DOG, AgeStage.ADULT, BodySize.MEDIUM, 3000L,
+                "[{\"weightMinKg\":10,\"weightMaxKg\":25,\"gramsPerDay\":110}]", 100);
+        deliveredOrderFor(uid, sku, 1, 22);
+
+        // 默认 scan-enabled=false：扫描器入口直接返回
+        expiryScanner.scanRepurchase();
+        assertThat(triggerCountFor(uid)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM notifications WHERE recipient_user_id = ? AND type = ?""",
+                Long.class, uid, NotificationType.REPURCHASE_FOOD_LOW.name())).isZero();
+
+        // 服务本身未改：直接调 scan 仍能产生触发（历史行为保留一个版本）
+        repurchase.scan(LocalDate.now(ZoneOffset.UTC));
+        assertThat(repurchase.activeTriggersFor(uid)).hasSize(1);
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/me/shop/repurchase-cards").header("Authorization", userBearer(uid)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().json("[]"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/me/shop/recommendations").header("Authorization", userBearer(uid)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+    }
 }

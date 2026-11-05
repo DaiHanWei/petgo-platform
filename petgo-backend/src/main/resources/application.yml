@@ -187,6 +187,10 @@ petgo:
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。
     low-stock-threshold: ${SHOP_LOW_STOCK_THRESHOLD:5}
+    # 复购日扫开关（v1.4.2 shop Story 6.2 · PRD FR-136 · 架构 D-20）：V1.4.2 FR-136 下线，代码保留一个版本后删。
+    # 默认 false ⇒ 日扫直接返回，不再产生复购触发与 REPURCHASE_FOOD_LOW 通知（枚举与约束值保留给历史行）。
+    repurchase:
+      scan-enabled: ${SHOP_REPURCHASE_SCAN_ENABLED:false}
     # 新订单 Lark 提醒（V1.3.0 shop-v2 Story 3-4 · SHOP-FR-24 · 主线 C）。
     # 运营接单原本靠「人工打开后台页面盯着」，零通知 —— 发货时效取决于有没有人想起来刷。
     # 🔴 mode=off（默认）或 receive-id 为空 ⇒ 扫描器静默跳过、**零出网**，队列行保持 PENDING。

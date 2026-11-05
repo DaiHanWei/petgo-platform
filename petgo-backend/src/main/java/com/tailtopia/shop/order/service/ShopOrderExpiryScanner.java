@@ -42,6 +42,13 @@ public class ShopOrderExpiryScanner {
     private final com.tailtopia.shop.repurchase.service.RepurchaseScanService repurchase;
     private final com.tailtopia.shop.review.service.ShopReviewService reviewService;
 
+    /**
+     * 复购日扫开关（v1.4.2 shop Story 6.2，D-20）：<b>默认 false</b>。{@code RepurchaseScanService} 本身不删不改，
+     * 直接调用 {@code scan()} 的既有测试仍有效；代码保留一个版本后删。
+     */
+    @org.springframework.beans.factory.annotation.Value("${petgo.shop.repurchase.scan-enabled:false}")
+    private boolean repurchaseScanEnabled;
+
     public ShopOrderExpiryScanner(ShopOrderPaymentService payments,
             ShopOrderFulfillmentService fulfillment,
             com.tailtopia.shop.returns.service.ReturnRequestService returnRequests,
@@ -120,6 +127,11 @@ public class ShopOrderExpiryScanner {
      */
     @Scheduled(fixedDelayString = "${petgo.shop.repurchase-scan-ms:86400000}")
     public void scanRepurchase() {
+        // v1.4.2 shop Story 6.2（PRD FR-136 / D-20）：复购下线，默认停用 —— 不再产生新触发与 REPURCHASE_FOOD_LOW。
+        if (!repurchaseScanEnabled) {
+            log.debug("复购粮量日扫已停用（petgo.shop.repurchase.scan-enabled=false）");
+            return;
+        }
         try {
             repurchase.scan(java.time.LocalDate.now(java.time.ZoneOffset.UTC));
         } catch (RuntimeException e) {

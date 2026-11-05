@@ -17,6 +17,7 @@ import com.tailtopia.shared.ratelimit.IdempotencyService;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -416,6 +417,15 @@ public class PaymentIntentService {
     @Transactional(readOnly = true)
     public Optional<PaymentIntent> findByToken(String publicToken) {
         return intents.findByPublicToken(publicToken);
+    }
+
+    /** 按对外 token 批量读意图（v1.4.2 shop Story 6.2 订单列表 {@code canPay}，只读）。空入参不查库。 */
+    @Transactional(readOnly = true)
+    public List<PaymentIntent> findByTokens(java.util.Collection<String> publicTokens) {
+        if (publicTokens == null || publicTokens.isEmpty()) {
+            return List.of();
+        }
+        return intents.findByPublicTokenIn(publicTokens);
     }
 
     /**

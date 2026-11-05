@@ -185,6 +185,22 @@ public class ShopOrderPaymentService {
         return token == null ? Optional.empty() : paymentIntents.findByToken(token);
     }
 
+    /**
+     * 批量取订单当前意图（v1.4.2 shop Story 6.2 订单列表 {@code canPay}，一次查询；同样经本 service 访问 pay 模块）。
+     *
+     * @return 意图 token → 意图；无 token 的订单不查
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, PaymentIntent> intentsOf(java.util.Collection<ShopOrder> orders) {
+        List<String> tokens = orders.stream().map(ShopOrder::getPaymentIntentToken)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        java.util.Map<String, PaymentIntent> out = new java.util.HashMap<>();
+        for (PaymentIntent pi : paymentIntents.findByTokens(tokens)) {
+            out.put(pi.getPublicToken(), pi);
+        }
+        return out;
+    }
+
     // ---------- 支付 ----------
 
     /**

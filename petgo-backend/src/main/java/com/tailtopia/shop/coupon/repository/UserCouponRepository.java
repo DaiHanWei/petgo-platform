@@ -33,6 +33,9 @@ public interface UserCouponRepository extends Repository<UserCoupon, Long> {
 
     List<UserCoupon> findByLockedOrderId(Long lockedOrderId);
 
+    /** v1.4.2 shop Story 6.2：订单详情 {@code couponReturn} 只读批量（订单头的两个券 id）。 */
+    List<UserCoupon> findByIdIn(Collection<Long> ids);
+
     /** 每人限领（D-2）：在领取事务内、模板行已 {@code FOR UPDATE} 后调用。 */
     long countByUserIdAndCouponId(Long userId, Long couponId);
 

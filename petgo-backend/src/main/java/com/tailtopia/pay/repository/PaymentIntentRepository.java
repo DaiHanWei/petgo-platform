@@ -19,6 +19,9 @@ public interface PaymentIntentRepository extends JpaRepository<PaymentIntent, Lo
 
     Optional<PaymentIntent> findByPublicToken(String publicToken);
 
+    /** v1.4.2 shop Story 6.2：订单列表 {@code canPay} 批量取意图。 */
+    List<PaymentIntent> findByPublicTokenIn(java.util.Collection<String> publicTokens);
+
     Optional<PaymentIntent> findByGatewayRef(String gatewayRef);
 
     /** 收款对账（轮询通道）：按状态取一批（未终态意图对账用）。 */

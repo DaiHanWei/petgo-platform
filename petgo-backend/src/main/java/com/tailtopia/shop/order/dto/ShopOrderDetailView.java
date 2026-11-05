@@ -105,7 +105,66 @@ public record ShopOrderDetailView(
         LatePayment latePayment,
         // ---------- v1.4.2 shop Story 5.1 物流（D-19 物流部分 / F7，末尾追加） ----------
         /** 最新活动运单的物流块；无运单或运单全被取消为 null（NON_NULL 不下发）。 */
-        Logistics logistics) {
+        Logistics logistics,
+        // ---------- v1.4.2 shop Story 6.2 详情收口（D-19 / F4 ~ F21，末尾追加；只搬运订单头快照与退款单金额，P-1） ----------
+        /** 订单头 {@code paid_at}；未付款为 null。 */
+        Instant paidAt,
+        /** 订单头 {@code cancelled_at}（3.2 列）；存量 / 未取消为 null。 */
+        Instant cancelledAt,
+        /** 订单头 {@code cancel_reason}（{@code CancelReason} 名）；F12 / F13 状态头据此写原因。 */
+        String cancelReason,
+        /** 金额明细（订单头快照，不重算）。 */
+        Amounts amounts,
+        /** 支付方式两段及各自状态（{@link PaymentMethodsView}）；两段都无金额信息时为 null。 */
+        PaymentMethodsView paymentMethods,
+        /**
+         * 部分取消的行（{@code refunded_qty > 0}，I5）；仅 {@code ShopOrderDetailAssembler} 装配（旧重载为 null）。
+         * 无部分取消为空数组。
+         */
+        List<CancelledLine> cancelledLines,
+        /** 已取消订单用过的券的退回结果（{@code CouponReturnStatus} 名）；未取消 / 未用券 / 旧重载为 null。 */
+        String couponReturn) {
+
+    /**
+     * 金额明细（v1.4.2 shop Story 6.2 AC3，F4 / F7）：<b>只搬运订单头快照，不重算</b>（P-1）。
+     *
+     * @param goodsAmount            {@code goods_subtotal}
+     * @param shippingDiscountSource {@code NONE / FREE_SHIPPING_RULE / COUPON}；存量单为 null
+     * @param payable                {@code total_amount}（应付）
+     */
+    public record Amounts(long goodsAmount, long discountCouponAmount, long shippingFee, long shippingDiscount,
+            String shippingDiscountSource, long insuranceFee, long payable, String courierName,
+            String courierServiceName) {
+
+        static Amounts of(ShopOrder o) {
+            return new Amounts(o.getGoodsSubtotal(), o.getDiscountCouponAmount(), o.getShippingFee(),
+                    o.getShippingDiscount(),
+                    o.getShippingDiscountSource() == null ? null : o.getShippingDiscountSource().name(),
+                    o.getInsuranceFee(), o.getTotalAmount(), o.getCourierName(), o.getCourierServiceName());
+        }
+    }
+
+    /**
+     * 部分取消行（v1.4.2 shop Story 6.2 AC3，F17）。
+     *
+     * @param lineIndex    对应 {@code lines} 数组下标
+     * @param cancelledQty = 订单行 {@code refunded_qty}
+     * @param refundAmount 该行 {@code LINE} 级退款单 {@code total_refund} 之和（可为 0）
+     */
+    public record CancelledLine(int lineIndex, String productName, String specName, int cancelledQty,
+            long refundAmount) {
+    }
+
+    /**
+     * 装配器补充（v1.4.2 shop Story 6.2）：行级退款合计与券退回结果。旧重载传 {@link #NONE}，
+     * {@code cancelledLines} / {@code couponReturn} 随之为 null。
+     *
+     * @param lineRefundTotals 订单行 id → 该行 {@code LINE} 级退款合计
+     */
+    public record Extras(Map<Long, Long> lineRefundTotals, String couponReturn) {
+
+        public static final Extras NONE = new Extras(null, null);
+    }
 
     /**
      * 物流块（v1.4.2 shop Story 5.1 AC13）：取<b>最新活动运单</b>（未被取代、未取消）。
@@ -249,6 +308,14 @@ public record ShopOrderDetailView(
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
             List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent, Instant now,
             List<ShopOrderRefundView> refunds, ReorderLinks links) {
+        return of(o, lines, shipments, imageUrlBySkuId, intent, now, refunds, links, Extras.NONE);
+    }
+
+    /** v1.4.2 shop Story 6.2：详情收口（{@code ShopOrderDetailAssembler} 唯一调用），带行级退款合计与券退回结果。 */
+    public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
+            List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent, Instant now,
+            List<ShopOrderRefundView> refunds, ReorderLinks links, Extras extras) {
+        Extras ex = extras == null ? Extras.NONE : extras;
         ReorderLinks rl = links == null ? ReorderLinks.NONE : links;
         var ship = o.shipTo();
         PaymentFailureCategory failureCategory = PaymentFailureCategory.of(intent);
@@ -295,7 +362,27 @@ public record ShopOrderDetailView(
                 rl.reorderedFromOrderNo(),
                 rl.reorderedFromOrderToken(),
                 LatePayment.of(o),
-                Logistics.of(o, shipments));
+                Logistics.of(o, shipments),
+                o.getPaidAt(),
+                o.getCancelledAt(),
+                o.getCancelReason() == null ? null : o.getCancelReason().name(),
+                Amounts.of(o),
+                PaymentMethodsView.of(o, now),
+                ex.lineRefundTotals() == null ? null : cancelledLinesOf(lines, ex.lineRefundTotals()),
+                ex.couponReturn());
+    }
+
+    /** {@code refunded_qty > 0} 的行（I5：部分取消复用该列，不新增 {@code cancelled_qty}）。 */
+    static List<CancelledLine> cancelledLinesOf(List<ShopOrderLine> lines, Map<Long, Long> lineRefundTotals) {
+        List<CancelledLine> out = new java.util.ArrayList<>();
+        for (int i = 0; i < lines.size(); i++) {
+            ShopOrderLine l = lines.get(i);
+            if (l.getRefundedQty() > 0) {
+                out.add(new CancelledLine(i, l.getProductName(), l.getSpecName(), l.getRefundedQty(),
+                        l.getId() == null ? 0L : lineRefundTotals.getOrDefault(l.getId(), 0L)));
+            }
+        }
+        return List.copyOf(out);
     }
 
     /**
