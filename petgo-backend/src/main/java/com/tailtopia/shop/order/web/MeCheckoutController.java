@@ -1,7 +1,9 @@
 package com.tailtopia.shop.order.web;
 
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.order.dto.CheckoutPreviewRequest;
 import com.tailtopia.shop.order.dto.CheckoutPreviewView;
+import com.tailtopia.shop.order.dto.CheckoutQuoteView;
 import com.tailtopia.shop.order.dto.CheckoutUnavailableException;
 import com.tailtopia.shop.order.dto.ShopOrderDetailView;
 import com.tailtopia.shop.order.dto.ShopOrderView;
@@ -35,14 +37,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeCheckoutController {
 
     private final CheckoutService checkout;
+    private final com.tailtopia.shop.order.service.CheckoutQuoteService quotes;
     private final ShopOrderPaymentService payments;
     private final com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment;
     private final com.tailtopia.shop.service.ShopLineImageResolver lineImages;
 
-    public MeCheckoutController(CheckoutService checkout, ShopOrderPaymentService payments,
+    public MeCheckoutController(CheckoutService checkout,
+            com.tailtopia.shop.order.service.CheckoutQuoteService quotes,
+            ShopOrderPaymentService payments,
             com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment,
             com.tailtopia.shop.service.ShopLineImageResolver lineImages) {
         this.checkout = checkout;
+        this.quotes = quotes;
         this.payments = payments;
         this.fulfillment = fulfillment;
         this.lineImages = lineImages;
@@ -70,6 +76,22 @@ public class MeCheckoutController {
             // 可缺省（2026-09-24）：没有地址也要能看订单预览，只是不能下单。
             @RequestParam(required = false) String addressToken) {
         return CheckoutPreviewView.of(checkout.preview(currentUserId(jwt), addressToken));
+    }
+
+    /**
+     * 新结算试算（v1.4.2 shop Story 3.1，D-8）：多快递、券、PawCoin 自选、保价。
+     *
+     * <p>POST 只因参数多，<b>语义只读</b>：不占券、不扣币、不锁库存、不写订单、不改购物车。
+     * 不可下单（无地址 / 超范围 / 询价失败 / 有不可买行）<b>不是错误</b>，回 {@code placeable=false}
+     * + {@code notPlaceableReason}；券不可用也不报错（试算永不因券报错）。
+     */
+    @PostMapping("/checkout/preview")
+    public CheckoutQuoteView previewQuote(@AuthenticationPrincipal Jwt jwt,
+            @RequestBody(required = false) CheckoutPreviewRequest req) {
+        if (req == null) {
+            throw AppException.validation("source 必填");
+        }
+        return quotes.preview(currentUserId(jwt), req);
     }
 
     /**

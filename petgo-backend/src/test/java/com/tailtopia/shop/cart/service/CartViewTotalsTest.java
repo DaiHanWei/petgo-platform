@@ -159,8 +159,8 @@ class CartViewTotalsTest {
 
         assertThat(v.invalidLines()).hasSize(1);
         assertThat(v.invalidLines().getFirst().selected())
-                .as("失效行的 selected 照实下发，不被改写成 false")
-                .isTrue();
+                .as("v1.4.2 Story 3.1 AC5.1：失效行一律下发 selected=false（库内仍为 true，只改出参）")
+                .isFalse();
         assertThat(v.subtotal()).as("subtotal 本来就只含有效行（文档的「全车合计」是笔误）")
                 .isEqualTo(200_000L);
         assertThat(v.selectedSubtotal())

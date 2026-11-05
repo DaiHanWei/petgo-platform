@@ -3,6 +3,7 @@ package com.tailtopia.shop.address.web;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.address.dto.ShippingAddressRequest;
 import com.tailtopia.shop.address.dto.ShippingAddressView;
+import com.tailtopia.shop.address.service.AddressServiceabilityService;
 import com.tailtopia.shop.address.service.ShippingAddressService;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -32,14 +33,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeShippingAddressController {
 
     private final ShippingAddressService service;
+    private final AddressServiceabilityService serviceability;
 
-    public MeShippingAddressController(ShippingAddressService service) {
+    public MeShippingAddressController(ShippingAddressService service,
+            AddressServiceabilityService serviceability) {
         this.service = service;
+        this.serviceability = serviceability;
     }
 
+    /** 列表带 {@code serviceable}（v1.4.2 shop Story 3.1 AC6）：取列表的读事务结束后再事务外询价。 */
     @GetMapping
     public List<ShippingAddressView> list(@AuthenticationPrincipal Jwt jwt) {
-        return service.list(currentUserId(jwt)).stream().map(ShippingAddressView::of).toList();
+        return serviceability.listWithServiceability(currentUserId(jwt));
     }
 
     @PostMapping

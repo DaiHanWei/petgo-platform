@@ -1,12 +1,13 @@
 package com.tailtopia.shop.cart.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.List;
 
 /**
  * 购物车视图（Story 3.1，FR-96）。
  *
  * <p>🔴 <b>失效商品单独成组</b>（{@code invalidLines}）：已下架或已售罄的行
- * <b>不参与合计、不可勾选</b>，但<b>也不静默消失</b>——用户加过什么应该看得见，
+ * <b>不参与合计、不可勾选</b>（v1.4.2 Story 3.1 起其 {@code selected} 一律下发 false），但<b>也不静默消失</b>——用户加过什么应该看得见，
  * 悄悄删掉会让他以为自己记错了，而下架/售罄恰恰是最需要解释的时刻。
  *
  * <p>🔴 <b>{@code itemCount} 是件数不是种类数</b>：Tab 角标显示 3 而车里有 3 种商品共 7 件，
@@ -33,7 +34,25 @@ public record CartView(
         long subtotal,
         long selectedSubtotal,
         int itemCount,
-        int selectedCount) {
+        int selectedCount,
+        /*
+         * v1.4.2 shop Story 3.1 AC3：底栏预估（运费 / 券 / 满额免运后的应付）。
+         * 🔴 只在 MeCartController 出口装配（CartEstimateService），CartService.view() 永远给 null ——
+         * view() 被结算 / 下单内部调用，放进去会让每次结算都多打一次计费询价。NON_NULL：null 不下发。
+         */
+        CartEstimate estimate) {
+
+    /** 不带预估的 6 参构造（v1.4.2 Story 3.1 追加 {@code estimate} 时保留；全部既有调用点走它）。 */
+    public CartView(List<CartLine> lines, List<CartLine> invalidLines, long subtotal,
+            long selectedSubtotal, int itemCount, int selectedCount) {
+        this(lines, invalidLines, subtotal, selectedSubtotal, itemCount, selectedCount, null);
+    }
+
+    /** 同一视图附上预估。 */
+    public CartView withEstimate(CartEstimate e) {
+        return new CartView(lines, invalidLines, subtotal, selectedSubtotal, itemCount,
+                selectedCount, e);
+    }
 
     /**
      * @param invalidReason 失效原因；有效行为 {@code null}。
@@ -52,7 +71,21 @@ public record CartView(
             String invalidReason,
             String entrySource,
             String triggerType,
-            boolean selected) {
+            boolean selected,
+            /*
+             * v1.4.2 shop Story 3.1 复审修复：库内原始勾选位（不序列化，对外 JSON 只有 selected）。
+             * 失效行对外 selected 一律 false（AC5.1），但旧下单 / 旧预览（S-4）仍按库内勾选位判定
+             * 「勾着的失效行」——否则旧版 App 结算页看 2 件、提交时被静默只下 1 件。有效行两者恒等。
+             */
+            @JsonIgnore boolean selectedInDb) {
+
+        /** 12 参构造（v1.4.2 Story 3.1 追加 {@code selectedInDb} 时保留）：库内勾选位 = {@code selected}。 */
+        public CartLine(String skuToken, String productToken, String productName, String specName,
+                long price, int qty, String mainImageUrl, Long availableStock,
+                String invalidReason, String entrySource, String triggerType, boolean selected) {
+            this(skuToken, productToken, productName, specName, price, qty, mainImageUrl,
+                    availableStock, invalidReason, entrySource, triggerType, selected, selected);
+        }
 
         /**
          * 不带归因的 9 参构造（Story 3.10 追加两列时保留）。

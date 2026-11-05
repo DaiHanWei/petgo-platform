@@ -72,6 +72,15 @@ public interface UserCouponRepository extends Repository<UserCoupon, Long> {
     List<UserCoupon> pageUsed(@Param("userId") Long userId, @Param("ts") Instant cursorTs,
             @Param("id") long cursorId, Pageable pageable);
 
+    /**
+     * 结算候选券（Story 3.1 AC1.6）：AVAILABLE 且在有效期内 {@code valid_from ≤ now < valid_until}；
+     * LOCKED / USED / VOIDED / 已过期一律不出现。按到期时间升序（先到期在前）。
+     */
+    @Query("select uc from UserCoupon uc where uc.userId = :userId "
+            + "and uc.status = com.tailtopia.shop.coupon.domain.UserCouponStatus.AVAILABLE "
+            + "and uc.validFrom <= :now and uc.validUntil > :now order by uc.validUntil asc, uc.id asc")
+    List<UserCoupon> findUsable(@Param("userId") Long userId, @Param("now") Instant now);
+
     /** 可用券张数（Story 2.2 AC8.3 / AC8.4）：AVAILABLE 且 {@code valid_from ≤ now < valid_until}（不含 LOCKED）。 */
     @Query("select count(uc) from UserCoupon uc where uc.userId = :userId "
             + "and uc.status = com.tailtopia.shop.coupon.domain.UserCouponStatus.AVAILABLE "

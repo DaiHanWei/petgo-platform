@@ -15,8 +15,9 @@ import java.util.List;
  * 会逼前端自己拆，而拆分规则（余额、单笔上限、运费可否抵扣）全在服务端 —— 前端无从算起，
  * 算出来也必然与下单时固化的那份漂移。
  *
- * <p>🔴 <b>不含优惠券 / 促销码 / 会员折扣，也不预留会员价字段</b>（FR-97）——
- * 会员制 Roadmap 整体暂缓，不为暂缓功能提前埋成本。
+ * <p>🔴 <b>本视图字段集冻结</b>（v1.4.2 shop Story 3.1 / S-4）：它只服务旧版 App 的
+ * {@code GET /me/checkout}，旧版按这些键解析；券、多快递、保价等新能力一律在新视图
+ * {@link CheckoutQuoteView}（{@code POST /me/checkout/preview}）里，本 record 一个字段不增不减。
  *
  * <p>🔴 <b>{@code shippingMethod} 恒为 {@code REGULER}</b>（C-14 把配送方式降为一维）。
  * 保留这个字段是为了让前端有个明确的「只有一档」来源，而不是各自写死一个字符串。
@@ -87,7 +88,8 @@ public record CheckoutPreviewView(
             //    逼他先回购物车删掉才能继续。那正是 Story 4-1 要消除的摩擦，
             //    也与 CheckoutService.collectUnavailable 的判定（按 selected 过滤）不一致：
             //    预览说买不了、下单却放行，两边对不上。
-            if (l.selected()) {
+            // v1.4.2 Story 3.1 复审修复：失效行对外 selected 恒 false，旧视图按库内勾选位（S-4 旧契约）
+            if (l.selectedInDb()) {
                 unavailable.add(line(l, null));
             }
         }
@@ -98,11 +100,11 @@ public record CheckoutPreviewView(
                 lines,
                 unavailable,
                 p.cart().selectedSubtotal(),
-                p.shipping() == null ? null : p.shipping().fee(),
-                p.shipping() == null ? null : p.shipping().discount(),
-                p.split() == null ? null : p.split().total(),
-                p.split() == null ? null : p.split().coinAmount(),
-                p.split() == null ? null : p.split().cashAmount(),
+                p.shippingFee(),
+                p.shippingDiscount(),
+                p.payableTotal(),
+                p.coinAmount(),
+                p.cashAmount(),
                 p.coinBalance(),
                 p.maxCoinPerOrder(),
                 p.coinCapped(),
@@ -127,7 +129,7 @@ public record CheckoutPreviewView(
      * 说「可退」是凭空承诺。前端在没有商品行时本就不渲染这个提示位，
      * 所以这个取值只会在「有行但查不到规则」的异常路径上被看到 —— 那时保守才是对的。
      */
-    static ReturnPolicy strictest(java.util.Collection<ReturnPolicy> policies) {
+    public static ReturnPolicy strictest(java.util.Collection<ReturnPolicy> policies) {
         if (policies.isEmpty()) {
             return ReturnPolicy.NON_RETURNABLE;
         }

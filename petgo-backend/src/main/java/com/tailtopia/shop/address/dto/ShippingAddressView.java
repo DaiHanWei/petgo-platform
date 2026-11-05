@@ -20,12 +20,22 @@ public record ShippingAddressView(
         String addressLine,
         String kodePos,
         String label,
-        boolean isDefault) {
+        boolean isDefault,
+        /*
+         * v1.4.2 shop Story 3.1 AC6（D-9 地址簿标注）：只有 GET 列表填它 ——
+         * false = 不可配送（区域未开通 / 无快递）；true = 可配送；null = 未判定（询价失败 / 其他出口），NON_NULL 不下发。
+         */
+        Boolean serviceable) {
 
+    /** 不带可配送标注（create / update / setDefault / 结算视图等出口，行为不变）。 */
     public static ShippingAddressView of(ShippingAddress a) {
+        return of(a, null);
+    }
+
+    public static ShippingAddressView of(ShippingAddress a, Boolean serviceable) {
         return new ShippingAddressView(
                 a.getPublicToken(), a.getReceiverName(), a.getReceiverPhone(),
                 a.getProvinsi(), a.getKotaKabupaten(), a.getKecamatan(),
-                a.getAddressLine(), a.getKodePos(), a.getLabel(), a.isDefault());
+                a.getAddressLine(), a.getKodePos(), a.getLabel(), a.isDefault(), serviceable);
     }
 }

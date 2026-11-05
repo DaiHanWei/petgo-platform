@@ -110,20 +110,44 @@ class CartViewContractTest {
     }
 
     @Test
-    @DisplayName("失效行的 selected 照实下发，不被改写成 false")
-    void invalidLineReportsItsSelectedFlagHonestly() {
-        CartView.CartLine dead = line("sku-9", 80_000L, 1, true, CartView.REASON_DELISTED);
+    @DisplayName("v1.4.2 Story 3.1：失效行下发 selected=false（CartService.view 改写出参），且不计入选中合计")
+    void invalidLineIsNeverReportedAsSelected() {
+        // CartService.view 对失效行一律给 selected=false（库内原值不回写，见 CartViewTotalsTest）；
+        // DTO 原样序列化这个 false —— App 据此不勾失效行。
+        CartView.CartLine dead = line("sku-9", 80_000L, 1, false, CartView.REASON_DELISTED);
         CartView v = new CartView(List.of(), List.of(dead), 0L, 0L, 0, 0);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> invalid = (List<Map<String, Object>>) wire(v).get("invalidLines");
         assertThat(invalid).hasSize(1);
-        assertThat(invalid.get(0).get("selected"))
-                .as("勾着的下架行要照实说它勾着 —— 改写成 false 会让用户以为自己没勾过")
-                .isEqualTo(true);
-        // 但它绝不计入选中合计：
+        assertThat(invalid.get(0).get("selected")).isEqualTo(false);
+        // 它绝不计入选中合计：
         assertThat(wire(v).get("selectedSubtotal")).isEqualTo(0L);
         assertThat(wire(v).get("selectedCount")).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("复审修复：库内勾选位 selectedInDb 不序列化（对外只有 selected）")
+    void selectedInDbIsNotOnTheWire() {
+        CartView.CartLine dead = new CartView.CartLine("sku-9", "p", "n", "3 kg", 1L, 1, null, 0L,
+                CartView.REASON_DELISTED, null, null, false, true);
+        assertThat(wire(dead)).doesNotContainKey("selectedInDb").containsEntry("selected", false);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 Story 3.1 AC3：estimate 为 null 时不下发（顶层仍是 6 个键）；有值时追加 estimate 一个键")
+    void estimateIsAppendedOnlyWhenPresent() {
+        CartView v = new CartView(List.of(line("sku-1", 100_000L, 2, true, null)),
+                List.of(), 200_000L, 200_000L, 2, 2);
+        assertThat(wire(v).keySet()).isEqualTo(VIEW_FIELDS);
+
+        CartView withEstimate = v.withEstimate(new CartEstimate(10_000L, 200_000L, 0L, 0L,
+                210_000L, 0L, null, null));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> est = (Map<String, Object>) wire(withEstimate).get("estimate");
+        assertThat(wire(withEstimate).keySet()).hasSize(VIEW_FIELDS.size() + 1);
+        assertThat(est).containsKeys("lowestFee", "goodsAmount", "discountCouponAmount",
+                "shippingDiscount", "payable", "saved").doesNotContainKey("reason");
     }
 
     @Test

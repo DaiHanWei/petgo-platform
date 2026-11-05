@@ -370,6 +370,9 @@ public class SecurityConfig {
                         // 改其购物车、以其名义下单。⚠️ 新增任何 /api/v1/me 下的电商端点必须同步加进本表。
                         .requestMatchers("/api/v1/me/cart", "/api/v1/me/cart/**",
                                 "/api/v1/me/checkout",
+                                // v1.4.2 shop Story 3.1（AC7）：POST /me/checkout/preview —— 精确路径不覆盖子路径，
+                                // 不加则落 anyRequest().authenticated()，兽医 token 可以同号用户名义试算（读其地址与余额）。
+                                "/api/v1/me/checkout/**",
                                 "/api/v1/me/shop-orders", "/api/v1/me/shop-orders/**",
                                 "/api/v1/me/shipping-addresses", "/api/v1/me/shipping-addresses/**",
                                 "/api/v1/me/shop-reviews", "/api/v1/me/shop-reviews/**",

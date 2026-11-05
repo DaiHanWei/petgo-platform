@@ -183,6 +183,41 @@ public class CouponQueryService {
         return userCoupons.countUsable(userId, now);
     }
 
+    /** 用户券 + 其模板（Story 3.1 结算候选用）。 */
+    public record OwnedCoupon(UserCoupon userCoupon, ShopCoupon coupon) {
+    }
+
+    /**
+     * 结算候选券（Story 3.1 AC1.6）：本人 AVAILABLE 且在有效期内的用户券连同模板，先到期在前。
+     * 🔴 只读（P-2）：不占券、不改状态。
+     */
+    @Transactional(readOnly = true)
+    public List<OwnedCoupon> checkoutCandidates(long userId, Instant now) {
+        List<UserCoupon> rows = userCoupons.findUsable(userId, now);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ShopCoupon> templates = templatesOf(rows.stream().map(UserCoupon::getCouponId).toList());
+        List<OwnedCoupon> out = new ArrayList<>(rows.size());
+        for (UserCoupon uc : rows) {
+            ShopCoupon c = templates.get(uc.getCouponId());
+            if (c != null) {
+                out.add(new OwnedCoupon(uc, c));
+            }
+        }
+        return out;
+    }
+
+    /** 本人名下某张用户券（任意状态）连同模板；不是本人 / 不存在 → empty（Story 3.1 手选券展示用）。 */
+    @Transactional(readOnly = true)
+    public java.util.Optional<OwnedCoupon> owned(long userId, String userCouponToken) {
+        if (userCouponToken == null || userCouponToken.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return userCoupons.findByPublicTokenAndUserId(userCouponToken, userId)
+                .flatMap(uc -> coupons.findById(uc.getCouponId()).map(c -> new OwnedCoupon(uc, c)));
+    }
+
     /**
      * 模板对本人的领取状态（复审修复）：{@code true} = 显示「Diklaim」（已达每人限领，或已领完而本人领过）；
      * {@code false} = 显示「Klaim」（未达限领且未领完）；{@code null} = 不出现（本人未领且已领完）。

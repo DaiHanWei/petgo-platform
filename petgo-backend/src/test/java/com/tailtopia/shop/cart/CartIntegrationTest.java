@@ -291,44 +291,59 @@ class CartIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 全选作用于**全部**行含失效行：失效行 selected=true 但永不计入选中合计")
-    void selectAllCoversInvalidLinesWithoutCountingThem() {
+    @DisplayName("v1.4.2 Story 3.1 AC5.3：全选只勾有效行，失效行不动、下发 selected=false，且不计入选中合计")
+    void selectAllSkipsInvalidLines() {
+        // 原断言「全选作用于全部行含失效行（失效行 selected=true）」随 Story 3.1 AC5 改写：后端不再默认勾选失效行。
         long uid = seedUser();
         String good = seedSku(10, 100_000L);
         String bad = seedSku(10, 50_000L);
         cart.add(uid, good, 2);
         cart.add(uid, bad, 3);
+        cart.setAllSelected(uid, false);
         listing.delist(productIdOfSku(bad), actor);
 
         CartView v = cart.setAllSelected(uid, true);
 
-        assertThat(v.invalidLines()).hasSize(1);
-        assertThat(v.invalidLines().getFirst().selected())
-                .as("把失效行排除在「全选」外，用户在商品补货后会发现自己全选过的东西没被选上")
-                .isTrue();
-        assertThat(v.selectedSubtotal())
-                .as("但它绝不计入选中合计 —— 过滤条件是「selected && invalidReason == null」")
-                .isEqualTo(200_000L);
+        assertThat(v.invalidLines()).singleElement()
+                .satisfies(l -> assertThat(l.selected()).isFalse());
+        assertThat(jdbc.queryForObject("SELECT selected FROM shop_cart_items WHERE sku_id = ?",
+                Boolean.class, skuIdOf(bad)))
+                .as("全选不动失效行的库内勾选位").isFalse();
+        assertThat(v.selectedSubtotal()).isEqualTo(200_000L);
         assertThat(v.selectedCount()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("🔴 勾选一个已售罄的行不报错 —— 勾选与「能不能买」是两件事")
-    void selectingASoldOutLineIsNotAnError() {
+    @DisplayName("v1.4.2 Story 3.1 AC5.2：勾选失效（售罄）行 → 422；取消勾选照常成功；补货后按库内原值显示")
+    void selectingASoldOutLineIs422() {
         long uid = seedUser();
         String sku = seedSku(10, 100_000L);
-        cart.add(uid, sku, 2);
-        // 卖空它（加购时有货，之后被别人买光）
-        Long skuId = jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?",
-                Long.class, sku);
-        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = ?", skuId);
+        cart.add(uid, sku, 2);   // 库内 selected=true
+        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = ?", skuIdOf(sku));
 
-        // 🔴 这里若抛 409（requireWithinStock 被误加到选择路径上），
-        //    「等它补货我再买」这件事就没法表达了。
-        CartView v = cart.setSelected(uid, sku, true);
+        assertThatThrownBy(() -> cart.setSelected(uid, sku, true))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("该商品当前不可购买");
+        assertThat(cart.view(uid).invalidLines()).singleElement()
+                .satisfies(l -> {
+                    assertThat(l.selected()).as("失效行一律下发 false").isFalse();
+                    // 复审修复：库内勾选位保留，旧下单仍据此 409 逐行明细（S-4，见 CheckoutIntegrationTest）
+                    assertThat(l.selectedInDb()).isTrue();
+                });
 
-        assertThat(v.invalidLines()).hasSize(1);
+        // 补货：重新有效，按库内原值（true）显示，不额外处理
+        jdbc.update("UPDATE sku_inventory SET actual = 10 WHERE sku_id = ?", skuIdOf(sku));
+        assertThat(cart.view(uid).lines()).singleElement()
+                .satisfies(l -> assertThat(l.selected()).isTrue());
+
+        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = ?", skuIdOf(sku));
+        CartView v = cart.setSelected(uid, sku, false);
         assertThat(v.selectedSubtotal()).isZero();
+    }
+
+    private Long skuIdOf(String token) {
+        return jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?", Long.class,
+                token);
     }
 
     @Test

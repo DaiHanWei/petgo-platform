@@ -1,11 +1,16 @@
 package com.tailtopia.shop.web;
 
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import com.tailtopia.shop.coupon.web.ShopCouponController;
 import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.dto.ShopProductDetailView;
 import com.tailtopia.shop.dto.ShopProductSummaryView;
+import com.tailtopia.shop.logistics.ShippingEstimateService;
+import com.tailtopia.shop.logistics.ShippingEstimateView;
 import com.tailtopia.shop.service.ShopProductQueryService;
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -34,9 +39,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShopProductController {
 
     private final ShopProductQueryService query;
+    private final ShippingEstimateService estimates;
+    private final RedisRateLimiter rateLimiter;
 
-    public ShopProductController(ShopProductQueryService query) {
+    /** 运费估算限流：每 viewer（或 IP）每分钟 30 次（防刷 Biteship 计费询价）。 */
+    static final int ESTIMATE_LIMIT = 30;
+    static final Duration ESTIMATE_WINDOW = Duration.ofMinutes(1);
+
+    public ShopProductController(ShopProductQueryService query, ShippingEstimateService estimates,
+            RedisRateLimiter rateLimiter) {
         this.query = query;
+        this.estimates = estimates;
+        this.rateLimiter = rateLimiter;
     }
 
     /**
@@ -90,6 +104,38 @@ public class ShopProductController {
     @GetMapping("/{token}")
     public ShopProductDetailView detail(@PathVariable String token) {
         return query.detail(token);
+    }
+
+    /**
+     * 运费估算（v1.4.2 shop Story 3.1 AC2，D-9）：「运费 Rp X 起」+ 能否送达 + 免运进度。
+     *
+     * <p>🔒 路径在既有 {@code GET /api/v1/shop/products/**} permitAll 下，<b>不新增安全规则</b>；
+     * 可选 viewer <b>只认 role=USER</b>（兽医 token 的 sub 与 users.id 撞号，不能当用户读其地址）——
+     * 非 USER 带 {@code addressToken} 一律忽略，按游客处理。
+     * Biteship 失败 → 200 + {@code quoteFailed=true}（不抛 503）。
+     */
+    @GetMapping("/{token}/shipping-estimate")
+    public ShippingEstimateView shippingEstimate(@PathVariable String token,
+            @RequestParam(required = false) String skuToken,
+            @RequestParam(required = false) Integer qty,
+            @RequestParam(required = false) String addressToken,
+            @RequestParam(required = false) Long regionKecamatanId,
+            @AuthenticationPrincipal Jwt jwt, HttpServletRequest http) {
+        Long viewer = ShopCouponController.userViewerId(jwt);
+        // 🔒 限流键只含 userId / 客户端 IP，不含地址与邮编
+        rateLimiter.check("rl:shop:ship-estimate:" + (viewer != null ? "u" + viewer : "ip" + clientIp(http)),
+                ESTIMATE_LIMIT, ESTIMATE_WINDOW);
+        return estimates.estimate(token, skuToken, qty, viewer,
+                viewer == null ? null : addressToken, regionKecamatanId);
+    }
+
+    /** 取客户端 IP（照 {@code AuthController.clientIp} 先例：X-Forwarded-For 首段，否则 remoteAddr）。 */
+    private static String clientIp(HttpServletRequest http) {
+        String fwd = http.getHeader("X-Forwarded-For");
+        if (fwd != null && !fwd.isBlank()) {
+            return fwd.split(",")[0].trim();
+        }
+        return http.getRemoteAddr();
     }
 
     private static ProductCategory parseCategory(String raw) {

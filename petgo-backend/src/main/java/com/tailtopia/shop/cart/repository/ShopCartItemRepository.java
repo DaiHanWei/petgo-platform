@@ -35,11 +35,21 @@ public interface ShopCartItemRepository extends JpaRepository<ShopCartItem, Long
             @Param("selected") boolean selected);
 
     /**
+     * 按 SKU 集合批量勾选 / 取消勾选（v1.4.2 shop Story 3.1 AC5.3）：全选只勾有效行，失效行不动。
+     *
+     * @return 受影响行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update ShopCartItem i set i.selected = :selected, i.updatedAt = CURRENT_TIMESTAMP "
+            + "where i.cartId = :cartId and i.skuId in :skuIds")
+    int updateSelectedForSkuIds(@Param("cartId") long cartId,
+            @Param("skuIds") java.util.Collection<Long> skuIds, @Param("selected") boolean selected);
+
+    /**
      * 全选 / 全不选（Story 4-1 AC2）。
      *
-     * <p>🔴 <b>作用于车内全部行，含失效行</b>：失效行也带着 {@code selected} 照实下发，
-     * 只是永不计入选中合计。把它们排除在「全选」之外，会让用户在商品补货后
-     * 发现自己「全选」过的东西没被选上。
+     * <p>v1.4.2 Story 3.1 起只用于「全不选」（作用于全部行）；「全选」走 {@link #updateSelectedForSkuIds}
+     * 只勾有效行。
      *
      * @return 受影响行数
      */

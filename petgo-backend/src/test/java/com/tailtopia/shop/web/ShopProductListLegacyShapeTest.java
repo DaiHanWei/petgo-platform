@@ -54,7 +54,7 @@ class ShopProductListLegacyShapeTest {
     @BeforeEach
     void setUp() {
         query = Mockito.mock(ShopProductQueryService.class);
-        controller = new ShopProductController(query);
+        controller = new ShopProductController(query, null, null);   // 运费估算与限流在列表形态测试里用不到
     }
 
     private static ShopProductSummaryView view(String token) {

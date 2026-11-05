@@ -67,6 +67,9 @@ public class CheckoutService {
     private final IdempotencyService idempotency;
     /** V1.4.1 商家平台：下单写归属门店（{@code shop_orders.referrer_merchant_id}）。 */
     private final com.tailtopia.merchant.binding.service.MerchantBindingService merchantBindings;
+    /** v1.4.2 shop Story 3.1：旧结算预览改走新装配链路。 */
+    private final CheckoutQuoteService quotesChain;
+    private final LegacyCheckoutAdapter legacy;
 
     public CheckoutService(CartService carts, ShippingAddressService addresses,
             ShippingQuoteService quotes, InventoryService inventory, ShopSkuRepository skus,
@@ -75,7 +78,8 @@ public class CheckoutService {
             ShopPawcoinRulesRepository rules, PawCoinWalletService wallet,
             ShopTokenGenerator tokens, ShopOrderDisplayNoGenerator displayNos,
             IdempotencyService idempotency,
-            com.tailtopia.merchant.binding.service.MerchantBindingService merchantBindings) {
+            com.tailtopia.merchant.binding.service.MerchantBindingService merchantBindings,
+            CheckoutQuoteService quotesChain, LegacyCheckoutAdapter legacy) {
         this.carts = carts;
         this.addresses = addresses;
         this.quotes = quotes;
@@ -90,102 +94,26 @@ public class CheckoutService {
         this.displayNos = displayNos;
         this.idempotency = idempotency;
         this.merchantBindings = merchantBindings;
+        this.quotesChain = quotesChain;
+        this.legacy = legacy;
     }
 
     /**
-     * 结算试算（结算页展示用，不产生任何副作用）。
+     * 旧结算试算（旧版 App 的 {@code GET /me/checkout}，S-4）。
      *
-     * <p>与 {@link #placeOrder} 走<b>同一套</b>运费与拆分计算 ——
-     * 两处各算一遍必然漂移，表现为「结算页显示要付 285.000，提交后变成 305.000」。
+     * <p>🔴 v1.4.2 shop Story 3.1 AC4：改走与新端点 {@code POST /me/checkout/preview} <b>同一条</b>装配链路
+     * （{@link CheckoutQuoteService#compute}），入参由 {@link LegacyCheckoutAdapter#previewCommand} 固定为
+     * 「购物车 · 最便宜快递 · 不用券 · 用币 · 不保价」；金额只来自 {@code ShopPricingCalculator}（P-1）。
+     * 运费改由 Biteship 报价，{@code shipping_zones.fee} 与按最大区域估算的无地址运费停读（D-9）。
      *
-     * <p>🔴 <b>超服务范围时不抛异常，而是回一个 {@code serviceable=false} 的试算</b>（Story 3.7）：
-     * 结算页此时仍要渲染地址、商品清单与「暂不配送至该区域」的警示并禁用提交（FR-99）。
-     * 抛异常会让整页变成错误态 —— 用户看不到自己选的地址是哪一个，也就不知道该改哪里。
-     * <b>下单路径 {@link #placeOrder} 仍然照抛不误</b>，阻断能力一点没少。
+     * <p>🔴 <b>本方法不加事务</b>：链路中间要在事务外调 Biteship（P-7）。
+     *
+     * <p>🔴 超服务范围 / 无地址 / 询价失败 / 一件没选都<b>不抛异常</b>，回一个金额位为 null 的试算
+     * （{@code serviceable=false} 当且仅当超范围）：结算页仍要渲染地址、商品清单与警示并禁用提交（FR-99）。
+     * <b>下单路径 {@link #placeOrder} 仍然照抛不误</b>。
      */
-    @Transactional(readOnly = true)
     public CheckoutPreview preview(long userId, String addressToken) {
-        CartView cart = carts.view(userId);
-        // 🔴 无地址预览（2026-09-24 产品拍板：点购买先进预览，没地址只是不让下单）。
-        //    金额照常算：运费用 ShippingQuoteService#estimateWithoutAddress 估（各区同价时即准确值），
-        //    address 为 null、serviceable 给 true（没地址不等于超范围）。下单路径仍强制要地址。
-        boolean noAddress = addressToken == null || addressToken.isBlank();
-        ShippingAddress addr = noAddress ? null : addresses.require(userId, addressToken);
-        if (addr != null && !quotes.isServiceable(addr.getKecamatan())) {
-            return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
-                    maxCoinPerOrder(), false, false, policiesOf(cart));
-        }
-        // 🔴 Story 4-1：三个计算点（免运门槛 / PawCoin 上限 / 库存锁定）的输入集合
-        //    全部换成「选中且有效」的行（CartView.selectedLines / selectedSubtotal）。
-        //    算式本身一行不改 —— ShippingQuoteService / PaymentSplit / InventoryService
-        //    三个类在本 story 的 diff 里零改动。
-        long goodsSubtotal = cart.selectedSubtotal();
-        if (nothingSelected(cart, cart.selectedLines())) {
-            // 🔴 复审 #10：一件都没选时**不算运费、不给应付总额**。
-            //    原实现照常往下走，于是返回一个「商品 0 元、只有运费」的应付总额，
-            //    而同一状态去下单会被 422 拦住 —— 预览与下单自相矛盾，
-            //    此前只靠 App 端 selectedCount==0 兜着，接口自己是不自洽的。
-            //    这里沿用本方法「不抛异常、返回降级视图」的既有姿态（见方法头注释）：
-            //    quote / split 为 null ⇒ 前端拿不到应付总额，自然也就不会显示「只付运费」。
-            return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
-                    maxCoinPerOrder(), false, true, policiesOf(cart));
-        }
-        ShippingQuote quote = addr == null
-                ? quotes.estimateWithoutAddress(goodsSubtotal)
-                : quotes.quote(addr.getKecamatan(), goodsSubtotal);
-        if (quote == null) {
-            // 无地址且一个开通区域都没有：运费确实算不出，金额位不下发（不编 0）
-            return new CheckoutPreview(cart, null, null, null, wallet.balanceOf(userId),
-                    maxCoinPerOrder(), false, true, policiesOf(cart));
-        }
-        PaymentSplit split = splitFor(userId, goodsSubtotal, quote);
-        return new CheckoutPreview(cart, addr, quote, split, wallet.balanceOf(userId),
-                maxCoinPerOrder(), coinCapped(userId, goodsSubtotal, quote, split), true,
-                policiesOf(cart));
-    }
-
-    /**
-     * 每个有效行的<b>生效</b>退货规则（FR-104 第 2 处明示 / S-6）。
-     *
-     * <p>🔴 与 {@link #placeOrder} 落库用的是<b>同一个</b> {@link #effectiveReturnPolicy} ——
-     * 结算页承诺的与订单行记下的必须是同一件事，否则退货时对不上账（而这正是 FR-104 存在的理由）。
-     */
-    private Map<String, ReturnPolicy> policiesOf(CartView cart) {
-        Map<String, ShopSku> skuByToken = skusOf(cart);
-        Map<String, ReturnPolicy> out = new java.util.LinkedHashMap<>();
-        // 🔴 Story 4-1：只收选中集。这个 map 除了逐行查规则，还要喂给
-        //    CheckoutPreviewView.strictest 算**整单**的退货标识 —— 把用户没勾的商品
-        //    算进去，会让他为一件自己压根不买的东西看到「本单不可退」。
-        for (CartView.CartLine l : cart.selectedLines()) {
-            ShopSku sku = skuByToken.get(l.skuToken());
-            if (sku != null) {
-                out.put(l.skuToken(), effectiveReturnPolicy(sku));
-            }
-        }
-        return out;
-    }
-
-    /**
-     * PawCoin 段是否<b>被单笔上限截断</b>（C-16 / UX-DR14）。
-     *
-     * <p>🔴 判定是「若没有上限，本可以抵扣得更多」，<b>不是「coinAmount == 上限」</b>：
-     * 余额恰好等于上限时也会相等，但那不是被截断，多出一行「本单最多可用 …」只会让用户困惑。
-     * 不明示真被截断的情况同样有害 —— 用户会以为系统算错了。
-     */
-    private boolean coinCapped(long userId, long goodsSubtotal, ShippingQuote quote,
-            PaymentSplit split) {
-        ShopPawcoinRules r = requireRules();
-        if (!r.isEnabled()) {
-            return false;
-        }
-        long total = goodsSubtotal + quote.total();
-        long deductible = r.isAllowShippingDeduction() ? total : Math.max(total - quote.total(), 0);
-        long wouldUse = Math.min(deductible, wallet.balanceOf(userId));
-        return wouldUse > r.getMaxCoinPerOrder() && split.coinAmount() == r.getMaxCoinPerOrder();
-    }
-
-    private long maxCoinPerOrder() {
-        return requireRules().getMaxCoinPerOrder();
+        return legacy.toLegacyPreview(quotesChain.compute(userId, legacy.previewCommand(addressToken)));
     }
 
     /** 无幂等键的便捷重载（既有内部调用方 / 集成测试用）。对外下单入口走带 key 的主方法。 */
@@ -337,8 +265,9 @@ public class CheckoutService {
      * </ul>
      */
     private boolean nothingSelected(CartView cart, List<CartView.CartLine> selected) {
+        // v1.4.2 Story 3.1 复审修复：失效行对外 selected 恒 false，这里按库内勾选位判（旧契约 S-4）
         return selected.isEmpty()
-                && cart.invalidLines().stream().noneMatch(CartView.CartLine::selected);
+                && cart.invalidLines().stream().noneMatch(CartView.CartLine::selectedInDb);
     }
 
     private List<UnavailableLine> collectUnavailable(CartView cart,
@@ -346,7 +275,7 @@ public class CheckoutService {
         List<UnavailableLine> out = new ArrayList<>();
         // 失效行（已下架/已售罄）直接进列表
         for (CartView.CartLine l : cart.invalidLines()) {
-            if (!l.selected()) {
+            if (!l.selectedInDb()) {   // v1.4.2 Story 3.1 复审修复：按库内勾选位（失效行对外 selected 恒 false）
                 continue;
             }
             out.add(new UnavailableLine(l.skuToken(), l.productName(), l.specName(),
@@ -396,8 +325,8 @@ public class CheckoutService {
         List<String> tokens = new ArrayList<>();
         cart.lines().forEach(l -> tokens.add(l.skuToken()));
         cart.invalidLines().forEach(l -> tokens.add(l.skuToken()));
-        return skus.findAll().stream()
-                .filter(s -> tokens.contains(s.getPublicToken()))
+        // v1.4.2 Story 3.1：原 skus.findAll() 全表扫改按 token 批量取
+        return skus.findByPublicTokenIn(tokens).stream()
                 .collect(Collectors.toMap(ShopSku::getPublicToken, s -> s, (a, b) -> a));
     }
 
@@ -427,15 +356,18 @@ public class CheckoutService {
     }
 
     /**
-     * 结算页试算结果。
+     * 旧结算页试算结果（v1.4.2 Story 3.1 起金额由新装配链路给出，见 {@link LegacyCheckoutAdapter}）。
      *
-     * @param address  未传地址时为 {@code null}（无地址预览：金额按估算运费照常给出）
-     * @param shipping 超服务范围时为 {@code null}（此时 {@code serviceable=false}）
-     * @param split    同上
-     * @param coinCapped PawCoin 段被单笔上限截断（UX-DR14 要求多出一行提示）
+     * @param address        未传地址时为 {@code null}
+     * @param shippingFee    最便宜快递运费；无报价（无地址 / 超范围 / 询价失败 / 一件没选）为 null
+     * @param shippingDiscount 免运抵扣，<b>≤ 0</b>（旧口径）；同上为 null
+     * @param payableTotal   应付；同上为 null
+     * @param coinCapped     PawCoin 段被单笔上限截断（UX-DR14 要求多出一行提示）
+     * @param serviceable    false 当且仅当超服务范围
      */
-    public record CheckoutPreview(CartView cart, ShippingAddress address, ShippingQuote shipping,
-            PaymentSplit split, long coinBalance, long maxCoinPerOrder, boolean coinCapped,
+    public record CheckoutPreview(CartView cart, ShippingAddress address, Long shippingFee,
+            Long shippingDiscount, Long payableTotal, Long coinAmount, Long cashAmount,
+            long coinBalance, long maxCoinPerOrder, boolean coinCapped,
             boolean serviceable, Map<String, ReturnPolicy> returnPolicies) {
     }
 }
