@@ -86,6 +86,11 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
         f.setSpecName(spec);
         f.setPrice(price);
         f.setNetWeightG(3000L);
+        // V1.4.2 shop-admin Story 4.2：保存规格时包裹四项必填
+        f.setPackageWeightG(3100);
+        f.setPackageLengthCm(30);
+        f.setPackageWidthCm(20);
+        f.setPackageHeightCm(10);
         return f;
     }
 

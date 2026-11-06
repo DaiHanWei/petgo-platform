@@ -233,7 +233,9 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(editor)).with(csrf())
                         .param("specName", "3 kg")
                         .param("price", "285000")
-                        .param("netWeightG", "3000"))
+                        .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/admin/shop/products/" + productId))
                 .andExpect(flash().attributeExists("notice"));
@@ -255,6 +257,30 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("V1.4.2 4.2 AC1 [L1]：包裹重量 / 长宽高任一未填 → 不能保存（flash error，规格不落库）；四项齐全落库可售")
+    void skuRequiresPackageData() throws Exception {
+        Authentication editor = staffWith(AdminPermissions.SHOP_PRODUCT_EDIT);
+        long productId = createProductViaEndpoint(editor, "包裹必填 " + SEQ.incrementAndGet());
+        mvc.perform(post("/admin/shop/products/" + productId + "/skus")
+                        .with(authentication(editor)).with(csrf())
+                        .param("specName", "4 kg").param("price", "182000")
+                        .param("packageWeightG", "4200").param("packageLengthCm", "30"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("error"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM shop_skus WHERE product_id = ?", Integer.class, productId))
+                .isZero();
+        mvc.perform(post("/admin/shop/products/" + productId + "/skus")
+                        .with(authentication(editor)).with(csrf())
+                        .param("specName", "4 kg").param("price", "182000")
+                        .param("packageWeightG", "4200").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "12"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("notice"));
+        assertThat(jdbc.queryForObject("SELECT package_height_cm FROM shop_skus WHERE product_id = ?", Integer.class,
+                productId)).isEqualTo(12);
+    }
+
+    @Test
     @DisplayName("🔴 浏览器形态（空的 id 隐藏域）也必须是【新建】而不是更新 —— 两次提交出两个规格")
     void emptyHiddenIdStillCreatesInsteadOfUpdating() throws Exception {
         Authentication editor = staffWith(AdminPermissions.SHOP_PRODUCT_EDIT);
@@ -266,7 +292,9 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                             .with(authentication(editor)).with(csrf())
                             .param("id", "")
                             .param("specName", spec).param("price", "285000")
-                            .param("netWeightG", "3000"))
+                            .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10"))
                     .andExpect(status().is3xxRedirection())
                     .andExpect(flash().attributeExists("notice"));
         }
@@ -287,6 +315,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(superEditor)).with(csrf())
                         .param("specName", "3 kg").param("price", "285000")
                         .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10")
                         .param("costPrice", String.valueOf(costPrice)))
                 .andExpect(status().is3xxRedirection());
         return productId;
@@ -331,6 +361,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(editorNoCost)).with(csrf())
                         .param("specName", "3 kg").param("price", "285000")
                         .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10")
                         .param("costPrice", "123456"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attributeExists("notice"));   // SKU 本身照存

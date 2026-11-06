@@ -163,7 +163,7 @@ class AdminShopProductServiceTest {
     @Test
     @DisplayName("SKU：规格名必填、价格非负、净含量为正")
     void skuValidation() {
-        ShopSkuForm f = new ShopSkuForm();
+        ShopSkuForm f = withPackage(new ShopSkuForm());
         f.setPrice(1000L);
         assertThatThrownBy(() -> service.validateSku(f)).isInstanceOf(AppException.class);
         f.setSpecName("3 kg");
@@ -180,7 +180,7 @@ class AdminShopProductServiceTest {
     @Test
     @DisplayName("批发价：可空，负数拒绝并挂 admin.err.product.wholesaleNegative")
     void wholesalePriceValidation() {
-        ShopSkuForm f = new ShopSkuForm();
+        ShopSkuForm f = withPackage(new ShopSkuForm());
         f.setSpecName("3 kg");
         f.setPrice(1000L);
         assertThatCode(() -> service.validateSku(f)).doesNotThrowAnyException();
@@ -207,7 +207,7 @@ class AdminShopProductServiceTest {
         existing.applyWholesalePrice(800L);
         Mockito.when(skus.findById(11L)).thenReturn(java.util.Optional.of(existing));
 
-        ShopSkuForm f = new ShopSkuForm();
+        ShopSkuForm f = withPackage(new ShopSkuForm());
         f.setId(11L);
         f.setSpecName("3 kg");
         f.setPrice(1000L);
@@ -223,5 +223,14 @@ class AdminShopProductServiceTest {
         Mockito.verify(audit).record(1L,
                 com.tailtopia.admin.audit.service.AuditActions.SHOP_SKU_WHOLESALE_UPDATED,
                 "SHOP_SKU", "tok", "old=800 new=750");
+    }
+
+    /** V1.4.2 shop-admin Story 4.2：保存规格时包裹四项必填，fixture 补齐。 */
+    static ShopSkuForm withPackage(ShopSkuForm f) {
+        f.setPackageWeightG(2150);
+        f.setPackageLengthCm(30);
+        f.setPackageWidthCm(20);
+        f.setPackageHeightCm(8);
+        return f;
     }
 }

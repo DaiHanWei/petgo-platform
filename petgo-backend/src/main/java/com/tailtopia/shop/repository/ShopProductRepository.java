@@ -61,6 +61,30 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
             @Param("category") ProductCategory category, @Param("active") Boolean active,
             org.springframework.data.domain.Pageable pageable);
 
+    /**
+     * V1.4.2 shop-admin Story 4.2（G5「包裹数据 · 缺重量体积」）：同 {@link #adminSearch}，只留至少一个 SKU 缺包裹参数的商品。
+     * 排序与 {@link #adminSearch} 逐字一致。
+     */
+    @Query(value = "select p from ShopProduct p "
+            + "where (:category is null or p.category = :category) "
+            + "  and (:active is null or p.active = :active) "
+            + "  and exists (select 1 from ShopSku s where s.productId = p.id and ("
+            + MISSING_PACKAGE + ")) "
+            + "order by p.sortWeight desc, p.id desc",
+            countQuery = "select count(p) from ShopProduct p "
+            + "where (:category is null or p.category = :category) "
+            + "  and (:active is null or p.active = :active) "
+            + "  and exists (select 1 from ShopSku s where s.productId = p.id and ("
+            + MISSING_PACKAGE + "))")
+    org.springframework.data.domain.Page<ShopProduct> adminSearchMissingPackage(
+            @Param("category") ProductCategory category, @Param("active") Boolean active,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** SKU 缺包裹参数（任一项空或非正）的 JPQL 条件，别名 {@code s}。 */
+    String MISSING_PACKAGE = "s.packageWeightG is null or s.packageLengthCm is null or s.packageWidthCm is null "
+            + "or s.packageHeightCm is null or s.packageWeightG <= 0 or s.packageLengthCm <= 0 "
+            + "or s.packageWidthCm <= 0 or s.packageHeightCm <= 0";
+
     /** 后台摘要条（AC1）：上架 / 下架商品数一次问出来。 */
     long countByActive(boolean active);
 

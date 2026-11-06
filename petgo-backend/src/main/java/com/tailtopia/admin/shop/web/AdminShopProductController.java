@@ -103,14 +103,19 @@ public class AdminShopProductController {
             @RequestParam(required = false) ProductCategory category,
             @RequestParam(required = false) Boolean active,
             @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "packageData", required = false) String packageData,
             HxRequest hx, Model model) {
-        var found = service.page(category, active, page, PAGE_SIZE);
+        // V1.4.2 shop-admin Story 4.2（G5）：「包裹数据」筛选 —— 全部 / MISSING（缺重量体积）
+        boolean missingPackage = "MISSING".equals(packageData);
+        var found = service.page(category, active, missingPackage, page, PAGE_SIZE);
         List<ShopProduct> rows = found.getContent();
         Map<Long, Integer> skuCount = new LinkedHashMap<>();
         Map<Long, Long> minPrice = new LinkedHashMap<>();
+        Map<Long, Long> missingBySku = new LinkedHashMap<>();
         for (ShopProduct p : rows) {
             List<ShopSku> ss = skus.findByProductIdOrderByIdAsc(p.getId());
             skuCount.put(p.getId(), ss.size());
+            missingBySku.put(p.getId(), ss.stream().filter(x -> !x.isSellable()).count());
             ss.stream().mapToLong(ShopSku::getPrice).min()
                     .ifPresent(v -> minPrice.put(p.getId(), v));
         }
@@ -124,6 +129,8 @@ public class AdminShopProductController {
         model.addAttribute("categories", ProductCategory.values());
         model.addAttribute("filterCategory", category);
         model.addAttribute("filterActive", active);
+        model.addAttribute("filterPackage", missingPackage ? "MISSING" : null);
+        model.addAttribute("missingPackageByProduct", missingBySku);
         model.addAttribute("canEdit", has(admin, AdminPermissions.SHOP_PRODUCT_EDIT));
         // 🔴 告警条与「阻止上架」共用 AdminShopListingService 的同一口径，不在此另算一遍
         model.addAttribute("activeSkuCount", listing.activeSkuCount());
@@ -185,6 +192,8 @@ public class AdminShopProductController {
         model.addAttribute("existingImages", existing);
         model.addAttribute("product", p);
         model.addAttribute("skus", ss);
+        // V1.4.2 shop-admin Story 4.2（G6）：缺包裹重量或长宽高的规格数（规格卡顶红色横幅）
+        model.addAttribute("skuMissingPackage", ss.stream().filter(x -> !x.isSellable()).count());
         model.addAttribute("availableBySku", inventory.availableBySkuId(
                 ss.stream().map(ShopSku::getId).toList()));
 

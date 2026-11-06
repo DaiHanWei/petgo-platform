@@ -46,6 +46,14 @@
                         <option value="false" th:selected="${filterActive == false}" th:text="#{admin.shop.active.no}">未上架</option>
                     </select>
                 </label>
+                <!--/* V1.4.2 shop-admin Story 4.2（G5）：包裹数据筛选（全部 / 缺重量体积） */-->
+                <label class="field"><span th:text="#{admin.v142.sku.filter.package}">包裹数据</span>
+                    <select name="packageData" class="sel">
+                        <option value="" th:text="#{admin.common.all}">全部</option>
+                        <option value="MISSING" th:selected="${filterPackage == 'MISSING'}"
+                                th:text="#{admin.v142.sku.filter.missing}">缺重量体积</option>
+                    </select>
+                </label>
                 <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.search}">查询</button>
             </form>
 

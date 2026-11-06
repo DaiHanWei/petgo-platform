@@ -6,7 +6,8 @@
   rows(oob)   — 表格 + 翻页（htmx 换 #shop-product-rows 的 innerHTML，摘要条以 oob 跟上）
   ⚠️ 操作列是「编辑」不是「详情」：2026-09-07 回滚的原文（AC1 点名），跳独立表单页而不是抽屉
      —— 这一页字段量太大，塞不进 480px 抽屉。
-  模型：products / summary / skuCount / minPrice / canEdit / filterCategory / filterActive / page / hasNext。
+  模型：products / summary / skuCount / minPrice / canEdit / filterCategory / filterActive / page / hasNext；
+  V1.4.2 shop-admin 4.2：filterPackage（MISSING|null）/ missingPackageByProduct（商品 id → 缺包裹参数的 SKU 数）。
 -->
 <body>
 <div th:fragment="sumbar(oob)" class="sum" id="shop-product-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
@@ -21,6 +22,11 @@
     <div class="sum-item">
         <div class="sum-label" th:text="#{admin.v130.shopProducts.summary.skus}">SKU 总数</div>
         <div class="sum-value" th:text="${summary.skuCount()}">0</div>
+    </div>
+    <!--/* V1.4.2 shop-admin Story 4.2（G5）：缺重量体积的 SKU（> 0 标红） */-->
+    <div class="sum-item" th:classappend="${summary.skuMissingPackage() > 0} ? 'dg'">
+        <div class="sum-label" th:text="#{admin.v142.sku.summary.missing}">缺重量体积的 SKU</div>
+        <div class="sum-value" th:text="${summary.skuMissingPackage()}">0</div>
     </div>
 </div>
 
@@ -50,6 +56,9 @@
             <td>
                 <div class="s-p-name" th:text="${p.name}">Royal Canin</div>
                 <div class="s-p-sub s-mono" th:text="${p.publicToken}">demo-mkn-01</div>
+                <span class="badge badge-danger" data-missing-package
+                      th:if="${missingPackageByProduct != null and missingPackageByProduct[p.id] != null and missingPackageByProduct[p.id] > 0}"
+                      th:text="#{admin.v142.sku.badge.missing(${missingPackageByProduct[p.id]})}">1 个 SKU 缺重量体积</span>
             </td>
             <td th:text="${p.brand}">Royal Canin</td>
             <td th:text="#{'admin.v130.shopProducts.category.' + ${p.category}}">MAKANAN</td>
@@ -87,10 +96,10 @@
     </div>
     <div class="pager" th:if="${!#lists.isEmpty(products)}" th:attr="data-page=${page}">
         <a th:if="${page > 0}" href="#" th:text="#{admin.v130.places.pager.prev}"
-           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},page=${page - 1})}"
+           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},packageData=${filterPackage},page=${page - 1})}"
            hx-target="#shop-product-rows" hx-swap="innerHTML" hx-push-url="true">上一页</a>
         <a th:if="${hasNext}" href="#" th:text="#{admin.v130.places.pager.next}"
-           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},page=${page + 1})}"
+           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},packageData=${filterPackage},page=${page + 1})}"
            hx-target="#shop-product-rows" hx-swap="innerHTML" hx-push-url="true">下一页</a>
     </div>
 </th:block>

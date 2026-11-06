@@ -1622,3 +1622,5 @@ tr.is-dragging { opacity: .5; }
 /* V1.4.2 shop-admin Story 4.1（G3）：预估余额低于阈值标红；Biteship 卡两个小表单间距 */
 .kv.amt .is-danger { color: var(--danger) !important; }
 .ship-biteship-form { margin-top: 12px; }
+/* V1.4.2 shop-admin Story 4.2（G6）：规格表「未填」标红 */
+td.is-missing { color: var(--danger); }

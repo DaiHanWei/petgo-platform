@@ -199,12 +199,12 @@ public class AdminShopCouponService {
 
     private static <E extends Enum<E>> E parse(Class<E> type, String raw, String field) {
         if (raw == null || raw.isBlank()) {
-            throw AppException.validation(field + "不能为空");
+            throw AppException.validation(field + "不能为空").code("admin.err.v142.coupon.optionRequired");
         }
         try {
             return Enum.valueOf(type, raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw AppException.validation(field + "不正确");
+            throw AppException.validation(field + "不正确").code("admin.err.v142.coupon.optionRequired");
         }
     }
 }

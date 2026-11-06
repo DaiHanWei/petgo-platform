@@ -14,6 +14,10 @@ public interface ShopSkuRepository extends JpaRepository<ShopSku, Long> {
 
     long countByProductId(long productId);
 
+    /** V1.4.2 shop-admin Story 4.2（G5 摘要）：缺包裹重量或长宽高的 SKU 数（= 暂不可售）。 */
+    @Query("select count(s) from ShopSku s where " + ShopProductRepository.MISSING_PACKAGE)
+    long countMissingPackage();
+
     /** V1.4.1 进货单建单按报文 {@code sku_token} 批量取 SKU。 */
     List<ShopSku> findByPublicTokenIn(java.util.Collection<String> publicTokens);
 
