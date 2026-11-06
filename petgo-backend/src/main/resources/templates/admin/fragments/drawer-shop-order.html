@@ -38,6 +38,13 @@
                 <td th:text="${#numbers.formatInteger(order.shippingFee, 0, 'COMMA')}">20.000</td></tr>
             <tr><th th:text="#{admin.shop.order.col.shippingDiscount}">免运抵扣</th>
                 <td th:text="${#numbers.formatInteger(order.shippingDiscount, 0, 'COMMA')}">0</td></tr>
+            <!--/* V1.4.2 shop-admin Story 8.1 AC5：用户实付运费（shipping_discount 存负数 → 用 +）、实际运费（未取消运单承运成本）、保价 */-->
+            <tr data-user-paid-shipping><th th:text="#{admin.v142.ful.shippingPaid}">用户支付运费</th>
+                <td th:text="${#numbers.formatInteger(T(java.lang.Math).max(0L, T(com.tailtopia.admin.shop.service.LogisticsCostCalc).userPaidShipping(order.shippingFee, order.shippingDiscount)), 0, 'COMMA')}">20.000</td></tr>
+            <tr data-actual-shipping><th th:text="#{admin.v142.ful.actualShipping}">实际运费</th>
+                <td th:text="${actualShipping != null} ? ${#numbers.formatInteger(actualShipping, 0, 'COMMA')} : '—'">—</td></tr>
+            <tr data-insurance><th th:text="#{admin.v142.ful.insurance}">保价</th>
+                <td th:text="${order.insuranceSelected} ? #{admin.v142.ful.insuranceYes(${#numbers.formatInteger(order.insuranceFee, 0, 'COMMA')})} : #{admin.v142.ful.insuranceNo}">否</td></tr>
             <!-- 🔴 两段支付构成必须分开展示：客服对账时「用户说付了 305 000」与
                  「网关只收到 245 000」的差额永远落在 PawCoin 段上。 -->
             <tr><th th:text="#{admin.shop.order.col.coinAmount}">PawCoin 段</th>

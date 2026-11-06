@@ -335,6 +335,95 @@ public class ShopFinanceDashboardService {
                 bonusRedeemedApprox);
     }
 
+    // ---------- V1.4.2 shop-admin Story 8.1 · AD-15：优惠与物流成本（新区块，原四卡不动） ----------
+
+    /** 新区块，单独 record（不往 {@link ReconciliationSnapshot} 里加字段）。金额一律 IDR 整数。 */
+    public record DiscountLogisticsSnapshot(long spendCouponDiscount, long thresholdShippingDiscount,
+            long couponShippingDiscount, long userPaidShipping, long actualCarrierCost, long reshipCost,
+            long netShippingCost, long insuranceFeeIncome, long insuranceActualCost, long pawcoinCompensation,
+            long claimsPendingCount, long claimsReceived, long refundAwaiting, long refundPayoutPending,
+            long refundPayoutFailed, long refundPaidOut, long lateReordered, long lateRefunded, long latePending) {
+
+        /** I2：所选时间段没有任何数据 → 只在新卡显示空态。待索赔是「当前」口径，不算期间数据。 */
+        public boolean empty() {
+            return spendCouponDiscount == 0 && thresholdShippingDiscount == 0 && couponShippingDiscount == 0
+                    && userPaidShipping == 0 && actualCarrierCost == 0 && reshipCost == 0 && insuranceFeeIncome == 0
+                    && insuranceActualCost == 0 && pawcoinCompensation == 0 && claimsReceived == 0
+                    && refundAwaiting == 0 && refundPayoutPending == 0 && refundPayoutFailed == 0 && refundPaidOut == 0
+                    && lateReordered == 0 && lateRefunded == 0 && latePending == 0;
+        }
+    }
+
+    private static final java.time.ZoneId WIB = com.tailtopia.admin.shared.time.AdminTime.ZONE;
+
+    /**
+     * 「优惠与物流成本」（AD-15）。🔴 时间范围按 <b>WIB</b> 日界（{@code from} 当日 00:00 WIB ～ {@code to} 次日 00:00 WIB，
+     * 半开区间）；原四卡的 {@code ts()} / {@code tsEnd()} 按 JVM 时区，不动。各行时间基准见 AD-15 表：订单类按 {@code paid_at}
+     * （下单口径，不冲减已退运费，O-24）、运单按 {@code created_at}、补偿按 {@code destination_chosen_at}、索赔到账按
+     * {@code claim_closed_at}、退款打款按退款单 {@code created_at}、取消后到账按 {@code late_paid_at}。
+     * 「取消后到账」只做分项展示，不并入现金收入（AC3：已转新订单的，现金在新单里算一次）。
+     */
+    @Transactional(readOnly = true)
+    public DiscountLogisticsSnapshot discountLogistics(LocalDate from, LocalDate to) {
+        java.sql.Timestamp f = java.sql.Timestamp.from(from.atStartOfDay(WIB).toInstant());
+        java.sql.Timestamp t = java.sql.Timestamp.from(to.plusDays(1).atStartOfDay(WIB).toInstant());
+
+        Map<String, Object> o = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(o.discount_coupon_amount), 0) AS spend_coupon,
+                       -- 存量单 source 为空 / NONE 但有减免：1.4.2 前唯一的运费减免就是满额免运，归入满额免运（复审修，不补算列）
+                       COALESCE(SUM(CASE WHEN o.shipping_discount_source IS DISTINCT FROM 'COUPON'
+                                         THEN -o.shipping_discount ELSE 0 END), 0) AS threshold_disc,
+                       COALESCE(SUM(CASE WHEN o.shipping_discount_source = 'COUPON'
+                                         THEN -o.shipping_discount ELSE 0 END), 0) AS coupon_disc,
+                       COALESCE(SUM(o.shipping_fee + o.shipping_discount), 0) AS user_paid_shipping,
+                       COALESCE(SUM(o.insurance_fee), 0) AS insurance_fee
+                FROM shop_orders o
+                WHERE o.paid_at >= ? AND o.paid_at < ?
+                """, f, t);
+        Map<String, Object> sh = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(CASE WHEN NOT s.is_reship THEN COALESCE(s.carrier_cost, 0) ELSE 0 END), 0) AS actual,
+                       COALESCE(SUM(CASE WHEN s.is_reship THEN COALESCE(s.carrier_cost, 0) ELSE 0 END), 0) AS reship,
+                       COALESCE(SUM(s.insurance_cost), 0) AS insurance_cost
+                FROM shipments s
+                WHERE s.status <> 'CANCELLED' AND s.created_at >= ? AND s.created_at < ?
+                """, f, t);
+        long compensation = scalar("""
+                SELECT COALESCE(SUM(r.compensation_amount), 0) FROM shop_order_refunds r
+                WHERE r.cash_destination = 'TO_PAWCOIN' AND r.destination_chosen_at >= ? AND r.destination_chosen_at < ?
+                """, f, t);
+        long claimsPending = scalar("SELECT COUNT(*) FROM shop_orders WHERE claim_pending");
+        long claimsReceived = scalar("""
+                SELECT COALESCE(SUM(o.claim_amount), 0) FROM shop_orders o
+                WHERE o.claim_closed_at >= ? AND o.claim_closed_at < ?
+                """, f, t);
+        Map<String, Object> rf = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(CASE WHEN r.status = 'AWAITING_DESTINATION' THEN r.cash_refund ELSE 0 END), 0) AS awaiting,
+                       COALESCE(SUM(CASE WHEN r.status = 'PAYOUT_PENDING' THEN r.cash_refund ELSE 0 END), 0) AS pending,
+                       COALESCE(SUM(CASE WHEN r.status = 'PAYOUT_FAILED' THEN r.cash_refund ELSE 0 END), 0) AS failed,
+                       COALESCE(SUM(CASE WHEN r.status = 'COMPLETED' AND r.cash_destination = 'TO_BANK'
+                                         THEN r.cash_refund ELSE 0 END), 0) AS paid
+                FROM shop_order_refunds r
+                WHERE r.created_at >= ? AND r.created_at < ?
+                """, f, t);
+        Map<String, Object> late = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(CASE WHEN o.late_payment_resolution = 'REORDERED' THEN o.late_paid_amount ELSE 0 END), 0) AS reordered,
+                       COALESCE(SUM(CASE WHEN o.late_payment_resolution = 'REFUNDED' THEN o.late_paid_amount ELSE 0 END), 0) AS refunded,
+                       COALESCE(SUM(CASE WHEN o.late_payment_resolution IS NULL THEN o.late_paid_amount ELSE 0 END), 0) AS pending
+                FROM shop_orders o
+                WHERE o.late_paid_amount IS NOT NULL AND o.late_paid_at >= ? AND o.late_paid_at < ?
+                """, f, t);
+
+        long userPaid = num(o.get("user_paid_shipping"));
+        long actual = num(sh.get("actual"));
+        long reship = num(sh.get("reship"));
+        return new DiscountLogisticsSnapshot(num(o.get("spend_coupon")), num(o.get("threshold_disc")),
+                num(o.get("coupon_disc")), userPaid, actual, reship,
+                LogisticsCostCalc.netShippingCost(actual, reship, userPaid), num(o.get("insurance_fee")),
+                num(sh.get("insurance_cost")), compensation, claimsPending, claimsReceived, num(rf.get("awaiting")),
+                num(rf.get("pending")), num(rf.get("failed")), num(rf.get("paid")), num(late.get("reordered")),
+                num(late.get("refunded")), num(late.get("pending")));
+    }
+
     // ---------- 内部 ----------
 
     private long scalar(String sql, Object... args) {

@@ -388,7 +388,8 @@ public class AdminShopOrderController {
         model.addAttribute("order", order);
         model.addAttribute("shipTo", order.shipTo());
         model.addAttribute("lines", orderLines.findByOrderIdOrderByIdAsc(order.getId()));
-        model.addAttribute("packages", fulfillment.shipmentsOf(order.getId()));
+        List<Shipment> pkgs = fulfillment.shipmentsOf(order.getId());
+        model.addAttribute("packages", pkgs);
         model.addAttribute("carriers", Carrier.values());
         model.addAttribute("canFulfill", has(admin, AdminPermissions.SHOP_ORDER_FULFILL));
         model.addAttribute("markable", order.getStatus() == ShopOrderStatus.SHIPPED);
@@ -404,6 +405,11 @@ public class AdminShopOrderController {
         model.addAttribute("activeBiteship", active.stream().filter(Shipment::isBiteship).findFirst().orElse(null));
         // V1.4.2 shop-admin Story 7.1（F7）：退款与成长值（只读，两个页面上下文都显示）
         model.addAttribute("afterSales", afterSales.of(order));
+        // V1.4.2 shop-admin Story 8.1 AC5：实际运费 = 未取消运单的承运成本合计（含重发；无运单 → 「—」）
+        var nonCancelled = pkgs.stream()
+                .filter(sh -> sh.getStatus() != com.tailtopia.shop.order.domain.ShipmentStatus.CANCELLED).toList();
+        model.addAttribute("actualShipping", nonCancelled.isEmpty() ? null
+                : nonCancelled.stream().mapToLong(Shipment::getCarrierCost).sum());
         // V1.4.2 shop-admin Story 7.2（F2 ~ F6）：取消后到账；重下单原快递不可用时运单改选的快递（O-5，抽屉提示）
         model.addAttribute("late", lateView.of(order));
         model.addAttribute("courierSwitched", active.stream().filter(Shipment::isBiteship).anyMatch(sh ->
