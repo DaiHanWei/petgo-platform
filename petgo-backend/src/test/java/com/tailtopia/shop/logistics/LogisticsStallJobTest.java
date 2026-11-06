@@ -88,7 +88,7 @@ class LogisticsStallJobTest {
         assertThat(order.hasUserVisibleDeliveryIssue()).isFalse();
         verify(orders).save(order);
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(alerts, times(1)).alert(text.capture());
+        verify(alerts, times(1)).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), text.capture());
         assertThat(text.getValue()).contains(LogisticsFixtures.DISPLAY_NO).contains("72").doesNotContain("Budi");
     }
 
@@ -100,7 +100,7 @@ class LogisticsStallJobTest {
         assertThat(job.run().flagged()).isEmpty();
         assertThat(order.getLogisticsException()).isNull();
         verify(orders, never()).save(any());
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
     }
 
     @Test
@@ -162,7 +162,7 @@ class LogisticsStallJobTest {
         LogisticsStallJob.Result r = job.run();
         assertThat(r.skipped()).isTrue();
         verify(shipments, never()).findStallCandidateOrderIds(any(), anyInt());
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
     }
 
     @Test
@@ -179,7 +179,7 @@ class LogisticsStallJobTest {
         LogisticsStallJob.Result r = job.run();
         assertThat(r.flagged()).containsExactly("TOKO-20261105-ZZZ999");
         assertThat(second.getLogisticsException()).isEqualTo(LogisticsException.STALLED);
-        verify(alerts, times(1)).alert(anyString());
+        verify(alerts, times(1)).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
     }
 
     @Test
@@ -187,7 +187,7 @@ class LogisticsStallJobTest {
     void noneNoAlert() {
         candidates();
         assertThat(job.run().flagged()).isEmpty();
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
     }
 
     @Test

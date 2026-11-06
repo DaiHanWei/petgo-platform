@@ -91,7 +91,7 @@ class ShopOrderPaidHandlerLateTest {
         verify(orders).recordLatePayment(eq(2L), eq(190_000L), any(), eq(200L));
         verify(payments, never()).markPaid(any(), any());
         assertThat(o.getStatus()).isEqualTo(ShopOrderStatus.CANCELLED);
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), anyString());
     }
 
     @Test
@@ -122,7 +122,7 @@ class ShopOrderPaidHandlerLateTest {
 
         handler.onPaid(paid(pi));
 
-        verify(alerts).alert(contains("同一订单第二笔迟到款"));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), contains("同一订单第二笔迟到款"));
     }
 
     @Test
@@ -136,7 +136,7 @@ class ShopOrderPaidHandlerLateTest {
         handler.onPaid(paid(pi));
 
         verify(orders).recordLatePayment(eq(5L), eq(190_000L), any(), eq(500L));
-        verify(alerts).alert(contains("重复付款"));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), contains("重复付款"));
         verify(payments, never()).markPaid(any(), any());
     }
 
@@ -148,7 +148,7 @@ class ShopOrderPaidHandlerLateTest {
 
         assertThatCode(() -> handler.onPaid(paid(pi))).doesNotThrowAnyException();
 
-        verify(alerts).alert("有一笔电商到账找不到订单：intentId=600");
+        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), org.mockito.ArgumentMatchers.eq("有一笔电商到账找不到订单：intentId=600"));
     }
 
     @Test

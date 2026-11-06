@@ -132,11 +132,24 @@ POSTHOG_HOST=https://eu.i.posthog.com
 # 环境标记，只认 prod / stag / dev。生产写 prod，staging（~/.env.petgo-stag）写 stag ——
 # 两边共用一个 PostHog 项目，靠 app_env 区分；不写会被标成 dev，staging 数据混进生产漏斗。
 APP_ENV=prod
+
+# === 电商运营提醒：三个飞书群自定义机器人（V1.4.2 shop-admin · AD-5；群由运营指定）===
+# 客服群：取消后到账 / 打款失败 / 超 7 天未选退款去向
+LARK_SHOP_CS_WEBHOOK_URL=
+LARK_SHOP_CS_SECRET=
+# 运营群：物流异常与停滞 / 待索赔 / Biteship 预估余额低 / 确认收货清除异常 / 运单取消失败
+LARK_SHOP_OPS_WEBHOOK_URL=
+LARK_SHOP_OPS_SECRET=
+# 技术群：查单 / webhook 连续失败、重下运单激增、到账找不到订单
+LARK_SHOP_TECH_WEBHOOK_URL=
+LARK_SHOP_TECH_SECRET=
 EOF
 chmod 600 ~/.env.petgo
 ```
 
 > 最小可启动只需 DB / Redis / JWT_SECRET；OSS/Gemini/Google/IM 留 stub/空也能跑起来（对应功能降级）。
+> `LARK_SHOP_*_WEBHOOK_URL` 留空只是对应群收不到电商提醒（日志里有 WARN「电商运营提醒未配置飞书群」）；`_SECRET` 只在机器人开了签名校验时填。
+> 🔴 V1.4.2 起电商告警不再走 `SHOP_ORDER_NOTIFY_*`（那组只管新订单提醒），原来收在新订单提醒群里的技术 / 运营告警改到这三个群。
 
 ### 2.3 起 PostgreSQL 容器（petgo 专用）
 

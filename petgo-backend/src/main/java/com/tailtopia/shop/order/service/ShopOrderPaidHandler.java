@@ -79,7 +79,7 @@ public class ShopOrderPaidHandler {
             // 不改任何状态、不抛：抛异常会把整个回调事务连同意图的 markPaid 一起回滚 —— 那才是真的丢账。
             // 这是唯一可能「钱进来了系统不认」的路径，必须有人知道（拍板③）。
             log.error("电商到账找不到订单 intentId={}", event.intentId());
-            alerts.alert("有一笔电商到账找不到订单：intentId=" + event.intentId());
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.TECH, "有一笔电商到账找不到订单：intentId=" + event.intentId());
             return;
         }
         if (order.getStatus() == ShopOrderStatus.PENDING_PAYMENT) {
@@ -134,7 +134,7 @@ public class ShopOrderPaidHandler {
         if (rows == 0) {
             if (!Objects.equals(order.getLatePaidIntentId(), event.intentId())) {
                 log.error("同一订单第二笔迟到款 displayNo={} intentId={}", order.getDisplayNo(), event.intentId());
-                alerts.alert("同一订单第二笔迟到款：" + order.getDisplayNo() + "，intentId=" + event.intentId()
+                alerts.alert(com.tailtopia.admin.alert.OpsChannel.TECH, "同一订单第二笔迟到款：" + order.getDisplayNo() + "，intentId=" + event.intentId()
                         + "，请人工处理");
             }
             return;
@@ -142,7 +142,7 @@ public class ShopOrderPaidHandler {
         if (duplicate) {
             log.error("电商订单重复付款 displayNo={} status={} intentId={}", order.getDisplayNo(),
                     order.getStatus(), event.intentId());
-            alerts.alert("电商订单重复付款：" + order.getDisplayNo() + "（" + order.getStatus() + "），intentId="
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.TECH, "电商订单重复付款：" + order.getDisplayNo() + "（" + order.getStatus() + "），intentId="
                     + event.intentId() + "，请人工处理");
         } else {
             log.info("电商订单关单后到账已记迟到款 order={} amount={}", order.getPublicToken(), amount);

@@ -76,7 +76,7 @@ class ShopOrderFulfillmentConfirmTest {
         assertThat(done.getTimerResumedAt()).isNotNull();
         assertThat(done.isClaimPending()).isTrue();
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(alerts).alert(text.capture());
+        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), text.capture());
         assertThat(text.getValue()).contains(DISPLAY_NO).contains(type.name()).doesNotContain("Budi")
                 .doesNotContain(TOKEN + " ");
         verify(orders).save(order);
@@ -89,7 +89,7 @@ class ShopOrderFulfillmentConfirmTest {
         assertThat(done.getStatus()).isEqualTo(ShopOrderStatus.COMPLETED);
         assertThat(done.getDeliveredAt()).isNotNull();
         assertThat(done.getTimerResumedAt()).isNull();
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
     }
 
     @Test
@@ -103,7 +103,7 @@ class ShopOrderFulfillmentConfirmTest {
         when(orders.findByPublicTokenAndUserId("tok2", USER)).thenReturn(Optional.of(pending));
         assertThatThrownBy(() -> service.confirmReceipt(USER, "tok2")).isInstanceOf(AppException.class);
         assertThat(pending.getLogisticsException()).isEqualTo(LogisticsException.PICKUP_FAILED);
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
     }
 
     @Test
@@ -111,6 +111,6 @@ class ShopOrderFulfillmentConfirmTest {
     void idempotentCompleted() {
         service.confirmReceipt(USER, TOKEN);
         service.confirmReceipt(USER, TOKEN);
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
     }
 }

@@ -292,7 +292,7 @@ class ShopOrderRefundServiceTest {
         rig.service.cancelWhole(RefundTestRig.ORDER_TOKEN, CancelReason.OUT_OF_STOCK, null, 7L);
 
         verify(canceller).cancelForPlatformCancel(rig.order, 7L);
-        verify(rig.alerts).alert(anyString());
+        verify(rig.alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
         assertThat(rig.order.getStatus()).isEqualTo(ShopOrderStatus.REFUNDING);
 
         RefundTestRig other = new RefundTestRig();

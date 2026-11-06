@@ -201,7 +201,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         log.warn("{}，已请求取消刚建的 Biteship 运单 order={} biteshipOrderId={} outcome={}", why, displayNo,
                 biteshipOrderId, c.getClass().getSimpleName());
         if (!(c instanceof CancelOutcome.Cancelled)) {
-            alerts.alert("[Biteship] 订单 " + displayNo + " " + why + "，运单 " + biteshipOrderId
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[Biteship] 订单 " + displayNo + " " + why + "，运单 " + biteshipOrderId
                     + " 未能自动取消，请到 Biteship 后台人工取消");
         }
     }
@@ -364,7 +364,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
                 Boolean first = redis.opsForValue().setIfAbsent(RETRY_ALERTED_KEY, "1", RETRY_WINDOW);
                 if (Boolean.TRUE.equals(first)) {
                     log.error("Biteship 重下运单激增 count={} window=5m", n);
-                    alerts.alert("[Biteship] 5 分钟内重下运单 " + n + " 次，请技术排查");
+                    alerts.alert(com.tailtopia.admin.alert.OpsChannel.TECH, "[Biteship] 5 分钟内重下运单 " + n + " 次，请技术排查");
                 }
             }
         } catch (RuntimeException e) {
@@ -464,7 +464,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         } catch (RuntimeException ex) {
             log.warn("平台原因取消后取消 Biteship 运单失败（取消已生效）order={} cause={}", e.orderDisplayNo(),
                     ex.getClass().getSimpleName());
-            alerts.alert("【电商】订单 " + e.orderDisplayNo()
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "【电商】订单 " + e.orderDisplayNo()
                     + " 平台原因取消时 Biteship 运单取消失败，请到 Biteship 后台人工取消运单");
         }
     }

@@ -168,7 +168,7 @@ class BiteshipTrackingServiceTest {
         ReflectionTestUtils.setField(order, "logisticsException", LogisticsException.LOST);
         service.applySnapshot(1L, snap("return_in_transit", NOW.plusSeconds(180)));
         assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.LOST);
-        verify(alerts, times(2)).alert(anyString());
+        verify(alerts, times(2)).alert(org.mockito.ArgumentMatchers.any(), anyString());
     }
 
     @Test
@@ -185,11 +185,11 @@ class BiteshipTrackingServiceTest {
         assertThat(shipment.getStatus()).isNotEqualTo(ShipmentStatus.DELIVERED);
         assertThat(shipment.getProviderStatus()).isEqualTo("in_transit");
         assertThat(shipment.getUserStatusKey()).as("App 不得显示已送达").isEqualTo("in_transit");
-        verify(alerts).alert(anyString());
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), anyString());
 
         assertThat(service.applySnapshot(1L, snap("delivered", NOW.plusSeconds(90))))
                 .as("下一次回查仍判为有变化、重新判定").isTrue();
-        verify(alerts, times(2)).alert(anyString());
+        verify(alerts, times(2)).alert(org.mockito.ArgumentMatchers.any(), anyString());
 
         ReflectionTestUtils.setField(order, "logisticsException", null);     // 5.2 清标记后
         service.applySnapshot(1L, snap("delivered", NOW.plusSeconds(120)));
@@ -203,13 +203,13 @@ class BiteshipTrackingServiceTest {
         shipment.markCancelRequested(NOW);
         service.applySnapshot(1L, snap("cancelled", NOW.plusSeconds(60)));
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.any(), anyString());
 
         shipment = LogisticsFixtures.biteshipShipment(1L, "bs_1");
         order.markRefunding(CancelReason.OUT_OF_STOCK, NOW);
         service.applySnapshot(1L, snap("cancelled", NOW.plusSeconds(60)));
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.any(), anyString());
     }
 
     @Test
@@ -217,7 +217,7 @@ class BiteshipTrackingServiceTest {
     void unexpectedCancelAlerts() {
         service.applySnapshot(1L, snap("cancelled", NOW.plusSeconds(60)));
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CREATED);
-        verify(alerts).alert(org.mockito.ArgumentMatchers.contains("cancelled"));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.contains("cancelled"));
     }
 
     @Test
@@ -226,7 +226,7 @@ class BiteshipTrackingServiceTest {
         service.applySnapshot(1L, snap("rejected", NOW.plusSeconds(60)));
         assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
         assertThat(shipment.getProviderStatus()).isEqualTo("rejected");
-        verify(alerts).alert(org.mockito.ArgumentMatchers.contains("rejected"));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.contains("rejected"));
     }
 
     @Test
@@ -235,7 +235,7 @@ class BiteshipTrackingServiceTest {
         order.markRefunding(CancelReason.OUT_OF_STOCK, NOW);
         service.applySnapshot(1L, snap("picked", NOW.plusSeconds(60)));
         assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.REFUNDING);
-        verify(alerts).alert(org.mockito.ArgumentMatchers.contains("已取消订单"));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.contains("已取消订单"));
         verify(events, never()).publishEvent(any(Object.class));
     }
 
@@ -260,7 +260,7 @@ class BiteshipTrackingServiceTest {
         assertThat(row.getAttempts()).isEqualTo(10);
         assertThat(row.getAlertedAt()).isNotNull();
         assertThat(row.getProcessedAt()).isNull();
-        verify(alerts, times(1)).alert(anyString());
+        verify(alerts, times(1)).alert(org.mockito.ArgumentMatchers.any(), anyString());
         verify(client, times(10)).getOrder("bs_1");
     }
 
@@ -275,7 +275,7 @@ class BiteshipTrackingServiceTest {
         assertThat(row.getLastError()).isEqualTo("UNKNOWN_ORDER");
         assertThat(row.getProcessedAt()).isNotNull();
         assertThat(row.getAlertedAt()).isNull();
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.any(), anyString());
         verify(client, never()).getOrder(anyString());
     }
 
@@ -300,7 +300,7 @@ class BiteshipTrackingServiceTest {
         assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.PICKUP_FAILED);
         assertThat(order.getLogisticsExceptionAt()).isEqualTo(NOW.plusSeconds(7200));
         assertThat(order.getTimerResumedAt()).isNotNull();
-        verify(alerts).alert(anyString());
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), anyString());
     }
 
     @Test
@@ -357,6 +357,6 @@ class BiteshipTrackingServiceTest {
         service.applySnapshot(1L, snap("courier_not_found", NOW.plusSeconds(60)));
         assertThat(order.getLogisticsException()).isEqualTo(LogisticsException.RETURNED);
         assertThat(order.isLogisticsExceptionConfirmed()).isTrue();
-        verify(alerts, never()).alert(anyString());
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.any(), anyString());
     }
 }

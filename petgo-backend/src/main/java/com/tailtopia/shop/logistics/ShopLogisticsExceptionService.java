@@ -195,7 +195,7 @@ public class ShopLogisticsExceptionService {
     /** 并发处置冲突：只告警（展示号）、不清标记、不审计，返回中止。 */
     private PickupResolution concurrentAbort(String displayNo, String how) {
         log.warn("揽收失败处置「{}」收尾时订单已被并发处置，未清标记 order={}", how, displayNo);
-        alerts.alert("[物流] 订单 " + displayNo + " 揽收失败处置「" + how
+        alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[物流] 订单 " + displayNo + " 揽收失败处置「" + how
                 + "」收尾时发现订单已被其他处置改变，未清标记，请人工核对");
         return PickupResolution.aborted("CONCURRENT_RESOLUTION");
     }

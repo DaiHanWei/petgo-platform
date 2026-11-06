@@ -141,7 +141,7 @@ public class BiteshipTrackingService {
                         row.markAlerted(now);
                         log.error("Biteship Webhook 处理连续失败，停止自动重试 eventId={} biteshipOrderId={} "
                                 + "attempts={} lastError={}", eventId, row.getBiteshipOrderId(), n, error);
-                        alerts.alert("[Biteship] Webhook 处理连续失败 " + n + " 次（Biteship 订单 "
+                        alerts.alert(com.tailtopia.admin.alert.OpsChannel.TECH, "[Biteship] Webhook 处理连续失败 " + n + " 次（Biteship 订单 "
                                 + row.getBiteshipOrderId() + "，原因 " + error + "），请技术排查");
                     }
                 }
@@ -232,7 +232,7 @@ public class BiteshipTrackingService {
             // 拍板⑥：退回途中的 delivered 语义不明（可能是退回发件地），只告警、交运营判断；下次回查会重新判定
             log.warn("Biteship 回传签收但订单带物流异常，不推进、不记状态 order={} exception={} biteshipOrderId={}",
                     order.getDisplayNo(), order.getLogisticsException(), s.getBiteshipOrderId());
-            alerts.alert("[Biteship] 订单 " + order.getDisplayNo() + " 带 " + order.getLogisticsException()
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[Biteship] 订单 " + order.getDisplayNo() + " 带 " + order.getLogisticsException()
                     + " 异常时收到 delivered（Biteship 订单 " + s.getBiteshipOrderId() + "），请人工判断");
         } else if (statusChanged) {
             s.applyProviderStatus(raw, at, mapping.userStatusKey());
@@ -282,7 +282,7 @@ public class BiteshipTrackingService {
                     log.warn("Biteship 未知运单状态 order={} biteshipOrderId={} status={}", order.getDisplayNo(),
                             s.getBiteshipOrderId(), raw);
                 }
-                alerts.alert("[Biteship] 订单 " + order.getDisplayNo() + " 运单状态 " + raw + "（Biteship 订单 "
+                alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[Biteship] 订单 " + order.getDisplayNo() + " 运单状态 " + raw + "（Biteship 订单 "
                         + s.getBiteshipOrderId() + "），请处理");
             }
         }
@@ -317,7 +317,7 @@ public class BiteshipTrackingService {
         if (order.flagLogisticsException(type, now)) {
             log.warn("Biteship 回传物流异常 order={} exception={} status={} biteshipOrderId={}", order.getDisplayNo(),
                     type, raw, s.getBiteshipOrderId());
-            alerts.alert("[Biteship] 订单 " + order.getDisplayNo() + " 物流异常 " + type + "（Biteship 状态 " + raw
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[Biteship] 订单 " + order.getDisplayNo() + " 物流异常 " + type + "（Biteship 状态 " + raw
                     + "），请处理");
         }
     }
@@ -325,7 +325,7 @@ public class BiteshipTrackingService {
     private void warnCancelledPicked(ShopOrder order, Shipment s, String raw) {
         log.warn("已取消 / 退款中订单的运单被揽收 order={} status={} biteshipOrderId={} providerStatus={}",
                 order.getDisplayNo(), order.getStatus(), s.getBiteshipOrderId(), raw);
-        alerts.alert("[Biteship] 已取消订单 " + order.getDisplayNo() + " 的运单被揽收（Biteship 订单 "
+        alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[Biteship] 已取消订单 " + order.getDisplayNo() + " 的运单被揽收（Biteship 订单 "
                 + s.getBiteshipOrderId() + "，状态 " + raw + "），请处理");
     }
 

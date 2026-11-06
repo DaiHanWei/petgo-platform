@@ -172,7 +172,7 @@ class ShopOrderCloseTest {
         assertThat(o.getStatus()).isEqualTo(ShopOrderStatus.PENDING_PAYMENT);
         verify(rig.intents, never()).applyResult(any());
         verify(rig.redis).expire("shop:close-query-fail:7", Duration.ofHours(24));
-        verify(rig.alerts, never()).alert(anyString());
+        verify(rig.alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), anyString());
     }
 
     @Test
@@ -201,13 +201,13 @@ class ShopOrderCloseTest {
         candidates(9L);
 
         service.closeOverdue(50);
-        verify(rig.alerts, times(1)).alert(
-                "电商订单关单前查单连续失败 10 次：TOKO-9，请检查 GemPay（多单同时出现时关单队列可能被堵）");
+        verify(rig.alerts, times(1)).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH),
+                org.mockito.ArgumentMatchers.eq("电商订单关单前查单连续失败 10 次：TOKO-9，请检查 GemPay（多单同时出现时关单队列可能被堵）"));
         service.closeOverdue(50);
-        verify(rig.alerts, times(1)).alert(anyString());
+        verify(rig.alerts, times(1)).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), anyString());
         service.closeOverdue(50);
-        verify(rig.alerts).alert(contains("20 次：TOKO-9"));
-        verify(rig.alerts, times(2)).alert(anyString());
+        verify(rig.alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), contains("20 次：TOKO-9"));
+        verify(rig.alerts, times(2)).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), anyString());
     }
 
     @Test
@@ -289,9 +289,9 @@ class ShopOrderCloseTest {
         candidates(16L, 17L);
 
         service.closeOverdue(2);
-        verify(rig.alerts, times(1)).alert(contains("关单队列可能被堵：本批 2 单全部查单未决"));
+        verify(rig.alerts, times(1)).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), contains("关单队列可能被堵：本批 2 单全部查单未决"));
 
         service.closeOverdue(3);   // 候选 2 < limit 3 → 不告警
-        verify(rig.alerts, times(1)).alert(contains("关单队列可能被堵"));
+        verify(rig.alerts, times(1)).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), contains("关单队列可能被堵"));
     }
 }

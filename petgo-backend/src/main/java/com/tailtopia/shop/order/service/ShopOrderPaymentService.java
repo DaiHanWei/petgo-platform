@@ -485,7 +485,7 @@ public class ShopOrderPaymentService {
         // 一张也轮不到 —— 关单队列可能被长期未决的单堵住。额外告警一次（是否加退避待规划层定）。
         if (held > 0 && held == batchLimit && candidateIds.size() == batchLimit) {
             log.error("电商关单队列可能被堵：本批 {} 单全部查单未决", held);
-            alerts.alert("电商关单队列可能被堵：本批 " + held + " 单全部查单未决（GemPay 查单失败 / 仍 Pending），"
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.TECH, "电商关单队列可能被堵：本批 " + held + " 单全部查单未决（GemPay 查单失败 / 仍 Pending），"
                     + "后续可关订单本轮未处理，请检查 GemPay");
         }
         return closed;
@@ -552,7 +552,7 @@ public class ShopOrderPaymentService {
             if (n % 10 == 0) {
                 log.error("电商订单关单前查单连续失败 displayNo={} count={}（多单同时出现时关单队列可能被堵）",
                         order.getDisplayNo(), n);
-                alerts.alert("电商订单关单前查单连续失败 " + n + " 次：" + order.getDisplayNo()
+                alerts.alert(com.tailtopia.admin.alert.OpsChannel.TECH, "电商订单关单前查单连续失败 " + n + " 次：" + order.getDisplayNo()
                         + "，请检查 GemPay（多单同时出现时关单队列可能被堵）");
             }
         } catch (RuntimeException e) {

@@ -125,7 +125,7 @@ public class LogisticsStallJob {
             return new Result(false, List.copyOf(flagged));
         });
         if (r != null && !r.flagged().isEmpty()) {
-            alerts.alert(summary(r.flagged(), stallAfter.toHours()));
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, summary(r.flagged(), stallAfter.toHours()));
         }
         return r == null ? new Result(true, List.of()) : r;
     }

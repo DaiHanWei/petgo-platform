@@ -184,6 +184,19 @@ petgo:
   pet-slot:
     expiry-scan-cron: ${PET_SLOT_EXPIRY_SCAN_CRON:0 5 * * * *}
   shop:
+    # V1.4.2 shop-admin Story 1.3 · AD-5 / O-10：电商运营提醒发到三个飞书群自定义机器人（客服 / 运营 / 技术）。
+    # 🔴 URL 留空 = 该群不发，只写 WARN 日志（本地 / 测试天然关闭）。webhook 与签名密钥 env 注入，绝不入库、绝不落日志。
+    # 同一事件按去重键只发一次（ops_alert_log）；技术类不去重，沿用调用方节流。
+    ops-alert:
+      cs:
+        webhook-url: ${LARK_SHOP_CS_WEBHOOK_URL:}
+        secret: ${LARK_SHOP_CS_SECRET:}
+      ops:
+        webhook-url: ${LARK_SHOP_OPS_WEBHOOK_URL:}
+        secret: ${LARK_SHOP_OPS_SECRET:}
+      tech:
+        webhook-url: ${LARK_SHOP_TECH_WEBHOOK_URL:}
+        secret: ${LARK_SHOP_TECH_SECRET:}
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。
     low-stock-threshold: ${SHOP_LOW_STOCK_THRESHOLD:5}

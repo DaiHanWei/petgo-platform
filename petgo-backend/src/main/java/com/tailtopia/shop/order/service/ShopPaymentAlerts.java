@@ -1,59 +1,31 @@
 package com.tailtopia.shop.order.service;
 
-import com.tailtopia.shop.order.notify.LarkMessageClient;
-import com.tailtopia.shop.order.notify.ShopOrderNotifyProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.tailtopia.admin.alert.OpsAlertService;
+import com.tailtopia.admin.alert.OpsChannel;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * 电商支付资金告警（v1.4.2 shop Story 3.3 AC4.3 / AC6.2）：复用 {@link LarkMessageClient#sendText} 发飞书机器人。
+ * 电商告警（v1.4.2 shop Story 3.3 AC4.3 / AC6.2 起；V1.4.2 shop-admin Story 1.3 · AD-5 起改走 {@link OpsAlertService}）。
  *
- * <p>🔴 <b>发送失败只 WARN、绝不抛</b>：告警是「有人知道」，不能反过来把关单 / 到账链路打断。
+ * <p>🔴 <b>按调用点分流</b>：技术类（查单 / webhook 连续失败、重下运单激增、到账找不到订单）走 {@link OpsChannel#TECH}；
+ * 运营类（用户确认收货清除异常、运单取消失败、物流异常 / 停滞、揽收失败处置）走 {@link OpsChannel#OPS}。
+ * 不去重（dedupeKey 为空）：各调用点沿用自己的节流。
  *
- * <p>🔴 <b>不在事务里出网</b>：在活动事务内调用（如到账回调事务里的 {@code ShopOrderPaidHandler}）→ 挂到
- * {@code afterCommit} 再发，避免一次 Lark 往返（最长数秒）拖着意图 / 订单行锁；事务回滚则不发（那笔到账本就没落库）。
+ * <p>🔴 <b>发送失败只 WARN、绝不抛</b>；在活动事务内调用 → 提交后才发，回滚不发（{@link OpsAlertService} 负责）。
+ * 群未配置（{@code LARK_SHOP_*_WEBHOOK_URL} 为空）只写 WARN —— 取代原来的 {@code order-notify.mode} 开关。
  *
- * <p>收件配置沿用新订单提醒（{@code petgo.shop.order-notify.*}）：{@code mode=off} 或收件人未配 → 零出网，只剩调用方的 ERROR 日志。
- *
- * <p>🔒 文案只含订单展示号 / 意图 id / 次数，不含 token、金额以外的用户信息。
+ * <p>🔒 文案只含订单展示号 / 意图 id / 次数，不含手机号、地址、收款账户。
  */
 @Component
 public class ShopPaymentAlerts {
 
-    private static final Logger log = LoggerFactory.getLogger(ShopPaymentAlerts.class);
+    private final OpsAlertService ops;
 
-    private final LarkMessageClient lark;
-    private final ShopOrderNotifyProperties props;
-
-    public ShopPaymentAlerts(LarkMessageClient lark, ShopOrderNotifyProperties props) {
-        this.lark = lark;
-        this.props = props;
+    public ShopPaymentAlerts(OpsAlertService ops) {
+        this.ops = ops;
     }
 
-    public void alert(String text) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    send(text);
-                }
-            });
-            return;
-        }
-        send(text);
-    }
-
-    private void send(String text) {
-        try {
-            if (!props.isLive()) {
-                return;
-            }
-            lark.sendText(text);
-        } catch (RuntimeException e) {
-            log.warn("电商支付告警发送失败 cause={}", e.getClass().getSimpleName());
-        }
+    public void alert(OpsChannel channel, String text) {
+        ops.send(channel, null, text);
     }
 }

@@ -242,7 +242,7 @@ public class ShopOrderFulfillmentService {
             log.info("物流异常订单用户确认收货 token={} exception={}", order.getPublicToken(), exception);
             log.warn("物流异常订单被用户确认收货，请运营核对 order={} exception={} claimPending={}",
                     order.getDisplayNo(), exception, order.isClaimPending());
-            alerts.alert("[物流] 订单 " + order.getDisplayNo() + " 在 " + exception + " 下被用户确认收货，请核对 / 撤回索赔");
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[物流] 订单 " + order.getDisplayNo() + " 在 " + exception + " 下被用户确认收货，请核对 / 撤回索赔");
         }
         return order;
     }

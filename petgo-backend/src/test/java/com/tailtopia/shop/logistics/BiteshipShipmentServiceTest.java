@@ -234,7 +234,7 @@ class BiteshipShipmentServiceTest {
         assertThat(r).isEqualTo(WaybillResult.failed("SETTLE_FAILED"));
         verify(client).cancelOrder("bs_7", "others");
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(alerts).alert(text.capture());
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), text.capture());
         assertThat(text.getValue()).contains(LogisticsFixtures.DISPLAY_NO).contains("bs_7")
                 .doesNotContain("id=" + ORDER_ID);
     }
@@ -249,7 +249,7 @@ class BiteshipShipmentServiceTest {
         when(client.cancelOrder("bs_8", "others")).thenReturn(new CancelOutcome.NotCancellable("picked"));
         service.createWaybill(ORDER_ID, 1L);
         verify(orders).findByIdForUpdate(ORDER_ID);
-        verify(alerts).alert(org.mockito.ArgumentMatchers.argThat(
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.argThat(
                 (String t) -> t.contains(LogisticsFixtures.DISPLAY_NO) && !t.contains("id=")));
     }
 
@@ -299,7 +299,7 @@ class BiteshipShipmentServiceTest {
             service.retryWaybill(ORDER_ID, 1L);
         }
         verify(redis).expire(BiteshipShipmentService.RETRY_COUNTER_KEY, Duration.ofMinutes(5));
-        verify(alerts, times(1)).alert(org.mockito.ArgumentMatchers.contains("重下运单"));
+        verify(alerts, times(1)).alert(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.contains("重下运单"));
 
         when(ops.increment(anyString())).thenThrow(new IllegalStateException("redis down"));
         assertThat(service.retryWaybill(ORDER_ID, 1L).created()).isFalse();
@@ -391,7 +391,7 @@ class BiteshipShipmentServiceTest {
         service.createWaybill(ORDER_ID, 1L);
         when(client.cancelOrder("bs_1", "others")).thenReturn(new CancelOutcome.NotCancellable("picked"));
         service.cancelAfterPlatformCancel(new ShopWaybillCancelRequestedEvent(ORDER_ID, "TOKO-X", 5L));
-        verify(alerts).alert(org.mockito.ArgumentMatchers.contains("人工取消运单"));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.contains("人工取消运单"));
 
         store.get(0).markPicked(NOW);
         service.cancelAfterPlatformCancel(new ShopWaybillCancelRequestedEvent(ORDER_ID, "TOKO-X", 5L));

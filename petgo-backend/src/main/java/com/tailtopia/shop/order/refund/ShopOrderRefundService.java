@@ -606,7 +606,7 @@ public class ShopOrderRefundService {
         } catch (RuntimeException e) {
             log.warn("平台原因取消前取消 Biteship 运单失败（不阻断取消）order={} cause={}", order.getDisplayNo(),
                     e.getClass().getSimpleName());
-            alerts.alert("【电商】订单 " + order.getDisplayNo()
+            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "【电商】订单 " + order.getDisplayNo()
                     + " 平台原因取消时 Biteship 运单取消失败，请到 Biteship 后台人工取消运单");
         }
     }

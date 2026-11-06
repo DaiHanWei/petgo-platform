@@ -101,7 +101,7 @@ class ShopLogisticsExceptionServiceTest {
         assertThat(order.getTimerResumedAt()).isNull();
         verify(orders).findByIdForUpdate(ORDER_ID);
         verifyNoInteractions(audit);
-        verify(alerts).alert(contains(LogisticsFixtures.DISPLAY_NO));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), contains(LogisticsFixtures.DISPLAY_NO));
     }
 
     @Test
@@ -128,7 +128,7 @@ class ShopLogisticsExceptionServiceTest {
         assertThat(r.outcome()).isEqualTo(PickupResolution.Outcome.ABORTED);
         verifyNoInteractions(refunds, audit);
         verify(orders).findByIdForUpdate(ORDER_ID);
-        verify(alerts).alert(contains(LogisticsFixtures.DISPLAY_NO));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), contains(LogisticsFixtures.DISPLAY_NO));
     }
 
     @Test

@@ -80,6 +80,6 @@ class ShopOrderPaidHandlerTest {
         when(orders.findByPaymentIntentToken("pi-1")).thenReturn(Optional.empty());
         handler.onPaid(paid(PaymentPurpose.SHOP_ORDER));
         verifyNoInteractions(payments, checkout);
-        verify(alerts).alert(org.mockito.ArgumentMatchers.contains("intentId=1"));
+        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), org.mockito.ArgumentMatchers.contains("intentId=1"));
     }
 }
