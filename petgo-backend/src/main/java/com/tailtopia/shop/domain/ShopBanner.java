@@ -16,9 +16,8 @@ import java.time.Instant;
 /**
  * Toko 顶部 banner（2026-08-27）。
  *
- * <p><b>同一时间只展示一张</b>：表里可以配多条，但取用时只取「已上架 + 权重最高」的那一条
- * （见 {@code ShopBannerRepository#pickActive}）。不做轮播 —— 轮播的第二张之后经常
- * 没被看到就被划走，收益不抵实现与运营成本。
+ * <p>v1.4.2 shop Story 6.1（D-16，PRD FR-132）起<b>多张轮播</b>（上限 6）+ 排期 {@link #startAt} / {@link #endAt}：
+ * 取用规则单一来源 {@code ShopBannerQueryService.liveBanners}。（2026-08-27 ~ V1.4.1 为「同一时间只展示一张」。）
  *
  * <p>V1.4.1 起<b>单张可点击</b>（{@link #targetType} / {@link #targetValue}，默认 NONE 不可点），
  * 并带不可枚举的 {@link #publicToken} 供埋点 {@code banner_id} 使用。仍不做轮播。
@@ -73,6 +72,14 @@ public class ShopBanner {
     @Column(name = "sort_weight", nullable = false)
     private int sortWeight;
 
+    /** 排期起（含），null = 不限（v1.4.2 Story 6.1，D-16）。 */
+    @Column(name = "start_at")
+    private Instant startAt;
+
+    /** 排期止（不含），null = 不限。 */
+    @Column(name = "end_at")
+    private Instant endAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -114,6 +121,24 @@ public class ShopBanner {
         BannerTargetType t = type == null ? BannerTargetType.NONE : type;
         this.targetType = t;
         this.targetValue = t == BannerTargetType.NONE ? null : value;
+    }
+
+    /**
+     * 设定排期（v1.4.2 Story 6.1）：左闭右开 {@code [start, end)}，任一端为 null = 该端不限。
+     * 两端都有且 {@code start >= end} → 422（与库层 {@code ck_shop_banners_schedule} 同口径）。
+     */
+    public void schedule(Instant start, Instant end) {
+        if (start != null && end != null && !start.isBefore(end)) {
+            throw com.tailtopia.shared.error.AppException.validation("排期开始时间须早于结束时间")
+                    .code("admin.err.banner.scheduleInvalid");
+        }
+        this.startAt = start;
+        this.endAt = end;
+    }
+
+    /** 此刻是否在排期内：{@code (start 为空或 ≤ now) 且 (end 为空或 > now)}。不看 {@code active}。 */
+    public boolean isScheduledAt(Instant now) {
+        return (startAt == null || !startAt.isAfter(now)) && (endAt == null || endAt.isAfter(now));
     }
 
     public void activate() {
@@ -172,6 +197,14 @@ public class ShopBanner {
 
     public int getSortWeight() {
         return sortWeight;
+    }
+
+    public Instant getStartAt() {
+        return startAt;
+    }
+
+    public Instant getEndAt() {
+        return endAt;
     }
 
     public Instant getCreatedAt() {

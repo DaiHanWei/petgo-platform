@@ -4,11 +4,19 @@ import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.shop.dto.ShopBannerForm;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.coupon.domain.CouponAcquireType;
+import com.tailtopia.shop.coupon.domain.CouponStatus;
+import com.tailtopia.shop.coupon.domain.ShopCoupon;
+import com.tailtopia.shop.coupon.repository.ShopCouponRepository;
 import com.tailtopia.shop.domain.BannerTargetType;
 import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopBanner;
 import com.tailtopia.shop.repository.ShopBannerRepository;
 import com.tailtopia.shop.repository.ShopProductRepository;
+import com.tailtopia.shop.service.ShopBannerQueryService;
+import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,12 +32,16 @@ public class AdminShopBannerService {
     private final ShopBannerRepository banners;
     private final AdminAuditService audit;
     private final ShopProductRepository products;
+    private final ShopCouponRepository coupons;
+    private final ShopBannerQueryService liveQuery;
 
     public AdminShopBannerService(ShopBannerRepository banners, AdminAuditService audit,
-            ShopProductRepository products) {
+            ShopProductRepository products, ShopCouponRepository coupons, ShopBannerQueryService liveQuery) {
         this.banners = banners;
         this.audit = audit;
         this.products = products;
+        this.coupons = coupons;
+        this.liveQuery = liveQuery;
     }
 
     // ---------- V1.3.0 Story 10.3：三档状态（AC3） ----------
@@ -41,18 +53,28 @@ public class AdminShopBannerService {
     }
 
     /**
-     * 当前真正会被 App 取到的那一张（{@code null} = 一张已上架的都没有）。
+     * 当前 App 轮播里的第一张（{@code null} = 一张生效的都没有）；旧版 App 单张端点取的也是它。
      *
-     * <p>🔴 <b>刻意调 App 端那条 repository 方法</b>（{@code findFirstByActiveTrueOrderBySortWeightDescIdDesc}），
-     * 而不是在后台列表里自己「取第一条 active」：两种写法今天结果相同（排序规则一样），
-     * 但那是两份各自演化的判据 —— 哪天 App 侧的取图规则变了（加个生效时间窗、加个投放人群），
-     * 后台这边的「生效中」标就会指错一张，而<b>界面上完全看不出来</b>：运营以为 A 在投，用户看到的是 B。
-     * AC3 要的「与 App 端取图规则同源」，取的就是「同一个方法」这个更强的解释。
+     * <p>🔴 <b>刻意调 App 端那个取用方法</b>（v1.4.2 起为 {@code ShopBannerQueryService.liveBanners}），
+     * 而不是在后台列表里自己「取第一条 active」：那是两份各自演化的判据 —— v1.4.2 正好加了排期与目标有效过滤，
+     * 后台若自己挑，「生效中」标就会指错一张，而<b>界面上完全看不出来</b>。AC3「与 App 端取图规则同源」取的就是
+     * 「同一个方法」这个更强的解释。
      */
     @Transactional(readOnly = true)
     public Long liveId() {
-        return banners.findFirstByActiveTrueOrderBySortWeightDescIdDesc()
-                .map(ShopBanner::getId).orElse(null);
+        return liveQuery.liveBanners(Instant.now()).stream()
+                .map(l -> l.banner().getId()).findFirst().orElse(null);
+    }
+
+    /**
+     * 全部生效张的 id（v1.4.2 Story 6.1 AC7.3，轮播最多 6 张，按取用顺序）。同源于 {@code liveBanners}。
+     * 后台页面升级为多张「生效中」由后台线完成。
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> liveIds() {
+        Set<Long> ids = new LinkedHashSet<>();
+        liveQuery.liveBanners(Instant.now()).forEach(l -> ids.add(l.banner().getId()));
+        return ids;
     }
 
     /**
@@ -75,6 +97,7 @@ public class AdminShopBannerService {
         ShopBanner b = ShopBanner.create(form.getImageKey().trim(), form.getImageW(),
                 form.getImageH(), form.getSortWeight());
         b.retarget(target.type(), target.value());
+        b.schedule(form.getStartAt(), form.getEndAt());
         banners.save(b);
         audit.record(actorAccountId, AuditActions.SHOP_BANNER_CREATED, "SHOP_BANNER",
                 String.valueOf(b.getId()), "新建 banner（默认未上架）");
@@ -89,6 +112,7 @@ public class AdminShopBannerService {
         b.apply(form.getImageKey().trim(), form.getImageW(), form.getImageH(),
                 form.getSortWeight());
         b.retarget(target.type(), target.value());
+        b.schedule(form.getStartAt(), form.getEndAt());
         banners.save(b);
         audit.record(actorAccountId, AuditActions.SHOP_BANNER_UPDATED, "SHOP_BANNER",
                 String.valueOf(id), "编辑 banner");
@@ -153,7 +177,7 @@ public class AdminShopBannerService {
     /**
      * 点击跳转校验（V1.4.1）。🔴 每类都校验到「App 点下去一定能落地」：
      * 商品须存在且已上架（下架商品点进去是空页）；品类须是合法字面量；外链只允许 https（不让运营配出
-     * http / javascript: / 自定义 scheme —— App 会把它交给系统浏览器打开）。
+     * http / javascript: / 自定义 scheme —— App 会把它交给系统浏览器打开）；券须为 ACTIVE 的 CLAIM 类且未过发放期止（v1.4.2）。
      */
     Target target(ShopBannerForm f) {
         String raw = f.getTargetType() == null ? "" : f.getTargetType().trim();
@@ -185,6 +209,17 @@ public class AdminShopBannerService {
                 if (!isHttpsUrl(value)) {
                     throw AppException.validation("外部链接须为 https 地址")
                             .code("admin.err.banner.targetUrl");
+                }
+            }
+            case COUPON -> {
+                // v1.4.2 Story 6.1 AC7.2：banner 券 = 可领取券的一个入口（PRD 不做「只在 banner 里领」的券），
+                // NEWBIE / CODE 类不可绑；已停用或已过发放期止的不可绑（发放期还没开始的允许，排期可以先配）。
+                ShopCoupon c = value.isEmpty() ? null : coupons.findByPublicToken(value).orElse(null);
+                if (c == null || c.getStatus() != CouponStatus.ACTIVE
+                        || c.getAcquireType() != CouponAcquireType.CLAIM
+                        || (c.getIssueEndAt() != null && !c.getIssueEndAt().isAfter(Instant.now()))) {
+                    throw AppException.validation("券不存在、已停用、不是领取类或已过发放期")
+                            .code("admin.err.banner.targetCoupon");
                 }
             }
         }

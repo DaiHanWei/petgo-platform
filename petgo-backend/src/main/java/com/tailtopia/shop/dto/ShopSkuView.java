@@ -13,6 +13,8 @@ import com.tailtopia.shop.domain.StockStatus;
  * <p><b>库存字段（1.2 追加）：</b>{@code stockStatus} 三态；{@code remaining} 仅在
  * {@link StockStatus#LOW_STOCK} 时有值，🔴 <b>取真实剩余数，不虚构数字</b>（FR-95）。
  * 其余状态为 {@code null}——售罄不必给数字，充足时给数字会泄露经营数据。
+ *
+ * <p>{@code sellable}（v1.4.2 shop Story 1.1，C-9）：包裹参数齐全才为 true。
  */
 public record ShopSkuView(
         String token,
@@ -21,5 +23,7 @@ public record ShopSkuView(
         Long netWeightG,
         ReturnPolicy returnPolicy,
         StockStatus stockStatus,
-        Long remaining) {
+        Long remaining,
+        /** v1.4.2 shop Story 1.1（C-9）：包裹参数齐全才 true；false 时 App 显示「暂不可售」。 */
+        boolean sellable) {
 }

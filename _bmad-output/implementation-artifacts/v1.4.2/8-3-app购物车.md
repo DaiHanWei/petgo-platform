@@ -1,6 +1,6 @@
 # Story 8.3: 购物车（App，C1–C8）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`
 > 口径优先级：`决策日志-shop.md`（S-0 ~ S-9）> PRD `电商/1-4-2电商prd.md`（§3.0 旅程 A、§3.1「免运进度提示」、§3.7「购物车」、§3.10「购物车运费、询价与保价」「其余细节」、§6 C 组）> `architecture-v1.4.2-shop-delta.md`（D-9、P-1、P-4、P-10、§1.2 第 11 条）> UI 定稿 `电商/ui-1-4-2-shop-integrated-v1.html` C1–C8 每屏说明；云端执行以 `cloud-rules-shop.md` 为准。
@@ -19,6 +19,8 @@ I want 购物车里就能看到运费、优惠后的预估应付,
 so that 决定买多少时心里有数。
 
 ## 接口契约（计划名，开工前核对 3.1 实际提交）
+
+> **T0 核对结果（dev 2026-11-05，以后端实际代码为准）**：`CartEstimate` 实际字段 `lowestFee: Long? / goodsAmount / discountCouponAmount / shippingDiscount / payable / saved / freeShippingProgress{threshold, remaining}? / reason`；`reason` 实际取值 `null | NO_DESTINATION | NOT_SERVICEABLE | QUOTE_FAILED | NO_SELECTION`（下文 `NO_ADDRESS` 即 `NO_DESTINATION`；`NO_SELECTION` = 一件没选，金额全 0、不询价）。`MeCartController` **7 个出口（GET + 6 个变更）都装配 `estimate`、都接受可选 `regionKecamatanId`** → App 每个请求都带本机地区，变更后不需要补 `refresh()`（待确认 1 已消解）。`estimate` 为 NON_NULL（null 不下发）。
 
 - `GET /api/v1/me/cart?regionKecamatanId=`（App 在本地记过送达地区时带上；服务端规则：有默认地址用默认地址 → 否则用该地区 → 都没有不含运费）。响应在现 `CartView`（`lines / invalidLines / subtotal / itemCount / selectedSubtotal / selectedCount`）上新增 `estimate {lowestFee: int?, payable: int, saved: int, freeShippingProgress: {threshold, remaining}?, reason: NO_ADDRESS|QUOTE_FAILED|NOT_SERVICEABLE|null}`：`payable` = 所选商品 + 本单最低运费 − 默认最优券 − 满额免运；`lowestFee == null` 时 `payable` 不含运费。
 - 失效行 `selected` 一律下发 false；`PATCH` 勾选失效行 → 422。
@@ -61,7 +63,7 @@ so that 决定买多少时心里有数。
 
 ### AC7 — 去结算与估算参数 `[L0]`（FR-133.8、D-9、epics 8.3）
 1. 「Checkout」→ `context.push('/shop/checkout')`（CART 模式，带勾选行由服务端按 `selected=true` 且有效决定）；结算页 `initState` 上报 `toko_checkout_page_viewed{entry: "cart"}`（7.1 已实现，本 story 只加测试证明从购物车进入时 `entry=cart`）。
-2. `CartRepository.view({int? regionKecamatanId})`：`CartController.build` 读 `AppPrefs.shopDeliveryArea?.kecamatanId`，有则作为 query 带上；变更类接口不带（服务端按同规则，若不一致见待确认 1）。
+2. `CartRepository.view({int? regionKecamatanId})`：`CartController.build` 读 `shopDeliveryAreaProvider`（8.2 已建，包 `AppPrefs.shopDeliveryArea`）的 `kecamatanId`，有则作为 query 带上；**变更类接口同样带**（后端 7 个出口都接受，T0 核对后改）。
 3. `CartView` 加 `CartEstimate? estimate`（`lowestFee`、`payable`、`saved`、`freeShippingProgress`（7.1 的 `FreeShippingProgress`）、`reason`），缺键为 null；`estimate == null`（旧后端）时底栏回落到现有 `selectedSubtotal` 显示，标签用「Belum termasuk ongkir」。
 
 ### AC8 — 文案 `[L0]`（PRD §6 C 组、P-10）
@@ -73,11 +75,11 @@ so that 决定买多少时心里有数。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：3.1 `estimate` 字段名、变更接口是否也带 `estimate`、失效行勾选 422；8.1 `ShopRecoGrid` 与 8.2 `shopDeliveryArea` 实际 API；有出入先改本文件
-- [ ] **T1 数据层**（AC7）：`domain/shop_cart.dart` 加 `CartEstimate`；`cart_repository.dart` `view(regionKecamatanId:)`
-- [ ] **T2 页面**（AC1–AC6）：`cart_page_v3.dart`；删 v2；路由
-- [ ] **T3 文案**（AC8）
-- [ ] **T4 测试** + `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：3.1 `estimate` 字段名、变更接口是否也带 `estimate`、失效行勾选 422；8.1 `ShopRecoGrid` 与 8.2 `shopDeliveryArea` 实际 API；有出入先改本文件
+- [x] **T1 数据层**（AC7）：`domain/shop_cart.dart` 加 `CartEstimate`；`cart_repository.dart` `view(regionKecamatanId:)`
+- [x] **T2 页面**（AC1–AC6）：`cart_page_v3.dart`；删 v2；路由
+- [x] **T3 文案**（AC8）
+- [x] **T4 测试** + `flutter analyze && flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -186,14 +188,61 @@ so that 决定买多少时心里有数。
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless，bmad-dev-story 流程，只到 L0。
+
 ### Debug Log References
+
+- 开工前基线：`flutter gen-l10n` + `flutter analyze` → No issues found。
+- `flutter analyze` → No issues found（完成后）。
+- `flutter test`（全量）→ +4712 ~3（3 个既有 skip），All tests passed。
+- 新增：`test/shop/cart_page_v3_test.dart` 48 例、`test/shop/cart_repository_estimate_test.dart` 12 例，全绿。
+- 复审修复后：`flutter analyze` → No issues found；`flutter test` 全量 → +4719 ~3，All tests passed。
+- `bash scripts/ci/check-flyway-versions.sh origin/main` → OK（本 story 无迁移）。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：L1 —— 有默认地址显示最低运费与预估应付；删默认地址切 C2；游客在详情选地区 → 登录 → 无地址时按该地区估算；下架某行 → 进失效组、勾选框不可点；结算只结已勾选有效行；库内历史勾着的失效行 → 结算页 409 失效卡片可「移出购物车」。L2 —— C1–C8 逐屏还原度 ≥ 95% 打分（AC9.2）、送达行 / 底栏三段 / 失效原因小标签视觉。
+- T0 名字对齐（已改本文件「接口契约」与 AC7.2）：`reason` 实际为 `NO_DESTINATION`（非 `NO_ADDRESS`），另有 `NO_SELECTION`；`estimate` 另有 `goodsAmount / discountCouponAmount / shippingDiscount`（App 读入、不展示）；后端 7 个出口都带 `estimate` 且都接受 `regionKecamatanId` → App 全部透传，不补 refresh；8.2 已建 `shopDeliveryAreaProvider`，`CartController` 复用（`build` 中 `watch`：在详情页换地区后购物车自动按新地区重估）。
+- 数据层：`domain/shop_cart.dart` 新增 `CartEstimate`（缺键 / 无 `payable` → null，旧后端回落）；`CartView.estimate`；`CartRepository` 7 个方法加可选 `regionKecamatanId`（null 不发键）；`CartController._mutate` 统一取本机地区。三个测试替身（`cart_attribution_test` / `cart_guest_add_test` / `product_detail_page_v3_test`）随签名补可选参数，行为不变。
+- 页面：新建 `cart_page_v3.dart`（`CartPageV3`），删除 `cart_page_v2.dart` 与 `cart_page_v2_test.dart`（用例迁入 v3 测试），路由 `/shop/cart` 改指新页。撤销 `_offerUndo` / `_undoRemove` 挂页面 State（R-3 注释原样迁移）。有效行同一 `ShopCard` 内 `ShopDivider` 分隔、图 72、名 13；失效分组单独一张卡。
+- 送达行：kecamatan 取默认地址 → 否则本机地区；`estimate.lowestFee == null` 且 `reason != NO_SELECTION`、或两处都没有地区 →「Pilih alamat untuk hitung ongkir」。点击有地址 `/me/addresses`、无地址 `/me/addresses/new`，返回后 `invalidate(addressListProvider)` + `cartProvider.refresh()`。只在有有效行时渲染。
+- 底栏 `_CartBottomBar`：免运进度行（未勾选不画；门槛 0 / null 不画；remaining 0 →「Dapat potongan ongkir」）+ 全选 / 「Estimasi total」或「Belum termasuk ongkir」+ `estimate.payable`（紫色等宽）+「Hemat」（saved 0 不画）/「Checkout (selectedCount)」。未勾选：「Pilih produk dulu」、金额灰、按钮 disabled 且不带件数、不发请求。`estimate == null` 回落 `selectedSubtotal` +「Belum termasuk ongkir」。App 无任何金额计算（P-1）。
+- 失效行（改线上）：勾选框 `ShopCheckbox(value: false, enabled: false, onChanged: null)`，即便服务端旧数据下发 true 也恒未勾；原因改图片底部深色小标签；价格灰；「Cari mirip」go `/shop`、「Hapus」remove（新增失败 toast）。
+- 3.1 遗留「库内仍勾着的失效行挡结算、对外 selected=false」：购物车侧引导出口为失效分组「Hapus semua」（二次确认）与行内「Hapus」；另「全不选」作用于全部行（含失效行）也可清掉库内勾选位；结算页 7.1 已有失效卡片 + 「移出购物车」兜底。本页不新增文案。
+- 文案：新增 `cartShipTo` / `cartChooseAddressForShipping` / `cartEstimatedTotal` / `cartShippingNotIncluded`（EN/ID，PRD §6 C 组原文），`cartSelectNoneHint` 改值（ID「Pilih produk dulu」/ EN「Select items first」）；复用 `tokoSavedAmount` / `tokoFreeShipRemaining` / `tokoFreeShipReached` / `tokoMightLike` 等。`cartTotalLabel` 新页不再引用，未删（9.4 清理）。
+- 拍板点复述：①不做合计上拉明细层、不画 `expand_less`；②送达行进地址簿 / 新增地址，不做购物车内地址抽屉；③「Checkout (n)」n = `selectedCount`。
+- AC7.1 `entry=cart`：`checkout_page_v3_test.dart`「无参数 → CART；上报 toko_checkout_page_viewed{entry: cart}」已覆盖（7.1），本 story 不重复，只测 Checkout push `/shop/checkout`（无参数）。
+- 埋点：沿用 `toko_cart_page_viewed`、`toko_cart_clear_invalid_tapped`，无新事件。
+
+#### 复审修复（2026-11-05）
+
+1. **失效行「Hapus」防重入**：`_InvalidLine` 改为有状态，await 期间按钮 `loading`、`onTap: null`，双击只发一次 DELETE；失败 toast。测试「复审修复：「Hapus」防重入」。
+2. **CartController 乱序覆盖**：build 与全部写操作共用**单调请求序号**（取号在任何 await 之前），只接受最新一次发出的请求的结果：写操作结果过时即丢弃；build 晚到且期间已有更新的写结果先到 → 让位返回该写结果。补充：最新一次写失败、且它之前还有请求的结果被丢弃 / 仍在路上 → `invalidateSelf()` 重拉一次 GET 对齐（只有单个写失败时仍保持原状态、不重拉）。同时覆盖跨控件并发（行勾选 + 全选）。测试组「🔴 CartController 乱序响应不回退」4 例（慢 GET + 快 POST；A 行勾选慢 + 全选快；最新失败触发重拉；单个失败不重拉）。
+3. **送达行地址未知态**：`addressListProvider` 加载中文案显示「—」（不先闪本机地区）；加载中 / 出错时点击一律进 `/me/addresses`（不进 new，避免造出第二个地址）。注意 Riverpod 3 失败后自动重试期间是「loading + error」，按「出错」处理（文案回落本机地区 / 选地址）。测试 2 例。
+
 #### 待确认
 
+1. ~~变更接口是否带 `estimate`~~：已核实 7 个出口都带、都接受 `regionKecamatanId`，App 全透传，不补 refresh。
+2. 送达行在 `NOT_SERVICEABLE`（有默认地址但不可配送）时按 AC3 显示「Pilih alamat untuk hitung ongkir」；PRD §6 无「该地址不可配送」的购物车文案，若设计想区分需补文案（待设计确认）。
+3. 只剩失效行时不渲染送达行（无底栏、无估算意义）；UI 定稿未明确，待设计确认。
+4. C-11「待设计确认」：本 story 用到的文案均取自 PRD §6，无 UI 稿独有文案。
+
 ### File List
+
+- 新增：`petgo_app/lib/features/shop/presentation/cart_page_v3.dart`
+- 新增：`petgo_app/test/shop/cart_page_v3_test.dart`
+- 新增：`petgo_app/test/shop/cart_repository_estimate_test.dart`
+- 删除：`petgo_app/lib/features/shop/presentation/cart_page_v2.dart`
+- 删除：`petgo_app/test/shop/cart_page_v2_test.dart`
+- 修改：`petgo_app/lib/core/router/app_router.dart`
+- 修改：`petgo_app/lib/features/shop/data/cart_repository.dart`
+- 修改：`petgo_app/lib/features/shop/domain/shop_cart.dart`
+- 修改：`petgo_app/lib/l10n/app_en.arb`、`petgo_app/lib/l10n/app_id.arb`
+- 修改（测试替身签名）：`petgo_app/test/shop/cart_attribution_test.dart`、`petgo_app/test/shop/cart_guest_add_test.dart`、`petgo_app/test/shop/product_detail_page_v3_test.dart`
+- 修改：本 story 文件
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev），依据决策日志 S-0 ~ S-9、PRD §6、架构增量、UI 定稿与 `dev_1.4.2` @ 2c507755 代码现状。
+- 2026-11-05：dev 完成 L0（Status → review）：购物车 v3（C1–C8）、`CartEstimate`、`regionKecamatanId` 全出口透传、失效行不可勾、文案；T0 名字对齐见 Completion Notes。L1/L2 待本地验收。
+- 2026-11-05：复审修复 3 项（失效行删除防重入、CartController 单调请求序号、送达行地址未知态），见 Completion Notes「复审修复」。

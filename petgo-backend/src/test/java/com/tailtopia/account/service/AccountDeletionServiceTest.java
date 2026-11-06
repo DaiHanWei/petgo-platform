@@ -118,6 +118,11 @@ class AccountDeletionServiceTest {
         verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         // 1.1.6 电商/分享注销联动：shop 清理 + 内容分享行删除 + 分享奖励留痕删除。
         verify(shopDeletion).deleteByUserId(7L);
+        // v1.4.2 shop Story 3.2 复审修复（D1/D2）：shop 注销联动（含待付款单退币退券）必须在 PawCoin 作废之前，
+        // 退回的币才会随钱包一并作废，而不是在作废之后给已注销账号重建钱包。
+        org.mockito.InOrder shopBeforeCoin = org.mockito.Mockito.inOrder(shopDeletion, pawCoinDeletion);
+        shopBeforeCoin.verify(shopDeletion).deleteByUserId(7L);
+        shopBeforeCoin.verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         verify(contentShareService).deleteByAuthorForAccountDeletion(7L);
         verify(shareRewardDeletion).deleteByUserId(7L);
         // V1.3.0 Story 5.4 · AC7：引导标记也在级联里 —— 漏接的表会在注销后留着

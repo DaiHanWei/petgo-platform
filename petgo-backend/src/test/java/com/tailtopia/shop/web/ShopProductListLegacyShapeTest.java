@@ -54,13 +54,13 @@ class ShopProductListLegacyShapeTest {
     @BeforeEach
     void setUp() {
         query = Mockito.mock(ShopProductQueryService.class);
-        controller = new ShopProductController(query);
+        controller = new ShopProductController(query, null, null);   // 运费估算与限流在列表形态测试里用不到
     }
 
     private static ShopProductSummaryView view(String token) {
         return new ShopProductSummaryView(token, "Royal Canin", "Royal Canin",
                 ProductCategory.MAKANAN, "shop/p/main.jpg", "https://cdn.test/shop/p/main.jpg",
-                800, 800, Species.DOG, 285_000L);
+                800, 800, Species.DOG, 285_000L, false);
     }
 
     // ---------- 🔴 老版本：不带任何分页参数 ----------
@@ -68,13 +68,13 @@ class ShopProductListLegacyShapeTest {
     @Test
     @DisplayName("🔴🔴 线上老版本（从不传 cursor/size）拿到的仍是**全量 JSON 数组**")
     void legacyClientNeverSendingPagingParamsStillGetsAPlainArray() {
-        when(query.list(isNull(), isNull())).thenReturn(List.of(view("tokA"), view("tokB")));
+        when(query.list(isNull(), isNull(), isNull())).thenReturn(List.of(view("tokA"), view("tokB")));
 
-        Object body = controller.list(null, null, null, null).getBody();
+        Object body = controller.list(null, null, null, null, null).getBody();
 
         // ① 走的是全量路径，一次分页查询都没打。
-        verify(query).list(isNull(), isNull());
-        verify(query, never()).page(any(), any(), any(), any());
+        verify(query).list(isNull(), isNull(), isNull());
+        verify(query, never()).page(any(), any(), any(), any(), any());
 
         // ② 🔴 更要紧的是**线上的字节形态**：老版本 App 解析的是数组。
         //    只断言「调了 list()」不够 —— 有人把返回值包成信封，那条断言照样绿。
@@ -93,21 +93,21 @@ class ShopProductListLegacyShapeTest {
     @DisplayName("🔴 老版本带 category / q（它一直会传）时，形态同样还是数组")
     void legacyClientWithFiltersStillGetsAnArray() {
         // 老版本一直在用品类筛选与搜索 —— 兼容分支不能只在「什么参数都不带」时成立。
-        when(query.list(eq(ProductCategory.MAKANAN), eq("royal")))
+        when(query.list(eq(ProductCategory.MAKANAN), eq("royal"), isNull()))
                 .thenReturn(List.of(view("tokA")));
 
-        Object body = controller.list("MAKANAN", "royal", null, null).getBody();
+        Object body = controller.list("MAKANAN", "royal", null, null, null).getBody();
 
         assertThat(json.writeValueAsString(body)).startsWith("[");
-        verify(query, never()).page(any(), any(), any(), any());
+        verify(query, never()).page(any(), any(), any(), any(), any());
     }
 
     @Test
     @DisplayName("🔴 空列表在老形态下是 `[]`，不是 `{\"items\":[]}`")
     void emptyLegacyResultIsAnEmptyArray() {
-        when(query.list(isNull(), isNull())).thenReturn(List.of());
+        when(query.list(isNull(), isNull(), isNull())).thenReturn(List.of());
 
-        assertThat(json.writeValueAsString(controller.list(null, null, null, null).getBody()))
+        assertThat(json.writeValueAsString(controller.list(null, null, null, null, null).getBody()))
                 .isEqualTo("[]");
     }
 
@@ -116,12 +116,12 @@ class ShopProductListLegacyShapeTest {
     @Test
     @DisplayName("带 cursor → 信封形态 {items, nextCursor, hasMore}")
     void cursorSwitchesToTheEnvelope() {
-        when(query.page(isNull(), isNull(), eq("abc"), isNull()))
+        when(query.page(isNull(), isNull(), eq("abc"), isNull(), isNull()))
                 .thenReturn(new ShopProductPageResponse(List.of(view("tokA")), "next", true));
 
-        Object body = controller.list(null, null, "abc", null).getBody();
+        Object body = controller.list(null, null, "abc", null, null).getBody();
 
-        verify(query, never()).list(any(), any());
+        verify(query, never()).list(any(), any(), any());
         String wire = json.writeValueAsString(body);
         assertThat(wire).startsWith("{")
                 .contains("\"items\"")
@@ -132,36 +132,36 @@ class ShopProductListLegacyShapeTest {
     @Test
     @DisplayName("只带 size（没有 cursor）→ 也是信封（请求第一页）")
     void sizeAloneAlsoSwitchesToTheEnvelope() {
-        when(query.page(isNull(), isNull(), isNull(), eq(20)))
+        when(query.page(isNull(), isNull(), isNull(), eq(20), isNull()))
                 .thenReturn(new ShopProductPageResponse(List.of(), null, false));
 
-        controller.list(null, null, null, 20);
+        controller.list(null, null, null, 20, null);
 
-        verify(query).page(isNull(), isNull(), isNull(), eq(20));
-        verify(query, never()).list(any(), any());
+        verify(query).page(isNull(), isNull(), isNull(), eq(20), isNull());
+        verify(query, never()).list(any(), any(), any());
     }
 
     @Test
     @DisplayName("🔴 空白 cursor 也进分页形态 —— 它是「请求第一页」，不是「没传」")
     void blankCursorStillMeansPaged() {
-        when(query.page(isNull(), isNull(), eq(""), isNull()))
+        when(query.page(isNull(), isNull(), eq(""), isNull(), isNull()))
                 .thenReturn(new ShopProductPageResponse(List.of(), null, false));
 
-        controller.list(null, null, "", null);
+        controller.list(null, null, "", null, null);
 
         // 新版本 App 第一页发的就是空游标；把它当成「没传」会让它收到一个数组而解析失败
         // —— 与老版本收到信封是同一个错误的两个方向。
-        verify(query).page(isNull(), isNull(), eq(""), isNull());
-        verify(query, never()).list(any(), any());
+        verify(query).page(isNull(), isNull(), eq(""), isNull(), isNull());
+        verify(query, never()).list(any(), any(), any());
     }
 
     @Test
     @DisplayName("末页信封里 nextCursor 整键省略（NON_NULL），不是 null 占位")
     void lastPageOmitsNextCursor() {
-        when(query.page(any(), any(), anyString(), any()))
+        when(query.page(any(), any(), anyString(), any(), any()))
                 .thenReturn(new ShopProductPageResponse(List.of(view("tokA")), null, false));
 
-        String wire = json.writeValueAsString(controller.list(null, null, "abc", null).getBody());
+        String wire = json.writeValueAsString(controller.list(null, null, "abc", null, null).getBody());
 
         assertThat(wire).doesNotContain("nextCursor").contains("\"hasMore\":false");
     }
@@ -173,14 +173,37 @@ class ShopProductListLegacyShapeTest {
     void invalidCategoryStill422InBothShapes() {
         // 解析在分派**之前**，所以不管走哪条路都一样拦住。
         // 静默忽略会让前端拿到「全部商品」却以为筛过了。
-        assertThatThrownBy(() -> controller.list("NOT_A_CATEGORY", null, null, null))
+        assertThatThrownBy(() -> controller.list("NOT_A_CATEGORY", null, null, null, null))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("品类");
-        assertThatThrownBy(() -> controller.list("NOT_A_CATEGORY", null, "abc", null))
+        assertThatThrownBy(() -> controller.list("NOT_A_CATEGORY", null, "abc", null, null))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("品类");
 
-        verify(query, never()).list(any(), any());
-        verify(query, never()).page(any(), any(), any(), any());
+        verify(query, never()).list(any(), any(), any());
+        verify(query, never()).page(any(), any(), any(), any(), any());
+    }
+
+    // ---------- v1.4.2 shop Story 2.2：promo 按查看者算 ----------
+
+    private static org.springframework.security.oauth2.jwt.Jwt jwt(String sub, String role) {
+        return org.springframework.security.oauth2.jwt.Jwt.withTokenValue("t").header("alg", "none")
+                .subject(sub).claim("role", role).build();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 2.2：USER token 把 users.id 传给 promo；兽医 token 按游客处理；两种形态都带 promo")
+    void viewerOnlyForUserRoleAndPromoOnWire() {
+        when(query.list(isNull(), isNull(), eq(12L))).thenReturn(List.of(view("tokA")));
+        String wire = json.writeValueAsString(controller.list(null, null, null, null, jwt("12", "USER")).getBody());
+        assertThat(wire).startsWith("[").contains("\"promo\":false");
+
+        controller.list(null, null, null, null, jwt("12", "VET"));
+        verify(query).list(isNull(), isNull(), isNull());
+
+        when(query.page(isNull(), isNull(), eq("abc"), isNull(), eq(12L)))
+                .thenReturn(new ShopProductPageResponse(List.of(view("tokA")), null, false));
+        assertThat(json.writeValueAsString(controller.list(null, null, "abc", null, jwt("12", "USER")).getBody()))
+                .contains("\"promo\":false");
     }
 }

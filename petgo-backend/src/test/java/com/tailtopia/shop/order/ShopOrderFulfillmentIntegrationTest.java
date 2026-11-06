@@ -88,8 +88,8 @@ class ShopOrderFulfillmentIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "fs" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)""", sToken, pid, price);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)""", sToken, pid, price);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, ?, 0)",
@@ -149,7 +149,8 @@ class ShopOrderFulfillmentIntegrationTest extends ApiIntegrationTest {
 
         assertThat(reload(order.getPublicToken()).getStatus()).isEqualTo(ShopOrderStatus.SHIPPED);
         assertThat(reload(order.getPublicToken()).getShippedAt()).isNotNull();
-        assertThat(s.getCarrier()).isEqualTo(Carrier.JNE);
+        // v1.4.2 shop 5.1：carrier 列改为字符串（Biteship 快递码大写），手工运单存枚举名
+        assertThat(s.getCarrier()).isEqualTo(Carrier.JNE.name());
         assertThat(s.getCarrierCost()).isEqualTo(18_000L);
         assertThat(shipments.countByShopOrderId(order.getId())).isEqualTo(1);
     }
@@ -218,12 +219,12 @@ class ShopOrderFulfillmentIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 SPEC-2 出口③：发货起 7 日无标记 → 定时扫描自动置送达")
+    @DisplayName("🔴 SPEC-2 出口③：发货起 14 日（v1.4.2 D-12）无标记 → 定时扫描自动置送达")
     void exitThreeAutoDeliverByScan() {
         long uid = seedUser();
         ShopOrder order = paidOrder(uid);
         fulfillment.ship(order.getPublicToken(), Carrier.ANTERAJA, "AR" + SEQ.incrementAndGet(), 1L);
-        backdateShipped(order.getPublicToken(), 8);
+        backdateShipped(order.getPublicToken(), 15);
 
         scanner.scanFulfillment();
 
@@ -235,12 +236,12 @@ class ShopOrderFulfillmentIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("发货未满 7 日的订单不被自动置送达")
+    @DisplayName("发货未满 14 日（v1.4.2 D-12）的订单不被自动置送达")
     void freshShipmentNotAutoDelivered() {
         long uid = seedUser();
         ShopOrder order = paidOrder(uid);
         fulfillment.ship(order.getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 1L);
-        backdateShipped(order.getPublicToken(), 6);
+        backdateShipped(order.getPublicToken(), 13);
 
         scanner.scanFulfillment();
 
@@ -274,13 +275,13 @@ class ShopOrderFulfillmentIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("最坏路径：D8 自动送达 → 再 D8 自动完成，全程无人工介入也不卡死")
+    @DisplayName("最坏路径：D15 自动送达（v1.4.2 M=14）→ 再 D8 自动完成，全程无人工介入也不卡死")
     void worstCasePathReachesCompletedWithoutHumanTouch() {
         long uid = seedUser();
         ShopOrder order = paidOrder(uid);
         fulfillment.ship(order.getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 1L);
 
-        backdateShipped(order.getPublicToken(), 8);
+        backdateShipped(order.getPublicToken(), 15);
         scanner.scanFulfillment();
         assertThat(reload(order.getPublicToken()).getStatus()).isEqualTo(ShopOrderStatus.DELIVERED);
 

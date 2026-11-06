@@ -61,8 +61,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
         boolean rejected;
         try {
             jdbc.update("""
-                    INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                    SELECT ?, id, '3 kg', 1000, -1 FROM shop_products WHERE public_token = ?
+                    INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                    SELECT ?, id, '3 kg', 1000, -1, 1000, 20, 15, 10 FROM shop_products WHERE public_token = ?
                     """, "cs" + SEQ.incrementAndGet(), pToken);
             rejected = false;
         } catch (Exception e) {
@@ -82,8 +82,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         'NO_RETURN_AFTER_OPEN', true)
                 """, pToken);
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                SELECT ?, id, '3 kg', 285000, 190000 FROM shop_products WHERE public_token = ?
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                SELECT ?, id, '3 kg', 285000, 190000, 1000, 20, 15, 10 FROM shop_products WHERE public_token = ?
                 """, "sk" + SEQ.incrementAndGet(), pToken);
 
         String body = mvc.perform(org.springframework.test.web.servlet.request

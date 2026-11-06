@@ -85,13 +85,36 @@ class AdminShopBannerStateTest {
         assertThat(from).as("找不到 liveId() —— 方法改名了，这条断言此刻毫无意义").isGreaterThan(0);
         String body = code.substring(from, code.indexOf("\n    }", from));
 
+        // v1.4.2 shop Story 6.1：App 端取用规则单一来源改为 ShopBannerQueryService.liveBanners（排期 + 目标有效）
         assertThat(body)
-                .as("后台的「生效中」判定没有走 App 端那条 repository 方法 —— "
+                .as("后台的「生效中」判定没有走 App 端那个取用方法 —— "
                         + "自己再算一遍就是第二份判据，App 改了取图规则后两边会静默分叉")
-                .contains("findFirstByActiveTrueOrderBySortWeightDescIdDesc");
+                .contains("liveQuery.liveBanners(");
+        assertThat(body).as("不得再用不看排期的旧查询")
+                .doesNotContain("findFirstByActiveTrueOrderBySortWeightDescIdDesc");
         // 反向：liveId() 里不该出现「把全量列表拉回来自己挑」的任何形态。
         assertThat(body)
                 .as("liveId() 又在自己挑 active 了 —— 这正是上面那条要防的第二份判据")
                 .doesNotContain("isActive").doesNotContain("all()").doesNotContain("filter");
+    }
+
+    /** v1.4.2 shop Story 6.1 AC7.3：liveId = liveBanners 第一张；liveIds = 全部生效张（按取用顺序）。 */
+    @Test
+    void liveIdIsTheFirstOfLiveBannersAndLiveIdsAreAll() {
+        var query = org.mockito.Mockito.mock(com.tailtopia.shop.service.ShopBannerQueryService.class);
+        var service = new AdminShopBannerService(
+                org.mockito.Mockito.mock(com.tailtopia.shop.repository.ShopBannerRepository.class),
+                org.mockito.Mockito.mock(com.tailtopia.admin.audit.service.AdminAuditService.class),
+                org.mockito.Mockito.mock(com.tailtopia.shop.repository.ShopProductRepository.class),
+                org.mockito.Mockito.mock(com.tailtopia.shop.coupon.repository.ShopCouponRepository.class), query);
+        org.mockito.Mockito.when(query.liveBanners(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.List.of(
+                new com.tailtopia.shop.service.ShopBannerQueryService.LiveBanner(banner(7L, true), "u", "NONE", null),
+                new com.tailtopia.shop.service.ShopBannerQueryService.LiveBanner(banner(3L, true), "u", "NONE", null)));
+        assertThat(service.liveId()).isEqualTo(7L);
+        assertThat(service.liveIds()).containsExactly(7L, 3L);
+
+        org.mockito.Mockito.when(query.liveBanners(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.List.of());
+        assertThat(service.liveId()).isNull();
+        assertThat(service.liveIds()).isEmpty();
     }
 }

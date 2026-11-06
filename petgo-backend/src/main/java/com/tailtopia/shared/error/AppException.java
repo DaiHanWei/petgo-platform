@@ -262,4 +262,94 @@ public class AppException extends RuntimeException {
     public static AppException collectNotPublic(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.COLLECT_NOT_PUBLIC, detail);
     }
+
+    /** v1.4.2 shop Story 1.1：SKU 包裹参数不全「暂不可售」→ 422 {@code sku-not-sellable}。 */
+    public static AppException skuNotSellable(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.SKU_NOT_SELLABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：兑换码 / 可领券不存在 → 404 {@code coupon-not-found}。 */
+    public static AppException couponNotFound(String detail) {
+        return new AppException(HttpStatus.NOT_FOUND, ErrorTypes.COUPON_NOT_FOUND, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：一次性码已被使用 → 409 {@code coupon-code-used}。 */
+    public static AppException couponCodeUsed(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_CODE_USED, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：不在发放期 / 已停用 → 409 {@code coupon-not-in-period}。 */
+    public static AppException couponNotInPeriod(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_NOT_IN_PERIOD, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：已达每人限领 → 409 {@code coupon-already-claimed}。 */
+    public static AppException couponAlreadyClaimed(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_ALREADY_CLAIMED, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：发放总量已领完 → 409 {@code coupon-sold-out}。 */
+    public static AppException couponSoldOut(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.COUPON_SOLD_OUT, detail);
+    }
+
+    /** v1.4.2 shop Story 2.2：兑换锁定中 → 429 {@code coupon-redeem-locked}。 */
+    public static AppException couponRedeemLocked(String detail) {
+        return new AppException(HttpStatus.TOO_MANY_REQUESTS, ErrorTypes.COUPON_REDEEM_LOCKED, detail);
+    }
+
+    /** v1.4.2 shop Story 3.2：无地址 / 区域未开通 / 无可结算行 → 422 {@code not-placeable}。 */
+    public static AppException notPlaceable(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.NOT_PLACEABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 3.2（I7）：报价失效或未绑定本单 → 409 {@code quote-expired}。 */
+    public static AppException quoteExpired(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.QUOTE_EXPIRED, detail);
+    }
+
+    /** v1.4.2 shop Story 3.3（S-7 / I3）：订单不可再支付 → 409 {@code shop-order-not-payable}。 */
+    public static AppException shopOrderNotPayable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.SHOP_ORDER_NOT_PAYABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 4.1 AC4.3：退款单当前状态不可选 / 改选现金去向 → 409 {@code refund-destination-locked}。 */
+    public static AppException refundDestinationLocked(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.REFUND_DESTINATION_LOCKED, detail);
+    }
+
+    /** v1.4.2 shop Story 4.1 AC2.6 / AC4.5：现金段不高于所选渠道手续费 → 422 {@code refund-below-payout-fee}。 */
+    public static AppException refundBelowPayoutFee(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.REFUND_BELOW_PAYOUT_FEE, detail);
+    }
+
+    /** v1.4.2 shop Story 4.1：订单已无可退金额（剩余应付为 0 或按原因算出的退款为 0）→ 409 {@code nothing-to-refund}。 */
+    public static AppException nothingToRefund(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.NOTHING_TO_REFUND, detail);
+    }
+
+    /** v1.4.2 shop Story 4.2 AC1 → 409 {@code late-payment-already-resolved}。 */
+    public static AppException latePaymentAlreadyResolved(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.LATE_PAYMENT_ALREADY_RESOLVED, detail);
+    }
+
+    /** v1.4.2 shop Story 4.2 AC2.1 → 409 {@code late-payment-not-reorderable}。 */
+    public static AppException latePaymentNotReorderable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.LATE_PAYMENT_NOT_REORDERABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 4.2 AC2.4 → 409 {@code reorder-coupon-unavailable}。 */
+    public static AppException reorderCouponUnavailable(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.REORDER_COUPON_UNAVAILABLE, detail);
+    }
+
+    /** v1.4.2 shop Story 4.2 AC2.5 → 409 {@code reorder-coin-insufficient}。 */
+    public static AppException reorderCoinInsufficient(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.REORDER_COIN_INSUFFICIENT, detail);
+    }
+
+    /** v1.4.2 shop Story 6.1（D-17）：商品已下架 → 410 {@code product-delisted}。 */
+    public static AppException productDelisted(String detail) {
+        return new AppException(HttpStatus.GONE, ErrorTypes.SHOP_PRODUCT_DELISTED, detail);
+    }
 }

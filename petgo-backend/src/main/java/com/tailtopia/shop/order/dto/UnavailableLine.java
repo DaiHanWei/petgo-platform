@@ -14,4 +14,9 @@ public record UnavailableLine(String skuToken, String productName, String specNa
     public static final String REASON_DELISTED = "DELISTED";
     /** 可售库存不足（含为 0）。 */
     public static final String REASON_INSUFFICIENT_STOCK = "INSUFFICIENT_STOCK";
+    /**
+     * v1.4.2 shop Story 3.2：SKU 包裹参数不全、暂不可售。<b>只在新结算模式下发</b>；旧结算模式降级为
+     * {@link #REASON_INSUFFICIENT_STOCK} + {@code available=0}（旧版 App 只认前两个值）。
+     */
+    public static final String REASON_NOT_SELLABLE = "NOT_SELLABLE";
 }

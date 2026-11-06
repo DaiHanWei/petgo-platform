@@ -247,6 +247,34 @@ public final class AuditActions {
     public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
     /** 运营标记缺货，订单进入异常订单工作台（A8 判据，V20260918_2243）。 */
     public static final String SHOP_ORDER_SHORTAGE_FLAGGED = "SHOP_ORDER_SHORTAGE_FLAGGED";
+    /**
+     * 取消退款处置（v1.4.2 shop Story 4.1）：整单取消 / 部分取消 / 退回入库确认 / 签收后赔付 / 迟到款退款。
+     * 摘要记退款单 token、范围、原因与各段金额。🔒 <b>不记收款账号 / 户名</b>。
+     */
+    public static final String SHOP_ORDER_REFUND_HANDLED = "SHOP_ORDER_REFUND_HANDLED";
+    /** 财务标记取消退款单已打款 / 打款失败（v1.4.2 shop Story 4.1 AC5）。🔒 只记渠道与金额，不记账号 / 户名。 */
+    public static final String SHOP_ORDER_REFUND_PAYOUT_MARKED = "SHOP_ORDER_REFUND_PAYOUT_MARKED";
+    /**
+     * 迟到款重新下单（v1.4.2 shop Story 4.2 AC4.8）：target = 原单 token，摘要记新单展示号、迟到款与新单币 / 现金 / 退回多余。
+     * 🔒 不记地址 / 手机号。迟到款退款走 {@link #SHOP_ORDER_REFUND_HANDLED}（4.1 {@code createLatePaymentRefund} 内记）。
+     */
+    public static final String SHOP_ORDER_LATE_PAYMENT_REORDERED = "SHOP_ORDER_LATE_PAYMENT_REORDERED";
+    /**
+     * Biteship 运单（v1.4.2 shop Story 5.1）：下运单成功 / 失败 / 取消运单 / 标记已发货。target = 订单 token；
+     * 摘要只记 referenceId、Biteship 订单 id、快递码、失败原因码。🔒 <b>不记收件人任何字段</b>。
+     */
+    public static final String SHOP_WAYBILL_CREATED = "SHOP_WAYBILL_CREATED";
+    public static final String SHOP_WAYBILL_FAILED = "SHOP_WAYBILL_FAILED";
+    public static final String SHOP_WAYBILL_CANCELLED = "SHOP_WAYBILL_CANCELLED";
+    public static final String SHOP_ORDER_MARKED_SHIPPED = "SHOP_ORDER_MARKED_SHIPPED";
+    /**
+     * 物流异常处置（v1.4.2 shop Story 5.2 AC7.6）：确认（退回原因 / 丢件 / 破损）、清除、揽收失败处置（重下 / 手工运单 / 取消）、
+     * 索赔提醒变更。target = 订单 token；摘要只记异常类型、处置方式。🔒 <b>不记收件人任何字段</b>。
+     */
+    public static final String SHOP_LOGISTICS_EXCEPTION_CONFIRMED = "SHOP_LOGISTICS_EXCEPTION_CONFIRMED";
+    public static final String SHOP_LOGISTICS_EXCEPTION_CLEARED = "SHOP_LOGISTICS_EXCEPTION_CLEARED";
+    public static final String SHOP_LOGISTICS_PICKUP_FAILURE_RESOLVED = "SHOP_LOGISTICS_PICKUP_FAILURE_RESOLVED";
+    public static final String SHOP_LOGISTICS_CLAIM_PENDING_CHANGED = "SHOP_LOGISTICS_CLAIM_PENDING_CHANGED";
 
     // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
     /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */
@@ -302,6 +330,24 @@ public final class AuditActions {
     public static final String MERCHANT_PO_DELIVERED = "MERCHANT_PO_DELIVERED";
     /** 编辑 SKU 批发价（门店进货价）。摘要记新旧值 —— 批发价门店本就看得到，不属于进货价那类敏感字段。 */
     public static final String SHOP_SKU_WHOLESALE_UPDATED = "SHOP_SKU_WHOLESALE_UPDATED";
+
+    // ===== 优惠券（v1.4.2 shop Story 2.1，D-1 ~ D-4；S-2 service 归 shop 线，后台线只做页面）=====
+    // target = {@code SHOP_COUPON} / 券模板 public_token。🔴 summary 绝不含兑换码明文。
+    /** 新建券模板（摘要记类型、获取方式、面额、门槛、范围类型、总量、每人限领）。 */
+    public static final String SHOP_COUPON_CREATED = "SHOP_COUPON_CREATED";
+    /** 停用券模板（摘要记是否作废已领未用及作废张数）。 */
+    public static final String SHOP_COUPON_STOPPED = "SHOP_COUPON_STOPPED";
+    /** 为券模板生成兑换码（摘要只记通用 / 一次性与数量，不记码）。 */
+    public static final String SHOP_COUPON_CODES_CREATED = "SHOP_COUPON_CODES_CREATED";
+
+    // ===== 商品评价运营（v1.4.2 shop Story 6.1，D-17；S-2 service 归 shop 线，后台线只做页面）=====
+    // target = {@code SHOP_REVIEW} / 评价 id。🔒 summary 只记评价 id 与商品 token，绝不记评价正文。
+    /** 隐藏一条评价（不展示、不计入均分与条数）。 */
+    public static final String SHOP_REVIEW_HIDDEN = "SHOP_REVIEW_HIDDEN";
+    /** 撤销隐藏。 */
+    public static final String SHOP_REVIEW_UNHIDDEN = "SHOP_REVIEW_UNHIDDEN";
+    /** 切换商品评价列表展示开关（target = {@code SHIPPING_SETTINGS}；摘要记开 / 关）。 */
+    public static final String SHOP_REVIEW_DISPLAY_TOGGLED = "SHOP_REVIEW_DISPLAY_TOGGLED";
 
     // ===== 话题管理（V1.4.2 social-topic Story 6.1，AB-10B）=====
     // target = {@code topic} / topicId；summary 只记标准名、状态变化、序号，不记说明全文。

@@ -109,8 +109,8 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "res" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)""", sToken, pid, price);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)""", sToken, pid, price);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, ?, 0)",
@@ -261,9 +261,13 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
                 Map.of(lines.get(0).getId(), 1), CashDestination.TO_BANK);
         assertThat(r.isFullReturn()).isTrue();
 
+        // v1.4.2 shop 3.2：旧模式下单运费改走 Biteship stub 报价（最低价 10,000），不再读 shipping_zones.fee
+        // （造数传入的 20,000 只落在区域表上，下单路径已不读取）。规则不变：整单退 → 去程运费按订单实付运费全额退回。
+        long paidShipping = reload(c.order().getPublicToken()).getShippingFee();
+        assertThat(paidShipping).as("stub 最低价").isEqualTo(10_000L);
         var quote = refunds.quote(r.getPublicToken());
-        assertThat(quote.outboundFeeRefund()).isEqualTo(20_000L);
-        assertThat(quote.refundTotal()).isEqualTo(120_000L);
+        assertThat(quote.outboundFeeRefund()).isEqualTo(paidShipping);
+        assertThat(quote.refundTotal()).isEqualTo(100_000L + paidShipping);
     }
 
     // ---------- 溢价（C-9 / D-8） ----------

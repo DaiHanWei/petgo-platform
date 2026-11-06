@@ -1,6 +1,6 @@
 # Story 9.3: 我的券与兑换（App，G1–G9）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`（从 `dev_1.4.2` 切出，全线 25 story 同一分支、串行）
 > 口径优先级：`决策日志-shop.md`（「我的券可用列表不显示被待付款订单占用的券」、I8）> PRD `电商/1-4-2电商prd.md`（FR-130「券的状态」「兑换码与过期提醒细节」、§3.0 旅程 E、§4、§6 G 组）> `architecture-v1.4.2-shop-delta.md`（D-2、D-4、D-6、D-21、D-22、P-2、P-5、P-9、P-10）> UI 稿 `电商/ui-1-4-2-shop-integrated-v1.html` G1 ~ G9 屏下说明。`cloud-rules-shop.md` 优先于通用步骤。
@@ -24,7 +24,7 @@ so that 知道手里有什么券、快过期的先用掉。
 
 ## 接口契约（来自 2.2 / 2.3，实现前核对后端实际 JSON；有出入以已提交代码为准并改本文件）
 
-- `GET /api/v1/me/coupons?tab=available|used&cursor=` → `{items[], nextCursor, availableCount}`（2.2 story AC8；每页 20；可用按 `claimed_at DESC`，已使用按 `updated_at DESC`）。可用 = AVAILABLE 且未过期（**LOCKED、VOIDED、已过期都不列**）；已使用 = USED。`items[]` 为 2.2 AC11 的 `CouponView`：`couponToken`（模板 token，埋点用）、`userCouponToken`、`kind`（`DISCOUNT | FREE_SHIPPING`）、`nameId` / `nameEn`（App 按当前语言取）、`amount`（满减额；免运券为封顶额）、`minSpend`、`scopeType`（`ALL | CATEGORY | PRODUCT`）、`scopeCategories[]`、`scopeProductCount`、`validFrom`、`validUntil`、`validDays`、`expiringSoon`、`claimed`、`newbie`、`isNew`、`status`（`AVAILABLE | USED`）。**G2 需要的 `usedAt` / `usedOrderNo` / `usedOrderToken` 不在 `CouponView` 里**（见「待确认」2）。
+- `GET /api/v1/me/coupons?tab=available|used&cursor=` → `{items[], nextCursor, availableCount}`（2.2 story AC8；每页 20；可用按 `claimed_at DESC`，已使用按 `updated_at DESC`）。可用 = AVAILABLE 且未过期 **+ LOCKED（`lockedByPendingOrder=true`，C-3，2.2 已实现）**（VOIDED、已过期不列；`availableCount` 不含 LOCKED）；已使用 = USED。`items[]` 为 2.2 AC11 的 `CouponView`：`couponToken`（模板 token，埋点用）、`userCouponToken`、`kind`（`DISCOUNT | FREE_SHIPPING`）、`nameId` / `nameEn`（App 按当前语言取）、`amount`（满减额；免运券为封顶额）、`minSpend`、`scopeType`（`ALL | CATEGORY | PRODUCT`）、`scopeCategories[]`、`scopeProductCount`、`validFrom`、`validUntil`、`validDays`、`expiringSoon`、`claimed`、`newbie`、`isNew`、`status`（`AVAILABLE | LOCKED | USED`）、`lockedByPendingOrder`、`usedAt` / `usedOrderNo` / `usedOrderToken`（C-9，2.2 已补进 `CouponView`，T0 核对 `CouponView.java`）。
 - `GET /api/v1/me/coupons/summary` → `{availableCount}`（9.1 入口计数）。
 - `POST /api/v1/me/coupons/redeem {code}` → 200 返回新用户券（`CouponView`）。失败 ProblemDetail `type`（2.2 AC1：`https://petgo/errors/<后缀>`，后缀含点号）的末段（`ProblemDetail.typeSlug`，`core/network/problem_detail.dart`:31-36）：`coupon-not-found`（码无效）/ `coupon-code-used` / `coupon-not-in-period` / `coupon-already-claimed` / `coupon-sold-out` / `coupon-redeem-locked`（429）；401 → 未登录。
 - 推送 / 通知 `COUPON_EXPIRING`（D-22）：深链 `/me/coupons`；张数在通知行 / 推送载荷的 `targetRef`（2.3 story 定，十进制字符串）；推送与通知中心文案由后端按收件人语言渲染后落库（`title` / `body`）。
@@ -34,7 +34,7 @@ so that 知道手里有什么券、快过期的先用掉。
 > 层级：`[L0]` `flutter analyze` / `flutter test` · `[L1]` 连本地 / stag 后端（10.1）· `[L2]` Android 模拟器视觉与还原度（本地）。
 
 ### AC1 — 入口与路由 `[L0]`（FR-130.8、UI G 组 FLOW）
-1. 新路由 `/me/coupons` → `features/shop/coupon/my_coupons_page.dart`（`MyCouponsPage`）。挂在 `/me` 前缀下，**已在 `_controlledLocations`**（`app_router.dart`:172-179）→ 游客自动拦截去登录（满足「未登录先登录再兑换」）；若 8.1 已注册该路由，本 story 只替换 builder。
+1. 新路由 `/me/coupons` → `features/shop/coupon/presentation/my_coupons_page.dart`（`MyCouponsPage`；8.1 起券模块按 data/domain/presentation 分层）。挂在 `/me` 前缀下，**已在 `_controlledLocations`**（`app_router.dart`:172-179）→ 游客自动拦截去登录（满足「未登录先登录再兑换」）；若 8.1 已注册该路由，本 story 只替换 builder。
 2. 入口：9.1 订单列表「Belanja」下的「Kupon Saya · {n} bisa dipakai」横条、8.1 首页「给你的券」右上「Kupon Saya ›」、G9 推送 / 通知中心。若 9.1 因本页未就绪而隐藏了入口，本 story 打开（T0 核对）。
 3. 入口计数：9.1 横条用 `/me/coupons/summary` 的 `availableCount`；本页「Bisa dipakai ({n})」用列表响应的 `availableCount`（每次刷新 / 兑换成功后以最新响应为准）。
 
@@ -46,7 +46,7 @@ so that 知道手里有什么券、快过期的先用掉。
    - 左块面额：满减「Rp {amount}」；免运「Ongkir」；门槛：满减「Min. Rp {minSpend}」、免运「Maks. Rp {amount}」（免运券的 `amount` 是每张封顶额，D-1）。
    - 右侧：名称；有效期「s/d {date}」（WIB 日期）；`expiringSoon=true` 时改为「Berakhir {date, time}」+ 红标签「Segera berakhir」（§6 G1，`.tag.red`）；范围「Semua produk」（复用 8.1 `tokoAllProducts` 或 §6 A1「Semua produk」）/「Kategori {品类名}」/「Produk tertentu」。
    - **点券不跳转**（使用在结算页，UI G1）。
-   - **被待付款订单占用（LOCKED）的券不显示**（决策日志「按推荐定下」第 6 条、D-6；UI G1 说明「显示在可用 Tab 标『Dipakai di pesanan menunggu bayar』」作废，见「待确认」1）。
+   - ~~被待付款订单占用（LOCKED）的券不显示~~ → **C-3：显示**，`CouponCard(disabled: true, reasonText: couponLockedByPendingOrder)` 置灰、不可点，标「Dipakai di pesanan menunggu bayar」（UI 原文，§6 未列）。
    - 过期判断以服务端为准（列表即服务端过滤结果），App 不按本地时钟隐藏。
 5. 已使用（G2）：同券面整体降权（不透明度 0.55）、去掉「Segera berakhir」标签；右侧末行「Dipakai {date} · {no}」（§6 G2，date = `usedAt` WIB `d MMM yyyy`，no = `usedOrderNo`），**单号可点**（UI G2「可点进订单」）→ `context.push('/shop/orders/{usedOrderToken}')`；无 `usedOrderToken` 时不可点；**三个字段 2.2 均未下发时**（见「待确认」2）整行不显示，只保留有效期行。
 6. 可用为空（G4）：`.empty`（图标块 72 圆角 24 `tint` 底 + `Icons.confirmation_number_outlined`）+ 标题「Belum ada kupon」+ 副句「Tukar kode di atas, atau klaim kupon di halaman produk.」（§6 G4）。「已使用」为空：同图标 + 标题「Belum ada kupon」、无副句（§6 未给专句，见「待确认」4）。
@@ -115,14 +115,14 @@ EN / ID 两份 arb 同加；新 key 前缀 `coupon*`。T0 先查 7.1 / 8.1 / 8.2
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：对照 2.2 / 2.3 / 7.1 / 8.1 / 8.2 / 9.1 **已提交代码**核对：券接口字段名（`availableCount`、`usedAt / usedOrderNo / usedOrderToken` 是否已补、`nameId / nameEn`）、P-5 `type` 实际串、`CouponCard` 组件 API 与已建券面 key、`toko_coupon_claimed` 的 `source` 字面量与 `_claimed` 后缀是否已登记、`/me/coupons` 路由与 9.1 入口状态、`COUPON_EXPIRING` 的 `targetRef` 是否为张数；有出入先改本文件
-- [ ] **T1 数据层**：`features/shop/coupon/data/coupon_repository.dart`（若 7.1 / 8.1 已建则扩）加 `myCoupons(tab, cursor)`、`redeem(code)`；domain `UserCoupon`（缺键容错）、`CouponTab`；`CouponRedeemError` 枚举（由 `typeSlug` 映射）；`api_paths.dart` 加 `meCoupons` / `meCouponsRedeem`
-- [ ] **T2 页面**：`my_coupons_page.dart`（兑换区 / Tab / 列表 / 空 / 失败 / 分页）；路由
-- [ ] **T3 兑换**：成功插顶 + Baru、失败框下提示、锁定禁用、埋点
-- [ ] **T4 推送与通知**：深链、`pushClickLocation`、推送点开埋点、通知中心标题正文图标与埋点映射
-- [ ] **T5 文案**（AC6）+ `flutter gen-l10n`；后缀守卫（AC5）
-- [ ] **T6 测试**（见 Dev Notes「测试」）；`resetUserScopedCaches` 登记与登记测试
-- [ ] **T7** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：对照 2.2 / 2.3 / 7.1 / 8.1 / 8.2 / 9.1 **已提交代码**核对：券接口字段名（`availableCount`、`usedAt / usedOrderNo / usedOrderToken` 是否已补、`nameId / nameEn`）、P-5 `type` 实际串、`CouponCard` 组件 API 与已建券面 key、`toko_coupon_claimed` 的 `source` 字面量与 `_claimed` 后缀是否已登记、`/me/coupons` 路由与 9.1 入口状态、`COUPON_EXPIRING` 的 `targetRef` 是否为张数；有出入先改本文件
+- [x] **T1 数据层**：`features/shop/coupon/data/coupon_repository.dart`（若 7.1 / 8.1 已建则扩）加 `myCoupons(tab, cursor)`、`redeem(code)`；domain `UserCoupon`（缺键容错）、`CouponTab`；`CouponRedeemError` 枚举（由 `typeSlug` 映射）；`api_paths.dart` 加 `meCoupons` / `meCouponsRedeem`
+- [x] **T2 页面**：`my_coupons_page.dart`（兑换区 / Tab / 列表 / 空 / 失败 / 分页）；路由
+- [x] **T3 兑换**：成功插顶 + Baru、失败框下提示、锁定禁用、埋点
+- [x] **T4 推送与通知**：深链、`pushClickLocation`、推送点开埋点、通知中心标题正文图标与埋点映射
+- [x] **T5 文案**（AC6）+ `flutter gen-l10n`；后缀守卫（AC5）
+- [x] **T6 测试**（见 Dev Notes「测试」）；`resetUserScopedCaches` 登记与登记测试
+- [x] **T7** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -204,14 +204,63 @@ EN / ID 两份 arb 同加；新 key 前缀 `coupon*`。T0 先查 7.1 / 8.1 / 8.2
 
 ### Agent Model Used
 
+claude-opus-5-5（Claude Code，云端 headless，L0）
+
 ### Debug Log References
+
+- `flutter gen-l10n` → `flutter analyze`：改动前 No issues found；改动后 No issues found。
+- `flutter test`（全量）：+4900 ~3（3 个既有 skip），All tests passed。
+- `bash scripts/ci/check-flyway-versions.sh origin/main`：OK（本 story 无迁移）。
+- 中途容器重启一次，工作区改动完好，重跑 gen-l10n 后续做。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC2 / AC3 的真后端联调（10.1：真实 `/me/coupons` 分页、兑换码 Redis 计数与 1 小时锁、429）、AC4 真机收 `COUPON_EXPIRING` 推送点开直达本页与 `toko_coupon_expiry_push_opened` 上报、AC7.3 还原度 ≥95 打分与模拟器视觉（券面左色块 108 宽 / 虚线分隔 / 红标签 `.tag.red` / 紫「Baru」`.tag` 等 G1–G8 视觉）全部留本地。L0 测试类：`test/shop/coupon/my_coupons_page_test.dart`、`user_coupon_model_test.dart`、`coupon_redeem_error_test.dart`、`test/notify/coupon_expiring_notification_test.dart` 及补充的 deep_link / push_payload / push_settings / user_scoped_cache_registry / api_log_interceptor_payout 测试。
+- **T0 名字对齐（已改本文件正文）**：① C-3 / C-9 后端已落地：可用页签含 LOCKED + `lockedByPendingOrder`，`CouponView` 已带 `usedAt / usedOrderNo / usedOrderToken` → 按 C-3 显示占用券（置灰 + 「Dipakai di pesanan menunggu bayar」），G2「Dipakai {date} · {no}」可点进 `/shop/orders/{usedOrderToken}`；「待确认」1、2 已由 C-3 / C-9 关闭。② 页面路径改为 `features/shop/coupon/presentation/my_coupons_page.dart`（8.1 已按 data/domain/presentation 分层）。③ 文案 key 复用已建：`couponMyTitle` → **`couponMyCoupons`**；`couponTabAvailable` → **`couponAvailableCount`**（7.1 同句）；G7 已领 / 领完复用 **`couponAlreadyClaimed` / `couponSoldOut`**（同字），故不建 `couponRedeemSoldOut`；`couponExpiringSoon`、`couponMinSpend`（§6 A4「min. belanja Rp {min}」，券面门槛取此句式，不用 UI「Min. Rp」短式）、`tokoAllProducts`、`commonRetry` 均复用。④ `toko_coupon_claimed` 的 `_claimed` 后缀 8.1 已登记，AC5 不动；`source` 取 `'code'`（8.1 体系为小写 `home/banner/detail`）。⑤ `COUPON_EXPIRING` 张数在 `targetRef`（后端 `CouponExpiryReminderService` 传 `String.valueOf(n)`），按此读。⑥ `kPushDirectTypes`（9.1 已建 Set）并入 `COUPON_EXPIRING`。⑦ 后端兑换接口不会返回 `coupon-invalid`（那是结算专用码），App 归入「其他 → toast」。
+- 数据层：`CouponRepository.myCoupons(tab, cursor)` / `redeem(code)`；`ApiPaths.meCoupons` / `meCouponsRedeem`；domain `user_coupon.dart`（`UserCoupon`、`MyCouponPage`、`CouponTab`、`CouponScopeType`、`UserCouponStatus`、`CouponRedeemError`、`normalizeCouponCode`）。
+- 状态：`myCouponsProvider`（`AsyncNotifierProvider.family<…, CouponTab>`，autoDispose）+ 页面对已访问页签 `listenManual` 保活（来回切不重复请求，下拉强刷），已登记 `resetUserScopedCaches`。App 不按 `status` 过滤，列表原样渲染。
+- 兑换：`_submitting` 守卫 + 按钮禁用转圈 + 输入只读防重复提交；成功插顶 + 本页 `Set` 保留「Baru」 + 后台刷新 + 失效 `couponSummaryProvider` / `couponsForYouProvider`；结算页每次进入重拉试算，无需失效。失败按 `typeSlug` 框下红字，其他错误 toast（新 key `couponRedeemFailed`），429 / `coupon-redeem-locked` 本页存续期间禁用。
+- 🔴 兑换码不进日志 / 埋点：`ApiLogInterceptor._sensitiveKeys` 加 `code`（debug 日志里其他名为 `code` 的字段也会打码，可接受）；埋点只带模板 `couponToken`，测试断言兑换码不出现在任何埋点属性里。
+- `CouponCard` 只加可选参数（`dimmed` / `tag` / `validityText` / `extraLines`），默认值保持 7.1 / 8.x 现状，既有测试未改。
+- 推送与通知：深链固定目标类加 `COUPON_EXPIRING → /me/coupons`；`kPushDirectTypes` 并入；`reportCouponExpiryPushOpened`（`@visibleForTesting` 纯函数，推送点击入口调用，列表点击不报）；通知中心读后端 title/body + 本地兜底（张数取 `targetRef`）、金色券图标、`_notifTypeForAnalytics` 登记 `coupon_expiring`。推送设置分类数不变（10 项，断言已加）。
+- 日期：有效期 / 使用日按 WIB（UTC+7）`d MMM yyyy`，「Berakhir」带 `HH:mm`（`formatDayMonthYearTime`）。
+
+#### 复审修复（2026-11-06）
+
+1. `MyCouponsController.insertTop` 改为 `copyWith(loadingMore: false)`；`_loadMore` 在途期间状态被替换（插顶 / 刷新）时丢弃作废页并复位仍挂着的 `loadingMore`，底部转圈不再卡死（`my_coupons_controller_test.dart`）。
+2. 首屏未返回时兑换成功：页面 `_mergeRedeemed` 先等 `myCouponsProvider(available).future` 完成（失败则跳过）再插顶 + 后台刷新（widget 用例「复审 #2」）。
+3. 兑换码输入 formatter 改为：大写 → 只留 `[A-Z0-9]` → 限长 32（光标按过滤后位置保留）；`normalizeCouponCode` 同口径；过滤后 < 4 位按钮不可提交（不发请求、不耗试错次数）。与后端 `CouponAdminService.CODE_FORMAT = ^[A-Z0-9]{4,32}$` 一致。产品待定，见下方待确认 6。
+4. 补 AC2.7「加载更多失败 → Coba lagi → 重拉追加」widget 用例。
+5. `CouponCard`：`tag == null` 时保持 7.1 / 8.x 原组件树（只在有 tag 时包 Row），既有券面测试全绿。
+- 复审后 L0：`flutter analyze` No issues found；`flutter test` 全量 +4904 ~3 全绿。
+
 #### 待确认
 
+1. **「已使用」Tab 为空**：§6 只给了 G4，本 story 只显示「Belum ada kupon」标题、无副句（同原待确认 4）。
+2. **§6 未列、按 UI 原文新增的文案（待设计确认，英语为草拟）**：`couponTabAvailablePlain`「Bisa dipakai / Available」、`couponValidUntil`「s/d {date} / Until {date}」、`couponEndsAt`「Berakhir {datetime} / Ends {datetime}」、`couponScopeCategory`「Kategori {name} / Category: {name}」、`couponScopeProduct`「Produk tertentu / Selected products」、`couponLockedByPendingOrder`「Dipakai di pesanan menunggu bayar / In use by an unpaid order」、`couponExpiringNotifyTitleFallback`「Kupon segera berakhir」、`couponExpiringNotifyBodyFallback`「Pakai sebelum hangus! / Use them before they expire!」。
+3. **免运券面额位**：沿用 7.1 已建券面（「Gratis ongkir」+ 封顶额 `Rp 15.000`），未改为 UI 稿「Ongkir / Maks. Rp」，以免改动 7.1 / 8.x 既有券面；券面左色块等视觉亦沿用 `CouponCard` 横排现状，留 L2 还原度打分时定。
+4. **推送点开直达我的券**改变「通知类推送一律落通知中心」现行口径（C-10 已拍板，仅登记）。
+5. `couponExpiringNotifyBody {date}` 已按 §6 建 key，但 App 本地拿不到日期，当前未使用（正文走后端整句 / 无日期兜底）。
+6. **兑换码输入过滤（复审 #3，保守实现）**：输入时丢弃非字母数字字符（含连字符、空格），不足 4 位不可点「Tukar」。依据是后端码格式 `^[A-Z0-9]{4,32}$`；若运营将来允许带连字符的码，需同步改前后端，请产品确认。
+
 ### File List
+
+- 新增：`petgo_app/lib/features/shop/coupon/domain/user_coupon.dart`
+- 新增：`petgo_app/lib/features/shop/coupon/presentation/my_coupons_controller.dart`
+- 新增：`petgo_app/lib/features/shop/coupon/presentation/my_coupons_page.dart`
+- 修改：`petgo_app/lib/features/shop/coupon/data/coupon_repository.dart`
+- 修改：`petgo_app/lib/features/shop/coupon/presentation/coupon_card.dart`（只加可选参数）
+- 修改：`petgo_app/lib/core/network/api_paths.dart`、`petgo_app/lib/core/network/api_log_interceptor.dart`
+- 修改：`petgo_app/lib/core/router/app_router.dart`、`petgo_app/lib/core/router/deep_link_routes.dart`
+- 修改：`petgo_app/lib/core/push/push_service.dart`
+- 修改：`petgo_app/lib/features/notify/presentation/notification_center_page.dart`
+- 修改：`petgo_app/lib/app.dart`
+- 修改：`petgo_app/lib/l10n/app_id.arb`、`petgo_app/lib/l10n/app_en.arb`
+- 新增测试：`petgo_app/test/shop/coupon/my_coupons_fakes.dart`、`my_coupons_page_test.dart`、`my_coupons_controller_test.dart`（复审）、`user_coupon_model_test.dart`、`coupon_redeem_error_test.dart`、`petgo_app/test/notify/coupon_expiring_notification_test.dart`
+- 修改测试：`petgo_app/test/notify/deep_link_routes_test.dart`、`push_payload_test.dart`、`push_settings_test.dart`、`petgo_app/test/app/user_scoped_cache_registry_test.dart`、`api_log_interceptor_payout_test.dart`
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev）。
+- 2026-11-06：实现我的券与兑换（G1–G9）、COUPON_EXPIRING 推送直达与通知中心；按 C-3 / C-9 与已提交代码对齐正文；L0 绿，状态 → review（L1/L2 待本地验收）。
+- 2026-11-06：复审低项修复 5 条（loadingMore 复位、首屏未返回时兑换合并、兑换码过滤与最短 4 位、加载更多失败重试用例、CouponCard 无 tag 保持原树）。

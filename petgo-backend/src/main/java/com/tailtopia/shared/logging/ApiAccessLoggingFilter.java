@@ -89,7 +89,7 @@ public class ApiAccessLoggingFilter extends OncePerRequestFilter {
 
         log.info("api method={} path={}{} status={} durMs={} sub={} role={} req={} resp={}",
                 original.getMethod(),
-                original.getRequestURI(),
+                redactPath(original.getRequestURI()),
                 query == null ? "" : "?" + query,
                 resp.getStatus(),
                 durMs,
@@ -97,6 +97,14 @@ public class ApiAccessLoggingFilter extends OncePerRequestFilter {
                 subRole[1],
                 reqBody,
                 respBody);
+    }
+
+    /**
+     * 路径脱敏（v1.4.2 shop Story 5.1 AC14.1）：Biteship Webhook 的路径密钥打码为 {@code ***}，其余原样。
+     * 实现在 {@link LogPaths#redact}（{@code GlobalExceptionHandler} 共用）。
+     */
+    static String redactPath(String uri) {
+        return LogPaths.redact(uri);
     }
 
     /**

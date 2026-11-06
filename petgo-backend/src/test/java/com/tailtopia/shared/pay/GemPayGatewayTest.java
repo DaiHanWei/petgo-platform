@@ -187,4 +187,82 @@ class GemPayGatewayTest {
                 .isInstanceOf(PayException.class)
                 .hasCauseInstanceOf(org.springframework.web.client.ResourceAccessException.class);
     }
+
+    // ===== v1.4.2 shop Story 3.3 AC5.3：/history 三态（整张表 7 行），异常不再抛出 =====
+
+    private static Map<String, Object> history(String status) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("request_id", "REQ-1");
+        row.put("ref_id", "GP-REF-1");
+        row.put("status", status);
+        row.put("signature", "must-be-stripped");
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("error_code", "00");
+        resp.put("data", java.util.List.of(row));
+        return resp;
+    }
+
+    @Test
+    void queryNetworkFailureIsUnknownNotThrown() {
+        PayProperties p = props("KMB0000", "s3cret");
+        p.getGempay().setBaseUrl("http://127.0.0.1:1"); // 必然连不上
+        p.setTimeoutSeconds(2);
+        ChargeQueryResult r = new GemPayGateway(p).queryCharge("GP-REF-1");
+        assertThat(r.outcome()).isEqualTo(ChargeQueryResult.Outcome.UNKNOWN);
+        assertThat(r.callback()).isNull();
+    }
+
+    @Test
+    void queryEmptyResponseIsUnknown() {
+        assertThat(GemPayGateway.toQueryResult(null).outcome()).isEqualTo(ChargeQueryResult.Outcome.UNKNOWN);
+    }
+
+    @Test
+    void queryNonZeroErrorCodeIsUnknown() {
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("error_code", "04");
+        resp.put("error_desc", "data not found");
+        assertThat(GemPayGateway.toQueryResult(resp).outcome()).isEqualTo(ChargeQueryResult.Outcome.UNKNOWN);
+    }
+
+    @Test
+    void queryEmptyDataIsUnknown() {
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("error_code", "00");
+        resp.put("data", java.util.List.of());
+        assertThat(GemPayGateway.toQueryResult(resp).outcome()).isEqualTo(ChargeQueryResult.Outcome.UNKNOWN);
+    }
+
+    @Test
+    void querySuccessAndCompositeSuccessArePaid() {
+        for (String st : new String[] {"Success", "Failure => Success", "Expired => Success"}) {
+            ChargeQueryResult r = GemPayGateway.toQueryResult(history(st));
+            assertThat(r.outcome()).as(st).isEqualTo(ChargeQueryResult.Outcome.PAID);
+            assertThat(r.callback().gatewayRef()).isEqualTo("GP-REF-1");
+            assertThat(r.callback().orderId()).isEqualTo("REQ-1");
+            assertThat(r.callback().rawMeta()).doesNotContainKey("signature");
+        }
+    }
+
+    @Test
+    void queryFailureAndExpiredAreTerminalNotPaid() {
+        ChargeQueryResult failed = GemPayGateway.toQueryResult(history("Failure"));
+        assertThat(failed.outcome()).isEqualTo(ChargeQueryResult.Outcome.NOT_PAID);
+        assertThat(failed.callback().status()).isEqualTo(GatewayStatus.FAILED);
+        assertThat(failed.isTerminalNotPaid()).isTrue();
+
+        ChargeQueryResult expired = GemPayGateway.toQueryResult(history("Expired"));
+        assertThat(expired.outcome()).isEqualTo(ChargeQueryResult.Outcome.NOT_PAID);
+        assertThat(expired.callback().status()).isEqualTo(GatewayStatus.EXPIRED);
+    }
+
+    @Test
+    void queryPendingInitialUnknownStatusIsNotPaidPending() {
+        for (String st : new String[] {"Pending", "Initial", "whatever"}) {
+            ChargeQueryResult r = GemPayGateway.toQueryResult(history(st));
+            assertThat(r.outcome()).as(st).isEqualTo(ChargeQueryResult.Outcome.NOT_PAID);
+            assertThat(r.callback().status()).isEqualTo(GatewayStatus.PENDING);
+            assertThat(r.isTerminalNotPaid()).as("PENDING 是未决，不得据此关单").isFalse();
+        }
+    }
 }

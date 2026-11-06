@@ -10,10 +10,6 @@ import com.tailtopia.shop.repurchase.repository.RepurchaseTriggerRepository;
 import com.tailtopia.shop.repurchase.service.ProfileRecommendationService;
 import com.tailtopia.shop.repurchase.service.RepurchaseScanService;
 import com.tailtopia.profile.repository.PetProfileRepository;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -64,61 +60,19 @@ public class MeRepurchaseController {
     }
 
     /**
-     * 区域①「补货提醒」（FR-109）。
+     * 区域①「补货提醒」（FR-109）—— <b>v1.4.2 起下线（PRD FR-136 / 架构 D-20）：恒返回空列表，不查任何仓库</b>。
      *
-     * <p>🔴 <b>无触发时返回空列表，前端整区不渲染</b> —— 不是渲染一个空态。
-     * 按当前 DEP-6 状态，这是上线首日的常态。
+     * <p>🔴 不 404：旧版 App（1.4.1 及以前）仍会请求本接口，空列表时整区不渲染（原有约定），等于把卡片区安静地收掉。
+     * 复购日扫默认停用（{@code petgo.shop.repurchase.scan-enabled=false}），不再产生新触发与 {@code REPURCHASE_FOOD_LOW}；
+     * 历史触发数据保留。代码保留一个版本后删。
      */
     @GetMapping("/shop/repurchase-cards")
     public List<RepurchaseCardView> cards(@AuthenticationPrincipal Jwt jwt) {
-        long userId = currentUserId(jwt);
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        List<RepurchaseCardView> out = new ArrayList<>();
-        List<RepurchaseTrigger> active = repurchase.activeTriggersFor(userId);
-        // V1.4.0 multi-pet（Story 1.2 · X23）：名字按每张卡自己的宠物（触发器 pet_profile_id），一次批量取。
-        java.util.Map<Long, String> petNames = new java.util.HashMap<>();
-        java.util.Set<Long> petIds = new java.util.HashSet<>();
-        for (RepurchaseTrigger t : active) {
-            if (t.getPetProfileId() != null) {
-                petIds.add(t.getPetProfileId());
-            }
-        }
-        if (!petIds.isEmpty()) {
-            for (var p : profiles.findAllById(petIds)) {
-                if (Long.valueOf(userId).equals(p.getOwnerId())) {
-                    petNames.put(p.getId(), p.getName());
-                }
-            }
-        }
-        for (RepurchaseTrigger t : active) {
-            String petName = t.getPetProfileId() == null ? null : petNames.get(t.getPetProfileId());
-            var sku = skus.findById(t.getSkuId()).orElse(null);
-            if (sku == null) {
-                continue;
-            }
-            var product = products.findById(sku.getProductId()).orElse(null);
-            if (product == null) {
-                continue;
-            }
-            // 推算依据：算不出任一项 → 整组 null，前端整卡不渲染（见 DTO 注释）。
-            var basis = repurchase.basisFor(t, today);
-            out.add(new RepurchaseCardView(t.getId(), t.getTriggerType().name(),
-                    sku.getPublicToken(), product.getPublicToken(), product.getName(), petName,
-                    t.getEstimatedDepletionDate(),
-                    ChronoUnit.DAYS.between(today, t.getEstimatedDepletionDate()),
-                    basis == null ? null : basis.dailyGrams(),
-                    basis == null ? null : basis.remainingGrams(),
-                    basis == null ? null : basis.purchasedOn(),
-                    // 🔴 Story 4-4：价格早就在手上（循环里持有的就是 ShopSku 实体），
-                    //    只是一直没下发 —— 加这一行零额外查询。
-                    //    取触发 SKU 的价，**不是** minPriceOf(productId)：那会多打一次查询，
-                    //    且在多规格商品上系统性低报。
-                    sku.getPrice()));
-        }
-        return RepurchaseCardView.capped(out);
+        currentUserId(jwt);
+        return List.of();
     }
 
-    /** 用户关掉一张补货卡。 */
+    /** 用户关掉一张补货卡（v1.4.2 起旧版 App 理论上已拿不到卡；保留只为不 404）。 */
     @PostMapping("/shop/repurchase-cards/{id}/dismiss")
     public void dismiss(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         long userId = currentUserId(jwt);

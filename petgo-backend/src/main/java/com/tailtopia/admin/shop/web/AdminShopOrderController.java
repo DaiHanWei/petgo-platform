@@ -257,14 +257,14 @@ public class AdminShopOrderController {
             Shipment s = adminOrders.ship(token, carrier, trackingNo, carrierCost,
                     admin == null ? null : admin.getAdminAccountId());
             return done(admin, token, msg.get("admin.flash.shopOrder.shipped",
-                    s.getCarrier().displayName(), s.getTrackingNo()), model);
+                    s.carrierDisplayName(), s.getTrackingNo()), model);
         }
         try {
             Shipment s = adminOrders.ship(token, carrier, trackingNo, carrierCost,
                     admin == null ? null : admin.getAdminAccountId());
             // 🔒 回显单号（非 PII）；不回显收件人任何字段
             ra.addFlashAttribute("notice",
-                    msg.get("admin.flash.shopOrder.shipped", s.getCarrier().displayName(), s.getTrackingNo()));
+                    msg.get("admin.flash.shopOrder.shipped", s.carrierDisplayName(), s.getTrackingNo()));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }

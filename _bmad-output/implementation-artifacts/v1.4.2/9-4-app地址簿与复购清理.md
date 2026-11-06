@@ -1,6 +1,6 @@
 # Story 9.4: 地址簿与复购清理收尾（App，H1–H5、I1）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`（从 `dev_1.4.2` 切出，全线 25 story 同一分支、串行）
 > 口径优先级：`决策日志-shop.md`（I10「地址簿用标准探测包裹按邮编询价判断可配送」）> PRD `电商/1-4-2电商prd.md`（FR-133「地址簿管理页」、FR-136 复购下线、FR-172.1、§4 停用事件、§6 H 组与 `petProfileWeightHint` 行）> `architecture-v1.4.2-shop-delta.md`（D-9 地址簿 `serviceable`、D-20、P-4、P-10）> UI 稿 `电商/ui-1-4-2-shop-integrated-v1.html` H1 ~ H5、I1 屏下说明。`cloud-rules-shop.md` 优先于通用步骤。
@@ -40,7 +40,7 @@ so that 下单前就能换。
 2. 确认后调 `DELETE`；成功 → 刷新列表；删的是默认地址 → 服务端自动把另一条设为默认，toast 照线上 `addressDefaultPromoted(name)`（改用 `showAppToast`，不再用 `SnackBar`）。失败 → toast `addressDeleteFailed`（新 key，§6 未列，见 AC5 末段），列表不变。删除中卡片操作禁用、不可重复点。
 
 ### AC3 — 新增 / 编辑地址表单（H3）`[L0 widget]` `[L2]`（FR-133.11「表单与结算页内同一套」）
-1. 地址簿的新增 / 编辑页（`/me/addresses/new`、`/me/addresses/:token`）改为承载 7.1 story 抽出的**同一个地址表单组件** `features/shop/address/presentation/address_form_body.dart` `AddressFormBody({ShippingAddress? initial, required String submitLabel, required ValueChanged<ShippingAddress> onSaved})`（以 7.1 实际提交为准，T0 核对；7.1 未抽则本 story 按此签名抽出并让结算页 D5 改用）。原有字段与校验**全部保留**：收件人 2–50 字、手机 +62 规则与帮助文字（`addressPhoneHelper`）、邮编 5 位、详细地址 ≥ 10 字、标签必填（Rumah / Kantor / Lainnya）、首个地址固定为默认、开通范围提示只告知不阻止保存（`addressInServiceArea` / `addressOutOfServiceArea`）、空表单点保存第一个错字段滚到可见。
+1. 地址簿的新增 / 编辑页（`/me/addresses/new`、`/me/addresses/:token`）改为承载 7.1 story 抽出的**同一个地址表单组件** `features/shop/address/presentation/address_form_body.dart` `AddressFormBody({ShippingAddress? initial, String? editToken, required String submitLabel, required ValueChanged<ShippingAddress> onSaved})`（T0 已核 7.1 实际提交：多一个 `editToken`，非空走 PUT）。原有字段与校验**全部保留**：收件人 2–50 字、手机 +62 规则与帮助文字（`addressPhoneHelper`）、邮编 5 位、详细地址 ≥ 10 字、标签必填（Rumah / Kantor / Lainnya）、首个地址固定为默认、开通范围提示只告知不阻止保存（`addressInServiceArea` / `addressOutOfServiceArea`）、空表单点保存第一个错字段滚到可见。
 2. **修线上缺陷——编辑预填**：`/me/addresses/:token` 进入时把该地址作为 `AddressFormBody.initial` 传入、预填全部字段（收件人、手机〔去掉 +62 显示规则同线上新增态〕、省市区、邮编、详细地址、标签、默认开关）；数据源 = `addressListProvider` 中同 token 项（列表已含全部字段，无单条 GET 接口）；列表未加载时先 `await` 列表；找不到该 token → toast `addressLoadFailed` 并 pop。
 3. **修线上缺陷——标题**：新增「Tambah alamat」（`addressAdd`）；编辑「Ubah alamat」（§6 H3 新 key）。
 4. **省市区三个下拉合并成一行「Wilayah」**（§6 H3）：未选时占位「Pilih wilayah」（§6 H3）、选后显示「{provinsi}, {kota}, {kecamatan}」，右侧 `chevron_right`；点击打开 H4 抽屉（AC4）。行下方保留开通范围提示（`check_circle` 紫 + `addressInServiceArea`「Wilayah ini sudah kami layani」/ 橙提示块 `addressNotServiceable` 标题 + `addressOutOfServiceArea` 正文，原逻辑 `_serviceHint`）。分组标题：「Penerima」/「Alamat」/「Label & utama」照 UI（现有 `addressSectionReceiver` / `addressSectionAddress` / `addressSectionLabel`，T0 核对现值，不改字）。
@@ -89,14 +89,14 @@ EN / ID 两份 arb 同加；新 key 前缀 `address*`。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：对照 3.1 / 6.2 / 7.1 / 8.1 / 8.2 **已提交代码**核对：地址列表 `serviceable` 字段、7.1 抽出的地址表单组件名与参数、8.2 地区抽屉组件名与是否支持表单模式、8.1 是否已删 `toko_page_v2` 补货行 / `ProfileRecoZoneV2` 是否仍被引用 / 是否已加 `REPURCHASE_FOOD_LOW` 深链 / 是否已改 `v140_events_inventory_test`；有出入先改本文件（Completion Notes 记）
-- [ ] **T1 数据层**：`ShippingAddress` 加 `bool? serviceable`（缺键 = null）；`addressDisplayLabel(l10n, raw)` 映射函数
-- [ ] **T2 地址簿页**（AC1、AC2）：重写 `address_book_page.dart` 视觉、吸底按钮、空态 / 失败态、删除确认与错误处理；保留选择器模式
-- [ ] **T3 表单**（AC3、AC4）：地址簿新增 / 编辑页承载共用表单组件；编辑预填与标题；Wilayah 一行 + H4 抽屉；提交失败错误条置顶；标签走 arb
-- [ ] **T4 复购清理**（AC6）：Diary 卡、组件、数据层、api path、arb key、深链、体重说明、埋点清单测试
-- [ ] **T5 文案**（AC5）+ `flutter gen-l10n`
-- [ ] **T6 测试**（见 Dev Notes「测试」）
-- [ ] **T7** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：对照 3.1 / 6.2 / 7.1 / 8.1 / 8.2 **已提交代码**核对：地址列表 `serviceable` 字段、7.1 抽出的地址表单组件名与参数、8.2 地区抽屉组件名与是否支持表单模式、8.1 是否已删 `toko_page_v2` 补货行 / `ProfileRecoZoneV2` 是否仍被引用 / 是否已加 `REPURCHASE_FOOD_LOW` 深链 / 是否已改 `v140_events_inventory_test`；有出入先改本文件（Completion Notes 记）
+- [x] **T1 数据层**：`ShippingAddress` 加 `bool? serviceable`（缺键 = null）；`addressDisplayLabel(l10n, raw)` 映射函数
+- [x] **T2 地址簿页**（AC1、AC2）：重写 `address_book_page.dart` 视觉、吸底按钮、空态 / 失败态、删除确认与错误处理；保留选择器模式
+- [x] **T3 表单**（AC3、AC4）：地址簿新增 / 编辑页承载共用表单组件；编辑预填与标题；Wilayah 一行 + H4 抽屉；提交失败错误条置顶；标签走 arb
+- [x] **T4 复购清理**（AC6）：Diary 卡、组件、数据层、api path、arb key、深链、体重说明、埋点清单测试
+- [x] **T5 文案**（AC5）+ `flutter gen-l10n`
+- [x] **T6 测试**（见 Dev Notes「测试」）
+- [x] **T7** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -180,14 +180,68 @@ EN / ID 两份 arb 同加；新 key 前缀 `address*`。
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless，只到 L0。
+
 ### Debug Log References
+
+- 开工前 `flutter gen-l10n` 后 `flutter analyze` 基线 No issues found。
+- 首轮全量 `flutter test`：`test/shop/epic1_analytics_test.dart`「shop 模块所有埋点属性名不含任何 PII 字段」红 —— 白名单含 `card_source`，该属性只由已删的复购触发卡上报；按设计打破，改断言（移出白名单并注释原因），不删不 skip。
+- Riverpod 3 对失败 provider 自动重试：地址簿「加载失败重试」用例改为 fake 持续失败、翻转标志后再点「Coba lagi」。
 
 ### Completion Notes List
 
+- **复审修复（2026-11-06）**：复审无 CONFIRMED；按 PLAUSIBLE 低项修正选择器模式下删除进行中（`_busy`）整卡仍可点选、会 pop 回正在被删的 token 的问题（`address_book_page.dart` 选择器 `InkWell.onTap` 在 `_busy` 时置 null，满足 AC2.2「删除中卡片操作禁用」）。`addressProvinsi` / `addressKota` / `addressKecamatan` 三个 arb key 合并 Wilayah 后零引用，story 未要求删，保留。flutter analyze 0 issue、flutter test 4919 绿。
+
+- **L1/L2 待本地验收**：AC1–AC4 的视觉 / 还原度 ≥ 95（L2 模拟器，H1–H5、I1）；10.1 真后端核对地址簿 `serviceable` 标注与结算页不可提交一致（L1）。本 story 无后端改动、无迁移、无 L1 测试类。
+- **T0 核对结果 / 对 story 文件的名字对齐**：
+  - 3.1：`ShippingAddress.serviceable`（`bool?`，缺键 / 非布尔 = null，不写回）与 `RegionKecamatan.id` 已由前序提交在 App 模型落地 → T1 只补测试；后端 `ShippingAddressView.serviceable` 一致。
+  - 7.1：`AddressFormBody` 实际签名多 `editToken`（AC3.1 已改写）；文件为 `presentation/address_form_body.dart`，未新建 `widgets/address_form.dart`。
+  - 8.1：`ProfileRecoZoneV2` 已删、`toko_page_v2` 已不存在、`REPURCHASE_FOOD_LOW → /shop` 深链与测试已加（AC6.5 跳过）；`v140_events_inventory_test` **未**改（本 story 改，AC6.7）。
+  - 8.2：B6 抽屉实际为 `presentation/widgets/delivery_area_sheet.dart` `DeliveryAreaSheet` / `showDeliveryAreaSheet`，B6 并无「Alamat saya」快捷组。
+- **AC4 处置**：泛化复用 B6（未新建 `region_picker_sheet.dart`）：`DeliveryAreaSheet` 加可选 `formMode` / `formSelected`（默认值 = 8.2 现状，8.2 测试未改且全绿），新增 `showRegionPickerSheet` + `RegionSelection`。表单模式：标题 `addressRegionPick`、不要求区有 id（按名称回填）、各级当前所选打勾、已有值时直接展开到该市的区列表、「Belum dilayani」句首大写渲染（仅表单模式；B6 默认模式保持小写原样）。
+- **AC3**：省市区三下拉 → 一行「Wilayah」（`addressRegionRow`），开通范围提示移到该行下方、可配送提示改 `check_circle`；提交失败错误条移到表单第一个子项（`AppColors.coralTint` 底 + 12 号 `errorText`）并滚回顶部（修正原先提示在底部却滚到顶部的错位）；标签胶囊显示走 arb，提交值仍 `Rumah|Kantor|Lainnya`（`address_label.dart` 的 `kAddressLabelValues` / `addressDisplayLabel`）；编辑页 `AddressFormPageV2` 改 ConsumerStateful：watch `addressListProvider` 定位同 token 一次后固定，找不到 / 加载失败 → toast `addressLoadFailed` 并 pop；手机号预填去 `+62`；标题新增 / 编辑区分；顶栏统一白底 + `chevron_left_rounded` 28。结算页 D5 共用同一组件，行为（Simpan & pakai）不变，其测试经共享填表 helper 更新后全绿。
+- **AC1 / AC2**：地址簿页重写（白卡圆角 16 / 内边距 16 / 卡间 12、Utama 紫标签、灰地址标签、`serviceable == false` 橙标签、右对齐操作链接、吸底 48 高按钮 `addressAddButton`、空态 / 失败态）；删除走 `showShopConfirm` + `showAppToastOnOverlay`（不再用 SnackBar），删除中卡内操作禁用；`serviceable` 不拦截设默认 / 编辑 / 选择器选择。选择器模式 4 条既有用例原样全绿。
+- **AC6 复购清理（实际删了什么）**：
+  - 删整文件 `lib/features/shop/presentation/widgets/repurchase_zones_v2.dart`（只剩 `RepurchaseTriggerCardV2` / `_Card`，连带埋点 `toko_repurchase_card_shown` / `_tapped` / `_why_tapped` / `_dismiss_tapped`）；`growth_archive_page.dart` 的 import 与 `const RepurchaseTriggerCardV2(source: 'diary')` 删除，其余原样。
+  - `shop_repurchase_repository.dart` 删 `cards()` / `dismiss()` / `repurchaseCardsProvider`，**保留** `recommendations()` / `recommendationsProvider`；`shop_repurchase.dart` 删 `RepurchaseCard`，保留 `Recommendations` / `RecommendationItem` / `ProfileSummary`；`ApiPaths.meShopRepurchaseCards` 删除。
+  - arb（两份同删，均已 grep 零引用）：`recoTriggerEyebrow/Conclusion/ConclusionOverdue/Basis/Why/Later`、`recoBasicTitle/recoBasicBadge`、`recoDegradedBody`、`recoSettingsEntry/recoSettingsEntrySub`、`tokoRestockLabel/Card/CardOverdue/Dismiss/Tag/TagOverdue`、`tokoBuyAgain`；**另删** `recoPersonalTitle` / `recoPersonalSubtitle`（story 未点名，但同属已删 `ProfileRecoZoneV2` 的复购推荐区、零引用，按 P-10「删除复购相关 key」一并删）。
+  - `petProfileWeightHint` 改值（key 与引用不变）。归因 `toko_repurchase_card` 取值与 `attribution_closure_test.dart` 不动。
+- **被删组件专属测试（随组件删除，非按设计打破的断言）**：整文件 `test/shop/repurchase_zones_v2_test.dart`，共 14 条，全部针对 `RepurchaseTriggerCardV2` / `RepurchaseCard`：①三个数齐全 → 渲染且依据行含三项；②缺日均用量 → 整卡不渲染；③缺购买日期 → 整卡不渲染；④依据齐全与不齐混排只渲染齐全的；⑤未过期「±N 天」；⑥已过预估耗尽日 →「可能已经吃完」；⑦可解释性入口是文字不是图标；⑧曝光埋点只带 trigger_type 与 card_source；⑨触发卡 411dp 不溢出；⑩有价渲染价格行；⑪price == null 不画；⑫price == 0 不画；⑬hasPrice 把 null 与 0 判为无价；⑭fromJson 读 price 与 skuToken。（`ProfileRecoZoneV2` 的用例 8.1 已随组件删除。）
+- **按设计打破、已改断言的既有测试**：`address_form_page_v2_test.dart`「三级都是选择器…」→「三级合并为 Wilayah 一行…」、「换了上级会清空下级」→ 断言移到抽屉内；`v140_events_inventory_test.dart` 三条复购事件移到新断言「V1.4.2 FR-136 已停用的复购卡事件必须不存在于 lib/」；`epic1_analytics_test.dart` PII 白名单移除 `card_source`；共享填表 helper `fill_address_form.dart` 改为 Wilayah 行 + 抽屉（`address_form_body_test` / `checkout_page_v3_test` D5 用例随之全绿）。
+- **新增测试**：`address_book_page_test.dart` +13（H1 三种 serviceable / Utama / 标签本地化 / 吸底按钮 / 满 20 禁用、H2 空态、加载失败重试、H5 取消 / 确认 / 默认被删提示 / 删除失败 / 删除中禁用、选择器下不可配送仍可选）；`address_form_page_v2_test.dart` +6（新增标题、编辑预填全部字段 + Ubah alamat、找不到 token toast+pop、编辑 PUT 且标签提交值为印尼语、标签 en 显示、提交失败错误条在顶部）；新 `region_picker_form_mode_test.dart` 4 条（H4）；`address_test.dart` +2（serviceable 容错、标签映射）；`growth_archive_test.dart` +1（Diary 无复购 / 推荐组件）；新 `pet_profile_edit_weight_hint_test.dart` 2 条。
+- **L0 结果**：`flutter analyze` No issues found；全量 `flutter test` 4919 通过 / 3 skip（既有）/ 0 失败；`check-flyway-versions.sh origin/main` OK（无迁移）。
+
 #### 待确认
 
+1. 「Belum dilayani」大小写：复用 `addressNotServiceable`，表单模式下句首大写渲染；B6 默认模式仍为原值（8.2 现状，未改）。若产品要两处一致或独立 key 再补。
+2. `addressDeleteFailed` 文案为草拟（§6 未列）：ID「Gagal menghapus alamat. Coba lagi.」/ EN「Couldn't delete the address. Try again.」。
+3. 待设计确认（C-11，UI 稿有、§6 未列，按 UI 原文 / 现有 token 实现）：地址卡标签尺寸（11 号 w600、圆角 6）、灰标签底色取 `divider2`、提交失败错误条底色取 `AppColors.coralTint`。
+4. 地址标签 `addressLabelHome/Office/Other` 的 ID 值与提交字面量相同（Rumah / Kantor / Lainnya）；EN 显示 Home / Office / Other。
+5. 「设为默认」失败仍无错误提示（线上原状，story 未要求，未改）。
+
 ### File List
+
+前端（petgo_app/）：
+- 改 `lib/features/shop/address/presentation/address_book_page.dart`
+- 改 `lib/features/shop/address/presentation/address_form_body.dart`
+- 改 `lib/features/shop/address/presentation/address_form_page_v2.dart`
+- 新 `lib/features/shop/address/presentation/address_label.dart`
+- 改 `lib/features/shop/presentation/widgets/delivery_area_sheet.dart`
+- 删 `lib/features/shop/presentation/widgets/repurchase_zones_v2.dart`
+- 改 `lib/features/shop/data/shop_repurchase_repository.dart`
+- 改 `lib/features/shop/domain/shop_repurchase.dart`
+- 改 `lib/core/network/api_paths.dart`
+- 改 `lib/features/profile/presentation/growth_archive_page.dart`
+- 改 `lib/l10n/app_id.arb`、`lib/l10n/app_en.arb`
+- 改 `test/shop/address/address_book_page_test.dart`、`address_form_page_v2_test.dart`、`address_test.dart`、`fill_address_form.dart`
+- 新 `test/shop/address/region_picker_form_mode_test.dart`
+- 删 `test/shop/repurchase_zones_v2_test.dart`
+- 改 `test/profile/growth_archive_test.dart`；新 `test/profile/pet_profile_edit_weight_hint_test.dart`
+- 改 `test/analytics/v140_events_inventory_test.dart`、`test/shop/epic1_analytics_test.dart`
+
+文档：本 story 文件。后端 / 迁移：无。
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev）。
+- 2026-11-06：dev-story 实现完成（L0 绿），AC3.1 签名对齐 7.1 实际提交；Status → review。

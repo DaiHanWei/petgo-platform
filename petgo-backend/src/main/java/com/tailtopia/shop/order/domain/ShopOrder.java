@@ -184,6 +184,101 @@ public class ShopOrder {
     @Column(name = "return_window_ends_at")
     private Instant returnWindowEndsAt;
 
+    // ---------- v1.4.2 shop Story 3.2：新结算模式（V20261105_1625） ----------
+
+    /** 结算来源；🔴 {@code null} = 本版之前下的单（PawCoin 付款时扣的过渡规则据此判定）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "checkout_source", updatable = false, length = 16)
+    private CheckoutSource checkoutSource;
+
+    /** 满减券抵扣（≥ 0）。存量单为 0。 */
+    @Column(name = "discount_coupon_amount", nullable = false, updatable = false)
+    private long discountCouponAmount;
+
+    /** 实际采用的满减券（{@code user_coupons.id}，不对外）。 */
+    @Column(name = "discount_user_coupon_id", updatable = false)
+    private Long discountUserCouponId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "shipping_discount_source", updatable = false, length = 24)
+    private com.tailtopia.shop.order.pricing.ShippingDiscountSource shippingDiscountSource;
+
+    /** 实际采用的免运券（{@code user_coupons.id}，不对外）；被满额免运胜出时为 null。 */
+    @Column(name = "free_shipping_user_coupon_id", updatable = false)
+    private Long freeShippingUserCouponId;
+
+    @Column(name = "insurance_fee", nullable = false, updatable = false)
+    private long insuranceFee;
+
+    @Column(name = "insurance_selected", nullable = false, updatable = false)
+    private boolean insuranceSelected;
+
+    @Column(name = "courier_code", updatable = false, length = 32)
+    private String courierCode;
+    @Column(name = "courier_service_code", updatable = false, length = 32)
+    private String courierServiceCode;
+    @Column(name = "courier_name", updatable = false, length = 64)
+    private String courierName;
+    @Column(name = "courier_service_name", updatable = false, length = 64)
+    private String courierServiceName;
+    @Column(name = "courier_eta_text", updatable = false, length = 32)
+    private String courierEtaText;
+
+    /** 锁定的 Biteship 报价（{@code shipping_quotes.id}，不对外）。 */
+    @Column(name = "shipping_quote_id", updatable = false)
+    private Long shippingQuoteId;
+
+    /** 用户提交时是否勾选「使用 PawCoin」。存量单为 null。 */
+    @Column(name = "coin_selected", updatable = false)
+    private Boolean coinSelected;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_reason", length = 32)
+    private com.tailtopia.shop.order.refund.CancelReason cancelReason;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    /** 4.2 迟到款重新下单：新单指向原单（本 story 只建列）。 */
+    @Column(name = "reorder_of_order_id", updatable = false)
+    private Long reorderOfOrderId;
+
+    /** 3.3 / 4.2 迟到款三列（同生同灭，库级 CHECK；本 story 只建列）。 */
+    @Column(name = "late_paid_amount")
+    private Long latePaidAmount;
+    @Column(name = "late_paid_at")
+    private Instant latePaidAt;
+    @Column(name = "late_paid_intent_id")
+    private Long latePaidIntentId;
+    /** {@code REORDERED | REFUNDED}（4.2 写入）。 */
+    @Column(name = "late_payment_resolution", length = 16)
+    private String latePaymentResolution;
+
+    // ---------- v1.4.2 shop Story 5.1：发货来源 / 运单失败 / 物流异常（异常组由 5.2 使用） ----------
+    /** 转 SHIPPED 的来源（只后台可见）；1.4.2 前的存量已发货订单为 null。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "shipped_source", length = 24)
+    private ShippedSource shippedSource;
+    @Column(name = "waybill_failed_at")
+    private Instant waybillFailedAt;
+    /** {@code <类别>:<Biteship 错误码或简述>}，≤ 200 字。🔒 不含地址 / 电话 / 姓名。 */
+    @Column(name = "waybill_fail_reason", length = 200)
+    private String waybillFailReason;
+    /** 下运单调用次数（每次调用前 +1 并提交，reference_id 序号来源）。 */
+    @Column(name = "waybill_attempts", nullable = false)
+    private int waybillAttempts;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "logistics_exception", length = 24)
+    private LogisticsException logisticsException;
+    @Column(name = "logistics_exception_at")
+    private Instant logisticsExceptionAt;
+    @Column(name = "logistics_exception_confirmed", nullable = false)
+    private boolean logisticsExceptionConfirmed;
+    @Column(name = "claim_pending", nullable = false)
+    private boolean claimPending;
+    @Column(name = "timer_resumed_at")
+    private Instant timerResumedAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -240,12 +335,146 @@ public class ShopOrder {
         return o;
     }
 
+    /**
+     * 新结算模式建单（v1.4.2 shop Story 3.2 AC3.2 第 8 步）。金额全部来自 {@code ShopPricingCalculator}（P-1），
+     * 本方法只搬运并断言应付公式与库级 {@code ck_shop_orders_total_formula} 一致。
+     *
+     * <p>🔴 {@code shippingDiscount} 入参为计价器给出的<b>正数减免额</b>，落库取负（沿用 ≤ 0 的存量口径）。
+     *
+     * @throws IllegalStateException 应付 ≠ 商品金额 − 满减 + 运费 − 运费减免 + 保价费（计价器口径漂移的护栏）
+     */
+    public static ShopOrder placeCheckout(PlaceSnapshot s) {
+        ShopOrder o = place(s.publicToken(), s.displayNo(), s.now(), s.userId(), s.goodsAmount(),
+                s.shippingFee(), Math.negateExact(s.shippingDiscount()), s.ship(),
+                s.referrerMerchantId());
+        o.discountCouponAmount = s.discountCouponAmount();
+        o.insuranceFee = s.insuranceFee();
+        o.insuranceSelected = s.insuranceSelected();
+        o.totalAmount = s.payable();
+        long formula = Math.addExact(Math.addExact(Math.subtractExact(s.goodsAmount(),
+                s.discountCouponAmount()), Math.subtractExact(s.shippingFee(), s.shippingDiscount())),
+                s.insuranceFee());
+        if (formula != s.payable() || s.payable() < 0) {
+            throw new IllegalStateException("应付与订单头金额公式不一致");
+        }
+        o.checkoutSource = s.checkoutSource();
+        o.discountUserCouponId = s.discountUserCouponId();
+        o.shippingDiscountSource = s.shippingDiscountSource();
+        o.freeShippingUserCouponId = s.freeShippingUserCouponId();
+        o.courierCode = s.courierCode();
+        o.courierServiceCode = s.courierServiceCode();
+        o.courierName = s.courierName();
+        o.courierServiceName = s.courierServiceName();
+        o.courierEtaText = s.courierEtaText();
+        o.shippingQuoteId = s.shippingQuoteId();
+        o.coinSelected = s.coinSelected();
+        return o;
+    }
+
+    /**
+     * 迟到款重新下单建新单（v1.4.2 shop Story 4.2 AC4.1，D-11 / 架构 §3.6 第 5 条「不重新询价」）。
+     *
+     * <p>复制原单的地址快照、全部订单头金额（商品金额 / 满减 / 运费 / 运费减免（≤ 0 口径原样）/ 保价 / 应付）、
+     * 减免来源、两个用户券 id、快递五列、报价 id、{@code coin_selected}、归属门店（购买决定发生在原单那一刻）；
+     * 写 {@code checkout_source = REORDER}、{@code reorder_of_order_id = original.id}；状态 {@code PENDING_PAYMENT}、
+     * {@code expires_at = now + 60 分钟}（调用方随即在同一事务内转待发货）。🔴 不挂支付意图、不写拆分（由调用方
+     * 按计价器 {@code reorderSettlement} 出参 {@code applyPaymentSplit}）。
+     */
+    public static ShopOrder placeReorder(ShopOrder original, String publicToken, String displayNo, Instant now) {
+        if (original.getId() == null) {
+            throw new IllegalStateException("原单未持久化");
+        }
+        ShopOrder o = place(publicToken, displayNo, now, original.userId, original.goodsSubtotal,
+                original.shippingFee, original.shippingDiscount, original.shipTo(), original.referrerMerchantId);
+        o.discountCouponAmount = original.discountCouponAmount;
+        o.insuranceFee = original.insuranceFee;
+        o.insuranceSelected = original.insuranceSelected;
+        o.totalAmount = original.totalAmount;
+        long formula = original.goodsSubtotal - original.discountCouponAmount + original.shippingFee
+                + original.shippingDiscount + original.insuranceFee;
+        if (formula != original.totalAmount || original.totalAmount <= 0) {
+            throw new IllegalStateException("原单应付与订单头金额公式不一致");
+        }
+        o.checkoutSource = CheckoutSource.REORDER;
+        o.reorderOfOrderId = original.getId();
+        o.discountUserCouponId = original.discountUserCouponId;
+        o.shippingDiscountSource = original.shippingDiscountSource;
+        o.freeShippingUserCouponId = original.freeShippingUserCouponId;
+        o.courierCode = original.courierCode;
+        o.courierServiceCode = original.courierServiceCode;
+        o.courierName = original.courierName;
+        o.courierServiceName = original.courierServiceName;
+        o.courierEtaText = original.courierEtaText;
+        o.shippingQuoteId = original.shippingQuoteId;
+        o.coinSelected = original.coinSelected;
+        return o;
+    }
+
+    /**
+     * {@link #placeCheckout} 的入参快照。
+     *
+     * @param shippingDiscount 计价器的运费减免（<b>正数</b>），落库取负
+     * @param payable          计价器应付
+     */
+    public record PlaceSnapshot(String publicToken, String displayNo, Instant now, long userId,
+            AddressSnapshot ship, Long referrerMerchantId, CheckoutSource checkoutSource,
+            long goodsAmount, long discountCouponAmount, long shippingFee, long shippingDiscount,
+            com.tailtopia.shop.order.pricing.ShippingDiscountSource shippingDiscountSource,
+            long insuranceFee, boolean insuranceSelected, long payable,
+            Long discountUserCouponId, Long freeShippingUserCouponId,
+            String courierCode, String courierServiceCode, String courierName,
+            String courierServiceName, String courierEtaText, Long shippingQuoteId,
+            Boolean coinSelected) {
+    }
+
+    /**
+     * 未付款取消（v1.4.2 shop Story 3.2 AC6.3 第 4 步）：写原因与时刻，经唯一入口转 {@code CANCELLED}。
+     * 原因只写第一次（重复取消不改写）。
+     */
+    public void markCancelled(com.tailtopia.shop.order.refund.CancelReason reason, Instant at) {
+        transitionTo(ShopOrderStatus.CANCELLED);
+        if (this.cancelReason == null) {
+            this.cancelReason = reason;
+            this.cancelledAt = at;
+        }
+    }
+
+    /**
+     * 已付款订单的整单取消（v1.4.2 shop Story 4.1 AC3 第 2 步）：写原因与时刻，经唯一入口转 {@code REFUNDING}；
+     * 全部退款单完成后由 {@code ShopOrderRefundService#settleOrderIfDone} 转 {@code REFUNDED}。
+     * 🔴 不能用 {@link #markCancelled}（那是未付款取消转 {@code CANCELLED}）。原因只写第一次。
+     */
+    public void markRefunding(com.tailtopia.shop.order.refund.CancelReason reason, Instant at) {
+        transitionTo(ShopOrderStatus.REFUNDING);
+        if (this.cancelReason == null) {
+            this.cancelReason = reason;
+            this.cancelledAt = at;
+        }
+    }
+
     /** 支付窗长度（AD-8）。🔴 与 App 端倒计时同源：客户端只展示服务端给的截止时刻。 */
     public static final java.time.Duration PAYMENT_WINDOW = java.time.Duration.ofMinutes(60);
 
-    /** 是否已过支付窗（无窗的历史订单恒 false —— 它们不参与超时扫描）。 */
+    /**
+     * 是否已过订单支付窗（无窗的历史订单恒 false）。
+     *
+     * <p>🔴 v1.4.2 shop Story 3.3（S-1 / B1）：<b>只用于 {@link #displayStatusAt} / {@code canPay} / {@code /pay} 拒绝</b>。
+     * <b>任何关单分支都不得直接用它</b> —— 订单窗（60 分钟）早于 GemPay 码失效（出码 + 65 分钟），按它关单会把
+     * 60~65 分钟内的付款变成迟到款。关单一律走 {@code ShopOrderPaymentService#isClosable}。
+     */
     public boolean isPaymentExpiredAt(Instant now) {
         return expiresAt != null && now.isAfter(expiresAt);
+    }
+
+    /**
+     * 对用户展示的状态（v1.4.2 shop Story 3.3 AC7.1，S-7）：宽限期（订单窗已过、码尚未失效、尚未关单）的待支付单
+     * <b>直接显示已取消</b>；期间到账则转待发货，用户刷新即见。<b>唯一实现</b>：详情、订单中心与 6.2 列表分组都复用它。
+     */
+    public ShopOrderStatus displayStatusAt(Instant now) {
+        if (status == ShopOrderStatus.PENDING_PAYMENT && isPaymentExpiredAt(now)) {
+            return ShopOrderStatus.CANCELLED;
+        }
+        return status;
     }
 
     public Instant getExpiresAt() {
@@ -302,23 +531,133 @@ public class ShopOrder {
     // ---------- 履约段（Story 4.1） ----------
 
     /**
-     * 自动确认收货的两段时长（S-1 已定 M = 7）。
+     * 自动确认收货的两段时长。
      *
-     * <p>标准快递 2–4 日 + 3 日冗余。最坏路径：D7 置 {@code DELIVERED} → D14 置 {@code COMPLETED}，
-     * 退货窗口 D7–D14。
+     * <p>v1.4.2 shop Story 5.1（D-12，PRD 旅程 D 第 6 条）：发货起自动送达兜底由 7 天改为 <b>14 天</b>
+     * （Biteship 回传签收是主路径，本兜底只管回传丢失；存量手工发货订单同样按 14 天）；送达后自动完成仍 7 天。
+     * 最坏路径：D14 置 {@code DELIVERED} → D21 置 {@code COMPLETED}，退货窗口 D14–D21。
      */
-    public static final java.time.Duration AUTO_DELIVER_AFTER = java.time.Duration.ofDays(7);
+    public static final java.time.Duration AUTO_DELIVER_AFTER = java.time.Duration.ofDays(14);
     public static final java.time.Duration AUTO_COMPLETE_AFTER = java.time.Duration.ofDays(7);
     /** 🔴 Epic 5 退货窗口长度，自「签收」（进入 {@code DELIVERED}）起算。 */
     public static final java.time.Duration RETURN_WINDOW = java.time.Duration.ofDays(7);
 
-    /** 首个包裹发出：订单转 {@code SHIPPED} 并记录发货时刻（M 日自动送达以此起算）。 */
+    /** 首个包裹发出（后台手工运单）：委托 {@link #markShipped(Instant, ShippedSource)}，来源 {@code MANUAL}。 */
     public void markShipped(Instant at) {
+        markShipped(at, ShippedSource.MANUAL);
+    }
+
+    /**
+     * 订单转 {@code SHIPPED} 并记录发货时刻与来源（M 日自动送达以此起算）。
+     * 🔴 一单多包 / Biteship 重复回传：已 SHIPPED 时不再改写发货时刻与来源。
+     */
+    public void markShipped(Instant at, ShippedSource source) {
         if (status == ShopOrderStatus.SHIPPED) {
             return;     // 一单多包：第二个包裹不再改写发货时刻
         }
         transitionTo(ShopOrderStatus.SHIPPED);
         this.shippedAt = at;
+        this.shippedSource = source;
+    }
+
+    /** 下运单前 +1（v1.4.2 shop 5.1 AC4.2）：返回 +1 后的次数，作 {@code reference_id} 序号。 */
+    public int incrementWaybillAttempts() {
+        this.waybillAttempts = Math.addExact(this.waybillAttempts, 1);
+        this.updatedAt = Instant.now();
+        return this.waybillAttempts;
+    }
+
+    /** 记运单失败（订单状态不变）。原因截断至 200 字。 */
+    public void recordWaybillFailure(Instant at, String reason) {
+        this.waybillFailedAt = at;
+        String r = reason == null ? "UNKNOWN" : reason;
+        this.waybillFailReason = r.length() > 200 ? r.substring(0, 200) : r;
+        this.updatedAt = Instant.now();
+    }
+
+    public void clearWaybillFailure() {
+        this.waybillFailedAt = null;
+        this.waybillFailReason = null;
+    }
+
+    /**
+     * 写物流异常标记（v1.4.2 shop 5.1 AC8.2 / 5.2 AC1.1）：当前无标记 → 写入（未确认）；当前为 {@code STALLED} 且新类型非
+     * {@code STALLED} → 覆盖（更严重的取代停滞，5.2 拍板①）；当前为其他类型 → 不覆盖、返回 false（调用方 WARN）。
+     * 只改订单头列，不改订单状态（D-13）。
+     *
+     * @return 是否写入
+     */
+    public boolean flagLogisticsException(LogisticsException type, Instant at) {
+        if (logisticsException != null && logisticsException != LogisticsException.STALLED) {
+            return false;
+        }
+        if (logisticsException == type) {
+            return false;
+        }
+        this.logisticsException = type;
+        this.logisticsExceptionAt = at;
+        this.logisticsExceptionConfirmed = false;
+        this.updatedAt = Instant.now();
+        return true;
+    }
+
+    /**
+     * 确认物流异常（v1.4.2 shop 5.2 AC1.2，运营）：当前异常须 = {@code type}；当前为空 / {@code STALLED} 时直接写入该
+     * {@code type}（运营手工标记丢件 / 破损，写入时刻 = {@code at}）。置 {@code logistics_exception_confirmed = true}；
+     * {@code claimPending = true} 时置 {@code claim_pending}（🔴 只置位不清除，AC8）。
+     *
+     * @param type 只允许 {@code RETURNED / LOST / DAMAGED}（C-6）；揽收失败 / 停滞用户侧本就不提示，不需要确认
+     * @throws AppException 类型不允许 422；当前为其他异常 409
+     */
+    public void confirmLogisticsException(LogisticsException type, boolean claimPending, Instant at) {
+        if (type == null || !type.userVisibleWhenConfirmed()) {
+            throw AppException.validation("只有退回 / 丢件 / 破损需要确认");
+        }
+        if (logisticsException == null || logisticsException == LogisticsException.STALLED) {
+            this.logisticsException = type;
+            this.logisticsExceptionAt = at;
+        } else if (logisticsException != type) {
+            throw AppException.conflict("订单当前物流异常为 " + logisticsException + "，不能按 " + type + " 确认");
+        }
+        this.logisticsExceptionConfirmed = true;
+        if (claimPending) {
+            this.claimPending = true;
+        }
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 清除物流异常（v1.4.2 shop 5.2 AC1.3）：清空类型 / 时刻、{@code confirmed = false}，<b>{@code timer_resumed_at = at}</b>
+     * （自动送达 / 完成从此重新计时）；🔴 {@code claim_pending} 不动（已在索赔的由运营自行撤回）。
+     *
+     * @return 是否有标记被清除（无标记幂等返回 false）
+     */
+    public boolean clearLogisticsException(Instant at) {
+        if (logisticsException == null) {
+            return false;
+        }
+        this.logisticsException = null;
+        this.logisticsExceptionAt = null;
+        this.logisticsExceptionConfirmed = false;
+        this.timerResumedAt = at;
+        this.updatedAt = Instant.now();
+        return true;
+    }
+
+    /** 索赔提醒（v1.4.2 shop 5.2 AC1.4）。置 false 的唯一入口是运营（AC8.2）。 */
+    public void setClaimPending(boolean pending) {
+        this.claimPending = pending;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 用户侧「配送异常」唯一判据（v1.4.2 shop 5.2 AC1.6 / C-6）：已确认的 {@code RETURNED / LOST / DAMAGED}，且订单仍在
+     * {@code SHIPPED / DELIVERED}（进入退款 / 取消 / 完成后状态头已有更准确的文案）。详情、列表（6.2）、埋点都只看它。
+     */
+    public boolean hasUserVisibleDeliveryIssue() {
+        return logisticsExceptionConfirmed && logisticsException != null
+                && logisticsException.userVisibleWhenConfirmed()
+                && (status == ShopOrderStatus.SHIPPED || status == ShopOrderStatus.DELIVERED);
     }
 
     /**
@@ -368,16 +707,25 @@ public class ShopOrder {
         return end != null && !now.isAfter(end);
     }
 
-    /** 发货起已超 M 日仍无任何送达标记 → 该由 {@code @Scheduled} 兜底置送达。 */
+    /**
+     * 发货起已超 M 日仍无任何送达标记 → 该由 {@code @Scheduled} 兜底置送达。
+     *
+     * <p>v1.4.2 shop 5.2 AC1.5（D-13）：🔴 带任一物流异常标记 → 不到期；计时起点 = {@code max(shippedAt, timer_resumed_at)}
+     * （{@code timer_resumed_at} 为空时等同原逻辑）。
+     */
     public boolean isAutoDeliverDue(Instant now) {
-        return status == ShopOrderStatus.SHIPPED && shippedAt != null
-                && now.isAfter(shippedAt.plus(AUTO_DELIVER_AFTER));
+        return status == ShopOrderStatus.SHIPPED && shippedAt != null && logisticsException == null
+                && now.isAfter(timerStart(shippedAt).plus(AUTO_DELIVER_AFTER));
     }
 
-    /** 送达起已超 7 日用户仍未确认 → 自动完成（FR-102）。 */
+    /** 送达起已超 7 日用户仍未确认 → 自动完成（FR-102）。5.2 AC1.5：同上，带异常不到期、起点取 {@code max(deliveredAt, timer_resumed_at)}。 */
     public boolean isAutoCompleteDue(Instant now) {
-        return status == ShopOrderStatus.DELIVERED && deliveredAt != null
-                && now.isAfter(deliveredAt.plus(AUTO_COMPLETE_AFTER));
+        return status == ShopOrderStatus.DELIVERED && deliveredAt != null && logisticsException == null
+                && now.isAfter(timerStart(deliveredAt).plus(AUTO_COMPLETE_AFTER));
+    }
+
+    private Instant timerStart(Instant base) {
+        return timerResumedAt != null && timerResumedAt.isAfter(base) ? timerResumedAt : base;
     }
 
     public Instant getShippedAt() {
@@ -409,9 +757,15 @@ public class ShopOrder {
      */
     public void applyPaymentSplit(com.tailtopia.pay.domain.PayChannel channel,
             PaymentSplit split) {
+        applyPaymentSplit(channel, split.coinAmount(), split.cashAmount());
+    }
+
+    /** 同上，两段金额直接取计价器出参（v1.4.2 shop Story 3.2：拆分只在 {@code ShopPricingCalculator}）。 */
+    public void applyPaymentSplit(com.tailtopia.pay.domain.PayChannel channel, long coinAmount,
+            long cashAmount) {
         this.payChannel = channel;
-        this.coinAmount = split.coinAmount();
-        this.cashAmount = split.cashAmount();
+        this.coinAmount = coinAmount;
+        this.cashAmount = cashAmount;
         this.updatedAt = Instant.now();
     }
 
@@ -568,6 +922,133 @@ public class ShopOrder {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    // ---------- v1.4.2 shop Story 3.2 getter ----------
+
+    public CheckoutSource getCheckoutSource() {
+        return checkoutSource;
+    }
+
+    /** 🔴 PawCoin 已在提交时扣（S-3）；false = 本版之前下的单，仍走付款时扣的过渡规则。 */
+    public boolean isCoinDebitedAtSubmit() {
+        return checkoutSource != null;
+    }
+
+    public long getDiscountCouponAmount() {
+        return discountCouponAmount;
+    }
+
+    public Long getDiscountUserCouponId() {
+        return discountUserCouponId;
+    }
+
+    public com.tailtopia.shop.order.pricing.ShippingDiscountSource getShippingDiscountSource() {
+        return shippingDiscountSource;
+    }
+
+    public Long getFreeShippingUserCouponId() {
+        return freeShippingUserCouponId;
+    }
+
+    public long getInsuranceFee() {
+        return insuranceFee;
+    }
+
+    public boolean isInsuranceSelected() {
+        return insuranceSelected;
+    }
+
+    public String getCourierCode() {
+        return courierCode;
+    }
+
+    public String getCourierServiceCode() {
+        return courierServiceCode;
+    }
+
+    public String getCourierName() {
+        return courierName;
+    }
+
+    public String getCourierServiceName() {
+        return courierServiceName;
+    }
+
+    public String getCourierEtaText() {
+        return courierEtaText;
+    }
+
+    public Long getShippingQuoteId() {
+        return shippingQuoteId;
+    }
+
+    public Boolean getCoinSelected() {
+        return coinSelected;
+    }
+
+    public com.tailtopia.shop.order.refund.CancelReason getCancelReason() {
+        return cancelReason;
+    }
+
+    public Instant getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public Long getReorderOfOrderId() {
+        return reorderOfOrderId;
+    }
+
+    public Long getLatePaidAmount() {
+        return latePaidAmount;
+    }
+
+    public Instant getLatePaidAt() {
+        return latePaidAt;
+    }
+
+    public Long getLatePaidIntentId() {
+        return latePaidIntentId;
+    }
+
+    public String getLatePaymentResolution() {
+        return latePaymentResolution;
+    }
+
+    public ShippedSource getShippedSource() {
+        return shippedSource;
+    }
+
+    public Instant getWaybillFailedAt() {
+        return waybillFailedAt;
+    }
+
+    public String getWaybillFailReason() {
+        return waybillFailReason;
+    }
+
+    public int getWaybillAttempts() {
+        return waybillAttempts;
+    }
+
+    public LogisticsException getLogisticsException() {
+        return logisticsException;
+    }
+
+    public Instant getLogisticsExceptionAt() {
+        return logisticsExceptionAt;
+    }
+
+    public boolean isLogisticsExceptionConfirmed() {
+        return logisticsExceptionConfirmed;
+    }
+
+    public boolean isClaimPending() {
+        return claimPending;
+    }
+
+    public Instant getTimerResumedAt() {
+        return timerResumedAt;
     }
 
     /** 🔒 不打印任何 PII。 */

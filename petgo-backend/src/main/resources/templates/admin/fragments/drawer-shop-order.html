@@ -134,7 +134,8 @@
                        下面那个发货下拉用的就是 carrierName，两处不一致时运营在下拉里选「SiCepat」、
                        发完货表格里却显示「SICEPAT」，看起来像选错了家。
                        ⚠️ 承运商名**不走 i18n**：它是品牌名，三语通用（与 places 的城市名同类）。 */-->
-                <td th:text="${p.carrier.displayName()}">SiCepat</td>
+                <!--/* v1.4.2 shop 5.1：carrier 改为字符串（Biteship 运单存任意快递码大写），展示名走 carrierDisplayName()（三家取品牌写法，其余原样）。 */-->
+                <td th:text="${p.carrierDisplayName()}">SiCepat</td>
                 <td th:text="${p.trackingNo}">JP123</td>
                 <td th:text="${#numbers.formatInteger(p.carrierCost, 0, 'COMMA')}">18.000</td>
                 <!--/* ShipmentStatus 只有 SHIPPED / DELIVERED，与订单状态那两档同义，直接复用既有 key；

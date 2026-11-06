@@ -9,6 +9,7 @@ import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
 import com.tailtopia.shared.analytics.AnalyticsDistinctId;
+import com.tailtopia.shop.order.event.ShopOrderPaidEvent;
 import com.tailtopia.shop.order.event.ShopPaymentIntentCreatedEvent;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,11 @@ class ShopPaymentAnalyticsListenerTest {
                 "IDR");
     }
 
+    /** v1.4.2 shop Story 3.2：shop_payment_paid 由订单「已付款」事件触发。 */
+    private ShopOrderPaidEvent orderPaid(String payChannel, String source) {
+        return new ShopOrderPaidEvent(9L, "ord-token", UID, 285_000L, payChannel, source);
+    }
+
     private PaymentIntentFailedEvent failed(PaymentPurpose purpose,
             PaymentFailureCategory category) {
         return new PaymentIntentFailedEvent(1L, "pi-1", UID, purpose, PayChannel.QRIS, 285_000L,
@@ -66,9 +72,9 @@ class ShopPaymentAnalyticsListenerTest {
     }
 
     @Test
-    @DisplayName("到账 → shop_payment_paid")
+    @DisplayName("到账 → shop_payment_paid（v1.4.2：由 ShopOrderPaidEvent 触发，order_amount = paidTotal）")
     void paidEvent() {
-        listener.onPaid(paid(PaymentPurpose.SHOP_ORDER));
+        listener.onOrderPaid(orderPaid("QRIS", "GATEWAY"));
 
         assertThat(captured).singleElement().satisfies(c -> {
             assertThat(c.event()).isEqualTo("shop_payment_paid");
@@ -101,7 +107,6 @@ class ShopPaymentAnalyticsListenerTest {
             if (p == PaymentPurpose.SHOP_ORDER) {
                 continue;
             }
-            listener.onPaid(paid(p));
             listener.onFailed(failed(p, PaymentFailureCategory.GATEWAY_DECLINED));
         }
         assertThat(captured).as("问诊 / 充值 / AI 解锁 / 高清身份证各有各的漏斗").isEmpty();
@@ -120,7 +125,7 @@ class ShopPaymentAnalyticsListenerTest {
     @DisplayName("🔒 逐键断言：订单号与任何 PII 一个都不出现")
     void neverEmitsOrderIdentifiersOrPii() {
         listener.onIntentCreated(new ShopPaymentIntentCreatedEvent(UID, "QRIS", 285_000L, false));
-        listener.onPaid(paid(PaymentPurpose.SHOP_ORDER));
+        listener.onOrderPaid(orderPaid("QRIS", "GATEWAY"));
         listener.onFailed(failed(PaymentPurpose.SHOP_ORDER,
                 PaymentFailureCategory.GATEWAY_DECLINED));
 
@@ -141,7 +146,7 @@ class ShopPaymentAnalyticsListenerTest {
     @Test
     @DisplayName("distinctId 走 AnalyticsDistinctId.of，不自造、不下发原始 userId")
     void distinctIdIsTheHashedForm() {
-        listener.onPaid(paid(PaymentPurpose.SHOP_ORDER));
+        listener.onOrderPaid(orderPaid("QRIS", "GATEWAY"));
 
         assertThat(captured).singleElement().satisfies(c -> {
             assertThat(c.distinctId()).isEqualTo(AnalyticsDistinctId.of(UID));
@@ -152,10 +157,37 @@ class ShopPaymentAnalyticsListenerTest {
     @Test
     @DisplayName("支付意图上没有「是否含 PawCoin」的信息 → 到账/失败事件不带该键，而不是瞎填 false")
     void paidAndFailedOmitHasPawcoinRatherThanGuessing() {
-        listener.onPaid(paid(PaymentPurpose.SHOP_ORDER));
+        listener.onOrderPaid(orderPaid("MIXED", "GATEWAY"));
         listener.onFailed(failed(PaymentPurpose.SHOP_ORDER, PaymentFailureCategory.EXPIRED));
 
         // 瞎填 false 会让漏斗按它分组时把混合支付单错归到纯现金一档。
         assertThat(captured).allSatisfy(c -> assertThat(c.props()).doesNotContainKey("has_pawcoin"));
+    }
+
+    // ---------- v1.4.2 shop Story 3.2 AC4.2（D-23） ----------
+
+    @Test
+    @DisplayName("🔴 纯币 / 零元单同样上报 shop_payment_paid（D-23 现状缺口）；键集合不变")
+    void pureCoinAndZeroPayAlsoEmitPaid() {
+        listener.onOrderPaid(orderPaid("PAWCOIN", "PURE_COIN"));
+        listener.onOrderPaid(orderPaid("QRIS", "ZERO_PAY"));
+
+        assertThat(captured).extracting(Captured::event)
+                .containsExactly("shop_payment_paid", "shop_payment_paid");
+        assertThat(captured.getFirst().props()).containsEntry("pay_channel", "PAWCOIN")
+                .containsEntry("order_amount", 285_000L);
+        assertThat(captured).allSatisfy(c -> assertThat(c.props().keySet())
+                .isSubsetOf("order_amount", "pay_channel"));
+    }
+
+    @Test
+    @DisplayName("🔴 PaymentIntentPaidEvent 不再触发 shop_payment_paid：监听器上没有接它的方法（迟到款意图不误发）")
+    void intentPaidEventNoLongerHandled() {
+        // 保留 PaymentIntentPaidEvent 夹具的引用，证明事件类型本身仍在（只是不再被本监听器订阅）
+        assertThat(paid(PaymentPurpose.SHOP_ORDER).purpose()).isEqualTo(PaymentPurpose.SHOP_ORDER);
+        for (java.lang.reflect.Method m : ShopPaymentAnalyticsListener.class.getDeclaredMethods()) {
+            assertThat(m.getParameterTypes()).as(m.getName())
+                    .doesNotContain(PaymentIntentPaidEvent.class);
+        }
     }
 }

@@ -147,6 +147,9 @@ public class SecurityConfig {
                         // htmx 请求 HX-Redirect 整页跳转，其余照旧 302 登录页。
                         .authenticationEntryPoint(new com.tailtopia.admin.account.web.AdminLoginEntryPoint()));
         // CSRF 保持开启（表单链默认即开）；会话按需创建（表单登录态）。
+        // v1.4.2 shop Story 2.1（D-24）：唯独 /admin/stag/** 免 CSRF —— 这些端点只在 stag profile 注册（@StagOnly），
+        // 仍要求后台会话 + SUPER_ADMIN，免 CSRF 只为验收时带会话 cookie 用 curl 调用。生产无此路由。
+        http.csrf(csrf -> csrf.ignoringRequestMatchers("/admin/stag/**"));
         return http.build();
     }
 
@@ -196,6 +199,9 @@ public class SecurityConfig {
                         .requestMatchers("/im/callback").permitAll()
                         // 支付网关回调（Midtrans 外部来源，内部 SHA-512 签名校验，Story 1.1）
                         .requestMatchers("/pay/callback").permitAll()
+                        // Biteship 物流 Webhook（v1.4.2 shop Story 5.1，D-12 / I14）：外部来源无鉴权。路径密钥（常量时间比较，
+                        // 不符 404）+ 回查 GET /v1/orders/:id —— 载荷只当通知，不据其改状态。access log 中路径密钥打码。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/biteship/*").permitAll()
                         // IM UserSig 签发（Story 5.5）：显式要求已认证；用户态 MAU 闸门（非 VET 须有活跃会话）
                         // 在 ImUserSigController 内做（403），此处仅收口鉴权（401）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/im/usersig").authenticated()
@@ -270,6 +276,13 @@ public class SecurityConfig {
                         // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
                         // 只读；配置走 /admin/shop/banners，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
+                        // v1.4.2 shop Story 6.1（D-16）：首页多张轮播，同上游客可见；精确路径。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/banners").permitAll()
+                        // v1.4.2 shop Story 2.2（D-5）：游客新人券弹窗活动，permitAll；精确路径。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/coupons/newbie-campaign").permitAll()
+                        // v1.4.2 shop Story 2.2（D-6）：首页「给你的券」带本人领取状态，仅 role=USER；
+                        // 🔴 精确路径，不写 /api/v1/shop/coupons/** 通配。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/coupons/for-you").hasRole("USER")
                         // 运营弹窗（V1.3.4 Story 5.1，AD-14）：候选列表游客可读（ALL 人群弹窗面向游客）；
                         // controller 只认 role=USER 识别登录用户，VET token 按游客处理。
                         // 曝光上报只给登录用户：游客频次在设备本地（AD-15）；兽医 token 的 sub=vetId
@@ -362,10 +375,15 @@ public class SecurityConfig {
                         // 改其购物车、以其名义下单。⚠️ 新增任何 /api/v1/me 下的电商端点必须同步加进本表。
                         .requestMatchers("/api/v1/me/cart", "/api/v1/me/cart/**",
                                 "/api/v1/me/checkout",
+                                // v1.4.2 shop Story 3.1（AC7）：POST /me/checkout/preview —— 精确路径不覆盖子路径，
+                                // 不加则落 anyRequest().authenticated()，兽医 token 可以同号用户名义试算（读其地址与余额）。
+                                "/api/v1/me/checkout/**",
                                 "/api/v1/me/shop-orders", "/api/v1/me/shop-orders/**",
                                 "/api/v1/me/shipping-addresses", "/api/v1/me/shipping-addresses/**",
                                 "/api/v1/me/shop-reviews", "/api/v1/me/shop-reviews/**",
                                 "/api/v1/me/shop-returns", "/api/v1/me/shop-returns/**",
+                                // v1.4.2 shop Story 2.2（AC10）：领券 / 兑换 / 我的券
+                                "/api/v1/me/coupons", "/api/v1/me/coupons/**",
                                 "/api/v1/me/shop/**").hasRole("USER")
                         // 宠物护照（V1.3.2 Story 1.2）：GET 里会签发（写）且 controller 把 jwt.sub 当 users.id 用 ——
                         // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。

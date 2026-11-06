@@ -216,26 +216,51 @@ public class ShopFinanceDashboardService {
     // ---------- 8.3 对账（AB-13D） ----------
 
     /*
-     * 🔴 PawCoin「可用 / 冻结中」的口径定义（Story 5-3 · SHOP-FR-28）。
+     * 🔴 PawCoin「可用 / 冻结中」的口径定义（Story 5-3 · SHOP-FR-28；v1.4.2 shop Story 3.2 AC7 按 S-3 改写）。
      * ⚠️ **本 story 只写定义，不实现查询、不加字段、不加方法** —— 这两个数的查询与展示
-     *    随 Story 9-5 落地（它的前置是 admin 主题 Epic 10，页面还没重构完，
-     *    现在加一个没人调用的死方法只会让下一个人猜它为什么在这儿）。
+     *    随 Story 9-5 落地（现在加一个没人调用的死方法只会让下一个人猜它为什么在这儿）。
      *
-     * 定义：
-     *   · **冻结中** ＝ 已被**待支付订单**占用、尚未扣减的部分
+     * 定义（S-3 起 PawCoin 在**提交订单时**扣，CheckoutService#place → settlePawCoinSegment，PawCoinTxnType.SPEND）：
+     *   · **冻结中** ＝ 已被**待付款订单扣下**、可能因取消退回的部分
      *                ＝ SUM(shop_orders.coin_amount) WHERE status = 'PENDING_PAYMENT'
-     *                  （且支付窗未过期）
-     *   · **可用**   ＝ pawcoin_wallets.balance − 冻结中
+     *                  AND checkout_source IS NOT NULL
+     *     （checkout_source IS NULL 的存量待付款单币尚未扣，不在此列 —— 过渡规则，见 ShopOrderPaymentService）
+     *   · **可用**   ＝ pawcoin_wallets.balance（S-3 后提交时已扣下的币不在 balance 里；过渡期存量待付款单
+     *                  的 coin_amount 仍在 balance 内、到账才扣 —— 9-5 落地时按此口径处理）
      *
-     * 为什么要现算、而不是读一个列：
-     *   · PawCoinWallet **只有一个 balance 列，没有冻结列**；
-     *   · PawCoin 是在**支付时刻**才扣的 —— CheckoutService.settlePawCoinSegment
-     *     走 PawCoinTxnType.SPEND，**不是下单时扣**。于是「下单了但还没付」这段时间里，
-     *     币还在 balance 里躺着，却已经被一笔订单占住了。
-     *   · 当前后台展示的是那个**不分可用/冻结中的单一数字**
-     *     （AdminUserDetailView.pawcoinBalance → templates/admin/user-detail.html）——
-     *     运营看到的余额会比用户实际能花的多，这正是 9-5 要修的。
+     * 未付款取消（用户取消 / 超时关单）经 ShopOrderPaymentService#releaseUnpaid 退回：
+     *   PawCoinTxnType.REFUND + ref_type = 'SHOP_ORDER_VOID'（与已付款退款 SHOP_ORDER 区分），
+     *   对账的 coinSpent 据此扣除「提交扣、取消退」的往返（见 COIN_SPENT_SQL / COIN_VOID_RETURNED_SQL）。
      */
+
+    /** 区间内 PawCoin 消费总额（全业务 SPEND）。抽成常量供 L0 文本护栏读取。 */
+    static final String COIN_SPENT_SQL = """
+            SELECT COALESCE(SUM(-delta), 0) FROM pawcoin_transactions
+            WHERE type = 'SPEND' AND created_at >= ? AND created_at < ?
+            """;
+
+    /**
+     * 区间内电商未付款作废退回的 PawCoin（v1.4.2 shop Story 3.2 AC7）：从 {@link #COIN_SPENT_SQL} 中扣除，
+     * 否则「提交扣、取消退」的往返会被当成真实消费。
+     *
+     * <p>⚠️ 按流水时刻分区间：提交在区间前、取消（≤ 75 分钟后）落在区间内时，该笔退回会被本区间扣除而扣币不在
+     * 本区间 —— 短区间（如单日、跨午夜）的 {@code coinSpent} 可能偏小，极端情况下<b>为负</b>。这是按流水时刻计的
+     * 正常口径，多日区间求和后自洽，展示层不应截断为 0。
+     */
+    static final String COIN_VOID_RETURNED_SQL = """
+            SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
+            WHERE type = 'REFUND' AND ref_type = 'SHOP_ORDER_VOID' AND created_at >= ? AND created_at < ?
+            """;
+
+    /**
+     * 历史入账总额（近似核销率的分母）：充值 + 赠送 + 退回，<b>排除</b>电商未付款作废退回（{@code SHOP_ORDER_VOID}）
+     * —— 那是提交时扣下又原样退回的往返，不是新的入账（v1.4.2 shop Story 3.2 复审修复）。
+     */
+    static final String CREDITED_ALL_TIME_SQL = """
+            SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
+            WHERE type IN ('TOPUP', 'BONUS', 'REFUND')
+              AND (ref_type IS NULL OR ref_type <> 'SHOP_ORDER_VOID')
+            """;
 
     /**
      * 对账。
@@ -295,16 +320,12 @@ public class ShopFinanceDashboardService {
                 SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
                 WHERE type = 'BONUS' AND created_at >= ? AND created_at < ?
                 """, f, t);
-        long coinSpent = scalar("""
-                SELECT COALESCE(SUM(-delta), 0) FROM pawcoin_transactions
-                WHERE type = 'SPEND' AND created_at >= ? AND created_at < ?
-                """, f, t);
+        // v1.4.2 shop Story 3.2 AC7：扣除未付款作废退回（提交时扣、取消时退的往返不算消费）。
+        // ⚠️ 短区间内可能为负（扣在区间前、退在区间内），见 COIN_VOID_RETURNED_SQL 注释。
+        long coinSpent = scalar(COIN_SPENT_SQL, f, t) - scalar(COIN_VOID_RETURNED_SQL, f, t);
         long bonusIssuedAllTime = scalar(
                 "SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions WHERE type = 'BONUS'");
-        long creditedAllTime = scalar("""
-                SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
-                WHERE type IN ('TOPUP', 'BONUS', 'REFUND')
-                """);
+        long creditedAllTime = scalar(CREDITED_ALL_TIME_SQL);
         // 近似核销率 = 历史赠币 ÷ 历史入账总额。⚠️ 这是【近似】，不是分层后的真值。
         long bonusRedeemedApprox = creditedAllTime <= 0 ? 0
                 : coinSpent * bonusIssuedAllTime / creditedAllTime;

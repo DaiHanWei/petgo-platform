@@ -66,6 +66,13 @@ public class ShopOrderLine {
     @Column(name = "trigger_type", updatable = false, length = 32)
     private String triggerType;
 
+    /**
+     * v1.4.2 shop Story 3.2：该行是否在<b>实际采用的</b>满减券适用范围内（无满减券 → false）。
+     * 4.1 部分取消的满减分摊用；快照，不随券模板后改。
+     */
+    @Column(name = "discount_eligible", nullable = false, updatable = false)
+    private boolean discountEligible;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -85,6 +92,15 @@ public class ShopOrderLine {
         l.returnPolicy = returnPolicy;
         l.createdAt = Instant.now();
         return l;
+    }
+
+    /** 记满减券适用范围快照（只在建行时调用）。 */
+    public void markDiscountEligible(boolean eligible) {
+        this.discountEligible = eligible;
+    }
+
+    public boolean isDiscountEligible() {
+        return discountEligible;
     }
 
     /** 归因随建行落库。null 表示来源未知（如后台代下单），不是错误。 */

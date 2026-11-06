@@ -38,6 +38,11 @@ const _mustReset = <String>[
   'petFollowStateProvider',
   // V1.4.2 social-topic Story 1.5：追更宠物列表（关系字段相对查看者）
   'followedPetListControllerProvider',
+  // v1.4.2 shop Story 9.1：电商订单角标计数 / 我的券入口计数
+  'shopOrderCountsProvider',
+  'couponSummaryProvider',
+  // v1.4.2 shop Story 9.3：我的券列表（两页签整族）
+  'myCouponsProvider',
 ];
 
 void main() {

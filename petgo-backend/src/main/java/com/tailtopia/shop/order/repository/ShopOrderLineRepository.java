@@ -10,6 +10,9 @@ import org.springframework.data.repository.query.Param;
 public interface ShopOrderLineRepository extends JpaRepository<ShopOrderLine, Long> {
     List<ShopOrderLine> findByOrderIdOrderByIdAsc(long orderId);
 
+    /** v1.4.2 shop Story 6.2：订单列表一页的行一次批量取（禁 N+1）。 */
+    List<ShopOrderLine> findByOrderIdInOrderByOrderIdAscIdAsc(java.util.Collection<Long> orderIds);
+
     /**
      * 该用户在 {@code after} 之后是否又买过这个 SKU 并已付款（Story 6.3）。
      *

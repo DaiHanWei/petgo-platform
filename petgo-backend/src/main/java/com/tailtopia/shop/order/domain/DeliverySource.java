@@ -14,6 +14,8 @@ public enum DeliverySource {
     ADMIN_MARK,
     /** ② 用户在已发货态直接确认收货 —— 用户比谁都先知道货到没到。 */
     USER_CONFIRM,
-    /** ③ 发货起 M=7 日无任何标记，{@code @Scheduled} 自动置位。 */
-    AUTO_TIMEOUT
+    /** ③ 发货起 M 日（v1.4.2 起 M=14，D-12）无任何标记，{@code @Scheduled} 自动置位。 */
+    AUTO_TIMEOUT,
+    /** Biteship 回传签收（v1.4.2 shop Story 5.1）：该单全部活动运单都已送达。 */
+    BITESHIP
 }

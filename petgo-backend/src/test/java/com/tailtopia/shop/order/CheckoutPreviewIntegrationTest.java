@@ -12,6 +12,7 @@ import com.tailtopia.shop.address.domain.AddressFields;
 import com.tailtopia.shop.address.service.ShippingAddressService;
 import com.tailtopia.shop.cart.service.CartService;
 import com.tailtopia.shop.order.dto.CheckoutPreviewView;
+import com.tailtopia.shop.order.dto.CheckoutQuoteView;
 import com.tailtopia.shop.order.service.AdminShopPawcoinRulesService;
 import com.tailtopia.shop.order.service.CheckoutService;
 import com.tailtopia.shop.shipping.service.AdminShippingZoneService;
@@ -52,6 +53,13 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
 
     private static final long ACTOR = 1L;
 
+    /**
+     * v1.4.2 shop Story 3.1 AC4：旧 GET /me/checkout 改走新装配链路 —— 运费 = Biteship 最便宜报价
+     * （{@code BITESHIP_MODE=stub}：JNE 10,000 / SiCepat 12,000），{@code shipping_zones.fee} 停读。
+     * {@code seedAddress} 的 fee 参数只剩「开通区域」与旧下单路径（3.2 前仍按区域运费）的意义。
+     */
+    private static final long STUB_LOWEST = 10_000L;
+
     private long seedUser() {
         long n = SEQ.incrementAndGet();
         jdbc.update("INSERT INTO users (nickname, status) VALUES (?, 'ACTIVE')", "cp" + n);
@@ -69,8 +77,8 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "ps" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)""", sToken, pid, price);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)""", sToken, pid, price);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, ?, 0)",
@@ -108,9 +116,9 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
 
         var v = preview(uid, addr);
 
-        assertThat(v.payableTotal()).isEqualTo(305_000L);
+        assertThat(v.payableTotal()).isEqualTo(285_000L + STUB_LOWEST);
         assertThat(v.coinAmount()).isZero();
-        assertThat(v.cashAmount()).isEqualTo(305_000L);
+        assertThat(v.cashAmount()).isEqualTo(285_000L + STUB_LOWEST);
         assertThat(v.coinCapped()).isFalse();
     }
 
@@ -126,8 +134,8 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
 
         var v = preview(uid, addr);
 
-        assertThat(v.payableTotal()).isEqualTo(120_000L);
-        assertThat(v.coinAmount()).isEqualTo(120_000L);
+        assertThat(v.payableTotal()).isEqualTo(100_000L + STUB_LOWEST);
+        assertThat(v.coinAmount()).isEqualTo(100_000L + STUB_LOWEST);
         assertThat(v.cashAmount()).isZero();
     }
 
@@ -145,7 +153,7 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
 
         // 只回一个总数会逼前端自己拆，而拆分规则全在服务端
         assertThat(v.coinAmount()).isEqualTo(60_000L);
-        assertThat(v.cashAmount()).isEqualTo(310_000L);
+        assertThat(v.cashAmount()).isEqualTo(350_000L + STUB_LOWEST - 60_000L);
         assertThat(v.coinAmount() + v.cashAmount()).isEqualTo(v.payableTotal());
         assertThat(v.coinCapped()).as("没到上限就不该提示被截断").isFalse();
     }
@@ -227,72 +235,83 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         assertThat(v.goodsSubtotal()).isEqualTo(285_000L);
     }
 
-    // ---------- 无地址预览（2026-09-24）：先看预览，没地址只是不让下单 ----------
-
-    private long maxActiveFee() {
-        return jdbc.queryForObject("SELECT MAX(fee) FROM shipping_zones WHERE active", Long.class);
-    }
+    // ---------- 无地址预览（2026-09-24；v1.4.2 Story 3.1 AC4.4 改口径） ----------
+    // 🔴 shipping_zones.fee 停读（D-9）：不再按「开通区域最高运费」估算，无地址时金额位全 null、
+    //    serviceable=true —— 与旧代码「quote == null」分支同形，旧版 App 已能渲染。
 
     @Test
-    @DisplayName("不传地址 → 金额照常算：运费取开通区域最高运费，address 为 null，不算超范围")
+    @DisplayName("不传地址 → 金额位全 null、address 为 null、不算超范围；商品清单与退货标识照常")
     void previewWithoutAddress() {
         long uid = seedUser();
         zones.setFreeShippingThreshold(0, ACTOR);
         rules.update(true, true, 1_000_000L, ACTOR);
-        seedAddress(seedUser(), 20_000L);   // 保证至少有一个开通区域（地址挂在别人名下）
+        seedAddress(seedUser(), 20_000L);   // 有开通区域也不再拿来估运费
         carts.add(uid, seedSku(10, 285_000L, "NO_RETURN_AFTER_OPEN"), 1);
 
         var v = preview(uid, null);
-        long fee = maxActiveFee();
 
         assertThat(v.address()).isNull();
         assertThat(v.serviceable()).as("没地址不等于超范围").isTrue();
         assertThat(v.lines()).hasSize(1);
         assertThat(v.goodsSubtotal()).isEqualTo(285_000L);
-        assertThat(v.shippingFee()).isEqualTo(fee);
-        assertThat(v.payableTotal()).isEqualTo(285_000L + fee);
-        assertThat(v.cashAmount()).isEqualTo(285_000L + fee);
+        assertThat(v.shippingFee()).isNull();
+        assertThat(v.shippingDiscount()).isNull();
+        assertThat(v.payableTotal()).isNull();
+        assertThat(v.coinAmount()).isNull();
+        assertThat(v.cashAmount()).isNull();
         assertThat(v.strictestReturnPolicy()).isEqualTo("NO_RETURN_AFTER_OPEN");
     }
 
     @Test
-    @DisplayName("不传地址也照常判免运门槛与 PawCoin 抵扣")
-    void previewWithoutAddressAppliesFreeShippingAndCoin() {
+    @DisplayName("不传地址：余额与单笔上限照常下发，coinCapped=false")
+    void previewWithoutAddressStillShowsCoinBalance() {
         long uid = seedUser();
         zones.setFreeShippingThreshold(100_000L, ACTOR);
         rules.update(true, true, 1_000_000L, ACTOR);
-        seedAddress(seedUser(), 20_000L);
         carts.add(uid, seedSku(10, 285_000L, "RETURNABLE"), 1);
         topUp(uid, 50_000L);
 
         var v = preview(uid, null);
-        long fee = maxActiveFee();
 
-        assertThat(v.shippingFee()).isEqualTo(fee);
-        assertThat(v.shippingDiscount()).as("达门槛 → 一条负数免运行").isEqualTo(-fee);
-        assertThat(v.payableTotal()).isEqualTo(285_000L);
-        assertThat(v.coinAmount()).isEqualTo(50_000L);
-        assertThat(v.cashAmount()).isEqualTo(235_000L);
+        assertThat(v.payableTotal()).isNull();
+        assertThat(v.coinBalance()).isEqualTo(50_000L);
+        assertThat(v.maxCoinPerOrder()).isEqualTo(1_000_000L);
+        assertThat(v.coinCapped()).isFalse();
     }
 
     @Test
-    @DisplayName("GET /me/checkout 不带 addressToken → 200 无地址预览（不再 400）")
+    @DisplayName("GET /me/checkout 不带 addressToken → 200 无地址预览（金额键不下发）")
     void previewWithoutAddressOverHttp() throws Exception {
         var u = newUser();
         long uid = u.getId();
         zones.setFreeShippingThreshold(0, ACTOR);
         rules.update(true, true, 1_000_000L, ACTOR);
-        seedAddress(seedUser(), 20_000L);
         carts.add(uid, seedSku(10, 120_000L, "RETURNABLE"), 2);
-        long fee = maxActiveFee();
 
         mvc.perform(get("/api/v1/me/checkout").header("Authorization", userBearer(uid)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.address").doesNotExist())
                 .andExpect(jsonPath("$.goodsSubtotal").value(240_000))
-                .andExpect(jsonPath("$.shippingFee").value(fee))
-                .andExpect(jsonPath("$.payableTotal").value(240_000 + fee))
+                .andExpect(jsonPath("$.shippingFee").doesNotExist())
+                .andExpect(jsonPath("$.payableTotal").doesNotExist())
                 .andExpect(jsonPath("$.serviceable").value(true));
+    }
+
+    @Test
+    @DisplayName("有地址：运费 = stub 最便宜报价（不是区域运费），满额免运按负数行下发")
+    void feeComesFromCheapestQuote() {
+        long uid = seedUser();
+        zones.setFreeShippingThreshold(100_000L, ACTOR);
+        rules.update(true, true, 1_000_000L, ACTOR);
+        String addr = seedAddress(uid, 20_000L);
+        carts.add(uid, seedSku(10, 285_000L, "RETURNABLE"), 1);
+
+        var v = preview(uid, addr);
+
+        assertThat(v.shippingFee()).isEqualTo(STUB_LOWEST);
+        assertThat(v.shippingDiscount()).as("旧口径：免运抵扣 ≤ 0").isEqualTo(-STUB_LOWEST);
+        assertThat(v.payableTotal()).isEqualTo(285_000L);
+        assertThat(v.shippingMethod()).isEqualTo("REGULER");
     }
 
     // ---------- 🔴 FR-104 / S-6：多 SKU 取最严 ----------
@@ -330,21 +349,22 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         assertThat(v.strictestReturnPolicy()).isEqualTo("NON_RETURNABLE");
     }
 
-    // ---------- 🔴 FR-97：不含也不预留优惠体系字段 ----------
+    // ---------- v1.4.2 Story 3.1 AC8.1：旧视图字段冻结（原「不得出现券字段」断言随 D-8 删除） ----------
 
     @Test
-    @DisplayName("🔴 结算视图不含优惠券/促销码/会员价字段（会员制暂缓，不提前埋成本）")
-    void noPromotionFieldsAtAll() {
-        // 断言的是 record 组件本身，不是某次响应的内容 —— 只要有人加了字段就会红，
-        // 而 FR-97 要挡的正是「先把字段留着，以后再说」。
+    @DisplayName("🔴 旧 CheckoutPreviewView 字段集合与改动前逐一相同；券 / 报价 / 多快递只在新 CheckoutQuoteView")
+    void legacyViewFieldsFrozenAndNewViewCarriesCoupons() {
+        // 原断言「CheckoutPreviewView 不得出现 coupon / promo 字段」（FR-97）随 D-8 删除：券体系已上线，
+        // 但它属于新视图；旧视图钉死键集合，保护旧版 App 契约（S-4）。
         var names = Arrays.stream(CheckoutPreviewView.class.getRecordComponents())
-                .map(RecordComponent::getName)
-                .map(n -> n.toLowerCase(Locale.ROOT))
-                .toList();
-        assertThat(names).noneMatch(n -> n.contains("coupon") || n.contains("promo")
-                || n.contains("voucher") || n.contains("member") || n.contains("discountcode"));
-        // 运费抵扣是 FR-99 的免运，不是优惠体系 —— 它必须在
-        assertThat(names).contains("shippingdiscount");
+                .map(RecordComponent::getName).toList();
+        assertThat(names).containsExactly("address", "serviceable", "lines", "unavailableLines",
+                "goodsSubtotal", "shippingFee", "shippingDiscount", "payableTotal", "coinAmount",
+                "cashAmount", "coinBalance", "maxCoinPerOrder", "coinCapped",
+                "strictestReturnPolicy", "shippingMethod");
+        var quoteNames = Arrays.stream(CheckoutQuoteView.class.getRecordComponents())
+                .map(RecordComponent::getName).map(n -> n.toLowerCase(Locale.ROOT)).toList();
+        assertThat(quoteNames).contains("coupons", "quotetoken", "couriers");
     }
 
     @Test
@@ -384,8 +404,8 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
                         .header("Authorization", userBearer(uid)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.coinAmount").value(60_000))
-                .andExpect(jsonPath("$.cashAmount").value(310_000))
-                .andExpect(jsonPath("$.payableTotal").value(370_000))
+                .andExpect(jsonPath("$.cashAmount").value(350_000 + STUB_LOWEST - 60_000))
+                .andExpect(jsonPath("$.payableTotal").value(350_000 + STUB_LOWEST))
                 .andExpect(jsonPath("$.strictestReturnPolicy").value("NO_RETURN_AFTER_OPEN"))
                 .andExpect(jsonPath("$.serviceable").value(true));
     }
@@ -409,7 +429,9 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.orderToken").isNotEmpty())
                 .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
-                .andExpect(jsonPath("$.totalAmount").value(305_000))
+                // v1.4.2 shop 3.2（Completion Notes「旧模式运费 = stub 最低价」）：旧模式下单运费改走 Biteship stub 报价，
+                // 不再读 shipping_zones.fee（造数里的 20,000）→ 应付 = 商品 285,000 + stub 最低价 10,000；与本类 previewOverHttp 同口径
+                .andExpect(jsonPath("$.totalAmount").value(285_000 + STUB_LOWEST))
                 .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.seqNo").doesNotExist());
     }
@@ -476,7 +498,7 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         assertThat(v.shippingDiscount())
                 .as("免运是负数折扣行；选中集不过线就不该有这一行")
                 .isZero();
-        assertThat(v.shippingFee()).isEqualTo(20_000L);
+        assertThat(v.shippingFee()).isEqualTo(STUB_LOWEST);
     }
 
     @Test
@@ -494,7 +516,7 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         CheckoutPreviewView v = preview(uid, addr);
 
         assertThat(v.goodsSubtotal()).isEqualTo(200_000L);
-        assertThat(v.shippingDiscount()).isEqualTo(-20_000L);
+        assertThat(v.shippingDiscount()).isEqualTo(-STUB_LOWEST);
     }
 
     @Test
@@ -515,8 +537,8 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
 
         assertThat(v.goodsSubtotal()).isEqualTo(100_000L);
         assertThat(v.coinAmount())
-                .as("余额足够整车，但本单只买 100.000 —— 抵扣不能按全车算")
-                .isEqualTo(100_000L);
+                .as("余额足够整车，但本单只买 100.000（+ 运费）—— 抵扣不能按全车算")
+                .isEqualTo(100_000L + STUB_LOWEST);
         assertThat(v.cashAmount()).isZero();
     }
 
@@ -537,7 +559,7 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         carts.setSelected(uid, pricey, false);
         CheckoutPreviewView v = preview(uid, addr);
 
-        assertThat(v.coinAmount()).isEqualTo(50_000L);
+        assertThat(v.coinAmount()).isEqualTo(50_000L + STUB_LOWEST);
         assertThat(v.coinCapped())
                 .as("本单根本没用满上限，多一行「本单最多可用…」只会让用户困惑")
                 .isFalse();
@@ -547,6 +569,26 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         CheckoutPreviewView full = preview(uid, addr);
         assertThat(full.coinAmount()).isEqualTo(100_000L);
         assertThat(full.coinCapped()).isTrue();
+    }
+
+    @Test
+    @DisplayName("🔴 v1.4.2 Story 3.1 复审修复：库内勾着的失效行照旧进旧视图 unavailableLines（S-4）")
+    void dbSelectedInvalidLineStillInUnavailableLines() {
+        long uid = seedUser();
+        String a = seedSku(10, 100_000L, "RETURNABLE");
+        String dead = seedSku(10, 50_000L, "RETURNABLE");
+        String addr = seedAddress(uid, 0L);
+        carts.add(uid, a, 1);
+        carts.add(uid, dead, 1);
+        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = "
+                + "(SELECT id FROM shop_skus WHERE public_token = ?)", dead);
+
+        CheckoutPreviewView v = preview(uid, addr);
+
+        assertThat(v.unavailableLines()).extracting(CheckoutPreviewView.CheckoutLine::skuToken)
+                .containsExactly(dead);
+        assertThat(v.lines()).extracting(CheckoutPreviewView.CheckoutLine::skuToken)
+                .containsExactly(a);
     }
 
     @Test

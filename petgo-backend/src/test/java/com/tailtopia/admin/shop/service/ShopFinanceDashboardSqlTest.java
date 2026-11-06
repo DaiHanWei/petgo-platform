@@ -81,4 +81,31 @@ class ShopFinanceDashboardSqlTest {
                 .doesNotContain("created_at")
                 .doesNotContain("limit");
     }
+
+    // ---------- v1.4.2 shop Story 3.2 AC7（S-3）：coinSpent 扣除未付款作废退回 ----------
+
+    @Test
+    @DisplayName("🔴 未付款作废退回的 SQL 只取 REFUND + ref_type=SHOP_ORDER_VOID（不误扣已付款退款 SHOP_ORDER）")
+    void coinVoidReturnedSql() {
+        String voidSql = ShopFinanceDashboardService.COIN_VOID_RETURNED_SQL.toLowerCase(Locale.ROOT);
+        assertThat(voidSql).contains("from pawcoin_transactions");
+        assertThat(voidSql).contains("type = 'refund'");
+        assertThat(voidSql).contains("ref_type = 'shop_order_void'");
+        assertThat(voidSql).contains("sum(delta)");
+        assertThat(voidSql).contains("created_at >= ? and created_at < ?");
+        assertThat(ShopFinanceDashboardService.COIN_VOID_RETURNED_SQL)
+                .contains(com.tailtopia.shop.order.service.ShopOrderPaymentService.REF_TYPE_VOID);
+
+        String spentSql = ShopFinanceDashboardService.COIN_SPENT_SQL.toLowerCase(Locale.ROOT);
+        assertThat(spentSql).contains("type = 'spend'").contains("sum(-delta)");
+    }
+
+    @Test
+    @DisplayName("🔴 历史入账总额排除 SHOP_ORDER_VOID（提交扣、取消退的往返不是新入账）")
+    void creditedAllTimeExcludesVoid() {
+        String sql = ShopFinanceDashboardService.CREDITED_ALL_TIME_SQL.toLowerCase(Locale.ROOT);
+        assertThat(sql).contains("type in ('topup', 'bonus', 'refund')");
+        assertThat(sql).contains("ref_type <> 'shop_order_void'");
+        assertThat(sql).as("ref_type 为 NULL 的历史流水不能被 <> 误排除").contains("ref_type is null or");
+    }
 }

@@ -89,6 +89,7 @@ public class CartService {
             String triggerType, boolean buyNow) {
         requirePositive(qty);
         ShopSku sku = requireSku(skuToken);
+        requireSellable(sku);
         ShopCart cart = cartOf(userId);
 
         int existing = items.findByCartIdAndSkuId(cart.getId(), sku.getId())
@@ -124,6 +125,10 @@ public class CartService {
         if (qty <= 0) {
             items.delete(line);
         } else {
+            // v1.4.2 Story 1.1：只拦「加大数量」；减少数量 / 删除不拦，用户得能把不可售行清掉
+            if (qty > line.getQty()) {
+                requireSellable(sku);
+            }
             requireWithinStock(sku, qty);
             line.setQty(qty);
             items.save(line);
@@ -140,16 +145,20 @@ public class CartService {
     /**
      * 勾选 / 取消勾选单行（Story 4-1，SHOP-FR-04 / AD-S6）。
      *
-     * <p>🔴 <b>不校验库存</b>：{@code requireWithinStock} 只管加购与改数量。
-     * 勾一个已售罄的行不是错误 —— 它只是不会被计入 {@code selectedSubtotal}，
-     * 也不会进下单集。在这里报 409 会让「补货后我想买它」这件事变得没法表达。
+     * <p>🔴 v1.4.2 shop Story 3.1 AC5.2：<b>失效行（下架 / 不可售 / 售罄）不可勾选</b> → 422；
+     * 取消勾选照常成功（允许取消）。有效行不校验库存数量（{@code requireWithinStock} 只管加购与改数量）。
      *
+     * @throws AppException 422 —— 勾选失效行
      * @throws AppException 404 —— 该 SKU 不在本人车里（与 {@code setQty} / {@code remove} 同口径）
      */
     @Transactional
     public CartView setSelected(long userId, String skuToken, boolean selected) {
         ShopSku sku = requireSku(skuToken);
         ShopCart cart = cartOf(userId);
+        if (selected && view(userId).invalidLines().stream()
+                .anyMatch(l -> l.skuToken().equals(skuToken))) {
+            throw AppException.validation("该商品当前不可购买");
+        }
         if (items.updateSelected(cart.getId(), sku.getId(), selected) == 0) {
             throw AppException.notFound("购物车中没有该商品");
         }
@@ -160,9 +169,7 @@ public class CartService {
     /**
      * 全选 / 全不选（Story 4-1 AC2）。
      *
-     * <p>🔴 <b>作用于车内全部行，含失效行</b>：失效行的 {@code selected} 照实下发，
-     * 只是永不计入选中合计。把失效行排除在「全选」之外，会让用户在商品补货后
-     * 发现自己明明点过全选、那一行却没被选上。
+     * <p>🔴 v1.4.2 shop Story 3.1 AC5.3：<b>全选只把有效行置 true，失效行不动</b>；全不选仍作用于全部行。
      *
      * <p>空车时是无操作（0 行受影响），返回空视图而不是 404 —— 「全不选一辆空车」
      * 不是一个错误，它只是什么都没发生。
@@ -170,7 +177,17 @@ public class CartService {
     @Transactional
     public CartView setAllSelected(long userId, boolean selected) {
         ShopCart cart = cartOf(userId);
-        items.updateAllSelected(cart.getId(), selected);
+        if (selected) {
+            List<String> validTokens = view(userId).lines().stream()
+                    .map(CartView.CartLine::skuToken).toList();
+            List<Long> skuIds = validTokens.isEmpty() ? List.of()
+                    : skus.findByPublicTokenIn(validTokens).stream().map(ShopSku::getId).toList();
+            if (!skuIds.isEmpty()) {
+                items.updateSelectedForSkuIds(cart.getId(), skuIds, true);
+            }
+        } else {
+            items.updateAllSelected(cart.getId(), false);
+        }
         cart.touch();
         return view(userId);
     }
@@ -203,7 +220,21 @@ public class CartService {
      */
     @Transactional
     public CartView view(long userId) {
-        ShopCart cart = cartOf(userId);
+        return build(cartOf(userId));
+    }
+
+    /**
+     * 只读读车（v1.4.2 Story 3.1 复审修复）：<b>无购物车按空车处理、不插入 {@code shop_carts}</b>。
+     * 供只读事务里的结算试算用 —— {@link #view} 的 {@code cartOf} 会在无车时 INSERT，
+     * 在 {@code readOnly} 事务里会被数据库拒绝（read-only transaction）。
+     */
+    @Transactional(readOnly = true)
+    public CartView viewReadOnly(long userId) {
+        return carts.findByUserId(userId).map(this::build)
+                .orElseGet(() -> new CartView(List.of(), List.of(), 0L, 0L, 0, 0));
+    }
+
+    private CartView build(ShopCart cart) {
         List<ShopCartItem> rows = items.findByCartIdOrderByIdAsc(cart.getId());
         if (rows.isEmpty()) {
             return new CartView(List.of(), List.of(), 0L, 0L, 0, 0);
@@ -240,6 +271,9 @@ public class CartService {
             String reason = null;
             if (p == null || !p.isActive()) {
                 reason = CartView.REASON_DELISTED;
+            } else if (!sku.isSellable()) {
+                // v1.4.2 Story 1.1：包裹参数不全 → 暂不可售（判定顺序 DELISTED → NOT_SELLABLE → OUT_OF_STOCK）
+                reason = CartView.REASON_NOT_SELLABLE;
             } else if (available <= 0) {
                 reason = CartView.REASON_OUT_OF_STOCK;
             }
@@ -257,6 +291,9 @@ public class CartService {
                     // 归因随行带出，供下单时抄到订单行（不下发给客户端，见 CartLine 注释）
                     row.getEntrySource(),
                     row.getTriggerType(),
+                    // v1.4.2 Story 3.1 AC5.1：失效行一律下发 false（只改出参，不回写库）
+                    reason == null && row.isSelected(),
+                    // 复审修复：库内原始勾选位，供旧下单 / 旧预览判「勾着的失效行」（S-4），不序列化
                     row.isSelected());
 
             if (reason == null) {
@@ -271,7 +308,8 @@ public class CartService {
                 }
             } else {
                 invalid.add(line);          // 🔴 不参与合计、不计入角标，但也不消失
-                // 失效行的 selected 照实下发（不强行改写成 false），但永不计入选中合计。
+                // v1.4.2 Story 3.1 AC5.1：失效行下发 selected=false（失效行不可勾选），库内原值不回写 ——
+                // 补货后该行重新有效时按库内原值显示（回写会丢掉「用户曾经勾过」）。永不计入选中合计。
             }
         }
         return new CartView(valid, invalid, subtotal, selectedSubtotal, count, selectedCount);
@@ -284,6 +322,13 @@ public class CartService {
                 .filter(s -> s.getPublicToken().equals(skuToken))
                 .findFirst()
                 .orElseThrow(() -> AppException.notFound("规格不存在"));
+    }
+
+    /** v1.4.2 Story 1.1（D-10）：包裹参数不全的 SKU 不可加购 / 立即购买（422 sku-not-sellable）。 */
+    private static void requireSellable(ShopSku sku) {
+        if (!sku.isSellable()) {
+            throw AppException.skuNotSellable("该规格暂不可售");
+        }
     }
 
     /** 🔴 上限是可售库存，超出给明确错误——静默截断会让用户以为加进去了。 */

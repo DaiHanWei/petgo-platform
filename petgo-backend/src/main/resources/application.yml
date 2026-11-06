@@ -187,6 +187,10 @@ petgo:
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。
     low-stock-threshold: ${SHOP_LOW_STOCK_THRESHOLD:5}
+    # 复购日扫开关（v1.4.2 shop Story 6.2 · PRD FR-136 · 架构 D-20）：V1.4.2 FR-136 下线，代码保留一个版本后删。
+    # 默认 false ⇒ 日扫直接返回，不再产生复购触发与 REPURCHASE_FOOD_LOW 通知（枚举与约束值保留给历史行）。
+    repurchase:
+      scan-enabled: ${SHOP_REPURCHASE_SCAN_ENABLED:false}
     # 新订单 Lark 提醒（V1.3.0 shop-v2 Story 3-4 · SHOP-FR-24 · 主线 C）。
     # 运营接单原本靠「人工打开后台页面盯着」，零通知 —— 发货时效取决于有没有人想起来刷。
     # 🔴 mode=off（默认）或 receive-id 为空 ⇒ 扫描器静默跳过、**零出网**，队列行保持 PENDING。
@@ -212,6 +216,34 @@ petgo:
       quiet-hours-enabled: ${SHOP_ORDER_NOTIFY_QUIET_ENABLED:false}
       quiet-start-hour: ${SHOP_ORDER_NOTIFY_QUIET_START:22}
       quiet-end-hour: ${SHOP_ORDER_NOTIFY_QUIET_END:8}
+    # v1.4.2 shop Story 1.1（D-9 / P-7）：Biteship 询价。🔒 key 只走 env，绝不入库 / 落日志。
+    # 云端与 L0 / L1 一律 stub（确定性、不出网）；prod（非 stag）须 live，否则 ERROR 日志、询价一律 quote-failed（决策 C-5，不拒启动）。
+    biteship:
+      mode: ${BITESHIP_MODE:stub}                 # stub | sandbox | live
+      api-key: ${BITESHIP_API_KEY:}
+      base-url: ${BITESHIP_BASE_URL:https://api.biteship.com}
+      couriers: ${BITESHIP_COURIERS:jne,sicepat,anteraja}
+      connect-timeout-ms: 3000
+      read-timeout-ms: 8000
+      # v1.4.2 shop Story 5.1：Webhook 路径密钥（空 = Webhook 一律 404，fail closed）、下运单 delivery_type、
+      # 收件行最大处理次数、收件重试间隔（毫秒）、在途回查 cron（UTC）。🔒 密钥只经 env 注入。
+      webhook-secret: ${BITESHIP_WEBHOOK_SECRET:}
+      delivery-type: ${BITESHIP_DELIVERY_TYPE:now}
+      webhook-max-attempts: 10
+      webhook-retry-ms: ${SHOP_BITESHIP_WEBHOOK_RETRY_MS:300000}
+      poll-cron: ${SHOP_BITESHIP_POLL_CRON:0 0 */6 * * *}
+    # v1.4.2 shop Story 5.2（D-13）：物流停滞检测——每小时扫一次，Biteship 活动运单超过 N 小时无新状态 → 订单标 STALLED（用户侧不提示）。
+    logistics:
+      stall-scan-ms: ${SHOP_LOGISTICS_STALL_SCAN_MS:3600000}
+      stall-after-hours: ${SHOP_LOGISTICS_STALL_AFTER_HOURS:72}
+    # 报价清理（每日删 2 天前，单次 5,000 行；时区 Asia/Jakarta）
+    shipping-quote-cleanup-cron: ${SHOP_SHIPPING_QUOTE_CLEANUP_CRON:0 30 3 * * *}
+    # v1.4.2 shop Story 2.3（D-22）：券快过期提醒（每天 WIB 10:00，窗口 (now, now+48h]）。"-" = 关闭。
+    coupon:
+      expiry-reminder-cron: ${SHOP_COUPON_EXPIRY_REMINDER_CRON:0 0 10 * * *}
+    # v1.4.2 shop Story 3.3（D-11 / FR-134.1）：电商定时查单周期（毫秒）。回调丢失时主动查 GemPay，
+    # 也覆盖关单后 24 小时内的 FAILED / EXPIRED 意图（找回迟到款）。Redis 锁防重入，网关调用不在事务内。
+    payment-reconcile-ms: ${SHOP_PAYMENT_RECONCILE_MS:120000}
 
 # 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
 # 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。

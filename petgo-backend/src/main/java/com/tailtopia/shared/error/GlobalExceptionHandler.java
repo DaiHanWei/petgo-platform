@@ -1,5 +1,6 @@
 package com.tailtopia.shared.error;
 
+import com.tailtopia.shared.logging.LogPaths;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.List;
@@ -134,8 +135,8 @@ public class GlobalExceptionHandler {
         Set<HttpMethod> supported = ex.getSupportedHttpMethods();
         // 🔴 不把 ex 传给 logger：SLF4J 见到末位 Throwable 就打整条堆栈，
         //    那正是本 story 要消除的东西。只记够定位的三样。
-        log.warn("Method not supported {} {} supported={}", req.getMethod(), req.getRequestURI(),
-                supported);
+        log.warn("Method not supported {} {} supported={}", req.getMethod(),
+                LogPaths.redact(req.getRequestURI()), supported);
         // H5 对外分享页：访客拿到一坨 JSON 没法看（ops 主题）。
         Object page = h5PageOrNull(req, HttpStatus.METHOD_NOT_ALLOWED, "card_gone");
         if (page != null) {
@@ -162,7 +163,7 @@ public class GlobalExceptionHandler {
             HttpMediaTypeNotSupportedException ex, HttpServletRequest req) {
         List<MediaType> supported = ex.getSupportedMediaTypes();
         log.warn("Media type not supported {} {} contentType={} supported={}", req.getMethod(),
-                req.getRequestURI(), req.getContentType(), supported);
+                LogPaths.redact(req.getRequestURI()), req.getContentType(), supported);
         ProblemDetail pd = base(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ErrorTypes.VALIDATION,
                 "Unsupported Media Type", "不支持的请求内容类型", req);
         HttpHeaders headers = new HttpHeaders();
@@ -328,7 +329,8 @@ public class GlobalExceptionHandler {
         pd.setType(type);
         pd.setTitle(title);
         if (req != null) {
-            pd.setInstance(URI.create(req.getRequestURI()));
+            // v1.4.2 shop 5.1 AC14.2：带路径密钥的 URI 不回显
+            pd.setInstance(URI.create(LogPaths.redact(req.getRequestURI())));
         }
         pd.setProperty("traceId", traceId);
         return pd;

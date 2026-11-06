@@ -68,8 +68,8 @@ class AdminShopInventoryEndpointIntegrationTest extends ApiIntegrationTest {
                 """, pToken);
         String sToken = "is" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                SELECT ?, id, '3 kg', 285000 FROM shop_products WHERE public_token = ?
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                SELECT ?, id, '3 kg', 285000, 1000, 20, 15, 10 FROM shop_products WHERE public_token = ?
                 """, sToken, pToken);
         Long skuId = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);

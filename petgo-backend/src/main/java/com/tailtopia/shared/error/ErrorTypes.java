@@ -136,6 +136,81 @@ public final class ErrorTypes {
     /** V1.4.1 商家平台：用户已绑定过门店，不能再填码（409，FR-7 —— 绑定永久，不能换店）。 */
     public static final URI MERCHANT_ALREADY_BOUND = URI.create(BASE + "merchant-already-bound");
 
+    /** v1.4.2 shop Story 1.1（D-10 / FR-172.5）：SKU 包裹参数不全，暂不可售（加购 / 立即购买 422）。 */
+    public static final URI SKU_NOT_SELLABLE = URI.create(BASE + "sku-not-sellable");
+
+    /** v1.4.2 shop Story 1.1（D-9 / C-5）：Biteship 询价失败（503，不回退固定运费，结算不可提交）。 */
+    public static final URI QUOTE_FAILED = URI.create(BASE + "quote-failed");
+
+    /**
+     * v1.4.2 shop Story 2.1（D-3 / P-5 / C-2）：提交订单时所选用户券已不可用（被占用 / 过期 / 作废 / 非本人，409），
+     * 扩展成员 {@code userCouponTokens}，见 {@code CouponInvalidException}。App 走 D17「券已失效、已为你重新选择」。
+     */
+    public static final URI COUPON_INVALID = URI.create(BASE + "coupon-invalid");
+
+    /** v1.4.2 shop Story 2.2（P-5 / C-2）：兑换码不存在；领券时券 token 不存在或不是可领券（404，G7「Kode kupon tidak valid」）。 */
+    public static final URI COUPON_NOT_FOUND = URI.create(BASE + "coupon-not-found");
+
+    /** v1.4.2 shop Story 2.2：一次性兑换码已被使用（409，G7「Kode ini sudah dipakai」）。 */
+    public static final URI COUPON_CODE_USED = URI.create(BASE + "coupon-code-used");
+
+    /** v1.4.2 shop Story 2.2：发放期未开始 / 已结束，或券已停用（409，G7「Kode ini tidak dalam masa berlaku」）。 */
+    public static final URI COUPON_NOT_IN_PERIOD = URI.create(BASE + "coupon-not-in-period");
+
+    /** v1.4.2 shop Story 2.2：已达每人限领（409，A5 / G7「Kamu sudah klaim kupon ini」）。 */
+    public static final URI COUPON_ALREADY_CLAIMED = URI.create(BASE + "coupon-already-claimed");
+
+    /** v1.4.2 shop Story 2.2：发放总量已领完（409，G7「Kupon sudah habis」）。 */
+    public static final URI COUPON_SOLD_OUT = URI.create(BASE + "coupon-sold-out");
+
+    /** v1.4.2 shop Story 2.2（D-4）：1 小时内输错 10 次，兑换锁定 1 小时（429，G8）。 */
+    public static final URI COUPON_REDEEM_LOCKED = URI.create(BASE + "coupon-redeem-locked");
+
+    /**
+     * v1.4.2 shop Story 3.2（P-5 / C-2）：提交订单时有行不可买（409），扩展成员 {@code unavailableLines}
+     * （见 {@code CheckoutUnavailableException}）。旧版 App 按 409 + 该成员识别，不看 type。
+     */
+    public static final URI UNAVAILABLE_LINES = URI.create(BASE + "unavailable-lines");
+
+    /** v1.4.2 shop Story 3.2：无地址 / 区域未开通 / 无可结算行 / 旧结算模式询价 0 家（422）。 */
+    public static final URI NOT_PLACEABLE = URI.create(BASE + "not-placeable");
+
+    /** v1.4.2 shop Story 3.2（I7）：报价不存在 / 已过期 / 未绑定本单地址与商品 / 所选快递不在报价中（409，App 重新试算）。 */
+    public static final URI QUOTE_EXPIRED = URI.create(BASE + "quote-expired");
+
+    /**
+     * v1.4.2 shop Story 3.3（S-7 / I3）：订单已超过付款时间（含 60~65 分钟宽限期），或已过出码窗口（建单 10 分钟后
+     * 且无可复用的码）→ 409，App 显示「付款超时·订单已取消」。
+     */
+    public static final URI SHOP_ORDER_NOT_PAYABLE = URI.create(BASE + "shop-order-not-payable");
+
+    /** v1.4.2 shop Story 4.1 AC4.3：取消退款单已不在可选去向的状态（已选 PawCoin / 打款中 / 已完成）（409，App 重取详情）。 */
+    public static final URI REFUND_DESTINATION_LOCKED = URI.create(BASE + "refund-destination-locked");
+
+    /** v1.4.2 shop Story 4.1 AC4.5：退到银行 / e-wallet 时现金段不高于渠道手续费（422，App 提示改选其他方式）。 */
+    public static final URI REFUND_BELOW_PAYOUT_FEE = URI.create(BASE + "refund-below-payout-fee");
+
+    /** v1.4.2 shop Story 4.1：订单已无可退金额，不生成 0 元取消退款单（409）。 */
+    public static final URI NOTHING_TO_REFUND = URI.create(BASE + "nothing-to-refund");
+
+    /** v1.4.2 shop Story 4.2 AC1（D-11）：该笔迟到款已处置（已重下单 / 已退款）或订单无迟到款（409）。 */
+    public static final URI LATE_PAYMENT_ALREADY_RESOLVED = URI.create(BASE + "late-payment-already-resolved");
+
+    /** v1.4.2 shop Story 4.2 AC2.1：原单不是已取消（如重复付款单正在履约），只能退款不能重新下单（409）。 */
+    public static final URI LATE_PAYMENT_NOT_REORDERABLE = URI.create(BASE + "late-payment-not-reorderable");
+
+    /** v1.4.2 shop Story 4.2 AC2.4（D-3）：原单用过的券已被别单占用 / 用掉 / 作废，不能重新下单（409）。 */
+    public static final URI REORDER_COUPON_UNAVAILABLE = URI.create(BASE + "reorder-coupon-unavailable");
+
+    /** v1.4.2 shop Story 4.2 AC2.5（S-6）：需要扣的 PawCoin 超过用户当前余额，只能退款（409）。 */
+    public static final URI REORDER_COIN_INSUFFICIENT = URI.create(BASE + "reorder-coin-insufficient");
+
+    /**
+     * v1.4.2 shop Story 6.1（D-17 / P-5 / C-2）：商品存在但已下架（{@code is_active = false}）→ 410，
+     * App 按 type 分流到 B13「商品已下架」页（不存在仍是 404 {@code not-found}）。
+     */
+    public static final URI SHOP_PRODUCT_DELISTED = URI.create(BASE + "product-delisted");
+
     private ErrorTypes() {
     }
 }

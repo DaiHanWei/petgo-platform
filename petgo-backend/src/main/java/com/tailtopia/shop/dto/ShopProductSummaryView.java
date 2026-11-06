@@ -19,6 +19,9 @@ import com.tailtopia.shop.domain.Species;
  * 🔴 <b>只给原始宽高，不给比例、不给算好的高度</b>：比例收敛与高度护栏依赖可视区尺寸，
  * 服务端算不了，两边都 clamp 就是双重裁切（与内容侧 Feed 同一口径）。
  * ⚠️ <b>存量商品恒为 null</b>（尺寸是上传时测的，不回填）—— 客户端占位兜底不可取消。
+ *
+ * <p>{@code promo}（v1.4.2 shop Story 2.2，FR-133.3「Lagi promo」）：有发放中的 CLAIM 券覆盖该商品，
+ * 或当前登录用户持有覆盖该商品的可用券（{@code PromoResolver}）。只加字段，旧版 App 忽略。
  */
 public record ShopProductSummaryView(
         String token,
@@ -30,5 +33,6 @@ public record ShopProductSummaryView(
         Integer mainImageW,
         Integer mainImageH,
         Species species,
-        Long minPrice) {
+        Long minPrice,
+        boolean promo) {
 }

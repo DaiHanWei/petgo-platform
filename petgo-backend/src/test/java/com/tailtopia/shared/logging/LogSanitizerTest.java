@@ -36,6 +36,18 @@ class LogSanitizerTest {
     }
 
     @Test
+    void masksBiteshipDriverFields() {
+        // v1.4.2 shop Story 5.1 AC14.3：Biteship Webhook 载荷里的司机信息
+        String out = sanitizeJson("{\"order_id\":\"bs_1\",\"courier_driver_name\":\"Joko\","
+                + "\"courier_driver_phone\":\"0811111\",\"courier_driver_plate_number\":\"B 1234 XY\","
+                + "\"courier_driver_photo_url\":\"https://img/x.jpg\",\"status\":\"picked\"}");
+        assertThat(out).doesNotContain("Joko").doesNotContain("0811111").doesNotContain("B 1234 XY")
+                .doesNotContain("https://img/x.jpg");
+        assertThat(out).contains("\"courier_driver_phone\":\"***\"");
+        assertThat(out).contains("\"order_id\":\"bs_1\"").contains("\"status\":\"picked\"");
+    }
+
+    @Test
     void masksHealthSymptomFields() {
         String out = sanitizeJson("{\"symptomText\":\"muntah dan lemas\",\"petId\":7}");
         assertThat(out).contains("\"symptomText\":\"***\"");

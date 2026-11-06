@@ -45,54 +45,54 @@ tracking_system: file-system
 story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.2"
 
 development_status:
-  epic-1: backlog
-  1-1-sku包裹参数与biteship报价: ready-for-dev
-  1-2-订单计价器: ready-for-dev
+  epic-1: in-progress
+  1-1-sku包裹参数与biteship报价: review
+  1-2-订单计价器: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-券数据与券账本: ready-for-dev
-  2-2-领券兑换码新人券与券查询: ready-for-dev
-  2-3-通知类型与券快过期推送: ready-for-dev
+  epic-2: in-progress
+  2-1-券数据与券账本: review
+  2-2-领券兑换码新人券与券查询: review
+  2-3-通知类型与券快过期推送: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-结算试算与运费估算: ready-for-dev
-  3-2-提交订单: ready-for-dev
-  3-3-付款窗口主动查单与关单后到账: ready-for-dev
+  epic-3: in-progress
+  3-1-结算试算与运费估算: review
+  3-2-提交订单: review
+  3-3-付款窗口主动查单与关单后到账: review
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-取消原因与取消退款单: ready-for-dev
-  4-2-迟到款重新下单与退款: ready-for-dev
+  epic-4: in-progress
+  4-1-取消原因与取消退款单: review
+  4-2-迟到款重新下单与退款: review
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-biteship运单webhook与物流状态: ready-for-dev
-  5-2-物流异常: ready-for-dev
+  epic-5: in-progress
+  5-1-biteship运单webhook与物流状态: review
+  5-2-物流异常: review
   epic-5-retrospective: optional
 
-  epic-6: backlog
-  6-1-banner轮播商品下架与评价: ready-for-dev
-  6-2-电商订单列表详情扩展与复购下线: ready-for-dev
+  epic-6: in-progress
+  6-1-banner轮播商品下架与评价: review
+  6-2-电商订单列表详情扩展与复购下线: review
   epic-6-retrospective: optional
 
-  epic-7: backlog
-  7-1-app一页结算: ready-for-dev
-  7-2-app支付面板与支付结果: ready-for-dev
+  epic-7: in-progress
+  7-1-app一页结算: review
+  7-2-app支付面板与支付结果: review
   epic-7-retrospective: optional
 
-  epic-8: backlog
-  8-1-app-toko首页与搜索: ready-for-dev
-  8-2-app商品详情: ready-for-dev
-  8-3-app购物车: ready-for-dev
+  epic-8: in-progress
+  8-1-app-toko首页与搜索: review
+  8-2-app商品详情: review
+  8-3-app购物车: review
   epic-8-retrospective: optional
 
-  epic-9: backlog
-  9-1-app电商订单列表与详情: ready-for-dev
-  9-2-app选择退款方式与线下打款: ready-for-dev
-  9-3-app我的券与兑换: ready-for-dev
-  9-4-app地址簿与复购清理: ready-for-dev
+  epic-9: in-progress
+  9-1-app电商订单列表与详情: review
+  9-2-app选择退款方式与线下打款: review
+  9-3-app我的券与兑换: review
+  9-4-app地址簿与复购清理: review
   epic-9-retrospective: optional
 
   epic-10: backlog

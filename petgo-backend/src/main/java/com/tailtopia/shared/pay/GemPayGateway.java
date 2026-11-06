@@ -6,7 +6,6 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.NestedExceptionUtils;
@@ -129,21 +128,21 @@ public class GemPayGateway implements PaymentGateway {
 
     @Override
     @SuppressWarnings("unchecked")
-    public Optional<PaymentCallback> queryCharge(String gatewayRef) {
+    public ChargeQueryResult queryCharge(String gatewayRef) {
         // 收款结果轮询：GemPay /history 按 ref_id 查单笔（length=1）。仅收款，不涉及 payout。
+        // 🔴 v1.4.2 shop Story 3.3（I2）：三态、不抛 —— 查询失败一律 UNKNOWN（关单方据此不关单）。
         if (gatewayRef == null || gatewayRef.isBlank()) {
-            return Optional.empty();
+            return ChargeQueryResult.unknown();
         }
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("merchant_id", g.getMerchantId());
-        form.add("project_no", g.getProjectNo());
-        form.add("start", "0");
-        form.add("length", "1");
-        form.add("ref_id", gatewayRef);
-        form.add("signature", GemPaySignature.history(g.getMerchantId(), g.getMerchantSecret(), g.getProjectNo()));
-
         Map<String, Object> response;
         try {
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("merchant_id", g.getMerchantId());
+            form.add("project_no", g.getProjectNo());
+            form.add("start", "0");
+            form.add("length", "1");
+            form.add("ref_id", gatewayRef);
+            form.add("signature", GemPaySignature.history(g.getMerchantId(), g.getMerchantSecret(), g.getProjectNo()));
             response = client.post()
                     .uri("/history")
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -153,31 +152,36 @@ public class GemPayGateway implements PaymentGateway {
                     .body(Map.class);
         } catch (RuntimeException e) {
             log.warn("GemPay 交易查询失败: ref_id={} cause={}", gatewayRef, describe(e));
-            throw payFailure("支付网关交易查询失败", e);
+            return ChargeQueryResult.unknown();
         }
         return toQueryResult(response);
     }
 
+    /**
+     * {@code /history} 响应 → 三态（package-private 供 L0 锁整张表）：空响应 / {@code error_code ≠ 00}（含
+     * {@code 04 data not found}）/ {@code data} 空 → UNKNOWN；行状态经 {@link #normalizeHistoryStatus} 归一化，
+     * PAID → paid，其余（FAILED / EXPIRED / PENDING）→ notPaid。
+     */
     @SuppressWarnings("unchecked")
-    private Optional<PaymentCallback> toQueryResult(Map<String, Object> response) {
+    static ChargeQueryResult toQueryResult(Map<String, Object> response) {
         if (response == null) {
-            return Optional.empty();
+            return ChargeQueryResult.unknown();
         }
         String errorCode = str(response.get("error_code"));
         if (!"00".equals(errorCode)) {
-            // 00 成功；04 data not found 等 → 查无结果（只 log 错误码，不 log body）。
+            // 00 成功；04 data not found 等 → 查询失败（只 log 错误码，不 log body）。
             log.warn("GemPay 交易查询无结果: error_code={} error_desc={}", errorCode, str(response.get("error_desc")));
-            return Optional.empty();
+            return ChargeQueryResult.unknown();
         }
         Object data = response.get("data");
         if (!(data instanceof List<?> list) || list.isEmpty() || !(list.get(0) instanceof Map<?, ?> row0)) {
-            return Optional.empty();
+            return ChargeQueryResult.unknown();
         }
         Map<String, Object> row = (Map<String, Object>) row0;
         String orderId = str(row.get("request_id"));
         String ref = str(row.get("ref_id"));
         GatewayStatus status = normalizeHistoryStatus(str(row.get("status")));
-        return Optional.of(new PaymentCallback(orderId, ref, status, sanitize(row)));
+        return ChargeQueryResult.of(new PaymentCallback(orderId, ref, status, sanitize(row)));
     }
 
     /**

@@ -1,6 +1,6 @@
 # Story 1.1: SKU 包裹参数、发货地配置与 Biteship 报价（后端）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop（电商重构）· 分支 `feat/1.4.2-shop`（从 `dev_1.4.2` 切出，全线 25 story 同一分支串行）
 > 口径优先级：`决策日志-shop.md`（S-0 ~ S-9）> PRD `电商/1-4-2电商prd.md`（FR-172 / FR-127）> `architecture-v1.4.2-shop-delta.md`（D-9、D-10、P-4、P-7、P-8 ①②⑧）> UI 稿（均在 `_bmad-output/planning-artifacts/v1.4.2/`）；跨 story 契约以 `_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md` 为准。云端执行另读 `implementation-artifacts/v1.4.2/cloud-rules-shop.md`。
@@ -188,15 +188,15 @@ so that 运费准确、询价成本可控。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：在 `feat/1.4.2-shop`、基于最新 `dev_1.4.2`；`db/migration` 最新仍为 `V20261104_2058`、无 `V20261105_16xx` 撞号；Dev Notes「现状」行号未漂移（有出入先改本文件并在 Completion Notes 记一句）
-- [ ] **T1 迁移**（AC1 ~ AC3）：三个迁移 + 迁移文本 L0 测试
-- [ ] **T2 SKU 可售**（AC4）：`ShopSku` 字段与 `isSellable`；`CartService.add / setQty / view`；`CartView.REASON_NOT_SELLABLE`；`CheckoutService.collectUnavailable` 映射；`ShopSkuView.sellable`；`ErrorTypes.SKU_NOT_SELLABLE` + `AppException.skuNotSellable`；`AdminShopSkuPackageService`
-- [ ] **T3 设置实体**（AC2）：`ShippingSettings` 新列 + `applyOrigin(...)` / `applyFreeShippingCap(Long)` / `applyInsuranceRateBp(int)` + getter；`ShippingZone.postalCode` + `applyPostalCode(String)`；后台线用的 service 方法挂在现 `AdminShippingZoneService`（写审计复用 `SHOP_SHIPPING_SETTINGS_UPDATED` / `SHOP_SHIPPING_ZONE_UPDATED`）
-- [ ] **T4 Biteship 客户端**（AC5、AC9）：`BiteshipClient` / `LiveBiteshipClient` / `StubBiteshipClient` / `BiteshipProperties` / `BiteshipConfig` / dto / `BiteshipException`
-- [ ] **T5 报价服务**（AC6、AC7、AC8）：`ShippingQuoteService`（新）、`ShippingQuoteRecord` + Repository、值对象、`QuoteFailedException` + `ErrorTypes.QUOTE_FAILED`、`ShippingQuoteCleanupJob`；旧类改 bean 名并标弃用
-- [ ] **T6 回归造数**（AC10）：`ShopSkuFixtures`；扫 30 个测试类补包裹参数
-- [ ] **T7 测试**：L0 全写并跑绿；L1 写好能编译（云端不跑）
-- [ ] **T8** `./mvnw -B clean package -DskipTests` + 指定 L0；`bash scripts/ci/check-flyway-versions.sh origin/main`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：在 `feat/1.4.2-shop`、基于最新 `dev_1.4.2`；`db/migration` 最新仍为 `V20261104_2058`、无 `V20261105_16xx` 撞号；Dev Notes「现状」行号未漂移（有出入先改本文件并在 Completion Notes 记一句）
+- [x] **T1 迁移**（AC1 ~ AC3）：三个迁移 + 迁移文本 L0 测试
+- [x] **T2 SKU 可售**（AC4）：`ShopSku` 字段与 `isSellable`；`CartService.add / setQty / view`；`CartView.REASON_NOT_SELLABLE`；`CheckoutService.collectUnavailable` 映射；`ShopSkuView.sellable`；`ErrorTypes.SKU_NOT_SELLABLE` + `AppException.skuNotSellable`；`AdminShopSkuPackageService`
+- [x] **T3 设置实体**（AC2）：`ShippingSettings` 新列 + `applyOrigin(...)` / `applyFreeShippingCap(Long)` / `applyInsuranceRateBp(int)` + getter；`ShippingZone.postalCode` + `applyPostalCode(String)`；后台线用的 service 方法挂在现 `AdminShippingZoneService`（写审计复用 `SHOP_SHIPPING_SETTINGS_UPDATED` / `SHOP_SHIPPING_ZONE_UPDATED`）
+- [x] **T4 Biteship 客户端**（AC5、AC9）：`BiteshipClient` / `LiveBiteshipClient` / `StubBiteshipClient` / `BiteshipProperties` / `BiteshipConfig` / dto / `BiteshipException`
+- [x] **T5 报价服务**（AC6、AC7、AC8）：`ShippingQuoteService`（新）、`ShippingQuoteRecord` + Repository、值对象、`QuoteFailedException` + `ErrorTypes.QUOTE_FAILED`、`ShippingQuoteCleanupJob`；旧类改 bean 名并标弃用
+- [x] **T6 回归造数**（AC10）：`ShopSkuFixtures`；扫 30 个测试类补包裹参数
+- [x] **T7 测试**：L0 全写并跑绿；L1 写好能编译（云端不跑）
+- [x] **T8** `./mvnw -B clean package -DskipTests` + 指定 L0；`bash scripts/ci/check-flyway-versions.sh origin/main`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -292,9 +292,14 @@ so that 运费准确、询价成本可控。
 - `shop/domain/ShopSkuSellableTest`：四项全有 → true；任一 null → false；`applyPackage` 部分为空 / 非正 → 抛异常。
 - `shop/ShopShippingMigrationTextTest`：三个迁移文件存在；①四列 `INTEGER` 与四个 CHECK；②六列、`insurance_rate_bp INTEGER NOT NULL DEFAULT 50`、两个邮编正则 CHECK；⑧ 表结构、`ck_shipping_quotes_lowest`、复用索引列序；三个文件都**不含** `SMALLINT`。
 - `shop/cart/service/CartViewTotalsTest`（补）：不可售行进 invalid、原因 `NOT_SELLABLE`、不计入合计。
+- `shop/shipping/service/AdminShippingZoneServiceOriginTest`（复审补）：发货地联系人 ≤ 60、电话 ≤ 20、地址 ≤ 300，超长 422 `validation`（不落库、不审计），恰好到上限可存、首尾空白不计；邮编格式不对 422；实体 `applyOrigin` 超长兜底抛 `IllegalArgumentException`；审计摘要不含联系人 / 电话 / 地址 / 完整邮编。
+- `admin/web/AdminMessagesExternalizedTest`（存量守卫，本 story 触发）：后台异常挂 `admin.err.*` 码。
+- `ShippingQuoteServiceTest` 复审补 2 例：`BiteshipClient.isAvailable()=false` 时查复用之前即抛 `quote-failed`、已有未过期报价也不复用；真实 `UnavailableBiteshipClient` 下 `quote` / `probe` 一律失败不落库。
+
+**最终 L0 `-Dtest` 列表**：`ShippingItemsHashTest,LiveBiteshipClientTest,StubBiteshipClientTest,BiteshipConfigTest,ShippingQuoteServiceTest,ShippingQuoteCleanupJobTest,ShopSkuSellableTest,ShopShippingMigrationTextTest,CartViewTotalsTest,AdminMessagesExternalizedTest,AdminShippingZoneServiceOriginTest`
 
 **L1（需 Docker postgres + redis，云端不跑，待本地验收）**
-- `shop/logistics/ShippingQuoteIntegrationTest`（新，类名与旧 `shop/shipping/ShippingQuoteIntegrationTest` 不同包，可同名；为免混淆建议命名 `BiteshipQuoteIntegrationTest`）：`ddl-auto=validate` 启动；stub 下询价落库、30 分钟内第二次不新增行；`findValid` 过期返回空；清理任务删 2 天前行。
+- `shop/logistics/BiteshipQuoteIntegrationTest`（新；按建议命名，避免与旧 `shop/shipping/ShippingQuoteIntegrationTest` 混淆）：`ddl-auto=validate` 启动；stub 下询价落库、30 分钟内第二次不新增行；`findValid` 过期返回空；清理任务删 2 天前行。
 - `shop/cart/CartIntegrationTest`（补）：不可售 SKU 加购 / 立即购买 422 `sku-not-sellable`；购物车行 `invalidReason=NOT_SELLABLE`；补齐参数后可加购。
 - `shop/web/ShopProductEndpointIntegrationTest`（补）：详情 SKU `sellable` 字段。
 - 全量 L1 回归（AC10 的造数补丁是否覆盖完整）。
@@ -305,7 +310,8 @@ so that 运费准确、询价成本可控。
 
 - 新增：`B/shared/logistics/biteship/{BiteshipClient, LiveBiteshipClient, StubBiteshipClient, BiteshipProperties, BiteshipConfig, BiteshipException, dto/BiteshipRatesRequest, dto/BiteshipRatesResult, dto/BiteshipRate}`；`B/shop/logistics/{ShippingQuoteService, ShippingQuoteRecord, ShippingQuoteRecordRepository, ShippingQuoteCleanupJob, PackageItem, PackageItems, CourierRate, QuoteResult, Serviceability, QuoteFailedException, SkuNotSellableException}`；`B/admin/shop/service/AdminShopSkuPackageService`。
 - 改：`ShopSku`、`ShippingSettings`、`ShippingZone`、`CartService`、`CartView`、`CheckoutService`（仅映射）、`ShopSkuView`、`ShopProductQueryService`、`ErrorTypes`、`AppException`、旧 `ShippingQuoteService`（仅注解）、`AdminShippingZoneService`、`application.yml`、`.env.example`。
-- `SkuNotSellableException` 可直接用 `AppException.skuNotSellable(...)` 代替，二选一，Completion Notes 写明。
+- `SkuNotSellableException` 可直接用 `AppException.skuNotSellable(...)` 代替，二选一，Completion Notes 写明。**（实现：选 `AppException.skuNotSellable`，不建 `SkuNotSellableException`。）**
+- 实现另增：`B/shared/logistics/biteship/UnavailableBiteshipClient`（C-5 生产不可用兜底）、`dto/{BiteshipCreateOrderRequest, BiteshipOrderSnapshot, CreateOutcome, CancelOutcome}`（按 5.1 文件里的计划名定形）；`B/shop/logistics/{ShippingProbeProperties, ShopLogisticsConfig}`；`ShopSkuRepository.findByPublicToken`；i18n 键 `admin.err.product.packageInvalid`（四份 messages*.properties）。
 
 ### References
 
@@ -330,14 +336,79 @@ so that 运费准确、询价成本可控。
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless，bmad-dev-story 流程，只到 L0。
+
 ### Debug Log References
+
+- 测试编译在默认 locale 下报 `bad filename …PetSlotExpiryServiceTest$??.class`（存量中文类名，与本 story 无关）；设 `LANG=C.UTF-8 LC_ALL=C.UTF-8` 后正常。
+- `LiveBiteshipClientTest.requestShape` 首跑红：断言 `doesNotContain("cod")` 误命中 `postal_code`；改为断言顶层字段集合恰为 4 个。
+- 全量 L0（661 个非集成测试类，5189 用例）首跑 1 红：`AdminMessagesExternalizedTest`（后台异常须挂 `admin.err.*` 码）→ `AdminShopSkuPackageService` 两处异常挂码（复用 `admin.err.product.skuNotFound`，新增 `admin.err.product.packageInvalid` 四语）后全绿。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：
+  - L1（需 Docker postgres + redis，云端未跑，只保证编译）：`shop/logistics/BiteshipQuoteIntegrationTest`（新：`ddl-auto=validate` 启动、stub 落库与 30 分钟复用、99999 不可配送落库 / 99998 失败不落库、`findValid` 过期、清理任务）；`shop/cart/CartIntegrationTest`（补 2 例：不可售加购 / 立即购买 422 `sku-not-sellable`、车内行 `NOT_SELLABLE` + 加量拦减量不拦 + 补齐后可加购）；`shop/web/ShopProductEndpointIntegrationTest`（补 1 例：详情 SKU `sellable`）；全量 L1 回归（AC10 的 28 个文件 SQL 造数补包裹参数是否覆盖完整，见下）。对应 AC1~AC4、AC6~AC7、AC10 的 `[L1]` 部分。
+  - L2（需 Biteship sandbox key）：AC5 真调一次（雅加达 → 雅加达）核对字段映射；偏远邮编（如 `97762`）报价可用性记录。
+- L0 结果：`./mvnw -B clean package -DskipTests` 绿；story 列的 8 个 L0 类 + `CartViewTotalsTest` + `AdminMessagesExternalizedTest` 共 74 例全绿；另跑全量非集成测试 5189 例全绿（10 skipped 为存量）；`check-flyway-versions.sh origin/main` OK。
+- 拍板点复述：① 旧类 `@Service("zoneShippingQuoteService")` + `@Deprecated(forRemoval = true)`，逻辑未动，3.2 删；② 「不可配送」落库复用、「询价失败」不落库；③ 复用键含 `provider_mode`；④ 询价不传 `courier_insurance` / COD；⑤ `courierKey = code:service`；⑥ prod（非 stag）不允许 stub / sandbox ——**按 C-5 改为不拒启动、装配不可用客户端**（见待确认 ①）。
+- `SkuNotSellableException` 未建，统一用 `AppException.skuNotSellable(...)`（422 `sku-not-sellable`）；`QuoteFailedException extends AppException`（503 `quote-failed`）。
+- `setQty` 只在「新数量 > 现数量」时拦不可售；减少 / 删除不拦。
+- `CheckoutService.collectUnavailable`：`NOT_SELLABLE` → `UnavailableLine.REASON_DELISTED`，其余结算行为未动。
+- 后台写服务：`AdminShopSkuPackageService.updatePackage(...)`（审计 `SHOP_SKU_UPSERTED`，摘要只记四个数值）；`AdminShippingZoneService` 新增 `setOrigin / setFreeShippingCap / setInsuranceRateBp / setZonePostalCode`（审计复用两个既有常量；发货地审计只记邮编前 2 位，不记联系人 / 电话 / 地址）。无 Controller / 页面。
+- `BiteshipClient` 增 `providerMode()`（落库复用键用）；`createOrder / cancelOrder / getOrder` 的入参 / 出参类型按 5.1 story 计划名定形（`BiteshipCreateOrderRequest` 目前只 4 个字段，5.1 按 AC4.2 补）；Live 实现抛 `UnsupportedOperationException("Story 5.1")`，stub 为最小内存实现（`BiteshipStubScript` 归 5.1）。
+- AC10：28 个 L1 测试文件的 `INSERT INTO shop_skus` 统一追加四列 `1000, 20, 15, 10`（脚本化，均可编译）；`ShopSku.create` 造数仅 `CartViewTotalsTest`（已用 `ShopSkuFixtures.sellable`）与 `AdminShopProductServiceTest`（不走加购，未改）。**经后台接口建 SKU 再加购的 L1 测试**本次未发现，但未逐个跑，留本地全量 L1 确认。
+- **复审修复（2026-11-05）**：
+  1. 发货地长度校验：`AdminShippingZoneService.setOrigin` 在 service 层按列宽校验联系人 60 / 电话 20 / 地址 300（trim 后计），超长抛 `AppException.validation`（与邮编校验同风格；该类在 `shop/shipping/service`，不在后台 i18n 守卫扫描范围、同类既有异常均未挂码，故未新增文案码）；`ShippingSettings.applyOrigin` 加同口径实体兜底（`IllegalArgumentException`）。
+  2. C-5 收紧：`BiteshipClient` 新增 `default boolean isAvailable()`（true），`UnavailableBiteshipClient` 返回 false；`ShippingQuoteService.quote` 在读发货地 / 查复用**之前**判断不可用即抛 `QuoteFailedException`，生产 key 丢失后不会再命中旧复用报价。
+  - 复审后 L0：`clean package` 绿，11 个 L0 类共 83 例全绿。
+- story 名字对齐修改：L1 新测试类按 Dev Notes 建议定名 `BiteshipQuoteIntegrationTest`；Project Structure Notes 补记实现新增的类 / 方法 / i18n 键；Dev Notes 「现状」行号与 `2c507755` 一致，未发现漂移。
+
 #### 待确认
 
+1. **C-5 与 AC5.7 的合并口径**：C-5 只写「生产缺 key 不拒启动」。实现取最保守、且不阻塞同版本其他线发布的做法——在 `prod` profile（含 stag）下，凡 Biteship 配置不可用（缺 key、前缀不符、prod 非 stag 用 stub / sandbox、未知 mode）一律**不拒启动**，ERROR 日志 + 装配 `UnavailableBiteshipClient`（询价一律 `quote-failed`，**绝不回退桩报价**）；非 prod 环境配错仍拒启动。`BiteshipConfigTest` 按此断言。若希望 stag 上 sandbox 缺 key 仍拒启动，需改 `BiteshipConfig.misconfigured` 的 prod 判定。
+2. epics「`shipping_zones.fee` 不再被读取」顺延 3.2（同 story 原「待确认」①）。
+3. 原「待确认」②~⑦ 照旧，均按 story 拍板实现；⑦ stag 部署前补数 SQL 仍需执行（C-13）。
+
 ### File List
+
+后端（新增）：
+- petgo-backend/src/main/java/com/tailtopia/shared/logistics/biteship/{BiteshipClient, LiveBiteshipClient, StubBiteshipClient, UnavailableBiteshipClient, BiteshipProperties, BiteshipConfig, BiteshipException}.java
+- petgo-backend/src/main/java/com/tailtopia/shared/logistics/biteship/dto/{BiteshipRatesRequest, BiteshipRatesResult, BiteshipRate, BiteshipCreateOrderRequest, BiteshipOrderSnapshot, CreateOutcome, CancelOutcome}.java
+- petgo-backend/src/main/java/com/tailtopia/shop/logistics/{ShippingQuoteService, ShippingQuoteRecord, ShippingQuoteRecordRepository, ShippingQuoteCleanupJob, PackageItem, PackageItems, CourierRate, QuoteResult, Serviceability, QuoteFailedException, ShippingProbeProperties, ShopLogisticsConfig}.java
+- petgo-backend/src/main/java/com/tailtopia/admin/shop/service/AdminShopSkuPackageService.java
+
+后端（修改）：
+- petgo-backend/src/main/java/com/tailtopia/shop/domain/ShopSku.java
+- petgo-backend/src/main/java/com/tailtopia/shop/repository/ShopSkuRepository.java
+- petgo-backend/src/main/java/com/tailtopia/shop/shipping/domain/{ShippingSettings, ShippingZone}.java
+- petgo-backend/src/main/java/com/tailtopia/shop/shipping/service/{ShippingQuoteService（仅注解）, AdminShippingZoneService}.java
+- petgo-backend/src/main/java/com/tailtopia/shop/cart/service/CartService.java、shop/cart/dto/CartView.java
+- petgo-backend/src/main/java/com/tailtopia/shop/order/service/CheckoutService.java（仅 collectUnavailable 映射）
+- petgo-backend/src/main/java/com/tailtopia/shop/dto/ShopSkuView.java、shop/service/ShopProductQueryService.java
+- petgo-backend/src/main/java/com/tailtopia/shared/error/{ErrorTypes, AppException}.java
+- petgo-backend/src/main/resources/application.yml、petgo-backend/.env.example
+- petgo-backend/src/main/resources/i18n/messages{,_en,_zh_CN,_id}.properties
+
+迁移：
+- petgo-backend/src/main/resources/db/migration/V20261105_1600__add_shop_skus_package_dimensions.sql
+- petgo-backend/src/main/resources/db/migration/V20261105_1605__shipping_settings_origin_cap_insurance_and_zone_postal_code.sql
+- petgo-backend/src/main/resources/db/migration/V20261105_1610__create_shipping_quotes.sql
+
+测试（新增）：
+- petgo-backend/src/test/java/com/tailtopia/shop/support/ShopSkuFixtures.java
+- petgo-backend/src/test/java/com/tailtopia/shared/logistics/biteship/{LiveBiteshipClientTest, StubBiteshipClientTest, BiteshipConfigTest}.java
+- petgo-backend/src/test/java/com/tailtopia/shop/logistics/{ShippingItemsHashTest, ShippingQuoteServiceTest, ShippingQuoteCleanupJobTest, BiteshipQuoteIntegrationTest}.java
+- petgo-backend/src/test/java/com/tailtopia/shop/domain/ShopSkuSellableTest.java
+- petgo-backend/src/test/java/com/tailtopia/shop/ShopShippingMigrationTextTest.java
+- petgo-backend/src/test/java/com/tailtopia/shop/shipping/service/AdminShippingZoneServiceOriginTest.java
+
+测试（修改）：
+- petgo-backend/src/test/java/com/tailtopia/shop/cart/service/CartViewTotalsTest.java（造数补包裹参数 + 2 例）
+- petgo-backend/src/test/java/com/tailtopia/shop/cart/CartIntegrationTest.java（+2 例）、shop/web/ShopProductEndpointIntegrationTest.java（+1 例）
+- 其余 26 个 L1 测试文件：`INSERT INTO shop_skus` 补包裹参数四列
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev），Biteship 报价接口细节按官方文档核对写入 AC5.3。
+- 2026-11-05：dev-story 实现（云端 L0 绿），Status → review；C-5 装配口径见「待确认」①。
+- 2026-11-05：复审修复——发货地字段长度校验；`BiteshipClient.isAvailable()` + 不可用时不复用旧报价；新增 `AdminShippingZoneServiceOriginTest`。

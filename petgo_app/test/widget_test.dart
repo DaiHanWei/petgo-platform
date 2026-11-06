@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/app.dart';
-import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/core/theme/motion.dart';
 import 'package:tailtopia/shared/widgets/app_shell.dart';
@@ -15,7 +14,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
   // Toko 现为第 2 位 Tab（DEP-1 闭合）。打桩商品列表，否则点进去会走真实 dio 请求，
   // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
       // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
-      shopBannerProvider.overrideWith((ref) async => null),
+      ...tokoHomeOverrides(),
       fakeShopProducts(const []),
     ],
     child: const TailTopiaApp(),

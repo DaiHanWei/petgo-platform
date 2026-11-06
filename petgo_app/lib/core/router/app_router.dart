@@ -26,13 +26,19 @@ import '../../features/notify/domain/app_version_check.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
+import '../../features/shop/coupon/presentation/my_coupons_page.dart';
 import '../../features/shop/presentation/shop_search_page.dart';
-import '../../features/shop/presentation/cart_page_v2.dart';
-import '../../features/shop/presentation/checkout_page_v2.dart';
-import '../../features/shop/presentation/product_detail_page_v2.dart';
+import '../../features/shop/presentation/cart_page_v3.dart';
+import '../../features/shop/domain/checkout_preview.dart' show CheckoutSource;
+import '../../features/shop/presentation/checkout_page_v3.dart';
+import '../../features/shop/presentation/product_detail_page_v3.dart';
+import '../../features/shop/presentation/review_list_page.dart';
 import '../../features/shop/presentation/shop_return_unavailable_page.dart';
-import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
-import '../../features/shop/presentation/toko_page_v2.dart';
+import '../../features/shop/presentation/shop_order_detail_page_v3.dart';
+import '../../features/shop/presentation/shop_pay_success_page.dart';
+import '../../features/shop/presentation/toko_page_v3.dart';
+import '../../features/shop/domain/shop_return.dart' show PayoutChannel;
+import '../../features/shop/refund/refund_destination_page.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
@@ -199,12 +205,13 @@ const Set<String> _controlledExactExceptions = {'/profile'};
 const String _devRoute = String.fromEnvironment('DEV_ROUTE');
 
 /// Tab 分支根页（与 [AppTab] 一一对应；穷尽 switch，新增 Tab 时编译期报错，不会静默漏配）。
-/// Tab 根页。**接收 [GoRouterState]** 而非只接 tab —— Toko 要读 `?category=`
-/// （FR-110 品类跳转注入），无 state 就取不到。其余 Tab 忽略它。
+/// Tab 根页。**接收 [GoRouterState]** 而非只接 tab —— 我的页要读 `?saved=`。
+/// Toko 自 v1.4.2 shop Story 8.1 起不再读 `?category=`（D-17）。
 Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   AppTab.profile => const GrowthArchivePage(),
-  // ⚠️ 2026-08-28 v1 版式整体删除，双 UI 并存机制随之移除；此处直接构造 v2 页面。
-  AppTab.shop => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
+  // v1.4.2 shop Story 8.1（D-17）：品类入口下线，`?category=` 一律忽略 —— URL 带参数也落首页、不报错
+  // （运营推送 CATEGORY 目标 / 旧深链仍会带它）。
+  AppTab.shop => const TokoPageV3(),
   AppTab.home => const HomePage(),
   // V1.4.0 ④ Story 2.4：读 `?saved=post|place`（收藏 Toast「Lihat」落点 → Disimpan 对应子分类）。
   AppTab.me => MePage(saved: state.uri.queryParameters['saved']),
@@ -666,8 +673,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    转化漏斗最上层，用登录墙拦截会直接杀掉转化。登录引导推迟到加购（Epic 3）。
       // 🔴 Tab 位序归 DEP-1 未拍板、图标归 DEP-2 未交付 → 本版本【只挂路由，不动 AppTab 枚举】
       //    （bottom_tab_bar.dart 属并行契约 C 类）。Tab 接入待 DEP-1 闭合后单独处理。
-      // `?category=` 只被 FR-110 的品类跳转注入（Story 9.1）：健康记录类型 → 品类，
-      // 系统生成、无 SKU。非法值由 ShopCategory.fromApi 落回 null（= 全部精选）。
+      // `?category=` 曾由 FR-110 品类跳转注入；v1.4.2 shop Story 8.1（D-17）起 Toko 忽略它、一律落首页。
       // 🔴 双 UI 并存（2026-08-19）：v1 = 逐 story 实现的首发版式，v2 = 电商设计稿版式。
       //    **路由结构一行不改** —— URL、深链、导航栈、受控路由名单全不变，
       //    （2026-08-28 起只有一套版式，此约束自然成立。）
@@ -678,8 +684,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) {
           final token = s.pathParameters['token']!;
           final from = s.uri.queryParameters['from'];
-          return ProductDetailPageV2(token: token, entrySource: from);
+          // v1.4.2 shop Story 8.2：详情换 v3（B1–B15）。
+          return ProductDetailPageV3(token: token, entrySource: from);
         },
+      ),
+      // 全部评价页（v1.4.2 shop Story 8.2 · B12）。🔒 游客可访问（评价是买前决策信息）。
+      GoRoute(
+        path: '/shop/products/:token/reviews',
+        builder: (c, s) => ReviewListPage(token: s.pathParameters['token']!),
       ),
       // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
       //    （游客渲染「登录后查看」空态 + 软性引导），而不是 redirect 弹走。
@@ -695,20 +707,57 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/shop/cart',
-        builder: (c, s) => const CartPageV2(),
+        builder: (c, s) => const CartPageV3(),
       ),
       // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
       //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
+      //    v1.4.2 shop Story 7.1：换一页结算 v3。`?source=buy_now&sku=<skuToken>&qty=<n>` → 立即购买；
+      //    无参数 / `source=cart` → 购物车。buy_now 参数不合法时页面自己给失败态（不退化成 CART）。
       GoRoute(
         path: '/shop/checkout',
-        builder: (c, s) => const CheckoutPageV2(),
+        builder: (c, s) {
+          final q = s.uri.queryParameters;
+          if (q['source'] == 'buy_now') {
+            return CheckoutPageV3(
+              source: CheckoutSource.buyNow,
+              buyNowSkuToken: q['sku'],
+              buyNowQty: int.tryParse(q['qty'] ?? '') ?? 0,
+              // v1.4.2 shop 8.2：立即购买的归因来源（详情页 `?from=` 透传）。
+              buyNowEntrySource: q['from'],
+            );
+          }
+          return const CheckoutPageV3();
+        },
       ),
       // 电商订单详情（Story 3.8）。token 寻址（不可枚举）；越权与不存在同为后端 404。
       GoRoute(
         path: '/shop/orders/:token',
         builder: (c, s) {
           final token = s.pathParameters['token']!;
-          return ShopOrderDetailPageV2(orderToken: token);
+          // v1.4.2 shop Story 7.1：结算页提交需扫码单 → `?autopay=1` 首帧自动拉起支付面板
+          // v1.4.2 shop Story 9.1：改指 v3（v2 同 story 删除，P-4）。
+          return ShopOrderDetailPageV3(
+              orderToken: token, autoPay: s.uri.queryParameters['autopay'] == '1');
+        },
+      ),
+      // 支付成功页（v1.4.2 shop Story 7.1 · E6）：纯币 / 零元单提交即结清直达；7.2 接 QRIS 到账。
+      GoRoute(
+        path: '/shop/orders/:token/paid',
+        builder: (c, s) => ShopPaySuccessPage(orderToken: s.pathParameters['token']!),
+      ),
+      // 取消退款单选择退款方式（v1.4.2 shop Story 9.2 · F14 / F15 / F23）。入口只在订单详情
+      // （「Pilih cara pengembalian dana」/ F25「Isi ulang rekening」）。F25 用 query `?retry=1&channel=BCA`
+      // 预选上次渠道（不用 `extra`：冷启动深链下 extra 为 null）。⚠️ 与下方两条退货路由无关，那两条仍落说明页。
+      GoRoute(
+        path: '/shop/orders/:token/refunds/:refundToken',
+        builder: (c, s) {
+          final q = s.uri.queryParameters;
+          return RefundDestinationPage(
+            orderToken: s.pathParameters['token']!,
+            refundToken: s.pathParameters['refundToken']!,
+            presetChannel: PayoutChannel.fromApi(q['channel']),
+            isRetry: q['retry'] == '1',
+          );
         },
       ),
       // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
@@ -1075,6 +1124,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: PushSettingsPage.routePath, builder: (c, s) => const PushSettingsPage()),
       // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
+      // v1.4.2 shop Story 8.1 AC3.5 挂路由、9.3 实现：我的券。受控（/me 前缀，游客深链被拦 → 先登录再兑换）。
+      GoRoute(path: MyCouponsPage.routePath, builder: (c, s) => const MyCouponsPage()),
       // V1.4.0 ① Tailrent Level（Story 1.5）：等级页 + EXP 明细页。受控（/me 前缀）；shell 外顶层隐 Tab。
       GoRoute(path: LevelPage.location, builder: (c, s) => const LevelPage()),
       GoRoute(path: ExpLedgerPage.location, builder: (c, s) => const ExpLedgerPage()),

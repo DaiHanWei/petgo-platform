@@ -95,8 +95,8 @@ class Epic4ChainIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "e4s" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)""", sToken, pid, price);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)""", sToken, pid, price);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, ?, 0)",
@@ -207,12 +207,12 @@ class Epic4ChainIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 SPEC-2 出口③：M=7 日自动 —— 订单脱离 SHIPPED，来源记为 AUTO_TIMEOUT")
+    @DisplayName("🔴 SPEC-2 出口③：M=14 日（v1.4.2 D-12）自动 —— 订单脱离 SHIPPED，来源记为 AUTO_TIMEOUT")
     void exitThreeAutoTimeoutLeavesShipped() {
         Ctx c = paidOrder();
         String token = c.order().getPublicToken();
         adminOrders.ship(token, "ANTERAJA", "AR" + SEQ.incrementAndGet(), 1L, ADMIN);
-        backdate("shipped_at", token, 8);
+        backdate("shipped_at", token, 15);
 
         scanner.scanFulfillment();
 
@@ -222,13 +222,13 @@ class Epic4ChainIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 无死锁：三条出口都不触发时，最坏路径也在 D14 走到 COMPLETED")
+    @DisplayName("🔴 无死锁：三条出口都不触发时，最坏路径也在 D21（v1.4.2 M=14）走到 COMPLETED")
     void noDeadlockOnTheWorstPath() {
         Ctx c = paidOrder();
         String token = c.order().getPublicToken();
         adminOrders.ship(token, "JNE", "JP" + SEQ.incrementAndGet(), 1L, ADMIN);
 
-        backdate("shipped_at", token, 8);
+        backdate("shipped_at", token, 15);
         scanner.scanFulfillment();
         assertThat(reload(token).getStatus()).isEqualTo(ShopOrderStatus.DELIVERED);
 

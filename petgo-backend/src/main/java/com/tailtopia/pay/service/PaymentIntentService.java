@@ -17,6 +17,7 @@ import com.tailtopia.shared.ratelimit.IdempotencyService;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ol>
  *   <li><b>幂等建单</b>：{@link #createIntent}——复用 {@link IdempotencyService}，同 {@code Idempotency-Key}
  *       重放取回既有意图、不重复建单；写端点 {@link RedisRateLimiter} 限流。</li>
- *   <li><b>回调/轮询单一收口</b>：{@link #applyCallback}——两通道同一入口，Redis 前置 + {@code gateway_ref}
+ *   <li><b>回调/轮询单一收口</b>：{@link #applyResult}（原 {@code applyCallback}，保留委托）——两通道同一入口，Redis 前置 + {@code gateway_ref}
  *       唯一约束 + 「已终态即幂等返回」三闸，双通道<b>只推进一次</b>；到账发 {@link PaymentIntentPaidEvent}
  *       （本 story 不含消费者，入账由 1.2/1.3 挂 hook）。</li>
  * </ol>
@@ -241,10 +242,18 @@ public class PaymentIntentService {
     @Transactional
     public int expireOverduePending(int limit) {
         int expired = 0;
+        Instant now = Instant.now();
         for (PaymentIntent intent : intents.findByStatusAndExpiresAtBefore(PaymentStatus.PENDING,
-                Instant.now(), org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)))) {
+                now, org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)))) {
             if (intent.getStatus() != PaymentStatus.PENDING) {
                 continue; // 并发已推进
+            }
+            // 🔴 v1.4.2 shop Story 3.3（B1 路径②）：电商意图再判码失效时刻 —— 存量 / 改造前意图的
+            //    expires_at 等于订单窗（≤ 60 分钟），而 GemPay 码要到出码 + 65 分钟才失效；码未失效前
+            //    置 EXPIRED 会让 60~65 分钟内的付款变成迟到款。未到 → 本轮跳过（不置、不发事件）。
+            //    其他 purpose 行为不变。
+            if (intent.getPurpose() == PaymentPurpose.SHOP_ORDER && !isProviderExpired(intent, now)) {
+                continue;
             }
             intent.markExpired(null);
             intents.save(intent);
@@ -287,19 +296,50 @@ public class PaymentIntentService {
     }
 
     /**
-     * 回调/轮询单一收口，幂等推进意图。双通道（回调 + 轮询）各到一次也只推进一次：
-     * Redis 前置短路 + 「已终态即返回」+ {@code gateway_ref} 唯一约束库级兜底。
+     * 回调/轮询单一收口（原名，保留为一行委托）。回调控制器、stag 支付模拟等既有调用方不改。
      *
-     * <p>{@link GatewayStatus#PENDING} 不推进；无匹配意图仅记日志忽略（不因未知回调改任何状态）。
+     * @see #applyResult(PaymentCallback)
      */
     @Transactional
     public void applyCallback(PaymentCallback cb) {
+        applyResult(cb);
+    }
+
+    /**
+     * 意图状态推进的<b>单一收口</b>（v1.4.2 shop Story 3.3 AC5.6，架构 P-3）：回调、定时查单、「我已付款」、
+     * 关单前查单四个入口全部经这里。幂等推进：Redis 前置短路 + 「已终态即返回」+ {@code gateway_ref}
+     * 唯一约束库级兜底，双通道各到一次也只推进一次。
+     *
+     * <p>{@link GatewayStatus#PENDING} 不推进；无匹配意图仅记日志忽略（不因未知回调改任何状态）。
+     *
+     * <p>🔴 <b>关单后到账（I1，仅 {@code SHOP_ORDER}）</b>：电商意图已 FAILED / EXPIRED 又收到 PAID →
+     * 照常转 PAID 并置 {@code paid_after_close}、发<b>现有</b> {@link PaymentIntentPaidEvent}（迟到款由
+     * {@code ShopOrderPaidHandler} 记到原订单）。该分支<b>跳过</b> Redis 去重与终态守卫 —— 先到的 FAILED 回调
+     * 已占了去重键，不跳过的话后到的 {@code Failure => Success} 会被吞掉，钱进来了系统不认。
+     * 其他业务线终态后到账仍按原逻辑忽略。
+     */
+    @Transactional
+    public void applyResult(PaymentCallback cb) {
         if (cb == null || cb.status() == GatewayStatus.PENDING) {
             return; // 未终态不推进
         }
         PaymentIntent intent = resolve(cb);
         if (intent == null) {
             log.warn("支付回调无匹配意图，忽略"); // 不打印 order_id/ref 外的正文/凭证
+            return;
+        }
+
+        // 🔴 判定放在 Redis 去重之前，且只在 cb.status == PAID 时成立；FAILED / EXPIRED 回调对终态意图仍短路。
+        boolean shopLate = intent.getPurpose() == PaymentPurpose.SHOP_ORDER
+                && cb.status() == GatewayStatus.PAID
+                && (intent.getStatus() == PaymentStatus.FAILED || intent.getStatus() == PaymentStatus.EXPIRED);
+        if (shopLate) {
+            intent.markPaidAfterClose(cb.gatewayRef(), cb.rawMeta());
+            intents.saveAndFlush(intent); // @Version 乐观锁裁决并发
+            events.publishEvent(new PaymentIntentPaidEvent(
+                    intent.getId(), intent.getPublicToken(), intent.getUserId(),
+                    intent.getPurpose(), intent.getChannel(), intent.getAmount(), intent.getCurrency()));
+            log.info("电商意图关单后到账 intentId={}", intent.getId());
             return;
         }
 
@@ -342,10 +382,50 @@ public class PaymentIntentService {
         }
     }
 
+    /** 码是否已失效：{@code now > COALESCE(provider_expires_at, created_at + 65 分钟)}（B1 统一判据的意图侧）。 */
+    public static boolean isProviderExpired(PaymentIntent intent, Instant now) {
+        Instant expiry = intent.effectiveProviderExpiry();
+        return expiry != null && now.isAfter(expiry);
+    }
+
+    /** v1.4.2 shop Story 3.3：某电商订单的全部意图（按 id 升序）。 */
+    @Transactional(readOnly = true)
+    public java.util.List<PaymentIntent> findByShopOrderId(long shopOrderId) {
+        return intents.findByShopOrderIdOrderByIdAsc(shopOrderId);
+    }
+
+    /** v1.4.2 shop Story 3.3 AC8.3：定时查单候选（≤ 100 笔）。 */
+    @Transactional(readOnly = true)
+    public java.util.List<PaymentIntent> findShopReconcileCandidates(Instant now) {
+        return intents.findShopReconcileCandidates(now);
+    }
+
+    /**
+     * 新建电商意图同事务绑定订单（v1.4.2 shop Story 3.3 AC2.2）：仅当 {@code shop_order_id} 为空时写。
+     */
+    @Transactional
+    public void bindShopOrder(String publicToken, long shopOrderId) {
+        intents.findByPublicToken(publicToken).ifPresent(intent -> {
+            if (intent.getShopOrderId() == null) {
+                intent.bindShopOrder(shopOrderId);
+                intents.saveAndFlush(intent);
+            }
+        });
+    }
+
     /** 按对外 token 读意图（供同模块下单/查询用；跨模块请走 DTO）。 */
     @Transactional(readOnly = true)
     public Optional<PaymentIntent> findByToken(String publicToken) {
         return intents.findByPublicToken(publicToken);
+    }
+
+    /** 按对外 token 批量读意图（v1.4.2 shop Story 6.2 订单列表 {@code canPay}，只读）。空入参不查库。 */
+    @Transactional(readOnly = true)
+    public List<PaymentIntent> findByTokens(java.util.Collection<String> publicTokens) {
+        if (publicTokens == null || publicTokens.isEmpty()) {
+            return List.of();
+        }
+        return intents.findByPublicTokenIn(publicTokens);
     }
 
     /**
@@ -369,7 +449,11 @@ public class PaymentIntentService {
         PaymentIntent intent = intents.findByPublicToken(publicToken)
                 .filter(i -> i.getUserId() != null && i.getUserId() == userId)
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
-        if (intent.getStatus() == PaymentStatus.PENDING && intent.isExpiredAt(Instant.now())) {
+        // 🔴 v1.4.2 shop Story 3.3（B1 路径③）：电商意图在此<b>只读</b> —— 任何人用意图 token 调通用状态端点
+        //    都能在订单窗（60 分钟）把它置 EXPIRED，而码 65 分钟才失效。电商意图的过期只经全局扫描（判码失效）
+        //    与关单前查单。其他 purpose（充值 / 名额月租 / 送礼）依赖这里就地过期，行为不变。
+        if (intent.getPurpose() != PaymentPurpose.SHOP_ORDER
+                && intent.getStatus() == PaymentStatus.PENDING && intent.isExpiredAt(Instant.now())) {
             intent.markExpired(null);
             intents.saveAndFlush(intent);
         }
@@ -382,6 +466,17 @@ public class PaymentIntentService {
      */
     @Transactional
     public void attachCharge(String publicToken, String gatewayRef, java.util.Map<String, Object> meta) {
+        attachCharge(publicToken, gatewayRef, meta, null);
+    }
+
+    /**
+     * 同上 + 写码失效时刻（v1.4.2 shop Story 3.3 AC2.3，<b>只有电商调用</b>）：在原有校验后执行
+     * {@link PaymentIntent#markProviderIssued}，{@code provider_expires_at = expires_at = now + providerTtl}
+     * （取网关返回之后的时刻，≥ GemPay 真实失效时刻，偏保守）。{@code providerTtl} 为 null 即三参版本行为。
+     */
+    @Transactional
+    public void attachCharge(String publicToken, String gatewayRef, java.util.Map<String, Object> meta,
+            Duration providerTtl) {
         PaymentIntent intent = intents.findByPublicToken(publicToken)
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         if (intent.getGatewayRef() != null) {
@@ -398,6 +493,9 @@ public class PaymentIntentService {
             throw AppException.conflict("支付单已失效，请重新发起支付");
         }
         intent.attachGatewayRef(gatewayRef, meta);
+        if (providerTtl != null) {
+            intent.markProviderIssued(Instant.now().plus(providerTtl));
+        }
         intents.saveAndFlush(intent);
     }
 

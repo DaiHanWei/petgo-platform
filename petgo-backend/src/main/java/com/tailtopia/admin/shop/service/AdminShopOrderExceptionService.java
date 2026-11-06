@@ -2,26 +2,19 @@ package com.tailtopia.admin.shop.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
-import com.tailtopia.config.domain.PawCoinConfig;
-import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
-import com.tailtopia.pay.domain.PawCoinTxnType;
-import com.tailtopia.pay.domain.PaymentPurpose;
-import com.tailtopia.pay.event.RefundSucceededEvent;
-import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
+import com.tailtopia.shop.order.refund.CancelReason;
+import com.tailtopia.shop.order.refund.ShopOrderRefundService;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
-import com.tailtopia.shop.service.InventoryMovementService;
-import java.time.LocalDate;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,15 +32,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>🔴 <b>S-3：运营手工选单取消，不做自动取消。</b>SKU ≤ 30、单量低，手工完全可行；
  * 自动取消会误杀大客户 —— 而被误杀的那一单往往正是最该保住的那一单。
  *
- * <p>🔴 <b>补偿是平台责任的兑现，不是客服的善意。</b>已付款却无货是平台的错，
- * 补偿溢价读的是 AB-6A 的<b>平台责任补偿溢价</b>配置项（{@code compensation_premium_rate}），
- * 与激励溢价是两个独立配置项（C-9 / D-8）；共用同一数值会静默毁掉 AB-13A 的售后成本口径。
- * 比例由配置决定，<b>不给运营手工调金额的入口</b>（避免因人而异的议价）。
- *
- * <p>⚠️ <b>QRIS 段的真钱打款不在本 story</b>：资金链路属 Epic 5 Story 5.5
- * （{@code pay/refund} 的 PayoutChannel + 两段审批）。AD-10 明确实物流程与资金流程是两个东西，
- * 本 story <b>不自建第二条打款路径</b>。本类只负责 PawCoin 段的即时退回与补偿，
- * 并把待退现金额写进审计与订单，供 5.5 接手。
+ * <p>🔴 <b>v1.4.2 shop Story 4.1：处置①② 的钱全部改走 {@link ShopOrderRefundService}</b>（D-15）：
+ * 金额只在 {@code ShopRefundCalculator}，币段即时退回，现金段生成取消退款单由用户选去向（PawCoin / 线下打款）；
+ * 平台责任补偿只对「现金段选退为 PawCoin」的金额发放（读 {@code compensation_premium_rate}，<b>不是</b> {@code premiumRate}）。
+ * 本类不再直接动钱包、不再发扣回事件。用户站内信由退款服务发送（每次处置一条）。
  */
 @Service
 public class AdminShopOrderExceptionService {
@@ -57,28 +45,22 @@ public class AdminShopOrderExceptionService {
 
     private final ShopOrderRepository orders;
     private final ShopOrderLineRepository orderLines;
-    private final InventoryMovementService movements;
     private final com.tailtopia.shop.repository.SkuInventoryRepository inventory;
-    private final PawCoinWalletService wallet;
-    private final PawCoinConfigRepository pawcoinConfig;
+    private final ShopOrderRefundService refundService;
     private final AdminAuditService audit;
     private final NotificationService notifications;
-    private final ApplicationEventPublisher events;
 
     public AdminShopOrderExceptionService(ShopOrderRepository orders,
-            ShopOrderLineRepository orderLines, InventoryMovementService movements,
+            ShopOrderLineRepository orderLines,
             com.tailtopia.shop.repository.SkuInventoryRepository inventory,
-            PawCoinWalletService wallet, PawCoinConfigRepository pawcoinConfig,
-            AdminAuditService audit, NotificationService notifications, ApplicationEventPublisher events) {
+            ShopOrderRefundService refundService,
+            AdminAuditService audit, NotificationService notifications) {
         this.orders = orders;
         this.orderLines = orderLines;
-        this.movements = movements;
         this.inventory = inventory;
-        this.wallet = wallet;
-        this.pawcoinConfig = pawcoinConfig;
+        this.refundService = refundService;
         this.audit = audit;
         this.notifications = notifications;
-        this.events = events;
     }
 
     // ---------- 入口：标记缺货 ----------
@@ -108,66 +90,38 @@ public class AdminShopOrderExceptionService {
     // ---------- 处置① 整单取消并退款 ----------
 
     /**
-     * 整单取消并退款。
+     * 整单取消并退款（v1.4.2 shop Story 4.1 AC7.1 改走 {@link ShopOrderRefundService}）。
      *
-     * <p>五个动作在<b>同一事务</b>里：状态 → 库存回补 → PawCoin 段退回 → 补偿溢价 → 审计。
-     * 拆开做的话，中间崩一次就会留下「订单已取消但币没退」这种只能人工对账才能发现的状态。
+     * <p>🔴 A8 工作台只处理缺货：原因固定 {@link CancelReason#OUT_OF_STOCK}，运营填的文字是说明。
+     * 状态由原来的 {@code PENDING_SHIPMENT → CANCELLED} 改为 {@code → REFUNDING →（全部退款单完成）REFUNDED}；
+     * 库存回补、币段即时退回、<b>现金段生成退款单待用户选去向</b>（不再只记审计）、券按原因退回都在退款服务同一事务里。
+     * 币段不再发补偿：补偿只对「现金段选退为 PawCoin」的金额发放（PRD 11-05），在用户选去向时由退款服务发放。
      *
      * <p>🔴 <b>全额退款含运费</b>：货是平台没备够，用户不该为一次没发生的配送付钱。
      */
     @Transactional
     public Outcome cancelWholeOrder(String orderToken, String reason, Long actorAccountId) {
-        ShopOrder order = requireHandleable(orderToken);
+        requireHandleable(orderToken);
         requireReason(reason);
-
-        // ① 库存回补到 actual —— 走退货入库批次（S-9 / SPEC-11：采购单号填原订单号，
-        //    单价由系统取该 SKU 最近一次采购价）。留原因就是留原订单号。
-        List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
-        restock(order, lines, actorAccountId);
-        for (ShopOrderLine line : lines) {
-            int remaining = line.getQty() - line.getRefundedQty();
-            if (remaining > 0) {
-                line.addRefundedQty(remaining);
-                orderLines.save(line);
-            }
-        }
-
-        // ② PawCoin 段全额退回 + 补偿溢价
-        long coinRefunded = refundCoinSegment(order, remainingCoin(order), "whole");
-        // V1.4.0 ① Story 1.3（AD-9 / P-3）：真退了币段 → 按比例扣回消费返成长值（现金段走 Epic 5，暂无落点，P-10 不扣）。
-        if (coinRefunded > 0) {
-            events.publishEvent(new RefundSucceededEvent("shop-exception:whole:" + order.getPublicToken(),
-                    order.getUserId(), PaymentPurpose.SHOP_ORDER, "SHOP_ORDER", String.valueOf(order.getId()), null,
-                    coinRefunded, order.paidTotal()));
-        }
-        long premium = payCompensationPremium(order, coinRefunded, "whole");
-
-        // ③ 记账：已退回的部分（现金段待 Epic 5 打款，不在这里记为已退）
-        order.recordRefund(coinRefunded, coinRefunded);
-        order.clearShortageFlag();
-        order.transitionTo(ShopOrderStatus.CANCELLED);
-        orders.save(order);
-
-        long cashDue = order.getCashAmount() == null ? 0L : order.getCashAmount();
+        ShopOrderRefundService.Outcome out = refundService.cancelWhole(orderToken, CancelReason.OUT_OF_STOCK,
+                reason.trim(), actorAccountId);
         audit.record(actorAccountId, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED, "SHOP_ORDER",
                 orderToken,
-                "整单取消并退款：原因=%s；PawCoin 段退回=%d；补偿溢价=%d；待退现金段=%d（走 Epic 5 打款）"
-                        .formatted(reason, coinRefunded, premium, cashDue));
-        notifyUser(order, "很抱歉，你的订单无法履约，我们已为你取消并安排退款。原因：" + reason);
-        log.info("异常订单整单取消 token={} coinRefunded={} premium={}", orderToken,
-                coinRefunded, premium);
-        return new Outcome(coinRefunded, premium, cashDue);
+                "整单取消并退款：原因=%s；PawCoin 段退回=%d；待用户选择去向的现金段=%d；退款单=%s"
+                        .formatted(reason, out.coinRefunded(), out.cashRefundDue(),
+                                out.refund() == null ? "—" : out.refund().getPublicToken()));
+        log.info("异常订单整单取消 token={} coinRefunded={} cashDue={}", orderToken,
+                out.coinRefunded(), out.cashRefundDue());
+        return new Outcome(out.coinRefunded(), 0L, out.cashRefundDue());
     }
 
     // ---------- 处置② 部分取消 ----------
 
     /**
-     * 部分取消：取消指定行的剩余数量，回补该行库存。
+     * 部分取消：取消指定行的若干件（v1.4.2 shop Story 4.1 AC7.2 改走 {@link ShopOrderRefundService}，<b>开始退钱</b>）。
      *
-     * <p>⚠️ <b>本 story 只做「货」这一半</b>：行被取消、库存回补、用户被告知。
-     * 对应的<b>金额结算走 Epic 5 Story 5.2 的整数累计法</b>（AD-2，安全攸关）——
-     * 按比例拆分退款在多次部分退款后必须能精确归零，那是一整条独立的资金精度约束，
-     * 在这里凭直觉写一个"按行金额比例退"，正是 AD-2 要防的那种实现。
+     * <p>金额只在 {@code ShopRefundCalculator}（满减按适用行分摊、币段按比例、零头入现金）；该行库存回补、
+     * 订单状态不变；取消到最后一件按整单处理。
      *
      * <p>✅ S-2：一单多包时以 {@code shipments} 为粒度处理，订单状态按「所有包裹」聚合判定
      * （见 {@code ShopOrderFulfillmentService}）—— 部分取消不改变这条聚合规则。
@@ -180,20 +134,18 @@ public class AdminShopOrderExceptionService {
         if (qty <= 0) {
             throw AppException.validation("取消数量必须为正").code("admin.err.orderException.qtyPositive");
         }
-        ShopOrderLine line = orderLines.findById(lineId)
+        orderLines.findById(lineId)
                 .filter(l -> l.getOrderId().equals(order.getId()))
                 .orElseThrow(() -> AppException.notFound("订单行不存在").code("admin.err.order.lineNotFound"));
 
-        line.addRefundedQty(qty);
-        orderLines.save(line);
-        movements.receiveReturn(line.getSkuId(), qty, order.getPublicToken(), LocalDate.now(),
-                actorAccountId == null ? 0L : actorAccountId);
+        ShopOrderRefundService.Outcome out = refundService.cancelLine(orderToken, lineId, qty,
+                CancelReason.OUT_OF_STOCK, reason.trim(), actorAccountId);
 
         audit.record(actorAccountId, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED, "SHOP_ORDER",
                 orderToken,
-                "部分取消：行=%d 数量=%d 原因=%s；金额结算走 Epic 5 整数累计法"
-                        .formatted(lineId, qty, reason));
-        notifyUser(order, "很抱歉，你的订单中有商品无法发出，我们已为你取消该部分。原因：" + reason);
+                "部分取消：行=%d 数量=%d 原因=%s；退款=%d（币 %d / 现金 %d）；退款单=%s"
+                        .formatted(lineId, qty, reason, out.refund().getTotalRefund(), out.coinRefunded(),
+                                out.cashRefundDue(), out.refund().getPublicToken()));
     }
 
     // ---------- 处置③ 联系用户后继续 ----------
@@ -319,62 +271,6 @@ public class AdminShopOrderExceptionService {
         }
     }
 
-    /** 🔴 回补走退货入库批次：留下的「原因」就是原订单号（S-9 / SPEC-11）。 */
-    private void restock(ShopOrder order, List<ShopOrderLine> lines, Long actorAccountId) {
-        for (ShopOrderLine line : lines) {
-            int remaining = line.getQty() - line.getRefundedQty();
-            if (remaining > 0) {
-                movements.receiveReturn(line.getSkuId(), remaining, order.getPublicToken(),
-                        LocalDate.now(), actorAccountId == null ? 0L : actorAccountId);
-            }
-        }
-    }
-
-    private static long remainingCoin(ShopOrder order) {
-        long coin = order.getCoinAmount() == null ? 0L : order.getCoinAmount();
-        return Math.max(0L, coin - order.getRefundedCoin());
-    }
-
-    /**
-     * 🔴 <b>PawCoin 段只能退回 PawCoin。</b>本类<b>不存在</b>任何把 Coin 段折成现金的方法 ——
-     * 是能力缺席，不是权限判断（FR-100A 规则 1，安全攸关）。
-     */
-    private long refundCoinSegment(ShopOrder order, long coins, String scope) {
-        if (coins <= 0) {
-            return 0L;
-        }
-        wallet.credit(order.getUserId(), coins, PawCoinTxnType.REFUND, "SHOP_ORDER",
-                order.getId(), "shop-exception:" + scope + ":" + order.getPublicToken());
-        return coins;
-    }
-
-    /**
-     * 平台责任补偿溢价（零新代码：读 AB-6A 配置 + 复用 {@code credit(..., BONUS, ...)}）。
-     *
-     * <p>🔴 读的是 {@code compensationPremiumRate}，<b>不是</b> {@code premiumRate}。
-     * 两者共用同一数值是静默错误（C-9 / D-8）。
-     */
-    private long payCompensationPremium(ShopOrder order, long coinBase, String scope) {
-        if (coinBase <= 0) {
-            return 0L;
-        }
-        PawCoinConfig config = pawcoinConfig.findAll().stream().findFirst().orElse(null);
-        if (config == null || config.getCompensationPremiumRate() <= 0) {
-            return 0L;
-        }
-        long premium = coinBase * config.getCompensationPremiumRate() / 100;
-        long cap = config.getCompensationPremiumCap();
-        if (cap > 0) {
-            premium = Math.min(premium, cap);
-        }
-        if (premium <= 0) {
-            return 0L;
-        }
-        wallet.credit(order.getUserId(), premium, PawCoinTxnType.BONUS, "SHOP_ORDER",
-                order.getId(), "shop-exception-premium:" + scope + ":" + order.getPublicToken());
-        return premium;
-    }
-
     /** 🔒 站内信只说原因与致歉，不带金额明细、不带收件信息。 */
     private void notifyUser(ShopOrder order, String body) {
         try {
@@ -390,7 +286,8 @@ public class AdminShopOrderExceptionService {
     /**
      * 处置结果。
      *
-     * @param cashRefundDue 待退现金段 —— 🔴 <b>由 Epic 5 Story 5.5 的资金链路打款</b>，本 story 不打
+     * @param compensationPremium 恒 0（v1.4.2 shop 4.1：币段不再发补偿；现金段选 PawCoin 时由退款服务发放）
+     * @param cashRefundDue       现金段 —— 已生成取消退款单，待用户选择去向
      */
     public record Outcome(long coinRefunded, long compensationPremium, long cashRefundDue) {
     }

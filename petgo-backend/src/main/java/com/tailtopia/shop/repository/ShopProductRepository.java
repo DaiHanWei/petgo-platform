@@ -17,12 +17,22 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
     /** 对外一律按 token 寻址，绝不按自增 id（CLAUDE.md 护栏）。 */
     Optional<ShopProduct> findByPublicTokenAndActiveTrue(String publicToken);
 
+    /** 含已下架（v1.4.2 shop Story 6.1 AC8）：详情区分「不存在 404」与「已下架 410」。 */
+    Optional<ShopProduct> findByPublicToken(String publicToken);
+
     /**
      * 批量版「在售」判定：{@code tokens} 中存在且 {@code is_active = true} 的商品 token（V1.3.4 Story 5.1，
      * 运营弹窗候选过滤一次查完，避免逐条查实体的 N+1）。只投影 token，不加载实体。
      */
     @Query("select p.publicToken from ShopProduct p where p.publicToken in :tokens and p.active = true")
     Set<String> findActivePublicTokens(@Param("tokens") Collection<String> tokens);
+
+    /**
+     * 批量版「存在」判定（含已下架）：{@code tokens} 中存在的商品 token（v1.4.2 shop Story 2.1，
+     * 券 PRODUCT 范围校验——下架商品允许写进券范围）。只投影 token，不加载实体。
+     */
+    @Query("select p.publicToken from ShopProduct p where p.publicToken in :tokens")
+    Set<String> findExistingPublicTokens(@Param("tokens") Collection<String> tokens);
 
     /** 稳定排序：运营权重降序，id 降序兜底（避免同权重时分页漂移）。 */
     List<ShopProduct> findByActiveTrueOrderBySortWeightDescIdDesc();
@@ -117,4 +127,22 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
     List<ShopProduct> pageSearchActiveByCategory(@Param("pattern") String pattern,
             @Param("category") ProductCategory category,
             @Param("sw") int sortWeight, @Param("id") long id, Pageable pageable);
+
+    // ---------- 列表总数（v1.4.2 shop C-9：首页「{n} produk」）----------
+    // 🔴 过滤口径与上面的列表 / 搜索逐字一致（只数在售；搜索同样 name + brand、同一 escape）。
+
+    long countByActiveTrue();
+
+    long countByActiveTrueAndCategory(ProductCategory category);
+
+    @Query("select count(p) from ShopProduct p where p.active = true "
+            + "and (lower(p.name) like :pattern escape '\\' "
+            + "  or lower(p.brand) like :pattern escape '\\')")
+    long countSearchActive(@Param("pattern") String pattern);
+
+    @Query("select count(p) from ShopProduct p where p.active = true and p.category = :category "
+            + "and (lower(p.name) like :pattern escape '\\' "
+            + "  or lower(p.brand) like :pattern escape '\\')")
+    long countSearchActiveByCategory(@Param("pattern") String pattern,
+            @Param("category") ProductCategory category);
 }

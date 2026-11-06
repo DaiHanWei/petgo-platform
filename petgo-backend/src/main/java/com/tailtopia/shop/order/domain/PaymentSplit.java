@@ -32,6 +32,19 @@ public record PaymentSplit(long total, long coinAmount, long cashAmount, BigDeci
      */
     public static PaymentSplit compute(long total, long shippingPortion, long coinBalance,
             long maxCoinPerOrder, boolean coinEnabled, boolean allowShippingDeduction) {
+        return compute(total, shippingPortion, coinBalance, maxCoinPerOrder, coinEnabled,
+                allowShippingDeduction, true);
+    }
+
+    /**
+     * v1.4.2 Story 1.2（D-8「PawCoin 自选」、FR-131.1）：增加 {@code useCoin}。
+     *
+     * @param useCoin 用户本单是否选择使用 PawCoin；{@code false} → 币 0、现金 = 总额。
+     *                6 参版本等价于 {@code useCoin=true}（行为不变）。
+     */
+    public static PaymentSplit compute(long total, long shippingPortion, long coinBalance,
+            long maxCoinPerOrder, boolean coinEnabled, boolean allowShippingDeduction,
+            boolean useCoin) {
         if (total <= 0) {
             return new PaymentSplit(Math.max(total, 0), 0, Math.max(total, 0), BigDecimal.ZERO);
         }
@@ -39,7 +52,7 @@ public record PaymentSplit(long total, long coinAmount, long cashAmount, BigDeci
         long deductible = allowShippingDeduction ? total : Math.max(total - shippingPortion, 0);
 
         long coin = 0;
-        if (coinEnabled) {
+        if (coinEnabled && useCoin) {
             // 🔴 三个上界依次收窄：可抵扣额 → 余额 → 单笔上限。
             //    顺序无关（取 min），但三者缺一都会造成真实资损或规则失效。
             coin = Math.min(deductible, Math.min(coinBalance, maxCoinPerOrder));

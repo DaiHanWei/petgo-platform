@@ -21,10 +21,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/shop_tokens.dart';
+import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/shop_repository.dart';
 import 'widgets/shop_pressable.dart';
-import 'widgets/shop_product_masonry.dart';
+import 'widgets/shop_product_card.dart';
+import 'widgets/shop_reco_grid.dart';
 import 'widgets/shop_surface.dart';
 
 class ShopSearchPage extends ConsumerStatefulWidget {
@@ -40,6 +42,9 @@ class _ShopSearchPageState extends ConsumerState<ShopSearchPage> {
   String? _keyword;
 
   final TextEditingController _controller = TextEditingController();
+
+  /// 页面级曝光去重（8.1 复审 #5）：结果网格惰性构建，滚走再滚回不重复报 `toko_product_shown`。
+  final ShopImpressionTracker _impressions = ShopImpressionTracker();
   Timer? _debounce;
 
   /// 防抖窗口。300ms 是「打完一个词的停顿」与「感觉不到延迟」之间的常用折中；
@@ -81,7 +86,9 @@ class _ShopSearchPageState extends ConsumerState<ShopSearchPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final kw = _keyword;
-    return Scaffold(
+    return ShopImpressionScope(
+      tracker: _impressions,
+      child: Scaffold(
       backgroundColor: ShopColors.bg,
       appBar: ShopAppBar(
         // 标题槽整个让给输入框 —— 本页除了搜索没有别的事，不需要页名占一行。
@@ -114,10 +121,8 @@ class _ShopSearchPageState extends ConsumerState<ShopSearchPage> {
                     : NotificationListener<ScrollNotification>(
                         onNotification: (n) {
                           // 🔴 与 Toko 首页同一条纪律（2026-09-18 复审 #7）：
-                          //    先认领通知再看距离。结果卡片里的任何嵌套滚动
-                          //    （横滑规格条、将来的图片轮播）冒泡上来时，
-                          //    它们几十像素的 maxScrollExtent 会让距离判据恒成立，
-                          //    用户横划几下就把整份搜索结果拉完。
+                          //    先认领通知再看距离。嵌套滚动冒泡上来时，
+                          //    它们几十像素的 maxScrollExtent 会让距离判据恒成立。
                           if (n.depth != 0 ||
                               n.metrics.axis != Axis.vertical) {
                             return false;
@@ -132,59 +137,78 @@ class _ShopSearchPageState extends ConsumerState<ShopSearchPage> {
                           }
                           return false;
                         },
-                        child: ListView(
-                          padding: const EdgeInsets.only(bottom: kShopGutter),
-                          children: [
-                            ShopProductMasonry(
+                        child: CustomScrollView(
+                          slivers: [
+                            const SliverToBoxAdapter(
+                                child: SizedBox(height: AppSpacing.md)),
+                            // v1.4.2 shop Story 8.1 AC8.1：结果卡换成与首页一致的商品卡（含「＋」与 Lagi promo）。
+                            // 行级归因：服务端加购时把 TOKO_SEARCH 记在购物车行上。
+                            ShopProductSliverGrid(
                               items: feed.items,
-                              // 行级归因：服务端加购时把它记在购物车行上，
-                              // 之后能回答「搜出来的商品到底转化如何」。
+                              zone: 'all_featured',
                               entrySource: 'TOKO_SEARCH',
                             ),
-                            if (feed.loadingMore)
-                              const Padding(
-                                key: ValueKey('searchLoadingMore'),
-                                padding: EdgeInsets.symmetric(vertical: 18),
-                                child: Center(
-                                    child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2))),
-                              )
-                            else if (!feed.hasMore)
-                              Padding(
-                                key: const ValueKey('searchNoMore'),
-                                padding: const EdgeInsets.symmetric(vertical: 18),
-                                child: Center(
-                                  child: Text(l10n.tokoNoMore,
-                                      style: ShopText.meta
-                                          .copyWith(color: ShopColors.text4)),
-                                ),
-                              ),
+                            SliverToBoxAdapter(
+                              child: feed.loadingMore
+                                  ? const Padding(
+                                      key: ValueKey('searchLoadingMore'),
+                                      padding: EdgeInsets.symmetric(vertical: 18),
+                                      child: Center(
+                                          child: SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2))),
+                                    )
+                                  : !feed.hasMore
+                                      ? Padding(
+                                          key: const ValueKey('searchNoMore'),
+                                          padding:
+                                              const EdgeInsets.symmetric(vertical: 18),
+                                          child: Center(
+                                            child: Text(l10n.tokoNoMore,
+                                                style: ShopText.meta
+                                                    .copyWith(color: ShopColors.text4)),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                            ),
+                            const SliverToBoxAdapter(
+                                child: SizedBox(height: kShopGutter)),
                           ],
                         ),
                       ),
               ),
+      ),
     );
   }
 
   /// 🔴 「搜不到」与「目录是空的」必须分开说 —— 都用 tokoEmpty 会让用户以为整个店没货。
-  /// 第二行给下一步动作，否则这一屏是个死胡同。
-  Widget _noResult(AppLocalizations l10n, String keyword) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: kShopScreenEdge, vertical: 40),
-        child: Column(
-          children: [
-            Text(l10n.tokoSearchEmpty(keyword),
-                key: const ValueKey('shopSearchNoResultV2'),
-                textAlign: TextAlign.center,
-                style: ShopText.body),
-            const SizedBox(height: 6),
-            Text(l10n.tokoSearchNoResultHint,
-                textAlign: TextAlign.center,
-                style: ShopText.meta.copyWith(color: ShopColors.text4)),
-          ],
-        ),
+  /// 第二行给下一步动作，下方再放推荐（A7：有档案 = 同首页推荐块；无档案 / 游客 =「Mungkin kamu suka」top 6），
+  /// 否则这一屏是个死胡同。
+  Widget _noResult(AppLocalizations l10n, String keyword) => ListView(
+        padding: const EdgeInsets.only(top: 40, bottom: AppSpacing.lg),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: kShopScreenEdge),
+            child: Column(
+              children: [
+                const Icon(Icons.search_off, size: 32, color: ShopColors.text4),
+                const SizedBox(height: 8),
+                Text(l10n.tokoSearchEmpty(keyword),
+                    key: const ValueKey('shopSearchNoResultV2'),
+                    textAlign: TextAlign.center,
+                    style: ShopText.body),
+                const SizedBox(height: 6),
+                Text(l10n.tokoSearchNoResultHint,
+                    textAlign: TextAlign.center,
+                    style: ShopText.meta.copyWith(color: ShopColors.text4)),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          const ShopRecoGrid(source: ShopRecoSource.profileOrTop),
+        ],
       );
 }
 

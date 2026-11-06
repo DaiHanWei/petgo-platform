@@ -472,9 +472,44 @@ class ApiPaths {
   /// 商品列表（Story 1.1 只读接口，**已对游客放行**）。可选 query：`category`。
   static const String shopProducts = '$base/shop/products';
 
-  /// Toko 顶部 banner（2026-08-27）。🔴 无 banner 时后端回 **204 No Content**，
-  /// 不是 200+null 也不是 404 —— 见 ShopBannerController 的说明。
-  static const String shopBanner = '$base/shop/banner';
+  /// 商品可领的券（v1.4.2 shop Story 2.2 / App 8.2，游客可读，`claimed` 只对 USER 有意义）→ `{items: CouponView[]}`。
+  static String shopProductCoupons(String productToken) =>
+      '$base/shop/products/$productToken/coupons';
+
+  /// 商品详情运费估算（v1.4.2 shop Story 3.1 / App 8.2，游客可用）：
+  /// `?skuToken=&qty=&addressToken=|regionKecamatanId=` → `{serviceable?, lowestFee?, quoteFailed, freeShippingProgress?, reason?}`。
+  static String shopProductShippingEstimate(String productToken) =>
+      '$base/shop/products/$productToken/shipping-estimate';
+
+  /// Toko 首页 banner 轮播（v1.4.2 shop Story 6.1 / App 8.1，游客可用）→ `{items: [...]}`，≤ 6 张、已排序、已过滤失效目标。
+  /// ⚠️ 旧单张端点 `/shop/banner` 只留给旧版 App，本 App 不再调用。
+  static const String shopBanners = '$base/shop/banners';
+
+  /// 在售商品按运营权重前 N（v1.4.2 shop Story 6.1，游客可用）：`?limit=6` → 商品摘要数组（带 `promo`）。
+  static const String shopProductsTop = '$base/shop/products/top';
+
+  /// 首页「给你的券」（v1.4.2 shop Story 2.2，仅 role=USER）→ `{items: CouponView[]}`。
+  static const String shopCouponsForYou = '$base/shop/coupons/for-you';
+
+  /// 游客新人券活动（v1.4.2 shop Story 2.2，游客可用）：无活动 → 204。
+  static const String shopNewbieCampaign = '$base/shop/coupons/newbie-campaign';
+
+  /// 🔒 进入 Toko（幂等，满足新人条件则发新人券）→ `{newbieCouponIssued}`。
+  static const String meShopEntry = '$base/me/shop/entry';
+
+  /// 🔒 领券 `{couponToken, source: HOME|BANNER|DETAIL}` → CouponView；409 already-claimed / sold-out / not-in-period。
+  static const String meCouponsClaim = '$base/me/coupons/claim';
+
+  /// 🔒 我的券入口计数 `{availableCount}`（v1.4.2 shop Story 2.2 AC8.4，App 9.1 订单页「Kupon Saya · n」）。
+  static const String meCouponsSummary = '$base/me/coupons/summary';
+
+  /// 🔒 我的券 `?tab=available|used&cursor=` → `{items[], nextCursor, availableCount}`（v1.4.2 shop Story 2.2 AC8 / 9.3）。
+  static const String meCoupons = '$base/me/coupons';
+
+  /// 🔒 兑换码 `{code}` → CouponView；失败 ProblemDetail（coupon-not-found / code-used / not-in-period /
+  /// already-claimed / sold-out / 429 redeem-locked）。🔴 码明文不进日志（`ApiLogInterceptor` 打码 `code`）。
+  static const String meCouponsRedeem = '$base/me/coupons/redeem';
+
   /// 行政区划三级树（Story 2.4，游客可读）。
   static const String shopRegions = '$base/shop/regions';
   /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。
@@ -501,9 +536,27 @@ class ApiPaths {
   /// 🔒 结算试算（Story 3.7）。`?addressToken=`；超服务范围回 `serviceable=false` 而非报错。
   static const String meCheckout = '$base/me/checkout';
 
+  /// 🔒 新结算试算（v1.4.2 shop Story 3.1 / App 7.1）。POST 只因参数多，语义只读：
+  /// 多快递、券、PawCoin 自选、保价。不可下单不是错误，回 `placeable=false` + `notPlaceableReason`。
+  static const String meCheckoutPreview = '$base/me/checkout/preview';
+
   /// 🔒 电商下单（Story 3.7）。409 带 `unavailableLines` 逐行明细（FR-95，不整单打回）。
   /// Story 3.8 追加：`/{token}` 详情 · `/{token}/pay` 发起支付 · `/{token}/cancel` 取消。
   static const String meShopOrders = '$base/me/shop-orders';
+
+  /// v1.4.2 shop Story 3.3 / 7.2：「我已付款」主动查单（`PaymentCheckView {paid, status, displayStatus}`）。
+  /// 服务端 10 秒节流，App 不再做客户端节流。
+  static String meShopOrderPaymentCheck(String orderToken) =>
+      '$meShopOrders/$orderToken/payment-check';
+
+  /// v1.4.2 shop Story 6.2 / App 9.1：电商订单角标计数 `{pendingPayment, toReceive}`（D-18）。
+  /// 列表本身是 [meShopOrders] 的 GET（`?group=&cursor=`）。字面路径，后端优先于 `/{token}`。
+  static const String meShopOrderCounts = '$meShopOrders/counts';
+
+  /// v1.4.2 shop Story 4.1 / App 9.2：取消退款单选择现金段去向（`RefundDestinationRequest`）。
+  /// 409 `refund-destination-locked`（已不可选）· 422 `refund-below-payout-fee` / 校验 · 404。
+  static String meShopOrderRefundDestination(String orderToken, String refundToken) =>
+      '$meShopOrders/$orderToken/refunds/$refundToken/destination';
 
   /// 退货申请页数据（Story 5.7）。🔴 不可退的行照样下发（带置灰原因），不由前端过滤。
   static String meReturnEligibility(String orderToken) =>
@@ -519,9 +572,6 @@ class ApiPaths {
   /// 🔒 Toko 首页区域②「为我的宠物精选」（Story 6.5，FR-107）。
   /// 在 `/me` 下是刻意的：FR-93 状态矩阵里游客不展示该区。
   static const String meShopRecommendations = '$base/me/shop/recommendations';
-
-  /// 🔒 Toko 首页区域①「补货提醒」（Story 6.4，FR-109）。`/{id}/dismiss` 关卡。
-  static const String meShopRepurchaseCards = '$base/me/shop/repurchase-cards';
 
   /// 商品详情页的评价区（Story 7.3）。🔒 对游客开放 —— 评价是买前决策信息，
   /// 拿它当登录墙会直接杀掉转化（FR-93A）。接口不下发任何评价者身份。

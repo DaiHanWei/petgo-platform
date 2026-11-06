@@ -105,4 +105,21 @@ void main() {
       expect((id['shopOrderRequestReturn'] as String).toLowerCase(), contains('retur'));
     });
   });
+
+  /// v1.4.2 shop Story 9.2 AC2.2：新增退款方式路由不碰两条退货路由（售后仍关闭）。直接读路由源码断言。
+  test('🔴 退货两条路由仍落说明页；取消退款单的新路由指向退款方式页', () {
+    final src = File('lib/core/router/app_router.dart').readAsStringSync();
+    String builderOf(String path) {
+      final i = src.indexOf("path: '$path'");
+      expect(i, greaterThanOrEqualTo(0), reason: '路由 $path 不见了');
+      final j = src.indexOf('GoRoute(', i);
+      return src.substring(i, j < 0 ? src.length : j);
+    }
+
+    expect(builderOf('/shop/orders/:token/return'), contains('ShopReturnUnavailablePage'));
+    expect(builderOf('/shop/returns/:token/refund-method'), contains('ShopReturnUnavailablePage'));
+    final refund = builderOf('/shop/orders/:token/refunds/:refundToken');
+    expect(refund, contains('RefundDestinationPage'));
+    expect(refund, isNot(contains('RefundMethodPageV2')));
+  });
 }

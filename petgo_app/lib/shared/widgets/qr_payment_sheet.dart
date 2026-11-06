@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/colors.dart';
 import '../../l10n/app_localizations.dart';
+import 'app_toast.dart';
 import 'qr_payment/qr_pay_parts.dart';
 import 'qr_payment/qr_pay_save.dart';
 
@@ -40,6 +41,26 @@ class QrPaymentAborted implements Exception {
 /// 可复制订单号、付款 App、付款步骤、「Simpan Kode QR」。两个新参数都可选：没传对应行不画。
 /// 倒计时归零 → 抽屉自己进过期态（A4）并停轮询，只剩「Tutup」（resolve `false`，与取消同路；
 /// 调用方原有的过期 Toast 照旧在关闭后弹）。
+///
+/// ## v1.4.2 shop Story 7.2（P-11）：只追加具名可选参数，**默认值 = 现状**
+///
+/// 送礼 / AI 解锁 / 身份证高清 / 一次性解锁 / 月租调用点一个都不传，行为一丝不变
+/// （`test/shared/qr_payment_sheet_defaults_test.dart` 钉住）。电商 E1–E7 传入：
+/// - [title]：标题行 + 右侧 ×（key `qrPayCloseX`，语义同取消：resolve false、不触发 [onAborted]）。
+/// - [amountLabel] / [coinHeldIdr]：金额标签与「+ PawCoin Rp x sudah ditahan」。
+/// - [showPaidCheck] + [onPaidCheck] + [notPaidMessage]：「Saya sudah bayar」主动查单；true = 到账
+///   （同轮询到账：关面板 resolve true），false / 抛错 → 面板内 toast [notPaidMessage]，面板保持。
+///   与轮询共用 `_closing` 防重入：谁先确认到账，另一方结果被忽略。
+/// - [hideCancel]：去掉红色「Batalkan Pembayaran」。
+/// - [collapsibleGuide]：支付指引收进折叠头（默认收起）。
+/// - [adaptiveHeight]：高度随内容（上限屏高 90%，超出内部滚动）；按钮与指引随内容排列。
+/// - [savedToastMessage] / [onSaved]：存图成功 toast 与成功回调（埋点由调用方在回调里发）。
+/// - [expiredBody]：过期蒙层正文。
+/// - [codeFailed] + [onRetryCode]：以 E7「Kode QR gagal dibuat」态打开（保存禁用、无「我已付款」）；
+///   [onRetryCode] 返回新 payload 即切回正常态，返回 null / 抛错保持 E7；为 null 不画重试。
+///   失败态下轮询照常（到账仍能接住）。
+/// - [isRetryClosed]：[onRetryCode] 抛错时判定「已不可能再出码」→ 切到无重试的 E7；null / 返回 false
+///   = 保持可重试（默认）。
 Future<bool> showQrPaymentSheet(
   BuildContext context, {
   required String payload,
@@ -48,6 +69,21 @@ Future<bool> showQrPaymentSheet(
   void Function(QrPaymentAborted abort)? onAborted,
   int? amountIdr,
   DateTime? expiresAt,
+  String? title,
+  String? amountLabel,
+  int? coinHeldIdr,
+  bool showPaidCheck = false,
+  Future<bool> Function()? onPaidCheck,
+  String? notPaidMessage,
+  bool hideCancel = false,
+  bool collapsibleGuide = false,
+  bool adaptiveHeight = false,
+  String? savedToastMessage,
+  VoidCallback? onSaved,
+  String? expiredBody,
+  bool codeFailed = false,
+  Future<String?> Function()? onRetryCode,
+  bool Function(Object error)? isRetryClosed,
 }) async {
   final bool? result = await showModalBottomSheet<bool>(
     context: context,
@@ -61,7 +97,22 @@ Future<bool> showQrPaymentSheet(
         orderRef: orderRef,
         onAborted: onAborted,
         amountIdr: amountIdr,
-        expiresAt: expiresAt),
+        expiresAt: expiresAt,
+        title: title,
+        amountLabel: amountLabel,
+        coinHeldIdr: coinHeldIdr,
+        showPaidCheck: showPaidCheck,
+        onPaidCheck: onPaidCheck,
+        notPaidMessage: notPaidMessage,
+        hideCancel: hideCancel,
+        collapsibleGuide: collapsibleGuide,
+        adaptiveHeight: adaptiveHeight,
+        savedToastMessage: savedToastMessage,
+        onSaved: onSaved,
+        expiredBody: expiredBody,
+        codeFailed: codeFailed,
+        onRetryCode: onRetryCode,
+        isRetryClosed: isRetryClosed),
   );
   return result ?? false;
 }
@@ -73,7 +124,22 @@ class _QrPaymentSheet extends StatefulWidget {
       this.orderRef,
       this.onAborted,
       this.amountIdr,
-      this.expiresAt});
+      this.expiresAt,
+      this.title,
+      this.amountLabel,
+      this.coinHeldIdr,
+      this.showPaidCheck = false,
+      this.onPaidCheck,
+      this.notPaidMessage,
+      this.hideCancel = false,
+      this.collapsibleGuide = false,
+      this.adaptiveHeight = false,
+      this.savedToastMessage,
+      this.onSaved,
+      this.expiredBody,
+      this.codeFailed = false,
+      this.onRetryCode,
+      this.isRetryClosed});
 
   final String payload;
   final Future<bool> Function() pollPaid;
@@ -87,6 +153,23 @@ class _QrPaymentSheet extends StatefulWidget {
   final int? amountIdr;
   final DateTime? expiresAt;
 
+  // ---- v1.4.2 shop Story 7.2：全部可选，默认 = 现状（见 [showQrPaymentSheet]） ----
+  final String? title;
+  final String? amountLabel;
+  final int? coinHeldIdr;
+  final bool showPaidCheck;
+  final Future<bool> Function()? onPaidCheck;
+  final String? notPaidMessage;
+  final bool hideCancel;
+  final bool collapsibleGuide;
+  final bool adaptiveHeight;
+  final String? savedToastMessage;
+  final VoidCallback? onSaved;
+  final String? expiredBody;
+  final bool codeFailed;
+  final Future<String?> Function()? onRetryCode;
+  final bool Function(Object error)? isRetryClosed;
+
   @override
   State<_QrPaymentSheet> createState() => _QrPaymentSheetState();
 }
@@ -96,6 +179,21 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
   Timer? _clock;
   bool _closing = false;
   bool _expired = false;
+
+  /// 当前二维码串（E7 重试成功后换成新码）。
+  late String _payload = widget.payload;
+
+  /// E7 取码失败态。
+  late bool _failed = widget.codeFailed;
+
+  /// E3「我已付款」查询中。
+  bool _checking = false;
+
+  /// E7「Coba lagi」进行中。
+  bool _retrying = false;
+
+  /// E7 重试被服务端判定为不可能再出码 → 不再画「Coba lagi」。
+  bool _retryClosed = false;
 
   Duration? get _remaining {
     final exp = widget.expiresAt;
@@ -171,6 +269,54 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
     }
   }
 
+  /// E3 / E4：主动查一次到账。
+  Future<void> _paidCheck() async {
+    final check = widget.onPaidCheck;
+    if (check == null || _closing || _checking) return;
+    setState(() => _checking = true);
+    bool paid = false;
+    try {
+      paid = await check();
+    } catch (_) {
+      paid = false; // 查询异常与未到账同一处置（E4），不另起错误文案
+    }
+    if (!mounted || _closing) return; // 轮询先确认了到账 → 本次结果忽略
+    if (paid) {
+      _closing = true;
+      _poll?.cancel();
+      _clock?.cancel();
+      Navigator.of(context).pop(true);
+      return;
+    }
+    setState(() => _checking = false);
+    final msg = widget.notPaidMessage;
+    if (msg != null) showAppToast(context, msg, extraBottom: 40);
+  }
+
+  /// E7「Coba lagi」：拿到新码即切回正常态；失败保持 E7。
+  Future<void> _retryCode() async {
+    final retry = widget.onRetryCode;
+    if (retry == null || _closing || _retrying) return;
+    setState(() => _retrying = true);
+    String? next;
+    bool closed = false;
+    try {
+      next = await retry();
+    } catch (e) {
+      next = null;
+      closed = widget.isRetryClosed?.call(e) ?? false;
+    }
+    if (!mounted || _closing) return;
+    setState(() {
+      _retrying = false;
+      if (closed) _retryClosed = true;
+      if (next != null) {
+        _payload = next;
+        _failed = false;
+      }
+    });
+  }
+
   void _cancel() {
     if (_closing) return;
     _closing = true;
@@ -182,6 +328,103 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final summary = QrPaySummary(
+      density: QrPayDensity.sheet,
+      amountIdr: widget.amountIdr,
+      remaining: _remaining,
+      label: widget.amountLabel,
+      coinHeldIdr: widget.coinHeldIdr,
+    );
+    final codeCard = QrPayCodeCard(
+      density: QrPayDensity.sheet,
+      payload: _payload,
+      orderRef: widget.orderRef,
+      expired: _expired,
+      expiredBody: widget.expiredBody,
+      failed: _failed,
+      onRetry: (_failed && !_expired && !_retrying && !_retryClosed && widget.onRetryCode != null) ? _retryCode : null,
+    );
+    final guide = QrPayGuide(expiresAt: widget.expiresAt, collapsible: widget.collapsibleGuide);
+    final showPaidCheck = widget.showPaidCheck && !_failed;
+    QrPayBottomBar bar({required bool docked}) => QrPayBottomBar(
+          density: QrPayDensity.sheet,
+          expired: _expired,
+          onClose: _cancel,
+          onSave: (_closing || _payload.isEmpty || _failed)
+              ? null
+              : () => saveQrPaymentImage(context,
+                  payload: _payload,
+                  amountIdr: widget.amountIdr,
+                  orderRef: widget.orderRef,
+                  expiresAt: widget.expiresAt,
+                  savedMessage: widget.savedToastMessage,
+                  onSaved: widget.onSaved),
+          onCancel: (_closing || widget.hideCancel) ? null : _cancel,
+          cancelLabel: l10n.vetPayCancel,
+          paidCheckLabel: showPaidCheck ? l10n.qrPayPaidCheck : null,
+          onPaidCheck: (showPaidCheck && !_closing) ? _paidCheck : null,
+          paidCheckBusy: _checking,
+          docked: docked,
+        );
+    final titleRow = widget.title == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 6, 6),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(widget.title!,
+                      key: const ValueKey('qrPaySheetTitle'),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                ),
+                IconButton(
+                  key: const ValueKey('qrPayCloseX'),
+                  tooltip: l10n.commonClose,
+                  onPressed: _closing ? null : _cancel,
+                  icon: const Icon(Icons.close_rounded, color: AppColors.ink2),
+                ),
+              ],
+            ),
+          );
+
+    if (widget.adaptiveHeight) {
+      // 电商 E1：高度随内容，上限屏高 90%（扣掉拖拽条），超出内部滚动；
+      // 版式自上而下：金额 → 二维码 → 主/次按钮 → 折叠指引（按钮随内容排列，不吸底）。
+      final double maxHeight = MediaQuery.sizeOf(context).height * 0.9 - kMinInteractiveDimension;
+      return ConstrainedBox(
+        key: const ValueKey('qrPayAdaptive'),
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            ?titleRow,
+            Flexible(
+              child: SingleChildScrollView(
+                key: const ValueKey('qrPayScroll'),
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                child: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.only(bottom: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      summary,
+                      const SizedBox(height: 10),
+                      codeCard,
+                      bar(docked: false),
+                      const SizedBox(height: 6),
+                      guide,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     // 抽屉固定 60% 屏高（稿 A1，含顶部拖拽条），内容在内部滚动，按钮区吸底。
     // showDragHandle 的拖拽条占 kMinInteractiveDimension（48）高，在本 SizedBox 之外，这里扣掉。
     final double height = MediaQuery.sizeOf(context).height * 0.6 - kMinInteractiveDimension;
@@ -189,6 +432,7 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
       height: height,
       child: Column(
         children: <Widget>[
+          ?titleRow,
           Expanded(
             child: SingleChildScrollView(
               key: const ValueKey('qrPayScroll'),
@@ -196,37 +440,15 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  QrPaySummary(
-                    density: QrPayDensity.sheet,
-                    amountIdr: widget.amountIdr,
-                    remaining: _remaining,
-                  ),
+                  summary,
                   const SizedBox(height: 10),
-                  QrPayCodeCard(
-                    density: QrPayDensity.sheet,
-                    payload: widget.payload,
-                    orderRef: widget.orderRef,
-                    expired: _expired,
-                  ),
-                  QrPayGuide(expiresAt: widget.expiresAt),
+                  codeCard,
+                  guide,
                 ],
               ),
             ),
           ),
-          QrPayBottomBar(
-            density: QrPayDensity.sheet,
-            expired: _expired,
-            onClose: _cancel,
-            onSave: (_closing || widget.payload.isEmpty)
-                ? null
-                : () => saveQrPaymentImage(context,
-                    payload: widget.payload,
-                    amountIdr: widget.amountIdr,
-                    orderRef: widget.orderRef,
-                    expiresAt: widget.expiresAt),
-            onCancel: _closing ? null : _cancel,
-            cancelLabel: l10n.vetPayCancel,
-          ),
+          bar(docked: true),
         ],
       ),
     );

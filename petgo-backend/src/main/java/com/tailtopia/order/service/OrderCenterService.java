@@ -422,9 +422,11 @@ public class OrderCenterService {
         //    ⚠️ 只有电商这两处改（mapShop / shopDetail）。问诊 / AI / 充值三类本版不改 ——
         //    本文件其余 7 处调用点、两个 admin service 里的 2 处、以及 OrderDisplayNo
         //    本体，一个字符都不动。
+        // v1.4.2 shop Story 3.3（C-8）：电商行按 displayStatus（宽限期待支付显示已取消），与订单详情一致。
+        ShopOrderStatus shown = o.displayStatusAt(java.time.Instant.now());
         return new OrderSummaryView(OrderType.ECOMMERCE.name(), o.getPublicToken(),
                 o.getDisplayNo(),
-                o.getStatus().name(), shopStatusColor(o.getStatus()).name(), o.getTotalAmount(),
+                shown.name(), shopStatusColor(shown).name(), o.getTotalAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(), o.getCreatedAt(),
                 card.thumbnailUrl(), card.itemTitle(), card.itemCount());
     }
@@ -433,9 +435,10 @@ public class OrderCenterService {
         // 电商订单的完整详情（行、地址、倒计时）走 Story 3.8 的专用页面；
         // 这里只补齐订单中心统一契约需要的那几项，形状与既有三个 detail 一致。
         // 🔴 Story 4-3：同 mapShop，读库列。列表与详情必须是同一个字符串。
+        ShopOrderStatus shown = o.displayStatusAt(java.time.Instant.now());   // C-8，同 mapShop
         return new OrderDetailView(OrderType.ECOMMERCE.name(), o.getPublicToken(),
                 o.getDisplayNo(),
-                o.getStatus().name(), shopStatusColor(o.getStatus()).name(), o.getTotalAmount(),
+                shown.name(), shopStatusColor(shown).name(), o.getTotalAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(),
                 o.getCreatedAt(), null,
                 null, null, null, false, null, null, null, null, null, null, null);
