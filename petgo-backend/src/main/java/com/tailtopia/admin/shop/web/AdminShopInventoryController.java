@@ -230,6 +230,45 @@ public class AdminShopInventoryController {
         return REDIRECT_LIST;
     }
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/inventory/damage/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmWriteOff(@RequestParam long skuId, @RequestParam long qty, @RequestParam String reason,
+            Model model, jakarta.servlet.http.HttpServletResponse response) {
+        InventoryRowView row = view.row(skuId);
+        java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("skuId", String.valueOf(skuId));
+        hidden.put("qty", String.valueOf(qty));
+        hidden.put("reason", reason);
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopInventory.confirmDamage", row.available()), "/admin/shop/inventory/damage",
+                hidden, msg.get("admin.shop.inventory.btn.damage"), true)
+                .withSuccessTarget("#shop-inventory-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    /** 盘点确认（AD-3）：差异数由服务端按库里当前实际库存现算（原来是前端 JS 改写 data-confirm）。 */
+    @PostMapping("/admin/shop/inventory/stocktake/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmStocktake(@RequestParam long skuId, @RequestParam long countedActual,
+            @RequestParam String reason, Model model, jakarta.servlet.http.HttpServletResponse response) {
+        InventoryRowView row = view.row(skuId);
+        long diff = countedActual - row.actual();
+        java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("skuId", String.valueOf(skuId));
+        hidden.put("countedActual", String.valueOf(countedActual));
+        hidden.put("reason", reason);
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopInventory.confirmStocktake", String.valueOf(row.actual()),
+                        String.valueOf(countedActual), (diff > 0 ? "+" : "") + diff),
+                "/admin/shop/inventory/stocktake", hidden, msg.get("admin.shop.inventory.btn.stocktake"), false)
+                .withSuccessTarget("#shop-inventory-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
     @PostMapping("/admin/shop/inventory/damage")
     @PreAuthorize(EDIT_AUTH)
     public String writeOff(@AuthenticationPrincipal AdminUserDetails admin,

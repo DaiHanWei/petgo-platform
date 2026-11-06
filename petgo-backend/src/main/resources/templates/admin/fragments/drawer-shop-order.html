@@ -197,10 +197,10 @@
             </form>
             <!-- SPEC-2 出口①：整单标记已送达 -->
             <form th:if="${markable}"
-                  th:attr="hx-post=@{/admin/shop/orders/{t}/mark-delivered(t=${order.publicToken})}"
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/mark-delivered/confirm(t=${order.publicToken})}"
                   hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="inline">
-                <button type="submit" class="btn btn-neutral" data-confirm-button
-                        th:attr="data-confirm=#{admin.v130.shopOrders.confirm.markDelivered(${order.publicToken})}"
+                <!--/* V1.4.2 Story 1.2 · AD-3：先取服务端确认弹层，确认后提交原端点。 */-->
+                <button type="submit" class="btn btn-neutral"
                         th:text="#{admin.shop.order.btn.markDelivered}">标记整单已送达</button>
             </form>
         </th:block>

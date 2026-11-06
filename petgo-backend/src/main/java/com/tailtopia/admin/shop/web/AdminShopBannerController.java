@@ -252,6 +252,19 @@ public class AdminShopBannerController {
         return "redirect:/admin/shop/banners";
     }
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/banners/{id}/delete/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmDelete(@PathVariable long id, Model model, HttpServletResponse response) {
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"), msg.get("admin.shop.banners.confirmDelete"),
+                "/admin/shop/banners/" + id + "/delete", java.util.Map.of(), msg.get("admin.shop.banners.btn.delete"), true)
+                .withSuccessTarget("#shop-banner-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
     @PostMapping("/admin/shop/banners/{id}/delete")
     @PreAuthorize(EDIT_AUTH)
     public String delete(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,

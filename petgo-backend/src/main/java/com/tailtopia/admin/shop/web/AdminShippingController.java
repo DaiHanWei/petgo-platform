@@ -132,6 +132,26 @@ public class AdminShippingController {
         return "redirect:/admin/shop/shipping";
     }
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/shipping/zones/toggle/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmToggleZone(@RequestParam String kecamatan, @RequestParam boolean active,
+            @RequestParam(defaultValue = "") String slot, Model model, HttpServletResponse response) {
+        java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("kecamatan", kecamatan);
+        hidden.put("active", String.valueOf(active));
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                active ? msg.get("admin.shop.shipping.btn.enable") + "「" + kecamatan + "」"
+                        : msg.get("admin.v130.shopShipping.confirmDisable", kecamatan),
+                "/admin/shop/shipping/zones/toggle", hidden,
+                msg.get(active ? "admin.shop.shipping.btn.enable" : "admin.shop.shipping.btn.disable"), !active)
+                .withSuccessTarget(slot.isBlank() ? "#cfg-ship-zones" : "#cfg-ship-zone-err-" + slot.replaceAll("[^0-9]", ""), "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
     @PostMapping("/admin/shop/shipping/threshold")
     @PreAuthorize(EDIT_AUTH)
     public String setThreshold(@AuthenticationPrincipal AdminUserDetails admin,

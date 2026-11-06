@@ -80,7 +80,7 @@
                 <!-- 🔴 已上架的不给删除按钮：service 层也会拦，这里不渲染是为了不让人点了才知道不行。
                      删一条正在首屏展示的 banner 不可撤销，而它与「下架」在运营眼里长得很像。 -->
                 <form class="inline" th:if="${canEdit and b.state == 'inactive'}"
-                      th:attr="hx-post=@{/admin/shop/banners/{id}/delete(id=${b.id})},data-confirm=#{admin.shop.banners.confirmDelete}"
+                      th:attr="hx-post=@{/admin/shop/banners/{id}/delete/confirm(id=${b.id})}"
                       hx-target="#shop-banner-drawer-body" hx-swap="innerHTML">
                     <button class="btn btn-sm btn-danger" type="submit"
                             th:text="#{admin.shop.banners.btn.delete}">删除</button>

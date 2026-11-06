@@ -19,6 +19,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='shop-order'">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row"><h1 th:text="#{admin.nav.shopOrders}">电商订单</h1></div>
         <p class="muted" th:text="#{admin.shop.orders.hint}">列表不显示收件人信息。要查看收件地址请打开订单抽屉。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>

@@ -302,6 +302,20 @@ public class AdminShopProductController {
         return "redirect:/admin/shop/products";
     }
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/products/{id}/delist/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmDelistProduct(@PathVariable long id, Model model, jakarta.servlet.http.HttpServletResponse response) {
+        var p = products.findById(id).orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopProducts.confirm.delist", p.getName()), "/admin/shop/products/" + id + "/delist",
+                java.util.Map.of(), msg.get("admin.shop.btn.delist"), true).asNativePost();
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
     @PostMapping("/admin/shop/products/{id}/delist")
     @PreAuthorize(EDIT_AUTH)
     public String delistProduct(@AuthenticationPrincipal AdminUserDetails admin,

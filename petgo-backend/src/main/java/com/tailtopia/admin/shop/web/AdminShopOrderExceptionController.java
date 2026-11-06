@@ -90,6 +90,53 @@ public class AdminShopOrderExceptionController {
                 : "admin/shop-order-exceptions";
     }
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/order-exceptions/{token}/cancel/confirm")
+    @PreAuthorize(HANDLE_AUTH)
+    public String confirmCancelWhole(@PathVariable String token, @RequestParam String reason,
+            Model model, jakarta.servlet.http.HttpServletResponse response) {
+        var order = orders.findByPublicToken(token)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopExceptions.confirm.cancelWhole",
+                        String.format(java.util.Locale.ROOT, "%,d", order.getTotalAmount())),
+                "/admin/shop/order-exceptions/" + enc(token) + "/cancel", java.util.Map.of("reason", reason),
+                msg.get("admin.shop.exceptions.btn.cancelWhole"), true)
+                .withSuccessTarget(".wb-detail-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    @PostMapping("/admin/shop/order-exceptions/{token}/cancel-line/confirm")
+    @PreAuthorize(HANDLE_AUTH)
+    public String confirmCancelLine(@PathVariable String token, @RequestParam long lineId, @RequestParam int qty,
+            @RequestParam String reason, Model model, jakarta.servlet.http.HttpServletResponse response) {
+        var order = orders.findByPublicToken(token)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+        var line = orderLines.findById(lineId).filter(l -> l.getOrderId().equals(order.getId()))
+                .orElseThrow(() -> AppException.notFound("订单行不存在").code("admin.err.order.notFound"));
+        if (qty < 1 || qty > line.getQty() - line.getRefundedQty()) {
+            throw AppException.validation("取消数量超出可取消范围").code("admin.err.v142.cancelQtyOutOfRange");
+        }
+        java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("lineId", String.valueOf(lineId));
+        hidden.put("qty", String.valueOf(qty));
+        hidden.put("reason", reason);
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopExceptions.confirm.cancelLine", line.getProductName(), String.valueOf(qty),
+                        String.format(java.util.Locale.ROOT, "%,d", line.getUnitPrice() * qty)),
+                "/admin/shop/order-exceptions/" + enc(token) + "/cancel-line", hidden,
+                msg.get("admin.v130.shopExceptions.btn.cancelLine"), true)
+                .withSuccessTarget(".wb-detail-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    private static String enc(String token) {
+        return org.springframework.web.util.UriUtils.encodePathSegment(token, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     @PostMapping("/admin/shop/order-exceptions/{token}/cancel")
     @PreAuthorize(HANDLE_AUTH)
     public String cancelWhole(@AuthenticationPrincipal AdminUserDetails admin,

@@ -57,6 +57,9 @@
 
 body {
     font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    /* V1.4.2 shop-admin Story 1.2 · AD-3：全局字体抗锯齿（UI 稿 .x） */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     margin: 0;
     color: var(--ink);
     background: var(--bg);
@@ -1580,3 +1583,31 @@ body:has(#growthbatch-drawer.drawer.is-open) .toast { right: 24px; bottom: 76px;
 .topic-pins-item { min-width: 0; }
 .topic-pins-sum { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
 .topic-pins-acts { display: flex; gap: 12px; align-items: center; }
+
+/* ===== V1.4.2 shop-admin Story 1.2 · AD-3：电商后台共用样式（值取自 UI 稿 .kv.amt / .sum .s.dg|wa / .tabs .c.dg / .bd）===== */
+/* 金额明细：标签左、金额右；.nt 灰字附注在金额前；.tl 合计行（上边线 + 加粗；首行不画线） */
+.kv.amt { display: grid; grid-template-columns: max-content 1fr; gap: 7px 0; font-size: 13px; margin: 10px 0; }
+.kv.amt > span:nth-child(odd) { padding-right: 16px; white-space: nowrap; color: var(--muted); }
+.kv.amt > span:nth-child(even) { text-align: right; font-weight: 700; color: var(--ink); }
+.kv.amt .tl { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; color: var(--ink) !important; font-weight: 700; }
+.kv.amt > .tl:nth-child(-n+2) { border-top: 0; padding-top: 0; margin-top: 0; }
+.kv.amt .nt { color: var(--muted); font-weight: 400; font-size: 12px; margin-right: 8px; }
+/* 金额与数字一律等宽数字、金额列不换行 */
+.num, .amt, td.amt, th.amt, .sum .sum-value { font-variant-numeric: tabular-nums; }
+td.amt, th.amt, .amt-cell { text-align: right; white-space: nowrap; }
+/* 汇总格语义色：.dg 红 / .wa 黄（左侧色条 + 数值着色） */
+.sum .sum-item.dg { box-shadow: inset 3px 0 0 var(--danger); }
+.sum .sum-item.dg .sum-value { color: var(--danger); }
+.sum .sum-item.wa { box-shadow: inset 3px 0 0 var(--warn); }
+.sum .sum-item.wa .sum-value { color: var(--warn); }
+/* 页签计数：待处理用红 / 黄 */
+.tab .tab-count.dg { color: var(--danger); }
+.tab .tab-count.wa { color: var(--warn); }
+/* 队列来源徽标（缺货 / 运单失败 / 揽收失败 / 退回 / 丢件破损），不换行 */
+.badge.q-src { white-space: nowrap; display: inline-block; }
+/* confirm-modal 单选组 / 下拉 */
+.cm-choices { border: 0; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+.cm-choices legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+.cm-choice { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.cm-choice small { display: block; }
+dialog.cm-modal .cm-select { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }

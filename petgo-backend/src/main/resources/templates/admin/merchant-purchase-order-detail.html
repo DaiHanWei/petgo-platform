@@ -17,6 +17,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row">
             <h1 th:text="#{admin.merchantPo.detail.title}">进货单详情</h1>
             <a th:href="@{/admin/merchant/purchase-orders}" class="btn btn-neutral btn-sm"
@@ -158,9 +160,10 @@
                     <button type="submit" class="btn btn-primary" disabled data-requires-target
                             th:text="#{admin.merchantPo.btn.addShipment}">录入包裹</button>
                 </form>
-                <form th:if="${markable}" method="post" class="inline"
-                      th:action="@{/admin/merchant/purchase-orders/{t}/mark-delivered(t=${po.publicToken})}"
-                      th:attr="data-confirm=#{admin.merchantPo.confirm.markDelivered(${po.orderNo})}">
+                <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：先取服务端确认弹层，弹层内原生 POST 原端点（重定向不变）。 */-->
+                <form th:if="${markable}" class="inline"
+                      th:attr="hx-post=@{/admin/merchant/purchase-orders/{t}/mark-delivered/confirm(t=${po.publicToken})}"
+                      hx-target="#confirm-host" hx-swap="innerHTML">
                     <button type="submit" class="btn btn-neutral"
                             th:text="#{admin.merchantPo.btn.markDelivered}">标记送达</button>
                 </form>

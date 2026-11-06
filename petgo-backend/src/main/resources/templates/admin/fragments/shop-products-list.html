@@ -71,9 +71,10 @@
                     <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.list}">上架</button>
                 </form>
                 <!-- 下架要确认：它立刻把商品从 App 所有列表与推荐里拿掉 -->
-                <form th:if="${canEdit and p.active}" method="post" class="inline"
-                      th:action="@{/admin/shop/products/{id}/delist(id=${p.id})}"
-                      th:attr="data-confirm=#{admin.v130.shopProducts.confirm.delist(${p.name})}">
+                <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：先取服务端确认弹层，弹层内原生 POST 原端点（重定向不变）。 */-->
+                <form th:if="${canEdit and p.active}" class="inline"
+                      th:attr="hx-post=@{/admin/shop/products/{id}/delist/confirm(id=${p.id})}"
+                      hx-target="#confirm-host" hx-swap="innerHTML">
                     <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.delist}">下架</button>
                 </form>
             </td>

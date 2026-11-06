@@ -17,6 +17,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="noDrawer=true">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row">
             <h1 th:text="#{admin.nav.shopProducts}">商品管理</h1>
             <a th:if="${canEdit}" th:href="@{/admin/shop/products/new}" class="btn btn-primary btn-sm"

@@ -271,6 +271,24 @@ public class AdminShopOrderController {
         return REDIRECT_LIST;
     }
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/orders/{token}/mark-delivered/confirm")
+    @PreAuthorize(FULFILL_AUTH)
+    public String confirmMarkDelivered(@PathVariable String token, Model model, jakarta.servlet.http.HttpServletResponse response) {
+        orders.findByPublicToken(token)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopOrders.confirm.markDelivered", token),
+                "/admin/shop/orders/" + org.springframework.web.util.UriUtils.encodePathSegment(token,
+                        java.nio.charset.StandardCharsets.UTF_8) + "/mark-delivered",
+                java.util.Map.of(), msg.get("admin.shop.order.btn.markDelivered"), false)
+                .withSuccessTarget("#shop-order-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
     /** SPEC-2 出口①：整单标记已送达。 */
     @PostMapping("/admin/shop/orders/{token}/mark-delivered")
     @PreAuthorize(FULFILL_AUTH)

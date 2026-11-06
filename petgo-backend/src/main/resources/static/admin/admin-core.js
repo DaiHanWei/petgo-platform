@@ -273,6 +273,26 @@ document.addEventListener('DOMContentLoaded', function () {
     //   🔴 为什么不让响应把宿主换空：确认表单的 hx-target 必须指向**弹层内部**的错误槽，
     //      否则 422 / 403 一回来就把整个弹层换掉，运营看到的是弹层凭空消失、
     //      而不是「为什么没成功」。成功路径因此只能靠这个事件。
+    // V1.4.2 shop-admin Story 1.2 · AD-3：替换原生 data-confirm 的弹层（form.cm-form[data-cm-success-target]）。
+    //   成功（2xx）且响应没自带 HX-Retarget → 把响应换进原表单的目标（与原来点确认后的行为一致），随后收起弹层；
+    //   错误（422 / 403）不动 —— AdminBusinessExceptionAdvice 按 HX-Target=confirm-modal-err 换进弹层内，弹层不消失。
+    document.body.addEventListener('htmx:beforeSwap', function (e) {
+        var elt = e.detail && e.detail.elt;
+        var form = elt && elt.closest ? elt.closest('form.cm-form[data-cm-success-target]') : null;
+        var xhr = e.detail && e.detail.xhr;
+        if (!form || !xhr || xhr.status < 200 || xhr.status >= 300) { return; }
+        if (!xhr.getResponseHeader('HX-Retarget')) {
+            var t = document.querySelector(form.getAttribute('data-cm-success-target'));
+            if (t) { e.detail.target = t; }
+        }
+        form.setAttribute('data-cm-done', '1');
+    });
+    document.body.addEventListener('htmx:afterRequest', function (e) {
+        var elt = e.detail && e.detail.elt;
+        if (elt && elt.getAttribute && elt.getAttribute('data-cm-done') === '1') {
+            document.body.dispatchEvent(new CustomEvent('admin:confirm-close'));
+        }
+    });
     document.body.addEventListener('admin:confirm-close', function () {
         document.querySelectorAll('dialog.modal[open]').forEach(function (d) {
             if (typeof d.close === 'function') { d.close(); }

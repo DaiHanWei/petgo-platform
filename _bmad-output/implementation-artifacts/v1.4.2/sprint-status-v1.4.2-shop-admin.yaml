@@ -41,7 +41,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.2"
 development_status:
   epic-1: in-progress
   1-1-后台导航权限码与复购下线: review
-  1-2-确认弹层扩展与商城页替换: ready-for-dev
+  1-2-确认弹层扩展与商城页替换: review
   1-3-运营提醒通道: ready-for-dev
   epic-1-retrospective: optional
 

@@ -23,6 +23,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row"><h1 th:text="#{admin.shop.returns.title}">退货审核</h1></div>
         <p class="muted" th:text="#{admin.shop.returns.hint}">「是否批准退货」与「运费由谁承担」是两件事。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>

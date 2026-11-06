@@ -22,6 +22,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row">
             <h1 th:text="#{admin.shop.shipping.title}">服务范围与运费</h1>
         </div>
@@ -102,13 +104,12 @@
                 <!--/* 启停是**另一个端点**，所以是一个独立的、与上面那个 form 平级的 form ——
                        嵌进去的话 HTML 解析器会把它整个丢掉，点「停用」会变成一次 upsert。
                        AC1：即时提交，不受保存钮控制。 */-->
-                <form class="ship-zone-toggle" method="post" th:if="${canEdit}"
-                      th:attr="action=@{/admin/shop/shipping/zones/toggle},
-                               hx-post=@{/admin/shop/shipping/zones/toggle},
-                               hx-target='#cfg-ship-zone-err-' + ${st.index},
-                               data-confirm=${z.active}
-                                   ? #{admin.v130.shopShipping.confirmDisable(${z.kecamatan})} : null"
+                <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：停用（当前启用）先走服务端确认弹层 …/toggle/confirm；启用不确认（同原状）。 */-->
+                <form class="ship-zone-toggle" th:if="${canEdit}"
+                      th:attr="hx-post=${z.active} ? @{/admin/shop/shipping/zones/toggle/confirm} : @{/admin/shop/shipping/zones/toggle},
+                               hx-target='#cfg-ship-zone-err-' + ${st.index}"
                       hx-swap="innerHTML">
+                    <input type="hidden" name="slot" th:value="${st.index}"/>
                     <input type="hidden" name="kecamatan" th:value="${z.kecamatan}"/>
                     <input type="hidden" name="active" th:value="${!z.active}"/>
                     <button class="btn btn-sm btn-neutral" type="submit"
