@@ -42,7 +42,13 @@ public class StubBiteshipClient implements BiteshipClient {
             Set.of("confirmed", "scheduled", "allocated", "picking_up");
 
     private final Map<String, BiteshipOrderSnapshot> orders = new ConcurrentHashMap<>();
-    private final AtomicLong waybillSeq = new AtomicLong(1);
+    /**
+     * 运单号序列起点随机（PR#49 CI 修复）：{@code shipments} 有唯一约束 {@code uq_shipments_carrier_tracking}，
+     * 而桩是内存态 —— 若每个实例都从 1 起号，同库里新起的 Spring 上下文（测试按配置分多个上下文）或重启后的本地
+     * 服务会再发 {@code STUBWB0000000001}，落库撞唯一键 → 被当成孤儿运单取消。随机起点 + 自增，仍是 10 位数字。
+     */
+    private final AtomicLong waybillSeq =
+            new AtomicLong(java.util.concurrent.ThreadLocalRandom.current().nextLong(1L, 9_000_000_000L));
 
     // ---------- 测试钩子状态（仅经 BiteshipStubScript 操作） ----------
     private final AtomicReference<String> failNextCreateCode = new AtomicReference<>();

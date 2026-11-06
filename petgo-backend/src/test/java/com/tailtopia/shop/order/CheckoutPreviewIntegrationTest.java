@@ -429,7 +429,9 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.orderToken").isNotEmpty())
                 .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
-                .andExpect(jsonPath("$.totalAmount").value(305_000))
+                // v1.4.2 shop 3.2（Completion Notes「旧模式运费 = stub 最低价」）：旧模式下单运费改走 Biteship stub 报价，
+                // 不再读 shipping_zones.fee（造数里的 20,000）→ 应付 = 商品 285,000 + stub 最低价 10,000；与本类 previewOverHttp 同口径
+                .andExpect(jsonPath("$.totalAmount").value(285_000 + STUB_LOWEST))
                 .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.seqNo").doesNotExist());
     }

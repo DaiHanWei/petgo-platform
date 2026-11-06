@@ -189,6 +189,8 @@ public class ShopOrderRefundService {
 
         if (restocksOnCancel(reason)) {
             restockRemaining(order, lines, actorAdminId);
+            order = reloadOrder(order);   // 见 reloadOrder：回补清了一级缓存
+            lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
         }
         fillRefundedQty(lines);
         order.markRefunding(reason, now);
@@ -229,6 +231,8 @@ public class ShopOrderRefundService {
 
         movements.receiveReturn(line.getSkuId(), qty, order.getPublicToken(), wibToday(),
                 actorAdminId == null ? 0L : actorAdminId);
+        order = reloadOrder(order);   // 见 reloadOrder：回补清了一级缓存
+        line = orderLines.findById(lineId).orElseThrow();
         line.addRefundedQty(qty);
         orderLines.save(line);
         if (quote.becameWhole()) {
@@ -265,6 +269,8 @@ public class ShopOrderRefundService {
         RefundQuote quote = ShopRefundCalculator.whole(RefundOrderSnapshot.of(order, lines),
                 CancelReason.USER_FAULT_RETURNED, null);
         restockRemaining(order, lines, actorAdminId);
+        order = reloadOrder(order);   // 见 reloadOrder：回补清了一级缓存
+        lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
         fillRefundedQty(lines);
         ShopOrderRefund refund = createRefund(order, quote, actorAdminId, now);
         coupons.releaseOnCancel(order.getId(), CancelReason.USER_FAULT_RETURNED.couponReleaseMode(), now);
@@ -510,6 +516,20 @@ public class ShopOrderRefundService {
 
     private ShopOrder requireOrder(String orderToken) {
         return orders.findByPublicToken(orderToken)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+    }
+
+    /**
+     * 库存回补后重读订单（PR#49 CI 修复）。
+     *
+     * <p>🔴 {@code InventoryMovementService.receiveReturn} → {@code SkuInventoryRepository.restock} 是
+     * {@code @Modifying(flushAutomatically, clearAutomatically)}：先 flush 再<b>清空一级缓存</b>，之前读出的订单 / 订单行
+     * 全部变成游离对象。继续改游离订单再 {@code save} 会 merge 出一份受管副本，第二次 {@code save}（结算 → REFUNDED）
+     * 拿游离对象的旧 {@code version} 去 merge 已 flush 过的副本 → {@code ObjectOptimisticLockingFailureException}。
+     * 因此回补之后一律重读，后续改动都作用在受管实体上（flushAutomatically 已把回补前的改动落库，重读不丢）。
+     */
+    private ShopOrder reloadOrder(ShopOrder order) {
+        return orders.findById(order.getId())
                 .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
     }
 

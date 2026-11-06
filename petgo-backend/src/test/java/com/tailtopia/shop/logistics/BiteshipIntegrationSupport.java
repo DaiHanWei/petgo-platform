@@ -42,6 +42,8 @@ abstract class BiteshipIntegrationSupport extends ApiIntegrationTest {
     protected ShopOrderRepository orders;
     @Autowired
     protected JdbcTemplate jdbc;
+    @Autowired
+    protected com.tailtopia.shop.service.InventoryMovementService movements;
 
     protected static final long ACTOR = 1L;
 
@@ -65,7 +67,11 @@ abstract class BiteshipIntegrationSupport extends ApiIntegrationTest {
                         package_length_cm, package_width_cm, package_height_cm)
                 VALUES (?, ?, '3 kg', 100000, 1000, 20, 15, 10)""", sToken, pid);
         Long sid = jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
-        jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 10, 0)", sid);
+        jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 0, 0)", sid);
+        // PR#49 CI 修复：库存走【真实采购入库】而非直接 INSERT actual=10 —— 揽收失败取消（平台原因整单取消）会按 S-9
+        // 以退货入库批次回补，单价取该 SKU 最近一次采购价，无采购历史即拒绝（同 AdminShopOrderExceptionIntegrationTest 造数）
+        movements.receivePurchase(sid, 10L, "PO-" + SEQ.incrementAndGet(), "供应商", 50_000L,
+                java.time.LocalDate.now(), ACTOR);
         return sToken;
     }
 

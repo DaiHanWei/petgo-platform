@@ -175,13 +175,16 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         // v1.4.2 shop 4.1（D-15）：PENDING_SHIPMENT → REFUNDING →（纯币单退款单即完成）REFUNDED，不再 CANCELLED
         assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.REFUNDED);
         assertThat(after.getCancelReason()).isEqualTo(com.tailtopia.shop.order.refund.CancelReason.OUT_OF_STOCK);
-        assertThat(after.getRefundedTotal()).isEqualTo(100_000L);
-        assertThat(after.getRefundedCoin()).isEqualTo(100_000L);
-        assertThat(out.coinRefunded()).isEqualTo(100_000L);
+        // v1.4.2 shop 3.2：旧模式下单运费改走 Biteship stub 报价（最低价 10,000），造数里的区域运费 0 已不再被读取；
+        // 缺货整单取消「全额退款含运费」规则不变 → 应退 = 商品 100,000 + 实付运费 10,000（纯币单，全额走币段）
+        assertThat(after.getShippingFee()).as("stub 最低价").isEqualTo(10_000L);
+        assertThat(after.getRefundedTotal()).isEqualTo(110_000L);
+        assertThat(after.getRefundedCoin()).isEqualTo(110_000L);
+        assertThat(out.coinRefunded()).isEqualTo(110_000L);
         assertThat(out.cashRefundDue()).isZero();
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM shop_order_refunds
-                WHERE order_id = ? AND scope = 'WHOLE' AND status = 'COMPLETED' AND total_refund = 100000""",
+                WHERE order_id = ? AND scope = 'WHOLE' AND status = 'COMPLETED' AND total_refund = 110000""",
                 Long.class, after.getId())).isEqualTo(1L);
         assertThat(wallet.balanceOf(c.userId()))
                 .isEqualTo(balanceBefore + out.coinRefunded() + out.compensationPremium());

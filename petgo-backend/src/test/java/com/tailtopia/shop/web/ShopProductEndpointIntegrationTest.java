@@ -251,13 +251,14 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
         String token = seedProduct(uniq("pc"), "MAKANAN", true, null);
         seedSku(token, uniq("sc"), 100_000L, null);
         java.time.Instant now = java.time.Instant.now();
+        String couponToken = uniq("cp");
         jdbc.update("""
                 INSERT INTO shop_coupons (public_token, kind, name_id, name_en, amount, min_spend, scope_type,
                         scope_values, acquire_type, issue_start_at, issue_end_at, valid_mode, valid_days,
                         per_user_limit, status, created_at, updated_at)
                 VALUES (?, 'DISCOUNT', 'Diskon', 'Discount', 10000, 50000, 'PRODUCT', ?::jsonb, 'CLAIM',
                         ?, ?, 'RELATIVE', 7, 1, 'ACTIVE', now(), now())""",
-                uniq("cp"), "[\"" + token + "\"]", java.sql.Timestamp.from(now.minusSeconds(3600)),
+                couponToken, "[\"" + token + "\"]", java.sql.Timestamp.from(now.minusSeconds(3600)),
                 java.sql.Timestamp.from(now.plusSeconds(86_400)));
 
         mvc.perform(get(BASE)).andExpect(status().isOk())
@@ -265,12 +266,15 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get(BASE).param("size", "100")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[?(@.token == '" + token + "')].promo").value(true));
 
+        // PR#49 CI 修复：商品可领券 = 覆盖该商品的全部可领券（全场 / 品类 / 指定商品，CouponQueryService.forProduct），
+        // CI 全量同库时其他测试类造的全场 / MAKANAN 品类可领券也会合法出现 → 按本用例的券 token 断言，不断言总条数
+        String mine = "$.items[?(@.couponToken == '" + couponToken + "')]";
         mvc.perform(get(BASE + "/" + token + "/coupons")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.items.length()").value(1))
-                .andExpect(jsonPath("$.items[0].claimed").value(false));
+                .andExpect(jsonPath(mine, org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath(mine + ".claimed").value(false));
         long uid = newUser().getId();
         mvc.perform(get(BASE + "/" + token + "/coupons").header("Authorization", userBearer(uid)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].claimed").value(false));
+                .andExpect(status().isOk()).andExpect(jsonPath(mine + ".claimed").value(false));
         mvc.perform(get(BASE + "/definitelyNotARealToken/coupons")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(0));
     }

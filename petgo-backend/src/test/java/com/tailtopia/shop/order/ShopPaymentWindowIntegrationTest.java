@@ -161,7 +161,10 @@ class ShopPaymentWindowIntegrationTest extends ApiIntegrationTest {
         payments.pay(uid, o.getPublicToken(), null);
         rewind(o, 62);   // 订单 62 分钟、码 = 出码 + 65 → 还剩约 3 分钟
 
-        assertThat(payments.closeOverdue(50)).isZero();
+        // PR#49 CI 修复：closeOverdue 是全局扫描，返回值含库里其他用例 / 其他测试类遗留的已过期单（CI 全量同库），
+        // 不能断言为 0；本用例要验的是「这一单」在码未失效时不被关（S-1 关单判据）
+        payments.closeOverdue(50);
+        assertThat(reload(o).getStatus()).isEqualTo(ShopOrderStatus.PENDING_PAYMENT);
         ShopOrderDetailView v = detailOf(uid, o);
         assertThat(v.status()).isEqualTo("PENDING_PAYMENT");
         assertThat(v.displayStatus()).isEqualTo("CANCELLED");
@@ -287,6 +290,9 @@ class ShopPaymentWindowIntegrationTest extends ApiIntegrationTest {
         PaymentIntent oldPi = intentOf(old);
         jdbc.update("UPDATE payment_intents SET updated_at = now() - interval '25 hours' WHERE id = ?", oldPi.getId());
 
+        // PR#49 CI 修复：造数阶段的 closeOverdue 按 S-1「关单前先查单」已对 closed / old 的意图各查过一次，
+        // 下面的 times(0) 要验的是「定时查单不再查 24 小时外的终态意图」（AC8.3），故先清掉造数阶段的调用记录（保留打桩）。
+        org.mockito.Mockito.clearInvocations(gateway);
         doAnswer(inv -> {
             String ref = inv.getArgument(0);
             return ChargeQueryResult.paid(new PaymentCallback(null, ref, GatewayStatus.PAID, Map.of()));

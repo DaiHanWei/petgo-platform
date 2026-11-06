@@ -61,6 +61,8 @@ class ShopOrderRefundIntegrationTest extends ApiIntegrationTest {
     private PawCoinWalletService wallet;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private com.tailtopia.support.VetTestSupport vets;
 
     private long actor;
 
@@ -302,7 +304,9 @@ class ShopOrderRefundIntegrationTest extends ApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
         mvc.perform(post("/api/v1/me/shop-orders/{t}/refunds/{r}/destination", c.order().getPublicToken(), rt)
-                        .header("Authorization", vetBearer(c.userId()))
+                        // PR#49 CI 修复：VET token 须对应 DB 里的 active vet 行（BannedVetFilter），
+                        // 原先拿 userId 当 vetId → 过滤器先判 401，测不到角色拒绝 403
+                        .header("Authorization", vetBearer(vets.newActiveVet("refund-authz").getId()))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
     }

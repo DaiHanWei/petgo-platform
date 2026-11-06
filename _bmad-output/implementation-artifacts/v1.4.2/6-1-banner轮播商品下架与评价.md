@@ -310,6 +310,7 @@ Claude Opus 5.5（claude-opus-5-5），云端 headless，L0 only。
 2. **评价公开昵称打码格式需产品确认并入决策日志**：C-9 要求下发 `nickname`，与 Story 7.3「不下发评价者身份」冲突；复审后按最保守做法服务端打码为「首词 + 末词首字母.」（对齐 UI 稿「Dewi S.」）。单词名会完整保留（印尼常见单名，可能即真名）；不下发头像与用户 token。
 3. **详情摘要查询数**：AC11.3「只多两次查询」——计数 + 均分 1 条、列表 1 条；开关开且有评价时为补 C-9 的昵称 / 规格名再各多 1 条批量查询（共 4 条，无 N+1）。
 4. **`totalCount` 的放置**：只加在分页信封（`cursor` / `size` 任一出现时）；不带分页参数的旧数组形态与 `/top` 不带总数。
+- **PR#49 CI 修复（2026-11-06）**：`BannerTargetType.COUPON` 新增后后台 banner 列表 / 抽屉按 `admin.shop.banners.target.{type}` 取文案，四份 `i18n/messages*.properties` 缺 `COUPON` 键 → `AdminPagesRenderSmokeTest` 红。已补（zh_CN「领券」/ en·默认「Claim coupon」/ id「Ambil kupon」）。L1 本地已跑绿。
 
 ### File List
 

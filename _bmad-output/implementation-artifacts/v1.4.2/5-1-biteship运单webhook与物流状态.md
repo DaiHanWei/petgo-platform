@@ -454,6 +454,7 @@ Claude Opus 5.5（claude-opus-5-5），bmad-dev-story 流程，云端 L0。
 4. 物流异常标记（`logistics_exception_at`）、Biteship 建单 / 取消时刻用本地 `now`，状态推进时刻用 Biteship `updated_at`（缺省 now）——两种时钟混用，停滞判定（5.2）与签收时刻若需统一口径，10.2 用 sandbox 核对 `updated_at` 是否可靠后再定。
 5. 在途回查每轮最多 500 条，按 `provider_status_at` 升序（最久未更新优先）；在途 > 500 时依赖下一轮轮转，未做游标分页，量级上来后（10.2 / 运营反馈）再评估。
 6. 旧版 App 的 `packages[].status` 会看到新值 `CREATED / CANCELLED`、并多出 `provider / superseded` 字段：9.1 需确认旧版 App 对未知包裹状态的兼容（不崩、显示合理），必要时服务端对旧版过滤。
+- **PR#49 CI 修复（2026-11-06）**：`StubBiteshipClient` 运单号序列从 1 起，同库内新起的 Spring 上下文（测试按 `@TestPropertySource` 分多个上下文）/ 本地服务重启会再发 `STUBWB0000000001`，撞 `uq_shipments_carrier_tracking` → 被当孤儿运单取消，`BiteshipWebhookIntegrationTest` 3 例取不到运单。改为随机起点 + 自增（仍 `STUBWB` + 10 位，`StubBiteshipClientTest` 正则不变）。`BiteshipIntegrationSupport` 造数库存改走真实采购入库（见 5-2）。L1 本地已跑绿。
 
 ### File List
 
