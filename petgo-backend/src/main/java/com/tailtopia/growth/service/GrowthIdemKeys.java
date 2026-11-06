@@ -93,6 +93,11 @@ public final class GrowthIdemKeys {
         return spendCoin("vet-consult-order:" + consultOrderId);
     }
 
+    /** 问诊订单的消费入账键：有支付意图走 {@link #spendIntent}，纯币走 {@link #spendConsultCoin}（V1.4.2 exp-reverse AD-2）。 */
+    public static String consultSpend(long consultOrderId, Long paymentIntentId) {
+        return paymentIntentId != null ? spendIntent(paymentIntentId) : spendConsultCoin(consultOrderId);
+    }
+
     /** 电商订单（Story 1.3，QRIS / MIXED / 纯币都只经此处）：{@code SPEND:SHOP:{shopOrderId}}。 */
     public static String spendShop(long shopOrderId) {
         return "SPEND:SHOP:" + shopOrderId;

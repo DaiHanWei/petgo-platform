@@ -150,32 +150,45 @@ public class GrowthLedgerService {
     /** 扣回。返回是否真的写了反向流水。 */
     @Transactional
     public boolean reverse(ReverseCommand cmd) {
+        return reverseDetailed(cmd).done();
+    }
+
+    /** 扣回并返回实扣额与前后等级（V1.4.2 exp-reverse AD-3：后台要提示实扣额、写审计）。 */
+    @Transactional
+    public ReverseOutcome reverseDetailed(ReverseCommand cmd) {
         GrowthLedgerEntry original = ledger.findByIdemKey(cmd.originalIdemKey()).orElse(null);
         if (original == null || original.getDelta() <= 0) {
-            return false;
+            return ReverseOutcome.nothingToReverse();
         }
         GrowthAccount account = accounts.lockById(original.getUserId()).orElse(null);
         if (account == null) {
-            return false;
+            return ReverseOutcome.nothingToReverse();
         }
         String idemKey = GrowthIdemKeys.reverse(original.getId(), cmd.sourceKey());
         if (ledger.existsByIdemKey(idemKey)) {
-            return false;
+            return ReverseOutcome.alreadyReversed();
         }
         long remaining = original.getDelta() - ledger.sumReversed(original.getId());
         if (remaining <= 0) {
-            return false;
+            return ReverseOutcome.alreadyReversed();
         }
         long wanted = cmd.amountOverride() != null ? cmd.amountOverride() : original.getDelta();
         int amount = (int) Math.min(Math.min(wanted, remaining), account.getLifetimeTotal());
         if (amount <= 0) {
-            return false;
+            return ReverseOutcome.nothingToReverse();
         }
         LocalDate wibDate = clock.instant().atZone(ScheduleWindow.WIB).toLocalDate();
         insertLedger(original.getUserId(), original.getRuleCode(), -amount, original.getRefType(),
                 original.getRefId(), null, idemKey, original.getId(), cmd.reason().name(), wibDate);
+        int levelBefore = account.getLevel();
         applyDelta(account, -amount, RuleCode.valueOf(original.getRuleCode()));
-        return true;
+        return ReverseOutcome.done(amount, levelBefore, account.getLevel());
+    }
+
+    /** 用户累计成长值；无账户行视为 0。 */
+    @Transactional(readOnly = true)
+    public long lifetimeTotal(long userId) {
+        return accounts.findById(userId).map(GrowthAccount::getLifetimeTotal).orElse(0L);
     }
 
     /**

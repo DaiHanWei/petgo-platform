@@ -5,7 +5,7 @@
     sumbar(oob) — 三格：本期成交额 · 单数 · 待核查数
     rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
     row(o, oob) — 单行；抽屉里标记成功后以 oob=true 原位替换（标记不会让行换位置，所以只换这一行）
-  🔴 「本期」= **当前筛选集**；本页现状没有任何筛选参数，所以它暂时等于全量 ——
+  🔴 「本期」= **当前筛选集**（V1.4.2 exp-reverse 起有「待扣回成长值」筛选）——
      这句话必须写在页面上，否则运营会把它读成「本月」。
 */-->
 <body>
@@ -47,7 +47,7 @@
 
     <div class="empty" th:if="${#lists.isEmpty(orders)}">
         <span class="empty-emoji">🧾</span>
-        <p th:text="#{admin.consultOrders.empty}">暂无兽医咨询订单</p>
+        <p th:text="${filtered} ? #{admin.v142.consultExp.filter.empty} : #{admin.consultOrders.empty}">暂无兽医咨询订单</p>
     </div>
 </th:block>
 

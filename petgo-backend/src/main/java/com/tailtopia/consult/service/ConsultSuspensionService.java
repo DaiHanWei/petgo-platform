@@ -128,6 +128,10 @@ public class ConsultSuspensionService {
             }
         } else {
             // QRIS/现金：订单留 REFUNDING，实际 Midtrans Iris 打款由 Epic 4 完成（本 story 不记 ledger 避免双记）。
+            // V1.4.2 exp-reverse AD-1：打标供后台人工扣回成长值；REFUNDING 还有常规退款来源，不能只看状态。
+            if (orders.markSuspensionRefund(order.getId(), now) != 1) {
+                throw new IllegalStateException("suspension refund mark failed: orderId=" + order.getId());
+            }
             billing.appendStageEvent(order.getId(), ConsultStageEvent.REFUND_REQUESTED, now,
                     "封禁挂起退款待打款（QRIS，Epic 4 执行）");
         }

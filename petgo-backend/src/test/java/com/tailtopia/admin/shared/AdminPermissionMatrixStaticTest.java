@@ -139,8 +139,8 @@ class AdminPermissionMatrixStaticTest {
      * + V1.4.2 shop-admin Story 1.1 两码（`shop.coupon_view` / `shop.coupon_edit`，不预授，O-7）= 89。
      */
     @Test
-    void thePermissionRegisterHasExactlyEightyNineCodes() {
-        assertThat(AdminPermissions.ALL).hasSize(89);
+    void thePermissionRegisterHasExactlyNinetyCodes() {
+        assertThat(AdminPermissions.ALL).hasSize(90);
         assertThat(AdminPermissions.ALL)
                 .contains(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST,
                         AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,

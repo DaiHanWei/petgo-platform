@@ -40,8 +40,8 @@ class AdminRoleTest {
         }
         assertThat(AdminRole.OPS_MANAGER.isTableBacked()).isFalse();
         // OPS_MANAGER 预授码数：基线 41 + V1.4.0 ① P-5 growth.user_adjust + ② AD-15 user.pet_slot_adjust ⇒ 43
-        //     （两线各 +1，合入 dev_1.4.0 后实测）。
-        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(43);
+        //     （两线各 +1，合入 dev_1.4.0 后实测）；V1.4.2 exp-reverse E-1 order.reverse_exp ⇒ 44。
+        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(44);
         assertThat(AdminRole.SUPER_ADMIN.isTableBacked()).isFalse();
         assertThat(AdminRole.CUSTOM.isTableBacked()).isFalse();
     }
@@ -67,6 +67,20 @@ class AdminRoleTest {
                     .doesNotContain(AdminPermissions.TOPIC_VIEW, AdminPermissions.TOPIC_MANAGE)
                     // V1.4.2 shop-admin Story 1.1（O-7）：优惠券两码不预授（券是真实成本，由管理员在角色页分配）
                     .doesNotContain(AdminPermissions.SHOP_COUPON_VIEW, AdminPermissions.SHOP_COUPON_EDIT);
+        }
+    }
+
+    /** V1.4.2 exp-reverse E-1：order.reverse_exp 只预授 OPS_MANAGER，普通客服等要由管理员在角色权限页勾选。 */
+    @Test
+    void orderReverseExpPreGrantedOnlyToOpsManager() {
+        assertThat(AdminPermissions.isValid(AdminPermissions.ORDER_REVERSE_EXP)).isTrue();
+        for (AdminRole role : AdminRole.values()) {
+            if (role == AdminRole.OPS_MANAGER) {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).contains(AdminPermissions.ORDER_REVERSE_EXP);
+            } else {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).as(role.name())
+                        .doesNotContain(AdminPermissions.ORDER_REVERSE_EXP);
+            }
         }
     }
 
