@@ -29,8 +29,14 @@ final class AdminShopTemplateRenderSupport {
         files.setSuffix(".html");
         files.setTemplateMode(TemplateMode.HTML);
         files.setCharacterEncoding("UTF-8");
+        files.setOrder(1);
+        files.setCheckExistence(true);
+        org.thymeleaf.templateresolver.StringTemplateResolver strings = new org.thymeleaf.templateresolver.StringTemplateResolver();
+        strings.setTemplateMode(TemplateMode.HTML);
+        strings.setOrder(2);
         SpringTemplateEngine e = new SpringTemplateEngine();
         e.addTemplateResolver(files);
+        e.addTemplateResolver(strings);
         e.setTemplateEngineMessageSource(new AdminLocaleConfig().messageSource());
         e.setLinkBuilder(new StandardLinkBuilder() {
             @Override
@@ -50,6 +56,13 @@ final class AdminShopTemplateRenderSupport {
         Context ctx = new Context(locale);
         model.forEach(ctx::setVariable);
         return ENGINE.process(template, Set.of(fragment), ctx);
+    }
+
+    /** 渲染一段内联标记（用于带参数的片段：{@code <div th:replace="~{… :: panel(true)}"></div>}）。 */
+    static String renderInline(String markup, Map<String, Object> model, Locale locale) {
+        Context ctx = new Context(locale);
+        model.forEach(ctx::setVariable);
+        return ENGINE.process(markup, ctx);
     }
 
     static String render(String template, String fragment, Map<String, Object> model) {

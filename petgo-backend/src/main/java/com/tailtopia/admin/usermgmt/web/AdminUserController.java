@@ -64,18 +64,22 @@ public class AdminUserController {
 
     /** V1.4.0 ③ gift Story 3.2：「收送礼记录」页签首屏（默认送出第 1 页 + 两个计数）。 */
     private final com.tailtopia.admin.gift.service.AdminUserGiftsService userGifts;
+    /** V1.4.2 shop-admin Story 2.3：「优惠券」页签（只读，权限沿用本抽屉）。 */
+    private final com.tailtopia.admin.shop.service.AdminUserCouponsService userCoupons;
 
     public AdminUserController(AdminUserService adminUserService,
             Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases,
             com.tailtopia.admin.growth.service.AdminGrowthUserService growth,
             com.tailtopia.admin.petslot.service.AdminPetSlotTabService petSlotTabs,
-            com.tailtopia.admin.gift.service.AdminUserGiftsService userGifts) {
+            com.tailtopia.admin.gift.service.AdminUserGiftsService userGifts,
+            com.tailtopia.admin.shop.service.AdminUserCouponsService userCoupons) {
         this.adminUserService = adminUserService;
         this.msg = msg;
         this.purchases = purchases;
         this.growth = growth;
         this.petSlotTabs = petSlotTabs;
         this.userGifts = userGifts;
+        this.userCoupons = userCoupons;
     }
 
     @GetMapping("/admin/users")
@@ -152,6 +156,8 @@ public class AdminUserController {
         // V1.4.0 ② Story 4.3：「宠物与名额」页签（只读四块 + 补发卡）与补发表单的一次性幂等 token。
         model.addAttribute("petSlotsTab", petSlotTabs.tab(userId));
         model.addAttribute("petSlotGrantToken", java.util.UUID.randomUUID().toString());
+        // V1.4.2 shop-admin Story 2.3：「优惠券」页签（只读，权限沿用本抽屉 user.view）
+        model.addAttribute("couponsTab", userCoupons.tab(userId));
     }
 
     /**

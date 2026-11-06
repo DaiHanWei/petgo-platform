@@ -113,6 +113,20 @@ public class CouponRedeemService {
         }
     }
 
+    /**
+     * 兑换锁定剩余秒数（V1.4.2 shop-admin Story 2.3 · A13，后台用户详情只读展示；客服不能解锁）。
+     * 未锁定 / 无 TTL / Redis 读失败 → 空（后台不显示横幅、不报错）。
+     */
+    public java.util.Optional<Long> redeemLockRemainingSeconds(long userId) {
+        try {
+            Long ttl = redis.getExpire(LOCK_KEY_PREFIX + userId);
+            return ttl != null && ttl > 0 ? java.util.Optional.of(ttl) : java.util.Optional.empty();
+        } catch (RuntimeException e) {
+            log.warn("兑换锁定 TTL 读取失败 cause={}", e.getClass().getSimpleName());
+            return java.util.Optional.empty();
+        }
+    }
+
     private boolean isLocked(long userId) {
         try {
             return Boolean.TRUE.equals(redis.hasKey(LOCK_KEY_PREFIX + userId));
