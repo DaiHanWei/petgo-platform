@@ -226,7 +226,13 @@ class ShopOrderRefundIntegrationTest extends ApiIntegrationTest {
                 String.class, rt);
         assertThat(enc).isNotEqualTo("081234567890").doesNotContain("081234567890");
 
-        refundService.markPayoutFailed(rt, "账号无效", actor);
+        // V1.4.2 shop-admin 5.2 · O-12：发起人（actor）不能标记打款结果 → 403，且违规审计独立提交不随回滚；换财务账号操作
+        long finance = persistedSuperAdminId("finance");
+        assertThatThrownBy(() -> refundService.markPayoutFailed(rt, "账号无效", actor))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(403));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM admin_audit_logs WHERE action = "
+                + "'SHOP_REFUND_DUTY_VIOLATION_BLOCKED' AND target_id = ?", Integer.class, rt)).isEqualTo(1);
+        refundService.markPayoutFailed(rt, "账号无效", finance);
         refundService.chooseDestination(c.userId(), c.order().getPublicToken(), rt,
                 new RefundDestinationRequest("TO_PAWCOIN", null, null, null));
         assertThat(refunds.findByPublicToken(rt).orElseThrow().getStatus()).isEqualTo(ShopRefundStatus.COMPLETED);
@@ -237,8 +243,9 @@ class ShopOrderRefundIntegrationTest extends ApiIntegrationTest {
                 .refund().getPublicToken();
         refundService.chooseDestination(d.userId(), d.order().getPublicToken(), rt2,
                 new RefundDestinationRequest("TO_BANK", "BCA", "1234567890", "Budi"));
-        refundService.markPaidOut(rt2, actor);
-        refundService.markPaidOut(rt2, actor);
+        refundService.markPaidOut(rt2, "BCA-TXN-1", null, finance);
+        refundService.markPaidOut(rt2, finance);
+        assertThat(refunds.findByPublicToken(rt2).orElseThrow().getPayoutTxnNo()).isEqualTo("BCA-TXN-1");
         assertThat(reload(d).getStatus()).isEqualTo(ShopOrderStatus.REFUNDED);
         assertThat(refunds.findByPublicToken(rt2).orElseThrow().getPaidOutAt()).isNotNull();
     }

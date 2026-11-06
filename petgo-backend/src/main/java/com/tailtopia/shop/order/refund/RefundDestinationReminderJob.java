@@ -42,6 +42,14 @@ public class RefundDestinationReminderJob {
         this.clock = clock;
     }
 
+    /** V1.4.2 shop-admin 5.2 · AD-5：改发客服群（去重键 {@code refund-overdue:{refundToken}}）。单测可缺省（只写 WARN）。 */
+    private com.tailtopia.admin.alert.OpsAlertService ops;
+
+    @Autowired(required = false)
+    void setOps(com.tailtopia.admin.alert.OpsAlertService ops) {
+        this.ops = ops;
+    }
+
     /** @return 本次提醒的退款单数 */
     @Scheduled(cron = "0 0 9 * * *", zone = "Asia/Jakarta")
     @Transactional
@@ -53,6 +61,10 @@ public class RefundDestinationReminderJob {
         for (ShopOrderRefund r : due) {
             String displayNo = orders.findById(r.getOrderId()).map(ShopOrder::getDisplayNo).orElse("?");
             log.warn("取消退款单超 7 天未选择退款方式 refund={} order={}", r.getPublicToken(), displayNo);
+            if (ops != null) {
+                ops.send(com.tailtopia.admin.alert.OpsChannel.CS, "refund-overdue:" + r.getPublicToken(),
+                        "【电商】订单 %s 的退款超过 7 天未选择退款方式，请联系用户在 App 选择。".formatted(displayNo));
+            }
             r.markDestinationReminded(now);
             refunds.save(r);
         }

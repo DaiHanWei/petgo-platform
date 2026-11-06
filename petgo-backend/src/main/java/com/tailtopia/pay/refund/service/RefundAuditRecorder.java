@@ -27,4 +27,14 @@ public class RefundAuditRecorder {
         audit.record(actorAdminId, AuditActions.REFUND_DUTY_VIOLATION_BLOCKED, "refund_request",
                 refundToken, summary);
     }
+
+    /**
+     * 电商取消退款单的职责分离违规审计（V1.4.2 shop-admin Story 5.2 · O-12）：同样 {@code REQUIRES_NEW} 独立提交，
+     * target = {@code SHOP_ORDER_REFUND}，动作 {@code SHOP_REFUND_DUTY_VIOLATION_BLOCKED}。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordShopRefundViolation(long actorAdminId, String refundToken, String summary) {
+        audit.record(actorAdminId, AuditActions.SHOP_REFUND_DUTY_VIOLATION_BLOCKED, "SHOP_ORDER_REFUND",
+                refundToken, summary);
+    }
 }

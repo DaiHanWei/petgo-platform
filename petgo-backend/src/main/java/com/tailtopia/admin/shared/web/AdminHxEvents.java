@@ -13,6 +13,9 @@ public final class AdminHxEvents {
     /** B1 内容管理：列表按当前筛选 + 当前页重拉表格与摘要条（Story 7.1）。 */
     public static final String CONTENT_LIST_REFRESH = "admin:content-list-refresh";
 
+    /** V1.4.2 shop-admin Story 5.2：退款打款抽屉内操作成功后刷新列表（行状态、页签计数、摘要）。 */
+    public static final String PAYOUT_LIST_REFRESH = "admin:payout-list-refresh";
+
     /**
      * B1 内容管理：抽屉按自身 URL 重拉（Story 7.1）。
      *

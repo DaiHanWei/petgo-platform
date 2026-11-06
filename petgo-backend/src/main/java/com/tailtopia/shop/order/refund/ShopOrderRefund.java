@@ -116,6 +116,25 @@ public class ShopOrderRefund {
     @Column(name = "destination_reminded_at")
     private Instant destinationRemindedAt;
 
+    // ---------- V1.4.2 shop-admin Story 5.2 · AD-10：打款回填 / 失败原因 / 线下结案 ----------
+    @Column(name = "payout_txn_no", length = 64)
+    private String payoutTxnNo;
+    @Column(name = "payout_proof_key", length = 255)
+    private String payoutProofKey;
+    @Column(name = "paid_out_by_admin_id")
+    private Long paidOutByAdminId;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payout_fail_reason", length = 24)
+    private PayoutFailReason payoutFailReason;
+    @Column(name = "payout_failed_by_admin_id")
+    private Long payoutFailedByAdminId;
+    @Column(name = "offline_closed_at")
+    private Instant offlineClosedAt;
+    @Column(name = "offline_closed_by_admin_id")
+    private Long offlineClosedBy;
+    @Column(name = "offline_close_note", length = 200)
+    private String offlineCloseNote;
+
     @Column(name = "created_by_admin_id", updatable = false)
     private Long createdByAdminId;
 
@@ -225,6 +244,73 @@ public class ShopOrderRefund {
         this.payoutFailedAt = now;
         this.payoutFailNote = note;
         this.updatedAt = now;
+    }
+
+    /**
+     * 财务标记已打款并回填流水号 / 截图（V1.4.2 shop-admin 5.2 · AD-10）。返回语义同 {@link #markPaidOut(Instant)}。
+     */
+    public boolean markPaidOut(Instant now, String txnNo, String proofKey, Long actorAdminId) {
+        boolean changed = markPaidOut(now);
+        if (changed) {
+            this.payoutTxnNo = txnNo;
+            this.payoutProofKey = proofKey;
+            this.paidOutByAdminId = actorAdminId;
+        }
+        return changed;
+    }
+
+    /** 财务标记打款失败并记原因（V1.4.2 shop-admin 5.2 · AD-10）。 */
+    public void markPayoutFailed(PayoutFailReason reason, String note, Instant now, Long actorAdminId) {
+        markPayoutFailed(note, now);
+        this.payoutFailReason = reason;
+        this.payoutFailedByAdminId = actorAdminId;
+    }
+
+    /**
+     * 注销用户线下处理结案（O-17 / O-26）：未完成的单 → {@code COMPLETED}，{@code cash_destination} 保持为空（留在注销用户页签）。
+     * 已完成 → 409。
+     */
+    public void closeOffline(String note, Instant now, Long actorAdminId) {
+        if (status == ShopRefundStatus.COMPLETED) {
+            throw AppException.conflict("该退款单已完成").code("admin.err.v142.payout.alreadyCompleted");
+        }
+        this.status = ShopRefundStatus.COMPLETED;
+        this.offlineClosedAt = now;
+        this.offlineClosedBy = actorAdminId;
+        this.offlineCloseNote = note;
+        this.updatedAt = now;
+    }
+
+    public String getPayoutTxnNo() {
+        return payoutTxnNo;
+    }
+
+    public String getPayoutProofKey() {
+        return payoutProofKey;
+    }
+
+    public Long getPaidOutByAdminId() {
+        return paidOutByAdminId;
+    }
+
+    public PayoutFailReason getPayoutFailReason() {
+        return payoutFailReason;
+    }
+
+    public Long getPayoutFailedByAdminId() {
+        return payoutFailedByAdminId;
+    }
+
+    public Instant getOfflineClosedAt() {
+        return offlineClosedAt;
+    }
+
+    public Long getOfflineClosedBy() {
+        return offlineClosedBy;
+    }
+
+    public String getOfflineCloseNote() {
+        return offlineCloseNote;
     }
 
     /** 7 天未选去向的运营提醒已发（AC6.2，只提醒一次）。 */

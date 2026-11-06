@@ -450,16 +450,57 @@ public class ShopOrderRefundService {
         return viewOf(refund);
     }
 
-    // ===================== AC5：财务标记 =====================
+    // ===================== AC5：财务标记（V1.4.2 shop-admin 5.2 · AD-10：回填 / 失败原因 / 职责分离 / 线下结案） =====================
 
-    /**
-     * 财务标记已打款（AC5.1）：{@code PAYOUT_PENDING → COMPLETED}，发 {@code SHOPREF:{t}:CASH_BANK} 扣回事件，
-     * 结算订单。已完成 → 幂等返回，不重复发事件。
-     */
+    /** V1.4.2 shop-admin 5.2 · O-12：职责分离违规审计（REQUIRES_NEW，被拦也留痕）。setter 注入，单测可缺省。 */
+    private com.tailtopia.pay.refund.service.RefundAuditRecorder dutyAudit;
+    /** V1.4.2 shop-admin 5.2 · AD-5：打款失败提醒客服群（提交后发送）。setter 注入，单测可缺省。 */
+    private com.tailtopia.admin.alert.OpsAlertService opsAlerts;
+
+    @Autowired(required = false)
+    void setDutyAudit(com.tailtopia.pay.refund.service.RefundAuditRecorder dutyAudit) {
+        this.dutyAudit = dutyAudit;
+    }
+
+    @Autowired(required = false)
+    void setOpsAlerts(com.tailtopia.admin.alert.OpsAlertService opsAlerts) {
+        this.opsAlerts = opsAlerts;
+    }
+
+    static final int PAYOUT_TXN_MAX = 64;
+    static final int OFFLINE_NOTE_MAX = 200;
+
+    /** stag / 存量调用：不回填流水号与截图（仍受职责分离约束）。 */
     @Transactional
     public ShopOrderRefundView markPaidOut(String refundToken, Long actorAdminId) {
+        return markPaidOutInternal(refundToken, null, null, actorAdminId);
+    }
+
+    /**
+     * 财务标记已打款（AC5.1 · V1.4.2 shop-admin 5.2 AC3）：{@code PAYOUT_PENDING → COMPLETED}，回填流水号（必填，≤ 64）与截图 key，
+     * 发 {@code SHOPREF:{t}:CASH_BANK} 扣回事件（成长值此时扣回），结算订单。已完成 → 幂等返回，不重复发事件。
+     * 🔴 职责分离：操作人 = 发起人 → 403（超管不豁免），违规审计独立提交。
+     */
+    @Transactional
+    public ShopOrderRefundView markPaidOut(String refundToken, String txnNo, String proofKey, Long actorAdminId) {
+        String t = txnNo == null ? "" : txnNo.trim();
+        if (t.isEmpty()) {
+            throw AppException.validation("请填写转账流水号").code("admin.err.v142.payout.txnRequired");
+        }
+        if (t.length() > PAYOUT_TXN_MAX) {
+            throw AppException.validation("转账流水号过长").code("admin.err.v142.payout.txnTooLong");
+        }
+        return markPaidOutInternal(refundToken, t, proofKey, actorAdminId);
+    }
+
+    private ShopOrderRefundView markPaidOutInternal(String refundToken, String txnNo, String proofKey,
+            Long actorAdminId) {
         ShopOrderRefund refund = requireRefund(refundToken);
-        if (!refund.markPaidOut(clock.instant())) {
+        if (refund.getStatus() == ShopRefundStatus.COMPLETED && refund.getCashDestination() == CashDestination.TO_BANK) {
+            return viewOf(refund);   // 已打款：幂等返回，不做职责分离判定、不写违规审计（复审修）
+        }
+        guardDutySeparation(refund, actorAdminId, "标记已打款");
+        if (!refund.markPaidOut(clock.instant(), txnNo, proofKey, actorAdminId)) {
             return viewOf(refund);
         }
         refunds.save(refund);
@@ -467,28 +508,111 @@ public class ShopOrderRefundService {
                 .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
         publishGrowthRefund(order, refund, "CASH_BANK", refund.getCashRefund());
         settleOrderIfDone(order);
+        // 🔒 审计只记账号末 4 位（O-22）；流水号不是账户信息，可记
         audit.record(actorAdminId, AuditActions.SHOP_ORDER_REFUND_PAYOUT_MARKED, "SHOP_ORDER_REFUND", refundToken,
-                "标记已打款：渠道=%s；现金段=%d；渠道费=%d".formatted(refund.getPayoutChannel(),
-                        refund.getCashRefund(), refund.getPayoutFee()));
+                "标记已打款：渠道=%s；账号末4位=%s；现金段=%d；渠道费=%d；流水号=%s；截图=%s".formatted(
+                        refund.getPayoutChannel(), refund.payoutAccountLast4(), refund.getCashRefund(),
+                        refund.getPayoutFee(), txnNo == null ? "—" : txnNo, proofKey == null ? "无" : "有"));
         return viewOf(refund);
     }
 
-    /**
-     * 财务标记打款失败（AC5.2）：{@code PAYOUT_PENDING → PAYOUT_FAILED}，记备注（≤ 200 字，不得含账户）。
-     * <b>不推送</b>（PRD：由客服联系）；用户可重选（AC4.3）。
-     */
+    /** 同一流水号已被其他退款单用过（提示不拦截，AD-10）。 */
+    @Transactional(readOnly = true)
+    public boolean payoutTxnNoUsedElsewhere(String refundToken, String txnNo) {
+        if (txnNo == null || txnNo.isBlank()) {
+            return false;
+        }
+        return refunds.existsByPayoutTxnNoAndPublicTokenNot(txnNo.trim(), refundToken);
+    }
+
+    /** stag / 存量调用：原因记 OTHER。 */
     @Transactional
     public ShopOrderRefundView markPayoutFailed(String refundToken, String note, Long actorAdminId) {
+        return markPayoutFailed(refundToken, PayoutFailReason.OTHER, note, actorAdminId);
+    }
+
+    /**
+     * 财务标记打款失败（AC5.2 · V1.4.2 shop-admin 5.2 AC4）：{@code PAYOUT_PENDING → PAYOUT_FAILED}，记原因与备注（≤ 200 字，不得含账户）。
+     * <b>不推送用户</b>；提交后提醒客服群联系用户（去重键 {@code payout-failed:{refundToken}:{payoutFailedAt}}）。用户可重选（AC4.3）。
+     */
+    @Transactional
+    public ShopOrderRefundView markPayoutFailed(String refundToken, PayoutFailReason reason, String note,
+            Long actorAdminId) {
+        if (reason == null) {
+            throw AppException.validation("请选择打款失败原因").code("admin.err.v142.payout.failReasonRequired");
+        }
         ShopOrderRefund refund = requireRefund(refundToken);
         String trimmed = note == null ? null : note.trim();
         if (trimmed != null && trimmed.length() > PAYOUT_FAIL_NOTE_MAX) {
             throw AppException.validation("备注不能超过 200 字").code("admin.err.orderRefund.failNoteTooLong");
         }
-        refund.markPayoutFailed(trimmed == null || trimmed.isEmpty() ? null : trimmed, clock.instant());
+        guardDutySeparation(refund, actorAdminId, "标记打款失败");
+        Instant now = clock.instant();
+        refund.markPayoutFailed(reason, trimmed == null || trimmed.isEmpty() ? null : trimmed, now, actorAdminId);
         refunds.save(refund);
         audit.record(actorAdminId, AuditActions.SHOP_ORDER_REFUND_PAYOUT_MARKED, "SHOP_ORDER_REFUND", refundToken,
-                "标记打款失败：渠道=%s".formatted(refund.getPayoutChannel()));
+                "标记打款失败：渠道=%s；账号末4位=%s；原因=%s".formatted(refund.getPayoutChannel(),
+                        refund.payoutAccountLast4(), reason));
+        if (opsAlerts != null) {
+            String displayNo = orders.findById(refund.getOrderId()).map(ShopOrder::getDisplayNo).orElse("?");
+            opsAlerts.send(com.tailtopia.admin.alert.OpsChannel.CS, "payout-failed:" + refundToken + ":" + now,
+                    "【电商】订单 %s 的退款打款失败（原因：%s），用户需在 App 重新填写收款账户，请联系用户。".formatted(displayNo,
+                            switch (reason) {
+                                case ACCOUNT_INVALID -> "账户信息有误";
+                                case TRANSFER_RETURNED -> "转账被退回";
+                                case OTHER -> "其他";
+                            }));
+        }
         return viewOf(refund);
+    }
+
+    /**
+     * 注销用户线下处理结案（V1.4.2 shop-admin 5.2 · O-17）：退款单所属用户已注销、单未完成 → {@code COMPLETED}（去向保持为空），
+     * 须填说明（≤ 200 字，不得含账户），受职责分离约束，写审计 {@code SHOP_ORDER_REFUND_OFFLINE_CLOSED}；成长值不处理、不发通知。
+     */
+    @Transactional
+    public ShopOrderRefundView closeOffline(String refundToken, String note, Long actorAdminId) {
+        String n = note == null ? "" : note.trim();
+        if (n.isEmpty()) {
+            throw AppException.validation("请填写线下处理说明").code("admin.err.v142.payout.offlineNoteRequired");
+        }
+        if (n.length() > OFFLINE_NOTE_MAX) {
+            throw AppException.validation("说明不能超过 200 字").code("admin.err.v142.payout.offlineNoteTooLong");
+        }
+        ShopOrderRefund refund = requireRefund(refundToken);
+        ShopOrder order = orders.findById(refund.getOrderId())
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+        if (accountDeletions.findByUserId(order.getUserId()).isEmpty()) {
+            throw AppException.conflict("该用户未注销，不能线下结案").code("admin.err.v142.payout.notDeletedUser");
+        }
+        guardDutySeparation(refund, actorAdminId, "线下结案");
+        refund.closeOffline(n, clock.instant(), actorAdminId);
+        refunds.save(refund);
+        settleOrderIfDone(order);
+        audit.record(actorAdminId, AuditActions.SHOP_ORDER_REFUND_OFFLINE_CLOSED, "SHOP_ORDER_REFUND", refundToken,
+                "注销用户线下结案：现金段=%d；说明已记在退款单（不入审计，防账户信息进审计表）".formatted(refund.getCashRefund()));
+        return viewOf(refund);
+    }
+
+    /**
+     * 职责分离（O-12，照 {@code RefundService.guardDutySeparation}）：操作人 = 退款单发起人 → 违规审计（REQUIRES_NEW）+ 403；
+     * 纯 id 相等判定，超管不豁免；发起人为空（系统生成）不拦截。
+     */
+    private void guardDutySeparation(ShopOrderRefund refund, Long actorAdminId, String action) {
+        Long creator = refund.getCreatedByAdminId();
+        if (creator != null && actorAdminId != null && creator.longValue() == actorAdminId.longValue()) {
+            if (dutyAudit != null) {
+                dutyAudit.recordShopRefundViolation(actorAdminId, refund.getPublicToken(),
+                        "电商退款职责分离拦截：发起人不可" + action);
+            }
+            throw AppException.forbidden("退款职责分离：发起人不能标记打款结果").code("admin.err.v142.payout.dutySeparation");
+        }
+    }
+
+    /** 当前操作人是否就是发起人（页面置灰用，与 {@link #guardDutySeparation} 同一判据）。 */
+    public static boolean isInitiator(ShopOrderRefund refund, Long actorAdminId) {
+        Long creator = refund.getCreatedByAdminId();
+        return creator != null && actorAdminId != null && creator.longValue() == actorAdminId.longValue();
     }
 
     // ===================== 结算与读 =====================

@@ -20,6 +20,9 @@ public interface ShopOrderRefundRepository extends JpaRepository<ShopOrderRefund
 
     boolean existsByOrderIdAndScope(long orderId, RefundScope scope);
 
+    /** V1.4.2 shop-admin 5.2：流水号是否已被其他退款单用过（提示不拦截）。 */
+    boolean existsByPayoutTxnNoAndPublicTokenNot(String payoutTxnNo, String publicToken);
+
     /** 运营提醒（AC6.2）：某状态、早于阈值、尚未提醒过的退款单。 */
     List<ShopOrderRefund> findByStatusAndCreatedAtBeforeAndDestinationRemindedAtIsNullOrderByCreatedAtAsc(
             ShopRefundStatus status, Instant threshold);
