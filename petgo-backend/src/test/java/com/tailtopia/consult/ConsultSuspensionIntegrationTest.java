@@ -126,6 +126,8 @@ class ConsultSuspensionIntegrationTest extends ApiIntegrationTest {
 
         assertThat(orders.findById(orderId).orElseThrow().getStatus())
                 .isEqualTo(ConsultOrderStatus.REFUNDING); // 留 REFUNDING（Epic 4 打款）
+        // V1.4.2 exp-reverse AD-1：打标落库，且没有把状态写回 IN_PROGRESS。
+        assertThat(orders.findById(orderId).orElseThrow().getSuspensionRefundAt()).isNotNull();
         assertThat(wallet.balanceOf(userId)).isEqualTo(balanceBefore); // QRIS 不退 PawCoin
         assertThat(sessions.findById(sessionId).orElseThrow().getStatus())
                 .isEqualTo(SessionStatus.INTERRUPTED);

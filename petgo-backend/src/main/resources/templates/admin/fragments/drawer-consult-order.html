@@ -3,13 +3,14 @@
 <!--/*
   B10 兽医订单抽屉（V1.3.0 Story 8.4 · AC2，480px 抽屉体 res=order，UI 稿 4-1）。
   整页 consult-order-detail.html 的三段原样平移：成交快照 / 阶段时间线 / 待核查标记。
-  ⚠️ 唯一写端点 POST {orderToken}/verify（status / note）逐字不变。
+  写端点：POST {orderToken}/verify（status / note）；V1.4.2 exp-reverse 加 POST {orderToken}/exp-reverse[/preview]。
   ⚠️ hx-target 指**带 id 的** #order-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头。
   🔴 **无退款入口**（退款只走客服工单两段审批）—— 那句提示不可删。
 */-->
 <body>
 <div th:fragment="drawer" id="order-drawer-panel" class="tag-drawer" th:attr="data-order-token=${order.orderToken}"
-     th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''order.edit'')')}">
+     th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''order.edit'')')},
+              canReverseExp=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''order.reverse_exp'')')}">
 
     <!--/* ① 成交快照。🔴 单价快照旁必须注明「成交时点值」：不注明的话，
            运营拿它跟当前配置价一比对不上，会当成计价错误来报。 */-->
@@ -61,6 +62,23 @@
         </table>
         <p class="hint" th:if="${order.stages.isEmpty()}"
            th:text="#{admin.consultOrderDetail.empty.stages}">暂无阶段事件</p>
+    </section>
+
+    <!--/* V1.4.2 exp-reverse：成长值。判定只认 AdminConsultOrderExpService.state；额度由服务端算，弹层不可改。
+           错误落 #order-drawer-err（带 id，htmx 才发 HX-Target）：抽屉过期时点按钮要看得到原因。 */-->
+    <section class="card card-full tag-card" data-section="order-growth">
+        <h3 th:text="#{admin.v142.consultExp.section}">成长值</h3>
+        <table class="ud-table">
+            <tr><th th:text="#{admin.v142.ol.growth.accrued}">当初入账成长值</th><td th:text="${exp.accrued()} ?: '—'">—</td></tr>
+            <tr><th th:text="#{admin.v142.ol.growth.reversed}">已扣回</th>
+                <td th:text="${exp.accrued() == null} ? '—' : ${exp.reversed()}">0</td></tr>
+            <tr th:if="${exp.reversible()}"><th th:text="#{admin.v142.ol.growth.pending}">待扣回</th>
+                <td data-exp-pending th:text="${exp.pending()}">0</td></tr>
+        </table>
+        <button type="button" class="btn btn-danger btn-sm" data-exp-reverse th:if="${exp.reversible() and canReverseExp}"
+                th:attr="hx-post=@{/admin/consult-orders/{t}/exp-reverse/preview(t=${order.orderToken})}"
+                hx-target="#order-drawer-err" hx-swap="innerHTML"
+                th:text="#{admin.v142.consultExp.btn}">扣回成长值</button>
     </section>
 
     <!--/* ③ 待核查标记：**纯人工注记**，不改订单业务状态、不触发退款/冻结。 */-->
@@ -120,9 +138,13 @@
     </div>
     <!--/* 🔴 外壳必须是**真的** <table hidden>，不能 th:remove="tag"：响应不以 `<tr` 开头时
            htmx 走通用解析，裸 <tr>/<td> 会被 HTML 解析器丢掉 —— 行不换、单元格文本还泄进抽屉的 err 槽。 */-->
-    <table hidden><tbody>
+    <table hidden th:unless="${filtered}"><tbody>
         <tr th:replace="~{admin/fragments/consult-orders-list :: row(${row}, true)}"></tr>
     </tbody></table>
+    <!--/* V1.4.2 exp-reverse：筛选视图下这单可能已不在结果里，整表换（含空态，不留空表头）。 */-->
+    <div th:if="${filtered}" id="orders-rows" hx-swap-oob="innerHTML">
+        <div th:replace="~{admin/fragments/consult-orders-list :: rows(false)}"></div>
+    </div>
     <div th:replace="~{admin/fragments/consult-orders-list :: sumbar(true)}"></div>
     <!--/* 🔴 toast 必须**多包一层**：htmx 的 oob 只有 outerHTML 语义才换整个元素，
            `beforeend:` 走的是「把这个元素的**子节点**搬过去」（htmx 1.9.12 的 Ee：

@@ -29,6 +29,8 @@ class GrowthIdemKeysTest {
         assertThat(GrowthIdemKeys.spendIntent(42L)).isEqualTo("SPEND:PI:42");
         assertThat(GrowthIdemKeys.spendCoin("id-hd-card:5")).isEqualTo("SPEND:COIN:id-hd-card:5");
         assertThat(GrowthIdemKeys.spendConsultCoin(9L)).isEqualTo("SPEND:COIN:vet-consult-order:9");
+        assertThat(GrowthIdemKeys.consultSpend(9L, 42L)).isEqualTo("SPEND:PI:42");
+        assertThat(GrowthIdemKeys.consultSpend(9L, null)).isEqualTo("SPEND:COIN:vet-consult-order:9");
         assertThat(GrowthIdemKeys.spendShop(7L)).isEqualTo("SPEND:SHOP:7");
         assertThat(GrowthIdemKeys.refundSource("rf_1")).isEqualTo("REFUND:rf_1");
     }

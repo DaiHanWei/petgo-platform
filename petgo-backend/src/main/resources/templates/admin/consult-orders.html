@@ -33,10 +33,17 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
         <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::order-filters}, ~{::order-summary}, ~{::order-table}, ~{::order-drawer})}">
-            <!--/* 本页现状没有筛选参数（摘要条的「本期」因此等于全量，这一点在提示里写明）。
-                   这里只放一句口径说明 —— 槽位留空的话摘要条会紧贴标题，读起来像标题的一部分。 */-->
-            <p th:fragment="order-filters" class="hint" data-notice="orders-scope"
-               th:text="#{admin.v130.consultOrders.summaryScope}">「本期」= 当前筛选集；本页暂无筛选，故为全量。</p>
+            <!--/* V1.4.2 exp-reverse（E-7）：唯一筛选。导出不接筛选，永远全表。 */-->
+            <form th:fragment="order-filters" class="filter-bar" data-autosubmit th:action="@{/admin/consult-orders}" method="get"
+                  th:attr="hx-get=@{/admin/consult-orders}" hx-target="#orders-rows" hx-swap="innerHTML" hx-push-url="true">
+                <select name="filter" class="sel" th:attr="aria-label=#{admin.v142.consultExp.filter.option}">
+                    <option value="" th:selected="${!filtered}" th:text="#{admin.common.all}">全部</option>
+                    <option value="exp-reverse" th:selected="${filtered}"
+                            th:text="#{admin.v142.consultExp.filter.option}">待扣回成长值</option>
+                </select>
+                <span class="hint" data-notice="orders-scope"
+                      th:text="#{admin.v130.consultOrders.summaryScope}">「本期」= 当前筛选集；不筛选时为全量。</span>
+            </form>
 
             <div th:fragment="order-summary" th:replace="~{admin/fragments/consult-orders-list :: sumbar(false)}"></div>
 
@@ -47,6 +54,8 @@
             <div th:fragment="order-drawer" class="drawer-title"
                  th:text="#{admin.consultOrderDetail.title}">订单详情</div>
         </div>
+
+        <div id="confirm-host"></div>
 
         <!--/* ?open=<orderToken> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
         <span hidden th:if="${open != null}" data-drawer-res="order"

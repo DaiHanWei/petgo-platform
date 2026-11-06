@@ -188,7 +188,7 @@ public final class AdminPageCatalog {
                     List.of(VIRTUAL_ACCOUNT_VIEW, VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL)).nav("admin.nav.virtualAccounts", "virtual-accounts", VIRTUAL_ACCOUNT_VIEW, VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL),
             // 💰 订单与资金
             page("consult-orders", G_ORDERS, "/admin/consult-orders",
-                    List.of(ORDER_VIEW), List.of(ORDER_EDIT), List.of(ORDER_EXPORT)).nav("admin.nav.consultOrders", "consult-orders", ORDER_VIEW),
+                    List.of(ORDER_VIEW), List.of(ORDER_EDIT), List.of(ORDER_EXPORT, ORDER_REVERSE_EXP)).nav("admin.nav.consultOrders", "consult-orders", ORDER_VIEW),
             shared("ai-orders", G_ORDERS, "/admin/ai-orders", List.of(ORDER_VIEW, ORDER_EXPORT)).nav("admin.nav.aiOrders", "ai-orders", ORDER_VIEW),
             page("payments", G_ORDERS, "/admin/payments",
                     List.of(PAYMENT_VIEW), List.of(), List.of(PAYMENT_LIST_EXPORT)).nav("admin.nav.payments", "payments", PAYMENT_VIEW),

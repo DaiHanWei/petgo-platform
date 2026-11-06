@@ -141,6 +141,8 @@ public final class AdminPermissions {
     /** 兽医·AI 咨询订单只读查看。 */
     public static final String ORDER_VIEW = "order.view";
     public static final String ORDER_EDIT = "order.edit";
+    /** 扣回问诊挂起退款订单的成长值（V1.4.2 exp-reverse AD-4）：改用户资产，单列，不并入 order.edit。 */
+    public static final String ORDER_REVERSE_EXP = "order.reverse_exp";
     /** 订单 / 收入统计导出。 */
     public static final String ORDER_EXPORT = "order.export";
 
@@ -388,7 +390,7 @@ public final class AdminPermissions {
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,
-                    CONFIG_EDIT, CONFIG_SHARE_REWARD_EDIT, CONFIG_ALGO_PARAM_EDIT, ORDER_EDIT, SETTLEMENT_PAYOUT, RISK_EDIT,
+                    CONFIG_EDIT, CONFIG_SHARE_REWARD_EDIT, CONFIG_ALGO_PARAM_EDIT, ORDER_EDIT, ORDER_REVERSE_EXP, SETTLEMENT_PAYOUT, RISK_EDIT,
                     VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,

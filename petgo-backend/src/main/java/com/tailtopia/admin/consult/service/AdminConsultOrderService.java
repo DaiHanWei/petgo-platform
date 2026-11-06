@@ -131,7 +131,7 @@ public class AdminConsultOrderService {
         return AdminExportWriter.csv(headers, rows);
     }
 
-    private static AdminConsultOrderRow toRow(ConsultOrder o) {
+    static AdminConsultOrderRow toRow(ConsultOrder o) {
         return new AdminConsultOrderRow(o.getOrderToken(),
                 com.tailtopia.order.dto.OrderDisplayNo.of(com.tailtopia.order.dto.OrderDisplayNo.VET_CONSULT, o.getId(), o.getCreatedAt()),
                 o.getUserId(), o.getVetId(), o.getAmount(),

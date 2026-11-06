@@ -267,6 +267,24 @@ class GrowthLedgerServiceTest {
         verify(counters, never()).tryGrant(anyLong(), any(), anyString(), anyInt(), anyInt());
     }
 
+    /** V1.4.2 exp-reverse：实扣额受累计截断，三态可区分。 */
+    @Test
+    void reverseDetailedReportsActualAmountAndAlreadyReversed() {
+        original(3);
+
+        ReverseOutcome ok = service.reverseDetailed(unlike());
+        assertThat(ok.status()).isEqualTo(ReverseOutcome.Status.DONE);
+        assertThat(ok.amount()).isEqualTo(3);
+
+        when(ledger.existsByIdemKey("REV:42:UNLIKE")).thenReturn(true);
+        assertThat(service.reverseDetailed(unlike()).status()).isEqualTo(ReverseOutcome.Status.ALREADY_REVERSED);
+    }
+
+    @Test
+    void reverseDetailedWithoutOriginalIsNothingToReverse() {
+        assertThat(service.reverseDetailed(unlike()).status()).isEqualTo(ReverseOutcome.Status.NOTHING_TO_REVERSE);
+    }
+
     @Test
     void reverseAlreadyFullyReversedDoesNothing() {
         original(3);

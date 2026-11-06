@@ -137,6 +137,8 @@ public final class AuditActions {
     // ===== 用户账号治理补充 =====
     /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
     public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
+    /** 人工扣回问诊挂起退款订单的成长值（V1.4.2 exp-reverse；summary 含入账 / 已扣回 / 本次 / 前后等级，不落 PII）。 */
+    public static final String CONSULT_ORDER_EXP_REVERSED = "CONSULT_ORDER_EXP_REVERSED";
     /** 运营补发宠物名额（V1.4.0 ② Story 4.3 · AB-34.2；summary 含天数/到期/原因/幂等键，不落 PII）。 */
     public static final String PET_SLOT_GRANTED = "PET_SLOT_GRANTED";
 

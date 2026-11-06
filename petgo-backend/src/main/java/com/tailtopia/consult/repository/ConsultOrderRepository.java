@@ -64,6 +64,21 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
     int markRefunding(@Param("id") long id);
 
     /**
+     * 标记「封禁挂起 + 现金退款」（V1.4.2 exp-reverse AD-1）。🔴 必须走这条 update，不能用实体 setter：
+     * {@link #markRefunding} 是 bulk update，一级缓存里的实体 status 还是 IN_PROGRESS，全列 UPDATE 会把状态写回去。
+     */
+    @Modifying
+    @Query("update ConsultOrder o "
+            + "set o.suspensionRefundAt = :at, o.updatedAt = CURRENT_TIMESTAMP "
+            + "where o.id = :id "
+            + "and o.status = com.tailtopia.consult.domain.ConsultOrderStatus.REFUNDING "
+            + "and o.suspensionRefundAt is null")
+    int markSuspensionRefund(@Param("id") long id, @Param("at") Instant at);
+
+    /** 待扣回成长值的候选：挂起 QRIS 退款且仍退款中（量极少，判定在 AdminConsultOrderExpService）。 */
+    List<ConsultOrder> findByStatusAndSuspensionRefundAtIsNotNullOrderByCreatedAtDesc(ConsultOrderStatus status);
+
+    /**
      * 客服批准退款需求 CAS（Story 4.4，AB-5B）：{@code COMPLETED→REFUNDING}。返回行数（1=已转、可进选方式；
      * 0=订单已非 COMPLETED，幂等跳过不报错）。<b>与 3-8 的 {@link #markRefunding}(IN_PROGRESS→REFUNDING) 两条独立 CAS，
      * 互不影响</b>：退款工单针对已交付完成订单，批准后进 REFUNDING 等用户填收款（4-5）→ 主管审批 + 财务打款（4-6）→ REFUNDED。
