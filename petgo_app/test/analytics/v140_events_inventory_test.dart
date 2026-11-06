@@ -41,9 +41,8 @@ void main() {
     // Epic 5
     'return_requested': 'toko_return_request_submitted',
     // Epic 6
-    'repurchase_card_impression': 'toko_repurchase_card_shown',
-    'repurchase_card_clicked': 'toko_repurchase_card_tapped',
-    'repurchase_card_dismissed': 'toko_repurchase_card_dismiss_tapped',
+    // ⚠️ repurchase_card_impression / _clicked / _dismissed 三条已随 v1.4.2 FR-136 停用，
+    //    移到下方 [retiredV142] 断言「必须不存在」（PRD §4「随 FR-136 停用的事件」）。
     'profile_reco_clicked': 'toko_profile_reco_tapped',
     // Epic 9（跨切口收尾）
     'push_permission_revoked': 'notify_push_permission_toggled',
@@ -60,6 +59,24 @@ void main() {
     expect(missing, isEmpty,
         reason: '🔴 §5 清单里声明了、代码里找不到上报点 —— 上线后这些指标就是空的。'
             'L-6 就是这么发生的');
+  });
+
+  /// v1.4.2 shop Story 9.4（FR-136 / P-9）：复购卡下线，三条事件随组件删除。
+  /// 清单从「必须存在」移到这里 —— 规则变了就改断言表达新规则，而不是删掉。
+  const retiredV142 = <String, String>{
+    'repurchase_card_impression': 'toko_repurchase_card_shown',
+    'repurchase_card_clicked': 'toko_repurchase_card_tapped',
+    'repurchase_card_dismissed': 'toko_repurchase_card_dismiss_tapped',
+  };
+
+  test('🔴 V1.4.2 FR-136 已停用的复购卡事件必须不存在于 lib/', () {
+    final inSource = _eventNamesInSource();
+    final stillThere = [
+      for (final e in retiredV142.entries)
+        if (inSource.contains(e.value)) '${e.key} → ${e.value}',
+    ];
+    expect(stillThere, isEmpty,
+        reason: '复购卡已随 FR-136 下线，这些事件不该再有上报点（死埋点会让看板误读）');
   });
 
   test('🔴 Epic 9 的两条跨切口事件确实存在（本 story 自己的交付物）', () {

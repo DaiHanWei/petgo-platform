@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,8 @@ import 'package:tailtopia/features/shop/address/presentation/address_form_page_v
 import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_controls.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+
+import 'fill_address_form.dart';
 
 /// 新增收货地址 · **设计稿版式**（V1.4.0 第 1 批）。
 ///
@@ -22,9 +25,13 @@ void main() {
     RegionTree? regions,
     Size size = const Size(411, 891),
     double textScale = 1,
+    String? token,
+    AddressRepository? repo,
+    Locale locale = const Locale('id'),
   }) {
     return ProviderScope(
       overrides: [
+        if (repo != null) addressRepositoryProvider.overrideWithValue(repo),
         addressListProvider.overrideWith((ref) async => existing),
         regionTreeProvider.overrideWith((ref) async =>
             regions ??
@@ -34,6 +41,9 @@ void main() {
                   RegionKecamatan('Kebayoran', true),
                   RegionKecamatan('Pesanggrahan', false),
                 ]),
+              ]),
+              RegionProvinsi('Jawa Barat', [
+                RegionKota('Bandung', [RegionKecamatan('Coblong', true)]),
               ]),
             ])),
       ],
@@ -45,28 +55,21 @@ void main() {
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('id'),
+        locale: locale,
         home: MediaQuery(
           data: MediaQueryData(size: size, textScaler: TextScaler.linear(textScale)),
-          child: const AddressFormPageV2(),
+          child: AddressFormPageV2(token: token),
         ),
       ),
     );
   }
 
-  /// 选到某个 kecamatan。三级级联要逐级点。
-  Future<void> pickRegion(WidgetTester tester, String kecamatan) async {
-    for (final (id, value) in [
-      ('provinsi', 'DKI Jakarta'),
-      ('kota', 'Jakarta Selatan'),
-      ('kecamatan', kecamatan),
-    ]) {
-      await tester.tap(find.byKey(ValueKey('addressPicker_$id')));
-      await tester.pumpAndSettle();
-      // 不可配送的 kecamatan 显示名带「· belum dilayani」后缀 → 用包含匹配。
-      await tester.tap(find.textContaining(value).last);
-      await tester.pumpAndSettle();
-    }
+  /// 选到某个 kecamatan：点「Wilayah」行打开 H4 抽屉，逐级点（v1.4.2 shop Story 9.4）。
+  Future<void> pickRegion(WidgetTester tester, String kecamatan,
+      {String provinsi = 'DKI Jakarta', String kota = 'Jakarta Selatan'}) async {
+    await tester.tap(find.byKey(const ValueKey('addressRegionRow')));
+    await tester.pumpAndSettle();
+    await pickRegionInSheet(tester, provinsi, kota, kecamatan);
   }
 
   /// 🔴 D-17（2026-09-02 stag，P2）：Label 是必填，却**既无必填标记、校验失败也零反馈**。
@@ -137,30 +140,51 @@ void main() {
   });
 
   group('🔴 行政区三级级联，不做自由输入', () {
-    testWidgets('三级都是选择器，没有可输入的行政区文本框', (tester) async {
+    // v1.4.2 shop Story 9.4（H3）：三个下拉合并成一行「Wilayah」+ 抽屉逐级 —— 仍不可自由输入。
+    testWidgets('三级合并为「Wilayah」一行（点开抽屉逐级选），没有可输入的行政区文本框', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
 
-      for (final id in ['provinsi', 'kota', 'kecamatan']) {
-        expect(find.byKey(ValueKey('addressPicker_$id')), findsOneWidget);
-      }
+      expect(find.byKey(const ValueKey('addressRegionRow')), findsOneWidget);
+      expect(find.text(l10n.addressRegionLabel), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('addressRegionValue'))).data,
+          l10n.addressRegionPick, reason: '未选时显示占位「Pilih wilayah」');
+      expect(find.byType(DropdownButtonFormField<String>), findsNothing,
+          reason: '三个下拉已合并');
+
+      await pickRegion(tester, 'Kebayoran');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('addressRegionValue'))).data,
+          'DKI Jakarta, Jakarta Selatan, Kebayoran');
       // 可输入的只有：收件人 / 电话 / 邮编 / 详细地址 —— 行政区不在其中。
       expect(find.byType(TextField), findsNWidgets(4),
           reason: '让用户自己打行政区，服务范围就永远对不上，且下单前无从发现');
     });
 
     testWidgets('换了上级会清空下级 —— 否则会拼出不存在的行政区组合', (tester) async {
+      // v1.4.2 shop Story 9.4：断言移到抽屉内 —— 回到省级换了省，列出的是新省的市 / 区，
+      // 旧的市 / 区不再出现、也不打勾；选完区后表单三级一起换成新组合。
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
       await pickRegion(tester, 'Kebayoran');
 
-      // 重新选 provinsi → kecamatan 的范围提示应消失（说明已被清空）
-      await tester.tap(find.byKey(const ValueKey('addressPicker_provinsi')));
+      await tester.tap(find.byKey(const ValueKey('addressRegionRow')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('DKI Jakarta').last);
+      await tester.tap(find.byKey(const ValueKey('deliveryAreaCrumb_0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('deliveryAreaProv_Jawa Barat')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('deliveryAreaKota_Jakarta Selatan')), findsNothing,
+          reason: '换了上级，下级必须从新上级重新列出');
+      expect(find.byKey(const ValueKey('deliveryAreaKota_Bandung')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('deliveryAreaKota_Bandung')));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.check), findsNothing, reason: '新路径下没有旧的已选项');
+      await tester.tap(find.byKey(const ValueKey('deliveryAreaKec_Coblong')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('addressInRangeHint')), findsNothing);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('addressRegionValue'))).data,
+          'Jawa Barat, Bandung, Coblong');
     });
   });
 
@@ -278,6 +302,123 @@ void main() {
     });
   });
 
+  group('v1.4.2 shop Story 9.4 · H3 标题 / 编辑预填 / 顶部错误条 / 标签', () {
+    const existing = ShippingAddress(
+      token: 'a1',
+      receiverName: 'Budi Santoso',
+      receiverPhone: '+628123456789',
+      provinsi: 'DKI Jakarta',
+      kotaKabupaten: 'Jakarta Selatan',
+      kecamatan: 'Pesanggrahan',
+      addressLine: 'Jl. Melati No. 5, dekat masjid',
+      kodePos: '12160',
+      label: 'Kantor',
+      isDefault: true,
+    );
+
+    testWidgets('新增标题「Tambah alamat」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.addressAdd), findsOneWidget);
+      expect(find.text(l10n.addressEditTitle), findsNothing);
+    });
+
+    testWidgets('🔴 编辑：标题「Ubah alamat」+ 预填全部字段（修线上：编辑进来是空表单）', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(existing: const [existing], token: 'a1'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.addressEditTitle), findsOneWidget);
+      expect(find.text(l10n.addressAdd), findsNothing);
+      String text(String id) =>
+          tester.widget<TextField>(find.byKey(ValueKey('addressField_$id'))).controller!.text;
+      expect(text('receiver'), 'Budi Santoso');
+      expect(text('phone'), '8123456789', reason: '显示规则同新增态：去掉 +62');
+      expect(text('kodePos'), '12160');
+      expect(text('line'), 'Jl. Melati No. 5, dekat masjid');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('addressRegionValue'))).data,
+          'DKI Jakarta, Jakarta Selatan, Pesanggrahan');
+      expect(find.byKey(const ValueKey('addressOutOfRangeHint')), findsOneWidget,
+          reason: '预填后开通范围提示照常出现');
+      await _scrollTo(tester, const ValueKey('addressDefaultSwitch'));
+      expect(tester.widget<ShopChip>(find.byKey(const ValueKey('addressLabel_Kantor'))).selected,
+          isTrue);
+      expect(tester.widget<ShopSwitch>(find.byKey(const ValueKey('addressDefaultSwitch'))).value,
+          isTrue);
+    });
+
+    testWidgets('编辑：列表里找不到该 token → toast addressLoadFailed 并退出', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [addressListProvider.overrideWith((ref) async => const [existing])],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          home: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () => Navigator.of(ctx).push(MaterialPageRoute<void>(
+                  builder: (_) => const AddressFormPageV2(token: 'gone'))),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.addressLoadFailed), findsOneWidget);
+      expect(find.text('open'), findsOneWidget, reason: '已 pop 回上一页');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('🔴 编辑保存走 PUT，标签提交值仍是印尼语字面量', (tester) async {
+      final repo = _RecordingRepo();
+      await tester.pumpWidget(host(
+          existing: const [existing], token: 'a1', repo: repo, locale: const Locale('en')));
+      await tester.pumpAndSettle();
+      await _scrollTo(tester, const ValueKey('addressLabel_Rumah'));
+      await tester.tap(find.byKey(const ValueKey('addressLabel_Rumah')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('addressSaveV2')));
+      await tester.pumpAndSettle();
+
+      expect(repo.updatedToken, 'a1');
+      expect(repo.updated?.label, 'Rumah', reason: '显示是 Home，提交值必须仍为 Rumah');
+      expect(repo.updated?.receiverPhone, '+628123456789');
+    });
+
+    testWidgets('标签胶囊显示走 arb（en：Home / Office / Other）', (tester) async {
+      await tester.pumpWidget(host(locale: const Locale('en')));
+      await tester.pumpAndSettle();
+      await _scrollTo(tester, const ValueKey('addressLabel_Rumah'));
+      expect(tester.widget<ShopChip>(find.byKey(const ValueKey('addressLabel_Rumah'))).label,
+          'Home');
+      expect(tester.widget<ShopChip>(find.byKey(const ValueKey('addressLabel_Kantor'))).label,
+          'Office');
+      expect(tester.widget<ShopChip>(find.byKey(const ValueKey('addressLabel_Lainnya'))).label,
+          'Other');
+    });
+
+    testWidgets('🔴 提交失败 → 错误条在表单顶部（第一个子项，在收件人块之上）', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(
+          host(existing: const [existing], token: 'a1', repo: _RecordingRepo(fail: true)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('addressSaveV2')));
+      await tester.pumpAndSettle();
+
+      final bar = find.byKey(const ValueKey('addressSubmitError'));
+      expect(bar, findsOneWidget);
+      expect(find.descendant(of: bar, matching: find.text(l10n.addressSaveFailed)), findsOneWidget);
+      final barY = tester.getTopLeft(bar).dy;
+      final receiverY = tester.getTopLeft(find.byKey(const ValueKey('addressField_receiver'))).dy;
+      expect(barY, lessThan(receiverY), reason: '错误条必须在表单顶部');
+    });
+  });
+
   group('布局不得溢出', () {
     testWidgets('411dp · 标准字号', (tester) async {
       await tester.pumpWidget(host());
@@ -307,4 +448,31 @@ Future<void> _scrollTo(WidgetTester tester, Key key) async {
     maxScrolls: 20,
   );
   await tester.pumpAndSettle();
+}
+
+class _RecordingRepo extends AddressRepository {
+  _RecordingRepo({this.fail = false}) : super(dio: Dio());
+
+  final bool fail;
+  String? updatedToken;
+  ShippingAddress? updated;
+
+  @override
+  Future<ShippingAddress> update(String token, ShippingAddress a) async {
+    if (fail) throw DioException(requestOptions: RequestOptions(path: '/x'));
+    updatedToken = token;
+    updated = a;
+    return ShippingAddress(
+      token: token,
+      receiverName: a.receiverName,
+      receiverPhone: a.receiverPhone,
+      provinsi: a.provinsi,
+      kotaKabupaten: a.kotaKabupaten,
+      kecamatan: a.kecamatan,
+      addressLine: a.addressLine,
+      kodePos: a.kodePos,
+      label: a.label,
+      isDefault: true,
+    );
+  }
 }

@@ -1,5 +1,8 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/shop/address/domain/shipping_address.dart';
+import 'package:tailtopia/features/shop/address/presentation/address_label.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 2.4：地址簿域逻辑。
 ///
@@ -57,6 +60,20 @@ void main() {
       expect(s, contains('Kebayoran Baru'));
     });
 
+    test('v1.4.2 shop 9.4：serviceable 缺键 / 非布尔 = null，布尔原样', () {
+      expect(ShippingAddress.fromJson({'token': 't'}).serviceable, isNull);
+      expect(ShippingAddress.fromJson({'token': 't', 'serviceable': null}).serviceable, isNull);
+      expect(ShippingAddress.fromJson({'token': 't', 'serviceable': 'x'}).serviceable, isNull);
+      expect(ShippingAddress.fromJson({'token': 't', 'serviceable': true}).serviceable, isTrue);
+      expect(ShippingAddress.fromJson({'token': 't', 'serviceable': false}).serviceable, isFalse);
+      expect(
+          ShippingAddress.fromJson({'token': 't', 'serviceable': false})
+              .toRequestJson()
+              .containsKey('serviceable'),
+          isFalse,
+          reason: '只读字段，不写回');
+    });
+
     test('fromJson 缺字段不崩；空 label 归一为 null', () {
       final a = ShippingAddress.fromJson({'token': 't', 'label': ''});
       expect(a.label, isNull);
@@ -85,6 +102,19 @@ void main() {
 
     test('空树不崩', () {
       expect(RegionTree.fromJson({}).provinsi, isEmpty);
+    });
+  });
+
+  group('v1.4.2 shop 9.4：标签显示映射（提交值不变）', () {
+    test('三个印尼语字面量映射为当前语言；未知值原样', () async {
+      final en = await AppLocalizations.delegate.load(const Locale('en'));
+      final id = await AppLocalizations.delegate.load(const Locale('id'));
+      expect([for (final v in kAddressLabelValues) addressDisplayLabel(en, v)],
+          ['Home', 'Office', 'Other']);
+      expect([for (final v in kAddressLabelValues) addressDisplayLabel(id, v)],
+          ['Rumah', 'Kantor', 'Lainnya']);
+      expect(addressDisplayLabel(en, 'Kos'), 'Kos');
+      expect(kAddressLabelValues, ['Rumah', 'Kantor', 'Lainnya'], reason: '提交值保持印尼语字面量');
     });
   });
 }

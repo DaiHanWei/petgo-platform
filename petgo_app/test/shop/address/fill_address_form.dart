@@ -15,18 +15,12 @@ Future<void> fillAndSaveAddressForm(WidgetTester tester) async {
 
   await field('receiver', 'Siti Aminah');
   await field('phone', '081234567890');
-  for (final (id, value) in [
-    ('provinsi', 'DKI Jakarta'),
-    ('kota', 'Jakarta Selatan'),
-    ('kecamatan', 'Kebayoran'),
-  ]) {
-    final picker = find.byKey(ValueKey('addressPicker_$id'));
-    await tester.ensureVisible(picker);
-    await tester.tap(picker);
-    await tester.pumpAndSettle();
-    await tester.tap(find.textContaining(value).last);
-    await tester.pumpAndSettle();
-  }
+  // v1.4.2 shop Story 9.4（H3 / H4）：省市区合并为一行「Wilayah」，点开地区抽屉逐级选。
+  final row = find.byKey(const ValueKey('addressRegionRow'));
+  await tester.ensureVisible(row);
+  await tester.tap(row);
+  await tester.pumpAndSettle();
+  await pickRegionInSheet(tester, 'DKI Jakarta', 'Jakarta Selatan', 'Kebayoran');
   await field('kodePos', '12160');
   await field('line', 'Jl. Melati No. 5, dekat masjid');
   final label = find.byKey(const ValueKey('addressLabel_Rumah'));
@@ -47,3 +41,16 @@ const kTestRegions = RegionTree([
   ]),
   RegionProvinsi('Jawa Barat', [RegionKota('Bandung', [])]),
 ]);
+
+/// 在已打开的地区抽屉（H4 表单模式）里逐级点选省 → 市 → 区。
+Future<void> pickRegionInSheet(
+    WidgetTester tester, String provinsi, String kota, String kecamatan) async {
+  for (final key in [
+    'deliveryAreaProv_$provinsi',
+    'deliveryAreaKota_$kota',
+    'deliveryAreaKec_$kecamatan',
+  ]) {
+    await tester.tap(find.byKey(ValueKey(key)));
+    await tester.pumpAndSettle();
+  }
+}

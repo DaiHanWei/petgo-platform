@@ -45,7 +45,6 @@ import 'widgets/recommended_pet_card.dart'
 import 'widgets/place_checkin_tap.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
-import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
 
 /// Diary 页（`/profile`）的四种用户状态（V1.1.2 · AD-15）。
 ///
@@ -575,10 +574,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
-          // 复购触发卡（V1.4.0 设计稿屏 1）。它是「记录的出口」，所以长在 Diary 里而不是 Toko 里。
-          // ⚠️ 2026-08-28 v1 版式整体删除后，此处不再需要 ShopUiSwitch 包一层 ——
-          //    那个开关原本用来"只在 v2 下渲染"，现在条件恒真。
-          const RepurchaseTriggerCardV2(source: 'diary'),
+          // v1.4.2 shop Story 9.4（FR-136 / I1）：Diary 复购触发卡已随复购下线删除，
+          // 成就卡之后直接接视图切换行（原本就零间距，无需补间距）。
           // 🔴 **档案推荐区已从 Diary 撤下**（产品 2026-08-27）。
           //
           // Story 6.5 原本给它两个展示位：Toko 首页区域② 与本页。实机上本页那一份的问题是
@@ -586,8 +583,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           // 于是 Diary 中段被一屏按年龄段的通用商品占掉 —— 成长记录页被商业内容打断，
           // 而那一屏并不能提供"推荐"的价值。产品决定商业内容全部收到 Toko。
           //
-          // ⚠️ **只撤展示位，组件与规则一行不动** —— `ProfileRecoZone(V2)` 在 Toko 侧照常使用。
-          //    要撤的是"在 Diary 露出"，不是这套推荐能力。
+          // ⚠️ v1.4.2 shop Story 8.1 起 `ProfileRecoZoneV2` 已删除，Toko 推荐改由 `ShopRecoGrid` 承担。
           // ⚠️ 连带影响：埋点 zone 取值 `diary_profile_reco` 自此**不再上报**
           //    （另一个位 `toko_profile_reco` 不受影响）。看板上这个位的曲线会归零，
           //    那是预期的，不是埋点坏了。

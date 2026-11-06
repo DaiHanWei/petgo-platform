@@ -19,33 +19,97 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/shop_tokens.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../presentation/widgets/shop_surface.dart';
+import '../data/address_repository.dart';
+import '../domain/shipping_address.dart';
 import 'address_form_body.dart';
 
 /// v1.4.2 shop Story 7.1 AC4.6：字段 / 校验 / 保存已抽到 [AddressFormBody]（结算页 D5 共用），
 /// 本页只包一层 Scaffold，保存后照旧 `context.pop()`。
-class AddressFormPageV2 extends StatelessWidget {
+///
+/// v1.4.2 shop Story 9.4（H3）：
+/// - 标题：新增「Tambah alamat」/ 编辑「Ubah alamat」（修线上：编辑也显示 Tambah）；
+/// - 🔴 **编辑预填**（修线上：编辑进来是空表单）：数据源 = [addressListProvider] 中同 token 项
+///   （列表已含全部字段，无单条 GET）；列表未加载先等；找不到 / 加载失败 → toast `addressLoadFailed` 并 pop。
+///   预填只在首次进入做一次（表单 State 只在 initState 读 initial），列表刷新不覆盖用户正在改的值。
+class AddressFormPageV2 extends ConsumerStatefulWidget {
   const AddressFormPageV2({super.key, this.token});
 
   /// 非空 = 编辑既有地址。
   final String? token;
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      backgroundColor: ShopColors.bg,
-      appBar: ShopAppBar(title: l10n.addressAdd),
-      body: AddressFormBody(
-        editToken: token,
-        submitLabel: l10n.addressSave,
-        onSaved: (_) => context.pop(),
-      ),
-    );
-  }
+  ConsumerState<AddressFormPageV2> createState() => _AddressFormPageV2State();
 }
 
+class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
+  /// 编辑态已定位到的地址（定位一次后固定，不随列表刷新变化）。
+  ShippingAddress? _initial;
+  bool _bailed = false;
+
+  void _bail(AppLocalizations l10n) {
+    if (_bailed) return;
+    _bailed = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showAppToast(context, l10n.addressLoadFailed);
+      Navigator.of(context).maybePop();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final token = widget.token;
+    final Widget body;
+    if (token == null) {
+      body = _form(l10n, null);
+    } else if (_initial != null) {
+      body = _form(l10n, _initial);
+    } else {
+      final list = ref.watch(addressListProvider);
+      body = list.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) {
+          _bail(l10n);
+          return const SizedBox.shrink();
+        },
+        data: (items) {
+          final hit = items.where((a) => a.token == token).firstOrNull;
+          if (hit == null) {
+            _bail(l10n);
+            return const SizedBox.shrink();
+          }
+          _initial = hit;
+          return _form(l10n, hit);
+        },
+      );
+    }
+    return Scaffold(
+      backgroundColor: ShopColors.bg,
+      appBar: ShopAppBar(
+        title: token == null ? l10n.addressAdd : l10n.addressEditTitle,
+        tone: ShopAppBarTone.light,
+        leading: IconButton(
+          icon: const Icon(Icons.chevron_left_rounded, size: 28),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      body: body,
+    );
+  }
+
+  Widget _form(AppLocalizations l10n, ShippingAddress? initial) => AddressFormBody(
+        key: ValueKey('addressFormBody_${widget.token ?? 'new'}'),
+        initial: initial,
+        editToken: widget.token,
+        submitLabel: l10n.addressSave,
+        onSaved: (_) => context.pop(),
+      );
+}

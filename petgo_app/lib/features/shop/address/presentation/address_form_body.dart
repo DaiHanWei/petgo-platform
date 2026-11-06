@@ -15,7 +15,11 @@
 /// 🔴 滚动用容器偏移计算，**不用 `Scrollable.ensureVisible`**。
 ///
 /// 保存成功：写地址簿 → 首个地址由后端设默认、勾了默认另调一次 → `invalidate(addressListProvider)`
-/// → 回调 [AddressFormBody.onSaved]（拿到服务端返回的地址）。H3 的视觉改动归 9.4。
+/// → 回调 [AddressFormBody.onSaved]（拿到服务端返回的地址）。
+///
+/// v1.4.2 shop Story 9.4（H3 / H4）：省市区三个下拉合并为一行「Wilayah」，点开共享地区抽屉
+/// （[showRegionPickerSheet]，与 8.2 B6 同一组件的表单模式）；提交失败提示改为表单**顶部**错误条；
+/// 标签胶囊文案走 arb（提交值仍为印尼语字面量，见 [addressDisplayLabel]）；编辑预填手机号去 `+62` 显示。
 library;
 
 import 'package:flutter/material.dart';
@@ -23,14 +27,18 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/shop_tokens.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../presentation/widgets/delivery_area_sheet.dart';
 import '../../presentation/widgets/shop_buttons.dart';
 import '../../presentation/widgets/shop_controls.dart';
 import '../../presentation/widgets/shop_decor.dart';
+import '../../presentation/widgets/shop_pressable.dart';
 import '../../presentation/widgets/shop_surface.dart';
 import '../data/address_repository.dart';
 import '../domain/shipping_address.dart';
+import 'address_label.dart';
 
 class AddressFormBody extends ConsumerStatefulWidget {
   const AddressFormBody({
@@ -109,7 +117,10 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
     final a = widget.initial;
     if (a != null) {
       _receiver.text = a.receiverName;
-      _phone.text = a.receiverPhone;
+      // 显示规则同新增态：本地号（去 +62），保存时再经 normalizeIdPhone 归一（9.4 AC3.2）。
+      _phone.text = a.receiverPhone.startsWith('+62')
+          ? a.receiverPhone.substring(3)
+          : a.receiverPhone;
       _kodePos.text = a.kodePos;
       _line.text = a.addressLine;
       _provinsi = a.provinsi.isEmpty ? null : a.provinsi;
@@ -163,6 +174,21 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
       controller: _scroll,
       padding: EdgeInsets.zero,
       children: [
+        // 🔴 提交失败提示放**顶部**（9.4 AC3.5 / UI H3），失败时滚回顶部让它可见。
+        if (_submitError != null)
+          Container(
+            key: const ValueKey('addressSubmitError'),
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(kShopGutter, kShopGutter, kShopGutter, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.coralTint,
+              borderRadius: BorderRadius.circular(ShopShape.radiusField),
+            ),
+            // 错误态用 error 系而非强调色 —— 跟着品牌紫走就读不出「这里出错了」。
+            child: Text(_submitError!,
+                style: ShopText.body.copyWith(fontSize: 12, color: ShopColors.errorText)),
+          ),
         // ---- 块 1：收件人 ----
         ShopSection(
           child: Column(
@@ -197,50 +223,15 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
             children: [
               Text(l10n.addressSectionAddress, style: ShopText.sectionTitle.copyWith(fontSize: 12)),
               const SizedBox(height: 10),
-              // 🔴 三级级联，**不做自由输入**。上级换了就清空下级 ——
-              //    留着旧的下级会拼出一个不存在的行政区组合。
-              _picker(
-                id: 'provinsi',
-                label: l10n.addressProvinsi,
-                value: _provinsi,
-                options: [for (final p in provinsiList) (p.name, true)],
-                onChanged: (v) => setState(() {
-                  _provinsi = v;
-                  _kota = null;
-                  _kecamatan = null;
-                }),
-              ),
-              const SizedBox(height: 11),
-              _picker(
-                id: 'kota',
-                label: l10n.addressKota,
-                value: _kota,
-                enabled: _provinsi != null,
-                options: [for (final k in kotaList) (k.name, true)],
-                onChanged: (v) => setState(() {
-                  _kota = v;
-                  _kecamatan = null;
-                }),
-              ),
-              const SizedBox(height: 11),
-              _picker(
-                id: 'kecamatan',
-                label: l10n.addressKecamatan,
-                value: _kecamatan,
-                enabled: _kota != null,
-                // 不可配送的 Kecamatan **仍然可选**（规则 2：只告知不阻断），
-                // 但在选项里就标出来，免得用户选完才发现。
-                options: [
-                  for (final k in kecamatanList)
-                    (k.serviceable ? k.name : '${k.name} · ${l10n.addressNotServiceable}',
-                        k.serviceable)
-                ],
-                onChanged: (v) => setState(() {
-                  _kecamatan = v == null ? null : _stripSuffix(v, l10n);
-                  _errors['region'] = null;
-                }),
-              ),
+              // 🔴 三级级联，**不做自由输入**（9.4：合并为一行「Wilayah」，点开 H4 抽屉逐级选）。
+              //    抽屉里换了上级，下级从新上级重新列出 —— 不会拼出不存在的行政区组合。
+              _regionRow(l10n),
               if (_errors['region'] != null) _errorLine(_errors['region']!),
+              // 开通范围提示紧跟「Wilayah」行（UI H3），只告知不阻断保存。
+              if (_kecamatan != null) ...[
+                const SizedBox(height: 11),
+                _serviceHint(l10n, kecamatanList),
+              ],
               const SizedBox(height: 11),
               _field(
                 id: 'kodePos',
@@ -264,10 +255,6 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
                 maxLines: 5,
                 onBlur: () => _validateOne(l10n, 'line'),
               ),
-              if (_kecamatan != null) ...[
-                const SizedBox(height: 11),
-                _serviceHint(l10n, kecamatanList),
-              ],
             ],
           ),
         ),
@@ -294,10 +281,11 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  for (final tag in const ['Rumah', 'Kantor', 'Lainnya'])
+                  // 显示走 arb，🔴 提交值仍是印尼语字面量（存量数据与后端都按字面量）。
+                  for (final tag in kAddressLabelValues)
                     ShopChip(
                       key: ValueKey('addressLabel_$tag'),
-                      label: tag,
+                      label: addressDisplayLabel(l10n, tag),
                       selected: _label == tag,
                       // 再点一次取消选中 —— 但取消后就是空，保存时会被拦下并标红。
                       onTap: () => setState(() => _label = _label == tag ? null : tag),
@@ -315,14 +303,6 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
             ],
           ),
         ),
-        if (_submitError != null)
-          ShopSection(
-            child: Text(_submitError!,
-                key: const ValueKey('addressSubmitError'),
-                // 提交失败提示：错误态用 error 系而非强调色——换紫后若跟着变紫，
-                // 「这里出错了」就读不出来了。
-                style: ShopText.body.copyWith(color: ShopColors.errorText)),
-          ),
         const SizedBox(height: kShopGutter),
       ],
     );
@@ -369,12 +349,7 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
         key: const ValueKey('addressInRangeHint'),
         child: Row(
           children: [
-            Container(
-              width: 13,
-              height: 13,
-              decoration:
-                  const BoxDecoration(color: ShopColors.purple, shape: BoxShape.circle),
-            ),
+            const Icon(Icons.check_circle, size: 14, color: ShopColors.purple),
             const SizedBox(width: 8),
             Expanded(
               child: Text(l10n.addressInServiceArea,
@@ -460,54 +435,63 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
             style: ShopText.meta.copyWith(fontSize: 9.5, color: ShopColors.error)),
       );
 
-  /// 级联选择器。`(显示名, 是否在服务范围)`。
-  Widget _picker({
-    required String id,
-    required String label,
-    required String? value,
-    required List<(String, bool)> options,
-    required ValueChanged<String?> onChanged,
-    bool enabled = true,
-  }) {
+  /// 「Wilayah」一行（H3）：未选显示占位「Pilih wilayah」，选后「{provinsi}, {kota}, {kecamatan}」。
+  Widget _regionRow(AppLocalizations l10n) {
+    final picked = _provinsi != null && _kota != null && _kecamatan != null;
+    final error = _errors['region'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: ShopText.meta.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
+        Text(l10n.addressRegionLabel,
+            style: ShopText.meta.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
-        DropdownButtonFormField<String>(
-          key: ValueKey('addressPicker_$id'),
-          // 受控值。kecamatan 的显示名可能带「· belum dilayani」后缀，
-          // 故按「去掉后缀后相等」回找显示串，而不是拿裸值直接比 —— 后者会让
-          // 不可配送的项选中后显示空白（用户以为没选上，反复点）。
-          initialValue: value == null
-              ? null
-              : options
-                  .map((o) => o.$1)
-                  .where((n) => n == value || n.startsWith('$value \u00B7 '))
-                  .firstOrNull,
-          isExpanded: true,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: ShopColors.text),
-          decoration: InputDecoration(
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            border: _border(ShopColors.border),
-            enabledBorder: _border(value == null ? ShopColors.border : ShopColors.purple),
-            disabledBorder: _border(ShopColors.border2),
+        ShopPressable(
+          key: const ValueKey('addressRegionRow'),
+          onTap: _pickRegion,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(ShopShape.radiusField),
+              border: Border.all(
+                  color: error != null
+                      ? ShopColors.error
+                      : (picked ? ShopColors.purple : ShopColors.border)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    picked ? '$_provinsi, $_kota, $_kecamatan' : l10n.addressRegionPick,
+                    key: const ValueKey('addressRegionValue'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: picked
+                        ? const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w500, color: ShopColors.text)
+                        : ShopText.body.copyWith(color: ShopColors.text4),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, size: 18, color: ShopColors.text4),
+              ],
+            ),
           ),
-          hint: Text(label, style: ShopText.body.copyWith(color: ShopColors.text4)),
-          items: [
-            for (final (name, _) in options)
-              DropdownMenuItem<String>(value: name, child: Text(name, overflow: TextOverflow.ellipsis)),
-          ],
-          onChanged: enabled ? onChanged : null,
         ),
       ],
     );
   }
 
-  String _stripSuffix(String v, AppLocalizations l10n) {
-    final suffix = ' · ${l10n.addressNotServiceable}';
-    return v.endsWith(suffix) ? v.substring(0, v.length - suffix.length) : v;
+  Future<void> _pickRegion() async {
+    final current = (_provinsi != null && _kota != null && _kecamatan != null)
+        ? RegionSelection(provinsi: _provinsi!, kota: _kota!, kecamatan: _kecamatan!)
+        : null;
+    final picked = await showRegionPickerSheet(context, selected: current);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _provinsi = picked.provinsi;
+      _kota = picked.kota;
+      _kecamatan = picked.kecamatan;
+      _errors['region'] = null;
+    });
   }
 
   // ---------------------------------------------------------------- 校验

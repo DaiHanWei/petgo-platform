@@ -6,9 +6,10 @@ import '../../../core/network/dio_client.dart';
 import '../../auth/domain/auth_state.dart';
 import '../domain/shop_repurchase.dart';
 
-/// 复购引擎数据层（Story 6.4 / 6.5）。
+/// 推荐数据层（Story 6.5；v1.4.2 shop Story 9.4：复购卡 `cards` / `dismiss` / `repurchaseCardsProvider`
+/// 随 FR-136 下线删除，**「为宠物推荐」`recommendations` 保留**）。
 ///
-/// 🔒 **两个端点都在 `/me` 下**：FR-93 状态矩阵里游客两区都不展示 ——
+/// 🔒 **端点在 `/me` 下**：FR-93 状态矩阵里游客两区都不展示 ——
 /// 做成对游客开放的接口再靠前端不渲染，等于给游客态留了一条数据暴露路径。
 class ShopRepurchaseRepository {
   ShopRepurchaseRepository({required this.dio});
@@ -18,18 +19,6 @@ class ShopRepurchaseRepository {
   Future<Recommendations> recommendations() async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.meShopRecommendations);
     return Recommendations.fromJson(resp.data!);
-  }
-
-  Future<List<RepurchaseCard>> cards() async {
-    final resp = await dio.get<List<dynamic>>(ApiPaths.meShopRepurchaseCards);
-    return (resp.data ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(RepurchaseCard.fromJson)
-        .toList(growable: false);
-  }
-
-  Future<void> dismiss(int triggerId) async {
-    await dio.post<void>('${ApiPaths.meShopRepurchaseCards}/$triggerId/dismiss');
   }
 }
 
@@ -52,12 +41,3 @@ final recommendationsProvider = FutureProvider.autoDispose<Recommendations>((ref
   return ref.read(shopRepurchaseRepositoryProvider).recommendations();
 });
 
-/// 区域① 补货提醒。🔴 同样在数据层短路游客态。
-final repurchaseCardsProvider =
-    FutureProvider.autoDispose<List<RepurchaseCard>>((ref) async {
-  final auth = ref.watch(authControllerProvider);
-  if (!auth.isLoggedIn) {
-    return const [];
-  }
-  return ref.read(shopRepurchaseRepositoryProvider).cards();
-});

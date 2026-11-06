@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +79,26 @@ void main() {
         reason: '🔴 商品推荐区又长回 Diary 了');
   });
 
+
+  /// v1.4.2 shop Story 9.4（FR-136 / I1）：Diary 复购触发卡随复购下线删除。
+  /// 组件已不存在 → 按类型名字符串断言，防它（或同类复购 / 推荐组件）随合并长回来。
+  testWidgets('🔴 有宠态 Diary 不含任何复购 / 推荐组件（I1）', (tester) async {
+    const profile = PetProfile(id: 1, name: 'Momo', cardToken: 'T');
+    await tester.pumpWidget(_wrap(auth: _authA(), profile: profile));
+    await tester.pumpAndSettle();
+
+    final offenders = tester.allWidgets
+        .map((w) => w.runtimeType.toString())
+        .where((n) => n.contains('Repurchase') || n.contains('RecoZone') || n == 'ShopRecoGrid')
+        .toSet();
+    expect(offenders, isEmpty, reason: '🔴 复购 / 推荐组件又长回 Diary 了');
+    expect(
+        File('lib/features/profile/presentation/growth_archive_page.dart')
+            .readAsStringSync()
+            .contains('repurchase'),
+        isFalse,
+        reason: 'Diary 页不应再 import 复购组件');
+  });
 
   testWidgets('状态 B/C → 非有宠态 + 修改状态入口（AC3）', (tester) async {
     await tester.pumpWidget(_wrap(auth: _authB()));

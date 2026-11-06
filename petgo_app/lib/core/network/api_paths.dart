@@ -573,9 +573,6 @@ class ApiPaths {
   /// 在 `/me` 下是刻意的：FR-93 状态矩阵里游客不展示该区。
   static const String meShopRecommendations = '$base/me/shop/recommendations';
 
-  /// 🔒 Toko 首页区域①「补货提醒」（Story 6.4，FR-109）。`/{id}/dismiss` 关卡。
-  static const String meShopRepurchaseCards = '$base/me/shop/repurchase-cards';
-
   /// 商品详情页的评价区（Story 7.3）。🔒 对游客开放 —— 评价是买前决策信息，
   /// 拿它当登录墙会直接杀掉转化（FR-93A）。接口不下发任何评价者身份。
   static String shopProductReviews(String productToken) =>

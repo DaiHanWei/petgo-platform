@@ -4,7 +4,9 @@
 /// 点某一级回到该级重选；**未开通的区仍列出**、标「Belum dilayani」仍可选；当前所选打 `check`。
 /// 选中区即关抽屉并返回 [ShopDeliveryArea] —— 🔴 **只记本地、不生成收货地址**（写 prefs 由调用方做）。
 ///
-/// ⚠️ 与地址簿表单里的三级选择（H4，9.4）不共用逻辑：那里选完是表单字段，这里选完是本机偏好。
+/// v1.4.2 shop Story 9.4（H4）：泛化为共享组件 —— 地址表单以**表单模式**（[showRegionPickerSheet]）调用同一抽屉：
+/// 选完回调表单字段、不写本地记忆、不要求区有 id、标题「Pilih wilayah」、各级当前所选打勾。
+/// 默认模式（[showDeliveryAreaSheet]，8.2 B6）行为不变。
 library;
 
 import 'package:flutter/material.dart';
@@ -32,10 +34,46 @@ Future<ShopDeliveryArea?> showDeliveryAreaSheet(BuildContext context, {int? sele
       builder: (_) => DeliveryAreaSheet(selectedKecamatanId: selectedKecamatanId),
     );
 
+/// 表单模式（H4）的选择结果 / 当前值：省 · 市 · 区三级名称 + 区是否开通。
+class RegionSelection {
+  const RegionSelection({
+    required this.provinsi,
+    required this.kota,
+    required this.kecamatan,
+    this.serviceable = true,
+  });
+
+  final String provinsi;
+  final String kota;
+  final String kecamatan;
+  final bool serviceable;
+}
+
+/// 打开 H4（地址表单的地区选择）。返回所选区；关掉 → null。
+///
+/// 🔴 **未开通的区同样可选**（只告知不阻断，FR-98 / FR-99），行尾灰字「Belum dilayani」。
+Future<RegionSelection?> showRegionPickerSheet(BuildContext context, {RegionSelection? selected}) =>
+    showModalBottomSheet<RegionSelection>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => DeliveryAreaSheet(formMode: true, formSelected: selected),
+    );
+
 class DeliveryAreaSheet extends ConsumerStatefulWidget {
-  const DeliveryAreaSheet({super.key, this.selectedKecamatanId});
+  const DeliveryAreaSheet(
+      {super.key, this.selectedKecamatanId, this.formMode = false, this.formSelected});
 
   final int? selectedKecamatanId;
+
+  /// 表单模式（9.4 H4）。默认 false = 8.2 B6 现状。
+  final bool formMode;
+
+  /// 表单模式下的当前值（打勾、并直接展开到其所在市的区列表）。
+  final RegionSelection? formSelected;
 
   @override
   ConsumerState<DeliveryAreaSheet> createState() => _DeliveryAreaSheetState();
@@ -46,11 +84,26 @@ class _DeliveryAreaSheetState extends ConsumerState<DeliveryAreaSheet> {
   List<String> _path = const [];
 
   @override
+  void initState() {
+    super.initState();
+    final sel = widget.formSelected;
+    // 表单模式且已有值 → 直接停在该市的区列表（面包屑可回上级重选）；名字在树里找不到时 _list 会回顶层。
+    if (widget.formMode && sel != null) _path = [sel.provinsi, sel.kota];
+  }
+
+  /// 「belum dilayani」→「Belum dilayani」（9.4 待确认 3：复用原 key，句首大写渲染）。
+  String _notServiceableTag(AppLocalizations l10n) {
+    final t = l10n.addressNotServiceable;
+    if (!widget.formMode || t.isEmpty) return t;
+    return t[0].toUpperCase() + t.substring(1);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final tree = ref.watch(regionTreeProvider);
     return SizedBox(
-      key: const ValueKey('deliveryAreaSheet'),
+      key: ValueKey(widget.formMode ? 'regionPickerSheet' : 'deliveryAreaSheet'),
       height: MediaQuery.sizeOf(context).height * .72,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,7 +113,7 @@ class _DeliveryAreaSheetState extends ConsumerState<DeliveryAreaSheet> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(l10n.tokoChooseArea,
+                  child: Text(widget.formMode ? l10n.addressRegionPick : l10n.tokoChooseArea,
                       style: AppTypography.title.copyWith(fontSize: 16, color: AppColors.ink)),
                 ),
                 IconButton(
@@ -129,17 +182,43 @@ class _DeliveryAreaSheetState extends ConsumerState<DeliveryAreaSheet> {
       }
     }
     final List<Widget> rows;
+    final form = widget.formMode;
+    final sel = widget.formSelected;
     if (prov == null) {
       rows = [
         for (final p in t.provinsi)
-          _row(p.name, key: 'deliveryAreaProv_${p.name}', onTap: () => setState(() => _path = [p.name])),
+          _row(p.name,
+              key: 'deliveryAreaProv_${p.name}',
+              checked: form && sel?.provinsi == p.name,
+              onTap: () => setState(() => _path = [p.name])),
       ];
     } else if (kota == null) {
       rows = [
         for (final k in prov.kota)
           _row(k.name,
               key: 'deliveryAreaKota_${k.name}',
+              checked: form && sel?.provinsi == prov.name && sel?.kota == k.name,
               onTap: () => setState(() => _path = [prov!.name, k.name])),
+      ];
+    } else if (form) {
+      // 表单模式：按名称回填表单，不要求 id（地址按名称存，见 ShippingAddress）。
+      // 🔴 换了上级 = 走了另一条路径，下级从新的上级重新列出 —— 不会拼出旧下级 + 新上级。
+      rows = [
+        for (final kec in kota.kecamatan)
+          _row(
+            kec.name,
+            key: 'deliveryAreaKec_${kec.name}',
+            tag: kec.serviceable ? null : _notServiceableTag(l10n),
+            checked: sel?.provinsi == prov.name &&
+                sel?.kota == kota.name &&
+                sel?.kecamatan == kec.name,
+            onTap: () => Navigator.of(context).pop(RegionSelection(
+              provinsi: prov!.name,
+              kota: kota!.name,
+              kecamatan: kec.name,
+              serviceable: kec.serviceable,
+            )),
+          ),
       ];
     } else {
       rows = [
