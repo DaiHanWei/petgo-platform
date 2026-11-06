@@ -96,7 +96,7 @@ class CouponClaimIntegrationTest extends ApiIntegrationTest {
     @Test
     void vetTokenIs403AndGuestIs401() throws Exception {
         ShopCoupon c = claimCoupon(null, 1);
-        mvc.perform(post(CLAIM).header("Authorization", vetBearer(1L))
+        mvc.perform(post(CLAIM).header("Authorization", activeVetBearer())
                         .contentType(MediaType.APPLICATION_JSON).content(body(c.getPublicToken(), "HOME")))
                 .andExpect(status().isForbidden());
         mvc.perform(post(CLAIM).contentType(MediaType.APPLICATION_JSON).content(body(c.getPublicToken(), "HOME")))

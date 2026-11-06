@@ -196,4 +196,14 @@ public abstract class ApiIntegrationTest {
     protected String vetBearer(long vetId) {
         return bearer(vetId, Role.VET);
     }
+
+    /** 落一个 active 兽医并返回其 Bearer：BannedVetFilter 查不到兽医行回 401，写死 id 会随测试顺序时红时绿。 */
+    protected String activeVetBearer() {
+        String email = "vet-" + java.util.UUID.randomUUID() + "@test.local";
+        return vetBearer(vetAccountsForTest.save(
+                com.tailtopia.vet.domain.VetAccount.create(email, "{bcrypt}x", "Vet")).getId());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.tailtopia.vet.repository.VetAccountRepository vetAccountsForTest;
 }

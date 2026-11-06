@@ -36,6 +36,14 @@ class LogSanitizerTest {
     }
 
     @Test
+    void masksPayoutAccountFields() {
+        String out = sanitizeJson("{\"destination\":\"TO_BANK\",\"channel\":\"OVO\","
+                + "\"account\":\"0812345678901\",\"accountHolderName\":\"Budi\",\"payoutAccountLast4\":\"8901\"}");
+        assertThat(out).doesNotContain("0812345678901").doesNotContain("Budi");
+        assertThat(out).contains("\"channel\":\"OVO\"").contains("\"payoutAccountLast4\":\"8901\"");
+    }
+
+    @Test
     void masksBiteshipDriverFields() {
         // v1.4.2 shop Story 5.1 AC14.3：Biteship Webhook 载荷里的司机信息
         String out = sanitizeJson("{\"order_id\":\"bs_1\",\"courier_driver_name\":\"Joko\","

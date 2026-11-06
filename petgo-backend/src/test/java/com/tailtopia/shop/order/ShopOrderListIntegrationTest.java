@@ -126,7 +126,7 @@ class ShopOrderListIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("兽医 token 403；无 token 401")
     void security() throws Exception {
-        mvc.perform(get("/api/v1/me/shop-orders").header("Authorization", vetBearer(1L)))
+        mvc.perform(get("/api/v1/me/shop-orders").header("Authorization", activeVetBearer()))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/me/shop-orders/counts")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/me/shop-orders")).andExpect(status().isUnauthorized());

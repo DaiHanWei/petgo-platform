@@ -112,4 +112,19 @@ void main() {
     expect(ShopOrderGroup.values.map((g) => g.api),
         ['all', 'pending_payment', 'pending_shipment', 'to_receive', 'completed', 'cancelled']);
   });
+
+  test('amounts.shippingDiscount：后端存负数，解析为正的减免额', () {
+    final a = ShopOrderAmounts.fromJson(const {
+      'goodsAmount': 185000,
+      'discountCouponAmount': 20000,
+      'shippingFee': 10000,
+      'shippingDiscount': -10000,
+      'shippingDiscountSource': 'COUPON',
+      'insuranceFee': 0,
+      'payable': 165000,
+    });
+    expect(a.shippingDiscount, 10000);
+    expect(a.goodsAmount - a.discountCouponAmount + a.shippingFee - a.shippingDiscount + a.insuranceFee,
+        a.payable);
+  });
 }

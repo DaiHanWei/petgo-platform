@@ -219,7 +219,7 @@ class CheckoutQuoteIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("🔒 兽医 token → 403；无 token → 401")
     void securityRules() throws Exception {
-        mvc.perform(post("/api/v1/me/checkout/preview").header("Authorization", vetBearer(1L))
+        mvc.perform(post("/api/v1/me/checkout/preview").header("Authorization", activeVetBearer())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"CART\"}"))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/me/checkout/preview")

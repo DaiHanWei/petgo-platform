@@ -58,8 +58,8 @@ class MyCouponsIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void vetTokenCannotReadCoupons() throws Exception {
-        mvc.perform(get("/api/v1/me/coupons").header("Authorization", vetBearer(1L))).andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/shop/coupons/for-you").header("Authorization", vetBearer(1L)))
+        mvc.perform(get("/api/v1/me/coupons").header("Authorization", activeVetBearer())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/shop/coupons/for-you").header("Authorization", activeVetBearer()))
                 .andExpect(status().isForbidden());
     }
 }

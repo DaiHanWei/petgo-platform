@@ -49,7 +49,10 @@ public class LogSanitizer {
             // Biteship Webhook 载荷里的司机信息（v1.4.2 shop Story 5.1 AC14.3）：上面的 "phone" 是整键匹配，
             // courier_driver_phone 不会被命中，必须逐键列出。
             "courier_driver_name", "courier_driver_phone", "courier_driver_plate_number",
-            "courier_driver_photo_url");
+            "courier_driver_photo_url",
+            // 收款账户（决策 O-22）：退款去向 / 打款请求体里的完整账号与户名。整键匹配，字段名须逐个列出。
+            "account", "accountnumber", "accountno", "accountholdername", "accountname", "payoutaccount",
+            "payoutaccountnumber", "payoutaccountname", "bankaccount");
 
     /**
      * <b>仅请求体</b>打码的字段名：用户自由文本，可含第三者 PII / 指控原文（如账号举报的

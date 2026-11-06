@@ -484,7 +484,8 @@ class ShopOrderAmounts {
         goodsAmount: _int(j['goodsAmount']) ?? 0,
         discountCouponAmount: _int(j['discountCouponAmount']) ?? 0,
         shippingFee: _int(j['shippingFee']) ?? 0,
-        shippingDiscount: _int(j['shippingDiscount']) ?? 0,
+        // 后端订单口径存负数（shipping_discount ≤ 0），这里统一成正的减免额，界面按「−Rp X」展示。
+        shippingDiscount: (_int(j['shippingDiscount']) ?? 0).abs(),
         shippingDiscountSource: _blankToNull(j['shippingDiscountSource']?.toString()),
         insuranceFee: _int(j['insuranceFee']) ?? 0,
         payable: _int(j['payable']) ?? 0,

@@ -79,6 +79,6 @@ class NewbieCouponIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void vetTokenCannotEnter() throws Exception {
-        mvc.perform(post(ENTRY).header("Authorization", vetBearer(1L))).andExpect(status().isForbidden());
+        mvc.perform(post(ENTRY).header("Authorization", activeVetBearer())).andExpect(status().isForbidden());
     }
 }
