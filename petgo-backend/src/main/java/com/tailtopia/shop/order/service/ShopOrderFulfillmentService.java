@@ -80,6 +80,15 @@ public class ShopOrderFulfillmentService {
      */
     @Transactional
     public Shipment ship(String orderToken, Carrier carrier, String trackingNo, long carrierCost) {
+        return ship(orderToken, carrier, trackingNo, carrierCost, null);
+    }
+
+    /**
+     * 同上，记操作人（V1.4.2 shop-admin 6.1 · AD-14）：首次转已发货写 {@code shipped_by_admin_id}；
+     * 运单失败后转手工运单 → 清 {@code waybill_failed_at}（否则一直挂在异常队列）。
+     */
+    @Transactional
+    public Shipment ship(String orderToken, Carrier carrier, String trackingNo, long carrierCost, Long actorAccountId) {
         ShopOrder order = requireOrder(orderToken);
         if (order.getStatus() != ShopOrderStatus.PENDING_SHIPMENT
                 && order.getStatus() != ShopOrderStatus.SHIPPED) {
@@ -102,6 +111,12 @@ public class ShopOrderFulfillmentService {
 
         Shipment shipment = shipments.save(Shipment.ship(order.getId(), c, no, carrierCost));
         order.markShipped(shipment.getShippedAt(), ShippedSource.MANUAL);
+        order.recordShippedBy(actorAccountId);
+        if (order.getWaybillFailReason() != null && order.getWaybillFailReason().startsWith("UNKNOWN_RESULT:")) {
+            // 抽屉已提示先去 Biteship 控制台核实；这里留痕，便于事后追查可能的孤儿运单
+            log.warn("运单失败结果未知时转手工运单，请到 Biteship 控制台核实是否已有运单 token={}", order.getPublicToken());
+        }
+        order.clearWaybillFailure();
         orders.save(order);
         // 🔒 单号非 PII 可记；同上下文的收件人姓名/电话/地址严禁记录（NFR-5）
         log.info("电商订单发货 token={} carrier={} trackingNo={}", order.getPublicToken(),
@@ -120,9 +135,10 @@ public class ShopOrderFulfillmentService {
             Long actorAccountId) {
         ShopOrder before = requireOrder(orderToken);
         boolean firstShip = before.getStatus() == ShopOrderStatus.PENDING_SHIPMENT;
-        Shipment shipment = ship(orderToken, carrier, trackingNo, carrierCost);
+        Shipment shipment = ship(orderToken, carrier, trackingNo, carrierCost, actorAccountId);
         audit.record(actorAccountId, AuditActions.SHOP_ORDER_SHIPPED, "SHOP_ORDER", orderToken,
-                "发货：承运商=%s 物流单号=%s".formatted(carrier.name(), shipment.getTrackingNo()));
+                "发货（手工运单）：承运商=%s 物流单号=%s 承运成本=%d".formatted(carrier.name(), shipment.getTrackingNo(),
+                        carrierCost));
         if (firstShip) {
             ShopOrder order = requireOrder(orderToken);
             events.publishEvent(new ShopOrderShippedEvent(order.getId(), order.getUserId(), order.getPublicToken()));
@@ -145,6 +161,7 @@ public class ShopOrderFulfillmentService {
             throw AppException.conflict("该订单没有 Biteship 运单，请先下运单或登记手工运单");
         }
         order.markShipped(Instant.now(), ShippedSource.MANUAL);
+        order.recordShippedBy(actorAccountId);   // V1.4.2 shop-admin 6.1：H4 显示操作人
         orders.save(order);
         events.publishEvent(new ShopOrderShippedEvent(order.getId(), order.getUserId(), order.getPublicToken()));
         audit.record(actorAccountId, AuditActions.SHOP_ORDER_MARKED_SHIPPED, "SHOP_ORDER", orderToken,

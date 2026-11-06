@@ -163,13 +163,72 @@
         </table>
     </section>
 
-    <!-- ⑤ 底部固定操作条 -->
-    <section class="sticky-footer so-actions">
+    <!--/* V1.4.2 shop-admin Story 6.1（H4 / H13）：发货来源、时间、操作人（只在后台可见）。 */-->
+    <section class="card card-full so-card" th:if="${acts != null and acts.has('SHIPPED_INFO')}" data-shipped-info>
+        <dl class="kv">
+            <dt th:text="#{admin.v142.ful.shippedSource}">已发货来源</dt>
+            <dd th:if="${order.shippedSource != null and order.shippedSource.name() == 'MANUAL'}"
+                th:text="#{admin.v142.ful.shippedByOps} + ' · ' + (${shippedByName} ?: '—') + ' · ' + ${@adminTime.wib(order.shippedAt)}">运营标记 · ops · -</dd>
+            <dd th:if="${order.shippedSource != null and order.shippedSource.name() == 'BITESHIP_PICKED'}"
+                th:text="#{admin.v142.ful.pickedAt(${@adminTime.wib(order.shippedAt)})}">- (Biteship 回传)</dd>
+            <dd th:if="${order.shippedSource == null}" th:text="${@adminTime.wib(order.shippedAt)}">-</dd>
+        </dl>
+    </section>
+
+    <!-- ⑤ 底部固定操作条（V1.4.2 shop-admin Story 6.1：按 DrawerActionsResolver 切换） -->
+    <section class="sticky-footer so-actions" th:with="a=${acts}">
         <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill')">
-            <!-- 发货（AB-11B）。🔴 承运成本必填（S-11）：不录则毛利看板缺行，自营毛利是否成立就无法验证。 -->
-            <form th:if="${shippable}" data-requires-form
-                  th:attr="hx-post=@{/admin/shop/orders/{t}/ship(t=${order.publicToken})}"
+            <!-- H5 运单失败 / H6 揽收失败横幅；结果未知须先核实（AC6） -->
+            <p class="banner err" th:if="${a.waybillFailed()}" data-waybill-failed
+               th:text="#{admin.v142.ful.waybillFailed.banner(${order.waybillFailReason}, ${@adminTime.wib(order.waybillFailedAt)})}">运单失败</p>
+            <p class="banner err" th:if="${a.pickupFailed()}" data-pickup-failed
+               th:text="#{admin.v142.ful.pickupFailed.banner(${activeBiteship != null and activeBiteship.providerStatus != null} ? ${activeBiteship.providerStatus} : '—', ${@adminTime.wib(order.logisticsExceptionAt)})}">揽收失败</p>
+            <p class="banner warn" th:if="${a.unknownResult()}" data-unknown-result th:text="#{admin.v142.ful.unknownWarn}">结果未知</p>
+
+            <!-- H2 Biteship 下单 -->
+            <form class="cfg-card card so-waybill" th:if="${a.has('BITESHIP_CREATE')}"
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/waybill/confirm(t=${order.publicToken},mode='create')}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.ful.btn.create}">Biteship 下单</h3>
+                <dl class="kv">
+                    <dt th:text="#{admin.v142.ful.courier}">快递</dt>
+                    <dd th:text="#{admin.v142.ful.courierUserChoice(${order.courierName} ?: '—')}">JNE（用户所选）</dd>
+                    <dt th:text="#{admin.v142.ful.shippingPaid}">用户支付运费</dt>
+                    <dd th:text="${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(T(java.lang.Math).max(0L, order.shippingFee + order.shippingDiscount))}">Rp</dd>
+                    <dt th:text="#{admin.v142.ful.insurance}">保价</dt>
+                    <dd th:text="${order.insuranceSelected} ? #{admin.v142.ful.insuranceYes(${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(order.insuranceFee)})} : #{admin.v142.ful.insuranceNo}">是</dd>
+                </dl>
+                <p class="hint" th:text="#{admin.v142.ful.waybill.hint}">确认后创建运单并预约上门取件。</p>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.ful.btn.create}">Biteship 下单</button>
+            </form>
+
+            <!-- H3 标记已发货 -->
+            <form class="cfg-card card so-mark-shipped" th:if="${a.has('MARK_SHIPPED')}"
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/mark-shipped(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.ful.btn.markShipped}">标记已发货</h3>
+                <p class="hint" th:text="#{admin.v142.ful.markShipped.hint}">仓库确认已打包后标记。</p>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.ful.btn.markShipped}">标记已发货</button>
+            </form>
+
+            <!-- H5 / H6 三选一 -->
+            <div class="cfg-card card so-fail-box" th:if="${a.has('CONTACT_CANCEL')}" data-fail-options>
+                <h3 th:text="${a.pickupFailed()} ? #{admin.v142.ful.pickup.title} : #{admin.v142.ful.waybill.failTitle}">选择处理方式</h3>
+                <form class="inline" th:if="${a.has('WAYBILL_RETRY') or a.has('PICKUP_RETRY')}"
+                      th:attr="hx-post=@{/admin/shop/orders/{t}/waybill/confirm(t=${order.publicToken},mode=${a.pickupFailed()} ? 'pickup-retry' : 'retry')}"
+                      hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-neutral" th:text="#{admin.v142.ful.btn.retry}">重新提交运单</button>
+                </form>
+                <a class="btn btn-neutral" th:href="@{/admin/shop/order-exceptions(open=${order.publicToken})}"
+                   th:text="#{admin.v142.ful.btn.contactCancel}">联系用户后取消 → 异常订单</a>
+                <p class="hint" th:text="${a.pickupFailed()} ? #{admin.v142.ful.pickup.hint} : #{admin.v142.ful.waybill.failHint}">提示</p>
+            </div>
+
+            <!-- H7 手工填写运单（运单失败 / 揽收失败 / 存量单 / 一单多包）。🔴 承运成本必填（S-11）。 -->
+            <form th:if="${a.has('MANUAL_FORM') or a.has('PICKUP_MANUAL')}" data-requires-form
+                  th:attr="hx-post=${a.has('PICKUP_MANUAL')} ? @{/admin/shop/orders/{t}/pickup/manual(t=${order.publicToken})} : @{/admin/shop/orders/{t}/ship(t=${order.publicToken})}"
                   hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="so-ship-form">
+                <h3 th:text="#{admin.v142.ful.manual.title}">手工填写运单</h3>
                 <label class="field" for="so-carrier" th:text="#{admin.shop.order.col.carrier}">承运商</label>
                 <select id="so-carrier" name="carrier" class="sel" required data-requires-text>
                     <option value="" th:text="#{admin.v130.shopOrders.ship.chooseCarrier}">选择承运商</option>
@@ -181,12 +240,12 @@
                 <label class="field" for="so-cost" th:text="#{admin.shop.order.col.carrierCost}">承运成本</label>
                 <input id="so-cost" type="number" name="carrierCost" class="inp" min="0" required
                        data-requires-text/>
-                <p class="hint" th:text="#{admin.shop.order.ship.hint}">承运成本填运单实际金额。</p>
+                <p class="hint" th:text="#{admin.v142.ful.manual.hint}">手工运单不接 Biteship 回传。</p>
                 <button type="submit" class="btn btn-primary" disabled data-requires-target
-                        th:text="#{admin.shop.order.btn.ship}">发货</button>
+                        th:text="#{admin.v142.ful.btn.saveAndShip}">保存并发货</button>
             </form>
             <!--/* 标记缺货（A8 唯一入口）：拣货时发现实物不够。说明仅后台可见，处置时才带原因告知用户。 */-->
-            <form th:if="${flaggable}" data-requires-form
+            <form th:if="${a.has('FLAG_SHORTAGE')}" data-requires-form
                   th:attr="hx-post=@{/admin/shop/orders/{t}/flag-shortage(t=${order.publicToken})}"
                   hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="so-shortage-form">
                 <label class="field" for="so-shortage-note" th:text="#{admin.v130.shopOrders.shortage.label}">缺货说明</label>
@@ -195,8 +254,8 @@
                 <button type="submit" class="btn btn-danger" disabled data-requires-target
                         th:text="#{admin.v130.shopOrders.shortage.btn}">标记缺货</button>
             </form>
-            <!-- SPEC-2 出口①：整单标记已送达 -->
-            <form th:if="${markable}"
+            <!-- SPEC-2 出口①：整单标记已送达（手工单只有手工送达，H13） -->
+            <form th:if="${a.has('MARK_DELIVERED')}"
                   th:attr="hx-post=@{/admin/shop/orders/{t}/mark-delivered/confirm(t=${order.publicToken})}"
                   hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="inline">
                 <!--/* V1.4.2 Story 1.2 · AD-3：先取服务端确认弹层，确认后提交原端点。 */-->

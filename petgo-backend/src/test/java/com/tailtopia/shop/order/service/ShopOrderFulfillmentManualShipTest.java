@@ -60,7 +60,7 @@ class ShopOrderFulfillmentManualShipTest {
         service.shipManualWithAudit(TOKEN, Carrier.JNE, "JN1", 9_000L, 42L);
         assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.SHIPPED);
         verify(audit).record(eq(42L), eq(AuditActions.SHOP_ORDER_SHIPPED), eq("SHOP_ORDER"), eq(TOKEN),
-                eq("发货：承运商=JNE 物流单号=JN1"));
+                eq("发货（手工运单）：承运商=JNE 物流单号=JN1 承运成本=9000"));
         verify(events).publishEvent(new ShopOrderShippedEvent(5L, 1L, TOKEN));
     }
 

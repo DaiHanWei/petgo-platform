@@ -72,10 +72,23 @@ public class AdminShopOrderController {
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
+    /** V1.4.2 shop-admin Story 6.1 · AD-14：Biteship 下单 / 重提 / 揽收失败处置（自带 REQUIRES_NEW 短事务，本类不开事务）。 */
+    private final com.tailtopia.shop.logistics.BiteshipShipmentService waybills;
+    private final com.tailtopia.shop.logistics.ShopLogisticsExceptionService logistics;
+    private final com.tailtopia.shop.order.repository.ShipmentRepository shipmentRepo;
+    private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
+
     public AdminShopOrderController(AdminShopOrderService adminOrders,
             ShopOrderFulfillmentService fulfillment, ShopOrderRepository orders,
             ShopOrderLineRepository orderLines, AdminShopOrderExceptionService exceptions,
-            Messages msg) {
+            Messages msg, com.tailtopia.shop.logistics.BiteshipShipmentService waybills,
+            com.tailtopia.shop.logistics.ShopLogisticsExceptionService logistics,
+            com.tailtopia.shop.order.repository.ShipmentRepository shipmentRepo,
+            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts) {
+        this.waybills = waybills;
+        this.logistics = logistics;
+        this.shipmentRepo = shipmentRepo;
+        this.adminAccounts = adminAccounts;
         this.adminOrders = adminOrders;
         this.fulfillment = fulfillment;
         this.orders = orders;
@@ -108,6 +121,7 @@ public class AdminShopOrderController {
             @RequestParam(required = false) String phone,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "open", required = false) String open,
+            @RequestParam(value = "flag", required = false) String flag,
             HxRequest hx, Model model) {
         boolean canPhoneSearch = has(admin, AdminPermissions.SHOP_ORDER_PHONE_SEARCH);
         ShopOrderStatus filter = parseStatus(status);
@@ -132,7 +146,7 @@ public class AdminShopOrderController {
             }
             current = 0;
         } else {
-            var p = adminOrders.page(filter, startOf(from), endOf(to), current, QUEUE_PAGE_SIZE);
+            var p = adminOrders.page(filter, startOf(from), endOf(to), flag, current, QUEUE_PAGE_SIZE);
             found = p.rows();
             current = p.page();
             hasNext = p.hasNext();
@@ -146,6 +160,12 @@ public class AdminShopOrderController {
         model.addAttribute("exceptionTokens",
                 exceptions.flagged(rows.stream().map(AdminShopOrderRow::orderToken).toList()));
         model.addAttribute("summary", adminOrders.summary(startOf(from), endOf(to)));
+        // V1.4.2 shop-admin Story 6.1（H1）：异常标记筛选 + 行徽标
+        model.addAttribute("flags", AdminShopOrderService.FLAGS);
+        model.addAttribute("flag", flag == null || !AdminShopOrderService.FLAGS.contains(flag) ? "" : flag);
+        java.util.Map<String, List<String>> flagsByToken = new java.util.HashMap<>();
+        found.forEach(o -> flagsByToken.put(o.getPublicToken(), AdminShopOrderService.flagsOf(o)));
+        model.addAttribute("flagsByToken", flagsByToken);
         model.addAttribute("statuses", ShopOrderStatus.values());
         model.addAttribute("status", filter == null ? "" : filter.name());
         model.addAttribute("orderToken", orderToken == null ? "" : orderToken);
@@ -233,13 +253,18 @@ public class AdminShopOrderController {
         model.addAttribute("packages", fulfillment.shipmentsOf(order.getId()));
         model.addAttribute("carriers", Carrier.values());
         model.addAttribute("canFulfill", has(admin, AdminPermissions.SHOP_ORDER_FULFILL));
-        model.addAttribute("shippable", order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT
-                || order.getStatus() == ShopOrderStatus.SHIPPED);
         model.addAttribute("markable", order.getStatus() == ShopOrderStatus.SHIPPED);
-        // 标记缺货只对待发货单开放；已标记的不再给按钮（重复标记服务层也会拒）
-        model.addAttribute("flaggable", order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT
-                && !order.isShortageFlagged());
         model.addAttribute("active", "shopOrders");
+        // V1.4.2 shop-admin Story 6.1 · AD-14：吸底操作集中判定（DrawerActionsResolver）
+        var active = shipmentRepo.findActiveByShopOrderId(order.getId());
+        var acts = DrawerActionsResolver.resolve(new DrawerActionsResolver.Facts(order.getStatus(),
+                order.getWaybillFailReason(), order.getWaybillFailedAt() != null, order.getLogisticsException(),
+                active.stream().anyMatch(Shipment::isBiteship), !active.isEmpty(),
+                order.getCourierCode() != null && !order.getCourierCode().isBlank(), order.isShortageFlagged()));
+        model.addAttribute("acts", acts);
+        model.addAttribute("activeBiteship", active.stream().filter(Shipment::isBiteship).findFirst().orElse(null));
+        model.addAttribute("shippedByName", order.getShippedByAdminId() == null ? null
+                : adminAccounts.findById(order.getShippedByAdminId()).map(a -> a.getDisplayName()).orElse(null));
         return order;
     }
 
@@ -326,6 +351,140 @@ public class AdminShopOrderController {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
         return REDIRECT_LIST;
+    }
+
+    // ---------- V1.4.2 shop-admin Story 6.1：Biteship 下单 / 重提 / 揽收失败 / 标记已发货（H2 ~ H7） ----------
+    // 🔴 本类不开事务：BiteshipShipmentService / ShopLogisticsExceptionService 自带 REQUIRES_NEW 短事务，Biteship 调用在事务外
+
+    /** H2 下单确认：复述快递（用户所选）、用户支付运费、保价。 */
+    @PostMapping("/admin/shop/orders/{token}/waybill/confirm")
+    @PreAuthorize(FULFILL_AUTH)
+    public String confirmWaybill(@PathVariable String token, @RequestParam(defaultValue = "create") String mode,
+            Model model, jakarta.servlet.http.HttpServletResponse response) {
+        ShopOrder order = requireOrder(token);
+        java.util.List<com.tailtopia.admin.shared.web.AdminConfirmModal.Fact> facts = java.util.List.of(
+                new com.tailtopia.admin.shared.web.AdminConfirmModal.Fact(msg.get("admin.v142.ful.courier"),
+                        msg.get("admin.v142.ful.courierUserChoice", nz(order.getCourierName()))),
+                new com.tailtopia.admin.shared.web.AdminConfirmModal.Fact(msg.get("admin.v142.ful.shippingPaid"),
+                        AdminShopOrderExceptionController.rp(Math.max(0L, order.getShippingFee() + order.getShippingDiscount()))),
+                new com.tailtopia.admin.shared.web.AdminConfirmModal.Fact(msg.get("admin.v142.ful.insurance"),
+                        order.isInsuranceSelected() ? msg.get("admin.v142.ful.insuranceYes",
+                                AdminShopOrderExceptionController.rp(order.getInsuranceFee())) : msg.get("admin.v142.ful.insuranceNo")));
+        boolean unknown = order.getWaybillFailReason() != null && order.getWaybillFailReason().startsWith("UNKNOWN_RESULT:");
+        String action = switch (mode) {
+            case "retry" -> "/waybill/retry";
+            case "pickup-retry" -> "/pickup/retry";
+            default -> "/waybill";
+        };
+        var cm = new com.tailtopia.admin.shared.web.AdminConfirmModal(msg.get("admin.v142.ful.waybill.title"),
+                unknown && "retry".equals(mode) ? msg.get("admin.v142.ful.unknownWarn") : null, java.util.List.of(),
+                "pickup-retry".equals(mode) ? msg.get("admin.v142.ful.pickup.hint") : msg.get("admin.v142.ful.waybill.hint"),
+                null, null, null, "/admin/shop/orders/" + enc(token) + action, java.util.Map.of(),
+                msg.get("create".equals(mode) ? "admin.v142.ful.btn.create" : "admin.v142.ful.btn.retry"), false,
+                unknown && "retry".equals(mode), facts)
+                .withSuccessTarget("#shop-order-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    @PostMapping("/admin/shop/orders/{token}/waybill")
+    @PreAuthorize(FULFILL_AUTH)
+    public String createWaybill(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            Model model) {
+        ShopOrder order = requirePendingNotPickupFailed(token);
+        var r = waybills.createWaybill(order.getId(), actorOf(admin));
+        return afterWaybill(admin, token, r, model);
+    }
+
+    @PostMapping("/admin/shop/orders/{token}/waybill/retry")
+    @PreAuthorize(FULFILL_AUTH)
+    public String retryWaybill(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            Model model) {
+        ShopOrder order = requirePendingNotPickupFailed(token);
+        var r = waybills.retryWaybill(order.getId(), actorOf(admin));
+        return afterWaybill(admin, token, r, model);
+    }
+
+    /** H6：揽收失败重新提交（先取消旧运单；已发货也可，状态不变，O-18）。 */
+    @PostMapping("/admin/shop/orders/{token}/pickup/retry")
+    @PreAuthorize(FULFILL_AUTH)
+    public String pickupRetry(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            Model model) {
+        ShopOrder order = requireOrder(token);
+        var res = logistics.resolvePickupFailureByRetry(order.getId(), actorOf(admin));
+        return afterPickup(admin, token, res, "admin.v142.ful.flash.pickupRetried", model);
+    }
+
+    /** H6 / H7：揽收失败转手工运单（先取消旧运单）。 */
+    @PostMapping("/admin/shop/orders/{token}/pickup/manual")
+    @PreAuthorize(FULFILL_AUTH)
+    public String pickupManual(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @RequestParam String carrier, @RequestParam String trackingNo, @RequestParam(required = false) Long carrierCost,
+            Model model) {
+        if (carrierCost == null) {
+            throw AppException.validation("请填写承运成本（S-11：不录则毛利看板缺行）").code("admin.err.shopOrder.carrierCostRequired");
+        }
+        ShopOrder order = requireOrder(token);
+        var res = logistics.resolvePickupFailureByManualWaybill(order.getId(), Carrier.parse(carrier), trackingNo,
+                carrierCost, actorOf(admin));
+        return afterPickup(admin, token, res, "admin.v142.ful.flash.manualSaved", model);
+    }
+
+    /** H3：标记已发货（Biteship 运单待揽收），复用 markShippedWithoutWaybill，写操作人。 */
+    @PostMapping("/admin/shop/orders/{token}/mark-shipped")
+    @PreAuthorize(FULFILL_AUTH)
+    public String markShipped(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            Model model) {
+        fulfillment.markShippedWithoutWaybill(token, actorOf(admin));
+        return done(admin, token, msg.get("admin.v142.ful.flash.markedShipped"), model);
+    }
+
+    private String afterWaybill(AdminUserDetails admin, String token, com.tailtopia.shop.logistics.WaybillResult r,
+            Model model) {
+        if (r.created()) {
+            ShopOrder order = requireOrder(token);
+            String no = shipmentRepo.findActiveByShopOrderId(order.getId()).stream().filter(Shipment::isBiteship)
+                    .map(Shipment::getTrackingNo).filter(java.util.Objects::nonNull).findFirst().orElse("—");
+            return done(admin, token, msg.get("admin.v142.ful.flash.created", no), model);
+        }
+        // 失败不抛：订单已写 waybill_failed_at，抽屉重渲染出 H5 三选一
+        return done(admin, token, msg.get("admin.v142.ful.flash.failed"), model);
+    }
+
+    private String afterPickup(AdminUserDetails admin, String token, com.tailtopia.shop.logistics.PickupResolution res,
+            String okKey, Model model) {
+        if (res.resolvedOk()) {
+            return done(admin, token, msg.get(okKey), model);
+        }
+        if (res.outcome() == com.tailtopia.shop.logistics.PickupResolution.Outcome.WAYBILL_FAILED) {
+            // 旧运单已取消、新运单没建成：订单已写运单失败，抽屉重渲染出新的处置选项（复审修）
+            return done(admin, token, msg.get("admin.v142.ful.flash.failed"), model);
+        }
+        throw AppException.conflict("揽收失败处置未完成：" + res.reason()).code("admin.err.v142.ful.pickupAborted");
+    }
+
+    /**
+     * 普通下单 / 重提只给待发货且非揽收失败的单（揽收失败必须经 {@code resolvePickupFailureBy*} 先取消旧运单并清标记）。
+     */
+    private ShopOrder requirePendingNotPickupFailed(String token) {
+        ShopOrder order = requireOrder(token);
+        if (order.getStatus() != ShopOrderStatus.PENDING_SHIPMENT
+                || order.getLogisticsException() == com.tailtopia.shop.order.domain.LogisticsException.PICKUP_FAILED) {
+            throw AppException.conflict("该订单当前不能直接下运单：" + order.getStatus()).code("admin.err.v142.ful.notCreatable");
+        }
+        return order;
+    }
+
+    private ShopOrder requireOrder(String token) {
+        return orders.findByPublicToken(token)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+    }
+
+    private static String enc(String token) {
+        return org.springframework.web.util.UriUtils.encodePathSegment(token, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String nz(String v) {
+        return v == null ? "—" : v;
     }
 
     // ---------- 标记缺货（A8 入口） ----------

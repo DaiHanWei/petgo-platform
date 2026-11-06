@@ -288,6 +288,9 @@ public class ShopOrder {
     private Instant returnInboundAt;
     @Column(name = "return_inbound_by")
     private Long returnInboundBy;
+    /** V1.4.2 shop-admin Story 6.1 · AD-14：标记已发货 / 手工运单的后台账号（首次转已发货写入，一单多包不改写）。 */
+    @Column(name = "shipped_by_admin_id")
+    private Long shippedByAdminId;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -686,6 +689,17 @@ public class ShopOrder {
         this.returnInboundAt = at;
         this.returnInboundBy = adminAccountId;
         this.updatedAt = Instant.now();
+    }
+
+    /** 首次由后台转已发货时记操作人；已有值不改写（一单多包第二个包裹不覆盖）。 */
+    public void recordShippedBy(Long adminAccountId) {
+        if (this.shippedByAdminId == null && adminAccountId != null) {
+            this.shippedByAdminId = adminAccountId;
+        }
+    }
+
+    public Long getShippedByAdminId() {
+        return shippedByAdminId;
     }
 
     public Instant getReturnInboundAt() {

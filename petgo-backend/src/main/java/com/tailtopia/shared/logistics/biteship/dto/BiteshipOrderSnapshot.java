@@ -8,5 +8,14 @@ import java.time.Instant;
  * <p>🔒 driver 姓名 / 电话、收发件人信息一律不读入本对象。
  */
 public record BiteshipOrderSnapshot(String id, String status, String waybillId, String trackingId,
-        String courierCompany, String courierType, Long price, String link, Instant updatedAt) {
+        String courierCompany, String courierType, Long price, String link, Instant updatedAt, Long insuranceFee) {
+
+    /**
+     * 不含保价费的旧形态（查询回放、桩与存量测试）。{@code insuranceFee} = null（V1.4.2 shop-admin 6.1：下单响应
+     * {@code courier.insurance.fee}，字段待沙箱确认，解析不到按 0）。
+     */
+    public BiteshipOrderSnapshot(String id, String status, String waybillId, String trackingId, String courierCompany,
+            String courierType, Long price, String link, Instant updatedAt) {
+        this(id, status, waybillId, trackingId, courierCompany, courierType, price, link, updatedAt, null);
+    }
 }

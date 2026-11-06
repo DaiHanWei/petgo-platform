@@ -262,13 +262,15 @@ class ShopLogisticsExceptionServiceTest {
     }
 
     @Test
-    @DisplayName("重下运单只允许待发货（揽收失败后又被揽收的已发货订单 409）")
-    void retryRequiresPendingShipment() {
+    @DisplayName("V1.4.2 shop-admin 6.1 · O-18：已发货的揽收失败也可重新提交（先取消旧运单，订单状态不变）")
+    void retryAllowedForShippedPickupFailure() {
         pickupFailed();
         order.markShipped(NOW);
-        assertThatThrownBy(() -> service.resolvePickupFailureByRetry(ORDER_ID, ACTOR))
-                .isInstanceOf(AppException.class);
-        verifyNoInteractions(waybills);
+        org.mockito.Mockito.when(waybills.retryWaybill(ORDER_ID, ACTOR)).thenReturn(WaybillResult.failed("REJECTED:x"));
+        var res = service.resolvePickupFailureByRetry(ORDER_ID, ACTOR);
+        assertThat(res.outcome()).isEqualTo(PickupResolution.Outcome.WAYBILL_FAILED);
+        org.mockito.Mockito.verify(waybills).cancelWaybill(ORDER_ID, "pickup_delay", ACTOR);
+        assertThat(order.getStatus()).isEqualTo(com.tailtopia.shop.order.domain.ShopOrderStatus.SHIPPED);
     }
 
     @Test

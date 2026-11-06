@@ -115,6 +115,10 @@ public class Shipment {
     @Column(name = "insurance_cost", nullable = false)
     private long insuranceCost;
 
+    /** 快递原因重发生成的运单（V1.4.2 shop-admin 6.1 · G19）。 */
+    @Column(name = "is_reship", nullable = false)
+    private boolean reship;
+
     /** 快递原因重发后被新运单取代的时刻（FR-172.8）；非空即非活动运单。 */
     @Column(name = "superseded_at")
     private Instant supersededAt;
@@ -424,6 +428,19 @@ public class Shipment {
 
     public long getInsuranceAmount() {
         return insuranceAmount;
+    }
+
+    /** 下单响应回写实际保价费（V1.4.2 shop-admin 6.1）；负数按 0。 */
+    public void applyInsuranceCost(long cost) {
+        this.insuranceCost = Math.max(0L, cost);
+    }
+
+    public void markReship() {
+        this.reship = true;
+    }
+
+    public boolean isReship() {
+        return reship;
     }
 
     /** Biteship 实际收取的保价费（IDR）；未保价或未回写为 0。 */

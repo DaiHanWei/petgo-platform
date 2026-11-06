@@ -285,6 +285,18 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
                         snap.trackingId(), snap.price() == null ? 0L : snap.price(), p.ready().insuranceAmount(), now);
                 sh.applyProviderStatus(snap.status(), now, null);
                 sh.updateTrackingUrl(snap.link());
+                // V1.4.2 shop-admin 6.1 · G17 / G19：实际保价费（解析不到按 0、记 WARN）与重发标识
+                if (snap.insuranceFee() == null) {
+                    if (p.ready().insuranceAmount() > 0) {
+                        log.warn("Biteship 下单响应未带保价费，按 0 记 order={} biteshipOrderId={}", order.getDisplayNo(),
+                                snap.id());
+                    }
+                } else {
+                    sh.applyInsuranceCost(snap.insuranceFee());
+                }
+                if (mode == Mode.RESHIP) {
+                    sh.markReship();
+                }
                 shipments.save(sh);
                 checkBalance();
                 order.clearWaybillFailure();
@@ -324,7 +336,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
     private void precheck(ShopOrder order, Mode mode) {
         List<Shipment> active = shipments.findActiveByShopOrderId(order.getId());
         if (mode == Mode.CREATE) {
-            if (order.getStatus() != ShopOrderStatus.PENDING_SHIPMENT) {
+            if (!creatable(order)) {
                 throw AppException.conflict("该订单当前状态不可下运单：" + order.getStatus());
             }
             if (!active.isEmpty()) {
@@ -358,9 +370,19 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
     private boolean stillValid(ShopOrder order, Mode mode) {
         List<Shipment> active = shipments.findActiveByShopOrderId(order.getId());
         if (mode == Mode.CREATE) {
-            return order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT && active.isEmpty();
+            return creatable(order) && active.isEmpty();
         }
         return reshippable(order) && active.stream().anyMatch(Shipment::isBiteship);
+    }
+
+    /**
+     * CREATE 模式可下 / 重提运单的状态：待发货；或已发货且揽收失败（V1.4.2 shop-admin 6.1 · O-18：已发货的揽收失败也可重新提交，
+     * 订单状态不变；「无活动运单」由调用方 precheck 校验）。
+     */
+    private static boolean creatable(ShopOrder order) {
+        return order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT
+                || (order.getStatus() == ShopOrderStatus.SHIPPED
+                        && order.getLogisticsException() == LogisticsException.PICKUP_FAILED);
     }
 
     private static boolean reshippable(ShopOrder order) {

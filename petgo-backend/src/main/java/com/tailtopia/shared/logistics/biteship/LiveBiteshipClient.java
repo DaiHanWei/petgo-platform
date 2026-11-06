@@ -448,7 +448,17 @@ public class LiveBiteshipClient implements BiteshipClient {
                 text(courier, "type"),
                 p,
                 text(courier, "link"),
-                parseInstant(text(root, "updated_at")));
+                parseInstant(text(root, "updated_at")),
+                insuranceFee(courier));
+    }
+
+    /**
+     * V1.4.2 shop-admin 6.1 · AD-13 / G17：Biteship 实际保价费 {@code courier.insurance.fee}（字段待沙箱确认）。
+     * 缺失或非数字 → null（调用方按 0 落 {@code shipments.insurance_cost}，并记 WARN）。
+     */
+    static Long insuranceFee(JsonNode courier) {
+        JsonNode fee = courier.path("insurance").path("fee");
+        return fee.isNumber() ? fee.decimalValue().setScale(0, RoundingMode.CEILING).longValue() : null;
     }
 
     private static java.time.Instant parseInstant(String s) {

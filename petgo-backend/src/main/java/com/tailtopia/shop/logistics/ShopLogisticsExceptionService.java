@@ -94,8 +94,13 @@ public class ShopLogisticsExceptionService {
     /** 重下 Biteship 运单：取消旧运单（{@code pickup_delay}）→ {@code retryWaybill}；建成后清标记，失败标记保留。 */
     public PickupResolution resolvePickupFailureByRetry(long orderId, Long actorAccountId) {
         tx.executeWithoutResult(s -> {
-            ShopOrder order = requirePickupFailed(orderId, Set.of(ShopOrderStatus.PENDING_SHIPMENT));
+            // V1.4.2 shop-admin 6.1 · O-18：已发货的揽收失败也可重提（订单状态不变）
+            ShopOrder order = requirePickupFailed(orderId, Set.of(ShopOrderStatus.PENDING_SHIPMENT, ShopOrderStatus.SHIPPED));
             waybills.requireWaybillData(order);   // 复审 5：数据前提先于取消旧运单校验
+            // 6.1 复审：已有手工包裹时重提必被「已有运单」拒，须在取消旧运单之前拦下，免得白取消
+            if (shipments.findActiveByShopOrderId(orderId).stream().anyMatch(sh -> !sh.isBiteship())) {
+                throw AppException.conflict("该订单已有手工运单，请改用「手工填写运单」");
+            }
         });
         PickupResolution aborted = cancelOldWaybill(orderId, "pickup_delay", actorAccountId);
         if (aborted != null) {
@@ -110,7 +115,8 @@ public class ShopLogisticsExceptionService {
         String conflict = tx.execute(s -> {
             ShopOrder order = lockOrder(orderId);
             boolean still = order.getLogisticsException() == LogisticsException.PICKUP_FAILED
-                    && order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT
+                    && (order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT
+                            || order.getStatus() == ShopOrderStatus.SHIPPED)
                     && shipments.findActiveByShopOrderId(orderId).stream().anyMatch(Shipment::isBiteship);
             if (!still) {
                 return order.getDisplayNo();

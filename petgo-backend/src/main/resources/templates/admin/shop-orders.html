@@ -45,6 +45,14 @@
                                     th:text="#{'admin.v130.shopOrders.status.' + ${s}}">SHIPPED</option>
                         </select>
                     </label>
+                    <!--/* V1.4.2 shop-admin Story 6.1（H1）：异常标记筛选 */-->
+                    <label class="field"><span th:text="#{admin.v142.ful.flag.label}">异常标记</span>
+                        <select name="flag" class="sel">
+                            <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
+                            <option th:each="f : ${flags}" th:value="${f}" th:selected="${f == flag}"
+                                    th:text="#{'admin.v142.ful.flag.' + ${f}}">有异常标记</option>
+                        </select>
+                    </label>
                     <label class="field"><span th:text="#{admin.shop.orders.filter.from}">起始日期</span>
                         <input type="date" name="from" class="inp" th:value="${from}"/>
                     </label>

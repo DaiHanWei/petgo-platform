@@ -322,6 +322,33 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             @Param("status") ShopOrderStatus status, @Param("from") Instant from,
             @Param("to") Instant to, Pageable pageable);
 
+    /** V1.4.2 shop-admin Story 6.1（H1）：「异常标记」筛选条件（一律只看 LIVE 状态，与摘要同口径）；{@code :flag} = ANY / SHORTAGE / WAYBILL_FAILED / PICKUP_FAILED / RETURNED / LOST_DAMAGED / STALLED / CLAIM_PENDING。 */
+    String FLAG_WHERE = " o.status in (:live) and ((:flag = 'ANY' and (o.shortageFlaggedAt is not null"
+            + "     or o.waybillFailedAt is not null or o.logisticsException is not null or o.claimPending = true))"
+            + " or (:flag = 'SHORTAGE' and o.shortageFlaggedAt is not null)"
+            + " or (:flag = 'WAYBILL_FAILED' and o.waybillFailedAt is not null)"
+            + " or (:flag = 'PICKUP_FAILED' and o.logisticsException = :pickup)"
+            + " or (:flag = 'RETURNED' and o.logisticsException = :returned)"
+            + " or (:flag = 'LOST_DAMAGED' and o.logisticsException in (:lost, :damaged))"
+            + " or (:flag = 'STALLED' and o.logisticsException = :stalled)"
+            + " or (:flag = 'CLAIM_PENDING' and o.claimPending = true))";
+
+    @Query(value = "SELECT o FROM ShopOrder o WHERE (:status IS NULL OR o.status = :status)"
+            + " AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)"
+            + " AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to) AND" + FLAG_WHERE
+            + " ORDER BY o.createdAt DESC, o.id DESC",
+            countQuery = "SELECT count(o) FROM ShopOrder o WHERE (:status IS NULL OR o.status = :status)"
+            + " AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)"
+            + " AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to) AND" + FLAG_WHERE)
+    org.springframework.data.domain.Page<ShopOrder> searchPageFlagged(
+            @Param("status") ShopOrderStatus status, @Param("from") Instant from, @Param("to") Instant to,
+            @Param("flag") String flag, @Param("live") java.util.Collection<ShopOrderStatus> live,
+            @Param("pickup") com.tailtopia.shop.order.domain.LogisticsException pickup,
+            @Param("returned") com.tailtopia.shop.order.domain.LogisticsException returned,
+            @Param("lost") com.tailtopia.shop.order.domain.LogisticsException lost,
+            @Param("damaged") com.tailtopia.shop.order.domain.LogisticsException damaged,
+            @Param("stalled") com.tailtopia.shop.order.domain.LogisticsException stalled, Pageable pageable);
+
     /**
      * 🔒 <b>按归一化后的收件人电话后缀匹配</b>（Story 4.3，AB-11A，NFR-11）。
      *
