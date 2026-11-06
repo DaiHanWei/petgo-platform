@@ -79,6 +79,8 @@ public class AdminShopOrderController {
     private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
     /** V1.4.2 shop-admin Story 6.2：用户原因退回按行确认入库（库存只在这里加一次）。 */
     private final com.tailtopia.shop.order.refund.ShopOrderRefundService refundService;
+    /** V1.4.2 shop-admin Story 7.1：抽屉「退款与成长值」一节（F7，只读）。 */
+    private final com.tailtopia.admin.shop.service.AdminShopOrderAfterSalesService afterSales;
 
     public AdminShopOrderController(AdminShopOrderService adminOrders,
             ShopOrderFulfillmentService fulfillment, ShopOrderRepository orders,
@@ -87,8 +89,10 @@ public class AdminShopOrderController {
             com.tailtopia.shop.logistics.ShopLogisticsExceptionService logistics,
             com.tailtopia.shop.order.repository.ShipmentRepository shipmentRepo,
             com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts,
-            com.tailtopia.shop.order.refund.ShopOrderRefundService refundService) {
+            com.tailtopia.shop.order.refund.ShopOrderRefundService refundService,
+            com.tailtopia.admin.shop.service.AdminShopOrderAfterSalesService afterSales) {
         this.refundService = refundService;
+        this.afterSales = afterSales;
         this.waybills = waybills;
         this.logistics = logistics;
         this.shipmentRepo = shipmentRepo;
@@ -127,6 +131,10 @@ public class AdminShopOrderController {
             @RequestParam(value = "open", required = false) String open,
             @RequestParam(value = "flag", required = false) String flag,
             HxRequest hx, Model model) {
+        // V1.4.2 shop-admin 7.1：履约页只认履约异常标记（LATE_PAID 只在「订单」页），其余当作不筛选
+        if (flag != null && !AdminShopOrderService.FLAGS.contains(flag)) {
+            flag = null;
+        }
         boolean canPhoneSearch = has(admin, AdminPermissions.SHOP_ORDER_PHONE_SEARCH);
         ShopOrderStatus filter = parseStatus(status);
         List<ShopOrder> found;
@@ -156,6 +164,59 @@ public class AdminShopOrderController {
             hasNext = p.hasNext();
         }
 
+        fillListing(found, filter, orderToken, from, to, flag, AdminShopOrderService.FLAGS, current, hasNext, model);
+        model.addAttribute("summary", adminOrders.summary(startOf(from), endOf(to)));
+        // 🔒 回显的是「是否搜过」，不回显号码本身 —— 回显会把 PII 带进 URL、浏览器历史与访问日志
+        model.addAttribute("phoneSearched", phone != null && !phone.isBlank());
+        model.addAttribute("canPhoneSearch", canPhoneSearch);
+        model.addAttribute("canFulfill", has(admin, AdminPermissions.SHOP_ORDER_FULFILL));
+        model.addAttribute("open", open == null || open.isBlank() ? null : open.trim());
+        model.addAttribute("active", "shopOrders");
+        return hx.isHtmx() ? "admin/fragments/shop-orders-list :: rows(oob=true)" : "admin/shop-orders";
+    }
+
+    // ---------- V1.4.2 shop-admin Story 7.1 · AD-12：「订单」总表（F1）+ 抽屉（页面上下文 = list） ----------
+
+    /**
+     * 「订单」总表：沿用履约页 7 列与查询（{@link AdminShopOrderService#page}），摘要换成待支付 / 待发货 / 待收货 / 退款中 /
+     * 取消后到账待处理；「异常标记」筛选与履约页共用 {@link AdminShopOrderService#FLAGS}。不含按电话搜索（那是履约页的独立能力）。
+     */
+    @GetMapping("/admin/shop/order-list")
+    @PreAuthorize(VIEW_AUTH)
+    public String orderList(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String orderToken,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "open", required = false) String open,
+            @RequestParam(value = "flag", required = false) String flag,
+            HxRequest hx, Model model) {
+        ShopOrderStatus filter = parseStatus(status);
+        List<ShopOrder> found;
+        int current = Math.max(page, 0);
+        boolean hasNext = false;
+        if (orderToken != null && !orderToken.isBlank()) {
+            found = searchByAnyOrderNo(orderToken).map(List::of).orElse(List.of());
+            current = 0;
+        } else {
+            var p = adminOrders.page(filter, startOf(from), endOf(to), flag, current, QUEUE_PAGE_SIZE);
+            found = p.rows();
+            current = p.page();
+            hasNext = p.hasNext();
+        }
+        fillListing(found, filter, orderToken, from, to, flag, AdminShopOrderService.LIST_FLAGS, current, hasNext,
+                model);
+        model.addAttribute("summary", adminOrders.listSummary(startOf(from), endOf(to)));
+        model.addAttribute("drawerBase", LIST_BASE);
+        model.addAttribute("open", open == null || open.isBlank() ? null : open.trim());
+        model.addAttribute("active", "shopOrderList");
+        return hx.isHtmx() ? "admin/fragments/shop-order-list-rows :: rows(oob=true)" : "admin/shop-order-list";
+    }
+
+    /** 两页共用的列表模型（行、A8 异常标、异常标记徽标与筛选回显、分页）。 */
+    private void fillListing(List<ShopOrder> found, ShopOrderStatus filter, String orderToken, LocalDate from,
+            LocalDate to, String flag, List<String> flagOptions, int current, boolean hasNext, Model model) {
         List<AdminShopOrderRow> rows = found.stream().map(this::toRow).toList();
         model.addAttribute("rows", rows);
         // AC1：有异常挂起的行打「异常」标并链到 A8。
@@ -163,10 +224,9 @@ public class AdminShopOrderController {
         //    —— 那份是「最旧的 N 条」，而本列表是「最新 20 条」，待发货一多两边零交集，标就永远不出现。
         model.addAttribute("exceptionTokens",
                 exceptions.flagged(rows.stream().map(AdminShopOrderRow::orderToken).toList()));
-        model.addAttribute("summary", adminOrders.summary(startOf(from), endOf(to)));
-        // V1.4.2 shop-admin Story 6.1（H1）：异常标记筛选 + 行徽标
-        model.addAttribute("flags", AdminShopOrderService.FLAGS);
-        model.addAttribute("flag", flag == null || !AdminShopOrderService.FLAGS.contains(flag) ? "" : flag);
+        // V1.4.2 shop-admin Story 6.1（H1）/ 7.1（F1）：异常标记筛选 + 行徽标
+        model.addAttribute("flags", flagOptions);
+        model.addAttribute("flag", flag == null || !flagOptions.contains(flag) ? "" : flag);
         java.util.Map<String, List<String>> flagsByToken = new java.util.HashMap<>();
         found.forEach(o -> flagsByToken.put(o.getPublicToken(), AdminShopOrderService.flagsOf(o)));
         model.addAttribute("flagsByToken", flagsByToken);
@@ -177,14 +237,24 @@ public class AdminShopOrderController {
         model.addAttribute("to", to);
         model.addAttribute("page", current);
         model.addAttribute("hasNext", hasNext);
-        // 🔒 回显的是「是否搜过」，不回显号码本身 —— 回显会把 PII 带进 URL、浏览器历史与访问日志
-        model.addAttribute("phoneSearched", phone != null && !phone.isBlank());
-        model.addAttribute("canPhoneSearch", canPhoneSearch);
-        model.addAttribute("canFulfill", has(admin, AdminPermissions.SHOP_ORDER_FULFILL));
-        model.addAttribute("open", open == null || open.isBlank() ? null : open.trim());
-        model.addAttribute("active", "shopOrders");
-        return hx.isHtmx() ? "admin/fragments/shop-orders-list :: rows(oob=true)" : "admin/shop-orders";
     }
+
+    /** 「订单」页的抽屉：同一份 drawer-shop-order，吸底不出履约操作（AC2，履约页行为不变）。 */
+    @GetMapping("/admin/shop/order-list/{token}")
+    @PreAuthorize(VIEW_AUTH)
+    public String orderListDrawer(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            throw AppException.notFound("该页面已并入订单列表的详情抽屉").code("admin.err.common.pageRetired");
+        }
+        populateDrawer(admin, token, model);
+        model.addAttribute("ctx", CTX_LIST);
+        model.addAttribute("active", "shopOrderList");
+        return "admin/fragments/drawer-shop-order :: drawer";
+    }
+
+    static final String LIST_BASE = "/admin/shop/order-list";
+    static final String CTX_LIST = "list";
 
     /** 日期按 UTC 起止换算（全库时间戳一律 UTC，CLAUDE.md 命名映射链）。 */
     /**
@@ -268,6 +338,8 @@ public class AdminShopOrderController {
                 order.getReturnCause(), order.getReturnInboundAt() != null, order.isClaimPending()));
         model.addAttribute("acts", acts);
         model.addAttribute("activeBiteship", active.stream().filter(Shipment::isBiteship).findFirst().orElse(null));
+        // V1.4.2 shop-admin Story 7.1（F7）：退款与成长值（只读，两个页面上下文都显示）
+        model.addAttribute("afterSales", afterSales.of(order));
         model.addAttribute("shippedByName", order.getShippedByAdminId() == null ? null
                 : adminAccounts.findById(order.getShippedByAdminId()).map(a -> a.getDisplayName()).orElse(null));
         return order;

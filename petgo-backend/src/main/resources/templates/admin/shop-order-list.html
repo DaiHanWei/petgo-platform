@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--
+  F1「订单」总表（V1.4.2 shop-admin Story 7.1 · AD-12，模板 B · tpl-b-list）。
+  全部电商订单（含已取消、退款中）：沿用订单履约的 7 列与行点开抽屉；筛选加「异常标记」（与 H1 共用枚举，含取消后到账）；
+  摘要：待支付 / 待发货 / 待收货 / 退款中 / 取消后到账待处理。抽屉同一份 drawer-shop-order，页面上下文 ctx=list 时吸底不出履约操作。
+  🔒 列表不渲染 PII；按电话搜索只在订单履约页（独立权限 + 审计）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.nav.shopOrderList}">订单 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='shop-order'">
+        <div id="confirm-host"></div>
+        <div class="wb-title-row"><h1 th:text="#{admin.nav.shopOrderList}">订单</h1></div>
+        <p class="muted" th:text="#{admin.v142.ol.hint}">全部电商订单（含已取消、退款中）。</p>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::ol-filters}, ~{::ol-summary}, ~{::ol-table}, ~{::ol-drawer})}">
+            <div th:fragment="ol-filters">
+                <form class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/shop/order-list}"
+                      hx-target="#shop-order-list-rows" hx-swap="innerHTML" hx-push-url="true">
+                    <label class="field"><span th:text="#{admin.shop.orders.search.orderNo}">订单号 / 旧订单号 / 内部标识</span>
+                        <input type="text" name="orderToken" class="inp" th:value="${orderToken}" maxlength="32"/>
+                    </label>
+                    <label class="field"><span th:text="#{admin.shop.orders.col.status}">状态</span>
+                        <select name="status" class="sel">
+                            <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
+                            <option th:each="s : ${statuses}" th:value="${s}" th:selected="${s.name() == status}"
+                                    th:text="#{'admin.v130.shopOrders.status.' + ${s}}">SHIPPED</option>
+                        </select>
+                    </label>
+                    <label class="field"><span th:text="#{admin.v142.ful.flag.label}">异常标记</span>
+                        <select name="flag" class="sel">
+                            <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
+                            <option th:each="f : ${flags}" th:value="${f}" th:selected="${f == flag}"
+                                    th:text="#{'admin.v142.ful.flag.' + ${f}}">有异常标记</option>
+                        </select>
+                    </label>
+                    <label class="field"><span th:text="#{admin.shop.orders.filter.from}">起始日期</span>
+                        <input type="date" name="from" class="inp" th:value="${from}"/>
+                    </label>
+                    <label class="field"><span th:text="#{admin.shop.orders.filter.to}">截止日期</span>
+                        <input type="date" name="to" class="inp" th:value="${to}"/>
+                    </label>
+                    <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.filter}">筛选</button>
+                </form>
+            </div>
+
+            <div th:fragment="ol-summary" th:replace="~{admin/fragments/shop-order-list-rows :: sumbar(false)}"></div>
+
+            <div th:fragment="ol-table" id="shop-order-list-rows">
+                <div th:replace="~{admin/fragments/shop-order-list-rows :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="ol-drawer" class="drawer-title" th:text="#{admin.shop.order.detail.title}">订单详情</div>
+        </div>
+        <span hidden th:if="${open != null}" data-drawer-res="shop-order"
+              th:attr="data-drawer-deeplink=@{/admin/shop/order-list/{t}(t=${open})}"></span>
+    </div>
+</div>
+</body>
+</html>

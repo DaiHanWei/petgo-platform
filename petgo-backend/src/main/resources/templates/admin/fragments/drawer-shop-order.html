@@ -148,7 +148,8 @@
                          HX-Target: shop-order-drawer-body ⇒ 422 / 403 由 AdminBusinessExceptionAdvice
                          回填到**抽屉体**——这正是 tpl-b-list 给抽屉体加 id 的用意（9.2 复审 M2），
                          错误就落在运营正看着的那扇抽屉里，而不是被遮罩盖住的页面级错误槽。 -->
-                    <form th:if="${canFulfill and markable and !p.delivered}"
+                    <!--/* 7.1 · AC2：「订单」页上下文（ctx=list）不出履约操作 */-->
+                    <form th:if="${canFulfill and markable and !p.delivered and ctx != 'list'}"
                           th:attr="hx-post=@{/admin/shop/orders/{t}/packages/{id}/delivered(t=${order.publicToken},id=${p.id})}"
                           hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="inline">
                         <button class="btn btn-sm btn-neutral" type="submit"
@@ -161,6 +162,51 @@
             </tr>
             </tbody>
         </table>
+    </section>
+
+    <!--/* V1.4.2 shop-admin Story 7.1（F7 · AD-12）：退款与成长值。所有有退款的订单都显示；存量单空值显示「—」（AC4）。
+           🔒 只到账号后四位，不出全号与户名。待扣回为预计值（O-30：全部未完成现金段）。 */-->
+    <section class="card card-full so-card" th:if="${afterSales != null and afterSales.visible()}" data-after-sales>
+        <h2 th:text="#{admin.v142.ol.afterSales.title}">退款与成长值</h2>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.v142.ol.afterSales.col.time}">时间</th>
+                <th th:text="#{admin.v142.payout.col.source}">来源</th>
+                <th class="s-col-num" th:text="#{admin.v142.ol.afterSales.col.coin}">PawCoin 段</th>
+                <th class="s-col-num" th:text="#{admin.v142.ol.afterSales.col.cash}">现金段</th>
+                <th th:text="#{admin.v142.ol.afterSales.col.destStatus}">去向 / 状态</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="v : ${afterSales.refunds()}" th:attr="data-refund=${v.refundToken()}"
+                th:with="rp=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)},
+                         pending=${v.status() == 'AWAITING_DESTINATION'}">
+                <td class="nowrap" th:text="${v.createdAt() != null} ? ${@adminTime.wib(v.createdAt())} : '—'">-</td>
+                <td th:text="${v.scope() == 'COMPENSATION'} ? #{admin.v142.ol.afterSales.source.compensation}
+                             : #{'admin.v142.payout.source.' + ${v.reason()}}">整单取消</td>
+                <td class="s-col-num"
+                    th:text="${v.coinRefund() > 0} ? #{admin.v142.ol.afterSales.coinRefunded(${rp.rp(v.coinRefund())})} : '—'">—</td>
+                <td class="s-col-num" th:text="${v.cashRefund() > 0} ? ${rp.rp(v.cashRefund())} : '—'">—</td>
+                <td>
+                    <span th:if="${pending and v.scope() == 'COMPENSATION'}" th:text="#{admin.v142.ol.afterSales.afterChoice}">待用户选择后计算</span>
+                    <th:block th:unless="${pending and v.scope() == 'COMPENSATION'}">
+                        <span th:if="${v.cashDestination() == 'TO_BANK' and v.payoutChannel() != null}"
+                              th:text="${v.payoutChannel()} + (${v.payoutAccountLast4()} != null ? ' ****' + ${v.payoutAccountLast4()} : '') + ' · '">BCA · </span>
+                        <span th:text="#{'admin.v142.ol.afterSales.status.' + ${v.status()}}">待打款</span>
+                    </th:block>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        <dl class="kv" data-growth th:with="g=${afterSales.growth()}">
+            <dt th:text="#{admin.v142.ol.growth.accrued}">当初入账成长值</dt>
+            <dd th:text="${g.accrued()} ?: '—'">146</dd>
+            <dt th:text="#{admin.v142.ol.growth.reversed}">已扣回</dt>
+            <dd th:text="${g.accrued() == null} ? '—' : ${g.reversed()}">50</dd>
+            <dt th:text="#{admin.v142.ol.growth.pending}">待扣回</dt>
+            <dd th:text="${g.accrued() == null} ? '—' : #{admin.v142.ol.growth.pendingValue(${g.pending()})}">96（预计）</dd>
+        </dl>
     </section>
 
     <!--/* V1.4.2 shop-admin Story 6.1（H4 / H13）：发货来源、时间、操作人（只在后台可见）。 */-->
@@ -176,7 +222,12 @@
     </section>
 
     <!-- ⑤ 底部固定操作条（V1.4.2 shop-admin Story 6.1：按 DrawerActionsResolver 切换） -->
-    <section class="sticky-footer so-actions" th:with="a=${acts}">
+    <!--/* V1.4.2 shop-admin Story 7.1 · AD-12：「订单」页上下文（ctx=list）吸底不出履约操作，只给去履约页的入口（AC2）。 */-->
+    <section class="sticky-footer so-actions" th:if="${ctx == 'list'}" data-ctx-list>
+        <a class="btn btn-neutral" th:href="@{/admin/shop/orders(open=${order.publicToken})}"
+           th:text="#{admin.v142.ol.toFulfillment}">在订单履约中处理</a>
+    </section>
+    <section class="sticky-footer so-actions" th:if="${ctx != 'list'}" th:with="a=${acts}">
         <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill')">
             <!-- H5 运单失败 / H6 揽收失败横幅；结果未知须先核实（AC6） -->
             <p class="banner err" th:if="${a.waybillFailed()}" data-waybill-failed

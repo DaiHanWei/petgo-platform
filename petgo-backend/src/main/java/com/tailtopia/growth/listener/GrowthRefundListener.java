@@ -84,8 +84,8 @@ public class GrowthRefundListener {
         };
     }
 
-    /** {@code round(delta × refund / original)}，HALF_UP。 */
-    static int proportional(int delta, long refundAmount, long originalAmount) {
+    /** {@code round(delta × refund / original)}，HALF_UP，上限原值。V1.4.2 shop-admin 7.1：后台「预计待扣回」复用同一规则（公开）。 */
+    public static int proportional(int delta, long refundAmount, long originalAmount) {
         return BigDecimal.valueOf(delta)
                 .multiply(BigDecimal.valueOf(refundAmount))
                 .divide(BigDecimal.valueOf(originalAmount), 0, RoundingMode.HALF_UP)

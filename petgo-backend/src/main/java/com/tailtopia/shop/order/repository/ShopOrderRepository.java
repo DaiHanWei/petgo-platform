@@ -322,8 +322,13 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             @Param("status") ShopOrderStatus status, @Param("from") Instant from,
             @Param("to") Instant to, Pageable pageable);
 
-    /** V1.4.2 shop-admin Story 6.1（H1）：「异常标记」筛选条件（一律只看 LIVE 状态，与摘要同口径）；{@code :flag} = ANY / SHORTAGE / WAYBILL_FAILED / PICKUP_FAILED / RETURNED / LOST_DAMAGED / STALLED / CLAIM_PENDING。 */
-    String FLAG_WHERE = " o.status in (:live) and ((:flag = 'ANY' and (o.shortageFlaggedAt is not null"
+    /**
+     * V1.4.2 shop-admin Story 6.1（H1）：「异常标记」筛选条件。履约异常（ANY / SHORTAGE / WAYBILL_FAILED / PICKUP_FAILED /
+     * RETURNED / LOST_DAMAGED / STALLED / CLAIM_PENDING）只看 LIVE 状态，与履约页摘要同口径；ANY = 有履约异常标记，不含 LATE_PAID。
+     * 7.1 · AD-11 / AD-12：LATE_PAID（取消后到账 = {@code late_paid_amount IS NOT NULL}，含已处理；只在「订单」页可选）不受 LIVE 限制 —— 这类单本就是已取消。
+     */
+    String FLAG_WHERE = " ((:flag = 'LATE_PAID' and o.latePaidAmount is not null)"
+            + " or (o.status in (:live) and ((:flag = 'ANY' and (o.shortageFlaggedAt is not null"
             + "     or o.waybillFailedAt is not null or o.logisticsException is not null or o.claimPending = true))"
             + " or (:flag = 'SHORTAGE' and o.shortageFlaggedAt is not null)"
             + " or (:flag = 'WAYBILL_FAILED' and o.waybillFailedAt is not null)"
@@ -331,7 +336,7 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             + " or (:flag = 'RETURNED' and o.logisticsException = :returned)"
             + " or (:flag = 'LOST_DAMAGED' and o.logisticsException in (:lost, :damaged))"
             + " or (:flag = 'STALLED' and o.logisticsException = :stalled)"
-            + " or (:flag = 'CLAIM_PENDING' and o.claimPending = true))";
+            + " or (:flag = 'CLAIM_PENDING' and o.claimPending = true))))";
 
     @Query(value = "SELECT o FROM ShopOrder o WHERE (:status IS NULL OR o.status = :status)"
             + " AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)"

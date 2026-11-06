@@ -488,4 +488,40 @@ class AdminShopOrderEndpointIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         assertThat(html).contains(order.getPublicToken());
     }
+
+    // ---------- V1.4.2 shop-admin Story 7.1：「订单」总表（F1）+ 抽屉上下文（AC2） ----------
+
+    @Test
+    @DisplayName("7.1 订单总表：7 列 + 五格摘要，列表不含 PII，行抽屉地址指向 /admin/shop/order-list")
+    void orderListPageRendersFiveSummaryCells() throws Exception {
+        ShopOrder order = paidOrder(seedUser());
+        String html = mvc.perform(get("/admin/shop/order-list")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).contains("id=\"shop-order-list-summary\"").contains("/admin/shop/order-list/" + order.getPublicToken());
+        assertThat(html.split("class=\"sum-item").length - 1).isEqualTo(5);
+        assertThat(html).doesNotContain(RECEIVER).doesNotContain(ADDRESS_LINE);
+    }
+
+    @Test
+    @DisplayName("7.1 AC2：订单页抽屉不出履约操作；履约页同一抽屉照旧出发货表单")
+    void orderListDrawerHasNoFulfillmentActions() throws Exception {
+        ShopOrder order = paidOrder(seedUser());
+        String listDrawer = mvc.perform(get("/admin/shop/order-list/{t}", order.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_FULFILL))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(listDrawer).contains("data-ctx-list").doesNotContain("/flag-shortage");
+        String fulfilDrawer = mvc.perform(get("/admin/shop/orders/{t}", order.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_FULFILL))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(fulfilDrawer).doesNotContain("data-ctx-list").contains("/flag-shortage");
+        mvc.perform(get("/admin/shop/order-list/{t}", order.getPublicToken())
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(status().isNotFound());
+    }
 }

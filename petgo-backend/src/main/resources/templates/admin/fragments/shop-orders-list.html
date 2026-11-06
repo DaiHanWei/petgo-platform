@@ -68,7 +68,8 @@
 <table th:remove="tag"><tbody th:remove="tag">
     <tr th:fragment="row(r, oob, flagged)" th:id="'shop-order-row-' + ${r.orderToken}"
         th:hx-swap-oob="${oob} ? 'true' : null"
-        th:data-id="${r.orderToken}" th:data-drawer-url="@{/admin/shop/orders/{t}(t=${r.orderToken})}"
+        th:data-id="${r.orderToken}"
+        th:data-drawer-url="${drawerBase != null} ? @{${drawerBase + '/' + r.orderToken}} : @{/admin/shop/orders/{t}(t=${r.orderToken})}"
         tabindex="0">
         <td class="nowrap">
             <span th:text="${r.orderToken}">abc</span>
