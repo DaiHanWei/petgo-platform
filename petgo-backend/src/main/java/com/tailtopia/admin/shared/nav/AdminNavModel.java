@@ -16,7 +16,12 @@ import java.util.Set;
 public final class AdminNavModel {
 
     /** 一个可见的导航组及其可见项。 */
-    public record NavGroup(AdminPageCatalog.Group group, List<AdminPageCatalog.Page> pages) {
+    public record NavGroup(AdminPageCatalog.Group group, List<AdminPageCatalog.Page> pages,
+            List<AdminPageCatalog.Page> shopTodos) {
+
+        public NavGroup(AdminPageCatalog.Group group, List<AdminPageCatalog.Page> pages) {
+            this(group, pages, List.of());
+        }
 
         /** 是否含当前页（组自动 open）；商城组沿用 active 以 shop 开头的约定。 */
         public boolean contains(String active) {
@@ -53,16 +58,28 @@ public final class AdminNavModel {
         return page.navCodes().stream().anyMatch(authorities::contains);
     }
 
+    /**
+     * V1.4.2 shop-admin Story 5.3 · AD-2：待办中心组末尾「商城待办」的跳转项（不是新 Catalog 页，指向商城组既有页面），
+     * 无页面权限不渲染。
+     */
+    public static final List<String> SHOP_TODO_KEYS = List.of("shop-order-exceptions", "shop-refund-payouts");
+
     /** 按目录顺序算出可见组 → 可见项。 */
     public static List<NavGroup> build(Set<String> authorities) {
         List<NavGroup> out = new ArrayList<>();
+        List<AdminPageCatalog.Page> shopTodos = SHOP_TODO_KEYS.stream()
+                .map(k -> AdminPageCatalog.PAGES.stream().filter(p -> p.key().equals(k)).findFirst().orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .filter(p -> visible(p, authorities))
+                .toList();
         for (var e : AdminPageCatalog.byGroup().entrySet()) {
             List<AdminPageCatalog.Page> visiblePages = e.getValue().stream()
                     .filter(AdminPageCatalog.Page::inNav)
                     .filter(p -> visible(p, authorities))
                     .toList();
-            if (!visiblePages.isEmpty()) {
-                out.add(new NavGroup(e.getKey(), visiblePages));
+            boolean inbox = AdminPageCatalog.G_INBOX.equals(e.getKey().key());
+            if (!visiblePages.isEmpty() || (inbox && !shopTodos.isEmpty())) {
+                out.add(new NavGroup(e.getKey(), visiblePages, inbox ? shopTodos : List.of()));
             }
         }
         return out;

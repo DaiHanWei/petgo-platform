@@ -146,6 +146,20 @@ public class AdminShopRefundPayoutService {
         return new Summary(awaiting, overdue, pending, failed);
     }
 
+    /**
+     * V1.4.2 shop-admin Story 5.3：待办中心「退款打款」角标 = 待打款 + 打款失败 + 待用户选择中超 7 天未选（AD-2）；
+     * 注销用户的单不计（O-17 / O-26）。
+     */
+    @Transactional(readOnly = true)
+    public long badgeCount() {
+        String from = "SELECT count(*) FROM shop_order_refunds r JOIN shop_orders o ON o.id = r.order_id WHERE ";
+        long pending = jdbc.queryForObject(from + whereOf(Tab.PENDING), Long.class);
+        long failed = jdbc.queryForObject(from + whereOf(Tab.FAILED), Long.class);
+        long overdue = jdbc.queryForObject(from + whereOf(Tab.AWAITING) + " AND r.created_at < ?", Long.class,
+                Timestamp.from(clock.instant().minus(OVERDUE)));
+        return pending + failed + overdue;
+    }
+
     /** 抽屉：发起人后台显示名（账号已删 → null）。 */
     @Transactional(readOnly = true)
     public String adminName(Long adminId) {

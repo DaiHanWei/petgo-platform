@@ -37,6 +37,14 @@
                     <span th:text="#{${p.navKey}}">页面</span>
                     <span th:if="${g.isInbox()}" class="badge nav-badge is-empty" th:id="'nav-badge-' + ${p.key}"></span>
                 </a>
+                <!--/* V1.4.2 shop-admin Story 5.3（D0）：待办中心末尾「商城待办」两项，跳商城组页面；计数随 /admin/nav/badges oob 填入。 */-->
+                <th:block th:if="${g.isInbox() and !#lists.isEmpty(g.shopTodos)}">
+                    <div class="nav-subhead" data-nav-shop-todos th:text="#{admin.v142.nav.shopTasks}">商城待办</div>
+                    <a th:each="p : ${g.shopTodos}" th:href="@{${p.route}}" class="nav-jump">
+                        <span th:text="#{${p.navKey}} + ' ↗'">异常订单 ↗</span>
+                        <span class="badge nav-badge is-empty" th:id="'nav-badge-' + ${p.key}"></span>
+                    </a>
+                </th:block>
             </div>
         </details>
     </th:block>

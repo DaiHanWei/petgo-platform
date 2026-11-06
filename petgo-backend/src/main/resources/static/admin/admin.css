@@ -1624,3 +1624,5 @@ tr.is-dragging { opacity: .5; }
 .ship-biteship-form { margin-top: 12px; }
 /* V1.4.2 shop-admin Story 4.2（G6）：规格表「未填」标红 */
 td.is-missing { color: var(--danger); }
+/* V1.4.2 shop-admin Story 5.3（D0）：待办中心组末尾「商城待办」小标题 */
+.nav-sub .nav-subhead { font-size: 11px; color: var(--muted); padding: 10px 12px 2px; letter-spacing: .02em; }

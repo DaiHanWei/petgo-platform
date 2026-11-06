@@ -341,6 +341,18 @@ public class AdminShopOrderExceptionService {
                 .filter(this::inQueue).toList();   // 库内条件与 ExceptionSource 一致，这里只是兜底
     }
 
+    /** V1.4.2 shop-admin Story 5.3：待办中心「异常订单」角标 = 队列「待处理」条数（注销用户不计，O-26）。 */
+    @Transactional(readOnly = true)
+    public long queueCount() {
+        return orders.countExceptionQueue(ShopOrderStatus.PENDING_SHIPMENT, ShopOrderStatus.SHIPPED,
+                ShopOrderStatus.DELIVERED, ShopOrderStatus.COMPLETED,
+                com.tailtopia.shop.order.domain.LogisticsException.PICKUP_FAILED,
+                com.tailtopia.shop.order.domain.LogisticsException.RETURNED,
+                com.tailtopia.shop.order.domain.LogisticsException.LOST,
+                com.tailtopia.shop.order.domain.LogisticsException.DAMAGED,
+                com.tailtopia.shop.order.refund.RefundScope.COMPENSATION);
+    }
+
     /**
      * 这一批订单里哪些还挂着异常（V1.3.0 Story 10.2 AC1：B15 列表的「异常」标）。
      *

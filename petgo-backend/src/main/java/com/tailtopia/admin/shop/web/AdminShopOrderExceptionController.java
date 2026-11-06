@@ -311,7 +311,7 @@ public class AdminShopOrderExceptionController {
         // 单页签（见 list() 的注释）：仍走公共页签行，计数与队列同源 —— 页签条本身就是「这里有多少条」的位置
         model.addAttribute("stateTabs", List.of(new StateTab("/admin/shop/order-exceptions",
                 "admin.v130.shopExceptions.tab.pending", "shop-exception-tab-count-pending",
-                candidates.size(), true)));
+                exceptions.queueCount(), true)));   // V1.4.2 shop-admin 5.3：与侧栏角标同源（不受 100 条上限影响）
     }
 
     /** 右栏三区取数：异常原因说明卡 / 订单行表 / 操作区。 */
