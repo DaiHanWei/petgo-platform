@@ -36,6 +36,8 @@ import '../../features/shop/presentation/shop_return_unavailable_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page_v3.dart';
 import '../../features/shop/presentation/shop_pay_success_page.dart';
 import '../../features/shop/presentation/toko_page_v3.dart';
+import '../../features/shop/domain/shop_return.dart' show PayoutChannel;
+import '../../features/shop/refund/refund_destination_page.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/widgets/placeholder_scaffold.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -743,6 +745,21 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/shop/orders/:token/paid',
         builder: (c, s) => ShopPaySuccessPage(orderToken: s.pathParameters['token']!),
+      ),
+      // 取消退款单选择退款方式（v1.4.2 shop Story 9.2 · F14 / F15 / F23）。入口只在订单详情
+      // （「Pilih cara pengembalian dana」/ F25「Isi ulang rekening」）。F25 用 query `?retry=1&channel=BCA`
+      // 预选上次渠道（不用 `extra`：冷启动深链下 extra 为 null）。⚠️ 与下方两条退货路由无关，那两条仍落说明页。
+      GoRoute(
+        path: '/shop/orders/:token/refunds/:refundToken',
+        builder: (c, s) {
+          final q = s.uri.queryParameters;
+          return RefundDestinationPage(
+            orderToken: s.pathParameters['token']!,
+            refundToken: s.pathParameters['refundToken']!,
+            presetChannel: PayoutChannel.fromApi(q['channel']),
+            isRetry: q['retry'] == '1',
+          );
+        },
       ),
       // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
       // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。

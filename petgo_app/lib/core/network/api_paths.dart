@@ -545,6 +545,11 @@ class ApiPaths {
   /// 列表本身是 [meShopOrders] 的 GET（`?group=&cursor=`）。字面路径，后端优先于 `/{token}`。
   static const String meShopOrderCounts = '$meShopOrders/counts';
 
+  /// v1.4.2 shop Story 4.1 / App 9.2：取消退款单选择现金段去向（`RefundDestinationRequest`）。
+  /// 409 `refund-destination-locked`（已不可选）· 422 `refund-below-payout-fee` / 校验 · 404。
+  static String meShopOrderRefundDestination(String orderToken, String refundToken) =>
+      '$meShopOrders/$orderToken/refunds/$refundToken/destination';
+
   /// 退货申请页数据（Story 5.7）。🔴 不可退的行照样下发（带置灰原因），不由前端过滤。
   static String meReturnEligibility(String orderToken) =>
       '$meShopOrders/$orderToken/return-eligibility';

@@ -1,6 +1,6 @@
 # Story 9.2: 选择退款方式与线下打款（App，F13–F16、F19、F23、F25）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.4.2 · 主题 shop · 分支 `feat/1.4.2-shop`（从 `dev_1.4.2` 切出，全线 25 story 同一分支、串行）
 > 口径优先级：`决策日志-shop.md`（S-0 ~ S-9，尤其 S-6 / S-8 / S-9）> PRD `电商/1-4-2电商prd.md`（FR-134 ③④⑤「去向由用户选择 / 线下打款的进度 / 退为 PawCoin 的补偿 / 打款失败」、§3.0 状态表「退款中 / 已退款」行、§6 F13 ~ F25）> `architecture-v1.4.2-shop-delta.md`（D-14、D-15、D-19、P-1、P-4、P-10）> UI 稿 `电商/ui-1-4-2-shop-integrated-v1.html` F13 ~ F16、F19、F23、F25 屏下说明。跨 story 契约以 `CROSS-STORY-DECISIONS.md` 为准；`cloud-rules-shop.md` 优先于通用步骤。
@@ -20,6 +20,14 @@ I want 自己选退成 PawCoin 还是打到银行卡,
 so that 按我方便的方式拿回钱。
 
 ## 接口契约（来自 4.1 / 6.2，实现前核对后端实际 JSON；有出入以已提交代码为准并改本文件）
+
+> **T0 核对结果（2026-11-06，以已提交后端 `ShopOrderRefundView` / `RefundDestinationRequest` / `MeCheckoutController` 为准，下文旧名作废）**：
+> - 退款单实际字段：`refundToken, scope, reason, status, totalRefund, coinRefund, cashRefund, compensationAmount, payoutFee, payoutChannel, payoutAccountLast4, canChooseDestination, payoutFailed, paidOutAt, createdAt, cashDestination, destinationChosenAt, compensate, compensationIfPawcoin`。
+>   末 4 位字段名是 **`payoutAccountLast4`**（不是 `accountLast4`）；**没有** `payoutOptions` / `totalIfPawcoin` / `netAmount` → 走 AC3.4 无服务端字段的处置。
+> - `status` 只有四值 `AWAITING_DESTINATION | PAYOUT_PENDING | PAYOUT_FAILED | COMPLETED`（后端无 `COIN_REFUNDED`；现金段 = 0 直接 `COMPLETED`，App 视同 COIN_REFUNDED 不改状态头）。
+> - 请求体 `{destination, channel, account, accountHolderName}`，后端**已接收** `accountHolderName`（「待确认」2 已闭合）。响应 = 该退款单 `ShopOrderRefundView`（App 一律 invalidate 详情重取）。
+> - 错误：409 `refund-destination-locked`；422 有两类——`refund-below-payout-fee`（现金段 ≤ 渠道费）与通用 `validation`（渠道 / 账号 / 户名空、过长）；404。
+> - 9.1 状态头纯函数实名 `resolveShopOrderHeader`（`shop_order_header.dart`），不是 `resolveHeader`。
 
 - 订单详情 `GET /me/shop-orders/{token}` 的 `refunds[]`（D-19）。**6.2 story AC3.2 已定**：`{refundToken, scope, reason, status, totalRefund, coinRefund, cashRefund, compensationAmount, cashDestination, payoutChannel, canChooseDestination, payoutFailed}`，按创建时间升序，「收款账户不下发（只下发渠道）」。**本 story 另需**（6.2 未列，见「待确认」1）：`compensationIfPawcoin`、`accountLast4`、`payoutFee`、`paidOutAt`，最好还有 `payoutOptions` / `totalIfPawcoin`。完整期望字段：
   `refundToken`、`scope`（`WHOLE | LINE | COMPENSATION`）、`reason`（D-14 九值）、`status`（`COIN_REFUNDED | AWAITING_DESTINATION | PAYOUT_PENDING | PAYOUT_FAILED | COMPLETED`）、`totalRefund`、`coinRefund`、`cashRefund`、`compensate`（bool，= `reason.compensate`）、`compensationIfPawcoin`（现金段选 PawCoin 时的补偿预估，服务端按 `compensation_premium_rate` / `_cap` 算）、`compensationAmount`（已发放补偿，COMPLETED 后）、`cashDestination`（`TO_PAWCOIN | TO_BANK`，未选 null）、`payoutChannel`（`BCA | OVO | GOPAY`）、`accountLast4`（账号末 4 位，**不下发完整账号**）、`payoutFee`、`paidOutAt`、`destinationChosenAt`、`canChooseDestination`（AWAITING_DESTINATION 或 PAYOUT_FAILED）、`payoutFailed`（= PAYOUT_FAILED）。可选：`payoutOptions[{channel, fee, netAmount}]`（见 AC3.4）。
@@ -101,14 +109,14 @@ EN / ID 两份 arb 同加；新 key 前缀 `shopRefund*`。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：对照 4.1 / 4.2 / 6.2 / 9.1 **已提交代码**核对 `refunds[]` 字段名（尤其 `compensationIfPawcoin`、`accountLast4`、`payoutOptions`、`totalIfPawcoin`）、destination 请求体（是否收 `accountHolderName`）、9.1 的 `resolveHeader` 与底栏结构；有出入先改本文件（Completion Notes 记）
-- [ ] **T1 数据层**：`ShopOrderRefundSummary` 扩全量字段（缺键容错）+ `ShopRefundStatus` / `RefundScope` 枚举；`ShopOrderRepository.chooseRefundDestination(orderToken, refundToken, {destination, channel, account, holder})`；`api_paths.dart` 加 `meShopOrderRefundDestination(orderToken, refundToken)`；复用 `CashDestination` / `PayoutChannel`（`shop_return.dart`）
-- [ ] **T2 抽组件**：`features/shop/refund/payout_account_form.dart`；`RefundMethodPageV2` 改用（行为不变）
-- [ ] **T3 退款方式页**：`features/shop/refund/refund_destination_page.dart` + 路由 `/shop/orders/:token/refunds/:refundToken`
-- [ ] **T4 订单详情退款分支**：`resolveHeader` 前置退款分支（F13 / F16 / F19 / F25）、F13 / F17 底栏按钮、F25 状态头内按钮、F13 米黄底色
-- [ ] **T5 文案**（AC5）+ `flutter gen-l10n`
-- [ ] **T6 测试**（见 Dev Notes「测试」）
-- [ ] **T7** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
+- [x] **T0 开工核对**：对照 4.1 / 4.2 / 6.2 / 9.1 **已提交代码**核对 `refunds[]` 字段名（尤其 `compensationIfPawcoin`、`accountLast4`、`payoutOptions`、`totalIfPawcoin`）、destination 请求体（是否收 `accountHolderName`）、9.1 的 `resolveHeader` 与底栏结构；有出入先改本文件（Completion Notes 记）
+- [x] **T1 数据层**：`ShopOrderRefundSummary` 扩全量字段（缺键容错）+ `ShopRefundStatus` / `RefundScope` 枚举；`ShopOrderRepository.chooseRefundDestination(orderToken, refundToken, {destination, channel, account, holder})`；`api_paths.dart` 加 `meShopOrderRefundDestination(orderToken, refundToken)`；复用 `CashDestination` / `PayoutChannel`（`shop_return.dart`）
+- [x] **T2 抽组件**：`features/shop/refund/payout_account_form.dart`；`RefundMethodPageV2` 改用（行为不变）
+- [x] **T3 退款方式页**：`features/shop/refund/refund_destination_page.dart` + 路由 `/shop/orders/:token/refunds/:refundToken`
+- [x] **T4 订单详情退款分支**：`resolveHeader` 前置退款分支（F13 / F16 / F19 / F25）、F13 / F17 底栏按钮、F25 状态头内按钮、F13 米黄底色
+- [x] **T5 文案**（AC5）+ `flutter gen-l10n`
+- [x] **T6 测试**（见 Dev Notes「测试」）
+- [x] **T7** `flutter analyze` + 全量 `flutter test`；Completion Notes 标「**L1/L2 待本地验收**」
 
 ## Dev Notes
 
@@ -183,14 +191,72 @@ EN / ID 两份 arb 同加；新 key 前缀 `shopRefund*`。
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless，bmad-dev-story 流程，只到 L0。
+
 ### Debug Log References
+
+- 改动前 `flutter gen-l10n` + `flutter analyze` 基线 No issues found。
+- 首轮全量 `flutter test` 1 红：`test/shop/epic1_analytics_test.dart`「NFR-5 埋点禁带 PII」白名单按设计变红（新增属性键），逐个确认后更新白名单（见 Completion Notes）。
+- 退款方式页初版用 `ListView`（惰性），合计卡在屏外未构建致 2 例找不到 → 改 `SingleChildScrollView`（与 9.1 详情页同理）。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC1 ~ AC4 的真后端联调（10.1：F13 → F14 → F16 → 标记已打款 → F19；打款失败 → F25 → 重填 / 改 PawCoin；成长值扣回）、AC6.3 还原度 ≥ 95 与 F13 米黄底 / 卡片视觉（L2 模拟器）。本 story 无后端改动、无 L1 测试类。
+- **名字对齐（T0）**：story 正文的 `accountLast4` → 实际 `payoutAccountLast4`；`resolveHeader` → `resolveShopOrderHeader`；`payoutOptions` / `totalIfPawcoin` / `netAmount` 后端未下发；`COIN_REFUNDED` 后端不存在；`accountHolderName` 后端已收（待确认 2 闭合）。已在「接口契约」节顶部写明。
+- **钱的口径（P-1）**：
+  - 补偿只取服务端 `compensationIfPawcoin`（F14 选项右侧「+ bonus」）/ `compensationAmount`（F19 PawCoin 变体单独一行「+ bonus Rp X」），**与现金段并列、从不相加**；因无 `totalIfPawcoin`，合计行恒用 `refundMethodGrandTotalPlain` + `cashRefund`（不用「termasuk tambahan」，否则标签与金额不符）。
+  - 银行到账额无服务端净额字段 → 采用 **AC3.4 先例**（`PayoutChannel.fee` 注释「费率只用于展示，净额由后端权威计算」）：F15 用 `PayoutChannel.fee` 显示「Biaya」与「Total dikembalikan = cashRefund − fee」；F19 用服务端写入的 `payoutFee`：`cashRefund − payoutFee`。全 App 唯一相减点 `payoutNetForDisplay`（`shop_order_header.dart`），口径与后端 `ShopRefundCalculator.payoutNet` 一致；提交不传任何金额。
+- **拍板点复述**：新页放 `features/shop/refund/`；数据源 = 订单详情 `refunds[]`（不加 GET）；去向不预选（F25 预选银行 + 上次渠道，账号清空）；打款失败只在详情提示、不推送；多张退款单只展示优先级最高一张（同级取 `createdAt` 最新）。
+- **范围细化（保守实现）**：F13 米黄底 + 底栏入口对 WHOLE / COMPENSATION；LINE（F17）保持部分取消样式、只给底栏入口。F16 / F19 对 WHOLE 换标题 + 副句；对 LINE / COMPENSATION（订单仍有效、状态不因退款而变）**只换副句、保留原状态标题**，避免把「待发货 / 已签收」盖成「已退款」。F25 任何范围都换标题 + 副句 + 状态头按钮。F20 原单只给入口、不换标题。签收后赔付待选时底栏：主「Pilih cara pengembalian dana」+ 次「确认收货」。
+- **补偿说明块与「+ bonus」**：条件 `compensate && compensationIfPawcoin > 0`（story 写 `compensate=true`；加上「预估 > 0」是 D-11「没有的补偿不许承诺」同口径）。
+- **错误处置**：409 → toast `refundMethodFailed` + invalidate + pop；422 `refund-below-payout-fee` → 新 toast `shopRefundBelowPayoutFee`（草拟文案，见待确认）；其余 422 → 账号框下 `refundAccountNumberInvalid`；其余 → toast 留页可重试。提交中转圈不可重复点；返回键可用、不取消请求（刷新用预先取得的 `ProviderContainer`，页面已 pop 仍会 invalidate 详情 / 列表 / counts / PawCoin）。
+- **埋点**：沿用 `toko_refund_method_viewed`（首帧拿到退款单时报一次）/ `toko_refund_method_submitted`，属性 `reason`、`is_retry`、`destination`、`channel`（bank 时，小写）；不含账号 / 末 4 位 / 户名。`epic1_analytics_test` PII 白名单新增这四个键并逐个注明理由（按设计变红后更新断言，未放宽规则）。
+- **抽组件**：`PayoutAccountForm` + `PayoutAccountFormController`（`ChangeNotifier`，持两个 `TextEditingController` 与错误 map，`validateAll` / `channel` / `account` / `holder` / `setError`）；`RefundMethodPageV2` 改用它，ValueKey 不变，`return_flow_page_v2_test.dart` 36 例全绿。
+- **共享组件**：`ShopCard` 只加可选 `color`（默认白，其他调用点外观不变）；`ShopRadioTile` / `ShopChip` 未改，新页单选项写私有 `_Option`。
+- **路由**：新增 `/shop/orders/:token/refunds/:refundToken`（`?retry=1&channel=BCA`，不用 `extra` 以兼容冷启动深链）；两条退货路由仍落 `ShopReturnUnavailablePage`（补源码路由断言）。
+- **L0 结果**：`flutter analyze` No issues found；全量 `flutter test` 4848 通过 / 3 跳过（既有 skip）/ 0 失败；`check-flyway-versions.sh origin/main` OK。
+
+#### 复审修复（2026-11-06）
+
+1. **PII 日志（中）**：`core/network/api_log_interceptor.dart` 的 `_sensitiveKeys` 补 `account`、`accountholdername`、`payoutaccount`（小写匹配，Map 递归），debug 日志不再打印收款账号与户名（同时覆盖退货线 / 虚拟单退款既有的 `payoutAccount`）；`payoutAccountLast4` 不受影响。新增 `test/app/api_log_interceptor_payout_test.dart`（2 例）。
+2. **低于渠道费（低）**：选银行且 `cashRefund ≤ 渠道 fee`（与后端 `payoutNet` 同判据）→ 合计显示「—」（不出现负数）、提前显示 `shopRefundBelowPayoutFee`、Kirim 禁用（必然 422 的请求不发）；切回 BCA 恢复。服务端 422 处置保留兜底。补 1 例。
+3. **字节上限（低）**：户名、账号输入框加 UTF-8 字节上限 150（`kPayoutFieldMaxBytes`，与后端 `ShopOrderRefundService.PAYOUT_FIELD_MAX_BYTES = 150` 一致，超限输入拒收）；账号另受 10–13 位数字校验，实际远低于上限。`RefundMethodPageV2` 同受益（同一表单），其测试仍全绿。422 validation 仍挂账号框（AC4.3）。补 1 例。
+- 复审后 L0：`flutter analyze` No issues found；全量 `flutter test` 4852 通过 / 3 跳过 / 0 失败；pubspec.lock 无改动。
+
 #### 待确认
 
+1. **银行到账额**：后端 `ShopOrderRefundView` 无净额字段，App 按 AC3.4 先例相减展示（F15 用渠道费表、F19 用服务端 `payoutFee`）。建议后端补 `payoutNetAmount`（只加字段），App 改为直取。
+2. **F14 PawCoin 合计**：无 `totalIfPawcoin`，合计只写 `cashRefund`，补偿单列「+ bonus」——UI 稿的「Total dikembalikan (termasuk tambahan) Rp 332.850」未实现，需后端补字段或产品确认现状可接受。
+3. **422 `refund-below-payout-fee` 文案**：PRD §6 / UI 稿均无，草拟 `shopRefundBelowPayoutFee`「Jumlah pengembalian tidak cukup untuk biaya channel ini. Pilih channel lain atau ubah jadi PawCoin.」，待产品确认。
+4. **UI 稿有、§6 未列（C-11，待设计确认）**：`shopRefundToPawcoinDoneHint`「Rp {amount} sudah masuk ke saldo PawCoin」、`shopRefundBankEta`「Diproses maks. 3 hari kerja」；卡短标题「Bagian QRIS Rp {x}」未另写（用 §6 句代替）。
+5. **F13 其他原因无副句**、F13 币段为 0 时读出「PawCoin Rp 0」（沿 story 待确认 4）。
+6. **LINE / COMPENSATION 的 F16 / F19 只换副句**（本 story 的保守细化，见 Completion Notes），需产品确认。
+7. OVO / GoPay 账号位数沿用 10–13 位（story 待确认 3）；`refundMethodPawcoinWhy`「retur」一词未改（待确认 6）；7 天未选 App 无动作（待确认 7）。
+
 ### File List
+
+前端（`petgo_app/`）：
+- 新增 `lib/features/shop/refund/refund_destination_page.dart`
+- 新增 `lib/features/shop/refund/payout_account_form.dart`
+- 改 `lib/features/shop/domain/shop_order_detail.dart`（`ShopOrderRefundSummary` 扩全量字段、`ShopRefundStatus` / `RefundScope`）
+- 改 `lib/features/shop/domain/shop_return.dart`（`PayoutChannel.shortName` / `fromApi`）
+- 改 `lib/features/shop/data/shop_order_repository.dart`（`chooseRefundDestination`）
+- 改 `lib/core/network/api_paths.dart`（`meShopOrderRefundDestination`）
+- 改 `lib/core/router/app_router.dart`（新路由）
+- 改 `lib/features/shop/presentation/shop_order_header.dart`（退款分支、`displayRefundOf`、`payoutNetForDisplay`）
+- 改 `lib/features/shop/presentation/shop_order_detail_page_v3.dart`（F13 / F16 / F19 / F25 状态头、底栏入口、F25 按钮）
+- 改 `lib/features/shop/presentation/refund_method_page_v2.dart`（改用 `PayoutAccountForm`，行为不变）
+- 改 `lib/features/shop/presentation/widgets/shop_surface.dart`（`ShopCard.color` 可选参数）
+- 改 `lib/l10n/app_en.arb`、`lib/l10n/app_id.arb`（17 个 `shopRefund*` key）
+- 新增 `test/shop/refund/refund_destination_page_test.dart`（17 例）、`test/shop/refund/payout_account_form_test.dart`（6 例）、`test/shop/shop_order_detail_refund_header_test.dart`（17 例）
+- 改 `lib/core/network/api_log_interceptor.dart`（复审：收款账户键打码）
+- 新增 `test/app/api_log_interceptor_payout_test.dart`（复审，2 例）
+- 改 `test/shop/shop_return_unavailable_page_test.dart`（路由断言）、`test/shop/epic1_analytics_test.dart`（PII 白名单 +4 键）
+
+后端 / 迁移：无。
 
 ### Change Log
 
 - 2026-11-05：story 文件创建（ready-for-dev）。
+- 2026-11-06：dev-story 实现（App，L0 绿），T0 对齐后端实际字段名；Status → review。
+- 2026-11-06：复审修复（日志脱敏收款账户、低于渠道费合计「—」并禁用提交、输入字节上限 150）。

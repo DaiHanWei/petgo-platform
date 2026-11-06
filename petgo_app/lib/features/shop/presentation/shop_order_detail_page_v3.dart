@@ -41,6 +41,7 @@ import '../data/cart_repository.dart';
 import '../data/shop_order_repository.dart';
 import '../domain/shop_order_detail.dart';
 import '../domain/shop_product.dart';
+import '../domain/shop_return.dart';
 import 'shop_order_header.dart';
 import 'shop_payment_launcher.dart';
 import 'widgets/shop_buttons.dart';
@@ -183,22 +184,51 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
           {'exception_type': deliveryExceptionTypeForAnalytics(order.logistics?.exceptionType)});
     }
     final fromNo = order.reorderedFromOrderNo;
+    final warn = header.warnTone;
+    final refund = header.refund;
+    final refundText = header.refundTextMode != ShopRefundTextMode.none;
+    // F19 退为 PawCoin：补偿与现金段两个服务端值并列显示，不相加（P-1，AC3.4 同口径）。
+    final bonus = refundText &&
+            refund != null &&
+            header.refundStage == ShopRefundStage.paidOut &&
+            refund.cashDestination == CashDestination.toPawcoin.api &&
+            refund.compensationAmount > 0
+        ? refund.compensationAmount
+        : 0;
     return ShopCard(
-      key: const ValueKey('shopOrderHeaderCard'),
+      key: ValueKey(warn ? 'shopOrderHeaderCardWarn' : 'shopOrderHeaderCard'),
+      color: warn ? ShopColors.warnBg : ShopColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
               key: const ValueKey('shopOrderHeaderTitle'),
-              style: AppTypography.body.copyWith(fontWeight: FontWeight.w600, color: ShopColors.ink)),
-          if (header.hint == ShopHeaderHint.reorderedFrom && fromNo != null) ...[
+              style: AppTypography.body.copyWith(
+                  fontWeight: FontWeight.w600, color: warn ? ShopColors.warnTitle : ShopColors.ink)),
+          if (!refundText && header.hint == ShopHeaderHint.reorderedFrom && fromNo != null) ...[
             const SizedBox(height: 4),
             _reorderedFromHint(l10n, order, fromNo),
           ] else if (hint != null) ...[
             const SizedBox(height: 4),
             Text(hint,
                 key: const ValueKey('shopOrderHeaderHint'),
-                style: AppTypography.caption.copyWith(color: ShopColors.text2)),
+                style: AppTypography.caption
+                    .copyWith(color: warn ? ShopColors.warnText : ShopColors.text2)),
+          ],
+          if (bonus > 0) ...[
+            const SizedBox(height: 2),
+            Text(l10n.shopRefundBonus(_idrDigits(bonus)),
+                key: const ValueKey('shopOrderRefundBonus'),
+                style: AppTypography.caption.copyWith(color: ShopColors.purple, fontWeight: FontWeight.w600)),
+          ],
+          if (header.showsReenterAccount && refund != null) ...[
+            const SizedBox(height: 12),
+            ShopButton(
+              key: const ValueKey('shopOrderRefundReenter'),
+              label: l10n.shopRefundReenterAccount,
+              variant: ShopButtonVariant.ink,
+              onTap: () => _openRefundDestination(order, refund, retry: true),
+            ),
           ],
           if (header.kind == ShopHeaderKind.reordered && order.reorderedToOrderToken != null) ...[
             const SizedBox(height: 8),
@@ -271,8 +301,59 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
       ShopHeaderKind.refunded => (l10n.orderStatusRefunded, null),
       ShopHeaderKind.other => (l10n.shopOrderStatusOther, null),
     };
-    if (h.hint == ShopHeaderHint.partialCancel) return (title, l10n.shopOrderPartialCancelHint);
-    return (title, hint);
+    final baseHint = h.hint == ShopHeaderHint.partialCancel ? l10n.shopOrderPartialCancelHint : hint;
+    // 9.2 退款分支：按覆盖程度换标题 / 副句（纯函数已判定，见 [ShopRefundTextMode]）。
+    final r = h.refund;
+    final stage = h.refundStage;
+    if (r == null || stage == null || h.refundTextMode == ShopRefundTextMode.none) return (title, baseHint);
+    final (String rTitle, String? rHint) = _refundText(l10n, r, stage);
+    return h.refundTextMode == ShopRefundTextMode.full ? (rTitle, rHint) : (title, rHint ?? baseHint);
+  }
+
+  /// 退款态文案（PRD §6 F13 / F16 / F19 / F25）。金额全部取服务端字段；
+  /// 尾号 / 渠道 / 日期任一缺失 → 副句为 null（不拼残句，AC1.3）。
+  (String, String?) _refundText(AppLocalizations l10n, ShopOrderRefundSummary r, ShopRefundStage stage) {
+    final channel = PayoutChannel.fromApi(r.payoutChannel);
+    final last4 = r.payoutAccountLast4;
+    switch (stage) {
+      case ShopRefundStage.awaitingDestination:
+        return (
+          l10n.shopOrderCancelledOutOfStock,
+          l10n.shopRefundOutOfStockHint(_idrDigits(r.coinRefund), _idrDigits(r.cashRefund)),
+        );
+      case ShopRefundStage.payoutPending:
+        return (
+          l10n.shopRefundProcessingTitle,
+          channel != null && last4 != null ? l10n.shopRefundProcessingHint(channel.shortName, last4) : null,
+        );
+      case ShopRefundStage.paidOut:
+        if (r.cashDestination == CashDestination.toPawcoin.api) {
+          return (l10n.orderStatusRefunded, l10n.shopRefundToPawcoinDoneHint(_idrDigits(r.cashRefund)));
+        }
+        final at = r.paidOutAt;
+        if (channel == null || last4 == null || at == null) return (l10n.orderStatusRefunded, null);
+        // 日期按 WIB 自然日显示（UTC+7，不随手机时区）。
+        final wib = at.toUtc().add(const Duration(hours: 7));
+        final day = formatDayMonthYear(context, DateTime(wib.year, wib.month, wib.day));
+        return (
+          l10n.orderStatusRefunded,
+          l10n.shopRefundPaidOutHint(
+              _idrDigits(payoutNetForDisplay(r.cashRefund, r.payoutFee)), channel.shortName, last4, day),
+        );
+      case ShopRefundStage.payoutFailed:
+        return (l10n.shopRefundPayoutFailedTitle, l10n.shopRefundPayoutFailedHint);
+    }
+  }
+
+  /// 进退款方式页（AC2.1）。F25 重填：`?retry=1&channel=` 预选上次渠道（query 兼容冷启动深链）。
+  void _openRefundDestination(ShopOrderDetail order, ShopOrderRefundSummary r, {bool retry = false}) {
+    final base = '/shop/orders/${order.orderToken}/refunds/${r.refundToken}';
+    if (!retry) {
+      context.push(base);
+      return;
+    }
+    final q = <String, String>{'retry': '1', 'channel': ?r.payoutChannel};
+    context.push(Uri(path: base, queryParameters: q).toString());
   }
 
   /// F21：「Pesanan ini dibuat ulang dari pesanan {no}.」—— 单号紫色；有原单 token 时整句可点回原单。
@@ -829,6 +910,31 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
   // ================================================================ 底栏
 
   Widget? _bottomBar(AppLocalizations l10n, ShopOrderDetail order) {
+    final header = resolveShopOrderHeader(order);
+    final refund = header.refund;
+    if (header.showsChooseRefund && refund != null) {
+      // F13 / F17：「Pilih cara pengembalian dana」。仍可确认收货的单（S-9 签收后赔付）把确认收货降为次按钮。
+      final choose = ShopButton(
+        key: const ValueKey('shopOrderChooseRefund'),
+        label: l10n.shopRefundChooseMethod,
+        variant: ShopButtonVariant.ink,
+        onTap: _busy ? null : () => _openRefundDestination(order, refund),
+      );
+      if (!order.status.canConfirmReceipt) return ShopBottomBarActions(primary: choose);
+      return ShopBottomBarActions(
+        secondary: ShopButton(
+          key: const ValueKey('shopOrderConfirmReceiptV2'),
+          label: l10n.shopOrderConfirmReceipt,
+          variant: _busy && _busyAction != _OrderAction.receipt
+              ? ShopButtonVariant.disabled
+              : ShopButtonVariant.outlineMuted,
+          loading: _busyAction == _OrderAction.receipt,
+          onTap: _busy ? null : () => _confirmReceipt(l10n),
+        ),
+        primary: choose,
+      );
+    }
+
     if (_payable(order)) {
       final pm = order.paymentMethods;
       // 🔴 按钮金额是**现在真要付的现金段**（服务端 `paymentMethods.cashAmount`；旧后端回落 shopCashSegment）。
@@ -874,7 +980,7 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
       );
     }
 
-    // 🔴 SD-5：已完成态不给退货入口；其余状态（待发货 / 已取消 / 退款）无底栏（9.2 再加退款按钮）。
+    // 🔴 SD-5：已完成态不给退货入口；其余状态（待发货 / 已取消 / 退款处理中 / 已退款）无底栏。
     return null;
   }
 

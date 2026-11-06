@@ -63,18 +63,22 @@ class ShopCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    this.color = ShopColors.surface,
   });
 
   final Widget child;
   final EdgeInsets padding;
   final EdgeInsets margin;
 
+  /// 卡片底色（默认白；v1.4.2 shop 9.2 F13 状态头用米黄提醒色 [ShopColors.warnBg]）。
+  final Color color;
+
   @override
   Widget build(BuildContext context) => Padding(
         padding: margin,
         child: DecoratedBox(
-          decoration: const BoxDecoration(
-            color: ShopColors.surface,
+          decoration: BoxDecoration(
+            color: color,
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
           child: Padding(padding: padding, child: child),

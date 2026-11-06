@@ -556,7 +556,52 @@ class ShopLogistics {
       );
 }
 
-/// 取消退款单摘要（后端 `ShopOrderRefundView`，4.1）。本 story 只读金额字段；9.2 再扩。
+/// 取消退款单状态（后端 `ShopRefundStatus` 四值镜像，4.1 / D-15）。
+///
+/// ⚠️ 后端**没有** `COIN_REFUNDED`（币段建单即退、现金段 = 0 直接 `COMPLETED`）。认不出 → [unknown]：
+/// 不改状态头、不给入口（对认不出的状态做资金动作是最糟的选择）。
+enum ShopRefundStatus {
+  awaitingDestination('AWAITING_DESTINATION'),
+  payoutPending('PAYOUT_PENDING'),
+  payoutFailed('PAYOUT_FAILED'),
+  completed('COMPLETED'),
+  unknown('');
+
+  const ShopRefundStatus(this.api);
+
+  final String api;
+
+  static ShopRefundStatus fromApi(String? raw) {
+    for (final s in values) {
+      if (s.api == raw && s != unknown) return s;
+    }
+    return unknown;
+  }
+}
+
+/// 退款单范围（后端 `RefundScope`）：整单 / 部分取消一行 / 签收后破损赔付（S-9，订单状态不变）。
+enum RefundScope {
+  whole('WHOLE'),
+  line('LINE'),
+  compensation('COMPENSATION'),
+  unknown('');
+
+  const RefundScope(this.api);
+
+  final String api;
+
+  static RefundScope fromApi(String? raw) {
+    for (final s in values) {
+      if (s.api == raw && s != unknown) return s;
+    }
+    return unknown;
+  }
+}
+
+/// 取消退款单（后端 `ShopOrderRefundView`，4.1 / C-9；订单详情 `refunds[]` 与选择去向接口响应同一结构）。
+///
+/// 🔴 **金额全部是服务端值**（P-1），App 只展示。🔒 收款账号只有末 4 位（[payoutAccountLast4]），
+/// 全号与户名不下发；本类不持有、也不得被扩成持有完整账号。缺键一律容错（旧后端 / 存量单）。
 class ShopOrderRefundSummary {
   const ShopOrderRefundSummary({
     required this.refundToken,
@@ -567,10 +612,17 @@ class ShopOrderRefundSummary {
     this.coinRefund = 0,
     this.cashRefund = 0,
     this.compensationAmount = 0,
+    this.payoutFee = 0,
     this.cashDestination,
     this.payoutChannel,
+    this.payoutAccountLast4,
     this.canChooseDestination = false,
     this.payoutFailed = false,
+    this.paidOutAt,
+    this.createdAt,
+    this.destinationChosenAt,
+    this.compensate = false,
+    this.compensationIfPawcoin = 0,
   });
 
   final String refundToken;
@@ -582,13 +634,40 @@ class ShopOrderRefundSummary {
   final int totalRefund;
   final int coinRefund;
   final int cashRefund;
+
+  /// 已发放补偿（现金段选 PawCoin 完成后；其余为 0）。
   final int compensationAmount;
+
+  /// 渠道费（选 TO_BANK 后由服务端按渠道写入；其余为 0）。
+  final int payoutFee;
+
+  /// `TO_PAWCOIN | TO_BANK`；未选为 null。
   final String? cashDestination;
+
+  /// `BCA | OVO | GOPAY`；未选银行为 null。
   final String? payoutChannel;
+
+  /// 收款账号末 4 位（C-9）。🔒 只末 4 位。
+  final String? payoutAccountLast4;
   final bool canChooseDestination;
   final bool payoutFailed;
+  final DateTime? paidOutAt;
+  final DateTime? createdAt;
+  final DateTime? destinationChosenAt;
+
+  /// 该原因是否给补偿（= 后端 `CancelReason.compensate()`）。
+  final bool compensate;
+
+  /// 现金段选 PawCoin 时将发放的补偿（服务端按当前配置预估；无补偿 / 不可选为 0）。
+  final int compensationIfPawcoin;
 
   bool get isLine => scope == 'LINE';
+
+  ShopRefundStatus get refundStatus => ShopRefundStatus.fromApi(status);
+
+  RefundScope get refundScope => RefundScope.fromApi(scope);
+
+  CancelReason? get cancelReason => CancelReason.fromApi(reason);
 
   factory ShopOrderRefundSummary.fromJson(Map<String, dynamic> j) => ShopOrderRefundSummary(
         refundToken: j['refundToken']?.toString() ?? '',
@@ -599,10 +678,17 @@ class ShopOrderRefundSummary {
         coinRefund: _int(j['coinRefund']) ?? 0,
         cashRefund: _int(j['cashRefund']) ?? 0,
         compensationAmount: _int(j['compensationAmount']) ?? 0,
+        payoutFee: _int(j['payoutFee']) ?? 0,
         cashDestination: _blankToNull(j['cashDestination']?.toString()),
         payoutChannel: _blankToNull(j['payoutChannel']?.toString()),
+        payoutAccountLast4: _blankToNull(j['payoutAccountLast4']?.toString()),
         canChooseDestination: j['canChooseDestination'] == true,
         payoutFailed: j['payoutFailed'] == true,
+        paidOutAt: _time(j['paidOutAt']),
+        createdAt: _time(j['createdAt']),
+        destinationChosenAt: _time(j['destinationChosenAt']),
+        compensate: j['compensate'] == true,
+        compensationIfPawcoin: _int(j['compensationIfPawcoin']) ?? 0,
       );
 }
 

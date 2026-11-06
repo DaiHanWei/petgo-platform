@@ -34,6 +34,11 @@ class ApiLogInterceptor extends Interceptor {
     'lng',
     'latitude',
     'longitude',
+    // 收款账户（v1.4.2 shop Story 9.2 复审）：取消退款选银行 `{account, accountHolderName}`、
+    // 退货 / 虚拟单退款 `{payoutAccount, accountHolderName}`。只给末 4 位的 `payoutAccountLast4` 不在此列。
+    'account',
+    'accountholdername',
+    'payoutaccount',
   };
 
   /// 签名 URL 特征（命中即整串打码）。

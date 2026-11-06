@@ -187,7 +187,13 @@ void main() {
       // v1.4.2 shop Story 9.1（订单详情配送异常，PRD §4 定死属性名）新增一项，已逐个确认：
       // - exception_type：toko_delivery_exception_shown / _cs_tapped 的异常类型，受控词表
       //   returned / lost / damaged / unknown（C-6），与个人无关；🔒 刻意不带运单号 / 订单号。
+      // v1.4.2 shop Story 9.2（退款方式页，沿用 toko_refund_method_viewed / _submitted，AC4.4）新增四项，已逐个确认：
+      // - reason：小写 CancelReason 受控词表（out_of_stock / late_payment …），与个人无关
+      // - is_retry：bool（F25 打款失败后重填进入）
+      // - destination：受控词表 to_pawcoin / to_bank
+      // - channel：受控词表 bca / ovo / gopay（打款渠道，非账号）；🔒 刻意不带账号 / 末 4 位 / 户名。
       expect(props, {
+        'reason', 'is_retry', 'destination', 'channel',
         'exception_type',
         'serviceable',
         'coupon_id', 'source', 'action',

@@ -5,6 +5,7 @@ import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/shop_order_detail.dart';
 import '../domain/shop_order_summary.dart';
+import '../domain/shop_return.dart';
 
 /// 电商订单数据层（Story 3.8）。
 ///
@@ -67,6 +68,31 @@ class ShopOrderRepository {
     final resp = await dio.post<Map<String, dynamic>>(
         '${ApiPaths.meShopOrders}/$orderToken/confirm-receipt');
     return ShopOrderDetail.fromJson(resp.data!);
+  }
+
+  /// 取消退款单选择现金段去向（v1.4.2 shop Story 9.2 · 后端 4.1）。
+  ///
+  /// 🔴 **不传任何金额 / 手续费**：渠道费与补偿由服务端算（P-1）。`TO_PAWCOIN` 不带渠道与账号。
+  /// 🔒 账号 / 户名是 PII：只进请求体，不进日志 / 埋点 / 本地缓存。调用方收到后应 invalidate 详情重取。
+  Future<ShopOrderRefundSummary> chooseRefundDestination(
+    String orderToken,
+    String refundToken, {
+    required CashDestination destination,
+    PayoutChannel? channel,
+    String? account,
+    String? accountHolderName,
+  }) async {
+    final toBank = destination == CashDestination.toBank;
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.meShopOrderRefundDestination(orderToken, refundToken),
+      data: {
+        'destination': destination.api,
+        if (toBank) 'channel': channel?.api,
+        if (toBank) 'account': account?.trim(),
+        if (toBank) 'accountHolderName': accountHolderName?.trim(),
+      },
+    );
+    return ShopOrderRefundSummary.fromJson(resp.data ?? const {});
   }
 }
 
