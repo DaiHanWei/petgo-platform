@@ -132,6 +132,21 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         this.clock = clock;
     }
 
+    /** V1.4.2 shop-admin Story 4.1 · AD-13：预估余额检查点（运单创建 / 取消后）。可缺省（单测不注入 = 不检查）。 */
+    private com.tailtopia.shop.logistics.balance.BiteshipBalanceService balance;
+
+    @Autowired(required = false)
+    void setBalanceService(com.tailtopia.shop.logistics.balance.BiteshipBalanceService balance) {
+        this.balance = balance;
+    }
+
+    /** 本事务内检查预估余额；提醒在事务提交后才发，失败只记日志（不影响运单）。 */
+    private void checkBalance() {
+        if (balance != null) {
+            balance.checkQuietly();
+        }
+    }
+
     // ---------- 下运单 / 重试 / 重发 ----------
 
     /** 下运单（AC4）。前置不过抛 409；失败返回 {@code created=false}，不抛。 */
@@ -271,6 +286,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
                 sh.applyProviderStatus(snap.status(), now, null);
                 sh.updateTrackingUrl(snap.link());
                 shipments.save(sh);
+                checkBalance();
                 order.clearWaybillFailure();
                 orders.save(order);
                 audit.record(actor, AuditActions.SHOP_WAYBILL_CREATED, "SHOP_ORDER", order.getPublicToken(),
@@ -431,6 +447,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         s.applyProviderStatus("cancelled", now, null);
         s.markCancelled(now);
         shipments.save(s);
+        checkBalance();
         ShopOrder order = requireOrder(s.getShopOrderId());
         audit.record(actor, AuditActions.SHOP_WAYBILL_CANCELLED, "SHOP_ORDER", order.getPublicToken(),
                 "取消运单：referenceId=%s；Biteship=%s；原因=%s".formatted(s.getReferenceId(), s.getBiteshipOrderId(),

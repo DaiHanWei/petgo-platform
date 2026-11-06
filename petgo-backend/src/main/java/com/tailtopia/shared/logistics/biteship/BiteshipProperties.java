@@ -36,6 +36,11 @@ public class BiteshipProperties {
     private String deliveryType = "now";
     /** Webhook 收件行最大处理次数（达到即告警 / 放弃，Story 5.1 AC7.3）。 */
     private int webhookMaxAttempts = 10;
+    /**
+     * Biteship 运单 {@code price} 是否已含保价费（V1.4.2 shop-admin Story 4.1 · AD-13，须在沙箱实测）。
+     * 默认 false = 不含，预估余额按 {@code carrier_cost + insurance_cost} 扣；true = 只扣 {@code carrier_cost}，不重复加。
+     */
+    private boolean priceIncludesInsurance = false;
 
     /**
      * 规范化后的快递列表：小写、去空格、去重、保序，并剔除 {@link #FORBIDDEN_COURIERS}。
@@ -130,6 +135,14 @@ public class BiteshipProperties {
 
     public void setWebhookMaxAttempts(int webhookMaxAttempts) {
         this.webhookMaxAttempts = webhookMaxAttempts;
+    }
+
+    public boolean isPriceIncludesInsurance() {
+        return priceIncludesInsurance;
+    }
+
+    public void setPriceIncludesInsurance(boolean priceIncludesInsurance) {
+        this.priceIncludesInsurance = priceIncludesInsurance;
     }
 
     /** 🔒 不含 key / Webhook 密钥。 */

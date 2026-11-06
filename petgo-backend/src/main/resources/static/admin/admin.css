@@ -1619,3 +1619,6 @@ tr.is-focus > td { background: var(--brand-tint, #F3F0FF); }
 .s-col-handle { width: 28px; }
 .drag-handle { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; }
 tr.is-dragging { opacity: .5; }
+/* V1.4.2 shop-admin Story 4.1（G3）：预估余额低于阈值标红；Biteship 卡两个小表单间距 */
+.kv.amt .is-danger { color: var(--danger) !important; }
+.ship-biteship-form { margin-top: 12px; }

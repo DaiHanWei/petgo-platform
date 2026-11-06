@@ -245,6 +245,8 @@ petgo:
       webhook-max-attempts: 10
       webhook-retry-ms: ${SHOP_BITESHIP_WEBHOOK_RETRY_MS:300000}
       poll-cron: ${SHOP_BITESHIP_POLL_CRON:0 0 */6 * * *}
+      # V1.4.2 shop-admin Story 4.1（AD-13）：运单 price 是否已含保价费（沙箱实测后定）；true 时预估余额不再另扣 insurance_cost。
+      price-includes-insurance: ${BITESHIP_PRICE_INCLUDES_INSURANCE:false}
     # v1.4.2 shop Story 5.2（D-13）：物流停滞检测——每小时扫一次，Biteship 活动运单超过 N 小时无新状态 → 订单标 STALLED（用户侧不提示）。
     logistics:
       stall-scan-ms: ${SHOP_LOGISTICS_STALL_SCAN_MS:3600000}

@@ -73,6 +73,13 @@ public class ShippingZone {
         this.updatedAt = Instant.now();
     }
 
+    /** 只改城市 / 省份，运费不动（V1.4.2 shop-admin Story 4.1：区域表去运费列，{@code fee} 保留不读）。 */
+    public void apply(String kotaKabupaten, String provinsi) {
+        this.kotaKabupaten = kotaKabupaten;
+        this.provinsi = provinsi;
+        this.updatedAt = Instant.now();
+    }
+
     public void setActive(boolean value) {
         this.active = value;
         this.updatedAt = Instant.now();

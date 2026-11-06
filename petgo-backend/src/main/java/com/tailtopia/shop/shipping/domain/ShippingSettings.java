@@ -63,6 +63,10 @@ public class ShippingSettings {
     @Column(name = "review_display_enabled", nullable = false)
     private boolean reviewDisplayEnabled;
 
+    /** Biteship 预估余额预警阈值（IDR，V1.4.2 shop-admin Story 4.1 · AD-13；0 = 不预警）。 */
+    @Column(name = "balance_alert_threshold", nullable = false)
+    private long balanceAlertThreshold;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -167,6 +171,19 @@ public class ShippingSettings {
 
     public int getInsuranceRateBp() {
         return insuranceRateBp;
+    }
+
+    public long getBalanceAlertThreshold() {
+        return balanceAlertThreshold;
+    }
+
+    /** 设置余额预警阈值；负数 → {@link IllegalArgumentException}。 */
+    public void applyBalanceAlertThreshold(long value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("balance alert threshold must be >= 0");
+        }
+        this.balanceAlertThreshold = value;
+        this.updatedAt = Instant.now();
     }
 
     public boolean isReviewDisplayEnabled() {

@@ -108,6 +108,13 @@ public class Shipment {
     @Column(name = "insurance_amount", nullable = false)
     private long insuranceAmount;
 
+    /**
+     * Biteship 实际收取的保价费（V1.4.2 shop-admin Story 4.1 建列，V20261106_1020；6.1 由下运单响应
+     * {@code courier.insurance.fee} 写入）。🔴 算钱（预估余额、物流成本）只用本列，不用 {@link #insuranceAmount}。
+     */
+    @Column(name = "insurance_cost", nullable = false)
+    private long insuranceCost;
+
     /** 快递原因重发后被新运单取代的时刻（FR-172.8）；非空即非活动运单。 */
     @Column(name = "superseded_at")
     private Instant supersededAt;
@@ -417,6 +424,11 @@ public class Shipment {
 
     public long getInsuranceAmount() {
         return insuranceAmount;
+    }
+
+    /** Biteship 实际收取的保价费（IDR）；未保价或未回写为 0。 */
+    public long getInsuranceCost() {
+        return insuranceCost;
     }
 
     public Instant getSupersededAt() {

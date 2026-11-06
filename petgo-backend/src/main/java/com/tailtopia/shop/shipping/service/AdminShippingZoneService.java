@@ -36,29 +36,69 @@ public class AdminShippingZoneService {
         return zones.findAllByOrderByProvinsiAscKotaKabupatenAscKecamatanAsc();
     }
 
-    /** 新增或更新一个区域的运费（按 Kecamatan 唯一）。 */
+    /**
+     * 新增或更新一个区域（V1.4.2 shop-admin Story 4.1 · AD-13：区域表去运费列，可填代表邮编）。
+     *
+     * <p>{@code fee} 可空：空 = 更新时保留原值、新增时写 0（{@code shipping_zones.fee} 仍 NOT NULL，保留不读）。
+     * {@code postalCode} 不传（null）= 保留原值；空白 = 清空（该区游客询价按不支持配送）。同一事务内写区域与邮编，审计只记有变化的字段。
+     */
     @Transactional
-    public ShippingZone upsert(String kecamatan, String kotaKabupaten, String provinsi, long fee,
-            long actorAccountId) {
+    public ShippingZone upsert(String kecamatan, String kotaKabupaten, String provinsi, Long fee,
+            String postalCode, long actorAccountId) {
         String k = require(kecamatan, "请填写 Kecamatan");
         String kota = require(kotaKabupaten, "请填写城市/县");
         String prov = require(provinsi, "请填写省份");
-        if (fee < 0) {
+        if (fee != null && fee < 0) {
             throw AppException.validation("运费不能为负");
         }
         ShippingZone z = zones.findByKecamatan(k).orElse(null);
-        String action;
-        if (z == null) {
-            z = ShippingZone.create(k, kota, prov, fee);
-            action = "新增";
+        java.util.List<String> changes = new java.util.ArrayList<>();
+        boolean created = z == null;
+        if (created) {
+            z = ShippingZone.create(k, kota, prov, fee == null ? 0L : fee);
+            changes.add("城市/县: " + kota);
+            changes.add("省份: " + prov);
         } else {
-            z.apply(kota, prov, fee);
-            action = "更新";
+            if (!kota.equals(z.getKotaKabupaten())) {
+                changes.add("城市/县: %s→%s".formatted(z.getKotaKabupaten(), kota));
+            }
+            if (!prov.equals(z.getProvinsi())) {
+                changes.add("省份: %s→%s".formatted(z.getProvinsi(), prov));
+            }
+            if (fee == null) {
+                z.apply(kota, prov);
+            } else {
+                if (fee != z.getFee()) {
+                    changes.add("运费: %d→%d".formatted(z.getFee(), fee));
+                }
+                z.apply(kota, prov, fee);
+            }
+        }
+        String oldPc = z.getPostalCode();
+        try {
+            if (postalCode != null) {   // 不传 = 保留原值；传空白 = 清空
+                z.applyPostalCode(postalCode);
+            }
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("邮编须为 5 位数字且首位不为 0").code("admin.err.v142.shipping.postalCodeFormat");
+        }
+        if (!java.util.Objects.equals(oldPc, z.getPostalCode())) {
+            changes.add("邮编: %s→%s".formatted(oldPc == null ? "空" : oldPc,
+                    z.getPostalCode() == null ? "空" : z.getPostalCode()));
         }
         ShippingZone saved = zones.save(z);
-        audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_ZONE_UPDATED, "SHIPPING_ZONE", k,
-                "%s配送区域 %s：运费 %d".formatted(action, k, fee));
+        if (created || !changes.isEmpty()) {
+            audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_ZONE_UPDATED, "SHIPPING_ZONE", k,
+                    "%s配送区域 %s：%s".formatted(created ? "新增" : "更新", k, String.join("；", changes)));
+        }
         return saved;
+    }
+
+    /** 新增或更新一个区域的运费（按 Kecamatan 唯一）。存量调用方（含测试）沿用；不动邮编。 */
+    @Transactional
+    public ShippingZone upsert(String kecamatan, String kotaKabupaten, String provinsi, long fee,
+            long actorAccountId) {
+        return upsert(kecamatan, kotaKabupaten, provinsi, Long.valueOf(fee), null, actorAccountId);
     }
 
     /**
@@ -138,20 +178,70 @@ public class AdminShippingZoneService {
     public ShippingSettings setOrigin(String postalCode, String contactName, String contactPhone,
             String address, long actorAccountId) {
         // 长度上限与列宽一致（V20261105_1605）：超长在 service 层拦成 422，不让 DB 报 500
-        requireMaxLength(contactName, ORIGIN_CONTACT_NAME_MAX, "发货联系人不能超过 %d 个字符");
-        requireMaxLength(contactPhone, ORIGIN_CONTACT_PHONE_MAX, "发货联系电话不能超过 %d 个字符");
-        requireMaxLength(address, ORIGIN_ADDRESS_MAX, "发货地址不能超过 %d 个字符");
+        validateOrigin(postalCode, contactName, contactPhone, address);
         ShippingSettings s = singleton();
         try {
             s.applyOrigin(postalCode, contactName, contactPhone, address);
         } catch (IllegalArgumentException e) {
-            throw AppException.validation("发货地邮编须为 5 位数字且首位不为 0");
+            throw AppException.validation("发货地邮编须为 5 位数字且首位不为 0")
+                    .code("admin.err.v142.shipping.originPostalCode");
         }
         String pc = s.getOriginPostalCode();
         audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_SETTINGS_UPDATED,
                 "SHIPPING_SETTINGS", "1",
                 pc == null ? "清空发货地邮编" : "配置发货地（邮编 " + pc.substring(0, 2) + "***，其余内容不入审计）");
         return settings.save(s);
+    }
+
+    /**
+     * 免运门槛与最高减免<b>同卡一起提交、一起校验</b>（V1.4.2 shop-admin Story 4.1 · AC4 · O-27）：
+     * 门槛 &gt; 0 时最高减免必须 &gt; 0（留空或 0 → 422 {@code admin.err.v142.shipping.capRequired}）；门槛为 0（不做免运）时不校验封顶。
+     * 同一事务写两列，审计「字段: 旧→新」只记有变化的。
+     */
+    @Transactional
+    public ShippingSettings setFreeShipping(long threshold, Long cap, long actorAccountId) {
+        validateFreeShipping(threshold, cap);
+        ShippingSettings s = singleton();
+        long oldThreshold = s.getFreeShippingThreshold();
+        Long oldCap = s.getFreeShippingCap();
+        java.util.List<String> changes = new java.util.ArrayList<>();
+        if (oldThreshold != threshold) {
+            changes.add("免运门槛: %d→%d".formatted(oldThreshold, threshold));
+        }
+        if (!java.util.Objects.equals(oldCap, cap)) {
+            changes.add("最高减免: %s→%s".formatted(oldCap == null ? "空" : oldCap, cap == null ? "空" : cap));
+        }
+        s.applyThreshold(threshold);
+        s.applyFreeShippingCap(cap);
+        if (!changes.isEmpty()) {
+            audit.record(actorAccountId, AuditActions.SHOP_SHIPPING_SETTINGS_UPDATED, "SHIPPING_SETTINGS", "1",
+                    String.join("；", changes));
+        }
+        return settings.save(s);
+    }
+
+    /** {@link #setFreeShipping} 的校验（预检确认弹层与落库共用一份，O-27）。 */
+    public static void validateFreeShipping(long threshold, Long cap) {
+        if (threshold < 0) {
+            throw AppException.validation("免运门槛不能为负").code("admin.err.v142.shipping.thresholdNegative");
+        }
+        if (cap != null && cap < 0) {
+            throw AppException.validation("最高减免不能为负").code("admin.err.v142.shipping.capNegative");
+        }
+        if (threshold > 0 && (cap == null || cap <= 0)) {
+            throw AppException.validation("门槛大于 0 时最高减免必填").code("admin.err.v142.shipping.capRequired");
+        }
+    }
+
+    /** 发货地校验（V1.4.2 shop-admin Story 4.1：确认弹层预检与落库共用一份）。 */
+    public static void validateOrigin(String postalCode, String contactName, String contactPhone, String address) {
+        requireMaxLength(contactName, ORIGIN_CONTACT_NAME_MAX, "发货联系人不能超过 %d 个字符");
+        requireMaxLength(contactPhone, ORIGIN_CONTACT_PHONE_MAX, "发货联系电话不能超过 %d 个字符");
+        requireMaxLength(address, ORIGIN_ADDRESS_MAX, "发货地址不能超过 %d 个字符");
+        if (postalCode != null && !postalCode.isBlank() && !postalCode.trim().matches("^[1-9][0-9]{4}$")) {
+            throw AppException.validation("发货地邮编须为 5 位数字且首位不为 0")
+                    .code("admin.err.v142.shipping.originPostalCode");
+        }
     }
 
     /** 设置免运减免封顶；{@code null} 或 0 = 不封顶。 */
