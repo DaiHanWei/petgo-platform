@@ -5,6 +5,9 @@
 /// - **按钮位**（领券，8.x）：传 [trailing]，右侧放调用方给的按钮。
 /// - **紧凑竖排**（8.1 首页「Kupon buat kamu」横滑，两张占满一行）：[compact] = true，
 ///   面额 → 门槛 / 封顶 → 按钮位自上而下；[accent] = 紫底白字（新人券），[badge] = 左上角标。
+/// - **我的券**（9.3，横排）：[validityText] 换掉默认有效期行（「s/d {date}」/「Berakhir {datetime}」），
+///   [tag] = 名称旁小标签（「Baru」），[extraLines] = 右栏末尾追加行（范围 / 占用 / 「Dipakai…」），
+///   [dimmed] = 整卡不透明度 0.55 且不画「Segera berakhir」（已使用 G2）。四者默认值保持 7.1 / 8.x 原样。
 ///
 /// 🔴 面额 / 门槛 / 封顶全是服务端值，本组件只格式化（`formatIdr` / `formatIdrAmount`），不算。
 library;
@@ -32,7 +35,23 @@ class CouponCard extends StatelessWidget {
     this.compact = false,
     this.accent = false,
     this.badge,
+    this.dimmed = false,
+    this.tag,
+    this.validityText,
+    this.extraLines = const [],
   });
+
+  /// 已使用降权（9.3 G2）：整卡 0.55 不透明度、不画「Segera berakhir」。默认 false。
+  final bool dimmed;
+
+  /// 名称旁小标签（9.3 G6「Baru」）。null = 不画。
+  final String? tag;
+
+  /// 替换默认有效期行的文案（已本地化）。null = 7.1 原样「Berlaku sampai {date}」。
+  final String? validityText;
+
+  /// 右栏末尾追加的行（9.3：范围 / 占用说明 / 「Dipakai {date} · {no}」）。默认空。
+  final List<Widget> extraLines;
 
   /// 紧凑竖排（8.1）。默认 false = 7.1 横排原样。
   final bool compact;
@@ -109,21 +128,54 @@ class CouponCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (name.isNotEmpty)
+                // 复审 #5：无 tag 时保持 7.1 / 8.x 原组件树（只在 tag != null 时包 Row）。
+                if (tag == null && name.isNotEmpty)
                   Text(name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.body.copyWith(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: disabled ? ShopColors.text3 : ShopColors.text)),
+                          color: disabled ? ShopColors.text3 : ShopColors.text))
+                else if (tag != null)
+                  Row(
+                    children: [
+                      if (name.isNotEmpty)
+                        Flexible(
+                          child: Text(name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.body.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: disabled ? ShopColors.text3 : ShopColors.text)),
+                        ),
+                      if (tag != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          key: const ValueKey('couponTag'),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: ShopColors.purple,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(tag!,
+                              style: AppTypography.micro.copyWith(
+                                  color: ShopColors.surface, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ],
+                  ),
                 if ((coupon.minSpend ?? 0) > 0)
                   Text(l10n.couponMinSpend(formatIdrAmount(coupon.minSpend!)),
                       style: AppTypography.caption),
-                if (until != null)
+                if (validityText != null)
+                  Text(validityText!,
+                      key: const ValueKey('couponValidity'), style: AppTypography.caption)
+                else if (until != null)
                   Text(l10n.qrPaySavedValidUntil(formatDayMonthYear(context, until.toLocal())),
                       style: AppTypography.caption),
-                if (coupon.expiringSoon && !disabled)
+                if (coupon.expiringSoon && !disabled && !dimmed)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(l10n.couponExpiringSoon,
@@ -137,6 +189,7 @@ class CouponCard extends StatelessWidget {
                         key: const ValueKey('couponReason'),
                         style: AppTypography.caption.copyWith(color: ShopColors.text3)),
                   ),
+                ...extraLines,
               ],
             ),
           ),
@@ -148,6 +201,9 @@ class CouponCard extends StatelessWidget {
         ],
       ),
     );
+    if (dimmed) {
+      return Opacity(key: const ValueKey('couponDimmed'), opacity: 0.55, child: card);
+    }
     if (disabled || onTap == null) return card;
     return Semantics(
       inMutuallyExclusiveGroup: selected != null,

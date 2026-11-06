@@ -81,6 +81,10 @@ class DeepLinkRoutes {
       case 'GROWTH_LEVEL_UP':
         // V1.4.0 ① Story 2.3：升级通知 → 等级页（字面量：core 不 import feature；与 LevelPage.location 一致）。
         return '/me/growth';
+      case 'COUPON_EXPIRING':
+        // v1.4.2 shop Story 9.3 · AC4.1（D-22）：券快过期 → 我的券。targetRef 是张数不是目标 → 必须在
+        // 「无 targetRef → 通知中心」短路之前（同 PET_SLOT_EXPIRING）。字面量：core 不 import feature。
+        return '/me/coupons';
       case 'REPURCHASE_FOOD_LOW':
         // v1.4.2 shop Story 8.1（D-20）：复购下线后旧推送点开落 Toko 首页（分支根，调用方按 shellTabRoots 用 go）。
         return '/shop';

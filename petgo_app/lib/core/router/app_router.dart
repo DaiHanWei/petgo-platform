@@ -26,6 +26,7 @@ import '../../features/notify/domain/app_version_check.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
+import '../../features/shop/coupon/presentation/my_coupons_page.dart';
 import '../../features/shop/presentation/shop_search_page.dart';
 import '../../features/shop/presentation/cart_page_v3.dart';
 import '../../features/shop/domain/checkout_preview.dart' show CheckoutSource;
@@ -38,8 +39,6 @@ import '../../features/shop/presentation/shop_pay_success_page.dart';
 import '../../features/shop/presentation/toko_page_v3.dart';
 import '../../features/shop/domain/shop_return.dart' show PayoutChannel;
 import '../../features/shop/refund/refund_destination_page.dart';
-import '../../l10n/app_localizations.dart';
-import '../../shared/widgets/placeholder_scaffold.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
@@ -1125,14 +1124,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: PushSettingsPage.routePath, builder: (c, s) => const PushSettingsPage()),
       // PawCoin 余额与流水页（Story 1.4）。受控（/me 前缀已被 _controlledLocations 守卫）；shell 外顶层隐 Tab Bar。
       GoRoute(path: '/me/pawcoin', builder: (c, s) => const PawCoinPage()),
-      // v1.4.2 shop Story 8.1 AC3.5：我的券（9.3 实现，先挂占位页；9.3 替换 builder）。受控（/me 前缀，游客深链被拦）。
-      GoRoute(
-        path: '/me/coupons',
-        builder: (c, s) {
-          final l10n = AppLocalizations.of(c);
-          return PlaceholderScaffold(title: l10n.couponMyCoupons, message: l10n.placeholderComingSoon);
-        },
-      ),
+      // v1.4.2 shop Story 8.1 AC3.5 挂路由、9.3 实现：我的券。受控（/me 前缀，游客深链被拦 → 先登录再兑换）。
+      GoRoute(path: MyCouponsPage.routePath, builder: (c, s) => const MyCouponsPage()),
       // V1.4.0 ① Tailrent Level（Story 1.5）：等级页 + EXP 明细页。受控（/me 前缀）；shell 外顶层隐 Tab。
       GoRoute(path: LevelPage.location, builder: (c, s) => const LevelPage()),
       GoRoute(path: ExpLedgerPage.location, builder: (c, s) => const ExpLedgerPage()),

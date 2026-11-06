@@ -71,4 +71,9 @@ void main() {
     });
     expect(missing.isEnabled(PushCategoryCode.petDiary), isTrue);
   });
+
+  test('v1.4.2 shop Story 9.3 · AC4.5：COUPON_EXPIRING 归 PROMO，不新增分类（仍 10 项）', () {
+    expect(PushCategoryCode.all, hasLength(10));
+    expect(PushCategoryCode.all, contains(PushCategoryCode.promo));
+  });
 }

@@ -228,4 +228,11 @@ void main() {
           reason: bad);
     }
   });
+
+  // v1.4.2 shop Story 9.3 · AC4.1（D-22）：券快过期 → 我的券；targetRef 是张数，空也命中（固定目标类）。
+  test('COUPON_EXPIRING → /me/coupons（targetRef 为空 / 张数都命中）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', null), '/me/coupons');
+    expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', ''), '/me/coupons');
+    expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', '3'), '/me/coupons');
+  });
 }

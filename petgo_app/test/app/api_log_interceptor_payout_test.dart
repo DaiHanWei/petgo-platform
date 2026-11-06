@@ -46,4 +46,15 @@ void main() {
     expect(out, isNot(contains('Siti Aminah')));
     expect(out, isNot(contains('5550001112')));
   });
+
+  test('v1.4.2 shop Story 9.3：兑换码 code 打码', () {
+    final lines = capture();
+    ApiLogInterceptor().onRequest(
+      RequestOptions(path: '/api/v1/me/coupons/redeem', method: 'POST', data: {'code': 'KUCING2026'}),
+      _Handler(),
+    );
+    final out = lines.join('\n');
+    expect(out, isNot(contains('KUCING2026')));
+    expect(out, contains('/api/v1/me/coupons/redeem'));
+  });
 }

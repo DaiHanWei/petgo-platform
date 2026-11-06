@@ -41,6 +41,8 @@ const _mustReset = <String>[
   // v1.4.2 shop Story 9.1：电商订单角标计数 / 我的券入口计数
   'shopOrderCountsProvider',
   'couponSummaryProvider',
+  // v1.4.2 shop Story 9.3：我的券列表（两页签整族）
+  'myCouponsProvider',
 ];
 
 void main() {

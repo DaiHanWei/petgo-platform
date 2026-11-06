@@ -39,6 +39,9 @@ class ApiLogInterceptor extends Interceptor {
     'account',
     'accountholdername',
     'payoutaccount',
+    // 兑换码（v1.4.2 shop Story 9.3）：`POST /me/coupons/redeem {code}`。码本身就是可兑现的凭证，
+    // 明文不进日志（后端同口径）。副作用：其他接口名为 `code` 的字段在 debug 日志里同样打码，可接受。
+    'code',
   };
 
   /// 签名 URL 特征（命中即整串打码）。

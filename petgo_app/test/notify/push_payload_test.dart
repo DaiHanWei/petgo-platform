@@ -115,6 +115,14 @@ void main() {
       );
     });
 
+    test('v1.4.2 shop 9.3：券快过期推送（有 token）→ 直达我的券', () {
+      expect(kPushDirectTypes, contains('COUPON_EXPIRING'));
+      expect(
+        pushClickLocation(hasToken: true, deepLink: '/me/coupons', type: 'COUPON_EXPIRING'),
+        '/me/coupons',
+      );
+    });
+
     test('IM 类但深链已兜底成通知中心 → 按原样返回', () {
       expect(
         pushClickLocation(hasToken: false, deepLink: DeepLinkRoutes.notificationsCenter),

@@ -502,6 +502,14 @@ class ApiPaths {
 
   /// 🔒 我的券入口计数 `{availableCount}`（v1.4.2 shop Story 2.2 AC8.4，App 9.1 订单页「Kupon Saya · n」）。
   static const String meCouponsSummary = '$base/me/coupons/summary';
+
+  /// 🔒 我的券 `?tab=available|used&cursor=` → `{items[], nextCursor, availableCount}`（v1.4.2 shop Story 2.2 AC8 / 9.3）。
+  static const String meCoupons = '$base/me/coupons';
+
+  /// 🔒 兑换码 `{code}` → CouponView；失败 ProblemDetail（coupon-not-found / code-used / not-in-period /
+  /// already-claimed / sold-out / 429 redeem-locked）。🔴 码明文不进日志（`ApiLogInterceptor` 打码 `code`）。
+  static const String meCouponsRedeem = '$base/me/coupons/redeem';
+
   /// 行政区划三级树（Story 2.4，游客可读）。
   static const String shopRegions = '$base/shop/regions';
   /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。

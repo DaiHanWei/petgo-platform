@@ -13,6 +13,7 @@ import '../../../../core/network/api_paths.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../auth/domain/auth_state.dart';
 import '../domain/shop_coupon.dart';
+import '../domain/user_coupon.dart';
 
 class CouponRepository {
   CouponRepository({required this.dio});
@@ -33,6 +34,25 @@ class CouponRepository {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.meCouponsSummary);
     final v = resp.data?['availableCount'];
     return v is num ? v.toInt() : 0;
+  }
+
+  /// 我的券一页（v1.4.2 shop Story 9.3 · 2.2 AC8）。失败抛 [DioException]（页面给 G5 重试）。
+  Future<MyCouponPage> myCoupons(CouponTab tab, {String? cursor}) async {
+    final resp = await dio.get<Map<String, dynamic>>(
+      ApiPaths.meCoupons,
+      queryParameters: {'tab': tab.api, if (cursor != null && cursor.isNotEmpty) 'cursor': cursor},
+    );
+    return MyCouponPage.fromJson(resp.data ?? const {});
+  }
+
+  /// 兑换码（v1.4.2 shop Story 9.3 · 2.2 AC3）。成功返回新用户券；失败抛 [DioException]
+  /// （调用方用 [CouponRedeemError.from] 分类）。🔴 [code] 明文不打日志、不进埋点。
+  Future<UserCoupon> redeem(String code) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.meCouponsRedeem,
+      data: {'code': normalizeCouponCode(code)},
+    );
+    return UserCoupon.fromJson(resp.data ?? const {});
   }
 
   /// 首页「给你的券」（新人券已由服务端置顶）。
