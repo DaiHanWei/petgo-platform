@@ -51,6 +51,21 @@ public interface ShopCouponRepository extends JpaRepository<ShopCoupon, Long> {
             + "and c.issueStartAt < :newEnd and c.issueEndAt > :newStart")
     boolean existsActiveNewbieOverlapping(@Param("newStart") Instant newStart, @Param("newEnd") Instant newEnd);
 
+    /** 与新券重叠的那张新人券（报错文案要带名称与发放期，A6）。 */
+    @Query("select c from ShopCoupon c "
+            + "where c.acquireType = com.tailtopia.shop.coupon.domain.CouponAcquireType.NEWBIE "
+            + "and c.status = com.tailtopia.shop.coupon.domain.CouponStatus.ACTIVE "
+            + "and (:excludeId is null or c.id <> :excludeId) "
+            + "and c.issueStartAt < :newEnd and c.issueEndAt > :newStart order by c.issueStartAt")
+    List<ShopCoupon> findActiveNewbieOverlapping(@Param("newStart") Instant newStart, @Param("newEnd") Instant newEnd,
+            @Param("excludeId") Long excludeId);
+
+    /** 后台列表（V1.4.2 shop-admin Story 2.1 · AD-6）：按类型 / 发放方式筛，新建在前。状态现算后在服务层过滤。 */
+    @Query("select c from ShopCoupon c where (:kind is null or c.kind = :kind) "
+            + "and (:acquireType is null or c.acquireType = :acquireType) order by c.createdAt desc, c.id desc")
+    List<ShopCoupon> findForAdmin(@Param("kind") com.tailtopia.shop.coupon.domain.CouponKind kind,
+            @Param("acquireType") CouponAcquireType acquireType);
+
     /**
      * 当前发放中的某类模板（Story 2.2）：ACTIVE 且 {@code issue_start_at ≤ now < issue_end_at}，
      * 按 {@code issue_start_at} 倒序（同刻按 id 倒序）。CLAIM 用于首页 / 详情 / promo，NEWBIE 用于新人券。

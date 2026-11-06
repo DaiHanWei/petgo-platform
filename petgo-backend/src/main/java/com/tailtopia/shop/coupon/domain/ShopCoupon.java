@@ -43,7 +43,8 @@ public class ShopCoupon {
     private String publicToken;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "kind", nullable = false, length = 16, updatable = false)
+    // V1.4.2 shop-admin Story 2.1：发放期未开始的券可改类型（服务端校验：只限未发放，O-32）
+    @Column(name = "kind", nullable = false, length = 16)
     private CouponKind kind;
 
     @Column(name = "name_id", nullable = false, length = 60)
@@ -68,7 +69,8 @@ public class ShopCoupon {
     private List<String> scopeValues = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "acquire_type", nullable = false, length = 16, updatable = false)
+    // V1.4.2 shop-admin Story 2.1：发放期未开始、未发放、无兑换码的券可改发放方式（服务端校验，O-32）
+    @Column(name = "acquire_type", nullable = false, length = 16)
     private CouponAcquireType acquireType;
 
     @Column(name = "issue_start_at", nullable = false)
@@ -145,6 +147,38 @@ public class ShopCoupon {
         c.totalQuantity = totalQuantity;
         c.perUserLimit = perUserLimit;
         return c;
+    }
+
+    /**
+     * 编辑（V1.4.2 shop-admin Story 2.1 · AD-6）：发放期未开始的券改全部参数。字段由 {@code CouponAdminService} 校验后传入；
+     * 是否允许（未开始 / 未停用 / 未发放）由调用方判断。
+     */
+    @SuppressWarnings("java:S107")
+    public void applyEdit(CouponKind kind, String nameId, String nameEn, long amount, long minSpend,
+            CouponScopeType scopeType, List<String> scopeValues, CouponAcquireType acquireType,
+            Instant issueStartAt, Instant issueEndAt, CouponValidMode validMode, Instant validStartAt,
+            Instant validEndAt, Integer validDays, Integer totalQuantity, int perUserLimit) {
+        this.kind = kind;
+        this.nameId = nameId;
+        this.nameEn = nameEn;
+        this.amount = amount;
+        this.minSpend = minSpend;
+        this.scopeType = scopeType;
+        this.scopeValues = new ArrayList<>(scopeValues);
+        this.acquireType = acquireType;
+        this.issueStartAt = issueStartAt;
+        this.issueEndAt = issueEndAt;
+        this.validMode = validMode;
+        this.validStartAt = validStartAt;
+        this.validEndAt = validEndAt;
+        this.validDays = validDays;
+        this.totalQuantity = totalQuantity;
+        this.perUserLimit = perUserLimit;
+    }
+
+    /** 已开始发放的券只能加总量（只增不减；null = 不限），由调用方校验方向。 */
+    public void raiseTotalQuantity(Integer newTotal) {
+        this.totalQuantity = newTotal;
     }
 
     /** 发放期左闭右开 {@code [issue_start_at, issue_end_at)} 且 ACTIVE：能领 / 能兑 / 新人能发。 */

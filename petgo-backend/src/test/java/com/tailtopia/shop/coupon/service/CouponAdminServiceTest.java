@@ -51,6 +51,7 @@ class CouponAdminServiceTest {
     private ShopCouponCodeRepository codes;
     private ShopProductRepository products;
     private CouponLedgerService ledger;
+    private com.tailtopia.shop.coupon.repository.UserCouponRepository userCoupons;
     private CouponNewbieLock newbieLock;
     private AdminAuditService audit;
     private CouponAdminService service;
@@ -61,12 +62,13 @@ class CouponAdminServiceTest {
         codes = mock(ShopCouponCodeRepository.class);
         products = mock(ShopProductRepository.class);
         ledger = mock(CouponLedgerService.class);
+        userCoupons = mock(com.tailtopia.shop.coupon.repository.UserCouponRepository.class);
         newbieLock = mock(CouponNewbieLock.class);
         audit = mock(AdminAuditService.class);
         ShopTokenGenerator tokens = mock(ShopTokenGenerator.class);
         when(tokens.generate()).thenReturn("tok");
         when(coupons.save(any(ShopCoupon.class))).thenAnswer(i -> i.getArgument(0));
-        service = new CouponAdminService(coupons, codes, products, ledger, newbieLock, tokens, audit,
+        service = new CouponAdminService(coupons, codes, products, ledger, userCoupons, newbieLock, tokens, audit,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -235,7 +237,7 @@ class CouponAdminServiceTest {
         audit = mock(AdminAuditService.class);
         ShopTokenGenerator tokens = mock(ShopTokenGenerator.class);
         when(tokens.generate()).thenReturn("tok2");
-        CouponAdminService noActor = new CouponAdminService(coupons, codes, products, ledger, newbieLock, tokens,
+        CouponAdminService noActor = new CouponAdminService(coupons, codes, products, ledger, userCoupons, newbieLock, tokens,
                 audit, Clock.fixed(NOW, ZoneOffset.UTC));
         noActor.create(acquire(CouponAcquireType.CLAIM, 1), null);
         verifyNoInteractions(audit);

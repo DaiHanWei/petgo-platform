@@ -57,10 +57,12 @@ class CouponLedgerRelockTest {
     @DisplayName("SQL：只认 AVAILABLE + 本人，🔴 不含有效期条件（已过期仍可用于新单）；LOCKED 到新单、不新建行")
     void relockSqlIgnoresValidityAndOnlyAcceptsAvailable() {
         String sql = UserCouponLedgerDao.RELOCK_FOR_REORDER_SQL;
-        assertThat(sql).startsWith("UPDATE user_coupons")
+        // V1.4.2 shop-admin Story 2.1：同一条语句用 CTE 补写 LOCKED 流水（user_coupon_events），用户券本身仍不新建行
+        assertThat(sql).startsWith("WITH u AS (").contains("UPDATE user_coupons")
                 .contains("status = 'LOCKED'", "locked_order_id = :orderId", "status = 'AVAILABLE'",
                         "user_id = :userId", "id = :id")
-                .doesNotContain("valid_from").doesNotContain("valid_until").doesNotContain("INSERT");
+                .contains("INSERT INTO user_coupon_events").contains("'LOCKED', :orderId")
+                .doesNotContain("valid_from").doesNotContain("valid_until").doesNotContain("INSERT INTO user_coupons");
     }
 
     @Test

@@ -99,4 +99,25 @@ public interface UserCouponRepository extends Repository<UserCoupon, Long> {
             + "ORDER BY user_id LIMIT :limit", nativeQuery = true)
     List<Long> findExpiryReminderUserIds(@Param("now") Instant now, @Param("until") Instant until,
             @Param("afterUserId") long afterUserId, @Param("limit") int limit);
+
+    // ===== V1.4.2 shop-admin Story 2.1 · AD-6：券后台详情数据（只读）=====
+
+    /** 已领张数（任何状态都算）。 */
+    long countByCouponId(Long couponId);
+
+    /** 某状态张数（占用中 = LOCKED、已使用 = USED）。 */
+    long countByCouponIdAndStatus(Long couponId, UserCouponStatus status);
+
+    /**
+     * 带来的订单金额：用了该模板任一张用户券（满减或免运）且<b>已付款</b>（{@code paid_at} 非空）的订单 {@code total_amount} 合计。
+     * {@code from / to} 为空 = 不限时间（按 {@code paid_at} 左闭右开）。
+     */
+    @Query(nativeQuery = true, value = "SELECT COALESCE(SUM(o.total_amount), 0) FROM shop_orders o "
+            + "WHERE o.paid_at IS NOT NULL "
+            + "AND (CAST(:from AS timestamptz) IS NULL OR o.paid_at >= CAST(:from AS timestamptz)) "
+            + "AND (CAST(:to AS timestamptz) IS NULL OR o.paid_at < CAST(:to AS timestamptz)) "
+            + "AND EXISTS (SELECT 1 FROM user_coupons uc WHERE uc.id IN (o.discount_user_coupon_id, o.free_shipping_user_coupon_id) "
+            + "AND (CAST(:couponId AS bigint) IS NULL OR uc.coupon_id = CAST(:couponId AS bigint)))")
+    long sumPaidOrderAmountUsingCoupon(@Param("couponId") Long couponId, @Param("from") Instant from,
+            @Param("to") Instant to);
 }

@@ -82,6 +82,41 @@ class CouponLedgerIntegrationTest extends ApiIntegrationTest {
         tx.executeWithoutResult(s -> ledger.lock(userId, orderId, List.of(uc.getPublicToken()), at));
     }
 
+    /** V1.4.2 shop-admin Story 2.1 AC6：发放 / 锁定 / 使用 / 退回 / 作废各写一行流水，带订单。 */
+    @Test
+    void everyStateChangeWritesOneEvent() {
+        long uid = newUser().getId();
+        ShopCoupon c = newCoupon(7);
+        UserCoupon uc = issue(uid, c);
+        long order = newOrder(uid);
+        lock(uid, order, uc, Instant.now());
+        tx.execute(s -> ledger.markUsed(order, Instant.now()));
+        tx.execute(s -> ledger.releaseOnCancel(order, CouponReleaseMode.RETURN, Instant.now()));
+        tx.execute(s -> ledger.voidUnused(c.getId(), Instant.now()));
+        List<String> events = jdbc.queryForList(
+                "SELECT event || ':' || COALESCE(order_id::text, '-') FROM user_coupon_events WHERE user_coupon_id = ? ORDER BY id",
+                String.class, uc.getId());
+        assertThat(events).containsExactly("ISSUED:-", "LOCKED:" + order, "USED:" + order, "RELEASED:" + order, "VOIDED:-");
+    }
+
+    /** V1.4.2 shop-admin Story 2.1 AC1：未开始的券可编辑；已开始的只能加总量。 */
+    @Test
+    void editRulesFollowTheIssuePeriod() {
+        Instant now = Instant.now();
+        ShopCoupon future = admin.create(new CouponDraft(CouponKind.DISCOUNT, "Future", "Future", 10_000L, 50_000L,
+                CouponScopeType.ALL, null, CouponAcquireType.CLAIM, now.plus(Duration.ofDays(1)),
+                now.plus(Duration.ofDays(10)), CouponValidMode.RELATIVE, null, null, 7, 100, 1), null);
+        ShopCoupon edited = admin.update(future.getPublicToken(), new CouponDraft(CouponKind.FREE_SHIPPING, "Ongkir",
+                "Ongkir", 20_000L, 50_000L, CouponScopeType.ALL, null, CouponAcquireType.CLAIM,
+                now.plus(Duration.ofDays(2)), now.plus(Duration.ofDays(10)), CouponValidMode.RELATIVE, null, null, 7, 80, 1),
+                true, null);
+        assertThat(coupons.findById(edited.getId()).orElseThrow().getKind()).isEqualTo(CouponKind.FREE_SHIPPING);
+
+        ShopCoupon running = newCoupon(7);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> admin.raiseTotalQuantity(running.getPublicToken(), 5, true, null))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+    }
+
     @Test
     void concurrentLockOnlyOneWins() throws Exception {
         long uid = newUser().getId();

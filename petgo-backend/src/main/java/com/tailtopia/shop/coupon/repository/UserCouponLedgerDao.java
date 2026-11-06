@@ -25,21 +25,42 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class UserCouponLedgerDao {
 
+    /*
+     * V1.4.2 shop-admin Story 2.1 · AD-6：每条状态变更语句都用数据修改 CTE 在<b>同一条语句</b>里补写
+     * user_coupon_events（ISSUED / LOCKED / RELEASED / USED / VOIDED 各一行），流水与状态不可能一边成一边不成。
+     * 更新类语句的影响行数 = 写入的流水行数 = 本次改了状态的用户券数（与原 executeUpdate 语义一致）。
+     */
     private static final String INSERT_SQL = """
-            INSERT INTO user_coupons (public_token, user_id, coupon_id, source, status,
-                                      valid_from, valid_until, claimed_at, created_at, updated_at)
-            VALUES (:token, :userId, :couponId, :source, 'AVAILABLE',
-                    :validFrom, :validUntil, :now, :now, :now)
-            RETURNING id""";
+            WITH n AS (
+                INSERT INTO user_coupons (public_token, user_id, coupon_id, source, status,
+                                          valid_from, valid_until, claimed_at, created_at, updated_at)
+                VALUES (:token, :userId, :couponId, :source, 'AVAILABLE',
+                        :validFrom, :validUntil, :now, :now, :now)
+                RETURNING id
+            ), e AS (
+                INSERT INTO user_coupon_events (user_coupon_id, event, order_id, created_at)
+                SELECT id, 'ISSUED', NULL, :now FROM n
+            )
+            SELECT id FROM n""";
 
     private static final String LOCK_SQL = """
-            UPDATE user_coupons SET status = 'LOCKED', locked_order_id = :orderId, updated_at = :now
-             WHERE public_token = :token AND user_id = :userId AND status = 'AVAILABLE'
-               AND valid_from <= :now AND valid_until > :now""";
+            WITH u AS (
+                UPDATE user_coupons SET status = 'LOCKED', locked_order_id = :orderId, updated_at = :now
+                 WHERE public_token = :token AND user_id = :userId AND status = 'AVAILABLE'
+                   AND valid_from <= :now AND valid_until > :now
+                RETURNING id
+            )
+            INSERT INTO user_coupon_events (user_coupon_id, event, order_id, created_at)
+            SELECT id, 'LOCKED', :orderId, :now FROM u""";
 
     private static final String MARK_USED_SQL = """
-            UPDATE user_coupons SET status = 'USED', used_order_id = :orderId, updated_at = :now
-             WHERE locked_order_id = :orderId AND status = 'LOCKED'""";
+            WITH u AS (
+                UPDATE user_coupons SET status = 'USED', used_order_id = :orderId, updated_at = :now
+                 WHERE locked_order_id = :orderId AND status = 'LOCKED'
+                RETURNING id
+            )
+            INSERT INTO user_coupon_events (user_coupon_id, event, order_id, created_at)
+            SELECT id, 'USED', :orderId, :now FROM u""";
 
     /**
      * 迟到款重新下单重新锁券（v1.4.2 shop Story 4.2 AC2.4，D-3「不新建行，直接把原行重新 LOCKED 到新订单」）：
@@ -47,25 +68,48 @@ public class UserCouponLedgerDao {
      * LOCKED / USED（被别单占用或用掉）、VOIDED（运营停用作废）均影响 0 行。
      */
     public static final String RELOCK_FOR_REORDER_SQL = """
-            UPDATE user_coupons SET status = 'LOCKED', locked_order_id = :orderId, used_order_id = NULL,
-                                    updated_at = :now
-             WHERE id = :id AND user_id = :userId AND status = 'AVAILABLE'""";
+            WITH u AS (
+                UPDATE user_coupons SET status = 'LOCKED', locked_order_id = :orderId, used_order_id = NULL,
+                                        updated_at = :now
+                 WHERE id = :id AND user_id = :userId AND status = 'AVAILABLE'
+                RETURNING id
+            )
+            INSERT INTO user_coupon_events (user_coupon_id, event, order_id, created_at)
+            SELECT id, 'LOCKED', :orderId, :now FROM u""";
 
-    /** 退回（D-3）：模板已停用且选了作废 → VOIDED，否则 → AVAILABLE；两种都清订单字段。 */
+    /**
+     * 退回（D-3）：模板已停用且选了作废 → VOIDED，否则 → AVAILABLE；两种都清订单字段。
+     * 流水：落 AVAILABLE 记 RELEASED，落 VOIDED 记 VOIDED，均带原订单。
+     */
     private static final String RELEASE_RETURN_SQL = """
-            UPDATE user_coupons uc SET
-                status = CASE WHEN c.status = 'STOPPED' AND c.void_on_stop THEN 'VOIDED' ELSE 'AVAILABLE' END,
-                locked_order_id = NULL, used_order_id = NULL, updated_at = :now
-              FROM shop_coupons c
-             WHERE uc.coupon_id = c.id AND uc.locked_order_id = :orderId AND uc.status IN ('LOCKED', 'USED')""";
+            WITH u AS (
+                UPDATE user_coupons uc SET
+                    status = CASE WHEN c.status = 'STOPPED' AND c.void_on_stop THEN 'VOIDED' ELSE 'AVAILABLE' END,
+                    locked_order_id = NULL, used_order_id = NULL, updated_at = :now
+                  FROM shop_coupons c
+                 WHERE uc.coupon_id = c.id AND uc.locked_order_id = :orderId AND uc.status IN ('LOCKED', 'USED')
+                RETURNING uc.id, uc.status
+            )
+            INSERT INTO user_coupon_events (user_coupon_id, event, order_id, created_at)
+            SELECT id, CASE WHEN status = 'VOIDED' THEN 'VOIDED' ELSE 'RELEASED' END, :orderId, :now FROM u""";
 
     private static final String VOID_UNUSED_BY_COUPON_SQL = """
-            UPDATE user_coupons SET status = 'VOIDED', updated_at = :now
-             WHERE coupon_id = :couponId AND status = 'AVAILABLE'""";
+            WITH u AS (
+                UPDATE user_coupons SET status = 'VOIDED', updated_at = :now
+                 WHERE coupon_id = :couponId AND status = 'AVAILABLE'
+                RETURNING id
+            )
+            INSERT INTO user_coupon_events (user_coupon_id, event, order_id, created_at)
+            SELECT id, 'VOIDED', NULL, :now FROM u""";
 
     private static final String VOID_AVAILABLE_BY_USER_SQL = """
-            UPDATE user_coupons SET status = 'VOIDED', updated_at = :now
-             WHERE user_id = :userId AND status = 'AVAILABLE'""";
+            WITH u AS (
+                UPDATE user_coupons SET status = 'VOIDED', updated_at = :now
+                 WHERE user_id = :userId AND status = 'AVAILABLE'
+                RETURNING id
+            )
+            INSERT INTO user_coupon_events (user_coupon_id, event, order_id, created_at)
+            SELECT id, 'VOIDED', NULL, :now FROM u""";
 
     /**
      * 快过期提醒置位（Story 2.3 AC5.5.2，I8「每张券只提醒一次」）：该用户 AVAILABLE、未提醒过、

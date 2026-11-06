@@ -30,8 +30,11 @@ import org.springframework.data.repository.CrudRepository;
 class CouponLedgerSingleEntryGuardTest {
 
     private static final Path SRC = Path.of("src/main/java");
+    /** V1.4.2 shop-admin Story 2.1：同时覆盖状态流水表 user_coupon_events（只由账本写）。 */
     private static final Pattern WRITE_SQL =
-            Pattern.compile("(?is)\\b(insert\\s+into|update|delete\\s+from)\\s+user_coupons\\b");
+            Pattern.compile("(?is)\\b(insert\\s+into|update|delete\\s+from)\\s+user_coupon(s|_events)\\b");
+    private static final Pattern EVENTS_WRITE_SQL =
+            Pattern.compile("(?is)\\b(insert\\s+into|update|delete\\s+from)\\s+user_coupon_events\\b");
     private static final String DAO_IMPORT = "import com.tailtopia.shop.coupon.repository.UserCouponLedgerDao";
 
     private static List<Path> javaFiles() throws IOException {
@@ -58,6 +61,24 @@ class CouponLedgerSingleEntryGuardTest {
         // 自检：DAO 里确实有写语句（防止正则失效导致守卫空转）
         Path dao = SRC.resolve("com/tailtopia/shop/coupon/repository/UserCouponLedgerDao.java");
         assertThat(WRITE_SQL.matcher(read(dao)).find()).isTrue();
+    }
+
+    @Test
+    void couponEventsAreWrittenOnlyByTheLedgerDaoAndOnEveryStateChange() throws IOException {
+        List<String> offenders = javaFiles().stream()
+                .filter(p -> !p.getFileName().toString().equals("UserCouponLedgerDao.java"))
+                .filter(p -> EVENTS_WRITE_SQL.matcher(read(p)).find())
+                .map(Path::toString).toList();
+        assertThat(offenders).as("user_coupon_events 写语句只允许出现在 UserCouponLedgerDao.java").isEmpty();
+        String dao = read(SRC.resolve("com/tailtopia/shop/coupon/repository/UserCouponLedgerDao.java"));
+        // 每种状态变更都写流水：发放 / 锁定（含重下单）/ 使用 / 退回（RELEASED 或 VOIDED）/ 作废
+        for (String event : List.of("'ISSUED'", "'LOCKED'", "'USED'", "'RELEASED'", "'VOIDED'")) {
+            assertThat(dao).as("DAO 缺 " + event + " 流水").contains(event);
+        }
+        long updates = Pattern.compile("(?i)UPDATE\\s+user_coupons\\b").matcher(dao).results().count();
+        long eventInserts = EVENTS_WRITE_SQL.matcher(dao).results().count();
+        // 改状态的 UPDATE（不含 expiry_notified_at 置位那一条）每条都配一条流水 INSERT；发券 INSERT 另配一条
+        assertThat(eventInserts).as("每条状态变更语句都要补写流水").isEqualTo(updates - 1 + 1);
     }
 
     @Test
