@@ -94,7 +94,8 @@ public class ShopBanner {
             int sortWeight) {
         ShopBanner b = new ShopBanner();
         b.publicToken = TOKENS.generate();
-        b.apply(imageKey, imageW, imageH, sortWeight);
+        b.apply(imageKey, imageW, imageH);
+        b.sortWeight = sortWeight;
         b.active = false;
         return b;
     }
@@ -105,12 +106,13 @@ public class ShopBanner {
      * <p>⚠️ {@code imageW / imageH} 必须与 {@code imageKey} <b>成对</b>传入：换了图却没换尺寸，
      * 客户端会按旧比例预置高度，banner 区高度与图对不上。两者同为 {@code Integer}，
      * <b>传反不会编译报错</b>，看准顺序（先宽后高）。
+     *
+     * <p>V1.4.2 shop-admin Story 3.1：编辑不再改排序权重，排序只经拖动 {@link #reweight}。
      */
-    public void apply(String imageKey, Integer imageW, Integer imageH, int sortWeight) {
+    public void apply(String imageKey, Integer imageW, Integer imageH) {
         this.imageKey = imageKey;
         this.imageW = imageW;
         this.imageH = imageH;
-        this.sortWeight = sortWeight;
     }
 
     /**
@@ -121,6 +123,11 @@ public class ShopBanner {
         BannerTargetType t = type == null ? BannerTargetType.NONE : type;
         this.targetType = t;
         this.targetValue = t == BannerTargetType.NONE ? null : value;
+    }
+
+    /** 拖动排序写回权重（V1.4.2 shop-admin Story 3.1 · AD-7：按新顺序重写 N..1）。 */
+    public void reweight(int sortWeight) {
+        this.sortWeight = sortWeight;
     }
 
     /**

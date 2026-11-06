@@ -1615,3 +1615,7 @@ dialog.cm-modal .cm-select { display: flex; flex-direction: column; gap: 4px; ma
 .btn-link { background: none; border: 0; padding: 0; color: var(--brand); cursor: pointer; font: inherit; }
 .btn-link:hover { text-decoration: underline; }
 tr.is-focus > td { background: var(--brand-tint, #F3F0FF); }
+/* V1.4.2 shop-admin Story 3.1：banner 拖动手柄 */
+.s-col-handle { width: 28px; }
+.drag-handle { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; }
+tr.is-dragging { opacity: .5; }

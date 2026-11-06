@@ -1464,3 +1464,83 @@ document.addEventListener('click', function (e) {
         go(e.target);
     });
 })();
+
+
+// ===== V1.4.2 shop-admin Story 3.1 · AD-7：banner 拖动排序 + 上传后比例提醒 =====
+(function () {
+    // ① 拖动排序：table[data-banner-reorder] 的行可拖，松手后按新顺序 htmx POST ids（服务端重写 sort_weight N..1，整表 oob 重拉）。
+    var dragging = null;
+    document.addEventListener('dragstart', function (e) {
+        var tr = e.target && e.target.closest ? e.target.closest('table[data-banner-reorder] tr[data-banner-id]') : null;
+        if (!tr) { return; }
+        dragging = tr;
+        dragging._before = orderOf(tr.closest('table'));
+        tr.classList.add('is-dragging');
+        if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tr.getAttribute('data-banner-id')); }
+    });
+    document.addEventListener('dragover', function (e) {
+        if (!dragging) { return; }
+        var over = e.target && e.target.closest ? e.target.closest('tr[data-banner-id]') : null;
+        if (!over || over === dragging || over.parentNode !== dragging.parentNode) { return; }
+        e.preventDefault();
+        var r = over.getBoundingClientRect();
+        over.parentNode.insertBefore(dragging, (e.clientY - r.top) > r.height / 2 ? over.nextSibling : over);
+    });
+    function orderOf(table) {
+        return [].slice.call(table.querySelectorAll('tr[data-banner-id]')).map(function (r) { return r.getAttribute('data-banner-id'); });
+    }
+    document.addEventListener('dragend', function () {
+        if (!dragging) { return; }
+        var table = dragging.closest('table[data-banner-reorder]');
+        var before = dragging._before || [];
+        dragging.classList.remove('is-dragging');
+        dragging = null;
+        if (!table || typeof htmx === 'undefined') { return; }
+        var ids = orderOf(table);
+        if (ids.join(',') === before.join(',')) { return; } // 没挪位置（或 Esc 取消）：不提交
+        var restore = function () {
+            // 保存失败（如别人刚增删了 banner）：行顺序退回拖动前，不让界面停在一个没保存的顺序上
+            var body = table.querySelector('tbody');
+            before.forEach(function (id) {
+                var row = body.querySelector('tr[data-banner-id="' + id + '"]');
+                if (row) { body.appendChild(row); }
+            });
+            if (table.getAttribute('data-msg-reorder-failed')) { window.alert(table.getAttribute('data-msg-reorder-failed')); }
+        };
+        table.addEventListener('htmx:afterRequest', function onDone(ev) {
+            table.removeEventListener('htmx:afterRequest', onDone);
+            if (!ev.detail || !ev.detail.successful) { restore(); }
+        });
+        htmx.ajax('POST', table.getAttribute('data-banner-reorder'), {
+            source: table, target: '#shop-banner-drawer-body', swap: 'innerHTML', values: { ids: ids }
+        });
+    });
+
+    // ② 比例提醒（B6）：与 BannerImageRatio 同一阈值（|w/h − 352/148| / (352/148) > 3%），提醒不拦截。
+    function check(box) {
+        var w = parseInt((document.getElementById(box.getAttribute('data-w-field')) || {}).value || '0', 10);
+        var h = parseInt((document.getElementById(box.getAttribute('data-h-field')) || {}).value || '0', 10);
+        box.querySelectorAll('[data-ratio-warn],[data-ratio-size]').forEach(function (n) { n.remove(); });
+        if (!(w > 0 && h > 0)) { return; }
+        var target = parseFloat(box.getAttribute('data-app-w')) / parseFloat(box.getAttribute('data-app-h'));
+        var actual = w / h, dev = (actual - target) / target;
+        var r = (Math.round(actual * 10) / 10).toFixed(1) + ':1';
+        function fill(t) { return (t || '').split('{w}').join(String(w)).split('{h}').join(String(h)).split('{r}').join(r); }
+        var size = document.createElement('p');
+        size.className = 'hint'; size.setAttribute('data-ratio-size', ''); size.textContent = fill(box.getAttribute('data-msg-size'));
+        box.appendChild(size);
+        if (Math.abs(dev) > parseFloat(box.getAttribute('data-tolerance'))) {
+            var warn = document.createElement('p');
+            warn.className = 'banner warn'; warn.setAttribute('data-ratio-warn', '');
+            warn.textContent = fill(box.getAttribute(dev < 0 ? 'data-msg-tall' : 'data-msg-wide'));
+            box.appendChild(warn);
+        }
+    }
+    document.addEventListener('input', function (e) {
+        var id = e.target && e.target.id;
+        if (!id) { return; }
+        document.querySelectorAll('[data-banner-ratio]').forEach(function (box) {
+            if (box.getAttribute('data-w-field') === id || box.getAttribute('data-h-field') === id) { check(box); }
+        });
+    });
+})();

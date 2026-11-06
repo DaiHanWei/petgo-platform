@@ -14,7 +14,6 @@ public class ShopBannerForm {
     private String imageKey;
     private Integer imageW;
     private Integer imageH;
-    private int sortWeight;
 
     /** 点击跳转类型（V1.4.1）：NONE / PRODUCT / CATEGORY / EXTERNAL / COUPON（v1.4.2）；空 = NONE。 */
     private String targetType;
@@ -22,14 +21,44 @@ public class ShopBannerForm {
     /** 跳转目标：商品 token / 品类字面量 / https 链接 / 券模板 public_token（v1.4.2 COUPON）。 */
     private String targetValue;
 
-    /** 排期起（含），null = 不限（v1.4.2 shop Story 6.1，D-16）。页面控件由后台线补。 */
+    /** 排期起（含），null = 不限（v1.4.2 shop Story 6.1，D-16）。 */
     private java.time.Instant startAt;
+
+    /**
+     * 页面控件（V1.4.2 shop-admin Story 3.1 · B3）：上 / 下线时间按 <b>WIB</b> 墙上时间录入（datetime-local），
+     * {@link #getStartAt()} / {@link #getEndAt()} 优先取它们换算成绝对时刻；不填 = 不限。
+     */
+    @org.springframework.format.annotation.DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+    private java.time.LocalDateTime startLocal;
+
+    @org.springframework.format.annotation.DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+    private java.time.LocalDateTime endLocal;
+
+    public java.time.LocalDateTime getStartLocal() {
+        return startLocal;
+    }
+
+    public void setStartLocal(java.time.LocalDateTime startLocal) {
+        this.startLocal = startLocal;
+    }
+
+    public java.time.LocalDateTime getEndLocal() {
+        return endLocal;
+    }
+
+    public void setEndLocal(java.time.LocalDateTime endLocal) {
+        this.endLocal = endLocal;
+    }
+
+    private static java.time.Instant wib(java.time.LocalDateTime t) {
+        return t == null ? null : t.atZone(com.tailtopia.shared.schedule.ScheduleWindow.WIB).toInstant();
+    }
 
     /** 排期止（不含），null = 不限。 */
     private java.time.Instant endAt;
 
     public java.time.Instant getStartAt() {
-        return startAt;
+        return startLocal != null ? wib(startLocal) : startAt;
     }
 
     public void setStartAt(java.time.Instant startAt) {
@@ -37,7 +66,7 @@ public class ShopBannerForm {
     }
 
     public java.time.Instant getEndAt() {
-        return endAt;
+        return endLocal != null ? wib(endLocal) : endAt;
     }
 
     public void setEndAt(java.time.Instant endAt) {
@@ -82,13 +111,5 @@ public class ShopBannerForm {
 
     public void setImageH(Integer imageH) {
         this.imageH = imageH;
-    }
-
-    public int getSortWeight() {
-        return sortWeight;
-    }
-
-    public void setSortWeight(int sortWeight) {
-        this.sortWeight = sortWeight;
     }
 }

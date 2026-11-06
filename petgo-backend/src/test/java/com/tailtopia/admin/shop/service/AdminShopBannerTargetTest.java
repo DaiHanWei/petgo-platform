@@ -60,9 +60,11 @@ class AdminShopBannerTargetTest {
                 .isInstanceOf(AppException.class).hasMessageContaining("商品");
     }
 
+    /** V1.4.2 shop-admin Story 3.1 · B4：品类跳转已下线，任何品类值一律拒绝（存量 banner 须改选）。 */
     @Test
-    void categoryMustBeKnownLiteral() {
-        assertThat(service.target(form("CATEGORY", "CAMILAN")).value()).isEqualTo("CAMILAN");
+    void categoryIsRetiredAndAlwaysRejected() {
+        assertThatThrownBy(() -> service.target(form("CATEGORY", "CAMILAN")))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getMessage()).contains("品类"));
         assertThatThrownBy(() -> service.target(form("CATEGORY", "camilan")))
                 .isInstanceOf(AppException.class);
     }

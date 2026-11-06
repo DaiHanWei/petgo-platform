@@ -10,7 +10,6 @@ import com.tailtopia.admin.shop.dto.ShopBannerForm;
 import com.tailtopia.admin.shop.service.AdminShopBannerService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
-import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopBanner;
 import com.tailtopia.shop.service.ShopImageUrlResolver;
 import java.util.ArrayList;
@@ -86,12 +85,12 @@ public class AdminShopBannerController {
             model.addAttribute("form", new ShopBannerForm());
             model.addAttribute("bannerId", null);
             model.addAttribute("existingImage", null);
-            model.addAttribute("categories", ProductCategory.values());
+            model.addAttribute("retiredCategory", false);
+            populateFormOptions(model, null);
             return "admin/fragments/drawer-shop-banner :: form";
         }
         if (hx.isHtmx() && open != null) {
             populateEditForm(open, model);
-            model.addAttribute("categories", ProductCategory.values());
             return "admin/fragments/drawer-shop-banner :: form";
         }
         populateList(model);
@@ -107,9 +106,19 @@ public class AdminShopBannerController {
         f.setImageKey(b.getImageKey());
         f.setImageW(b.getImageW());
         f.setImageH(b.getImageH());
-        f.setSortWeight(b.getSortWeight());
-        f.setTargetType(b.getTargetType().name());
-        f.setTargetValue(b.getTargetValue());
+        // V1.4.2 shop-admin Story 3.1 · B4：存量「品类」跳转回填为空类型，必须改选才能保存（服务端同样拒绝）
+        boolean retired = b.getTargetType() == com.tailtopia.shop.domain.BannerTargetType.CATEGORY;
+        f.setTargetType(retired ? "" : b.getTargetType().name());
+        f.setTargetValue(retired ? null : b.getTargetValue());
+        f.setStartLocal(b.getStartAt() == null ? null
+                : java.time.LocalDateTime.ofInstant(b.getStartAt(), com.tailtopia.shared.schedule.ScheduleWindow.WIB));
+        f.setEndLocal(b.getEndAt() == null ? null
+                : java.time.LocalDateTime.ofInstant(b.getEndAt(), com.tailtopia.shared.schedule.ScheduleWindow.WIB));
+        model.addAttribute("retiredCategory", retired);
+        populateFormOptions(model, b.getTargetType() == com.tailtopia.shop.domain.BannerTargetType.COUPON
+                ? b.getTargetValue() : null);
+        model.addAttribute("ratio", b.getImageW() == null || b.getImageH() == null ? null
+                : com.tailtopia.admin.shop.service.BannerImageRatio.check(b.getImageW(), b.getImageH()));
         model.addAttribute("form", f);
         model.addAttribute("bannerId", id);
         // ⚠️ CDN 未配时 publicUrl 返 null —— 不能 String.valueOf 成字符串 "null"，
@@ -136,13 +145,50 @@ public class AdminShopBannerController {
         return false;
     }
 
+    /** B5：保存失败回抽屉（422），顶部 .banner.err 写原因，表单保留（不被整块换成一行错误）。 */
+    private String formWithError(ShopBannerForm form, Long bannerId, String error, Model model,
+            HttpServletResponse response) {
+        response.setStatus(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY.value());
+        model.addAttribute("form", form);
+        model.addAttribute("bannerId", bannerId);
+        String url = form.getImageKey() == null || form.getImageKey().isBlank() ? null : imageUrls.publicUrl(form.getImageKey());
+        model.addAttribute("existingImage", url == null ? null : Map.of("key", form.getImageKey(), "url", url,
+                "w", form.getImageW() == null ? "" : String.valueOf(form.getImageW()),
+                "h", form.getImageH() == null ? "" : String.valueOf(form.getImageH())));
+        model.addAttribute("retiredCategory", false);
+        model.addAttribute("formError", error);
+        model.addAttribute("ratio", form.getImageW() == null || form.getImageH() == null ? null
+                : com.tailtopia.admin.shop.service.BannerImageRatio.check(form.getImageW(), form.getImageH()));
+        populateFormOptions(model, "COUPON".equals(form.getTargetType()) ? form.getTargetValue() : null);
+        return "admin/fragments/drawer-shop-banner :: form";
+    }
+
+    /** 抽屉下拉：只列用户领取类、可绑的券（B3）；编辑态当前绑定的券即使已不可绑也保留在下拉里（保存时服务端校验，B5）。 */
+    private void populateFormOptions(Model model, String currentCouponToken) {
+        java.util.List<Map<String, String>> opts = new ArrayList<>();
+        for (com.tailtopia.shop.coupon.domain.ShopCoupon c : service.claimableCouponOptions(java.time.Instant.now())) {
+            opts.add(Map.of("token", c.getPublicToken(), "name", c.getNameId()));
+        }
+        if (currentCouponToken != null && opts.stream().noneMatch(o -> o.get("token").equals(currentCouponToken))) {
+            opts.add(Map.of("token", currentCouponToken, "name", currentCouponToken));
+        }
+        model.addAttribute("couponOptions", opts);
+    }
+
     private void populateList(Model model) {
         // 🔴 「生效中」那一条问的是 App 端自己那条查询（见 AdminShopBannerService#liveId）——
         //    后台再写一遍「取第一条 active」就是第二份判据，将来 App 改了取图规则这里不会跟着变，
         //    而界面上完全看不出来：运营以为 A 在投，用户看到的是 B。
-        Long liveId = service.liveId();
+        // V1.4.2 shop-admin Story 3.1 · AD-7：六态由 ShopBannerQueryService.states 算（与 App 取数共用生效判定）
+        java.time.Instant now = java.time.Instant.now();
+        List<ShopBanner> all = service.all();
+        Map<Long, com.tailtopia.shop.service.ShopBannerQueryService.BannerState> states = service.states(all, now);
+        Map<String, String> couponNames = service.couponNames(all.stream()
+                .filter(b -> b.getTargetType() == com.tailtopia.shop.domain.BannerTargetType.COUPON && b.getTargetValue() != null)
+                .map(ShopBanner::getTargetValue).toList());
+        boolean anyLive = false;
         List<Map<String, Object>> view = new ArrayList<>();
-        for (ShopBanner b : service.all()) {
+        for (ShopBanner b : all) {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("id", b.getId());
             m.put("imageKey", b.getImageKey());
@@ -151,8 +197,11 @@ public class AdminShopBannerController {
             m.put("w", b.getImageW());
             m.put("h", b.getImageH());
             m.put("active", b.isActive());
-            m.put("sortWeight", b.getSortWeight());
-            m.put("state", AdminShopBannerService.stateOf(b, liveId));
+            m.put("state", states.get(b.getId()).name());
+            anyLive |= states.get(b.getId()) == com.tailtopia.shop.service.ShopBannerQueryService.BannerState.LIVE;
+            m.put("startAt", b.getStartAt());
+            m.put("endAt", b.getEndAt());
+            m.put("couponName", couponNames.get(b.getTargetValue()));
             // V1.4.1：跳转目标（NONE = 不可点）与埋点 banner_id，列表里给运营核对用。
             m.put("targetType", b.getTargetType().name());
             m.put("targetValue", b.getTargetValue());
@@ -160,7 +209,7 @@ public class AdminShopBannerController {
             view.add(m);
         }
         model.addAttribute("banners", view);
-        model.addAttribute("hasLive", liveId != null);
+        model.addAttribute("hasLive", anyLive);
     }
 
     /** banner 图直传。与商品图同构（同一条上传链路，只换 folder）。 */
@@ -188,7 +237,11 @@ public class AdminShopBannerController {
             @ModelAttribute("form") ShopBannerForm form, HxRequest hx, Model model,
             HttpServletResponse response, RedirectAttributes ra) {
         if (hx.isHtmx()) {
-            service.create(form, admin.getAdminAccountId());
+            try {
+                service.create(form, admin.getAdminAccountId());
+            } catch (AppException e) {
+                return formWithError(form, null, msg.resolve(e), model, response);
+            }
             return done(msg.get("admin.flash.banner.created"), admin, model, response);
         }
         try {
@@ -206,7 +259,11 @@ public class AdminShopBannerController {
             @ModelAttribute("form") ShopBannerForm form, HxRequest hx, Model model,
             HttpServletResponse response, RedirectAttributes ra) {
         if (hx.isHtmx()) {
-            service.update(id, form, admin.getAdminAccountId());
+            try {
+                service.update(id, form, admin.getAdminAccountId());
+            } catch (AppException e) {
+                return formWithError(form, id, msg.resolve(e), model, response);
+            }
             return done(msg.get("admin.flash.banner.updated"), admin, model, response);
         }
         try {
@@ -216,6 +273,15 @@ public class AdminShopBannerController {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/banners";
+    }
+
+    /** 拖动排序（V1.4.2 shop-admin Story 3.1 · AD-7）：按新顺序重写 sort_weight（N..1），整表重拉。 */
+    @PostMapping("/admin/shop/banners/reorder")
+    @PreAuthorize(EDIT_AUTH)
+    public String reorder(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(value = "ids", required = false) List<Long> ids, Model model, HttpServletResponse response) {
+        service.reorder(ids, admin.getAdminAccountId());
+        return done(msg.get("admin.v142.banner.flash.reordered"), admin, model, response);
     }
 
     @PostMapping("/admin/shop/banners/{id}/activate")

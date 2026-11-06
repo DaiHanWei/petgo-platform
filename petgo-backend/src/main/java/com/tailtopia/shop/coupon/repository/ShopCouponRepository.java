@@ -19,6 +19,9 @@ public interface ShopCouponRepository extends JpaRepository<ShopCoupon, Long> {
 
     Optional<ShopCoupon> findByPublicToken(String publicToken);
 
+    /** 批量按 token 取（V1.4.2 shop-admin Story 3.1：banner 列表显示券名）。 */
+    List<ShopCoupon> findByPublicTokenIn(Collection<String> publicTokens);
+
     /** {@code SELECT … FOR UPDATE}：领取 / 兑换 / 新人发放串行同一模板（D-2 每人限领的并发保护）。 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from ShopCoupon c where c.id = :id")

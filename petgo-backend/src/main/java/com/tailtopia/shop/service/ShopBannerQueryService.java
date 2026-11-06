@@ -8,7 +8,9 @@ import com.tailtopia.shop.repository.ShopProductRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -88,26 +90,102 @@ public class ShopBannerQueryService {
             if (out.size() >= limit) {
                 break;
             }
-            String url = urlOf.apply(b.getImageKey());
-            if (url == null || url.isBlank()) {
-                continue;   // CDN base 未配置：裂图不如不展示（与旧端点 204 同口径）
-            }
-            BannerTargetType type = b.getTargetType() == null ? BannerTargetType.NONE : b.getTargetType();
-            String value = b.getTargetValue();
-            LiveBanner live = switch (type) {
-                case PRODUCT -> value != null && onSaleProducts.contains(value)
-                        ? new LiveBanner(b, url, type.name(), value) : null;
-                case COUPON -> value != null && claimableCoupons.contains(value)
-                        ? new LiveBanner(b, url, type.name(), value) : null;
-                case CATEGORY -> new LiveBanner(b, url, WIRE_TOKO_HOME, null);
-                case EXTERNAL -> new LiveBanner(b, url, type.name(), value);
-                case NONE -> new LiveBanner(b, url, BannerTargetType.NONE.name(), null);
-            };
+            LiveBanner live = toLive(b, onSaleProducts, claimableCoupons, urlOf);
             if (live != null) {
                 out.add(live);
             }
         }
         return out;
+    }
+
+    /**
+     * 单张已上架、在排期内的 banner 的下发形态（{@link #select} 与后台六态 {@link #states} <b>共用这一处判定</b>，
+     * V1.4.2 shop-admin Story 3.1 · AD-7）。{@code null} = App 不展示：目标失效（商品不在售 / 券此刻不可领）或图片 URL 拼不出。
+     */
+    static LiveBanner toLive(ShopBanner b, Set<String> onSaleProducts, Set<String> claimableCoupons,
+            Function<String, String> urlOf) {
+        String url = urlOf.apply(b.getImageKey());
+        if (url == null || url.isBlank()) {
+            return null;   // CDN base 未配置：裂图不如不展示（与旧端点 204 同口径）
+        }
+        BannerTargetType type = b.getTargetType() == null ? BannerTargetType.NONE : b.getTargetType();
+        String value = b.getTargetValue();
+        return switch (type) {
+            case PRODUCT -> value != null && onSaleProducts.contains(value)
+                    ? new LiveBanner(b, url, type.name(), value) : null;
+            case COUPON -> value != null && claimableCoupons.contains(value)
+                    ? new LiveBanner(b, url, type.name(), value) : null;
+            case CATEGORY -> new LiveBanner(b, url, WIRE_TOKO_HOME, null);
+            case EXTERNAL -> new LiveBanner(b, url, type.name(), value);
+            case NONE -> new LiveBanner(b, url, BannerTargetType.NONE.name(), null);
+        };
+    }
+
+    /** 后台列表六态（V1.4.2 shop-admin Story 3.1 · AD-7）。 */
+    public enum BannerState {
+        /** 已上架、上线时间未到。 */
+        PENDING,
+        /** 此刻在 App 轮播里。 */
+        LIVE,
+        /** 已上架、在排期内，但跳转目标失效（或图片 URL 拼不出），App 自动不展示。 */
+        TARGET_INVALID,
+        /** 已上架、在排期内、目标有效，但排在第 {@value #MAX_BANNERS} 张之后。 */
+        OVER_LIMIT,
+        /** 已上架、下线时间已过。 */
+        EXPIRED,
+        /** 未上架。 */
+        INACTIVE
+    }
+
+    /**
+     * 六态纯函数（L0 单测入口）：{@code allInOrder} 为<b>全部</b> banner、按取用顺序。与 {@link #select} 同一套生效判定
+     * （{@link #toLive}）、同一个上限：前 {@code limit} 张有效的为 LIVE，之后的有效张为 OVER_LIMIT。
+     */
+    public static Map<Long, BannerState> states(List<ShopBanner> allInOrder, Instant now, Set<String> onSaleProducts,
+            Set<String> claimableCoupons, Function<String, String> urlOf, int limit) {
+        return states(allInOrder, now, onSaleProducts, claimableCoupons, urlOf, limit, Integer.MAX_VALUE);
+    }
+
+    /**
+     * 同上，并模拟 App 的候选上限 {@code candidateLimit}（{@link #liveBanners} 只看前 {@value #CANDIDATE_LIMIT} 张已上架且在排期内的）：
+     * 排在候选上限之后的有效张 App 根本看不到，标 OVER_LIMIT —— 后台与 App 不会因候选截断而分叉。
+     */
+    public static Map<Long, BannerState> states(List<ShopBanner> allInOrder, Instant now, Set<String> onSaleProducts,
+            Set<String> claimableCoupons, Function<String, String> urlOf, int limit, int candidateLimit) {
+        Map<Long, BannerState> out = new LinkedHashMap<>();
+        int live = 0;
+        int candidates = 0;
+        for (ShopBanner b : allInOrder) {
+            BannerState s;
+            if (!b.isActive()) {
+                s = BannerState.INACTIVE;
+            } else if (b.getStartAt() != null && b.getStartAt().isAfter(now)) {
+                s = BannerState.PENDING;
+            } else if (b.getEndAt() != null && !b.getEndAt().isAfter(now)) {
+                s = BannerState.EXPIRED;
+            } else if (candidates++ >= candidateLimit) {
+                s = BannerState.OVER_LIMIT;
+            } else if (toLive(b, onSaleProducts, claimableCoupons, urlOf) == null) {
+                s = BannerState.TARGET_INVALID;
+            } else if (live < limit) {
+                s = BannerState.LIVE;
+                live++;
+            } else {
+                s = BannerState.OVER_LIMIT;
+            }
+            out.put(b.getId(), s);
+        }
+        return out;
+    }
+
+    /** 后台用：对全部 banner（取用顺序）算六态；商品 / 券有效性批量查（同 {@link #liveBanners}）。 */
+    @Transactional(readOnly = true)
+    public Map<Long, BannerState> statesOf(List<ShopBanner> allInOrder, Instant now) {
+        Set<String> productTokens = tokensOf(allInOrder, BannerTargetType.PRODUCT);
+        Set<String> couponTokens = tokensOf(allInOrder, BannerTargetType.COUPON);
+        Set<String> onSale = productTokens.isEmpty() ? Set.of() : products.findActivePublicTokens(productTokens);
+        Set<String> claimable = couponTokens.isEmpty() ? Set.of() : coupons.findClaimableTokens(couponTokens, now);
+        return states(allInOrder, now, onSale, claimable, imageUrls::publicUrl, MAX_BANNERS, CANDIDATE_LIMIT);
     }
 
     static Set<String> tokensOf(Collection<ShopBanner> cands, BannerTargetType type) {

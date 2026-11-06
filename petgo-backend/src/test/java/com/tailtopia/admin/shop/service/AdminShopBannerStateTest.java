@@ -37,26 +37,28 @@ class AdminShopBannerStateTest {
         return b;
     }
 
+    /**
+     * V1.4.2 shop-admin Story 3.1 · AD-7：三档升级为六档（多张轮播）。原「生效中 / 被压住 / 未上架」对应
+     * LIVE / OVER_LIMIT / INACTIVE；判定改走 {@code ShopBannerQueryService.states}（与 App 取数共用生效判定）。
+     */
     @Test
     void theLiveOneTheOutrankedOneAndTheUnlistedOneAreThreeDifferentStates() {
-        ShopBanner live = banner(1L, true);
-        ShopBanner outranked = banner(2L, true);
-        ShopBanner unlisted = banner(3L, false);
-
-        assertThat(AdminShopBannerService.stateOf(live, 1L)).isEqualTo("live");
-        assertThat(AdminShopBannerService.stateOf(outranked, 1L))
-                .as("已上架但不是被取到的那一张 —— 与「未上架」必须分得开，处置动作完全不同")
-                .isEqualTo("activeNotLive");
-        assertThat(AdminShopBannerService.stateOf(unlisted, 1L)).isEqualTo("inactive");
+        var states = com.tailtopia.shop.service.ShopBannerQueryService.states(
+                java.util.List.of(banner(1L, true), banner(2L, true), banner(3L, false)), java.time.Instant.now(),
+                java.util.Set.of(), java.util.Set.of(), k -> "https://cdn/" + k, 1);
+        assertThat(states.get(1L)).isEqualTo(com.tailtopia.shop.service.ShopBannerQueryService.BannerState.LIVE);
+        assertThat(states.get(2L)).as("有效但排在上限之后 —— 与「未上架」必须分得开")
+                .isEqualTo(com.tailtopia.shop.service.ShopBannerQueryService.BannerState.OVER_LIMIT);
+        assertThat(states.get(3L)).isEqualTo(com.tailtopia.shop.service.ShopBannerQueryService.BannerState.INACTIVE);
     }
 
-    /** 一张已上架的都没有时，{@code liveId} 为 null —— 已上架的那些不能因此被标成「生效中」。 */
+    /** 一张已上架的都没有时，没有任何一张是「生效中」。 */
     @Test
     void withNoLiveBannerNothingIsMarkedLive() {
-        assertThat(AdminShopBannerService.stateOf(banner(1L, false), null)).isEqualTo("inactive");
-        assertThat(AdminShopBannerService.stateOf(banner(2L, true), null))
-                .as("liveId 为 null 时，已上架的也只能是「被压住」而不是「生效中」")
-                .isEqualTo("activeNotLive");
+        var states = com.tailtopia.shop.service.ShopBannerQueryService.states(
+                java.util.List.of(banner(1L, false)), java.time.Instant.now(), java.util.Set.of(), java.util.Set.of(),
+                k -> "https://cdn/" + k, 6);
+        assertThat(states.values()).doesNotContain(com.tailtopia.shop.service.ShopBannerQueryService.BannerState.LIVE);
     }
 
     /**

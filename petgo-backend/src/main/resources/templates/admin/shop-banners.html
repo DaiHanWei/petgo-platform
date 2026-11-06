@@ -40,7 +40,8 @@
             <div th:fragment="sb-table" id="shop-banner-rows">
                 <div th:replace="~{admin/fragments/shop-banners-list :: rows}"></div>
             </div>
-            <div th:fragment="sb-drawer" class="drawer-title" th:text="#{admin.shop.banners.section.add}">Banner</div>
+            <!--/* V1.4.2 shop-admin Story 3.1：抽屉标题不再固定「新增 Banner」（bug），新建 / 编辑标题在抽屉表单里 */-->
+            <div th:fragment="sb-drawer" class="drawer-title" th:text="#{admin.nav.shopBanners}">Banner</div>
         </div>
         <!--/* ?open=<id> 深链兜底：行按钮走 [data-drawer-open]，但从别处带 ?open= 进来时得有个落点。 */-->
         <span hidden th:if="${open != null}" data-drawer-res="shop-banner"

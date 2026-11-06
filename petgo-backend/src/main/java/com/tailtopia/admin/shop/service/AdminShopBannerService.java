@@ -9,7 +9,6 @@ import com.tailtopia.shop.coupon.domain.CouponStatus;
 import com.tailtopia.shop.coupon.domain.ShopCoupon;
 import com.tailtopia.shop.coupon.repository.ShopCouponRepository;
 import com.tailtopia.shop.domain.BannerTargetType;
-import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopBanner;
 import com.tailtopia.shop.repository.ShopBannerRepository;
 import com.tailtopia.shop.repository.ShopProductRepository;
@@ -78,44 +77,129 @@ public class AdminShopBannerService {
     }
 
     /**
-     * 三档状态（AC3）：{@code live} 生效中 · {@code activeNotLive} 已上架但被更高权重压住 · {@code inactive} 未上架。
-     *
-     * <p>只显示启用 / 停用两档会让运营反复怀疑「我明明上架了为什么没显示」——
-     * App 同一时间只展示一张，被压住的那些和没上架的在效果上完全一样，但处置动作完全不同。
+     * 后台列表六态（V1.4.2 shop-admin Story 3.1 · AD-7）：待上线 / 生效中 / 目标失效 / 超出展示上限 / 已过期 / 未上架。
+     * 🔴 判定在 {@code ShopBannerQueryService.states}，与 App 取数 {@code select} 共用同一处生效判定，后台不写第二份。
      */
-    public static String stateOf(ShopBanner b, Long liveId) {
-        if (!b.isActive()) {
-            return "inactive";
-        }
-        return b.getId().equals(liveId) ? "live" : "activeNotLive";
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, com.tailtopia.shop.service.ShopBannerQueryService.BannerState> states(
+            java.util.List<ShopBanner> allInOrder, Instant now) {
+        return liveQuery.statesOf(allInOrder, now);
     }
 
+    /**
+     * 新建（V1.4.2 shop-admin Story 3.1）：排到列表<b>末尾</b>（当前最小 {@code sort_weight} − 1），不顶掉生效中的 banner。
+     * 摘要记跳转目标与排期。
+     */
     @Transactional
     public ShopBanner create(ShopBannerForm form, long actorAccountId) {
         validate(form);
         Target target = target(form);
-        ShopBanner b = ShopBanner.create(form.getImageKey().trim(), form.getImageW(),
-                form.getImageH(), form.getSortWeight());
+        int weight = banners.findAllByOrderBySortWeightDescIdDesc().stream()
+                .mapToInt(ShopBanner::getSortWeight).min().orElse(1) - 1;
+        ShopBanner b = ShopBanner.create(form.getImageKey().trim(), form.getImageW(), form.getImageH(), weight);
         b.retarget(target.type(), target.value());
         b.schedule(form.getStartAt(), form.getEndAt());
         banners.save(b);
         audit.record(actorAccountId, AuditActions.SHOP_BANNER_CREATED, "SHOP_BANNER",
-                String.valueOf(b.getId()), "新建 banner（默认未上架）");
+                String.valueOf(b.getId()), "新建 banner（默认未上架） target=" + target.type()
+                        + (target.value() == null ? "" : ":" + target.value())
+                        + " schedule=" + fmt(form.getStartAt()) + "~" + fmt(form.getEndAt()));
         return b;
     }
 
+    /**
+     * 编辑：换图 / 跳转目标 / 排期。🔴 不改排序（排序只经拖动 {@link #reorder}）。摘要只写有变化的字段（O-11）。
+     */
     @Transactional
     public void update(long id, ShopBannerForm form, long actorAccountId) {
         validate(form);
-        Target target = target(form);
         ShopBanner b = require(id);
-        b.apply(form.getImageKey().trim(), form.getImageW(), form.getImageH(),
-                form.getSortWeight());
+        // B4：存量品类跳转必须改选 —— 空类型不能悄悄落成「不可点」
+        if (b.getTargetType() == BannerTargetType.CATEGORY
+                && (form.getTargetType() == null || form.getTargetType().isBlank())) {
+            throw AppException.validation("品类跳转已下线，请改选其他跳转类型").code("admin.err.banner.categoryRetired");
+        }
+        Target target = target(form);
+        // 页面控件只到分钟：与现值同一分钟时保留原值（只改图不会把排期截掉秒、也不写假的排期变更）
+        form.setStartAt(keepIfSameMinute(b.getStartAt(), form.getStartAt()));
+        form.setEndAt(keepIfSameMinute(b.getEndAt(), form.getEndAt()));
+        form.setStartLocal(null);
+        form.setEndLocal(null);
+        java.util.List<String> diff = new java.util.ArrayList<>();
+        if (!java.util.Objects.equals(b.getImageKey(), form.getImageKey().trim())) {
+            diff.add("image: changed");
+        }
+        String oldTarget = b.getTargetType() + (b.getTargetValue() == null ? "" : ":" + b.getTargetValue());
+        String newTarget = target.type() + (target.value() == null ? "" : ":" + target.value());
+        if (!oldTarget.equals(newTarget)) {
+            diff.add("target: " + oldTarget + "→" + newTarget);
+        }
+        String oldSchedule = fmt(b.getStartAt()) + "~" + fmt(b.getEndAt());
+        String newSchedule = fmt(form.getStartAt()) + "~" + fmt(form.getEndAt());
+        if (!oldSchedule.equals(newSchedule)) {
+            diff.add("schedule: " + oldSchedule + "→" + newSchedule);
+        }
+        b.apply(form.getImageKey().trim(), form.getImageW(), form.getImageH());
         b.retarget(target.type(), target.value());
         b.schedule(form.getStartAt(), form.getEndAt());
         banners.save(b);
         audit.record(actorAccountId, AuditActions.SHOP_BANNER_UPDATED, "SHOP_BANNER",
-                String.valueOf(id), "编辑 banner");
+                String.valueOf(id), diff.isEmpty() ? "编辑 banner（无字段变化）" : "编辑 banner " + String.join(" ", diff));
+    }
+
+    /**
+     * 拖动排序（V1.4.2 shop-admin Story 3.1 · AD-7）：{@code ids} 须恰为全部 banner（顺序即新顺序），
+     * 按新顺序重写 {@code sort_weight}（N..1）。摘要记排序前后 id 顺序。
+     */
+    @Transactional
+    public void reorder(java.util.List<Long> ids, long actorAccountId) {
+        java.util.List<ShopBanner> all = banners.findAllByOrderBySortWeightDescIdDesc();
+        java.util.List<Long> before = all.stream().map(ShopBanner::getId).toList();
+        if (ids == null || ids.size() != before.size() || !new java.util.HashSet<>(ids).equals(new java.util.HashSet<>(before))) {
+            throw AppException.validation("排序列表与当前 banner 不一致，请刷新后重试").code("admin.err.banner.reorderStale");
+        }
+        if (ids.equals(before)) {
+            return;
+        }
+        java.util.Map<Long, ShopBanner> byId = new java.util.HashMap<>();
+        all.forEach(b -> byId.put(b.getId(), b));
+        int w = ids.size();
+        for (Long id : ids) {
+            byId.get(id).reweight(w--);
+        }
+        banners.saveAll(all);
+        audit.record(actorAccountId, AuditActions.SHOP_BANNER_REORDERED, "SHOP_BANNER", "order",
+                "order: " + before + "→" + ids);
+    }
+
+    /** banner 可绑的券（B3）：ACTIVE、用户领取类（CLAIM）、发放期未结束。 */
+    @Transactional(readOnly = true)
+    public java.util.List<ShopCoupon> claimableCouponOptions(Instant now) {
+        return coupons.findForAdmin(null, CouponAcquireType.CLAIM).stream()
+                .filter(c -> c.getStatus() == CouponStatus.ACTIVE && c.getIssueEndAt().isAfter(now))
+                .toList();
+    }
+
+    private static Instant keepIfSameMinute(Instant current, Instant submitted) {
+        if (current != null && submitted != null
+                && current.truncatedTo(java.time.temporal.ChronoUnit.MINUTES).equals(submitted)) {
+            return current;
+        }
+        return submitted;
+    }
+
+    /** 列表里券跳转显示券名（不论此刻是否可领，目标失效时也要认得出是哪张券）。 */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, String> couponNames(java.util.Collection<String> tokens) {
+        java.util.Map<String, String> out = new java.util.HashMap<>();
+        if (tokens != null && !tokens.isEmpty()) {
+            coupons.findByPublicTokenIn(tokens).forEach(c -> out.put(c.getPublicToken(), c.getNameId()));
+        }
+        return out;
+    }
+
+    private static String fmt(Instant t) {
+        return t == null ? "—" : t.toString();
     }
 
     /**
@@ -199,11 +283,9 @@ public class AdminShopBannerService {
                 }
             }
             case CATEGORY -> {
-                try {
-                    value = ProductCategory.valueOf(value).name();
-                } catch (IllegalArgumentException e) {
-                    throw AppException.validation("品类不合法").code("admin.err.banner.targetCategory");
-                }
+                // V1.4.2 shop-admin Story 3.1 · AD-7（B4）：品类跳转已随 App 品类筛选下线，新建 / 编辑一律拒绝，
+                // 存量 banner 须改选其他类型才能保存（App 取数里存量 CATEGORY → TOKO_HOME 不动）。
+                throw AppException.validation("品类跳转已下线，请改选其他跳转类型").code("admin.err.banner.categoryRetired");
             }
             case EXTERNAL -> {
                 if (!isHttpsUrl(value)) {
