@@ -87,7 +87,7 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         assertThat(count(html, "data-config-card")).isEqualTo(7);
         for (String[] card : new String[][] {
                 {"cfg-pricing", "/admin/config/pricing", "vetConsultPrice"}, {"cfg-ktp", "/admin/config/ktp-pricing", "passportPagePrice"},
-                {"cfg-pawcoin", "/admin/config/pawcoin", "premiumRate"}, {"cfg-share-reward", "/admin/config/share-reward", "shareRewardMonthlyCap"},
+                {"cfg-pawcoin", "/admin/config/pawcoin", "premiumRate"},
                 {"cfg-support", "/admin/config/support-contact", "whatsappNumber"},
                 {"cfg-pet-slot", "/admin/config/pet-slot-pricing", "petSlotMonthlyPrice"}}) {
             assertThat(html).as(card[0]).contains("id=\"" + card[0] + "\"").contains("action=\"" + card[1] + "\"").contains("hx-post=\"" + card[1] + "\"")
@@ -101,6 +101,12 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
                 .contains("id=\"cfg-app-version-err\"").contains("name=\"minSupportedVersion\"")
                 .containsPattern("id=\"cfg-app-version\"[^>]*data-error-fields=")
                 .doesNotContainPattern("id=\"cfg-app-version\"[^>]*data-confirm-diff").contains("id=\"confirm-host\"");
+        // V1.4.2 shop-admin Story 3.2 · C2：分享奖励卡同样改走服务端确认弹层（新旧值 + 真钱警示 + 估算），htmx 先 POST 预检端点。
+        assertThat(html).contains("id=\"cfg-share-reward\"").contains("action=\"/admin/config/share-reward\"")
+                .contains("hx-post=\"/admin/config/share-reward/confirm\"").contains("hx-target=\"#cfg-share-reward-err\"")
+                .contains("id=\"cfg-share-reward-err\"").containsPattern("id=\"cfg-share-reward\"[^>]*data-error-fields=")
+                .contains("name=\"shareRewardMonthlyCap\"").contains("data-notice=\"share-reward-real-money\"")
+                .doesNotContainPattern("id=\"cfg-share-reward\"[^>]*data-confirm-diff");
         // 保存钮初始禁用 + 「已修改」标；确认弹层文案模板挂在表单上（前端拼旧值 → 新值）
         assertThat(count(html, "data-save")).isEqualTo(7);
         assertThat(count(html, "data-dirty-flag")).isEqualTo(7);

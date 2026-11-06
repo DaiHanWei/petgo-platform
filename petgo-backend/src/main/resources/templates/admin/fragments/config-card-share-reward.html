@@ -9,7 +9,7 @@
 -->
 <body>
 <th:block th:fragment="card"
-          th:with="action=@{/admin/config/share-reward},hxPost=@{/admin/config/share-reward},cardId='cfg-share-reward',confirmDiff=true,
+          th:with="action=@{/admin/config/share-reward},hxPost=@{/admin/config/share-reward/confirm},cardId='cfg-share-reward',confirmDiff=false,
                    errorFields=${errorFields?.get('shareReward')},ov=${shareRewardOverview},
                    canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.share_reward_edit'')')},
                    readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.share_reward_edit'')')},
@@ -17,6 +17,8 @@
     <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::sr-title}, ~{::sr-form}, #{admin.config.btn.saveShareReward})}">
         <h2 class="cfg-title" th:fragment="sr-title" th:text="#{admin.config.shareReward}">分享奖励</h2>
         <div th:fragment="sr-form">
+            <!--/* V1.4.2 shop-admin Story 3.2 · C1：常驻真钱警示。C2：保存先 POST …/share-reward/confirm 取服务端弹层（新旧值 + 估算）。 */-->
+            <div class="banner warn" data-notice="share-reward-real-money" th:text="#{admin.v142.shareReward.warn}">分享奖励发放的 PawCoin 是真钱，请谨慎设置金额。</div>
             <p class="hint" data-notice="share-reward-freeride">
                 <span th:text="#{admin.config.shareReward.hdPrice}">当前 HD 解锁价</span>:
                 <b th:text="${ov.hdPrice()}">5000</b> ·
