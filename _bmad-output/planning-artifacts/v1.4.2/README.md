@@ -8,6 +8,7 @@
 |---|---|---|---|---|---|
 | `social-topic` | 追更宠物 · 新增 S 级里程碑 · 内容话题（FR-153~157、FR-69、FR-165、AB-10A 扩展 / AB-10B / AB-37） | `追更话题/1-4-2追更宠物·里程碑·话题prd.md`（2026-11-03 定稿） | `追更话题/ui-1-4-2-social-topic-integrated-v1.html`（App 43 屏）+ `追更话题/ui-admin-1-4-2-social-topic-integrated-v1.html`（后台 19 屏），2026-11-03 定稿 | `feat/1.4.2-social-topic` | 规划完成，待切分支交云端 |
 | `shop` | 电商模块重构（FR-127 ~ FR-134、FR-136、FR-172）：配送前置 / 一页结算 / 优惠券 / PawCoin 自选 / banner 轮播 / 页面重做 / 资金闭环 / 复购下线 / 物流接入 Biteship | `电商/1-4-2电商prd.md`（2026-11-05 快照） | `电商/ui-1-4-2-shop-integrated-v1.html`（App 约 95 屏，A~H 组），2026-11-05 快照 | `feat/1.4.2-shop` | 规划完成（2026-11-05，25 story 均 ready-for-dev），待切分支交云端 |
+| `shop-admin` | 电商管理后台（AB-24 / 25 / 27 / 28 / 29 / 38 / 39） | `电商/1-4-2电商后台prd.md`（2026-11-06 快照） | `电商/ui-admin-1-4-2-shop-integrated-v1.html`（后台 69 屏），2026-11-06 快照 | `feat/1.4.2-shop-admin`（电商线合入 dev 后切） | 规划完成（2026-11-06，9 Epic / 20 story），待电商线合入后开工 |
 
 ## 产物文件（social-topic）
 
@@ -44,3 +45,13 @@
 
 - `ck_notifications_type` 约束重建：本线新增 `PET_FOLLOWED`、`PET_DIARY_POSTED`；电商线的优惠券到账通知也要加类型。**后合并的一方负责在同一迁移里 DROP + ADD 重列全集**（值取自当前树里最后一条重建它的迁移）。
 - `PushCategory`：本线新增第 10 个分类「追更宠物」；新增通知类型都必须在映射表里指定分类。
+
+## 产物文件（shop-admin）
+
+| 类型 | 文件 | 状态 |
+|---|---|---|
+| 架构增量 | `architecture-v1.4.2-shop-admin-delta.md` | 完成（2026-11-06，AD-1 ~ AD-18） |
+| 决策日志 | `决策日志-shop-admin.md` | O-1 ~ O-24 |
+| Epics / stories 清单 | `epics-v1.4.2-shop-admin.md` | 9 Epic / 20 story |
+| 就绪度评审 | `readiness-v1.4.2-shop-admin.md` | READY（回改后） |
+| sprint-status | `../../implementation-artifacts/v1.4.2/sprint-status-v1.4.2-shop-admin.yaml` | 迁移号已预分配；云端须知 `cloud-rules-shop-admin.md`；文案 `shop-admin-文案三语表.md` |
