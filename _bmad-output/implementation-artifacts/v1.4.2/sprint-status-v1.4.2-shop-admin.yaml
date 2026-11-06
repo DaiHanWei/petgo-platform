@@ -75,7 +75,7 @@ development_status:
 
   epic-7: in-progress
   7-1-订单总表与退款成长值节: review
-  7-2-取消后到账处置: ready-for-dev
+  7-2-取消后到账处置: review
   epic-7-retrospective: optional
 
   epic-8: backlog

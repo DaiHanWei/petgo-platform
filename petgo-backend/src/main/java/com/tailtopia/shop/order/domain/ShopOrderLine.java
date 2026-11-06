@@ -80,6 +80,10 @@ public class ShopOrderLine {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** V1.4.2 shop-admin 7.2 · AD-11：迟到款重新下单时锁不到库存的行（未锁、未确认库存）。 */
+    @Column(name = "stock_unlocked", nullable = false)
+    private boolean stockUnlocked;
+
     protected ShopOrderLine() {
     }
 
@@ -198,5 +202,26 @@ public class ShopOrderLine {
                     .code("admin.err.v142.inbound.qtyExceeded");
         }
         this.returnInboundQty += n;
+    }
+
+    // ---------- V1.4.2 shop-admin Story 7.2 · AD-11：未锁库存行 ----------
+
+    /** 建行时标记「锁不到库存」（只在迟到款重新下单复制行时调用）。 */
+    public void markStockUnlocked() {
+        this.stockUnlocked = true;
+    }
+
+    /** 「联系用户后继续」lock + commit 成功后清标记。 */
+    public void clearStockUnlocked() {
+        this.stockUnlocked = false;
+    }
+
+    public boolean isStockUnlocked() {
+        return stockUnlocked;
+    }
+
+    /** 未处置的未锁库存行：仍有未取消的件数（全部取消即视为已处置）。 */
+    public boolean isUnresolvedStockUnlocked() {
+        return stockUnlocked && qty - refundedQty > 0;
     }
 }

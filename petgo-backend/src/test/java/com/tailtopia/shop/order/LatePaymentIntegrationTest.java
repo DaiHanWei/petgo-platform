@@ -280,4 +280,58 @@ class LatePaymentIntegrationTest extends ApiIntegrationTest {
         }
         assertThat(reload(o).getLatePaymentResolution()).isIn("REORDERED", "REFUNDED");
     }
+
+    // ---------- V1.4.2 shop-admin Story 7.2 · AD-11（O-4 / O-26） ----------
+
+    @Autowired
+    private com.tailtopia.shop.order.repository.ShopOrderLineRepository orderLinesRepo;
+    @Autowired
+    private com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillmentService;
+    @Autowired
+    private com.tailtopia.admin.shop.service.AdminShopOrderExceptionService exceptionService;
+
+    private ShopOrder lateOrderTwo(long uid, String skuA, String skuB) {
+        carts.add(uid, skuB, 1);
+        return lateOrder(uid, skuA);
+    }
+
+    @Test
+    @DisplayName("7.2 AC4 / AC5：部分缺货可重新下单 → 缺货行不锁库存、新单标缺货、发货入口拒绝；联系后继续锁不到也拒绝")
+    void partialStockReorderMarksUnlockedLine() {
+        long uid = seedUser();
+        String a = seedSku(5, 100_000L);
+        String b = seedSku(5, 50_000L);
+        ShopOrder o = lateOrderTwo(uid, a, b);
+        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = ?", skuId(b));
+        long actualA = actualOf(a);
+
+        ReorderOutcome out = latePayments.reorderFromLatePayment(o.getPublicToken(), true, true, ACTOR);
+        ShopOrder n = orders.findByPublicToken(out.newOrderToken()).orElseThrow();
+        assertThat(n.getStatus()).isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        assertThat(n.isShortageFlagged()).isTrue();
+        var lines = orderLinesRepo.findByOrderIdOrderByIdAsc(n.getId());
+        assertThat(lines).filteredOn(com.tailtopia.shop.order.domain.ShopOrderLine::isStockUnlocked).hasSize(1);
+        assertThat(actualOf(a)).isEqualTo(actualA - 1);
+        assertThat(actualOf(b)).isZero();
+
+        assertThatThrownBy(() -> fulfillmentService.ship(n.getPublicToken(),
+                com.tailtopia.shop.order.domain.Carrier.JNE, "JNE123", 10_000L, ACTOR))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.v142.late.stockUnlocked"));
+        assertThatThrownBy(() -> exceptionService.contactAndContinue(n.getPublicToken(), "用户同意等货", ACTOR))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.v142.late.continueNoStock"));
+        assertThat(actualOf(a)).as("联系后继续失败整单回滚").isEqualTo(actualA - 1);
+    }
+
+    @Test
+    @DisplayName("7.2 AC2：手勾项未勾 → 422，不抢占处理权")
+    void checklistIncompleteRejected() {
+        long uid = seedUser();
+        ShopOrder o = lateOrder(uid, seedSku(5, 100_000L));
+        assertThatThrownBy(() -> latePayments.reorderFromLatePayment(o.getPublicToken(), true, false, ACTOR))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.v142.late.checklistIncomplete"));
+        assertThat(reload(o).getLatePaymentResolution()).isNull();
+    }
 }

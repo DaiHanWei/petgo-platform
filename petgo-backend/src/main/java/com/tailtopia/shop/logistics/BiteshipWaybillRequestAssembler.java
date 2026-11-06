@@ -76,6 +76,16 @@ public final class BiteshipWaybillRequestAssembler {
      */
     public static Assembly assemble(ShopOrder order, List<ShopOrderLine> lines, Map<Long, SkuPackage> packages,
             Origin origin, long lineGoodsRefunded, int attempt, String deliveryType) {
+        return assemble(order, lines, packages, origin, lineGoodsRefunded, attempt, deliveryType,
+                order.getCourierCode(), order.getCourierServiceCode(), order.getShippingFee());
+    }
+
+    /**
+     * 同上，快递由调用方给（V1.4.2 shop-admin 7.2 · AD-11 · O-5：重下单原快递不可用时改选最便宜一家，只写运单，订单快照不改）。
+     */
+    public static Assembly assemble(ShopOrder order, List<ShopOrderLine> lines, Map<Long, SkuPackage> packages,
+            Origin origin, long lineGoodsRefunded, int attempt, String deliveryType, String courierCode,
+            String courierServiceCode, long price) {
         List<Item> items = new ArrayList<>();
         boolean packageMissing = false;
         for (ShopOrderLine l : lines) {
@@ -108,7 +118,7 @@ public final class BiteshipWaybillRequestAssembler {
         long insurance = order.isInsuranceSelected()
                 ? insuranceValue(order.getGoodsSubtotal(), order.getDiscountCouponAmount(), lineGoodsRefunded) : 0L;
         BiteshipCreateOrderRequest req = new BiteshipCreateOrderRequest(referenceId(order.getDisplayNo(), attempt),
-                order.getCourierCode(), order.getCourierServiceCode(), order.getShippingFee(),
+                courierCode, courierServiceCode, price,
                 deliveryType == null || deliveryType.isBlank() ? "now" : deliveryType.trim(), from, dest, items,
                 order.isInsuranceSelected() ? insurance : null);
         return new Ready(req, insurance);

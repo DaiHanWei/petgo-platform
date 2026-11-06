@@ -179,8 +179,89 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
     private record Settled(WaybillResult result, String orphanBiteshipOrderId) {
     }
 
+    /** V1.4.2 shop-admin 7.2 · AD-11（O-5）：原快递不可用时改选的快递（只写运单，订单快照不改）。 */
+    record CourierOverride(String courierCode, String serviceCode, long price) {
+    }
+
+    private ShippingQuoteService quotes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setQuotes(ShippingQuoteService quotes) {
+        this.quotes = quotes;
+    }
+
+    /**
+     * 只对 {@code checkout_source = REORDER} 的订单（迟到款重新下单不询价）：下运单前询价一次（🔴 事务外，复用窗口同结算 30 分钟），
+     * 原快递 / 服务不在报价内 → 选最便宜一家（报价按价格升序）。询价失败 / 包裹参数不全 / 原快递仍可用 → 不改（null）。
+     */
+    CourierOverride courierOverride(long orderId, Mode mode) {
+        // 复审修：快递原因重发（RESHIP）按 AC12 同快递同服务，不改选
+        if (quotes == null || mode == Mode.RESHIP) {
+            return null;
+        }
+        record In(String postal, List<PackageItem> items, long userId, String key, boolean insured) {
+        }
+        In in = tx.execute(s -> {
+            ShopOrder o = requireOrder(orderId);
+            if (o.getCheckoutSource() != com.tailtopia.shop.order.domain.CheckoutSource.REORDER) {
+                return null;
+            }
+            precheck(o, mode);   // 复审修：会被拒的单不出网询价（同 prepare 的校验，409 照抛）
+            if (isBlank(o.getCourierCode())
+|| isBlank(o.getCourierServiceCode())) {
+                return null;
+            }
+            List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(o.getId());
+            Map<Long, ShopSku> byId = skus.findAllById(lines.stream().map(ShopOrderLine::getSkuId).toList()).stream()
+                    .collect(Collectors.toMap(ShopSku::getId, k -> k, (a, b) -> a));
+            List<PackageItem> items = new java.util.ArrayList<>();
+            for (ShopOrderLine l : lines) {
+                int qty = l.getQty() - l.getRefundedQty();
+                ShopSku sku = byId.get(l.getSkuId());
+                if (qty <= 0) {
+                    continue;
+                }
+                if (sku == null || !sku.isSellable()) {
+                    return null;   // 包裹参数不全：交给 prepare 记 SKU_PACKAGE_MISSING
+                }
+                items.add(PackageItems.of(sku, l.getProductName(), qty));
+            }
+            return items.isEmpty() ? null : new In(o.shipTo().kodePos(), items, o.getUserId(),
+                    CourierRate.keyOf(o.getCourierCode(), o.getCourierServiceCode()), o.isInsuranceSelected());
+        });
+        if (in == null) {
+            return null;
+        }
+        QuoteResult q;
+        try {
+            q = quotes.quote(in.postal(), in.items(), in.userId());
+        } catch (RuntimeException e) {
+            log.warn("重下单下运单前询价失败，按原快递下单 orderId={} cause={}", orderId, e.getClass().getSimpleName());
+            return null;
+        }
+        return pickOverride(q.rates(), in.key(), in.insured());
+    }
+
+    /**
+     * 纯函数：原快递在报价内 → null；否则取最便宜一家（订单选了保价 → 只在支持保价的快递里选，复审修）。
+     * 无可选 → null，交给 Biteship 按原快递报错（运单失败，客服走 H5 处置）。
+     */
+    static CourierOverride pickOverride(List<CourierRate> rates, String originalKey, boolean insured) {
+        if (rates == null || rates.isEmpty()
+                || rates.stream().anyMatch(r -> originalKey.equalsIgnoreCase(r.courierKey()))) {
+            return null;
+        }
+        CourierRate cheapest = rates.stream().filter(r -> !insured || r.insuranceSupported())
+                .min(java.util.Comparator.comparingLong(CourierRate::price)).orElse(null);
+        if (cheapest == null) {
+            return null;
+        }
+        return new CourierOverride(cheapest.courierCode(), cheapest.courierServiceCode(), cheapest.price());
+    }
+
     private WaybillResult run(long orderId, Long actor, Mode mode) {
-        Prepared p = tx.execute(s -> prepare(orderId, mode, actor));
+        CourierOverride override = courierOverride(orderId, mode);    // 🔴 询价在 prepare 事务之前
+        Prepared p = tx.execute(s -> prepare(orderId, mode, actor, override));
         if (p.failReason() != null) {
             return WaybillResult.failed(p.failReason());
         }
@@ -222,7 +303,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
     }
 
     /** 短事务 ①：校验 + 组装；可下单时 {@code waybill_attempts + 1} 并随事务提交。 */
-    private Prepared prepare(long orderId, Mode mode, Long actor) {
+    private Prepared prepare(long orderId, Mode mode, Long actor, CourierOverride override) {
         ShopOrder order = requireOrder(orderId);
         precheck(order, mode);
         if (!client.isAvailable()) {
@@ -240,16 +321,21 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         long lineGoodsRefunded = refunds.findByOrderIdOrderByCreatedAtAscIdAsc(order.getId()).stream()
                 .filter(r -> r.getScope() == RefundScope.LINE).mapToLong(ShopOrderRefund::getGoodsRefund).sum();
         int attempt = order.getWaybillAttempts() + 1;
+        String courier = override == null ? order.getCourierCode() : override.courierCode();
+        String service = override == null ? order.getCourierServiceCode() : override.serviceCode();
+        long price = override == null ? order.getShippingFee() : override.price();   // 改选后按所选快递的报价
         Assembly a = BiteshipWaybillRequestAssembler.assemble(order, lines, packages, origin, lineGoodsRefunded,
-                attempt, props.getDeliveryType());
+                attempt, props.getDeliveryType(), courier, service, price);
         if (a instanceof Missing m) {
             return failNow(order, m.reason(), actor);
         }
         Ready ready = (Ready) a;
         order.incrementWaybillAttempts();
         orders.save(order);
-        return new Prepared(ready, ready.request().referenceId(), order.getCourierCode(),
-                order.getCourierServiceCode(), null, order.getDisplayNo());
+        if (override != null) {
+            log.info("重下单原快递不可用，改选 order={} courier={}/{}", order.getDisplayNo(), courier, service);
+        }
+        return new Prepared(ready, ready.request().referenceId(), courier, service, null, order.getDisplayNo());
     }
 
     private Prepared failNow(ShopOrder order, String reason, Long actor) {
@@ -351,6 +437,18 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
             }
         }
         requireWaybillData(order);
+        requireNoUnlockedStock(order.getId());
+    }
+
+    /**
+     * V1.4.2 shop-admin 7.2 · AD-11：迟到款重下单有未锁库存行且未处置（未全部取消 / 未经「联系用户后继续」锁到）→ 拒绝发货。
+     * 揽收失败重下运单（{@code ShopLogisticsExceptionService}）在取消旧运单之前也先调它。
+     */
+    public void requireNoUnlockedStock(long orderId) {
+        if (orderLines.existsUnresolvedStockUnlocked(orderId)) {
+            throw AppException.conflict("该订单有未锁到库存的商品行，请先到异常订单处理（部分取消或联系用户后继续）")
+                    .code("admin.err.v142.late.stockUnlocked");
+        }
     }
 
     /**

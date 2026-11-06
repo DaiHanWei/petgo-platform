@@ -57,9 +57,13 @@ public class ShopOrderPaidHandler {
     private final CheckoutService checkout;
     private final PaymentIntentService paymentIntents;
     private final ShopPaymentAlerts alerts;
+    /** V1.4.2 shop-admin 7.2 · AD-5 / AD-11：迟到款落库后提醒客服（CS，提交后发送，去重键 late-paid:{orderToken}）。 */
+    private final com.tailtopia.admin.alert.OpsAlertService opsAlerts;
 
     public ShopOrderPaidHandler(ShopOrderRepository orders, ShopOrderPaymentService payments,
-            CheckoutService checkout, PaymentIntentService paymentIntents, ShopPaymentAlerts alerts) {
+            CheckoutService checkout, PaymentIntentService paymentIntents, ShopPaymentAlerts alerts,
+            com.tailtopia.admin.alert.OpsAlertService opsAlerts) {
+        this.opsAlerts = opsAlerts;
         this.orders = orders;
         this.payments = payments;
         this.checkout = checkout;
@@ -139,6 +143,10 @@ public class ShopOrderPaidHandler {
             }
             return;
         }
+        opsAlerts.send(com.tailtopia.admin.alert.OpsChannel.CS, "late-paid:" + order.getPublicToken(),
+                (duplicate ? "[商城] 订单 %s 重复付款 %s（订单仍在履约），请到「订单」页退还到账款"
+                        : "[商城] 订单 %s 取消后到账 %s，请联系用户后到「订单」页重新下单或退还到账款")
+                        .formatted(order.getDisplayNo(), com.tailtopia.shop.logistics.balance.BiteshipBalanceService.rp(amount)));
         if (duplicate) {
             log.error("电商订单重复付款 displayNo={} status={} intentId={}", order.getDisplayNo(),
                     order.getStatus(), event.intentId());

@@ -10,6 +10,11 @@ import org.springframework.data.repository.query.Param;
 public interface ShopOrderLineRepository extends JpaRepository<ShopOrderLine, Long> {
     List<ShopOrderLine> findByOrderIdOrderByIdAsc(long orderId);
 
+    /** V1.4.2 shop-admin 7.2 · AD-11：订单是否还有未处置的未锁库存行（仍有未取消件数）—— 有就拒绝一切发货入口。 */
+    @org.springframework.data.jpa.repository.Query("select count(l) > 0 from ShopOrderLine l where l.orderId = :orderId"
+            + " and l.stockUnlocked = true and l.qty > l.refundedQty")
+    boolean existsUnresolvedStockUnlocked(@org.springframework.data.repository.query.Param("orderId") long orderId);
+
     /** v1.4.2 shop Story 6.2：订单列表一页的行一次批量取（禁 N+1）。 */
     List<ShopOrderLine> findByOrderIdInOrderByOrderIdAscIdAsc(java.util.Collection<Long> orderIds);
 

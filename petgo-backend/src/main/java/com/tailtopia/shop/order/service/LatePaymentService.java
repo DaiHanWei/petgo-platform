@@ -80,22 +80,26 @@ public class LatePaymentService {
     private final AccountDeletionRepository accountDeletions;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    /** V1.4.2 shop-admin 7.2：核对清单只读查原券现状（券状态变更仍只经 CouponLedgerService）。 */
+    private final com.tailtopia.shop.coupon.repository.UserCouponRepository userCoupons;
 
     @Autowired
     public LatePaymentService(ShopOrderRepository orders, ShopOrderLineRepository orderLines, ShopSkuRepository skus,
             InventoryService inventory, CouponLedgerService coupons, PawCoinWalletService wallet,
             ShopTokenGenerator tokens, ShopOrderDisplayNoGenerator displayNos, ShopOrderPaidTransition paidTransition,
             ShopOrderRefundService refunds, AdminAuditService audit, AccountDeletionRepository accountDeletions,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, com.tailtopia.shop.coupon.repository.UserCouponRepository userCoupons) {
         this(orders, orderLines, skus, inventory, coupons, wallet, tokens, displayNos, paidTransition, refunds,
-                audit, accountDeletions, events, Clock.systemUTC());
+                audit, accountDeletions, events, userCoupons, Clock.systemUTC());
     }
 
     LatePaymentService(ShopOrderRepository orders, ShopOrderLineRepository orderLines, ShopSkuRepository skus,
             InventoryService inventory, CouponLedgerService coupons, PawCoinWalletService wallet,
             ShopTokenGenerator tokens, ShopOrderDisplayNoGenerator displayNos, ShopOrderPaidTransition paidTransition,
             ShopOrderRefundService refunds, AdminAuditService audit, AccountDeletionRepository accountDeletions,
-            ApplicationEventPublisher events, Clock clock) {
+            ApplicationEventPublisher events, com.tailtopia.shop.coupon.repository.UserCouponRepository userCoupons,
+            Clock clock) {
+        this.userCoupons = userCoupons;
         this.orders = orders;
         this.orderLines = orderLines;
         this.skus = skus;
@@ -123,6 +127,23 @@ public class LatePaymentService {
      */
     @Transactional
     public ReorderOutcome reorderFromLatePayment(String orderToken, Long actorAdminId) {
+        return reorder(orderToken, null, actorAdminId);
+    }
+
+    /**
+     * 后台「提交重新下单」（V1.4.2 shop-admin 7.2 · AD-11 · F3）：手勾项（用户已同意、地址有效）必须都勾，系统项服务端重查
+     * （券 / PawCoin / 库存在下单过程中逐项校验，不信任页面勾选）。审计带清单勾选结果（AC10）。
+     */
+    @Transactional
+    public ReorderOutcome reorderFromLatePayment(String orderToken, boolean consented, boolean addressValid,
+            Long actorAdminId) {
+        if (!consented || !addressValid) {
+            throw AppException.validation("核对清单未全部满足").code("admin.err.v142.late.checklistIncomplete");
+        }
+        return reorder(orderToken, "清单：用户已同意=是；地址有效=是；券 / PawCoin / 库存服务端重查通过", actorAdminId);
+    }
+
+    private ReorderOutcome reorder(String orderToken, String checklistNote, Long actorAdminId) {
         ShopOrder o = requireOrder(orderToken);
         if (o.getStatus() != ShopOrderStatus.CANCELLED) {
             // 重复付款单（3.3：已付款订单又被另一意图付了一次）本身在履约，重下单会多发一份货 → 只能退款（拍板点 ④）
@@ -134,7 +155,8 @@ public class LatePaymentService {
         Instant now = clock.instant();
 
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(o.getId());
-        requireStock(lines);
+        // V1.4.2 shop-admin 7.2 · AD-11（O-4）：至少一行有货即可；锁不到的行照常复制、置 stock_unlocked
+        List<ReorderChecklist.LineStock> alloc = allocateOrUnavailable(lines);
 
         ReorderSettlement s = ShopPricingCalculator.reorderSettlement(o.getTotalAmount(), coinOf(o),
                 o.getLatePaidAmount());
@@ -143,13 +165,23 @@ public class LatePaymentService {
         ShopOrder n = orders.save(ShopOrder.placeReorder(o, tokens.generate(), displayNo, now));
 
         // ② 订单行逐行复制（原快照）+ 原子锁库存
-        for (ShopOrderLine l : lines) {
+        for (int i = 0; i < lines.size(); i++) {
+            ShopOrderLine l = lines.get(i);
             ShopOrderLine copy = ShopOrderLine.of(n.getId(), l.getSkuId(), l.getProductName(), l.getSpecName(),
                     l.getUnitPrice(), l.getQty(), l.getReturnPolicy());
             copy.attributeTo(l.getEntrySource(), l.getTriggerType());
             copy.markDiscountEligible(l.isDiscountEligible());
+            // 预分配有货的行原子锁库存；查可售之后被别单买走（tryLock 失败，不抛异常）→ 同样按缺货行处理（复审修）
+            boolean locks = alloc.get(i).locks() && inventory.tryLock(l.getSkuId(), l.getQty());
+            if (!locks) {
+                copy.markStockUnlocked();   // 不锁库存；转已付款跳过 commit；新单标缺货
+                alloc.set(i, new ReorderChecklist.LineStock(alloc.get(i).lineId(), l.getSkuId(), l.getProductName(),
+                        l.getQty(), false));
+            }
             orderLines.save(copy);
-            lockOrUnavailable(l);
+        }
+        if (alloc.stream().noneMatch(ReorderChecklist.LineStock::locks)) {
+            throw unavailable(lines, java.util.Map.of());   // 竞争后一行都没锁到：全部缺货只能退款（整事务回滚）
         }
 
         // ③ 原券重新锁到新单（不校验有效期；被占用 / 用掉 / 作废 → 409）
@@ -183,11 +215,18 @@ public class LatePaymentService {
         if (!paidTransition.markPaid(n, PaidSource.REORDER)) {
             throw new IllegalStateException("重下单新单未能转为已付款");
         }
+        // V1.4.2 shop-admin 7.2 · AD-11：部分缺货 → 新单自动标缺货（必须在转已付款之后，flagShortage 只收待发货）
+        List<ReorderChecklist.LineStock> shortLines = alloc.stream().filter(a -> !a.locks()).toList();
+        if (!shortLines.isEmpty()) {
+            n.flagShortage(actorAdminId, ReorderChecklist.shortageNote(shortLines), now);
+            orders.save(n);
+        }
 
         // ⑧ 审计（不含地址 / 手机号）
         audit.record(actorAdminId, AuditActions.SHOP_ORDER_LATE_PAYMENT_REORDERED, "SHOP_ORDER", o.getPublicToken(),
-                "迟到款重新下单 → %s；迟到款 %d；新单币 %d / 现金 %d；退回多余 %d".formatted(n.getDisplayNo(),
-                        o.getLatePaidAmount(), s.coinAmount(), s.cashAmount(), s.excessToPawcoin()));
+                "迟到款重新下单 → %s；迟到款 %d；新单币 %d / 现金 %d；退回多余 %d；缺货行 %d%s".formatted(n.getDisplayNo(),
+                        o.getLatePaidAmount(), s.coinAmount(), s.cashAmount(), s.excessToPawcoin(), shortLines.size(),
+                        checklistNote == null ? "" : "；" + checklistNote));
 
         // ⑨ 通知（AFTER_COMMIT 才发）
         events.publishEvent(new ShopOrderReorderedEvent(o.getId(), n.getId(), o.getUserId(), n.getPublicToken(),
@@ -208,7 +247,8 @@ public class LatePaymentService {
     @Transactional
     public ShopOrderRefund refundLatePayment(String orderToken, Long actorAdminId) {
         ShopOrder o = requireOrder(orderToken);
-        requireNotDeleted(o);
+        // V1.4.2 shop-admin 7.2 · O-26：注销用户不再 409 —— 照常生成 LATE_PAYMENT 退款单，进退款打款「注销用户 · 线下处理」
+        // 页签（5.2：不计角标、不推送、线下打款后结案）；重新下单仍拒绝（资产已作废，不建新单）
         o = claim(o, RESOLUTION_REFUNDED);
         ShopOrderRefund refund = refunds.createLatePaymentRefund(o, o.getLatePaidAmount(), actorAdminId);
         log.info("迟到款退款 order={} amount={} refund={}", o.getPublicToken(), o.getLatePaidAmount(),
@@ -267,45 +307,64 @@ public class LatePaymentService {
         return orders.findById(o.getId()).orElseThrow(() -> AppException.notFound("订单不存在"));
     }
 
-    /** AC2.3：逐行（原单行全部，按原 qty；同 SKU 多行合并判断）查可售，不足的逐行收集 → 409 {@code unavailable-lines}。 */
-    private void requireStock(List<ShopOrderLine> lines) {
-        Map<Long, Long> need = new LinkedHashMap<>();
-        for (ShopOrderLine l : lines) {
-            need.merge(l.getSkuId(), (long) l.getQty(), Long::sum);
+    /**
+     * V1.4.2 shop-admin 7.2 · AD-11（O-4）：逐行分配可售（{@link ReorderChecklist#allocate}）；<b>全部缺货</b> → 409
+     * {@code unavailable-lines}（只能退款）；至少一行有货 → 返回分配结果（锁不到的行后续置 {@code stock_unlocked}）。
+     */
+    private List<ReorderChecklist.LineStock> allocateOrUnavailable(List<ShopOrderLine> lines) {
+        Map<Long, Long> available = inventory.availableBySkuId(
+                lines.stream().map(ShopOrderLine::getSkuId).distinct().toList());
+        List<ReorderChecklist.LineStock> alloc = new ArrayList<>(ReorderChecklist.allocate(needsOf(lines), available));
+        if (alloc.stream().anyMatch(ReorderChecklist.LineStock::locks)) {
+            return alloc;
         }
-        Map<Long, Long> available = inventory.availableBySkuId(new ArrayList<>(need.keySet()));
-        List<ShopOrderLine> shortLines = lines.stream()
-                .filter(l -> available.getOrDefault(l.getSkuId(), 0L) < need.get(l.getSkuId()))
-                .toList();
-        if (shortLines.isEmpty()) {
-            return;
-        }
-        Map<Long, String> tokenBySku = skus.findAllById(shortLines.stream().map(ShopOrderLine::getSkuId)
+        throw unavailable(lines, available);
+    }
+
+    private CheckoutUnavailableException unavailable(List<ShopOrderLine> lines, Map<Long, Long> available) {
+        Map<Long, String> tokenBySku = skus.findAllById(lines.stream().map(ShopOrderLine::getSkuId)
                         .distinct().toList()).stream()
                 .collect(Collectors.toMap(ShopSku::getId, ShopSku::getPublicToken, (a, b) -> a));
-        List<UnavailableLine> out = shortLines.stream()
+        List<UnavailableLine> out = lines.stream()
                 .map(l -> new UnavailableLine(tokenBySku.get(l.getSkuId()), l.getProductName(), l.getSpecName(),
                         UnavailableLine.REASON_INSUFFICIENT_STOCK,
                         Math.max(available.getOrDefault(l.getSkuId(), 0L), 0L), l.getQty()))
                 .toList();
-        throw new CheckoutUnavailableException(out);
+        return new CheckoutUnavailableException(out);
     }
 
+    private static List<ReorderChecklist.LineNeed> needsOf(List<ShopOrderLine> lines) {
+        return lines.stream().map(l -> new ReorderChecklist.LineNeed(l.getId() == null ? 0L : l.getId(), l.getSkuId(),
+                l.getProductName(), l.getQty())).toList();
+    }
+
+    // ===================== 核对清单（V1.4.2 shop-admin 7.2 · F3 / F4，只读） =====================
+
     /**
-     * 原子锁库存；查可售之后、锁之前被别单买走（{@code inventory.lock} 影响 0 行抛通用 409）→ 转成 AC2.3 的
-     * {@code unavailable-lines}（带该行明细、可售按 0 报），整个事务随之回滚。
+     * 核对清单系统项（只读，不抢占处理权）：原券现状、PawCoin 实际需扣额与当前余额、逐行库存。手勾项由页面勾，提交时再判。
+     * 订单不是可重新下单的迟到款（已处理 / 非已取消 / 注销用户）→ 返回 {@code null}（抽屉不出「重新下单」）。
      */
-    private void lockOrUnavailable(ShopOrderLine l) {
-        try {
-            inventory.lock(l.getSkuId(), l.getQty());
-        } catch (AppException e) {
-            if (!ErrorTypes.CONFLICT.equals(e.getType())) {
-                throw e;
-            }
-            String skuToken = skus.findById(l.getSkuId()).map(ShopSku::getPublicToken).orElse(null);
-            throw new CheckoutUnavailableException(List.of(new UnavailableLine(skuToken, l.getProductName(),
-                    l.getSpecName(), UnavailableLine.REASON_INSUFFICIENT_STOCK, 0L, l.getQty())));
+    @Transactional(readOnly = true)
+    public ReorderChecklist.Result checklist(ShopOrder o) {
+        if (o.getStatus() != ShopOrderStatus.CANCELLED || o.getLatePaidAmount() == null
+                || o.getLatePaymentResolution() != null || accountDeletions.findByUserId(o.getUserId()).isPresent()) {
+            return null;
         }
+        Instant now = clock.instant();
+        List<ReorderChecklist.CouponState> cs = new ArrayList<>();
+        for (Long id : couponIdsOf(o)) {
+            var uc = userCoupons.findById(id).orElse(null);
+            boolean usable = uc != null && java.util.Objects.equals(uc.getUserId(), o.getUserId())
+                    && uc.getStatus() == com.tailtopia.shop.coupon.domain.UserCouponStatus.AVAILABLE;
+            cs.add(new ReorderChecklist.CouponState(uc == null ? "—" : uc.getPublicToken(), usable,
+                    uc != null && uc.isExpiredAt(now)));
+        }
+        ReorderSettlement st = ShopPricingCalculator.reorderSettlement(o.getTotalAmount(), coinOf(o),
+                o.getLatePaidAmount());
+        List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(o.getId());
+        List<ReorderChecklist.LineStock> alloc = ReorderChecklist.allocate(needsOf(lines),
+                inventory.availableBySkuId(lines.stream().map(ShopOrderLine::getSkuId).distinct().toList()));
+        return ReorderChecklist.evaluate(cs, st.coinAmount(), wallet.balanceOf(o.getUserId()), alloc, false, false);
     }
 
     private void relockCoupons(ShopOrder o, ShopOrder n, Instant now) {

@@ -51,6 +51,16 @@ public class InventoryService {
         }
     }
 
+    /**
+     * 尝试锁定，不抛异常（V1.4.2 shop-admin 7.2 · AD-11：迟到款重新下单部分缺货 —— 锁不到的行置 {@code stock_unlocked}，
+     * 不能让一次失败的 lock 把外层事务标成 rollback-only）。
+     */
+    @Transactional
+    public boolean tryLock(long skuId, long qty) {
+        requirePositive(qty);
+        return inventory.lock(skuId, qty) > 0;
+    }
+
     /** 锁定 → 可售（3.4 支付超时 / 用户取消）。 */
     @Transactional
     public void release(long skuId, long qty) {

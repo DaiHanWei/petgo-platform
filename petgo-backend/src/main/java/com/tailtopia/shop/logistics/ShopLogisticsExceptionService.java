@@ -97,6 +97,7 @@ public class ShopLogisticsExceptionService {
             // V1.4.2 shop-admin 6.1 · O-18：已发货的揽收失败也可重提（订单状态不变）
             ShopOrder order = requirePickupFailed(orderId, Set.of(ShopOrderStatus.PENDING_SHIPMENT, ShopOrderStatus.SHIPPED));
             waybills.requireWaybillData(order);   // 复审 5：数据前提先于取消旧运单校验
+            waybills.requireNoUnlockedStock(orderId);   // 7.2 · AD-11：未锁库存行未处置不发货
             // 6.1 复审：已有手工包裹时重提必被「已有运单」拒，须在取消旧运单之前拦下，免得白取消
             if (shipments.findActiveByShopOrderId(orderId).stream().anyMatch(sh -> !sh.isBiteship())) {
                 throw AppException.conflict("该订单已有手工运单，请改用「手工填写运单」");
@@ -143,6 +144,7 @@ public class ShopLogisticsExceptionService {
         }
         tx.executeWithoutResult(s -> {
             requirePickupFailed(orderId, Set.of(ShopOrderStatus.PENDING_SHIPMENT, ShopOrderStatus.SHIPPED));
+            waybills.requireNoUnlockedStock(orderId);   // 7.2 · AD-11
             // 先于取消旧运单校验重复单号：否则旧运单已取消、手工运单却登记不上
             if (shipments.findByCarrierAndTrackingNo(carrier.name(), no).isPresent()) {
                 throw AppException.conflict("该承运商的这个物流单号已录入过");

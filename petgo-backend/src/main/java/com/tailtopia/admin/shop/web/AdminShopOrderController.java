@@ -81,6 +81,9 @@ public class AdminShopOrderController {
     private final com.tailtopia.shop.order.refund.ShopOrderRefundService refundService;
     /** V1.4.2 shop-admin Story 7.1：抽屉「退款与成长值」一节（F7，只读）。 */
     private final com.tailtopia.admin.shop.service.AdminShopOrderAfterSalesService afterSales;
+    /** V1.4.2 shop-admin Story 7.2：取消后到账（F2 ~ F6）。 */
+    private final com.tailtopia.admin.shop.service.AdminShopLatePaymentService lateView;
+    private final com.tailtopia.shop.order.service.LatePaymentService latePayments;
 
     public AdminShopOrderController(AdminShopOrderService adminOrders,
             ShopOrderFulfillmentService fulfillment, ShopOrderRepository orders,
@@ -90,7 +93,11 @@ public class AdminShopOrderController {
             com.tailtopia.shop.order.repository.ShipmentRepository shipmentRepo,
             com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts,
             com.tailtopia.shop.order.refund.ShopOrderRefundService refundService,
-            com.tailtopia.admin.shop.service.AdminShopOrderAfterSalesService afterSales) {
+            com.tailtopia.admin.shop.service.AdminShopOrderAfterSalesService afterSales,
+            com.tailtopia.admin.shop.service.AdminShopLatePaymentService lateView,
+            com.tailtopia.shop.order.service.LatePaymentService latePayments) {
+        this.lateView = lateView;
+        this.latePayments = latePayments;
         this.refundService = refundService;
         this.afterSales = afterSales;
         this.waybills = waybills;
@@ -253,6 +260,63 @@ public class AdminShopOrderController {
         return "admin/fragments/drawer-shop-order :: drawer";
     }
 
+    // ---------- V1.4.2 shop-admin Story 7.2 · AD-11：取消后到账处置（F2 ~ F6；只在「订单」页抽屉） ----------
+
+    /** F3 提交重新下单：手勾两项必须勾；券 / PawCoin / 库存服务端重查（AC2）。全部缺货 → 409 只能退款（AC4）。 */
+    @PostMapping("/admin/shop/order-list/{token}/late/reorder")
+    @PreAuthorize(FULFILL_AUTH)
+    public String lateReorder(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @RequestParam(required = false) String consented, @RequestParam(required = false) String addressValid,
+            Model model) {
+        com.tailtopia.shop.order.service.ReorderOutcome out;
+        try {
+            out = latePayments.reorderFromLatePayment(token, consented != null, addressValid != null, actorOf(admin));
+        } catch (com.tailtopia.shop.order.dto.CheckoutUnavailableException e) {
+            throw AppException.conflict("原订单商品全部缺货，只能退还到账款").code("admin.err.v142.late.allOutOfStock");
+        }
+        return listDone(admin, token, msg.get("admin.v142.late.flash.reordered", out.newDisplayNo()), model);
+    }
+
+    /** F6 确认弹层：复述到账款，提示 App 出「选择退款方式」、无补偿（只读，不写库）。 */
+    @PostMapping("/admin/shop/order-list/{token}/late/refund/confirm")
+    @PreAuthorize(FULFILL_AUTH)
+    public String confirmLateRefund(@PathVariable String token, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
+        ShopOrder order = requireOrder(token);
+        if (order.getLatePaidAmount() == null || order.getLatePaymentResolution() != null) {
+            throw AppException.conflict("该笔迟到款已处理过，或订单没有迟到款").code("admin.err.latePayment.alreadyResolved");
+        }
+        var cm = new com.tailtopia.admin.shared.web.AdminConfirmModal(msg.get("admin.v142.late.refund.confirmTitle"),
+                null, java.util.List.of(), msg.get("admin.v142.late.refund.confirmBody"), null, null, null,
+                "/admin/shop/order-list/" + enc(token) + "/late/refund", java.util.Map.of(),
+                msg.get("admin.v142.late.btn.refund"), false)
+                .withAmounts(java.util.List.of(new com.tailtopia.admin.shared.web.AdminConfirmModal.AmountLine(
+                        msg.get("admin.v142.late.refund.received"),
+                        AdminShopOrderExceptionController.rp(order.getLatePaidAmount()), null, true)))
+                .withSuccessTarget("#shop-order-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    /** F6 退还到账款：进待用户选择，无补偿（AC8）；注销用户进「注销用户 · 线下处理」（O-26）。 */
+    @PostMapping("/admin/shop/order-list/{token}/late/refund")
+    @PreAuthorize(FULFILL_AUTH)
+    public String lateRefund(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            Model model) {
+        latePayments.refundLatePayment(token, actorOf(admin));
+        return listDone(admin, token, msg.get("admin.v142.late.flash.refunded"), model);
+    }
+
+    /** 「订单」页抽屉处置成功：同 {@link #done}，带页面上下文（吸底不出履约操作、行抽屉地址指向订单页）。 */
+    private String listDone(AdminUserDetails admin, String token, String message, Model model) {
+        model.addAttribute("ctx", CTX_LIST);
+        model.addAttribute("drawerBase", LIST_BASE);
+        String view = done(admin, token, message, model);
+        model.addAttribute("flagsByToken", java.util.Map.of(token,
+                AdminShopOrderService.flagsOf(requireOrder(token))));
+        model.addAttribute("active", "shopOrderList");
+        return view;
+    }
+
     static final String LIST_BASE = "/admin/shop/order-list";
     static final String CTX_LIST = "list";
 
@@ -340,6 +404,13 @@ public class AdminShopOrderController {
         model.addAttribute("activeBiteship", active.stream().filter(Shipment::isBiteship).findFirst().orElse(null));
         // V1.4.2 shop-admin Story 7.1（F7）：退款与成长值（只读，两个页面上下文都显示）
         model.addAttribute("afterSales", afterSales.of(order));
+        // V1.4.2 shop-admin Story 7.2（F2 ~ F6）：取消后到账；重下单原快递不可用时运单改选的快递（O-5，抽屉提示）
+        model.addAttribute("late", lateView.of(order));
+        model.addAttribute("courierSwitched", active.stream().filter(Shipment::isBiteship).anyMatch(sh ->
+                order.getCourierCode() != null && sh.getCourierCode() != null
+                        && (!order.getCourierCode().equalsIgnoreCase(sh.getCourierCode())
+                                || !String.valueOf(order.getCourierServiceCode())
+                                        .equalsIgnoreCase(String.valueOf(sh.getCourierServiceCode())))));
         model.addAttribute("shippedByName", order.getShippedByAdminId() == null ? null
                 : adminAccounts.findById(order.getShippedByAdminId()).map(a -> a.getDisplayName()).orElse(null));
         return order;

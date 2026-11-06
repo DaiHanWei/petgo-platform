@@ -102,6 +102,11 @@ public class ShopOrderFulfillmentService {
         if (c == null) {
             throw AppException.validation("请选择承运商");
         }
+        // V1.4.2 shop-admin 7.2 · AD-11：有未处置的未锁库存行（迟到款重下单部分缺货）→ 一切发货入口拒绝
+        if (orderLines.existsUnresolvedStockUnlocked(order.getId())) {
+            throw AppException.conflict("该订单有未锁到库存的商品行，请先到异常订单处理（部分取消或联系用户后继续）")
+                    .code("admin.err.v142.late.stockUnlocked");
+        }
         // v1.4.2 shop 5.1 AC10.1：已有活动 Biteship 运单时不得再登记手工运单（先由 5.2 的处置取消再转手工）
         if (Shipments.hasActiveBiteship(shipments.findByShopOrderIdOrderByIdAsc(order.getId()))) {
             throw AppException.conflict("该订单已有 Biteship 运单，请先取消");

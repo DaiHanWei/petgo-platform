@@ -37,8 +37,10 @@ class ShopOrderPaidHandlerLateTest {
     private final CheckoutService checkout = mock(CheckoutService.class);
     private final PaymentIntentService paymentIntents = mock(PaymentIntentService.class);
     private final ShopPaymentAlerts alerts = mock(ShopPaymentAlerts.class);
+    private final com.tailtopia.admin.alert.OpsAlertService opsAlerts =
+            org.mockito.Mockito.mock(com.tailtopia.admin.alert.OpsAlertService.class);
     private final ShopOrderPaidHandler handler = new ShopOrderPaidHandler(orders, payments, checkout,
-            paymentIntents, alerts);
+            paymentIntents, alerts, opsAlerts);
 
     /** 绑定到订单 {@code orderId} 的已到账意图（MIXED：总额 220,000 = 币 30,000 + 现金 190,000）。 */
     private PaymentIntent mixedIntent(long intentId, Long orderId) {
@@ -92,6 +94,9 @@ class ShopOrderPaidHandlerLateTest {
         verify(payments, never()).markPaid(any(), any());
         assertThat(o.getStatus()).isEqualTo(ShopOrderStatus.CANCELLED);
         verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), anyString());
+        // V1.4.2 shop-admin 7.2 · AC1：迟到款落库后提醒客服（CS，去重键 late-paid:{token}），只带展示号与金额
+        verify(opsAlerts).send(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.CS),
+                org.mockito.ArgumentMatchers.eq("late-paid:" + o.getPublicToken()), contains("取消后到账 Rp 190.000"));
     }
 
     @Test
@@ -123,6 +128,7 @@ class ShopOrderPaidHandlerLateTest {
         handler.onPaid(paid(pi));
 
         verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), contains("同一订单第二笔迟到款"));
+        org.mockito.Mockito.verifyNoInteractions(opsAlerts);   // 没落库就不提醒客服
     }
 
     @Test
@@ -137,6 +143,8 @@ class ShopOrderPaidHandlerLateTest {
 
         verify(orders).recordLatePayment(eq(5L), eq(190_000L), any(), eq(500L));
         verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.TECH), contains("重复付款"));
+        verify(opsAlerts).send(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.CS), anyString(),
+                contains("重复付款"));
         verify(payments, never()).markPaid(any(), any());
     }
 

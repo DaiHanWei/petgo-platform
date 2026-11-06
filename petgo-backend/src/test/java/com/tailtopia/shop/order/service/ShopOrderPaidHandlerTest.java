@@ -26,8 +26,10 @@ class ShopOrderPaidHandlerTest {
     private final com.tailtopia.pay.service.PaymentIntentService paymentIntents =
             mock(com.tailtopia.pay.service.PaymentIntentService.class);
     private final ShopPaymentAlerts alerts = mock(ShopPaymentAlerts.class);
+    private final com.tailtopia.admin.alert.OpsAlertService opsAlerts =
+            org.mockito.Mockito.mock(com.tailtopia.admin.alert.OpsAlertService.class);
     private final ShopOrderPaidHandler handler = new ShopOrderPaidHandler(orders, payments, checkout,
-            paymentIntents, alerts);
+            paymentIntents, alerts, opsAlerts);
 
     private static PaymentIntentPaidEvent paid(PaymentPurpose purpose) {
         return new PaymentIntentPaidEvent(1L, "pi-1", 9L, purpose, PayChannel.MIXED, 220_000L, "IDR");

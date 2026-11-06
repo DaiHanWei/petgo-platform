@@ -297,7 +297,8 @@ public class AdminShopOrderExceptionService {
     // ---------- 处置③ 联系用户后继续 ----------
 
     /**
-     * 联系用户后继续履约：<b>不动状态、不动库存、不动钱</b>，只留痕与告知。
+     * 联系用户后继续履约：<b>不动状态、不动钱</b>，只留痕与告知；V1.4.2 shop-admin 7.2：迟到款重下单的未锁库存行在这里补锁库存
+     * （lock + commit，与已付款单其他行同态），锁不到整单拒绝。
      *
      * <p>这条出口存在的意义是让「已经打过电话、用户同意等」这件事在系统里有记录 ——
      * 否则下一个客服看到同一张异常单，会以为没人处理过而再打一次。
@@ -310,6 +311,20 @@ public class AdminShopOrderExceptionService {
         // V1.4.2 shop-admin 5.1 · AD-9：「联系用户后继续」只对缺货来源（语义不变：清缺货标记）
         if (source(order).orElse(null) != ExceptionSource.OUT_OF_STOCK) {
             throw AppException.conflict("只有缺货订单可以联系用户后继续").code("admin.err.v142.exception.continueOnlyShortage");
+        }
+        // V1.4.2 shop-admin 7.2 · AD-11：迟到款重下单锁不到库存的行 → 这里做 lock + commit 并清标记；锁不到则拒绝（走部分取消）
+        for (com.tailtopia.shop.order.domain.ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
+            if (!line.isUnresolvedStockUnlocked()) {
+                continue;
+            }
+            int n = line.getQty() - line.getRefundedQty();
+            if (inventory.lock(line.getSkuId(), n) == 0 || inventory.commit(line.getSkuId(), n) == 0) {
+                // 整个事务回滚：前面已锁到的行一并撤销
+                throw AppException.conflict("仍有商品行锁不到库存，请对该行做部分取消")
+                        .code("admin.err.v142.late.continueNoStock");
+            }
+            line.clearStockUnlocked();
+            orderLines.save(line);
         }
         // 继续履约 = 这单的缺货处置完了（补到货 / 用户同意等）→ 离开工作台
         order.clearShortageFlag();

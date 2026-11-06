@@ -74,6 +74,67 @@
         </ol>
     </section>
 
+    <!--/* V1.4.2 shop-admin Story 7.2（F2 ~ F6 · AD-11）：取消后到账。横幅两个页面都显示；处置只在「订单」页（ctx=list）且有 shop.order_fulfill。 */-->
+    <section class="card card-full so-card" th:if="${late != null}" data-late-payment
+             th:with="rp=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)}">
+        <p class="banner warn" th:if="${late.duplicate()}" data-late-duplicate
+           th:text="#{admin.v142.late.bannerDuplicate(${rp.rp(late.amount())}, ${late.paidAt() != null} ? ${@adminTime.wib(late.paidAt())} : '—')}">重复付款</p>
+        <p class="banner warn" th:unless="${late.duplicate()}" th:text="#{admin.v142.late.banner(${rp.rp(late.amount())}, ${late.paidAt() != null} ? ${@adminTime.wib(late.paidAt())} : '—', ${late.cancelledAt() != null} ? ${@adminTime.wib(late.cancelledAt())} : '—')}">取消后到账</p>
+        <!-- F5 已重新下单 / 已退还 -->
+        <p class="banner ok" th:if="${late.resolution() == 'REORDERED'}" data-late-reordered>
+            <span th:text="#{admin.v142.late.reordered(${late.newOrderNo()} ?: '—', ${late.newOrderStatus() != null} ? #{'admin.v130.shopOrders.status.' + ${late.newOrderStatus()}} : '—', ${late.operator()} ?: '—', ${late.handledAt() != null} ? ${@adminTime.wib(late.handledAt())} : '—')}">已为用户重新下单</span>
+            <a th:if="${late.newOrderToken() != null}" th:href="@{/admin/shop/order-list(open=${late.newOrderToken()})}"
+               th:text="#{admin.v142.late.openNew}">查看新订单</a>
+        </p>
+        <p class="banner ok" th:if="${late.resolution() == 'REFUNDED'}" data-late-refunded
+           th:text="#{admin.v142.late.refunded(${late.operator()} ?: '—', ${late.handledAt() != null} ? ${@adminTime.wib(late.handledAt())} : '—')}">已退还到账款</p>
+        <th:block th:if="${ctx == 'list' and late.pending() and canFulfill}">
+            <div class="cfg-card card" data-late-actions>
+                <h3 th:text="#{admin.v142.late.box.title}">取消后到账处理</h3>
+                <p class="hint" th:text="#{admin.v142.late.box.hint}">先联系用户，征得同意后再重新下单</p>
+                <!-- F3 / F4 核对清单（重复付款单 / 注销用户不出，只能退还） -->
+                <details th:if="${late.checklist() != null}" data-late-checklist th:with="c=${late.checklist()}">
+                    <summary class="btn btn-neutral" th:text="#{admin.v142.late.btn.reorder}">重新下单</summary>
+                    <form th:attr="hx-post=@{/admin/shop/order-list/{t}/late/reorder(t=${order.publicToken})}"
+                          hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                        <h4 th:text="#{admin.v142.late.check.title}">重新下单 · 核对清单（全部满足才可提交）</h4>
+                        <ul class="checklist">
+                            <li><label><input type="checkbox" name="consented" value="1"/>
+                                <span th:text="#{admin.v142.late.check.consented}">用户已同意由平台帮他重新下单</span></label></li>
+                            <li th:if="${!#lists.isEmpty(c.coupons())}" th:classappend="${c.couponsOk()} ? 'ok' : 'err'" data-check-coupon>
+                                <span th:text="(${c.couponsOk()} ? '✓ ' : '✗ ') + #{admin.v142.late.check.coupon}">原订单用过的券仍在用户账户中</span>
+                                <small th:each="cp : ${c.coupons()}" th:if="${cp.expired()}" th:text="#{admin.v142.late.check.couponExpired(${cp.label()})}">已过期也可用</small>
+                            </li>
+                            <li th:if="${c.coinRequired() > 0}" th:classappend="${c.coinOk()} ? 'ok' : 'err'" data-check-coin>
+                                <span th:text="(${c.coinOk()} ? '✓ ' : '✗ ') + #{admin.v142.late.check.coin}">PawCoin 余额足够</span>
+                                <small th:text="#{admin.v142.late.check.coinDetail(${#numbers.formatInteger(c.coinRequired(), 0, 'POINT')}, ${#numbers.formatInteger(c.coinBalance(), 0, 'POINT')})}">需 · 当前</small>
+                            </li>
+                            <li th:classappend="${c.anyInStock()} ? 'ok' : 'err'" data-check-stock>
+                                <span th:text="(${c.anyInStock()} ? '✓ ' : '✗ ') + #{admin.v142.late.check.stock}">至少一行商品有库存</span>
+                                <small th:if="${#lists.isEmpty(c.shortLines())}" th:text="#{admin.v142.late.check.stockAll(${c.lines().size()})}">均有库存</small>
+                                <small th:each="sl : ${c.shortLines()}" th:text="#{admin.v142.late.check.stockShort(${sl.productName()})}">缺货</small>
+                            </li>
+                            <li><label><input type="checkbox" name="addressValid" value="1"/>
+                                <span th:text="#{admin.v142.late.check.address}">收货地址仍有效</span></label></li>
+                        </ul>
+                        <p class="banner warn" th:if="${c.anyInStock() and !#lists.isEmpty(c.shortLines())}"
+                           th:text="#{admin.v142.late.check.partialWarn(${#strings.listJoin(c.shortLines().![productName()], '、')})}">部分缺货</p>
+                        <p class="hint" th:text="#{admin.v142.late.check.hint}">新订单金额按原订单锁定</p>
+                        <button type="submit" class="btn btn-primary" th:disabled="${!c.systemOk()}"
+                                th:text="#{admin.v142.late.btn.submitReorder}">提交重新下单</button>
+                    </form>
+                </details>
+                <form class="inline" th:attr="hx-post=@{/admin/shop/order-list/{t}/late/refund/confirm(t=${order.publicToken})}"
+                      hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-danger" th:text="#{admin.v142.late.btn.refund}">退还到账款</button>
+                </form>
+            </div>
+        </th:block>
+    </section>
+
+    <!--/* V1.4.2 shop-admin Story 7.2（O-5）：重下单原快递不可用，运单已改选最便宜一家（订单快照不变，差额平台承担） */-->
+    <p class="banner warn" th:if="${courierSwitched}" data-courier-switched th:text="#{admin.v142.late.courierSwitched}">原快递不可用，已改选</p>
+
     <!-- ② 商品行表 -->
     <section class="card card-full so-card">
         <h2 th:text="#{admin.shop.order.section.lines}">商品行</h2>

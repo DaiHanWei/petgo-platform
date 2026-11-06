@@ -255,9 +255,12 @@ public class ShopOrderRefundService {
         }
         Instant now = clock.instant();
 
-        movements.receiveReturn(line.getSkuId(), qty, order.getPublicToken(), wibToday(),
-                actorAdminId == null ? 0L : actorAdminId);
-        order = reloadOrder(order);   // 见 reloadOrder：回补清了一级缓存
+        // V1.4.2 shop-admin 7.2 · AD-11：未锁库存行（迟到款重下单锁不到）从没扣过库存，取消不回补
+        if (!line.isStockUnlocked()) {
+            movements.receiveReturn(line.getSkuId(), qty, order.getPublicToken(), wibToday(),
+                    actorAdminId == null ? 0L : actorAdminId);
+            order = reloadOrder(order);   // 见 reloadOrder：回补清了一级缓存
+        }
         line = orderLines.findById(lineId).orElseThrow();
         line.addRefundedQty(qty);
         orderLines.save(line);
@@ -775,7 +778,7 @@ public class ShopOrderRefundService {
     private void restockRemaining(ShopOrder order, List<ShopOrderLine> lines, Long actorAdminId) {
         for (ShopOrderLine line : lines) {
             int remaining = line.getQty() - line.getRefundedQty();
-            if (remaining > 0) {
+            if (remaining > 0 && !line.isStockUnlocked()) {   // 7.2 · AD-11：未锁库存行不回补
                 movements.receiveReturn(line.getSkuId(), remaining, order.getPublicToken(), wibToday(),
                         actorAdminId == null ? 0L : actorAdminId);
             }

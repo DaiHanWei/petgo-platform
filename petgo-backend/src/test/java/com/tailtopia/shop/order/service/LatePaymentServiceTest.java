@@ -103,11 +103,14 @@ class LatePaymentServiceTest {
         accountDeletions = mock(AccountDeletionRepository.class);
         events = mock(ApplicationEventPublisher.class);
         service = new LatePaymentService(orders, orderLines, skus, inventory, coupons, wallet, tokens, displayNos,
-                paidTransition, refunds, audit, accountDeletions, events, Clock.fixed(NOW, ZoneOffset.UTC));
+                paidTransition, refunds, audit, accountDeletions, events,
+                mock(com.tailtopia.shop.coupon.repository.UserCouponRepository.class), Clock.fixed(NOW, ZoneOffset.UTC));
 
         when(tokens.generate()).thenReturn("new-tok");
         when(displayNos.generateUnique(eq(NOW), any())).thenReturn("TOKO-20261105-NEW001");
         when(accountDeletions.findByUserId(anyLong())).thenReturn(Optional.empty());
+        // V1.4.2 shop-admin 7.2：锁库存改 tryLock（锁不到的行置 stock_unlocked，不抛异常）
+        when(inventory.tryLock(anyLong(), anyLong())).thenReturn(true);
         when(orders.save(any(ShopOrder.class))).thenAnswer(inv -> {
             ShopOrder o = inv.getArgument(0);
             if (o.getId() == null) {
@@ -223,17 +226,20 @@ class LatePaymentServiceTest {
     }
 
     @Test
-    @DisplayName("注销用户 → 409 线下处理（admin.err.latePayment.userDeleted），两条路径都不抢占处理权")
+    @DisplayName("注销用户：重新下单 409 线下处理且不抢占；V1.4.2 shop-admin 7.2 · O-26 退款不再 409 → 照常出 LATE_PAYMENT 退款单（进「注销用户 · 线下处理」）")
     void deletedUserRejected() {
-        arrange(ShopOrderStatus.CANCELLED, 229_575L, 10);
+        ShopOrder o = arrange(ShopOrderStatus.CANCELLED, 229_575L, 10);
         when(accountDeletions.findByUserId(USER)).thenReturn(Optional.of(mock(AccountDeletion.class)));
         assertThatThrownBy(() -> service.reorderFromLatePayment("orig-tok", 1L))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.latePayment.userDeleted"));
-        assertThatThrownBy(() -> service.refundLatePayment("orig-tok", 1L))
-                .isInstanceOfSatisfying(AppException.class,
-                        e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.latePayment.userDeleted"));
         verify(orders, never()).claimLatePayment(anyLong(), anyString());
+        // O-26：按设计改断言 —— 退款路径对注销用户放行
+        ShopOrderRefund r = mock(ShopOrderRefund.class);
+        when(r.getPublicToken()).thenReturn("rf-tok");
+        when(refunds.createLatePaymentRefund(o, 229_575L, 1L)).thenReturn(r);
+        assertThat(service.refundLatePayment("orig-tok", 1L)).isSameAs(r);
+        verify(orders).claimLatePayment(ORIG_ID, "REFUNDED");
     }
 
     // ===================== AC2.3 ~ AC2.5 =====================
@@ -261,13 +267,14 @@ class LatePaymentServiceTest {
     }
 
     @Test
-    @DisplayName("AC2.3 复审：查可售后被别单买走（inventory.lock 抛通用 409）→ 转 unavailable-lines 带该行明细，不扣币、不转已付款")
+    @DisplayName("AC2.3 复审：查可售后被别单买走（7.2 起 tryLock 失败；唯一一行也锁不到 = 全部缺货）→ unavailable-lines 带该行明细，不扣币、不转已付款")
     void stockRaceBetweenCheckAndLock() {
         arrange(ShopOrderStatus.CANCELLED, 229_575L, 10);
-        org.mockito.Mockito.doThrow(AppException.conflict("已售罄")).when(inventory).lock(SKU, 3);
+        when(inventory.tryLock(SKU, 3)).thenReturn(false);
         ShopSku sku = mock(ShopSku.class);
         when(sku.getPublicToken()).thenReturn("sku-tok");
-        when(skus.findById(SKU)).thenReturn(Optional.of(sku));
+        when(sku.getId()).thenReturn(SKU);
+        when(skus.findAllById(any())).thenReturn(List.of(sku));
         assertThatThrownBy(() -> service.reorderFromLatePayment("orig-tok", 1L))
                 .isInstanceOfSatisfying(CheckoutUnavailableException.class, e -> {
                     assertThat(e.getType()).isEqualTo(ErrorTypes.UNAVAILABLE_LINES);
@@ -322,7 +329,7 @@ class LatePaymentServiceTest {
         ShopOrder n = newOrder();
         InOrder io = inOrder(orders, inventory, coupons, wallet, paidTransition, events);
         io.verify(orders).claimLatePayment(ORIG_ID, "REORDERED");
-        io.verify(inventory).lock(SKU, 3);
+        io.verify(inventory).tryLock(SKU, 3);
         io.verify(coupons).relockForReorder(USER, DISCOUNT_UC, NEW_ID, NOW);
         io.verify(coupons).relockForReorder(USER, FREE_SHIP_UC, NEW_ID, NOW);
         io.verify(wallet).debit(USER, 100_000L, PawCoinTxnType.SPEND, "SHOP_ORDER", NEW_ID, "shop-order:new-tok");

@@ -57,6 +57,9 @@ public class ShopOrderPaidTransition {
             return false;   // 已处理过（重复回调 / 轮询二次到达）或已被取消
         }
         for (ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
+            if (line.isStockUnlocked()) {
+                continue;   // V1.4.2 shop-admin 7.2 · AD-11：迟到款重下单锁不到库存的行，没锁就不确认
+            }
             inventory.commit(line.getSkuId(), line.getQty());
         }
         Instant now = Instant.now();
