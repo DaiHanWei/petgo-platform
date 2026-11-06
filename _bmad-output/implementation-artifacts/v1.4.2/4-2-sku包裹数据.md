@@ -25,6 +25,9 @@ So that 上线前存量 SKU 可售.
 - [ ] 页面与三语文案
 - [ ] 测试：L0 单测跑绿，L1 测试写好能编译
 - [ ] 审计与提醒逐项核对
+- [ ] （核对补）`AdminShopSkuPackageService.updatePackage` 允许四项全空（清空 = 暂不可售），AC1 要求必填，校验放在 `AdminShopProductService.upsertSku`
+- [ ] （核对补）`updatePackage` 按 `skuToken` 寻址，`upsertSku` 同事务调用时传 `sku.getPublicToken()`，新建规格也要走到
+- [ ] （核对补）`AdminShopProductServiceTest`、`Epic1ChainIntegrationTest` 也调 `upsertSku`，fixture 补四项
 
 ## Dev Notes
 
@@ -36,6 +39,12 @@ So that 上线前存量 SKU 可售.
 - **验证层级 L0 测试类**：`SkuPackageValidationTest`
 
 - 退货规则、进货价列保留
+
+### 代码核对（2026-11-06，基线 `fd94b3ffa`，电商线 PR#49 已合入）
+
+- 列名：`package_weight_g`、`package_length_cm`、`package_width_cm`、`package_height_cm`（`V20261105_1600`），实体 `ShopSku.applyPackage(...)`。`ShopSkuForm` 现在没有这四项。
+- 审计沿用 `SHOP_SKU_UPSERTED`，`updatePackage` 已写一条，`upsertSku` 自己也写一条，同一次保存会有两条。PRD 要求带上重量体积，保留这两条即可。
+- `page(category, active, ...)` 是商品列表现有入口，「包裹数据」筛选加在这里。
 
 ## Dev Agent Record
 

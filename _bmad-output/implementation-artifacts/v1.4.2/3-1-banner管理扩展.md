@@ -31,6 +31,8 @@ So that 能安排活动.
 - [ ] 页面与三语文案
 - [ ] 测试：L0 单测跑绿，L1 测试写好能编译
 - [ ] 审计与提醒逐项核对
+- [ ] （核对补）`AdminShopBannerService.update` 现在把 `form.getSortWeight()` 写回去。表单去掉权重后它恒为 0，编辑一次就把排序打乱：`update` 不再改权重，`ShopBanner.apply` 和 `ShopBannerForm.sortWeight` 同步调整
+- [ ] （核对补）`create` 同理：新建 banner 排在列表末尾（当前最小 `sort_weight` − 1），不顶掉生效中的 banner。Completion Notes 标「待确认」
 
 ## Dev Notes
 
@@ -43,6 +45,14 @@ So that 能安排活动.
 
 - 生效判定抽成一处供后台与 App 共用，App 接口结果不变
 - 上线后品类跳转落 Toko 首页已由电商线处理
+
+### 代码核对（2026-11-06，基线 `fd94b3ffa`，电商线 PR#49 已合入）
+
+- 现状入口：`AdminShopBannerService.stateOf / liveId / liveIds`、`ShopBannerQueryService.liveBanners / select`、`ShopBannerRepository.findLiveCandidates`（JPQL 过滤上架与排期）、`findAllByOrderBySortWeightDescIdDesc`。
+- `select` 已是纯函数，但它会跳过图片 URL 为空的 banner，且只处理已过滤的候选。六态判定要覆盖全部 banner，抽公共判定时注意这两点；`MAX_BANNERS = 6`，`CANDIDATE_LIMIT = 30`。
+- 旧三态 `live / activeNotLive / inactive` 被 `shop-banners-list.html` 直接引用（如 `b.state == 'inactive'`），`AdminShopBannerStateTest`、`AdminShopBannerTargetTest` 也会被打破。
+- `validate` 现在接受 CATEGORY，AC5 要改成服务端拒绝；App 取数里 CATEGORY → `TOKO_HOME` 不动。`ShopBannerForm.startAt / endAt` 是 `Instant`，页面控件按 WIB 转换。
+- `POST /admin/shop/banners/reorder` 不会和 `POST /admin/shop/banners/{id}` 冲突，字面量路径优先。
 
 ## Dev Agent Record
 
