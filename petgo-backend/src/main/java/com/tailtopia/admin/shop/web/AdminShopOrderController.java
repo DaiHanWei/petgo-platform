@@ -77,6 +77,8 @@ public class AdminShopOrderController {
     private final com.tailtopia.shop.logistics.ShopLogisticsExceptionService logistics;
     private final com.tailtopia.shop.order.repository.ShipmentRepository shipmentRepo;
     private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
+    /** V1.4.2 shop-admin Story 6.2：用户原因退回按行确认入库（库存只在这里加一次）。 */
+    private final com.tailtopia.shop.order.refund.ShopOrderRefundService refundService;
 
     public AdminShopOrderController(AdminShopOrderService adminOrders,
             ShopOrderFulfillmentService fulfillment, ShopOrderRepository orders,
@@ -84,7 +86,9 @@ public class AdminShopOrderController {
             Messages msg, com.tailtopia.shop.logistics.BiteshipShipmentService waybills,
             com.tailtopia.shop.logistics.ShopLogisticsExceptionService logistics,
             com.tailtopia.shop.order.repository.ShipmentRepository shipmentRepo,
-            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts) {
+            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts,
+            com.tailtopia.shop.order.refund.ShopOrderRefundService refundService) {
+        this.refundService = refundService;
         this.waybills = waybills;
         this.logistics = logistics;
         this.shipmentRepo = shipmentRepo;
@@ -260,7 +264,8 @@ public class AdminShopOrderController {
         var acts = DrawerActionsResolver.resolve(new DrawerActionsResolver.Facts(order.getStatus(),
                 order.getWaybillFailReason(), order.getWaybillFailedAt() != null, order.getLogisticsException(),
                 active.stream().anyMatch(Shipment::isBiteship), !active.isEmpty(),
-                order.getCourierCode() != null && !order.getCourierCode().isBlank(), order.isShortageFlagged()));
+                order.getCourierCode() != null && !order.getCourierCode().isBlank(), order.isShortageFlagged(),
+                order.getReturnCause(), order.getReturnInboundAt() != null, order.isClaimPending()));
         model.addAttribute("acts", acts);
         model.addAttribute("activeBiteship", active.stream().filter(Shipment::isBiteship).findFirst().orElse(null));
         model.addAttribute("shippedByName", order.getShippedByAdminId() == null ? null
@@ -436,6 +441,168 @@ public class AdminShopOrderController {
             Model model) {
         fulfillment.markShippedWithoutWaybill(token, actorOf(admin));
         return done(admin, token, msg.get("admin.v142.ful.flash.markedShipped"), model);
+    }
+
+    // ---------- V1.4.2 shop-admin Story 6.2：退回判定 / 重发 / 退回入库 / 丢件破损 / 索赔结案 / 清除停滞（H8 ~ H12） ----------
+    // 🔴 同上：ShopLogisticsExceptionService 自带短事务，本类不包外层事务
+
+    /** H8：判定退回原因（快递原因 → 待索赔；用户原因 → 抽屉出「确认退回入库」）。 */
+    @PostMapping("/admin/shop/orders/{token}/returned/decide")
+    @PreAuthorize(FULFILL_AUTH)
+    public String decideReturned(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @RequestParam(required = false) String cause, @RequestParam(required = false) String note, Model model) {
+        com.tailtopia.shop.logistics.ReturnCause rc = parseReturnCause(cause);
+        ShopOrder order = requireOrder(token);
+        logistics.confirmReturned(order.getId(), rc, note, actorOf(admin));
+        return done(admin, token, msg.get("admin.v142.ret.flash.decided"), model);
+    }
+
+    /** H9 确认：重发运单（平台承担运费、原运单保留）。 */
+    @PostMapping("/admin/shop/orders/{token}/reship/confirm")
+    @PreAuthorize(FULFILL_AUTH)
+    public String confirmReship(@PathVariable String token, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
+        ShopOrder order = requireOrder(token);
+        var cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.v142.ret.reship.title"),
+                msg.get("admin.v142.ret.reship.courierValue", nz(order.getCourierName())) + " · "
+                        + msg.get("admin.v142.ret.reship.feeValue"),
+                "/admin/shop/orders/" + enc(token) + "/reship", java.util.Map.of(),
+                msg.get("admin.v142.ret.btn.reship"), false)
+                .withSuccessTarget("#shop-order-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    /** H9：快递原因重发；失败不抛，订单写运单失败，抽屉可再次提交。 */
+    @PostMapping("/admin/shop/orders/{token}/reship")
+    @PreAuthorize(FULFILL_AUTH)
+    public String reship(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token, Model model) {
+        ShopOrder order = requireOrder(token);
+        var r = logistics.reshipAfterCourierFault(order.getId(), actorOf(admin));
+        return afterWaybill(admin, token, r, model);
+    }
+
+    /**
+     * 用户原因退回按行确认入库（无 UI 稿，照 H7 表单写法）：参数 {@code qty_<lineId>}，空 / 0 的行跳过；可分次，
+     * 累计不超应收；收齐后才能到异常订单整单取消（用户原因）。
+     */
+    @PostMapping("/admin/shop/orders/{token}/return-inbound")
+    @PreAuthorize(FULFILL_AUTH)
+    public String returnInbound(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @RequestParam java.util.Map<String, String> params, Model model) {
+        java.util.Map<Long, Integer> qty = parseInboundQty(params);
+        var out = refundService.confirmReturnedInbound(token, qty, actorOf(admin));
+        return done(admin, token, msg.get(out.complete() ? "admin.v142.ret.inbound.flash.complete"
+                : "admin.v142.ret.inbound.flash.partial"), model);
+    }
+
+    /** H10 确认弹层：复述订单号与类型，提示 App 将显示配送异常。 */
+    @PostMapping("/admin/shop/orders/{token}/lost-damaged/confirm")
+    @PreAuthorize(FULFILL_AUTH)
+    public String confirmLostDamaged(@PathVariable String token, @RequestParam(required = false) String type,
+            @RequestParam(required = false) String note, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
+        com.tailtopia.shop.order.domain.LogisticsException le = parseLostDamaged(type);
+        ShopOrder order = requireOrder(token);
+        String label = msg.get("admin.v142.exc.lost." + le.name());
+        java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("type", le.name());
+        if (note != null && !note.isBlank()) {
+            hidden.put("note", note.strip());
+        }
+        var cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(
+                msg.get("admin.v142.lost.confirm.title", order.getDisplayNo(), label),
+                msg.get("admin.v142.lost.confirm.body"), "/admin/shop/orders/" + enc(token) + "/lost-damaged",
+                hidden, msg.get("admin.v142.lost.confirm.btn", label), true)
+                .withSuccessTarget("#shop-order-drawer-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    /** H10：标记丢件 / 破损 → 待索赔；退款到异常订单整单取消（丢件破损）。 */
+    @PostMapping("/admin/shop/orders/{token}/lost-damaged")
+    @PreAuthorize(FULFILL_AUTH)
+    public String markLostDamaged(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @RequestParam(required = false) String type, @RequestParam(required = false) String note, Model model) {
+        com.tailtopia.shop.order.domain.LogisticsException le = parseLostDamaged(type);
+        ShopOrder order = requireOrder(token);
+        logistics.markLostOrDamaged(order.getId(), le, note, actorOf(admin));
+        return done(admin, token, msg.get("admin.v142.lost.flash.marked"), model);
+    }
+
+    /** H11：索赔结案（任何订单状态），金额进对账。 */
+    @PostMapping("/admin/shop/orders/{token}/claim/close")
+    @PreAuthorize(FULFILL_AUTH)
+    public String closeClaim(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @RequestParam(required = false) String result, @RequestParam(required = false) Long amount, Model model) {
+        // 结果 / 金额校验只在 ShopOrder.closeClaim 一处（金额留空按 0，已赔付 / 部分赔付会被拒）
+        ShopOrder order = requireOrder(token);
+        logistics.closeClaim(order.getId(), result, amount == null ? 0L : amount, actorOf(admin));
+        return done(admin, token, msg.get("admin.v142.claim.flash.closed"), model);
+    }
+
+    /** H12：手工清除停滞（只允许 STALLED，其他异常 409）。 */
+    @PostMapping("/admin/shop/orders/{token}/stalled/clear")
+    @PreAuthorize(FULFILL_AUTH)
+    public String clearStalled(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            Model model) {
+        ShopOrder order = requireOrder(token);
+        logistics.clearStalled(order.getId(), actorOf(admin));
+        return done(admin, token, msg.get("admin.v142.stall.flash.cleared"), model);
+    }
+
+    /** H12 横幅「{days} 天没有更新」：从最后一条物流状态（没有则从标记时刻）算到现在，向下取整。 */
+    public static long stalledDays(Shipment active, java.time.Instant flaggedAt) {
+        java.time.Instant from = active != null && active.getProviderStatusAt() != null ? active.getProviderStatusAt()
+                : flaggedAt;
+        return from == null ? 0 : Math.max(0, java.time.Duration.between(from, java.time.Instant.now()).toDays());
+    }
+
+    private static com.tailtopia.shop.logistics.ReturnCause parseReturnCause(String raw) {
+        if (raw != null) {
+            for (var c : com.tailtopia.shop.logistics.ReturnCause.values()) {
+                if (c.name().equals(raw)) {
+                    return c;
+                }
+            }
+        }
+        throw AppException.validation("请选择退回原因").code("admin.err.v142.ret.causeRequired");
+    }
+
+    private static com.tailtopia.shop.order.domain.LogisticsException parseLostDamaged(String raw) {
+        if ("LOST".equals(raw)) {
+            return com.tailtopia.shop.order.domain.LogisticsException.LOST;
+        }
+        if ("DAMAGED".equals(raw)) {
+            return com.tailtopia.shop.order.domain.LogisticsException.DAMAGED;
+        }
+        throw AppException.validation("请选择丢件或破损").code("admin.err.v142.lost.typeRequired");
+    }
+
+    /** {@code qty_<lineId>} → 件数；空白 / 0 跳过，非数字 / 负数 422，全空 422。 */
+    static java.util.Map<Long, Integer> parseInboundQty(java.util.Map<String, String> params) {
+        java.util.Map<Long, Integer> out = new java.util.LinkedHashMap<>();
+        for (var e : params.entrySet()) {
+            if (!e.getKey().startsWith("qty_") || e.getValue() == null || e.getValue().isBlank()) {
+                continue;
+            }
+            long lineId;
+            int n;
+            try {
+                lineId = Long.parseLong(e.getKey().substring(4));
+                n = Integer.parseInt(e.getValue().strip());
+            } catch (NumberFormatException ex) {
+                throw AppException.validation("入库件数必须是整数").code("admin.err.v142.inbound.qtyInvalid");
+            }
+            if (n < 0) {
+                throw AppException.validation("入库件数必须是整数").code("admin.err.v142.inbound.qtyInvalid");
+            }
+            if (n > 0) {
+                out.put(lineId, n);
+            }
+        }
+        if (out.isEmpty()) {
+            throw AppException.validation("请至少填写一行实收件数").code("admin.err.v142.inbound.empty");
+        }
+        return out;
     }
 
     private String afterWaybill(AdminUserDetails admin, String token, com.tailtopia.shop.logistics.WaybillResult r,

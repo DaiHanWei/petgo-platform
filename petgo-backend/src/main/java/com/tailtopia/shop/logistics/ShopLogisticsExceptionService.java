@@ -233,6 +233,11 @@ public class ShopLogisticsExceptionService {
      * {@link #reshipAfterCourierFault}；用户原因 → 运营调 4.1 整单取消（{@code USER_FAULT_RETURNED}，本类不实现取消本身）。
      */
     public ShopOrder confirmReturned(long orderId, ReturnCause cause, Long actorAccountId) {
+        return confirmReturned(orderId, cause, null, actorAccountId);
+    }
+
+    /** 同上，带运营说明（H8 输入框，进审计）。 */
+    public ShopOrder confirmReturned(long orderId, ReturnCause cause, String note, Long actorAccountId) {
         if (cause == null) {
             throw AppException.validation("请选择退回原因");
         }
@@ -245,9 +250,12 @@ public class ShopLogisticsExceptionService {
                     clock.instant());
             orders.save(order);
             audit.record(actorAccountId, AuditActions.SHOP_LOGISTICS_EXCEPTION_CONFIRMED, TARGET,
-                    order.getPublicToken(), "确认物流异常：异常=RETURNED；原因=%s；待索赔=%s".formatted(cause,
-                            order.isClaimPending()));
+                    order.getPublicToken(), "确认物流异常：异常=RETURNED；原因=%s；待索赔=%s%s".formatted(cause,
+                            order.isClaimPending(), noteSuffix(note)));
             log.info("确认退回 order={} cause={}", order.getDisplayNo(), cause);
+            if (cause == ReturnCause.COURIER_FAULT) {
+                alertClaimPending(order, "快递原因退回");
+            }
             return order;
         });
     }
@@ -289,6 +297,11 @@ public class ShopLogisticsExceptionService {
      * 但用户侧只在 {@code SHIPPED / DELIVERED} 显示配送异常。后续赔付走 4.1。
      */
     public ShopOrder markLostOrDamaged(long orderId, LogisticsException type, Long actorAccountId) {
+        return markLostOrDamaged(orderId, type, null, actorAccountId);
+    }
+
+    /** 同上，带运营说明（H10 输入框，进审计）。 */
+    public ShopOrder markLostOrDamaged(long orderId, LogisticsException type, String note, Long actorAccountId) {
         if (type != LogisticsException.LOST && type != LogisticsException.DAMAGED) {
             throw AppException.validation("只能标记丢件或破损");
         }
@@ -302,10 +315,68 @@ public class ShopLogisticsExceptionService {
             order.confirmLogisticsException(type, true, clock.instant());
             orders.save(order);
             audit.record(actorAccountId, AuditActions.SHOP_LOGISTICS_EXCEPTION_CONFIRMED, TARGET,
-                    order.getPublicToken(), "标记物流异常：异常=%s；待索赔=true".formatted(type));
+                    order.getPublicToken(), "标记物流异常：异常=%s；待索赔=true%s".formatted(type, noteSuffix(note)));
             log.info("标记丢件 / 破损 order={} type={}", order.getDisplayNo(), type);
+            alertClaimPending(order, type == LogisticsException.LOST ? "丢件" : "破损");
             return order;
         });
+    }
+
+    // ===================== V1.4.2 shop-admin Story 6.2：索赔结案 / 清除停滞 / 待索赔提醒 =====================
+
+    /** 待索赔产生时提醒运营（AD-5：OPS，去重键 {@code claim:{orderToken}}，提交后发送）。setter 注入，单测可缺省。 */
+    private com.tailtopia.admin.alert.OpsAlertService opsAlerts;
+
+    @Autowired(required = false)
+    void setOpsAlerts(com.tailtopia.admin.alert.OpsAlertService opsAlerts) {
+        this.opsAlerts = opsAlerts;
+    }
+
+    private static String noteSuffix(String note) {
+        if (note == null || note.isBlank()) {
+            return "";
+        }
+        String n = note.strip();
+        return "；说明=" + (n.length() > 200 ? n.substring(0, 200) : n);
+    }
+
+    private void alertClaimPending(ShopOrder order, String why) {
+        if (opsAlerts != null && order.isClaimPending()) {
+            // 去重键按「本轮异常」：同单再次丢件 / 退回（新的异常时刻）要能再提醒（复审修）
+            String round = order.getLogisticsException() + ":"
+                    + (order.getLogisticsExceptionAt() == null ? 0 : order.getLogisticsExceptionAt().toEpochMilli());
+            opsAlerts.send(com.tailtopia.admin.alert.OpsChannel.OPS, "claim:" + order.getPublicToken() + ":" + round,
+                    "[物流] 订单 %s 标为「待索赔」（%s），请向快递发起索赔。".formatted(order.getDisplayNo(), why));
+        }
+    }
+
+    /**
+     * 索赔结案（H11）：写结果与到账金额，再经 {@link #setClaimPending} 清「待索赔」（唯一置 false 入口）；任何订单状态可结案，
+     * 金额进对账。审计 {@code SHOP_LOGISTICS_CLAIM_CLOSED}。
+     */
+    public void closeClaim(long orderId, String result, long amount, Long actorAccountId) {
+        tx.executeWithoutResult(s -> {
+            ShopOrder order = lockOrder(orderId);
+            if (!order.isClaimPending()) {
+                throw AppException.conflict("该订单没有待索赔").code("admin.err.v142.claim.notPending");
+            }
+            order.closeClaim(result, amount, clock.instant(), actorAccountId);
+            audit.record(actorAccountId, AuditActions.SHOP_LOGISTICS_CLAIM_CLOSED, TARGET, order.getPublicToken(),
+                    "索赔结案：结果=%s；到账金额=%d".formatted(order.getClaimResult(), order.getClaimAmount()));
+            // 复审修：与结果同一把行锁、同一事务清「待索赔」，防止重复提交两次结案互相覆盖
+            applyClaimPending(order, false, actorAccountId);
+        });
+    }
+
+    /** 后台「清除停滞标记」（H12）：只允许 {@code STALLED}（其他异常 409），再走 {@link #clearException}。 */
+    public boolean clearStalled(long orderId, Long actorAccountId) {
+        // 复审修：校验与清除在同一把行锁内，期间被改成退回 / 丢件的不会被一并清掉
+        tx.executeWithoutResult(s -> {
+            ShopOrder order = lockOrder(orderId);
+            requireException(order, LogisticsException.STALLED);
+            clearAndAudit(order, AuditActions.SHOP_LOGISTICS_EXCEPTION_CLEARED, "运营清除停滞标记", actorAccountId);
+        });
+        return true;
     }
 
     // ===================== 清除 / 索赔提醒 =====================
@@ -325,16 +396,18 @@ public class ShopLogisticsExceptionService {
 
     /** 索赔提醒（后台「待索赔」完成后撤销）。值未变不写审计。 */
     public void setClaimPending(long orderId, boolean pending, Long actorAccountId) {
-        tx.executeWithoutResult(s -> {
-            ShopOrder order = requireOrder(orderId);
-            if (order.isClaimPending() == pending) {
-                return;
-            }
-            order.setClaimPending(pending);
-            orders.save(order);
-            audit.record(actorAccountId, AuditActions.SHOP_LOGISTICS_CLAIM_PENDING_CHANGED, TARGET,
-                    order.getPublicToken(), "待索赔=%s".formatted(pending));
-        });
+        tx.executeWithoutResult(s -> applyClaimPending(requireOrder(orderId), pending, actorAccountId));
+    }
+
+    /** {@code claim_pending} 变更的唯一落点（{@link #setClaimPending} 与 {@link #closeClaim} 共用），须在事务内调用。 */
+    private void applyClaimPending(ShopOrder order, boolean pending, Long actorAccountId) {
+        if (order.isClaimPending() == pending) {
+            return;
+        }
+        order.setClaimPending(pending);
+        orders.save(order);
+        audit.record(actorAccountId, AuditActions.SHOP_LOGISTICS_CLAIM_PENDING_CHANGED, TARGET,
+                order.getPublicToken(), "待索赔=%s".formatted(pending));
     }
 
     // ===================== 只读列表（AC7.7） =====================

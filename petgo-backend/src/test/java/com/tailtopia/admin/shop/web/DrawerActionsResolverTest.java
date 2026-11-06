@@ -32,10 +32,10 @@ class DrawerActionsResolverTest {
             "PENDING_SHIPMENT; -; PICKUP_FAILED; true; true; true; PICKUP_RETRY PICKUP_MANUAL CONTACT_CANCEL FLAG_SHORTAGE; false",
             "SHIPPED; -; PICKUP_FAILED; false; false; true; PICKUP_RETRY PICKUP_MANUAL CONTACT_CANCEL MARK_DELIVERED SHIPPED_INFO; false",
             // H4 / H13：已发货（Biteship 活动）→ 送达；手工单还可再登记包裹
-            "SHIPPED; -; -; true; true; true; MARK_DELIVERED SHIPPED_INFO; false",
-            "SHIPPED; -; -; false; true; false; MANUAL_FORM MARK_DELIVERED SHIPPED_INFO; false",
-            "DELIVERED; -; -; false; false; true; SHIPPED_INFO; false",
-            "COMPLETED; -; -; false; false; true; SHIPPED_INFO; false",
+            "SHIPPED; -; -; true; true; true; MARK_DELIVERED SHIPPED_INFO MARK_LOST_DAMAGED; false",
+            "SHIPPED; -; -; false; true; false; MANUAL_FORM MARK_DELIVERED SHIPPED_INFO MARK_LOST_DAMAGED; false",
+            "DELIVERED; -; -; false; false; true; SHIPPED_INFO MARK_LOST_DAMAGED; false",
+            "COMPLETED; -; -; false; false; true; SHIPPED_INFO MARK_LOST_DAMAGED; false",
             "REFUNDING; REJECTED:x; -; false; false; true; ; false",
     })
     void table(ShopOrderStatus status, String failReason, LogisticsException le, boolean activeBs, boolean activeAny,
@@ -46,5 +46,31 @@ class DrawerActionsResolverTest {
                 : Arrays.stream(expected.trim().split("\\s+")).map(Action::valueOf).collect(Collectors.toSet());
         assertThat(r.actions()).isEqualTo(want);
         assertThat(r.unknownResult()).isEqualTo(unknown);
+    }
+
+    @ParameterizedTest(name = "6.2 {0} le={1} cause={2} inbound={3} claim={4} → {5}")
+    @CsvSource(nullValues = "-", delimiter = ';', value = {
+            "SHIPPED; RETURNED; -; false; false; DECIDE_RETURN",
+            "DELIVERED; RETURNED; -; false; false; -",
+            "PENDING_SHIPMENT; RETURNED; -; false; false; -",
+            "SHIPPED; RETURNED; COURIER_FAULT; false; true; RESHIP CLOSE_CLAIM",
+            "SHIPPED; RETURNED; USER_FAULT; false; false; RETURN_INBOUND",
+            "SHIPPED; RETURNED; USER_FAULT; true; false; -",
+            "SHIPPED; LOST; -; false; true; CLOSE_CLAIM",
+            "COMPLETED; -; -; false; true; MARK_LOST_DAMAGED CLOSE_CLAIM",
+            "REFUNDED; -; -; false; true; CLOSE_CLAIM",
+            "SHIPPED; STALLED; -; false; false; MARK_LOST_DAMAGED CLEAR_STALLED",
+            "SHIPPED; PICKUP_FAILED; -; false; false; -",
+    })
+    void logisticsActions(ShopOrderStatus status, LogisticsException le, com.tailtopia.shop.logistics.ReturnCause cause,
+            boolean inbound, boolean claim, String expected) {
+        var r = DrawerActionsResolver.resolve(new Facts(status, null, false, le, false, false, true, true, cause, inbound,
+                claim));
+        Set<Action> sixTwo = Set.of(Action.DECIDE_RETURN, Action.RESHIP, Action.RETURN_INBOUND, Action.MARK_LOST_DAMAGED,
+                Action.CLOSE_CLAIM, Action.CLEAR_STALLED);
+        Set<Action> got = r.actions().stream().filter(sixTwo::contains).collect(Collectors.toSet());
+        Set<Action> want = expected == null ? Set.of()
+                : Arrays.stream(expected.trim().split("\\s+")).map(Action::valueOf).collect(Collectors.toSet());
+        assertThat(got).isEqualTo(want);
     }
 }

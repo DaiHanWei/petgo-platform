@@ -1069,8 +1069,14 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
       _invalidateLists();
       Analytics.capture('toko_order_receipt_confirm_succeeded');
       showAppToast(context, l10n.shopOrderReceiptConfirmed);
-    } catch (_) {
-      if (mounted) showAppToast(context, l10n.shopOrderConfirmReceiptFailed);
+    } catch (e) {
+      if (mounted) {
+        showAppToast(
+            context,
+            isReturnInboundConfirmedError(e)
+                ? l10n.shopOrderConfirmReceiptReturnInbound
+                : l10n.shopOrderConfirmReceiptFailed);
+      }
     } finally {
       if (mounted) setState(() => _busyAction = null);
     }

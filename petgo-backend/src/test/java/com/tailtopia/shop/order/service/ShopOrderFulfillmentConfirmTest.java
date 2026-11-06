@@ -40,13 +40,16 @@ class ShopOrderFulfillmentConfirmTest {
     private final ShopOrderRepository orders = mock(ShopOrderRepository.class);
     private final ShipmentRepository shipments = mock(ShipmentRepository.class);
     private final ShopPaymentAlerts alerts = mock(ShopPaymentAlerts.class);
+    private final com.tailtopia.shop.order.repository.ShopOrderLineRepository lines =
+            mock(com.tailtopia.shop.order.repository.ShopOrderLineRepository.class);
+    private final com.tailtopia.admin.alert.OpsAlertService ops = mock(com.tailtopia.admin.alert.OpsAlertService.class);
     private ShopOrderFulfillmentService service;
     private ShopOrder order;
 
     @BeforeEach
     void setUp() {
         service = new ShopOrderFulfillmentService(orders, shipments, mock(ApplicationEventPublisher.class),
-                mock(AdminAuditService.class), alerts);
+                mock(AdminAuditService.class), alerts, lines, ops);
         order = ShopOrder.place(TOKEN, DISPLAY_NO, T0, USER, 285_000L, 20_000L, 0L,
                 new AddressSnapshot("Budi", "+628123456789", "DKI Jakarta", "Jakarta Selatan", "Kebayoran Baru",
                         "Jl. Melawai IV No. 12", "12160"));
@@ -76,7 +79,9 @@ class ShopOrderFulfillmentConfirmTest {
         assertThat(done.getTimerResumedAt()).isNotNull();
         assertThat(done.isClaimPending()).isTrue();
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(alerts).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), text.capture());
+        // V1.4.2 shop-admin 6.2 · AC9：改走 OpsAlertService（OPS，去重键 receipt-cleared:{token}）
+        verify(ops).send(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS),
+                org.mockito.ArgumentMatchers.eq("receipt-cleared:" + TOKEN), text.capture());
         assertThat(text.getValue()).contains(DISPLAY_NO).contains(type.name()).doesNotContain("Budi")
                 .doesNotContain(TOKEN + " ");
         verify(orders).save(order);
@@ -89,7 +94,7 @@ class ShopOrderFulfillmentConfirmTest {
         assertThat(done.getStatus()).isEqualTo(ShopOrderStatus.COMPLETED);
         assertThat(done.getDeliveredAt()).isNotNull();
         assertThat(done.getTimerResumedAt()).isNull();
-        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
+        verify(ops, never()).send(org.mockito.ArgumentMatchers.any(), anyString(), anyString());
     }
 
     @Test
@@ -103,7 +108,7 @@ class ShopOrderFulfillmentConfirmTest {
         when(orders.findByPublicTokenAndUserId("tok2", USER)).thenReturn(Optional.of(pending));
         assertThatThrownBy(() -> service.confirmReceipt(USER, "tok2")).isInstanceOf(AppException.class);
         assertThat(pending.getLogisticsException()).isEqualTo(LogisticsException.PICKUP_FAILED);
-        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
+        verify(ops, never()).send(org.mockito.ArgumentMatchers.any(), anyString(), anyString());
     }
 
     @Test
@@ -111,6 +116,47 @@ class ShopOrderFulfillmentConfirmTest {
     void idempotentCompleted() {
         service.confirmReceipt(USER, TOKEN);
         service.confirmReceipt(USER, TOKEN);
-        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS), anyString());
+        verify(ops, never()).send(org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+    }
+
+    // ---------- V1.4.2 shop-admin Story 6.2 · O-16 / AC9 ----------
+
+    private void inboundLine(int inboundQty) {
+        var line = com.tailtopia.shop.order.domain.ShopOrderLine.of(5L, 9L, "Royal Canin", "2kg", 100_000L, 2,
+                com.tailtopia.shop.domain.ReturnPolicy.RETURNABLE);
+        if (inboundQty > 0) {
+            line.addReturnInboundQty(inboundQty);
+        }
+        when(lines.findByOrderIdOrderByIdAsc(5L)).thenReturn(List.of(line));
+    }
+
+    @Test
+    @DisplayName("O-16：已开始按行确认退回入库 → 409 return-inbound-confirmed，订单不动")
+    void confirmAfterInboundStartedIs409() {
+        order.flagLogisticsException(LogisticsException.RETURNED, T0);
+        order.decideReturnCause(com.tailtopia.shop.logistics.ReturnCause.USER_FAULT);
+        inboundLine(1);
+        assertThatThrownBy(() -> service.confirmReceipt(USER, TOKEN)).isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    assertThat(((AppException) e).getStatus().value()).isEqualTo(409);
+                    assertThat(((AppException) e).getType().toString()).endsWith("return-inbound-confirmed");
+                });
+        assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.SHIPPED);
+        verify(orders, never()).save(order);
+    }
+
+    @Test
+    @DisplayName("AC9：未入库的异常照常可确认；提醒走 OPS 去重键 receipt-cleared:{token}，待索赔提示撤回")
+    void confirmWithoutInboundAlertsOpsWithDedupe() {
+        order.flagLogisticsException(LogisticsException.RETURNED, T0);
+        order.setClaimPending(true);
+        order.decideReturnCause(com.tailtopia.shop.logistics.ReturnCause.USER_FAULT);
+        inboundLine(0);
+        assertThat(service.confirmReceipt(USER, TOKEN).getStatus()).isEqualTo(ShopOrderStatus.COMPLETED);
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(ops).send(org.mockito.ArgumentMatchers.eq(com.tailtopia.admin.alert.OpsChannel.OPS),
+                org.mockito.ArgumentMatchers.eq("receipt-cleared:" + TOKEN), text.capture());
+        assertThat(text.getValue()).contains(DISPLAY_NO).contains("撤回索赔").doesNotContain("Budi");
+        verify(alerts, never()).alert(org.mockito.ArgumentMatchers.any(), anyString());
     }
 }

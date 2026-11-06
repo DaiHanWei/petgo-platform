@@ -2084,6 +2084,7 @@
   "shopOrderConfirmReceiptNo": "Belum",
   "shopOrderReceiptConfirmed": "Terima kasih, pesanan selesai",
   "shopOrderConfirmReceiptFailed": "Konfirmasi gagal. Coba lagi.",
+  "shopOrderConfirmReceiptReturnInbound": "Barang retur sudah kembali ke gudang kami, jadi pesanan ini tidak bisa dikonfirmasi. Hubungi CS untuk bantuan.",
   "shopOrderReturnWindow": "Kamu bisa ajukan retur sampai {date}.",
   "shopOrderDeliveredHint": "Sudah ditandai terkirim. Ketuk Konfirmasi terima kalau semuanya sesuai.",
   "shopOrderCompletedHint": "Pesanan ini sudah selesai.",

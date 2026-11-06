@@ -3143,6 +3143,8 @@
   "@shopOrderReceiptConfirmed": {"description": "Shop order detail: toast after confirming receipt"},
   "shopOrderConfirmReceiptFailed": "Could not confirm. Please try again.",
   "@shopOrderConfirmReceiptFailed": {"description": "Shop order detail: confirm-receipt error. Never echoes the server detail string"},
+  "shopOrderConfirmReceiptReturnInbound": "The returned items are already back at our warehouse, so this order can’t be confirmed. Please contact support.",
+  "@shopOrderConfirmReceiptReturnInbound": {"description": "V1.4.2 shop-admin 6.2 (O-16): confirm receipt rejected with 409 return-inbound-confirmed. Copy pending design confirmation"},
   "shopOrderReturnWindow": "You can request a return until {date}.",
   "@shopOrderReturnWindow": {"description": "Shop order detail: return window end, computed by the SERVER. The app never adds 7 days itself. V1.3.0 hidden by SD-5 — restore in next version", "placeholders": {"date": {"type": "String"}}},
   "shopOrderDeliveredHint": "Marked as delivered. Tap Confirm receipt when everything looks right.",

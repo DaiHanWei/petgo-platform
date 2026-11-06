@@ -384,8 +384,14 @@ class _ShopOrderListState extends ConsumerState<_ShopOrderList> {
       _refreshLists();
       Analytics.capture('toko_order_receipt_confirm_succeeded');
       showAppToast(context, l10n.shopOrderReceiptConfirmed);
-    } catch (_) {
-      if (mounted) showAppToast(context, l10n.shopOrderConfirmReceiptFailed);
+    } catch (e) {
+      if (mounted) {
+        showAppToast(
+            context,
+            isReturnInboundConfirmedError(e)
+                ? l10n.shopOrderConfirmReceiptReturnInbound
+                : l10n.shopOrderConfirmReceiptFailed);
+      }
     } finally {
       if (mounted) setState(() => _busyToken = null);
     }

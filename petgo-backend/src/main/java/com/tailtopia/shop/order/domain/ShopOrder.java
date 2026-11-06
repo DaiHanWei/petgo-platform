@@ -291,6 +291,15 @@ public class ShopOrder {
     /** V1.4.2 shop-admin Story 6.1 · AD-14：标记已发货 / 手工运单的后台账号（首次转已发货写入，一单多包不改写）。 */
     @Column(name = "shipped_by_admin_id")
     private Long shippedByAdminId;
+    /** V1.4.2 shop-admin Story 6.2 · AD-14：索赔结案（结果 / 到账金额 / 时刻 / 账号）。 */
+    @Column(name = "claim_result", length = 16)
+    private String claimResult;
+    @Column(name = "claim_amount")
+    private Long claimAmount;
+    @Column(name = "claim_closed_at")
+    private Instant claimClosedAt;
+    @Column(name = "claim_closed_by_admin_id")
+    private Long claimClosedByAdminId;
 
     @Version
     @Column(name = "version", nullable = false)
@@ -696,6 +705,39 @@ public class ShopOrder {
         if (this.shippedByAdminId == null && adminAccountId != null) {
             this.shippedByAdminId = adminAccountId;
         }
+    }
+
+    /**
+     * 索赔结案（V1.4.2 shop-admin 6.2 · H11）：任何订单状态可结案；结果 PAID / PARTIAL / REJECTED；PAID / PARTIAL 到账金额 > 0，
+     * REJECTED 记 0。{@code claim_pending} 置 false 不在这里，走 {@code ShopLogisticsExceptionService.setClaimPending}。
+     */
+    public void closeClaim(String result, long amount, Instant at, Long adminAccountId) {
+        if (result == null || !java.util.Set.of("PAID", "PARTIAL", "REJECTED").contains(result)) {
+            throw AppException.validation("请选择索赔结果").code("admin.err.v142.claim.resultRequired");
+        }
+        if (amount < 0) {
+            throw AppException.validation("到账金额不能为负").code("admin.err.v142.claim.amountNegative");
+        }
+        if (!"REJECTED".equals(result) && amount == 0) {
+            throw AppException.validation("已赔付 / 部分赔付须填写到账金额").code("admin.err.v142.claim.amountRequired");
+        }
+        this.claimResult = result;
+        this.claimAmount = "REJECTED".equals(result) ? 0L : amount;
+        this.claimClosedAt = at;
+        this.claimClosedByAdminId = adminAccountId;
+        this.updatedAt = at;
+    }
+
+    public String getClaimResult() {
+        return claimResult;
+    }
+
+    public Long getClaimAmount() {
+        return claimAmount;
+    }
+
+    public Instant getClaimClosedAt() {
+        return claimClosedAt;
     }
 
     public Long getShippedByAdminId() {

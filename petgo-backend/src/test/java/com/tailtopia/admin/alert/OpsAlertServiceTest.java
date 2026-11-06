@@ -125,7 +125,10 @@ class OpsAlertServiceTest {
     /** AC5：电商线告警按调用点分流（源码扫描钉住分流表，归类见 story Completion Notes）。 */
     @Test
     void shopAlertsAreRoutedPerCallSite() throws Exception {
-        assertRouted("shop/order/service/ShopOrderFulfillmentService.java", 1, 0);
+        // V1.4.2 shop-admin 6.2 · AC9：确认收货清除异常的提醒改走 OpsAlertService.send（OPS + 去重键），不再经 ShopPaymentAlerts
+        assertRouted("shop/order/service/ShopOrderFulfillmentService.java", 0, 0);
+        assertThat(Files.readString(Path.of("src/main/java/com/tailtopia/shop/order/service/ShopOrderFulfillmentService.java"),
+                StandardCharsets.UTF_8)).contains("opsAlerts.send(com.tailtopia.admin.alert.OpsChannel.OPS, \"receipt-cleared:\"");
         assertRouted("shop/order/refund/ShopOrderRefundService.java", 1, 0);
         assertRouted("shop/logistics/BiteshipShipmentService.java", 2, 1);
         assertRouted("shop/logistics/BiteshipTrackingService.java", 4, 1);

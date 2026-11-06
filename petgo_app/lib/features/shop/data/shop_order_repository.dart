@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/network/problem_detail.dart';
 import '../domain/shop_order_detail.dart';
 import '../domain/shop_order_summary.dart';
 import '../domain/shop_return.dart';
@@ -117,3 +118,10 @@ final shopOrderCountsProvider = FutureProvider.autoDispose<ShopOrderCounts?>((re
     return null;
   }
 });
+
+/// V1.4.2 shop-admin 6.2（O-16）：确认收货 409 `return-inbound-confirmed` —— 退回商品已开始入库，App 提示联系客服。
+bool isReturnInboundConfirmedError(Object e) {
+  if (e is! DioException) return false;
+  final pd = ProblemDetail.fromDioException(e);
+  return pd?.typeSlug == 'return-inbound-confirmed';
+}

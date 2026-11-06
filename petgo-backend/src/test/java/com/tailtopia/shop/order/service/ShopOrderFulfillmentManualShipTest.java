@@ -42,7 +42,9 @@ class ShopOrderFulfillmentManualShipTest {
 
     @BeforeEach
     void setUp() {
-        service = new ShopOrderFulfillmentService(orders, shipments, events, audit, mock(ShopPaymentAlerts.class));
+        service = new ShopOrderFulfillmentService(orders, shipments, events, audit, mock(ShopPaymentAlerts.class),
+                mock(com.tailtopia.shop.order.repository.ShopOrderLineRepository.class),
+                mock(com.tailtopia.admin.alert.OpsAlertService.class));
         order = ShopOrder.place(TOKEN, "TOKO-20261101-ABC123", T0, 1L, 285_000L, 20_000L, 0L,
                 new AddressSnapshot("Budi", "+628123456789", "DKI Jakarta", "Jakarta Selatan", "Kebayoran Baru",
                         "Jl. Melawai IV No. 12", "12160"));

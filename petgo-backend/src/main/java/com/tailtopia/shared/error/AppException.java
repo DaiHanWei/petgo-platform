@@ -318,6 +318,11 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.REFUND_DESTINATION_LOCKED, detail);
     }
 
+    /** V1.4.2 shop-admin Story 6.2 · O-16：已开始退回入库后确认收货 → 409 {@code return-inbound-confirmed}。 */
+    public static AppException returnInboundConfirmed(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.RETURN_INBOUND_CONFIRMED, detail);
+    }
+
     /** v1.4.2 shop Story 4.1 AC2.6 / AC4.5：现金段不高于所选渠道手续费 → 422 {@code refund-below-payout-fee}。 */
     public static AppException refundBelowPayoutFee(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.REFUND_BELOW_PAYOUT_FEE, detail);

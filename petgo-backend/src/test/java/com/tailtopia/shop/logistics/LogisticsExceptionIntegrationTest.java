@@ -221,4 +221,52 @@ class LogisticsExceptionIntegrationTest extends BiteshipIntegrationSupport {
         assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.REFUNDING);
         assertThat(after.hasUserVisibleDeliveryIssue()).isFalse();
     }
+
+    private long actualStockOf(long orderId) {
+        long skuId = orderLines.findByOrderIdOrderByIdAsc(orderId).get(0).getSkuId();
+        return jdbc.queryForObject("SELECT actual FROM sku_inventory WHERE sku_id = ?", Long.class, skuId);
+    }
+
+    @Test
+    @DisplayName("V1.4.2 shop-admin 6.2 AC4 / AC5：入库后确认收货 409；入库 + 用户原因取消全流程后库存净增 = 实收件数")
+    void userFaultInboundAddsStockOnceAndBlocksReceipt() {
+        long uid = seedUser();
+        ShopOrder o = shippedViaBiteship(uid);
+        Shipment s = active(o.getId());
+        stub.setStatus(s.getBiteshipOrderId(), "returned");
+        tracking.refresh(s.getId());
+        service.confirmReturned(o.getId(), ReturnCause.USER_FAULT, ACTOR);
+        long before = actualStockOf(o.getId());
+
+        java.util.Map<Long, Integer> all = new java.util.LinkedHashMap<>();
+        orderLines.findByOrderIdOrderByIdAsc(o.getId()).forEach(l -> all.put(l.getId(), l.pendingInboundQty()));
+        int received = all.values().stream().mapToInt(Integer::intValue).sum();
+        refunds.confirmReturnedInbound(o.getPublicToken(), all, ACTOR);
+        assertThat(actualStockOf(o.getId())).isEqualTo(before + received);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> fulfillment.confirmReceipt(uid, o.getPublicToken()))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class)
+                .satisfies(e -> assertThat(((com.tailtopia.shared.error.AppException) e).getType().toString())
+                        .endsWith("return-inbound-confirmed"));
+
+        refunds.cancelWhole(o.getPublicToken(), CancelReason.USER_FAULT_RETURNED, "用户拒收", ACTOR);
+        assertThat(actualStockOf(o.getId())).as("取消不再回补：库存只加一次").isEqualTo(before + received);
+    }
+
+    @Test
+    @DisplayName("V1.4.2 shop-admin 6.2 AC7 / AC8：索赔结案任何状态可结、清待索赔；清除停滞只允许 STALLED")
+    void closeClaimAndClearStalledGuard() {
+        long uid = seedUser();
+        ShopOrder o = shippedViaBiteship(uid);
+        service.markLostOrDamaged(o.getId(), LogisticsException.DAMAGED, "箱子压坏", ACTOR);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.clearStalled(o.getId(), ACTOR))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+        fulfillment.confirmReceipt(uid, o.getPublicToken());
+        service.closeClaim(o.getId(), "PARTIAL", 40_000L, ACTOR);
+        ShopOrder after = reload(o.getPublicToken());
+        assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.COMPLETED);
+        assertThat(after.isClaimPending()).isFalse();
+        assertThat(after.getClaimResult()).isEqualTo("PARTIAL");
+        assertThat(after.getClaimAmount()).isEqualTo(40_000L);
+    }
 }

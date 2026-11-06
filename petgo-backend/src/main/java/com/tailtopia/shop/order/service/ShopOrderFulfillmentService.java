@@ -53,7 +53,11 @@ public class ShopOrderFulfillmentService {
     private final ShopPaymentAlerts alerts;
 
     public ShopOrderFulfillmentService(ShopOrderRepository orders, ShipmentRepository shipments,
-            ApplicationEventPublisher events, AdminAuditService audit, ShopPaymentAlerts alerts) {
+            ApplicationEventPublisher events, AdminAuditService audit, ShopPaymentAlerts alerts,
+            com.tailtopia.shop.order.repository.ShopOrderLineRepository orderLines,
+            com.tailtopia.admin.alert.OpsAlertService opsAlerts) {
+        this.orderLines = orderLines;
+        this.opsAlerts = opsAlerts;
         this.orders = orders;
         this.shipments = shipments;
         this.events = events;
@@ -221,6 +225,10 @@ public class ShopOrderFulfillmentService {
 
     // ---------- 出口②：用户确认收货 ----------
 
+    /** V1.4.2 shop-admin Story 6.2：O-16 判据（订单行已入库件数）与 OPS 去重提醒。 */
+    private final com.tailtopia.shop.order.repository.ShopOrderLineRepository orderLines;
+    private final com.tailtopia.admin.alert.OpsAlertService opsAlerts;
+
     /**
      * 出口②：用户确认收货。
      *
@@ -241,6 +249,12 @@ public class ShopOrderFulfillmentService {
                 && order.getStatus() != ShopOrderStatus.DELIVERED) {
             throw AppException.conflict("该订单当前状态不可确认收货");
         }
+        // V1.4.2 shop-admin Story 6.2 · O-16：已开始按行确认退回入库 → 409（货已回仓，App 提示联系客服）；其余异常照常可确认
+        if (order.getReturnCause() == com.tailtopia.shop.logistics.ReturnCause.USER_FAULT
+                && orderLines.findByOrderIdOrderByIdAsc(order.getId()).stream()
+                .anyMatch(l -> l.getReturnInboundQty() > 0)) {
+            throw AppException.returnInboundConfirmed("退回商品已入库，请联系平台客服");
+        }
         Instant now = Instant.now();
         if (order.getStatus() == ShopOrderStatus.SHIPPED) {
             markActiveDelivered(order.getId(), now);
@@ -259,7 +273,10 @@ public class ShopOrderFulfillmentService {
             log.info("物流异常订单用户确认收货 token={} exception={}", order.getPublicToken(), exception);
             log.warn("物流异常订单被用户确认收货，请运营核对 order={} exception={} claimPending={}",
                     order.getDisplayNo(), exception, order.isClaimPending());
-            alerts.alert(com.tailtopia.admin.alert.OpsChannel.OPS, "[物流] 订单 " + order.getDisplayNo() + " 在 " + exception + " 下被用户确认收货，请核对 / 撤回索赔");
+            String text = "[物流] 订单 " + order.getDisplayNo() + " 在 " + exception + " 下被用户确认收货，异常已清除，请核对"
+                    + (order.isClaimPending() ? "；该单已标「待索赔」，请撤回索赔" : "");
+            // V1.4.2 shop-admin 6.2 · AD-5：OPS 群，去重键 receipt-cleared:{orderToken}
+            opsAlerts.send(com.tailtopia.admin.alert.OpsChannel.OPS, "receipt-cleared:" + order.getPublicToken(), text);
         }
         return order;
     }

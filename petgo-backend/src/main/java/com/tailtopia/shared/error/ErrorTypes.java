@@ -187,6 +187,9 @@ public final class ErrorTypes {
     /** v1.4.2 shop Story 4.1 AC4.3：取消退款单已不在可选去向的状态（已选 PawCoin / 打款中 / 已完成）（409，App 重取详情）。 */
     public static final URI REFUND_DESTINATION_LOCKED = URI.create(BASE + "refund-destination-locked");
 
+    /** V1.4.2 shop-admin Story 6.2 · O-16：用户原因退回已开始按行确认入库，用户再点确认收货（409，App 提示联系客服）。 */
+    public static final URI RETURN_INBOUND_CONFIRMED = URI.create(BASE + "return-inbound-confirmed");
+
     /** v1.4.2 shop Story 4.1 AC4.5：退到银行 / e-wallet 时现金段不高于渠道手续费（422，App 提示改选其他方式）。 */
     public static final URI REFUND_BELOW_PAYOUT_FEE = URI.create(BASE + "refund-below-payout-fee");
 

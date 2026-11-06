@@ -32,13 +32,29 @@ public final class DrawerActionsResolver {
         CONTACT_CANCEL,
         FLAG_SHORTAGE,
         MARK_DELIVERED,
-        SHIPPED_INFO
+        SHIPPED_INFO,
+        // V1.4.2 shop-admin Story 6.2（H8 ~ H12）
+        DECIDE_RETURN,
+        RESHIP,
+        RETURN_INBOUND,
+        MARK_LOST_DAMAGED,
+        CLOSE_CLAIM,
+        CLEAR_STALLED
     }
 
     /** 判定所需的订单事实。 */
     public record Facts(ShopOrderStatus status, String waybillFailReason, boolean waybillFailed,
             LogisticsException logisticsException, boolean activeBiteship, boolean activeAny, boolean hasCourierCode,
-            boolean shortageFlagged) {
+            boolean shortageFlagged, com.tailtopia.shop.logistics.ReturnCause returnCause, boolean inboundDone,
+            boolean claimPending) {
+
+        /** 6.1 形态（无退回原因 / 入库 / 待索赔事实）。 */
+        public Facts(ShopOrderStatus status, String waybillFailReason, boolean waybillFailed,
+                LogisticsException logisticsException, boolean activeBiteship, boolean activeAny, boolean hasCourierCode,
+                boolean shortageFlagged) {
+            this(status, waybillFailReason, waybillFailed, logisticsException, activeBiteship, activeAny, hasCourierCode,
+                    shortageFlagged, null, false, false);
+        }
     }
 
     /**
@@ -89,6 +105,31 @@ public final class DrawerActionsResolver {
         }
         if (shipped || st == ShopOrderStatus.DELIVERED || st == ShopOrderStatus.COMPLETED) {
             a.add(Action.SHIPPED_INFO);
+        }
+        // V1.4.2 shop-admin Story 6.2：退回判定（H8，已发货 / 已签收；待发货只展示，O-29）→ 快递原因重发（H9）/ 用户原因按行入库
+        LogisticsException le = f.logisticsException();
+        boolean delivered = st == ShopOrderStatus.DELIVERED;
+        // 复审修：只给已发货 —— 退回入库与用户原因取消都要求 SHIPPED，已签收判了用户原因会走进死路（已签收只展示横幅）
+        if (le == LogisticsException.RETURNED && shipped) {
+            if (f.returnCause() == null) {
+                a.add(Action.DECIDE_RETURN);
+            } else if (f.returnCause() == com.tailtopia.shop.logistics.ReturnCause.COURIER_FAULT) {
+                a.add(Action.RESHIP);
+            } else if (!f.inboundDone()) {
+                a.add(Action.RETURN_INBOUND);
+            }
+        }
+        // H10：已发货 / 已签收 / 已完成可标丢件破损（退回、已标丢件破损的不再给入口）
+        // 复审修：只在无异常或停滞时给（confirmLogisticsException 对揽收失败等其他异常一律 409）
+        if ((shipped || delivered || st == ShopOrderStatus.COMPLETED)
+                && (le == null || le == LogisticsException.STALLED)) {
+            a.add(Action.MARK_LOST_DAMAGED);
+        }
+        if (f.claimPending()) {
+            a.add(Action.CLOSE_CLAIM);   // H11：任何订单状态可结案
+        }
+        if (le == LogisticsException.STALLED) {
+            a.add(Action.CLEAR_STALLED);   // H12
         }
         return new Result(Set.copyOf(a), unknown, waybillFailed, pickupFailed);
     }
