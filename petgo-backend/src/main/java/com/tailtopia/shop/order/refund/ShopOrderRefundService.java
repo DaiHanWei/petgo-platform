@@ -123,7 +123,7 @@ public class ShopOrderRefundService {
     /**
      * 处置结果。
      *
-     * @param refund 本次生成的退款单；{@code USER_FAULT_RETURNED} 取消（S-8，待入库后才生成）为 null
+     * @param refund 本次生成的退款单（V1.4.2 shop-admin 5.1 起 {@code USER_FAULT_RETURNED} 先入库后取消，取消时即出单，恒非空）
      */
     public record Outcome(ShopOrder order, ShopOrderRefund refund) {
 
@@ -151,9 +151,11 @@ public class ShopOrderRefundService {
      *   <li>{@code OUT_OF_STOCK / WAYBILL_FAILED}：{@code PENDING_SHIPMENT}，回补库存；</li>
      *   <li>{@code PICKUP_FAILED}：{@code PENDING_SHIPMENT} 或 {@code SHIPPED}，回补库存；</li>
      *   <li>{@code COURIER_FAULT / LOST_DAMAGED}：{@code SHIPPED}，不回补；</li>
-     *   <li>{@code USER_FAULT_RETURNED}：{@code SHIPPED}，此时不回补、<b>不生成退款单</b>（S-8，待 {@link #confirmReturnInbound}）。</li>
+     *   <li>{@code USER_FAULT_RETURNED}：{@code SHIPPED}，<b>须已按行确认入库</b>（{@code return_inbound_at} 非空，否则 409，
+     *       V1.4.2 shop-admin 5.1 · O-3 先入库后取消）；直接出退款单（扣实付运费与保价、不补偿、不退券），
+     *       <b>不回补库存</b>（已在 {@link #confirmReturnedInbound} 按行加过一次）。</li>
      * </ul>
-     * 订单 → {@code REFUNDING}，全部退款单完成后 → {@code REFUNDED}。
+     * 订单 → {@code REFUNDING}，全部退款单完成后 → {@code REFUNDED}；运单失败标记随取消清除（AD-9）。
      *
      * <p>C-7：平台原因先经 {@link ShopWaybillCanceller} 取消可取消的 Biteship 运单（在读写订单之前、不持锁）；
      * 失败只记 WARN 并发运营提醒，不阻断取消与退款。
@@ -166,27 +168,17 @@ public class ShopOrderRefundService {
         ShopOrder order = requireOrder(orderToken);
         requireWholeAllowed(order, reason);
         requireNotDeleted(order);
+        if (reason == CancelReason.USER_FAULT_RETURNED && order.getReturnInboundAt() == null) {
+            throw AppException.conflict("退回商品尚未确认入库，不能提交用户原因的取消")
+                    .code("admin.err.v142.exception.inboundRequired");
+        }
         Instant now = clock.instant();
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
         // 全部校验（状态、注销、计算器）先于外部运单取消：校验失败时运单不应已被取消（复审修复）
-        RefundQuote quote = reason == CancelReason.USER_FAULT_RETURNED ? null
-                : ShopRefundCalculator.whole(RefundOrderSnapshot.of(order, lines), reason, negotiatedAmount);
+        RefundQuote quote = quoteWhole(order, lines, reason, negotiatedAmount);
         if (reason.platformFault()) {
             cancelWaybillQuietly(order, actorAdminId);
         }
-
-        if (reason == CancelReason.USER_FAULT_RETURNED) {
-            // S-8：先转 REFUNDING 等货退回，运营确认入库后才生成退款单；券不退
-            order.markRefunding(reason, now);
-            order.clearShortageFlag();
-            orders.save(order);
-            coupons.releaseOnCancel(order.getId(), reason.couponReleaseMode(), now);
-            audit.record(actorAdminId, AuditActions.SHOP_ORDER_REFUND_HANDLED, "SHOP_ORDER", orderToken,
-                    "整单取消（待入库后退款）：原因=%s；说明=%s".formatted(reason, safeNote(note)));
-            notifyUser(order, withNote("你的订单已取消，商品退回仓库并确认入库后我们将为你安排退款。", note));
-            return new Outcome(order, null);
-        }
-
         if (restocksOnCancel(reason)) {
             restockRemaining(order, lines, actorAdminId);
             order = reloadOrder(order);   // 见 reloadOrder：回补清了一级缓存
@@ -195,11 +187,45 @@ public class ShopOrderRefundService {
         fillRefundedQty(lines);
         order.markRefunding(reason, now);
         order.clearShortageFlag();
+        order.clearWaybillFailure();
         ShopOrderRefund refund = createRefund(order, quote, actorAdminId, now);
         coupons.releaseOnCancel(order.getId(), reason.couponReleaseMode(), now);
         auditRefund(actorAdminId, orderToken, "整单取消", refund, note);
-        notifyUser(order, withNote("很抱歉，你的订单已被取消，我们已为你安排退款。", note));
+        notifyUser(order, withNote(reason == CancelReason.USER_FAULT_RETURNED
+                ? "你的订单已取消，退回的商品已入库，我们已为你安排退款。"
+                : "很抱歉，你的订单已被取消，我们已为你安排退款。", note));
         return new Outcome(order, refund);
+    }
+
+    // ===================== V1.4.2 shop-admin 5.1：试算（只读，与落库同一计算，AD-9 · G6） =====================
+
+    /** 整单取消试算：与 {@link #cancelWhole} 同一 {@link #quoteWhole}；不改任何数据。 */
+    @Transactional(readOnly = true)
+    public RefundQuote previewWhole(String orderToken, CancelReason reason, Long negotiatedAmount) {
+        ShopOrder order = requireOrder(orderToken);
+        return quoteWhole(order, orderLines.findByOrderIdOrderByIdAsc(order.getId()), reason, negotiatedAmount);
+    }
+
+    /** 部分取消试算：与 {@link #cancelLine} 同一 {@code ShopRefundCalculator.partial}（最后一件 {@code becameWhole}）。 */
+    @Transactional(readOnly = true)
+    public RefundQuote previewLine(String orderToken, long lineId, int qty, CancelReason reason) {
+        ShopOrder order = requireOrder(orderToken);
+        return ShopRefundCalculator.partial(RefundOrderSnapshot.of(order, orderLines.findByOrderIdOrderByIdAsc(
+                order.getId())), lineId, qty, reason);
+    }
+
+    /** 签收后赔付试算：与 {@link #compensate} 同一 {@code ShopRefundCalculator.compensation}。 */
+    @Transactional(readOnly = true)
+    public RefundQuote previewCompensate(String orderToken, Long negotiatedAmount) {
+        ShopOrder order = requireOrder(orderToken);
+        return ShopRefundCalculator.compensation(RefundOrderSnapshot.of(order,
+                orderLines.findByOrderIdOrderByIdAsc(order.getId())), negotiatedAmount);
+    }
+
+    /** 整单退款金额的唯一装配点（落库与试算共用）。 */
+    private static RefundQuote quoteWhole(ShopOrder order, List<ShopOrderLine> lines, CancelReason reason,
+            Long negotiatedAmount) {
+        return ShopRefundCalculator.whole(RefundOrderSnapshot.of(order, lines), reason, negotiatedAmount);
     }
 
     /**
@@ -238,6 +264,7 @@ public class ShopOrderRefundService {
         if (quote.becameWhole()) {
             order.markRefunding(reason, now);
             order.clearShortageFlag();
+            order.clearWaybillFailure();
         }
         ShopOrderRefund refund = createRefund(order, quote, actorAdminId, now);
         if (quote.becameWhole()) {
@@ -251,32 +278,79 @@ public class ShopOrderRefundService {
         return new Outcome(order, refund);
     }
 
+    /** 按行入库结果：{@code complete} = 全部收齐（已写 {@code return_inbound_at}）。 */
+    public record InboundOutcome(ShopOrder order, boolean complete) {
+    }
+
     /**
-     * 用户原因退回的入库确认（S-8）：{@code REFUNDING} 且原因 {@code USER_FAULT_RETURNED} 且尚无 WHOLE 退款单 →
-     * 剩余件回补，生成 WHOLE 退款单（商品实付 − 已退，不退运费保价、无补偿、不退券）。
+     * 用户原因退回按行确认入库（V1.4.2 shop-admin Story 5.1 · AD-9 · O-3 / O-15；取代电商线 {@code confirmReturnInbound}）。
+     *
+     * <p>要求 {@code return_cause = USER_FAULT} 且订单仍 {@code SHIPPED}（先入库、后取消）；每行累计不超过
+     * {@code qty − refunded_qty}；同事务调 {@code movements.receiveReturn}（🔴 库存只在这里加一次，取消时不再回补）；
+     * 可分多次，全部收齐写 {@code return_inbound_at / return_inbound_by}。不出退款单、不动钱。
+     *
+     * @param qtyByLine 订单行 id → 本次入库件数（≥ 1）
      */
     @Transactional
-    public Outcome confirmReturnInbound(String orderToken, Long actorAdminId) {
+    public InboundOutcome confirmReturnedInbound(String orderToken, java.util.Map<Long, Integer> qtyByLine,
+            Long actorAdminId) {
         ShopOrder order = requireOrder(orderToken);
-        if (order.getStatus() != ShopOrderStatus.REFUNDING
-                || order.getCancelReason() != CancelReason.USER_FAULT_RETURNED
-                || refunds.existsByOrderIdAndScope(order.getId(), RefundScope.WHOLE)) {
-            throw AppException.conflict("该订单不在待入库确认状态").code("admin.err.orderRefund.notAwaitingInbound");
+        if (order.getReturnCause() != com.tailtopia.shop.logistics.ReturnCause.USER_FAULT
+                || order.getStatus() != ShopOrderStatus.SHIPPED) {
+            throw AppException.conflict("该订单不是待入库的用户原因退回").code("admin.err.v142.inbound.notUserFault");
         }
-        requireNotDeleted(order);
-        Instant now = clock.instant();
+        if (order.getReturnInboundAt() != null) {
+            throw AppException.conflict("退回商品已全部入库").code("admin.err.v142.inbound.alreadyComplete");
+        }
+        if (qtyByLine == null || qtyByLine.isEmpty()) {
+            throw AppException.validation("请填写入库件数").code("admin.err.v142.inbound.qtyPositive");
+        }
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
-        RefundQuote quote = ShopRefundCalculator.whole(RefundOrderSnapshot.of(order, lines),
-                CancelReason.USER_FAULT_RETURNED, null);
-        restockRemaining(order, lines, actorAdminId);
-        order = reloadOrder(order);   // 见 reloadOrder：回补清了一级缓存
+        java.util.Map<Long, ShopOrderLine> byId = new java.util.HashMap<>();
+        lines.forEach(l -> byId.put(l.getId(), l));
+        // 全部校验先于任何回补：不留下回补了一半的批次
+        for (var e : qtyByLine.entrySet()) {
+            ShopOrderLine line = byId.get(e.getKey());
+            if (line == null) {
+                throw AppException.notFound("订单行不存在").code("admin.err.order.lineNotFound");
+            }
+            Integer n = e.getValue();
+            if (n == null || n <= 0) {
+                throw AppException.validation("入库件数必须为正").code("admin.err.v142.inbound.qtyPositive");
+            }
+            if (n > line.pendingInboundQty()) {
+                throw AppException.conflict("入库件数超过待入库件数").code("admin.err.v142.inbound.qtyExceeded");
+            }
+        }
+        Instant now = clock.instant();
+        StringBuilder detail = new StringBuilder();
+        for (var e : qtyByLine.entrySet()) {
+            ShopOrderLine line = byId.get(e.getKey());
+            movements.receiveReturn(line.getSkuId(), e.getValue(), order.getPublicToken(), wibToday(),
+                    actorAdminId == null ? 0L : actorAdminId);
+            detail.append(detail.isEmpty() ? "" : "，").append("行").append(line.getId()).append("×").append(e.getValue());
+        }
+        // 🔴 receiveReturn 清了一级缓存（PR#49）：重读订单与订单行再改
+        order = reloadOrder(order);
         lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
-        fillRefundedQty(lines);
-        ShopOrderRefund refund = createRefund(order, quote, actorAdminId, now);
-        coupons.releaseOnCancel(order.getId(), CancelReason.USER_FAULT_RETURNED.couponReleaseMode(), now);
-        auditRefund(actorAdminId, orderToken, "退回入库确认", refund, null);
-        notifyUser(order, "你退回的商品已入库，我们已为你安排退款。");
-        return new Outcome(order, refund);
+        boolean complete = true;
+        for (ShopOrderLine line : lines) {
+            Integer n = qtyByLine.get(line.getId());
+            if (n != null) {
+                line.addReturnInboundQty(n);
+                orderLines.save(line);
+            }
+            if (line.pendingInboundQty() > 0) {
+                complete = false;
+            }
+        }
+        if (complete) {
+            order.markReturnInbound(now, actorAdminId);
+            orders.save(order);
+        }
+        audit.record(actorAdminId, AuditActions.SHOP_ORDER_RETURN_INBOUND_CONFIRMED, "SHOP_ORDER", orderToken,
+                "按行确认退回入库：%s；库存回补；已收齐=%s".formatted(detail, complete ? "是" : "否"));
+        return new InboundOutcome(order, complete);
     }
 
     /**

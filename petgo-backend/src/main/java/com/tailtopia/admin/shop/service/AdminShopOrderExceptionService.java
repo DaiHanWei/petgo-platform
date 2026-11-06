@@ -49,18 +49,124 @@ public class AdminShopOrderExceptionService {
     private final ShopOrderRefundService refundService;
     private final AdminAuditService audit;
     private final NotificationService notifications;
+    /** V1.4.2 shop-admin Story 5.1：赔付单是否已有（丢件破损来源判定）。 */
+    private final com.tailtopia.shop.order.refund.ShopOrderRefundRepository refunds;
+    /** O-26：已注销用户的异常订单不进本队列（转 5.2「注销用户·线下处理」）。 */
+    private final com.tailtopia.account.repository.AccountDeletionRepository accountDeletions;
+    /** O-21：有活动运单的订单不能部分取消。 */
+    private final com.tailtopia.shop.order.repository.ShipmentRepository shipments;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public AdminShopOrderExceptionService(ShopOrderRepository orders,
             ShopOrderLineRepository orderLines,
             com.tailtopia.shop.repository.SkuInventoryRepository inventory,
             ShopOrderRefundService refundService,
-            AdminAuditService audit, NotificationService notifications) {
+            AdminAuditService audit, NotificationService notifications,
+            com.tailtopia.shop.order.refund.ShopOrderRefundRepository refunds,
+            com.tailtopia.account.repository.AccountDeletionRepository accountDeletions,
+            com.tailtopia.shop.order.repository.ShipmentRepository shipments) {
         this.orders = orders;
         this.orderLines = orderLines;
         this.inventory = inventory;
         this.refundService = refundService;
         this.audit = audit;
         this.notifications = notifications;
+        this.refunds = refunds;
+        this.accountDeletions = accountDeletions;
+        this.shipments = shipments;
+    }
+
+    // ---------- V1.4.2 shop-admin Story 5.1：队列来源 / 原因类别 / 试算 ----------
+
+    /** 订单的队列来源（AD-9 一个函数）；不在队列 → 空。 */
+    @Transactional(readOnly = true)
+    public java.util.Optional<ExceptionSource> source(ShopOrder order) {
+        boolean le = order.getLogisticsException() == com.tailtopia.shop.order.domain.LogisticsException.LOST
+                || order.getLogisticsException() == com.tailtopia.shop.order.domain.LogisticsException.DAMAGED;
+        boolean hasCompensation = le && refunds.existsByOrderIdAndScope(order.getId(),
+                com.tailtopia.shop.order.refund.RefundScope.COMPENSATION);
+        return ExceptionSource.of(new ExceptionSource.Facts(order.getStatus(), order.isShortageFlagged(),
+                order.getWaybillFailedAt() != null, order.getLogisticsException(), hasCompensation));
+    }
+
+    /** 在队列里 = 有来源 ∧ 用户未注销（O-26）。 */
+    private boolean inQueue(ShopOrder order) {
+        return source(order).isPresent() && !userDeleted(order);
+    }
+
+    private boolean userDeleted(ShopOrder order) {
+        return accountDeletions.findByUserId(order.getUserId()).isPresent();
+    }
+
+    /**
+     * 整单取消的落库计划：来源 + 类别 → 取消原因 / 动作（{@link CancelCategoryMapping}，不符 409）。
+     * 揽收失败（{@link CancelCategoryMapping.Action#PICKUP_CANCEL}）由 Controller 在<b>事务外</b>调
+     * {@code ShopLogisticsExceptionService.resolvePickupFailureByCancel}（先取消旧运单，失败则中止）。
+     */
+    @Transactional(readOnly = true)
+    public CancelCategoryMapping.Plan planWhole(String orderToken, CancelCategoryMapping.Category category) {
+        ShopOrder order = requireOrder(orderToken);
+        requireInQueue(order);
+        return CancelCategoryMapping.resolve(source(order).orElse(null), category, order.getStatus(),
+                order.getReturnCause(), order.getReturnInboundAt() != null);
+    }
+
+    /**
+     * 整单取消 / 赔付试算（D3~D5）：与落库同一计算（{@code ShopOrderRefundService.preview*}）。
+     *
+     * @param quote           未保价丢件破损尚未填协商额时为 null（页面只画上限与输入框）
+     * @param inboundMissing  用户原因但退回商品尚未全部入库（D4：明细照显，按钮置灰，提交 409）
+     * @param needsNegotiated 未保价丢件破损（须填协商额，≤ 商品实付）
+     */
+    public record WholePreview(CancelCategoryMapping.Plan plan, com.tailtopia.shop.order.pricing.RefundQuote quote,
+            long payable, long shippingPaid, long insuranceFee, long goodsPaidCap, boolean insured,
+            long refundedBefore, boolean inboundMissing, boolean needsNegotiated) {
+
+        public boolean couponReturned() {
+            return plan.reason().refundCoupon();
+        }
+
+        public boolean compensates() {
+            return plan.reason().compensate();
+        }
+
+        /** 平台原因中回补库存的三类（快递原因 / 丢件破损不回补；用户原因已在入库时回补）。 */
+        public boolean restocks() {
+            CancelReason r = plan.reason();
+            return r == CancelReason.OUT_OF_STOCK || r == CancelReason.WAYBILL_FAILED || r == CancelReason.PICKUP_FAILED;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public WholePreview previewWhole(String orderToken, CancelCategoryMapping.Category category,
+            Long negotiatedAmount) {
+        ShopOrder order = requireOrder(orderToken);
+        requireInQueue(order);
+        boolean inboundDone = order.getReturnInboundAt() != null;
+        // 试算不因「未入库」拒绝（D4 要照显明细），落库时 planWhole 仍 409
+        CancelCategoryMapping.Plan plan = CancelCategoryMapping.resolve(source(order).orElse(null), category,
+                order.getStatus(), order.getReturnCause(), true);
+        var snap = com.tailtopia.shop.order.pricing.RefundOrderSnapshot.of(order,
+                orderLines.findByOrderIdOrderByIdAsc(order.getId()));
+        boolean needsNegotiated = plan.reason() == CancelReason.LOST_DAMAGED && !snap.insuranceSelected();
+        com.tailtopia.shop.order.pricing.RefundQuote quote = null;
+        if (!needsNegotiated || negotiatedAmount != null) {
+            quote = plan.action() == CancelCategoryMapping.Action.COMPENSATE
+                    ? refundService.previewCompensate(orderToken, negotiatedAmount)
+                    : refundService.previewWhole(orderToken, plan.reason(), negotiatedAmount);
+        }
+        return new WholePreview(plan, quote, snap.total(), snap.shippingPaid(), Math.max(0L, snap.insuranceFee()),
+                snap.goodsPaid(), snap.insuranceSelected(), snap.refundedTotal(),
+                plan.reason() == CancelReason.USER_FAULT_RETURNED && !inboundDone, needsNegotiated);
+    }
+
+    /** 部分取消试算（D6 / D7）：原因由来源绑定（只平台原因）；最后一件 {@code becameWhole}。 */
+    @Transactional(readOnly = true)
+    public com.tailtopia.shop.order.pricing.RefundQuote previewLine(String orderToken, long lineId, int qty) {
+        ShopOrder order = requireOrder(orderToken);
+        requireInQueue(order);
+        return refundService.previewLine(orderToken, lineId, qty,
+                CancelCategoryMapping.lineReason(source(order).orElse(null)));
     }
 
     // ---------- 入口：标记缺货 ----------
@@ -90,46 +196,80 @@ public class AdminShopOrderExceptionService {
     // ---------- 处置① 整单取消并退款 ----------
 
     /**
-     * 整单取消并退款（v1.4.2 shop Story 4.1 AC7.1 改走 {@link ShopOrderRefundService}）。
+     * 整单取消并退款 / 签收后赔付（V1.4.2 shop-admin Story 5.1 · AD-9 · AC4 ~ AC9）。
      *
-     * <p>🔴 A8 工作台只处理缺货：原因固定 {@link CancelReason#OUT_OF_STOCK}，运营填的文字是说明。
-     * 状态由原来的 {@code PENDING_SHIPMENT → CANCELLED} 改为 {@code → REFUNDING →（全部退款单完成）REFUNDED}；
-     * 库存回补、币段即时退回、<b>现金段生成退款单待用户选去向</b>（不再只记审计）、券按原因退回都在退款服务同一事务里。
-     * 币段不再发补偿：补偿只对「现金段选退为 PawCoin」的金额发放（PRD 11-05），在用户选去向时由退款服务发放。
+     * <p>先选原因类别，服务端按来源绑定取消原因（{@link CancelCategoryMapping}，不符 409）；类别决定退款、补偿、退券，
+     * 运营不能单独开关。金额只在 {@code ShopRefundCalculator}，退款服务同一事务里回补库存 / 退币 / 出退款单 / 退券。
+     * 已签收 / 已完成的丢件破损走 {@code compensate}（订单状态不变）。
      *
-     * <p>🔴 <b>全额退款含运费</b>：货是平台没备够，用户不该为一次没发生的配送付钱。
+     * <p>🔴 揽收失败（{@code PICKUP_CANCEL}）<b>不能</b>从这里落库：须先在事务外取消旧运单，由 Controller 调
+     * {@code ShopLogisticsExceptionService.resolvePickupFailureByCancel}，成功后调 {@link #auditPickupCancel}。
+     *
+     * @param negotiatedAmount 仅未保价丢件破损必填（≤ 商品实付）
      */
     @Transactional
-    public Outcome cancelWholeOrder(String orderToken, String reason, Long actorAccountId) {
-        requireHandleable(orderToken);
+    public Outcome cancelWholeOrder(String orderToken, CancelCategoryMapping.Category category,
+            Long negotiatedAmount, String reason, Long actorAccountId) {
         requireReason(reason);
-        ShopOrderRefundService.Outcome out = refundService.cancelWhole(orderToken, CancelReason.OUT_OF_STOCK,
-                reason.trim(), actorAccountId);
-        audit.record(actorAccountId, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED, "SHOP_ORDER",
-                orderToken,
-                "整单取消并退款：原因=%s；PawCoin 段退回=%d；待用户选择去向的现金段=%d；退款单=%s"
-                        .formatted(reason, out.coinRefunded(), out.cashRefundDue(),
-                                out.refund() == null ? "—" : out.refund().getPublicToken()));
-        log.info("异常订单整单取消 token={} coinRefunded={} cashDue={}", orderToken,
-                out.coinRefunded(), out.cashRefundDue());
+        CancelCategoryMapping.Plan plan = planWhole(orderToken, category);
+        if (plan.action() == CancelCategoryMapping.Action.PICKUP_CANCEL) {
+            throw new IllegalStateException("揽收失败取消须经 resolvePickupFailureByCancel（事务外先取消旧运单）");
+        }
+        ShopOrderRefundService.Outcome out = plan.action() == CancelCategoryMapping.Action.COMPENSATE
+                ? refundService.compensate(orderToken, negotiatedAmount, reason.trim(), actorAccountId)
+                : refundService.cancelWhole(orderToken, plan.reason(), negotiatedAmount, reason.trim(), actorAccountId);
+        auditHandled(actorAccountId, orderToken, plan, out.refund(), reason);
+        log.info("异常订单整单处置 token={} category={} reason={} coinRefunded={} cashDue={}", orderToken,
+                plan.category(), plan.reason(), out.coinRefunded(), out.cashRefundDue());
         return new Outcome(out.coinRefunded(), 0L, out.cashRefundDue());
+    }
+
+    /** 平台原因整单取消的简写（存量调用方沿用；仍按来源绑定原因，不符 409）。 */
+    @Transactional
+    public Outcome cancelWholeOrder(String orderToken, String reason, Long actorAccountId) {
+        return cancelWholeOrder(orderToken, CancelCategoryMapping.Category.PLATFORM, null, reason, actorAccountId);
+    }
+
+    /** 揽收失败取消成功后补写处置审计（类别、退款合计、币现拆分、退券、库存回补），并返回结果供 toast。 */
+    @Transactional
+    public Outcome auditPickupCancel(String orderToken, String reason, Long actorAccountId) {
+        ShopOrder order = requireOrder(orderToken);
+        var refund = refunds.findByOrderIdOrderByCreatedAtAscIdAsc(order.getId()).stream()
+                .filter(r -> r.getScope() == com.tailtopia.shop.order.refund.RefundScope.WHOLE)
+                .reduce((a, b) -> b).orElse(null);
+        auditHandled(actorAccountId, orderToken, new CancelCategoryMapping.Plan(CancelCategoryMapping.Category.PLATFORM,
+                CancelReason.PICKUP_FAILED, CancelCategoryMapping.Action.PICKUP_CANCEL), refund, reason);
+        return new Outcome(refund == null ? 0L : refund.getCoinRefund(), 0L,
+                refund == null ? 0L : refund.getCashRefund());
+    }
+
+    /** AC13：审计记类别、退款合计、币现拆分、退券、库存回补（门店返佣按 O-23 不记）。 */
+    private void auditHandled(Long actor, String orderToken, CancelCategoryMapping.Plan plan,
+            com.tailtopia.shop.order.refund.ShopOrderRefund refund, String reason) {
+        CancelReason r = plan.reason();
+        boolean restock = r == CancelReason.OUT_OF_STOCK || r == CancelReason.WAYBILL_FAILED
+                || r == CancelReason.PICKUP_FAILED;
+        audit.record(actor, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED, "SHOP_ORDER", orderToken,
+                "%s：类别=%s；原因=%s；退款合计=%d（币 %d / 现金 %d）；退券=%s；库存回补=%s；退款单=%s；说明=%s".formatted(
+                        plan.action() == CancelCategoryMapping.Action.COMPENSATE ? "签收后赔付" : "整单取消并退款",
+                        plan.category(), r, refund == null ? 0L : refund.getTotalRefund(),
+                        refund == null ? 0L : refund.getCoinRefund(), refund == null ? 0L : refund.getCashRefund(),
+                        r.refundCoupon() ? "是" : "否", restock ? "是" : "否",
+                        refund == null ? "—" : refund.getPublicToken(), reason == null ? "—" : reason.trim()));
     }
 
     // ---------- 处置② 部分取消 ----------
 
     /**
-     * 部分取消：取消指定行的若干件（v1.4.2 shop Story 4.1 AC7.2 改走 {@link ShopOrderRefundService}，<b>开始退钱</b>）。
-     *
-     * <p>金额只在 {@code ShopRefundCalculator}（满减按适用行分摊、币段按比例、零头入现金）；该行库存回补、
-     * 订单状态不变；取消到最后一件按整单处理。
-     *
-     * <p>✅ S-2：一单多包时以 {@code shipments} 为粒度处理，订单状态按「所有包裹」聚合判定
-     * （见 {@code ShopOrderFulfillmentService}）—— 部分取消不改变这条聚合规则。
+     * 部分取消（V1.4.2 shop-admin 5.1 · AD-9 · AC11）：原因由来源绑定（只平台原因：缺货 / 运单失败 / 揽收失败），
+     * 有活动运单时拒绝（O-21，须先取消运单）；最后一行转整单时类别只能是平台原因（即此处的绑定原因）。
+     * 金额只在 {@code ShopRefundCalculator}（满减按适用行分摊、币段按比例向下取整、零头入现金）。
      */
     @Transactional
     public void cancelLine(String orderToken, long lineId, int qty, String reason,
             Long actorAccountId) {
-        ShopOrder order = requireHandleable(orderToken);
+        ShopOrder order = requireOrder(orderToken);
+        requireInQueue(order);
         requireReason(reason);
         if (qty <= 0) {
             throw AppException.validation("取消数量必须为正").code("admin.err.orderException.qtyPositive");
@@ -137,15 +277,21 @@ public class AdminShopOrderExceptionService {
         orderLines.findById(lineId)
                 .filter(l -> l.getOrderId().equals(order.getId()))
                 .orElseThrow(() -> AppException.notFound("订单行不存在").code("admin.err.order.lineNotFound"));
+        CancelReason cancelReason = CancelCategoryMapping.lineReason(source(order).orElse(null));
+        if (!shipments.findActiveByShopOrderId(order.getId()).isEmpty()) {
+            throw AppException.conflict("该订单有活动运单，请先取消运单再部分取消")
+                    .code("admin.err.v142.exception.activeWaybill");
+        }
 
         ShopOrderRefundService.Outcome out = refundService.cancelLine(orderToken, lineId, qty,
-                CancelReason.OUT_OF_STOCK, reason.trim(), actorAccountId);
+                cancelReason, reason.trim(), actorAccountId);
 
         audit.record(actorAccountId, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED, "SHOP_ORDER",
                 orderToken,
-                "部分取消：行=%d 数量=%d 原因=%s；退款=%d（币 %d / 现金 %d）；退款单=%s"
-                        .formatted(lineId, qty, reason, out.refund().getTotalRefund(), out.coinRefunded(),
-                                out.cashRefundDue(), out.refund().getPublicToken()));
+                "部分取消：行=%d 数量=%d；类别=PLATFORM；原因=%s；退款合计=%d（币 %d / 现金 %d）；退券=%s；库存回补=是；退款单=%s；说明=%s"
+                        .formatted(lineId, qty, cancelReason, out.refund().getTotalRefund(), out.coinRefunded(),
+                                out.cashRefundDue(), out.refund().getScope() == com.tailtopia.shop.order.refund.RefundScope.WHOLE
+                                        ? "是" : "否", out.refund().getPublicToken(), reason.trim()));
     }
 
     // ---------- 处置③ 联系用户后继续 ----------
@@ -158,8 +304,13 @@ public class AdminShopOrderExceptionService {
      */
     @Transactional
     public void contactAndContinue(String orderToken, String reason, Long actorAccountId) {
-        ShopOrder order = requireHandleable(orderToken);
+        ShopOrder order = requireOrder(orderToken);
+        requireInQueue(order);
         requireReason(reason);
+        // V1.4.2 shop-admin 5.1 · AD-9：「联系用户后继续」只对缺货来源（语义不变：清缺货标记）
+        if (source(order).orElse(null) != ExceptionSource.OUT_OF_STOCK) {
+            throw AppException.conflict("只有缺货订单可以联系用户后继续").code("admin.err.v142.exception.continueOnlyShortage");
+        }
         // 继续履约 = 这单的缺货处置完了（补到货 / 用户同意等）→ 离开工作台
         order.clearShortageFlag();
         orders.save(order);
@@ -178,9 +329,16 @@ public class AdminShopOrderExceptionService {
     @Transactional(readOnly = true)
     public List<ShopOrder> exceptionCandidates(int limit) {
         // V1.3.0 Story 10.1 AC3：工作台左栏**先进先出**（时间升序）——积压最久的那一单最该先处置。
-        return orders.findByStatusAndShortageFlaggedAtIsNotNullOrderByCreatedAtAscIdAsc(
-                ShopOrderStatus.PENDING_SHIPMENT,
-                org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)));
+        // V1.4.2 shop-admin 5.1 · AD-9：粗筛后按 ExceptionSource 一个函数判定（含已签收且无赔付单）；注销用户不进（O-26）
+        return orders.findExceptionQueue(ShopOrderStatus.PENDING_SHIPMENT, ShopOrderStatus.SHIPPED,
+                        ShopOrderStatus.DELIVERED, ShopOrderStatus.COMPLETED,
+                        com.tailtopia.shop.order.domain.LogisticsException.PICKUP_FAILED,
+                        com.tailtopia.shop.order.domain.LogisticsException.RETURNED,
+                        com.tailtopia.shop.order.domain.LogisticsException.LOST,
+                        com.tailtopia.shop.order.domain.LogisticsException.DAMAGED,
+                        com.tailtopia.shop.order.refund.RefundScope.COMPENSATION,
+                        org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit))).stream()
+                .filter(this::inQueue).toList();   // 库内条件与 ExceptionSource 一致，这里只是兜底
     }
 
     /**
@@ -213,14 +371,16 @@ public class AdminShopOrderExceptionService {
      */
     @Transactional(readOnly = true)
     public boolean isCandidate(String orderToken) {
-        return orders.findByPublicToken(orderToken)
-                .map(AdminShopOrderExceptionService::isCandidate)
-                .orElse(false);
+        return orders.findByPublicToken(orderToken).map(this::inQueue).orElse(false);
     }
 
-    /** 判据的唯一实现：待发货 ∧ 已标记缺货。列表「异常」标、工作台左栏、处置后去留都走它。 */
-    static boolean isCandidate(ShopOrder order) {
-        return order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT && order.isShortageFlagged();
+    /**
+     * 判据的唯一实现（V1.4.2 shop-admin 5.1 · AD-9）：有队列来源（{@link ExceptionSource#of}）∧ 用户未注销。
+     * 列表「异常」标、工作台左栏、处置后去留都走它。
+     */
+    @Transactional(readOnly = true)
+    public boolean isCandidate(ShopOrder order) {
+        return inQueue(order);
     }
 
     /**
@@ -252,15 +412,16 @@ public class AdminShopOrderExceptionService {
 
     // ---------- 内部 ----------
 
-    private ShopOrder requireHandleable(String orderToken) {
-        ShopOrder order = orders.findByPublicToken(orderToken)
+    private ShopOrder requireOrder(String orderToken) {
+        return orders.findByPublicToken(orderToken)
                 .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
-        if (order.getStatus() != ShopOrderStatus.PENDING_SHIPMENT) {
-            // 已发货的订单出口是退货（Epic 5），不是取消 —— 货已经出门了。
-            throw AppException.conflict("只有待发货订单可走异常处置，当前状态：" + order.getStatus())
-                    .code("admin.err.orderException.onlyPending", order.getStatus());
+    }
+
+    /** 只处置队列里的单（来源为空 / 已出队 / 用户已注销 → 409）。 */
+    private void requireInQueue(ShopOrder order) {
+        if (!inQueue(order)) {
+            throw AppException.conflict("该订单不在异常订单队列").code("admin.err.v142.exception.notInQueue");
         }
-        return order;
     }
 
     private static void requireReason(String reason) {

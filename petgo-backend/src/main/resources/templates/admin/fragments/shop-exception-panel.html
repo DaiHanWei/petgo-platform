@@ -15,6 +15,8 @@
 -->
 <body>
 <div th:fragment="detail" class="se-detail" th:attr="data-order-token=${order.publicToken}">
+    <!--/* V1.4.2 shop-admin Story 5.1 · AD-9：模型另含 source（ExceptionSource）、categoryAllowed、canPartial、canContinue、
+           preview / previewError / selectedCategory（默认取第一个可选类别）。 */-->
 
     <!-- ① 异常原因说明卡 -->
     <section class="card card-full se-card">
@@ -38,6 +40,33 @@
         <div class="banner warn" th:if="${order.shortageFlagged}" data-notice="shortage-note">
             <b th:text="#{admin.v130.shopExceptions.flag.note}">缺货说明</b> <span th:text="${order.shortageNote}">…</span>
             <span class="muted" th:text="#{admin.v130.shopExceptions.flag.at(${@adminTime.wib(order.shortageFlaggedAt)})}">标记于 -</span>
+        </div>
+        <!--/* V1.4.2 shop-admin Story 5.1：按来源的异常说明（运单失败 / 揽收失败 / 退回 / 丢件破损）。 */-->
+        <div class="banner warn" th:if="${source != null and source.name() == 'WAYBILL_FAILED'}" data-notice="waybill-failed">
+            <b th:text="#{admin.v142.exc.source.WAYBILL_FAILED}">运单失败</b>
+            <span th:if="${order.waybillFailReason != null}" th:text="' · ' + ${order.waybillFailReason}">· reason</span>
+            <span class="muted" th:if="${order.waybillFailedAt != null}" th:text="' · ' + ${@adminTime.wib(order.waybillFailedAt)}">· -</span>
+        </div>
+        <div class="banner warn" th:if="${source != null and source.name() == 'PICKUP_FAILED'}" data-notice="pickup-failed">
+            <b th:text="#{admin.v142.exc.source.PICKUP_FAILED}">揽收失败</b>
+            <span class="muted" th:if="${order.logisticsExceptionAt != null}" th:text="' · ' + ${@adminTime.wib(order.logisticsExceptionAt)}">· -</span>
+        </div>
+        <div class="banner warn" th:if="${source != null and source.name() == 'RETURNED'}" data-notice="returned">
+            <b th:text="#{admin.v142.exc.source.deliveryPrefix} + ' · ' + #{admin.v142.exc.source.RETURNED}">配送异常 · 退回</b>
+            <span th:if="${order.returnCause != null}"
+                  th:text="' · ' + #{admin.v142.exc.returned.cause(#{'admin.v142.exc.category.' + (${order.returnCause.name() == 'USER_FAULT'} ? 'USER' : 'PLATFORM')})}">· 原因：用户原因</span>
+            <span th:if="${order.returnCause == null}" th:text="' · ' + #{admin.v142.exc.returned.undecided}">· 原因待判定</span>
+            <th:block th:if="${order.returnCause != null and order.returnCause.name() == 'USER_FAULT'}">
+                <span th:if="${order.returnInboundAt != null}" th:text="' · ' + #{admin.v142.exc.returned.inbound(${@adminTime.wib(order.returnInboundAt)})}">· 已入库</span>
+                <span th:if="${order.returnInboundAt == null}" th:text="' · ' + #{admin.v142.exc.returned.notInbound}">· 退回商品尚未确认入库</span>
+            </th:block>
+        </div>
+        <div class="banner warn" th:if="${source != null and source.name() == 'LOST_DAMAGED'}" data-notice="lost-damaged">
+            <b th:text="#{admin.v142.exc.source.deliveryPrefix} + ' · ' + #{admin.v142.exc.source.LOST_DAMAGED}">配送异常 · 丢件破损</b>
+            <span th:if="${order.logisticsException != null}" th:text="' · ' + #{'admin.v142.exc.lost.' + ${order.logisticsException.name()}}">· 丢件</span>
+            <span class="muted" th:if="${order.logisticsExceptionAt != null}" th:text="' · ' + #{admin.v130.shopExceptions.flag.at(${@adminTime.wib(order.logisticsExceptionAt)})}">· 标记于 -</span>
+            <span th:unless="${order.insuranceSelected}" th:text="' · ' + #{admin.v142.exc.noInsurance}">· 未购买保价</span>
+            <span th:if="${order.claimPending}" th:text="' · ' + #{admin.v142.exc.claimPending}">· 待索赔</span>
         </div>
         <p class="hint" th:text="#{admin.shop.exceptions.hint}">这里列出运营标记为缺货的待发货订单。</p>
         <p class="hint" th:text="#{admin.shop.exceptions.manualHint}">系统不会自动取消任何订单。</p>
@@ -75,7 +104,7 @@
                     <!-- 🔴 data-inline-error 不能少：admin-workbench.js 只给 `.wb-actions` 里的请求把
                          HX-Target 改指 #admin-inline-error，而这张表单在行表里（区②）。不标的话，
                          htmx 会把 HX-Target: wb-detail-body 发上去，422 / 403 就把**整个右栏**清成一行错误。 -->
-                    <form th:if="${canHandle and !done}" data-inline-error
+                    <form th:if="${canHandle and !done and canPartial}" data-inline-error
                           th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/cancel-line/confirm(t=${order.publicToken})}"
                           hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
                         <input type="hidden" name="lineId" th:value="${l.id}"/>
@@ -93,23 +122,33 @@
         </table>
     </section>
 
-    <!-- ③ 操作区 -->
+    <!-- ③ 操作区（V1.4.2 shop-admin Story 5.1：整单取消先选原因类别 + 退款明细试算；「联系用户后继续」只对缺货来源） -->
     <section class="wb-actions se-actions">
         <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill')">
-            <!-- 处置①：整单取消并退款（全额含运费 + 补偿溢价补 Coin） -->
-            <form th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/cancel/confirm(t=${order.publicToken})}"
-                  hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+            <form id="se-cancel-form" th:if="${categoryAllowed != null and categoryAllowed.containsValue(true)}"
+                  th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/cancel/confirm(t=${order.publicToken})}"
+                  hx-target=".wb-detail-body" hx-swap="innerHTML" data-requires-form>
+                <h3 th:text="#{admin.v142.exc.wholeTitle}">整单取消 · 原因类别</h3>
+                <fieldset class="cm-choices" data-category-choices
+                          th:attr="hx-get=@{/admin/shop/order-exceptions/{t}/preview(t=${order.publicToken})}"
+                          hx-trigger="change" hx-target="#se-breakdown" hx-swap="outerHTML" hx-include="#se-cancel-form">
+                    <label class="cm-choice" th:each="c : ${T(com.tailtopia.admin.shop.service.CancelCategoryMapping$Category).values()}">
+                        <input type="radio" name="category" th:value="${c.name()}"
+                               th:checked="${selectedCategory == c.name()}" th:disabled="${!categoryAllowed.get(c.name())}"/>
+                        <span><b th:text="#{'admin.v142.exc.category.' + ${c.name()}}">平台原因</b>
+                            <small class="muted" th:text="#{'admin.v142.exc.category.' + ${c.name()} + '.hint'}">说明</small></span>
+                    </label>
+                </fieldset>
+                <h3 th:text="#{admin.v142.exc.breakdownTitle}">退款明细</h3>
+                <div th:replace="~{admin/fragments/shop-exception-panel :: breakdown}"></div>
                 <input type="text" name="reason" class="inp" required maxlength="200" data-requires-text
                        th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
-                <!--/* V1.4.2 Story 1.2 · AD-3：先取服务端确认弹层，确认后提交原端点。 */-->
-                <button type="submit" class="btn btn-danger" disabled data-requires-target
-                        th:text="#{admin.shop.exceptions.btn.cancelWhole}">整单取消并退款</button>
             </form>
-            <!-- 处置③：联系用户后继续（🔴 reason 同样必填：站内信要把它告诉用户，审计要靠它复盘） -->
-            <form th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/continue(t=${order.publicToken})}"
+            <!-- 处置③：联系用户后继续（只对缺货来源；🔴 reason 同样必填：站内信要把它告诉用户，审计要靠它复盘） -->
+            <form th:if="${canContinue}" th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/continue(t=${order.publicToken})}"
                   hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
                 <input type="text" name="reason" class="inp" required maxlength="200" data-requires-text
-                       th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
+                       th:placeholder="#{admin.v142.exc.reasonShort}"/>
                 <button type="submit" class="btn btn-neutral" disabled data-requires-target
                         th:text="#{admin.shop.exceptions.btn.continue}">联系用户后继续</button>
             </form>
@@ -121,6 +160,67 @@
             <span th:text="#{admin.v130.err.forbidden(#{perm.shop.order_fulfill})}">需要权限</span>
         </p>
     </section>
+</div>
+
+<!--/* V1.4.2 shop-admin Story 5.1（D1 / D3 ~ D5 / D7）：退款明细试算（与落库同一计算）。
+       模型：preview（AdminShopOrderExceptionService.WholePreview，可空）、previewError、selectedCategory、negotiatedAmount、order、token。
+       提交钮在片段内：切类别后按可用态重画（用户原因未入库 / 未保价未填协商额 → 置灰）。 */-->
+<div th:fragment="breakdown" id="se-breakdown" class="se-breakdown"
+     th:with="pv=${preview}, q=${preview != null} ? ${preview.quote()} : null, rpf=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)}">
+    <p class="banner err" th:if="${previewError != null}" th:text="${previewError}" data-preview-error>错误</p>
+    <th:block th:if="${pv != null}" th:with="r=${pv.plan().reason().name()}">
+        <p class="banner err" th:if="${pv.inboundMissing()}" data-inbound-missing th:text="#{admin.v142.exc.inboundMissing}">退回商品尚未确认入库</p>
+        <div class="kv amt" data-breakdown>
+            <th:block th:if="${r == 'USER_FAULT_RETURNED'}">
+                <span th:text="#{admin.v142.exc.row.payable}">应付金额</span><span th:text="${rpf.rp(pv.payable())}">Rp</span>
+                <span th:text="#{admin.v142.exc.row.lessShipping}">扣除用户实付运费</span><span th:text="'− ' + ${rpf.rp(pv.shippingPaid())}">− Rp</span>
+                <span th:text="#{admin.v142.exc.row.lessInsurance}">扣除保价费</span><span th:text="'− ' + ${rpf.rp(pv.insuranceFee())}">− Rp</span>
+            </th:block>
+            <th:block th:if="${r == 'LOST_DAMAGED'}">
+                <span th:text="#{admin.v142.exc.row.goodsCap}">商品实付上限</span>
+                <span th:text="#{admin.v142.exc.row.goodsCapValue(${rpf.rp(pv.goodsPaidCap())})}">Rp（应付 − 实付运费 − 保价费）</span>
+                <th:block th:if="${pv.needsNegotiated()}">
+                    <span th:text="#{admin.v142.exc.row.negotiated}">协商退款金额</span>
+                    <span><input type="number" class="inp" name="negotiatedAmount" min="0" step="1" required
+                                 th:max="${pv.goodsPaidCap()}" th:value="${negotiatedAmount}"
+                                 th:attr="hx-get=@{/admin/shop/order-exceptions/{t}/preview(t=${order.publicToken})}"
+                                 hx-trigger="change" hx-target="#se-breakdown" hx-swap="outerHTML" hx-include="#se-cancel-form"/>
+                        <span class="nt" th:text="#{admin.v142.exc.row.negotiatedHint}">未购买保价，填与用户协商的金额</span></span>
+                </th:block>
+            </th:block>
+            <th:block th:if="${pv.refundedBefore() > 0 and q != null}">
+                <span th:text="#{admin.v142.exc.row.remaining}">剩余未退应付</span>
+                <span th:text="#{admin.v142.exc.row.remainingValue(${rpf.rp(q.totalRefund())}, ${rpf.rp(pv.refundedBefore())})}">Rp</span>
+            </th:block>
+            <th:block th:if="${q != null}">
+                <span th:text="#{admin.v142.exc.coinSegment}">PawCoin 段</span>
+                <span th:text="#{admin.v142.exc.row.coinValue(${rpf.rp(q.coinRefund())})}">Rp · 立即退回</span>
+                <span th:text="#{admin.v142.exc.cashSegment}">现金段</span>
+                <span th:text="${q.cashRefund() > 0} ? #{admin.v142.exc.row.cashValue(${rpf.rp(q.cashRefund())})} : ${rpf.rp(0)}">Rp · 等用户选去向</span>
+            </th:block>
+            <th:block th:if="${pv.plan().reason().platformFault() and r != 'LOST_DAMAGED'}">
+                <span th:text="#{admin.v142.exc.row.compensation}">转 PawCoin 补偿</span>
+                <span class="nt" th:text="#{admin.v142.exc.row.compensationValue}">用户把现金段选为退为 PawCoin 时另发</span>
+                <span th:text="#{admin.v142.exc.row.coupon}">优惠券</span><span th:text="#{admin.v142.exc.row.couponReturned}">退回</span>
+            </th:block>
+            <th:block th:if="${r == 'USER_FAULT_RETURNED' or r == 'LOST_DAMAGED'}">
+                <span th:text="#{admin.v142.exc.row.compAndCoupon}">补偿 · 优惠券</span>
+                <span th:text="${r == 'LOST_DAMAGED'} ? #{admin.v142.exc.row.givenReturned} : #{admin.v142.exc.row.noneNotReturned}">不给 · 不退</span>
+            </th:block>
+            <span th:text="#{admin.v142.exc.row.stock}">库存</span>
+            <span th:text="${pv.restocks()} ? #{admin.v142.exc.row.stockRestock}
+                           : (${r == 'USER_FAULT_RETURNED'} ? #{admin.v142.exc.row.stockInbound} : #{admin.v142.exc.row.stockNone})">回补</span>
+            <th:block th:if="${q != null}">
+                <span class="tl" th:text="#{admin.v142.exc.refundTotal}">退款合计</span>
+                <span class="tl" data-refund-total
+                      th:text="${pv.plan().reason().platformFault() and r != 'LOST_DAMAGED' and pv.refundedBefore() == 0}
+                               ? #{admin.v142.exc.row.full(${rpf.rp(q.totalRefund())})} : ${rpf.rp(q.totalRefund())}">Rp（全额）</span>
+            </th:block>
+        </div>
+        <button type="submit" class="btn btn-danger" disabled
+                th:attr="data-requires-target=${!pv.inboundMissing() and q != null} ? 'true' : null"
+                th:text="#{admin.shop.exceptions.btn.cancelWhole}">整单取消并退款</button>
+    </th:block>
 </div>
 </body>
 </html>

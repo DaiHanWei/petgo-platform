@@ -55,6 +55,10 @@ public class ShopOrderLine {
     @Column(name = "refunded_qty", nullable = false)
     private int refundedQty;
 
+    /** V1.4.2 shop-admin Story 5.1 · AD-9：用户原因退回已确认入库件数（累计）。 */
+    @Column(name = "return_inbound_qty", nullable = false)
+    private int returnInboundQty;
+
     /**
      * 🔴 下单入口来源（Story 3.4，IR 前移）。AB-13B 算转化率的<b>服务端权威依据</b> ——
      * 只靠客户端埋点会被广告拦截与事件丢失打穿分母，而这个数字是裁决 A-16 的唯一依据。
@@ -172,5 +176,27 @@ public class ShopOrderLine {
 
     public int getRefundedQty() {
         return refundedQty;
+    }
+
+    public int getReturnInboundQty() {
+        return returnInboundQty;
+    }
+
+    /** 尚待确认入库的件数 = {@code qty − refunded_qty − return_inbound_qty}（不小于 0）。 */
+    public int pendingInboundQty() {
+        return Math.max(0, qty - refundedQty - returnInboundQty);
+    }
+
+    /** 确认入库若干件（V1.4.2 shop-admin 5.1）；超过待入库件数 → 409。 */
+    public void addReturnInboundQty(int n) {
+        if (n <= 0) {
+            throw com.tailtopia.shared.error.AppException.validation("入库件数必须为正")
+                    .code("admin.err.v142.inbound.qtyPositive");
+        }
+        if (n > pendingInboundQty()) {
+            throw com.tailtopia.shared.error.AppException.conflict("入库件数超过待入库件数")
+                    .code("admin.err.v142.inbound.qtyExceeded");
+        }
+        this.returnInboundQty += n;
     }
 }

@@ -390,4 +390,68 @@ class ShopRefundCalculatorTest {
                     assertThat(e.getMessageCode()).isEqualTo("admin.err.orderRefund.nothingToRefund");
                 });
     }
+
+    // ---------- V1.4.2 shop-admin Story 5.1：UI 稿 D3 ~ D7 示例（T = 146.500、C = 50.000）----------
+    // 注：UI 稿 D4 / D5 的币段写作 46.690 / 34.130（四舍五入的示意值）；本计算器按拍板口径「币段 ⌊本次 × C / T⌋」
+    //     向下取整，为 46.689 / 34.129，零头入现金。D6 / D7 的数字与稿一致。
+
+    /** D3 / D4 / D5：商品 140.000 − 满减 3.200 = 实付 136.800；运费 9.000（无减免）；保价 700。 */
+    private static RefundOrderSnapshot uiOrder(boolean insured) {
+        return new RefundOrderSnapshot(146_500L, 50_000L, 0L, 0L, 140_000L, 3_200L, 9_000L, 0L, 700L, insured,
+                List.of(new RefundLine(A, 100_000L, 1, 0, true), new RefundLine(B, 40_000L, 1, 0, true)));
+    }
+
+    @Test
+    void uiD3PlatformFullRefund() {
+        RefundQuote q = ShopRefundCalculator.whole(uiOrder(true), CancelReason.OUT_OF_STOCK, null);
+        assertThat(q.totalRefund()).isEqualTo(146_500L);
+        assertThat(q.coinRefund()).isEqualTo(50_000L);
+        assertThat(q.cashRefund()).isEqualTo(96_500L);
+        assertThat(q.shippingRefund()).isEqualTo(9_000L);
+        assertThat(q.insuranceRefund()).isEqualTo(700L);
+    }
+
+    @Test
+    void uiD4UserFaultLessShippingAndInsurance() {
+        RefundQuote q = ShopRefundCalculator.whole(uiOrder(true), CancelReason.USER_FAULT_RETURNED, null);
+        assertThat(q.totalRefund()).isEqualTo(136_800L);
+        assertThat(q.coinRefund()).isEqualTo(46_689L);
+        assertThat(q.cashRefund()).isEqualTo(90_111L);
+        assertThat(q.shippingRefund()).isZero();
+        assertThat(q.insuranceRefund()).isZero();
+    }
+
+    @Test
+    void uiD5LostDamagedNegotiatedWithinGoodsPaid() {
+        RefundQuote q = ShopRefundCalculator.whole(uiOrder(false), CancelReason.LOST_DAMAGED, 100_000L);
+        assertThat(q.totalRefund()).isEqualTo(100_000L);
+        assertThat(q.coinRefund()).isEqualTo(34_129L);
+        assertThat(q.cashRefund()).isEqualTo(65_871L);
+        assertThatThrownBy(() -> ShopRefundCalculator.whole(uiOrder(false), CancelReason.LOST_DAMAGED, 136_801L))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+        // 已保价：固定为商品实付
+        assertThat(ShopRefundCalculator.whole(uiOrder(true), CancelReason.LOST_DAMAGED, null).totalRefund())
+                .isEqualTo(136_800L);
+    }
+
+    /** D6 / D7：商品 140.000 − 满减 7.000（两行都适用），运费 12.800，保价 700；Whiskas 40.000 分摊满减 2.000 → 实付 38.000。 */
+    @Test
+    void uiD6PartialAndD7LastLineBecomesWhole() {
+        RefundOrderSnapshot s = new RefundOrderSnapshot(146_500L, 50_000L, 0L, 0L, 140_000L, 7_000L, 12_800L, 0L,
+                700L, true, List.of(new RefundLine(A, 100_000L, 1, 0, true), new RefundLine(B, 40_000L, 1, 0, true)));
+        RefundQuote d6 = ShopRefundCalculator.partial(s, B, 1, CancelReason.OUT_OF_STOCK);
+        assertThat(d6.becameWhole()).isFalse();
+        assertThat(d6.totalRefund()).isEqualTo(38_000L);
+        assertThat(d6.coinRefund()).isEqualTo(12_969L);
+        assertThat(d6.cashRefund()).isEqualTo(25_031L);
+
+        RefundOrderSnapshot after = new RefundOrderSnapshot(146_500L, 50_000L, 38_000L, 12_969L, 140_000L, 7_000L,
+                12_800L, 0L, 700L, true, List.of(new RefundLine(A, 100_000L, 1, 0, true),
+                        new RefundLine(B, 40_000L, 1, 1, true)));
+        RefundQuote d7 = ShopRefundCalculator.partial(after, A, 1, CancelReason.OUT_OF_STOCK);
+        assertThat(d7.becameWhole()).isTrue();
+        assertThat(d7.totalRefund()).isEqualTo(108_500L);
+        assertThat(d7.coinRefund()).isEqualTo(37_031L);
+        assertThat(d7.cashRefund()).isEqualTo(71_469L);
+    }
 }

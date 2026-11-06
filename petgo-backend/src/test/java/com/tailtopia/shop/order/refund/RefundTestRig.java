@@ -148,6 +148,13 @@ final class RefundTestRig {
         order.markShipped(NOW);
     }
 
+    /** V1.4.2 shop-admin 5.1：已发货 + 判定用户原因退回 + 全部按行入库（先入库后取消的前置）。 */
+    void userFaultReceived() {
+        shipped();
+        order.decideReturnCause(com.tailtopia.shop.logistics.ReturnCause.USER_FAULT);
+        service.confirmReturnedInbound(ORDER_TOKEN, java.util.Map.of(1L, 2, 2L, 1, 3L, 3), 7L);
+    }
+
     void delivered() {
         shipped();
         order.markDelivered(NOW, DeliverySource.ADMIN_MARK);

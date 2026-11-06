@@ -31,6 +31,8 @@ class LogisticsExceptionIntegrationTest extends BiteshipIntegrationSupport {
     @Autowired
     private BiteshipShipmentService waybills;
     @Autowired
+    private com.tailtopia.shop.order.repository.ShopOrderLineRepository orderLines;
+    @Autowired
     private BiteshipTrackingService tracking;
     @Autowired
     private BiteshipStubScript stub;
@@ -204,6 +206,15 @@ class LogisticsExceptionIntegrationTest extends BiteshipIntegrationSupport {
         tracking.refresh(s.getId());
         service.confirmReturned(o.getId(), ReturnCause.USER_FAULT, ACTOR);
         assertThat(reload(o.getPublicToken()).isClaimPending()).isFalse();
+        assertThat(reload(o.getPublicToken()).getReturnCause()).isEqualTo(ReturnCause.USER_FAULT);
+        // V1.4.2 shop-admin 5.1 · O-28：本轮已判定，不能改
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.confirmReturned(o.getId(), ReturnCause.COURIER_FAULT, ACTOR))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+        // V1.4.2 shop-admin 5.1 · O-3：先按行入库收齐，再取消
+        java.util.Map<Long, Integer> all = new java.util.LinkedHashMap<>();
+        orderLines.findByOrderIdOrderByIdAsc(o.getId()).forEach(l -> all.put(l.getId(), l.getQty() - l.getRefundedQty()));
+        refunds.confirmReturnedInbound(o.getPublicToken(), all, ACTOR);
 
         refunds.cancelWhole(o.getPublicToken(), CancelReason.USER_FAULT_RETURNED, "用户拒收", ACTOR);
         ShopOrder after = reload(o.getPublicToken());

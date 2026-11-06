@@ -62,8 +62,8 @@ development_status:
   4-2-sku包裹数据: review
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-异常订单队列原因类别与退款试算: ready-for-dev
+  epic-5: in-progress
+  5-1-异常订单队列原因类别与退款试算: review
   5-2-退款打款页: ready-for-dev
   5-3-待办中心商城待办: ready-for-dev
   epic-5-retrospective: optional

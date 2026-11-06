@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -132,39 +133,48 @@ class ShopOrderRefundServiceTest {
     }
 
     @Test
-    @DisplayName("S-8 用户原因退回：取消时 → REFUNDING、不生成退款单、不回补、券不退、不退币；入库确认后才生成")
-    void userFaultReturnedThenInbound() {
+    @DisplayName("V1.4.2 shop-admin 5.1（O-3）用户原因退回：先按行入库（库存只加这一次），收齐后取消直接出 WHOLE 退款单、不再回补、券不退")
+    void userFaultReturnedInboundThenCancel() {
         rig.shipped();
+        rig.order.decideReturnCause(com.tailtopia.shop.logistics.ReturnCause.USER_FAULT);
+        // 未入库 → 409
+        assert409(() -> rig.service.cancelWhole(RefundTestRig.ORDER_TOKEN, CancelReason.USER_FAULT_RETURNED, null, 7L));
+
+        var first = rig.service.confirmReturnedInbound(RefundTestRig.ORDER_TOKEN, java.util.Map.of(1L, 1), 7L);
+        assertThat(first.complete()).isFalse();
+        assertThat(rig.order.getReturnInboundAt()).isNull();
+        verify(rig.movements).receiveReturn(eq(11L), eq(1L), anyString(), any(), anyLong());
+        // 超过待入库件数 → 409，不回补
+        assert409(() -> rig.service.confirmReturnedInbound(RefundTestRig.ORDER_TOKEN, java.util.Map.of(1L, 2), 7L));
+        var second = rig.service.confirmReturnedInbound(RefundTestRig.ORDER_TOKEN,
+                java.util.Map.of(1L, 1, 2L, 1, 3L, 3), 7L);
+        assertThat(second.complete()).isTrue();
+        assertThat(rig.order.getReturnInboundAt()).isEqualTo(RefundTestRig.NOW);
+        assert409(() -> rig.service.confirmReturnedInbound(RefundTestRig.ORDER_TOKEN, java.util.Map.of(1L, 1), 7L));
+        clearInvocations(rig.movements);
+
         var out = rig.service.cancelWhole(RefundTestRig.ORDER_TOKEN, CancelReason.USER_FAULT_RETURNED, null, 7L);
-
-        assertThat(out.refund()).isNull();
-        assertThat(rig.store).isEmpty();
-        assertThat(rig.order.getStatus()).isEqualTo(ShopOrderStatus.REFUNDING);
-        verify(rig.movements, never()).receiveReturn(anyLong(), anyLong(), anyString(), any(), anyLong());
-        verify(rig.wallet, never()).credit(anyLong(), anyLong(), any(), anyString(), anyLong(), anyString());
-        verify(rig.coupons).releaseOnCancel(RefundTestRig.ORDER_ID, CouponReleaseMode.KEEP, RefundTestRig.NOW);
-
-        rig.service.confirmReturnInbound(RefundTestRig.ORDER_TOKEN, 7L);
-        ShopOrderRefund r = rig.only();
+        ShopOrderRefund r = out.refund();
+        assertThat(r).isNotNull();
         assertThat(r.getScope()).isEqualTo(RefundScope.WHOLE);
         assertThat(r.getReason()).isEqualTo(CancelReason.USER_FAULT_RETURNED);
         assertThat(r.getTotalRefund()).isEqualTo(315_000L);
         assertThat(r.getShippingRefund()).isZero();
         assertThat(r.getInsuranceRefund()).isZero();
-        verify(rig.movements).receiveReturn(eq(11L), eq(2L), anyString(), any(), anyLong());
+        assertThat(rig.order.getStatus()).isEqualTo(ShopOrderStatus.REFUNDING);
+        verify(rig.movements, never()).receiveReturn(anyLong(), anyLong(), anyString(), any(), anyLong());
         assertThat(rig.lines).allMatch(l -> l.getRefundedQty() == l.getQty());
-        verify(rig.coupons, never()).releaseOnCancel(anyLong(), eq(CouponReleaseMode.RETURN), any());
-
-        // 已有 WHOLE 退款单 → 不可重复确认
-        assert409(() -> rig.service.confirmReturnInbound(RefundTestRig.ORDER_TOKEN, 7L));
+        verify(rig.coupons).releaseOnCancel(RefundTestRig.ORDER_ID, CouponReleaseMode.KEEP, RefundTestRig.NOW);
     }
 
     @Test
-    @DisplayName("入库确认只认 REFUNDING + USER_FAULT_RETURNED；缺货取消单 409")
+    @DisplayName("按行入库只认已发货 + return_cause = USER_FAULT；缺货 / 快递原因 409")
     void inboundRequiresUserFault() {
-        assert409(() -> rig.service.confirmReturnInbound(RefundTestRig.ORDER_TOKEN, 7L));
-        rig.service.cancelWhole(RefundTestRig.ORDER_TOKEN, CancelReason.OUT_OF_STOCK, null, 7L);
-        assert409(() -> rig.service.confirmReturnInbound(RefundTestRig.ORDER_TOKEN, 7L));
+        assert409(() -> rig.service.confirmReturnedInbound(RefundTestRig.ORDER_TOKEN, java.util.Map.of(1L, 1), 7L));
+        rig.shipped();
+        rig.order.decideReturnCause(com.tailtopia.shop.logistics.ReturnCause.COURIER_FAULT);
+        assert409(() -> rig.service.confirmReturnedInbound(RefundTestRig.ORDER_TOKEN, java.util.Map.of(1L, 1), 7L));
+        verify(rig.movements, never()).receiveReturn(anyLong(), anyLong(), anyString(), any(), anyLong());
     }
 
     @Test
@@ -298,7 +308,7 @@ class ShopOrderRefundServiceTest {
         RefundTestRig other = new RefundTestRig();
         ShopWaybillCanceller c2 = mock(ShopWaybillCanceller.class);
         when(other.cancellers.getIfAvailable()).thenReturn(c2);
-        other.shipped();
+        other.userFaultReceived();
         other.service.cancelWhole(RefundTestRig.ORDER_TOKEN, CancelReason.USER_FAULT_RETURNED, null, 7L);
         verify(c2, never()).cancelForPlatformCancel(any(), any());
     }

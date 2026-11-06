@@ -1,10 +1,12 @@
 package com.tailtopia.shop.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.shop.domain.ReturnPolicy;
@@ -242,23 +244,27 @@ class ShopOrderRefundIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("USER_FAULT：取消后无退款单、订单 REFUNDING；入库确认 → 库存回补、退款 = 商品实付、无补偿")
+    @DisplayName("V1.4.2 shop-admin 5.1 USER_FAULT：未入库取消 409；按行入库库存只加一次；收齐后取消出退款单 = 商品实付、不再回补、无补偿")
     void userFaultInbound() {
         O1 c = seedO1(true, 100_000L);
         ShopOrder o = reload(c);
         o.markShipped(Instant.now());
+        o.decideReturnCause(com.tailtopia.shop.logistics.ReturnCause.USER_FAULT);
         persist(o);
         long skuA = c.lines().get(0).getSkuId();
         long before = actual(skuA);
 
-        refundService.cancelWhole(c.order().getPublicToken(), CancelReason.USER_FAULT_RETURNED, null, actor);
-        assertThat(reload(c).getStatus()).isEqualTo(ShopOrderStatus.REFUNDING);
-        assertThat(refunds.findByOrderIdOrderByCreatedAtAscIdAsc(o.getId())).isEmpty();
-        assertThat(actual(skuA)).isEqualTo(before);
-
-        var out = refundService.confirmReturnInbound(c.order().getPublicToken(), actor);
-        assertThat(out.refund().getTotalRefund()).isEqualTo(315_000L);
+        assertThatThrownBy(() -> refundService.cancelWhole(c.order().getPublicToken(),
+                CancelReason.USER_FAULT_RETURNED, null, actor)).isInstanceOf(AppException.class);
+        java.util.Map<Long, Integer> all = new java.util.LinkedHashMap<>();
+        c.lines().forEach(l -> all.put(l.getId(), l.getQty() - l.getRefundedQty()));
+        var in = refundService.confirmReturnedInbound(c.order().getPublicToken(), all, actor);
+        assertThat(in.complete()).isTrue();
         assertThat(actual(skuA)).isEqualTo(before + 2);
+
+        var out = refundService.cancelWhole(c.order().getPublicToken(), CancelReason.USER_FAULT_RETURNED, null, actor);
+        assertThat(out.refund().getTotalRefund()).isEqualTo(315_000L);
+        assertThat(actual(skuA)).as("库存只在入库时加一次").isEqualTo(before + 2);
         refundService.chooseDestination(c.userId(), c.order().getPublicToken(), out.refund().getPublicToken(),
                 new RefundDestinationRequest("TO_PAWCOIN", null, null, null));
         assertThat(refunds.findByPublicToken(out.refund().getPublicToken()).orElseThrow().getCompensationAmount())

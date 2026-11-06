@@ -37,9 +37,8 @@ class RefundDestinationTest {
 
     private ShopOrderRefund wholeCancelled(CancelReason reason) {
         if (reason == CancelReason.USER_FAULT_RETURNED) {
-            rig.shipped();
+            rig.userFaultReceived();   // V1.4.2 shop-admin 5.1：先按行入库、后取消（取消时即出退款单）
             rig.service.cancelWhole(RefundTestRig.ORDER_TOKEN, reason, null, 7L);
-            rig.service.confirmReturnInbound(RefundTestRig.ORDER_TOKEN, 7L);
         } else {
             rig.service.cancelWhole(RefundTestRig.ORDER_TOKEN, reason, null, 7L);
         }

@@ -163,6 +163,15 @@ public class ShopLogisticsExceptionService {
      * 标记保留作为历史（订单已离开待收货，用户侧不显示）。
      */
     public PickupResolution resolvePickupFailureByCancel(long orderId, Long actorAccountId) {
+        return resolvePickupFailureByCancel(orderId, null, actorAccountId);
+    }
+
+    /**
+     * 同上，带运营填写的处置说明（V1.4.2 shop-admin Story 5.1：说明进站内信，同 {@code withNote}；空 = 「揽收失败」）。
+     * 🔴 不得在外层事务里调用（本方法先在事务外取消旧运单）。
+     */
+    public PickupResolution resolvePickupFailureByCancel(long orderId, String note, Long actorAccountId) {
+        String why = note == null || note.isBlank() ? "揽收失败" : note.trim();
         tx.executeWithoutResult(s -> requirePickupFailed(orderId,
                 Set.of(ShopOrderStatus.PENDING_SHIPMENT, ShopOrderStatus.SHIPPED)));
         PickupResolution aborted = cancelOldWaybill(orderId, "others", actorAccountId);
@@ -180,7 +189,7 @@ public class ShopLogisticsExceptionService {
             if (!still) {
                 return order.getDisplayNo();
             }
-            refunds.cancelWhole(order.getPublicToken(), CancelReason.PICKUP_FAILED, "揽收失败", actorAccountId);
+            refunds.cancelWhole(order.getPublicToken(), CancelReason.PICKUP_FAILED, why, actorAccountId);
             audit.record(actorAccountId, AuditActions.SHOP_LOGISTICS_PICKUP_FAILURE_RESOLVED, TARGET,
                     order.getPublicToken(), "揽收失败处置：取消订单（异常=PICKUP_FAILED，标记保留）");
             log.info("揽收失败处置：取消订单 order={}", order.getDisplayNo());
@@ -224,6 +233,8 @@ public class ShopLogisticsExceptionService {
         return tx.execute(s -> {
             ShopOrder order = requireOrder(orderId);
             requireException(order, LogisticsException.RETURNED);
+            // V1.4.2 shop-admin 5.1 · AD-9 / O-28：原因落库，本轮异常内判定后不可改（已判定 → 409）
+            order.decideReturnCause(cause);
             order.confirmLogisticsException(LogisticsException.RETURNED, cause == ReturnCause.COURIER_FAULT,
                     clock.instant());
             orders.save(order);
@@ -246,11 +257,21 @@ public class ShopLogisticsExceptionService {
             if (!order.isLogisticsExceptionConfirmed()) {
                 throw AppException.conflict("请先确认退回原因");
             }
+            // V1.4.2 shop-admin 5.1 · AD-9：重发要求快递原因
+            if (order.getReturnCause() != ReturnCause.COURIER_FAULT) {
+                throw AppException.conflict("只有快递原因的退回可以重发").code("admin.err.v142.exception.reshipNeedsCourierFault");
+            }
         });
         WaybillResult w = waybills.reshipForCourierFault(orderId, actorAccountId);     // 🔴 内部事务外调 Biteship
         if (w.created()) {
-            tx.executeWithoutResult(s -> clearAndAudit(requireOrder(orderId),
-                    AuditActions.SHOP_LOGISTICS_EXCEPTION_CLEARED, "快递原因重发新运单后清除（异常=RETURNED）", actorAccountId));
+            tx.executeWithoutResult(s -> {
+                ShopOrder order = requireOrder(orderId);
+                // O-28：本轮异常结束，清空退回原因，再次退回可重新判定
+                order.clearReturnCause();
+                clearAndAudit(order, AuditActions.SHOP_LOGISTICS_EXCEPTION_CLEARED,
+                        "快递原因重发新运单后清除（异常=RETURNED）", actorAccountId);
+                orders.save(order);
+            });
         }
         return w;
     }

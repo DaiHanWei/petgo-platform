@@ -114,7 +114,7 @@ public class ShopStagController {
             Long negotiatedAmount, String note) {
     }
 
-    /** 取消结果：退款单 token（USER_FAULT_RETURNED 整单取消无退款单，为 null）与订单状态。 */
+    /** 取消结果：退款单 token（V1.4.2 shop-admin 5.1 起各原因整单取消都出退款单；USER_FAULT_RETURNED 须先按行入库）与订单状态。 */
     public record CancelResponse(String refundToken, String orderStatus) {
     }
 
@@ -143,12 +143,21 @@ public class ShopStagController {
         return new CancelResponse(r == null ? null : r.getPublicToken(), out.order().getStatus().name());
     }
 
+    /** V1.4.2 shop-admin 5.1（O-13）：按行确认入库请求体 {@code {"lines": {"<lineId>": <件数>}}}。 */
+    public record ReturnInboundRequest(java.util.Map<Long, Integer> lines) {
+    }
+
+    /** 按行入库结果：订单状态与是否已全部收齐（收齐后才能 USER_FAULT_RETURNED 整单取消出退款单）。 */
+    public record ReturnInboundResponse(String orderStatus, boolean complete) {
+    }
+
     @PostMapping("/admin/stag/shop/orders/{token}/return-inbound")
     @PreAuthorize(AUTH)
-    public CancelResponse returnInbound(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token) {
-        ShopOrderRefundService.Outcome out = refunds.confirmReturnInbound(token, admin.getAdminAccountId());
-        return new CancelResponse(out.refund().getPublicToken(), out.order().getStatus().name());
+    public ReturnInboundResponse returnInbound(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable String token, @RequestBody(required = false) ReturnInboundRequest req) {
+        ShopOrderRefundService.InboundOutcome out = refunds.confirmReturnedInbound(token,
+                req == null ? null : req.lines(), admin.getAdminAccountId());
+        return new ReturnInboundResponse(out.order().getStatus().name(), out.complete());
     }
 
     @PostMapping("/admin/stag/shop/refunds/{token}/paid-out")

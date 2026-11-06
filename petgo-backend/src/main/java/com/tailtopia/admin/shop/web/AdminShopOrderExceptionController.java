@@ -5,6 +5,8 @@ import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.shared.web.StateTab;
 import com.tailtopia.admin.shop.service.AdminShopOrderExceptionService;
+import com.tailtopia.admin.shop.service.CancelCategoryMapping;
+import com.tailtopia.admin.shared.web.AdminConfirmModal;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
@@ -51,13 +53,20 @@ public class AdminShopOrderExceptionController {
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
+    /** V1.4.2 shop-admin Story 5.1：揽收失败取消在事务外先取消旧运单（AD-9）。 */
+    private final com.tailtopia.shop.logistics.ShopLogisticsExceptionService logistics;
+    private final com.tailtopia.shop.order.repository.ShipmentRepository shipments;
+
     public AdminShopOrderExceptionController(AdminShopOrderExceptionService exceptions,
             ShopOrderLineRepository orderLines, ShopOrderRepository orders,
-            Messages msg) {
+            Messages msg, com.tailtopia.shop.logistics.ShopLogisticsExceptionService logistics,
+            com.tailtopia.shop.order.repository.ShipmentRepository shipments) {
         this.exceptions = exceptions;
         this.orderLines = orderLines;
         this.orders = orders;
         this.msg = msg;
+        this.logistics = logistics;
+        this.shipments = shipments;
     }
 
     /**
@@ -90,25 +99,54 @@ public class AdminShopOrderExceptionController {
                 : "admin/shop-order-exceptions";
     }
 
-    /**
-     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
-     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
-     */
+    // ---------- V1.4.2 shop-admin Story 5.1：原因类别 + 试算（D1 / D3 ~ D7） ----------
+
+    /** 退款明细试算片段（切换原因类别 / 改协商额时 htmx 刷新）；只读、与落库同一计算。 */
+    @GetMapping("/admin/shop/order-exceptions/{token}/preview")
+    @PreAuthorize(VIEW_AUTH)
+    public String preview(@PathVariable String token, @RequestParam(required = false) String category,
+            @RequestParam(required = false) Long negotiatedAmount, Model model) {
+        ShopOrder order = orders.findByPublicToken(token)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+        model.addAttribute("order", order);
+        putPreview(token, category == null ? null : CancelCategoryMapping.Category.parse(category), negotiatedAmount,
+                model);
+        return "admin/fragments/shop-exception-panel :: breakdown";
+    }
+
+    /** D3 ~ D5：整单取消确认弹层 —— 复述原因类别与退款明细（同一试算）。 */
     @PostMapping("/admin/shop/order-exceptions/{token}/cancel/confirm")
     @PreAuthorize(HANDLE_AUTH)
-    public String confirmCancelWhole(@PathVariable String token, @RequestParam String reason,
+    public String confirmCancelWhole(@PathVariable String token, @RequestParam String category,
+            @RequestParam(required = false) Long negotiatedAmount, @RequestParam String reason,
             Model model, jakarta.servlet.http.HttpServletResponse response) {
-        var order = orders.findByPublicToken(token)
-                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
-        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
-                msg.get("admin.v130.shopExceptions.confirm.cancelWhole",
-                        String.format(java.util.Locale.ROOT, "%,d", order.getTotalAmount())),
-                "/admin/shop/order-exceptions/" + enc(token) + "/cancel", java.util.Map.of("reason", reason),
-                msg.get("admin.shop.exceptions.btn.cancelWhole"), true)
+        if (reason == null || reason.isBlank()) {
+            throw AppException.validation("请填写处置原因（会一并告知用户）").code("admin.err.orderException.reasonRequired");
+        }
+        var cat = CancelCategoryMapping.Category.parse(category);
+        exceptions.planWhole(token, cat);   // 落库口径校验（含用户原因须已入库）：不过 409，不弹确认
+        var pv = exceptions.previewWhole(token, cat, negotiatedAmount);
+        if (pv.quote() == null) {
+            throw AppException.validation("未保价订单须填写协商赔付额，且不超过商品实付")
+                    .code("admin.err.orderRefund.negotiatedInvalid", pv.goodsPaidCap());
+        }
+        java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("category", cat.name());
+        hidden.put("negotiatedAmount", negotiatedAmount == null ? "" : String.valueOf(negotiatedAmount));
+        hidden.put("reason", reason);
+        String body = msg.get("admin.v142.exc.confirm.body." + (pv.couponReturned() ? "couponReturn" : "couponKeep")
+                + (pv.restocks() ? "Restock" : "NoRestock"));
+        var cm = new AdminConfirmModal(msg.get("admin.v142.exc.confirm.wholeTitle"), null, List.of(), body, null, null,
+                null, "/admin/shop/order-exceptions/" + enc(token) + "/cancel", hidden,
+                msg.get("admin.shop.exceptions.btn.cancelWhole"), true, false,
+                List.of(new AdminConfirmModal.Fact(msg.get("admin.v142.exc.category.label"),
+                        msg.get("admin.v142.exc.category." + cat.name()))))
+                .withAmounts(amounts(pv.quote(), "admin.v142.exc.confirm.coinNote", "admin.v142.exc.confirm.cashNote"))
                 .withSuccessTarget(".wb-detail-body", "innerHTML");
         return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
     }
 
+    /** D6 / D7：部分取消确认弹层 —— 复述拆分明细；最后一件转整单时复述整单口径（类别只能平台原因）。 */
     @PostMapping("/admin/shop/order-exceptions/{token}/cancel-line/confirm")
     @PreAuthorize(HANDLE_AUTH)
     public String confirmCancelLine(@PathVariable String token, @RequestParam long lineId, @RequestParam int qty,
@@ -120,42 +158,101 @@ public class AdminShopOrderExceptionController {
         if (qty < 1 || qty > line.getQty() - line.getRefundedQty()) {
             throw AppException.validation("取消数量超出可取消范围").code("admin.err.v142.cancelQtyOutOfRange");
         }
+        if (!shipments.findActiveByShopOrderId(order.getId()).isEmpty()) {
+            throw AppException.conflict("该订单有活动运单，请先取消运单再部分取消")
+                    .code("admin.err.v142.exception.activeWaybill");
+        }
+        var quote = exceptions.previewLine(token, lineId, qty);
         java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
         hidden.put("lineId", String.valueOf(lineId));
         hidden.put("qty", String.valueOf(qty));
         hidden.put("reason", reason);
-        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
-                msg.get("admin.v130.shopExceptions.confirm.cancelLine", line.getProductName(), String.valueOf(qty),
-                        String.format(java.util.Locale.ROOT, "%,d", line.getUnitPrice() * qty)),
-                "/admin/shop/order-exceptions/" + enc(token) + "/cancel-line", hidden,
-                msg.get("admin.v130.shopExceptions.btn.cancelLine"), true)
-                .withSuccessTarget(".wb-detail-body", "innerHTML");
-        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+        AdminConfirmModal cm;
+        if (quote.becameWhole()) {
+            cm = new AdminConfirmModal(msg.get("admin.v142.exc.confirm.wholeTitle"), null, List.of(),
+                    msg.get("admin.v142.exc.lastLine.hint"), null, null, null,
+                    "/admin/shop/order-exceptions/" + enc(token) + "/cancel-line", hidden,
+                    msg.get("admin.v142.exc.lastLine.btn"), true, false,
+                    List.of(new AdminConfirmModal.Fact(msg.get("admin.v142.exc.category.label"),
+                            msg.get("admin.v142.exc.category.PLATFORM"))))
+                    .withAmounts(amounts(quote, "admin.v142.exc.confirm.coinNote", "admin.v142.exc.confirm.cashNote"));
+        } else {
+            cm = AdminConfirmModal.simple(msg.get("admin.v142.exc.confirm.lineTitle", line.getProductName(),
+                            String.valueOf(qty)), msg.get("admin.v142.exc.confirm.lineBody"),
+                    "/admin/shop/order-exceptions/" + enc(token) + "/cancel-line", hidden,
+                    msg.get("admin.v130.shopExceptions.btn.cancelLine"), true)
+                    .withAmounts(amounts(quote, "admin.v142.exc.confirm.coinNote", "admin.v142.exc.confirm.lineCashNote"));
+        }
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model,
+                response, cm.withSuccessTarget(".wb-detail-body", "innerHTML"));
+    }
+
+    /** 弹层金额行：PawCoin 段 / 现金段 / 退款合计（金额已由同一试算给出，只格式化）。 */
+    private List<AdminConfirmModal.AmountLine> amounts(com.tailtopia.shop.order.pricing.RefundQuote q, String coinNoteKey,
+            String cashNoteKey) {
+        return List.of(new AdminConfirmModal.AmountLine(msg.get("admin.v142.exc.coinSegment"), rp(q.coinRefund()),
+                        msg.get(coinNoteKey), false),
+                new AdminConfirmModal.AmountLine(msg.get("admin.v142.exc.cashSegment"), rp(q.cashRefund()),
+                        msg.get(cashNoteKey), false),
+                AdminConfirmModal.AmountLine.total(msg.get("admin.v142.exc.refundTotal"), rp(q.totalRefund())));
+    }
+
+    static String rp(long v) {
+        return com.tailtopia.shop.logistics.balance.BiteshipBalanceService.rp(v);
     }
 
     private static String enc(String token) {
         return org.springframework.web.util.UriUtils.encodePathSegment(token, java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    /**
+     * 整单取消并退款 / 签收后赔付（D3 ~ D5 → D8）。揽收失败在<b>事务外</b>走
+     * {@code resolvePickupFailureByCancel}（先取消旧运单，失败则中止、不回补库存），不直接调 {@code cancelWhole}。
+     */
     @PostMapping("/admin/shop/order-exceptions/{token}/cancel")
     @PreAuthorize(HANDLE_AUTH)
     public String cancelWhole(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token, @RequestParam String reason,
+            @PathVariable String token, @RequestParam String category,
+            @RequestParam(required = false) Long negotiatedAmount, @RequestParam String reason,
             HxRequest hx, Model model, RedirectAttributes ra) {
         if (hx.isHtmx()) {
-            var out = exceptions.cancelWholeOrder(token, reason, actorOf(admin));
-            return done(admin, token, msg.get("admin.flash.orderException.fullCancelled",
-                    out.coinRefunded(), out.compensationPremium(), out.cashRefundDue()), model);
+            AdminShopOrderExceptionService.Outcome out = handleWhole(admin, token, category, negotiatedAmount, reason);
+            return done(admin, token, toast(token, out), model);
         }
         try {
-            var out = exceptions.cancelWholeOrder(token, reason, actorOf(admin));
-            ra.addFlashAttribute("notice",
-                    msg.get("admin.flash.orderException.fullCancelled", out.coinRefunded(),
-                            out.compensationPremium(), out.cashRefundDue()));
+            AdminShopOrderExceptionService.Outcome out = handleWhole(admin, token, category, negotiatedAmount, reason);
+            ra.addFlashAttribute("notice", toast(token, out));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/order-exceptions";
+    }
+
+    private AdminShopOrderExceptionService.Outcome handleWhole(AdminUserDetails admin, String token, String category,
+            Long negotiatedAmount, String reason) {
+        var cat = CancelCategoryMapping.Category.parse(category);
+        var plan = exceptions.planWhole(token, cat);
+        if (plan.action() == CancelCategoryMapping.Action.PICKUP_CANCEL) {
+            if (reason == null || reason.isBlank()) {
+                throw AppException.validation("请填写处置原因（会一并告知用户）").code("admin.err.orderException.reasonRequired");
+            }
+            ShopOrder order = orders.findByPublicToken(token)
+                    .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+            // 🔴 不在任何外层事务里：本方法先在事务外取消旧 Biteship 运单，失败则中止（订单、库存都不动）
+            var res = logistics.resolvePickupFailureByCancel(order.getId(), reason.trim(), actorOf(admin));
+            if (!res.resolvedOk()) {
+                throw AppException.conflict("旧运单取消失败，已中止：" + res.reason())
+                        .code("admin.err.v142.exception.pickupCancelAborted");
+            }
+            return exceptions.auditPickupCancel(token, reason, actorOf(admin));
+        }
+        return exceptions.cancelWholeOrder(token, cat, negotiatedAmount, reason, actorOf(admin));
+    }
+
+    /** D8 toast：订单号 + PawCoin 段已退回 + 现金段待用户选择去向。 */
+    private String toast(String token, AdminShopOrderExceptionService.Outcome out) {
+        String no = orders.findByPublicToken(token).map(ShopOrder::getDisplayNo).orElse(token);
+        return msg.get("admin.v142.exc.toast.whole", no, rp(out.coinRefunded()), rp(out.cashRefundDue()));
     }
 
     @PostMapping("/admin/shop/order-exceptions/{token}/cancel-line")
@@ -205,6 +302,12 @@ public class AdminShopOrderExceptionController {
         }
         model.addAttribute("orders", candidates);
         model.addAttribute("linesByToken", linesByToken);
+        // V1.4.2 shop-admin Story 5.1：队列来源徽标
+        Map<String, com.tailtopia.admin.shop.service.ExceptionSource> sourceByToken = new LinkedHashMap<>();
+        for (ShopOrder o : candidates) {
+            exceptions.source(o).ifPresent(src -> sourceByToken.put(o.getPublicToken(), src));
+        }
+        model.addAttribute("sourceByToken", sourceByToken);
         // 单页签（见 list() 的注释）：仍走公共页签行，计数与队列同源 —— 页签条本身就是「这里有多少条」的位置
         model.addAttribute("stateTabs", List.of(new StateTab("/admin/shop/order-exceptions",
                 "admin.v130.shopExceptions.tab.pending", "shop-exception-tab-count-pending",
@@ -222,6 +325,43 @@ public class AdminShopOrderExceptionController {
         model.addAttribute("lines", orderLines.findByOrderIdOrderByIdAsc(order.getId()));
         model.addAttribute("stockByLine", stockByLine);
         model.addAttribute("stillCandidate", exceptions.isCandidate(token));
+        // V1.4.2 shop-admin Story 5.1：来源、可选原因类别、部分取消可用态、默认类别的退款明细试算
+        var source = exceptions.source(order).orElse(null);
+        model.addAttribute("source", source);
+        java.util.Map<String, Boolean> allowed = new LinkedHashMap<>();
+        CancelCategoryMapping.Category first = null;
+        for (var c : CancelCategoryMapping.Category.values()) {
+            boolean ok = CancelCategoryMapping.allowed(source, c, order.getStatus(), order.getReturnCause());
+            allowed.put(c.name(), ok);
+            if (ok && first == null) {
+                first = c;
+            }
+        }
+        model.addAttribute("categoryAllowed", allowed);
+        model.addAttribute("canPartial", source != null && order.getStatus() == com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_SHIPMENT
+                && (source == com.tailtopia.admin.shop.service.ExceptionSource.OUT_OF_STOCK
+                        || source == com.tailtopia.admin.shop.service.ExceptionSource.WAYBILL_FAILED
+                        || source == com.tailtopia.admin.shop.service.ExceptionSource.PICKUP_FAILED)
+                && shipments.findActiveByShopOrderId(order.getId()).isEmpty());
+        model.addAttribute("canContinue", source == com.tailtopia.admin.shop.service.ExceptionSource.OUT_OF_STOCK);
+        if (first != null) {
+            putPreview(token, first, null, model);
+        }
+    }
+
+    /** 试算放进 model：{@code preview}（WholePreview）或 {@code previewError}（如未保价须填协商额、用户原因未入库）。 */
+    private void putPreview(String token, CancelCategoryMapping.Category category, Long negotiatedAmount, Model model) {
+        model.addAttribute("selectedCategory", category == null ? null : category.name());
+        model.addAttribute("negotiatedAmount", negotiatedAmount);
+        if (category == null) {
+            return;
+        }
+        try {
+            model.addAttribute("preview", exceptions.previewWhole(token, category, negotiatedAmount));
+        } catch (AppException e) {
+            // 如协商额越界、已无可退金额：明细区显示错误，不弹确认
+            model.addAttribute("previewError", msg.resolve(e));
+        }
     }
 
     /**

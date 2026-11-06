@@ -279,6 +279,16 @@ public class ShopOrder {
     @Column(name = "timer_resumed_at")
     private Instant timerResumedAt;
 
+    /** V1.4.2 shop-admin Story 5.1 · AD-9 / O-28：包裹退回原因（本轮异常内不可改，快递原因重发成功后清空）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "return_cause", length = 16)
+    private com.tailtopia.shop.logistics.ReturnCause returnCause;
+    /** 用户原因退回全部按行确认入库的时刻 / 账号（O-3 / O-15）。 */
+    @Column(name = "return_inbound_at")
+    private Instant returnInboundAt;
+    @Column(name = "return_inbound_by")
+    private Long returnInboundBy;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -642,6 +652,48 @@ public class ShopOrder {
         this.timerResumedAt = at;
         this.updatedAt = Instant.now();
         return true;
+    }
+
+    // ---------- V1.4.2 shop-admin Story 5.1：退回原因 / 按行入库 ----------
+
+    /** 判定退回原因：本轮已判定为另一原因 → 409，同一原因幂等（O-28：只限当前这轮异常，重发成功后由 {@link #clearReturnCause} 清空）。 */
+    public void decideReturnCause(com.tailtopia.shop.logistics.ReturnCause cause) {
+        if (cause == null) {
+            throw AppException.validation("请选择退回原因");
+        }
+        if (this.returnCause == cause) {
+            return;   // 同一原因重复提交（双击 / 重试）幂等
+        }
+        if (this.returnCause != null) {
+            throw AppException.conflict("退回原因已判定，不能修改").code("admin.err.v142.exception.returnCauseDecided");
+        }
+        this.returnCause = cause;
+        this.updatedAt = Instant.now();
+    }
+
+    /** 快递原因重发成功后清空（O-28）。 */
+    public void clearReturnCause() {
+        this.returnCause = null;
+        this.updatedAt = Instant.now();
+    }
+
+    public com.tailtopia.shop.logistics.ReturnCause getReturnCause() {
+        return returnCause;
+    }
+
+    /** 全部收齐时写入（之后才允许 USER_FAULT_RETURNED 整单取消）。 */
+    public void markReturnInbound(Instant at, Long adminAccountId) {
+        this.returnInboundAt = at;
+        this.returnInboundBy = adminAccountId;
+        this.updatedAt = Instant.now();
+    }
+
+    public Instant getReturnInboundAt() {
+        return returnInboundAt;
+    }
+
+    public Long getReturnInboundBy() {
+        return returnInboundBy;
     }
 
     /** 索赔提醒（v1.4.2 shop 5.2 AC1.4）。置 false 的唯一入口是运营（AC8.2）。 */

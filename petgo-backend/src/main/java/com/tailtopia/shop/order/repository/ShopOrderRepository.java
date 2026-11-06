@@ -237,6 +237,30 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     /** 先进先出（V1.3.0 Story 10.1：A8 异常订单工作台左栏，积压最久的排最前）。 */
     List<ShopOrder> findByStatusOrderByCreatedAtAscIdAsc(ShopOrderStatus status, Pageable pageable);
 
+    /**
+     * V1.4.2 shop-admin Story 5.1 · AD-9：异常订单队列（先进先出）—— 条件与 {@code ExceptionSource.of} 逐条一致（含「已签收 /
+     * 已完成且尚无赔付单」与 O-26 排除注销用户），在库里筛完再分页，不让永不入队的旧单挤掉真异常（复审修）。
+     * 来源仍由 {@code ExceptionSource.of} 一个函数算出。
+     */
+    @Query("select o from ShopOrder o where ("
+            + " (o.status = :pending and o.shortageFlaggedAt is not null)"
+            + " or (o.status in (:pending, :shipped) and o.waybillFailedAt is not null)"
+            + " or (o.status in (:pending, :shipped) and o.logisticsException = :pickup)"
+            + " or (o.status in (:pending, :shipped, :delivered) and o.logisticsException = :returned)"
+            + " or (o.logisticsException in (:lost, :damaged) and (o.status = :shipped"
+            + "     or (o.status in (:delivered, :completed) and not exists (select 1 from"
+            + "         com.tailtopia.shop.order.refund.ShopOrderRefund r where r.orderId = o.id and r.scope = :compensation))))"
+            + ") and not exists (select 1 from com.tailtopia.account.domain.AccountDeletion d where d.userId = o.userId)"
+            + " order by o.createdAt asc, o.id asc")
+    List<ShopOrder> findExceptionQueue(@Param("pending") ShopOrderStatus pending,
+            @Param("shipped") ShopOrderStatus shipped, @Param("delivered") ShopOrderStatus delivered,
+            @Param("completed") ShopOrderStatus completed,
+            @Param("pickup") com.tailtopia.shop.order.domain.LogisticsException pickup,
+            @Param("returned") com.tailtopia.shop.order.domain.LogisticsException returned,
+            @Param("lost") com.tailtopia.shop.order.domain.LogisticsException lost,
+            @Param("damaged") com.tailtopia.shop.order.domain.LogisticsException damaged,
+            @Param("compensation") com.tailtopia.shop.order.refund.RefundScope compensation, Pageable pageable);
+
     /** 异常订单工作台（A8）：待发货 ∧ 运营已标记缺货，先进先出。 */
     List<ShopOrder> findByStatusAndShortageFlaggedAtIsNotNullOrderByCreatedAtAscIdAsc(ShopOrderStatus status,
             Pageable pageable);

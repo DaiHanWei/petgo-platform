@@ -468,7 +468,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                                                 .AdminPermissions.SHOP_ORDER_FULFILL)))
                         .with(org.springframework.security.test.web.servlet.request
                                 .SecurityMockMvcRequestPostProcessors.csrf())
-                        .param("reason", "缺货"))
+                        .param("reason", "缺货").param("category", "PLATFORM"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                         .status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -504,7 +504,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                                     .SecurityMockMvcRequestPostProcessors.authentication(staff))
                             .with(org.springframework.security.test.web.servlet.request
                                     .SecurityMockMvcRequestPostProcessors.csrf())
-                            .param("reason", " "))
+                            .param("reason", " ").param("category", "PLATFORM"))
                     .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                             .status().isUnprocessableEntity());
         }
@@ -527,7 +527,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                                                 .AdminPermissions.SHOP_ORDER_VIEW)))
                         .with(org.springframework.security.test.web.servlet.request
                                 .SecurityMockMvcRequestPostProcessors.csrf())
-                        .param("reason", "缺货"))
+                        .param("reason", "缺货").param("category", "PLATFORM"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                         .status().isForbidden());
         assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
@@ -649,5 +649,43 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         assertThat(body).contains("data-notice=\"shortage-flagged\"").contains("差 1 袋")
                 .contains("/admin/shop/order-exceptions?open=" + token)
                 .as("已标记的单不再给标记按钮").doesNotContain("/flag-shortage");
+    }
+
+    // ---------- V1.4.2 shop-admin Story 5.1（L1 待本地验收） ----------
+
+    @Test
+    @DisplayName("5.1 AC1 / AC2：运单失败的待发货单进队列（来源 = 运单失败）；平台原因整单取消后出队、运单失败标记清除")
+    void waybillFailedEntersQueueAndCancelClearsFlag() {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        jdbc.update("UPDATE shop_orders SET waybill_failed_at = now(), waybill_fail_reason = 'REJECTED:x' WHERE id = ?",
+                c.order().getId());
+        ShopOrder o = orders.findByPublicToken(c.order().getPublicToken()).orElseThrow();
+        assertThat(exceptions.source(o)).contains(ExceptionSource.WAYBILL_FAILED);
+        assertThat(exceptions.exceptionCandidates(100)).extracting(ShopOrder::getPublicToken)
+                .contains(c.order().getPublicToken());
+
+        var pv = exceptions.previewWhole(c.order().getPublicToken(), CancelCategoryMapping.Category.PLATFORM, null);
+        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), CancelCategoryMapping.Category.PLATFORM, null,
+                "运单失败", actor);
+        assertThat(out.coinRefunded()).as("试算与落库同一计算").isEqualTo(pv.quote().coinRefund());
+        ShopOrder after = orders.findByPublicToken(c.order().getPublicToken()).orElseThrow();
+        assertThat(after.getWaybillFailedAt()).isNull();
+        assertThat(after.getCancelReason()).isEqualTo(com.tailtopia.shop.order.refund.CancelReason.WAYBILL_FAILED);
+        assertThat(exceptions.isCandidate(c.order().getPublicToken())).isFalse();
+    }
+
+    @Test
+    @DisplayName("5.1 AC4：缺货来源选用户原因 / 丢件破损 → 409，订单不动")
+    void categoryMismatchIsConflict() {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        makeShort(c);
+        for (var cat : List.of(CancelCategoryMapping.Category.USER, CancelCategoryMapping.Category.LOST_DAMAGED)) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> exceptions.cancelWholeOrder(
+                    c.order().getPublicToken(), cat, null, "x", actor))
+                    .isInstanceOfSatisfying(com.tailtopia.shared.error.AppException.class,
+                            e -> assertThat(e.getStatus().value()).isEqualTo(409));
+        }
+        assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
     }
 }
