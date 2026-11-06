@@ -137,7 +137,8 @@ class AdminPermissionsTest {
         //     （2026-10-19 ③ 送礼线合入 dev_1.4.0 后实测：① +3、② +1、③ +3）。
         // 2026-11-05（V1.4.2 social-topic Story 6.1 · AB-10B）：话题管理 content.topic_view / content.topic_manage
         //     （不预授任何预置角色）⇒ 85 + 2 = 87。
+        // 2026-11-06（V1.4.2 shop-admin Story 1.1 · O-7）：优惠券 shop.coupon_view / shop.coupon_edit（不预授）⇒ 87 + 2 = 89。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(87);
+        assertThat(all).hasSize(89);
     }
 }

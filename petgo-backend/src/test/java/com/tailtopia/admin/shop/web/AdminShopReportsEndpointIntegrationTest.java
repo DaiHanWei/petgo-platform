@@ -66,10 +66,8 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
     @DisplayName("🔴 C2 / C3 / C4 三页只读：无任何 POST 表单、无导出入口，且带只读标识")
     void allThreeReportPagesAreReadOnly() throws Exception {
         Authentication finance = staffWith(AdminPermissions.SHOP_FINANCE_VIEW);
-        Authentication ops = staffWith(AdminPermissions.CONFIG_VIEW);
-
+        // V1.4.2 shop-admin Story 1.1 · AB-29：C2 复购看板已下线，只剩 C3 / C4。
         for (String html : new String[] {
-                page("/admin/shop/repurchase-dashboard", ops),
                 page("/admin/shop/margin", finance),
                 page("/admin/shop/inventory-turnover", finance)}) {
             assertThat(html).as("模板 C 的壳必须给出只读标识 —— 不标的话运营会一直找「这里怎么改」")
@@ -89,8 +87,6 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
     void allThreeReportPagesReturnFragmentsUnderHtmx() throws Exception {
         record Case(String url, Authentication who, String cardsId) { }
         Case[] cases = {
-            new Case("/admin/shop/repurchase-dashboard", staffWith(AdminPermissions.CONFIG_VIEW),
-                    "repurchase-cards"),
             new Case("/admin/shop/margin", staffWith(AdminPermissions.SHOP_FINANCE_VIEW),
                     "margin-cards"),
             new Case("/admin/shop/inventory-turnover", staffWith(AdminPermissions.SHOP_FINANCE_VIEW),
@@ -113,30 +109,14 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
 
     // ---------- AC1 / AC2 / AC3：字段现状原样 + 权限 ----------
 
-    /** AC1：C2 的四个区块字段一个都不能少（它是裁决 A-16 的唯一依据）。 */
+    /** V1.4.2 shop-admin Story 1.1 · AB-29 / AD-17：C2 复购引擎效果整页下线，旧地址 404（不做跳转）。 */
     @Test
-    @DisplayName("C2 四区块字段现状原样，且「缺喂量数据」/「判据未拍板」两条口径提示都在（bug 551：不再露内部编号）")
-    void repurchaseDashboardKeepsEveryBlock() throws Exception {
-        var result = mvc.perform(get("/admin/shop/repurchase-dashboard").with(authentication(staffWith(AdminPermissions.ORDER_VIEW))))
-                .andExpect(status().isOk()).andReturn();
-        String html = result.getResponse().getContentAsString();
-        var snapshot = (com.tailtopia.admin.shop.service.RepurchaseDashboardService.Snapshot)
-                result.getModelAndView().getModel().get("s");
-
-        assertThat(html).contains("repurchase-cards").contains("repurchase-detail");
-        // 🔴 三个触发类型都要列出来（含本版本恒为 0 的两个）—— 让「为什么是 0」有地方解释
-        assertThat(html).contains("粮量见底").contains("驱虫周期").contains("疫苗周期");
-        // ⚠️ 这两条提示是 AC 的一部分：少了它们，「恒为 0」会被读成埋点坏了，
-        //    而这一页会被当成「可以据此砍掉复购引擎」的依据 —— 它现在还不是。
-        // OQ-42 常驻；DEP-6 是条件提示（「覆盖率为 0 且有人买过粮」才亮）—— 共享库里别的测试造了触发记录就不该亮，
-        // 所以按页面自己的判定断言：亮 / 不亮都要与 looksLikeMissingFeedingData() 一致
-        assertThat(html).contains("尚未拍板");
-        // bug 20260923-551：内部编号（Story / FR / DEP / OQ / A-）不得出现在运营界面上
-        assertThat(html).doesNotContain("OQ-42").doesNotContain("DEP-6").doesNotContain("FR-10").doesNotContain("Story 9.2");
-        if (snapshot.looksLikeMissingFeedingData()) {
-            assertThat(html).contains("每日建议喂量还没录入");
-        } else {
-            assertThat(html).doesNotContain("每日建议喂量还没录入");
+    @DisplayName("C2 复购看板已下线：任何权限访问旧地址都是 404")
+    void repurchaseDashboardIsGone() throws Exception {
+        for (Authentication who : new Authentication[] {
+                staffWith(AdminPermissions.ORDER_VIEW), staffWith(AdminPermissions.CONFIG_VIEW)}) {
+            mvc.perform(get("/admin/shop/repurchase-dashboard").with(authentication(who)))
+                    .andExpect(status().isNotFound());
         }
     }
 
@@ -167,7 +147,7 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
     // ---------- 权限门（零变更） ----------
 
     @Test
-    @DisplayName("🔒 C3 / C4 要 shop.finance_view；C2 走 config.view 或 order.view（三页权限码不一致，如实）")
+    @DisplayName("🔒 C3 / C4 要 shop.finance_view（C2 已于 V1.4.2 下线）")
     void permissionsAreUnchanged() throws Exception {
         Authentication ops = staffWith(AdminPermissions.CONFIG_VIEW);
 
@@ -175,13 +155,6 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get("/admin/shop/margin").with(authentication(ops)))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/admin/shop/inventory-turnover").with(authentication(ops)))
-                .andExpect(status().isForbidden());
-        // C2 不含成本数字，走运营码
-        mvc.perform(get("/admin/shop/repurchase-dashboard").with(authentication(ops)))
-                .andExpect(status().isOk());
-        // 反过来：财务码进不去 C2（现状就是两套码，不是笔误）
-        mvc.perform(get("/admin/shop/repurchase-dashboard")
-                        .with(authentication(staffWith(AdminPermissions.SHOP_FINANCE_VIEW))))
                 .andExpect(status().isForbidden());
     }
 }

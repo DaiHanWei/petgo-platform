@@ -179,8 +179,6 @@ public class AdminShopProductController {
         model.addAttribute("skus", ss);
         model.addAttribute("availableBySku", inventory.availableBySkuId(
                 ss.stream().map(ShopSku::getId).toList()));
-        model.addAttribute("feedingWarning",
-                service.needsFeedingGuideWarning(p.getCategory(), p.getFeedingGuide()));
 
         // 🔒 进货价：有权限才放进 model —— 无权限时模板拿不到这个 map，不是靠 th:if 隐藏
         boolean canViewCost = has(admin, AdminPermissions.SHOP_COST_VIEW);

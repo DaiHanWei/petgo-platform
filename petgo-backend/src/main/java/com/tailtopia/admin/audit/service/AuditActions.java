@@ -340,6 +340,30 @@ public final class AuditActions {
     /** 为券模板生成兑换码（摘要只记通用 / 一次性与数量，不记码）。 */
     public static final String SHOP_COUPON_CODES_CREATED = "SHOP_COUPON_CODES_CREATED";
 
+    // ===== 电商后台（V1.4.2 shop-admin Story 1.1 · AD-4 / O-11，按后台 PRD 文档头「操作审计」表补全）=====
+    // 摘要只写有变化的字段（`字段: 旧→新`），涉钱写全金额；兑换码只记数量；不记收款账户 / 手机号 / 地址。
+    /** 编辑券模板（发放期未开始时可改全部参数；摘要记改前改后）。 */
+    public static final String SHOP_COUPON_UPDATED = "SHOP_COUPON_UPDATED";
+    /** 已开始发放的券增加发放总量（只增不减；批量码券同事务补生成差额码，摘要记旧→新总量与补码数量）。 */
+    public static final String SHOP_COUPON_QUOTA_INCREASED = "SHOP_COUPON_QUOTA_INCREASED";
+    /** 导出一次性兑换码 CSV（🔴 只记数量，不记码明文）。 */
+    public static final String SHOP_COUPON_CODES_EXPORTED = "SHOP_COUPON_CODES_EXPORTED";
+    /** banner 拖动排序（target = {@code SHOP_BANNER} / {@code order}；摘要记排序前后 id 顺序）。 */
+    public static final String SHOP_BANNER_REORDERED = "SHOP_BANNER_REORDERED";
+    /**
+     * 电商取消退款单打款时被职责分离规则拦截（O-12，不豁免超管；REQUIRES_NEW 独立事务写）。
+     * target = {@code SHOP_ORDER_REFUND} / 退款单 token。与 V1.1 退款审批的 {@link #REFUND_DUTY_VIOLATION_BLOCKED} 分开（target 不同）。
+     */
+    public static final String SHOP_REFUND_DUTY_VIOLATION_BLOCKED = "SHOP_REFUND_DUTY_VIOLATION_BLOCKED";
+    /** 注销用户的未退现金线下处理后结案（O-17 / O-26；摘要记金额与备注，不记账号）。 */
+    public static final String SHOP_ORDER_REFUND_OFFLINE_CLOSED = "SHOP_ORDER_REFUND_OFFLINE_CLOSED";
+    /** 用户原因退回：订单抽屉按订单行确认入库（O-15；摘要记各行数量，库存只在这里加一次）。 */
+    public static final String SHOP_ORDER_RETURN_INBOUND_CONFIRMED = "SHOP_ORDER_RETURN_INBOUND_CONFIRMED";
+    /** 丢件破损索赔结案（AD-14；摘要记结果与到账金额）。 */
+    public static final String SHOP_LOGISTICS_CLAIM_CLOSED = "SHOP_LOGISTICS_CLAIM_CLOSED";
+    /** 录入 Biteship 实际余额（AD-13；摘要记录入值与当时的预估值）。 */
+    public static final String SHOP_BITESHIP_BALANCE_RECORDED = "SHOP_BITESHIP_BALANCE_RECORDED";
+
     // ===== 商品评价运营（v1.4.2 shop Story 6.1，D-17；S-2 service 归 shop 线，后台线只做页面）=====
     // target = {@code SHOP_REVIEW} / 评价 id。🔒 summary 只记评价 id 与商品 token，绝不记评价正文。
     /** 隐藏一条评价（不展示、不计入均分与条数）。 */

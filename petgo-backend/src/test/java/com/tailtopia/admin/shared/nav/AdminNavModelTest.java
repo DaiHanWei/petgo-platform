@@ -37,9 +37,9 @@ class AdminNavModelTest {
         List<AdminNavModel.NavGroup> groups = AdminNavModel.build(Set.of("ROLE_ADMIN", AdminPermissions.CONFIG_VIEW));
         assertThat(groups).extracting(g -> g.group().key()).containsExactly("overview", "shop", "config");
         assertThat(groups.stream().noneMatch(AdminNavModel.NavGroup::isInbox)).isTrue();
-        // config.view 也开着复购看板 / 运费配置（与 Controller 入口门同集）。
+        // config.view 也开着运费配置（与 Controller 入口门同集）；复购看板 V1.4.2 shop-admin 1.1 已下线。
         assertThat(groups.get(1).pages()).extracting(AdminPageCatalog.Page::key)
-                .containsExactly("repurchase-dashboard", "shop-shipping");
+                .containsExactly("shop-shipping");
     }
 
     @Test

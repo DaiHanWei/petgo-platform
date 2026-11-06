@@ -44,12 +44,7 @@
 
         <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
 
-        <!-- 🔴 Makanan 未填喂量的显著警告：FR-109 能否成立的唯一提醒点 -->
-        <!--/* bug 20260924-568：文案走 i18n（原先服务层写死中文，任何语言都显示中文）；品类名按语言取 */-->
-        <p th:if="${feedingWarning}" class="warn"
-           th:text="#{admin.shop.form.feedingWarning(${#messages.msg('admin.v130.shopProducts.category.MAKANAN')})}">
-            此商品为 Makanan 但未填写每日建议喂量。
-        </p>
+        <!--/* V1.4.2 shop-admin Story 1.1 · AB-29：复购下线，「未填每日建议喂量」警告删除；喂量字段保留。 */-->
 
         <form method="post" data-config-card
               th:action="${productId} == null ? @{/admin/shop/products} : @{'/admin/shop/products/' + ${productId}}"
@@ -210,9 +205,6 @@
                 <div class="s-card-head"><h2 th:text="#{admin.shop.form.section.feeding}">每日建议喂量</h2></div>
                 <div class="s-card-body">
                     <!-- 🔴 结构化行编辑器，绝不提供自由文本框 —— FR-109 的唯一计算依据 -->
-                    <p class="warn" th:text="#{admin.shop.form.hint.feedingConsequence}">
-                        此字段是粮量见底预估（复购提醒）的唯一计算依据，填成描述性文字会导致整条复购机制失效。
-                    </p>
                     <table>
                         <thead><tr>
                             <th th:text="#{admin.shop.feed.min}">体重下限(kg)</th>

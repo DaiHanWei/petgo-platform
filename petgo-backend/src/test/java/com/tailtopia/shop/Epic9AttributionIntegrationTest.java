@@ -2,7 +2,6 @@ package com.tailtopia.shop;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.tailtopia.admin.shop.service.RepurchaseDashboardService;
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.shop.address.domain.AddressFields;
@@ -64,8 +63,6 @@ class Epic9AttributionIntegrationTest extends ApiIntegrationTest {
     private ShopOrderRepository orders;
     @Autowired
     private ShopOrderLineRepository orderLines;
-    @Autowired
-    private RepurchaseDashboardService dashboard;
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -144,8 +141,8 @@ class Epic9AttributionIntegrationTest extends ApiIntegrationTest {
         assertThat(lines.get(0).getTriggerType()).isEqualTo("FOOD_LOW");
 
         // 🔴 看板底账数得到它 —— 对账的另一半（PostHog 侧同口径聚合）才有得比
-        var snapshot = dashboard.snapshot(LocalDate.now().minusDays(1), LocalDate.now());
-        assertThat(snapshot.linesByEntrySource()).containsEntry(uniqueSource, 1L);
+        // V1.4.2 shop-admin 1.1：看板下线，改直接查订单行归因（口径同原看板底账）
+        assertThat(linesBySource(uniqueSource, o.getId())).isEqualTo(1L);
     }
 
     @Test
@@ -195,8 +192,17 @@ class Epic9AttributionIntegrationTest extends ApiIntegrationTest {
                 java.util.Map.of());
         assertThat(view.attributionSource()).isEqualTo("unknown");
 
-        var snapshot = dashboard.snapshot(LocalDate.now().minusDays(1), LocalDate.now());
-        assertThat(snapshot.linesByEntrySource()).containsKey("(none)");
-        assertThat(snapshot.linesByEntrySource().get("(none)")).isGreaterThanOrEqualTo(1L);
+        // V1.4.2 shop-admin 1.1：看板下线，无归因订单行直接查库（entry_source 为空，不丢弃）
+        assertThat(linesBySource(null, o.getId())).isGreaterThanOrEqualTo(1L);
+    }
+
+    /** 订单行按归因来源计数（source 为 null = 无归因）。 */
+    private long linesBySource(String source, Long orderId) {
+        Long n = source == null
+                ? jdbc.queryForObject("SELECT count(*) FROM shop_order_lines WHERE order_id = ? AND entry_source IS NULL",
+                        Long.class, orderId)
+                : jdbc.queryForObject("SELECT count(*) FROM shop_order_lines WHERE order_id = ? AND entry_source = ?",
+                        Long.class, orderId, source);
+        return n == null ? 0L : n;
     }
 }

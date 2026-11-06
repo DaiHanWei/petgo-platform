@@ -64,7 +64,9 @@ class AdminRoleTest {
                     // V1.4.0 ③ AB-36：送礼记录查看码不预授（超管隐式拥有）
                     .doesNotContain(AdminPermissions.GIFT_ORDER_VIEW)
                     // V1.4.2 social-topic Story 6.1（D-18）：话题管理两码不预授（超管隐式拥有）
-                    .doesNotContain(AdminPermissions.TOPIC_VIEW, AdminPermissions.TOPIC_MANAGE);
+                    .doesNotContain(AdminPermissions.TOPIC_VIEW, AdminPermissions.TOPIC_MANAGE)
+                    // V1.4.2 shop-admin Story 1.1（O-7）：优惠券两码不预授（券是真实成本，由管理员在角色页分配）
+                    .doesNotContain(AdminPermissions.SHOP_COUPON_VIEW, AdminPermissions.SHOP_COUPON_EDIT);
         }
     }
 

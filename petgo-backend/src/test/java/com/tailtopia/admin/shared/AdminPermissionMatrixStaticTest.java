@@ -135,11 +135,12 @@ class AdminPermissionMatrixStaticTest {
      * + V1.4.0 ② Story 4.3 一码（`user.pet_slot_adjust`）= 82（① 等级线 +3、② 多宠物线 +1，两线合入后实测）
      * + V1.4.0 ③ gift Story 3.1 两码（`gift.catalog_view` / `gift.catalog_edit`）= 84
      * + V1.4.0 ③ gift Story 3.2 一码（`gift.order_view`）= 85（③ 送礼线合入 dev_1.4.0 后实测）
-     * + V1.4.2 social-topic Story 6.1 两码（`content.topic_view` / `content.topic_manage`，不预授）= 87。
+     * + V1.4.2 social-topic Story 6.1 两码（`content.topic_view` / `content.topic_manage`，不预授）= 87
+     * + V1.4.2 shop-admin Story 1.1 两码（`shop.coupon_view` / `shop.coupon_edit`，不预授，O-7）= 89。
      */
     @Test
-    void thePermissionRegisterHasExactlyEightySevenCodes() {
-        assertThat(AdminPermissions.ALL).hasSize(87);
+    void thePermissionRegisterHasExactlyEightyNineCodes() {
+        assertThat(AdminPermissions.ALL).hasSize(89);
         assertThat(AdminPermissions.ALL)
                 .contains(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST,
                         AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
@@ -147,6 +148,7 @@ class AdminPermissionMatrixStaticTest {
                         AdminPermissions.USER_PET_SLOT_ADJUST,
                         AdminPermissions.GIFT_CATALOG_VIEW, AdminPermissions.GIFT_CATALOG_EDIT,
                         AdminPermissions.GIFT_ORDER_VIEW,
-                        AdminPermissions.TOPIC_VIEW, AdminPermissions.TOPIC_MANAGE);
+                        AdminPermissions.TOPIC_VIEW, AdminPermissions.TOPIC_MANAGE,
+                        AdminPermissions.SHOP_COUPON_VIEW, AdminPermissions.SHOP_COUPON_EDIT);
     }
 }

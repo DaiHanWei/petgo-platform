@@ -342,6 +342,14 @@ public final class AdminPermissions {
      */
     public static final String SHOP_FINANCE_VIEW = "shop.finance_view";
 
+    /**
+     * 优惠券后台（V1.4.2 shop-admin Story 1.1 · AB-24，决策 O-7）。查看 / 编辑分两码。
+     * <p>🔴 <b>不预授任何预置角色</b>：券是真实成本，不沿用 banner 的商品权限，由管理员在角色页分配。
+     */
+    public static final String SHOP_COUPON_VIEW = "shop.coupon_view";
+    /** 新建 / 编辑 / 加总量 / 停用 / 生成与导出兑换码（AB-24）。 */
+    public static final String SHOP_COUPON_EDIT = "shop.coupon_edit";
+
     // 后台账号 / 审计（Epic 1）
     public static final String ADMIN_CREATE_ACCOUNT = "admin.create_account";
     public static final String ADMIN_VIEW_ACCOUNTS = "admin.view_accounts";
@@ -370,7 +378,7 @@ public final class AdminPermissions {
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
-                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW,
+                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW, SHOP_COUPON_VIEW,
                     OPS_NOTIFY_VIEW, GROWTH_CONFIG_VIEW, GIFT_CATALOG_VIEW, GIFT_ORDER_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
@@ -384,7 +392,7 @@ public final class AdminPermissions {
                     VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
-                    SHOP_ORDER_FULFILL,
+                    SHOP_ORDER_FULFILL, SHOP_COUPON_EDIT,
                     PLACE_MANAGE, COMMENT_VIRTUAL_POST,
                     CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND, GROWTH_CONFIG_EDIT,
                     GROWTH_USER_ADJUST, GIFT_CATALOG_EDIT)));
