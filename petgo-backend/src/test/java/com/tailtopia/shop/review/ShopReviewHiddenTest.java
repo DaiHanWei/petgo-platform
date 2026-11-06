@@ -23,10 +23,10 @@ class ShopReviewHiddenTest {
         ShopReview r = published();
         assertThat(r.isHidden()).isFalse();
         Instant t1 = Instant.parse("2026-11-05T01:00:00Z");
-        r.hide(t1);
+        r.hide(t1, com.tailtopia.shop.review.domain.ReviewHideReason.OTHER, null);
         assertThat(r.isHidden()).isTrue();
         assertThat(r.getHiddenAt()).isEqualTo(t1);
-        r.hide(t1.plusSeconds(3600));
+        r.hide(t1.plusSeconds(3600), com.tailtopia.shop.review.domain.ReviewHideReason.OTHER, null);
         assertThat(r.getHiddenAt()).as("已隐藏再隐藏不改写时刻").isEqualTo(t1);
         assertThat(r.isPublished()).as("隐藏不改审核状态").isTrue();
         assertThat(r.getReviewStatus()).isEqualTo(ReviewStatus.PUBLISHED);
@@ -37,7 +37,7 @@ class ShopReviewHiddenTest {
         ShopReview r = published();
         r.unhide();
         assertThat(r.isHidden()).isFalse();
-        r.hide(Instant.now());
+        r.hide(Instant.now(), com.tailtopia.shop.review.domain.ReviewHideReason.OTHER, null);
         r.unhide();
         assertThat(r.isHidden()).isFalse();
         assertThat(r.getHiddenAt()).isNull();
@@ -47,7 +47,7 @@ class ShopReviewHiddenTest {
     @Test
     void toStringNeverPrintsContent() {
         ShopReview r = published();
-        r.hide(Instant.now());
+        r.hide(Instant.now(), com.tailtopia.shop.review.domain.ReviewHideReason.OTHER, null);
         assertThat(r.toString()).doesNotContain("ok");
     }
 }

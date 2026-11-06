@@ -323,7 +323,7 @@ class ShopReviewIntegrationTest extends ApiIntegrationTest {
         reviews.submit(uid2, second.order().getPublicToken(), second.line().getId(), 3, "kedua", null);
         assertThat(reviews.averageRating(productId)).isEqualTo(4.0);
 
-        adminReviews.hide(r1.getId(), null);
+        adminReviews.hide(r1.getId(), com.tailtopia.shop.review.domain.ReviewHideReason.AD, null);
         assertThat(reviews.publishedFor(productId, 10)).hasSize(1);
         assertThat(reviews.publishedCount(productId)).isEqualTo(1);
         assertThat(reviews.averageRating(productId)).isEqualTo(3.0);

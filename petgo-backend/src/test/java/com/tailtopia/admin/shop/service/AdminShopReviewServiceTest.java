@@ -65,13 +65,16 @@ class AdminShopReviewServiceTest {
 
     @Test
     void hideIsIdempotentAndAuditsOnceWithoutContent() {
-        service.hide(77L, 9L);
-        service.hide(77L, 9L);
+        service.hide(77L, com.tailtopia.shop.review.domain.ReviewHideReason.AD, 9L);
+        service.hide(77L, com.tailtopia.shop.review.domain.ReviewHideReason.AD, 9L);
         assertThat(review.isHidden()).isTrue();
         ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
         verify(audit, times(1)).record(eq(9L), eq(AuditActions.SHOP_REVIEW_HIDDEN), eq("SHOP_REVIEW"),
                 eq("77"), summary.capture());
-        assertThat(summary.getValue()).contains("77").contains("prodTok").doesNotContain(SECRET_CONTENT);
+        assertThat(summary.getValue()).contains("77").contains("prodTok").contains("reason=AD").doesNotContain(SECRET_CONTENT);
+        // V1.4.2 shop-admin Story 3.3：原因与操作人落在评价上；恢复时一并清空
+        assertThat(review.getHiddenReason()).isEqualTo(com.tailtopia.shop.review.domain.ReviewHideReason.AD);
+        assertThat(review.getHiddenByAdminId()).isEqualTo(9L);
         verify(reviews, times(1)).save(review);
     }
 
@@ -79,7 +82,7 @@ class AdminShopReviewServiceTest {
     void unhideIsIdempotent() {
         service.unhide(77L, 9L);
         verify(audit, never()).record(any(), anyString(), anyString(), anyString(), anyString());
-        service.hide(77L, 9L);
+        service.hide(77L, com.tailtopia.shop.review.domain.ReviewHideReason.AD, 9L);
         service.unhide(77L, 9L);
         service.unhide(77L, 9L);
         assertThat(review.isHidden()).isFalse();
@@ -88,9 +91,15 @@ class AdminShopReviewServiceTest {
     }
 
     @Test
+    void hideWithoutReasonIsRejected() {
+        assertThatThrownBy(() -> service.hide(77L, null, 9L)).isInstanceOf(AppException.class);
+        assertThat(review.isHidden()).isFalse();
+    }
+
+    @Test
     void missingReviewIs404() {
         when(reviews.findById(anyLong())).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.hide(1L, 9L)).isInstanceOfSatisfying(AppException.class,
+        assertThatThrownBy(() -> service.hide(1L, com.tailtopia.shop.review.domain.ReviewHideReason.AD, 9L)).isInstanceOfSatisfying(AppException.class,
                 e -> assertThat(e.getStatus().value()).isEqualTo(404));
         assertThatThrownBy(() -> service.unhide(1L, 9L)).isInstanceOf(AppException.class);
     }
@@ -117,7 +126,7 @@ class AdminShopReviewServiceTest {
     /** 复审修复：无操作人（系统 / stag）同样写审计，不跳过。 */
     @Test
     void nullActorStillAudits() {
-        service.hide(77L, null);
+        service.hide(77L, com.tailtopia.shop.review.domain.ReviewHideReason.OTHER, null);
         verify(audit).record(org.mockito.ArgumentMatchers.isNull(), eq(AuditActions.SHOP_REVIEW_HIDDEN),
                 eq("SHOP_REVIEW"), eq("77"), anyString());
         service.unhide(77L, null);

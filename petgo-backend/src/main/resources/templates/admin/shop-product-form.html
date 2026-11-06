@@ -42,7 +42,21 @@
             </div>
         </div>
 
+        <!--/* V1.4.2 shop-admin Story 3.3 · J1：编辑态页头下「商品信息 / 评价」两个页签；原表单全部在「商品信息」里不动。 */-->
+        <div id="confirm-host"></div>
+        <nav class="tabs" th:if="${productId != null}" data-product-tabs>
+            <a class="tab" th:classappend="${tab != 'reviews'} ? 'tab--on'" th:href="@{/admin/shop/products/{id}(id=${productId})}"
+               th:text="#{admin.v142.review.tab.info}">商品信息</a>
+            <a class="tab" th:classappend="${tab == 'reviews'} ? 'tab--on'" th:href="@{/admin/shop/products/{id}(id=${productId},tab='reviews')}">
+                <span th:text="#{admin.v142.review.tab.reviews}">评价</span>
+                <span class="tab-count" th:if="${reviewsTab != null}" th:text="${reviewsTab.total()}">0</span></a>
+        </nav>
         <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
+
+        <th:block th:if="${tab == 'reviews' and reviewsTab != null}">
+            <div th:replace="~{admin/fragments/shop-product-reviews :: panel}"></div>
+        </th:block>
+        <th:block th:unless="${tab == 'reviews'}">
 
         <!--/* V1.4.2 shop-admin Story 1.1 · AB-29：复购下线，「未填每日建议喂量」警告删除；喂量字段保留。 */-->
 
@@ -357,6 +371,7 @@
                 });
             </script>
         </div>
+        </th:block>
     </div>
 </div>
 </body>

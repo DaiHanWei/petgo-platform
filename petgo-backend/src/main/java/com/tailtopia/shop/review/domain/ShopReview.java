@@ -67,6 +67,14 @@ public class ShopReview {
     @Column(name = "hidden_at")
     private Instant hiddenAt;
 
+    /** V1.4.2 shop-admin Story 3.3：隐藏原因（空 = 未隐藏，或 v1.4.2 之前由 stag 工具隐藏）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hidden_reason", length = 16)
+    private ReviewHideReason hiddenReason;
+
+    @Column(name = "hidden_by_admin_id")
+    private Long hiddenByAdminId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -115,20 +123,32 @@ public class ShopReview {
         return reviewStatus == ReviewStatus.PUBLISHED;
     }
 
-    /** 隐藏（运营）。已隐藏 → 幂等，不改写原隐藏时刻。 */
-    public void hide(Instant now) {
+    /** 隐藏（运营）。已隐藏 → 幂等，不改写原隐藏时刻与原因。V1.4.2 shop-admin Story 3.3：同时记原因与操作人。 */
+    public void hide(Instant now, ReviewHideReason reason, Long adminId) {
         if (this.hiddenAt == null) {
             this.hiddenAt = now;
+            this.hiddenReason = reason;
+            this.hiddenByAdminId = adminId;
             this.updatedAt = now;
         }
     }
 
-    /** 撤销隐藏。未隐藏 → 幂等。 */
+    /** 撤销隐藏（原因与操作人一并清空）。未隐藏 → 幂等。 */
     public void unhide() {
         if (this.hiddenAt != null) {
             this.hiddenAt = null;
+            this.hiddenReason = null;
+            this.hiddenByAdminId = null;
             this.updatedAt = Instant.now();
         }
+    }
+
+    public ReviewHideReason getHiddenReason() {
+        return hiddenReason;
+    }
+
+    public Long getHiddenByAdminId() {
+        return hiddenByAdminId;
     }
 
     public boolean isHidden() {

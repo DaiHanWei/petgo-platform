@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 ·「商品评价展示」卡（V1.4.2 shop-admin Story 3.3 · AB-39 · UI J5 / J6）。
+  绑定 shipping_settings.review_display_enabled（默认关）；权限 config.edit。保存先 POST …/review-display/confirm 回服务端弹层复述改动，
+  确认后 POST /admin/config/review-display。开关写操作审计 SHOP_REVIEW_DISPLAY_TOGGLED。
+-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/config/review-display},hxPost=@{/admin/config/review-display/confirm},cardId='cfg-review-display',confirmDiff=false,
+                   errorFields=null,
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::rd-title}, ~{::rd-form}, #{admin.common.save})}">
+        <h2 class="cfg-title" th:fragment="rd-title" th:text="#{admin.v142.review.display.title}">商品评价展示</h2>
+        <div th:fragment="rd-form">
+            <p class="hint" th:text="#{admin.v142.review.display.hint}">开启后 App 商品详情显示评价列表与全部评价页。</p>
+            <label class="field field-check"><span th:text="#{admin.v142.review.display.check}">在 App 商品详情展示评价内容</span>
+                <input type="checkbox" name="reviewDisplayEnabled" value="true" th:checked="${reviewDisplayEnabled}" th:disabled="${!canEdit}"/></label>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-review-display :: card}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

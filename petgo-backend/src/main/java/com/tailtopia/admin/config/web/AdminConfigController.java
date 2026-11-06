@@ -150,11 +150,15 @@ public class AdminConfigController {
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
+    /** V1.4.2 shop-admin Story 3.3 · J5：「商品评价展示」开关（{@code shipping_settings.review_display_enabled}）。 */
+    private final com.tailtopia.admin.shop.service.AdminShopReviewService reviewDisplay;
 
     public AdminConfigController(PlatformConfigService read, AdminConfigService write,
             Messages msg,
             com.tailtopia.share.repository.ShareRewardQuotaStatsRepository shareStats,
-            AppVersionConfigService appVersion) {
+            AppVersionConfigService appVersion,
+            com.tailtopia.admin.shop.service.AdminShopReviewService reviewDisplay) {
+        this.reviewDisplay = reviewDisplay;
         this.read = read;
         this.appVersion = appVersion;
         this.shareStats = shareStats;
@@ -187,7 +191,55 @@ public class AdminConfigController {
         // V1.3.4 AB-22：App 版本配置单行；缺行（理论上不会，迁移带种子）时模板整卡不渲染，同客服卡。
         model.addAttribute("appVersion", appVersion.current().orElse(null));
         model.addAttribute("shareRewardOverview", shareRewardOverview());
+        model.addAttribute("reviewDisplayEnabled", reviewDisplay.isDisplayEnabled());
         model.addAttribute("errorFields", ERROR_FIELDS);
+    }
+
+    /**
+     * 「商品评价展示」· 保存前预检（V1.4.2 shop-admin Story 3.3 · J6）：只算、不写库，回 confirm-modal 复述改动（同 C2）。
+     * 权限 {@code config.edit}。确认后 POST {@link #updateReviewDisplay}。
+     */
+    @PostMapping("/admin/config/review-display/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmReviewDisplay(@RequestParam(defaultValue = "false") boolean reviewDisplayEnabled,
+            HxRequest hx, Model model, HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/config";
+        }
+        String on = msg.get("admin.v130.config.confirm.on");
+        String off = msg.get("admin.v130.config.confirm.off");
+        boolean before = reviewDisplay.isDisplayEnabled();
+        List<AdminConfirmModal.DiffLine> lines = before == reviewDisplayEnabled ? List.of()
+                : List.of(new AdminConfirmModal.DiffLine(msg.get("admin.v142.review.display.title"),
+                        before ? on : off, reviewDisplayEnabled ? on : off));
+        Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("reviewDisplayEnabled", String.valueOf(reviewDisplayEnabled));
+        hidden.put("confirmed", "true");
+        AdminConfirmModal cm = new AdminConfirmModal(msg.get("admin.v130.config.confirm.title"), null, lines,
+                reviewDisplayEnabled ? msg.get("admin.v142.review.display.onNote") : null, null, null, null,
+                "/admin/config/review-display", hidden, msg.get("admin.common.save"), false);
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    /** 「商品评价展示」保存（写操作审计 {@code SHOP_REVIEW_DISPLAY_TOGGLED}；不写 config_change_logs —— 该表 CHECK 无此类）。 */
+    @PostMapping("/admin/config/review-display")
+    @PreAuthorize(EDIT_AUTH)
+    public String updateReviewDisplay(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(defaultValue = "false") boolean reviewDisplayEnabled,
+            @RequestParam(defaultValue = "false") boolean confirmed,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (reviewDisplay.isDisplayEnabled() != reviewDisplayEnabled) {
+            reviewDisplay.setDisplayEnabled(reviewDisplayEnabled, admin.getAdminAccountId());
+        }
+        if (hx.isHtmx()) {
+            if (confirmed) {
+                response.setHeader("HX-Trigger-After-Swap", AdminHxEvents.CONFIRM_CLOSE);
+            }
+            return savedCard("cfg-review-display", "config-card-review-display", "admin.v142.review.display.saved",
+                    model, response);
+        }
+        flash.addFlashAttribute("notice", msg.get("admin.v142.review.display.saved"));
+        return "redirect:/admin/config";
     }
 
     /**
