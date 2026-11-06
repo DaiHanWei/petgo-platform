@@ -485,6 +485,12 @@ public class CouponAdminService {
 
     // ------------------------------------------------------------------ 列表 / 详情数据（V1.4.2 shop-admin Story 2.1）
 
+    /** 按 token 取券（后台页面读用）；不存在 404。 */
+    @Transactional(readOnly = true)
+    public ShopCoupon require(String couponToken) {
+        return coupons.findByPublicToken(couponToken).orElseThrow(() -> AppException.notFound("券不存在"));
+    }
+
     /** 列表状态（现算，AD-6）：已停用 / 未开始 / 进行中 / 已结束（按发放期）。 */
     public enum AdminCouponStatus {
         NOT_STARTED, RUNNING, ENDED, STOPPED

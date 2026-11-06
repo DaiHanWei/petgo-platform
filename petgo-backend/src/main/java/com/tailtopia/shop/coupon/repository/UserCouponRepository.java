@@ -120,4 +120,12 @@ public interface UserCouponRepository extends Repository<UserCoupon, Long> {
             + "AND (CAST(:couponId AS bigint) IS NULL OR uc.coupon_id = CAST(:couponId AS bigint)))")
     long sumPaidOrderAmountUsingCoupon(@Param("couponId") Long couponId, @Param("from") Instant from,
             @Param("to") Instant to);
+
+    /** 全部模板某状态张数（券列表摘要「占用中」= LOCKED，V1.4.2 shop-admin Story 2.2）。 */
+    long countByStatus(UserCouponStatus status);
+
+    /** 各模板已使用张数（券列表「已使用」列，一次查询）：{@code [couponId, count]}。 */
+    @Query("select uc.couponId, count(uc) from UserCoupon uc "
+            + "where uc.status = com.tailtopia.shop.coupon.domain.UserCouponStatus.USED group by uc.couponId")
+    List<Object[]> countUsedGroupedByCoupon();
 }

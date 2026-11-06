@@ -1611,3 +1611,7 @@ td.amt, th.amt, .amt-cell { text-align: right; white-space: nowrap; }
 .cm-choice { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
 .cm-choice small { display: block; }
 dialog.cm-modal .cm-select { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+/* V1.4.2 shop-admin Story 2.2：行内文字按钮（停用）、新建后定位行 */
+.btn-link { background: none; border: 0; padding: 0; color: var(--brand); cursor: pointer; font: inherit; }
+.btn-link:hover { text-decoration: underline; }
+tr.is-focus > td { background: var(--brand-tint, #F3F0FF); }

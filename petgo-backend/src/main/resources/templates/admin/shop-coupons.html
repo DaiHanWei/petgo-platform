@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--
+  A1 / A2 优惠券（V1.4.2 shop-admin Story 2.2 · AB-24，模板 B · tpl-b-list + 抽屉）。
+  抽屉取数复用 GET /admin/shop/coupons（?create=1 / ?edit=<token> / ?detail=<token> + HX-Request）。
+  二次确认一律 confirm-modal（#confirm-host）：防误配 A7、停用 A9。业务规则在 CouponAdminService。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.nav.shopCoupons}">优惠券 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='shop-coupon'">
+        <div id="confirm-host"></div>
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.nav.shopCoupons}">优惠券</h1>
+            <button th:if="${canEdit}" type="button" class="btn btn-primary btn-sm" data-drawer-res="shop-coupon"
+                    th:attr="data-drawer-open=@{/admin/shop/coupons(create=1)}"
+                    th:text="#{admin.v142.coupon.btn.new}">＋ 新建优惠券</button>
+        </div>
+        <p class="muted" th:text="#{admin.v142.coupon.hint}">券的一切参数由运营配置。</p>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::sc-filters}, ~{}, ~{::sc-table}, ~{::sc-drawer})}">
+            <form th:fragment="sc-filters" class="filter-bar" data-autosubmit
+                  th:attr="hx-get=@{/admin/shop/coupons}" hx-target="#shop-coupon-rows" hx-swap="innerHTML" hx-push-url="true">
+                <label class="field"><span th:text="#{admin.common.status}">状态</span>
+                    <select name="status" class="sel">
+                        <option value="" th:text="#{admin.common.all}">全部</option>
+                        <option th:each="s : ${statuses}" th:value="${s}" th:selected="${s.name() == filterStatus}"
+                                th:text="#{'admin.v142.coupon.status.' + ${s}}">进行中</option>
+                    </select>
+                </label>
+                <label class="field"><span th:text="#{admin.v142.coupon.col.kind}">类型</span>
+                    <select name="kind" class="sel">
+                        <option value="" th:text="#{admin.common.all}">全部</option>
+                        <option th:each="k : ${kinds}" th:value="${k}" th:selected="${k.name() == filterKind}"
+                                th:text="#{'admin.v142.coupon.kind.' + ${k}}">满减</option>
+                    </select>
+                </label>
+                <label class="field"><span th:text="#{admin.v142.coupon.col.acquire}">发放方式</span>
+                    <select name="acquire" class="sel">
+                        <option value="" th:text="#{admin.common.all}">全部</option>
+                        <option th:each="a : ${acquires}" th:value="${a}" th:selected="${a.name() == filterAcquire}"
+                                th:text="#{'admin.v142.coupon.acquire.' + ${a}}">用户领取</option>
+                    </select>
+                </label>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.filter}">查询</button>
+            </form>
+            <div th:fragment="sc-table" id="shop-coupon-rows">
+                <div th:replace="~{admin/fragments/shop-coupons-list :: rows}"></div>
+            </div>
+            <div th:fragment="sc-drawer" class="drawer-title" th:text="#{admin.nav.shopCoupons}">优惠券</div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
