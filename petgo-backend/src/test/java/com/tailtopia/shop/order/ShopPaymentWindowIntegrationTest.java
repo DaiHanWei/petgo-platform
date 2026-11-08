@@ -56,7 +56,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
         "petgo.shop.sku-cap=500",
         "petgo.shop.order-notify.mode=live",
         "petgo.shop.order-notify.receive-id=oc_integration_test_fake",
-        "petgo.shop.order-notify.cron=-"})
+        "petgo.shop.order-notify.cron=-",
+        // V1.4.2 shop-admin Story 1.3 · AD-5：技术类告警改走 OpsAlertService → LarkWebhookClient.sendTo（TECH 群）；
+        // URL 为空 = 不发只 WARN，故测试里配一个假的 TECH webhook（客户端已 mock，不出网）
+        "petgo.shop.ops-alert.tech.webhook-url=" + ShopPaymentWindowIntegrationTest.TECH_WEBHOOK})
 class ShopPaymentWindowIntegrationTest extends ApiIntegrationTest {
 
     @Autowired private CheckoutService checkout;
@@ -72,6 +75,9 @@ class ShopPaymentWindowIntegrationTest extends ApiIntegrationTest {
 
     @MockitoSpyBean private PaymentGateway gateway;
     @MockitoBean private LarkMessageClient lark;
+    @MockitoBean private com.tailtopia.admin.dailyreport.LarkWebhookClient webhook;
+
+    static final String TECH_WEBHOOK = "https://open.larksuite.test/open-apis/bot/v2/hook/integration-test-tech";
 
     private static final long ACTOR = 1L;
 
@@ -219,7 +225,12 @@ class ShopPaymentWindowIntegrationTest extends ApiIntegrationTest {
         }
 
         assertThat(reload(o).getStatus()).isEqualTo(ShopOrderStatus.PENDING_PAYMENT);
-        verify(lark, times(1)).sendText(org.mockito.ArgumentMatchers.contains(reload(o).getDisplayNo()));
+        // V1.4.2 shop-admin Story 1.3 · AD-5：ShopPaymentAlerts → OpsAlertService(TECH) → LarkWebhookClient.sendTo；
+        // 只数文案含本单展示号的那几次（同库其他待支付单 / 「队列被堵」告警不计入）
+        String displayNo = reload(o).getDisplayNo();
+        verify(webhook, times(1)).sendTo(org.mockito.ArgumentMatchers.eq(TECH_WEBHOOK), anyString(),
+                org.mockito.ArgumentMatchers.argThat(payload -> payload != null
+                        && String.valueOf(payload.get("content")).contains(displayNo)));
     }
 
     @Test
@@ -235,7 +246,9 @@ class ShopPaymentWindowIntegrationTest extends ApiIntegrationTest {
         ShopOrder o = placeOrder(uid, seedSku(10, 100_000L));
         rewind(o, 5);
         doThrow(new PayException("down")).when(gateway).createCharge(any());
-        assertThatThrownBy(() -> payments.pay(uid, o.getPublicToken(), null)).isInstanceOf(PayException.class);
+        assertThatThrownBy(() -> payments.pay(uid, o.getPublicToken(), null))
+                .isInstanceOfSatisfying(com.tailtopia.shared.error.AppException.class,
+                        e -> assertThat(e.getStatus().value()).as("BUG-142-02：网关失败 → 502").isEqualTo(502));
         org.mockito.Mockito.reset(gateway);
         rewind(o, 2);
         var r = payments.pay(uid, o.getPublicToken(), null);

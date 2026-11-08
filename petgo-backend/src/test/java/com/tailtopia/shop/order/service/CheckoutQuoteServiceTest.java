@@ -612,8 +612,8 @@ class CheckoutQuoteServiceTest {
     }
 
     @Test
-    @DisplayName("🔴 复审修复（S-4 同口径）：库内勾着的失效行进 lines[] 带原因 → UNAVAILABLE_LINES，不静默少买")
-    void dbSelectedInvalidLineBlocks() {
+    @DisplayName("V1.4.2 验收拍板 DEC-142-01：新端点跳过库内勾着的失效行（App 已显示为未勾选），只按有效行可下单")
+    void dbSelectedInvalidLineIsSkippedOnNewEndpoint() {
         seedSku(1, "s1", 100_000L, true, true, ReturnPolicy.RETURNABLE);
         seedSku(2, "s2", 50_000L, false, true, ReturnPolicy.RETURNABLE);
         CartView.CartLine dead = new CartView.CartLine("s2", "ps2", "Produk", "3 kg", 50_000L, 1,
@@ -629,9 +629,8 @@ class CheckoutQuoteServiceTest {
         CheckoutQuoteView v = service.preview(UID, cart());
 
         assertThat(v.lines()).extracting(CheckoutQuoteView.QuoteLine::skuToken)
-                .containsExactly("s1", "s2");
-        assertThat(v.lines().get(1).unavailableReason()).isEqualTo("DELISTED");
-        assertThat(v.notPlaceableReason()).isEqualTo(CheckoutQuoteView.UNAVAILABLE_LINES);
+                .containsExactly("s1");
+        assertThat(v.notPlaceableReason()).as("不再被失效行拦住").isNotEqualTo(CheckoutQuoteView.UNAVAILABLE_LINES);
         assertThat(v.pricing().goodsAmount()).as("失效行不计价").isEqualTo(100_000L);
     }
 

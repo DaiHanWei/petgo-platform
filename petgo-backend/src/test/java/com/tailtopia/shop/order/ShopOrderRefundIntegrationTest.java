@@ -230,7 +230,7 @@ class ShopOrderRefundIntegrationTest extends ApiIntegrationTest {
         long finance = persistedSuperAdminId("finance");
         assertThatThrownBy(() -> refundService.markPayoutFailed(rt, "账号无效", actor))
                 .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(403));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM admin_audit_logs WHERE action = "
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM admin_audit_logs WHERE action_type = "
                 + "'SHOP_REFUND_DUTY_VIOLATION_BLOCKED' AND target_id = ?", Integer.class, rt)).isEqualTo(1);
         refundService.markPayoutFailed(rt, "账号无效", finance);
         refundService.chooseDestination(c.userId(), c.order().getPublicToken(), rt,

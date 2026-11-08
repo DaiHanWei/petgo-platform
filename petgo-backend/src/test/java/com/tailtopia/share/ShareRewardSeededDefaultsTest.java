@@ -52,14 +52,6 @@ class ShareRewardSeededDefaultsTest extends ApiIntegrationTest {
                 .isEqualTo("0");
     }
 
-    /**
-     * 总开关默认**开着**，这是有意的。
-     *
-     * <p>⚠️ 它与上面三个 0 是**两件事**：三个 0 表示「还没配」，
-     * 总开关表示「当前有没有紧急情况」。让开关默认开着，
-     * 它的状态才代表 <b>没有紧急情况</b>，而不是「还没配好」——
-     * 否则运营看到开关是关的，无从判断是谁因为什么关的。
-     */
     /** V1.3.2 Story 4.5：两个新渠道四项同样默认 0（RC-3 由运营配）。 */
     @Test
     void tailsonalityAndPassportChannelsDefaultToZero() {
@@ -69,8 +61,14 @@ class ShareRewardSeededDefaultsTest extends ApiIntegrationTest {
         }
     }
 
+    /**
+     * 总开关列默认值<b>关</b>（V1.4.2 shop-admin Story 3.2 · AD-8 / 决策 O-1，迁移 V20261106_1010）。
+     *
+     * <p>原「默认开 = 没有紧急情况」的语义已被 O-1 推翻：分享奖励发的是真钱（PawCoin），新环境 / 新插入行
+     * 默认不发，由运营在后台确认后再打开。⚠️ 该迁移只改列默认值，不改线上已有那一行的值。
+     */
     @Test
-    void masterSwitchDefaultsToOnBecauseItMeansNoEmergencyNotUnconfigured() {
-        assertThat(columnDefault("share_reward_enabled")).isEqualTo("true");
+    void masterSwitchDefaultsToOffPerDecisionO1() {
+        assertThat(columnDefault("share_reward_enabled")).isEqualTo("false");
     }
 }

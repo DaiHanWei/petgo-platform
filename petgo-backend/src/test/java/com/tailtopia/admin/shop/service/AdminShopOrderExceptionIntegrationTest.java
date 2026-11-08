@@ -164,6 +164,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @DisplayName("整单取消：v1.4.2 shop 4.1 起走取消退款单 —— 纯币单直接 REFUNDED + 库存回补 + PawCoin 全额退回 + 站内信一条")
     void cancelWholeRefundsCoinAndRestocks() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         long sid = skuId(c.skuToken());
         assertThat(inventory.findBySkuId(sid).orElseThrow().getActual())
                 .as("付款后已出库").isEqualTo(9L);
@@ -212,6 +214,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         jdbc.update("UPDATE pawcoin_config SET premium_rate = 50, compensation_premium_rate = 10, "
                 + "compensation_premium_cap = 0");
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
 
         var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
 
@@ -230,6 +234,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         jdbc.update("UPDATE pawcoin_config SET compensation_premium_rate = 50, "
                 + "compensation_premium_cap = 3000");
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
         assertThat(out.compensationPremium()).isZero();
     }
@@ -239,6 +245,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     void noPremiumWhenRateIsZero() {
         jdbc.update("UPDATE pawcoin_config SET compensation_premium_rate = 0");
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
         assertThat(out.compensationPremium()).isZero();
         Long bonusRows = jdbc.queryForObject(
@@ -261,15 +269,27 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @DisplayName("🔴 已发货订单不可走异常取消 —— 货已出门，出口是退货（Epic 5）")
     void shippedOrderCannotBeCancelledHere() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // 先标记缺货入队，再发货：验证「曾在队列里的单一旦发货就不能再从这里取消」
+        makeShort(c);
         fulfillment.ship(c.order().getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 1L);
+        // ⚠️ v1.4.2 shop-admin 5.1 起，原「只允许待发货」校验已被 requireInQueue 前置取代：
+        //    缺货来源只认 PENDING_SHIPMENT（ExceptionSource.of），发货后该单自动出队，
+        //    处置入口统一以 409「不在异常订单队列」拒绝 —— 原「待发货」文案已走不到，故改断言出队拒绝。
+        assertThat(exceptions.isCandidate(c.order().getPublicToken())).as("发货即出队").isFalse();
         assertThatThrownBy(() -> exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货",
-                actor)).isInstanceOf(AppException.class).hasMessageContaining("待发货");
+                actor)).isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getMessageCode())
+                .isEqualTo("admin.err.v142.exception.notInQueue");
+        assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
+                .as("拒绝后订单不动").isEqualTo(ShopOrderStatus.SHIPPED);
     }
 
     @Test
     @DisplayName("审计摘要记全三段金额与原因，但不含收件人任何字段")
     void auditRecordsAmountsWithoutPii() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         exceptions.cancelWholeOrder(c.order().getPublicToken(), "盘点后发现少货", actor);
 
         String summary = jdbc.queryForObject("""
@@ -277,8 +297,11 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                 WHERE action_type = ? AND target_id = ?""",
                 String.class, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED,
                 c.order().getPublicToken());
-        assertThat(summary).contains("盘点后发现少货").contains("PawCoin 段退回")
-                .contains("现金段");
+        // V1.4.2 shop-admin 5.1 AC13：审计记类别、原因、退款合计、币现拆分、退券、库存回补、退款单、说明
+        //（原「PawCoin 段退回 / 现金段」措辞随 5.1 改为下列字段）
+        assertThat(summary).contains("盘点后发现少货").contains("类别=PLATFORM").contains("原因=OUT_OF_STOCK")
+                .contains("退款合计=110000").contains("币 110000").contains("现金 0")
+                .contains("退券=").contains("库存回补=是").contains("退款单=");
         assertThat(summary).doesNotContain("Budi").doesNotContain("8123456789")
                 .doesNotContain("Jl. Test");
     }
@@ -304,6 +327,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         long sid = skuId(sku);
         assertThat(inventory.findBySkuId(sid).orElseThrow().getActual()).isEqualTo(7L);
 
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(new Ctx(uid, sku, order));
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(
                 orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId());
         exceptions.cancelLine(order.getPublicToken(), lines.get(0).getId(), 2, "缺 2 件", actor);
@@ -325,6 +350,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @DisplayName("🔴 部分取消数量累加不得超过下单数量")
     void cancelLineCannotExceedOrderedQty() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // 入队后才能走到数量校验（ShopRefundCalculator 的 qtyExceeded），否则只会被 notInQueue 拦下
+        makeShort(c);
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(c.order().getId());
         assertThatThrownBy(() -> exceptions.cancelLine(c.order().getPublicToken(),
                 lines.get(0).getId(), 2, "x", actor))
@@ -337,6 +364,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @DisplayName("联系用户后继续：不动状态、不动库存、不动钱，只留痕与告知")
     void contactAndContinueChangesNothingButRecords() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         long sid = skuId(c.skuToken());
         long balanceBefore = wallet.balanceOf(c.userId());
 

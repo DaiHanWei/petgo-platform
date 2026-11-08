@@ -303,7 +303,7 @@ class AdminShippingEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT amount FROM biteship_balance_snapshots ORDER BY id DESC LIMIT 1",
                 Long.class)).isEqualTo(2_000_000L);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM admin_audit_logs WHERE action = 'SHOP_BITESHIP_BALANCE_RECORDED'",
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM admin_audit_logs WHERE action_type = 'SHOP_BITESHIP_BALANCE_RECORDED'",
                 Integer.class)).isPositive();
     }
 }
