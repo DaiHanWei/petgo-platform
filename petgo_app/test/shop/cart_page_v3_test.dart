@@ -591,6 +591,21 @@ void main() {
       expect(find.byKey(const ValueKey('appToastAction')), findsNothing);
     });
 
+    testWidgets('🔴 ocr M1：删除后立刻离开购物车，再点撤销 → 仍按原数量加回', (tester) async {
+      final ctrl = await pumpOneLine(tester);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+      GoRouter.of(tester.element(find.byType(CartPageV3))).go('/shop');
+      await tester.pumpAndSettle();
+      expect(find.byType(CartPageV3), findsNothing, reason: '购物车页已销毁');
+      await tester.tap(find.text('Urungkan'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(ctrl.added, hasLength(1));
+      expect(ctrl.added.single.sku, 'sku-a');
+    });
+
     testWidgets('撤销带自述的归因值 CART_UNDO，而不是留 null', (tester) async {
       final ctrl = await pumpOneLine(tester);
       await tester.tap(find.byKey(const ValueKey('stepperDec')));

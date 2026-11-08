@@ -295,12 +295,7 @@ class _AddressCardState extends ConsumerState<_AddressCard> {
                 _Link(
                   key: ValueKey('addressSetDefault_${address.token}'),
                   text: l10n.addressSetDefault,
-                  onTap: _busy
-                      ? null
-                      : () async {
-                          await ref.read(addressRepositoryProvider).setDefault(address.token);
-                          widget.onChanged();
-                        },
+                  onTap: _busy ? null : _setDefault,
                 ),
               _Link(
                 key: ValueKey('addressEdit_${address.token}'),
@@ -320,6 +315,23 @@ class _AddressCardState extends ConsumerState<_AddressCard> {
   }
 
   /// H5：确认后删除；失败 toast 且列表不变；删的是默认地址 → 告知新的默认地址。
+  /// 设为默认（ocr 审查 L3）：与 [_delete] 同口径 —— busy 锁防连点、失败出声。
+  Future<void> _setDefault() async {
+    final l10n = AppLocalizations.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final repo = ref.read(addressRepositoryProvider);
+    setState(() => _busy = true);
+    try {
+      await repo.setDefault(address.token);
+    } catch (_) {
+      showAppToastOnOverlay(overlay, l10n.addressSaveFailed);
+      if (mounted) setState(() => _busy = false);
+      return;
+    }
+    if (mounted) setState(() => _busy = false);
+    widget.onChanged();
+  }
+
   Future<void> _delete() async {
     final l10n = AppLocalizations.of(context);
     final ok = await showShopConfirm(

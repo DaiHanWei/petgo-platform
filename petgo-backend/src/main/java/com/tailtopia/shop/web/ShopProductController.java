@@ -142,13 +142,8 @@ public class ShopProductController {
                 viewer == null ? null : addressToken, regionKecamatanId);
     }
 
-    /** 取客户端 IP（照 {@code AuthController.clientIp} 先例：X-Forwarded-For 首段，否则 remoteAddr）。 */
     private static String clientIp(HttpServletRequest http) {
-        String fwd = http.getHeader("X-Forwarded-For");
-        if (fwd != null && !fwd.isBlank()) {
-            return fwd.split(",")[0].trim();
-        }
-        return http.getRemoteAddr();
+        return com.tailtopia.shared.web.ClientIp.of(http);
     }
 
     private static ProductCategory parseCategory(String raw) {

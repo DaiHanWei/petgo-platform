@@ -288,6 +288,11 @@ public class ShopOrderPaymentService {
     /** 幂等取/建意图，并把 token 记到订单上（到账事件据此回找订单）。 */
     @Transactional
     public PaymentIntent ensureIntent(long userId, ShopOrder order, String idempotencyKey) {
+        // 🔴 v1.4.2 ocr 审查 L1：pay() 判「可付」用的是另一个只读事务里的快照；用户的取消若恰好在两者之间提交，
+        //    订单已是 CANCELLED、旧意图已被作废，这里却会给已取消单再建一个意图并出码 —— 用户扫码付的钱落成迟到款。
+        //    所以建意图前在本事务里重读并复核状态；之后 save 时 @Version 再兜住「复核后才提交的取消」。
+        ShopOrder managed = orders.findById(order.getId()).orElseThrow();
+        requirePayable(managed);
         long coin = order.getCoinAmount() == null ? 0L : order.getCoinAmount();
         long cash = order.getCashAmount() == null ? order.getTotalAmount() : order.getCashAmount();
         // 🔴 幂等键绑定订单 token：重复点「去支付」取回同一个意图、同一个二维码，
@@ -308,7 +313,6 @@ public class ShopOrderPaymentService {
         paymentIntents.bindShopOrder(response.token(), order.getId());
         PaymentIntent entity = paymentIntents.findByToken(response.token())
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
-        ShopOrder managed = orders.findById(order.getId()).orElseThrow();
         // 🔴 判据是「换了新意图」而不是「调了 ensureIntent」（Story 1-2 AC9）：本方法幂等，
         //    连点三次「去支付」拿回的是同一个意图，照调用次数发事件会把漏斗入口灌水，
         //    转化率被用户自己的重试稀释。比对必须在 attachPaymentIntent 之前做。
