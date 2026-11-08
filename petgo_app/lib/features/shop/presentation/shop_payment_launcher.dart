@@ -285,7 +285,8 @@ ShopPaymentOutcome _onPaymentAborted(BuildContext context, AppLocalizations l10n
     case ShopPaymentFailure.gatewayDeclined:
       Analytics.capture('toko_payment_declined_shown',
           shopPayProps(order, failureCategory: ShopPaymentFailure.gatewayDeclined.api));
-      showAppToast(context, l10n.shopPaymentDeclinedNotice);
+      // V1.4.2 验收修复（BUG-142-03）：长句 + 面板刚关，默认 2.6 秒读不完 → 4 秒。
+      showAppToast(context, l10n.shopPaymentDeclinedNotice, duration: const Duration(seconds: 4));
       return ShopPaymentOutcome.declined;
     case ShopPaymentFailure.expired:
       Analytics.capture('toko_payment_expired_shown',

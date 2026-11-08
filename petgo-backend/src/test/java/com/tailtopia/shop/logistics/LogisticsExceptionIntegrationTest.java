@@ -198,7 +198,7 @@ class LogisticsExceptionIntegrationTest extends BiteshipIntegrationSupport {
     }
 
     @Test
-    @DisplayName("USER_FAULT 确认后调 4.1 整单取消 → REFUNDING、详情不再显示配送异常")
+    @DisplayName("USER_FAULT 确认后调 4.1 整单取消 → 纯币单退款单即 COMPLETED → REFUNDED、详情不再显示配送异常")
     void returnedUserFault() {
         ShopOrder o = shippedViaBiteship(seedUser());
         Shipment s = active(o.getId());
@@ -218,7 +218,11 @@ class LogisticsExceptionIntegrationTest extends BiteshipIntegrationSupport {
 
         refunds.cancelWhole(o.getPublicToken(), CancelReason.USER_FAULT_RETURNED, "用户拒收", ACTOR);
         ShopOrder after = reload(o.getPublicToken());
-        assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.REFUNDING);
+        // Story 4-1 §5 settleOrderIfDone：→ REFUNDING，WHOLE 退款单全部 COMPLETED 即 → REFUNDED；
+        // 本夹具是纯 PawCoin 单（现金段 0 → 退款单建单即 COMPLETED），同一事务内直接 REFUNDED。
+        assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.REFUNDED);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM shop_order_refunds WHERE order_id = ? "
+                + "AND scope = 'WHOLE' AND status = 'COMPLETED'", Long.class, o.getId())).isEqualTo(1L);
         assertThat(after.hasUserVisibleDeliveryIssue()).isFalse();
     }
 

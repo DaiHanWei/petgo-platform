@@ -203,4 +203,19 @@ class ShopOrderPaymentWindowTest {
         paid.markPaid(now);
         assertThat(ShopOrderPaymentService.canPay(paid, null, now)).isFalse();
     }
+
+    @Test
+    @DisplayName("V1.4.2 验收修复 BUG-142-02：网关拒绝（PayException）→ 502 payment-gateway，意图置 FAILED，不再裸 500")
+    void gatewayDeclineMapsTo502() {
+        order(21L, 1);
+        stubNewIntent("pi-21");
+        when(rig.gateway.createCharge(any())).thenThrow(new com.tailtopia.shared.pay.PayException("支付网关收款失败"));
+
+        assertThatThrownBy(() -> service.pay(UID, "tok21", null))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(502);
+                    assertThat(e.getType()).isEqualTo(ErrorTypes.PAYMENT_GATEWAY);
+                });
+        verify(rig.intents).failChargeAttempt("pi-21");
+    }
 }

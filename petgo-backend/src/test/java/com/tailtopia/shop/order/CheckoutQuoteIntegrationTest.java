@@ -241,8 +241,8 @@ class CheckoutQuoteIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("复审修复：库内勾着的失效行 → UNAVAILABLE_LINES（不静默少买）")
-    void dbSelectedInvalidLineBlocksNewPreview() throws Exception {
+    @DisplayName("V1.4.2 验收拍板 DEC-142-01：新端点跳过库内勾着的失效行，按有效行可下单")
+    void dbSelectedInvalidLineIsSkippedOnNewPreview() throws Exception {
         long uid = newUser().getId();
         seedDefaultAddress(uid);
         String good = seedSku(10, 100_000L);
@@ -254,8 +254,8 @@ class CheckoutQuoteIntegrationTest extends ApiIntegrationTest {
         mvc.perform(post("/api/v1/me/checkout/preview").header("Authorization", userBearer(uid))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"CART\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.notPlaceableReason").value("UNAVAILABLE_LINES"))
-                .andExpect(jsonPath("$.lines[1].unavailableReason").value("OUT_OF_STOCK"));
+                .andExpect(jsonPath("$.notPlaceableReason").doesNotExist())
+                .andExpect(jsonPath("$.lines.length()").value(1));
     }
 
     @Test

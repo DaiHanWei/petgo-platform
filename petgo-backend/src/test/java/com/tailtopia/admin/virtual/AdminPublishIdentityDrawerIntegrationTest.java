@@ -71,7 +71,8 @@ class AdminPublishIdentityDrawerIntegrationTest extends ApiIntegrationTest {
     }
 
     private long virtualAccount() {
-        return virtualAccounts.create("虚拟号-" + SEQ.incrementAndGet(), null, "DOG", 1L);
+        // 昵称 ≤ 20 字（NICKNAME_MAX）：SEQ 起点是 nanoTime（可达 16 位），取模保证不超长
+        return virtualAccounts.create("虚拟号-" + SEQ.incrementAndGet() % 1_000_000, null, "DOG", 1L);
     }
 
     private String body(MvcResult r) throws Exception {
@@ -110,8 +111,8 @@ class AdminPublishIdentityDrawerIntegrationTest extends ApiIntegrationTest {
      */
     @Test
     void theTwoKeywordFiltersAreIndependent() throws Exception {
-        long hit = virtualAccounts.create("找得到我-" + SEQ.incrementAndGet(), null, "DOG", 1L);
-        long miss = virtualAccounts.create("别的号-" + SEQ.incrementAndGet(), null, "CAT", 1L);
+        long hit = virtualAccounts.create("找得到我-" + SEQ.incrementAndGet() % 1_000_000, null, "DOG", 1L);
+        long miss = virtualAccounts.create("别的号-" + SEQ.incrementAndGet() % 1_000_000, null, "CAT", 1L);
         User real = newUser();
         real.setNickname("真人候选-" + SEQ.incrementAndGet() % 1_000_000);
         users.save(real);

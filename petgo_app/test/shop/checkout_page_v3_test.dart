@@ -650,6 +650,17 @@ void main() {
     expect(find.byType(CheckoutPageV3), findsOneWidget);
   });
 
+  testWidgets('V1.4.2 BUG-142-01：不可售行（NOT_SELLABLE）显示「Tidak tersedia」，不再按库存文案', (tester) async {
+    repo = _FakeCheckoutRepo((req, n) async => CheckoutPreview.fromJson(pv(block: 'UNAVAILABLE_LINES', lines: [
+          _line('s1'),
+          _line('s2', unavailable: 'NOT_SELLABLE', stock: 2, qty: 1),
+        ])));
+    await pumpPage(tester);
+    expect(find.byKey(const ValueKey('checkoutUnavailableCard')), findsOneWidget);
+    expect(find.textContaining('Tidak tersedia'), findsOneWidget);
+    expect(find.textContaining('Sisa 2, diminta 1'), findsNothing);
+  });
+
   testWidgets('试算阶段失效行（UNAVAILABLE_LINES）：CART 给「Hapus & lanjut」移除后重算', (tester) async {
     var removedDone = false;
     repo = _FakeCheckoutRepo((req, n) async => removedDone

@@ -613,8 +613,10 @@ void main() {
 
       final l10n = await AppLocalizations.delegate.load(const Locale('id'));
       expect(find.byKey(const ValueKey('qrPayImage')), findsNothing, reason: '二维码必须关掉');
-      expect(find.text(l10n.shopPaymentDeclinedNotice), findsOneWidget,
+      expect(find.text(l10n.shopPaymentDeclinedNotice), findsWidgets,
           reason: '不说原因用户会以为是自己手机坏了');
+      // V1.4.2 验收修复 BUG-142-03：toast 消失后支付卡片里仍常驻拒付说明。
+      expect(find.byKey(const ValueKey('shopOrderPaymentDeclinedNote')), findsOneWidget);
       expect(find.byKey(const ValueKey('shopOrderPayV2')), findsOneWidget,
           reason: '订单没取消也没过期 —— 重试入口必须留着');
       expect(repo.cancelCalls, 0, reason: '拒付不该顺手取消订单');

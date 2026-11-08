@@ -39,7 +39,7 @@ public record PlaceCommand(CheckoutSource checkoutSource, CheckoutCommand checko
         return new PlaceCommand(
                 source == CheckoutPreviewRequest.Source.BUY_NOW ? CheckoutSource.BUY_NOW
                         : CheckoutSource.CART,
-                new CheckoutCommand(preview, false, true), req.quoteToken().trim(),
+                new CheckoutCommand(preview, false, true, true), req.quoteToken().trim(),
                 Boolean.TRUE.equals(req.agreeReturnPolicy()), entry, req.triggerType());
     }
 }

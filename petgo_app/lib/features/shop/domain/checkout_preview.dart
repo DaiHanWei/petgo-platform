@@ -625,6 +625,9 @@ class UnavailableLine {
 
   bool get isDelisted => reason == 'DELISTED';
 
+  /// 包裹参数不全、暂不可售（V1.4.2 验收修复 BUG-142-01：不能按库存不足展示「Sisa N, diminta M」）。
+  bool get isNotSellable => reason == 'NOT_SELLABLE';
+
   factory UnavailableLine.fromJson(Map<String, dynamic> json) => UnavailableLine(
         skuToken: json['skuToken']?.toString() ?? '',
         productName: json['productName']?.toString(),

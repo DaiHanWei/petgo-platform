@@ -263,6 +263,11 @@ public class ShopOrderPaymentService {
             } catch (RuntimeException e) {
                 // 下单失败：意图置 FAILED 留档（request_id 可对账），下次发起走新意图、新 request_id。
                 paymentIntents.failChargeAttempt(intent.getPublicToken());
+                if (e instanceof com.tailtopia.shared.pay.PayException) {
+                    // V1.4.2 验收修复（BUG-142-02）：网关拒绝 / 出码失败是可预期的外部失败 → 502 规范错误，
+                    // 不再以未处理异常 500 落日志。仍是 5xx：App 据此进 E7 可重试态（旧版同样识别）。
+                    throw AppException.paymentGateway("支付网关暂时无法生成二维码，请稍后重试");
+                }
                 throw e;
             }
             Map<String, Object> meta = new LinkedHashMap<>();

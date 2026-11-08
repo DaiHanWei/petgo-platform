@@ -29,6 +29,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/analytics/analytics.dart';
+import '../../../core/theme/colors.dart';
 import '../../../core/theme/shop_tokens.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
@@ -799,6 +800,16 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
               title: l10n.checkoutQris,
               status: cashStatus,
               amount: cash,
+            ),
+          // V1.4.2 验收修复（BUG-142-03）：上次付款被网关拒绝、订单仍待付款 → 卡片里常驻说明。
+          // 拒付 toast 很短、面板会自动关，之前页面上只剩「Menunggu」，用户不知道发生了什么。复用既有文案。
+          if (order.status.isPendingPayment &&
+              (_lastPaymentDeclined || order.paymentFailure == ShopPaymentFailure.gatewayDeclined))
+            Padding(
+              key: const ValueKey('shopOrderPaymentDeclinedNote'),
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(l10n.shopPaymentDeclinedNotice,
+                  style: AppTypography.disclaimer.copyWith(color: AppColors.danger)),
             ),
         ],
       ),
