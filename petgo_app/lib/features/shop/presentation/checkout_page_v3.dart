@@ -526,7 +526,7 @@ class _CheckoutPageV3State extends ConsumerState<CheckoutPageV3> {
 
   String _unavailableText(AppLocalizations l10n, UnavailableLine l) =>
       '${l.productName ?? l.skuToken} · '
-      '${l.isDelisted ? l10n.checkoutUnavailableDelisted : l10n.checkoutUnavailableStock(l.available, l.requested)}';
+      '${l.isDelisted ? l10n.checkoutUnavailableDelisted : l.isNotSellable ? l10n.cartReasonUnavailable : l10n.checkoutUnavailableStock(l.available, l.requested)}';
 
   // ================================================================ 商品折叠（D1 / D18）
 

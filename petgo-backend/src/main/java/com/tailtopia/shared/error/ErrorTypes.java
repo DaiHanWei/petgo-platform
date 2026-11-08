@@ -18,6 +18,12 @@ public final class ErrorTypes {
     public static final URI RATE_LIMITED = URI.create(BASE + "rate-limited");
     public static final URI INTERNAL = URI.create(BASE + "internal");
 
+    /**
+     * V1.4.2 验收修复（BUG-142-02）：支付网关出码失败 / 拒绝（502）。属可预期的外部失败，不是服务端缺陷——
+     * 不再落成「Unhandled exception」500。保持 5xx 是 App 契约：`/pay` 5xx = E7「Kode QR gagal dibuat · Coba lagi」。
+     */
+    public static final URI PAYMENT_GATEWAY = URI.create(BASE + "payment-gateway");
+
     /** Story 2.1：媒体凭证 / 签名 URL 签发异常（绝不外泄 OSS 原始错误/堆栈）。 */
     public static final URI MEDIA_CREDENTIAL = URI.create(BASE + "media-credential");
 

@@ -108,6 +108,11 @@ public class AppException extends RuntimeException {
     }
 
     /** Story 2.1：媒体凭证/签名 URL 签发失败（上游 OSS/STS 异常），对外 502，绝不外泄原始错误。 */
+    /** 支付网关出码失败 / 拒绝（502，见 {@link ErrorTypes#PAYMENT_GATEWAY}）。 */
+    public static AppException paymentGateway(String detail) {
+        return new AppException(HttpStatus.BAD_GATEWAY, ErrorTypes.PAYMENT_GATEWAY, detail);
+    }
+
     public static AppException mediaCredential(String detail) {
         return new AppException(HttpStatus.BAD_GATEWAY, ErrorTypes.MEDIA_CREDENTIAL, detail);
     }

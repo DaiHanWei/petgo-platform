@@ -98,7 +98,11 @@ public class CheckoutLineResolver {
             lines = new ArrayList<>(cartLines(cart.selectedLines()));
             // 🔴 复审修复（S-4 同口径）：库内勾着的失效行照样进 lines[]、带原因 → UNAVAILABLE_LINES，
             //    与旧下单「勾着的失效行 409 逐行明细」一致，绝不静默少买
-            lines.addAll(selectedInvalidLines(cart.invalidLines()));
+            //    V1.4.2 验收拍板（DEC-142-01）：只对旧结算模式保留这条；新端点跳过——新版 App 已把失效行
+            //    显示为未勾选、不计入合计，「绝不静默少买」在新版里由购物车界面本身告知，不该再拦整单。
+            if (!cmd.skipInvalidCartLines()) {
+                lines.addAll(selectedInvalidLines(cart.invalidLines()));
+            }
         }
 
         ShippingAddress address = resolveAddress(userId, req.addressTokenOrNull(),

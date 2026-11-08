@@ -83,8 +83,10 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
     void pageRendersFourIndependentCardsWithUnchangedEndpoints() throws Exception {
         String html = mvc.perform(get("/admin/config").param("lang", "zh_CN").with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        // V1.4.0 multi-pet Story 2.2（UI 稿 L7）按设计新增第七张卡「宠物名额月租价格」
-        assertThat(count(html, "data-config-card")).isEqualTo(7);
+        // V1.4.0 multi-pet Story 2.2（UI 稿 L7）按设计新增第七张卡「宠物名额月租价格」；
+        // V1.4.2 shop-admin Story 3.3（J5）新增第八张卡「商品评价展示」（权限 config.edit）
+        assertThat(count(html, "data-config-card")).isEqualTo(8);
+        assertThat(html).contains("id=\"cfg-review-display\"").contains("action=\"/admin/config/review-display\"");
         for (String[] card : new String[][] {
                 {"cfg-pricing", "/admin/config/pricing", "vetConsultPrice"}, {"cfg-ktp", "/admin/config/ktp-pricing", "passportPagePrice"},
                 {"cfg-pawcoin", "/admin/config/pawcoin", "premiumRate"},
@@ -108,8 +110,8 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
                 .contains("name=\"shareRewardMonthlyCap\"").contains("data-notice=\"share-reward-real-money\"")
                 .doesNotContainPattern("id=\"cfg-share-reward\"[^>]*data-confirm-diff");
         // 保存钮初始禁用 + 「已修改」标；确认弹层文案模板挂在表单上（前端拼旧值 → 新值）
-        assertThat(count(html, "data-save")).isEqualTo(7);
-        assertThat(count(html, "data-dirty-flag")).isEqualTo(7);
+        assertThat(count(html, "data-save")).isEqualTo(8);
+        assertThat(count(html, "data-dirty-flag")).isEqualTo(8);
         assertThat(html).contains("data-confirm-diff-line=\"{0}：{1} → {2}\"").contains("确认修改以下配置");
         // D-8「组头不标红高危」对其余配置卡照旧；唯一例外是 AB-22 的「最低支持版本」行 —— 后台 PRD §1.1 / UI 稿 G1 明确要求
         // 该行左侧红线 +「高危」标签（返工清单 §2）。所以只把这张卡切掉再断言，且它自己必须恰好出现一次。
@@ -175,8 +177,10 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(staffWith(AdminPermissions.CONFIG_VIEW, AdminPermissions.CONFIG_SHARE_REWARD_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         // 含客服联系方式卡、App 版本配置卡、V1.4.0 multi-pet Story 2.2「宠物名额月租价格」卡（三者同按 config.edit；
-        // 2.2 Dev Notes：权限沿用 config.edit / config.view，不新增权限码）→ 6 + 1 = 7
-        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(7);
+        // 2.2 Dev Notes：权限沿用 config.edit / config.view，不新增权限码）→ 6 + 1 = 7；
+        // V1.4.2 shop-admin Story 3.3「商品评价展示」卡同按 config.edit → 8
+        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(8);
+        assertThat(viewOnly).containsPattern("id=\"cfg-review-display\"[^>]*data-readonly=\"true\"");
         assertThat(viewOnly).containsPattern("id=\"cfg-pet-slot\"[^>]*data-readonly=\"true\"")
                 .containsPattern("name=\"petSlotMonthlyPrice\"[^>]*disabled");
         assertThat(viewOnly).containsPattern("name=\"vetConsultPrice\"[^>]*disabled").containsPattern("name=\"shareRewardMonthlyCap\"[^>]*disabled")

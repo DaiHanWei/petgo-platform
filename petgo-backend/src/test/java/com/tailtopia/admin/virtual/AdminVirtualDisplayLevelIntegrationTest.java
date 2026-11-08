@@ -120,14 +120,16 @@ class AdminVirtualDisplayLevelIntegrationTest extends ApiIntegrationTest {
     @Test
     void officialAccountDisplayLevelIsEditableOnPublishIdentityPage() throws Exception {
         long n = SEQ.incrementAndGet();
-        User official = users.saveAndFlush(User.newAdmin("official-dl-" + n + "@tailtopia.test", "官方号" + n, "{bcrypt}x"));
+        // 昵称 ≤ 20 字：SEQ 起点是 nanoTime（可达 16 位），取模保证不超长
+        String nickname = "官方号" + n % 1_000_000;
+        User official = users.saveAndFlush(User.newAdmin("official-dl-" + n + "@tailtopia.test", nickname, "{bcrypt}x"));
         long id = official.getId();
         Authentication manager = staffWith(AdminPermissions.VIRTUAL_ACCOUNT_MANAGE);
 
         String page = mvc.perform(get("/admin/virtual-accounts").with(authentication(manager)).param("lang", "zh_CN"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(page).contains("id=\"official-rows\"").contains("id=\"official-row-" + id + "\"")
-                .contains("官方号" + n).contains("/admin/virtual-accounts/official/" + id + "/display-level")
+                .contains(nickname).contains("/admin/virtual-accounts/official/" + id + "/display-level")
                 .contains("data-official-display-form");
         // 官方号区块只有展示等级卡：不出现虚拟号专属的启停 / 物种入口
         String block = page.substring(page.indexOf("id=\"official-rows\""), page.indexOf("id=\"official-inline-err\""));
@@ -177,7 +179,7 @@ class AdminVirtualDisplayLevelIntegrationTest extends ApiIntegrationTest {
     @Test
     void officialWithDeletionSubmittedIsHiddenAndRejected() throws Exception {
         long n = SEQ.incrementAndGet();
-        User official = users.saveAndFlush(User.newAdmin("official-del-" + n + "@tailtopia.test", "注销官方号" + n,
+        User official = users.saveAndFlush(User.newAdmin("official-del-" + n + "@tailtopia.test", "注销官方号" + n % 1_000_000,
                 "{bcrypt}x"));
         jdbc.update("INSERT INTO account_deletions (user_id, status, requested_at) VALUES (?, 'DONE', now())",
                 official.getId());
