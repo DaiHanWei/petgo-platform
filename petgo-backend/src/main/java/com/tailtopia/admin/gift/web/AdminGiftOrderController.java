@@ -84,6 +84,7 @@ public class AdminGiftOrderController {
         model.addAttribute("totalElements", result.getTotalElements());
         model.addAttribute("hasPrev", result.hasPrevious());
         model.addAttribute("hasNext", result.hasNext());
+        model.addAttribute("pager", com.tailtopia.admin.shared.AdminPager.of(result)); // V1.4.2 通用分页条
         // 🔴 摘要覆盖整个筛选结果，不是当前这一页。
         model.addAttribute("summary", service.summarize(filter));
         return hx.isHtmx() ? "admin/fragments/gift-orders-list :: rows(oob=true)" : "admin/gift-orders";

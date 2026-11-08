@@ -65,20 +65,20 @@ class ShopPaymentAnalyticsListenerTest {
 
         assertThat(captured).singleElement().satisfies(c -> {
             assertThat(c.event()).isEqualTo("shop_payment_intent_created");
-            assertThat(c.props()).containsEntry("order_amount", 285_000L)
+            assertThat(c.props()).doesNotContainKey("order_amount")
                     .containsEntry("pay_channel", "MIXED")
                     .containsEntry("has_pawcoin", true);
         });
     }
 
     @Test
-    @DisplayName("到账 → shop_payment_paid（v1.4.2：由 ShopOrderPaidEvent 触发，order_amount = paidTotal）")
+    @DisplayName("到账 → shop_payment_paid（v1.4.2：由 ShopOrderPaidEvent 触发；金额不进 PostHog）")
     void paidEvent() {
         listener.onOrderPaid(orderPaid("QRIS", "GATEWAY"));
 
         assertThat(captured).singleElement().satisfies(c -> {
             assertThat(c.event()).isEqualTo("shop_payment_paid");
-            assertThat(c.props()).containsEntry("order_amount", 285_000L)
+            assertThat(c.props()).doesNotContainKey("order_amount")
                     .containsEntry("pay_channel", "QRIS");
         });
     }
@@ -137,9 +137,9 @@ class ShopPaymentAnalyticsListenerTest {
                     "receiver_name", "receiverName", "receiver_phone", "phone",
                     "address", "address_line", "email", "user_id", "userId",
                     "gateway_meta", "gatewayMeta", "gateway_ref", "gatewayRef");
-            // 属性键只能取自这四个 —— 多一个都要过 AnalyticsEventGuard 的白名单。
+            // 属性键只能取自这三个（V1.4.2 起无 order_amount） —— 多一个都要过 AnalyticsEventGuard 的白名单。
             assertThat(c.props().keySet()).isSubsetOf(
-                    "order_amount", "pay_channel", "has_pawcoin", "failure_category");
+                    "pay_channel", "has_pawcoin", "failure_category");
         }
     }
 
@@ -175,9 +175,9 @@ class ShopPaymentAnalyticsListenerTest {
         assertThat(captured).extracting(Captured::event)
                 .containsExactly("shop_payment_paid", "shop_payment_paid");
         assertThat(captured.getFirst().props()).containsEntry("pay_channel", "PAWCOIN")
-                .containsEntry("order_amount", 285_000L);
+                .doesNotContainKey("order_amount");
         assertThat(captured).allSatisfy(c -> assertThat(c.props().keySet())
-                .isSubsetOf("order_amount", "pay_channel"));
+                .isSubsetOf("pay_channel"));
     }
 
     @Test

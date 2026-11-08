@@ -211,6 +211,11 @@ public class AdminContentManageController {
                     < summary.total();
         }
         model.addAttribute("hasNext", hasNext);
+        // V1.4.2 通用分页条：只有默认口径的总数是准的（摘要条那个数）；物种筛选在应用层过滤、
+        // 「按点赞时间」的行来自内存池 —— 这两档给不出准确总页数，退回「第 x 页 + 上一页 / 下一页」。
+        model.addAttribute("pager", ("liked".equals(dateBasis) || speciesFiltered)
+                ? com.tailtopia.admin.shared.AdminPager.unknown(page, hasNext)
+                : com.tailtopia.admin.shared.AdminPager.of(page, AdminContentManageService.PAGE_SIZE, summary.total()));
         return hxRequest != null ? "admin/fragments/content-list :: rows(oob=true)" : "admin/content";
     }
 

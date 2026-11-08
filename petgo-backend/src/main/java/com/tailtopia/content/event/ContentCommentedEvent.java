@@ -15,6 +15,7 @@ import java.time.Instant;
  * @param contentAuthorId  内容作者 id（推送目标之一）
  * @param parentAuthorId   被回复的一级评论作者 id（一级评论时 null）
  * @param body             评论原文（V1.3.4，推送正文用；禁止进日志）
+ * @param replyToAuthorId  被回复的二级评论作者 id（V1.4.2；回复一级 / 一级评论时 null）
  */
 public record ContentCommentedEvent(
         long postId,
@@ -29,7 +30,18 @@ public record ContentCommentedEvent(
          * V1.3.4 follow · Story 3.1：评论原文（已过审核），只用于互动推送正文。
          * 🔴 含用户原文，<b>禁止写进任何日志</b>。可为 null（老调用方经 7 参构造器）。
          */
-        String body) {
+        String body,
+        /**
+         * V1.4.2：回复的是一条<b>二级</b>评论时，那条二级评论的作者 id（被回复的 C）；否则 null。
+         * notify 侧据此补发「回复了你的评论」，去重规则见 {@code ContentNotifyListener}。
+         */
+        Long replyToAuthorId) {
+
+    /** V1.4.2 之前的 8 参构造（{@code replyToAuthorId = null}）。 */
+    public ContentCommentedEvent(long postId, long commentId, long commenterId, long contentAuthorId,
+            Long parentAuthorId, Instant createdAt, Long parentCommentId, String body) {
+        this(postId, commentId, commenterId, contentAuthorId, parentAuthorId, createdAt, parentCommentId, body, null);
+    }
 
     /** 不带原文的 7 参构造（V1.3.4 之前的全部调用方；{@code body = null}）。 */
     public ContentCommentedEvent(long postId, long commentId, long commenterId, long contentAuthorId,

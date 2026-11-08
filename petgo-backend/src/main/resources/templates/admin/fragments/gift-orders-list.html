@@ -126,13 +126,10 @@
     </div>
 
     <!--/* ⚠️ 翻页链接必须带上全部筛选条件，否则点「下一页」会悄悄回到无筛选的全量。 */-->
-    <div class="pager" th:if="${totalPages > 0}">
-        <a th:if="${hasPrev}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.prev}"
-           th:href="@{/admin/gift-orders(page=${page - 1},senderId=${senderId},ownerId=${ownerId},channel=${channel},status=${status},from=${from},to=${to})}">上一页</a>
-        <span th:text="#{admin.audit.page(${page + 1}, ${totalPages}, ${totalElements})}">分页</span>
-        <a th:if="${hasNext}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.next}"
-           th:href="@{/admin/gift-orders(page=${page + 1},senderId=${senderId},ownerId=${ownerId},channel=${channel},status=${status},from=${from},to=${to})}">下一页</a>
-    </div>
+    <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页），翻页带全部筛选条件。 */-->
+    <th:block th:if="${totalPages > 0}" th:with="tpl=@{/admin/gift-orders(page='~PAGE~',senderId=${senderId},ownerId=${ownerId},channel=${channel},status=${status},from=${from},to=${to})}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target=null)}"></div>
+    </th:block>
 </th:block>
 </body>
 </html>

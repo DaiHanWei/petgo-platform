@@ -1629,3 +1629,16 @@ td.is-missing { color: var(--danger); }
 
 /* V1.4.2 exp-reverse：抽屉成长值节的扣回按钮与上方表格留间距 */
 [data-section="order-growth"] [data-exp-reverse] { margin-top: 12px; }
+
+/* ===== 通用分页条（V1.4.2 优化项，admin/fragments/pager）===== */
+.admin-pager { flex-wrap: wrap; gap: 6px 10px; }
+.admin-pager .pager-total { color: var(--muted); margin-right: 6px; }
+.admin-pager .pager-num, .admin-pager .pager-batch {
+    min-width: 28px; height: 28px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px; font-variant-numeric: tabular-nums;
+}
+.admin-pager a.pager-num:hover, .admin-pager a.pager-batch:hover { background: var(--brand-soft, rgba(132, 94, 201, .08)); }
+.admin-pager .pager-num.is-current { background: var(--brand-strong); color: #fff; font-weight: 600; }
+.admin-pager .pager-jump { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 6px; }
+.admin-pager .pager-jump label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.admin-pager .pager-jump-input { width: 64px; height: 28px; padding: 0 6px; font-variant-numeric: tabular-nums; }

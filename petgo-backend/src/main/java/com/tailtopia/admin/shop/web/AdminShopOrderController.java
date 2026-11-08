@@ -147,6 +147,8 @@ public class AdminShopOrderController {
         List<ShopOrder> found;
         int current = Math.max(page, 0);
         boolean hasNext = false;
+        // V1.4.2 通用分页条：只有分页浏览有总数；按单号 / 电话精确查是单页结果，不出分页条。
+        com.tailtopia.admin.shared.AdminPager pager = com.tailtopia.admin.shared.AdminPager.unknown(0, false);
 
         if (orderToken != null && !orderToken.isBlank()) {
             // 订单号精确查。🔴 shop-v2 Story 4-3：新号 / 旧号 / 内部 token 三种输入都要命中同一单。
@@ -169,9 +171,11 @@ public class AdminShopOrderController {
             found = p.rows();
             current = p.page();
             hasNext = p.hasNext();
+            pager = com.tailtopia.admin.shared.AdminPager.of(current, QUEUE_PAGE_SIZE, p.total());
         }
 
         fillListing(found, filter, orderToken, from, to, flag, AdminShopOrderService.FLAGS, current, hasNext, model);
+        model.addAttribute("pager", pager);
         model.addAttribute("summary", adminOrders.summary(startOf(from), endOf(to)));
         // 🔒 回显的是「是否搜过」，不回显号码本身 —— 回显会把 PII 带进 URL、浏览器历史与访问日志
         model.addAttribute("phoneSearched", phone != null && !phone.isBlank());
@@ -203,6 +207,8 @@ public class AdminShopOrderController {
         List<ShopOrder> found;
         int current = Math.max(page, 0);
         boolean hasNext = false;
+        // V1.4.2 通用分页条：只有分页浏览有总数；按单号 / 电话精确查是单页结果，不出分页条。
+        com.tailtopia.admin.shared.AdminPager pager = com.tailtopia.admin.shared.AdminPager.unknown(0, false);
         if (orderToken != null && !orderToken.isBlank()) {
             found = searchByAnyOrderNo(orderToken).map(List::of).orElse(List.of());
             current = 0;
@@ -211,9 +217,11 @@ public class AdminShopOrderController {
             found = p.rows();
             current = p.page();
             hasNext = p.hasNext();
+            pager = com.tailtopia.admin.shared.AdminPager.of(current, QUEUE_PAGE_SIZE, p.total());
         }
         fillListing(found, filter, orderToken, from, to, flag, AdminShopOrderService.LIST_FLAGS, current, hasNext,
                 model);
+        model.addAttribute("pager", pager);
         model.addAttribute("summary", adminOrders.listSummary(startOf(from), endOf(to)));
         model.addAttribute("drawerBase", LIST_BASE);
         model.addAttribute("open", open == null || open.isBlank() ? null : open.trim());

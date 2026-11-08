@@ -152,11 +152,11 @@ public class AdminShopOrderService {
         int p = Math.max(page, 0);
         int s = Math.max(1, size);
         var found = orders.searchPage(status, from, to, PageRequest.of(p, s));
-        return new Page(found.getContent(), p, found.hasNext());
+        return new Page(found.getContent(), p, found.hasNext(), found.getTotalElements());
     }
 
-    /** 一页订单。 */
-    public record Page(List<ShopOrder> rows, int page, boolean hasNext) {
+    /** 一页订单。{@code total} = 筛选后的总条数（V1.4.2 通用分页条用）。 */
+    public record Page(List<ShopOrder> rows, int page, boolean hasNext, long total) {
     }
 
     /** V1.4.2 shop-admin Story 6.1（H1）：「异常标记」筛选取值。 */
@@ -187,7 +187,7 @@ public class AdminShopOrderService {
                 com.tailtopia.shop.order.domain.LogisticsException.LOST,
                 com.tailtopia.shop.order.domain.LogisticsException.DAMAGED,
                 com.tailtopia.shop.order.domain.LogisticsException.STALLED, PageRequest.of(p, Math.max(1, size)));
-        return new Page(found.getContent(), p, found.hasNext());
+        return new Page(found.getContent(), p, found.hasNext(), found.getTotalElements());
     }
 
     /** 订单当前挂着的异常标记（列表徽标，H1）；按 LIST_FLAGS 顺序，不含 ANY。履约异常只看 LIVE 状态；取消后到账（7.1）不限状态。 */

@@ -43,7 +43,7 @@ public class ShopPaymentAnalyticsListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIntentCreated(ShopPaymentIntentCreatedEvent e) {
         analytics.capture(AnalyticsDistinctId.of(e.userId()), "shop_payment_intent_created",
-                props(e.amount(), e.payChannel(), e.hasPawcoin()));
+                props(e.payChannel(), e.hasPawcoin()));
     }
 
     /**
@@ -56,7 +56,7 @@ public class ShopPaymentAnalyticsListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPaid(ShopOrderPaidEvent e) {
         analytics.capture(AnalyticsDistinctId.of(e.userId()), "shop_payment_paid",
-                props(e.paidTotal(), e.payChannel(), null));
+                props(e.payChannel(), null));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -76,21 +76,20 @@ public class ShopPaymentAnalyticsListener {
             case USER_CANCELLED -> "shop_payment_user_cancelled";
         };
         Map<String, Object> props =
-                props(e.amount(), e.channel() == null ? null : e.channel().name(), null);
+                props(e.channel() == null ? null : e.channel().name(), null);
         props.put("failure_category", category.name());
         analytics.capture(AnalyticsDistinctId.of(e.userId()), event, props);
     }
 
     /**
-     * 组装属性。<b>只放这三个键</b>（失败事件另加 {@code failure_category}）。
+     * 组装属性。<b>只放这两个键</b>（pay_channel / has_pawcoin）（失败事件另加 {@code failure_category}）。
      *
      * @param hasPawcoin 为 null 时不带该键 —— 支付意图上没有「是否含 PawCoin」这个信息，
      *     瞎填一个 false 会让漏斗按它分组时把混合支付单错归到纯现金一档
      */
-    private static Map<String, Object> props(long orderAmount, String payChannel,
-            Boolean hasPawcoin) {
+    private static Map<String, Object> props(String payChannel, Boolean hasPawcoin) {
         Map<String, Object> p = new LinkedHashMap<>();
-        p.put("order_amount", orderAmount);
+        // V1.4.2：不再带 order_amount —— 金额一律不进 PostHog（2026-11-08 拍板）。
         if (payChannel != null) {
             p.put("pay_channel", payChannel);
         }

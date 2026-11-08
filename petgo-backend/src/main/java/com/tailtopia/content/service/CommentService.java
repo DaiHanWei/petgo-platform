@@ -20,8 +20,10 @@ import com.tailtopia.mention.service.MentionSanitizer;
 import com.tailtopia.mention.service.MentionViewService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -126,6 +128,11 @@ public class CommentService {
         long topLevelParentId = parent.isTopLevel() ? parent.getId() : parent.getParentId();
 
         Comment reply = Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body);
+        // V1.4.2：回复的是二级评论时记下它（归并前的目标），过审时据此通知被回复人 C。
+        // App 回复二级评论时 parentId 传的就是那条二级评论 —— 不依赖请求体 replyToCommentId，旧包同样生效。
+        if (!parent.isTopLevel()) {
+            reply.setReplyToCommentId(parent.getId());
+        }
         reply.setMentionedUserIds(mentioned);
         Comment saved = comments.save(reply);
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
@@ -295,12 +302,26 @@ public class CommentService {
     private void publishCommented(Comment c, long contentAuthorId, ContentPost post) {
         Long parentAuthorId = c.isTopLevel() ? null
                 : comments.findById(c.getParentId()).map(Comment::getAuthorId).orElse(null);
+        Long replyToAuthorId = c.getReplyToCommentId() == null ? null
+                : comments.findById(c.getReplyToCommentId()).map(Comment::getAuthorId).orElse(null);
         events.publishEvent(new ContentCommentedEvent(
                 c.getPostId(), c.getId(), c.getAuthorId(), contentAuthorId, parentAuthorId, Instant.now(),
-                c.isTopLevel() ? null : c.getParentId(), c.getBody()));
+                c.isTopLevel() ? null : c.getParentId(), c.getBody(), replyToAuthorId));
         // Story 3.4：@ 通知与「新评论」通知**同一个落点** —— 评论 UNDER_REVIEW → VISIBLE 的那一刻。
         // 🔴 提交那一刻发的话，审核没过的评论会让被 @ 的人点进去看不到任何东西。
-        List<Long> mentioned = c.getMentionedUserIds();
+        // V1.4.2 去重：同一条评论每人最多一条通知 —— 已经会收「评论了你的内容 / 回复了你的评论」的人
+        // （帖主 A、一级评论作者 B、被回复人 C）不再另收「提到了你」。只滤事件名单，评论里的 @ 展示不变。
+        Set<Long> commentRecipients = new HashSet<>();
+        commentRecipients.add(contentAuthorId);
+        if (parentAuthorId != null) {
+            commentRecipients.add(parentAuthorId);
+        }
+        if (replyToAuthorId != null) {
+            commentRecipients.add(replyToAuthorId);
+        }
+        List<Long> mentioned = c.getMentionedUserIds().stream()
+                .filter(id -> !commentRecipients.contains(id))
+                .toList();
         // 🔴 **非 PUBLIC 的帖子，连它评论里的 @ 也不发通知**（与 ContentService.publishMentioned
         //    同一条不变式 —— ContentMentionedEvent 的 javadoc 让 notify 侧信任它，
         //    两条路径口径不一致就等于那句话是假的）。

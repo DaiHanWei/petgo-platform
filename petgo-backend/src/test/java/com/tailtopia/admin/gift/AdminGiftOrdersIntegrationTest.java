@@ -136,7 +136,7 @@ class AdminGiftOrdersIntegrationTest extends ApiIntegrationTest {
                 .doesNotContain("Ghost")
                 .contains("（已删除）Boba").contains("Tennis ball")
                 .contains("已送达").contains("待支付").contains("已过期").contains("已付款未送达")
-                .contains("第 1 / 1 页（共 6 条）")
+                .contains("共 6 条")
                 .as("全站视图有支付意图列").contains("支付意图");
         // 只读断言只看业务内容区：layout 顶栏常驻「退出登录」POST 表单（layout.html，全后台每页都有），不属于本页。
         String content = html.substring(html.indexOf("class=\"wb-title-row\""));
@@ -148,7 +148,7 @@ class AdminGiftOrdersIntegrationTest extends ApiIntegrationTest {
     @Test
     void undeliveredFilterSwitchesToAnomalyView() throws Exception {
         String html = page(viewer(), "ownerId", String.valueOf(owner.getId()), "status", "UNDELIVERED");
-        assertThat(html).contains("第 1 / 1 页（共 3 条）")
+        assertThat(html).contains("共 3 条")
                 .contains("原因").contains("PawCoin 退回")
                 .contains("宠物已删除").contains("送礼人已拉黑主人").contains("主人已注销")
                 .contains("已退回 Rp20,000").contains("退回失败 · 待重试").contains("退回失败 · 需人工")
@@ -161,12 +161,12 @@ class AdminGiftOrdersIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void filtersBySenderChannelAndDate() throws Exception {
-        assertThat(page(viewer(), "senderId", String.valueOf(sender.getId()))).contains("（共 5 条）");
-        assertThat(page(viewer(), "ownerId", String.valueOf(owner.getId()), "channel", "PAWCOIN")).contains("（共 1 条）");
+        assertThat(page(viewer(), "senderId", String.valueOf(sender.getId()))).contains("共 5 条");
+        assertThat(page(viewer(), "ownerId", String.valueOf(owner.getId()), "channel", "PAWCOIN")).contains("共 1 条");
         assertThat(page(viewer(), "ownerId", String.valueOf(owner.getId()), "channel", "bogus"))
-                .as("不认识的渠道 = 不限").contains("（共 6 条）");
+                .as("不认识的渠道 = 不限").contains("共 6 条");
         assertThat(page(viewer(), "ownerId", String.valueOf(owner.getId()), "from", "2026-10-16", "to", "2026-10-16"))
-                .as("止日含当天（WIB）").contains("（共 6 条）");
+                .as("止日含当天（WIB）").contains("共 6 条");
         assertThat(page(viewer(), "ownerId", String.valueOf(owner.getId()), "from", "2026-10-17"))
                 .as("M3 无结果").contains("暂无符合筛选条件的送礼记录").contains("🎁");
     }

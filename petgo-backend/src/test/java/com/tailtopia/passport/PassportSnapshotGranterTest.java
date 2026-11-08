@@ -77,7 +77,7 @@ class PassportSnapshotGranterTest {
                 .onUnlocked(new KeepsakeUnlockedEvent(7L, KeepsakeSku.PASSPORT_SNAP, 5L, 2000L, PayChannel.QRIS));
         ArgumentCaptor<Map> p = ArgumentCaptor.forClass(Map.class);
         verify(analytics).capture(anyString(), eq("passport_snapshot_unlocked"), p.capture());
-        assertThat(p.getValue()).isEqualTo(Map.of("stamp_count", 3, "price", 2000L));
+        assertThat(p.getValue()).isEqualTo(Map.of("stamp_count", 3));
         AnalyticsEventGuard guard = new AnalyticsEventGuard();
         assertThat(guard.allowsEvent("passport_snapshot_unlocked")).isTrue();
         assertThat(guard.filterProperties(p.getValue())).isEqualTo(p.getValue());

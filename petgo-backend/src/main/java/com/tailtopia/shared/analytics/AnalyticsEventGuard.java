@@ -88,13 +88,12 @@ public class AnalyticsEventGuard {
             "outcome",                          // pet_card_cta_outcome
             "open_method",                      // post_share_link_opened
             // ---- Story 1-2 新增 4 个：支付漏斗维度，全是枚举与数值，无一条可反推到人 ----
-            "order_amount",                     // long，订单总额
+            // V1.4.2：order_amount / price 已移出白名单 —— 金额一律不进 PostHog（2026-11-08 拍板）。
             "failure_category",                 // PaymentFailureCategory 名
             "pay_channel",                      // PayChannel 名
             "has_pawcoin",                      // boolean
             // ---- 2026-09-25 KTP 付费漏斗：与 App 端同名键，跨端漏斗才拼得起来 ----
             "method",                           // PayChannel 名（PAWCOIN / QRIS）
-            "price_idr",                        // long，成交价
             "failure_reason",                   // PaymentFailureCategory 名
             // ---- V1.3.2 Story 1.2：场所打卡 / 护照。🛡 不带宠物名 / 护照号 / 坐标 ----
             "place_id",                         // 值 = 场所 **token**（不是自增 id），与 App 端同名键
@@ -104,7 +103,6 @@ public class AnalyticsEventGuard {
             "stamp_count",                      // int，已集章数（无分母）
             // ---- V1.3.2 Story 3.2：Tailsonality 解锁。🛡 不带宠物名 / 品种 / token ----
             "role_code",                        // 完整代号，如 ENTJ-H
-            "price",                            // long，成交价
             "result_index",                     // int，该宠物第几次测试
             // ---- V1.3.4 ktp Story 1.8：ktp_unlock_succeeded 补卡种。值为枚举名，🛡 不带卡号 / 宠物名 ----
             "card_type",                        // KTP / PASSPORT / KITAS / SIM / STUDENT

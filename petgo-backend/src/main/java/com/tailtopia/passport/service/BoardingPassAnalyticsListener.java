@@ -47,7 +47,7 @@ public class BoardingPassAnalyticsListener {
             if (!type.isEmpty() && type.get(0) != null) {
                 p.put("place_type", type.get(0));
             }
-            p.put("price", e.priceIdr());
+            // V1.4.2：金额不再进 PostHog（2026-11-08 拍板，事件保留只去金额）。
             analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_UNLOCKED, p);
         } catch (RuntimeException ex) {
             log.warn("boarding pass analytics skipped refId={}", e.refId(), ex);

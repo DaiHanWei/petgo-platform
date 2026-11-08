@@ -87,15 +87,10 @@
         <p th:text="#{admin.content.empty}">无匹配内容。</p>
     </div>
 
-    <div class="pager" th:if="${!#lists.isEmpty(items)}" th:attr="data-page=${page}">
-        <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#content-rows" hx-swap="innerHTML" hx-push-url="true"
-           th:attr="hx-get=@{/admin/content(type=${type},authorId=${authorId},from=${from},to=${to},status=${status},q=${q},sort=${sort},species=${species},speciesSource=${speciesSource},dateBasis=${dateBasis},page=${page - 1})}"
-           th:text="#{admin.audit.prev}">← 上一页</a>
-        <span th:text="#{admin.v130.content.pager.page(${page + 1})}">第 1 页</span>
-        <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#content-rows" hx-swap="innerHTML" hx-push-url="true"
-           th:attr="hx-get=@{/admin/content(type=${type},authorId=${authorId},from=${from},to=${to},status=${status},q=${q},sort=${sort},species=${species},speciesSource=${speciesSource},dateBasis=${dateBasis},page=${page + 1})}"
-           th:text="#{admin.audit.next}">下一页 →</a>
-    </div>
+    <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页），翻页带全部筛选条件。 */-->
+    <th:block th:if="${!#lists.isEmpty(items)}" th:with="tpl=@{/admin/content(type=${type},authorId=${authorId},from=${from},to=${to},status=${status},q=${q},sort=${sort},species=${species},speciesSource=${speciesSource},dateBasis=${dateBasis},page='~PAGE~')}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target='#content-rows')}"></div>
+    </th:block>
 </th:block>
 
 <!--/* 单行（rows 循环体；抽屉里处置成功后以 oob=true 原位替换）。置于 rows 之外 → 整页渲染不会输出为游离行 */-->
