@@ -359,11 +359,17 @@ class TopicApiIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
 
         String stem = uniq("sg");
-        topic(stem + "_lucu", "USER", "ACTIVE", null, null, 5, null);
-        topic(stem + "xlucu", "USER", "ACTIVE", null, null, 9, null); // `_` 若当通配会命中它
-        topic(stem + "_resmi", "OFFICIAL", "ACTIVE", null, null, 0, null);
-        topic(stem + "_hidden", "USER", "HIDDEN", null, null, 99, null);
-        topic(stem + "_disabled", "USER", "DISABLED", null, null, 99, null);
+        long author = newUser().getId();
+        // 用户话题须挂着一条可见帖才进联想（ocr 审查 M3），这里各挂一条已发布帖
+        post(author, topic(stem + "_lucu", "USER", "ACTIVE", null, null, 5, null), "a");
+        post(author, topic(stem + "xlucu", "USER", "ACTIVE", null, null, 9, null), "b"); // `_` 若当通配会命中它
+        topic(stem + "_resmi", "OFFICIAL", "ACTIVE", null, null, 0, null); // 官方话题不受可见帖门槛限制
+        post(author, topic(stem + "_hidden", "USER", "HIDDEN", null, null, 99, null), "c");
+        post(author, topic(stem + "_disabled", "USER", "DISABLED", null, null, 99, null), "d");
+        // 🔴 只挂着审核中帖子的新话题：审核前不得出现在联想里
+        ContentPost review = post(author, topic(stem + "_ditinjau", "USER", "ACTIVE", null, null, 50, null), "e");
+        jdbc.update("UPDATE content_posts SET status = 'UNDER_REVIEW' WHERE id = ?", review.getId());
+        topic(stem + "_kosong", "USER", "ACTIVE", null, null, 60, null); // 一条帖子都没有
         long viewer = newUser().getId();
 
         JsonNode r = getOk(get("/api/v1/topic-suggestions").param("q", stem.toUpperCase() + "_")
@@ -380,7 +386,8 @@ class TopicApiIntegrationTest extends ApiIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, userBearer(viewer)))).isEmpty();
         JsonNode top = getOk(get("/api/v1/topic-suggestions").header(HttpHeaders.AUTHORIZATION, userBearer(viewer)));
         assertThat(top.size()).isLessThanOrEqualTo(20);
-        assertThat(names(top)).doesNotContain(stem + "_hidden", stem + "_disabled");
+        assertThat(names(top)).doesNotContain(stem + "_hidden", stem + "_disabled", stem + "_ditinjau",
+                stem + "_kosong");
     }
 
     // ---------------------------------------------------------------- AC4 首页话题行 / AC5 推荐

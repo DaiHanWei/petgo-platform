@@ -82,6 +82,22 @@ class ShopOrderPaymentWindowTest {
     }
 
     @Test
+    @DisplayName("🔴 ocr L1：pay() 判可付后、建意图前订单被取消 → ensureIntent 事务内复核 409，不建意图不出码")
+    void ensureIntentRechecksStatusInsideTx() {
+        ShopOrder snapshot = order(7L, 5);
+        ShopOrder cancelled = ShopPaymentTestRig.createdAt(
+                ShopOrderTestOrders.newModeOrder(7L, UID, 0L, CheckoutSource.CART), snapshot.getCreatedAt());
+        cancelled.markCancelled(com.tailtopia.shop.order.refund.CancelReason.USER_UNPAID_CANCEL, Instant.now());
+        when(rig.orders.findById(7L)).thenReturn(Optional.of(cancelled));
+        stubNewIntent("pi-7");
+
+        assertThatThrownBy(() -> service.pay(UID, "tok7", null))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(409));
+        verify(rig.intents, never()).createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString(), any());
+        verify(rig.gateway, never()).createCharge(any());
+    }
+
+    @Test
     @DisplayName("🔴 S-7：订单窗已过（宽限期）→ 409 shop-order-not-payable「订单已超过付款时间」，不出码")
     void payRejectsAfterOrderWindow() {
         order(2L, 61);

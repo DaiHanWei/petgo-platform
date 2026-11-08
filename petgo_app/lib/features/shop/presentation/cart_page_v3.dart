@@ -133,12 +133,19 @@ class _CartPageV3State extends ConsumerState<CartPageV3> {
   void _offerUndo(
       {required String skuToken, required int qty, required String name}) {
     final l10n = AppLocalizations.of(context);
-    showAppToast(
-      context,
+    // 🔴 撤销条挂在根 Overlay 上、会比本页多活 5 秒：用户删完立刻返回，再点「撤销」时
+    //    本 State 已销毁，`ref` 不能再用（riverpod 3 抛 StateError，加回请求根本没发）。
+    //    所以容器与 overlay 都在这里先取好，撤销走它们，不依赖页面还活着。
+    final container = ProviderScope.containerOf(context, listen: false);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+    showAppToastOnOverlay(
+      overlay,
       l10n.cartRemovedUndo(name),
       duration: const Duration(seconds: 5),
       actionLabel: l10n.cartUndo,
-      onAction: () => _undoRemove(l10n, skuToken: skuToken, qty: qty),
+      onAction: () => _undoRemove(container, overlay, l10n,
+          skuToken: skuToken, qty: qty),
     );
   }
 
@@ -156,15 +163,16 @@ class _CartPageV3State extends ConsumerState<CartPageV3> {
   /// 而 toast 在调 onAction 前就自我收起了（app_toast 里那句 `_dismiss()`），
   /// 连点两次也不可能。原实现在这里 `setState(() => _busy = true)`，
   /// 正是 2026-09-03 那条「撤销点了没反应」的根因 —— 见 [_offerUndo]。
-  Future<void> _undoRemove(AppLocalizations l10n,
+  static Future<void> _undoRemove(ProviderContainer container,
+      OverlayState overlay, AppLocalizations l10n,
       {required String skuToken, required int qty}) async {
     try {
-      await ref
+      await container
           .read(cartProvider.notifier)
           .add(skuToken, qty: qty, entrySource: 'CART_UNDO');
     } on CartMutationError catch (e) {
-      if (mounted) {
-        showAppToast(context,
+      if (overlay.mounted) {
+        showAppToastOnOverlay(overlay,
             e == CartMutationError.stock ? l10n.cartStockError : l10n.cartGenericError);
       }
     }

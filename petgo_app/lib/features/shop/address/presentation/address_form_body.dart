@@ -80,6 +80,11 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
   bool _saving = false;
   String? _submitError;
 
+  /// 新增模式下「创建」已成功的那条地址 token（ocr 审查 L2）。
+  /// 创建与「设为默认」是两次请求：后者失败时整体按失败提示，用户再点保存
+  /// 必须改走 update 这条，而不是再 create 一条重复地址。
+  String? _createdToken;
+
   /// 字段 key → 错误文案。null / 缺失 = 该字段无错。
   final Map<String, String?> _errors = {};
 
@@ -556,7 +561,7 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
     try {
       final phone = normalizeIdPhone(_phone.text)!;
       final a = ShippingAddress(
-        token: widget.editToken ?? '',
+        token: widget.editToken ?? _createdToken ?? '',
         receiverName: _receiver.text.trim(),
         receiverPhone: phone,
         provinsi: _provinsi!,
@@ -568,9 +573,10 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
         isDefault: false,
       );
       final repo = ref.read(addressRepositoryProvider);
-      final saved = widget.editToken == null
-          ? await repo.create(a)
-          : await repo.update(widget.editToken!, a);
+      final existing = widget.editToken ?? _createdToken;
+      final saved =
+          existing == null ? await repo.create(a) : await repo.update(existing, a);
+      if (widget.editToken == null) _createdToken = saved.token;
       // 默认地址是独立的一次调用（后端保证「默认唯一」）。
       // 首个地址由后端强制为默认，端上不再重复设置。
       if (_makeDefault && !saved.isDefault) {
@@ -580,12 +586,14 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
       // 宿主决定保存后去哪（地址簿页 pop；结算页 D5 回填本单并重新试算）。
       if (mounted) widget.onSaved(saved);
     } catch (_) {
+      // 抽屉在保存途中被关掉（结算页新增地址抽屉可下拉关闭）→ State 已销毁。
+      if (!mounted) return;
       // 🔒 错误提示**不回显用户输入**（含 PII）。
       setState(() => _submitError = l10n.addressSaveFailed);
       // 🔴 D-17：光设上文案不够 —— 这块提示画在表单**顶部**，而用户是在**底部**
       //    点的保存，不滚过去就是「页面纹丝不动」。本轮测试第三次撞见同一形态
       //    （D-8 上传 403 静默、D-12 退货提交无提示），是全局性的反馈缺失。
-      if (mounted) _scrollToSubmitError();
+      _scrollToSubmitError();
     } finally {
       if (mounted) setState(() => _saving = false);
     }
