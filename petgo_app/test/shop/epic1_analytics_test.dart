@@ -5,13 +5,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
-import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
-import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
-import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/product_detail_page_v3.dart';
+import 'package:tailtopia/features/shop/presentation/toko_page_v3.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'fake_shop_products.dart';
+import 'pdp_fakes.dart';
 
 /// Story 1.8：Epic 1 埋点收口。
 ///
@@ -55,10 +55,10 @@ void main() {
 
   testWidgets('Toko 页：toko_tab_viewed + toko_product_shown(zone)', (t) async {
     await t.pumpWidget(wrap(
-      const TokoPageV2(),
+      const TokoPageV3(),
       [
-        // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
-        shopBannerProvider.overrideWith((ref) async => null),
+        // banner / 券 / top 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
+        ...tokoHomeOverrides(),
         fakeShopProducts(const [
           ShopProductSummary(token: 'tok1', name: 'n', brand: 'b', minPrice: 285000),
         ]),
@@ -74,13 +74,13 @@ void main() {
 
   testWidgets('详情页：toko_product_detail_viewed', (t) async {
     await t.pumpWidget(wrap(
-      const ProductDetailPageV2(token: 'tok1'),
-      [
-        shopProductDetailProvider.overrideWith((ref, token) async => ShopProductDetail(
-              token: 'tok1', name: 'n', brand: 'b',
-              returnPolicy: ReturnPolicy.returnable, skus: [sku('3 kg')],
-            )),
-      ],
+      const ProductDetailPageV3(token: 'tok1'),
+      pdpOverrides(
+        detail: ShopProductDetail(
+          token: 'tok1', name: 'n', brand: 'b',
+          returnPolicy: ReturnPolicy.returnable, skus: [sku('3 kg')],
+        ),
+      ),
     ));
     await t.pumpAndSettle();
 
@@ -96,14 +96,14 @@ void main() {
     });
 
     await t.pumpWidget(wrap(
-      const ProductDetailPageV2(token: 'tok1'),
-      [
-        shopProductDetailProvider.overrideWith((ref, token) async => ShopProductDetail(
-              token: 'tok1', name: 'n', brand: 'b',
-              returnPolicy: ReturnPolicy.returnable,
-              skus: [sku('3 kg', stock: StockStatus.outOfStock)],
-            )),
-      ],
+      const ProductDetailPageV3(token: 'tok1'),
+      pdpOverrides(
+        detail: ShopProductDetail(
+          token: 'tok1', name: 'n', brand: 'b',
+          returnPolicy: ReturnPolicy.returnable,
+          skus: [sku('3 kg', stock: StockStatus.outOfStock)],
+        ),
+      ),
     ));
     await t.pumpAndSettle();
 
@@ -161,6 +161,7 @@ void main() {
       //   mixed / unknown …），与个人无关
       // V1.4.0 第 3 批新增一项，已逐个确认：
       // - card_source：复购触发卡出现在哪个界面（`diary` / `home`），受控词表两值。
+      //   ⚠️ v1.4.2 shop Story 9.4：随复购卡（FR-136）删除，已从下方白名单移除。
       //   设计文档要求区分这两处的转化率（记录里的卡 vs 商城里的卡效果差很多），
       //   与个人无关。⚠️ 名字**刻意不叫 `source`**：那个词太泛，看板上分不清
       //   它说的是「卡片在哪」还是「用户从哪来」（后者是 entry_source）。
@@ -168,12 +169,41 @@ void main() {
       // - banner_id：banner 的不可枚举 token（后台配置的运营素材），与个人无关
       // - position：第几张（本版恒 1，不做轮播），整数
       // - target_type：受控词表 product_detail / category_list / external_link，与个人无关
+      // v1.4.2 shop Story 7.1（一页结算，PRD §4 / D-23）新增六项，已逐个确认：
+      // - entry：toko_checkout_page_viewed 的入口，受控词表 cart / buy_now
+      // - coupon_ids：本单实际使用的券**模板** token 列表（不可枚举，运营配置的券，非用户券），与个人无关
+      // - coin_used：bool（本单是否用了 PawCoin）
+      // - courier：受控词表 `<courierCode>_<serviceCode>` 小写（如 jne_reg），与个人无关
+      // - shipping_fee：所选快递运费整数（运费随地址变化，但只是一个区间金额，不可反推地址）
+      // - insurance：bool（是否保价）
+      // v1.4.2 shop Story 8.1（领券 / 新人弹窗，PRD §4 定死属性名）新增三项，已逐个确认：
+      // - coupon_id：券**模板** token（不可枚举，运营配置的券，非用户券 token），与个人无关
+      // - source：toko_coupon_claimed 的领券入口，受控词表 home / banner / newbie（PRD §4 定名，非自由文本）
+      // - action：toko_newbie_coupon_popup_tapped 的动作，受控词表 register / close
+      // （同批：banner position 改为实际轮播位次，target_type 词表改为 product_detail / coupon / toko_home /
+      //   external_link / none —— 键名不变。）
+      // v1.4.2 shop Story 8.2（商品详情，PRD §4）新增一项，已逐个确认：
+      // - serviceable：toko_delivery_area_selected 的 bool（所选地区能否配送）；🔒 刻意不带地区名 / 邮编 / 区域 id。
+      //   （toko_coupon_claimed 的 source 新增取值 detail，键名不变。）
+      // v1.4.2 shop Story 9.1（订单详情配送异常，PRD §4 定死属性名）新增一项，已逐个确认：
+      // - exception_type：toko_delivery_exception_shown / _cs_tapped 的异常类型，受控词表
+      //   returned / lost / damaged / unknown（C-6），与个人无关；🔒 刻意不带运单号 / 订单号。
+      // v1.4.2 shop Story 9.2（退款方式页，沿用 toko_refund_method_viewed / _submitted，AC4.4）新增四项，已逐个确认：
+      // - reason：小写 CancelReason 受控词表（out_of_stock / late_payment …），与个人无关
+      // - is_retry：bool（F25 打款失败后重填进入）
+      // - destination：受控词表 to_pawcoin / to_bank
+      // - channel：受控词表 bca / ovo / gopay（打款渠道，非账号）；🔒 刻意不带账号 / 末 4 位 / 户名。
       expect(props, {
+        'reason', 'is_retry', 'destination', 'channel',
+        'exception_type',
+        'serviceable',
+        'coupon_id', 'source', 'action',
         'product_token', 'sku_token', 'zone', 'pay_channel', 'item_count',
         'trigger_type', 'product_id',
         'items', 'sku_id', 'qty', 'entry_source', 'attribution_source',
-        'card_source',
+        // v1.4.2 shop Story 9.4（FR-136）：card_source 随 Diary 复购触发卡删除，已不再上报 → 移出白名单。
         'banner_id', 'position', 'target_type',
+        'entry', 'coupon_ids', 'coin_used', 'courier', 'shipping_fee', 'insurance',
       });
     });
 

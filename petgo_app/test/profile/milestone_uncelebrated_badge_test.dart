@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
@@ -78,7 +79,8 @@ void main() {
       Analytics.debugCaptureSink = (e, p) => seen.add(MapEntry(e, p));
       addTearDown(() => Analytics.debugCaptureSink = null);
 
-      await tester.pumpWidget(MaterialApp(
+      // V1.4.2 Story 3.2：庆祝页弹出时取 ProviderContainer（D-21）→ 宿主需在 ProviderScope 下。
+      await tester.pumpWidget(ProviderScope(child: MaterialApp(
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
@@ -105,7 +107,7 @@ void main() {
             ),
           ),
         ),
-      ));
+      )));
       await tester.tap(find.text('go'));
       await tester.pump();
 

@@ -172,4 +172,41 @@ class NotificationServiceOpsTest {
             TransactionSynchronizationManager.clearSynchronization();
         }
     }
+
+    // ===== V1.4.2 Story 7.1 · AB-37 逐人替换 =====
+
+    @Test
+    void variablesRenderedPerRecipientWithLocaleFallback() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.increment(org.mockito.ArgumentMatchers.anyString())).thenReturn(5L);
+        OpsNotificationCampaign c = OpsNotificationCampaign.create("campTok22charsAbcdefgh",
+                "Halo {{nickname}}!", "Hi {{nickname}}!", "{{petName}} rindu kamu, {{nickname}}",
+                "{{petName}} misses you, {{nickname}}", OpsTargetType.NONE, null, AudienceSpec.all().toJson(),
+                null, 1L);
+
+        List<Notification> saved = service().writeOpsAnnouncements(c, List.of(
+                new OpsRecipient(1L, "en", "hex", "tuotuo"),
+                new OpsRecipient(2L, "id", "yenny", "huahua"),
+                new OpsRecipient(3L, "id", null, "mimi"),
+                new OpsRecipient(4L, "en", null, "bobo")));
+
+        assertThat(saved).extracting(Notification::getTitle)
+                .containsExactly("Hi hex!", "Halo yenny!", "Halo Sobat!", "Hi there!");
+        assertThat(saved).extracting(Notification::getBody).containsExactly(
+                "tuotuo misses you, hex", "huahua rindu kamu, yenny", "mimi rindu kamu, Sobat",
+                "bobo misses you, there");
+        verifyNoInteractions(pusher, messageSource);
+    }
+
+    @Test
+    void campaignWithoutTokensIsWrittenVerbatim() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.increment(org.mockito.ArgumentMatchers.anyString())).thenReturn(5L);
+        List<Notification> saved = service().writeOpsAnnouncements(campaign(), List.of(
+                new OpsRecipient(1L, "en", "hex", "tuotuo"), new OpsRecipient(2L, "id", "yenny", null)));
+        assertThat(saved).extracting(Notification::getTitle).containsExactly("Weekend promo", "Promo akhir pekan");
+        assertThat(saved).extracting(Notification::getBody).containsExactly("Body EN", "Isi ID");
+    }
 }

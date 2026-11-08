@@ -2,6 +2,7 @@ package com.tailtopia.admin.pin.web;
 
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.pin.service.AdminContentPinService;
+import com.tailtopia.admin.topic.service.TopicView;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
 import com.tailtopia.admin.shared.web.AdminHxEvents;
@@ -41,6 +42,11 @@ public class AdminContentPinController {
     static final String VIEW = "hasRole('SUPER_ADMIN') or hasAuthority('" + AdminPermissions.CONTENT_PIN_VIEW + "')";
     static final String MANAGE = "hasRole('SUPER_ADMIN') or hasAuthority('" + AdminPermissions.CONTENT_PIN_MANAGE + "')";
 
+    /** 首页 Feed 列表（G1 页签一）。 */
+    static final String FEED_URL = "/admin/content-pins";
+    /** 话题页页签（G1a）。 */
+    static final String TOPICS_URL = "/admin/content-pins/topics";
+
     /** 运营填的墙上时间按这个时区解释（AD-9 Rule 4）。 */
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
 
@@ -78,6 +84,8 @@ public class AdminContentPinController {
         //    无 CHECK 约束，将来新增坑位只需多一个取值，不改结构（AD-8 Rule 5）。
         model.addAttribute("slots", java.util.List.of(ContentPin.SLOT_HOME_FEED));
         populate(s, status, page, model);
+        // V1.4.2 Story 6.2：pins-list 的分页 / 刷新路径参数化（Feed = 本页，渲染结果不变）。
+        model.addAttribute("listUrl", FEED_URL);
         model.addAttribute("open", open);
         // ?create=1 深链（无 htmx 时直达新建表单 URL 的落点）：整页渲染后自动展开新建抽屉。
         model.addAttribute("openCreate", create != null);
@@ -90,7 +98,7 @@ public class AdminContentPinController {
     @PreAuthorize(VIEW)
     public String drawer(@PathVariable long id, HxRequest hx, Model model) {
         if (!hx.isHtmx()) {
-            return "redirect:/admin/content-pins?open=" + id;
+            return "redirect:" + listUrlOfPin(id) + "?open=" + id;
         }
         model.addAttribute("active", "content-pins");
         model.addAttribute("d", service.detail(id, Instant.now()));
@@ -104,21 +112,98 @@ public class AdminContentPinController {
     @GetMapping("/admin/content-pins/new/drawer")
     @PreAuthorize(MANAGE)
     public String newDrawer(@RequestParam(value = "slot", required = false) String slot,
+            @RequestParam(value = "topicId", required = false) Long topicId,
+            @RequestParam(value = "from", required = false) String from,
             HxRequest hx, Model model) {
         String s = (slot == null || slot.isBlank()) ? ContentPin.SLOT_HOME_FEED : slot;
+        // V1.4.2 Story 6.2（AC4.1 / AC5）：话题页坑位 —— 话题须存在且未禁用，否则 422。
+        boolean topicPage = AdminContentPinService.SLOT_PARAM_TOPIC_PAGE.equals(s);
+        TopicView topic = null;
+        if (topicPage) {
+            service.resolveSlot(s, topicId);
+            topic = service.requirePinnableTopic(topicId);
+        }
         if (!hx.isHtmx()) {
+            if (topicPage) {
+                return "redirect:" + topicUrl(topic.id()) + "?create=1";
+            }
             return "redirect:/admin/content-pins?create=1&slot="
                     + java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
         }
         model.addAttribute("active", "content-pins");
         model.addAttribute("slot", s);
         // 首屏候选：与原页尾表单一样，进来就有一批可选内容（不必先搜一次）。
-        var first = service.pickable(null, 0);
+        Long tid = topic == null ? null : topic.id();
+        var first = tid == null ? service.pickable(null, 0) : service.pickable(null, 0, tid);
         model.addAttribute("candidates", first);
         model.addAttribute("hasMore", first.size() >= com.tailtopia.admin.pin.service.PinnableContentPicker.PAGE_SIZE);
         model.addAttribute("q", null);
         model.addAttribute("page", 0);
+        if (topic != null) {
+            model.addAttribute("topic", topic);
+            model.addAttribute("topicId", tid);
+            // from=topic：表单在话题抽屉里打开（AC8.3）—— 才显示「← 返回话题详情」、成功才回话题抽屉。
+            model.addAttribute("from", FROM_TOPIC.equals(from) ? FROM_TOPIC : null);
+        }
         return "admin/fragments/drawer-content-pin :: createForm";
+    }
+
+    /** {@code from} 取值：新建表单开在话题抽屉里（AC8.3 / AC8.4）。 */
+    static final String FROM_TOPIC = "topic";
+
+    // ================================================================ 话题页（V1.4.2 Story 6.2 · G1a / G1b）
+
+    /** G1a：话题列表（只列 ACTIVE / HIDDEN，AC2 / AC5）。 */
+    @GetMapping(TOPICS_URL)
+    @PreAuthorize(VIEW)
+    public String topics(@RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+            HxRequest hx, Model model) {
+        var found = service.topicRows(q, page, Instant.now());
+        model.addAttribute("active", "content-pins");
+        model.addAttribute("tab", "topics");
+        model.addAttribute("topicRows", found.rows());
+        model.addAttribute("page", found.page());
+        model.addAttribute("hasNext", found.hasNext());
+        model.addAttribute("q", q == null ? "" : q.strip());
+        return hx.isHtmx() ? "admin/fragments/pin-topics-list :: rows(oob=true)" : "admin/content-pins-topics";
+    }
+
+    /** G1b：某话题的排期页（AC3）；话题 DISABLED / 不存在 → 404。 */
+    @GetMapping(TOPICS_URL + "/{topicId}")
+    @PreAuthorize(VIEW)
+    public String topic(@PathVariable long topicId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(value = "open", required = false) Long open,
+            @RequestParam(value = "create", required = false) String create,
+            HxRequest hx, Model model) {
+        TopicView topic = service.requirePinnableTopic(topicId);
+        String slot = ContentPin.topicSlot(topic.id());
+        model.addAttribute("active", "content-pins");
+        model.addAttribute("topic", topic);
+        model.addAttribute("topicId", topic.id());
+        model.addAttribute("slot", slot);
+        model.addAttribute("listUrl", topicUrl(topic.id()));
+        populate(slot, status, page, model);
+        model.addAttribute("open", open);
+        model.addAttribute("openCreate", create != null);
+        return hx.isHtmx() ? "admin/fragments/pins-list :: rows(oob=true)" : "admin/content-pins-topic";
+    }
+
+    private static String topicUrl(long topicId) {
+        return TOPICS_URL + "/" + topicId;
+    }
+
+    /**
+     * 排期所在列表页：话题坑位 → G1b；话题已禁用 / 不存在（G1b 会 404）→ G1a 话题列表（复审 c）；其余 → Feed 列表。
+     */
+    String listUrlOfPin(long pinId) {
+        Long tid = service.topicIdOfPin(pinId);
+        if (tid == null) {
+            return FEED_URL;
+        }
+        return service.pinnableTopic(tid).isPresent() ? topicUrl(tid) : TOPICS_URL;
     }
 
     private void populate(String slot, String status, int page, Model model) {
@@ -147,8 +232,14 @@ public class AdminContentPinController {
     @GetMapping("/admin/content-pins/pick")
     @PreAuthorize(VIEW)
     public String pick(@RequestParam(value = "q", required = false) String q,
-            @RequestParam(value = "page", defaultValue = "0") int page, Model model) {
-        var rows = service.pickable(q, page);
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "topicId", required = false) Long topicId, Model model) {
+        // V1.4.2 Story 6.2（AC4.2）：带 topicId 时只列该话题下的帖子；话题不存在 / 已禁用 → 404（AC5）。
+        if (topicId != null) {
+            service.requirePinnableTopic(topicId);
+        }
+        var rows = topicId == null ? service.pickable(q, page) : service.pickable(q, page, topicId);
+        model.addAttribute("topicId", topicId);
         model.addAttribute("candidates", rows);
         // 满页 = 可能还有下一页（bug 20260924-562：此前没有翻页控件，永远只能看到前 20 条）
         model.addAttribute("hasMore", rows.size() >= com.tailtopia.admin.pin.service.PinnableContentPicker.PAGE_SIZE);
@@ -161,6 +252,8 @@ public class AdminContentPinController {
     @PreAuthorize(MANAGE)
     public String create(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam String slot,
+            @RequestParam(required = false) Long topicId,
+            @RequestParam(value = "from", required = false) String origin,
             @RequestParam String objectType,
             @RequestParam(required = false) Long contentId,
             @RequestParam(required = false) String promoImageUrl,
@@ -176,12 +269,14 @@ public class AdminContentPinController {
         //（新行不能用 oob 插：页面上还没有这一行，oob 会被直接丢掉）；
         // 失败（重叠 / 缺必填 / 时间窗非法）不在这里 catch，交给 AdminBusinessExceptionAdvice 出 422 行内 err。
         if (hx.isHtmx()) {
+            // V1.4.2 Story 6.2（AC4.3）：坑位白名单 + 服务端拼话题坑位（不收客户端直传的 TOPIC:…）。
+            String target = service.resolveSlot(slot, topicId);
             Instant hFrom = toInstant(startsAt);
             Instant hTo = toInstant(endsAt);
             long id;
             if ("PROMO".equals(objectType)) {
                 var up = uploadPromo(promoImageFile, promoImageUrl);
-                id = service.createPromoPin(admin.getAdminAccountId(), slot, up.url(),
+                id = service.createPromoPin(admin.getAdminAccountId(), target, up.url(),
                         blankToNull(promoTitle), blankToNull(promoLinkUrl), hFrom, hTo);
                 if (up.warning() != null) {
                     model.addAttribute("warn", up.warning());
@@ -191,11 +286,30 @@ public class AdminContentPinController {
                     throw AppException.validation("请选择要顶置的内容")
                             .code("admin.err.pins.contentRequired");
                 }
-                id = service.createContentPin(admin.getAdminAccountId(), slot, contentId, hFrom, hTo);
+                id = service.createContentPin(admin.getAdminAccountId(), target, contentId, hFrom, hTo);
+            }
+            Long tid = AdminContentPinService.topicIdOf(target);
+            if (tid != null && FROM_TOPIC.equals(origin)) {
+                // AC8.4：表单开在话题抽屉里 —— 页面上没有 pin 抽屉（afterAction 的 oob 目标不存在），
+                // 只回 toast + 清空错误槽，由 admin:drawer-open 把同一个 480px 抽屉切回话题详情（区块随之刷新）。
+                // 复审：推广卡图片比例预警（model 的 warn）在话题抽屉里没有 pin 详情抽屉可显示 → 拼进 toast，不吞
+                //（两条 toast 同为 fixed 定位会叠在一起，故拼成一句）。
+                Object warn = model.getAttribute("warn");
+                String saved = msg.get("admin.flash.pins.saved");
+                model.addAttribute("toast", warn == null ? saved : saved + " " + warn);
+                AdminFragmentResponses.triggerWithPayload(response, AdminHxEvents.DRAWER_OPEN,
+                        "{\"url\":\"/admin/topics/" + tid + "/drawer\",\"res\":\"topic\"}");
+                return "admin/fragments/drawer-content-pin :: createdInTopic";
             }
             return afterAction(id, msg.get("admin.flash.pins.saved"), model, response);
         }
+        String back = FEED_URL + "?slot=" + slot;
         try {
+            String target = service.resolveSlot(slot, topicId);
+            Long tid = AdminContentPinService.topicIdOf(target);
+            if (tid != null) {
+                back = topicUrl(tid);
+            }
             Instant from = toInstant(startsAt);
             Instant to = toInstant(endsAt);
             if ("PROMO".equals(objectType)) {
@@ -207,7 +321,7 @@ public class AdminContentPinController {
                     imageUrl = uploaded.url();
                     cropWarning = uploaded.warning();
                 }
-                service.createPromoPin(admin.getAdminAccountId(), slot,
+                service.createPromoPin(admin.getAdminAccountId(), target,
                         imageUrl, blankToNull(promoTitle),
                         blankToNull(promoLinkUrl), from, to);
                 // 🛡 比例超出 0.75–1.78 → 保存成功但明说会被裁多少（只提醒，不拦）。
@@ -219,14 +333,14 @@ public class AdminContentPinController {
                     throw AppException.validation("请选择要顶置的内容")
                             .code("admin.err.pins.contentRequired");
                 }
-                service.createContentPin(admin.getAdminAccountId(), slot, contentId, from, to);
+                service.createContentPin(admin.getAdminAccountId(), target, contentId, from, to);
             }
             flash.addFlashAttribute("notice", msg.get("admin.flash.pins.saved"));
         } catch (AppException e) {
             // 重叠 / 缺必填 / 时间窗非法都收在这里回显一句人话，不抛 500。
             flash.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/content-pins?slot=" + slot;
+        return "redirect:" + back;
     }
 
     @PostMapping("/admin/content-pins/{id}/edit")
@@ -245,7 +359,7 @@ public class AdminContentPinController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/content-pins";
+        return "redirect:" + listUrlOfPin(id);
     }
 
     @PostMapping("/admin/content-pins/{id}/terminate")
@@ -265,7 +379,7 @@ public class AdminContentPinController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/content-pins";
+        return "redirect:" + listUrlOfPin(id);
     }
 
     /** 推广卡片图：本地上传与 URL 二选一，都给时以上传为准（与整页路径同一份逻辑）。 */

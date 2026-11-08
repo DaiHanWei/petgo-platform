@@ -62,6 +62,14 @@ public final class GrowthIdemKeys {
         return "MILESTONE:" + userId + ":" + code + ":" + (petId == null ? 0L : petId);
     }
 
+    /**
+     * 账号级里程碑（V1.4.2 Story 2.1 · P-7）：按账号 + flag 一次，与宠物数无关。
+     * 格式 {@code MILESTONE_ACCT:{userId}:{flagKey}}（定死，存量补算 2.2 复用同一键防重复给分）。
+     */
+    public static String milestoneAccount(long userId, String flagKey) {
+        return "MILESTONE_ACCT:" + userId + ":" + flagKey;
+    }
+
     public static String giftSent(long giftOrderId) {
         return "GIFT_SENT:" + giftOrderId;
     }
@@ -85,6 +93,11 @@ public final class GrowthIdemKeys {
         return spendCoin("vet-consult-order:" + consultOrderId);
     }
 
+    /** 问诊订单的消费入账键：有支付意图走 {@link #spendIntent}，纯币走 {@link #spendConsultCoin}（V1.4.2 exp-reverse AD-2）。 */
+    public static String consultSpend(long consultOrderId, Long paymentIntentId) {
+        return paymentIntentId != null ? spendIntent(paymentIntentId) : spendConsultCoin(consultOrderId);
+    }
+
     /** 电商订单（Story 1.3，QRIS / MIXED / 纯币都只经此处）：{@code SPEND:SHOP:{shopOrderId}}。 */
     public static String spendShop(long shopOrderId) {
         return "SPEND:SHOP:" + shopOrderId;
@@ -93,6 +106,14 @@ public final class GrowthIdemKeys {
     /** 上线存量补算（Story 2.2；迁移 V20261018_1503 里以 SQL 写同一格式）：{@code BACKFILL:{u}}。 */
     public static String backfill(long userId) {
         return "BACKFILL:" + userId;
+    }
+
+    /**
+     * 账号级里程碑存量补算（V1.4.2 Story 2.2 · P-7；迁移 V20261104_2040 里以 SQL 写同一格式）：
+     * {@code BACKFILL142:{u}:{flagKey}}，按（账号, flag）一次。前缀与 {@link #backfill} 的 {@code BACKFILL:} 不同，互不冲突。
+     */
+    public static String backfillAccountMilestone(long userId, String flagKey) {
+        return "BACKFILL142:" + userId + ":" + flagKey;
     }
 
     /** 后台单个调整 / 运营活动（Story 4.2）：{@code ADMIN:{grantToken}}，token 为页面渲染时生成的一次性 UUID。 */

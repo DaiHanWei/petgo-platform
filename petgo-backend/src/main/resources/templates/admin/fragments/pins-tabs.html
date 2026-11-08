@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  顶置管理页顶页签条（V1.4.2 social-topic · Story 6.2 · UI G1，写法照 comments-tabs.html）。
+  页签一「首页 Feed」= /admin/content-pins（线上列表原样）；页签二「话题页」= /admin/content-pins/topics（G1a）。
+  两个都是**整页链接**；门控都 = AdminContentPinController.VIEW（逐字一致）。
+  调用：th:replace="~{admin/fragments/pins-tabs :: tabs(tab='feed')}"（具名参数）。
+*/-->
+<body>
+<div th:fragment="tabs(tab)" class="tabs pins-tabs" role="tablist">
+    <a class="tab" role="tab" th:classappend="${tab == 'feed'} ? 'tab--on'" th:attr="aria-selected=${tab == 'feed'}"
+       th:href="@{/admin/content-pins}"
+       sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
+       th:text="#{admin.pins.tab.feed}">首页 Feed</a>
+    <a class="tab" role="tab" th:classappend="${tab == 'topics'} ? 'tab--on'" th:attr="aria-selected=${tab == 'topics'}"
+       th:href="@{/admin/content-pins/topics}"
+       sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.pin_view')"
+       th:text="#{admin.pins.tab.topics}">话题页</a>
+</div>
+</body>
+</html>

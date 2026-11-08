@@ -44,8 +44,8 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
     private void seedSku(String productToken, String skuToken, long price, String returnPolicy) {
         jdbc.update("""
                 INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g,
-                        return_policy)
-                SELECT ?, id, '3 kg', ?, 3000, ? FROM shop_products WHERE public_token = ?
+                        return_policy, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                SELECT ?, id, '3 kg', ?, 3000, ?, 1000, 20, 15, 10 FROM shop_products WHERE public_token = ?
                 """, skuToken, price, returnPolicy, productToken);
     }
 
@@ -95,11 +95,12 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("未上架商品不可见 —— 详情 404、列表不含")
+    @DisplayName("未上架商品不可见 —— 详情 410 product-delisted（v1.4.2 shop Story 6.1，原 404）、列表不含")
     void inactiveProductHidden() throws Exception {
         String token = seedProduct(uniq("i"), "MAKANAN", false, "[]");
 
-        mvc.perform(get(BASE + "/" + token)).andExpect(status().isNotFound());
+        mvc.perform(get(BASE + "/" + token)).andExpect(status().isGone())
+                .andExpect(jsonPath("$.type").value("https://petgo/errors/product-delisted"));
         mvc.perform(get(BASE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.token=='" + token + "')]").isEmpty());
@@ -153,6 +154,22 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.returnPolicy").value("NO_RETURN_AFTER_OPEN"))
                 .andExpect(jsonPath("$.skus[0].returnPolicy").value("NO_RETURN_AFTER_OPEN"))
                 .andExpect(jsonPath("$.skus[1].returnPolicy").value("RETURNABLE"));
+    }
+
+    @Test
+    @DisplayName("v1.4.2 1.1（C-9）：详情规格 sellable —— 包裹参数齐全 true，任一为空 false")
+    void skuSellableFlag() throws Exception {
+        String token = seedProduct(uniq("sl"), "MAKANAN", true, "[]");
+        String ok = uniq("s");
+        String bad = uniq("s");
+        seedSku(token, ok, 165_000L, null);
+        seedSku(token, bad, 285_000L, null);
+        jdbc.update("UPDATE shop_skus SET package_height_cm = NULL WHERE public_token = ?", bad);
+
+        mvc.perform(get(BASE + "/" + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.skus[0].sellable").value(true))
+                .andExpect(jsonPath("$.skus[1].sellable").value(false));
     }
 
     @Test
@@ -224,5 +241,87 @@ class ShopProductEndpointIntegrationTest extends ApiIntegrationTest {
         } catch (Exception e) {
             return true;
         }
+    }
+
+    // ---------- v1.4.2 shop Story 2.2 AC7 / AC9（L1，云端不跑） ----------
+
+    @Test
+    @DisplayName("v1.4.2 2.2：列表两种形态都有 promo；商品可领券游客可读、登录带 claimed")
+    void promoAndProductCoupons() throws Exception {
+        String token = seedProduct(uniq("pc"), "MAKANAN", true, null);
+        seedSku(token, uniq("sc"), 100_000L, null);
+        java.time.Instant now = java.time.Instant.now();
+        String couponToken = uniq("cp");
+        jdbc.update("""
+                INSERT INTO shop_coupons (public_token, kind, name_id, name_en, amount, min_spend, scope_type,
+                        scope_values, acquire_type, issue_start_at, issue_end_at, valid_mode, valid_days,
+                        per_user_limit, status, created_at, updated_at)
+                VALUES (?, 'DISCOUNT', 'Diskon', 'Discount', 10000, 50000, 'PRODUCT', ?::jsonb, 'CLAIM',
+                        ?, ?, 'RELATIVE', 7, 1, 'ACTIVE', now(), now())""",
+                couponToken, "[\"" + token + "\"]", java.sql.Timestamp.from(now.minusSeconds(3600)),
+                java.sql.Timestamp.from(now.plusSeconds(86_400)));
+
+        mvc.perform(get(BASE)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.token == '" + token + "')].promo").value(true));
+        mvc.perform(get(BASE).param("size", "100")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.token == '" + token + "')].promo").value(true));
+
+        // PR#49 CI 修复：商品可领券 = 覆盖该商品的全部可领券（全场 / 品类 / 指定商品，CouponQueryService.forProduct），
+        // CI 全量同库时其他测试类造的全场 / MAKANAN 品类可领券也会合法出现 → 按本用例的券 token 断言，不断言总条数
+        String mine = "$.items[?(@.couponToken == '" + couponToken + "')]";
+        mvc.perform(get(BASE + "/" + token + "/coupons")).andExpect(status().isOk())
+                .andExpect(jsonPath(mine, org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath(mine + ".claimed").value(false));
+        long uid = newUser().getId();
+        mvc.perform(get(BASE + "/" + token + "/coupons").header("Authorization", userBearer(uid)))
+                .andExpect(status().isOk()).andExpect(jsonPath(mine + ".claimed").value(false));
+        mvc.perform(get(BASE + "/definitelyNotARealToken/coupons")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0));
+    }
+
+    // ---------- v1.4.2 shop Story 6.1（L1，云端不跑，待本地验收）----------
+
+    @Test
+    @DisplayName("v1.4.2 6.1：不存在 404 not-found；已下架 410 product-delisted")
+    void delistedIs410AndUnknownIs404() throws Exception {
+        String token = seedProduct(uniq("dl"), "MAKANAN", false, "[]");
+        mvc.perform(get(BASE + "/" + token)).andExpect(status().isGone())
+                .andExpect(jsonPath("$.type").value("https://petgo/errors/product-delisted"))
+                .andExpect(jsonPath("$.status").value(410));
+        mvc.perform(get(BASE + "/nope" + uniq("x"))).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.type").value("https://petgo/errors/not-found"));
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6.1：详情带 reviewSummary（开关默认关 → items 空）与 reviewListEnabled=false")
+    void detailCarriesReviewSummary() throws Exception {
+        String token = seedProduct(uniq("rs"), "MAKANAN", true, "[]");
+        seedSku(token, uniq("s"), 100_000L, null);
+        mvc.perform(get(BASE + "/" + token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviewSummary.total").value(0))
+                .andExpect(jsonPath("$.reviewSummary.items").isEmpty())
+                .andExpect(jsonPath("$.reviewListEnabled").value(false));
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6.1：/top 游客可用、数组形态、带 promo、limit 钳位")
+    void topIsPublicArrayWithPromo() throws Exception {
+        String token = seedProduct(uniq("tp"), "MAKANAN", true, "[]");
+        jdbc.update("UPDATE shop_products SET sort_weight = 2000000000 WHERE public_token = ?", token);
+        seedSku(token, uniq("s"), 100_000L, null);
+        mvc.perform(get(BASE + "/top").param("limit", "99")).andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].token").value(token))
+                .andExpect(jsonPath("$[0].promo").exists());
+        mvc.perform(get(BASE + "/top").param("limit", "0")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("v1.4.2 C-9：分页信封带 totalCount")
+    void pagedEnvelopeHasTotalCount() throws Exception {
+        seedProduct(uniq("tc"), "MAKANAN", true, "[]");
+        mvc.perform(get(BASE).param("size", "1")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").isNumber());
     }
 }

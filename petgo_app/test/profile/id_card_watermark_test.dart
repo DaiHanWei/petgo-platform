@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/id_card_style.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/id_card_low_res_cover.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/id_card_watermark.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/kitas_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/ktp_card.dart';
@@ -176,5 +177,55 @@ void main() {
       expect(front, findsOneWidget, reason: type);
       expectWatermarkOutsideExportBoundary(tester, front);
     }
+  });
+
+  // ===== V1.4.2「KTP 高清防绕过」 =====
+
+  test('水印改版：深色斜向平铺、条带覆盖率 ≥ 50%', () {
+    expect(IdCardWatermark.bandCoverage, greaterThanOrEqualTo(0.5), reason: '需求 §2.1：覆盖率 ≥ 50%');
+    expect(IdCardWatermark.angleDeg, inInclusiveRange(-30, -20), reason: '需求 §2.1：斜向 -20°~-30°');
+    expect(IdCardWatermark.bandOpacity, lessThan(0.25), reason: '条带压太深卡面文字就读不清了');
+  });
+
+  test('预览 / 免费分享降清档位约为高清的 1/3', () {
+    expect(kIdCardPreviewDownscale, inInclusiveRange(2.5, 4.0));
+  });
+
+  testWidgets('水印绘制在 5 种画布比例下都不抛错', (tester) async {
+    for (final style in IdCardStyle.values) {
+      await tester.pumpWidget(Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: SizedBox(
+            width: 360,
+            height: 360 * style.canvas.height / style.canvas.width,
+            child: Stack(children: [IdCardWatermark(canvas: style.canvas, canvasRadius: style.canvasRadius)]),
+          ),
+        ),
+      ));
+      expect(tester.takeException(), isNull, reason: '$style');
+    }
+  });
+
+  testWidgets('未解锁：详情页盖低清遮罩，且遮罩在付费导出边界之外', (tester) async {
+    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: false));
+    expect(find.byType(IdCardLowResCover), findsOneWidget);
+    RepaintBoundary? exportBoundary;
+    tester.element(find.byType(KtpCardFront)).visitAncestorElements((el) {
+      if (el.widget is RepaintBoundary) {
+        exportBoundary = el.widget as RepaintBoundary;
+        return false;
+      }
+      return true;
+    });
+    expect(exportBoundary!.key, isA<GlobalKey>());
+    expect(find.descendant(of: find.byWidget(exportBoundary!), matching: find.byType(IdCardLowResCover)),
+        findsNothing, reason: '🔴 遮罩进了导出边界 ⇒ 付费高清图变低清');
+  });
+
+  testWidgets('已解锁：预览恢复清晰（无低清遮罩），水印沿用现状', (tester) async {
+    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true));
+    expect(find.byType(IdCardLowResCover), findsNothing);
+    expect(find.byType(IdCardWatermark), findsOneWidget);
   });
 }

@@ -73,6 +73,13 @@ public class ConsultOrder {
     @Column(name = "session_started_at")
     private Instant sessionStartedAt;
 
+    /**
+     * 封禁挂起 + 现金退款的发起时刻（V1.4.2 exp-reverse AD-1）。只由 {@code ConsultOrderRepository#markSuspensionRefund}
+     * 写入；{@code updatable=false} 防同事务里的陈旧实体全列 UPDATE 把它写回 null。
+     */
+    @Column(name = "suspension_refund_at", updatable = false)
+    private Instant suspensionRefundAt;
+
     /** 关联的付费问诊会话 id（V88，付费建单后 markSessionStarted 回填）。迁移前订单为 null。 */
     @Column(name = "consult_session_id")
     private Long consultSessionId;
@@ -208,6 +215,10 @@ public class ConsultOrder {
 
     public Long getPaymentIntentId() {
         return paymentIntentId;
+    }
+
+    public Instant getSuspensionRefundAt() {
+        return suspensionRefundAt;
     }
 
     public Long getVetPayout() {

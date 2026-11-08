@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  顶置管理 ·「话题页」页签（V1.4.2 social-topic · Story 6.2 · UI G1a）。
+  标题行（不放「＋ 新建顶置」）→ 说明句 → 页签 → 页签说明 → 搜索 → 话题表（只列 ACTIVE / HIDDEN，热度倒序，每页 20）。
+  整行可点 = **整页跳转**到该话题的排期页 G1b（tr[data-href]，admin-core.js），不是开抽屉 ⇒ 本页无抽屉壳（noDrawer=true）。
+  门控 = AdminContentPinController.VIEW；侧栏仍高亮「顶置管理」（active = content-pins）。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.pins.title}">顶置管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='pin',noDrawer=true">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.pins.title}">顶置管理</h1>
+        </div>
+        <p class="muted" th:text="#{admin.pins.subtitle}">配置首页 Feed 与话题页坑位……</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <div th:replace="~{admin/fragments/pins-tabs :: tabs(tab='topics')}"></div>
+        <p class="muted" th:text="#{admin.pins.topics.hint}">点一行进入该话题的顶置排期……</p>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::pin-topic-filters}, ~{}, ~{::pin-topic-table}, ~{})}">
+            <form th:fragment="pin-topic-filters" class="filter-bar" th:action="@{/admin/content-pins/topics}" method="get"
+                  th:attr="hx-get=@{/admin/content-pins/topics}" hx-target="#pin-topics-rows" hx-swap="innerHTML" hx-push-url="true">
+                <label class="field">
+                    <span th:text="#{admin.users.search}">搜索</span>
+                    <input type="search" name="q" class="inp" th:value="${q}" maxlength="40"
+                           th:placeholder="#{admin.topics.searchPlaceholder}" placeholder="话题名" style="width:220px"/>
+                </label>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.users.search}">搜索</button>
+            </form>
+
+            <div th:fragment="pin-topic-table" id="pin-topics-rows">
+                <div th:replace="~{admin/fragments/pin-topics-list :: rows(oob=false)}"></div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

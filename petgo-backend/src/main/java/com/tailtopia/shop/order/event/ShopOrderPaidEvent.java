@@ -3,7 +3,8 @@ package com.tailtopia.shop.order.event;
 /**
  * 电商订单**真的**从待支付推进为待发货（v1.3.0 shop-v2 复审 #6 / #13）。
  *
- * <p>发点唯一：{@code ShopOrderPaymentService#fulfillPaid} 返回 {@code true} 时。
+ * <p>发点唯一：{@code ShopOrderPaidTransition#markPaid} 返回 {@code true} 时（v1.4.2 shop Story 3.2 由
+ * {@code ShopOrderPaymentService#fulfillPaid} 改名抽出；网关到账 / 纯币 / 零元单 / 4.2 重下单全部经它）。
  * 那是两条支付路径唯一的交汇处 ——
  * <ul>
  *   <li><b>混合 / 纯现金</b>：网关回调 → {@code ShopOrderPaidHandler#onPaid}；</li>
@@ -19,6 +20,11 @@ package com.tailtopia.shop.order.event;
  *
  * <p>V1.4.0 ① Story 1.3 末尾追加 {@code userId} / {@code paidTotal}（现金 + PawCoin 实付总额，IDR）：电商消费返成长值
  * 只经此一处（QRIS / MIXED / 纯币三种付法），MIXED 的币段与现金段不会各算一次。
+ *
+ * <p>v1.4.2 shop Story 3.2 末尾追加 {@code payChannel}（{@code QRIS | PAWCOIN | MIXED}，可空）与
+ * {@code source}（{@code PaidSource} 名：{@code GATEWAY | PURE_COIN | ZERO_PAY | REORDER}）；服务端埋点
+ * {@code shop_payment_paid} 改由本事件触发（D-23）。
  */
-public record ShopOrderPaidEvent(long shopOrderId, String orderToken, long userId, long paidTotal) {
+public record ShopOrderPaidEvent(long shopOrderId, String orderToken, long userId, long paidTotal,
+        String payChannel, String source) {
 }

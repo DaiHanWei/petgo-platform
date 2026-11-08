@@ -105,14 +105,17 @@ class AdminPageCatalogTest {
                 // ⛔ "online" 已移除：V1.3.0 Story 9.1a 把在线状态并进兽医列表与抽屉，整页路由删除。
                 "dashboard", "failed-requests", "manual-review", "payments", "red-overage", "refunds",
                 "roles", "seed", "seed-batches", "settlements", "shopBanners", "shopInventory", "shopMargin", "shopOrders",
-                "shopProducts", "shopReconciliation", "shopRepurchase", "shopReturns", "shopShipping", "shopTurnover",
-                "shopOrderExceptions", "shopPrecedents", "support-tickets", "tickets", "user-tags", "users", "vets",
+                "shopProducts", "shopReconciliation", "shopReturns", "shopShipping", "shopTurnover",
+                "shopOrderExceptions", "shopPrecedents",
+                "shopOrderList", "shopRefundPayouts", "shopCoupons", // V1.4.2 shop-admin Story 1.1 · AD-2
+                "support-tickets", "tickets", "user-tags", "users", "vets",
                 "virtual-accounts", "warm-replies", "places",
                 "ops-popups", // V1.3.4 AB-30
                 "ops-notifications", // V1.3.4 AB-31
                 "growth", // V1.4.0 ① AB-32 · Story 4.1
                 "gift-catalog", // V1.4.0 ③ AB-35
-                "gift-orders")) { // V1.4.0 ③ AB-36
+                "gift-orders", // V1.4.0 ③ AB-36
+                "topics")) { // V1.4.2 Story 6.1 · AB-10B
             assertThat(actives).as("active=" + active + " 没有对应侧栏项").contains(active);
         }
     }

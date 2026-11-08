@@ -116,6 +116,13 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="tailtopia" android:host="place"/>
             </intent-filter>
+            <!-- 话题页深链：tailtopia://topic/{name} → 打开 App 落话题详情（V1.4.2 social-topic Story 4.3 · D-20）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="topic"/>
+            </intent-filter>
             <!-- 下载引导落地页深链：tailtopia://open → 打开 App 落首页（s.tailtopia.id/get 唤起）。 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>

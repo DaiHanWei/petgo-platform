@@ -37,7 +37,12 @@ class NavBadgeServiceTest {
     private final AdminSupportTicketQueryService support = mock(AdminSupportTicketQueryService.class);
     private final AdminRefundQueryService refunds = mock(AdminRefundQueryService.class);
     private final WarmReplyQueueService warmReplies = mock(WarmReplyQueueService.class);
-    private final NavBadgeService service = new NavBadgeService(manual, tickets, anomalies, support, refunds, warmReplies);
+    private final com.tailtopia.admin.shop.service.AdminShopOrderExceptionService shopExceptions =
+            mock(com.tailtopia.admin.shop.service.AdminShopOrderExceptionService.class);
+    private final com.tailtopia.admin.shop.service.AdminShopRefundPayoutService shopPayouts =
+            mock(com.tailtopia.admin.shop.service.AdminShopRefundPayoutService.class);
+    private final NavBadgeService service = new NavBadgeService(manual, tickets, anomalies, support, refunds, warmReplies,
+            shopExceptions, shopPayouts);
 
     @AfterEach
     void clear() {
@@ -130,7 +135,40 @@ class NavBadgeServiceTest {
     @Test
     void sidebarCountsAreNotAffectedByGrouping() {
         stubAll();
+        // V1.4.2 shop-admin 5.3：商城待办两项并入队列（超管可见）
         assertThat(service.counts(Set.of("ROLE_SUPER_ADMIN"))).containsOnlyKeys(
-                "manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies", "total");
+                "manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies",
+                "shop-order-exceptions", "shop-refund-payouts", "total");
+    }
+
+    // ---------- V1.4.2 shop-admin Story 5.3 ----------
+
+    @org.junit.jupiter.api.Test
+    void shopTodosCountIntoInboxTotalOnlyWhenPageVisible() {
+        stubAll();
+        when(shopExceptions.queueCount()).thenReturn(5L);
+        when(shopPayouts.badgeCount()).thenReturn(4L);
+
+        Map<String, Long> all = service.counts(Set.of("ROLE_SUPER_ADMIN"));
+        assertThat(all).containsEntry("shop-order-exceptions", 5L).containsEntry("shop-refund-payouts", 4L)
+                .containsEntry("total", 28L + 9L);
+
+        Map<String, Long> fulfil = service.counts(Set.of("ROLE_ADMIN", AdminPermissions.SHOP_ORDER_FULFILL));
+        assertThat(fulfil).containsKey("shop-order-exceptions").doesNotContainKey("shop-refund-payouts");
+        Map<String, Long> payout = service.counts(Set.of("ROLE_ADMIN", AdminPermissions.REFUND_PAYOUT));
+        assertThat(payout).containsKey("shop-refund-payouts").doesNotContainKey("shop-order-exceptions");
+        Map<String, Long> none = service.counts(Set.of("ROLE_ADMIN", AdminPermissions.CONTENT_TAKEDOWN));
+        assertThat(none).doesNotContainKeys("shop-order-exceptions", "shop-refund-payouts");
+    }
+
+    @org.junit.jupiter.api.Test
+    void shopTodoLinksOnlyForVisiblePagesAndInboxGroupAppearsForShopOnlyStaff() {
+        var groups = AdminNavModel.build(Set.of("ROLE_ADMIN", AdminPermissions.REFUND_PAYOUT));
+        var inbox = groups.stream().filter(AdminNavModel.NavGroup::isInbox).findFirst().orElseThrow();
+        assertThat(inbox.shopTodos()).extracting(com.tailtopia.admin.shared.AdminPageCatalog.Page::key)
+                .containsExactly("shop-refund-payouts");
+        var contentOnly = AdminNavModel.build(Set.of("ROLE_ADMIN", AdminPermissions.CONTENT_TAKEDOWN));
+        contentOnly.stream().filter(AdminNavModel.NavGroup::isInbox)
+                .forEach(g -> assertThat(g.shopTodos()).isEmpty());
     }
 }

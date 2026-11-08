@@ -128,7 +128,7 @@ class MerchantBindingIntegrationTest extends ApiIntegrationTest {
                         species, detail_html, shelf_life_note, return_policy, is_active)
                 VALUES (?, 'P', 'B', 'MAKANAN', 'k.jpg', 'DOG', '<p/>', 'n', 'RETURNABLE', true)""", "mbp" + n);
         Long pid = jdbc.queryForObject("SELECT id FROM shop_products WHERE public_token = ?", Long.class, "mbp" + n);
-        jdbc.update("INSERT INTO shop_skus (public_token, product_id, spec_name, price) VALUES (?, ?, '1 kg', 50000)",
+        jdbc.update("INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm) VALUES (?, ?, '1 kg', 50000, 1000, 20, 15, 10)",
                 "mbs" + n, pid);
         Long sid = jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?", Long.class, "mbs" + n);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 5, 0)", sid);

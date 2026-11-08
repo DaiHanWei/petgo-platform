@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/milestone_account_codes.dart';
 import 'current_pet_provider.dart';
 import 'milestone_repository.dart';
 
@@ -24,6 +25,15 @@ void reportMilestoneCelebrated(WidgetRef ref, List<String> codes, {void Function
   // ⚠️ 异步收尾交给 provider 自己的 Ref 做：调用方的 WidgetRef 常常在回报落库前就已销毁
   //（「已打卡」picker 早已 pop），在它上面 invalidate 会抛 StateError。
   ref.read(locallyCelebratedMilestonesProvider.notifier).report(codes, onDone: onDone, petId: petId);
+}
+
+/// [reportMilestoneCelebrated] 的 [ProviderContainer] 版（V1.4.2 social-topic Story 3.2 · T5.3）：语义逐条相同。
+///
+/// 庆祝页关闭时宿主页可能已销毁（如「Bagikan ke Komunitas」后发布页才关），在其 `WidgetRef` 上 read 会抛
+/// `StateError` —— 调用方弹出前取好 container（`ProviderScope.containerOf(context, listen: false)`）走这里。
+void reportMilestoneCelebratedIn(ProviderContainer c, List<String> codes, {void Function()? onDone, int? petId}) {
+  if (codes.isEmpty) return;
+  c.read(locallyCelebratedMilestonesProvider.notifier).report(codes, onDone: onDone, petId: petId);
 }
 
 /// 在回报前**先**把 code 记进本地集合（见 [locallyCelebratedMilestonesProvider]）。
@@ -79,7 +89,10 @@ class LocallyCelebratedMilestones extends Notifier<Set<String>> {
         if (peekEffectivePetId(ref) == petId) ...state,
       };
 
-  void add(Iterable<String> codes, {int? petId}) {
+  /// V1.4.2 Story 2.3 · AC5.3：账号级编码按同 flag 的三物种全集记（[expandAccountSiblings]）——
+  /// 混养账号猫列表弹过 C-S19，切到狗列表时 D-S19 同样被挡住。
+  void add(Iterable<String> raw, {int? petId}) {
+    final codes = expandAccountSiblings(raw);
     if (petId != null) {
       (_byPet[petId] ??= <String>{}).addAll(codes);
       // 当前宠物的庆祝同时记进 state（列表页等按当前宠物读 state 的调用方照旧挡得住）。
@@ -114,8 +127,10 @@ class LocallyCelebratedMilestones extends Notifier<Set<String>> {
     }).catchError((Object _) {
       // 静默。撤回本地标记 —— 下次进列表页会再补弹一次，用户不会永久失去这次庆祝。
       if (_stale(epoch)) return;
-      if (petId != null) _byPet[petId]?.removeAll(codes);
-      state = {...state}..removeAll(codes);
+      // 撤回与记入同一全集（账号级编码含三物种兄弟编码）。
+      final local = expandAccountSiblings(codes);
+      if (petId != null) _byPet[petId]?.removeAll(local);
+      state = {...state}..removeAll(local);
     });
   }
 }

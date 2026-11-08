@@ -9,9 +9,16 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.domain.BannerTargetType;
 import com.tailtopia.shop.domain.ShopBanner;
 import com.tailtopia.shop.domain.ShopProduct;
+import com.tailtopia.shop.coupon.domain.CouponAcquireType;
+import com.tailtopia.shop.coupon.domain.CouponStatus;
+import com.tailtopia.shop.coupon.domain.ShopCoupon;
+import com.tailtopia.shop.coupon.repository.ShopCouponRepository;
 import com.tailtopia.shop.repository.ShopBannerRepository;
 import com.tailtopia.shop.repository.ShopProductRepository;
+import com.tailtopia.shop.service.ShopBannerQueryService;
+import java.time.Instant;
 import java.util.Optional;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -22,8 +29,11 @@ import org.mockito.Mockito;
 class AdminShopBannerTargetTest {
 
     private final ShopProductRepository products = Mockito.mock(ShopProductRepository.class);
+    private final ShopCouponRepository coupons = Mockito.mock(ShopCouponRepository.class);
+    private final ShopBannerRepository banners = Mockito.mock(ShopBannerRepository.class);
     private final AdminShopBannerService service = new AdminShopBannerService(
-            Mockito.mock(ShopBannerRepository.class), Mockito.mock(AdminAuditService.class), products);
+            banners, Mockito.mock(AdminAuditService.class), products, coupons,
+            Mockito.mock(ShopBannerQueryService.class));
 
     private static ShopBannerForm form(String type, String value) {
         ShopBannerForm f = new ShopBannerForm();
@@ -50,9 +60,11 @@ class AdminShopBannerTargetTest {
                 .isInstanceOf(AppException.class).hasMessageContaining("商品");
     }
 
+    /** V1.4.2 shop-admin Story 3.1 · B4：品类跳转已下线，任何品类值一律拒绝（存量 banner 须改选）。 */
     @Test
-    void categoryMustBeKnownLiteral() {
-        assertThat(service.target(form("CATEGORY", "CAMILAN")).value()).isEqualTo("CAMILAN");
+    void categoryIsRetiredAndAlwaysRejected() {
+        assertThatThrownBy(() -> service.target(form("CATEGORY", "CAMILAN")))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getMessage()).contains("品类"));
         assertThatThrownBy(() -> service.target(form("CATEGORY", "camilan")))
                 .isInstanceOf(AppException.class);
     }
@@ -70,7 +82,78 @@ class AdminShopBannerTargetTest {
 
     @Test
     void unknownTypeRejected() {
-        assertThatThrownBy(() -> service.target(form("COUPON", "x"))).isInstanceOf(AppException.class);
+        // v1.4.2 起 COUPON 是合法类型（见下方 COUPON 用例），换一个真不存在的字面量
+        assertThatThrownBy(() -> service.target(form("TOKO_HOME", "x"))).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.target(form("coupon", "x"))).isInstanceOf(AppException.class);
+    }
+
+    // ---------- v1.4.2 shop Story 6.1 AC7：COUPON 目标 + 排期 ----------
+
+    private static ShopCoupon coupon(CouponAcquireType type, CouponStatus status, Instant issueEnd) {
+        ShopCoupon c = ShopCoupon.create("cpn1", com.tailtopia.shop.coupon.domain.CouponKind.values()[0],
+                "n", "n", 5000, 0, com.tailtopia.shop.coupon.domain.CouponScopeType.values()[0],
+                java.util.List.of(), type, Instant.parse("2026-01-01T00:00:00Z"), issueEnd,
+                com.tailtopia.shop.coupon.domain.CouponValidMode.values()[0], null, null, 7, null, 1);
+        ReflectionTestUtils.setField(c, "status", status);
+        return c;
+    }
+
+    private static final Instant FUTURE = Instant.parse("2099-01-01T00:00:00Z");
+
+    @Test
+    void couponMustBeActiveClaimAndNotPastIssueEnd() {
+        Mockito.when(coupons.findByPublicToken("cpn1"))
+                .thenReturn(Optional.of(coupon(CouponAcquireType.CLAIM, CouponStatus.ACTIVE, FUTURE)));
+        assertThat(service.target(form("COUPON", " cpn1 ")))
+                .isEqualTo(new AdminShopBannerService.Target(BannerTargetType.COUPON, "cpn1"));
+    }
+
+    @Test
+    void couponMissingStoppedNonClaimOrExpiredIsRejected() {
+        Mockito.when(coupons.findByPublicToken("missing")).thenReturn(Optional.empty());
+        assertCouponRejected("missing");
+        assertCouponRejected("");
+
+        Mockito.when(coupons.findByPublicToken("cpn1"))
+                .thenReturn(Optional.of(coupon(CouponAcquireType.CLAIM, CouponStatus.STOPPED, FUTURE)));
+        assertCouponRejected("cpn1");
+        for (CouponAcquireType t : new CouponAcquireType[] {CouponAcquireType.NEWBIE, CouponAcquireType.CODE}) {
+            Mockito.when(coupons.findByPublicToken("cpn1"))
+                    .thenReturn(Optional.of(coupon(t, CouponStatus.ACTIVE, FUTURE)));
+            assertCouponRejected("cpn1");
+        }
+        Mockito.when(coupons.findByPublicToken("cpn1")).thenReturn(Optional.of(
+                coupon(CouponAcquireType.CLAIM, CouponStatus.ACTIVE, Instant.parse("2026-02-01T00:00:00Z"))));
+        assertCouponRejected("cpn1");
+    }
+
+    private void assertCouponRejected(String value) {
+        assertThatThrownBy(() -> service.target(form("COUPON", value)))
+                .as(value).isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.banner.targetCoupon"));
+    }
+
+    @Test
+    void scheduleStartMustBeBeforeEnd() {
+        Instant t = Instant.parse("2026-11-05T10:00:00Z");
+        ShopBannerForm f = form(null, null);
+        f.setStartAt(t);
+        f.setEndAt(t);
+        assertThatThrownBy(() -> service.create(f, 1L)).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getMessageCode()).isEqualTo("admin.err.banner.scheduleInvalid"));
+        f.setEndAt(t.minusSeconds(1));
+        assertThatThrownBy(() -> service.create(f, 1L)).isInstanceOf(AppException.class);
+        Mockito.verify(banners, Mockito.never()).save(Mockito.any());
+
+        f.setEndAt(t.plusSeconds(1));
+        ShopBanner b = service.create(f, 1L);
+        assertThat(b.getStartAt()).isEqualTo(t);
+        assertThat(b.getEndAt()).isEqualTo(t.plusSeconds(1));
+        f.setStartAt(null);
+        f.setEndAt(null);
+        ShopBanner open = service.create(f, 1L);
+        assertThat(open.getStartAt()).isNull();
+        assertThat(open.getEndAt()).isNull();
     }
 
     @Test

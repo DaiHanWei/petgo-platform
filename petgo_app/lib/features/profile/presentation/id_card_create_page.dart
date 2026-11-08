@@ -22,6 +22,7 @@ import 'id_card/id_card_form.dart';
 import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_pet_type_fields.dart';
 import 'id_card/id_card_ui_style.dart';
+import 'id_card/id_card_low_res_cover.dart';
 import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_fields.dart';
 import 'id_card_detail_page.dart';
@@ -56,6 +57,9 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   String? _avatarUrl;
   bool _prefilled = false;
   bool _busy = false; // 上传/创建中
+
+  /// V1.4.2 KTP 防绕过：矢量卡面所在 boundary，供低清遮罩栅格化（建卡页不导出，只做预览降清）。
+  final GlobalKey _previewBoundaryKey = GlobalKey();
 
   /// V1.4.0 multi-pet Story 4.2：本次会话选中的预填宠物（只用于宠物行显示与抽屉默认选中）。
   /// **不回写** `currentPetIdProvider`（AD-14：在 KTP 里换宠物不切换 Diary Tab 当前宠物）。null = 不显示宠物行。
@@ -259,7 +263,13 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            FittedBox(fit: BoxFit.contain, child: cardFront),
+                            RepaintBoundary(
+                              key: _previewBoundaryKey,
+                              child: FittedBox(fit: BoxFit.contain, child: cardFront),
+                            ),
+                            // V1.4.2 KTP 防绕过 §3.1：建卡预览一律低清（这里的卡都还没付费）。
+                            IdCardLowResCover(
+                                sourceKey: _previewBoundaryKey, canvas: canvas, canvasRadius: radius),
                             IdCardWatermark(canvas: canvas, canvasRadius: radius),
                           ],
                         ),

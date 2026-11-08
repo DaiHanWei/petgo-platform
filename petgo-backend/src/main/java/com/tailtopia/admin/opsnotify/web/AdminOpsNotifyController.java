@@ -15,6 +15,7 @@ import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.notify.ops.domain.AudienceSpec;
 import com.tailtopia.notify.ops.domain.OpsCampaignStatus;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
+import com.tailtopia.notify.ops.domain.OpsTextVariables;
 import com.tailtopia.ops.target.OpsAppPage;
 import com.tailtopia.ops.target.OpsTargetType;
 import com.tailtopia.profile.domain.PetType;
@@ -53,6 +54,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.support.RequestContextUtils;
 import org.springframework.web.util.HtmlUtils;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 「系统通知发送」页（V1.3.4 AB-31 · FR-138；按后台返工清单 §4 对齐 UI 稿 I1–I11）：
@@ -86,6 +88,12 @@ public class AdminOpsNotifyController {
      * （10MB）——改这里要同步看那边。
      */
     static final long MAX_CSV_BYTES = 4L * 1024 * 1024;
+    /**
+     * V1.4.2 AB-37（Story 7.2）：变量三语显示名 JSON（= {@link OpsTextVariables#DISPLAY_NAMES}），新建页
+     * {@code data-var-names} 下发给 admin-ops-notify.js 做第 ① 步手打检测（服务端 containsTyped 兜底）。
+     */
+    static final String VAR_NAMES_JSON = JsonMapper.builder().build()
+            .writeValueAsString(OpsTextVariables.DISPLAY_NAMES);
 
     private final AdminOpsNotifyService service;
     private final OpsNotifyLabels labels;
@@ -145,7 +153,9 @@ public class AdminOpsNotifyController {
         Map<String, Object> m = new LinkedHashMap<>();
         OpsCampaignStatus s = c.getStatus();
         m.put("token", c.getPublicToken());
-        m.put("titleId", c.getTitleId());
+        // V1.4.2 AB-37：活动表存带令牌的原文；列表摘要把令牌换成显示名（{用户昵称}），不出现任何收件人真实值
+        m.put("titleId", summary(c.getTitleId()));
+        m.put("summary", summary(c.getTitleId()));
         m.put("status", s.name());
         m.put("pending", s == OpsCampaignStatus.PENDING);
         m.put("audience", labels.audience(spec(c), c.getIdsSource()));
@@ -154,7 +164,17 @@ public class AdminOpsNotifyController {
         m.put("reachMuted", s == OpsCampaignStatus.PENDING || s == OpsCampaignStatus.CANCELED);
         m.put("failed", s == OpsCampaignStatus.PARTIAL_FAILED && c.getFailedCount() > 0
                 ? msg.get("admin.opsNotify.reach.failed", c.getFailedCount()) : null);
+        // V1.4.2 AB-37（R-3）：「跳过 N（没有宠物）」读 skipped_no_pet_count；只在已开始发送的行出现（显示归 7.2）
+        m.put("skippedNoPet", c.getSkippedNoPetCount() > 0 && (s == OpsCampaignStatus.SENDING
+                || s == OpsCampaignStatus.DONE || s == OpsCampaignStatus.PARTIAL_FAILED)
+                ? msg.get("admin.opsNotify.reach.skippedNoPet", c.getSkippedNoPetCount()) : null);
         return m;
+    }
+
+    /** 令牌 → 按后台当前语言的变量显示名（{@code admin.opsNotify.var.tag.*}）。 */
+    private String summary(String text) {
+        return OpsTextVariables.toDisplay(text, msg.get("admin.opsNotify.var.tag.nickname"),
+                msg.get("admin.opsNotify.var.tag.petName"));
     }
 
     private static AudienceSpec spec(OpsNotificationCampaign c) {
@@ -217,6 +237,7 @@ public class AdminOpsNotifyController {
         model.addAttribute("nowWib", adminTime.fmt(Instant.now()));
         model.addAttribute("minScheduleWib", adminTime.nowWibForInput());
         model.addAttribute("maxCsvBytes", MAX_CSV_BYTES);
+        model.addAttribute("varNamesJson", VAR_NAMES_JSON);
         return "admin/ops-notification-new";
     }
 
@@ -227,7 +248,11 @@ public class AdminOpsNotifyController {
     @PostMapping(BASE + "/preview")
     @PreAuthorize(EDIT_AUTH)
     public String preview(@ModelAttribute("form") OpsNotifyForm form, Model model) {
-        model.addAttribute("count", service.preview(form));
+        AdminOpsNotifyService.Estimate e = service.preview(form);
+        // V1.4.2 AB-37：count = 净人数（用了宠物变量时已扣除没有宠物的人）；excludedNoPet / total 供 7.2 说明句
+        model.addAttribute("count", e.net());
+        model.addAttribute("excludedNoPet", e.excludedNoPet());
+        model.addAttribute("total", e.total());
         return "admin/fragments/ops-notification-steps :: estimate";
     }
 
@@ -310,6 +335,16 @@ public class AdminOpsNotifyController {
     public String review(@ModelAttribute("form") OpsNotifyForm form, HttpServletResponse response, Model model) {
         Prepared p = service.review(form);
         model.addAttribute("p", p);
+        // V1.4.2 AB-37：预览用户 + 净人数口径；净 0（I6）时主响应体落错误槽，确认面板照常 oob
+        model.addAttribute("sample", p.sample());
+        model.addAttribute("excludedNoPet", p.excludedNoPet());
+        model.addAttribute("usesPet", p.usesPet());
+        model.addAttribute("blockedNoPet", p.blockedNoPet());
+        addPreviewPaneLabels(p.titleId(), p.titleEn(), p.bodyId(), p.bodyEn(), model);
+        if (p.blockedNoPet()) {
+            model.addAttribute("code", AdminOpsNotifyService.ERR_AUDIENCE_EMPTY_NO_PET);
+            model.addAttribute("blockedMessage", msg.get(AdminOpsNotifyService.ERR_AUDIENCE_EMPTY_NO_PET));
+        }
         model.addAttribute("audienceLabel", labels.audience(p.spec(), p.idsSource()));
         model.addAttribute("targetLabel", labels.target(p.targetType(), p.targetValue()));
         model.addAttribute("sendAtLabel", p.scheduledAt() == null ? msg.get("admin.opsNotify.review.sendNow")
@@ -317,6 +352,59 @@ public class AdminOpsNotifyController {
         // swap 之后再切到 ④：先切的话确认面板还是上一次的内容
         response.setHeader("HX-Trigger-After-Swap", "opsn:reviewed");
         return "admin/fragments/ops-notification-steps :: review";
+    }
+
+    /**
+     * 预览用户「换一个」（V1.4.2 AB-37 · UI 稿 I4）：整张表单 + {@code excludeUserId}，从本次人群随机换 1 人，
+     * 返回 {@code previewPane} 片段（落片段根）。只读：不写审计、不落库；人群条件不合法同样 422。
+     */
+    @PostMapping(BASE + "/review/sample")
+    @PreAuthorize(EDIT_AUTH)
+    public String sample(@ModelAttribute("form") OpsNotifyForm form,
+            @RequestParam(value = "excludeUserId", required = false) Long excludeUserId, Model model) {
+        model.addAttribute("sample", service.sample(form, excludeUserId).orElse(null));
+        addPreviewPaneLabels(form.getTitleId(), form.getTitleEn(), form.getBodyId(), form.getBodyEn(), model);
+        return "admin/fragments/ops-notification-steps :: previewPane";
+    }
+
+    /**
+     * 预览片段的显示值：预览用户一行「{昵称} #{id} · 宠物 {宠物名}」（空昵称 / 没有宠物显示「—」）；没有可预览的人时
+     * 气泡显示变量显示名原文（I6）。🔒 只进模型渲染，不进日志。
+     */
+    private void addPreviewPaneLabels(String titleId, String titleEn, String bodyId, String bodyEn, Model model) {
+        Object raw = model.getAttribute("sample");
+        if (raw instanceof AdminOpsNotifyService.Sample s) {
+            // #{1} 是用户 id：传字符串，避免 MessageFormat 渲染出千分位（10,234）
+            model.addAttribute("previewUserLabel", msg.get("admin.opsNotify.review.previewUserValue",
+                    dash(s.nickname()), String.valueOf(s.userId()), dash(s.petName())));
+            // 7.2 · UI 稿 I4：昵称常规色、「#id · 宠物 X」降灰——按 {0} 位置把同一句拆成三段（三语句式都由文案决定）
+            String marker = "\u0000";
+            String whole = msg.get("admin.opsNotify.review.previewUserValue", marker, String.valueOf(s.userId()),
+                    dash(s.petName()));
+            int at = whole.indexOf(marker);
+            model.addAttribute("previewUserBefore", at < 0 ? "" : whole.substring(0, at));
+            model.addAttribute("previewUserName", at < 0 ? "" : dash(s.nickname()));
+            model.addAttribute("previewUserMeta", at < 0 ? model.getAttribute("previewUserLabel")
+                    : whole.substring(at + marker.length()));
+            model.addAttribute("pvTitleId", s.titleId());
+            model.addAttribute("pvBodyId", s.bodyId());
+            model.addAttribute("pvTitleEn", s.titleEn());
+            model.addAttribute("pvBodyEn", s.bodyEn());
+        } else {
+            model.addAttribute("previewUserLabel", msg.get("admin.opsNotify.review.previewUserNone"));
+            model.addAttribute("pvTitleId", summary(trim(titleId)));
+            model.addAttribute("pvBodyId", summary(trim(bodyId)));
+            model.addAttribute("pvTitleEn", summary(trim(titleEn)));
+            model.addAttribute("pvBodyEn", summary(trim(bodyEn)));
+        }
+    }
+
+    private static String dash(String v) {
+        return v == null || v.isBlank() ? "—" : v;
+    }
+
+    private static String trim(String v) {
+        return v == null ? null : v.trim();
     }
 
     // ---------- 写入 ----------
@@ -430,7 +518,7 @@ public class AdminOpsNotifyController {
         hidden.put("page", String.valueOf(page));
         Instant when = c.getScheduledAt() != null ? c.getScheduledAt() : c.getCreatedAt();
         model.addAttribute("cm", new AdminConfirmModal(msg.get("admin.opsNotify.cancel.title"), null, List.of(),
-                msg.get("admin.opsNotify.cancel.body", c.getTitleId(), SHORT.format(when)), null, null, null,
+                msg.get("admin.opsNotify.cancel.body", summary(c.getTitleId()), SHORT.format(when)), null, null, null,
                 BASE + "/" + token + "/cancel", hidden, msg.get("admin.opsNotify.cancel.confirm"), true));
         response.setHeader(AdminFragmentResponses.HEADER_RETARGET, "#confirm-host");
         response.setHeader(AdminFragmentResponses.HEADER_RESWAP, "innerHTML");

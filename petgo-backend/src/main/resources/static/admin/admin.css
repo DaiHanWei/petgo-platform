@@ -57,6 +57,9 @@
 
 body {
     font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    /* V1.4.2 shop-admin Story 1.2 · AD-3：全局字体抗锯齿（UI 稿 .x） */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     margin: 0;
     color: var(--ink);
     background: var(--bg);
@@ -589,8 +592,8 @@ dialog { z-index: 60; }
 .empty--queue + .empty-elsewhere { margin-top: -32px; padding-bottom: 40px; }
 /* 模板 B 列表 */
 .lst-table table tr { height: 48px; }
-.lst-table tr[data-drawer-url] { cursor: pointer; }
-.lst-table tr[data-drawer-url]:hover { background: var(--brand-tint); }
+.lst-table tr[data-drawer-url], .lst-table tr[data-href] { cursor: pointer; }
+.lst-table tr[data-drawer-url]:hover, .lst-table tr[data-href]:hover { background: var(--brand-tint); }
 .lst-table tr.is-selected { background: var(--brand-tint); box-shadow: inset 3px 0 0 var(--brand); }
 /* 模板 C 报表 */
 .rpt-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -1226,11 +1229,11 @@ tr.is-muted td { opacity: .55; }
 #ops-notify-rows .opsn-table th { background: #F0F1F5; font-weight: 600; color: var(--ink-2); text-align: left; padding: 11px 12px; }
 #ops-notify-rows .opsn-table td { padding: 9px 12px; border-top: 1px solid var(--line); height: 48px; color: var(--ink); font-variant-numeric: tabular-nums; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #ops-notify-rows .opsn-table .opsp-window { color: var(--muted); }
-#ops-notify-rows .opsn-c-sum { width: 25%; }
+#ops-notify-rows .opsn-c-sum { width: 22%; } /* V1.4.2 AB-37 · I5：25 → 22，让出位置给「· 跳过 N（没有宠物）」 */
 #ops-notify-rows .opsn-c-aud { width: 22.5%; }
-#ops-notify-rows .opsn-c-at { width: 18.5%; }
+#ops-notify-rows .opsn-c-at { width: 16.5%; }
 #ops-notify-rows .opsn-c-st { width: 11%; }
-#ops-notify-rows .opsn-c-reach { width: 15.5%; }
+#ops-notify-rows .opsn-c-reach { width: 20.5%; }
 #ops-notify-rows .opsn-reach.muted, #ops-notify-rows .opsn-reach .muted { color: var(--muted); }
 #ops-notify-rows .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; }
 #ops-notify-rows .badge-muted { background: #F1F2F5; color: var(--muted); }
@@ -1256,6 +1259,7 @@ tr.is-muted td { opacity: .55; }
 .opsn-wiz textarea.s-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; min-height: 96px; }
 .opsn-wiz .inp.is-invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
 .opsn-h { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 8px 0 0; }
+.opsn-h.opsn-var-hint { margin-top: 4px; }
 .opsn-ferr { color: var(--danger); font-size: 12px; margin: 8px 0 0; }
 .opsn-ferr[hidden] { display: none; }
 .opsn-wiz .opsp-two { margin-top: 0; }
@@ -1271,6 +1275,23 @@ tr.is-muted td { opacity: .55; }
 .opsn-ids-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .opsn-ids-row .opsn-h { margin: 0; }
 .opsn-upload { background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-weight: 600; }
+/* V1.4.2 AB-37 · Story 7.2（UI 稿 I1–I3）：contenteditable 编辑区 + 整体变量标签 + 插入按钮 + 示例效果 */
+.opsn-wiz .opsn-ed { cursor: text; outline: 0; word-break: break-word; }
+.opsn-wiz .opsn-ed[data-single-line] { line-height: 20px; white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.opsn-wiz .opsn-ed[data-single-line]::-webkit-scrollbar { display: none; }
+.opsn-wiz .opsn-ed:not([data-single-line]) { height: auto; min-height: 70px; line-height: 1.5; white-space: pre-wrap; }
+.opsn-ed:focus { outline: 2px solid var(--brand-line); border-color: var(--brand); }
+.opsn-wiz .opsn-ed.is-over { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.opsn-var { display: inline-block; background: var(--brand-tint); color: var(--brand-strong); border: 1px solid var(--brand-line);
+  border-radius: 4px; padding: 0 4px; margin: 0 1px; font-size: 13px; font-weight: 600; line-height: 18px; white-space: nowrap;
+  cursor: default; -webkit-user-select: all; user-select: all; }
+.opsn-var-row { display: flex; align-items: center; gap: 8px; }
+.opsn-wiz .opsn-varbtn { background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-size: 12px; font-weight: 600;
+  height: 26px; padding: 0 10px; border-radius: 6px; line-height: 1; }
+.opsn-ex { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 0; word-break: break-word; }
+.opsn-ex[hidden] { display: none; }
+.opsn-ex b { color: var(--ink-2); font-weight: 600; white-space: pre-wrap; }
+.opsn-l em.is-over { color: var(--danger); font-weight: 600; }
 .opsn-ids-result:empty { display: none; }
 .opsn-ids-banner { margin-top: 14px; background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 10px 14px; font-size: 13px; }
 .opsn-ids-banner .opsp-lnk { margin: 0 0 0 8px; color: var(--brand-strong); }
@@ -1294,6 +1315,14 @@ tr.is-muted td { opacity: .55; }
 .opsn-kv { display: grid; grid-template-columns: 132px 1fr; gap: 12px 0; margin: 0; font-size: 13px; }
 .opsn-kv dt { color: var(--muted); }
 .opsn-kv dd { margin: 0; font-weight: 600; color: var(--ink); word-break: break-word; }
+/* V1.4.2 AB-37 · 7.2（UI 稿 I4 / I6）：预计触达下一行「已排除 N 位没有宠物的用户」；预览用户条 */
+.opsn-kv .opsn-excl { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--warn); }
+.opsn-pv-user { display: flex; align-items: center; gap: 8px; min-height: 34px; box-sizing: border-box; margin: 0 0 16px;
+  padding: 4px 6px 4px 12px; font-size: 13px; color: var(--ink-2); background: #F7F8FA; border: 1px solid var(--line); border-radius: 6px; }
+.opsn-pv-user-n { color: var(--ink); font-weight: 600; }
+.opsn-pv-user-v { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opsn-pv-user .opsp-lnk { margin: 0 0 0 auto; padding: 4px 6px; border-radius: 4px; flex-shrink: 0; }
+.opsn-pv-user .opsp-lnk[disabled] { opacity: .5; cursor: progress; }
 .opsn-foot { position: fixed; left: 210px; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line);
   padding: 14px 32px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 .opsn-foot [hidden] { display: none; }
@@ -1478,3 +1507,138 @@ body:has(#growthbatch-drawer.drawer.is-open) .toast { right: 24px; bottom: 76px;
 .growth-adjust { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
 .growth-adjust > h3 { margin: 0 0 4px; font-size: 12.5px; color: var(--ink-2); }
 .growth-ledger .pager { display: flex; justify-content: flex-end; align-items: center; gap: 12px; font-size: 12.5px; margin-top: 8px; }
+
+/* ===== V1.4.2 Story 6.1 · 话题管理（AB-10B，UI 稿 F1–F9）===== */
+/* 新开关组件：原生 <button role="switch" aria-checked>，32×18，整格 28px 热区；禁用同 .btn[disabled] 半透明 */
+.switch { position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 28px; padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; vertical-align: middle; }
+.switch::before { content: ''; width: 32px; height: 18px; border-radius: 9px; background: #D5D3DE; transition: background .15s; }
+.switch .switch-knob { position: absolute; top: 7px; left: 6px; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform .15s; }
+.switch[aria-checked="true"]::before { background: var(--brand); }
+.switch[aria-checked="true"] .switch-knob { transform: translateX(14px); }
+.switch:focus-visible { outline: 0; }
+.switch:focus-visible::before { box-shadow: 0 0 0 2px var(--brand-line); outline: 1px solid var(--brand); }
+.switch[disabled], .switch[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+/* 新建成功定位到新行：高亮约 2 秒 */
+@keyframes topic-row-flash { from { background: var(--brand-line); } to { background: transparent; } }
+.lst-table tr.row-flash td { animation: topic-row-flash 2s ease-out 1; }
+.topics-table td.num, .topics-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.topic-meta dd.num { text-align: left; font-variant-numeric: tabular-nums; }
+.topics-table .sort-arrow { color: var(--brand); margin-left: 2px; font-size: 10px; }
+.topic-type--official { background: var(--surface); color: var(--brand-strong); border-color: var(--brand); }
+.topic-type--user { background: #F2F1F5; color: var(--ink-2); border-color: var(--line); }
+.topic-feat { min-height: 28px; }
+.topic-feat form.inline { display: inline-flex; vertical-align: middle; }
+.topic-feat .topic-order { width: 52px; margin-left: 6px; padding: 3px 6px; text-align: right; font-variant-numeric: tabular-nums; }
+.topic-feat .topic-order-ro { margin-left: 6px; font-variant-numeric: tabular-nums; }
+.topic-feat .topic-order-err { margin: 2px 0 0; white-space: normal; }
+.topic-feat .topic-order-err[hidden] { display: none; }
+.topic-edit { color: var(--brand-strong); font-weight: 600; text-decoration: none; }
+.topic-edit:hover { text-decoration: underline; }
+.topics-empty { background: none; }
+/* 抽屉 */
+.topic-drawer .topic-status { display: inline-flex; align-items: center; gap: 4px; }
+/* 话题抽屉头部摘要（UI 稿 F4/F5/F7）：单列「标签 → 值」，标签定宽不换行，值左对齐 */
+.topic-meta { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; }
+.topic-meta > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; font-size: var(--fs-sm); }
+.topic-meta dt { white-space: nowrap; }
+.topic-meta dt { color: var(--muted); }
+.topic-meta dd { margin: 0; color: var(--ink); }
+.topic-name-inp { display: flex; width: 100%; box-sizing: border-box; }
+.topic-name-inp .price-inp-field { flex: 1; width: auto; text-align: left; font-family: inherit; }
+.topic-name-inp:focus-within { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-tint); }
+.topic-desc { border-radius: 6px; min-height: 96px; resize: vertical; width: 100%; box-sizing: border-box; }
+.topic-desc-ro { white-space: pre-wrap; }
+.topic-name-check:empty { display: none; }
+.topic-name-check .banner { margin: 8px 0 0; }
+.topic-name-check .err { margin: 6px 0 0; }
+.topic-save { min-width: 88px; }
+.topic-drawer [data-topic-caseonly][hidden] { display: none; }
+.topic-actions .lst-inline-error { flex: 1; margin: 0; }
+
+/* ===== V1.4.2 social-topic · Story 6.2 话题页顶置（UI G1–G2、F4 / F5 区块）===== */
+/* 页签条与说明句、筛选栏之间的间距（UI G1 .lG-tabs margin 4px 0 16px） */
+.pins-tabs { margin: 4px 0 16px; }
+.pins-tabs .tab { font-weight: 700; margin-bottom: -1px; }
+/* 面包屑（新写法，后台此前无面包屑组件）：13px 灰字、链接品牌紫、「/」分隔、末段深色半粗 */
+.crumbs { margin: 0 0 6px; font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.crumbs a { color: var(--brand-strong); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs b { color: var(--ink); font-weight: 600; }
+.pin-topic-h1 { display: flex; align-items: center; gap: 8px; }
+.pin-topic-acts { display: flex; gap: 8px; align-items: center; }
+/* G1a：当前生效的顶置一行截断 */
+.pin-topics-table { table-layout: fixed; width: 100%; }
+.pin-topic-cur { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* G2：坑位只读一行（不用灰底框） */
+.pin-slot-line { margin: 0 0 8px; font-size: 13px; color: var(--ink); }
+.pin-slot-line .muted { margin-right: 8px; }
+.pin-back { margin: 0 0 8px; }
+/* F4 / F5「话题页顶置」区块：白卡 + 13px 灰色半粗小标题（.pin-card h3） */
+.topic-pins-dl { margin: 0 0 8px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.topic-pins-dl > div { display: grid; grid-template-columns: 64px 1fr; gap: 8px; }
+.topic-pins-dl dt { color: var(--muted); }
+.topic-pins-dl dd { margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.topic-pins-item { min-width: 0; }
+.topic-pins-sum { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.topic-pins-acts { display: flex; gap: 12px; align-items: center; }
+
+/* ===== V1.4.2 shop-admin Story 1.2 · AD-3：电商后台共用样式（值取自 UI 稿 .kv.amt / .sum .s.dg|wa / .tabs .c.dg / .bd）===== */
+/* 金额明细：标签左、金额右；.nt 灰字附注在金额前；.tl 合计行（上边线 + 加粗；首行不画线） */
+.kv.amt { display: grid; grid-template-columns: max-content 1fr; gap: 7px 0; font-size: 13px; margin: 10px 0; }
+.kv.amt > span:nth-child(odd) { padding-right: 16px; white-space: nowrap; color: var(--muted); }
+.kv.amt > span:nth-child(even) { text-align: right; font-weight: 700; color: var(--ink); }
+.kv.amt .tl { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; color: var(--ink) !important; font-weight: 700; }
+.kv.amt > .tl:nth-child(-n+2) { border-top: 0; padding-top: 0; margin-top: 0; }
+.kv.amt .nt { color: var(--muted); font-weight: 400; font-size: 12px; margin-right: 8px; }
+/* 金额与数字一律等宽数字、金额列不换行 */
+.num, .amt, td.amt, th.amt, .sum .sum-value { font-variant-numeric: tabular-nums; }
+td.amt, th.amt, .amt-cell { text-align: right; white-space: nowrap; }
+/* 汇总格语义色：.dg 红 / .wa 黄（左侧色条 + 数值着色） */
+.sum .sum-item.dg { box-shadow: inset 3px 0 0 var(--danger); }
+.sum .sum-item.dg .sum-value { color: var(--danger); }
+.sum .sum-item.wa { box-shadow: inset 3px 0 0 var(--warn); }
+.sum .sum-item.wa .sum-value { color: var(--warn); }
+/* 页签计数：待处理用红 / 黄 */
+.tab .tab-count.dg { color: var(--danger); }
+.tab .tab-count.wa { color: var(--warn); }
+/* 队列来源徽标（缺货 / 运单失败 / 揽收失败 / 退回 / 丢件破损），不换行 */
+.badge.q-src { white-space: nowrap; display: inline-block; }
+/* confirm-modal 单选组 / 下拉 */
+.cm-choices { border: 0; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+.cm-choices legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+.cm-choice { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.cm-choice small { display: block; }
+dialog.cm-modal .cm-select { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+/* V1.4.2 shop-admin Story 2.2：行内文字按钮（停用）、新建后定位行 */
+.btn-link { background: none; border: 0; padding: 0; color: var(--brand); cursor: pointer; font: inherit; }
+.btn-link:hover { text-decoration: underline; }
+tr.is-focus > td { background: var(--brand-tint, #F3F0FF); }
+/* V1.4.2 shop-admin Story 3.1：banner 拖动手柄 */
+.s-col-handle { width: 28px; }
+.drag-handle { cursor: grab; color: var(--muted); user-select: none; letter-spacing: -2px; }
+tr.is-dragging { opacity: .5; }
+/* V1.4.2 shop-admin Story 4.1（G3）：预估余额低于阈值标红；Biteship 卡两个小表单间距 */
+.kv.amt .is-danger { color: var(--danger) !important; }
+.ship-biteship-form { margin-top: 12px; }
+/* V1.4.2 shop-admin Story 4.2（G6）：规格表「未填」标红 */
+td.is-missing { color: var(--danger); }
+/* V1.4.2 shop-admin Story 5.3（D0）：待办中心组末尾「商城待办」小标题 */
+.nav-sub .nav-subhead { font-size: 11px; color: var(--muted); padding: 10px 12px 2px; letter-spacing: .02em; }
+
+/* V1.4.2 exp-reverse：抽屉成长值节的扣回按钮与上方表格留间距 */
+[data-section="order-growth"] [data-exp-reverse] { margin-top: 12px; }
+
+/* ===== 通用分页条（V1.4.2 优化项，admin/fragments/pager）===== */
+.admin-pager { flex-wrap: wrap; gap: 6px 10px; }
+.admin-pager .pager-total { color: var(--muted); margin-right: 6px; }
+.admin-pager .pager-num, .admin-pager .pager-batch {
+    min-width: 28px; height: 28px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px; font-variant-numeric: tabular-nums;
+}
+.admin-pager a.pager-num:hover, .admin-pager a.pager-batch:hover { background: var(--brand-soft, rgba(132, 94, 201, .08)); }
+.admin-pager .pager-num.is-current { background: var(--brand-strong); color: #fff; font-weight: 600; }
+.admin-pager .pager-jump { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 6px; }
+.admin-pager .pager-jump label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.admin-pager .pager-jump-input { width: 64px; height: 28px; padding: 0 6px; font-variant-numeric: tabular-nums; }

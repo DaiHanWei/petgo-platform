@@ -17,8 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>🔴 <b>服务范围的校验时机是「试算/结算」，不是「保存地址」</b>（FR-99）：
  * 用户存下一个当前不可送达的地址是合法的（他可能下个月搬过去、或先存着等平台开通），
  * 挡在保存这一步既没必要又损失数据。<b>阻断发生在下单前的最后一刻。</b>
+ *
+ * @deprecated v1.4.2 shop Story 1.1：运费改由 Biteship 报价（{@code shop.logistics.ShippingQuoteService}）。
+ *     与新类同名，故显式 bean 名 {@code zoneShippingQuoteService} 避免默认 bean 名冲突；
+ *     <b>Story 3.2 重写结算后删除</b>。在此之前逻辑一字不改（现结算仍靠它出运费）。
  */
-@Service
+@Deprecated(forRemoval = true)
+@Service("zoneShippingQuoteService")
 public class ShippingQuoteService {
 
     private final ShippingZoneRepository zones;

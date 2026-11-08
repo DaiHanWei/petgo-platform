@@ -17,6 +17,8 @@ import com.tailtopia.growth.service.GrowthIdemKeys;
 import com.tailtopia.growth.service.GrowthLedgerService;
 import com.tailtopia.growth.service.ReverseCommand;
 import com.tailtopia.place.event.PlaceCheckedInEvent;
+import com.tailtopia.profile.domain.AccountMilestoneFlag;
+import com.tailtopia.profile.event.AccountMilestoneCompletedEvent;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import java.time.Clock;
@@ -194,6 +196,10 @@ public class GrowthActivityListener {
     @Async
     @TransactionalEventListener
     public void onMilestone(MilestoneCompletedEvent e) {
+        // V1.4.2 Story 2.1（D-12）：账号级 6 个编码只按账号给分（onAccountMilestone），屏蔽按宠物路径的重复入账。
+        if (AccountMilestoneFlag.isAccountLevel(e.code())) {
+            return;
+        }
         RuleCode rule = switch (e.level()) {
             case S -> RuleCode.MILESTONE_S;
             case M -> RuleCode.MILESTONE_M;
@@ -201,6 +207,18 @@ public class GrowthActivityListener {
         };
         accrue(new AccrualCommand(e.ownerId(), rule, null, GrowthIdemKeys.milestone(e.ownerId(), e.code(), e.petId()),
                 REF_MILESTONE, e.code(), petIds(e.petId()), clock.instant()));
+    }
+
+    /**
+     * 账号级里程碑（V1.4.2 Story 2.1 · D-12 / G-3 / P-7）：账号 + flag 只 1 条 {@code MILESTONE_S}，与宠物数无关；
+     * 触发时没有 ACTIVE 宠物也照发（pet_ids 为 NULL）。refId = flagKey（与物种无关；5 次上限按 refId 计，不与其他编码互扰）。
+     */
+    @Async
+    @TransactionalEventListener
+    public void onAccountMilestone(AccountMilestoneCompletedEvent e) {
+        accrue(new AccrualCommand(e.userId(), RuleCode.MILESTONE_S, null,
+                GrowthIdemKeys.milestoneAccount(e.userId(), e.flagKey()), REF_MILESTONE, e.flagKey(),
+                petIds(e.petIds()), clock.instant()));
     }
 
     /** 违规下架（PRD AC7）：只扣该帖的发帖分；被赞 / 被评 / 被收藏所得不扣。 */

@@ -91,8 +91,9 @@ class CardPageControllerTest {
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false, java.util.List.of())));
         // 第 6 个字段是 V1.3.0 Story 1.4 的「未庆祝」角标数；访客页不展示它，给 0。
         // 第 7 个字段是 V1.4.0 gift Story 2.1 的礼物总价值（票根 Hadiah 列）；多宠物线起按名片那只宠物（10L）取。
+        // 第 8 个字段是 V1.4.2 social-topic Story 1.1 的追更人数；H5 名片不展示它，给 0。
         when(timelineService.getStats(7L, 10L))
-                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0, giftTotalValue));
+                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0, giftTotalValue, 0));
     }
 
     @Test
@@ -237,7 +238,7 @@ class CardPageControllerTest {
                 org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
     }
 
-    /** 总数按物种取常量目录（猫 33，V1.3.4 +C-S17/C-S18），<b>不是</b>视觉稿里那个示意的 30。 */
+    /** 总数按物种取常量目录（猫 35，V1.3.4 +C-S17/C-S18，V1.4.2 +C-S19/C-S20），<b>不是</b>视觉稿里那个示意的 30。 */
     @Test
     void milestoneTotalComesFromCatalogNotTheMockupNumber() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
@@ -249,9 +250,9 @@ class CardPageControllerTest {
 
         int catTotal = com.tailtopia.profile.domain.MilestoneCatalog
                 .forType(com.tailtopia.profile.domain.PetType.CAT).size();
-        assertThat(catTotal).isEqualTo(33);
+        assertThat(catTotal).isEqualTo(35);
         assertThat(model.getAttribute("milestoneTotal")).isEqualTo(catTotal);
-        assertThat(model.getAttribute("milestoneMore")).isEqualTo(33L); // 一个没完成 → +33
+        assertThat(model.getAttribute("milestoneMore")).isEqualTo(35L); // 一个没完成 → +35
     }
 
     /** 具名徽章取<b>最近完成</b>的若干条，且标题是<b>印尼语</b>（AC3：页面不得出现中文）。 */

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  用户抽屉「优惠券」页签（V1.4.2 shop-admin Story 2.3 · UI A11 ~ A13）。只读：没有修改券、补发、解锁入口。
+    panel(visible) — 根元素 <section data-utab-panel="coupons">；visible=false 时带 hidden。
+  · 点一行：<details> 展开状态变化记录（user_coupon_events，带订单号，可点进订单）。
+  · 占用中 / 已使用显示当前订单号；已退回的券订单号只在状态记录里。
+  · A13：被兑换锁定时顶部 .banner.warn 显示剩余分钟；TTL 读不到不显示、不报错。
+  模型：couponsTab（AdminUserCouponsService.Tab，可空 —— 空时只留容器，不让整张抽屉 500）。
+*/-->
+<body>
+<section th:fragment="panel(visible)" class="card card-full ud-card" data-utab-panel="coupons" id="user-coupons-panel"
+         th:attr="hidden=${visible} ? null : 'hidden'" th:with="t=${couponsTab}">
+    <th:block th:if="${t != null}">
+    <div class="banner warn" th:if="${t.lockMinutes() != null}" data-coupon-lock
+         th:text="#{admin.v142.userCoupons.locked(${t.lockMinutes()})}">兑换已锁定，30 分钟后解除。</div>
+    <p class="muted" th:if="${#lists.isEmpty(t.rows())}" th:text="#{admin.v142.userCoupons.empty}">该用户还没有优惠券。</p>
+    <table class="ud-coupons" th:unless="${#lists.isEmpty(t.rows())}">
+        <thead><tr>
+            <th th:text="#{admin.v142.userCoupons.col.coupon}">券</th>
+            <th th:text="#{admin.v142.userCoupons.col.source}">获得方式</th>
+            <th th:text="#{admin.v142.userCoupons.col.claimedAt}">领取时间</th>
+            <th th:text="#{admin.v142.userCoupons.col.validUntil}">有效期至</th>
+            <th th:text="#{admin.common.status}">状态</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="r : ${t.rows()}" th:attr="data-user-coupon=${r.token()}">
+            <td>
+                <details>
+                    <summary>
+                        <span th:if="${r.kind() == 'DISCOUNT' and r.minSpend() == 0}" th:text="#{admin.v142.userCoupons.name.discountNoMin(${#numbers.formatInteger(r.amount(), 0, 'POINT')})}">无门槛减 20.000</span>
+                        <span th:if="${r.kind() == 'DISCOUNT' and r.minSpend() > 0}" th:text="#{admin.v142.userCoupons.name.discount(${#numbers.formatInteger(r.minSpend(), 0, 'POINT')}, ${#numbers.formatInteger(r.amount(), 0, 'POINT')})}">满 100.000 减 20.000</span>
+                        <span th:if="${r.kind() == 'FREE_SHIPPING'}" th:text="#{admin.v142.userCoupons.name.freeShipping(${#numbers.formatInteger(r.amount(), 0, 'POINT')})}">免运 最高 15.000</span>
+                        <small class="muted" th:if="${r.source() == 'NEWBIE'}" th:text="#{admin.v142.userCoupons.newbieTag}">新人券</small>
+                    </summary>
+                    <div class="ud-coupon-events">
+                        <div class="muted" th:text="#{admin.v142.userCoupons.history(${#locale.language == 'id'} ? ${r.couponName()} : ${r.couponNameEn()})}">状态变化</div>
+                        <ul>
+                            <li th:each="e : ${r.events()}">
+                                <span class="num" th:text="${#temporals.format(e.at(), 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">2026-11-05 10:00</span>
+                                <th:block th:switch="${e.event()}">
+                                    <span th:case="'ISSUED'" th:text="#{'admin.v142.userCoupons.event.ISSUED.' + ${r.source()}}">兑换获得</span>
+                                    <span th:case="'LOCKED'">
+                                        <th:block th:text="#{admin.v142.userCoupons.event.LOCKED(${e.orderNo() == null ? '—' : e.orderNo()})}">被 TOKO-… 占用</th:block>
+                                    </span>
+                                    <span th:case="'RELEASED'" th:text="#{admin.v142.userCoupons.event.RELEASED(${e.orderNo() == null ? '—' : e.orderNo()})}">订单取消，退回为可用</span>
+                                    <span th:case="'USED'" th:text="#{admin.v142.userCoupons.event.USED(${e.orderNo() == null ? '—' : e.orderNo()})}">付款，已使用</span>
+                                    <span th:case="'VOIDED'" th:text="#{admin.v142.userCoupons.event.VOIDED}">已作废</span>
+                                </th:block>
+                                <a th:if="${e.orderToken() != null}" th:href="@{/admin/shop/orders(open=${e.orderToken()})}"
+                                   th:text="#{admin.v142.userCoupons.openOrder}">查看订单</a>
+                            </li>
+                        </ul>
+                    </div>
+                </details>
+            </td>
+            <td th:text="#{'admin.v142.userCoupons.source.' + ${r.source()}}">领取</td>
+            <td class="num" th:text="${#temporals.format(r.claimedAt(), 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">2026-11-05</td>
+            <td class="num" th:text="${#temporals.format(r.validUntil(), 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">2026-11-12</td>
+            <td>
+                <span class="badge" th:classappend="${r.displayStatus() == 'AVAILABLE'} ? 'badge-ok' : (${r.displayStatus() == 'LOCKED'} ? 'badge-warn' : 'badge-muted')"
+                      th:text="#{'admin.v142.userCoupons.status.' + ${r.displayStatus()}}">可用</span>
+                <a th:if="${r.orderToken() != null}" th:href="@{/admin/shop/orders(open=${r.orderToken()})}" th:text="${r.orderNo()}">TOKO-…</a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="muted" th:if="${t.truncated()}" th:text="#{admin.v142.userCoupons.truncated}">只显示最近 200 张。</p>
+    </th:block>
+</section>
+</body>
+</html>

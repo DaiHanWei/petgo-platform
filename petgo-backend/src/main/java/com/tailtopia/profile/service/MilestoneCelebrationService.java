@@ -1,5 +1,6 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.AccountMilestoneFlag;
 import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.MilestoneCelebrationReportResponse;
@@ -8,8 +9,10 @@ import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,10 +71,24 @@ public class MilestoneCelebrationService {
         List<Long> rosterIds = roster.stream().map(PetMilestone::getId).toList();
 
         Set<String> requested = new LinkedHashSet<>(codes); // 去重，重复 code 不影响结果
-        List<Long> targetIds = roster.stream()
+        List<Long> targetIds = new ArrayList<>(roster.stream()
                 .filter(m -> requested.contains(m.getCode()))
                 .map(PetMilestone::getId)
+                .toList());
+        // V1.4.2 Story 2.1（D-12 末条 / PRD AC10）：账号级编码按账号回报 —— 账号下所有宠物（含 READ_ONLY，只要有完成行）
+        // 同一 flag 的行一并置位（仍只置 NULL 的）。其余 code 仍只置本宠物（AD-A2.3b 不变）。
+        // 🔴 按完整 code 精确反查 flag，不切后缀；落行仍限定在本人（ownerId）名下。
+        List<String> accountCodes = requested.stream()
+                .map(AccountMilestoneFlag::ofCode)
+                .flatMap(Optional::stream)
+                .distinct()
+                .flatMap(f -> f.codes().stream())
                 .toList();
+        if (!accountCodes.isEmpty()) {
+            Set<Long> merged = new LinkedHashSet<>(targetIds);
+            merged.addAll(milestones.findIdsByOwnerIdAndCodeIn(ownerId, accountCodes));
+            targetIds = new ArrayList<>(merged);
+        }
 
         int marked = targetIds.isEmpty() ? 0 : completions.markCelebrated(targetIds, Instant.now());
         long remaining = completions.countByPetMilestoneIdInAndCelebratedAtIsNull(rosterIds);

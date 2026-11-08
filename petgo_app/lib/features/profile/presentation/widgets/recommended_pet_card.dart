@@ -41,6 +41,9 @@ const String kPetRecommendFromExploreGrid = 'explore_grid';
 /// 与「专门点进去看的」——而这两批人的意图强弱完全不同。
 const String kPetRecommendFromExploreStrip = 'explore_strip';
 
+/// V1.4.2 social-topic Story 1.5（AC4.5 · UI 稿 A8）：我自己的关注列表 Hewan 为空时下方的推荐宠物卡。
+const String kPetRecommendFromFollowListEmpty = 'follow_list_empty';
+
 /// 「逛别人家的毛孩子」宠物卡（V1.3.0 batch-b1 Story 4.1 · AC4/AC5/AC7）。
 ///
 /// <h3>🔴 大图与小圆头像是**两个不同字段、不同来源**</h3>

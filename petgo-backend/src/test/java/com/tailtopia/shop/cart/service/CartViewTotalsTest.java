@@ -17,6 +17,7 @@ import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
 import com.tailtopia.shop.service.InventoryService;
 import com.tailtopia.shop.service.ShopImageUrlResolver;
+import com.tailtopia.shop.support.ShopSkuFixtures;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -79,9 +80,17 @@ class CartViewTotalsTest {
 
     /** 造一个已上架商品 + 一个 SKU + 一条车行（走真实工厂，不反射造实体）。 */
     private ShopCartItem row(long skuId, long price, int qty, boolean selected, long available) {
+        return row(skuId, price, qty, selected, available, true);
+    }
+
+    private ShopCartItem row(long skuId, long price, int qty, boolean selected, long available,
+            boolean sellable) {
         long productId = 100L + skuId;
         ShopSku sku = ShopSku.create("sku-" + skuId, productId, "3 kg", price, null,
                 com.tailtopia.shop.domain.ReturnPolicy.RETURNABLE);
+        if (sellable) {
+            ShopSkuFixtures.sellable(sku);   // v1.4.2 Story 1.1：包裹参数不全 = 暂不可售
+        }
         ReflectionTestUtils.setField(sku, "id", skuId);
 
         ShopProduct p = ShopProduct.create("prd-" + skuId, "Royal Canin", "RC",
@@ -150,14 +159,43 @@ class CartViewTotalsTest {
 
         assertThat(v.invalidLines()).hasSize(1);
         assertThat(v.invalidLines().getFirst().selected())
-                .as("失效行的 selected 照实下发，不被改写成 false")
-                .isTrue();
+                .as("v1.4.2 Story 3.1 AC5.1：失效行一律下发 selected=false（库内仍为 true，只改出参）")
+                .isFalse();
         assertThat(v.subtotal()).as("subtotal 本来就只含有效行（文档的「全车合计」是笔误）")
                 .isEqualTo(200_000L);
         assertThat(v.selectedSubtotal())
                 .as("过滤条件必须是「selected && invalidReason == null」")
                 .isEqualTo(200_000L);
         assertThat(v.selectedCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 Story 1.1：包裹参数不全的行进 invalid、原因 NOT_SELLABLE、不计入合计")
+    void notSellableLineIsInvalidAndExcludedFromTotals() {
+        withRows(row(1L, 100_000L, 2, true, 10L),
+                row(2L, 50_000L, 3, true, 10L, false));   // 有库存、勾着，但包裹参数为空
+
+        CartView v = service.view(USER);
+
+        assertThat(v.invalidLines()).hasSize(1);
+        assertThat(v.invalidLines().getFirst().invalidReason())
+                .isEqualTo(CartView.REASON_NOT_SELLABLE);
+        assertThat(v.subtotal()).isEqualTo(200_000L);
+        assertThat(v.itemCount()).isEqualTo(2);
+        assertThat(v.selectedSubtotal()).isEqualTo(200_000L);
+        assertThat(v.selectedCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 Story 1.1：判定顺序 OUT_OF_STOCK 排在 NOT_SELLABLE 之后")
+    void notSellableTakesPrecedenceOverOutOfStock() {
+        withRows(row(1L, 100_000L, 2, true, 0L, false));
+
+        CartView v = service.view(USER);
+
+        assertThat(v.invalidLines()).singleElement()
+                .extracting(CartView.CartLine::invalidReason)
+                .isEqualTo(CartView.REASON_NOT_SELLABLE);
     }
 
     @Test

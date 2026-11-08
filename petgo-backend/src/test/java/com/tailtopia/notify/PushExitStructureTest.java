@@ -68,6 +68,9 @@ class PushExitStructureTest {
             "NotificationService#pushInteraction",
             "NotificationService#sendWithCopy",
             "NotificationService#sendGiftReceived",
+            // V1.4.2 social-topic Story 1.2：被追更 / 追更宠物新 Diary（提交后直接推，各自带 pushAllowed）
+            "NotificationService#sendPetFollowed",
+            "NotificationService#sendPetDiaryPosted",
             "OpsNotificationDispatcher#push");
 
     private static final Pattern METHOD_DECL = Pattern.compile(

@@ -37,6 +37,9 @@ import org.mockito.ArgumentCaptor;
  * 迁移里的清单必须与 {@code NotificationType} 枚举<b>双向相等</b>。
  * 这条用例的价值在于：下一个人加通知类型时，忘了重列 CHECK 会**在 L0 就红**，
  * 而不是等到 staging 起不来。
+ *
+ * <p>V1.4.2 shop Story 2.3 重建（{@code V20261105_1620}，+券快过期 / 迟到款重新下单两值）：
+ * 本守卫动态取版本序最后一条重建迁移，新迁移按规范写好后无需改比对逻辑即应变绿。
  */
 class MentionNotifyTest {
 
@@ -87,6 +90,13 @@ class MentionNotifyTest {
         // 「在旧清单上打补丁」是四次事故的共同形状 —— 约束的改法只有 DROP + ADD 重列全集。
         assertThat(sql).contains("DROP CONSTRAINT IF EXISTS ck_notifications_type");
         assertThat(sql).contains("ADD CONSTRAINT ck_notifications_type CHECK (type IN (");
+    }
+
+    @Test
+    void 电商线两值进了最新重建迁移() throws IOException {
+        // 防止新迁移因格式问题没被识别为「最后一条」、让旧文件冒充最新重建而空转。
+        assertThat(lastRebuildMigration().getFileName().toString()).startsWith("V20261105_1620__");
+        assertThat(lastRebuiltTypeValues()).contains("COUPON_EXPIRING", "SHOP_ORDER_REORDERED");
     }
 
     @Test

@@ -35,8 +35,43 @@ public class ShippingSettings {
     @Column(name = "return_receiver_phone", length = 20)
     private String returnReceiverPhone;
 
+    /**
+     * 发货地（v1.4.2 Story 1.1，D-9 / D-10；V20261105_1605）。邮编用于 Biteship 询价，
+     * 联系人 / 电话 / 地址供 5.1 下运单。🔴 电话与地址不得进日志。
+     */
+    @Column(name = "origin_postal_code", length = 5)
+    private String originPostalCode;
+    @Column(name = "origin_contact_name", length = 60)
+    private String originContactName;
+    @Column(name = "origin_contact_phone", length = 20)
+    private String originContactPhone;
+    @Column(name = "origin_address", length = 300)
+    private String originAddress;
+
+    /** 免运减免封顶（最小币种单位）；空或 0 = 不设额外封顶（m7）。计价在 1.2 计价器。 */
+    @Column(name = "free_shipping_cap")
+    private Long freeShippingCap;
+
+    /** 保价费率（基点，50 = 0.5%，D-7）。计价在 1.2 计价器。 */
+    @Column(name = "insurance_rate_bp", nullable = false)
+    private int insuranceRateBp = DEFAULT_INSURANCE_RATE_BP;
+
+    /**
+     * 商品评价列表展示开关（v1.4.2 shop Story 6.1，D-17；V20261105_1650，默认关）。
+     * 关闭时详情与 /reviews 只给均分与条数，不给评价条目；运营过完历史评价后打开。
+     */
+    @Column(name = "review_display_enabled", nullable = false)
+    private boolean reviewDisplayEnabled;
+
+    /** Biteship 预估余额预警阈值（IDR，V1.4.2 shop-admin Story 4.1 · AD-13；0 = 不预警）。 */
+    @Column(name = "balance_alert_threshold", nullable = false)
+    private long balanceAlertThreshold;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** 与迁移默认值一致：0.5%。 */
+    public static final int DEFAULT_INSURANCE_RATE_BP = 50;
 
     protected ShippingSettings() {
     }
@@ -74,6 +109,97 @@ public class ShippingSettings {
     public boolean hasReturnAddress() {
         return returnAddressText != null && returnReceiverName != null
                 && returnReceiverPhone != null;
+    }
+
+    /**
+     * 配置发货地（v1.4.2 Story 1.1）。邮编可空（空 = 未配置，live / sandbox 下询价失败）；
+     * 非空必须 5 位、首位非 0。
+     */
+    public void applyOrigin(String postalCode, String contactName, String contactPhone,
+            String address) {
+        String pc = blankToNull(postalCode);
+        if (pc != null && !pc.matches("^[1-9][0-9]{4}$")) {
+            throw new IllegalArgumentException("postal code must be 5 digits, not starting with 0");
+        }
+        requireMaxLength(contactName, 60, "origin contact name");
+        requireMaxLength(contactPhone, 20, "origin contact phone");
+        requireMaxLength(address, 300, "origin address");
+        this.originPostalCode = pc;
+        this.originContactName = blankToNull(contactName);
+        this.originContactPhone = blankToNull(contactPhone);
+        this.originAddress = blankToNull(address);
+        this.updatedAt = Instant.now();
+    }
+
+    /** 设置免运封顶；{@code null} 或 0 = 不封顶；负数 → {@link IllegalArgumentException}。 */
+    public void applyFreeShippingCap(Long cap) {
+        if (cap != null && cap < 0) {
+            throw new IllegalArgumentException("free shipping cap must be >= 0");
+        }
+        this.freeShippingCap = cap;
+        this.updatedAt = Instant.now();
+    }
+
+    /** 设置保价费率（基点 0 ~ 10000）。 */
+    public void applyInsuranceRateBp(int bp) {
+        if (bp < 0 || bp > 10000) {
+            throw new IllegalArgumentException("insurance rate bp must be within 0..10000");
+        }
+        this.insuranceRateBp = bp;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getOriginPostalCode() {
+        return originPostalCode;
+    }
+
+    public String getOriginContactName() {
+        return originContactName;
+    }
+
+    public String getOriginContactPhone() {
+        return originContactPhone;
+    }
+
+    public String getOriginAddress() {
+        return originAddress;
+    }
+
+    public Long getFreeShippingCap() {
+        return freeShippingCap;
+    }
+
+    public int getInsuranceRateBp() {
+        return insuranceRateBp;
+    }
+
+    public long getBalanceAlertThreshold() {
+        return balanceAlertThreshold;
+    }
+
+    /** 设置余额预警阈值；负数 → {@link IllegalArgumentException}。 */
+    public void applyBalanceAlertThreshold(long value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("balance alert threshold must be >= 0");
+        }
+        this.balanceAlertThreshold = value;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isReviewDisplayEnabled() {
+        return reviewDisplayEnabled;
+    }
+
+    public void setReviewDisplayEnabled(boolean enabled) {
+        this.reviewDisplayEnabled = enabled;
+        this.updatedAt = Instant.now();
+    }
+
+    private static void requireMaxLength(String v, int max, String field) {
+        String t = blankToNull(v);
+        if (t != null && t.length() > max) {
+            throw new IllegalArgumentException(field + " exceeds " + max + " characters");
+        }
     }
 
     private static String blankToNull(String v) {

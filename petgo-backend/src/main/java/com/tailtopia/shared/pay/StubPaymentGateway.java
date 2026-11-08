@@ -56,4 +56,19 @@ public class StubPaymentGateway implements PaymentGateway {
     public PaymentCallback parseCallback(Map<String, Object> body) {
         return CallbackParser.parse(body);
     }
+
+    /**
+     * v1.4.2 shop Story 3.3 AC5.4：桩查单恒回「已过期未付」—— stub 环境（dev / L1）的电商订单能在码失效后按时关单；
+     * 需要 PAID / UNKNOWN 的用例用 {@code @MockitoBean PaymentGateway} 覆盖。stag 的「支付模拟器」走回调收口，
+     * 仍可在关单前模拟到账。
+     */
+    @Override
+    public ChargeQueryResult queryCharge(String gatewayRef) {
+        if (gatewayRef == null || gatewayRef.isBlank()) {
+            return ChargeQueryResult.unknown();
+        }
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("stub", true);
+        return ChargeQueryResult.notPaid(new PaymentCallback(null, gatewayRef, GatewayStatus.EXPIRED, meta));
+    }
 }

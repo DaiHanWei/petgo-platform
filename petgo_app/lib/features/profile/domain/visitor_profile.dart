@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import 'pet_header_info.dart';
 import 'pet_profile.dart';
 
@@ -18,6 +20,10 @@ class VisitorProfile {
     this.birthday,
     this.intro,
     this.ownerNickname,
+    this.iFollow,
+    this.iFollowOwner,
+    this.ownerToken,
+    this.followEpoch = 0,
   });
 
   final String name;
@@ -32,6 +38,36 @@ class VisitorProfile {
 
   /// 主人昵称，供顶部「由 {昵称} 分享」横幅用。查不到为 null。
   final String? ownerNickname;
+
+  /// 我是否追更这只宠物（V1.4.2 social-topic · Story 1.1 / 1.4 · D-8）。
+  /// **只有站内入口下发**；分享 token 公开路径缺键 → null。
+  final bool? iFollow;
+
+  /// 我是否关注这只宠物的主人（R-2，埋点 `is_following_owner`）。缺键 → null。
+  final bool? iFollowOwner;
+
+  /// 主人公开 token（R-2，埋点 `owner_id`；不上报自增 id）。缺键 → null。
+  final String? ownerToken;
+
+  /// 发请求前读到的追更全局版本号（`petFollowStateProvider.currentEpoch`，V1.4.2 1.4 复审）：
+  /// 本会话里比它新的追更覆盖才盖过 [iFollow]。**客户端字段**，不来自 JSON（缺省 0）。
+  final int followEpoch;
+
+  /// 记上快照版本号（由 `visitorProfileProvider` 在取数前读、取数后贴）。
+  VisitorProfile withFollowEpoch(int epoch) => VisitorProfile(
+        name: name,
+        petType: petType,
+        avatarUrl: avatarUrl,
+        breed: breed,
+        sex: sex,
+        birthday: birthday,
+        intro: intro,
+        ownerNickname: ownerNickname,
+        iFollow: iFollow,
+        iFollowOwner: iFollowOwner,
+        ownerToken: ownerToken,
+        followEpoch: epoch,
+      );
 
   /// 页头视图模型 —— 与作者态用同一个类型，页头组件因此可以原样复用。
   PetHeaderInfo get header => PetHeaderInfo(
@@ -55,6 +91,31 @@ class VisitorProfile {
       birthday: rawBirthday == null ? null : DateTime.tryParse(rawBirthday),
       intro: json['intro'] as String?,
       ownerNickname: json['ownerNickname'] as String?,
+      iFollow: json['iFollow'] as bool?,
+      iFollowOwner: json['iFollowOwner'] as bool?,
+      ownerToken: json['ownerToken'] as String?,
     );
   }
+}
+
+/// 访客档案加载失败的分类（V1.4.2 social-topic · Story 1.4 · AC4 / AC5，照 `ContentLoadErrorKind`）。
+///
+/// - [gone]：服务端明确说「不存在」（404：宠物已删 / 主人注销或封号 / 对方拉黑我 / 链接失效；
+///   403 `blocked-user`：我拉黑了主人）→ A14，**四种原因共用一屏、文案不区分**。
+/// - [network]：没拿到明确业务结论（断网 / 超时 / 5xx / 其它）→ A15，可重试。
+enum VisitorLoadErrorKind { gone, network }
+
+class VisitorLoadError implements Exception {
+  const VisitorLoadError(this.kind);
+
+  final VisitorLoadErrorKind kind;
+
+  /// 404 / 403 → gone；其余（含没有响应）→ network。
+  static VisitorLoadError classify(DioException e) => switch (e.response?.statusCode) {
+        404 || 403 => const VisitorLoadError(VisitorLoadErrorKind.gone),
+        _ => const VisitorLoadError(VisitorLoadErrorKind.network),
+      };
+
+  @override
+  String toString() => 'VisitorLoadError(${kind.name})';
 }

@@ -24,6 +24,7 @@ import '../data/detail_repository.dart';
 import 'content_detail_page.dart';
 import 'detail_providers.dart';
 import 'feed_controller.dart';
+import '../../../shared/rich_text/topic_mention_text_controller.dart';
 import 'like_button.dart';
 
 /// 详情页**固定底栏**（Story 3.5 起为评论框；V1.3.0 Story 2.3 起合并互动栏，FR-114 · AD-A13）。
@@ -54,7 +55,9 @@ class CommentComposer extends ConsumerStatefulWidget {
 }
 
 class _CommentComposerState extends ConsumerState<CommentComposer> {
-  final TextEditingController _controller = TextEditingController();
+  /// V1.4.2 social-topic Story 4.4（§2.1）：点选插入的 @ 在输入框里高亮；**评论不高亮话题、不弹 # 联想**（D-19）。
+  late final TopicMentionTextController _controller =
+      TopicMentionTextController(mentionRefs: () => _mentions.refs, highlightTopics: false);
   final FocusNode _focusNode = FocusNode();
   static const int _maxLen = 200;
   bool _sending = false;
@@ -159,9 +162,8 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     );
     // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
     // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
-    Analytics.capture('mention_inserted', {
-      'context': MentionContext.comment.wire,
-    });
+    // V1.4.2 Story 5.2 AC4：加 relation / from_quick_list（选中时 @ 后关键词为空 = 来自快捷列表）。
+    Analytics.capture('mention_inserted', {'context': MentionContext.comment.wire, 'relation': candidate.relation.wire, 'from_quick_list': query.keyword.isEmpty});
     setState(() => _mentionQuery = null);
   }
 
@@ -349,6 +351,8 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
           if (_mentionQuery != null) ...[
             MentionPicker(
               keyword: _mentionQuery!.keyword,
+              // V1.4.2 Story 5.2 AC2.2：位置不动，只去过滤框；行左右 16（随评论页）。
+              rowHorizontalPadding: 16,
               onSelected: _onMentionSelected,
             ),
             const SizedBox(height: AppSpacing.xs),

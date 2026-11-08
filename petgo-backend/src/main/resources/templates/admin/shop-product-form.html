@@ -42,14 +42,23 @@
             </div>
         </div>
 
+        <!--/* V1.4.2 shop-admin Story 3.3 · J1：编辑态页头下「商品信息 / 评价」两个页签；原表单全部在「商品信息」里不动。 */-->
+        <div id="confirm-host"></div>
+        <nav class="tabs" th:if="${productId != null}" data-product-tabs>
+            <a class="tab" th:classappend="${tab != 'reviews'} ? 'tab--on'" th:href="@{/admin/shop/products/{id}(id=${productId})}"
+               th:text="#{admin.v142.review.tab.info}">商品信息</a>
+            <a class="tab" th:classappend="${tab == 'reviews'} ? 'tab--on'" th:href="@{/admin/shop/products/{id}(id=${productId},tab='reviews')}">
+                <span th:text="#{admin.v142.review.tab.reviews}">评价</span>
+                <span class="tab-count" th:if="${reviewsTab != null}" th:text="${reviewsTab.total()}">0</span></a>
+        </nav>
         <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
 
-        <!-- 🔴 Makanan 未填喂量的显著警告：FR-109 能否成立的唯一提醒点 -->
-        <!--/* bug 20260924-568：文案走 i18n（原先服务层写死中文，任何语言都显示中文）；品类名按语言取 */-->
-        <p th:if="${feedingWarning}" class="warn"
-           th:text="#{admin.shop.form.feedingWarning(${#messages.msg('admin.v130.shopProducts.category.MAKANAN')})}">
-            此商品为 Makanan 但未填写每日建议喂量。
-        </p>
+        <th:block th:if="${tab == 'reviews' and reviewsTab != null}">
+            <div th:replace="~{admin/fragments/shop-product-reviews :: panel}"></div>
+        </th:block>
+        <th:block th:unless="${tab == 'reviews'}">
+
+        <!--/* V1.4.2 shop-admin Story 1.1 · AB-29：复购下线，「未填每日建议喂量」警告删除；喂量字段保留。 */-->
 
         <form method="post" data-config-card
               th:action="${productId} == null ? @{/admin/shop/products} : @{'/admin/shop/products/' + ${productId}}"
@@ -210,9 +219,6 @@
                 <div class="s-card-head"><h2 th:text="#{admin.shop.form.section.feeding}">每日建议喂量</h2></div>
                 <div class="s-card-body">
                     <!-- 🔴 结构化行编辑器，绝不提供自由文本框 —— FR-109 的唯一计算依据 -->
-                    <p class="warn" th:text="#{admin.shop.form.hint.feedingConsequence}">
-                        此字段是粮量见底预估（复购提醒）的唯一计算依据，填成描述性文字会导致整条复购机制失效。
-                    </p>
                     <table>
                         <thead><tr>
                             <th th:text="#{admin.shop.feed.min}">体重下限(kg)</th>
@@ -247,6 +253,9 @@
         <div class="s-section" th:if="${productId} != null">
             <div class="s-card">
                 <div class="s-card-head"><h2 th:text="#{admin.shop.form.section.skus}">规格与价格</h2></div>
+                <!--/* V1.4.2 shop-admin Story 4.2（G6）：缺包裹参数的规格在 App 不可加购 / 购买 */-->
+                <div class="banner err" th:if="${skuMissingPackage != null and skuMissingPackage > 0}" data-sku-missing-package
+                     th:text="#{admin.v142.sku.banner.missing(${skuMissingPackage})}">有 1 个规格缺包裹重量或长宽高</div>
                 <table>
                     <thead><tr>
                         <th th:text="#{admin.shop.sku.specName}">规格名</th>
@@ -254,6 +263,8 @@
                         <!-- 批发价（门店进货价）：门店本就看得到，不受 shop.cost_view 门控（与下面的进货价 cost_price 不是一回事） -->
                         <th class="s-col-num" th:text="#{admin.shop.sku.wholesalePrice}">批发价</th>
                         <th class="s-col-num" th:text="#{admin.shop.sku.netWeight}">净含量(g)</th>
+                        <th class="s-col-num" th:text="#{admin.v142.sku.col.weight}">重量(g)</th>
+                        <th class="s-col-num" th:text="#{admin.v142.sku.col.dims}">长×宽×高(cm)</th>
                         <th th:text="#{admin.shop.col.returnPolicy}">退货规则</th>
                         <th class="s-col-num" th:text="#{admin.shop.sku.available}">可售库存</th>
                         <!-- 🔒 无 shop.cost_view 时 canViewCost 为 false，整列不渲染；且 costBySku 根本不在 model 中 -->
@@ -267,6 +278,12 @@
                         <td class="s-col-num"
                             th:text="${s.wholesalePrice} != null ? ${#numbers.formatInteger(s.wholesalePrice, 0, 'COMMA')} : '—'">250.000</td>
                         <td class="s-col-num" th:text="${s.netWeightG} ?: '—'">3000</td>
+                        <td class="s-col-num" th:classappend="${s.packageWeightG == null or s.packageWeightG <= 0} ? 'is-missing'"
+                            th:text="${s.packageWeightG} ?: #{admin.v142.sku.missing}">2150</td>
+                        <td class="s-col-num" th:classappend="${!s.sellable} ? 'is-missing'"
+                            th:text="${s.packageLengthCm != null and s.packageWidthCm != null and s.packageHeightCm != null}
+                                     ? ${s.packageLengthCm} + '×' + ${s.packageWidthCm} + '×' + ${s.packageHeightCm}
+                                     : #{admin.v142.sku.missing}">30×20×8</td>
                         <td th:text="${s.returnPolicy} != null ? #{'admin.v130.shopOrders.returnPolicy.' + ${s.returnPolicy}} : #{admin.shop.sku.inherit}">继承商品级</td>
                         <td class="s-col-num" th:text="${availableBySku[s.id]} ?: 0">0</td>
                         <td th:if="${canViewCost}" class="s-col-num"
@@ -275,7 +292,7 @@
                                🔒 进货价不回填：留空 = 不改（控制器对 null 跳过），避免无改动也写一条进货价审计。 */-->
                         <td>
                             <button type="button" class="btn btn-sm btn-neutral" data-sku-edit
-                                    th:attr="data-id=${s.id},data-spec=${s.specName},data-price=${s.price},data-wholesale=${s.wholesalePrice},data-net=${s.netWeightG},data-rp=${s.returnPolicy}"
+                                    th:attr="data-id=${s.id},data-spec=${s.specName},data-price=${s.price},data-wholesale=${s.wholesalePrice},data-net=${s.netWeightG},data-rp=${s.returnPolicy},data-pw=${s.packageWeightG},data-pl=${s.packageLengthCm},data-pwd=${s.packageWidthCm},data-ph=${s.packageHeightCm}"
                                     th:text="#{admin.shop.sku.edit}">编辑</button>
                         </td>
                     </tr>
@@ -320,6 +337,23 @@
                             <label class="s-label" for="sku-net" th:text="#{admin.shop.sku.netWeight}">净含量(g)</label>
                             <div class="s-ctl"><input id="sku-net" type="number" name="netWeightG" min="1"/></div>
                         </div>
+                        <!--/* V1.4.2 shop-admin Story 4.2（G6 · AD-18）：包裹重量与长宽高四项必填（服务端 validatePackage 同样拒绝） */-->
+                        <div class="s-form-row">
+                            <label class="s-label s-req" for="sku-pw" th:text="#{admin.v142.sku.packageWeight}">包裹重量(g)</label>
+                            <div class="s-ctl"><input id="sku-pw" type="number" name="packageWeightG" min="1" step="1" required/></div>
+                        </div>
+                        <div class="s-form-row">
+                            <label class="s-label s-req" for="sku-pl" th:text="#{admin.v142.sku.packageLength}">长(cm)</label>
+                            <div class="s-ctl"><input id="sku-pl" type="number" name="packageLengthCm" min="1" step="1" required/></div>
+                        </div>
+                        <div class="s-form-row">
+                            <label class="s-label s-req" for="sku-pwd" th:text="#{admin.v142.sku.packageWidth}">宽(cm)</label>
+                            <div class="s-ctl"><input id="sku-pwd" type="number" name="packageWidthCm" min="1" step="1" required/></div>
+                        </div>
+                        <div class="s-form-row">
+                            <label class="s-label s-req" for="sku-ph" th:text="#{admin.v142.sku.packageHeight}">高(cm)</label>
+                            <div class="s-ctl"><input id="sku-ph" type="number" name="packageHeightCm" min="1" step="1" required/></div>
+                        </div>
                         <div class="s-form-row">
                             <label class="s-label" for="sku-rp" th:text="#{admin.shop.col.returnPolicy}">退货规则</label>
                             <div class="s-ctl">
@@ -359,12 +393,17 @@
                     put('wholesalePrice', b.getAttribute('data-wholesale'));
                     put('netWeightG', b.getAttribute('data-net'));
                     put('returnPolicy', b.getAttribute('data-rp'));
+                    put('packageWeightG', b.getAttribute('data-pw'));
+                    put('packageLengthCm', b.getAttribute('data-pl'));
+                    put('packageWidthCm', b.getAttribute('data-pwd'));
+                    put('packageHeightCm', b.getAttribute('data-ph'));
                     put('costPrice', '');
                     var spec = form.querySelector('[name="specName"]');
                     if (spec) { spec.dispatchEvent(new Event('input', { bubbles: true })); spec.focus(); }
                 });
             </script>
         </div>
+        </th:block>
     </div>
 </div>
 </body>

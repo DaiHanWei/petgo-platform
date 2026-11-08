@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<body>
+<!--/*
+  后台通用分页条（V1.4.2 优化项）：共 N 条 · 第 x / y 页 · 页码一批 10 个（« » 换批）· 上一页 / 下一页 · 跳页。
+
+  用法（参数必须具名，Thymeleaf 3.1.5）：
+    <th:block th:with="tpl=@{/admin/users(page='~PAGE~', q=${q})}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target=null)}"></div>
+    </th:block>
+    ⚠️ th:with 必须在外层标签：与 th:replace 同标签时变量会被静默丢弃（AdminTemplateStructureTest 守）。
+  - p      : com.tailtopia.admin.shared.AdminPager（页码 0 基）
+  - tpl    : 带全部筛选条件的列表 URL，页码位置写占位符 ~PAGE~（0 基页码会被替换进去）。
+             ⚠️ 不能用 __PAGE__：双下划线是 Thymeleaf 预处理语法，会被当表达式求值成空串。
+  - target : htmx 局部刷新的目标选择器（如 '#content-rows'）；null = 整页跳转（href）
+  总数未知（p.known() 为 false）时退化为「第 x 页 + 上一页 / 下一页」，不显示总页数与跳页。
+*/-->
+<div th:fragment="pager(p, tpl, target)" class="pager admin-pager" th:if="${p != null}"
+     th:attr="data-page=${p.page()},data-pager-tpl=${tpl},data-pager-target=${target},data-pager-total=${p.totalPages()}">
+    <span class="pager-total" th:if="${p.known()}"
+          th:text="#{admin.pager.total(${#numbers.formatInteger(p.total(), 1, 'COMMA')})}">共 14,400 条</span>
+
+    <th:block th:if="${p.known() ? p.totalPages() > 1 : (p.hasPrev() or p.hasNext())}">
+        <a th:if="${p.hasPrev()}" class="pager-step" data-no-drawer
+           th:with="u=${#strings.replace(tpl, '~PAGE~', '' + (p.page() - 1))}"
+           th:href="${u}" th:attr="hx-get=${target != null} ? ${u} : null,hx-target=${target},hx-swap=${target != null} ? 'innerHTML' : null,hx-push-url=${target != null} ? 'true' : null"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+
+        <th:block th:if="${p.known()}">
+            <a th:if="${p.hasPrevBatch()}" class="pager-batch" data-no-drawer
+               th:title="#{admin.pager.prevBatch}"
+               th:with="u=${#strings.replace(tpl, '~PAGE~', '' + p.prevBatchPage())}"
+               th:href="${u}" th:attr="hx-get=${target != null} ? ${u} : null,hx-target=${target},hx-swap=${target != null} ? 'innerHTML' : null,hx-push-url=${target != null} ? 'true' : null">«</a>
+            <th:block th:each="n : ${p.batch()}">
+                <span th:if="${n == p.page()}" class="pager-num is-current" aria-current="page" th:text="${n + 1}">1</span>
+                <a th:unless="${n == p.page()}" class="pager-num" data-no-drawer
+                   th:with="u=${#strings.replace(tpl, '~PAGE~', '' + n)}"
+                   th:href="${u}" th:attr="hx-get=${target != null} ? ${u} : null,hx-target=${target},hx-swap=${target != null} ? 'innerHTML' : null,hx-push-url=${target != null} ? 'true' : null"
+                   th:text="${n + 1}">2</a>
+            </th:block>
+            <a th:if="${p.hasNextBatch()}" class="pager-batch" data-no-drawer
+               th:title="#{admin.pager.nextBatch}"
+               th:with="u=${#strings.replace(tpl, '~PAGE~', '' + p.nextBatchPage())}"
+               th:href="${u}" th:attr="hx-get=${target != null} ? ${u} : null,hx-target=${target},hx-swap=${target != null} ? 'innerHTML' : null,hx-push-url=${target != null} ? 'true' : null">»</a>
+        </th:block>
+        <span th:unless="${p.known()}" class="pager-page" th:text="#{admin.pager.pageOnly(${p.page() + 1})}">第 1 页</span>
+
+        <a th:if="${p.hasNext()}" class="pager-step" data-no-drawer
+           th:with="u=${#strings.replace(tpl, '~PAGE~', '' + (p.page() + 1))}"
+           th:href="${u}" th:attr="hx-get=${target != null} ? ${u} : null,hx-target=${target},hx-swap=${target != null} ? 'innerHTML' : null,hx-push-url=${target != null} ? 'true' : null"
+           th:text="#{admin.audit.next}">下一页 →</a>
+
+        <form th:if="${p.known()}" class="pager-jump" data-pager-jump novalidate>
+            <span class="pager-page" th:text="#{admin.pager.pageOf(${p.page() + 1}, ${p.totalPages()})}">第 1 / 9 页</span>
+            <label>
+                <span th:text="#{admin.pager.jumpTo}">跳至</span>
+                <input type="number" name="pagerJump" min="1" th:max="${p.totalPages()}" th:value="${p.page() + 1}"
+                       class="pager-jump-input" inputmode="numeric">
+            </label>
+            <button type="submit" class="btn btn-sm" th:text="#{admin.pager.go}">跳转</button>
+        </form>
+    </th:block>
+</div>
+</body>
+</html>

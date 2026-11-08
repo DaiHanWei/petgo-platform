@@ -38,12 +38,14 @@ public class MilestoneService {
     private final PetResolver petResolver;
     private final PetMilestoneRepository milestones;
     private final MilestoneCompletionRepository completions;
+    private final AccountMilestoneService accountMilestones;
 
     public MilestoneService(PetResolver petResolver, PetMilestoneRepository milestones,
-            MilestoneCompletionRepository completions) {
+            MilestoneCompletionRepository completions, AccountMilestoneService accountMilestones) {
         this.petResolver = petResolver;
         this.milestones = milestones;
         this.completions = completions;
+        this.accountMilestones = accountMilestones;
     }
 
     /**
@@ -63,7 +65,13 @@ public class MilestoneService {
             milestones.saveAll(roster);
         } catch (DataIntegrityViolationException e) {
             // 并发双建窗：唯一约束 (pet_profile_id, code) 兜底，已被另一事务物化 → 视为成功。
+            // 赢的那个事务已走过下面的钩子，这里不再补（本事务此刻已不可靠）。
+            return;
         }
+        // V1.4.2 Story 2.1（D-12 / G-3）：账号已有账号级 flag → 新物化的宠物直接「已完成且已庆祝」，不发事件。
+        // 只在真正物化时调（上方 existsByPetProfileId 短路分支不调：已有 roster 的宠物走触发 / reconcile 路径）；
+        // 新建档（ProfileService.create）与存量无 roster 宠物的惰性物化（getMilestones）都经这里。
+        accountMilestones.applyExistingFlagsToPet(petProfileId);
     }
 
     /**

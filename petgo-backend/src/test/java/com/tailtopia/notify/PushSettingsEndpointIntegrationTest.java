@@ -56,15 +56,17 @@ class PushSettingsEndpointIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("新用户 GET → 9 项全开，只有 ORDER_ACCOUNT 不可关；库里 0 行")
+    @DisplayName("新用户 GET → 10 项全开（V1.4.2 +PET_DIARY），只有 ORDER_ACCOUNT 不可关；库里 0 行")
     void freshUserAllEnabled() throws Exception {
         User u = newUser();
         mvc.perform(get(URL).header("Authorization", userBearer(u.getId())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.categories.length()").value(9))
+                .andExpect(jsonPath("$.categories.length()").value(10))
+                .andExpect(jsonPath("$.categories[4].code").value("PET_DIARY"))
+                .andExpect(jsonPath("$.categories[4].lockable").value(true))
                 .andExpect(jsonPath("$.categories[0].code").value("LIKE"))
-                .andExpect(jsonPath("$.categories[8].code").value("ORDER_ACCOUNT"))
-                .andExpect(jsonPath("$.categories[8].lockable").value(false))
+                .andExpect(jsonPath("$.categories[9].code").value("ORDER_ACCOUNT"))
+                .andExpect(jsonPath("$.categories[9].lockable").value(false))
                 .andExpect(jsonPath("$.categories[0].lockable").value(true))
                 .andExpect(jsonPath("$.categories[?(@.enabled == false)]").isEmpty());
         assertThat(rows(u.getId())).isZero();

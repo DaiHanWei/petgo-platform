@@ -6,6 +6,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface PetProfileRepository extends JpaRepository<PetProfile, Long> {
 
@@ -44,4 +47,20 @@ public interface PetProfileRepository extends JpaRepository<PetProfile, Long> {
 
     /** 内容审核 story 4：违规重置默认宠物名唯一性查重（DefaultNameGenerator）。 */
     boolean existsByName(String name);
+
+    /**
+     * 追更计数 ±1（V1.4.2 social-topic Story 1.1 · D-1，只由 {@code social.service.PetFollowService} 在写入 /
+     * 删除追更行的<b>同一事务</b>里调用）。
+     *
+     * <p>🔴 必须在 SQL 里改，<b>禁止</b>读出来在 Java 里 ±1 再 save（并发丢更新）；
+     * 计数列在实体上是只读映射。{@code GREATEST(…, 0)} 兜底，计数永不为负（照 {@code UserRepository#addFollowerCount}）。
+     */
+    @Modifying
+    @Query(value = "UPDATE pet_profiles SET follower_count = GREATEST(follower_count + :delta, 0) WHERE id = :petId",
+            nativeQuery = true)
+    int addFollowerCount(@Param("petId") long petId, @Param("delta") int delta);
+
+    /** 重新读出 {@code follower_count}（实体值是加载时快照，追更写入后要最新值时用）；宠物不存在为 null。 */
+    @Query(value = "SELECT follower_count FROM pet_profiles WHERE id = :petId", nativeQuery = true)
+    Integer findFollowerCount(@Param("petId") long petId);
 }

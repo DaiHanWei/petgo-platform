@@ -21,7 +21,6 @@ import '../../profile/presentation/milestone_instant_celebration.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
 import '../data/tailsonality_repository.dart';
-import '../data/ts_remote_art.dart';
 import '../domain/content/ts_match_copy.dart';
 import '../domain/content/ts_text.dart';
 import '../domain/tailsonality_result.dart';
@@ -30,6 +29,7 @@ import 'share/match_share_card.dart';
 import 'tailsonality_unlock_analytics.dart';
 import 'widgets/ts_letter_compare.dart';
 import 'widgets/ts_match_card.dart';
+import 'widgets/ts_remote_art_image.dart';
 import 'widgets/ts_rich_text.dart';
 import 'widgets/ts_type_selector.dart';
 import '../../profile/data/pet_list_repository.dart';
@@ -79,9 +79,9 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
   Future<Uint8List?> _captureCard() async {
     final capture = TailsonalityMatchPage.captureForTest;
     if (capture != null) return capture();
-    // 配型卡按需下载（TsRemoteArt）：图还没到手时卡上画的是占位，不截（调用方按「出图失败」提示）。
-    final tier = _shownTier;
-    if (tier == null || TsRemoteArt.peek(TsRemoteArt.match(tier)) == null) return null;
+    // 配型卡按需下载（TsRemoteArt）：等插画真正画上屏再截；取不到 / 超时不截（调用方按「出图失败」提示）。
+    final boundary = _cardKey.currentContext;
+    if (_shownTier == null || boundary == null || !await TsRemoteArtImage.waitPainted(boundary)) return null;
     return CardRenderPipeline.capture(boundaryKey: _cardKey, canvas: kTsMatchCanvas);
   }
 

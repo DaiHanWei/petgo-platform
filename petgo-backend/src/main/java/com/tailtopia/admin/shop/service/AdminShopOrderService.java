@@ -69,12 +69,13 @@ public class AdminShopOrderService {
             throw AppException.validation("请填写承运成本（S-11：不录则毛利看板缺行）").code("admin.err.shopOrder.carrierCostRequired");
         }
         Carrier carrier = Carrier.parse(carrierRaw);
-        Shipment shipment = fulfillment.ship(orderToken, carrier, trackingNo, carrierCost);
+        Shipment shipment = fulfillment.ship(orderToken, carrier, trackingNo, carrierCost, actorAccountId);
         ShopOrder order = orders.findByPublicToken(orderToken).orElseThrow();
 
-        // 🔒 只记承运商 + 单号；收件人信息一个字都不进审计
+        // 🔒 只记承运商 + 单号 + 承运成本（V1.4.2 shop-admin 6.1 AC9）；收件人信息一个字都不进审计
         audit.record(actorAccountId, AuditActions.SHOP_ORDER_SHIPPED, "SHOP_ORDER", orderToken,
-                "发货：承运商=%s 物流单号=%s".formatted(carrier.name(), shipment.getTrackingNo()));
+                "发货（手工运单）：承运商=%s 物流单号=%s 承运成本=%d".formatted(carrier.name(), shipment.getTrackingNo(),
+                        carrierCost));
 
         notifyShipped(order);
         return shipment;
@@ -151,11 +152,73 @@ public class AdminShopOrderService {
         int p = Math.max(page, 0);
         int s = Math.max(1, size);
         var found = orders.searchPage(status, from, to, PageRequest.of(p, s));
-        return new Page(found.getContent(), p, found.hasNext());
+        return new Page(found.getContent(), p, found.hasNext(), found.getTotalElements());
     }
 
-    /** 一页订单。 */
-    public record Page(List<ShopOrder> rows, int page, boolean hasNext) {
+    /** 一页订单。{@code total} = 筛选后的总条数（V1.4.2 通用分页条用）。 */
+    public record Page(List<ShopOrder> rows, int page, boolean hasNext, long total) {
+    }
+
+    /** V1.4.2 shop-admin Story 6.1（H1）：「异常标记」筛选取值。 */
+    public static final List<String> FLAGS = List.of("ANY", "SHORTAGE", "WAYBILL_FAILED", "PICKUP_FAILED", "RETURNED",
+            "LOST_DAMAGED", "STALLED", "CLAIM_PENDING");
+
+    /**
+     * V1.4.2 shop-admin 7.1（F1）：「订单」页的异常标记筛选 = 履约页同一组取值 + 取消后到账。履约页不给 LATE_PAID
+     * （已取消的单不在履约口径里，见 {@code ShopOrderRepository.FLAG_WHERE}）。
+     */
+    public static final List<String> LIST_FLAGS = java.util.stream.Stream
+            .concat(FLAGS.stream(), java.util.stream.Stream.of("LATE_PAID")).toList();
+
+    /** 「有异常标记」口径的订单状态（取消 / 退款中 / 已退款不算，标记留作历史）。 */
+    static final List<ShopOrderStatus> LIVE = List.of(ShopOrderStatus.PENDING_SHIPMENT, ShopOrderStatus.SHIPPED,
+            ShopOrderStatus.DELIVERED, ShopOrderStatus.COMPLETED);
+
+    /** 带「异常标记」筛选的一页（flag 为空 / 不认识 → 同 {@link #page}）。 */
+    @Transactional(readOnly = true)
+    public Page page(ShopOrderStatus status, Instant from, Instant to, String flag, int page, int size) {
+        if (flag == null || !LIST_FLAGS.contains(flag)) {
+            return page(status, from, to, page, size);
+        }
+        int p = Math.max(page, 0);
+        var found = orders.searchPageFlagged(status, from, to, flag, LIVE,
+                com.tailtopia.shop.order.domain.LogisticsException.PICKUP_FAILED,
+                com.tailtopia.shop.order.domain.LogisticsException.RETURNED,
+                com.tailtopia.shop.order.domain.LogisticsException.LOST,
+                com.tailtopia.shop.order.domain.LogisticsException.DAMAGED,
+                com.tailtopia.shop.order.domain.LogisticsException.STALLED, PageRequest.of(p, Math.max(1, size)));
+        return new Page(found.getContent(), p, found.hasNext(), found.getTotalElements());
+    }
+
+    /** 订单当前挂着的异常标记（列表徽标，H1）；按 LIST_FLAGS 顺序，不含 ANY。履约异常只看 LIVE 状态；取消后到账（7.1）不限状态。 */
+    public static List<String> flagsOf(ShopOrder o) {
+        List<String> out = new java.util.ArrayList<>();
+        if (!LIVE.contains(o.getStatus())) {
+            // V1.4.2 shop-admin 7.1（F1）：取消后到账待处理不受状态限制（这类单本就是已取消）
+            if (o.getLatePaidAmount() != null) {   // AD-11：取消后到账（含已处理），待处理只在摘要计
+                out.add("LATE_PAID");
+            }
+            return out;   // 取消 / 退款中 / 已退款：标记留作历史，不再挂徽标（与筛选、摘要同口径）
+        }
+        if (o.isShortageFlagged()) {
+            out.add("SHORTAGE");
+        }
+        if (o.getWaybillFailedAt() != null) {
+            out.add("WAYBILL_FAILED");
+        }
+        var le = o.getLogisticsException();
+        if (le != null) {
+            out.add(switch (le) {
+                case PICKUP_FAILED -> "PICKUP_FAILED";
+                case RETURNED -> "RETURNED";
+                case LOST, DAMAGED -> "LOST_DAMAGED";
+                case STALLED -> "STALLED";
+            });
+        }
+        if (o.isClaimPending()) {
+            out.add("CLAIM_PENDING");
+        }
+        return out;
     }
 
     /**
@@ -188,8 +251,8 @@ public class AdminShopOrderService {
                         java.sql.Types.TIMESTAMP);
         return jdbc.query(SUMMARY_SQL, params, rs -> rs.next()
                 ? new Summary(rs.getLong("pending_shipment"), rs.getLong("in_transit"),
-                        rs.getLong("delivered_today"))
-                : new Summary(0, 0, 0));
+                        rs.getLong("delivered_today"), rs.getLong("flagged"))
+                : new Summary(0, 0, 0, 0));
     }
 
     private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
@@ -197,12 +260,16 @@ public class AdminShopOrderService {
     private static final String SUMMARY_SQL = """
             SELECT count(*) FILTER (WHERE status = 'PENDING_SHIPMENT' AND in_range) AS pending_shipment,
                    count(*) FILTER (WHERE status = 'SHIPPED'          AND in_range) AS in_transit,
+                   count(*) FILTER (WHERE flagged AND in_range)                  AS flagged,
                    -- 「今日签收」刻意**不带 in_range**：见方法注释
                    count(*) FILTER (WHERE status = 'DELIVERED'
                                       AND delivered_at >= :dayStart
                                       AND delivered_at <  :dayEnd)              AS delivered_today
               FROM (
                     SELECT status, delivered_at,
+                           (status IN ('PENDING_SHIPMENT', 'SHIPPED', 'DELIVERED', 'COMPLETED')
+                            AND (shortage_flagged_at IS NOT NULL OR waybill_failed_at IS NOT NULL
+                                 OR logistics_exception IS NOT NULL OR claim_pending)) AS flagged,
                            (CAST(:from AS timestamptz) IS NULL OR created_at >= :from)
                        AND (CAST(:to   AS timestamptz) IS NULL OR created_at <  :to) AS in_range
                       FROM shop_orders
@@ -210,7 +277,45 @@ public class AdminShopOrderService {
             """;
 
     /** 摘要条三格。 */
-    public record Summary(long pendingShipment, long inTransit, long deliveredToday) {
+    public record Summary(long pendingShipment, long inTransit, long deliveredToday, long flagged) {
+
+        public Summary(long pendingShipment, long inTransit, long deliveredToday) {
+            this(pendingShipment, inTransit, deliveredToday, 0);
+        }
+    }
+
+    /**
+     * 「订单」总表摘要（V1.4.2 shop-admin 7.1 · AD-12 · F1）：待支付 / 待发货 / 待收货（已发货 + 已签收）/ 退款中 /
+     * 取消后到账待处理。单条 COUNT FILTER；前四格随下单时间范围联动，「取消后到账待处理」是待办口径，不叠加时间范围。
+     */
+    @Transactional(readOnly = true)
+    public ListSummary listSummary(Instant from, Instant to) {
+        var params = new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                .addValue("from", from == null ? null : java.sql.Timestamp.from(from), java.sql.Types.TIMESTAMP)
+                .addValue("to", to == null ? null : java.sql.Timestamp.from(to), java.sql.Types.TIMESTAMP);
+        return jdbc.query(LIST_SUMMARY_SQL, params, rs -> rs.next()
+                ? new ListSummary(rs.getLong("pending_payment"), rs.getLong("pending_shipment"),
+                        rs.getLong("awaiting_delivery"), rs.getLong("refunding"), rs.getLong("late_paid"))
+                : new ListSummary(0, 0, 0, 0, 0));
+    }
+
+    private static final String LIST_SUMMARY_SQL = """
+            SELECT count(*) FILTER (WHERE status = 'PENDING_PAYMENT' AND in_range)              AS pending_payment,
+                   count(*) FILTER (WHERE status = 'PENDING_SHIPMENT' AND in_range)             AS pending_shipment,
+                   count(*) FILTER (WHERE status IN ('SHIPPED', 'DELIVERED') AND in_range)      AS awaiting_delivery,
+                   count(*) FILTER (WHERE status = 'REFUNDING' AND in_range)                    AS refunding,
+                   count(*) FILTER (WHERE late_paid_amount IS NOT NULL AND late_payment_resolution IS NULL) AS late_paid
+              FROM (
+                    SELECT status, late_paid_amount, late_payment_resolution,
+                           (CAST(:from AS timestamptz) IS NULL OR created_at >= :from)
+                       AND (CAST(:to   AS timestamptz) IS NULL OR created_at <  :to) AS in_range
+                      FROM shop_orders
+                   ) t
+            """;
+
+    /** 「订单」总表摘要五格。 */
+    public record ListSummary(long pendingPayment, long pendingShipment, long awaitingDelivery, long refunding,
+            long latePaidPending) {
     }
 
     /** 至少 6 位才允许搜 —— 再短就不是搜索而是遍历。 */

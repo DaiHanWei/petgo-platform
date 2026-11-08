@@ -6,19 +6,34 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../social/presentation/widgets/suggested_follow_list.dart';
 import '../social_tab.dart';
 
+/// 关注流空态的两种（V1.4.2 social-topic · Story 1.5 · D-9）。
+enum FollowingEmptyVariant {
+  /// 一个人 / 一只宠物都没关注（或旧后端没给计数）：现有空态。
+  noFollows,
+
+  /// 关注了人或追更了宠物，但暂无新动态（UI 稿 A11）。
+  noNewPosts,
+}
+
 /// Following 空状态（spec §2.4 · UI 稿 A3）：图标 + 标题 + 说明 + 推荐关注 +「Explore Discover ›」。
 ///
 /// 触发 = 关注流首页为空（一个都没关注，或关注的人都没有可见帖）；此时**不显示头像排**。
 /// 在这里关注某人后**不立刻刷新**关注流（2026-10-14 拍板）——下拉刷新或下次进入才出现。
 /// 本组件放进可下拉的滚动容器里由调用方提供下拉刷新。
+///
+/// V1.4.2 social-topic Story 1.5 · AC5.3（UI 稿 A11）：[variant] = [FollowingEmptyVariant.noNewPosts] 时
+/// 版式完全不变，只换图标（`schedule`）、标题与说明 ——「关注 / 追更了人或宠物，但暂无新动态」。
 class FollowingEmptyView extends ConsumerWidget {
-  const FollowingEmptyView({super.key});
+  const FollowingEmptyView({super.key, this.variant = FollowingEmptyVariant.noFollows});
+
+  final FollowingEmptyVariant variant;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final noNew = variant == FollowingEmptyVariant.noNewPosts;
     return Padding(
-      key: const ValueKey('followingEmptyView'),
+      key: ValueKey(noNew ? 'followingNoNewView' : 'followingEmptyView'),
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -28,18 +43,18 @@ class FollowingEmptyView extends ConsumerWidget {
               width: 96,
               height: 96,
               decoration: const BoxDecoration(color: AppColors.violet100, shape: BoxShape.circle),
-              child: const Icon(Icons.person_add_alt_outlined, size: 42, color: AppColors.mint),
+              child: Icon(noNew ? Icons.schedule : Icons.person_add_alt_outlined, size: 42, color: AppColors.mint),
             ),
           ),
           const SizedBox(height: 24),
           Text(
-            l10n.followingEmptyTitle,
+            noNew ? l10n.followingFeedNoNewTitle : l10n.followingEmptyTitle,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink),
           ),
           const SizedBox(height: 10),
           Text(
-            l10n.followingEmptyBody,
+            noNew ? l10n.followingFeedNoNewBody : l10n.followingEmptyBody,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 14.5, height: 1.45, color: AppColors.ink2),
           ),

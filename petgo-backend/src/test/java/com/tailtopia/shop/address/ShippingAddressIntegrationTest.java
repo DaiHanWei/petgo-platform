@@ -187,4 +187,52 @@ class ShippingAddressIntegrationTest extends ApiIntegrationTest {
         // Kecamatan 不是 PII —— 它是运费与服务范围的判定粒度，排障需要看得见
         assertThat(out).contains("Kebayoran Baru");
     }
+
+    // ---------- v1.4.2 shop Story 3.1 AC6：列表 serviceable 三态（BITESHIP_MODE=stub） ----------
+
+    @Autowired
+    private com.tailtopia.shop.address.service.AddressServiceabilityService serviceability;
+    @Autowired
+    private com.tailtopia.shop.shipping.service.AdminShippingZoneService zones;
+    @Autowired
+    private com.tailtopia.shop.logistics.ShippingQuoteRecordRepository quoteRecords;
+
+    private AddressFields at(String kecamatan, String kodePos) {
+        return new AddressFields("Budi", "08123456789", "DKI Jakarta", "Jakarta Selatan",
+                kecamatan, "Jl. Melawai IV No. 12", kodePos, "Rumah");
+    }
+
+    @Test
+    @DisplayName("v1.4.2 Story 3.1：列表 serviceable —— 未开通 false / 可达 true / 无快递 false / 询价失败不下发")
+    void listCarriesServiceability() {
+        long uid = seedUser();
+        String open = "Ks" + SEQ.incrementAndGet();
+        zones.upsert(open, "Jakarta Selatan", "DKI Jakarta", 0L, 1L);
+        ShippingAddress closed = service.create(uid, at("Closed" + SEQ.incrementAndGet(), "12160"));
+        ShippingAddress ok = service.create(uid, at(open, "12160"));
+        ShippingAddress none = service.create(uid, at(open, "99999"));     // stub：无快递
+        ShippingAddress failing = service.create(uid, at(open, "99998"));  // stub：500
+
+        var byToken = serviceability.listWithServiceability(uid).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.tailtopia.shop.address.dto.ShippingAddressView::token,
+                        v -> java.util.Optional.ofNullable(v.serviceable())));
+        assertThat(byToken.get(closed.getPublicToken())).contains(false);
+        assertThat(byToken.get(ok.getPublicToken())).contains(true);
+        assertThat(byToken.get(none.getPublicToken())).contains(false);
+        assertThat(byToken.get(failing.getPublicToken())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 Story 3.1：24 小时内第二次列表复用探测报价，不再新增 shipping_quotes")
+    void probeIsReusedWithin24h() {
+        long uid = seedUser();
+        String open = "Kr" + SEQ.incrementAndGet();
+        zones.upsert(open, "Jakarta Selatan", "DKI Jakarta", 0L, 1L);
+        service.create(uid, at(open, "12160"));
+        serviceability.listWithServiceability(uid);
+        long after1 = quoteRecords.count();
+        serviceability.listWithServiceability(uid);
+        assertThat(quoteRecords.count()).isEqualTo(after1);
+    }
 }

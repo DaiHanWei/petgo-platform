@@ -14,11 +14,11 @@ import org.springframework.stereotype.Component;
  *
  * <p>三段各自独立 try/catch、各自独立节奏：
  * <ol>
- *   <li><b>支付窗超时</b>（1min）：{@code PENDING_PAYMENT} 且 {@code expires_at < now}
- *       → 取消并<b>释放库存</b>。用户可见的正确性由<b>懒过期</b>承担（读详情 / 点支付时就地判定），
- *       本扫描是兜底 —— 无人查看的订单不该永远锁着库存。🔴 这一条比意图过期扫描重要得多：
+ *   <li><b>支付窗超时</b>（1min）：v1.4.2 shop Story 3.3 起<b>关单唯一入口</b>——订单窗已过且该单所有码已失效，
+ *       关单前最后查单、查询失败不关（{@code ShopOrderPaymentService#closeOverdue}）→ 取消并<b>释放库存</b>。
+ *       读详情 / 点支付不再懒关单（宽限期显示已取消）。🔴 这一条比意图过期扫描重要得多：
  *       支付意图滞留 PENDING 只是脏数据，而订单滞留 PENDING_PAYMENT 会一直占着别人想买的货。</li>
- *   <li><b>自动置送达</b>（10min）：SPEC-2 出口③，发货起 M=7 日无任何标记则置 {@code DELIVERED}。</li>
+ *   <li><b>自动置送达</b>（10min）：SPEC-2 出口③，发货起 M 日（v1.4.2 起 M=14，D-12）无任何标记则置 {@code DELIVERED}。</li>
  *   <li><b>自动确认收货</b>（10min）：送达起 7 日未确认则置 {@code COMPLETED}（FR-102）。</li>
  *   <li><b>退货寄回超时</b>（10min）：S-7，超 7 日未寄回则关闭申请并回退订单状态。</li>
  *   <li><b>评价审核重试</b>（10min）：Story 7.1，三方不可用时评价落 PENDING，这里收敛。</li>
@@ -42,6 +42,13 @@ public class ShopOrderExpiryScanner {
     private final com.tailtopia.shop.repurchase.service.RepurchaseScanService repurchase;
     private final com.tailtopia.shop.review.service.ShopReviewService reviewService;
 
+    /**
+     * 复购日扫开关（v1.4.2 shop Story 6.2，D-20）：<b>默认 false</b>。{@code RepurchaseScanService} 本身不删不改，
+     * 直接调用 {@code scan()} 的既有测试仍有效；代码保留一个版本后删。
+     */
+    @org.springframework.beans.factory.annotation.Value("${petgo.shop.repurchase.scan-enabled:false}")
+    private boolean repurchaseScanEnabled;
+
     public ShopOrderExpiryScanner(ShopOrderPaymentService payments,
             ShopOrderFulfillmentService fulfillment,
             com.tailtopia.shop.returns.service.ReturnRequestService returnRequests,
@@ -57,9 +64,10 @@ public class ShopOrderExpiryScanner {
     @Scheduled(fixedDelayString = "${petgo.shop.order-expiry-scan-ms:60000}")
     public void scan() {
         try {
-            int cancelled = payments.cancelOverdue(BATCH_LIMIT);
+            // v1.4.2 shop Story 3.3（S-1）：等码失效并最后查单才关单；每单可能一次网关往返，批量 50。
+            int cancelled = payments.closeOverdue(ShopOrderPaymentService.CLOSE_BATCH_LIMIT);
             if (cancelled > 0) {
-                log.info("电商订单支付超时取消并释放库存 count={}", cancelled);
+                log.info("电商订单支付超时关单并释放库存 count={}", cancelled);
             }
         } catch (RuntimeException e) {
             log.warn("电商订单超时扫描失败 cause={}", e.getClass().getSimpleName());
@@ -119,6 +127,11 @@ public class ShopOrderExpiryScanner {
      */
     @Scheduled(fixedDelayString = "${petgo.shop.repurchase-scan-ms:86400000}")
     public void scanRepurchase() {
+        // v1.4.2 shop Story 6.2（PRD FR-136 / D-20）：复购下线，默认停用 —— 不再产生新触发与 REPURCHASE_FOOD_LOW。
+        if (!repurchaseScanEnabled) {
+            log.debug("复购粮量日扫已停用（petgo.shop.repurchase.scan-enabled=false）");
+            return;
+        }
         try {
             repurchase.scan(java.time.LocalDate.now(java.time.ZoneOffset.UTC));
         } catch (RuntimeException e) {

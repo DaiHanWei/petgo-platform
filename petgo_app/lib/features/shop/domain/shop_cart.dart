@@ -7,6 +7,8 @@
 /// 用户加过什么应该看得见——悄悄删掉会让他以为自己记错了。
 library;
 
+import 'free_shipping_progress.dart';
+
 /// 失效原因（后端 `CartView.REASON_*`）。
 ///
 /// 🔴 **未知值降级到 [unavailable]**（HANDOFF 硬纪律 5）：认不出的原因照样算失效，
@@ -113,6 +115,7 @@ class CartView {
     required this.itemCount,
     required this.selectedSubtotal,
     required this.selectedCount,
+    this.estimate,
   });
 
   /// 有效行（参与合计、可结算）。
@@ -138,6 +141,10 @@ class CartView {
 
   /// 「勾选且有效」的件数（与 [itemCount] 同口径）。
   final int selectedCount;
+
+  /// 底栏预估（v1.4.2 shop Story 3.1 / 8.3，D-9）。🔴 **App 只展示、不自算**（P-1）。
+  /// 旧后端不下发 → null，底栏回落到 [selectedSubtotal] 并标「不含运费」。
+  final CartEstimate? estimate;
 
   bool get isEmpty => lines.isEmpty && invalidLines.isEmpty;
 
@@ -174,10 +181,75 @@ class CartView {
           json['selectedSubtotal'] is num ? (json['selectedSubtotal'] as num).toInt() : subtotal,
       selectedCount:
           json['selectedCount'] is num ? (json['selectedCount'] as num).toInt() : itemCount,
+      estimate: CartEstimate.fromJson(json['estimate']),
     );
   }
 
   static List<CartLine> _lines(Object? raw) => raw is List
       ? raw.whereType<Map<String, dynamic>>().map(CartLine.fromJson).toList(growable: false)
       : const [];
+}
+
+/// 购物车底栏预估（后端 `CartEstimate`，v1.4.2 shop Story 3.1 AC3）。
+///
+/// 口径（服务端 `ShopPricingCalculator`，PRD 11-04）：预估应付 = 所选商品 + 本单最低运费 − 默认最优券 −
+/// 满额免运减免；不用币、不保价。🔴 **App 不做任何加减**，每个数原样展示（P-1）。
+class CartEstimate {
+  const CartEstimate({
+    required this.payable,
+    required this.saved,
+    this.lowestFee,
+    this.goodsAmount,
+    this.discountCouponAmount,
+    this.shippingDiscount,
+    this.freeShippingProgress,
+    this.reason,
+  });
+
+  /// 本单最低运费；null = 无报价（无收货地 / 不可配送 / 询价失败 / 一件没选），此时 [payable] 不含运费。
+  final int? lowestFee;
+
+  /// 预估应付。
+  final int payable;
+
+  /// 已省（「Hemat Rp X」；0 不画）。
+  final int saved;
+
+  /// 以下三项后端下发、本页不展示（无明细层，story 拍板 1），只为与后端字段对齐。
+  final int? goodsAmount;
+  final int? discountCouponAmount;
+  final int? shippingDiscount;
+
+  /// 满额免运进度；null = 未配置门槛。
+  final FreeShippingProgress? freeShippingProgress;
+
+  /// `null | NO_DESTINATION | NOT_SERVICEABLE | QUOTE_FAILED | NO_SELECTION`（认不出的值原样保留）。
+  final String? reason;
+
+  static const String reasonNoDestination = 'NO_DESTINATION';
+  static const String reasonNotServiceable = 'NOT_SERVICEABLE';
+  static const String reasonQuoteFailed = 'QUOTE_FAILED';
+  static const String reasonNoSelection = 'NO_SELECTION';
+
+  /// 运费是否已计入 [payable]。
+  bool get shippingKnown => lowestFee != null;
+
+  /// 缺键 / 非 Map / 没有 `payable` → null（按旧后端处理）。
+  static CartEstimate? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final payable = raw['payable'];
+    if (payable is! num) return null;
+    int? n(Object? v) => v is num ? v.toInt() : null;
+    final reason = raw['reason']?.toString();
+    return CartEstimate(
+      lowestFee: n(raw['lowestFee']),
+      payable: payable.toInt(),
+      saved: n(raw['saved']) ?? 0,
+      goodsAmount: n(raw['goodsAmount']),
+      discountCouponAmount: n(raw['discountCouponAmount']),
+      shippingDiscount: n(raw['shippingDiscount']),
+      freeShippingProgress: FreeShippingProgress.fromJson(raw['freeShippingProgress']),
+      reason: (reason == null || reason.isEmpty) ? null : reason,
+    );
+  }
 }

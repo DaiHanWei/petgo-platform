@@ -55,14 +55,17 @@ class FollowServiceTest {
     @Mock RedisRateLimiter rateLimiter;
     @Mock ApplicationEventPublisher events;
     @Mock com.tailtopia.social.repository.OfficialFollowOptoutRepository optouts;
+    /** V1.4.2 social-topic Story 1.1：每日额度改两表合计，追更表也参与。 */
+    @Mock com.tailtopia.social.repository.PetFollowRepository petFollows;
 
     private FollowService service(Instant now) {
         return service(now, "");
     }
 
     private FollowService service(Instant now, String autoFollowIds) {
+        Clock clock = Clock.fixed(now, ZoneOffset.UTC);
         return new FollowService(follows, counters, accounts, hideRelations, followReader, rateLimiter, events,
-                optouts, new AutoFollowTargets(autoFollowIds), Clock.fixed(now, ZoneOffset.UTC));
+                optouts, new AutoFollowTargets(autoFollowIds), new FollowDailyQuota(follows, petFollows, clock), clock);
     }
 
     private void targetExists() {
@@ -98,6 +101,32 @@ class FollowServiceTest {
         FollowResultResponse r = service(Instant.parse("2026-10-12T05:00:00Z")).follow(ME, TOKEN);
 
         assertThat(r).isEqualTo(new FollowResultResponse(true, false, 7L));
+        verify(counters).applyFollow(ME, TARGET);
+    }
+
+    /** V1.4.2 social-topic Story 1.1 · AC5.4：当日已追更 500 只宠物 → 关注一个人也 429（两表合计）。 */
+    @Test
+    void petFollowsFillTheSharedDailyQuota() {
+        targetExists();
+        when(follows.countCreatedSince(eq(ME), any())).thenReturn(0L);
+        when(petFollows.countCreatedSince(eq(ME), any())).thenReturn(500L);
+
+        assertThatThrownBy(() -> service(Instant.parse("2026-10-12T05:00:00Z")).follow(ME, TOKEN))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+        verify(follows, never()).insertIfAbsent(anyLong(), anyLong());
+    }
+
+    /** 合计 499（关注 300 + 追更 199）→ 还能再关注一个。 */
+    @Test
+    void combinedDailyQuota499StillFollows() {
+        targetExists();
+        when(follows.countCreatedSince(eq(ME), any())).thenReturn(300L);
+        when(petFollows.countCreatedSince(eq(ME), any())).thenReturn(199L);
+        when(follows.insertIfAbsent(ME, TARGET)).thenReturn(1);
+
+        service(Instant.parse("2026-10-12T05:00:00Z")).follow(ME, TOKEN);
+
         verify(counters).applyFollow(ME, TARGET);
     }
 

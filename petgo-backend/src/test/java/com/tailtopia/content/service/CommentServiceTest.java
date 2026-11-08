@@ -62,7 +62,9 @@ class CommentServiceTest {
         service = new CommentService(comments, posts, accounts, events, moderation, reviewGate,
                 new com.tailtopia.mention.service.MentionSanitizer(accounts,
                         mock(com.tailtopia.social.read.UserHideRelationReader.class),
-                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)),
+                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class),
+                        // V1.4.2 social-topic Story 5.1：范围扩大到「我关注 ∪ 关注我」。
+                        mock(com.tailtopia.social.read.FollowReader.class)),
                 // Story 3.3：@ 渲染投影。同上，没 @ 就不碰依赖。
                 new com.tailtopia.mention.service.MentionViewService(accounts,
                         mock(com.tailtopia.social.read.UserHideRelationReader.class)));
@@ -407,6 +409,72 @@ class CommentServiceTest {
         service.restoreComment(73L);
         assertThat(c.getModerationStatus()).isEqualTo(CommentModerationStatus.VISIBLE);
         verify(events, never()).publishEvent(any());
+    }
+
+    // ===== V1.4.2：回复了你的回复也要通知 =====
+
+    @Test
+    void replyToSecondLevelRecordsReplyTarget() {
+        when(comments.findById(20L)).thenReturn(Optional.of(existingComment(20L, 10L, 4L, 1L)));
+        postBy(1L, 7L);
+        service.createReply(20L, 9L, "reply");
+        ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
+        verify(comments).save(cap.capture());
+        assertThat(cap.getValue().getParentId()).isEqualTo(10L);
+        assertThat(cap.getValue().getReplyToCommentId()).isEqualTo(20L);
+    }
+
+    @Test
+    void replyToTopLevelHasNoReplyTarget() {
+        when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
+        postBy(1L, 7L);
+        service.createReply(10L, 9L, "reply");
+        ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
+        verify(comments).save(cap.capture());
+        assertThat(cap.getValue().getReplyToCommentId()).isNull();
+    }
+
+    @Test
+    void approveReplyToSecondLevelCarriesReplyToAuthor() {
+        Comment c = underReview(90L, 10L, 9L, 1L);
+        setField(c, Comment.class, "replyToCommentId", 20L);
+        when(comments.findById(90L)).thenReturn(Optional.of(c));
+        when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
+        when(comments.findById(20L)).thenReturn(Optional.of(existingComment(20L, 10L, 4L, 1L)));
+        postBy(1L, 7L);
+        service.approveComment(90L);
+        ArgumentCaptor<ContentCommentedEvent> ev = ArgumentCaptor.forClass(ContentCommentedEvent.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue().parentAuthorId()).isEqualTo(3L);
+        assertThat(ev.getValue().replyToAuthorId()).isEqualTo(4L);
+    }
+
+    @Test
+    void mentionOfSomeoneAlreadyNotifiedByCommentIsDropped() {
+        // 同一条评论每人最多一条：帖主 7、一级作者 3、被回复人 4 都已收「评论 / 回复」通知，@ 只剩 42。
+        Comment c = underReview(91L, 10L, 9L, 1L);
+        setField(c, Comment.class, "replyToCommentId", 20L);
+        setField(c, Comment.class, "mentionedUserIds", java.util.List.of(4L, 3L, 7L, 42L));
+        when(comments.findById(91L)).thenReturn(Optional.of(c));
+        when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
+        when(comments.findById(20L)).thenReturn(Optional.of(existingComment(20L, 10L, 4L, 1L)));
+        postBy(1L, 7L);
+        service.approveComment(91L);
+        assertThat(mentionEvents()).singleElement()
+                .satisfies(e -> assertThat(e.mentionedUserIds()).containsExactly(42L));
+    }
+
+    @Test
+    void mentionOnlyOfReplyTargetPublishesNoMentionEvent() {
+        Comment c = underReview(92L, 10L, 9L, 1L);
+        setField(c, Comment.class, "replyToCommentId", 20L);
+        setField(c, Comment.class, "mentionedUserIds", java.util.List.of(4L));
+        when(comments.findById(92L)).thenReturn(Optional.of(c));
+        when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
+        when(comments.findById(20L)).thenReturn(Optional.of(existingComment(20L, 10L, 4L, 1L)));
+        postBy(1L, 7L);
+        service.approveComment(92L);
+        assertThat(mentionEvents()).isEmpty();
     }
 
     private Comment underReview(long id, Long parentId, long authorId, long postId) {

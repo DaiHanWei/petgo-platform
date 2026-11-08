@@ -121,7 +121,7 @@ class AdminShippingEndpointIntegrationTest extends ApiIntegrationTest {
         MvcResult res = mvc.perform(post("/admin/shop/shipping/threshold")
                         .header("HX-Request", "true").header("HX-Target", "cfg-ship-threshold-err")
                         .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
-                        .param("threshold", "150000"))
+                        .param("threshold", "150000").param("freeShippingCap", "20000"))
                 .andExpect(status().isOk())
                 .andReturn();
         String body = res.getResponse().getContentAsString();
@@ -153,7 +153,8 @@ class AdminShippingEndpointIntegrationTest extends ApiIntegrationTest {
                 .andReturn();
 
         assertThat(res.getResponse().getHeader("HX-Retarget")).isEqualTo("#cfg-ship-zones");
-        assertThat(res.getResponse().getContentAsString()).contains(kec).contains("25000");
+        // V1.4.2 shop-admin Story 4.1：区域表去运费列 —— 卡里不再出现运费，但 fee 照旧落库（保留不读）
+        assertThat(res.getResponse().getContentAsString()).contains(kec);
         assertThat(jdbc.queryForObject("SELECT fee FROM shipping_zones WHERE kecamatan = ?",
                 Long.class, kec)).isEqualTo(25000L);
     }
@@ -226,7 +227,83 @@ class AdminShippingEndpointIntegrationTest extends ApiIntegrationTest {
     void nonHtmxSubmitStillRedirects() throws Exception {
         mvc.perform(post("/admin/shop/shipping/threshold")
                         .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
-                        .param("threshold", "99000"))
+                        .param("threshold", "99000").param("freeShippingCap", "20000"))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    // ---------- V1.4.2 shop-admin Story 4.1（L1 待本地验收） ----------
+
+    @Test
+    @DisplayName("4.1 AC4 / O-27：门槛 > 0 而最高减免留空或填 0 → 422，库不变；门槛 0 不校验封顶")
+    void capRequiredWhenThresholdAboveZero() throws Exception {
+        for (String cap : new String[] {"", "0"}) {
+            MvcResult res = mvc.perform(post("/admin/shop/shipping/threshold")
+                            .header("HX-Request", "true").header("HX-Target", "cfg-ship-threshold-err")
+                            .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
+                            .param("threshold", "150000").param("freeShippingCap", cap))
+                    .andReturn();
+            assertThat(res.getResponse().getStatus()).isEqualTo(422);
+        }
+        MvcResult pre = mvc.perform(post("/admin/shop/shipping/threshold/confirm")
+                        .header("HX-Request", "true").header("HX-Target", "cfg-ship-threshold-err")
+                        .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
+                        .param("threshold", "150000"))
+                .andReturn();
+        assertThat(pre.getResponse().getStatus()).as("预检同样拒绝，不弹确认").isEqualTo(422);
+        mvc.perform(post("/admin/shop/shipping/threshold")
+                        .header("HX-Request", "true").header("HX-Target", "cfg-ship-threshold-err")
+                        .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
+                        .param("threshold", "0"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("4.1 AC8：门槛卡保存走 confirm-modal 预检（只读不写库，回 #confirm-host）")
+    void thresholdConfirmRendersModalWithoutWriting() throws Exception {
+        long before = jdbc.queryForObject("SELECT free_shipping_threshold FROM shipping_settings WHERE id = 1", Long.class);
+        MvcResult res = mvc.perform(post("/admin/shop/shipping/threshold/confirm")
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
+                        .param("threshold", String.valueOf(before + 1000)).param("freeShippingCap", "20000"))
+                .andExpect(status().isOk()).andReturn();
+        assertThat(res.getResponse().getHeader("HX-Retarget")).isEqualTo("#confirm-host");
+        assertThat(res.getResponse().getContentAsString()).contains("confirmed");
+        assertThat(jdbc.queryForObject("SELECT free_shipping_threshold FROM shipping_settings WHERE id = 1", Long.class))
+                .isEqualTo(before);
+    }
+
+    @Test
+    @DisplayName("4.1 AC2：新增区域可填邮编；更新不传 fee 时保留原运费")
+    void zoneUpsertAcceptsPostalCodeAndKeepsFee() throws Exception {
+        String kec = "Kec" + SEQ.incrementAndGet();
+        mvc.perform(post("/admin/shop/shipping/zones").header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
+                        .param("kecamatan", kec).param("kotaKabupaten", "Jakarta Barat")
+                        .param("provinsi", "DKI Jakarta").param("postalCode", "11510"))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT fee FROM shipping_zones WHERE kecamatan = ?", Long.class, kec)).isZero();
+        jdbc.update("UPDATE shipping_zones SET fee = 9000 WHERE kecamatan = ?", kec);
+        mvc.perform(post("/admin/shop/shipping/zones").header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
+                        .param("kecamatan", kec).param("kotaKabupaten", "Jakarta Barat")
+                        .param("provinsi", "DKI Jakarta").param("postalCode", "11520"))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT fee FROM shipping_zones WHERE kecamatan = ?", Long.class, kec))
+                .isEqualTo(9000L);
+        assertThat(jdbc.queryForObject("SELECT postal_code FROM shipping_zones WHERE kecamatan = ?", String.class, kec))
+                .isEqualTo("11520");
+    }
+
+    @Test
+    @DisplayName("4.1 AC7：录入余额记入值、录入时预估、录入人、时间并写审计")
+    void recordBalanceStoresSnapshot() throws Exception {
+        mvc.perform(post("/admin/shop/shipping/biteship/balance").header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.CONFIG_EDIT))).with(csrf())
+                        .param("amount", "2000000").param("confirmed", "true"))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT amount FROM biteship_balance_snapshots ORDER BY id DESC LIMIT 1",
+                Long.class)).isEqualTo(2_000_000L);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM admin_audit_logs WHERE action = 'SHOP_BITESHIP_BALANCE_RECORDED'",
+                Integer.class)).isPositive();
     }
 }

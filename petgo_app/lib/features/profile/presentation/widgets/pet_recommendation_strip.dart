@@ -111,7 +111,7 @@ class PetRecommendationStrip extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               itemCount: pets.length,
               separatorBuilder: (_, _) => const SizedBox(width: cardGap),
-              itemBuilder: (context, i) => _StripPetTile(pet: pets[i]),
+              itemBuilder: (context, i) => PetStripTile(pet: pets[i], from: kPetRecommendFromExploreStrip),
             ),
           ),
         ],
@@ -131,30 +131,46 @@ class PetRecommendationStrip extends ConsumerWidget {
 ///
 /// 🔴 大图与小圆头像仍是**两个字段、两个来源**（UX-DR15）：方图 = 最近一张公开照片，
 /// 头像 = 宠物档案头像；没有公开照片时落占位底色，绝不拿头像顶上去。
-class _StripPetTile extends ConsumerWidget {
-  const _StripPetTile({required this.pet});
+///
+/// <h3>V1.4.2 social-topic Story 1.5：公共化</h3>
+/// 关注列表 Hewan 空态的推荐卡（UI 稿 A8）复用同一外观：[width] 88、[bottom] 插槽放追更按钮。
+/// 首页横滑行调用保持缺省（65 宽、无插槽）→ 像素不变。[bottom] 在点击区（进访客页）**之外**，
+/// 点按钮不会同时触发进页。
+class PetStripTile extends ConsumerWidget {
+  const PetStripTile({
+    super.key,
+    required this.pet,
+    required this.from,
+    this.width = PetRecommendationStrip.cardWidth,
+    this.bottom,
+  });
 
   final RecommendedPet pet;
 
-  static const double _size = PetRecommendationStrip.cardWidth;
+  /// 埋点 / 落点 `from`（`openRecommendedPet`）：首页 `explore_strip`、关注列表空态 `follow_list_empty`。
+  final String from;
+
+  /// 卡宽 = 方图边长。
+  final double width;
+
+  /// 卡片下方的附加内容（关注列表空态的追更按钮）；null = 首页原样。
+  final Widget? bottom;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return SizedBox(
-      width: _size,
-      child: GestureDetector(
+    final size = width;
+    final tile = GestureDetector(
         key: ValueKey('recommendedPet_${pet.petId}'),
         behavior: HitTestBehavior.opaque,
-        onTap: () => openRecommendedPet(context, ref,
-            pet: pet, from: kPetRecommendFromExploreStrip),
+        onTap: () => openRecommendedPet(context, ref, pet: pet, from: from),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              width: _size,
-              height: _size,
+              width: size,
+              height: size,
               child: Stack(
                 // 头像探出方图左下角（UI 稿 B1）→ 不裁剪溢出。
                 clipBehavior: Clip.none,
@@ -203,7 +219,16 @@ class _StripPetTile extends ConsumerWidget {
             ),
           ],
         ),
-      ),
+      );
+    return SizedBox(
+      width: size,
+      child: bottom == null
+          ? tile
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [tile, bottom!],
+            ),
     );
   }
 

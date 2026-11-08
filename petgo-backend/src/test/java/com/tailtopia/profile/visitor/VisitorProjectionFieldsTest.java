@@ -102,7 +102,10 @@ class VisitorProjectionFieldsTest {
         // 顺带钉住列数：统计卡三格（V1.4.0 gift Story 2.1 起为 Diary / 礼物总价值 / 里程碑），
         // 里程碑占两个数（完成 / 总数），另保留旧版 App 仍在读的问诊次数 consultCount，故是 5 个组件。
         // giftTotalValue 不含任何禁词（上面 assertNoForbiddenComponents 已验）。
-        assertThat(VisitorStats.class.getRecordComponents()).hasSize(5);
+        // V1.4.2 social-topic Story 1.1：末尾追加追更人数 followerCount（访客页「追更 N」），共 6 个组件；
+        // 它是公开计数、不含禁词，且与作者态 ArchiveStatsResponse 同名。
+        assertThat(VisitorStats.class.getRecordComponents()).hasSize(6);
+        assertThat(VisitorStats.class.getRecordComponents()[5].getName()).isEqualTo("followerCount");
     }
 
     /**

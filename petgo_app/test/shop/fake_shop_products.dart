@@ -1,8 +1,15 @@
 // ⚠️ 不能只 `show AsyncData`：`asData` 是 `AsyncValueX` 上的**扩展**取值器，
 //    扩展不在 show 列表里就不可见（报错长得像「getter 未定义」，很容易误判成版本问题）。
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:tailtopia/features/shop/coupon/data/coupon_repository.dart';
+import 'package:tailtopia/features/shop/coupon/domain/shop_coupon.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
+import 'package:tailtopia/features/shop/domain/checkout_preview.dart' show CouponKind;
+import 'package:tailtopia/features/shop/domain/shop_banner.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 
 /// 商品列表 provider 的测试替身（Story 4-5 起）。
@@ -94,3 +101,117 @@ Override fakeShopProducts(
           nextPageItems: nextPageItems,
           loadMoreCalls: loadMoreCalls,
         ));
+
+/// 不打网络的券仓库（v1.4.2 shop Story 8.1）：记录调用，按预置结果返回。
+class FakeCouponRepository extends CouponRepository {
+  FakeCouponRepository({
+    this.forYouItems = const [],
+    this.campaign,
+    this.entryIssued = false,
+    this.claimError,
+    this.productItems = const [],
+  }) : super(dio: Dio());
+
+  List<ShopCoupon> forYouItems;
+
+  /// 商品详情「可领的券」（v1.4.2 shop Story 8.2）。领成功后同样按服务端口径标 claimed。
+  List<ShopCoupon> productItems;
+  int productCalls = 0;
+  NewbieCampaign? campaign;
+  bool entryIssued;
+
+  /// 非 null → [claim] 抛它（用 [problemError] 造 409）。
+  Object? claimError;
+
+  /// 非 null → [claim] 等它完成再返回（测在途锁）。
+  Completer<void>? claimGate;
+
+  /// 非 null → [newbieCampaign] 等它完成再返回（测弹窗前的前台判断）。
+  Completer<void>? campaignGate;
+
+  /// 领成功后服务端是否把该券标成 claimed（perUserLimit = 1 的常态）；false 模拟 perUserLimit > 1。
+  bool claimMarksClaimed = true;
+
+  int entryCalls = 0;
+  int campaignCalls = 0;
+  final List<(String, CouponClaimSource)> claims = [];
+
+  @override
+  Future<ShopCoupon> claim(String couponToken, CouponClaimSource source) async {
+    claims.add((couponToken, source));
+    final gate = claimGate;
+    if (gate != null) await gate.future;
+    final e = claimError;
+    if (e != null) throw e;
+    if (claimMarksClaimed) {
+      // 模拟服务端：领到之后 for-you 里这张变成 claimed（App 只认服务端值）。
+      forYouItems = [
+        for (final c in forYouItems) c.couponToken == couponToken ? c.copyWith(claimed: true) : c,
+      ];
+      productItems = [
+        for (final c in productItems) c.couponToken == couponToken ? c.copyWith(claimed: true) : c,
+      ];
+    }
+    final hit = [...forYouItems, ...productItems]
+        .where((c) => c.couponToken == couponToken)
+        .firstOrNull;
+    return (hit ?? ShopCoupon(couponToken: couponToken, kind: CouponKind.discount, amount: 0, minSpend: 0))
+        .copyWith(claimed: true);
+  }
+
+  int forYouCalls = 0;
+
+  @override
+  Future<List<ShopCoupon>> forYou() async {
+    forYouCalls++;
+    return forYouItems;
+  }
+
+  @override
+  Future<List<ShopCoupon>> forProduct(String productToken) async {
+    productCalls++;
+    return productItems;
+  }
+
+  @override
+  Future<NewbieCampaign?> newbieCampaign() async {
+    campaignCalls++;
+    final gate = campaignGate;
+    if (gate != null) await gate.future;
+    return campaign;
+  }
+
+  @override
+  Future<bool> enterShop() async {
+    entryCalls++;
+    return entryIssued;
+  }
+}
+
+/// 造一个带 ProblemDetail `type` 的 409（领券失败分类用）。
+DioException problemError(String slug, {int status = 409}) {
+  final req = RequestOptions(path: '/x');
+  return DioException(
+    requestOptions: req,
+    response: Response(
+      requestOptions: req,
+      statusCode: status,
+      data: {'type': 'https://api.tailtopia.app/errors/$slug', 'status': status},
+    ),
+    type: DioExceptionType.badResponse,
+  );
+}
+
+/// Toko 首页 v3 其余数据源的替身（banner / 券 / top 6）。🔴 真 provider 会发请求并留下未完成 Timer。
+///
+/// 挂整个 App（`TailTopiaApp`）或 Toko 页的用例都应带上它，与 [fakeShopProducts] 同用。
+List<Override> tokoHomeOverrides({
+  List<ShopBanner> banners = const [],
+  FakeCouponRepository? coupons,
+  List<ShopProductSummary> top = const [],
+}) =>
+    [
+      shopBannersProvider.overrideWith((ref) async => banners),
+      couponRepositoryProvider.overrideWithValue(coupons ?? FakeCouponRepository()),
+      shopTopProductsProvider.overrideWith((ref) async => top),
+    ];

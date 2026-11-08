@@ -103,14 +103,19 @@ public class AdminShopProductController {
             @RequestParam(required = false) ProductCategory category,
             @RequestParam(required = false) Boolean active,
             @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "packageData", required = false) String packageData,
             HxRequest hx, Model model) {
-        var found = service.page(category, active, page, PAGE_SIZE);
+        // V1.4.2 shop-admin Story 4.2（G5）：「包裹数据」筛选 —— 全部 / MISSING（缺重量体积）
+        boolean missingPackage = "MISSING".equals(packageData);
+        var found = service.page(category, active, missingPackage, page, PAGE_SIZE);
         List<ShopProduct> rows = found.getContent();
         Map<Long, Integer> skuCount = new LinkedHashMap<>();
         Map<Long, Long> minPrice = new LinkedHashMap<>();
+        Map<Long, Long> missingBySku = new LinkedHashMap<>();
         for (ShopProduct p : rows) {
             List<ShopSku> ss = skus.findByProductIdOrderByIdAsc(p.getId());
             skuCount.put(p.getId(), ss.size());
+            missingBySku.put(p.getId(), ss.stream().filter(x -> !x.isSellable()).count());
             ss.stream().mapToLong(ShopSku::getPrice).min()
                     .ifPresent(v -> minPrice.put(p.getId(), v));
         }
@@ -124,6 +129,8 @@ public class AdminShopProductController {
         model.addAttribute("categories", ProductCategory.values());
         model.addAttribute("filterCategory", category);
         model.addAttribute("filterActive", active);
+        model.addAttribute("filterPackage", missingPackage ? "MISSING" : null);
+        model.addAttribute("missingPackageByProduct", missingBySku);
         model.addAttribute("canEdit", has(admin, AdminPermissions.SHOP_PRODUCT_EDIT));
         // 🔴 告警条与「阻止上架」共用 AdminShopListingService 的同一口径，不在此另算一遍
         model.addAttribute("activeSkuCount", listing.activeSkuCount());
@@ -149,9 +156,17 @@ public class AdminShopProductController {
     @GetMapping("/admin/shop/products/{id}")
     @PreAuthorize(VIEW_AUTH)
     public String detail(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long id, Model model) {
+            @PathVariable long id, @RequestParam(value = "tab", required = false) String tab,
+            @RequestParam(value = "page", defaultValue = "0") int page, Model model) {
         ShopProduct p = products.findById(id)
                 .orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
+        // V1.4.2 shop-admin Story 3.3 · J1：页头下「商品信息 / 评价」两个页签；评价页签只读列表 + 行内隐藏 / 恢复
+        boolean reviewsTab = "reviews".equals(tab);
+        model.addAttribute("tab", reviewsTab ? "reviews" : "info");
+        if (reviewsTab && reviewsQuery != null) {
+            model.addAttribute("reviewsTab", reviewsQuery.page(id, page));
+            model.addAttribute("canEditReviews", has(admin, AdminPermissions.SHOP_PRODUCT_EDIT));
+        }
         List<ShopSku> ss = skus.findByProductIdOrderByIdAsc(id);
         model.addAttribute("form", toForm(p));
         model.addAttribute("productId", id);
@@ -177,10 +192,10 @@ public class AdminShopProductController {
         model.addAttribute("existingImages", existing);
         model.addAttribute("product", p);
         model.addAttribute("skus", ss);
+        // V1.4.2 shop-admin Story 4.2（G6）：缺包裹重量或长宽高的规格数（规格卡顶红色横幅）
+        model.addAttribute("skuMissingPackage", ss.stream().filter(x -> !x.isSellable()).count());
         model.addAttribute("availableBySku", inventory.availableBySkuId(
                 ss.stream().map(ShopSku::getId).toList()));
-        model.addAttribute("feedingWarning",
-                service.needsFeedingGuideWarning(p.getCategory(), p.getFeedingGuide()));
 
         // 🔒 进货价：有权限才放进 model —— 无权限时模板拿不到这个 map，不是靠 th:if 隐藏
         boolean canViewCost = has(admin, AdminPermissions.SHOP_COST_VIEW);
@@ -304,6 +319,20 @@ public class AdminShopProductController {
         return "redirect:/admin/shop/products";
     }
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/products/{id}/delist/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmDelistProduct(@PathVariable long id, Model model, jakarta.servlet.http.HttpServletResponse response) {
+        var p = products.findById(id).orElseThrow(() -> AppException.notFound("商品不存在").code("admin.err.product.notFound"));
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopProducts.confirm.delist", p.getName()), "/admin/shop/products/" + id + "/delist",
+                java.util.Map.of(), msg.get("admin.shop.btn.delist"), true).asNativePost();
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
     @PostMapping("/admin/shop/products/{id}/delist")
     @PreAuthorize(EDIT_AUTH)
     public String delistProduct(@AuthenticationPrincipal AdminUserDetails admin,
@@ -316,6 +345,89 @@ public class AdminShopProductController {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/products";
+    }
+
+    // ---------- V1.4.2 shop-admin Story 3.3 · AB-39：评价隐藏 / 恢复（confirm-modal，权限 shop.product_edit；不通知用户） ----------
+
+    private com.tailtopia.admin.shop.service.AdminProductReviewsService reviewsQuery;
+    private com.tailtopia.admin.shop.service.AdminShopReviewService reviewAdmin;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setReviewServices(com.tailtopia.admin.shop.service.AdminProductReviewsService reviewsQuery,
+            com.tailtopia.admin.shop.service.AdminShopReviewService reviewAdmin) {
+        this.reviewsQuery = reviewsQuery;
+        this.reviewAdmin = reviewAdmin;
+    }
+
+    /** J3：隐藏确认 —— 原因下拉必选（辱骂 / 广告 / 隐私 / 其他），确认按钮红色。 */
+    @PostMapping("/admin/shop/products/{id}/reviews/{reviewId}/hide/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmHideReview(@PathVariable long id, @PathVariable long reviewId,
+            @RequestParam(value = "page", defaultValue = "0") int page, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
+        requireReviewOf(id, reviewId);
+        List<com.tailtopia.admin.shared.web.AdminConfirmModal.Option> opts = new java.util.ArrayList<>();
+        for (com.tailtopia.shop.review.domain.ReviewHideReason r : com.tailtopia.shop.review.domain.ReviewHideReason.values()) {
+            opts.add(new com.tailtopia.admin.shared.web.AdminConfirmModal.Option(r.name(),
+                    msg.get("admin.v142.review.reason." + r.name()), false));
+        }
+        var cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.v142.review.hide.title"),
+                        msg.get("admin.v142.review.hide.note"), "/admin/shop/products/" + id + "/reviews/" + reviewId + "/hide",
+                        Map.of("page", String.valueOf(page)), msg.get("admin.v142.review.btn.hide"), true)
+                .withSelect(new com.tailtopia.admin.shared.web.AdminConfirmModal.SelectField("reason",
+                        msg.get("admin.v142.review.reason.label"), opts, true))
+                .asNativePost();
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    @PostMapping("/admin/shop/products/{id}/reviews/{reviewId}/hide")
+    @PreAuthorize(EDIT_AUTH)
+    public String hideReview(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @PathVariable long reviewId, @RequestParam(value = "reason", required = false) String reason,
+            @RequestParam(value = "page", defaultValue = "0") int page, RedirectAttributes ra) {
+        try {
+            requireReviewOf(id, reviewId);
+            reviewAdmin.hide(reviewId, com.tailtopia.shop.review.domain.ReviewHideReason.parse(reason).orElse(null),
+                    admin.getAdminAccountId());
+            ra.addFlashAttribute("flash", msg.get("admin.v142.review.flash.hidden"));
+        } catch (AppException e) {
+            ra.addFlashAttribute("flash", msg.resolve(e));
+        }
+        return "redirect:/admin/shop/products/" + id + "?tab=reviews&page=" + Math.max(page, 0);
+    }
+
+    /** J4：恢复显示确认。 */
+    @PostMapping("/admin/shop/products/{id}/reviews/{reviewId}/unhide/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmUnhideReview(@PathVariable long id, @PathVariable long reviewId,
+            @RequestParam(value = "page", defaultValue = "0") int page, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
+        requireReviewOf(id, reviewId);
+        var cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.v142.review.unhide.title"),
+                msg.get("admin.v142.review.unhide.note"), "/admin/shop/products/" + id + "/reviews/" + reviewId + "/unhide",
+                Map.of("page", String.valueOf(page)), msg.get("admin.v142.review.btn.unhide"), false).asNativePost();
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    @PostMapping("/admin/shop/products/{id}/reviews/{reviewId}/unhide")
+    @PreAuthorize(EDIT_AUTH)
+    public String unhideReview(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @PathVariable long reviewId, @RequestParam(value = "page", defaultValue = "0") int page, RedirectAttributes ra) {
+        try {
+            requireReviewOf(id, reviewId);
+            reviewAdmin.unhide(reviewId, admin.getAdminAccountId());
+            ra.addFlashAttribute("flash", msg.get("admin.v142.review.flash.unhidden"));
+        } catch (AppException e) {
+            ra.addFlashAttribute("flash", msg.resolve(e));
+        }
+        return "redirect:/admin/shop/products/" + id + "?tab=reviews&page=" + Math.max(page, 0);
+    }
+
+    /** 路径里的评价必须属于路径里的商品且已发布（防止拼错 id 改到别的商品的评价，或改到列表外的待审 / 拦截评价）。 */
+    private void requireReviewOf(long productId, long reviewId) {
+        if (!reviewAdmin.isPublishedReviewOf(productId, reviewId)) {
+            throw AppException.notFound("评价不存在").code("admin.err.shopReview.notFound");
+        }
     }
 
     // ---------- helpers ----------

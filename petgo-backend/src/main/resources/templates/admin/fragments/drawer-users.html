@@ -58,6 +58,9 @@
                 th:text="#{admin.v140.users.tab.petSlots}">宠物与名额</button>
         <button type="button" class="tab" role="tab" data-utab="gifts"
                 th:text="#{admin.v140.users.tab.gifts}">收送礼记录</button>
+        <!--/* V1.4.2 shop-admin Story 2.3 · A11：第 10 个页签「优惠券」（只读） */-->
+        <button type="button" class="tab" role="tab" data-utab="coupons"
+                th:text="#{admin.nav.shopCoupons}">优惠券</button>
     </div>
 
     <!--/* ① 基本信息 */-->
@@ -357,6 +360,8 @@
            ③ Story 3.2：内容在独立片段 drawer-users-gifts :: panel（根元素仍是 data-utab-panel="gifts" 的 section，
            胶囊切换 / 翻页只换这一块）。 */-->
     <section th:replace="~{admin/fragments/drawer-users-gifts :: panel(false)}"></section>
+    <!--/* V1.4.2 shop-admin Story 2.3：「优惠券」页签内容（A11~A13）。 */-->
+    <section th:replace="~{admin/fragments/drawer-users-coupons :: panel(false)}"></section>
 
     <div id="user-drawer-err" class="lst-inline-error" aria-live="polite"></div>
 

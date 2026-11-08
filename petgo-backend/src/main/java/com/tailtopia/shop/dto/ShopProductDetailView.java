@@ -16,6 +16,8 @@ import java.util.List;
  * 🔴 图片字段一律 OSS objectKey，非 URL（NFR-5）。
  *
  * <p>⚠️ 不含库存/售罄状态——属 Story 1.2。
+ *
+ * <p>v1.4.2 shop Story 6.1：已下架商品不组装本视图（410 {@code product-delisted}），末尾追加评价摘要。
  */
 public record ShopProductDetailView(
         String token,
@@ -33,5 +35,16 @@ public record ShopProductDetailView(
         List<FeedingGuideEntry> feedingGuide,
         String shelfLifeNote,
         ReturnPolicy returnPolicy,
-        List<ShopSkuView> skus) {
+        List<ShopSkuView> skus,
+        /** v1.4.2 shop Story 6.1 AC11：评价摘要（只算已发布未隐藏）。 */
+        ReviewSummary reviewSummary,
+        /** v1.4.2 C-9：评价列表展示开关（同 {@code reviewSummary.displayEnabled}，供 App 直接判是否渲染列表）。 */
+        boolean reviewListEnabled) {
+
+    /**
+     * 评价摘要（AC11）：开关关 → {@code items = []}；开 → 最新 3 条。无评价 → {@code total = 0}、{@code averageRating = null}。
+     */
+    public record ReviewSummary(long total, Double averageRating, boolean displayEnabled,
+            List<com.tailtopia.shop.review.dto.ShopReviewView> items) {
+    }
 }

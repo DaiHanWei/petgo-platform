@@ -230,8 +230,12 @@ class ConsultShopBoundaryTest {
         List<String> offenders = new ArrayList<>();
         forEachJava(MAIN.resolve("com/tailtopia/shop"), (path, src) -> {
             String code = stripComments(src);
-            if (code.contains("wallet.debit(") && !path.toString().contains("CheckoutService")) {
-                // 只有结算时扣币是合法的 debit；其余任何 debit 都要解释清楚
+            String file = path.getFileName().toString();
+            boolean submitPath = file.equals("CheckoutService.java")
+                    // v1.4.2 4.2：迟到款重新下单 = 建新单时按提交扣币（S-3/S-6，story AC3 明文），同属下单扣币
+                    || file.equals("LatePaymentService.java");
+            if (code.contains("wallet.debit(") && !submitPath) {
+                // 只有下单提交时扣币是合法的 debit；其余任何 debit 都要解释清楚
                 offenders.add(path.toString());
             }
         });

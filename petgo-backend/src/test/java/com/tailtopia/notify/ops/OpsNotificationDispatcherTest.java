@@ -437,4 +437,79 @@ class OpsNotificationDispatcherTest {
         verify(repo, never()).addFailed(anyLong(), anyInt(), any());
         verify(repo).finish(ID, OpsCampaignStatus.DONE, NOW);
     }
+
+    // ===== V1.4.2 Story 7.1 · AB-37 宠物变量排除无宠用户（R-3：skipped_no_pet_count）=====
+
+    private void petCampaign(AudienceSpec spec) {
+        OpsNotificationCampaign c = OpsNotificationCampaign.create(CAMPAIGN_TOKEN, "Judul", "Hi {{petName}}", "Isi",
+                "Body", OpsTargetType.NONE, null, spec.toJson(), null, 1L);
+        ReflectionTestUtils.setField(c, "id", ID);
+        when(repo.findById(ID)).thenReturn(Optional.of(c));
+        when(repo.setSkippedNoPet(eq(ID), anyInt(), any())).thenReturn(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<OpsRecipient> written() {
+        ArgumentCaptor<List<OpsRecipient>> cap = ArgumentCaptor.forClass(List.class);
+        verify(notificationService, org.mockito.Mockito.atLeastOnce()).writeOpsAnnouncements(any(), cap.capture());
+        return cap.getAllValues().stream().flatMap(List::stream).toList();
+    }
+
+    @Test
+    void petVariableExcludesUsersWithoutPet() {
+        petCampaign(AudienceSpec.all());
+        when(audience.resolve(any(), eq(ID))).thenReturn(List.of(new OpsRecipient(1, "id", "hex", "tuotuo"),
+                new OpsRecipient(2, "en", "yenny", null), new OpsRecipient(3, "en", null, "huahua")));
+        dispatcher.dispatch(ID);
+        assertThat(written()).extracting(OpsRecipient::userId).containsExactly(1L, 3L);
+        verify(repo).setPlanned(ID, 2, NOW);
+        verify(repo).setSkippedNoPet(ID, 1, NOW);
+        verify(repo, never()).setSkipped(eq(ID), anyInt(), any());
+        verify(repo).finish(ID, OpsCampaignStatus.DONE, NOW);
+    }
+
+    @Test
+    void idsModeKeepsSkippedCountSemantics() {
+        petCampaign(AudienceSpec.ids());
+        when(targets.countByCampaign(ID)).thenReturn(5L);
+        when(audience.resolve(any(), eq(ID))).thenReturn(List.of(new OpsRecipient(1, "id", "a", "p1"),
+                new OpsRecipient(2, "id", "b", null), new OpsRecipient(3, "id", "c", "p3")));
+        dispatcher.dispatch(ID);
+        verify(repo).setSkipped(ID, 2, NOW); // 子表 5 − 基础命中 3（无宠的有效用户不计入）
+        verify(repo).setSkippedNoPet(ID, 1, NOW);
+        verify(repo).setPlanned(ID, 2, NOW);
+        assertThat(written()).extracting(OpsRecipient::userId).containsExactly(1L, 3L);
+    }
+
+    @Test
+    void noPetVariableNeverWritesNoPetCount() {
+        when(audience.resolve(any(), eq(ID))).thenReturn(List.of(new OpsRecipient(1, "id", "hex", null),
+                new OpsRecipient(2, "en", null, null)));
+        dispatcher.dispatch(ID);
+        verify(repo, never()).setSkippedNoPet(anyLong(), anyInt(), any());
+        verify(repo).setPlanned(ID, 2, NOW);
+        assertThat(written()).hasSize(2);
+    }
+
+    @Test
+    void allWithoutPetFinishesDoneWithZeroRecipients() {
+        petCampaign(AudienceSpec.all());
+        when(audience.resolve(any(), eq(ID))).thenReturn(List.of(new OpsRecipient(1, "id"),
+                new OpsRecipient(2, "en")));
+        dispatcher.dispatch(ID);
+        verify(repo).setPlanned(ID, 0, NOW);
+        verify(repo).setSkippedNoPet(ID, 2, NOW);
+        verify(notificationService, never()).writeOpsAnnouncements(any(), any());
+        verify(repo).finish(ID, OpsCampaignStatus.DONE, NOW);
+    }
+
+    @Test
+    void noPetCountWriteLostMeansStop() {
+        petCampaign(AudienceSpec.all());
+        when(repo.setSkippedNoPet(eq(ID), anyInt(), any())).thenReturn(0);
+        when(audience.resolve(any(), eq(ID))).thenReturn(List.of(new OpsRecipient(1, "id", "hex", "tuotuo")));
+        dispatcher.dispatch(ID);
+        verify(notificationService, never()).writeOpsAnnouncements(any(), any());
+        verify(repo, never()).finish(anyLong(), any(), any());
+    }
 }

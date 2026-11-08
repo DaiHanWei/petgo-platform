@@ -10,7 +10,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
@@ -19,6 +18,8 @@ import com.tailtopia.content.dto.CommentCreateRequest;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.mention.repository.MentionCandidateRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.social.read.FollowReader;
+import com.tailtopia.social.read.FollowState;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -47,6 +48,7 @@ class MentionSanitizerTest {
     private AccountQueryService accounts;
     private UserHideRelationReader hideRelations;
     private MentionCandidateRepository candidates;
+    private FollowReader follows;
     private MentionSanitizer sanitizer;
 
     @BeforeEach
@@ -54,21 +56,31 @@ class MentionSanitizerTest {
         accounts = mock(AccountQueryService.class);
         hideRelations = mock(UserHideRelationReader.class);
         candidates = mock(MentionCandidateRepository.class);
-        sanitizer = new MentionSanitizer(accounts, hideRelations, candidates);
-        // 默认：提交的人都在候选集里、谁都没拉黑谁、所有人都活着。各用例按需覆盖。
+        follows = mock(FollowReader.class);
+        sanitizer = new MentionSanitizer(accounts, hideRelations, candidates, follows);
+        // 默认：提交的人都在候选集里、与我互不关注、谁都没拉黑谁、所有人都有效。各用例按需覆盖。
         when(candidates.findExistingCandidateIds(anyLong(), anyCollection()))
                 .thenAnswer(inv -> List.copyOf(inv.<java.util.Collection<Long>>getArgument(1)));
+        when(follows.followStates(anyLong(), anyCollection())).thenAnswer(inv -> states(
+                inv.<java.util.Collection<Long>>getArgument(1), Map.of()));
         when(hideRelations.hiddenEitherWay(anyLong(), anyCollection())).thenReturn(Set.of());
-        when(accounts.findAuthorViewsWithoutTags(anyCollection()))
-                .thenAnswer(inv -> alive(inv.getArgument(0)));
+        when(accounts.activeIdsAmong(anyCollection()))
+                .thenAnswer(inv -> Set.copyOf(inv.<java.util.Collection<Long>>getArgument(0)));
     }
 
-    private static Map<Long, AuthorView> alive(Iterable<Long> ids) {
-        Map<Long, AuthorView> out = new HashMap<>();
+    /** 同 FollowReaderImpl：入参里每个 id 都有值，缺失的填 NONE。 */
+    private static Map<Long, FollowState> states(Iterable<Long> ids, Map<Long, FollowState> known) {
+        Map<Long, FollowState> out = new HashMap<>();
         for (Long id : ids) {
-            out.put(id, new AuthorView(id, "u" + id, null, false, List.of()));
+            out.put(id, known.getOrDefault(id, FollowState.NONE));
         }
         return out;
+    }
+
+    private void onlyInScopeVia(Map<Long, FollowState> rel) {
+        when(candidates.findExistingCandidateIds(anyLong(), anyCollection())).thenReturn(List.of());
+        when(follows.followStates(anyLong(), anyCollection())).thenAnswer(inv -> states(
+                inv.<java.util.Collection<Long>>getArgument(1), rel));
     }
 
     // ===== AC5：上限 5 人 =====
@@ -94,8 +106,9 @@ class MentionSanitizerTest {
         assertThatThrownBy(() -> sanitizer.sanitize(ME, List.of(2L, 3L, 4L, 5L, 6L, 7L)))
                 .isInstanceOf(AppException.class);
         verify(candidates, never()).findExistingCandidateIds(anyLong(), anyCollection());
+        verify(follows, never()).followStates(anyLong(), anyCollection());
         verify(hideRelations, never()).hiddenEitherWay(anyLong(), anyCollection());
-        verify(accounts, never()).findAuthorViewsWithoutTags(anyCollection());
+        verify(accounts, never()).activeIdsAmong(anyCollection());
     }
 
     @Test
@@ -105,11 +118,11 @@ class MentionSanitizerTest {
                 .isInstanceOf(AppException.class);
     }
 
-    // ===== AD-10 Rule 3：@ 不到没打过交道的陌生人（服务端闸门）=====
+    // ===== D-15：@ 不到范围外的人（服务端闸门；范围 = 互动候选 ∪ 我关注 ∪ 关注我）=====
 
     @Test
-    void 不在候选集里的陌生人被剔除() {
-        // 🔴 前端那个选择器只能点到候选集里的人，但**接口自己必须拦** ——
+    void 三类都不是被静默剔除() {
+        // 🔴 前端那个选择器只能点到范围内的人，但**接口自己必须拦** ——
         //    否则一个 for 循环遍历 userId 就成了对任意陌生人的定向推送口（Story 3.4 发通知）。
         when(candidates.findExistingCandidateIds(anyLong(), anyCollection()))
                 .thenReturn(List.of(3L));
@@ -117,17 +130,38 @@ class MentionSanitizerTest {
     }
 
     @Test
-    void 全是陌生人时后两条查询都不发() {
+    void 只是粉丝也放行() {
+        onlyInScopeVia(Map.of(2L, new FollowState(false, true)));
+        assertThat(sanitizer.sanitize(ME, List.of(2L, 3L))).containsExactly(2L);
+    }
+
+    @Test
+    void 只是我关注的也放行() {
+        onlyInScopeVia(Map.of(4L, new FollowState(true, false)));
+        assertThat(sanitizer.sanitize(ME, List.of(3L, 4L))).containsExactly(4L);
+    }
+
+    @Test
+    void 互动候选关注粉丝三类混合时都放行且保序() {
+        when(candidates.findExistingCandidateIds(anyLong(), anyCollection())).thenReturn(List.of(5L));
+        when(follows.followStates(anyLong(), anyCollection())).thenAnswer(inv -> states(
+                inv.<java.util.Collection<Long>>getArgument(1),
+                Map.of(2L, new FollowState(false, true), 4L, new FollowState(true, true))));
+        assertThat(sanitizer.sanitize(ME, List.of(4L, 9L, 2L, 5L))).containsExactly(4L, 2L, 5L);
+    }
+
+    @Test
+    void 全是范围外的人时后两条查询都不发() {
         when(candidates.findExistingCandidateIds(anyLong(), anyCollection()))
                 .thenReturn(List.of());
         assertThat(sanitizer.sanitize(ME, List.of(2L, 3L))).isEmpty();
         verify(hideRelations, never()).hiddenEitherWay(anyLong(), anyCollection());
-        verify(accounts, never()).findAuthorViewsWithoutTags(anyCollection());
+        verify(accounts, never()).activeIdsAmong(anyCollection());
     }
 
     @Test
-    void 陌生人同样是静默剔除不报错() {
-        // 报错 = 把「这个 id 跟我互动过吗」做成一个可以逐个试探的问答口。
+    void 范围外同样是静默剔除不报错() {
+        // 报错 = 把「这个 id 跟我有没有关系」做成一个可以逐个试探的问答口。
         when(candidates.findExistingCandidateIds(anyLong(), anyCollection()))
                 .thenReturn(List.of());
         assertThat(sanitizer.sanitize(ME, List.of(999L))).isEmpty();
@@ -148,15 +182,22 @@ class MentionSanitizerTest {
 
     @Test
     void 已注销的人被剔除() {
-        when(accounts.findAuthorViewsWithoutTags(anyCollection())).thenReturn(
-                Map.of(2L, AuthorView.anonymized(2L), 3L, new AuthorView(3L, "u3", null, false, List.of())));
+        // activeIdsAmong 与 isActive 同口径：注销（deleted_at 非空）不在返回集合里。
+        when(accounts.activeIdsAmong(anyCollection())).thenReturn(Set.of(3L));
         assertThat(sanitizer.sanitize(ME, List.of(2L, 3L))).containsExactly(3L);
     }
 
     @Test
+    void DEACTIVATED被剔除() {
+        // V1.4.2 Story 5.1 新增：封号同样剔除（原来只判注销）—— 判据改走 activeIdsAmong。
+        when(accounts.activeIdsAmong(anyCollection())).thenReturn(Set.of(2L));
+        assertThat(sanitizer.sanitize(ME, List.of(2L, 3L))).containsExactly(2L);
+        verify(accounts, never()).findAuthorViewsWithoutTags(anyCollection());
+    }
+
+    @Test
     void 不存在的id被剔除() {
-        when(accounts.findAuthorViewsWithoutTags(anyCollection()))
-                .thenReturn(Map.of(3L, new AuthorView(3L, "u3", null, false, List.of())));
+        when(accounts.activeIdsAmong(anyCollection())).thenReturn(Set.of(3L));
         assertThat(sanitizer.sanitize(ME, List.of(999L, 3L))).containsExactly(3L);
     }
 
@@ -190,16 +231,22 @@ class MentionSanitizerTest {
     @Test
     void 没有有效候选时不发多余查询() {
         assertThat(sanitizer.sanitize(ME, List.of(ME))).isEmpty();
+        verify(candidates, never()).findExistingCandidateIds(anyLong(), anyCollection());
+        verify(follows, never()).followStates(anyLong(), anyCollection());
         verify(hideRelations, never()).hiddenEitherWay(anyLong(), anyCollection());
     }
 
     @Test
-    void 取数恰好三条查询与人数无关() {
+    void 取数恰好四条查询与人数无关() {
         // AD-6：批量，不逐个查。这条路径是发布/评论的**同步写**路径。
+        // 候选 + 关注两条判范围 → 隐藏一条 → 有效账号一条。
         sanitizer.sanitize(ME, List.of(2L, 3L, 4L, 5L, 6L));
         verify(candidates, times(1)).findExistingCandidateIds(anyLong(), anyCollection());
+        verify(follows, times(1)).followStates(anyLong(), anyCollection());
+        verify(follows, never()).followState(anyLong(), anyLong());
         verify(hideRelations, times(1)).hiddenEitherWay(anyLong(), anyCollection());
-        verify(accounts, times(1)).findAuthorViewsWithoutTags(anyCollection());
+        verify(accounts, times(1)).activeIdsAmong(anyCollection());
+        verify(accounts, never()).findAuthorViewsWithoutTags(anyCollection());
     }
 
     // ===== AC4：存储形态 —— 存 id，且只存 id =====

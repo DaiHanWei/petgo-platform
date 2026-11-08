@@ -21,6 +21,11 @@
         <div class="sum-label" th:text="#{admin.v130.shopOrders.summary.inTransit}">在途</div>
         <div class="sum-value" th:text="${summary.inTransit()}">0</div>
     </div>
+    <!--/* V1.4.2 shop-admin Story 6.1（H1）：有异常标记 */-->
+    <div class="sum-item" th:classappend="${summary.flagged() > 0} ? 'dg'">
+        <div class="sum-label" th:text="#{admin.v142.ful.flag.ANY}">有异常标记</div>
+        <div class="sum-value" th:text="${summary.flagged()}">0</div>
+    </div>
     <div class="sum-item">
         <div class="sum-label" th:text="#{admin.v130.shopOrders.summary.deliveredToday}">今日签收</div>
         <div class="sum-value" th:text="${summary.deliveredToday()}">0</div>
@@ -50,20 +55,17 @@
         <span class="empty-emoji">🔍</span>
         <p th:text="#{admin.shop.orders.empty}">暂无订单。</p>
     </div>
-    <div class="pager" th:if="${!#lists.isEmpty(rows)}" th:attr="data-page=${page}">
-        <a th:if="${page > 0}" href="#" th:text="#{admin.v130.places.pager.prev}"
-           th:attr="hx-get=@{/admin/shop/orders(status=${status},orderToken=${orderToken},from=${from},to=${to},page=${page - 1})}"
-           hx-target="#shop-order-rows" hx-swap="innerHTML" hx-push-url="true">上一页</a>
-        <a th:if="${hasNext}" href="#" th:text="#{admin.v130.places.pager.next}"
-           th:attr="hx-get=@{/admin/shop/orders(status=${status},orderToken=${orderToken},from=${from},to=${to},page=${page + 1})}"
-           hx-target="#shop-order-rows" hx-swap="innerHTML" hx-push-url="true">下一页</a>
-    </div>
+    <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页），翻页带全部筛选条件。 */-->
+    <th:block th:if="${!#lists.isEmpty(rows)}" th:with="tpl=@{/admin/shop/orders(status=${status},orderToken=${orderToken},from=${from},to=${to},flag=${flag},page='~PAGE~')}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target='#shop-order-rows')}"></div>
+    </th:block>
 </th:block>
 
 <table th:remove="tag"><tbody th:remove="tag">
     <tr th:fragment="row(r, oob, flagged)" th:id="'shop-order-row-' + ${r.orderToken}"
         th:hx-swap-oob="${oob} ? 'true' : null"
-        th:data-id="${r.orderToken}" th:data-drawer-url="@{/admin/shop/orders/{t}(t=${r.orderToken})}"
+        th:data-id="${r.orderToken}"
+        th:data-drawer-url="${drawerBase != null} ? @{${drawerBase + '/' + r.orderToken}} : @{/admin/shop/orders/{t}(t=${r.orderToken})}"
         tabindex="0">
         <td class="nowrap">
             <span th:text="${r.orderToken}">abc</span>
@@ -72,6 +74,11 @@
             <a class="badge badge-danger" th:if="${flagged}"
                th:href="@{/admin/shop/order-exceptions(open=${r.orderToken})}"
                th:text="#{admin.v130.shopOrders.exception}">异常</a>
+            <!--/* V1.4.2 shop-admin Story 6.1（H1）：订单号旁异常标记徽标 */-->
+            <th:block th:if="${flagsByToken != null and flagsByToken.get(r.orderToken) != null}">
+                <span th:each="f : ${flagsByToken.get(r.orderToken)}" class="badge badge-warn q-src" data-order-flag
+                      th:text="#{'admin.v142.ful.flag.' + ${f}}">运单失败</span>
+            </th:block>
         </td>
         <td class="nowrap">
             <span class="dot" th:classappend="${r.status == 'PENDING_SHIPMENT'} ? 'dot--todo'

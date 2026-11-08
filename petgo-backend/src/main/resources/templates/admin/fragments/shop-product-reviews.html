@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  商品编辑页「评价」页签（V1.4.2 shop-admin Story 3.3 · AB-39 · UI J1 / J2）。只列已发布（含已隐藏），分页；内容照原文展示。
+  行内「隐藏」→ J3 confirm-modal（原因下拉必选）；「恢复显示」→ J4 confirm-modal。无删除入口；不通知用户。
+  模型：reviewsTab（AdminProductReviewsService.Tab）、canEditReviews、productId。
+*/-->
+<body>
+<section th:fragment="panel" class="card card-full" data-product-reviews th:with="t=${reviewsTab}">
+    <div class="sum" th:if="${t.total() > 0}">
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.review.sum.avg}">平均分（显示中）</div>
+            <div class="sum-value num" th:text="${t.averageVisible() == null} ? '—' : ${#numbers.formatDecimal(t.averageVisible(), 1, 'NONE', 1, 'POINT')}">4.6</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.review.state.visible}">显示中</div>
+            <div class="sum-value num" th:text="${t.visible()}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.review.state.hidden}">已隐藏</div>
+            <div class="sum-value num" th:text="${t.hidden()}">0</div></div>
+    </div>
+    <table th:if="${t.total() > 0}">
+        <thead><tr>
+            <th th:text="#{admin.v142.review.col.rating}">评分</th>
+            <th th:text="#{admin.v142.review.col.content}">内容</th>
+            <th th:text="#{admin.v142.review.col.images}">图片</th>
+            <th th:text="#{admin.v142.review.col.user}">用户</th>
+            <th th:text="#{admin.v142.review.col.time}">时间</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="s-col-act" th:text="#{admin.common.actions}">操作</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="r : ${t.rows()}" th:attr="data-review-id=${r.id()}" th:classappend="${r.hidden()} ? 'is-muted'">
+            <td class="num" th:text="${#strings.repeat('★', r.rating())} + ${#strings.repeat('☆', 5 - r.rating())}">★★★★★</td>
+            <td th:text="${r.content() == null} ? '—' : ${r.content()}">内容</td>
+            <td th:text="${r.imageCount() == 0} ? '—' : #{admin.v142.review.images(${r.imageCount()})}">—</td>
+            <td th:text="${r.userName() == null} ? '—' : ${r.userName()}">用户</td>
+            <td class="num" th:text="${r.createdAt() == null} ? '—' : ${#temporals.format(r.createdAt(), 'yyyy-MM-dd', 'Asia/Jakarta')}">2026-08-14</td>
+            <td>
+                <span th:unless="${r.hidden()}" class="badge badge-ok" th:text="#{admin.v142.review.state.visible}">显示中</span>
+                <span th:if="${r.hidden() and r.reason() != null}" class="badge badge-muted"
+                      th:text="#{admin.v142.review.state.hiddenWith(#{'admin.v142.review.reason.' + ${r.reason()}})}">已隐藏 · 广告</span>
+                <span th:if="${r.hidden() and r.reason() == null}" class="badge badge-muted" th:text="#{admin.v142.review.state.hidden}">已隐藏</span>
+            </td>
+            <td class="s-col-act">
+                <form th:if="${canEditReviews and !r.hidden()}" class="inline"
+                      th:attr="hx-post=@{/admin/shop/products/{p}/reviews/{r}/hide/confirm(p=${productId},r=${r.id()},page=${t.page()})}"
+                      hx-target="#confirm-host" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-sm btn-danger" th:text="#{admin.v142.review.btn.hide}">隐藏</button>
+                </form>
+                <form th:if="${canEditReviews and r.hidden()}" class="inline"
+                      th:attr="hx-post=@{/admin/shop/products/{p}/reviews/{r}/unhide/confirm(p=${productId},r=${r.id()},page=${t.page()})}"
+                      hx-target="#confirm-host" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-sm btn-neutral" th:text="#{admin.v142.review.btn.unhide}">恢复显示</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="pager" th:if="${t.total() > 0}">
+        <span class="muted" th:text="#{admin.v142.review.pager(${t.total()}, ${t.page() + 1}, ${t.totalPages()})}">共 23 条 · 第 1 / 8 页</span>
+        <a th:if="${t.page() > 0}" th:href="@{/admin/shop/products/{id}(id=${productId},tab='reviews',page=${t.page() - 1})}"
+           th:text="#{admin.v142.review.prev}">上一页</a>
+        <a th:if="${t.page() + 1 < t.totalPages()}" th:href="@{/admin/shop/products/{id}(id=${productId},tab='reviews',page=${t.page() + 1})}"
+           th:text="#{admin.v142.review.next}">下一页</a>
+    </div>
+    <div class="empty" th:if="${t.total() == 0}">
+        <span class="empty-emoji">💬</span>
+        <p th:text="#{admin.v142.review.empty}">这个商品还没有评价。</p>
+    </div>
+</section>
+</body>
+</html>

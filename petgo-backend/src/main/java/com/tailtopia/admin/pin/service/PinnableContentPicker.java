@@ -38,15 +38,27 @@ public class PinnableContentPicker {
 
     @Transactional(readOnly = true)
     public List<PinnableContentRow> page(String keyword, int page) {
+        return page(keyword, page, null);
+    }
+
+    /**
+     * 同上；{@code topicId} 非空时（V1.4.2 Story 6.2 · 话题页顶置）候选只取挂在该话题下的帖子，
+     * 按数字 id 直达同样只认该话题下的帖子。{@code topicId == null} 与两参版本逐字一致。
+     */
+    @Transactional(readOnly = true)
+    public List<PinnableContentRow> page(String keyword, int page, Long topicId) {
         // 🔴 绝不传 null：绑 null 时 Postgres 推不出类型（lower(bytea) does not exist），
         //    而"不带关键词"正是页面首次加载的那一次。无关键词 → "%" 匹配全部。
         String kw = keyword == null ? "" : keyword.trim();
         String pattern = kw.isEmpty() ? "%" : "%" + kw.toLowerCase() + "%";
-        List<ContentPost> found = new ArrayList<>(
-                posts.searchPinnable(pattern, PageRequest.of(Math.max(page, 0), PAGE_SIZE)));
+        PageRequest pr = PageRequest.of(Math.max(page, 0), PAGE_SIZE);
+        List<ContentPost> found = new ArrayList<>(topicId == null
+                ? posts.searchPinnable(pattern, pr)
+                : posts.searchPinnableInTopic(pattern, topicId, pr));
         if (page <= 0 && kw.matches("\\d{1,18}")) {
             posts.findById(Long.parseLong(kw))
                     .filter(PinnableContentPicker::pinnable)
+                    .filter(p -> topicId == null || posts.isInTopic(p.getId(), topicId))
                     .filter(p -> found.stream().noneMatch(f -> f.getId().equals(p.getId())))
                     .ifPresent(p -> found.add(0, p));
         }

@@ -23,6 +23,7 @@
 # ---- 选择器（弹层里用的候选列表，没有导航入口）----
 /admin/content-pins/pick   # 置顶管理的内容选择器
 /admin/content-tags/pick   # 内容标签的内容选择器
+/admin/topics/name-check   # 话题管理新建抽屉的名称查重片段（V1.4.2 Story 6.1 · F3 黄条），页面是 /admin/topics；门 = content.topic_manage
 /admin/user-tags/pick   # 用户标签的用户选择器
 /admin/seed-post/pets   # 种子发布的宠物选择器
 /admin/ops-notifications/new   # 系统通知发送的四步新建页（V1.3.4 AB-31），从列表「＋ 新建通知」进，侧栏仍归 /admin/ops-notifications；门 = ops_notify.send
@@ -38,6 +39,10 @@
                                #    comment.virtual_post 的运营有权限却没有任何入口能走到这一页**
                                #    （「能进却看不见」）。修法是设计问题（侧栏该指向哪个页签），
                                #    已记入 Story 11.4 待拍板，不在 11.4 里私自改。
+/admin/content-pins/topics   # 顶置管理页签二「话题页」（V1.4.2 Story 6.2 · G1a），真整页、门 = 与 /admin/content-pins
+                             #    逐字同一个 VIEW（content.pin_view）；入口是顶置管理顶部页签（同一 sec:authorize），
+                             #    侧栏仍高亮「顶置管理」（active = content-pins），码随父页、不在权限矩阵另起一行。
+                             #    其内层页 /admin/content-pins/topics/{topicId}（G1b）带路径参数，按规则本就不算页面。
 /admin/payments/keepsake-exceptions   # 一次性解锁异常子页（V1.3.2 Story 3.6 AC5），真整页、只读。
                                       #    门 = 与 /admin/payments 逐字同一个 VIEW_AUTH（payment.view），
                                       #    入口是支付页顶部页内链接（同一 sec:authorize），story 明定不进侧栏；

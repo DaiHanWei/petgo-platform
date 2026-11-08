@@ -119,9 +119,9 @@
         <p class="hint" th:text="#{admin.shop.inventory.damage.hint}">只能报损可售库存。</p>
         <p class="banner warn" th:unless="${canEdit}"
            th:text="#{admin.v130.shopInventory.needEdit}">需要「库存编辑」权限。</p>
-        <!--/* 🔴 data-confirm 复述**可售上限**：报损不可撤销，而运营最常见的错是照着「实际库存」填数。 */-->
-        <form th:if="${canEdit}" th:attr="hx-post=@{/admin/shop/inventory/damage},
-                     data-confirm=#{admin.v130.shopInventory.confirmDamage(${row.available()})}"
+        <!--/* 🔴 确认弹层复述**可售上限**：报损不可撤销，而运营最常见的错是照着「实际库存」填数。
+               V1.4.2 Story 1.2 · AD-3：先 POST …/damage/confirm 取服务端弹层（可售数按库里现值算）。 */-->
+        <form th:if="${canEdit}" th:attr="hx-post=@{/admin/shop/inventory/damage/confirm}"
               hx-target="#shop-inventory-drawer-body" hx-swap="innerHTML" data-requires-form>
             <input type="hidden" name="skuId" th:value="${row.skuId()}"/>
             <label><span th:text="#{admin.shop.inventory.col.qty}">数量</span>
@@ -139,20 +139,16 @@
         <p class="hint" th:text="#{admin.shop.inventory.stocktake.hint}">填写实际盘点到的数量，系统按差额记流水。</p>
         <p class="banner warn" th:unless="${canEdit}"
            th:text="#{admin.v130.shopInventory.needEdit}">需要「库存编辑」权限。</p>
-        <!--/* 🔴 确认框复述的是**差异数**而不是盘点值：盘点填的是「我数出来多少」，
+        <!--/* 🔴 确认弹层复述的是**差异数**而不是盘点值：盘点填的是「我数出来多少」，
                而真正落账的是「差多少」。只复述盘点值的话，把 12 误填成 120 与正确填 120
-               在确认框里长得一模一样 —— 差异数 +108 才会让人停下来。差异由 JS 现算（见下方脚本）。 */-->
-        <!--/* 🔴 **静态兜底 data-confirm 必须先在属性上**：下面那段脚本会把它覆盖成带差异数的版本，
-               但脚本若没跑（CSP 拦了内联脚本 / 片段被别处以非 htmx 方式插入），
-               admin-core.js 的 `form[data-confirm]` 选择器就一个都选不中 ——
-               盘点这条**直接赋值 actual** 的路径会变成「点一下就改库存、零确认」。
-               宁可先问一句不带数字的，也不能一句都不问。 */-->
-        <form th:if="${canEdit}" th:attr="hx-post=@{/admin/shop/inventory/stocktake},
-                     data-confirm=#{admin.v130.shopInventory.confirmStocktakeFallback}"
+               长得一模一样 —— 差异数 +108 才会让人停下来。
+               V1.4.2 Story 1.2 · AD-3：确认改为服务端弹层（…/stocktake/confirm 按库里当前实际库存现算差异，
+               不再依赖下方脚本改写属性 —— 脚本没跑也不会变成零确认）。脚本只负责输入框下的差异提示。 */-->
+        <form th:if="${canEdit}" th:attr="hx-post=@{/admin/shop/inventory/stocktake/confirm}"
               hx-target="#shop-inventory-drawer-body" hx-swap="innerHTML"
               data-requires-form data-stocktake-form
               th:data-actual="${row.actual()}"
-              th:data-confirm-tpl="#{admin.v130.shopInventory.confirmStocktake}">
+              th:data-diff-tpl="#{admin.v130.shopInventory.confirmStocktake}">
             <input type="hidden" name="skuId" th:value="${row.skuId()}"/>
             <label><span th:text="#{admin.shop.inventory.col.counted}">盘点数量</span>
                 <input type="number" class="inp" name="countedActual" min="0" required
@@ -187,20 +183,16 @@
                 });
             });
 
-            // 盘点差异：确认框文案由 data-confirm 承载（admin-core.js 的通用确认拦截读它），
-            // 每次输入变化就重写一遍 —— 提交那一刻读到的一定是当前值。
+            // 盘点差异提示：每次输入变化就在输入框下方复述一遍（确认弹层由服务端另算，见上方注释）。
             var form = panel.querySelector('[data-stocktake-form]');
             if (!form) { return; }
             var actual = parseInt(form.getAttribute('data-actual'), 10);
-            var tpl = form.getAttribute('data-confirm-tpl') || '';
-            var fallback = form.getAttribute('data-confirm') || '';
+            var tpl = form.getAttribute('data-diff-tpl') || '';
             var input = form.querySelector('[data-stocktake-counted]');
             var out = form.querySelector('[data-stocktake-diff]');
             function refresh() {
                 var counted = parseInt(input.value, 10);
                 if (isNaN(counted)) {
-                    // ⚠️ 不能 removeAttribute：那会把上面那条静态兜底也抹掉，变成零确认。
-                    form.setAttribute('data-confirm', fallback);
                     if (out) { out.textContent = ''; }
                     return;
                 }
@@ -208,7 +200,6 @@
                 var signed = (diff > 0 ? '+' : '') + diff;
                 var text = tpl.replace('{0}', String(actual)).replace('{1}', String(counted))
                         .replace('{2}', signed);
-                form.setAttribute('data-confirm', text);
                 if (out) { out.textContent = text; }
             }
             input.addEventListener('input', refresh);

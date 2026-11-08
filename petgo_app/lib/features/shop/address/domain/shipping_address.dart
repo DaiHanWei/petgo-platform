@@ -15,6 +15,7 @@ class ShippingAddress {
     required this.kodePos,
     required this.isDefault,
     this.label,
+    this.serviceable,
   });
 
   final String token;
@@ -28,6 +29,10 @@ class ShippingAddress {
   final String? label;
   final bool isDefault;
 
+  /// v1.4.2 shop Story 3.1（D-9）：地址簿列表的可配送标注。false = 不可配送；true = 可配送；
+  /// null = 未判定（询价失败 / 其他出口不下发）。🔴 只读，[toRequestJson] 不写出。
+  final bool? serviceable;
+
   factory ShippingAddress.fromJson(Map<String, dynamic> j) => ShippingAddress(
         token: j['token']?.toString() ?? '',
         receiverName: j['receiverName']?.toString() ?? '',
@@ -39,6 +44,7 @@ class ShippingAddress {
         kodePos: j['kodePos']?.toString() ?? '',
         label: (j['label']?.toString().isEmpty ?? true) ? null : j['label'].toString(),
         isDefault: j['isDefault'] == true,
+        serviceable: j['serviceable'] is bool ? j['serviceable'] as bool : null,
       );
 
   Map<String, dynamic> toRequestJson() => {
@@ -102,15 +108,22 @@ class RegionKota {
 }
 
 class RegionKecamatan {
-  const RegionKecamatan(this.name, this.serviceable);
+  const RegionKecamatan(this.name, this.serviceable, {this.id});
 
   final String name;
 
   /// false = 平台已录入但当前不可送达。🔴 仍要让用户选得到（FR-99 允许存超范围地址）。
   final bool serviceable;
 
-  factory RegionKecamatan.fromJson(Map<String, dynamic> j) =>
-      RegionKecamatan(j['name']?.toString() ?? '', j['serviceable'] == true);
+  /// `shipping_zones.id`（v1.4.2 shop Story 3.1 / C-9：区域参考数据，允许外露）。
+  /// 详情页 / 购物车按地区估运费时作 `regionKecamatanId`。旧后端缺键 → null。
+  final int? id;
+
+  factory RegionKecamatan.fromJson(Map<String, dynamic> j) => RegionKecamatan(
+        j['name']?.toString() ?? '',
+        j['serviceable'] == true,
+        id: j['id'] is num ? (j['id'] as num).toInt() : null,
+      );
 }
 
 /// 印尼手机号归一化 —— 🔴 **口径必须与服务端 `IndonesiaPhone` 完全一致**（C-15）。

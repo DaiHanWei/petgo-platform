@@ -40,6 +40,9 @@ public interface ContentPinRepository extends JpaRepository<ContentPin, Long> {
     /** 后台列表（Story 11.1）：某坑位全部排期，含已结束的历史，开始时间倒序。 */
     List<ContentPin> findBySlotOrderByStartsAtDesc(String slot);
 
+    /** 后台话题页顶置汇总（V1.4.2 Story 6.2 · G1a）：一次取多个坑位的全部排期（禁逐话题查）。 */
+    List<ContentPin> findBySlotIn(java.util.Collection<String> slots);
+
     /**
      * 与给定窗口重叠的排期（重叠校验用）。
      *
@@ -71,6 +74,20 @@ public interface ContentPinRepository extends JpaRepository<ContentPin, Long> {
                and p.endsAt > :at
             """)
     int terminateByContent(@Param("contentId") long contentId, @Param("at") Instant at);
+
+    /**
+     * 话题禁用联动（V1.4.2 Story 6.1 · AC6.2 · D-6）：把该坑位（{@code ContentPin.topicSlot(id)}）上
+     * 所有尚未结束的排期提前结束 —— 生效中与排期中都结束（恢复话题后不自动重新上线）。
+     * 与 {@link #terminateByContent} 同一套幂等守卫。
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update ContentPin p set p.terminatedAt = :at, p.updatedAt = :at
+             where p.slot = :slot
+               and p.terminatedAt is null
+               and p.endsAt > :at
+            """)
+    int terminateBySlot(@Param("slot") String slot, @Param("at") Instant at);
 
     /**
      * 注销联动：某作者名下内容全部不再可展示时，一并结束引用它们的排期。

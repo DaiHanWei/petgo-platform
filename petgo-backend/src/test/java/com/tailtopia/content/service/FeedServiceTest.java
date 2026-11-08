@@ -41,6 +41,10 @@ class FeedServiceTest {
     private com.tailtopia.social.read.FollowReader followReader =
             org.mockito.Mockito.mock(com.tailtopia.social.read.FollowReader.class);
 
+    /** V1.4.2 social-topic Story 1.3：关注流首页的追更计数读端口。 */
+    private com.tailtopia.social.read.PetFollowReader petFollowReader =
+            org.mockito.Mockito.mock(com.tailtopia.social.read.PetFollowReader.class);
+
     @BeforeEach
     void setUp() {
         posts = mock(ContentPostRepository.class);
@@ -68,7 +72,13 @@ class FeedServiceTest {
                         mock(com.tailtopia.auth.service.AccountQueryService.class),
                         mock(com.tailtopia.social.read.UserHideRelationReader.class)),
                 // V1.3.4 follow Story 2.1：作者关注关系（整页一次批量）。
-                followReader);
+                followReader,
+                // V1.4.2 social-topic Story 1.3：关注流首页追更计数。
+                petFollowReader,
+                // V1.4.2 social-topic Story 4.1：话题名批量口（mock 默认无话题）。
+                org.mockito.Mockito.mock(com.tailtopia.topic.service.TopicQueryService.class),
+                // V1.4.2 social-topic Story 4.2：话题页 Populer 读 comment_weight（本类不验）。
+                org.mockito.Mockito.mock(com.tailtopia.config.service.PlatformConfigService.class));
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
@@ -381,5 +391,112 @@ class FeedServiceTest {
         org.mockito.Mockito.verify(posts).findFeed(isNull(), eq(false),
                 eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(),
                 any(Pageable.class));
+    }
+
+    // ===== V1.4.2 social-topic Story 1.3 · AC3：关注流出口的 reason 与首页两个计数 =====
+
+    private void followingFeedReturns(List<ContentPost> rows) {
+        when(posts.findFollowingFeed(org.mockito.ArgumentMatchers.anyLong(), any(Boolean.class), any(), any(),
+                any(Pageable.class))).thenReturn(rows);
+        when(accounts.publicTokensOf(org.mockito.ArgumentMatchers.anyCollection())).thenAnswer(inv -> {
+            java.util.Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().distinct().collect(Collectors.toMap(id -> id, id -> "tok" + id));
+        });
+    }
+
+    @Test
+    void followingFeedReasonFollowsAuthorFollowState() {
+        // 作者 7 在我的关注名单中 → followed_user；作者 8 不在（经追更宠物进流）→ followed_pet。
+        Instant t = Instant.parse("2026-11-04T00:00:00Z");
+        followingFeedReturns(List.of(
+                post(2L, ContentType.GROWTH_MOMENT, 7L, t, List.of()),
+                post(1L, ContentType.GROWTH_MOMENT, 8L, t.minusSeconds(1), List.of())));
+        when(followReader.followStates(eq(42L), org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(Map.of(7L, new com.tailtopia.social.read.FollowState(true, false),
+                        8L, com.tailtopia.social.read.FollowState.NONE));
+
+        FeedPageResponse page = service.loadFollowingFeed(42L, null);
+
+        assertThat(page.items()).extracting(com.tailtopia.content.dto.FeedItemResponse::reason)
+                .containsExactly("followed_user", "followed_pet");
+        // 零额外查询：关注态整页只查一次（就是 assemble 那一次）。
+        org.mockito.Mockito.verify(followReader, org.mockito.Mockito.times(1))
+                .followStates(eq(42L), org.mockito.ArgumentMatchers.anyCollection());
+    }
+
+    @Test
+    void followingFeedFirstPageCarriesBothCounts() {
+        followingFeedReturns(List.of());
+        when(accounts.followingCountOf(42L)).thenReturn(3L);
+        when(petFollowReader.countFollowingOf(42L)).thenReturn(2L);
+
+        FeedPageResponse page = service.loadFollowingFeed(42L, null);
+
+        assertThat(page.items()).isEmpty();
+        assertThat(page.hasMore()).isFalse();
+        assertThat(page.followingUserCount()).isEqualTo(3L);
+        assertThat(page.followingPetCount()).isEqualTo(2L);
+        assertThat(page.rankMode()).isEqualTo(FeedPageResponse.RANK_MODE_CHRONO);
+    }
+
+    @Test
+    void followingFeedEmptyForNewViewerReportsZeroCounts() {
+        followingFeedReturns(List.of());
+        when(accounts.followingCountOf(42L)).thenReturn(0L);
+        when(petFollowReader.countFollowingOf(42L)).thenReturn(0L);
+
+        FeedPageResponse page = service.loadFollowingFeed(42L, null);
+
+        assertThat(page.followingUserCount()).isZero();
+        assertThat(page.followingPetCount()).isZero();
+    }
+
+    @Test
+    void followingFeedLaterPagesOmitCountsAndDoNotQueryThem() {
+        followingFeedReturns(List.of());
+        String cursor = new FeedCursor(Instant.parse("2026-11-04T00:00:00Z"), 50L).encode();
+
+        FeedPageResponse page = service.loadFollowingFeed(42L, cursor);
+
+        assertThat(page.followingUserCount()).isNull();
+        assertThat(page.followingPetCount()).isNull();
+        org.mockito.Mockito.verify(accounts, org.mockito.Mockito.never()).followingCountOf(
+                org.mockito.ArgumentMatchers.anyLong());
+        org.mockito.Mockito.verify(petFollowReader, org.mockito.Mockito.never()).countFollowingOf(
+                org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void followingFeedPagingContractUnchanged() {
+        // PAGE_SIZE+1 判 hasMore、游标取本页最后一条 —— 合并追更后游标契约不变。
+        Instant base = Instant.parse("2026-11-04T00:00:00Z");
+        List<ContentPost> rows = IntStream.range(0, FeedService.PAGE_SIZE + 1)
+                .mapToObj(i -> post(100L - i, ContentType.GROWTH_MOMENT, 7L, base.minusSeconds(i), List.of()))
+                .toList();
+        followingFeedReturns(rows);
+
+        FeedPageResponse page = service.loadFollowingFeed(42L, null);
+
+        assertThat(page.items()).hasSize(FeedService.PAGE_SIZE);
+        assertThat(page.hasMore()).isTrue();
+        FeedCursor next = FeedCursor.decode(page.nextCursor());
+        assertThat(next.id()).isEqualTo(100L - (FeedService.PAGE_SIZE - 1));
+        org.mockito.Mockito.verify(posts).findFollowingFeed(eq(42L), eq(false), isNull(), isNull(),
+                any(Pageable.class));
+    }
+
+    @Test
+    void discoverFeedItemsCarryNoReasonAndNoCounts() {
+        // Discover（分类 Tab 时间倒序）出口：reason 与两个计数恒为 null（NON_NULL 不下发）。
+        when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                .thenReturn(List.of(post(1L, ContentType.DAILY, 7L, Instant.now(), List.of())));
+
+        FeedPageResponse page = service.loadFeed("DAILY", null, 42L, null);
+
+        assertThat(page.items()).allSatisfy(i -> assertThat(i.reason()).isNull());
+        assertThat(page.followingUserCount()).isNull();
+        assertThat(page.followingPetCount()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(petFollowReader);
     }
 }

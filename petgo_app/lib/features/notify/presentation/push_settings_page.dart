@@ -67,6 +67,8 @@ final List<_Group> _groups = [
     _Row(PushCategoryCode.comment, Icons.mode_comment_rounded, AppColors.mint, AppColors.cream2),
     _Row(PushCategoryCode.mention, Icons.alternate_email_rounded, AppColors.mint, AppColors.cream2),
     _Row(PushCategoryCode.follower, Icons.person_add_rounded, AppColors.mint, AppColors.cream2),
+    // V1.4.2 social-topic Story 1.5 · AC7.2（D-23 · UI 稿 A13）：紧跟「Pengikut baru」；紫色图标统一 cream2 底。
+    _Row(PushCategoryCode.petDiary, Icons.pets_rounded, AppColors.mint, AppColors.cream2),
     _Row(PushCategoryCode.gift, Icons.redeem_rounded, AppColors.gold, AppColors.goldTint),
   ]),
   _Group((l) => l.pushSettingsGroupPet, const [
@@ -85,7 +87,10 @@ final List<_Group> _groups = [
       PushCategoryCode.like => (l.pushSettingsLikeTitle, l.pushSettingsLikeDesc),
       PushCategoryCode.comment => (l.pushSettingsCommentTitle, l.pushSettingsCommentDesc),
       PushCategoryCode.mention => (l.pushSettingsMentionTitle, l.pushSettingsMentionDesc),
-      PushCategoryCode.follower => (l.pushSettingsFollowerTitle, l.pushSettingsFollowerDesc),
+      // V1.4.2 social-topic Story 1.5 · AC7.3：「Pengikut baru」也管被追更 → 说明两行（同样式、换行）。
+      PushCategoryCode.follower =>
+        (l.pushSettingsFollowerTitle, '${l.pushSettingsFollowerDesc}\n${l.petFollowPushFollowerPetDesc}'),
+      PushCategoryCode.petDiary => (l.petFollowPushTitle, l.petFollowPushDesc),
       PushCategoryCode.gift => (l.pushSettingsGiftTitle, l.pushSettingsGiftDesc),
       PushCategoryCode.petReminder => (l.pushSettingsPetReminderTitle, l.pushSettingsPetReminderDesc),
       PushCategoryCode.achievement => (l.pushSettingsAchievementTitle, l.pushSettingsAchievementDesc),

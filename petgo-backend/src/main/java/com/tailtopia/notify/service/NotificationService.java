@@ -2,6 +2,7 @@ package com.tailtopia.notify.service;
 
 import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.port.NotificationPetNames;
 import com.tailtopia.notify.preference.PushPreferenceService;
 import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.repository.NotificationAggregateDao;
@@ -12,6 +13,8 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -45,13 +48,14 @@ public class NotificationService {
 
     /**
      * 带触发人的互动类型（模板只覆盖它们）。{@link #sendInteraction} 只接受前四种；{@code PET_GIFT_RECEIVED}
-     * （V1.4.0 gift Story 1.2）只经 {@link #sendGiftReceived} 写入。本集合同时是通知列表现拼、未读角标「有效未读」口径的事实源
+     * （V1.4.0 gift Story 1.2）只经 {@link #sendGiftReceived} 写入；{@code PET_FOLLOWED}（V1.4.2 social-topic Story 1.2）
+     * 只经 {@link #sendPetFollowed} 写入。本集合同时是通知列表现拼、未读角标「有效未读」口径的事实源
      * （{@link InteractionActorResolver#INTERACTION_TYPE_NAMES} 由它派生）。
      */
     static final java.util.Set<NotificationType> INTERACTION_TYPES = java.util.EnumSet.of(
             NotificationType.CONTENT_LIKED, NotificationType.CONTENT_COMMENTED,
             NotificationType.USER_FOLLOWED, NotificationType.PLACE_COMMENTED,
-            NotificationType.PET_GIFT_RECEIVED);
+            NotificationType.PET_GIFT_RECEIVED, NotificationType.PET_FOLLOWED);
 
     /** 收礼聚合键前缀（V1.4.0 gift · AD-8）：{@code GIFT:PET:{petId}}，同一宠物未读即合并。不去抖（{@link #debounceKey} 返回 null）。 */
     static final String GIFT_AGGREGATE_PREFIX = "GIFT:PET:";
@@ -76,6 +80,11 @@ public class NotificationService {
     private final InteractionActorResolver unreadResolver;
     /** V1.4.0 ④ Story 1.2：推送分类开关闸门（AD-5）——只决定推 / 不推，不影响落库与角标。 */
     private final PushPreferenceService prefs;
+    /**
+     * V1.4.2 social-topic Story 1.2：被追更推送标题里的宠物名（提交后现取）。缺 bean / 未注入（单测 10 参构造）→
+     * 按 noPet 文案推。用 {@link ObjectProvider} 懒取，避免与宠物侧 bean 成环。
+     */
+    private final ObjectProvider<NotificationPetNames> petNames;
     private final SecureRandom random = new SecureRandom();
 
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
@@ -83,6 +92,17 @@ public class NotificationService {
             com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
             NotificationActorRepository actors, InteractionCopyRenderer copy,
             InteractionActorResolver unreadResolver, PushPreferenceService prefs) {
+        this(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, unreadResolver, prefs, null);
+    }
+
+    @Autowired
+    public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
+            NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
+            com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
+            NotificationActorRepository actors, InteractionCopyRenderer copy,
+            InteractionActorResolver unreadResolver, PushPreferenceService prefs,
+            ObjectProvider<NotificationPetNames> petNames) {
+        this.petNames = petNames;
         this.repo = repo;
         this.redis = redis;
         this.pusher = pusher;
@@ -192,7 +212,8 @@ public class NotificationService {
     public Notification sendInteraction(long recipientUserId, NotificationType type, long actorUserId,
             String aggregateKey, String targetRef, Long commentId, String variant, String pushBodyText) {
         // 3.1 code-review F1：非互动类型在写库之前就拒绝（否则行写了、渲染推送时才炸）。
-        if (!INTERACTION_TYPES.contains(type) || type == NotificationType.PET_GIFT_RECEIVED) {
+        if (!INTERACTION_TYPES.contains(type) || type == NotificationType.PET_GIFT_RECEIVED
+                || type == NotificationType.PET_FOLLOWED) {
             throw new IllegalArgumentException("not an interaction type: " + type);
         }
         long id;
@@ -330,6 +351,105 @@ public class NotificationService {
         return saved;
     }
 
+    /**
+     * 被追更通知（V1.4.2 social-topic Story 1.2 · AC5 · D-10）：{@code PET_FOLLOWED}，<b>不聚合</b>，每次新建一行。
+     *
+     * <p>{@code targetRef} = 追更者 user id（同 {@code USER_FOLLOWED}，推送 / 列表点击直达追更者主页）；宠物 id 存
+     * {@code variant}（列表据此现查宠物名）。记触发人 + 角标 +1。
+     *
+     * <p>推送在本事务<b>提交之后</b>（失败只丢这次推送、不重推）：虚拟号 / 官方号不推 → 分类闸门（{@code FOLLOWER}）→
+     * 触发人全被过滤则不推 → 标题按收件人语言 {@link InteractionCopyRenderer#title}（带宠物名，查不到 → noPet），正文空串。
+     * 拉黑 / 隐藏 / 主人有效性 / 24h 去重抑制<b>不在这里</b>（在 {@link PetFollowNotifyListener}）。REQUIRES_NEW 的理由同 {@link #send}。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification sendPetFollowed(long recipientUserId, long actorUserId, long petId) {
+        NotificationType type = NotificationType.PET_FOLLOWED;
+        String targetRef = String.valueOf(actorUserId);
+        String variant = String.valueOf(petId);
+        Notification saved = repo.save(Notification.interaction(recipientUserId, type, fallbackTitle(type, variant),
+                INTERACTION_FALLBACK_BODY, type.name(), generateToken(), targetRef, null, null, variant));
+        aggregates.addActor(saved.getId(), actorUserId);
+        bumpUnreadBadge(recipientUserId);
+        Long id = saved.getId();
+        String token = saved.getDeepLinkToken();
+        runAfterCommit(() -> {
+            try {
+                if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
+                    return;
+                }
+                if (!pushAllowed(recipientUserId, type)) {
+                    return; // 关了「新粉丝」→ 只留通知中心
+                }
+                Optional<InteractionCopyRenderer.ActorSummary> summary =
+                        copy.resolve(recipientUserId, List.of(actorUserId));
+                if (summary.isEmpty()) {
+                    return;
+                }
+                java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+                pusher.pushToUser(recipientUserId, copy.title(type, null, summary.get(), locale, petNameOf(petId)),
+                        "", type.name(), token, targetRef);
+            } catch (RuntimeException e) {
+                log.warn("被追更推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
+            }
+        });
+        return saved;
+    }
+
+    /** 单只宠物名；端口缺失 / 查不到 / 异常 → null（按 noPet 文案）。 */
+    private String petNameOf(long petId) {
+        NotificationPetNames port = petNames == null ? null : petNames.getIfAvailable();
+        if (port == null) {
+            return null;
+        }
+        try {
+            java.util.Map<Long, String> m = port.namesOf(List.of(petId));
+            return m == null ? null : m.get(petId);
+        } catch (RuntimeException e) {
+            log.warn("取宠物名失败（按无宠物名推送）cause={}", e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /**
+     * 追更宠物有新 Diary（V1.4.2 social-topic Story 1.2 · AC6 · D-10 / D-5）：{@code PET_DIARY_POSTED}，不带触发人行。
+     *
+     * <p>标题在<b>写入时</b>按收件人语言渲染并落库（{@code notify.tpl.petDiaryPosted}，{@code {0}} 宠物名；宠物名为空 →
+     * {@code .noPet}）—— 列表兜底与推送同一句；{@code body} 落空串。{@code deepLinkType = PET_DIARY_POSTED}、
+     * {@code targetRef} = 帖子 id、{@code variant} = 命中的宠物 id（列表现查宠物名）。角标 +1。
+     *
+     * <p>推送在本事务<b>提交之后</b>：虚拟号 / 官方号不推 → 分类闸门（{@code PET_DIARY}）→ 推送；失败只 warn、不重推。
+     * 全局限速由 IM 客户端内的 {@code PushRateLimiter} 统一生效，这里<b>不另加限速</b>。
+     * 去重（{@code pet_diary_notify_log}）、拉黑、有效性过滤<b>不在这里</b>（在 {@link PetDiaryNotifyListener}）。
+     * <p>{@code REQUIRED}（复审 1）：由 {@link PetDiaryNotifyWriter} 的 {@code REQUIRES_NEW} 事务调用，与去重日志插入
+     * 同成同败；推送登记在该事务提交之后。无外层事务时自开一个。
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public Notification sendPetDiaryPosted(long recipientUserId, long postId, long petId, String petName) {
+        NotificationType type = NotificationType.PET_DIARY_POSTED;
+        java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+        String title = copy.petDiaryPostedTitle(petName, locale);
+        String targetRef = String.valueOf(postId);
+        Notification saved = repo.save(Notification.interaction(recipientUserId, type, title, "", type.name(),
+                generateToken(), targetRef, null, null, String.valueOf(petId)));
+        bumpUnreadBadge(recipientUserId);
+        Long id = saved.getId();
+        String token = saved.getDeepLinkToken();
+        runAfterCommit(() -> {
+            try {
+                if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
+                    return;
+                }
+                if (!pushAllowed(recipientUserId, type)) {
+                    return; // 关了「追更宠物」→ 只留通知中心
+                }
+                pusher.pushToUser(recipientUserId, title, "", type.name(), token, targetRef);
+            } catch (RuntimeException e) {
+                log.warn("追更日提醒推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
+            }
+        });
+        return saved;
+    }
+
     /** 合并前（不含本次触发人）的触发人是否全被过滤。 */
     private boolean wasInvisible(long recipientUserId, long notificationId, long newActorId) {
         List<Long> before = actors.findActorIdsNewestFirst(notificationId).stream()
@@ -437,6 +557,7 @@ public class NotificationService {
             case USER_FOLLOWED -> "有人关注了你";
             case PLACE_COMMENTED -> "有人评论了你添加的地点";
             case PET_GIFT_RECEIVED -> "有人给你的宠物送了礼物";
+            case PET_FOLLOWED -> "有人追更了你的宠物";
             default -> type.name();
         };
     }
@@ -550,8 +671,11 @@ public class NotificationService {
         java.util.List<Notification> saved = new java.util.ArrayList<>(recipients.size());
         for (com.tailtopia.notify.ops.domain.OpsRecipient r : recipients) {
             boolean en = "en".equalsIgnoreCase(r.locale());
-            String title = en ? campaign.getTitleEn() : campaign.getTitleId();
-            String body = en ? campaign.getBodyEn() : campaign.getBodyId();
+            // V1.4.2 Story 7.1（AB-37）：逐人替换 {{nickname}} / {{petName}}；无令牌的文案原样（推送取本行，天然一致）
+            String title = com.tailtopia.notify.ops.domain.OpsTextVariables.render(
+                    en ? campaign.getTitleEn() : campaign.getTitleId(), r.nickname(), r.petName(), en);
+            String body = com.tailtopia.notify.ops.domain.OpsTextVariables.render(
+                    en ? campaign.getBodyEn() : campaign.getBodyId(), r.nickname(), r.petName(), en);
             saved.add(repo.save(Notification.of(r.userId(), NotificationType.OPS_ANNOUNCEMENT, title, body,
                     NotificationType.OPS_ANNOUNCEMENT.name(), generateToken(), campaign.getPublicToken())));
         }

@@ -80,6 +80,9 @@ import tools.jackson.databind.ObjectMapper;
             // V1.4.0 multi-pet Story 2.3：名额到期每小时扫描会把共享库里别的测试遗留的过期名额置 EXPIRED、给其用户发通知
             // （「未读数 = N」类断言随机红）。"-" = 关闭；扫描由 PetSlotExpiryScanIntegrationTest 直接调 scan(now) 验证。
             "petgo.pet-slot.expiry-scan-cron=-",
+            // V1.4.2 shop Story 2.3：券快过期提醒（每天 WIB 10:00）跨点时会给共享库用户发通知，同上理由关闭；
+            // 由 CouponExpiryReminderIntegrationTest 直接调 run(now) 验证。
+            "petgo.shop.coupon.expiry-reminder-cron=-",
             // V1.4.1 商家平台进货内部接口：MOCK web 环境不起 Tomcat，端口只用于守卫按 localPort 分区；
             // 放在基类而不是各测试类的 @TestPropertySource —— 多一份属性差异就多一个上下文、多一个连接池。
             "petgo.merchant.internal.port=18095",
@@ -87,6 +90,9 @@ import tools.jackson.databind.ObjectMapper;
             // 进货单扫描器（默认首轮即跑）会取消共享库里别的测试遗留的过期进货单；扫描逻辑由测试直接调用验证。
             "petgo.merchant.po-expiry-scan-ms=86400000",
             "petgo.merchant.po-fulfillment-scan-ms=86400000",
+            // V1.4.2 shop Story 3.3：电商定时查单会把共享库里别的测试遗留的电商意图按 stub 查单推进（EXPIRED）；
+            // 首延 1 天 = 测试期内不自动跑，由 ShopPaymentWindowIntegrationTest 直接调 run() 验证。
+            "petgo.shop.payment-reconcile-initial-delay-ms=86400000",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
@@ -190,4 +196,14 @@ public abstract class ApiIntegrationTest {
     protected String vetBearer(long vetId) {
         return bearer(vetId, Role.VET);
     }
+
+    /** 落一个 active 兽医并返回其 Bearer：BannedVetFilter 查不到兽医行回 401，写死 id 会随测试顺序时红时绿。 */
+    protected String activeVetBearer() {
+        String email = "vet-" + java.util.UUID.randomUUID() + "@test.local";
+        return vetBearer(vetAccountsForTest.save(
+                com.tailtopia.vet.domain.VetAccount.create(email, "{bcrypt}x", "Vet")).getId());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.tailtopia.vet.repository.VetAccountRepository vetAccountsForTest;
 }

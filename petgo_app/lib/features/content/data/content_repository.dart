@@ -6,10 +6,11 @@ import '../../../core/network/dio_client.dart';
 import '../domain/content_type.dart';
 import '../domain/feed_image_layout.dart';
 import '../domain/feed_item.dart' show kVisibilityPrivate, kVisibilityPublic;
+import '../domain/published_post.dart';
 
 /// 内容发布数据层（Story 2.3）。带 `Idempotency-Key` 去重。抽象便于测试注入 fake。
 abstract class ContentRepository {
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     /// Diary 关联的全部宠物（V1.4.0 multi-pet Story 3.3 · AC3.1，按创建顺序）。非空时请求体写 `petIds`
@@ -45,7 +46,7 @@ class DioContentRepository implements ContentRepository {
   final Dio dio;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -102,7 +103,8 @@ class DioContentRepository implements ContentRepository {
       data: data,
       options: Options(headers: <String, dynamic>{'Idempotency-Key': idempotencyKey}),
     );
-    return resp.data!['id'] as int;
+    // V1.4.2 Story 4.4：带回本帖写入的话题（topic_inserted 按它上报，R-2）。
+    return PublishedPost.fromJson(resp.data!);
   }
 }
 

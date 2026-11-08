@@ -25,7 +25,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * KTP（身份证高清图）付费漏斗的服务端埋点（2026-09-25）。
  *
  * <p>事件名与 App 端 {@code ktp_unlock_paywall_shown / ktp_unlock_started} 同一族，
- * 属性键也同名（{@code method} / {@code price_idr}），漏斗才能跨端拼起来。
+ * 属性键也同名（{@code method}；V1.4.2 起两端都不再带 {@code price_idr}），漏斗才能跨端拼起来。
  *
  * <p>🔴 <b>成功只在服务端报</b>：App 只在二维码弹窗开着时轮询到账，用户关掉弹窗后再付款
  * App 永远不知道 —— 客户端报「成功」会系统性少计收入。到账回调是唯一可信的点。
@@ -66,7 +66,7 @@ public class KtpUnlockAnalyticsListener {
         if (e.purpose() != PaymentPurpose.ID_HD) {
             return;
         }
-        Map<String, Object> p = props(e.channel() == null ? PayChannel.QRIS.name() : e.channel().name(), e.amount());
+        Map<String, Object> p = props(e.channel() == null ? PayChannel.QRIS.name() : e.channel().name());
         putCardStyle(p, safeCard(() -> purchases.findFirstByPaymentIntentId(e.intentId())
                 .map(IdCardHdPurchase::getCardId)
                 .flatMap(idCards::findById)));
@@ -75,7 +75,7 @@ public class KtpUnlockAnalyticsListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPawcoinUnlocked(IdHdPawcoinUnlockedEvent e) {
-        Map<String, Object> p = props(PayChannel.PAWCOIN.name(), e.price());
+        Map<String, Object> p = props(PayChannel.PAWCOIN.name());
         if (e.cardId() != null) {
             putCardStyle(p, safeCard(() -> idCards.findById(e.cardId())));
         }
@@ -109,17 +109,17 @@ public class KtpUnlockAnalyticsListener {
         if (e.purpose() != PaymentPurpose.ID_HD || e.failureCategory() == null) {
             return; // 类别为 null 说明上游算错了，宁可不发也不发一条归不了类的
         }
-        Map<String, Object> p = props(e.channel() == null ? null : e.channel().name(), e.amount());
+        Map<String, Object> p = props(e.channel() == null ? null : e.channel().name());
         p.put("failure_reason", e.failureCategory().name());
         analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_FAILED, p);
     }
 
-    private static Map<String, Object> props(String method, long priceIdr) {
+    private static Map<String, Object> props(String method) {
         Map<String, Object> p = new LinkedHashMap<>();
         if (method != null) {
             p.put("method", method);
         }
-        p.put("price_idr", priceIdr);
+        // V1.4.2：不再带 price_idr —— 金额一律不进 PostHog（2026-11-08 拍板）。
         return p;
     }
 }

@@ -128,6 +128,32 @@ class MilestoneAnalyticsTest {
         }
 
         @Test
+        @DisplayName("V1.4.2 账号级：按去重后的物种编码各报一次（1 猫 1 狗 → 2 条；2 猫 → 1 条；无宠物不报）")
+        void accountMilestoneReportsDistinctSpeciesCodes() {
+            RecordingClient client = new RecordingClient();
+            MilestoneAnalyticsListener listener = new MilestoneAnalyticsListener(client);
+
+            listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(42L,
+                    "FIRST_FOLLOW_USER", List.of(1L, 2L), List.of("C-S19", "D-S19"), "C-S19"));
+            assertThat(client.captured).extracting(c -> c.props().get("code")).containsExactly("C-S19", "D-S19");
+            assertThat(client.captured).allSatisfy(c -> {
+                assertThat(c.event()).isEqualTo("milestone_achieved");
+                assertThat(c.props()).containsOnlyKeys("code", "level", "path")
+                        .containsEntry("level", "S").containsEntry("path", "system_auto");
+            });
+
+            client.captured.clear();
+            listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(42L,
+                    "FIRST_COLLECT_CONTENT", List.of(1L, 3L), List.of("C-S20", "C-S20"), "C-S20"));
+            assertThat(client.captured).hasSize(1);
+
+            client.captured.clear();
+            listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(42L,
+                    "FIRST_COLLECT_CONTENT", List.of(), List.of(), null));
+            assertThat(client.captured).isEmpty();
+        }
+
+        @Test
         @DisplayName("distinctId 是哈希，不是自增 id（护栏：对外标识不可枚举）")
         void distinctIdIsHashed() {
             RecordingClient client = new RecordingClient();

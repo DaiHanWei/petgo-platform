@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -9,8 +11,9 @@ import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_order_detail.dart';
 import 'package:tailtopia/features/shop/domain/shop_return.dart';
-import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v3.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/qr_payment/qr_pay_save.dart';
 
 /// Story 1-4：电商支付环节埋点。
 ///
@@ -19,6 +22,10 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// 「不查库定性、在 PostHog 持续看」就落空了。
 ///
 /// 🔒 **埋点禁带 PII 与订单号**（SHOP-NFR-01）：本类逐事件逐键核查，不靠「写的时候注意点」。
+///
+/// v1.4.2 Story 7.2 按设计打破：电商面板去掉了红色「Batalkan Pembayaran」（qrPayCancel），
+/// 关闭入口改为标题行 ×（qrPayCloseX，语义同原取消：只关面板、不触发 onAborted）——
+/// 本文件全部点击改为 qrPayCloseX，**事件断言一字不改**。
 void main() {
   late List<(String, Map<String, Object>?)> events;
 
@@ -89,7 +96,7 @@ void main() {
         locale: const Locale('id'),
         home: const MediaQuery(
           data: MediaQueryData(size: Size(411, 891)),
-          child: ShopOrderDetailPageV2(orderToken: 'ord1'),
+          child: ShopOrderDetailPageV3(orderToken: 'ord1'),
         ),
       ),
     );
@@ -132,7 +139,7 @@ void main() {
       'has_pawcoin': true,
     });
 
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
   });
 
@@ -142,7 +149,7 @@ void main() {
     await tapPayAndOpenSheet(tester);
 
     // 服务端状态一个字没变 —— 用户只是点了面板上的取消。
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
@@ -214,7 +221,7 @@ void main() {
         reason: '既有事件照发不误 —— 重试也是一次「进入支付」，漏斗分母要算上');
     expect(names(), contains('toko_payment_retry_tapped'));
 
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
   });
 
@@ -226,7 +233,7 @@ void main() {
     expect(names(), contains('toko_order_pay_tapped'));
     expect(names(), isNot(contains('toko_payment_retry_tapped')));
 
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
   });
 
@@ -241,7 +248,7 @@ void main() {
 
     expect(names(), contains('toko_payment_retry_tapped'));
 
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
   });
 
@@ -253,7 +260,46 @@ void main() {
 
     expect(names(), isNot(contains('toko_payment_retry_tapped')));
 
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('🔴 AC8 逐字一致：被拒后又收到未知失败类别 → 下次点支付**不算**重试（清记忆）', (tester) async {
+    await tester.pumpWidget(host(order(), _FakeShopOrderRepo()));
+    await tester.pumpAndSettle();
+    await tapPayAndOpenSheet(tester);
+    await serverMovesTo(tester, order(paymentFailureCategory: 'GATEWAY_DECLINED'));
+    await flushToast(tester);
+    await tapPayAndOpenSheet(tester);
+    await serverMovesTo(tester, order(paymentFailureCategory: 'SOMETHING_NEW'));
+    await flushToast(tester);
+
+    current = order(); // 服务端不再下发被拒类别，只剩本页记忆这一半判据
+    events.clear();
+    await tapPayAndOpenSheet(tester);
+    expect(names(), isNot(contains('toko_payment_retry_tapped')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('🔴 AC8 逐字一致：被拒后 /pay 抛错 → 记忆不清，下次点支付仍算重试', (tester) async {
+    final repo = _FakeShopOrderRepo();
+    await tester.pumpWidget(host(order(), repo));
+    await tester.pumpAndSettle();
+    await tapPayAndOpenSheet(tester);
+    await serverMovesTo(tester, order(paymentFailureCategory: 'GATEWAY_DECLINED'));
+    await flushToast(tester);
+
+    current = order();
+    repo.payError = StateError('boom');
+    await tester.tap(find.byKey(const ValueKey('shopOrderPayV2')));
+    await tester.pump();
+    await flushToast(tester);
+
+    events.clear();
+    await tapPayAndOpenSheet(tester);
+    expect(names(), contains('toko_payment_retry_tapped'));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
   });
 
@@ -261,7 +307,7 @@ void main() {
     await tester.pumpWidget(host(order(), _FakeShopOrderRepo()));
     await tester.pumpAndSettle();
     await tapPayAndOpenSheet(tester);
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
 
     events.clear();
@@ -270,7 +316,55 @@ void main() {
     // 判据是「上次失败类别是不是被拒」，不是计数器 —— 计数器在这里就会误报。
     expect(names(), isNot(contains('toko_payment_retry_tapped')));
 
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
+    await tester.pumpAndSettle();
+  });
+
+  // ---------- v1.4.2 Story 7.2 · E2 存图 ----------
+
+  testWidgets('存图成功 → toko_payment_qr_saved（无属性）+ 扩写 toast；面板不关', (tester) async {
+    final g = _FakeGallery(access: true);
+    qrPayGallery = g;
+    addTearDown(() => qrPayGallery = const GalQrPayGallery());
+    await tester.pumpWidget(host(order(), _FakeShopOrderRepo()));
+    await tester.pumpAndSettle();
+    await tapPayAndOpenSheet(tester);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const ValueKey('qrPaySave')));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(g.saved, isNotNull);
+    expect(names().where((e) => e == 'toko_payment_qr_saved').length, 1);
+    final saved = events.firstWhere((e) => e.$1 == 'toko_payment_qr_saved');
+    expect(saved.$2 == null || saved.$2!.isEmpty, isTrue, reason: 'PRD §4：无属性');
+    final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+    expect(find.text(l10n.qrPaySavedOpenWallet), findsOneWidget);
+    expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget, reason: '面板不关');
+    await tester.pump(const Duration(seconds: 3)); // 放 toast 定时器跑完（面板里有常驻转圈，不能 settle）
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('存图被拒（无权限）→ 不报 toko_payment_qr_saved', (tester) async {
+    final g = _FakeGallery(access: false);
+    qrPayGallery = g;
+    addTearDown(() => qrPayGallery = const GalQrPayGallery());
+    await tester.pumpWidget(host(order(), _FakeShopOrderRepo()));
+    await tester.pumpAndSettle();
+    await tapPayAndOpenSheet(tester);
+
+    await tester.tap(find.byKey(const ValueKey('qrPaySave')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('qrPayPermissionDialog')), findsOneWidget);
+    expect(names(), isNot(contains('toko_payment_qr_saved')));
+    await tester.tap(find.byType(TextButton).last);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
   });
 
@@ -303,7 +397,7 @@ void main() {
     await serverMovesTo(tester, order(paymentFailureCategory: 'GATEWAY_DECLINED'));
     await flushToast(tester);
     await tapPayAndOpenSheet(tester);
-    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
     await tester.pumpAndSettle();
 
     const allowed = {'pay_channel', 'attribution_source', 'has_pawcoin', 'failure_category'};
@@ -337,6 +431,7 @@ void main() {
       'toko_payment_expired_shown',
       'toko_payment_retry_tapped',
       'toko_order_cancel_succeeded',
+      'toko_payment_qr_saved', // v1.4.2 Story 7.2
     ]) {
       expect(Analytics.appsflyerEvents, isNot(contains(e)),
           reason: 'PawCoin 消耗与电商下单不得计为收入事件');
@@ -371,9 +466,17 @@ class _FakeShopOrderRepo extends ShopOrderRepository {
   /// 页面拿到返回值后只是 invalidate provider 重拉，不直接用它，所以这里给什么都行。
   ShopOrderDetail? cancelResult;
 
+  /// 下一次 `/pay` 抛的错（抛一次即清空）。
+  Object? payError;
+
   @override
   Future<ShopPayResult> pay(String orderToken) async {
     payCalls++;
+    final e = payError;
+    if (e != null) {
+      payError = null;
+      throw e;
+    }
     return const ShopPayResult(
         orderStatus: 'PENDING_PAYMENT', paymentIntentToken: 'pi-1', payload: 'QR-DATA');
   }
@@ -383,4 +486,23 @@ class _FakeShopOrderRepo extends ShopOrderRepository {
     cancelCalls++;
     return cancelResult!;
   }
+}
+
+/// 相册写入 fake（v1.4.2 Story 7.2 · E2）。
+class _FakeGallery implements QrPayGallery {
+  _FakeGallery({this.access = true});
+  final bool access;
+  Uint8List? saved;
+
+  @override
+  Future<bool> hasAccess() async => access;
+
+  @override
+  Future<bool> requestAccess() async => false;
+
+  @override
+  Future<void> putImageBytes(Uint8List bytes, {required String name}) async => saved = bytes;
+
+  @override
+  Future<bool> openSettings() async => true;
 }

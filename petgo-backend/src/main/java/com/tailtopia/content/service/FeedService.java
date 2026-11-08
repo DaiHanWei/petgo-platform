@@ -83,9 +83,15 @@ public class FeedService {
             ContentTagQueryService contentTags, UserHideRelationReader hideRelations,
             FeedRecommendationService recommendations,
             com.tailtopia.mention.service.MentionViewService mentionViews,
-            com.tailtopia.social.read.FollowReader followReader) {
+            com.tailtopia.social.read.FollowReader followReader,
+            com.tailtopia.social.read.PetFollowReader petFollowReader,
+            com.tailtopia.topic.service.TopicQueryService topicQuery,
+            com.tailtopia.config.service.PlatformConfigService platformConfig) {
+        this.topicQuery = topicQuery;
+        this.platformConfig = platformConfig;
         this.mentionViews = mentionViews;
         this.followReader = followReader;
+        this.petFollowReader = petFollowReader;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
@@ -101,6 +107,23 @@ public class FeedService {
 
     /** V1.3.4 follow Story 2.1：卡片作者的关注关系（只读端口，同 hideRelations 的模块边界）。 */
     private final com.tailtopia.social.read.FollowReader followReader;
+
+    /** V1.4.2 social-topic Story 1.3：关注流首页的 {@code followingPetCount}（只读端口，同上模块边界）。 */
+    private final com.tailtopia.social.read.PetFollowReader petFollowReader;
+
+    /** V1.4.2 social-topic Story 4.1（D-13）：卡片 {@code topicNames}，<b>整页一次批量</b>（同 @ / 装饰标签）。 */
+    private final com.tailtopia.topic.service.TopicQueryService topicQuery;
+
+    /**
+     * V1.4.2 social-topic Story 4.2（D-14 · §1.2 第 17 条）：话题页 Populer 每请求读一次 {@code comment_weight}
+     * （单行直读无缓存，运营改参数即时生效）。
+     */
+    private final com.tailtopia.config.service.PlatformConfigService platformConfig;
+
+    /** 一页内容各自的话题标准名（整页一次；空页不发查询）。 */
+    private Map<Long, List<String>> topicNamesFor(List<ContentPost> page) {
+        return topicQuery.topicNamesFor(page.stream().map(ContentPost::getId).toList());
+    }
 
     /**
      * 一页作者的 token 与关注关系（V1.3.4 follow Story 2.1 · AD-6 / AD-16）—— <b>整页各一次查询</b>。
@@ -157,15 +180,23 @@ public class FeedService {
      * 这一处最容易漏：大家通常只想到"坑位端点挂了客户端不显示"，忘了首页内部也查了一次。
      */
     private Long pinnedContentIdToYield(String cursor) {
-        if (cursor != null && !cursor.isBlank()) {
+        return pinnedContentIdToYield(ContentPin.SLOT_HOME_FEED, cursor == null || cursor.isBlank());
+    }
+
+    /**
+     * 同上，按坑位（V1.4.2 social-topic Story 4.2 · AC6.4 抽参数）：首页传 {@link ContentPin#SLOT_HOME_FEED}，
+     * 话题页传 {@link ContentPin#topicSlot}。非首屏 → null；查顶置出错 → null（按无顶置继续，不连带列表 500）。
+     */
+    private Long pinnedContentIdToYield(String slot, boolean firstPage) {
+        if (!firstPage) {
             return null; // 只首屏让位
         }
         try {
-            return pins.activePin(ContentPin.SLOT_HOME_FEED, Instant.now())
+            return pins.activePin(slot, Instant.now())
                     .map(ContentPin::getContentId)   // 推广卡片没有内容 id，天然不参与排除
                     .orElse(null);
         } catch (RuntimeException e) {
-            log.warn("查顶置失败，本次首页不让位（降级）", e);
+            log.warn("查顶置失败，本次不让位（降级） slot={}", slot, e);
             return null;
         }
     }
@@ -306,8 +337,16 @@ public class FeedService {
     }
 
     /**
-     * 关注流（V1.3.4）：我关注的人的公开帖，纯时间倒序，登录专属。
+     * 关注流（V1.3.4；V1.4.2 social-topic Story 1.3 · D-9 合并追更宠物）：我关注的人 ∪ 我追更的宠物的公开 Diary，
+     * 纯时间倒序，登录专属。
      * 🔴 过滤全在 SQL WHERE 内（{@code PAGE_SIZE+1} / hasMore / 游标契约），组装复用 {@link #assemble}。
+     *
+     * <p>关注流出口另填两样（其余出口不填）：
+     * <ul>
+     *   <li>每条 {@code reason}：作者在我的关注名单中 → {@code followed_user}，否则 → {@code followed_pet}。
+     *       直接用 {@code assemble} 已算好的 {@code authorFollowState.iFollow}，<b>不再加查询</b>；</li>
+     *   <li>首页（cursor 为空）两个计数 {@code followingUserCount} / {@code followingPetCount}，后续页不下发。</li>
+     * </ul>
      */
     @Transactional(readOnly = true)
     public FeedPageResponse loadFollowingFeed(long viewerId, String cursor) {
@@ -327,7 +366,108 @@ public class FeedService {
             ContentPost last = page.get(page.size() - 1);
             nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
         }
-        return assemble(page, viewerId, nextCursor, hasMore, FeedPageResponse.RANK_MODE_CHRONO);
+        FeedPageResponse assembled =
+                assemble(page, viewerId, nextCursor, hasMore, FeedPageResponse.RANK_MODE_CHRONO);
+        List<FeedItemResponse> items = assembled.items().stream()
+                .map(item -> item.withReason(reasonOf(item)))
+                .toList();
+        boolean firstPage = decoded == null;
+        return new FeedPageResponse(items, assembled.nextCursor(), assembled.hasMore(),
+                assembled.rankMode(),
+                firstPage ? accountQueryService.followingCountOf(viewerId) : null,
+                firstPage ? petFollowReader.countFollowingOf(viewerId) : null);
+    }
+
+    /** 话题页排序：最新（缺省）。 */
+    public static final String TOPIC_SORT_LATEST = "latest";
+
+    /** 话题页排序：热门。 */
+    public static final String TOPIC_SORT_POPULAR = "popular";
+
+    /** 话题页 Populer 页码上限（防深翻全表聚合；4.2 自定阈值，见 story 待确认第 5 条）。 */
+    public static final int TOPIC_POPULAR_MAX_PAGE = 50;
+
+    /**
+     * 话题页帖子（V1.4.2 social-topic Story 4.2 · AC2 · P-2）。{@code topicId} 由调用方经
+     * {@code TopicQueryService.requireVisible} 解析（content → topic 单向依赖）。
+     *
+     * <ul>
+     *   <li>{@code latest}（缺省）：时间倒序 + {@link FeedCursor}，写法同 {@link #loadFollowingFeed}；</li>
+     *   <li>{@code popular}：「赞 + comment_weight × 评」倒序，页码分页（1 起、≤ {@value #TOPIC_POPULAR_MAX_PAGE}），
+     *       {@code nextCursor} 恒 null；</li>
+     *   <li>非法 sort / 页码 → 422。</li>
+     * </ul>
+     * 顶置让位（AC6.4）：latest 只首屏（无游标）排除该话题坑位当前生效的内容顶置，后续页照常可出现；
+     * popular <b>每一页都排除</b>（复审 CONFIRMED-1：页码分页下若只首页排除，OFFSET 会让原第 21 名在第 1、2 页各出现一次，
+     * 且顶置帖再也不出现——无法既不重复又包含它，故顶置期间整个热门列表都不含它）。
+     * 组装复用 {@link #assemble}（AD-7 Rule 4），{@code rankMode} 省略（不是首页 Feed 出口）。
+     */
+    @Transactional(readOnly = true)
+    public FeedPageResponse loadTopicPosts(long topicId, String sort, String cursor, Integer page,
+            Long viewerId) {
+        String s = (sort == null || sort.isBlank()) ? TOPIC_SORT_LATEST : sort.trim().toLowerCase(java.util.Locale.ROOT);
+        if (TOPIC_SORT_LATEST.equals(s)) {
+            return topicLatest(topicId, cursor, viewerId);
+        }
+        if (TOPIC_SORT_POPULAR.equals(s)) {
+            int p = page == null ? 1 : page;
+            if (p < 1 || p > TOPIC_POPULAR_MAX_PAGE) {
+                throw AppException.validation("页码无效");
+            }
+            return topicPopular(topicId, p, viewerId);
+        }
+        throw AppException.validation("排序无效");
+    }
+
+    private FeedPageResponse topicLatest(long topicId, String cursor, Long viewerId) {
+        FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
+        Long yieldId = pinnedContentIdToYield(ContentPin.topicSlot(topicId), decoded == null);
+        List<ContentPost> rows = posts.findTopicFeed(
+                topicId,
+                viewerId != null, viewerId,
+                yieldId != null, yieldId,
+                decoded != null,
+                decoded == null ? null : decoded.createdAt(),
+                decoded == null ? null : decoded.id(),
+                PageRequest.of(0, PAGE_SIZE + 1));
+
+        boolean hasMore = rows.size() > PAGE_SIZE;
+        List<ContentPost> pageRows = hasMore ? rows.subList(0, PAGE_SIZE) : rows;
+        String nextCursor = null;
+        if (hasMore && !pageRows.isEmpty()) {
+            ContentPost last = pageRows.get(pageRows.size() - 1);
+            nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
+        }
+        return assemble(pageRows, viewerId, nextCursor, hasMore, null);
+    }
+
+    private FeedPageResponse topicPopular(long topicId, int page, Long viewerId) {
+        // 每页都查同一个顶置并排除（OFFSET 分页下各页口径必须一致，否则错位重复）。
+        Long yieldId = pinnedContentIdToYield(ContentPin.topicSlot(topicId), true);
+        double commentWeight = platformConfig.feedRank().getCommentWeight();
+        List<Long> ids = posts.findTopicPopularIds(
+                topicId,
+                viewerId != null, viewerId == null ? -1L : viewerId,
+                yieldId != null, yieldId == null ? -1L : yieldId,
+                commentWeight,
+                PAGE_SIZE + 1,
+                (page - 1) * PAGE_SIZE).stream().map(Number::longValue).toList();
+
+        boolean hasMore = ids.size() > PAGE_SIZE;
+        List<Long> pageIds = hasMore ? ids.subList(0, PAGE_SIZE) : ids;
+        // findAllById 不保序：按排名 id 顺序重排（缺失的——两次查询之间被删——直接跳过）。
+        Map<Long, ContentPost> byId = pageIds.isEmpty() ? Map.of()
+                : posts.findAllById(pageIds).stream()
+                        .collect(Collectors.toMap(ContentPost::getId, p -> p, (a, b) -> a));
+        List<ContentPost> pageRows = pageIds.stream().map(byId::get).filter(java.util.Objects::nonNull).toList();
+        return assemble(pageRows, viewerId, null, hasMore, null);
+    }
+
+    /** 关注流 reason 判据（D-9 / 拍板点 ①）：同时命中两路记 followed_user。 */
+    private static String reasonOf(FeedItemResponse item) {
+        return item.authorFollowState() != null && item.authorFollowState().iFollow()
+                ? FeedItemResponse.REASON_FOLLOWED_USER
+                : FeedItemResponse.REASON_FOLLOWED_PET;
     }
 
     /** 告警锚点串（降级链级别 4）。🛡 改动即等于改动告警配置。 */
@@ -388,6 +528,8 @@ public class FeedService {
         var mentions = mentionsFor(page, viewerId);
         // V1.3.4 follow Story 2.1：作者 token 与关注关系，整页各一次（推荐序与时间倒序共用这一处）。
         AuthorFollow follow = authorFollow(page, viewerId);
+        // V1.4.2 social-topic Story 4.1：话题名整页一次（推荐序 / 分类 Tab / 关注流 / 4.2 话题页共用这一处）。
+        Map<Long, List<String>> topicNames = topicNamesFor(page);
 
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
@@ -398,7 +540,8 @@ public class FeedService {
                         com.tailtopia.mention.service.MentionViewService.pick(
                                 p.getMentionedUserIds(), mentions),
                         follow.tokens().get(p.getAuthorId()),
-                        follow.stateOf(p.getAuthorId())))
+                        follow.stateOf(p.getAuthorId()),
+                        topicNames.get(p.getId())))
                 .toList();
         return new FeedPageResponse(items, nextCursor, hasMore, rankMode);
     }
@@ -465,7 +608,7 @@ public class FeedService {
                 decorationTags(one).get(post.getId()),
                 com.tailtopia.mention.service.MentionViewService.pick(
                         post.getMentionedUserIds(), mentionsFor(one, viewerId)),
-                token, followState);
+                token, followState, topicNamesFor(one).get(post.getId()));
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
@@ -528,6 +671,7 @@ public class FeedService {
         Set<Long> liked = likedIds(page, viewerId);
         Map<Long, Long> commentCounts = commentCounts(page, viewerId);
         var mentions = mentionsFor(page, viewerId);
+        Map<Long, List<String>> topicNames = topicNamesFor(page); // V1.4.2 Story 4.1
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
@@ -538,7 +682,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null))
+                        null, null, topicNames.get(p.getId())))
                 .toList();
 
         String nextCursor = null;
@@ -578,6 +722,7 @@ public class FeedService {
         // ⚠️「我的发布」**不是** FR-75 列的三处展示位之一，故不查装饰标签 ——
         // 为一个不展示它的页面多发一次查询没有意义。真要展示时把这里换成 decorationTags(page) 即可。
         var mentions = mentionsFor(page, userId);
+        Map<Long, List<String>> topicNames = topicNamesFor(page); // V1.4.2 Story 4.1
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
@@ -588,7 +733,7 @@ public class FeedService {
                         // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
                         // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
                         // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
-                        null, null))
+                        null, null, topicNames.get(p.getId())))
                 .toList();
 
         String nextCursor = null;

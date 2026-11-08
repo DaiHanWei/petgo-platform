@@ -1,76 +1,95 @@
 package com.tailtopia.shop.web;
 
-import com.tailtopia.shop.domain.ShopBanner;
-import com.tailtopia.shop.dto.ShopBannerView;
 import com.tailtopia.shop.domain.BannerTargetType;
-import com.tailtopia.shop.repository.ShopBannerRepository;
-import com.tailtopia.shop.repository.ShopProductRepository;
-import com.tailtopia.shop.service.ShopImageUrlResolver;
-import java.util.Optional;
+import com.tailtopia.shop.domain.ShopBanner;
+import com.tailtopia.shop.dto.ShopBannerListView;
+import com.tailtopia.shop.dto.ShopBannerView;
+import com.tailtopia.shop.service.ShopBannerQueryService;
+import com.tailtopia.shop.service.ShopBannerQueryService.LiveBanner;
+import java.time.Clock;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Toko 顶部 banner 只读端点（2026-08-27）。
+ * Toko 顶部 banner 只读端点（2026-08-27；v1.4.2 shop Story 6.1 起多张轮播）。
  *
  * <p>🔴 <b>对游客放行</b>，与商品列表同理（FR-93A）：banner 位于转化漏斗最上层，
- * 用登录墙拦住它没有任何意义 —— 需在 {@code SecurityConfig} 一并放行。
+ * 用登录墙拦住它没有任何意义 —— 需在 {@code SecurityConfig} 一并放行（两条路径各一条）。
+ *
+ * <p>🔴 两个端点<b>都只调 {@link ShopBannerQueryService#liveBanners}</b>（单一来源）：
+ * 排期、目标有效、图片 URL 的判定不在本类重复。
  *
  * <p><b>只读</b>：配置走后台（{@code /admin/shop/banners}），本端点不提供任何写入。
  */
 @RestController
-@RequestMapping("/api/v1/shop/banner")
 public class ShopBannerController {
 
-    private final ShopBannerRepository banners;
-    private final ShopImageUrlResolver imageUrls;
-    private final ShopProductRepository products;
+    private final ShopBannerQueryService query;
+    private final Clock clock;
 
-    public ShopBannerController(ShopBannerRepository banners, ShopImageUrlResolver imageUrls,
-            ShopProductRepository products) {
-        this.banners = banners;
-        this.imageUrls = imageUrls;
-        this.products = products;
+    @Autowired
+    public ShopBannerController(ShopBannerQueryService query) {
+        this(query, Clock.systemUTC());
+    }
+
+    ShopBannerController(ShopBannerQueryService query, Clock clock) {
+        this.query = query;
+        this.clock = clock;
     }
 
     /**
-     * 当前该展示的那一张 banner。
-     *
-     * <p>🔴 <b>没有可展示的 banner 时返回 204 No Content</b>，而不是 200 + 空对象或 404：
-     * <ul>
-     *   <li>404 是错的 —— 这个端点本身存在，只是此刻没有内容，客户端不该当成异常来记；
-     *   <li>200 + 空对象会让客户端必须去判断"哪个字段为空才算没有"，判据散落在客户端。
-     * </ul>
-     * 204 让"没有 banner"成为一个明确的、无歧义的状态。
-     *
-     * <p>🔴 <b>拼不出 URL 时同样按 204 处理</b>（CDN base 未配置）：
-     * 此时返回一个 {@code imageUrl=null} 的对象等于把一个必然显示不出来的空壳交给客户端 ——
-     * 客户端只能再判一次 null，而判漏了就是首屏一块裂图。服务端在这里判掉，
-     * 客户端就只有"有/没有"两种情况。
+     * 新版 App 首页轮播（AC5）：最多 6 张，{@code CATEGORY} 下发为 {@code TOKO_HOME}；无 → {@code {"items": []}}。
      */
-    @GetMapping
+    @GetMapping("/api/v1/shop/banners")
+    public ShopBannerListView list() {
+        List<ShopBannerView> items = query.liveBanners(clock.instant()).stream()
+                .map(l -> view(l.banner(), l.imageUrl(), l.wireTargetType(), l.wireTargetValue()))
+                .toList();
+        return new ShopBannerListView(items);
+    }
+
+    /**
+     * 旧版 App（单张，AC6）：返回新列表的<b>第一张</b>，下发形状不变。
+     *
+     * <p>🔴 <b>没有可展示的 banner 时返回 204 No Content</b>（同 V1.4.1）：404 是错的（端点存在，只是此刻没内容），
+     * 200 + 空对象会让客户端去猜「哪个字段为空才算没有」。拼不出 URL 的 banner 已在单一来源里剔除。
+     *
+     * <p>对旧版的兼容转换：{@code COUPON} → {@code NONE}（旧版不认识领券，按不可点渲染）；
+     * {@code CATEGORY} 保持原类型与原值（旧版支持品类跳转）；{@code TOKO_HOME} 不出现在本端点。
+     * 行为变化（按设计）：目标商品下架的 banner 整张不展示、轮到下一张；排期外的不再返回。
+     */
+    @GetMapping("/api/v1/shop/banner")
     public ResponseEntity<ShopBannerView> current() {
-        Optional<ShopBanner> picked = banners.findFirstByActiveTrueOrderBySortWeightDescIdDesc();
-        if (picked.isEmpty()) {
+        List<LiveBanner> live = query.liveBanners(clock.instant());
+        if (live.isEmpty()) {
             return ResponseEntity.noContent().build();
         }
-        ShopBanner b = picked.get();
-        String url = imageUrls.publicUrl(b.getImageKey());
-        if (url == null || url.isBlank()) {
-            return ResponseEntity.noContent().build();
+        LiveBanner first = live.get(0);
+        ShopBanner b = first.banner();
+        BannerTargetType type = b.getTargetType() == null ? BannerTargetType.NONE : b.getTargetType();
+        String wireType;
+        String wireValue;
+        switch (type) {
+            case COUPON, NONE -> {
+                wireType = BannerTargetType.NONE.name();
+                wireValue = null;
+            }
+            case CATEGORY -> {
+                wireType = BannerTargetType.CATEGORY.name();
+                wireValue = b.getTargetValue();
+            }
+            default -> {
+                wireType = first.wireTargetType();
+                wireValue = first.wireTargetValue();
+            }
         }
-        // 🔴 商品是否在售只在后台保存 banner 时校验过一次；之后商品下架 / 删除，banner 不会跟着改。
-        //    这里每次下发前复查：不在售就按「不可点」下发，免得用户点进一个已下架的商品。
-        BannerTargetType type = b.getTargetType();
-        String value = b.getTargetValue();
-        if (type == BannerTargetType.PRODUCT
-                && (value == null || products.findByPublicTokenAndActiveTrue(value).isEmpty())) {
-            type = BannerTargetType.NONE;
-            value = null;
-        }
-        return ResponseEntity.ok(new ShopBannerView(url, b.getImageW(), b.getImageH(), b.getPublicToken(),
-                type.name(), value));
+        return ResponseEntity.ok(view(b, first.imageUrl(), wireType, wireValue));
+    }
+
+    private static ShopBannerView view(ShopBanner b, String url, String type, String value) {
+        return new ShopBannerView(url, b.getImageW(), b.getImageH(), b.getPublicToken(), type, value);
     }
 }

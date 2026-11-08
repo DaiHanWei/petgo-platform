@@ -21,7 +21,11 @@ public record RegionTree(List<Provinsi> provinsi) {
     public record Kota(String name, List<Kecamatan> kecamatan) {
     }
 
-    /** {@code serviceable} = 当前可配送（active）。false 表示已录入但暂不送达。 */
-    public record Kecamatan(String name, boolean serviceable) {
+    /**
+     * {@code serviceable} = 当前可配送（active）。false 表示已录入但暂不送达。
+     * {@code id} = {@code shipping_zones.id}（v1.4.2 shop Story 3.1 / C-9：区域参考数据，允许外露），
+     * 详情页按地区估运费 / 购物车预估传 {@code regionKecamatanId}。
+     */
+    public record Kecamatan(String name, boolean serviceable, Long id) {
     }
 }

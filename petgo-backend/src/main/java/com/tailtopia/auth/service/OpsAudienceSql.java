@@ -56,9 +56,16 @@ public final class OpsAudienceSql {
     static final List<String> PAID_ORDER_STATUSES = List.of(
             "PENDING_SHIPMENT", "SHIPPED", "DELIVERED", "COMPLETED", "REFUNDING", "REFUNDED");
 
-    private static final String SELECT = "SELECT u.id, u.locale FROM users u WHERE ";
+    /**
+     * 收件人选列（V1.4.2 Story 7.1 · D-16）：昵称去首尾空白、空串 → NULL；宠物名由 {@link #petPick} 的 LATERAL 带出。
+     */
+    private static final String SELECT_COLS = "SELECT u.id, u.locale, NULLIF(btrim(u.nickname), '') AS nickname, "
+            + "pet.name AS pet_name FROM users u LEFT JOIN LATERAL (";
+    private static final String LATERAL_END = ") pet ON TRUE WHERE ";
     private static final String ORDER = " ORDER BY u.id ASC";
-    private static final String COUNT = "SELECT count(*) FROM users u WHERE ";
+    /** 计数：基础 + 人群条件的总人数，以及其中有宠物的人数（用了宠物变量时的净人数），一条 SQL 出两列。 */
+    static final String COUNT = "SELECT count(*) AS total, count(*) FILTER (WHERE "
+            + "EXISTS (SELECT 1 FROM pet_profiles p WHERE p.owner_id = u.id)) AS with_pet FROM users u WHERE ";
 
     private static final String HAS_PET = "EXISTS (SELECT 1 FROM pet_profiles p WHERE p.owner_id = u.id)";
     private static final String HAS_SPECIES =
@@ -97,12 +104,64 @@ public final class OpsAudienceSql {
             }
             case FILTER -> appendFilter(spec, wib, now, where, params);
         }
-        return new Query(SELECT + where + ORDER, Collections.unmodifiableMap(params));
+        return new Query(recipientHead(spec) + where + ORDER, Collections.unmodifiableMap(params));
+    }
+
+    /**
+     * 收件人 SELECT + LATERAL 选宠物 + {@code WHERE }（V1.4.2 Story 7.1 · D-16）。
+     *
+     * <p>每个用户至多 1 只：有物种筛选（{@code filters().species()}）只在该物种内选；<b>ACTIVE（非 READ_ONLY）优先，
+     * 再按 {@code created_at, id} 最早</b>；全只读取最早只读；无宠物 → {@code pet_name IS NULL}。无物种筛选时与
+     * {@code profile.service.DefaultPetPolicy.pick} 逐条同口径（L1 对照测试锁定）。
+     *
+     * <p>⚠️ 用 {@code DISTINCT ON} 而非取单行写法：本文件在 {@code PetOwnerLookupGuardTest} 白名单内，白名单文件禁取单行。
+     */
+    static String recipientHead(AudienceSpec spec) {
+        return SELECT_COLS + petPick(spec) + LATERAL_END;
+    }
+
+    private static String petPick(AudienceSpec spec) {
+        boolean bySpecies = spec.mode() == AudienceSpec.Mode.FILTER && spec.filters().species() != null;
+        // :species 与 HAS_SPECIES 共用同一个参数（appendTargeting 已放入排序后的列表），这里不再另放
+        return "SELECT DISTINCT ON (p.owner_id) p.name FROM pet_profiles p WHERE p.owner_id = u.id"
+                + (bySpecies ? " AND p.pet_type IN (:species)" : "")
+                + " ORDER BY p.owner_id, (p.status = 'READ_ONLY'), p.created_at, p.id";
+    }
+
+    /**
+     * 后台「预览用户」抽样的基础查询（V1.4.2 Story 7.1 · AC8）：与 {@link #build} 同一套选列 / LATERAL / WHERE，
+     * <b>不带 ORDER BY</b>——随机排序与取一行由 {@link OpsAudienceQuery#sample} 拼接（见该处说明）。
+     *
+     * <p>IDS 模式活动尚未建立，id 来自表单：用 {@code u.id IN (:ids)}（参数由调用方分批放入），与 {@link #countIds()} 同口径。
+     *
+     * @param requirePet 用了宠物变量：只抽有宠物的人（{@code pet.name IS NOT NULL}）
+     * @param excludeUserId 「换一个」时尽量避开的上一位；{@code null} = 不避开（参数名 {@code excludeUserId}）
+     */
+    public static Query sampleBase(AudienceSpec spec, ZoneId wib, Instant now, boolean requirePet,
+            Long excludeUserId) {
+        StringBuilder where = new StringBuilder(BASE_FILTER);
+        Map<String, Object> params = new LinkedHashMap<>();
+        switch (spec.mode()) {
+            case ALL -> {
+                // 只有基础过滤
+            }
+            case IDS -> where.append(" AND u.id IN (:ids)");
+            case FILTER -> appendFilter(spec, wib, now, where, params);
+        }
+        if (requirePet) {
+            where.append(" AND pet.name IS NOT NULL");
+        }
+        if (excludeUserId != null) {
+            where.append(" AND u.id <> :excludeUserId");
+            params.put("excludeUserId", excludeUserId);
+        }
+        return new Query(recipientHead(spec) + where, Collections.unmodifiableMap(params));
     }
 
     /**
      * 人数预估（V1.3.4 AB-31 后台「预估人数」）：ALL / FILTER 与 {@link #build} <b>同一段 WHERE</b>，只把选列换成
-     * {@code count(*)}——预估与真正发送两处口径不能各写一份。
+     * {@code count(*)}——预估与真正发送两处口径不能各写一份。V1.4.2 Story 7.1：同时出 {@code total} 与
+     * {@code with_pet}（其中有宠物的人数），不需要 LATERAL。
      *
      * <p>IDS 模式发送时 id 在子表里、预估时活动还没建，不能走这里：用 {@link #countIds()} 按粘贴的 id 分批计数。
      */
@@ -124,7 +183,7 @@ public final class OpsAudienceSql {
 
     /**
      * IDS 模式预估：给定一批 id（调用方已去重、已分批，参数名 {@code ids}）里满足基础过滤的人数。
-     * 与发送时 {@link #IN_TARGETS} 分支同口径（基础过滤 + 指定 id，不叠加任何筛选条件）。
+     * 与发送时 {@link #IN_TARGETS} 分支同口径（基础过滤 + 指定 id，不叠加任何筛选条件）。两列同 {@link #count}。
      */
     public static String countIds() {
         return COUNT + BASE_FILTER + " AND u.id IN (:ids)";

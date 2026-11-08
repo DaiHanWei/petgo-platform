@@ -34,6 +34,7 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.onLongPressItem,
     this.onAuthorTap,
     this.onTapMention,
+    this.onTapTopic,
     this.onCommentItem,
     this.onMoreItem,
     this.header,
@@ -47,6 +48,7 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.followSurfacePrefix = 'feed',
     this.focusItemId,
     this.onFocusHandled,
+    this.usePrimaryScrollController = false,
   });
 
   final List<FeedItem> items;
@@ -74,6 +76,9 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   /// ⚠️ 与 [onAuthorTap] 分开两个回调：拉黑 / 举报后的收尾都是「把**那个作者**的卡片
   /// 从列表移除」，而被 @ 的人通常**不是**这条卡片的作者 —— 共用一个回调会把错的人清掉。
   final void Function(int userId)? onTapMention;
+
+  /// 点正文里的 `#话题` → 话题页（V1.4.2 social-topic · Story 4.4），参数为标准名；透传到普通卡与内容顶置卡。
+  final void Function(String topicName)? onTapTopic;
 
   /// 可选全幅头部（随 Feed 同滚）。Beranda 用作问候/快捷入口/每日提示区。
   final Widget? header;
@@ -117,12 +122,39 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   final int? focusItemId;
   final VoidCallback? onFocusHandled;
 
+  /// V1.4.2 social-topic Story 4.3（话题页吸顶页签）：true = 改用外层 [PrimaryScrollController]
+  /// （`NestedScrollView` 的 inner 控制器，内外滚动才能联动），且**不监听** `homeScrollTopProvider`
+  /// （再点 Social Tab 回顶是首页的事，不该把话题页也滚回去）。
+  /// 默认 false：逐字节保持首页 / 关注流 / 我的发布的现状。
+  final bool usePrimaryScrollController;
+
   @override
   ConsumerState<FeedMasonryView> createState() => _FeedMasonryViewState();
 }
 
 class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   final ScrollController _controller = ScrollController();
+
+  /// 外层 [PrimaryScrollController]（仅 [FeedMasonryView.usePrimaryScrollController] 时非 null）。
+  /// 🔴 不归本组件所有：只挂 / 摘监听，绝不 dispose。
+  ScrollController? _primary;
+
+  /// 本组件实际驱动的滚动控制器（滚动、预加载、锚定补偿统一走它）。
+  ScrollController get _effectiveController => _primary ?? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget.usePrimaryScrollController) return;
+    final next = PrimaryScrollController.maybeOf(context);
+    if (identical(next, _primary)) return;
+    _primary?.removeListener(_onScroll);
+    _primary = next;
+    if (next != null) {
+      _controller.removeListener(_onScroll);
+      next.addListener(_onScroll);
+    }
+  }
 
   /// 回到顶部（bug 20260709-278）：已在首页再点 Home → 信号 +1 → 动画滚回顶。
   void _scrollToTop() {
@@ -286,6 +318,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   @override
   void dispose() {
     _highlightTimer?.cancel();
+    _primary?.removeListener(_onScroll);
     _controller.removeListener(_onScroll);
     _controller.dispose();
     super.dispose();
@@ -296,7 +329,9 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
     if (!widget.autoLoadMore) return;
     // 失败态停止自动预加载——避免静默重试循环，须用户点击底部「重试」。
     if (!widget.hasMore || widget.loadingMore || widget.loadMoreFailed) return;
-    final pos = _controller.position;
+    final controller = _effectiveController;
+    if (!controller.hasClients) return;
+    final pos = controller.position;
     if (pos.pixels >= pos.maxScrollExtent - _preloadThreshold) {
       widget.onLoadMore();
     }
@@ -317,14 +352,15 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   /// ## 为什么用 jumpTo 而不是动画
   /// 目的是让画面**看起来完全没动**。动画等于把一次本不该发生的位移演给用户看。
   bool _anchorScroll(FeedImageHeightChanged n) {
-    if (!_controller.hasClients) return true;
+    final controller = _effectiveController;
+    if (!controller.hasClients) return true;
     final box = n.context.findRenderObject();
     final viewport = context.findRenderObject();
     if (box is! RenderBox || !box.attached || viewport is! RenderBox) {
       return true;
     }
 
-    final pos = _controller.position;
+    final pos = controller.position;
 
     // 🔴 用户正在拖拽 / 惯性滑行时**不补偿**（review 2026-09-11 findings #2）。
     //
@@ -353,7 +389,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
       pos.maxScrollExtent,
     );
     if ((target - pos.pixels).abs() > 0.5) {
-      _controller.jumpTo(target);
+      controller.jumpTo(target);
     }
     return true;
   }
@@ -361,7 +397,9 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   @override
   Widget build(BuildContext context) {
     // 已在首页再次点击 Home Tab → 回到顶部（bug 20260709-278）。
-    ref.listen<int>(homeScrollTopProvider, (_, _) => _scrollToTop());
+    if (!widget.usePrimaryScrollController) {
+      ref.listen<int>(homeScrollTopProvider, (_, _) => _scrollToTop());
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         // 🔴 高度护栏（V1.1.6 Story 3.3）的「可视区高度」口径 = **滚动视口的实际高度**。
@@ -443,6 +481,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                 onAuthorTap:
                     widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(pinnedItem),
                 onTapMention: widget.onTapMention,
+                onTapTopic: widget.onTapTopic,
                 // 🔴 举报入口（长按 + 「···」）**必须一并挂上**：AC 要求"其余部分与普通条目完全一致，
                 // 常规互动入口位置不变"。实机上才发现漏了 —— 只挂点击与评论会让顶置卡少一个入口，
                 // 用户对顶置内容反而没法举报。
@@ -497,6 +536,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                     ? null
                     : () => widget.onAuthorTap!(widget.items[i]),
                 onTapMention: widget.onTapMention,
+                onTapTopic: widget.onTapTopic,
                 onComment: widget.onCommentItem == null
                     ? null
                     : () => widget.onCommentItem!(widget.items[i]),
@@ -514,7 +554,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
             color: AppColors.accentGrowth,
             onRefresh: widget.onRefresh,
             child: SingleChildScrollView(
-              controller: _controller,
+              controller: _effectiveController,
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 children: [

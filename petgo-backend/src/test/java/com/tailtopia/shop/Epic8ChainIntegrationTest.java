@@ -128,8 +128,8 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "e8s" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                VALUES (?, ?, '3 kg', ?, ?)""", sToken, pid, price, costPrice);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, ?, 1000, 20, 15, 10)""", sToken, pid, price, costPrice);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 0, 0)", sid);
@@ -366,8 +366,8 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "e8t" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                VALUES (?, ?, '3 kg', 100000, 60000)""", sToken, pid);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', 100000, 60000, 1000, 20, 15, 10)""", sToken, pid);
         return jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
     }
@@ -397,5 +397,18 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
      */
     private static java.util.List<String> evidence(long userId) {
         return java.util.List.of("private/" + userId + "/ev1.jpg", "private/" + userId + "/ev2.jpg");
+    }
+
+    @Test
+    @DisplayName("V1.4.2 shop-admin 8.1 AC2 / AC3：新区块运费净成本 = 实际 + 重发 − 实付；取消后到账只分项展示不并入现金")
+    void discountLogisticsBlockIsSelfConsistent() {
+        LocalDate today = LocalDate.now(com.tailtopia.admin.shared.time.AdminTime.ZONE);
+        var dl = finance.discountLogistics(today.minusDays(30), today);
+        assertThat(dl.netShippingCost()).isEqualTo(dl.actualCarrierCost() + dl.reshipCost() - dl.userPaidShipping());
+        assertThat(dl.thresholdShippingDiscount()).isNotNegative();
+        assertThat(dl.couponShippingDiscount()).isNotNegative();
+        // 原四卡不受影响：同一时间段原结构照常可取
+        var recon = finance.reconciliation(today.minusDays(30), today);
+        assertThat(recon.segmentsBalance()).isTrue();
     }
 }

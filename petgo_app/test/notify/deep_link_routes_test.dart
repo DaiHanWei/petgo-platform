@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/place/presentation/place_detail_page.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
@@ -183,5 +185,54 @@ void main() {
   test('礼物页不是 Tab 根：冷启动需要先铺底座再叠（deepLinkNeedsBaseRoute）', () {
     expect(deepLinkNeedsBaseRoute('/pets/12/gifts?wall=expanded'), isTrue);
   });
-}
 
+  // V1.4.2 social-topic Story 1.5 · AC6.6。
+  test('PET_DIARY_POSTED → 帖子详情；非数字 / 空 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_DIARY_POSTED', '88'), '/content/88');
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_DIARY_POSTED', 'x88'), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_DIARY_POSTED', null), DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('PET_FOLLOWED → 追更者主页（targetRef = 追更者 user id）；非数字 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_FOLLOWED', '42'), '${PublicProfilePage.routeBase}/42');
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_FOLLOWED', 'abc'), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_FOLLOWED', ''), DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('两类型在 switch 里显式列出（不靠 default）', () {
+    final src = File('lib/core/router/deep_link_routes.dart').readAsStringSync();
+    expect(src, contains("case 'PET_FOLLOWED':"));
+    expect(src, contains("case 'PET_DIARY_POSTED':"));
+  });
+
+  test('v1.4.2 shop Story 8.1（D-20）：旧复购推送 REPURCHASE_FOOD_LOW → Toko 首页（分支根，须 go）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('REPURCHASE_FOOD_LOW', null), '/shop');
+    expect(DeepLinkRoutes.pushPayloadToLocation('REPURCHASE_FOOD_LOW', 'anything'), '/shop');
+    expect(DeepLinkRoutes.isShellTabRoot('/shop'), isTrue);
+  });
+
+  // v1.4.2 shop Story 9.1 · AC6.4（F22）：重新下单 → 新订单详情；空 / 含非法字符 → 通知中心。
+  test('SHOP_ORDER_REORDERED → /shop/orders/{token}；空 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', 'aB3xY9_k-Q'),
+        '/shop/orders/aB3xY9_k-Q');
+    expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', null),
+        DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', ''),
+        DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('SHOP_ORDER_REORDERED targetRef 不符白名单 ^[A-Za-z0-9_-]+\$ → 通知中心（不拼非法路由）', () {
+    for (final bad in ['a/b', 'tok?x=1', 'tok#f', '../paid', 'tok en', 'tok.x', 'tök', 'tok%2F', 'a&b']) {
+      expect(DeepLinkRoutes.pushPayloadToLocation('SHOP_ORDER_REORDERED', bad),
+          DeepLinkRoutes.notificationsCenter,
+          reason: bad);
+    }
+  });
+
+  // v1.4.2 shop Story 9.3 · AC4.1（D-22）：券快过期 → 我的券；targetRef 是张数，空也命中（固定目标类）。
+  test('COUPON_EXPIRING → /me/coupons（targetRef 为空 / 张数都命中）', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', null), '/me/coupons');
+    expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', ''), '/me/coupons');
+    expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', '3'), '/me/coupons');
+  });
+}

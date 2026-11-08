@@ -3,9 +3,9 @@ package com.tailtopia.shop.order.service;
 import com.tailtopia.pay.domain.PaymentFailureCategory;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.event.PaymentIntentFailedEvent;
-import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
 import com.tailtopia.shared.analytics.AnalyticsDistinctId;
+import com.tailtopia.shop.order.event.ShopOrderPaidEvent;
 import com.tailtopia.shop.order.event.ShopPaymentIntentCreatedEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -43,16 +43,20 @@ public class ShopPaymentAnalyticsListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIntentCreated(ShopPaymentIntentCreatedEvent e) {
         analytics.capture(AnalyticsDistinctId.of(e.userId()), "shop_payment_intent_created",
-                props(e.amount(), e.payChannel(), e.hasPawcoin()));
+                props(e.payChannel(), e.hasPawcoin()));
     }
 
+    /**
+     * 到账 → {@code shop_payment_paid}。
+     *
+     * <p>🔴 v1.4.2 shop Story 3.2（D-23）：由 {@code PaymentIntentPaidEvent} 挪到 {@link ShopOrderPaidEvent} ——
+     * 一处发，网关 / 纯币 / 零元单 / 4.2 重下单都覆盖（纯币单此前缺这条）；3.3 迟到款意图虽发意图事件，
+     * 但不经「已付款」迁移，不会误发。属性键集合不变。
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onPaid(PaymentIntentPaidEvent e) {
-        if (e.purpose() != PaymentPurpose.SHOP_ORDER) {
-            return; // 问诊 / 充值 / AI 解锁 / 高清身份证各有各的漏斗，不混进电商口径
-        }
+    public void onOrderPaid(ShopOrderPaidEvent e) {
         analytics.capture(AnalyticsDistinctId.of(e.userId()), "shop_payment_paid",
-                props(e.amount(), e.channel() == null ? null : e.channel().name(), null));
+                props(e.payChannel(), null));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -72,21 +76,20 @@ public class ShopPaymentAnalyticsListener {
             case USER_CANCELLED -> "shop_payment_user_cancelled";
         };
         Map<String, Object> props =
-                props(e.amount(), e.channel() == null ? null : e.channel().name(), null);
+                props(e.channel() == null ? null : e.channel().name(), null);
         props.put("failure_category", category.name());
         analytics.capture(AnalyticsDistinctId.of(e.userId()), event, props);
     }
 
     /**
-     * 组装属性。<b>只放这三个键</b>（失败事件另加 {@code failure_category}）。
+     * 组装属性。<b>只放这两个键</b>（pay_channel / has_pawcoin）（失败事件另加 {@code failure_category}）。
      *
      * @param hasPawcoin 为 null 时不带该键 —— 支付意图上没有「是否含 PawCoin」这个信息，
      *     瞎填一个 false 会让漏斗按它分组时把混合支付单错归到纯现金一档
      */
-    private static Map<String, Object> props(long orderAmount, String payChannel,
-            Boolean hasPawcoin) {
+    private static Map<String, Object> props(String payChannel, Boolean hasPawcoin) {
         Map<String, Object> p = new LinkedHashMap<>();
-        p.put("order_amount", orderAmount);
+        // V1.4.2：不再带 order_amount —— 金额一律不进 PostHog（2026-11-08 拍板）。
         if (payChannel != null) {
             p.put("pay_channel", payChannel);
         }

@@ -66,6 +66,13 @@ public interface UserHideRelationRepository extends JpaRepository<UserHideRelati
     @Query("SELECT DISTINCT r.targetId FROM UserHideRelation r WHERE r.holderId = :holderId AND r.targetId IN :targetIds")
     List<Long> findHiddenTargetIds(@Param("holderId") long holderId, @Param("targetIds") List<Long> targetIds);
 
+    /**
+     * 这批 holder 里哪些隐藏了 target —— <b>不分来源</b>（V1.4.2 social-topic Story 1.2，追更日提醒扇出）。
+     * 拉黑与举报可能各有一行，故 {@code DISTINCT}。
+     */
+    @Query("SELECT DISTINCT r.holderId FROM UserHideRelation r WHERE r.targetId = :targetId AND r.holderId IN :holderIds")
+    List<Long> findHolderIdsHidingTarget(@Param("targetId") long targetId, @Param("holderIds") List<Long> holderIds);
+
     /** 删除指定来源的那一行；返回受影响行数（解除拉黑只删 BLOCK 行）。 */
     long deleteByHolderIdAndTargetIdAndSource(long holderId, long targetId, HideSource source);
 

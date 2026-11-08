@@ -22,17 +22,23 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row">
             <h1 th:text="#{admin.shop.shipping.title}">服务范围与运费</h1>
         </div>
         <p class="muted" th:text="#{admin.shop.shipping.hint}">以 Kecamatan 为粒度维护可配送区域，每个区域一个固定运费。不接承运商实时计费；配送方式只有 Reguler 一档，界面刻意不给「配送方式」维度。停用区域用停用而不是删除——历史订单的运费需要可追溯。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <div th:replace="~{admin/shop-shipping :: shipAlerts}"></div>
 
         <!--/* ⚠️ 三张卡必须是**兄弟**：卡间距靠 admin.css 的 `.cfg-card + .cfg-card`，
                中间夹一层包装 div 会让那条相邻选择器整个失效（卡会贴在一起，而且不报错）。 */-->
-        <div th:replace="~{admin/shop-shipping :: zonesCard}"></div>
+        <!--/* V1.4.2 shop-admin Story 4.1（G1）：发货地址、Biteship 账户两张新卡在前，三张原卡保留。 */-->
+        <div th:replace="~{admin/shop-shipping :: originCard}"></div>
+        <div th:replace="~{admin/shop-shipping :: biteshipCard}"></div>
         <div th:replace="~{admin/shop-shipping :: thresholdCard}"></div>
+        <div th:replace="~{admin/shop-shipping :: zonesCard}"></div>
         <div th:replace="~{admin/shop-shipping :: returnAddressCard}"></div>
     </div>
 </div>
@@ -41,6 +47,114 @@
        `shop-shipping :: savedXxx` 按片段选取。不包这一层，整页渲染时它们也会跟在布局后面原样再渲一遍
        （三张卡 ×3 = 页面上字段重复三次）。 */-->
 <th:block th:remove="all">
+<!--/* ===== V1.4.2 shop-admin Story 4.1：页顶横幅（G2 发货地址未配置 .banner.err；G3 预估余额低于阈值 .banner.warn）。
+       保存后随 saved* 片段 oob 刷新，不必整页重载。 */-->
+<div th:fragment="shipAlerts" id="ship-alerts">
+    <div class="banner err" th:if="${originMissing}" data-ship-origin-missing>
+        <b th:text="#{admin.v142.shipping.origin.missing.lead}">还没有配置发货地址</b><span
+            th:text="#{admin.v142.shipping.origin.missing.rest}">：App 端无法向 Biteship 询价，所有用户结算时都拿不到运费、不能下单。</span>
+    </div>
+    <div class="banner warn" th:if="${balanceBelow}" data-ship-balance-low
+         th:text="#{admin.v142.biteship.lowBanner(${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(balance.result().estimate())}, ${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(balance.threshold())})}">低于阈值</div>
+</div>
+
+<!--/* ===== 卡 · 发货地址（G1 / G2，标准模板 D 单 form；保存先 …/origin/confirm 复述改动）=====
+       🔒 审计只记邮编前 2 位（AdminShippingZoneService.setOrigin），联系人 / 电话 / 地址不入审计。 */-->
+<th:block th:fragment="originCard"
+          th:with="action=@{/admin/shop/shipping/origin},hxPost=@{/admin/shop/shipping/origin/confirm},
+                   cardId='cfg-ship-origin',confirmDiff=false,errorFields=${shipErrorFields?.get('origin')},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::og-title}, ~{::og-form}, #{admin.v142.shipping.origin.save})}">
+        <h2 class="cfg-title" th:fragment="og-title" th:text="#{admin.v142.shipping.origin.title}">发货地址</h2>
+        <div th:fragment="og-form">
+            <label class="field"><span th:text="#{admin.v142.shipping.origin.contactName}">联系人</span>
+                <input class="inp field-full" type="text" name="originContactName" maxlength="60"
+                       th:value="${settings != null} ? ${settings.originContactName} : ''" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.shop.order.col.phone}">电话</span>
+                <input class="inp field-full" type="text" name="originContactPhone" maxlength="20"
+                       th:value="${settings != null} ? ${settings.originContactPhone} : ''" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.shop.order.col.address}">地址</span>
+                <input class="inp field-full" type="text" name="originAddress" maxlength="300"
+                       th:value="${settings != null} ? ${settings.originAddress} : ''" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.v142.shipping.origin.postalCode}">邮编</span>
+                <input class="inp field-full" type="text" name="originPostalCode" maxlength="5" inputmode="numeric"
+                       pattern="[1-9][0-9]{4}"
+                       th:value="${settings != null} ? ${settings.originPostalCode} : ''" th:disabled="${!canEdit}"/>
+            </label>
+        </div>
+    </div>
+</th:block>
+
+<!--/* Biteship 卡的金额明细（无权限分支，单独成片段便于 L0 直渲）。模型：balance（BiteshipBalanceService.Overview）。 */-->
+<th:block th:fragment="biteshipEstimate" th:with="r=${balance != null} ? ${balance.result()} : null">
+<div class="kv amt" th:if="${r != null and r.recorded()}" data-biteship-estimate
+         th:with="rpf=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)}">
+        <span><th:block th:text="#{admin.v142.biteship.last}">上次录入的余额</th:block></span>
+        <span><span class="nt" th:text="${#temporals.format(balance.recordedAt(), 'MM-dd HH:mm', 'Asia/Jakarta')} + (${balance.recordedByName() != null} ? ' · ' + ${balance.recordedByName()} : '')">11-01 10:00 · ops</span><th:block
+                th:text="${rpf.rp(r.lastAmount())}">Rp 2.000.000</th:block></span>
+        <span th:text="#{admin.v142.biteship.deducted}">此后运单扣除</span>
+        <span><span class="nt" th:text="#{admin.v142.biteship.deductedNote(${r.count()})}">31 单，不含已取消运单</span><th:block
+                th:text="'− ' + ${rpf.rp(r.deducted())}">− Rp 716.000</th:block></span>
+        <span class="tl" th:text="#{admin.v142.biteship.estimate}">预估余额</span>
+        <span class="tl" th:classappend="${balance.below()} ? 'is-danger'" data-biteship-estimate-value
+              th:text="${rpf.rp(r.estimate())}">Rp 1.284.000</span>
+    </div>
+    <p class="muted" th:if="${r == null or !r.recorded()}" data-biteship-not-recorded
+       th:text="#{admin.v142.biteship.estimate} + '：' + #{admin.v142.biteship.notRecorded}">预估余额：未录入</p>
+</th:block>
+
+<!--/* ===== 卡 · Biteship 账户（G1 / G3）=====
+       🔴 Biteship 没有余额接口：显示「上次录入 − 此后扣除 = 预估余额」（BiteshipBalanceEstimate，已取消运单不扣）。
+       两个独立 form（录入实际余额 / 预警阈值），各自先 …/confirm 复述再提交；不能套 configCard（form 不能嵌套）。 */-->
+<section th:fragment="biteshipCard" id="cfg-ship-biteship" class="card cfg-card"
+         th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                  r=${balance != null} ? ${balance.result()} : null">
+    <div class="cfg-head">
+        <h2 class="cfg-title" th:text="#{admin.v142.biteship.title}">Biteship 账户</h2>
+    </div>
+    <div class="cfg-body">
+        <p class="hint cfg-readonly" th:unless="${canEdit}"
+           th:text="#{admin.v130.config.readonly(#{perm.config.edit})}">只读</p>
+        <div th:replace="~{admin/shop-shipping :: biteshipEstimate}"></div>
+        <p class="hint" th:text="#{admin.v142.biteship.hint}">预估值，可能与 Biteship 实际余额有出入。</p>
+
+        <form class="ship-biteship-form" data-config-card method="post" th:if="${canEdit}"
+              th:attr="action=@{/admin/shop/shipping/biteship/balance},hx-post=@{/admin/shop/shipping/biteship/balance/confirm}"
+              hx-target="#cfg-ship-biteship-err" hx-swap="innerHTML">
+            <label class="field"><span th:text="#{admin.v142.biteship.enter}">录入实际余额</span>
+                <input class="inp field-full" type="number" name="amount" min="0" step="1" required
+                       th:placeholder="#{admin.v142.biteship.enter.placeholder}"/>
+            </label>
+            <span class="ship-zone-save">
+                <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
+                <button type="submit" class="btn btn-sm btn-primary" disabled data-save
+                        th:text="#{admin.v142.biteship.btn.updateBalance}">更新余额</button>
+            </span>
+        </form>
+
+        <form class="ship-biteship-form" data-config-card method="post"
+              th:attr="action=@{/admin/shop/shipping/biteship/threshold},hx-post=@{/admin/shop/shipping/biteship/threshold/confirm}"
+              hx-target="#cfg-ship-biteship-err" hx-swap="innerHTML">
+            <label class="field"><span th:text="#{admin.v142.biteship.threshold}">余额预警阈值</span>
+                <input class="inp field-full" type="number" name="balanceAlertThreshold" min="0" step="1" required
+                       th:value="${balance != null} ? ${balance.threshold()} : 0" th:disabled="${!canEdit}"/>
+            </label>
+            <p class="hint" th:text="#{admin.v142.biteship.threshold.hint}">预估余额低于阈值时飞书提醒运营充值。</p>
+            <span class="ship-zone-save" th:if="${canEdit}">
+                <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
+                <button type="submit" class="btn btn-sm btn-primary" disabled data-save
+                        th:text="#{admin.shop.shipping.btn.saveThreshold}">保存阈值</button>
+            </span>
+        </form>
+        <p class="inline-error-slot" aria-live="polite" id="cfg-ship-biteship-err"></p>
+    </div>
+</section>
+
 <!--
   ===== 卡① 可配送区域（AC1）=====
   🔴 **每行一个 form，不是整卡一个 form**。三条约束把形状定死了：
@@ -73,7 +187,7 @@
                 <span th:text="#{admin.shop.shipping.col.kecamatan}">Kecamatan</span>
                 <span th:text="#{admin.shop.shipping.col.kota}">Kota/Kabupaten</span>
                 <span th:text="#{admin.shop.shipping.col.provinsi}">Provinsi</span>
-                <span th:text="#{admin.shop.shipping.col.fee}">运费</span>
+                <span th:text="#{admin.v142.shipping.origin.postalCode}">邮编</span>
                 <span th:text="#{admin.shop.shipping.col.active}">启用</span>
             </div>
             <div class="ship-zone-row" th:each="z,st : ${zones}"
@@ -90,8 +204,9 @@
                            th:value="${z.kotaKabupaten}" th:disabled="${!canEdit}"/>
                     <input class="inp" type="text" name="provinsi" maxlength="60" required
                            th:value="${z.provinsi}" th:disabled="${!canEdit}"/>
-                    <input class="inp" type="number" name="fee" min="0" required
-                           th:value="${z.fee}" th:disabled="${!canEdit}"/>
+                    <!--/* V1.4.2 shop-admin Story 4.1：区域表去运费列（运费改由 Biteship 实时报价，fee 列保留不读、不提交 = 保留原值）；改填代表邮编 */-->
+                    <input class="inp" type="text" name="postalCode" maxlength="5" inputmode="numeric" pattern="[1-9][0-9]{4}"
+                           th:value="${z.postalCode}" th:disabled="${!canEdit}"/>
                     <span class="ship-zone-save">
                         <span class="tag tag-dirty" hidden data-dirty-flag
                               th:text="#{admin.v130.tpl.dirty}">已修改</span>
@@ -102,13 +217,12 @@
                 <!--/* 启停是**另一个端点**，所以是一个独立的、与上面那个 form 平级的 form ——
                        嵌进去的话 HTML 解析器会把它整个丢掉，点「停用」会变成一次 upsert。
                        AC1：即时提交，不受保存钮控制。 */-->
-                <form class="ship-zone-toggle" method="post" th:if="${canEdit}"
-                      th:attr="action=@{/admin/shop/shipping/zones/toggle},
-                               hx-post=@{/admin/shop/shipping/zones/toggle},
-                               hx-target='#cfg-ship-zone-err-' + ${st.index},
-                               data-confirm=${z.active}
-                                   ? #{admin.v130.shopShipping.confirmDisable(${z.kecamatan})} : null"
+                <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：停用（当前启用）先走服务端确认弹层 …/toggle/confirm；启用不确认（同原状）。 */-->
+                <form class="ship-zone-toggle" th:if="${canEdit}"
+                      th:attr="hx-post=${z.active} ? @{/admin/shop/shipping/zones/toggle/confirm} : @{/admin/shop/shipping/zones/toggle},
+                               hx-target='#cfg-ship-zone-err-' + ${st.index}"
                       hx-swap="innerHTML">
+                    <input type="hidden" name="slot" th:value="${st.index}"/>
                     <input type="hidden" name="kecamatan" th:value="${z.kecamatan}"/>
                     <input type="hidden" name="active" th:value="${!z.active}"/>
                     <button class="btn btn-sm btn-neutral" type="submit"
@@ -139,8 +253,8 @@
                            th:placeholder="#{admin.shop.shipping.col.kota}"/>
                     <input class="inp" type="text" name="provinsi" maxlength="60" required
                            th:placeholder="#{admin.shop.shipping.col.provinsi}"/>
-                    <input class="inp" type="number" name="fee" min="0" required
-                           th:placeholder="#{admin.shop.shipping.col.fee}"/>
+                    <input class="inp" type="text" name="postalCode" maxlength="5" inputmode="numeric" pattern="[1-9][0-9]{4}"
+                           th:placeholder="#{admin.v142.shipping.origin.postalCode}"/>
                     <span class="ship-zone-save">
                         <span class="tag tag-dirty" hidden data-dirty-flag
                               th:text="#{admin.v130.tpl.dirty}">已修改</span>
@@ -156,8 +270,8 @@
 
 <!-- ===== 卡② 免运门槛（标准模板 D 单 form）===== -->
 <th:block th:fragment="thresholdCard"
-          th:with="action=@{/admin/shop/shipping/threshold},hxPost=@{/admin/shop/shipping/threshold},
-                   cardId='cfg-ship-threshold',confirmDiff=true,
+          th:with="action=@{/admin/shop/shipping/threshold},hxPost=@{/admin/shop/shipping/threshold/confirm},
+                   cardId='cfg-ship-threshold',confirmDiff=false,errorFields=${shipErrorFields?.get('threshold')},
                    canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
                    readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
                    readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
@@ -171,6 +285,12 @@
             <label class="field"><span th:text="#{admin.shop.shipping.section.threshold}">免运门槛</span>
                 <input class="inp field-full" type="number" name="threshold" min="0" step="1" required
                        th:value="${settings != null} ? ${settings.freeShippingThreshold} : 0"
+                       th:disabled="${!canEdit}"/>
+            </label>
+            <!--/* V1.4.2 shop-admin Story 4.1 · AC4 · O-27：门槛 > 0 时最高减免必填且 > 0（服务端 validateFreeShipping 同样拒绝，G4 红边）。 */-->
+            <label class="field"><span th:text="#{admin.v142.shipping.cap}">最高减免</span>
+                <input class="inp field-full" type="number" name="freeShippingCap" min="0" step="1"
+                       th:value="${settings != null} ? ${settings.freeShippingCap} : ''"
                        th:disabled="${!canEdit}"/>
             </label>
         </div>
@@ -214,6 +334,20 @@
        ⚠️ toast 必须多包一层：`beforeend:` oob 搬的是**子节点**，直接写在 .toast 上落进宿主的只有裸文本。 */-->
 <th:block th:fragment="savedZones">
     <div th:replace="~{admin/shop-shipping :: zonesCard}"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+<th:block th:fragment="savedOrigin">
+    <div th:replace="~{admin/shop-shipping :: originCard}"></div>
+    <div hx-swap-oob="outerHTML:#ship-alerts"><div th:replace="~{admin/shop-shipping :: shipAlerts}"></div></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+<th:block th:fragment="savedBiteship">
+    <div th:replace="~{admin/shop-shipping :: biteshipCard}"></div>
+    <div hx-swap-oob="outerHTML:#ship-alerts"><div th:replace="~{admin/shop-shipping :: shipAlerts}"></div></div>
     <div hx-swap-oob="beforeend:#admin-toast-host">
         <div class="toast" role="status" th:text="${toast}">已保存</div>
     </div>

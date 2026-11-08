@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
+import 'package:tailtopia/features/profile/domain/visitor_profile.dart';
 
 /// V1.1.6 · L0：访客接口的**线上契约**（2026-08-18 L2 视觉验收补）。
 ///
@@ -79,6 +80,47 @@ void main() {
         'imageUrls': <String>[],
       });
       expect(item.openable, isNull);
+    });
+  });
+
+  /// V1.4.2 social-topic Story 1.4：访客 profile 新三字段 + stats `followerCount`（后端 1.1 的真实字段名）。
+  group('追更字段（V1.4.2 social-topic 1.4）', () {
+    test('站内 profile：iFollow / iFollowOwner / ownerToken 读得出来', () {
+      final p = VisitorProfile.fromJson(const {
+        'name': 'Mochi',
+        'petType': 'CAT',
+        'iFollow': true,
+        'iFollowOwner': false,
+        'ownerToken': 'OWNER-TOK',
+      });
+      expect(p.iFollow, isTrue);
+      expect(p.iFollowOwner, isFalse);
+      expect(p.ownerToken, 'OWNER-TOK');
+    });
+
+    test('分享 token 公开路径不下发三字段 → 一律 null（不是 false / 空串）', () {
+      final p = VisitorProfile.fromJson(const {'name': 'Mochi', 'petType': 'CAT'});
+      expect(p.iFollow, isNull);
+      expect(p.iFollowOwner, isNull);
+      expect(p.ownerToken, isNull);
+    });
+
+    test('stats followerCount：有键读值；缺键为 null（防旧后端误显「0 Pengikut」）', () {
+      final withCount = ArchiveStats.fromJson(const {
+        'happyMomentCount': 1,
+        'consultCount': 0,
+        'milestoneCompleted': 0,
+        'milestoneTotal': 31,
+        'followerCount': 128,
+      });
+      expect(withCount.followerCount, 128);
+      final legacy = ArchiveStats.fromJson(const {
+        'happyMomentCount': 1,
+        'consultCount': 0,
+        'milestoneCompleted': 0,
+        'milestoneTotal': 31,
+      });
+      expect(legacy.followerCount, isNull);
     });
   });
 }

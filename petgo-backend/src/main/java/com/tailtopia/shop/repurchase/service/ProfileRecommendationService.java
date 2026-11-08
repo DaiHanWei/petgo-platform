@@ -3,6 +3,7 @@ package com.tailtopia.shop.repurchase.service;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shop.coupon.service.PromoResolver;
 import com.tailtopia.shop.domain.AgeStage;
 import com.tailtopia.shop.domain.BodySize;
 import com.tailtopia.shop.domain.ShopProduct;
@@ -13,10 +14,12 @@ import com.tailtopia.shop.repository.ShopSkuRepository;
 import com.tailtopia.shop.service.ShopImageUrlResolver;
 import com.tailtopia.shop.repurchase.domain.ProfileFacts;
 import com.tailtopia.shop.repurchase.dto.RecommendationView;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +53,9 @@ public class ProfileRecommendationService {
         推荐滑道此前一直是斜纹占位，就是因为只下发了 key。 */
     private final ShopImageUrlResolver imageUrls;
 
+    /** v1.4.2 shop Story 2.2：推荐卡「Lagi promo」批量判定。 */
+    private final PromoResolver promos;
+
     /** 🔴 犬猫年龄阈值可后台配置（FR-107）。这里经配置注入，默认取 PRD 值。 */
     private final int puppyMaxYears;
     private final int adultMaxYears;
@@ -57,6 +63,7 @@ public class ProfileRecommendationService {
     public ProfileRecommendationService(PetProfileRepository profiles,
             ShopProductRepository products, ShopSkuRepository skus,
             RecommendationSilenceService silence, ShopImageUrlResolver imageUrls,
+            PromoResolver promos,
             @Value("${petgo.shop.reco.puppy-max-years:1}") int puppyMaxYears,
             @Value("${petgo.shop.reco.adult-max-years:7}") int adultMaxYears) {
         this.profiles = profiles;
@@ -64,6 +71,7 @@ public class ProfileRecommendationService {
         this.skus = skus;
         this.silence = silence;
         this.imageUrls = imageUrls;
+        this.promos = promos;
         this.puppyMaxYears = puppyMaxYears;
         this.adultMaxYears = adultMaxYears;
     }
@@ -95,24 +103,48 @@ public class ProfileRecommendationService {
             return RecommendationView.empty(pet.getName(), false, "NONE");
         }
         ProfileFacts facts = factsOf(pet);
-        return recommend(facts);
+        return recommend(facts, userId);
     }
 
     /** 纯函数式入口，便于单测四步过滤（不碰 DB 的部分见 {@link #filter}）。 */
     @Transactional(readOnly = true)
     public RecommendationView recommend(ProfileFacts facts) {
+        return recommend(facts, null);
+    }
+
+    /** 同 {@link #recommend(ProfileFacts)}，并按查看者算 {@code promo}（Story 2.2 AC9；null = 只算 CLAIM 模板）。 */
+    @Transactional(readOnly = true)
+    public RecommendationView recommend(ProfileFacts facts, Long viewerUserId) {
         List<ShopProduct> active = products.findByActiveTrueOrderBySortWeightDescIdDesc();
         List<ShopProduct> matched = filter(active, facts);
+        Set<String> promoTokens = promos.resolve(matched.stream()
+                .map(p -> new PromoResolver.ProductRef(p.getPublicToken(), p.getCategory())).toList(),
+                viewerUserId, Instant.now());
         List<RecommendationView.Item> items = new ArrayList<>();
         for (ShopProduct p : matched) {
             // key 与 url 同时下发：key 保留是因为既有契约与后台链路都在用它，
             // url 是给 App 显示的 —— 客户端不做 key→URL 拼装（CDN base 只在服务端）。
             items.add(new RecommendationView.Item(p.getPublicToken(), p.getName(), p.getBrand(),
                     p.getMainImageKey(), imageUrls.publicUrl(p.getMainImageKey()),
-                    minPriceOf(p.getId()), reasonFor(p, facts)));
+                    minPriceOf(p.getId()), reasonFor(p, facts),
+                    promoTokens.contains(p.getPublicToken())));
         }
         return new RecommendationView(!facts.isComplete(), facts.missing(), facts.petName(),
-                items);
+                items, summaryOf(facts));
+    }
+
+    /**
+     * 档案摘要（v1.4.2 shop Story 6.1 AC13）：只从已算好的 {@code facts} 取，不重复推算。
+     * 调用方只有「已建档且非静默期」的分支走到这里（两个 {@code empty} 分支为 null）。
+     */
+    static RecommendationView.ProfileSummary summaryOf(ProfileFacts facts) {
+        Species sp = facts.species() == null ? Species.UNIVERSAL : facts.species();
+        return new RecommendationView.ProfileSummary(
+                facts.petName(),
+                sp.name(),
+                facts.bodySize() == null || facts.bodySize() == BodySize.UNIVERSAL ? null : facts.bodySize().name(),
+                facts.ageStage() == null || facts.ageStage() == AgeStage.UNIVERSAL ? null : facts.ageStage().name(),
+                facts.weightKg() == null);
     }
 
     /**

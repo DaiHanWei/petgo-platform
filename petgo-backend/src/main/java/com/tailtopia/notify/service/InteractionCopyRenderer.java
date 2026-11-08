@@ -125,12 +125,21 @@ public class InteractionCopyRenderer {
      * 只对 {@code PET_GIFT_RECEIVED} 且单个送礼人（{@code others == 0}）生效 —— {@code giftLabel} 非空 →
      * {@code notify.tpl.giftReceived.oneGift}（{0} 昵称、{1} 宠物名、{2} 礼物）/ {@code .oneGift.noPet}（{0} 昵称、{1} 礼物）；
      * 为空（查不到 / 送了不止一种）→ 回落 {@code .one}。多人合并照稿 G1 不列礼物。{@code giftLabel} 用 {@link #giftLabel} 拼。
+     *
+     * <p>V1.4.2 social-topic Story 1.2：{@code PET_FOLLOWED} → {@code notify.tpl.petFollowed}（{0} 追更者昵称、{1} 宠物名）/
+     * {@code .noPet}（{@code petName == null}）；不聚合，忽略 {@code others}。
      */
     public String title(NotificationType type, String variant, ActorSummary s, Locale locale, String petName,
             String giftLabel) {
         String name = s.latestNickname();
         // {1} 以字符串传入：MessageFormat 对数字会按语言插千分位（1.234 / 1,234）。
         String others = String.valueOf(s.others());
+        if (type == NotificationType.PET_FOLLOWED) {
+            // V1.4.2 social-topic Story 1.2：{0} 追更者昵称、{1} 宠物名；宠物已删 / 查不到 → noPet
+            return petName == null
+                    ? msg("notify.tpl.petFollowed.noPet", locale, name)
+                    : msg("notify.tpl.petFollowed", locale, name, petName);
+        }
         if (type == NotificationType.PET_GIFT_RECEIVED) {
             String total = String.valueOf(s.total());
             String suffix = petName == null ? ".noPet" : "";
@@ -157,6 +166,17 @@ public class InteractionCopyRenderer {
             case USER_FOLLOWED -> msg("notify.tpl.followed", locale, name);
             default -> throw new IllegalArgumentException("not an interaction type: " + type);
         };
+    }
+
+    /**
+     * {@code PET_DIARY_POSTED} 标题（V1.4.2 social-topic Story 1.2 · AC6）：写入时落库与通知列表现拼共用这一句。
+     * 有宠物名 → {@code notify.tpl.petDiaryPosted}（{0} 宠物名）；为空 → {@code notify.tpl.petDiaryPosted.noPet}。
+     * 不是带触发人的互动类型，不经 {@link #title}。
+     */
+    public String petDiaryPostedTitle(String petName, Locale locale) {
+        return petName == null || petName.isBlank()
+                ? messages.getMessage("notify.tpl.petDiaryPosted.noPet", null, locale)
+                : msg("notify.tpl.petDiaryPosted", locale, petName);
     }
 
     /**

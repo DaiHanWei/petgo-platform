@@ -42,13 +42,15 @@ class VisitorProjectionServiceTest {
 
     @Test
     void statsUseThatPet() {
-        when(timelineService.getStats(OWNER, PET_B)).thenReturn(new ArchiveStatsResponse(3, 1, 2, 31, 9, 0, 0));
+        when(timelineService.getStats(OWNER, PET_B)).thenReturn(new ArchiveStatsResponse(3, 1, 2, 31, 9, 0, 0, 12));
 
         VisitorStats s = service.stats(petB);
 
         assertThat(s.happyMomentCount()).isEqualTo(3);
         assertThat(s.consultCount()).isEqualTo(1);
         assertThat(s.milestoneCompleted()).isEqualTo(2);
+        // V1.4.2 social-topic Story 1.1：追更人数透传作者态同一份（字段名两处一致）。
+        assertThat(s.followerCount()).isEqualTo(12);
         verify(timelineService).getStats(OWNER, PET_B);
         verify(timelineService, never()).getStats(anyLong());
     }

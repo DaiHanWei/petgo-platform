@@ -72,8 +72,6 @@ class Epic6ChainIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ShopOrderRepository orders;
     @Autowired
-    private com.tailtopia.admin.shop.service.RepurchaseDashboardService dashboard;
-    @Autowired
     private JdbcTemplate jdbc;
 
     private static final long ACTOR = 1L;
@@ -112,8 +110,8 @@ class Epic6ChainIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "e6s" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g)
-                VALUES (?, ?, '3 kg', 285000, 3000)""", sToken, pid);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', 285000, 3000, 1000, 20, 15, 10)""", sToken, pid);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 100, 0)", sid);
@@ -220,11 +218,15 @@ class Epic6ChainIntegrationTest extends ApiIntegrationTest {
         assertThat(repurchase.activeTriggersFor(uid)).isEmpty();
         assertThat(pushCount(uid)).isZero();
 
-        // 🔴 看板要能让人一眼看出「是数据没到位」，而不是「机制无效」
-        var snap = dashboard.snapshot(LocalDate.now().minusDays(30), LocalDate.now());
-        assertThat(snap.usersWithFoodPurchase()).isPositive();
-        // 覆盖率的分子分母语义正确（本用例这一位用户没有触发）
-        assertThat(snap.triggersByType()).containsKeys("FOOD_LOW", "DEWORM", "VACCINE");
+        // 🔴 「是数据没到位」而不是「机制无效」：该用户有粮食购买历史（V1.4.2 shop-admin 1.1 看板下线后直接查库）
+        Long foodBuyers = jdbc.queryForObject("""
+                SELECT count(DISTINCT o.user_id) FROM shop_orders o
+                JOIN shop_order_lines l ON l.order_id = o.id
+                JOIN shop_skus s ON s.id = l.sku_id
+                JOIN shop_products p ON p.id = s.product_id
+                WHERE p.category = 'MAKANAN' AND o.user_id = ?
+                """, Long.class, uid);
+        assertThat(foodBuyers).isPositive();
     }
 
     @Test
@@ -255,15 +257,23 @@ class Epic6ChainIntegrationTest extends ApiIntegrationTest {
         buyAndDeliver(uid, sku, 1, 22);
         repurchase.scan(LocalDate.now(ZoneOffset.UTC));
 
-        var snap = dashboard.snapshot(LocalDate.now().minusDays(1), LocalDate.now());
+        // V1.4.2 shop-admin 1.1：看板下线，改直接按 trigger_type 计数（口径同原看板）
+        java.util.Map<String, Long> byType = new java.util.LinkedHashMap<>();
+        for (RepurchaseTriggerType t : RepurchaseTriggerType.values()) {
+            byType.put(t.name(), jdbc.queryForObject(
+                    "SELECT count(*) FROM repurchase_triggers WHERE trigger_type = ? AND user_id = ?",
+                    Long.class, t.name(), uid));
+        }
 
         // ⚠️ 三值都在 —— DEWORM/VACCINE 恒为 0 是范围决策（C-11），看板要能说明这一点
-        assertThat(snap.triggersByType()).containsKeys("FOOD_LOW", "DEWORM", "VACCINE");
-        assertThat(snap.triggersByType().get("DEWORM")).isZero();
-        assertThat(snap.triggersByType().get("VACCINE")).isZero();
-        assertThat(snap.triggersByType().get("FOOD_LOW")).isPositive();
+        assertThat(byType).containsKeys("FOOD_LOW", "DEWORM", "VACCINE");
+        assertThat(byType.get("DEWORM")).isZero();
+        assertThat(byType.get("VACCINE")).isZero();
+        assertThat(byType.get("FOOD_LOW")).isPositive();
         // 归因读的是订单行，不是卡片状态
-        assertThat(snap.linesTotal()).isPositive();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM shop_order_lines l JOIN shop_orders o ON o.id = l.order_id WHERE o.user_id = ?",
+                Long.class, uid)).isPositive();
     }
 
     private long pushCount(long uid) {

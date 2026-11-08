@@ -27,9 +27,10 @@ class AdminShopReportsReadOnlyGuardTest {
 
     /** 三帧各自一个模板 + 一个卡区片段（AC4「不得合成一页多分区」）。 */
     private static final List<String> PAGES = List.of(
-            "shop-repurchase-dashboard.html", "shop-margin.html", "shop-inventory-turnover.html");
+            // V1.4.2 shop-admin Story 1.1 · AB-29：复购看板整页下线，只剩两帧。
+            "shop-margin.html", "shop-inventory-turnover.html");
     private static final List<String> FRAGMENTS = List.of(
-            "fragments/cards-shop-repurchase.html", "fragments/cards-shop-margin.html",
+            "fragments/cards-shop-margin.html",
             "fragments/cards-shop-turnover.html");
 
     private static String read(Path p) throws IOException {
@@ -66,20 +67,21 @@ class AdminShopReportsReadOnlyGuardTest {
     @Test
     @DisplayName("🔴 三条报表路由在 Controller 里只有 @GetMapping，没有任何 POST / 导出端点")
     void theThreeReportRoutesHaveNoWriteOrExportEndpoint() throws IOException {
-        String repurchase = stripped(read(CONTROLLERS.resolve("AdminRepurchaseDashboardController.java")));
+        // V1.4.2 shop-admin Story 1.1 · AB-29：复购看板 Controller 已删除，钉住它不再回来。
+        assertThat(Files.exists(CONTROLLERS.resolve("AdminRepurchaseDashboardController.java"))).isFalse();
         String finance = stripped(read(CONTROLLERS.resolve("AdminShopFinanceController.java")));
 
         // 🔴 判据是 `PostMapping` 而**不是** `@PostMapping`：写成后者的话，
         //    一个 `@org.springframework.web.bind.annotation.PostMapping(...)` 的全限定注解就能绕过去
         //    —— 落地时实测过这一条，带 @ 的断言对全限定写法完全无感。
         //    `RequestMethod.POST` 是 `@RequestMapping(method = …)` 那条同样合法的路径。
-        for (String s : List.of(repurchase, finance)) {
+        for (String s : List.of(finance)) {
             assertThat(s).as("报表 Controller 里出现了 POST 端点 —— 只读报表不该有写入口，"
                             + "而没有 UI 的端点照样能被直接调用，且不会出现在任何页面截图里")
                     .doesNotContain("PostMapping").doesNotContain("RequestMethod.POST");
         }
         // 导出端点也是 GET，所以单看 @GetMapping 数量不够 —— 直接钉路径里不能有 export / csv / xlsx
-        for (String s : List.of(repurchase, finance)) {
+        for (String s : List.of(finance)) {
             assertThat(s).as("报表 Controller 里出现了导出端点（AC4 明确不新增）")
                     .doesNotContain("export").doesNotContain(".csv").doesNotContain(".xlsx");
         }

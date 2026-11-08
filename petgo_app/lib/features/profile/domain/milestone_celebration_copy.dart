@@ -131,6 +131,20 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyEn: "{name}'s personality is unlocked.",
   ),
 
+  // V1.4.2 FR-154（决策日志 R-4）：账号级「第一次关注 / 第一次收藏」，三物种同文案，**不含 {name}**（不拼宠物名）。
+  'C-S19': MilestoneCelebrationCopy(
+    titleId: 'Teman pertama! 🤝',
+    bodyId: 'Kamu mulai mengikuti seseorang — makin seru bareng sesama pecinta anabul.',
+    titleEn: 'First friend! 🤝',
+    bodyEn: 'You followed someone for the first time — more fun with fellow pet lovers.',
+  ),
+  'C-S20': MilestoneCelebrationCopy(
+    titleId: 'Simpan pertama! 🔖',
+    bodyId: 'Postingan pertama sudah tersimpan — buka lagi kapan saja.',
+    titleEn: 'First save! 🔖',
+    bodyEn: 'Your first saved post — come back to it anytime.',
+  ),
+
   // ===== CAT (C) · M 级 =====
   'C-M1': MilestoneCelebrationCopy(
     titleId: 'Petualangan pertama {name} dimulai! 🌏',
@@ -331,6 +345,20 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyEn: "{name}'s personality is unlocked.",
   ),
 
+  // V1.4.2 FR-154（决策日志 R-4）：账号级「第一次关注 / 第一次收藏」，三物种同文案，**不含 {name}**（不拼宠物名）。
+  'D-S19': MilestoneCelebrationCopy(
+    titleId: 'Teman pertama! 🤝',
+    bodyId: 'Kamu mulai mengikuti seseorang — makin seru bareng sesama pecinta anabul.',
+    titleEn: 'First friend! 🤝',
+    bodyEn: 'You followed someone for the first time — more fun with fellow pet lovers.',
+  ),
+  'D-S20': MilestoneCelebrationCopy(
+    titleId: 'Simpan pertama! 🔖',
+    bodyId: 'Postingan pertama sudah tersimpan — buka lagi kapan saja.',
+    titleEn: 'First save! 🔖',
+    bodyEn: 'Your first saved post — come back to it anytime.',
+  ),
+
   // ===== DOG (D) · M 级 =====
   'D-M1': MilestoneCelebrationCopy(
     titleId: 'Jalan-jalan pertama {name} dimulai! 🦮',
@@ -487,6 +515,20 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyId: 'Kepribadian {name} sudah terbuka.',
     titleEn: '{name} knows who they are now! 🔮',
     bodyEn: "{name}'s personality is unlocked.",
+  ),
+
+  // V1.4.2 FR-154（决策日志 R-4）：账号级「第一次关注 / 第一次收藏」，三物种同文案，**不含 {name}**（不拼宠物名）。
+  'G-S12': MilestoneCelebrationCopy(
+    titleId: 'Teman pertama! 🤝',
+    bodyId: 'Kamu mulai mengikuti seseorang — makin seru bareng sesama pecinta anabul.',
+    titleEn: 'First friend! 🤝',
+    bodyEn: 'You followed someone for the first time — more fun with fellow pet lovers.',
+  ),
+  'G-S13': MilestoneCelebrationCopy(
+    titleId: 'Simpan pertama! 🔖',
+    bodyId: 'Postingan pertama sudah tersimpan — buka lagi kapan saja.',
+    titleEn: 'First save! 🔖',
+    bodyEn: 'Your first saved post — come back to it anytime.',
   ),
 
   // ===== OTHER (G) · M 级 =====

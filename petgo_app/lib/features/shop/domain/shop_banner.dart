@@ -1,26 +1,25 @@
-/// Toko 顶部 banner（2026-08-27）。
+/// Toko 首页 banner（2026-08-27 立；v1.4.2 shop Story 8.1 起多张轮播）。
 ///
-/// V1.4.1 契约变更：后端下发 [bannerId]（不可枚举 token，埋点 `banner_id`）与点击跳转
-/// [target]（不可点 / 商品详情 / 品类 / 外部链接）。旧后端不下发 → 不可点、不报 banner_id，与改动前一致。
-/// 「领券」没有对应功能，后端不会下发这一类，这里也不建枚举值。
+/// V1.4.1 契约：后端下发 [bannerId]（不可枚举 token，埋点 `banner_id`）与点击跳转 [target]。
+/// v1.4.2（D-16 / FR-132）：`GET /shop/banners` 下发 `COUPON`（领券）与 `TOKO_HOME`（旧品类跳转改落首页）；
+/// `CATEGORY` 不再出现在新端点，本包按未知值落 [ShopBannerTarget.none]（不可点）。
 library;
 
-import 'shop_product.dart';
-
-/// banner 点击跳转类型（后端 `BannerTargetType`）。未知值一律按 [none]（不可点）—— 新后端加了新类型，
-/// 旧包不认识就别让它可点，否则点了没反应。
+/// banner 点击跳转类型（后端 `BannerTargetType` 的新端点下发值）。未知值一律按 [none]（不可点）——
+/// 新后端加了新类型，旧包不认识就别让它可点，否则点了没反应。
 enum ShopBannerTarget {
-  none('NONE', null),
+  none('NONE', 'none'),
   product('PRODUCT', 'product_detail'),
-  category('CATEGORY', 'category_list'),
+  coupon('COUPON', 'coupon'),
+  tokoHome('TOKO_HOME', 'toko_home'),
   external('EXTERNAL', 'external_link');
 
   const ShopBannerTarget(this.wire, this.analytics);
 
   final String wire;
 
-  /// 埋点 `target_type` 取值（snake_case 词表）；[none] 不可点，没有点击事件。
-  final String? analytics;
+  /// 埋点 `target_type` 取值（snake_case 词表）；[none] 不可点，实际不会产生点击事件。
+  final String analytics;
 
   static ShopBannerTarget fromWire(String? raw) {
     for (final t in values) {
@@ -37,6 +36,9 @@ enum ShopBannerTarget {
 /// 从 0 高度弹开把整页内容推下去。
 const double kShopBannerFallbackAspect = 3.0;
 
+/// 轮播最多张数（D-16；服务端已限，这里兜底）。
+const int kShopBannerMax = 6;
+
 class ShopBanner {
   const ShopBanner({
     required this.imageUrl,
@@ -51,26 +53,26 @@ class ShopBanner {
   final String? bannerId;
   final ShopBannerTarget target;
 
-  /// 跳转目标值：商品 token / 品类字面量 / https 链接。
+  /// 跳转目标值：商品 token / 券模板 token / https 链接；`TOKO_HOME` / `NONE` 为 null。
   final String? targetValue;
 
-  /// 是否可点：类型可识别且目标值非空；外链额外要求 https（后台已校验，这里兜底）；
-  /// 品类要求本包认识（后端新增了品类、旧包不认识 → 不可点，免得点了没反应却记一次点击）。
+  /// 是否可点：
+  /// - [ShopBannerTarget.tokoHome]：恒可点（留在首页，只记一次点击；后端不下发值）；
+  /// - 商品 / 领券：目标值非空；外链额外要求 https（后台已校验，这里兜底）；
+  /// - [ShopBannerTarget.none]：不可点。
   bool get tappable {
     final v = targetValue ?? '';
-    if (v.isEmpty) return false;
     return switch (target) {
       ShopBannerTarget.none => false,
-      ShopBannerTarget.external => (Uri.tryParse(v)?.scheme ?? '') == 'https',
-      ShopBannerTarget.category => ShopCategory.fromApi(v) != null,
-      ShopBannerTarget.product => true,
+      ShopBannerTarget.tokoHome => true,
+      ShopBannerTarget.external => v.isNotEmpty && (Uri.tryParse(v)?.scheme ?? '') == 'https',
+      ShopBannerTarget.product || ShopBannerTarget.coupon => v.isNotEmpty,
     };
   }
 
   /// 公开桶 CDN 全 URL。
   ///
-  /// 🔴 后端保证它非空：拼不出 URL 时后端直接回 204（当作"没有 banner"），
-  /// 不会下发一个 imageUrl 为 null 的空壳。所以这里不必再判一次 null。
+  /// 🔴 后端在单一来源里已剔除拼不出 URL 的 banner；仓库层仍把空 URL 的条目丢掉兜底。
   final String imageUrl;
 
   /// 原始像素宽高；null = 未知（手填 objectKey 的兜底路径）。

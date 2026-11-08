@@ -4,6 +4,10 @@ import com.tailtopia.admin.pin.dto.PinDetail;
 import com.tailtopia.admin.pin.dto.PinRow;
 import com.tailtopia.admin.pin.dto.PinSummary;
 import com.tailtopia.admin.pin.dto.PinnableContentRow;
+import com.tailtopia.admin.pin.dto.TopicPinPreview;
+import com.tailtopia.admin.pin.dto.TopicPinRow;
+import com.tailtopia.admin.topic.service.AdminTopicStore;
+import com.tailtopia.admin.topic.service.TopicView;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.content.domain.ContentPin;
 import com.tailtopia.content.domain.ContentPost;
@@ -11,7 +15,9 @@ import com.tailtopia.content.domain.PinObjectType;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.content.service.ContentDisplayability;
 import com.tailtopia.content.service.ContentPinService;
+import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.schedule.SchedulePhase;
+import com.tailtopia.topic.domain.TopicStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -47,15 +53,146 @@ public class AdminContentPinService {
     /** 抽屉里的作者昵称（Story 7.3 · AC3 顶置内容预览）。 */
     private final com.tailtopia.auth.service.AccountQueryService accountQuery;
     private final PinnableContentPicker picker;
+    /** 话题页坑位（V1.4.2 Story 6.2）：话题存在与状态校验、G1a 话题列表。 */
+    private final AdminTopicStore topics;
+
+    /** 表单坑位参数：首页 Feed（库内值同名）。 */
+    public static final String SLOT_PARAM_HOME_FEED = ContentPin.SLOT_HOME_FEED;
+    /** 表单坑位参数：话题页（库内值由服务端按 D-6 拼成 {@code TOPIC:{topicId}}，绝不收客户端直传的 {@code TOPIC:…}）。 */
+    public static final String SLOT_PARAM_TOPIC_PAGE = "TOPIC_PAGE";
+
+    /** 话题抽屉区块「排期中」最多条数（AC8.1）。 */
+    public static final int PREVIEW_PENDING_MAX = 3;
 
     public AdminContentPinService(ContentPinService pins, ContentPostRepository posts,
             AdminAuditService audit, com.tailtopia.auth.service.AccountQueryService accountQuery,
-            PinnableContentPicker picker) {
+            PinnableContentPicker picker, AdminTopicStore topics) {
         this.pins = pins;
         this.posts = posts;
         this.audit = audit;
         this.accountQuery = accountQuery;
         this.picker = picker;
+        this.topics = topics;
+    }
+
+    // ================================================================ 话题页坑位（V1.4.2 Story 6.2）
+
+    /**
+     * 表单坑位参数 → 库内坑位值（AC4.3 / AC5，D-6）。
+     * {@code HOME_FEED} → {@code HOME_FEED}；{@code TOPIC_PAGE} + 可配置话题（ACTIVE / HIDDEN）→
+     * {@link ContentPin#topicSlot}；话题不存在 / 已禁用 → 422 {@code admin.err.pins.topicUnavailable}；
+     * 其他任意字符串（含原样提交的 {@code TOPIC:5}、空串）→ 422 {@code admin.err.pins.slotInvalid}。
+     */
+    @Transactional(readOnly = true)
+    public String resolveSlot(String slotParam, Long topicId) {
+        if (SLOT_PARAM_HOME_FEED.equals(slotParam)) {
+            return ContentPin.SLOT_HOME_FEED;
+        }
+        if (SLOT_PARAM_TOPIC_PAGE.equals(slotParam)) {
+            if (topicId == null) {
+                throw topicUnavailable();
+            }
+            return ContentPin.topicSlot(pinnableTopic(topicId)
+                    .orElseThrow(AdminContentPinService::topicUnavailable).id());
+        }
+        throw AppException.validation("坑位不正确").code("admin.err.pins.slotInvalid");
+    }
+
+    /** 库内坑位值 → 话题 id（{@code TOPIC:} + 数字）；首页 Feed / 非法值 → {@code null}。 */
+    public static Long topicIdOf(String slot) {
+        if (slot == null || !slot.startsWith(ContentPin.SLOT_TOPIC_PREFIX)) {
+            return null;
+        }
+        String rest = slot.substring(ContentPin.SLOT_TOPIC_PREFIX.length());
+        if (!rest.matches("\\d{1,18}")) {
+            return null;
+        }
+        return Long.parseLong(rest);
+    }
+
+    /** 可配置话题页顶置的话题（ACTIVE / HIDDEN）；不存在或已禁用 → empty（AC5）。 */
+    @Transactional(readOnly = true)
+    public java.util.Optional<TopicView> pinnableTopic(long topicId) {
+        return topics.findById(topicId).filter(t -> t.status() != TopicStatus.DISABLED);
+    }
+
+    /** G1b 用：同上，但不可配置 → 404（AC3.3：DISABLED 与不存在同样 404）。 */
+    @Transactional(readOnly = true)
+    public TopicView requirePinnableTopic(long topicId) {
+        return pinnableTopic(topicId).orElseThrow(() -> AppException.notFound("话题不存在")
+                .code("admin.err.topics.notFound"));
+    }
+
+    /** 某排期所在话题 id（非 htmx 写操作的重定向回 G1b 用）；不存在 / 首页 Feed → {@code null}。 */
+    @Transactional(readOnly = true)
+    public Long topicIdOfPin(long pinId) {
+        return pins.byId(pinId).map(p -> topicIdOf(p.getSlot())).orElse(null);
+    }
+
+    /** 一页 G1a 行 + 有无下一页。 */
+    public record TopicRowsPage(List<TopicPinRow> rows, boolean hasNext, int page) {
+    }
+
+    /**
+     * G1a（AC2）：一次查当页话题（ACTIVE / HIDDEN、搜索、热度倒序、20 条）+ 一次查这些坑位的全部排期，
+     * Java 内算「当前生效（取 1 条）」与「排期中条数（未结束且未开始）」—— 判定走 {@link #list} 同一份 PinRow。
+     */
+    @Transactional(readOnly = true)
+    public TopicRowsPage topicRows(String q, int page, Instant now) {
+        AdminTopicStore.TopicPage found = topics.pinnablePage(q, page);
+        List<String> slots = found.rows().stream().map(t -> ContentPin.topicSlot(t.id())).toList();
+        Map<String, List<PinRow>> bySlot = toRows(pins.listBySlots(slots), now).stream()
+                .collect(Collectors.groupingBy(PinRow::slot));
+        List<TopicPinRow> rows = found.rows().stream().map(t -> {
+            List<PinRow> mine = bySlot.getOrDefault(ContentPin.topicSlot(t.id()), List.of());
+            return new TopicPinRow(t, activeOf(mine), mine.stream().filter(AdminContentPinService::pending).count());
+        }).toList();
+        return new TopicRowsPage(rows, found.hasNext(), found.page());
+    }
+
+    /** 话题抽屉区块（AC8.1）：生效 1 + 排期中最多 {@link #PREVIEW_PENDING_MAX} 条（按开始时间升序）。 */
+    @Transactional(readOnly = true)
+    public TopicPinPreview topicPinPreview(long topicId, Instant now) {
+        List<PinRow> all = list(ContentPin.topicSlot(topicId), now);
+        List<PinRow> pending = all.stream().filter(AdminContentPinService::pending)
+                .sorted(java.util.Comparator.comparing(PinRow::startsAt)
+                        .thenComparing(java.util.Comparator.comparingLong(PinRow::id)))
+                .limit(PREVIEW_PENDING_MAX)
+                .toList();
+        return new TopicPinPreview(activeOf(all), pending);
+    }
+
+    /** 生效中：未收手且处于窗口内；重叠校验保证至多一条，仍取开始最晚的一条兜底（同 {@code findActiveOne}）。 */
+    private static PinRow activeOf(List<PinRow> rows) {
+        return rows.stream().filter(r -> !r.ended() && r.phase() == SchedulePhase.ACTIVE)
+                .max(java.util.Comparator.comparing(PinRow::startsAt)
+                        .thenComparing(java.util.Comparator.comparingLong(PinRow::id)))
+                .orElse(null);
+    }
+
+    /** 排期中：未收手（被提前结束的待生效不算）且尚未开始。 */
+    private static boolean pending(PinRow r) {
+        return !r.ended() && r.phase() == SchedulePhase.PENDING;
+    }
+
+    /**
+     * 话题坑位写入前，在<b>同一事务</b>里对话题行加 {@code FOR SHARE} 并复核状态（复审 a）：
+     * 关掉「resolveSlot 通过 → 运营禁用话题 → 本排期才落库」的窗口 —— 否则禁用时的 {@code terminateForSlot}
+     * 看不到这条，话题恢复后它会自己重新生效。DISABLED / 行不存在 → 422 {@code topicUnavailable}。
+     * 首页 Feed（{@code topicId == null}）不加锁。
+     */
+    private void lockPinnableTopic(Long topicId) {
+        if (topicId == null) {
+            return;
+        }
+        TopicStatus st = topics.lockStatusForShare(topicId).orElse(null);
+        if (st == null || st == TopicStatus.DISABLED) {
+            throw topicUnavailable();
+        }
+    }
+
+    private static AppException topicUnavailable() {
+        return AppException.validation("该话题已禁用或不存在，不能配置顶置").code("admin.err.pins.topicUnavailable");
     }
 
     /** 一页排期 + 有无下一页（列表按生效时间倒序）。 */
@@ -154,7 +291,11 @@ public class AdminContentPinService {
     /** 某坑位的全部排期（含历史），已带 phase 与「内容失效」标记。 */
     @Transactional(readOnly = true)
     public List<PinRow> list(String slot, Instant now) {
-        List<ContentPin> all = pins.listBySlot(slot);
+        return toRows(pins.listBySlot(slot), now);
+    }
+
+    /** 排期 → 带 phase 与「内容失效」标记的行（内容整批一次取）。 */
+    private List<PinRow> toRows(List<ContentPin> all, Instant now) {
         List<Long> contentIds = all.stream()
                 .map(ContentPin::getContentId)
                 .filter(java.util.Objects::nonNull)
@@ -187,10 +328,31 @@ public class AdminContentPinService {
         return picker.page(keyword, page);
     }
 
+    /** 同上；{@code topicId} 非空 = 只列该话题下的帖子（Story 6.2 · AC4.2）。 */
+    @Transactional(readOnly = true)
+    public List<PinnableContentRow> pickable(String keyword, int page, Long topicId) {
+        return picker.page(keyword, page, topicId);
+    }
+
     /** @return 新排期 id（Story 7.3：抽屉建完要立刻打开它） */
     @Transactional
     public long createContentPin(long adminId, String slot, long contentId,
             Instant startsAt, Instant endsAt) {
+        Long topicId = topicIdOf(slot);
+        lockPinnableTopic(topicId);
+        if (topicId != null) {
+            // 🔴 服务端权威（Story 6.2 · AC4.3）：话题页内容顶置的帖子必须挂在该话题下且可公开展示、
+            //    作者未注销且 ACTIVE（isInTopic 内含，复审 b，同 4.2 话题列表口径），
+            //    否则 App 话题页会出现「点进去是别的话题的帖 / 空的置顶」。推广卡片不受话题限制。
+            boolean ok = posts.findById(contentId)
+                    .filter(PinnableContentPicker::pinnable)
+                    .filter(p -> posts.isInTopic(p.getId(), topicId))
+                    .isPresent();
+            if (!ok) {
+                throw AppException.validation("所选内容不属于该话题，或已不可公开展示")
+                        .code("admin.err.pins.notInTopic");
+            }
+        }
         ContentPin saved = pins.schedule(ContentPin.ofContent(slot, contentId, startsAt, endsAt));
         audit.record(adminId, "CONTENT_PIN_CREATE", "content_pin", String.valueOf(saved.getId()),
                 "slot=" + slot + " contentId=" + contentId);
@@ -201,6 +363,7 @@ public class AdminContentPinService {
     @Transactional
     public long createPromoPin(long adminId, String slot, String imageUrl, String title,
             String linkUrl, Instant startsAt, Instant endsAt) {
+        lockPinnableTopic(topicIdOf(slot));
         ContentPin saved = pins.schedule(
                 ContentPin.ofPromo(slot, imageUrl, title, linkUrl, startsAt, endsAt));
         audit.record(adminId, "CONTENT_PIN_CREATE", "content_pin", String.valueOf(saved.getId()),

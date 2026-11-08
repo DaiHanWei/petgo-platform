@@ -23,12 +23,15 @@ public class UserHideRelationService {
     private final AccountQueryService accountQuery;
     /** V1.3.4 follow Story 1.2：拉黑同事务取消 holder → target 的关注（AD-5）。 */
     private final FollowService followService;
+    /** V1.4.2 social-topic Story 1.1：拉黑同事务取消 holder 对 target 名下所有宠物的追更（D-11）。 */
+    private final PetFollowService petFollowService;
 
     public UserHideRelationService(UserHideRelationRepository relations,
-            AccountQueryService accountQuery, FollowService followService) {
+            AccountQueryService accountQuery, FollowService followService, PetFollowService petFollowService) {
         this.relations = relations;
         this.accountQuery = accountQuery;
         this.followService = followService;
+        this.petFollowService = petFollowService;
     }
 
     /**
@@ -50,6 +53,9 @@ public class UserHideRelationService {
         // ⚠️ 重复拉黑也照常执行一次 —— 删 0 行即无副作用；不发任何通知。
         // hideByReport / unblock 刻意不碰关注（REPORT 不影响关注，解除拉黑不恢复）。
         followService.removeOnBlock(holderId, targetId);
+        // V1.4.2 social-topic Story 1.1（D-11）：同一事务删我对他名下所有宠物的追更、对应计数 −1；
+        // 他对我宠物的追更保留。同样不限流、不发事件；hideByReport / unblock 不碰追更。
+        petFollowService.removeOnBlock(holderId, targetId);
     }
 
     /**

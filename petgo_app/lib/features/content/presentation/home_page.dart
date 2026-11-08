@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/feature_flags.dart';
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../features/auth/domain/auth_guard.dart';
@@ -32,6 +33,10 @@ import 'publish_compose_page.dart';
 import 'report_sheet.dart';
 import 'social_tab.dart';
 import '../../notify/data/notification_repository.dart';
+import '../../topic/domain/topic.dart' show TopicEntrySource;
+import '../../topic/presentation/topic_page.dart';
+import '../../topic/presentation/topic_providers.dart';
+import '../../topic/presentation/widgets/home_topic_row.dart';
 
 /// 首页 Beranda（TailTopia Prototype 全面换肤）。
 ///
@@ -279,6 +284,8 @@ class HomePage extends ConsumerWidget {
             //    于是**断网启动**那一次失败会让整行永久消失，下拉刷新也救不回来，只能杀进程
             //    （code-review 2026-09-15 实测）。
             ref.invalidate(petRecommendationsProvider);
+            // V1.4.2 Story 4.3 · AC4.2：首页话题行同理（关了自动重试，漏刷 = 断网首启后整行永久消失）。
+            ref.invalidate(homeTopicRowProvider);
             await ref.read(feedProvider.notifier).refresh();
           },
           onTapItem: (item) => context.push('/content/${item.id}'),
@@ -312,6 +319,8 @@ class HomePage extends ConsumerWidget {
             onBlocked: onAuthorHidden(ref, userId),
             onReported: onAuthorHidden(ref, userId),
           ),
+          // V1.4.2 social-topic Story 4.4：点正文 #话题 → 话题页（topic_page_viewed.source = feed_card）。
+          onTapTopic: (name) => context.push(TopicPage.routeFor(name, from: TopicEntrySource.feedCard)),
           // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
           // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。
           onCommentItem: (item) =>
@@ -374,12 +383,16 @@ class _BerandaTop extends StatelessWidget {
         // `SizedBox.shrink()`，这里不留占位。
         const AppUpdateBanner(),
         // 场所入口行（Story 1.1 AC7）：在分类 chips 之上。
-        const PlaceEntryRow(),
+        // V1.4.2 FR-165（D-22）：入口暂时隐藏、组件保留；宠物横滑行直接上移，无空位。
+        if (kPlaceEntryEnabled) const PlaceEntryRow(),
         // 宠物横滑行（Story 4.4 AC1/AC2）：在场所入口行**之下**、分类 chips **之上**。
         // 🛡 游客 / 池子为空 / 取不到 → 整行不渲染（AC3）。判断全在组件内部，
         //    这里**不留占位** —— 留一个空 SizedBox 会让下一个人以为它没接上。
         const PetRecommendationStrip(),
         FeedTabRow(selected: selectedCategory, labels: labels, onSelected: onSelectCategory),
+        // 话题行（V1.4.2 Story 4.3 · AC4 · UI C1）：分类标签之后、顶置卡之前；只在 Discover（本组件只在
+        // Discover 分支渲染）；随 Feed 滚动不吸顶；0 个 / 取不到 → 组件内部整行不渲染、不留占位。
+        const HomeTopicRow(),
         const SizedBox(height: 8),
       ],
     );

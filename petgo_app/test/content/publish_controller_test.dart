@@ -8,6 +8,7 @@ import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 class _FakeRepo implements ContentRepository {
   ContentType? lastType;
@@ -24,7 +25,7 @@ class _FakeRepo implements ContentRepository {
   Object? throwOnPublish;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -48,7 +49,7 @@ class _FakeRepo implements ContentRepository {
     lastEventDate = eventDate;
     lastIdem = idempotencyKey;
     if (throwOnPublish != null) throw throwOnPublish!;
-    return 123;
+    return const PublishedPost(id: 123);
   }
 }
 

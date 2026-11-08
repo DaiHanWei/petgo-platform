@@ -14,23 +14,25 @@ import org.junit.jupiter.api.Test;
 class MilestoneCatalogTest {
 
     @Test
-    void catHasThirtyThreeMilestonesSplit18_10_5() {
+    void catHasThirtyFiveMilestonesSplit20_10_5() {
         // 7.3：聚合里程碑 Lulus Pemula（C-S16）令 S 级 15→16、总 30→31。
         // V1.3.4 FR-126 +2（C-S17 打卡 / C-S18 性格测试）：S 级 16→18、总 31→33。
-        assertLevels(PetType.CAT, 18, 10, 5, 33);
+        // V1.4.2 FR-154 +2（C-S19 关注 / C-S20 收藏）：S 级 18→20、总 33→35。
+        assertLevels(PetType.CAT, 20, 10, 5, 35);
     }
 
     @Test
-    void dogHasThirtyThreeMilestonesSplit18_10_5() {
-        // V1.3.4 FR-126 +2（D-S17 / D-S18）。
-        assertLevels(PetType.DOG, 18, 10, 5, 33);
+    void dogHasThirtyFiveMilestonesSplit20_10_5() {
+        // V1.3.4 FR-126 +2（D-S17 / D-S18）；V1.4.2 FR-154 +2（D-S19 / D-S20）。
+        assertLevels(PetType.DOG, 20, 10, 5, 35);
     }
 
     @Test
-    void otherHasEighteenMilestonesSplit11_4_3() {
+    void otherHasTwentyMilestonesSplit13_4_3() {
         // 7.3：OTHER 的 Lulus Pemula 是 G-S9，S 级 8→9、总 15→16。
         // V1.3.4 FR-126 +2（G-S10 / G-S11）：S 级 9→11、总 16→18。
-        assertLevels(PetType.OTHER, 11, 4, 3, 18);
+        // V1.4.2 FR-154 +2（G-S12 / G-S13，决策日志 B1）：S 级 11→13、总 18→20。
+        assertLevels(PetType.OTHER, 13, 4, 3, 20);
     }
 
     @Test
@@ -42,9 +44,10 @@ class MilestoneCatalogTest {
             assertThat(MilestoneCatalog.isLulusPemula(code)).isTrue();
             assertThat(lp.level()).as("%s Lulus Pemula is S level", type).isEqualTo(MilestoneLevel.S);
             assertThat(lp.trigger()).isEqualTo(MilestoneTriggerType.SYSTEM_AUTO);
-            // sortOrder 不变（V1.3.4 前的末位；V1.3.4 起其后追加打卡 / 性格测试两条，Lulus 成为倒数第 3）。
+            // sortOrder 不变（V1.3.4 前的末位；V1.3.4 起其后追加打卡 / 性格测试两条、V1.4.2 再追加关注 / 收藏两条，
+            // Lulus 成为倒数第 5）。
             assertThat(lp.sortOrder()).isEqualTo(type == PetType.OTHER ? 16 : 31);
-            assertThat(list.get(list.size() - 3).code()).isEqualTo(code);
+            assertThat(list.get(list.size() - 5).code()).isEqualTo(code);
         }
         assertThat(MilestoneCatalog.lulusPemulaCode(PetType.CAT)).isEqualTo("C-S16");
         assertThat(MilestoneCatalog.lulusPemulaCode(PetType.DOG)).isEqualTo("D-S16");
@@ -62,8 +65,9 @@ class MilestoneCatalogTest {
         for (Object[] row : expected) {
             PetType type = (PetType) row[0];
             List<MilestoneDefinition> list = MilestoneCatalog.forType(type);
-            MilestoneDefinition checkin = list.get(list.size() - 2);
-            MilestoneDefinition tailsonality = list.get(list.size() - 1);
+            // V1.4.2 起其后再追加账号级两条（见下一个用例），故取倒数第 4 / 第 3。
+            MilestoneDefinition checkin = list.get(list.size() - 4);
+            MilestoneDefinition tailsonality = list.get(list.size() - 3);
 
             assertThat(checkin.code()).as("%s checkin code", type).isEqualTo(row[1]);
             assertThat(checkin.sortOrder()).isEqualTo(row[2]);
@@ -83,6 +87,45 @@ class MilestoneCatalogTest {
             assertThat(MilestoneCatalog.isNewbiePrereq(code)).as("%s 不是新手前置", code).isFalse();
             assertThat(MilestoneCatalog.isLulusPemula(code)).isFalse();
         }
+    }
+
+    /**
+     * V1.4.2 FR-154（D-4 / 决策日志 B1）：账号级两条追加在清单末尾，关注在前、收藏在后；
+     * 通用是 G-S12 / G-S13（不是 S19 / S20）；不纳入新手任务（1.5.0 才计入）。
+     */
+    @Test
+    void v142AccountLevelFollowAndCollectAppendedLast() {
+        Object[][] expected = {
+            {PetType.CAT, "C-S19", 34, "C-S20", 35},
+            {PetType.DOG, "D-S19", 34, "D-S20", 35},
+            {PetType.OTHER, "G-S12", 19, "G-S13", 20},
+        };
+        for (Object[] row : expected) {
+            PetType type = (PetType) row[0];
+            List<MilestoneDefinition> list = MilestoneCatalog.forType(type);
+            MilestoneDefinition follow = list.get(list.size() - 2);
+            MilestoneDefinition collect = list.get(list.size() - 1);
+
+            assertThat(follow.code()).as("%s follow code", type).isEqualTo(row[1]);
+            assertThat(follow.sortOrder()).isEqualTo(row[2]);
+            assertThat(follow.level()).isEqualTo(MilestoneLevel.S);
+            assertThat(follow.trigger()).isEqualTo(MilestoneTriggerType.SYSTEM_AUTO);
+            assertThat(follow.titleZh()).isEqualTo("第一次关注一个人");
+            assertThat(follow.titleId()).isEqualTo("Teman pertama");
+
+            assertThat(collect.code()).as("%s collect code", type).isEqualTo(row[3]);
+            assertThat(collect.sortOrder()).isEqualTo(row[4]);
+            assertThat(collect.level()).isEqualTo(MilestoneLevel.S);
+            assertThat(collect.trigger()).isEqualTo(MilestoneTriggerType.SYSTEM_AUTO);
+            assertThat(collect.titleZh()).isEqualTo("第一次收藏内容");
+            assertThat(collect.titleId()).isEqualTo("Simpan pertama");
+        }
+        for (String code : List.of("C-S19", "C-S20", "D-S19", "D-S20", "G-S12", "G-S13")) {
+            assertThat(MilestoneCatalog.isNewbiePrereq(code)).as("%s 不是新手前置", code).isFalse();
+            assertThat(MilestoneCatalog.isLulusPemula(code)).isFalse();
+        }
+        assertThat(MilestoneCatalog.byCode("G-S19")).isNull();
+        assertThat(MilestoneCatalog.byCode("G-S20")).isNull();
     }
 
     @Test

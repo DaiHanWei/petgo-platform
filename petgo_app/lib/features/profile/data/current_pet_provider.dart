@@ -148,6 +148,14 @@ Future<int?> readRequestPetId(WidgetRef ref) async {
   return ref.read(requestPetIdProvider.future);
 }
 
+/// [readRequestPetId] 的 [ProviderContainer] 版（V1.4.2 social-topic Story 3.2 · D-21）：语义逐条相同。
+///
+/// 给「依赖在弹出时取好」的调用方用（庆祝层按钮）：宿主页的 `WidgetRef` 可能已销毁，不能再在它上面 read。
+Future<int?> readRequestPetIdFrom(ProviderContainer c) async {
+  if (!c.exists(effectivePetIdProvider)) return c.read(currentPetIdProvider);
+  return c.read(requestPetIdProvider.future);
+}
+
 /// 同步窥视已解析的当前宠物 id（不触发请求、不等待）。
 ///
 /// 已解析且不在重取中 → 它；否则（未建立 / 还在取 / 失败 / 换账号重取中）→ 用户选过的那只（可能 null =

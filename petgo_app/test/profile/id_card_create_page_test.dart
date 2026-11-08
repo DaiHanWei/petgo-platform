@@ -16,6 +16,8 @@ import 'package:tailtopia/features/profile/domain/id_card_style.dart';
 import 'package:tailtopia/features/profile/domain/pet_breeds.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/hd_paywall_sheet.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/id_card_low_res_cover.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/id_card_watermark.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/ktp_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/passport_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/student_variant_card.dart';
@@ -184,6 +186,14 @@ void main() {
       expect(find.byKey(const ValueKey('idCardStyleTab_0')), findsNothing);
       expect(find.byType(front), findsOneWidget, reason: '$style');
     }
+  });
+
+  // V1.4.2「KTP 高清防绕过」§3.1：建卡预览一律低清 + 新水印（这里的卡都还没付费）。
+  testWidgets('建卡预览：低清遮罩 + 水印，矢量卡面仍在（遮罩只盖在上面）', (tester) async {
+    await _pump(tester, IdCardStyle.ktp, repo: _Repo());
+    expect(find.byType(IdCardLowResCover), findsOneWidget);
+    expect(find.byType(IdCardWatermark), findsOneWidget);
+    expect(find.byType(KtpCardFront), findsOneWidget);
   });
 
   testWidgets('五套表单字段：出现 / 不出现；任何卡款都没有一句话介绍', (tester) async {

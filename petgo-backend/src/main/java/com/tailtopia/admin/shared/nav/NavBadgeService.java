@@ -32,7 +32,9 @@ public class NavBadgeService {
 
     /** 队列 key = catalog 页面 key（也是模板里 data-badge / id 的后缀）。 */
     public static final List<String> QUEUES = List.of(
-            "manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies");
+            "manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies",
+            // V1.4.2 shop-admin Story 5.3 · AD-2：待办中心「商城待办」两项（页面仍归商城组，计数并入本组角标）
+            "shop-order-exceptions", "shop-refund-payouts");
 
     /**
      * 空态去向的<b>关联组</b>（bug 20260923-554）：空态只推荐与当前页同一职责的队列，不再把全部队列混着列。
@@ -40,7 +42,7 @@ public class NavBadgeService {
      * <li>内容治理：人工复核 ↔ 被举报用户；</li>
      * <li>问诊 / 客服 / 退款：问诊异常 ↔ 客服工单 ↔ 退款；</li>
      * <li>暖贴跟进：单独一组；</li>
-     * <li>商城售后：退货审核 ↔ 异常订单（二者目前都不在角标队列里，故空态不带去向）。</li>
+     * <li>商城售后：退货审核 ↔ 异常订单 ↔ 退款打款（V1.4.2 shop-admin 5.3：后两者进了角标队列，空态会带去向；退货审核仍不在队列）。</li>
      * </ul>
      * ⚠️ 只影响空态去向；侧栏角标 {@link #counts} 不受分组影响。不在任何组里的 key 保持原行为（列出全部其他队列）。
      */
@@ -48,7 +50,7 @@ public class NavBadgeService {
             Set.of("manual-review", "tickets"),
             Set.of("anomalies", "support-tickets", "refunds"),
             Set.of("warm-replies"),
-            Set.of("shop-returns", "shop-order-exceptions"));
+            Set.of("shop-returns", "shop-order-exceptions", "shop-refund-payouts"));
 
     /** 空态「其他队列还有 N 条」的去向链接（Story 2.9 AC3）。 */
     public record QueueLink(String key, String route, String navKey, long count) {
@@ -61,9 +63,17 @@ public class NavBadgeService {
     private final AdminRefundQueryService refunds;
     private final WarmReplyQueueService warmReplies;
 
+    /** V1.4.2 shop-admin Story 5.3：商城待办计数源。 */
+    private final com.tailtopia.admin.shop.service.AdminShopOrderExceptionService shopExceptions;
+    private final com.tailtopia.admin.shop.service.AdminShopRefundPayoutService shopPayouts;
+
     public NavBadgeService(ManualReviewWorkbenchService manualReview, TicketsWorkbenchService tickets,
             ConsultAnomalyService anomalies, AdminSupportTicketQueryService supportTickets,
-            AdminRefundQueryService refunds, WarmReplyQueueService warmReplies) {
+            AdminRefundQueryService refunds, WarmReplyQueueService warmReplies,
+            com.tailtopia.admin.shop.service.AdminShopOrderExceptionService shopExceptions,
+            com.tailtopia.admin.shop.service.AdminShopRefundPayoutService shopPayouts) {
+        this.shopExceptions = shopExceptions;
+        this.shopPayouts = shopPayouts;
         this.manualReview = manualReview;
         this.tickets = tickets;
         this.anomalies = anomalies;
@@ -133,6 +143,9 @@ public class NavBadgeService {
             case "refunds" -> refunds::pendingCount;
             // A9（Story 4.4）：暖贴回复跟进待处理数
             case "warm-replies" -> warmReplies::pendingCount;
+            // V1.4.2 shop-admin 5.3：异常订单 = 待处理队列条数；退款打款 = 待打款 + 打款失败 + 超 7 天未选（均不含注销用户）
+            case "shop-order-exceptions" -> shopExceptions::queueCount;
+            case "shop-refund-payouts" -> shopPayouts::badgeCount;
             default -> () -> 0L;
         };
     }

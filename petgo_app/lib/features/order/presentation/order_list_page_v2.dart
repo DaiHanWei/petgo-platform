@@ -12,30 +12,39 @@
 /// 用户端**混排、按时间倒序、不分业务 Tab** —— 一个人不会按「这是问诊还是买东西」
 /// 去找自己的订单，他只记得「前几天那一单」。
 ///
-/// ## ⚠️ 设计稿的状态 Tab 未实现，用的是既有的**类型**筛选
+/// ## 一级 = 类型筛选；「Belanja」下二级 = 电商状态分组（v1.4.2 shop Story 9.1）
 ///
-/// 设计稿画的是 `Semua / Belum bayar / Dikirim / Selesai`（按状态）。
-/// 但列表接口 `GET /orders` **只支持 `type` 筛选，没有状态筛选**，
-/// 而列表是游标分页的 —— 在端上按状态过滤当前页会造出「这个 Tab 是空的」的假象，
-/// 而真相是符合条件的订单在下一页。那比不做这个 Tab 更糟。
-///
-/// 故此处保留设计稿的 Tab 行**样式**，承载既有的类型筛选（Semua / Konsultasi /
-/// PawCoin / Lainnya）。要做状态 Tab 需要后端加筛选参数。
+/// 通用 `GET /orders` 只支持 `type` 筛选，故一级标签仍是类型（Semua / Konsultasi / PawCoin / Belanja）。
+/// 只有选中「Belanja」时出现二级标签 `Semua / Belum bayar / Dikemas / Dikirim / Selesai / Dibatalkan`，
+/// 数据改走 6.2 的 `GET /me/shop-orders?group=`（服务端按 `displayStatus` 分组、游标分页 ——
+/// 不在端上按状态过滤当前页，那会造出「这个 Tab 是空的」的假象）。卡片用 [ShopOrderCard]。
+/// 「Semua」混排仍走 `/orders` + [OrderCardV2]，不受影响。
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
+import '../../../core/theme/colors.dart';
 import '../../../core/theme/shop_tokens.dart';
+import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
+import '../../shop/coupon/data/coupon_repository.dart';
+import '../../shop/data/shop_order_repository.dart';
+import '../../shop/domain/shop_order_detail.dart' show ShopPaymentFailure;
+import '../../shop/domain/shop_order_summary.dart';
 import '../../shop/domain/shop_product.dart' show formatIdr;
+import '../../shop/presentation/shop_payment_launcher.dart';
 import '../../shop/presentation/widgets/shop_buttons.dart';
 import '../../shop/presentation/widgets/shop_decor.dart';
 import '../../shop/presentation/widgets/shop_surface.dart';
+import '../../support/presentation/support_whatsapp_button.dart';
 import '../domain/order_summary.dart';
 import 'order_l10n.dart';
 import 'order_list_controller.dart';
+import 'widgets/shop_order_card.dart';
 
 class OrderListPageV2 extends ConsumerWidget {
   const OrderListPageV2({super.key});
@@ -52,7 +61,11 @@ class OrderListPageV2 extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(orderListProvider);
-    final current = async.maybeWhen(data: (s) => s.filter, orElse: () => null);
+    final notifier = ref.read(orderListProvider.notifier);
+    // 加载中 state 无值 → 用控制器记住的筛选，标签不闪回「全部」。
+    final current = async.value?.filter ?? notifier.currentFilter;
+    final shopGroup = async.value?.shopGroup ?? notifier.currentShopGroup;
+    final isShop = current == OrderType.ecommerce;
 
     return Scaffold(
       backgroundColor: ShopColors.bg,
@@ -71,20 +84,31 @@ class OrderListPageV2 extends ConsumerWidget {
           // 分享奖励 / 新手任务 / 消费等入账出账在 PawCoin 明细页（/me/pawcoin），这里给一条明确的入口，
           // 免得用户以为奖励没到账。
           if (current == OrderType.pawcoinTopup) _PawcoinHistoryBanner(l10n: l10n),
-          Expanded(child: _body(context, ref, l10n, async)),
+          // v1.4.2 shop Story 9.1：只有「Belanja」下才有二级分组与「我的券」入口。
+          if (isShop) ...[
+            _ShopGroupTabs(
+              current: shopGroup,
+              onSelected: (g) => ref.read(orderListProvider.notifier).setShopGroup(g),
+            ),
+            const _CouponEntryBar(),
+          ],
+          Expanded(child: _body(context, ref, l10n, async, isShop: isShop)),
         ],
       ),
     );
   }
 
   Widget _body(BuildContext context, WidgetRef ref, AppLocalizations l10n,
-          AsyncValue<OrderListState> async) =>
+          AsyncValue<OrderListState> async, {required bool isShop}) =>
       async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => _hint(l10n.orderLoadFailed),
-        data: (state) => state.items.isEmpty
-            ? _empty(l10n)
-            : RefreshIndicator(
+        // F18：失败卡 + 「Coba lagi」（修线上「失败只有一行字、没有重试」）。
+        error: (_, _) => _failed(l10n, ref),
+        data: (state) => state.isEmpty
+            ? _empty(context, l10n, isShop: state.isShop)
+            : state.isShop
+                ? _ShopOrderList(state: state)
+                : RefreshIndicator(
                 onRefresh: () => ref.read(orderListProvider.notifier).refresh(),
                 child: ListView.builder(
                   padding: EdgeInsets.zero,
@@ -99,43 +123,321 @@ class OrderListPageV2 extends ConsumerWidget {
               ),
       );
 
-  Widget _loadMore(AppLocalizations l10n, WidgetRef ref, OrderListState state) => ShopSection(
-        child: Center(
-          child: ShopButton(
-            key: const ValueKey('orderLoadMoreV2'),
-            label: state.loadingMore ? l10n.orderLoadMore : l10n.orderLoadMore,
-            variant: state.loadingMore
-                ? ShopButtonVariant.disabled
-                : ShopButtonVariant.outlineMuted,
-            dense: true,
-            onTap: state.loadingMore
-                ? null
-                : () => ref.read(orderListProvider.notifier).loadMore(),
-          ),
-        ),
-      );
+  Widget _loadMore(AppLocalizations l10n, WidgetRef ref, OrderListState state) =>
+      orderLoadMoreTile(l10n, ref, state);
 
-  Widget _empty(AppLocalizations l10n) => Center(
+  /// F3 空态（`.empty`）：图标块 72×72 圆角 24 + 标题 + 副句；**只在「Belanja」下**加「Mulai belanja」。
+  Widget _empty(BuildContext context, AppLocalizations l10n, {required bool isShop}) => Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
+            key: const ValueKey('orderEmptyState'),
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(l10n.orderEmpty, style: ShopText.sectionTitle),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Icon(Icons.receipt_long, size: 32, color: AppColors.mint),
+              ),
+              const SizedBox(height: 16),
+              Text(l10n.orderEmpty, style: AppTypography.title),
               const SizedBox(height: 6),
-              Text(l10n.orderEmptyHint,
-                  textAlign: TextAlign.center, style: ShopText.body),
+              Text(l10n.orderEmptyHint, textAlign: TextAlign.center, style: AppTypography.caption),
+              if (isShop) ...[
+                const SizedBox(height: 20),
+                ShopButton(
+                  key: const ValueKey('orderStartShopping'),
+                  label: l10n.shopOrderMulaiBelanja,
+                  variant: ShopButtonVariant.pay,
+                  onTap: () => context.go('/shop'),
+                ),
+              ],
             ],
           ),
         ),
       );
 
-  Widget _hint(String text) => Center(
+  /// F18 失败卡：`cloud_off` + 「Gagal memuat pesanan」+「Coba lagi」。
+  Widget _failed(AppLocalizations l10n, WidgetRef ref) => Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Text(text, textAlign: TextAlign.center, style: ShopText.body),
+          child: Column(
+            key: const ValueKey('orderLoadFailedState'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off, size: 40, color: AppColors.muted),
+              const SizedBox(height: 12),
+              Text(l10n.orderLoadFailed, textAlign: TextAlign.center, style: AppTypography.body),
+              const SizedBox(height: 16),
+              ShopButton(
+                key: const ValueKey('orderLoadRetry'),
+                label: l10n.commonRetry,
+                variant: ShopButtonVariant.outlinePurple,
+                onTap: () => ref.read(orderListProvider.notifier).refresh(),
+              ),
+            ],
+          ),
         ),
       );
+}
+
+/// 列表底部「加载更多」行：失败时给「Coba lagi」（`loadMoreFailed` 此前有状态无 UI，9.1 补上）。
+Widget orderLoadMoreTile(AppLocalizations l10n, WidgetRef ref, OrderListState state) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: state.loadMoreFailed
+            ? ShopButton(
+                key: const ValueKey('orderLoadMoreRetry'),
+                label: l10n.commonRetry,
+                variant: ShopButtonVariant.outlinePurple,
+                dense: true,
+                onTap: () => ref.read(orderListProvider.notifier).loadMore(),
+              )
+            : ShopButton(
+                key: const ValueKey('orderLoadMoreV2'),
+                label: l10n.orderLoadMore,
+                variant: state.loadingMore ? ShopButtonVariant.disabled : ShopButtonVariant.outlineMuted,
+                dense: true,
+                loading: state.loadingMore,
+                onTap: state.loadingMore ? null : () => ref.read(orderListProvider.notifier).loadMore(),
+              ),
+      ),
+    );
+
+/// 「Belanja」二级标签行（UI `.sub`）：项间距 24、左右 16、白底、底部 1px 分隔；
+/// 选中 `mint600` w600 + 2px `mint` 下划线；「Belum bayar」「Dikirim」后接红色角标（counts，0 / 失败不显示）。
+class _ShopGroupTabs extends ConsumerWidget {
+  const _ShopGroupTabs({required this.current, required this.onSelected});
+
+  final ShopOrderGroup current;
+  final ValueChanged<ShopOrderGroup> onSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final counts = ref.watch(shopOrderCountsProvider).value;
+    final groups = <(ShopOrderGroup, String, int)>[
+      (ShopOrderGroup.all, l10n.orderFilterAll, 0),
+      (ShopOrderGroup.pendingPayment, l10n.shopOrderGroupUnpaid, counts?.pendingPayment ?? 0),
+      (ShopOrderGroup.pendingShipment, l10n.shopOrderGroupPacking, 0),
+      (ShopOrderGroup.toReceive, l10n.shopOrderGroupShipped, counts?.toReceive ?? 0),
+      (ShopOrderGroup.completed, l10n.shopOrderStatusCompleted, 0),
+      (ShopOrderGroup.cancelled, l10n.shopOrderStatusCancelled, 0),
+    ];
+    return Container(
+      key: const ValueKey('shopOrderGroupTabs'),
+      height: 44,
+      decoration: const BoxDecoration(
+        color: ShopColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.line2)),
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          for (final (g, label, n) in groups)
+            Padding(
+              padding: const EdgeInsets.only(right: 24),
+              child: InkWell(
+                key: ValueKey('shopOrderGroup_${g.api}'),
+                onTap: () => onSelected(g),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                          color: g == current ? AppColors.mint : Colors.transparent, width: 2),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(label,
+                          style: AppTypography.caption.copyWith(
+                              color: g == current ? AppColors.mint600 : AppColors.ink2,
+                              fontWeight: g == current ? FontWeight.w600 : FontWeight.w400)),
+                      if (n > 0) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          key: ValueKey('shopOrderGroupBadge_${g.api}'),
+                          constraints: const BoxConstraints(minWidth: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.popRed,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(n > 99 ? '99+' : '$n',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 「我的券」入口（只在「Belanja」下）：浅紫横条 → `/me/coupons`（8.1 已注册路由，9.3 换真页）。
+/// 计数取 `/me/coupons/summary`；失败或 0 只显示「Kupon Saya」。
+class _CouponEntryBar extends ConsumerWidget {
+  const _CouponEntryBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final n = ref.watch(couponSummaryProvider).value ?? 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Material(
+        color: AppColors.mintTint,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          key: const ValueKey('shopOrderCouponEntry'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => context.push('/me/coupons'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.confirmation_number_outlined, size: 20, color: AppColors.mint),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(n > 0 ? l10n.shopOrderCouponEntry(n) : l10n.couponMyCoupons,
+                      key: const ValueKey('shopOrderCouponEntryText'),
+                      style: AppTypography.caption.copyWith(color: AppColors.ink)),
+                ),
+                const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「Belanja」下的电商订单列表：卡上「去支付」直接拉起支付面板、「确认收货」直接调接口（无弹窗）。
+class _ShopOrderList extends ConsumerStatefulWidget {
+  const _ShopOrderList({required this.state});
+
+  final OrderListState state;
+
+  @override
+  ConsumerState<_ShopOrderList> createState() => _ShopOrderListState();
+}
+
+class _ShopOrderListState extends ConsumerState<_ShopOrderList> {
+  /// 正在处理的卡（转圈 + 防重复点）。
+  String? _busyToken;
+
+  void _refreshLists() {
+    ref.invalidate(orderListProvider);
+    ref.invalidate(shopOrderCountsProvider);
+  }
+
+  /// F1：列表上下文先取详情（现金段 / 到期 / 展示号），再走 7.2 单一入口 [launchShopPayment]。
+  Future<void> _pay(ShopOrderSummary s) async {
+    if (_busyToken != null) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _busyToken = s.orderToken);
+    try {
+      final detail = await ref.read(shopOrderRepositoryProvider).detail(s.orderToken);
+      if (!mounted) return;
+      final outcome = await launchShopPayment(context, ref, detail,
+          isRetry: detail.paymentFailure == ShopPaymentFailure.gatewayDeclined);
+      if (!mounted) return;
+      ref.invalidate(shopOrderDetailProvider(s.orderToken));
+      _refreshLists();
+      if (outcome == ShopPaymentOutcome.paid || outcome == ShopPaymentOutcome.settledByCoin) {
+        context.push('/shop/orders/${s.orderToken}/paid');
+      }
+    } catch (_) {
+      if (mounted) {
+        Analytics.capture('toko_order_payment_failed_shown');
+        showAppToast(context, l10n.shopOrderPayFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _busyToken = null);
+    }
+  }
+
+  /// 确认收货：**无二次确认**（PRD 11-05），埋点同详情页。
+  Future<void> _confirm(ShopOrderSummary s) async {
+    if (_busyToken != null) return;
+    final l10n = AppLocalizations.of(context);
+    Analytics.capture('toko_order_receipt_confirm_tapped');
+    setState(() => _busyToken = s.orderToken);
+    try {
+      await ref.read(shopOrderRepositoryProvider).confirmReceipt(s.orderToken);
+      if (!mounted) return;
+      ref.invalidate(shopOrderDetailProvider(s.orderToken));
+      _refreshLists();
+      Analytics.capture('toko_order_receipt_confirm_succeeded');
+      showAppToast(context, l10n.shopOrderReceiptConfirmed);
+    } catch (e) {
+      if (mounted) {
+        showAppToast(
+            context,
+            isReturnInboundConfirmedError(e)
+                ? l10n.shopOrderConfirmReceiptReturnInbound
+                : l10n.shopOrderConfirmReceiptFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _busyToken = null);
+    }
+  }
+
+  void _contactCs(ShopOrderSummary s) {
+    // 列表项不下发 exceptionType（6.2 `ShopOrderListItem` 只有 bool）→ 'unknown'（待确认）；列表不报 _shown。
+    Analytics.capture('toko_delivery_exception_cs_tapped', {'exception_type': 'unknown'});
+    openSupportWhatsApp(context, ref, orderNo: s.shownNo, screen: 'order_list');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final state = widget.state;
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(shopOrderCountsProvider);
+        await ref.read(orderListProvider.notifier).refresh();
+      },
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        itemCount: state.shopItems.length + (state.hasMore ? 1 : 0),
+        itemBuilder: (c, i) {
+          if (i >= state.shopItems.length) return orderLoadMoreTile(l10n, ref, state);
+          final o = state.shopItems[i];
+          return ShopOrderCard(
+            order: o,
+            busy: _busyToken == o.orderToken,
+            onPay: () => _pay(o),
+            onConfirmReceipt: () => _confirm(o),
+            onContactCs: () => _contactCs(o),
+            // 倒计时归零：按订单 token 只刷新一次（记在控制器里，列表重建也不重复 → 不会因为
+            // 服务端还没把它挪出待付款而反复刷新；另一张单归零照样刷）。
+            onCountdownExpired: () {
+              if (!mounted) return;
+              if (ref.read(orderListProvider.notifier).markExpiryRefreshed(o.orderToken)) {
+                _refreshLists();
+              }
+            },
+          );
+        },
+      ),
+    );
+  }
 }
 
 /// 顶栏之下的筛选 Tab 行（墨底，选中项 700 + 2px 玫红下边框）。

@@ -60,6 +60,9 @@ public class ContentDetailService {
     /** V1.4.0 ④ Story 2.1：详情的收藏状态 / 作者视角收藏数（只读口，不依赖 CollectService，避免 Bean 环）。 */
     private final com.tailtopia.collect.service.CollectStateQuery collectState;
 
+    /** V1.4.2 social-topic Story 4.1（D-13）：详情 {@code topicNames}（单条也走批量口）。 */
+    private final com.tailtopia.topic.service.TopicQueryService topicQuery;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
@@ -71,7 +74,9 @@ public class ContentDetailService {
             com.tailtopia.profile.service.PetQueryService petQuery,
             com.tailtopia.gift.port.GiftPetDirectory giftPetDirectory,
             com.tailtopia.gift.service.GiftShowcaseQuery giftShowcase,
-            com.tailtopia.collect.service.CollectStateQuery collectState) {
+            com.tailtopia.collect.service.CollectStateQuery collectState,
+            com.tailtopia.topic.service.TopicQueryService topicQuery) {
+        this.topicQuery = topicQuery;
         this.contentPetQuery = contentPetQuery;
         this.petQuery = petQuery;
         this.giftPetDirectory = giftPetDirectory;
@@ -171,7 +176,8 @@ public class ContentDetailService {
                 : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
                 decorations, sizes, mentions, checkinPlace, authorToken, followState, linkedPets(post),
-                giftPets(post), collected, collectCount);
+                giftPets(post), collected, collectCount,
+                topicQuery.topicNamesFor(List.of(post.getId())).get(post.getId()));
     }
 
     /**

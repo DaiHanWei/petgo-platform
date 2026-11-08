@@ -131,25 +131,29 @@ void main() {
       }
     });
 
-    testWidgets('聚合页就是五张卡，按 C-8 顺序', (tester) async {
+    /// V1.4.2 FR-165（Story 4.3 · AC6 · D-22）：护照（Jejak Anabul）/ 登机牌两张卡入口暂时隐藏，
+    /// 其余三张按原顺序依次上移、无空位。
+    testWidgets('聚合页现为三张卡（护照 / 登机牌按 FR-165 隐藏），按 C-8 顺序', (tester) async {
       await _pumpHub(tester, petType: 'CAT');
-      const order = ['insightIdCard', 'insightAgeCard', 'insightPassport', 'insightTailsonality', 'insightBoardingPass'];
+      const order = ['insightIdCard', 'insightAgeCard', 'insightTailsonality'];
       for (final k in order) {
         expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
       }
-      expect(find.byType(InkWell), findsNWidgets(5));
+      expect(find.byKey(const ValueKey('insightPassport')), findsNothing);
+      expect(find.byKey(const ValueKey('insightBoardingPass')), findsNothing);
+      expect(find.byType(InkWell), findsNWidgets(3));
       final rects = [for (final k in order) tester.getRect(find.byKey(ValueKey(k)))];
-      // V1.3.4 AD-14 单列：自上而下，后一张严格在前一张下方。
+      // V1.3.4 AD-14 单列：自上而下，后一张严格在前一张下方；相邻间距仍是 10（去掉的卡不留间距）。
       for (var i = 1; i < rects.length; i++) {
         final prev = rects[i - 1], cur = rects[i];
         expect(cur.top, greaterThan(prev.bottom), reason: order[i]);
       }
     });
 
-    /// V1.3.4 AD-14：单列整宽——五张卡左缘相同、等宽、宽度 ≈ 页面内容宽；护照 / Tailsonality 全物种可点。
-    testWidgets('单列整宽：五张卡等宽撑满、护照 + Tailsonality 全物种可点', (tester) async {
+    /// V1.3.4 AD-14：单列整宽——三张卡左缘相同、等宽、宽度 ≈ 页面内容宽；Tailsonality 全物种可点。
+    testWidgets('单列整宽：三张卡等宽撑满、Tailsonality 全物种可点', (tester) async {
       await _pumpHub(tester, petType: 'OTHER');
-      const order = ['insightIdCard', 'insightAgeCard', 'insightPassport', 'insightTailsonality', 'insightBoardingPass'];
+      const order = ['insightIdCard', 'insightAgeCard', 'insightTailsonality'];
       final rects = [for (final k in order) tester.getRect(find.byKey(ValueKey(k)))];
       final contentWidth = tester.getSize(find.byType(SingleChildScrollView)).width - 32;
       for (var i = 0; i < rects.length; i++) {
@@ -158,23 +162,16 @@ void main() {
         expect(rects[i].width, closeTo(contentWidth, 1), reason: '${order[i]} 撑满内容宽');
       }
       expect(tester.widget<InkWell>(find.byKey(const ValueKey('insightTailsonality'))).onTap, isNotNull);
-      final card = tester.widget<InkWell>(find.byKey(const ValueKey('insightPassport')));
-      expect(card.onTap, isNotNull);
-
-      await tester.tap(find.byKey(const ValueKey('insightPassport')));
-      await tester.pumpAndSettle();
-      expect(find.text('passport'), findsOneWidget);
     });
 
-    /// 登机牌在 Tailsonality 下方、与 KTP 卡同宽；全物种可点 → 登机牌列表。
-    testWidgets('登机牌在最后一行、与 KTP 同宽、可点进列表', (tester) async {
+    /// 🔴 AC6.4：入口隐藏 ≠ 功能下线 —— 护照 / 登机牌路由原样，其它入口直接 push 仍可达。
+    testWidgets('护照 / 登机牌入口隐藏后，路由仍可直接进入', (tester) async {
       await _pumpHub(tester, petType: 'OTHER');
-      final ts = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
-      final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
-      final bp = tester.getRect(find.byKey(const ValueKey('insightBoardingPass')));
-      expect(bp.top, greaterThan(ts.bottom), reason: '在 Tailsonality 下方');
-      expect(bp.width, closeTo(ktp.width, 1), reason: '单列等宽');
-      await tester.tap(find.byKey(const ValueKey('insightBoardingPass')));
+      final ctx = tester.element(find.byKey(const ValueKey('insightIdCard')));
+      GoRouter.of(ctx).push(PetInsightsRoutes.passport);
+      await tester.pumpAndSettle();
+      expect(find.text('passport'), findsOneWidget);
+      GoRouter.of(ctx).push(PetInsightsRoutes.boardingPass);
       await tester.pumpAndSettle();
       expect(find.text('boarding-pass'), findsOneWidget);
     });
