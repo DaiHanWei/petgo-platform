@@ -110,6 +110,16 @@ public class ContentNotifyListener {
             notificationService.sendInteraction(parent, NotificationType.CONTENT_COMMENTED, event.commenterId(),
                     null, ref, event.commentId(), Notification.VARIANT_REPLY, event.body());
         }
+        // V1.4.2：回复的是一条二级评论时，再通知被回复的那条二级评论作者 C（「回复了你的评论」，复用 REPLY 文案）。
+        // 去重：同一个人最多一条 —— C 是回复者本人 / 帖主 A / 一级评论作者 B 时，上面已发或不该发，跳过。
+        // 屏蔽口径与 B 那条完全一致（C 也是第三方，R3 同样适用）。
+        Long replyTo = event.replyToAuthorId();
+        if (replyTo != null && replyTo != event.commenterId() && replyTo != event.contentAuthorId()
+                && !replyTo.equals(parent)
+                && !suppressed(replyTo, event.commenterId(), event.contentAuthorId())) {
+            notificationService.sendInteraction(replyTo, NotificationType.CONTENT_COMMENTED, event.commenterId(),
+                    null, ref, event.commentId(), Notification.VARIANT_REPLY, event.body());
+        }
     }
 
     /**

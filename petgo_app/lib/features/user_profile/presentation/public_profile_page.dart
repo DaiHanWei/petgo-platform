@@ -11,6 +11,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -272,11 +273,21 @@ class PublicProfilePage extends ConsumerWidget {
                     ),
                     child: const Icon(Icons.person_rounded, size: 52, color: AppColors.muted),
                   )
-                : CircleAvatar(
-                    key: const ValueKey('profileAvatar'),
-                    radius: 42,
-                    backgroundColor: AppColors.border,
-                    backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
+                // V1.4.2：点头像看原图（复用全屏灯箱；无头像占位不可点）。
+                : GestureDetector(
+                    key: const ValueKey('profileAvatarTap'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => ImageLightbox.open(context,
+                        urls: [p.avatarUrl!],
+                        initialIndex: 0,
+                        heroTagPrefix: 'user_profile_avatar',
+                        source: 'user_profile_avatar'),
+                    child: CircleAvatar(
+                      key: const ValueKey('profileAvatar'),
+                      radius: 42,
+                      backgroundColor: AppColors.border,
+                      backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
+                    ),
                   ),
           ),
         ),

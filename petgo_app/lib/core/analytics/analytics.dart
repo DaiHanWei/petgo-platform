@@ -149,11 +149,39 @@ class Analytics {
   /// 同步回传 Meta / TikTok 的付款成功事件（投放渠道看付费率 / ROAS 用）。只能经 [capturePurchase] 发。
   static const String adPurchaseEvent = 'af_purchase';
 
+  /// V1.4.2（2026-11-08 拍板）：**金额一律不进 PostHog**，事件本身照发（漏斗 / 次数不受影响）。
+  ///
+  /// 只在 PostHog 这一路剥：AppsFlyer / Meta / TikTok 的 `af_revenue` / `af_price` 是投放 ROAS 口径，照旧带。
+  /// 调用点仍可传这些键（KTP / Tailsonality / 礼物 / 结账等），统一在出口去掉 —— 新增金额类键必须登记到这里。
+  /// 历史上已进 PostHog 的金额数据不删（同日拍板）。
+  static const Set<String> posthogMoneyKeys = {
+    'price',
+    'price_idr',
+    'total_amount',
+    'coin_used',
+    'shipping_fee',
+    'order_amount',
+    'amount',
+    'af_revenue',
+    'af_price',
+  };
+
+  /// 发往 PostHog 的属性：去掉 [posthogMoneyKeys]（纯函数，L0 可测）。
+  @visibleForTesting
+  static Map<String, Object>? posthogProperties(Map<String, Object>? clean) {
+    if (clean == null) return null;
+    return {
+      for (final e in clean.entries)
+        if (!posthogMoneyKeys.contains(e.key)) e.key: e.value,
+    };
+  }
+
   /// 事件是否分发 AppsFlyer（纯函数，L0 可测）。
   static bool isAppsFlyerEvent(String event) => appsflyerEvents.contains(event);
 
   /// 测试观察点（Story 6.1）：非 null 时，每条 [capture] / [screen] 都同步回调一次
-  /// **净化后**的属性。埋点断言必须看到端上真正发出的形态，所以钩子挂在 scrub 之后。
+  /// **净化后**的属性（含金额键 —— 即 AppsFlyer 一路收到的形态；PostHog 实收的是
+  /// [posthogProperties] 再去掉金额后的那份，见其单测）。埋点断言必须看到端上真正发出的形态，所以钩子挂在 scrub 之后。
   /// 生产路径恒为 null（`main.dart` 从不赋值），不影响上报。
   @visibleForTesting
   static void Function(String event, Map<String, Object>? properties)? debugCaptureSink;
@@ -191,7 +219,7 @@ class Analytics {
       ));
     }
     try {
-      await Posthog().capture(eventName: event, properties: clean);
+      await Posthog().capture(eventName: event, properties: posthogProperties(clean));
     } catch (e) {
       debugPrint('[Analytics] capture failed: $e');
     }

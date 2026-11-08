@@ -52,14 +52,10 @@
         <span class="empty-emoji">🔍</span>
         <p th:text="#{admin.shop.orders.empty}">暂无订单。</p>
     </div>
-    <div class="pager" th:if="${!#lists.isEmpty(rows)}" th:attr="data-page=${page}">
-        <a th:if="${page > 0}" href="#" th:text="#{admin.v130.places.pager.prev}"
-           th:attr="hx-get=@{/admin/shop/order-list(status=${status},orderToken=${orderToken},from=${from},to=${to},flag=${flag},page=${page - 1})}"
-           hx-target="#shop-order-list-rows" hx-swap="innerHTML" hx-push-url="true">上一页</a>
-        <a th:if="${hasNext}" href="#" th:text="#{admin.v130.places.pager.next}"
-           th:attr="hx-get=@{/admin/shop/order-list(status=${status},orderToken=${orderToken},from=${from},to=${to},flag=${flag},page=${page + 1})}"
-           hx-target="#shop-order-list-rows" hx-swap="innerHTML" hx-push-url="true">下一页</a>
-    </div>
+    <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页），翻页带全部筛选条件。 */-->
+    <th:block th:if="${!#lists.isEmpty(rows)}" th:with="tpl=@{/admin/shop/order-list(status=${status},orderToken=${orderToken},from=${from},to=${to},flag=${flag},page='~PAGE~')}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target='#shop-order-list-rows')}"></div>
+    </th:block>
 </th:block>
 </body>
 </html>

@@ -102,11 +102,11 @@ class PostHogAnalyticsClientTest {
         server.expect(requestTo("https://ph.test/i/v0/e/"))
                 .andExpect(jsonPath("$.properties.app_env").value("stag"))
                 .andExpect(jsonPath("$.properties.distinct_id").value("hash-abc"))
-                .andExpect(jsonPath("$.properties.order_amount").value(285000))
+                .andExpect(jsonPath("$.properties.pay_channel").value("QRIS"))
                 .andRespond(withSuccess());
 
         new PostHogAnalyticsClient(KEY, builder, "stag", GUARD)
-                .capture("hash-abc", "shop_payment_paid", Map.of("order_amount", 285_000L));
+                .capture("hash-abc", "shop_payment_paid", Map.of("pay_channel", "QRIS"));
 
         server.verify();
     }
@@ -129,14 +129,15 @@ class PostHogAnalyticsClientTest {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         server.expect(requestTo("https://ph.test/i/v0/e/"))
-                .andExpect(jsonPath("$.properties.order_amount").value(100))
+                .andExpect(jsonPath("$.properties.pay_channel").value("QRIS"))
+                .andExpect(jsonPath("$.properties.order_amount").doesNotExist())
                 .andExpect(jsonPath("$.properties.receiver_name").doesNotExist())
                 .andExpect(jsonPath("$.properties.order_token").doesNotExist())
                 .andRespond(withSuccess());
 
         new PostHogAnalyticsClient(KEY, builder, "prod", GUARD).capture("hash-abc",
                 "shop_payment_paid",
-                Map.of("order_amount", 100L, "receiver_name", "Budi", "order_token", "ord-1"));
+                Map.of("pay_channel", "QRIS", "order_amount", 100L, "receiver_name", "Budi", "order_token", "ord-1"));
 
         server.verify();
     }

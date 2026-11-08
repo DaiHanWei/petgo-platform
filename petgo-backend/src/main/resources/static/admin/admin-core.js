@@ -1544,3 +1544,29 @@ document.addEventListener('click', function (e) {
         });
     });
 })();
+
+// ===== 通用分页条 · 跳页（V1.4.2 优化项，模板 admin/fragments/pager）=====
+// 页码链接是服务端渲染好的 href / hx-get，这里只管「跳至第 N 页」：输入值夹到 1..总页数，
+// 套进 data-pager-tpl 的 ~PAGE~（0 基）。有 data-pager-target → htmx 局部刷新并写地址栏，否则整页跳转。
+document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.matches || !form.matches('form[data-pager-jump]')) { return; }
+    e.preventDefault();
+    var bar = form.closest('.admin-pager');
+    if (!bar) { return; }
+    var tpl = bar.getAttribute('data-pager-tpl');
+    var total = parseInt(bar.getAttribute('data-pager-total'), 10) || 1;
+    var input = form.querySelector('input[name="pagerJump"]');
+    var n = parseInt(input && input.value, 10);
+    if (!tpl || isNaN(n)) { return; }
+    n = Math.min(Math.max(n, 1), total);
+    var url = tpl.replace('~PAGE~', String(n - 1));
+    var target = bar.getAttribute('data-pager-target');
+    if (target && typeof htmx !== 'undefined' && document.querySelector(target)) {
+        htmx.ajax('GET', url, { target: target, swap: 'innerHTML' }).then(function () {
+            try { history.pushState({ htmx: true }, '', url); } catch (ignored) { /* 地址栏写不进去也不影响翻页 */ }
+        });
+    } else {
+        window.location.href = url;
+    }
+});

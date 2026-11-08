@@ -92,12 +92,10 @@ class AnalyticsEventGuardTest {
         raw.put("referrer_host", "wa.me");
         raw.put("outcome", "OPENED");
         raw.put("open_method", "deeplink");
-        raw.put("order_amount", 285_000L);
         raw.put("failure_category", "GATEWAY_DECLINED");
         raw.put("pay_channel", "QRIS");
         raw.put("has_pawcoin", true);
         raw.put("method", "QRIS");
-        raw.put("price_idr", 10_000L);
         raw.put("failure_reason", "EXPIRED");
         // V1.3.2 Story 1.2
         raw.put("place_id", "aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09");
@@ -107,10 +105,9 @@ class AnalyticsEventGuardTest {
         raw.put("stamp_count", 3);
         // V1.3.2 Story 3.2
         raw.put("role_code", "ENTJ-H");
-        raw.put("price", 5_000L);
         raw.put("result_index", 2);
 
-        assertThat(guard.filterProperties(raw)).hasSize(23).containsAllEntriesOf(raw);
+        assertThat(guard.filterProperties(raw)).hasSize(20).containsAllEntriesOf(raw);
     }
 
     @Test
@@ -137,10 +134,10 @@ class AnalyticsEventGuardTest {
     @DisplayName("属性键不合规只丢该键，事件本身照发 —— 两级粒度不能写反")
     void unknownKeyDoesNotKillTheWholeEvent() {
         Map<String, Object> out = guard.filterProperties(
-                Map.of("order_amount", 100L, "receiver_name", "Budi"));
+                Map.of("pay_channel", "QRIS", "receiver_name", "Budi"));
 
         // 为一个多余的键把整条事件丢掉是更坏的结果：漏斗的分母靠事件本身。
-        assertThat(out).containsEntry("order_amount", 100L).hasSize(1);
+        assertThat(out).containsEntry("pay_channel", "QRIS").hasSize(1);
         assertThat(guard.allowsEvent("shop_payment_paid")).isTrue();
     }
 
@@ -174,7 +171,7 @@ class AnalyticsEventGuardTest {
     void keepsScalarValues() {
         Map<String, Object> raw = new HashMap<>();
         raw.put("has_pawcoin", false);
-        raw.put("order_amount", 285_000L);
+        raw.put("coupon_count", 285_000L);
         raw.put("level", 3);
 
         assertThat(guard.filterProperties(raw)).hasSize(3);
@@ -226,5 +223,16 @@ class AnalyticsEventGuardTest {
         props.put("coupon_count", 3);
         props.put("coupon_token", "abc"); // 不在白名单 → 丢弃
         assertThat(guard.filterProperties(props)).containsOnlyKeys("coupon_count").containsEntry("coupon_count", 3);
+    }
+
+    @Test
+    @DisplayName("V1.4.2：金额键一律不进 PostHog（order_amount / price / price_idr 被白名单丢弃）")
+    void moneyKeysAreDropped() {
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("order_amount", 285_000L);
+        raw.put("price", 5_000L);
+        raw.put("price_idr", 10_000L);
+        raw.put("pay_channel", "QRIS");
+        assertThat(guard.filterProperties(raw)).containsOnlyKeys("pay_channel");
     }
 }

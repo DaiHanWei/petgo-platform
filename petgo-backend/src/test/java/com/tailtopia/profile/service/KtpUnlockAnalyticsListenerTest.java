@@ -55,7 +55,7 @@ class KtpUnlockAnalyticsListenerTest {
     }
 
     @Test
-    @DisplayName("QRIS 到账 → ktp_unlock_succeeded（method=QRIS, price_idr）")
+    @DisplayName("QRIS 到账 → ktp_unlock_succeeded（method=QRIS；V1.4.2 起不带金额）")
     void qrisPaid() {
         listener.onPaid(paid(PaymentPurpose.ID_HD));
 
@@ -63,7 +63,7 @@ class KtpUnlockAnalyticsListenerTest {
             assertThat(c.distinctId()).isEqualTo(AnalyticsDistinctId.of(UID));
             assertThat(c.event()).isEqualTo("ktp_unlock_succeeded");
             assertThat(c.props()).containsExactlyInAnyOrderEntriesOf(
-                    Map.of("method", "QRIS", "price_idr", 10_000L));
+                    Map.of("method", "QRIS"));
         });
     }
 
@@ -74,7 +74,7 @@ class KtpUnlockAnalyticsListenerTest {
 
         assertThat(captured).singleElement().satisfies(c -> {
             assertThat(c.event()).isEqualTo("ktp_unlock_succeeded");
-            assertThat(c.props()).containsEntry("method", "PAWCOIN").containsEntry("price_idr", 10_000L);
+            assertThat(c.props()).containsEntry("method", "PAWCOIN").doesNotContainKey("price_idr");
         });
     }
 
@@ -86,7 +86,7 @@ class KtpUnlockAnalyticsListenerTest {
         assertThat(captured).singleElement().satisfies(c -> {
             assertThat(c.event()).isEqualTo("ktp_unlock_failed");
             assertThat(c.props()).containsEntry("failure_reason", "EXPIRED")
-                    .containsEntry("method", "QRIS").containsEntry("price_idr", 10_000L);
+                    .containsEntry("method", "QRIS").doesNotContainKey("price_idr");
         });
     }
 
@@ -136,7 +136,7 @@ class KtpUnlockAnalyticsListenerTest {
         assertThat(captured).extracting(Captured::event)
                 .containsOnly("ktp_unlock_succeeded", "ktp_unlock_failed");
         assertThat(Set.copyOf(captured.stream().flatMap(c -> c.props().keySet().stream()).toList()))
-                .containsExactlyInAnyOrder("method", "price_idr", "failure_reason", "card_type", "card_variant");
+                .containsExactlyInAnyOrder("method", "failure_reason", "card_type", "card_variant");
     }
 
     // ---- V1.3.4 ktp Story 1.8（AD-12）：ktp_unlock_succeeded 补 card_type / card_variant ----

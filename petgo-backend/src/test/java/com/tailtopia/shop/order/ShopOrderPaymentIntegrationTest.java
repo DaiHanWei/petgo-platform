@@ -591,9 +591,9 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
 
         ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_paid");
         assertThat(props.getValue().keySet())
-                .isSubsetOf("order_amount", "pay_channel", "has_pawcoin");
-        // v1.4.2 shop Story 3.2：改由 ShopOrderPaidEvent 触发，order_amount = paidTotal（含 stub 运费）
-        assertThat(props.getValue()).containsEntry("order_amount", 285_000L + STUB_FEE);
+                .isSubsetOf("pay_channel", "has_pawcoin");
+        // V1.4.2（2026-11-08）：金额不进 PostHog，事件照发。
+        assertThat(props.getValue()).doesNotContainKey("order_amount");
     }
 
     @Test
@@ -605,7 +605,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         placeOrder(uid, seedSku(10, 100_000L), 1, 100_000L);
 
         ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_paid");
-        assertThat(props.getValue()).containsEntry("order_amount", 100_000L + STUB_FEE)
+        assertThat(props.getValue()).doesNotContainKey("order_amount")
                 .containsEntry("pay_channel", "PAWCOIN");
     }
 
@@ -673,7 +673,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_declined");
         assertThat(props.getValue()).containsEntry("failure_category", "GATEWAY_DECLINED");
         assertThat(props.getValue().keySet())
-                .isSubsetOf("order_amount", "pay_channel", "has_pawcoin", "failure_category");
+                .isSubsetOf("pay_channel", "has_pawcoin", "failure_category");
     }
 
     // ---------- Story 3-4：新订单提醒登记绝不拖累支付 ----------

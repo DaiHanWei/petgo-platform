@@ -95,17 +95,12 @@
     </div>
 
     <!-- bug 20260701-164：浏览态分页（搜索态无分页 —— 那是「找一个人」的用法）。 -->
-    <div class="pager" th:if="${page != null and page.totalElements > 0}" th:attr="data-page=${page.number}">
-        <!-- bug 20260901-469：翻页必须带上 phone / status 筛选 —— 不带的话点下一页筛选静默丢失、
-             列表变回全量，同时导出链接也跟着失去筛选（正是提报里两份名单对不上的来源）。 -->
-        <a th:if="${page.hasPrevious()}" data-no-drawer
-           th:href="@{/admin/users(page=${page.number - 1}, phone=${phone}, status=${status}, q=${q})}"
-           th:text="#{admin.audit.prev}">← 上一页</a>
-        <span th:text="#{admin.audit.page(${page.number + 1}, ${page.totalPages}, ${page.totalElements})}">分页</span>
-        <a th:if="${page.hasNext()}" data-no-drawer
-           th:href="@{/admin/users(page=${page.number + 1}, phone=${phone}, status=${status}, q=${q})}"
-           th:text="#{admin.audit.next}">下一页 →</a>
-    </div>
+    <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页）。翻页必须带上 phone / status / q 筛选
+         （bug 20260901-469：不带的话筛选静默丢失、导出也跟着失去筛选）。 */-->
+    <th:block th:if="${page != null and page.totalElements > 0}"
+              th:with="tpl=@{/admin/users(page='~PAGE~', phone=${phone}, status=${status}, q=${q})}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target=null)}"></div>
+    </th:block>
 </th:block>
 
 <!--/* 单行。点行开抽屉（「查看详情」列已删）。 */-->

@@ -111,6 +111,7 @@ public class AdminUserController {
                     PageRequest.of(Math.max(page, 0), PAGE_SIZE));
             model.addAttribute("results", pageResult.getContent());
             model.addAttribute("page", pageResult);
+            model.addAttribute("pager", com.tailtopia.admin.shared.AdminPager.of(pageResult));
         }
         // 摘要条与列表同一次筛选（Story 8.1 · AC1）：一条聚合出四个数。
         model.addAttribute("summary", adminUserService.summary(q, phone, status));

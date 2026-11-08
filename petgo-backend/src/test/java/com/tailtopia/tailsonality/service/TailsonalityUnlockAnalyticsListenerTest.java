@@ -52,7 +52,7 @@ class TailsonalityUnlockAnalyticsListenerTest {
         listener.onUnlocked(event(KeepsakeSku.TAILSONALITY));
         ArgumentCaptor<Map> p = ArgumentCaptor.forClass(Map.class);
         verify(analytics).capture(anyString(), eq("tailsonality_unlocked"), p.capture());
-        assertThat(p.getValue()).isEqualTo(Map.of("role_code", "ENTJ-H", "price", 5000L, "result_index", 2));
+        assertThat(p.getValue()).isEqualTo(Map.of("role_code", "ENTJ-H", "result_index", 2));
         assertThat(guard.filterProperties(p.getValue())).isEqualTo(p.getValue());
         assertThat(guard.allowsEvent("tailsonality_unlocked")).isTrue();
     }

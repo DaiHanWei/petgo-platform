@@ -85,6 +85,8 @@ public class AdminCommentModerationController {
         model.addAttribute("postId", postId);
         model.addAttribute("q", q);
         model.addAttribute("page", found.page()); // 页码越界已回退，分页器要用实际页码
+        model.addAttribute("pager", com.tailtopia.admin.shared.AdminPager.of(found.page(),
+                com.tailtopia.admin.comment.service.AdminCommentModerationService.PAGE_SIZE, found.total()));
         model.addAttribute("statusOptions", STATUS_OPTIONS);
     }
 }
