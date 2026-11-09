@@ -95,6 +95,12 @@ class ShopColors {
   /// ⚠️ 与 `AppColors.mint600` (#6C48AE) 差 1 个色阶，是设计稿终值，非笔误。
   static const Color purpleDark = Color(0xFF6B45AE);
 
+  /// 免运券青（UI A1 `.v-cp.ship` 色条与面额 #1B7F8C）。
+  static const Color shipTeal = Color(0xFF1B7F8C);
+
+  /// 新人券角标黄（UI A1 `.v-cp.nb em` #FFD27A）。
+  static const Color newbieBadge = Color(0xFFFFD27A);
+
   /// 紫块内的正文色。
   static const Color purpleText = Color(0xFF4A3D66);
 

@@ -60,7 +60,11 @@ class ShopButton extends StatelessWidget {
     this.dense = false,
     this.padding,
     this.loading = false,
+    this.radius,
   });
+
+  /// 圆角（null = [ShopShape.radiusButton]）。胶囊形按钮传 999（UI C3 失效行「Cari mirip / Hapus」）。
+  final double? radius;
 
   final String label;
   final ShopButtonVariant variant;
@@ -149,7 +153,7 @@ class ShopButton extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(ShopShape.radiusButton),
+            borderRadius: BorderRadius.circular(radius ?? ShopShape.radiusButton),
             border: border == null ? null : Border.all(color: border),
           ),
           child: Padding(

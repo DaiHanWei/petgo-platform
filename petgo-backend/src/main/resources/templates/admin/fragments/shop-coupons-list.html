@@ -6,7 +6,8 @@
 -->
 <body>
 <th:block th:fragment="rows">
-    <div class="sum" id="shop-coupon-summary">
+    <!--/* UI A2：一张券都没有时不出摘要条（四个 0 没有信息量），只留空态卡。 */-->
+    <div class="sum" id="shop-coupon-summary" th:if="${anyCoupon}">
         <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.status.RUNNING}">进行中</div>
             <div class="sum-value" th:text="${summary.running()}">0</div></div>
         <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.status.NOT_STARTED}">未开始</div>
@@ -68,7 +69,7 @@
         </tr>
         </tbody>
     </table>
-    <div class="empty" th:if="${#lists.isEmpty(rows)}">
+    <div class="empty empty-boxed" th:if="${#lists.isEmpty(rows)}">
         <span class="empty-emoji">🎟️</span>
         <p th:text="${anyCoupon} ? #{admin.v142.coupon.emptyFiltered} : #{admin.v142.coupon.empty}">还没有优惠券。</p>
     </div>

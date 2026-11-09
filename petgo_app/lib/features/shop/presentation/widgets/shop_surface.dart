@@ -248,17 +248,19 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
         //    ⚠️ 但余量只剩 0.25 —— **压在这条顶栏上的任何前景色都要重算**，
         //    照搬为墨底调的半透明白（onInk45/60/85）会当场掉到 3:1 以下。
         //    订单列表的状态 Tab 行就是这么修的（见 order_list_page_v2 的 _FilterTabs）。
+        // 🔴 2026-11-09 产品拍板（V1.4.2 UI 还原度）：1.4.2 电商稿全部屏（购物车 / 结算 / 订单 / 地址 / 券…）
+        //    都是**白底 + 深色标题**，不再用紫底。`dark` 这个名字保留（调用方零改动），配色改为与稿一致；
+        //    原紫底时代为「紫压紫」「白 60% 不达标」做的特判（订单列表 _FilterTabs）已同步改回深色前景。
         ShopAppBarTone.dark => (
-            background: ShopColors.purple,
-            foreground: ShopColors.surface,
-            capsule: ShopColors.onInk12,
-            overlay: SystemUiOverlayStyle.light,
+            background: ShopColors.surface,
+            foreground: ShopColors.ink,
+            capsule: ShopColors.purpleTagBg,
+            overlay: SystemUiOverlayStyle.dark,
           ),
-        // 白底 → 前景取**主体色**（品牌紫），在白底上可见（2026-09-02 产品拍板）。
-        // 胶囊底同步换成浅紫 —— onInk12 是「白 12%」，压在白底上等于没有。
+        // 白底：前景同样取深色标题（1.4.2 稿；2026-09-02 曾取品牌紫）。胶囊底浅紫。
         ShopAppBarTone.light => (
             background: ShopColors.surface,
-            foreground: ShopColors.purple,
+            foreground: ShopColors.ink,
             capsule: ShopColors.purpleTagBg,
             overlay: SystemUiOverlayStyle.dark,
           ),

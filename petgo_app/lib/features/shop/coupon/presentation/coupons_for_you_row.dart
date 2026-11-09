@@ -16,7 +16,6 @@ import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../auth/domain/auth_state.dart';
-import '../../presentation/widgets/shop_buttons.dart';
 import '../../presentation/widgets/shop_pressable.dart';
 import '../data/coupon_repository.dart';
 import '../domain/shop_coupon.dart';
@@ -68,15 +67,14 @@ class _CouponsForYouRowState extends ConsumerState<CouponsForYouRow> {
     final l10n = AppLocalizations.of(context);
     // 新人券置顶（服务端已排，这里稳定排序兜底）。
     final sorted = [...coupons.where((c) => c.newbie), ...coupons.where((c) => !c.newbie)];
-    const gap = AppSpacing.md;
-    // 列宽取实际约束（不取 MediaQuery 宽）：两张正好占满一行。
-    return LayoutBuilder(builder: (context, constraints) {
-      final cardW = (constraints.maxWidth - AppSpacing.screenEdge * 2 - gap) / 2;
-      return _row(l10n, sorted, cardW, gap);
-    });
+    // UI A1 `.v-cps`：窄卡定宽 172、间距 8（新人券 264），横滑露出下一张。
+    return _row(l10n, sorted, 8);
   }
 
-  Widget _row(AppLocalizations l10n, List<ShopCoupon> sorted, double cardW, double gap) {
+  static const double _cardW = 172;
+  static const double _newbieCardW = 264;
+
+  Widget _row(AppLocalizations l10n, List<ShopCoupon> sorted, double gap) {
     return Padding(
       key: const ValueKey('couponsForYouRow'),
       padding: const EdgeInsets.only(top: AppSpacing.lg),
@@ -117,9 +115,11 @@ class _CouponsForYouRowState extends ConsumerState<CouponsForYouRow> {
                 children: [
                   for (var i = 0; i < sorted.length; i++) ...[
                     if (i > 0) SizedBox(width: gap),
-                    SizedBox(
-                      width: cardW,
-                      child: _card(l10n, sorted[i]),
+                    // 稿件定宽 172（新人券 264）；本机字体 / 字号放大时按内容撑宽，宁可宽一点也不截断面额。
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                          minWidth: sorted[i].newbie ? _newbieCardW : _cardW, maxWidth: 300),
+                      child: IntrinsicWidth(child: _card(l10n, sorted[i])),
                     ),
                   ],
                 ],
@@ -162,13 +162,55 @@ class _CouponsForYouRowState extends ConsumerState<CouponsForYouRow> {
       key: ValueKey('couponForYou_${c.couponToken}'),
       coupon: c.toOption(),
       compact: true,
-      trailing: ShopButton(
+      trailing: CouponClaimPill(
         key: ValueKey('couponClaim_${c.couponToken}'),
         label: claimed ? l10n.couponClaimedShort : l10n.couponClaim,
-        variant: claimed ? ShopButtonVariant.disabled : ShopButtonVariant.purple,
-        dense: true,
+        claimed: claimed,
         loading: pending,
         onTap: claimed || pending ? null : () => _claim(c),
+      ),
+    );
+  }
+}
+
+/// 窄卡右侧的「Klaim / Diklaim」胶囊（UI A1 `.v-cbtn`：紫底白字 12/700、4×12 内边距；已领灰底灰字）。
+/// 视觉是小胶囊，命中区仍撑到 [kShopMinTapTarget]。
+class CouponClaimPill extends StatelessWidget {
+  const CouponClaimPill({
+    super.key,
+    required this.label,
+    required this.claimed,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool claimed;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = claimed ? ShopColors.text3 : ShopColors.surface;
+    return ShopPressable(
+      onTap: onTap,
+      minSize: kShopMinTapTarget,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: claimed ? ShopColors.border2 : ShopColors.purple,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: loading
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+              )
+            : Text(label,
+                maxLines: 1,
+                style: AppTypography.caption
+                    .copyWith(fontSize: 12, fontWeight: FontWeight.w700, color: fg)),
       ),
     );
   }

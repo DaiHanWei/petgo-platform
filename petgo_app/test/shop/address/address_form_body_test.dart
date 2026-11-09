@@ -102,6 +102,37 @@ void main() {
     expect(repo.updatedTokens, ['addr-new']);
     expect(got?.token, 'addr-new');
   });
+
+  testWidgets('UI D5：compact 抽屉形态只有五项 —— 无标签块、无「设为默认」，不选标签也能保存', (tester) async {
+    final repo = _FakeAddressRepo();
+    ShippingAddress? got;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        addressRepositoryProvider.overrideWithValue(repo),
+        addressListProvider.overrideWith((ref) async => const []),
+        regionTreeProvider.overrideWith((ref) async => kTestRegions),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('id'),
+        home: Scaffold(
+          body: AddressFormBody(compact: true, submitLabel: 'Simpan & pakai', onSaved: (a) => got = a),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('addressLabel_Rumah')), findsNothing);
+    expect(find.byKey(const ValueKey('addressDefaultSwitch')), findsNothing);
+    await fillAndSaveAddressForm(tester);
+    expect(repo.created, 1);
+    expect(got?.token, 'addr-new');
+  });
 }
 
 class _FakeAddressRepo extends AddressRepository {

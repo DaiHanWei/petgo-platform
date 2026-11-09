@@ -23,10 +23,13 @@ Future<void> fillAndSaveAddressForm(WidgetTester tester) async {
   await pickRegionInSheet(tester, 'DKI Jakarta', 'Jakarta Selatan', 'Kebayoran');
   await field('kodePos', '12160');
   await field('line', 'Jl. Melati No. 5, dekat masjid');
+  // 结算页 D5 抽屉形态（compact）不出标签块，只有地址簿页才选标签。
   final label = find.byKey(const ValueKey('addressLabel_Rumah'));
-  await tester.ensureVisible(label);
-  await tester.tap(label);
-  await tester.pumpAndSettle();
+  if (label.evaluate().isNotEmpty) {
+    await tester.ensureVisible(label);
+    await tester.tap(label);
+    await tester.pumpAndSettle();
+  }
   await tester.tap(find.byKey(const ValueKey('addressSaveV2')));
   await tester.pumpAndSettle();
 }

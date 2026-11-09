@@ -187,6 +187,18 @@ void main() {
     expect(names(), isNot(contains('toko_payment_sheet_dismissed')));
   });
 
+  testWidgets('UI E7：取码 502（网关拒付）后轮询到 GATEWAY_DECLINED → 面板不自动关，仍停在 Coba lagi', (tester) async {
+    await launch(tester, _Repo()..error = _http(502));
+    expect(find.byKey(const ValueKey('qrPayCodeFailed')), findsOneWidget);
+    await serverMovesTo(tester, order(paymentFailureCategory: 'GATEWAY_DECLINED'));
+    await tester.pump(const Duration(seconds: 6));
+    expect(outcome, isNull, reason: '面板仍开着，launchShopPayment 尚未返回');
+    expect(find.byKey(const ValueKey('qrPayCodeFailed')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('qrPayCloseX')));
+    await tester.pumpAndSettle();
+    expect(outcome, ShopPaymentOutcome.failed);
+  });
+
   testWidgets('E7 → Coba lagi 出码成功 → 补发 qr_shown；之后关面板记 sheet_dismissed', (tester) async {
     final repo = _Repo()..error = DioException(requestOptions: RequestOptions(path: '/pay'));
     await launch(tester, repo);

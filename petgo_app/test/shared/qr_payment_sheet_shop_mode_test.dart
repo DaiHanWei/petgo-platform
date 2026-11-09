@@ -107,7 +107,7 @@ void main() {
     expect(find.byKey(const ValueKey('qrPayCloseX')), findsOneWidget);
     expect(find.text('Bayar via QRIS'), findsOneWidget);
     expect(find.text(l10n.qrPayTotalLabel), findsNothing);
-    expect(find.text('Rp317.000'), findsOneWidget);
+    expect(find.text('Rp 317.000'), findsOneWidget);
     expect(find.text('+ PawCoin Rp 12.000 sudah ditahan'), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayCopy')), findsOneWidget);
@@ -288,7 +288,7 @@ void main() {
     expect(find.text(l10n.rechargeStubHint), findsNothing, reason: '不是测试环境的 Mode uji 占位');
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('qrPaySave'))).onPressed, isNull);
     expect(find.byKey(const ValueKey('qrPayPaidCheck')), findsNothing);
-    expect(find.text('Rp317.000'), findsOneWidget, reason: '金额照常');
+    expect(find.text('Rp 317.000'), findsOneWidget, reason: '金额照常');
     expect(find.byKey(const ValueKey('qrPayCountdown')), findsOneWidget, reason: '倒计时照走');
     expect(find.textContaining('TOKO-20261105-ABC123'), findsOneWidget, reason: '订单号照常');
 

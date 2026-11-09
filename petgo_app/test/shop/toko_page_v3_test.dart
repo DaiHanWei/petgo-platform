@@ -15,6 +15,7 @@ import 'package:tailtopia/features/auth/domain/login_guide_controller.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/shop/coupon/data/coupon_repository.dart';
 import 'package:tailtopia/features/shop/coupon/domain/shop_coupon.dart';
+import 'package:tailtopia/features/shop/coupon/presentation/coupons_for_you_row.dart' show CouponClaimPill;
 import 'package:tailtopia/features/shop/data/cart_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_repurchase_repository.dart';
@@ -24,7 +25,6 @@ import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/domain/shop_repurchase.dart';
 import 'package:tailtopia/features/shop/presentation/toko_page_v3.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_banner_carousel.dart';
-import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_controls.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_reco_grid.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -761,8 +761,9 @@ void main() {
 
   // ------------------------------------------------------------------ 复审修复（8.1 code review）
   group('复审修复', () {
-    ShopButton claimBtn(WidgetTester t, String token) =>
-        t.widget<ShopButton>(find.byKey(ValueKey('couponClaim_$token')));
+    // UI A1：首页窄卡的领券位是小胶囊（CouponClaimPill），不再是 ShopButton。
+    CouponClaimPill claimBtn(WidgetTester t, String token) =>
+        t.widget<CouponClaimPill>(find.byKey(ValueKey('couponClaim_$token')));
 
     testWidgets('#1「Diklaim」只取服务端值；换账号（列表重拉）后服务端可领 → 按钮恢复「Klaim」', (t) async {
       final repo = FakeCouponRepository(forYouItems: [_coupon('c1')]);

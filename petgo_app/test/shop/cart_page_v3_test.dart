@@ -152,8 +152,11 @@ void main() {
         line('b', name: 'Whiskas Pouch', price: 80000, qty: 2),
       ];
 
-  String? textOf(WidgetTester tester, String key) =>
-      tester.widget<Text>(find.byKey(ValueKey(key))).data;
+  // 送达行是 Text.rich（地区名加粗，UI C1）→ 取纯文本用 textSpan.toPlainText()。
+  String? textOf(WidgetTester tester, String key) {
+    final t = tester.widget<Text>(find.byKey(ValueKey(key)));
+    return t.data ?? t.textSpan?.toPlainText();
+  }
   String? totalOf(WidgetTester tester) => textOf(tester, 'cartPayableV3');
 
   group('AC1 页面结构', () {
@@ -198,7 +201,7 @@ void main() {
           'Belanja Rp 171.000 lagi untuk potongan ongkir');
       expect(find.text('Checkout (3)'), findsOneWidget);
       final amount = tester.widget<Text>(find.byKey(const ValueKey('cartPayableV3')));
-      expect(amount.style?.color, ShopColors.purple);
+      expect(amount.style?.color, ShopColors.ink, reason: 'UI C1：预估应付深色（Hemat 行才是紫色）');
     });
 
     testWidgets('送达行：默认地址的 kecamatan', (tester) async {
