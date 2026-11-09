@@ -1,0 +1,14 @@
+{
+  "name": "ai-query-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ops 后台 AI 查数的内部任务服务：接收 ops 提交的问题，用 claude -p 执行并保存结果",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.mjs\""
+  }
+}

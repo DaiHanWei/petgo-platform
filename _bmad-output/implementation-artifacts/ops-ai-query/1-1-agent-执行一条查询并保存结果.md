@@ -1,6 +1,6 @@
 # Story 1.1: Agent 执行一条查询并保存结果
 
-Status: ready-for-dev
+Status: review
 
 <!-- 主题 ops-ai-query，不归属任何版本。分支 feat/ops-ai-query，基于 main。 -->
 
@@ -27,29 +27,29 @@ Status: ready-for-dev
 
 ## Tasks / Subtasks
 
-- [ ] 建立 `ai-query-agent/` 工程（AC: 全部）
-  - [ ] `package.json`：`"type": "module"`，`engines.node >= 24`，`"test": "node --test"`，不加任何运行依赖
-  - [ ] `src/config.mjs`：读取 `AGENT_SECRET`（缺失时拒绝启动）、`PORT`、`DATA_DIR`、`CLAUDE_BIN`（默认 `claude`）、`JOB_TIMEOUT_MS`（默认 600000）
-  - [ ] 根目录 `.gitignore` 增加 `ai-query-agent/data/`
-- [ ] 先写失败的测试和假 `claude`（AC: 1-10）
-  - [ ] `test/fake-claude.mjs`：记录收到的参数和 env，按 stdin 内容输出成功、额度用尽、授权失效、挂起
-  - [ ] 所有定时值通过配置注入，测试不真实等待 10 分钟
-- [ ] 实现 HTTP 层 `src/server.mjs`（AC: 1, 2, 4, 5, 6, 7）
-  - [ ] 使用 `node:http`；密钥比较使用 `crypto.timingSafeEqual`，先比较 SHA-256 摘要避免长度差异
-  - [ ] `POST /jobs` 校验 `jobToken, conversationToken, question, lang`，`lang` 仅允许 `zh|en|id`，请求体上限 64KB
-  - [ ] `jobToken`、`conversationToken` 必须匹配 `^[A-Za-z0-9_-]{8,128}$`，防止路径穿越
-- [ ] 实现任务队列 `src/jobs.mjs`（AC: 2, 5, 7）
-  - [ ] 内存队列，并发 2，排队上限 20；同一 token 在内存或磁盘已存在时直接返回 202
-- [ ] 实现执行器 `src/runner.mjs`（AC: 1, 3, 8, 9, 10）
-  - [ ] `spawn` 不使用 shell，问题通过 stdin 传入；`detached: true` 建立独立进程组
-  - [ ] 参数：`-p --output-format json --allowedTools Bash,Read,Grep,Glob`，追问时加 `--resume <id>`
-  - [ ] 子进程 env 只传 `PATH`、`HOME`、`CLAUDE_CODE_OAUTH_TOKEN`，集中在 `buildChildEnv()`，Story 1.2 在此收紧，不得展开 `process.env`
-  - [ ] 超时先向进程组发 `SIGTERM`，5 秒后 `SIGKILL`，等 `close` 事件后才释放名额
-  - [ ] 错误分类集中在 `classifyFailure()`
-- [ ] 实现结果存储 `src/store.mjs`（AC: 6, 7）
-  - [ ] 先写临时文件再 `rename`；`result.json` 不保存问题原文
-  - [ ] 本 story 的 `files` 恒为空数组，文件能力在 Story 2.1 实现
-- [ ] 运行 `cd ai-query-agent && npm test`，全部通过（AC: 全部）
+- [x] 建立 `ai-query-agent/` 工程（AC: 全部）
+  - [x] `package.json`：`"type": "module"`，`engines.node >= 24`，`"test": "node --test"`，不加任何运行依赖
+  - [x] `src/config.mjs`：读取 `AGENT_SECRET`（缺失时拒绝启动）、`PORT`、`DATA_DIR`、`CLAUDE_BIN`（默认 `claude`）、`JOB_TIMEOUT_MS`（默认 600000）
+  - [x] 根目录 `.gitignore` 增加 `ai-query-agent/data/`
+- [x] 先写失败的测试和假 `claude`（AC: 1-10）
+  - [x] `test/fake-claude.mjs`：记录收到的参数和 env，按 stdin 内容输出成功、额度用尽、授权失效、挂起
+  - [x] 所有定时值通过配置注入，测试不真实等待 10 分钟
+- [x] 实现 HTTP 层 `src/server.mjs`（AC: 1, 2, 4, 5, 6, 7）
+  - [x] 使用 `node:http`；密钥比较使用 `crypto.timingSafeEqual`，先比较 SHA-256 摘要避免长度差异
+  - [x] `POST /jobs` 校验 `jobToken, conversationToken, question, lang`，`lang` 仅允许 `zh|en|id`，请求体上限 64KB
+  - [x] `jobToken`、`conversationToken` 必须匹配 `^[A-Za-z0-9_-]{8,128}$`，防止路径穿越
+- [x] 实现任务队列 `src/jobs.mjs`（AC: 2, 5, 7）
+  - [x] 内存队列，并发 2，排队上限 20；同一 token 在内存或磁盘已存在时直接返回 202
+- [x] 实现执行器 `src/runner.mjs`（AC: 1, 3, 8, 9, 10）
+  - [x] `spawn` 不使用 shell，问题通过 stdin 传入；`detached: true` 建立独立进程组
+  - [x] 参数：`-p --output-format json --allowedTools Bash,Read,Grep,Glob`，追问时加 `--resume <id>`
+  - [x] 子进程 env 只传 `PATH`、`HOME`、`CLAUDE_CODE_OAUTH_TOKEN`，集中在 `buildChildEnv()`，Story 1.2 在此收紧，不得展开 `process.env`
+  - [x] 超时先向进程组发 `SIGTERM`，5 秒后 `SIGKILL`，等 `close` 事件后才释放名额
+  - [x] 错误分类集中在 `classifyFailure()`
+- [x] 实现结果存储 `src/store.mjs`（AC: 6, 7）
+  - [x] 先写临时文件再 `rename`；`result.json` 不保存问题原文
+  - [x] 本 story 的 `files` 恒为空数组，文件能力在 Story 2.1 实现
+- [x] 运行 `cd ai-query-agent && npm test`，全部通过（AC: 全部）
 
 ## Dev Notes
 
@@ -105,8 +105,34 @@ ai-query-agent/
 
 ### Agent Model Used
 
+Claude（云端 headless session）
+
 ### Debug Log References
+
+- `node --test` 不带路径时默认把 `test/**/*.mjs` 全部当测试跑，`fake-claude.mjs` 会等 stdin 挂住；`npm test` 已改为显式 `"test/**/*.test.mjs"`。
+- 云端 Node 22 → 安装 Node 24.22.2 后运行。
 
 ### Completion Notes List
 
+**L1/L2 待本地验收。** 本 story 全部 AC 为 L0，`cd ai-query-agent && npm test` 21/21 通过（Node 24.22.2）。以下内容未在真实环境验证：
+
+- **claude 输出字段和错误文案待本地实测确认**（AC1、AC6、AC10）：云端不运行真实 `claude -p`。依据 2026-11-09 查阅的官方文档（headless、errors、env-vars 页）编写 `test/fixtures/`：文档只明确 `result`、`session_id`、`total_cost_usd`；`num_turns`、`is_error` 文档未列出，代码按可选字段处理（成功判定为退出码 0 + `result` 为字符串 + `is_error !== true`）。额度用尽 / 授权失效的匹配规则取自 errors 页文案片段（`You've hit your session limit`、`Not logged in`、`API Error: 401` 等），集中在 `src/classify.mjs`，未识别一律 `AGENT_ERROR`。本地需跑一次成功、一次 token 失效、（有条件时）一次额度用尽，把真实输出替换进 fixtures 并校正规则。
+- AC8 超时清理用假 claude 验证了进程组 SIGTERM→SIGKILL 和孙进程回收；真实 `claude` 的 Bash 子进程树待 Story 1.9 在 stag 观察。
+
+**复审（code-review）修复项：**
+- `resumeSessionId` 原正则允许以 `-` 开头，可注入 CLI 参数 → 改为严格 UUID 校验。
+- claude 原以 agent 自身目录为 cwd（含 `data/jobs`）→ 新增 `WORK_DIR`（默认 `./work`，禁止位于 `DATA_DIR` 内）。
+- 主进程退出后残留的后台孙进程占着 stdout 管道，`close` 不来、名额白占到超时 → `exit` 时整组 SIGKILL，`killGraceMs` 后仍未 `close` 则销毁管道收尾。
+- 停止中仍接收新任务且永不执行 → 停止后返回 429。
+- 落盘失败时结果丢失且同 token 可重跑 → 结果保留在内存。
+- 失败分类只在 `is_error === true` 时读 `result`，避免答案里的关键词误判。
+- `JOB_TIMEOUT_MS`、`PORT` 增加取值范围校验。
+- 未修：OAuth token 对 Bash 子进程可见 —— 属 Story 1.2（`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` 与 env 白名单收紧）；`HOST` 默认 `0.0.0.0` 是容器接入 internal 网络所需，不映射端口。
+
 ### File List
+
+- `.gitignore`（新增 `ai-query-agent/data/`、`node_modules/`）
+- `ai-query-agent/package.json`
+- `ai-query-agent/src/{main,config,log,server,jobs,runner,classify,store}.mjs`
+- `ai-query-agent/test/{fake-claude.mjs,helpers.mjs,jobs.test.mjs}`
+- `ai-query-agent/test/fixtures/{README.md,success.json,rate-limited.json,auth-failed.json}`
