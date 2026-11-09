@@ -212,7 +212,14 @@ Future<ShopPaymentOutcome> launchShopPayment(
       // 🔴 先看支付单：网关拒付**只改 payment_intents、不改订单**，订单会一直停在
       //    PENDING_PAYMENT，只看 status 的话二维码要挂到 60 分钟窗口耗尽。
       final failure = fresh.paymentFailure;
-      if (failure != null) {
+      // UI E7（v1.4.2 还原度）：取码就失败（面板正停在「Kode QR gagal dibuat · Coba lagi」、还没出过码）时，
+      // 网关拒付**不中止面板** —— 拒付的正是这次取码，用户要的是留在面板里点「Coba lagi」，
+      // 而不是 3 秒后面板自己消失。超时 / 取消仍照常中止（下面的判据不变）。
+      final declinedWhileCodeFailed = codeIssue != null &&
+          !qrShown &&
+          ShopPaymentFailure.fromApi(fresh.paymentFailureCategory) ==
+              ShopPaymentFailure.gatewayDeclined;
+      if (failure != null && !declinedWhileCodeFailed) {
         throw QrPaymentAborted(fresh.paymentFailureCategory);
       }
       // 兜底：后端未升级或纯 PawCoin 单时两字段为 null，行为与改动前完全一致。

@@ -1996,6 +1996,7 @@
   "cartIncrease": "Tambah jumlah",
   "cartRemoveLine": "Hapus produk",
   "cartSelectAll": "Pilih semua",
+  "cartSelectAllShort": "Semua",
   "cartSelectLine": "Pilih {name}",
   "cartSelectNoneHint": "Pilih produk dulu",
   "cartRemovedUndo": "\u201C{name}\u201D dihapus",
