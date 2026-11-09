@@ -38,14 +38,16 @@ public class AiQueryService {
     private final AdminAuditService audit;
     private final AiQueryProperties props;
     private final EntityManager em;
+    private final AiQueryAuthLock authLock;
 
     public AiQueryService(AiQueryConversationRepository conversations, AiQueryMessageRepository messages,
-            AdminAuditService audit, AiQueryProperties props, EntityManager em) {
+            AdminAuditService audit, AiQueryProperties props, EntityManager em, AiQueryAuthLock authLock) {
         this.conversations = conversations;
         this.messages = messages;
         this.audit = audit;
         this.props = props;
         this.em = em;
+        this.authLock = authLock;
     }
 
     /** 新建对话并提交第一问。 */
@@ -94,6 +96,10 @@ public class AiQueryService {
      */
     private SubmitResult appendTurn(long accountId, AiQueryConversation c, String question) {
         String q = validate(question);
+        // 授权失效且尚未恢复（UX D4）：不接受追问 / 重新查询 / 重试，需要管理员先更新 token
+        if (authLock.locked(messages.findByConversationIdOrderByIdAsc(c.getId()))) {
+            throw new AiQueryRejection(AiQueryRejection.Reason.AUTH_FAILED);
+        }
         lockOwner(accountId);
         if (messages.hasUnfinished(c.getId())) {
             throw new AiQueryRejection(AiQueryRejection.Reason.BUSY);

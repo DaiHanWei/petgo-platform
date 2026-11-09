@@ -36,14 +36,20 @@
                 <span class="tn" th:text="#{admin.aiQuery.foot.meta(${m.agentSecs != null ? m.agentSecs : 0}, ${@adminTime.shortWib(m.finishedAt)})}">耗时 28 秒 · 11-09 14:02</span>
                 <span>
                     <button type="button" data-aiq-copy th:attr="data-aiq-copied=#{admin.aiQuery.foot.copied},data-aiq-copy-failed=#{admin.aiQuery.foot.copyFailed}"
-                            th:text="#{admin.aiQuery.foot.copy}">复制</button><form method="post" class="aiq-inline" data-aiq-form th:if="${aiqCurrent != null}"
+                            th:text="#{admin.aiQuery.foot.copy}">复制</button><form method="post" class="aiq-inline" data-aiq-form th:if="${aiqCurrent != null and aiqActions == true}"
                           th:action="@{/admin/ai-query/{c}/requery(c=${aiqCurrent})}"><input type="hidden" name="m" th:value="${m.token}"/><button
                             type="submit" data-aiq-send th:text="#{admin.aiQuery.foot.requery}">重新查询</button></form>
                 </span>
             </div>
         </div>
-        <div th:case="*" class="aiq-err bad" role="alert">
-            <div><b th:text="#{admin.aiQuery.err.failed.title}">查询没有成功</b></div>
+        <!-- D1–D4：在原位置显示原因与下一步。失败 / 授权失效用危险色，超时 / 额度用尽用警告色；授权失效不提供重试 -->
+        <div th:case="*" class="aiq-err" role="alert" th:with="f=${m.failure}"
+             th:classappend="${f != null and f.warn()} ? 'warn' : 'bad'" th:data-aiq-failure="${f != null} ? ${f.name()} : 'FAILED'">
+            <div><b th:text="#{'admin.aiQuery.fail.' + (${f != null} ? ${f.key()} : 'failed') + '.title'}">查询没有成功</b>
+                <p th:text="#{'admin.aiQuery.fail.' + (${f != null} ? ${f.key()} : 'failed') + '.note'}">可以用原问题重试。</p></div>
+            <form method="post" class="aiq-inline" data-aiq-form th:if="${aiqCurrent != null and aiqActions == true and (f == null or f.retryable())}"
+                  th:action="@{/admin/ai-query/{c}/requery(c=${aiqCurrent})}"><input type="hidden" name="m" th:value="${m.token}"/><button
+                    type="submit" class="btn btn-primary btn-sm" data-aiq-send th:text="#{admin.aiQuery.fail.retry}">用原问题重试</button></form>
         </div>
     </th:block>
 </div>

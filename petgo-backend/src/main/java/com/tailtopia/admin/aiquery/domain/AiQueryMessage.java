@@ -151,6 +151,11 @@ public class AiQueryMessage {
         return updatedAt;
     }
 
+    /** 失败分类；未失败为 null。 */
+    public AiQueryFailure getFailure() {
+        return AiQueryFailure.of(status, errorCode);
+    }
+
     public boolean isUnfinished() {
         return status != null && status.isUnfinished();
     }

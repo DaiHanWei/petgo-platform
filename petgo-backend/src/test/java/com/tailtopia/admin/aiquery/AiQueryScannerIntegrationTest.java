@@ -130,10 +130,10 @@ class AiQueryScannerIntegrationTest extends AiQueryIntegrationSupport {
     }
 
     @Test
-    void agentFailureCodesAreStoredAndUnknownJobBecomesFailed() throws Exception {
+    void agentFailureCodesAreStoredAndUnknownJobBecomesFailed(CapturedOutput out) throws Exception {
         Actor a = querier();
         String c1 = ask(a, "q1");
-        String c2 = ask(a, "q2");
+        String c2 = ask(a, "授权失效时的问题原文");
         String c3 = ask(a, "q3");
         scanner.scan();
         stub.failed((String) latest(c1).get("token"), "AGENT_RATE_LIMITED");
@@ -144,6 +144,10 @@ class AiQueryScannerIntegrationTest extends AiQueryIntegrationSupport {
         assertThat(latest(c1)).containsEntry("status", "FAILED").containsEntry("error_code", "AGENT_RATE_LIMITED");
         assertThat(latest(c2)).containsEntry("status", "FAILED").containsEntry("error_code", "AGENT_AUTH_FAILED");
         assertThat(latest(c3)).containsEntry("status", "FAILED").containsEntry("error_code", "AGENT_LOST");
+        // 授权失效记 error 日志（Story 1.8），只有 token，不含问题和答案
+        String authLog = out.getAll().lines().filter(l -> l.contains("authorization failed")).findFirst().orElse("");
+        assertThat(authLog).contains("ERROR").contains((String) latest(c2).get("token"));
+        assertThat(out.getAll()).doesNotContain("授权失效时的问题原文");
     }
 
     @Test

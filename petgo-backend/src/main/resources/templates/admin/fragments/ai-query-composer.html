@@ -5,6 +5,7 @@
   · 未启用（AI_QUERY_MODE=off）：整体禁用（A2）。
   · 新对话：可选回答语言，默认跟随后台界面语言；POST /admin/ai-query。
   · 已有对话：语言只读显示（按对话保存）；POST /admin/ai-query/{token}/messages。
+  · 最新一轮授权失效：禁用，占位「暂时无法提问」（D4）。
   · 该对话有未完成任务：禁用，占位文字说明原因（B4）；若是提交被拒回显的草稿，保持可编辑以免内容丢失。
   · 被拒：错误紧贴输入框上方（role=alert），保留已输入内容（B2 / B6）。
 -->
@@ -12,15 +13,17 @@
 <th:block th:fragment="composer"
           th:with="conv=${aiqView != null} ? ${aiqView.conversation()} : null,
                    busy=${aiqView != null and aiqView.busy()},
-                   dis=${!aiqEnabled or (busy and aiqDraft == null)}">
+                   locked=${aiqView != null and aiqView.authLocked()},
+                   dis=${!aiqEnabled or ((locked or busy) and aiqDraft == null)}">
     <form method="post" data-aiq-form
           th:action="${conv == null} ? @{/admin/ai-query} : @{/admin/ai-query/{t}/messages(t=${conv.token})}">
         <p class="aiq-field-err" role="alert" th:if="${aiqError != null}" th:text="${aiqError}">请输入问题</p>
         <div class="aiq-box" th:classappend="${dis} ? 'is-dis'">
             <textarea name="question" rows="2" data-aiq-question th:disabled="${dis}"
                       th:attr="aria-label=#{admin.aiQuery.composer.label},
-                               placeholder=${busy} ? #{admin.aiQuery.composer.placeholderBusy}
-                                          : (${conv != null} ? #{admin.aiQuery.composer.placeholderFollowUp} : #{admin.aiQuery.composer.placeholder})"
+                               placeholder=${locked} ? #{admin.aiQuery.composer.placeholderLocked}
+                                          : (${busy} ? #{admin.aiQuery.composer.placeholderBusy}
+                                          : (${conv != null} ? #{admin.aiQuery.composer.placeholderFollowUp} : #{admin.aiQuery.composer.placeholder}))"
                       th:text="${aiqDraft}"></textarea>
             <div class="aiq-row">
                 <select name="answerLang" th:if="${conv == null}" th:attr="aria-label=#{admin.aiQuery.composer.lang.label}" th:disabled="${dis}">

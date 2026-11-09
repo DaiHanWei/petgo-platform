@@ -38,7 +38,7 @@ public class AiQueryQueries {
     }
 
     /** 右栏：对话与全部轮次（按时间正序）。 */
-    public record ConversationView(AiQueryConversation conversation, List<AiQueryMessage> messages) {
+    public record ConversationView(AiQueryConversation conversation, List<AiQueryMessage> messages, boolean authLocked) {
 
         public boolean busy() {
             return messages.stream().anyMatch(AiQueryMessage::isUnfinished);
@@ -47,17 +47,20 @@ public class AiQueryQueries {
         public AiQueryMessage latest() {
             return messages.isEmpty() ? null : messages.get(messages.size() - 1);
         }
+
     }
 
     private final AiQueryConversationRepository conversations;
     private final AiQueryMessageRepository messages;
     private final AiQueryProperties props;
+    private final AiQueryAuthLock authLock;
 
     public AiQueryQueries(AiQueryConversationRepository conversations, AiQueryMessageRepository messages,
-            AiQueryProperties props) {
+            AiQueryProperties props, AiQueryAuthLock authLock) {
         this.conversations = conversations;
         this.messages = messages;
         this.props = props;
+        this.authLock = authLock;
     }
 
     /** 左栏一页：行 + 下一页游标（没有更多时为 null）。 */
@@ -153,7 +156,8 @@ public class AiQueryQueries {
         }
         AiQueryConversation c = conversations.findOwned(token, accountId, props.notBefore())
                 .orElseThrow(AiQueryNotFound::new);
-        return new ConversationView(c, messages.findByConversationIdOrderByIdAsc(c.getId()));
+        List<AiQueryMessage> turns = messages.findByConversationIdOrderByIdAsc(c.getId());
+        return new ConversationView(c, turns, authLock.locked(turns));
     }
 
     public static long elapsed(Instant since) {

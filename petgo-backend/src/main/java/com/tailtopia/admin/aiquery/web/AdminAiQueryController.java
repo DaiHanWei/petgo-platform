@@ -205,6 +205,8 @@ public class AdminAiQueryController {
     }
 
     private void populateComposer(ConversationView view, Locale locale, Model model) {
+        // 答案页脚「重新查询」、失败卡「用原问题重试」只在能提交时显示（功能开启、对话不忙、未被授权失效锁住）
+        model.addAttribute("aiqActions", props.isEnabled() && view != null && !view.busy() && !view.authLocked());
         model.addAttribute("aiqEnabled", props.isEnabled());
         model.addAttribute("aiqDefaultLang", AiQueryLanguage.fromLocale(locale).code());
         model.addAttribute("aiqLanguages", AiQueryLanguage.values());

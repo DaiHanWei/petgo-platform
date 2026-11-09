@@ -92,4 +92,10 @@ public interface AiQueryMessageRepository extends JpaRepository<AiQueryMessage, 
                AND c.adminAccountId = :owner AND c.updatedAt >= :notBefore""")
     List<AiQueryMessage> findOwnedByTokens(@Param("tokens") Collection<String> tokens, @Param("owner") long owner,
             @Param("notBefore") Instant notBefore);
+
+    /** 某时刻之后全系统是否有查询成功（用来判断授权失效是否已被修复，见 {@code AiQueryAuthLock}）。 */
+    @Query("""
+            SELECT count(m) > 0 FROM AiQueryMessage m
+             WHERE m.status = com.tailtopia.admin.aiquery.domain.AiQueryStatus.DONE AND m.finishedAt > :since""")
+    boolean anyDoneSince(@Param("since") Instant since);
 }

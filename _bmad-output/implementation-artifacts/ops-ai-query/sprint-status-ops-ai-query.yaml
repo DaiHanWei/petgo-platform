@@ -53,7 +53,7 @@ development_status:
   1-5-后台扫描器推进任务: review
   1-6-在页面上跟踪查询进度: review
   1-7-阅读可信的答案: review
-  1-8-失败时知道原因并重试: backlog
+  1-8-失败时知道原因并重试: review
   1-9-在-stag-跑通真实问答: backlog
   epic-1-retrospective: optional
   epic-2: backlog

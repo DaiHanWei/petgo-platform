@@ -25,7 +25,8 @@ class AiQueryServiceTest {
         AiQueryProperties p = new AiQueryProperties();
         p.setMode(enabled ? "on" : "off");
         return new AiQueryService(mock(AiQueryConversationRepository.class), mock(AiQueryMessageRepository.class),
-                mock(AdminAuditService.class), p, mock(EntityManager.class));
+                mock(AdminAuditService.class), p, mock(EntityManager.class),
+                mock(com.tailtopia.admin.aiquery.service.AiQueryAuthLock.class));
     }
 
     private static AiQueryRejection.Reason reasonOf(Runnable r) {
