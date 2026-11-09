@@ -3,6 +3,7 @@
 // - 运行中的任务不持久化：agent 重启后丢失，GET 返回 404，由 ops 转 FAILED（spec §4.2）
 
 import { runClaude } from './runner.mjs';
+import { prepareJobDir, listJobFiles, sealJobDir } from './files.mjs';
 
 export function createJobManager({ config, store, log, run = runClaude, parentEnv = process.env }) {
   /** @type {Map<string, {status:string, job:object, startedAt?:number}>} */
@@ -52,8 +53,12 @@ export function createJobManager({ config, store, log, run = runClaude, parentEn
   async function execute(token, entry) {
     const started = entry.startedAt;
     let r;
+    let exportDir = null;
     try {
-      r = await run(entry.job, config, parentEnv, abort.signal);
+      if (config.exportDir) {
+        exportDir = await prepareJobDir(config.exportDir, entry.job.conversationToken, token);
+      }
+      r = await run({ ...entry.job, exportDir }, config, parentEnv, abort.signal);
     } catch {
       r = { ok: false, errorCode: 'AGENT_ERROR' };
     }
@@ -64,11 +69,20 @@ export function createJobManager({ config, store, log, run = runClaude, parentEn
       return;
     }
     const secs = Math.round((Date.now() - started) / 1000);
+    let files = [];
+    if (exportDir) {
+      if (r.ok) {
+        try { files = await listJobFiles(exportDir); } catch { files = []; }
+      }
+      await sealJobDir(exportDir);
+    }
     const result = {
       status: r.ok ? 'DONE' : 'FAILED',
       answerMd: r.ok ? r.answerMd : null,
       sessionId: r.sessionId ?? null,
-      files: [],
+      files,
+      // 内部字段：定位导出目录（下载 / 清理用），GET /jobs 不返回
+      conversationToken: entry.job.conversationToken,
       secs,
       turns: r.turns ?? null,
       costUsd: r.costUsd ?? null,

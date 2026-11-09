@@ -17,6 +17,8 @@ try {
 
 fs.mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
 fs.mkdirSync(config.workDir, { recursive: true });
+fs.mkdirSync(config.exportDir, { recursive: true });
+fs.chmodSync(config.exportDir, 0o711);
 const store = createStore(config.dataDir);
 const jobs = createJobManager({ config, store, log });
 const server = createServer({ config, jobs, log });

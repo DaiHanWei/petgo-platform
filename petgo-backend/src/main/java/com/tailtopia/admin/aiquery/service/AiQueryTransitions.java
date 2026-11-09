@@ -70,11 +70,10 @@ public class AiQueryTransitions {
         return won;
     }
 
-    /** 文件名只保留 agent 清单里的基名；大小非负。 */
+    /** 只保留下载时也能通过校验的文件名（同一条规则）；大小非负。 */
     static List<AiQueryFile> sanitize(List<AiQueryFile> files) {
         return files.stream()
-                .filter(f -> f != null && f.name() != null && !f.name().isBlank()
-                        && !f.name().contains("/") && !f.name().contains("\\") && !f.name().startsWith("."))
+                .filter(f -> f != null && AiQueryQueries.isSafeFileName(f.name()))
                 .map(f -> new AiQueryFile(f.name(), Math.max(0, f.size())))
                 .toList();
     }

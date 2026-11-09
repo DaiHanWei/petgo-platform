@@ -40,10 +40,10 @@ export function buildChildEnv(parentEnv, { claudeHome } = {}) {
   return { ...env, ...CHILD_ENV_FIXED };
 }
 
-export function buildArgs({ resumeSessionId, lang }) {
+export function buildArgs({ resumeSessionId, lang, exportDir }) {
   const args = [
     '-p', '--output-format', 'json', '--allowedTools', ALLOWED_TOOLS,
-    '--append-system-prompt', buildSystemPrompt(lang),
+    '--append-system-prompt', buildSystemPrompt(lang, exportDir),
     // 只加载工作目录（root 所有、只读）里的项目设置，忽略 claude 可写的 ~/.claude/settings.json，
     // 防止某次被注入的任务写入 hooks / 权限后影响以后所有任务
     '--setting-sources', 'project',
@@ -69,7 +69,7 @@ export function runClaude(job, config, parentEnv = process.env, abortSignal = un
     let child;
     try {
       child = spawn(config.claudeBin, buildArgs(job), {
-        env: buildChildEnv(parentEnv, config),
+        env: { ...buildChildEnv(parentEnv, config), ...(job.exportDir ? { AIQ_EXPORT_DIR: job.exportDir } : {}) },
         cwd: config.workDir,
         detached: true,
         shell: false,

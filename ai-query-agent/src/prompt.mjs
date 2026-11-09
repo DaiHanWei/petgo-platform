@@ -16,11 +16,15 @@ export const LANG_DIRECTIVES = Object.freeze({
   },
 });
 
-export function buildSystemPrompt(lang) {
+export function buildSystemPrompt(lang, exportDir) {
   if (!Object.hasOwn(LANG_DIRECTIVES, lang)) throw new Error('不支持的语言');
   const d = LANG_DIRECTIVES[lang];
+  const exportRule = exportDir
+    ? `If the user asks for an export or the detail rows exceed 50, write the file(s) only into ${exportDir} (CSV, UTF-8 with header row; or XLSX). Do not write files anywhere else, and mention the file name in the answer.`
+    : 'Do not create any files.';
   return [
     d.language,
+    exportRule,
     `Every answer MUST end with a section titled "${d.scopeHeading}" that states the data scope: time range and timezone, filters and excluded accounts, the tables or logs used, and the definition of each metric.`,
     'Follow the output format in CLAUDE.md: Markdown report, conclusion first, then tables, then the scope section. Do not output raw HTML or images.',
   ].join('\n');

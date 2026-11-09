@@ -42,8 +42,14 @@ export function loadConfig(env = process.env) {
   // claude 子进程的独立 uid / gid / HOME（容器内配置；不配置时与 agent 同用户，仅用于本地测试）
   const claudeUid = env.CLAUDE_UID ? intEnv(env, 'CLAUDE_UID', 0, 1, 2 ** 31 - 1) : undefined;
   const claudeGid = env.CLAUDE_GID ? intEnv(env, 'CLAUDE_GID', 0, 1, 2 ** 31 - 1) : claudeUid;
+  // 导出文件根目录（Story 2.1）：与任务数据目录分开，claude 只能写自己任务的子目录
+  const exportDir = path.resolve(env.EXPORT_DIR || './exports');
+  if (exportDir === dataDir || exportDir.startsWith(dataDir + path.sep)) {
+    throw new Error('EXPORT_DIR 不得位于 DATA_DIR 内');
+  }
   return {
     secret,
+    exportDir,
     claudeUid,
     claudeGid,
     claudeHome: env.CLAUDE_HOME || undefined,

@@ -23,6 +23,7 @@ export function testConfig(over = {}) {
     host: '127.0.0.1',
     dataDir: tmpDir('aiq-data-'),
     workDir: tmpDir('aiq-work-'),
+    exportDir: tmpDir('aiq-export-'),
     claudeBin: FAKE_CLAUDE,
     jobTimeoutMs: 60_000,
     killGraceMs: 300,

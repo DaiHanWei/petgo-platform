@@ -56,8 +56,8 @@ development_status:
   1-8-失败时知道原因并重试: review
   1-9-在-stag-跑通真实问答: backlog
   epic-1-retrospective: optional
-  epic-2: backlog
-  2-1-下载答案里的导出文件: backlog
+  epic-2: in-progress
+  2-1-下载答案里的导出文件: review
   2-2-对话和文件-30-天后自动清除: backlog
   epic-2-retrospective: optional
   epic-3: backlog

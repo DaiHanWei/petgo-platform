@@ -2,8 +2,10 @@
 // 所有接口先校验 X-Internal-Secret（先于任何其他校验）。
 
 import http from 'node:http';
+import { pipeline } from 'node:stream';
 import crypto from 'node:crypto';
 import { isValidToken, LANGS } from './config.mjs';
+import { isSafeFileName, jobDir, openJobFile } from './files.mjs';
 
 export const MAX_BODY = 64 * 1024;
 export const MAX_QUESTION = 2000;
@@ -103,7 +105,35 @@ export function createServer({ config, jobs, log, routes }) {
         if (!isValidToken(token)) return send(res, 404, { error: 'NOT_FOUND' });
         const r = await jobs.get(token);
         if (!r) return send(res, 404, { error: 'NOT_FOUND' });
-        return send(res, 200, r);
+        const { conversationToken: _internal, ...pub } = r;
+        return send(res, 200, pub);
+      }
+
+      // 下载导出文件（Story 2.1）：name 只允许匹配该任务清单里的文件，拒绝路径穿越与符号链接
+      if (req.method === 'GET' && parts.length === 4 && parts[0] === 'jobs' && parts[2] === 'files') {
+        req.resume();
+        const token = parts[1];
+        let name;
+        try { name = decodeURIComponent(parts[3]); } catch { return send(res, 400, { error: 'BAD_NAME' }); }
+        if (!isSafeFileName(name)) return send(res, 400, { error: 'BAD_NAME' });
+        if (!isValidToken(token)) return send(res, 404, { error: 'NOT_FOUND' });
+        const r = await jobs.get(token);
+        if (!r || r.status !== 'DONE' || !r.conversationToken || !config.exportDir
+            || !(r.files || []).some((f) => f.name === name)) {
+          return send(res, 404, { error: 'NOT_FOUND' });
+        }
+        const file = await openJobFile(jobDir(config.exportDir, r.conversationToken, token), name);
+        if (!file) return send(res, 404, { error: 'GONE' });
+        log('file.download', { jobToken: token });
+        res.writeHead(200, {
+          'content-type': 'application/octet-stream',
+          'content-length': String(file.size),
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+        });
+        // pipeline：客户端中途断开时也会关闭文件流，不泄漏文件描述符
+        pipeline(file.stream, res, () => {});
+        return;
       }
 
       if (routes && await routes(req, res, url, { send, HttpError })) return;

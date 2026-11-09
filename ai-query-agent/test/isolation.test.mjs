@@ -86,7 +86,8 @@ test('AC4 三种语言的系统提示：语言指令 + 统计口径要求', asyn
     await a.call('POST', '/jobs', j);
     await waitDone(a, j.jobToken);
     const [rec] = records(a.home);
-    assert.equal(rec.args[rec.args.indexOf('--append-system-prompt') + 1], buildSystemPrompt('id'));
+    assert.ok(rec.env.AIQ_EXPORT_DIR.endsWith(`${j.conversationToken}/${j.jobToken}`));
+    assert.equal(rec.args[rec.args.indexOf('--append-system-prompt') + 1], buildSystemPrompt('id', rec.env.AIQ_EXPORT_DIR));
     assert.equal(rec.cwd, fs.realpathSync(a.config.workDir));
   } finally { await a.close(); }
 });

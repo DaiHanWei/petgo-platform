@@ -2,7 +2,14 @@ package com.tailtopia.admin.aiquery.web;
 
 import com.tailtopia.admin.aiquery.config.AiQueryProperties;
 import com.tailtopia.admin.aiquery.domain.AiQueryLanguage;
+import com.tailtopia.admin.aiquery.agent.AiQueryAgentClient;
+import com.tailtopia.admin.aiquery.service.AiQueryFileGone;
+import com.tailtopia.admin.aiquery.service.AiQueryFileRef;
 import com.tailtopia.admin.aiquery.service.AiQueryNotFound;
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.ContentDisposition;
 import com.tailtopia.admin.aiquery.service.AiQueryQueries;
 import com.tailtopia.admin.aiquery.service.AiQueryQueries.ConversationView;
 import com.tailtopia.admin.aiquery.service.AiQueryRejection;
@@ -49,13 +56,17 @@ public class AdminAiQueryController {
     private final AiQueryService service;
     private final AiQueryQueries queries;
     private final Messages msg;
+    private final AiQueryAgentClient agent;
+    private final AdminAuditService audit;
 
     public AdminAiQueryController(AiQueryProperties props, AiQueryService service, AiQueryQueries queries,
-            Messages msg) {
+            Messages msg, AiQueryAgentClient agent, AdminAuditService audit) {
         this.props = props;
         this.service = service;
         this.queries = queries;
         this.msg = msg;
+        this.agent = agent;
+        this.audit = audit;
     }
 
     /** 新对话（左栏本人对话 + 右栏空态）。 */
@@ -125,6 +136,62 @@ public class AdminAiQueryController {
         }
     }
 
+    /**
+     * 下载答案里的导出文件（Story 2.1）：先校验归属（对话本人、消息在对话里、文件在清单里）再从 agent 流式取回。
+     * 他人 / 不存在 → 404；文件名含路径分隔符等 → 400；超过保留期或 agent 已清除 → 410（C4）。
+     * 取回成功才记 {@code AI_QUERY_DOWNLOAD} 审计，摘要只含 token 与文件名。
+     */
+    @GetMapping(ROUTE + "/{token}/files/{message}/{name}")
+    @PreAuthorize(AUTH)
+    public String download(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @PathVariable String message, @PathVariable String name, Model model, HttpServletResponse response) {
+        if (!AiQueryQueries.isSafeFileName(name)) {
+            response.setStatus(HttpStatus.BAD_REQUEST.value());
+            return fileProblem(model, "admin.aiQuery.file.bad");
+        }
+        AiQueryFileRef ref;
+        try {
+            ref = queries.file(admin.getAdminAccountId(), token, message, name);
+        } catch (AiQueryFileGone e) {
+            response.setStatus(HttpStatus.GONE.value());
+            return fileProblem(model, "admin.aiQuery.file.gone");
+        }
+        var outcome = agent.download(ref.messageToken(), ref.name(), (size, body) -> {
+            audit.record(admin.getAdminAccountId(), AuditActions.AI_QUERY_DOWNLOAD, AiQueryService.AUDIT_TARGET,
+                    ref.messageToken(), "conversation=" + ref.conversationToken() + " message=" + ref.messageToken()
+                            + " file=" + ref.name());
+            response.setStatus(HttpStatus.OK.value());
+            response.setContentType("application/octet-stream");
+            response.setHeader("Content-Disposition", ContentDisposition.attachment()
+                    .filename(ref.name(), StandardCharsets.UTF_8).build().toString());
+            response.setHeader("X-Content-Type-Options", "nosniff");
+            response.setHeader("Cache-Control", "no-store");
+            if (size >= 0) {
+                response.setContentLengthLong(size);
+            }
+            body.transferTo(response.getOutputStream());
+            response.flushBuffer();
+        });
+        return switch (outcome) {
+            // 已开始写出（含中途中断）：响应已提交，不再渲染页面
+            case OK, ABORTED -> null;
+            case GONE -> {
+                response.setStatus(HttpStatus.GONE.value());
+                yield fileProblem(model, "admin.aiQuery.file.gone");
+            }
+            case UNAVAILABLE -> {
+                response.setStatus(HttpStatus.BAD_GATEWAY.value());
+                yield fileProblem(model, "admin.aiQuery.file.unavailable");
+            }
+        };
+    }
+
+    private String fileProblem(Model model, String headingKey) {
+        model.addAttribute("active", "ai-query");
+        model.addAttribute("aiqGoneKey", headingKey);
+        return VIEW_GONE;
+    }
+
     /** 左栏滚动加载（E3，沿用工作台 q-more）：游标之后的一页行 + 下一页哨兵。 */
     @GetMapping(ROUTE + "/rows")
     @PreAuthorize(AUTH)
@@ -154,7 +221,7 @@ public class AdminAiQueryController {
         List<String> w = validTokens(watchedConversations, POLL_MAX_CONVERSATIONS);
         List<String> m = validTokens(watchedMessages, POLL_MAX_MESSAGES);
         var rows = queries.rows(me, w);
-        var msgs = queries.messages(me, m);
+        var msgs = queries.messages(me, current, m);
         ConversationView view = null;
         if (AiQueryTokens.isValid(current) && msgs.stream().anyMatch(x -> !x.isUnfinished())) {
             try {

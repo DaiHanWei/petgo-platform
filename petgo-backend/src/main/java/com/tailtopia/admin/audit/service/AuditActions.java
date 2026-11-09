@@ -306,6 +306,8 @@ public final class AuditActions {
     // ===== ops AI 查数（主题 ops-ai-query，spec §5.5）=====
     /** 🔒 提交问题（新对话或追问）。摘要只记对话 / 消息 token、语言、问题长度；<b>严禁写问题原文</b>（可能含手机号等 PII）。 */
     public static final String AI_QUERY_SUBMIT = "AI_QUERY_SUBMIT";
+    /** 下载答案里的导出文件。摘要只记对话 / 消息 token 与文件名。 */
+    public static final String AI_QUERY_DOWNLOAD = "AI_QUERY_DOWNLOAD";
 
     private AuditActions() {
     }

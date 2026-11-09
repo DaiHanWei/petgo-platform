@@ -15,6 +15,8 @@
 | 代码挂载 | 服务器 deploy key 拉取的仓库 → `/repo:ro` | 同左 |
 | ops 侧 | `petgo-server-stag`，`AI_QUERY_AGENT_URL=http://ai-query-agent-stag:8790` | `petgo-server` |
 
+导出文件：`ai-query-agent-stag-exports` 卷挂到 `/exports`，按 `<对话 token>/<任务 token>/` 隔离，30 天随对话清除（Story 2.2）。
+
 运行限制：1 核 2G、`--read-only` 根文件系统（`/tmp` 为 tmpfs）、`--cap-drop ALL`（只加回 `SETUID`/`SETGID`/`KILL`）、`no-new-privileges`、**不挂 docker socket、不映射端口**、日志和代码只读挂载（代码为无 `.git` 的快照 `repo-<sha>`）。
 
 进程模型：agent（node）以容器内 root 运行，claude 及其 Bash 以 uid 10002 运行并加 `--setting-sources project`。这样 claude 读不到 agent 进程的 env（`AGENT_SECRET`）和 `/data` 下其他任务的结果，也无法通过改写 `~/.claude/settings.json` 给以后的任务埋 hooks。

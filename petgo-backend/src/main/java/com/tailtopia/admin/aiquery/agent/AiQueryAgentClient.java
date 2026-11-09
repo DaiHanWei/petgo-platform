@@ -114,6 +114,57 @@ public class AiQueryAgentClient {
         }
     }
 
+    /** 下载结果。 */
+    public enum DownloadOutcome {
+        /** 已写出。 */
+        OK,
+        /** 404：文件或任务已不在 agent 上（已清除）。 */
+        GONE,
+        /** 不可达 / 其他错误（尚未向浏览器写出任何内容）。 */
+        UNAVAILABLE,
+        /** 已开始写出后中断（浏览器取消 / 连接断开）：响应已提交。 */
+        ABORTED
+    }
+
+    /** 回调：agent 返回 200 时调用，参数为文件大小（未知为 -1）与文件流；在回调里写出响应。 */
+    @FunctionalInterface
+    public interface FileSink {
+        void accept(long size, java.io.InputStream body) throws java.io.IOException;
+    }
+
+    /** 从 agent 取回导出文件，流式交给 {@code sink}（不在内存里整份缓存）。 */
+    public DownloadOutcome download(String jobToken, String name, FileSink sink) {
+        if (!props.agentConfigured()) {
+            return DownloadOutcome.UNAVAILABLE;
+        }
+        try {
+            return rest.get().uri(props.getAgentUrl() + "/jobs/{t}/files/{n}", jobToken, name)
+                    .header(SECRET_HEADER, props.getAgentSecret())
+                    .exchange((req, res) -> {
+                        int s = res.getStatusCode().value();
+                        if (s == 404) {
+                            return DownloadOutcome.GONE;
+                        }
+                        if (s != 200) {
+                            if (s == 401) {
+                                logAuthMismatch(jobToken);
+                            }
+                            return DownloadOutcome.UNAVAILABLE;
+                        }
+                        try {
+                            sink.accept(res.getHeaders().getContentLength(), res.getBody());
+                        } catch (java.io.IOException e) {
+                            log.info("ai-query download aborted jobToken={} cause={}", jobToken, e.getClass().getSimpleName());
+                            return DownloadOutcome.ABORTED;
+                        }
+                        return DownloadOutcome.OK;
+                    });
+        } catch (RestClientException e) {
+            log.warn("ai-query agent unreachable on download jobToken={} cause={}", jobToken, e.getClass().getSimpleName());
+            return DownloadOutcome.UNAVAILABLE;
+        }
+    }
+
     public PollOutcome poll(String jobToken) {
         if (!props.agentConfigured()) {
             return new PollOutcome.Unreachable();

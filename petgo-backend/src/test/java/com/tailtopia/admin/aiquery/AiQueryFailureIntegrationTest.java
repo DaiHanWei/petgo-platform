@@ -87,27 +87,36 @@ class AiQueryFailureIntegrationTest extends AiQueryIntegrationSupport {
     @Test
     void authLockAlsoBlocksFollowUpAndClearsOnceAnyQuerySucceedsAgain() throws Exception {
         enable();
-        // 共享库里别的用例的成功记录不能影响本用例的时间线：失败时刻设在未来
+        // 共享库里别的用例的成功记录不能影响本用例的时间线：失败时刻设在远未来；结束时复原，免得污染后续用例
         Actor a = querier();
         String conv = ask(a, "q");
-        jdbc.update("""
-                UPDATE ai_query_messages SET status = 'FAILED', error_code = 'AGENT_AUTH_FAILED', finished_at = now() + interval '1 hour'
-                 WHERE conversation_id = (SELECT id FROM ai_query_conversations WHERE token = ?)""", conv);
-        mvc.perform(post("/admin/ai-query/" + conv + "/messages").param("question", "追问").param("lang", "zh_CN")
-                        .with(csrf()).with(authentication(a.auth())))
-                .andExpect(status().isUnprocessableEntity());
-        assertThat(messages(conv)).hasSize(1);
-        // 新建对话不加锁（总得有人验证更新后的 token）
-        String probe = ask(a, "验证新 token");
-        // 管理员更新 token 后有查询成功 → 锁解除
-        jdbc.update("""
-                UPDATE ai_query_messages SET status = 'DONE', answer_md = 'ok', finished_at = now() + interval '2 hours'
-                 WHERE conversation_id = (SELECT id FROM ai_query_conversations WHERE token = ?)""", probe);
-        String html = view(a, conv);
-        assertThat(html).contains("AI 服务授权已失效").doesNotContain("暂时无法提问");
-        mvc.perform(post("/admin/ai-query/" + conv + "/messages").param("question", "追问").with(csrf()).with(authentication(a.auth())))
-                .andExpect(status().is3xxRedirection());
-        assertThat(messages(conv)).hasSize(2);
+        String probe = null;
+        try {
+            jdbc.update("""
+                    UPDATE ai_query_messages SET status = 'FAILED', error_code = 'AGENT_AUTH_FAILED',
+                           finished_at = now() + interval '100 years'
+                     WHERE conversation_id = (SELECT id FROM ai_query_conversations WHERE token = ?)""", conv);
+            mvc.perform(post("/admin/ai-query/" + conv + "/messages").param("question", "追问").param("lang", "zh_CN")
+                            .with(csrf()).with(authentication(a.auth())))
+                    .andExpect(status().isUnprocessableEntity());
+            assertThat(messages(conv)).hasSize(1);
+            // 新建对话不加锁（总得有人验证更新后的 token）
+            probe = ask(a, "验证新 token");
+            // 管理员更新 token 后有查询成功 → 锁解除
+            jdbc.update("""
+                    UPDATE ai_query_messages SET status = 'DONE', answer_md = 'ok', finished_at = now() + interval '101 years'
+                     WHERE conversation_id = (SELECT id FROM ai_query_conversations WHERE token = ?)""", probe);
+            String html = view(a, conv);
+            assertThat(html).contains("AI 服务授权已失效").doesNotContain("暂时无法提问");
+            mvc.perform(post("/admin/ai-query/" + conv + "/messages").param("question", "追问").with(csrf()).with(authentication(a.auth())))
+                    .andExpect(status().is3xxRedirection());
+            assertThat(messages(conv)).hasSize(2);
+        } finally {
+            jdbc.update("""
+                    UPDATE ai_query_messages SET finished_at = now() - interval '1 day'
+                     WHERE conversation_id IN (SELECT id FROM ai_query_conversations WHERE token IN (?, ?))""",
+                    conv, probe == null ? conv : probe);
+        }
     }
 
     @Test

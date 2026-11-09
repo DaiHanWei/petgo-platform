@@ -129,10 +129,16 @@ public class AiQueryQueries {
         return cs.stream().map(c -> row(c, latest.get(c.getId()))).toList();
     }
 
-    /** 轮询：本人未过期对话里的指定几轮。 */
+    /** 轮询：本人未过期的当前对话里的指定几轮（不属于该对话的不返回，避免下载链接拼错对话 token）。 */
     @Transactional(readOnly = true)
-    public List<AiQueryMessage> messages(long accountId, Collection<String> tokens) {
-        return tokens.isEmpty() ? List.of() : messages.findOwnedByTokens(tokens, accountId, props.notBefore());
+    public List<AiQueryMessage> messages(long accountId, String conversationToken, Collection<String> tokens) {
+        if (tokens.isEmpty() || !AiQueryTokens.isValid(conversationToken)) {
+            return List.of();
+        }
+        return conversations.findOwned(conversationToken, accountId, props.notBefore())
+                .map(c -> messages.findOwnedByTokens(tokens, accountId, props.notBefore()).stream()
+                        .filter(m -> m.getConversationId() == c.getId()).toList())
+                .orElse(List.of());
     }
 
     private Map<Long, AiQueryMessage> latestOf(List<AiQueryConversation> cs) {
@@ -167,6 +173,43 @@ public class AiQueryQueries {
     /** 某一轮的已用时长（秒）。 */
     public static long elapsedSecs(AiQueryMessage m) {
         return elapsed(startedAt(m));
+    }
+
+    /**
+     * 文件名规则（与 agent {@code files.mjs} 一致）：不含路径分隔符、NUL / 换行、{@code % ; ? #}（防火墙会拒绝路径里编码后的这些字符），
+     * 不以点开头，≤200 字。清单落库前（{@code AiQueryTransitions}）与下载时用同一条规则。
+     */
+    private static final java.util.regex.Pattern SAFE_FILE_NAME = java.util.regex.Pattern.compile("[^/\\\\\\x00\\r\\n%;?#]{1,200}");
+
+    public static boolean isSafeFileName(String name) {
+        return name != null && SAFE_FILE_NAME.matcher(name).matches() && !name.startsWith(".");
+    }
+
+    /**
+     * 下载前的归属校验（Story 2.1）：对话本人且未过期、消息属于该对话且已完成、文件在清单里；
+     * 否则 {@link AiQueryNotFound}（统一 404）。超过保留期 → {@link AiQueryFileGone}。
+     */
+    @Transactional(readOnly = true)
+    public AiQueryFileRef file(long accountId, String conversationToken, String messageToken, String name) {
+        if (!AiQueryTokens.isValid(conversationToken) || !AiQueryTokens.isValid(messageToken) || !isSafeFileName(name)) {
+            throw new AiQueryNotFound();
+        }
+        AiQueryConversation c = conversations.findOwned(conversationToken, accountId, props.notBefore())
+                .orElseThrow(AiQueryNotFound::new);
+        AiQueryMessage m = messages.findByTokenAndConversationId(messageToken, c.getId())
+                .filter(x -> x.getStatus() == AiQueryStatus.DONE)
+                .orElseThrow(AiQueryNotFound::new);
+        var f = m.getFiles().stream().filter(x -> name.equals(x.name())).findFirst().orElseThrow(AiQueryNotFound::new);
+        if (filesGone(m)) {
+            throw new AiQueryFileGone();
+        }
+        return new AiQueryFileRef(c.getToken(), m.getToken(), f.name(), f.size());
+    }
+
+    /** 某一轮的导出文件是否已超过保留期（按该轮完成时间计，UX C4）。 */
+    public boolean filesGone(AiQueryMessage m) {
+        Instant at = m.getFinishedAt() != null ? m.getFinishedAt() : m.getUpdatedAt();
+        return at != null && at.isBefore(props.notBefore());
     }
 
     /** 计时起点：排队中从提交算，查询中从派发给 agent 算。 */

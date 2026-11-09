@@ -9,6 +9,7 @@
 //   BG_ORPHAN        → 留下占着 stdout 的后台孙进程后正常退出
 //   SLOW:<ms>        → 等待后成功
 //   ECHO_ENV:<name>  → 把指定 env 写入答案（用于验证 env 白名单）
+//   WRITE_FILE       → 在 AIQ_EXPORT_DIR 写 report.csv（及一个隐藏文件、一个子目录、一个指向 /etc/passwd 的符号链接）
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -67,6 +68,14 @@ if (marker === 'HANG' || marker === 'HANG_STUBBORN') {
   save();
   process.stderr.write('something unexpected SECRET_QUESTION_TEXT\n');
   process.exitCode = 2;
+} else if (marker === 'WRITE_FILE') {
+  const dir = process.env.AIQ_EXPORT_DIR;
+  fs.writeFileSync(path.join(dir, 'report.csv'), 'week,count\n1,1612\n');
+  fs.writeFileSync(path.join(dir, '.hidden'), 'x');
+  fs.mkdirSync(path.join(dir, 'sub'));
+  fs.symlinkSync('/etc/passwd', path.join(dir, 'leak.csv'));
+  save();
+  success('已导出 report.csv');
 } else if (marker.startsWith('ECHO_ENV:')) {
   save();
   success(String(process.env[marker.slice(9)] ?? '<unset>'));

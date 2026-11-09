@@ -49,6 +49,7 @@ readonly DB_CONTAINER="petgo-postgres"
 readonly HOME_VOLUME="ai-query-agent-stag-home"
 readonly CLAUDE_UID="10002"
 readonly DATA_VOLUME="ai-query-agent-stag-data"
+readonly EXPORT_VOLUME="ai-query-agent-stag-exports"
 # stag 只挂 stag 日志（spec §7）
 readonly STAG_LOG_DIR="~/petgo-server-stag/logs"
 
@@ -130,6 +131,7 @@ docker run -d \\
   -v "\$SNAP":/repo:ro \\
   -v $HOME_VOLUME:/home/claude \\
   -v $DATA_VOLUME:/data \\
+  -v $EXPORT_VOLUME:/exports \\
   $IMAGE
 
 # Story 3.1 白名单代理落地前，临时接一个可出网的普通网络供 claude 访问 Anthropic API

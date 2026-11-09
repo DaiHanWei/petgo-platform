@@ -12,7 +12,8 @@ RUN apt-get update \
  && npm cache clean --force \
  && useradd --create-home --uid 10002 --shell /usr/sbin/nologin claude \
  && chmod 700 /home/claude \
- && mkdir -p /data && chmod 700 /data
+ && mkdir -p /data && chmod 700 /data \
+ && mkdir -p /exports && chmod 711 /exports
 
 WORKDIR /app
 # 代码与说明书归 root 所有，agent 用户只读，claude 无法改写说明书
@@ -30,6 +31,7 @@ ENV NODE_ENV=production \
     CLAUDE_GID=10002 \
     CLAUDE_HOME=/home/claude \
     DATA_DIR=/data \
+    EXPORT_DIR=/exports \
     WORK_DIR=/app/work \
     PORT=8790 \
     TZ=Asia/Jakarta
