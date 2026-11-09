@@ -110,6 +110,21 @@ public class AdminAiQueryController {
         }
     }
 
+    /** 重新查询 / 用原问题重试：在当前对话新增一轮，沿用某一轮的原问题。 */
+    @PostMapping(ROUTE + "/{token}/requery")
+    @PreAuthorize(AUTH)
+    public String requery(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable String token,
+            @RequestParam(value = "m", required = false) String messageToken,
+            Locale locale, Model model, HttpServletResponse response) {
+        try {
+            service.requery(admin.getAdminAccountId(), token, messageToken);
+            return "redirect:" + ROUTE + "/" + token;
+        } catch (AiQueryRejection e) {
+            populate(admin.getAdminAccountId(), queries.view(admin.getAdminAccountId(), token), locale, model);
+            return rejected(e, null, model, response);
+        }
+    }
+
     /** 左栏滚动加载（E3，沿用工作台 q-more）：游标之后的一页行 + 下一页哨兵。 */
     @GetMapping(ROUTE + "/rows")
     @PreAuthorize(AUTH)

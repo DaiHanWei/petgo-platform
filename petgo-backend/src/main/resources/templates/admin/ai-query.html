@@ -11,6 +11,10 @@
     <title th:text="#{admin.aiQuery.pageTitle}">AI 查数 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
+    <!-- 答案渲染：marked 15.0.12 + DOMPurify 3.2.6（固定版本，见 vendor/README.md），先净化再写入页面 -->
+    <script defer th:src="@{/admin/vendor/marked.umd.js}"></script>
+    <script defer th:src="@{/admin/vendor/purify.min.js}"></script>
+    <script defer th:src="@{/admin/admin-ai-query-render.js}"></script>
     <script defer th:src="@{/admin/admin-ai-query.js}"></script>
 </head>
 <body>

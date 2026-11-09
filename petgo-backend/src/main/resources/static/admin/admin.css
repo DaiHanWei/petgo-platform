@@ -1547,3 +1547,13 @@ body:has(#growthbatch-drawer.drawer.is-open) .toast { right: 24px; bottom: 76px;
 .aiq-row select { font-size: var(--fs-xs); padding: 4px 6px; }
 .aiq-lang { font-size: var(--fs-xs); color: var(--muted); }
 .aiq-hint { flex: 1; font-size: var(--fs-xs); color: var(--muted); text-align: right; }
+.aiq-md { color: var(--ink); line-height: 1.6; overflow-wrap: anywhere; }
+.aiq-md > :first-child { margin-top: 0; }
+.aiq-md h1, .aiq-md h2, .aiq-md h3, .aiq-md h4 { font-size: 14px; margin: 14px 0 6px; }
+.aiq-md p, .aiq-md ul, .aiq-md ol { margin: 0 0 10px; }
+.aiq-md pre { background: var(--surface-quiet); border-radius: var(--radius-sm); padding: 8px 10px; overflow: auto; }
+.aiq-md .aiq-table table { width: 100%; }
+.aiq-md .amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.aiq-scope > p, .aiq-scope > ul, .aiq-scope > ol { display: inline; margin: 0; }
+.aiq-scope > ul, .aiq-scope > ol { display: block; padding-left: 18px; }
+.aiq-inline { display: inline; margin: 0; }

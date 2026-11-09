@@ -45,6 +45,73 @@
         var btn = form.querySelector('[data-aiq-send]');
         if (btn) { btn.disabled = true; }
     });
+    // ---------- 答案渲染（Story 1.7）----------
+    function renderAnswers() {
+        if (!window.AiqRender) { return; }
+        document.querySelectorAll('[data-aiq-answer]:not([data-aiq-ready])').forEach(function (box) {
+            var tpl = box.querySelector('template[data-aiq-md]');
+            var out = box.querySelector('[data-aiq-rendered]');
+            if (!tpl || !out) { return; }
+            window.AiqRender.renderInto(out, tpl.content ? tpl.content.textContent : tpl.textContent);
+            box.setAttribute('data-aiq-ready', '1');
+        });
+    }
+
+    /** 打开对话时定位到最新一轮（C3）。 */
+    function scrollToLatest() {
+        var detail = document.getElementById('aiq-detail');
+        var turns = document.querySelectorAll('#aiq-detail .aiq-turn');
+        if (!detail || turns.length < 2) { return; }
+        var last = turns[turns.length - 1];
+        detail.scrollTop = Math.max(0, last.offsetTop - detail.offsetTop - 12);
+    }
+
+    // 复制整个答案（UX-DR16）
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-aiq-copy]') : null;
+        if (!btn) { return; }
+        var box = btn.closest('[data-aiq-answer]');
+        var tpl = box && box.querySelector('template[data-aiq-md]');
+        if (!tpl) { return; }
+        var text = tpl.content ? tpl.content.textContent : tpl.textContent;
+        var flash = function (key) {
+            var label = btn.getAttribute('data-aiq-label') || btn.textContent;
+            btn.setAttribute('data-aiq-label', label);
+            btn.textContent = btn.getAttribute(key) || label;
+            setTimeout(function () { btn.textContent = label; }, 2000);
+        };
+        // 复制失败绝不能静默：提示失败，并选中渲染后的答案让人手动复制（同 admin-core.js 的口径）
+        var fail = function () {
+            flash('data-aiq-copy-failed');
+            var rendered = box.querySelector('[data-aiq-rendered]');
+            if (rendered && window.getSelection) {
+                var range = document.createRange();
+                range.selectNodeContents(rendered);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        };
+        var legacy = function () {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = false;
+            try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+            document.body.removeChild(ta);
+            if (ok) { flash('data-aiq-copied'); } else { fail(); }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { flash('data-aiq-copied'); }, legacy);
+        } else {
+            legacy();
+        }
+    });
+
     // ---------- 计时器 ----------
     function pad(n) { return n < 10 ? '0' + n : String(n); }
     function clock(secs) {
@@ -169,6 +236,7 @@
             }
         });
         tick();
+        renderAnswers();
         if (finished > 0 && document.hidden) {
             awayDone += finished;
             var label = (page() && page().getAttribute('data-aiq-done-label')) || 'done';
@@ -195,6 +263,8 @@
 
     function start() {
         if (!page()) { return; }
+        renderAnswers();
+        scrollToLatest();
         tick();
         // 只在页面上有计时器时走表
         setInterval(function () { if (document.querySelector('[data-aiq-elapsed]')) { tick(); } }, 1000);

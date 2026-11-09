@@ -16,6 +16,8 @@ public interface AiQueryMessageRepository extends JpaRepository<AiQueryMessage, 
 
     List<AiQueryMessage> findByConversationIdOrderByIdAsc(long conversationId);
 
+    java.util.Optional<AiQueryMessage> findByTokenAndConversationId(String token, long conversationId);
+
     /** 某对话是否有未完成任务（同一 Claude 会话不可并发，spec §5.3）。 */
     @Query("""
             SELECT count(m) > 0 FROM AiQueryMessage m

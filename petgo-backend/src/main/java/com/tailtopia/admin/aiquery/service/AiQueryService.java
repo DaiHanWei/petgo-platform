@@ -67,9 +67,32 @@ public class AiQueryService {
             throw new AiQueryNotFound();
         }
         // 先确认归属（不存在 / 他人 / 过期 → 404），再校验内容：对他人对话不泄露任何校验信息。
-        // 只有本人能往自己的对话追问，本人的提交已由 advisory lock 串行化，无需再锁对话行。
         AiQueryConversation c = conversations.findOwned(conversationToken, accountId, props.notBefore())
                 .orElseThrow(AiQueryNotFound::new);
+        return appendTurn(accountId, c, question);
+    }
+
+    /**
+     * 用某一轮的原问题再问一次（Story 1.7「重新查询」、Story 1.8「用原问题重试」）：在当前对话新增一轮，
+     * 遵守同一对话忙、单人上限 3 的限制。
+     */
+    @Transactional
+    public SubmitResult requery(long accountId, String conversationToken, String messageToken) {
+        if (!AiQueryTokens.isValid(conversationToken) || !AiQueryTokens.isValid(messageToken)) {
+            throw new AiQueryNotFound();
+        }
+        AiQueryConversation c = conversations.findOwned(conversationToken, accountId, props.notBefore())
+                .orElseThrow(AiQueryNotFound::new);
+        AiQueryMessage original = messages.findByTokenAndConversationId(messageToken, c.getId())
+                .orElseThrow(AiQueryNotFound::new);
+        return appendTurn(accountId, c, original.getQuestion());
+    }
+
+    /**
+     * 在本人已确认归属的对话里追加一轮（追问 / 重新查询 / 重试共用）：校验 → 按账号加锁 → 同一对话忙 → 单人上限。
+     * 只有本人能往自己的对话追加，本人的提交已由 advisory lock 串行化，无需再锁对话行。
+     */
+    private SubmitResult appendTurn(long accountId, AiQueryConversation c, String question) {
         String q = validate(question);
         lockOwner(accountId);
         if (messages.hasUnfinished(c.getId())) {

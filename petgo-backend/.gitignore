@@ -37,3 +37,7 @@ logs/
 
 # 本地 redis-server 快照（测试数据，绝不入库）
 dump.rdb
+
+# 后台前端脚本测试（src/test/js）的本地依赖
+src/test/js/node_modules
+src/test/js/package-lock.json

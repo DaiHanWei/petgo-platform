@@ -28,8 +28,19 @@
                 <span class="tn"><span th:text="#{admin.aiQuery.run.elapsed}">已用时</span> <span th:data-aiq-elapsed="${secs}" th:text="${@aiqFormat.clock(secs)}">00:32</span></span></div>
             <p th:text="#{admin.aiQuery.run.note}">查询在后台运行，可以离开页面，完成后在左侧列表查看。</p>
         </div>
-        <div th:case="'DONE'" class="aiq-a">
-            <div class="aiq-md" th:text="${m.answerMd}">答案</div>
+        <!-- C1 / C3：报告式。原文放在 template 里（服务端已转义），由 admin-ai-query-render.js 净化后渲染进 aiq-md -->
+        <div th:case="'DONE'" class="aiq-a" data-aiq-answer>
+            <template data-aiq-md th:text="${m.answerMd}"></template>
+            <div class="aiq-md" data-aiq-rendered></div>
+            <div class="aiq-foot">
+                <span class="tn" th:text="#{admin.aiQuery.foot.meta(${m.agentSecs != null ? m.agentSecs : 0}, ${@adminTime.shortWib(m.finishedAt)})}">耗时 28 秒 · 11-09 14:02</span>
+                <span>
+                    <button type="button" data-aiq-copy th:attr="data-aiq-copied=#{admin.aiQuery.foot.copied},data-aiq-copy-failed=#{admin.aiQuery.foot.copyFailed}"
+                            th:text="#{admin.aiQuery.foot.copy}">复制</button><form method="post" class="aiq-inline" data-aiq-form th:if="${aiqCurrent != null}"
+                          th:action="@{/admin/ai-query/{c}/requery(c=${aiqCurrent})}"><input type="hidden" name="m" th:value="${m.token}"/><button
+                            type="submit" data-aiq-send th:text="#{admin.aiQuery.foot.requery}">重新查询</button></form>
+                </span>
+            </div>
         </div>
         <div th:case="*" class="aiq-err bad" role="alert">
             <div><b th:text="#{admin.aiQuery.err.failed.title}">查询没有成功</b></div>
