@@ -7,6 +7,7 @@ import com.tailtopia.admin.aiquery.service.AiQueryQueries;
 import com.tailtopia.admin.aiquery.service.AiQueryQueries.ConversationView;
 import com.tailtopia.admin.aiquery.service.AiQueryRejection;
 import com.tailtopia.admin.aiquery.service.AiQueryService;
+import com.tailtopia.admin.aiquery.service.AiQueryTokens;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.i18n.Messages;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,7 +24,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * ops AI 查数页（主题 ops-ai-query，spec §5.2 / §5.3，UX A–E）。SSR，表单 PRG；轮询走 htmx（Story 1.6）。
+ * ops AI 查数页（主题 ops-ai-query，spec §5.2 / §5.3，UX A–E）。SSR，表单 PRG；
+ * 轮询由 admin-ai-query.js 的 fetch 循环调用 {@code /poll}（Story 1.6），左栏滚动加载用 htmx q-more。
  *
  * <ul>
  * <li>权限：{@code ai.query}，不预授予任何角色；SUPER_ADMIN 隐式拥有。无权限走现有拒绝页（A3）。</li>
@@ -108,6 +110,61 @@ public class AdminAiQueryController {
         }
     }
 
+    /** 左栏滚动加载（E3，沿用工作台 q-more）：游标之后的一页行 + 下一页哨兵。 */
+    @GetMapping(ROUTE + "/rows")
+    @PreAuthorize(AUTH)
+    public String rows(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(value = "after", required = false) String after,
+            @RequestParam(value = "c", required = false) String current, Model model) {
+        model.addAttribute("aiqList", queries.list(admin.getAdminAccountId(), after));
+        model.addAttribute("aiqFirstPage", after == null);
+        model.addAttribute("aiqCurrent", current);
+        return "admin/fragments/ai-query-list :: rows";
+    }
+
+    /**
+     * 页面轮询（UX-DR13，仅在有未完成任务时由 admin-ai-query.js 每 3 秒调用）：
+     * {@code w} = 左栏里未完成的对话，{@code m} = 右栏里未完成的轮次，{@code c} = 当前对话。
+     * 返回按元素 id 替换的片段：左栏行、右栏轮次；当前对话的未完成轮次结束时，连同输入框一起替换。
+     * 只返回本人未过期的数据；查不到的 token 不返回任何内容（前端随即停止关注）。
+     */
+    @GetMapping(ROUTE + "/poll")
+    @PreAuthorize(AUTH)
+    public String poll(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(value = "w", required = false) List<String> watchedConversations,
+            @RequestParam(value = "m", required = false) List<String> watchedMessages,
+            @RequestParam(value = "c", required = false) String current,
+            Locale locale, Model model, HttpServletResponse response) {
+        long me = admin.getAdminAccountId();
+        List<String> w = validTokens(watchedConversations, POLL_MAX_CONVERSATIONS);
+        List<String> m = validTokens(watchedMessages, POLL_MAX_MESSAGES);
+        var rows = queries.rows(me, w);
+        var msgs = queries.messages(me, m);
+        ConversationView view = null;
+        if (AiQueryTokens.isValid(current) && msgs.stream().anyMatch(x -> !x.isUnfinished())) {
+            try {
+                view = queries.view(me, current);
+            } catch (AiQueryNotFound ignored) {
+                view = null;
+            }
+        }
+        populateComposer(view, locale, model);
+        model.addAttribute("aiqRows", rows);
+        model.addAttribute("aiqMessages", msgs);
+        model.addAttribute("aiqComposerRefresh", view != null);
+        model.addAttribute("aiqCurrent", current);
+        response.setHeader("Cache-Control", "no-store");
+        return "admin/fragments/ai-query-poll :: poll";
+    }
+
+    static final int POLL_MAX_CONVERSATIONS = 50;
+    static final int POLL_MAX_MESSAGES = 10;
+
+    private static List<String> validTokens(List<String> in, int max) {
+        return in == null ? List.of()
+                : in.stream().filter(AiQueryTokens::isValid).distinct().limit(max).toList();
+    }
+
     /** E1：不存在 / 属于他人 / 已过期，同一文案、同一状态码。 */
     @org.springframework.web.bind.annotation.ExceptionHandler(AiQueryNotFound.class)
     public String notFound(Model model, HttpServletResponse response) {
@@ -125,11 +182,17 @@ public class AdminAiQueryController {
 
     private void populate(long accountId, ConversationView view, Locale locale, Model model) {
         model.addAttribute("active", "ai-query");
+        populateComposer(view, locale, model);
+        model.addAttribute("aiqSamples", SAMPLE_KEYS);
+        model.addAttribute("aiqList", queries.list(accountId, null));
+        model.addAttribute("aiqFirstPage", true);
+        model.addAttribute("aiqCurrent", view == null ? null : view.conversation().getToken());
+    }
+
+    private void populateComposer(ConversationView view, Locale locale, Model model) {
         model.addAttribute("aiqEnabled", props.isEnabled());
         model.addAttribute("aiqDefaultLang", AiQueryLanguage.fromLocale(locale).code());
         model.addAttribute("aiqLanguages", AiQueryLanguage.values());
-        model.addAttribute("aiqSamples", SAMPLE_KEYS);
-        model.addAttribute("aiqList", queries.list(accountId, 0));
         model.addAttribute("aiqView", view);
     }
 }

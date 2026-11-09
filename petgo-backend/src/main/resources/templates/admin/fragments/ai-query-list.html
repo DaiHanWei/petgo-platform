@@ -1,33 +1,47 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <!--
-  ops AI 查数左栏（UX-DR10）：本人对话，最后更新倒序；状态 = 最新一轮的状态（圆点 + 文字）。
-  list = 整个列表（空态「还没有对话」）；row(r, current) = 单行（链接到对话深链）。
+  ops AI 查数左栏（UX-DR10）：本人对话，最后更新倒序；状态 = 最新一轮的状态，圆点 + 文字。
+  · 排队中 / 查询中带计时（data-aiq-elapsed，admin-ai-query.js 每秒走表），行带 data-aiq-unfinished 供轮询关注（B5）。
+  · 滚动加载沿用工作台 q-more（E3）：hx-trigger="revealed"。
+  list = 首屏；rows = 一页行 + 下一页哨兵（游标分页）；row(r, current) = 单行。
 -->
 <body>
 <th:block th:fragment="list">
     <div class="empty" th:if="${aiqList.isEmpty()}"><p th:text="#{admin.aiQuery.list.empty}">还没有对话</p></div>
     <ul class="q-list" id="aiq-rows" th:unless="${aiqList.isEmpty()}">
-        <th:block th:each="r : ${aiqList.content}">
-            <li th:replace="~{admin/fragments/ai-query-list :: row(${r}, ${aiqView != null and aiqView.conversation().token == r.token()})}"></li>
-        </th:block>
+        <th:block th:replace="~{admin/fragments/ai-query-list :: rows}"></th:block>
     </ul>
 </th:block>
 
+<th:block th:fragment="rows">
+    <th:block th:each="r : ${aiqList.rows()}">
+        <li th:replace="~{admin/fragments/ai-query-list :: row(${r}, ${aiqCurrent != null and aiqCurrent == r.token()})}"></li>
+    </th:block>
+    <li th:if="${aiqList.next() != null}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
+        th:attr="hx-get=@{/admin/ai-query/rows(after=${aiqList.next()},c=${aiqCurrent})}">
+        <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
+    </li>
+</th:block>
+
 <ul th:remove="tag">
-    <li th:fragment="row(r, current)" th:id="'aiq-row-' + ${r.token()}" th:data-token="${r.token()}">
+    <li th:fragment="row(r, current)" th:id="'aiq-row-' + ${r.token()}" th:data-token="${r.token()}"
+        th:attr="data-aiq-unfinished=${r.unfinished()} ? 'true' : null">
         <a class="q-row" th:classappend="${current} ? 'on'" th:href="@{/admin/ai-query/{t}(t=${r.token()})}"
            th:attr="aria-current=${current} ? 'page' : null">
             <span class="q-title" th:text="${r.title()}">10 月注册用户有多少？按周拆分</span>
-            <span class="q-meta">
-                <th:block th:switch="${r.status() != null} ? ${r.status().name()} : ''">
-                    <span th:case="'PENDING'" class="aiq-st wait"><i></i><span th:text="#{admin.aiQuery.status.pending}">排队中</span></span>
-                    <span th:case="'RUNNING'" class="aiq-st run"><i></i><span th:text="#{admin.aiQuery.status.running}">查询中</span></span>
-                    <span th:case="'DONE'" th:text="#{admin.aiQuery.status.done}">已完成</span>
-                    <span th:case="'TIMEOUT'" class="aiq-st bad"><i></i><span th:text="#{admin.aiQuery.status.failed}">失败</span></span>
-                    <span th:case="'FAILED'" class="aiq-st bad"><i></i><span th:text="#{admin.aiQuery.status.failed}">失败</span></span>
-                </th:block>
-                · <span class="tn" th:text="${@adminTime.shortWib(r.updatedAt())}">11-09 14:02</span>
+            <span class="q-meta" th:switch="${r.status() != null} ? ${r.status().name()} : ''">
+                <th:block th:case="'PENDING'"><span class="aiq-st wait"><i></i><span th:text="#{admin.aiQuery.status.pending}">排队中</span></span>
+                    <span class="tn" th:data-aiq-elapsed="${r.elapsedSecs()}" th:text="${@aiqFormat.clock(r.elapsedSecs())}">00:12</span></th:block>
+                <th:block th:case="'RUNNING'"><span class="aiq-st run"><i></i><span th:text="#{admin.aiQuery.status.running}">查询中</span></span>
+                    <span class="tn" th:data-aiq-elapsed="${r.elapsedSecs()}" th:text="${@aiqFormat.clock(r.elapsedSecs())}">00:32</span></th:block>
+                <th:block th:case="'DONE'"><span th:text="#{admin.aiQuery.status.done}">已完成</span>
+                    · <span class="tn" th:text="${@adminTime.shortWib(r.updatedAt())}">11-09 14:02</span></th:block>
+                <th:block th:case="'FAILED'"><span class="aiq-st bad"><i></i><span th:text="#{admin.aiQuery.status.failed}">失败</span></span>
+                    · <span class="tn" th:text="${@adminTime.shortWib(r.updatedAt())}">11-09 14:02</span></th:block>
+                <th:block th:case="'TIMEOUT'"><span class="aiq-st bad"><i></i><span th:text="#{admin.aiQuery.status.failed}">失败</span></span>
+                    · <span class="tn" th:text="${@adminTime.shortWib(r.updatedAt())}">11-09 14:02</span></th:block>
+                <th:block th:case="*"><span class="tn" th:text="${@adminTime.shortWib(r.updatedAt())}">11-09 14:02</span></th:block>
             </span>
         </a>
     </li>

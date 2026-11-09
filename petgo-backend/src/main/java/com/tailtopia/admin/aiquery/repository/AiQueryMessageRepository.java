@@ -82,4 +82,12 @@ public interface AiQueryMessageRepository extends JpaRepository<AiQueryMessage, 
             UPDATE ai_query_messages SET status = 'TIMEOUT', error_code = 'TIMEOUT', finished_at = now(), updated_at = now()
              WHERE id = :id AND status IN ('PENDING', 'RUNNING') AND created_at < :cutoff""", nativeQuery = true)
     int markTimeout(@Param("id") long id, @Param("cutoff") Instant cutoff);
+
+    /** 轮询：本人未过期对话里的指定几轮。 */
+    @Query("""
+            SELECT m FROM AiQueryMessage m, AiQueryConversation c
+             WHERE m.conversationId = c.id AND m.token IN :tokens
+               AND c.adminAccountId = :owner AND c.updatedAt >= :notBefore""")
+    List<AiQueryMessage> findOwnedByTokens(@Param("tokens") Collection<String> tokens, @Param("owner") long owner,
+            @Param("notBefore") Instant notBefore);
 }

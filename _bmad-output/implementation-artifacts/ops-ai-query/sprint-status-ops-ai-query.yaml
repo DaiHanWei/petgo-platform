@@ -51,7 +51,7 @@ development_status:
   1-3-管理员开通后可以进入-ai-查数: review
   1-4-提交问题并在同一对话追问: review
   1-5-后台扫描器推进任务: review
-  1-6-在页面上跟踪查询进度: backlog
+  1-6-在页面上跟踪查询进度: review
   1-7-阅读可信的答案: backlog
   1-8-失败时知道原因并重试: backlog
   1-9-在-stag-跑通真实问答: backlog

@@ -20,7 +20,8 @@
             <h1 th:text="#{admin.aiQuery.title}">AI 查数</h1>
             <a class="btn btn-neutral btn-sm" th:href="@{/admin/ai-query}" th:text="#{admin.aiQuery.newConversation}">+ 新对话</a>
         </div>
-        <div class="wb aiq-page" data-aiq-page th:attr="data-aiq-conversation=${aiqView != null} ? ${aiqView.conversation().token} : null">
+        <div class="wb aiq-page" data-aiq-page
+             th:attr="data-aiq-conversation=${aiqCurrent},data-aiq-poll-url=@{/admin/ai-query/poll},data-aiq-done-label=#{admin.aiQuery.tab.done}">
             <div class="wb-body">
                 <section class="wb-queue" data-pane="queue" th:attr="aria-label=#{admin.aiQuery.list.label}">
                     <div class="wb-queue-body" id="aiq-list">
@@ -29,6 +30,11 @@
                 </section>
                 <section class="wb-detail" data-pane="detail">
                     <div class="wb-detail-body" id="aiq-detail">
+                        <!-- E2：轮询失败时显示，恢复后自动隐藏 -->
+                        <div class="aiq-err warn slim" role="status" id="aiq-conn" hidden>
+                            <div><b th:text="#{admin.aiQuery.conn.title}">连接中断</b>
+                                <p th:text="#{admin.aiQuery.conn.note}">查询仍在后台运行，恢复后会自动更新。</p></div>
+                        </div>
                         <th:block th:if="${aiqView != null}">
                             <div th:replace="~{admin/fragments/ai-query-thread :: thread(${aiqView})}"></div>
                         </th:block>
@@ -51,7 +57,9 @@
                         </th:block>
                     </div>
                     <div class="wb-actions aiq-actions" id="aiq-composer">
-                        <div th:replace="~{admin/fragments/ai-query-composer :: composer}"></div>
+                        <div id="aiq-composer-inner">
+                            <div th:replace="~{admin/fragments/ai-query-composer :: composer}"></div>
+                        </div>
                     </div>
                 </section>
             </div>

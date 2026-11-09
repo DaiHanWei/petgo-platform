@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  ops AI 查数轮询响应（UX-DR13）：admin-ai-query.js 按元素 id 逐个替换页面上的同名元素（outerHTML）。
+  · 左栏行 aiq-row-<t>、右栏轮次 aiq-msg-<t>；当前对话的未完成轮次结束时，连同输入框 aiq-composer-inner 一起替换。
+  · 查不到（他人 / 过期 / 已清除）的 token 不出现在响应里，前端随即停止关注。
+-->
+<body>
+<div th:fragment="poll" id="aiq-poll" data-aiq-poll>
+    <th:block th:each="r : ${aiqRows}">
+        <li th:replace="~{admin/fragments/ai-query-list :: row(${r}, ${aiqCurrent != null and aiqCurrent == r.token()})}"></li>
+    </th:block>
+    <th:block th:each="m : ${aiqMessages}">
+        <div th:replace="~{admin/fragments/ai-query-thread :: message(${m})}"></div>
+    </th:block>
+    <div th:if="${aiqComposerRefresh}" id="aiq-composer-inner">
+        <div th:replace="~{admin/fragments/ai-query-composer :: composer}"></div>
+    </div>
+</div>
+</body>
+</html>
