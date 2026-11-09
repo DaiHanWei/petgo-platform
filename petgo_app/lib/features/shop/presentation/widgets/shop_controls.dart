@@ -54,7 +54,11 @@ class ShopStepper extends StatelessWidget {
     this.decrementLabel,
     this.incrementLabel,
     this.removeLabel,
+    this.grouped = false,
   });
+
+  /// UI C1：三个控件收进**一个**圆角描边胶囊（`[🗑/− | n | +]`），按钮本身无框。默认 false = 原分格样式。
+  final bool grouped;
 
   final int value;
   final int min;
@@ -77,6 +81,7 @@ class ShopStepper extends StatelessWidget {
     final isRemove = atFloor && onRemove != null;
     final canDec = onChanged != null && (!atFloor || isRemove);
     final canInc = onChanged != null && value < max;
+    if (grouped) return _grouped(isRemove, canDec, canInc);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -97,6 +102,52 @@ class ShopStepper extends StatelessWidget {
         ),
         _box('+', canInc, () => onChanged!(value + 1), 'stepperInc', incrementLabel),
       ],
+    );
+  }
+
+  Widget _grouped(bool isRemove, bool canDec, bool canInc) {
+    Widget btn(String keyName, bool enabled, VoidCallback onTap, String? label, IconData icon) {
+      final fg = enabled ? ShopColors.text : ShopColors.disabledText;
+      return Semantics(
+        button: true,
+        enabled: enabled,
+        label: label,
+        child: ShopPressable(
+          enabled: enabled,
+          onTap: onTap,
+          minSize: kShopMinTapTarget,
+          child: SizedBox(
+            key: ValueKey(keyName),
+            width: 34,
+            height: 34,
+            child: Icon(icon, size: 18, color: fg),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: ShopColors.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          btn('stepperDec', canDec, isRemove ? onRemove! : () => onChanged!(value - 1),
+              isRemove ? removeLabel : decrementLabel,
+              isRemove ? Icons.delete_outline : Icons.remove),
+          SizedBox(
+            width: 30,
+            child: Text('$value',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600, color: ShopColors.text)),
+          ),
+          btn('stepperInc', canInc, () => onChanged!(value + 1), incrementLabel, Icons.add),
+        ],
+      ),
     );
   }
 

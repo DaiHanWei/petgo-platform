@@ -100,7 +100,8 @@ class QrPaySummary extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(this.label ?? l10n.qrPayTotalLabel, style: label),
-              Text('Rp${formatIdrAmount(amountIdr!)}',
+              // UI E1 / E7：「Rp 317.000」Rp 后带空格（与全 App 金额口径一致）。
+              Text('Rp ${formatIdrAmount(amountIdr!)}',
                   key: const ValueKey('qrPayAmount'),
                   style: TextStyle(
                       fontSize: big,
@@ -237,29 +238,41 @@ class QrPayCodeCard extends StatelessWidget {
         width: side,
         height: side,
         padding: const EdgeInsets.symmetric(horizontal: 16),
+        // UI E7：浅灰底 + 灰色二维码图标 + 白底描边胶囊「Coba lagi」。
         decoration: BoxDecoration(
-          color: AppColors.cream2,
+          color: const Color(0xFFF8F8FB),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.line),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        // 二维码区边长随屏宽缩（小屏 / 大字号下可能只有 ~180）：整块按比例缩小，不溢出。
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, size: 40, color: AppColors.muted),
-            const SizedBox(height: 8),
+            const Icon(Icons.qr_code_2, size: 44, color: AppColors.muted),
+            const SizedBox(height: 10),
             Text(l10n.qrPayCodeFailed,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.ink)),
             if (onRetry != null) ...[
-              const SizedBox(height: 6),
-              TextButton(
+              const SizedBox(height: 10),
+              OutlinedButton(
                 key: const ValueKey('qrPayRetryCode'),
                 onPressed: onRetry,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  shape: const StadiumBorder(),
+                  side: const BorderSide(color: AppColors.line, width: 1.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  minimumSize: const Size(0, 40),
+                ),
                 child: Text(l10n.commonRetry,
-                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.mint)),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
               ),
             ],
           ],
+        ),
         ),
       );
     } else if (!hasPayload) {

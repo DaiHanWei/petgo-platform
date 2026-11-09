@@ -190,9 +190,11 @@ class _CartPageV3State extends ConsumerState<CartPageV3> {
 
   Widget _list(BuildContext context, AppLocalizations l10n, CartView cart) {
     return ListView(
-      padding: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.lg),
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
       children: [
+        // UI C1：送达行是顶栏下方的通栏白条（不是卡片），下面再留出卡片间距。
         if (cart.lines.isNotEmpty) _ShipToRow(cart: cart),
+        if (cart.lines.isEmpty) const SizedBox(height: AppSpacing.md),
         if (cart.lines.isNotEmpty)
           // 🔴 同一张白卡片内分隔（UI C1：不再每行一块白底）。
           ShopCard(
@@ -324,8 +326,9 @@ class _ShipToRow extends ConsumerWidget {
         est.lowestFee == null &&
         est.reason != CartEstimate.reasonNoSelection;
     final choose = kec == null || noFee;
-    return ShopCard(
-      padding: EdgeInsets.zero,
+    return Container(
+      color: ShopColors.surface,
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: ShopPressable(
         key: const ValueKey('cartShipToRow'),
         onTap: () async {
@@ -336,16 +339,16 @@ class _ShipToRow extends ConsumerWidget {
           await ref.read(cartProvider.notifier).refresh();
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
           child: Row(
             children: [
               const Icon(Icons.location_on, size: 18, color: ShopColors.purple),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(
-                  addrLoading
-                      ? '—'
-                      : (choose ? l10n.cartChooseAddressForShipping : l10n.cartShipTo(kec)),
+                child: Text.rich(
+                  addrLoading || choose
+                      ? TextSpan(text: addrLoading ? '—' : l10n.cartChooseAddressForShipping)
+                      : _shipToSpan(l10n.cartShipTo(kec), kec),
                   key: const ValueKey('cartShipToText'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -359,6 +362,22 @@ class _ShipToRow extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 「Dikirim ke **Kec. Mampang Prapatan**」：地区部分加粗（UI C1）。文案模板里找不到地区名时整句原样。
+TextSpan _shipToSpan(String full, String kec) {
+  final i = full.indexOf(kec);
+  if (i < 0) return TextSpan(text: full);
+  // 地区名前若紧跟「Kec. 」一并加粗。
+  var start = i;
+  const kecPrefix = 'Kec. ';
+  if (start >= kecPrefix.length && full.substring(start - kecPrefix.length, start) == kecPrefix) {
+    start -= kecPrefix.length;
+  }
+  return TextSpan(children: [
+    TextSpan(text: full.substring(0, start)),
+    TextSpan(text: full.substring(start), style: const TextStyle(fontWeight: FontWeight.w700)),
+  ]);
 }
 
 /// 底栏（UI C1 / C2 / C4 / C5）：免运进度一行 + 「全选 | 金额两行 | Checkout (n)」。
@@ -435,12 +454,12 @@ class _CartBottomBar extends StatelessWidget {
                           style: AppTypography.title.copyWith(
                               fontWeight: FontWeight.w700,
                               fontFeatures: _tabular,
-                              color: nothingSelected ? ShopColors.text4 : ShopColors.purple)),
+                              color: nothingSelected ? ShopColors.text4 : ShopColors.ink)),
                       if (saved > 0)
                         Text(l10n.tokoSavedAmount(formatIdrAmount(saved)),
                             key: const ValueKey('cartSavedV3'),
                             style: AppTypography.caption.copyWith(
-                                color: ShopColors.saving, fontWeight: FontWeight.w600)),
+                                color: ShopColors.purple, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -491,7 +510,8 @@ class _SelectAllToggleState extends ConsumerState<_SelectAllToggle> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final all = widget.cart.allValidSelected;
-    return Row(
+    // UI C1：勾选框在上、短标签「Semua」在下（省出横向空间给金额）。
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         ShopCheckbox(
@@ -500,8 +520,7 @@ class _SelectAllToggleState extends ConsumerState<_SelectAllToggle> {
           onChanged: _busy ? null : (v) => _toggle(l10n, v),
           semanticLabel: l10n.cartSelectAll,
         ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(l10n.cartSelectAll, style: AppTypography.caption),
+        Text(l10n.cartSelectAllShort, style: AppTypography.caption.copyWith(color: ShopColors.text3)),
       ],
     );
   }
@@ -575,21 +594,32 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
                         fontSize: 13, height: 1.35, fontWeight: FontWeight.w600,
                         color: ShopColors.text)),
                 const SizedBox(height: AppSpacing.xxs),
-                Text(line.specName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.micro.copyWith(color: ShopColors.text3)),
-                const SizedBox(height: AppSpacing.xs),
-                Text(formatIdr(line.price),
-                    style: AppTypography.body.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontFeatures: _tabular,
-                        color: ShopColors.accent)),
-                const SizedBox(height: AppSpacing.xs),
+                // UI C1：规格与「Sisa stok」标签同一行；价格（深色）与数量胶囊同一行。
                 Row(
                   children: [
-                    Expanded(child: _stockTag(l10n, line)),
+                    Flexible(
+                      child: Text(line.specName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption.copyWith(color: ShopColors.text3)),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    _stockTag(l10n, line),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(formatIdr(line.price),
+                          style: AppTypography.body.copyWith(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: _tabular,
+                              color: ShopColors.ink)),
+                    ),
                     ShopStepper(
+                      grouped: true,
                       value: line.qty,
                       min: 1,
                       max: maxQty,
@@ -615,6 +645,7 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
     final stock = line.availableStock;
     if (stock == null || line.qty < stock) return const SizedBox.shrink();
     return Align(
+      widthFactor: 1,
       alignment: Alignment.centerLeft,
       child: Container(
         key: const ValueKey('cartStockTag'),
@@ -753,12 +784,17 @@ class _InvalidLineState extends ConsumerState<_InvalidLine> {
                     child: Container(
                       key: ValueKey('cartInvalidReasonTag_${line.skuToken}'),
                       padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
-                      color: ShopColors.ink.withValues(alpha: .78),
+                      margin: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                      decoration: BoxDecoration(
+                        color: ShopColors.ink.withValues(alpha: .78),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       alignment: Alignment.center,
                       child: Text(_reasonShort(l10n, line.invalidReason),
-                          maxLines: 1,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.badge.copyWith(color: ShopColors.surface)),
+                          style: AppTypography.badge.copyWith(color: ShopColors.surface, height: 1.2)),
                     ),
                   ),
                 ],
@@ -790,9 +826,11 @@ class _InvalidLineState extends ConsumerState<_InvalidLine> {
                     ShopButton(
                       key: ValueKey('cartFindSimilar_${line.skuToken}'),
                       label: l10n.cartFindSimilar,
-                      variant: ShopButtonVariant.outlinePurple,
+                      // UI C3：两个都是灰描边深字胶囊。
+                      variant: ShopButtonVariant.outlineMuted,
                       dense: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      radius: 999,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                       // 无「同类目替代品」端点 → 去 Toko 看别的（`/shop` 一律 go）。
                       onTap: () => context.go('/shop'),
                     ),
@@ -801,7 +839,8 @@ class _InvalidLineState extends ConsumerState<_InvalidLine> {
                       label: l10n.cartRemoveShort,
                       variant: ShopButtonVariant.outlineMuted,
                       dense: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      radius: 999,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                       loading: _busy,
                       onTap: _busy ? null : () => _remove(l10n),
                     ),

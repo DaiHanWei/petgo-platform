@@ -90,7 +90,7 @@ void main() {
 
     // 抽屉总高（含拖拽条）= 60% 屏高 ⇒ 顶边落在 40% 处。
     expect(tester.getTopLeft(find.byType(BottomSheet)).dy, closeTo(860 * 0.4, 1));
-    expect(find.text('Rp52.000'), findsOneWidget);
+    expect(find.text('Rp 52.000'), findsOneWidget);
     expect(find.text('59:43'), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
     expect(find.textContaining('PAYGIFT-20261029-000042'), findsOneWidget);
