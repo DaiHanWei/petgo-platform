@@ -5,6 +5,8 @@ import path from 'node:path';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{8,128}$/;
 
+const FORBIDDEN_ENV_RE = /^(LARK|FEISHU)_/i;
+
 export const LANGS = Object.freeze(['zh', 'en', 'id']);
 
 function intEnv(env, name, def, min, max = Number.MAX_SAFE_INTEGER) {
@@ -22,6 +24,11 @@ function intEnv(env, name, def, min, max = Number.MAX_SAFE_INTEGER) {
  * @param {Record<string,string|undefined>} env
  */
 export function loadConfig(env = process.env) {
+  // agent 不持有任何 Lark 凭证（spec §3、NFR12、S1）
+  const lark = Object.keys(env).filter((k) => FORBIDDEN_ENV_RE.test(k));
+  if (lark.length > 0) {
+    throw new Error(`环境中存在 Lark 变量（${lark.join(', ')}），拒绝启动`);
+  }
   const secret = env.AGENT_SECRET;
   if (!secret || secret.length < 16) {
     throw new Error('AGENT_SECRET 未配置或过短（至少 16 个字符），拒绝启动');
@@ -32,8 +39,14 @@ export function loadConfig(env = process.env) {
   if (workDir === dataDir || workDir.startsWith(dataDir + path.sep)) {
     throw new Error('WORK_DIR 不得位于 DATA_DIR 内');
   }
+  // claude 子进程的独立 uid / gid / HOME（容器内配置；不配置时与 agent 同用户，仅用于本地测试）
+  const claudeUid = env.CLAUDE_UID ? intEnv(env, 'CLAUDE_UID', 0, 1, 2 ** 31 - 1) : undefined;
+  const claudeGid = env.CLAUDE_GID ? intEnv(env, 'CLAUDE_GID', 0, 1, 2 ** 31 - 1) : claudeUid;
   return {
     secret,
+    claudeUid,
+    claudeGid,
+    claudeHome: env.CLAUDE_HOME || undefined,
     // 容器内监听全部接口：只接入 Docker internal 网络、不映射端口（spec §4）
     port: intEnv(env, 'PORT', 8790, 1, 65535),
     host: env.HOST || '0.0.0.0',

@@ -6,20 +6,48 @@
 
 import { spawn } from 'node:child_process';
 import { classifyFailure } from './classify.mjs';
+import { buildSystemPrompt } from './prompt.mjs';
 
 export const ALLOWED_TOOLS = 'Bash,Read,Grep,Glob';
 
-/** 子进程 env 白名单（Story 1.2 在此收紧，禁止展开 process.env）。 */
-export function buildChildEnv(parentEnv) {
+/**
+ * 子进程 env 白名单（spec §6 S1）。只按名单逐个复制，禁止展开 process.env。
+ * - 数据库密码不走 env：用 PGPASSFILE 指向只读挂载的 .pgpass
+ * - 代理变量透传，为白名单代理（Story 3.1）预留
+ */
+export const CHILD_ENV_PASSTHROUGH = Object.freeze([
+  'PATH', 'HOME', 'LANG', 'TZ',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  'PGHOST', 'PGPORT', 'PGUSER', 'PGDATABASE', 'PGPASSFILE',
+  'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY',
+]);
+
+/** 固定写入的 env（官方文档 env-vars 页，2026-11-09 查阅）。 */
+export const CHILD_ENV_FIXED = Object.freeze({
+  // 从 Bash、hooks 等子进程环境中剥离凭证；claude 自身仍用 token 调 API
+  CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
+  // 关闭自动更新、遥测、错误上报等非必要出网
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+  DISABLE_AUTOUPDATER: '1',
+});
+
+export function buildChildEnv(parentEnv, { claudeHome } = {}) {
   const env = {};
-  for (const k of ['PATH', 'HOME', 'CLAUDE_CODE_OAUTH_TOKEN']) {
+  for (const k of CHILD_ENV_PASSTHROUGH) {
     if (parentEnv[k] !== undefined) env[k] = parentEnv[k];
   }
-  return env;
+  if (claudeHome) env.HOME = claudeHome;
+  return { ...env, ...CHILD_ENV_FIXED };
 }
 
-export function buildArgs({ resumeSessionId }) {
-  const args = ['-p', '--output-format', 'json', '--allowedTools', ALLOWED_TOOLS];
+export function buildArgs({ resumeSessionId, lang }) {
+  const args = [
+    '-p', '--output-format', 'json', '--allowedTools', ALLOWED_TOOLS,
+    '--append-system-prompt', buildSystemPrompt(lang),
+    // 只加载工作目录（root 所有、只读）里的项目设置，忽略 claude 可写的 ~/.claude/settings.json，
+    // 防止某次被注入的任务写入 hooks / 权限后影响以后所有任务
+    '--setting-sources', 'project',
+  ];
   if (resumeSessionId) args.push('--resume', resumeSessionId);
   return args;
 }
@@ -38,13 +66,22 @@ function killGroup(child, signal) {
  */
 export function runClaude(job, config, parentEnv = process.env, abortSignal = undefined) {
   return new Promise((resolve) => {
-    const child = spawn(config.claudeBin, buildArgs(job), {
-      env: buildChildEnv(parentEnv),
-      cwd: config.workDir,
-      detached: true,
-      shell: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    let child;
+    try {
+      child = spawn(config.claudeBin, buildArgs(job), {
+        env: buildChildEnv(parentEnv, config),
+        cwd: config.workDir,
+        detached: true,
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // claude 以独立 uid 运行：读不到 agent 进程的 /proc/<pid>/environ（AGENT_SECRET）和 /data 下其他任务的结果
+        ...(config.claudeUid !== undefined ? { uid: config.claudeUid, gid: config.claudeGid } : {}),
+      });
+    } catch (e) {
+      resolve({ ok: false, answerMd: null, sessionId: null, turns: null, costUsd: null,
+        errorCode: 'AGENT_ERROR', exitCode: null, signal: null, spawnError: e });
+      return;
+    }
 
     const out = [];
     const err = [];

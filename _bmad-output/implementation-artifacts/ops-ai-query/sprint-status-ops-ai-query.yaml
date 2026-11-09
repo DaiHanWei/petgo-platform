@@ -47,7 +47,7 @@ story_location: _bmad-output/implementation-artifacts/ops-ai-query
 development_status:
   epic-1: in-progress
   1-1-agent-执行一条查询并保存结果: review
-  1-2-agent-隔离基线和查数说明书: backlog
+  1-2-agent-隔离基线和查数说明书: review
   1-3-管理员开通后可以进入-ai-查数: backlog
   1-4-提交问题并在同一对话追问: backlog
   1-5-后台扫描器推进任务: backlog

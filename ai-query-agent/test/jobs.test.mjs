@@ -21,6 +21,7 @@ test('AC1 POST /jobs 返回 202 并以 claude -p 执行，不含 --bare', async 
     assert.ok(rec.args.includes('-p'));
     assert.ok(!rec.args.includes('--bare'));
     assert.deepEqual(rec.args.slice(0, 5), ['-p', '--output-format', 'json', '--allowedTools', 'Bash,Read,Grep,Glob']);
+    assert.ok(rec.args.includes('--append-system-prompt'));
     // 问题经 stdin 传入，不出现在参数里
     assert.equal(rec.stdin, j.question);
     assert.ok(!rec.args.some((x) => x.includes('注册')));
@@ -296,8 +297,8 @@ test('buildChildEnv 只传白名单，不展开父进程 env', () => {
   assert.ok(!('LARK_APP_SECRET' in env));
   assert.ok(!('DB_PASSWORD' in env));
   assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, 't');
-  assert.ok(!buildArgs({}).includes('--bare'));
-  assert.ok(!buildArgs({}).includes('--resume'));
+  assert.ok(!buildArgs({ lang: 'zh' }).includes('--bare'));
+  assert.ok(!buildArgs({ lang: 'zh' }).includes('--resume'));
 });
 
 test('子进程实际拿不到白名单外变量', async () => {
