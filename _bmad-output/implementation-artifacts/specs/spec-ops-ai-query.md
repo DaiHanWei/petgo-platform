@@ -51,10 +51,10 @@ ux: _bmad-output/planning-artifacts/ops-ai-query/ux-designs/ux-petgo-platform-20
 | # | 决策 | 结论 |
 |---|---|---|
 | D1 | Claude 凭证 | 暂时沿用订阅 token（`CLAUDE_CODE_OAUTH_TOKEN`，`claude setup-token` 生成，2026-11-09 Dai 拍板）；调用 `claude -p` 时不得加 `--bare`（该模式不读此变量）。agent 的凭证读取保持只靠 env，日后换 API Key 只改 env |
-| D2 | 开放范围 | `ai.query` 不预授给任何角色，原 9 个提问人逐个开通；没有 ops 账号的先建号 |
+| D2 | 开放范围 | `ai.query` 不预授给任何角色，由管理员在后台账号页面按需开通 |
 | D3 | 回答语言 | 中文 / English / 印尼语三种，默认跟随后台界面语言，只在新建对话时选择，按对话保存 |
 | D4 | 群内协作 | 接受失去；结果仅提问人可见，需要共享时下载文件转发 |
-| D5 | Lark 入口 | 生产稳定运行一周后下线，不保留双入口 |
+| D5 | Lark 入口 | 只暂停，不下线：`claude-bot` 容器保持停止，飞书应用、凭证和历史数据保留 |
 | D6 | 保留期 | 问答、导出文件、Claude 会话记录保留 30 天；审计记录长期保留，且不含问题原文 |
 | D7 | 异步方式 | ops 定时拉取，页面 htmx 轮询，不用 SSE / WebSocket |
 | D8 | 统计口径 | 每个答案固定带统计口径，写入查数说明书 |
@@ -134,7 +134,7 @@ PENDING ──提交成功──▶ RUNNING ──▶ DONE
 
 ### 5.3 页面
 
-路由 `/admin/ai-query`：复用 `tpl-a-workbench`，左侧本人对话列表，右侧消息流和输入框。轮询同时更新左侧列表状态；用户离开期间完成时，浏览器标签页提示已完成。逐屏规格见 frontmatter 的 `ux` 目录。
+路由 `/admin/ai-query`，对话深链 `/admin/ai-query/{conversationToken}`：复用 `tpl-a-workbench`，左侧本人对话列表，右侧消息流和输入框。轮询同时更新左侧列表状态；用户离开期间完成时，浏览器标签页提示已完成。逐屏规格见 frontmatter 的 `ux` 目录。
 
 | 场景 | 表现 |
 |---|---|
@@ -205,18 +205,17 @@ PENDING ──提交成功──▶ RUNNING ──▶ DONE
 
 ## 8. Story 拆分
 
-建议顺序如下，预计 5～7 个工作日（不含生产观察期）。
+正式拆分以 `_bmad-output/planning-artifacts/ops-ai-query/epics.md` 为准（3 个 epic、14 个 story），下表仅保留原估算，预计 5～7 个工作日。
 
 | Story | 内容 | 预估 |
 |---|---|---|
-| 0 | 确认 9 人的 ops 账号与登录方式 | 0.5 天 |
 | 1 | agent 任务服务 + 说明书迁入 + 入库 | 1 天 |
 | 2 | 安全隔离：env 白名单、internal 网络、白名单代理、stag 库账号 | 1 天 |
 | 3 | 迁移、权限码、状态机、扫描器、审计 | 1 天 |
 | 4 | ops 页面、轮询、渲染净化、三语文案 | 1～1.5 天 |
 | 5 | 文件下载、数据清理 | 0.5 天 |
 | 6 | stag 验收 | 1 天 |
-| 7 | 生产上线、一周观察、下线 Lark | 0.5 天 + 观察期 |
+| 7 | 生产上线 | 0.5 天 |
 
 ## 9. 验收标准
 
@@ -240,17 +239,16 @@ PENDING ──提交成功──▶ RUNNING ──▶ DONE
 ## 10. 上线与回退
 
 1. stag 验收通过后，生产先以 `AI_QUERY_MODE=off` 发布后端，再起 agent 容器。
-2. 给 Dai 开权限试跑，确认后开通其余人员。
-3. 稳定运行一周后下线 Lark：**确认订阅 token 已迁入新 env 后，删除飞书应用、`~/.env.claude-bot`、旧容器，清理历史 `audit.log`、`out/`（235 个目录，含用户数据）属不可逆操作，届时逐项确认。**
+2. 给 Dai 开权限试跑，确认后由管理员按需开通。
 
-回退：`AI_QUERY_MODE=off` 并停止 agent 容器，不影响后台其他功能。观察期内旧容器和 Lark 应用保留，可 `docker start claude-bot` 恢复（需先还原其配置）。
+回退：`AI_QUERY_MODE=off` 并停止 agent 容器，不影响后台其他功能。旧容器和 Lark 应用保留，可 `docker start claude-bot` 恢复（需先还原其配置）。
 
 ## 11. 风险
 
 | 风险 | 应对 |
 |---|---|
 | Lark 登录接口未按预期豁免额度（概率低），普通账号无法重新登录 ops | 额度耗尽时实测，见 §3；已登录会话默认 8 小时内不受影响 |
-| 印尼同事不习惯切换到后台，使用量下降 | 提前开号并告知入口，界面和回答支持印尼语 |
+| 印尼同事不习惯切换到后台，使用量下降 | 提前告知入口，界面和回答支持印尼语 |
 | 订阅 token 由多人共用，官方条款要求最终用户使用各自凭证，并建议给他人用的工具走 API Key | 已知风险，Dai 2026-11-09 决定暂时接受；凭证只靠 env，可随时切换 API Key |
 | 与 token 所属账号的日常使用共享订阅限额，高峰时查询可能失败 | 失败原因单独标记；统计 `AGENT_RATE_LIMITED` 次数，频繁出现时再切 API Key |
 | 订阅 token 约一年到期（现有 token 2026-10-05 生成），到期后全部查询失败 | 到期前重新生成并更新两个环境的 env，重建容器生效；`AGENT_AUTH_FAILED` 记 error 日志 |
