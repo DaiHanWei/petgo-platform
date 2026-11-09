@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!--
-  ops AI 查数（主题 ops-ai-query，spec §5.3，UX A1/A2；EXPERIENCE.md）。
+  ops AI 查数（主题 ops-ai-query，spec §5.3；UX A–E，EXPERIENCE.md）。
   沿用模板 A 工作台骨架（.wb / .wb-body / .wb-queue 360px / .wb-detail ≥720px），电脑端专用。
-  左栏：本人对话列表；右栏：消息流 + 输入框。新增样式全部在 admin.css 的 aiq- 前缀下。
+  左栏：本人对话列表（ai-query-list）；右栏：消息流（ai-query-thread）或空态 + 输入框（ai-query-composer）。
+  新增样式全部在 admin.css 的 aiq- 前缀下。
 -->
 <head>
     <meta charset="UTF-8"/>
@@ -19,30 +20,35 @@
             <h1 th:text="#{admin.aiQuery.title}">AI 查数</h1>
             <a class="btn btn-neutral btn-sm" th:href="@{/admin/ai-query}" th:text="#{admin.aiQuery.newConversation}">+ 新对话</a>
         </div>
-        <div class="wb aiq-page" data-aiq-page>
+        <div class="wb aiq-page" data-aiq-page th:attr="data-aiq-conversation=${aiqView != null} ? ${aiqView.conversation().token} : null">
             <div class="wb-body">
                 <section class="wb-queue" data-pane="queue" th:attr="aria-label=#{admin.aiQuery.list.label}">
                     <div class="wb-queue-body" id="aiq-list">
-                        <div class="empty"><p th:text="#{admin.aiQuery.list.empty}">还没有对话</p></div>
+                        <div th:replace="~{admin/fragments/ai-query-list :: list}"></div>
                     </div>
                 </section>
                 <section class="wb-detail" data-pane="detail">
                     <div class="wb-detail-body" id="aiq-detail">
-                        <div class="aiq-empty" th:unless="${aiqEnabled}">
-                            <h2 th:text="#{admin.aiQuery.disabled.heading}">AI 查数暂未启用</h2>
-                            <p th:text="#{admin.aiQuery.disabled.note}">请联系管理员。</p>
-                        </div>
-                        <div class="aiq-empty" th:if="${aiqEnabled}">
-                            <h2 th:text="#{admin.aiQuery.empty.heading}">想查什么数据？</h2>
-                            <p th:text="#{admin.aiQuery.empty.note}">查询在后台运行，提交后可以离开页面，结果保留 30 天。</p>
-                            <div class="aiq-samples">
-                                <button type="button" th:each="s : ${aiqSamples}" data-aiq-sample
-                                        th:attr="data-aiq-sample=#{'admin.aiQuery.sample.' + ${s} + '.q'}">
-                                    <small th:text="#{'admin.aiQuery.sample.' + ${s} + '.tag'}">用户</small><span
-                                        th:text="#{'admin.aiQuery.sample.' + ${s} + '.q'}">上个月新注册用户有多少？按周拆分</span>
-                                </button>
+                        <th:block th:if="${aiqView != null}">
+                            <div th:replace="~{admin/fragments/ai-query-thread :: thread(${aiqView})}"></div>
+                        </th:block>
+                        <th:block th:if="${aiqView == null}">
+                            <div class="aiq-empty" th:unless="${aiqEnabled}">
+                                <h2 th:text="#{admin.aiQuery.disabled.heading}">AI 查数暂未启用</h2>
+                                <p th:text="#{admin.aiQuery.disabled.note}">请联系管理员。</p>
                             </div>
-                        </div>
+                            <div class="aiq-empty" th:if="${aiqEnabled}">
+                                <h2 th:text="#{admin.aiQuery.empty.heading}">想查什么数据？</h2>
+                                <p th:text="#{admin.aiQuery.empty.note}">查询在后台运行，提交后可以离开页面，结果保留 30 天。</p>
+                                <div class="aiq-samples">
+                                    <button type="button" th:each="s : ${aiqSamples}"
+                                            th:attr="data-aiq-sample=#{'admin.aiQuery.sample.' + ${s} + '.q'}">
+                                        <small th:text="#{'admin.aiQuery.sample.' + ${s} + '.tag'}">用户</small><span
+                                            th:text="#{'admin.aiQuery.sample.' + ${s} + '.q'}">上个月新注册用户有多少？按周拆分</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </th:block>
                     </div>
                     <div class="wb-actions aiq-actions" id="aiq-composer">
                         <div th:replace="~{admin/fragments/ai-query-composer :: composer}"></div>

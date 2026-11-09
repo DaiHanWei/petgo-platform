@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  ops AI 查数左栏（UX-DR10）：本人对话，最后更新倒序；状态 = 最新一轮的状态（圆点 + 文字）。
+  list = 整个列表（空态「还没有对话」）；row(r, current) = 单行（链接到对话深链）。
+-->
+<body>
+<th:block th:fragment="list">
+    <div class="empty" th:if="${aiqList.isEmpty()}"><p th:text="#{admin.aiQuery.list.empty}">还没有对话</p></div>
+    <ul class="q-list" id="aiq-rows" th:unless="${aiqList.isEmpty()}">
+        <th:block th:each="r : ${aiqList.content}">
+            <li th:replace="~{admin/fragments/ai-query-list :: row(${r}, ${aiqView != null and aiqView.conversation().token == r.token()})}"></li>
+        </th:block>
+    </ul>
+</th:block>
+
+<ul th:remove="tag">
+    <li th:fragment="row(r, current)" th:id="'aiq-row-' + ${r.token()}" th:data-token="${r.token()}">
+        <a class="q-row" th:classappend="${current} ? 'on'" th:href="@{/admin/ai-query/{t}(t=${r.token()})}"
+           th:attr="aria-current=${current} ? 'page' : null">
+            <span class="q-title" th:text="${r.title()}">10 月注册用户有多少？按周拆分</span>
+            <span class="q-meta">
+                <th:block th:switch="${r.status() != null} ? ${r.status().name()} : ''">
+                    <span th:case="'PENDING'" class="aiq-st wait"><i></i><span th:text="#{admin.aiQuery.status.pending}">排队中</span></span>
+                    <span th:case="'RUNNING'" class="aiq-st run"><i></i><span th:text="#{admin.aiQuery.status.running}">查询中</span></span>
+                    <span th:case="'DONE'" th:text="#{admin.aiQuery.status.done}">已完成</span>
+                    <span th:case="'TIMEOUT'" class="aiq-st bad"><i></i><span th:text="#{admin.aiQuery.status.failed}">失败</span></span>
+                    <span th:case="'FAILED'" class="aiq-st bad"><i></i><span th:text="#{admin.aiQuery.status.failed}">失败</span></span>
+                </th:block>
+                · <span class="tn" th:text="${@adminTime.shortWib(r.updatedAt())}">11-09 14:02</span>
+            </span>
+        </a>
+    </li>
+</ul>
+</body>
+</html>

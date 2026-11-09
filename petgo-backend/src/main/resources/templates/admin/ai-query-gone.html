@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!-- ops AI 查数 E1：对话不存在、属于他人或已过期 —— 同一文案、同一 404，不暴露是否存在。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.aiQuery.pageTitle}">AI 查数 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="aiq-empty" data-aiq-gone>
+            <h2 th:text="#{admin.aiQuery.gone.heading}">对话不存在或已过期</h2>
+            <p><a class="btn btn-neutral" th:href="@{/admin/ai-query}" th:text="#{admin.aiQuery.gone.back}">返回 AI 查数</a></p>
+        </div>
+    </div>
+</div>
+</body>
+</html>

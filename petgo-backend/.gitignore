@@ -34,3 +34,6 @@ build/
 
 # Runtime logs (Story: api-logging-system)
 logs/
+
+# 本地 redis-server 快照（测试数据，绝不入库）
+dump.rdb

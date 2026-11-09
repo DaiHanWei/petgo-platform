@@ -303,6 +303,10 @@ public final class AuditActions {
     /** 编辑 SKU 批发价（门店进货价）。摘要记新旧值 —— 批发价门店本就看得到，不属于进货价那类敏感字段。 */
     public static final String SHOP_SKU_WHOLESALE_UPDATED = "SHOP_SKU_WHOLESALE_UPDATED";
 
+    // ===== ops AI 查数（主题 ops-ai-query，spec §5.5）=====
+    /** 🔒 提交问题（新对话或追问）。摘要只记对话 / 消息 token、语言、问题长度；<b>严禁写问题原文</b>（可能含手机号等 PII）。 */
+    public static final String AI_QUERY_SUBMIT = "AI_QUERY_SUBMIT";
+
     private AuditActions() {
     }
 }

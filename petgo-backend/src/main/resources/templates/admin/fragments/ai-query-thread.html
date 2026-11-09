@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  ops AI 查数右栏消息流（报告式，不用聊天气泡，spec D10）。多轮之间一条分隔线 aiq-sep。
+  thread(view) = 全部轮次；message(m) = 一轮：问题 aiq-q + 按状态的结果块。
+-->
+<body>
+<th:block th:fragment="thread(view)">
+    <th:block th:each="m, st : ${view.messages()}">
+        <hr class="aiq-sep" th:unless="${st.first}"/>
+        <div th:replace="~{admin/fragments/ai-query-thread :: message(${m})}"></div>
+    </th:block>
+</th:block>
+
+<div th:fragment="message(m)" class="aiq-turn" th:id="'aiq-msg-' + ${m.token}" th:data-status="${m.status.name()}">
+    <div class="aiq-q" th:text="${m.question}">10 月注册用户有多少？按周拆分</div>
+    <th:block th:switch="${m.status.name()}">
+        <div th:case="'PENDING'" class="aiq-run" aria-live="polite">
+            <div class="top"><span class="aiq-st wait"><i></i><span th:text="#{admin.aiQuery.status.pending}">排队中</span></span></div>
+            <p th:text="#{admin.aiQuery.run.note}">查询在后台运行，可以离开页面，完成后在左侧列表查看。</p>
+        </div>
+        <div th:case="'RUNNING'" class="aiq-run" aria-live="polite">
+            <div class="top"><span class="aiq-st run"><i></i><span th:text="#{admin.aiQuery.status.runningLong}">正在查询</span></span></div>
+            <p th:text="#{admin.aiQuery.run.note}">查询在后台运行，可以离开页面，完成后在左侧列表查看。</p>
+        </div>
+        <div th:case="'DONE'" class="aiq-a">
+            <div class="aiq-md" th:text="${m.answerMd}">答案</div>
+        </div>
+        <div th:case="*" class="aiq-err bad" role="alert">
+            <div><b th:text="#{admin.aiQuery.err.failed.title}">查询没有成功</b></div>
+        </div>
+    </th:block>
+</div>
+</body>
+</html>

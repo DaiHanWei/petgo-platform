@@ -4,7 +4,8 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * 回答语言（spec D3）：只在新建对话时选择，按对话保存；落库为小写代码，与 agent 接口 {@code lang} 一致。
+ * 回答语言（spec D3）：只在新建对话时选择，按对话保存。落库为枚举名（UPPER_SNAKE）；
+ * {@link #code()} 是表单值与 agent 接口 {@code lang} 的取值（zh / en / id）。
  */
 public enum AiQueryLanguage {
     ZH("zh"), EN("en"), ID("id");
