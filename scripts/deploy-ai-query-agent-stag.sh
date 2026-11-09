@@ -122,7 +122,7 @@ docker run -d \\
   --restart unless-stopped \\
   --cpus 1 --memory 2g --memory-swap 2g --pids-limit 256 \\
   --read-only --tmpfs /tmp:rw,size=256m \\
-  --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL \\
+  --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL --cap-add DAC_OVERRIDE \\
   --security-opt no-new-privileges \\
   --env-file $REMOTE_BASE/env \\
   -e PGPASSFILE=/run/secrets/pgpass \\

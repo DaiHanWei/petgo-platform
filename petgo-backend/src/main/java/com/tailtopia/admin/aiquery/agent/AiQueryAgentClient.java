@@ -165,6 +165,30 @@ public class AiQueryAgentClient {
         }
     }
 
+    /** 删除 agent 上该对话的导出目录、任务结果与 Claude 会话记录（幂等）。成功返回 true，不可达 / 出错返回 false。 */
+    public boolean deleteConversation(String conversationToken) {
+        if (!props.agentConfigured()) {
+            return false;
+        }
+        try {
+            int s = rest.delete().uri(props.getAgentUrl() + "/conversations/{t}", conversationToken)
+                    .header(SECRET_HEADER, props.getAgentSecret())
+                    .retrieve()
+                    .toBodilessEntity()
+                    .getStatusCode().value();
+            return s == 200 || s == 204;
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 401) {
+                logAuthMismatch(conversationToken);
+            }
+            return false;
+        } catch (RestClientException e) {
+            log.warn("ai-query agent unreachable on cleanup conversationToken={} cause={}", conversationToken,
+                    e.getClass().getSimpleName());
+            return false;
+        }
+    }
+
     public PollOutcome poll(String jobToken) {
         if (!props.agentConfigured()) {
             return new PollOutcome.Unreachable();

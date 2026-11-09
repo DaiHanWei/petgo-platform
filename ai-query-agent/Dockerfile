@@ -22,8 +22,9 @@ COPY src ./src
 COPY work ./work
 
 # 进程模型（Story 1.2 复审）：
-#   - agent（node）以容器内 root 运行，部署时 --cap-drop ALL 后只加回 SETUID / SETGID / KILL，
-#     用于以独立 uid 启动 claude 并在超时时结束其进程组；/data 归 root 且 700
+#   - agent（node）以容器内 root 运行，部署时 --cap-drop ALL 后只加回 SETUID / SETGID / KILL / DAC_OVERRIDE：
+#     以独立 uid 启动 claude、超时时结束其进程组、清理 claude 创建的导出文件与会话记录（Story 2.2）；
+#     切换到 claude 的 uid 时这些能力随之清空，claude 拿不到；/data 归 root 且 700
 #   - claude 及其 Bash 以 uid 10002 运行：读不到 agent 的 /proc/<pid>/environ（AGENT_SECRET）
 #     和 /data 下其他任务的结果
 ENV NODE_ENV=production \

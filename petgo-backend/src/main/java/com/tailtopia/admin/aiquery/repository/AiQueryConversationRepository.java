@@ -57,4 +57,18 @@ public interface AiQueryConversationRepository extends JpaRepository<AiQueryConv
              WHERE c.token IN :tokens AND c.adminAccountId = :owner AND c.updatedAt >= :notBefore""")
     List<AiQueryConversation> findOwnedByTokens(@Param("tokens") Collection<String> tokens, @Param("owner") long owner,
             @Param("notBefore") Instant notBefore);
+
+    /** 清理：最后更新早于 cutoff、且排在游标 (afterUpdatedAt, afterId) 之后的对话（按最旧优先）。 */
+    @Query("""
+            SELECT c FROM AiQueryConversation c
+             WHERE c.updatedAt < :cutoff
+               AND (c.updatedAt > :afterU OR (c.updatedAt = :afterU AND c.id > :afterId))
+             ORDER BY c.updatedAt ASC, c.id ASC""")
+    List<AiQueryConversation> findExpiredAfter(@Param("cutoff") Instant cutoff, @Param("afterU") Instant afterUpdatedAt,
+            @Param("afterId") long afterId, Pageable pageable);
+
+    /** 清理：仍过期才删（期间被追问刷新的不删）。消息经 ON DELETE CASCADE 一并删除。 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "DELETE FROM ai_query_conversations WHERE id = :id AND updated_at < :cutoff", nativeQuery = true)
+    int deleteIfExpired(@Param("id") long id, @Param("cutoff") Instant cutoff);
 }

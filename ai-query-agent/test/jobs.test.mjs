@@ -21,6 +21,7 @@ test('AC1 POST /jobs 返回 202 并以 claude -p 执行，不含 --bare', async 
     assert.ok(rec.args.includes('-p'));
     assert.ok(!rec.args.includes('--bare'));
     assert.deepEqual(rec.args.slice(0, 5), ['-p', '--output-format', 'json', '--allowedTools', 'Bash,Read,Grep,Glob']);
+    assert.ok(rec.args.includes('--session-id'), '新会话预分配会话 id');
     assert.ok(rec.args.includes('--append-system-prompt'));
     // 问题经 stdin 传入，不出现在参数里
     assert.equal(rec.stdin, j.question);
@@ -69,6 +70,7 @@ test('AC3 带 resumeSessionId 时以 --resume 沿用会话', async () => {
     const i = rec.args.indexOf('--resume');
     assert.ok(i > 0);
     assert.equal(rec.args[i + 1], sid);
+    assert.ok(!rec.args.includes('--session-id'), '追问不另起会话');
   } finally { await a.close(); }
 });
 
@@ -180,7 +182,8 @@ test('AC6 结果落盘 result.json，agent 重启后仍可取回全部字段', a
       ['answerMd', 'costUsd', 'errorCode', 'files', 'secs', 'sessionId', 'status', 'turns'].sort());
     assert.equal(r.json.status, 'DONE');
     assert.match(r.json.answerMd, /1,234/);
-    assert.equal(r.json.sessionId, '3f6a1d2e-0b1c-4d5e-8f90-123456789abc');
+    // 新会话由 agent 预分配 UUID（--session-id）
+    assert.match(r.json.sessionId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     assert.equal(r.json.turns, 3);
     assert.equal(r.json.costUsd, 0.1234);
     assert.deepEqual(r.json.files, []);

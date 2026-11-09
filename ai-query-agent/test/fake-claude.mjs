@@ -30,12 +30,14 @@ function save() {
 
 const resumeIdx = args.indexOf('--resume');
 const resumed = resumeIdx >= 0 ? args[resumeIdx + 1] : null;
+const sidIdx = args.indexOf('--session-id');
+const assigned = sidIdx >= 0 ? args[sidIdx + 1] : null;
 const marker = stdin.trim().split(/\s+/).pop() || '';
 
 function success(answer) {
   const out = JSON.parse(fixture('success.json'));
   out.result = answer ?? out.result;
-  out.session_id = resumed || out.session_id;
+  out.session_id = resumed || assigned || out.session_id;
   process.stdout.write(JSON.stringify(out));
 }
 

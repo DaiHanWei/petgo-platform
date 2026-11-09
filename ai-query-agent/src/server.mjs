@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream';
 import crypto from 'node:crypto';
 import { isValidToken, LANGS } from './config.mjs';
 import { isSafeFileName, jobDir, openJobFile } from './files.mjs';
+import { deleteConversation } from './cleanup.mjs';
 
 export const MAX_BODY = 64 * 1024;
 export const MAX_QUESTION = 2000;
@@ -83,7 +84,7 @@ export function parseJobRequest(raw) {
  * @param {{config:object, jobs:object, log:Function, routes?:Function}} deps
  *   routes：扩展路由（Epic 2 的文件与删除接口），签名 (req, res, url, ctx) => boolean|Promise<boolean>
  */
-export function createServer({ config, jobs, log, routes }) {
+export function createServer({ config, jobs, log, routes, store, claudeHome }) {
   return http.createServer(async (req, res) => {
     try {
       if (!secretMatches(req.headers['x-internal-secret'], config.secret)) {
@@ -134,6 +135,20 @@ export function createServer({ config, jobs, log, routes }) {
         // pipeline：客户端中途断开时也会关闭文件流，不泄漏文件描述符
         pipeline(file.stream, res, () => {});
         return;
+      }
+
+      // 清理对话（Story 2.2）：导出目录、任务结果、Claude 会话记录；幂等
+      if (req.method === 'DELETE' && parts.length === 2 && parts[0] === 'conversations') {
+        req.resume();
+        const token = parts[1];
+        if (!isValidToken(token)) return send(res, 400, { error: 'BAD_TOKEN' });
+        if (!store) return send(res, 500, { error: 'INTERNAL' });
+        // 还有排队 / 运行中的任务：拒绝，ops 下轮重试（不在任务运行时删它的目录）
+        if (jobs.hasActive(token)) return send(res, 409, { error: 'BUSY' });
+        const r = await deleteConversation({ config, store, conversationToken: token, claudeHome });
+        jobs.forget(r.jobs);
+        log('conversation.deleted', { conversationToken: token, count: r.jobs.length });
+        return send(res, 200, { deleted: true });
       }
 
       if (routes && await routes(req, res, url, { send, HttpError })) return;

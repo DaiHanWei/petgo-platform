@@ -21,7 +21,7 @@ fs.mkdirSync(config.exportDir, { recursive: true });
 fs.chmodSync(config.exportDir, 0o711);
 const store = createStore(config.dataDir);
 const jobs = createJobManager({ config, store, log });
-const server = createServer({ config, jobs, log });
+const server = createServer({ config, jobs, log, store, claudeHome: config.claudeHome || process.env.HOME });
 
 server.listen(config.port, config.host, () => {
   log('agent.started', { port: config.port });

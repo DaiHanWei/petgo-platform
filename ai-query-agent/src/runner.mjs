@@ -40,7 +40,7 @@ export function buildChildEnv(parentEnv, { claudeHome } = {}) {
   return { ...env, ...CHILD_ENV_FIXED };
 }
 
-export function buildArgs({ resumeSessionId, lang, exportDir }) {
+export function buildArgs({ resumeSessionId, sessionId, lang, exportDir }) {
   const args = [
     '-p', '--output-format', 'json', '--allowedTools', ALLOWED_TOOLS,
     '--append-system-prompt', buildSystemPrompt(lang, exportDir),
@@ -48,7 +48,12 @@ export function buildArgs({ resumeSessionId, lang, exportDir }) {
     // 防止某次被注入的任务写入 hooks / 权限后影响以后所有任务
     '--setting-sources', 'project',
   ];
-  if (resumeSessionId) args.push('--resume', resumeSessionId);
+  if (resumeSessionId) {
+    args.push('--resume', resumeSessionId);
+  } else if (sessionId) {
+    // 预分配的会话 id（agent 生成的 UUID），保证即使任务超时 / 中断，清理时也知道会话记录在哪
+    args.push('--session-id', sessionId);
+  }
   return args;
 }
 

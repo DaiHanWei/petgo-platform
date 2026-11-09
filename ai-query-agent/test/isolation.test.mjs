@@ -128,7 +128,7 @@ test('AC6/AC7 stag 部署脚本：deploy key 拉取、1 核 2G、只读挂载、
   assert.match(sh, /\$STAG_LOG_DIR:\/logs\/stag:ro/);
   assert.match(sh, /"\\\$SNAP":\/repo:ro/);
   assert.match(sh, /git -C \$REMOTE_SRC archive HEAD/);
-  assert.match(sh, /--cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL/);
+  assert.match(sh, /--cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL --cap-add DAC_OVERRIDE/);
   assert.match(sh, /no-new-privileges/);
   assert.match(sh, /--network \$INTERNAL_NETWORK/);
   assert.match(sh, /docker network create --internal/);

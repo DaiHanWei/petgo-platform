@@ -41,7 +41,7 @@ export async function startAgent({ config = testConfig(), parentEnv, routes, ext
   const log = (event, fields = {}) => logs.push(JSON.stringify({ event, ...fields }));
   const store = createStore(config.dataDir);
   const jobs = createJobManager({ config, store, log, parentEnv: env });
-  const server = createServer({ config, jobs, log, routes: routes?.({ config, store, jobs, log, env }), ...extra });
+  const server = createServer({ config, jobs, log, store, claudeHome: env.HOME, routes: routes?.({ config, store, jobs, log, env }), ...extra });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   async function call(method, p, body, { secret = SECRET, headers = {} } = {}) {

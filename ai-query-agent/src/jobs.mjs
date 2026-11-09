@@ -2,6 +2,7 @@
 // - 同一 jobToken 在内存或磁盘已存在时直接视为已接收（幂等）
 // - 运行中的任务不持久化：agent 重启后丢失，GET 返回 404，由 ops 转 FAILED（spec §4.2）
 
+import crypto from 'node:crypto';
 import { runClaude } from './runner.mjs';
 import { prepareJobDir, listJobFiles, sealJobDir } from './files.mjs';
 
@@ -54,11 +55,14 @@ export function createJobManager({ config, store, log, run = runClaude, parentEn
     const started = entry.startedAt;
     let r;
     let exportDir = null;
+    // 新会话预分配 Claude 会话 id（--session-id），追问沿用原 id（--resume）；开始前就登记进对话索引
+    const sessionId = entry.job.resumeSessionId || crypto.randomUUID();
     try {
+      await store.addToIndex(entry.job.conversationToken, { jobToken: token, sessionId });
       if (config.exportDir) {
         exportDir = await prepareJobDir(config.exportDir, entry.job.conversationToken, token);
       }
-      r = await run({ ...entry.job, exportDir }, config, parentEnv, abort.signal);
+      r = await run({ ...entry.job, exportDir, sessionId }, config, parentEnv, abort.signal);
     } catch {
       r = { ok: false, errorCode: 'AGENT_ERROR' };
     }
@@ -88,6 +92,9 @@ export function createJobManager({ config, store, log, run = runClaude, parentEn
       costUsd: r.costUsd ?? null,
       errorCode: r.ok ? null : (r.errorCode || 'AGENT_ERROR'),
     };
+    if (result.sessionId && result.sessionId !== sessionId) {
+      await store.addToIndex(entry.job.conversationToken, { sessionId: result.sessionId }).catch(() => {});
+    }
     try {
       await store.writeResult(token, result);
     } catch {
@@ -119,6 +126,19 @@ export function createJobManager({ config, store, log, run = runClaude, parentEn
     return store.readResult(token);
   }
 
+  /** 某对话是否有排队中 / 运行中的任务（清理时拒绝删除）。 */
+  function hasActive(conversationToken) {
+    for (const e of active.values()) {
+      if (e.job.conversationToken === conversationToken) return true;
+    }
+    return false;
+  }
+
+  /** 清理后忘掉只在内存里的结果（落盘失败的那些）。 */
+  function forget(tokens) {
+    for (const t of tokens) unpersisted.delete(t);
+  }
+
   /** 关闭：不再派发，结束正在运行的 claude 进程组（运行中任务随之丢失，属预期）。 */
   function close() {
     closed = true;
@@ -130,7 +150,7 @@ export function createJobManager({ config, store, log, run = runClaude, parentEn
   }
 
   return {
-    submit, get, close, drain,
+    submit, get, close, drain, hasActive, forget,
     stats: () => ({ running, queued: queue.length }),
   };
 }

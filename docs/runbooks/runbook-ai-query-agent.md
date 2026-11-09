@@ -17,7 +17,7 @@
 
 导出文件：`ai-query-agent-stag-exports` 卷挂到 `/exports`，按 `<对话 token>/<任务 token>/` 隔离，30 天随对话清除（Story 2.2）。
 
-运行限制：1 核 2G、`--read-only` 根文件系统（`/tmp` 为 tmpfs）、`--cap-drop ALL`（只加回 `SETUID`/`SETGID`/`KILL`）、`no-new-privileges`、**不挂 docker socket、不映射端口**、日志和代码只读挂载（代码为无 `.git` 的快照 `repo-<sha>`）。
+运行限制：1 核 2G、`--read-only` 根文件系统（`/tmp` 为 tmpfs）、`--cap-drop ALL`（只加回 `SETUID`/`SETGID`/`KILL`/`DAC_OVERRIDE`；切到 claude 的 uid 时能力清空）、`no-new-privileges`、**不挂 docker socket、不映射端口**、日志和代码只读挂载（代码为无 `.git` 的快照 `repo-<sha>`）。
 
 进程模型：agent（node）以容器内 root 运行，claude 及其 Bash 以 uid 10002 运行并加 `--setting-sources project`。这样 claude 读不到 agent 进程的 env（`AGENT_SECRET`）和 `/data` 下其他任务的结果，也无法通过改写 `~/.claude/settings.json` 给以后的任务埋 hooks。
 
@@ -59,7 +59,11 @@ CONFIRM_SHARED_INFRA=1 ./scripts/deploy-ai-query-agent-stag.sh   # 仅在 Dai �
 | 服务器拉取代码需要的域名 | `github.com`（git over SSH，在宿主机执行，不经容器） |
 | internal 网络（无出网）下一次真实查询的结果 | 待实测（预期：认证失败 → `AGENT_ERROR` / `AGENT_AUTH_FAILED`，据此确认代理必须放行的域名） |
 
-## 6. 回退
+## 6. 数据清理（Story 2.2）
+
+ops 每日（默认 02:40 WIB）对 30 天未更新的对话调用 `DELETE /conversations/{token}`：agent 按对话索引 `data/conversations/<token>.json` 删除导出目录、任务结果与 Claude 会话记录（`~/.claude/projects/*/<sessionId>.jsonl`），成功后 ops 再删库。agent 不可达或返回 409（仍有运行中任务）时跳过、下轮重试。
+
+## 6.1 回退
 
 `AI_QUERY_MODE=off`（ops 侧）+ `docker stop ai-query-agent-stag`。不影响后台其他功能。旧 `claude-bot` 容器与飞书应用保持原状（只暂停，不下线）。
 

@@ -23,6 +23,7 @@ final class AgentStub implements AutoCloseable {
     /** 路径 → 固定状态码 + 体（优先于默认行为）。 */
     final Map<String, Object[]> overrides = new ConcurrentHashMap<>();
     volatile int submitStatus = 202;
+    volatile int deleteStatus = 200;
     private final HttpServer server;
 
     AgentStub() throws IOException {
@@ -52,6 +53,10 @@ final class AgentStub implements AutoCloseable {
                         {"status":"QUEUED","answerMd":null,"sessionId":null,"files":[],"secs":0,"turns":null,"costUsd":null,"errorCode":null}"""});
             }
             send(ex, submitStatus, "{}".getBytes(StandardCharsets.UTF_8), "application/json");
+            return;
+        }
+        if ("DELETE".equals(ex.getRequestMethod()) && path.startsWith("/conversations/")) {
+            send(ex, deleteStatus, "{\"deleted\":true}".getBytes(StandardCharsets.UTF_8), "application/json");
             return;
         }
         if ("GET".equals(ex.getRequestMethod()) && path.startsWith("/jobs/") && path.split("/").length == 3) {
