@@ -699,16 +699,42 @@ tr.row-danger td { background: var(--danger-bg); }
 /* ===== D1 服务范围与运费（V1.3.0 Story 10.6）===== */
 /* 🔴 区域是 div 网格不是 <table>：每行自己是一个 <form>（一行一次 upsert），
    而 <form> 不能直接包 <tr> —— 用表格的话浏览器会把 form 提到表外，行里的输入全部脱离它。 */
-.ship-zones { display: grid; gap: 6px; }
-.ship-zone-head, .ship-zone-form {
-    display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr .8fr auto; gap: 8px; align-items: center;
+/* V1.4.2 UI G1 / G2：已有区域按表格呈现 —— 行内 form 用 display:contents 让它的子项直接参与行网格
+   （form 关联不受 display 影响，提交照常），表头与每行共用同一组列宽才能对齐。
+   列：Kecamatan · Kota · Provinsi · 邮编 · [保存] · 启用徽标 · 启停钮。 */
+.ship-zones { display: grid; gap: 0; }
+.ship-zone-head, .ship-zones:not(.ship-zones-new) .ship-zone-row {
+    display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1.2fr) minmax(0,1fr) 72px auto 46px 52px;
+    gap: 8px; align-items: center; padding: 8px 12px;
 }
-.ship-zone-head { color: var(--muted); font-size: var(--fs-xs); padding: 0 2px; }
-.ship-zone-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
-/* 区域表 5 列 + 保存钮，比 .cfg-card 默认的 720px 宽 —— 挤在 720px 里每个输入只剩 ~100px。 */
-#cfg-ship-zones { max-width: 980px; }
-.ship-zone-row .inline-error-slot { grid-column: 1 / -1; margin: 0; }
-.ship-zone-row.is-off .ship-zone-form .inp { opacity: .6; }
+.ship-zone-head { background: var(--surface-2, #f4f4f7); color: var(--ink-2); font-size: var(--fs-xs); font-weight: 600;
+                  border: 1px solid var(--line); border-radius: 6px 6px 0 0; }
+.ship-zones:not(.ship-zones-new) .ship-zone-row { border: 1px solid var(--line); border-top: 0; font-size: var(--fs-sm); }
+.ship-zones:not(.ship-zones-new) .ship-zone-row:last-child { border-radius: 0 0 6px 6px; }
+.ship-zones:not(.ship-zones-new) .ship-zone-form { display: contents; }
+.ship-zone-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ship-zones:not(.ship-zones-new) .ship-zone-form .inp { width: 100%; min-width: 0; padding-left: 6px; padding-right: 6px; }
+/* 行内保存钮只在改过邮编后出现（未改时 disabled → 不占列宽，表格按稿只剩文本 + 徽标 + 启停） */
+.ship-zones:not(.ship-zones-new) .ship-zone-save:has([data-save]:disabled) { width: 0; overflow: hidden; visibility: hidden; }
+.ship-zone-row .ship-zone-state { order: 6; justify-self: start; }
+.ship-zone-row .ship-zone-toggle { order: 7; }
+.ship-zone-row .inline-error-slot { order: 8; grid-column: 1 / -1; margin: 0; }
+.ship-zone-row.is-off .ship-zone-cell, .ship-zone-row.is-off .ship-zone-form .inp { color: var(--muted); }
+/* 新增行：四个输入 + 保存钮一行 */
+.ship-zones-new .ship-zone-form { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)) 76px auto; gap: 8px; align-items: center; }
+.ship-zones-new .ship-zone-form .inp { min-width: 0; width: 100%; }
+
+/* 两栏（左：发货地址 / Biteship / 免运门槛；右：区域 / 退货地址）。窄屏回落单栏。 */
+.ship-cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.ship-col { min-width: 0; }
+.ship-col > .cfg-card { max-width: none; }
+@media (max-width: 1180px) { .ship-cols { grid-template-columns: minmax(0, 1fr); } }
+/* 标签左置（.s-form-row）在卡内收窄标签列；输入框默认宽度对齐稿（约 260px），地址类整宽 */
+.ship-hform .s-form-row > .s-label, .ship-biteship-form .s-form-row > .s-label { width: 110px; }
+.ship-hform .s-form-row, .ship-biteship-form .s-form-row { padding: 6px 0; }
+.ship-inline { display: flex; gap: 8px; align-items: center; }
+.ship-inline .inp { min-width: 0; width: 260px; }
+.ship-save-end { justify-content: flex-end; }
 .ship-zone-save { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
 .ship-zones-new { margin-top: 14px; }
 .ship-zones-new h3 { font-size: var(--fs-sm); margin: 0 0 6px; }
@@ -718,3 +744,17 @@ tr.row-danger td { background: var(--danger-bg); }
 .card-kpi.repurchase-kpi { min-width: 0; overflow-x: auto; }
 .card-kpi.repurchase-kpi th,
 .card-kpi.repurchase-kpi td { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+
+/* ===== V1.4.2 UI A2 / A3 优惠券页 ===== */
+/* A2 筛选栏：标签在上、控件在下（全局 label.field 是 block，会把 span 与 select 排成一行） */
+.sc-filter-bar { align-items: flex-end; }
+.sc-filter-bar label.field { display: flex; flex-direction: column; gap: 4px; }
+.sc-filter-bar .sel { min-width: 120px; }
+/* A2 空态：描边卡 */
+.empty.empty-boxed { border: 1px solid var(--line); border-radius: 8px; padding: 36px 16px; background: var(--surface); }
+/* A3 抽屉：起止日期同一行、有效期单选、保存钮通栏 */
+.s-range { display: flex; align-items: center; gap: 6px; max-width: 260px; }
+.s-range .inp { flex: 1 1 0; min-width: 0; width: 0; padding-left: 8px; padding-right: 6px; }
+.s-radios { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; margin-bottom: 6px; }
+.s-radios label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
+.coupon-drawer-form .sticky-footer .btn { width: 100%; }

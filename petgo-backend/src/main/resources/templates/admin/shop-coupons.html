@@ -26,7 +26,7 @@
         <p class="muted" th:text="#{admin.v142.coupon.hint}">券的一切参数由运营配置。</p>
 
         <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::sc-filters}, ~{}, ~{::sc-table}, ~{::sc-drawer})}">
-            <form th:fragment="sc-filters" class="filter-bar" data-autosubmit
+            <form th:fragment="sc-filters" class="filter-bar sc-filter-bar" data-autosubmit
                   th:attr="hx-get=@{/admin/shop/coupons}" hx-target="#shop-coupon-rows" hx-swap="innerHTML" hx-push-url="true">
                 <label class="field"><span th:text="#{admin.common.status}">状态</span>
                     <select name="status" class="sel">
@@ -49,7 +49,7 @@
                                 th:text="#{'admin.v142.coupon.acquire.' + ${a}}">用户领取</option>
                     </select>
                 </label>
-                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.filter}">查询</button>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.search}">查询</button>
             </form>
             <div th:fragment="sc-table" id="shop-coupon-rows">
                 <div th:replace="~{admin/fragments/shop-coupons-list :: rows}"></div>
