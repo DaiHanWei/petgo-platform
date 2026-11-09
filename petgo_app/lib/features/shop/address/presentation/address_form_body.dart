@@ -47,7 +47,12 @@ class AddressFormBody extends ConsumerStatefulWidget {
     this.editToken,
     required this.submitLabel,
     required this.onSaved,
+    this.compact = false,
   });
+
+  /// 结算页 D5 抽屉形态（UI D5）：白底平铺、无分块卡与块标题，只留 收件人 / 电话 / Wilayah / 邮编 / 详细地址 五项，
+  /// 不出「标签」与「设为默认」（标签后端本就可空；首个地址由后端强制为默认）。地址簿页（H2 / H3）保持 false。
+  final bool compact;
 
   /// 预填值（可空）。
   final ShippingAddress? initial;
@@ -195,12 +200,14 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
                 style: ShopText.body.copyWith(fontSize: 12, color: ShopColors.errorText)),
           ),
         // ---- 块 1：收件人 ----
-        ShopSection(
+        _block(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.addressSectionReceiver, style: ShopText.sectionTitle.copyWith(fontSize: 12)),
-              const SizedBox(height: 10),
+              if (!widget.compact) ...[
+                Text(l10n.addressSectionReceiver, style: _sectionTitleStyle),
+                const SizedBox(height: 14),
+              ],
               _field(
                 id: 'receiver',
                 label: l10n.addressReceiverName,
@@ -221,13 +228,16 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
         ),
 
         // ---- 块 2：地址 ----
-        ShopSection(
+        _block(
           child: Column(
             key: _fieldKeys['region'],
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.addressSectionAddress, style: ShopText.sectionTitle.copyWith(fontSize: 12)),
-              const SizedBox(height: 10),
+              if (!widget.compact) ...[
+                Text(l10n.addressSectionAddress, style: _sectionTitleStyle),
+                const SizedBox(height: 14),
+              ] else
+                const SizedBox(height: 11),
               // 🔴 三级级联，**不做自由输入**（9.4：合并为一行「Wilayah」，点开 H4 抽屉逐级选）。
               //    抽屉里换了上级，下级从新上级重新列出 —— 不会拼出不存在的行政区组合。
               _regionRow(l10n),
@@ -264,8 +274,9 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
           ),
         ),
 
-        // ---- 块 3：标签与默认 ----
-        ShopSection(
+        // ---- 块 3：标签与默认（D5 抽屉形态不出）----
+        if (!widget.compact)
+        _block(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -274,11 +285,8 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
               Row(
                 key: _fieldKeys['label'],
                 children: [
-                  Text(l10n.addressSectionLabel,
-                      style: ShopText.sectionTitle.copyWith(fontSize: 12)),
-                  Text(' *',
-                      style: ShopText.sectionTitle
-                          .copyWith(fontSize: 12, color: ShopColors.errorText)),
+                  Text(l10n.addressSectionLabel, style: _sectionTitleStyle),
+                  Text(' *', style: _sectionTitleStyle.copyWith(color: ShopColors.errorText)),
                 ],
               ),
               const SizedBox(height: 10),
@@ -312,6 +320,25 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
       ],
     );
   }
+
+  /// 分块容器：地址簿页是白卡（[ShopSection]）；D5 抽屉形态平铺在白底上、只留左右边距。
+  /// 地址簿页（UI H2 / H3）：圆角白卡、左右留 16、卡间 12（原 v1.3 的通栏白块 + 3px 灰缝与 1.4.2 稿不符）。
+  Widget _block({required Widget child}) => widget.compact
+      ? Padding(padding: const EdgeInsets.fromLTRB(16, 6, 16, 0), child: child)
+      : Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: ShopColors.surface,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: child,
+        );
+
+  /// 块标题（「Penerima」「Alamat」「Label & utama」）。
+  static const TextStyle _sectionTitleStyle =
+      TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.3, color: ShopColors.text);
 
   /// 默认地址开关。
   ///
@@ -350,15 +377,21 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
     final hit = kecamatanList.where((k) => k.name == _kecamatan).firstOrNull;
     if (hit == null) return const SizedBox.shrink();
     if (hit.serviceable) {
-      return ShopLeftAccentBlock.pawcoin(
+      // UI H3：浅紫圆角条（无左侧色条）。
+      return Container(
         key: const ValueKey('addressInRangeHint'),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: ShopColors.purpleTagBg,
+          borderRadius: BorderRadius.circular(10),
+        ),
         child: Row(
           children: [
-            const Icon(Icons.check_circle, size: 14, color: ShopColors.purple),
+            const Icon(Icons.check_circle, size: 18, color: ShopColors.purple),
             const SizedBox(width: 8),
             Expanded(
               child: Text(l10n.addressInServiceArea,
-                  style: ShopText.body.copyWith(color: ShopColors.purpleText)),
+                  style: ShopText.body.copyWith(fontSize: 13, color: ShopColors.purpleText)),
             ),
           ],
         ),
@@ -390,8 +423,8 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
       key: _fieldKeys[id],
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: ShopText.meta.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
+        Text(label, style: _labelStyle),
+        const SizedBox(height: 6),
         Focus(
           onFocusChange: (has) {
             if (!has) onBlur();
@@ -403,12 +436,12 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
             inputFormatters: inputFormatters,
             minLines: minLines,
             maxLines: maxLines,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: _inputStyle,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: ShopText.body.copyWith(color: ShopColors.text4),
+              hintStyle: _inputStyle.copyWith(color: ShopColors.text4, fontWeight: FontWeight.w400),
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               // 错误只改描边色 + 下方一行说明（设计稿），不用 Material 的 errorText
               // ——那会把控件整体上移，一片红边时页面会跳动。
               border: _border(ShopColors.border),
@@ -423,11 +456,17 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
         if (error == null && helper != null)
           Padding(
             padding: const EdgeInsets.only(top: 3),
-            child: Text(helper, style: ShopText.meta.copyWith(fontSize: 9.5)),
+            child: Text(helper, style: ShopText.meta.copyWith(fontSize: 11)),
           ),
       ],
     );
   }
+
+  /// v1.4.2 UI D5 / H3：字段标签深色加粗、输入字号与稿一致（原 v1.3 密排档 10 / 12 偏小，还原度扣分项）。
+  static const TextStyle _labelStyle =
+      TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.3, color: ShopColors.text);
+  static const TextStyle _inputStyle =
+      TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.35, color: ShopColors.text);
 
   OutlineInputBorder _border(Color c) => OutlineInputBorder(
         borderRadius: BorderRadius.circular(ShopShape.radiusField),
@@ -437,7 +476,7 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
   Widget _errorLine(String text) => Padding(
         padding: const EdgeInsets.only(top: 3),
         child: Text(text,
-            style: ShopText.meta.copyWith(fontSize: 9.5, color: ShopColors.error)),
+            style: ShopText.meta.copyWith(fontSize: 11, color: ShopColors.error)),
       );
 
   /// 「Wilayah」一行（H3）：未选显示占位「Pilih wilayah」，选后「{provinsi}, {kota}, {kecamatan}」。
@@ -447,14 +486,13 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.addressRegionLabel,
-            style: ShopText.meta.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
+        Text(l10n.addressRegionLabel, style: _labelStyle),
+        const SizedBox(height: 6),
         ShopPressable(
           key: const ValueKey('addressRegionRow'),
           onTap: _pickRegion,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(ShopShape.radiusField),
               border: Border.all(
@@ -468,12 +506,11 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
                   child: Text(
                     picked ? '$_provinsi, $_kota, $_kecamatan' : l10n.addressRegionPick,
                     key: const ValueKey('addressRegionValue'),
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: picked
-                        ? const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w500, color: ShopColors.text)
-                        : ShopText.body.copyWith(color: ShopColors.text4),
+                        ? _inputStyle
+                        : _inputStyle.copyWith(color: ShopColors.text4, fontWeight: FontWeight.w400),
                   ),
                 ),
                 const Icon(Icons.chevron_right, size: 18, color: ShopColors.text4),
@@ -505,7 +542,7 @@ class _AddressFormBodyState extends ConsumerState<AddressFormBody> {
   String? _errorFor(AppLocalizations l10n, String id) => switch (id) {
         // 必填。⚠️ **不默认选中 Rumah**：那会替用户做一次他没做过的选择，
         //    而这个标签会显示在他日后的地址列表里。宁可要求他点一下。
-        'label' => _label == null ? l10n.addressRequired : null,
+        'label' => _label == null && !widget.compact ? l10n.addressRequired : null,
         'receiver' => switch (_receiver.text.trim().length) {
             0 => l10n.addressRequired,
             < 2 || > 50 => l10n.addressNameTooShort,

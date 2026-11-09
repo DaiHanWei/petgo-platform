@@ -187,7 +187,7 @@ Future<ShippingAddress?> showAddAddressSheet(BuildContext context) =>
     showModalBottomSheet<ShippingAddress>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: ShopColors.bg,
+      backgroundColor: ShopColors.surface,
       shape: _sheetShape,
       builder: (sheetCtx) {
         final l10n = AppLocalizations.of(sheetCtx);
@@ -203,6 +203,7 @@ Future<ShippingAddress?> showAddAddressSheet(BuildContext context) =>
                 ),
                 Expanded(
                   child: AddressFormBody(
+                    compact: true,
                     submitLabel: l10n.checkoutSaveAndUse,
                     onSaved: (a) => Navigator.of(sheetCtx).pop(a),
                   ),

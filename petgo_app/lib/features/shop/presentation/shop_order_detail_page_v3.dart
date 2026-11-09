@@ -196,16 +196,22 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
             refund.compensationAmount > 0
         ? refund.compensationAmount
         : 0;
+    // UI F11：已完成 = 浅绿底 + 绿色加粗标题（与警示态同一套「底色 + 标题色」切换）。
+    final done = !warn && header.kind == ShopHeaderKind.completed;
     return ShopCard(
       key: ValueKey(warn ? 'shopOrderHeaderCardWarn' : 'shopOrderHeaderCard'),
-      color: warn ? ShopColors.warnBg : ShopColors.surface,
+      color: warn ? ShopColors.warnBg : (done ? ShopColors.savingBg : ShopColors.surface),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
               key: const ValueKey('shopOrderHeaderTitle'),
-              style: AppTypography.body.copyWith(
-                  fontWeight: FontWeight.w600, color: warn ? ShopColors.warnTitle : ShopColors.ink)),
+              style: done
+                  ? AppTypography.title.copyWith(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: ShopColors.saving)
+                  : AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: warn ? ShopColors.warnTitle : ShopColors.ink)),
           if (!refundText && header.hint == ShopHeaderHint.reorderedFrom && fromNo != null) ...[
             const SizedBox(height: 4),
             _reorderedFromHint(l10n, order, fromNo),
@@ -496,9 +502,10 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
             ],
           ),
           const SizedBox(height: 6),
+          // UI F11：快递行加粗深色，运单号在下一行灰色等宽。
           Text(service == null || service.isEmpty ? courier : '$courier · $service',
               key: const ValueKey('shopOrderCourierLine'),
-              style: AppTypography.caption.copyWith(color: ShopColors.text2)),
+              style: AppTypography.body.copyWith(fontWeight: FontWeight.w600, color: ShopColors.ink)),
           if (waybill.isNotEmpty)
             Row(
               children: [
@@ -509,8 +516,8 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
                       style: const TextStyle(
                           fontFamily: ShopText.mono,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: ShopColors.text)),
+                          fontWeight: FontWeight.w400,
+                          color: ShopColors.text3)),
                 ),
                 ShopPressable(
                   key: const ValueKey('shopOrderCopyResiV2'),
@@ -564,7 +571,7 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
                 pending: pending, cancelled: cancelledByIndex[i], outOfStock: outOfStock),
             const SizedBox(height: 12),
           ],
-          const ShopDivider(margin: EdgeInsets.only(bottom: 8)),
+          const ShopDivider(color: ShopColors.border2, margin: EdgeInsets.only(bottom: 8)),
           ..._amountRows(l10n, order, header),
           ..._partialRefundRows(l10n, order),
         ],
@@ -680,7 +687,8 @@ class _ShopOrderDetailPageV3State extends ConsumerState<ShopOrderDetailPageV3> {
         : cancelledKind
             ? l10n.shopOrderCancelledTotalLabel
             : l10n.shopOrderTotalPaid;
-    rows.add(const SizedBox(height: 6));
+    // UI F11：合计行上方一条分隔线（同商品行与明细之间）。
+    rows.add(const ShopDivider(color: ShopColors.border2, margin: EdgeInsets.symmetric(vertical: 8)));
     rows.add(Row(
       children: [
         Expanded(
@@ -1182,10 +1190,11 @@ class _LogisticsTimeline extends StatelessWidget {
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(bottom: i == labels.length - 1 ? 0 : 12),
+                      // UI F11：已走过的节点文字深色（圆点仍是品牌紫），当前节点加粗；未到的灰。
                       child: Text(labels[i],
-                          style: AppTypography.caption.copyWith(
+                          style: AppTypography.body.copyWith(
                               fontWeight: i == current ? FontWeight.w700 : FontWeight.w400,
-                              color: i <= current ? ShopColors.accentDark : ShopColors.text4)),
+                              color: i <= current ? ShopColors.ink : ShopColors.text4)),
                     ),
                   ),
                 ],

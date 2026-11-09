@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/shop_tokens.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/format/idr_compact.dart';
 import '../../../../shared/utils/date_format.dart';
 import '../../../../shared/widgets/pay_channel_picker.dart' show formatIdrAmount;
 import '../../domain/checkout_preview.dart';
@@ -215,61 +216,100 @@ class CouponCard extends StatelessWidget {
 }
 
 extension on CouponCard {
+  /// 首页横滑窄卡（UI A1 `.v-cp`）：左侧 4px 色条（满减紫 / 免运青）+ 面额（rb 简写）与门槛 / 封顶两行 + 右侧按钮；
+  /// 新人券（[accent]）紫底白字、角标在上、按钮位在右下。宽度由调用方给（172 / 新人券 264）。
   Widget _buildCompact(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isFs = coupon.kind == CouponKind.freeShipping;
-    final fg = accent ? ShopColors.surface : ShopColors.purple;
-    final sub = accent ? ShopColors.surface.withValues(alpha: .85) : ShopColors.text3;
+    final stripe = isFs ? ShopColors.shipTeal : ShopColors.purple;
+    final fg = accent ? ShopColors.surface : (isFs ? ShopColors.shipTeal : ShopColors.purpleDark);
+    final sub = accent ? ShopColors.surface : ShopColors.text2;
+    // 满减：面额「Rp 20rb」+「Min. Rp 300rb」；免运：「Ongkir」+「Maks. Rp 15rb」（封顶）。
+    final face = isFs ? l10n.couponStripShipping : _rbShort(coupon.amount ?? 0);
+    final String? subLine = isFs
+        ? (coupon.amount != null ? l10n.couponStripMax(_rbShort(coupon.amount!)) : null)
+        : ((coupon.minSpend ?? 0) > 0 ? l10n.couponStripMin(_rbShort(coupon.minSpend!)) : null);
     final card = Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: accent ? ShopColors.purple : ShopColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: accent ? null : Border.all(color: ShopColors.border2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      color: accent ? ShopColors.purple : ShopColors.surface,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: accent ? CrossAxisAlignment.end : CrossAxisAlignment.center,
         children: [
-          if (badge != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(badge!,
-                  key: const ValueKey('couponBadge'),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (badge != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(badge!,
+                        key: const ValueKey('couponBadge'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.micro.copyWith(
+                            color: ShopColors.newbieBadge,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .4)),
+                  ),
+                Text(
+                  face,
+                  key: const ValueKey('couponFace'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.micro.copyWith(
-                      color: fg, fontWeight: FontWeight.w700, letterSpacing: .4)),
-            ),
-          Text(
-            isFs ? l10n.checkoutCouponFreeShipping : formatIdr(coupon.amount ?? 0),
-            key: const ValueKey('couponFace'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.body.copyWith(
-              fontWeight: FontWeight.w700,
-              color: fg,
-              fontFeatures: const [FontFeature.tabularFigures()],
+                  style: AppTypography.body.copyWith(
+                    fontSize: 16,
+                    height: 1.25,
+                    fontWeight: FontWeight.w800,
+                    color: fg,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                if (subLine != null)
+                  Text(subLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption.copyWith(fontSize: 11, color: sub)),
+              ],
             ),
           ),
-          // 满减：min. belanja Rp {min}；免运：封顶额（同 7.1 横排口径）。
-          if (isFs && coupon.amount != null)
-            Text(formatIdr(coupon.amount!),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.caption.copyWith(color: sub))
-          else if ((coupon.minSpend ?? 0) > 0)
-            Text(l10n.couponMinSpend(formatIdrAmount(coupon.minSpend!)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.caption.copyWith(color: sub)),
-          if (trailing != null) ...[const SizedBox(height: 8), trailing!],
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
         ],
       ),
     );
-    if (onTap == null) return card;
-    return Semantics(button: true, child: ShopPressable(onTap: onTap, child: card));
+    // 左侧色条：圆角卡上不能用非统一 Border（Flutter 断言），改为裁圆角后叠一条 4px 色块（同稿 inset box-shadow）。
+    final framed = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        children: [
+          card,
+          // 页底色比稿浅，白卡会「消失」：补一圈极淡描边（新人券紫底不需要）。
+          if (!accent)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: ShopColors.border2),
+                  ),
+                ),
+              ),
+            ),
+          if (!accent)
+            Positioned(left: 0, top: 0, bottom: 0, width: 4, child: ColoredBox(color: stripe)),
+        ],
+      ),
+    );
+    if (onTap == null) return framed;
+    return Semantics(button: true, child: ShopPressable(onTap: onTap, child: framed));
   }
+}
+
+/// 「Rp 20rb」「Rp 1,5jt」：券卡窄位用的简写（规则同 [formatIdrCompact]，Rp 后带空格对齐稿件）。
+String _rbShort(int amount) {
+  final p = idrCompactParts(amount);
+  return 'Rp ${p.number}${p.unit}';
 }
 
 class _Radio extends StatelessWidget {

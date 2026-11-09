@@ -35,11 +35,19 @@
         <!--/* ⚠️ 三张卡必须是**兄弟**：卡间距靠 admin.css 的 `.cfg-card + .cfg-card`，
                中间夹一层包装 div 会让那条相邻选择器整个失效（卡会贴在一起，而且不报错）。 */-->
         <!--/* V1.4.2 shop-admin Story 4.1（G1）：发货地址、Biteship 账户两张新卡在前，三张原卡保留。 */-->
-        <div th:replace="~{admin/shop-shipping :: originCard}"></div>
-        <div th:replace="~{admin/shop-shipping :: biteshipCard}"></div>
-        <div th:replace="~{admin/shop-shipping :: thresholdCard}"></div>
-        <div th:replace="~{admin/shop-shipping :: zonesCard}"></div>
-        <div th:replace="~{admin/shop-shipping :: returnAddressCard}"></div>
+        <!--/* UI G1 / G2：两栏 —— 左：发货地址 / Biteship 账户 / 免运门槛；右：可配送区域 / 退货收件地址。
+               每栏内的卡仍是兄弟（`.cfg-card + .cfg-card` 间距照旧生效）。 */-->
+        <div class="ship-cols">
+            <div class="ship-col">
+                <div th:replace="~{admin/shop-shipping :: originCard}"></div>
+                <div th:replace="~{admin/shop-shipping :: biteshipCard}"></div>
+                <div th:replace="~{admin/shop-shipping :: thresholdCard}"></div>
+            </div>
+            <div class="ship-col">
+                <div th:replace="~{admin/shop-shipping :: zonesCard}"></div>
+                <div th:replace="~{admin/shop-shipping :: returnAddressCard}"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -68,24 +76,37 @@
                    readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
     <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::og-title}, ~{::og-form}, #{admin.v142.shipping.origin.save})}">
         <h2 class="cfg-title" th:fragment="og-title" th:text="#{admin.v142.shipping.origin.title}">发货地址</h2>
-        <div th:fragment="og-form">
-            <label class="field"><span th:text="#{admin.v142.shipping.origin.contactName}">联系人</span>
-                <input class="inp field-full" type="text" name="originContactName" maxlength="60"
-                       th:value="${settings != null} ? ${settings.originContactName} : ''" th:disabled="${!canEdit}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.shop.order.col.phone}">电话</span>
-                <input class="inp field-full" type="text" name="originContactPhone" maxlength="20"
-                       th:value="${settings != null} ? ${settings.originContactPhone} : ''" th:disabled="${!canEdit}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.shop.order.col.address}">地址</span>
-                <input class="inp field-full" type="text" name="originAddress" maxlength="300"
-                       th:value="${settings != null} ? ${settings.originAddress} : ''" th:disabled="${!canEdit}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.v142.shipping.origin.postalCode}">邮编</span>
-                <input class="inp field-full" type="text" name="originPostalCode" maxlength="5" inputmode="numeric"
-                       pattern="[1-9][0-9]{4}"
-                       th:value="${settings != null} ? ${settings.originPostalCode} : ''" th:disabled="${!canEdit}"/>
-            </label>
+        <!--/* UI G2：标签左置 + 必填星（只做视觉提示：服务端允许整体清空发货地，故不加 required 拦提交）。 */-->
+        <div th:fragment="og-form" class="ship-hform">
+            <div class="s-form-row">
+                <label class="s-label s-req" th:text="#{admin.v142.shipping.origin.contactName}">联系人</label>
+                <div class="s-ctl">
+                    <input class="inp" type="text" name="originContactName" maxlength="60"
+                           th:value="${settings != null} ? ${settings.originContactName} : ''" th:disabled="${!canEdit}"/>
+                </div>
+            </div>
+            <div class="s-form-row">
+                <label class="s-label s-req" th:text="#{admin.shop.order.col.phone}">电话</label>
+                <div class="s-ctl">
+                    <input class="inp" type="text" name="originContactPhone" maxlength="20"
+                           th:value="${settings != null} ? ${settings.originContactPhone} : ''" th:disabled="${!canEdit}"/>
+                </div>
+            </div>
+            <div class="s-form-row">
+                <label class="s-label s-req" th:text="#{admin.shop.order.col.address}">地址</label>
+                <div class="s-ctl">
+                    <input class="inp field-full" type="text" name="originAddress" maxlength="300"
+                           th:value="${settings != null} ? ${settings.originAddress} : ''" th:disabled="${!canEdit}"/>
+                </div>
+            </div>
+            <div class="s-form-row">
+                <label class="s-label s-req" th:text="#{admin.v142.shipping.origin.postalCode}">邮编</label>
+                <div class="s-ctl">
+                    <input class="inp" type="text" name="originPostalCode" maxlength="5" inputmode="numeric"
+                           pattern="[1-9][0-9]{4}"
+                           th:value="${settings != null} ? ${settings.originPostalCode} : ''" th:disabled="${!canEdit}"/>
+                </div>
+            </div>
         </div>
     </div>
 </th:block>
@@ -126,26 +147,32 @@
         <form class="ship-biteship-form" data-config-card method="post" th:if="${canEdit}"
               th:attr="action=@{/admin/shop/shipping/biteship/balance},hx-post=@{/admin/shop/shipping/biteship/balance/confirm}"
               hx-target="#cfg-ship-biteship-err" hx-swap="innerHTML">
-            <label class="field"><span th:text="#{admin.v142.biteship.enter}">录入实际余额</span>
-                <input class="inp field-full" type="number" name="amount" min="0" step="1" required
-                       th:placeholder="#{admin.v142.biteship.enter.placeholder}"/>
-            </label>
-            <span class="ship-zone-save">
-                <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
-                <button type="submit" class="btn btn-sm btn-primary" disabled data-save
-                        th:text="#{admin.v142.biteship.btn.updateBalance}">更新余额</button>
-            </span>
+            <div class="s-form-row">
+                <label class="s-label" th:text="#{admin.v142.biteship.enter}">录入实际余额</label>
+                <div class="s-ctl ship-inline">
+                    <input class="inp" type="number" name="amount" min="0" step="1" required
+                           th:placeholder="#{admin.v142.biteship.enter.placeholder}"/>
+                    <span class="ship-zone-save">
+                        <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
+                        <button type="submit" class="btn btn-sm btn-neutral" disabled data-save
+                                th:text="#{admin.v142.biteship.btn.updateBalance}">更新余额</button>
+                    </span>
+                </div>
+            </div>
         </form>
 
         <form class="ship-biteship-form" data-config-card method="post"
               th:attr="action=@{/admin/shop/shipping/biteship/threshold},hx-post=@{/admin/shop/shipping/biteship/threshold/confirm}"
               hx-target="#cfg-ship-biteship-err" hx-swap="innerHTML">
-            <label class="field"><span th:text="#{admin.v142.biteship.threshold}">余额预警阈值</span>
-                <input class="inp field-full" type="number" name="balanceAlertThreshold" min="0" step="1" required
-                       th:value="${balance != null} ? ${balance.threshold()} : 0" th:disabled="${!canEdit}"/>
-            </label>
-            <p class="hint" th:text="#{admin.v142.biteship.threshold.hint}">预估余额低于阈值时飞书提醒运营充值。</p>
-            <span class="ship-zone-save" th:if="${canEdit}">
+            <div class="s-form-row">
+                <label class="s-label" th:text="#{admin.v142.biteship.threshold}">余额预警阈值</label>
+                <div class="s-ctl">
+                    <input class="inp" type="number" name="balanceAlertThreshold" min="0" step="1" required
+                           th:value="${balance != null} ? ${balance.threshold()} : 0" th:disabled="${!canEdit}"/>
+                    <p class="hint" th:text="#{admin.v142.biteship.threshold.hint}">预估余额低于阈值时飞书提醒运营充值。</p>
+                </div>
+            </div>
+            <span class="ship-zone-save ship-save-end" th:if="${canEdit}">
                 <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
                 <button type="submit" class="btn btn-sm btn-primary" disabled data-save
                         th:text="#{admin.shop.shipping.btn.saveThreshold}">保存阈值</button>
@@ -188,7 +215,9 @@
                 <span th:text="#{admin.shop.shipping.col.kota}">Kota/Kabupaten</span>
                 <span th:text="#{admin.shop.shipping.col.provinsi}">Provinsi</span>
                 <span th:text="#{admin.v142.shipping.origin.postalCode}">邮编</span>
+                <span></span>
                 <span th:text="#{admin.shop.shipping.col.active}">启用</span>
+                <span></span>
             </div>
             <div class="ship-zone-row" th:each="z,st : ${zones}"
                  th:classappend="${!z.active} ? 'is-off'">
@@ -198,12 +227,14 @@
                       hx-swap="innerHTML">
                     <!--/* 🔴 只读而不是 disabled：disabled 的输入**不会被提交**，
                            upsert 会收到空 kecamatan 而不是这一行的键。 */-->
-                    <input class="inp" type="text" name="kecamatan" th:value="${z.kecamatan}"
-                           readonly th:title="#{admin.v130.shopShipping.keyReadonly}"/>
-                    <input class="inp" type="text" name="kotaKabupaten" maxlength="60" required
-                           th:value="${z.kotaKabupaten}" th:disabled="${!canEdit}"/>
-                    <input class="inp" type="text" name="provinsi" maxlength="60" required
-                           th:value="${z.provinsi}" th:disabled="${!canEdit}"/>
+                    <!--/* UI G1 / G2：已有行按表格展示（Kecamatan / Kota / Provinsi 是文本，不是输入框）——
+                           三项随 hidden 照原值提交（upsert 只改邮编）；要改 Kota / Provinsi 走下方「新增 / 更新区域」（同 Kecamatan 即覆盖）。 */-->
+                    <input type="hidden" name="kecamatan" th:value="${z.kecamatan}"/>
+                    <input type="hidden" name="kotaKabupaten" th:value="${z.kotaKabupaten}"/>
+                    <input type="hidden" name="provinsi" th:value="${z.provinsi}"/>
+                    <span class="ship-zone-cell" th:text="${z.kecamatan}" th:title="#{admin.v130.shopShipping.keyReadonly}">Kebayoran Baru</span>
+                    <span class="ship-zone-cell" th:text="${z.kotaKabupaten}">Jakarta Selatan</span>
+                    <span class="ship-zone-cell" th:text="${z.provinsi}">DKI Jakarta</span>
                     <!--/* V1.4.2 shop-admin Story 4.1：区域表去运费列（运费改由 Biteship 实时报价，fee 列保留不读、不提交 = 保留原值）；改填代表邮编 */-->
                     <input class="inp" type="text" name="postalCode" maxlength="5" inputmode="numeric" pattern="[1-9][0-9]{4}"
                            th:value="${z.postalCode}" th:disabled="${!canEdit}"/>
@@ -278,21 +309,23 @@
     <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::th-title}, ~{::th-form}, #{admin.shop.shipping.btn.saveThreshold})}">
         <h2 class="cfg-title" th:fragment="th-title"
             th:text="#{admin.shop.shipping.section.threshold}">免运门槛</h2>
-        <div th:fragment="th-form">
+        <div th:fragment="th-form" class="ship-hform">
             <!--/* 🔴 「填 0 表示不做免运」这句不能删：0 在这里是关掉功能，不是「0 元即免运」。
                    少了它，运营把门槛清空想「先不设」，结果是**全场包邮**。 */-->
             <p class="hint" th:text="#{admin.shop.shipping.threshold.hint}">商品小计达到该金额即免运费。填 0 表示不做免运——不是「0 元即免运」。</p>
-            <label class="field"><span th:text="#{admin.shop.shipping.section.threshold}">免运门槛</span>
-                <input class="inp field-full" type="number" name="threshold" min="0" step="1" required
+            <div class="s-form-row">
+                <label class="s-label s-req" th:text="#{admin.shop.shipping.section.threshold}">免运门槛</label>
+                <div class="s-ctl"><input class="inp" type="number" name="threshold" min="0" step="1" required
                        th:value="${settings != null} ? ${settings.freeShippingThreshold} : 0"
-                       th:disabled="${!canEdit}"/>
-            </label>
+                       th:disabled="${!canEdit}"/></div>
+            </div>
             <!--/* V1.4.2 shop-admin Story 4.1 · AC4 · O-27：门槛 > 0 时最高减免必填且 > 0（服务端 validateFreeShipping 同样拒绝，G4 红边）。 */-->
-            <label class="field"><span th:text="#{admin.v142.shipping.cap}">最高减免</span>
-                <input class="inp field-full" type="number" name="freeShippingCap" min="0" step="1"
+            <div class="s-form-row">
+                <label class="s-label" th:text="#{admin.v142.shipping.cap}">最高减免</label>
+                <div class="s-ctl"><input class="inp" type="number" name="freeShippingCap" min="0" step="1"
                        th:value="${settings != null} ? ${settings.freeShippingCap} : ''"
-                       th:disabled="${!canEdit}"/>
-            </label>
+                       th:disabled="${!canEdit}"/></div>
+            </div>
         </div>
     </div>
 </th:block>
@@ -307,25 +340,28 @@
     <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::ra-title}, ~{::ra-form}, #{admin.shop.shipping.btn.saveReturnAddress})}">
         <h2 class="cfg-title" th:fragment="ra-title"
             th:text="#{admin.shop.shipping.section.returnAddress}">退货收件地址</h2>
-        <div th:fragment="ra-form">
+        <div th:fragment="ra-form" class="ship-hform">
             <!--/* 🔴 「三项要么都填、要么都留空」是服务层的校验口径，这里如实复述：
                    只填一半的地址寄不到，而寄不到的退货会变成「货在路上、钱也没退」的双输。 */-->
             <p class="hint" th:text="#{admin.shop.shipping.returnAddress.hint}">用户自寄退货到这个地址；本版本不做上门取件。三项要么都填、要么都留空——只填一半的地址寄不到，而寄不到的退货会变成「货在路上、钱也没退」的双输。</p>
-            <label class="field"><span th:text="#{admin.shop.order.col.receiver}">收件人</span>
-                <input class="inp field-full" type="text" name="receiverName" maxlength="60"
+            <div class="s-form-row">
+                <label class="s-label" th:text="#{admin.shop.order.col.receiver}">收件人</label>
+                <div class="s-ctl"><input class="inp field-full" type="text" name="receiverName" maxlength="60"
                        th:value="${settings != null} ? ${settings.returnReceiverName} : ''"
-                       th:disabled="${!canEdit}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.shop.order.col.phone}">电话</span>
-                <input class="inp field-full" type="text" name="receiverPhone" maxlength="20"
+                       th:disabled="${!canEdit}"/></div>
+            </div>
+            <div class="s-form-row">
+                <label class="s-label" th:text="#{admin.shop.order.col.phone}">电话</label>
+                <div class="s-ctl"><input class="inp field-full" type="text" name="receiverPhone" maxlength="20"
                        th:value="${settings != null} ? ${settings.returnReceiverPhone} : ''"
-                       th:disabled="${!canEdit}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.shop.order.col.address}">地址</span>
-                <input class="inp field-full" type="text" name="addressText" maxlength="300"
+                       th:disabled="${!canEdit}"/></div>
+            </div>
+            <div class="s-form-row">
+                <label class="s-label" th:text="#{admin.shop.order.col.address}">地址</label>
+                <div class="s-ctl"><input class="inp field-full" type="text" name="addressText" maxlength="300"
                        th:value="${settings != null} ? ${settings.returnAddressText} : ''"
-                       th:disabled="${!canEdit}"/>
-            </label>
+                       th:disabled="${!canEdit}"/></div>
+            </div>
         </div>
     </div>
 </th:block>

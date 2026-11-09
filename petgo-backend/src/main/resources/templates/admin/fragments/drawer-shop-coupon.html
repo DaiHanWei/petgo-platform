@@ -100,23 +100,27 @@
         <div class="s-form-row">
             <label class="s-label s-req" th:text="#{admin.v142.coupon.col.issuePeriod}">发放期</label>
             <div class="s-ctl">
-                <input type="date" class="inp" name="issueStart" th:value="${form.issueStart}"/> – <input type="date" class="inp" name="issueEnd" th:value="${form.issueEnd}"/>
+                <!--/* UI A3：起止日期同一行（原先两框换行、「–」掉到框外） */-->
+                <div class="s-range"><input type="date" class="inp" name="issueStart" th:value="${form.issueStart}"/><span>–</span><input type="date" class="inp" name="issueEnd" th:value="${form.issueEnd}"/></div>
                 <p class="hint" th:text="#{admin.v142.coupon.form.issueHint}">能领取、能兑换、新人券能发放的时间</p>
             </div>
         </div>
         <div class="s-form-row">
-            <label class="s-label s-req" for="f-cpValidMode" th:text="#{admin.v142.coupon.col.validity}">使用有效期</label>
+            <label class="s-label s-req" th:text="#{admin.v142.coupon.col.validity}">使用有效期</label>
             <div class="s-ctl">
-                <select id="f-cpValidMode" class="inp" name="validMode" data-show-switch>
-                    <option value="RELATIVE" th:selected="${form.validMode == 'RELATIVE'}" th:text="#{admin.v142.coupon.form.validRelative}">领取后 N 天内有效</option>
-                    <option value="FIXED" th:selected="${form.validMode == 'FIXED'}" th:text="#{admin.v142.coupon.form.validFixed}">固定起止日期</option>
-                </select>
+                <!--/* UI A3：单选而不是下拉（两种口径要一眼看全）。radio 的 change 只在被选中那个上触发，
+                       data-show-switch 取 e.target.value 即当前选中值，显隐逻辑不用改。 */-->
+                <div class="s-radios">
+                    <label><input type="radio" name="validMode" value="FIXED" data-show-switch
+                                  th:checked="${form.validMode == 'FIXED'}"/> <span th:text="#{admin.v142.coupon.form.validFixed}">固定起止日期</span></label>
+                    <label><input type="radio" name="validMode" value="RELATIVE" data-show-switch
+                                  th:checked="${form.validMode == 'RELATIVE'}"/> <span th:text="#{admin.v142.coupon.form.validRelative}">领取后 N 天内有效</span></label>
+                </div>
                 <div data-show-when="validMode:RELATIVE" th:hidden="${form.validMode != 'RELATIVE'}">
                     <input type="number" min="1" class="inp" name="validDays" th:value="${form.validDays}" th:disabled="${form.validMode != 'RELATIVE'}"/>
                 </div>
                 <div data-show-when="validMode:FIXED" th:hidden="${form.validMode != 'FIXED'}">
-                    <input type="date" class="inp" name="validStart" th:value="${form.validStart}" th:disabled="${form.validMode != 'FIXED'}"/> –
-                    <input type="date" class="inp" name="validEnd" th:value="${form.validEnd}" th:disabled="${form.validMode != 'FIXED'}"/>
+                    <div class="s-range"><input type="date" class="inp" name="validStart" th:value="${form.validStart}" th:disabled="${form.validMode != 'FIXED'}"/><span>–</span><input type="date" class="inp" name="validEnd" th:value="${form.validEnd}" th:disabled="${form.validMode != 'FIXED'}"/></div>
                 </div>
             </div>
         </div>
