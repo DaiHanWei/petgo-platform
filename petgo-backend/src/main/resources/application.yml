@@ -79,6 +79,9 @@ petgo:
     mode: ${AI_QUERY_MODE:off}
     # 问答、导出文件、Claude 会话记录保留天数（spec D6），按对话最后更新时间计
     retention-days: ${AI_QUERY_RETENTION_DAYS:30}
+    # agent 内网地址（Docker internal 网络内按容器名访问，不映射端口、不接 Cloudflare）与共享密钥（X-Internal-Secret）
+    agent-url: ${AI_QUERY_AGENT_URL:}
+    agent-secret: ${AI_QUERY_AGENT_SECRET:}
   # 商家平台（tailtopia-merchant）进货内部接口（V1.4.1，契约 docs/integration/tailtopia-contract.md 第 5 节）。
   # 🔴 /internal/** 只在独立端口上提供：该端口只在 docker 网络 jbp-net 内可达，部署时【不要】给它 -p 映射、
   #    不要接 Cloudflare Tunnel。port=0（默认）= 关闭，内部接口整体 404。secret 共享给商家平台，env 注入，绝不入库/落日志。

@@ -77,6 +77,9 @@ import tools.jackson.databind.ObjectMapper;
             // 让「新用户未读数 = N」类断言随机红。首延拉到 1 天 = 测试期内不自动跑；
             // 扫描逻辑由 OpsNotificationDispatchIntegrationTest 直接调 scan() 验证。
             "petgo.ops-notify.scan-initial-delay-ms=86400000",
+            // ops AI 查数扫描器（主题 ops-ai-query）：测试里开关可能被打开（AI_QUERY_MODE=on），
+            // 定时扫描会与直接调用 scan() 的用例并发推进状态。首延 1 天 = 测试期内不自动跑。
+            "petgo.ai-query.scan-initial-delay-ms=86400000",
             // V1.4.0 multi-pet Story 2.3：名额到期每小时扫描会把共享库里别的测试遗留的过期名额置 EXPIRED、给其用户发通知
             // （「未读数 = N」类断言随机红）。"-" = 关闭；扫描由 PetSlotExpiryScanIntegrationTest 直接调 scan(now) 验证。
             "petgo.pet-slot.expiry-scan-cron=-",
