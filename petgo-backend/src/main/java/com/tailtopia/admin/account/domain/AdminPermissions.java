@@ -343,6 +343,14 @@ public final class AdminPermissions {
 
     /** 场所内容管理（V1.3.0 Story 1.4 预留，Epic 5 建端点）：编辑 / 下架 / 合并 / 新建场所。不预授予任何预置角色。 */
     public static final String PLACE_MANAGE = "place.manage";
+
+    /**
+     * ops AI 查数（主题 ops-ai-query，spec §5.2 / D2）：提问、追问、下载导出文件。
+     *
+     * <p>🔴 <b>不预授予任何预置角色</b>，由管理员在后台账号页逐人开通 —— 获授权者可查全部数据
+     * （2026-10-05 决策，不做字段分权），这个码是唯一的准入闸。SUPER_ADMIN 按现有规则隐式拥有。
+     */
+    public static final String AI_QUERY = "ai.query";
     /** 暖贴——以虚拟身份「去评论」（V1.3.0 Story 1.4 预留，Epic 4 建端点）。不预授予任何预置角色。 */
     public static final String COMMENT_VIRTUAL_POST = "comment.virtual_post";
 
@@ -364,7 +372,8 @@ public final class AdminPermissions {
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
                     SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW,
-                    OPS_NOTIFY_VIEW, GROWTH_CONFIG_VIEW, GIFT_CATALOG_VIEW, GIFT_ORDER_VIEW)),
+                    OPS_NOTIFY_VIEW, GROWTH_CONFIG_VIEW, GIFT_CATALOG_VIEW, GIFT_ORDER_VIEW,
+                    AI_QUERY)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,

@@ -137,8 +137,8 @@ class AdminPermissionMatrixStaticTest {
      * + V1.4.0 ③ gift Story 3.2 一码（`gift.order_view`）= 85（③ 送礼线合入 dev_1.4.0 后实测）。
      */
     @Test
-    void thePermissionRegisterHasExactlyEightyFiveCodes() {
-        assertThat(AdminPermissions.ALL).hasSize(85);
+    void thePermissionRegisterHasExactlyEightySixCodes() {
+        assertThat(AdminPermissions.ALL).hasSize(86); // + ops-ai-query ai.query
         assertThat(AdminPermissions.ALL)
                 .contains(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST,
                         AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,

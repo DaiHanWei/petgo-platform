@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  ops AI 查数输入框 aiq-box（UX-DR4 / DR5）：文本框 + 回答语言 + 快捷键提示 + 发送合为一体。
+  · 未启用（AI_QUERY_MODE=off）：整体禁用（A2）。
+  · 新对话：可选回答语言，默认跟随后台界面语言。
+-->
+<body>
+<div th:fragment="composer" th:remove="tag"
+     th:with="dis=${!aiqEnabled}">
+    <div class="aiq-box" th:classappend="${dis} ? 'is-dis'">
+        <textarea name="question" rows="2" maxlength="2000" data-aiq-question
+                  th:attr="aria-label=#{admin.aiQuery.composer.label},placeholder=#{admin.aiQuery.composer.placeholder}"
+                  th:disabled="${dis}"></textarea>
+        <div class="aiq-row">
+            <select name="lang" th:attr="aria-label=#{admin.aiQuery.composer.lang.label}" th:disabled="${dis}">
+                <option th:each="l : ${aiqLanguages}" th:value="${l.code()}"
+                        th:selected="${l.code().equals(aiqDefaultLang)}"
+                        th:text="#{'admin.aiQuery.lang.' + ${l.code()}}">中文</option>
+            </select>
+            <span class="aiq-hint" th:text="#{admin.aiQuery.composer.hint}">Enter 发送 · Shift+Enter 换行</span>
+            <button type="submit" class="btn btn-primary" th:disabled="${dis}"
+                    th:text="#{admin.aiQuery.composer.send}">发送</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

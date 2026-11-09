@@ -23,8 +23,20 @@ import java.util.Set;
  */
 public final class AdminPageCatalog {
 
-    /** 8 个导航组（顺序即展示顺序）。titleKey = admin.group.&lt;key&gt;。 */
-    public record Group(String key, String titleKey) {
+    /** 导航组（顺序即展示顺序）。titleKey = admin.group.&lt;key&gt;。 */
+    /**
+     * @param singleLink 顶层单链接组（spec ops-ai-query D9）：侧栏不套 {@code <details>}，直接渲染一个链接，
+     *                   文案取组标题。概览与 AI 查数属此类，组内只放一页。
+     */
+    public record Group(String key, String titleKey, boolean singleLink) {
+
+        public Group(String key, String titleKey) {
+            this(key, titleKey, false);
+        }
+
+        public boolean isSingleLink() {
+            return singleLink;
+        }
     }
 
     /**
@@ -91,6 +103,8 @@ public final class AdminPageCatalog {
     }
 
     public static final String G_OVERVIEW = "overview";
+    /** ops AI 查数（主题 ops-ai-query）：概览下方的顶层单链接。 */
+    public static final String G_AI_QUERY = "ai-query";
     public static final String G_INBOX = "inbox";
     public static final String G_CONTENT = "content";
     public static final String G_USERS = "users";
@@ -100,7 +114,8 @@ public final class AdminPageCatalog {
     public static final String G_CONFIG = "config";
 
     public static final List<Group> GROUPS = List.of(
-            new Group(G_OVERVIEW, "admin.group.overview"),
+            new Group(G_OVERVIEW, "admin.group.overview", true),
+            new Group(G_AI_QUERY, "admin.group.aiQuery", true),
             new Group(G_INBOX, "admin.group.inbox"),
             new Group(G_CONTENT, "admin.group.content"),
             new Group(G_USERS, "admin.group.users"),
@@ -136,6 +151,9 @@ public final class AdminPageCatalog {
             // 路由用 /admin/dashboard 不用 /admin：静态资源内容指纹链（paths=/admin/**）会把 @{/admin} 当成 static/admin/ 目录
             // 改写成 /admin-<md5>.null，侧栏「概览」直接 404。Controller 两个路径都映射，/admin 仍可直接访问。
             new Page("dashboard", G_OVERVIEW, "/admin/dashboard", List.of(), List.of(), List.of(), List.of(PAYMENT_VIEW), false).nav("admin.nav.dashboard", "dashboard"),
+            // 🤖 AI 查数（主题 ops-ai-query，D9）：概览下方的顶层单链接。入口门 = ai.query（不预授予任何预置角色）。
+            page("ai-query", G_AI_QUERY, "/admin/ai-query",
+                    List.of(AI_QUERY), List.of(), List.of()).nav("admin.nav.aiQuery", "ai-query", AI_QUERY),
             // 📥 待办中心
             //   content.view_reports：旧举报队列（/admin/reports 已退役）码，暂挂统一复核「其他操作」（D-46）。
             page("manual-review", G_INBOX, "/admin/manual-review",

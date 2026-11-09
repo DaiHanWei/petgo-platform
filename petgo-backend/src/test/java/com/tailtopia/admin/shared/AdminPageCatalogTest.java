@@ -50,10 +50,10 @@ class AdminPageCatalogTest {
     void everyPageHasKnownGroupAndStableKey() {
         Set<String> groups = new HashSet<>();
         AdminPageCatalog.GROUPS.forEach(g -> groups.add(g.key()));
-        assertThat(AdminPageCatalog.GROUPS).hasSize(8);
+        assertThat(AdminPageCatalog.GROUPS).hasSize(9); // 8 组 + ops-ai-query 单链接组
         Set<String> keys = new HashSet<>();
         for (AdminPageCatalog.Page p : AdminPageCatalog.PAGES) {
-            assertThat(groups).as(p.key() + " 的分组不在 8 组内").contains(p.group());
+            assertThat(groups).as(p.key() + " 的分组不在目录分组内").contains(p.group());
             assertThat(keys.add(p.key())).as("页面 key 重复 " + p.key()).isTrue();
             assertThat(p.key()).matches("[a-z0-9-]+");
         }
