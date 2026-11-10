@@ -1,0 +1,67 @@
+# generated: 2026-11-09
+# last_updated: 2026-11-09
+# project: ops AI 查数
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts/ops-ai-query
+
+# 主题 ops-ai-query，不归属任何版本（Dai 2026-11-09）。分支 feat/ops-ai-query，基于 main。
+# Epics: _bmad-output/planning-artifacts/ops-ai-query/epics.md
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-11-09
+last_updated: 2026-11-09
+project: ops AI 查数
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/ops-ai-query
+
+development_status:
+  epic-1: in-progress
+  1-1-agent-执行一条查询并保存结果: review
+  1-2-agent-隔离基线和查数说明书: review
+  1-3-管理员开通后可以进入-ai-查数: review
+  1-4-提交问题并在同一对话追问: review
+  1-5-后台扫描器推进任务: review
+  1-6-在页面上跟踪查询进度: review
+  1-7-阅读可信的答案: review
+  1-8-失败时知道原因并重试: review
+  1-9-在-stag-跑通真实问答: backlog
+  epic-1-retrospective: optional
+  epic-2: in-progress
+  2-1-下载答案里的导出文件: review
+  2-2-对话和文件-30-天后自动清除: review
+  epic-2-retrospective: optional
+  epic-3: backlog
+  3-1-限制-agent-只能访问白名单地址: backlog
+  3-2-准备生产-agent-和账号: backlog
+  3-3-开启生产并验证回退: backlog
+  epic-3-retrospective: optional

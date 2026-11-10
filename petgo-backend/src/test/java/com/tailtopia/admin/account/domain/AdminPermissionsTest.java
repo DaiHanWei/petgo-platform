@@ -139,7 +139,8 @@ class AdminPermissionsTest {
         //     （不预授任何预置角色）⇒ 85 + 2 = 87。
         // 2026-11-06（V1.4.2 shop-admin Story 1.1 · O-7）：优惠券 shop.coupon_view / shop.coupon_edit（不预授）⇒ 87 + 2 = 89。
         // 2026-11-06（V1.4.2 exp-reverse）：order.reverse_exp ⇒ 89 + 1 = 90。
+        // 2026-11-09（主题 ops-ai-query）：AI 查数 ai.query（不预授任何预置角色）⇒ 90 + 1 = 91。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(90);
+        assertThat(all).hasSize(91);
     }
 }
