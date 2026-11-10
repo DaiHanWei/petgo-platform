@@ -51,3 +51,7 @@ petgo_app/android/build/
 # Python 字节码缓存（scripts/bug-system 等脚本运行时自动生成）
 __pycache__/
 *.py[cod]
+
+# ops AI 查数 agent 运行数据（任务结果、导出文件，可能含查询结果，绝不入库）
+ai-query-agent/data/
+ai-query-agent/node_modules/

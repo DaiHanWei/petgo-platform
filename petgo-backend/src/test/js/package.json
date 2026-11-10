@@ -1,0 +1,15 @@
+{
+  "name": "petgo-admin-js-tests",
+  "private": true,
+  "description": "后台前端脚本的直接测试（ops AI 查数答案净化，NFR13）。运行：cd petgo-backend/src/test/js && npm install && npm test",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"*.test.mjs\""
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

@@ -13,8 +13,8 @@
 <nav th:fragment="nav(active, navGroups)">
     <div class="brand" th:text="#{admin.brand}">🐾 TailTopia 运营</div>
     <th:block th:each="g : ${navGroups}">
-        <!-- 📊 概览：单链接，不套 details -->
-        <th:block th:if="${g.group.key == 'overview'}">
+        <!-- 单链接组（📊 概览、🤖 AI 查数）：不套 details，文案取组标题 -->
+        <th:block th:if="${g.group.singleLink}">
             <a th:each="p : ${g.pages}" th:href="@{${p.route}}"
                th:classappend="${active == p.activeKey} ? 'active'"
                th:text="#{${g.group.titleKey}}">📊 概览</a>
@@ -22,7 +22,7 @@
         <!--/* data-nav-group：给「整组无权限则整组不渲染」那条 L1 断言一个稳定锚点
                （V1.3.0 Story 11.4 AC4）。组标题是 #{admin.group.*} 文案，拿文案去断言会跟
                同名的页面项撞车（比如「内容」既是组名也可能是项名），一撞就成了假绿。 */-->
-        <details th:unless="${g.group.key == 'overview'}" class="nav-section"
+        <details th:unless="${g.group.singleLink}" class="nav-section"
                  th:with="navOpen=${g.contains(active)}"
                  th:attr="open=${navOpen} ? 'open' : null,data-nav-group=${g.group.key}">
             <summary th:classappend="${navOpen} ? 'active'">
