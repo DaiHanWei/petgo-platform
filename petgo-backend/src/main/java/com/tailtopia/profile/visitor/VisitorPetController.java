@@ -71,8 +71,10 @@ public class VisitorPetController {
 
     /** 访客统计条三列。🛡 健康记录条数不在其中（{@link VisitorStats} 里根本没有那个字段）。 */
     @GetMapping("/{cardToken}/stats")
-    public VisitorStats stats(@PathVariable String cardToken) {
-        return visitors.stats(requireVisible(cardToken));
+    public VisitorStats stats(@PathVariable String cardToken,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
+        return visitors.stats(requireVisible(cardToken), !com.tailtopia.profile.service.ClientAppVersion.isV142OrLater(appVersion));
     }
 
     /**
