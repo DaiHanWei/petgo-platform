@@ -9,6 +9,14 @@ const FORBIDDEN_ENV_RE = /^(LARK|FEISHU)_/i;
 
 export const LANGS = Object.freeze(['zh', 'en', 'id']);
 
+function boolEnv(env, name, def) {
+  const raw = env[name];
+  if (raw === undefined || raw === '') return def;
+  if (raw === '1') return true;
+  if (raw === '0') return false;
+  throw new Error(`配置 ${name} 只能是 1 或 0`);
+}
+
 function intEnv(env, name, def, min, max = Number.MAX_SAFE_INTEGER) {
   const raw = env[name];
   if (raw === undefined || raw === '') return def;
@@ -53,6 +61,10 @@ export function loadConfig(env = process.env) {
     claudeUid,
     claudeGid,
     claudeHome: env.CLAUDE_HOME || undefined,
+    // 从 Bash 子进程剥离凭证（CLAUDE_CODE_SUBPROCESS_ENV_SCRUB）。依赖 bubblewrap 沙箱，
+    // 宿主内核不允许容器内创建命名空间时 claude 无法启动，只能置 0。
+    // 2026-11-10 Dai 确认：当前服务器关闭剥离并接受 Bash 可读订阅 token 的风险（spec §11）。
+    subprocessEnvScrub: boolEnv(env, 'SUBPROCESS_ENV_SCRUB', true),
     // 容器内监听全部接口：只接入 Docker internal 网络、不映射端口（spec §4）
     port: intEnv(env, 'PORT', 8790, 1, 65535),
     host: env.HOST || '0.0.0.0',
