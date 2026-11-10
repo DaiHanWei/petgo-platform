@@ -103,9 +103,13 @@ public class BiteshipWebhookController {
 
     /** 已鉴权、体积合规后的处理（包级可见，单测直接覆盖）。 */
     ResponseEntity<Void> handle(byte[] body) {
+        // Biteship 后台「Tambah Webhook」安装时发一次空体 POST，必须回 200 才算安装成功（2026-11-10 stag 实测）
+        if (body == null || body.length == 0) {
+            return ResponseEntity.ok().build();
+        }
         JsonNode root;
         try {
-            root = body == null || body.length == 0 ? null : JSON.readTree(body);
+            root = JSON.readTree(body);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().build();
         }
