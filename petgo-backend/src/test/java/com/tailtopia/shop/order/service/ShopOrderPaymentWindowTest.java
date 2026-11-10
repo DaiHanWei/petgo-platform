@@ -132,6 +132,18 @@ class ShopOrderPaymentWindowTest {
     }
 
     @Test
+    @DisplayName("旧版 App（< 1.4.2）：建单 11 分钟后首次出码 → 放行出新码（不知道 10 分钟窗口）；订单窗过后仍 409")
+    void legacyClientIssuesAfterTenMinutesButNotAfterWindow() {
+        order(40L, 11);
+        stubNewIntent("pi-40");
+        ShopOrderPaymentService.PayResult r = service.pay(UID, "tok40", null, true);
+        assertThat(r.payload()).isEqualTo("QR-pi-40");
+
+        order(41L, 61);
+        assertNotPayable(() -> service.pay(UID, "tok41", null, true), "订单已超过付款时间");
+    }
+
+    @Test
     @DisplayName("首次出码失败（意图 FAILED）后第 7 分钟重试 → 出新码")
     void payAllowsRetryWithinTenMinutesAfterChargeFailure() {
         ShopOrder o = order(5L, 7);

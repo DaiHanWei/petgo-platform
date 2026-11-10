@@ -116,11 +116,13 @@ public class InAppVisitorPetController {
     @GetMapping("/timeline")
     public VisitorPetController.TimelineItems timeline(@AuthenticationPrincipal Jwt jwt,
             @PathVariable long petId,
-            @RequestParam(name = "limit", defaultValue = "30") int limit) {
+            @RequestParam(name = "limit", defaultValue = "30") int limit,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
         int safe = Math.max(1, Math.min(limit, MAX_TIMELINE_LIMIT));
         // 🔴 站内入口不含私密条目：petId 可枚举、主人未分享过（code review #2，见 VisitorProjectionService#timeline）
-        return new VisitorPetController.TimelineItems(
-                visitors.timeline(requireVisible(jwt, petId), safe, false));
+        return new VisitorPetController.TimelineItems(com.tailtopia.profile.service.LegacyMilestoneCompat
+                .visitorForClient(visitors.timeline(requireVisible(jwt, petId), safe, false), appVersion));
     }
 
     /**

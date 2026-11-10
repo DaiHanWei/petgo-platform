@@ -127,7 +127,7 @@ class ProfileApiControllerTest {
         TimelinePageResponse stub = new TimelinePageResponse(List.of(), null, false);
         when(timelineService.getTimeline(77L, null, "CUR", 20,
                 com.tailtopia.profile.service.TimelineCapabilities.none(), false)).thenReturn(stub);
-        TimelinePageResponse resp = controller.timeline(jwt("77"), "CUR", 20, null, false, null);
+        TimelinePageResponse resp = controller.timeline(jwt("77"), "CUR", 20, null, false, null, "1.4.2");
         assertThat(resp.hasMore()).isFalse();
     }
 
