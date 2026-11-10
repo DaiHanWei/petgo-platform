@@ -74,6 +74,12 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
     public static final Set<String> CANCEL_REASONS =
             Set.of("change_courier", "pickup_delay", "change_address", "others");
 
+    /**
+     * Biteship 侧已结束、不能也不必再取消的运单状态：{@code courier_not_found} 时 Biteship 已作废该单，调 cancel 回 400
+     * （2026-11-10 stag 沙箱实测）。遇到这些状态只落本地取消。
+     */
+    static final Set<String> ENDED_REMOTELY = Set.of("cancelled", "courier_not_found");
+
     static final String RETRY_COUNTER_KEY = "shop:biteship:waybill-retry";
     static final String RETRY_ALERTED_KEY = "shop:biteship:waybill-retry-alerted";
     static final Duration RETRY_WINDOW = Duration.ofMinutes(5);
@@ -512,7 +518,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
 
     /**
      * 取消该单活动的 Biteship 运单（AC5.5，供 5.2 揽收失败处置）：无 → 幂等返回；{@code provider_status} 已是
-     * {@code cancelled} → 只落本地；否则事务外 {@code cancelOrder}：{@code Cancelled} 落本地 {@code CANCELLED} /
+     * {@code cancelled} / {@code courier_not_found}（{@link #ENDED_REMOTELY}）→ 只落本地；否则事务外 {@code cancelOrder}：{@code Cancelled} 落本地 {@code CANCELLED} /
      * {@code NotCancellable} 409 / {@code Unknown} 503 不改本地。
      *
      * @param reasonCode Biteship 四值之一，否则 422
@@ -525,7 +531,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         if (target == null) {
             return;
         }
-        if ("cancelled".equalsIgnoreCase(target.getProviderStatus())) {
+        if (endedRemotely(target.getProviderStatus())) {
             tx.executeWithoutResult(s -> cancelLocally(target.getId(), reasonCode, actorAccountId));
             return;
         }
@@ -537,6 +543,9 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         CancelOutcome out = client.cancelOrder(target.getBiteshipOrderId(), reasonCode);     // 🔴 事务外
         switch (out) {
             case CancelOutcome.Cancelled c ->
+                    tx.executeWithoutResult(s -> cancelLocally(target.getId(), reasonCode, actorAccountId));
+            case CancelOutcome.NotCancellable n when endedRemotely(n.providerStatus()) ->
+                    // 本地状态滞后：Biteship 已作废该单（回查结果），按已取消落本地
                     tx.executeWithoutResult(s -> cancelLocally(target.getId(), reasonCode, actorAccountId));
             case CancelOutcome.NotCancellable n -> {
                 // 5.2 复审 4：Biteship 明确拒绝 → 运单仍有效，复位「本地已发起取消」（Unknown 保留，结果不明）
@@ -554,6 +563,10 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
                 throw AppException.serviceUnavailable("Biteship 暂不可用，运单未取消，请稍后重试");
             }
         }
+    }
+
+    private static boolean endedRemotely(String providerStatus) {
+        return providerStatus != null && ENDED_REMOTELY.contains(providerStatus.toLowerCase(java.util.Locale.ROOT));
     }
 
     private Shipment activeBiteship(long orderId) {
