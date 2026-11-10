@@ -181,3 +181,12 @@ test('配置 CLAUDE_UID / CLAUDE_HOME 时传给子进程', () => {
   assert.equal(c.claudeGid, 10002);
   assert.equal(buildChildEnv({ HOME: '/root' }, c).HOME, '/home/claude');
 });
+
+test('SUBPROCESS_ENV_SCRUB：默认开启，只能由 agent 配置关闭', () => {
+  assert.equal(loadConfig({ AGENT_SECRET: SECRET }).subprocessEnvScrub, true);
+  const off = loadConfig({ AGENT_SECRET: SECRET, SUBPROCESS_ENV_SCRUB: '0' });
+  assert.equal(off.subprocessEnvScrub, false);
+  assert.equal(buildChildEnv({ CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' }, off).CLAUDE_CODE_SUBPROCESS_ENV_SCRUB, '0');
+  assert.equal(buildChildEnv({ CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '0' }, { subprocessEnvScrub: true }).CLAUDE_CODE_SUBPROCESS_ENV_SCRUB, '1');
+  assert.throws(() => loadConfig({ AGENT_SECRET: SECRET, SUBPROCESS_ENV_SCRUB: 'no' }), /1 或 0/);
+});

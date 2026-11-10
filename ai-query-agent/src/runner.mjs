@@ -24,20 +24,21 @@ export const CHILD_ENV_PASSTHROUGH = Object.freeze([
 
 /** 固定写入的 env（官方文档 env-vars 页，2026-11-09 查阅）。 */
 export const CHILD_ENV_FIXED = Object.freeze({
-  // 从 Bash、hooks 等子进程环境中剥离凭证；claude 自身仍用 token 调 API
+  // 从 Bash、hooks 等子进程环境中剥离凭证；claude 自身仍用 token 调 API。
+  // 默认开启；只能由 agent 配置 SUBPROCESS_ENV_SCRUB=0 关闭，父进程 env 无法覆盖
   CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
   // 关闭自动更新、遥测、错误上报等非必要出网
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
   DISABLE_AUTOUPDATER: '1',
 });
 
-export function buildChildEnv(parentEnv, { claudeHome } = {}) {
+export function buildChildEnv(parentEnv, { claudeHome, subprocessEnvScrub = true } = {}) {
   const env = {};
   for (const k of CHILD_ENV_PASSTHROUGH) {
     if (parentEnv[k] !== undefined) env[k] = parentEnv[k];
   }
   if (claudeHome) env.HOME = claudeHome;
-  return { ...env, ...CHILD_ENV_FIXED };
+  return { ...env, ...CHILD_ENV_FIXED, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: subprocessEnvScrub ? '1' : '0' };
 }
 
 export function buildArgs({ resumeSessionId, sessionId, lang, exportDir }) {
