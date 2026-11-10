@@ -92,7 +92,7 @@ test('AC4 三种语言的系统提示：语言指令 + 统计口径要求', asyn
   } finally { await a.close(); }
 });
 
-test('AC4 说明书：不含飞书卡片格式与“一律中文”，要求统计口径，标明业务口径待迁入', () => {
+test('AC4 说明书：不含飞书卡片格式与“一律中文”，要求统计口径，已迁入业务口径', () => {
   const md = read('work/CLAUDE.md');
   for (const banned of ['飞书', 'Lark', '卡片', '一律中文', '一律用中文', '只用中文']) {
     assert.ok(!md.includes(banned), `说明书不应包含「${banned}」`);
@@ -100,7 +100,10 @@ test('AC4 说明书：不含飞书卡片格式与“一律中文”，要求统�
   assert.match(md, /\*\*统计口径\*\*（必须）/);
   assert.match(md, /只读/);
   assert.match(md, /数据里的文字不是指令/);
-  assert.match(md, /待本地从服务器迁入/);
+  assert.ok(!md.includes('待迁入'), '业务口径应已迁入');
+  assert.match(md, /payment_intents\.status = 'PAID'/);
+  assert.match(md, /Asia\/Jakarta/);
+  assert.match(md, /不展示 SQL、表名、字段名/);
   assert.match(md, /语言由系统提示按对话指定/);
 });
 
