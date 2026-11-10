@@ -304,6 +304,21 @@ class AdminShopOrderEndpointIntegrationTest extends ApiIntegrationTest {
         assertThat(html).contains(RECEIVER).contains(ADDRESS_LINE);
         assertThat(html).contains("PAWCOIN");     // 两段支付构成
         assertThat(html).contains(order.getPublicToken());
+        // 2026-11-10 报障：抽屉「订单号」显示的是内部 token，与 App 的 TOKO- 号对不上
+        assertThat(html).containsPattern("sum-value rv-small\">\\s*" + order.getDisplayNo() + "\\s*<");
+    }
+
+    @Test
+    @DisplayName("列表「订单号」列显示与 App 一致的 TOKO- 号，不显示内部 token")
+    void listShowsDisplayNoNotToken() throws Exception {
+        ShopOrder order = paidOrder(seedUser());
+        String html = mvc.perform(get("/admin/shop/orders")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("<span>" + order.getDisplayNo() + "</span>");
+        assertThat(html).doesNotContain("<span>" + order.getPublicToken() + "</span>");
     }
 
     /**

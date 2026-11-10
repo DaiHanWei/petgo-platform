@@ -16,7 +16,7 @@
         <h2 th:text="#{admin.shop.order.section.summary}">订单</h2>
         <div class="sum sum--grid2">
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.token}">订单号</div>
-                <div class="sum-value rv-small" th:text="${order.publicToken}">abc</div></div>
+                <div class="sum-value rv-small" th:text="${order.displayNo}">TOKO-20261110-ABC123</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
                 <div class="sum-value rv-small"
                      th:text="#{'admin.v130.shopOrders.status.' + ${order.status}}">SHIPPED</div></div>

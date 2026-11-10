@@ -28,7 +28,7 @@
                      Story 10.2 已把订单详情整页退役 ⇒ 走 ?open=<token> 页内深链（D-23），新标签打开。 -->
                 <div class="sum-value rv-small">
                     <a th:href="@{/admin/shop/orders(open=${order.publicToken})}" target="_blank"
-                       rel="noopener" th:text="${order.publicToken}">ord</a></div></div>
+                       rel="noopener" th:text="${order.displayNo}">ord</a></div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
                 <div class="sum-value rv-small" th:text="${order.status}">PENDING_SHIPMENT</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.total}">订单金额</div>

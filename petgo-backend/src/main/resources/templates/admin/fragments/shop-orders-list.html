@@ -68,7 +68,7 @@
         th:data-drawer-url="${drawerBase != null} ? @{${drawerBase + '/' + r.orderToken}} : @{/admin/shop/orders/{t}(t=${r.orderToken})}"
         tabindex="0">
         <td class="nowrap">
-            <span th:text="${r.orderToken}">abc</span>
+            <span th:text="${r.displayNo}">TOKO-20261110-ABC123</span>
             <!-- AC1：有异常挂起（已付款待发货 ∧ 库存不足）→ 打标并链到 A8。
                  ⚠️ 这是 <a>，点它不该同时把抽屉也开起来 —— admin-drawer.js 的行点击委托已排除 a / button。 -->
             <a class="badge badge-danger" th:if="${flagged}"

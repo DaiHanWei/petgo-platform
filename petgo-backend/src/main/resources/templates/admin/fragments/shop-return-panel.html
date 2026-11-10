@@ -48,7 +48,7 @@
                      新标签打开、不打断本页处置。 -->
                 <div class="sum-value rv-small">
                     <a th:href="@{/admin/shop/orders(open=${order.publicToken})}" target="_blank"
-                       rel="noopener" th:text="${order.publicToken}">ord</a></div></div>
+                       rel="noopener" th:text="${order.displayNo}">ord</a></div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
                 <div class="sum-value rv-small" th:text="#{'admin.v130.shopReturns.status.' + ${r.status}}">状态</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.returns.col.type}">退货类型</div>
