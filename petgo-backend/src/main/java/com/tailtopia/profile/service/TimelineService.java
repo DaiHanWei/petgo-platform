@@ -635,6 +635,24 @@ public class TimelineService {
         return getStats(ownerId, null);
     }
 
+    /**
+     * 旧版 App（&lt; 1.4.2）统计栏：里程碑三数扣掉 1.4.2 新里程碑（列表里已隐藏），否则「未庆祝」角标永远消不掉、
+     * 进度与列表页对不上。新版走 {@link #getStats(long, Long)} 原样。
+     */
+    @Transactional(readOnly = true)
+    public ArchiveStatsResponse getStats(long ownerId, Long petId, boolean legacyClient) {
+        ArchiveStatsResponse s = getStats(ownerId, petId);
+        if (!legacyClient) {
+            return s;
+        }
+        PetProfile profile = requireProfile(ownerId, petId);
+        MilestoneService.V142Share h = milestoneService.v142Share(profile.getId(), profile.getPetType());
+        return new ArchiveStatsResponse(s.happyMomentCount(), s.consultCount(),
+                Math.max(0, s.milestoneCompleted() - h.completed()), Math.max(0, s.milestoneTotal() - h.total()),
+                s.healthRecordCount(), Math.max(0, s.milestoneUncelebrated() - h.uncelebrated()),
+                s.giftTotalValue(), s.followerCount());
+    }
+
     /** V1.4.0 multi-pet：指定宠物的统计栏（{@code petId} 为 null = 默认宠物）。 */
     @Transactional(readOnly = true)
     public ArchiveStatsResponse getStats(long ownerId, Long petId) {
