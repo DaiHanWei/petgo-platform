@@ -26,4 +26,16 @@ class ClientAppVersionTest {
         assertThat(ClientAppVersion.supportsMultiPet("abc")).isFalse();
         assertThat(ClientAppVersion.supportsMultiPet("99999999999.0.0")).isFalse();
     }
+
+    @Test
+    void v142FromHeaderLegacyOtherwise() {
+        assertThat(ClientAppVersion.isV142OrLater("1.4.2")).isTrue();
+        assertThat(ClientAppVersion.isV142OrLater("1.4.2-stag")).isTrue();
+        assertThat(ClientAppVersion.isV142OrLater("1.4.10")).isTrue();
+        assertThat(ClientAppVersion.isV142OrLater("1.5.0")).isTrue();
+        assertThat(ClientAppVersion.isV142OrLater("1.4.1")).as("线上旧包 1.4.1+19").isFalse();
+        assertThat(ClientAppVersion.isV142OrLater("1.4.0-stag")).isFalse();
+        assertThat(ClientAppVersion.isV142OrLater(null)).isFalse();
+        assertThat(ClientAppVersion.isV142OrLater("abc")).isFalse();
+    }
 }

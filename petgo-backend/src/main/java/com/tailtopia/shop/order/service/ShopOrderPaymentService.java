@@ -212,6 +212,14 @@ public class ShopOrderPaymentService {
      * @return 付款载荷；纯 PawCoin 单当场结清，返回的 {@code payload} 为 null
      */
     public PayResult pay(long userId, String orderToken, String idempotencyKey) {
+        return pay(userId, orderToken, idempotencyKey, false);
+    }
+
+    /**
+     * @param legacyClient 旧版 App（&lt; 1.4.2）：不受 10 分钟出码窗口（I3）限制，订单窗内都可出新码。
+     *                     关单仍按 {@link #isClosable} 等每个码失效，最晚 = 建单 + 60 + 65 分钟（与 1.4.1 行为一致）。
+     */
+    public PayResult pay(long userId, String orderToken, String idempotencyKey, boolean legacyClient) {
         // 🔴 本方法刻意无事务（网关往返不入库事务），故事务方法一律经 self 代理调 ——
         //    this.xxx() 自调用会绕过代理让 @Transactional 失效。
         ShopOrderPaymentService self = selfProvider.getObject();
@@ -228,6 +236,9 @@ public class ShopOrderPaymentService {
         Instant now = Instant.now();
         PaymentIntent current = self.intentOf(order).orElse(null);
         PayGate gate = payGate(order, current, now);
+        if (legacyClient && gate == PayGate.ISSUE_CLOSED) {
+            gate = PayGate.ISSUE_NEW;
+        }
         switch (gate) {
             case WINDOW_CLOSED -> throw AppException.shopOrderNotPayable("订单已超过付款时间");
             case ISSUE_CLOSED -> throw AppException.shopOrderNotPayable("订单已无法支付");
