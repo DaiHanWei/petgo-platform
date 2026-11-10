@@ -75,6 +75,23 @@ class AdminBusinessExceptionAdviceTest {
 
     private MockMvc mvc;
 
+    /** 期望文案与请求同用简体中文：不依赖线程里其他测试残留的 LocaleContextHolder（CI 测试顺序变化时曾红）。 */
+    private static final java.util.Locale ZH = java.util.Locale.SIMPLIFIED_CHINESE;
+
+    private static String zh(String code) {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(ZH);
+        try {
+            return TestMessages.real().get(code);
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @BeforeEach
     void setUp() {
         GlobalExceptionHandler fallback = new GlobalExceptionHandler(TestMessages.real(), DataSize.ofMegabytes(1));
@@ -82,7 +99,7 @@ class AdminBusinessExceptionAdviceTest {
         mvc = MockMvcBuilders.standaloneSetup(new ProbeController())
                 .setControllerAdvice(advice)
                 .setViewResolvers((name, locale) -> (View) (model, req, resp) -> {
-                    resp.setContentType("text/html");
+                    resp.setContentType("text/html;charset=UTF-8");
                     resp.getWriter().write(name + "|" + model.get("message"));
                 })
                 .build();
@@ -124,23 +141,23 @@ class AdminBusinessExceptionAdviceTest {
 
     @Test
     void htmxAccessDeniedBecomes403ForbiddenFragmentNamingThePermission() throws Exception {
-        String body = mvc.perform(post("/admin/probe/denied").header("HX-Request", "true"))
+        String body = mvc.perform(post("/admin/probe/denied").header("HX-Request", "true").locale(ZH))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string("HX-Reswap", "innerHTML"))
                 .andReturn().getResponse().getContentAsString();
         assertThat(body).startsWith("admin/fragments/tpl-shared :: forbidden|");
         // 所缺权限名 = perm.admin.deactivate 的三语显示名（D-37 固定显示）
-        assertThat(body).contains(TestMessages.real().get("perm.admin.deactivate"));
+        assertThat(body).contains(zh("perm.admin.deactivate"));
     }
 
     @Test
     void htmxAccessDeniedOnAnyOfGateNamesEveryAcceptablePermission() throws Exception {
         // 多选一门控：两个可满足的权限都要报出来，不能只报第一个误导「缺的就是它」（复审 0914）
-        String body = mvc.perform(post("/admin/probe/denied-any").header("HX-Request", "true"))
+        String body = mvc.perform(post("/admin/probe/denied-any").header("HX-Request", "true").locale(ZH))
                 .andExpect(status().isForbidden())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(body).contains(TestMessages.real().get("perm.admin.deactivate"))
-                .contains(TestMessages.real().get("perm.user.deactivate"));
+        assertThat(body).contains(zh("perm.admin.deactivate"))
+                .contains(zh("perm.user.deactivate"));
     }
 
     @Test
