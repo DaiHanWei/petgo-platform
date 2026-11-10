@@ -265,7 +265,10 @@ public class AdminAiQueryController {
     private void populate(long accountId, ConversationView view, Locale locale, Model model) {
         model.addAttribute("active", "ai-query");
         populateComposer(view, locale, model);
-        model.addAttribute("aiqSamples", SAMPLE_KEYS);
+        // 推荐问题：先放本人最近问过的首问，不足 4 条再用固定示例补齐；第一次使用时全是固定示例
+        List<String> recent = queries.recentQuestions(accountId, SAMPLE_KEYS.size());
+        model.addAttribute("aiqRecent", recent);
+        model.addAttribute("aiqSamples", SAMPLE_KEYS.subList(0, SAMPLE_KEYS.size() - recent.size()));
         model.addAttribute("aiqList", queries.list(accountId, null));
         model.addAttribute("aiqFirstPage", true);
         model.addAttribute("aiqCurrent", view == null ? null : view.conversation().getToken());

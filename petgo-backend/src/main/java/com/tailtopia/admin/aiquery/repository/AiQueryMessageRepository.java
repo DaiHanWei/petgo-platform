@@ -34,6 +34,22 @@ public interface AiQueryMessageRepository extends JpaRepository<AiQueryMessage, 
                                 com.tailtopia.admin.aiquery.domain.AiQueryStatus.RUNNING)""")
     long countUnfinishedByOwner(@Param("owner") long owner);
 
+    /**
+     * 新对话的推荐问题：本人各对话的第一个问题（不含追问），相同问题只取最近一次，按对话新旧倒序。
+     * 只查本人名下（{@code admin_account_id}），与对话归属规则一致。
+     */
+    @Query(value = """
+            SELECT t.q FROM (
+              SELECT DISTINCT ON (f.question) f.question AS q, c.id AS cid
+                FROM ai_query_conversations c
+                JOIN LATERAL (SELECT m.question FROM ai_query_messages m
+                               WHERE m.conversation_id = c.id ORDER BY m.id LIMIT 1) f ON true
+               WHERE c.admin_account_id = :owner
+               ORDER BY f.question, c.id DESC) t
+             ORDER BY t.cid DESC
+             LIMIT :limit""", nativeQuery = true)
+    List<String> findRecentFirstQuestions(@Param("owner") long owner, @Param("limit") int limit);
+
     /** 左栏：每个对话最新一轮（按 id 最大）。 */
     @Query("""
             SELECT m FROM AiQueryMessage m

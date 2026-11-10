@@ -71,6 +71,12 @@ public class AiQueryQueries {
         }
     }
 
+    /** 新对话的推荐问题：本人最近问过的首问，最多 {@code limit} 条（见 {@code findRecentFirstQuestions}）。 */
+    @Transactional(readOnly = true)
+    public List<String> recentQuestions(long accountId, int limit) {
+        return limit <= 0 ? List.of() : messages.findRecentFirstQuestions(accountId, limit);
+    }
+
     /** {@code after} 为空 = 首屏；否则为上一页给出的游标（非法游标按首屏处理）。 */
     @Transactional(readOnly = true)
     public RowsPage list(long accountId, String after) {
