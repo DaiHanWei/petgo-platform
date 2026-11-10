@@ -59,7 +59,7 @@ die() { echo "✗ $*" >&2; exit 1; }
 command -v ssh >/dev/null || die "缺少 ssh"
 ssh -o ConnectTimeout=5 -o BatchMode=yes "$DEPLOY_HOST" true || die "无法 SSH 到 $DEPLOY_HOST"
 
-log "▶ 部署 $CONTAINER（GIT_REF=$GIT_REF）"
+log "▶ 部署 ${CONTAINER}（GIT_REF=${GIT_REF}）"
 ssh "$DEPLOY_HOST" bash -se <<EOF
 set -euo pipefail
 
@@ -71,7 +71,7 @@ for f in $REMOTE_BASE/env $REMOTE_BASE/pgpass; do
 done
 # psql 以 claude 的 uid 读取 .pgpass，文件须归该 uid 所有
 [ "\$(stat -c %u $REMOTE_BASE/pgpass)" = "$CLAUDE_UID" ] \
-  || { echo "pgpass 属主必须是 uid $CLAUDE_UID：sudo chown $CLAUDE_UID:$CLAUDE_UID $REMOTE_BASE/pgpass"; exit 1; }
+  || { echo "pgpass 属主必须是 uid ${CLAUDE_UID}：sudo chown $CLAUDE_UID:$CLAUDE_UID $REMOTE_BASE/pgpass"; exit 1; }
 if grep -Eiq '^[[:space:]]*(export[[:space:]]+)?(LARK|FEISHU)_' $REMOTE_BASE/env; then
   echo "env 文件含 Lark 变量，拒绝部署"; exit 1
 fi
@@ -107,9 +107,9 @@ fi
 if ! docker inspect -f '{{json .NetworkSettings.Networks}}' $DB_CONTAINER | grep -q '"$INTERNAL_NETWORK"'; then
   if [ "$CONFIRM_SHARED_INFRA" = "1" ]; then
     docker network connect $INTERNAL_NETWORK $DB_CONTAINER
-    echo "已把 $DB_CONTAINER 接入 $INTERNAL_NETWORK（已确认的共享基建变更）"
+    echo "已把 $DB_CONTAINER 接入 ${INTERNAL_NETWORK}（已确认的共享基建变更）"
   else
-    echo "✗ $DB_CONTAINER 尚未接入 $INTERNAL_NETWORK。这是共享基建变更，须 Dai 确认后以 CONFIRM_SHARED_INFRA=1 重跑"
+    echo "✗ $DB_CONTAINER 尚未接入 ${INTERNAL_NETWORK}。这是共享基建变更，须 Dai 确认后以 CONFIRM_SHARED_INFRA=1 重跑"
     exit 1
   fi
 fi
