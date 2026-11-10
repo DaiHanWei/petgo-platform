@@ -51,6 +51,10 @@
                                 <h2 th:text="#{admin.aiQuery.empty.heading}">想查什么数据？</h2>
                                 <p th:text="#{admin.aiQuery.empty.note}">查询在后台运行，提交后可以离开页面，结果保留 30 天。</p>
                                 <div class="aiq-samples">
+                                    <button type="button" th:each="q : ${aiqRecent}" class="aiq-sample--recent"
+                                            th:attr="data-aiq-sample=${q},title=${q}">
+                                        <small th:text="#{admin.aiQuery.recent.tag}">最近问过</small><span th:text="${q}">10 月注册用户有多少？</span>
+                                    </button>
                                     <button type="button" th:each="s : ${aiqSamples}"
                                             th:attr="data-aiq-sample=#{'admin.aiQuery.sample.' + ${s} + '.q'}">
                                         <small th:text="#{'admin.aiQuery.sample.' + ${s} + '.tag'}">用户</small><span
