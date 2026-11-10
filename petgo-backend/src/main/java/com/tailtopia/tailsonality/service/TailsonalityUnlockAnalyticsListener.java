@@ -52,7 +52,7 @@ public class TailsonalityUnlockAnalyticsListener {
             if (row != null) {
                 p.put("role_code", row.code().full());
             }
-            p.put("price", e.priceIdr());
+            // V1.4.2：金额不再进 PostHog（2026-11-08 拍板，事件保留只去金额）。
             if (row != null) {
                 p.put("result_index", resultService.indexOf(row.getPetProfileId(), row.getId()));
             }

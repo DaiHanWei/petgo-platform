@@ -3,7 +3,9 @@ import '../../../core/analytics/analytics.dart';
 import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../mention/domain/mention_context.dart';
-import '../../mention/presentation/mention_text.dart';
+import '../../../shared/rich_text/rich_body_text.dart';
+import '../../topic/domain/topic.dart' show TopicEntrySource;
+import '../../topic/presentation/topic_page.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -279,8 +281,13 @@ class _DetailScaffold extends ConsumerWidget {
                         // V1.3.0 batch-b1 Story 3.3：正文里的 @ 高亮可点（AC1/AC2）。
                         // 🔴 高亮与可点的判定**全在后端**（拉黑 AC3 / 注销 AC4），这里只照做。
                         // （合并注：位置随批次 A Story 2.2 的新顺序 —— 作者行 → 图片 → 正文。）
-                        child: MentionText(
+                        // V1.4.2 social-topic Story 4.4：换 RichBodyText —— 关联话题（detail.topicNames）高亮可点，
+                        // 进话题页 source = post_body；@ 部分参数原样。
+                        child: RichBodyText(
                           text: detail.body!,
+                          topicNames: detail.topicNames,
+                          onTapTopic: (name) => context.push(
+                              TopicPage.routeFor(name, from: TopicEntrySource.postBody)),
                           mentions: detail.mentions,
                           mentionContext: MentionContext.post,
                           style: AppTypography.body,

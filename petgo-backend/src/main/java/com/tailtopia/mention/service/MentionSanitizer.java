@@ -1,12 +1,14 @@
 package com.tailtopia.mention.service;
 
-import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.mention.repository.MentionCandidateRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.social.read.FollowReader;
+import com.tailtopia.social.read.FollowState;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -22,16 +24,19 @@ import org.springframework.stereotype.Service;
  * 数字 id：已注销的、把自己拉黑了的、乃至自己。所以服务端在写库前**自己再判一遍**
  * （护栏：安全规则层只升不降不可绕过）。
  *
- * <h2>🔴 「@ 不到没打过交道的陌生人」是服务端闸门，不是前端约定</h2>
- * AD-10 Rule 3 的原文就是这一句。前端那个选择器只能点到候选集里的人，但
+ * <h2>🔴 「@ 不到范围外的人」是服务端闸门，不是前端约定</h2>
+ * 范围 = <b>互动候选 ∪ 我关注 ∪ 关注我</b>（V1.4.2 social-topic Story 5.1 · D-15 · FR-157 AC5；
+ * 原 AD-10 Rule 3「@ 不到没打过交道的陌生人」在此基础上扩大，追更宠物不算）。前端选择器只能点到范围内的人，但
  * <b>接口自己必须拦</b> —— 否则一个 for 循环遍历 userId 就成了对任意陌生人的
  * 定向推送口（Story 3.4 会把每个 @ 变成一条通知）。
- * 所以本类第一步就是**与候选表求交集**，交集之外的 id 一律丢掉。
- * ⚠️ 别把这一步挪到后面"顺手一起判"：它是三个过滤里唯一挡得住陌生人的那个。
+ * 所以本类第一步就是<b>与范围求交集</b>（按<b>提交这一刻</b>的关系判），交集之外的 id 一律丢掉。
+ * ⚠️ 别把这一步挪到后面"顺手一起判"：它是几个过滤里唯一挡得住陌生人的那个。
+ * <p>官方号（{@code role=ADMIN}）不特殊处理：它的粉丝是全体自动关注了它的用户，自然都在范围内（D-15）。
+ * <p>发布之后取关 / 被取关<b>不影响</b>已落库的名单 —— 读路径不重新按关注校验。
  *
  * <h2>🔴 越界拒绝，不越界的异常一律「静默丢弃」</h2>
  * 只有**超过 {@value #MAX_MENTIONS} 人**才 422（AC5 是产品规则，用户看得见、该给反馈）；
- * 其余几类（不在候选集里的、自己、已注销、有拉黑关系）都是**悄悄剔掉**：
+ * 其余几类（范围外的、自己、已注销、封号、有拉黑关系）都是**悄悄剔掉**：
  * <ul>
  *   <li>报错等于把「这个 id 存不存在 / 他有没有拉黑我」做成一个可以逐个试探的问答口
  *       —— 与 Story 2.5「被拉黑与没内容逐字段相等」同一条口径；</li>
@@ -39,10 +44,11 @@ import org.springframework.stereotype.Service;
  *       那个名字点不动 —— 与「对方发完之后才把我拉黑」的结果完全一致。</li>
  * </ul>
  *
- * <h2>⚠️ 三次批量查询，与人数无关（AD-6）</h2>
- * 一次批量求候选交集，一次批量判拉黑（走 {@code social.read} 的统一出口，AD-7），
- * 一次批量取投影判注销。逐个查在这里代价不高（≤5 人），但它服务的是
- * **发布/评论的同步写路径**，且与 Story 3.1 是同一族取数形态，没有理由破例。
+ * <h2>⚠️ 常数四次批量查询，与人数无关（AD-6）</h2>
+ * 一次批量求候选交集 + 一次批量取关注关系（{@code social.read.FollowReader}，双向一次）判范围，
+ * 一次批量判拉黑（走 {@code social.read} 的统一出口，AD-7），一次批量判账号有效
+ * （{@code activeIdsAmong}：注销 + 封号，与 {@code isActive} 同口径）。逐个查在这里代价不高（≤5 人），但它服务的是
+ * **发布/评论的同步写路径**，没有理由破例。范围交集为空时后两条不发。
  */
 @Service
 public class MentionSanitizer {
@@ -56,12 +62,14 @@ public class MentionSanitizer {
     private final AccountQueryService accounts;
     private final UserHideRelationReader hideRelations;
     private final MentionCandidateRepository candidates;
+    private final FollowReader follows;
 
     public MentionSanitizer(AccountQueryService accounts, UserHideRelationReader hideRelations,
-            MentionCandidateRepository candidates) {
+            MentionCandidateRepository candidates, FollowReader follows) {
         this.accounts = accounts;
         this.hideRelations = hideRelations;
         this.candidates = candidates;
+        this.follows = follows;
     }
 
     /**
@@ -69,7 +77,7 @@ public class MentionSanitizer {
      *
      * @param authorId 发内容 / 发评论的人
      * @param raw      客户端提交的 userId 列表，可为 null
-     * @return 去重、保序、已剔除非法项（非候选 / 自己 / 已注销 / 有拉黑关系）的列表；
+     * @return 去重、保序、已剔除非法项（范围外 / 自己 / 已注销 / 封号 / 有拉黑关系）的列表；
      *         没有任何有效 @ 时返回**空表**（不是 null）
      * @throws AppException 422，当提交人数超过 {@value #MAX_MENTIONS}
      */
@@ -96,30 +104,30 @@ public class MentionSanitizer {
             return List.of();
         }
 
-        // ① 🔴 候选交集 —— **一次**批量。AD-10 Rule 3：@ 不到没打过交道的陌生人。
+        // ① 🔴 范围交集 —— 互动候选 **一次** + 关注关系（双向）**一次**，按提交这一刻判（D-15）。
         //    这一步挡的是「绕过前端、直接对任意 userId 发定向通知」。
-        Set<Long> known = Set.copyOf(candidates.findExistingCandidateIds(authorId, ids));
-        if (known.isEmpty()) {
-            // 全是陌生人 → 后面两条查询都不必发。
+        Set<Long> inScope = new HashSet<>(candidates.findExistingCandidateIds(authorId, ids));
+        for (Map.Entry<Long, FollowState> e : follows.followStates(authorId, ids).entrySet()) {
+            FollowState st = e.getValue();
+            if (st != null && (st.iFollow() || st.followsMe())) {
+                inScope.add(e.getKey());
+            }
+        }
+        inScope.retainAll(ids);
+        if (inScope.isEmpty()) {
+            // 全是范围外的人 → 后面两条查询都不必发。
             return List.of();
         }
         // ② 拉黑 / 举报隐藏 —— **一次**批量、**双向**判定，走统一出口（AD-7）。
-        //    ⚠️ 候选集查询侧（Story 3.1）已经排过拉黑，但那是**取候选那一刻**的状态；
+        //    ⚠️ 候选集查询侧已经排过拉黑，但那是**取候选那一刻**的状态；
         //    用户可能在选完之后、提交之前把对方拉黑（或被拉黑），所以写入侧还要再判。
-        Set<Long> hidden = hideRelations.hiddenEitherWay(authorId, known);
-        // ③ 注销 / 不存在 —— **一次**批量投影。用不带运营标签的那个重载：
-        //    这里只需要「这个 id 还是不是一个活着的用户」。
-        Map<Long, AuthorView> views = accounts.findAuthorViewsWithoutTags(known);
+        Set<Long> hidden = hideRelations.hiddenEitherWay(authorId, inScope);
+        // ③ 注销 / 封号 / 不存在 —— **一次**批量，与 isActive 同口径（V1.4.2 Story 5.1 起封号也剔除）。
+        Set<Long> active = accounts.activeIdsAmong(inScope);
 
         List<Long> out = new ArrayList<>(ids.size());
         for (Long id : ids) {
-            if (!known.contains(id) || hidden.contains(id)) {
-                continue;
-            }
-            AuthorView view = views.get(id);
-            // ⚠️ 注销后 nickname 本就是 null，存进去的话 Story 3.3 渲染出来是一个
-            //    点进去「用户不存在」的空 @。
-            if (view == null || view.deleted()) {
+            if (!inScope.contains(id) || hidden.contains(id) || !active.contains(id)) {
                 continue;
             }
             out.add(id);

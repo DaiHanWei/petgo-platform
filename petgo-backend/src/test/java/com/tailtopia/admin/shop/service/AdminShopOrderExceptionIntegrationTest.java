@@ -114,8 +114,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "es" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)""", sToken, pid, price);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)""", sToken, pid, price);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 0, 0)", sid);
@@ -134,6 +134,11 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
 
     /** 纯 PawCoin 已付款单（Coin 段 = 全额，便于验退回与溢价）。 */
     private Ctx pureCoinPaidOrder(long coins) {
+        return pureCoinPaidOrder(coins, 1);
+    }
+
+    /** 同上，单行 {@code qty} 件（v1.4.2 shop 4.1：部分取消到最后一件会按整单处理，留在工作台的用例须 ≥ 2 件）。 */
+    private Ctx pureCoinPaidOrder(long coins, int qty) {
         long uid = seedUser();
         rules.update(true, true, 1_000_000L, actor);
         wallet.credit(uid, coins, PawCoinTxnType.TOPUP, "TEST", null,
@@ -144,7 +149,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         String addr = addresses.create(uid, new AddressFields("Budi", "08123456789", "DKI Jakarta",
                 "Jakarta Selatan", kec, "Jl. Test No. 1", "12160", "Rumah")).getPublicToken();
         String sku = seedSku(10, 100_000L);
-        carts.add(uid, sku, 1);
+        carts.add(uid, sku, qty);
         ShopOrder o = checkout.placeOrder(uid, addr, null, null);
         payments.pay(uid, o.getPublicToken(), null);
         return new Ctx(uid, sku, orders.findByPublicToken(o.getPublicToken()).orElseThrow());
@@ -156,9 +161,11 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     // ---------- 处置① 整单取消并退款 ----------
 
     @Test
-    @DisplayName("整单取消：状态 CANCELLED + 库存回补 + PawCoin 全额退回 + 站内信")
+    @DisplayName("整单取消：v1.4.2 shop 4.1 起走取消退款单 —— 纯币单直接 REFUNDED + 库存回补 + PawCoin 全额退回 + 站内信一条")
     void cancelWholeRefundsCoinAndRestocks() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         long sid = skuId(c.skuToken());
         assertThat(inventory.findBySkuId(sid).orElseThrow().getActual())
                 .as("付款后已出库").isEqualTo(9L);
@@ -167,8 +174,20 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
 
         ShopOrder after = orders.findByPublicToken(c.order().getPublicToken()).orElseThrow();
-        assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.CANCELLED);
-        assertThat(out.coinRefunded()).isEqualTo(100_000L);
+        // v1.4.2 shop 4.1（D-15）：PENDING_SHIPMENT → REFUNDING →（纯币单退款单即完成）REFUNDED，不再 CANCELLED
+        assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.REFUNDED);
+        assertThat(after.getCancelReason()).isEqualTo(com.tailtopia.shop.order.refund.CancelReason.OUT_OF_STOCK);
+        // v1.4.2 shop 3.2：旧模式下单运费改走 Biteship stub 报价（最低价 10,000），造数里的区域运费 0 已不再被读取；
+        // 缺货整单取消「全额退款含运费」规则不变 → 应退 = 商品 100,000 + 实付运费 10,000（纯币单，全额走币段）
+        assertThat(after.getShippingFee()).as("stub 最低价").isEqualTo(10_000L);
+        assertThat(after.getRefundedTotal()).isEqualTo(110_000L);
+        assertThat(after.getRefundedCoin()).isEqualTo(110_000L);
+        assertThat(out.coinRefunded()).isEqualTo(110_000L);
+        assertThat(out.cashRefundDue()).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM shop_order_refunds
+                WHERE order_id = ? AND scope = 'WHOLE' AND status = 'COMPLETED' AND total_refund = 110000""",
+                Long.class, after.getId())).isEqualTo(1L);
         assertThat(wallet.balanceOf(c.userId()))
                 .isEqualTo(balanceBefore + out.coinRefunded() + out.compensationPremium());
         // 🔴 库存回补到 actual（走退货入库批次，S-9）
@@ -189,32 +208,36 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 C-9：补偿溢价读【平台责任补偿溢价】，与激励溢价取不同值时各归各的")
+    @DisplayName("🔴 v1.4.2 shop 4.1（PRD 11-05）：币段不再发补偿 —— 补偿只对现金段选退为 PawCoin 的金额发放")
     void compensationPremiumUsesItsOwnConfigItem() {
         // 两个配置项刻意设成不同值 —— 共用同一数值是静默错误（C-9 / D-8）
         jdbc.update("UPDATE pawcoin_config SET premium_rate = 50, compensation_premium_rate = 10, "
                 + "compensation_premium_cap = 0");
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
 
         var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
 
-        // 100 000 × 10%（补偿溢价），不是 × 50%（激励溢价）
-        assertThat(out.compensationPremium()).isEqualTo(10_000L);
+        // 纯币单：现金段为 0 → 无补偿（原「币段 × 补偿比例」随 4.1 AC7 取消）
+        assertThat(out.compensationPremium()).isZero();
         Long bonusRows = jdbc.queryForObject("""
                 SELECT count(*) FROM pawcoin_transactions
-                WHERE user_id = ? AND type = 'BONUS' AND delta = 10000""",
+                WHERE user_id = ? AND type = 'BONUS'""",
                 Long.class, c.userId());
-        assertThat(bonusRows).isEqualTo(1L);
+        assertThat(bonusRows).isZero();
     }
 
     @Test
-    @DisplayName("补偿溢价受单笔上限约束（cap > 0 时封顶）")
+    @DisplayName("v1.4.2 shop 4.1：补偿比例 / 封顶配置不影响币段（币段无补偿）")
     void compensationPremiumRespectsCap() {
         jdbc.update("UPDATE pawcoin_config SET compensation_premium_rate = 50, "
                 + "compensation_premium_cap = 3000");
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
-        assertThat(out.compensationPremium()).isEqualTo(3_000L);
+        assertThat(out.compensationPremium()).isZero();
     }
 
     @Test
@@ -222,6 +245,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     void noPremiumWhenRateIsZero() {
         jdbc.update("UPDATE pawcoin_config SET compensation_premium_rate = 0");
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
         assertThat(out.compensationPremium()).isZero();
         Long bonusRows = jdbc.queryForObject(
@@ -244,15 +269,27 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @DisplayName("🔴 已发货订单不可走异常取消 —— 货已出门，出口是退货（Epic 5）")
     void shippedOrderCannotBeCancelledHere() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // 先标记缺货入队，再发货：验证「曾在队列里的单一旦发货就不能再从这里取消」
+        makeShort(c);
         fulfillment.ship(c.order().getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 1L);
+        // ⚠️ v1.4.2 shop-admin 5.1 起，原「只允许待发货」校验已被 requireInQueue 前置取代：
+        //    缺货来源只认 PENDING_SHIPMENT（ExceptionSource.of），发货后该单自动出队，
+        //    处置入口统一以 409「不在异常订单队列」拒绝 —— 原「待发货」文案已走不到，故改断言出队拒绝。
+        assertThat(exceptions.isCandidate(c.order().getPublicToken())).as("发货即出队").isFalse();
         assertThatThrownBy(() -> exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货",
-                actor)).isInstanceOf(AppException.class).hasMessageContaining("待发货");
+                actor)).isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getMessageCode())
+                .isEqualTo("admin.err.v142.exception.notInQueue");
+        assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
+                .as("拒绝后订单不动").isEqualTo(ShopOrderStatus.SHIPPED);
     }
 
     @Test
     @DisplayName("审计摘要记全三段金额与原因，但不含收件人任何字段")
     void auditRecordsAmountsWithoutPii() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         exceptions.cancelWholeOrder(c.order().getPublicToken(), "盘点后发现少货", actor);
 
         String summary = jdbc.queryForObject("""
@@ -260,8 +297,11 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                 WHERE action_type = ? AND target_id = ?""",
                 String.class, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED,
                 c.order().getPublicToken());
-        assertThat(summary).contains("盘点后发现少货").contains("PawCoin 段退回")
-                .contains("待退现金段");
+        // V1.4.2 shop-admin 5.1 AC13：审计记类别、原因、退款合计、币现拆分、退券、库存回补、退款单、说明
+        //（原「PawCoin 段退回 / 现金段」措辞随 5.1 改为下列字段）
+        assertThat(summary).contains("盘点后发现少货").contains("类别=PLATFORM").contains("原因=OUT_OF_STOCK")
+                .contains("退款合计=110000").contains("币 110000").contains("现金 0")
+                .contains("退券=").contains("库存回补=是").contains("退款单=");
         assertThat(summary).doesNotContain("Budi").doesNotContain("8123456789")
                 .doesNotContain("Jl. Test");
     }
@@ -287,6 +327,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         long sid = skuId(sku);
         assertThat(inventory.findBySkuId(sid).orElseThrow().getActual()).isEqualTo(7L);
 
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(new Ctx(uid, sku, order));
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(
                 orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId());
         exceptions.cancelLine(order.getPublicToken(), lines.get(0).getId(), 2, "缺 2 件", actor);
@@ -294,18 +336,26 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         assertThat(inventory.findBySkuId(sid).orElseThrow().getActual()).isEqualTo(9L);
         assertThat(orderLines.findById(lines.get(0).getId()).orElseThrow().getRefundedQty())
                 .isEqualTo(2);
-        assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow().getStatus())
+        ShopOrder afterLine = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
+        assertThat(afterLine.getStatus())
                 .as("部分取消不改订单状态").isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        // v1.4.2 shop 4.1 AC7.2：部分取消开始退钱 —— LINE 退款单 + 订单累计
+        assertThat(afterLine.getRefundedTotal()).isEqualTo(200_000L);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM shop_order_refunds WHERE order_id = ? AND scope = 'LINE' AND line_qty = 2""",
+                Long.class, afterLine.getId())).isEqualTo(1L);
     }
 
     @Test
     @DisplayName("🔴 部分取消数量累加不得超过下单数量")
     void cancelLineCannotExceedOrderedQty() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // 入队后才能走到数量校验（ShopRefundCalculator 的 qtyExceeded），否则只会被 notInQueue 拦下
+        makeShort(c);
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(c.order().getId());
         assertThatThrownBy(() -> exceptions.cancelLine(c.order().getPublicToken(),
                 lines.get(0).getId(), 2, "x", actor))
-                .isInstanceOf(AppException.class).hasMessageContaining("超过下单数量");
+                .isInstanceOf(AppException.class).hasMessageContaining("超过可取消数量");
     }
 
     // ---------- 处置③ 联系用户后继续 ----------
@@ -314,6 +364,8 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @DisplayName("联系用户后继续：不动状态、不动库存、不动钱，只留痕与告知")
     void contactAndContinueChangesNothingButRecords() {
         Ctx c = pureCoinPaidOrder(500_000L);
+        // v1.4.2 shop-admin 5.1：处置前须在异常队列（requireInQueue）→ 先标记缺货入队
+        makeShort(c);
         long sid = skuId(c.skuToken());
         long balanceBefore = wallet.balanceOf(c.userId());
 
@@ -445,15 +497,16 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                                                 .AdminPermissions.SHOP_ORDER_FULFILL)))
                         .with(org.springframework.security.test.web.servlet.request
                                 .SecurityMockMvcRequestPostProcessors.csrf())
-                        .param("reason", "缺货"))
+                        .param("reason", "缺货").param("category", "PLATFORM"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                         .status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(body).contains("data-done");
         assertThat(body).contains("id=\"shop-exception-queue\"").contains("hx-swap-oob");
+        // v1.4.2 shop 4.1：缺货整单取消不再是 CANCELLED（纯币单退款单即完成 → REFUNDED）
         assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
-                .isEqualTo(ShopOrderStatus.CANCELLED);
+                .isEqualTo(ShopOrderStatus.REFUNDED);
         assertThat(exceptions.isCandidate(c.order().getPublicToken()))
                 .as("已取消的单不该还留在候选集里").isFalse();
     }
@@ -480,7 +533,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                                     .SecurityMockMvcRequestPostProcessors.authentication(staff))
                             .with(org.springframework.security.test.web.servlet.request
                                     .SecurityMockMvcRequestPostProcessors.csrf())
-                            .param("reason", " "))
+                            .param("reason", " ").param("category", "PLATFORM"))
                     .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                             .status().isUnprocessableEntity());
         }
@@ -503,7 +556,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                                                 .AdminPermissions.SHOP_ORDER_VIEW)))
                         .with(org.springframework.security.test.web.servlet.request
                                 .SecurityMockMvcRequestPostProcessors.csrf())
-                        .param("reason", "缺货"))
+                        .param("reason", "缺货").param("category", "PLATFORM"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                         .status().isForbidden());
         assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
@@ -572,7 +625,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("处置去留：部分取消保留标记（逐行处理不掉队），联系后继续 / 整单取消清除标记")
     void handlingDecidesWhetherTheOrderStaysOnTheWorkbench() {
-        Ctx partial = pureCoinPaidOrder(500_000L);
+        Ctx partial = pureCoinPaidOrder(500_000L, 2);
         makeShort(partial);
         var line = orderLines.findByOrderIdOrderByIdAsc(partial.order().getId()).get(0);
         exceptions.cancelLine(partial.order().getPublicToken(), line.getId(), 1, "缺 1 件", actor);
@@ -625,5 +678,43 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         assertThat(body).contains("data-notice=\"shortage-flagged\"").contains("差 1 袋")
                 .contains("/admin/shop/order-exceptions?open=" + token)
                 .as("已标记的单不再给标记按钮").doesNotContain("/flag-shortage");
+    }
+
+    // ---------- V1.4.2 shop-admin Story 5.1（L1 待本地验收） ----------
+
+    @Test
+    @DisplayName("5.1 AC1 / AC2：运单失败的待发货单进队列（来源 = 运单失败）；平台原因整单取消后出队、运单失败标记清除")
+    void waybillFailedEntersQueueAndCancelClearsFlag() {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        jdbc.update("UPDATE shop_orders SET waybill_failed_at = now(), waybill_fail_reason = 'REJECTED:x' WHERE id = ?",
+                c.order().getId());
+        ShopOrder o = orders.findByPublicToken(c.order().getPublicToken()).orElseThrow();
+        assertThat(exceptions.source(o)).contains(ExceptionSource.WAYBILL_FAILED);
+        assertThat(exceptions.exceptionCandidates(100)).extracting(ShopOrder::getPublicToken)
+                .contains(c.order().getPublicToken());
+
+        var pv = exceptions.previewWhole(c.order().getPublicToken(), CancelCategoryMapping.Category.PLATFORM, null);
+        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), CancelCategoryMapping.Category.PLATFORM, null,
+                "运单失败", actor);
+        assertThat(out.coinRefunded()).as("试算与落库同一计算").isEqualTo(pv.quote().coinRefund());
+        ShopOrder after = orders.findByPublicToken(c.order().getPublicToken()).orElseThrow();
+        assertThat(after.getWaybillFailedAt()).isNull();
+        assertThat(after.getCancelReason()).isEqualTo(com.tailtopia.shop.order.refund.CancelReason.WAYBILL_FAILED);
+        assertThat(exceptions.isCandidate(c.order().getPublicToken())).isFalse();
+    }
+
+    @Test
+    @DisplayName("5.1 AC4：缺货来源选用户原因 / 丢件破损 → 409，订单不动")
+    void categoryMismatchIsConflict() {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        makeShort(c);
+        for (var cat : List.of(CancelCategoryMapping.Category.USER, CancelCategoryMapping.Category.LOST_DAMAGED)) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> exceptions.cancelWholeOrder(
+                    c.order().getPublicToken(), cat, null, "x", actor))
+                    .isInstanceOfSatisfying(com.tailtopia.shared.error.AppException.class,
+                            e -> assertThat(e.getStatus().value()).isEqualTo(409));
+        }
+        assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
     }
 }

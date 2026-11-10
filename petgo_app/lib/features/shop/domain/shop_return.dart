@@ -88,6 +88,22 @@ enum PayoutChannel {
 
   final String api;
   final int fee;
+
+  /// 渠道短名（v1.4.2 shop Story 9.2：F16 / F19 句中的 `{bank}`，UI「BCA •••• 0695」）。
+  /// 专有名词不进 arb（同 `refundChannelOvo` 写法）。
+  String get shortName => switch (this) {
+        PayoutChannel.bca => 'BCA',
+        PayoutChannel.ovo => 'OVO',
+        PayoutChannel.gopay => 'GoPay',
+      };
+
+  /// 缺值 / 认不出 → null（调用方降级，不猜渠道）。
+  static PayoutChannel? fromApi(String? raw) {
+    for (final c in values) {
+      if (c.api == raw) return c;
+    }
+    return null;
+  }
 }
 
 /// 退货申请页里的一行。

@@ -75,8 +75,8 @@ class InternalPurchaseOrderApiIntegrationTest extends ApiIntegrationTest {
                 VALUES (?, 'Royal Canin', 'B', 'MAKANAN', 'shop/rc.jpg', 'DOG', '<p/>', 'n', 'RETURNABLE', true)""",
                 "pop" + n);
         Long pid = jdbc.queryForObject("SELECT id FROM shop_products WHERE public_token = ?", Long.class, "pop" + n);
-        jdbc.update("INSERT INTO shop_skus (public_token, product_id, spec_name, price, wholesale_price) "
-                + "VALUES (?, ?, '3 kg', 285000, ?)", "pos" + n, pid, wholesale);
+        jdbc.update("INSERT INTO shop_skus (public_token, product_id, spec_name, price, wholesale_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm) "
+                + "VALUES (?, ?, '3 kg', 285000, ?, 1000, 20, 15, 10)", "pos" + n, pid, wholesale);
         Long sid = jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?", Long.class, "pos" + n);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, ?, 0)", sid, stock);
         return "pos" + n;

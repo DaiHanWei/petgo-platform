@@ -1,0 +1,101 @@
+# generated: 2026-11-05
+# last_updated: 2026-11-05  # 25 条 story 文件已生成，均 ready-for-dev（Epic 1~9 可交云端；Epic 10 联调留本地）
+# project: TailTopia V1.4.2 · 主题 shop（电商重构：配送前置 / 一页结算 / 优惠券 / PawCoin 自选 / banner 轮播 / 页面重做 / 资金闭环 / 复购下线 / Biteship 物流：App + 后端，后台页面另起线）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.4.2
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.4.2/epics-v1.4.2-shop.md (10 Epic / 25 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.4.2/architecture-v1.4.2-shop-delta.md (D-1~D-24 · P-1~P-12)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.4.2/电商/1-4-2电商prd.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.4.2/决策日志-shop.md（S-0~S-9）
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.4.2/电商/ui-1-4-2-shop-integrated-v1.html（App 95 屏，A1~H5）
+# 就绪度: {project-root}/_bmad-output/planning-artifacts/v1.4.2/readiness-v1.4.2-shop.md（READY WITH FIXES → 已回改）
+# 云端须知: {project-root}/_bmad-output/implementation-artifacts/v1.4.2/cloud-rules-shop.md
+#
+# 🔴 口径优先级：决策日志 > PRD > 架构增量 > UI 稿。
+# 🔴 同一版本目录还有 social-topic 线 story，编号同号——只按本文件的完整 key 取。
+# 🔴 分支 feat/1.4.2-shop（从 dev_1.4.2 切出），全部 story 同一分支串行。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 依赖 =====
+# 串行 Epic 1 -> 10；epic 内按序号。后端 E1~E6 → App E7~E9 → 联调 E10。
+#
+# ===== 迁移预分配（时间戳制，排在 V20261104_2058 之后）=====
+# 1.1 V20261105_1600 shop_skus 包裹参数（①）
+# 1.1 V20261105_1605 shipping_settings 发货地 / 免运封顶 / 保价费率 + shipping_zones.postal_code（②）
+# 1.1 V20261105_1610 shipping_quotes（⑧）
+# 2.1 V20261105_1615 shop_coupons / user_coupons / shop_coupon_codes / coupon_expiry_notify_log（⑦）
+# 2.3 V20261105_1620 rebuild ck_notifications_type（⑪，值取当前树最后一次重建的全集 + 2）
+# 3.2 V20261105_1625 shop_orders 结算新列（③）
+# 3.3 V20261105_1630 payment_intents.provider_expires_at / paid_after_close（⑩）
+# 4.1 V20261105_1635 shop_order_refunds（⑨）
+# 5.1 V20261105_1640 shipments Biteship 列 + 订单物流异常列 + biteship_webhook_events（④）
+# 6.1 V20261105_1645 shop_banners 排期与 COUPON 目标（⑤）
+# 6.1 V20261105_1650 shop_reviews.hidden_at（⑥）
+# 若实现时发现与其他分支撞号，按 CLAUDE.md 取创建时刻重新取号，并回写本表。
+
+generated: 2026-11-05
+last_updated: 2026-11-05
+project: TailTopia V1.4.2 shop
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.4.2"
+
+development_status:
+  epic-1: in-progress
+  1-1-sku包裹参数与biteship报价: review
+  1-2-订单计价器: review
+  epic-1-retrospective: optional
+
+  epic-2: in-progress
+  2-1-券数据与券账本: review
+  2-2-领券兑换码新人券与券查询: review
+  2-3-通知类型与券快过期推送: review
+  epic-2-retrospective: optional
+
+  epic-3: in-progress
+  3-1-结算试算与运费估算: review
+  3-2-提交订单: review
+  3-3-付款窗口主动查单与关单后到账: review
+  epic-3-retrospective: optional
+
+  epic-4: in-progress
+  4-1-取消原因与取消退款单: review
+  4-2-迟到款重新下单与退款: review
+  epic-4-retrospective: optional
+
+  epic-5: in-progress
+  5-1-biteship运单webhook与物流状态: review
+  5-2-物流异常: review
+  epic-5-retrospective: optional
+
+  epic-6: in-progress
+  6-1-banner轮播商品下架与评价: review
+  6-2-电商订单列表详情扩展与复购下线: review
+  epic-6-retrospective: optional
+
+  epic-7: in-progress
+  7-1-app一页结算: review
+  7-2-app支付面板与支付结果: review
+  epic-7-retrospective: optional
+
+  epic-8: in-progress
+  8-1-app-toko首页与搜索: review
+  8-2-app商品详情: review
+  8-3-app购物车: review
+  epic-8-retrospective: optional
+
+  epic-9: in-progress
+  9-1-app电商订单列表与详情: review
+  9-2-app选择退款方式与线下打款: review
+  9-3-app我的券与兑换: review
+  9-4-app地址簿与复购清理: review
+  epic-9-retrospective: optional
+
+  epic-10: backlog
+  10-1-下单付款取消退款全链路联调: ready-for-dev
+  10-2-biteship物流全链路联调: ready-for-dev
+  epic-10-retrospective: optional

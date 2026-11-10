@@ -42,7 +42,7 @@ public class PassportSnapshotAnalyticsListener {
         try {
             Map<String, Object> p = new LinkedHashMap<>();
             snapshots.findById(e.refId()).ifPresent(s -> p.put("stamp_count", s.getStampCount()));
-            p.put("price", e.priceIdr());
+            // V1.4.2：金额不再进 PostHog（2026-11-08 拍板，事件保留只去金额）。
             analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_UNLOCKED, p);
         } catch (RuntimeException ex) {
             log.warn("passport snapshot analytics skipped refId={}", e.refId(), ex);

@@ -70,7 +70,9 @@ public class AnalyticsEventGuard {
             // ---- V1.3.2 Story 3.4：护照快照解锁成功（事件名暂定，待产品确认）----
             com.tailtopia.passport.service.PassportSnapshotAnalyticsListener.EVENT_UNLOCKED,
             // ---- V1.3.2 Story 3.5：登机牌单张解锁成功（事件名暂定，待产品确认）----
-            com.tailtopia.passport.service.BoardingPassAnalyticsListener.EVENT_UNLOCKED);
+            com.tailtopia.passport.service.BoardingPassAnalyticsListener.EVENT_UNLOCKED,
+            // ---- V1.4.2 shop Story 2.3：券快过期提醒确实推送时（服务端报，PRD §4；事件名字面量 P-9）----
+            "toko_coupon_expiry_push_sent");
 
     /**
      * 属性键白名单。
@@ -86,13 +88,12 @@ public class AnalyticsEventGuard {
             "outcome",                          // pet_card_cta_outcome
             "open_method",                      // post_share_link_opened
             // ---- Story 1-2 新增 4 个：支付漏斗维度，全是枚举与数值，无一条可反推到人 ----
-            "order_amount",                     // long，订单总额
+            // V1.4.2：order_amount / price 已移出白名单 —— 金额一律不进 PostHog（2026-11-08 拍板）。
             "failure_category",                 // PaymentFailureCategory 名
             "pay_channel",                      // PayChannel 名
             "has_pawcoin",                      // boolean
             // ---- 2026-09-25 KTP 付费漏斗：与 App 端同名键，跨端漏斗才拼得起来 ----
             "method",                           // PayChannel 名（PAWCOIN / QRIS）
-            "price_idr",                        // long，成交价
             "failure_reason",                   // PaymentFailureCategory 名
             // ---- V1.3.2 Story 1.2：场所打卡 / 护照。🛡 不带宠物名 / 护照号 / 坐标 ----
             "place_id",                         // 值 = 场所 **token**（不是自增 id），与 App 端同名键
@@ -102,11 +103,12 @@ public class AnalyticsEventGuard {
             "stamp_count",                      // int，已集章数（无分母）
             // ---- V1.3.2 Story 3.2：Tailsonality 解锁。🛡 不带宠物名 / 品种 / token ----
             "role_code",                        // 完整代号，如 ENTJ-H
-            "price",                            // long，成交价
             "result_index",                     // int，该宠物第几次测试
             // ---- V1.3.4 ktp Story 1.8：ktp_unlock_succeeded 补卡种。值为枚举名，🛡 不带卡号 / 宠物名 ----
             "card_type",                        // KTP / PASSPORT / KITAS / SIM / STUDENT
-            "card_variant");                    // 学生卡配色 BINTANG / MALAM / CERIA / KLASIK
+            "card_variant",                     // 学生卡配色 BINTANG / MALAM / CERIA / KLASIK
+            // ---- V1.4.2 shop Story 2.3：toko_coupon_expiry_push_sent。int，本次提醒的券张数 ----
+            "coupon_count");
 
     /**
      * 字符串属性值的长度上限。

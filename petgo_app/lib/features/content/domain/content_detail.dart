@@ -5,6 +5,7 @@ import '../../social/domain/follow_state.dart';
 import 'content_pet_ref.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
+import 'feed_item.dart' show topicNamesFromJson;
 import '../../place/domain/checkin_place_ref.dart';
 import '../../gift/domain/gift_showcase.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
@@ -38,7 +39,11 @@ class ContentDetail {
     this.giftPets = const [],
     this.collected = false,
     this.collectCount,
+    this.topicNames = const [],
   });
+
+  /// 本帖关联的话题标准名（V1.4.2 social-topic · Story 4.4）：正文只有命中它的 `#话题` 才高亮可点。缺键 → 空表。
+  final List<String> topicNames;
 
   /// Diary 关联的宠物（V1.4.0 multi-pet Story 3.3 · AC4.1），按创建顺序；Moment / Tips / 无关联 → 空表。
   final List<ContentPetRef> pets;
@@ -93,6 +98,8 @@ class ContentDetail {
         // 🔴 V1.4.0 ④：漏拷 → 进详情收藏态恒为 false、作者看不到收藏数。
         collected: collected,
         collectCount: collectCount,
+        // V1.4.2 Story 4.4：漏拷 → 详情正文话题不可点。
+        topicNames: topicNames,
       );
 
   final int id;
@@ -196,6 +203,8 @@ class ContentDetail {
       // V1.4.0 ④ Story 2.3：缺键（游客 / 老后端 / 非作者的 collectCount）按默认。
       collected: json['collected'] == true,
       collectCount: json['collectCount'] is int ? json['collectCount'] as int : null,
+      // V1.4.2 social-topic Story 4.4：空表时后端省略该键。
+      topicNames: topicNamesFromJson(json['topicNames']),
     );
   }
 }

@@ -195,4 +195,67 @@ class ContentNotifyListenerTest {
         verify(hideRelations, org.mockito.Mockito.times(1)).isHidden(9L, 2L);
         org.mockito.Mockito.verifyNoMoreInteractions(hideRelations);
     }
+
+    // ===== V1.4.2：回复了你的回复也要通知（A 帖主 / B 一级评论作者 / C 被回复的二级评论作者 / D 回复者）=====
+    // id 故意取 >127：Long 装箱缓存之外，若误用 == 比较引用会在这里暴露。
+
+    private static final long A = 9000L, B = 3000L, C = 4000L, D = 2000L;
+
+    private static ContentCommentedEvent replyToSecondLevel(long commenter, long contentAuthor, Long parent, Long replyTo) {
+        return new ContentCommentedEvent(55L, 7L, commenter, contentAuthor, parent, Instant.now(), 70L, "halo", replyTo);
+    }
+
+    @Test
+    void replyToSecondLevelNotifiesAllThreeOnce() {
+        listener().onContentCommented(replyToSecondLevel(D, A, B, C));
+        verify(notificationService).sendInteraction(A, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L, null, "halo");
+        verify(notificationService).sendInteraction(B, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
+                Notification.VARIANT_REPLY, "halo");
+        verify(notificationService).sendInteraction(C, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
+                Notification.VARIANT_REPLY, "halo");
+        org.mockito.Mockito.verifyNoMoreInteractions(notificationService);
+    }
+
+    @Test
+    void replyToOwnSecondLevelDoesNotNotifySelf() {
+        listener().onContentCommented(replyToSecondLevel(C, A, B, C));
+        verifyNoInteractionSentTo(C);
+    }
+
+    @Test
+    void replyToTargetIsContentAuthorGetsOnlyOne() {
+        listener().onContentCommented(replyToSecondLevel(D, A, B, A));
+        verify(notificationService, org.mockito.Mockito.times(1)).sendInteraction(eq(A), any(), anyLong(), any(),
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void replyToTargetIsParentAuthorGetsOnlyOne() {
+        listener().onContentCommented(replyToSecondLevel(D, A, B, B));
+        verify(notificationService, org.mockito.Mockito.times(1)).sendInteraction(eq(B), any(), anyLong(), any(),
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void replyTargetSuppressedWhenHeHidTheCommenter() {
+        org.mockito.Mockito.lenient().when(hideRelations.isHidden(C, D)).thenReturn(true);
+        listener().onContentCommented(replyToSecondLevel(D, A, B, C));
+        verifyNoInteractionSentTo(C);
+        verify(notificationService).sendInteraction(eq(B), any(), anyLong(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void replyTargetSuppressedWhenContentAuthorHidTheCommenter() {
+        when(hideRelations.isHidden(A, D)).thenReturn(true);
+        listener().onContentCommented(replyToSecondLevel(D, A, B, C));
+        verifyNoInteractionSentTo(C);
+        verifyNoInteractionSentTo(B);
+        verifyNoInteractionSentTo(A);
+    }
+
+    @Test
+    void eightArgEventHasNoReplyTarget() {
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, D, A, B, Instant.now(), 70L, "halo"));
+        verifyNoInteractionSentTo(C);
+    }
 }

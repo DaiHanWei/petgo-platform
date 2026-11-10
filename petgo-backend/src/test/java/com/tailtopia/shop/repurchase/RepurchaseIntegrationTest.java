@@ -123,8 +123,8 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "rps" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g)
-                VALUES (?, ?, '3 kg', 100000, ?)""", sToken, pid, netWeightG);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', 100000, ?, 1000, 20, 15, 10)""", sToken, pid, netWeightG);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 100, 0)", sid);
@@ -247,6 +247,21 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
         assertThat(view.degraded()).isTrue();
         assertThat(view.missing()).isEqualTo("PROFILE");
         assertThat(view.items()).isEmpty();
+        // v1.4.2 shop Story 6.1 AC13：未建档无摘要
+        assertThat(view.profileSummary()).isNull();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6.1：/me/shop/recommendations 带 profileSummary（狗 · 成年 · 体重未填）")
+    void recommendationsCarryProfileSummary() {
+        long uid = seedUser();
+        seedPet(uid, "DOG", LocalDate.now().minusYears(3), null);
+        var s = recommendations.recommendFor(uid).profileSummary();
+        assertThat(s).isNotNull();
+        assertThat(s.species()).isEqualTo("DOG");
+        assertThat(s.ageStage()).isEqualTo("ADULT");
+        assertThat(s.sizeClass()).isNull();
+        assertThat(s.weightMissing()).isTrue();
     }
 
     @Test
@@ -432,8 +447,8 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "rpns" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g)
-                VALUES (?, ?, 'M', 50000, 3000)""", sToken, pid);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, net_weight_g, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, 'M', 50000, 3000, 1000, 20, 15, 10)""", sToken, pid);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 100, 0)", sid);
@@ -476,5 +491,39 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
         assertThat(tokens).doesNotContain(productToken);
         List<ShopProduct> all = products.findByActiveTrueOrderBySortWeightDescIdDesc();
         assertThat(all).noneMatch(p -> p.getPublicToken().equals(productToken));
+    }
+
+    // ---------- v1.4.2 shop Story 6.2 复购下线（FR-136 / D-20） ----------
+
+    @Autowired
+    private com.tailtopia.shop.order.service.ShopOrderExpiryScanner expiryScanner;
+
+    @Test
+    @DisplayName("v1.4.2 复购下线：有活动触发器也返回 []；推荐接口不受影响；默认配置下扫描器不产生新触发与通知")
+    void repurchaseRetired() throws Exception {
+        long uid = seedUser();
+        seedPet(uid, "DOG", LocalDate.now().minusYears(3), new BigDecimal("15"));
+        String sku = seedFoodSku(Species.DOG, AgeStage.ADULT, BodySize.MEDIUM, 3000L,
+                "[{\"weightMinKg\":10,\"weightMaxKg\":25,\"gramsPerDay\":110}]", 100);
+        deliveredOrderFor(uid, sku, 1, 22);
+
+        // 默认 scan-enabled=false：扫描器入口直接返回
+        expiryScanner.scanRepurchase();
+        assertThat(triggerCountFor(uid)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM notifications WHERE recipient_user_id = ? AND type = ?""",
+                Long.class, uid, NotificationType.REPURCHASE_FOOD_LOW.name())).isZero();
+
+        // 服务本身未改：直接调 scan 仍能产生触发（历史行为保留一个版本）
+        repurchase.scan(LocalDate.now(ZoneOffset.UTC));
+        assertThat(repurchase.activeTriggersFor(uid)).hasSize(1);
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/me/shop/repurchase-cards").header("Authorization", userBearer(uid)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().json("[]"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/v1/me/shop/recommendations").header("Authorization", userBearer(uid)))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
     }
 }

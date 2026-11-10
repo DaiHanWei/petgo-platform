@@ -54,6 +54,38 @@ class ShopSection extends StatelessWidget {
   }
 }
 
+/// 白卡片（v1.4.2 shop Story 7.1 结算页起用：卡片圆角 16、卡间 12、页边 16）。
+///
+/// 🔴 **不替换 [ShopSection]**：订单 v2 / 退款页仍用灰缝版式，两者并存到 9.x 收尾。
+class ShopCard extends StatelessWidget {
+  const ShopCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    this.color = ShopColors.surface,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final EdgeInsets margin;
+
+  /// 卡片底色（默认白；v1.4.2 shop 9.2 F13 状态头用米黄提醒色 [ShopColors.warnBg]）。
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: margin,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+          child: Padding(padding: padding, child: child),
+        ),
+      );
+}
+
 /// 加载失败占位 —— 一句说明 + 一个**可见的重试按钮**。
 ///
 /// 🔴 <b>错误态必须给出口</b>（2026-08-27 审查结论）。此前电商各页的错误分支一律只画一行
@@ -216,17 +248,19 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
         //    ⚠️ 但余量只剩 0.25 —— **压在这条顶栏上的任何前景色都要重算**，
         //    照搬为墨底调的半透明白（onInk45/60/85）会当场掉到 3:1 以下。
         //    订单列表的状态 Tab 行就是这么修的（见 order_list_page_v2 的 _FilterTabs）。
+        // 🔴 2026-11-09 产品拍板（V1.4.2 UI 还原度）：1.4.2 电商稿全部屏（购物车 / 结算 / 订单 / 地址 / 券…）
+        //    都是**白底 + 深色标题**，不再用紫底。`dark` 这个名字保留（调用方零改动），配色改为与稿一致；
+        //    原紫底时代为「紫压紫」「白 60% 不达标」做的特判（订单列表 _FilterTabs）已同步改回深色前景。
         ShopAppBarTone.dark => (
-            background: ShopColors.purple,
-            foreground: ShopColors.surface,
-            capsule: ShopColors.onInk12,
-            overlay: SystemUiOverlayStyle.light,
+            background: ShopColors.surface,
+            foreground: ShopColors.ink,
+            capsule: ShopColors.purpleTagBg,
+            overlay: SystemUiOverlayStyle.dark,
           ),
-        // 白底 → 前景取**主体色**（品牌紫），在白底上可见（2026-09-02 产品拍板）。
-        // 胶囊底同步换成浅紫 —— onInk12 是「白 12%」，压在白底上等于没有。
+        // 白底：前景同样取深色标题（1.4.2 稿；2026-09-02 曾取品牌紫）。胶囊底浅紫。
         ShopAppBarTone.light => (
             background: ShopColors.surface,
-            foreground: ShopColors.purple,
+            foreground: ShopColors.ink,
             capsule: ShopColors.purpleTagBg,
             overlay: SystemUiOverlayStyle.dark,
           ),

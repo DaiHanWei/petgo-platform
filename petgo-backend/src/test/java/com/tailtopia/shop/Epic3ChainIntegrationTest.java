@@ -96,8 +96,8 @@ class Epic3ChainIntegrationTest extends ApiIntegrationTest {
                 Long.class, pToken);
         String sToken = "e3s" + n();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)""", sToken, pid, price);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)""", sToken, pid, price);
         Long sid = jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?",
                 Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, ?, 0)", sid,
@@ -135,11 +135,12 @@ class Epic3ChainIntegrationTest extends ApiIntegrationTest {
         // ② 结算试算：两段金额
         CheckoutPreviewView preview = CheckoutPreviewView.of(checkout.preview(uid, addr));
         assertThat(preview.goodsSubtotal()).isEqualTo(370_000L);
-        assertThat(preview.payableTotal()).isEqualTo(390_000L);   // + 运费 20.000
+        // v1.4.2 shop 3.1 / 3.2：运费 = Biteship stub 最便宜一家（JNE 10.000），shipping_zones.fee 停读
+        assertThat(preview.payableTotal()).isEqualTo(380_000L);   // + 运费 10.000
         assertThat(preview.coinAmount()).isEqualTo(60_000L);
-        assertThat(preview.cashAmount()).isEqualTo(330_000L);
+        assertThat(preview.cashAmount()).isEqualTo(320_000L);
 
-        // ③ 下单：锁库存、不扣款
+        // ③ 下单：锁库存；v1.4.2 S-3 起 PawCoin 段在提交时扣
         ShopOrder order = checkout.placeOrder(uid, addr, null, null);
         assertThat(order.getStatus()).isEqualTo(ShopOrderStatus.PENDING_PAYMENT);
         assertThat(order.getPayChannel()).isEqualTo(PayChannel.MIXED);
@@ -147,7 +148,7 @@ class Epic3ChainIntegrationTest extends ApiIntegrationTest {
         assertThat(order.getCoinAmount()).isEqualTo(preview.coinAmount());
         assertThat(order.getCashAmount()).isEqualTo(preview.cashAmount());
         assertThat(order.getTotalAmount()).isEqualTo(preview.payableTotal());
-        assertThat(wallet.balanceOf(uid)).as("下单不扣款").isEqualTo(60_000L);
+        assertThat(wallet.balanceOf(uid)).as("v1.4.2 S-3：下单即扣币").isZero();
         assertThat(inventory.findBySkuId(skuId(skuA)).orElseThrow().getLocked()).isEqualTo(1L);
 
         // 🔴 归因链闭合：加购时记的入口一路走到订单行
@@ -160,7 +161,7 @@ class Epic3ChainIntegrationTest extends ApiIntegrationTest {
         PaymentIntent intent = paymentIntents.findByToken(pay.paymentIntentToken()).orElseThrow();
         assertThat(intent.getChannel()).isEqualTo(PayChannel.MIXED);
         assertThat(intent.getCoinAmount()).isEqualTo(60_000L);
-        assertThat(intent.getCashAmount()).isEqualTo(330_000L);
+        assertThat(intent.getCashAmount()).isEqualTo(320_000L);
         assertThat(intent.getCoinAmount() + intent.getCashAmount()).isEqualTo(intent.getAmount());
         assertThat(intent.getCoinRatio()).isNotNull();
 
@@ -168,7 +169,7 @@ class Epic3ChainIntegrationTest extends ApiIntegrationTest {
         paymentIntents.applyCallback(new PaymentCallback(intent.getPublicToken(), "gw-" + n(),
                 GatewayStatus.PAID, Map.of()));
 
-        // 账：PawCoin 精确减少 + 一条 SPEND 流水
+        // 账：PawCoin 精确减少 + 一条 SPEND 流水（提交时那一条；到账不再扣第二次）
         assertThat(wallet.balanceOf(uid)).isZero();
         Integer spends = jdbc.queryForObject(
                 "SELECT count(*) FROM pawcoin_transactions WHERE user_id = ? AND type = 'SPEND'",

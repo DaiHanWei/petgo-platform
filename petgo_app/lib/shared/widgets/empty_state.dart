@@ -21,11 +21,15 @@ class EmptyState extends StatelessWidget {
     this.hideIcon = false,
     this.iconBackground,
     this.iconColor,
+    this.iconWidget,
   });
 
   final String title;
   final String? message;
   final IconData? icon;
+
+  /// 自定义大图标（V1.4.2 A14 / C10 的「已失效」组合图标 [GoneIcon]）。非 null 时替代 [icon]，忽略 [iconBackground]。
+  final Widget? iconWidget;
 
   /// 可选图标圆形底盘（原型 notif/通知空态：80×80 浅紫圆底包裹图标）。null=裸图标。
   final Color? iconBackground;
@@ -51,7 +55,9 @@ class EmptyState extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (!hideIcon) ...[
-              if (iconBackground != null)
+              if (iconWidget != null)
+                iconWidget!
+              else if (iconBackground != null)
                 Container(
                   width: 80,
                   height: 80,

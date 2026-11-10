@@ -17,13 +17,15 @@ import org.junit.jupiter.api.Test;
  */
 class PushCategoryTest {
 
-    /** 照 PRD §3.1 / story AC2 表抄的期望映射（39 条）。 */
+    /** 照 PRD §3.1 / story AC2 表抄的期望映射（V1.4.2 social-topic Story 1.2 +PET_FOLLOWED / PET_DIARY_POSTED；V1.4.2 shop Story 2.3 +COUPON_EXPIRING / SHOP_ORDER_REORDERED）。 */
     private static final Map<NotificationType, PushCategory> EXPECTED = Map.ofEntries(
             Map.entry(CONTENT_LIKED, PushCategory.LIKE),
             Map.entry(CONTENT_COMMENTED, PushCategory.COMMENT),
             Map.entry(PLACE_COMMENTED, PushCategory.COMMENT),
             Map.entry(CONTENT_MENTIONED, PushCategory.MENTION),
             Map.entry(USER_FOLLOWED, PushCategory.FOLLOWER),
+            Map.entry(PET_FOLLOWED, PushCategory.FOLLOWER),
+            Map.entry(PET_DIARY_POSTED, PushCategory.PET_DIARY),
             Map.entry(PET_GIFT_RECEIVED, PushCategory.GIFT),
             Map.entry(PET_BIRTHDAY, PushCategory.PET_REMINDER),
             Map.entry(COMPANION_ANNIVERSARY, PushCategory.PET_REMINDER),
@@ -37,9 +39,11 @@ class PushCategoryTest {
             Map.entry(LIFECYCLE_WINBACK, PushCategory.PROMO),
             Map.entry(REPURCHASE_FOOD_LOW, PushCategory.PROMO),
             Map.entry(CSAT_SURVEY, PushCategory.PROMO),
+            Map.entry(COUPON_EXPIRING, PushCategory.PROMO),
             Map.entry(SHOP_ORDER_SHIPPED, PushCategory.ORDER_ACCOUNT),
             Map.entry(SHOP_ORDER_EXCEPTION, PushCategory.ORDER_ACCOUNT),
             Map.entry(SHOP_RETURN_UPDATED, PushCategory.ORDER_ACCOUNT),
+            Map.entry(SHOP_ORDER_REORDERED, PushCategory.ORDER_ACCOUNT),
             Map.entry(REFUND_REJECTED, PushCategory.ORDER_ACCOUNT),
             Map.entry(PET_SLOT_EXPIRING, PushCategory.ORDER_ACCOUNT),
             Map.entry(PET_SLOT_EXPIRED, PushCategory.ORDER_ACCOUNT),
@@ -61,7 +65,7 @@ class PushCategoryTest {
 
     @Test
     void everyTypeMapsToACategory() {
-        assertThat(NotificationType.values()).hasSize(39);
+        assertThat(NotificationType.values()).hasSize(43);
         for (NotificationType t : NotificationType.values()) {
             assertThat(PushCategory.of(t)).as(t.name()).isNotNull();
         }
@@ -85,19 +89,20 @@ class PushCategoryTest {
                 Map.entry(PushCategory.LIKE, 1L),
                 Map.entry(PushCategory.COMMENT, 2L),
                 Map.entry(PushCategory.MENTION, 1L),
-                Map.entry(PushCategory.FOLLOWER, 1L),
+                Map.entry(PushCategory.FOLLOWER, 2L),
+                Map.entry(PushCategory.PET_DIARY, 1L),
                 Map.entry(PushCategory.GIFT, 1L),
                 Map.entry(PushCategory.PET_REMINDER, 2L),
                 Map.entry(PushCategory.ACHIEVEMENT, 3L),
-                Map.entry(PushCategory.PROMO, 7L),
-                Map.entry(PushCategory.ORDER_ACCOUNT, 21L));
+                Map.entry(PushCategory.PROMO, 8L),
+                Map.entry(PushCategory.ORDER_ACCOUNT, 22L));
     }
 
     @Test
     void declarationOrderIsResponseOrderAndOnlyOrderAccountIsLocked() {
         assertThat(PushCategory.values()).containsExactly(
                 PushCategory.LIKE, PushCategory.COMMENT, PushCategory.MENTION, PushCategory.FOLLOWER,
-                PushCategory.GIFT, PushCategory.PET_REMINDER, PushCategory.ACHIEVEMENT, PushCategory.PROMO,
+                PushCategory.PET_DIARY, PushCategory.GIFT, PushCategory.PET_REMINDER, PushCategory.ACHIEVEMENT, PushCategory.PROMO,
                 PushCategory.ORDER_ACCOUNT);
         for (PushCategory c : PushCategory.values()) {
             assertThat(c.lockable()).as(c.name()).isEqualTo(c != PushCategory.ORDER_ACCOUNT);
@@ -114,5 +119,13 @@ class PushCategoryTest {
         assertThat(PushCategory.of(CONTENT_COMMENTED)).isEqualTo(PushCategory.COMMENT);
         assertThat(PushCategory.of(MILESTONE_SM_NODE)).isEqualTo(PushCategory.ACHIEVEMENT);
         assertThat(PushCategory.of(NEW_CONSULT_REQUEST)).isEqualTo(PushCategory.ORDER_ACCOUNT);
+        // V1.4.2 social-topic Story 1.2：被追更跟新粉丝走；追更宠物新 Diary 单独一类（可关）
+        assertThat(PushCategory.of(PET_FOLLOWED)).isEqualTo(PushCategory.FOLLOWER);
+        assertThat(PushCategory.of(PET_DIARY_POSTED)).isEqualTo(PushCategory.PET_DIARY);
+        assertThat(PushCategory.PET_DIARY.lockable()).isTrue();
+        // V1.4.2 shop Story 2.3：券快过期跟促销走（可关）；迟到款重新下单归订单与账号（不可关）
+        assertThat(PushCategory.of(COUPON_EXPIRING)).isEqualTo(PushCategory.PROMO);
+        assertThat(PushCategory.of(SHOP_ORDER_REORDERED)).isEqualTo(PushCategory.ORDER_ACCOUNT);
+        assertThat(PushCategory.PROMO.lockable()).isTrue();
     }
 }

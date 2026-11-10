@@ -55,6 +55,10 @@ public class ShopOrderLine {
     @Column(name = "refunded_qty", nullable = false)
     private int refundedQty;
 
+    /** V1.4.2 shop-admin Story 5.1 · AD-9：用户原因退回已确认入库件数（累计）。 */
+    @Column(name = "return_inbound_qty", nullable = false)
+    private int returnInboundQty;
+
     /**
      * 🔴 下单入口来源（Story 3.4，IR 前移）。AB-13B 算转化率的<b>服务端权威依据</b> ——
      * 只靠客户端埋点会被广告拦截与事件丢失打穿分母，而这个数字是裁决 A-16 的唯一依据。
@@ -66,8 +70,19 @@ public class ShopOrderLine {
     @Column(name = "trigger_type", updatable = false, length = 32)
     private String triggerType;
 
+    /**
+     * v1.4.2 shop Story 3.2：该行是否在<b>实际采用的</b>满减券适用范围内（无满减券 → false）。
+     * 4.1 部分取消的满减分摊用；快照，不随券模板后改。
+     */
+    @Column(name = "discount_eligible", nullable = false, updatable = false)
+    private boolean discountEligible;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    /** V1.4.2 shop-admin 7.2 · AD-11：迟到款重新下单时锁不到库存的行（未锁、未确认库存）。 */
+    @Column(name = "stock_unlocked", nullable = false)
+    private boolean stockUnlocked;
 
     protected ShopOrderLine() {
     }
@@ -85,6 +100,15 @@ public class ShopOrderLine {
         l.returnPolicy = returnPolicy;
         l.createdAt = Instant.now();
         return l;
+    }
+
+    /** 记满减券适用范围快照（只在建行时调用）。 */
+    public void markDiscountEligible(boolean eligible) {
+        this.discountEligible = eligible;
+    }
+
+    public boolean isDiscountEligible() {
+        return discountEligible;
     }
 
     /** 归因随建行落库。null 表示来源未知（如后台代下单），不是错误。 */
@@ -156,5 +180,48 @@ public class ShopOrderLine {
 
     public int getRefundedQty() {
         return refundedQty;
+    }
+
+    public int getReturnInboundQty() {
+        return returnInboundQty;
+    }
+
+    /** 尚待确认入库的件数 = {@code qty − refunded_qty − return_inbound_qty}（不小于 0）。 */
+    public int pendingInboundQty() {
+        return Math.max(0, qty - refundedQty - returnInboundQty);
+    }
+
+    /** 确认入库若干件（V1.4.2 shop-admin 5.1）；超过待入库件数 → 409。 */
+    public void addReturnInboundQty(int n) {
+        if (n <= 0) {
+            throw com.tailtopia.shared.error.AppException.validation("入库件数必须为正")
+                    .code("admin.err.v142.inbound.qtyPositive");
+        }
+        if (n > pendingInboundQty()) {
+            throw com.tailtopia.shared.error.AppException.conflict("入库件数超过待入库件数")
+                    .code("admin.err.v142.inbound.qtyExceeded");
+        }
+        this.returnInboundQty += n;
+    }
+
+    // ---------- V1.4.2 shop-admin Story 7.2 · AD-11：未锁库存行 ----------
+
+    /** 建行时标记「锁不到库存」（只在迟到款重新下单复制行时调用）。 */
+    public void markStockUnlocked() {
+        this.stockUnlocked = true;
+    }
+
+    /** 「联系用户后继续」lock + commit 成功后清标记。 */
+    public void clearStockUnlocked() {
+        this.stockUnlocked = false;
+    }
+
+    public boolean isStockUnlocked() {
+        return stockUnlocked;
+    }
+
+    /** 未处置的未锁库存行：仍有未取消的件数（全部取消即视为已处置）。 */
+    public boolean isUnresolvedStockUnlocked() {
+        return stockUnlocked && qty - refundedQty > 0;
     }
 }

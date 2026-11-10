@@ -27,7 +27,7 @@ class PublicProfileResponseGrowthContractTest {
 
     private static PublicProfileResponse of(AuthorView author) {
         return PublicProfileResponse.of(author, "hi", Instant.parse("2026-01-01T00:00:00Z"), 3, 4, false, null,
-                "t".repeat(32), 1, 2, FollowState.NONE, false);
+                "t".repeat(32), 1, 2, FollowState.NONE, false, 0);
     }
 
     @Test

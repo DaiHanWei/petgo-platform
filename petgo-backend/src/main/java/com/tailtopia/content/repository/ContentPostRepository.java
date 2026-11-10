@@ -39,7 +39,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *
      * <h2>🔴 排序：最近更新倒序，**同日**按互动量（AC1）</h2>
      * 「同日」是按 {@code created_at} 的日期截断分桶 —— 不截断的话同一天里先发的永远排后面，
-     * 互动量那一半就永远用不上。互动量取该宠物<b>入池的那些帖子</b>的点赞总数。
+     * 互动量那一半就永远用不上。互动量取该宠物<b>入池的那些帖子</b>的点赞总数，<b>只数近 14 天的点赞</b>
+     * （{@code l.created_at >= :since}，与入选窗口同一个值；V1.4.2 social-topic Story 1.3 · D-17 ——
+     * 否则累计高赞的老宠物永远压着近期活跃的新宠物）。
      *
      * <h3>⚠️ 「同日」必须按 **WIB（Asia/Jakarta）** 截断，不能用会话时区</h3>
      * {@code date(timestamptz)} 隐式吃数据库会话时区（生产容器里是 UTC），于是雅加达
@@ -108,6 +110,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                    AND p.visibility = 'PUBLIC'
                    AND p.status = 'PUBLISHED'
                    AND p.deleted_at IS NULL
+                   AND l.created_at >= :since
                  GROUP BY cp.pet_profile_id
             )
             SELECT c.pet_id                AS pet_id,
@@ -343,6 +346,40 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> searchPinnable(@Param("pattern") String pattern, Pageable pageable);
+
+    /**
+     * 话题页顶置的候选（V1.4.2 social-topic · Story 6.2 · AC4.2）：{@link #searchPinnable} 同一组条件
+     * + 该帖挂在话题 {@code :topicId} 下（{@code content_topics} 关联）
+     * + 作者未注销且 ACTIVE（与 4.2 话题帖子列表口径一致：不把封号作者的帖顶到话题页；首页 Feed 的
+     * {@link #searchPinnable} 不动）。{@code pattern} 同样绝不传 null。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND LOWER(COALESCE(p.text, '')) LIKE :pattern
+              AND EXISTS (SELECT 1 FROM ContentTopic ct WHERE ct.postId = p.id AND ct.topicId = :topicId)
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> searchPinnableInTopic(@Param("pattern") String pattern, @Param("topicId") long topicId,
+            Pageable pageable);
+
+    /**
+     * 该帖是否挂在该话题下、且作者未注销并 ACTIVE（Story 6.2：选帖按 id 直达 / 新建话题页内容顶置的服务端校验；
+     * 作者口径同 {@link #searchPinnableInTopic}）。帖子本身的可顶置条件由调用方另判。
+     */
+    @Query("""
+            SELECT COUNT(ct) > 0 FROM ContentTopic ct, ContentPost p
+            WHERE ct.postId = :postId AND ct.topicId = :topicId AND p.id = ct.postId
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+            """)
+    boolean isInTopic(@Param("postId") long postId, @Param("topicId") long topicId);
 
     /**
      * 成长时间线读：某作者某宠物某类型未删内容，createdAt 倒序游标分页（Story 2.4）。
@@ -670,11 +707,23 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /**
-     * 关注流（V1.3.4 Following 流）：仅「我关注的人」的公开帖，时间倒序游标分页。
+     * 关注流（V1.3.4 Following 流；V1.4.2 social-topic Story 1.3 · D-9 合并追更宠物）：
+     * 「我关注的人」∪「我追更的宠物的公开 Diary」，时间倒序游标分页。
      *
-     * <p>🔴 过滤口径与 {@link #findFeed} 一致（deleted / PUBLISHED / PUBLIC / 举报帖 / 账号级隐藏 / 游标），
+     * <p>🔴 公共过滤口径与 {@link #findFeed} 一致（deleted / PUBLISHED / PUBLIC / 举报帖 / 账号级隐藏 / 游标），
      * 去掉：UNDER_REVIEW 本人例外（关注流只含他人帖）、类型 / 宠物 / 顶置让位。
-     * 另加：作者在我的关注名单内，且作者未注销（{@code deletedAt IS NULL}）、状态 ACTIVE。
+     * 另加：作者未注销（{@code deletedAt IS NULL}）、状态 ACTIVE。两路<b>共用</b>这组公共条件
+     * （可见性四件套：举报过的帖、我隐藏的作者〔不分来源〕、作者已注销、作者非 ACTIVE —— P-2；
+     * 话题页 4.2 照抄本查询的可见性写法）。
+     *
+     * <p>来源两路 OR —— <b>一条查询天然按帖去重</b>，游标与排序不变：
+     * <ol>
+     *   <li><b>关注的人</b>：作者在我的关注名单内 —— 维持 1.3.4 现状，<b>一个谓词都不加</b>；</li>
+     *   <li><b>追更的宠物</b>：{@code GROWTH_MOMENT} 帖关联了我追更的任一宠物，且<b>作者没有 BLOCK 我</b>
+     *       （决策 R-1：「作者拉黑了我」<b>只在这一路</b>排除；我同时关注作者本人时，
+     *       其宠物 Diary 仍从第 ① 路出现 —— 拉黑只删 A→B 的关注，B→A 保留，不让被拉黑方察觉）。</li>
+     * </ol>
+     * 口径与 1.2 {@code PET_DIARY_POSTED} 扇出的排除（追更者隐藏了作者 / 作者 BLOCK 了追更者）对应，改一边核另一边。
      * 登录专属，故无 hasViewer 门控。排序 {@code created_at DESC, id DESC}（id 作 tie-breaker 保游标稳定）。
      * Discover 查询不受影响。
      */
@@ -683,7 +732,6 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             WHERE p.deletedAt IS NULL
               AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
               AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
-              AND p.authorId IN (SELECT f.followeeId FROM UserFollow f WHERE f.followerId = :viewerId)
               AND p.authorId IN (SELECT u.id FROM User u
                                  WHERE u.deletedAt IS NULL
                                    AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
@@ -691,6 +739,17 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                               WHERE r.postId = p.id AND r.reporterId = :viewerId)
               AND NOT EXISTS (SELECT 1 FROM UserHideRelation h
                               WHERE h.holderId = :viewerId AND h.targetId = p.authorId)
+              AND (
+                    p.authorId IN (SELECT f.followeeId FROM UserFollow f WHERE f.followerId = :viewerId)
+                 OR (p.type = com.tailtopia.content.domain.ContentType.GROWTH_MOMENT
+                     AND EXISTS (SELECT 1 FROM ContentPet cp, PetFollow pf
+                                 WHERE cp.id.postId = p.id
+                                   AND pf.petProfileId = cp.id.petProfileId
+                                   AND pf.followerId = :viewerId)
+                     AND NOT EXISTS (SELECT 1 FROM UserHideRelation hb
+                                     WHERE hb.holderId = p.authorId AND hb.targetId = :viewerId
+                                       AND hb.source = com.tailtopia.social.domain.HideSource.BLOCK))
+              )
               AND (:hasCursor = false
                    OR p.createdAt < :cursorTs
                    OR (p.createdAt = :cursorTs AND p.id < :cursorId))
@@ -702,6 +761,102 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("cursorTs") Instant cursorTs,
             @Param("cursorId") Long cursorId,
             Pageable pageable);
+
+    /**
+     * 话题页 · Terbaru（V1.4.2 social-topic · Story 4.2 · AC2 · P-2）：某话题下公开内容时间倒序游标分页。
+     *
+     * <p>🔴 <b>可见性四件套与 {@link #findFollowingFeed} 逐条一致</b>（改一边核另一边）：
+     * <ol>
+     *   <li>作者已注销（{@code u.deletedAt IS NULL}）—— 与人无关，<b>游客也套</b>；</li>
+     *   <li>作者非 ACTIVE（{@code u.status = ACTIVE}）—— 同上，游客也套；</li>
+     *   <li>我举报过的帖 —— 登录才套（{@code :hasViewer} 门控，同 {@link #findFeed}，防 42P18）；</li>
+     *   <li>我隐藏的作者（不分 BLOCK / REPORT）—— 登录才套，同上。</li>
+     * </ol>
+     * 公共条件：deleted / PUBLISHED / PUBLIC（私密 / 审核中 / 下架都不出）。
+     * <b>不加</b>「作者 BLOCK 了我」（R-1 / P-2：只在追更宠物一路）；<b>不读</b> {@code rank_throttles}。
+     * 「作者在关注名单」换成「帖子关联了该话题」。顶置让位 {@code hasExclude} 只首屏传（同 {@link #findFeed}）。
+     * 过滤全在 WHERE 内（{@code PAGE_SIZE+1} / hasMore / 游标契约，AD-5）。
+     * JPQL 引用 topic 模块实体 {@code ContentTopic} 与引用 {@code ContentReport} / {@code UserHideRelation} 同属既定破例。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND EXISTS (SELECT 1 FROM ContentTopic ct WHERE ct.postId = p.id AND ct.topicId = :topicId)
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+              AND (:hasExclude = false OR p.id <> :excludeId)
+              AND (:hasCursor = false
+                   OR p.createdAt < :cursorTs
+                   OR (p.createdAt = :cursorTs AND p.id < :cursorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findTopicFeed(
+            @Param("topicId") long topicId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            @Param("hasExclude") boolean hasExclude,
+            @Param("excludeId") Long excludeId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
+    /**
+     * 话题页 · Populer（V1.4.2 social-topic · Story 4.2 · AC2.3）：按「累计赞 + {@code :w} × 累计评论」倒序，
+     * 并列 {@code created_at DESC, id DESC}；页码分页（{@code LIMIT :limit OFFSET :offset}，调用方多取 1 判 hasMore）。
+     *
+     * <p>🔴 可见性四件套与 {@link #findTopicFeed} / {@link #findFollowingFeed} 逐条一致（作者 join 两条游客也套；
+     * 举报 / 隐藏两条 {@code :hasViewer} 门控）。游客时 {@code viewerId} / {@code excludeId} 传 {@code -1}
+     * 占位（布尔门控已短路，避免 NULL 参数 42P18）。
+     *
+     * <p>评论计数 = <b>平台口径</b>（CROSS-STORY 2026-08-16）：未删 + VISIBLE；R1 不套；
+     * <b>R2 影子评论必须排</b>（帖子作者隐藏了评论者的评论，及父评论是影子评论的回复）。与热度任务同口径。
+     *
+     * @return 帖子 id（按排名顺序）；调用方 {@code findAllById} 后须按此顺序重排
+     */
+    @Query(value = """
+            SELECT p.id
+            FROM content_posts p
+            JOIN content_topics ct ON ct.post_id = p.id AND ct.topic_id = :topicId
+            JOIN users u ON u.id = p.author_id AND u.deleted_at IS NULL AND u.status = 'ACTIVE'
+            LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM content_likes l WHERE l.post_id = p.id) lk ON true
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS n FROM comments c
+                WHERE c.post_id = p.id AND c.deleted_at IS NULL AND c.moderation_status = 'VISIBLE'
+                  AND NOT EXISTS (SELECT 1 FROM user_hide_relations h
+                                  WHERE h.holder_id = p.author_id AND h.target_id = c.author_id)
+                  AND (c.parent_id IS NULL OR NOT EXISTS (
+                          SELECT 1 FROM comments pc JOIN user_hide_relations h2
+                            ON h2.holder_id = p.author_id AND h2.target_id = pc.author_id
+                          WHERE pc.id = c.parent_id))
+            ) cm ON true
+            WHERE p.deleted_at IS NULL AND p.status = 'PUBLISHED' AND p.visibility = 'PUBLIC'
+              AND (:hasViewer = false OR NOT EXISTS (SELECT 1 FROM content_reports r
+                                                     WHERE r.post_id = p.id AND r.reporter_id = :viewerId))
+              AND (:hasViewer = false OR NOT EXISTS (SELECT 1 FROM user_hide_relations h3
+                                                     WHERE h3.holder_id = :viewerId AND h3.target_id = p.author_id))
+              AND (:hasExclude = false OR p.id <> :excludeId)
+            ORDER BY (lk.n + CAST(:w AS double precision) * cm.n) DESC, p.created_at DESC, p.id DESC
+            LIMIT :limit OFFSET :offset
+            """, nativeQuery = true)
+    List<Number> findTopicPopularIds(
+            @Param("topicId") long topicId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") long viewerId,
+            @Param("hasExclude") boolean hasExclude,
+            @Param("excludeId") long excludeId,
+            @Param("w") double commentWeight,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
 
     /**
      * 推荐序候选池的过滤口径 —— 主池 {@link #findRankCandidatePool} 与教育池 {@link #findEduCandidatePool} 共用

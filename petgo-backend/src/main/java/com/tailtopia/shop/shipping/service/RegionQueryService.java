@@ -31,7 +31,7 @@ public class RegionQueryService {
         for (ShippingZone z : zones.findAllByOrderByProvinsiAscKotaKabupatenAscKecamatanAsc()) {
             grouped.computeIfAbsent(z.getProvinsi(), k -> new LinkedHashMap<>())
                     .computeIfAbsent(z.getKotaKabupaten(), k -> new ArrayList<>())
-                    .add(new RegionTree.Kecamatan(z.getKecamatan(), z.isActive()));
+                    .add(new RegionTree.Kecamatan(z.getKecamatan(), z.isActive(), z.getId()));
         }
         List<RegionTree.Provinsi> out = new ArrayList<>();
         grouped.forEach((prov, kotas) -> {

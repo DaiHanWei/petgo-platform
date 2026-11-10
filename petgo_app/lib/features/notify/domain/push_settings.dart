@@ -6,6 +6,9 @@ abstract final class PushCategoryCode {
   static const comment = 'COMMENT';
   static const mention = 'MENTION';
   static const follower = 'FOLLOWER';
+
+  /// 追更宠物新 Diary（V1.4.2 social-topic · Story 1.2 后端第 10 项 / 1.5 App）：默认开、可关。
+  static const petDiary = 'PET_DIARY';
   static const gift = 'GIFT';
   static const petReminder = 'PET_REMINDER';
   static const achievement = 'ACHIEVEMENT';
@@ -16,7 +19,7 @@ abstract final class PushCategoryCode {
 
   /// 顺序 = 后端 `PushCategory` 声明顺序（AD-1）。
   static const all = <String>[
-    like, comment, mention, follower, gift, petReminder, achievement, promo, orderAccount,
+    like, comment, mention, follower, petDiary, gift, petReminder, achievement, promo, orderAccount,
   ];
 
   /// App 侧锁定（双保险：服务端 `lockable` 缺失或给错也照锁）。

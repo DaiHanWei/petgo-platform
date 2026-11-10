@@ -65,4 +65,52 @@ public class ShopOrderCardService {
                 .orElse(null);
         return new CardInfo(url, first.getProductName() + " · " + first.getSpecName(), count);
     }
+
+    /**
+     * 批量版（v1.4.2 shop Story 6.2 AC1.5，禁 N+1）：行一次、SKU 一次、商品一次。口径同 {@link #of}。
+     *
+     * @return 订单 id → 卡片摘要；入参里每个 id 都有值（无行的订单为 {@code (null, null, 0)}）
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, CardInfo> ofAll(java.util.Collection<Long> orderIds) {
+        java.util.Map<Long, CardInfo> out = new java.util.HashMap<>();
+        if (orderIds == null || orderIds.isEmpty()) {
+            return out;
+        }
+        java.util.Map<Long, List<ShopOrderLine>> byOrder = new java.util.LinkedHashMap<>();
+        for (ShopOrderLine l : lines.findByOrderIdInOrderByOrderIdAscIdAsc(orderIds)) {
+            byOrder.computeIfAbsent(l.getOrderId(), k -> new java.util.ArrayList<>()).add(l);
+        }
+        List<Long> firstSkuIds = byOrder.values().stream().map(rows -> rows.getFirst().getSkuId())
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        java.util.Map<Long, Long> productIdBySku = new java.util.HashMap<>();
+        java.util.Map<Long, String> urlByProduct = new java.util.HashMap<>();
+        if (!firstSkuIds.isEmpty()) {
+            for (ShopSku sku : skus.findAllById(firstSkuIds)) {
+                productIdBySku.put(sku.getId(), sku.getProductId());
+            }
+            List<Long> productIds = productIdBySku.values().stream().distinct().toList();
+            if (!productIds.isEmpty()) {
+                for (ShopProduct p : products.findAllById(productIds)) {
+                    String url = images.publicUrl(p.getMainImageKey());
+                    if (url != null) {
+                        urlByProduct.put(p.getId(), url);
+                    }
+                }
+            }
+        }
+        for (Long id : orderIds) {
+            List<ShopOrderLine> rows = byOrder.get(id);
+            if (rows == null || rows.isEmpty()) {
+                out.put(id, new CardInfo(null, null, 0));
+                continue;
+            }
+            ShopOrderLine first = rows.getFirst();
+            int count = rows.stream().mapToInt(ShopOrderLine::getQty).sum();
+            Long productId = productIdBySku.get(first.getSkuId());
+            String url = productId == null ? null : urlByProduct.get(productId);
+            out.put(id, new CardInfo(url, first.getProductName() + " · " + first.getSpecName(), count));
+        }
+        return out;
+    }
 }

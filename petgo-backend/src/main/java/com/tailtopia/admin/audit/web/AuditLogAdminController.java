@@ -95,6 +95,7 @@ public class AuditLogAdminController {
 
         model.addAttribute("active", "audit-logs");
         model.addAttribute("result", result);
+        model.addAttribute("pager", com.tailtopia.admin.shared.AdminPager.of(result)); // V1.4.2 通用分页条
         model.addAttribute("actionTypes", ACTION_TYPES);
         // 回显筛选条件（含分页链接复用）。
         model.addAttribute("from", from);

@@ -1,6 +1,7 @@
 package com.tailtopia.shop.service;
 
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.coupon.service.PromoResolver;
 import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopProduct;
 import com.tailtopia.shop.domain.ShopSku;
@@ -11,9 +12,12 @@ import com.tailtopia.shop.dto.ShopSkuView;
 import com.tailtopia.shop.domain.StockStatus;
 import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
+import com.tailtopia.shop.review.service.ProductReviewQueryService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import java.util.stream.Collectors;
@@ -37,13 +41,42 @@ public class ShopProductQueryService {
     private final ShopSkuRepository skus;
     private final InventoryService inventory;
     private final ShopImageUrlResolver imageUrls;
+    private final PromoResolver promos;
+    private final ProductReviewQueryService reviews;
 
     public ShopProductQueryService(ShopProductRepository products, ShopSkuRepository skus,
-            InventoryService inventory, ShopImageUrlResolver imageUrls) {
+            InventoryService inventory, ShopImageUrlResolver imageUrls, PromoResolver promos,
+            ProductReviewQueryService reviews) {
         this.products = products;
         this.skus = skus;
         this.inventory = inventory;
         this.imageUrls = imageUrls;
+        this.promos = promos;
+        this.reviews = reviews;
+    }
+
+    /** {@code /shop/products/top} 条数默认值与上限（v1.4.2 shop Story 6.1 AC12）。 */
+    public static final int TOP_DEFAULT = 6;
+    public static final int TOP_MAX = 20;
+
+    /**
+     * 在售商品按运营权重前 N（v1.4.2 shop Story 6.1 AC12，无档案推荐 / 首页「热门」）。
+     * 排序与列表逐字一致（{@code sort_weight DESC, id DESC}）；{@code promo} 复用列表同一套批量组装。
+     *
+     * @param limit null → {@value #TOP_DEFAULT}；越界钳位到 1 ~ {@value #TOP_MAX}，不报错
+     */
+    @Transactional(readOnly = true)
+    public List<ShopProductSummaryView> top(Integer limit, Long viewerUserId) {
+        int n = clampTop(limit);
+        List<ShopProduct> rows = products.findByActiveTrueOrderBySortWeightDescIdDesc();
+        return toViews(rows.size() > n ? rows.subList(0, n) : rows, viewerUserId);
+    }
+
+    static int clampTop(Integer limit) {
+        if (limit == null) {
+            return TOP_DEFAULT;
+        }
+        return Math.max(1, Math.min(limit, TOP_MAX));
     }
 
     /**
@@ -68,6 +101,16 @@ public class ShopProductQueryService {
      */
     @Transactional(readOnly = true)
     public List<ShopProductSummaryView> list(ProductCategory category, String query) {
+        return list(category, query, null);
+    }
+
+    /**
+     * 同 {@link #list(ProductCategory, String)}，并按查看者算 {@code promo}（v1.4.2 shop Story 2.2 AC9）。
+     *
+     * @param viewerUserId 只认 {@code role=USER} 的登录用户；游客 / 非 USER → null（只算 CLAIM 模板）
+     */
+    @Transactional(readOnly = true)
+    public List<ShopProductSummaryView> list(ProductCategory category, String query, Long viewerUserId) {
         String pattern = likePattern(query);
         List<ShopProduct> rows;
         if (pattern == null) {
@@ -79,7 +122,7 @@ public class ShopProductQueryService {
                     ? products.searchActive(pattern)
                     : products.searchActiveByCategory(pattern, category);
         }
-        return toViews(rows);
+        return toViews(rows, viewerUserId);
     }
 
     /**
@@ -88,11 +131,15 @@ public class ShopProductQueryService {
      * <p>🔴 <b>全量与分页共用这一处组装</b>：两处各拼一遍，迟早出现「不翻页时有图、
      * 翻页后没图」这种只在某一条路径上出现的差异。
      */
-    private List<ShopProductSummaryView> toViews(List<ShopProduct> rows) {
+    private List<ShopProductSummaryView> toViews(List<ShopProduct> rows, Long viewerUserId) {
         if (rows.isEmpty()) {
             return List.of();
         }
         Map<Long, Long> minPriceByProduct = minPriceByProduct(rows);
+        // promo 批量算（Story 2.2 AC9）：整页两次查询，不逐商品查库
+        Set<String> promoTokens = promos.resolve(rows.stream()
+                .map(p -> new PromoResolver.ProductRef(p.getPublicToken(), p.getCategory())).toList(),
+                viewerUserId, Instant.now());
         List<ShopProductSummaryView> out = new ArrayList<>(rows.size());
         for (ShopProduct p : rows) {
             out.add(new ShopProductSummaryView(
@@ -105,7 +152,8 @@ public class ShopProductQueryService {
                     p.getMainImageW(),
                     p.getMainImageH(),
                     p.getSpecies(),
-                    minPriceByProduct.get(p.getId())));
+                    minPriceByProduct.get(p.getId()),
+                    promoTokens.contains(p.getPublicToken())));
         }
         return out;
     }
@@ -133,6 +181,13 @@ public class ShopProductQueryService {
     @Transactional(readOnly = true)
     public ShopProductPageResponse page(ProductCategory category, String query, String cursor,
             Integer size) {
+        return page(category, query, cursor, size, null);
+    }
+
+    /** 同 {@link #page(ProductCategory, String, String, Integer)}，并按查看者算 {@code promo}（Story 2.2 AC9）。 */
+    @Transactional(readOnly = true)
+    public ShopProductPageResponse page(ProductCategory category, String query, String cursor,
+            Integer size, Long viewerUserId) {
         int limit = normalizeSize(size);
         ShopProductCursor from = ShopProductCursor.decode(cursor);
         String pattern = likePattern(query);
@@ -154,15 +209,20 @@ public class ShopProductQueryService {
 
         boolean hasMore = rows.size() > limit;
         List<ShopProduct> page = hasMore ? rows.subList(0, limit) : rows;
+        // v1.4.2 C-9：同一筛选条件下的在售总数（首页「{n} produk」），过滤口径与上面四条查询逐字一致
+        long total = pattern == null
+                ? (category == null ? products.countByActiveTrue() : products.countByActiveTrueAndCategory(category))
+                : (category == null ? products.countSearchActive(pattern)
+                        : products.countSearchActiveByCategory(pattern, category));
         // 🔴 无结果 → 空 items，不是 404：「这个品类下暂时没有商品」是一个正常答案。
         if (page.isEmpty()) {
-            return new ShopProductPageResponse(List.of(), null, false);
+            return new ShopProductPageResponse(List.of(), null, false, total);
         }
         ShopProduct last = page.get(page.size() - 1);
-        return new ShopProductPageResponse(toViews(page),
+        return new ShopProductPageResponse(toViews(page, viewerUserId),
                 // 末页 nextCursor 为 null → NON_NULL 下整键省略（与 Feed 信封同款）
                 hasMore ? new ShopProductCursor(last.getSortWeight(), last.getId()).encode() : null,
-                hasMore);
+                hasMore, total);
     }
 
     private static int normalizeSize(Integer size) {
@@ -175,12 +235,17 @@ public class ShopProductQueryService {
     /**
      * 商品详情 + 其 SKU 列表（FR-94 / FR-94A）。
      *
-     * @throws AppException 未上架或不存在 → {@code notFound}（404，非 403 —— 防枚举）
+     * @throws AppException 不存在 → {@code notFound}（404，非 403 —— 防枚举）；
+     *     存在但 {@code active = false} → {@code productDelisted}（410 {@code product-delisted}，v1.4.2 Story 6.1，
+     *     App 分流到「商品已下架」页。库里无「曾上架」标记，从未上架的草稿同样 410；token 不可枚举，暴露面可忽略）
      */
     @Transactional(readOnly = true)
     public ShopProductDetailView detail(String publicToken) {
-        ShopProduct p = products.findByPublicTokenAndActiveTrue(publicToken)
+        ShopProduct p = products.findByPublicToken(publicToken)
                 .orElseThrow(() -> AppException.notFound("商品不存在"));
+        if (!p.isActive()) {
+            throw AppException.productDelisted("商品已下架");
+        }
         List<ShopSku> rows = skus.findByProductIdOrderByIdAsc(p.getId());
         // 批量取库存，避免 N+1；无库存行的 SKU 视为可售 0（售罄）
         Map<Long, Long> availableBySku =
@@ -198,9 +263,12 @@ public class ShopProductQueryService {
                             s.effectiveReturnPolicy(p.getReturnPolicy()),
                             status,
                             // 🔴 仅低库存时给真实剩余数；售罄/充足给 null（不虚构、不泄露经营数据）
-                            status == StockStatus.LOW_STOCK ? available : null);
+                            status == StockStatus.LOW_STOCK ? available : null,
+                            s.isSellable());
                 })
                 .toList();
+        // v1.4.2 Story 6.1 AC11：评价摘要（计数 + 均分一条 SQL；开关开时再取 3 条），410 / 404 路径不组装
+        ShopProductDetailView.ReviewSummary summary = reviews.summaryFor(p.getId());
         return new ShopProductDetailView(
                 p.getPublicToken(),
                 p.getName(),
@@ -217,7 +285,9 @@ public class ShopProductQueryService {
                 p.getFeedingGuide(),
                 p.getShelfLifeNote(),
                 p.getReturnPolicy(),
-                skuViews);
+                skuViews,
+                summary,
+                summary.displayEnabled());
     }
 
     /** 一次取回本页商品的全部 SKU，按商品聚出最低价——避免 N+1。 */

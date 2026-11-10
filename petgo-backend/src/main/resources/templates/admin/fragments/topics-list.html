@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  F 屏话题管理的摘要条 / 表格 / 单行（V1.4.2 Story 6.1，模板 B）。调用一律具名参数（Thymeleaf 3.1.5 位置参数踩过坑）：
+    sumbar(oob)  — 5 格：话题总数 / 官方话题 / 首页话题行 N / 5 / 已隐藏 / 已禁用（全量口径，不随筛选变）
+    rows(oob)    — 表格 + 空态（F9）+ 分页；oob=true 时摘要条随片段一并换
+    row(t, oob)  — 单行：点行或「编辑」开抽屉；开关 / 序号框 / 链接的点击不开抽屉（admin-drawer.js 排除 a/button/input/label/select）
+  🛡 写控件的 sec 判定与 AdminTopicController.MANAGE 逐字一致。
+  帖子数读 topics.post_count（热度任务每小时重算，R-5 接受最多滞后 1 小时）；抽屉头部另查实时数。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="topics-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.topics.sum.total}">话题总数</div>
+        <div class="sum-value" th:text="${summary.total}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.topics.sum.official}">官方话题</div>
+        <div class="sum-value" th:text="${summary.official}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.topics.sum.featured}">首页话题行</div>
+        <div class="sum-value" th:text="${summary.featured} + ' / ' + ${summary.featuredMax}">0 / 5</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.topics.sum.hidden}">已隐藏</div>
+        <div class="sum-value" th:text="${summary.hidden}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.common.disabled}">已禁用</div>
+        <div class="sum-value" th:text="${summary.disabled}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/topics-list :: sumbar(oob=true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(topics)}" class="topics-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.topics.col.name}">话题名</th>
+            <th th:text="#{admin.content.col.type}">类型</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="num" th:text="#{admin.dashboard.m.posts}">帖子数</th>
+            <!--/* 当前排序列：表头 ▼ 品牌色（默认且唯一的排序：近 7 天热度倒序） */-->
+            <th class="num nowrap" aria-sort="descending"><span th:text="#{admin.topics.col.heat}">近 7 天热度</span><span class="sort-arrow" aria-hidden="true">▼</span></th>
+            <th class="nowrap" th:text="#{admin.topics.col.featured}">首页话题行（序号）</th>
+            <th class="nowrap" th:text="#{admin.topics.col.createdAt}">创建时间（WIB）</th>
+            <th th:text="#{admin.common.actions}">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="t : ${topics}"><tr th:replace="~{admin/fragments/topics-list :: row(t=${t}, oob=false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <!--/* F9：筛选 / 搜索无结果 → 线上 .empty（无白卡、上下 40px、🔍 28px）；筛选栏与摘要条保留 */-->
+    <div class="empty topics-empty" th:if="${#lists.isEmpty(topics)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:text="#{admin.topics.emptyFiltered}">没有符合条件的话题。</p>
+    </div>
+
+    <div class="pager" th:if="${!#lists.isEmpty(topics) or page > 0}" th:attr="data-page=${page}">
+        <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#topics-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/topics(type=${type},status=${status},q=${q},page=${page - 1})}"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.v130.pins.pager.page(${page + 1})}">第 1 页</span>
+        <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#topics-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/topics(type=${type},status=${status},q=${q},page=${page + 1})}"
+           th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</th:block>
+
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(t, oob)" th:id="'topic-row-' + ${t.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${t.id}" th:data-drawer-url="@{/admin/topics/{id}/drawer(id=${t.id})}" tabindex="0"
+        th:classappend="${(t.disabled() ? 'row-muted ' : '') + ((focus != null and focus == t.id) ? 'row-flash' : '')}"
+        th:with="canManage=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''content.topic_manage'')')}">
+        <td class="nowrap" th:text="'#' + ${t.nameDisplay}">#KucingLucu</td>
+        <td class="nowrap">
+            <span class="tag topic-type" th:classappend="${t.official()} ? 'topic-type--official' : 'topic-type--user'"
+                  th:text="${t.official()} ? #{admin.topics.type.OFFICIAL} : #{admin.common.user}">官方</span>
+        </td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${t.active()} ? 'dot--ok' : (${t.hidden()} ? 'dot--wait' : 'dot--hot')"></span>
+            <span class="badge" th:classappend="${t.active()} ? 'badge-ok' : (${t.hidden()} ? 'badge-warn' : 'badge-danger')"
+                  th:text="${t.active()} ? #{admin.topics.status.ACTIVE} : (${t.hidden()} ? #{admin.topics.status.HIDDEN} : #{admin.common.disabled})">正常</span>
+        </td>
+        <td class="num" th:text="${t.postCount}">0</td>
+        <td class="num" th:text="${t.disabled()} ? '—' : ${t.heatText()}">0.0</td>
+        <td class="nowrap topic-feat">
+            <!--/* 开关（新组件 .switch，32×18、整格 28px 可点）；隐藏 / 禁用行半透明不可点。
+                   表单提交走 htmx：422（满 5 个等）落 #admin-inline-error，admin-topics.js 把开关弹回。 */-->
+            <form class="inline topic-switch-form" th:if="${canManage}" data-topic-switch
+                  th:attr="hx-post=@{/admin/topics/{id}/featured(id=${t.id})}"
+                  hx-target="#admin-inline-error" hx-swap="innerHTML">
+                <input type="hidden" name="on" th:value="${!t.featured()}"/>
+                <button type="submit" class="switch" role="switch"
+                        th:attr="aria-checked=${t.featured()},aria-label=#{admin.topics.col.featured}"
+                        th:disabled="${!t.active()}"><span class="switch-knob" aria-hidden="true"></span></button>
+            </form>
+            <span th:unless="${canManage}" class="switch" role="switch" aria-disabled="true"
+                  th:attr="aria-checked=${t.featured()},aria-label=#{admin.topics.col.featured}"><span class="switch-knob" aria-hidden="true"></span></span>
+            <!--/* 序号框：只在已放入时显示；只接受 1..当前个数（前端即时校验，服务端 422 兜底） */-->
+            <form class="inline topic-order-form" th:if="${canManage and t.featured()}" data-topic-order
+                  th:attr="hx-post=@{/admin/topics/{id}/featured-order(id=${t.id})},data-max=${summary.featured}"
+                  hx-trigger="change" hx-target="#admin-inline-error" hx-swap="innerHTML">
+                <input type="number" name="order" class="inp topic-order" min="1"
+                       th:max="${summary.featured}" th:value="${t.featuredOrder}"
+                       th:attr="data-initial=${t.featuredOrder},aria-label=#{admin.topics.col.featured}"/>
+            </form>
+            <span th:if="${!canManage and t.featured()}" class="topic-order-ro" th:text="${t.featuredOrder}">1</span>
+            <p class="err topic-order-err" th:if="${canManage and t.featured()}" hidden data-topic-order-err
+               th:text="#{admin.err.topics.featureOrderRange(${summary.featured})}">序号只能填 1–N</p>
+        </td>
+        <td class="nowrap" th:text="${@adminTime.fmt(t.createdAt)}">2026-11-10 10:00</td>
+        <td class="nowrap"><a href="#" class="topic-edit" data-topic-edit th:text="#{admin.tags.edit}">编辑</a></td>
+    </tr>
+</tbody></table>
+</body>
+</html>

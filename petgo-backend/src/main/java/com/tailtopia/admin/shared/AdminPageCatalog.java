@@ -15,16 +15,28 @@ import java.util.Set;
  *
  * <p><b>归属规则</b>：每个权限码在整个目录里<b>恰好属于一个页面</b>（{@link Page#viewCodes} / {@link Page#editCodes} /
  * {@link Page#otherCodes} 三列之一，矩阵里对应恰好一个复选框）；多个页面共用同一码的现状不规整项
- * （PRD FR-21A-7：评论管理沿用 content.view、Toko 退货 / 开封判例共用 refund.*、异常订单与履约同码、运费用 config.*、
- * 复购看板 config.view 或 order.view、未成功请求沿用 vet.view）记在 {@link Page#sharedCodes}——矩阵里只展示「沿用 …」
+ * （PRD FR-21A-7：评论管理沿用 content.view、Toko 退货 / 开封判例 / 退款打款共用 refund.*、异常订单 / 订单总表与履约同码、运费用 config.*、
+ * 未成功请求沿用 vet.view）记在 {@link Page#sharedCodes}——矩阵里只展示「沿用 …」
  * 文字 + 注脚，不再出复选框。L0 {@code AdminPageCatalogTest} 断言归属码 == {@code AdminPermissions.ALL} 且无重复。
  *
  * <p>分组按 UI 稿 7-9 的 8 个导航组（不是现状 layout.html 的 10 组）。
  */
 public final class AdminPageCatalog {
 
-    /** 8 个导航组（顺序即展示顺序）。titleKey = admin.group.&lt;key&gt;。 */
-    public record Group(String key, String titleKey) {
+    /** 导航组（顺序即展示顺序）。titleKey = admin.group.&lt;key&gt;。 */
+    /**
+     * @param singleLink 顶层单链接组（spec ops-ai-query D9）：侧栏不套 {@code <details>}，直接渲染一个链接，
+     *                   文案取组标题。概览与 AI 查数属此类，组内只放一页。
+     */
+    public record Group(String key, String titleKey, boolean singleLink) {
+
+        public Group(String key, String titleKey) {
+            this(key, titleKey, false);
+        }
+
+        public boolean isSingleLink() {
+            return singleLink;
+        }
     }
 
     /**
@@ -91,6 +103,8 @@ public final class AdminPageCatalog {
     }
 
     public static final String G_OVERVIEW = "overview";
+    /** ops AI 查数（主题 ops-ai-query）：概览下方的顶层单链接。 */
+    public static final String G_AI_QUERY = "ai-query";
     public static final String G_INBOX = "inbox";
     public static final String G_CONTENT = "content";
     public static final String G_USERS = "users";
@@ -100,7 +114,8 @@ public final class AdminPageCatalog {
     public static final String G_CONFIG = "config";
 
     public static final List<Group> GROUPS = List.of(
-            new Group(G_OVERVIEW, "admin.group.overview"),
+            new Group(G_OVERVIEW, "admin.group.overview", true),
+            new Group(G_AI_QUERY, "admin.group.aiQuery", true),
             new Group(G_INBOX, "admin.group.inbox"),
             new Group(G_CONTENT, "admin.group.content"),
             new Group(G_USERS, "admin.group.users"),
@@ -136,6 +151,9 @@ public final class AdminPageCatalog {
             // 路由用 /admin/dashboard 不用 /admin：静态资源内容指纹链（paths=/admin/**）会把 @{/admin} 当成 static/admin/ 目录
             // 改写成 /admin-<md5>.null，侧栏「概览」直接 404。Controller 两个路径都映射，/admin 仍可直接访问。
             new Page("dashboard", G_OVERVIEW, "/admin/dashboard", List.of(), List.of(), List.of(), List.of(PAYMENT_VIEW), false).nav("admin.nav.dashboard", "dashboard"),
+            // 🤖 AI 查数（主题 ops-ai-query，D9）：概览下方的顶层单链接。入口门 = ai.query（不预授予任何预置角色）。
+            page("ai-query", G_AI_QUERY, "/admin/ai-query",
+                    List.of(AI_QUERY), List.of(), List.of()).nav("admin.nav.aiQuery", "ai-query", AI_QUERY),
             // 📥 待办中心
             //   content.view_reports：旧举报队列（/admin/reports 已退役）码，暂挂统一复核「其他操作」（D-46）。
             page("manual-review", G_INBOX, "/admin/manual-review",
@@ -161,6 +179,9 @@ public final class AdminPageCatalog {
                     List.of(CONTENT_PIN_VIEW), List.of(CONTENT_PIN_MANAGE), List.of()).nav("admin.nav.contentPins", "content-pins", CONTENT_PIN_VIEW),
             page("content-tags", G_CONTENT, "/admin/content-tags",
                     List.of(CONTENT_TAG_VIEW), List.of(CONTENT_TAG_MANAGE), List.of()).nav("admin.nav.contentTags", "content-tags", CONTENT_TAG_VIEW),
+            // V1.4.2 Story 6.1 · AB-10B：内容组「内容标签」后插入「话题」（D-18；两码均不预授）
+            page("topics", G_CONTENT, "/admin/topics",
+                    List.of(TOPIC_VIEW), List.of(TOPIC_MANAGE), List.of()).nav("admin.nav.topics", "topics", TOPIC_VIEW),
             page("throttles", G_CONTENT, null,
                     List.of(CONTENT_THROTTLE_VIEW), List.of(CONTENT_THROTTLE_MANAGE), List.of()),
             page("seed-batches", G_CONTENT, "/admin/seed-batches",
@@ -185,7 +206,7 @@ public final class AdminPageCatalog {
                     List.of(VIRTUAL_ACCOUNT_VIEW, VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL)).nav("admin.nav.virtualAccounts", "virtual-accounts", VIRTUAL_ACCOUNT_VIEW, VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL),
             // 💰 订单与资金
             page("consult-orders", G_ORDERS, "/admin/consult-orders",
-                    List.of(ORDER_VIEW), List.of(ORDER_EDIT), List.of(ORDER_EXPORT)).nav("admin.nav.consultOrders", "consult-orders", ORDER_VIEW),
+                    List.of(ORDER_VIEW), List.of(ORDER_EDIT), List.of(ORDER_EXPORT, ORDER_REVERSE_EXP)).nav("admin.nav.consultOrders", "consult-orders", ORDER_VIEW),
             shared("ai-orders", G_ORDERS, "/admin/ai-orders", List.of(ORDER_VIEW, ORDER_EXPORT)).nav("admin.nav.aiOrders", "ai-orders", ORDER_VIEW),
             page("payments", G_ORDERS, "/admin/payments",
                     List.of(PAYMENT_VIEW), List.of(), List.of(PAYMENT_LIST_EXPORT)).nav("admin.nav.payments", "payments", PAYMENT_VIEW),
@@ -201,6 +222,9 @@ public final class AdminPageCatalog {
                     List.of(SHOP_PRODUCT_VIEW), List.of(SHOP_PRODUCT_EDIT), List.of()).nav("admin.nav.shopProducts", "shopProducts", SHOP_PRODUCT_VIEW, SHOP_PRODUCT_EDIT),
             page("shop-inventory", G_SHOP, "/admin/shop/inventory",
                     List.of(SHOP_INVENTORY_VIEW), List.of(SHOP_INVENTORY_EDIT), List.of()).nav("admin.nav.shopInventory", "shopInventory", SHOP_INVENTORY_VIEW, SHOP_INVENTORY_EDIT),
+            // V1.4.2 shop-admin Story 1.1 · AD-2：「订单」总表（新路由，不占 /admin/shop/orders）；沿用订单履约两码
+            shared("shop-order-list", G_SHOP, "/admin/shop/order-list",
+                    List.of(SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL)).nav("admin.nav.shopOrderList", "shopOrderList", SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL),
             page("shop-orders", G_SHOP, "/admin/shop/orders",
                     List.of(SHOP_ORDER_VIEW), List.of(SHOP_ORDER_FULFILL), List.of(SHOP_ORDER_PHONE_SEARCH)).nav("admin.nav.shopOrders", "shopOrders", SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL),
             shared("shop-order-exceptions", G_SHOP, "/admin/shop/order-exceptions",
@@ -210,10 +234,12 @@ public final class AdminPageCatalog {
                     List.of(SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL)).nav("admin.nav.merchantPurchaseOrders", "merchantPurchaseOrders", SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL),
             shared("shop-returns", G_SHOP, "/admin/shop/returns",
                     List.of(REFUND_VIEW, REFUND_APPROVE, REFUND_PAYOUT)).nav("admin.nav.shopReturns", "shopReturns", REFUND_VIEW, REFUND_APPROVE, REFUND_PAYOUT),
+            // V1.4.2 shop-admin Story 1.1 · AD-2 / O-8：「退款打款」（退货审核后）；查看 refund.view 或 refund.payout，操作只限 refund.payout
+            shared("shop-refund-payouts", G_SHOP, "/admin/shop/refund-payouts",
+                    List.of(REFUND_VIEW, REFUND_PAYOUT)).nav("admin.nav.shopRefundPayouts", "shopRefundPayouts", REFUND_VIEW, REFUND_PAYOUT),
             shared("return-precedents", G_SHOP, "/admin/shop/return-precedents",
                     List.of(REFUND_VIEW, REFUND_APPROVE)).nav("admin.nav.shopPrecedents", "shopPrecedents", REFUND_VIEW, REFUND_APPROVE, REFUND_PAYOUT),
-            shared("repurchase-dashboard", G_SHOP, "/admin/shop/repurchase-dashboard",
-                    List.of(CONFIG_VIEW, ORDER_VIEW)).nav("admin.nav.shopRepurchase", "shopRepurchase", CONFIG_VIEW, ORDER_VIEW),
+            // ⛔ V1.4.2 shop-admin Story 1.1 · AB-29 / AD-17：「复购引擎效果」整页下线（旧地址 404，不做跳转），目录不留条目。
             page("shop-finance", G_SHOP, "/admin/shop/margin",
                     List.of(SHOP_FINANCE_VIEW), List.of(), List.of()).nav("admin.nav.shopMargin", "shopMargin", SHOP_FINANCE_VIEW),
             page("shop-cost", G_SHOP, null,
@@ -221,6 +247,9 @@ public final class AdminPageCatalog {
             // 现状独立页（10.3 Banner 抽屉化、经营数据三页合一后由 Epic 10 收口）：侧栏暂保留。
             legacy("shop-banners", G_SHOP, "/admin/shop/banners", "admin.nav.shopBanners", "shopBanners",
                     SHOP_PRODUCT_VIEW, SHOP_PRODUCT_EDIT),
+            // V1.4.2 shop-admin Story 1.1 · AD-2 / O-7：「优惠券」（顶部 Banner 后）；两码不预授
+            page("shop-coupons", G_SHOP, "/admin/shop/coupons",
+                    List.of(SHOP_COUPON_VIEW), List.of(SHOP_COUPON_EDIT), List.of()).nav("admin.nav.shopCoupons", "shopCoupons", SHOP_COUPON_VIEW, SHOP_COUPON_EDIT),
             legacy("shop-turnover", G_SHOP, "/admin/shop/inventory-turnover", "admin.nav.shopTurnover", "shopTurnover",
                     SHOP_FINANCE_VIEW),
             legacy("shop-reconciliation", G_SHOP, "/admin/shop/reconciliation", "admin.nav.shopReconciliation",

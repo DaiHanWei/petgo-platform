@@ -135,7 +135,12 @@ class AdminPermissionsTest {
         // 2026-10-18（V1.4.0 ③ gift Story 3.1）：gift.catalog_view / gift.catalog_edit（不预授）⇒ 82 + 2 = 84。
         // 2026-10-18（V1.4.0 ③ gift Story 3.2）：送礼记录 gift.order_view（导出同码，不另设，不预授）⇒ 84 + 1 = 85
         //     （2026-10-19 ③ 送礼线合入 dev_1.4.0 后实测：① +3、② +1、③ +3）。
+        // 2026-11-05（V1.4.2 social-topic Story 6.1 · AB-10B）：话题管理 content.topic_view / content.topic_manage
+        //     （不预授任何预置角色）⇒ 85 + 2 = 87。
+        // 2026-11-06（V1.4.2 shop-admin Story 1.1 · O-7）：优惠券 shop.coupon_view / shop.coupon_edit（不预授）⇒ 87 + 2 = 89。
+        // 2026-11-06（V1.4.2 exp-reverse）：order.reverse_exp ⇒ 89 + 1 = 90。
+        // 2026-11-09（主题 ops-ai-query）：AI 查数 ai.query（不预授任何预置角色）⇒ 90 + 1 = 91。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(85);
+        assertThat(all).hasSize(91);
     }
 }

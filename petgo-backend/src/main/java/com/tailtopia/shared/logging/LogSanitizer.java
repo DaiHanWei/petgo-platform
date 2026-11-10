@@ -45,7 +45,14 @@ public class LogSanitizer {
             // 位置坐标（NFR-4，batch-b1 复审）：`POST /places` 请求体带的是用户标记时的设备 GPS
             // （表单默认取当前定位）。query 里的 lat/lng 已由 ApiAccessLoggingFilter.redactQuery 打码，
             // 请求体这一半此前是明文落盘的。响应里的场所坐标同样来自标记人的 GPS，一并打码。
-            "lat", "lng", "latitude", "longitude");
+            "lat", "lng", "latitude", "longitude",
+            // Biteship Webhook 载荷里的司机信息（v1.4.2 shop Story 5.1 AC14.3）：上面的 "phone" 是整键匹配，
+            // courier_driver_phone 不会被命中，必须逐键列出。
+            "courier_driver_name", "courier_driver_phone", "courier_driver_plate_number",
+            "courier_driver_photo_url",
+            // 收款账户（决策 O-22）：退款去向 / 打款请求体里的完整账号与户名。整键匹配，字段名须逐个列出。
+            "account", "accountnumber", "accountno", "accountholdername", "accountname", "payoutaccount",
+            "payoutaccountnumber", "payoutaccountname", "bankaccount");
 
     /**
      * <b>仅请求体</b>打码的字段名：用户自由文本，可含第三者 PII / 指控原文（如账号举报的

@@ -16,6 +16,7 @@ import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
 import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_ui_style.dart';
+import 'id_card/id_card_low_res_cover.dart';
 import 'id_card/id_card_watermark.dart';
 import '../data/current_pet_provider.dart';
 
@@ -117,6 +118,10 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                                 child: cardFront,
                               ),
                             ),
+                            // V1.4.2 KTP 防绕过 §3.1：未解锁只给低清预览（盖在矢量卡面上，付费导出不受影响）。
+                            if (!card.hdUnlocked)
+                              IdCardLowResCover(
+                                  sourceKey: idCardBoundaryKey, canvas: canvas, canvasRadius: radius),
                             IdCardWatermark(canvas: canvas, canvasRadius: radius),
                           ],
                         ),
@@ -248,7 +253,9 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     try {
       final origin = _shareOrigin();
       // 🛡 AC2：截**含水印**的那个 boundary。无水印仍需付费。
-      final bytes = await _capture(idCardWatermarkedBoundaryKey);
+      // V1.4.2 KTP 防绕过 §3.2：免费分享图降到与预览同档（约 1/3），付费高清那一路不动。
+      final bytes =
+          await _capture(idCardWatermarkedBoundaryKey, downscale: kIdCardPreviewDownscale);
       if (bytes == null) return;
       // D-7：card_style 保留（KTP 0 / 护照 1 / 学生卡 2 / SIM 3 / 居住证 4），另加 card_type / card_variant（wire 值）。
       Analytics.capture('id_card_share_tapped', {
@@ -332,14 +339,17 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   /// ⚠️ 传 boundary 而不是写死：付费 HD 导出用**不含水印**的内层 boundary，
   /// 免费分享用**含水印**的外层 boundary（Story 18.2 · AC2）。两条路径共用这一份
   /// 画布选择与白底合成逻辑 —— 抄两遍就会出现「改了一处忘了另一处」。
-  Future<Uint8List?> _capture(GlobalKey boundaryKey) async {
+  ///
+  /// [downscale]：输出宽 = 画布宽 ÷ downscale。付费 HD 恒为 1（原规格）；免费分享传
+  /// [kIdCardPreviewDownscale]（V1.4.2 KTP 防绕过 §3.2）。
+  Future<Uint8List?> _capture(GlobalKey boundaryKey, {double downscale = 1}) async {
     final boundary =
         boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) return null;
     // 按当前卡面选画布（护照 1990×1548 与 KTP/学生卡 1988×1200 不同，
     // 恒用 KTP 宽会把护照导出尺寸错算）。
     final exportCanvas = _style.canvas;
-    final pixelRatio = exportCanvas.width / boundary.size.width;
+    final pixelRatio = (exportCanvas.width / downscale) / boundary.size.width;
     final ui.Image shot = await boundary.toImage(pixelRatio: pixelRatio);
     // bug 20260731-441：卡面 ClipRRect 圆角外是 alpha=0 透明像素，PNG 存透明本身没问题，
     // 但相册查看器深色主题/IM 转发压缩会把透明平铺成黑角——导出前合成到白底再编码。

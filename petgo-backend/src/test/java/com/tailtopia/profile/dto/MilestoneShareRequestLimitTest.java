@@ -28,7 +28,7 @@ class MilestoneShareRequestLimitTest {
             size = component.getAnnotation(Size.class);
         }
 
-        assertThat(longest).isEqualTo(33);
+        assertThat(longest).isEqualTo(35); // V1.4.2 FR-154：猫 / 狗 33 → 35
         assertThat(size).isNotNull();
         assertThat(size.max()).isGreaterThanOrEqualTo(longest);
     }

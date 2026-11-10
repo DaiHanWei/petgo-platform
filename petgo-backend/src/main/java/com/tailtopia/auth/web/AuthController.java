@@ -6,6 +6,7 @@ import com.tailtopia.auth.dto.LoginResponse;
 import com.tailtopia.auth.dto.RefreshRequest;
 import com.tailtopia.auth.dto.TokenResponse;
 import com.tailtopia.auth.service.AuthService;
+import com.tailtopia.auth.service.SocialLoginService;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -30,23 +31,26 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final SocialLoginService socialLogin;
     private final RedisRateLimiter rateLimiter;
 
-    public AuthController(AuthService authService, RedisRateLimiter rateLimiter) {
+    public AuthController(AuthService authService, SocialLoginService socialLogin,
+            RedisRateLimiter rateLimiter) {
         this.authService = authService;
+        this.socialLogin = socialLogin;
         this.rateLimiter = rateLimiter;
     }
 
     @PostMapping("/google")
     public LoginResponse google(@Valid @RequestBody GoogleLoginRequest req, HttpServletRequest http) {
         rateLimiter.check("rl:auth:google:" + clientIp(http), 10, Duration.ofMinutes(1));
-        return authService.loginWithGoogle(req.idToken());
+        return socialLogin.loginWithGoogle(req.idToken());
     }
 
     @PostMapping("/apple")
     public LoginResponse apple(@Valid @RequestBody AppleLoginRequest req, HttpServletRequest http) {
         rateLimiter.check("rl:auth:apple:" + clientIp(http), 10, Duration.ofMinutes(1));
-        return authService.loginWithApple(req.identityToken());
+        return socialLogin.loginWithApple(req.identityToken());
     }
 
     @PostMapping("/refresh")
@@ -62,10 +66,6 @@ public class AuthController {
     }
 
     private static String clientIp(HttpServletRequest http) {
-        String fwd = http.getHeader("X-Forwarded-For");
-        if (fwd != null && !fwd.isBlank()) {
-            return fwd.split(",")[0].trim();
-        }
-        return http.getRemoteAddr();
+        return com.tailtopia.shared.web.ClientIp.of(http);
     }
 }

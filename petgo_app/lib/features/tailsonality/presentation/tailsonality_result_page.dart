@@ -37,6 +37,7 @@ import 'widgets/ts_locked_analysis.dart';
 import 'widgets/ts_match_teaser.dart';
 import 'widgets/ts_result_card.dart';
 import 'widgets/ts_result_menu.dart';
+import 'widgets/ts_remote_art_image.dart';
 import 'widgets/ts_rich_text.dart';
 import 'widgets/ts_unlocked_analysis.dart';
 import '../../profile/data/pet_list_repository.dart';
@@ -200,12 +201,15 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
   // ---------- Story 4.1 · AC5：点卡图看大图 ----------
 
   /// 截当前 3:4 卡面。🔴 未解锁截**含水印**的外层（大图 / 发帖图也得带水印），已解锁截内层。
-  Future<Uint8List?> _captureCard(TailsonalityResult r) {
+  ///
+  /// 角色卡按需下载（TsRemoteArt）：等插画真正画上屏再截；取不到 / 超时不截（调用方按「出图失败」提示）。
+  Future<Uint8List?> _captureCard(TailsonalityResult r) async {
     final boundary = r.unlocked ? _cardKey : _cardWatermarkedKey;
     final capture = TailsonalityResultPage.captureForTest;
-    return capture != null
-        ? capture(boundary)
-        : CardRenderPipeline.capture(boundaryKey: boundary, canvas: kTsCardCanvas);
+    if (capture != null) return capture(boundary);
+    final ctx = boundary.currentContext;
+    if (ctx == null || !await TsRemoteArtImage.waitPainted(ctx)) return null;
+    return CardRenderPipeline.capture(boundaryKey: boundary, canvas: kTsCardCanvas);
   }
 
   /// ⋯「Pamer di postingan」（Story 4.4）：截 3:4 卡（与分享图同一水印规则）→ 带图带字进发帖页。

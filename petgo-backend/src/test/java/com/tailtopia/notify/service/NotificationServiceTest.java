@@ -443,8 +443,10 @@ class NotificationServiceTest {
     void interactionTypesIncludeGiftReceivedAndResolverFollows() {
         assertThat(NotificationService.INTERACTION_TYPES).containsExactlyInAnyOrder(NotificationType.CONTENT_LIKED,
                 NotificationType.CONTENT_COMMENTED, NotificationType.USER_FOLLOWED, NotificationType.PLACE_COMMENTED,
-                NotificationType.PET_GIFT_RECEIVED);
-        assertThat(InteractionActorResolver.INTERACTION_TYPE_NAMES).contains("PET_GIFT_RECEIVED").hasSize(5);
+                NotificationType.PET_GIFT_RECEIVED, NotificationType.PET_FOLLOWED);
+        // V1.4.2 social-topic Story 1.2：PET_FOLLOWED 进互动类型（有效未读 / 触发人过滤自动覆盖）；PET_DIARY_POSTED 不进
+        assertThat(InteractionActorResolver.INTERACTION_TYPE_NAMES).contains("PET_GIFT_RECEIVED", "PET_FOLLOWED")
+                .doesNotContain("PET_DIARY_POSTED").hasSize(6);
     }
 
     @Test
@@ -540,5 +542,117 @@ class NotificationServiceTest {
                 NotificationType.PET_GIFT_RECEIVED, 2L, "GIFT:PET:70", "70", null, null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         org.mockito.Mockito.verifyNoInteractions(repo, aggregates, redis, pusher);
+    }
+
+    // ===== V1.4.2 social-topic Story 1.2：sendPetFollowed / sendPetDiaryPosted =====
+
+    @Test
+    void sendInteractionRejectsPetFollowed() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> interactionService().sendInteraction(9L,
+                NotificationType.PET_FOLLOWED, 2L, null, "2", null, "70", null))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.mockito.Mockito.verifyNoInteractions(repo, aggregates, pusher);
+    }
+
+    @Test
+    void sendPetFollowedWritesInteractionRowAddsActorBumpsBadgeAndPushesThroughFollowerGate() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(n, "id", 300L);
+            return n;
+        });
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(copy.resolve(9L, java.util.List.of(2L))).thenReturn(java.util.Optional.of(SUMMARY));
+        when(accountQuery.localeOf(9L)).thenReturn(java.util.Locale.forLanguageTag("id"));
+        when(copy.title(eq(NotificationType.PET_FOLLOWED), isNull(), eq(SUMMARY), any(), isNull()))
+                .thenReturn("Rani mulai mengikuti hewanmu");
+
+        Notification n = interactionService().sendPetFollowed(9L, 2L, 70L);
+
+        assertThat(n.getType()).isEqualTo(NotificationType.PET_FOLLOWED);
+        assertThat(n.getTargetRef()).isEqualTo("2"); // 追更者 user id
+        assertThat(n.getVariant()).isEqualTo("70"); // 宠物 id
+        assertThat(n.getAggregateKey()).isNull(); // 不聚合
+        assertThat(n.getDeepLinkType()).isEqualTo("PET_FOLLOWED");
+        verify(aggregates).addActor(300L, 2L);
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
+        verify(prefs).isEnabled(9L, NotificationType.PET_FOLLOWED);
+        verify(pusher).pushToUser(eq(9L), eq("Rani mulai mengikuti hewanmu"), eq(""), eq("PET_FOLLOWED"),
+                anyString(), eq("2"));
+    }
+
+    @Test
+    void sendPetFollowedWithFollowerCategoryOffStillWritesButDoesNotPush() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(n, "id", 301L);
+            return n;
+        });
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(prefs.isEnabled(9L, NotificationType.PET_FOLLOWED)).thenReturn(false);
+
+        interactionService().sendPetFollowed(9L, 2L, 70L);
+
+        verify(repo).save(any(Notification.class));
+        verify(aggregates).addActor(301L, 2L);
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
+
+    @Test
+    void sendPetDiaryPostedStoresRecipientLocaleTitleTargetsPostAndKeepsPetInVariant() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(n, "id", 400L);
+            return n;
+        });
+        when(redis.opsForValue()).thenReturn(valueOps);
+        java.util.Locale en = java.util.Locale.forLanguageTag("en");
+        when(accountQuery.localeOf(11L)).thenReturn(en);
+        when(copy.petDiaryPostedTitle("Mochi", en)).thenReturn("Mochi has a new story");
+
+        Notification n = interactionService().sendPetDiaryPosted(11L, 555L, 70L, "Mochi");
+
+        assertThat(n.getType()).isEqualTo(NotificationType.PET_DIARY_POSTED);
+        assertThat(n.getTitle()).isEqualTo("Mochi has a new story");
+        assertThat(n.getBody()).isEmpty();
+        assertThat(n.getTargetRef()).isEqualTo("555");
+        assertThat(n.getVariant()).isEqualTo("70");
+        assertThat(n.getDeepLinkType()).isEqualTo("PET_DIARY_POSTED");
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "11");
+        verify(aggregates, never()).addActor(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong());
+        verify(prefs).isEnabled(11L, NotificationType.PET_DIARY_POSTED);
+        verify(pusher).pushToUser(eq(11L), eq("Mochi has a new story"), eq(""), eq("PET_DIARY_POSTED"),
+                anyString(), eq("555"));
+    }
+
+    @Test
+    void sendPetDiaryPostedWithCategoryOffStillWritesAndBumpsButDoesNotPush() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(accountQuery.localeOf(11L)).thenReturn(java.util.Locale.forLanguageTag("id"));
+        when(copy.petDiaryPostedTitle(eq("Mochi"), any())).thenReturn("Mochi punya cerita baru");
+        when(prefs.isEnabled(11L, NotificationType.PET_DIARY_POSTED)).thenReturn(false);
+
+        interactionService().sendPetDiaryPosted(11L, 555L, 70L, "Mochi");
+
+        verify(repo).save(any(Notification.class));
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "11");
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
+
+    @Test
+    void sendPetDiaryPostedSkipsPushForVirtualRecipient() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(accountQuery.localeOf(11L)).thenReturn(java.util.Locale.forLanguageTag("id"));
+        when(copy.petDiaryPostedTitle(eq("Mochi"), any())).thenReturn("Mochi punya cerita baru");
+        when(accountQuery.isVirtual(11L)).thenReturn(true);
+
+        interactionService().sendPetDiaryPosted(11L, 555L, 70L, "Mochi");
+
+        verify(repo).save(any(Notification.class));
+        org.mockito.Mockito.verifyNoInteractions(pusher);
     }
 }

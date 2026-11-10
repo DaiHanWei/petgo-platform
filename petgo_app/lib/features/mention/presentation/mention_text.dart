@@ -1,11 +1,7 @@
-import 'package:flutter/foundation.dart' show listEquals;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/analytics/analytics.dart';
-import '../../../core/theme/colors.dart';
+import '../../../shared/rich_text/rich_body_text.dart';
 import '../domain/mention_context.dart';
-import '../domain/mention_token.dart';
 import '../domain/mention_view.dart';
 
 /// 把「正文里的 @昵称」渲染成可点高亮片段（V1.3.0 batch-b1 Story 3.3 · AC1/AC2）。
@@ -28,7 +24,12 @@ import '../domain/mention_view.dart';
 /// 两者不一致时这里找不到那一段，于是不高亮 —— 内容照常显示，只是点不动。
 /// 这与 Story 3.5「存量 @ 不回溯解析」渲染出来的样子是同一种（已知取舍，
 /// 见 story Completion Notes 的 🔸 一条）。
-class MentionText extends StatefulWidget {
+///
+/// <h3>V1.4.2 social-topic Story 4.4（D-19）：本类改为 [RichBodyText] 的薄包装</h3>
+/// 切片、recognizer 生命周期与 `mention_tapped` 埋点都搬进了 [RichBodyText]（定位逻辑在
+/// `shared/rich_text/body_tokens.dart` 的 `mentionRanges`）。构造参数不变；**不解析话题**
+/// （`topicNames` 恒空、`onTapTopic` 恒 null）—— 评论区继续用它（D-19：评论不解析话题）。
+class MentionText extends StatelessWidget {
   const MentionText({
     super.key,
     required this.text,
@@ -48,10 +49,7 @@ class MentionText extends StatefulWidget {
   /// 点了某个 @ → 去那个人的公开主页（AC2）。
   final void Function(int userId) onTapUser;
 
-  /// 这段文字是正文还是评论（Story 3.5 · AC4 的 `context` 属性）。
-  ///
-  /// 🔴 **必填，而且埋点由本组件自己发** —— 交给每个调用方发的话，
-  /// 下一个接入点忘了发就是看板上少一截，而没有任何东西会报错。
+  /// 这段文字是正文还是评论（Story 3.5 · AC4 的 `context` 属性）；埋点由 [RichBodyText] 自己发。
   final MentionContext mentionContext;
 
   final TextStyle? style;
@@ -59,173 +57,13 @@ class MentionText extends StatefulWidget {
   final TextOverflow? overflow;
 
   @override
-  State<MentionText> createState() => _MentionTextState();
-}
-
-class _MentionTextState extends State<MentionText> {
-  /// 已切好的可点片段（按位置升序、互不重叠），每段自带一个 recognizer。
-  List<_Hit> _hits = const <_Hit>[];
-
-  @override
-  void initState() {
-    super.initState();
-    _rebuildHits();
-  }
-
-  @override
-  void didUpdateWidget(MentionText oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // ⚠️ 只在**内容真的变了**时重算 —— recognizer 的生死绑在这里，
-    //    绑到 build 上就会被无关重建打断（见类注释）。
-    //    onTapUser 变了不必重算：recognizer 里读的是 `widget.onTapUser`。
-    if (widget.text != oldWidget.text || !listEquals(widget.mentions, oldWidget.mentions)) {
-      _rebuildHits();
-    }
-  }
-
-  @override
-  void dispose() {
-    _disposeHits();
-    super.dispose();
-  }
-
-  void _disposeHits() {
-    for (final hit in _hits) {
-      hit.recognizer.dispose();
-    }
-    _hits = const <_Hit>[];
-  }
-
-  void _rebuildHits() {
-    _disposeHits();
-    _hits = _locate()
-        .map((r) => _Hit(
-              start: r.start,
-              end: r.end,
-              userId: r.userId,
-              // 闭包里读 widget.onTapUser 而不是捕获当前值：回调换了不必重建 recognizer。
-              recognizer: TapGestureRecognizer()..onTap = () => _onTap(r.userId),
-            ))
-        .toList(growable: false);
-  }
-
-  void _onTap(int userId) {
-    // Story 3.5 AC4：属性**只有** context（post / comment），没有任何自由文本 ——
-    // 不传昵称、不传正文片段，源头就不给（别依赖埋点层的兜底黑名单）。
-    // ⚠️ 事件名与属性 Map 都写字面量：埋点守卫是正则扫源码的，抽成常量等于对它们隐身
-    //    （见 MentionContext 的类注释）。
-    Analytics.capture('mention_tapped', {'context': widget.mentionContext.wire});
-    widget.onTapUser(userId);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 没有一处可点 → 就是一个普通 Text（不白建富文本，也不挂任何 recognizer）。
-    if (_hits.isEmpty) {
-      return Text(widget.text,
-          style: widget.style, maxLines: widget.maxLines, overflow: widget.overflow);
-    }
-    final base = widget.style ?? DefaultTextStyle.of(context).style;
-    return Text.rich(
-      TextSpan(children: _spans(base)),
-      style: widget.style,
-      maxLines: widget.maxLines,
-      overflow: widget.overflow,
-    );
-  }
-
-  /// 「普通文字 / 可点 @」交替的片段。
-  List<InlineSpan> _spans(TextStyle base) {
-    final List<InlineSpan> spans = <InlineSpan>[];
-    int cursor = 0;
-    for (final hit in _hits) {
-      if (hit.start > cursor) {
-        spans.add(TextSpan(text: widget.text.substring(cursor, hit.start)));
-      }
-      spans.add(TextSpan(
-        text: widget.text.substring(hit.start, hit.end),
-        // 高亮就是品牌色 + 中等字重；刻意**不加下划线** —— 正文里一段下划线更像链接广告。
-        style: base.copyWith(color: AppColors.mint600, fontWeight: FontWeight.w600),
-        recognizer: hit.recognizer,
-      ));
-      cursor = hit.end;
-    }
-    if (cursor < widget.text.length) {
-      spans.add(TextSpan(text: widget.text.substring(cursor)));
-    }
-    return spans;
-  }
-
-  /// 在正文里找出每一处 `@当前昵称`，按位置排序、互不重叠。
-  List<_Range> _locate() {
-    // 🔴 **同名的候选一律不高亮**（code-review 2026-09-15）：候选里两个人都叫「Budi」时，
-    //    正文里那一处「@Budi」根本无从判断是谁 —— 高亮了就是把读者送进**确定错误**的主页。
-    //    写入侧那边同名的代价只是多发一条通知（已作为已知不精确接受），这里代价大得多。
-    final Map<String, List<MentionView>> byNickname = <String, List<MentionView>>{};
-    for (final m in widget.mentions.where((m) => m.highlightable)) {
-      byNickname.putIfAbsent(m.nickname!, () => <MentionView>[]).add(m);
-    }
-    final List<MentionView> candidates = byNickname.values
-        .where((group) => group.map((m) => m.userId).toSet().length == 1)
-        .map((group) => group.first)
-        .toList()
-      // ⚠️ 昵称长的先匹配：同时有「An」与「Ana」时，短的先来会把「@Ana」切成
-      //    「@An」+「a」——「@An」那段的边界判定虽然已经挡住了它，但排序仍然保留：
-      //    它让"先占长的"这件事不依赖边界判定这一道防线。
-      ..sort((a, b) => b.nickname!.length.compareTo(a.nickname!.length));
-    if (candidates.isEmpty) return const <_Range>[];
-
-    final List<_Range> hits = <_Range>[];
-    final List<bool> taken = List<bool>.filled(widget.text.length, false);
-    for (final m in candidates) {
-      int from = 0;
-      while (true) {
-        // 🔴 边界判定与写入侧共用同一份（MentionToken）：裸 indexOf 会让
-        //    「@An」匹配到「@Ana」，点进去是错的人。
-        final int at = MentionToken.indexOf(widget.text, m.nickname!, from);
-        if (at < 0) break;
-        final int end = at + m.nickname!.length + 1; // +1 = '@'
-        bool overlap = false;
-        for (int i = at; i < end; i++) {
-          if (taken[i]) {
-            overlap = true;
-            break;
-          }
-        }
-        if (!overlap) {
-          for (int i = at; i < end; i++) {
-            taken[i] = true;
-          }
-          hits.add(_Range(start: at, end: end, userId: m.userId));
-        }
-        from = at + 1;
-      }
-    }
-    hits.sort((a, b) => a.start.compareTo(b.start));
-    return hits;
-  }
-}
-
-/// 一处待高亮的区间（还没挂 recognizer）。
-class _Range {
-  const _Range({required this.start, required this.end, required this.userId});
-
-  final int start;
-  final int end;
-  final int userId;
-}
-
-/// 一处已挂 recognizer 的高亮片段。
-class _Hit {
-  const _Hit({
-    required this.start,
-    required this.end,
-    required this.userId,
-    required this.recognizer,
-  });
-
-  final int start;
-  final int end;
-  final int userId;
-  final TapGestureRecognizer recognizer;
+  Widget build(BuildContext context) => RichBodyText(
+        text: text,
+        mentions: mentions,
+        onTapUser: onTapUser,
+        mentionContext: mentionContext,
+        style: style,
+        maxLines: maxLines,
+        overflow: overflow,
+      );
 }

@@ -349,14 +349,9 @@ public class ReturnRequest {
         }
         this.cashDestination = destination;
         if (destination == CashDestination.TO_BANK) {
-            if (channel == null) {
-                throw AppException.validation("请选择收款渠道");
-            }
-            if (account == null || account.isBlank()) {
-                throw AppException.validation("请填写收款账号");
-            }
+            String trimmed = requirePayoutAccount(channel, account);
             this.payoutChannel = channel;
-            this.payoutAccount = account.trim();
+            this.payoutAccount = trimmed;
             this.payoutAccountHolder = accountHolder;
             this.payoutChannelFee = channel.fee();
         } else {
@@ -367,6 +362,22 @@ public class ReturnRequest {
             this.payoutChannelFee = 0L;
         }
         this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 线下打款收款信息的共用校验（退货单与 v1.4.2 shop Story 4.1 取消退款单共用，不复制）：渠道必选、账号非空。
+     *
+     * @return 去首尾空白后的账号
+     */
+    public static String requirePayoutAccount(com.tailtopia.pay.refund.domain.PayoutChannel channel,
+            String account) {
+        if (channel == null) {
+            throw AppException.validation("请选择收款渠道");
+        }
+        if (account == null || account.isBlank()) {
+            throw AppException.validation("请填写收款账号");
+        }
+        return account.trim();
     }
 
     public void recordShipbackReimbursement(long amount) {

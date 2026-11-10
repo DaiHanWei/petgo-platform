@@ -17,5 +17,15 @@ import java.util.List;
 public record ShopProductPageResponse(
         List<ShopProductSummaryView> items,
         String nextCursor,
-        boolean hasMore) {
+        boolean hasMore,
+        /**
+         * v1.4.2 shop C-9：同一筛选条件（品类 + 关键词）下在售商品总数（首页「{n} produk」）；
+         * 每页都给，与翻到第几页无关。null（仅旧构造器）→ NON_NULL 下省略。
+         */
+        Long totalCount) {
+
+    /** 无总数的旧形态（测试 / 既有调用点）。 */
+    public ShopProductPageResponse(List<ShopProductSummaryView> items, String nextCursor, boolean hasMore) {
+        this(items, nextCursor, hasMore, null);
+    }
 }

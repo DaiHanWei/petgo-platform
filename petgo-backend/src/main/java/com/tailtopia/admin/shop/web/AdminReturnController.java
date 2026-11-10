@@ -344,6 +344,32 @@ public class AdminReturnController {
 
     // ---------- 5.5 退款执行（财务） ----------
 
+    /**
+     * V1.4.2 shop-admin Story 1.2 · AD-3：原生 {@code data-confirm} 改为服务端确认弹层。只读、不写库；
+     * 弹层确认后再提交原端点（业务行为不变，AP-7）。权限同原端点。
+     */
+    @PostMapping("/admin/shop/returns/{token}/refund/confirm")
+    @PreAuthorize(PAYOUT_AUTH)
+    public String confirmRefund(@PathVariable String token, @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full, Model model, jakarta.servlet.http.HttpServletResponse response) {
+        // 🔴 算不出退款额就不弹确认（异常交给 advice 落行内错误）：确认步骤的意义就是复述金额，不能让人盲确认。
+        String grand = String.format(java.util.Locale.ROOT, "%,d", adminReturns.quote(token).grandTotal());
+        java.util.Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        if (type != null) {
+            hidden.put("type", type);
+        }
+        if (full != null) {
+            hidden.put("full", full);
+        }
+        com.tailtopia.admin.shared.web.AdminConfirmModal cm = com.tailtopia.admin.shared.web.AdminConfirmModal.simple(msg.get("admin.confirm.title.default"),
+                msg.get("admin.v130.shopReturns.confirm.refund", grand),
+                "/admin/shop/returns/" + org.springframework.web.util.UriUtils.encodePathSegment(token,
+                        java.nio.charset.StandardCharsets.UTF_8) + "/refund",
+                hidden, msg.get("admin.shop.returns.btn.refund"), false)
+                .withSuccessTarget(".wb-detail-body", "innerHTML");
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
     @PostMapping("/admin/shop/returns/{token}/refund")
     @PreAuthorize(PAYOUT_AUTH)
     public String refund(@AuthenticationPrincipal AdminUserDetails admin,

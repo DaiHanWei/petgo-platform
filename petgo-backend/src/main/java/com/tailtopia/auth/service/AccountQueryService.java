@@ -72,6 +72,16 @@ public class AccountQueryService {
                 .orElse(false);
     }
 
+    /**
+     * 我当前关注的人数（{@code users.following_count} 冗余列，含系统自动关注的官方号 ——
+     * 与「我的页四格 Mengikuti」同一个数）。V1.4.2 social-topic Story 1.3：关注流首页的 {@code followingUserCount}。
+     * 只读；计数的唯一写入口不变。账号不存在 → 0。
+     */
+    @Transactional(readOnly = true)
+    public long followingCountOf(long userId) {
+        return users.findById(userId).map(u -> (long) u.getFollowingCount()).orElse(0L);
+    }
+
     /** 有效官方号（role=ADMIN、未注销、未封号）的内部 id（V1.3.4 following 流 · 自动关注）。 */
     @Transactional(readOnly = true)
     public List<Long> activeOfficialIds() {
@@ -94,6 +104,12 @@ public class AccountQueryService {
                         && u.getDeletedAt() == null
                         && u.getStatus() == UserStatus.ACTIVE)
                 .orElse(false);
+    }
+
+    /** 注册时间（{@code users.created_at}，v1.4.2 shop Story 2.2 新人券判定）；用户不存在 → empty。 */
+    @Transactional(readOnly = true)
+    public Optional<Instant> createdAtOf(long userId) {
+        return users.findById(userId).map(User::getCreatedAt);
     }
 
     /**

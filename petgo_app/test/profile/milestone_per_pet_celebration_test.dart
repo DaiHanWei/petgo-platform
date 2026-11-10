@@ -168,8 +168,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
-    await tester.ensureVisible(find.byKey(const ValueKey('milestoneShare')));
-    await tester.tap(find.byKey(const ValueKey('milestoneShare')));
+    // V1.4.2 Story 3.2：站外分享（建分享链接）移到次按钮「Bagikan ke luar」；主按钮改为发到社区。
+    await tester.tap(find.byKey(const ValueKey('milestoneShareOutside')));
     await tester.pumpAndSettle();
     expect(repo.sharedFor, [2]);
   });

@@ -15,11 +15,22 @@ class AdminNavModelTest {
     void superAdminSeesEveryNavPageInCatalogOrder() {
         List<AdminNavModel.NavGroup> groups = AdminNavModel.build(Set.of("ROLE_ADMIN", "ROLE_SUPER_ADMIN"));
         assertThat(groups).extracting(g -> g.group().key()).containsExactly(
-                "overview", "inbox", "content", "users", "orders", "shop", "vet", "config");
+                "overview", "ai-query", "inbox", "content", "users", "orders", "shop", "vet", "config");
         int pages = groups.stream().mapToInt(g -> g.pages().size()).sum();
         assertThat(pages).isEqualTo(AdminPageCatalog.navPages().size());
-        assertThat(groups.get(1).pages()).extracting(AdminPageCatalog.Page::key)
+        assertThat(groups.get(2).pages()).extracting(AdminPageCatalog.Page::key)
                 .containsExactly("manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies"); // 4.4 第 6 项
+    }
+
+    /** ops-ai-query D9：AI 查数是概览下方的单链接组；ai.query 不在任何预置角色里，只持该码才可见。 */
+    @Test
+    void aiQueryIsASingleLinkGroupRightAfterOverviewAndNeedsItsCode() {
+        List<AdminNavModel.NavGroup> withCode = AdminNavModel.build(Set.of("ROLE_ADMIN", AdminPermissions.AI_QUERY));
+        assertThat(withCode).extracting(g -> g.group().key()).containsExactly("overview", "ai-query");
+        assertThat(withCode.get(1).group().isSingleLink()).isTrue();
+        assertThat(withCode.get(1).pages()).extracting(AdminPageCatalog.Page::route).containsExactly("/admin/ai-query");
+        assertThat(AdminNavModel.build(Set.of("ROLE_ADMIN", AdminPermissions.CONFIG_VIEW)))
+                .extracting(g -> g.group().key()).doesNotContain("ai-query");
     }
 
     @Test
@@ -37,9 +48,9 @@ class AdminNavModelTest {
         List<AdminNavModel.NavGroup> groups = AdminNavModel.build(Set.of("ROLE_ADMIN", AdminPermissions.CONFIG_VIEW));
         assertThat(groups).extracting(g -> g.group().key()).containsExactly("overview", "shop", "config");
         assertThat(groups.stream().noneMatch(AdminNavModel.NavGroup::isInbox)).isTrue();
-        // config.view 也开着复购看板 / 运费配置（与 Controller 入口门同集）。
+        // config.view 也开着运费配置（与 Controller 入口门同集）；复购看板 V1.4.2 shop-admin 1.1 已下线。
         assertThat(groups.get(1).pages()).extracting(AdminPageCatalog.Page::key)
-                .containsExactly("repurchase-dashboard", "shop-shipping");
+                .containsExactly("shop-shipping");
     }
 
     @Test

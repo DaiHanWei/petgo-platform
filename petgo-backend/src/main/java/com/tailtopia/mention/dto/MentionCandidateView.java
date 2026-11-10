@@ -1,9 +1,11 @@
 package com.tailtopia.mention.dto;
 
+import com.tailtopia.mention.domain.MentionRelation;
+
 /**
  * @ 选择器里的一个人（V1.3.0 batch-b1 Story 3.1 · FR-119）。Jackson NON_NULL。
  *
- * <h2>⚠️ 只有三个字段，是刻意的</h2>
+ * <h2>⚠️ 一行只有头像 + 昵称（外加等级展示与关系），是刻意的</h2>
  * 这是一个<b>打字时弹出的选择列表</b>，一行只有头像 + 昵称。
  * 运营标签 / 签名 / 发帖数都<b>不在这里</b> —— 那是主页的事，往这里加只会让
  * 一次本该极快的取数多打几张表。
@@ -18,7 +20,9 @@ package com.tailtopia.mention.dto;
  * @param level     等级展示（V1.4.0 ① Story 3.1 · AD-14）；无等级时省略（App 3.2 只解析）
  * @param tier      段位（{@code GrowthTier} 名）
  * @param frame     生效头像框，无框省略
+ * @param relation  与我的关系（V1.4.2 social-topic Story 5.1 · P-5）：{@code following} / {@code follower} /
+ *                  {@code interacted}，命中多类取靠前的一类；每行必有值（拍板点 ⑤）。只加字段，前 6 个语义不变（NFR7）
  */
 public record MentionCandidateView(long userId, String nickname, String avatarUrl,
-        Integer level, String tier, String frame) {
+        Integer level, String tier, String frame, MentionRelation relation) {
 }

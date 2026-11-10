@@ -15,7 +15,6 @@ import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 import '../support/fake_feed_repository.dart';
-import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import '../shop/fake_shop_products.dart';
 
 /// 底栏标签精确定位：页面正文里也可能出现同名文字（如游客态页头的统计列 "Diary"），
@@ -37,7 +36,7 @@ Future<ProviderContainer> _pumpGuestApp(WidgetTester tester) async {
   // Toko 现为第 2 位 Tab（DEP-1 闭合）。打桩商品列表，否则点进去会走真实 dio 请求，
   // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
       // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
-      shopBannerProvider.overrideWith((ref) async => null),
+      ...tokoHomeOverrides(),
       fakeShopProducts(const []),
     ],
   );

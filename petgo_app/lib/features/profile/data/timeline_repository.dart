@@ -10,6 +10,7 @@ import '../domain/calendar_month.dart';
 import '../domain/day_detail.dart';
 import '../domain/timeline_item.dart';
 import '../domain/visitor_profile.dart';
+import '../../social/domain/pet_follow_state.dart';
 
 /// 成长档案数据层（Story 2.4）。时间线游标分页 + 日历月视图 + 当天详情 + 统计栏。
 ///
@@ -142,16 +143,26 @@ class DioTimelineRepository implements TimelineRepository {
     return ArchiveStats.fromJson(resp.data!);
   }
 
+  // V1.4.2 social-topic Story 1.4 · AC5.3：访客档案取数**在数据层分类错误**（404 / 403 → gone、其余 → network），
+  // 页面据此分 A14 / A15 两屏。🔴 不把请求错误画成空态。
   @override
   Future<VisitorProfile> getVisitorProfile(String token) async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.sharedPetProfile(token));
-    return VisitorProfile.fromJson(resp.data!);
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.sharedPetProfile(token));
+      return VisitorProfile.fromJson(resp.data!);
+    } on DioException catch (e) {
+      throw VisitorLoadError.classify(e);
+    }
   }
 
   @override
   Future<VisitorProfile> getInAppVisitorProfile(int petId) async {
-    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.inAppPetProfile(petId));
-    return VisitorProfile.fromJson(resp.data!);
+    try {
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.inAppPetProfile(petId));
+      return VisitorProfile.fromJson(resp.data!);
+    } on DioException catch (e) {
+      throw VisitorLoadError.classify(e);
+    }
   }
 }
 
@@ -244,16 +255,34 @@ final dayDetailProvider = FutureProvider.family<DayDetail, ({int petId, DateTime
 // ⚠️ 分享 token 那一支同样受益：那一屏也是 push 进来的一次性页面。
 
 /// 访客档案（family：作用域）。
+///
+/// V1.4.2 social-topic Story 1.4 · AC4 / AC5：抛 [VisitorLoadError]（gone / network）。
+/// ⚠️ `retry: null`（同 bug 20261006-583 的处理）：Riverpod 3 默认指数退避重试，重试期间是 `AsyncLoading`
+/// —— 失效页 A14 / 加载失败页 A15 要转圈几十秒才出来。失败就停在失败态，重试由 A15 的「Coba lagi」触发。
+///
+/// V1.4.2 1.4 复审：发请求前读追更全局版本号贴进快照（[VisitorProfile.followEpoch]）——
+/// 重取到的 `iFollow` 因此能接管本会话早先的追更覆盖（同 `publicProfileProvider` 的 followEpoch）。
 final visitorProfileProvider = FutureProvider.family<VisitorProfile, ArchiveScope>(
-  (ref, scope) => scope.isInApp
-      ? ref.read(timelineRepositoryProvider).getInAppVisitorProfile(scope.petId!)
-      : ref.read(timelineRepositoryProvider).getVisitorProfile(scope.token!),
+  (ref, scope) async {
+    final epoch = ref.read(petFollowStateProvider.notifier).currentEpoch;
+    final p = scope.isInApp
+        ? await ref.read(timelineRepositoryProvider).getInAppVisitorProfile(scope.petId!)
+        : await ref.read(timelineRepositoryProvider).getVisitorProfile(scope.token!);
+    return p.withFollowEpoch(epoch);
+  },
   isAutoDispose: true,
+  retry: (_, _) => null,
 );
 
 /// 访客统计栏（family：作用域）。
+///
+/// V1.4.2 1.4 复审：同上贴追更版本号（[ArchiveStats.followEpoch]）—— 重取到的 `followerCount` 接管早先的人数覆盖。
 final visitorStatsProvider = FutureProvider.family<ArchiveStats, ArchiveScope>(
-  (ref, scope) => ref.read(timelineRepositoryProvider).getStats(scope: scope),
+  (ref, scope) async {
+    final epoch = ref.read(petFollowStateProvider.notifier).currentEpoch;
+    final stats = await ref.read(timelineRepositoryProvider).getStats(scope: scope);
+    return stats.withFollowEpoch(epoch);
+  },
   isAutoDispose: true,
 );
 

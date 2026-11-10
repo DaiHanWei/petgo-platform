@@ -27,6 +27,11 @@ import java.time.LocalDate;
  * @param birthday 生日，可空 —— 供客户端算年龄展示
  * @param intro 自述，可空
  * @param ownerNickname 主人昵称，供顶部「由 {昵称} 分享」横幅用；查不到为 null
+ * @param iFollow 我是否追更这只宠物（V1.4.2 social-topic Story 1.1 · D-8）。<b>只有站内入口填</b>；
+ *                分享 token 公开路径为 null → 全局 NON_NULL 不下发（公开路径 key 集合不变）
+ * @param iFollowOwner 我是否关注这只宠物的主人（同上，R-2）
+ * @param ownerToken 主人公开 token（同上，供埋点 {@code owner_id}，R-2）。
+ *                ⚠️ 分享链接可外转，公开路径<b>不</b>多吐主人 token
  */
 public record VisitorProfileResponse(
         String name,
@@ -36,9 +41,19 @@ public record VisitorProfileResponse(
         PetSex sex,
         LocalDate birthday,
         String intro,
-        String ownerNickname) {
+        String ownerNickname,
+        Boolean iFollow,
+        Boolean iFollowOwner,
+        String ownerToken) {
 
+    /** 分享 token 公开路径：不填追更 / 主人 token 三个字段（null → NON_NULL 省略）。 */
     static VisitorProfileResponse of(PetProfile p, String ownerNickname) {
+        return of(p, ownerNickname, null, null, null);
+    }
+
+    /** 站内入口（V1.4.2 social-topic Story 1.1）：带 {@code iFollow} / {@code iFollowOwner} / {@code ownerToken}。 */
+    static VisitorProfileResponse of(PetProfile p, String ownerNickname, Boolean iFollow, Boolean iFollowOwner,
+            String ownerToken) {
         return new VisitorProfileResponse(
                 p.getName(),
                 p.getAvatarUrl() == null ? null : AliyunOssClient.exifStrippedDeliveryUrl(p.getAvatarUrl()),
@@ -47,6 +62,9 @@ public record VisitorProfileResponse(
                 p.getSex(),
                 p.getBirthday(),
                 p.getIntro(),
-                ownerNickname);
+                ownerNickname,
+                iFollow,
+                iFollowOwner,
+                ownerToken);
     }
 }

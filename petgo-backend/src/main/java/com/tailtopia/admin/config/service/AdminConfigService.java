@@ -221,6 +221,15 @@ public class AdminConfigService {
      */
     @Transactional
     public void updateShareReward(ShareRewardForm form, long adminId) {
+        validateShareReward(form);
+        writeShareReward(form, adminId);
+    }
+
+    /**
+     * 分享奖励校验（只校验、不写库）。V1.4.2 shop-admin Story 3.2：保存前预检端点（C2 弹层）先跑这一套，
+     * 校验不过直接 422 回卡底错误槽（字段红边照旧），不弹确认。
+     */
+    public void validateShareReward(ShareRewardForm form) {
         require(form.shareRewardMonthlyCap() >= 0, "分享奖励月度上限须 ≥ 0（0 = 不发）",
                 "admin.err.config.shareRewardCapNegative");
         require(form.idCardShareReward() >= 0, "身份证分享每次发放枚数须 ≥ 0（0 = 不发）",
@@ -269,7 +278,9 @@ public class AdminConfigService {
                 || form.shareRewardMonthlyCap() >= form.passportShareReward(),
                 "分享奖励月度上限须 ≥ 护照 / 登机牌分享每次发放枚数",
                 "admin.err.config.shareRewardCapBelowPassportReward");
+    }
 
+    private void writeShareReward(ShareRewardForm form, long adminId) {
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
         List<ConfigChangeLog> logs = new ArrayList<>();

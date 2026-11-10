@@ -2,6 +2,7 @@ package com.tailtopia.shop.cart.web;
 
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.cart.dto.CartView;
+import com.tailtopia.shop.cart.service.CartEstimateService;
 import com.tailtopia.shop.cart.service.CartService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -26,14 +27,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeCartController {
 
     private final CartService cart;
+    private final CartEstimateService estimates;
 
-    public MeCartController(CartService cart) {
+    public MeCartController(CartService cart, CartEstimateService estimates) {
         this.cart = cart;
+        this.estimates = estimates;
+    }
+
+    /**
+     * v1.4.2 shop Story 3.1 AC3：每个返回 {@link CartView} 的出口在<b>返回前</b>装配 {@code estimate}。
+     * 购物车写事务此时已提交，询价在事务外（P-7）。{@code regionKecamatanId} 可选：
+     * 无默认地址时用它（App 传详情页选过的地区，区域参考数据 id 允许外露）。
+     */
+    private CartView withEstimate(long userId, CartView v, Long regionKecamatanId) {
+        return v.withEstimate(estimates.estimate(userId, v, regionKecamatanId));
     }
 
     @GetMapping
-    public CartView view(@AuthenticationPrincipal Jwt jwt) {
-        return cart.view(currentUserId(jwt));
+    public CartView view(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Long regionKecamatanId) {
+        long userId = currentUserId(jwt);
+        return withEstimate(userId, cart.view(userId), regionKecamatanId);
     }
 
     /**
@@ -50,19 +64,26 @@ public class MeCartController {
             @RequestParam(required = false) String entrySource,
             @RequestParam(required = false) String triggerType,
             // 立即购买（code review #4）：只勾这一件、车内其它取消勾选。可选，旧版 App 不传 = 普通加购
-            @RequestParam(defaultValue = "false") boolean buyNow) {
-        return cart.add(currentUserId(jwt), skuToken, qty, entrySource, triggerType, buyNow);
+            @RequestParam(defaultValue = "false") boolean buyNow,
+            @RequestParam(required = false) Long regionKecamatanId) {
+        long userId = currentUserId(jwt);
+        return withEstimate(userId,
+                cart.add(userId, skuToken, qty, entrySource, triggerType, buyNow), regionKecamatanId);
     }
 
     @PutMapping("/items/{skuToken}")
     public CartView setQty(@AuthenticationPrincipal Jwt jwt,
-            @PathVariable String skuToken, @RequestParam int qty) {
-        return cart.setQty(currentUserId(jwt), skuToken, qty);
+            @PathVariable String skuToken, @RequestParam int qty,
+            @RequestParam(required = false) Long regionKecamatanId) {
+        long userId = currentUserId(jwt);
+        return withEstimate(userId, cart.setQty(userId, skuToken, qty), regionKecamatanId);
     }
 
     @DeleteMapping("/items/{skuToken}")
-    public CartView remove(@AuthenticationPrincipal Jwt jwt, @PathVariable String skuToken) {
-        return cart.remove(currentUserId(jwt), skuToken);
+    public CartView remove(@AuthenticationPrincipal Jwt jwt, @PathVariable String skuToken,
+            @RequestParam(required = false) Long regionKecamatanId) {
+        long userId = currentUserId(jwt);
+        return withEstimate(userId, cart.remove(userId, skuToken), regionKecamatanId);
     }
 
     /**
@@ -77,26 +98,31 @@ public class MeCartController {
      */
     @PutMapping("/items/{skuToken}/selected")
     public CartView setSelected(@AuthenticationPrincipal Jwt jwt,
-            @PathVariable String skuToken, @RequestParam boolean selected) {
-        return cart.setSelected(currentUserId(jwt), skuToken, selected);
+            @PathVariable String skuToken, @RequestParam boolean selected,
+            @RequestParam(required = false) Long regionKecamatanId) {
+        long userId = currentUserId(jwt);
+        return withEstimate(userId, cart.setSelected(userId, skuToken, selected), regionKecamatanId);
     }
 
     /**
      * 全选 / 全不选（Story 4-1，SHOP-FR-04）。
      *
-     * <p>作用于本人车内<b>全部</b>行（含失效行）—— 失效行的 {@code selected} 照实下发，
-     * 只是永不计入 {@code selectedSubtotal}。
+     * <p>v1.4.2 Story 3.1：全选只勾有效行，失效行不动；全不选作用于全部行。
      */
     @PutMapping("/selection")
     public CartView setAllSelected(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam boolean selected) {
-        return cart.setAllSelected(currentUserId(jwt), selected);
+            @RequestParam boolean selected,
+            @RequestParam(required = false) Long regionKecamatanId) {
+        long userId = currentUserId(jwt);
+        return withEstimate(userId, cart.setAllSelected(userId, selected), regionKecamatanId);
     }
 
     /** 清空全部失效商品（已下架 / 已售罄）。 */
     @DeleteMapping("/invalid-items")
-    public CartView clearInvalid(@AuthenticationPrincipal Jwt jwt) {
-        return cart.clearInvalid(currentUserId(jwt));
+    public CartView clearInvalid(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Long regionKecamatanId) {
+        long userId = currentUserId(jwt);
+        return withEstimate(userId, cart.clearInvalid(userId), regionKecamatanId);
     }
 
     private static long currentUserId(Jwt jwt) {

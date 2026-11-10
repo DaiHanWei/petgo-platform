@@ -61,8 +61,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
         boolean rejected;
         try {
             jdbc.update("""
-                    INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                    SELECT ?, id, '3 kg', 1000, -1 FROM shop_products WHERE public_token = ?
+                    INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                    SELECT ?, id, '3 kg', 1000, -1, 1000, 20, 15, 10 FROM shop_products WHERE public_token = ?
                     """, "cs" + SEQ.incrementAndGet(), pToken);
             rejected = false;
         } catch (Exception e) {
@@ -82,8 +82,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         'NO_RETURN_AFTER_OPEN', true)
                 """, pToken);
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
-                SELECT ?, id, '3 kg', 285000, 190000 FROM shop_products WHERE public_token = ?
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                SELECT ?, id, '3 kg', 285000, 190000, 1000, 20, 15, 10 FROM shop_products WHERE public_token = ?
                 """, "sk" + SEQ.incrementAndGet(), pToken);
 
         String body = mvc.perform(org.springframework.test.web.servlet.request
@@ -233,7 +233,9 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(editor)).with(csrf())
                         .param("specName", "3 kg")
                         .param("price", "285000")
-                        .param("netWeightG", "3000"))
+                        .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/admin/shop/products/" + productId))
                 .andExpect(flash().attributeExists("notice"));
@@ -255,6 +257,30 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("V1.4.2 4.2 AC1 [L1]：包裹重量 / 长宽高任一未填 → 不能保存（flash error，规格不落库）；四项齐全落库可售")
+    void skuRequiresPackageData() throws Exception {
+        Authentication editor = staffWith(AdminPermissions.SHOP_PRODUCT_EDIT);
+        long productId = createProductViaEndpoint(editor, "包裹必填 " + SEQ.incrementAndGet());
+        mvc.perform(post("/admin/shop/products/" + productId + "/skus")
+                        .with(authentication(editor)).with(csrf())
+                        .param("specName", "4 kg").param("price", "182000")
+                        .param("packageWeightG", "4200").param("packageLengthCm", "30"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("error"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM shop_skus WHERE product_id = ?", Integer.class, productId))
+                .isZero();
+        mvc.perform(post("/admin/shop/products/" + productId + "/skus")
+                        .with(authentication(editor)).with(csrf())
+                        .param("specName", "4 kg").param("price", "182000")
+                        .param("packageWeightG", "4200").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "12"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("notice"));
+        assertThat(jdbc.queryForObject("SELECT package_height_cm FROM shop_skus WHERE product_id = ?", Integer.class,
+                productId)).isEqualTo(12);
+    }
+
+    @Test
     @DisplayName("🔴 浏览器形态（空的 id 隐藏域）也必须是【新建】而不是更新 —— 两次提交出两个规格")
     void emptyHiddenIdStillCreatesInsteadOfUpdating() throws Exception {
         Authentication editor = staffWith(AdminPermissions.SHOP_PRODUCT_EDIT);
@@ -266,7 +292,9 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                             .with(authentication(editor)).with(csrf())
                             .param("id", "")
                             .param("specName", spec).param("price", "285000")
-                            .param("netWeightG", "3000"))
+                            .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10"))
                     .andExpect(status().is3xxRedirection())
                     .andExpect(flash().attributeExists("notice"));
         }
@@ -287,6 +315,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(superEditor)).with(csrf())
                         .param("specName", "3 kg").param("price", "285000")
                         .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10")
                         .param("costPrice", String.valueOf(costPrice)))
                 .andExpect(status().is3xxRedirection());
         return productId;
@@ -331,6 +361,8 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(editorNoCost)).with(csrf())
                         .param("specName", "3 kg").param("price", "285000")
                         .param("netWeightG", "3000")
+                        .param("packageWeightG", "3100").param("packageLengthCm", "30")
+                        .param("packageWidthCm", "20").param("packageHeightCm", "10")
                         .param("costPrice", "123456"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attributeExists("notice"));   // SKU 本身照存
@@ -420,10 +452,10 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
 
     /**
      * AC4：新建 / 编辑抽屉的取数<b>复用列表这同一条 mapping</b>（{@code ?create=1} / {@code ?open=<id>}）——
-     * 零新端点。编辑态必须把原图与权重回填，否则「不换图 = 保留原图」这条口径就不成立。
+     * 零新端点。编辑态必须把原图回填（V1.4.2 3.1 起无权重字段），否则「不换图 = 保留原图」这条口径就不成立。
      */
     @Test
-    @DisplayName("B17 抽屉表单走 ?create=1 / ?open=<id>（零新端点），编辑态回填原图与权重")
+    @DisplayName("B17 抽屉表单走 ?create=1 / ?open=<id>（零新端点），编辑态回填原图")
     void bannerDrawerFormComesFromTheListMapping() throws Exception {
         var editor = staffWith(AdminPermissions.SHOP_PRODUCT_EDIT);
         // 🔴 用**自己刚提交的那个 key** 反查 id，不用 `SELECT max(id)`：
@@ -431,8 +463,7 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
         //    max(id) 那时会指向别的用例留下的行，断言照常绿 —— 测的却不是这条。
         String key = "shop-banner/b" + SEQ.incrementAndGet() + ".jpg";
         mvc.perform(post("/admin/shop/banners").with(authentication(editor)).with(csrf())
-                        .param("imageKey", key)
-                        .param("sortWeight", "7"))
+                        .param("imageKey", key))
                 .andExpect(status().is3xxRedirection());
         Long id = jdbc.queryForObject(
                 "SELECT id FROM shop_banners WHERE image_key = ?", Long.class, key);
@@ -449,31 +480,43 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .header("HX-Request", "true").with(authentication(editor)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(edit).as("编辑态要回填权重，否则一保存就把它冲成 0").contains("value=\"7\"");
+        // V1.4.2 shop-admin Story 3.1：Banner 删掉 sortWeight 权重字段、改列表拖动排序（/reorder），抽屉不再有权重输入；
+        // 这里只钉「编辑态回填原图」—— 否则「不换图 = 保留原图」口径不成立。
+        assertThat(edit).as("编辑态要回填原图 key").contains(key);
         assertThat(edit).as("提交要打到 update 端点而不是 create").contains("/admin/shop/banners/" + id);
 
-        // V1.4.1：品类目标是下拉（枚举名只能选不能手填）；编辑态回填选中项，非当前类型的输入 disabled 不提交。
+        // V1.4.2 shop-admin Story 3.1 · AD-7（B4）：「品类」跳转随 App 品类筛选下线 —— 下拉里不再有品类，
+        // 新建 / 编辑提交 CATEGORY 一律拒绝（admin.err.banner.categoryRetired）。原 V1.4.1 品类下拉断言随之作废。
+        assertThat(create).as("新建态跳转下拉不再有品类").doesNotContain("f-bannerTargetCategory")
+                .doesNotContain("<option value=\"CATEGORY\"");
         String catKey = "shop-banner/c" + SEQ.incrementAndGet() + ".jpg";
         mvc.perform(post("/admin/shop/banners").with(authentication(editor)).with(csrf())
-                        .param("imageKey", catKey).param("sortWeight", "0")
-                        .param("targetType", "CATEGORY").param("targetValue", "CAMILAN"))
+                        .param("imageKey", catKey).param("targetType", "CATEGORY").param("targetValue", "CAMILAN"))
                 .andExpect(status().is3xxRedirection());
-        Long catId = jdbc.queryForObject(
-                "SELECT id FROM shop_banners WHERE image_key = ?", Long.class, catKey);
-        assertThat(create).as("新建态默认不可点：品类下拉在但 disabled")
-                .contains("value=\"MAKANAN\"")
-                .containsPattern("<select id=\"f-bannerTargetCategory\"[^>]*disabled");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM shop_banners WHERE image_key = ?", Integer.class, catKey))
+                .as("新建品类跳转必须被拒（不落库）").isZero();
+
+        // 存量品类 banner：编辑态类型回填为空 + 顶部警示；空类型保存拒绝，改选「不可点」后保存成功并清空目标值。
+        mvc.perform(post("/admin/shop/banners").with(authentication(editor)).with(csrf())
+                        .param("imageKey", catKey).param("targetType", "NONE"))
+                .andExpect(status().is3xxRedirection());
+        Long catId = jdbc.queryForObject("SELECT id FROM shop_banners WHERE image_key = ?", Long.class, catKey);
+        jdbc.update("UPDATE shop_banners SET target_type = 'CATEGORY', target_value = 'CAMILAN' WHERE id = ?", catId);
         String catEdit = mvc.perform(get("/admin/shop/banners").param("open", String.valueOf(catId))
                         .header("HX-Request", "true").with(authentication(editor)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(catEdit).containsPattern("<option value=\"CAMILAN\"[^>]*selected");
-        assertThat(catEdit).containsPattern("<select id=\"f-bannerTargetCategory\"(?![^>]*disabled)");
-        assertThat(catEdit).containsPattern("<input id=\"f-bannerTargetProduct\"[^>]*disabled");
+        assertThat(catEdit).contains("class=\"banner warn\"").contains("<option value=\"\" selected")
+                .doesNotContain("<option value=\"CATEGORY\"");
+        mvc.perform(post("/admin/shop/banners/" + catId).with(authentication(editor)).with(csrf())
+                        .param("imageKey", catKey).param("targetType", ""))
+                .andExpect(status().is3xxRedirection());
+        assertThat(jdbc.queryForObject("SELECT target_type FROM shop_banners WHERE id = ?", String.class, catId))
+                .as("空类型不能悄悄落成「不可点」").isEqualTo("CATEGORY");
 
         // 切回「不可点」：隐藏格 disabled 不提交 targetValue，库里目标值清空（CHECK：NONE ⇔ value IS NULL）。
         mvc.perform(post("/admin/shop/banners/" + catId).with(authentication(editor)).with(csrf())
-                        .param("imageKey", catKey).param("sortWeight", "0").param("targetType", "NONE"))
+                        .param("imageKey", catKey).param("targetType", "NONE"))
                 .andExpect(status().is3xxRedirection());
         assertThat(jdbc.queryForMap("SELECT target_type, target_value FROM shop_banners WHERE id = ?", catId))
                 .containsEntry("target_type", "NONE").containsEntry("target_value", null);
@@ -531,7 +574,7 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
      * 关掉抽屉才发现表格没了，只能 F5。这里钉的就是 {@code HX-Retarget}。
      */
     @Test
-    @DisplayName("B17 抽屉提交缺图 → 4xx 且 HX-Retarget 落在抽屉体（不是整表被红字换掉）")
+    @DisplayName("B17 抽屉提交缺图 → 422 返抽屉表单片段 + 行内错误（不是整表被红字换掉）")
     void bannerHtmxValidationErrorIsRetargetedToTheDrawerBody() throws Exception {
         MvcResult res = mvc.perform(post("/admin/shop/banners")
                         .header("HX-Request", "true").header("HX-Target", "shop-banner-drawer-body")
@@ -540,12 +583,14 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                         .param("imageKey", "").param("sortWeight", "0"))
                 .andReturn();
 
-        assertThat(res.getResponse().getStatus()).isBetween(400, 499);
-        assertThat(res.getResponse().getHeader("HX-Retarget"))
-                .as("4xx 要落在运营正看着的抽屉里；落到列表上就是「点了没反应 + 表格没了」")
-                .isEqualTo("#shop-banner-drawer-body");
-        assertThat(res.getResponse().getContentAsString())
-                .as("错误片段不该顺手把整表 oob 换掉").doesNotContain("hx-swap-oob");
+        // V1.4.2 shop-admin Story 3.1（B5）：失败回抽屉表单（422）—— 抽屉表单自身 hx-target 就是 #shop-banner-drawer-body，
+        // 不再靠 HX-Retarget 头；返回体是整份表单片段（保留已填内容）+ 顶部 .banner.err 写原因。
+        assertThat(res.getResponse().getStatus()).isEqualTo(422);
+        String body = res.getResponse().getContentAsString();
+        assertThat(body).as("返的是抽屉表单片段，不是整页").doesNotContain("<html")
+                .contains("banner-drawer-form").contains("hx-target=\"#shop-banner-drawer-body\"");
+        assertThat(body).as("顶部要有错误提示").containsPattern("class=\"banner err\"[^>]*role=\"alert\">\\s*\\S[^<]*</div>");
+        assertThat(body).as("错误片段不该顺手把整表 oob 换掉").doesNotContain("hx-swap-oob");
     }
 
     /** 🔒 只读账号从抽屉提交（htmx）→ 403 也要落回抽屉体，而不是把整页 forward 成拒绝页。 */

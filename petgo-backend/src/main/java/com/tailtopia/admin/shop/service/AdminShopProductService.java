@@ -37,13 +37,25 @@ public class AdminShopProductService {
     private final ShopTokenGenerator tokens;
     private final AdminAuditService audit;
 
+    /** V1.4.2 shop-admin Story 4.2 · AD-18：包裹参数与 SKU 同事务写（审计沿用 SHOP_SKU_UPSERTED）。 */
+    private final AdminShopSkuPackageService packages;
+
+    @org.springframework.beans.factory.annotation.Autowired
     public AdminShopProductService(ShopProductRepository products, ShopSkuRepository skus,
-            InventoryService inventory, ShopTokenGenerator tokens, AdminAuditService audit) {
+            InventoryService inventory, ShopTokenGenerator tokens, AdminAuditService audit,
+            AdminShopSkuPackageService packages) {
         this.products = products;
         this.skus = skus;
         this.inventory = inventory;
         this.tokens = tokens;
         this.audit = audit;
+        this.packages = packages;
+    }
+
+    /** 存量单测用：包裹服务按同一组仓库 / 审计自建。 */
+    public AdminShopProductService(ShopProductRepository products, ShopSkuRepository skus,
+            InventoryService inventory, ShopTokenGenerator tokens, AdminAuditService audit) {
+        this(products, skus, inventory, tokens, audit, new AdminShopSkuPackageService(skus, audit));
     }
 
     // ---------- V1.3.0 Story 10.3：B16 列表分页与摘要条（AC1） ----------
@@ -57,18 +69,27 @@ public class AdminShopProductService {
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<ShopProduct> page(ProductCategory category,
             Boolean active, int page, int size) {
-        return products.adminSearch(category, active,
-                org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(1, size)));
+        return page(category, active, false, page, size);
+    }
+
+    /** V1.4.2 shop-admin Story 4.2（G5）：{@code missingPackage = true} 只看至少一个 SKU 缺包裹参数的商品。 */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ShopProduct> page(ProductCategory category,
+            Boolean active, boolean missingPackage, int page, int size) {
+        var pr = org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(1, size));
+        return missingPackage ? products.adminSearchMissingPackage(category, active, pr)
+                : products.adminSearch(category, active, pr);
     }
 
     /** 摘要条三格：上架商品数 · 下架商品数 · SKU 总数（AC1）。 */
     @Transactional(readOnly = true)
     public Summary summary() {
-        return new Summary(products.countByActive(true), products.countByActive(false), skus.count());
+        return new Summary(products.countByActive(true), products.countByActive(false), skus.count(),
+                skus.countMissingPackage());
     }
 
-    /** 摘要条三格。 */
-    public record Summary(long activeCount, long inactiveCount, long skuCount) {
+    /** 摘要条：上架 / 下架 / SKU 总数 + 缺重量体积的 SKU（V1.4.2 shop-admin Story 4.2 · G5）。 */
+    public record Summary(long activeCount, long inactiveCount, long skuCount, long skuMissingPackage) {
     }
 
     // ---------- 商品 ----------
@@ -141,6 +162,9 @@ public class AdminShopProductService {
             // 建库存行：下单锁定（1.2 lock）在无行时会返回影响 0 行 = 售罄，故必须先建
             inventory.ensureRow(sku.getId());
         }
+        // V1.4.2 shop-admin Story 4.2 · AD-18：同事务写包裹参数（新建规格也走到），其审计带重量体积
+        sku = packages.updatePackage(sku, form.getPackageWeightG(), form.getPackageLengthCm(),
+                form.getPackageWidthCm(), form.getPackageHeightCm(), actorAccountId);
         audit.record(actorAccountId, AuditActions.SHOP_SKU_UPSERTED,
                 "SHOP_SKU", sku.getPublicToken(),
                 (created ? "新建规格：" : "更新规格：") + sku.getSpecName());
@@ -248,6 +272,19 @@ public class AdminShopProductService {
         }
         if (f.getWholesalePrice() != null && f.getWholesalePrice() < 0) {
             throw AppException.validation("批发价不能为负").code("admin.err.product.wholesaleNegative");
+        }
+        validatePackage(f.getPackageWeightG(), f.getPackageLengthCm(), f.getPackageWidthCm(), f.getPackageHeightCm());
+    }
+
+    /**
+     * 后台保存规格时包裹四项必填正整数（V1.4.2 shop-admin Story 4.2 · AC1 · G6）。
+     * 🔴 校验放在这里而不是 {@code AdminShopSkuPackageService}：后者仍允许四项全空（清空 = 暂不可售，电商线语义）。
+     */
+    static void validatePackage(Integer weightG, Integer lengthCm, Integer widthCm, Integer heightCm) {
+        for (Integer v : new Integer[] {weightG, lengthCm, widthCm, heightCm}) {
+            if (v == null || v <= 0) {
+                throw AppException.validation("包裹重量与长宽高必填，须为正整数").code("admin.err.v142.sku.packageRequired");
+            }
         }
     }
 

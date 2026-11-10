@@ -7,6 +7,8 @@
     row(r, oob)  — 单行；oob 形参目前恒为 false（处置成功走整表重拉：新建的行本来就不在页面上，oob 插不进去），
                    保留是为了与其它模板 B 列表同形
   🔴 时间一律标「WIB」：不写运营就按自己电脑的时区读，整批排期看着都对不上。
+  V1.4.2 Story 6.2：G1b（话题排期页）复用 rows / sumbar —— 分页链接按 model 的 topicId / listUrl 分流：
+    topicId == null（Feed）→ 与改动前逐字一致的 /admin/content-pins(slot=…)；否则 → listUrl（本话题页，不带 slot）。
 */-->
 <body>
 <div th:fragment="sumbar(oob)" class="sum" id="pins-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
@@ -47,11 +49,11 @@
 
     <div class="pager" th:if="${!#lists.isEmpty(rows)}" th:attr="data-page=${page}">
         <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#pins-rows" hx-swap="innerHTML" hx-push-url="true"
-           th:attr="hx-get=@{/admin/content-pins(slot=${slot},status=${status},page=${page - 1})}"
+           th:attr="hx-get=${topicId == null} ? @{/admin/content-pins(slot=${slot},status=${status},page=${page - 1})} : @{${listUrl}(status=${status},page=${page - 1})}"
            th:text="#{admin.audit.prev}">← 上一页</a>
         <span th:text="#{admin.v130.pins.pager.page(${page + 1})}">第 1 页</span>
         <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#pins-rows" hx-swap="innerHTML" hx-push-url="true"
-           th:attr="hx-get=@{/admin/content-pins(slot=${slot},status=${status},page=${page + 1})}"
+           th:attr="hx-get=${topicId == null} ? @{/admin/content-pins(slot=${slot},status=${status},page=${page + 1})} : @{${listUrl}(status=${status},page=${page + 1})}"
            th:text="#{admin.audit.next}">下一页 →</a>
     </div>
 </th:block>

@@ -89,19 +89,10 @@
             </tbody>
         </table>
 
-        <div class="pager" th:if="${result.totalElements > 0}" th:attr="data-page=${result.number}">
-            <a th:if="${result.hasPrevious()}"
-               th:hx-get="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number - 1})}"
-               hx-target="#results" hx-swap="innerHTML"
-               th:href="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number - 1})}"
-               th:text="#{admin.audit.prev}">← 上一页</a>
-            <span th:text="#{admin.audit.page(${result.number + 1}, ${result.totalPages}, ${result.totalElements})}">分页</span>
-            <a th:if="${result.hasNext()}"
-               th:hx-get="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number + 1})}"
-               hx-target="#results" hx-swap="innerHTML"
-               th:href="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number + 1})}"
-               th:text="#{admin.audit.next}">下一页 →</a>
-        </div>
+        <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页），翻页带全部筛选条件。 */-->
+        <th:block th:if="${result.totalElements > 0}" th:with="tpl=@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page='~PAGE~')}">
+            <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target='#results')}"></div>
+        </th:block>
     </div>
 
     <!-- ===== 哈希链状态徽标（GET /admin/audit-logs/chain-status）===== -->

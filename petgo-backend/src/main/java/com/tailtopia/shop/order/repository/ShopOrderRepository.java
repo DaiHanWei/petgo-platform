@@ -2,11 +2,13 @@ package com.tailtopia.shop.order.repository;
 
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,6 +24,14 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     Optional<ShopOrder> findByPublicToken(String publicToken);
 
     /**
+     * 订单行写锁（v1.4.2 shop Story 5.1 复审：下运单落结果的短事务②，防并发写两条活动运单）。
+     * 🔴 持锁区间内不得有外部调用。
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM ShopOrder o WHERE o.id = :id")
+    Optional<ShopOrder> findByIdForUpdate(@Param("id") long id);
+
+    /**
      * 展示号查重（Story 4-3）。
      *
      * <p>🔴 <b>「先查后插」是重试机制的一半</b>：唯一索引冲突会把当前事务打成 aborted，
@@ -29,6 +39,12 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
      * 索引是兜底报错（防并发穿越），这个查询才是重试的依据。
      */
     boolean existsByDisplayNo(String displayNo);
+
+    /**
+     * 是否有过<b>已支付</b>的电商订单（v1.4.2 shop Story 2.2 新人判定，D-5）：{@code paid_at} 一旦写入不改，
+     * 之后取消 / 退款仍算付过；下单未付、超时取消的不算。
+     */
+    boolean existsByUserIdAndPaidAtIsNotNull(Long userId);
 
     /** 后台按用户报出来的新号搜单（Story 4-3 AC4）。 */
     Optional<ShopOrder> findByDisplayNo(String displayNo);
@@ -42,6 +58,9 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     Optional<ShopOrder> findByLegacyDisplayNo(String legacyDisplayNo);
 
     List<ShopOrder> findByUserIdOrderByCreatedAtDescIdDesc(long userId);
+
+    /** v1.4.2 shop Story 3.2 复审修复：注销联动取该用户待付款单。 */
+    List<ShopOrder> findByUserIdAndStatus(long userId, ShopOrderStatus status);
 
     /**
      * 订单中心游标分页（Story 3.9）：本人电商订单，游标 {@code (beforeTs, beforeId)} 之后的一页，
@@ -68,6 +87,74 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             @Param("beforeTs") Instant beforeTs,
             @Param("beforeId") long beforeId, Pageable pageable);
 
+    // ---------- v1.4.2 shop Story 6.2：电商订单列表（D-18，按 displayStatus 归组，走 ix_shop_orders_user） ----------
+    //
+    // 🔴 共享同一排序 {@code created_at DESC, id DESC} 与 (created_at, id) 行比较游标；首页由调用方传哨兵游标。
+    // 归组边界与 ShopOrder#displayStatusAt 一致（now > expires_at 才算过窗）：待付款 expires_at >= :now，宽限期 expires_at < :now。
+
+    /** 全部（无状态条件）。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyShopOrderPage(@Param("userId") long userId, @Param("beforeTs") Instant beforeTs,
+            @Param("beforeId") long beforeId, Pageable pageable);
+
+    /** 待发货 / 待收货 / 已完成：原始状态 ∈ {@code statuses}。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId AND o.status IN :statuses
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyShopOrderPageByStatuses(@Param("userId") long userId,
+            @Param("statuses") java.util.Collection<ShopOrderStatus> statuses, @Param("beforeTs") Instant beforeTs,
+            @Param("beforeId") long beforeId, Pageable pageable);
+
+    /** 待付款：未过订单窗（含无窗的历史单）。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId
+              AND o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_PAYMENT
+              AND (o.expiresAt IS NULL OR o.expiresAt >= :now)
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyPendingPaymentPage(@Param("userId") long userId, @Param("now") Instant now,
+            @Param("beforeTs") Instant beforeTs, @Param("beforeId") long beforeId, Pageable pageable);
+
+    /** 已取消：已取消 / 退款中 / 已退款，或宽限期待支付（S-7）。 */
+    @Query("""
+            SELECT o FROM ShopOrder o
+            WHERE o.userId = :userId
+              AND (o.status IN (com.tailtopia.shop.order.domain.ShopOrderStatus.CANCELLED,
+                                com.tailtopia.shop.order.domain.ShopOrderStatus.REFUNDING,
+                                com.tailtopia.shop.order.domain.ShopOrderStatus.REFUNDED)
+                   OR (o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_PAYMENT
+                       AND o.expiresAt < :now))
+              AND (o.createdAt < :beforeTs OR (o.createdAt = :beforeTs AND o.id < :beforeId))
+            ORDER BY o.createdAt DESC, o.id DESC
+            """)
+    List<ShopOrder> findMyCancelledPage(@Param("userId") long userId, @Param("now") Instant now,
+            @Param("beforeTs") Instant beforeTs, @Param("beforeId") long beforeId, Pageable pageable);
+
+    /**
+     * 角标计数（AC2）：一条 SQL 两个条件计数，口径同上两组。返回单行 {@code [pendingPayment, toReceive]}
+     * （{@code SUM} 无行时为 null，调用方按 0）。
+     */
+    @Query("""
+            SELECT SUM(CASE WHEN o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.PENDING_PAYMENT
+                                 AND (o.expiresAt IS NULL OR o.expiresAt >= :now) THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN o.status IN (com.tailtopia.shop.order.domain.ShopOrderStatus.SHIPPED,
+                                              com.tailtopia.shop.order.domain.ShopOrderStatus.DELIVERED)
+                            THEN 1 ELSE 0 END)
+            FROM ShopOrder o
+            WHERE o.userId = :userId
+            """)
+    List<Object[]> countMyShopOrderBadges(@Param("userId") long userId, @Param("now") Instant now);
+
     /** 按当前支付意图 token 回找订单（到账事件用，Story 3.8）。 */
     Optional<ShopOrder> findByPaymentIntentToken(String paymentIntentToken);
 
@@ -85,9 +172,60 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     List<ShopOrder> findOverdue(@Param("status") ShopOrderStatus status,
             @Param("now") Instant now, Pageable pageable);
 
-    default List<ShopOrder> findOverduePendingPayment(Instant now, Pageable pageable) {
-        return findOverdue(ShopOrderStatus.PENDING_PAYMENT, now, pageable);
-    }
+    /**
+     * 可关单候选（v1.4.2 shop Story 3.3 AC3 路径⑤，S-1 / B1）：订单窗已过，且该单每一个已出码（{@code gateway_ref}
+     * 非空）的意图码都已失效（{@code COALESCE(provider_expires_at, created_at + 65 分钟) < now}）。
+     * 未出码的意图从未把码交到用户手上，不参与判据。候选仍须经 {@code isClosable} 复核与关单前查单。
+     */
+    String CLOSABLE_CANDIDATES_SQL = """
+            SELECT o.id FROM shop_orders o
+             WHERE o.status = 'PENDING_PAYMENT' AND o.expires_at < :now
+               AND NOT EXISTS (
+                   SELECT 1 FROM payment_intents pi
+                    WHERE pi.shop_order_id = o.id AND pi.gateway_ref IS NOT NULL
+                      AND COALESCE(pi.provider_expires_at, pi.created_at + INTERVAL '65 minutes') >= :now)
+             ORDER BY o.expires_at ASC
+             LIMIT :limit
+            """;
+
+    @Query(value = CLOSABLE_CANDIDATES_SQL, nativeQuery = true)
+    List<Long> findClosableCandidateIds(@Param("now") Instant now, @Param("limit") int limit);
+
+    /**
+     * 记迟到款（v1.4.2 shop Story 3.3 AC6.2）：条件更新，只在尚无迟到款时写；<b>不改订单状态</b>。
+     *
+     * <p>🔴 native 条件更新而不是读实体再 save：与 {@code markPaid} 抢同一行时不会因 {@code @Version}
+     * 把整个到账回调事务打回（那会连同意图 PAID 一起回滚，才是真丢账）。
+     *
+     * @return 受影响行数；0 = 已有迟到款（或订单不存在）
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = """
+            UPDATE shop_orders SET late_paid_amount = :amount, late_paid_at = :now, late_paid_intent_id = :intentId,
+                                   updated_at = :now, version = version + 1
+             WHERE id = :orderId AND late_paid_intent_id IS NULL
+            """, nativeQuery = true)
+    int recordLatePayment(@Param("orderId") long orderId, @Param("amount") long amount,
+            @Param("now") Instant now, @Param("intentId") long intentId);
+
+    /**
+     * 抢占迟到款处理权（v1.4.2 shop Story 4.2 AC1，D-11「同一笔迟到款只能处理一次」）：条件更新，仅在有迟到款且
+     * 尚未处置时写 {@code late_payment_resolution}。重下单与退款并发时恰好一个影响 1 行。
+     *
+     * <p>⚠️ native 更新绕过一级缓存：调用方随后必须重读订单（{@code entityManager.refresh}），否则托管实体的旧
+     * {@code version} 会在后续 flush 时撞乐观锁（{@code clearAutomatically} 已清掉一级缓存，重读即得新版本）。
+     *
+     * @return 受影响行数；0 = 无迟到款 / 已处置 / 订单不存在
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE shop_orders SET late_payment_resolution = :resolution, updated_at = now(), version = version + 1
+             WHERE id = :orderId AND late_paid_amount IS NOT NULL AND late_payment_resolution IS NULL
+            """, nativeQuery = true)
+    int claimLatePayment(@Param("orderId") long orderId, @Param("resolution") String resolution);
+
+    /** 由某原单重新下单所建的新单（v1.4.2 shop Story 4.2 AC7.1；库级部分唯一索引保证至多一张）。 */
+    Optional<ShopOrder> findByReorderOfOrderId(Long reorderOfOrderId);
 
     /** 后台订单列表（Story 4.2，按下单时间倒序）。 */
     List<ShopOrder> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
@@ -98,6 +236,43 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
 
     /** 先进先出（V1.3.0 Story 10.1：A8 异常订单工作台左栏，积压最久的排最前）。 */
     List<ShopOrder> findByStatusOrderByCreatedAtAscIdAsc(ShopOrderStatus status, Pageable pageable);
+
+    /** 异常订单队列条件（列表与角标计数共用一处，与 {@code ExceptionSource.of} 逐条一致）。 */
+    String EXCEPTION_QUEUE_WHERE = " ("
+            + " (o.status = :pending and o.shortageFlaggedAt is not null)"
+            + " or (o.status in (:pending, :shipped) and o.waybillFailedAt is not null)"
+            + " or (o.status in (:pending, :shipped) and o.logisticsException = :pickup)"
+            + " or (o.status in (:pending, :shipped, :delivered) and o.logisticsException = :returned)"
+            + " or (o.logisticsException in (:lost, :damaged) and (o.status = :shipped"
+            + "     or (o.status in (:delivered, :completed) and not exists (select 1 from"
+            + "         com.tailtopia.shop.order.refund.ShopOrderRefund r where r.orderId = o.id and r.scope = :compensation))))"
+            + ") and not exists (select 1 from com.tailtopia.account.domain.AccountDeletion d where d.userId = o.userId)";
+
+    /**
+     * V1.4.2 shop-admin Story 5.1 · AD-9：异常订单队列（先进先出）—— 条件与 {@code ExceptionSource.of} 逐条一致（含「已签收 /
+     * 已完成且尚无赔付单」与 O-26 排除注销用户），在库里筛完再分页，不让永不入队的旧单挤掉真异常（复审修）。
+     * 来源仍由 {@code ExceptionSource.of} 一个函数算出。
+     */
+    @Query("select o from ShopOrder o where" + EXCEPTION_QUEUE_WHERE + " order by o.createdAt asc, o.id asc")
+    List<ShopOrder> findExceptionQueue(@Param("pending") ShopOrderStatus pending,
+            @Param("shipped") ShopOrderStatus shipped, @Param("delivered") ShopOrderStatus delivered,
+            @Param("completed") ShopOrderStatus completed,
+            @Param("pickup") com.tailtopia.shop.order.domain.LogisticsException pickup,
+            @Param("returned") com.tailtopia.shop.order.domain.LogisticsException returned,
+            @Param("lost") com.tailtopia.shop.order.domain.LogisticsException lost,
+            @Param("damaged") com.tailtopia.shop.order.domain.LogisticsException damaged,
+            @Param("compensation") com.tailtopia.shop.order.refund.RefundScope compensation, Pageable pageable);
+
+    /** V1.4.2 shop-admin Story 5.3：异常订单「待处理」条数（待办中心角标，同 {@link #findExceptionQueue} 条件）。 */
+    @Query("select count(o) from ShopOrder o where" + EXCEPTION_QUEUE_WHERE)
+    long countExceptionQueue(@Param("pending") ShopOrderStatus pending,
+            @Param("shipped") ShopOrderStatus shipped, @Param("delivered") ShopOrderStatus delivered,
+            @Param("completed") ShopOrderStatus completed,
+            @Param("pickup") com.tailtopia.shop.order.domain.LogisticsException pickup,
+            @Param("returned") com.tailtopia.shop.order.domain.LogisticsException returned,
+            @Param("lost") com.tailtopia.shop.order.domain.LogisticsException lost,
+            @Param("damaged") com.tailtopia.shop.order.domain.LogisticsException damaged,
+            @Param("compensation") com.tailtopia.shop.order.refund.RefundScope compensation);
 
     /** 异常订单工作台（A8）：待发货 ∧ 运营已标记缺货，先进先出。 */
     List<ShopOrder> findByStatusAndShortageFlaggedAtIsNotNullOrderByCreatedAtAscIdAsc(ShopOrderStatus status,
@@ -148,6 +323,38 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             @Param("to") Instant to, Pageable pageable);
 
     /**
+     * V1.4.2 shop-admin Story 6.1（H1）：「异常标记」筛选条件。履约异常（ANY / SHORTAGE / WAYBILL_FAILED / PICKUP_FAILED /
+     * RETURNED / LOST_DAMAGED / STALLED / CLAIM_PENDING）只看 LIVE 状态，与履约页摘要同口径；ANY = 有履约异常标记，不含 LATE_PAID。
+     * 7.1 · AD-11 / AD-12：LATE_PAID（取消后到账 = {@code late_paid_amount IS NOT NULL}，含已处理；只在「订单」页可选）不受 LIVE 限制 —— 这类单本就是已取消。
+     */
+    String FLAG_WHERE = " ((:flag = 'LATE_PAID' and o.latePaidAmount is not null)"
+            + " or (o.status in (:live) and ((:flag = 'ANY' and (o.shortageFlaggedAt is not null"
+            + "     or o.waybillFailedAt is not null or o.logisticsException is not null or o.claimPending = true))"
+            + " or (:flag = 'SHORTAGE' and o.shortageFlaggedAt is not null)"
+            + " or (:flag = 'WAYBILL_FAILED' and o.waybillFailedAt is not null)"
+            + " or (:flag = 'PICKUP_FAILED' and o.logisticsException = :pickup)"
+            + " or (:flag = 'RETURNED' and o.logisticsException = :returned)"
+            + " or (:flag = 'LOST_DAMAGED' and o.logisticsException in (:lost, :damaged))"
+            + " or (:flag = 'STALLED' and o.logisticsException = :stalled)"
+            + " or (:flag = 'CLAIM_PENDING' and o.claimPending = true))))";
+
+    @Query(value = "SELECT o FROM ShopOrder o WHERE (:status IS NULL OR o.status = :status)"
+            + " AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)"
+            + " AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to) AND" + FLAG_WHERE
+            + " ORDER BY o.createdAt DESC, o.id DESC",
+            countQuery = "SELECT count(o) FROM ShopOrder o WHERE (:status IS NULL OR o.status = :status)"
+            + " AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)"
+            + " AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to) AND" + FLAG_WHERE)
+    org.springframework.data.domain.Page<ShopOrder> searchPageFlagged(
+            @Param("status") ShopOrderStatus status, @Param("from") Instant from, @Param("to") Instant to,
+            @Param("flag") String flag, @Param("live") java.util.Collection<ShopOrderStatus> live,
+            @Param("pickup") com.tailtopia.shop.order.domain.LogisticsException pickup,
+            @Param("returned") com.tailtopia.shop.order.domain.LogisticsException returned,
+            @Param("lost") com.tailtopia.shop.order.domain.LogisticsException lost,
+            @Param("damaged") com.tailtopia.shop.order.domain.LogisticsException damaged,
+            @Param("stalled") com.tailtopia.shop.order.domain.LogisticsException stalled, Pageable pageable);
+
+    /**
      * 🔒 <b>按归一化后的收件人电话后缀匹配</b>（Story 4.3，AB-11A，NFR-11）。
      *
      * <p>得益于 C-15 的 E.164 归一化，{@code 08123…} / {@code 8123…} / {@code +62 812-3…}
@@ -183,11 +390,16 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
      *
      * <p>🔴 {@code shippedAt IS NOT NULL} 不是冗余条件：本列上线前若已有 {@code SHIPPED} 订单
      * （历史数据 / 手工改库），它们没有起算点，不该被"自动送达"。
+     *
+     * <p>v1.4.2 shop 5.2 AC2.1（D-13）：排除带物流异常标记的订单；清除后从 {@code timer_resumed_at} 重新计时（两条件合起来
+     * 即 {@code max(起点, timer_resumed_at) < threshold}，不用 {@code GREATEST}，避免方言差异）。自动完成同理。
      */
     @Query("""
             SELECT o FROM ShopOrder o
             WHERE o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.SHIPPED
               AND o.shippedAt IS NOT NULL AND o.shippedAt < :threshold
+              AND o.logisticsException IS NULL
+              AND (o.timerResumedAt IS NULL OR o.timerResumedAt < :threshold)
             ORDER BY o.shippedAt ASC
             """)
     List<ShopOrder> findAutoDeliverDue(@Param("threshold") Instant threshold, Pageable pageable);
@@ -197,9 +409,37 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             SELECT o FROM ShopOrder o
             WHERE o.status = com.tailtopia.shop.order.domain.ShopOrderStatus.DELIVERED
               AND o.deliveredAt IS NOT NULL AND o.deliveredAt < :threshold
+              AND o.logisticsException IS NULL
+              AND (o.timerResumedAt IS NULL OR o.timerResumedAt < :threshold)
             ORDER BY o.deliveredAt ASC
             """)
     List<ShopOrder> findAutoCompleteDue(@Param("threshold") Instant threshold, Pageable pageable);
+
+    // ---------- v1.4.2 shop Story 5.2 物流异常（后台线只读列表，走 ix_shop_orders_logistics_exception） ----------
+
+    /** 带物流异常标记的订单（{@code type} 为 null 不筛类型），按标记时刻倒序。 */
+    @Query(value = """
+            SELECT o FROM ShopOrder o
+            WHERE o.logisticsException IS NOT NULL
+              AND (:type IS NULL OR o.logisticsException = :type)
+            ORDER BY o.logisticsExceptionAt DESC, o.id DESC
+            """,
+            countQuery = """
+            SELECT count(o) FROM ShopOrder o
+            WHERE o.logisticsException IS NOT NULL
+              AND (:type IS NULL OR o.logisticsException = :type)
+            """)
+    org.springframework.data.domain.Page<ShopOrder> findLogisticsExceptionOpen(
+            @Param("type") com.tailtopia.shop.order.domain.LogisticsException type, Pageable pageable);
+
+    /** 待索赔（{@code claim_pending = true}），按最近更新倒序。 */
+    @Query(value = """
+            SELECT o FROM ShopOrder o
+            WHERE o.claimPending = true
+            ORDER BY o.updatedAt DESC, o.id DESC
+            """,
+            countQuery = "SELECT count(o) FROM ShopOrder o WHERE o.claimPending = true")
+    org.springframework.data.domain.Page<ShopOrder> findClaimPending(Pageable pageable);
 
     /**
      * 账号注销级联（Story 7.3，照 consult_orders 口径）：<b>订单行保留</b>（交易/财务记录），

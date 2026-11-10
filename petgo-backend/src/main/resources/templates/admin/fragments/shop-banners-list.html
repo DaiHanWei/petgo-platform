@@ -14,17 +14,20 @@
          不写这句，运营看到 App 上没有 banner 会以为配置没生效。 -->
     <p th:unless="${hasLive}" class="banner warn" th:text="#{admin.shop.banners.noneHint}">
         当前没有已上架的 banner —— App 顶部会显示白色顶栏。</p>
-    <table th:if="${!#lists.isEmpty(banners)}">
+    <!--/* V1.4.2 shop-admin Story 3.1 · B1：拖动行调整顺序（权重列改为拖动手柄）；松手即 POST /admin/shop/banners/reorder（ids 为新顺序）。 */-->
+    <table th:if="${!#lists.isEmpty(banners)}" th:attr="data-banner-reorder=${canEdit} ? @{/admin/shop/banners/reorder} : null,data-msg-reorder-failed=#{admin.err.banner.reorderStale}">
         <thead><tr>
+            <th class="s-col-handle" th:if="${canEdit}"></th>
             <th th:text="#{admin.shop.banners.col.preview}">预览</th>
             <th th:text="#{admin.shop.banners.col.size}">原始尺寸</th>
             <th th:text="#{admin.shop.banners.col.target}">点击跳转</th>
-            <th class="s-col-num" th:text="#{admin.shop.banners.col.weight}">权重</th>
+            <th th:text="#{admin.v142.banner.col.schedule}">排期</th>
             <th th:text="#{admin.shop.banners.col.status}">状态</th>
             <th class="s-col-act" th:text="#{admin.common.actions}">操作</th>
         </tr></thead>
         <tbody>
-        <tr th:each="b : ${banners}" th:id="'shop-banner-row-' + ${b.id}">
+        <tr th:each="b : ${banners}" th:id="'shop-banner-row-' + ${b.id}" th:attr="data-banner-id=${b.id},draggable=${canEdit} ? 'true' : null">
+            <td class="s-col-handle" th:if="${canEdit}"><span class="drag-handle" aria-hidden="true">⋮⋮</span></td>
             <td>
                 <!-- CDN 未配时 imageUrl 为 null：显示提示而不是渲染一张裂图 -->
                 <img th:if="${b.imageUrl != null}" th:src="${b.imageUrl}" alt=""
@@ -42,19 +45,23 @@
             <td>
                 <!-- V1.4.1：跳转目标 + 埋点 banner_id（运营对 PostHog 看板时按这个 id 找 banner）。 -->
                 <span th:text="#{'admin.shop.banners.target.' + ${b.targetType}}">不可点</span>
-                <div th:if="${b.targetValue != null and b.targetType == 'CATEGORY'}"
-                     th:text="#{'admin.v130.shopProducts.category.' + ${b.targetValue}}">主粮</div>
-                <div th:if="${b.targetValue != null and b.targetType != 'CATEGORY'}" class="s-mono"
+                <!--/* B1：存量品类跳转红字提示改选 */-->
+                <div th:if="${b.targetType == 'CATEGORY'}" class="err" th:text="#{admin.v142.banner.categoryRetired}">品类跳转已下线，请改选</div>
+                <div th:if="${b.targetType == 'COUPON'}"
+                     th:text="${b.couponName != null} ? ${b.couponName} : ${b.targetValue}">券名</div>
+                <div th:if="${b.targetValue != null and b.targetType != 'CATEGORY' and b.targetType != 'COUPON'}" class="s-mono"
                      style="max-width:240px;word-break:break-all" th:text="${b.targetValue}">https://…</div>
                 <div class="muted s-mono" th:text="'banner_id ' + ${b.publicToken}">banner_id …</div>
             </td>
-            <td class="s-col-num" th:text="${b.sortWeight}">0</td>
+            <td class="num">
+                <span th:text="${b.startAt == null} ? '—' : ${#temporals.format(b.startAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">—</span>
+                <br/><small class="muted" th:text="${b.endAt == null} ? #{admin.v142.banner.noEnd} : ${#temporals.format(b.endAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">不限</small>
+            </td>
             <td>
-                <!-- 三档而不是两档：「已上架但被更高权重压住」的那些，运营必须能一眼分辨，
-                     否则会反复怀疑"我明明上架了为什么没显示"。 -->
-                <span class="badge" th:classappend="${b.state == 'live'} ? 'badge-ok'
-                         : (${b.state == 'activeNotLive'} ? 'badge-warn' : 'badge-muted')"
-                      th:text="#{'admin.v130.shopBanners.state.' + ${b.state}}">生效中</span>
+                <!--/* V1.4.2 shop-admin Story 3.1 · AD-7：六态（与 App 取数共用生效判定） */-->
+                <span class="badge" th:classappend="${b.state == 'LIVE'} ? 'badge-ok'
+                         : (${b.state == 'TARGET_INVALID'} ? 'badge-danger' : (${b.state == 'OVER_LIMIT' or b.state == 'PENDING'} ? 'badge-warn' : 'badge-muted'))"
+                      th:text="#{'admin.v142.banner.state.' + ${b.state}}">生效中</span>
             </td>
             <td class="s-col-act">
                 <!-- AC4：行「编辑」开抽屉。⚠️ 这个入口此前**根本不存在** ——
@@ -64,14 +71,14 @@
                 <button th:if="${canEdit}" type="button" class="btn btn-sm btn-neutral"
                         data-drawer-res="shop-banner"
                         th:attr="data-drawer-open=@{/admin/shop/banners(open=${b.id})}"
-                        th:text="#{admin.shop.form.titleEdit}">编辑</button>
-                <form class="inline" th:if="${canEdit and b.state == 'inactive'}"
+                        th:text="#{admin.v142.banner.btn.edit}">编辑</button>
+                <form class="inline" th:if="${canEdit and b.state == 'INACTIVE'}"
                       th:attr="hx-post=@{/admin/shop/banners/{id}/activate(id=${b.id})}"
                       hx-target="#shop-banner-drawer-body" hx-swap="innerHTML">
                     <button class="btn btn-sm btn-primary" type="submit"
                             th:text="#{admin.shop.banners.btn.activate}">上架</button>
                 </form>
-                <form class="inline" th:if="${canEdit and b.state != 'inactive'}"
+                <form class="inline" th:if="${canEdit and b.state != 'INACTIVE'}"
                       th:attr="hx-post=@{/admin/shop/banners/{id}/deactivate(id=${b.id})}"
                       hx-target="#shop-banner-drawer-body" hx-swap="innerHTML">
                     <button class="btn btn-sm btn-neutral" type="submit"
@@ -79,8 +86,8 @@
                 </form>
                 <!-- 🔴 已上架的不给删除按钮：service 层也会拦，这里不渲染是为了不让人点了才知道不行。
                      删一条正在首屏展示的 banner 不可撤销，而它与「下架」在运营眼里长得很像。 -->
-                <form class="inline" th:if="${canEdit and b.state == 'inactive'}"
-                      th:attr="hx-post=@{/admin/shop/banners/{id}/delete(id=${b.id})},data-confirm=#{admin.shop.banners.confirmDelete}"
+                <form class="inline" th:if="${canEdit and b.state == 'INACTIVE'}"
+                      th:attr="hx-post=@{/admin/shop/banners/{id}/delete/confirm(id=${b.id})}"
                       hx-target="#shop-banner-drawer-body" hx-swap="innerHTML">
                     <button class="btn btn-sm btn-danger" type="submit"
                             th:text="#{admin.shop.banners.btn.delete}">删除</button>

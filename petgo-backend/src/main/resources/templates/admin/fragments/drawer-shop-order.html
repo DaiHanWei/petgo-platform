@@ -16,7 +16,7 @@
         <h2 th:text="#{admin.shop.order.section.summary}">订单</h2>
         <div class="sum sum--grid2">
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.token}">订单号</div>
-                <div class="sum-value rv-small" th:text="${order.publicToken}">abc</div></div>
+                <div class="sum-value rv-small" th:text="${order.displayNo}">TOKO-20261110-ABC123</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
                 <div class="sum-value rv-small"
                      th:text="#{'admin.v130.shopOrders.status.' + ${order.status}}">SHIPPED</div></div>
@@ -38,6 +38,13 @@
                 <td th:text="${#numbers.formatInteger(order.shippingFee, 0, 'COMMA')}">20.000</td></tr>
             <tr><th th:text="#{admin.shop.order.col.shippingDiscount}">免运抵扣</th>
                 <td th:text="${#numbers.formatInteger(order.shippingDiscount, 0, 'COMMA')}">0</td></tr>
+            <!--/* V1.4.2 shop-admin Story 8.1 AC5：用户实付运费（shipping_discount 存负数 → 用 +）、实际运费（未取消运单承运成本）、保价 */-->
+            <tr data-user-paid-shipping><th th:text="#{admin.v142.ful.shippingPaid}">用户支付运费</th>
+                <td th:text="${#numbers.formatInteger(T(java.lang.Math).max(0L, T(com.tailtopia.admin.shop.service.LogisticsCostCalc).userPaidShipping(order.shippingFee, order.shippingDiscount)), 0, 'COMMA')}">20.000</td></tr>
+            <tr data-actual-shipping><th th:text="#{admin.v142.ful.actualShipping}">实际运费</th>
+                <td th:text="${actualShipping != null} ? ${#numbers.formatInteger(actualShipping, 0, 'COMMA')} : '—'">—</td></tr>
+            <tr data-insurance><th th:text="#{admin.v142.ful.insurance}">保价</th>
+                <td th:text="${order.insuranceSelected} ? #{admin.v142.ful.insuranceYes(${#numbers.formatInteger(order.insuranceFee, 0, 'COMMA')})} : #{admin.v142.ful.insuranceNo}">否</td></tr>
             <!-- 🔴 两段支付构成必须分开展示：客服对账时「用户说付了 305 000」与
                  「网关只收到 245 000」的差额永远落在 PawCoin 段上。 -->
             <tr><th th:text="#{admin.shop.order.col.coinAmount}">PawCoin 段</th>
@@ -73,6 +80,67 @@
             </li>
         </ol>
     </section>
+
+    <!--/* V1.4.2 shop-admin Story 7.2（F2 ~ F6 · AD-11）：取消后到账。横幅两个页面都显示；处置只在「订单」页（ctx=list）且有 shop.order_fulfill。 */-->
+    <section class="card card-full so-card" th:if="${late != null}" data-late-payment
+             th:with="rp=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)}">
+        <p class="banner warn" th:if="${late.duplicate()}" data-late-duplicate
+           th:text="#{admin.v142.late.bannerDuplicate(${rp.rp(late.amount())}, ${late.paidAt() != null} ? ${@adminTime.wib(late.paidAt())} : '—')}">重复付款</p>
+        <p class="banner warn" th:unless="${late.duplicate()}" th:text="#{admin.v142.late.banner(${rp.rp(late.amount())}, ${late.paidAt() != null} ? ${@adminTime.wib(late.paidAt())} : '—', ${late.cancelledAt() != null} ? ${@adminTime.wib(late.cancelledAt())} : '—')}">取消后到账</p>
+        <!-- F5 已重新下单 / 已退还 -->
+        <p class="banner ok" th:if="${late.resolution() == 'REORDERED'}" data-late-reordered>
+            <span th:text="#{admin.v142.late.reordered(${late.newOrderNo()} ?: '—', ${late.newOrderStatus() != null} ? #{'admin.v130.shopOrders.status.' + ${late.newOrderStatus()}} : '—', ${late.operator()} ?: '—', ${late.handledAt() != null} ? ${@adminTime.wib(late.handledAt())} : '—')}">已为用户重新下单</span>
+            <a th:if="${late.newOrderToken() != null}" th:href="@{/admin/shop/order-list(open=${late.newOrderToken()})}"
+               th:text="#{admin.v142.late.openNew}">查看新订单</a>
+        </p>
+        <p class="banner ok" th:if="${late.resolution() == 'REFUNDED'}" data-late-refunded
+           th:text="#{admin.v142.late.refunded(${late.operator()} ?: '—', ${late.handledAt() != null} ? ${@adminTime.wib(late.handledAt())} : '—')}">已退还到账款</p>
+        <th:block th:if="${ctx == 'list' and late.pending() and canFulfill}">
+            <div class="cfg-card card" data-late-actions>
+                <h3 th:text="#{admin.v142.late.box.title}">取消后到账处理</h3>
+                <p class="hint" th:text="#{admin.v142.late.box.hint}">先联系用户，征得同意后再重新下单</p>
+                <!-- F3 / F4 核对清单（重复付款单 / 注销用户不出，只能退还） -->
+                <details th:if="${late.checklist() != null}" data-late-checklist th:with="c=${late.checklist()}">
+                    <summary class="btn btn-neutral" th:text="#{admin.v142.late.btn.reorder}">重新下单</summary>
+                    <form th:attr="hx-post=@{/admin/shop/order-list/{t}/late/reorder(t=${order.publicToken})}"
+                          hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                        <h4 th:text="#{admin.v142.late.check.title}">重新下单 · 核对清单（全部满足才可提交）</h4>
+                        <ul class="checklist">
+                            <li><label><input type="checkbox" name="consented" value="1"/>
+                                <span th:text="#{admin.v142.late.check.consented}">用户已同意由平台帮他重新下单</span></label></li>
+                            <li th:if="${!#lists.isEmpty(c.coupons())}" th:classappend="${c.couponsOk()} ? 'ok' : 'err'" data-check-coupon>
+                                <span th:text="(${c.couponsOk()} ? '✓ ' : '✗ ') + #{admin.v142.late.check.coupon}">原订单用过的券仍在用户账户中</span>
+                                <small th:each="cp : ${c.coupons()}" th:if="${cp.expired()}" th:text="#{admin.v142.late.check.couponExpired(${cp.label()})}">已过期也可用</small>
+                            </li>
+                            <li th:if="${c.coinRequired() > 0}" th:classappend="${c.coinOk()} ? 'ok' : 'err'" data-check-coin>
+                                <span th:text="(${c.coinOk()} ? '✓ ' : '✗ ') + #{admin.v142.late.check.coin}">PawCoin 余额足够</span>
+                                <small th:text="#{admin.v142.late.check.coinDetail(${#numbers.formatInteger(c.coinRequired(), 0, 'POINT')}, ${#numbers.formatInteger(c.coinBalance(), 0, 'POINT')})}">需 · 当前</small>
+                            </li>
+                            <li th:classappend="${c.anyInStock()} ? 'ok' : 'err'" data-check-stock>
+                                <span th:text="(${c.anyInStock()} ? '✓ ' : '✗ ') + #{admin.v142.late.check.stock}">至少一行商品有库存</span>
+                                <small th:if="${#lists.isEmpty(c.shortLines())}" th:text="#{admin.v142.late.check.stockAll(${c.lines().size()})}">均有库存</small>
+                                <small th:each="sl : ${c.shortLines()}" th:text="#{admin.v142.late.check.stockShort(${sl.productName()})}">缺货</small>
+                            </li>
+                            <li><label><input type="checkbox" name="addressValid" value="1"/>
+                                <span th:text="#{admin.v142.late.check.address}">收货地址仍有效</span></label></li>
+                        </ul>
+                        <p class="banner warn" th:if="${c.anyInStock() and !#lists.isEmpty(c.shortLines())}"
+                           th:text="#{admin.v142.late.check.partialWarn(${#strings.listJoin(c.shortLines().![productName()], '、')})}">部分缺货</p>
+                        <p class="hint" th:text="#{admin.v142.late.check.hint}">新订单金额按原订单锁定</p>
+                        <button type="submit" class="btn btn-primary" th:disabled="${!c.systemOk()}"
+                                th:text="#{admin.v142.late.btn.submitReorder}">提交重新下单</button>
+                    </form>
+                </details>
+                <form class="inline" th:attr="hx-post=@{/admin/shop/order-list/{t}/late/refund/confirm(t=${order.publicToken})}"
+                      hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-danger" th:text="#{admin.v142.late.btn.refund}">退还到账款</button>
+                </form>
+            </div>
+        </th:block>
+    </section>
+
+    <!--/* V1.4.2 shop-admin Story 7.2（O-5）：重下单原快递不可用，运单已改选最便宜一家（订单快照不变，差额平台承担） */-->
+    <p class="banner warn" th:if="${courierSwitched}" data-courier-switched th:text="#{admin.v142.late.courierSwitched}">原快递不可用，已改选</p>
 
     <!-- ② 商品行表 -->
     <section class="card card-full so-card">
@@ -134,7 +202,8 @@
                        下面那个发货下拉用的就是 carrierName，两处不一致时运营在下拉里选「SiCepat」、
                        发完货表格里却显示「SICEPAT」，看起来像选错了家。
                        ⚠️ 承运商名**不走 i18n**：它是品牌名，三语通用（与 places 的城市名同类）。 */-->
-                <td th:text="${p.carrier.displayName()}">SiCepat</td>
+                <!--/* v1.4.2 shop 5.1：carrier 改为字符串（Biteship 运单存任意快递码大写），展示名走 carrierDisplayName()（三家取品牌写法，其余原样）。 */-->
+                <td th:text="${p.carrierDisplayName()}">SiCepat</td>
                 <td th:text="${p.trackingNo}">JP123</td>
                 <td th:text="${#numbers.formatInteger(p.carrierCost, 0, 'COMMA')}">18.000</td>
                 <!--/* ShipmentStatus 只有 SHIPPED / DELIVERED，与订单状态那两档同义，直接复用既有 key；
@@ -147,7 +216,8 @@
                          HX-Target: shop-order-drawer-body ⇒ 422 / 403 由 AdminBusinessExceptionAdvice
                          回填到**抽屉体**——这正是 tpl-b-list 给抽屉体加 id 的用意（9.2 复审 M2），
                          错误就落在运营正看着的那扇抽屉里，而不是被遮罩盖住的页面级错误槽。 -->
-                    <form th:if="${canFulfill and markable and !p.delivered}"
+                    <!--/* 7.1 · AC2：「订单」页上下文（ctx=list）不出履约操作 */-->
+                    <form th:if="${canFulfill and markable and !p.delivered and ctx != 'list'}"
                           th:attr="hx-post=@{/admin/shop/orders/{t}/packages/{id}/delivered(t=${order.publicToken},id=${p.id})}"
                           hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="inline">
                         <button class="btn btn-sm btn-neutral" type="submit"
@@ -162,13 +232,122 @@
         </table>
     </section>
 
-    <!-- ⑤ 底部固定操作条 -->
-    <section class="sticky-footer so-actions">
+    <!--/* V1.4.2 shop-admin Story 7.1（F7 · AD-12）：退款与成长值。所有有退款的订单都显示；存量单空值显示「—」（AC4）。
+           🔒 只到账号后四位，不出全号与户名。待扣回为预计值（O-30：全部未完成现金段）。 */-->
+    <section class="card card-full so-card" th:if="${afterSales != null and afterSales.visible()}" data-after-sales>
+        <h2 th:text="#{admin.v142.ol.afterSales.title}">退款与成长值</h2>
+        <table>
+            <thead>
+            <tr>
+                <th th:text="#{admin.v142.ol.afterSales.col.time}">时间</th>
+                <th th:text="#{admin.v142.payout.col.source}">来源</th>
+                <th class="s-col-num" th:text="#{admin.v142.ol.afterSales.col.coin}">PawCoin 段</th>
+                <th class="s-col-num" th:text="#{admin.v142.ol.afterSales.col.cash}">现金段</th>
+                <th th:text="#{admin.v142.ol.afterSales.col.destStatus}">去向 / 状态</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="v : ${afterSales.refunds()}" th:attr="data-refund=${v.refundToken()}"
+                th:with="rp=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)},
+                         pending=${v.status() == 'AWAITING_DESTINATION'}">
+                <td class="nowrap" th:text="${v.createdAt() != null} ? ${@adminTime.wib(v.createdAt())} : '—'">-</td>
+                <td th:text="${v.scope() == 'COMPENSATION'} ? #{admin.v142.ol.afterSales.source.compensation}
+                             : #{'admin.v142.payout.source.' + ${v.reason()}}">整单取消</td>
+                <td class="s-col-num"
+                    th:text="${v.coinRefund() > 0} ? #{admin.v142.ol.afterSales.coinRefunded(${rp.rp(v.coinRefund())})} : '—'">—</td>
+                <td class="s-col-num" th:text="${v.cashRefund() > 0} ? ${rp.rp(v.cashRefund())} : '—'">—</td>
+                <td>
+                    <span th:if="${pending and v.scope() == 'COMPENSATION'}" th:text="#{admin.v142.ol.afterSales.afterChoice}">待用户选择后计算</span>
+                    <th:block th:unless="${pending and v.scope() == 'COMPENSATION'}">
+                        <span th:if="${v.cashDestination() == 'TO_BANK' and v.payoutChannel() != null}"
+                              th:text="${v.payoutChannel()} + (${v.payoutAccountLast4()} != null ? ' ****' + ${v.payoutAccountLast4()} : '') + ' · '">BCA · </span>
+                        <span th:text="#{'admin.v142.ol.afterSales.status.' + ${v.status()}}">待打款</span>
+                    </th:block>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        <dl class="kv" data-growth th:with="g=${afterSales.growth()}">
+            <dt th:text="#{admin.v142.ol.growth.accrued}">当初入账成长值</dt>
+            <dd th:text="${g.accrued()} ?: '—'">146</dd>
+            <dt th:text="#{admin.v142.ol.growth.reversed}">已扣回</dt>
+            <dd th:text="${g.accrued() == null} ? '—' : ${g.reversed()}">50</dd>
+            <dt th:text="#{admin.v142.ol.growth.pending}">待扣回</dt>
+            <dd th:text="${g.accrued() == null} ? '—' : #{admin.v142.ol.growth.pendingValue(${g.pending()})}">96（预计）</dd>
+        </dl>
+    </section>
+
+    <!--/* V1.4.2 shop-admin Story 6.1（H4 / H13）：发货来源、时间、操作人（只在后台可见）。 */-->
+    <section class="card card-full so-card" th:if="${acts != null and acts.has('SHIPPED_INFO')}" data-shipped-info>
+        <dl class="kv">
+            <dt th:text="#{admin.v142.ful.shippedSource}">已发货来源</dt>
+            <dd th:if="${order.shippedSource != null and order.shippedSource.name() == 'MANUAL'}"
+                th:text="#{admin.v142.ful.shippedByOps} + ' · ' + (${shippedByName} ?: '—') + ' · ' + ${@adminTime.wib(order.shippedAt)}">运营标记 · ops · -</dd>
+            <dd th:if="${order.shippedSource != null and order.shippedSource.name() == 'BITESHIP_PICKED'}"
+                th:text="#{admin.v142.ful.pickedAt(${@adminTime.wib(order.shippedAt)})}">- (Biteship 回传)</dd>
+            <dd th:if="${order.shippedSource == null}" th:text="${@adminTime.wib(order.shippedAt)}">-</dd>
+        </dl>
+    </section>
+
+    <!-- ⑤ 底部固定操作条（V1.4.2 shop-admin Story 6.1：按 DrawerActionsResolver 切换） -->
+    <!--/* V1.4.2 shop-admin Story 7.1 · AD-12：「订单」页上下文（ctx=list）吸底不出履约操作，只给去履约页的入口（AC2）。 */-->
+    <section class="sticky-footer so-actions" th:if="${ctx == 'list'}" data-ctx-list>
+        <a class="btn btn-neutral" th:href="@{/admin/shop/orders(open=${order.publicToken})}"
+           th:text="#{admin.v142.ol.toFulfillment}">在订单履约中处理</a>
+    </section>
+    <section class="sticky-footer so-actions" th:if="${ctx != 'list'}" th:with="a=${acts}">
         <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill')">
-            <!-- 发货（AB-11B）。🔴 承运成本必填（S-11）：不录则毛利看板缺行，自营毛利是否成立就无法验证。 -->
-            <form th:if="${shippable}" data-requires-form
-                  th:attr="hx-post=@{/admin/shop/orders/{t}/ship(t=${order.publicToken})}"
+            <!-- H5 运单失败 / H6 揽收失败横幅；结果未知须先核实（AC6） -->
+            <p class="banner err" th:if="${a.waybillFailed()}" data-waybill-failed
+               th:text="#{admin.v142.ful.waybillFailed.banner(${order.waybillFailReason}, ${@adminTime.wib(order.waybillFailedAt)})}">运单失败</p>
+            <p class="banner err" th:if="${a.pickupFailed()}" data-pickup-failed
+               th:text="#{admin.v142.ful.pickupFailed.banner(${activeBiteship != null and activeBiteship.providerStatus != null} ? ${activeBiteship.providerStatus} : '—', ${@adminTime.wib(order.logisticsExceptionAt)})}">揽收失败</p>
+            <p class="banner warn" th:if="${a.unknownResult()}" data-unknown-result th:text="#{admin.v142.ful.unknownWarn}">结果未知</p>
+
+            <!-- H2 Biteship 下单 -->
+            <form class="cfg-card card so-waybill" th:if="${a.has('BITESHIP_CREATE')}"
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/waybill/confirm(t=${order.publicToken},mode='create')}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.ful.btn.create}">Biteship 下单</h3>
+                <dl class="kv">
+                    <dt th:text="#{admin.v142.ful.courier}">快递</dt>
+                    <dd th:text="#{admin.v142.ful.courierUserChoice(${order.courierName} ?: '—')}">JNE（用户所选）</dd>
+                    <dt th:text="#{admin.v142.ful.shippingPaid}">用户支付运费</dt>
+                    <dd th:text="${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(T(java.lang.Math).max(0L, order.shippingFee + order.shippingDiscount))}">Rp</dd>
+                    <dt th:text="#{admin.v142.ful.insurance}">保价</dt>
+                    <dd th:text="${order.insuranceSelected} ? #{admin.v142.ful.insuranceYes(${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(order.insuranceFee)})} : #{admin.v142.ful.insuranceNo}">是</dd>
+                </dl>
+                <p class="hint" th:text="#{admin.v142.ful.waybill.hint}">确认后创建运单并预约上门取件。</p>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.ful.btn.create}">Biteship 下单</button>
+            </form>
+
+            <!-- H3 标记已发货 -->
+            <form class="cfg-card card so-mark-shipped" th:if="${a.has('MARK_SHIPPED')}"
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/mark-shipped(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.ful.btn.markShipped}">标记已发货</h3>
+                <p class="hint" th:text="#{admin.v142.ful.markShipped.hint}">仓库确认已打包后标记。</p>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.ful.btn.markShipped}">标记已发货</button>
+            </form>
+
+            <!-- H5 / H6 三选一 -->
+            <div class="cfg-card card so-fail-box" th:if="${a.has('CONTACT_CANCEL')}" data-fail-options>
+                <h3 th:text="${a.pickupFailed()} ? #{admin.v142.ful.pickup.title} : #{admin.v142.ful.waybill.failTitle}">选择处理方式</h3>
+                <form class="inline" th:if="${a.has('WAYBILL_RETRY') or a.has('PICKUP_RETRY')}"
+                      th:attr="hx-post=@{/admin/shop/orders/{t}/waybill/confirm(t=${order.publicToken},mode=${a.pickupFailed()} ? 'pickup-retry' : 'retry')}"
+                      hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-neutral" th:text="#{admin.v142.ful.btn.retry}">重新提交运单</button>
+                </form>
+                <a class="btn btn-neutral" th:href="@{/admin/shop/order-exceptions(open=${order.publicToken})}"
+                   th:text="#{admin.v142.ful.btn.contactCancel}">联系用户后取消 → 异常订单</a>
+                <p class="hint" th:text="${a.pickupFailed()} ? #{admin.v142.ful.pickup.hint} : #{admin.v142.ful.waybill.failHint}">提示</p>
+            </div>
+
+            <!-- H7 手工填写运单（运单失败 / 揽收失败 / 存量单 / 一单多包）。🔴 承运成本必填（S-11）。 -->
+            <form th:if="${a.has('MANUAL_FORM') or a.has('PICKUP_MANUAL')}" data-requires-form
+                  th:attr="hx-post=${a.has('PICKUP_MANUAL')} ? @{/admin/shop/orders/{t}/pickup/manual(t=${order.publicToken})} : @{/admin/shop/orders/{t}/ship(t=${order.publicToken})}"
                   hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="so-ship-form">
+                <h3 th:text="#{admin.v142.ful.manual.title}">手工填写运单</h3>
                 <label class="field" for="so-carrier" th:text="#{admin.shop.order.col.carrier}">承运商</label>
                 <select id="so-carrier" name="carrier" class="sel" required data-requires-text>
                     <option value="" th:text="#{admin.v130.shopOrders.ship.chooseCarrier}">选择承运商</option>
@@ -180,12 +359,130 @@
                 <label class="field" for="so-cost" th:text="#{admin.shop.order.col.carrierCost}">承运成本</label>
                 <input id="so-cost" type="number" name="carrierCost" class="inp" min="0" required
                        data-requires-text/>
-                <p class="hint" th:text="#{admin.shop.order.ship.hint}">承运成本填运单实际金额。</p>
+                <p class="hint" th:text="#{admin.v142.ful.manual.hint}">手工运单不接 Biteship 回传。</p>
                 <button type="submit" class="btn btn-primary" disabled data-requires-target
-                        th:text="#{admin.shop.order.btn.ship}">发货</button>
+                        th:text="#{admin.v142.ful.btn.saveAndShip}">保存并发货</button>
             </form>
+            <!--/* V1.4.2 shop-admin Story 6.2（H8 ~ H12）：退回判定 / 快递原因重发 / 用户原因按行入库 / 丢件破损 / 索赔结案 / 清除停滞 */-->
+            <th:block th:with="ret=${order.logisticsException != null and order.logisticsException.name() == 'RETURNED'}">
+                <p class="banner err" th:if="${ret and order.returnCause == null}" data-returned-banner
+                   th:text="#{admin.v142.ret.banner(${activeBiteship != null and activeBiteship.providerStatus != null} ? ${activeBiteship.providerStatus} : '—', ${@adminTime.wib(order.logisticsExceptionAt)})}">退回</p>
+                <p class="banner warn" th:if="${ret and order.returnCause != null and order.returnCause.name() == 'COURIER_FAULT'}"
+                   data-returned-courier th:text="#{admin.v142.ret.courierBanner(${@adminTime.wib(order.logisticsExceptionAt)})}">退回 · 快递原因</p>
+            </th:block>
+            <!-- H8 判定退回原因 -->
+            <form class="cfg-card card so-return-decide" th:if="${a.has('DECIDE_RETURN')}" data-decide-return
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/returned/decide(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.ret.decide.title}">判定退回原因</h3>
+                <label class="radio">
+                    <input type="radio" name="cause" value="COURIER_FAULT" required/>
+                    <span th:text="#{admin.v142.ret.cause.COURIER_FAULT}">快递原因</span>
+                    <span class="hint" th:text="#{admin.v142.ret.cause.COURIER_FAULT.hint}">平台承担运费</span>
+                </label>
+                <label class="radio">
+                    <input type="radio" name="cause" value="USER_FAULT" required/>
+                    <span th:text="#{admin.v142.exc.category.USER}">用户原因</span>
+                    <span class="hint" th:text="#{admin.v142.ret.cause.USER_FAULT.hint}">地址错、联系不上、拒收</span>
+                </label>
+                <input type="text" name="note" class="inp field-full" maxlength="200"
+                       th:placeholder="#{admin.v142.ret.note.placeholder}"/>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.ret.btn.decide}">确认判定</button>
+            </form>
+            <!-- H9 快递原因重发（原运单保留，运费记平台成本） -->
+            <form class="cfg-card card so-reship" th:if="${a.has('RESHIP')}" data-reship
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/reship/confirm(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.ret.reship.title}">重新发货</h3>
+                <dl class="kv">
+                    <dt th:text="#{admin.v142.ful.courier}">快递</dt>
+                    <dd th:text="#{admin.v142.ret.reship.courierValue(${order.courierName} ?: '—')}">JNE（同原订单）</dd>
+                    <dt th:text="#{admin.v142.ful.shippingPaid}">运费</dt>
+                    <dd th:text="#{admin.v142.ret.reship.feeValue}">平台成本，不向用户收取</dd>
+                </dl>
+                <p class="hint" th:text="#{admin.v142.ret.reship.hint}">退回到仓的商品不走入库，直接重新发出。</p>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.ret.btn.reship}">新建运单重发</button>
+            </form>
+            <!-- 用户原因：按订单行确认退回入库（无 UI 稿，照 H7 表单写法；可分次，累计不超应收） -->
+            <form class="cfg-card card so-return-inbound" th:if="${a.has('RETURN_INBOUND')}" data-return-inbound
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/return-inbound(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.ret.inbound.title}">确认退回入库</h3>
+                <table>
+                    <thead>
+                    <tr>
+                        <th th:text="#{admin.shop.col.name}">商品名</th>
+                        <th class="s-col-num" th:text="#{admin.v142.ret.inbound.col.expected}">应收</th>
+                        <th class="s-col-num" th:text="#{admin.v142.ret.inbound.col.received}">已入库</th>
+                        <th class="s-col-num" th:text="#{admin.v142.ret.inbound.col.now}">本次实收</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="l : ${lines}" th:if="${l.qty - l.refundedQty > 0}" th:attr="data-inbound-line=${l.id}">
+                        <td th:text="${l.productName} + ' · ' + ${l.specName}">Royal Canin · 2kg</td>
+                        <td class="s-col-num" th:text="${l.qty - l.refundedQty}">2</td>
+                        <td class="s-col-num" th:text="${l.returnInboundQty}">0</td>
+                        <td class="s-col-num">
+                            <input type="number" class="inp" min="0" th:max="${l.pendingInboundQty()}"
+                                   th:name="'qty_' + ${l.id}" th:disabled="${l.pendingInboundQty() == 0}"
+                                   th:value="${l.pendingInboundQty() == 0} ? null : ${l.pendingInboundQty()}"/>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+                <p class="hint" th:text="#{admin.v142.ret.inbound.hint}">按实收件数填写，可分次；收齐后到异常订单整单取消（用户原因）。</p>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.ret.inbound.btn}">确认入库</button>
+            </form>
+            <p class="banner ok" th:if="${order.returnInboundAt != null and order.status.name() == 'SHIPPED'}" data-inbound-done>
+                <span th:text="#{admin.v142.ret.inbound.done(${@adminTime.wib(order.returnInboundAt)})}">退回商品已全部入库</span>
+                <a th:href="@{/admin/shop/order-exceptions(open=${order.publicToken})}"
+                   th:text="#{admin.v142.ful.btn.contactCancel}">异常订单</a>
+            </p>
+            <!-- H10 标记丢件破损（已发货 / 已签收 / 已完成） -->
+            <form class="cfg-card card so-lost" th:if="${a.has('MARK_LOST_DAMAGED')}" data-lost-damaged
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/lost-damaged/confirm(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.lost.title}">标记丢件破损</h3>
+                <label class="radio">
+                    <input type="radio" name="type" value="LOST" required/>
+                    <span th:text="#{admin.v142.exc.lost.LOST}">丢件</span>
+                </label>
+                <label class="radio">
+                    <input type="radio" name="type" value="DAMAGED" required/>
+                    <span th:text="#{admin.v142.exc.lost.DAMAGED}">破损</span>
+                </label>
+                <input type="text" name="note" class="inp field-full" maxlength="200"
+                       th:placeholder="#{admin.v142.lost.note.placeholder}"/>
+                <p class="hint" th:if="${order.insuranceSelected}" th:text="#{admin.v142.lost.insuredHint}">本单已购买保价</p>
+                <button type="submit" class="btn btn-danger" th:text="#{admin.v142.lost.title}">标记丢件破损</button>
+            </form>
+            <!-- H11 索赔结案（任何订单状态） -->
+            <form class="cfg-card card so-claim" th:if="${a.has('CLOSE_CLAIM')}" data-close-claim
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/claim/close(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v142.claim.title}">索赔结案</h3>
+                <label class="field" for="so-claim-result" th:text="#{admin.v142.claim.result}">索赔结果</label>
+                <select id="so-claim-result" name="result" class="sel" required>
+                    <option value="PAID" th:text="#{admin.v142.claim.result.PAID}">已赔付</option>
+                    <option value="PARTIAL" th:text="#{admin.v142.claim.result.PARTIAL}">部分赔付</option>
+                    <option value="REJECTED" th:text="#{admin.v142.claim.result.REJECTED}">被拒</option>
+                </select>
+                <label class="field" for="so-claim-amount" th:text="#{admin.v142.claim.amount}">到账金额</label>
+                <input id="so-claim-amount" type="number" name="amount" class="inp" min="0"/>
+                <button type="submit" class="btn btn-primary" th:text="#{admin.v142.claim.btn}">结案并清除「待索赔」</button>
+            </form>
+            <!-- H12 物流停滞 -->
+            <div class="cfg-card card so-stalled" th:if="${a.has('CLEAR_STALLED')}" data-stalled>
+                <p class="banner warn" th:text="#{admin.v142.stall.banner(${T(com.tailtopia.admin.shop.web.AdminShopOrderController).stalledDays(activeBiteship, order.logisticsExceptionAt)}, ${activeBiteship != null and activeBiteship.providerStatus != null} ? ${activeBiteship.providerStatus} : '—', ${activeBiteship != null and activeBiteship.providerStatusAt != null} ? ${@adminTime.wib(activeBiteship.providerStatusAt)} : '—')}">物流停滞</p>
+                <h3 th:text="#{admin.v142.ful.flag.STALLED}">物流停滞</h3>
+                <p class="hint" th:text="#{admin.v142.stall.hint}">物流恢复更新时自动清除</p>
+                <form class="inline" th:attr="hx-post=@{/admin/shop/orders/{t}/stalled/clear(t=${order.publicToken})}"
+                      hx-target="#shop-order-drawer-body" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-neutral" th:text="#{admin.v142.stall.btn.clear}">清除停滞标记</button>
+                </form>
+            </div>
             <!--/* 标记缺货（A8 唯一入口）：拣货时发现实物不够。说明仅后台可见，处置时才带原因告知用户。 */-->
-            <form th:if="${flaggable}" data-requires-form
+            <form th:if="${a.has('FLAG_SHORTAGE')}" data-requires-form
                   th:attr="hx-post=@{/admin/shop/orders/{t}/flag-shortage(t=${order.publicToken})}"
                   hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="so-shortage-form">
                 <label class="field" for="so-shortage-note" th:text="#{admin.v130.shopOrders.shortage.label}">缺货说明</label>
@@ -194,12 +491,12 @@
                 <button type="submit" class="btn btn-danger" disabled data-requires-target
                         th:text="#{admin.v130.shopOrders.shortage.btn}">标记缺货</button>
             </form>
-            <!-- SPEC-2 出口①：整单标记已送达 -->
-            <form th:if="${markable}"
-                  th:attr="hx-post=@{/admin/shop/orders/{t}/mark-delivered(t=${order.publicToken})}"
+            <!-- SPEC-2 出口①：整单标记已送达（手工单只有手工送达，H13） -->
+            <form th:if="${a.has('MARK_DELIVERED')}"
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/mark-delivered/confirm(t=${order.publicToken})}"
                   hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="inline">
-                <button type="submit" class="btn btn-neutral" data-confirm-button
-                        th:attr="data-confirm=#{admin.v130.shopOrders.confirm.markDelivered(${order.publicToken})}"
+                <!--/* V1.4.2 Story 1.2 · AD-3：先取服务端确认弹层，确认后提交原端点。 */-->
+                <button type="submit" class="btn btn-neutral"
                         th:text="#{admin.shop.order.btn.markDelivered}">标记整单已送达</button>
             </form>
         </th:block>

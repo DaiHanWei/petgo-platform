@@ -11,7 +11,7 @@
 /// 两边测试逐行照抄同一张用例表（对端测试 `petgo-backend/src/test/java/com/tailtopia/shared/format/IdrCompactTest.java`）
 /// —— **改一边必须改另一边**。
 ///
-/// ⚠️ 不要拿 `toko_page_v2.dart` 的私有 `_compactIdr` 替代：那是顶栏余额口径（四舍五入、rb 档无小数、无 Rp）。
+/// ⚠️ 不要拿 `toko_page_v3.dart` 的私有 `_compactIdr` 替代：那是顶栏余额口径（四舍五入、rb 档无小数、无 Rp）。
 library;
 
 const int _thousand = 1000;

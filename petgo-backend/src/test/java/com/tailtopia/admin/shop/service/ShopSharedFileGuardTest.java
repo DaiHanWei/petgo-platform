@@ -119,11 +119,13 @@ class ShopSharedFileGuardTest {
                 .filter(p -> com.tailtopia.admin.shared.AdminPageCatalog.G_SHOP.equals(p.group()))
                 .map(com.tailtopia.admin.shared.AdminPageCatalog.Page::route).toList();
         assertThat(shopRoutes).containsExactly(
-                "/admin/shop/products", "/admin/shop/inventory", "/admin/shop/orders", "/admin/shop/order-exceptions",
+                // V1.4.2 shop-admin Story 1.1 · AD-2：订单（履约前）、退款打款（退货审核后）、优惠券（Banner 后）；复购看板下线
+                "/admin/shop/products", "/admin/shop/inventory", "/admin/shop/order-list", "/admin/shop/orders",
+                "/admin/shop/order-exceptions",
                 // 商家平台对接：门店进货单，紧跟 Toko 异常订单
                 "/admin/merchant/purchase-orders",
-                "/admin/shop/returns", "/admin/shop/return-precedents", "/admin/shop/repurchase-dashboard",
-                "/admin/shop/margin", "/admin/shop/banners", "/admin/shop/inventory-turnover",
+                "/admin/shop/returns", "/admin/shop/refund-payouts", "/admin/shop/return-precedents",
+                "/admin/shop/margin", "/admin/shop/banners", "/admin/shop/coupons", "/admin/shop/inventory-turnover",
                 "/admin/shop/reconciliation", "/admin/shop/shipping");
     }
 }

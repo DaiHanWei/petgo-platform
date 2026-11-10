@@ -92,6 +92,11 @@ public class AdminShopFinanceController {
         model.addAttribute("from", start);
         model.addAttribute("to", end);
         model.addAttribute("r", finance.reconciliation(start, end));
+        // V1.4.2 shop-admin Story 8.1 · AD-15：优惠与物流成本（WIB 日界，新区块单独取数）。
+        // 未传日期时按 WIB 的「今天」取默认区间（原四卡的默认按 JVM 时区，不动）
+        LocalDate dlEnd = to == null ? LocalDate.now(com.tailtopia.admin.shared.time.AdminTime.ZONE) : to;
+        LocalDate dlStart = from == null ? dlEnd.minusDays(30) : from;
+        model.addAttribute("dl", finance.discountLogistics(dlStart, dlEnd));
         model.addAttribute("active", "shopReconciliation");
         return hx.isHtmx() ? "admin/fragments/cards-shop-reconciliation :: cards"
                 : "admin/shop-reconciliation";

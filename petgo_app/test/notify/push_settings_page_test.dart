@@ -173,7 +173,7 @@ void main() {
     pairs.forEach((field, type) => expect(settingsStyle(field), centerStyle(type), reason: '$field ↔ $type'));
   });
 
-  testWidgets('B1：4 组 9 行，8 个开关开、订单与账号为锁定胶囊；状态卡开启', (tester) async {
+  testWidgets('B1：4 组 10 行（V1.4.2 +PET_DIARY），9 个开关开、订单与账号为锁定胶囊；状态卡开启', (tester) async {
     await pump(tester);
     final titles = ['INTERAKSI', 'HEWAN & PENCAPAIAN', 'INFO & PROMO', 'SELALU AKTIF'];
     final dy = [for (final t in titles) tester.getTopLeft(find.text(t)).dy];
@@ -302,7 +302,7 @@ void main() {
     expect(find.byType(Switch), findsNothing);
   });
 
-  testWidgets('B6：加载失败 → 云图标 + 重试；无状态卡无开关；重试成功出 9 行', (tester) async {
+  testWidgets('B6：加载失败 → 云图标 + 重试；无状态卡无开关；重试成功出 10 行', (tester) async {
     var fail = true;
     repo.fetchOverride = () async {
       if (fail) throw Exception('net');
@@ -316,7 +316,7 @@ void main() {
     fail = false;
     await tester.tap(find.byKey(const ValueKey('emptyStateAction')));
     await tester.pumpAndSettle();
-    expect(find.byType(Switch), findsNWidgets(8));
+    expect(find.byType(Switch), findsNWidgets(9)); // V1.4.2 Story 1.5：+PET_DIARY
     expect(find.byKey(const ValueKey('pushSettingsLocked_ORDER_ACCOUNT')), findsOneWidget);
   });
 
@@ -335,5 +335,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(openCalls, 0);
     expect(find.byKey(const ValueKey('pushSettingsStatusOn')), findsOneWidget);
+  });
+
+  // ===== V1.4.2 social-topic Story 1.5 · AC7（UI 稿 A13）=====
+  testWidgets('A13：「Hewan yang kamu ikuti」紧跟「Pengikut baru」；爪印紫 / cream2 底；默认开', (tester) async {
+    await pump(tester);
+    final follower = tester.getTopLeft(find.byKey(const ValueKey('pushSettingsSwitch_FOLLOWER'))).dy;
+    final petDiary = tester.getTopLeft(find.byKey(const ValueKey('pushSettingsSwitch_PET_DIARY'))).dy;
+    final gift = tester.getTopLeft(find.byKey(const ValueKey('pushSettingsSwitch_GIFT'))).dy;
+    expect(follower, lessThan(petDiary));
+    expect(petDiary, lessThan(gift));
+    final icon = leadIcon(tester, PushCategoryCode.petDiary);
+    expect(icon.icon, Icons.pets_rounded);
+    expect(icon.color, AppColors.mint);
+    final circle = tester.widget<Container>(find.ancestor(of: find.byWidget(icon), matching: find.byType(Container)).first);
+    expect((circle.decoration! as BoxDecoration).color, AppColors.cream2);
+    expect(find.text('Hewan yang kamu ikuti'), findsOneWidget);
+    expect(find.text('Diary baru dari hewan yang kamu ikuti'), findsOneWidget);
+    expect(switchOf(tester, PushCategoryCode.petDiary).value, isTrue);
+  });
+
+  testWidgets('A13：切换「Hewan yang kamu ikuti」→ PATCH (PET_DIARY, false)', (tester) async {
+    await pump(tester);
+    await tester.tap(find.byKey(const ValueKey('pushSettingsSwitch_PET_DIARY')));
+    await tester.pumpAndSettle();
+    expect(repo.updates, [(PushCategoryCode.petDiary, false)]);
+    expect(switchOf(tester, PushCategoryCode.petDiary).value, isFalse);
+  });
+
+  testWidgets('A13：「Pengikut baru」说明两行（同样式、换行）', (tester) async {
+    await pump(tester);
+    final desc = find.text('Seseorang mulai mengikutimu\nSeseorang mulai mengikuti hewanmu');
+    expect(desc, findsOneWidget);
+    final t = tester.widget<Text>(desc);
+    expect(t.style!.fontSize, 12);
+    expect(t.style!.color, AppColors.muted);
   });
 }

@@ -33,6 +33,13 @@ public class ShippingZone {
     @Column(name = "fee", nullable = false)
     private long fee;
 
+    /**
+     * 区域代表邮编（v1.4.2 Story 1.1，D-9；V20261105_1605）：游客按地区询价用。
+     * 为空 = 该区游客询价按「不支持配送」。5 位、首位非 0。
+     */
+    @Column(name = "postal_code", length = 5)
+    private String postalCode;
+
     /** 🔴 下架用 false 而非删行——历史订单的运费需可追溯（AB-13D）。 */
     @Column(name = "active", nullable = false)
     private boolean active = true;
@@ -66,9 +73,30 @@ public class ShippingZone {
         this.updatedAt = Instant.now();
     }
 
+    /** 只改城市 / 省份，运费不动（V1.4.2 shop-admin Story 4.1：区域表去运费列，{@code fee} 保留不读）。 */
+    public void apply(String kotaKabupaten, String provinsi) {
+        this.kotaKabupaten = kotaKabupaten;
+        this.provinsi = provinsi;
+        this.updatedAt = Instant.now();
+    }
+
     public void setActive(boolean value) {
         this.active = value;
         this.updatedAt = Instant.now();
+    }
+
+    /** 设置区域代表邮编；空白视为清空。格式不对 → {@link IllegalArgumentException}。 */
+    public void applyPostalCode(String value) {
+        String v = value == null || value.isBlank() ? null : value.trim();
+        if (v != null && !v.matches("^[1-9][0-9]{4}$")) {
+            throw new IllegalArgumentException("postal code must be 5 digits, not starting with 0");
+        }
+        this.postalCode = v;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getPostalCode() {
+        return postalCode;
     }
 
     public Long getId() {

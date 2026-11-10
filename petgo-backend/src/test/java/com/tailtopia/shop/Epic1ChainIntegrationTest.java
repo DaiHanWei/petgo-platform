@@ -86,6 +86,11 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
         f.setSpecName(spec);
         f.setPrice(price);
         f.setNetWeightG(3000L);
+        // V1.4.2 shop-admin Story 4.2：保存规格时包裹四项必填
+        f.setPackageWeightG(3100);
+        f.setPackageLengthCm(30);
+        f.setPackageWidthCm(20);
+        f.setPackageHeightCm(10);
         return f;
     }
 
@@ -106,8 +111,9 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
 
         // 未上架 → App 查不到
         assertThat(publicList()).doesNotContain(p.getPublicToken());
+        // v1.4.2 shop Story 6.1：已下架 / 未上架详情改为 410 product-delisted（原 404）
         mvc.perform(get("/api/v1/shop/products/" + p.getPublicToken()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isGone());
 
         // ② 配 SKU 与价格
         ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), actor);
@@ -190,8 +196,9 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
         listing.delist(p.getId(), actor);
 
         assertThat(publicList()).doesNotContain(p.getPublicToken());
+        // v1.4.2 shop Story 6.1：已下架 / 未上架详情改为 410 product-delisted（原 404）
         mvc.perform(get("/api/v1/shop/products/" + p.getPublicToken()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isGone());
 
         // 下架只改可见性：库存原封不动
         Long actual = jdbc.queryForObject(

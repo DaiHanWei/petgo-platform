@@ -10,10 +10,11 @@ import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.
 /// V1.3.2 Story 5.1：里程碑徽章映射表与公共组件（L0）。
 void main() {
   group('AC1 映射表：按完整 code 精确寻址', () {
-    test('84 个 code 各一条、恰 42 个语义键，code 集合 == 标题表全集', () {
-      // V1.3.4 FR-126：+6 code（打卡 / 性格测试 × 三物种）、+2 语义键（place_checkin / tailsonality）。
-      expect(kMilestoneBadgeKeys, hasLength(84));
-      expect(kMilestoneBadgeKeys.values.toSet(), hasLength(42));
+    test('90 个 code 各一条、恰 44 个语义键，code 集合 == 标题表全集', () {
+      // V1.3.4 FR-126：+6 code（打卡 / 性格测试 × 三物种）、+2 语义键（place_checkin / tailsonality）；
+      // V1.4.2 FR-154：+6 code（关注 / 收藏 × 三物种）、+2 语义键（first_friend / first_save）。
+      expect(kMilestoneBadgeKeys, hasLength(90));
+      expect(kMilestoneBadgeKeys.values.toSet(), hasLength(44));
       expect(kMilestoneBadgeKeys.keys.toSet(), kMilestoneTitles.keys.toSet());
       for (final v in kMilestoneBadgeKeys.values) {
         expect(RegExp(r'^[a-z0-9_]+$').hasMatch(v), isTrue, reason: v);

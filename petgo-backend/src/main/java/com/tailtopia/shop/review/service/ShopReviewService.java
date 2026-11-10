@@ -151,24 +151,26 @@ public class ShopReviewService {
 
     // ---------- 详情页读 ----------
 
-    /** 🔴 只出已发布的，按时间倒序（Story 7.3）。 */
+    /** 🔴 只出已发布且未隐藏的（v1.4.2 Story 6.1），按时间倒序（Story 7.3）。 */
     @Transactional(readOnly = true)
     public List<ShopReview> publishedFor(long productId, int limit) {
-        return reviews.findByProductIdAndReviewStatusOrderByCreatedAtDescIdDesc(productId,
+        return reviews.findByProductIdAndReviewStatusAndHiddenAtIsNullOrderByCreatedAtDescIdDesc(productId,
                 ReviewStatus.PUBLISHED, PageRequest.of(0, Math.max(1, limit)));
     }
 
+    /** 已发布且未隐藏的条数（v1.4.2 Story 6.1：隐藏的不计入）。 */
     @Transactional(readOnly = true)
     public long publishedCount(long productId) {
-        return reviews.countByProductIdAndReviewStatus(productId, ReviewStatus.PUBLISHED);
+        return reviews.countByProductIdAndReviewStatusAndHiddenAtIsNull(productId, ReviewStatus.PUBLISHED);
     }
 
-    /** 平均星级。🔴 无评价时返回 null，<b>不是 0</b> —— 0 会被读成「零分」。 */
+    /** 平均星级（只算已发布且未隐藏）。🔴 无评价时返回 null，<b>不是 0</b> —— 0 会被读成「零分」。 */
     @Transactional(readOnly = true)
     public Double averageRating(long productId) {
         return reviews.averageRating(productId);
     }
 
+    /** 本人评价列表。🔴 不受运营隐藏影响（作者仍能看到自己的评价，状态照旧，v1.4.2 Story 6.1 AC9.2）。 */
     @Transactional(readOnly = true)
     public List<ShopReview> myReviews(long userId) {
         return reviews.findByUserIdOrderByCreatedAtDescIdDesc(userId);

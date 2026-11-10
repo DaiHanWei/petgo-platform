@@ -137,6 +137,8 @@ public final class AuditActions {
     // ===== 用户账号治理补充 =====
     /** 后台赠送 PawCoin（bug 20260728-389；summary 含数量/原因/幂等键，不落 PII）。 */
     public static final String PAWCOIN_GRANTED = "PAWCOIN_GRANTED";
+    /** 人工扣回问诊挂起退款订单的成长值（V1.4.2 exp-reverse；summary 含入账 / 已扣回 / 本次 / 前后等级，不落 PII）。 */
+    public static final String CONSULT_ORDER_EXP_REVERSED = "CONSULT_ORDER_EXP_REVERSED";
     /** 运营补发宠物名额（V1.4.0 ② Story 4.3 · AB-34.2；summary 含天数/到期/原因/幂等键，不落 PII）。 */
     public static final String PET_SLOT_GRANTED = "PET_SLOT_GRANTED";
 
@@ -247,6 +249,34 @@ public final class AuditActions {
     public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
     /** 运营标记缺货，订单进入异常订单工作台（A8 判据，V20260918_2243）。 */
     public static final String SHOP_ORDER_SHORTAGE_FLAGGED = "SHOP_ORDER_SHORTAGE_FLAGGED";
+    /**
+     * 取消退款处置（v1.4.2 shop Story 4.1）：整单取消 / 部分取消 / 退回入库确认 / 签收后赔付 / 迟到款退款。
+     * 摘要记退款单 token、范围、原因与各段金额。🔒 <b>不记收款账号 / 户名</b>。
+     */
+    public static final String SHOP_ORDER_REFUND_HANDLED = "SHOP_ORDER_REFUND_HANDLED";
+    /** 财务标记取消退款单已打款 / 打款失败（v1.4.2 shop Story 4.1 AC5）。🔒 只记渠道与金额，不记账号 / 户名。 */
+    public static final String SHOP_ORDER_REFUND_PAYOUT_MARKED = "SHOP_ORDER_REFUND_PAYOUT_MARKED";
+    /**
+     * 迟到款重新下单（v1.4.2 shop Story 4.2 AC4.8）：target = 原单 token，摘要记新单展示号、迟到款与新单币 / 现金 / 退回多余。
+     * 🔒 不记地址 / 手机号。迟到款退款走 {@link #SHOP_ORDER_REFUND_HANDLED}（4.1 {@code createLatePaymentRefund} 内记）。
+     */
+    public static final String SHOP_ORDER_LATE_PAYMENT_REORDERED = "SHOP_ORDER_LATE_PAYMENT_REORDERED";
+    /**
+     * Biteship 运单（v1.4.2 shop Story 5.1）：下运单成功 / 失败 / 取消运单 / 标记已发货。target = 订单 token；
+     * 摘要只记 referenceId、Biteship 订单 id、快递码、失败原因码。🔒 <b>不记收件人任何字段</b>。
+     */
+    public static final String SHOP_WAYBILL_CREATED = "SHOP_WAYBILL_CREATED";
+    public static final String SHOP_WAYBILL_FAILED = "SHOP_WAYBILL_FAILED";
+    public static final String SHOP_WAYBILL_CANCELLED = "SHOP_WAYBILL_CANCELLED";
+    public static final String SHOP_ORDER_MARKED_SHIPPED = "SHOP_ORDER_MARKED_SHIPPED";
+    /**
+     * 物流异常处置（v1.4.2 shop Story 5.2 AC7.6）：确认（退回原因 / 丢件 / 破损）、清除、揽收失败处置（重下 / 手工运单 / 取消）、
+     * 索赔提醒变更。target = 订单 token；摘要只记异常类型、处置方式。🔒 <b>不记收件人任何字段</b>。
+     */
+    public static final String SHOP_LOGISTICS_EXCEPTION_CONFIRMED = "SHOP_LOGISTICS_EXCEPTION_CONFIRMED";
+    public static final String SHOP_LOGISTICS_EXCEPTION_CLEARED = "SHOP_LOGISTICS_EXCEPTION_CLEARED";
+    public static final String SHOP_LOGISTICS_PICKUP_FAILURE_RESOLVED = "SHOP_LOGISTICS_PICKUP_FAILURE_RESOLVED";
+    public static final String SHOP_LOGISTICS_CLAIM_PENDING_CHANGED = "SHOP_LOGISTICS_CLAIM_PENDING_CHANGED";
 
     // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
     /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */
@@ -302,6 +332,75 @@ public final class AuditActions {
     public static final String MERCHANT_PO_DELIVERED = "MERCHANT_PO_DELIVERED";
     /** 编辑 SKU 批发价（门店进货价）。摘要记新旧值 —— 批发价门店本就看得到，不属于进货价那类敏感字段。 */
     public static final String SHOP_SKU_WHOLESALE_UPDATED = "SHOP_SKU_WHOLESALE_UPDATED";
+
+    // ===== 优惠券（v1.4.2 shop Story 2.1，D-1 ~ D-4；S-2 service 归 shop 线，后台线只做页面）=====
+    // target = {@code SHOP_COUPON} / 券模板 public_token。🔴 summary 绝不含兑换码明文。
+    /** 新建券模板（摘要记类型、获取方式、面额、门槛、范围类型、总量、每人限领）。 */
+    public static final String SHOP_COUPON_CREATED = "SHOP_COUPON_CREATED";
+    /** 停用券模板（摘要记是否作废已领未用及作废张数）。 */
+    public static final String SHOP_COUPON_STOPPED = "SHOP_COUPON_STOPPED";
+    /** 为券模板生成兑换码（摘要只记通用 / 一次性与数量，不记码）。 */
+    public static final String SHOP_COUPON_CODES_CREATED = "SHOP_COUPON_CODES_CREATED";
+
+    // ===== 电商后台（V1.4.2 shop-admin Story 1.1 · AD-4 / O-11，按后台 PRD 文档头「操作审计」表补全）=====
+    // 摘要只写有变化的字段（`字段: 旧→新`），涉钱写全金额；兑换码只记数量；不记收款账户 / 手机号 / 地址。
+    /** 编辑券模板（发放期未开始时可改全部参数；摘要记改前改后）。 */
+    public static final String SHOP_COUPON_UPDATED = "SHOP_COUPON_UPDATED";
+    /** 已开始发放的券增加发放总量（只增不减；批量码券同事务补生成差额码，摘要记旧→新总量与补码数量）。 */
+    public static final String SHOP_COUPON_QUOTA_INCREASED = "SHOP_COUPON_QUOTA_INCREASED";
+    /** 导出一次性兑换码 CSV（🔴 只记数量，不记码明文）。 */
+    public static final String SHOP_COUPON_CODES_EXPORTED = "SHOP_COUPON_CODES_EXPORTED";
+    /** banner 拖动排序（target = {@code SHOP_BANNER} / {@code order}；摘要记排序前后 id 顺序）。 */
+    public static final String SHOP_BANNER_REORDERED = "SHOP_BANNER_REORDERED";
+    /**
+     * 电商取消退款单打款时被职责分离规则拦截（O-12，不豁免超管；REQUIRES_NEW 独立事务写）。
+     * target = {@code SHOP_ORDER_REFUND} / 退款单 token。与 V1.1 退款审批的 {@link #REFUND_DUTY_VIOLATION_BLOCKED} 分开（target 不同）。
+     */
+    public static final String SHOP_REFUND_DUTY_VIOLATION_BLOCKED = "SHOP_REFUND_DUTY_VIOLATION_BLOCKED";
+    /** 注销用户的未退现金线下处理后结案（O-17 / O-26；摘要记金额与备注，不记账号）。 */
+    public static final String SHOP_ORDER_REFUND_OFFLINE_CLOSED = "SHOP_ORDER_REFUND_OFFLINE_CLOSED";
+    /** 用户原因退回：订单抽屉按订单行确认入库（O-15；摘要记各行数量，库存只在这里加一次）。 */
+    public static final String SHOP_ORDER_RETURN_INBOUND_CONFIRMED = "SHOP_ORDER_RETURN_INBOUND_CONFIRMED";
+    /** 丢件破损索赔结案（AD-14；摘要记结果与到账金额）。 */
+    public static final String SHOP_LOGISTICS_CLAIM_CLOSED = "SHOP_LOGISTICS_CLAIM_CLOSED";
+    /** 录入 Biteship 实际余额（AD-13；摘要记录入值与当时的预估值）。 */
+    public static final String SHOP_BITESHIP_BALANCE_RECORDED = "SHOP_BITESHIP_BALANCE_RECORDED";
+
+    // ===== 商品评价运营（v1.4.2 shop Story 6.1，D-17；S-2 service 归 shop 线，后台线只做页面）=====
+    // target = {@code SHOP_REVIEW} / 评价 id。🔒 summary 只记评价 id 与商品 token，绝不记评价正文。
+    /** 隐藏一条评价（不展示、不计入均分与条数）。 */
+    public static final String SHOP_REVIEW_HIDDEN = "SHOP_REVIEW_HIDDEN";
+    /** 撤销隐藏。 */
+    public static final String SHOP_REVIEW_UNHIDDEN = "SHOP_REVIEW_UNHIDDEN";
+    /** 切换商品评价列表展示开关（target = {@code SHIPPING_SETTINGS}；摘要记开 / 关）。 */
+    public static final String SHOP_REVIEW_DISPLAY_TOGGLED = "SHOP_REVIEW_DISPLAY_TOGGLED";
+
+    // ===== 话题管理（V1.4.2 social-topic Story 6.1，AB-10B）=====
+    // target = {@code topic} / topicId；summary 只记标准名、状态变化、序号，不记说明全文。
+    /** 后台新建官方话题。 */
+    public static final String TOPIC_CREATED = "TOPIC_CREATED";
+    /** 同名用户话题升级为官方话题（帖子关联不动、状态不变，R-5）。 */
+    public static final String TOPIC_UPGRADED = "TOPIC_UPGRADED";
+    /** 编辑话题（显示写法只改大小写 / 官方话题说明）。 */
+    public static final String TOPIC_UPDATED = "TOPIC_UPDATED";
+    /** 隐藏话题（在首页话题行时一并移出）。 */
+    public static final String TOPIC_HIDDEN = "TOPIC_HIDDEN";
+    /** 禁用话题（移出首页话题行 + 结束话题页坑位全部未结束排期）。 */
+    public static final String TOPIC_DISABLED = "TOPIC_DISABLED";
+    /** 恢复为正常（隐藏 / 禁用 → ACTIVE；首页话题行位置与顶置不恢复）。 */
+    public static final String TOPIC_RESTORED = "TOPIC_RESTORED";
+    /** 放入首页话题行（排到最后）。 */
+    public static final String TOPIC_FEATURED = "TOPIC_FEATURED";
+    /** 移出首页话题行（后面的前移）。 */
+    public static final String TOPIC_UNFEATURED = "TOPIC_UNFEATURED";
+    /** 改首页话题行序号（与原占该位的话题互换）。 */
+    public static final String TOPIC_FEATURE_REORDERED = "TOPIC_FEATURE_REORDERED";
+
+    // ===== ops AI 查数（主题 ops-ai-query，spec §5.5）=====
+    /** 🔒 提交问题（新对话或追问）。摘要只记对话 / 消息 token、语言、问题长度；<b>严禁写问题原文</b>（可能含手机号等 PII）。 */
+    public static final String AI_QUERY_SUBMIT = "AI_QUERY_SUBMIT";
+    /** 下载答案里的导出文件。摘要只记对话 / 消息 token 与文件名。 */
+    public static final String AI_QUERY_DOWNLOAD = "AI_QUERY_DOWNLOAD";
 
     private AuditActions() {
     }

@@ -273,6 +273,26 @@ document.addEventListener('DOMContentLoaded', function () {
     //   🔴 为什么不让响应把宿主换空：确认表单的 hx-target 必须指向**弹层内部**的错误槽，
     //      否则 422 / 403 一回来就把整个弹层换掉，运营看到的是弹层凭空消失、
     //      而不是「为什么没成功」。成功路径因此只能靠这个事件。
+    // V1.4.2 shop-admin Story 1.2 · AD-3：替换原生 data-confirm 的弹层（form.cm-form[data-cm-success-target]）。
+    //   成功（2xx）且响应没自带 HX-Retarget → 把响应换进原表单的目标（与原来点确认后的行为一致），随后收起弹层；
+    //   错误（422 / 403）不动 —— AdminBusinessExceptionAdvice 按 HX-Target=confirm-modal-err 换进弹层内，弹层不消失。
+    document.body.addEventListener('htmx:beforeSwap', function (e) {
+        var elt = e.detail && e.detail.elt;
+        var form = elt && elt.closest ? elt.closest('form.cm-form[data-cm-success-target]') : null;
+        var xhr = e.detail && e.detail.xhr;
+        if (!form || !xhr || xhr.status < 200 || xhr.status >= 300) { return; }
+        if (!xhr.getResponseHeader('HX-Retarget')) {
+            var t = document.querySelector(form.getAttribute('data-cm-success-target'));
+            if (t) { e.detail.target = t; }
+        }
+        form.setAttribute('data-cm-done', '1');
+    });
+    document.body.addEventListener('htmx:afterRequest', function (e) {
+        var elt = e.detail && e.detail.elt;
+        if (elt && elt.getAttribute && elt.getAttribute('data-cm-done') === '1') {
+            document.body.dispatchEvent(new CustomEvent('admin:confirm-close'));
+        }
+    });
     document.body.addEventListener('admin:confirm-close', function () {
         document.querySelectorAll('dialog.modal[open]').forEach(function (d) {
             if (typeof d.close === 'function') { d.close(); }
@@ -1426,3 +1446,127 @@ document.addEventListener('click', function (e) {
         });
     });
 })();
+
+// ===== 整行可点的整页跳转（V1.4.2 social-topic · Story 6.2 · G1a 话题页顶置列表）=====
+// <tr data-href="<url>">：点行（排除 a / button / input / label / select / textarea / summary / details / [data-no-drawer]）
+// 或在行上按 Enter → location.href。行尾仍保留真正的 <a>，键盘与无 JS 照样可用。
+// 与 admin-drawer.js 的 tr[data-drawer-url]（开抽屉）互不重叠：一行只挂其中一种。
+(function () {
+    function go(tr) { if (tr && tr.dataset.href) { window.location.href = tr.dataset.href; } }
+    document.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) { return; }
+        if (t.closest('a, button, input, label, select, textarea, summary, details, [data-no-drawer]')) { return; }
+        go(t.closest('tr[data-href]'));
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || !e.target || !e.target.matches || !e.target.matches('tr[data-href]')) { return; }
+        go(e.target);
+    });
+})();
+
+
+// ===== V1.4.2 shop-admin Story 3.1 · AD-7：banner 拖动排序 + 上传后比例提醒 =====
+(function () {
+    // ① 拖动排序：table[data-banner-reorder] 的行可拖，松手后按新顺序 htmx POST ids（服务端重写 sort_weight N..1，整表 oob 重拉）。
+    var dragging = null;
+    document.addEventListener('dragstart', function (e) {
+        var tr = e.target && e.target.closest ? e.target.closest('table[data-banner-reorder] tr[data-banner-id]') : null;
+        if (!tr) { return; }
+        dragging = tr;
+        dragging._before = orderOf(tr.closest('table'));
+        tr.classList.add('is-dragging');
+        if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', tr.getAttribute('data-banner-id')); }
+    });
+    document.addEventListener('dragover', function (e) {
+        if (!dragging) { return; }
+        var over = e.target && e.target.closest ? e.target.closest('tr[data-banner-id]') : null;
+        if (!over || over === dragging || over.parentNode !== dragging.parentNode) { return; }
+        e.preventDefault();
+        var r = over.getBoundingClientRect();
+        over.parentNode.insertBefore(dragging, (e.clientY - r.top) > r.height / 2 ? over.nextSibling : over);
+    });
+    function orderOf(table) {
+        return [].slice.call(table.querySelectorAll('tr[data-banner-id]')).map(function (r) { return r.getAttribute('data-banner-id'); });
+    }
+    document.addEventListener('dragend', function () {
+        if (!dragging) { return; }
+        var table = dragging.closest('table[data-banner-reorder]');
+        var before = dragging._before || [];
+        dragging.classList.remove('is-dragging');
+        dragging = null;
+        if (!table || typeof htmx === 'undefined') { return; }
+        var ids = orderOf(table);
+        if (ids.join(',') === before.join(',')) { return; } // 没挪位置（或 Esc 取消）：不提交
+        var restore = function () {
+            // 保存失败（如别人刚增删了 banner）：行顺序退回拖动前，不让界面停在一个没保存的顺序上
+            var body = table.querySelector('tbody');
+            before.forEach(function (id) {
+                var row = body.querySelector('tr[data-banner-id="' + id + '"]');
+                if (row) { body.appendChild(row); }
+            });
+            if (table.getAttribute('data-msg-reorder-failed')) { window.alert(table.getAttribute('data-msg-reorder-failed')); }
+        };
+        table.addEventListener('htmx:afterRequest', function onDone(ev) {
+            table.removeEventListener('htmx:afterRequest', onDone);
+            if (!ev.detail || !ev.detail.successful) { restore(); }
+        });
+        htmx.ajax('POST', table.getAttribute('data-banner-reorder'), {
+            source: table, target: '#shop-banner-drawer-body', swap: 'innerHTML', values: { ids: ids }
+        });
+    });
+
+    // ② 比例提醒（B6）：与 BannerImageRatio 同一阈值（|w/h − 352/148| / (352/148) > 3%），提醒不拦截。
+    function check(box) {
+        var w = parseInt((document.getElementById(box.getAttribute('data-w-field')) || {}).value || '0', 10);
+        var h = parseInt((document.getElementById(box.getAttribute('data-h-field')) || {}).value || '0', 10);
+        box.querySelectorAll('[data-ratio-warn],[data-ratio-size]').forEach(function (n) { n.remove(); });
+        if (!(w > 0 && h > 0)) { return; }
+        var target = parseFloat(box.getAttribute('data-app-w')) / parseFloat(box.getAttribute('data-app-h'));
+        var actual = w / h, dev = (actual - target) / target;
+        var r = (Math.round(actual * 10) / 10).toFixed(1) + ':1';
+        function fill(t) { return (t || '').split('{w}').join(String(w)).split('{h}').join(String(h)).split('{r}').join(r); }
+        var size = document.createElement('p');
+        size.className = 'hint'; size.setAttribute('data-ratio-size', ''); size.textContent = fill(box.getAttribute('data-msg-size'));
+        box.appendChild(size);
+        if (Math.abs(dev) > parseFloat(box.getAttribute('data-tolerance'))) {
+            var warn = document.createElement('p');
+            warn.className = 'banner warn'; warn.setAttribute('data-ratio-warn', '');
+            warn.textContent = fill(box.getAttribute(dev < 0 ? 'data-msg-tall' : 'data-msg-wide'));
+            box.appendChild(warn);
+        }
+    }
+    document.addEventListener('input', function (e) {
+        var id = e.target && e.target.id;
+        if (!id) { return; }
+        document.querySelectorAll('[data-banner-ratio]').forEach(function (box) {
+            if (box.getAttribute('data-w-field') === id || box.getAttribute('data-h-field') === id) { check(box); }
+        });
+    });
+})();
+
+// ===== 通用分页条 · 跳页（V1.4.2 优化项，模板 admin/fragments/pager）=====
+// 页码链接是服务端渲染好的 href / hx-get，这里只管「跳至第 N 页」：输入值夹到 1..总页数，
+// 套进 data-pager-tpl 的 ~PAGE~（0 基）。有 data-pager-target → htmx 局部刷新并写地址栏，否则整页跳转。
+document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.matches || !form.matches('form[data-pager-jump]')) { return; }
+    e.preventDefault();
+    var bar = form.closest('.admin-pager');
+    if (!bar) { return; }
+    var tpl = bar.getAttribute('data-pager-tpl');
+    var total = parseInt(bar.getAttribute('data-pager-total'), 10) || 1;
+    var input = form.querySelector('input[name="pagerJump"]');
+    var n = parseInt(input && input.value, 10);
+    if (!tpl || isNaN(n)) { return; }
+    n = Math.min(Math.max(n, 1), total);
+    var url = tpl.replace('~PAGE~', String(n - 1));
+    var target = bar.getAttribute('data-pager-target');
+    if (target && typeof htmx !== 'undefined' && document.querySelector(target)) {
+        htmx.ajax('GET', url, { target: target, swap: 'innerHTML' }).then(function () {
+            try { history.pushState({ htmx: true }, '', url); } catch (ignored) { /* 地址栏写不进去也不影响翻页 */ }
+        });
+    } else {
+        window.location.href = url;
+    }
+});

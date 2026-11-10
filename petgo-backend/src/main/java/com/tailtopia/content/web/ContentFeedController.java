@@ -4,6 +4,7 @@ import com.tailtopia.content.domain.ContentPin;
 import com.tailtopia.content.dto.FeedPageResponse;
 import com.tailtopia.content.dto.PinnedSlotResponse;
 import com.tailtopia.content.service.FeedService;
+import com.tailtopia.topic.service.TopicQueryService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,8 +35,12 @@ public class ContentFeedController {
 
     private final FeedService feedService;
 
-    public ContentFeedController(FeedService feedService) {
+    /** V1.4.2 social-topic Story 4.2（D-6）：{@code ?topic=} 按标准名解析话题坑位（content → topic 单向依赖）。 */
+    private final TopicQueryService topicQuery;
+
+    public ContentFeedController(FeedService feedService, TopicQueryService topicQuery) {
         this.feedService = feedService;
+        this.topicQuery = topicQuery;
     }
 
     @GetMapping("/api/v1/content-posts")
@@ -54,11 +59,40 @@ public class ContentFeedController {
      * 无生效配置返回 {@code {}}（pin 为空），**不是错误** —— 客户端什么都不渲染、不留占位。
      *
      * <p>与首页一样对游客开放（顶置内容本就是公开内容）。
+     *
+     * <p>V1.4.2 social-topic Story 4.2（D-6 · AC6）：
+     * <ul>
+     *   <li>{@code ?topic=<标准名>}：话题可访问（ACTIVE / HIDDEN）→ 取 {@link ContentPin#topicSlot} 坑位，
+     *       推广卡 / 内容顶置 / 可展示判定 / 查看者隐藏作者 → 空，全部复用 {@code loadPinnedSlot}；
+     *       话题 DISABLED / 不存在 / 非法名 → {@code {}}（坑位为空，<b>不是 404</b>）。</li>
+     *   <li>🔴 {@code ?slot=TOPIC:…} 直接 {@code {}}：话题坑位只能按标准名访问，防按自增 id 枚举。</li>
+     *   <li>不带 {@code topic}：行为与改动前一致。</li>
+     * </ul>
      */
     @GetMapping("/api/v1/content-posts/pinned")
     public PinnedSlotResponse pinnedSlot(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(value = "slot", defaultValue = ContentPin.SLOT_HOME_FEED) String slot) {
+            @RequestParam(value = "slot", defaultValue = ContentPin.SLOT_HOME_FEED) String slot,
+            @RequestParam(value = "topic", required = false) String topic) {
+        if (topic != null) {
+            return topicQuery.findVisible(topic)
+                    .map(t -> feedService.loadPinnedSlot(ContentPin.topicSlot(t.getId()), userViewerId(jwt)))
+                    .orElseGet(() -> new PinnedSlotResponse(null));
+        }
+        if (slot.startsWith(ContentPin.SLOT_TOPIC_PREFIX)) {
+            return new PinnedSlotResponse(null);
+        }
         return feedService.loadPinnedSlot(slot, viewerId(jwt));
+    }
+
+    /**
+     * 话题坑位（{@code ?topic=}）专用查看者：只认 {@code role=USER}（AC0.4，同 {@code TopicPostsController.viewerId}），
+     * 兽医 / 运营 token 的 sub 不是 users.id，按游客处理。不带 {@code topic} 的旧路径仍用下面的 {@link #viewerId}（行为不变）。
+     */
+    private static Long userViewerId(Jwt jwt) {
+        if (jwt == null || !"USER".equals(jwt.getClaimAsString("role"))) {
+            return null;
+        }
+        return viewerId(jwt);
     }
 
     /** 登录用户 id（游客 / 无效 JWT → null）。 */

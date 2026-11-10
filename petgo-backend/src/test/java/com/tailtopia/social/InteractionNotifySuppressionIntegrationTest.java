@@ -86,14 +86,16 @@ class InteractionNotifySuppressionIntegrationTest extends ApiIntegrationTest {
         return id;
     }
 
-    private void reply(long userId, long parentId, String body) throws Exception {
+    private long reply(long userId, long parentId, String body) throws Exception {
         MvcResult r = mvc.perform(post("/api/v1/comments/" + parentId + "/replies")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(userId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"body\":\"" + body + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        awaitProcessed(json.readTree(r.getResponse().getContentAsString()).get("id").asLong());
+        long id = json.readTree(r.getResponse().getContentAsString()).get("id").asLong();
+        awaitProcessed(id);
+        return id;
     }
 
     /** 某人通知中心里的通知类型列表（最新在前）。 */
@@ -209,6 +211,43 @@ class InteractionNotifySuppressionIntegrationTest extends ApiIntegrationTest {
         reply(b.getId(), parent, "B 回复 C");
 
         assertThat(notificationTypesOf(c.getId())).containsExactly("CONTENT_COMMENTED");
+    }
+
+    // ===== V1.4.2 · 回复了你的回复也要通知 =====
+
+    /** A 发帖、B 一级评论、C 回复 B、D 回复 C → A/B/C 各一条，D 自己没有。 */
+    @Test
+    void v142_replyToSecondLevelNotifiesTheRepliedUser() throws Exception {
+        User a = newUser();
+        User b = newUser();
+        User c = newUser();
+        User d = newUser();
+        long postId = newPost(a.getId()).getId();
+
+        long top = comment(b.getId(), postId, "B 一级");
+        long cReply = reply(c.getId(), top, "C 回复 B");
+        reply(d.getId(), cReply, "D 回复 C");
+
+        assertThat(notificationTypesOf(c.getId())).containsExactly("CONTENT_COMMENTED"); // 新增：D→C
+        assertThat(notificationTypesOf(b.getId())).containsExactly("CONTENT_COMMENTED", "CONTENT_COMMENTED");
+        assertThat(notificationTypesOf(d.getId())).isEmpty();
+    }
+
+    /** 被回复人 C 拉黑了 D → C 收不到（与其他评论通知同一套屏蔽）。 */
+    @Test
+    void v142_replyTargetWhoHidTheReplierGetsNothing() throws Exception {
+        User a = newUser();
+        User b = newUser();
+        User c = newUser();
+        User d = newUser();
+        long postId = newPost(a.getId()).getId();
+
+        long top = comment(b.getId(), postId, "B 一级");
+        long cReply = reply(c.getId(), top, "C 回复 B");
+        hideService.block(c.getId(), d.getId());
+        reply(d.getId(), cReply, "D 回复 C");
+
+        assertThat(notificationTypesOf(c.getId())).isEmpty();
     }
 
     // ===== AC5 · 解除与历史 =====

@@ -69,6 +69,10 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.collect.service.CollectDeletionService collectDeletion;
     /** OCR #2：宠物名额随注销终止。 */
     @Mock com.tailtopia.profile.slot.PetSlotAccountDeletionService petSlotDeletion;
+    /** V1.4.2 social-topic Story 1.1：追更者一侧追更行清理。 */
+    @Mock com.tailtopia.social.service.PetFollowService petFollowService;
+    /** V1.4.2 social-topic Story 2.1：账号级里程碑 flag 清理。 */
+    @Mock com.tailtopia.profile.service.AccountMilestoneService accountMilestones;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -78,7 +82,7 @@ class AccountDeletionServiceTest {
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
                 followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion,
-                petSlotDeletion);
+                petSlotDeletion, petFollowService, accountMilestones);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -114,6 +118,11 @@ class AccountDeletionServiceTest {
         verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         // 1.1.6 电商/分享注销联动：shop 清理 + 内容分享行删除 + 分享奖励留痕删除。
         verify(shopDeletion).deleteByUserId(7L);
+        // v1.4.2 shop Story 3.2 复审修复（D1/D2）：shop 注销联动（含待付款单退币退券）必须在 PawCoin 作废之前，
+        // 退回的币才会随钱包一并作废，而不是在作废之后给已注销账号重建钱包。
+        org.mockito.InOrder shopBeforeCoin = org.mockito.Mockito.inOrder(shopDeletion, pawCoinDeletion);
+        shopBeforeCoin.verify(shopDeletion).deleteByUserId(7L);
+        shopBeforeCoin.verify(pawCoinDeletion).voidBalanceAndPurge(7L);
         verify(contentShareService).deleteByAuthorForAccountDeletion(7L);
         verify(shareRewardDeletion).deleteByUserId(7L);
         // V1.3.0 Story 5.4 · AC7：引导标记也在级联里 —— 漏接的表会在注销后留着
@@ -123,6 +132,7 @@ class AccountDeletionServiceTest {
         verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
         // V1.4.0 ① Story 1.2 · AC7：成长值三张表在 tailsonality 之后、PawCoin 作废之前删除（AD-18）。
         verify(growthDeletion).deleteByUserId(7L);
+        verify(accountMilestones).deleteByUserId(7L); // V1.4.2 Story 2.1 AC10
         org.mockito.InOrder growthOrder = org.mockito.Mockito.inOrder(tailsonalityDeletion, growthDeletion,
                 pawCoinDeletion);
         growthOrder.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
@@ -160,6 +170,12 @@ class AccountDeletionServiceTest {
         org.mockito.InOrder afterUserRow = org.mockito.Mockito.inOrder(authDeletion, followService);
         afterUserRow.verify(authDeletion).deleteByUserId(7L);
         afterUserRow.verify(followService).purgeUser(7L);
+        // V1.4.2 social-topic Story 1.1 · AC7.3：追更者一侧同样显式清理，紧挨 followService.purgeUser 之后。
+        verify(petFollowService).purgeFollower(7L);
+        org.mockito.InOrder petFollowOrder = org.mockito.Mockito.inOrder(authDeletion, followService, petFollowService);
+        petFollowOrder.verify(authDeletion).deleteByUserId(7L);
+        petFollowOrder.verify(followService).purgeUser(7L);
+        petFollowOrder.verify(petFollowService).purgeFollower(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());
         verify(mediaDeletion).deletePublicByUrls(anyList());

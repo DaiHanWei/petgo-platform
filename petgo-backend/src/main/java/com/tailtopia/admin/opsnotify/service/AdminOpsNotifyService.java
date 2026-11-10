@@ -6,11 +6,14 @@ import com.tailtopia.admin.ops.AdminOpsTargetValidator;
 import com.tailtopia.admin.opsnotify.dto.OpsNotifyForm;
 import com.tailtopia.auth.service.OpsAudienceQuery;
 import com.tailtopia.auth.service.OpsAudienceQuery.IdStatus;
+import com.tailtopia.auth.service.OpsAudienceQuery.Reach;
 import com.tailtopia.growth.domain.GrowthTier;
 import com.tailtopia.notify.ops.domain.AudienceSpec;
 import com.tailtopia.notify.ops.domain.OpsCampaignDraft;
 import com.tailtopia.notify.ops.domain.OpsCampaignStatus;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
+import com.tailtopia.notify.ops.domain.OpsRecipient;
+import com.tailtopia.notify.ops.domain.OpsTextVariables;
 import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.ops.service.OpsNotificationCampaignService;
 import com.tailtopia.ops.audience.ActivityBand;
@@ -30,6 +33,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,6 +87,8 @@ public class AdminOpsNotifyService {
     public static final String ERR_DUPLICATE_SUBMIT = "admin.err.ops-notify.duplicate-submit";
     public static final String ERR_PREVIEW_REQUIRED = "admin.err.ops-notify.preview-required";
     public static final String ERR_AUDIENCE_EMPTY = "admin.err.ops-notify.audience-empty";
+    /** V1.4.2 AB-37：用了宠物变量、扣除没有宠物的人后净 0 人（P-5：新建 422；确认页不抛、带 blockedNoPet 渲染 I6）。 */
+    public static final String ERR_AUDIENCE_EMPTY_NO_PET = "admin.err.ops-notify.audience-empty-no-pet";
     public static final String ERR_PREVIEW_STALE = "admin.err.ops-notify.preview-stale";
     public static final String ERR_TARGET_HTTPS = "admin.err.ops-notify.target.https";
     public static final String ERR_TARGET_TYPE_REQUIRED = "admin.err.opsPopup.targetTypeRequired";
@@ -180,9 +186,56 @@ public class AdminOpsNotifyService {
      * IDS = 有效人数（与 {@link #checkIds} 同口径）。人群条件本身不合法与新建同样报 422。
      */
     @Transactional(readOnly = true)
-    public long preview(OpsNotifyForm f) {
+    public Estimate preview(OpsNotifyForm f) {
         Audience a = audience(f);
-        return count(a);
+        Reach r = count(a);
+        boolean usesPet = usesPet(f);
+        long net = usesPet ? r.withPet() : r.total();
+        return new Estimate(net, r.total() - net, r.total());
+    }
+
+    /**
+     * 预计触达（V1.4.2 AB-37 · D-16）：{@code net} = 净人数（用了宠物变量时扣除没有宠物的人，其余 = total）；
+     * {@code excludedNoPet} = 扣除数；{@code total} = 基础 + 人群条件。
+     */
+    public record Estimate(long net, long excludedNoPet, long total) {
+    }
+
+    /**
+     * 预览用户（V1.4.2 AB-37 · UI 稿 I4）：本次人群里随机 1 人与四段替换后的真实文案（ID 段兜底 Sobat、EN 段兜底 there，
+     * 两种语言用同一人）。🔒 只回给后台页面渲染，不进日志、不落库、不写审计。
+     */
+    public record Sample(long userId, String nickname, String petName, String titleId, String bodyId,
+            String titleEn, String bodyEn) {
+    }
+
+    /**
+     * 「换一个」（V1.4.2 AB-37 · AC8）：按整张表单的人群（用了宠物变量时只抽有宠物的人）随机取 1 人，尽量避开
+     * {@code excludeUserId}；只剩他一人时仍返回他；0 人 → empty。只读、不写审计。人群条件不合法与新建同样报 422。
+     */
+    @Transactional(readOnly = true)
+    public Optional<Sample> sample(OpsNotifyForm f, Long excludeUserId) {
+        Audience a = audience(f);
+        return sample(a, trim(f.getTitleId()), trim(f.getTitleEn()), trim(f.getBodyId()), trim(f.getBodyEn()),
+                excludeUserId);
+    }
+
+    private Optional<Sample> sample(Audience a, String titleId, String titleEn, String bodyId, String bodyEn,
+            Long excludeUserId) {
+        if (a.spec().mode() == AudienceSpec.Mode.IDS && (a.ids() == null || a.ids().isEmpty())) {
+            return Optional.empty();
+        }
+        boolean usesPet = OpsTextVariables.usesPet(titleId, titleEn, bodyId, bodyEn);
+        Optional<OpsRecipient> r = audienceQuery.sample(a.spec(), a.ids(), usesPet, excludeUserId);
+        return r.map(x -> new Sample(x.userId(), x.nickname(), x.petName(),
+                OpsTextVariables.render(titleId, x.nickname(), x.petName(), false),
+                OpsTextVariables.render(bodyId, x.nickname(), x.petName(), false),
+                OpsTextVariables.render(titleEn, x.nickname(), x.petName(), true),
+                OpsTextVariables.render(bodyEn, x.nickname(), x.petName(), true)));
+    }
+
+    private static boolean usesPet(OpsNotifyForm f) {
+        return OpsTextVariables.usesPet(f.getTitleId(), f.getTitleEn(), f.getBodyId(), f.getBodyEn());
     }
 
     // ---------- 指定用户 ID：校验 / 跳过清单 ----------
@@ -278,10 +331,21 @@ public class AdminOpsNotifyService {
 
     // ---------- 写 ----------
 
-    /** 通过全部校验的表单：发送核心要的东西 + 此刻按条件重算的人数。 */
+    /**
+     * 通过全部校验的表单：发送核心要的东西 + 此刻按条件重算的人数。
+     *
+     * <p>V1.4.2 AB-37：{@code count} = <b>净人数</b>（用了宠物变量时扣除没有宠物的人；确认页 {@code previewCount}、
+     * 预估闸、手输门槛、{@code estimated_count} 一律用它）；{@code excludedNoPet} = 扣除数；{@code blockedNoPet} =
+     * 人群非 0 但净 0（确认页渲染 I6、新建 422）；{@code sample} = 预览用户（只 {@link #review} 填，其余 null）。
+     */
     public record Prepared(String titleId, String titleEn, String bodyId, String bodyEn, OpsTargetType targetType,
             String targetValue, AudienceSpec spec, List<Long> ids, String idsSource, Instant scheduledAt,
-            long count) {
+            long count, long excludedNoPet, boolean usesPet, boolean blockedNoPet, Sample sample) {
+
+        Prepared withSample(Sample s) {
+            return new Prepared(titleId, titleEn, bodyId, bodyEn, targetType, targetValue, spec, ids, idsSource,
+                    scheduledAt, count, excludedNoPet, usesPet, blockedNoPet, s);
+        }
     }
 
     /**
@@ -290,7 +354,12 @@ public class AdminOpsNotifyService {
      */
     @Transactional(readOnly = true)
     public Prepared review(OpsNotifyForm f) {
-        return prepare(f);
+        Prepared p = prepare(f);
+        if (p.blockedNoPet()) {
+            return p; // I6：不抛，停在第 ④ 步显示拦截；没有可预览的人
+        }
+        Audience a = new Audience(p.spec(), p.ids(), p.idsSource());
+        return p.withSample(sample(a, p.titleId(), p.titleEn(), p.bodyId(), p.bodyEn(), null).orElse(null));
     }
 
     /** 新建结果：token + 定时时刻（null = 立即）。 */
@@ -315,6 +384,10 @@ public class AdminOpsNotifyService {
     public Created create(OpsNotifyForm f, long actorAccountId) {
         String submitKey = requireSubmitKey(f.getSubmitKey());
         Prepared p = prepare(f);
+        // V1.4.2 AB-37（P-5）：净 0 先于预估闸判——否则表单带回的 previewCount = 0 会先报 preview-required
+        if (p.blockedNoPet()) {
+            throw AppException.validation("扣除没有宠物的用户后为 0 人，无法发送").code(ERR_AUDIENCE_EMPTY_NO_PET);
+        }
         long previewed = checkPreview(f.getPreviewCount(), p.count());
         if (needsTypedConfirm(p.spec(), previewed, p.count())) {
             String typed = norm(f.getConfirmCount());
@@ -333,6 +406,7 @@ public class AdminOpsNotifyService {
             String token = core.create(draft, actorAccountId);
             audit.record(actorAccountId, AuditActions.OPS_NOTIFY_CREATED, "OPS_NOTIFY", token,
                     "新建系统通知「" + p.titleId() + "」；人群 " + audienceSummary(p) + "；预计 " + p.count() + " 人；"
+                            + (p.usesPet() ? "已排除无宠 " + p.excludedNoPet() + " 人；" : "")
                             + (p.scheduledAt() == null ? "立即发送"
                                     : "定时 " + ScheduleWindow.toWib(p.scheduledAt()).toString().replace('T', ' ')
                                             + " WIB")
@@ -363,7 +437,7 @@ public class AdminOpsNotifyService {
     }
 
     /**
-     * 全部校验，按 ① → ② → ③ 的先后报第一处错：文案（空 / 超长）→ 跳转（未选类型 / 格式 / 外链须 https / 商品不可用）
+     * 全部校验，按 ① → ② → ③ 的先后报第一处错：文案（空 / 手打变量 / 超长）→ 跳转（未选类型 / 格式 / 外链须 https / 商品不可用）
      * → 人群（不合法 / ID 超限 / 有效 0 人）→ 发送时间（未选 / 未填 / 格式 / 已过）。
      */
     Prepared prepare(OpsNotifyForm f) {
@@ -375,9 +449,14 @@ public class AdminOpsNotifyService {
             throw AppException.validation("标题与正文（EN / ID）均不能为空")
                     .code(OpsNotificationCampaignService.ERR_TEXT_BLANK);
         }
-        if (titleId.length() > TITLE_MAX || titleEn.length() > TITLE_MAX
-                || bodyId.length() > BODY_MAX || bodyEn.length() > BODY_MAX) {
-            throw AppException.validation("标题不超过 " + TITLE_MAX + " 字符、正文不超过 " + BODY_MAX + " 字符")
+        // V1.4.2 AB-37：空 → 手打变量 → 超长（每个变量按 20 计），与核心同一套判定
+        if (OpsTextVariables.containsTyped(titleId, titleEn, bodyId, bodyEn)) {
+            throw AppException.validation("文案里有手打的变量，请用按钮插入")
+                    .code(OpsNotificationCampaignService.ERR_VAR_TYPED);
+        }
+        if (OpsNotificationCampaignService.tooLong(titleId, titleEn, bodyId, bodyEn)) {
+            throw AppException.validation("标题不超过 " + TITLE_MAX + " 字符、正文不超过 " + BODY_MAX + " 字符"
+                    + "（每个变量按 " + OpsTextVariables.VAR_WEIGHT + " 计）")
                     .code(OpsNotificationCampaignService.ERR_TEXT_TOO_LONG);
         }
         if (norm(f.getTargetType()) == null) {
@@ -394,13 +473,16 @@ public class AdminOpsNotifyService {
         targets.check(targetType, targetValue, true);
 
         Audience a = audience(f);
-        long count = count(a);
-        if (count <= 0) {
+        Reach reach = count(a);
+        if (reach.total() <= 0) {
             throw AppException.validation("当前人群 0 人，无法发送").code(ERR_AUDIENCE_EMPTY);
         }
+        // V1.4.2 AB-37：任一语言用了宠物变量 → 净人数 = 有宠物的人；净 0 不在这里抛（review 要渲染 I6，create 再拒）
+        boolean usesPet = OpsTextVariables.usesPet(titleId, titleEn, bodyId, bodyEn);
+        long net = usesPet ? reach.withPet() : reach.total();
         Instant scheduledAt = schedule(f.getSendMode(), f.getScheduledAt());
         return new Prepared(titleId, titleEn, bodyId, bodyEn, targetType, targetValue, a.spec(), a.ids(),
-                a.idsSource(), scheduledAt, count);
+                a.idsSource(), scheduledAt, net, reach.total() - net, usesPet, net <= 0, null);
     }
 
     /**
@@ -497,9 +579,9 @@ public class AdminOpsNotifyService {
     }
 
     /** IDS 模式：有效人数（数字 ID 里满足基础过滤的）；非数字行天然不计。其余模式按条件计数。 */
-    private long count(Audience a) {
+    private Reach count(Audience a) {
         if (a.spec().mode() == AudienceSpec.Mode.IDS && (a.ids() == null || a.ids().isEmpty())) {
-            return 0;
+            return Reach.EMPTY;
         }
         return audienceQuery.count(a.spec(), a.ids());
     }

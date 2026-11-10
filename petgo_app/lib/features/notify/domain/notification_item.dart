@@ -19,6 +19,7 @@ class NotificationItem {
     this.actorFollowsMe,
     this.bodyDeleted = false,
     this.opsTarget,
+    this.petName,
   });
 
   /// 后端拼好文案的互动类型（V1.3.4 follow · Story 3.3 / 3.4）。
@@ -30,6 +31,9 @@ class NotificationItem {
     'USER_FOLLOWED',
     'PLACE_COMMENTED',
     'PET_GIFT_RECEIVED',
+    // V1.4.2 social-topic Story 1.5 · AC6.1（D-10 / 决策日志 I5）：被追更 / 追更宠物新 Diary，后端按收件人语言拼整句。
+    'PET_FOLLOWED',
+    'PET_DIARY_POSTED',
   };
 
   // VET_REPLY|CONSULT_CLOSED|CONTENT_LIKED|CONTENT_COMMENTED|NEW_CONSULT_REQUEST|PET_BIRTHDAY|COMPANION_ANNIVERSARY|MILESTONE_NODE|OPS_ANNOUNCEMENT（V1.3.4 运营通知）|USER_FOLLOWED|PLACE_COMMENTED|PET_SLOT_EXPIRING|PET_SLOT_EXPIRED（V1.4.0 multi-pet 名额到期，读后端 title / body）|…
@@ -64,6 +68,10 @@ class NotificationItem {
   /// 只对 `USER_FOLLOWED`：该触发人是否仍关注我（T-41，回关按钮三态用）。
   final bool? actorFollowsMe;
 
+  /// 宠物现名（V1.4.2 social-topic Story 1.2）：只 `PET_FOLLOWED`（被追更的宠物）/ `PET_DIARY_POSTED`（发 Diary 的宠物）
+  /// 下发，标题里与 [actorName] 一起加粗；其余类型 / 宠物已删缺键 → null。
+  final String? petName;
+
   /// 评论已删除：[body] 是后端给的「评论已删除」占位文案，按稿显示灰色斜体（缺键 = false）。
   final bool bodyDeleted;
 
@@ -88,6 +96,7 @@ class NotificationItem {
         actorIFollow: json['actorIFollow'] as bool?,
         actorFollowsMe: json['actorFollowsMe'] as bool?,
         bodyDeleted: json['bodyDeleted'] == true,
+        petName: json['petName'] as String?,
         opsTarget: json['opsTarget'] is Map
             ? OpsTarget.fromJson((json['opsTarget'] as Map).cast<String, dynamic>())
             : null,

@@ -137,6 +137,48 @@ class AppPrefs {
     return _prefs.setString(kOpsPopupShown, jsonEncode(Map<String, String>.fromEntries(kept)));
   }
 
+  // --- Toko 游客新人券弹窗「已弹过」的活动 token（v1.4.2 shop Story 8.1 · AC4.2 / D-5）---
+  //
+  // 粒度是「设备 × campaignToken」：同设备同一活动只弹一次（关闭后也不再弹），换活动再弹。
+  // 只保留最近 [kShownNewbieCampaignsCap] 个，防无限增长。
+  static const kShownNewbieCampaigns = 'petgo.shown_newbie_campaigns';
+  static const kShownNewbieCampaignsCap = 20;
+
+  Set<String> get shownNewbieCampaigns =>
+      (_prefs.getStringList(kShownNewbieCampaigns) ?? const <String>[]).toSet();
+
+  Future<void> markNewbieCampaignShown(String campaignToken) {
+    final list = [...?_prefs.getStringList(kShownNewbieCampaigns)]..remove(campaignToken);
+    list.add(campaignToken);
+    final kept = list.length > kShownNewbieCampaignsCap
+        ? list.sublist(list.length - kShownNewbieCampaignsCap)
+        : list;
+    return _prefs.setStringList(kShownNewbieCampaigns, kept);
+  }
+
+  // --- Toko 商品详情「送达地区」（v1.4.2 shop Story 8.2 · B6）---
+  //
+  // 🔴 只记本机、**不生成收货地址**；8.3 购物车无地址时用 [ShopDeliveryArea.kecamatanId] 作 `regionKecamatanId`。
+  // 存的是区域参考数据（`shipping_zones.id` + 行政区名），不是用户地址，不含 PII。
+  static const kShopDeliveryArea = 'petgo.shop_delivery_area';
+
+  ShopDeliveryArea? get shopDeliveryArea {
+    final raw = _prefs.getString(kShopDeliveryArea);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final j = jsonDecode(raw);
+      return j is Map ? ShopDeliveryArea.fromJson(Map<String, dynamic>.from(j)) : null;
+    } catch (_) {
+      return null; // 脏数据按「未选」
+    }
+  }
+
+  Future<void> setShopDeliveryArea(ShopDeliveryArea area) =>
+      _prefs.setString(kShopDeliveryArea, jsonEncode(area.toJson()));
+
+  /// 退出登录 / 换账号时清（8.2 复审 #4）。
+  Future<void> clearShopDeliveryArea() => _prefs.remove(kShopDeliveryArea);
+
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
   //
   // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。
@@ -159,4 +201,43 @@ class AppPrefs {
   Future<void> setInt(String key, int value) => _prefs.setInt(key, value);
   bool getBool(String key, {bool fallback = false}) => _prefs.getBool(key) ?? fallback;
   Future<void> setBool(String key, bool value) => _prefs.setBool(key, value);
+}
+
+/// 本机记住的送达地区（v1.4.2 shop Story 8.2 · B6）。区域参考数据，非收货地址。
+class ShopDeliveryArea {
+  const ShopDeliveryArea({
+    required this.kecamatanId,
+    required this.kecamatan,
+    required this.kota,
+    required this.provinsi,
+    this.serviceable,
+  });
+
+  /// `shipping_zones.id`。
+  final int kecamatanId;
+  final String kecamatan;
+  final String kota;
+  final String provinsi;
+
+  /// 选择当时区域树标注的可配送（只作询价失败时的埋点兜底，不持久化）。
+  final bool? serviceable;
+
+  static ShopDeliveryArea? fromJson(Map<String, dynamic> j) {
+    final id = j['kecamatanId'];
+    final kec = j['kecamatan']?.toString() ?? '';
+    if (id is! num || kec.isEmpty) return null;
+    return ShopDeliveryArea(
+      kecamatanId: id.toInt(),
+      kecamatan: kec,
+      kota: j['kota']?.toString() ?? '',
+      provinsi: j['provinsi']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'kecamatanId': kecamatanId,
+        'kecamatan': kecamatan,
+        'kota': kota,
+        'provinsi': provinsi,
+      };
 }

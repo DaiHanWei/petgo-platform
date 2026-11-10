@@ -83,10 +83,23 @@ class ShopColors {
   /// 半透明白（onInk45/60/85）一律不达标。
   static const Color purple = AppColors.mint; // #845EC9，与全局主色同值
 
+  /// 「已省」绿（v1.4.2 shop Story 7.1：结算页「Kamu hemat …」/ 底栏「Hemat Rp X」/ 支付成功勾）。
+  /// 别名回全局 Momen 绿文字，不自造新色。
+  static const Color saving = AppColors.momenBadgeText; // #0E7A4D
+
+  /// 「已省」绿底（支付成功页勾圆底）。
+  static const Color savingBg = AppColors.momenBadgeBg; // #E7F8F0
+
   /// 紫深 —— 虚拟服务徽标文字、链接按下态。
   ///
   /// ⚠️ 与 `AppColors.mint600` (#6C48AE) 差 1 个色阶，是设计稿终值，非笔误。
   static const Color purpleDark = Color(0xFF6B45AE);
+
+  /// 免运券青（UI A1 `.v-cp.ship` 色条与面额 #1B7F8C）。
+  static const Color shipTeal = Color(0xFF1B7F8C);
+
+  /// 新人券角标黄（UI A1 `.v-cp.nb em` #FFD27A）。
+  static const Color newbieBadge = Color(0xFFFFD27A);
 
   /// 紫块内的正文色。
   static const Color purpleText = Color(0xFF4A3D66);

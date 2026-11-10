@@ -110,6 +110,7 @@ public class AdminPaymentController {
         model.addAttribute("totalElements", result.getTotalElements());
         model.addAttribute("hasPrev", result.hasPrevious());
         model.addAttribute("hasNext", result.hasNext());
+        model.addAttribute("pager", com.tailtopia.admin.shared.AdminPager.of(result)); // V1.4.2 通用分页条
         // 🔴 汇总覆盖**整个筛选结果**，不是当前这一页（见 summarize 的说明）。
         model.addAttribute("summary", service.summarize(filter));
         // htmx 局部：只回表格 + 摘要条 oob（模拟回调改了状态之后由页面上的刷新槽拉一次）。

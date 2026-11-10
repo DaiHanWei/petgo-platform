@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/format/idr_compact.dart';
+import '../../../../shared/utils/compact_count.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
 import '../../domain/pet_header_info.dart';
@@ -28,6 +29,8 @@ class PetInfoCard extends StatelessWidget {
     this.milestoneCount,
     this.topRight,
     this.avatarKey,
+    this.followerCount,
+    this.bottomAction,
   });
 
   final PetHeaderInfo profile;
@@ -47,6 +50,17 @@ class PetInfoCard extends StatelessWidget {
 
   /// 点礼物格进礼物页（主人 / 站内访客注入）。null → 不可点、无「›」（游客示例、分享 token 态）。
   final VoidCallback? onOpenGifts;
+
+  /// 第 4 格「{N} Pengikut」（V1.4.2 social-topic · Story 1.4 · AC2）：追更人数，**不可点**。
+  /// 🔴 null（旧后端缺字段 / 游客示例页）→ 维持 3 格、内边距 8，外观逐像素不变。
+  final int? followerCount;
+
+  /// 统计条下方的整宽动作（V1.4.2 social-topic · Story 1.4 · AC1：站内访客页的追更按钮），上距 12。
+  /// null = 改动前外观。
+  final Widget? bottomAction;
+
+  /// 4 格时每格左右内边距 4（3 格 8，改动前的值）。
+  double get _hp => followerCount != null ? 4.0 : 8.0;
 
   /// 无头像时的 emoji 占位：**按物种取**（原先恒为 🐱，狗主人会看到自家狗顶着猫脸 ——
   /// 2026-08-04 用户实机反馈）。未知物种走中性爪印。
@@ -189,9 +203,11 @@ class PetInfoCard extends StatelessWidget {
                 _statCol(happyCount, l10n.petInfoStatHappyMoments),
                 _giftCol(l10n),
                 _statCol(milestoneCount, l10n.petInfoStatMilestone),
+                if (followerCount != null) _followerCol(context, l10n, followerCount!),
               ],
             ),
           ),
+          if (bottomAction != null) ...[const SizedBox(height: 12), bottomAction!],
         ],
       ),
     );
@@ -199,7 +215,7 @@ class PetInfoCard extends StatelessWidget {
 
   Widget _statCol(int? n, String label) => Expanded(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: EdgeInsets.symmetric(horizontal: _hp, vertical: 6),
           child: Column(
             children: [
               Text(n?.toString() ?? '·',
@@ -237,10 +253,12 @@ class PetInfoCard extends StatelessWidget {
     }
     final tappable = onOpenGifts != null;
     final column = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: _hp, vertical: 6),
       child: Column(
         children: [
-          value,
+          // 4 格时（V1.4.2 social-topic 1.4 · AC2.3）：360dp 小屏「Rp999,9rb」放不下 → 等比缩小、不截断。
+          // 3 格保持原样（不包），像素不变。
+          if (followerCount != null) FittedBox(fit: BoxFit.scaleDown, child: value) else value,
           const SizedBox(height: 1),
           Text.rich(
             TextSpan(children: [
@@ -273,5 +291,30 @@ class PetInfoCard extends StatelessWidget {
           : KeyedSubtree(key: const ValueKey('petInfoGiftStat'), child: column),
     );
   }
+
+  /// 第 4 格「{N} Pengikut」（AC2）：数字 16 / w700 `ink` + 等宽数字（乐观 +1 不跳宽），
+  /// 计数格式同 1.3.4（[formatCompactCount]）；标签 11 号 `ink2`；不可点。
+  Widget _followerCol(BuildContext context, AppLocalizations l10n, int n) => Expanded(
+        key: const ValueKey('petInfoFollowerStat'),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: _hp, vertical: 6),
+          child: Column(
+            children: [
+              Text(formatCompactCount(n, Localizations.localeOf(context)),
+                  key: const ValueKey('petInfoFollowerCount'),
+                  maxLines: 1,
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                      fontFeatures: [FontFeature.tabularFigures()])),
+              const SizedBox(height: 1),
+              Text(l10n.followStatFollowers,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: AppColors.ink2)),
+            ],
+          ),
+        ),
+      );
 
 }

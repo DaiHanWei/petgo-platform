@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  E1 / E2 退款打款（V1.4.2 shop-admin Story 5.2 · AB-28 · AD-10，模板 B · tpl-b-list）。
+  页签：待用户选择 / 待打款 / 打款失败 / 已打款 / 已退为 PawCoin + 注销用户·线下处理（O-17，无稿，不计角标）。
+  🔒 列表只显示账号末 4 位与户名；点行开抽屉（fragments/drawer-shop-refund-payout.html）。
+  模型：tab、tabs、counts（Tab → 条数）、summary、rows、page。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.page.shop-refund-payouts}">退款打款 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='payout'">
+        <div id="confirm-host"></div>
+        <div class="wb-title-row"><h1 th:text="#{admin.page.shop-refund-payouts}">退款打款</h1></div>
+        <p class="muted" th:text="#{admin.v142.payout.hint}">汇集所有待退的电商现金退款。</p>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::rp-filters}, ~{::rp-summary}, ~{::rp-table}, ~{::rp-drawer})}">
+            <div th:fragment="rp-filters"></div>
+            <div th:fragment="rp-summary" th:replace="~{admin/shop-refund-payouts :: summary}"></div>
+            <div th:fragment="rp-table" id="payout-list"
+                 th:attr="hx-get=@{/admin/shop/refund-payouts(tab=${tab})}" hx-trigger="admin:payout-list-refresh from:body"
+                 hx-target="this" hx-swap="innerHTML">
+                <div th:replace="~{admin/shop-refund-payouts :: listBody}"></div>
+            </div>
+            <div th:fragment="rp-drawer" class="drawer-title" th:text="#{admin.page.shop-refund-payouts}">退款打款</div>
+        </div>
+    </div>
+</div>
+
+<th:block th:remove="all">
+<div th:fragment="summary" class="sum" id="payout-summary">
+    <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.payout.tab.AWAITING}">待用户选择</div>
+        <div class="sum-value num" th:text="${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(summary.awaitingAmount())}">Rp 0</div></div>
+    <div class="sum-item" th:classappend="${summary.overdueCount() > 0} ? 'wa'">
+        <div class="sum-label" th:text="#{admin.v142.payout.sum.overdue}">其中超 7 天未选</div>
+        <div class="sum-value num" th:text="#{admin.v142.payout.sum.count(${summary.overdueCount()})}">0 笔</div></div>
+    <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.payout.tab.PENDING}">待打款</div>
+        <div class="sum-value num" th:text="${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService).rp(summary.pendingAmount())}">Rp 0</div></div>
+    <div class="sum-item" th:classappend="${summary.failedCount() > 0} ? 'dg'">
+        <div class="sum-label" th:text="#{admin.v142.payout.tab.FAILED}">打款失败</div>
+        <div class="sum-value num" th:text="#{admin.v142.payout.sum.count(${summary.failedCount()})}">0 笔</div></div>
+</div>
+
+<th:block th:fragment="listBody" th:with="rpf=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)}">
+    <nav class="tabs" data-payout-tabs>
+        <a th:each="t : ${tabs}" class="tab" th:classappend="${t.name() == tab} ? 'is-active'"
+           th:href="@{/admin/shop/refund-payouts(tab=${t.name()})}">
+            <span th:text="#{'admin.v142.payout.tab.' + ${t.name()}}">待用户选择</span>
+            <span class="tab-count" th:if="${t.name() == 'AWAITING' or t.name() == 'PENDING' or t.name() == 'FAILED'}"
+                  th:classappend="${t.name() == 'FAILED' and counts.get(t) > 0} ? 'dg'" th:text="${counts.get(t)}">0</span>
+        </a>
+    </nav>
+    <table th:unless="${#lists.isEmpty(rows)}">
+        <thead><tr>
+            <th th:text="#{admin.shop.orders.col.token}">订单号</th>
+            <th th:text="#{admin.v142.review.col.user}">用户</th>
+            <th class="amt" th:text="#{admin.v142.payout.col.amount}">退款金额</th>
+            <th th:text="#{admin.v142.payout.col.source}">来源</th>
+            <th th:text="#{admin.v142.payout.col.channel}">收款渠道与账号</th>
+            <th th:text="#{admin.v142.payout.col.holder}">户名</th>
+            <th th:text="#{admin.v142.payout.col.submittedAt}">用户提交时间</th>
+            <th th:text="#{admin.common.status}">状态</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="r : ${rows}" th:data-id="${r.refundToken()}" tabindex="0"
+            th:data-drawer-url="@{/admin/shop/refund-payouts/{t}(t=${r.refundToken()})}">
+            <td class="nowrap" th:text="${r.displayNo()}">SO</td>
+            <td th:text="${r.userName()} ?: '—'">Rina</td>
+            <td class="amt" th:text="${rpf.rp(r.cashRefund())}">Rp</td>
+            <td th:text="#{'admin.v142.payout.source.' + ${r.reason()}}">异常订单 · 缺货</td>
+            <td class="nowrap">
+                <span th:if="${r.channel() != null}" th:text="${r.channel()} + (${r.accountLast4() != null} ? ' · ••••' + ${r.accountLast4()} : '')">BCA · ••••7890</span>
+                <span th:if="${r.channel() == null}">—</span>
+                <small class="muted" th:if="${r.payoutFee() > 0}" th:text="#{admin.v142.payout.fee(${rpf.rp(r.payoutFee())})}">渠道费</small>
+            </td>
+            <td th:text="${r.holder()} ?: '—'">RINA</td>
+            <td class="nowrap" th:text="${r.chosenAt() == null} ? '—' : ${#temporals.format(r.chosenAt(), 'MM-dd HH:mm', 'Asia/Jakarta')}">11-04 13:02</td>
+            <td>
+                <span class="badge" th:text="${r.offlineClosed()} ? #{admin.v142.payout.status.OFFLINE} : #{'admin.v142.payout.status.' + ${r.status()}}">待打款</span>
+                <span class="badge badge-warn" th:if="${r.overdue()}" th:text="#{admin.v142.payout.overdue}">超 7 天未选</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(rows)}" data-payout-empty>
+        <span class="empty-emoji">💸</span>
+        <p th:text="#{admin.v142.payout.empty}">没有待打款的退款。</p>
+    </div>
+    <th:block th:if="${oob}"><div th:replace="~{admin/shop-refund-payouts :: summaryOob}"></div></th:block>
+</th:block>
+
+<div th:fragment="summaryOob" hx-swap-oob="outerHTML:#payout-summary"><div th:replace="~{admin/shop-refund-payouts :: summary}"></div></div>
+</th:block>
+</body>
+</html>

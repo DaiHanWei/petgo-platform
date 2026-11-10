@@ -48,7 +48,7 @@
                      新标签打开、不打断本页处置。 -->
                 <div class="sum-value rv-small">
                     <a th:href="@{/admin/shop/orders(open=${order.publicToken})}" target="_blank"
-                       rel="noopener" th:text="${order.publicToken}">ord</a></div></div>
+                       rel="noopener" th:text="${order.displayNo}">ord</a></div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
                 <div class="sum-value rv-small" th:text="#{'admin.v130.shopReturns.status.' + ${r.status}}">状态</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.returns.col.type}">退货类型</div>
@@ -267,7 +267,7 @@
             </p>
         </th:block>
 
-        <!-- 退款执行段（财务 refund.payout；data-confirm 复述总退回金额） -->
+        <!-- 退款执行段（财务 refund.payout；确认弹层复述总退回金额，V1.4.2 Story 1.2 改服务端弹层） -->
         <!-- grand 先算好再进 #{...(...)}：在消息参数位置里写整个三元表达式是容易踩解析坑的写法。
              quote 为 null 的情形是真实存在的（Controller 里 quote() 抛 AppException 时置 null）。 -->
         <th:block th:if="${r.status.name() == 'REFUNDING' or r.status.name() == 'REFUND_FAILED'}"
@@ -275,12 +275,11 @@
             <p class="hint err" th:if="${r.status.name() == 'REFUND_FAILED' and r.refundFailureNote != null}"
                th:text="${r.refundFailureNote}">上次失败原因</p>
             <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.payout')">
-                <form th:attr="hx-post=@{/admin/shop/returns/{t}/refund(t=${r.publicToken})}"
+                <form th:attr="hx-post=@{/admin/shop/returns/{t}/refund/confirm(t=${r.publicToken})}"
                       hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
                     <input type="hidden" name="type" th:value="${type}"/>
                     <input type="hidden" name="full" th:value="${full}"/>
-                    <button type="submit" class="btn btn-primary" data-confirm-button
-                            th:attr="data-confirm=#{admin.v130.shopReturns.confirm.refund(${grand})}"
+                    <button type="submit" class="btn btn-primary"
                             th:text="#{admin.shop.returns.btn.refund}">执行退款</button>
                 </form>
             </div>

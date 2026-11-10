@@ -5,6 +5,7 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.media.AliyunOssClient;
+import com.tailtopia.social.read.PetFollowReader;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,7 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <ol>
  *   <li>① content 侧一条聚合查询拿候选（近 14 天活跃 + 公开记录 ≥3）；</li>
  *   <li>② 批量取宠物档案（筛「有头像」）；</li>
- *   <li>③ 批量判 owner 有效（未注销 <b>且</b> 未封号）+ <b>双向</b>拉黑（走 {@code social.read} 统一出口，AD-7）；</li>
+ *   <li>③ 批量判 owner 有效（未注销 <b>且</b> 未封号）+ <b>双向</b>拉黑（走 {@code social.read} 统一出口，AD-7）
+ *       + 我已追更的宠物（V1.4.2 social-topic Story 1.3 · D-17，{@code PetFollowReader.followedAmong} 一次批量）；</li>
  *   <li>④ 批量取封面图。</li>
  * </ol>
  * ⚠️ 别在循环里查任何一样 —— 一页 10 张卡会变成 40 次查询。
@@ -74,13 +76,16 @@ public class PetRecommendationService {
     private final PetProfileRepository profiles;
     private final AccountQueryService accounts;
     private final UserHideRelationReader hideRelations;
+    private final PetFollowReader petFollows;
 
     public PetRecommendationService(ContentService contentService, PetProfileRepository profiles,
-            AccountQueryService accounts, UserHideRelationReader hideRelations) {
+            AccountQueryService accounts, UserHideRelationReader hideRelations,
+            PetFollowReader petFollows) {
         this.contentService = contentService;
         this.profiles = profiles;
         this.accounts = accounts;
         this.hideRelations = hideRelations;
+        this.petFollows = petFollows;
     }
 
     /**
@@ -100,7 +105,7 @@ public class PetRecommendationService {
      * 推荐给 {@code viewerId} 看的**一页**宠物卡（Story 4.3 的全屏集合页用它翻页）。
      *
      * <h2>🔴 游标取自「最后**看过**的那一行候选」，不是「最后**返回**的那一张卡」</h2>
-     * 被过滤掉的宠物（没头像 / owner 注销封号 / 互相拉黑 / 档案已删）是**确定性排除**，
+     * 被过滤掉的宠物（没头像 / owner 注销封号 / 互相拉黑 / 档案已删 / 我已追更）是**确定性排除**，
      * 下一页再扫一遍它们只会再排除一次 —— 所以游标越过它们是对的、也更省。
      * ⚠️ 反过来（游标取自最后返回的卡）不会出错，但每翻一页都要重扫一遍这些必然被丢掉的行。
      *
@@ -151,6 +156,9 @@ public class PetRecommendationService {
         // 互相拉黑的双方不互推（AC3）——**双向**，走统一读取口（AD-7）。
         // ⚠️ 只判单向的表现是「我拉黑了他，他家的宠物还在我的推荐位里」。
         Set<Long> hiddenOwners = hideRelations.hiddenEitherWay(viewerId, ownerIds);
+        // V1.4.2 social-topic Story 1.3 · D-17：已追更的宠物不再推荐 —— 对本页候选**一次批量**，
+        // ⚠️ 不在循环里逐个查（一页 40 个候选就是 40 次查询）；不缓存（架构护栏）。
+        Set<Long> followedPets = petFollows.followedAmong(viewerId, petIds);
 
         List<PetProfile> picked = new ArrayList<>(capped);
         // 最后**看过**的那一行候选 —— 下一页的游标从它算（见方法注释）。
@@ -171,6 +179,10 @@ public class PetRecommendationService {
             }
             // 不推给自己（自己的宠物不该出现在「逛别人家的」里）。
             if (pet.getOwnerId() == viewerId) {
+                continue;
+            }
+            // 已追更的宠物不推（D-17）：在关注流里已经能看到它了。
+            if (followedPets.contains(petId)) {
                 continue;
             }
             if (hiddenOwners.contains(pet.getOwnerId())) {

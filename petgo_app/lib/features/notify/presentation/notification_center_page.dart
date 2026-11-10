@@ -19,6 +19,7 @@ import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 import '../../ops/presentation/open_ops_target.dart';
+import '../../profile/domain/milestone_account_codes.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/presentation/widgets/milestone_badge.dart';
@@ -281,6 +282,13 @@ class _NotificationCenterPageState
     // V1.4.0 multi-pet Story 2.4 · AC6.1：名额到期两类（显式登记，取值与线格式小写同形）。
     'PET_SLOT_EXPIRING' => 'pet_slot_expiring',
     'PET_SLOT_EXPIRED' => 'pet_slot_expired',
+    // V1.4.2 social-topic Story 1.5 · AC6.8：被追更 / 追更宠物新 Diary（显式登记）。
+    'PET_FOLLOWED' => 'pet_followed',
+    'PET_DIARY_POSTED' => 'pet_diary_posted',
+    // v1.4.2 shop Story 9.1 · AC6.4：迟到款重新下单（显式登记）。
+    'SHOP_ORDER_REORDERED' => 'shop_order_reordered',
+    // v1.4.2 shop Story 9.3 · AC4.4：券快过期（显式登记）。
+    'COUPON_EXPIRING' => 'coupon_expiring',
     _ => type.toLowerCase(),
   };
 
@@ -338,12 +346,22 @@ class _NotificationCenterPageState
     }
     // 列表点击与系统推送直跳共用 NotificationDeepLink.open（标记已读 + 角标重算 + 算 location）。
     // V1.3.4 Story 3.4 · AC7.2：新粉丝用 actorUserId 进对方主页（推送点击只有 targetRef，T-34 同为关注者 id）。
-    final targetRef = item.type == 'USER_FOLLOWED' && item.actorUserId != null
-        ? item.actorUserId.toString()
-        : item.targetRef;
+    // V1.4.2 social-topic Story 1.5 · AC6.5：被追更同样用 actorUserId 进追更者主页；**无 actorUserId → 不跳转**
+    // （落通知中心本身，已读照标）。
+    final targetRef = item.type == 'PET_FOLLOWED'
+        ? item.actorUserId?.toString()
+        : item.type == 'USER_FOLLOWED' && item.actorUserId != null
+            ? item.actorUserId.toString()
+            : item.targetRef;
     _opening = true;
     final String location;
     try {
+      // V1.4.2 Story 2.3 · AC7（G-2）：账号级里程碑通知进「当前宠物」的列表补弹；当前宠物只读
+      // （账号级里程碑不在只读宠物上完成）→ 先切到账号下第一只 ACTIVE 再进列表。
+      if (item.type == 'MILESTONE_SM_NODE' && isAccountMilestone(item.targetRef ?? '')) {
+        await _selectActivePetForAccountMilestone();
+        if (!mounted) return;
+      }
       location = await NotificationDeepLink.open(
         ref,
         type: item.deepLinkType,
@@ -365,7 +383,8 @@ class _NotificationCenterPageState
       _opening = false;
     }
     // 3.4 code-review F1 / T-21：进他人主页一律走 openUserProfile —— 那里才报 `user_profile_viewed`（from=avatar）。
-    final profileId = item.type == 'USER_FOLLOWED' ? int.tryParse(targetRef ?? '') : null;
+    final profileId =
+        item.type == 'USER_FOLLOWED' || item.type == 'PET_FOLLOWED' ? int.tryParse(targetRef ?? '') : null;
     if (profileId != null && location == '${PublicProfilePage.routeBase}/$profileId') {
       unawaited(openUserProfile(context, ref, profileId));
       return;
@@ -391,10 +410,29 @@ class _NotificationCenterPageState
     }
   }
 
+  /// G-2：当前有效宠物为 READ_ONLY → `select` 账号下第一只 ACTIVE（与用户在档案页手动切换等价）。
+  /// 宠物列表取不到 / 3 秒超时 / 没有 ACTIVE → 不切，照常进列表。
+  Future<void> _selectActivePetForAccountMilestone() async {
+    try {
+      // 列表最多等 3 秒（同 gift_pet_switch.dart），超时按不切宠物处理。
+      final pets = await ref.read(petListProvider.future).timeout(const Duration(seconds: 3));
+      if (!mounted) return;
+      final currentId = resolveEffectivePetId(pets, ref.read(currentPetIdProvider));
+      final current = pets.where((p) => p.id == currentId).firstOrNull;
+      if (current == null || !current.isReadOnly) return;
+      final firstActive = pets.where((p) => !p.isReadOnly).firstOrNull;
+      if (firstActive == null) return;
+      await ref.read(currentPetIdProvider.notifier).select(firstActive.id);
+    } catch (_) {
+      // best-effort：切不成照常进列表（只读宠物列表里这两枚是锁定态，不会误弹）。
+    }
+  }
+
   /// 点赞 / 评论类条目对应的帖子是否已删除（详情接口 404）。
+  /// V1.4.2 social-topic Story 1.5 · AC6.5：追更宠物新 Diary（`PET_DIARY_POSTED`）同样先探。
   Future<bool> _postGone(NotificationItem item) async {
     final type = item.deepLinkType;
-    if (type != 'CONTENT_LIKED' && type != 'CONTENT_COMMENTED') return false;
+    if (type != 'CONTENT_LIKED' && type != 'CONTENT_COMMENTED' && type != 'PET_DIARY_POSTED') return false;
     final postId = int.tryParse(item.targetRef ?? '');
     if (postId == null) return false;
     try {
@@ -749,6 +787,9 @@ class _NotificationTileState extends State<_NotificationTile> {
     if (code == null || code.isEmpty) {
       return (title: AppLocalizations.of(context).notifyTypeMilestoneNode, body: '');
     }
+    // V1.4.2 Story 2.3 · R-4：账号级编码（第一次关注 / 收藏）文案本身不含 `{name}`，
+    // 无论有没有宠物名都直接用庆祝标题 + 正文，**不拼宠物名**。
+    if (isAccountMilestone(code)) return localizedMilestoneCelebration(code, locale, '');
     final name = widget.petName;
     if (name == null || name.isEmpty) {
       return (title: localizedMilestoneTitle(code, locale), body: '');
@@ -794,6 +835,14 @@ class _NotificationTileState extends State<_NotificationTile> {
     'PET_BIRTHDAY' => (Icons.cake_rounded, AppColors.gold, AppColors.goldTint),
     // V1.4.0 gift Story 2.2 · AC5.2（UI 稿 G1）：收礼金色礼物（同 PET_BIRTHDAY 金 / 金浅底，decision-log ③ #F6A609）。
     'PET_GIFT_RECEIVED' => (Icons.redeem_rounded, AppColors.gold, AppColors.goldTint),
+    // v1.4.2 shop Story 9.3 · AC4.4（UI G9）：券快过期 = 金色券（与生日等提醒类同色系）。
+    'COUPON_EXPIRING' => (Icons.confirmation_number_rounded, AppColors.gold, AppColors.goldTint),
+    // V1.4.2 social-topic Story 1.5 · AC6.3（UI 稿 A12）：被追更 = 与 USER_FOLLOWED 完全相同；
+    // 追更宠物新 Diary = 紫色爪印。两者底色都用 violet100（**不用 cream2**：未读条目底色就是 cream2，图标块会「消失」）。
+    'PET_FOLLOWED' => (Icons.person_add_rounded, AppColors.mint, AppColors.violet100),
+    'PET_DIARY_POSTED' => (Icons.pets_rounded, AppColors.mint, AppColors.violet100),
+    // v1.4.2 shop Story 9.1 · AC6.4（UI F22）：重新下单 = 紫色货车（violet100 底，同上理由不用 cream2）。
+    'SHOP_ORDER_REORDERED' => (Icons.local_shipping_rounded, AppColors.mint, AppColors.violet100),
     // UI 稿 G3：退回用紫色钱包（钱回来了）—— **不用** REFUND_REJECTED 的红色。
     'GIFT_UNDELIVERED_REFUND' => (
       Icons.account_balance_wallet_rounded,
@@ -971,8 +1020,14 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
     // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 title，理由见 [_storedTitle]。
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedTitle(l10n),
+    // V1.4.2 social-topic Story 1.5 · AC6.7：宠物已删（无 actorName）→ 读后端写入时按收件人语言渲染的整句，同上理由。
+    'PET_DIARY_POSTED' => _storedTitle(l10n),
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：继运营通知后又一个读后端 title 的类型，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundTitle(l10n),
+    // v1.4.2 shop Story 9.1 · AC6.4（F22）：读后端整句（正文带新单号，App 无从本地拼），空则本地兜底。
+    'SHOP_ORDER_REORDERED' => _reorderedTitle(l10n),
+    // v1.4.2 shop Story 9.3 · AC4.4（G9）：读后端整句（正文带日期），空则本地兜底。
+    'COUPON_EXPIRING' => _couponExpiringTitle(l10n),
     // 收礼无 actorName（送礼人已注销 / 封号）→ 本地兜底；有 actorName 走「后端文案条目」分支。
     'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedTitle,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
@@ -1030,8 +1085,12 @@ class _NotificationTileState extends State<_NotificationTile> {
         : l10n.notifyBodyContentMentionedPost,
     // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 body，理由见 [_storedTitle]。
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedBody(l10n),
+    // V1.4.2 social-topic Story 1.5 · AC6.2：无正文 → 空串，不留正文行（见下方兜底布局）。
+    'PET_DIARY_POSTED' => '',
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3）：读后端 body，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundBody(l10n),
+    'SHOP_ORDER_REORDERED' => _reorderedBody(l10n),
+    'COUPON_EXPIRING' => _couponExpiringBody(l10n),
     'PET_GIFT_RECEIVED' => l10n.giftNotifyReceivedBody,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
@@ -1066,6 +1125,34 @@ class _NotificationTileState extends State<_NotificationTile> {
     return b.isEmpty ? l10n.giftNotifyRefundBodyFallback : b;
   }
 
+  /// 重新下单（v1.4.2 shop Story 9.1 · F22）：同 [_refundTitle] 范式 —— 后端按收件人语言渲染整句（含新单号），
+  /// 任一为空回落本地兜底（正文兜底句去掉单号，待确认 7）。
+  String _reorderedTitle(AppLocalizations l10n) {
+    final t = widget.item.title?.trim() ?? '';
+    return t.isEmpty ? l10n.shopOrderReorderedNotifyTitle : t;
+  }
+
+  String _reorderedBody(AppLocalizations l10n) {
+    final b = widget.item.body?.trim() ?? '';
+    return b.isEmpty ? l10n.shopOrderReorderedNotifyBodyFallback : b;
+  }
+
+  /// 券快过期（v1.4.2 shop Story 9.3 · G9）：同 [_refundTitle] 范式 —— 后端（2.3）按收件人语言渲染整句落库
+  /// （正文带最早到期日，App 无从本地拼）。标题兜底：targetRef 是张数时带数，取不到不猜数字；正文兜底不带日期。
+  String _couponExpiringTitle(AppLocalizations l10n) {
+    final t = widget.item.title?.trim() ?? '';
+    if (t.isNotEmpty) return t;
+    final n = int.tryParse(widget.item.targetRef ?? '');
+    return (n != null && n > 0)
+        ? l10n.couponExpiringNotifyTitle(n)
+        : l10n.couponExpiringNotifyTitleFallback;
+  }
+
+  String _couponExpiringBody(AppLocalizations l10n) {
+    final b = widget.item.body?.trim() ?? '';
+    return b.isEmpty ? l10n.couponExpiringNotifyBodyFallback : b;
+  }
+
   /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。
   ///
   /// ⚠️ 判据是 targetRef 的前缀，**与深链落点同一处口径** —— 两边分叉的表现是
@@ -1094,19 +1181,34 @@ class _NotificationTileState extends State<_NotificationTile> {
 
   /// 后端文案条目的标题（V1.3.4 Story 3.4 · AC3.3）：整句常规字重，**只有** actorName 加粗；
   /// actorName 在标题里找不到 → 整句常规字重，不崩。
+  ///
+  /// V1.4.2 social-topic Story 1.5 · AC6.2：另加粗 `petName`（被追更的宠物 / 发 Diary 的宠物）。两段各自在标题里找、
+  /// 按出现位置切分拼接；找不到的片段忽略（防后端语序变化），同名（`PET_DIARY_POSTED` 的 actorName == petName）只加粗一次。
+  /// 命中与已加粗区间重叠（如昵称「Mochi Lover」包含宠物名「Mochi」）→ 从下一个位置接着找，直到找到不重叠的一处或找完（1.5 复审）。
   Widget _serverTitle() {
     final title = widget.item.title ?? '';
-    final name = widget.item.actorName ?? '';
-    final at = name.isEmpty ? -1 : title.indexOf(name);
+    final spans = <(int, int)>[];
+    for (final name in {widget.item.actorName ?? '', widget.item.petName ?? ''}) {
+      if (name.isEmpty) continue;
+      var at = title.indexOf(name);
+      while (at >= 0 && spans.any((r) => at < r.$2 && at + name.length > r.$1)) {
+        at = title.indexOf(name, at + 1);
+      }
+      if (at < 0) continue;
+      spans.add((at, at + name.length));
+    }
+    spans.sort((a, b) => a.$1.compareTo(b.$1));
+    final children = <TextSpan>[];
+    var cursor = 0;
+    for (final (start, end) in spans) {
+      if (start > cursor) children.add(TextSpan(text: title.substring(cursor, start)));
+      children.add(TextSpan(text: title.substring(start, end), style: const TextStyle(fontWeight: FontWeight.w700)));
+      cursor = end;
+    }
+    if (cursor < title.length) children.add(TextSpan(text: title.substring(cursor)));
     return Text.rich(
       key: ValueKey('notificationTitle_${widget.item.deepLinkToken ?? widget.item.type}'),
-      at < 0
-          ? TextSpan(text: title)
-          : TextSpan(children: [
-              TextSpan(text: title.substring(0, at)),
-              TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700)),
-              TextSpan(text: title.substring(at + name.length)),
-            ]),
+      spans.isEmpty ? TextSpan(text: title) : TextSpan(children: children),
       style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400, color: AppColors.ink),
     );
   }
@@ -1290,6 +1392,8 @@ class _NotificationTileState extends State<_NotificationTile> {
                             color: AppColors.ink,
                           ),
                         ),
+                        // V1.4.2 social-topic Story 1.5：正文为空（`PET_DIARY_POSTED` 兜底）→ 不留正文行。
+                        if (_typeBody(l10n).isNotEmpty) ...[
                         const SizedBox(height: 3),
                         Text(
                           _typeBody(l10n),
@@ -1299,6 +1403,7 @@ class _NotificationTileState extends State<_NotificationTile> {
                               : TextOverflow.ellipsis,
                           style: bodyStyle,
                         ),
+                        ],
                         const SizedBox(height: 6),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,

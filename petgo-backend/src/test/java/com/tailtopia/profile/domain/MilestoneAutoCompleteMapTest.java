@@ -144,6 +144,17 @@ class MilestoneAutoCompleteMapTest {
         }
     }
 
+    /** V1.4.2 FR-154（决策日志 B1）：账号级两个事件三物种显式映射；通用是 G-S12 / G-S13，不是 S19 / S20。 */
+    @Test
+    void v142AccountLevelEventsMapAllThreeSpecies() {
+        assertThat(code(PetType.CAT, MilestoneAutoEvent.FIRST_FOLLOW_USER)).isEqualTo("C-S19");
+        assertThat(code(PetType.DOG, MilestoneAutoEvent.FIRST_FOLLOW_USER)).isEqualTo("D-S19");
+        assertThat(code(PetType.OTHER, MilestoneAutoEvent.FIRST_FOLLOW_USER)).isEqualTo("G-S12");
+        assertThat(code(PetType.CAT, MilestoneAutoEvent.FIRST_COLLECT_CONTENT)).isEqualTo("C-S20");
+        assertThat(code(PetType.DOG, MilestoneAutoEvent.FIRST_COLLECT_CONTENT)).isEqualTo("D-S20");
+        assertThat(code(PetType.OTHER, MilestoneAutoEvent.FIRST_COLLECT_CONTENT)).isEqualTo("G-S13");
+    }
+
     // ===== 全表结构性约束 =====
 
     /** 每个事件都必须为三个物种各登记一行（值可以是 null，但不能"没这一行"）。 */

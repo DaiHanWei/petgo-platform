@@ -21,8 +21,6 @@ import '../domain/health_list_item.dart';
 import '../domain/health_record_icons.dart';
 import '../domain/health_milestones.dart';
 import '../domain/milestone.dart';
-import '../domain/milestone_share.dart';
-import '../domain/milestone_titles.dart';
 import '../data/milestone_celebration_reporter.dart';
 import 'widgets/milestone_celebration.dart';
 import '../data/pet_list_repository.dart';
@@ -403,13 +401,14 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     if (jumpCategory == null) return card;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [card, _categoryJumpRow(context, l10n, item.type, jumpCategory)],
+      children: [card, _categoryJumpRow(context, l10n, item.type)],
     );
   }
 
-  /// 系统生成的品类跳转行。**整行只带一个品类 code**，带不了别的。
+  /// 系统生成的品类跳转行（仅当记录类型映射得到品类时出现）。**跳转不带 SKU**；
+  /// v1.4.2 shop Story 8.1 起落 Toko 首页（品类筛选下线，D-17）。
   Widget _categoryJumpRow(
-      BuildContext context, AppLocalizations l10n, String recordType, String category) {
+      BuildContext context, AppLocalizations l10n, String recordType) {
     return Align(
       alignment: Alignment.centerLeft,
       child: TextButton.icon(
@@ -425,7 +424,8 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
           // ⚠️ 必须 `go` 不能 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
           //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏
           //    （见 deep_link_routes.dart shellTabRoots 注释里的 20260729 事故）。
-          context.go('/shop?category=$category');
+          // v1.4.2 shop Story 8.1（D-17 / FR-133.1）：品类筛选下线，落 Toko 首页；埋点不变。
+          context.go('/shop');
         },
         style: TextButton.styleFrom(
           foregroundColor: AppColors.mint,
@@ -753,15 +753,14 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
 
   /// 弹 P-35 解锁庆祝（与发布「去发布」回填路径同 UX，见 publish_compose_page）。
   Future<void> _celebrate(MilestoneItem done) async {
-    final l10n = AppLocalizations.of(context);
-    final locale = Localizations.localeOf(context);
     final petId = _petId;
     final listData = petId == null ? null : ref.read(milestoneListProvider(petId)).asData?.value;
     final petName = listData?.petName ?? '';
     final collection = listData == null
         ? const <MilestoneItem>[]
         : [for (final g in listData.groups) ...g.items];
-    final shareText = l10n.milestoneShareText(localizedMilestoneTitle(done.code, locale));
+    // V1.4.2 Story 3.2 · D-21：弹出前取好 container —— 庆祝关闭（尤其「发到社区」后发布页才关）时本页可能已销毁。
+    final container = ProviderScope.containerOf(context, listen: false);
     // 弹出前先记本地：短轮询已把「未庆祝」写进列表缓存，回报又要等弹窗关掉才发。
     markMilestonesCelebrating(ref, [done.code]);
     await showMilestoneCelebration(
@@ -771,17 +770,10 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
       // 存健康记录后 500/800/1200ms 三次短轮询拉到的即时庆祝（既有路径，本 story 保留不动）。
       path: MilestoneCelebrationPath.instant,
       collection: collection,
-      onShare: () => shareMilestoneWithLink(
-        ref,
-        item: done,
-        locale: locale,
-        petName: petName,
-        shareText: shareText,
-        collection: collection,
-      ),
+      petId: petId,
     );
     // 即时庆祝同样要回报，否则这条会在下次进里程碑列表页时被当成"未庆祝"再弹一遍（AD-A3.1）。
-    reportMilestoneCelebrated(ref, [done.code]);
+    reportMilestoneCelebratedIn(container, [done.code]);
   }
 
   Future<void> _delete() async {

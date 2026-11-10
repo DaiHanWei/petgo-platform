@@ -32,10 +32,17 @@ class FeedState {
     this.loadMoreFailed = false,
     this.pagesLoaded = 1,
     this.rankMode = RankMode.unknown,
+    this.followingUserCount,
+    this.followingPetCount,
   });
 
   final List<FeedItem> items;
   final FeedCategory category;
+
+  /// 关注流首页的两个计数（V1.4.2 social-topic · Story 1.5 · AC5.2）：只 [FollowingFeedController] 填，
+  /// 缺键 = null；加载更多经 [copyWith] 原样保留（后续页不下发，不得覆盖首页值）。Discover 恒 null。
+  final int? followingUserCount;
+  final int? followingPetCount;
 
   /// 本次刷新（含已翻的各页）实际用的排序路径（V1.1.6 Story 16.5，服务端下发）。
   ///
@@ -73,6 +80,8 @@ class FeedState {
         loadMoreFailed: loadMoreFailed ?? this.loadMoreFailed,
         pagesLoaded: pagesLoaded ?? this.pagesLoaded,
         rankMode: rankMode ?? this.rankMode,
+        followingUserCount: followingUserCount,
+        followingPetCount: followingPetCount,
       );
 }
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/shared/widgets/pill_tab.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
@@ -156,6 +158,43 @@ void main() {
     expect(tapped, FeedCategory.daily);
     await tester.tap(find.text('Growth'));
     expect(tapped, FeedCategory.growthMoment);
+  });
+
+  testWidgets('V1.4.2 Story 1.5：Discover 胶囊抽成 PillTab 后外观不变（13 / 7、999、12 / w600、紫底白字 / 白底灰框）',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: FeedTabRow(
+          selected: FeedCategory.all,
+          labels: const {
+            FeedCategory.all: 'All',
+            FeedCategory.daily: 'Daily',
+            FeedCategory.growthMoment: 'Growth',
+            FeedCategory.knowledge: 'Tips',
+          },
+          onSelected: (_) {},
+        ),
+      ),
+    ));
+    expect(find.byType(PillTab), findsNWidgets(4));
+    Container box(String label) => tester.widget<Container>(
+        find.ancestor(of: find.text(label), matching: find.byType(Container)).first);
+    final on = box('All');
+    final off = box('Daily');
+    expect(on.padding, const EdgeInsets.symmetric(horizontal: 13, vertical: 7));
+    expect((on.decoration! as BoxDecoration).color, AppColors.mint);
+    expect((on.decoration! as BoxDecoration).borderRadius, BorderRadius.circular(999));
+    expect((off.decoration! as BoxDecoration).color, AppColors.card);
+    expect((off.decoration! as BoxDecoration).border, Border.all(color: AppColors.line, width: 1.5));
+    final t = tester.widget<Text>(find.text('Daily'));
+    expect(t.style!.fontSize, 12);
+    expect(t.style!.fontWeight, FontWeight.w600);
+    expect(t.style!.color, AppColors.textSecondary);
+    expect(tester.widget<Text>(find.text('All')).style!.color, Colors.white);
+    // 无数字：胶囊里只有一个 Text。
+    expect(find.descendant(of: find.byType(PillTab).first, matching: find.byType(Text)), findsOneWidget);
+    // 胶囊间距 7。
+    expect(tester.getTopLeft(find.byType(PillTab).at(1)).dx - tester.getTopRight(find.byType(PillTab).first).dx, 7);
   });
 
   testWidgets('AC2: Feed 有内容 → 渲染瀑布卡片', (tester) async {

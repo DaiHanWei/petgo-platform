@@ -23,6 +23,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='shop-banner'">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row">
             <h1 th:text="#{admin.nav.shopBanners}">Toko 顶部 Banner</h1>
             <!-- AC3：「＋新增 Banner」移到筛选栏（本页没有筛选项，就落在标题行右侧的同一位置） -->
@@ -38,7 +40,8 @@
             <div th:fragment="sb-table" id="shop-banner-rows">
                 <div th:replace="~{admin/fragments/shop-banners-list :: rows}"></div>
             </div>
-            <div th:fragment="sb-drawer" class="drawer-title" th:text="#{admin.shop.banners.section.add}">Banner</div>
+            <!--/* V1.4.2 shop-admin Story 3.1：抽屉标题不再固定「新增 Banner」（bug），新建 / 编辑标题在抽屉表单里 */-->
+            <div th:fragment="sb-drawer" class="drawer-title" th:text="#{admin.nav.shopBanners}">Banner</div>
         </div>
         <!--/* ?open=<id> 深链兜底：行按钮走 [data-drawer-open]，但从别处带 ?open= 进来时得有个落点。 */-->
         <span hidden th:if="${open != null}" data-drawer-res="shop-banner"

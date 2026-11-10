@@ -17,6 +17,9 @@ import 'package:tailtopia/features/mention/data/mention_candidate_repository.dar
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/content/presentation/following_feed_controller.dart';
 import 'package:tailtopia/features/social/data/following_strip_repository.dart';
+import 'package:tailtopia/features/social/domain/pet_follow_state.dart';
+import 'package:tailtopia/features/social/presentation/followed_pet_list_controller.dart';
+import 'package:tailtopia/features/topic/presentation/topic_providers.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
@@ -28,6 +31,10 @@ import 'package:tailtopia/features/notify/domain/app_update_controller.dart';
 import 'package:tailtopia/features/notify/domain/app_version_check.dart';
 import 'package:tailtopia/features/notify/presentation/app_update_presenter.dart';
 import 'package:tailtopia/features/order/presentation/order_list_controller.dart';
+import 'package:tailtopia/features/shop/coupon/data/coupon_repository.dart';
+import 'package:tailtopia/features/shop/coupon/presentation/my_coupons_controller.dart';
+import 'package:tailtopia/features/shop/data/shop_order_repository.dart';
+import 'package:tailtopia/features/shop/data/shipping_estimate_repository.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
@@ -50,6 +57,7 @@ import 'features/pet_slot/data/pet_slot_repository.dart';
 /// - `tailtopia://card/{token}` → `/pet/{token}`（**被分享的那只宠物**，V1.1.6 Story 2.4）
 /// - `tailtopia://post/{token}` → `/shared-post/{token}`（**只有被分享的那一条内容**，V1.1.6 Story 9.3）
 /// - `tailtopia://milestone` → `/profile/milestones`（**自己的**里程碑列表，2026-09-11 产品定）
+/// - `tailtopia://topic/{name}` → `/topics/{name}`（V1.4.2 Story 4.3 话题页；没名字 → `/home`）
 /// - `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）
 /// - `tailtopia://open/<路径>` → 该路径（🔧 **仅 debug 包**，本地验收导航用；release 恒 `/home`）
 /// - 其它 scheme/host 暂不识别（返回 null，调用方忽略）
@@ -101,6 +109,13 @@ String? deepLinkToLocation(Uri uri) {
     // 用户点的是一条场所链接，给他场所列表至少还在同一个功能里。
     // `?from=share` 只喂埋点（E-5 place_detail_viewed，bug 20260922-528）。
     return token.isEmpty ? '/places' : '/places/$token?from=share';
+  }
+  // 话题页（V1.4.2 social-topic · Story 4.3 · D-20）：`tailtopia://topic/{name}` → `/topics/{name}`。
+  // 名字原样转发（后端按标准化规则查，大小写不敏感）；不带 `from`（推广卡入口由 openPromoTarget 追加 `from=pin`）。
+  // 没名字 → 首页（没有可展示的话题）。
+  if (uri.scheme == 'tailtopia' && uri.host == 'topic') {
+    final name = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    return name.isEmpty ? '/home' : '/topics/${Uri.encodeComponent(name)}';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
@@ -253,6 +268,11 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       final prevId = prev?.profile?.id;
       final nextId = next.profile?.id;
+      // v1.4.2 shop Story 8.2 复审 #4：商品详情 B6「记住的送达地区」按设备存，退出登录 / 换账号时清掉
+      //    （只是区域参考数据、不含地址，但下一个使用者不该继承上一位的选择）。冷启动恢复不清。
+      if (leftUserAccount(prevId, nextId)) {
+        unawaited(ref.read(shopDeliveryAreaProvider.notifier).clear());
+      }
       if (next.status != AuthStatus.guest && nextId != null) {
         // 非 guest 且拿到 id（含 newUserPendingOnboarding 引导期）。仅在 id 变化时上报，避免改资料重复 identify；
         // 直接切到另一用户（中途未过 guest）时先 reset 再 identify，遵守 PostHog「换人先 reset」规约。
@@ -385,6 +405,13 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   // V1.3.4 following 流：关注流 / 头像排都按当前用户算，换账号必须重取（否则看到上个账号的关注内容）。
   ref.invalidate(followingFeedProvider);
   ref.invalidate(followingStripProvider);
+  // V1.4.2 social-topic Story 1.4 · AC1.8：追更覆盖表是账号维度 —— 换账号必须清，否则 B 看到 A 的追更态。
+  ref.invalidate(petFollowStateProvider);
+  // V1.4.2 social-topic Story 1.5 · AC9.1：追更宠物列表的 iFollow / iFollowOwner 相对查看者 → 换账号重取。
+  ref.invalidate(followedPetListControllerProvider);
+  // V1.4.2 social-topic Story 4.3：话题页列表 / 顶置卡带查看者相关的点赞 / 关注快照 → 换账号整族重取。
+  ref.invalidate(topicPostsProvider);
+  ref.invalidate(topicPinnedProvider);
   // V1.3.4 follow Story 2.1（code-review #2）：顶置卡带查看者相关的关注 / 点赞快照，换账号不重取会串号。
   ref.invalidate(pinnedSlotProvider);
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
@@ -396,7 +423,16 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
   ref.invalidate(onboardingMarksProvider); // 一次性引导标记（按账号存：换账号不得沿用上个账号的）
+  // v1.4.2 shop Story 8.1：「给你的券」按当前用户算；进入 Toko 的 60 秒去重是进程级，换账号必须清零
+  //    —— 新账号首次进 Toko 要立刻判新人发券（AC4.1 / AC4.4）。
+  ref.invalidate(couponsForYouProvider);
+  resetShopEntryThrottle();
   ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
+  // v1.4.2 shop Story 9.1：「Belanja」二级标签角标与「我的券」入口计数（按当前用户算）。
+  ref.invalidate(shopOrderCountsProvider);
+  ref.invalidate(couponSummaryProvider);
+  // v1.4.2 shop Story 9.3：我的券列表（两页签整族失效）。
+  ref.invalidate(myCouponsProvider);
   // batch-b1 复审：以下两项都是按当前用户算的（排除自己 / 互相拉黑的人 / 最近互动的人）。
   ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
   ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）

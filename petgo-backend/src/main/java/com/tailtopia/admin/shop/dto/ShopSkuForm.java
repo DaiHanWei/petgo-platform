@@ -25,6 +25,11 @@ public class ShopSkuForm {
     private Long costPrice;
     private ReturnPolicy returnPolicy;
     private Long wholesalePrice;
+    /** V1.4.2 shop-admin Story 4.2 · AD-18：包裹重量（g）与长宽高（cm），四项必填正整数（Biteship 询价 / 下运单）。 */
+    private Integer packageWeightG;
+    private Integer packageLengthCm;
+    private Integer packageWidthCm;
+    private Integer packageHeightCm;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -40,4 +45,12 @@ public class ShopSkuForm {
     public void setReturnPolicy(ReturnPolicy v) { this.returnPolicy = v; }
     public Long getWholesalePrice() { return wholesalePrice; }
     public void setWholesalePrice(Long wholesalePrice) { this.wholesalePrice = wholesalePrice; }
+    public Integer getPackageWeightG() { return packageWeightG; }
+    public void setPackageWeightG(Integer v) { this.packageWeightG = v; }
+    public Integer getPackageLengthCm() { return packageLengthCm; }
+    public void setPackageLengthCm(Integer v) { this.packageLengthCm = v; }
+    public Integer getPackageWidthCm() { return packageWidthCm; }
+    public void setPackageWidthCm(Integer v) { this.packageWidthCm = v; }
+    public Integer getPackageHeightCm() { return packageHeightCm; }
+    public void setPackageHeightCm(Integer v) { this.packageHeightCm = v; }
 }

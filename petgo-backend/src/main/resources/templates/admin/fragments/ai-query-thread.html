@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  ops AI 查数右栏消息流（报告式，不用聊天气泡，spec D10）。多轮之间一条分隔线 aiq-sep。
+  thread(view) = 全部轮次；message(m) = 一轮：问题 aiq-q + 按状态的结果块。
+-->
+<body>
+<th:block th:fragment="thread(view)">
+    <th:block th:each="m, st : ${view.messages()}">
+        <hr class="aiq-sep" th:unless="${st.first}"/>
+        <div th:replace="~{admin/fragments/ai-query-thread :: message(${m})}"></div>
+    </th:block>
+</th:block>
+
+<div th:fragment="message(m)" class="aiq-turn" th:id="'aiq-msg-' + ${m.token}" th:data-status="${m.status.name()}"
+     th:attr="data-aiq-unfinished=${m.unfinished} ? 'true' : null"
+     th:with="secs=${@aiqFormat.elapsedSecs(m)}">
+    <div class="aiq-q" th:text="${m.question}">10 月注册用户有多少？按周拆分</div>
+    <th:block th:switch="${m.status.name()}">
+        <!-- B3 / B4：状态文字 + 已用时长 + 可以离开；第一期不提供取消 -->
+        <div th:case="'PENDING'" class="aiq-run" aria-live="polite">
+            <div class="top"><span class="aiq-st wait"><i></i><span th:text="#{admin.aiQuery.status.pending}">排队中</span></span>
+                <span class="tn"><span th:text="#{admin.aiQuery.run.waited}">已等待</span> <span th:data-aiq-elapsed="${secs}" th:text="${@aiqFormat.clock(secs)}">00:12</span></span></div>
+            <p th:text="#{admin.aiQuery.run.note}">查询在后台运行，可以离开页面，完成后在左侧列表查看。</p>
+        </div>
+        <div th:case="'RUNNING'" class="aiq-run" aria-live="polite">
+            <div class="top"><span class="aiq-st run"><i></i><span th:text="#{admin.aiQuery.status.runningLong}">正在查询</span></span>
+                <span class="tn"><span th:text="#{admin.aiQuery.run.elapsed}">已用时</span> <span th:data-aiq-elapsed="${secs}" th:text="${@aiqFormat.clock(secs)}">00:32</span></span></div>
+            <p th:text="#{admin.aiQuery.run.note}">查询在后台运行，可以离开页面，完成后在左侧列表查看。</p>
+        </div>
+        <!-- C1 / C3：报告式。原文放在 template 里（服务端已转义），由 admin-ai-query-render.js 净化后渲染进 aiq-md -->
+        <div th:case="'DONE'" class="aiq-a" data-aiq-answer>
+            <template data-aiq-md th:text="${m.answerMd}"></template>
+            <div class="aiq-md" data-aiq-rendered></div>
+            <!-- C2 / C4：导出文件卡（文件名、大小、下载）；超过保留期显示「已清除」 -->
+            <th:block th:if="${!m.files.isEmpty()}" th:with="gone=${@aiqFormat.filesGone(m)}">
+                <div class="aiq-file" th:each="f : ${m.files}" th:classappend="${gone} ? 'is-gone'">
+                    <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path
+                         d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>
+                    <div class="nm"><b th:text="${f.name()}">KTP高清解锁明细-11月.xlsx</b>
+                        <span th:text="${gone} ? #{admin.aiQuery.file.goneNote} : ${@aiqFormat.size(f.size())}">32 KB</span></div>
+                    <span class="muted" th:if="${gone}" th:text="#{admin.aiQuery.file.cleared}">已清除</span>
+                    <a class="btn btn-sm btn-neutral" th:unless="${gone or aiqCurrent == null}"
+                       th:href="@{/admin/ai-query/{c}/files/{m}/{n}(c=${aiqCurrent},m=${m.token},n=${f.name()})}"
+                       th:text="#{admin.aiQuery.file.download}">下载</a>
+                </div>
+            </th:block>
+            <div class="aiq-foot">
+                <span class="tn" th:text="#{admin.aiQuery.foot.meta(${m.agentSecs != null ? m.agentSecs : 0}, ${@adminTime.shortWib(m.finishedAt)})}">耗时 28 秒 · 11-09 14:02</span>
+                <span>
+                    <button type="button" data-aiq-copy th:attr="data-aiq-copied=#{admin.aiQuery.foot.copied},data-aiq-copy-failed=#{admin.aiQuery.foot.copyFailed}"
+                            th:text="#{admin.aiQuery.foot.copy}">复制</button><form method="post" class="aiq-inline" data-aiq-form th:if="${aiqCurrent != null and aiqActions == true}"
+                          th:action="@{/admin/ai-query/{c}/requery(c=${aiqCurrent})}"><input type="hidden" name="m" th:value="${m.token}"/><button
+                            type="submit" data-aiq-send th:text="#{admin.aiQuery.foot.requery}">重新查询</button></form>
+                </span>
+            </div>
+        </div>
+        <!-- D1–D4：在原位置显示原因与下一步。失败 / 授权失效用危险色，超时 / 额度用尽用警告色；授权失效不提供重试 -->
+        <div th:case="*" class="aiq-err" role="alert" th:with="f=${m.failure}"
+             th:classappend="${f != null and f.warn()} ? 'warn' : 'bad'" th:data-aiq-failure="${f != null} ? ${f.name()} : 'FAILED'">
+            <div><b th:text="#{'admin.aiQuery.fail.' + (${f != null} ? ${f.key()} : 'failed') + '.title'}">查询没有成功</b>
+                <p th:text="#{'admin.aiQuery.fail.' + (${f != null} ? ${f.key()} : 'failed') + '.note'}">可以用原问题重试。</p></div>
+            <form method="post" class="aiq-inline" data-aiq-form th:if="${aiqCurrent != null and aiqActions == true and (f == null or f.retryable())}"
+                  th:action="@{/admin/ai-query/{c}/requery(c=${aiqCurrent})}"><input type="hidden" name="m" th:value="${m.token}"/><button
+                    type="submit" class="btn btn-primary btn-sm" data-aiq-send th:text="#{admin.aiQuery.fail.retry}">用原问题重试</button></form>
+        </div>
+    </th:block>
+</div>
+</body>
+</html>

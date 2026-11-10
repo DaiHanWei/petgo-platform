@@ -6,6 +6,7 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.auth.service.FollowCounterService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
+import com.tailtopia.shared.schedule.ScheduleWindow;
 import com.tailtopia.social.dto.FollowResultResponse;
 import com.tailtopia.social.event.UserFollowedEvent;
 import com.tailtopia.social.read.FollowReader;
@@ -14,7 +15,6 @@ import com.tailtopia.social.repository.OfficialFollowOptoutRepository;
 import com.tailtopia.social.repository.UserFollowRepository;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -36,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Story 3.2：关注行<b>真正新建</b>时发布 {@link UserFollowedEvent}（与计数 +1 同一分支，事务内发布、
  * 通知监听器 AFTER_COMMIT 才执行）；其余路径（幂等、拒绝、取关、拉黑联动、注销清理）一律不发。
  * <b>不在这里判接收方隐藏关系</b>（D-4 / NFR2：被拉黑方从关注结果里察觉不到），抑制在通知侧。
+ *
+ * <p>V1.4.2 social-topic Story 1.1（D-8）：每分钟限流桶与每日 500 额度都<b>与追更宠物共用</b>——
+ * 限流 key 见 {@link #rateKey}，每日额度改走 {@link FollowDailyQuota}（两表合计）。
  */
 @Service
 public class FollowService {
@@ -43,11 +46,11 @@ public class FollowService {
     /** 关注与取关共用的每分钟限流桶（T-1）。 */
     static final int PER_MINUTE_LIMIT = 30;
 
-    /** 每日新增关注上限（WIB 自然日，AD-4 / T-3）。 */
-    static final int DAILY_LIMIT = 500;
+    /** 每日新增关注上限（WIB 自然日，AD-4 / T-3）。V1.4.2 起与追更合计，判定在 {@link FollowDailyQuota}。 */
+    static final int DAILY_LIMIT = FollowDailyQuota.DAILY_LIMIT;
 
-    /** 「每日」的日界：雅加达自然日（与仓库其他每日上限同口径）。 */
-    static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
+    /** 「每日」的日界：雅加达自然日（V1.4.2 Story 1.1 起改用 {@link ScheduleWindow#WIB}，行为不变）。 */
+    static final ZoneId WIB = ScheduleWindow.WIB;
 
     private final UserFollowRepository follows;
     private final FollowCounterService counters;
@@ -58,21 +61,25 @@ public class FollowService {
     private final ApplicationEventPublisher events;
     private final OfficialFollowOptoutRepository optouts;
     private final AutoFollowTargets autoFollowTargets;
+    /** V1.4.2 social-topic Story 1.1：关注 + 追更两表合计的每日额度（D-8）。 */
+    private final FollowDailyQuota dailyQuota;
     private final Clock clock;
 
     @Autowired
     public FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
             FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events,
-            OfficialFollowOptoutRepository optouts, AutoFollowTargets autoFollowTargets) {
+            OfficialFollowOptoutRepository optouts, AutoFollowTargets autoFollowTargets,
+            FollowDailyQuota dailyQuota) {
         this(follows, counters, accounts, hideRelations, followReader, rateLimiter, events, optouts,
-                autoFollowTargets, Clock.systemUTC());
+                autoFollowTargets, dailyQuota, Clock.systemUTC());
     }
 
     FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
             FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events,
-            OfficialFollowOptoutRepository optouts, AutoFollowTargets autoFollowTargets, Clock clock) {
+            OfficialFollowOptoutRepository optouts, AutoFollowTargets autoFollowTargets,
+            FollowDailyQuota dailyQuota, Clock clock) {
         this.follows = follows;
         this.counters = counters;
         this.accounts = accounts;
@@ -82,6 +89,7 @@ public class FollowService {
         this.events = events;
         this.optouts = optouts;
         this.autoFollowTargets = autoFollowTargets;
+        this.dailyQuota = dailyQuota;
         this.clock = clock;
     }
 
@@ -104,7 +112,7 @@ public class FollowService {
             throw AppException.followBlocked("你已拉黑该用户");
         }
         if (!follows.existsByFollowerIdAndFolloweeId(viewerId, targetId)) {
-            checkDailyLimit(viewerId);
+            dailyQuota.check(viewerId);
             if (follows.insertIfAbsent(viewerId, targetId) == 1) {
                 counters.applyFollow(viewerId, targetId);
                 // Story 3.2：只在真正新建时发（并发双击只发一次）；对方拉黑了我也照发，抑制在通知侧（D-4）。
@@ -171,15 +179,15 @@ public class FollowService {
     }
 
     private void checkRate(long viewerId) {
-        rateLimiter.check("rl:social:follow:" + viewerId, PER_MINUTE_LIMIT, Duration.ofMinutes(1));
+        rateLimiter.check(rateKey(viewerId), PER_MINUTE_LIMIT, Duration.ofMinutes(1));
     }
 
-    /** 当日（WIB 自然日）新建且仍存在的关注行数 ≥ 500 → 429（AD-4 / T-3）。 */
-    private void checkDailyLimit(long viewerId) {
-        Instant dayStart = clock.instant().atZone(WIB).toLocalDate().atStartOfDay(WIB).toInstant();
-        if (follows.countCreatedSince(viewerId, dayStart) >= DAILY_LIMIT) {
-            throw AppException.rateLimited("今日关注次数已达上限");
-        }
+    /**
+     * 关注 / 取关 / 追更 / 取消追更<b>共用</b>的每分钟限流桶 key（T-1；V1.4.2 D-8「与关注人共用每分钟 30 次」）。
+     * {@link PetFollowService} 也经这里取 key，保证同一个桶。
+     */
+    static String rateKey(long viewerId) {
+        return "rl:social:follow:" + viewerId;
     }
 
     private static void requireNotSelf(long viewerId, long targetId) {

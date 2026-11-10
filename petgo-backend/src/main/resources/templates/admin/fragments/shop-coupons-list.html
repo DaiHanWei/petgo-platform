@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A1 / A2 优惠券列表片段（V1.4.2 shop-admin Story 2.2）。rows — 摘要条 + 表 + 空态；done — 处置成功（整表重拉 + toast，定位新行）。
+  状态由 CouponAdminService.statusOf 现算（未开始 / 进行中 / 已结束 / 已停用）。金额 Rp + 点分千位。
+-->
+<body>
+<th:block th:fragment="rows">
+    <!--/* UI A2：一张券都没有时不出摘要条（四个 0 没有信息量），只留空态卡。 */-->
+    <div class="sum" id="shop-coupon-summary" th:if="${anyCoupon}">
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.status.RUNNING}">进行中</div>
+            <div class="sum-value" th:text="${summary.running()}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.status.NOT_STARTED}">未开始</div>
+            <div class="sum-value" th:text="${summary.notStarted()}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.sum.locked}">占用中</div>
+            <div class="sum-value" th:text="${summary.locked()}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.sum.monthAmount}">本月带来订单金额</div>
+            <div class="sum-value num" th:text="'Rp ' + ${#numbers.formatInteger(summary.monthOrderAmount(), 0, 'POINT')}">Rp 0</div></div>
+    </div>
+    <table th:if="${!#lists.isEmpty(rows)}">
+        <thead><tr>
+            <th th:text="#{admin.v142.coupon.col.name}">券名称</th>
+            <th th:text="#{admin.v142.coupon.col.kind}">类型</th>
+            <th class="amt" th:text="#{admin.v142.coupon.col.amount}">面额 / 门槛</th>
+            <th th:text="#{admin.v142.coupon.col.acquire}">发放方式</th>
+            <th><span th:text="#{admin.v142.coupon.col.issuePeriod}">发放期</span><br/><small class="muted" th:text="#{admin.v142.coupon.col.validity}">使用有效期</small></th>
+            <th class="amt" th:text="#{admin.v142.coupon.col.issuedTotal}">已发 / 总量</th>
+            <th class="amt" th:text="#{admin.v142.coupon.col.used}">已使用</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="s-col-act" th:text="#{admin.common.actions}">操作</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="c : ${rows}" th:id="'shop-coupon-row-' + ${c.token}" th:classappend="${c.token == focus} ? 'is-focus'">
+            <td>
+                <a href="#" data-drawer-res="shop-coupon" th:attr="data-drawer-open=@{/admin/shop/coupons(detail=${c.token})}"
+                   th:text="${c.name}">券名</a>
+                <div class="muted" th:if="${c.scopeType == 'CATEGORY'}"
+                     th:text="#{admin.v142.coupon.scope.categoryOf(${#strings.listJoin(c.scopeValues, ', ')})}">指定品类：主粮</div>
+                <div class="muted" th:if="${c.scopeType == 'PRODUCT'}"
+                     th:text="#{admin.v142.coupon.scope.productOf(${#lists.size(c.scopeValues)})}">指定商品：2 个</div>
+            </td>
+            <td th:text="#{'admin.v142.coupon.kind.' + ${c.kind}}">满减</td>
+            <td class="amt">
+                <span th:if="${c.kind == 'DISCOUNT'}" th:text="#{admin.v142.coupon.cell.discount(${#numbers.formatInteger(c.amount, 0, 'POINT')}, ${#numbers.formatInteger(c.minSpend, 0, 'POINT')})}">Rp 20.000 / 满 Rp 100.000</span>
+                <span th:if="${c.kind == 'FREE_SHIPPING'}" th:text="#{admin.v142.coupon.cell.freeShipping(${#numbers.formatInteger(c.amount, 0, 'POINT')}, ${#numbers.formatInteger(c.minSpend, 0, 'POINT')})}">最高减 Rp 15.000 / 满 Rp 150.000</span>
+            </td>
+            <td th:text="#{'admin.v142.coupon.acquire.' + ${c.acquire}}">用户领取</td>
+            <td><span class="num" th:text="${c.issuePeriod}">11-10 – 12-31</span><br/>
+                <small class="muted" th:if="${c.validDays != null}" th:text="#{admin.v142.coupon.validDays(${c.validDays})}">领取后 7 天内有效</small>
+                <small class="muted num" th:if="${c.validPeriod != null}" th:text="${c.validPeriod}">12-01 – 12-20</small></td>
+            <td class="amt num"><span th:text="${#numbers.formatInteger(c.issued, 0, 'POINT')}">0</span> /
+                <span th:text="${c.total == null} ? #{admin.v142.coupon.unlimited} : ${#numbers.formatInteger(c.total, 0, 'POINT')}">不限</span></td>
+            <td class="amt num" th:text="${usedByToken == null} ? '—' : ${usedByToken.get(c.token)}">0</td>
+            <td><span class="badge"
+                      th:classappend="${c.status == 'RUNNING'} ? 'badge-ok' : (${c.status == 'NOT_STARTED'} ? 'badge-info' : 'badge-muted')"
+                      th:text="#{'admin.v142.coupon.status.' + ${c.status}}">进行中</span></td>
+            <td class="s-col-act">
+                <th:block th:if="${canEdit and c.editable}">
+                    <a href="#" data-drawer-res="shop-coupon" th:attr="data-drawer-open=@{/admin/shop/coupons(edit=${c.token})}"
+                       th:text="#{admin.v142.coupon.btn.edit}">编辑</a> ·
+                    <form class="inline" th:attr="hx-post=@{/admin/shop/coupons/{t}/stop/confirm(t=${c.token})}"
+                          hx-target="#confirm-host" hx-swap="innerHTML">
+                        <button type="submit" class="btn-link" th:text="#{admin.v142.coupon.btn.stop}">停用</button>
+                    </form>
+                </th:block>
+                <a th:unless="${canEdit and c.editable}" href="#" data-drawer-res="shop-coupon"
+                   th:attr="data-drawer-open=@{/admin/shop/coupons(detail=${c.token})}" th:text="#{admin.common.detail}">详情</a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="empty empty-boxed" th:if="${#lists.isEmpty(rows)}">
+        <span class="empty-emoji">🎟️</span>
+        <p th:text="${anyCoupon} ? #{admin.v142.coupon.emptyFiltered} : #{admin.v142.coupon.empty}">还没有优惠券。</p>
+    </div>
+</th:block>
+
+<th:block th:fragment="done">
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已保存</div>
+    </div>
+    <div id="shop-coupon-rows" hx-swap-oob="true">
+        <div th:replace="~{admin/fragments/shop-coupons-list :: rows}"></div>
+    </div>
+</th:block>
+</body>
+</html>

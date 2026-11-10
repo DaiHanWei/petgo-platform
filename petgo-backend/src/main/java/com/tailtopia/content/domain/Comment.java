@@ -219,9 +219,16 @@ public class Comment {
         return contentVersion;
     }
 
-    /** 预留字段（D-35 / X-2），本版恒为 null。 */
+    /**
+     * 二级回复所回复的那条<b>二级</b>评论 id（V1.4.2 起写值）。回复一级评论 / 一级评论本身为 null。
+     * 只用于「回复了你的回复」通知定位被回复人，不参与两级归并与展示。
+     */
     public Long getReplyToCommentId() {
         return replyToCommentId;
+    }
+
+    public void setReplyToCommentId(Long replyToCommentId) {
+        this.replyToCommentId = replyToCommentId;
     }
 
     public Instant getDeletedAt() {

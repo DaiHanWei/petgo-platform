@@ -70,6 +70,61 @@
         </table>
         <p class="hint err" th:text="#{admin.shop.recon.bonusHint}">⚠️「赠币核销额」是近似值。</p>
     </section>
+    <!--/* V1.4.2 shop-admin Story 8.1（I1 / I2 · AD-15）：优惠与物流成本，整宽卡；原四卡不动。
+           时间按 WIB 日界；订单类按付款时间（原四卡按下单时间），卡内注明。无数据只在本卡显示空态（I2）。 */-->
+    <section class="card card-full recon-card" id="recon-discount-logistics" data-discount-logistics th:if="${dl != null}">
+        <h2 th:text="#{admin.v142.recon.dl.title}">优惠与物流成本</h2>
+        <p class="hint" th:text="#{admin.v142.recon.dl.basis}">订单类按付款时间（WIB）</p>
+        <div class="empty" th:if="${dl.empty()}">
+            <p th:text="#{admin.v142.recon.dl.empty}">所选时间段没有数据。</p>
+        </div>
+        <table th:unless="${dl.empty()}" th:with="fmt=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)}">
+            <thead><tr><th th:text="#{admin.v142.recon.dl.col.item}">项目</th><th class="s-col-num">Rp</th><th></th></tr></thead>
+            <tbody>
+            <tr><th th:text="#{admin.v142.recon.dl.spendCoupon}">满减券抵扣</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.spendCouponDiscount())}">0</td>
+                <td class="muted" th:text="#{admin.v142.recon.dl.spendCoupon.note}">平台承担的商品折扣</td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.thresholdShipping}">满额免运减免</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.thresholdShippingDiscount())}">0</td><td></td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.couponShipping}">免运券减免</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.couponShippingDiscount())}">0</td><td></td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.userPaidShipping}">用户实际支付的运费</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.userPaidShipping())}">0</td>
+                <td class="muted" th:text="#{admin.v142.recon.dl.userPaidShipping.note}">运费 − 减免</td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.actualCarrier}">Biteship 实际运费</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.actualCarrierCost())}">0</td>
+                <td class="muted" th:text="#{admin.v142.recon.dl.actualCarrier.note}">不含保价</td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.reship}">重发运费</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.reshipCost())}">0</td>
+                <td class="muted" th:text="#{admin.v142.recon.dl.reship.note}">快递原因重新发货</td></tr>
+            <tr class="recon-check" data-net-shipping><th th:text="#{admin.v142.recon.dl.netShipping}">运费净成本</th>
+                <td class="s-col-num" th:text="(${dl.netShippingCost() < 0} ? '−' : '') + ${fmt.rp(T(java.lang.Math).abs(dl.netShippingCost()))}">0</td>
+                <td class="muted" th:text="#{admin.v142.recon.dl.netShipping.note}">实际 + 重发 − 实付</td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.insurance}">保价费收入 / 保价实际成本</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.insuranceFeeIncome())} + ' / ' + ${fmt.rp(dl.insuranceActualCost())}">0 / 0</td><td></td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.compensation}">转 PawCoin 补偿</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.pawcoinCompensation())}">0</td>
+                <td class="muted" th:text="#{admin.v142.recon.dl.compensation.note}">平台原因退款</td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.claims}">待索赔 / 已索赔到账</th>
+                <td class="s-col-num" th:text="#{admin.v142.recon.dl.claims.value(${dl.claimsPendingCount()}, ${fmt.rp(dl.claimsReceived())})}">0 单 / Rp 0</td><td></td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.refundPayout}">退款打款</th>
+                <td class="s-col-num" colspan="2">
+                    <span th:text="#{admin.v142.payout.tab.AWAITING} + ' ' + ${fmt.rp(dl.refundAwaiting())}">待用户选择</span> ·
+                    <span th:text="#{admin.v142.payout.tab.PENDING} + ' ' + ${fmt.rp(dl.refundPayoutPending())}">待打款</span> ·
+                    <span th:text="#{admin.v142.payout.tab.FAILED} + ' ' + ${fmt.rp(dl.refundPayoutFailed())}"
+                          th:title="#{admin.v142.recon.dl.refundFailed.note}">打款失败</span> ·
+                    <span th:text="#{admin.v142.payout.tab.PAID} + ' ' + ${fmt.rp(dl.refundPaidOut())}">已打款</span>
+                </td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.late.reordered}">取消后到账 · 已转新订单</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.lateReordered())}">0</td>
+                <td class="muted" th:text="#{admin.v142.recon.dl.late.reordered.note}">计入新订单现金收入，不重复计</td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.late.refunded}">取消后到账 · 已退</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.lateRefunded())}">0</td><td></td></tr>
+            <tr><th th:text="#{admin.v142.recon.dl.late.pending}">取消后到账 · 待处理</th>
+                <td class="s-col-num" th:text="${fmt.rp(dl.latePending())}">0</td><td></td></tr>
+            </tbody>
+        </table>
+    </section>
 </div>
 </body>
 </html>

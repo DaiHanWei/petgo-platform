@@ -19,6 +19,8 @@ public enum PushCategory {
     COMMENT(true),
     MENTION(true),
     FOLLOWER(true),
+    /** 追更宠物（V1.4.2 social-topic Story 1.2）：我追更的宠物发了新 Diary。紧跟新粉丝之后（App A13 展示顺序）。 */
+    PET_DIARY(true),
     GIFT(true),
     PET_REMINDER(true),
     ACHIEVEMENT(true),
@@ -43,14 +45,18 @@ public enum PushCategory {
             case CONTENT_LIKED -> LIKE;
             case CONTENT_COMMENTED, PLACE_COMMENTED -> COMMENT;
             case CONTENT_MENTIONED -> MENTION;
-            case USER_FOLLOWED -> FOLLOWER;
+            // V1.4.2：被追更与被关注同归「新粉丝」
+            case USER_FOLLOWED, PET_FOLLOWED -> FOLLOWER;
+            case PET_DIARY_POSTED -> PET_DIARY;
             case PET_GIFT_RECEIVED -> GIFT;
             case PET_BIRTHDAY, COMPANION_ANNIVERSARY -> PET_REMINDER;
             case MILESTONE_NODE, MILESTONE_SM_NODE, GROWTH_LEVEL_UP -> ACHIEVEMENT;
             case OPS_ANNOUNCEMENT, LIFECYCLE_D1, LIFECYCLE_D3, LIFECYCLE_D7, LIFECYCLE_WINBACK,
-                    REPURCHASE_FOOD_LOW, CSAT_SURVEY -> PROMO;
-            // 订单与支付
-            case SHOP_ORDER_SHIPPED, SHOP_ORDER_EXCEPTION, SHOP_RETURN_UPDATED, REFUND_REJECTED,
+                    REPURCHASE_FOOD_LOW, CSAT_SURVEY,
+                    // V1.4.2 shop：券快过期提醒归「促销与活动」（可关）
+                    COUPON_EXPIRING -> PROMO;
+            // 订单与支付（V1.4.2 shop：迟到款已重新下单）
+            case SHOP_ORDER_SHIPPED, SHOP_ORDER_EXCEPTION, SHOP_RETURN_UPDATED, SHOP_ORDER_REORDERED, REFUND_REJECTED,
                     PET_SLOT_EXPIRING, PET_SLOT_EXPIRED, GIFT_UNDELIVERED_REFUND,
                     // 客服
                     TICKET_RESOLVED,

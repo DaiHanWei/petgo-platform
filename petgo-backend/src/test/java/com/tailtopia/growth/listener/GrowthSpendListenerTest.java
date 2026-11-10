@@ -113,7 +113,7 @@ class GrowthSpendListenerTest {
 
     @Test
     void shopOrderAccruesOncePerOrderOnPaidTotal() {
-        listener.onShopOrderPaid(new ShopOrderPaidEvent(11L, "ord", 7L, 200_000));
+        listener.onShopOrderPaid(new ShopOrderPaidEvent(11L, "ord", 7L, 200_000, "QRIS", "GATEWAY"));
 
         AccrualCommand c = accrued();
         assertThat(c.rule()).isEqualTo(RuleCode.SPEND_SHOP);

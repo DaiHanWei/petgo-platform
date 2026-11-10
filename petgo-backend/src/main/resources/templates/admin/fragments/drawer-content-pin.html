@@ -10,6 +10,11 @@
      而 AdminBusinessExceptionAdvice 按这个头 HX-Retarget（7.1 复审 C1 的教训）。重叠冲突的 422 就落这里。
   🔴 时间输入旁必须有「WIB」字样：不写运营就按自己电脑的时区填，整批排期偏移。
   🔴 已结束的排期只读（editable=false）。
+  V1.4.2 Story 6.2（G2 / AC8.3）：model 带 topic（话题页坑位）时 createForm 差异化渲染 ——
+    只读坑位行「坑位 话题页 · #X」、隐藏字段 slot=TOPIC_PAGE + topicId（+ from=topic）、说明句 / 空态换话题版、
+    搜索与「加载更多」带 topicId；from=topic（表单开在话题抽屉里）时顶部「← 返回话题详情」。
+    topic == null（首页 Feed）时渲染结果与改动前一致。
+    createdInTopic — 话题抽屉里新建成功：只回 toast（主体为空 → 清掉 #pin-drawer-err），由 HX-Trigger admin:drawer-open 切回话题详情。
 */-->
 <body>
 <div th:fragment="drawer" class="pin-drawer" th:attr="data-pin-id=${d.row.id}"
@@ -93,8 +98,23 @@
     <form th:attr="hx-post=@{/admin/content-pins}" hx-encoding="multipart/form-data"
           hx-target="#pin-drawer-err" hx-swap="innerHTML" id="pinCreateForm"
           th:action="@{/admin/content-pins}" method="post" enctype="multipart/form-data">
+        <!--/* 话题抽屉内打开（from=topic）：回到同一个 480px 抽屉的话题详情（不叠第二层） */-->
+        <p class="pin-back" th:if="${topic != null and from == 'topic'}">
+            <button type="button" class="opsp-lnk" data-drawer-res="topic"
+                    th:attr="data-drawer-open=@{/admin/topics/{id}/drawer(id=${topic.id})}"
+                    th:text="#{admin.pins.backToTopic}">← 返回话题详情</button>
+        </p>
         <h3 th:text="#{admin.pins.new}">新建顶置</h3>
+        <!--/* G2：话题页坑位只读一行（不用灰底框）；Feed 坑位不显示 */-->
+        <p class="pin-slot-line" th:if="${topic != null}">
+            <span class="muted" th:text="#{admin.pins.slot}">坑位</span>
+            <span th:text="#{admin.pins.slot.topicPage(${topic.nameDisplay})}">话题页 · #KucingLucu</span>
+        </p>
         <input type="hidden" name="slot" th:value="${slot}"/>
+        <th:block th:if="${topic != null}">
+            <input type="hidden" name="topicId" th:value="${topic.id}"/>
+            <input type="hidden" name="from" th:if="${from != null}" th:value="${from}"/>
+        </th:block>
         <label class="field field-full">
             <span th:text="#{admin.pins.objectType}">类型</span>
             <select name="objectType" id="pinObjectType" class="sel">
@@ -106,9 +126,15 @@
         <!--/* 内容型：选择器（只列公开内容，搜索 300ms 防抖 + 分页；大结果集不可平铺——1.2.0 既有要求） */-->
         <fieldset id="pinContentFields">
             <legend th:text="#{admin.pins.pickContent}">选择内容</legend>
-            <p class="hint" th:text="#{admin.pins.pickHint}">只列可公开展示的内容。</p>
+            <p class="hint" th:text="${topic == null} ? #{admin.pins.pickHint} : #{admin.pins.pickHintTopic}">只列可公开展示的内容。</p>
             <input type="search" name="q" class="inp field-full" th:placeholder="#{admin.pins.pickSearch}"
+                   th:if="${topic == null}"
                    hx-get="/admin/content-pins/pick" hx-target="#pinCandidates"
+                   hx-trigger="keyup changed delay:300ms, search"/>
+            <!--/* 话题版：候选只列该话题下的帖子 —— topicId 直接写进 hx-get（GET 不会自动带上表单里的隐藏字段） */-->
+            <input type="search" name="q" class="inp field-full" th:placeholder="#{admin.pins.pickSearch}"
+                   th:if="${topic != null}"
+                   th:attr="hx-get=@{/admin/content-pins/pick(topicId=${topic.id})}" hx-target="#pinCandidates"
                    hx-trigger="keyup changed delay:300ms, search"/>
             <div id="pinCandidates" class="pick-list">
                 <div th:replace="~{admin/content-pins :: candidates}"></div>
@@ -211,6 +237,14 @@
         /*]]>*/
     </script>
 </div>
+
+<!--/* V1.4.2 Story 6.2（AC8.4）：话题抽屉内新建成功 —— 主体为空（落进 #pin-drawer-err 即清空错误）+ toast；
+       页面上没有 pin 抽屉，afterAction 的 oob 目标不存在，故另出本片段 */-->
+<th:block th:fragment="createdInTopic">
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
 
 <!--/* 处置 / 新建成功：抽屉体 oob + toast；列表由 HX-Trigger admin:pin-list-refresh 整表重拉
        （新建的行页面上还没有，oob 插不进去；摘要条与状态筛选也都要跟着变） */-->

@@ -4,5 +4,6 @@
 - 规格：透明底，建议 512×512；同一张图在 14px 角标到 120px 大徽章之间等比缩放（不做大小两套）。
 - 素材已入库（2026-10-05，设计稿 milestone compressed 512×512 PNG → webp q90）：39 枚语义键 + `locked.webp`；`first_health_check`（G-M2 其他宠物「第一次健康检查 / 疫苗」，「1st CHECKUP」）2026-10-05 补到，**40 枚齐**。换图同名覆盖即生效，**不改代码**。
 - 2026-10-12 V1.3.4 FR-126 新增 `place_checkin`（场所打卡）、`tailsonality`（性格测试），App 与后端同名同哈希预置入库。
+- 2026-11-10 V1.4.2 FR-154 素材到货：`first_save`（第一次收藏）、`first_friend`（第一次关注），设计稿 1024 白底 PNG → 抠白底、裁边、缩放至 512×512 透明底 webp q90；App 与后端同名同哈希入库，替换原 `MilestoneBadge` 兜底。
 - 后端 `petgo-backend/src/main/resources/static/milestone/` 必须同名同字节放一份（H5 分享页用，`MilestoneBadgeAssetSyncTest` 按 SHA-256 钉死）。
 - 测试 `test/profile/milestone_badge_test.dart` 会拒绝本目录下名字不在映射表里的 `.webp`（防拼错的孤儿文件）。

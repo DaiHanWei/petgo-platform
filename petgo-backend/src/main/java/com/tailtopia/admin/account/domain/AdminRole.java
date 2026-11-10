@@ -15,6 +15,7 @@ import static com.tailtopia.admin.account.domain.AdminPermissions.CONTENT_VIEW;
 import static com.tailtopia.admin.account.domain.AdminPermissions.CONTENT_VIEW_REPORTS;
 import static com.tailtopia.admin.account.domain.AdminPermissions.GROWTH_USER_ADJUST;
 import static com.tailtopia.admin.account.domain.AdminPermissions.ORDER_EDIT;
+import static com.tailtopia.admin.account.domain.AdminPermissions.ORDER_REVERSE_EXP;
 import static com.tailtopia.admin.account.domain.AdminPermissions.ORDER_EXPORT;
 import static com.tailtopia.admin.account.domain.AdminPermissions.ORDER_VIEW;
 import static com.tailtopia.admin.account.domain.AdminPermissions.PAYMENT_VIEW;
@@ -114,6 +115,7 @@ public enum AdminRole {
             REFUND_VIEW, REFUND_APPROVE,
             CONFIG_VIEW, CONFIG_EDIT,
             ORDER_VIEW, ORDER_EDIT, ORDER_EXPORT,
+            ORDER_REVERSE_EXP, // V1.4.2 exp-reverse E-1：PRD 的「客服主管」落到本角色，偏离『新码不预授』惯例
             RISK_VIEW, RISK_EDIT,
             VIRTUAL_ACCOUNT_VIEW, VIRTUAL_ACCOUNT_MANAGE,
             SHOP_PRODUCT_VIEW, SHOP_PRODUCT_EDIT,

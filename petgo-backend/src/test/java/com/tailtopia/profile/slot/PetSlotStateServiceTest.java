@@ -37,8 +37,10 @@ class PetSlotStateServiceTest {
     private final PetProfileRepository profiles = mock(PetProfileRepository.class);
     private final PetSlotService slots = mock(PetSlotService.class);
     private final PetSlotLock lock = mock(PetSlotLock.class);
+    private final com.tailtopia.profile.service.AccountMilestoneService accountMilestones =
+            mock(com.tailtopia.profile.service.AccountMilestoneService.class);
     private final PetSlotStateService service =
-            new PetSlotStateService(profiles, slots, lock, new PetResolver(profiles));
+            new PetSlotStateService(profiles, slots, lock, new PetResolver(profiles), accountMilestones);
 
     private PetProfile a;
     private PetProfile b;
@@ -199,6 +201,11 @@ class PetSlotStateServiceTest {
 
             assertThat(ids(r.restored())).containsExactly(12L);
             verify(profiles).saveAll(List.of(c));
+            // V1.4.2 Story 2.1 T6.2：恢复的宠物补账号级里程碑（saveAll 之后、同一事务）；未恢复的不碰。
+            InOrder order = inOrder(profiles, accountMilestones);
+            order.verify(profiles).saveAll(List.of(c));
+            order.verify(accountMilestones).applyExistingFlagsToPet(c);
+            verify(accountMilestones, never()).applyExistingFlagsToPet(b);
         }
 
         @Test
@@ -244,6 +251,9 @@ class PetSlotStateServiceTest {
             assertThat(ids(r.demoted())).containsExactly(11L);
             assertThat(ids(r.restored())).containsExactly(13L);
             verify(lock).lockUser(OWNER);
+            // V1.4.2 Story 2.1 T6.2：改选（rearrange）恢复的 D 也补账号级里程碑；被降级的 B 不补。
+            verify(accountMilestones).applyExistingFlagsToPet(d);
+            verify(accountMilestones, never()).applyExistingFlagsToPet(b);
         }
 
         @Test

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/network/problem_detail.dart';
 import '../domain/shop_banner.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_product_detail.dart';
@@ -107,30 +108,68 @@ class ShopRepository {
     return ShopProductPage.empty;
   }
 
-  /// Toko 顶部 banner（2026-08-27）。**没有可展示的 banner 时返回 null**。
+  /// Toko 首页 banner 轮播（v1.4.2 shop Story 6.1 / 8.1，`{items: [...]}`，≤ 6 张、服务端已排序与过滤）。
   ///
-  /// 🔴 判据是 **204 No Content**，不是"data 为空"：后端在拼不出 URL 时也回 204，
-  /// 把"有没有 banner"收敛成了一个明确的状态码。这里照着它判，不要改成判 data ——
-  /// 判 data 会把网络层的空响应也误当成"没有 banner"。
-  ///
-  /// ⚠️ 拉取失败一律当作**没有 banner**（返回 null）而不是抛错：banner 是锦上添花的
-  /// 展示位，它挂了不该让整个 Toko 页进入错误态 —— 那是主次颠倒。
-  Future<ShopBanner?> fetchBanner() async {
+  /// ⚠️ 拉取失败一律当作**没有 banner**（空列表）而不是抛错：banner 是锦上添花的展示位，
+  /// 它挂了不该让整个 Toko 页进入错误态 —— 那是主次颠倒。空 URL 的条目丢掉（不渲染空壳）。
+  Future<List<ShopBanner>> fetchBanners() async {
     try {
-      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.shopBanner);
-      if (resp.statusCode == 204 || resp.data == null) return null;
-      return ShopBanner.fromJson(resp.data!);
+      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.shopBanners);
+      final items = resp.data?['items'];
+      if (items is! List) return const [];
+      return items
+          .whereType<Map<String, dynamic>>()
+          .map(ShopBanner.fromJson)
+          .where((b) => b.imageUrl.isNotEmpty)
+          .take(kShopBannerMax)
+          .toList(growable: false);
     } catch (_) {
-      return null;
+      return const [];
     }
   }
 
-  /// 商品详情（Story 1.7）。未上架/不存在 → 后端 404（`DioException` 抛给页面）。
-  /// 🔒 同样对游客开放，不做登录判断。
-  Future<ShopProductDetail> fetchDetail(String token) async {
-    final resp = await dio.get<Map<String, dynamic>>('${ApiPaths.shopProducts}/$token');
-    return ShopProductDetail.fromJson(resp.data!);
+  /// 在售商品按运营权重前 N（v1.4.2 shop Story 6.1，`GET /shop/products/top?limit=`）。游客可用。
+  Future<List<ShopProductSummary>> fetchTopProducts({int limit = 6}) async {
+    final resp = await dio.get<List<dynamic>>(
+      ApiPaths.shopProductsTop,
+      queryParameters: {'limit': limit},
+    );
+    return (resp.data ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(ShopProductSummary.fromJson)
+        .toList(growable: false);
   }
+
+  /// 商品详情（Story 1.7）。不存在 → 后端 404（`DioException` 抛给页面）。
+  /// 🔒 同样对游客开放，不做登录判断。
+  ///
+  /// v1.4.2 shop Story 8.2（AC8.3）：已下架 → 后端 **410** `product-delisted` → 抛 [ShopProductDelisted]，
+  /// 页面据此画「商品已下架」整页态（B13，不给重试 —— 重试也没用）。404 / 网络失败仍原样抛 [DioException]。
+  Future<ShopProductDetail> fetchDetail(String token) async {
+    try {
+      final resp = await dio.get<Map<String, dynamic>>('${ApiPaths.shopProducts}/$token');
+      return ShopProductDetail.fromJson(resp.data!);
+    } on DioException catch (e) {
+      if (isProductDelistedError(e)) throw const ShopProductDelisted();
+      rethrow;
+    }
+  }
+}
+
+/// 商品已下架（详情 410 `product-delisted`）。
+class ShopProductDelisted implements Exception {
+  const ShopProductDelisted();
+
+  @override
+  String toString() => 'ShopProductDelisted';
+}
+
+/// 410 或 ProblemDetail `type` 末段为 `product-delisted`（C-2 连字符风格）。
+bool isProductDelistedError(DioException e) {
+  final pd = ProblemDetail.fromDioException(e);
+  return pd?.status == 410 ||
+      e.response?.statusCode == 410 ||
+      (pd?.typeSlug?.endsWith('product-delisted') ?? false);
 }
 
 final shopRepositoryProvider =
@@ -156,9 +195,13 @@ class ShopProductFeed {
     required this.hasMore,
     this.cursor,
     this.loadingMore = false,
+    this.totalCount,
   });
 
   final List<ShopProductSummary> items;
+
+  /// 同筛选条件下的在售总数（首页「{n} produk」）；null = 服务端未给 → 不显示件数。
+  final int? totalCount;
 
   /// 下一页游标；[hasMore] 为 false 时为 null。
   final String? cursor;
@@ -180,6 +223,7 @@ class ShopProductFeed {
         cursor: cursor,
         hasMore: hasMore ?? this.hasMore,
         loadingMore: loadingMore ?? this.loadingMore,
+        totalCount: totalCount,
       );
 }
 
@@ -204,7 +248,10 @@ class ShopProductListController extends AsyncNotifier<ShopProductFeed> {
         .read(shopRepositoryProvider)
         .fetchProductPage(category: _query.category, keyword: _query.keyword);
     return ShopProductFeed(
-        items: page.items, cursor: page.nextCursor, hasMore: page.hasMore);
+        items: page.items,
+        cursor: page.nextCursor,
+        hasMore: page.hasMore,
+        totalCount: page.totalCount);
   }
 
   /// 追加下一页。
@@ -252,6 +299,7 @@ class ShopProductListController extends AsyncNotifier<ShopProductFeed> {
       items: [...current.items, ...page.items],
       cursor: page.nextCursor,
       hasMore: page.hasMore,
+      totalCount: page.totalCount ?? current.totalCount,
     ));
   }
 }
@@ -260,12 +308,22 @@ final shopProductsProvider = AsyncNotifierProvider.autoDispose
     .family<ShopProductListController, ShopProductFeed, ShopProductsQuery>(
         ShopProductListController.new);
 
-/// Toko 顶部 banner。null = 没有可展示的 banner（页面据此显示白色顶栏）。
+/// Toko 首页 banner 轮播（v1.4.2 shop Story 8.1）。空列表 = 整块不渲染（A2）。
 ///
 /// 🔴 **不用 autoDispose**：banner 变动极少，而 Toko 是高频进出的 Tab ——
-/// 每次进出都重拉一次纯属浪费，且会让顶部在每次返回时闪一下。
-final shopBannerProvider = FutureProvider<ShopBanner?>((ref) async {
-  return ref.read(shopRepositoryProvider).fetchBanner();
+/// 每次进出都重拉一次纯属浪费，且会让轮播在每次返回时闪一下。下拉刷新显式 invalidate。
+final shopBannersProvider = FutureProvider<List<ShopBanner>>((ref) async {
+  return ref.read(shopRepositoryProvider).fetchBanners();
+});
+
+/// 运营权重前 6（搜索无结果 / 空购物车在无档案时的「Mungkin kamu suka」，D-17）。失败 → 空（整块不出现）。
+final shopTopProductsProvider =
+    FutureProvider.autoDispose<List<ShopProductSummary>>((ref) async {
+  try {
+    return await ref.read(shopRepositoryProvider).fetchTopProducts(limit: 6);
+  } catch (_) {
+    return const [];
+  }
 });
 
 /// 商品详情（按 token）。

@@ -80,6 +80,9 @@ class MentionEventPublishTest {
         when(candidates.findExistingCandidateIds(anyLong(), anyCollection()))
                 .thenAnswer(inv -> List.copyOf(inv.<java.util.Collection<Long>>getArgument(1)));
         when(hideRelations.hiddenEitherWay(anyLong(), anyCollection())).thenReturn(Set.of());
+        // V1.4.2 social-topic Story 5.1：有效账号判据改走 activeIdsAmong（注销 + 封号）。
+        when(accounts.activeIdsAmong(anyCollection()))
+                .thenAnswer(inv -> Set.copyOf(inv.<java.util.Collection<Long>>getArgument(0)));
         when(accounts.findAuthorViewsWithoutTags(anyCollection())).thenAnswer(inv -> {
             Map<Long, AuthorView> out = new HashMap<>();
             for (Long id : inv.<java.util.Collection<Long>>getArgument(0)) {
@@ -97,14 +100,19 @@ class MentionEventPublishTest {
                 new ImageSizeResolver(),
                 Mockito.mock(ImageSizeBackfillService.class),
                 Mockito.mock(ContentPinService.class),
-                new MentionSanitizer(accounts, hideRelations, candidates),
+                new MentionSanitizer(accounts, hideRelations, candidates,
+                        // V1.4.2 social-topic Story 5.1：范围扩大（本类 stub 候选全放行，关注默认空）。
+                        Mockito.mock(com.tailtopia.social.read.FollowReader.class)),
                 Mockito.mock(com.tailtopia.place.service.PlaceCheckinQueryService.class),
                 new ImageCropOffsetValidator(),
                 Mockito.mock(com.tailtopia.profile.service.PetWriteGuard.class),
                 // V1.4.0 multi-pet Story 3.1：本类只发 DAILY，不碰宠物关联。
                 Mockito.mock(com.tailtopia.profile.service.PetResolver.class),
                 Mockito.mock(com.tailtopia.content.repository.ContentPetRepository.class),
-                Mockito.mock(ContentPetQuery.class));
+                Mockito.mock(ContentPetQuery.class),
+                // V1.4.2 social-topic Story 4.1：话题写入 / 只读口（mock 默认无话题）。
+                org.mockito.Mockito.mock(com.tailtopia.topic.service.TopicService.class),
+                org.mockito.Mockito.mock(com.tailtopia.topic.service.TopicQueryService.class));
     }
 
     private static void setId(ContentPost p, long id) {

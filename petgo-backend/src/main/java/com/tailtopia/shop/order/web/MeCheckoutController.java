@@ -1,11 +1,17 @@
 package com.tailtopia.shop.order.web;
 
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.order.dto.CheckoutPreviewRequest;
 import com.tailtopia.shop.order.dto.CheckoutPreviewView;
-import com.tailtopia.shop.order.dto.CheckoutUnavailableException;
+import com.tailtopia.shop.order.dto.CheckoutQuoteView;
+import com.tailtopia.shop.order.dto.PlaceOrderRequest;
+import com.tailtopia.shop.order.dto.RefundDestinationRequest;
+import com.tailtopia.shop.order.dto.ShopOrderRefundView;
+import com.tailtopia.shop.order.refund.ShopOrderRefundService;
 import com.tailtopia.shop.order.dto.ShopOrderDetailView;
 import com.tailtopia.shop.order.dto.ShopOrderView;
 import com.tailtopia.shop.order.service.CheckoutService;
+import com.tailtopia.shop.order.service.PlaceCommand;
 import com.tailtopia.shop.order.service.ShopOrderPaymentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,30 +41,37 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeCheckoutController {
 
     private final CheckoutService checkout;
+    private final com.tailtopia.shop.order.service.CheckoutQuoteService quotes;
     private final ShopOrderPaymentService payments;
     private final com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment;
-    private final com.tailtopia.shop.service.ShopLineImageResolver lineImages;
+    private final ShopOrderRefundService refunds;
+    private final com.tailtopia.shop.order.service.ShopOrderDetailAssembler details;
+    private final com.tailtopia.shop.order.service.ShopOrderListService orderList;
 
-    public MeCheckoutController(CheckoutService checkout, ShopOrderPaymentService payments,
+    public MeCheckoutController(CheckoutService checkout,
+            com.tailtopia.shop.order.service.CheckoutQuoteService quotes,
+            ShopOrderPaymentService payments,
             com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment,
-            com.tailtopia.shop.service.ShopLineImageResolver lineImages) {
+            ShopOrderRefundService refunds,
+            com.tailtopia.shop.order.service.ShopOrderDetailAssembler details,
+            com.tailtopia.shop.order.service.ShopOrderListService orderList) {
         this.checkout = checkout;
+        this.quotes = quotes;
         this.payments = payments;
         this.fulfillment = fulfillment;
-        this.lineImages = lineImages;
+        this.refunds = refunds;
+        this.details = details;
+        this.orderList = orderList;
     }
 
     /**
-     * 订单详情的三个出口共用：装配前先批量取一次主图（2026-09-03）。
+     * 订单详情的出口共用（详情 / 取消 / 确认收货）：v1.4.2 shop Story 6.2 起统一经
+     * {@link com.tailtopia.shop.order.service.ShopOrderDetailAssembler}（批量取行、主图、运单、意图、退款单、重下单关联、券退回）。
      *
-     * <p>🔴 三处各写一遍必然漏掉其中一处 —— 「下单后全链路无图」本就是这么攒出来的。
+     * <p>🔴 各处各写一遍必然漏掉其中一处 —— 「下单后全链路无图」本就是这么攒出来的。
      */
     private ShopOrderDetailView detailOf(com.tailtopia.shop.order.domain.ShopOrder order) {
-        var lines = payments.linesOf(order);
-        return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()),
-                lineImages.mainImageUrlBySkuId(lines.stream()
-                        .map(com.tailtopia.shop.order.domain.ShopOrderLine::getSkuId).toList()),
-                payments.intentOf(order).orElse(null));
+        return details.assemble(order, java.time.Instant.now());
     }
 
     /**
@@ -73,34 +86,74 @@ public class MeCheckoutController {
     }
 
     /**
-     * 下单（只锁库存、不扣款；PawCoin 实扣在支付执行时，Story 3.8）。
+     * 新结算试算（v1.4.2 shop Story 3.1，D-8）：多快递、券、PawCoin 自选、保价。
      *
-     * <p>🔴 有行不可购买时回 <b>409 + {@code unavailableLines} 扩展成员</b>，
-     * 前端据此让用户移除后继续 —— <b>不整单打回</b>（FR-95）。
-     * 笼统的「库存不足，请重试」会让用户在一车 8 件商品里逐个试错。
-     * 映射由 {@link CheckoutUnavailableException} 自己声明（它实现 {@code ProblemExtensions}），
-     * 本控制器<b>不重复拼错误信封</b> —— 自拼会漏掉 traceId，而排障最先看的就是它。
+     * <p>POST 只因参数多，<b>语义只读</b>：不占券、不扣币、不锁库存、不写订单、不改购物车。
+     * 不可下单（无地址 / 超范围 / 询价失败 / 有不可买行）<b>不是错误</b>，回 {@code placeable=false}
+     * + {@code notPlaceableReason}；券不可用也不报错（试算永不因券报错）。
+     */
+    @PostMapping("/checkout/preview")
+    public CheckoutQuoteView previewQuote(@AuthenticationPrincipal Jwt jwt,
+            @RequestBody(required = false) CheckoutPreviewRequest req) {
+        if (req == null) {
+            throw AppException.validation("source 必填");
+        }
+        return quotes.preview(currentUserId(jwt), req);
+    }
+
+    /**
+     * 下单（v1.4.2 shop Story 3.2 重写，D-8）。
      *
-     * <p>🔴 {@code Idempotency-Key} 头去重（与同控制器 pay 端点同款：可选，缺失时不拒 ——
-     * 幂等层对空 key 直接跳过）：同 key 重放取回既有订单，<b>不重复建单、不重复锁库存</b>。
+     * <p>🔴 <b>判别只看 {@code quoteToken}</b>：为空 → 旧结算模式（旧版 App，S-4）——
+     * {@link CheckoutService#placeOrder} 先在事务外询价（{@code LegacyCheckoutAdapter}），再进提交事务；
+     * 非空 → 新结算模式，按报价锁定快递与运费、MANUAL 用券、PawCoin 自选，提交即扣币（S-3）。
+     *
+     * <p>🔴 有行不可购买时回 <b>409 {@code unavailable-lines} + {@code unavailableLines} 扩展成员</b>，
+     * 前端据此让用户移除后继续 —— <b>不整单打回</b>（FR-95）。映射由异常自己声明（{@code ProblemExtensions}），
+     * 本控制器<b>不重复拼错误信封</b>。
+     *
+     * <p>🔴 {@code Idempotency-Key} 头去重（可选）：同 key 重放取回既有订单，<b>不重复建单、不重复扣币</b>。
      */
     @PostMapping("/shop-orders")
     @ResponseStatus(HttpStatus.CREATED)
     public ShopOrderView placeOrder(@AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) PlaceOrderRequest req) {
-        if (req == null || req.addressToken() == null || req.addressToken().isBlank()) {
-            throw AppException.validation("请选择收货地址");
+        long userId = currentUserId(jwt);
+        if (req == null || !req.newCheckoutMode()) {
+            // 旧结算模式：新字段一律忽略；空地址 422 validation「请选择收货地址」（沿用旧文案与码）
+            if (req == null || req.addressToken() == null || req.addressToken().isBlank()) {
+                throw AppException.validation("请选择收货地址");
+            }
+            return ShopOrderView.of(checkout.placeOrder(userId, req.addressToken(),
+                    req.entrySource(), req.triggerType(), idempotencyKey));
         }
-        return ShopOrderView.of(checkout.placeOrder(currentUserId(jwt), req.addressToken(),
-                req.entrySource(), req.triggerType(), idempotencyKey));
+        return ShopOrderView.of(checkout.place(userId, PlaceCommand.of(req), idempotencyKey));
     }
 
     // ===== Story 3.8：待支付订单详情与支付 =====
 
     /**
-     * 订单详情。🔴 **读的时候就地判过期**（懒过期）——用户会在窗口刚过的那一秒打开这一页，
-     * 等定时扫描（最长 1 分钟延迟）会让他看到一个其实已经作废的倒计时。
+     * 电商订单列表（v1.4.2 shop Story 6.2 AC1，D-18）：按 {@code displayStatus} 分组（S-7），游标分页每页 20。
+     * {@code group} ∈ {@code all | pending_payment | pending_shipment | to_receive | completed | cancelled}，非法 422；
+     * 坏游标按首页。通用 {@code /api/v1/orders} 不动。
+     */
+    @GetMapping("/shop-orders")
+    public com.tailtopia.shop.order.dto.ShopOrderListPage list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String group,
+            @RequestParam(required = false) String cursor) {
+        return orderList.list(currentUserId(jwt), group, cursor);
+    }
+
+    /** 角标计数（AC2，F1）：{@code {pendingPayment, toReceive}}，口径与列表分组一致。字面路径优先于 {@code /{token}}。 */
+    @GetMapping("/shop-orders/counts")
+    public com.tailtopia.shop.order.dto.ShopOrderCounts counts(@AuthenticationPrincipal Jwt jwt) {
+        return orderList.counts(currentUserId(jwt));
+    }
+
+    /**
+     * 订单详情。v1.4.2 shop Story 3.3：读单<b>不再懒关单</b>（码要到出码 + 65 分钟才失效）；
+     * 宽限期由 {@code displayStatus=CANCELLED} / {@code canPay=false} 表达，用户刷新即见，关单交给扫描。
      */
     @GetMapping("/shop-orders/{token}")
     public ShopOrderDetailView detail(@AuthenticationPrincipal Jwt jwt,
@@ -122,7 +175,17 @@ public class MeCheckoutController {
         return payments.pay(currentUserId(jwt), token, idempotencyKey);
     }
 
-    /** 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。 */
+    /**
+     * 「我已付款」（v1.4.2 shop Story 3.3 AC9，FR-128.8 / FR-134.1）：主动向网关查一次（10 秒节流，节流内不调网关、
+     * 直接回当前状态）。查单失败不报错，回 {@code paid=false}。
+     */
+    @PostMapping("/shop-orders/{token}/payment-check")
+    public com.tailtopia.shop.order.dto.PaymentCheckView paymentCheck(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token) {
+        return payments.paymentCheck(currentUserId(jwt), token);
+    }
+
+    /** 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。宽限期内 no-op，直接回当前详情。 */
     @PostMapping("/shop-orders/{token}/cancel")
     public ShopOrderDetailView cancel(@AuthenticationPrincipal Jwt jwt,
             @PathVariable String token) {
@@ -151,14 +214,20 @@ public class MeCheckoutController {
         return detailOf(order);
     }
 
+    // ===== v1.4.2 shop Story 4.1：取消退款单选择现金去向 =====
+
     /**
-     * 下单请求体。
+     * 选择取消退款单现金段的去向（AC4，D-15 / FR-134.4）：{@code TO_PAWCOIN} 即时入账（平台原因另给补偿，只对现金段）；
+     * {@code TO_BANK} 渠道费后端算、账户加密落库 → 待财务打款。
      *
-     * @param entrySource 归因：用户从哪个入口进的商品（区域② 档案推荐 / 区域④ 全部精选 …）
-     * @param triggerType 归因：触发类型（复购提醒 / 主动浏览 …）。两者随订单行落库，
-     *     是 AB-13B 复购看板的<b>服务端权威口径</b>（PostHog 只作交叉验证）。
+     * <p>🔴 请求里<b>没有「PawCoin 段去哪」参数</b>（能力缺席，FR-100A 规则 1），也不收手续费。
+     * 订单非本人 / 退款单不属于该订单 → 404（不区分）；已不可选 → 409 {@code refund-destination-locked}。
      */
-    public record PlaceOrderRequest(String addressToken, String entrySource, String triggerType) {
+    @PostMapping("/shop-orders/{token}/refunds/{refundToken}/destination")
+    public ShopOrderRefundView chooseRefundDestination(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token, @PathVariable String refundToken,
+            @RequestBody(required = false) RefundDestinationRequest req) {
+        return refunds.chooseDestination(currentUserId(jwt), token, refundToken, req);
     }
 
     private static long currentUserId(Jwt jwt) {

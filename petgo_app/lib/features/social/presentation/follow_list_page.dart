@@ -8,14 +8,21 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/pill_tab.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../profile/data/pet_recommendation_repository.dart';
+import '../../profile/presentation/widgets/pet_recommendation_strip.dart';
+import '../../profile/presentation/widgets/recommended_pet_card.dart';
 import '../../user_profile/data/public_profile_repository.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 import '../data/follow_suggestion_repository.dart';
 import '../domain/follow_list_item.dart';
 import 'blocked_list_skeleton.dart';
 import 'follow_list_controller.dart';
+import 'followed_pet_list_controller.dart';
 import 'widgets/follow_user_row.dart';
+import 'widgets/followed_pet_row.dart';
+import 'widgets/pet_follow_button.dart';
 import 'widgets/suggested_follow_list.dart';
 
 /// 关注 / 粉丝列表页（V1.3.4 follow · Story 2.2 · UI 稿 B1 / B3 / B7 ~ B10）。
@@ -75,6 +82,8 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
         ref.invalidate(publicProfileProvider(widget.userId));
         ref.invalidate(followListControllerProvider);
         ref.invalidate(followSuggestionsProvider);
+        // V1.4.2 social-topic Story 1.5 · AC9.2：Hewan 列表的 iFollow / iFollowOwner 相对查看者，同样按新身份重取。
+        ref.invalidate(followedPetListControllerProvider);
       },
     );
     final async = ref.watch(publicProfileProvider(widget.userId));
@@ -93,6 +102,10 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
         ),
       ),
       body: async.when(
+        // 1.5 复审：页内操作（如 Hewan 列表里取消追更）会 invalidate 本页的主页 provider；那次重取失败时
+        // **继续用已有的主页数据**（skipError），不把整页切成错误态 —— 否则 AC2.3 应保留的行会随整页一起消失。
+        // 首次加载失败（无已有值）仍走下方 error 分支。
+        skipError: true,
         // UI 稿 B9 / B10：资料加载中 / 失败也先画 Tab 栏外壳，骨架 / 错误态放在 Tab 内容区。
         loading: () => _withTabBar(l10n, const BlockedListSkeleton(rows: 7, divided: true)),
         error: (e, _) => _profileError(l10n, e),
@@ -108,14 +121,20 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
                 child: TabBarView(
                   controller: _tabs,
                   children: [
-                    for (final tab in FollowListTab.values)
-                      _FollowListTabView(
-                        key: PageStorageKey('followList_${tab.wire}'),
-                        ownerId: widget.userId,
-                        token: token,
-                        tab: tab,
-                        ownerIsSelf: p.self,
-                      ),
+                    // V1.4.2 social-topic Story 1.5 · AC1：只有 Mengikuti Tab 带 Pengguna / Hewan 筛选；Pengikut 不变。
+                    _FollowingFilteredTab(
+                      key: const PageStorageKey('followList_following'),
+                      ownerId: widget.userId,
+                      token: token,
+                      ownerIsSelf: p.self,
+                    ),
+                    _FollowListTabView(
+                      key: const PageStorageKey('followList_followers'),
+                      ownerId: widget.userId,
+                      token: token,
+                      tab: FollowListTab.followers,
+                      ownerIsSelf: p.self,
+                    ),
                   ],
                 ),
               ),
@@ -360,6 +379,281 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
         Text(following ? l10n.followListEmptyFollowing : l10n.followListEmptyFollowers,
             textAlign: TextAlign.center, style: AppTypography.title),
       ],
+    );
+  }
+}
+
+/// Mengikuti Tab：筛选胶囊「Pengguna {N}」（默认）/「Hewan {N}」+ 两路各自独立分页的列表
+/// （V1.4.2 social-topic · Story 1.5 · AC1 · UI 稿 A5）。无「全部」。
+///
+/// - N：Pengguna = 主页 `followingCount`（含官方号，不变）；Hewan = 主页 `petFollowingCount`（G-1），
+///   Hewan 列表首页到达后以列表信封的 `petFollowingCount` 校准（拍板②）—— 因此在列表里取消追更后，
+///   胶囊数要等**下拉刷新**才变（同「行刷新后才消失」）。旧后端缺字段 → 胶囊不带数字。
+/// - 两路用 [IndexedStack] 并存、各自 keep-alive：切换不丢已加载页与滚动位置；Hewan 首次选中才构建（才发请求）。
+class _FollowingFilteredTab extends ConsumerStatefulWidget {
+  const _FollowingFilteredTab({
+    super.key,
+    required this.ownerId,
+    required this.token,
+    required this.ownerIsSelf,
+  });
+
+  final int ownerId;
+  final String token;
+  final bool ownerIsSelf;
+
+  @override
+  ConsumerState<_FollowingFilteredTab> createState() => _FollowingFilteredTabState();
+}
+
+class _FollowingFilteredTabState extends ConsumerState<_FollowingFilteredTab> with AutomaticKeepAliveClientMixin {
+  bool _pets = false;
+
+  /// Hewan 列表是否已构建过（首次切到 Hewan 才建，之后常驻）。
+  bool _petsBuilt = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final l10n = AppLocalizations.of(context);
+    final profile = ref.watch(publicProfileProvider(widget.ownerId)).value;
+    var petCount = profile?.petFollowingCount;
+    if (_petsBuilt) {
+      final listCount = ref.watch(followedPetListControllerProvider(widget.token)).value?.petFollowingCount;
+      if (listCount != null) petCount = listCount;
+    }
+    return Column(
+      children: [
+        Padding(
+          key: const ValueKey('followListFilterRow'),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.screenEdge, 12, AppSpacing.screenEdge, 4),
+          child: Row(
+            children: [
+              PillTab(
+                key: const ValueKey('followListFilterPeople'),
+                label: l10n.petFollowFilterPeople,
+                count: profile?.followingCount,
+                active: !_pets,
+                onTap: () => setState(() => _pets = false),
+              ),
+              const SizedBox(width: 7),
+              PillTab(
+                key: const ValueKey('followListFilterPets'),
+                label: l10n.petFollowFilterPets,
+                count: petCount,
+                active: _pets,
+                onTap: () => setState(() {
+                  _pets = true;
+                  _petsBuilt = true;
+                }),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: IndexedStack(
+            index: _pets ? 1 : 0,
+            sizing: StackFit.expand,
+            children: [
+              _FollowListTabView(
+                key: const PageStorageKey('followList_following_people'),
+                ownerId: widget.ownerId,
+                token: widget.token,
+                tab: FollowListTab.following,
+                ownerIsSelf: widget.ownerIsSelf,
+              ),
+              if (_petsBuilt)
+                _FollowedPetListView(
+                  key: const PageStorageKey('followList_following_pets'),
+                  token: widget.token,
+                  ownerIsSelf: widget.ownerIsSelf,
+                )
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Hewan 列表（V1.4.2 social-topic · Story 1.5 · AC2 ~ AC4 · UI 稿 A6 ~ A9）。
+///
+/// 我自己的列表：行右侧常驻追更按钮（点 Mengikuti 立即取消、行保留，**下拉刷新后**消失）；
+/// 别人的列表：无按钮。空态：自己 = A8（空态 + 推荐宠物）；别人 = A9（只空态）。
+/// 🔴 请求失败画错误态 + 重试，**绝不画成空态**（同 Pengguna 列表）。
+class _FollowedPetListView extends ConsumerStatefulWidget {
+  const _FollowedPetListView({super.key, required this.token, required this.ownerIsSelf});
+
+  final String token;
+  final bool ownerIsSelf;
+
+  @override
+  ConsumerState<_FollowedPetListView> createState() => _FollowedPetListViewState();
+}
+
+class _FollowedPetListViewState extends ConsumerState<_FollowedPetListView> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final l10n = AppLocalizations.of(context);
+    final provider = followedPetListControllerProvider(widget.token);
+    final async = ref.watch(provider);
+    return RefreshIndicator(
+      onRefresh: () async {
+        // 自己的空态带推荐宠物：刷新连推荐一起重拉（刚追更的已被服务端排除，D-17）。
+        if (widget.ownerIsSelf) ref.invalidate(petRecommendationsProvider);
+        await ref.read(provider.notifier).refresh();
+        final stillEmpty = mounted && (ref.read(provider).value?.items.isEmpty ?? false);
+        if (widget.ownerIsSelf && stillEmpty) {
+          try {
+            await ref.read(petRecommendationsProvider.future);
+          } catch (_) {}
+        }
+      },
+      child: async.when(
+        skipLoadingOnRefresh: true,
+        loading: () => const BlockedListSkeleton(rows: 7, divided: true),
+        error: (_, _) => _ListError(onRetry: () => ref.invalidate(provider)),
+        data: (s) => s.items.isEmpty ? _empty(l10n) : _list(l10n, s),
+      ),
+    );
+  }
+
+  Widget _list(AppLocalizations l10n, FollowedPetListState s) => NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          if (n.metrics.extentAfter >= 300) return false;
+          // 读当前状态（理由同 Pengguna 列表：失败后不自动重试，等底部 Coba lagi）。
+          final cur = ref.read(followedPetListControllerProvider(widget.token)).value;
+          if (cur != null && cur.hasMore && !cur.loadingMore && !cur.loadMoreFailed) {
+            ref.read(followedPetListControllerProvider(widget.token).notifier).loadMore();
+          }
+          return false;
+        },
+        child: ListView.separated(
+          key: const ValueKey('followedPetList'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+          itemCount: s.items.length + (s.hasMore || s.loadMoreFailed ? 1 : 0),
+          separatorBuilder: (_, _) => const Divider(height: 1, thickness: 1, color: AppColors.line2),
+          itemBuilder: (context, i) {
+            if (i < s.items.length) return FollowedPetRow(pet: s.items[i], showButton: widget.ownerIsSelf);
+            return _footer(l10n, s);
+          },
+        ),
+      );
+
+  Widget _footer(AppLocalizations l10n, FollowedPetListState s) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Center(
+          child: s.loadMoreFailed
+              ? TextButton(
+                  key: const ValueKey('followedPetLoadMoreRetry'),
+                  onPressed: () => ref.read(followedPetListControllerProvider(widget.token).notifier).loadMore(),
+                  child: Text(l10n.feedRetry),
+                )
+              : const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      );
+
+  /// UI 稿 A8 / A9：版式照 Pengguna 的 `_empty`（顶距 120 / 图标 48 / 标题 18 w600）；
+  /// 我自己的空态下方 32 放推荐宠物（推荐为空 / 失败 / 加载中 → 整块不占位）。外层可滚（下拉刷新可用）。
+  Widget _empty(AppLocalizations l10n) => ListView(
+        key: ValueKey(widget.ownerIsSelf ? 'followedPetSelfEmpty' : 'followedPetEmpty'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Column(
+              children: [
+                const SizedBox(height: 120),
+                const Icon(Icons.pets, size: 48, color: AppColors.muted),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  widget.ownerIsSelf ? l10n.petFollowListEmptySelf : l10n.petFollowListEmpty,
+                  textAlign: TextAlign.center,
+                  textWidthBasis: TextWidthBasis.longestLine,
+                  style: AppTypography.title,
+                ),
+              ],
+            ),
+          ),
+          if (widget.ownerIsSelf) const _PetRecommendSection(),
+        ],
+      );
+}
+
+/// A8 空态下方的推荐宠物（V1.4.2 social-topic · Story 1.5 · AC4.2 ~ AC4.6）。
+///
+/// 数据复用 `petRecommendationsProvider`（后端已排除已追更）；为空 / 失败 / 加载中 → 整块隐藏（不留标题）。
+/// 卡片 = 首页横滑行小卡 [PetStripTile]，唯一差别：宽 88 + 卡下方「Ikuti」按钮（热区 44）。
+/// 追更后卡片**不移除**（非常驻位置），按钮变 Mengikuti；空态本身下拉刷新后才变成列表。
+class _PetRecommendSection extends ConsumerWidget {
+  const _PetRecommendSection();
+
+  static const double _cardWidth = 88;
+
+  /// 按钮热区高（视觉 30、上下各扩 7）。
+  static const double _hitHeight = 44;
+
+  /// 行高 = 方图 88 + 8 + 一行 micro（11 × 1.3 × 字号上限 1.3 ≈ 18.6 → 19）+ 1 + 热区 44（按钮视觉上距 = 1 + 7 = 8）。
+  static const double _rowHeight = _cardWidth + AppSpacing.sm + 19 + 1 + _hitHeight;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 推荐接口仅登录可用：游客不 watch（不发请求）。自己的列表必然已登录，这里只是兜底。
+    if (!ref.watch(authControllerProvider).isLoggedIn) return const SizedBox.shrink();
+    final pets = ref.watch(petRecommendationsProvider).value ?? const <RecommendedPet>[];
+    if (pets.isEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      key: const ValueKey('followedPetRecommend'),
+      padding: const EdgeInsets.only(top: AppSpacing.xxl, bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xs),
+            child: Text(l10n.petRecommendSectionTitle,
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
+          ),
+          SizedBox(
+            height: _rowHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              itemCount: pets.length,
+              separatorBuilder: (_, _) => const SizedBox(width: PetRecommendationStrip.cardGap),
+              itemBuilder: (context, i) => PetStripTile(
+                pet: pets[i],
+                from: kPetRecommendFromFollowListEmpty,
+                width: _cardWidth,
+                bottom: Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: PetFollowButton(
+                    petId: pets[i].petId,
+                    // 推荐池已排除已追更（D-17）→ 服务端快照恒未追更；本会话的覆盖照常盖上。
+                    initialFollow: false,
+                    style: PetFollowButtonStyle.listCompact,
+                    // R-2 / PRD §4 新增取值。推荐接口不下发主人 token → 埋点省略 owner_id（见 story「待确认」）。
+                    source: 'pet_recommendation',
+                    hitHeight: _hitHeight,
+                    // 卡片不移除、空态下拉刷新后才更新为列表（AC4.5）→ 不在这里失效列表。
+                    invalidatesFollowedPetList: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

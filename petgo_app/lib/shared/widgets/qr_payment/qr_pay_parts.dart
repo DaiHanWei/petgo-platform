@@ -58,6 +58,8 @@ class QrPaySummary extends StatelessWidget {
     this.expiresAt,
     this.urgent = false,
     this.countdownKey = const ValueKey('qrPayCountdown'),
+    this.label,
+    this.coinHeldIdr,
   });
 
   final QrPayDensity density;
@@ -76,6 +78,13 @@ class QrPaySummary extends StatelessWidget {
   /// 问诊 5 分钟窗：倒计时红色强调（稿 C1 `.cd.urg`）。
   final bool urgent;
 
+  /// v1.4.2 shop Story 7.2：金额标签（电商「Bayar via QRIS」）。null = `qrPayTotalLabel`（现状）。
+  final String? label;
+
+  /// v1.4.2 shop Story 7.2：金额下方「+ PawCoin Rp {x} sudah ditahan」（混合支付已冻结的币段）。
+  /// null / ≤0 不画（现状）。金额由服务端下发，这里只格式化。
+  final int? coinHeldIdr;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -90,8 +99,9 @@ class QrPaySummary extends StatelessWidget {
         : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.qrPayTotalLabel, style: label),
-              Text('Rp${formatIdrAmount(amountIdr!)}',
+              Text(this.label ?? l10n.qrPayTotalLabel, style: label),
+              // UI E1 / E7：「Rp 317.000」Rp 后带空格（与全 App 金额口径一致）。
+              Text('Rp ${formatIdrAmount(amountIdr!)}',
                   key: const ValueKey('qrPayAmount'),
                   style: TextStyle(
                       fontSize: big,
@@ -103,6 +113,10 @@ class QrPaySummary extends StatelessWidget {
               if (page && coins != null)
                 Text(l10n.qrPayCoinsSub(formatIdrAmount(coins!)),
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mint)),
+              if ((coinHeldIdr ?? 0) > 0)
+                Text(l10n.qrPayCoinHeld(formatIdrAmount(coinHeldIdr!)),
+                    key: const ValueKey('qrPayCoinHeld'),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink2)),
             ],
           );
 
@@ -161,6 +175,9 @@ class QrPayCodeCard extends StatelessWidget {
     this.stubHint,
     this.qrKey = const ValueKey('qrPayImage'),
     this.orderRefKey = const ValueKey('qrPayOrderRef'),
+    this.expiredBody,
+    this.failed = false,
+    this.onRetry,
   });
 
   final QrPayDensity density;
@@ -173,6 +190,17 @@ class QrPayCodeCard extends StatelessWidget {
   /// 沿用各页既有 key（抽屉 `qrPayImage`、问诊 `vetPayQr`…），不弄断既有测试。
   final Key qrKey;
   final Key orderRefKey;
+
+  /// v1.4.2 shop Story 7.2：过期蒙层正文（电商 E5「Waktu pembayaran habis. Pesanan dibatalkan.」）。
+  /// null = `qrPayExpiredBody`（现状）。
+  final String? expiredBody;
+
+  /// v1.4.2 shop Story 7.2 · E7：取码失败 —— 二维码位换「Kode QR gagal dibuat」，等待中不画。
+  /// 默认 false（现状）。🔴 与 [payload] 为空的「Mode uji」占位是两回事：那是成功拿到了空码。
+  final bool failed;
+
+  /// E7「Coba lagi」；null 时不画重试（例如建单超 10 分钟服务端已不再出码）。
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +232,50 @@ class QrPayCodeCard extends StatelessWidget {
         );
 
     Widget code;
-    if (!hasPayload) {
+    if (failed) {
+      code = Container(
+        key: const ValueKey('qrPayCodeFailed'),
+        width: side,
+        height: side,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        // UI E7：浅灰底 + 灰色二维码图标 + 白底描边胶囊「Coba lagi」。
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F8FB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.line),
+        ),
+        // 二维码区边长随屏宽缩（小屏 / 大字号下可能只有 ~180）：整块按比例缩小，不溢出。
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.qr_code_2, size: 44, color: AppColors.muted),
+            const SizedBox(height: 10),
+            Text(l10n.qrPayCodeFailed,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.ink)),
+            if (onRetry != null) ...[
+              const SizedBox(height: 10),
+              OutlinedButton(
+                key: const ValueKey('qrPayRetryCode'),
+                onPressed: onRetry,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  shape: const StadiumBorder(),
+                  side: const BorderSide(color: AppColors.line, width: 1.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  minimumSize: const Size(0, 40),
+                ),
+                child: Text(l10n.commonRetry,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              ),
+            ],
+          ],
+        ),
+        ),
+      );
+    } else if (!hasPayload) {
       code = KeyedSubtree(key: const ValueKey('qrPayStub'), child: stub());
     } else {
       // GemPay 返回 QRIS/EMVCo 串，本地生成二维码；历史上偶有 http 图片链接，回退 Image.network。
@@ -246,7 +317,7 @@ class QrPayCodeCard extends StatelessWidget {
                                 fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
                       ),
                       const SizedBox(height: 2),
-                      Text(l10n.qrPayExpiredBody,
+                      Text(expiredBody ?? l10n.qrPayExpiredBody,
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 11.5, height: 1.4, color: AppColors.ink2)),
                     ],
@@ -307,7 +378,7 @@ class QrPayCodeCard extends StatelessWidget {
               ),
             ),
           ],
-          if (showWaiting && !expired) ...[
+          if (showWaiting && !expired && !failed) ...[
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -330,14 +401,64 @@ class QrPayCodeCard extends StatelessWidget {
 }
 
 /// 「Bisa dibayar pakai」logo 行 +「Cara bayar」5 条步骤（稿 `.blk`）。
-class QrPayGuide extends StatelessWidget {
-  const QrPayGuide({super.key, this.expiresAt});
+///
+/// v1.4.2 shop Story 7.2：[collapsible] 为 true 时整块收进「Cara bayar & aplikasi yang didukung ›」
+/// 折叠头（默认收起，点开才画 logo 与步骤）；默认 false = 平铺（现状）。
+class QrPayGuide extends StatefulWidget {
+  const QrPayGuide({super.key, this.expiresAt, this.collapsible = false});
 
   /// 步骤 5 的有效期；null 时步骤 5 不画（没有付款窗就不承诺期限）。
   final DateTime? expiresAt;
 
+  final bool collapsible;
+
+  @override
+  State<QrPayGuide> createState() => _QrPayGuideState();
+}
+
+class _QrPayGuideState extends State<QrPayGuide> {
+  bool _open = false;
+
   @override
   Widget build(BuildContext context) {
+    if (!widget.collapsible) return _body(context);
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          key: const ValueKey('qrPayGuideToggle'),
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _open = !_open),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(l10n.qrPayGuideToggle,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
+                ),
+                const SizedBox(width: 2),
+                AnimatedRotation(
+                  turns: _open ? 0.25 : 0,
+                  duration: const Duration(milliseconds: 150),
+                  child: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.mint),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_open) _body(context),
+      ],
+    );
+  }
+
+  Widget _body(BuildContext context) {
+    final expiresAt = widget.expiresAt;
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context).languageCode;
     const title = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink);
@@ -346,7 +467,7 @@ class QrPayGuide extends StatelessWidget {
       l10n.qrPayStep2,
       l10n.qrPayStep3,
       l10n.qrPayStep4,
-      if (expiresAt != null) l10n.qrPayStep5(qrPayDeadlineText(expiresAt!, locale)),
+      if (expiresAt != null) l10n.qrPayStep5(qrPayDeadlineText(expiresAt, locale)),
     ];
     return Column(
       key: const ValueKey('qrPayGuide'),
@@ -423,6 +544,10 @@ class QrPayBottomBar extends StatelessWidget {
     this.cancelKey = const ValueKey('qrPayCancel'),
     this.expired = false,
     this.onClose,
+    this.paidCheckLabel,
+    this.onPaidCheck,
+    this.paidCheckBusy = false,
+    this.docked = true,
   });
 
   final QrPayDensity density;
@@ -436,6 +561,16 @@ class QrPayBottomBar extends StatelessWidget {
   /// 过期（稿 A4）：按钮只剩「Tutup」。
   final bool expired;
   final VoidCallback? onClose;
+
+  /// v1.4.2 shop Story 7.2 · E1/E3：次按钮「Saya sudah bayar」。[paidCheckLabel] 为 null 不画（现状）；
+  /// 过期态不画。[paidCheckBusy] = 查询中：转圈 + 「Mengecek pembayaran…」，期间不可点。
+  final String? paidCheckLabel;
+  final VoidCallback? onPaidCheck;
+  final bool paidCheckBusy;
+
+  /// v1.4.2 shop Story 7.2：false = 嵌在可滚动内容里（自适应高度的面板），不画顶部分隔线与底部安全区。
+  /// 默认 true（吸底，现状）。
+  final bool docked;
 
   @override
   Widget build(BuildContext context) {
@@ -476,6 +611,65 @@ class QrPayBottomBar extends StatelessWidget {
         ),
       );
     }
+    final showPaidCheck = !expired && paidCheckLabel != null;
+    final buttons = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        primary,
+        if (showPaidCheck) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton(
+              key: const ValueKey('qrPayPaidCheck'),
+              onPressed: paidCheckBusy ? null : onPaidCheck,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.mint,
+                disabledForegroundColor: AppColors.mint,
+                side: const BorderSide(color: AppColors.mint, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: paidCheckBusy
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(
+                          key: ValueKey('qrPayPaidCheckBusy'),
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(l10n.qrPayPaidChecking,
+                              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    )
+                  : Text(paidCheckLabel!, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+        if (!expired && onCancel != null && cancelLabel != null)
+          InkWell(
+            key: cancelKey,
+            onTap: onCancel,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(minHeight: 40),
+              padding: const EdgeInsets.only(top: 10),
+              alignment: Alignment.center,
+              child: Text(cancelLabel!,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.danger)),
+            ),
+          ),
+      ],
+    );
+    if (!docked) {
+      return Padding(padding: const EdgeInsets.only(top: 14), child: buttons);
+    }
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.card,
@@ -485,26 +679,7 @@ class QrPayBottomBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         minimum: const EdgeInsets.only(bottom: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            primary,
-            if (!expired && onCancel != null && cancelLabel != null)
-              InkWell(
-                key: cancelKey,
-                onTap: onCancel,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: double.infinity,
-                  constraints: const BoxConstraints(minHeight: 40),
-                  padding: const EdgeInsets.only(top: 10),
-                  alignment: Alignment.center,
-                  child: Text(cancelLabel!,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.danger)),
-                ),
-              ),
-          ],
-        ),
+        child: buttons,
       ),
     );
   }

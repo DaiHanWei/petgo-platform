@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A3~A8 新建 / 编辑抽屉、A10 详情抽屉（V1.4.2 shop-admin Story 2.2 · AB-24）。
+  · form —— 新建：POST /admin/shop/coupons；编辑：POST /admin/shop/coupons/{token}。
+      已开始发放（started）：A8 只读展示面额 / 门槛 / 发放期 / 范围，只有发放总量可改（只增不减）。
+      校验失败（A6）：Controller 以 422 回本片段，顶部 .banner.err 写原因，表单保留。
+      防误配（A7）：Controller 回 confirm-modal（#confirm-host），确认后带 acknowledgeRisk=true 重提。
+  · detail —— 数据四格（已领取 / 占用中 / 已使用 / 带来的订单金额）+ 参数；批量码券吸底「导出兑换码」（要 shop.coupon_edit）。
+  显隐用 admin-core.js 的 select[data-show-switch] + [data-show-when]（隐藏块内输入同时 disabled，不提交）。
+  需要 model：form、couponToken、started、current、codeMode、formError、categories / c、stats、codeMode、universalCode。
+-->
+<body>
+<form th:fragment="form" class="coupon-drawer-form" th:object="${form}"
+      th:attr="hx-post=${couponToken} == null ? @{/admin/shop/coupons} : @{/admin/shop/coupons/{t}(t=${couponToken})}"
+      hx-target="#shop-coupon-drawer-body" hx-swap="innerHTML">
+    <h3 class="drawer-subtitle" th:text="${couponToken} == null ? #{admin.v142.coupon.drawer.new} : #{admin.v142.coupon.drawer.edit}">新建优惠券</h3>
+    <div class="banner err" th:if="${formError != null}" th:text="${formError}" role="alert">校验失败</div>
+
+    <!--/* A8：已开始发放 —— 只读 + 只改总量 */-->
+    <th:block th:if="${started}">
+        <div class="banner warn" th:text="#{admin.v142.coupon.startedWarn}">这张券已开始发放：只能增加发放总量或停用。</div>
+        <input type="hidden" name="onlyTotal" value="true"/>
+        <div class="kv">
+            <span th:text="#{admin.v142.coupon.col.name}">券名称</span><b th:text="${current.name}">券名</b>
+            <span th:text="#{admin.v142.coupon.col.amount}">面额 / 门槛</span>
+            <b th:if="${current.kind == 'DISCOUNT'}" th:text="#{admin.v142.coupon.cell.discount(${#numbers.formatInteger(current.amount, 0, 'POINT')}, ${#numbers.formatInteger(current.minSpend, 0, 'POINT')})}"></b>
+            <b th:if="${current.kind == 'FREE_SHIPPING'}" th:text="#{admin.v142.coupon.cell.freeShipping(${#numbers.formatInteger(current.amount, 0, 'POINT')}, ${#numbers.formatInteger(current.minSpend, 0, 'POINT')})}"></b>
+            <span th:text="#{admin.v142.coupon.col.issuePeriod}">发放期</span><b class="num" th:text="${current.issuePeriod}"></b>
+            <span th:text="#{admin.v142.coupon.form.scope}">适用范围</span>
+            <b th:text="${current.scopeType == 'ALL'} ? #{admin.v142.coupon.scope.ALL} : (${current.scopeType == 'CATEGORY'} ? #{admin.v142.coupon.scope.categoryOf(${#strings.listJoin(current.scopeValues, ', ')})} : #{admin.v142.coupon.scope.productOf(${#lists.size(current.scopeValues)})})"></b>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label s-req" for="f-cpTotal" th:text="#{admin.v142.coupon.form.total}">发放总量</label>
+            <div class="s-ctl">
+                <input id="f-cpTotal" type="number" min="1" class="inp" name="totalQuantity" th:value="${form.totalQuantity}"/>
+                <p class="hint" th:text="#{admin.v142.coupon.form.totalStartedHint(${current.total == null} ? #{admin.v142.coupon.unlimited} : ${current.total}, ${current.issued})}">当前 2000，已发 312；只能增加</p>
+            </div>
+        </div>
+    </th:block>
+
+    <th:block th:unless="${started}">
+        <div class="s-form-row">
+            <label class="s-label s-req" for="f-cpKind" th:text="#{admin.v142.coupon.form.kind}">券类型</label>
+            <div class="s-ctl">
+                <select id="f-cpKind" class="inp" name="kind" data-show-switch>
+                    <option th:each="k : ${ {'DISCOUNT','FREE_SHIPPING'} }" th:value="${k}" th:selected="${form.kind == k}"
+                            th:text="#{'admin.v142.coupon.kind.' + ${k}}">满减</option>
+                </select>
+            </div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label s-req" for="f-cpNameId" th:text="#{admin.v142.coupon.form.nameId}">券名称（印尼语）</label>
+            <div class="s-ctl"><input id="f-cpNameId" type="text" class="inp" maxlength="60" name="nameId" th:value="${form.nameId}"/></div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label s-req" for="f-cpNameEn" th:text="#{admin.v142.coupon.form.nameEn}">券名称（英语）</label>
+            <div class="s-ctl"><input id="f-cpNameEn" type="text" class="inp" maxlength="60" name="nameEn" th:value="${form.nameEn}"/></div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label s-req" for="f-cpAmount">
+                <span data-show-when="kind:DISCOUNT" th:hidden="${form.kind != 'DISCOUNT'}" th:text="#{admin.v142.coupon.form.amount}">减免金额</span>
+                <span data-show-when="kind:FREE_SHIPPING" th:hidden="${form.kind != 'FREE_SHIPPING'}" th:text="#{admin.v142.coupon.form.cap}">最高减免金额</span>
+            </label>
+            <div class="s-ctl">
+                <input id="f-cpAmount" type="number" min="1" class="inp" name="amount" th:value="${form.amount}"/>
+                <p class="hint" data-show-when="kind:FREE_SHIPPING" th:hidden="${form.kind != 'FREE_SHIPPING'}"
+                   th:text="#{admin.v142.coupon.form.capHint}">减免额取本单最低快递运费与此上限中较小者</p>
+            </div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label" for="f-cpMin" th:text="#{admin.v142.coupon.form.minSpend}">门槛金额</label>
+            <div class="s-ctl"><input id="f-cpMin" type="number" min="0" class="inp" name="minSpend" th:value="${form.minSpend}"/></div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label s-req" for="f-cpAcquire" th:text="#{admin.v142.coupon.col.acquire}">发放方式</label>
+            <div class="s-ctl">
+                <select id="f-cpAcquire" class="inp" name="acquireType" data-show-switch>
+                    <option th:each="a : ${ {'NEWBIE','CLAIM','CODE'} }" th:value="${a}" th:selected="${form.acquireType == a}"
+                            th:text="#{'admin.v142.coupon.acquire.' + ${a}}">用户领取</option>
+                </select>
+            </div>
+        </div>
+        <!--/* A5 兑换码：只在新建时选；已建的码不在这里改 */-->
+        <th:block th:if="${couponToken == null}">
+        <div class="s-form-row" data-show-when="acquireType:CODE" th:hidden="${form.acquireType != 'CODE'}">
+            <label class="s-label s-req" for="f-cpCodeMode" th:text="#{admin.v142.coupon.acquire.CODE}">兑换码</label>
+            <div class="s-ctl">
+                <select id="f-cpCodeMode" class="inp" name="codeMode" th:disabled="${form.acquireType != 'CODE'}">
+                    <option value="UNIVERSAL" th:selected="${form.codeMode == 'UNIVERSAL'}" th:text="#{admin.v142.coupon.code.universal}">通用码</option>
+                    <option value="BATCH" th:selected="${form.codeMode == 'BATCH'}" th:text="#{admin.v142.coupon.code.batch}">批量生成一次性码</option>
+                </select>
+                <p class="hint" th:text="#{admin.v142.coupon.code.universalHint}">所有用户输同一个码</p>
+                <p class="hint" th:text="#{admin.v142.coupon.code.batchHint}">每个码只能兑换一张</p>
+                <input type="text" class="inp" name="universalCode" maxlength="32" th:value="${form.universalCode}"
+                       th:placeholder="#{admin.v142.coupon.code.universalPlaceholder}" th:disabled="${form.acquireType != 'CODE'}"/>
+            </div>
+        </div>
+        </th:block>
+        <div class="s-form-row">
+            <label class="s-label s-req" th:text="#{admin.v142.coupon.col.issuePeriod}">发放期</label>
+            <div class="s-ctl">
+                <!--/* UI A3：起止日期同一行（原先两框换行、「–」掉到框外） */-->
+                <div class="s-range"><input type="date" class="inp" name="issueStart" th:value="${form.issueStart}"/><span>–</span><input type="date" class="inp" name="issueEnd" th:value="${form.issueEnd}"/></div>
+                <p class="hint" th:text="#{admin.v142.coupon.form.issueHint}">能领取、能兑换、新人券能发放的时间</p>
+            </div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label s-req" th:text="#{admin.v142.coupon.col.validity}">使用有效期</label>
+            <div class="s-ctl">
+                <!--/* UI A3：单选而不是下拉（两种口径要一眼看全）。radio 的 change 只在被选中那个上触发，
+                       data-show-switch 取 e.target.value 即当前选中值，显隐逻辑不用改。 */-->
+                <div class="s-radios">
+                    <label><input type="radio" name="validMode" value="FIXED" data-show-switch
+                                  th:checked="${form.validMode == 'FIXED'}"/> <span th:text="#{admin.v142.coupon.form.validFixed}">固定起止日期</span></label>
+                    <label><input type="radio" name="validMode" value="RELATIVE" data-show-switch
+                                  th:checked="${form.validMode == 'RELATIVE'}"/> <span th:text="#{admin.v142.coupon.form.validRelative}">领取后 N 天内有效</span></label>
+                </div>
+                <div data-show-when="validMode:RELATIVE" th:hidden="${form.validMode != 'RELATIVE'}">
+                    <input type="number" min="1" class="inp" name="validDays" th:value="${form.validDays}" th:disabled="${form.validMode != 'RELATIVE'}"/>
+                </div>
+                <div data-show-when="validMode:FIXED" th:hidden="${form.validMode != 'FIXED'}">
+                    <div class="s-range"><input type="date" class="inp" name="validStart" th:value="${form.validStart}" th:disabled="${form.validMode != 'FIXED'}"/><span>–</span><input type="date" class="inp" name="validEnd" th:value="${form.validEnd}" th:disabled="${form.validMode != 'FIXED'}"/></div>
+                </div>
+            </div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label" for="f-cpTotalNew" th:text="#{admin.v142.coupon.form.total}">发放总量</label>
+            <div class="s-ctl">
+                <input id="f-cpTotalNew" type="number" min="1" class="inp" name="totalQuantity" th:value="${form.totalQuantity}" th:placeholder="#{admin.v142.coupon.unlimited}"/>
+            </div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label s-req" for="f-cpPerUser" th:text="#{admin.v142.coupon.form.perUser}">每人限领</label>
+            <div class="s-ctl"><input id="f-cpPerUser" type="number" min="1" class="inp" name="perUserLimit" th:value="${form.perUserLimit}"/></div>
+        </div>
+        <div class="s-form-row">
+            <label class="s-label" for="f-cpScope" th:text="#{admin.v142.coupon.form.scope}">适用范围</label>
+            <div class="s-ctl">
+                <select id="f-cpScope" class="inp" name="scopeType" data-show-switch>
+                    <option th:each="s : ${ {'ALL','CATEGORY','PRODUCT'} }" th:value="${s}" th:selected="${form.scopeType == s}"
+                            th:text="#{'admin.v142.coupon.scope.' + ${s}}">全场</option>
+                </select>
+                <div data-show-when="scopeType:CATEGORY" th:hidden="${form.scopeType != 'CATEGORY'}">
+                    <select class="inp" name="scopeCategories" multiple th:disabled="${form.scopeType != 'CATEGORY'}">
+                        <option th:each="cat : ${categories}" th:value="${cat}" th:selected="${#lists.contains(form.scopeCategories, cat.name())}"
+                                th:text="#{'admin.v130.shopProducts.category.' + ${cat}}">主粮</option>
+                    </select>
+                </div>
+                <div data-show-when="scopeType:PRODUCT" th:hidden="${form.scopeType != 'PRODUCT'}">
+                    <input type="text" class="inp" name="scopeProducts" th:value="${form.scopeProducts}"
+                           th:placeholder="#{admin.v142.coupon.scope.productsPlaceholder}" th:disabled="${form.scopeType != 'PRODUCT'}"/>
+                </div>
+                <p class="hint" data-show-when="scopeType:CATEGORY,PRODUCT" th:hidden="${form.scopeType == 'ALL'}"
+                   th:text="#{admin.v142.coupon.scope.allInScopeHint}">本单全部商品都在范围内才可用</p>
+            </div>
+        </div>
+    </th:block>
+    <div class="sticky-footer">
+        <button type="submit" class="btn btn-primary" th:text="#{admin.common.save}">保存</button>
+    </div>
+</form>
+
+<div th:fragment="detail" class="coupon-detail">
+    <h3 class="drawer-subtitle" th:text="#{admin.v142.coupon.drawer.detail}">券详情</h3>
+    <div class="sum sum--grid2">
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.stats.claimed}">已领取</div>
+            <div class="sum-value num" th:text="${#numbers.formatInteger(stats.claimed(), 0, 'POINT')}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.stats.locked}">占用中（待支付订单）</div>
+            <div class="sum-value num" th:text="${#numbers.formatInteger(stats.locked(), 0, 'POINT')}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.col.used}">已使用</div>
+            <div class="sum-value num" th:text="${#numbers.formatInteger(stats.used(), 0, 'POINT')}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.coupon.stats.orderAmount}">带来的订单金额</div>
+            <div class="sum-value num" th:text="'Rp ' + ${#numbers.formatInteger(stats.orderAmount(), 0, 'POINT')}">Rp 0</div></div>
+    </div>
+    <div class="kv">
+        <span th:text="#{admin.v142.coupon.col.name}">券名称</span><b th:text="${c.name} + ' / ' + ${c.nameEn}">券名</b>
+        <span th:text="#{admin.v142.coupon.col.kind}">类型</span><b th:text="#{'admin.v142.coupon.kind.' + ${c.kind}}">满减</b>
+        <span th:text="#{admin.v142.coupon.col.amount}">面额 / 门槛</span>
+        <b th:if="${c.kind == 'DISCOUNT'}" th:text="#{admin.v142.coupon.cell.discount(${#numbers.formatInteger(c.amount, 0, 'POINT')}, ${#numbers.formatInteger(c.minSpend, 0, 'POINT')})}"></b>
+        <b th:if="${c.kind == 'FREE_SHIPPING'}" th:text="#{admin.v142.coupon.cell.freeShipping(${#numbers.formatInteger(c.amount, 0, 'POINT')}, ${#numbers.formatInteger(c.minSpend, 0, 'POINT')})}"></b>
+        <span th:text="#{admin.v142.coupon.col.acquire}">发放方式</span>
+        <b><th:block th:text="#{'admin.v142.coupon.acquire.' + ${c.acquire}}">兑换码</th:block>
+            <th:block th:if="${codeMode == 'UNIVERSAL'}" th:text="' · ' + #{admin.v142.coupon.code.universal} + ' ' + ${universalCode}"></th:block>
+            <th:block th:if="${codeMode == 'BATCH'}" th:text="' · ' + #{admin.v142.coupon.code.batch}"></th:block></b>
+        <span th:text="#{admin.v142.coupon.col.issuePeriod}">发放期</span><b class="num" th:text="${c.issuePeriod}"></b>
+        <span th:text="#{admin.v142.coupon.col.validity}">使用有效期</span>
+        <b th:text="${c.validDays != null} ? #{admin.v142.coupon.validDays(${c.validDays})} : ${c.validPeriod}"></b>
+        <span th:text="#{admin.v142.coupon.form.total}">发放总量</span>
+        <b th:text="(${c.total == null} ? #{admin.v142.coupon.unlimited} : ${#numbers.formatInteger(c.total, 0, 'POINT')}) + ' · ' + #{admin.v142.coupon.form.perUser} + ' ' + ${c.perUser}"></b>
+        <span th:text="#{admin.v142.coupon.form.scope}">适用范围</span>
+        <b th:text="${c.scopeType == 'ALL'} ? #{admin.v142.coupon.scope.ALL} : (${c.scopeType == 'CATEGORY'} ? #{admin.v142.coupon.scope.categoryOf(${#strings.listJoin(c.scopeValues, ', ')})} : #{admin.v142.coupon.scope.productOf(${#lists.size(c.scopeValues)})})"></b>
+        <span th:text="#{admin.common.status}">状态</span><b th:text="#{'admin.v142.coupon.status.' + ${c.status}}">进行中</b>
+    </div>
+    <div class="sticky-footer" th:if="${codeMode == 'BATCH' and canEdit}">
+        <a class="btn btn-neutral" th:href="@{/admin/shop/coupons/{t}/codes.csv(t=${c.token})}" download
+           th:text="#{admin.v142.coupon.btn.export}">导出兑换码</a>
+    </div>
+</div>
+</body>
+</html>

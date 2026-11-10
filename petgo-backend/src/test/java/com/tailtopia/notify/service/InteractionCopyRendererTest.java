@@ -224,4 +224,33 @@ class InteractionCopyRendererTest {
         assertThat(source.getMessage("notify.GIFT_UNDELIVERED_REFUND.title", new Object[] {"Mochi", "25.000", reasonId},
                 ID)).isEqualTo("Hadiah tidak terkirim");
     }
+
+    // ===== V1.4.2 social-topic Story 1.2 · AC5.4 / AC6.6：被追更 / 追更宠物新 Diary 文案 =====
+
+    @Test
+    void petFollowedWithAndWithoutPetName() {
+        ActorSummary b = new ActorSummary(2L, "Budi", "t", 0);
+        assertThat(renderer.title(NotificationType.PET_FOLLOWED, null, b, ID, "Mochi"))
+                .isEqualTo("Budi mulai mengikuti Mochi");
+        assertThat(renderer.title(NotificationType.PET_FOLLOWED, null, b, EN, "Mochi"))
+                .isEqualTo("Budi started following Mochi");
+        assertThat(renderer.title(NotificationType.PET_FOLLOWED, null, b, ZH, "Mochi")).isEqualTo("Budi 追更了 Mochi");
+        assertThat(renderer.title(NotificationType.PET_FOLLOWED, null, b, ID, null))
+                .isEqualTo("Budi mulai mengikuti hewanmu");
+        assertThat(renderer.title(NotificationType.PET_FOLLOWED, null, b, EN, null))
+                .isEqualTo("Budi started following your pet");
+        // 4 参版本 = 无宠物名
+        assertThat(renderer.title(NotificationType.PET_FOLLOWED, null, b, ID)).isEqualTo("Budi mulai mengikuti hewanmu");
+    }
+
+    @Test
+    void petDiaryPostedTitleFollowsLocaleAndFallsBackWithoutPetName() {
+        assertThat(renderer.petDiaryPostedTitle("Mochi", ID)).isEqualTo("Mochi punya cerita baru");
+        assertThat(renderer.petDiaryPostedTitle("Mochi", EN)).isEqualTo("Mochi has a new story");
+        assertThat(renderer.petDiaryPostedTitle("Mochi", ZH)).isEqualTo("Mochi 有新动态了");
+        assertThat(renderer.petDiaryPostedTitle(null, ID)).isEqualTo("Hewan yang kamu ikuti punya cerita baru");
+        assertThat(renderer.petDiaryPostedTitle(" ", EN)).isEqualTo("A pet you follow has a new story");
+        // 宠物名里的花括号 / 单引号不被当成模式
+        assertThat(renderer.petDiaryPostedTitle("Bo'{0}", ID)).isEqualTo("Bo'{0} punya cerita baru");
+    }
 }

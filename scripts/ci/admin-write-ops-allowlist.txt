@@ -9,6 +9,13 @@
 #    人工登记在《后台写操作清单-核对-<日期>.md》。
 
 # ===== 允许新增 · 写端点 =====
++ POST /admin/topics   # V1.4.2 Story 6.1（AB-10B 话题管理：新建 / 升级官方话题）
++ POST /admin/topics/{id}/edit   # V1.4.2 Story 6.1（AB-10B 编辑显示写法 / 说明）
++ POST /admin/topics/{id}/hide   # V1.4.2 Story 6.1（AB-10B 隐藏）
++ POST /admin/topics/{id}/disable   # V1.4.2 Story 6.1（AB-10B 禁用）
++ POST /admin/topics/{id}/restore   # V1.4.2 Story 6.1（AB-10B 恢复为正常）
++ POST /admin/topics/{id}/featured   # V1.4.2 Story 6.1（AB-10B 首页话题行开关）
++ POST /admin/topics/{id}/featured-order   # V1.4.2 Story 6.1（AB-10B 首页话题行序号）
 + POST /admin/comments/virtual   # Story 4.2（AB-20A 虚拟身份发布评论，走完整审核）
 + POST /admin/config/ktp-pricing   # Story 6.1（AB-18A KTP 高清图解锁定价三行）
 + POST /admin/config/support-contact   # shop-v2 Story 3-1（客服联系方式配置化，合入 D2 运营配置模板 D；合并 dev_1.3.0 时漏登）
@@ -33,6 +40,12 @@
 + POST /admin/users/{userId}/pet-slots/grant   # V1.4.0 ② multi-pet Story 4.3（AB-34.2 运营补发宠物名额，user.pet_slot_adjust）
 
 # ===== 允许新增 · GET（抽屉片段 / 模板 A 工作台片段 / 本版新页面）=====
++ GET /admin/topics   # V1.4.2 Story 6.1（AB-10B 话题管理页）
++ GET /admin/topics/new/drawer   # V1.4.2 Story 6.1（AB-10B 新建抽屉）
++ GET /admin/topics/name-check   # V1.4.2 Story 6.1（AB-10B 新建名称查重片段）
++ GET /admin/topics/{id}/drawer   # V1.4.2 Story 6.1（AB-10B 话题抽屉）
++ GET /admin/content-pins/topics   # V1.4.2 Story 6.2（AB-10A G1a 顶置管理「话题页」页签：话题列表）
++ GET /admin/content-pins/topics/{topicId}   # V1.4.2 Story 6.2（AB-10A G1b 话题排期页）
 + GET /admin/merchant/purchase-orders   # 商家平台对接：门店进货单列表（新页面）
 + GET /admin/merchant/purchase-orders/{token}   # 商家平台对接：门店进货单详情（新页面）
 + GET /admin/accounts/new/drawer   # Story 6.5（B24 后台账号抽屉 / 创建账号）

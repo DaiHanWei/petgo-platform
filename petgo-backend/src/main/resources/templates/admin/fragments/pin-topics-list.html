@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  G1a 话题页顶置 · 话题表（V1.4.2 social-topic · Story 6.2）。调用一律具名参数：
+    rows(oob) — 表格 + 空态 + 分页（oob 形参与其它模板 B 列表同形；本页无摘要条，oob 无额外输出）
+  列：话题名（官方带方角标签）/ 状态（圆点 + 徽章，同话题管理）/ 当前生效的顶置（类型灰字 + 标题摘要，一行截断；无 =「—」）
+      / 排期中（条数）/ 近 7 天热度（默认且唯一的排序，▼）/ 操作（「管理顶置 →」）。
+  整行可点：tr[data-href] → 整页跳转 G1b（admin-core.js）；行尾保留真正的 <a> 保证键盘 / 无 JS 可用。
+*/-->
+<body>
+<th:block th:fragment="rows(oob)">
+    <table th:if="${!#lists.isEmpty(topicRows)}" class="pin-topics-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.topics.col.name}">话题名</th>
+            <th th:text="#{admin.pins.phase}">状态</th>
+            <th th:text="#{admin.pins.topics.col.active}">当前生效的顶置</th>
+            <th class="num nowrap" th:text="#{admin.pins.phase.pending}">排期中</th>
+            <th class="num nowrap" aria-sort="descending"><span th:text="#{admin.topics.col.heat}">近 7 天热度</span><span class="sort-arrow" aria-hidden="true">▼</span></th>
+            <th th:text="#{admin.pins.actions}">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${topicRows}" th:with="t=${r.topic},a=${r.active}" th:data-id="${t.id}" tabindex="0"
+            th:attr="data-href=@{/admin/content-pins/topics/{id}(id=${t.id})}">
+            <td class="nowrap">
+                <span th:text="'#' + ${t.nameDisplay}">#KucingLucu</span>
+                <span class="tag topic-type topic-type--official" th:if="${t.official()}" th:text="#{admin.topics.type.OFFICIAL}">官方</span>
+            </td>
+            <td class="nowrap">
+                <span class="dot" th:classappend="${t.active()} ? 'dot--ok' : 'dot--wait'"></span>
+                <span class="badge" th:classappend="${t.active()} ? 'badge-ok' : 'badge-warn'"
+                      th:text="${t.active()} ? #{admin.topics.status.ACTIVE} : #{admin.topics.status.HIDDEN}">正常</span>
+            </td>
+            <td class="pin-topic-cur">
+                <th:block th:if="${a != null}">
+                    <span class="muted" th:text="(${a.objectType == 'PROMO'} ? #{admin.pins.type.promo} : #{admin.pins.type.content}) + ' ·'">推广卡片 ·</span>
+                    <span th:text="${a.summary} ?: '—'">标题摘要</span>
+                </th:block>
+                <span class="muted" th:if="${a == null}">—</span>
+            </td>
+            <td class="num"><span th:classappend="${r.pendingCount == 0} ? 'muted'" th:text="${r.pendingCount}">0</span></td>
+            <td class="num" th:text="${t.heatText()}">0.0</td>
+            <td class="nowrap"><a class="opsp-lnk" th:href="@{/admin/content-pins/topics/{id}(id=${t.id})}"
+                                  th:text="#{admin.pins.topics.manage}">管理顶置 →</a></td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(topicRows)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:text="#{admin.topics.emptyFiltered}">没有符合条件的话题。</p>
+    </div>
+
+    <div class="pager" th:if="${!#lists.isEmpty(topicRows) or page > 0}" th:attr="data-page=${page}">
+        <a th:if="${page > 0}" href="#" hx-target="#pin-topics-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/content-pins/topics(q=${q},page=${page - 1})}"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.v130.pins.pager.page(${page + 1})}">第 1 页</span>
+        <a th:if="${hasNext}" href="#" hx-target="#pin-topics-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/content-pins/topics(q=${q},page=${page + 1})}"
+           th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</th:block>
+</body>
+</html>

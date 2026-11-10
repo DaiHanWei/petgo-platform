@@ -19,6 +19,8 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
+        <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：服务端确认弹层宿主（原生二次确认已全部改为 …/confirm） */-->
+        <div id="confirm-host"></div>
         <div class="wb-title-row"><h1 th:text="#{admin.shop.exceptions.title}">异常订单</h1></div>
         <p class="muted" th:text="#{admin.v130.shopExceptions.liveHint}">本页是实时候选清单，处置完即离开；处置记录在操作审计里。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>

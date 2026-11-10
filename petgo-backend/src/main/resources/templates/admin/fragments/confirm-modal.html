@@ -19,7 +19,19 @@
         <h3 id="confirm-modal-title" th:text="${cm.title}"></h3>
         <button type="button" class="modal-close" data-close-dialog th:attr="aria-label=#{admin.confirm.close}">✕</button>
     </div>
-    <form class="cm-form" th:attr="hx-post=@{${cm.actionPath}}" hx-target="#confirm-modal-err" hx-swap="innerHTML">
+    <!--/* V1.4.2 shop-admin Story 1.2 · AD-3：
+           · nativePost —— 原表单是非 htmx 的 POST + 重定向：弹层表单原生整页提交（th:action 自动带 CSRF 隐藏域）；
+           · successTarget —— 替换原生 data-confirm：成功（2xx 且无 HX-Retarget）时 admin-core.js 把响应换进原表单的目标并收起弹层，
+             错误（422 / 403）仍按 HX-Target=confirm-modal-err 落弹层内，弹层不消失。未传时与现状逐字一致。 */-->
+    <form class="cm-form" th:if="${cm.nativePost}" method="post" th:action="@{${cm.actionPath}}">
+        <div th:replace="~{::cm-body}"></div>
+    </form>
+    <form class="cm-form" th:unless="${cm.nativePost}" th:attr="hx-post=@{${cm.actionPath}},data-cm-success-target=${cm.successTarget},hx-swap=${cm.formSwap()}"
+          hx-target="#confirm-modal-err">
+        <div th:replace="~{::cm-body}"></div>
+    </form>
+</dialog>
+<th:block th:fragment="cm-body">
         <div class="modal-body">
             <div class="cm-banner" role="alert" th:if="${cm.danger != null}" th:classappend="${cm.warnBanner} ? 'cm-banner-warn'" th:text="${cm.danger}"></div>
             <!--/* V1.4.0 ① Story 4.1：「标签：值」事实行（如 G6 升 / 降级人数），渲染在 diffs 上方；无 facts 时不输出。 */-->
@@ -29,7 +41,30 @@
             <div class="cm-diff" th:unless="${#lists.isEmpty(cm.diffs)}" data-confirm-diff-list>
                 <div class="cm-diff-line" th:each="d : ${cm.diffs}"><span th:text="#{admin.confirm.diffLabel(${d.label})}">字段：</span><s th:text="${#strings.isEmpty(d.oldValue)} ? #{admin.confirm.emptyValue} : ${d.oldValue}"></s><span class="cm-arrow" aria-hidden="true">→</span><b th:text="${#strings.isEmpty(d.newValue)} ? #{admin.confirm.emptyValue} : ${d.newValue}"></b></div>
             </div>
+            <!--/* V1.4.2 AD-3：金额明细块（标签左、金额右、灰字附注、合计行）；空则不输出。 */-->
+            <div class="kv amt cm-amounts" th:unless="${#lists.isEmpty(cm.amounts)}" data-confirm-amounts>
+                <th:block th:each="a : ${cm.amounts}">
+                    <span th:classappend="${a.total} ? 'tl'" th:text="${a.label}">标签</span>
+                    <span class="num" th:classappend="${a.total} ? 'tl'"><span class="nt" th:if="${a.note != null}" th:text="${a.note}"></span><th:block th:text="${a.amount}">Rp 0</th:block></span>
+                </th:block>
+            </div>
             <p class="cm-note" th:if="${cm.note != null}" th:text="${cm.note}"></p>
+            <!--/* V1.4.2 AD-3：单选组；null 则不输出。 */-->
+            <fieldset class="cm-choices" th:if="${cm.choices != null}" data-confirm-choices>
+                <legend th:if="${cm.choices.label != null}" th:text="${cm.choices.label}">选项</legend>
+                <label class="cm-choice" th:each="c : ${cm.choices.options}">
+                    <input type="radio" th:name="${cm.choices.name}" th:value="${c.value}" th:checked="${c.checked}" required/>
+                    <span><span th:text="${c.label}">选项</span><small class="muted" th:if="${c.hint != null}" th:text="${c.hint}"></small></span>
+                </label>
+            </fieldset>
+            <!--/* V1.4.2 AD-3：下拉；null 则不输出。 */-->
+            <label class="field cm-select" th:if="${cm.select != null}" data-confirm-select>
+                <span th:if="${cm.select.label != null}" th:text="${cm.select.label}">下拉</span>
+                <select class="inp" th:name="${cm.select.name}" th:required="${cm.select.required}">
+                    <option th:if="${cm.select.required}" value=""></option>
+                    <option th:each="o : ${cm.select.options}" th:value="${o.value}" th:selected="${o.selected}" th:text="${o.label}"></option>
+                </select>
+            </label>
             <label class="cm-typed" th:if="${cm.typed()}">
                 <span class="cm-typed-prompt" th:utext="${cm.typedPromptHtml}"></span>
                 <input class="inp cm-typed-input" type="text" autocomplete="off" spellcheck="false" maxlength="40"
@@ -44,7 +79,6 @@
                     th:disabled="${cm.typed()}" th:attr="data-typed-confirm-submit=${cm.typed()} ? 'true' : null"
                     th:text="${cm.confirmLabel}"></button>
         </div>
-    </form>
-</dialog>
+</th:block>
 </body>
 </html>

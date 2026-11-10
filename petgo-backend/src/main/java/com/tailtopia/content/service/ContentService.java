@@ -87,6 +87,15 @@ public class ContentService {
     /** V1.4.0 multi-pet Story 3.1（AD-10）：关联宠物只读口（过审时取 {@code petIds}）。 */
     private final ContentPetQuery contentPetQuery;
 
+    /**
+     * V1.4.2 social-topic Story 4.1（D-2）：发帖写话题关联（content 单向调 topic，§5.3）。
+     * 两条落库分支 + {@link #publishTrusted} 都调；必须在 {@code moderation.evaluate} 之后（硬拦截不建任何话题）。
+     */
+    private final com.tailtopia.topic.service.TopicService topicService;
+
+    /** V1.4.2 social-topic Story 4.1（D-13）：话题只读口（幂等重放 / 过审读回关联、时间线批量取话题名）。 */
+    private final com.tailtopia.topic.service.TopicQueryService topicQuery;
+
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes,
             IdempotencyService idempotency, ContentModerationService moderation,
@@ -98,7 +107,11 @@ public class ContentService {
             com.tailtopia.profile.service.PetWriteGuard petWriteGuard,
             com.tailtopia.profile.service.PetResolver petResolver,
             com.tailtopia.content.repository.ContentPetRepository contentPets,
-            ContentPetQuery contentPetQuery) {
+            ContentPetQuery contentPetQuery,
+            com.tailtopia.topic.service.TopicService topicService,
+            com.tailtopia.topic.service.TopicQueryService topicQuery) {
+        this.topicService = topicService;
+        this.topicQuery = topicQuery;
         this.petWriteGuard = petWriteGuard;
         this.petResolver = petResolver;
         this.contentPets = contentPets;
@@ -366,8 +379,10 @@ public class ContentService {
                 // V1.4.0 multi-pet Story 3.1（AC4）：挂起时已写 content_pets，过审此刻读回全部关联宠物。
                 List<Long> petIds = p.getType() == ContentType.GROWTH_MOMENT
                         ? contentPetQuery.petsOf(p.getId()) : List.of();
+                // V1.4.2 social-topic Story 4.1（AC6.1）：挂起时已写 content_topics，过审此刻读回（只取非 DISABLED）。
+                List<Long> topicIds = topicQuery.activeTopicIdsOf(p.getId());
                 events.publishEvent(new ContentPublishedEvent(p.getId(), p.getAuthorId(), p.getType(),
-                        p.getPetId(), growthCount, p.getVisibility(), p.getCreatedAt(), petIds));
+                        p.getPetId(), growthCount, p.getVisibility(), p.getCreatedAt(), petIds, topicIds));
                 // Story 3.4：挂起帖过审 → **此刻**才发 @ 通知（提交那一刻发就是点进去 404）。
                 publishMentioned(p, null, p.getAuthorId());
             }
@@ -475,8 +490,9 @@ public class ContentService {
         // 幂等重放：同 key 已落一条则取回，不重复创建。
         Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
         if (existing.isPresent()) {
+            // V1.4.2 Story 4.1（AC6.3）：重放从 content_topics 读回本帖话题（created 恒 false）。
             return posts.findById(existing.get())
-                    .map(ContentPostResponse::from)
+                    .map(p -> ContentPostResponse.from(p, topicRefs(topicQuery.attachedTopicsOf(existing.get()))))
                     .orElseThrow(() -> AppException.notFound("内容不存在")
                             .code("admin.err.seed.postNotFound"));
         }
@@ -579,10 +595,14 @@ public class ContentService {
                 // V1.4.0 multi-pet Story 3.1：🔴 挂起分支**同样要写 content_pets**（与尺寸 / @ 名单 / 打卡关联同一个坑）——
                 // 漏了的话挂起帖过审后只剩 pet_id 那一只。
                 linkPets(pending.getId(), petIds);
+                // V1.4.2 social-topic Story 4.1：🔴 挂起分支**同样要写话题关联**（与 content_pets 同一个坑）——
+                // 漏了的话挂起帖过审后永远不进话题页（读时按 status = PUBLISHED 过滤，审核中的帖也写，D-2）。
+                List<com.tailtopia.topic.service.AttachedTopic> pendingTopics =
+                        topicService.attach(pending.getId(), pending.getText(), pending.getVisibility());
                 scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
                 manualReviewGate.enqueue(pending.getId());
-                return ContentPostResponse.from(pending);
+                return ContentPostResponse.from(pending, topicRefs(pendingTopics));
             }
             // 开关关闭（现网默认）：无队列可挂，按放行发布（G1 关态行为逐字节不变，只有硬拦截失败）。
             // fall-through 至下方正常发布路径。
@@ -611,6 +631,9 @@ public class ContentService {
         post.setPlaceCheckinId(placeCheckinId); // V1.3.2 Story 1.5（AD-10）
         ContentPost saved = posts.save(post);
         linkPets(saved.getId(), petIds); // V1.4.0 multi-pet Story 3.1（AD-10）
+        // V1.4.2 social-topic Story 4.1（D-2）：话题关联与帖子同事务，失败整帖失败（不吞）。
+        List<com.tailtopia.topic.service.AttachedTopic> topics =
+                topicService.attach(saved.getId(), saved.getText(), saved.getVisibility());
         scheduleSizeBackfill(saved, sizes);
 
         idempotency.store(idempotencyKey, saved.getId());
@@ -622,10 +645,10 @@ public class ContentService {
                         authorId, ContentType.GROWTH_MOMENT, PostStatus.PUBLISHED)
                 : 0L;
         events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), petId,
-                growthCount, saved.getVisibility(), saved.getCreatedAt(), petIds));
+                growthCount, saved.getVisibility(), saved.getCreatedAt(), petIds, topicIdsOf(topics)));
         // Story 3.4：@ 通知。发布时机 = **这条内容变成别人看得见的那一刻**（本分支就是）。
         publishMentioned(saved, null, authorId);
-        return ContentPostResponse.from(saved);
+        return ContentPostResponse.from(saved, topicRefs(topics));
     }
 
     /**
@@ -723,7 +746,8 @@ public class ContentService {
         if (existing.isPresent()) {
             Optional<ContentPost> replay = posts.findById(existing.get());
             if (replay.isPresent()) {
-                return ContentPostResponse.from(replay.get());
+                return ContentPostResponse.from(replay.get(),
+                        topicRefs(topicQuery.attachedTopicsOf(existing.get())));
             }
         }
 
@@ -752,11 +776,14 @@ public class ContentService {
         //    它会给被 @ 的人发通知（Story 3.4）——由运营账号批量发出去就是骚扰。
         //    这条路径本就免审（见类注释），再放开 @ 等于给它一个绕过候选集的群发口子。
         ContentPost saved = posts.save(post);
+        // V1.4.2 social-topic Story 4.1（G-5）：Lark 定时发帖同样写话题关联（免审，但话题规则照走）。
+        List<com.tailtopia.topic.service.AttachedTopic> topics =
+                topicService.attach(saved.getId(), saved.getText(), saved.getVisibility());
         idempotency.store(idempotencyKey, saved.getId());
         // 与 publish 同口径发布事件（非 GROWTH_MOMENT → growthCount=0）。
         events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), null,
-                0L, saved.getVisibility(), saved.getCreatedAt(), List.of()));
-        return ContentPostResponse.from(saved);
+                0L, saved.getVisibility(), saved.getCreatedAt(), List.of(), topicIdsOf(topics)));
+        return ContentPostResponse.from(saved, topicRefs(topics));
     }
 
     /**
@@ -1067,6 +1094,30 @@ public class ContentService {
         if (imageSizes.needsBackfill(sizes)) {
             sizeBackfill.backfill(saved.getId());
         }
+    }
+
+    /**
+     * 一批帖子各自的话题标准名（V1.4.2 social-topic Story 4.1 · D-13，仅 ACTIVE / HIDDEN）。
+     * 经 service 暴露给 profile 时间线（作者态 / 访客态）<b>整页一次批量</b>取，不让 profile 直依赖 topic 表。
+     *
+     * @return postId → 标准名；无话题的帖不在 Map 里
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, List<String>> topicNamesOf(java.util.Collection<Long> postIds) {
+        return topicQuery.topicNamesFor(postIds);
+    }
+
+    /** 写入结果 → 发帖响应 {@code topics}（只出标准名，不出 id）。 */
+    private static List<com.tailtopia.content.dto.TopicRef> topicRefs(
+            List<com.tailtopia.topic.service.AttachedTopic> topics) {
+        return topics.stream()
+                .map(t -> new com.tailtopia.content.dto.TopicRef(t.name(), t.official(), t.created()))
+                .toList();
+    }
+
+    /** 写入结果 → 事件 {@code topicIds}（进程内）。 */
+    private static List<Long> topicIdsOf(List<com.tailtopia.topic.service.AttachedTopic> topics) {
+        return topics.stream().map(com.tailtopia.topic.service.AttachedTopic::topicId).toList();
     }
 
     private static GrowthMomentView toGrowthMomentView(ContentPost p) {

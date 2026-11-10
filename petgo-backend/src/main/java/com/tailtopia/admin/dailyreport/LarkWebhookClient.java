@@ -78,8 +78,15 @@ public class LarkWebhookClient {
     }
 
     private void sendOne(DailyReportProperties.Target target, Map<String, Object> payload) {
+        sendTo(target.webhookUrl(), target.secret(), payload);
+    }
+
+    /**
+     * 发到指定的一个群（V1.4.2 shop-admin Story 1.3 · AD-5：电商运营提醒按客服 / 运营 / 技术三个群各自的 URL + 密钥发）。
+     * 签名、成功判据、超时与 {@link #send} 完全一致；失败抛 {@link LarkWebhookException}（不含 URL）。
+     */
+    public void sendTo(String webhookUrl, String secret, Map<String, Object> payload) {
         Map<String, Object> body = new LinkedHashMap<>();
-        String secret = target.secret();
         if (secret != null && !secret.isBlank()) {
             String ts = String.valueOf(clock.instant().getEpochSecond());
             body.put("timestamp", ts);
@@ -89,7 +96,7 @@ public class LarkWebhookClient {
 
         HttpResponse<String> resp;
         try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(target.webhookUrl()))
+            HttpRequest req = HttpRequest.newBuilder(URI.create(webhookUrl))
                     .timeout(Duration.ofSeconds(props.getTimeoutSeconds()))
                     .header("Content-Type", "application/json; charset=utf-8")
                     .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body), StandardCharsets.UTF_8))

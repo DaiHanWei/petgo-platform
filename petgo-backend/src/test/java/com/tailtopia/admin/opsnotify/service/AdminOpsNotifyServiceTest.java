@@ -17,6 +17,9 @@ import com.tailtopia.admin.ops.AdminOpsTargetValidator;
 import com.tailtopia.admin.opsnotify.dto.OpsNotifyForm;
 import com.tailtopia.auth.service.OpsAudienceQuery;
 import com.tailtopia.auth.service.OpsAudienceQuery.IdStatus;
+import com.tailtopia.auth.service.OpsAudienceQuery.Reach;
+import com.tailtopia.notify.ops.domain.OpsRecipient;
+import java.util.Optional;
 import com.tailtopia.notify.ops.domain.AudienceSpec;
 import com.tailtopia.notify.ops.domain.OpsCampaignReadyEvent;
 import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
@@ -86,7 +89,7 @@ class AdminOpsNotifyServiceTest {
         when(redis.opsForValue()).thenReturn(redisOps);
         when(redisOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
         // 预估闸默认放行：重算 = 表单里的 previewCount（5）
-        when(audienceQuery.count(any(), any())).thenReturn(5L);
+        when(audienceQuery.count(any(), any())).thenReturn(reach(5));
         OpsTargetPolicy policy = new OpsTargetPolicy(products);
         OpsTokenGenerator tokens = mock(OpsTokenGenerator.class);
         when(tokens.generate()).thenReturn("tok22charsAbcdefghijkl");
@@ -106,6 +109,11 @@ class AdminOpsNotifyServiceTest {
      * 一份合法表单：四项文案齐、按条件（有手机号）、App 内页面、立即发送；调用方覆盖某项构造违规用例。
      * ⚠️ 至少带一个条件：「按条件」一个都不选 = 全部用户，恒要手输人数（I8），会把无关用例都卡在弹层上。
      */
+    /** 人数预估：无宠排除为 0（total = withPet）。 */
+    private static Reach reach(long n) {
+        return new Reach(n, n);
+    }
+
     private static OpsNotifyForm valid(Consumer<OpsNotifyForm> tweak) {
         OpsNotifyForm f = new OpsNotifyForm();
         f.setTitleId("  Promo akhir pekan ");
@@ -271,7 +279,7 @@ class AdminOpsNotifyServiceTest {
             f.setAudienceMode("IDS");
             f.setUserIds("abc\nxyz");
         }, AdminOpsNotifyService.ERR_AUDIENCE_EMPTY);
-        when(audienceQuery.count(any(), any())).thenReturn(0L);
+        when(audienceQuery.count(any(), any())).thenReturn(reach(0));
         assertRejected(f -> { }, AdminOpsNotifyService.ERR_AUDIENCE_EMPTY);
     }
 
@@ -305,10 +313,10 @@ class AdminOpsNotifyServiceTest {
         }, AdminOpsNotifyService.ERR_CONFIRM_COUNT);
 
         // 按条件、预计 10,001 人 → 同样要手输；10,000 人不要
-        when(audienceQuery.count(any(), any())).thenReturn(10_001L);
+        when(audienceQuery.count(any(), any())).thenReturn(reach(10_001));
         assertThatThrownBy(() -> service.create(valid(f -> f.setPreviewCount("10001")), 1L))
                 .isInstanceOf(OpsNotifyTypedConfirmRequired.class);
-        when(audienceQuery.count(any(), any())).thenReturn(10_000L);
+        when(audienceQuery.count(any(), any())).thenReturn(reach(10_000));
         service.create(valid(f -> f.setPreviewCount("10000")), 1L);
         assertThat(saved().getEstimatedCount()).isEqualTo(10_000);
     }
@@ -345,7 +353,7 @@ class AdminOpsNotifyServiceTest {
     @Test
     @DisplayName("I8：确认页 9,500、重算 10,400（预估闸容差内）→ 仍须手输；须输的是确认页上的 9,500")
     void typedConfirmUsesServerRecount() {
-        when(audienceQuery.count(any(), any())).thenReturn(10_400L);
+        when(audienceQuery.count(any(), any())).thenReturn(reach(10_400));
         assertThatThrownBy(() -> service.create(valid(f -> f.setPreviewCount("9500")), 1L))
                 .isInstanceOf(OpsNotifyTypedConfirmRequired.class)
                 .satisfies(e -> assertThat(((OpsNotifyTypedConfirmRequired) e).count()).isEqualTo(9_500L));
@@ -380,7 +388,7 @@ class AdminOpsNotifyServiceTest {
     void previewGate() {
         assertRejected(f -> f.setPreviewCount(""), AdminOpsNotifyService.ERR_PREVIEW_REQUIRED);
         assertRejected(f -> f.setPreviewCount("abc"), AdminOpsNotifyService.ERR_PREVIEW_REQUIRED);
-        when(audienceQuery.count(any(), any())).thenReturn(200L);
+        when(audienceQuery.count(any(), any())).thenReturn(reach(200));
         assertRejected(f -> f.setPreviewCount("100"), AdminOpsNotifyService.ERR_PREVIEW_STALE);
         assertThat(AdminOpsNotifyService.checkPreview("100", 110)).isEqualTo(100);
         assertThat(AdminOpsNotifyService.checkPreview("100", 3)).isEqualTo(100);
@@ -478,12 +486,12 @@ class AdminOpsNotifyServiceTest {
         assertThat(service.preview(valid(f -> {
             f.setAudienceMode("IDS");
             f.setUserIds("abc");
-        }))).isZero();
+        })).net()).isZero();
         verify(audienceQuery, never()).count(any(), any());
         assertThat(service.preview(valid(f -> {
             f.setAudienceMode("IDS");
             f.setUserIds("1\n2");
-        }))).isEqualTo(5);
+        })).net()).isEqualTo(5);
     }
 
     // ---------- 列表 / 取消 ----------
@@ -521,5 +529,134 @@ class AdminOpsNotifyServiceTest {
         assertThat(AdminOpsNotifyService.parseStatus("done")).isNull();
         assertThat(AdminOpsNotifyService.parseStatus(" ")).isNull();
         assertThat(Set.of(AdminOpsNotifyService.WITHIN_PRESETS.toArray())).containsExactlyInAnyOrder(7, 30, 90);
+    }
+
+    // ===== V1.4.2 Story 7.1 · AB-37 昵称 / 宠物名变量 =====
+
+    private static final String PET = "{{petName}}";
+    private static final String NICK = "{{nickname}}";
+
+    @Test
+    @DisplayName("AB-37：用了宠物变量 → 净人数 = withPet，进 Prepared.count / estimated_count；排除数 = total − withPet；审计记排除数")
+    void netCountWhenPetVariableUsed() {
+        when(audienceQuery.count(any(), any())).thenReturn(new Reach(8, 5));
+        AdminOpsNotifyService.Prepared p = service.review(valid(f -> f.setTitleEn("Hi " + PET)));
+        assertThat(p.count()).isEqualTo(5);
+        assertThat(p.excludedNoPet()).isEqualTo(3);
+        assertThat(p.usesPet()).isTrue();
+        assertThat(p.blockedNoPet()).isFalse();
+
+        service.create(valid(f -> f.setBodyId("Halo " + PET)), 1L);
+        assertThat(saved().getEstimatedCount()).isEqualTo(5);
+        ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+        verify(audit).record(eq(1L), eq(AuditActions.OPS_NOTIFY_CREATED), eq("OPS_NOTIFY"), anyString(),
+                detail.capture());
+        assertThat(detail.getValue()).contains("预计 5 人").contains("已排除无宠 3 人");
+    }
+
+    @Test
+    @DisplayName("AB-37：只用昵称变量 / 不含变量 → 不排除，净人数 = total")
+    void nicknameOnlyDoesNotExclude() {
+        when(audienceQuery.count(any(), any())).thenReturn(new Reach(8, 5));
+        AdminOpsNotifyService.Prepared p = service.review(valid(f -> {
+            f.setTitleId("Halo " + NICK);
+            f.setPreviewCount("8");
+        }));
+        assertThat(p.count()).isEqualTo(8);
+        assertThat(p.excludedNoPet()).isZero();
+        assertThat(p.usesPet()).isFalse();
+        assertThat(service.preview(valid(f -> { }))).isEqualTo(new AdminOpsNotifyService.Estimate(8, 0, 8));
+        assertThat(service.preview(valid(f -> f.setBodyEn(PET))))
+                .isEqualTo(new AdminOpsNotifyService.Estimate(5, 3, 8));
+    }
+
+    @Test
+    @DisplayName("AB-37：手输门槛按净人数（扣前 12,000 / 扣后 9,000 → 不手输，UI 稿 I4 例）")
+    void typedConfirmUsesNetCount() {
+        when(audienceQuery.count(any(), any())).thenReturn(new Reach(12_000, 9_000));
+        service.create(valid(f -> {
+            f.setTitleEn("Hi " + PET);
+            f.setPreviewCount("9000");
+        }), 1L);
+        assertThat(saved().getEstimatedCount()).isEqualTo(9_000);
+    }
+
+    @Test
+    @DisplayName("AB-37：total>0 且净 0 → review 不抛、带 blockedNoPet；create 422 audience-empty-no-pet，先于预估闸、不认领提交键")
+    void blockedNoPet() {
+        when(audienceQuery.count(any(), any())).thenReturn(new Reach(4, 0));
+        AdminOpsNotifyService.Prepared p = service.review(valid(f -> f.setTitleEn(PET)));
+        assertThat(p.blockedNoPet()).isTrue();
+        assertThat(p.count()).isZero();
+        assertThat(p.excludedNoPet()).isEqualTo(4);
+        assertThat(p.sample()).isNull();
+        verify(audienceQuery, never()).sample(any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+
+        assertRejected(f -> {
+            f.setTitleEn(PET);
+            f.setPreviewCount("0"); // 确认页带回的是净 0：仍须报 no-pet 而非 preview-required
+        }, AdminOpsNotifyService.ERR_AUDIENCE_EMPTY_NO_PET);
+        verify(redisOps, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("AB-37：total == 0 → 仍是 audience-empty（第 ② 步），不论是否用了宠物变量")
+    void totalZeroStillAudienceEmpty() {
+        when(audienceQuery.count(any(), any())).thenReturn(new Reach(0, 0));
+        assertRejected(f -> f.setTitleEn(PET), AdminOpsNotifyService.ERR_AUDIENCE_EMPTY);
+        assertThatThrownBy(() -> service.review(valid(f -> f.setTitleEn(PET))))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode())
+                        .isEqualTo(AdminOpsNotifyService.ERR_AUDIENCE_EMPTY));
+    }
+
+    @Test
+    @DisplayName("AB-37：校验顺序 空 → 手打 → 超长；变量按 20 计（115 字 + 1 变量 = 135 拒；100 字 + 1 变量 = 120 过）")
+    void typedAndCountedLength() {
+        assertRejected(f -> f.setTitleId("Halo {用户昵称}"), OpsNotificationCampaignService.ERR_VAR_TYPED);
+        assertRejected(f -> f.setBodyEn("Hi ｛Pet Name｝"), OpsNotificationCampaignService.ERR_VAR_TYPED);
+        assertRejected(f -> f.setBodyId("Halo {{Nickname}}"), OpsNotificationCampaignService.ERR_VAR_TYPED);
+        // 空优先于手打；手打优先于超长
+        assertRejected(f -> {
+            f.setTitleId("");
+            f.setTitleEn("{Pet name}");
+        }, OpsNotificationCampaignService.ERR_TEXT_BLANK);
+        assertRejected(f -> {
+            f.setTitleId("{用户昵称}" + "x".repeat(200));
+        }, OpsNotificationCampaignService.ERR_VAR_TYPED);
+        assertRejected(f -> f.setTitleId("x".repeat(115) + NICK), OpsNotificationCampaignService.ERR_TEXT_TOO_LONG);
+        AdminOpsNotifyService.Prepared ok = service.review(valid(f -> f.setTitleId("x".repeat(100) + NICK)));
+        assertThat(ok.titleId()).endsWith(NICK);
+    }
+
+    @Test
+    @DisplayName("AB-37：review 带首个预览用户（ID 段兜底 Sobat、EN 段兜底 there，同一人）；sample 端点透传 excludeUserId")
+    void reviewCarriesSample() {
+        when(audienceQuery.sample(any(), any(), eq(true), isNull()))
+                .thenReturn(Optional.of(new OpsRecipient(10_234L, "id", null, "tuotuo")));
+        AdminOpsNotifyService.Prepared p = service.review(valid(f -> {
+            f.setTitleId("Halo " + NICK);
+            f.setBodyId(PET + " menunggu");
+            f.setTitleEn("Hi " + NICK);
+            f.setBodyEn(PET + " is waiting");
+        }));
+        assertThat(p.sample()).isEqualTo(new AdminOpsNotifyService.Sample(10_234L, null, "tuotuo",
+                "Halo Sobat", "tuotuo menunggu", "Hi there", "tuotuo is waiting"));
+
+        when(audienceQuery.sample(any(), any(), eq(false), eq(10_234L)))
+                .thenReturn(Optional.of(new OpsRecipient(7L, "en", "yenny", null)));
+        assertThat(service.sample(valid(f -> f.setTitleEn("Hi " + NICK)), 10_234L))
+                .hasValueSatisfying(s -> {
+                    assertThat(s.userId()).isEqualTo(7L);
+                    assertThat(s.titleEn()).isEqualTo("Hi yenny");
+                    assertThat(s.titleId()).isEqualTo("Promo akhir pekan");
+                });
+        when(audienceQuery.sample(any(), any(), eq(false), eq(1L))).thenReturn(Optional.empty());
+        assertThat(service.sample(valid(f -> { }), 1L)).isEmpty();
+        // IDS 全是非数字：不查库
+        assertThat(service.sample(valid(f -> {
+            f.setAudienceMode("IDS");
+            f.setUserIds("abc");
+        }), null)).isEmpty();
     }
 }

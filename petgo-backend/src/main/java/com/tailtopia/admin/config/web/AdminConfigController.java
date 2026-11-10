@@ -150,11 +150,15 @@ public class AdminConfigController {
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
+    /** V1.4.2 shop-admin Story 3.3 · J5：「商品评价展示」开关（{@code shipping_settings.review_display_enabled}）。 */
+    private final com.tailtopia.admin.shop.service.AdminShopReviewService reviewDisplay;
 
     public AdminConfigController(PlatformConfigService read, AdminConfigService write,
             Messages msg,
             com.tailtopia.share.repository.ShareRewardQuotaStatsRepository shareStats,
-            AppVersionConfigService appVersion) {
+            AppVersionConfigService appVersion,
+            com.tailtopia.admin.shop.service.AdminShopReviewService reviewDisplay) {
+        this.reviewDisplay = reviewDisplay;
         this.read = read;
         this.appVersion = appVersion;
         this.shareStats = shareStats;
@@ -187,7 +191,55 @@ public class AdminConfigController {
         // V1.3.4 AB-22：App 版本配置单行；缺行（理论上不会，迁移带种子）时模板整卡不渲染，同客服卡。
         model.addAttribute("appVersion", appVersion.current().orElse(null));
         model.addAttribute("shareRewardOverview", shareRewardOverview());
+        model.addAttribute("reviewDisplayEnabled", reviewDisplay.isDisplayEnabled());
         model.addAttribute("errorFields", ERROR_FIELDS);
+    }
+
+    /**
+     * 「商品评价展示」· 保存前预检（V1.4.2 shop-admin Story 3.3 · J6）：只算、不写库，回 confirm-modal 复述改动（同 C2）。
+     * 权限 {@code config.edit}。确认后 POST {@link #updateReviewDisplay}。
+     */
+    @PostMapping("/admin/config/review-display/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmReviewDisplay(@RequestParam(defaultValue = "false") boolean reviewDisplayEnabled,
+            HxRequest hx, Model model, HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/config";
+        }
+        String on = msg.get("admin.v130.config.confirm.on");
+        String off = msg.get("admin.v130.config.confirm.off");
+        boolean before = reviewDisplay.isDisplayEnabled();
+        List<AdminConfirmModal.DiffLine> lines = before == reviewDisplayEnabled ? List.of()
+                : List.of(new AdminConfirmModal.DiffLine(msg.get("admin.v142.review.display.title"),
+                        before ? on : off, reviewDisplayEnabled ? on : off));
+        Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("reviewDisplayEnabled", String.valueOf(reviewDisplayEnabled));
+        hidden.put("confirmed", "true");
+        AdminConfirmModal cm = new AdminConfirmModal(msg.get("admin.v130.config.confirm.title"), null, lines,
+                reviewDisplayEnabled ? msg.get("admin.v142.review.display.onNote") : null, null, null, null,
+                "/admin/config/review-display", hidden, msg.get("admin.common.save"), false);
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    /** 「商品评价展示」保存（写操作审计 {@code SHOP_REVIEW_DISPLAY_TOGGLED}；不写 config_change_logs —— 该表 CHECK 无此类）。 */
+    @PostMapping("/admin/config/review-display")
+    @PreAuthorize(EDIT_AUTH)
+    public String updateReviewDisplay(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(defaultValue = "false") boolean reviewDisplayEnabled,
+            @RequestParam(defaultValue = "false") boolean confirmed,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (reviewDisplay.isDisplayEnabled() != reviewDisplayEnabled) {
+            reviewDisplay.setDisplayEnabled(reviewDisplayEnabled, admin.getAdminAccountId());
+        }
+        if (hx.isHtmx()) {
+            if (confirmed) {
+                response.setHeader("HX-Trigger-After-Swap", AdminHxEvents.CONFIRM_CLOSE);
+            }
+            return savedCard("cfg-review-display", "config-card-review-display", "admin.v142.review.display.saved",
+                    model, response);
+        }
+        flash.addFlashAttribute("notice", msg.get("admin.v142.review.display.saved"));
+        return "redirect:/admin/config";
     }
 
     /**
@@ -224,12 +276,17 @@ public class AdminConfigController {
             @RequestParam(defaultValue = "0") int tailsonalityShareDailyCap,
             @RequestParam(defaultValue = "0") long passportShareReward,
             @RequestParam(defaultValue = "0") int passportShareDailyCap,
+            @RequestParam(defaultValue = "false") boolean confirmed,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward, idCardShareDailyCap,
                     ageCardShareReward, ageCardShareDailyCap, tailsonalityShareReward, tailsonalityShareDailyCap,
                     passportShareReward, passportShareDailyCap), admin.getAdminAccountId());
+            if (confirmed) {
+                // 从 C2 确认弹层提交：成功后收起弹层（同 app-version 卡）
+                response.setHeader("HX-Trigger-After-Swap", AdminHxEvents.CONFIRM_CLOSE);
+            }
             return savedCard("cfg-share-reward", "config-card-share-reward", "admin.flash.config.shareRewardSaved", model, response);
         }
         try {
@@ -243,6 +300,86 @@ public class AdminConfigController {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
+    }
+
+    /**
+     * 分享奖励 · 保存前预检（V1.4.2 shop-admin Story 3.2 · AD-8 · C2）：<b>只算、不写库</b>，回服务端确认弹层 ——
+     * 逐字段新旧值 + 黄色「真钱」警示；改了金额 / 每日上限 / 月度上限时再加估算行
+     * 「每个账号每月最多可获得 = min(月度上限, Σ(每次发放 × 每日上限) × 当月天数)」（当月按 WIB）。
+     * 弹层确认后再 POST 原端点 {@code /admin/config/share-reward}（带 {@code confirmed=true}），配置变更日志照旧。
+     * 非 htmx 请求没有弹层可回，重定向回页面。
+     */
+    @PostMapping("/admin/config/share-reward/confirm")
+    @PreAuthorize(SHARE_REWARD_EDIT_AUTH)
+    public String confirmShareReward(
+            @RequestParam(defaultValue = "false") boolean shareRewardEnabled,
+            @RequestParam(defaultValue = "0") long shareRewardMonthlyCap,
+            @RequestParam(defaultValue = "0") long idCardShareReward,
+            @RequestParam(defaultValue = "0") int idCardShareDailyCap,
+            @RequestParam(defaultValue = "0") long ageCardShareReward,
+            @RequestParam(defaultValue = "0") int ageCardShareDailyCap,
+            @RequestParam(defaultValue = "0") long tailsonalityShareReward,
+            @RequestParam(defaultValue = "0") int tailsonalityShareDailyCap,
+            @RequestParam(defaultValue = "0") long passportShareReward,
+            @RequestParam(defaultValue = "0") int passportShareDailyCap,
+            HxRequest hx, Model model, HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/config";
+        }
+        var after = new com.tailtopia.admin.config.dto.ShareRewardForm(shareRewardEnabled, shareRewardMonthlyCap,
+                idCardShareReward, idCardShareDailyCap, ageCardShareReward, ageCardShareDailyCap,
+                tailsonalityShareReward, tailsonalityShareDailyCap, passportShareReward, passportShareDailyCap);
+        write.validateShareReward(after);   // 校验不过 → 422 回卡底错误槽（字段红边），不弹确认
+        var c = read.pawcoin();
+        var before = new com.tailtopia.admin.config.dto.ShareRewardForm(c.isShareRewardEnabled(),
+                c.getShareRewardMonthlyCap(), c.getIdCardShareReward(), c.getIdCardShareDailyCap(),
+                c.getAgeCardShareReward(), c.getAgeCardShareDailyCap(), c.getTailsonalityShareReward(),
+                c.getTailsonalityShareDailyCap(), c.getPassportShareReward(), c.getPassportShareDailyCap());
+        String on = msg.get("admin.v130.config.confirm.on");
+        String off = msg.get("admin.v130.config.confirm.off");
+        List<AdminConfirmModal.DiffLine> lines = new java.util.ArrayList<>();
+        diffLine(lines, "admin.config.shareRewardEnabled", before.shareRewardEnabled() ? on : off,
+                after.shareRewardEnabled() ? on : off);
+        diffLine(lines, "admin.config.shareRewardMonthlyCap", before.shareRewardMonthlyCap(), after.shareRewardMonthlyCap());
+        diffLine(lines, "admin.config.idCardShareReward", before.idCardShareReward(), after.idCardShareReward());
+        diffLine(lines, "admin.config.idCardShareDailyCap", before.idCardShareDailyCap(), after.idCardShareDailyCap());
+        diffLine(lines, "admin.config.ageCardShareReward", before.ageCardShareReward(), after.ageCardShareReward());
+        diffLine(lines, "admin.config.ageCardShareDailyCap", before.ageCardShareDailyCap(), after.ageCardShareDailyCap());
+        diffLine(lines, "admin.config.tailsonalityShareReward", before.tailsonalityShareReward(), after.tailsonalityShareReward());
+        diffLine(lines, "admin.config.tailsonalityShareDailyCap", before.tailsonalityShareDailyCap(), after.tailsonalityShareDailyCap());
+        diffLine(lines, "admin.config.passportShareReward", before.passportShareReward(), after.passportShareReward());
+        diffLine(lines, "admin.config.passportShareDailyCap", before.passportShareDailyCap(), after.passportShareDailyCap());
+        List<AdminConfirmModal.Fact> facts = new java.util.ArrayList<>();
+        String note = null;
+        if (com.tailtopia.admin.config.service.ShareRewardEstimate.amountsChanged(before, after)) {
+            java.time.YearMonth month = com.tailtopia.admin.config.service.ShareRewardEstimate.currentMonth(java.time.Instant.now());
+            var est = com.tailtopia.admin.config.service.ShareRewardEstimate.estimate(after, month);
+            facts.add(new AdminConfirmModal.Fact(msg.get("admin.v142.shareReward.estimate.label"), String.valueOf(est.max())));
+            note = msg.get("admin.v142.shareReward.estimate.note", String.valueOf(after.shareRewardMonthlyCap()),
+                    String.valueOf(est.days()), String.valueOf(est.channelSum()));
+        }
+        Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("shareRewardEnabled", String.valueOf(after.shareRewardEnabled()));
+        hidden.put("shareRewardMonthlyCap", String.valueOf(after.shareRewardMonthlyCap()));
+        hidden.put("idCardShareReward", String.valueOf(after.idCardShareReward()));
+        hidden.put("idCardShareDailyCap", String.valueOf(after.idCardShareDailyCap()));
+        hidden.put("ageCardShareReward", String.valueOf(after.ageCardShareReward()));
+        hidden.put("ageCardShareDailyCap", String.valueOf(after.ageCardShareDailyCap()));
+        hidden.put("tailsonalityShareReward", String.valueOf(after.tailsonalityShareReward()));
+        hidden.put("tailsonalityShareDailyCap", String.valueOf(after.tailsonalityShareDailyCap()));
+        hidden.put("passportShareReward", String.valueOf(after.passportShareReward()));
+        hidden.put("passportShareDailyCap", String.valueOf(after.passportShareDailyCap()));
+        hidden.put("confirmed", "true");
+        AdminConfirmModal cm = new AdminConfirmModal(msg.get("admin.v142.shareReward.confirm.title"),
+                msg.get("admin.v142.shareReward.confirm.warn"), lines, note, null, null, null,
+                "/admin/config/share-reward", hidden, msg.get("admin.config.btn.saveShareReward"), false, true, facts);
+        return com.tailtopia.admin.shared.web.AdminConfirmModals.render(model, response, cm);
+    }
+
+    private void diffLine(List<AdminConfirmModal.DiffLine> lines, String labelKey, Object before, Object after) {
+        if (!String.valueOf(before).equals(String.valueOf(after))) {
+            lines.add(new AdminConfirmModal.DiffLine(msg.get(labelKey), String.valueOf(before), String.valueOf(after)));
+        }
     }
 
     /** 分享奖励的同屏对照数据（HD 价 / 白嫖倍数 / 当月消耗）。 */

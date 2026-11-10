@@ -362,6 +362,14 @@ void main() {
         // 映射表见 `v140_gift_events_test.dart`）。模块是「送礼」——入口横跨访客视图、详情页、礼物页三处。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则；不加新后缀。
         'gift_',
+        // V1.4.2 social-topic 话题（Story 4.3 / 4.4 · PRD §4）：模块是「话题」—— 话题页、发布页 # 联想、正文话题链接
+        // 三处界面都在报（topic_page_viewed / topic_sort_switched / topic_inserted），挂任一单页前缀都会误导。
+        // 名字由 PRD §4 定。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'topic_',
+        // V1.4.2 social-topic 首页话题行（Story 4.3 · PRD §4 `home_topic_row_tapped`）：模块是「Discover 首页的话题行」——
+        // 🔴 刻意不并进 `topic_`：那是话题页 / 话题本身，这是首页入口的点击（分母是首页曝光），两组数不是同一漏斗。
+        // 名字由 PRD §4 定。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'home_topic_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -470,6 +478,11 @@ void main() {
         // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
         '_followed',
         '_unfollowed',
+        // 追更宠物 / 取消追更（V1.4.2 social-topic · Story 1.4 · PRD §4 定死 `pet_follow` / `pet_unfollow`）：
+        // **服务端确认成功后**才报（失败、游客拦截不报），描述结果而非点击。`pet_unfollow` 不以 `_follow` 结尾，
+        // 两个都要登记。⚠️ 只放这两个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_set` / `_paid` 先例）。
+        '_follow',
+        '_unfollow',
         // 收藏 / 取消收藏（V1.4.0 ④ push-collect · P-8，PRD §4 定死 `content_collected` 等四个名字）：过去式，
         // **服务端确认成功后**才报。`*_uncollected` 不以 `_collected` 结尾，两个都要登记。扩表、不改名。
         '_collected',
@@ -492,6 +505,14 @@ void main() {
         // 后才报（PawCoin 扣币成功 / QRIS 回调 PAID），描述结果而非点击；与 `pet_slot_rent_started`（发起）配对。
         // 名字由 PRD 定死，扩表、不改名（同 `_played` / `_published` 先例）。
         '_paid',
+        // 二维码存图成功（V1.4.2 shop · Story 7.2 · PRD §4 定死 `toko_payment_qr_saved`）：`_saved` = **写入相册成功**
+        // 之后才报（权限被拒 / 失败不报），描述「存图成功」这一结果而非点击。
+        // ⚠️ 只放这个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_paid` / `_published` 先例）。
+        '_saved',
+        // 领券成功（V1.4.2 shop · Story 8.1 · PRD §4 定死 `toko_coupon_claimed {coupon_id, source}`）：`_claimed` =
+        // **服务端已发券**之后才报（已领 / 领完 / 不在发放期不报；新人券由 entry 返回已发放时报），描述结果而非点击。
+        // ⚠️ 只放这个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_saved` / `_paid` 先例）。
+        '_claimed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -501,6 +522,12 @@ void main() {
         expect(allowedSuffixes.any(e.endsWith), isTrue,
             reason: '$e 的动作词不明确（动作要落在词尾，如 _tapped / _viewed）');
       }
+    });
+
+    /// V1.4.2 social-topic Story 1.4（复审）：`pet_follow` / `pet_unfollow` 必须是守卫正则扫得到的字面量
+    /// （写成三元式 `capture(c ? 'a' : 'b')` 时一个都提取不到，命名守卫等于没守）。
+    test('V1.4.2 追更埋点 pet_follow / pet_unfollow 被守卫提取到', () {
+      expect(eventNamesInSource(), containsAll(<String>['pet_follow', 'pet_unfollow']));
     });
 
     test('本版本清单 T-1~T-12 的事件在源码里确实存在（声明与实现不许脱节）', () {
@@ -562,6 +589,12 @@ void main() {
         'post_id', 'content_type', 'place_id',
         // V1.4.0 ④ Story 2.4：收藏列表条目点击（不可见条目弹移除抽屉）。'tab' 已在上方。
         'is_unavailable',
+        // V1.4.2 social-topic Story 4.3（PRD §4 · R-2）：topic_id = 话题标准名（不外露自增 id）；sort ∈ latest / popular；
+        // position 从 1 起；is_pinned_by_ops = 首页话题行该项是否运营指定。'source' 已在上方。
+        'topic_id', 'sort', 'position', 'is_pinned_by_ops',
+        // V1.4.2 social-topic Story 4.4（PRD §4 · R-2）：topic_inserted{topic_id, is_official, is_new, method}；
+        // method ∈ suggestion / typed（'method' 已在上方）。
+        'is_official', 'is_new',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

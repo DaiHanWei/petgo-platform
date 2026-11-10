@@ -71,8 +71,8 @@ class CheckoutIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "os" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)""", sToken, pid, price);
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)""", sToken, pid, price);
         Long sid = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
         jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, ?, 0)",
@@ -108,8 +108,12 @@ class CheckoutIntegrationTest extends ApiIntegrationTest {
 
         assertThat(o.getStatus()).isEqualTo(ShopOrderStatus.PENDING_PAYMENT);
         assertThat(o.getGoodsSubtotal()).isEqualTo(570_000L);
-        assertThat(o.getShippingFee()).isEqualTo(20_000L);
-        assertThat(o.getTotalAmount()).isEqualTo(590_000L);
+        // v1.4.2 shop Story 3.2：旧结算模式运费 = Biteship stub 最便宜一家（JNE 10,000），shipping_zones.fee 停读
+        assertThat(o.getShippingFee()).isEqualTo(10_000L);
+        assertThat(o.getTotalAmount()).isEqualTo(580_000L);
+        assertThat(o.getCheckoutSource()).isEqualTo(com.tailtopia.shop.order.domain.CheckoutSource.LEGACY);
+        assertThat(o.getCourierCode()).isEqualTo("jne");
+        assertThat(o.getShippingQuoteId()).isNotNull();
 
         // 🔴 库存被锁定而非扣减（此时尚未付款）
         var inv = inventory.findBySkuId(skuId(sku)).orElseThrow();
@@ -484,7 +488,9 @@ class CheckoutIntegrationTest extends ApiIntegrationTest {
         assertThat(orderLines.findByOrderIdOrderByIdAsc(o.getId()))
                 .as("全部行进订单").hasSize(2);
         assertThat(o.getGoodsSubtotal()).as("金额是全车合计").isEqualTo(350_000L);
-        assertThat(o.getShippingFee()).isEqualTo(20_000L);
+        // v1.4.2 shop Story 3.2：运费 = stub 最低价，且与旧 GET /me/checkout 预览一致
+        assertThat(o.getShippingFee()).isEqualTo(10_000L);
+        assertThat(preview.shippingFee()).isEqualTo(o.getShippingFee());
         assertThat(inventory.findBySkuId(skuId(a)).orElseThrow().getLocked()).isEqualTo(2L);
         assertThat(inventory.findBySkuId(skuId(b)).orElseThrow().getLocked()).isEqualTo(3L);
         assertThat(carts.view(uid).lines()).as("车被清空").isEmpty();

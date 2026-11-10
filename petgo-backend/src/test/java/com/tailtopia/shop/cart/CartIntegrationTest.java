@@ -59,8 +59,8 @@ class CartIntegrationTest extends ApiIntegrationTest {
                 "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
         String sToken = "cs" + SEQ.incrementAndGet();
         jdbc.update("""
-                INSERT INTO shop_skus (public_token, product_id, spec_name, price)
-                VALUES (?, ?, '3 kg', ?)
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, package_weight_g, package_length_cm, package_width_cm, package_height_cm)
+                VALUES (?, ?, '3 kg', ?, 1000, 20, 15, 10)
                 """, sToken, productId, price);
         Long skuId = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
@@ -291,44 +291,59 @@ class CartIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 全选作用于**全部**行含失效行：失效行 selected=true 但永不计入选中合计")
-    void selectAllCoversInvalidLinesWithoutCountingThem() {
+    @DisplayName("v1.4.2 Story 3.1 AC5.3：全选只勾有效行，失效行不动、下发 selected=false，且不计入选中合计")
+    void selectAllSkipsInvalidLines() {
+        // 原断言「全选作用于全部行含失效行（失效行 selected=true）」随 Story 3.1 AC5 改写：后端不再默认勾选失效行。
         long uid = seedUser();
         String good = seedSku(10, 100_000L);
         String bad = seedSku(10, 50_000L);
         cart.add(uid, good, 2);
         cart.add(uid, bad, 3);
+        cart.setAllSelected(uid, false);
         listing.delist(productIdOfSku(bad), actor);
 
         CartView v = cart.setAllSelected(uid, true);
 
-        assertThat(v.invalidLines()).hasSize(1);
-        assertThat(v.invalidLines().getFirst().selected())
-                .as("把失效行排除在「全选」外，用户在商品补货后会发现自己全选过的东西没被选上")
-                .isTrue();
-        assertThat(v.selectedSubtotal())
-                .as("但它绝不计入选中合计 —— 过滤条件是「selected && invalidReason == null」")
-                .isEqualTo(200_000L);
+        assertThat(v.invalidLines()).singleElement()
+                .satisfies(l -> assertThat(l.selected()).isFalse());
+        assertThat(jdbc.queryForObject("SELECT selected FROM shop_cart_items WHERE sku_id = ?",
+                Boolean.class, skuIdOf(bad)))
+                .as("全选不动失效行的库内勾选位").isFalse();
+        assertThat(v.selectedSubtotal()).isEqualTo(200_000L);
         assertThat(v.selectedCount()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("🔴 勾选一个已售罄的行不报错 —— 勾选与「能不能买」是两件事")
-    void selectingASoldOutLineIsNotAnError() {
+    @DisplayName("v1.4.2 Story 3.1 AC5.2：勾选失效（售罄）行 → 422；取消勾选照常成功；补货后按库内原值显示")
+    void selectingASoldOutLineIs422() {
         long uid = seedUser();
         String sku = seedSku(10, 100_000L);
-        cart.add(uid, sku, 2);
-        // 卖空它（加购时有货，之后被别人买光）
-        Long skuId = jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?",
-                Long.class, sku);
-        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = ?", skuId);
+        cart.add(uid, sku, 2);   // 库内 selected=true
+        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = ?", skuIdOf(sku));
 
-        // 🔴 这里若抛 409（requireWithinStock 被误加到选择路径上），
-        //    「等它补货我再买」这件事就没法表达了。
-        CartView v = cart.setSelected(uid, sku, true);
+        assertThatThrownBy(() -> cart.setSelected(uid, sku, true))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("该商品当前不可购买");
+        assertThat(cart.view(uid).invalidLines()).singleElement()
+                .satisfies(l -> {
+                    assertThat(l.selected()).as("失效行一律下发 false").isFalse();
+                    // 复审修复：库内勾选位保留，旧下单仍据此 409 逐行明细（S-4，见 CheckoutIntegrationTest）
+                    assertThat(l.selectedInDb()).isTrue();
+                });
 
-        assertThat(v.invalidLines()).hasSize(1);
+        // 补货：重新有效，按库内原值（true）显示，不额外处理
+        jdbc.update("UPDATE sku_inventory SET actual = 10 WHERE sku_id = ?", skuIdOf(sku));
+        assertThat(cart.view(uid).lines()).singleElement()
+                .satisfies(l -> assertThat(l.selected()).isTrue());
+
+        jdbc.update("UPDATE sku_inventory SET actual = 0 WHERE sku_id = ?", skuIdOf(sku));
+        CartView v = cart.setSelected(uid, sku, false);
         assertThat(v.selectedSubtotal()).isZero();
+    }
+
+    private Long skuIdOf(String token) {
+        return jdbc.queryForObject("SELECT id FROM shop_skus WHERE public_token = ?", Long.class,
+                token);
     }
 
     @Test
@@ -395,5 +410,58 @@ class CartIntegrationTest extends ApiIntegrationTest {
         assertThat(cols)
                 .as("照搬 Shopee 的多店铺结构会让购物车/结算/订单三处都多出一层永远只有一个元素的嵌套")
                 .isZero();
+    }
+
+    // ---------- v1.4.2 shop Story 1.1：包裹参数不全 = 暂不可售 ----------
+
+    private void clearPackage(String skuToken) {
+        jdbc.update("""
+                UPDATE shop_skus SET package_weight_g = NULL, package_length_cm = NULL,
+                        package_width_cm = NULL, package_height_cm = NULL WHERE public_token = ?
+                """, skuToken);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 1.1：不可售 SKU 加购 / 立即购买 → 422 sku-not-sellable")
+    void notSellableSkuRejectedOnAdd() {
+        long uid = seedUser();
+        String sku = seedSku(10, 1000L);
+        clearPackage(sku);
+
+        assertThatThrownBy(() -> cart.add(uid, sku, 1))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(422);
+                    assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.SKU_NOT_SELLABLE);
+                });
+        assertThatThrownBy(() -> cart.add(uid, sku, 1, null, null, true))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.SKU_NOT_SELLABLE));
+        assertThat(cart.view(uid).lines()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 1.1：车内行变不可售 → invalidReason=NOT_SELLABLE；加大数量拦、减少不拦；补齐后可加购")
+    void cartLineBecomesNotSellable() {
+        long uid = seedUser();
+        String sku = seedSku(10, 1000L);
+        cart.add(uid, sku, 2);
+        clearPackage(sku);
+
+        CartView v = cart.view(uid);
+        assertThat(v.lines()).isEmpty();
+        assertThat(v.invalidLines()).singleElement()
+                .extracting(CartView.CartLine::invalidReason)
+                .isEqualTo(CartView.REASON_NOT_SELLABLE);
+        assertThat(v.subtotal()).isZero();
+
+        assertThatThrownBy(() -> cart.setQty(uid, sku, 3)).isInstanceOf(AppException.class);
+        assertThat(cart.setQty(uid, sku, 1).invalidLines().getFirst().qty()).isEqualTo(1);
+
+        jdbc.update("""
+                UPDATE shop_skus SET package_weight_g = 1000, package_length_cm = 20,
+                        package_width_cm = 15, package_height_cm = 10 WHERE public_token = ?
+                """, sku);
+        assertThat(cart.add(uid, sku, 1).lines()).singleElement()
+                .extracting(CartView.CartLine::qty).isEqualTo(2);
     }
 }

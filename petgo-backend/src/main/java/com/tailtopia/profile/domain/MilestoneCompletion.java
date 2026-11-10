@@ -60,6 +60,18 @@ public class MilestoneCompletion {
         return c;
     }
 
+    /**
+     * 「已完成且已庆祝」行（V1.4.2 D-12 / G-3）：账号已有账号级 flag 时，新建 / 从只读恢复的宠物直接带上
+     * 完成态，不发事件、不进补庆祝队列。{@code completed_at = celebrated_at = at}（同 V20261012_1105 回填语义）。
+     */
+    public static MilestoneCompletion ofCelebrated(long petMilestoneId, MilestoneCompletionSource source,
+            Instant at) {
+        MilestoneCompletion c = of(petMilestoneId, source, null);
+        c.completedAt = at;
+        c.celebratedAt = at;
+        return c;
+    }
+
     @PrePersist
     void onCreate() {
         if (this.completedAt == null) {

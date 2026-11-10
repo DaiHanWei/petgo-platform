@@ -49,6 +49,8 @@ import java.util.List;
  * @param level       等级展示（V1.4.0 ① Story 3.1 · AD-14）；停用 / 无等级时省略。{@link #deactivated()} 恒省略
  * @param tier        段位（{@code GrowthTier} 名）
  * @param frame       生效头像框（BASIC / UPGRADED / ANIMATED），无框省略
+ * @param petFollowingCount 该用户追更的宠物数（V1.4.2 social-topic Story 1.1 · D-8，「Hewan N」胶囊）。
+ *                    注销态 0；被拉黑方视角也给真实值（同 {@code followingCount}）
  */
 public record PublicProfileResponse(
         String nickname,
@@ -69,7 +71,8 @@ public record PublicProfileResponse(
         Boolean official,
         Integer level,
         String tier,
-        String frame) {
+        String frame,
+        long petFollowingCount) {
 
     /**
      * 已注销：不暴露任何身份信息（AC5 / NFR-8）。
@@ -79,17 +82,18 @@ public record PublicProfileResponse(
      */
     public static PublicProfileResponse deactivated() {
         return new PublicProfileResponse(null, null, null, List.of(), null, 0, 0, false, true, null,
-                null, 0, 0, false, false, null, null, null, null);
+                null, 0, 0, false, false, null, null, null, null, 0);
     }
 
     /**
      * @param reported 登录者传 true/false；<b>游客传 null</b>（键会被 NON_NULL 省略）。
      * @param follow   当前查看者与目标的关注关系（游客 / 本人传 {@code FollowState.NONE}）
+     * @param petFollowingCount 目标追更的宠物数（V1.4.2 Story 1.1）
      */
     public static PublicProfileResponse of(AuthorView author, String signature, Instant joinedAt,
             long postCount, long likeCount, boolean self, Boolean reported,
             String userToken, long followingCount, long followerCount,
-            com.tailtopia.social.read.FollowState follow, boolean official) {
+            com.tailtopia.social.read.FollowState follow, boolean official, long petFollowingCount) {
         return new PublicProfileResponse(
                 author.nickname(),
                 author.avatarUrl(),
@@ -109,6 +113,7 @@ public record PublicProfileResponse(
                 official ? Boolean.TRUE : null,
                 author.badgeLevel(),
                 author.badgeTier(),
-                author.badgeFrame());
+                author.badgeFrame(),
+                petFollowingCount);
     }
 }

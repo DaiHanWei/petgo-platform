@@ -20,7 +20,8 @@
         </tr></thead>
         <tbody>
         <tr th:each="c : ${campaigns}" th:id="'ops-notify-row-' + ${c.token}">
-            <td class="opsn-c-sum" th:text="${c.titleId}" th:title="${c.titleId}">Promo akhir pekan</td>
+            <!--/* V1.4.2 AB-37（7.2 · I5）：摘要 = 变量显示名原样（{用户昵称}），不加底色、不替换真实值 */-->
+            <td class="opsn-c-sum" th:text="${c.summary}" th:title="${c.summary}">Promo akhir pekan</td>
             <td th:text="${c.audience}">按条件：近 30 天活跃 · 猫</td>
             <td class="opsp-window" th:text="${c.sendLabel}">10/11 09:00（定时）</td>
             <td><span class="badge" th:classappend="${c.status == 'DONE'} ? 'badge-ok'
@@ -30,7 +31,8 @@
                       th:text="#{'admin.opsNotify.status.' + ${c.status}}">待发送</span></td>
             <td class="opsn-reach" th:classappend="${c.reachMuted} ? 'muted'">
                 <span th:text="${c.reach}">预计 8,210</span><span class="muted" th:if="${c.failed != null}"
-                      th:text="' · ' + ${c.failed}"> · 失败 120</span>
+                      th:text="' · ' + ${c.failed}"> · 失败 120</span><span class="muted" th:if="${c.skippedNoPet != null}"
+                      th:text="' · ' + ${c.skippedNoPet}"> · 跳过 3,000（没有宠物）</span>
             </td>
             <td class="opsp-acts">
                 <button type="button" class="opsp-lnk dg" th:if="${canEdit and c.pending}"

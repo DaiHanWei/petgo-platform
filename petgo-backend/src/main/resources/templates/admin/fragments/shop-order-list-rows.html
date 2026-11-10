@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  F1「订单」总表片段（V1.4.2 shop-admin Story 7.1 · AD-12）。
+  sumbar(oob) — 摘要五格：待支付 · 待发货 · 待收货 · 退款中 · 取消后到账待处理
+  rows(oob)   — 表格 + 翻页（行复用履约页 shop-orders-list :: row，抽屉地址取 model 的 drawerBase）
+  🔒 列表不带 PII（同履约页）。
+-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="shop-order-list-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopOrders.status.PENDING_PAYMENT}">待支付</div>
+        <div class="sum-value" th:text="${summary.pendingPayment()}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopOrders.status.PENDING_SHIPMENT}">待发货</div>
+        <div class="sum-value" th:text="${summary.pendingShipment()}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v142.ol.summary.awaitingDelivery}">待收货</div>
+        <div class="sum-value" th:text="${summary.awaitingDelivery()}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopOrders.status.REFUNDING}">退款中</div>
+        <div class="sum-value" th:text="${summary.refunding()}">0</div>
+    </div>
+    <div class="sum-item" th:classappend="${summary.latePaidPending() > 0} ? 'dg'">
+        <div class="sum-label" th:text="#{admin.v142.ol.summary.latePaid}">取消后到账待处理</div>
+        <div class="sum-value" th:text="${summary.latePaidPending()}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/shop-order-list-rows :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(rows)}">
+        <thead>
+        <tr>
+            <th th:text="#{admin.shop.orders.col.token}">订单号</th>
+            <th th:text="#{admin.shop.orders.col.status}">状态</th>
+            <th th:text="#{admin.shop.orders.col.total}">金额</th>
+            <th th:text="#{admin.shop.orders.col.pay}">支付构成</th>
+            <th th:text="#{admin.shop.orders.col.kecamatan}">配送区</th>
+            <th th:text="#{admin.shop.orders.col.packages}">包裹数</th>
+            <th th:text="#{admin.shop.orders.col.createdAt}">下单时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="r : ${rows}"><tr th:replace="~{admin/fragments/shop-orders-list :: row(${r}, false, ${exceptionTokens.contains(r.orderToken)})}"></tr></th:block>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(rows)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:text="#{admin.shop.orders.empty}">暂无订单。</p>
+    </div>
+    <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页），翻页带全部筛选条件。 */-->
+    <th:block th:if="${!#lists.isEmpty(rows)}" th:with="tpl=@{/admin/shop/order-list(status=${status},orderToken=${orderToken},from=${from},to=${to},flag=${flag},page='~PAGE~')}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target='#shop-order-list-rows')}"></div>
+    </th:block>
+</th:block>
+</body>
+</html>

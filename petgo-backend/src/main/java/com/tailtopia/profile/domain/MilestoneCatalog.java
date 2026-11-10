@@ -13,8 +13,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 里程碑清单后端固定常量（FR-42 / 决策 F16；7.3 聚合里程碑 +1）。**清单的唯一事实源**——猫 33 / 狗 33 / 通用 18
- * （V1.3.4 FR-126 在各清单末尾追加「第一次场所打卡」「解锁性格测试结果」两条）。
+ * 里程碑清单后端固定常量（FR-42 / 决策 F16；7.3 聚合里程碑 +1）。**清单的唯一事实源**——猫 35 / 狗 35 / 通用 20
+ * （V1.3.4 FR-126 在各清单末尾追加「第一次场所打卡」「解锁性格测试结果」两条；V1.4.2 FR-154 再追加
+ * 账号级「第一次关注一个人」「第一次收藏内容」两条）。
  *
  * <p>V1 不做运营可编辑清单（护栏）：清单为编译期常量；DB 的 {@code pet_milestones} roster 仅是建档时
  * 按本常量物化的 per-pet 副本（承载结构位供查询自包含），标题/级别/触发/组合依赖一律以本类为准。
@@ -111,7 +112,7 @@ public final class MilestoneCatalog {
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐱 猫咪里程碑清单（共 33：S18(含 Lulus Pemula、V1.3.4 打卡 / 性格测试) / M10 / L5）
+    // 🐱 猫咪里程碑清单（共 35：S20(含 Lulus Pemula、V1.3.4 打卡 / 性格测试、V1.4.2 账号级两条) / M10 / L5）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildCat() {
         Seq q = new Seq("C");
@@ -154,11 +155,15 @@ public final class MilestoneCatalog {
                 // V1.3.4 FR-126（AD-18）：Lulus Pemula 之后追加，既有 code / sortOrder 一个不变。
                 // 不纳入新手任务；自动达成由 Story 4.2 的事件监听接线。
                 q.s(SYSTEM_AUTO, "第一次场所打卡", "Check-in pertama"),          // C-S17
-                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"));      // C-S18
+                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"),       // C-S18
+                // V1.4.2 FR-154（D-4 / D-12）：账号级里程碑，末尾追加，既有 code / sortOrder 一个不变。
+                // 账号内首次触发 → 所有 ACTIVE 宠物各完成本物种编码（AccountMilestoneService）。
+                q.s(SYSTEM_AUTO, "第一次关注一个人", "Teman pertama"),          // C-S19
+                q.s(SYSTEM_AUTO, "第一次收藏内容", "Simpan pertama"));          // C-S20
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐶 狗狗里程碑清单（共 33：S18(含 Lulus Pemula、V1.3.4 打卡 / 性格测试) / M10 / L5）
+    // 🐶 狗狗里程碑清单（共 35：S20(含 Lulus Pemula、V1.3.4 打卡 / 性格测试、V1.4.2 账号级两条) / M10 / L5）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildDog() {
         Seq q = new Seq("D");
@@ -201,11 +206,15 @@ public final class MilestoneCatalog {
                 // V1.3.4 FR-126（AD-18）：Lulus Pemula 之后追加，既有 code / sortOrder 一个不变。
                 // 不纳入新手任务；自动达成由 Story 4.2 的事件监听接线。
                 q.s(SYSTEM_AUTO, "第一次场所打卡", "Check-in pertama"),          // D-S17
-                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"));      // D-S18
+                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"),       // D-S18
+                // V1.4.2 FR-154（D-4 / D-12）：账号级里程碑，末尾追加，既有 code / sortOrder 一个不变。
+                // 账号内首次触发 → 所有 ACTIVE 宠物各完成本物种编码（AccountMilestoneService）。
+                q.s(SYSTEM_AUTO, "第一次关注一个人", "Teman pertama"),          // D-S19
+                q.s(SYSTEM_AUTO, "第一次收藏内容", "Simpan pertama"));          // D-S20
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐾 通用里程碑清单（其他宠物，共 18：S11(含 Lulus Pemula、V1.3.4 打卡 / 性格测试) / M4 / L3）
+    // 🐾 通用里程碑清单（其他宠物，共 20：S13(含 Lulus Pemula、V1.3.4 打卡 / 性格测试、V1.4.2 账号级两条) / M4 / L3）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildOther() {
         Seq q = new Seq("G");
@@ -239,7 +248,10 @@ public final class MilestoneCatalog {
                 // V1.3.4 FR-126（AD-18）：Lulus Pemula 之后追加，既有 code / sortOrder 一个不变。
                 // 不纳入新手任务；自动达成由 Story 4.2 的事件监听接线。
                 q.s(SYSTEM_AUTO, "第一次场所打卡", "Check-in pertama"),          // G-S10
-                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"));      // G-S11
+                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"),       // G-S11
+                // V1.4.2 FR-154（D-4 / D-12；决策日志 B1：G-S12 / G-S13，不是 S19 / S20）：账号级里程碑。
+                q.s(SYSTEM_AUTO, "第一次关注一个人", "Teman pertama"),          // G-S12
+                q.s(SYSTEM_AUTO, "第一次收藏内容", "Simpan pertama"));          // G-S13
     }
 
     /** 清单构造辅助：按级别自增编号生成 code（C-S1…），并维护全局 sortOrder。 */

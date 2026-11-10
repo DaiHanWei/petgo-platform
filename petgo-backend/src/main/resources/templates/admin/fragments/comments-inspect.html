@@ -91,15 +91,10 @@
         <p th:text="#{admin.comments.empty}">暂无评论</p>
     </div>
 
-    <div class="pager" th:if="${!#lists.isEmpty(comments)}" th:attr="data-page=${page}">
-        <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#comments-rows" hx-swap="innerHTML" hx-push-url="true"
-           th:attr="hx-get=@{/admin/comments(status=${status},postId=${postId},q=${q},page=${page - 1})}"
-           th:text="#{admin.audit.prev}">← 上一页</a>
-        <span th:text="#{admin.v130.comments.pager.total(${total})}">共 N 条</span>
-        <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#comments-rows" hx-swap="innerHTML" hx-push-url="true"
-           th:attr="hx-get=@{/admin/comments(status=${status},postId=${postId},q=${q},page=${page + 1})}"
-           th:text="#{admin.audit.next}">下一页 →</a>
-    </div>
+    <!--/* V1.4.2：通用分页条（总页数 + 10 页一批 + 跳页），翻页带全部筛选条件。 */-->
+    <th:block th:if="${!#lists.isEmpty(comments)}" th:with="tpl=@{/admin/comments(status=${status},postId=${postId},q=${q},page='~PAGE~')}">
+        <div th:replace="~{admin/fragments/pager :: pager(p=${pager}, tpl=${tpl}, target='#comments-rows')}"></div>
+    </th:block>
 </th:block>
 
 <!--/* 单行（rows 循环体；抽屉里处置成功后以 oob=true 原位替换） */-->

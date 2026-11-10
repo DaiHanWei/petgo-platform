@@ -216,26 +216,51 @@ public class ShopFinanceDashboardService {
     // ---------- 8.3 对账（AB-13D） ----------
 
     /*
-     * 🔴 PawCoin「可用 / 冻结中」的口径定义（Story 5-3 · SHOP-FR-28）。
+     * 🔴 PawCoin「可用 / 冻结中」的口径定义（Story 5-3 · SHOP-FR-28；v1.4.2 shop Story 3.2 AC7 按 S-3 改写）。
      * ⚠️ **本 story 只写定义，不实现查询、不加字段、不加方法** —— 这两个数的查询与展示
-     *    随 Story 9-5 落地（它的前置是 admin 主题 Epic 10，页面还没重构完，
-     *    现在加一个没人调用的死方法只会让下一个人猜它为什么在这儿）。
+     *    随 Story 9-5 落地（现在加一个没人调用的死方法只会让下一个人猜它为什么在这儿）。
      *
-     * 定义：
-     *   · **冻结中** ＝ 已被**待支付订单**占用、尚未扣减的部分
+     * 定义（S-3 起 PawCoin 在**提交订单时**扣，CheckoutService#place → settlePawCoinSegment，PawCoinTxnType.SPEND）：
+     *   · **冻结中** ＝ 已被**待付款订单扣下**、可能因取消退回的部分
      *                ＝ SUM(shop_orders.coin_amount) WHERE status = 'PENDING_PAYMENT'
-     *                  （且支付窗未过期）
-     *   · **可用**   ＝ pawcoin_wallets.balance − 冻结中
+     *                  AND checkout_source IS NOT NULL
+     *     （checkout_source IS NULL 的存量待付款单币尚未扣，不在此列 —— 过渡规则，见 ShopOrderPaymentService）
+     *   · **可用**   ＝ pawcoin_wallets.balance（S-3 后提交时已扣下的币不在 balance 里；过渡期存量待付款单
+     *                  的 coin_amount 仍在 balance 内、到账才扣 —— 9-5 落地时按此口径处理）
      *
-     * 为什么要现算、而不是读一个列：
-     *   · PawCoinWallet **只有一个 balance 列，没有冻结列**；
-     *   · PawCoin 是在**支付时刻**才扣的 —— CheckoutService.settlePawCoinSegment
-     *     走 PawCoinTxnType.SPEND，**不是下单时扣**。于是「下单了但还没付」这段时间里，
-     *     币还在 balance 里躺着，却已经被一笔订单占住了。
-     *   · 当前后台展示的是那个**不分可用/冻结中的单一数字**
-     *     （AdminUserDetailView.pawcoinBalance → templates/admin/user-detail.html）——
-     *     运营看到的余额会比用户实际能花的多，这正是 9-5 要修的。
+     * 未付款取消（用户取消 / 超时关单）经 ShopOrderPaymentService#releaseUnpaid 退回：
+     *   PawCoinTxnType.REFUND + ref_type = 'SHOP_ORDER_VOID'（与已付款退款 SHOP_ORDER 区分），
+     *   对账的 coinSpent 据此扣除「提交扣、取消退」的往返（见 COIN_SPENT_SQL / COIN_VOID_RETURNED_SQL）。
      */
+
+    /** 区间内 PawCoin 消费总额（全业务 SPEND）。抽成常量供 L0 文本护栏读取。 */
+    static final String COIN_SPENT_SQL = """
+            SELECT COALESCE(SUM(-delta), 0) FROM pawcoin_transactions
+            WHERE type = 'SPEND' AND created_at >= ? AND created_at < ?
+            """;
+
+    /**
+     * 区间内电商未付款作废退回的 PawCoin（v1.4.2 shop Story 3.2 AC7）：从 {@link #COIN_SPENT_SQL} 中扣除，
+     * 否则「提交扣、取消退」的往返会被当成真实消费。
+     *
+     * <p>⚠️ 按流水时刻分区间：提交在区间前、取消（≤ 75 分钟后）落在区间内时，该笔退回会被本区间扣除而扣币不在
+     * 本区间 —— 短区间（如单日、跨午夜）的 {@code coinSpent} 可能偏小，极端情况下<b>为负</b>。这是按流水时刻计的
+     * 正常口径，多日区间求和后自洽，展示层不应截断为 0。
+     */
+    static final String COIN_VOID_RETURNED_SQL = """
+            SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
+            WHERE type = 'REFUND' AND ref_type = 'SHOP_ORDER_VOID' AND created_at >= ? AND created_at < ?
+            """;
+
+    /**
+     * 历史入账总额（近似核销率的分母）：充值 + 赠送 + 退回，<b>排除</b>电商未付款作废退回（{@code SHOP_ORDER_VOID}）
+     * —— 那是提交时扣下又原样退回的往返，不是新的入账（v1.4.2 shop Story 3.2 复审修复）。
+     */
+    static final String CREDITED_ALL_TIME_SQL = """
+            SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
+            WHERE type IN ('TOPUP', 'BONUS', 'REFUND')
+              AND (ref_type IS NULL OR ref_type <> 'SHOP_ORDER_VOID')
+            """;
 
     /**
      * 对账。
@@ -295,16 +320,12 @@ public class ShopFinanceDashboardService {
                 SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
                 WHERE type = 'BONUS' AND created_at >= ? AND created_at < ?
                 """, f, t);
-        long coinSpent = scalar("""
-                SELECT COALESCE(SUM(-delta), 0) FROM pawcoin_transactions
-                WHERE type = 'SPEND' AND created_at >= ? AND created_at < ?
-                """, f, t);
+        // v1.4.2 shop Story 3.2 AC7：扣除未付款作废退回（提交时扣、取消时退的往返不算消费）。
+        // ⚠️ 短区间内可能为负（扣在区间前、退在区间内），见 COIN_VOID_RETURNED_SQL 注释。
+        long coinSpent = scalar(COIN_SPENT_SQL, f, t) - scalar(COIN_VOID_RETURNED_SQL, f, t);
         long bonusIssuedAllTime = scalar(
                 "SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions WHERE type = 'BONUS'");
-        long creditedAllTime = scalar("""
-                SELECT COALESCE(SUM(delta), 0) FROM pawcoin_transactions
-                WHERE type IN ('TOPUP', 'BONUS', 'REFUND')
-                """);
+        long creditedAllTime = scalar(CREDITED_ALL_TIME_SQL);
         // 近似核销率 = 历史赠币 ÷ 历史入账总额。⚠️ 这是【近似】，不是分层后的真值。
         long bonusRedeemedApprox = creditedAllTime <= 0 ? 0
                 : coinSpent * bonusIssuedAllTime / creditedAllTime;
@@ -312,6 +333,95 @@ public class ShopFinanceDashboardService {
         return new ReconciliationSnapshot(orders, total, coin, cash, shippingCharged,
                 shippingPaidByCoin, refundedTotal, refundedCoin, bonusIssued, coinSpent,
                 bonusRedeemedApprox);
+    }
+
+    // ---------- V1.4.2 shop-admin Story 8.1 · AD-15：优惠与物流成本（新区块，原四卡不动） ----------
+
+    /** 新区块，单独 record（不往 {@link ReconciliationSnapshot} 里加字段）。金额一律 IDR 整数。 */
+    public record DiscountLogisticsSnapshot(long spendCouponDiscount, long thresholdShippingDiscount,
+            long couponShippingDiscount, long userPaidShipping, long actualCarrierCost, long reshipCost,
+            long netShippingCost, long insuranceFeeIncome, long insuranceActualCost, long pawcoinCompensation,
+            long claimsPendingCount, long claimsReceived, long refundAwaiting, long refundPayoutPending,
+            long refundPayoutFailed, long refundPaidOut, long lateReordered, long lateRefunded, long latePending) {
+
+        /** I2：所选时间段没有任何数据 → 只在新卡显示空态。待索赔是「当前」口径，不算期间数据。 */
+        public boolean empty() {
+            return spendCouponDiscount == 0 && thresholdShippingDiscount == 0 && couponShippingDiscount == 0
+                    && userPaidShipping == 0 && actualCarrierCost == 0 && reshipCost == 0 && insuranceFeeIncome == 0
+                    && insuranceActualCost == 0 && pawcoinCompensation == 0 && claimsReceived == 0
+                    && refundAwaiting == 0 && refundPayoutPending == 0 && refundPayoutFailed == 0 && refundPaidOut == 0
+                    && lateReordered == 0 && lateRefunded == 0 && latePending == 0;
+        }
+    }
+
+    private static final java.time.ZoneId WIB = com.tailtopia.admin.shared.time.AdminTime.ZONE;
+
+    /**
+     * 「优惠与物流成本」（AD-15）。🔴 时间范围按 <b>WIB</b> 日界（{@code from} 当日 00:00 WIB ～ {@code to} 次日 00:00 WIB，
+     * 半开区间）；原四卡的 {@code ts()} / {@code tsEnd()} 按 JVM 时区，不动。各行时间基准见 AD-15 表：订单类按 {@code paid_at}
+     * （下单口径，不冲减已退运费，O-24）、运单按 {@code created_at}、补偿按 {@code destination_chosen_at}、索赔到账按
+     * {@code claim_closed_at}、退款打款按退款单 {@code created_at}、取消后到账按 {@code late_paid_at}。
+     * 「取消后到账」只做分项展示，不并入现金收入（AC3：已转新订单的，现金在新单里算一次）。
+     */
+    @Transactional(readOnly = true)
+    public DiscountLogisticsSnapshot discountLogistics(LocalDate from, LocalDate to) {
+        java.sql.Timestamp f = java.sql.Timestamp.from(from.atStartOfDay(WIB).toInstant());
+        java.sql.Timestamp t = java.sql.Timestamp.from(to.plusDays(1).atStartOfDay(WIB).toInstant());
+
+        Map<String, Object> o = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(o.discount_coupon_amount), 0) AS spend_coupon,
+                       -- 存量单 source 为空 / NONE 但有减免：1.4.2 前唯一的运费减免就是满额免运，归入满额免运（复审修，不补算列）
+                       COALESCE(SUM(CASE WHEN o.shipping_discount_source IS DISTINCT FROM 'COUPON'
+                                         THEN -o.shipping_discount ELSE 0 END), 0) AS threshold_disc,
+                       COALESCE(SUM(CASE WHEN o.shipping_discount_source = 'COUPON'
+                                         THEN -o.shipping_discount ELSE 0 END), 0) AS coupon_disc,
+                       COALESCE(SUM(o.shipping_fee + o.shipping_discount), 0) AS user_paid_shipping,
+                       COALESCE(SUM(o.insurance_fee), 0) AS insurance_fee
+                FROM shop_orders o
+                WHERE o.paid_at >= ? AND o.paid_at < ?
+                """, f, t);
+        Map<String, Object> sh = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(CASE WHEN NOT s.is_reship THEN COALESCE(s.carrier_cost, 0) ELSE 0 END), 0) AS actual,
+                       COALESCE(SUM(CASE WHEN s.is_reship THEN COALESCE(s.carrier_cost, 0) ELSE 0 END), 0) AS reship,
+                       COALESCE(SUM(s.insurance_cost), 0) AS insurance_cost
+                FROM shipments s
+                WHERE s.status <> 'CANCELLED' AND s.created_at >= ? AND s.created_at < ?
+                """, f, t);
+        long compensation = scalar("""
+                SELECT COALESCE(SUM(r.compensation_amount), 0) FROM shop_order_refunds r
+                WHERE r.cash_destination = 'TO_PAWCOIN' AND r.destination_chosen_at >= ? AND r.destination_chosen_at < ?
+                """, f, t);
+        long claimsPending = scalar("SELECT COUNT(*) FROM shop_orders WHERE claim_pending");
+        long claimsReceived = scalar("""
+                SELECT COALESCE(SUM(o.claim_amount), 0) FROM shop_orders o
+                WHERE o.claim_closed_at >= ? AND o.claim_closed_at < ?
+                """, f, t);
+        Map<String, Object> rf = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(CASE WHEN r.status = 'AWAITING_DESTINATION' THEN r.cash_refund ELSE 0 END), 0) AS awaiting,
+                       COALESCE(SUM(CASE WHEN r.status = 'PAYOUT_PENDING' THEN r.cash_refund ELSE 0 END), 0) AS pending,
+                       COALESCE(SUM(CASE WHEN r.status = 'PAYOUT_FAILED' THEN r.cash_refund ELSE 0 END), 0) AS failed,
+                       COALESCE(SUM(CASE WHEN r.status = 'COMPLETED' AND r.cash_destination = 'TO_BANK'
+                                         THEN r.cash_refund ELSE 0 END), 0) AS paid
+                FROM shop_order_refunds r
+                WHERE r.created_at >= ? AND r.created_at < ?
+                """, f, t);
+        Map<String, Object> late = jdbc.queryForMap("""
+                SELECT COALESCE(SUM(CASE WHEN o.late_payment_resolution = 'REORDERED' THEN o.late_paid_amount ELSE 0 END), 0) AS reordered,
+                       COALESCE(SUM(CASE WHEN o.late_payment_resolution = 'REFUNDED' THEN o.late_paid_amount ELSE 0 END), 0) AS refunded,
+                       COALESCE(SUM(CASE WHEN o.late_payment_resolution IS NULL THEN o.late_paid_amount ELSE 0 END), 0) AS pending
+                FROM shop_orders o
+                WHERE o.late_paid_amount IS NOT NULL AND o.late_paid_at >= ? AND o.late_paid_at < ?
+                """, f, t);
+
+        long userPaid = num(o.get("user_paid_shipping"));
+        long actual = num(sh.get("actual"));
+        long reship = num(sh.get("reship"));
+        return new DiscountLogisticsSnapshot(num(o.get("spend_coupon")), num(o.get("threshold_disc")),
+                num(o.get("coupon_disc")), userPaid, actual, reship,
+                LogisticsCostCalc.netShippingCost(actual, reship, userPaid), num(o.get("insurance_fee")),
+                num(sh.get("insurance_cost")), compensation, claimsPending, claimsReceived, num(rf.get("awaiting")),
+                num(rf.get("pending")), num(rf.get("failed")), num(rf.get("paid")), num(late.get("reordered")),
+                num(late.get("refunded")), num(late.get("pending")));
     }
 
     // ---------- 内部 ----------

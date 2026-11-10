@@ -22,6 +22,7 @@ import 'package:tailtopia/features/profile/presentation/pet_profile_create_page.
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
+import 'package:tailtopia/features/content/domain/published_post.dart';
 
 /// 发布请求抛注入异常的 fake（模拟审核 422）。
 class _ThrowRepo implements ContentRepository {
@@ -29,7 +30,7 @@ class _ThrowRepo implements ContentRepository {
   final String slug;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -59,7 +60,7 @@ class _ThrowRepo implements ContentRepository {
 /// 正常返回 id 的 fake（用于建档返回续发链路）。
 class _OkRepo implements ContentRepository {
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -73,7 +74,7 @@ class _OkRepo implements ContentRepository {
     List<int> mentionedUserIds = const [],
     String? placeCheckinToken,
   }) async =>
-      1;
+      PublishedPost(id: 1);
 }
 
 class _FakeProfileRepo implements ProfileRepository {
@@ -727,7 +728,7 @@ class _PetRecordingRepo implements ContentRepository {
   int calls = 0;
 
   @override
-  Future<int> publish({
+  Future<PublishedPost> publish({
     required ContentType type,
     int? petId,
     List<int> petIds = const [],
@@ -756,7 +757,7 @@ class _PetRecordingRepo implements ContentRepository {
         ),
       );
     }
-    return 42;
+    return const PublishedPost(id: 42);
   }
 }
 

@@ -90,7 +90,7 @@ void main() {
   test('源码：场所条在正文之后、分隔线之前', () {
     final src = File('lib/features/content/presentation/content_detail_page.dart').readAsStringSync();
     final strip = src.indexOf('_DetailCheckinPlaceStrip(place: detail.checkinPlace!)');
-    final body = src.indexOf('MentionText(');
+    final body = src.indexOf('RichBodyText(');
     final divider = src.indexOf('const Divider(height: AppSpacing.xl, color: AppColors.divider)');
     expect(strip, greaterThan(body));
     expect(divider, greaterThan(strip));

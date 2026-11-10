@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  退款打款抽屉（V1.4.2 shop-admin Story 5.2 · E3 ~ E5）。吸底两块表单：标记已打款（灰框）/ 打款失败（红框），提交前 confirm-modal。
+  注销用户的单（O-17）只给「线下结案」表单（无稿，文案待设计确认）。
+  🔴 发起人本人打开时置灰并显示 E5 警示（服务端同样 403）。🔒 完整账号只在 accountShown（refund.payout）；截图走签名 URL。
+  模型：refund、info（OrderInfo）、initiatorName、canPayout、isInitiator、accountShown、failReasons。
+*/-->
+<body>
+<div th:fragment="panel" class="rp-drawer" th:with="r=${refund}, rpf=${T(com.tailtopia.shop.logistics.balance.BiteshipBalanceService)},
+        locked=${!canPayout or isInitiator}">
+    <div class="sum sum--grid2">
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v142.payout.col.amount}">退款金额</div>
+            <div class="sum-value num" th:text="${rpf.rp(r.cashRefund)}">Rp</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.common.status}">状态</div>
+            <div class="sum-value rv-small" th:text="${r.offlineClosedAt != null} ? #{admin.v142.payout.status.OFFLINE} : #{'admin.v142.payout.status.' + ${r.status.name()}}">待打款</div></div>
+    </div>
+    <dl class="kv">
+        <dt th:text="#{admin.shop.orders.col.token}">订单号</dt><dd th:text="${info != null} ? ${info.displayNo()} : '—'">SO</dd>
+        <dt th:text="#{admin.v142.payout.col.source}">来源</dt><dd th:text="#{'admin.v142.payout.source.' + ${r.reason.name()}}">来源</dd>
+        <dt th:text="#{admin.v142.payout.initiator}">发起人</dt><dd th:text="${initiatorName} ?: '—'">ops</dd>
+        <dt th:text="#{admin.v142.payout.channel}">收款渠道</dt>
+        <dd th:text="${r.payoutChannel == null} ? '—' : (${r.payoutFee == 0} ? #{admin.v142.payout.channelNoFee(${r.payoutChannel.name()})}
+                    : ${r.payoutChannel.name()} + ' · ' + #{admin.v142.payout.fee(${rpf.rp(r.payoutFee)})})">BCA</dd>
+        <dt th:text="#{admin.v142.payout.account}">账号</dt><dd th:text="${accountShown} ?: '—'" data-payout-account>••••</dd>
+        <dt th:text="#{admin.v142.payout.col.holder}">户名</dt><dd th:text="${r.payoutAccountHolder} ?: '—'">RINA</dd>
+        <dt th:text="#{admin.v142.payout.col.submittedAt}">用户提交时间</dt>
+        <dd th:text="${r.destinationChosenAt == null} ? '—' : ${#temporals.format(r.destinationChosenAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">-</dd>
+        <th:block th:if="${r.payoutTxnNo != null}">
+            <dt th:text="#{admin.v142.payout.txnNo}">转账流水号</dt><dd th:text="${r.payoutTxnNo}">-</dd>
+        </th:block>
+        <th:block th:if="${r.payoutProofKey != null and canPayout}">
+            <dt th:text="#{admin.v142.payout.proof}">转账截图</dt>
+            <dd><a target="_blank" rel="noopener" th:href="@{/admin/shop/refund-payouts/{t}/proof(t=${r.publicToken})}"
+                   th:text="#{admin.v142.payout.proofView}">查看</a></dd>
+        </th:block>
+        <th:block th:if="${r.payoutFailReason != null}">
+            <dt th:text="#{admin.v142.payout.failReason}">原因</dt><dd th:text="#{'admin.v142.payout.failReason.' + ${r.payoutFailReason.name()}}">-</dd>
+        </th:block>
+        <th:block th:if="${r.offlineCloseNote != null}">
+            <dt th:text="#{admin.v142.payout.offlineNote}">线下处理说明</dt><dd th:text="${r.offlineCloseNote}">-</dd>
+        </th:block>
+    </dl>
+
+    <p class="banner warn" th:if="${isInitiator}" data-duty-blocked
+       th:text="#{admin.v142.payout.dutyBlocked(${initiatorName} ?: '—', #{'admin.v142.payout.source.' + ${r.reason.name()}})}">职责分离</p>
+    <p class="hint" th:unless="${canPayout}" th:text="#{admin.v130.err.forbidden(#{perm.refund.payout})}">只读</p>
+
+    <!-- E3 标记已打款（灰框）：仅 PAYOUT_PENDING、非注销用户 -->
+    <form class="cfg-card card rp-paid" th:if="${r.status.name() == 'PAYOUT_PENDING' and info != null and !info.userDeleted()}"
+          th:attr="hx-post=@{/admin/shop/refund-payouts/{t}/paid/confirm(t=${r.publicToken})}"
+          hx-target="#payout-drawer-err" hx-swap="innerHTML" data-requires-form>
+        <h3 th:text="#{admin.v142.payout.btn.markPaid}">标记已打款</h3>
+        <label class="field"><span th:text="#{admin.v142.payout.txnNo}">转账流水号</span>
+            <input class="inp field-full" type="text" name="txnNo" maxlength="64" required data-requires-text
+                   th:disabled="${locked}"/></label>
+        <div class="field"><span th:text="#{admin.v142.payout.proof}">转账截图</span>
+            <div id="payout-proof-slot"><input type="hidden" name="proofKey" value=""/></div>
+            <input type="file" name="file" accept="image/jpeg,image/png" th:disabled="${locked}"
+                   th:attr="hx-post=@{/admin/shop/refund-payouts/{t}/proof(t=${r.publicToken})}"
+                   hx-trigger="change" hx-encoding="multipart/form-data" hx-target="#payout-proof-slot" hx-swap="innerHTML"/>
+        </div>
+        <button type="submit" class="btn btn-primary" disabled th:attr="data-requires-target=${locked} ? null : 'true'"
+                th:text="#{admin.v142.payout.btn.markPaid}">标记已打款</button>
+    </form>
+
+    <!-- E4 打款失败（红框） -->
+    <form class="cfg-card card rp-failed" th:if="${r.status.name() == 'PAYOUT_PENDING' and info != null and !info.userDeleted()}"
+          th:attr="hx-post=@{/admin/shop/refund-payouts/{t}/failed/confirm(t=${r.publicToken})}"
+          hx-target="#payout-drawer-err" hx-swap="innerHTML" data-requires-form>
+        <h3 th:text="#{admin.v142.payout.btn.markFailed}">打款失败</h3>
+        <label class="field"><span th:text="#{admin.v142.payout.failReason}">原因</span>
+            <select name="reason" class="sel" required data-requires-text th:disabled="${locked}">
+                <option value="" th:text="#{admin.v142.payout.pleaseSelect}">请选择</option>
+                <option th:each="fr : ${failReasons}" th:value="${fr.name()}"
+                        th:text="#{'admin.v142.payout.failReason.' + ${fr.name()}}">账户信息有误</option>
+            </select></label>
+        <label class="field"><span th:text="#{admin.v142.payout.failNote}">备注</span>
+            <input class="inp field-full" type="text" name="note" maxlength="200" th:disabled="${locked}"/></label>
+        <p class="hint" th:text="#{admin.v142.payout.failedHint}">App 订单详情会提示用户重新填写收款账户。</p>
+        <button type="submit" class="btn btn-danger" disabled th:attr="data-requires-target=${locked} ? null : 'true'"
+                th:text="#{admin.v142.payout.btn.markFailed}">打款失败</button>
+    </form>
+
+    <!-- 注销用户线下结案（O-17，无稿） -->
+    <form class="cfg-card card rp-offline" th:if="${info != null and info.userDeleted() and r.status.name() != 'COMPLETED'}"
+          th:attr="hx-post=@{/admin/shop/refund-payouts/{t}/offline/confirm(t=${r.publicToken})}"
+          hx-target="#payout-drawer-err" hx-swap="innerHTML" data-requires-form>
+        <h3 th:text="#{admin.v142.payout.btn.closeOffline}">线下结案</h3>
+        <p class="hint" th:text="#{admin.v142.payout.offlineHint}">用户已注销。</p>
+        <label class="field"><span th:text="#{admin.v142.payout.offlineNote}">线下处理说明</span>
+            <input class="inp field-full" type="text" name="note" maxlength="200" required data-requires-text
+                   th:disabled="${locked}"/></label>
+        <button type="submit" class="btn btn-primary" disabled th:attr="data-requires-target=${locked} ? null : 'true'"
+                th:text="#{admin.v142.payout.btn.closeOffline}">线下结案</button>
+    </form>
+    <p class="inline-error-slot" aria-live="polite" id="payout-drawer-err"></p>
+</div>
+
+<!--/* 截图上传成功：回填隐藏域 + 查看链接。 */-->
+<th:block th:fragment="proofSlot">
+    <input type="hidden" name="proofKey" th:value="${proofKey}"/>
+    <a target="_blank" rel="noopener" th:href="@{/admin/shop/refund-payouts/{t}/proof(t=${refundToken},key=${proofKey})}"
+       th:text="#{admin.v142.payout.proofUploaded}">已上传，查看</a>
+</th:block>
+
+<!--/* 写成功：重渲染抽屉体 + toast（列表由 HX-Trigger admin:payout-list-refresh 刷新）。 */-->
+<th:block th:fragment="saved">
+    <div th:replace="~{admin/fragments/drawer-shop-refund-payout :: panel}"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

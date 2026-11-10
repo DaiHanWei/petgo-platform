@@ -111,4 +111,40 @@ class PaymentSplitTest {
         PaymentSplit s = PaymentSplit.compute(305_000L, 20_000L, 999_999L, 0L, true, true);
         assertThat(s.coinAmount()).isZero();
     }
+
+    // ---------------------------------------------------------------- v1.4.2 Story 1.2：useCoin
+
+    @Test
+    @DisplayName("v1.4.2 useCoin=false：有余额也不用币 → 全额现金")
+    void useCoinFalseWithBalance() {
+        PaymentSplit s = PaymentSplit.compute(305_000L, 20_000L, 100_000L, CAP, true, true, false);
+        assertThat(s.coinAmount()).isZero();
+        assertThat(s.cashAmount()).isEqualTo(305_000L);
+        assertThat(s.isPureCash()).isTrue();
+    }
+
+    @Test
+    @DisplayName("v1.4.2 useCoin=false：余额超上限也不用币")
+    void useCoinFalseWithBalanceAboveCap() {
+        PaymentSplit s = PaymentSplit.compute(3_000_000L, 20_000L, 5_000_000L, CAP, true, true, false);
+        assertThat(s.coinAmount()).isZero();
+        assertThat(s.cashAmount()).isEqualTo(3_000_000L);
+    }
+
+    @Test
+    @DisplayName("v1.4.2 6 参版本 ≡ 7 参 useCoin=true（行为不变）")
+    void sixArgEqualsSevenArgUseCoinTrue() {
+        long[][] cases = {
+                {305_000L, 20_000L, 0L, CAP}, {305_000L, 20_000L, 500_000L, CAP},
+                {305_000L, 20_000L, 100_000L, CAP}, {3_000_000L, 20_000L, 5_000_000L, CAP},
+                {0L, 0L, 100_000L, CAP}, {305_000L, 20_000L, 999_999L, 0L}};
+        for (long[] c : cases) {
+            for (boolean enabled : new boolean[] {true, false}) {
+                for (boolean allow : new boolean[] {true, false}) {
+                    assertThat(PaymentSplit.compute(c[0], c[1], c[2], c[3], enabled, allow, true))
+                            .isEqualTo(PaymentSplit.compute(c[0], c[1], c[2], c[3], enabled, allow));
+                }
+            }
+        }
+    }
 }
