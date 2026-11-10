@@ -1,6 +1,7 @@
 package com.tailtopia.shop.coupon;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.coupon.domain.CouponAcquireType;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +26,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.MessageSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -34,6 +37,7 @@ class CouponAdminIntegrationTest extends ApiIntegrationTest {
     @Autowired private ShopCouponRepository coupons;
     @Autowired private TransactionTemplate tx;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private MessageSource messageSource;
 
     private static CouponDraft newbie(Instant start, Instant end) {
         return new CouponDraft(CouponKind.DISCOUNT, "Baru", "Newbie", 10_000L, 0L, CouponScopeType.ALL, null,
@@ -70,6 +74,27 @@ class CouponAdminIntegrationTest extends ApiIntegrationTest {
         Integer rows = jdbc.queryForObject("SELECT count(*) FROM shop_coupons WHERE acquire_type = 'NEWBIE' "
                 + "AND status = 'ACTIVE' AND issue_start_at = ?", Integer.class, java.sql.Timestamp.from(start));
         assertThat(rows).isEqualTo(1);
+    }
+
+    /** 2026-11-10 报障：后台切成英文 / 印尼语，券保存的校验错误仍是中文 —— 每条都要带文案码。 */
+    @Test
+    void validationErrorsCarryLocalizedMessageCodes() {
+        Instant now = Instant.now();
+        AppException belowMin = catchThrowableOfType(AppException.class, () -> admin.create(new CouponDraft(
+                CouponKind.DISCOUNT, "Ikan teri", "Bone", 50_000L, 50_000L, CouponScopeType.ALL, null,
+                CouponAcquireType.CLAIM, now, now.plusSeconds(86400), CouponValidMode.RELATIVE, null, null, 5, 5, 1),
+                null));
+        assertThat(belowMin.getMessageCode()).isEqualTo("admin.err.coupon.amountBelowMinSpend");
+        assertThat(messageSource.getMessage(belowMin.getMessageCode(), belowMin.getMessageArgs(), Locale.ENGLISH))
+                .startsWith("For a spend discount coupon");
+        assertThat(messageSource.getMessage(belowMin.getMessageCode(), belowMin.getMessageArgs(),
+                Locale.forLanguageTag("id"))).startsWith("Untuk kupon potongan belanja");
+
+        AppException noName = catchThrowableOfType(AppException.class, () -> admin.create(new CouponDraft(
+                CouponKind.DISCOUNT, " ", "Bone", 5_000L, 50_000L, CouponScopeType.ALL, null,
+                CouponAcquireType.CLAIM, now, now.plusSeconds(86400), CouponValidMode.RELATIVE, null, null, 5, 5, 1),
+                null));
+        assertThat(noName.getMessageCode()).isEqualTo("admin.err.coupon.required.nameId");
     }
 
     @Test
