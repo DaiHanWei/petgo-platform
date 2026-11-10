@@ -75,8 +75,8 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
             Set.of("change_courier", "pickup_delay", "change_address", "others");
 
     /**
-     * Biteship 侧已结束、不能也不必再取消的运单状态：{@code courier_not_found} 时 Biteship 已作废该单，调 cancel 回 400
-     * （2026-11-10 stag 沙箱实测）。遇到这些状态只落本地取消。
+     * Biteship 拒绝取消后，回查到这些状态 = 该单在 Biteship 已作废，只落本地取消：{@code courier_not_found} 时调 cancel 回 400
+     * （2026-11-10 stag 沙箱实测）。🔴 只认<b>回查结果</b>，不认本地 {@code provider_status}——本地可能滞后（运单其实已被揽收）。
      */
     static final Set<String> ENDED_REMOTELY = Set.of("cancelled", "courier_not_found");
 
@@ -518,7 +518,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
 
     /**
      * 取消该单活动的 Biteship 运单（AC5.5，供 5.2 揽收失败处置）：无 → 幂等返回；{@code provider_status} 已是
-     * {@code cancelled} / {@code courier_not_found}（{@link #ENDED_REMOTELY}）→ 只落本地；否则事务外 {@code cancelOrder}：{@code Cancelled} 落本地 {@code CANCELLED} /
+     * {@code cancelled} → 只落本地；Biteship 拒绝但回查为 {@link #ENDED_REMOTELY} → 只落本地；否则事务外 {@code cancelOrder}：{@code Cancelled} 落本地 {@code CANCELLED} /
      * {@code NotCancellable} 409 / {@code Unknown} 503 不改本地。
      *
      * @param reasonCode Biteship 四值之一，否则 422
@@ -531,7 +531,7 @@ public class BiteshipShipmentService implements ShopWaybillCanceller {
         if (target == null) {
             return;
         }
-        if (endedRemotely(target.getProviderStatus())) {
+        if ("cancelled".equalsIgnoreCase(target.getProviderStatus())) {
             tx.executeWithoutResult(s -> cancelLocally(target.getId(), reasonCode, actorAccountId));
             return;
         }

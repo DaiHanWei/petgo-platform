@@ -347,15 +347,19 @@ class BiteshipShipmentServiceTest {
     }
 
     @Test
-    @DisplayName("provider_status 已是 courier_not_found（Biteship 已作废、cancel 会 400）→ 只落本地，不调 Biteship")
-    void cancelCourierNotFoundLocallyOnly() {
+    @DisplayName("本地 courier_not_found 仍先调 Biteship：回查已揽收（picked）→ 409 不落本地；回查 courier_not_found → 落本地")
+    void courierNotFoundStillAsksBiteship() {
         created("bs_1");
         service.createWaybill(ORDER_ID, 1L);
         store.get(0).applyProviderStatus("courier_not_found", NOW.plusSeconds(10), null);
+        when(client.cancelOrder("bs_1", "others")).thenReturn(new CancelOutcome.NotCancellable("picked"));
+        assertThatThrownBy(() -> service.cancelWaybill(ORDER_ID, "others", 1L))
+                .extracting(e -> ((AppException) e).getStatus().value()).isEqualTo(409);
+        assertThat(store.get(0).isActive()).isTrue();
+
+        when(client.cancelOrder("bs_1", "others")).thenReturn(new CancelOutcome.NotCancellable("courier_not_found"));
         service.cancelWaybill(ORDER_ID, "others", 1L);
         assertThat(store.get(0).getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
-        assertThat(store.get(0).isActive()).isFalse();
-        verify(client, never()).cancelOrder(anyString(), anyString());
     }
 
     @Test
