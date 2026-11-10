@@ -558,7 +558,8 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
         seedGrowth(owner.getId(), "2026-06-03T08:00:00Z", "2026-06-03", "https://cdn/b.jpg");
 
         mvc.perform(get("/api/v1/pet-profiles/me/archive-stats")
-                        .header(HttpHeaders.AUTHORIZATION, token))
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .header(com.tailtopia.profile.service.ClientAppVersion.HEADER, "1.4.2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.happyMomentCount").value(2))
                 .andExpect(jsonPath("$.consultCount").value(0)) // 保留给旧版 App（V1.4.0 gift Story 2.1）
@@ -566,6 +567,13 @@ class ProfileApiControllerEndpointTest extends ApiIntegrationTest {
                 // 8-3 自动完成：2 条成长瞬间跨过 onGrowthMomentCount>=1 阈值，完成「首条成长记录」里程碑
                 .andExpect(jsonPath("$.milestoneCompleted").value(1))
                 .andExpect(jsonPath("$.milestoneTotal").value(35)); // DOG = 35（7-3 加 D-S16 Lulus Pemula；V1.3.4 +D-S17/D-S18；V1.4.2 +D-S19/D-S20 账号级）
+
+        // 旧版 App（< 1.4.2 / 缺头）：扣掉 1.4.2 新增的两条账号级里程碑
+        mvc.perform(get("/api/v1/pet-profiles/me/archive-stats")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .header(com.tailtopia.profile.service.ClientAppVersion.HEADER, "1.4.1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.milestoneTotal").value(33));
     }
 
     @Test

@@ -91,6 +91,27 @@ public class MilestoneService {
     public record MilestoneProgress(long completed, int total) {
     }
 
+    /** 1.4.2 新增账号级里程碑在这只宠物名下的份额（旧版 App 统计扣减用，见 {@link LegacyMilestoneCompat}）。 */
+    public record V142Share(long completed, int total, long uncelebrated) {
+        public static final V142Share NONE = new V142Share(0, 0, 0);
+    }
+
+    /** 新里程碑的总数（按宠物类型清单）、已完成数、已完成未庆祝数。 */
+    @Transactional(readOnly = true)
+    public V142Share v142Share(long petProfileId, PetType petType) {
+        int total = (int) com.tailtopia.profile.domain.MilestoneCatalog.forType(petType).stream()
+                .filter(d -> LegacyMilestoneCompat.hiddenForLegacy(d.code())).count();
+        List<Long> ids = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
+                .filter(m -> LegacyMilestoneCompat.hiddenForLegacy(m.getCode()))
+                .map(PetMilestone::getId).toList();
+        if (ids.isEmpty()) {
+            return new V142Share(0, total, 0);
+        }
+        List<MilestoneCompletion> done = completions.findByPetMilestoneIdIn(ids);
+        long uncelebrated = done.stream().filter(c -> c.getCelebratedAt() == null).count();
+        return new V142Share(done.size(), total, uncelebrated);
+    }
+
     /** 当前用户里程碑列表（无档案 → 404）。读路径若 roster 缺失（存量档案）则 lazy 物化兜底。 */
     @Transactional
     public MilestoneListResponse getMilestones(long ownerId) {

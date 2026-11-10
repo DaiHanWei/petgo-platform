@@ -213,8 +213,10 @@ public class ProfileApiController {
      */
     @GetMapping("/me/archive-stats")
     public ArchiveStatsResponse archiveStats(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "petId", required = false) Long petId) {
-        return timelineService.getStats(currentUserId(jwt), petId);
+            @RequestParam(name = "petId", required = false) Long petId,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
+        return timelineService.getStats(currentUserId(jwt), petId, !com.tailtopia.profile.service.ClientAppVersion.isV142OrLater(appVersion));
     }
 
     /**
