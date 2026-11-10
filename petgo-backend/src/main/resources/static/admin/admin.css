@@ -1688,6 +1688,7 @@ td.is-missing { color: var(--danger); }
 .aiq-run .tn { color: var(--ink-2); font-size: var(--fs-sm); }
 .aiq-run p { margin: 6px 0 0; color: var(--muted); font-size: var(--fs-sm); }
 .aiq-err { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-radius: var(--radius); padding: 12px 14px; }
+.aiq-err[hidden] { display: none; } /* display:flex 会盖掉 UA 的 [hidden]，连接中断提示（E2）曾因此常亮 */
 .aiq-err b { font-size: 14px; }
 .aiq-err p { margin: 2px 0 0; font-size: var(--fs-sm); }
 .aiq-err.bad { background: var(--danger-bg); color: var(--danger); }
