@@ -193,7 +193,7 @@ public class CouponAdminService {
         if (overlap) {
             ShopCoupon other = coupons.findActiveNewbieOverlapping(v.issueStart(), v.issueEnd(), excludeId)
                     .stream().findFirst().orElse(null);
-            AppException e = AppException.conflict("已有发放期重叠的新人券");
+            AppException e = AppException.conflict("已有发放期重叠的新人券").code("admin.err.coupon.newbieOverlapGeneric");
             if (other != null) {
                 java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
                         .withZone(com.tailtopia.shared.schedule.ScheduleWindow.WIB);
@@ -214,7 +214,7 @@ public class CouponAdminService {
      */
     Validated validate(CouponDraft draft, ShopCoupon current) {
         if (draft == null) {
-            throw AppException.validation("券信息不能为空");
+            throw AppException.validation("券信息不能为空").code("admin.err.coupon.draftMissing");
         }
         CouponKind kind = require(draft.kind(), "券类型");
         CouponAcquireType acquireType = require(draft.acquireType(), "获取方式");
@@ -226,14 +226,14 @@ public class CouponAdminService {
         long amount = require(draft.amount(), kind == CouponKind.FREE_SHIPPING ? "最高减免金额" : "面额");
         long minSpend = draft.minSpend() == null ? 0L : draft.minSpend();
         if (amount <= 0) {
-            throw AppException.validation("面额必须大于 0");
+            throw AppException.validation("面额必须大于 0").code("admin.err.coupon.amountPositive");
         }
         if (minSpend < 0) {
-            throw AppException.validation("使用门槛不能为负");
+            throw AppException.validation("使用门槛不能为负").code("admin.err.coupon.minSpendNegative");
         }
         // 满减券：有门槛时面额必须小于门槛（min_spend = 0 无门槛走防误配确认）；免运券 amount 即每张封顶，不受此限。O-14 硬拒。
         if (kind == CouponKind.DISCOUNT && minSpend > 0 && amount >= minSpend) {
-            throw AppException.validation("满减券面额必须小于使用门槛");
+            throw AppException.validation("满减券面额必须小于使用门槛").code("admin.err.coupon.amountBelowMinSpend");
         }
 
         CouponScopeType scopeType = draft.scopeType() == null ? CouponScopeType.ALL : draft.scopeType();
@@ -244,47 +244,47 @@ public class CouponAdminService {
         Instant issueStart = require(draft.issueStartAt(), "发放开始时间");
         Instant issueEnd = require(draft.issueEndAt(), "发放结束时间");
         if (!issueEnd.isAfter(issueStart)) {
-            throw AppException.validation("发放结束时间必须晚于开始时间");
+            throw AppException.validation("发放结束时间必须晚于开始时间").code("admin.err.coupon.issueEndAfterStart");
         }
         Instant validStart = draft.validStartAt();
         Instant validEnd = draft.validEndAt();
         Integer validDays = draft.validDays();
         if (validMode == CouponValidMode.FIXED) {
             if (validStart == null || validEnd == null) {
-                throw AppException.validation("固定有效期必须填写起止时间");
+                throw AppException.validation("固定有效期必须填写起止时间").code("admin.err.coupon.fixedNeedsRange");
             }
             if (validDays != null) {
-                throw AppException.validation("固定有效期不能同时填写领取后天数");
+                throw AppException.validation("固定有效期不能同时填写领取后天数").code("admin.err.coupon.fixedNoDays");
             }
             if (!validEnd.isAfter(validStart)) {
-                throw AppException.validation("有效期结束时间必须晚于开始时间");
+                throw AppException.validation("有效期结束时间必须晚于开始时间").code("admin.err.coupon.validEndAfterStart");
             }
             // 领到即可用：不存在「已领但未生效」的券（计价器没有「尚未生效」这一不可用原因）。
             if (validStart.isAfter(issueStart)) {
-                throw AppException.validation("有效期开始时间不能晚于发放开始时间");
+                throw AppException.validation("有效期开始时间不能晚于发放开始时间").code("admin.err.coupon.validStartBeforeIssue");
             }
             if (issueEnd.isAfter(validEnd)) {
-                throw AppException.validation("发放结束时间不能晚于有效期结束时间");
+                throw AppException.validation("发放结束时间不能晚于有效期结束时间").code("admin.err.coupon.issueEndBeforeValidEnd");
             }
         } else {
             if (validDays == null || validDays < 1) {
-                throw AppException.validation("领取后有效天数必须至少 1 天");
+                throw AppException.validation("领取后有效天数必须至少 1 天").code("admin.err.coupon.daysMin");
             }
             if (validStart != null || validEnd != null) {
-                throw AppException.validation("领取后 N 天的券不能填写固定起止时间");
+                throw AppException.validation("领取后 N 天的券不能填写固定起止时间").code("admin.err.coupon.daysNoRange");
             }
         }
 
         Integer totalQuantity = draft.totalQuantity();
         if (totalQuantity != null && totalQuantity < 1) {
-            throw AppException.validation("发放总量至少为 1（不限请留空）");
+            throw AppException.validation("发放总量至少为 1（不限请留空）").code("admin.err.coupon.totalMin");
         }
         int perUserLimit = draft.perUserLimit() == null ? 1 : draft.perUserLimit();
         if (acquireType == CouponAcquireType.NEWBIE) {
             perUserLimit = 1; // 新人券每人只能 1 张（FR-130.5），强制覆盖
         }
         if (perUserLimit < 1) {
-            throw AppException.validation("每人限领至少为 1");
+            throw AppException.validation("每人限领至少为 1").code("admin.err.coupon.perUserMin");
         }
         return new Validated(kind, nameId, nameEn, amount, minSpend, scopeType, scopeValues, acquireType,
                 issueStart, issueEnd, validMode,
@@ -305,7 +305,7 @@ public class CouponAdminService {
     public ShopCoupon update(String couponToken, CouponDraft draft, boolean acknowledgeRisk, Long actorAdminId) {
         ShopCoupon coupon = lockedByToken(couponToken);
         if (coupon.getStatus() != CouponStatus.ACTIVE) {
-            throw AppException.validation("已停用的券不能编辑");
+            throw AppException.validation("已停用的券不能编辑").code("admin.err.coupon.disabledNoEdit");
         }
         Validated v = validate(draft, coupon);
         Instant now = clock.instant();
@@ -318,14 +318,14 @@ public class CouponAdminService {
         requireRiskAcknowledged(v, acknowledgeRisk);
         boolean kindOrAcquireChanged = v.kind() != coupon.getKind() || v.acquireType() != coupon.getAcquireType();
         if (kindOrAcquireChanged && coupon.getIssuedCount() > 0) {
-            throw AppException.validation("已有用户领取的券不能修改类型或发放方式");
+            throw AppException.validation("已有用户领取的券不能修改类型或发放方式").code("admin.err.coupon.claimedLocked");
         }
         if (v.acquireType() != coupon.getAcquireType() && codes.existsByCouponId(coupon.getId())) {
-            throw AppException.validation("已生成兑换码的券不能修改发放方式");
+            throw AppException.validation("已生成兑换码的券不能修改发放方式").code("admin.err.coupon.codesLockAcquire");
         }
         long singleUse = codes.countByCouponIdAndSingleUse(coupon.getId(), true);
         if (singleUse > 0 && (v.totalQuantity() == null || v.totalQuantity() < singleUse)) {
-            throw AppException.validation("已生成一次性兑换码的券，发放总量不能少于已生成的码数");
+            throw AppException.validation("已生成一次性兑换码的券，发放总量不能少于已生成的码数").code("admin.err.coupon.totalBelowCodes");
         }
         if (v.acquireType() == CouponAcquireType.NEWBIE) {
             newbieLock.acquire();
@@ -353,7 +353,7 @@ public class CouponAdminService {
             Long actorAdminId) {
         ShopCoupon coupon = lockedByToken(couponToken);
         if (coupon.getStatus() != CouponStatus.ACTIVE) {
-            throw AppException.validation("已停用的券不能修改");
+            throw AppException.validation("已停用的券不能修改").code("admin.err.coupon.disabledNoChange");
         }
         return raiseTotalQuantityLocked(coupon, newTotal, acknowledgeRisk, actorAdminId);
     }
@@ -369,14 +369,14 @@ public class CouponAdminService {
             throw new CouponRiskNotAcknowledgedException(List.of(CouponRisk.UNLIMITED_QUANTITY));
         }
         if (newTotal != null && newTotal < 1) {
-            throw AppException.validation("发放总量至少为 1（不限请留空）");
+            throw AppException.validation("发放总量至少为 1（不限请留空）").code("admin.err.coupon.totalMin");
         }
         if (old == null || (newTotal != null && newTotal < old)) {
             throw AppException.validation("发放总量只能增加").code("admin.err.coupon.quantityOnlyUp");
         }
         long singleUse = codes.countByCouponIdAndSingleUse(coupon.getId(), true);
         if (newTotal == null && singleUse > 0) {
-            throw AppException.validation("批量一次性码券的发放总量不能改为不限");
+            throw AppException.validation("批量一次性码券的发放总量不能改为不限").code("admin.err.coupon.batchNoUnlimited");
         }
         coupon.raiseTotalQuantity(newTotal);
         ShopCoupon saved = coupons.saveAndFlush(coupon);
@@ -410,13 +410,13 @@ public class CouponAdminService {
         // 行锁串行：并发「生成」或与加总量并发时只补一次差额
         ShopCoupon coupon = lockedByToken(couponToken);
         if (coupon.getStatus() != CouponStatus.ACTIVE) {
-            throw AppException.validation("已停用的券不能生成兑换码");
+            throw AppException.validation("已停用的券不能生成兑换码").code("admin.err.coupon.disabledNoCodes");
         }
         if (coupon.getTotalQuantity() == null) {
             throw AppException.validation("批量一次性码券必须填写发放总量").code("admin.err.coupon.batchNeedsTotal");
         }
         if (codes.countByCouponIdAndSingleUse(coupon.getId(), false) > 0) {
-            throw AppException.validation("这张券已有通用码，不能再生成一次性码");
+            throw AppException.validation("这张券已有通用码，不能再生成一次性码").code("admin.err.coupon.hasUniversalCode");
         }
         int added = topUpSingleUseCodes(coupon);
         if (added > 0) {
@@ -479,8 +479,8 @@ public class CouponAdminService {
 
     /** 加行锁并<b>刷新</b>（同 {@link CouponRowLock#lockFresh}：先按 token 读过的实例在一级缓存里，直接 FOR UPDATE 会拿回旧值）。 */
     private ShopCoupon lockedByToken(String couponToken) {
-        ShopCoupon c = coupons.findByPublicToken(couponToken).orElseThrow(() -> AppException.notFound("券不存在"));
-        return rowLock.lockFresh(c.getId()).orElseThrow(() -> AppException.notFound("券不存在"));
+        ShopCoupon c = coupons.findByPublicToken(couponToken).orElseThrow(() -> AppException.notFound("券不存在").code("admin.err.coupon.notFound"));
+        return rowLock.lockFresh(c.getId()).orElseThrow(() -> AppException.notFound("券不存在").code("admin.err.coupon.notFound"));
     }
 
     // ------------------------------------------------------------------ 列表 / 详情数据（V1.4.2 shop-admin Story 2.1）
@@ -488,7 +488,7 @@ public class CouponAdminService {
     /** 按 token 取券（后台页面读用）；不存在 404。 */
     @Transactional(readOnly = true)
     public ShopCoupon require(String couponToken) {
-        return coupons.findByPublicToken(couponToken).orElseThrow(() -> AppException.notFound("券不存在"));
+        return coupons.findByPublicToken(couponToken).orElseThrow(() -> AppException.notFound("券不存在").code("admin.err.coupon.notFound"));
     }
 
     /** 列表状态（现算，AD-6）：已停用 / 未开始 / 进行中 / 已结束（按发放期）。 */
@@ -527,7 +527,7 @@ public class CouponAdminService {
 
     @Transactional(readOnly = true)
     public CouponStats detailStats(String couponToken) {
-        ShopCoupon c = coupons.findByPublicToken(couponToken).orElseThrow(() -> AppException.notFound("券不存在"));
+        ShopCoupon c = coupons.findByPublicToken(couponToken).orElseThrow(() -> AppException.notFound("券不存在").code("admin.err.coupon.notFound"));
         return new CouponStats(userCoupons.countByCouponId(c.getId()),
                 userCoupons.countByCouponIdAndStatus(c.getId(), UserCouponStatus.LOCKED),
                 userCoupons.countByCouponIdAndStatus(c.getId(), UserCouponStatus.USED),
@@ -563,26 +563,26 @@ public class CouponAdminService {
                         .map(String::trim).toList()));
         if (scopeType == CouponScopeType.ALL) {
             if (!values.isEmpty()) {
-                throw AppException.validation("全场券不能指定适用范围");
+                throw AppException.validation("全场券不能指定适用范围").code("admin.err.coupon.allScopeNoValues");
             }
             return values;
         }
         if (values.isEmpty()) {
-            throw AppException.validation("指定范围的券必须至少选一项");
+            throw AppException.validation("指定范围的券必须至少选一项").code("admin.err.coupon.scopeNeedsValue");
         }
         if (values.size() > SCOPE_VALUES_MAX) {
-            throw AppException.validation("适用范围最多 " + SCOPE_VALUES_MAX + " 项");
+            throw AppException.validation("适用范围最多 " + SCOPE_VALUES_MAX + " 项").code("admin.err.coupon.scopeTooMany", SCOPE_VALUES_MAX);
         }
         if (scopeType == CouponScopeType.CATEGORY) {
             Set<String> allowed = Arrays.stream(ProductCategory.values()).map(Enum::name)
                     .collect(Collectors.toSet());
             if (!allowed.containsAll(values)) {
-                throw AppException.validation("适用品类不存在");
+                throw AppException.validation("适用品类不存在").code("admin.err.coupon.categoryNotFound");
             }
         } else {
             Set<String> existing = products.findExistingPublicTokens(values);
             if (existing == null || !existing.containsAll(values)) {
-                throw AppException.validation("适用商品不存在");
+                throw AppException.validation("适用商品不存在").code("admin.err.coupon.productNotFound");
             }
         }
         return values;
@@ -597,7 +597,7 @@ public class CouponAdminService {
     @Transactional
     public void stop(String couponToken, boolean voidUnused, Long actorAdminId) {
         ShopCoupon coupon = coupons.findByPublicToken(couponToken)
-                .orElseThrow(() -> AppException.notFound("券不存在"));
+                .orElseThrow(() -> AppException.notFound("券不存在").code("admin.err.coupon.notFound"));
         Instant now = clock.instant();
         // 条件更新而非读后写：并发停券只有影响 1 行的那个继续作废 / 审计，其余幂等返回（复审修复）。
         if (coupon.getStatus() != CouponStatus.ACTIVE
@@ -617,13 +617,13 @@ public class CouponAdminService {
         ShopCoupon coupon = codeCoupon(couponToken);
         String normalized = normalizeCode(code);
         if (codes.existsByCode(normalized)) {
-            throw AppException.conflict("兑换码已存在");
+            throw AppException.conflict("兑换码已存在").code("admin.err.coupon.codeExists");
         }
         try {
             // saveAndFlush：让并发撞 uq_shop_coupon_codes_code 在这里抛出、转 409，而不是提交时变 500
             codes.saveAndFlush(ShopCouponCode.of(coupon.getId(), normalized, false));
         } catch (DataIntegrityViolationException e) {
-            throw AppException.conflict("兑换码已存在");
+            throw AppException.conflict("兑换码已存在").code("admin.err.coupon.codeExists");
         }
         audit(actorAdminId, AuditActions.SHOP_COUPON_CODES_CREATED, coupon.getPublicToken(),
                 "singleUse=false count=1");
@@ -634,7 +634,7 @@ public class CouponAdminService {
     @Transactional
     public List<String> generateSingleUseCodes(String couponToken, int count, Long actorAdminId) {
         if (count < 1 || count > SINGLE_USE_BATCH_MAX) {
-            throw AppException.validation("一次性码数量须在 1 ~ " + SINGLE_USE_BATCH_MAX + " 之间");
+            throw AppException.validation("一次性码数量须在 1 ~ " + SINGLE_USE_BATCH_MAX + " 之间").code("admin.err.coupon.batchCountRange", SINGLE_USE_BATCH_MAX);
         }
         ShopCoupon coupon = codeCoupon(couponToken);
         List<String> result = generateCodes(coupon, count);
@@ -667,7 +667,7 @@ public class CouponAdminService {
             codes.saveAllAndFlush(result.stream().map(c -> ShopCouponCode.of(coupon.getId(), c, true)).toList());
         } catch (DataIntegrityViolationException e) {
             // 与并发生成 / 建码撞唯一约束（极小概率）：整批回滚，运营重试即可
-            throw AppException.conflict("兑换码与已有码重复，请重试");
+            throw AppException.conflict("兑换码与已有码重复，请重试").code("admin.err.coupon.codeCollision");
         }
         return List.copyOf(result);
     }
@@ -675,11 +675,11 @@ public class CouponAdminService {
     /** 码规范化 = {@code trim().toUpperCase(Locale.ROOT)}，格式 {@code ^[A-Z0-9]{4,32}$}（D-4）。2.2 兑换时同口径。 */
     public static String normalizeCode(String raw) {
         if (raw == null) {
-            throw AppException.validation("兑换码不能为空");
+            throw AppException.validation("兑换码不能为空").code("admin.err.coupon.codeRequired");
         }
         String n = raw.trim().toUpperCase(Locale.ROOT);
         if (!CODE_FORMAT.matcher(n).matches()) {
-            throw AppException.validation("兑换码只能是 4 ~ 32 位字母或数字");
+            throw AppException.validation("兑换码只能是 4 ~ 32 位字母或数字").code("admin.err.coupon.codeFormat");
         }
         return n;
     }
@@ -694,9 +694,9 @@ public class CouponAdminService {
 
     private ShopCoupon codeCoupon(String couponToken) {
         ShopCoupon coupon = coupons.findByPublicToken(couponToken)
-                .orElseThrow(() -> AppException.notFound("券不存在"));
+                .orElseThrow(() -> AppException.notFound("券不存在").code("admin.err.coupon.notFound"));
         if (coupon.getAcquireType() != CouponAcquireType.CODE) {
-            throw AppException.validation("只有「兑换码」类型的券可以生成兑换码");
+            throw AppException.validation("只有「兑换码」类型的券可以生成兑换码").code("admin.err.coupon.codesOnlyForCodeType");
         }
         return coupon;
     }
@@ -711,20 +711,37 @@ public class CouponAdminService {
         audit.record(actorAdminId, action, AUDIT_TARGET, couponToken, summary);
     }
 
+    /** 必填字段：中文名进 message（日志/兜底），按字段取后台多语言文案码（写全名：死键检查按字面量扫描）。 */
+    private static final java.util.Map<String, String> FIELD_KEYS = java.util.Map.of(
+            "券类型", "admin.err.coupon.required.kind",
+            "获取方式", "admin.err.coupon.required.acquireType",
+            "有效期模式", "admin.err.coupon.required.validMode",
+            "印尼语券名", "admin.err.coupon.required.nameId",
+            "英文券名", "admin.err.coupon.required.nameEn",
+            "最高减免金额", "admin.err.coupon.required.maxDiscount",
+            "面额", "admin.err.coupon.required.amount",
+            "发放开始时间", "admin.err.coupon.required.issueStart",
+            "发放结束时间", "admin.err.coupon.required.issueEnd");
+
+    private static AppException fieldRequired(String field) {
+        return AppException.validation(field + "不能为空")
+                .code(FIELD_KEYS.getOrDefault(field, "admin.err.coupon.required.generic"));
+    }
+
     private static <T> T require(T v, String field) {
         if (v == null) {
-            throw AppException.validation(field + "不能为空");
+            throw fieldRequired(field);
         }
         return v;
     }
 
     private static String name(String v, String field) {
         if (v == null || v.isBlank()) {
-            throw AppException.validation(field + "不能为空");
+            throw fieldRequired(field);
         }
         String t = v.trim();
         if (t.length() > NAME_MAX) {
-            throw AppException.validation(field + "最多 " + NAME_MAX + " 字");
+            throw AppException.validation(field + "最多 " + NAME_MAX + " 字").code("admin.err.coupon.nameTooLong", NAME_MAX);
         }
         return t;
     }

@@ -11,6 +11,8 @@ import java.time.Instant;
  */
 public record AdminShopOrderRow(
         String orderToken,
+        /** 对外订单号（TOKO-yyyyMMdd-XXXXXX），与 App 一致；列表展示用它，定位 / 链接仍用 orderToken。 */
+        String displayNo,
         String status,
         long totalAmount,
         String payChannel,

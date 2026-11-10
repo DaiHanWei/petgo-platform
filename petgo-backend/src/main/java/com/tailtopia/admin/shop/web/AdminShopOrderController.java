@@ -856,7 +856,7 @@ public class AdminShopOrderController {
     // ---------- 内部 ----------
 
     private AdminShopOrderRow toRow(ShopOrder o) {
-        return new AdminShopOrderRow(o.getPublicToken(), o.getStatus().name(), o.getTotalAmount(),
+        return new AdminShopOrderRow(o.getPublicToken(), o.getDisplayNo(), o.getStatus().name(), o.getTotalAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(),
                 o.getCoinAmount(), o.getCashAmount(),
                 o.getShipKecamatan(), fulfillment.shipmentsOf(o.getId()).size(),
