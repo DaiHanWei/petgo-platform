@@ -73,3 +73,23 @@ ops 每日（默认 02:40 WIB）对 30 天未更新的对话调用 `DELETE /conv
 - `~/.claude/projects`（会话记录，含他人问题原文）与 claude 同 uid，claude 的 Bash 能读到其他对话的记录。获授权者本就可以查全部数据（2026-10-05 决策），问题原文属于他人，风险接受与否由 Dai 决定。
 - 角色级 `statement_timeout` 是会话默认值，账号可 `SET statement_timeout = 0` 覆盖；只读由权限保证不受影响。连接上限 3 是硬限制。
 - Story 3.1 落地前 stag agent 可任意出网（临时出网网络）。
+
+## 8. 生产（2026-11-11 上线）
+
+> Dai 拍板不等 Story 3.1 白名单代理先上线，接受「可任意出网 + 子进程可读订阅 token」在生产数据上的风险（见 §7）。3.1 落地后去掉临时出网网络 `aiq-prod-egress`。
+
+| 项 | 值 |
+|---|---|
+| 容器 / 镜像 | `ai-query-agent` / `ai-query-agent:prod`（代码取 `main`） |
+| 网络 | `aiq-prod-net`（internal，接 `petgo-server`、`petgo-postgres`）+ 临时 `aiq-prod-egress` |
+| 库账号 | `claude_bot` / `petgo`（只读、30 秒超时、连接上限 3；已加 `ALTER DEFAULT PRIVILEGES FOR ROLE petgo … GRANT SELECT … TO claude_bot`） |
+| 日志挂载 | `~/petgo-server/logs` → `/logs/prod:ro`，`~/petgo-server-stag/logs` → `/logs/stag:ro` |
+| 服务器文件 | `~/ai-query-agent/env`（600）、`~/ai-query-agent/pgpass`（600，属主 10002） |
+| ops 侧 env（`~/.env.petgo`） | `AI_QUERY_MODE=on`、`AI_QUERY_AGENT_URL=http://ai-query-agent:8790`、`AI_QUERY_AGENT_SECRET`（= agent `AGENT_SECRET`） |
+
+部署：`CONFIRM_SHARED_INFRA=1 ./scripts/deploy-ai-query-agent-prod.sh`。
+
+🔴 **每次部署生产后端后**（容器重建会脱离 `aiq-prod-net`）：重跑上面的脚本，或 `docker network connect aiq-prod-net petgo-server`。否则页面提示 agent 不可用。
+
+回退：`~/.env.petgo` 改 `AI_QUERY_MODE=off` 后重建后端容器；agent 可 `docker stop ai-query-agent`。
+
