@@ -138,7 +138,7 @@ class InAppVisitorEntryTest {
         assertThat(card.toString()).doesNotContain("tok-secret");
         // 🔴 别为了一个数去调 stats(...)：那会连带算问诊次数、里程碑进度与两次健康表计数，
         //    五条查询换一个数，而这是个游客可达、userId 可枚举的端点。
-        verify(visitors, never()).stats(any());
+        verify(visitors, never()).stats(any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     // ===== AD-4 Rule 2：同一层投影 =====
@@ -152,15 +152,15 @@ class InAppVisitorEntryTest {
     @Test
     void everyInAppEndpointGoesThroughTheSharedProjection() {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
-        when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30, 0L, 0L));
+        when(visitors.stats(any(), org.mockito.ArgumentMatchers.eq(false))).thenReturn(new VisitorStats(1L, 0L, 0L, 30, 0L, 0L));
         when(visitors.timeline(any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of());
 
         inApp.profile(user(VIEWER), PET_ID);
-        inApp.stats(user(VIEWER), PET_ID);
+        inApp.stats(user(VIEWER), PET_ID, "1.4.2");
         inApp.timeline(user(VIEWER), PET_ID, 30, "1.4.2");
 
         verify(visitors, org.mockito.Mockito.times(3)).findVisibleProfileById(PET_ID);
-        verify(visitors).stats(any());
+        verify(visitors).stats(any(), org.mockito.ArgumentMatchers.eq(false));
         verify(visitors).timeline(any(), anyInt(), org.mockito.ArgumentMatchers.eq(false));
     }
 

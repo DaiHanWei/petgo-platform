@@ -108,8 +108,10 @@ public class InAppVisitorPetController {
 
     /** 访客统计条三列。🛡 健康记录条数不在其中（{@link VisitorStats} 里根本没有那个字段）。 */
     @GetMapping("/stats")
-    public VisitorStats stats(@AuthenticationPrincipal Jwt jwt, @PathVariable long petId) {
-        return visitors.stats(requireVisible(jwt, petId));
+    public VisitorStats stats(@AuthenticationPrincipal Jwt jwt, @PathVariable long petId,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
+        return visitors.stats(requireVisible(jwt, petId), !com.tailtopia.profile.service.ClientAppVersion.isV142OrLater(appVersion));
     }
 
     /** 访客时间线。⚠️ 不分页，与公开那条同口径（「看一眼别人的宠物」，不是「翻完整个档案」）。 */

@@ -49,6 +49,10 @@ class AccountMilestoneIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private MilestoneService milestoneService;
     @Autowired
+    private com.tailtopia.profile.service.TimelineService timelineService;
+    @Autowired
+    private com.tailtopia.profile.visitor.VisitorProjectionService visitorProjection;
+    @Autowired
     private MilestoneCelebrationService celebrations;
     @Autowired
     private AccountMilestoneService accountMilestones;
@@ -63,6 +67,30 @@ class AccountMilestoneIntegrationTest extends ApiIntegrationTest {
     @Autowired
     @Qualifier("applicationTaskExecutor")
     private ThreadPoolTaskExecutor asyncExecutor;
+
+    // ===== 1.4.2 上线前旧版兼容：旧包的档案 / 访客统计扣掉新里程碑（否则「未庆祝」角标消不掉） =====
+
+    @Test
+    void legacyClientStatsExcludeNewAccountMilestones() throws Exception {
+        User u = newUser();
+        long cat = rosteredPet(u, PetType.CAT);
+        followService.follow(u.getId(), newUser().getPublicToken());
+        awaitAsyncIdle();
+
+        var fresh = timelineService.getStats(u.getId(), cat, false);
+        var legacy = timelineService.getStats(u.getId(), cat, true);
+        assertThat(fresh.milestoneTotal()).isEqualTo(35);
+        assertThat(legacy.milestoneTotal()).isEqualTo(33);
+        assertThat(fresh.milestoneCompleted() - legacy.milestoneCompleted()).as("C-S19 已完成，旧版不计").isEqualTo(1);
+        assertThat(fresh.milestoneUncelebrated() - legacy.milestoneUncelebrated())
+                .as("C-S19 未庆祝，旧版不计（旧包列表里看不到它，回报不了庆祝）").isEqualTo(1);
+
+        var profile = petProfiles.findById(cat).orElseThrow();
+        var vFresh = visitorProjection.stats(profile, false);
+        var vLegacy = visitorProjection.stats(profile, true);
+        assertThat(vFresh.milestoneTotal() - vLegacy.milestoneTotal()).isEqualTo(2);
+        assertThat(vFresh.milestoneCompleted() - vLegacy.milestoneCompleted()).isEqualTo(1);
+    }
 
     // ===== AC2 / AC4 / AC7：多宠 + 只读 + 混养 + 只触发一次 =====
 

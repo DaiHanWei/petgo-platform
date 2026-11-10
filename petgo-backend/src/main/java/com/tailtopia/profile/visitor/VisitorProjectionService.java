@@ -275,6 +275,19 @@ public class VisitorProjectionService {
      * <p>⚠️ 「问诊<b>次数</b>」可下发（2026-08-06 产品确认保留），「问诊<b>记录</b>」不可 —— 两件事。
      */
     @Transactional(readOnly = true)
+    /** 旧版 App（&lt; 1.4.2）访客统计：里程碑数扣掉 1.4.2 新里程碑（访客时间线里已隐藏）。H5 名片走 {@link #stats(PetProfile)}。 */
+    public VisitorStats stats(PetProfile profile, boolean legacyClient) {
+        VisitorStats s = stats(profile);
+        if (!legacyClient) {
+            return s;
+        }
+        com.tailtopia.profile.service.MilestoneService.V142Share h =
+                milestoneService.v142Share(profile.getId(), profile.getPetType());
+        return new VisitorStats(s.happyMomentCount(), s.consultCount(),
+                Math.max(0, s.milestoneCompleted() - h.completed()), Math.max(0, s.milestoneTotal() - h.total()),
+                s.giftTotalValue(), s.followerCount());
+    }
+
     public VisitorStats stats(PetProfile profile) {
         // V1.4.0 multi-pet（Story 1.3 · AD-13）：按这只宠物统计（Diary / 问诊 / 里程碑只算该宠物）。
         ArchiveStatsResponse authorStats = timelineService.getStats(profile.getOwnerId(), profile.getId());
