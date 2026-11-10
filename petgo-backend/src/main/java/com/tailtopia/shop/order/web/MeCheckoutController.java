@@ -74,6 +74,12 @@ public class MeCheckoutController {
         return details.assemble(order, java.time.Instant.now());
     }
 
+    /** 旧版 App（&lt; 1.4.2）给兼容视图，见 {@link ShopOrderDetailView#forLegacyClient()}。 */
+    private ShopOrderDetailView detailFor(com.tailtopia.shop.order.domain.ShopOrder order, String appVersion) {
+        ShopOrderDetailView v = detailOf(order);
+        return com.tailtopia.profile.service.ClientAppVersion.isV142OrLater(appVersion) ? v : v.forLegacyClient();
+    }
+
     /**
      * 结算试算。超服务范围<b>不是错误</b>——回 {@code serviceable=false} 让页面渲染警示态
      * （见 {@link CheckoutService#preview}）。
@@ -157,9 +163,10 @@ public class MeCheckoutController {
      */
     @GetMapping("/shop-orders/{token}")
     public ShopOrderDetailView detail(@AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion,
             @PathVariable String token) {
         var order = payments.requireOwn(currentUserId(jwt), token);
-        return detailOf(order);
+        return detailFor(order, appVersion);
     }
 
     /**
@@ -171,8 +178,11 @@ public class MeCheckoutController {
     @PostMapping("/shop-orders/{token}/pay")
     public ShopOrderPaymentService.PayResult pay(@AuthenticationPrincipal Jwt jwt,
             @PathVariable String token,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
-        return payments.pay(currentUserId(jwt), token, idempotencyKey);
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
+        // 旧版 App（< 1.4.2）不知道 10 分钟出码窗口，放宽到整个订单窗（关单仍等码失效，见 isClosable）
+        return payments.pay(currentUserId(jwt), token, idempotencyKey,
+                !com.tailtopia.profile.service.ClientAppVersion.isV142OrLater(appVersion));
     }
 
     /**
@@ -188,11 +198,12 @@ public class MeCheckoutController {
     /** 用户主动取消（仅待支付可取消）。释放库存 + 作废支付意图。宽限期内 no-op，直接回当前详情。 */
     @PostMapping("/shop-orders/{token}/cancel")
     public ShopOrderDetailView cancel(@AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion,
             @PathVariable String token) {
         long userId = currentUserId(jwt);
         payments.cancel(userId, token);
         var order = payments.requireOwn(userId, token);
-        return detailOf(order);
+        return detailFor(order, appVersion);
     }
 
     // ===== Story 4.1：履约段（SPEC-2 出口②） =====
@@ -208,10 +219,11 @@ public class MeCheckoutController {
      */
     @PostMapping("/shop-orders/{token}/confirm-receipt")
     public ShopOrderDetailView confirmReceipt(@AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion,
             @PathVariable String token) {
         long userId = currentUserId(jwt);
         var order = fulfillment.confirmReceipt(userId, token);
-        return detailOf(order);
+        return detailFor(order, appVersion);
     }
 
     // ===== v1.4.2 shop Story 4.1：取消退款单选择现金去向 =====

@@ -84,9 +84,12 @@ public class VisitorPetController {
      */
     @GetMapping("/{cardToken}/timeline")
     public TimelineItems timeline(@PathVariable String cardToken,
-            @RequestParam(name = "limit", defaultValue = "30") int limit) {
+            @RequestParam(name = "limit", defaultValue = "30") int limit,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
         int safe = Math.max(1, Math.min(limit, MAX_TIMELINE_LIMIT));
-        return new TimelineItems(visitors.timeline(requireVisible(cardToken), safe));
+        return new TimelineItems(com.tailtopia.profile.service.LegacyMilestoneCompat.visitorForClient(
+                visitors.timeline(requireVisible(cardToken), safe), appVersion));
     }
 
     /** 访客日历月视图。只返回<b>有 Diary 记录</b>的日子；无记录日与未来日由前端补格。 */

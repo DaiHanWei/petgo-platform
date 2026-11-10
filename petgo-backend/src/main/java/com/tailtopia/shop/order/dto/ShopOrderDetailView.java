@@ -228,6 +228,27 @@ public record ShopOrderDetailView(
     }
 
     /**
+     * 旧版 App（&lt; 1.4.2）兼容视图（1.4.2 上线前旧版兼容检查）：
+     * <ul>
+     *   <li>{@code status} 改为 {@code displayStatus}——旧包只读 {@code status}，宽限期内否则「列表已取消、详情仍可支付」；</li>
+     *   <li>{@code packages} 去掉已取消 / 已被重发取代的运单——旧包一律取 {@code packages.first}，否则重发后显示作废单号。</li>
+     * </ul>
+     * 新版不走这里（新版读 {@code displayStatus} / {@code logistics}）。
+     */
+    public ShopOrderDetailView forLegacyClient() {
+        List<Package> current = packages == null ? null : packages.stream()
+                .filter(p -> !p.superseded() && !"CANCELLED".equals(p.status()))
+                .toList();
+        return new ShopOrderDetailView(orderToken, displayNo, displayStatus == null ? status : displayStatus,
+                goodsSubtotal, shippingFee, shippingDiscount, totalAmount, payChannel, coinAmount, cashAmount,
+                expiresAt, createdAt, paymentIntentToken, shipTo, lines, shippedAt, deliveredAt, completedAt,
+                returnWindowEndsAt, current, attributionSource, paymentStatus, paymentFailureCategory, displayStatus,
+                canPay, paymentDeadline, refunds, reorderedToOrderToken, reorderedFromOrderNo, reorderedFromOrderToken,
+                latePayment, logistics, paidAt, cancelledAt, cancelReason, amounts, paymentMethods, cancelledLines,
+                couponReturn);
+    }
+
+    /**
      * 包裹（S-2）。
      *
      * <p>🔴 <b>{@code trackingUrl} 是承运商官网地址，App 只做跳转</b> ——

@@ -54,8 +54,11 @@ public class MilestoneController {
     /** 当前用户里程碑列表（L/M/S 分区 + 完成状态 + 进度）。无档案 → 404。 */
     @GetMapping
     public MilestoneListResponse list(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "petId", required = false) Long petId) {
-        return milestoneService.getMilestones(currentUserId(jwt), petId);
+            @RequestParam(name = "petId", required = false) Long petId,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
+        return com.tailtopia.profile.service.LegacyMilestoneCompat.forClient(
+                milestoneService.getMilestones(currentUserId(jwt), petId), appVersion);
     }
 
     /**

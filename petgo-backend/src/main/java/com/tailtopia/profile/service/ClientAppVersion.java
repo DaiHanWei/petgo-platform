@@ -17,6 +17,12 @@ public final class ClientAppVersion {
     /** 支持多宠物的最低客户端版本。 */
     private static final int[] MULTI_PET_MIN = {1, 4, 0};
 
+    /**
+     * V1.4.2 客户端（新结算 / 物流 / 账号级里程碑）。低于它的旧包由后端做兼容（1.4.2 上线前旧版兼容检查）：
+     * 隐藏新里程碑、订单详情 status 与 displayStatus 对齐、包裹只给当前有效运单、放宽 10 分钟出码窗口。
+     */
+    private static final int[] V142_MIN = {1, 4, 2};
+
     private static final Pattern LEADING = Pattern.compile("^\\s*(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})");
 
     private ClientAppVersion() {
@@ -24,6 +30,15 @@ public final class ClientAppVersion {
 
     /** 客户端是否支持多宠物（≥ 1.4.0）。 */
     public static boolean supportsMultiPet(String header) {
+        return atLeast(header, MULTI_PET_MIN);
+    }
+
+    /** 客户端是否为 V1.4.2 及以上；缺头 / 解析不了按旧版（false）。 */
+    public static boolean isV142OrLater(String header) {
+        return atLeast(header, V142_MIN);
+    }
+
+    private static boolean atLeast(String header, int[] min) {
         if (header == null) {
             return false;
         }
@@ -32,7 +47,7 @@ public final class ClientAppVersion {
             return false;
         }
         for (int i = 0; i < 3; i++) {
-            int c = Integer.compare(Integer.parseInt(m.group(i + 1)), MULTI_PET_MIN[i]);
+            int c = Integer.compare(Integer.parseInt(m.group(i + 1)), min[i]);
             if (c != 0) {
                 return c > 0;
             }
