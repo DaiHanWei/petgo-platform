@@ -347,6 +347,29 @@ class BiteshipShipmentServiceTest {
     }
 
     @Test
+    @DisplayName("provider_status 已是 courier_not_found（Biteship 已作废、cancel 会 400）→ 只落本地，不调 Biteship")
+    void cancelCourierNotFoundLocallyOnly() {
+        created("bs_1");
+        service.createWaybill(ORDER_ID, 1L);
+        store.get(0).applyProviderStatus("courier_not_found", NOW.plusSeconds(10), null);
+        service.cancelWaybill(ORDER_ID, "others", 1L);
+        assertThat(store.get(0).getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
+        assertThat(store.get(0).isActive()).isFalse();
+        verify(client, never()).cancelOrder(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("本地状态滞后：Biteship 拒绝取消且回查为 courier_not_found / cancelled → 按已取消落本地，不抛 409")
+    void notCancellableButEndedRemotely() {
+        created("bs_1");
+        service.createWaybill(ORDER_ID, 1L);
+        when(client.cancelOrder("bs_1", "others")).thenReturn(new CancelOutcome.NotCancellable("courier_not_found"));
+        service.cancelWaybill(ORDER_ID, "others", 1L);
+        assertThat(store.get(0).getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
+        verify(audit).record(any(), eq(AuditActions.SHOP_WAYBILL_CANCELLED), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("reshipForCourierFault：旧运单 superseded、不调 Biteship 取消；新运单 CREATED、新 reference；订单状态不变")
     void reship() {
         created("bs_1");
