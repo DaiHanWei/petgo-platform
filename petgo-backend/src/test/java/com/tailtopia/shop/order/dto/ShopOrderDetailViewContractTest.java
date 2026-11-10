@@ -128,6 +128,37 @@ class ShopOrderDetailViewContractTest {
     }
 
     @Test
+    @DisplayName("旧版 App 兼容视图：status = displayStatus；包裹去掉已取消 / 已被取代的运单；其余字段不变")
+    void legacyClientView() {
+        ShopOrderDetailView full = fullyPopulated("PAID", null);
+        Instant t = Instant.parse("2026-09-16T10:00:00Z");
+        var old = new ShopOrderDetailView.Package("JNE", "JNE", "OLD", null, "SHIPPED", t, null, "BITESHIP", true);
+        var cancelled = new ShopOrderDetailView.Package("JNE", "JNE", "CXL", null, "CANCELLED", null, null,
+                "BITESHIP", false);
+        var cur = new ShopOrderDetailView.Package("JNE", "JNE", "CUR", null, "SHIPPED", t, null, "BITESHIP", false);
+        ShopOrderDetailView v = withPackagesAndStatus(full, List.of(old, cancelled, cur), "PENDING_PAYMENT", "CANCELLED")
+                .forLegacyClient();
+        assertThat(v.status()).isEqualTo("CANCELLED");
+        assertThat(v.displayStatus()).isEqualTo("CANCELLED");
+        assertThat(v.packages()).extracting(ShopOrderDetailView.Package::trackingNo).containsExactly("CUR");
+        assertThat(v.orderToken()).isEqualTo(full.orderToken());
+        assertThat(v.logistics()).isEqualTo(full.logistics());
+        assertThat(v.couponReturn()).isEqualTo(full.couponReturn());
+    }
+
+    private static ShopOrderDetailView withPackagesAndStatus(ShopOrderDetailView f,
+            List<ShopOrderDetailView.Package> pk, String status, String display) {
+        return new ShopOrderDetailView(f.orderToken(), f.displayNo(), status, f.goodsSubtotal(), f.shippingFee(),
+                f.shippingDiscount(), f.totalAmount(), f.payChannel(), f.coinAmount(), f.cashAmount(), f.expiresAt(),
+                f.createdAt(), f.paymentIntentToken(), f.shipTo(), f.lines(), f.shippedAt(), f.deliveredAt(),
+                f.completedAt(), f.returnWindowEndsAt(), pk, f.attributionSource(), f.paymentStatus(),
+                f.paymentFailureCategory(), display, f.canPay(), f.paymentDeadline(), f.refunds(),
+                f.reorderedToOrderToken(), f.reorderedFromOrderNo(), f.reorderedFromOrderToken(), f.latePayment(),
+                f.logistics(), f.paidAt(), f.cancelledAt(), f.cancelReason(), f.amounts(), f.paymentMethods(),
+                f.cancelledLines(), f.couponReturn());
+    }
+
+    @Test
     @DisplayName("顶层字段集恰好 39 个（5.1 加 logistics，6.2 加 7 个），displayNo / paymentStatus / paymentFailureCategory / displayStatus / canPay / paymentDeadline 在列")
     void fullOrderHasExactlyTheContractFields() {
         assertThat(wire(fullyPopulated("FAILED", "GATEWAY_DECLINED")).keySet())

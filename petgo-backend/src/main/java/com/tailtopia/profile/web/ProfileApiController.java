@@ -174,9 +174,12 @@ public class ProfileApiController {
             @RequestParam(value = "supports", required = false) java.util.List<String> supports,
             // 2026-10-06「只看 Diary」开关：只下发主人自己发的内容（老 App 不传 = false，行为不变）。
             @RequestParam(value = "diaryOnly", defaultValue = "false") boolean diaryOnly,
-            @RequestParam(name = "petId", required = false) Long petId) {
-        return timelineService.getTimeline(currentUserId(jwt), petId, cursor, limit,
-                com.tailtopia.profile.service.TimelineCapabilities.parse(supports), diaryOnly);
+            @RequestParam(name = "petId", required = false) Long petId,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
+        return com.tailtopia.profile.service.LegacyMilestoneCompat.forClient(
+                timelineService.getTimeline(currentUserId(jwt), petId, cursor, limit,
+                        com.tailtopia.profile.service.TimelineCapabilities.parse(supports), diaryOnly), appVersion);
     }
 
     /**

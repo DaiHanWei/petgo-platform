@@ -157,7 +157,7 @@ class InAppVisitorEntryTest {
 
         inApp.profile(user(VIEWER), PET_ID);
         inApp.stats(user(VIEWER), PET_ID);
-        inApp.timeline(user(VIEWER), PET_ID, 30);
+        inApp.timeline(user(VIEWER), PET_ID, 30, "1.4.2");
 
         verify(visitors, org.mockito.Mockito.times(3)).findVisibleProfileById(PET_ID);
         verify(visitors).stats(any());
@@ -185,10 +185,10 @@ class InAppVisitorEntryTest {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
         when(visitors.timeline(any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of());
 
-        inApp.timeline(user(VIEWER), PET_ID, 100000);
+        inApp.timeline(user(VIEWER), PET_ID, 100000, "1.4.2");
         verify(visitors).timeline(any(), eq(100), org.mockito.ArgumentMatchers.eq(false));
 
-        inApp.timeline(user(VIEWER), PET_ID, 0);
+        inApp.timeline(user(VIEWER), PET_ID, 0, "1.4.2");
         verify(visitors).timeline(any(), eq(1), org.mockito.ArgumentMatchers.eq(false));
     }
 
@@ -205,7 +205,7 @@ class InAppVisitorEntryTest {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
         when(hideRelations.isBlocked(VIEWER, OWNER)).thenReturn(true);
 
-        assertThatThrownBy(() -> inApp.timeline(user(VIEWER), PET_ID, 30))
+        assertThatThrownBy(() -> inApp.timeline(user(VIEWER), PET_ID, 30, "1.4.2"))
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> {
                     AppException ex = (AppException) e;
