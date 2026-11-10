@@ -110,6 +110,9 @@ class BiteshipWebhookControllerTest {
                 .isEqualTo(HttpStatus.OK);
         assertThat(controller.receive(SECRET, body("{\"order_id\":\"\"}")).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
+        // Biteship 安装 Webhook 时的探测是空体 POST
+        assertThat(controller.receive(SECRET, raw(null)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(controller.receive(SECRET, raw(new byte[0])).getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(inbox, never()).save(any());
     }
 
@@ -129,7 +132,6 @@ class BiteshipWebhookControllerTest {
         assertThat(controller.receive(SECRET, chunked).getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
         assertThat(controller.receive(SECRET, body("{not json")).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(controller.receive(SECRET, body("[1,2]")).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(controller.receive(SECRET, raw(null)).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         verify(inbox, never()).save(any());
     }
 
