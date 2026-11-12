@@ -184,6 +184,22 @@ class PartitionMaintenanceJobIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void createsDetailPartitionsForWibTodayPlusSevenIdempotently() {
+        // Story 1.6：UTC 2099-01-10 08:00 = WIB 2099-01-10 15:00
+        RunResult first = job.run();
+        RunResult second = job.run();
+
+        assertThat(first.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(second.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(second.detail().created()).isEmpty();
+        java.util.Set<LocalDate> built = DetailPartitions.builtDates(analyticsJdbc);
+        for (LocalDate d : DetailPartitions.daysToEnsure(TODAY)) {
+            assertThat(built).contains(d);
+        }
+        assertThat(exists("events_detail_pdefault")).as("明细层不设 DEFAULT").isFalse();
+    }
+
+    @Test
     void startupRunCreatedTodaysRealPartition() {
         // ApplicationReadyEvent 那一次用的是真实时钟
         String today = RawPartitionPlanner.partitionName(RawPartitionPlanner.utcDay(Instant.now()));

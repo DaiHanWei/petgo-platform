@@ -28,9 +28,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 埋点库分区维护（analytics-pipeline Story 1.3，D-8 / FR-12）。
  *
- * <p>本 story 只做<b>原始层预建</b>（{@link #ensureRawPartitions}）：保证 UTC 今天起 8 天的 {@code events_raw_pYYYYMMDD}
- * 都存在。Story 1.7 在同一个类里再加「明细层预建」「过期删除」—— 各自一个方法，由 {@link #run()} 串起来，
- * 不要把逻辑写进 {@code @Scheduled} 方法。
+ * <p>原始层预建（Story 1.3，{@link #ensureRawPartitions}）：保证 UTC 今天起 8 天的 {@code events_raw_pYYYYMMDD} 都存在。
+ * 明细层预建（Story 1.6，{@link #ensureDetailPartitions}）：保证 <b>WIB</b> 今天起 8 天的 {@code events_detail_pYYYYMMDD}
+ * 都存在（明细层没有 DEFAULT 兜底，缺分区时 {@code DetailBuilder} 整片回滚、不推进进度）。Story 1.7 再加「过期删除」——
+ * 各自一个方法，由 {@link #run()} 串起来，不要把逻辑写进 {@code @Scheduled} 方法。
+ *
+ * <p>原始层、明细层各一个埋点事务，拿同一把维护锁；一层失败不影响另一层照常预建。
  *
  * <h2>触发</h2>
  * <ul>
@@ -60,6 +63,7 @@ public class PartitionMaintenanceJob {
 
     static final String ALERT_DEFAULT_NONEMPTY = "analytics-raw-default-nonempty:";
     static final String ALERT_FAILED = "analytics-partition-failed:";
+    static final String ALERT_DETAIL_FAILED = "analytics-detail-partition-failed:";
 
     /** 一次运行的结局。 */
     public enum Outcome {
@@ -90,8 +94,28 @@ public class PartitionMaintenanceJob {
         }
     }
 
-    /** 一次运行的汇总；{@code raw} 只在 {@link Outcome#DONE} 时非空。 */
-    public record RunResult(Outcome outcome, RawResult raw) {
+    /**
+     * 明细层预建结果（Story 1.6）。
+     *
+     * @param lockAcquired 是否拿到锁
+     * @param created      本次新建的分区
+     */
+    public record DetailResult(boolean lockAcquired, List<String> created) {
+
+        static DetailResult notLocked() {
+            return new DetailResult(false, List.of());
+        }
+    }
+
+    /**
+     * 一次运行的汇总。{@code raw} / {@code detail} 为对应层成功运行的结果，失败或未运行时为空；
+     * 任一层失败 → {@link Outcome#FAILED}（已告警）。
+     */
+    public record RunResult(Outcome outcome, RawResult raw, DetailResult detail) {
+
+        RunResult(Outcome outcome, RawResult raw) {
+            this(outcome, raw, null);
+        }
     }
 
     private final AnalyticsPipelineState state;
@@ -151,7 +175,8 @@ public class PartitionMaintenanceJob {
                     + "影响：埋点接收不受影响；缺分区的日期写进 events_raw_pdefault 兜底。"
                     + "每天 UTC 00:05 自动重试，已预建 " + RawPartitionPlanner.DAYS_AHEAD + " 天，有修复时间。\n"
                     + "处理：检查埋点库与写入账号权限（建表 / ALTER events_raw）；修好后重建后端容器会立即补跑一次。");
-            return new RunResult(Outcome.FAILED, null);
+            DetailResult detail = runDetail();
+            return new RunResult(Outcome.FAILED, null, detail);
         }
         if (raw == null || !raw.lockAcquired()) {
             log.info("analytics partition maintenance skipped: lock held elsewhere");
@@ -170,7 +195,38 @@ public class PartitionMaintenanceJob {
                     + "影响：数据没丢，仍在原始层；落在今天起 8 天内的行下次维护会自动搬进对应分区。\n"
                     + "处理：核对服务器时钟与分区维护日志；超出预建范围的行需人工按 received_at 建分区后搬移。");
         }
-        return new RunResult(Outcome.DONE, raw);
+        DetailResult detail = runDetail();
+        return new RunResult(detail == null ? Outcome.FAILED : Outcome.DONE, raw, detail);
+    }
+
+    /**
+     * 明细层预建（独立的埋点事务）：失败只告警、返回 {@code null}；没拿到锁返回 {@link DetailResult#notLocked()}。
+     */
+    private DetailResult runDetail() {
+        LocalDate todayWib = EventTimeCorrector.wibDate(clock.instant());
+        DetailResult detail;
+        try {
+            detail = tx.execute(status -> ensureDetailPartitions(todayWib));
+        } catch (RuntimeException | Error e) {
+            String cause = describe(e);
+            log.warn("analytics detail partition maintenance failed: {}", cause);
+            alert(ALERT_DETAIL_FAILED + todayWib, "【埋点明细分区预建失败】环境 " + appEnv + "\n"
+                    + "原因：" + cause + "\n"
+                    + "影响：埋点接收与原始层不受影响；明细层没有 DEFAULT 兜底，若预建的 "
+                    + DetailPartitions.DAYS_AHEAD + " 天用完仍未修好，明细转换会停在缺分区那天（数据仍在原始层，修好后自动追上）。"
+                    + "每天 UTC 00:05 自动重试。\n"
+                    + "处理：检查埋点库与写入账号权限（建表 / ALTER events_detail）；修好后重建后端容器会立即补跑一次。");
+            return null;
+        }
+        if (detail == null) {
+            return null;
+        }
+        if (!detail.lockAcquired()) {
+            log.info("analytics detail partition maintenance skipped: lock held elsewhere");
+        } else if (!detail.created().isEmpty()) {
+            log.info("analytics detail partitions ensured: created={}", detail.created());
+        }
+        return detail;
     }
 
     /** 库可用即跑；清单无效时库是好的，照常建分区（免得清单一错连分区也断）。 */
@@ -226,6 +282,26 @@ public class PartitionMaintenanceJob {
             defaultRows = n == null ? 0 : n;
         }
         return new RawResult(true, List.copyOf(created), List.copyOf(moved), movedRows, defaultRows);
+    }
+
+    /**
+     * 明细层预建：在调用方的埋点事务内执行（先拿同一把维护锁）。没有 DEFAULT 分区，缺哪天直接建。
+     *
+     * @param todayWib WIB 今天（{@link EventTimeCorrector#wibDate}）
+     */
+    DetailResult ensureDetailPartitions(LocalDate todayWib) {
+        Boolean locked = jdbc.queryForObject("SELECT pg_try_advisory_xact_lock(?, ?)", Boolean.class,
+                AnalyticsLockKeys.NAMESPACE, AnalyticsLockKeys.PARTITION_MAINTENANCE);
+        if (!Boolean.TRUE.equals(locked)) {
+            return DetailResult.notLocked();
+        }
+        List<String> created = new ArrayList<>();
+        for (LocalDate day : DetailPartitions.daysToEnsure(todayWib)) {
+            if (DetailPartitions.ensure(jdbc, day)) {
+                created.add(DetailPartitions.partitionName(day));
+            }
+        }
+        return new DetailResult(true, List.copyOf(created));
     }
 
     private void alert(String dedupeKey, String text) {

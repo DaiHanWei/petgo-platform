@@ -16,6 +16,7 @@ import com.tailtopia.admin.alert.OpsAlertService;
 import com.tailtopia.admin.alert.OpsChannel;
 import com.tailtopia.analytics.AnalyticsPipelineState;
 import com.tailtopia.analytics.AnalyticsPipelineState.Reason;
+import com.tailtopia.analytics.store.PartitionMaintenanceJob.DetailResult;
 import com.tailtopia.analytics.store.PartitionMaintenanceJob.Outcome;
 import com.tailtopia.analytics.store.PartitionMaintenanceJob.RawResult;
 import com.tailtopia.analytics.store.PartitionMaintenanceJob.RunResult;
@@ -40,6 +41,9 @@ class PartitionMaintenanceJobTest {
     private final OpsAlertService alerts = mock(OpsAlertService.class);
     private final PartitionMaintenanceJob job = new PartitionMaintenanceJob(state, jdbc, tx, alerts, "test", CLOCK);
 
+    /** 第二个事务（Story 1.6 明细层预建）的正常返回。 */
+    private static final DetailResult DETAIL_OK = new DetailResult(true, List.of());
+
     @Test
     void skipsWhenDbUnavailable() {
         state.disable(Reason.DB_UNAVAILABLE, "x");
@@ -59,7 +63,8 @@ class PartitionMaintenanceJobTest {
     @Test
     void stillRunsWhenOnlyCatalogInvalid() {
         state.disable(Reason.CATALOG_INVALID, "x");
-        when(tx.execute(any())).thenReturn(new RawResult(true, List.of("events_raw_p20261231"), List.of(), 0, 0));
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of("events_raw_p20261231"), List.of(), 0, 0),
+                DETAIL_OK);
 
         RunResult r = job.run();
 
@@ -99,7 +104,7 @@ class PartitionMaintenanceJobTest {
 
     @Test
     void nonEmptyDefaultAlertsWithRowCountKeyedByUtcDay() {
-        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 3));
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 3), DETAIL_OK);
 
         assertThat(job.run().outcome()).isEqualTo(Outcome.DONE);
         verify(alerts).send(eq(OpsChannel.TECH), eq("analytics-raw-default-nonempty:2026-12-31"), contains("行数：3"));
@@ -107,9 +112,53 @@ class PartitionMaintenanceJobTest {
 
     @Test
     void emptyDefaultDoesNotAlert() {
-        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0));
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0), DETAIL_OK);
 
         assertThat(job.run().outcome()).isEqualTo(Outcome.DONE);
+        verifyNoInteractions(alerts);
+    }
+
+    // ---------------------------------------------------------------- Story 1.6：明细层预建
+
+    @Test
+    void detailFailureAlertsKeyedByWibDayAndRawResultKept() {
+        RawResult raw = new RawResult(true, List.of(), List.of(), 0, 0);
+        when(tx.execute(any())).thenReturn(raw).thenThrow(new IllegalStateException("password=x"));
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(r.raw()).isSameAs(raw);
+        assertThat(r.detail()).isNull();
+        assertThat(state.isEnabled()).isTrue();
+        // UTC 2026-12-31 18:00 = WIB 2027-01-01 01:00：明细层告警按 WIB 日期
+        verify(alerts).send(eq(OpsChannel.TECH), eq("analytics-detail-partition-failed:2027-01-01"),
+                contains("IllegalStateException"));
+        verify(alerts, never()).send(any(), anyString(), contains("password"));
+    }
+
+    @Test
+    void rawFailureStillRunsDetail() {
+        when(tx.execute(any())).thenThrow(new IllegalStateException("boom")).thenReturn(
+                new DetailResult(true, List.of("events_detail_p20270108")));
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(r.detail().created()).containsExactly("events_detail_p20270108");
+        verify(alerts).send(eq(OpsChannel.TECH), eq("analytics-partition-failed:2026-12-31"), anyString());
+        verify(alerts, never()).send(any(), eq("analytics-detail-partition-failed:2027-01-01"), anyString());
+    }
+
+    @Test
+    void detailLockHeldElsewhereIsQuiet() {
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0),
+                DetailResult.notLocked());
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(r.detail().lockAcquired()).isFalse();
         verifyNoInteractions(alerts);
     }
 
