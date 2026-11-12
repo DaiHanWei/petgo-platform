@@ -161,9 +161,26 @@ public record ShopOrderDetailView(
      *
      * @param lineRefundTotals 订单行 id → 该行 {@code LINE} 级退款合计
      */
-    public record Extras(Map<Long, Long> lineRefundTotals, String couponReturn) {
+    public record Extras(Map<Long, Long> lineRefundTotals, String couponReturn,
+            /** analytics-pipeline Story 3.4：skuId → 行的商品 / SKU 公开 token；null 时 {@code lines} 不带 token。 */
+            Map<Long, LineTokens> lineTokensBySkuId) {
 
-        public static final Extras NONE = new Extras(null, null);
+        public static final Extras NONE = new Extras(null, null, null);
+
+        /** 6.2 原签名（不带行 token）。 */
+        public Extras(Map<Long, Long> lineRefundTotals, String couponReturn) {
+            this(lineRefundTotals, couponReturn, null);
+        }
+    }
+
+    /**
+     * 订单行的公开 token（analytics-pipeline Story 3.4）：App 在 {@code toko_order_pay_tapped} 的 {@code items[]}
+     * 里带 {@code product_token}，埋点漏斗「进入支付」一步才能按商品关联（D-13：业务库与埋点一律用 public token 关联）。
+     *
+     * @param productToken {@code shop_products.public_token}
+     * @param skuToken     {@code shop_skus.public_token}
+     */
+    public record LineTokens(String productToken, String skuToken) {
     }
 
     /**
@@ -279,7 +296,16 @@ public record ShopOrderDetailView(
      * 运营事后换主图，这里会跟着变。用途是「认出是哪件」，不是留证。
      */
     public record Line(String productName, String specName, long unitPrice, int qty,
-            long lineTotal, String returnPolicy, String mainImageUrl) {
+            long lineTotal, String returnPolicy, String mainImageUrl,
+            // analytics-pipeline Story 3.4（末尾追加，只增不改；旧版 App 忽略）：读时派生的公开 token，
+            // 取不到（SKU 被物理删除 / 旧重载未传）为 null，NON_NULL 不下发。不是 PII。
+            String productToken, String skuToken) {
+
+        /** Story 3.4 前的 7 参签名（不带 token）。 */
+        public Line(String productName, String specName, long unitPrice, int qty, long lineTotal,
+                String returnPolicy, String mainImageUrl) {
+            this(productName, specName, unitPrice, qty, lineTotal, returnPolicy, mainImageUrl, null, null);
+        }
     }
 
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
@@ -358,10 +384,15 @@ public record ShopOrderDetailView(
                         ship.kotaKabupaten(), ship.kecamatan(), ship.addressLine(),
                         ship.kodePos()),
                 lines.stream()
-                        .map(l -> new Line(l.getProductName(), l.getSpecName(), l.getUnitPrice(),
-                                l.getQty(), l.getLineTotal(),
-                                l.getReturnPolicy() == null ? null : l.getReturnPolicy().name(),
-                                imageUrlBySkuId.get(l.getSkuId())))
+                        .map(l -> {
+                            LineTokens tk = ex.lineTokensBySkuId() == null ? null
+                                    : ex.lineTokensBySkuId().get(l.getSkuId());
+                            return new Line(l.getProductName(), l.getSpecName(), l.getUnitPrice(),
+                                    l.getQty(), l.getLineTotal(),
+                                    l.getReturnPolicy() == null ? null : l.getReturnPolicy().name(),
+                                    imageUrlBySkuId.get(l.getSkuId()),
+                                    tk == null ? null : tk.productToken(), tk == null ? null : tk.skuToken());
+                        })
                         .toList(),
                 o.getShippedAt(),
                 o.getDeliveredAt(),

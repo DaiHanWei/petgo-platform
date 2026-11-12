@@ -51,6 +51,32 @@ public class ShopLineImageResolver {
      * 调用方一律 {@code map.get(id)} 拿 null 走占位图，不必分辨是哪一种缺失。
      */
     public Map<Long, String> mainImageUrlBySkuId(Collection<Long> skuIds) {
+        Map<Long, String> out = new HashMap<>();
+        lineRefsBySkuId(skuIds).forEach((skuId, ref) -> {
+            if (ref.mainImageUrl() != null) {
+                out.put(skuId, ref.mainImageUrl());
+            }
+        });
+        return out;
+    }
+
+    /**
+     * 订单行的读时派生信息：主图 URL 与商品 / SKU 公开 token（analytics-pipeline Story 3.4）。
+     *
+     * @param mainImageUrl 商品主图 CDN 全 URL；取不到为 null
+     * @param skuToken     {@code shop_skus.public_token}
+     * @param productToken {@code shop_products.public_token}；商品行不存在为 null
+     */
+    public record LineRefs(String mainImageUrl, String skuToken, String productToken) {
+    }
+
+    /**
+     * skuId → {@link LineRefs}，与 {@link #mainImageUrlBySkuId} 同样两次 {@code findAllById}（不 N+1）。
+     *
+     * <p>SKU 被物理删除的键<b>不出现在结果里</b>，调用方 {@code map.get(id)} 拿 null 即可。
+     * 订单详情用它一次取齐主图与 token（埋点漏斗按商品关联，Story 3.4），查询数不增加。
+     */
+    public Map<Long, LineRefs> lineRefsBySkuId(Collection<Long> skuIds) {
         List<Long> ids = skuIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
         if (ids.isEmpty()) {
             return Map.of();
@@ -60,13 +86,11 @@ public class ShopLineImageResolver {
                 .findAllById(skuRows.stream().map(ShopSku::getProductId).distinct().toList())
                 .stream().collect(Collectors.toMap(ShopProduct::getId, p -> p));
 
-        Map<Long, String> out = new HashMap<>();
+        Map<Long, LineRefs> out = new HashMap<>();
         for (ShopSku sku : skuRows) {
             ShopProduct p = productById.get(sku.getProductId());
             String url = p == null ? null : imageUrls.publicUrl(p.getMainImageKey());
-            if (url != null) {
-                out.put(sku.getId(), url);
-            }
+            out.put(sku.getId(), new LineRefs(url, sku.getPublicToken(), p == null ? null : p.getPublicToken()));
         }
         return out;
     }

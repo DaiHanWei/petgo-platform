@@ -65,3 +65,80 @@ metrics:
       SQL 由 Story 4.4 填。
     changelog:
       - { date: "2026-11-12", change: "Story 3.1：核对运营位清单（ops_popup / toko_banner / newbie_coupon）、事件名、token 来源表，统一曝光规则与点击判定；新人券弹窗曝光改为首帧后上报" }
+  - code: "电商#6"
+    name: "Toko 分析漏斗"
+    definition: >-
+      团队原文：7 天内按顺序经过每一步的去重用户数：浏览 Toko 标签页（toko_page）→ 商品在列表中展示（toko_product_shown）
+      → 浏览商品详情（toko_product_detail_viewed）→ 立即购买或加入购物车（toko_buy_now_tapped / toko_add_to_cart_tapped）
+      → 提交订单（toko_order_submitted）→ 点击支付（toko_order_pay_tapped）→ 支付成功。转化率 = 某一步的用户数 ÷ 上一步的用户数。
+      实际事件（Story 3.4 按代码核对）：
+      第 1 步 PostHog 时期的 $screen = toko_page 改为 screen_viewed 且 screen = 'toko_page'（Story 2.4；电商 #4「打开 Toko 人数」与本步同源，电商 #4 条目建立时同步写此映射）；
+      第 2 步 toko_product_shown（ShopProductCard 首次构建即报，页面级按 product_token + zone 去重）；
+      第 3 步 toko_product_detail_viewed（详情页 initState，详情加载前）；
+      第 4 步 toko_buy_now_tapped 或 toko_add_to_cart_tapped（规格弹层确认后、登录判断与请求之前）；
+      第 5 步 toko_order_submitted（下单请求成功后）；
+      第 6 步 toko_order_pay_tapped（进入支付）或 toko_order_payment_succeeded（纯 PawCoin / 零元单结算时直接结清、不经过 pay_tapped，由 Story 4.5 认作经过第 6 步）；
+      第 7 步 支付成功 = 业务库 shop_orders.paid_at IS NOT NULL（D-13），经订单行的商品 / SKU token 与埋点关联。
+      「按顺序」：同一人在 7 天窗口内各步首次发生时间单调不减；按人去重，WIB 自然日。
+      商品维度：第 2–6 步都带商品 token —— 第 2–4 步顶层 product_token；第 5 步 items[].product_token（Story 3.4 补）；
+      第 6 步 toko_order_pay_tapped 的 items[].product_token（Story 3.4：后端订单详情行新增 productToken / skuToken，App 随之上报）。第 1 步是页面级浏览，不适用商品维度。
+    sources:
+      - "events_detail：screen_viewed（screen = 'toko_page'）"
+      - "events_detail：toko_product_shown / toko_product_detail_viewed / toko_buy_now_tapped / toko_add_to_cart_tapped（product_token）"
+      - "events_detail：toko_order_submitted（items[].product_token、items[].sku_id）"
+      - "events_detail：toko_order_pay_tapped（items[].product_token、items[].sku_id）/ toko_order_payment_succeeded（纯币单的第 6 步）"
+      - "业务库：shop_orders.paid_at IS NOT NULL（支付成功，D-13；按 paid_at 的 WIB 日期归日，付款后退款 / 取消仍算已付款）"
+    exclusions: >-
+      只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+      toko_tab_viewed 不作为第 1 步（只在 TokoPageV3.initState 报一次，IndexedStack 保活后再进不报）。
+      shop_product_masonry.dart 里的同名 toko_product_shown 上报所在组件无调用方（死代码），不影响数据。
+    known_bias: >-
+      ① 第 1 步：经 context.go('/shop') 进入 Toko 的路径（运营弹窗 / 推送目标 OpsAppPage.toko、购物车空态与订单列表「去逛逛」、
+      详情页下架态「Ke Toko」、健康列表入口）走 StatefulShellRoute 切分支、不经点 Tab 上报；Story 2.4 已在 AppShell
+      分支切换与外壳新挂载时补报 toko_page（按 Analytics.currentScreen 去重，同一次切换只报一次），自建口径不再因此偏低。
+      残留：同一 Toko 分支内再 go('/shop') 不补报（PostHog 时期同样不报）；分支首次建出另有一条 screen = '/shop'（路径模板），
+      第 1 步只认 screen = 'toko_page'，不要把 '/shop' 算进来。
+      ② 第 2 步不是严格的「露出 > 50%」：卡片在惰性 sliver 里被构建即报，含视口外预构建的少量卡片，曝光数偏高。
+      ③ 第 3 步在详情加载前报，商品已下架 / 加载失败也算一次浏览。
+      ④ 第 4 步在请求前报，游客放弃登录、加购失败也算（即团队「点了加购」的口径，保持）。
+      ⑤ 第 6 步 toko_order_pay_tapped = 进入支付次数：结算后 ?autopay=1 自动拉起支付面板也报（不是用户点击），重试、订单列表重新支付会再报；按人去重不影响人数。
+      纯 PawCoin / 零元单不经过 pay_tapped，按上文改认 toko_order_payment_succeeded，否则漏斗在第 6 步不单调。
+      ⑥ 旧后端未下发订单行 token、或 SKU 已被物理删除时，toko_order_pay_tapped 不带 items（按人计不受影响，只缺商品维度）；
+      toko_order_submitted 的 product_token 取自结算页试算行，取不到时省略。
+      SQL 由 Story 4.3 / 4.5 填。
+    changelog:
+      - { date: "2026-11-12", change: "Story 3.4：逐步核对触发时机；按代码修正：第 1 步 $screen=toko_page → screen_viewed 且 screen='toko_page'；第 6 步纯币单改认 toko_order_payment_succeeded；toko_order_submitted 与 toko_order_pay_tapped 的 items[] 补 product_token（后端订单详情行加 productToken / skuToken）" }
+  - code: "产品#1"
+    name: "安装后创建宠物档案的比例"
+    definition: >-
+      团队原文：有 pet_profile_create_submitted 的去重用户数 ÷ 有 Application Installed 的去重用户数（S2），同一个月。
+      按代码修正（D-13，Dai 2026-11-12 拍板）：分子改用 pet_added（建档请求成功后才上报）的去重用户数；
+      pet_profile_create_submitted 保留但不用于本指标（点击即报，建档请求失败也会报）。按 WIB 自然月。
+    sources:
+      - "events_detail：pet_added（分子，建档成功；属性 pet_index、slot_source）"
+      - "events_detail：Application Installed（分母，同 S2）"
+    exclusions: >-
+      只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+    known_bias: >-
+      第 2 只及以后的宠物也会报 pet_added，按去重人数计不影响；如需「首只」可取 pet_index = 1。
+      分子分母都按事件去重人数、同一个月，分子不要求来自当月安装的人（团队原文口径），月初建档的老用户也计入分子。
+      SQL 由 Story 4.3 / 4.5 填。
+    changelog:
+      - { date: "2026-11-12", change: "Story 3.4：按代码修正：分子由 pet_profile_create_submitted（点击即报，失败也算）改为 pet_added（建档成功后上报），D-13；需告知产品团队" }
+  - code: "产品#5"
+    name: "新用户 W1 留存"
+    definition: >-
+      团队原文：完成新手引导后，在引导完成后第 7–13 天中任意一天再次打开 App（Application Opened）的用户比例。
+      锚点 = 该用户首次 onboarding_completed 的时刻（WIB 日期）；分子 = 锚点后第 7–13 天任一天有 Application Opened 的人。
+      Story 3.4 起 onboarding_completed 在养宠状态更新请求成功后才上报（D-13，Dai 2026-11-12 拍板），失败不报。
+    sources:
+      - "events_detail：onboarding_completed（锚点，首次；属性 pet_status）"
+      - "events_detail：Application Opened（回访）"
+    exclusions: >-
+      只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+    known_bias: >-
+      唯一触发点是引导流最后一步（pet_status_page）。Story 3.4 之前的 App 版本点击即报（请求失败、失败后放弃的人也算完成引导，重试会多报），
+      自建库只收新版 App 事件，因此自建口径不含这部分；与 PostHog 时期数据对比时，PostHog 侧略偏高。
+      SQL 由 Story 4.3 / 4.5 填。
+    changelog:
+      - { date: "2026-11-12", change: "Story 3.4：按代码修正：onboarding_completed 改为请求成功后上报、失败不报（D-13）；锚点取首次 onboarding_completed；需告知产品团队" }

@@ -75,6 +75,33 @@ class MetricDefinitionsTest {
         assertThat(s5.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 3.1"));
     }
 
+    /** Story 3.4：电商 #6 / 产品 #1 / 产品 #5 口径条目按代码核对后的实际事件名与变更记录。 */
+    @Test
+    void story34FunnelAndOnboardingMetrics() {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+        assertThat(m.isLoaded()).isTrue();
+        java.util.function.Function<String, MetricDefinition> byCode =
+                code -> m.metrics().stream().filter(d -> d.code().equals(code)).findFirst().orElseThrow();
+
+        MetricDefinition funnel = byCode.apply("电商#6");
+        assertThat(funnel.definition()).contains("screen_viewed", "screen = 'toko_page'", "toko_product_shown",
+                "toko_product_detail_viewed", "toko_buy_now_tapped", "toko_add_to_cart_tapped", "toko_order_submitted",
+                "toko_order_pay_tapped", "toko_order_payment_succeeded", "paid_at IS NOT NULL", "items[].product_token");
+        assertThat(String.join("\n", funnel.sources())).contains("shop_orders.paid_at");
+        assertThat(funnel.exclusions()).contains("account_type = 'REAL'");
+        assertThat(funnel.knownBias()).contains("context.go('/shop')", "autopay");
+        assertThat(funnel.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 3.4", "按代码修正"));
+
+        MetricDefinition p1 = byCode.apply("产品#1");
+        assertThat(String.join("\n", p1.sources())).contains("pet_added", "Application Installed")
+                .doesNotContain("pet_profile_create_submitted");
+        assertThat(p1.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("pet_added", "D-13"));
+
+        MetricDefinition p5 = byCode.apply("产品#5");
+        assertThat(p5.definition()).contains("onboarding_completed", "请求成功后", "第 7–13 天");
+        assertThat(p5.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 3.4", "D-13"));
+    }
+
     @Test
     void duplicateCodeAndMissingNameDisableWithPath() {
         MetricDefinitions m = load("classpath:analytics/bad-metric-definitions.yaml");

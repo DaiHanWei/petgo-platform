@@ -56,7 +56,7 @@ class ShopOrderDetailAssemblerTest {
         when(payments.linesOf(any())).thenReturn(List.of());
         when(payments.intentOf(any())).thenReturn(Optional.empty());
         when(fulfillment.shipmentsOf(anyLong())).thenReturn(List.of());
-        when(images.mainImageUrlBySkuId(anyCollection())).thenReturn(Map.of());
+        when(images.lineRefsBySkuId(anyCollection())).thenReturn(Map.of());
         when(refunds.detailRefundsOf(any())).thenReturn(ShopOrderRefundService.DetailRefunds.NONE);
         when(latePayments.linksOf(any())).thenReturn(ShopOrderDetailView.ReorderLinks.NONE);
     }
@@ -91,10 +91,30 @@ class ShopOrderDetailAssemblerTest {
         verify(payments, times(1)).linesOf(o);
         verify(payments, times(1)).intentOf(o);
         verify(fulfillment, times(1)).shipmentsOf(1L);
-        verify(images, times(1)).mainImageUrlBySkuId(anyCollection());
+        verify(images, times(1)).lineRefsBySkuId(anyCollection());
+        verify(images, times(0)).mainImageUrlBySkuId(anyCollection());
         verify(refunds, times(1)).detailRefundsOf(o);
         verify(latePayments, times(1)).linksOf(o);
         verifyNoInteractions(coupons);
+    }
+
+    @Test
+    @DisplayName("analytics-pipeline 3.4：行带商品 / SKU 公开 token 与主图（同一次 lineRefsBySkuId）；SKU 已物理删除的行 token / 图为 null")
+    void linesCarryPublicTokens() {
+        ShopOrder o = order(6, ShopOrderStatus.PENDING_PAYMENT, null);
+        // line(id) 的 skuId = 100 + id
+        when(payments.linesOf(o)).thenReturn(List.of(line(61, 6, "A", 1, 0), line(62, 6, "B", 2, 0)));
+        when(images.lineRefsBySkuId(anyCollection())).thenReturn(Map.of(
+                161L, new ShopLineImageResolver.LineRefs("https://cdn.example/a.jpg", "sku-tok-a", "prod-tok-a")));
+
+        List<ShopOrderDetailView.Line> lines = assembler.assemble(o, NOW).lines();
+
+        assertThat(lines.get(0).productToken()).isEqualTo("prod-tok-a");
+        assertThat(lines.get(0).skuToken()).isEqualTo("sku-tok-a");
+        assertThat(lines.get(0).mainImageUrl()).isEqualTo("https://cdn.example/a.jpg");
+        assertThat(lines.get(1).productToken()).isNull();
+        assertThat(lines.get(1).skuToken()).isNull();
+        assertThat(lines.get(1).mainImageUrl()).isNull();
     }
 
     @Test

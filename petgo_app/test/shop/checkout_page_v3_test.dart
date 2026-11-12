@@ -754,6 +754,8 @@ void main() {
       expect(p['item_count'], 1);
       expect((p['items'] as List).single, {
         'sku_id': 's1',
+        // analytics-pipeline Story 3.4：漏斗各步都带 product_token（商品维度能关联）
+        'product_token': 'p-s1',
         'qty': 1,
         'entry_source': 'unknown',
         'trigger_type': 'none',

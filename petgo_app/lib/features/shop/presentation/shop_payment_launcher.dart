@@ -72,6 +72,23 @@ Map<String, Object> shopPayProps(ShopOrderDetail order, {String? failureCategory
       'failure_category': ?failureCategory,
     };
 
+/// `toko_order_pay_tapped` 的 `items[]`（analytics-pipeline Story 3.4）：每行 `{product_token, sku_id}`，
+/// 与 `toko_order_submitted.items[]` 同键名，埋点漏斗「进入支付」一步按商品关联。
+///
+/// 🔒 只有商品 / SKU 的公开 token（不可枚举，与个人无关）；绝不放订单号、商品名、价格。
+/// 后端未下发 token（旧后端 / SKU 已物理删除）的行跳过；一行都没有时返回 null → 整键不带。
+List<Map<String, Object>>? shopPayTappedItems(ShopOrderDetail order) {
+  final items = [
+    for (final l in order.lines)
+      if (l.productToken != null || l.skuToken != null)
+        {
+          'product_token': ?l.productToken,
+          'sku_id': ?l.skuToken,
+        },
+  ];
+  return items.isEmpty ? null : items;
+}
+
 /// 现在真要扫码付的现金段（币段下单时已冻结）。非混合单 `cashAmount` 为 null → 总额减币段。
 int shopCashSegment(ShopOrderDetail order) =>
     order.cashAmount ?? (order.totalAmount - (order.coinAmount ?? 0));
@@ -115,7 +132,10 @@ Future<ShopPaymentOutcome> launchShopPayment(
   final repo = ref.read(shopOrderRepositoryProvider);
 
   // 🔴 既有事件照发不误：漏斗「进入支付」这一格的分母靠它，重试也是一次进入支付。
-  Analytics.capture('toko_order_pay_tapped');
+  //    触发时机不变；analytics-pipeline Story 3.4 只加 items[]（漏斗按商品关联）。
+  final payItems = shopPayTappedItems(order);
+  //    取不到任何 token（旧后端）时与原先一样不带属性。
+  Analytics.capture('toko_order_pay_tapped', payItems == null ? null : {'items': payItems});
   if (isRetry) {
     Analytics.capture('toko_payment_retry_tapped', shopPayProps(order));
   }

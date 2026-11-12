@@ -11,7 +11,9 @@ import com.tailtopia.shop.service.ShopLineImageResolver;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 订单详情装配（v1.4.2 shop Story 6.2 AC3，D-19）：取代 {@code MeCheckoutController#detailOf} 的拼装，详情 / 取消 /
  * 确认收货后返回详情的路径都经这里。
  *
- * <p>🔴 <b>单次详情查询数恒定</b>：行 1、主图（SKU + 商品）1、运单 1、意图 1、退款单 1、重下单关联至多 2、券退回 1，
+ * <p>🔴 <b>单次详情查询数恒定</b>：行 1、主图与行 token（SKU + 商品，Story 3.4 起同批取）1、运单 1、意图 1、退款单 1、重下单关联至多 2、券退回 1，
  * 与行数 / 退款单数无关。只搬运订单头快照与退款单金额，不重算任何金额（P-1）；券状态只经 {@link CouponLedgerService}（P-2）。
  */
 @Service
@@ -52,10 +54,20 @@ public class ShopOrderDetailAssembler {
     public ShopOrderDetailView assemble(ShopOrder order, Instant now) {
         List<ShopOrderLine> lines = payments.linesOf(order);
         ShopOrderRefundService.DetailRefunds r = refunds.detailRefundsOf(order);
-        return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()),
-                lineImages.mainImageUrlBySkuId(lines.stream().map(ShopOrderLine::getSkuId).toList()),
+        // analytics-pipeline Story 3.4：主图与商品 / SKU token 同一次取（SKU + 商品 两次查询，与原先相同）
+        Map<Long, ShopLineImageResolver.LineRefs> refs =
+                lineImages.lineRefsBySkuId(lines.stream().map(ShopOrderLine::getSkuId).toList());
+        Map<Long, String> imageUrls = new HashMap<>();
+        Map<Long, ShopOrderDetailView.LineTokens> tokens = new HashMap<>();
+        refs.forEach((skuId, ref) -> {
+            if (ref.mainImageUrl() != null) {
+                imageUrls.put(skuId, ref.mainImageUrl());
+            }
+            tokens.put(skuId, new ShopOrderDetailView.LineTokens(ref.productToken(), ref.skuToken()));
+        });
+        return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()), imageUrls,
                 payments.intentOf(order).orElse(null), now, r.views(), latePayments.linksOf(order),
-                new ShopOrderDetailView.Extras(r.lineRefundTotals(), couponReturnOf(order, now)));
+                new ShopOrderDetailView.Extras(r.lineRefundTotals(), couponReturnOf(order, now), tokens));
     }
 
     private String couponReturnOf(ShopOrder order, Instant now) {

@@ -102,6 +102,58 @@ void main() {
     expect(find.byKey(const ValueKey('qrPayImage')), findsNothing);
     expect(names(), containsAllInOrder(['toko_order_pay_tapped', 'toko_order_payment_succeeded']));
     expect(names(), isNot(contains('toko_payment_qr_shown')));
+    expect(events.firstWhere((e) => e.$1 == 'toko_order_pay_tapped').$2, isNull,
+        reason: '订单行没有 token（旧后端）→ 与原先一样不带属性（analytics-pipeline 3.4）');
+  });
+
+  group('analytics-pipeline 3.4：toko_order_pay_tapped.items[]', () {
+    ShopOrderDetail withLines(List<ShopOrderLine> lines) => ShopOrderDetail(
+          orderToken: 'ord1',
+          status: ShopOrderStatus.pendingPayment,
+          goodsSubtotal: 1,
+          shippingFee: 0,
+          shippingDiscount: 0,
+          totalAmount: 1,
+          expiresAt: DateTime.now().toUtc(),
+          lines: lines,
+          receiverName: 'Budi',
+          receiverPhone: '08123456789',
+          addressText: 'Jl. Test',
+        );
+    ShopOrderLine line({String? productToken, String? skuToken}) => ShopOrderLine(
+        productName: 'Royal Canin', specName: '2 kg', unitPrice: 1, qty: 2, lineTotal: 2,
+        productToken: productToken, skuToken: skuToken);
+
+    test('每行带 product_token 与 sku_id（与 toko_order_submitted.items[] 同键名），无名称 / 价格 / 订单号', () {
+      final items = shopPayTappedItems(withLines([
+        line(productToken: 'p1', skuToken: 's1'),
+        line(productToken: 'p2', skuToken: 's2'),
+      ]));
+      expect(items, [
+        {'product_token': 'p1', 'sku_id': 's1'},
+        {'product_token': 'p2', 'sku_id': 's2'},
+      ]);
+    });
+
+    test('取不到 token 的行跳过；全部取不到 → null（不带 items 键）', () {
+      expect(shopPayTappedItems(withLines([line(productToken: 'p1'), line()])), [
+        {'product_token': 'p1'},
+      ]);
+      expect(shopPayTappedItems(withLines([line(), line()])), isNull);
+      expect(shopPayTappedItems(withLines(const [])), isNull);
+    });
+
+    test('ShopOrderLine.fromJson 读 productToken / skuToken（空串 → null，旧后端缺键 → null）', () {
+      final l = ShopOrderLine.fromJson({
+        'productName': 'A', 'specName': 'B', 'unitPrice': 1, 'qty': 1, 'lineTotal': 1,
+        'productToken': 'p1', 'skuToken': '',
+      });
+      expect(l.productToken, 'p1');
+      expect(l.skuToken, isNull);
+      final old = ShopOrderLine.fromJson({'productName': 'A', 'specName': 'B'});
+      expect(old.productToken, isNull);
+      expect(old.skuToken, isNull);
+    });
   });
 
   testWidgets('paid：轮询到账 → succeeded(pay_channel, attribution_source)，不弹 shopOrderPaid', (tester) async {

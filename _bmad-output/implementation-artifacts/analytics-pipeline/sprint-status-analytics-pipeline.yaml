@@ -74,7 +74,7 @@ development_status:
   3-1-运营位曝光与点击核对: review
   3-2-推送打开统一事件: review
   3-3-购物车事件补全: review
-  3-4-漏斗与引导事件核对: ready-for-dev
+  3-4-漏斗与引导事件核对: review
   epic-3-retrospective: optional
   # Epic 4：指标汇总、日活对账与 AI 查数（批次 ②）（后端；批次 ②，发版后可补）
   epic-4: in-progress

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/data/me_repository.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -70,6 +71,12 @@ class _RecordingMeRepository implements MeRepository {
   @override
   Future<UserProfile> updatePhone(String phone) async => const UserProfile();
 
+}
+
+/// updatePetStatus 失败（analytics-pipeline Story 3.4：失败不报 onboarding_completed）。
+class _FailingPetStatusMeRepository extends _FakeMeRepository {
+  @override
+  Future<UserProfile> updatePetStatus(String petStatus) async => throw StateError('boom');
 }
 
 /// 引导返回键测试用路由（昵称 ↔ 状态 ↔ 未登录首页占位）。
@@ -305,5 +312,47 @@ void main() {
     // 提示条组件本身已删除，Discovery 顶部只有分类 Tab —— 由 story 2.3 的
     // 「Discovery 顶部无建档提示」回归测试统一守门。
     expect(find.byType(FeedTabRow), findsOneWidget);
+  });
+
+  group('analytics-pipeline 3.4：onboarding_completed 请求成功后才报（D-13）', () {
+    late List<(String, Map<String, Object>?)> events;
+    setUp(() {
+      events = [];
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+    });
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    Future<void> completeWith(WidgetTester tester, MeRepository repo) async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          meRepositoryProvider.overrideWithValue(repo),
+          feedRepositoryProvider.overrideWithValue(FakeFeedRepository()),
+        ],
+        child: MaterialApp.router(
+          routerConfig: _flowRouter(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('petStatus_PLANNING')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('petStatusComplete')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('成功 → 报一次 onboarding_completed {pet_status}', (tester) async {
+      await completeWith(tester, _FakeMeRepository());
+      final hits = events.where((e) => e.$1 == 'onboarding_completed').toList();
+      expect(hits, hasLength(1));
+      expect(hits.single.$2, {'pet_status': 'PLANNING'});
+    });
+
+    testWidgets('失败 → 不报 onboarding_completed，停在状态页', (tester) async {
+      await completeWith(tester, _FailingPetStatusMeRepository());
+      expect(events.where((e) => e.$1 == 'onboarding_completed'), isEmpty);
+      expect(find.byType(PetStatusPage), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
   });
 }

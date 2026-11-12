@@ -175,7 +175,7 @@ events:
     source: APP
     status: ACTIVE
     domain: auth
-    description: "引导流最后一步选完养宠状态"
+    description: "引导流最后一步选完养宠状态，养宠状态更新请求成功后上报、失败不报（Story 3.4 / D-13 起；之前为点击即报）；产品 #5 新用户 W1 留存的锚点"
     code_ref: petgo_app/lib/features/auth/presentation/pet_status_page.dart
     properties:
       - { name: pet_status, type: string, description: "养宠状态（受控枚举）" }
@@ -1313,7 +1313,7 @@ events:
     source: APP
     status: ACTIVE
     domain: profile
-    description: "新增宠物成功"
+    description: "新增宠物成功（建档请求成功后上报；产品 #1 安装后建档比例的来源事件，D-13）"
     code_ref: petgo_app/lib/features/profile/presentation/pet_profile_create_page.dart
     properties:
       - { name: pet_index, type: int, description: "这是账号下第几只宠物" }
@@ -1360,7 +1360,7 @@ events:
     source: APP
     status: ACTIVE
     domain: profile
-    description: "提交创建宠物档案"
+    description: "提交创建宠物档案（点击即报，在建档请求之前，失败重试会多报；不用于产品 #1，见 pet_added）"
     code_ref: petgo_app/lib/features/profile/presentation/pet_profile_create_page.dart
     properties:
       - { name: species, type: string, description: "物种（dog / cat）" }
@@ -1902,9 +1902,10 @@ events:
     source: APP
     status: ACTIVE
     domain: toko
-    description: "点了去支付"
+    description: "进入支付（launchShopPayment 开头：手动点、结算后 autopay 自动拉起、重试、订单列表去支付都报；纯 PawCoin / 零元单结算时直接结清、不经过本事件）"
     code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
-    properties: []
+    properties:
+      - { name: items, type: list, description: "订单行：[{product_token: 商品 token, sku_id: SKU token}]（Story 3.4；后端订单详情行未下发 token 时整键不带），无价格、无名称、无订单号" }
   - name: toko_order_payment_failed_shown
     source: APP
     status: ACTIVE
@@ -1943,7 +1944,7 @@ events:
     code_ref: petgo_app/lib/features/shop/presentation/checkout_page_v3.dart
     properties:
       - { name: item_count, type: int, description: "订单行数" }
-      - { name: items, type: list, description: "订单行：[{sku_id: SKU token, qty, entry_source, trigger_type}]，无价格、无名称" }
+      - { name: items, type: list, description: "订单行：[{sku_id: SKU token, product_token: 商品 token（Story 3.4，取不到时省略）, qty, entry_source, trigger_type}]，无价格、无名称" }
       - { name: coupon_ids, type: list, description: "所用券的公开 token 列表" }
       - { name: coin_used, type: bool, description: "是否用了 PawCoin 抵扣" }
       - { name: courier, type: string, description: "物流商与服务代号（小写，courier_service）" }
@@ -2043,8 +2044,8 @@ events:
     source: APP
     status: ACTIVE
     domain: toko
-    description: "商品卡曝光"
-    code_ref: petgo_app/lib/features/shop/presentation/widgets/shop_product_masonry.dart
+    description: "商品卡曝光（卡片在惰性网格中首次构建即报，页面级按 product_token + zone 去重；以 ShopProductCard 为准，shop_product_masonry 里的同名上报无调用方）"
+    code_ref: petgo_app/lib/features/shop/presentation/widgets/shop_product_card.dart
     properties:
       - { name: product_token, type: string, description: "商品公开 token" }
       - { name: zone, type: string, description: "商品出现的区块（受控枚举）" }

@@ -145,6 +145,8 @@ class ShopOrderLine {
     required this.qty,
     required this.lineTotal,
     this.mainImageUrl,
+    this.productToken,
+    this.skuToken,
   });
 
   final String productName;
@@ -159,6 +161,11 @@ class ShopOrderLine {
   /// 历史订单的缩略图会跟着变。它的用途是「认出是哪件」，不是留证。
   final String? mainImageUrl;
 
+  /// 商品 / SKU 公开 token（analytics-pipeline Story 3.4，后端末尾追加）。**可空** —— 旧后端不下发、
+  /// SKU 被物理删除时为 null。只用于埋点 `toko_order_pay_tapped.items[].product_token`（漏斗按商品关联）。
+  final String? productToken;
+  final String? skuToken;
+
   factory ShopOrderLine.fromJson(Map<String, dynamic> j) => ShopOrderLine(
         productName: j['productName']?.toString() ?? '',
         specName: j['specName']?.toString() ?? '',
@@ -166,6 +173,8 @@ class ShopOrderLine {
         qty: _int(j['qty']) ?? 0,
         lineTotal: _int(j['lineTotal']) ?? 0,
         mainImageUrl: _blankToNull(j['mainImageUrl']?.toString()),
+        productToken: _blankToNull(j['productToken']?.toString()),
+        skuToken: _blankToNull(j['skuToken']?.toString()),
       );
 }
 

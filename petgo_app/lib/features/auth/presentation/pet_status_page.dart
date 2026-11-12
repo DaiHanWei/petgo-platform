@@ -26,10 +26,12 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
   Future<void> _onComplete() async {
     final status = _selected;
     if (status == null || _busy) return;
-    Analytics.capture('onboarding_completed', {'pet_status': status});
     setState(() => _busy = true);
     try {
       final profile = await ref.read(meRepositoryProvider).updatePetStatus(status);
+      // analytics-pipeline Story 3.4（架构 D-13，Dai 拍板）：请求成功后才报，失败不报 ——
+      // 产品 #5（新用户 W1 留存）以首次 onboarding_completed 为锚点，失败放弃者不应计入。
+      Analytics.capture('onboarding_completed', {'pet_status': status});
       ref.read(authControllerProvider.notifier).completeOnboarding(profile);
       ref.read(homeRefreshProvider.notifier).bump();
       if (!mounted) return;

@@ -140,6 +140,22 @@ class EventCatalogTest {
         assertThat(c.userIdentifierKeys()).doesNotContain("push_type", "campaign_token");
     }
 
+    /** Story 3.4：漏斗第 6 步 toko_order_pay_tapped 登记 items（元素带 product_token）；商品曝光 code_ref 指向 ShopProductCard。 */
+    @Test
+    void funnelEventsRegisterItemsAndCardCodeRef() {
+        EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);
+        Map<String, EventDefinition> byName = new LinkedHashMap<>();
+        c.events().forEach(e -> byName.put(e.name(), e));
+
+        assertThat(c.allowedPropertyKeys("toko_order_pay_tapped")).containsExactly("items");
+        assertThat(c.allowedPropertyKeys("toko_order_submitted")).contains("items", "item_count");
+        assertThat(byName.get("toko_product_shown").codeRef())
+                .isEqualTo("petgo_app/lib/features/shop/presentation/widgets/shop_product_card.dart");
+        assertThat(byName.get("onboarding_completed").status()).isEqualTo(Status.ACTIVE);
+        assertThat(c.allowedPropertyKeys("pet_added")).containsExactlyInAnyOrder("pet_index", "slot_source");
+        assertThat(c.userIdentifierKeys()).doesNotContain("items", "product_token", "sku_id");
+    }
+
     /** Story 3.1：三类运营位事件都登记了 placement_type / placement_token，原属性保留，且不算用户标识（擦除不清）。 */
     @Test
     void placementPropertiesRegisteredForPlacementEvents() {

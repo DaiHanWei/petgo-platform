@@ -1239,11 +1239,13 @@ class _CheckoutPageV3State extends ConsumerState<CheckoutPageV3> {
     final coinUsed = (p.pricing.coinAmount ?? 0) > 0;
     Analytics.capture('toko_order_submitted', {
       'item_count': p.lines.length,
-      // 🔒 items 里只有受控标识与数量：sku_id 是不可枚举 token，无价格、无名称、无 PII
+      // 🔒 items 里只有受控标识与数量：sku_id / product_token 是不可枚举 token，无价格、无名称、无 PII
+      //    （product_token：analytics-pipeline Story 3.4，漏斗按商品关联；取不到时省略）
       'items': [
         for (final l in p.lines)
           {
             'sku_id': l.skuToken,
+            'product_token': ?l.productToken,
             'qty': l.qty,
             // v1.4.2 8.2 复审 #1：立即购买的行 QuoteLine 不带来源 → 用路由透传的 buyNowEntrySource 兜底。
             'entry_source': l.entrySource ??

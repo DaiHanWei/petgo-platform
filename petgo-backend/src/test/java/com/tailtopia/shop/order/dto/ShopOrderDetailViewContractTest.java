@@ -76,6 +76,10 @@ class ShopOrderDetailViewContractTest {
     private static final Set<String> PAYMENT_METHODS_KEYS = Set.of("coinAmount", "coinStatus", "cashAmount",
             "cashStatus");
 
+    /** 订单行键集（全字段非 null 时）；analytics-pipeline Story 3.4 末尾追加 productToken / skuToken。 */
+    private static final Set<String> LINE_KEYS = Set.of("productName", "specName", "unitPrice", "qty", "lineTotal",
+            "returnPolicy", "mainImageUrl", "productToken", "skuToken");
+
     /** v1.4.2 shop Story 6.2：部分取消行键集。 */
     private static final Set<String> CANCELLED_LINE_KEYS = Set.of("lineIndex", "productName", "specName",
             "cancelledQty", "refundAmount");
@@ -110,7 +114,7 @@ class ShopOrderDetailViewContractTest {
                 new ShopOrderDetailView.ShipTo("Budi", "0811", "DKI", "Jakarta Selatan",
                         "Kebayoran", "Jl. Melati 1", "12110"),
                 List.of(new ShopOrderDetailView.Line("Royal Canin 2kg", "2kg", 100_000L, 1,
-                        100_000L, "NO_RETURN", "https://cdn.example/x.jpg")),
+                        100_000L, "NO_RETURN", "https://cdn.example/x.jpg", "prod-tok-1", "sku-tok-1")),
                 t, t, t, t,
                 List.of(new ShopOrderDetailView.Package("JNE", "JNE", "JN1", "https://jne/JN1",
                         "DELIVERED", t, t, "BITESHIP", false)),
@@ -163,6 +167,24 @@ class ShopOrderDetailViewContractTest {
     void fullOrderHasExactlyTheContractFields() {
         assertThat(wire(fullyPopulated("FAILED", "GATEWAY_DECLINED")).keySet())
                 .isEqualTo(TOP_LEVEL_KEYS);
+    }
+
+    @Test
+    @DisplayName("analytics-pipeline 3.4：订单行带 productToken / skuToken（只增不改）；旧 7 参构造不带 token → 整键省略")
+    @SuppressWarnings("unchecked")
+    void lineCarriesPublicTokens() {
+        Map<String, Object> w = wire(fullyPopulated("PAID", null));
+        Map<String, Object> line = ((List<Map<String, Object>>) w.get("lines")).get(0);
+        assertThat(line.keySet()).isEqualTo(LINE_KEYS);
+        assertThat(line.get("productToken")).isEqualTo("prod-tok-1");
+        assertThat(line.get("skuToken")).isEqualTo("sku-tok-1");
+
+        var legacy = new ShopOrderDetailView.Line("A", "1kg", 1L, 1, 1L, "NO_RETURN", null);
+        assertThat(legacy.productToken()).isNull();
+        assertThat(legacy.skuToken()).isNull();
+        // 复审 3.4：NON_NULL 下取不到 token 的行在线上是「键不出现」，不是「键在、值为 null」
+        assertThat(wire(legacy).keySet()).doesNotContain("productToken", "skuToken")
+                .contains("productName", "specName", "unitPrice", "qty", "lineTotal", "returnPolicy");
     }
 
     @Test
