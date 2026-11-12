@@ -84,6 +84,7 @@ class ImageLightbox extends StatefulWidget {
     required int initialIndex,
     required String heroTagPrefix,
     required String source,
+    bool useRootNavigator = false,
   }) {
     if (urls.isEmpty) return Future<int?>.value();
     if (_keyboardSwallowsTap(context)) return Future<int?>.value();
@@ -95,6 +96,7 @@ class ImageLightbox extends StatefulWidget {
         heroTagPrefix: heroTagPrefix,
         source: source,
       ),
+      useRootNavigator: useRootNavigator,
     );
   }
 
@@ -147,8 +149,10 @@ class ImageLightbox extends StatefulWidget {
     return false;
   }
 
-  static Future<int?> _push(BuildContext context, ImageLightbox lightbox) {
-    return Navigator.of(context).push(PageRouteBuilder<int>(
+  /// [useRootNavigator]：Tab 页（底栏壳内）里打开时传 true，盖住底部导航栏全屏显示。
+  /// ⚠️ 只给**没有 Hero 源**的入口用（如头像）：Hero 飞行要求源与目标在同一个 Navigator，推到根导航器会丢掉飞入动画。
+  static Future<int?> _push(BuildContext context, ImageLightbox lightbox, {bool useRootNavigator = false}) {
+    return Navigator.of(context, rootNavigator: useRootNavigator).push(PageRouteBuilder<int>(
       // 🔴 `opaque: false` 是 Story 3.2 下滑关闭（AC1「背景随拖拽渐透明」）的**前提**：
       // 不透明路由之下的那一页根本不参与绘制，把黑底调淡只会露出一片虚空，
       // 而用户期待看见的是自己刚才那一页正在露出来。

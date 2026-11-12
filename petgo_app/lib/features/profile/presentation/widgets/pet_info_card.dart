@@ -99,7 +99,12 @@ class PetInfoCard extends StatelessWidget {
       key: const ValueKey('petAvatarTap'),
       behavior: HitTestBehavior.opaque,
       onTap: () => ImageLightbox.open(context,
-          urls: [url], initialIndex: 0, heroTagPrefix: 'pet_diary_avatar', source: 'pet_diary_avatar'),
+          urls: [url],
+          initialIndex: 0,
+          heroTagPrefix: 'pet_diary_avatar',
+          source: 'pet_diary_avatar',
+          // Diary 是底栏 Tab 页：推到根导航器才能盖住底部导航栏（头像无 Hero 源，不受影响）。
+          useRootNavigator: true),
       child: child,
     );
   }

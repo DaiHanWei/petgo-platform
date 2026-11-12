@@ -178,16 +178,18 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     }
   }
 
-  /// 锚点到位后把高亮行滚进视野。详情页 `?focus=comments` 已先把评论区标题滚到顶部附近，
-  /// 锚点楼紧挨着标题，通常已经可见 —— 用 keepVisibleAtEnd：**只在它被挡在视野下方时才滚**，
-  /// 不把已经对齐好的评论区标题再推走。
+  /// 锚点到位后把高亮行滚到视野上部（约 1/5 处）。
+  ///
+  /// ⚠️ 不能指望详情页 `?focus=comments` 的那次滚动：它在挂载当帧执行，此时评论还没加载、页面不够长，
+  /// 标题根本滚不上去；锚点到了也只停在屏幕底边（2026-11-12 模拟器实测）。所以锚点到位后**主动**对齐一次，
+  /// 内容不够长时滚到底为止（ensureVisible 自动夹到可滚范围内）。
   void _scrollAnchorIntoView() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = _anchorTargetKey.currentContext;
       if (ctx == null) return;
       Scrollable.ensureVisible(
         ctx,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        alignment: 0.2,
         duration: AppMotion.sheet,
         curve: Curves.easeOut,
       );
