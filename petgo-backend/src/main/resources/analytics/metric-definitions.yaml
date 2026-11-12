@@ -29,3 +29,39 @@ metrics:
     sql_path: analytics/rollup/dau.sql
     changelog:
       - { date: "2026-11-13", change: "初版骨架" }
+  - code: S5
+    name: "运营位曝光与点击"
+    definition: >-
+      每个弹窗 / banner 的展示次数、点击次数、点击率，推广 Toko 的另算点击后 7 天已付款 Toko 订单数（团队原文）。
+      运营位按 placement_type 分三类、按 placement_token 区分到具体一条：
+      ops_popup（运营弹窗）—— 曝光 ops_popup_shown，点击 ops_popup_tapped，另有关闭 ops_popup_closed（不算点击）；
+      toko_banner（Toko 横幅）—— 曝光 toko_banner_shown，点击 toko_banner_tapped；
+      newbie_coupon（新人券弹窗）—— 曝光 toko_newbie_coupon_popup_shown，点击 toko_newbie_coupon_popup_tapped 且 action = 'register'（action = 'close' 不算点击）。
+      曝光规则：露出超过 50% 计一次（与 Toko 横幅原定义一致）——运营弹窗与新人券弹窗在弹窗首帧后（整窗露出）报一次；
+      横幅以当前页露出 > 50% 为准，同一次进入 Toko 同一张只报一次。
+      点击判定：ops_popup 看 ops_popup_tapped（弹窗 pop 后上报；目标无效时图片不可点、只能点按钮，也算点击）；
+      toko_banner 看 toko_banner_tapped（target=NONE 的横幅不可点，点击率按 0 记而不是缺失）；newbie_coupon 看 action = 'register'。
+      点击率 = 点击次数 ÷ 曝光次数，按 placement_token、WIB 自然日。
+      「是否推广 Toko」由 Story 4.4 读业务库运营位配置的跳转目标决定（FR-17 第 3 条）；新人券弹窗恒属 Toko；
+      toko_banner_tapped 另带 target_type。运营推送（ops_notification_campaigns）的打开由 Story 3.2 的 push_opened + campaign_token 覆盖，不在本条。
+    sources:
+      - "events_detail：ops_popup_shown / ops_popup_tapped / ops_popup_closed（placement_type = ops_popup）"
+      - "events_detail：toko_banner_shown / toko_banner_tapped（placement_type = toko_banner）"
+      - "events_detail：toko_newbie_coupon_popup_shown / toko_newbie_coupon_popup_tapped（placement_type = newbie_coupon）"
+      - "placement_token 来源表（业务库）：ops_popup → ops_popups.public_token（App 取 OpsPopupCandidate.token）"
+      - "placement_token 来源表（业务库）：toko_banner → shop_banners.public_token（V20261030_0330 加列，App 取 ShopBanner.bannerId）"
+      - "placement_token 来源表（业务库）：newbie_coupon → shop_coupons.public_token（新人券模板，GET /shop/coupons/newbie-campaign 下发，App 取 NewbieCampaign.campaignToken）"
+    exclusions: >-
+      只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+      非运营位弹窗 / 横幅不算：growth_backfill_popup_shown、growth_celebration_shown（成长体系功能弹窗）、
+      app_update_prompt_shown（升级提示）、login_guide_*（登录引导）、pet_readonly_banner_shown（名额只读条）——
+      它们不是后台运营配置，没有运营位 token。首页只有升级横幅（AppUpdateBanner），没有运营 banner。
+    known_bias: >-
+      V1.5.0 之前的旧版 App 不带 placement_*，但旧版事件不进自建库（PostHog 已停用，自建只收新版），自建库里不存在缺 placement_* 的旧事件，无需兼容映射。
+      运营弹窗另有服务端曝光计数（_reportImpression，只记登录且非兽医用户），与埋点曝光（游客也报）口径不同，两者不能直接对比。
+      横幅曝光以「当前页」为单位，自动轮播翻到的每张各算一次曝光。
+      新人券弹窗只对游客展示，点击（注册）后到登录完成之间可能流失，点击 ≠ 领券；领券看 toko_coupon_claimed（source = newbie）。
+      旧后端未下发横幅 token 时 toko_banner_tapped 不带 banner_id / placement_token；新人券活动 token 解析失败（空串）时不带 placement_token。
+      SQL 由 Story 4.4 填。
+    changelog:
+      - { date: "2026-11-12", change: "Story 3.1：核对运营位清单（ops_popup / toko_banner / newbie_coupon）、事件名、token 来源表，统一曝光规则与点击判定；新人券弹窗曝光改为首帧后上报" }

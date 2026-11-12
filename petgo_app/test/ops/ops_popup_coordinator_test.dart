@@ -261,7 +261,8 @@ void main() {
     expect(env.impressions, ['popA']);
     final shown = env.events.where((e) => e.key == 'ops_popup_shown').toList();
     expect(shown, hasLength(1));
-    expect(shown.single.value, {'popup_id': 'popA'}, reason: 'D-24：只带 public_token');
+    expect(shown.single.value, {'popup_id': 'popA', 'placement_type': 'ops_popup', 'placement_token': 'popA'},
+        reason: 'D-24：只带 public_token；analytics-pipeline 3.1：运营位类型 + 同一 token');
     // ID 语言：图片 / 文案取 *Id。
     final d = env.lastDialog!;
     expect((d.image as NetworkImage).url, 'https://x/popA-id.webp');
@@ -468,7 +469,7 @@ void main() {
     expect(env.opened, [_catTarget]);
     expect(env.showCompletedBeforeOpen, isTrue);
     final tapped = env.events.where((e) => e.key == 'ops_popup_tapped').toList();
-    expect(tapped.single.value, {'popup_id': 'popA'});
+    expect(tapped.single.value, {'popup_id': 'popA', 'placement_type': 'ops_popup', 'placement_token': 'popA'});
     expect(_names(env), isNot(contains('ops_popup_closed')));
   });
 
@@ -477,7 +478,8 @@ void main() {
     await _pump(tester, env);
     await _release(tester);
     expect(env.opened, isEmpty);
-    expect(env.events.where((e) => e.key == 'ops_popup_closed').single.value, {'popup_id': 'popA'});
+    expect(env.events.where((e) => e.key == 'ops_popup_closed').single.value,
+        {'popup_id': 'popA', 'placement_type': 'ops_popup', 'placement_token': 'popA'});
     expect(_names(env), isNot(contains('ops_popup_tapped')));
   });
 

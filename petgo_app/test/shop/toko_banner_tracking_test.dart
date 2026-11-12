@@ -14,6 +14,7 @@ import 'fake_shop_products.dart';
 /// - `toko_banner_shown`：当前页露出 > 50% 才报；一次进入页面内同一张只报一次（来回滚不重复）；
 ///   离开再进来重新计；`position` = **实际位次**（原恒为 1，8.1 按设计改写）。
 /// - `toko_banner_tapped`：banner_id + target_type + position。
+/// - analytics-pipeline Story 3.1：两者都带 `placement_type = toko_banner`、`placement_token = banner_id`（S5 运营位）。
 /// - 8.1 按设计改写：旧「点品类 banner → tapped(category_list) 并切到该品类」→ 旧 `CATEGORY` 值解析为 none、
 ///   不可点；新增 `TOKO_HOME` → tapped(toko_home) 留在首页。
 void main() {
@@ -94,7 +95,7 @@ void main() {
     await t.pump();
     await t.pump();
     expect(shown().toList(), [
-      {'banner_id': 'bnTok123', 'position': 1}
+      {'banner_id': 'bnTok123', 'position': 1, 'placement_type': 'toko_banner', 'placement_token': 'bnTok123'}
     ]);
     await t.drag(find.byType(CustomScrollView), const Offset(0, -600));
     await t.pump();
@@ -111,8 +112,8 @@ void main() {
     await t.drag(find.byKey(const ValueKey('tokoBannerPageView')), const Offset(-600, 0));
     await t.pumpAndSettle();
     expect(shown().toList(), [
-      {'banner_id': 'bnTok123', 'position': 1},
-      {'banner_id': 'bnTok456', 'position': 2},
+      {'banner_id': 'bnTok123', 'position': 1, 'placement_type': 'toko_banner', 'placement_token': 'bnTok123'},
+      {'banner_id': 'bnTok456', 'position': 2, 'placement_type': 'toko_banner', 'placement_token': 'bnTok456'},
     ]);
   });
 
@@ -153,9 +154,30 @@ void main() {
     await t.tap(find.byKey(const ValueKey('tokoBannerImage_0')));
     await t.pump();
     expect(tapped().toList(), [
-      {'banner_id': 'bnTok123', 'target_type': 'toko_home', 'position': 1}
+      {
+        'banner_id': 'bnTok123',
+        'target_type': 'toko_home',
+        'position': 1,
+        'placement_type': 'toko_banner',
+        'placement_token': 'bnTok123',
+      }
     ]);
     expect(find.byType(TokoPageV3), findsOneWidget);
+  });
+
+  testWidgets('analytics-pipeline 3.1：旧后端无 bannerId → tapped 不带 banner_id / placement_token、仍带 placement_type；不报 shown',
+      (t) async {
+    await t.pumpWidget(wrap([
+      const ShopBanner(imageUrl: 'https://cdn.example/b.jpg', imageW: 1600, imageH: 900, target: ShopBannerTarget.tokoHome),
+    ]));
+    await t.pump();
+    await t.pump();
+    expect(shown(), isEmpty, reason: '无 token 的 banner 无法按运营位归属，曝光不报（原行为）');
+    await t.tap(find.byKey(const ValueKey('tokoBannerImage_0')));
+    await t.pump();
+    expect(tapped().toList(), [
+      {'target_type': 'toko_home', 'position': 1, 'placement_type': 'toko_banner'}
+    ]);
   });
 
   testWidgets('快速双击只算一次点击', (t) async {

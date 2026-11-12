@@ -64,6 +64,11 @@ void main() {
       expect(out.keys, ['button_id']);
     });
 
+    test('analytics-pipeline 3.1：placement_token / placement_type 不被误删（_piiKeys 只精确匹配 token）', () {
+      final out = Analytics.scrub({'placement_token': 'x', 'placement_type': 'ops_popup'});
+      expect(out, {'placement_token': 'x', 'placement_type': 'ops_popup'});
+    });
+
     test('超长字符串值(>64)整键丢弃——大概率是用户内容', () {
       final out = Analytics.scrub({
         'note': 'a' * 65,

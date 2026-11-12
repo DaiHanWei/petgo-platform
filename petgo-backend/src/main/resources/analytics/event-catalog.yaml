@@ -972,6 +972,8 @@ events:
     code_ref: petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart
     properties:
       - { name: popup_id, type: string, description: "运营弹窗公开 token" }
+      - { name: placement_type, type: string, description: "运营位类型（受控枚举，本事件恒为 ops_popup；S5 运营位统计）" }
+      - { name: placement_token, type: string, description: "运营位公开 token（同 popup_id，ops_popups.public_token；不是用户标识）" }
   - name: ops_popup_shown
     source: APP
     status: ACTIVE
@@ -980,6 +982,8 @@ events:
     code_ref: petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart
     properties:
       - { name: popup_id, type: string, description: "运营弹窗公开 token" }
+      - { name: placement_type, type: string, description: "运营位类型（受控枚举，本事件恒为 ops_popup；S5 运营位统计）" }
+      - { name: placement_token, type: string, description: "运营位公开 token（同 popup_id，ops_popups.public_token；不是用户标识）" }
   - name: ops_popup_tapped
     source: APP
     status: ACTIVE
@@ -988,6 +992,8 @@ events:
     code_ref: petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart
     properties:
       - { name: popup_id, type: string, description: "运营弹窗公开 token" }
+      - { name: placement_type, type: string, description: "运营位类型（受控枚举，本事件恒为 ops_popup；S5 运营位统计）" }
+      - { name: placement_token, type: string, description: "运营位公开 token（同 popup_id，ops_popups.public_token；不是用户标识）" }
 
   # ======== passport (5)
   - name: boarding_pass_unlocked
@@ -1715,6 +1721,8 @@ events:
     properties:
       - { name: banner_id, type: string, description: "Banner 公开 id" }
       - { name: position, type: int, description: "Banner 轮播位次（从 1 起）" }
+      - { name: placement_type, type: string, description: "运营位类型（受控枚举，本事件恒为 toko_banner；S5 运营位统计）" }
+      - { name: placement_token, type: string, description: "运营位公开 token（同 banner_id，shop_banners.public_token；不是用户标识）" }
   - name: toko_banner_tapped
     source: APP
     status: ACTIVE
@@ -1725,6 +1733,8 @@ events:
       - { name: banner_id, type: string, description: "Banner 公开 id" }
       - { name: target_type, type: string, description: "Banner 跳转目标类型（受控枚举）" }
       - { name: position, type: int, description: "Banner 轮播位次（从 1 起）" }
+      - { name: placement_type, type: string, description: "运营位类型（受控枚举，本事件恒为 toko_banner；S5 运营位统计）" }
+      - { name: placement_token, type: string, description: "运营位公开 token（同 banner_id，shop_banners.public_token；旧后端无 token 时不带；不是用户标识）" }
   - name: toko_buy_now_tapped
     source: APP
     status: ACTIVE
@@ -1840,6 +1850,8 @@ events:
     code_ref: petgo_app/lib/features/shop/coupon/presentation/newbie_popup.dart
     properties:
       - { name: coupon_id, type: string, description: "券 / 券活动公开 token" }
+      - { name: placement_type, type: string, description: "运营位类型（受控枚举，本事件恒为 newbie_coupon；S5 运营位统计）" }
+      - { name: placement_token, type: string, description: "运营位公开 token（新人券活动 campaignToken，shop_coupons.public_token；为空时不带；不是用户标识）" }
   - name: toko_newbie_coupon_popup_tapped
     source: APP
     status: ACTIVE
@@ -1849,6 +1861,8 @@ events:
     properties:
       - { name: coupon_id, type: string, description: "券 / 券活动公开 token" }
       - { name: action, type: string, description: "点击动作（close / register）" }
+      - { name: placement_type, type: string, description: "运营位类型（受控枚举，本事件恒为 newbie_coupon；S5 运营位统计）" }
+      - { name: placement_token, type: string, description: "运营位公开 token（新人券活动 campaignToken，shop_coupons.public_token；为空时不带；不是用户标识）" }
   - name: toko_order_cancel_succeeded
     source: APP
     status: ACTIVE

@@ -109,6 +109,25 @@ class EventCatalogTest {
         }
     }
 
+    /** Story 3.1：三类运营位事件都登记了 placement_type / placement_token，原属性保留，且不算用户标识（擦除不清）。 */
+    @Test
+    void placementPropertiesRegisteredForPlacementEvents() {
+        EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);
+
+        assertThat(c.allowedPropertyKeys("ops_popup_shown")).containsExactlyInAnyOrder("popup_id", "placement_type", "placement_token");
+        assertThat(c.allowedPropertyKeys("ops_popup_tapped")).containsExactlyInAnyOrder("popup_id", "placement_type", "placement_token");
+        assertThat(c.allowedPropertyKeys("ops_popup_closed")).containsExactlyInAnyOrder("popup_id", "placement_type", "placement_token");
+        assertThat(c.allowedPropertyKeys("toko_banner_shown"))
+                .containsExactlyInAnyOrder("banner_id", "position", "placement_type", "placement_token");
+        assertThat(c.allowedPropertyKeys("toko_banner_tapped"))
+                .containsExactlyInAnyOrder("banner_id", "target_type", "position", "placement_type", "placement_token");
+        assertThat(c.allowedPropertyKeys("toko_newbie_coupon_popup_shown"))
+                .containsExactlyInAnyOrder("coupon_id", "placement_type", "placement_token");
+        assertThat(c.allowedPropertyKeys("toko_newbie_coupon_popup_tapped"))
+                .containsExactlyInAnyOrder("coupon_id", "action", "placement_type", "placement_token");
+        assertThat(c.userIdentifierKeys()).doesNotContain("placement_type", "placement_token");
+    }
+
     @Test
     void realCatalogIsGroupedByDomainAndSortedWithinDomain() {
         EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);

@@ -16,6 +16,7 @@ import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart'
 import 'package:tailtopia/features/shop/coupon/data/coupon_repository.dart';
 import 'package:tailtopia/features/shop/coupon/domain/shop_coupon.dart';
 import 'package:tailtopia/features/shop/coupon/presentation/coupons_for_you_row.dart' show CouponClaimPill;
+import 'package:tailtopia/features/shop/coupon/presentation/newbie_popup.dart' show showNewbieCouponPopup;
 import 'package:tailtopia/features/shop/data/cart_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_repurchase_repository.dart';
@@ -420,7 +421,13 @@ void main() {
       await t.tap(find.byKey(const ValueKey('tokoBannerImage_0')));
       await t.pumpAndSettle();
       expect(h.pushed, ['/shop/products/pT1?from=BANNER']);
-      expect(ev('toko_banner_tapped').single, {'banner_id': 'bp', 'target_type': 'product_detail', 'position': 1});
+      expect(ev('toko_banner_tapped').single, {
+        'banner_id': 'bp',
+        'target_type': 'product_detail',
+        'position': 1,
+        'placement_type': 'toko_banner',
+        'placement_token': 'bp',
+      });
     });
 
     testWidgets('NONE 不可点', (t) async {
@@ -537,6 +544,54 @@ void main() {
   });
 
   // ------------------------------------------------------------------ A4 / entry
+  // analytics-pipeline Story 3.1 AC1 / AC2：新人券弹窗曝光挪到弹窗首帧后（露出才算曝光），带运营位属性。
+  group('analytics-pipeline 3.1 新人券弹窗曝光时机与运营位属性', () {
+    Future<void> pumpLauncher(WidgetTester t, NewbieCampaign c) async {
+      await t.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('id'),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('launchNewbie'),
+              onPressed: () => showNewbieCouponPopup(context, c),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ));
+    }
+
+    testWidgets('showDialog 之前 / 首帧前不报 shown；首帧后恰好一条；rebuild 不重复', (t) async {
+      await pumpLauncher(t, const NewbieCampaign(campaignToken: 'nbCamp', amount: 25000, minSpend: 0));
+      await t.tap(find.byKey(const ValueKey('launchNewbie')));
+      expect(ev('toko_newbie_coupon_popup_shown'), isEmpty, reason: '弹窗还没露出，不算曝光');
+      await t.pump();
+      expect(ev('toko_newbie_coupon_popup_shown').toList(), [
+        {'coupon_id': 'nbCamp', 'placement_type': 'newbie_coupon', 'placement_token': 'nbCamp'}
+      ]);
+      await t.pumpAndSettle(); // 路由过渡动画期间弹窗反复 rebuild
+      t.binding.platformDispatcher.textScaleFactorTestValue = 1.3; // 触发依赖 MediaQuery 的 rebuild
+      await t.pump();
+      t.binding.platformDispatcher.clearTextScaleFactorTestValue();
+      await t.pump();
+      expect(find.byKey(const ValueKey('newbieCouponPopup')), findsOneWidget);
+      expect(ev('toko_newbie_coupon_popup_shown'), hasLength(1));
+    });
+
+    testWidgets('campaignToken 为空串 → 三个事件都不带 placement_token（不报空串），其余属性保留', (t) async {
+      await pumpLauncher(t, const NewbieCampaign(campaignToken: '', amount: 25000, minSpend: 0));
+      await t.tap(find.byKey(const ValueKey('launchNewbie')));
+      await t.pumpAndSettle();
+      expect(ev('toko_newbie_coupon_popup_shown').single, {'coupon_id': '', 'placement_type': 'newbie_coupon'});
+      await t.tap(find.byKey(const ValueKey('newbieCouponPopupClose')));
+      await t.pumpAndSettle();
+      expect(ev('toko_newbie_coupon_popup_tapped').single,
+          {'coupon_id': '', 'action': 'close', 'placement_type': 'newbie_coupon'});
+    });
+  });
+
   group('AC4 进入 Toko：已登录发新人券 / 游客弹窗', () {
     const campaign = NewbieCampaign(campaignToken: 'nbCamp', amount: 25000, minSpend: 100000);
 
@@ -545,7 +600,9 @@ void main() {
       expect(find.byKey(const ValueKey('newbieCouponPopup')), findsOneWidget);
       expect(find.text('Daftar sekarang, dapat kupon Rp 25.000'), findsOneWidget);
       expect(find.text('Khusus pengguna baru · min. belanja Rp 100.000'), findsOneWidget);
-      expect(ev('toko_newbie_coupon_popup_shown').single, {'coupon_id': 'nbCamp'});
+      // analytics-pipeline 3.1：shown 在弹窗首帧后上报（pump 已跑完首帧），带运营位类型与活动 token。
+      expect(ev('toko_newbie_coupon_popup_shown').single,
+          {'coupon_id': 'nbCamp', 'placement_type': 'newbie_coupon', 'placement_token': 'nbCamp'});
       final prefs = await AppPrefs.create();
       expect(prefs.shownNewbieCampaigns, contains('nbCamp'));
     });
@@ -556,7 +613,8 @@ void main() {
       await pump(t, coupons: repo, ticker: ticker);
       await t.tap(find.byKey(const ValueKey('newbieCouponPopupClose')));
       await t.pumpAndSettle();
-      expect(ev('toko_newbie_coupon_popup_tapped').single, {'coupon_id': 'nbCamp', 'action': 'close'});
+      expect(ev('toko_newbie_coupon_popup_tapped').single,
+          {'coupon_id': 'nbCamp', 'action': 'close', 'placement_type': 'newbie_coupon', 'placement_token': 'nbCamp'});
       expect(find.byKey(const ValueKey('newbieCouponPopup')), findsNothing);
       // 离开再回来（切 Tab）
       ticker.value = false;
@@ -572,7 +630,8 @@ void main() {
       final h = await pump(t, coupons: FakeCouponRepository(campaign: campaign));
       await t.tap(find.byKey(const ValueKey('newbieCouponPopupCta')));
       await t.pumpAndSettle();
-      expect(ev('toko_newbie_coupon_popup_tapped').single, {'coupon_id': 'nbCamp', 'action': 'register'});
+      expect(ev('toko_newbie_coupon_popup_tapped').single,
+          {'coupon_id': 'nbCamp', 'action': 'register', 'placement_type': 'newbie_coupon', 'placement_token': 'nbCamp'});
       expect(h.pushed, ['/login']);
     });
 

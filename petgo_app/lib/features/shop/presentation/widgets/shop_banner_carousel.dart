@@ -179,7 +179,12 @@ class _ShopBannerCarouselState extends State<ShopBannerCarousel> with WidgetsBin
     if (id == null || id.isEmpty || _shown.contains(id)) return;
     if (_visibleFraction() <= 0.5) return;
     _shown.add(id);
-    Analytics.capture('toko_banner_shown', {'banner_id': id, 'position': i + 1});
+    Analytics.capture('toko_banner_shown', {
+      'banner_id': id,
+      'position': i + 1,
+      'placement_type': 'toko_banner',
+      'placement_token': id,
+    });
   }
 
   void _tap(ShopBanner b, int index) {

@@ -154,6 +154,8 @@ class _TokoPageV3State extends ConsumerState<TokoPageV3> {
       'banner_id': ?b.bannerId,
       'target_type': b.target.analytics,
       'position': position,
+      'placement_type': 'toko_banner',
+      'placement_token': ?b.bannerId,
     });
     switch (b.target) {
       case ShopBannerTarget.product:

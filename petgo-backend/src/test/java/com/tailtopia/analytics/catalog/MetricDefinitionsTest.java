@@ -56,6 +56,25 @@ class MetricDefinitionsTest {
         });
     }
 
+    /** Story 3.1 AC3：S5 写明运营位清单、事件名、token 来源表、曝光规则与变更记录。 */
+    @Test
+    void s5ListsPlacementsEventsAndTokenSources() {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+
+        assertThat(m.isLoaded()).isTrue();
+        MetricDefinition s5 = m.metrics().stream().filter(d -> d.code().equals("S5")).findFirst().orElseThrow();
+        assertThat(s5.definition()).contains("ops_popup", "toko_banner", "newbie_coupon", "50%", "action = 'register'");
+        assertThat(String.join("\n", s5.sources())).contains(
+                "ops_popup_shown", "ops_popup_tapped", "ops_popup_closed",
+                "toko_banner_shown", "toko_banner_tapped",
+                "toko_newbie_coupon_popup_shown", "toko_newbie_coupon_popup_tapped",
+                "ops_popups.public_token", "shop_banners.public_token", "shop_coupons.public_token");
+        assertThat(s5.exclusions()).contains("account_type = 'REAL'", "growth_backfill_popup_shown", "app_update_prompt_shown");
+        assertThat(s5.knownBias()).contains("_reportImpression");
+        assertThat(s5.sqlPath()).isNull();
+        assertThat(s5.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 3.1"));
+    }
+
     @Test
     void duplicateCodeAndMissingNameDisableWithPath() {
         MetricDefinitions m = load("classpath:analytics/bad-metric-definitions.yaml");

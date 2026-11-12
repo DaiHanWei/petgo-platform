@@ -193,6 +193,10 @@ void main() {
       // - is_retry：bool（F25 打款失败后重填进入）
       // - destination：受控词表 to_pawcoin / to_bank
       // - channel：受控词表 bca / ovo / gopay（打款渠道，非账号）；🔒 刻意不带账号 / 末 4 位 / 户名。
+      // analytics-pipeline Story 3.1（运营位曝光与点击核对，S5）新增两项，已逐个确认：
+      // - placement_type：运营位类型，受控词表 ops_popup / toko_banner / newbie_coupon，与个人无关
+      // - placement_token：运营位 / 活动的公开 token（banner token、新人券活动 token，后台运营配置），
+      //   与 banner_id / coupon_id 同值，不可枚举，与个人无关
       expect(props, {
         'reason', 'is_retry', 'destination', 'channel',
         'exception_type',
@@ -204,6 +208,7 @@ void main() {
         // v1.4.2 shop Story 9.4（FR-136）：card_source 随 Diary 复购触发卡删除，已不再上报 → 移出白名单。
         'banner_id', 'position', 'target_type',
         'entry', 'coupon_ids', 'coin_used', 'courier', 'shipping_fee', 'insurance',
+        'placement_type', 'placement_token',
       });
     });
 

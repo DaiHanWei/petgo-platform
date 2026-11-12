@@ -615,6 +615,9 @@ void main() {
         // V1.4.2 social-topic Story 4.4（PRD §4 · R-2）：topic_inserted{topic_id, is_official, is_new, method}；
         // method ∈ suggestion / typed（'method' 已在上方）。
         'is_official', 'is_new',
+        // analytics-pipeline Story 3.1（S5 运营位）：placement_type ∈ ops_popup / toko_banner / newbie_coupon（受控词表）；
+        // placement_token = 运营弹窗 / banner / 新人券活动的公开 token（后台运营配置，不可枚举），与个人无关。
+        'placement_type', 'placement_token',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

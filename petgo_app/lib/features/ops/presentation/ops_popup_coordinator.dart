@@ -260,19 +260,31 @@ class OpsPopupCoordinator {
 
     // 结果处理在弹窗 pop 之后（AC5.4）。
     if (outcome == OpsPopupOutcome.tap) {
-      unawaited(Analytics.capture('ops_popup_tapped', {'popup_id': picked.token}));
+      unawaited(Analytics.capture('ops_popup_tapped', {
+        'popup_id': picked.token,
+        'placement_type': 'ops_popup',
+        'placement_token': picked.token,
+      }));
       if (!targetValid) return;
       final navCtx = _rootContext();
       if (navCtx == null || !navCtx.mounted) return;
       await _openTarget(navCtx, target);
     } else {
-      unawaited(Analytics.capture('ops_popup_closed', {'popup_id': picked.token}));
+      unawaited(Analytics.capture('ops_popup_closed', {
+        'popup_id': picked.token,
+        'placement_type': 'ops_popup',
+        'placement_token': picked.token,
+      }));
     }
   }
 
   /// 真正显示后：写本地频次（游客也写）+ 登录用户曝光上报 + `ops_popup_shown`（AC3.4 / AC3.5）。
   void _onShown(OpsPopupCandidate c, AppPrefs prefs) {
-    unawaited(Analytics.capture('ops_popup_shown', {'popup_id': c.token}));
+    unawaited(Analytics.capture('ops_popup_shown', {
+      'popup_id': c.token,
+      'placement_type': 'ops_popup',
+      'placement_token': c.token,
+    }));
     unawaited(prefs
         .markOpsPopupShown(c.token, opsPopupShownValue(c.frequency, _now()))
         .catchError((Object _) {}));
