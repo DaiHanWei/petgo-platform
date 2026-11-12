@@ -114,12 +114,12 @@ void main() {
     // 位置：FeedTabRow 之后（分类标签与顶置卡之间）。
     expect(tester.getTopLeft(row).dy,
         greaterThanOrEqualTo(tester.getBottomLeft(find.byType(FeedTabRow)).dy - 0.5));
-    // 横滑、可点高度 36（2026-11-12 收紧，原 44）、文字 13 w600 mint600。
+    // 横滑、可点高度 36（2026-11-12 收紧，原 44）、文字 15 w600 mint600（原 13）。
     expect(tester.widget<ListView>(find.descendant(of: row, matching: find.byType(ListView))).scrollDirection,
         Axis.horizontal);
     expect(tester.getSize(row).height, HomeTopicRow.itemHeight);
     final style = tester.widget<Text>(find.text('#Topik2')).style!;
-    expect(style.fontSize, 13);
+    expect(style.fontSize, 15);
     expect(style.fontWeight, FontWeight.w600);
     expect(style.color, AppColors.mint600);
   });

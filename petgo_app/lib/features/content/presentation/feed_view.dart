@@ -85,7 +85,7 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   final Widget? header;
 
   /// 首张卡片上方的留白（原恒为屏边距 16）。头部最后一行本身已有留白时由调用方收小
-  /// （首页话题行出现时传 4，否则话题与首帖之间空得过大 —— 2026-11-12 实机反馈两轮）。
+  /// （首页话题行出现时传 6，否则话题与首帖之间空得过大 —— 2026-11-12 实机反馈）。
   final double cardsTopPadding;
 
   /// 顶置坑位（V1.1.6 Story 4.2 · FR-68）。

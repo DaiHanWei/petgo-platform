@@ -247,11 +247,11 @@ class HomePage extends ConsumerWidget {
         }
         final pinnedAsync = ref.watch(pinnedSlotProvider);
         // 访客登录引导卡已下线（不再显示登录/注册按钮）；游客与登录态一致自动翻页浏览。
-        // 话题行出现时，首帖上方只留 4（话题行自带下方 4 的点击区），否则维持 16。
+        // 话题行出现时，首帖上方只留 6（话题行自带下方 6 的点击区），否则维持 16。
         final topicRowShown = ref.watch(homeTopicRowProvider).value?.isNotEmpty ?? false;
         return FeedMasonryView(
           header: header,
-          cardsTopPadding: topicRowShown ? 4 : AppSpacing.screenEdge,
+          cardsTopPadding: topicRowShown ? 6 : AppSpacing.screenEdge,
           // bug 20261012-586：发布成功页「去 Feed 看」→ 定位刚发的帖。
           // 🔴 首屏与顶置**都到手**才传：刷新中拿的是旧列表（会误判「没有」提前放弃）；
           //    顶置晚到会把卡片整体往下推，先滚过去就白滚了。
