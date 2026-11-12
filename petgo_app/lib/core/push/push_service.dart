@@ -55,6 +55,22 @@ void reportOpsNotificationOpenedFromPush(PushPayload p) {
   Analytics.capture('ops_notification_opened', {'campaign_id': id, 'source': 'push'});
 }
 
+/// 统一推送打开事件（analytics-pipeline Story 3.2 · FR-18）。只在系统推送点击时调，通知中心列表点击不调。
+///
+/// `push_type` = 载荷 `type` 原值（缺失 / 空串记 `unknown`，不丢事件）。只有运营通知带
+/// `campaign_token`（= `targetRef`，活动 public_token）——其他类型的 `targetRef` 含义各异
+/// （`USER_FOLLOWED` 是关注者数字 userId、`VET_REPLY` 是会话 id、`COUPON_EXPIRING` 是张数），绝不带出。
+/// 冷启动：点击回调在 `registerPush` 之后才投递，匿名 id 早已在 `runApp` 前加载；只走门面，不自读匿名 id。
+@visibleForTesting
+void reportPushOpened(PushPayload p) {
+  final type = (p.type == null || p.type!.isEmpty) ? 'unknown' : p.type!;
+  final ref = p.targetRef;
+  Analytics.capture('push_opened', {
+    'push_type': type,
+    if (type == 'OPS_ANNOUNCEMENT' && ref != null && ref.isNotEmpty) 'campaign_token': ref,
+  });
+}
+
 /// 推送点击直达深链目标的通知类型（其余通知类推送仍落通知中心，2026-08-07 产品口径）。
 /// v1.4.2 shop 9.3（C-10）：`COUPON_EXPIRING` 并入 → 我的券。
 const Set<String> kPushDirectTypes = {'GROWTH_LEVEL_UP', 'SHOP_ORDER_REORDERED', 'COUPON_EXPIRING'};
@@ -256,6 +272,8 @@ class PushService {
   ///（Story 5.1 F2），正是兽医新单推送该去的地方。
   void _onNotificationClicked({required String ext, String? userID, String? groupID}) {
     final p = parsePushExt(ext);
+    // analytics-pipeline Story 3.2：统一推送打开事件，同步上报——落点计算 / 导航失败都不影响打开计数。
+    reportPushOpened(p);
     // 运营通知埋点（Story 6.3）；落点规则不变（有 token → 通知中心，不直达目标）。
     reportOpsNotificationOpenedFromPush(p);
     // v1.4.2 shop Story 9.3：券快过期推送点开（与运营推送同为「推送点开」口径，落点不影响上报）。

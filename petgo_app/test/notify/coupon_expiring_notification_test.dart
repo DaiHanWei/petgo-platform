@@ -103,6 +103,8 @@ void main() {
     final types = events.map((e) => e.$2?['notif_type']).whereType<String>().toSet();
     expect(types, contains('coupon_expiring'));
     expect(events.where((e) => e.$1 == 'toko_coupon_expiry_push_opened'), isEmpty);
+    // analytics-pipeline Story 3.2 AC3：列表点击也不报统一事件 push_opened。
+    expect(events.where((e) => e.$1 == 'push_opened'), isEmpty);
   });
 
   group('推送点开埋点 toko_coupon_expiry_push_opened', () {

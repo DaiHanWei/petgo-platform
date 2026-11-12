@@ -73,7 +73,7 @@ class EventCatalogTest {
     void ac2PlannedEventsPreRegistered() {
         EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);
         List<String> planned = List.of("user_identified", "screen_viewed", "Application Installed",
-                "Application Updated", "Application Opened", "push_opened", "toko_cart_item_removed",
+                "Application Updated", "Application Opened", "toko_cart_item_removed",
                 "toko_cart_quantity_changed");
         Map<String, EventDefinition> byName = new LinkedHashMap<>();
         c.events().forEach(e -> byName.put(e.name(), e));
@@ -107,6 +107,18 @@ class EventCatalogTest {
                 }
             }
         }
+    }
+
+    /** Story 3.2：push_opened 落地（PLANNED → ACTIVE），只登记 push_type / campaign_token，都不算用户标识（擦除不清）。 */
+    @Test
+    void pushOpenedActiveWithTypeAndCampaignToken() {
+        EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);
+        EventDefinition e = c.events().stream().filter(d -> d.name().equals("push_opened")).findFirst().orElseThrow();
+
+        assertThat(e.status()).isEqualTo(Status.ACTIVE);
+        assertThat(e.codeRef()).isEqualTo("petgo_app/lib/core/push/push_service.dart");
+        assertThat(c.allowedPropertyKeys("push_opened")).containsExactlyInAnyOrder("push_type", "campaign_token");
+        assertThat(c.userIdentifierKeys()).doesNotContain("push_type", "campaign_token");
     }
 
     /** Story 3.1：三类运营位事件都登记了 placement_type / placement_token，原属性保留，且不算用户标识（擦除不清）。 */

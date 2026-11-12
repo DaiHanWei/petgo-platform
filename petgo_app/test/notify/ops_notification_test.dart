@@ -253,6 +253,8 @@ void main() {
       final tapped = events.where((e) => e.$1 == 'app_notification_item_tapped').toList();
       expect(tapped, hasLength(1));
       expect(tapped.single.$2, {'notif_type': 'ops_announcement'});
+      // analytics-pipeline Story 3.2 AC3：通知中心列表点击不报 push_opened。
+      expect(events.where((e) => e.$1 == 'push_opened'), isEmpty);
     });
 
     testWidgets('targetRef 为空 → 不报 ops_notification_opened（仍报 item_tapped）', (tester) async {

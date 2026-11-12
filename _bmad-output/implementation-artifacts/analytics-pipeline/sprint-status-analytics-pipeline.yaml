@@ -72,7 +72,7 @@ development_status:
   # Epic 3：补齐团队指标需要的事件（随 V1.5.0）（App 为主；随 V1.5.0；可与 Epic 2 并行）
   epic-3: in-progress
   3-1-运营位曝光与点击核对: review
-  3-2-推送打开统一事件: ready-for-dev
+  3-2-推送打开统一事件: review
   3-3-购物车事件补全: ready-for-dev
   3-4-漏斗与引导事件核对: ready-for-dev
   epic-3-retrospective: optional

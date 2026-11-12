@@ -618,6 +618,9 @@ void main() {
         // analytics-pipeline Story 3.1（S5 运营位）：placement_type ∈ ops_popup / toko_banner / newbie_coupon（受控词表）；
         // placement_token = 运营弹窗 / banner / 新人券活动的公开 token（后台运营配置，不可枚举），与个人无关。
         'placement_type', 'placement_token',
+        // analytics-pipeline Story 3.2（push_opened · FR-18）：push_type = 推送载荷 type 受控枚举（缺失记 unknown）；
+        // campaign_token = 运营通知活动 public_token（仅 OPS_ANNOUNCEMENT 带），与个人无关。
+        'push_type', 'campaign_token',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

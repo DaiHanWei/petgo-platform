@@ -921,12 +921,13 @@ events:
       - { name: enabled, type: bool, description: "开关目标态" }
   - name: push_opened
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: notify
-    description: "推送被点开的统一事件（Epic 3，FR-18）"
+    description: "任一系统推送被点开的统一事件（Story 3.2，FR-18）；前台 / 后台 / 冷启动都报，通知中心列表点击不报"
+    code_ref: petgo_app/lib/core/push/push_service.dart
     properties:
-      - { name: push_type, type: string, description: "推送类型（受控枚举）" }
-      - { name: campaign_token, type: string, description: "运营推送的活动公开 token（仅运营推送带）" }
+      - { name: push_type, type: string, description: "推送载荷 type 原值（后端 NotificationType 大写枚举名或 VET_REPLY；缺失 / 空串记 unknown）；受控枚举，不是用户标识" }
+      - { name: campaign_token, type: string, description: "运营通知活动 ops_notification_campaigns.public_token（载荷 targetRef；仅 push_type = OPS_ANNOUNCEMENT 时带）；不是用户标识" }
   - name: push_permission_prompt_shown
     source: APP
     status: ACTIVE
