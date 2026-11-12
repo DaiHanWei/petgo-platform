@@ -3,6 +3,8 @@ package com.tailtopia.analytics.ingest;
 import com.tailtopia.admin.alert.OpsAlertService;
 import com.tailtopia.admin.alert.OpsChannel;
 import com.tailtopia.analytics.config.AnalyticsDataSourceConfig;
+import com.tailtopia.analytics.identity.IdentityLink;
+import com.tailtopia.analytics.identity.IdentityLinkRepository;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -12,6 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
@@ -39,6 +42,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 最多等 {@code analytics.ingest.shutdown-drain-timeout}（默认 20s，小于 Spring 默认每阶段 30s），超时把剩余条数打 WARN。
  * 数据源在生命周期停止之后才销毁，写库可用。
  *
+ * <h2>身份关联（Story 1.5）</h2>
+ * 带 {@link RawEvent#identityLink()} 的事件，其关联行在<b>同一个埋点事务</b>里、写完 {@code events_raw} 之后
+ * 由 {@link IdentityLinkRepository#appendAll} 追加（{@code ON CONFLICT DO NOTHING}，重试幂等）——事件和关联同生共死；
+ * 请求线程不写库。本批没有关联时只有一条语句。
+ *
  * <h2>写失败</h2>
  * 同一批在一个埋点事务里写（全成或全不成，重试不会产生半批重复）；失败按 1s / 2s / 4s 重试 3 次，仍失败 → 丢弃、计数、
  * WARN（只打条数与首末 {@code messageId}）、TECH 告警（按 UTC 日去重）。不无限重试，免得堵死队列。
@@ -63,6 +71,7 @@ public class IngestFlusher implements SmartLifecycle {
     private final IngestQueue queue;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
+    private final IdentityLinkRepository identityLinks;
     private final OpsAlertService alerts;
     private final String appEnv;
     private final int batchSize;
@@ -80,20 +89,28 @@ public class IngestFlusher implements SmartLifecycle {
     public IngestFlusher(IngestQueue queue,
             @Qualifier(AnalyticsDataSourceConfig.QUALIFIER) JdbcTemplate analyticsJdbcTemplate,
             @Qualifier(AnalyticsDataSourceConfig.QUALIFIER) TransactionTemplate analyticsTransactionTemplate,
-            OpsAlertService alerts, IngestProperties props,
+            IdentityLinkRepository identityLinks, OpsAlertService alerts, IngestProperties props,
             @Value("${analytics.app-env:dev}") String appEnv) {
-        this(queue, analyticsJdbcTemplate, analyticsTransactionTemplate, alerts, appEnv, props.flushBatchSize(),
-                Duration.ofMillis(props.flushIntervalMs()), props.shutdownDrainTimeout(), Duration.ofSeconds(1),
-                Clock.systemUTC());
+        this(queue, analyticsJdbcTemplate, analyticsTransactionTemplate, identityLinks, alerts, appEnv,
+                props.flushBatchSize(), Duration.ofMillis(props.flushIntervalMs()), props.shutdownDrainTimeout(),
+                Duration.ofSeconds(1), Clock.systemUTC());
     }
 
-    /** 测试用：可调批量、间隔、停机等待、重试退避基数。 */
+    /** 测试用：可调批量、间隔、停机等待、重试退避基数；关联仓库用同一个 {@code jdbc}。 */
     IngestFlusher(IngestQueue queue, JdbcTemplate jdbc, TransactionTemplate tx, OpsAlertService alerts,
             String appEnv, int batchSize, Duration interval, Duration drainTimeout, Duration retryBackoff,
             Clock clock) {
+        this(queue, jdbc, tx, new IdentityLinkRepository(jdbc), alerts, appEnv, batchSize, interval, drainTimeout,
+                retryBackoff, clock);
+    }
+
+    IngestFlusher(IngestQueue queue, JdbcTemplate jdbc, TransactionTemplate tx, IdentityLinkRepository identityLinks,
+            OpsAlertService alerts, String appEnv, int batchSize, Duration interval, Duration drainTimeout,
+            Duration retryBackoff, Clock clock) {
         this.queue = queue;
         this.jdbc = jdbc;
         this.tx = tx;
+        this.identityLinks = identityLinks;
         this.alerts = alerts;
         this.appEnv = appEnv;
         this.batchSize = Math.max(1, batchSize);
@@ -188,15 +205,21 @@ public class IngestFlusher implements SmartLifecycle {
         }
     }
 
-    /** 写一批：埋点事务内 {@code batchUpdate}，失败按 1s / 2s / 4s 重试 3 次，仍失败丢弃 + 告警。绝不抛。 */
+    /** 写一批：埋点事务内先 {@code events_raw} 再关联，失败按 1s / 2s / 4s 重试 3 次，仍失败丢弃 + 告警。绝不抛。 */
     void write(List<RawEvent> batch) {
+        List<IdentityLink> links = linksOf(batch);
         RuntimeException last = null;
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             if (attempt > 0 && !sleep(retryBackoff.multipliedBy(1L << (attempt - 1)))) {
                 break;
             }
             try {
-                tx.executeWithoutResult(status -> jdbc.batchUpdate(INSERT_SQL, batch, batch.size(), IngestFlusher::bind));
+                tx.executeWithoutResult(status -> {
+                    jdbc.batchUpdate(INSERT_SQL, batch, batch.size(), IngestFlusher::bind);
+                    if (!links.isEmpty()) {
+                        identityLinks.appendAll(links);
+                    }
+                });
                 writtenCount.addAndGet(batch.size());
                 return;
             } catch (RuntimeException e) {
@@ -217,6 +240,17 @@ public class IngestFlusher implements SmartLifecycle {
         } catch (RuntimeException e) {
             log.warn("analytics ingest alert failed: {}", e.getClass().getSimpleName());
         }
+    }
+
+    /** 本批事件挂的关联行（按事件顺序）；没有返回空列表。 */
+    static List<IdentityLink> linksOf(List<RawEvent> batch) {
+        List<IdentityLink> links = new ArrayList<>();
+        for (RawEvent e : batch) {
+            if (e.identityLink() != null) {
+                links.add(e.identityLink());
+            }
+        }
+        return links;
     }
 
     /** @return {@code false} = 被中断（停机超时），放弃重试 */

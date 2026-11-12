@@ -68,8 +68,16 @@ class AnalyticsBatchControllerTest {
         mvc = build(IngestProperties.defaults());
     }
 
+    /**
+     * 测试替身（= Story 1.4 的直通语义）：有用户标识 → 原样保留并标 {@code identityUnverified}；没有 → 三项空 / false。
+     * 本类只测接口流程，真正的身份判定（Story 1.5 {@code LinkTableIdentityResolver}）另见 {@code IdentityResolverTest}。
+     */
+    private static final IdentityResolver PASSTHROUGH = (events, jwt) -> events.stream()
+            .map(e -> e.userKey() == null ? e.withIdentity(null, null, false) : e.withIdentity(e.userKey(), null, true))
+            .toList();
+
     private MockMvc build(IngestProperties props) {
-        AnalyticsBatchController c = new AnalyticsBatchController(queue, catalog, new IdentityResolver.Passthrough(),
+        AnalyticsBatchController c = new AnalyticsBatchController(queue, catalog, PASSTHROUGH,
                 state, limiter, props, Clock.fixed(NOW, ZoneOffset.UTC));
         return MockMvcBuilders.standaloneSetup(c)
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())

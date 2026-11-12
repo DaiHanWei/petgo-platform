@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.alert.OpsAlertService;
 import com.tailtopia.admin.alert.OpsChannel;
+import com.tailtopia.analytics.identity.IdentityLink;
 import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.time.Clock;
@@ -32,6 +34,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.server.context.WebServerGracefulShutdownLifecycle;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.mockito.InOrder;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ParameterizedPreparedStatementSetter;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -179,5 +183,64 @@ class IngestFlusherTest {
         verify(ps).setBoolean(12, true);
         verify(ps).setBoolean(13, true);
         assertThat(IngestFlusher.INSERT_SQL).contains("?::jsonb, ?::jsonb").startsWith("INSERT INTO events_raw (");
+    }
+
+    // ---- Story 1.5：关联行与事件同一个埋点事务 ----
+
+    private static RawEvent withLink(String messageId) {
+        IdentityLink link = new IdentityLink("3f2c8a1e-9b4d-4c1a-8e7f-0a1b2c3d4e5f", 7L, "k".repeat(64), T,
+                messageId);
+        return IngestQueueTest.event(messageId).withIdentityLink(link);
+    }
+
+    @Test
+    @DisplayName("1.5：带关联的批 → 同一事务内先写 events_raw 再写 identity_links")
+    @SuppressWarnings("unchecked")
+    void linksWrittenAfterEventsInSameTransaction() {
+        PlatformTransactionManager ptm = mock(PlatformTransactionManager.class);
+        tx = new TransactionTemplate(ptm);
+        IngestFlusher f = flusher(500, Duration.ofSeconds(1));
+
+        f.write(List.of(IngestQueueTest.event("a"), withLink("b"), withLink("c")));
+
+        InOrder order = inOrder(ptm, jdbc);
+        order.verify(ptm).getTransaction(any());
+        order.verify(jdbc).batchUpdate(eq(IngestFlusher.INSERT_SQL), anyCollection(), eq(3),
+                any(ParameterizedPreparedStatementSetter.class));
+        order.verify(jdbc).batchUpdate(startsWith("INSERT INTO identity_links"),
+                any(BatchPreparedStatementSetter.class));
+        order.verify(ptm).commit(any());
+        verify(ptm, times(1)).getTransaction(any());
+        assertThat(f.writtenCount()).isEqualTo(3);
+        assertThat(IngestFlusher.linksOf(List.of(IngestQueueTest.event("a"), withLink("b"), withLink("c"))))
+                .extracting(IdentityLink::messageId).containsExactly("b", "c");
+    }
+
+    @Test
+    @DisplayName("1.5：没有关联的批 → 只有一条 events_raw 语句")
+    void noLinksNoSecondStatement() {
+        IngestFlusher f = flusher(500, Duration.ofSeconds(1));
+
+        f.write(events(2));
+
+        verify(jdbc, never()).batchUpdate(anyString(), any(BatchPreparedStatementSetter.class));
+    }
+
+    @Test
+    @DisplayName("1.5：关联写失败 → 整批（含事件）按原语义重试，成功后不丢")
+    @SuppressWarnings("unchecked")
+    void linkFailureRetriesWholeBatch() {
+        when(jdbc.batchUpdate(startsWith("INSERT INTO identity_links"), any(BatchPreparedStatementSetter.class)))
+                .thenThrow(new DataAccessResourceFailureException("blip"))
+                .thenReturn(new int[] {1});
+        IngestFlusher f = flusher(500, Duration.ofSeconds(1));
+
+        f.write(List.of(withLink("b")));
+
+        verify(jdbc, times(2)).batchUpdate(eq(IngestFlusher.INSERT_SQL), anyCollection(), anyInt(),
+                any(ParameterizedPreparedStatementSetter.class));
+        assertThat(f.writtenCount()).isEqualTo(1);
+        assertThat(f.droppedCount()).isZero();
+        verify(alerts, never()).send(any(), any(), any());
     }
 }

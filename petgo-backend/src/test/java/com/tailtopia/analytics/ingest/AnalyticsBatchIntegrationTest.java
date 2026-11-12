@@ -156,15 +156,16 @@ class AnalyticsBatchIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    /** Story 1.5 起：无 JWT、关联表里查不到的用户标识被剥离并标记（原 1.4 直通实现是保留标识 + 标记）。 */
     @Test
-    void userIdStoredUnverified() throws Exception {
+    void userIdWithoutLinkStrippedAndFlagged() throws Exception {
         String userKey = "a".repeat(64);
 
         send("{\"batch\":[" + event("1", knownEvent(), ",\"userId\":\"" + userKey + "\"") + "]}", null)
                 .andExpect(status().isAccepted());
 
         Map<String, Object> row = awaitRows(1).get(0);
-        assertThat(row.get("user_key")).isEqualTo(userKey);
+        assertThat(row.get("user_key")).isNull();
         assertThat(row.get("user_id")).isNull();
         assertThat(row.get("identity_unverified")).isEqualTo(true);
     }
