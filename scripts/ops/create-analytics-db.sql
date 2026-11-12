@@ -20,7 +20,9 @@
 -- 做了什么：
 --   - 写入账号：LOGIN、CONNECTION LIMIT 5、statement_timeout=120s；是埋点库 OWNER（跑迁移、建分区；
 --     PG15+ public schema 归库属主）。汇总 / 擦除任务在事务内 SET LOCAL 放宽超时。
---   - 只读账号：LOGIN、CONNECTION LIMIT 3、只有 CONNECT 权限。
+--   - 只读账号：LOGIN、NOINHERIT、CONNECTION LIMIT 3、只有 CONNECT 权限；会话默认 statement_timeout=30s、
+--     idle_in_transaction_session_timeout=60s、default_transaction_read_only=on（Story 4.8）。
+--     核验：ai-query-agent/deploy/sql/verify_analytics_reader.sql。
 --     🔴 不写 ALTER DEFAULT PRIVILEGES：表权限由各 story 的迁移逐表 GRANT（白名单；events_raw 等不授权）。
 --   - REVOKE ALL ON DATABASE ... FROM PUBLIC：同实例上的业务账号、ops_readonly、claude_bot 等角色
 --     默认能 CONNECT 任何库，不收回它们都能连进埋点库；也挡住 stag 角色连生产埋点库。
@@ -70,11 +72,17 @@ ALTER ROLE :"writer_role" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLI
     CONNECTION LIMIT 5 PASSWORD :'writer_pw';
 ALTER ROLE :"writer_role" SET statement_timeout = '120s';
 
--- ---- 只读账号 ----
+-- ---- 只读账号（AI 查数，FR-27；Story 4.8 补齐会话属性） ----
 SELECT format('CREATE ROLE %I LOGIN', :'reader_role')
  WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'reader_role') \gexec
-ALTER ROLE :"reader_role" WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
+ALTER ROLE :"reader_role" WITH LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
     CONNECTION LIMIT 3 PASSWORD :'reader_pw';
+-- 以下三项是会话默认值（与业务库 claude_bot_stag 同一套），账号自己可用 SET 覆盖，不是硬限制：
+-- 真正的只读保证来自权限（迁移只逐表授 SELECT）；连接上限 3 由 CONNECTION LIMIT 强制。
+-- 30 秒超时可被会话 SET 覆盖的残留风险见 docs/runbooks/runbook-ai-query-agent.md §7。
+ALTER ROLE :"reader_role" SET statement_timeout = '30s';
+ALTER ROLE :"reader_role" SET idle_in_transaction_session_timeout = '60s';
+ALTER ROLE :"reader_role" SET default_transaction_read_only = on;
 
 -- ---- 埋点库（写入账号为属主） ----
 SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'db_name', :'writer_role', 'UTF8')

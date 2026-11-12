@@ -14,11 +14,14 @@ export const ALLOWED_TOOLS = 'Bash,Read,Grep,Glob';
  * 子进程 env 白名单（spec §6 S1）。只按名单逐个复制，禁止展开 process.env。
  * - 数据库密码不走 env：用 PGPASSFILE 指向只读挂载的 .pgpass
  * - 代理变量透传，为白名单代理（Story 3.1）预留
+ * - 埋点库（analytics-pipeline Story 4.8，FR-27）：只多两个非机密变量（库名、账号名），主机 / 端口 / PGPASSFILE 复用，
+ *   密码写在同一个 .pgpass 的第二行
  */
 export const CHILD_ENV_PASSTHROUGH = Object.freeze([
   'PATH', 'HOME', 'LANG', 'TZ',
   'CLAUDE_CODE_OAUTH_TOKEN',
   'PGHOST', 'PGPORT', 'PGUSER', 'PGDATABASE', 'PGPASSFILE',
+  'AIQ_ANALYTICS_PGDATABASE', 'AIQ_ANALYTICS_PGUSER',
   'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY',
 ]);
 

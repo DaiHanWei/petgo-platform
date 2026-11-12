@@ -29,6 +29,8 @@
 #   ~/.ssh/ai_query_agent_deploy_key        只读 deploy key（GitHub 仓库 Deploy keys，Read-only）
 #   ~/ai-query-agent-stag/env               agent env 文件，权限 600（模板 ai-query-agent/.env.example）
 #   ~/ai-query-agent-stag/pgpass            claude_bot_stag 的 .pgpass，权限 600，属主 uid 10002
+#                                           （第二行为埋点库 analytics_reader_stag，env 配 AIQ_ANALYTICS_PGDATABASE / _PGUSER；
+#                                            缺失只警告，见 runbook §2 第 6 步）
 #
 set -euo pipefail
 
@@ -74,6 +76,11 @@ done
   || { echo "pgpass 属主必须是 uid ${CLAUDE_UID}：sudo chown $CLAUDE_UID:$CLAUDE_UID $REMOTE_BASE/pgpass"; exit 1; }
 if grep -Eiq '^[[:space:]]*(export[[:space:]]+)?(LARK|FEISHU)_' $REMOTE_BASE/env; then
   echo "env 文件含 Lark 变量，拒绝部署"; exit 1
+fi
+# 埋点库只读账号（analytics-pipeline Story 4.8）：缺失只警告、照常部署（agent 仍可只查业务库）
+if ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?AIQ_ANALYTICS_PGDATABASE=[^[:space:]]' $REMOTE_BASE/env \
+   || ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?AIQ_ANALYTICS_PGUSER=[^[:space:]]' $REMOTE_BASE/env; then
+  echo "⚠ env 未配置 AIQ_ANALYTICS_PGDATABASE / AIQ_ANALYTICS_PGUSER：AI 查数只能查业务库（埋点库接入见 runbook §2 第 6 步）"
 fi
 
 # 1. 用 deploy key 在服务器上拉取代码

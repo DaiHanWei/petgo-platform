@@ -33,6 +33,88 @@ test('AC1 子进程 env 只含白名单 + 固定项，Lark、数据库密码、a
   assert.equal(env.PGPASSFILE, '/run/secrets/pgpass');
 });
 
+test('analytics 4.8 AC8：埋点库只多传库名、账号名两个非机密变量，密码类变量仍不传', () => {
+  const parent = {
+    PATH: '/bin', PGHOST: 'petgo-postgres', PGPASSFILE: '/run/secrets/pgpass',
+    AIQ_ANALYTICS_PGDATABASE: 'petgo_analytics_stag', AIQ_ANALYTICS_PGUSER: 'analytics_reader_stag',
+    ANALYTICS_DB_PASSWORD: 'leak', AIQ_ANALYTICS_PGPASSWORD: 'leak', PGPASSWORD: 'leak',
+    ANALYTICS_DB_USER: 'analytics_writer', ANALYTICS_DB_NAME: 'petgo_analytics', AIQ_ANALYTICS_PGHOST: 'other',
+  };
+  const env = buildChildEnv(parent);
+  assert.equal(env.AIQ_ANALYTICS_PGDATABASE, 'petgo_analytics_stag');
+  assert.equal(env.AIQ_ANALYTICS_PGUSER, 'analytics_reader_stag');
+  assert.equal(env.PGPASSFILE, '/run/secrets/pgpass');
+  for (const k of ['ANALYTICS_DB_PASSWORD', 'AIQ_ANALYTICS_PGPASSWORD', 'PGPASSWORD', 'ANALYTICS_DB_USER',
+    'ANALYTICS_DB_NAME', 'AIQ_ANALYTICS_PGHOST']) {
+    assert.ok(!(k in env), `不应传入 ${k}`);
+  }
+  // 白名单相对 Story 1.1 只多这两个名字，且名字里不含密码 / 令牌字样
+  const added = CHILD_ENV_PASSTHROUGH.filter((k) => k.startsWith('AIQ_ANALYTICS_'));
+  assert.deepEqual(added, ['AIQ_ANALYTICS_PGDATABASE', 'AIQ_ANALYTICS_PGUSER']);
+  for (const k of CHILD_ENV_PASSTHROUGH) assert.ok(!/PASSWORD|SECRET/.test(k), k);
+});
+
+test('analytics 4.8 AC8：真实子进程拿到埋点库两个变量，拿不到埋点库密码', async () => {
+  const base = await startAgent();
+  const env = { ...base.env, AIQ_ANALYTICS_PGDATABASE: 'petgo_analytics_stag', AIQ_ANALYTICS_PGUSER: 'analytics_reader_stag',
+    ANALYTICS_DB_PASSWORD: 'pw' };
+  await base.close();
+  const a = await startAgent({ parentEnv: env });
+  try {
+    const j = job();
+    await a.call('POST', '/jobs', j);
+    await waitDone(a, j.jobToken);
+    const [rec] = records(env.HOME);
+    assert.equal(rec.env.AIQ_ANALYTICS_PGDATABASE, 'petgo_analytics_stag');
+    assert.equal(rec.env.AIQ_ANALYTICS_PGUSER, 'analytics_reader_stag');
+    assert.ok(!('ANALYTICS_DB_PASSWORD' in rec.env));
+  } finally { await a.close(); }
+});
+
+test('analytics 4.8 AC5 / AC9：说明书写明埋点库用法与付费成功新口径', () => {
+  const md = read('work/CLAUDE.md');
+  assert.match(md, /\| 埋点库 \|/);
+  assert.match(md, /AIQ_ANALYTICS_PGDATABASE/);
+  assert.match(md, /## 6\. 埋点库/);
+  assert.match(md, /metric_definitions/);
+  assert.match(md, /绝不把日表人数相加/);
+  assert.match(md, /agg_weekly_\*/);
+  assert.match(md, /agg_monthly_\*/);
+  assert.match(md, /不能 join/);
+  assert.match(md, /agg_progress/);
+  assert.match(md, /ga4_daily_snapshot/);
+  assert.match(md, /is_final = false/);
+  assert.match(md, /permission denied/);
+  assert.match(md, /同时只开一个 `psql` 连接/);
+  const s53 = md.slice(md.indexOf('### 5.3'), md.indexOf('### 5.4'));
+  assert.match(s53, /shop_orders\.paid_at IS NOT NULL/);
+  assert.match(s53, /产品#3/);
+  assert.ok(!/付费成功以 `payment_intents\.status = 'PAID'` 为准/.test(s53), '不再只认 payment_intents');
+});
+
+test('analytics 4.8：埋点库只读账号 verify SQL 与 .env.example 占位', () => {
+  const sql = read('deploy/sql/verify_analytics_reader.sql');
+  assert.match(sql, /:'reader'/);
+  for (const t of ['events_detail', 'identity_links', 'agg_progress', 'ga4_daily_snapshot', 'event_catalog',
+    'metric_definitions', 'events_raw', 'events_raw_pdefault', 'pipeline_progress', 'erasure_requests']) {
+    assert.ok(sql.includes(t), t);
+  }
+  assert.match(sql, /statement_timeout=30s/);
+  assert.match(sql, /default_transaction_read_only=on/);
+  assert.match(sql, /rolconnlimit/);
+  assert.ok(!/PASSWORD\s+'/i.test(sql), '不写密码');
+  const env = read('.env.example');
+  assert.match(env, /^AIQ_ANALYTICS_PGDATABASE=petgo_analytics_stag$/m);
+  assert.match(env, /^AIQ_ANALYTICS_PGUSER=analytics_reader_stag$/m);
+  assert.match(env, /\.pgpass 的第二行/);
+  assert.ok(!/^AIQ_ANALYTICS_PG(PASSWORD|PASS)=/m.test(env));
+  for (const f of ['scripts/deploy-ai-query-agent-stag.sh', 'scripts/deploy-ai-query-agent-prod.sh']) {
+    const sh = fs.readFileSync(path.join(repo, f), 'utf8');
+    execFileSync('bash', ['-n', path.join(repo, f)]);
+    assert.match(sh, /AIQ_ANALYTICS_PGDATABASE/, f);
+  }
+});
+
 test('AC1 固定项不可被父进程覆盖', () => {
   const env = buildChildEnv({ CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '0' });
   assert.equal(env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB, '1');

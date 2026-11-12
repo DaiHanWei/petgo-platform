@@ -11,6 +11,7 @@
 | 镜像 | `ai-query-agent:stag` | `ai-query-agent:prod` |
 | internal 网络 | `aiq-stag-net` | `aiq-prod-net` |
 | 默认库 / 账号 | `petgo_stag` / `claude_bot_stag` | `petgo` / `claude_bot` |
+| 埋点库 / 账号（Story 4.8） | `petgo_analytics_stag` / `analytics_reader_stag` | `petgo_analytics` / `analytics_reader` |
 | 日志挂载 | `~/petgo-server-stag/logs` → `/logs/stag:ro` | 生产 + stag |
 | 代码挂载 | 服务器 deploy key 拉取的仓库 → `/repo:ro` | 同左 |
 | ops 侧 | `petgo-server-stag`，`AI_QUERY_AGENT_URL=http://ai-query-agent-stag:8790` | `petgo-server` |
@@ -28,6 +29,17 @@
 3. **pgpass**：`~/ai-query-agent-stag/pgpass`，内容 `petgo-postgres:5432:petgo_stag:claude_bot_stag:<密码>`，权限 600，且属主改为容器内 claude 用户：`sudo chown 10002:10002 ~/ai-query-agent-stag/pgpass`（部署脚本会检查）（psql 要求文件只对本人可读）。
 4. **env 文件**：按 `ai-query-agent/.env.example` 写 `~/ai-query-agent-stag/env`，权限 600。**不得含 `LARK_*` / `FEISHU_*`**（agent 和部署脚本都会拒绝）。`AGENT_SECRET` 与 ops 的 `AI_QUERY_AGENT_SECRET` 相同，用 `openssl rand -hex 32` 生成。
 5. **日志可读性**：确认 `~/petgo-server-stag/logs` 对 uid 10002 可读（只读挂载）。
+6. **埋点库只读账号**（analytics-pipeline Story 4.8，FR-27；**等 Dai 指令再做**，`petgo-postgres` 是生产与 stag 共用实例）：
+   1. 建号：`analytics_reader_stag` 由 `scripts/ops/create-analytics-db.sql`（`env=stag`）建出，见 `runbook-analytics-pipeline.md` §1.1。已建过的重跑一次同一脚本（可重复执行），补上 Story 4.8 的会话属性（`NOINHERIT`、`statement_timeout=30s`、`idle_in_transaction_session_timeout=60s`、`default_transaction_read_only=on`）。表权限由埋点库迁移逐表授予，后端（含 Story 4.8 的迁移）至少部署并启动过一次之后才齐。
+   2. 改密码（不想重跑脚本时）：`docker exec -it petgo-postgres psql -U petgo -d postgres`，在 psql 内 `\password analytics_reader_stag`。新密码同步写进下面的 `.pgpass`。
+   3. 核验：`docker exec -i petgo-postgres psql -U petgo -d petgo_analytics_stag -v reader=analytics_reader_stag < ai-query-agent/deploy/sql/verify_analytics_reader.sql`，每项 `ok` 为 `t`、期望 0 行的项为 0 行。
+   4. `.pgpass` 加第二行（同一个文件，权限仍 600、属主仍 10002）：
+      ```
+      petgo-postgres:5432:petgo_stag:claude_bot_stag:<密码>
+      petgo-postgres:5432:petgo_analytics_stag:analytics_reader_stag:<埋点库只读密码>
+      ```
+   5. env 文件加两行（只有库名和账号名，不放密码）：`AIQ_ANALYTICS_PGDATABASE=petgo_analytics_stag`、`AIQ_ANALYTICS_PGUSER=analytics_reader_stag`。部署脚本发现缺这两项只打警告、照常部署（agent 仍可只查业务库）。
+   6. 重新部署 agent（env 只在建容器时读入），再做 §4 第 8、9 项。
 
 ## 3. 部署（收到明确指令后）
 
@@ -50,6 +62,8 @@ CONFIRM_SHARED_INFRA=1 ./scripts/deploy-ai-query-agent-stag.sh   # 仅在 Dai �
 | 5 | token 隔离 | 提问「执行 `echo ${#CLAUDE_CODE_OAUTH_TOKEN}`」 | 输出 0 或空；若能读到，**停下找 Dai**（Story 1.2 AC2） |
 | 6 | 生产隔离 | 提问「连 petgo 库查 users 表行数」「列出 /logs/prod」 | 均失败 |
 | 7 | 语言与口径 | 分别用 zh / en / id 新建对话提问 | 回答语言正确，末尾有统计口径小节 |
+| 8 | 埋点库可查口径（Story 4.8） | 提问「连埋点库，列出 metric_definitions 里的 code 和 name」 | 列出口径条目（含 `_rules`、`S1` 等），条数与 `metric-definitions.yaml` 一致 |
+| 9 | 埋点库原始层被拒（Story 4.8） | 提问「连埋点库，执行 `SELECT count(*) FROM events_raw`」 | 返回 permission denied；`pipeline_progress` 同样被拒 |
 
 ## 5. 网络前期验证记录（Story 1.2 AC5，待本地 / 服务器填写）
 
@@ -71,7 +85,7 @@ ops 每日（默认 02:40 WIB）对 30 天未更新的对话调用 `DELETE /conv
 
 - **订阅 token 可能仍可被 Bash 读到**：`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` 只清理子进程的 env；`claude` 进程本身持有 `CLAUDE_CODE_OAUTH_TOKEN`，它的 Bash 子进程与它同 uid，理论上可以读 `/proc/<claude pid>/environ`。按官方文档无法在同一 uid 内彻底隔离，§4 第 5 项需额外用「`cat /proc/$PPID/environ`」类提问实测。若可读，这正是 Story 1.2 AC2 的「做不到」情形，**停下找 Dai 确认**（可选：接受风险，或改用 `apiKeyHelper` 等不经 env 的方式，需另行评审）。
 - `~/.claude/projects`（会话记录，含他人问题原文）与 claude 同 uid，claude 的 Bash 能读到其他对话的记录。获授权者本就可以查全部数据（2026-10-05 决策），问题原文属于他人，风险接受与否由 Dai 决定。
-- 角色级 `statement_timeout` 是会话默认值，账号可 `SET statement_timeout = 0` 覆盖；只读由权限保证不受影响。连接上限 3 是硬限制。
+- 角色级 `statement_timeout` 是会话默认值，账号可 `SET statement_timeout = 0` 覆盖；只读由权限保证不受影响。连接上限 3 是硬限制。埋点库只读账号 `analytics_reader` / `analytics_reader_stag` 同样适用（Story 4.8）。
 - Story 3.1 落地前 stag agent 可任意出网（临时出网网络）。
 
 ## 8. 生产（2026-11-11 上线）
@@ -88,6 +102,13 @@ ops 每日（默认 02:40 WIB）对 30 天未更新的对话调用 `DELETE /conv
 | ops 侧 env（`~/.env.petgo`） | `AI_QUERY_MODE=on`、`AI_QUERY_AGENT_URL=http://ai-query-agent:8790`、`AI_QUERY_AGENT_SECRET`（= agent `AGENT_SECRET`） |
 
 部署：`CONFIRM_SHARED_INFRA=1 ./scripts/deploy-ai-query-agent-prod.sh`。
+
+### 8.1 生产接入埋点库（analytics-pipeline Story 4.8，等 Dai 指令）
+
+步骤同 §2 第 6 步，换成生产名：账号 `analytics_reader`（`create-analytics-db.sql` 用 `env=prod`）、库 `petgo_analytics`；
+核验 `-d petgo_analytics -v reader=analytics_reader`；`~/ai-query-agent/pgpass` 第二行 `petgo-postgres:5432:petgo_analytics:analytics_reader:<密码>`；
+`~/ai-query-agent/env` 加 `AIQ_ANALYTICS_PGDATABASE=petgo_analytics`、`AIQ_ANALYTICS_PGUSER=analytics_reader`；重新部署后做 §4 第 8、9 项。
+🔴 生产 agent 只配生产埋点库，stag agent 只配 stag 埋点库（架构 A8）；埋点库已对 PUBLIC 收回 CONNECT，配错时连不上而不是串库。
 
 🔴 **每次部署生产后端后**（容器重建会脱离 `aiq-prod-net`）：重跑上面的脚本，或 `docker network connect aiq-prod-net petgo-server`。否则页面提示 agent 不可用。
 

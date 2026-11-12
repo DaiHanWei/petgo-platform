@@ -289,6 +289,50 @@ class MetricDefinitionsTest {
                 .hasMessageContaining("metrics[0].sources[1] 必须是非空字符串");
     }
 
+    /** Story 4.8：team_ref（可选字符串）与 tables（字符串列表）随条目加载；缺省为 null / 空列表。 */
+    @Test
+    void teamRefAndTablesAreParsed() throws CatalogInvalidException {
+        String yaml = """
+                version: 1
+                metrics:
+                  - code: X1
+                    team_ref: "电商#6"
+                    name: n
+                    definition: d
+                    tables: [agg_daily_toko, agg_weekly_toko]
+                  - code: X2
+                    name: n
+                    definition: d
+                """;
+        var list = MetricDefinitions.parse(new StringReader(yaml), "inline.yaml");
+        assertThat(list.get(0).teamRef()).isEqualTo("电商#6");
+        assertThat(list.get(0).tables()).containsExactly("agg_daily_toko", "agg_weekly_toko");
+        assertThat(list.get(1).teamRef()).isNull();
+        assertThat(list.get(1).tables()).isEmpty();
+
+        String bad = """
+                version: 1
+                metrics:
+                  - code: X1
+                    name: n
+                    definition: d
+                    tables: [ok, ""]
+                """;
+        assertThatThrownBy(() -> MetricDefinitions.parse(new StringReader(bad), "inline.yaml"))
+                .hasMessageContaining("metrics[0].tables[1] 必须是非空字符串");
+    }
+
+    /** Story 4.8：真实 yaml 的 S1 带团队编号与汇总表。 */
+    @Test
+    void realYamlHasTeamRefAndTables() {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+        assertThat(m.isLoaded()).isTrue();
+        MetricDefinition s1 = m.metrics().stream().filter(d -> d.code().equals("S1")).findFirst().orElseThrow();
+        assertThat(s1.teamRef()).isEqualTo("S1");
+        assertThat(s1.tables()).contains("agg_daily_activity", "ga4_daily_snapshot");
+        assertThat(s1.exclusions()).contains("_rules");
+    }
+
     /** Story 4.7 AC1 / AC3 / AC4：S4、产品 #3、内容 #1 指向 ratio.sql，逐表列出判据、分母规则、月比率与回访用户定义。 */
     @Test
     void story47RatioMetrics() {

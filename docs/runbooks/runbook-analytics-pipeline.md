@@ -40,7 +40,7 @@ unset W R
 
 执行完脚本会回显两个角色的 `rolconnlimit` / `rolconfig` 和库的属主 / ACL，核对：
 
-- 写入账号 `rolconnlimit=5`、`rolconfig={statement_timeout=120s}`；只读账号 `rolconnlimit=3`。
+- 写入账号 `rolconnlimit=5`、`rolconfig={statement_timeout=120s}`；只读账号 `rolconnlimit=3`、`rolconfig={statement_timeout=30s,idle_in_transaction_session_timeout=60s,default_transaction_read_only=on}`（Story 4.8 补；1.1 时已建过的账号重跑一次脚本即可补上）。
 - 库属主是写入账号；`datacl` 里**没有** `=c/`（PUBLIC）项，只有写入账号和只读账号。
 
 > ⚠️ 若实例开了 `log_statement=all|ddl`，`ALTER ROLE ... PASSWORD` 会进 postgres 日志，执行前确认未开。
@@ -208,10 +208,11 @@ fi
 
 `RollupJob` 每天 WIB 03:00（晚于 02:00 的注销擦除）运行，`asOf` = WIB 昨天：
 
-- 每个指标族（`activity`、`install`、`dau_reconcile`、`retention`、`install_profile`、`placement`、`push`，后续 story 追加）按 `agg_progress.last_done_date` 续算到 `asOf`，**每次至少重算最近 3 天**（晚到事件，D-6）。首次运行只算最近 3 天，更早的历史用下面的重跑回补。
+- 每个指标族（`activity`、`install`、`dau_reconcile`、`retention`、`install_profile`、`placement`、`push`、`toko`、`cart`、`product`、`ratio`；指标族与汇总表、口径条目的对应见 `analytics/metric-definitions.yaml` 各条目的 `tables` / `sql_path`）按 `agg_progress.last_done_date` 续算到 `asOf`，**每次至少重算最近 3 天**（晚到事件，D-6）。首次运行只算最近 3 天，更早的历史用下面的重跑回补。
 - 例外：`retention`（`agg_cohort_retention`，按组日期 X 一行）每次重算最近 **16** 天——W1 要看到 X+13，再留 3 天晚到；未满 N 天的列为空（`X+N > asOf`）。重跑旧组日期时成熟度仍按当前的 `asOf` 判断，已有值不会变回空。
 - `install_profile`（`agg_monthly_install_profile`）没有日表，按 WIB 自然月写：与重算窗口相交的月份都重算，月中是「截至昨天」的值（`is_complete = false`），月末次日起写终值；月初早于保留期下限的月份重跑时跳过（明细已清理）。
 - `placement`（Story 4.4，`agg_daily/weekly/monthly_placement`）每次重算最近 **10** 天（7 天带单窗口 + 3 天晚到）；`push`（`agg_daily/weekly/monthly_push`）重算 3 天。两者的周表 / 月表与重算窗口相交的周期都重算（周期内重新去重，不是日表相加），`is_complete = false` 为「截至昨天」的值。每个单元先在埋点事务**之外**读业务库（运营位配置、已付款订单、运营推送活动，窄查询只取 token 与计数列），再开埋点事务写汇总；业务库读失败按该单元失败处理（告警、下次补）。
+- `toko`（Story 4.5，`agg_daily/weekly/monthly_toko`）与 `cart`（Story 4.6，`agg_daily_cart`）每次重算最近 **8** 天（7 天漏斗 / 观察窗 + 当天），`is_final = false` 的行窗口未关闭、之后随回补刷新；`toko` 的周表 / 月表只在周期结束后计算。`product`（Story 4.6，`agg_daily_product`）重算 3 天，库存列是该行首次写入时的快照、回补不覆盖。`ratio` 见 §5.3。三者都先在埋点事务之外窄查业务库（已付款订单、订单行、商品 / SKU token 与库存）。
 - `push` 的运营推送累计打开人数只计发送后 `ANALYTICS_ROLLUP_PUSH_CAMPAIGN_DAYS`（默认 14）天内的打开；该 env 写错不影响启动，只停用累计打开人数（列写空）并在启动就绪时 TECH 告警「【埋点配置非法】」，改对后重建容器即恢复。
 - 每个（指标族, WIB 日）一个短事务：写汇总表与推进 `agg_progress` 同一事务提交。
 - 某指标族某日失败：该指标族本轮停止、进度不推进，`agg_progress.last_error` 记异常类名，TECH 群收到「【埋点汇总失败】」；下一次运行自动从缺的日期补。其他指标族照常。
@@ -275,3 +276,27 @@ FROM agg_daily_ratio ORDER BY stat_date DESC LIMIT 35;
 - 分母缺失（GA4 当天没拉到、stag 无 GA4）时 `dau` / 两个比率 / `returning_users` 为空、分子照写；GA4 补拉成功后 3 天回补窗口内自动填上。更早缺的日子按 §4.2 插 `rollup_rerun_requests`（`families` = `{ratio}`，只能在明细保留期内）手动重跑。
 - 月比率 = 当月每日比率的算术平均（跳过分母为空的日子），由日表现算，不建月表。
 - 超过 14 天仍缺的 GA4 日期不再自动补拉：临时设 env `ANALYTICS_GA4SNAPSHOT_BACKFILLDAYS=<天数>`（Spring 宽松绑定，3–92）放大补拉窗口、重建容器等一次 02:30 运行后撤掉。对账表的 GA4 数会在下一次 03:00 汇总时随整表重算刷新，无需手动重跑。
+
+## 6. 上线检查清单（首次在某环境启用埋点管道）
+
+部署含埋点管道的后端之前 / 之后逐项打勾（生产、stag 各一遍）：
+
+1. **建库建号**：§1.1 已执行；回显核对通过（只读账号含 Story 4.8 的三项会话默认值）。
+2. **后端 env**：§1.2 各项已写，改完重建容器（§1.3）；启动日志确认管道已启用（§1.4）。
+3. 🔴 **原始层最早数据早于明细初始分区时，明细游标会卡住**（Story 1.6 复审 R2）：明细层首条迁移只建「迁移当天（WIB）前后各 7 天」的分区，`pipeline_progress` 初始游标是 1970-01-01。若该环境的 `events_raw` 在明细层上线前已积累了更早的数据（原始层保留 35 天），DetailBuilder 会从最早那行开始处理、找不到对应日分区，整片回滚并每天告警一次，进度永久不动。**上线前**用写入账号核对：
+   ```sql
+   SELECT min(received_at), (min(received_at) AT TIME ZONE 'Asia/Jakarta')::date AS min_wib_date FROM events_raw;
+   SELECT min(c.relname) AS earliest_detail_partition
+   FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid WHERE i.inhparent = 'events_detail'::regclass;
+   ```
+   若 `min_wib_date` 早于最早的 `events_detail_pYYYYMMDD`：二选一 ——（a）按告警里的日期手工补建明细分区（例：`CREATE TABLE events_detail_p20261101 PARTITION OF events_detail FOR VALUES FROM ('2026-11-01') TO ('2026-11-02');`，每天一个，用写入账号；超过明细保留期 3 个月的日期不要补）；（b）放弃更早的原始数据，把游标设到初始分区起点：`UPDATE pipeline_progress SET last_received_at = '<最早明细分区日期> 00:00:00+07' WHERE pipeline = 'detail';`。两者都属运维动作，先问 Dai。
+4. **首日汇总**：次日 WIB 03:00 后 `SELECT family, last_done_date, last_error FROM agg_progress;`，11 个指标族都推进到昨天、`last_error` 为空；更早的历史按 §4.2 重跑。
+5. **口径同步**：`SELECT count(*) FROM metric_definitions;` 等于 `analytics/metric-definitions.yaml` 的条目数（含 `_rules`），`team_ref` / `tables` 非空（Story 4.8）。
+6. **AI 查数接入**（Story 4.8，等 Dai 指令）：按 `runbook-ai-query-agent.md` §2 第 6 步 / §8.1 给 agent 配埋点库只读账号，`verify_analytics_reader.sql` 全部通过，§4 第 8、9 项检查通过。
+
+## 7. AI 查数只读账号（Story 4.8，FR-27）
+
+- 账号：生产 `analytics_reader` / stag `analytics_reader_stag`，`NOINHERIT`、`CONNECTION LIMIT 3`、会话默认 `statement_timeout=30s`、`idle_in_transaction_session_timeout=60s`、`default_transaction_read_only=on`；另一环境的埋点库连不上（埋点库已 `REVOKE ALL ... FROM PUBLIC`，只给本环境只读账号 CONNECT），本库的 TEMP / CREATE 也随之收回。⚠️ 业务库 `petgo` / `petgo_stag` 仍保留 PostgreSQL 默认的 PUBLIC CONNECT（收回属共享库变更，须 Dai 另行确认，同 `claude_bot_stag.sql` 末尾说明），所以只读账号**能连上业务库但没有任何表权限**，读不到业务数据。
+- 表权限：迁移里按白名单逐表 `GRANT SELECT ON <表> TO ${readerRole}`（明细 `events_detail`、`identity_links`、`v_events_person`、全部 `agg_*`、`agg_progress`、`ga4_daily_snapshot`、`event_catalog`、`metric_definitions`），**不用** `ALTER DEFAULT PRIVILEGES`。`events_raw` 及其分区、`pipeline_progress`、`detail_recompute_requests`、`storage_watermarks`、`rollup_rerun_requests` 不授权；擦除登记在业务库 `analytics_erasure_outbox`，埋点库只读账号在业务库无表权限、读不到；注意 AI 的业务库账号 `claude_bot` / `claude_bot_stag` 按其「全表 SELECT + 默认授权」能读到该表（只有内部 user_id 与哈希 user_key，属业务库账号既有范围）。新增表必须在迁移里决定是否授权（CI：`AnalyticsReaderGrantsTextTest`）。
+- 核验：`ai-query-agent/deploy/sql/verify_analytics_reader.sql`（见 `runbook-ai-query-agent.md` §2 第 6 步）。
+- 口径唯一来源：`petgo-backend/src/main/resources/analytics/metric-definitions.yaml`，启动时同步进 `metric_definitions`；新增汇总表必须有条目在 `tables` 里引用它（CI：`MetricDefinitionsCoverageTest`）。

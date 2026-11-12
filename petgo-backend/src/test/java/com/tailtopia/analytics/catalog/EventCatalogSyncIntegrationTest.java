@@ -93,6 +93,19 @@ class EventCatalogSyncIntegrationTest extends ApiIntegrationTest {
         assertThat(eventRows()).isEqualTo(catalog.events().size());
     }
 
+    /** Story 4.8 AC3：新列 team_ref / tables 随启动同步写入（V20261113_1430 补列）。 */
+    @Test
+    void teamRefAndTablesAreSynced() {
+        assertThat(analyticsJdbc.queryForObject("SELECT team_ref FROM metric_definitions WHERE code = 'S1'",
+                String.class)).isEqualTo("S1");
+        assertThat(analyticsJdbc.queryForObject(
+                "SELECT tables @> '[\"agg_daily_activity\"]'::jsonb FROM metric_definitions WHERE code = 'S1'", Boolean.class))
+                .isTrue();
+        assertThat(analyticsJdbc.queryForObject(
+                "SELECT team_ref IS NULL AND exclusions IS NOT NULL FROM metric_definitions WHERE code = '_rules'",
+                Boolean.class)).isTrue();
+    }
+
     @Test
     void repeatedSyncIsIdempotentAndKeepsUpdatedAt() {
         sync.sync(catalog.events(), metrics.metrics());

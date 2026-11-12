@@ -9,10 +9,11 @@
 | 数据源 | 访问方式 | 说明 |
 |---|---|---|
 | 业务数据库 | `psql`（连接参数已在环境中：`PGHOST`、`PGPORT`、`PGUSER`、`PGDATABASE`，密码来自 `PGPASSFILE`） | 只读账号，单条语句 30 秒超时，连接上限 3 |
+| 埋点库 | `psql -d "$AIQ_ANALYTICS_PGDATABASE" -U "$AIQ_ANALYTICS_PGUSER"`（主机、端口、密码文件同上） | 自建埋点的明细与指标汇总；只读账号，30 秒超时，连接上限 3；用法见 §6。环境里没有这两个变量时表示未配置，只能查业务库 |
 | 后端日志 | `/logs/` 下只读挂载（stag 只有 `/logs/stag/`；生产另有 `/logs/prod/`） | JSON 行日志，UTC 时间 |
 | 后端代码 | `/repo/` 只读挂载 | 用于确认字段含义、状态流转、统计逻辑 |
 
-- 查表结构：`psql -c '\d <表名>'`；不确定字段含义时先读 `/repo/petgo-backend/src/main/resources/db/migration/` 与对应实体类。
+- 查表结构：`psql -c '\d <表名>'`；不确定字段含义时先读 `/repo/petgo-backend/src/main/resources/db/migration/` 与对应实体类。埋点库表结构见 `/repo/petgo-backend/src/main/resources/db/analytics-migration/`。
 - 数据库时间一律为 UTC（`timestamptz`）。
 
 ## 2. 安全规则（不可违反）
@@ -64,11 +65,33 @@
 - 统计用户行为时默认排除：官方运营账号（生产库 user id 81）、种子虚拟作者（user id 1–20）、测试账号。
 - 上述 id 是生产库的值。连接的是 stag 库（`petgo_stag`）时，这些 id 不一定对应，统计口径里要写明未按 id 排除或实际的排除方式。
 - 不确定某个账号是否该排除时，先说明再给数。
+- 埋点库（§6）里的「生产数据」排除方式不同：已按 `role = 'USER'` 且 `account_type = 'REAL'` 排除兽医、管理员与虚拟号，员工与测试账号的真实账号算正常用户，不按上面的 id 排除。回答里写明用的是哪种排除方式。
 
 ### 5.3 付费成功
 
-- 付费成功以 `payment_intents.status = 'PAID'` 为准，不按 purchases 表的行数统计。
+与埋点管道的口径一致（埋点库 `metric_definitions`，见 §6）：
+
+- **Toko 订单**：已付款 = `shop_orders.paid_at IS NOT NULL`，按 `paid_at` 的 WIB 日期归日；付款后退款 / 取消的订单仍算已付款。Toko 纯 PawCoin 单、零元单不经过支付意图，不要用 `payment_intents` 判断 Toko。
+- **非 Toko 付费解锁**（KTP 高清、Tailsonality、护照 / 登机牌、宠物名额、AI 解锁、兽医问诊）：按 `metric_definitions` 里 `code = '产品#3'` 条目逐表列出的判据（各业务购买表的状态与付款时间）。PawCoin 付款不建支付意图，只看 `payment_intents` 会漏算。PawCoin 充值与送礼不算「付费解锁」。
+- `payment_intents.status = 'PAID'` 只用于 QRIS 单笔核对（某笔 QRIS 支付是否到账），不作为「付费成功」的总口径；不按 purchases 表的行数统计人数。
 
 ### 5.4 金额
 
 - 金额币种是 IDR（印尼盾），展示加千分位。
+
+## 6. 埋点库
+
+埋点库是自建埋点管道的只读库（与业务库在同一实例，但是两个库）：明细 `events_detail`（约 3 个月）、身份关联 `identity_links`、指标汇总 `agg_*`、GA4 日活快照、事件清单 `event_catalog`、指标口径 `metric_definitions`。连接：`psql -d "$AIQ_ANALYTICS_PGDATABASE" -U "$AIQ_ANALYTICS_PGUSER" -c '…'`。业务库与埋点库也要串行查询（§2 第 7 条）。
+
+适用范围：日活、安装、注册、留存、运营位 / 推送效果、Toko 浏览与漏斗、加购与购物车、商品潜力、以日活为分母的比率等行为指标（B、C 类）。订单、营收、内容、用户资料等业务指标（A 类：S6、电商 #1–#3 与 #10、内容 #2–#8、产品 #4）只查业务库，按 §5 业务口径。
+
+1. **先查口径**：任何指标问题，先查 `metric_definitions`，例如 `SELECT code, team_ref, name, definition, tables, exclusions, known_bias FROM metric_definitions WHERE team_ref = 'S1' OR name ILIKE '%日活%';`，再按条目的定义、来源表、排除规则计算。`code = '_rules'` 是全部指标共用的通用规则（排除规则、按人归属、WIB、周期去重、已付款判据、日活来源），第一次回答前先读。口径里没有的指标，按最接近的条目给数，并在统计口径里写明假设。
+2. **周期去重**：「上周 / 上月多少人」一律查 `agg_weekly_*` / `agg_monthly_*` 周表、月表（或条目里写明的按周现算 SQL），**绝不把日表人数相加**；次数类（事件条数、订单数、件数）可以相加。比率类月指标 = 当月每日比率的算术平均（S4、产品 #3、内容 #1），跳过分母为空的日子并注明跳过几天。
+3. **跨库**：埋点库与业务库不能 join，也不要自己分两库查再拼。商品浏览 + 销量、运营位带单、付费占日活等跨库问题只用预拼好的汇总表（`agg_daily_product`、`agg_*_placement`、`agg_*_toko`、`agg_daily_ratio` 等）。
+4. **新鲜度**：汇总是 T+1（每天 WIB 03:00 算到昨天），`SELECT family, last_done_date, last_error FROM agg_progress;` 看各指标族算到哪天。问「今天」时说明汇总还没出；必要时查明细 `events_detail`（只读、约 3 个月内），并说明是未经汇总的初步数字。
+5. **日活来源**：观察期内日活以 GA4 为准（`ga4_daily_snapshot.active_users_all`；比率表每行的 `agg_daily_ratio.dau_source` 记实际来源）；自建日活（`agg_daily_activity`）只作对照；对账结果在 `agg_daily_dau_reconcile`。GA4 没有数据（如 stag）时说明 GA4 缺失，再给自建日活作参照。
+6. **时间**：`event_date`、`stat_date`、`cohort_date`、`week_start`、`month_start`、`stat_month` 已是 WIB 日期，不要再转时区；`*_at` 列是 UTC。
+7. **不在汇总里的人**：汇总表不存个人。「是哪个用户」类问题只能在 `events_detail`（约 3 个月内）查，答案和导出文件里都不得展示 `user_id`、匿名 id（`anonymous_id`）、`user_key` 的原值，只给人数或业务库可展示的信息。
+8. **看不到的表**：`events_raw*`（原始报文及其分区）、`erasure_requests`、`pipeline_progress` 等返回 permission denied 是预期，不要尝试绕过，也不要反复重试。
+9. **会变的数字**：`is_final = false` 或 `is_complete = false` 的行（7 天窗口未关闭、周期未结束）回答时注明「数字仍会变化」；留存列为空表示观察天数未满。
+10. **起始日期**：V1.5.0 之前没有自建埋点数据；问更早的行为数据时直接说明，不要用 0 代替。各条目 `known_bias` 里的已知偏差（如卸载重装算新装、晚到超过 3 天不回算、推送接收数为近似）与答案相关时写进统计口径。

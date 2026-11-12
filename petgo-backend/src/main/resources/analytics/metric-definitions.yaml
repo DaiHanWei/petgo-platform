@@ -1,20 +1,63 @@
 # 指标口径（analytics-pipeline Story 1.2，架构 D-9 / FR-26）—— 口径文档的唯一来源。
 #
-# 后端启动时同步进埋点库 metric_definitions 表（表是本文件的投影，AI 查数只读库）。
-# 字段与表列一一对应：
-#   code        团队编号，如 S1、电商#6（全表唯一，≤32）
+# 后端启动时同步进埋点库 metric_definitions 表（表是本文件的投影，AI 查数只读库）；本文件删掉的条目同步时从表里删除。
+# 字段与表列一一对应（括号里是 Story 4.8 规定的含义；1.2 已有的字段名不改）：
+#   code        条目 id（全表唯一，≤32）：一般就是团队编号；同一编号拆多条时加后缀（S1-登录、S1-GA4）；_rules = 通用规则
+#   team_ref    团队编号（S1、电商#6、市场#1 …；日活来源 / 对账写 FR-24 / FR-25）。除 _rules 外必填（Story 4.8）
 #   name        指标名（必填，≤128）
 #   definition  定义：算什么、按什么时区 / 周期（必填）
 #   sources     来源表 / 事件（字符串列表）
-#   exclusions  排除规则
-#   known_bias  已知偏差
-#   sql_path    汇总 SQL 文件位置（resources/ 下的相对路径）
-#   changelog   变更记录 [{date: "YYYY-MM-DD", change: ...}]（日期一律加引号，按字符串存）
+#   tables      用到的汇总表 / 快照表名（字符串列表，Story 4.8）。每张 agg_* 汇总表至少被一个条目引用（CI：MetricDefinitionsCoverageTest）
+#   exclusions  排除规则（各条目开头引用 _rules，不重复全文）
+#   known_bias  已知偏差（= Story 4.8 的 known_deviations）
+#   sql_path    汇总 SQL 文件位置（resources/ 下的相对路径，= Story 4.8 的 sql_files；必须存在于 classpath）
+#   changelog   变更记录 [{date: "YYYY-MM-DD", change: ...}]（日期一律加引号，按字符串存）；口径改动必须加一条
 #
-# 本 story 只放结构与 S1 示例，其余指标随 Epic 4（FR-26）补。
+# 范围：PRD §5 的 B、C 类指标。A 类（S6、电商 #1–#3、#10、内容 #2–#8、产品 #4）只查业务库，按查数说明书 §5 的业务口径，不在本文件。
 version: 1
 metrics:
+  - code: _rules
+    name: "Epic 4 通用规则（全部条目适用）"
+    definition: >-
+      ① 只算生产数据：events_detail.is_production = true 且 NOT is_suspicious；App 行为指标只算 source = 'APP'。
+      ② 用户维度只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）：埋点在按人归属之后排除（匿名事件经关联表归到兽医 / 虚拟号的也排除），
+      业务库直接按下单人 / 付款人过滤；埋点库的「生产」按 role + account_type 排除，与业务库查数按 user id 排除官方号 / 种子号的做法不同。
+      ③ 按「人」去重（D-10，视图 v_events_person）：带用户标识的事件归该用户；匿名事件按关联表 identity_links 归属——
+      事件之前有关联 → 最近一次关联的账号；之前没有、之后有 → 第一个关联的账号；从未关联 → 按匿名 id 算一人。
+      ④ 时间：event_date、stat_date、cohort_date、week_start、month_start、stat_month 都已是 WIB 日期；周 = 周一至周日；月 = WIB 自然月；*_at 列是 UTC。
+      ⑤ 周期去重（D-12）：凡「统计周期内去重人数」的指标，日表、周表、月表各自去重，周 / 月人数查 agg_weekly_* / agg_monthly_*，
+      绝不把日表人数相加；次数类（事件条数、订单数、件数）可以相加；比率类月指标 = 当月每日比率的算术平均，由日表现算（S4、产品 #3、内容 #1）。
+      ⑥ Toko 已付款 = 业务库 shop_orders.paid_at IS NOT NULL，按 paid_at 的 WIB 日期归日，付款后退款 / 取消仍算已付款（D-13）。
+      业务库与埋点库不跨库 SQL：跨库指标由汇总任务用 public token / 用户窄查询预拼进汇总表。
+      ⑦ 日活来源（FR-24）：观察期内日活以 GA4 为准（ga4_daily_snapshot.active_users_all）；开关 analytics.dau-source = GA4 / SELF，
+      以日活为分母的比率（agg_daily_ratio）每行的 dau_source 列记实际来源，切换日期见 S1 条目 dau_source_switch；对账结果在 agg_daily_dau_reconcile（FR-25）。
+      ⑧ 新鲜度：汇总 T+1（WIB 03:00 算到昨天），agg_progress.last_done_date 记各指标族算到哪天；is_final = false / is_complete = false 的行仍会变化。
+      ⑨ 汇总表不含 user_id、匿名 id、user_key；逐人明细只在 events_detail（保留约 3 个月）。
+    sources:
+      - "events_detail（is_production、is_suspicious、source、user_id、anonymous_id）"
+      - "identity_links、v_events_person（D-10 按人归属）"
+      - "业务库：users.role、users.account_type（汇总任务窄查询）"
+      - "agg_progress（各指标族算到哪天）"
+    tables:
+      - agg_progress
+    exclusions: >-
+      默认排除：非生产（模拟器、TestFlight、侧载、生产标记插件超时的会话）、可疑事件（is_suspicious）、非 USER 角色（兽医、管理员）、
+      非 REAL 账号（虚拟号）。不排除：员工与测试账号的真实账号（Q5，算正常用户）。
+      有意例外：S1-对账自建 / S1-覆盖率 / S1-对账 与 GA4 对齐，按设备、不做生产与账号排除（D-11）。
+    known_bias: >-
+      所有自建埋点指标共有的已知偏差，各条目另列本指标特有的：
+      卸载重装算新装（新匿名 id；未登录时同一台设备算两人）；升级用户清过旧版数据会被算新装；
+      iOS installerStore 为 null 算生产（Xcode 直装 / 企业分发包也会算生产，量很小）；
+      员工与测试账号按正常用户算（Q5）；
+      晚到超过 3 天不回算（D-6；7 天窗口类指标的回补窗口另见各条目）；
+      V1.5.0 之前无数据（旧版 App 不上报自建埋点），新版覆盖率爬升期人数偏低；
+      冷启动慢的机器上生产标记插件超过 3 秒才返回时整个会话记为非生产（偏低）；
+      Android 跳外部全屏页面回来会多报一次 Application Opened（无 PostHog 约 700ms 去抖），按人去重不受影响、次数偏高；
+      运营推送接收数为近似（写入通知中心人数）；购物车跨设备不可观测（其他设备、旧版、后台清空的移出看不到）。
+    changelog:
+      - { date: "2026-11-12", change: "Story 4.8：新增通用规则条目；全部条目补 team_ref / tables，exclusions 引用本条，known_bias 补齐通用已知偏差（口径未变）" }
   - code: S1
+    team_ref: "S1"
     name: "日活（DAU）"
     definition: >-
       WIB 自然日内有 Application Opened 的去重人数。另含（周 = 周一至周日）：周合计 = 每日日活之和；
@@ -22,7 +65,12 @@ metrics:
     sources:
       - "观察期：ga4_daily_snapshot.active_users_all（GA4 全版本日活，按设备、含游客；Story 4.2）"
       - "对账通过后（FR-24）：events_detail 的 Application Opened"
+    tables:
+      - agg_daily_activity
+      - ga4_daily_snapshot
+      - agg_daily_ratio
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
       自建口径（agg_daily_activity.dau_person）：event_date = 统计日、is_production、NOT is_suspicious、source = 'APP'
       （H5 访客不是 App 设备，不算）；按 v_events_person 归属到人之后再排除非 USER / 非 REAL 用户
@@ -39,6 +87,7 @@ metrics:
       冷启动慢的机器上生产标记的环境插件超过 3 秒才返回时，整个会话的事件记为非生产、不计入（宁可少算生产，日活略偏低）。
       之前从未关联过的匿名 id，事后登录兽医 / 虚拟号时才被识别并排除；从未登录的兽医设备无法识别，按游客计入。
       晚到超过 3 天的事件进明细但不回算（D-6）；V1.5.0 之前的版本没有自建数据。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/activity.sql
     # 日活来源切换日期（Story 4.7）：analytics.dau-source 从 GA4 切到 SELF 时填 "YYYY-MM-DD"（加引号，WIB 日期），
     # 并在下面 changelog 写一条切换原因。SELF 而本字段为空时后端启动打 WARN + TECH 告警（不阻断启动）。
@@ -50,6 +99,7 @@ metrics:
       - { date: "2026-11-13", change: "Story 4.2：观察期内取 ga4_daily_snapshot.active_users_all；新增日活来源开关 analytics.dau-source（默认 GA4），切换由 Dai 决定、切换日期写进本条（Story 4.7）" }
       - { date: "2026-11-13", change: "Story 4.7：新增字段 dau_source_switch（初始 null；切到 SELF 时填切换日期）；S1 同时是 S4 / 产品 #3 / 内容 #1 的分母（agg_daily_ratio.dau）" }
   - code: "S1-登录"
+    team_ref: "S1"
     name: "登录用户日活"
     definition: >-
       WIB 自然日内，事件发生时已登录（明细 user_id 非空）且有 Application Opened 的去重用户数。
@@ -57,16 +107,21 @@ metrics:
     sources:
       - "events_detail：Application Opened（user_id 非空）"
       - "汇总表：agg_daily_activity.dau_logged_in"
+    tables:
+      - agg_daily_activity
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
     known_bias: >-
       员工与测试账号算作正常用户；all 行整体单独去重，不是各平台相加。
       登出状态下打开 App 不算登录用户日活（但按人归属计入 S1 自建日活）。
       晚到超过 3 天的事件不回算（D-6）；V1.5.0 之前没有自建数据。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/activity.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.1：新增" }
   - code: S2
+    team_ref: "S2"
     name: "安装量（新装数）"
     definition: >-
       WIB 自然日内首次出现 Application Installed 的去重人数（agg_daily_install.new_installs）。
@@ -77,7 +132,10 @@ metrics:
       - "events_detail：Application Installed"
       - "identity_links（D-10：未登录时的安装事件归到之后首次登录的账号）"
       - "汇总表：agg_daily_install.new_installs"
+    tables:
+      - agg_daily_install
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户（Q5）。
     known_bias: >-
       卸载重装生成新匿名 id：重装后一直未登录的算一次新装；重装后登录了原账号的，安装事件按 D-10 归回原账号，
@@ -86,10 +144,13 @@ metrics:
       员工与测试账号按正常用户算；生产标记的环境插件超过 3 秒才返回的会话记为非生产，不计入（偏低）。
       兽医 / 虚拟号设备登录前的安装按关联表归到该账号后排除；从未登录的兽医设备无法识别，按游客计入。
       晚到超过 3 天的事件进明细但不回算（D-6）；V1.5.0 之前没有自建数据（旧版升级上来的设备报 Application Updated，不算新装）。
+      卸载重装算新装（同一台设备未登录时按新匿名 id 再算一次）；升级用户清过旧版数据（清除应用数据后首次打开新版）也会被算新装。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/install.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.1：新增" }
   - code: S3
+    team_ref: "S3"
     name: "注册数与注册率"
     definition: >-
       注册数 = WIB 自然日内首次出现 signup_succeeded 的去重人数（agg_daily_install.signups），「首次」判断同 S2（回看 92 天）。
@@ -97,16 +158,21 @@ metrics:
     sources:
       - "events_detail：signup_succeeded（App 唯一上报入口 petgo_app/lib/core/analytics/analytics.dart）"
       - "汇总表：agg_daily_install.signups（分子）、agg_daily_install.new_installs（分母）"
+    tables:
+      - agg_daily_install
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；按人归属后排除非 USER / 非 REAL 用户（Q5）。
     known_bias: >-
       注册率的分子分母都按「当期首次」计，分子不要求来自当期安装的人（团队原文口径）。
       「首次」只在明细保留期内判断。员工与测试账号按正常用户算。
       晚到超过 3 天的事件不回算（D-6）；V1.5.0 之前没有自建数据。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/install.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.1：新增" }
   - code: S5
+    team_ref: "S5"
     name: "运营位曝光与点击"
     definition: >-
       每个弹窗 / banner 的展示次数、点击次数、点击率，推广 Toko 的另算点击后 7 天已付款 Toko 订单数（团队原文）。
@@ -142,7 +208,12 @@ metrics:
       - "汇总表：agg_daily_placement / agg_weekly_placement / agg_monthly_placement（Story 4.4）"
       - "业务库（窄查询，只取 token / 跳转列）：ops_popups(public_token, target_type, target_value)、shop_banners(public_token, target_type)"
       - "业务库（窄查询）：shop_orders(user_id, public_token, paid_at)，paid_at IS NOT NULL = 已付款（D-13）"
+    tables:
+      - agg_daily_placement
+      - agg_weekly_placement
+      - agg_monthly_placement
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
       非运营位弹窗 / 横幅不算：growth_backfill_popup_shown、growth_celebration_shown（成长体系功能弹窗）、
       app_update_prompt_shown（升级提示）、login_guide_*（登录引导）、pet_readonly_banner_shown（名额只读条）——
@@ -160,11 +231,13 @@ metrics:
       promotes_toko 按计算时的配置判定，回补窗口（10 天）内运营改了跳转会改变历史行；配置已删的为空；新人券不查配置，恒为 true。
       曝光只在新版 App（Story 3.1 之后）统一为「露出超过 50% 计一次」。
       带单重算窗口 10 天（7 天带单 + 3 天晚到，D-6）：之后再晚到的事件不回算。员工与测试账号按正常用户算。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/placement.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.1：核对运营位清单（ops_popup / toko_banner / newbie_coupon）、事件名、token 来源表，统一曝光规则与点击判定；新人券弹窗曝光改为首帧后上报" }
       - { date: "2026-11-13", change: "Story 4.4：汇总落地 agg_daily/weekly/monthly_placement（曝光、点击、点击人数周期去重、点击后 7 天已付款 Toko 订单数、推广 Toko 判定），SQL 见 analytics/rollup/placement.sql" }
   - code: "S5-推送"
+    team_ref: "S5"
     name: "推送发送、接收与打开"
     definition: >-
       每条运营推送的发送、接收、打开与打开率，系统推送按类型的打开（FR-23，department-data-summary S5）。
@@ -204,7 +277,12 @@ metrics:
       - "events_detail：toko_coupon_expiry_push_sent（source = 'SERVER'，券过期推送发送数）"
       - "业务库（窄查询）：ops_notification_campaigns(public_token, planned_count, recipient_count, target_type, target_value, COALESCE(started_at, scheduled_at, created_at))，status 不是 PENDING / CANCELED"
       - "汇总表：agg_daily_push / agg_weekly_push / agg_monthly_push（Story 4.4）"
+    tables:
+      - agg_daily_push
+      - agg_weekly_push
+      - agg_monthly_push
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）——
       兽医点开 VET_REPLY / NEW_CONSULT_REQUEST 推送也报 push_opened，在此排除（Story 3.2 复审 R4）。
       运营推送只算已开始发送的活动（status 不是 PENDING / CANCELED）；「发送时间」= COALESCE(started_at, scheduled_at, created_at)，
@@ -219,10 +297,13 @@ metrics:
       同一条推送在 TIMPush 上是否可能回调两次未实测（Story 3.2），若有重复会使打开次数偏高，打开人数不受影响。
       promotes_toko 按计算时的配置判定；活动查不到为空。晚到超过 3 天的打开事件不回算日表（D-6），但仍会计入跟踪期内之后各天的累计打开人数。
       员工与测试账号按正常用户算；V1.5.0 之前没有自建数据。
+      运营推送接收数为近似（= 写入通知中心人数）。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/push.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.4：新增；汇总落地 agg_daily/weekly/monthly_push，A13 / Q4 系统推送发送记录勘察结论写入本条" }
   - code: "电商#6"
+    team_ref: "电商#6"
     name: "Toko 分析漏斗"
     definition: >-
       团队原文：7 天内按顺序经过每一步的去重用户数：浏览 Toko 标签页（toko_page）→ 商品在列表中展示（toko_product_shown）
@@ -245,7 +326,12 @@ metrics:
       - "events_detail：toko_order_submitted（items[].product_token、items[].sku_id）"
       - "events_detail：toko_order_pay_tapped（items[].product_token、items[].sku_id）/ toko_order_payment_succeeded（纯币单的第 6 步）"
       - "业务库：shop_orders.paid_at IS NOT NULL（支付成功，D-13；按 paid_at 的 WIB 日期归日，付款后退款 / 取消仍算已付款）"
+    tables:
+      - agg_daily_toko
+      - agg_weekly_toko
+      - agg_monthly_toko
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
       toko_tab_viewed 不作为第 1 步（只在 TokoPageV3.initState 报一次，IndexedStack 保活后再进不报）。
       shop_product_masonry.dart 里的同名 toko_product_shown 上报所在组件无调用方（死代码），不影响数据。
@@ -271,11 +357,13 @@ metrics:
       转化率现算：SELECT stat_date, funnel_s2_product_shown::numeric / NULLIF(funnel_s1_toko_page, 0) FROM agg_daily_toko …（逐步相除）。
       is_final = false 的行 7 天窗口未关闭，之后每天随回补刷新；每次运行回补最近 8 个 WIB 日（[昨天 − 7, 昨天]），晚到超过回补窗口的事件不再回算。
       退款 / 取消的订单仍算已付款（D-13）。V1.5.0 之前没有行为事件，新版覆盖率低时各步人数偏低（第 7 步来自业务库，但只在前 6 步都有事件的人里判定，同样偏低）。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/toko.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.4：逐步核对触发时机；按代码修正：第 1 步 $screen=toko_page → screen_viewed 且 screen='toko_page'；第 6 步纯币单改认 toko_order_payment_succeeded；toko_order_submitted 与 toko_order_pay_tapped 的 items[] 补 product_token（后端订单详情行加 productToken / skuToken）" }
       - { date: "2026-11-12", change: "Story 4.5：汇总落地 agg_daily/weekly/monthly_toko（toko.sql）；第 6 步合并 toko_order_payment_succeeded（纯 PawCoin / 零元单）为对团队定义的口径补充，需告知电商团队；第 7 步按用户匹配业务库已付款订单" }
   - code: "电商#4"
+    team_ref: "电商#4"
     name: "打开 Toko 的去重用户数"
     definition: >-
       统计周期内有 screen_viewed 且 screen = 'toko_page' 的去重人数（PostHog 时期的 $screen = toko_page，Story 2.4 改名）。
@@ -284,17 +372,24 @@ metrics:
     sources:
       - "events_detail：screen_viewed（screen = 'toko_page'；分支首次打开多出的 screen = '/shop' 不计入）"
       - "汇总表：agg_daily_toko / agg_weekly_toko / agg_monthly_toko.toko_viewers（Story 4.5）"
+    tables:
+      - agg_daily_toko
+      - agg_weekly_toko
+      - agg_monthly_toko
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
     known_bias: >-
       按「人」去重（D-10）：登录前的匿名浏览按关联表归到账号；从未登录的设备按匿名 id 算一人，卸载重装算两人。
       进入方式残留偏差同电商 #6 第 1 步（同一 Toko 分支内再 go('/shop') 不补报）。
       V1.5.0 之前没有自建数据，新版覆盖率低时偏低。周 / 月只在结束后计算；每次运行回补最近 8 个 WIB 日，晚到超过回补窗口的事件不再回算。
       员工与测试账号按正常用户算。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/toko.sql
     changelog:
       - { date: "2026-11-12", change: "Story 4.5：新增；汇总落地 agg_daily/weekly/monthly_toko.toko_viewers" }
   - code: "电商#5"
+    team_ref: "电商#5"
     name: "加购 → 支付订单转化率"
     definition: >-
       统计周期内有 toko_add_to_cart_tapped 的去重人数（atc_users，同时就是电商 #7 的「加购的用户数」）中，
@@ -306,16 +401,23 @@ metrics:
       - "events_detail：toko_add_to_cart_tapped"
       - "业务库：shop_orders.paid_at IS NOT NULL（D-13；按用户窄查询，经埋点库临时表匹配，不跨库）"
       - "汇总表：agg_daily_toko / agg_weekly_toko / agg_monthly_toko 的 atc_users、atc_converted_users（Story 4.5）"
+    tables:
+      - agg_daily_toko
+      - agg_weekly_toko
+      - agg_monthly_toko
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
     known_bias: >-
       加购事件在请求前上报，游客放弃登录、加购失败也算加购（团队「点了加购」口径）；从未登录的匿名人无法匹配订单，只进分母。
       退款 / 取消的订单仍算已付款（D-13）。is_final = false 的行 7 天窗口未关闭；每次运行回补最近 8 个 WIB 日，晚到超过回补窗口的事件不再回算。
       V1.5.0 之前没有行为事件，新版覆盖率低时分母偏低。员工与测试账号按正常用户算。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/toko.sql
     changelog:
       - { date: "2026-11-12", change: "Story 4.5：新增；汇总落地 agg_daily/weekly/monthly_toko.atc_users / atc_converted_users" }
   - code: "电商#7"
+    team_ref: "电商#7"
     name: "购物车内容与停留"
     definition: >-
       团队原文：对统计周期内每一件被加购（toko_add_to_cart_tapped）的商品记是哪件商品、哪个用户、什么时间；停留时长 = 从加购到该商品
@@ -344,7 +446,13 @@ metrics:
       - "events_detail：toko_cart_quantity_changed（sku_token、qty_after；product_token / qty_before / unit_price 可能缺）"
       - "业务库：shop_orders（checkout_source = 'CART'、created_at、paid_at）+ shop_order_lines → shop_skus / shop_products 的 public token（经埋点库临时表匹配，不跨库）"
       - "汇总表：agg_daily_cart（Story 4.6）；加购的用户数见 agg_daily_toko / agg_weekly_toko / agg_monthly_toko.atc_users（Story 4.5）"
+    tables:
+      - agg_daily_cart
+      - agg_daily_toko
+      - agg_weekly_toko
+      - agg_monthly_toko
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）；
       业务库订单行只取下单人 USER + REAL。「立即购买」（checkout_source = 'BUY_NOW'）等非购物车订单不算购物车购买，即使同一 SKU。
       不带 sku_token 的加购事件（旧版 App）不成件。
@@ -362,10 +470,13 @@ metrics:
       ⑦ 7 天观察窗按加购日归档：is_final = false 的行（加购日 + 7 > 计算基准日）还会随每天回补变化；每次运行回补最近 8 个 WIB 日（[昨天 − 7, 昨天]），
       晚到超过回补窗口的事件不再回算。已购买以运行时业务库 paid_at 为准，退款 / 取消仍算已购买（D-13）。
       员工与测试账号按正常用户算。
+      购物车跨设备不可观测（见上 ①）。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/cart.sql
     changelog:
       - { date: "2026-11-12", change: "Story 4.6：新增；汇总落地 agg_daily_cart（cart.sql），只存聚合；新增「下单未付款」去向；逐件明细只在明细层 3 个月内可查，需告知电商" }
   - code: "电商#8"
+    team_ref: "电商#8"
     name: "最具潜力的前 3 个商品"
     definition: >-
       统计周期内「商品详情浏览次数 + 加购次数」最多的 3 个商品。日表 agg_daily_product 存每个商品每天的原始计数，不预排名：
@@ -378,17 +489,22 @@ metrics:
       - "events_detail：toko_product_detail_viewed、toko_add_to_cart_tapped（product_token）"
       - "业务库：shop_products（public_token、name、is_active）"
       - "汇总表：agg_daily_product（Story 4.6）"
+    tables:
+      - agg_daily_product
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户的事件（Q5）。
       明细里出现、业务库查不到的商品 token（已删除商品）丢弃（只在日志计数）。
     known_bias: >-
       次数不去重人：同一人反复打开同一商品详情都算。详情浏览在详情加载前上报，商品已下架 / 加载失败也算一次；
       加购在请求前上报，游客放弃登录、加购失败也算（同电商 #6 ③ ④）。V1.5.0 之前没有自建数据。
       每次运行回补最近 3 个 WIB 日，晚到超过回补窗口的事件不再回算。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/product.sql
     changelog:
       - { date: "2026-11-12", change: "Story 4.6：新增；汇总落地 agg_daily_product.detail_views / add_to_cart" }
   - code: "电商#9"
+    team_ref: "电商#9"
     name: "已售罄但关注度高的商品"
     definition: >-
       库存为 0 的商品，按近 30 天的实际销量（已付款件数）+ 商品详情浏览次数排序。agg_daily_product 每个商品每天一行：
@@ -404,17 +520,22 @@ metrics:
       - "业务库：sku_inventory（actual、locked）、shop_orders.paid_at + shop_order_lines.qty（经 shop_skus / shop_products 的 public token）"
       - "events_detail：toko_product_detail_viewed（product_token）"
       - "汇总表：agg_daily_product（Story 4.6）"
+    tables:
+      - agg_daily_product
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       已付款件数只算下单人 users.role = 'USER' 且 account_type = 'REAL'；浏览次数同电商 #8。
     known_bias: >-
       库存是快照：业务库只有「此刻」库存，没有历史；sellable_stock / is_sold_out / stock_captured_at（及名称、上下架）是该行首次写入时
       （汇总任务运行时，约次日 03:00 WIB）读到的值，回补重算不覆盖；手动重跑从未写过的旧日期时，记的是重跑当时的库存（看 stock_captured_at）。
       paid_qty_30d 不扣退款（refunded_qty）：退款 / 取消的已付款订单仍算（D-13）；每次回补随业务库刷新。
       可售 = 实际 − 锁定，已下单未付款锁定的库存不算可售，可能显示售罄但仓库里还有货。没有 SKU 的商品不出现。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/product.sql
     changelog:
       - { date: "2026-11-12", change: "Story 4.6：新增；汇总落地 agg_daily_product.sellable_stock / is_sold_out / paid_qty_30d（库存为快照，只首次写）" }
   - code: "产品#2"
+    team_ref: "产品#2"
     name: "Toko 支付成功率"
     definition: >-
       已付款订单数 ÷ 已提交订单数，按 WIB 自然日 / 周 / 月（agg_daily_toko / agg_weekly_toko / agg_monthly_toko）：
@@ -426,7 +547,12 @@ metrics:
       - "events_detail：toko_order_submitted（分母）"
       - "业务库：shop_orders.paid_at IS NOT NULL（分子）、shop_orders.created_at（参照列）；JOIN users 只算 role = 'USER' 且 account_type = 'REAL'"
       - "汇总表：agg_daily_toko / agg_weekly_toko / agg_monthly_toko 的 orders_submitted、orders_paid、orders_created_biz（Story 4.5）"
+    tables:
+      - agg_daily_toko
+      - agg_weekly_toko
+      - agg_monthly_toko
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       分母：只算生产数据、非可疑、source = 'APP'，按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户。
       分子与参照列：业务库直接按下单人 users.role = 'USER' 且 account_type = 'REAL' 过滤。
     known_bias: >-
@@ -434,10 +560,12 @@ metrics:
       覆盖率未达 90% 前可用 orders_paid ÷ orders_created_biz 作参照。
       分子按付款日归日、分母按提交日归日，跨日付款的订单两者落在不同日期；退款 / 取消的订单仍算已付款（D-13）。
       每次运行回补最近 8 个 WIB 日，晚到超过回补窗口的提交事件不再回算。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过回补窗口不回算（D-6 基准为晚到超过 3 天不回算，本条窗口见上）。
     sql_path: analytics/rollup/toko.sql
     changelog:
       - { date: "2026-11-12", change: "Story 4.5：新增；汇总落地 agg_daily/weekly/monthly_toko.orders_submitted / orders_paid / orders_created_biz" }
   - code: "产品#1"
+    team_ref: "产品#1"
     name: "安装后创建宠物档案的比例"
     definition: >-
       团队原文：有 pet_profile_create_submitted 的去重用户数 ÷ 有 Application Installed 的去重用户数（S2），同一个月。
@@ -446,7 +574,10 @@ metrics:
     sources:
       - "events_detail：pet_added（分子，建档成功；属性 pet_index、slot_source）"
       - "events_detail：Application Installed（分母，同 S2）"
+    tables:
+      - agg_monthly_install_profile
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
       汇总（Story 4.3）：is_production、NOT is_suspicious、source = 'APP'，按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户
       （匿名安装经关联表归到兽医 / 虚拟号的也排除）。
@@ -460,11 +591,13 @@ metrics:
       第 2 只及以后的宠物也会报 pet_added，按去重人数计不影响；如需「首只」可取 pet_index = 1。
       卸载重装算新装；「首次」只能在明细保留期（约 3 个月）内判断；员工与测试账号按正常用户算。
       V1.5.0 之前没有自建数据（旧版升级上来的设备报 Application Updated，不算新装）。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/install_profile.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.4：按代码修正：分子由 pet_profile_create_submitted（点击即报，失败也算）改为 pet_added（建档成功后上报），D-13；需告知产品团队" }
       - { date: "2026-11-13", change: "Story 4.3：落地 agg_monthly_install_profile（install_profile.sql）；分子按 Dai 拍板改为当月新装人中当月有 pet_added 的人数（原「分子不要求来自当月安装的人」作废）；需告知产品团队" }
   - code: "产品#5"
+    team_ref: "产品#5"
     name: "新用户 W1 留存"
     definition: >-
       团队原文：完成新手引导后，在引导完成后第 7–13 天中任意一天再次打开 App（Application Opened）的用户比例。
@@ -473,7 +606,10 @@ metrics:
     sources:
       - "events_detail：onboarding_completed（锚点，首次；属性 pet_status）"
       - "events_detail：Application Opened（回访）"
+    tables:
+      - agg_cohort_retention
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
     known_bias: >-
       唯一触发点是引导流最后一步（pet_status_page）。Story 3.4 之前的 App 版本点击即报（请求失败、失败后放弃的人也算完成引导，重试会多报），
@@ -487,11 +623,13 @@ metrics:
       WHERE cohort_type = 'ONBOARDING' AND cohort_date BETWEEN :week_monday AND :week_monday + 6 AND w1_retained IS NOT NULL;
       Application Opened 冷启动和回前台都会报，当天有一次即算打开；员工与测试账号按正常用户算；
       每次汇总回补最近 16 天的组（13 天观察 + 3 天晚到），晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据，上线后前 13 天的组 W1 不完整。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/retention.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.4：按代码修正：onboarding_completed 改为请求成功后上报、失败不报（D-13）；锚点取首次 onboarding_completed；需告知产品团队" }
       - { date: "2026-11-13", change: "Story 4.3：落地 agg_cohort_retention（ONBOARDING 组，retention.sql）；补按周加权现算 SQL 与已知偏差" }
   - code: "市场#1"
+    team_ref: "市场#1"
     name: "D1 留存"
     definition: >-
       从安装算起：第 X 天首次安装 App（首次 Application Installed，按 D-10 归属到人）的人中，第 X+1 天当天再次打开（Application Opened）的比例。
@@ -503,17 +641,22 @@ metrics:
       - "events_detail：Application Installed（组，首次）、Application Opened（回访）"
       - "identity_links（D-10：未登录时的安装归到之后首次登录的账号，「安装 → 注册登录 → 次日以账号打开」算同一人）"
       - "汇总表：agg_cohort_retention（cohort_type = 'INSTALL'：cohort_size、d1_retained）"
+    tables:
+      - agg_cohort_retention
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）：按 v_events_person 归属到人之后排除，匿名事件经关联表归到兽医 / 虚拟号的也排除。
     known_bias: >-
       组人数与 S2 同口径（同一次计算时 = agg_daily_install all 行同日 new_installs；本表回补 16 天、日表只回补 3 天，晚到 4–15 天的安装事件或身份关联会让二者略有差异）。d1_retained 为空 = 未满 1 天（X+1 晚于计算基准日 WIB 昨天）。
       安装当天（X）的打开不算留存；只看 X+1 当天。
       卸载重装算新装、新组；「首次」只能在明细层保留期（约 3 个月）内判断；Application Opened 冷启动和回前台都会报，当天有一次即算打开；
       员工与测试账号按正常用户算；每次汇总回补最近 16 天的组，晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/retention.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.3：新增" }
   - code: "市场#2"
+    team_ref: "市场#2"
     name: "D3 留存"
     definition: >-
       从安装算起：第 X 天首次安装 App（首次 Application Installed，按 D-10 归属到人）的人中，第 X+3 天当天再次打开（Application Opened）的比例。
@@ -525,17 +668,22 @@ metrics:
       - "events_detail：Application Installed（组，首次）、Application Opened（回访）"
       - "identity_links（D-10：未登录时的安装归到之后首次登录的账号，「安装 → 注册登录 → 次日以账号打开」算同一人）"
       - "汇总表：agg_cohort_retention（cohort_type = 'INSTALL'：cohort_size、d3_retained）"
+    tables:
+      - agg_cohort_retention
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）：按 v_events_person 归属到人之后排除，匿名事件经关联表归到兽医 / 虚拟号的也排除。
     known_bias: >-
       组人数与 S2 同口径（同一次计算时 = agg_daily_install all 行同日 new_installs；本表回补 16 天、日表只回补 3 天，晚到 4–15 天的安装事件或身份关联会让二者略有差异）。d3_retained 为空 = 未满 3 天（X+3 晚于计算基准日 WIB 昨天）。
       安装当天（X）的打开不算留存；只看 X+3 当天，不是「X+1 至 X+3 内任一天」。
       卸载重装算新装、新组；「首次」只能在明细层保留期（约 3 个月）内判断；Application Opened 冷启动和回前台都会报，当天有一次即算打开；
       员工与测试账号按正常用户算；每次汇总回补最近 16 天的组，晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/retention.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.3：新增" }
   - code: "市场#3"
+    team_ref: "市场#3"
     name: "D7 留存"
     definition: >-
       从安装算起：第 X 天首次安装 App（首次 Application Installed，按 D-10 归属到人）的人中，第 X+7 天当天再次打开（Application Opened）的比例。
@@ -547,17 +695,22 @@ metrics:
       - "events_detail：Application Installed（组，首次）、Application Opened（回访）"
       - "identity_links（D-10：未登录时的安装归到之后首次登录的账号，「安装 → 注册登录 → 次日以账号打开」算同一人）"
       - "汇总表：agg_cohort_retention（cohort_type = 'INSTALL'：cohort_size、d7_retained）"
+    tables:
+      - agg_cohort_retention
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）：按 v_events_person 归属到人之后排除，匿名事件经关联表归到兽医 / 虚拟号的也排除。
     known_bias: >-
       组人数与 S2 同口径（同一次计算时 = agg_daily_install all 行同日 new_installs；本表回补 16 天、日表只回补 3 天，晚到 4–15 天的安装事件或身份关联会让二者略有差异）。d7_retained 为空 = 未满 7 天（X+7 晚于计算基准日 WIB 昨天）。
       安装当天（X）的打开不算留存；只看 X+7 当天，不是「X+1 至 X+7 内任一天」。
       卸载重装算新装、新组；「首次」只能在明细层保留期（约 3 个月）内判断；Application Opened 冷启动和回前台都会报，当天有一次即算打开；
       员工与测试账号按正常用户算；每次汇总回补最近 16 天的组，晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；iOS installerStore 为 null 算生产；V1.5.0 之前无数据，新版覆盖率爬升期人数偏低；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/retention.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.3：新增" }
   - code: "S1-GA4"
+    team_ref: "FR-24"
     name: "GA4 日活（含游客）"
     definition: >-
       GA4 Data API runReport 的 activeUsers（Firebase 统计，iOS + Android 合计，按设备去重、含未登录用户），单日查询，
@@ -568,17 +721,22 @@ metrics:
     sources:
       - "GA4 Data API：properties/{GA4_PROPERTY_ID}:runReport，metrics = activeUsers，维度 appVersion（与日报同一服务账号凭证）"
       - "快照表：ga4_daily_snapshot（active_users_all、active_users_new_version、min_app_version、fetched_at）"
+    tables:
+      - ga4_daily_snapshot
     exclusions: >-
+      通用规则见 _rules 条目；本条与 GA4 对齐，下列为有意例外。
       不做任何排除：GA4 按设备计数，含游客、兽医、虚拟号、员工与测试设备（stag 包不上报 GA4，GA4 属性只有生产包数据）。
       版本号含非数字段（如 (not set)、1.5.0-beta）的不算新版本。
     known_bias: >-
       GA4 有处理延迟：02:30 拉到的 D−1 是初值，每次运行回拉最近 3 天覆盖旧值，之后两天修正；拉取失败的日期在最近 14 天内会补拉，
       超过 14 天仍缺的需手动处理。GA4 按设备计数，同一人多台设备算多人、卸载重装（新的 App 实例 id）算两人；
       与自建 S1（按人，D-10）口径不同，不能直接相减（对账见「自建对账日活」）。stag 关闭快照任务，表为空。
+      通用偏差（详见 _rules 条目）：GA4 按设备计数，员工与测试账号、兽医、游客都计入；GA4 是全版本数据，不受「V1.5.0 之前无数据」限制。
     sql_path: analytics/rollup/dau_reconcile.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.2：新增（D-11）" }
   - code: "S1-对账自建"
+    team_ref: "FR-25"
     name: "自建对账日活"
     definition: >-
       WIB 自然日内 events_detail 中 event = 'Application Opened'、source = 'APP'、NOT is_suspicious 的
@@ -586,17 +744,22 @@ metrics:
     sources:
       - "events_detail：Application Opened（source = 'APP'）"
       - "汇总表：agg_daily_dau_reconcile.self_reconcile_dau"
+    tables:
+      - agg_daily_dau_reconcile
     exclusions: >-
+      通用规则见 _rules 条目；本条与 GA4 对齐，下列为有意例外。
       🔴 Epic 4 通用规则的有意例外（D-11，Dai 2026-11-12 拍板）：不走身份归属视图、不做生产排除（不看 is_production）、
       不排除兽医 / 虚拟号等账号——与 GA4 口径一致。仍只算 source = 'APP'（H5 访客、服务端事件不计入）、仍排除可疑事件。
     known_bias: >-
       只用于和 GA4 V1.5.0+ 对账，不是 S1：S1 自建口径按人去重并做生产 / 账号排除（agg_daily_activity.dau_person）。
       新版 App（V1.5.0+）才上报自建事件，所以天然只含 V1.5.0+。卸载重装生成新匿名 id，算两台设备（GA4 同样）。
       模拟器 / TestFlight / 侧载包的设备也计入（GA4 只收生产包，此处略偏高）。晚到超过 3 天的事件不回算（D-6）。
+      通用偏差（详见 _rules 条目）：按设备、不做账号排除，员工与测试账号、兽医、游客都计入；自建侧 V1.5.0 之前无数据；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/dau_reconcile.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.2：新增（D-11 同口径对账）" }
   - code: "S1-覆盖率"
+    team_ref: "FR-25"
     name: "新版覆盖率"
     definition: >-
       GA4 V1.5.0+ 日活 ÷ GA4 全版本日活（ga4_daily_snapshot.active_users_new_version ÷ active_users_all），
@@ -604,15 +767,21 @@ metrics:
     sources:
       - "ga4_daily_snapshot.active_users_new_version / active_users_all"
       - "汇总表：agg_daily_dau_reconcile.coverage"
+    tables:
+      - agg_daily_dau_reconcile
+      - ga4_daily_snapshot
     exclusions: >-
+      通用规则见 _rules 条目；本条与 GA4 对齐，下列为有意例外。
       同「GA4 日活（含游客）」：不做任何排除。GA4 缺数或全版本为 0 时为空。
     known_bias: >-
       近似值：GA4 的 appVersion 取当天上报时的版本，升级当天的设备新旧版本各算一次，分子分母都按 GA4 去重，覆盖率略偏低或偏高都可能。
       随 GA4 回拉（最近 3 天）变化。
+      通用偏差（详见 _rules 条目）：GA4 按设备计数，员工与测试账号、兽医、游客都计入；GA4 是全版本数据，不受「V1.5.0 之前无数据」限制。
     sql_path: analytics/rollup/dau_reconcile.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.2：新增（注明近似）" }
   - code: "S1-对账"
+    team_ref: "FR-25"
     name: "对账差值与状态"
     definition: >-
       差值 =（自建对账日活 − GA4 V1.5.0+ 日活）÷ GA4 V1.5.0+ 日活，小数（0.0523 = 5.23%），四位小数四舍五入；GA4 为空或 0 时为空。
@@ -623,16 +792,22 @@ metrics:
     sources:
       - "汇总表：agg_daily_dau_reconcile（diff_pct、coverage、status、observation_start、dau_person、dau_logged_in）"
       - "ga4_daily_snapshot、events_detail、agg_daily_activity"
+    tables:
+      - agg_daily_dau_reconcile
+      - ga4_daily_snapshot
     exclusions: >-
+      通用规则见 _rules 条目；本条与 GA4 对齐，下列为有意例外。
       同「自建对账日活」与「GA4 日活（含游客）」：两边都按设备、不做生产排除。
     known_bias: >-
       NO_GA4 是 epics 四种状态（未开始 / 正常 / 异常 / 已结束）之外新增的，用来区分「GA4 没拉到」与「对不上」；
       stag 不拉 GA4，状态全部为 NO_GA4。阈值比较用四舍五入后的四位小数。每次汇总都整表重算状态，GA4 回拉改动覆盖率后观察期起点可能前移或后移。
       结果只存库，不推飞书日报（FR-25）；是否改用自建日活由 Dai 看本表决定（analytics.dau-source）。
+      通用偏差（详见 _rules 条目）：按设备、不做账号排除，员工与测试账号、兽医、游客都计入；自建侧 V1.5.0 之前无数据；晚到超过 3 天不回算（D-6）。
     sql_path: analytics/rollup/dau_reconcile.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.2：新增（FR-24 / FR-25；新增 NO_GA4 状态）" }
   - code: S4
+    team_ref: "S4"
     name: "电商交易占日活"
     definition: >-
       WIB 自然日内有已付款 Toko 订单的去重人数 ÷ 当天日活（agg_daily_ratio.s4_ratio = toko_buyers ÷ dau，六位小数四舍五入）。
@@ -647,7 +822,10 @@ metrics:
       - "业务库：shop_orders.paid_at（分子）；JOIN users 只算 role = 'USER' 且 account_type = 'REAL'"
       - "分母：ga4_daily_snapshot.active_users_all（GA4）或 agg_daily_activity.dau_person（platform = 'all'，SELF）"
       - "汇总表：agg_daily_ratio（toko_buyers、dau、dau_source、s4_ratio；Story 4.7）"
+    tables:
+      - agg_daily_ratio
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       分子按下单人 users.role = 'USER' 且 account_type = 'REAL' 过滤（兽医 / 虚拟号排除）。
       分母 GA4 不做任何排除（按设备）；SELF 同 S1 自建口径（生产、非可疑、source = 'APP'、按人归属后排除非 USER / 非 REAL）。
     known_bias: >-
@@ -655,10 +833,12 @@ metrics:
       分子覆盖所有 App 版本；SELF 分母只来自 V1.5.0+ 的自建上报，新版覆盖率低时比率偏高。
       员工与测试账号算作正常用户。每次运行回补最近 3 天（与 GA4 回拉 3 天一致），GA4 补上后自动填上分母；更早缺的日子需手动重跑。
       开关切换后只有回补窗口内的行改写成新来源，更早的行保留旧来源（以每行 dau_source 为准，切换日期见 S1 的 dau_source_switch）。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；分子来自业务库、覆盖所有版本，SELF 分母与自建日活一样 V1.5.0 之前无数据；晚到超过 3 天不回算（回补 3 天，D-6）。
     sql_path: analytics/rollup/ratio.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.7：新增；汇总落地 agg_daily_ratio.toko_buyers / dau / dau_source / s4_ratio" }
   - code: "产品#3"
+    team_ref: "产品#3"
     name: "付费用户占日活（非 Toko 付费解锁）"
     definition: >-
       WIB 自然日内有非 Toko 付费解锁的去重人数 ÷ 当天日活（agg_daily_ratio.p3_ratio = nontoko_payers ÷ dau，六位小数四舍五入）。
@@ -678,7 +858,10 @@ metrics:
       - "业务库：payment_intents、id_card_hd_purchases、keepsake_purchases、pet_slot_purchases、ai_consult_orders、consult_orders（分子）；gift_orders、payment_intents（参照列）；JOIN users 只算 role = 'USER' 且 account_type = 'REAL'"
       - "分母：ga4_daily_snapshot.active_users_all（GA4）或 agg_daily_activity.dau_person（platform = 'all'，SELF）"
       - "汇总表：agg_daily_ratio（nontoko_payers、payers_*、dau、dau_source、p3_ratio；Story 4.7）"
+    tables:
+      - agg_daily_ratio
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       只算付款人 users.role = 'USER' 且 account_type = 'REAL'。一律排除 SHOP_ORDER（Toko，归 S4）与 MERCHANT_PO（门店进货单，
       payment_intents.user_id 为负的门店 id，与用户不相交，JOIN users 时自然排除）。keepsake_purchases 的 DUPLICATE_PAID / ORPHAN_PAID
       （到账但发放失败、交人工）不算；pet_slot_purchases 的运营补发 ADMIN_GRANT 不算。
@@ -689,10 +872,12 @@ metrics:
       口径（Dai 2026-11-12 拍板）：「付费解锁」不含 PawCoin 充值（买币不是解锁，计入会与之后的扣币解锁重复）和送礼（不是解锁），
       两者人数另存参照列；若口径调整，只改并集定义，表结构不变。分子按人、GA4 分母按设备，比率是近似值（同 S4）。
       退款的兽医问诊仍算付费（D-13）。每次运行回补最近 3 天。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；分子来自业务库、覆盖所有版本，SELF 分母与自建日活一样 V1.5.0 之前无数据；晚到超过 3 天不回算（回补 3 天，D-6）。
     sql_path: analytics/rollup/ratio.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.7：新增（D-13 逐表列出判据；不含充值与送礼，Dai 2026-11-12 拍板）" }
   - code: "内容#1"
+    team_ref: "内容#1"
     name: "新用户与回访用户"
     definition: >-
       新用户 new_users = 业务库 users.created_at 的 WIB 日期 = 当天、role = 'USER' 且 account_type = 'REAL' 的人数。
@@ -702,12 +887,16 @@ metrics:
       - "业务库：users.created_at、role、account_type"
       - "分母：ga4_daily_snapshot.active_users_all（GA4）或 agg_daily_activity.dau_person（platform = 'all'，SELF）"
       - "汇总表：agg_daily_ratio（new_users、returning_users、dau、dau_source；Story 4.7）"
+    tables:
+      - agg_daily_ratio
     exclusions: >-
+      通用规则（生产、非可疑、按人归属、USER + REAL、WIB、周期去重、已付款判据）见 _rules 条目。
       新用户只算 users.role = 'USER' 且 account_type = 'REAL'；分母排除规则同 S4。
     known_bias: >-
       与 S3 注册数（agg_daily_install.signups，按 signup_succeeded 事件）口径不同：本条读业务库，含旧版 App 注册、不受新版覆盖率影响；
       S3 只来自 V1.5.0+ 的自建上报。回访用户 = 日活 − 新用户，日活按设备（GA4）或按人（SELF）、新用户按账号，可能为负，不截断；
       当天注册但没打开 App 的人（极少）也会被减掉。每次只回补最近 3 天，更早的行不随业务库后来的变化而改。
+      通用偏差（详见 _rules 条目）：员工与测试账号按正常用户算；分子来自业务库、覆盖所有版本，SELF 分母与自建日活一样 V1.5.0 之前无数据；晚到超过 3 天不回算（回补 3 天，D-6）。
     sql_path: analytics/rollup/ratio.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.7：新增；汇总落地 agg_daily_ratio.new_users / returning_users" }

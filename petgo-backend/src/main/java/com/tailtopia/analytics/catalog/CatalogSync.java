@@ -72,23 +72,25 @@ public class CatalogSync implements InitializingBean {
 
     static final String UPSERT_METRIC = """
             INSERT INTO metric_definitions
-                (code, name, definition, sources, exclusions, known_bias, sql_path, changelog, updated_at)
-            VALUES (?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, now())
+                (code, team_ref, name, definition, sources, tables, exclusions, known_bias, sql_path, changelog, updated_at)
+            VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?::jsonb, now())
             ON CONFLICT (code) DO UPDATE SET
+                team_ref = EXCLUDED.team_ref,
                 name = EXCLUDED.name,
                 definition = EXCLUDED.definition,
                 sources = EXCLUDED.sources,
+                tables = EXCLUDED.tables,
                 exclusions = EXCLUDED.exclusions,
                 known_bias = EXCLUDED.known_bias,
                 sql_path = EXCLUDED.sql_path,
                 changelog = EXCLUDED.changelog,
                 updated_at = now()
-            WHERE (metric_definitions.name, metric_definitions.definition, metric_definitions.sources,
-                   metric_definitions.exclusions, metric_definitions.known_bias, metric_definitions.sql_path,
-                   metric_definitions.changelog)
+            WHERE (metric_definitions.team_ref, metric_definitions.name, metric_definitions.definition,
+                   metric_definitions.sources, metric_definitions.tables, metric_definitions.exclusions,
+                   metric_definitions.known_bias, metric_definitions.sql_path, metric_definitions.changelog)
                   IS DISTINCT FROM
-                  (EXCLUDED.name, EXCLUDED.definition, EXCLUDED.sources, EXCLUDED.exclusions,
-                   EXCLUDED.known_bias, EXCLUDED.sql_path, EXCLUDED.changelog)
+                  (EXCLUDED.team_ref, EXCLUDED.name, EXCLUDED.definition, EXCLUDED.sources, EXCLUDED.tables,
+                   EXCLUDED.exclusions, EXCLUDED.known_bias, EXCLUDED.sql_path, EXCLUDED.changelog)
             """;
 
     static final String DELETE_STALE_METRICS = "DELETE FROM metric_definitions WHERE NOT (code = ANY (?))";
@@ -180,8 +182,9 @@ public class CatalogSync implements InitializingBean {
         for (int i = 0; i < metricList.size(); i++) {
             MetricDefinition m = metricList.get(i);
             codes[i] = m.code();
-            metricRows.add(new Object[] {m.code(), m.name(), m.definition(), json.writeValueAsString(m.sources()),
-                    m.exclusions(), m.knownBias(), m.sqlPath(), changelogJson(m.changelog())});
+            metricRows.add(new Object[] {m.code(), m.teamRef(), m.name(), m.definition(),
+                    json.writeValueAsString(m.sources()), json.writeValueAsString(m.tables()), m.exclusions(),
+                    m.knownBias(), m.sqlPath(), changelogJson(m.changelog())});
         }
         int[] counts = tx.execute(status -> {
             jdbc.batchUpdate(UPSERT_EVENT, eventRows);

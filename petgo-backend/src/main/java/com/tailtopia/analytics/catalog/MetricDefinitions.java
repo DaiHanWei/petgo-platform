@@ -36,6 +36,7 @@ public class MetricDefinitions implements InitializingBean {
 
     /** 与 {@code metric_definitions} 表列长度一致。 */
     static final int MAX_CODE = 32;
+    static final int MAX_TEAM_REF = 32;
     static final int MAX_NAME = 128;
     static final int MAX_SQL_PATH = 255;
 
@@ -43,9 +44,15 @@ public class MetricDefinitions implements InitializingBean {
     public record ChangelogEntry(String date, String change) {
     }
 
-    /** 一个指标。列表字段不可变。 */
-    public record MetricDefinition(String code, String name, String definition, List<String> sources,
-            String exclusions, String knownBias, String sqlPath, List<ChangelogEntry> changelog) {
+    /**
+     * 一个指标。列表字段不可变。
+     *
+     * <p>Story 4.8 补 {@code teamRef}（团队编号，可选：{@code _rules} 通用规则条目没有）与 {@code tables}
+     * （用到的汇总表 / 快照表名）。已有字段名不改：{@code code} 即条目 id、{@code knownBias} 即已知偏差、
+     * {@code sqlPath} 即 SQL 文件位置。
+     */
+    public record MetricDefinition(String code, String teamRef, String name, String definition, List<String> sources,
+            List<String> tables, String exclusions, String knownBias, String sqlPath, List<ChangelogEntry> changelog) {
     }
 
     private final String location;
@@ -139,19 +146,23 @@ public class MetricDefinitions implements InitializingBean {
             if (code != null && !seen.add(code)) {
                 errors.add(path + ".code", "重复：" + code);
             }
+            String teamRef = CatalogYaml.optionalString(m, "team_ref", path, MAX_TEAM_REF, errors);
             String name = CatalogYaml.requiredString(m, "name", path, MAX_NAME, errors);
             String definition = CatalogYaml.requiredString(m, "definition", path, 0, errors);
             List<String> sources = sources(m.get("sources"), path + ".sources", errors);
+            List<String> tables = sources(m.get("tables"), path + ".tables", errors);
             String exclusions = CatalogYaml.optionalString(m, "exclusions", path, 0, errors);
             String knownBias = CatalogYaml.optionalString(m, "known_bias", path, 0, errors);
             String sqlPath = CatalogYaml.optionalString(m, "sql_path", path, MAX_SQL_PATH, errors);
             List<ChangelogEntry> changelog = changelog(m.get("changelog"), path + ".changelog", errors);
-            out.add(new MetricDefinition(code, name, definition, sources, exclusions, knownBias, sqlPath, changelog));
+            out.add(new MetricDefinition(code, teamRef, name, definition, sources, tables, exclusions, knownBias, sqlPath,
+                    changelog));
         }
         errors.throwIfAny();
         return List.copyOf(out);
     }
 
+    /** 字符串列表（{@code sources} / {@code tables}）：缺省为空列表，元素必须是非空字符串。 */
     private static List<String> sources(Object node, String path, Errors errors) {
         if (node == null) {
             return List.of();
