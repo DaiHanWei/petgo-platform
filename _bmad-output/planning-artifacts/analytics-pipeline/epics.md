@@ -289,8 +289,8 @@ So that 注销承诺在埋点库里也成立。
 
 **Acceptance Criteria:**
 
-**Given** 迁移建 `erasure_requests`（`user_id`、`user_key`、`requested_at`、`done_at`；**不授权**给 `analytics_reader`）**When** `AccountDeletionService` 状态机执行注销 **Then** 新增的 `AnalyticsErasureParticipant` 写入一行；写失败抛异常，由状态机现有重试兜住〔L1〕
-**And** `ErasureJob` 每晚固定时刻运行（早于汇总，advisory lock，任务内 `SET LOCAL statement_timeout` 放宽）：删除这些用户的 `identity_links`；把 `events_detail`、`events_raw` 中的 `user_id` / `user_key` 置空，并删掉清单里标为用户标识的属性键；原始层按分区逐个处理；完成后写 `done_at`〔L1〕
+**Given** **业务库**迁移建 `analytics_erasure_outbox`（`user_id`、`user_key`、`requested_at`、`done_at`）**When** `AccountDeletionService` 状态机执行注销 **Then** 新增的 `AnalyticsErasureParticipant` 在注销同一事务内写入一行，不访问埋点库；埋点库故障不影响注销完成（Dai 2026-11-12 拍板）〔L1〕
+**And** `ErasureJob` 每晚固定时刻运行（早于汇总，advisory lock，任务内 `SET LOCAL statement_timeout` 放宽）：从业务库读出未完成的行，在埋点库删除这些用户的 `identity_links`；把 `events_detail`、`events_raw` 中的 `user_id` / `user_key` 置空，并删掉清单里标为用户标识的属性键；原始层按分区逐个处理；完成后回写业务库 `done_at`；埋点库不可用时跳过并告警，下次再处理〔L1〕
 **And** 重复运行安全；已处理的请求不再扫描〔L1〕
 **And** 擦除后匿名 id 上的事件仍保留（变成匿名事件）；汇总层不动〔L1〕
 **And** 集成测试：注销 → 跑擦除任务 → 埋点库里查不到该 `user_id` / `user_key`，属性里也没有该用户的标识〔L1〕
@@ -303,7 +303,7 @@ So that 后端一上线就有服务端数据。
 
 **Acceptance Criteria:**
 
-**Given** `AnalyticsClient` 新增 `captureForUser(long userId, String event, Map props)` 与 `captureForVisitor(String visitorId, String event, Map props)`，原 `capture(distinctId, …)` 标为废弃 **Then** 约 12 处调用点改用新方法（机械改动）〔L0〕
+**Given** `AnalyticsClient` 新增 `captureForUser(long userId, String event, Map props)` 与 `captureForVisitor(String visitorId, String event, Map props)`，原 `capture(distinctId, …)` 标为废弃 **Then** 10 个类 17 处调用点改用新方法（机械改动）〔L0〕
 **And** 新增 `SelfHostedAnalyticsClient`：`captureForUser` 写 `source=SERVER`、`user_id` 直接给出并视为已校验；`captureForVisitor` 写 `source=H5`、匿名 id 用访客 id，不进关联表〔L1〕
 **And** 队列满、熔断或管道停用时，服务端事件丢弃并计数，不抛异常、不影响业务〔L1〕
 **And** 删除 `PostHogAnalyticsClient`、`analytics.posthog.*` 配置和 `POSTHOG_*` 环境变量占位〔L0〕
@@ -338,7 +338,8 @@ So that 埋点数据完整，又不拖慢 App。
 
 **Acceptance Criteria:**
 
-**Given** 新增 `anonymous_id.dart` **Then** 首次启动生成 UUIDv4 存 `shared_preferences`（不放 secure storage）；卸载前不变；读取同步可用，早于任何事件入队〔L0〕
+**Given** 新增 `anonymous_id.dart` **Then** 首次启动生成 UUIDv4，存在应用支持目录的 `analytics/state.json`（不放 secure storage，也不放 `shared_preferences`）；卸载前不变；读取早于任何事件入队〔L0〕
+**And** 本地队列文件也放 `analytics/` 目录；Android 备份规则（`fullBackupContent` 与 `dataExtractionRules`）排除 `analytics/` 目录，其余数据照常备份（Dai 2026-11-12 拍板）〔L0〕
 **And** 新增 `self_hosted_sink.dart`、`event_queue_file.dart`；业务代码调用 `Analytics.capture` / `capturePurchase` / `buttonTapped` 等时，门面签名不变，事件经现有白名单和 `scrub()` 后进本地队列；金额属性允许保留〔L0〕
 **And** 每条事件带 `messageId`（UUIDv4）、`timestamp`、`anonymousId`；发送时填 `sentAt`；请求体外层 camelCase、属性 snake_case〔L0〕
 **And** 每 20 条或 30 秒发一批（先到者为准）；切到后台立即发；网络恢复后补发；冷启动时补发上次未发完的〔L0〕
@@ -369,7 +370,7 @@ So that 安装量、留存、日活能接着算。
 
 **Acceptance Criteria:**
 
-**Given** 新增 `lifecycle_events.dart` **When** 设备上既没有自建安装标记、也没有旧版本地数据 **Then** 首次启动报 `Application Installed` 并写安装标记与当前版本号〔L0〕
+**Given** 新增 `lifecycle_events.dart` **When** 设备上既没有自建安装标记、也没有旧版本地数据 **Then** 首次启动报 `Application Installed` 并把安装标记与当前版本号写进 `analytics/state.json`（不进备份）〔L0〕
 **And** 有旧版本地数据但没有安装标记的设备，首次启动报 `Application Updated`，**不报 Installed**；之后版本号每次变化也报 Updated（带前后版本）〔L0〕
 **And** 「旧版本地数据」的判据键在 story 内核实并写明：必须是旧版每台设备首启必写、未登录和未完成引导的用户也有的键〔L0〕
 **And** 每次冷启动和每次从后台回到前台都报 `Application Opened`，属性 `from_background` 区分；静默推送唤醒不报〔L0〕
@@ -475,8 +476,9 @@ So that 漏斗和留存不会因为事件名对不上而算错。
 
 **Given** 电商 #6 漏斗各步（`toko_page` 浏览、`toko_product_shown`、`toko_product_detail_viewed`、`toko_buy_now_tapped` / `toko_add_to_cart_tapped`、`toko_order_submitted`、`toko_order_pay_tapped`）、产品 #1 `pet_profile_create_submitted`、产品 #5 `onboarding_completed` **Then** 逐个核对触发时机与团队文档定义一致，结论写进 `metric-definitions.yaml` 对应条目〔L0〕
 **And** 不一致的以代码为准修正口径条目并写变更记录；需告知团队的列进 Completion Notes〔L0〕
-**And** 漏斗各步事件都带 `product_token`（商品维度能关联），缺的补上〔L0〕
-**And** 本 story 不改事件的触发时机；确需改动的单列出来交 Dai 拍板〔L0〕
+**And** 漏斗各步事件都带 `product_token`（商品维度能关联），缺的补上；订单详情的行由后端补 `productToken` / `skuToken` 字段（只增不改）〔L0 / L1〕
+**And** `onboarding_completed` 改为引导请求成功后再上报（请求失败不报）（Dai 2026-11-12 拍板）〔L0〕
+**And** 其余事件不改触发时机；确需改动的单列出来交 Dai 拍板〔L0〕
 
 ---
 
@@ -534,7 +536,7 @@ So that 能评估投放质量和新手引导。
 
 **Given** 迁移建 `agg_cohort_retention` **Then** 以安装日为组（首次 `Application Installed`，按归属规则归到人），记组人数和第 X+1、X+3、X+7 天再次 `Application Opened` 的人数；未满 N 天的组该列为空（市场 #1–#3）〔L1〕
 **And** 以 `onboarding_completed` 日为组，记组人数和其后第 7–13 天内任意一天打开过的人数（产品 #5）〔L1〕
-**And** 按月（`agg_monthly_install_profile`）记当月新装人数中有 `pet_profile_create_submitted` 的人数（产品 #1）〔L1〕
+**And** 按月（`agg_monthly_install_profile`）记当月新装人数中有 `pet_added`（建档成功）的人数（产品 #1，不用点击即报的 `pet_profile_create_submitted`）（Dai 2026-11-12 拍板）〔L1〕
 **And** 每次运行回补仍在观察窗口内的组（最长 13 天）〔L1〕
 **And** 按周加权的留存由组表现算，口径写进 `metric-definitions.yaml`〔L0〕
 
@@ -546,7 +548,7 @@ So that 知道哪个运营位有效。
 
 **Acceptance Criteria:**
 
-**Given** 迁移建 `agg_daily_placement`、`agg_weekly_placement`、`agg_monthly_placement`、`agg_daily_push` **Then** 按 `placement_type` + `placement_token` 记曝光次数、点击次数、点击人数（周表、月表的点击人数为周期内去重）〔L1〕
+**Given** 迁移建 `agg_daily_placement`、`agg_weekly_placement`、`agg_monthly_placement`、`agg_daily_push`、`agg_weekly_push`、`agg_monthly_push`（推送打开人数也是周期去重指标）**Then** 按 `placement_type` + `placement_token` 记曝光次数、点击次数、点击人数（周表、月表的点击人数为周期内去重）〔L1〕
 **And** 每个运营位记「点击后 7 天内产生的已付款 Toko 订单数」：读业务库已付款订单（用户 + `paid_at`），与点击按用户和时间匹配，结果写回埋点库（S5 带单，FR-22）〔L1〕
 **And** 运营位是否推广 Toko：读业务库运营位配置的跳转目标，作为维度写进汇总表（FR-17 第 3 条）〔L1〕
 **And** 运营推送按 `campaign_token` 记 `ops_notification_campaigns` 的 `planned_count` / `recipient_count`（口径注明「接收 = 写入通知中心人数，近似」）和 `push_opened` 打开人数；券过期推送的发送数取服务端事件 `toko_coupon_expiry_push_sent`；其他系统推送按 `push_type` 只记打开人数，并在口径中注明（FR-23）〔L1〕
@@ -588,7 +590,7 @@ So that 这几项能和日活放在同一口径下比较。
 
 **Acceptance Criteria:**
 
-**Given** 迁移建 `agg_daily_ratio` **Then** 每天记有已付款 Toko 订单的人数（S4 分子）、有非 Toko 付费解锁的人数（产品 #3 分子，判据按各业务表逐项列出）、当天注册人数（内容 #1），分子均读业务库〔L1〕
+**Given** 迁移建 `agg_daily_ratio` **Then** 每天记有已付款 Toko 订单的人数（S4 分子）、有非 Toko 付费解锁的人数（产品 #3 分子，判据按各业务表逐项列出；不含 PawCoin 充值和送礼，另存两者人数作参照（Dai 2026-11-12 拍板））、当天注册人数（内容 #1），分子均读业务库〔L1〕
 **And** 分母日活按 `analytics.dau-source` 取：`GA4` 时取 GA4 全版本日活，`SELF` 时取自建日活（含游客，按人）；表里同时存分母来源〔L1〕
 **And** 切到 `SELF` 时在 `metric-definitions.yaml` 的 S1 条目写切换日期〔L0〕
 **And** 回访用户 = 当天日活 − 当天新用户；月比率取每日比率的平均，写进口径〔L0〕

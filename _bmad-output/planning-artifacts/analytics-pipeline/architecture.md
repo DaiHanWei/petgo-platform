@@ -141,17 +141,17 @@ FR-17–20（补埋点缺口）跨①和④两个组件。
 | D-11 | **GA4 快照与对账口径**（FR-24、FR-25）：`Ga4ActiveUsersClient` 新增按 `appVersion` 维度拉取的方法；每天拉 GA4 全版本日活（指标分母用）和 V1.5.0 及以上日活（对账用），**每次回拉最近 3 天覆盖旧值**（GA4 有处理延迟）。**对账同口径**：GA4 V1.5.0+ 日活 vs 自建「按设备（匿名 id）去重、不做生产排除」的对账日活；阈值仍 ±10%（Dai 2026-11-12 拍板）。新版覆盖率 = V1.5.0+ ÷ 全版本，按版本拆分会跨版本重复计人，注明为近似值 | 两边口径一致，差值才有意义 |
 | D-8 | **分区维护**：每天跑一次，按 UTC（原始层）/ WIB（明细层）计算日期。提前建好 7 天分区。原始层保留 DEFAULT 分区兜底，非空即告警；建分区前若 DEFAULT 里有落在该区间的行，先 DETACH DEFAULT、建分区、搬行、再 ATTACH。原始层删超过 35 天的分区，**前提是那一天已转进明细层**；明细层删超过 3 个月的分区。明细处理进度存 `pipeline_progress`（由明细层 story 建），不复用 `agg_progress` | 落实故障隔离与时间边界 |
 | D-12 | **周期去重指标单独入表**：「统计周期内去重人数」不能由日表相加（§4.5.1），凡团队定义按周期去重的指标（电商 #4、#5、#6 周漏斗、#7 加购人数、S5 点击 / 打开人数等），另建 `agg_weekly_*`（周一至周日）与 `agg_monthly_*`（WIB 自然月），周期结束次日计算、按 D-6 回补；比率类月指标（取每日比率平均）仍由日表现算（就绪度评审 2026-11-12 修订） | 明细只留 3 个月，过期后周期去重数只能来自汇总 |
-| D-13 | **业务库判据**：Toko「已付款」= `shop_orders.paid_at IS NOT NULL`，按 `paid_at` 的 WIB 日期归日；付款后退款或取消的仍算已付款（Dai 2026-11-12 拍板），口径注明。非 Toko 付费按各业务表逐项列出（`payment_intents.status = 'PAID'` 及 KTP、Tailsonality、名额等），写进口径条目。业务库与埋点关联**一律用 public token**（商品、SKU、运营位、活动），业务库窄查询返回 token | 业务库没有 `PAID` 订单状态；App 事件只带 token |
+| D-13 | **业务库判据与事件口径**：产品 #1 建档用请求成功后才上报的 `pet_added`（不用点击即报的 `pet_profile_create_submitted`）；产品 #5 的 `onboarding_completed` 改为请求成功后再上报；产品 #3「付费解锁」不含 PawCoin 充值和送礼，表里另存两者人数作参照（Dai 2026-11-12 拍板）。Toko「已付款」= `shop_orders.paid_at IS NOT NULL`，按 `paid_at` 的 WIB 日期归日；付款后退款或取消的仍算已付款（Dai 2026-11-12 拍板），口径注明。非 Toko 付费按各业务表逐项列出（`payment_intents.status = 'PAID'` 及 KTP、Tailsonality、名额等），写进口径条目。业务库与埋点关联**一律用 public token**（商品、SKU、运营位、活动），业务库窄查询返回 token | 业务库没有 `PAID` 订单状态；App 事件只带 token |
 
 ### 二、身份与安全
 
 | # | 决策 |
 |---|---|
-| **A3** | 匿名 id 是 App 首次启动时生成的 UUIDv4，存 `shared_preferences`，**不放 secure storage**（避开 BAD_DECRYPT 坑）。卸载后重新生成，登出不重置 |
-| **A4** | App 上报的用户标识沿用 `AnalyticsDistinctId`，即 `sha256('tailtopia-user-'+id)`，前后端已逐字对齐；App 请求的 `user_id` 由 JWT 与关联表得出。服务端事件：`AnalyticsClient` 新增 `captureForUser(long userId, …)` 与 `captureForVisitor(String visitorId, …)`，原 `capture(distinctId, …)` 标为废弃，约 12 处调用点做机械改动（就绪度评审 2026-11-12 修订）。埋点库内部另存 `user_id`（bigint）供 C 类指标关联业务库；它不对外暴露，不违反「对外标识不可枚举」 |
+| **A3** | 匿名 id 是 App 首次启动时生成的 UUIDv4，与安装标记、上次版本号一起存在应用支持目录下的独立文件 `analytics/state.json`（本地队列文件也放 `analytics/` 目录），**不放 secure storage**（避开 BAD_DECRYPT 坑），也不放 `shared_preferences`（Android 整个 prefs 文件只能整体备份）。Android 备份规则（`fullBackupContent` 与 API 31+ 的 `dataExtractionRules`）排除 `analytics/` 目录，其余数据照常备份（Dai 2026-11-12 拍板）。卸载后重新生成，登出不重置 |
+| **A4** | App 上报的用户标识沿用 `AnalyticsDistinctId`，即 `sha256('tailtopia-user-'+id)`，前后端已逐字对齐；App 请求的 `user_id` 由 JWT 与关联表得出。服务端事件：`AnalyticsClient` 新增 `captureForUser(long userId, …)` 与 `captureForVisitor(String visitorId, …)`，原 `capture(distinctId, …)` 标为废弃，10 个类 17 处调用点做机械改动（就绪度评审 2026-11-12 修订）。埋点库内部另存 `user_id`（bigint）供 C 类指标关联业务库；它不对外暴露，不违反「对外标识不可枚举」 |
 | **A7** | 带 JWT 的请求以 token 用户为准，逐条事件判断：<br>• 事件里没有用户标识：按匿名事件处理。<br>• 用户标识等于 token 用户：通过。<br>• 用户标识不等于 token 用户（跨账号补发）：查关联表，看（匿名 id，该用户）之前登录时是否建立过关联。有就通过；没有就去掉用户标识，标记 `identity_unverified`。<br>不带 JWT 但带了用户标识的请求，同样走关联表校验 |
 | 接口 | `POST /api/v1/analytics/batch`，可不带 JWT。限流**以匿名 id 为主**，IP 只设很宽的兜底阈值（印尼移动网络普遍 CGNAT 共用出口 IP，阈值压测后定）；429 响应由接收端补上 `Retry-After`（现有 `AppException.rateLimited` 不带）。必填字段：`messageId`、`event`、`timestamp`、`sentAt`、`anonymousId`（UUID）；其余缺失不拒收。体积限制按 A6 |
-| **A10** | `AccountDeletionService`（DB 状态机）新增一个参与者：往埋点库 `erasure_requests` 写一行，写失败抛异常，由状态机现有重试兜住（埋点库不可用会延后业务侧注销完成，作为已知取舍）。**每晚在汇总之前**批量处理：删关联表；把明细层和原始层中这些用户的 `user_id` / `user_key` 置空，并删掉事件清单里标为用户标识的属性键（原始层用 `properties - key`）；原始层**按分区逐个处理**，任务内 `SET LOCAL statement_timeout` 放宽。汇总层不动。最晚 24 小时内生效（以注销作业完成为起点） |
+| **A10** | `AccountDeletionService`（DB 状态机）新增一个参与者：往**业务库**的 `analytics_erasure_outbox` 写一行，与注销在同一事务内，不依赖埋点库，埋点库故障不会卡住注销（Dai 2026-11-12 拍板）。`ErasureJob` 每晚从业务库读出未完成的行，在埋点库执行擦除，成功后回写业务库的完成时间；埋点库不可用时只是延后并告警。**每晚在汇总之前**批量处理：删关联表；把明细层和原始层中这些用户的 `user_id` / `user_key` 置空，并删掉事件清单里标为用户标识的属性键（原始层用 `properties - key`）；原始层**按分区逐个处理**，任务内 `SET LOCAL statement_timeout` 放宽。汇总层不动。最晚 24 小时内生效（以注销作业完成为起点） |
 
 ### 三、接收与资源
 

@@ -48,42 +48,42 @@ story_location: _bmad-output/implementation-artifacts/analytics-pipeline
 
 development_status:
   # Epic 1：后端埋点管道上线（后端；先上 stag，V1.5.0 发版前上生产）
-  epic-1: backlog
-  1-1-埋点库骨架: backlog
-  1-2-事件清单盘点与口径骨架: backlog
-  1-3-原始层与分区维护: backlog
-  1-4-批量接收接口: backlog
-  1-5-身份校验与关联表: backlog
-  1-6-明细层转换: backlog
-  1-7-明细分区-原始层清理与重算: backlog
-  1-8-注销擦除: backlog
-  1-9-服务端事件改走自建: backlog
-  1-10-存储水位与停写熔断: backlog
+  epic-1: in-progress
+  1-1-埋点库骨架: ready-for-dev
+  1-2-事件清单盘点与口径骨架: ready-for-dev
+  1-3-原始层与分区维护: ready-for-dev
+  1-4-批量接收接口: ready-for-dev
+  1-5-身份校验与关联表: ready-for-dev
+  1-6-明细层转换: ready-for-dev
+  1-7-明细分区-原始层清理与重算: ready-for-dev
+  1-8-注销擦除: ready-for-dev
+  1-9-服务端事件改走自建: ready-for-dev
+  1-10-存储水位与停写熔断: ready-for-dev
   epic-1-retrospective: optional
   # Epic 2：App 切到自建上报（随 V1.5.0）（App；随 V1.5.0；依赖 Epic 1 已上 stag）
-  epic-2: backlog
-  2-1-自建上报器-本地队列与匿名-id: backlog
-  2-2-身份绑定: backlog
-  2-3-生命周期事件: backlog
-  2-4-页面浏览事件: backlog
-  2-5-环境与生产标记: backlog
-  2-6-移除-posthog-与事件名比对: backlog
+  epic-2: in-progress
+  2-1-自建上报器-本地队列与匿名-id: ready-for-dev
+  2-2-身份绑定: ready-for-dev
+  2-3-生命周期事件: ready-for-dev
+  2-4-页面浏览事件: ready-for-dev
+  2-5-环境与生产标记: ready-for-dev
+  2-6-移除-posthog-与事件名比对: ready-for-dev
   epic-2-retrospective: optional
   # Epic 3：补齐团队指标需要的事件（随 V1.5.0）（App 为主；随 V1.5.0；可与 Epic 2 并行）
-  epic-3: backlog
-  3-1-运营位曝光与点击核对: backlog
-  3-2-推送打开统一事件: backlog
-  3-3-购物车事件补全: backlog
-  3-4-漏斗与引导事件核对: backlog
+  epic-3: in-progress
+  3-1-运营位曝光与点击核对: ready-for-dev
+  3-2-推送打开统一事件: ready-for-dev
+  3-3-购物车事件补全: ready-for-dev
+  3-4-漏斗与引导事件核对: ready-for-dev
   epic-3-retrospective: optional
   # Epic 4：指标汇总、日活对账与 AI 查数（批次 ②）（后端；批次 ②，发版后可补）
-  epic-4: backlog
-  4-1-汇总框架与活跃-安装-注册: backlog
-  4-2-ga4-快照与日活对账: backlog
-  4-3-留存与引导转化: backlog
-  4-4-运营位与推送效果: backlog
-  4-5-toko-浏览-漏斗与加购转化: backlog
-  4-6-购物车与商品: backlog
-  4-7-以日活为分母的比率指标: backlog
-  4-8-口径文档补全与-ai-查数接入: backlog
+  epic-4: in-progress
+  4-1-汇总框架与活跃-安装-注册: ready-for-dev
+  4-2-ga4-快照与日活对账: ready-for-dev
+  4-3-留存与引导转化: ready-for-dev
+  4-4-运营位与推送效果: ready-for-dev
+  4-5-toko-浏览-漏斗与加购转化: ready-for-dev
+  4-6-购物车与商品: ready-for-dev
+  4-7-以日活为分母的比率指标: ready-for-dev
+  4-8-口径文档补全与-ai-查数接入: ready-for-dev
   epic-4-retrospective: optional

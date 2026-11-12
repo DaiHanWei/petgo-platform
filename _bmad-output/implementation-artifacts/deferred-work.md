@@ -149,3 +149,7 @@
 **待查线索**：TIMPush 插件全程未调用 IM SDK 的 `V2TIMOfflinePushManager.setOfflinePushConfig`（把 token 绑给 **IM 服务**的接口）——但 iOS 侧插件并不暴露 APNs token，说明该绑定**本应由 TIMPush 原生自动完成**，故此线索未坐实。
 **下一步建议**：① 用后端系统消息（`sendSystemMessage`，已带 `OfflinePushInfo`，纯服务端 → IM 服务路径）做区分实验——能到则问题在客户端发送路径，不能到则是 IM 服务侧绑定/配置；② 腾讯控制台 Push → 接入测试指定 userID 验通道；③ 必要时提工单。
 **影响面**：兽医回复的**通知中心推送**（FR-22A，后端 `VET_REPLY`）不受影响、正常可达；缺的只是聊天消息本身的即时通知栏提醒。
+
+## analytics-pipeline（2026-11-12 建 story 时发现，范围外）
+
+- 后台模板和 i18n 里还有多处「去 PostHog 查看」的提示文案；PostHog 已停用，自建埋点上线后应改成指向 AI 查数或删除。来源：Story 1.9 建档 agent 报告。
