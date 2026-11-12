@@ -9,6 +9,7 @@
 #   scripts/cloud-run-story-loop.sh v1.3.0 admin feat/1.3.0-ops-ui-refactor --skip-epics "10"
 #   scripts/cloud-run-story-loop.sh v1.4.0 app   feat/1.4.0-app
 #   scripts/cloud-run-story-loop.sh v2.0.0 shop  feat/2.0.0-shop
+#   scripts/cloud-run-story-loop.sh analytics-pipeline - feat/analytics-pipeline   # 不挂版本的专题线，主题传 "-"
 #
 # 做什么：
 #   1. 校验 sprint-status-<ver>-<主题>.yaml 存在、分支已 push 且远端与本地同步。
@@ -38,8 +39,14 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 impl_dir="_bmad-output/implementation-artifacts/${VER}"
 plan_dir="_bmad-output/planning-artifacts/${VER}"
-status_file="$impl_dir/sprint-status-${VER}-${THEME}.yaml"
-rules_file="$impl_dir/cloud-rules-${THEME}.md"
+# 主题传 "-" = 不挂版本的专题线（如 analytics-pipeline），文件名不带主题后缀
+if [ "$THEME" = "-" ]; then
+  status_file="$impl_dir/sprint-status-${VER}.yaml"
+  rules_file="$impl_dir/cloud-rules.md"
+else
+  status_file="$impl_dir/sprint-status-${VER}-${THEME}.yaml"
+  rules_file="$impl_dir/cloud-rules-${THEME}.md"
+fi
 
 # ---- 1. 校验 ---------------------------------------------------------------
 [ -f "${status_file}" ] || { echo "FATAL: 找不到 ${status_file}（先跑 sprint-planning 生成）"; exit 1; }
