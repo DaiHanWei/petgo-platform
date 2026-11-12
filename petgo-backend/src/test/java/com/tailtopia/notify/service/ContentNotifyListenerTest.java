@@ -206,12 +206,28 @@ class ContentNotifyListenerTest {
     }
 
     @Test
-    void replyToSecondLevelNotifiesAllThreeOnce() {
+    void replyToSecondLevelNotifiesContentAuthorAndReplyTargetButNotParent() {
+        // 修复线：D 回复的是 B 楼里 C 的二级评论 —— 不是直接回复 B，B 不再收通知。
         listener().onContentCommented(replyToSecondLevel(D, A, B, C));
         verify(notificationService).sendInteraction(A, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L, null, "halo");
+        verify(notificationService).sendInteraction(C, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
+                Notification.VARIANT_REPLY, "halo");
+        org.mockito.Mockito.verifyNoMoreInteractions(notificationService);
+    }
+
+    @Test
+    void replyToParentsOwnSecondLevelStillNotifiesParent() {
+        // D 回复的是 B 在自己楼里发的二级评论 —— 被回复的就是 B，算直接回复。
+        listener().onContentCommented(replyToSecondLevel(D, A, B, B));
         verify(notificationService).sendInteraction(B, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
                 Notification.VARIANT_REPLY, "halo");
-        verify(notificationService).sendInteraction(C, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
+    }
+
+    @Test
+    void ownerThreadScenarioParentOnlyNotifiedWhenRepliedDirectly() {
+        // 用户场景：我（A）的帖子，B 的一级评论楼里，我回复 C 的回复 → C 收；B 不收；我自己不收。
+        listener().onContentCommented(replyToSecondLevel(A, A, B, C));
+        verify(notificationService).sendInteraction(C, NotificationType.CONTENT_COMMENTED, A, null, "55", 7L,
                 Notification.VARIANT_REPLY, "halo");
         org.mockito.Mockito.verifyNoMoreInteractions(notificationService);
     }
@@ -241,7 +257,8 @@ class ContentNotifyListenerTest {
         org.mockito.Mockito.lenient().when(hideRelations.isHidden(C, D)).thenReturn(true);
         listener().onContentCommented(replyToSecondLevel(D, A, B, C));
         verifyNoInteractionSentTo(C);
-        verify(notificationService).sendInteraction(eq(B), any(), anyLong(), any(), any(), any(), any(), any());
+        verifyNoInteractionSentTo(B); // 修复线：非直接回复 B，本就不发
+        verify(notificationService).sendInteraction(eq(A), any(), anyLong(), any(), any(), any(), any(), any());
     }
 
     @Test

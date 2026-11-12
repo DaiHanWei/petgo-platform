@@ -311,9 +311,11 @@ public class CommentService {
         // 🔴 提交那一刻发的话，审核没过的评论会让被 @ 的人点进去看不到任何东西。
         // V1.4.2 去重：同一条评论每人最多一条通知 —— 已经会收「评论了你的内容 / 回复了你的评论」的人
         // （帖主 A、一级评论作者 B、被回复人 C）不再另收「提到了你」。只滤事件名单，评论里的 @ 展示不变。
+        // 修复线：一级评论作者 B 只在「直接被回复」时才收回复通知（口径同 ContentNotifyListener），
+        // 回复的是 B 楼里别人时 B 收不到回复通知 —— 此时若 @ 了 B，必须保留「提到了你」，否则 B 什么都收不到。
         Set<Long> commentRecipients = new HashSet<>();
         commentRecipients.add(contentAuthorId);
-        if (parentAuthorId != null) {
+        if (parentAuthorId != null && (replyToAuthorId == null || replyToAuthorId.equals(parentAuthorId))) {
             commentRecipients.add(parentAuthorId);
         }
         if (replyToAuthorId != null) {
