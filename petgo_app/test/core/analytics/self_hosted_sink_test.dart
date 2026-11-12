@@ -16,11 +16,13 @@ void main() {
 
   late DateTime clock;
   late List<String> bodies;
+  late List<String?> bearers; // 每次请求带的 token（null = 无 Authorization）
   late List<Object> replies; // SinkResponse 或要抛出的异常
   late MemoryEventQueueStore store;
 
-  Future<SinkResponse> transport(String body) async {
+  Future<SinkResponse> transport(String body, String? bearer) async {
     bodies.add(body);
+    bearers.add(bearer);
     final r = replies.isEmpty ? const SinkResponse(202) : replies.removeAt(0);
     if (r is SinkResponse) return r;
     throw r;
@@ -45,6 +47,7 @@ void main() {
   setUp(() {
     clock = t0;
     bodies = [];
+    bearers = [];
     replies = [];
     store = MemoryEventQueueStore();
   });
@@ -194,7 +197,7 @@ void main() {
       var maxInFlight = 0;
       final sent = <int>[];
       final s = SelfHostedSink.test(
-        transport: (body) async {
+        transport: (body, _) async {
           inFlight++;
           maxInFlight = inFlight > maxInFlight ? inFlight : maxInFlight;
           if (sent.isEmpty) await gate.future;
@@ -514,7 +517,9 @@ void main() {
       final src = File('lib/core/analytics/analytics.dart').readAsStringSync();
       expect(src.contains('Posthog().capture'), isFalse);
       expect(src.contains('posthogMoneyKeys'), isFalse);
-      expect(src.contains('SelfHostedSink.instance.enqueue(event, clean)'), isTrue);
+      // Story 2.2：经 `_sink`（测试可注入，生产恒为 SelfHostedSink.instance）。
+      expect(src.contains('_sink.enqueue(event, clean)'), isTrue);
+      expect(src.contains('debugSinkOverride ?? SelfHostedSink.instance'), isTrue);
     });
 
     test('sink 用独立 Dio + kApiBaseUrl，不用 dioProvider（避免 AuthInterceptor 401 踢游客）', () {
@@ -524,6 +529,149 @@ void main() {
       expect(src.contains("import '../network/dio_client.dart' show kApiBaseUrl;"), isTrue);
       expect(src.contains('kApiBaseUrl'), isTrue);
       expect(src.contains("'/api/v1/analytics/batch'"), isTrue);
+      expect(src.contains('auth_interceptor'), isFalse, reason: '埋点请求不得触发续期 / 转游客 / 登录弹框');
+    });
+  });
+
+  group('身份绑定与 JWT（Story 2.2 AC1、AC4）', () {
+    const keyA = 'aaaa';
+    const keyB = 'bbbb';
+
+    test('入队即绑定：入队后 setUserKey(B)，已入队事件 userId 仍为 A', () async {
+      final s = await started();
+      s.setUserKey(keyA);
+      s.enqueue('e_a', null);
+      s.setUserKey(keyB);
+      s.enqueue('e_b', null);
+      await s.flush();
+      final b = batchOf(bodies.single);
+      expect(b.map((e) => e['event']), ['e_a', 'e_b']);
+      expect(b[0]['userId'], keyA);
+      expect(b[1]['userId'], keyB);
+    });
+
+    test('启动前缓冲的事件同样在入队那一刻绑定', () async {
+      final s = makeSink();
+      addTearDown(s.dispose);
+      s.setUserKey(keyA);
+      s.enqueue('e_a', null);
+      s.setUserKey(null);
+      await s.start();
+      await settle();
+      expect(batchOf(bodies.single).single['userId'], keyA);
+    });
+
+    test('setUserKey(null) 后新事件 userId 为 null，anonymousId 不变', () async {
+      final s = await started();
+      s.setUserKey(keyA);
+      s.enqueue('e1', null);
+      s.setUserKey(null);
+      s.enqueue('e2', null);
+      final q = await store.readAll();
+      expect(q[0]['userId'], keyA);
+      expect(q[1]['userId'], isNull);
+      expect(q[1]['anonymousId'], q[0]['anonymousId']);
+      expect(q[1]['anonymousId'], AnonymousId.value);
+      expect(s.currentUserKey, isNull);
+    });
+
+    SelfHostedSink tokenSink(Future<String?> Function() readToken) {
+      final s = SelfHostedSink.test(transport: transport, readToken: readToken, now: () => clock, store: store);
+      addTearDown(s.dispose);
+      return s;
+    }
+
+    test('有 token 时带 Authorization，且 token 不进请求体 / 队列', () async {
+      final s = tokenSink(() async => 'jwt-123');
+      await s.start();
+      await settle();
+      s.enqueue('e', null);
+      await s.flush();
+      expect(bearers, ['jwt-123']);
+      expect(bodies.single.contains('jwt-123'), isFalse);
+    });
+
+    test('无 token / 空串时不带 Authorization', () async {
+      for (final t in <String?>[null, '']) {
+        bearers.clear();
+        final s = tokenSink(() async => t);
+        await s.start();
+        await settle();
+        s.enqueue('e', null);
+        await s.flush();
+        expect(bearers, [null]);
+      }
+    });
+
+    test('读 token 抛异常时照常发送且不带头', () async {
+      final s = tokenSink(() async => throw StateError('keystore'));
+      await s.start();
+      await settle();
+      s.enqueue('e', null);
+      await s.flush();
+      expect(bearers, [null]);
+      expect(await store.readAll(), isEmpty);
+    });
+
+    test('401 → 同一批立刻去头重发一次；重发 202 则删除本批、不退避', () async {
+      final s = tokenSink(() async => 'expired');
+      await s.start();
+      await settle();
+      s.enqueue('e', null);
+      replies.addAll([const SinkResponse(401), const SinkResponse(202)]);
+      await s.flush();
+      expect(bearers, ['expired', null]);
+      expect(bodies[1], bodies[0], reason: '原样重发同一批（同 messageId / sentAt）');
+      expect(await store.readAll(), isEmpty);
+      expect(s.droppedCount, 0);
+      expect(s.backoffUntil, isNull);
+    });
+
+    test('401 去头重发仍非 2xx：按返回码表处理（再 401 → 保留 + 退避，不再重发）', () async {
+      final s = tokenSink(() async => 'expired');
+      await s.start();
+      await settle();
+      s.enqueue('e', null);
+      replies.addAll([const SinkResponse(401), const SinkResponse(401)]);
+      await s.flush();
+      expect(bearers, ['expired', null]);
+      expect(await store.readAll(), hasLength(1));
+      expect(s.droppedCount, 0);
+      expect(s.backoffUntil!.difference(clock).inSeconds, 5);
+    });
+
+    test('401 去头重发得 429：遵守 Retry-After 暂停', () async {
+      final s = tokenSink(() async => 'expired');
+      await s.start();
+      await settle();
+      s.enqueue('e', null);
+      replies.addAll([const SinkResponse(401), const SinkResponse(429, retryAfter: '30')]);
+      await s.flush();
+      expect(bearers, ['expired', null]);
+      expect(await store.readAll(), hasLength(1));
+      expect(s.pauseUntil!.difference(clock).inSeconds, 30);
+    });
+
+    test('未带 token 的 401 不重发（只退避）', () async {
+      final s = await started();
+      s.enqueue('e', null);
+      replies.add(const SinkResponse(401));
+      await s.flush();
+      expect(bearers, [null]);
+      expect(await store.readAll(), hasLength(1));
+    });
+
+    test('token 每批发送前现读（换号后用新 token）', () async {
+      var token = 'jwt-a';
+      final s = tokenSink(() async => token);
+      await s.start();
+      await settle();
+      s.enqueue('e1', null);
+      await s.flush();
+      token = 'jwt-b';
+      s.enqueue('e2', null);
+      await s.flush();
+      expect(bearers, ['jwt-a', 'jwt-b']);
     });
   });
 }

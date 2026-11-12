@@ -63,7 +63,7 @@ development_status:
   # Epic 2：App 切到自建上报（随 V1.5.0）（App；随 V1.5.0；依赖 Epic 1 已上 stag）
   epic-2: in-progress
   2-1-自建上报器-本地队列与匿名-id: review
-  2-2-身份绑定: ready-for-dev
+  2-2-身份绑定: review
   2-3-生命周期事件: ready-for-dev
   2-4-页面浏览事件: ready-for-dev
   2-5-环境与生产标记: ready-for-dev

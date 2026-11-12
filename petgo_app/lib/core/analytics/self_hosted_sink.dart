@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../network/dio_client.dart' show kApiBaseUrl;
+import '../storage/secure_storage.dart';
 import 'anonymous_id.dart';
 import 'event_queue_file.dart';
 
@@ -19,8 +20,12 @@ class SinkResponse {
 }
 
 /// 传输函数：POST 已序列化的请求体（`{"batch":[...]}`），返回状态码。
+/// [bearer] 非 null 时带 `Authorization: Bearer <bearer>`（Story 2.2）；token 只进请求头。
 /// 网络异常 / 超时直接抛出，由 sink 按「断网」退避。
-typedef SinkTransport = Future<SinkResponse> Function(String body);
+typedef SinkTransport = Future<SinkResponse> Function(String body, String? bearer);
+
+/// 读当前 access token（Story 2.2）。返回 null 或抛异常都按「无 token」发送。
+typedef SinkTokenReader = Future<String?> Function();
 
 /// 自建埋点上报器（analytics-pipeline Story 2.1，FR-1–3 / A2）。
 ///
@@ -37,9 +42,17 @@ typedef SinkTransport = Future<SinkResponse> Function(String body);
 /// - 503 → 保留；带 `Retry-After`（管道停用时后端会带）时同 429 遵守，并取与退避两者较长者；
 ///   不带则指数退避；
 /// - 400 / 413 → 整批丢弃并计数（防止坏批次永远卡在队头）；
-/// - 401 → 保留 + 指数退避（本 story 不带 JWT，正常不会出现；Story 2.2 加 JWT 后在此接刷新）；
+/// - 401 → 带了 JWT 的批次立刻去掉 `Authorization` 原样重发一次（Story 2.2：access token
+///   15 分钟过期，过期 token 会被安全链直接 401），重发结果再按本表处理；不刷新 token、不改登录态。
+///   未带 JWT 仍 401 → 保留 + 指数退避；
 /// - 其他 5xx / 非预期状态（如 404）/ 网络异常 / 超时 → 保留，指数退避
 ///   （5s 起 ×2，封顶 5 分钟，±20% 抖动），成功一次归零。
+///
+/// **身份（Story 2.2，FR-2）**：[setUserKey] 设当前用户标识（`Analytics.distinctIdFor` 的哈希，
+/// 绝不放明文数字 id），[enqueue] 组装信封时取**那一刻**的值写进 `userId`；信封随即序列化进队列，
+/// 之后登出 / 换号不改已入队事件的身份。该值只在内存，冷启动由 `app.dart` 的 auth 监听重新 identify。
+/// 发送时读 access token 加 `Authorization`；用独立 Dio，**不挂 `AuthInterceptor`**，埋点请求绝不
+/// 触发续期 / 转游客 / 登录弹框。token 不进队列文件、日志、事件属性。
 ///
 /// **不打扰主流程**：debug 包 `enabled=false`，[enqueue] 直接返回、不写文件、不起定时器；
 /// 一切异常内部吞掉，日志只打条数 / 状态码，绝不打事件内容。
@@ -47,12 +60,14 @@ class SelfHostedSink with WidgetsBindingObserver {
   SelfHostedSink._({
     required this.enabled,
     SinkTransport? transport,
+    SinkTokenReader? readToken,
     DateTime Function()? now,
     double Function()? jitter,
     EventQueueStore? store,
     Future<EventQueueStore> Function()? openStore,
     bool registerLifecycle = true,
   })  : _transport = transport ?? _dioTransport(),
+        _readToken = readToken ?? _readAccessToken,
         _now = now ?? DateTime.now,
         _jitter = jitter ?? _defaultJitter,
         _openStore = openStore ?? (store != null ? (() async => store) : _openFileStore),
@@ -64,6 +79,7 @@ class SelfHostedSink with WidgetsBindingObserver {
   factory SelfHostedSink.test({
     bool enabled = true,
     required SinkTransport transport,
+    SinkTokenReader? readToken,
     DateTime Function()? now,
     double Function()? jitter,
     EventQueueStore? store,
@@ -71,6 +87,7 @@ class SelfHostedSink with WidgetsBindingObserver {
       SelfHostedSink._(
         enabled: enabled,
         transport: transport,
+        readToken: readToken ?? () async => null,
         now: now,
         jitter: jitter ?? () => 1.0,
         store: store ?? MemoryEventQueueStore(),
@@ -103,12 +120,16 @@ class SelfHostedSink with WidgetsBindingObserver {
 
   final bool enabled;
   final SinkTransport _transport;
+  final SinkTokenReader _readToken;
   final DateTime Function() _now;
   final double Function() _jitter;
   final Future<EventQueueStore> Function() _openStore;
   final bool _registerLifecycle;
 
   EventQueueStore? _store;
+
+  /// 当前用户标识（`distinctIdFor` 哈希）；null = 未登录 / 兽医 / 冷启动恢复前。只在内存。
+  String? _currentUserKey;
   final List<Map<String, Object?>> _pending = [];
   bool _starting = false;
   Timer? _timer;
@@ -138,6 +159,12 @@ class SelfHostedSink with WidgetsBindingObserver {
 
   @visibleForTesting
   bool get isStarted => _store != null;
+
+  @visibleForTesting
+  String? get currentUserKey => _currentUserKey;
+
+  /// 设 / 清当前用户标识（Story 2.2）。只影响之后入队的事件。
+  void setUserKey(String? userKey) => _currentUserKey = userKey;
 
   /// `Analytics.init()` 调一次：打开队列文件、裁剪并加载上次未发完的事件、合并启动前缓冲、
   /// 注册生命周期观察者、起 30 秒定时器，然后立即补发一次。失败只降级为内存队列，不抛。
@@ -182,8 +209,8 @@ class SelfHostedSink with WidgetsBindingObserver {
         'event': event,
         'timestamp': isoUtcMillis(_now()),
         'anonymousId': AnonymousId.value,
-        // Story 2.2 入队时绑定。
-        'userId': null,
+        // Story 2.2：入队那一刻绑定，之后改 _currentUserKey 不影响已入队事件。
+        'userId': _currentUserKey,
         'properties': properties ?? const <String, Object>{},
         // Story 2.5 填环境字段。
         'context': const <String, Object>{},
@@ -277,9 +304,16 @@ class SelfHostedSink with WidgetsBindingObserver {
         i++;
       }
       final ids = {for (final e in chunk) e['messageId'] as String};
+      final body = '{"batch":[${encoded.join(',')}]}';
       SinkResponse resp;
       try {
-        resp = await _transport('{"batch":[${encoded.join(',')}]}');
+        final bearer = await _bearer();
+        resp = await _transport(body, bearer);
+        if (resp.statusCode == 401 && bearer != null) {
+          // 过期 / 失效 JWT：同一批立刻去头重发一次，按匿名请求处理（身份由关联表归属）。
+          debugPrint('[Analytics] batch unauthorized, resending without token');
+          resp = await _transport(body, null);
+        }
       } catch (e) {
         debugPrint('[Analytics] batch send failed: ${e.runtimeType}');
         _backoff();
@@ -305,13 +339,22 @@ class SelfHostedSink with WidgetsBindingObserver {
         debugPrint('[Analytics] batch unavailable: status=503');
         return;
       } else {
-        // 401 / 404 / 其他 5xx / 非预期：不丢，退避。
-        // TODO(Story 2.2)：加 JWT 后 401 改为「单飞刷新 token 后重发一次，刷新失败去掉 JWT 匿名重发」，
-        // 仍不得整批丢弃、不得快速重试。
+        // 401（已去头重发过或本就没带 token）/ 404 / 其他 5xx / 非预期：不丢，退避。
         _backoff();
         debugPrint('[Analytics] batch kept: status=$code');
         return;
       }
+    }
+  }
+
+  /// 读 access token；空串 / 异常一律按无 token。
+  Future<String?> _bearer() async {
+    try {
+      final t = await _readToken();
+      return (t == null || t.isEmpty) ? null : t;
+    } catch (e) {
+      debugPrint('[Analytics] token read failed: ${e.runtimeType}');
+      return null;
     }
   }
 
@@ -345,6 +388,8 @@ class SelfHostedSink with WidgetsBindingObserver {
 
   static double _defaultJitter() => 0.8 + Random().nextDouble() * 0.4;
 
+  static Future<String?> _readAccessToken() => SecureTokenStore().readAccess();
+
   static Future<EventQueueStore> _openFileStore() async =>
       EventQueueFile(await analyticsDirectory());
 
@@ -358,8 +403,12 @@ class SelfHostedSink with WidgetsBindingObserver {
       contentType: Headers.jsonContentType,
       validateStatus: (_) => true,
     ));
-    return (body) async {
-      final r = await dio.post<void>(path, data: body);
+    return (body, bearer) async {
+      final r = await dio.post<void>(
+        path,
+        data: body,
+        options: bearer == null ? null : Options(headers: {'Authorization': 'Bearer $bearer'}),
+      );
       return SinkResponse(r.statusCode ?? 0, retryAfter: r.headers.value('retry-after'));
     };
   }

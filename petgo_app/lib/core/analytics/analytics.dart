@@ -7,20 +7,20 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
+import 'event_names.dart';
 import 'meta_client.dart';
 import 'self_hosted_sink.dart';
 import 'tiktok_client.dart';
 
 /// 前端行为分析门面：事件底层已换成自建上报（[SelfHostedSink] → `POST /api/v1/analytics/batch`，
-/// analytics-pipeline Story 2.1）。PostHog 的 init / screen / identify / reset 残留由 Story 2.6 统一清理。
+/// analytics-pipeline Story 2.1）；identify / reset 已改走自建身份绑定（Story 2.2）。
+/// PostHog 的 init / screen 残留由 Story 2.6 统一清理。
 ///
 /// 设计约束（CLAUDE.md 护栏）：
 /// - Project Token / Host 走 dart-define 注入，带生产默认值，对齐 `dio_client.dart`。
-/// - **绝不**向 PostHog 传 PII（email/昵称/姓名/电话）或健康数据。
-/// - identify 的 distinctId 用哈希；person property 额外明文携带内部数字 id
-///   （**「自增 id 不外露」护栏的 PostHog 专项豁免**，2026-08-18 拍板：无盐哈希本可被反推，
-///   明文不增加实际暴露面，运营需按 id 定位用户）。豁免只限 PostHog——AppsFlyer CUID
-///   等其它第三方仍只传哈希，对外 API 面仍一律不可枚举 token。
+/// - **绝不**上报 PII（email/昵称/姓名/电话）或健康数据。
+/// - 用户标识一律用 [distinctIdFor] 的哈希，**不上报明文数字 id**（原 PostHog 专项豁免
+///   `internal_user_id` 自建库不沿用，Story 2.2 AC2；埋点库内部 `user_id` 由后端从 JWT / 关联表得出）。
 /// - 所有上报调用 try/catch 吞错，分析失败绝不阻断主流程。
 ///
 /// 本期为基建层：提供 init / identify / reset / 脱敏 capture，不批量埋业务事件。
@@ -95,57 +95,54 @@ class Analytics {
     }
   }
 
-  /// 登录成功后关联用户。distinctId 取 `sha256('tailtopia-user-' + id)`，并以 person property
-  /// 附带明文数字 id（运营在 PostHog 按 id 定位用户；无盐哈希本可被反推回自增 id，明给不增加
-  /// 暴露面）。username/昵称/邮箱/手机号仍一概不传（PDP 合规红线）。
-  /// 同一哈希值同时设为 AppsFlyer CUID（跨端归因 P0）：两端跑同一份 Dart 代码，
-  /// 天然逐字节一致。
+  /// 测试注入点：非 null 时 identify / reset / capture 用它代替 [SelfHostedSink.instance]
+  /// （debug 构建下生产单例 `enabled=false`，测不到信封）。生产路径恒为 null。
+  @visibleForTesting
+  static SelfHostedSink? debugSinkOverride;
+
+  static SelfHostedSink get _sink => debugSinkOverride ?? SelfHostedSink.instance;
+
+  /// 登录成功后关联用户（analytics-pipeline Story 2.2，FR-2 / A4 / A7）。
+  ///
+  /// ① sink 设当前用户标识 `distinctIdFor(userId)` —— 之后入队的事件信封 `userId` 都带它；
+  /// ② 上报 `user_identified`，属性只放 `role`（USER / VET，非标识；留存看板据此剔除兽医号）。
+  ///    **不带** `internal_user_id`、不带 `distinct_id` —— 用户标识已在信封 `userId` 上，
+  ///    后端凭「信封 `anonymousId` + `userId` == token 用户」建关联行；
+  /// ③ 立即 flush（不 await）：让 `user_identified` 随**本账号的 JWT** 尽快送达。若拖到下一个
+  ///    账号登录后才发，`userId` 与 token 用户不符，后端不建关联（`LinkTableIdentityResolver`）。
+  ///
+  /// 同一哈希值同时设为 AppsFlyer CUID（跨端归因 P0）/ TikTok / Meta user id。
   static Future<void> identifyUser(int userId, {String? role}) async {
-    AppsFlyerClient.instance.setUserId(distinctIdFor(userId));
-    unawaited(TikTokClient.instance.setUserId(distinctIdFor(userId)));
-    unawaited(MetaClient.instance.setUserId(distinctIdFor(userId)));
+    final key = distinctIdFor(userId);
+    AppsFlyerClient.instance.setUserId(key);
+    unawaited(TikTokClient.instance.setUserId(key));
+    unawaited(MetaClient.instance.setUserId(key));
     try {
-      await Posthog().identify(
-        userId: distinctIdFor(userId),
-        userProperties: personProperties(userId: userId, role: role),
-      );
+      final sink = _sink;
+      sink.setUserKey(key);
+      await capture(AnalyticsEvents.userIdentified, {'role': ?role});
+      unawaited(sink.flush());
     } catch (e) {
-      debugPrint('[Analytics] identify failed: $e');
+      debugPrint('[Analytics] identify failed: ${e.runtimeType}');
     }
   }
 
-  /// identify 随附的 person property（`$set` 语义：**每次 identify 覆盖**）。纯函数，L0 可测。
+  /// 登出 / 续期失败 / 换号前 → 解除关联，回到匿名。AppsFlyer CUID / TikTok / Meta 关联同步清空
+  /// （防换账号串数据）。
   ///
-  /// ⚠️ **只放对该账号恒定的字段**。person property 是覆盖式的、且回溯查询取**最新值**，
-  /// 放可变字段会静默变脏：`identifyUser` 只在**换人**时触发（`app.dart` 的 auth 监听），
-  /// 用户后来建了档 / 选了养宠状态都不会重报 —— 属性会永远停在首次登录那一刻的值。
-  ///
-  /// 因此 `user_state` / `has_pet_profile` **刻意不放这里**：
-  /// - `user_state` 已是 T-1 / T-2 的**事件**属性，按事件取数天然是当时的真值；
-  /// - 「注册后 N 天内是否建档」这类**时点归因**本来就不能用 person property 表达
-  ///   （取最新值会把第 60 天才建档的人算进他第 7 天的「已建档」组，归因是反的），
-  ///   必须用 event-based cohort。
-  @visibleForTesting
-  static Map<String, Object> personProperties({
-    required int userId,
-    String? role,
-  }) =>
-      scrub({
-        'internal_user_id': userId,
-        // 账号角色（USER / VET）。留存看板据此**把兽医号剔出宠主大盘** ——
-        // 混在一起会让所有留存曲线带上一批行为模式完全不同的样本。
-        'role': ?role,
-      });
-
-  /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID / TikTok / Meta 关联同步清空（防换账号串数据）。
+  /// Story 2.2：① 先触发一次 flush（不 await、失败不阻塞）—— 让上一账号还在队列里的事件趁旧
+  /// 身份尽量先发出（换号前先发，AC3）；② 再清 sink 的用户标识。**不重置匿名 id**（A3 / FR-5），
+  /// 登录前后靠同一匿名 id 连成同一个人。已入队事件的 `userId` 不受影响（入队即绑定）。
   static Future<void> reset() async {
     AppsFlyerClient.instance.clearUserId();
     unawaited(TikTokClient.instance.clearUserId());
     unawaited(MetaClient.instance.clearUserId());
     try {
-      await Posthog().reset();
+      final sink = _sink;
+      unawaited(sink.flush());
+      sink.setUserKey(null);
     } catch (e) {
-      debugPrint('[Analytics] reset failed: $e');
+      debugPrint('[Analytics] reset failed: ${e.runtimeType}');
     }
   }
 
@@ -210,7 +207,7 @@ class Analytics {
       ));
     }
     // 自建上报（Story 2.1）：同步入本地队列，发送由 sink 攒批异步完成；enqueue 内部吞全部异常。
-    SelfHostedSink.instance.enqueue(event, clean);
+    _sink.enqueue(event, clean);
   }
 
   /// **现金付款成功**的唯一上报入口（2026-10-09 起覆盖全部 QRIS 入口：PawCoin 充值 / 兽医问诊 /

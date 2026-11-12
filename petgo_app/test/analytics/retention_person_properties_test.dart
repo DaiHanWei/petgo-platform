@@ -1,53 +1,170 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/analytics/anonymous_id.dart';
+import 'package:tailtopia/core/analytics/event_names.dart';
+import 'package:tailtopia/core/analytics/event_queue_file.dart';
+import 'package:tailtopia/core/analytics/self_hosted_sink.dart';
 
-/// L0：**留存看板的 person property 地基**（2026-08-24）。
+/// L0：**留存看板的身份 / 注册画像地基**（2026-08-24；analytics-pipeline Story 2.2 改写）。
 ///
-/// **为什么值得写成测试**：这两组属性是留存看板「按注册月分群」「注册来源 × 留存」
-/// 「兽医号剔出宠主大盘」三个切法的**唯一**来源，而 person property 出错的方式格外阴险 ——
-/// 它不会崩、不会报警，只会让看板上的分群**悄悄变脏**，且**回溯不了**：
-/// `$set` 写成覆盖式、或把可变字段放进 person property，历史值当场被抹掉，
-/// 事后没有任何办法把它还原回去。
+/// **为什么值得写成测试**：这些字段是留存看板「按注册月分群」「注册来源 × 留存」
+/// 「兽医号剔出宠主大盘」三个切法的**唯一**来源，出错的方式格外阴险 ——
+/// 它不会崩、不会报警，只会让看板上的分群**悄悄变脏**，且**回溯不了**。
 ///
-/// 因此这里锁死四件事：
-/// 1. `personProperties` **只含对账号恒定的字段** —— 可变字段（`user_state` /
-///    `has_pet_profile`）不得放进来，它们只会停在首次登录那一刻的值；
+/// 这里锁死：
+/// 1. `identifyUser` 上报 `user_identified`，属性**只有 `role`**（Story 2.2 AC2）——
+///    不带 `internal_user_id`（PostHog 专项豁免自建库不沿用）、不带 `distinct_id`
+///    （用户标识在信封 `userId` 上）；可变字段（`user_state` / `has_pet_profile`）也不放；
 /// 2. 注册画像走 **`$set_once` 而非 `$set`** —— 用 `$set` 会把老用户的 `signup_date`
 ///    刷成「最近一次登录日」，整列失去意义；
-/// 3. `$set_once` 的嵌套 map **能活着穿过 `scrub`** —— 它是 map，一旦哪天 scrub 改坏了
-///    嵌套处理，属性会静默消失而事件照常上报；
-/// 4. 无论哪条路径，**PII 一个字节都不许进** person property。
+/// 3. `$set_once` 的嵌套 map **能活着穿过 `scrub`**；
+/// 4. 无论哪条路径，**PII 一个字节都不许进**。
 void main() {
-  group(r'personProperties（identify 随附，$set 语义）', () {
-    test('恒定字段带上：internal_user_id + role', () {
-      final p = Analytics.personProperties(userId: 42, role: 'VET');
-      expect(p['internal_user_id'], 42);
-      expect(p['role'], 'VET');
+  group('identifyUser → user_identified（Story 2.2 AC2）', () {
+    late List<MapEntry<String, Map<String, Object>?>> seen;
+
+    setUp(() {
+      seen = [];
+      Analytics.debugCaptureSink = (e, p) => seen.add(MapEntry(e, p));
+    });
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    test('事件名正确，属性只有 role', () async {
+      await Analytics.identifyUser(42, role: 'USER');
+      expect(seen.single.key, AnalyticsEvents.userIdentified);
+      expect(seen.single.key, 'user_identified');
+      expect(seen.single.value, {'role': 'USER'});
     });
 
-    test('role 缺省时整个键不出现（不是 null，是没有这个键）', () {
-      final p = Analytics.personProperties(userId: 42);
-      expect(p.containsKey('role'), isFalse,
-          reason: '送 null 会在 PostHog 里建出一个值为 null 的属性列，分群时多一个无意义的桶');
+    test('🔴 不带 internal_user_id / distinct_id 等明文或冗余标识', () async {
+      await Analytics.identifyUser(42, role: 'VET');
+      final p = seen.single.value!;
+      for (final k in ['internal_user_id', 'user_id', 'userId', 'distinct_id', 'distinctId']) {
+        expect(p.containsKey(k), isFalse, reason: '用户标识只在信封 userId（哈希）上，明文数字 id 不出端');
+      }
+      expect(p.values, isNot(contains(42)));
     });
 
-    test('🔴 可变字段不得放进 person property', () {
-      final p = Analytics.personProperties(userId: 42, role: 'USER');
+    test('role 缺省时整个键不出现（不是 null，是没有这个键）', () async {
+      await Analytics.identifyUser(42);
+      expect(seen.single.key, 'user_identified');
+      expect(seen.single.value!.containsKey('role'), isFalse);
+    });
+
+    test('🔴 可变字段不放进 user_identified', () async {
+      await Analytics.identifyUser(42, role: 'USER');
+      final p = seen.single.value!;
       for (final mutable in ['user_state', 'has_pet_profile', 'pet_status']) {
         expect(p.containsKey(mutable), isFalse,
-            reason: '🔴 $mutable 是可变的，而 identifyUser 只在**换人**时触发 —— '
-                '放进来会永远停在首次登录那一刻的值。'
-                '`user_state` 已是 T-1/T-2 的事件属性；'
-                '「注册后 N 天内是否建档」必须用 event-based cohort，'
-                'person property 取最新值会把第 60 天才建档的人算进他第 7 天的已建档组');
+            reason: '🔴 $mutable 是可变的，而 identifyUser 只在**换人**时触发；按事件取数用 T-1/T-2 的事件属性');
       }
     });
 
-    test('🔒 PII 进不来（scrub 兜底真的挂在这条路径上）', () {
-      // 直接验证返回值经过了 scrub：昵称类键在 scrub 黑名单里。
-      final p = Analytics.personProperties(userId: 7, role: 'USER');
+    test('🔒 PII 进不来（走 capture → scrub 同一通路）', () async {
+      await Analytics.identifyUser(7, role: 'USER');
+      final p = seen.single.value!;
       expect(p.keys, everyElement(isNot(contains('name'))));
       expect(p.keys, everyElement(isNot(contains('email'))));
+    });
+  });
+
+  group('身份绑定门面（Story 2.2 AC1–AC3）', () {
+    late List<String> bodies;
+    late SelfHostedSink sink;
+    late MemoryEventQueueStore store;
+
+    List<Map<String, dynamic>> sent() => [
+          for (final b in bodies)
+            ...((jsonDecode(b) as Map<String, dynamic>)['batch'] as List).cast<Map<String, dynamic>>(),
+        ];
+
+    Future<void> settle() async {
+      for (var i = 0; i < 30; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    setUp(() async {
+      bodies = [];
+      store = MemoryEventQueueStore();
+      sink = SelfHostedSink.test(
+        transport: (body, _) async {
+          bodies.add(body);
+          return const SinkResponse(202);
+        },
+        store: store,
+      );
+      await sink.start();
+      await settle();
+      Analytics.debugSinkOverride = sink;
+    });
+    tearDown(() {
+      Analytics.debugSinkOverride = null;
+      sink.dispose();
+    });
+
+    test('identifyUser(42) 后 capture 的信封 userId == distinctIdFor(42)，绝非明文 id', () async {
+      await Analytics.identifyUser(42, role: 'USER');
+      await Analytics.capture('x');
+      final q = [...sent(), ...await store.readAll()];
+      final x = q.singleWhere((e) => e['event'] == 'x');
+      expect(x['userId'], Analytics.distinctIdFor(42));
+      expect(x['userId'], isNot('42'));
+      final ident = q.singleWhere((e) => e['event'] == 'user_identified');
+      expect(ident['userId'], Analytics.distinctIdFor(42));
+      expect(ident['properties'], {'role': 'USER'});
+    });
+
+    test('identifyUser 立即触发 flush：user_identified 不等攒批就发出', () async {
+      await Analytics.identifyUser(42, role: 'USER');
+      await settle();
+      expect(sent().map((e) => e['event']), contains('user_identified'));
+    });
+
+    test('reset() 后 userId 为 null，匿名 id 不变', () async {
+      await Analytics.identifyUser(42, role: 'USER');
+      await Analytics.capture('before');
+      await Analytics.reset();
+      await Analytics.capture('after');
+      await settle();
+      final q = [...sent(), ...await store.readAll()];
+      final before = q.singleWhere((e) => e['event'] == 'before');
+      final after = q.singleWhere((e) => e['event'] == 'after');
+      expect(before['userId'], Analytics.distinctIdFor(42));
+      expect(after['userId'], isNull);
+      expect(after['anonymousId'], before['anonymousId']);
+      expect(after['anonymousId'], AnonymousId.value);
+      expect(sink.currentUserKey, isNull);
+    });
+
+    test('reset() 触发一次 flush：上一账号的事件在切换前就发出', () async {
+      await Analytics.identifyUser(42, role: 'USER');
+      await settle();
+      await Analytics.capture('a_event');
+      final before = bodies.length;
+      await Analytics.reset();
+      await settle();
+      expect(bodies.length, before + 1);
+      expect(sent().singleWhere((e) => e['event'] == 'a_event')['userId'], Analytics.distinctIdFor(42));
+    });
+
+    test('换号序列 reset → identify(B)：A 的事件不会打上 B 的标识', () async {
+      await Analytics.identifyUser(1, role: 'USER');
+      await Analytics.capture('a1');
+      // app.dart 的 auth 监听：同一同步帧里 reset() 后紧跟 identifyUser(B)。
+      Analytics.reset();
+      Analytics.identifyUser(2, role: 'USER');
+      await Analytics.capture('b1');
+      await settle();
+      final q = [...sent(), ...await store.readAll()];
+      final a = Analytics.distinctIdFor(1);
+      final b = Analytics.distinctIdFor(2);
+      expect(q.singleWhere((e) => e['event'] == 'a1')['userId'], a);
+      expect(q.singleWhere((e) => e['event'] == 'b1')['userId'], b);
+      final idents = q.where((e) => e['event'] == 'user_identified').map((e) => e['userId']).toList();
+      expect(idents, [a, b]);
     });
   });
 
