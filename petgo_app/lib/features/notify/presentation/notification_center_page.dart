@@ -190,6 +190,33 @@ class _NotificationCenterPageState
     });
   }
 
+  /// 下拉刷新（修复线 2026-11-12：此前通知中心不能下拉刷新）。
+  ///
+  /// 与 [_loadFirstPage] 同一口径重拉首页，但**不切回整页转圈**：刷新期间旧列表留在原地，拿到新数据才整体替换；
+  /// 失败保留旧列表、只给轻提示（不把已显示的内容换成错误页）。结束后校准铃铛角标（服务端拉首页时自愈计数）。
+  Future<void> _refresh() async {
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    try {
+      final page = await ref.read(notificationRepositoryProvider).list();
+      if (!mounted) return;
+      setState(() {
+        _page = Future.value(page);
+        _followEpochs.clear();
+        _recordEpoch(page.items, epoch);
+        _items
+          ..clear()
+          ..addAll(page.items);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadMoreFailed = false;
+      });
+    } catch (_) {
+      if (mounted) showAppToast(context, AppLocalizations.of(context).detailNetworkError);
+    } finally {
+      if (mounted) ref.invalidate(unreadCountProvider);
+    }
+  }
+
   /// 重拉列表（bug 20260625-088：加载失败态的重试）。
   void _reload() {
     setState(_loadFirstPage);
@@ -616,12 +643,27 @@ class _NotificationCenterPageState
           // 否则每次 setState 重建都会把翻页加载到的内容抹回第一页。
           final items = _items;
           if (items.isEmpty) {
-            return EmptyState(
-              key: const ValueKey('notificationEmpty'),
-              icon: Icons.notifications_off_outlined, // 稿 D6：静音铃铛
-              iconBackground: AppColors.cream2, // 浅紫圆底盘（原型 notif-empty）
-              title: l10n.notificationEmpty,
-              message: l10n.notificationEmptyHint,
+            // 空态也能下拉刷新：撑满视口的可滚动容器，否则手势拉不动。
+            return RefreshIndicator(
+              key: const ValueKey('notificationRefresh'),
+              onRefresh: _refresh,
+              child: LayoutBuilder(
+                builder: (context, c) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: c.maxHeight),
+                    child: Center(
+                      child: EmptyState(
+                        key: const ValueKey('notificationEmpty'),
+                        icon: Icons.notifications_off_outlined, // 稿 D6：静音铃铛
+                        iconBackground: AppColors.cream2, // 浅紫圆底盘（原型 notif-empty）
+                        title: l10n.notificationEmpty,
+                        message: l10n.notificationEmptyHint,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             );
           }
           return _notificationList(l10n, items);
@@ -674,8 +716,13 @@ class _NotificationCenterPageState
     }
     // bug 20260730-436：显式 padding 会关掉 ScrollView 自动注入的底部安全区补偿，
     // edge-to-edge 下末条会被系统手势条/三键遮挡——固定 20 之上叠加安全区高度。
-    return ListView(
+    return RefreshIndicator(
+      key: const ValueKey('notificationRefresh'),
+      onRefresh: _refresh,
+      child: ListView(
       controller: _scroll, // 滚到底附近自动加载下一页（_onScroll）
+      // 条目少于一屏时也要能下拉刷新
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + MediaQuery.paddingOf(context).bottom),
       children: [
         ...sections,
@@ -698,6 +745,7 @@ class _NotificationCenterPageState
             ),
           ),
       ],
+      ),
     );
   }
 
