@@ -189,11 +189,18 @@ void main() {
   });
 
   group('V1.3.2 Story 2.3 · AC1.3 Tailsonality 卡分流', () {
-    testWidgets('无结果 → 弹说明抽屉', (tester) async {
+    // 修复线（2026-11-12）：说明抽屉去掉，无结果直接进答题页。
+    testWidgets('无结果 → 直接进答题页（无说明抽屉）', (tester) async {
       await _pumpHub(tester, petType: 'CAT', tsResults: const []);
       await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
+      expect(find.text('quiz'), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+    });
+
+    testWidgets('Tailsonality 卡不再显示「new」角标', (tester) async {
+      await _pumpHub(tester, petType: 'CAT');
+      expect(find.text('new'), findsNothing);
     });
 
     // V1.3.2 Story 2.6 · AC4：有结果的去向由「最近一次结果页」改为结果列表页。
@@ -216,24 +223,11 @@ void main() {
       expect(find.text('results-list'), findsOneWidget);
     });
 
-    // 待确认 2.5（2026-10-02）按新规则更新：不再静默，给「加载失败，再试一次」轻提示。
-    testWidgets('档案取失败且无结果 → 不抛未处理异常、不弹抽屉、给轻提示', (tester) async {
-      await _pumpHub(tester, petType: null, profileFails: true);
-      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
-      await tester.pump();
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
-      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      expect(find.text(l10n.detailNetworkError), findsOneWidget);
-      await tester.pumpAndSettle(const Duration(seconds: 5));
-    });
-
-    testWidgets('列表读取失败 → 仍弹说明抽屉', (tester) async {
+    testWidgets('列表读取失败 → 仍直接进答题页', (tester) async {
       await _pumpHub(tester, petType: 'OTHER', tsFails: true);
       await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
+      expect(find.text('quiz'), findsOneWidget);
     });
   });
 

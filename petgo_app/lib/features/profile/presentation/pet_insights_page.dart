@@ -11,16 +11,12 @@ import '../../pet_passport/presentation/passport_layout.dart';
 import '../../../core/config/feature_flags.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/app_toast.dart';
 import '../../tailsonality/data/tailsonality_repository.dart';
 import '../../tailsonality/domain/tailsonality_result.dart';
-import '../../tailsonality/presentation/tailsonality_retake.dart';
 import '../../tailsonality/presentation/tailsonality_routes.dart';
-import '../../tailsonality/presentation/widgets/tailsonality_intro_sheet.dart';
 import '../../../shared/widgets/coachmark_overlay.dart';
 import '../data/onboarding_mark_repository.dart';
 import '../data/profile_repository.dart';
-import '../domain/pet_profile.dart';
 import 'widgets/insight_entry_card.dart';
 import '../data/current_pet_provider.dart';
 
@@ -253,7 +249,6 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                   icon: Icons.psychology_alt_outlined,
                   title: l10n.tailsonalityTitle,
                   sub: l10n.tailsonalityEntrySub,
-                  badge: l10n.insightNewBadge,
                   onTap: _onTailsonalityTap,
                 ),
               ),
@@ -275,43 +270,31 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
   }
 }
 
-/// Tailsonality 卡的分流（V1.3.2 Story 2.3 · AC1.3 / Story 2.6 · AC4）：无结果 → 说明抽屉；有结果 → 结果列表页；
-/// 列表读取失败 → 仍弹说明抽屉（不因读失败挡住入口；重测免费，误进新测试无代价）。
+/// Tailsonality 卡的分流（V1.3.2 Story 2.3 · AC1.3 / Story 2.6 · AC4）：无结果 → **直接进答题页**；有结果 → 结果列表页；
+/// 列表读取失败 → 仍进答题页（不因读失败挡住入口；重测免费，误进新测试无代价）。
 ///
-/// 读列表期间再点一次直接忽略（慢网下双击会叠两层抽屉 / 推两次结果页）。
+/// 修复线（2026-11-12 产品）：去掉原「说明抽屉」，点卡直接进答题。答题页题干自带宠物名、自己处理档案加载失败，
+/// 「测的是谁」仍可见。读列表期间再点一次直接忽略（慢网下双击会推两次页面）。
 Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
   if (_tailsonalityOpening) return;
   _tailsonalityOpening = true;
   List<TailsonalityResult> results = const [];
-  PetProfile? pet;
   try {
-    try {
-      results = await ref.read(tailsonalityRepositoryProvider).fetchResults(petId: await readRequestPetId(ref));
-    } catch (_) {
-      results = const [];
-    }
-    if (results.isEmpty) {
-      // 档案取不到：抽屉无从确认「测的是谁」，不开抽屉、给轻提示（待确认 2.5，2026-10-02：静默像 bug）。
-      pet = await readPetForTailsonality(ref);
-    }
+    results = await ref.read(tailsonalityRepositoryProvider).fetchResults(petId: await readRequestPetId(ref));
+  } catch (_) {
+    results = const [];
   } finally {
-    // 抽屉 / 跳转之前就放开：抽屉的 Future 可能随页面销毁永不完成，不能让闸门跟着卡死。
     _tailsonalityOpening = false;
   }
   if (!context.mounted) return;
   // V1.4.0 multi-pet Story 2.4 · AC5.5：没有结果 = 要开始新测试（写操作）→ 只读宠物先弹 E1；有结果照常进列表查看。
   if (results.isEmpty && !guardPetWritable(context, ref)) return;
   if (results.isNotEmpty) {
-    // Story 2.6：有结果 → 结果列表页（替换 2.3 的「进最近一次结果页」临时去向）。
+    // Story 2.6：有结果 → 结果列表页。
     context.push(TailsonalityRoutes.results);
     return;
   }
-  if (pet == null) {
-    // 与结果列表页 / 重测入口同一提示（再点一次即重试）。
-    showAppToast(context, AppLocalizations.of(context).detailNetworkError);
-    return;
-  }
-  await showTailsonalityIntroSheet(context, pet);
+  context.push(TailsonalityRoutes.quiz);
 }
 
 bool _tailsonalityOpening = false;

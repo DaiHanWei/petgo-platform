@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
@@ -14,6 +15,7 @@ import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_rep
 import 'package:tailtopia/features/tailsonality/data/tailsonality_providers.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_result_page.dart';
+import 'package:tailtopia/features/tailsonality/presentation/tailsonality_routes.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_generating_view.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_locked_analysis.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_match_teaser.dart';
@@ -55,14 +57,21 @@ void main() {
           tailsonalityOwnerTypeRepositoryProvider.overrideWithValue(_OwnerRepo(ownerType)),
           ...overrides,
         ],
-        child: MaterialApp(
+        child: MaterialApp.router(
           locale: const Locale('id'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: MediaQuery(
-            data: MediaQueryData(disableAnimations: reduceMotion, size: const Size(420, 2400)),
-            child: scaffold ? Scaffold(body: child) : child,
-          ),
+          // 修复线：重测确认后直接 push 答题页，需要路由（原说明抽屉已去掉）。
+          routerConfig: GoRouter(routes: [
+            GoRoute(
+              path: '/',
+              builder: (c, s) => MediaQuery(
+                data: MediaQueryData(disableAnimations: reduceMotion, size: const Size(420, 2400)),
+                child: scaffold ? Scaffold(body: child) : child,
+              ),
+            ),
+            GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const Scaffold(body: Text('quiz-page'))),
+          ]),
         ),
       );
 
@@ -208,19 +217,6 @@ void main() {
       expect(find.byKey(const ValueKey('tsResultRetry')), findsNothing);
     });
 
-    testWidgets('重测确认但档案取不到 → 提示、不开抽屉、不报埋点', (tester) async {
-      await pumpPage(tester, petFails: true);
-      await tester.tap(find.byKey(const ValueKey('tsResultMore')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('tsMenuRetake')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('confirmSheetConfirm')));
-      await tester.pump();
-      expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
-      expect(events.where((e) => e.$1 == 'tailsonality_retake_confirmed'), isEmpty);
-      await tester.pumpAndSettle(const Duration(seconds: 5));
-    });
-
     testWidgets('Story 2.5 · AC7：主人类型已设 → 引流模块显示对照 + 档位标签，可点', (tester) async {
       await pumpPage(tester, r: result(letters: 'ENTJ', energy: 'H'), ownerType: 'ESTJ');
       expect(find.byKey(const ValueKey('tsMatchTeaserOwner')), findsOneWidget);
@@ -253,7 +249,7 @@ void main() {
     });
 
     // Story 4.4 按新规则更新：⋯ 菜单三项、顺序固定 Bagikan → Pamer di postingan → Tes Ulang（C-7）。
-    testWidgets('⋯ 菜单三项（Bagikan、Pamer di postingan、Tes Ulang）；重测确认后发埋点并弹说明抽屉；取消无埋点', (tester) async {
+    testWidgets('⋯ 菜单三项（Bagikan、Pamer di postingan、Tes Ulang）；重测确认后发埋点并直接进答题页；取消无埋点', (tester) async {
       await pumpPage(tester);
       await tester.tap(find.byKey(const ValueKey('tsResultMore')));
       await tester.pumpAndSettle();
@@ -274,7 +270,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('confirmSheetCancel')));
       await tester.pumpAndSettle();
       expect(events.where((e) => e.$1 == 'tailsonality_retake_confirmed'), isEmpty);
-      expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
+      expect(find.text('quiz-page'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('tsResultMore')));
       await tester.pumpAndSettle();
@@ -284,8 +280,7 @@ void main() {
       await tester.pumpAndSettle();
       final e = events.where((e) => e.$1 == 'tailsonality_retake_confirmed').single;
       expect(e.$2, isNull);
-      expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
-      expect(find.text('Tes kepribadian Momo · Anggora'), findsOneWidget);
+      expect(find.text('quiz-page'), findsOneWidget);
     });
   });
 

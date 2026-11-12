@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/features/tailsonality/presentation/tailsonality_routes.dart';
 import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/features/profile/data/onboarding_mark_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
@@ -36,6 +37,7 @@ void main() {
     }
     final router = GoRouter(initialLocation: PetInsightsRoutes.hub, routes: [
       GoRoute(path: PetInsightsRoutes.hub, builder: (c, s) => const PetInsightsPage()),
+      GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const Scaffold(body: Text('quiz-page'))),
     ]);
     addTearDown(router.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
@@ -103,13 +105,13 @@ void main() {
     expect(marksRepo.marked, [kOnboardingMarkTailsonalityEntry]);
   });
 
-  testWidgets('蒙层显示时点卡（聚光区可点穿）→ 蒙层先消失并置位，再执行卡动作（弹说明抽屉）', (tester) async {
+  testWidgets('蒙层显示时点卡（聚光区可点穿）→ 蒙层先消失并置位，再执行卡动作（直接进答题页）', (tester) async {
     final c = await pump(tester, server: {});
     expect(find.byType(CoachmarkOverlay), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
     await tester.pumpAndSettle();
     expect(find.byType(CoachmarkOverlay), findsNothing);
-    expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
+    expect(find.text('quiz-page'), findsOneWidget);
     expect(c.read(onboardingMarksProvider).asData!.value, contains(kOnboardingMarkTailsonalityEntry));
   });
 
