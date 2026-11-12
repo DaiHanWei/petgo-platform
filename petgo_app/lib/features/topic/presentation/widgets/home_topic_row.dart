@@ -12,14 +12,15 @@ import 'topic_official_badge.dart';
 
 /// Discover 首页话题行（V1.4.2 social-topic · Story 4.3 · AC4 · UI C1）。
 ///
-/// 纯文字链：「#displayName」13/1.4 w600 mint600 + 官方项后 4 跟 Resmi；项距 16、每项上下 8（可点高 36）、
+/// 纯文字链：「#displayName」13/1.4 w600 mint600 + 官方项后 4 跟 Resmi；项距 16、每项上 8 下 4（可点高 32）、
 /// 屏边 16；横向滚动，被屏边截断的那项即「可右滑」提示。
 /// 🛡 0 个 / 取数失败 / 加载中 → **整行不渲染、不留占位**（同 `PetRecommendationStrip`）。
 class HomeTopicRow extends ConsumerWidget {
   const HomeTopicRow({super.key});
 
-  /// 行高 36（上下各 8）。原 44（上下 12）叠上 Feed 顶部 16 内距，话题与首帖之间空得过大（2026-11-12 实机反馈）。
-  static const double itemHeight = 36;
+  /// 行高 32（上 8 下 4）。原 44（上下 12）叠上 Feed 顶部 16，话题与首帖之间空得过大（2026-11-12 实机反馈两轮）；
+  /// 下方只留 4，首帖上方再由 Feed 收到 4（见 home_page `cardsTopPadding`）。
+  static const double itemHeight = 32;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,7 +52,7 @@ class HomeTopicRow extends ConsumerWidget {
         context.push(TopicPage.routeFor(t.name, from: TopicEntrySource.homeRow));
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -38,6 +38,7 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.onCommentItem,
     this.onMoreItem,
     this.header,
+    this.cardsTopPadding = AppSpacing.screenEdge,
     this.pinned,
     this.onTapPinned,
     this.onTapPromo,
@@ -82,6 +83,10 @@ class FeedMasonryView extends ConsumerStatefulWidget {
 
   /// 可选全幅头部（随 Feed 同滚）。Beranda 用作问候/快捷入口/每日提示区。
   final Widget? header;
+
+  /// 首张卡片上方的留白（原恒为屏边距 16）。头部最后一行本身已有留白时由调用方收小
+  /// （首页话题行出现时传 4，否则话题与首帖之间空得过大 —— 2026-11-12 实机反馈两轮）。
+  final double cardsTopPadding;
 
   /// 顶置坑位（V1.1.6 Story 4.2 · FR-68）。
   ///
@@ -563,8 +568,9 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                     // 🔴 通栏：**去掉左右屏边距**，让卡片里的图片能贴到屏幕边缘。
                     // ⚠️ 文字区的 16px 由卡片内部各块自己补（作者行/操作行/正文/时间），
                     // 不是整张卡贴边 —— 那样文字会顶到屏幕边上。
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.screenEdge,
+                    padding: EdgeInsets.only(
+                      top: widget.cardsTopPadding,
+                      bottom: AppSpacing.screenEdge,
                     ),
                     child: Column(
                       children: [
