@@ -82,6 +82,10 @@ import tools.jackson.databind.ObjectMapper;
             // 套件恰跨那一刻时它会抢先物化近几天，让 DashboardMaterializerIntegrationTest 的「恰好补 3 天」随机红。
             // "-" = Scheduled.CRON_DISABLED；跑批本身由该测试类直接调用验证。
             "petgo.admin.dashboard.cron=-",
+            // analytics-pipeline Story 1.3：埋点分区维护（默认每天 UTC 00:05）理由同上关闭 —— 套件跨点时它会与
+            // PartitionMaintenanceJobIntegrationTest 并发 DETACH / 建分区。由该测试类直接调用 run() 验证
+            // （启动时的那一次照常跑，属于上下文初始化，不与用例并发）。
+            "analytics.partition.cron=-",
             // V1.3.4 Story 6.2：运营通知定时扫描（默认首延 60s、每 60s）会把共享库里别的测试遗留的
             // PENDING 全量（ALL）活动发出去 —— 给库里所有用户各写一条通知、角标 +1，
             // 让「新用户未读数 = N」类断言随机红。首延拉到 1 天 = 测试期内不自动跑；
