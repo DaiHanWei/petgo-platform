@@ -29,6 +29,18 @@ public class NotificationPusher {
         deliver(ImAccountMapper.userImId(userId), title, body, deepLinkType, deepLinkToken, targetRef);
     }
 
+    /** 同上，Ext 另带 {@code commentId}（修复线：「赞了你的评论」推送点开定位该评论；null 等同上一个方法）。 */
+    @Async
+    public void pushToUser(long userId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef, Long commentId) {
+        try {
+            imClient.pushOffline(ImAccountMapper.userImId(userId), title, body, deepLinkType, deepLinkToken,
+                    targetRef, commentId);
+        } catch (RuntimeException e) {
+            log.warn("离线推送投递失败 type={} cause={}", deepLinkType, e.getClass().getSimpleName());
+        }
+    }
+
     /** 推送给兽医（IM 账号 v_{vetId}，Story 6.2 新请求推送在线兽医）。 */
     @Async
     public void pushToVet(long vetId, String title, String body, String deepLinkType, String deepLinkToken,

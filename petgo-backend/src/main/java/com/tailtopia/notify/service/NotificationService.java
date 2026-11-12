@@ -208,6 +208,14 @@ public class NotificationService {
      *
      * @return 落库（或被合并到）的那一行；T-29 跳过时也返回那一行
      */
+    /**
+     * 该触发人是否曾（含已读）就这个合并键通知过该接收人 —— 修复线评论点赞「取消后再赞不再发第二条」用。
+     */
+    @Transactional(readOnly = true)
+    public boolean actorEverNotified(long recipientUserId, String aggregateKey, long actorUserId) {
+        return aggregates.actorEverNotified(recipientUserId, aggregateKey, actorUserId);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Notification sendInteraction(long recipientUserId, NotificationType type, long actorUserId,
             String aggregateKey, String targetRef, Long commentId, String variant, String pushBodyText) {
@@ -240,7 +248,8 @@ public class NotificationService {
         // （角标已 +1、去抖键已占，通知却没了）。提交后再推，任何异常都只丢这一次推送。无事务（单测）时直接执行。
         runAfterCommit(() -> {
             try {
-                pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, pushBodyText);
+                pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, commentId,
+                        pushBodyText);
             } catch (RuntimeException e) {
                 log.warn("互动推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
             }
@@ -458,7 +467,7 @@ public class NotificationService {
     }
 
     private void pushInteraction(long recipientUserId, NotificationType type, String variant, String aggregateKey,
-            long notificationId, String token, String targetRef, String pushBodyText) {
+            long notificationId, String token, String targetRef, Long commentId, String pushBodyText) {
         // D-9：官方内容账号（role=ADMIN 的作者 shim）不登录 App、不接收推送，与虚拟号同样跳过（3.1 code-review F3）。
         if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
             return;
@@ -480,8 +489,14 @@ public class NotificationService {
             return;
         }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
-        pusher.pushToUser(recipientUserId, copy.title(type, variant, summary.get(), locale),
-                truncateBody(pushBodyText), type.name(), token, targetRef);
+        String title = copy.title(type, variant, summary.get(), locale);
+        if (Notification.VARIANT_COMMENT.equals(variant) && commentId != null) {
+            // 修复线：「赞了你的评论」推送 Ext 带 commentId，新版 App 点开直达帖子并定位这条评论。
+            pusher.pushToUser(recipientUserId, title, truncateBody(pushBodyText), type.name(), token, targetRef,
+                    commentId);
+            return;
+        }
+        pusher.pushToUser(recipientUserId, title, truncateBody(pushBodyText), type.name(), token, targetRef);
     }
 
     /**

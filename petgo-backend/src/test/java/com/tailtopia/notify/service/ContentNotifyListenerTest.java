@@ -60,6 +60,15 @@ class ContentNotifyListenerTest {
     }
 
     @Test
+    void commentLikeAlreadyNotifiedBeforeIsNotSentAgain() {
+        // 取消赞、取消后再赞（哪怕上一条已读）：同一人同一条评论只通知一次。
+        when(notificationService.actorEverNotified(9L, "LIKE:COMMENT:70", 2L)).thenReturn(true);
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 2L, 9L, "halo"));
+        verify(notificationService, org.mockito.Mockito.never()).sendInteraction(anyLong(), any(), anyLong(), any(),
+                any(), any(), any(), any());
+    }
+
+    @Test
     void selfCommentLikeNotPushed() {
         listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 9L, 9L, "halo"));
         verifyNoInteractionSent();

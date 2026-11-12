@@ -102,8 +102,13 @@ public class ContentNotifyListener {
         if (suppressed(event.commentAuthorId(), event.likerId(), event.commentAuthorId())) {
             return;
         }
+        String key = "LIKE:COMMENT:" + event.commentId();
+        // 一人一条评论只通知一次：取消赞、取消后再赞都不再发（含通知已读之后 —— 未读期间 upsert 本就会挡）。
+        if (notificationService.actorEverNotified(event.commentAuthorId(), key, event.likerId())) {
+            return;
+        }
         notificationService.sendInteraction(event.commentAuthorId(), NotificationType.CONTENT_LIKED, event.likerId(),
-                "LIKE:COMMENT:" + event.commentId(), String.valueOf(event.postId()), event.commentId(),
+                key, String.valueOf(event.postId()), event.commentId(),
                 Notification.VARIANT_COMMENT, event.commentBody());
     }
 

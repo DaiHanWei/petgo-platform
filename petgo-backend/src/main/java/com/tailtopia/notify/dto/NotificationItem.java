@@ -23,7 +23,7 @@ import java.time.Instant;
  *       供回关按钮按三态显示；其余类型为 null。</li>
  * </ul>
  * 其它条目（系统类、上线前无触发人的存量）原样返回，新字段为 null / 0（全局 NON_NULL：null 键不下发）。
- * <b>不暴露</b>通知 id、评论 id、合并键、variant。
+ * <b>不暴露</b>通知 id、合并键、variant；评论 id 只对「赞了你的评论」下发（{@code commentId}，修复线定位用）。
  *
  * <p><b>opsTarget</b>（V1.3.4 Story 6.1）：仅 {@code OPS_ANNOUNCEMENT} 附带，复用 Story 5.1 的
  * {@link OpsTargetView}（与运营弹窗候选接口的 {@code target} 同一形态）；其它类型为 null，
@@ -51,7 +51,13 @@ public record NotificationItem(
          * V1.4.2 social-topic Story 1.2：宠物现名 —— 只对 {@code PET_FOLLOWED}（被追更的宠物）/ {@code PET_DIARY_POSTED}
          * （发 Diary 的宠物）填，供 App 把宠物名也加粗（UI 稿 A12）；其余类型或宠物已删 / 查不到为 null（不下发）。
          */
-        @JsonProperty("petName") String petName) {
+        @JsonProperty("petName") String petName,
+        /**
+         * 修复线：「赞了你的评论」（{@code CONTENT_LIKED} + variant COMMENT）被赞的评论 id —— 新版 App 点开据此
+         * 调 {@code GET /api/v1/comments/{id}/anchor} 定位并高亮；帖子点赞等其余条目为 null（不下发）。
+         * 旧版 App 不认识此键，照旧按 targetRef 打开帖子。
+         */
+        @JsonProperty("commentId") Long commentId) {
 
     /** 原样返回（系统类 / 存量）：title / body 照搬库值，触发人字段为空。 */
     public static NotificationItem from(Notification n) {
@@ -61,7 +67,7 @@ public record NotificationItem(
     public static NotificationItem from(Notification n, OpsTargetView opsTarget) {
         return new NotificationItem(n.getType().name(), n.getTitle(), n.getBody(),
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
-                null, 0, null, null, null, null, opsTarget, null, null);
+                null, 0, null, null, null, null, opsTarget, null, null, null);
     }
 
     /**
@@ -84,7 +90,8 @@ public record NotificationItem(
         return new NotificationItem(n.getType().name(), title, body,
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
                 actorName, actorCount, actorUserId, actorToken, iFollow, followsMe, null,
-                bodyDeleted ? Boolean.TRUE : null, petName);
+                bodyDeleted ? Boolean.TRUE : null, petName,
+                Notification.VARIANT_COMMENT.equals(n.getVariant()) ? n.getCommentId() : null);
     }
 
     /**
@@ -95,6 +102,6 @@ public record NotificationItem(
     public static NotificationItem petDiary(Notification n, String title, String petName) {
         return new NotificationItem(n.getType().name(), title, n.getBody(),
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
-                petName, 0, null, null, null, null, null, null, petName);
+                petName, 0, null, null, null, null, null, null, petName, null);
     }
 }

@@ -39,6 +39,15 @@ public interface TencentImClient {
     void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
             String targetRef);
 
+    /**
+     * 同上，Ext 另带 {@code commentId}（修复线：「赞了你的评论」推送点开直达并定位该评论）。
+     * 旧版 App 只读 type/token/targetRef，多一个键无影响。默认实现忽略 commentId（桩 / 测试替身不必实现）。
+     */
+    default void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef, Long commentId) {
+        pushOffline(imUserId, title, body, deepLinkType, deepLinkToken, targetRef);
+    }
+
     /** 同 pushOffline，但返回是否投递成功（HTTP 成功且 ErrorCode == 0）。运营通知失败计数用（V1.3.4 Story 6.2；bug 604 起失败不重推）。 */
     default boolean pushOfflineChecked(String imUserId, String title, String body, String deepLinkType,
             String deepLinkToken, String targetRef) {

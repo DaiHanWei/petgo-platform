@@ -1,5 +1,6 @@
 package com.tailtopia.content.web;
 
+import com.tailtopia.content.dto.CommentAnchorResponse;
 import com.tailtopia.content.dto.CommentPageResponse;
 import com.tailtopia.content.dto.ContentDetailResponse;
 import com.tailtopia.content.service.CommentQueryService;
@@ -61,6 +62,15 @@ public class ContentDetailController {
     public CommentPageResponse comments(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
             @RequestParam(value = "cursor", required = false) String cursor) {
         return commentQueryService.topLevel(id, cursor, viewerId(jwt));
+    }
+
+    /**
+     * 评论定位（修复线）：通知点开时 App 拿它把目标评论所在的一级评论置顶 + 高亮。看不到 → 404（App 退化为只滚到评论区）。
+     * 与列表同为游客可读（{@code GET /api/v1/comments/**} 已 permitAll）。
+     */
+    @GetMapping("/api/v1/comments/{id}/anchor")
+    public CommentAnchorResponse anchor(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        return commentQueryService.anchor(id, viewerId(jwt));
     }
 
     @GetMapping("/api/v1/comments/{parentId}/replies")
