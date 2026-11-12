@@ -1,0 +1,8 @@
+# 测试夹具（Story 1.2 MetricDefinitionsTest）：code 重复、name 缺失 → 结构错误，消息须带路径。
+version: 1
+metrics:
+  - code: S1
+    name: "日活"
+    definition: "定义"
+  - code: S1
+    definition: "重复的 code、缺 name"

@@ -488,6 +488,11 @@ analytics:
       connection-timeout: 5000
       # 建池不连库，连不上不抛（由 AnalyticsBootstrap 判停用）
       initialization-fail-timeout: -1
+  # 事件清单 / 指标口径（analytics-pipeline Story 1.2，D-7 / D-9）：启动时加载并同步进埋点库 event_catalog / metric_definitions。
+  # yaml 无效 → 埋点管道停用（CATALOG_INVALID）+ TECH 告警，不阻断启动。位置一般不改，测试可覆盖。
+  catalog:
+    event-catalog-location: classpath:analytics/event-catalog.yaml
+    metric-definitions-location: classpath:analytics/metric-definitions.yaml
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

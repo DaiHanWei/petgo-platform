@@ -1,0 +1,15 @@
+# 测试夹具（Story 1.2 EventCatalogTest）：事件名重复 + 同一事件内属性名重复 → 结构错误，消息须带路径。
+version: 1
+events:
+  - name: fixture_dup_event
+    source: APP
+    status: ACTIVE
+    description: "第一次"
+    properties: []
+  - name: fixture_dup_event
+    source: SERVER
+    status: ACTIVE
+    description: "重复的事件名"
+    properties:
+      - { name: place_id, type: string, description: "场所" }
+      - { name: place_id, type: string, description: "重复的属性名" }

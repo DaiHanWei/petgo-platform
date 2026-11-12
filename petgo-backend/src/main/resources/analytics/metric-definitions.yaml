@@ -1,0 +1,31 @@
+# 指标口径（analytics-pipeline Story 1.2，架构 D-9 / FR-26）—— 口径文档的唯一来源。
+#
+# 后端启动时同步进埋点库 metric_definitions 表（表是本文件的投影，AI 查数只读库）。
+# 字段与表列一一对应：
+#   code        团队编号，如 S1、电商#6（全表唯一，≤32）
+#   name        指标名（必填，≤128）
+#   definition  定义：算什么、按什么时区 / 周期（必填）
+#   sources     来源表 / 事件（字符串列表）
+#   exclusions  排除规则
+#   known_bias  已知偏差
+#   sql_path    汇总 SQL 文件位置（resources/ 下的相对路径）
+#   changelog   变更记录 [{date: "YYYY-MM-DD", change: ...}]（日期一律加引号，按字符串存）
+#
+# 本 story 只放结构与 S1 示例，其余指标随 Epic 4（FR-26）补。
+version: 1
+metrics:
+  - code: S1
+    name: "日活（DAU）"
+    definition: >-
+      WIB 自然日内有 Application Opened 的去重人数。另含（周 = 周一至周日）：周合计 = 每日日活之和；
+      周均值 = 周合计 ÷ 天数；周内最高 / 最低日；周增长率 =（本周 − 上周）÷ 上周；工作日（周一至周五）与周末平均日活。
+    sources:
+      - "观察期：ga4_daily_snapshot（GA4 日活，含游客）"
+      - "对账通过后（FR-24）：events_detail 的 Application Opened"
+    exclusions: >-
+      只算生产数据；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+    known_bias: >-
+      员工与测试账号算作正常用户；日去重人数不能跨天相加（§4.5.1），周合计是日活之和、不是周去重人数。
+    sql_path: analytics/rollup/dau.sql
+    changelog:
+      - { date: "2026-11-13", change: "初版骨架" }

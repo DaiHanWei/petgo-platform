@@ -50,7 +50,7 @@ development_status:
   # Epic 1：后端埋点管道上线（后端；先上 stag，V1.5.0 发版前上生产）
   epic-1: in-progress
   1-1-埋点库骨架: review
-  1-2-事件清单盘点与口径骨架: ready-for-dev
+  1-2-事件清单盘点与口径骨架: review
   1-3-原始层与分区维护: ready-for-dev
   1-4-批量接收接口: ready-for-dev
   1-5-身份校验与关联表: ready-for-dev

@@ -1,0 +1,13 @@
+# 测试夹具（Story 1.2 EventCatalogTest）：第 9 行的行内映射缺右花括号 → SnakeYAML 语法错误，消息须带行号。
+version: 1
+events:
+  - name: fixture_ok_event
+    source: APP
+    status: ACTIVE
+    description: "正常事件"
+    properties:
+      - { name: product_token, type: string, description: "缺右花括号"
+  - name: fixture_second_event
+    source: APP
+    status: ACTIVE
+    description: "第二个事件"

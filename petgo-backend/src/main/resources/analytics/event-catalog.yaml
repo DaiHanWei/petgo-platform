@@ -1,0 +1,2072 @@
+# 事件清单（analytics-pipeline Story 1.2，架构 D-7）—— 埋点事件的唯一来源。
+#
+# 用途：
+#   - 明细层只保留这里登记过的属性键（D-4）；未登记的事件照样进原始层，标 unknown_event、不进明细。
+#   - 注销擦除时删掉 user_identifier: true 的属性键（A10）。
+#   - 后端启动时同步进埋点库 event_catalog 表，供 AI 查数理解事件含义（表是本文件的投影）。
+#
+# 规则：
+#   - 新增事件三步：在本文件登记 → 加 Dart 事件常量 → 比对测试变绿。
+#   - 事件下线把 status 改成 RETIRED，不要删条目（删了表里的行也会被删，历史数据就没了注释）。
+#   - 事件名原样；只有 3 个生命周期事件用 Segment 写法（带空格、首字母大写），其余 snake_case。
+#   - 属性一律 snake_case；只登记经 Analytics.scrub() 之后仍会上报的键。
+#   - 名字是 on / off / yes / no / true / false 这类词时必须加引号（yaml 1.1 会把它们解析成布尔，加载会报错）。
+#   - 凡属性值是某个用户的内部 id / 公开 token / 哈希（不论本人还是对方），标 user_identifier: true。宁可多标。
+#   - 格式约定（App 侧 Story 2.6 的比对测试按行解析，不要改写法）：
+#       每个事件首行 `  - name: <事件名>`；属性一律单行 `      - { name: ..., type: ..., description: ... }`。
+#   - 按 domain 分组、组内按事件名排序。
+#   - source: APP | SERVER | H5；status: ACTIVE | PLANNED | RETIRED；
+#     type: string | int | number | bool | list | map。
+version: 1
+events:
+
+  # ======== app (12)
+  - name: "Application Installed"
+    source: APP
+    status: PLANNED
+    domain: app
+    description: "新装首启（Story 2.3）：既无自建安装标记、也无旧版本地数据时发"
+    properties:
+      - { name: version, type: string, description: "App 版本号（PackageInfo.version）" }
+      - { name: build, type: string, description: "App 构建号（PackageInfo.buildNumber）" }
+  - name: "Application Opened"
+    source: APP
+    status: PLANNED
+    domain: app
+    description: "冷启动或每次回到前台（Story 2.3）；静默推送唤醒不报"
+    properties:
+      - { name: from_background, type: bool, description: "true = 从后台回到前台；false = 冷启动" }
+  - name: "Application Updated"
+    source: APP
+    status: PLANNED
+    domain: app
+    description: "升级后首启或版本号变化（Story 2.3）；升级不报 Installed"
+    properties:
+      - { name: version, type: string, description: "App 版本号（PackageInfo.version）" }
+      - { name: build, type: string, description: "App 构建号（PackageInfo.buildNumber）" }
+      - { name: previous_version, type: string, description: "升级前的版本号（取不到时不带）" }
+      - { name: previous_build, type: string, description: "升级前的构建号（取不到时不带）" }
+  - name: app_launch_landed_on_tab
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "冷启动后落在了哪个 Tab（超时兜底与迟到纠正各另报一次）"
+    code_ref: petgo_app/lib/core/router/app_router.dart
+    properties:
+      - { name: tab, type: string, description: "Tab 名（受控枚举）" }
+      - { name: user_state, type: string, description: "用户状态（guest / vet / owner_with_profile / owner_without_profile）" }
+      - { name: corrected_from, type: string, description: "迟到纠正前落在的 Tab（仅纠正那次带）" }
+      - { name: restore_timeout, type: bool, description: "恢复超时兜底（仅超时那次带，恒 true）" }
+  - name: app_update_go_store_tapped
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "升级提示里点了去应用商店"
+    code_ref: petgo_app/lib/features/notify/presentation/app_update_banner.dart
+    properties:
+      - { name: decision, type: string, description: "升级决策（force / recommend）" }
+      - { name: surface, type: string, description: "展示形态（banner / dialog）" }
+  - name: app_update_later_tapped
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "升级提示里点了稍后"
+    code_ref: petgo_app/lib/features/notify/presentation/app_update_banner.dart
+    properties:
+      - { name: decision, type: string, description: "升级决策（force / recommend）" }
+      - { name: surface, type: string, description: "展示形态（banner / dialog）" }
+  - name: app_update_prompt_shown
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "版本升级提示曝光（横幅或弹窗）"
+    code_ref: petgo_app/lib/features/notify/presentation/app_update_banner.dart
+    properties:
+      - { name: decision, type: string, description: "升级决策（force / recommend）" }
+      - { name: surface, type: string, description: "展示形态（banner / dialog）" }
+  - name: bottom_nav_tab_switched
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "点底部导航切换 Tab"
+    code_ref: petgo_app/lib/shared/widgets/app_shell.dart
+    properties:
+      - { name: from_tab, type: string, description: "切换前的 Tab" }
+      - { name: to_tab, type: string, description: "切换后的 Tab" }
+      - { name: user_state, type: string, description: "用户状态（guest / vet / owner_with_profile / owner_without_profile）" }
+  - name: button_tapped
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "白名单按钮点击，由 Analytics.buttonTapped 派生；按钮 id 必须是 ButtonId 常量"
+    code_ref: petgo_app/lib/core/analytics/analytics.dart
+    properties:
+      - { name: button_id, type: string, description: "按钮 id（ButtonId 常量白名单，如 triage.start）" }
+      - { name: screen, type: string, description: "页面名（受控字面量）" }
+  - name: lightbox_dismissed
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "关闭图片大图查看"
+    code_ref: petgo_app/lib/shared/media/image_lightbox.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: dismiss_gesture, type: string, description: "关闭手势（受控枚举）" }
+      - { name: max_zoom_used, type: number, description: "本次查看用到的最大缩放倍数（两位小数）" }
+  - name: lightbox_opened
+    source: APP
+    status: ACTIVE
+    domain: app
+    description: "打开图片大图查看"
+    code_ref: petgo_app/lib/shared/media/image_lightbox.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: screen_viewed
+    source: APP
+    status: PLANNED
+    domain: app
+    description: "页面浏览，取代 PostHog 的 $screen（Story 2.4）；页面名放属性 screen，如 toko_page"
+    properties:
+      - { name: screen, type: string, description: "页面名（受控字面量）" }
+
+  # ======== auth (11)
+  - name: af_complete_registration
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "新用户注册完成（AppsFlyer 标准名，同步回传 Meta / TikTok）。只在 isNewUser 时报"
+    code_ref: petgo_app/lib/features/auth/presentation/login_page.dart
+    properties:
+      - { name: af_registration_method, type: string, description: "注册方式（google / apple）" }
+  - name: login_guide_entry_blocked
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "游客点了受控入口、被登录门控拦下（点击意图）"
+    code_ref: petgo_app/lib/shared/widgets/app_shell.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: login_guide_hard_dialog_login_tapped
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "强登录弹窗里点了登录"
+    code_ref: petgo_app/lib/features/auth/domain/login_guide_controller.dart
+    properties:
+      - { name: method, type: string, description: "登录方式（google / apple）" }
+      - { name: entry_source, type: string, description: "注册 / 登录引导的入口来源（受控枚举）" }
+  - name: login_guide_hard_dialog_shown
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "强登录弹窗曝光"
+    code_ref: petgo_app/lib/features/auth/domain/login_guide_controller.dart
+    properties:
+      - { name: entry_source, type: string, description: "注册 / 登录引导的入口来源（受控枚举）" }
+  - name: login_tapped
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "登录页点了第三方登录按钮"
+    code_ref: petgo_app/lib/features/auth/presentation/login_page.dart
+    properties:
+      - { name: method, type: string, description: "登录方式（google / apple）" }
+  - name: onboarding_completed
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "引导流最后一步选完养宠状态"
+    code_ref: petgo_app/lib/features/auth/presentation/pet_status_page.dart
+    properties:
+      - { name: pet_status, type: string, description: "养宠状态（受控枚举）" }
+  - name: onboarding_nickname_submitted
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "引导流提交昵称"
+    code_ref: petgo_app/lib/features/auth/presentation/nickname_page.dart
+    properties: []
+  - name: signup_succeeded
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "注册真正成功（不是点了按钮），由 Analytics.captureSignupSucceeded 统一上报"
+    code_ref: petgo_app/lib/core/analytics/analytics.dart
+    properties:
+      - { name: entry_source, type: string, description: "注册 / 登录引导的入口来源（受控枚举）" }
+  - name: social_soft_login_sheet_login_tapped
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "软登录浮层里点了登录"
+    code_ref: petgo_app/lib/features/auth/domain/login_guide_controller.dart
+    properties:
+      - { name: method, type: string, description: "登录方式（google / apple）" }
+  - name: social_soft_login_sheet_shown
+    source: APP
+    status: ACTIVE
+    domain: auth
+    description: "Social 刷到第 3 页弹出软登录浮层"
+    code_ref: petgo_app/lib/features/auth/domain/login_guide_controller.dart
+    properties: []
+  - name: user_identified
+    source: APP
+    status: PLANNED
+    domain: auth
+    description: "登录后关联身份（Story 2.2）：信封带 userId，属性不带任何明文用户 id"
+    properties:
+      - { name: role, type: string, description: "账号角色（USER / VET）" }
+
+  # ======== collect (6)
+  - name: collection_item_opened
+    source: APP
+    status: ACTIVE
+    domain: collect
+    description: "从收藏列表打开一条收藏"
+    code_ref: petgo_app/lib/features/collect/presentation/saved_collections_section.dart
+    properties:
+      - { name: tab, type: string, description: "收藏分组（post / place）" }
+      - { name: is_unavailable, type: bool, description: "收藏的对象已不可用（删除 / 下架）" }
+  - name: collection_list_viewed
+    source: APP
+    status: ACTIVE
+    domain: collect
+    description: "打开我的收藏列表"
+    code_ref: petgo_app/lib/features/me/presentation/me_page.dart
+    properties:
+      - { name: tab, type: string, description: "收藏分组（post / place）" }
+  - name: content_collected
+    source: APP
+    status: ACTIVE
+    domain: collect
+    description: "收藏帖子成功（后端确认后报）"
+    code_ref: petgo_app/lib/features/collect/presentation/collect_button.dart
+    properties:
+      - { name: post_id, type: int, description: "帖子 id" }
+      - { name: content_type, type: string, description: "内容类型（受控枚举）" }
+      - { name: source, type: string, description: "收藏入口，当前恒为 detail" }
+  - name: content_uncollected
+    source: APP
+    status: ACTIVE
+    domain: collect
+    description: "取消收藏帖子成功（后端确认后报）"
+    code_ref: petgo_app/lib/features/collect/presentation/collect_button.dart
+    properties:
+      - { name: post_id, type: int, description: "帖子 id" }
+      - { name: content_type, type: string, description: "内容类型（受控枚举）" }
+      - { name: source, type: string, description: "取消收藏入口，当前恒为 detail" }
+  - name: place_collected
+    source: APP
+    status: ACTIVE
+    domain: collect
+    description: "收藏场所成功（后端确认后报）"
+    code_ref: petgo_app/lib/features/collect/presentation/collect_button.dart
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+  - name: place_uncollected
+    source: APP
+    status: ACTIVE
+    domain: collect
+    description: "取消收藏场所成功（后端确认后报）"
+    code_ref: petgo_app/lib/features/collect/presentation/collect_button.dart
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+
+  # ======== consult (7)
+  - name: ai_unlock_started
+    source: APP
+    status: ACTIVE
+    domain: consult
+    description: "AI 自查结果发起解锁"
+    code_ref: petgo_app/lib/features/triage/presentation/widgets/unlock_method_sheet.dart
+    properties:
+      - { name: consult_type, type: string, description: "问诊类型（AI / VET）" }
+      - { name: method, type: string, description: "解锁方式（受控枚举）" }
+      - { name: price_idr, type: int, description: "价格（IDR）" }
+  - name: ai_unlock_succeeded
+    source: APP
+    status: ACTIVE
+    domain: consult
+    description: "AI 自查结果解锁成功"
+    code_ref: petgo_app/lib/features/triage/presentation/widgets/unlock_method_sheet.dart
+    properties:
+      - { name: consult_type, type: string, description: "问诊类型（AI / VET）" }
+      - { name: method, type: string, description: "解锁方式（受控枚举）" }
+  - name: consult_pay_succeeded
+    source: APP
+    status: ACTIVE
+    domain: consult
+    description: "兽医问诊付款成功"
+    code_ref: petgo_app/lib/features/consult/presentation/vet_timed_pay_page.dart
+    properties:
+      - { name: consult_type, type: string, description: "问诊类型（AI / VET）" }
+      - { name: method, type: string, description: "支付方式（qris / pawcoin）" }
+  - name: consult_request_submitted
+    source: APP
+    status: ACTIVE
+    domain: consult
+    description: "兽医问诊请求确认提交"
+    code_ref: petgo_app/lib/features/consult/presentation/vet_request_confirm_page.dart
+    properties:
+      - { name: consult_type, type: string, description: "问诊类型（AI / VET）" }
+  - name: consult_session_started
+    source: APP
+    status: ACTIVE
+    domain: consult
+    description: "兽医问诊会话开始"
+    code_ref: petgo_app/lib/features/consult/presentation/vet_timed_pay_page.dart
+    properties:
+      - { name: consult_type, type: string, description: "问诊类型（AI / VET）" }
+  - name: consult_started
+    source: APP
+    status: ACTIVE
+    domain: consult
+    description: "发起兽医问诊（自查结果页 / 直接入口 / 自查兜底）"
+    code_ref: petgo_app/lib/features/triage/presentation/triage_result_view.dart
+    properties:
+      - { name: consult_type, type: string, description: "问诊类型（AI / VET）" }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: triage_submitted
+    source: APP
+    status: ACTIVE
+    domain: consult
+    description: "提交 AI 自查"
+    code_ref: petgo_app/lib/features/triage/presentation/triage_upload_page.dart
+    properties:
+      - { name: consult_type, type: string, description: "问诊类型（AI / VET）" }
+
+  # ======== content (30)
+  - name: brag_post_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "纪念卡 / 里程碑等「晒到社区」入口点击（点击当下报，转码失败也算）"
+    code_ref: petgo_app/lib/features/content/presentation/brag_post_entry.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: code, type: string, description: "里程碑代号（仅里程碑来源带）" }
+      - { name: level, type: string, description: "里程碑级别（仅里程碑来源带）" }
+  - name: comment_like_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "点赞 / 取消点赞评论"
+    code_ref: petgo_app/lib/features/content/presentation/comment_section.dart
+    properties:
+      - { name: liked, type: bool, description: "点击后的目标态：true = 点赞" }
+      - { name: comment_level, type: int, description: "评论层级（1 = 一级评论，2 = 回复）" }
+  - name: content_badge_tooltip_opened
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "点开内容标签徽章的说明浮层"
+    code_ref: petgo_app/lib/shared/widgets/content_tag_chip.dart
+    properties:
+      - { name: badge_id, type: string, description: "徽章代号" }
+      - { name: position, type: string, description: "所在位置（受控枚举：feed / detail / comment / mini_profile）" }
+  - name: content_publish_submitted
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "发布内容提交"
+    code_ref: petgo_app/lib/features/content/presentation/publish_compose_page.dart
+    properties:
+      - { name: type, type: string, description: "帖子类型（枚举名）" }
+  - name: detail_page_dwell
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "离开帖子详情页时上报停留时长"
+    code_ref: petgo_app/lib/features/content/presentation/content_detail_page.dart
+    properties:
+      - { name: duration_ms, type: int, description: "耗时（毫秒）" }
+      - { name: post_id, type: int, description: "帖子 id" }
+  - name: diary_published
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "Diary 发布成功（服务端已接住；Moment / Tips、审核拦截、失败不报）"
+    code_ref: petgo_app/lib/features/content/presentation/publish_compose_page.dart
+    properties:
+      - { name: pet_count, type: int, description: "关联的宠物数" }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: following_strip_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "点了关注条（头像或更多）"
+    code_ref: petgo_app/lib/features/content/presentation/widgets/following_strip.dart
+    properties:
+      - { name: target, type: string, description: "点击目标（avatar / more）" }
+  - name: home_topic_row_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "首页话题行点了某个话题"
+    code_ref: petgo_app/lib/features/topic/presentation/widgets/home_topic_row.dart
+    properties:
+      - { name: topic_id, type: string, description: "话题名（话题的公开标识）" }
+      - { name: position, type: int, description: "在话题行中的位次（从 1 起）" }
+      - { name: is_pinned_by_ops, type: bool, description: "是否运营置顶" }
+  - name: mention_inserted
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "发帖或评论时插入一个 @"
+    code_ref: petgo_app/lib/features/content/presentation/comment_composer.dart
+    properties:
+      - { name: context, type: string, description: "@ 所在场景（post / comment）" }
+      - { name: relation, type: string, description: "被 @ 者与我的关系（following / follower / interacted）" }
+      - { name: from_quick_list, type: bool, description: "是否从未输入关键词时的快捷列表选中" }
+  - name: mention_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "点了正文里的 @ 用户"
+    code_ref: petgo_app/lib/shared/rich_text/rich_body_text.dart
+    properties:
+      - { name: context, type: string, description: "@ 所在场景（post / comment）" }
+  - name: post_like_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "点赞 / 取消点赞帖子"
+    code_ref: petgo_app/lib/features/content/presentation/like_button.dart
+    properties:
+      - { name: liked, type: bool, description: "点击后的目标态：true = 点赞" }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: feed_tab, type: string, description: "Feed 所在 Tab（与 rank_mode 同时出现或同时缺省）" }
+      - { name: rank_mode, type: string, description: "排序模式（recommend / chrono / mixed / unknown）" }
+      - { name: reason, type: string, description: "推荐理由（受控枚举，推荐流才带）" }
+  - name: post_likers_opened
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "打开帖子点赞人列表"
+    code_ref: petgo_app/lib/features/content/presentation/post_likers_sheet.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: post_share_card_generated
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "帖子分享卡生成完成"
+    code_ref: petgo_app/lib/features/content/presentation/share_card/share_card_preview_page.dart
+    properties:
+      - { name: template, type: string, description: "卡片模板（image / text_only）" }
+      - { name: size, type: string, description: "卡片尺寸（1x1 / 9x16）" }
+      - { name: duration_ms, type: int, description: "耗时（毫秒）" }
+  - name: post_share_card_sent
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "帖子分享卡经系统分享面板发出（系统回调之后）"
+    code_ref: petgo_app/lib/features/content/presentation/share_card/share_card_preview_page.dart
+    properties:
+      - { name: channel, type: string, description: "系统分享面板回调的渠道" }
+  - name: post_share_card_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "帖子详情点了生成分享卡"
+    code_ref: petgo_app/lib/features/content/presentation/share_card/open_share_card.dart
+    properties:
+      - { name: content_type, type: string, description: "内容类型（受控枚举）" }
+      - { name: is_private_diary, type: bool, description: "是否私密 Diary" }
+      - { name: has_image, type: bool, description: "是否带图" }
+  - name: post_share_link_opened
+    source: H5
+    status: ACTIVE
+    domain: content
+    description: "帖子分享链接被打开（访客事件，服务端上报；失效页也报）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/content/service/PostSharePageAnalytics.java
+    properties:
+      - { name: open_method, type: string, description: "打开方式（qr / link）" }
+      - { name: ua_platform, type: string, description: "访客平台（ios / android / desktop / other）" }
+  - name: publish_done_share_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "发布结果页点了分享"
+    code_ref: petgo_app/lib/features/content/presentation/publish_result_page.dart
+    properties:
+      - { name: is_private, type: bool, description: "是否私密发布" }
+  - name: publish_image_crop_completed
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "露出区域调整完成（每张需调整的图各报一次）"
+    code_ref: petgo_app/lib/features/content/domain/image_exposure.dart
+    properties:
+      - { name: target_ratio, type: string, description: "目标露出比例（0x75 / 1x78）" }
+      - { name: adjusted, type: bool, description: "用户是否手动调整过露出区域" }
+  - name: publish_image_crop_exit_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "露出区域调整页点了退出"
+    code_ref: petgo_app/lib/features/content/presentation/publish_exposure_page.dart
+    properties:
+      - { name: original_ratio, type: number, description: "原图宽高比（三位小数）" }
+  - name: publish_image_crop_shown
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "有图片超出露出区域、需要调整时曝光"
+    code_ref: petgo_app/lib/features/content/domain/image_exposure.dart
+    properties:
+      - { name: original_ratio, type: number, description: "原图宽高比（三位小数）" }
+      - { name: batch_size, type: int, description: "本次一起处理的图片数" }
+  - name: publish_page_content_type_selected
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "发布页选了内容类型"
+    code_ref: petgo_app/lib/features/content/presentation/publish_compose_page.dart
+    properties:
+      - { name: type, type: string, description: "内容类型（受控枚举）" }
+      - { name: is_default, type: bool, description: "是否默认选中的类型" }
+      - { name: has_pet_profile, type: bool, description: "是否已有宠物档案" }
+  - name: publish_page_image_source_selected
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "发布页选了图片来源（相机 / 相册），真正去拍 / 去选之前"
+    code_ref: petgo_app/lib/features/content/presentation/publish_compose_page.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: publish_page_sync_to_moment_toggled
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "发布页拨了「同步到 Moment」开关"
+    code_ref: petgo_app/lib/features/content/presentation/publish_compose_page.dart
+    properties:
+      - { name: enabled, type: bool, description: "开关目标态" }
+  - name: social_pinned_duplicate_viewed
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "被顶置的内容在 Feed 后续页再次出现（重复曝光）"
+    code_ref: petgo_app/lib/features/content/presentation/feed_view.dart
+    properties:
+      - { name: content_id, type: int, description: "帖子 id" }
+      - { name: serp_position, type: int, description: "在 Feed 序列里的位次（从 1 起）" }
+      - { name: feed_tab, type: string, description: "Feed 所在 Tab（与 rank_mode 同时出现或同时缺省）" }
+      - { name: rank_mode, type: string, description: "排序模式（recommend / chrono / mixed / unknown）" }
+  - name: social_pinned_slot_tapped
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "点了 Feed 顶置位"
+    code_ref: petgo_app/lib/features/content/presentation/feed_view.dart
+    properties:
+      - { name: pin_config_id, type: int, description: "顶置配置 id" }
+      - { name: pin_type, type: string, description: "顶置类型（受控枚举）" }
+      - { name: jump_target, type: string, description: "点击后的跳转目标（受控枚举）" }
+      - { name: content_id, type: int, description: "帖子 id" }
+      - { name: feed_tab, type: string, description: "Feed 所在 Tab（与 rank_mode 同时出现或同时缺省）" }
+      - { name: rank_mode, type: string, description: "排序模式（recommend / chrono / mixed / unknown）" }
+  - name: social_pinned_slot_viewed
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "Feed 顶置位曝光（每次进入只报一次）"
+    code_ref: petgo_app/lib/features/content/presentation/feed_view.dart
+    properties:
+      - { name: pin_config_id, type: int, description: "顶置配置 id" }
+      - { name: pin_type, type: string, description: "顶置类型（受控枚举）" }
+      - { name: content_id, type: int, description: "帖子 id" }
+      - { name: feed_tab, type: string, description: "Feed 所在 Tab（与 rank_mode 同时出现或同时缺省）" }
+      - { name: rank_mode, type: string, description: "排序模式（recommend / chrono / mixed / unknown）" }
+  - name: social_tab_viewed
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "Social 页切换到某个子 Tab"
+    code_ref: petgo_app/lib/features/content/presentation/social_tab.dart
+    properties:
+      - { name: tab, type: string, description: "Tab 名（受控枚举）" }
+  - name: topic_inserted
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "发帖时插入一个话题"
+    code_ref: petgo_app/lib/features/content/presentation/publish_compose_page.dart
+    properties:
+      - { name: topic_id, type: string, description: "话题名（话题的公开标识）" }
+      - { name: is_official, type: bool, description: "是否官方话题" }
+      - { name: is_new, type: bool, description: "是否本次新建的话题" }
+      - { name: method, type: string, description: "插入方式（suggestion / typed）" }
+  - name: topic_page_viewed
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "打开话题页"
+    code_ref: petgo_app/lib/features/topic/presentation/topic_page.dart
+    properties:
+      - { name: topic_id, type: string, description: "话题名（话题的公开标识）" }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: topic_sort_switched
+    source: APP
+    status: ACTIVE
+    domain: content
+    description: "话题页切换排序"
+    code_ref: petgo_app/lib/features/topic/presentation/topic_page.dart
+    properties:
+      - { name: sort, type: string, description: "排序方式（受控枚举）" }
+
+  # ======== gift (7)
+  - name: gift_locked_block_tapped
+    source: APP
+    status: ACTIVE
+    domain: gift
+    description: "点了等级未达的锁定礼物区"
+    code_ref: petgo_app/lib/features/gift/presentation/gift_panel_sheet.dart
+    properties:
+      - { name: required_level, type: int, description: "解锁所需成长等级" }
+  - name: gift_panel_opened
+    source: APP
+    status: ACTIVE
+    domain: gift
+    description: "打开送礼面板"
+    code_ref: petgo_app/lib/features/gift/presentation/gift_send_flow.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: pet_id, type: int, description: "宠物 id" }
+      - { name: is_multi_pet_post, type: bool, description: "是否多宠帖" }
+  - name: gift_payment_succeeded
+    source: APP
+    status: ACTIVE
+    domain: gift
+    description: "送礼支付成功"
+    code_ref: petgo_app/lib/features/gift/presentation/gift_send_flow.dart
+    properties:
+      - { name: gift_id, type: string, description: "礼物公开 token" }
+      - { name: quantity, type: int, description: "数量" }
+      - { name: total_amount, type: int, description: "总价" }
+      - { name: channel, type: string, description: "支付渠道（受控枚举）" }
+  - name: gift_qris_low_amount_shown
+    source: APP
+    status: ACTIVE
+    domain: gift
+    description: "礼物总价低于 QRIS 最低额提示曝光"
+    code_ref: petgo_app/lib/features/gift/presentation/gift_send_flow.dart
+    properties:
+      - { name: total_amount, type: int, description: "总价（IDR），低于 QRIS 最低额" }
+  - name: gift_send_tapped
+    source: APP
+    status: ACTIVE
+    domain: gift
+    description: "送礼面板点了送出"
+    code_ref: petgo_app/lib/features/gift/presentation/gift_panel_sheet.dart
+    properties:
+      - { name: gift_id, type: string, description: "礼物公开 token" }
+      - { name: quantity, type: int, description: "数量" }
+      - { name: total_amount, type: int, description: "总价（PawCoin / IDR）" }
+      - { name: is_exclusive, type: bool, description: "是否专属礼物" }
+  - name: gift_sender_list_opened
+    source: APP
+    status: ACTIVE
+    domain: gift
+    description: "打开送礼人列表"
+    code_ref: petgo_app/lib/features/gift/presentation/gift_page.dart
+    properties:
+      - { name: is_owner, type: bool, description: "查看者是否宠物主人" }
+  - name: gift_wall_opened
+    source: APP
+    status: ACTIVE
+    domain: gift
+    description: "打开礼物墙"
+    code_ref: petgo_app/lib/features/gift/presentation/gift_page.dart
+    properties:
+      - { name: is_owner, type: bool, description: "查看者是否宠物主人" }
+
+  # ======== growth (5)
+  - name: avatar_frame_changed
+    source: APP
+    status: ACTIVE
+    domain: growth
+    description: "更换头像框"
+    code_ref: petgo_app/lib/features/growth/presentation/level_up_celebration.dart
+    properties:
+      - { name: frame_id, type: string, description: "头像框代号（小写）" }
+  - name: growth_backfill_popup_shown
+    source: APP
+    status: ACTIVE
+    domain: growth
+    description: "等级补发弹窗曝光"
+    code_ref: petgo_app/lib/features/growth/presentation/backfill_popup.dart
+    properties:
+      - { name: level, type: int, description: "补发的成长等级" }
+  - name: growth_celebration_shown
+    source: APP
+    status: ACTIVE
+    domain: growth
+    description: "升级庆祝弹窗曝光"
+    code_ref: petgo_app/lib/features/growth/presentation/level_up_celebration.dart
+    properties:
+      - { name: to_level, type: int, description: "升到的成长等级" }
+  - name: growth_level_page_viewed
+    source: APP
+    status: ACTIVE
+    domain: growth
+    description: "打开成长等级页"
+    code_ref: petgo_app/lib/features/growth/presentation/growth_popup_coordinator.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: growth_level_up
+    source: APP
+    status: ACTIVE
+    domain: growth
+    description: "成长等级提升"
+    code_ref: petgo_app/lib/features/growth/presentation/growth_popup_coordinator.dart
+    properties:
+      - { name: from_level, type: int, description: "升级前的成长等级" }
+      - { name: to_level, type: int, description: "升到的成长等级" }
+      - { name: is_tier_up, type: bool, description: "是否跨段位" }
+
+  # ======== id_card (13)
+  - name: id_card_buka_hd_tapped
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "点了解锁高清（Buka HD）"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card/id_card_hd_flow.dart
+    properties:
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: id_card_created
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "证件卡创建成功"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card_create_page.dart
+    properties:
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: card_variant, type: string, description: "卡片配色 / 变体（受控枚举）" }
+      - { name: number_reused, type: bool, description: "是否复用了已有卡号" }
+  - name: id_card_form_opened
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "打开证件卡填写表单"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card_create_page.dart
+    properties:
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+  - name: id_card_paywall_dismissed
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "高清解锁付费墙被关闭"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card/id_card_hd_flow.dart
+    properties:
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: id_card_share_rewarded
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "证件卡分享后领奖结果"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card_detail_page.dart
+    properties:
+      - { name: rewarded, type: bool, description: "本次分享是否拿到奖励" }
+  - name: id_card_share_sent
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "证件卡经系统分享面板发出"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card_detail_page.dart
+    properties:
+      - { name: channel, type: string, description: "系统分享面板回调的渠道" }
+  - name: id_card_share_tapped
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "证件卡详情点了分享"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card_detail_page.dart
+    properties:
+      - { name: card_style, type: string, description: "卡片样式（受控枚举）" }
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: card_variant, type: string, description: "卡片配色 / 变体（受控枚举）" }
+  - name: id_card_style_tapped
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "点了一种证件卡样式"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card_page.dart
+    properties:
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: card_variant, type: string, description: "卡片配色 / 变体（受控枚举）" }
+  - name: id_card_tab_viewed
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "证件卡页切换 Tab"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card_page.dart
+    properties:
+      - { name: tab, type: string, description: "Tab 名（受控枚举）" }
+      - { name: has_cards, type: bool, description: "该 Tab 下是否已有卡" }
+  - name: ktp_unlock_failed
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "KTP 高清解锁失败。App 报余额不足 / 请求没到服务端两类，服务端报支付侧结局（超时 / 网关拒绝 / 取消），两端同名同键"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart; petgo-backend/src/main/java/com/tailtopia/profile/service/KtpUnlockAnalyticsListener.java
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+      - { name: method, type: string, description: "支付方式（PAWCOIN / QRIS）" }
+      - { name: failure_reason, type: string, description: "失败原因（App：余额不足 / 请求失败等；服务端：PaymentFailureCategory 名）" }
+      - { name: price_idr, type: int, description: "价格（IDR）" }
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: card_variant, type: string, description: "卡片配色 / 变体（受控枚举）" }
+  - name: ktp_unlock_paywall_shown
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "KTP 高清解锁付费墙曝光"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+      - { name: price_idr, type: int, description: "价格（IDR）" }
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: card_variant, type: string, description: "卡片配色 / 变体（受控枚举）" }
+  - name: ktp_unlock_started
+    source: APP
+    status: ACTIVE
+    domain: id_card
+    description: "KTP 高清解锁发起支付"
+    code_ref: petgo_app/lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+      - { name: method, type: string, description: "支付方式（受控枚举）" }
+      - { name: price_idr, type: int, description: "价格（IDR）" }
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: card_variant, type: string, description: "卡片配色 / 变体（受控枚举）" }
+  - name: ktp_unlock_succeeded
+    source: SERVER
+    status: ACTIVE
+    domain: id_card
+    description: "KTP 高清解锁成功（只在服务端报：QRIS 到账或 PawCoin 扣款）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/profile/service/KtpUnlockAnalyticsListener.java
+    properties:
+      - { name: method, type: string, description: "支付方式（PAWCOIN / QRIS）" }
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: card_variant, type: string, description: "卡片配色 / 变体（受控枚举）" }
+
+  # ======== keepsake (1)
+  - name: keepsake_card_generated
+    source: APP
+    status: ACTIVE
+    domain: keepsake
+    description: "纪念卡（结果卡 / 配型卡 / 护照页 / 登机牌）出图完成；事件名来自常量 kKeepsakeCardGeneratedEvent"
+    code_ref: petgo_app/lib/features/keepsake/presentation/keepsake_card_style.dart
+    properties:
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: duration_ms, type: int, description: "耗时（毫秒）" }
+
+  # ======== notify (11)
+  - name: app_notification_center_viewed
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "打开通知中心"
+    code_ref: petgo_app/lib/features/notify/presentation/notification_center_page.dart
+    properties:
+      - { name: unread_count, type: int, description: "未读通知数" }
+      - { name: push_permission, type: string, description: "系统通知权限（granted / denied / not_asked）" }
+  - name: app_notification_item_tapped
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "点了通知中心的一条通知（所有类型都报）"
+    code_ref: petgo_app/lib/features/notify/presentation/notification_center_page.dart
+    properties:
+      - { name: notif_type, type: string, description: "通知类型（受控枚举）" }
+      - { name: level, type: string, description: "里程碑级别（S / M / L，仅里程碑类通知带）" }
+      - { name: actor_count, type: int, description: "后端文案条目的合并人数" }
+  - name: notification_follow_back_tapped
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "通知中心「新粉丝」条目里点了回关"
+    code_ref: petgo_app/lib/features/notify/presentation/notification_center_page.dart
+    properties: []
+  - name: notify_push_permission_toggled
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "系统通知开关发生变化（关 → 开或开 → 关）时上报"
+    code_ref: petgo_app/lib/features/notify/domain/push_permission_change_reporter.dart
+    properties:
+      - { name: enabled, type: bool, description: "开关目标态" }
+      - { name: from_screen, type: string, description: "发生开关变化时所在页面（受控枚举）" }
+  - name: ops_notification_opened
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "运营通知被打开（通知中心点击或系统推送点开）"
+    code_ref: petgo_app/lib/features/notify/presentation/notification_center_page.dart
+    properties:
+      - { name: campaign_id, type: string, description: "运营活动公开 token" }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: push_category_toggled
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "推送设置页切换某个推送分类的开关"
+    code_ref: petgo_app/lib/features/notify/presentation/push_settings_page.dart
+    properties:
+      - { name: category, type: string, description: "推送分类（小写）" }
+      - { name: enabled, type: bool, description: "开关目标态" }
+  - name: push_opened
+    source: APP
+    status: PLANNED
+    domain: notify
+    description: "推送被点开的统一事件（Epic 3，FR-18）"
+    properties:
+      - { name: push_type, type: string, description: "推送类型（受控枚举）" }
+      - { name: campaign_token, type: string, description: "运营推送的活动公开 token（仅运营推送带）" }
+  - name: push_permission_prompt_shown
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "App 内推送权限引导曝光"
+    code_ref: petgo_app/lib/features/notify/domain/push_permission_prompt.dart
+    properties:
+      - { name: trigger_point, type: string, description: "触发点（first_consult / profile_created / notification_center / vet_online）" }
+      - { name: prompt_type, type: string, description: "引导形式，恒为 in_app_guide" }
+  - name: push_permission_responded
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "用户对推送权限引导作出响应"
+    code_ref: petgo_app/lib/features/notify/domain/push_permission_prompt.dart
+    properties:
+      - { name: trigger_point, type: string, description: "触发点（first_consult / profile_created / notification_center / vet_online）" }
+      - { name: prompt_type, type: string, description: "引导形式，恒为 in_app_guide" }
+      - { name: result, type: string, description: "响应结果（granted / denied / settings_opened / dismissed）" }
+  - name: push_permission_state_reported
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "每次冷启动在通知权限流程落定后上报一次当前系统通知开关状态"
+    code_ref: petgo_app/lib/features/notify/domain/push_permission_state_reporter.dart
+    properties:
+      - { name: granted, type: bool, description: "系统通知开关是否打开" }
+  - name: push_settings_viewed
+    source: APP
+    status: ACTIVE
+    domain: notify
+    description: "打开推送设置页"
+    code_ref: petgo_app/lib/features/notify/presentation/push_settings_page.dart
+    properties:
+      - { name: system_permission, type: string, description: "系统通知开关（on / off）" }
+
+  # ======== ops (3)
+  - name: ops_popup_closed
+    source: APP
+    status: ACTIVE
+    domain: ops
+    description: "关闭运营弹窗"
+    code_ref: petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart
+    properties:
+      - { name: popup_id, type: string, description: "运营弹窗公开 token" }
+  - name: ops_popup_shown
+    source: APP
+    status: ACTIVE
+    domain: ops
+    description: "运营弹窗曝光"
+    code_ref: petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart
+    properties:
+      - { name: popup_id, type: string, description: "运营弹窗公开 token" }
+  - name: ops_popup_tapped
+    source: APP
+    status: ACTIVE
+    domain: ops
+    description: "点了运营弹窗"
+    code_ref: petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart
+    properties:
+      - { name: popup_id, type: string, description: "运营弹窗公开 token" }
+
+  # ======== passport (5)
+  - name: boarding_pass_unlocked
+    source: SERVER
+    status: ACTIVE
+    domain: passport
+    description: "登机牌单张解锁成功（只在服务端报）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/passport/service/BoardingPassAnalyticsListener.java
+    properties:
+      - { name: place_type, type: string, description: "场所类型（受控枚举）" }
+  - name: passport_card_shared
+    source: APP
+    status: ACTIVE
+    domain: passport
+    description: "分享护照页 / 登机牌卡"
+    code_ref: petgo_app/lib/features/boarding_pass/presentation/share/boarding_pass_share_card.dart
+    properties:
+      - { name: card_type, type: string, description: "卡种（受控枚举）" }
+      - { name: stamp_count, type: int, description: "已集章数" }
+  - name: passport_issued
+    source: SERVER
+    status: ACTIVE
+    domain: passport
+    description: "宠物护照签发"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/passport/service/PassportAnalyticsListener.java
+    properties:
+      - { name: passport_source, type: string, description: "护照来源（KTP / ISSUED）" }
+  - name: passport_snapshot_unlocked
+    source: SERVER
+    status: ACTIVE
+    domain: passport
+    description: "护照快照解锁成功（只在服务端报）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/passport/service/PassportSnapshotAnalyticsListener.java
+    properties:
+      - { name: stamp_count, type: int, description: "已集章数" }
+  - name: passport_stamped
+    source: SERVER
+    status: ACTIVE
+    domain: passport
+    description: "护照集到新章（打卡且为新章时）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/passport/service/PassportAnalyticsListener.java
+    properties:
+      - { name: place_type, type: string, description: "场所类型（受控枚举）" }
+      - { name: stamp_count, type: int, description: "已集章数" }
+
+  # ======== pawcoin (1)
+  - name: af_initiated_checkout
+    source: APP
+    status: ACTIVE
+    domain: pawcoin
+    description: "PawCoin 充值下单成功、尚未支付（AppsFlyer 标准名）"
+    code_ref: petgo_app/lib/features/pawcoin/presentation/recharge_page.dart
+    properties:
+      - { name: af_price, type: int, description: "充值档位的现金金额（IDR）" }
+      - { name: af_currency, type: string, description: "币种，恒为 IDR" }
+      - { name: af_content_id, type: string, description: "充值档位 id（af_initiated_checkout）或支付用途代号，如 VET_CONSULT（af_purchase）" }
+
+  # ======== payment (1)
+  - name: af_purchase
+    source: APP
+    status: ACTIVE
+    domain: payment
+    description: "现金（QRIS）付款成功的唯一事件，由 Analytics.capturePurchase 派生；覆盖充值 / 问诊 / AI 解锁 / KTP 高清 / 一次性解锁 / 商城订单。PawCoin 消费不报"
+    code_ref: petgo_app/lib/core/analytics/analytics.dart
+    properties:
+      - { name: af_revenue, type: int, description: "实付现金金额（IDR）；金额未知时不带" }
+      - { name: af_currency, type: string, description: "币种，恒为 IDR" }
+      - { name: af_content_id, type: string, description: "充值档位 id（af_initiated_checkout）或支付用途代号，如 VET_CONSULT（af_purchase）" }
+      - { name: af_quantity, type: int, description: "数量，恒为 1" }
+      - { name: af_order_id, type: string, description: "不可枚举的支付号 / 订单号，供投放渠道按订单去重" }
+
+  # ======== pet_slot (5)
+  - name: pet_readonly_banner_shown
+    source: APP
+    status: ACTIVE
+    domain: pet_slot
+    description: "宠物只读（名额到期）横幅曝光"
+    code_ref: petgo_app/lib/features/pet_slot/presentation/pet_readonly_banner.dart
+    properties: []
+  - name: pet_readonly_renew_tapped
+    source: APP
+    status: ACTIVE
+    domain: pet_slot
+    description: "只读宠物点了续租"
+    code_ref: petgo_app/lib/features/pet_slot/presentation/pet_readonly_block.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: pet_slot_full_shown
+    source: APP
+    status: ACTIVE
+    domain: pet_slot
+    description: "宠物名额已满提示曝光，并记录用户选择"
+    code_ref: petgo_app/lib/features/pet_slot/presentation/add_pet_flow.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: action, type: string, description: "用户选择（rent / upgrade / close）" }
+  - name: pet_slot_rent_paid
+    source: APP
+    status: ACTIVE
+    domain: pet_slot
+    description: "宠物名额月租到账成功（服务端确认后）"
+    code_ref: petgo_app/lib/features/pet_slot/presentation/pet_slot_purchase_flow.dart
+    properties:
+      - { name: count, type: int, description: "名额数" }
+      - { name: is_renewal, type: bool, description: "是否续租" }
+      - { name: channel, type: string, description: "支付渠道（pawcoin / qris，小写）" }
+  - name: pet_slot_rent_started
+    source: APP
+    status: ACTIVE
+    domain: pet_slot
+    description: "宠物名额月租发起（确认支付渠道时）"
+    code_ref: petgo_app/lib/features/pet_slot/presentation/pet_slot_purchase_flow.dart
+    properties:
+      - { name: count, type: int, description: "名额数" }
+      - { name: is_renewal, type: bool, description: "是否续租" }
+      - { name: channel, type: string, description: "支付渠道（pawcoin / qris，小写）" }
+
+  # ======== place (8)
+  - name: place_checkin
+    source: SERVER
+    status: ACTIVE
+    domain: place
+    description: "场所打卡成功"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/passport/service/PassportAnalyticsListener.java
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+      - { name: place_type, type: string, description: "场所类型（受控枚举）" }
+      - { name: is_new_stamp, type: bool, description: "本次打卡是否集到新章" }
+  - name: place_checkin_post_created
+    source: APP
+    status: ACTIVE
+    domain: place
+    description: "带打卡场所的帖子发布成功"
+    code_ref: petgo_app/lib/features/content/presentation/publish_compose_page.dart
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+      - { name: place_type, type: string, description: "场所类型（受控枚举，取不到不带）" }
+  - name: place_comment_posted
+    source: APP
+    status: ACTIVE
+    domain: place
+    description: "场所评论发布成功"
+    code_ref: petgo_app/lib/features/place/presentation/place_comment_composer.dart
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+  - name: place_created
+    source: APP
+    status: ACTIVE
+    domain: place
+    description: "标记新场所提交成功"
+    code_ref: petgo_app/lib/features/place/presentation/place_mark_page.dart
+    properties:
+      - { name: type, type: string, description: "场所类型（受控枚举）" }
+      - { name: tag_count, type: int, description: "标签数" }
+      - { name: photo_count, type: int, description: "照片数" }
+  - name: place_detail_viewed
+    source: APP
+    status: ACTIVE
+    domain: place
+    description: "打开场所详情页"
+    code_ref: petgo_app/lib/features/place/presentation/place_detail_page.dart
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+      - { name: from, type: string, description: "来源页面（受控枚举）" }
+  - name: place_photo_added
+    source: APP
+    status: ACTIVE
+    domain: place
+    description: "给场所添加照片"
+    code_ref: petgo_app/lib/features/place/presentation/place_detail_page.dart
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+  - name: place_shared
+    source: APP
+    status: ACTIVE
+    domain: place
+    description: "分享场所"
+    code_ref: petgo_app/lib/features/place/presentation/place_detail_page.dart
+    properties:
+      - { name: place_id, type: string, description: "场所公开 token" }
+  - name: place_stamp_ceremony_played
+    source: APP
+    status: ACTIVE
+    domain: place
+    description: "打卡集章仪式播放结束（或被跳过 / 超时）"
+    code_ref: petgo_app/lib/features/place/presentation/place_stamp_ceremony_page.dart
+    properties:
+      - { name: result, type: string, description: "仪式播放结果（受控枚举）" }
+
+  # ======== profile (24)
+  - name: age_card_generated
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "年龄卡出图成功"
+    code_ref: petgo_app/lib/features/profile/presentation/age_card_page.dart
+    properties:
+      - { name: species, type: string, description: "物种（dog / cat）" }
+      - { name: size_class, type: string, description: "体型档（受控枚举）" }
+      - { name: canvas, type: string, description: "卡片画布（square / story）" }
+  - name: age_card_shared
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "年龄卡经系统分享面板分享成功（取消不报）"
+    code_ref: petgo_app/lib/features/profile/presentation/age_card_page.dart
+    properties:
+      - { name: channel, type: string, description: "系统分享面板回调的渠道" }
+      - { name: species, type: string, description: "物种（dog / cat）" }
+      - { name: size_class, type: string, description: "体型档（受控枚举）" }
+      - { name: canvas, type: string, description: "卡片画布（square / story）" }
+  - name: diary_guest_create_profile_cta_tapped
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "游客点了任一「建档引导」入口"
+    code_ref: petgo_app/lib/features/profile/presentation/diary_guest_page.dart
+    properties:
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: diary_guest_page_viewed
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "未登录用户看到 Diary 游客种草页"
+    code_ref: petgo_app/lib/features/profile/presentation/diary_guest_page.dart
+    properties:
+      - { name: session_first, type: bool, description: "是否本次启动首次看到" }
+  - name: diary_only_toggled
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "Diary 页切换「只看 Diary」开关"
+    code_ref: petgo_app/lib/features/profile/presentation/growth_archive_page.dart
+    properties:
+      - { name: "on", type: bool, description: "开关目标态（键名就是 on；必须加引号，否则 yaml 1.1 解析成布尔 true）" }
+  - name: diary_timeline_item_tapped
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "点了 Diary 时间线上的某条"
+    code_ref: petgo_app/lib/features/profile/presentation/growth_archive_page.dart
+    properties:
+      - { name: item_type, type: string, description: "时间线条目类型（受控枚举，缺省 UNSPECIFIED）" }
+  - name: diary_view_mode_switched
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "Diary 在时间线与日历之间切换"
+    code_ref: petgo_app/lib/features/profile/presentation/growth_archive_page.dart
+    properties:
+      - { name: to_view, type: string, description: "切换后的视图（timeline / calendar）" }
+  - name: diary_visitor_viewed
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "进入他人宠物的站内访客视图"
+    code_ref: petgo_app/lib/features/profile/presentation/visitor_archive_view.dart
+    properties:
+      - { name: from, type: string, description: "来源页面（受控枚举）" }
+  - name: me_phone_save_error_shown
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "保存手机号失败提示曝光"
+    code_ref: petgo_app/lib/features/me/presentation/phone_edit_sheet.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: me_phone_save_succeeded
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "保存手机号成功（不带号码）"
+    code_ref: petgo_app/lib/features/me/presentation/phone_edit_sheet.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+      - { name: is_first_time, type: bool, description: "是否首次填写手机号" }
+  - name: milestone_achieved
+    source: SERVER
+    status: ACTIVE
+    domain: profile
+    description: "里程碑达成（判定在服务端）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/profile/service/MilestoneAnalyticsListener.java
+    properties:
+      - { name: code, type: string, description: "里程碑代号" }
+      - { name: level, type: string, description: "里程碑级别（S / M / L）" }
+      - { name: path, type: string, description: "里程碑点亮路径（受控枚举）" }
+  - name: milestone_celebration_shown
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "里程碑庆祝页曝光"
+    code_ref: petgo_app/lib/features/profile/presentation/widgets/milestone_celebration.dart
+    properties:
+      - { name: code, type: string, description: "里程碑代号" }
+      - { name: level, type: string, description: "里程碑级别（S / M / L）" }
+      - { name: path, type: string, description: "里程碑点亮路径（受控枚举）" }
+  - name: milestone_share_created
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "生成里程碑分享"
+    code_ref: petgo_app/lib/features/profile/domain/milestone_share.dart
+    properties:
+      - { name: code, type: string, description: "里程碑代号" }
+      - { name: level, type: string, description: "里程碑级别（枚举名）" }
+  - name: milestone_share_failed
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "里程碑分享失败"
+    code_ref: petgo_app/lib/features/profile/presentation/widgets/milestone_celebration.dart
+    properties:
+      - { name: code, type: string, description: "里程碑代号" }
+      - { name: stage, type: string, description: "失败环节（受控枚举）" }
+  - name: pet_added
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "新增宠物成功"
+    code_ref: petgo_app/lib/features/profile/presentation/pet_profile_create_page.dart
+    properties:
+      - { name: pet_index, type: int, description: "这是账号下第几只宠物" }
+      - { name: slot_source, type: string, description: "名额来源（default / level / rent）" }
+  - name: pet_card_cta_outcome
+    source: H5
+    status: ACTIVE
+    domain: profile
+    description: "宠物名片 H5 页 CTA 跳转结果（靠时序推断，尽力上报、会丢）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/profile/web/CardTrackController.java
+    properties:
+      - { name: page_state, type: string, description: "名片页状态（full / empty / gone）" }
+      - { name: ua_platform, type: string, description: "访客平台（ios / android / desktop / other）" }
+      - { name: outcome, type: string, description: "CTA 跳转结果（app_opened / store_redirect / desktop_fallback）" }
+  - name: pet_card_cta_tapped
+    source: H5
+    status: ACTIVE
+    domain: profile
+    description: "宠物名片 H5 页点了吸底 CTA（浏览器经 /p/track 上报，白名单见 CardTrackController）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/profile/web/CardTrackController.java
+    properties:
+      - { name: page_state, type: string, description: "名片页状态（full / empty / gone）" }
+      - { name: ua_platform, type: string, description: "访客平台（ios / android / desktop / other）" }
+  - name: pet_card_link_opened
+    source: H5
+    status: ACTIVE
+    domain: profile
+    description: "宠物名片 H5 页被打开（访客事件，服务端上报）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/profile/service/CardPageAnalytics.java
+    properties:
+      - { name: page_state, type: string, description: "名片页状态（full / empty / gone）" }
+      - { name: ua_platform, type: string, description: "访客平台（ios / android / desktop / other）" }
+      - { name: referrer_host, type: string, description: "来源域名（仅主机名）" }
+  - name: pet_card_share_tapped
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "Diary 头部点了分享宠物名片"
+    code_ref: petgo_app/lib/features/profile/presentation/growth_archive_page.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+      - { name: has_milestone, type: bool, description: "是否已有建档外的里程碑" }
+  - name: pet_profile_create_submitted
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "提交创建宠物档案"
+    code_ref: petgo_app/lib/features/profile/presentation/pet_profile_create_page.dart
+    properties:
+      - { name: species, type: string, description: "物种（dog / cat）" }
+  - name: pet_switched
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "切换当前宠物"
+    code_ref: petgo_app/lib/features/profile/presentation/widgets/pet_switcher.dart
+    properties:
+      - { name: from_pet_id, type: int, description: "切换前的宠物 id（无当前宠物时不带）" }
+      - { name: to_pet_id, type: int, description: "切换后的宠物 id" }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: phone_prompt_responded
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "对手机号软提示作出响应"
+    code_ref: petgo_app/lib/features/me/domain/phone_soft_prompt.dart
+    properties:
+      - { name: action, type: string, description: "响应（submitted / skipped / dismissed）" }
+  - name: phone_prompt_shown
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "手机号软提示曝光"
+    code_ref: petgo_app/lib/features/me/domain/phone_soft_prompt.dart
+    properties:
+      - { name: trigger, type: string, description: "触发条件（受控枚举，如 day3_open）" }
+  - name: triage_category_jump_tapped
+    source: APP
+    status: ACTIVE
+    domain: profile
+    description: "健康记录列表点了跳转到对应分类"
+    code_ref: petgo_app/lib/features/profile/presentation/health_list_page.dart
+    properties:
+      - { name: record_type, type: string, description: "健康记录类型（受控枚举）" }
+
+  # ======== social (13)
+  - name: follow_list_viewed
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "打开关注 / 粉丝列表"
+    code_ref: petgo_app/lib/features/social/presentation/follow_list_page.dart
+    properties:
+      - { name: tab, type: string, description: "Tab 名（受控枚举）" }
+      - { name: is_self, type: bool, description: "是否本人的列表" }
+      - { name: is_empty, type: bool, description: "列表是否为空" }
+  - name: pet_card_tapped
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "点了推荐宠物卡 / 主页上的宠物卡"
+    code_ref: petgo_app/lib/features/profile/presentation/widgets/recommended_pet_card.dart
+    properties:
+      - { name: from, type: string, description: "来源页面（受控枚举）" }
+  - name: pet_follow
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "追更（关注）宠物成功（服务端确认后报）"
+    code_ref: petgo_app/lib/features/social/presentation/widgets/pet_follow_button.dart
+    properties:
+      - { name: pet_id, type: int, description: "宠物 id" }
+      - { name: owner_id, type: string, description: "宠物主人的公开 token（指向一个用户）", user_identifier: true }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: is_following_owner, type: bool, description: "是否已关注宠物主人" }
+  - name: pet_unfollow
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "取消追更宠物成功（服务端确认后报）"
+    code_ref: petgo_app/lib/features/social/presentation/widgets/pet_follow_button.dart
+    properties:
+      - { name: pet_id, type: int, description: "宠物 id" }
+      - { name: owner_id, type: string, description: "宠物主人的公开 token（指向一个用户）", user_identifier: true }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: is_following_owner, type: bool, description: "是否已关注宠物主人" }
+  - name: social_account_report_submitted
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "举报账号提交成功"
+    code_ref: petgo_app/lib/features/social/presentation/account_report_sheet.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+      - { name: reason, type: string, description: "举报理由（账号维度五类受控词表）" }
+  - name: social_blocklist_report_tapped
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "黑名单页点了「⋯ → 举报」（不等提交）"
+    code_ref: petgo_app/lib/features/social/presentation/blocked_users_page.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: social_user_hide_submitted
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "拉黑或举报后隐藏关系建立成功"
+    code_ref: petgo_app/lib/shared/widgets/mini_profile_sheet.dart
+    properties:
+      - { name: origin, type: string, description: "隐藏关系的来源（BLOCK / REPORT）" }
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: social_user_unhide_submitted
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "解除拉黑成功"
+    code_ref: petgo_app/lib/features/social/presentation/blocked_users_page.dart
+    properties:
+      - { name: origin, type: string, description: "隐藏关系的来源（BLOCK / REPORT）" }
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: suggested_follow_shown
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "推荐关注列表曝光"
+    code_ref: petgo_app/lib/features/social/presentation/widgets/suggested_follow_list.dart
+    properties: []
+  - name: user_badge_tooltip_opened
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "点开用户标签徽章的说明浮层"
+    code_ref: petgo_app/lib/shared/widgets/user_tag_row.dart
+    properties:
+      - { name: badge_id, type: string, description: "徽章代号" }
+      - { name: position, type: string, description: "所在位置（受控枚举：feed / detail / comment / mini_profile）" }
+  - name: user_followed
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "关注用户成功（服务端确认后报）"
+    code_ref: petgo_app/lib/features/social/presentation/widgets/follow_button.dart
+    properties:
+      - { name: target_user_id, type: int, description: "对方用户的内部 id", user_identifier: true }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: is_follow_back, type: bool, description: "点击前对方是否已关注我" }
+  - name: user_profile_viewed
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "打开他人公开主页"
+    code_ref: petgo_app/lib/features/user_profile/presentation/public_profile_page.dart
+    properties:
+      - { name: target_user_id, type: int, description: "对方用户的内部 id", user_identifier: true }
+      - { name: from, type: string, description: "来源页面（受控枚举）" }
+  - name: user_unfollowed
+    source: APP
+    status: ACTIVE
+    domain: social
+    description: "取消关注用户成功（服务端确认后报）"
+    code_ref: petgo_app/lib/features/social/presentation/widgets/follow_button.dart
+    properties:
+      - { name: target_user_id, type: int, description: "对方用户的内部 id", user_identifier: true }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+      - { name: is_follow_back, type: bool, description: "点击前对方是否已关注我" }
+
+  # ======== tailsonality (15)
+  - name: tailsonality_badge_equipped
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "佩戴 Tailsonality 徽章"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_results_page.dart
+    properties:
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+  - name: tailsonality_card_shared
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "分享 Tailsonality 结果卡"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/share/result_share_card.dart
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+      - { name: is_unlocked, type: bool, description: "完整解读是否已解锁" }
+  - name: tailsonality_completed
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "完成 Tailsonality 测试"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_quiz_page.dart
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+  - name: tailsonality_match_card_shared
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "分享配型卡"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/share/match_share_card.dart
+    properties:
+      - { name: owner_type, type: string, description: "主人类型代号" }
+      - { name: pet_type, type: string, description: "宠物类型代号" }
+      - { name: match_level, type: int, description: "配型相同维度数" }
+  - name: tailsonality_match_entered
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "进入配型页"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_match_page.dart
+    properties:
+      - { name: pet_type, type: string, description: "宠物类型代号" }
+  - name: tailsonality_match_unlock_initiated
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "配型发起解锁"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_unlock_analytics.dart
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+      - { name: price, type: int, description: "价格（PawCoin / IDR）" }
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+      - { name: method, type: string, description: "支付方式（受控枚举）" }
+      - { name: product, type: string, description: "解锁商品（受控枚举）" }
+  - name: tailsonality_match_unlock_viewed
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "配型解锁付费墙曝光"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_unlock_analytics.dart
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+      - { name: price, type: int, description: "价格（PawCoin / IDR）" }
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+  - name: tailsonality_match_unlocked
+    source: SERVER
+    status: ACTIVE
+    domain: tailsonality
+    description: "配型单独解锁成功（只在服务端报；完整解读顺带开配型不另报）。注意：现行 AnalyticsEventGuard 白名单未收此名，PostHog 实际收不到"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/tailsonality/service/TailsonalityUnlockAnalyticsListener.java
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+  - name: tailsonality_owner_type_set
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "配型页设置主人类型"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_match_page.dart
+    properties:
+      - { name: owner_type, type: string, description: "主人类型代号" }
+      - { name: pet_type, type: string, description: "宠物类型代号" }
+      - { name: match_level, type: int, description: "配型相同维度数" }
+  - name: tailsonality_paywall_abandoned
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "离开付费墙未解锁"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_unlock_analytics.dart
+    properties:
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+  - name: tailsonality_retake_confirmed
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "确认重测"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_retake.dart
+    properties: []
+  - name: tailsonality_started
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "开始 Tailsonality 测试"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_quiz_page.dart
+    properties: []
+  - name: tailsonality_unlock_initiated
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "完整解读发起解锁"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_unlock_analytics.dart
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+      - { name: price, type: int, description: "价格（PawCoin / IDR）" }
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+      - { name: method, type: string, description: "支付方式（受控枚举）" }
+  - name: tailsonality_unlock_viewed
+    source: APP
+    status: ACTIVE
+    domain: tailsonality
+    description: "完整解读付费墙曝光"
+    code_ref: petgo_app/lib/features/tailsonality/presentation/tailsonality_unlock_analytics.dart
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+      - { name: price, type: int, description: "价格（PawCoin / IDR）" }
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+  - name: tailsonality_unlocked
+    source: SERVER
+    status: ACTIVE
+    domain: tailsonality
+    description: "Tailsonality 完整解读解锁成功（只在服务端报）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/tailsonality/service/TailsonalityUnlockAnalyticsListener.java
+    properties:
+      - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }
+      - { name: result_index, type: int, description: "该宠物第几次测试" }
+
+  # ======== toko (50)
+  - name: shop_payment_declined
+    source: SERVER
+    status: ACTIVE
+    domain: toko
+    description: "商城订单支付被网关拒绝 / 下单失败"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/shop/order/service/ShopPaymentAnalyticsListener.java
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: failure_category, type: string, description: "支付失败类别（GATEWAY_DECLINED / EXPIRED / USER_CANCELLED）" }
+  - name: shop_payment_expired
+    source: SERVER
+    status: ACTIVE
+    domain: toko
+    description: "商城订单二维码超时未付"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/shop/order/service/ShopPaymentAnalyticsListener.java
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: failure_category, type: string, description: "支付失败类别（GATEWAY_DECLINED / EXPIRED / USER_CANCELLED）" }
+  - name: shop_payment_intent_created
+    source: SERVER
+    status: ACTIVE
+    domain: toko
+    description: "商城订单支付意图创建（事务提交后）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/shop/order/service/ShopPaymentAnalyticsListener.java
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: has_pawcoin, type: bool, description: "是否含 PawCoin 段（混合支付）" }
+  - name: shop_payment_paid
+    source: SERVER
+    status: ACTIVE
+    domain: toko
+    description: "商城订单到账（网关 / 纯币 / 零元单 / 重下单都覆盖）"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/shop/order/service/ShopPaymentAnalyticsListener.java
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+  - name: shop_payment_user_cancelled
+    source: SERVER
+    status: ACTIVE
+    domain: toko
+    description: "商城订单支付被用户取消"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/shop/order/service/ShopPaymentAnalyticsListener.java
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: failure_category, type: string, description: "支付失败类别（GATEWAY_DECLINED / EXPIRED / USER_CANCELLED）" }
+  - name: toko_add_to_cart_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "商品详情 SKU 选择面板点「加入购物车」"
+    code_ref: petgo_app/lib/features/shop/presentation/product_detail_page_v3.dart
+    properties:
+      - { name: product_token, type: string, description: "商品公开 token" }
+      - { name: sku_token, type: string, description: "SKU 公开 token" }
+  - name: toko_banner_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "Toko Banner 曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/widgets/shop_banner_carousel.dart
+    properties:
+      - { name: banner_id, type: string, description: "Banner 公开 id" }
+      - { name: position, type: int, description: "Banner 轮播位次（从 1 起）" }
+  - name: toko_banner_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "点了 Toko Banner"
+    code_ref: petgo_app/lib/features/shop/presentation/toko_page_v3.dart
+    properties:
+      - { name: banner_id, type: string, description: "Banner 公开 id" }
+      - { name: target_type, type: string, description: "Banner 跳转目标类型（受控枚举）" }
+      - { name: position, type: int, description: "Banner 轮播位次（从 1 起）" }
+  - name: toko_buy_now_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "商品详情 SKU 选择面板点「立即购买」"
+    code_ref: petgo_app/lib/features/shop/presentation/product_detail_page_v3.dart
+    properties:
+      - { name: product_token, type: string, description: "商品公开 token" }
+      - { name: sku_token, type: string, description: "SKU 公开 token" }
+  - name: toko_cart_clear_invalid_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "购物车点了清空失效商品"
+    code_ref: petgo_app/lib/features/shop/presentation/cart_page_v3.dart
+    properties: []
+  - name: toko_cart_item_removed
+    source: APP
+    status: PLANNED
+    domain: toko
+    description: "购物车移除商品（手动删除或清空失效商品，按商品各报一次；下单后离开购物车不报）（Story 3.3）"
+    properties:
+      - { name: reason, type: string, description: "移除原因（manual / invalid_cleared）" }
+  - name: toko_cart_page_viewed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "打开购物车页"
+    code_ref: petgo_app/lib/features/shop/presentation/cart_page_v3.dart
+    properties: []
+  - name: toko_cart_quantity_changed
+    source: APP
+    status: PLANNED
+    domain: toko
+    description: "购物车修改商品数量（Story 3.3）"
+    properties: []
+  - name: toko_checkout_out_of_range_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "结算页地址超出配送范围提示曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/checkout_page_v3.dart
+    properties: []
+  - name: toko_checkout_page_viewed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "打开结算页"
+    code_ref: petgo_app/lib/features/shop/presentation/checkout_page_v3.dart
+    properties:
+      - { name: entry, type: string, description: "入口（受控枚举）" }
+  - name: toko_checkout_submit_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "结算页点了提交订单"
+    code_ref: petgo_app/lib/features/shop/presentation/checkout_page_v3.dart
+    properties: []
+  - name: toko_coupon_claimed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "领券成功"
+    code_ref: petgo_app/lib/features/shop/presentation/toko_page_v3.dart
+    properties:
+      - { name: coupon_id, type: string, description: "券 / 券活动公开 token" }
+      - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
+  - name: toko_coupon_expiry_push_opened
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "券快过期推送被点开（通知中心列表点击不报）"
+    code_ref: petgo_app/lib/core/push/push_service.dart
+    properties:
+      - { name: coupon_count, type: int, description: "本次涉及的券张数" }
+  - name: toko_coupon_expiry_push_sent
+    source: SERVER
+    status: ACTIVE
+    domain: toko
+    description: "券快过期提醒推送确实发出时"
+    code_ref: petgo-backend/src/main/java/com/tailtopia/shop/coupon/service/CouponExpiryReminderService.java
+    properties:
+      - { name: coupon_count, type: int, description: "本次涉及的券张数" }
+  - name: toko_delivery_area_selected
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "商品详情选择配送地区"
+    code_ref: petgo_app/lib/features/shop/presentation/product_detail_page_v3.dart
+    properties:
+      - { name: serviceable, type: bool, description: "所选地区是否可配送" }
+  - name: toko_delivery_exception_cs_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "物流异常时点了联系客服"
+    code_ref: petgo_app/lib/features/order/presentation/order_list_page_v2.dart
+    properties:
+      - { name: exception_type, type: string, description: "物流异常类型（受控枚举，未知为 unknown）" }
+  - name: toko_delivery_exception_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "订单物流异常提示曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_order_detail_page_v3.dart
+    properties:
+      - { name: exception_type, type: string, description: "物流异常类型（受控枚举，未知为 unknown）" }
+  - name: toko_newbie_coupon_popup_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "新人券弹窗曝光"
+    code_ref: petgo_app/lib/features/shop/coupon/presentation/newbie_popup.dart
+    properties:
+      - { name: coupon_id, type: string, description: "券 / 券活动公开 token" }
+  - name: toko_newbie_coupon_popup_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "新人券弹窗点击"
+    code_ref: petgo_app/lib/features/shop/coupon/presentation/newbie_popup.dart
+    properties:
+      - { name: coupon_id, type: string, description: "券 / 券活动公开 token" }
+      - { name: action, type: string, description: "点击动作（close / register）" }
+  - name: toko_order_cancel_succeeded
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "取消订单成功"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_order_detail_page_v3.dart
+    properties: []
+  - name: toko_order_cancel_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "点了取消订单"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_order_detail_page_v3.dart
+    properties: []
+  - name: toko_order_detail_viewed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "打开订单详情"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_order_detail_page_v3.dart
+    properties: []
+  - name: toko_order_pay_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "点了去支付"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
+    properties: []
+  - name: toko_order_payment_failed_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "订单支付失败提示曝光"
+    code_ref: petgo_app/lib/features/order/presentation/order_list_page_v2.dart
+    properties: []
+  - name: toko_order_payment_succeeded
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "订单支付成功（App 侦测到）"
+    code_ref: petgo_app/lib/features/shop/presentation/checkout_page_v3.dart
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: attribution_source, type: string, description: "订单归因来源（受控枚举）" }
+  - name: toko_order_receipt_confirm_succeeded
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "确认收货成功"
+    code_ref: petgo_app/lib/features/order/presentation/order_list_page_v2.dart
+    properties: []
+  - name: toko_order_receipt_confirm_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "点了确认收货"
+    code_ref: petgo_app/lib/features/order/presentation/order_list_page_v2.dart
+    properties: []
+  - name: toko_order_submitted
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "订单提交成功"
+    code_ref: petgo_app/lib/features/shop/presentation/checkout_page_v3.dart
+    properties:
+      - { name: item_count, type: int, description: "订单行数" }
+      - { name: items, type: list, description: "订单行：[{sku_id: SKU token, qty, entry_source, trigger_type}]，无价格、无名称" }
+      - { name: coupon_ids, type: list, description: "所用券的公开 token 列表" }
+      - { name: coin_used, type: bool, description: "是否用了 PawCoin 抵扣" }
+      - { name: courier, type: string, description: "物流商与服务代号（小写，courier_service）" }
+      - { name: shipping_fee, type: int, description: "运费（IDR）" }
+      - { name: insurance, type: bool, description: "是否加购运费险" }
+  - name: toko_order_tracking_copy_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "复制物流单号"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_order_detail_page_v3.dart
+    properties: []
+  - name: toko_order_tracking_site_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "打开物流商查询页"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_order_detail_page_v3.dart
+    properties: []
+  - name: toko_out_of_stock_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "商品缺货提示曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/product_detail_page_v3.dart
+    properties:
+      - { name: product_token, type: string, description: "商品公开 token" }
+      - { name: sku_token, type: string, description: "SKU 公开 token" }
+  - name: toko_payment_declined_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "支付被网关拒绝提示曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: attribution_source, type: string, description: "订单归因来源（受控枚举）" }
+      - { name: has_pawcoin, type: bool, description: "是否含 PawCoin 段（混合支付）" }
+      - { name: failure_category, type: string, description: "支付失败类别（GATEWAY_DECLINED / EXPIRED / USER_CANCELLED）" }
+  - name: toko_payment_expired_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "支付超时提示曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: attribution_source, type: string, description: "订单归因来源（受控枚举）" }
+      - { name: has_pawcoin, type: bool, description: "是否含 PawCoin 段（混合支付）" }
+      - { name: failure_category, type: string, description: "支付失败类别（GATEWAY_DECLINED / EXPIRED / USER_CANCELLED）" }
+  - name: toko_payment_qr_saved
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "保存支付二维码"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
+    properties: []
+  - name: toko_payment_qr_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "订单支付二维码曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: attribution_source, type: string, description: "订单归因来源（受控枚举）" }
+      - { name: has_pawcoin, type: bool, description: "是否含 PawCoin 段（混合支付）" }
+  - name: toko_payment_retry_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "支付失败后点了重试"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: attribution_source, type: string, description: "订单归因来源（受控枚举）" }
+      - { name: has_pawcoin, type: bool, description: "是否含 PawCoin 段（混合支付）" }
+  - name: toko_payment_sheet_dismissed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "关闭支付面板"
+    code_ref: petgo_app/lib/features/shop/presentation/shop_payment_launcher.dart
+    properties:
+      - { name: pay_channel, type: string, description: "支付渠道（PAWCOIN / QRIS 等，未知为 UNKNOWN）" }
+      - { name: attribution_source, type: string, description: "订单归因来源（受控枚举）" }
+      - { name: has_pawcoin, type: bool, description: "是否含 PawCoin 段（混合支付）" }
+  - name: toko_product_detail_viewed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "打开商品详情"
+    code_ref: petgo_app/lib/features/shop/presentation/product_detail_page_v3.dart
+    properties:
+      - { name: product_token, type: string, description: "商品公开 token" }
+  - name: toko_product_shown
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "商品卡曝光"
+    code_ref: petgo_app/lib/features/shop/presentation/widgets/shop_product_masonry.dart
+    properties:
+      - { name: product_token, type: string, description: "商品公开 token" }
+      - { name: zone, type: string, description: "商品出现的区块（受控枚举）" }
+  - name: toko_profile_reco_tapped
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "点了个人页推荐商品"
+    code_ref: petgo_app/lib/features/shop/presentation/widgets/shop_reco_grid.dart
+    properties:
+      - { name: zone, type: string, description: "商品出现的区块（受控枚举）" }
+      - { name: product_id, type: string, description: "商品公开 token" }
+  - name: toko_refund_method_submitted
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "退款方式提交成功"
+    code_ref: petgo_app/lib/features/shop/presentation/refund_method_page_v2.dart
+    properties:
+      - { name: reason, type: string, description: "退款原因（受控枚举）" }
+      - { name: is_retry, type: bool, description: "是否失败后重新提交" }
+      - { name: destination, type: string, description: "退款去向（to_bank / to_pawcoin）" }
+      - { name: channel, type: string, description: "退款渠道（小写）" }
+  - name: toko_refund_method_viewed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "打开退款方式页"
+    code_ref: petgo_app/lib/features/shop/presentation/refund_method_page_v2.dart
+    properties:
+      - { name: reason, type: string, description: "退款原因（受控枚举）" }
+      - { name: is_retry, type: bool, description: "是否失败后重新提交" }
+  - name: toko_return_request_submitted
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "退货申请提交成功"
+    code_ref: petgo_app/lib/features/shop/presentation/return_request_page_v2.dart
+    properties: []
+  - name: toko_return_request_viewed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "打开退货申请页"
+    code_ref: petgo_app/lib/features/shop/presentation/return_request_page_v2.dart
+    properties: []
+  - name: toko_tab_viewed
+    source: APP
+    status: ACTIVE
+    domain: toko
+    description: "进入 Toko（商城）Tab"
+    code_ref: petgo_app/lib/features/shop/presentation/toko_page_v3.dart
+    properties: []
