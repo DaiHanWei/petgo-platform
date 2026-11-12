@@ -360,6 +360,9 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> with WidgetsBindingObs
       payload: _payload,
       orderRef: widget.orderRef,
       expired: _expired,
+      // 修复线（2026-11-12 产品）：抽屉不显示「Waiting for payment…」转圈行 —— 到账后抽屉自动关闭，
+      // 一直转的圈反而让人以为卡住了。充值页 / 问诊付款页仍沿用组件默认（显示）。
+      showWaiting: false,
       expiredBody: widget.expiredBody,
       failed: _failed,
       onRetry: (_failed && !_expired && !_retrying && !_retryClosed && widget.onRetryCode != null) ? _retryCode : null,
