@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@link AnalyticsClient} 的三条硬约束原先<b>只写在 javadoc 里，没有一行代码守着</b>。
  * 本类把「事件名」与「属性」两道闸落成代码，接在唯一上报通路
- * {@link PostHogAnalyticsClient#capture} 上。
+ * {@link SelfHostedAnalyticsClient}（{@code captureForUser} / {@code captureForVisitor}）上
+ * （analytics-pipeline Story 1.9 起；此前是已删除的 PostHog 实现）。
  *
  * <p><b>两级粒度别写反</b>：
  * <table>
@@ -67,6 +68,9 @@ public class AnalyticsEventGuard {
             com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PASSPORT_STAMPED,
             // ---- V1.3.2 Story 3.2：Tailsonality 解锁成功（只在服务端报）----
             com.tailtopia.tailsonality.service.TailsonalityUnlockAnalyticsListener.EVENT_UNLOCKED,
+            // ---- 配型单独解锁（2026-10-09 起代码在发，但此前漏登记，事件一直被本护栏整条丢掉）。
+            //      analytics-pipeline Story 1.9 补登：事件清单已登记为 ACTIVE / SERVER，属性键与上一条相同 ----
+            com.tailtopia.tailsonality.service.TailsonalityUnlockAnalyticsListener.EVENT_MATCH_UNLOCKED,
             // ---- V1.3.2 Story 3.4：护照快照解锁成功（事件名暂定，待产品确认）----
             com.tailtopia.passport.service.PassportSnapshotAnalyticsListener.EVENT_UNLOCKED,
             // ---- V1.3.2 Story 3.5：登机牌单张解锁成功（事件名暂定，待产品确认）----
@@ -77,8 +81,8 @@ public class AnalyticsEventGuard {
     /**
      * 属性键白名单。
      *
-     * <p>⚠️ {@code distinct_id} 与 {@code app_env} <b>不在此列</b>：它们是框架注入的，
-     * 在本护栏之后才加进 properties，不受本白名单约束。
+     * <p>analytics-pipeline Story 1.9 起服务端事件写自建库，不再注入 {@code distinct_id} / {@code app_env} 等
+     * PostHog 专用键；用户 / 访客标识走 {@code events_raw} 的专用列，不进 properties。
      */
     private static final Set<String> ALLOWED_PROPERTY_KEYS = Set.of(
             // ---- 既有 8 个 ----
@@ -121,7 +125,7 @@ public class AnalyticsEventGuard {
 
     /**
      * 事件名是否放行。不放行时打一行 WARN（<b>只记事件名，不记 properties</b>——照
-     * {@code PostHogAnalyticsClient} 的既有纪律）。
+     * {@link SelfHostedAnalyticsClient} 的既有纪律）。
      */
     public boolean allowsEvent(String event) {
         if (event != null && ALLOWED_EVENTS.contains(event)) {

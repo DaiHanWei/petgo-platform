@@ -2,6 +2,7 @@ package com.tailtopia.passport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -76,7 +77,7 @@ class PassportSnapshotGranterTest {
         new PassportSnapshotAnalyticsListener(analytics, repo)
                 .onUnlocked(new KeepsakeUnlockedEvent(7L, KeepsakeSku.PASSPORT_SNAP, 5L, 2000L, PayChannel.QRIS));
         ArgumentCaptor<Map> p = ArgumentCaptor.forClass(Map.class);
-        verify(analytics).capture(anyString(), eq("passport_snapshot_unlocked"), p.capture());
+        verify(analytics).captureForUser(anyLong(), eq("passport_snapshot_unlocked"), p.capture());
         assertThat(p.getValue()).isEqualTo(Map.of("stamp_count", 3));
         AnalyticsEventGuard guard = new AnalyticsEventGuard();
         assertThat(guard.allowsEvent("passport_snapshot_unlocked")).isTrue();

@@ -38,18 +38,29 @@ import org.springframework.http.HttpHeaders;
 @Import(PostSharePageAnalyticsIntegrationTest.CapturingAnalytics.class)
 class PostSharePageAnalyticsIntegrationTest extends ApiIntegrationTest {
 
-    /** 用会记账的假客户端替掉真 PostHog 实现（做法同 1-4 的 CardPageAnalyticsIntegrationTest）。 */
+    /** 用会记账的假客户端替掉真实现 SelfHostedAnalyticsClient（做法同 1-4 的 CardPageAnalyticsIntegrationTest）。 */
     @TestConfiguration
     static class CapturingAnalytics {
         static final List<Captured> EVENTS = new ArrayList<>();
 
-        record Captured(String distinctId, String event, Map<String, Object> props) {
+        /** {@code visitorId}：H5 访客 id（走 captureForVisitor）；用户事件为 null。 */
+        record Captured(String visitorId, String event, Map<String, Object> props) {
         }
 
         @Bean
         @Primary
         AnalyticsClient capturingAnalyticsClient() {
-            return (distinctId, event, props) -> EVENTS.add(new Captured(distinctId, event, props));
+            return new AnalyticsClient() {
+                @Override
+                public void captureForUser(long userId, String event, Map<String, Object> props) {
+                    EVENTS.add(new Captured(null, event, props));
+                }
+
+                @Override
+                public void captureForVisitor(String visitorId, String event, Map<String, Object> props) {
+                    EVENTS.add(new Captured(visitorId, event, props));
+                }
+            };
         }
     }
 
@@ -139,6 +150,6 @@ class PostSharePageAnalyticsIntegrationTest extends ApiIntegrationTest {
         User author = newUser();
         mvc.perform(get("/c/" + shareToken(author))).andExpect(status().isOk());
 
-        assertThat(only("post_share_link_opened").distinctId()).isNotBlank();
+        assertThat(only("post_share_link_opened").visitorId()).isNotBlank();
     }
 }

@@ -3,7 +3,6 @@ package com.tailtopia.tailsonality.service;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.event.KeepsakeUnlockedEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import com.tailtopia.tailsonality.domain.TailsonalityResult;
 import com.tailtopia.tailsonality.repository.TailsonalityResultRepository;
 import java.util.LinkedHashMap;
@@ -56,7 +55,7 @@ public class TailsonalityUnlockAnalyticsListener {
             if (row != null) {
                 p.put("result_index", resultService.indexOf(row.getPetProfileId(), row.getId()));
             }
-            analytics.capture(AnalyticsDistinctId.of(e.userId()),
+            analytics.captureForUser(e.userId(),
                     e.sku() == KeepsakeSku.TS_MATCH ? EVENT_MATCH_UNLOCKED : EVENT_UNLOCKED, p);
         } catch (RuntimeException ex) {
             log.warn("tailsonality unlock analytics skipped refId={}", e.refId(), ex);

@@ -1,6 +1,7 @@
 package com.tailtopia.passport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,14 +34,14 @@ class PassportAnalyticsListenerTest {
                 java.util.List.of(5L), 11L));
 
         ArgumentCaptor<Map> checkin = ArgumentCaptor.forClass(Map.class);
-        verify(analytics).capture(anyString(), eq("place_checkin"), checkin.capture());
+        verify(analytics).captureForUser(anyLong(), eq("place_checkin"), checkin.capture());
         assertThat(checkin.getValue()).containsEntry("place_id", "tok".repeat(10))
                 .containsEntry("place_type", "PARK").containsEntry("is_new_stamp", true);
         // V1.3.4 Story 4.2 · AC2.3：事件虽带 petIds，埋点不带任何宠物标识（AD-19）。
         assertThat(checkin.getValue().keySet())
                 .isEqualTo(java.util.Set.of("place_id", "place_type", "is_new_stamp"));
         ArgumentCaptor<Map> stamped = ArgumentCaptor.forClass(Map.class);
-        verify(analytics).capture(anyString(), eq("passport_stamped"), stamped.capture());
+        verify(analytics).captureForUser(anyLong(), eq("passport_stamped"), stamped.capture());
         assertThat(stamped.getValue()).containsEntry("place_type", "PARK").containsEntry("stamp_count", 3);
         // 全部键都在白名单里（漏登记 = 静默丢键）。
         assertThat(guard.filterProperties(checkin.getValue())).isEqualTo(checkin.getValue());
@@ -51,7 +52,7 @@ class PassportAnalyticsListenerTest {
     void repeatVisitDoesNotEmitStamped() {
         listener.onCheckedIn(new PlaceCheckedInEvent(7L, "t".repeat(32), PlaceType.CAFE, false, 3,
                 java.util.List.of(5L), 11L));
-        verify(analytics, never()).capture(anyString(), eq("passport_stamped"), anyMap());
+        verify(analytics, never()).captureForUser(anyLong(), eq("passport_stamped"), anyMap());
     }
 
     @Test
@@ -59,7 +60,7 @@ class PassportAnalyticsListenerTest {
     void issuedCarriesOnlyTheSource() {
         listener.onIssued(new PassportIssuedEvent(7L, PassportSource.KTP));
         ArgumentCaptor<Map> p = ArgumentCaptor.forClass(Map.class);
-        verify(analytics).capture(anyString(), eq("passport_issued"), p.capture());
+        verify(analytics).captureForUser(anyLong(), eq("passport_issued"), p.capture());
         assertThat(p.getValue()).isEqualTo(Map.of("passport_source", "KTP"));
     }
 

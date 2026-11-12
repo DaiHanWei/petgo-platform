@@ -36,18 +36,29 @@ import org.springframework.http.MediaType;
 @Import(CardPageAnalyticsIntegrationTest.CapturingAnalytics.class)
 class CardPageAnalyticsIntegrationTest extends ApiIntegrationTest {
 
-    /** 用一个会记账的假客户端替掉真的 PostHog 实现，好断言「报了什么」。 */
+    /** 用一个会记账的假客户端替掉真实现（SelfHostedAnalyticsClient），好断言「报了什么」。 */
     @TestConfiguration
     static class CapturingAnalytics {
         static final List<Captured> EVENTS = new ArrayList<>();
 
-        record Captured(String distinctId, String event, Map<String, Object> props) {
+        /** {@code visitorId}：H5 访客 id（走 captureForVisitor）；用户事件为 null。 */
+        record Captured(String visitorId, String event, Map<String, Object> props) {
         }
 
         @Bean
         @Primary
         AnalyticsClient capturingAnalyticsClient() {
-            return (distinctId, event, props) -> EVENTS.add(new Captured(distinctId, event, props));
+            return new AnalyticsClient() {
+                @Override
+                public void captureForUser(long userId, String event, Map<String, Object> props) {
+                    EVENTS.add(new Captured(null, event, props));
+                }
+
+                @Override
+                public void captureForVisitor(String visitorId, String event, Map<String, Object> props) {
+                    EVENTS.add(new Captured(visitorId, event, props));
+                }
+            };
         }
     }
 
@@ -147,13 +158,13 @@ class CardPageAnalyticsIntegrationTest extends ApiIntegrationTest {
         assertThat(issued.getValue()).hasSize(32);
         assertThat(issued.isHttpOnly()).isTrue();
 
-        String firstId = only("pet_card_link_opened").distinctId();
+        String firstId = only("pet_card_link_opened").visitorId();
         assertThat(firstId).isEqualTo(issued.getValue());
 
         // 带着 cookie 再来一次 → 必须是同一个 id，否则漏斗串不起来
         CapturingAnalytics.EVENTS.clear();
         mvc.perform(get("/p/" + token).cookie(issued)).andExpect(status().isOk());
-        assertThat(only("pet_card_link_opened").distinctId()).isEqualTo(firstId);
+        assertThat(only("pet_card_link_opened").visitorId()).isEqualTo(firstId);
     }
 
     /** 🛡 失效页那条路径也要种 cookie，否则「打开了失效链接」这批人串不进漏斗。 */
@@ -170,10 +181,10 @@ class CardPageAnalyticsIntegrationTest extends ApiIntegrationTest {
         String token = createProfileAndGetToken(newUser());
 
         mvc.perform(get("/p/" + token)).andExpect(status().isOk());
-        String a = only("pet_card_link_opened").distinctId();
+        String a = only("pet_card_link_opened").visitorId();
         CapturingAnalytics.EVENTS.clear();
         mvc.perform(get("/p/" + token)).andExpect(status().isOk()); // 另一个访客（无 cookie）
-        String b = only("pet_card_link_opened").distinctId();
+        String b = only("pet_card_link_opened").visitorId();
 
         assertThat(a)
                 .as("同一分享页的不同访客被算成了同一个人 —— 漏斗会失真且历史数据回不来")
@@ -203,8 +214,8 @@ class CardPageAnalyticsIntegrationTest extends ApiIntegrationTest {
         assertThat(only("pet_card_cta_tapped").props()).containsEntry("page_state", "full");
         assertThat(only("pet_card_cta_outcome").props()).containsEntry("outcome", "app_opened");
         // 两个事件属于同一个访客 —— 漏斗才成立
-        assertThat(only("pet_card_cta_tapped").distinctId())
-                .isEqualTo(only("pet_card_cta_outcome").distinctId());
+        assertThat(only("pet_card_cta_tapped").visitorId())
+                .isEqualTo(only("pet_card_cta_outcome").visitorId());
     }
 
     /** 🛡 事件名白名单外的一律丢弃，且**仍回 204**（回 4xx 等于帮探测者摸白名单）。 */
@@ -258,7 +269,7 @@ class CardPageAnalyticsIntegrationTest extends ApiIntegrationTest {
                                 """))
                 .andExpect(status().isNoContent());
 
-        assertThat(only("pet_card_cta_tapped").distinctId())
+        assertThat(only("pet_card_cta_tapped").visitorId())
                 .as("事件被挂到了请求体伪造的 id 上")
                 .isEqualTo(vid.getValue());
     }

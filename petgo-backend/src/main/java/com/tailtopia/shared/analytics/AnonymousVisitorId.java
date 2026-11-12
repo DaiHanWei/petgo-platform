@@ -84,8 +84,9 @@ public final class AnonymousVisitorId {
     /**
      * 形态校验：只认自己发出去的那种格式。
      * 🛡 防的是有人把任意字符串塞进 cookie 当 distinctId 灌脏数据。
+     * 包内可见：{@link SelfHostedAnalyticsClient} 入队前复核（analytics-pipeline Story 1.9）。
      */
-    private static boolean isWellFormed(String value) {
+    static boolean isWellFormed(String value) {
         if (value == null || value.length() != 32) {
             return false;
         }

@@ -10,7 +10,6 @@ import com.tailtopia.profile.event.IdHdPawcoinUnlockedEvent;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -70,7 +69,7 @@ public class KtpUnlockAnalyticsListener {
         putCardStyle(p, safeCard(() -> purchases.findFirstByPaymentIntentId(e.intentId())
                 .map(IdCardHdPurchase::getCardId)
                 .flatMap(idCards::findById)));
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_SUCCEEDED, p);
+        analytics.captureForUser(e.userId(), EVENT_SUCCEEDED, p);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -79,7 +78,7 @@ public class KtpUnlockAnalyticsListener {
         if (e.cardId() != null) {
             putCardStyle(p, safeCard(() -> idCards.findById(e.cardId())));
         }
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_SUCCEEDED, p);
+        analytics.captureForUser(e.userId(), EVENT_SUCCEEDED, p);
     }
 
     /** 查卡；任何异常都吞掉（埋点不能影响任何流程），只记一行不含业务数据的警告。 */
@@ -111,7 +110,7 @@ public class KtpUnlockAnalyticsListener {
         }
         Map<String, Object> p = props(e.channel() == null ? null : e.channel().name());
         p.put("failure_reason", e.failureCategory().name());
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_FAILED, p);
+        analytics.captureForUser(e.userId(), EVENT_FAILED, p);
     }
 
     private static Map<String, Object> props(String method) {

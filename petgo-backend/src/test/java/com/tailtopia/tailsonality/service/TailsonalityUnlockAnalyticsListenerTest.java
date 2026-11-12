@@ -1,6 +1,7 @@
 package com.tailtopia.tailsonality.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -51,7 +52,7 @@ class TailsonalityUnlockAnalyticsListenerTest {
 
         listener.onUnlocked(event(KeepsakeSku.TAILSONALITY));
         ArgumentCaptor<Map> p = ArgumentCaptor.forClass(Map.class);
-        verify(analytics).capture(anyString(), eq("tailsonality_unlocked"), p.capture());
+        verify(analytics).captureForUser(anyLong(), eq("tailsonality_unlocked"), p.capture());
         assertThat(p.getValue()).isEqualTo(Map.of("role_code", "ENTJ-H", "result_index", 2));
         assertThat(guard.filterProperties(p.getValue())).isEqualTo(p.getValue());
         assertThat(guard.allowsEvent("tailsonality_unlocked")).isTrue();
@@ -60,14 +61,14 @@ class TailsonalityUnlockAnalyticsListenerTest {
     @Test
     void otherSkusAreIgnored() {
         listener.onUnlocked(event(KeepsakeSku.PASSPORT_SNAP));
-        verify(analytics, never()).capture(anyString(), anyString(), anyMap());
+        verify(analytics, never()).captureForUser(anyLong(), anyString(), anyMap());
     }
 
     @Test
     void failuresNeverPropagate() {
         when(results.findById(42L)).thenThrow(new IllegalStateException("db down"));
         listener.onUnlocked(event(KeepsakeSku.TAILSONALITY));
-        doThrow(new RuntimeException("x")).when(analytics).capture(anyString(), anyString(), anyMap());
+        doThrow(new RuntimeException("x")).when(analytics).captureForUser(anyLong(), anyString(), anyMap());
         org.mockito.Mockito.doReturn(Optional.empty()).when(results).findById(42L);
         listener.onUnlocked(event(KeepsakeSku.TAILSONALITY));
     }

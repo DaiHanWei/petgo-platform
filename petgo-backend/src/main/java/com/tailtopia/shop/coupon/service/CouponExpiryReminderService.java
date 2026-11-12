@@ -5,7 +5,6 @@ import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.preference.PushPreferenceService;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import com.tailtopia.shop.coupon.repository.CouponExpiryNotifyLogDao;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -120,7 +119,7 @@ public class CouponExpiryReminderService {
             notifications.sendWithCopy(userId, NotificationType.COUPON_EXPIRING, CouponExpiryCopy.COPY_KEY, args,
                     copy.render("title", args, locale), copy.render("body", args, locale), String.valueOf(n));
             if (willPush) {
-                analytics.capture(AnalyticsDistinctId.of(userId), "toko_coupon_expiry_push_sent",
+                analytics.captureForUser(userId, "toko_coupon_expiry_push_sent",
                         Map.of("coupon_count", n));
             }
             return Outcome.SENT;

@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  * H5 分享页的埋点上报口（V1.1.6 Story 1.4 · E-25 / E-26）。
  *
  * <p><b>为什么需要它</b>：「点了 CTA」和「跳转结果」都发生在浏览器里，服务端看不到。
- * 浏览器用 {@code navigator.sendBeacon} 打到这里，由后端转发 PostHog ——
+ * 浏览器用 {@code navigator.sendBeacon} 打到这里，由后端写入自建埋点库（analytics-pipeline 1.9 起；此前转发 PostHog）——
  * 这样<b>浏览器只与自家域通信</b>，不加载任何第三方统计脚本（沿用 V1.1.2 服务端埋点的既定原则）。
  *
  * <h2>🛡 这是全项目唯一一个「对公网开放的写入口」，边界必须扎紧</h2>

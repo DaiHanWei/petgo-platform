@@ -60,6 +60,8 @@ class AnalyticsEventGuardTest {
         assertThat(guard.allowsEvent("passport_stamped")).isTrue();
         // V1.3.2 Story 3.2：Tailsonality 解锁成功（服务端发）
         assertThat(guard.allowsEvent("tailsonality_unlocked")).isTrue();
+        // analytics-pipeline Story 1.9：配型单独解锁此前漏登记被整条丢，现已补进白名单
+        assertThat(guard.allowsEvent("tailsonality_match_unlocked")).isTrue();
         // V1.3.2 Story 3.4：护照快照解锁成功（服务端发，事件名暂定）
         assertThat(guard.allowsEvent("passport_snapshot_unlocked")).isTrue();
         // V1.3.2 Story 3.5：登机牌单张解锁成功（服务端发，事件名暂定）

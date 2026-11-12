@@ -25,14 +25,19 @@ class MilestoneAnalyticsTest {
 
     /** 记录上报内容的假客户端（不出网）。 */
     private static final class RecordingClient implements AnalyticsClient {
-        record Captured(String distinctId, String event, Map<String, Object> props) {
+        record Captured(long userId, String event, Map<String, Object> props) {
         }
 
         final List<Captured> captured = new ArrayList<>();
 
         @Override
-        public void capture(String distinctId, String event, Map<String, Object> properties) {
-            captured.add(new Captured(distinctId, event, properties));
+        public void captureForUser(long userId, String event, Map<String, Object> properties) {
+            captured.add(new Captured(userId, event, properties));
+        }
+
+        @Override
+        public void captureForVisitor(String visitorId, String event, Map<String, Object> properties) {
+            throw new AssertionError("里程碑是登录用户事件，不应走访客通道");
         }
     }
 
@@ -154,15 +159,14 @@ class MilestoneAnalyticsTest {
         }
 
         @Test
-        @DisplayName("distinctId 是哈希，不是自增 id（护栏：对外标识不可枚举）")
-        void distinctIdIsHashed() {
+        @DisplayName("走 captureForUser，user_id 为宠物主人（埋点库内部用，不对外；user_key 由自建实现统一哈希）")
+        void reportsOwnerUserId() {
             RecordingClient client = new RecordingClient();
             new MilestoneAnalyticsListener(client).onMilestoneCompleted(
                     new MilestoneCompletedEvent(42L, "C-S1", MilestoneLevel.S, "档案创建",
                             MilestoneCompletionSource.SYSTEM_AUTO, 3L));
 
-            String id = client.captured.getFirst().distinctId();
-            assertThat(id).isEqualTo(AnalyticsDistinctId.of(42L)).hasSize(64).doesNotContain("42");
+            assertThat(client.captured.getFirst().userId()).isEqualTo(42L);
         }
     }
 
@@ -187,8 +191,6 @@ class MilestoneAnalyticsTest {
         }
     }
 
-    // 「凭证缺省时不出网」与整条 HTTP 线路形态改由
-    // com.tailtopia.shared.analytics.PostHogAnalyticsClientTest 用 MockRestServiceServer 把守。
-    // 原先放在这里的那个用例是恒绿的：请求真发出去也会被 client 内部的 catch 吞掉
-    // （code-review 2026-08-04）。
+    // 入队形态（source / user_id / user_key 等）由 com.tailtopia.shared.analytics.SelfHostedAnalyticsClientTest 把守
+    // （analytics-pipeline Story 1.9 起 PostHog 实现已删除）。
 }

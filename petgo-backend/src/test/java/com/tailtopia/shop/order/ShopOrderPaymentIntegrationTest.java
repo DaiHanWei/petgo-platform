@@ -81,8 +81,8 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     /**
      * Story 1-2：捕获服务端埋点实参。
      *
-     * <p>用 spy 而不是 mock —— 真实现（{@code PostHogAnalyticsClient}）在测试环境
-     * {@code key} 为空 ⇒ {@code isEnabled()} 为 false ⇒ 本就不出网，spy 只负责记下调用。
+     * <p>用 spy 而不是 mock —— 真实现（{@code SelfHostedAnalyticsClient}，analytics-pipeline Story 1.9）只把事件放进
+     * 内存接收队列（埋点库不可用时直接丢弃计数），不出网、不抛异常，spy 只负责记下调用。
      */
     @MockitoSpyBean
     private AnalyticsClient analytics;
@@ -558,7 +558,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     private List<String> capturedEvents() {
         ArgumentCaptor<String> event = ArgumentCaptor.forClass(String.class);
         Mockito.verify(analytics, Mockito.atLeast(0))
-                .capture(Mockito.anyString(), event.capture(), Mockito.any(Map.class));
+                .captureForUser(Mockito.anyLong(), event.capture(), Mockito.any(Map.class));
         return event.getAllValues();
     }
 
@@ -592,7 +592,7 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_paid");
         assertThat(props.getValue().keySet())
                 .isSubsetOf("pay_channel", "has_pawcoin");
-        // V1.4.2（2026-11-08）：金额不进 PostHog，事件照发。
+        // V1.4.2（2026-11-08）：金额不进埋点，事件照发。
         assertThat(props.getValue()).doesNotContainKey("order_amount");
     }
 
@@ -754,14 +754,13 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
 
     @SuppressWarnings("unchecked")
     /**
-     * ⚠️ 必须带 {@code timeout}：{@link AnalyticsClient#capture} 自身是
-     * {@code @Async("analyticsExecutor")}（ShopPaymentAnalyticsListener 的注释说明了为什么不再叠一层），
-     * 裸 {@code verify} 在全量跑时会赶在异步任务执行前断言 —— 单跑绿、全量偶发红。
+     * {@code timeout} 是历史遗留的保险：Story 1.9 起 {@link AnalyticsClient#captureForUser} 在调用线程同步入队，
+     * 不再有 {@code @Async}；已满足时 {@code timeout} 立即返回，不拖慢用例，留着防将来监听器再改成异步。
      */
     private ArgumentCaptor<Map<String, Object>> propsCaptorFor(String event) {
         ArgumentCaptor<Map<String, Object>> props = ArgumentCaptor.forClass(Map.class);
         Mockito.verify(analytics, Mockito.timeout(5_000))
-                .capture(Mockito.anyString(), Mockito.eq(event), props.capture());
+                .captureForUser(Mockito.anyLong(), Mockito.eq(event), props.capture());
         return props;
     }
 

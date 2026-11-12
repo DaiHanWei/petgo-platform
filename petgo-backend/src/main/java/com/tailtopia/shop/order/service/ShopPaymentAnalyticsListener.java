@@ -4,7 +4,6 @@ import com.tailtopia.pay.domain.PaymentFailureCategory;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import com.tailtopia.shop.order.event.ShopOrderPaidEvent;
 import com.tailtopia.shop.order.event.ShopPaymentIntentCreatedEvent;
 import java.util.LinkedHashMap;
@@ -20,10 +19,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * 客户端埋点会被广告拦截与丢包吃掉，服务端这一份是权威分母。
  *
  * <p>🔴 <b>刻意不加 {@code @Async}</b>（与 epics 1-2 AC3 的有意偏离，照
- * {@code MilestoneAnalyticsListener} 的既有先例）：{@link AnalyticsClient#capture} 自身已是
- * {@code @Async("analyticsExecutor")}，监听器再叠一层等于往同一个有界池投两次任务
- * （core 1 / max 2 / queue 200 / {@code DiscardPolicy}，见 {@code AsyncConfig}），
- * 只会更早触发丢弃。
+ * {@code MilestoneAnalyticsListener} 的既有先例）：{@link AnalyticsClient#captureForUser} 只是内存非阻塞入队
+ * （analytics-pipeline Story 1.9 起写自建埋点接收队列，满了丢弃计数），调用立刻返回、不抛异常，
+ * 无需再叠一层异步。
  *
  * <p>🔴 <b>本监听器不写库</b>，所以不涉及 {@code REQUIRES_NEW}。若后续有人想在这里顺手落库，
  * 必须先回看 {@code notify/service/NotificationService} 的 AFTER_COMMIT 吞写事故。
@@ -42,7 +40,7 @@ public class ShopPaymentAnalyticsListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIntentCreated(ShopPaymentIntentCreatedEvent e) {
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), "shop_payment_intent_created",
+        analytics.captureForUser(e.userId(), "shop_payment_intent_created",
                 props(e.payChannel(), e.hasPawcoin()));
     }
 
@@ -55,7 +53,7 @@ public class ShopPaymentAnalyticsListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPaid(ShopOrderPaidEvent e) {
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), "shop_payment_paid",
+        analytics.captureForUser(e.userId(), "shop_payment_paid",
                 props(e.payChannel(), null));
     }
 
@@ -78,7 +76,7 @@ public class ShopPaymentAnalyticsListener {
         Map<String, Object> props =
                 props(e.channel() == null ? null : e.channel().name(), null);
         props.put("failure_category", category.name());
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), event, props);
+        analytics.captureForUser(e.userId(), event, props);
     }
 
     /**

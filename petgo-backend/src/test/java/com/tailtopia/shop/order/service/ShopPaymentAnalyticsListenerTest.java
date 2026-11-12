@@ -8,7 +8,6 @@ import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import com.tailtopia.shop.order.event.ShopOrderPaidEvent;
 import com.tailtopia.shop.order.event.ShopPaymentIntentCreatedEvent;
 import java.util.ArrayList;
@@ -25,14 +24,24 @@ import org.junit.jupiter.api.Test;
  */
 class ShopPaymentAnalyticsListenerTest {
 
-    /** 记录式桩：把每次 capture 的三个实参原样留下，供逐键断言。 */
-    private record Captured(String distinctId, String event, Map<String, Object> props) {
+    /** 记录式桩：把每次 captureForUser 的三个实参原样留下，供逐键断言。 */
+    private record Captured(long userId, String event, Map<String, Object> props) {
     }
 
     private final List<Captured> captured = new ArrayList<>();
 
     private final AnalyticsClient recording =
-            (distinctId, event, props) -> captured.add(new Captured(distinctId, event, props));
+            new AnalyticsClient() {
+                @Override
+                public void captureForUser(long userId, String event, Map<String, Object> props) {
+                    captured.add(new Captured(userId, event, props));
+                }
+
+                @Override
+                public void captureForVisitor(String visitorId, String event, Map<String, Object> props) {
+                    throw new AssertionError("服务端用户事件不应走访客通道");
+                }
+            };
 
     private final ShopPaymentAnalyticsListener listener =
             new ShopPaymentAnalyticsListener(recording);
@@ -144,14 +153,11 @@ class ShopPaymentAnalyticsListenerTest {
     }
 
     @Test
-    @DisplayName("distinctId 走 AnalyticsDistinctId.of，不自造、不下发原始 userId")
-    void distinctIdIsTheHashedForm() {
+    @DisplayName("走 captureForUser，user_id 原样交给自建实现（user_key 由 SelfHostedAnalyticsClient 统一哈希）")
+    void reportsTheOrderOwnerUserId() {
         listener.onOrderPaid(orderPaid("QRIS", "GATEWAY"));
 
-        assertThat(captured).singleElement().satisfies(c -> {
-            assertThat(c.distinctId()).isEqualTo(AnalyticsDistinctId.of(UID));
-            assertThat(c.distinctId()).doesNotContain(String.valueOf(UID));
-        });
+        assertThat(captured).singleElement().satisfies(c -> assertThat(c.userId()).isEqualTo(UID));
     }
 
     @Test

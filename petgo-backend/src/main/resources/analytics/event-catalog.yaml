@@ -1584,7 +1584,7 @@ events:
     source: SERVER
     status: ACTIVE
     domain: tailsonality
-    description: "配型单独解锁成功（只在服务端报；完整解读顺带开配型不另报）。注意：现行 AnalyticsEventGuard 白名单未收此名，PostHog 实际收不到"
+    description: "配型单独解锁成功（只在服务端报；完整解读顺带开配型不另报）。AnalyticsEventGuard 白名单原先漏收此名，analytics-pipeline Story 1.9 已补"
     code_ref: petgo-backend/src/main/java/com/tailtopia/tailsonality/service/TailsonalityUnlockAnalyticsListener.java
     properties:
       - { name: role_code, type: string, description: "Tailsonality 完整代号，如 ENTJ-H" }

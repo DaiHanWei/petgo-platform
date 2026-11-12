@@ -13,7 +13,6 @@ import com.tailtopia.profile.event.IdHdPawcoinUnlockedEvent;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import com.tailtopia.shared.analytics.AnalyticsEventGuard;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,12 +27,22 @@ import static org.mockito.Mockito.when;
 /** L0：KTP（身份证高清图）付费漏斗服务端埋点（2026-09-25）。 */
 class KtpUnlockAnalyticsListenerTest {
 
-    private record Captured(String distinctId, String event, Map<String, Object> props) {
+    private record Captured(long userId, String event, Map<String, Object> props) {
     }
 
     private final List<Captured> captured = new ArrayList<>();
     private final AnalyticsClient recording =
-            (distinctId, event, props) -> captured.add(new Captured(distinctId, event, props));
+            new AnalyticsClient() {
+                @Override
+                public void captureForUser(long userId, String event, Map<String, Object> props) {
+                    captured.add(new Captured(userId, event, props));
+                }
+
+                @Override
+                public void captureForVisitor(String visitorId, String event, Map<String, Object> props) {
+                    throw new AssertionError("服务端用户事件不应走访客通道");
+                }
+            };
     private final IdCardRepository idCards = mock(IdCardRepository.class);
     private final IdCardHdPurchaseRepository purchases = mock(IdCardHdPurchaseRepository.class);
     private final KtpUnlockAnalyticsListener listener =
@@ -60,7 +69,7 @@ class KtpUnlockAnalyticsListenerTest {
         listener.onPaid(paid(PaymentPurpose.ID_HD));
 
         assertThat(captured).singleElement().satisfies(c -> {
-            assertThat(c.distinctId()).isEqualTo(AnalyticsDistinctId.of(UID));
+            assertThat(c.userId()).isEqualTo(UID);
             assertThat(c.event()).isEqualTo("ktp_unlock_succeeded");
             assertThat(c.props()).containsExactlyInAnyOrderEntriesOf(
                     Map.of("method", "QRIS"));

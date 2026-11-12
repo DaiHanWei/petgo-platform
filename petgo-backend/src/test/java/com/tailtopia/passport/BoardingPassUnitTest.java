@@ -314,7 +314,7 @@ class BoardingPassUnitTest {
         new BoardingPassAnalyticsListener(analytics, jdbc)
                 .onUnlocked(new KeepsakeUnlockedEvent(USER, KeepsakeSku.BOARDING_PASS, 5L, 1000L, PayChannel.QRIS));
         ArgumentCaptor<Map> p = ArgumentCaptor.forClass(Map.class);
-        verify(analytics).capture(anyString(), eq("boarding_pass_unlocked"), p.capture());
+        verify(analytics).captureForUser(anyLong(), eq("boarding_pass_unlocked"), p.capture());
         assertThat(p.getValue()).isEqualTo(Map.of("place_type", "PARK"));
         AnalyticsEventGuard guard = new AnalyticsEventGuard();
         assertThat(guard.allowsEvent("boarding_pass_unlocked")).isTrue();

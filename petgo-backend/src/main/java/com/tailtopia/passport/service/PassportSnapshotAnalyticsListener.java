@@ -4,7 +4,6 @@ import com.tailtopia.passport.repository.PassportSnapshotRepository;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.event.KeepsakeUnlockedEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -43,7 +42,7 @@ public class PassportSnapshotAnalyticsListener {
             Map<String, Object> p = new LinkedHashMap<>();
             snapshots.findById(e.refId()).ifPresent(s -> p.put("stamp_count", s.getStampCount()));
             // V1.4.2：金额不再进 PostHog（2026-11-08 拍板，事件保留只去金额）。
-            analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_UNLOCKED, p);
+            analytics.captureForUser(e.userId(), EVENT_UNLOCKED, p);
         } catch (RuntimeException ex) {
             log.warn("passport snapshot analytics skipped refId={}", e.refId(), ex);
         }

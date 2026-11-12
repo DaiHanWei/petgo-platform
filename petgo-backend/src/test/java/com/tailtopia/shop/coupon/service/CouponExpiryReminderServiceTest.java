@@ -18,7 +18,6 @@ import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.preference.PushPreferenceService;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import com.tailtopia.shop.coupon.repository.CouponExpiryNotifyLogDao;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -90,7 +89,7 @@ class CouponExpiryReminderServiceTest {
     private void verifyNothingSent() {
         verify(notifications, never()).sendWithCopy(anyLong(), any(), anyString(), any(), anyString(), anyString(),
                 anyString());
-        verify(analytics, never()).capture(anyString(), anyString(), anyMap());
+        verify(analytics, never()).captureForUser(anyLong(), anyString(), anyMap());
     }
 
     @Test
@@ -126,7 +125,7 @@ class CouponExpiryReminderServiceTest {
                 eq("COUPON_EXPIRING"), args.capture(), eq("3 kupon segera berakhir"),
                 eq("Pakai sebelum 6 Nov, 23:59. Jangan sampai hangus!"), eq("3"));
         assertThat(args.getValue()).containsExactly("3", "6 Nov, 23:59");
-        verify(analytics).capture(AnalyticsDistinctId.of(UID), "toko_coupon_expiry_push_sent",
+        verify(analytics).captureForUser(UID, "toko_coupon_expiry_push_sent",
                 Map.of("coupon_count", 3));
     }
 
@@ -137,7 +136,7 @@ class CouponExpiryReminderServiceTest {
         assertThat(service.remindUser(UID, NOW, UNTIL)).isEqualTo(CouponExpiryReminderService.Outcome.SENT);
         verify(notifications).sendWithCopy(eq(UID), eq(NotificationType.COUPON_EXPIRING), eq("COUPON_EXPIRING"),
                 any(), anyString(), anyString(), eq("1"));
-        verify(analytics, never()).capture(anyString(), anyString(), anyMap());
+        verify(analytics, never()).captureForUser(anyLong(), anyString(), anyMap());
     }
 
     @Test
@@ -147,7 +146,7 @@ class CouponExpiryReminderServiceTest {
         service.remindUser(UID, NOW, UNTIL);
         verify(notifications).sendWithCopy(eq(UID), eq(NotificationType.COUPON_EXPIRING), anyString(), any(),
                 anyString(), anyString(), eq("1"));
-        verify(analytics, never()).capture(anyString(), anyString(), anyMap());
+        verify(analytics, never()).captureForUser(anyLong(), anyString(), anyMap());
     }
 
     @Test
@@ -167,7 +166,7 @@ class CouponExpiryReminderServiceTest {
         assertThat(service.remindUser(UID, NOW, UNTIL)).isEqualTo(CouponExpiryReminderService.Outcome.FAILED);
         verify(notifications, times(1)).sendWithCopy(anyLong(), any(), anyString(), any(), anyString(), anyString(),
                 anyString());
-        verify(analytics, never()).capture(anyString(), anyString(), anyMap());
+        verify(analytics, never()).captureForUser(anyLong(), anyString(), anyMap());
         assertThat(txCount).isEqualTo(1);
     }
 

@@ -3,7 +3,6 @@ package com.tailtopia.passport.service;
 import com.tailtopia.passport.event.PassportIssuedEvent;
 import com.tailtopia.place.event.PlaceCheckedInEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -41,20 +40,20 @@ public class PassportAnalyticsListener {
             checkin.put("place_type", type);
         }
         checkin.put("is_new_stamp", e.isNewStamp());
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_PLACE_CHECKIN, checkin);
+        analytics.captureForUser(e.userId(), EVENT_PLACE_CHECKIN, checkin);
         if (e.isNewStamp()) {
             Map<String, Object> stamped = new LinkedHashMap<>();
             if (type != null) {
                 stamped.put("place_type", type);
             }
             stamped.put("stamp_count", e.stampCount());
-            analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_PASSPORT_STAMPED, stamped);
+            analytics.captureForUser(e.userId(), EVENT_PASSPORT_STAMPED, stamped);
         }
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssued(PassportIssuedEvent e) {
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_PASSPORT_ISSUED,
+        analytics.captureForUser(e.userId(), EVENT_PASSPORT_ISSUED,
                 Map.of("passport_source", e.source().name()));
     }
 }

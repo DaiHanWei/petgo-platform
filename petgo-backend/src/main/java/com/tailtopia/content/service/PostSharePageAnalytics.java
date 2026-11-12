@@ -14,8 +14,9 @@ import org.springframework.stereotype.Component;
  * 回答不了，整条 FR-73 的漏斗断在最后一环（E-11 点分享 → E-12 出图 → E-13 递出 → ？）。
  *
  * <p><b>服务端上报</b>，与名片页 {@link CardPageAnalytics} 同一条路子：复用既有
- * {@code PostHogAnalyticsClient}，<b>不引入任何前端统计 SDK</b>（V1.1.2 起的既定原则）。
- * 匿名 {@code distinct_id} 也复用同一个 {@code tt_vid} cookie —— 同一个访客先点名片、
+ * {@code AnalyticsClient#captureForVisitor}（analytics-pipeline Story 1.9 起写入自建埋点库），
+ * <b>不引入任何前端统计 SDK</b>（V1.1.2 起的既定原则）。
+ * 匿名访客 id 也复用同一个 {@code tt_vid} cookie —— 同一个访客先点名片、
  * 后点某条内容，在看板上是同一个人。
  *
  * <h2>🔴 三个属性里只有一个做得出来</h2>
@@ -69,8 +70,8 @@ public class PostSharePageAnalytics {
         if (visitorId == null || visitorId.isBlank()) {
             return; // 没有匿名标识就不报 —— 报了也串不进漏斗，只会污染绝对值
         }
-        // AnalyticsClient 自身已是 @Async + 吞异常；这里不再加任何阻塞或重试。
-        analytics.capture(visitorId, EVENT_OPENED, props);
+        // AnalyticsClient 只做内存非阻塞入队、任何失败吞掉并计数（analytics-pipeline 1.9）；这里不再加任何阻塞或重试。
+        analytics.captureForVisitor(visitorId, EVENT_OPENED, props);
     }
 
     /**

@@ -3,7 +3,6 @@ package com.tailtopia.passport.service;
 import com.tailtopia.purchase.domain.KeepsakeSku;
 import com.tailtopia.purchase.event.KeepsakeUnlockedEvent;
 import com.tailtopia.shared.analytics.AnalyticsClient;
-import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +47,7 @@ public class BoardingPassAnalyticsListener {
                 p.put("place_type", type.get(0));
             }
             // V1.4.2：金额不再进 PostHog（2026-11-08 拍板，事件保留只去金额）。
-            analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_UNLOCKED, p);
+            analytics.captureForUser(e.userId(), EVENT_UNLOCKED, p);
         } catch (RuntimeException ex) {
             log.warn("boarding pass analytics skipped refId={}", e.refId(), ex);
         }

@@ -83,8 +83,8 @@ public class CardPageAnalytics {
         if (visitorId == null || visitorId.isBlank()) {
             return; // 没有匿名标识就不报 —— 报了也串不进漏斗，只会污染绝对值
         }
-        // AnalyticsClient 自身已是 @Async + 吞异常；这里不再加任何阻塞或重试。
-        analytics.capture(visitorId, event, properties);
+        // AnalyticsClient 只做内存非阻塞入队、任何失败吞掉并计数（analytics-pipeline 1.9）；这里不再加任何阻塞或重试。
+        analytics.captureForVisitor(visitorId, event, properties);
     }
 
     /**

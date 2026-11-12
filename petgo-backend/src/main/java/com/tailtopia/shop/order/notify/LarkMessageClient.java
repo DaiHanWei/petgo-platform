@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 改其中一份时请看一眼另一份。
  *
  * <p>🔴 <b>出网必须有超时</b>：没有超时的调用会把异步线程池挂满
- * （照 {@code PostHogAnalyticsClient} 的既定做法）。
+ * （照 {@code MidtransGateway} 等出网客户端的既定做法）。
  *
  * <p>🔒 <b>appSecret 绝不落日志</b>。
  */
