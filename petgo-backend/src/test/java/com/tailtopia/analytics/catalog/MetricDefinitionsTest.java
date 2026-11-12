@@ -99,11 +99,44 @@ class MetricDefinitionsTest {
         MetricDefinition p1 = byCode.apply("产品#1");
         assertThat(String.join("\n", p1.sources())).contains("pet_added", "Application Installed")
                 .doesNotContain("pet_profile_create_submitted");
-        assertThat(p1.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("pet_added", "D-13"));
+        assertThat(p1.changelog()).first().satisfies(c -> assertThat(c.change()).contains("pet_added", "D-13"));
 
         MetricDefinition p5 = byCode.apply("产品#5");
         assertThat(p5.definition()).contains("onboarding_completed", "请求成功后", "第 7–13 天");
-        assertThat(p5.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 3.4", "D-13"));
+        assertThat(p5.changelog()).first().satisfies(c -> assertThat(c.change()).contains("Story 3.4", "D-13"));
+    }
+
+    /** Story 4.3 AC5：市场 #1–#3、产品 #1、产品 #5 指向汇总 SQL，写明按周加权的现算 SQL、已知偏差与变更记录。 */
+    @Test
+    void story43RetentionAndInstallProfileMetrics() {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+        assertThat(m.isLoaded()).isTrue();
+        java.util.function.Function<String, MetricDefinition> byCode =
+                code -> m.metrics().stream().filter(d -> d.code().equals(code)).findFirst().orElseThrow();
+
+        String[][] market = {{"市场#1", "d1_retained"}, {"市场#2", "d3_retained"}, {"市场#3", "d7_retained"}};
+        for (String[] mk : market) {
+            MetricDefinition d = byCode.apply(mk[0]);
+            assertThat(d.sqlPath()).isEqualTo("analytics/rollup/retention.sql");
+            assertThat(d.definition()).contains("Application Installed", "Application Opened", "WIB",
+                    "sum(" + mk[1] + ")::numeric / NULLIF(sum(cohort_size), 0)", "cohort_type = 'INSTALL'",
+                    mk[1] + " IS NOT NULL");
+            assertThat(d.exclusions()).contains("account_type = 'REAL'");
+            assertThat(d.knownBias()).contains("卸载重装", "保留期", "晚到超过 3 天不回算", "V1.5.0");
+            assertThat(d.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 4.3"));
+        }
+
+        MetricDefinition p1 = byCode.apply("产品#1");
+        assertThat(p1.sqlPath()).isEqualTo("analytics/rollup/install_profile.sql");
+        assertThat(p1.knownBias()).contains("agg_monthly_install_profile", "with_pet_profile", "当月新装",
+                "次月建档不计入");
+        assertThat(p1.changelog()).hasSize(2).last().satisfies(c -> assertThat(c.change()).contains("Story 4.3"));
+
+        MetricDefinition p5 = byCode.apply("产品#5");
+        assertThat(p5.sqlPath()).isEqualTo("analytics/rollup/retention.sql");
+        assertThat(p5.knownBias()).contains("cohort_type = 'ONBOARDING'",
+                "sum(w1_retained)::numeric / NULLIF(sum(cohort_size), 0)", "w1_retained IS NOT NULL", "生效日期");
+        assertThat(p5.changelog()).hasSize(2).last().satisfies(c -> assertThat(c.change()).contains("Story 4.3"));
     }
 
     @Test

@@ -19,13 +19,13 @@ import org.junit.jupiter.api.Test;
 class RollupSqlFilesTest {
 
     /** 已注册的 SQL 指标族（与 {@link RollupConfig} 一致；dau_reconcile 的口径断言见 {@code DauReconcileFamilyTest}）。 */
-    static final List<String> FAMILIES = List.of("activity", "install", "dau_reconcile");
+    static final List<String> FAMILIES = List.of("activity", "install", "dau_reconcile", "retention", "install_profile");
 
     private static final Set<String> ALLOWED_PARAMS = Set.of("stat_date", "as_of", "lookback_start", "computed_at");
     private static final Pattern PARAM = Pattern.compile("(?<![:\\w]):([a-z_][a-z0-9_]*)");
 
     @ParameterizedTest
-    @ValueSource(strings = {"activity", "install"})
+    @ValueSource(strings = {"activity", "install", "retention", "install_profile"})
     void readableAndNoCurrentDateFunctions(String family) {
         String sql = SqlRollupFamily.readScript(family);
         String lower = sql.toLowerCase(Locale.ROOT);
@@ -40,7 +40,7 @@ class RollupSqlFilesTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"activity", "install"})
+    @ValueSource(strings = {"activity", "install", "retention"})
     void onlyFrameworkParameters(String family) {
         for (String stmt : new SqlRollupFamily(family).statements()) {
             Matcher m = PARAM.matcher(stmt);
@@ -86,5 +86,54 @@ class RollupSqlFilesTest {
         String sql = new SqlRollupFamily("activity").statements().get(1);
         assertThat(sql).contains("GROUPING SETS ((o.platform), ())").contains("count(DISTINCT o.person_key)")
                 .contains("count(DISTINCT o.user_id)").contains("'Application Opened'");
+    }
+
+    // ---------------------------------------------------------------- Story 4.3
+
+    /** retention：先删组日期再插两种 cohort_type；首次安装与 install.sql 同一回看区间与标准过滤；成熟度只看 X+N ≤ as_of。 */
+    @Test
+    void retentionCohortsAndMaturity() {
+        List<String> stmts = new SqlRollupFamily("retention").statements();
+        assertThat(stmts).hasSize(2);
+        assertThat(stmts.get(0)).isEqualTo(
+                "DELETE FROM agg_cohort_retention WHERE cohort_date = CAST(:stat_date AS date)");
+        String sql = stmts.get(1);
+        assertThat(sql).startsWith("INSERT INTO agg_cohort_retention");
+        assertThat(sql.substring(0, sql.indexOf("WITH"))).doesNotContain("user_id", "anonymous_id", "person_key");
+        // 首次：与 install.sql 同一回看区间
+        assertThat(sql).contains("BETWEEN CAST(:lookback_start AS date) AND CAST(:stat_date AS date)")
+                .contains("'Application Installed'").contains("'onboarding_completed'")
+                .doesNotContain("Application Updated");
+        // 打开只看 X+1 之后、不超过 as_of；安装当天不算
+        assertThat(sql).contains("BETWEEN CAST(:stat_date AS date) + 1")
+                .contains("LEAST(CAST(:stat_date AS date) + 13, CAST(:as_of AS date))");
+        for (int n : new int[] {1, 3, 7, 13}) {
+            assertThat(sql).contains("CAST(:stat_date AS date) + " + n + " <= CAST(:as_of AS date)");
+        }
+        assertThat(sql).contains("BETWEEN CAST(:stat_date AS date) + 7 AND CAST(:stat_date AS date) + 13")
+                .contains("VALUES ('INSTALL'), ('ONBOARDING')");
+    }
+
+    /** install_profile：只用月参数；分子 pet_added（D-13），不用 pet_profile_create_submitted；同一标准过滤。 */
+    @Test
+    void installProfileMonthlyParametersAndEvents() {
+        Set<String> allowed = Set.of("month_start", "month_end", "as_of", "lookback_start", "computed_at");
+        List<String> stmts = new InstallProfileFamily().statements();
+        assertThat(stmts).hasSize(2);
+        assertThat(stmts.get(0)).isEqualTo(
+                "DELETE FROM agg_monthly_install_profile WHERE stat_month = CAST(:month_start AS date)");
+        assertThat(stmts.get(1)).startsWith("INSERT INTO agg_monthly_install_profile");
+        for (String stmt : stmts) {
+            Matcher m = PARAM.matcher(stmt);
+            while (m.find()) {
+                assertThat(allowed).as("install_profile 参数 :%s", m.group(1)).contains(m.group(1));
+            }
+        }
+        String sql = stmts.get(1);
+        assertThat(sql).contains("'pet_added'").contains("'Application Installed'")
+                .doesNotContain("pet_profile_create_submitted").doesNotContain("Application Updated");
+        assertThat(sql).contains("LEAST(CAST(:month_end AS date), CAST(:as_of AS date))")
+                .contains("CAST(:month_end AS date) <= CAST(:as_of AS date)");
+        assertThat(sql.substring(0, sql.indexOf("WITH"))).doesNotContain("user_id", "anonymous_id", "person_key");
     }
 }

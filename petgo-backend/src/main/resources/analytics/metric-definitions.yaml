@@ -184,19 +184,29 @@ metrics:
     name: "安装后创建宠物档案的比例"
     definition: >-
       团队原文：有 pet_profile_create_submitted 的去重用户数 ÷ 有 Application Installed 的去重用户数（S2），同一个月。
-      按代码修正（D-13，Dai 2026-11-12 拍板）：分子改用 pet_added（建档请求成功后才上报）的去重用户数；
+      按代码修正（D-13，Dai 2026-11-12 拍板）：分子改为当月新装人（分母里的人）中当月有 pet_added（建档请求成功后才上报）的去重人数；
       pet_profile_create_submitted 保留但不用于本指标（点击即报，建档请求失败也会报）。按 WIB 自然月。
     sources:
       - "events_detail：pet_added（分子，建档成功；属性 pet_index、slot_source）"
       - "events_detail：Application Installed（分母，同 S2）"
     exclusions: >-
       只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+      汇总（Story 4.3）：is_production、NOT is_suspicious、source = 'APP'，按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户
+      （匿名安装经关联表归到兽医 / 虚拟号的也排除）。
     known_bias: >-
+      汇总表 agg_monthly_install_profile（按 WIB 自然月，stat_month = 当月 1 日）：
+      new_installs = 首次 Application Installed 落在当月的去重人数（口径同 S2；同一次计算时等于当月 agg_daily_install all 行 new_installs 之和，但日表只在 3 天内回补，之后身份关联变化（匿名安装后来归到已装过的老用户）会让二者略有差异）；
+      with_pet_profile = 其中当月（event_date 在本月内）有 pet_added 的人数（Dai 2026-11-12 拍板：分子取当月新装人中建档成功的人，
+      不再是「当月有建档事件的全部去重用户」）。不要求建档晚于安装，只要求同月；月末安装、次月建档不计入。
+      比例现算：SELECT stat_month, with_pet_profile::numeric / NULLIF(new_installs, 0) FROM agg_monthly_install_profile ORDER BY stat_month;
+      is_complete = false 的行是月中「截至昨天」的值；月末次日起写终值，之后 3 天内随回补再刷新，晚到超过 3 天不回算（D-6）。
       第 2 只及以后的宠物也会报 pet_added，按去重人数计不影响；如需「首只」可取 pet_index = 1。
-      分子分母都按事件去重人数、同一个月，分子不要求来自当月安装的人（团队原文口径），月初建档的老用户也计入分子。
-      SQL 由 Story 4.3 / 4.5 填。
+      卸载重装算新装；「首次」只能在明细保留期（约 3 个月）内判断；员工与测试账号按正常用户算。
+      V1.5.0 之前没有自建数据（旧版升级上来的设备报 Application Updated，不算新装）。
+    sql_path: analytics/rollup/install_profile.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.4：按代码修正：分子由 pet_profile_create_submitted（点击即报，失败也算）改为 pet_added（建档成功后上报），D-13；需告知产品团队" }
+      - { date: "2026-11-13", change: "Story 4.3：落地 agg_monthly_install_profile（install_profile.sql）；分子按 Dai 拍板改为当月新装人中当月有 pet_added 的人数（原「分子不要求来自当月安装的人」作废）；需告知产品团队" }
   - code: "产品#5"
     name: "新用户 W1 留存"
     definition: >-
@@ -211,9 +221,85 @@ metrics:
     known_bias: >-
       唯一触发点是引导流最后一步（pet_status_page）。Story 3.4 之前的 App 版本点击即报（请求失败、失败后放弃的人也算完成引导，重试会多报），
       自建库只收新版 App 事件，因此自建口径不含这部分；与 PostHog 时期数据对比时，PostHog 侧略偏高。
-      SQL 由 Story 4.3 / 4.5 填。
+      生效日期：「请求成功后才上报」随 Story 3.4 所在的 App 版本（V1.5.0）上线之日起生效；该日之前进入自建库的 onboarding_completed（如测试包）含「请求失败也上报」的偏差。
+      汇总表 agg_cohort_retention（cohort_type = 'ONBOARDING'，cohort_date = 组日期 Y）：cohort_size = 首次 onboarding_completed 恰在 Y 的人数，
+      w1_retained = 其中在 [Y+7, Y+13] 任意一天有 Application Opened 的人数；Y+13 晚于计算基准日（WIB 昨天）时为空。
+      「首次」只在明细保留期内判断：同一人重装后再走一次引导，只按第一次分组。
+      周值（当周每日组按组人数加权平均，只算已满 13 天的组），现算不入库：
+      SELECT sum(w1_retained)::numeric / NULLIF(sum(cohort_size), 0) FROM agg_cohort_retention
+      WHERE cohort_type = 'ONBOARDING' AND cohort_date BETWEEN :week_monday AND :week_monday + 6 AND w1_retained IS NOT NULL;
+      Application Opened 冷启动和回前台都会报，当天有一次即算打开；员工与测试账号按正常用户算；
+      每次汇总回补最近 16 天的组（13 天观察 + 3 天晚到），晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据，上线后前 13 天的组 W1 不完整。
+    sql_path: analytics/rollup/retention.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.4：按代码修正：onboarding_completed 改为请求成功后上报、失败不报（D-13）；锚点取首次 onboarding_completed；需告知产品团队" }
+      - { date: "2026-11-13", change: "Story 4.3：落地 agg_cohort_retention（ONBOARDING 组，retention.sql）；补按周加权现算 SQL 与已知偏差" }
+  - code: "市场#1"
+    name: "D1 留存"
+    definition: >-
+      从安装算起：第 X 天首次安装 App（首次 Application Installed，按 D-10 归属到人）的人中，第 X+1 天当天再次打开（Application Opened）的比例。
+      按 WIB 自然日分组。按周统计时取当周每日安装组的留存，按各组人数加权平均（= 当周各组留存人数之和 ÷ 组人数之和），现算不入库：
+      SELECT sum(d1_retained)::numeric / NULLIF(sum(cohort_size), 0) FROM agg_cohort_retention
+      WHERE cohort_type = 'INSTALL' AND cohort_date BETWEEN :week_monday AND :week_monday + 6 AND d1_retained IS NOT NULL;
+      （只算已满 1 天的组。周 = 周一至周日。）
+    sources:
+      - "events_detail：Application Installed（组，首次）、Application Opened（回访）"
+      - "identity_links（D-10：未登录时的安装归到之后首次登录的账号，「安装 → 注册登录 → 次日以账号打开」算同一人）"
+      - "汇总表：agg_cohort_retention（cohort_type = 'INSTALL'：cohort_size、d1_retained）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）：按 v_events_person 归属到人之后排除，匿名事件经关联表归到兽医 / 虚拟号的也排除。
+    known_bias: >-
+      组人数与 S2 同口径（同一次计算时 = agg_daily_install all 行同日 new_installs；本表回补 16 天、日表只回补 3 天，晚到 4–15 天的安装事件或身份关联会让二者略有差异）。d1_retained 为空 = 未满 1 天（X+1 晚于计算基准日 WIB 昨天）。
+      安装当天（X）的打开不算留存；只看 X+1 当天。
+      卸载重装算新装、新组；「首次」只能在明细层保留期（约 3 个月）内判断；Application Opened 冷启动和回前台都会报，当天有一次即算打开；
+      员工与测试账号按正常用户算；每次汇总回补最近 16 天的组，晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据。
+    sql_path: analytics/rollup/retention.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.3：新增" }
+  - code: "市场#2"
+    name: "D3 留存"
+    definition: >-
+      从安装算起：第 X 天首次安装 App（首次 Application Installed，按 D-10 归属到人）的人中，第 X+3 天当天再次打开（Application Opened）的比例。
+      只统计安装满 3 天的组。按 WIB 自然日分组。按周统计时取当周每日安装组的留存，按各组人数加权平均（= 当周各组留存人数之和 ÷ 组人数之和），现算不入库：
+      SELECT sum(d3_retained)::numeric / NULLIF(sum(cohort_size), 0) FROM agg_cohort_retention
+      WHERE cohort_type = 'INSTALL' AND cohort_date BETWEEN :week_monday AND :week_monday + 6 AND d3_retained IS NOT NULL;
+      （只算已满 3 天的组。周 = 周一至周日。）
+    sources:
+      - "events_detail：Application Installed（组，首次）、Application Opened（回访）"
+      - "identity_links（D-10：未登录时的安装归到之后首次登录的账号，「安装 → 注册登录 → 次日以账号打开」算同一人）"
+      - "汇总表：agg_cohort_retention（cohort_type = 'INSTALL'：cohort_size、d3_retained）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）：按 v_events_person 归属到人之后排除，匿名事件经关联表归到兽医 / 虚拟号的也排除。
+    known_bias: >-
+      组人数与 S2 同口径（同一次计算时 = agg_daily_install all 行同日 new_installs；本表回补 16 天、日表只回补 3 天，晚到 4–15 天的安装事件或身份关联会让二者略有差异）。d3_retained 为空 = 未满 3 天（X+3 晚于计算基准日 WIB 昨天）。
+      安装当天（X）的打开不算留存；只看 X+3 当天，不是「X+1 至 X+3 内任一天」。
+      卸载重装算新装、新组；「首次」只能在明细层保留期（约 3 个月）内判断；Application Opened 冷启动和回前台都会报，当天有一次即算打开；
+      员工与测试账号按正常用户算；每次汇总回补最近 16 天的组，晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据。
+    sql_path: analytics/rollup/retention.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.3：新增" }
+  - code: "市场#3"
+    name: "D7 留存"
+    definition: >-
+      从安装算起：第 X 天首次安装 App（首次 Application Installed，按 D-10 归属到人）的人中，第 X+7 天当天再次打开（Application Opened）的比例。
+      只统计安装满 7 天的组。按 WIB 自然日分组。按周统计时取当周每日安装组的留存，按各组人数加权平均（= 当周各组留存人数之和 ÷ 组人数之和），现算不入库：
+      SELECT sum(d7_retained)::numeric / NULLIF(sum(cohort_size), 0) FROM agg_cohort_retention
+      WHERE cohort_type = 'INSTALL' AND cohort_date BETWEEN :week_monday AND :week_monday + 6 AND d7_retained IS NOT NULL;
+      （只算已满 7 天的组。周 = 周一至周日。）
+    sources:
+      - "events_detail：Application Installed（组，首次）、Application Opened（回访）"
+      - "identity_links（D-10：未登录时的安装归到之后首次登录的账号，「安装 → 注册登录 → 次日以账号打开」算同一人）"
+      - "汇总表：agg_cohort_retention（cohort_type = 'INSTALL'：cohort_size、d7_retained）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）：按 v_events_person 归属到人之后排除，匿名事件经关联表归到兽医 / 虚拟号的也排除。
+    known_bias: >-
+      组人数与 S2 同口径（同一次计算时 = agg_daily_install all 行同日 new_installs；本表回补 16 天、日表只回补 3 天，晚到 4–15 天的安装事件或身份关联会让二者略有差异）。d7_retained 为空 = 未满 7 天（X+7 晚于计算基准日 WIB 昨天）。
+      安装当天（X）的打开不算留存；只看 X+7 当天，不是「X+1 至 X+7 内任一天」。
+      卸载重装算新装、新组；「首次」只能在明细层保留期（约 3 个月）内判断；Application Opened 冷启动和回前台都会报，当天有一次即算打开；
+      员工与测试账号按正常用户算；每次汇总回补最近 16 天的组，晚到超过 3 天不回算（D-6）；V1.5.0 之前无数据。
+    sql_path: analytics/rollup/retention.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.3：新增" }
   - code: "S1-GA4"
     name: "GA4 日活（含游客）"
     definition: >-

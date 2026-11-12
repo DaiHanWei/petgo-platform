@@ -21,6 +21,11 @@ import org.springframework.context.annotation.Configuration;
         ReconcileProperties.class, AnalyticsDauSourceProperties.class})
 public class RollupConfig {
 
+    /** 留存指标族名（= SQL 文件名）。 */
+    public static final String RETENTION = "retention";
+    /** 留存指标族每次重算的天数：13 天观察窗口 + 3 天晚到。 */
+    public static final int RETENTION_RECOMPUTE_DAYS = 16;
+
     /** 日活：{@code analytics/rollup/activity.sql} → {@code agg_daily_activity}。 */
     @Bean
     public RollupFamily activityRollupFamily() {
@@ -37,5 +42,20 @@ public class RollupConfig {
     @Bean
     public RollupFamily dauReconcileRollupFamily() {
         return new DauReconcileFamily();
+    }
+
+    /**
+     * 留存（Story 4.3）：{@code analytics/rollup/retention.sql} → {@code agg_cohort_retention}（INSTALL 组 D1 / D3 / D7、
+     * ONBOARDING 组 W1）。{@code recomputeDays = 16}：W1 要看到 X+13，再留 3 天给晚到数据（D-6），组日期最早回到 {@code asOf − 15}。
+     */
+    @Bean
+    public RollupFamily retentionRollupFamily() {
+        return new SqlRollupFamily(RETENTION, RETENTION_RECOMPUTE_DAYS, Set.of());
+    }
+
+    /** 安装后建档（Story 4.3，按月）：{@code analytics/rollup/install_profile.sql} → {@code agg_monthly_install_profile}。 */
+    @Bean
+    public RollupFamily installProfileRollupFamily() {
+        return new InstallProfileFamily();
     }
 }
