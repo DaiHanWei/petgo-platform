@@ -56,7 +56,7 @@ development_status:
   1-5-身份校验与关联表: review
   1-6-明细层转换: review
   1-7-明细分区-原始层清理与重算: review
-  1-8-注销擦除: ready-for-dev
+  1-8-注销擦除: review
   1-9-服务端事件改走自建: ready-for-dev
   1-10-存储水位与停写熔断: ready-for-dev
   epic-1-retrospective: optional

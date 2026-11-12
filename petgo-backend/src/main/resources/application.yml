@@ -527,6 +527,13 @@ analytics:
   recompute:
     fixed-delay-ms: 60000
     initial-delay-ms: 60000
+  # 注销擦除（analytics-pipeline Story 1.8，A10 / FR-15）：ErasureJob 每晚 WIB 02:00（早于 03:00 汇总）从业务库
+  # analytics_erasure_outbox 读待处理请求，在埋点库删关联、置空明细 / 原始层身份列并剥用户标识属性，成功后回写 done_at。
+  # 埋点库不可用 / 失败只 TECH 告警、下次再处理。任务内 SET LOCAL statement_timeout 放宽（写入账号默认 120s）。
+  # 测试设 "-" 关闭，直接调 runOnce()。
+  erasure:
+    cron: "0 0 2 * * *"
+    statement-timeout: 30min
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

@@ -74,6 +74,16 @@ import tools.jackson.databind.node.ObjectNode;
  * 过滤事件名、只写请求区间内的行、不推进进度。存在 {@code RUNNING} 的重算请求时，实时增量在锁内看到即整片跳过
  * （{@link Outcome#SKIPPED_RECOMPUTING}）—— 重算期间明细新鲜度暂停。
  *
+ * <h2>注销擦除拦截（Story 1.8，A10 / FR-15）</h2>
+ * 开埋点事务之前，再用业务库窄查询 {@code analytics_erasure_outbox}（{@link #ERASED_SQL}）：
+ * <ul>
+ *   <li>本片 {@code user_id} 命中 outbox（<b>任何状态</b>）的行 → 写明细前置空 {@code user_id} / {@code user_key}，并剥掉清单里
+ *       全部用户标识键 —— 注销后设备补发的旧事件，明细层永不再出现该用户（匿名 id 保留，成为匿名事件）。</li>
+ *   <li>待处理或 {@code done_at} 在最近 {@link #ERASED_VALUE_WINDOW} 内的请求：他人事件里用户标识键的值等于被注销用户的
+ *       {@code user_id} 十进制 / {@code user_key} / 公开 token → 删掉该键（与 {@code ErasureJob} 按值匹配同口径）。</li>
+ * </ul>
+ * 实时增量与重算共用同一套拦截。
+ *
  * <p>日志只打条数，不打事件内容、{@code user_id} / {@code user_key} / 匿名 id。埋点库只经 {@code @Qualifier("analytics")}
  * 的 {@link JdbcTemplate} / {@link TransactionTemplate} 访问，禁止 JPA。
  */
@@ -122,6 +132,15 @@ public class DetailBuilder {
     /** Story 1.7 重算：不看原始层 {@code unknown_event} 标记，按<b>当前</b>清单登记的事件名过滤（补登记的事件同样转入）。 */
     static final String RECOMPUTE_USER_IDS_SQL = "SELECT DISTINCT user_id FROM events_raw "
             + "WHERE received_at > ? AND received_at <= ? AND event = ANY(?) AND user_id IS NOT NULL";
+    /**
+     * Story 1.8：业务库 outbox 里本片用户（任何状态）+ 近期请求（按值匹配用）的标识。
+     * {@code users.public_token} 不可更新、注销匿名化后仍保留（事件清单 {@code owner_id} 的值就是它）。
+     */
+    static final String ERASED_SQL = "SELECT o.user_id, o.user_key, u.public_token FROM analytics_erasure_outbox o "
+            + "LEFT JOIN users u ON u.id = o.user_id "
+            + "WHERE o.user_id = ANY(?) OR o.done_at IS NULL OR o.done_at > ?";
+    /** Story 1.8：按值匹配只看待处理或 {@code done_at} 在这么久内的请求（App 队列最长 7 天 + 1 天余量，同 ErasureJob）。 */
+    static final Duration ERASED_VALUE_WINDOW = Duration.ofDays(8);
     static final String RECOMPUTE_READ_SQL = "SELECT DISTINCT ON (message_id) message_id, event, client_ts, sent_at, "
             + "received_at, anonymous_id, user_key, user_id, source, properties::text, context::text FROM events_raw "
             + "WHERE received_at > ? AND received_at <= ? AND event = ANY(?) ORDER BY message_id, received_at";
@@ -136,6 +155,26 @@ public class DetailBuilder {
     record DetailRow(String messageId, String event, Instant clientTs, Instant eventTime, LocalDate eventDate,
             boolean suspicious, String source, String anonymousId, Long userId, String userKey, String platform,
             String appVersion, String osVersion, String deviceModel, boolean production, String propertiesJson) {
+    }
+
+    /**
+     * Story 1.8：已登记注销擦除的用户（来自业务库 outbox）。
+     *
+     * @param userIds  命中即置空身份列、剥全部用户标识键
+     * @param userKeys 同上（按 {@code user_key} 命中）
+     * @param values   按值匹配用的标识串（{@code user_id} 十进制 / {@code user_key} / 公开 token）
+     */
+    record Erased(Set<Long> userIds, Set<String> userKeys, Set<String> values) {
+
+        static final Erased NONE = new Erased(Set.of(), Set.of(), Set.of());
+
+        boolean isEmpty() {
+            return userIds.isEmpty() && userKeys.isEmpty() && values.isEmpty();
+        }
+
+        boolean matches(Long userId, String userKey) {
+            return (userId != null && userIds.contains(userId)) || (userKey != null && userKeys.contains(userKey));
+        }
     }
 
     /** 转换结果：明细行 + 生产标记判定（计数用）。 */
@@ -299,9 +338,10 @@ public class DetailBuilder {
         if (upper == null) {
             return SliceResult.of(SliceStatus.CAUGHT_UP);
         }
-        Map<Long, UserAccount> users = lookupUsers(
-                jdbc.queryForList(SLICE_USER_IDS_SQL, Long.class, utc(lower), utc(upper)));
-        SliceResult r = tx.execute(status -> processSlice(lower, upper, built, users));
+        List<Long> sliceUserIds = jdbc.queryForList(SLICE_USER_IDS_SQL, Long.class, utc(lower), utc(upper));
+        Map<Long, UserAccount> users = lookupUsers(sliceUserIds);
+        Erased erased = lookupErased(sliceUserIds);
+        SliceResult r = tx.execute(status -> processSlice(lower, upper, built, users, erased));
         return r == null ? SliceResult.of(SliceStatus.LOCKED) : r;
     }
 
@@ -331,7 +371,7 @@ public class DetailBuilder {
 
     /** 在调用方的埋点事务内：拿锁 → 复核进度 → 读 → 转换 → 查重 → 写 → 推进进度。 */
     private SliceResult processSlice(Instant lower, Instant upper, Set<LocalDate> built,
-            Map<Long, UserAccount> users) {
+            Map<Long, UserAccount> users, Erased erased) {
         Boolean locked = jdbc.queryForObject("SELECT pg_try_advisory_xact_lock(?, ?)", Boolean.class,
                 AnalyticsLockKeys.NAMESPACE, AnalyticsLockKeys.DETAIL_BUILDER);
         if (!Boolean.TRUE.equals(locked)) {
@@ -345,7 +385,7 @@ public class DetailBuilder {
             return SliceResult.of(SliceStatus.MOVED_ELSEWHERE);
         }
         List<RawRow> raws = jdbc.query(READ_SQL, DetailBuilder::mapRaw, utc(lower), utc(upper));
-        SliceResult r = writeRows(raws, built, users, d -> true);
+        SliceResult r = writeRows(raws, built, users, erased, d -> true);
         jdbc.update(UPDATE_PROGRESS_SQL, utc(upper), PIPELINE);
         beforeCommit();
         return r;
@@ -356,17 +396,19 @@ public class DetailBuilder {
      * {@link AnalyticsLockKeys#DETAIL_BUILDER} 锁时调用。
      *
      * @param raws  本片原始行（已 {@code DISTINCT ON (message_id)}、已按清单过滤事件名）
+     * @param erased Story 1.8：已登记注销擦除的用户（写入前拦截）
      * @param keep  只写 {@code event_date} 满足它的行（实时恒真；重算只写请求区间内的行，区间外的读进来丢掉）。
      *              不满足的行不检查分区是否存在，也不计数
      */
     private SliceResult writeRows(List<RawRow> raws, Set<LocalDate> built, Map<Long, UserAccount> users,
-            Predicate<LocalDate> keep) {
+            Erased erased, Predicate<LocalDate> keep) {
+        Set<String> idKeys = erased.isEmpty() ? Set.of() : catalog.userIdentifierKeys();
         List<DetailRow> candidates = new ArrayList<>(raws.size());
         long suspicious = 0;
         long nonProduction = 0;
         long unknownUsers = 0;
         for (RawRow raw : raws) {
-            Mapped m = toDetail(raw, built, catalog::allowedPropertyKeys, users);
+            Mapped m = toDetail(raw, built, catalog::allowedPropertyKeys, users, erased, idKeys);
             DetailRow row = m.row();
             if (!keep.test(row.eventDate())) {
                 continue;
@@ -420,11 +462,13 @@ public class DetailBuilder {
     SliceResult recomputeSlice(Instant lower, Instant upper, Set<LocalDate> built, List<String> registered,
             LocalDate from, LocalDate to) {
         String[] events = registered.toArray(String[]::new);
-        Map<Long, UserAccount> users = lookupUsers(jdbc.query(RECOMPUTE_USER_IDS_SQL, ps -> {
+        List<Long> sliceUserIds = jdbc.query(RECOMPUTE_USER_IDS_SQL, ps -> {
             ps.setObject(1, utc(lower));
             ps.setObject(2, utc(upper));
             ps.setArray(3, ps.getConnection().createArrayOf("varchar", events));
-        }, (rs, n) -> rs.getLong(1)));
+        }, (rs, n) -> rs.getLong(1));
+        Map<Long, UserAccount> users = lookupUsers(sliceUserIds);
+        Erased erased = lookupErased(sliceUserIds);
         return tx.execute(status -> {
             lockDetailBuilderBlocking();
             List<RawRow> raws = jdbc.query(RECOMPUTE_READ_SQL, ps -> {
@@ -432,7 +476,7 @@ public class DetailBuilder {
                 ps.setObject(2, utc(upper));
                 ps.setArray(3, ps.getConnection().createArrayOf("varchar", events));
             }, DetailBuilder::mapRaw);
-            return writeRows(raws, built, users, d -> !d.isBefore(from) && !d.isAfter(to));
+            return writeRows(raws, built, users, erased, d -> !d.isBefore(from) && !d.isAfter(to));
         });
     }
 
@@ -484,18 +528,36 @@ public class DetailBuilder {
      */
     static Mapped toDetail(RawRow raw, Set<LocalDate> built, Function<String, Set<String>> allowedKeys,
             Map<Long, UserAccount> users) {
+        return toDetail(raw, built, allowedKeys, users, Erased.NONE, Set.of());
+    }
+
+    /**
+     * 同上，另做 Story 1.8 注销擦除拦截：{@code user_id} / {@code user_key} 命中 {@code erased} 的行置空身份列并剥掉
+     * {@code idKeys} 全部键；其余行里 {@code idKeys} 的值命中 {@code erased.values()} 的键删除。生产标记仍按原 {@code user_id}
+     * 判（角色 / 账号类型不是身份信息，结果只是一个布尔）。
+     *
+     * @param idKeys 清单里 {@code user_identifier: true} 的键
+     */
+    static Mapped toDetail(RawRow raw, Set<LocalDate> built, Function<String, Set<String>> allowedKeys,
+            Map<Long, UserAccount> users, Erased erased, Set<String> idKeys) {
         EventTimeCorrector.Corrected c = EventTimeCorrector.correct(raw.clientTs(), raw.sentAt(), raw.receivedAt(),
                 built);
         JsonNode ctx = parseObject(raw.contextJson());
         Verdict verdict = ProductionFlag.judge(ctx, raw.userId(), users);
-        String userKey = raw.userKey();
-        if (userKey == null && raw.userId() != null) {
-            userKey = AnalyticsDistinctId.of(raw.userId());
+        boolean erasedUser = erased.matches(raw.userId(), raw.userKey());
+        Long userId = erasedUser ? null : raw.userId();
+        String userKey = erasedUser ? null : raw.userKey();
+        if (userKey == null && userId != null) {
+            userKey = AnalyticsDistinctId.of(userId);
+        }
+        String properties = slimProperties(raw.propertiesJson(), allowedKeys.apply(raw.event()));
+        if (!erased.isEmpty()) {
+            properties = stripIdentifiers(properties, idKeys, erasedUser, erased.values());
         }
         DetailRow row = new DetailRow(raw.messageId(), raw.event(), raw.clientTs(), c.eventTime(), c.eventDate(),
-                c.suspicious(), raw.source(), raw.anonymousId(), raw.userId(), userKey,
+                c.suspicious(), raw.source(), raw.anonymousId(), userId, userKey,
                 text(ctx, "platform"), text(ctx, "appVersion"), text(ctx, "osVersion"), text(ctx, "deviceModel"),
-                verdict.isProduction(), slimProperties(raw.propertiesJson(), allowedKeys.apply(raw.event())));
+                verdict.isProduction(), properties);
         return new Mapped(row, verdict);
     }
 
@@ -511,6 +573,33 @@ public class DetailBuilder {
             }
         }
         return JSON.writeValueAsString(out);
+    }
+
+    /**
+     * Story 1.8：剥用户标识键。{@code all} 为真 → 删掉 {@code idKeys} 全部键；否则只删值（字符串 / 数字原样转文本，与 PG
+     * {@code ->>} 同口径）落在 {@code values} 里的键。输入是 {@link #slimProperties} 的输出（必为 JSON 对象）。
+     */
+    static String stripIdentifiers(String propertiesJson, Set<String> idKeys, boolean all, Set<String> values) {
+        if (idKeys == null || idKeys.isEmpty()) {
+            return propertiesJson;
+        }
+        JsonNode node = parseObject(propertiesJson);
+        if (node == null) {
+            return propertiesJson;
+        }
+        ObjectNode obj = (ObjectNode) node;
+        boolean changed = false;
+        for (String k : idKeys) {
+            JsonNode v = obj.get(k);
+            if (v == null) {
+                continue;
+            }
+            if (all || (v.isValueNode() && !v.isNull() && values.contains(v.asString()))) {
+                obj.remove(k);
+                changed = true;
+            }
+        }
+        return changed ? JSON.writeValueAsString(obj) : propertiesJson;
     }
 
     /** 上下文里的字符串字段：缺失 / 非字符串 / 空白为 null，超长截断到 {@link #MAX_TEXT}。 */
@@ -580,6 +669,33 @@ public class DetailBuilder {
             });
         }
         return existing;
+    }
+
+    /** Story 1.8：业务库一次窄查询 outbox（本片用户任何状态 + 近期请求）。 */
+    private Erased lookupErased(List<Long> sliceUserIds) {
+        Long[] arr = sliceUserIds.toArray(Long[]::new);
+        OffsetDateTime since = utc(clock.instant().minus(ERASED_VALUE_WINDOW));
+        Set<Long> ids = new HashSet<>();
+        Set<String> keys = new HashSet<>();
+        Set<String> values = new HashSet<>();
+        businessJdbc.query(ERASED_SQL, ps -> {
+            ps.setArray(1, ps.getConnection().createArrayOf("bigint", arr));
+            ps.setObject(2, since);
+        }, (ResultSet rs) -> {
+            long id = rs.getLong(1);
+            ids.add(id);
+            values.add(Long.toString(id));
+            String key = rs.getString(2);
+            if (key != null) {
+                keys.add(key);
+                values.add(key);
+            }
+            String token = rs.getString(3);
+            if (token != null && !token.isEmpty()) {
+                values.add(token);
+            }
+        });
+        return ids.isEmpty() ? Erased.NONE : new Erased(Set.copyOf(ids), Set.copyOf(keys), Set.copyOf(values));
     }
 
     /** 业务库一次窄查询本片用户的角色与账号类型。 */

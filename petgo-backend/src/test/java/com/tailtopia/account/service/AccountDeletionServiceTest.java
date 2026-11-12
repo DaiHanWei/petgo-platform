@@ -73,6 +73,8 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.social.service.PetFollowService petFollowService;
     /** V1.4.2 social-topic Story 2.1：账号级里程碑 flag 清理。 */
     @Mock com.tailtopia.profile.service.AccountMilestoneService accountMilestones;
+    /** analytics-pipeline Story 1.8：埋点擦除请求登记（业务库 outbox）。 */
+    @Mock com.tailtopia.analytics.erasure.AnalyticsErasureParticipant analyticsErasure;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -82,7 +84,7 @@ class AccountDeletionServiceTest {
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
                 placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
                 followService, opsPopupImpressionDeletion, growthDeletion, pushPreferences, collectDeletion,
-                petSlotDeletion, petFollowService, accountMilestones);
+                petSlotDeletion, petFollowService, accountMilestones, analyticsErasure);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -182,6 +184,40 @@ class AccountDeletionServiceTest {
         verify(imClient).deleteUserConversationMedia(anyString());
         // 状态机 DONE
         assertThat(d.getStatus()).isEqualTo(DeletionStatus.DONE);
+    }
+
+    @Test
+    void executeRegistersAnalyticsErasureOnceBeforeCascade() {
+        AccountDeletion d = pending(1L, 7L);
+        when(deletions.findById(1L)).thenReturn(Optional.of(d));
+        when(profileDeletion.deleteAllForAccount(7L)).thenReturn(PersonalMedia.empty());
+        when(triageDeletion.deleteByUserId(7L)).thenReturn(PersonalMedia.empty());
+        when(consultAnonymization.anonymizeByUserId(7L)).thenReturn(PersonalMedia.empty());
+        when(authDeletion.deleteByUserId(7L)).thenReturn(PersonalMedia.empty());
+
+        service().execute(1L);
+
+        // analytics-pipeline Story 1.8 · AC1：登记一次，且在第一个级联步骤（删宠物档案）之前。
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(analyticsErasure, profileDeletion);
+        order.verify(analyticsErasure).register(7L);
+        order.verify(profileDeletion).deleteAllForAccount(7L);
+        verify(analyticsErasure, org.mockito.Mockito.times(1)).register(anyLong());
+        assertThat(d.getStatus()).isEqualTo(DeletionStatus.DONE);
+    }
+
+    @Test
+    void analyticsErasureRegistrationFailureMarksFailedAndStopsCascade() {
+        AccountDeletion d = pending(1L, 7L);
+        when(deletions.findById(1L)).thenReturn(Optional.of(d));
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataAccessResourceFailureException("down"))
+                .when(analyticsErasure).register(7L);
+
+        service().onRequested(new com.tailtopia.account.event.AccountDeletionRequestedEvent(1L));
+
+        // analytics-pipeline Story 1.8 · AC1：写失败不吞 → 状态机置 FAILED（启动重扫续跑），后续步骤不执行。
+        assertThat(d.getStatus()).isEqualTo(DeletionStatus.FAILED);
+        verify(profileDeletion, org.mockito.Mockito.never()).deleteAllForAccount(anyLong());
+        verify(authDeletion, org.mockito.Mockito.never()).deleteByUserId(anyLong());
     }
 
     @Test

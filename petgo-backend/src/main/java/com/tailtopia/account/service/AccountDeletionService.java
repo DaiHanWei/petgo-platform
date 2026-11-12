@@ -5,6 +5,7 @@ import com.tailtopia.account.domain.DeletionStatus;
 import com.tailtopia.account.event.AccountDeletionRequestedEvent;
 import com.tailtopia.account.repository.AccountDeletionRepository;
 import com.tailtopia.admin.moderation.service.ManualReviewService;
+import com.tailtopia.analytics.erasure.AnalyticsErasureParticipant;
 import com.tailtopia.auth.service.AuthAccountDeletionService;
 import com.tailtopia.collect.service.CollectDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
@@ -96,6 +97,8 @@ public class AccountDeletionService {
     private final PetFollowService petFollowService;
     /** V1.4.2 social-topic Story 2.1：账号级里程碑 flag 随注销物理删除。 */
     private final com.tailtopia.profile.service.AccountMilestoneService accountMilestones;
+    /** analytics-pipeline Story 1.8（A10 / FR-15）：登记埋点擦除请求（业务库 outbox，不访问埋点库）。 */
+    private final AnalyticsErasureParticipant analyticsErasure;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -116,7 +119,8 @@ public class AccountDeletionService {
             PushPreferenceService pushPreferences, CollectDeletionService collectDeletion,
             PetSlotAccountDeletionService petSlotDeletion,
             PetFollowService petFollowService,
-            com.tailtopia.profile.service.AccountMilestoneService accountMilestones) {
+            com.tailtopia.profile.service.AccountMilestoneService accountMilestones,
+            AnalyticsErasureParticipant analyticsErasure) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -146,6 +150,7 @@ public class AccountDeletionService {
         this.petSlotDeletion = petSlotDeletion;
         this.petFollowService = petFollowService;
         this.accountMilestones = accountMilestones;
+        this.analyticsErasure = analyticsErasure;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -175,6 +180,11 @@ public class AccountDeletionService {
         }
         long userId = d.getUserId();
         setProcessing(deletionId);
+
+        // analytics-pipeline Story 1.8（A10 / FR-15）：登记埋点擦除请求 —— 写【业务库】analytics_erasure_outbox
+        // （幂等 ON CONFLICT DO NOTHING），不访问埋点库：埋点库故障 / 管道停用都不会让注销失败（Dai 2026-11-12 拍板）。
+        // 真正的擦除由 ErasureJob 每晚在埋点库执行。写失败（业务库异常）照常抛出 → 本次注销 FAILED，由启动重扫续跑。
+        analyticsErasure.register(userId);
 
         // 删除/匿名化各模块，收集待删个人媒体（content 由 user 行删除自动匿名，无需单独调用）。
         PersonalMedia media = PersonalMedia.empty()

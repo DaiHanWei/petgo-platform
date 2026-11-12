@@ -170,6 +170,55 @@ class DetailBuilderTest {
         assertThat(r.eventDate()).isEqualTo(LocalDate.of(2026, 11, 20));
     }
 
+    // ---------------------------------------------------------------- Story 1.8：注销擦除拦截
+
+    private static final Function<String, Set<String>> SOCIAL_KEYS = e -> Set.of("owner_id", "target_user_id", "source");
+    private static final Set<String> ID_KEYS = Set.of("owner_id", "target_user_id");
+    /** 用户 7 已登记擦除；公开 token 为 tok7。 */
+    private static final DetailBuilder.Erased ERASED_7 = new DetailBuilder.Erased(Set.of(7L),
+            Set.of(AnalyticsDistinctId.of(7L)), Set.of("7", AnalyticsDistinctId.of(7L), "tok7"));
+
+    @Test
+    void erasedUsersOwnLateEventLosesIdentityButKeepsAnonymousId() {
+        RawRow late = app("user_followed", 7L, AnalyticsDistinctId.of(7L),
+                "{\"target_user_id\":99,\"owner_id\":\"tokX\",\"source\":\"feed\"}", "{}");
+
+        DetailRow r = DetailBuilder.toDetail(late, BUILT, SOCIAL_KEYS, USERS, ERASED_7, ID_KEYS).row();
+
+        assertThat(r.userId()).isNull();
+        assertThat(r.userKey()).isNull();
+        assertThat(r.anonymousId()).isEqualTo("4b0e3c0e-5f6a-4c41-9a39-0d1f6c2b7a10");
+        // 本人行剥掉全部用户标识键（含指向别人的），非标识键保留
+        assertThat(r.propertiesJson()).isEqualTo("{\"source\":\"feed\"}");
+    }
+
+    @Test
+    void otherUsersEventDropsOnlyIdentifierValuesPointingToErasedUser() {
+        RawRow byToken = app("pet_follow", 8L, null, "{\"owner_id\":\"tok7\",\"source\":\"feed\"}", "{}");
+        RawRow byId = app("user_followed", 8L, null, "{\"target_user_id\":7,\"source\":\"feed\"}", "{}");
+        RawRow unrelated = app("user_followed", 8L, null, "{\"target_user_id\":70,\"source\":\"feed\"}", "{}");
+
+        DetailRow a = DetailBuilder.toDetail(byToken, BUILT, SOCIAL_KEYS, USERS, ERASED_7, ID_KEYS).row();
+        DetailRow b = DetailBuilder.toDetail(byId, BUILT, SOCIAL_KEYS, USERS, ERASED_7, ID_KEYS).row();
+        DetailRow c = DetailBuilder.toDetail(unrelated, BUILT, SOCIAL_KEYS, USERS, ERASED_7, ID_KEYS).row();
+
+        assertThat(a.userId()).isEqualTo(8L);
+        assertThat(a.propertiesJson()).isEqualTo("{\"source\":\"feed\"}");
+        assertThat(b.propertiesJson()).isEqualTo("{\"source\":\"feed\"}");
+        assertThat(c.propertiesJson()).isEqualTo("{\"target_user_id\":70,\"source\":\"feed\"}");
+    }
+
+    @Test
+    void noErasedUsersLeavesRowUntouched() {
+        RawRow raw = app("user_followed", 7L, null, "{\"target_user_id\":7}", "{}");
+
+        DetailRow r = DetailBuilder.toDetail(raw, BUILT, SOCIAL_KEYS, USERS, DetailBuilder.Erased.NONE, ID_KEYS).row();
+
+        assertThat(r.userId()).isEqualTo(7L);
+        assertThat(r.userKey()).isEqualTo(AnalyticsDistinctId.of(7L));
+        assertThat(r.propertiesJson()).isEqualTo("{\"target_user_id\":7}");
+    }
+
     // ---------------------------------------------------------------- 跳过 / 失败
 
     @Test

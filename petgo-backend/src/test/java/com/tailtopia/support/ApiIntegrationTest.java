@@ -94,6 +94,9 @@ import tools.jackson.databind.ObjectMapper;
             // analytics-pipeline Story 1.7：明细重算每分钟消费一次请求表，会与 DetailRecomputeIntegrationTest 抢同一条请求；
             // 理由同上，首延 1 天，由该测试类直接调 runOnce() 验证。
             "analytics.recompute.initial-delay-ms=86400000",
+            // analytics-pipeline Story 1.8：注销擦除每晚一次（WIB 02:00），套件跨点时会与 AnalyticsErasureIntegrationTest
+            // 抢同一批 outbox 行；关闭，由测试直接调 runOnce()。
+            "analytics.erasure.cron=-",
             // V1.3.4 Story 6.2：运营通知定时扫描（默认首延 60s、每 60s）会把共享库里别的测试遗留的
             // PENDING 全量（ALL）活动发出去 —— 给库里所有用户各写一条通知、角标 +1，
             // 让「新用户未读数 = N」类断言随机红。首延拉到 1 天 = 测试期内不自动跑；
