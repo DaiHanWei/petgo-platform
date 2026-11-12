@@ -1,6 +1,6 @@
 # Story 4.5: Toko 浏览、漏斗与加购转化
 
-Status: ready-for-dev
+Status: review
 
 <!-- 主题 analytics-pipeline，不挂版本（App 侧随 V1.5.0 切换）。分支 feat/analytics-pipeline，基于 main。 -->
 <!-- 批次 ②（Epic 4）。只改后端；云端只跑 L0，L1/L2 留本地。 -->
@@ -41,37 +41,37 @@ so that 知道用户在哪一步流失。
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1：开工前核对前置 story 的真实产物**（AC: 全部）
-  - [ ] 读 Story 1.1 / 1.2 / 1.6 / 4.1 / 4.4 的 story 文件 File List，确认这些名字的**实际**写法，本 story 全部沿用，不另造：
+- [x] **Task 1：开工前核对前置 story 的真实产物**（AC: 全部）
+  - [x] 读 Story 1.1 / 1.2 / 1.6 / 4.1 / 4.4 的 story 文件 File List，确认这些名字的**实际**写法，本 story 全部沿用，不另造：
     - 埋点 `JdbcTemplate` 的 `@Qualifier` 名与 `AnalyticsDataSourceConfig`（1.1）
     - 迁移里授权只读账号的写法（1.2 首次 `GRANT`；stag 角色名是 `analytics_reader_stag`，见 Dev Notes「授权陷阱」）
     - `events_detail` 的生产标记列名（1.6，架构 D-4 只叫「生产标记」）
     - 4.1 的 `RollupJob` 指标族注册方式、`agg_progress` 结构、SQL 文件加载器、**身份归属共用视图 / 函数**的名字和返回列（下文用 `<归属视图>` 指代）
     - 4.4 建立的「读业务库已付款订单」读取器（带单匹配已经在用）——本 story **复用**，不写第二份
-  - [ ] 读 `petgo-backend/src/main/resources/analytics/event-catalog.yaml`，确认漏斗各步事件名、`screen_viewed` 的 `screen` 属性、`toko_order_pay_tapped` / `toko_order_payment_succeeded` 都已登记且属性被明细层保留；读 `metric-definitions.yaml` 里 Story 3.4 写下的电商 #6 / 产品 #2 核对结论
-- [ ] **Task 2：迁移 `V20261113_1400__agg_toko.sql`**（AC: 1, 2, 3, 4, 6）
-  - [ ] 建三张表（结构见 Dev Notes「表结构」），`stat_date` / `week_start` / `month_start` 列注释写明「WIB 日期」
-  - [ ] 三张表授权只读账号（沿用 1.2 的写法）
-  - [ ] 本地自查：`bash scripts/ci/check-flyway-versions.sh origin/main` 绿
-- [ ] **Task 3：汇总 SQL `analytics/rollup/toko.sql`**（AC: 1–5, 7）
-  - [ ] 一个查询，输入 `:period_start`、`:period_end`（WIB 日期，闭区间）、`:window_end`（= `:period_end` + 7 天），输出一行该周期的全部指标列；日 / 周 / 月三种粒度复用同一 SQL
-  - [ ] 只按 `event_date` 过滤明细（读取区间 `[:period_start, :window_end + 1]`，再用 `event_time` 精确比窗口），不按 `received_at`，不用 `date(event_time)`
-  - [ ] 业务库已付款订单由 Java 先读出、写进本事务的临时表 `tmp_toko_paid_orders(user_id bigint, paid_at timestamptz)`（`ON COMMIT DROP`），SQL 只 join 临时表——绝不跨库
-  - [ ] 漏斗各步、加购转化的算法按 Dev Notes「口径与算法」，不得自行简化
-- [ ] **Task 4：指标族 Java 实现**（AC: 2, 3, 4, 5, 9）
-  - [ ] 在 `com.tailtopia.analytics.rollup` 下新增 `TokoRollup`（或 4.1 约定的指标族接口实现），注册进 `RollupJob`
-  - [ ] 每次运行（运行日 R，`Y = R − 1`）重算：日 `[Y−7, Y]` 每一天；周表、月表中「周期结束日落在 `[Y−7, Y]`」的已结束周期；`agg_progress` 落后时从断点续算（取较早者）
-  - [ ] 每个周期：读业务库已付款订单（`paid_at ∈ [period_start 00:00 WIB, window_end + 1 00:00 WIB)`，下单人 `role='USER' AND account_type='REAL'`）→ 写临时表 → 跑 `toko.sql` → upsert 目标表 → 推进 `agg_progress`，**同一事务**
-  - [ ] 业务库另读两个计数：周期内 `paid_at` 落在周期的订单数（`orders_paid`）、`created_at` 落在周期的订单数（`orders_created_biz`，参照列），同样只算 USER + REAL
-  - [ ] `is_final` = 周期结束日 `<= Y − 7`（窗口已全部关闭）
-  - [ ] 失败经 TECH 渠道告警（复用 4.1 的失败处理，不另写）
-- [ ] **Task 5：口径条目**（AC: 1–4）
-  - [ ] `metric-definitions.yaml` 新增 / 补全 电商 #4、电商 #5、电商 #6、产品 #2 四个条目（字段按 1.2 的结构；4.8 会统一补齐），写明来源表、算法、已知偏差（见 Dev Notes）、SQL 位置 `analytics/rollup/toko.sql`
-- [ ] **Task 6：测试**（AC: 7, 8, 9）
-  - [ ] L0：`TokoRollupPeriodTest` —— 重算区间计算（跨月、跨年、周一起始、月末 31/30/28/29 日）、`is_final` 判定、WIB 边界时间戳换算
-  - [ ] L0：读取 `toko.sql` 断言不含 `now()`、`current_date`、`date(event_time` 等禁用写法（参照 4.1 是否已有同类守门测试，有就扩展）
-  - [ ] L1：`TokoRollupIT`（埋点测试库 + 业务测试库），按 AC 8 列出的场景构造数据集；AC 9 的一致性断言
-  - [ ] `mvn -B clean package` 绿（L0）；L1 在本地跑 `mvn -B verify`（按 4.1 的 L1 跑法）
+  - [x] 读 `petgo-backend/src/main/resources/analytics/event-catalog.yaml`，确认漏斗各步事件名、`screen_viewed` 的 `screen` 属性、`toko_order_pay_tapped` / `toko_order_payment_succeeded` 都已登记且属性被明细层保留；读 `metric-definitions.yaml` 里 Story 3.4 写下的电商 #6 / 产品 #2 核对结论
+- [x] **Task 2：迁移 `V20261113_1400__agg_toko.sql`**（AC: 1, 2, 3, 4, 6）
+  - [x] 建三张表（结构见 Dev Notes「表结构」），`stat_date` / `week_start` / `month_start` 列注释写明「WIB 日期」
+  - [x] 三张表授权只读账号（沿用 1.2 的写法）
+  - [x] 本地自查：`bash scripts/ci/check-flyway-versions.sh origin/main` 绿
+- [x] **Task 3：汇总 SQL `analytics/rollup/toko.sql`**（AC: 1–5, 7）
+  - [x] 一个查询，输入 `:period_start`、`:period_end`（WIB 日期，闭区间）、`:window_end`（= `:period_end` + 7 天），输出一行该周期的全部指标列；日 / 周 / 月三种粒度复用同一 SQL
+  - [x] 只按 `event_date` 过滤明细（读取区间 `[:period_start, :window_end + 1]`，再用 `event_time` 精确比窗口），不按 `received_at`，不用 `date(event_time)`
+  - [x] 业务库已付款订单由 Java 先读出、写进本事务的临时表 `tmp_toko_paid_orders(user_id bigint, paid_at timestamptz)`（`ON COMMIT DROP`），SQL 只 join 临时表——绝不跨库
+  - [x] 漏斗各步、加购转化的算法按 Dev Notes「口径与算法」，不得自行简化
+- [x] **Task 4：指标族 Java 实现**（AC: 2, 3, 4, 5, 9）
+  - [x] 在 `com.tailtopia.analytics.rollup` 下新增 `TokoRollup`（或 4.1 约定的指标族接口实现），注册进 `RollupJob`
+  - [x] 每次运行（运行日 R，`Y = R − 1`）重算：日 `[Y−7, Y]` 每一天；周表、月表中「周期结束日落在 `[Y−7, Y]`」的已结束周期；`agg_progress` 落后时从断点续算（取较早者）
+  - [x] 每个周期：读业务库已付款订单（`paid_at ∈ [period_start 00:00 WIB, window_end + 1 00:00 WIB)`，下单人 `role='USER' AND account_type='REAL'`）→ 写临时表 → 跑 `toko.sql` → upsert 目标表 → 推进 `agg_progress`，**同一事务**
+  - [x] 业务库另读两个计数：周期内 `paid_at` 落在周期的订单数（`orders_paid`）、`created_at` 落在周期的订单数（`orders_created_biz`，参照列），同样只算 USER + REAL
+  - [x] `is_final` = 周期结束日 `<= Y − 7`（窗口已全部关闭）
+  - [x] 失败经 TECH 渠道告警（复用 4.1 的失败处理，不另写）
+- [x] **Task 5：口径条目**（AC: 1–4）
+  - [x] `metric-definitions.yaml` 新增 / 补全 电商 #4、电商 #5、电商 #6、产品 #2 四个条目（字段按 1.2 的结构；4.8 会统一补齐），写明来源表、算法、已知偏差（见 Dev Notes）、SQL 位置 `analytics/rollup/toko.sql`
+- [x] **Task 6：测试**（AC: 7, 8, 9）
+  - [x] L0：`TokoRollupPeriodTest` —— 重算区间计算（跨月、跨年、周一起始、月末 31/30/28/29 日）、`is_final` 判定、WIB 边界时间戳换算
+  - [x] L0：读取 `toko.sql` 断言不含 `now()`、`current_date`、`date(event_time` 等禁用写法（参照 4.1 是否已有同类守门测试，有就扩展）
+  - [x] L1：`TokoRollupIT`（埋点测试库 + 业务测试库），按 AC 8 列出的场景构造数据集；AC 9 的一致性断言
+  - [x] `mvn -B clean package` 绿（L0）；L1 在本地跑 `mvn -B verify`（按 4.1 的 L1 跑法）
 
 ## Dev Notes
 
@@ -212,14 +212,69 @@ petgo-backend/src/test/java/com/tailtopia/analytics/rollup/TokoRollupIT.java    
 
 ### Agent Model Used
 
+Claude Opus 5.5（claude-opus-5-5），云端 headless session
+
 ### Debug Log References
+
+- `bash scripts/ci/l0-backend.sh`（= `./mvnw -B clean package`，排除 425 个 Spring 上下文 / 真库测试类）→ **BUILD SUCCESS，Tests run: 6746, Failures: 0, Errors: 0, Skipped: 10**（新增 `TokoRollupPeriodTest` 9、`TokoFamilyTest` 8、`RollupMigrationTextTest` +1、`MetricDefinitionsTest` +1）；L1 测试类 `TokoRollupIntegrationTest` 随 clean package 编译通过。
+- `bash scripts/ci/check-flyway-versions.sh origin/main` → `flyway-guard: OK（migration 289 个，analytics-migration 12 个…）`。
+- 未起 Docker、未连任何库 / 第三方。
 
 ### Completion Notes List
 
-- 云端只跑到 L0；L1 待本地验收。
-- 需告知团队：电商 #6 第 6 步合并纯 PawCoin / 零元单的成交事件；产品 #2 在新版覆盖率低时偏高。
+- 云端只跑到 L0；**L1/L2 待本地验收**。需本地验收：
+  - L1 `TokoRollupIntegrationTest`（埋点测试库 `petgo_analytics_test` + 业务测试库）：AC1–AC4、AC8 全部 7 个场景（跳步、超 7 天、顺序颠倒、跨午夜 WIB 归日、非生产 / 可疑 / 兽医及匿名归到兽医被排除、登录前匿名浏览与登录后付款归同一人、周表人数 ≠ 日表之和）、AC9（`orders_paid` 与直接查业务库一致，日 / 周 / 月）、AC5（`runScheduled` 回补 `[Y−7, Y]`、`is_final`）、幂等、月表。
+  - L1 AC6：迁移 `V20261113_1400__agg_toko.sql` 在真库应用、stag 上 `${readerRole}` 授权生效（本地 / CI 无角色走 NOTICE 跳过）。
+  - L1 性能观察：业务库 `paid_at` 区间计数会顺扫 `shop_orders`（只有带商家条件的部分索引），若慢于 1 秒记入此处；按 story 不加业务迁移。
+  - L2：本 story 无（4.8 统一在 stag 实测）。
+- 实现要点：
+  - 指标族类名沿用 4.4 约定命名为 `TokoFamily`（story 写的 `TokoRollup` 为暂名）；L1 测试类按项目惯例命名 `TokoRollupIntegrationTest`（项目无 failsafe，`*IT` 不会被 surefire 运行）。
+  - 业务库已付款订单**复用** 4.4 的 `BusinessPlacementReader.paidOrders`（按其签名：先在埋点库短查询本单元可能到达第 6 步 / 加购过的已归属用户，再按用户批量读）；`orders_paid` / `orders_created_biz` 两个计数在同一读取器上**新增**两个方法（窄查询 JOIN users 只算 USER + REAL），未改动 4.4 已有方法。
+  - 业务库读取全部在 `prepareDay` / `preparePeriods`（埋点库事务之外），结果按 key 校验后在单元事务内写进临时表 `tmp_toko_paid_orders(user_id, paid_at)`（ON COMMIT DROP），SQL 只 join 临时表；两库不跨库。日志只打条数。
+  - `toko.sql` 按 4.4 的 `-- @section` 分段（compute / daily / weekly / monthly），日 / 周 / 月复用同一段 compute：先按 `event_date ∈ [period_start, window_end + 1]` 与事件名过滤进 `tmp_toko_events`，再逐步相关子查询求 t2…t6；目标表用 `INSERT … ON CONFLICT DO UPDATE` upsert。SQL 内无 `now()` / `CURRENT_DATE`，`is_final`、业务库计数、`window_end` 全由 Java 传入。
+  - 重算：`recomputeDays = 8`（日 `[Y−7, Y]`，进度落后由框架从断点续算）；周 / 月只算**已结束**且结束日落在本轮重算区间内的周期（D-12「周期结束次日计算」），首日早于汇总下限的跳过；`is_final` = 周期末日 ≤ Y − 7。
+  - 表结构按 story：日表主键 `stat_date`，周表 `week_start`，月表 `month_start`，标志列 `is_final`（与 4.4 的 `period_start` / `is_complete` 命名不同，以本 story 表结构为准）；计数列一律 `integer`。
+  - 失败处理复用 4.1 `RollupService`（进度不推进、事务外 TECH 告警），未另写。
+- 口径（需告知团队）：
+  - 电商 #6 第 6 步合并 `toko_order_payment_succeeded`（纯 PawCoin / 零元单不经 pay_tapped）—— 与 Story 3.4 在 `metric-definitions.yaml` 的结论一致，已写入电商 #6 已知偏差与变更记录。
+  - 电商 #6 第 7 步按**用户**匹配业务库已付款订单（`paid_at ∈ [t6, t1 + 7 天]`），汇总表不分商品；3.4 条目「经订单行的商品 / SKU token 与埋点关联」指商品维度，本 story 表无商品维度，未使用 token 关联，已在条目中写明。
+  - 产品 #2 在新版覆盖率低时比值偏高，覆盖率未达 90% 前可用 `orders_paid ÷ orders_created_biz` 作参照（已写入条目）。
+  - 电商 #4 / #5 / 产品 #2 条目新增，电商 #6 补 `sql_path` 与汇总算法；Story 3.4 的 `MetricDefinitionsTest` 断言电商 #6 变更记录「仅一条」改为「第一条」（与 4.3 对产品 #1 的处理相同）。
 
 ### File List
+
+- petgo-backend/src/main/resources/db/analytics-migration/V20261113_1400__agg_toko.sql（新）
+- petgo-backend/src/main/resources/analytics/rollup/toko.sql（新）
+- petgo-backend/src/main/java/com/tailtopia/analytics/rollup/TokoFamily.java（新）
+- petgo-backend/src/main/java/com/tailtopia/analytics/rollup/BusinessPlacementReader.java（改：新增两个订单计数方法）
+- petgo-backend/src/main/java/com/tailtopia/analytics/rollup/RollupConfig.java（改：注册 toko 指标族）
+- petgo-backend/src/main/resources/analytics/metric-definitions.yaml（改：电商#4、电商#5、产品#2 新增；电商#6 补全）
+- petgo-backend/src/test/java/com/tailtopia/analytics/rollup/TokoRollupPeriodTest.java（新，L0）
+- petgo-backend/src/test/java/com/tailtopia/analytics/rollup/TokoFamilyTest.java（新，L0）
+- petgo-backend/src/test/java/com/tailtopia/analytics/rollup/TokoRollupIntegrationTest.java（新，L1）
+- petgo-backend/src/test/java/com/tailtopia/analytics/rollup/RollupMigrationTextTest.java（改）
+- petgo-backend/src/test/java/com/tailtopia/analytics/rollup/RollupSqlFilesTest.java（改）
+- petgo-backend/src/test/java/com/tailtopia/analytics/catalog/MetricDefinitionsTest.java（改）
+- _bmad-output/implementation-artifacts/analytics-pipeline/4-5-toko-浏览-漏斗与加购转化.md（改）
+- _bmad-output/implementation-artifacts/analytics-pipeline/sprint-status-analytics-pipeline.yaml（改）
+
+### Review Findings（代码复审 2026-11-12）
+
+已逐项核对：漏斗 7 步事件与口径条目一致（s1 只认 `screen='toko_page'`、`/shop` 不计；s6 合并 payment_succeeded；s7 `paid_at ∈ [t6, t1+7天]`、匿名不通过）；按序（`t_k ≥ t_{k-1}`、窗口 `[t1, t1+7天]`、跳步即止步）；按 `v_events_person` 归属后的 `person_key` 去重并按 `tmp_excluded_users` 排除；只按 `event_date` 过滤、日期全参数化；周 / 月从明细重算（D-12）、只算已结束且结束日在 `[Y−7, Y]` 内的周期、`is_final = 末日 ≤ Y−7`；业务库读取全在 prepare（事务外）、临时表注入、无跨库 SQL；`BusinessPlacementReader` 只新增方法，4.4 行为不变；迁移版本、表结构、`${readerRole}` 条件授权与 story / 1.1 写法一致。
+
+| # | 严重度 | 判定 | 描述 | 处理 |
+|---|---|---|---|---|
+| R1 | 低 | CONFIRMED | `metric-definitions.yaml` 电商 #6 的 definition 仍写「第 7 步经订单行商品 / SKU token 与埋点关联」，与本 story 在 known_bias 补的「汇总表按用户匹配、不经 token」自相矛盾，AI 读口径会困惑 | 已修：definition 该句补「（商品维度）；按人汇总的 agg_*_toko.funnel_s7_paid 按同一用户匹配、不经 token」 |
+| R2 | — | REJECTED | 偏离 4（s7 按 user_id 匹配而非 public token）是否违反 D-13 | D-13 的「一律用 public token」列举的是商品、SKU、运营位、活动的关联；用户维度按埋点库内部 `user_id` 关联业务库是 A4 明文允许的，且 story 正文 s7 写明「同一 `user_id`」。不违反 |
+| R3 | 低 | PLAUSIBLE | `t1 + interval '7 days'` 的天加法依赖会话 TimeZone；若 JVM / 会话时区为有夏令时的区（如 Europe/Berlin），跨 DST 时窗口差 1 小时 | 未修：与 4.4 placement.sql 同写法，容器默认 UTC；如部署改了时区再统一改 `interval '168 hours'` |
+| R4 | 低 | PLAUSIBLE | prepare 阶段 `SCAN_USERS_SQL`（月单元扫 ~38 天明细经归属视图）在单元事务外执行，只受写入账号默认 120s `statement_timeout`，未享受 `SET LOCAL` 放宽 | 未修：与 4.4 同模式，只取三类低频事件且有 `event` 索引；L1 / stag 观察耗时，超时再议 |
+
+复审后 L0：`bash scripts/ci/l0-backend.sh` → BUILD SUCCESS，Tests run: 6746, Failures: 0, Errors: 0, Skipped: 10；`check-flyway-versions.sh origin/main` → OK。
+
+### Change Log
+
+- 2026-11-12：Story 4.5 实现（Toko 浏览、漏斗与加购转化指标族 `toko`：迁移、汇总 SQL、指标族、口径条目、L0 / L1 测试）；状态 → review。
+- 2026-11-12：代码复审：修 R1（电商 #6 definition 与 known_bias 关于第 7 步关联方式的矛盾）；其余见 Review Findings。
 
 
 ## 跨 story 对齐（2026-11-12 汇总）

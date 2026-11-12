@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
-/** L0：Story 4.1 / 4.3 / 4.4 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
+/** L0：Story 4.1 / 4.3 / 4.4 / 4.5 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
 class RollupMigrationTextTest {
 
     private static final String PATH = "db/analytics-migration/V20261113_1300__rollup_framework_activity_install.sql";
@@ -16,6 +16,8 @@ class RollupMigrationTextTest {
     private static final String PATH_43 = "db/analytics-migration/V20261113_1320__cohort_retention_and_install_profile.sql";
 
     private static final String PATH_44 = "db/analytics-migration/V20261113_1330__placement_and_push.sql";
+
+    private static final String PATH_45 = "db/analytics-migration/V20261113_1400__agg_toko.sql";
 
     private static String sql() throws IOException {
         return read(PATH);
@@ -100,5 +102,33 @@ class RollupMigrationTextTest {
         assertThat(s).contains("rolname = '${readerRole}'").doesNotContain("TO analytics_reader");
         assertThat(s).doesNotContainIgnoringCase("REFERENCES");
         assertThat(s).doesNotContain("user_id", "anonymous_id", "person_key", "order_token");
+    }
+
+    /** Story 4.5 AC6：Toko 日 / 周 / 月表、主键、周一 / 月初约束、计数列 integer（不用 smallint）、WIB 注释与授权；不含可识别个人的列。 */
+    @Test
+    void tokoTables() throws IOException {
+        String s = read(PATH_45);
+        String[][] tables = {{"agg_daily_toko", "stat_date"}, {"agg_weekly_toko", "week_start"},
+            {"agg_monthly_toko", "month_start"}};
+        for (String[] t : tables) {
+            assertThat(s).contains("CREATE TABLE " + t[0] + " (", "COMMENT ON TABLE " + t[0] + " IS",
+                    t[1] + "  ", "format('GRANT SELECT ON %I TO %I', '" + t[0] + "', '${readerRole}')");
+            assertThat(s).containsPattern("COMMENT ON COLUMN " + t[0] + "\\." + t[1] + " IS 'WIB 日期");
+        }
+        assertThat(s).contains("stat_date                  date         PRIMARY KEY",
+                "week_start                 date         PRIMARY KEY",
+                "month_start                date         PRIMARY KEY",
+                "CHECK (extract(isodow FROM week_start) = 1)",
+                "CHECK (month_start = date_trunc('month', month_start)::date)");
+        for (String c : new String[] {"toko_viewers", "funnel_s1_toko_page", "funnel_s2_product_shown",
+            "funnel_s3_detail_viewed", "funnel_s4_buy_or_cart", "funnel_s5_order_submitted", "funnel_s6_pay_tapped",
+            "funnel_s7_paid", "orders_submitted", "orders_paid", "orders_created_biz", "atc_users",
+            "atc_converted_users"}) {
+            assertThat(s).containsPattern("(?m)^    " + c + " +integer +NOT NULL,$");
+        }
+        assertThat(s).doesNotContainIgnoringCase("smallint");
+        assertThat(s).contains("rolname = '${readerRole}'").doesNotContain("TO analytics_reader");
+        assertThat(s).doesNotContainIgnoringCase("REFERENCES");
+        assertThat(s).doesNotContain("user_id", "anonymous_id", "person_key");
     }
 }

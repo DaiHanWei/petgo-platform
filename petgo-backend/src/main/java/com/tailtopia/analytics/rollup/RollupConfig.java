@@ -80,4 +80,14 @@ public class RollupConfig {
             OpsAlertService alerts, @Value("${analytics.app-env:dev}") String appEnv) {
         return new PushFamily(businessPlacementReader, props, alerts, appEnv);
     }
+
+    /**
+     * Toko 浏览、漏斗与加购转化（Story 4.5）：{@code analytics/rollup/toko.sql} → {@code agg_daily_toko} / {@code agg_weekly_toko} /
+     * {@code agg_monthly_toko}；业务库窄查询（已付款订单、订单计数）在单元事务之外，复用 {@link BusinessPlacementReader}。
+     * {@code recomputeDays = 8}：7 天窗口每次回补 {@code [昨天 − 7, 昨天]}；周 / 月只在结束后计算。
+     */
+    @Bean
+    public RollupFamily tokoRollupFamily(BusinessPlacementReader businessPlacementReader) {
+        return new TokoFamily(businessPlacementReader);
+    }
 }

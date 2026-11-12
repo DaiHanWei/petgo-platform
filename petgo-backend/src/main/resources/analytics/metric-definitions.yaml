@@ -230,7 +230,7 @@ metrics:
       第 4 步 toko_buy_now_tapped 或 toko_add_to_cart_tapped（规格弹层确认后、登录判断与请求之前）；
       第 5 步 toko_order_submitted（下单请求成功后）；
       第 6 步 toko_order_pay_tapped（进入支付）或 toko_order_payment_succeeded（纯 PawCoin / 零元单结算时直接结清、不经过 pay_tapped，由 Story 4.5 认作经过第 6 步）；
-      第 7 步 支付成功 = 业务库 shop_orders.paid_at IS NOT NULL（D-13），经订单行的商品 / SKU token 与埋点关联。
+      第 7 步 支付成功 = 业务库 shop_orders.paid_at IS NOT NULL（D-13），经订单行的商品 / SKU token 与埋点关联（商品维度）；按人汇总的 agg_*_toko.funnel_s7_paid 按同一用户匹配、不经 token（Story 4.5，见已知偏差）。
       「按顺序」：同一人在 7 天窗口内各步首次发生时间单调不减；按人去重，WIB 自然日。
       商品维度：第 2–6 步都带商品 token —— 第 2–4 步顶层 product_token；第 5 步 items[].product_token（Story 3.4 补）；
       第 6 步 toko_order_pay_tapped 的 items[].product_token（Story 3.4：后端订单详情行新增 productToken / skuToken，App 随之上报）。第 1 步是页面级浏览，不适用商品维度。
@@ -257,9 +257,82 @@ metrics:
       纯 PawCoin / 零元单不经过 pay_tapped，按上文改认 toko_order_payment_succeeded，否则漏斗在第 6 步不单调。
       ⑥ 旧后端未下发订单行 token、或 SKU 已被物理删除时，toko_order_pay_tapped 不带 items（按人计不受影响，只缺商品维度）；
       toko_order_submitted 的 product_token 取自结算页试算行，取不到时省略。
-      SQL 由 Story 4.3 / 4.5 填。
+      汇总（Story 4.5，agg_daily_toko / agg_weekly_toko / agg_monthly_toko 的 funnel_s1_toko_page … funnel_s7_paid）：
+      组 = 统计周期内（event_date）首次触发第 1 步的人，t1 = 其周期内最早一次；窗口 [t1, t1 + 7 天]（含两端）；
+      第 k 步 = 窗口内、不早于第 k−1 步时间的第一条事件，跳步即止步（有第 3 步无第 2 步不算第 3 步），顺序颠倒不算；
+      第 7 步 = 同一用户（按 v_events_person 归属后的用户）存在 paid_at ∈ [第 6 步时间, t1 + 7 天] 的已付款订单 ——
+      汇总表按人计、不分商品，不经商品 / SKU token 关联（商品维度如需另算）；匿名人（从未登录）无法到达第 7 步。
+      周表 / 月表的组 = 该周 / 该月内首次浏览的人，不是日组相加（D-12），周 / 月只在结束后计算。
+      转化率现算：SELECT stat_date, funnel_s2_product_shown::numeric / NULLIF(funnel_s1_toko_page, 0) FROM agg_daily_toko …（逐步相除）。
+      is_final = false 的行 7 天窗口未关闭，之后每天随回补刷新；每次运行回补最近 8 个 WIB 日（[昨天 − 7, 昨天]），晚到超过回补窗口的事件不再回算。
+      退款 / 取消的订单仍算已付款（D-13）。V1.5.0 之前没有行为事件，新版覆盖率低时各步人数偏低（第 7 步来自业务库，但只在前 6 步都有事件的人里判定，同样偏低）。
+    sql_path: analytics/rollup/toko.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.4：逐步核对触发时机；按代码修正：第 1 步 $screen=toko_page → screen_viewed 且 screen='toko_page'；第 6 步纯币单改认 toko_order_payment_succeeded；toko_order_submitted 与 toko_order_pay_tapped 的 items[] 补 product_token（后端订单详情行加 productToken / skuToken）" }
+      - { date: "2026-11-12", change: "Story 4.5：汇总落地 agg_daily/weekly/monthly_toko（toko.sql）；第 6 步合并 toko_order_payment_succeeded（纯 PawCoin / 零元单）为对团队定义的口径补充，需告知电商团队；第 7 步按用户匹配业务库已付款订单" }
+  - code: "电商#4"
+    name: "打开 Toko 的去重用户数"
+    definition: >-
+      统计周期内有 screen_viewed 且 screen = 'toko_page' 的去重人数（PostHog 时期的 $screen = toko_page，Story 2.4 改名）。
+      按 WIB 自然日 / 周（周一至周日）/ 自然月分别去重：agg_daily_toko / agg_weekly_toko / agg_monthly_toko 的 toko_viewers
+      （周 / 月在周期内重新去重，不是日表相加，D-12）。与电商 #6 第 1 步同源，toko_viewers = funnel_s1_toko_page。
+    sources:
+      - "events_detail：screen_viewed（screen = 'toko_page'；分支首次打开多出的 screen = '/shop' 不计入）"
+      - "汇总表：agg_daily_toko / agg_weekly_toko / agg_monthly_toko.toko_viewers（Story 4.5）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+    known_bias: >-
+      按「人」去重（D-10）：登录前的匿名浏览按关联表归到账号；从未登录的设备按匿名 id 算一人，卸载重装算两人。
+      进入方式残留偏差同电商 #6 第 1 步（同一 Toko 分支内再 go('/shop') 不补报）。
+      V1.5.0 之前没有自建数据，新版覆盖率低时偏低。周 / 月只在结束后计算；每次运行回补最近 8 个 WIB 日，晚到超过回补窗口的事件不再回算。
+      员工与测试账号按正常用户算。
+    sql_path: analytics/rollup/toko.sql
+    changelog:
+      - { date: "2026-11-12", change: "Story 4.5：新增；汇总落地 agg_daily/weekly/monthly_toko.toko_viewers" }
+  - code: "电商#5"
+    name: "加购 → 支付订单转化率"
+    definition: >-
+      统计周期内有 toko_add_to_cart_tapped 的去重人数（atc_users，同时就是电商 #7 的「加购的用户数」）中，
+      存在某次周期内加购（时刻 t）且同一用户有 paid_at ∈ [t, t + 7 天] 的 Toko 已付款订单的人数（atc_converted_users）。
+      不要求订单含该商品（团队定义）。按 WIB 自然日 / 周 / 月分别去重（D-12），写在 agg_daily_toko / agg_weekly_toko / agg_monthly_toko。
+      转化率不落表，现算：SELECT stat_date, atc_converted_users::numeric / NULLIF(atc_users, 0) FROM agg_daily_toko ORDER BY stat_date;
+      比率类月指标若取「每日比率平均」由日表现算。
+    sources:
+      - "events_detail：toko_add_to_cart_tapped"
+      - "业务库：shop_orders.paid_at IS NOT NULL（D-13；按用户窄查询，经埋点库临时表匹配，不跨库）"
+      - "汇总表：agg_daily_toko / agg_weekly_toko / agg_monthly_toko 的 atc_users、atc_converted_users（Story 4.5）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+    known_bias: >-
+      加购事件在请求前上报，游客放弃登录、加购失败也算加购（团队「点了加购」口径）；从未登录的匿名人无法匹配订单，只进分母。
+      退款 / 取消的订单仍算已付款（D-13）。is_final = false 的行 7 天窗口未关闭；每次运行回补最近 8 个 WIB 日，晚到超过回补窗口的事件不再回算。
+      V1.5.0 之前没有行为事件，新版覆盖率低时分母偏低。员工与测试账号按正常用户算。
+    sql_path: analytics/rollup/toko.sql
+    changelog:
+      - { date: "2026-11-12", change: "Story 4.5：新增；汇总落地 agg_daily/weekly/monthly_toko.atc_users / atc_converted_users" }
+  - code: "产品#2"
+    name: "Toko 支付成功率"
+    definition: >-
+      已付款订单数 ÷ 已提交订单数，按 WIB 自然日 / 周 / 月（agg_daily_toko / agg_weekly_toko / agg_monthly_toko）：
+      分母 orders_submitted = 周期内 toko_order_submitted 事件条数（建单成功后才上报，一次建单一条，不去重人）；
+      分子 orders_paid = 业务库 shop_orders.paid_at 的 WIB 日期落在周期内的订单数（D-13，下单人 USER + REAL；同时是电商 #1 的已付款订单数）。
+      参照列 orders_created_biz = 业务库 created_at 落在周期内的订单数（下单人 USER + REAL）。
+      现算：SELECT stat_date, orders_paid::numeric / NULLIF(orders_submitted, 0) FROM agg_daily_toko ORDER BY stat_date;
+    sources:
+      - "events_detail：toko_order_submitted（分母）"
+      - "业务库：shop_orders.paid_at IS NOT NULL（分子）、shop_orders.created_at（参照列）；JOIN users 只算 role = 'USER' 且 account_type = 'REAL'"
+      - "汇总表：agg_daily_toko / agg_weekly_toko / agg_monthly_toko 的 orders_submitted、orders_paid、orders_created_biz（Story 4.5）"
+    exclusions: >-
+      分母：只算生产数据、非可疑、source = 'APP'，按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户。
+      分子与参照列：业务库直接按下单人 users.role = 'USER' 且 account_type = 'REAL' 过滤。
+    known_bias: >-
+      分母只来自 V1.5.0+ 且生产标记的设备，分子覆盖所有版本：新版覆盖率低时比值偏高（可能 > 1）。
+      覆盖率未达 90% 前可用 orders_paid ÷ orders_created_biz 作参照。
+      分子按付款日归日、分母按提交日归日，跨日付款的订单两者落在不同日期；退款 / 取消的订单仍算已付款（D-13）。
+      每次运行回补最近 8 个 WIB 日，晚到超过回补窗口的提交事件不再回算。
+    sql_path: analytics/rollup/toko.sql
+    changelog:
+      - { date: "2026-11-12", change: "Story 4.5：新增；汇总落地 agg_daily/weekly/monthly_toko.orders_submitted / orders_paid / orders_created_biz" }
   - code: "产品#1"
     name: "安装后创建宠物档案的比例"
     definition: >-

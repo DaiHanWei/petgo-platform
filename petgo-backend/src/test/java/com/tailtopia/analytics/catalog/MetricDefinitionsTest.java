@@ -138,7 +138,7 @@ class MetricDefinitionsTest {
         assertThat(String.join("\n", funnel.sources())).contains("shop_orders.paid_at");
         assertThat(funnel.exclusions()).contains("account_type = 'REAL'");
         assertThat(funnel.knownBias()).contains("context.go('/shop')", "autopay");
-        assertThat(funnel.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 3.4", "按代码修正"));
+        assertThat(funnel.changelog()).first().satisfies(c -> assertThat(c.change()).contains("Story 3.4", "按代码修正"));
 
         MetricDefinition p1 = byCode.apply("产品#1");
         assertThat(String.join("\n", p1.sources())).contains("pet_added", "Application Installed")
@@ -148,6 +148,32 @@ class MetricDefinitionsTest {
         MetricDefinition p5 = byCode.apply("产品#5");
         assertThat(p5.definition()).contains("onboarding_completed", "请求成功后", "第 7–13 天");
         assertThat(p5.changelog()).first().satisfies(c -> assertThat(c.change()).contains("Story 3.4", "D-13"));
+    }
+
+    /** Story 4.5 T5：电商 #4 / #5 / #6、产品 #2 指向 toko.sql，写明汇总表列、算法与已知偏差。 */
+    @Test
+    void story45TokoMetrics() {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+        assertThat(m.isLoaded()).isTrue();
+        java.util.function.Function<String, MetricDefinition> byCode =
+                code -> m.metrics().stream().filter(d -> d.code().equals(code)).findFirst().orElseThrow();
+        for (String code : new String[] {"电商#4", "电商#5", "电商#6", "产品#2"}) {
+            MetricDefinition d = byCode.apply(code);
+            assertThat(d.sqlPath()).as(code).isEqualTo("analytics/rollup/toko.sql");
+            assertThat(d.exclusions()).as(code).contains("account_type = 'REAL'");
+            assertThat(d.changelog()).as(code).last().satisfies(c -> assertThat(c.change()).contains("Story 4.5"));
+        }
+        assertThat(byCode.apply("电商#4").definition()).contains("screen = 'toko_page'", "toko_viewers", "D-12");
+        assertThat(String.join("\n", byCode.apply("电商#4").sources())).contains("'/shop' 不计入");
+        assertThat(byCode.apply("电商#5").definition()).contains("atc_users", "atc_converted_users", "[t, t + 7 天]",
+                "NULLIF(atc_users, 0)");
+        MetricDefinition funnel = byCode.apply("电商#6");
+        assertThat(funnel.knownBias()).contains("funnel_s7_paid", "[t1, t1 + 7 天]", "跳步即止步",
+                "toko_order_payment_succeeded", "匿名人", "D-13");
+        assertThat(funnel.changelog()).hasSize(2);
+        MetricDefinition p2 = byCode.apply("产品#2");
+        assertThat(p2.definition()).contains("orders_submitted", "orders_paid", "orders_created_biz");
+        assertThat(p2.knownBias()).contains("覆盖率未达 90%", "orders_paid ÷ orders_created_biz");
     }
 
     /** Story 4.3 AC5：市场 #1–#3、产品 #1、产品 #5 指向汇总 SQL，写明按周加权的现算 SQL、已知偏差与变更记录。 */

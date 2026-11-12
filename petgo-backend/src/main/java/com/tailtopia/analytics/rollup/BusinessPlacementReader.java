@@ -35,6 +35,15 @@ public class BusinessPlacementReader {
     /** 已付款 Toko 订单（D-13：paid_at 非空，退款 / 取消仍算）：按用户 + 付款时间区间，ix_shop_orders_user 先按用户缩小范围。 */
     static final String PAID_ORDERS_SQL = "SELECT user_id, public_token, paid_at FROM shop_orders "
             + "WHERE paid_at >= ? AND paid_at < ? AND user_id = ANY(?)";
+    /**
+     * Story 4.5（产品 #2 分子 / 电商 #1）：{@code paid_at} 落在区间内的已付款订单数，只算下单人 USER + REAL（D-13：退款 / 取消仍算）。
+     * {@code paid_at} 只有带商家条件的部分索引，按时间区间会顺扫；订单量小、低峰跑，可接受（不为此加业务迁移）。
+     */
+    static final String PAID_ORDER_COUNT_SQL = "SELECT count(*) FROM shop_orders o JOIN users u ON u.id = o.user_id "
+            + "WHERE o.paid_at >= ? AND o.paid_at < ? AND u.role = 'USER' AND u.account_type = 'REAL'";
+    /** Story 4.5（参照列 orders_created_biz）：{@code created_at} 落在区间内的订单数，只算下单人 USER + REAL。 */
+    static final String CREATED_ORDER_COUNT_SQL = "SELECT count(*) FROM shop_orders o JOIN users u ON u.id = o.user_id "
+            + "WHERE o.created_at >= ? AND o.created_at < ? AND u.role = 'USER' AND u.account_type = 'REAL'";
     /** 每批用户数（{@code user_id = ANY(?)} 的数组长度上限）。 */
     static final int USER_BATCH = 1000;
 
@@ -101,6 +110,25 @@ public class BusinessPlacementReader {
             });
         }
         return out;
+    }
+
+    /** Story 4.5：{@code [from, toExclusive)} 内付款的订单数（下单人 USER + REAL）。 */
+    public long paidOrderCount(Instant from, Instant toExclusive) {
+        return count(PAID_ORDER_COUNT_SQL, from, toExclusive);
+    }
+
+    /** Story 4.5：{@code [from, toExclusive)} 内创建的订单数（下单人 USER + REAL）。 */
+    public long createdOrderCount(Instant from, Instant toExclusive) {
+        return count(CREATED_ORDER_COUNT_SQL, from, toExclusive);
+    }
+
+    private long count(String sql, Instant from, Instant toExclusive) {
+        if (!from.isBefore(toExclusive)) {
+            return 0;
+        }
+        Long n = jdbc.queryForObject(sql, Long.class, OffsetDateTime.ofInstant(from, ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(toExclusive, ZoneOffset.UTC));
+        return n == null ? 0 : n;
     }
 
     private static Instant toInstant(Timestamp ts) {
