@@ -44,6 +44,31 @@ public class BusinessPlacementReader {
     /** Story 4.5（参照列 orders_created_biz）：{@code created_at} 落在区间内的订单数，只算下单人 USER + REAL。 */
     static final String CREATED_ORDER_COUNT_SQL = "SELECT count(*) FROM shop_orders o JOIN users u ON u.id = o.user_id "
             + "WHERE o.created_at >= ? AND o.created_at < ? AND u.role = 'USER' AND u.account_type = 'REAL'";
+    /**
+     * Story 4.6（电商 #7）：{@code created_at} 落在区间内、{@code checkout_source = 'CART'} 的订单行（下单人 USER + REAL），
+     * 带 SKU / 商品 public token 与 {@code paid_at}（D-13）。「立即购买」等其他来源不算购物车购买。
+     */
+    static final String CART_ORDER_LINES_SQL = "SELECT o.user_id, s.public_token, p.public_token, o.created_at, o.paid_at "
+            + "FROM shop_orders o JOIN users u ON u.id = o.user_id "
+            + "JOIN shop_order_lines l ON l.order_id = o.id "
+            + "JOIN shop_skus s ON s.id = l.sku_id "
+            + "JOIN shop_products p ON p.id = s.product_id "
+            + "WHERE o.checkout_source = 'CART' AND o.created_at >= ? AND o.created_at < ? "
+            + "AND u.role = 'USER' AND u.account_type = 'REAL'";
+    /** Story 4.6（电商 #8 / #9）：商品全集（含下架，至少一个 SKU）与可售库存 Σ max(actual − locked, 0)（可售不落库）。 */
+    static final String PRODUCT_SNAPSHOT_SQL = "SELECT p.public_token, p.name, p.is_active, "
+            + "COALESCE(SUM(GREATEST(i.actual - i.locked, 0)), 0) AS sellable_stock "
+            + "FROM shop_products p JOIN shop_skus s ON s.product_id = p.id "
+            + "LEFT JOIN sku_inventory i ON i.sku_id = s.id "
+            + "GROUP BY p.public_token, p.name, p.is_active";
+    /** Story 4.6（电商 #9）：{@code paid_at} 落在区间内的已付款件数 Σ qty（按商品；下单人 USER + REAL；不扣退款，D-13）。 */
+    static final String PAID_QTY_BY_PRODUCT_SQL = "SELECT p.public_token, SUM(l.qty) AS paid_qty "
+            + "FROM shop_orders o JOIN users u ON u.id = o.user_id "
+            + "JOIN shop_order_lines l ON l.order_id = o.id "
+            + "JOIN shop_skus s ON s.id = l.sku_id "
+            + "JOIN shop_products p ON p.id = s.product_id "
+            + "WHERE o.paid_at >= ? AND o.paid_at < ? AND u.role = 'USER' AND u.account_type = 'REAL' "
+            + "GROUP BY p.public_token";
     /** 每批用户数（{@code user_id = ANY(?)} 的数组长度上限）。 */
     static final int USER_BATCH = 1000;
 
@@ -54,6 +79,14 @@ public class BusinessPlacementReader {
 
     /** 已付款订单（订单 token 只用来去重计数，不落汇总表）。 */
     public record PaidOrder(long userId, String orderToken, Instant paidAt) {
+    }
+
+    /** 购物车订单行（Story 4.6；user_id 只在埋点库临时表里与明细匹配，不落汇总表）。paidAt 为空 = 未付款。 */
+    public record CartOrderLine(long userId, String skuToken, String productToken, Instant createdAt, Instant paidAt) {
+    }
+
+    /** 商品快照（Story 4.6）：业务库此刻的名称、上下架与可售库存。 */
+    public record ProductStock(String productToken, String name, boolean active, long sellableStock) {
     }
 
     private final JdbcTemplate jdbc;
@@ -120,6 +153,34 @@ public class BusinessPlacementReader {
     /** Story 4.5：{@code [from, toExclusive)} 内创建的订单数（下单人 USER + REAL）。 */
     public long createdOrderCount(Instant from, Instant toExclusive) {
         return count(CREATED_ORDER_COUNT_SQL, from, toExclusive);
+    }
+
+    /** Story 4.6：{@code [from, toExclusive)} 内创建的购物车订单行（下单人 USER + REAL）。 */
+    public List<CartOrderLine> cartOrderLines(Instant from, Instant toExclusive) {
+        if (!from.isBefore(toExclusive)) {
+            return List.of();
+        }
+        return jdbc.query(CART_ORDER_LINES_SQL, (rs, i) -> new CartOrderLine(rs.getLong(1), rs.getString(2),
+                rs.getString(3), toInstant(rs.getTimestamp(4)), toInstant(rs.getTimestamp(5))),
+                OffsetDateTime.ofInstant(from, ZoneOffset.UTC), OffsetDateTime.ofInstant(toExclusive, ZoneOffset.UTC));
+    }
+
+    /** Story 4.6：业务库全部商品（含下架）的当前名称、上下架与可售库存。 */
+    public List<ProductStock> productStocks() {
+        return jdbc.query(PRODUCT_SNAPSHOT_SQL, (rs, i) -> new ProductStock(rs.getString(1), rs.getString(2),
+                rs.getBoolean(3), rs.getLong(4)));
+    }
+
+    /** Story 4.6：{@code [from, toExclusive)} 内付款的件数，商品 token → Σ qty（下单人 USER + REAL）。 */
+    public Map<String, Long> paidQtyByProduct(Instant from, Instant toExclusive) {
+        Map<String, Long> out = new HashMap<>();
+        if (!from.isBefore(toExclusive)) {
+            return out;
+        }
+        jdbc.query(PAID_QTY_BY_PRODUCT_SQL, rs -> {
+            out.put(rs.getString(1), rs.getLong(2));
+        }, OffsetDateTime.ofInstant(from, ZoneOffset.UTC), OffsetDateTime.ofInstant(toExclusive, ZoneOffset.UTC));
+        return out;
     }
 
     private long count(String sql, Instant from, Instant toExclusive) {

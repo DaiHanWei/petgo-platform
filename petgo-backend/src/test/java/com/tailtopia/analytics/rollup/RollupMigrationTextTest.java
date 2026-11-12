@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
-/** L0：Story 4.1 / 4.3 / 4.4 / 4.5 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
+/** L0：Story 4.1 / 4.3 / 4.4 / 4.5 / 4.6 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
 class RollupMigrationTextTest {
 
     private static final String PATH = "db/analytics-migration/V20261113_1300__rollup_framework_activity_install.sql";
@@ -18,6 +18,8 @@ class RollupMigrationTextTest {
     private static final String PATH_44 = "db/analytics-migration/V20261113_1330__placement_and_push.sql";
 
     private static final String PATH_45 = "db/analytics-migration/V20261113_1400__agg_toko.sql";
+
+    private static final String PATH_46 = "db/analytics-migration/V20261113_1410__agg_cart_product.sql";
 
     private static String sql() throws IOException {
         return read(PATH);
@@ -126,6 +128,37 @@ class RollupMigrationTextTest {
             "atc_converted_users"}) {
             assertThat(s).containsPattern("(?m)^    " + c + " +integer +NOT NULL,$");
         }
+        assertThat(s).doesNotContainIgnoringCase("smallint");
+        assertThat(s).contains("rolname = '${readerRole}'").doesNotContain("TO analytics_reader");
+        assertThat(s).doesNotContainIgnoringCase("REFERENCES");
+        assertThat(s).doesNotContain("user_id", "anonymous_id", "person_key");
+    }
+
+    /** Story 4.6 AC1 / AC4 / AC5：购物车与商品日表、主键、scope 约束、计数列 integer、WIB 注释与授权；不含可识别个人的列。 */
+    @Test
+    void cartAndProductTables() throws IOException {
+        String s = read(PATH_46);
+        for (String t : new String[] {"agg_daily_cart", "agg_daily_product"}) {
+            assertThat(s).contains("CREATE TABLE " + t + " (", "COMMENT ON TABLE " + t + " IS",
+                    "format('GRANT SELECT ON %I TO %I', '" + t + "', '${readerRole}')");
+            assertThat(s).containsPattern("COMMENT ON COLUMN " + t + "\\.stat_date IS 'WIB 日期");
+        }
+        assertThat(s).contains("PRIMARY KEY (stat_date, scope, product_token)",
+                "PRIMARY KEY (stat_date, product_token)",
+                "product_token         varchar(32)   NOT NULL DEFAULT ''",
+                "CHECK (scope IN ('PRODUCT', 'TOTAL')", "AND ((scope = 'TOTAL') = (product_token = '')))");
+        for (String c : new String[] {"add_events", "add_items", "removed_items", "removed_manual", "removed_invalid",
+            "purchased_items", "ordered_unpaid_items", "in_cart_items", "dwell_lt_1h", "dwell_1h_1d", "dwell_1d_3d",
+            "dwell_3d_7d", "detail_views", "add_to_cart"}) {
+            assertThat(s).containsPattern("(?m)^    " + c + " +integer +NOT NULL,$");
+        }
+        assertThat(s).containsPattern("(?m)^    cart_value_idr +bigint +NOT NULL,$")
+                .containsPattern("(?m)^    paid_qty_30d +bigint +NOT NULL,$")
+                .containsPattern("(?m)^    sellable_stock +bigint +NOT NULL,$")
+                .containsPattern("(?m)^    items_per_cart_avg +numeric\\(8,2\\),$");
+        // 口径注释：TOTAL / PRODUCT 混加会翻倍；库存快照只首次写
+        assertThat(s).contains("scope = ''PRODUCT''").containsPattern(
+                "COMMENT ON COLUMN agg_daily_product\\.sellable_stock IS '快照[^']*只在行首次写入时记录");
         assertThat(s).doesNotContainIgnoringCase("smallint");
         assertThat(s).contains("rolname = '${readerRole}'").doesNotContain("TO analytics_reader");
         assertThat(s).doesNotContainIgnoringCase("REFERENCES");

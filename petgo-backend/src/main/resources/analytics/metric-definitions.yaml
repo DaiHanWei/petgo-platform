@@ -310,6 +310,105 @@ metrics:
     sql_path: analytics/rollup/toko.sql
     changelog:
       - { date: "2026-11-12", change: "Story 4.5：新增；汇总落地 agg_daily/weekly/monthly_toko.atc_users / atc_converted_users" }
+  - code: "电商#7"
+    name: "购物车内容与停留"
+    definition: >-
+      团队原文：对统计周期内每一件被加购（toko_add_to_cart_tapped）的商品记是哪件商品、哪个用户、什么时间；停留时长 = 从加购到该商品
+      被购买或被移除，仍在购物车里的算到统计周期结束；每件标记为已购买、已移除或仍在购物车；周期汇总加购的用户数、每个购物车的商品数、
+      购物车总价值（单价 × 数量）。
+      落地（Story 4.6，agg_daily_cart，只存聚合、不存人）：
+      「件」= 同一人（按 v_events_person 归属，D-10）同一 sku_token 在一个 WIB 日内的第一次加购，加购时刻 t_add = 该条时间；
+      当天多次加购只算一件（add_items），但 add_events 计全部条数。按加购日（WIB）归档。
+      7 天观察窗：[t_add, 加购日 + 7 天 24:00 WIB)，取最早发生的去向——
+      已移出（removed_items：同人同 SKU 的 toko_cart_item_removed，按 reason 分 removed_manual = manual、removed_invalid = invalid_cleared）；
+      已购买（purchased_items：同一用户、同 sku_token 的业务库 checkout_source = 'CART' 订单行，created_at ≥ t_add，且 paid_at IS NOT NULL，D-13）；
+      下单未付款（ordered_unpaid_items：同上但 paid_at 为空，已离开购物车，超时取消的单也在这里——团队定义之外新增的去向）；
+      仍在车里（in_cart_items：窗口内以上都没有）。下单成功后服务端删除车行、App 不报移出（Story 3.3），所以「离开购物车」= 移出事件或购物车订单。
+      停留时长 = 结束时刻 − t_add（移出事件时间 / 订单 created_at），按整分钟分桶：dwell_lt_1h（< 60 分钟）、dwell_1h_1d（[1 小时, 1 天)）、
+      dwell_1d_3d（[1 天, 3 天)）、dwell_3d_7d（≥ 3 天）；仍在车里的不入分桶，只进中位数 dwell_p50_minutes（截断到观察窗结束，窗口未关闭时截到数据截至时刻）。
+      购物车总价值 cart_value_idr = Σ 单价 × 数量：单价 = 加购事件的 unit_price（缺则取同件后续移出 / 改数量事件的 unit_price），
+      数量 = 观察窗内（结束前）最后一次 toko_cart_quantity_changed.qty_after，没有则用加购 qty（缺按 1）。
+      每个商品一行（scope = 'PRODUCT'）+ 全体一行（scope = 'TOTAL'，product_token = ''）；TOTAL 行另有 carts（当天有加购件的去重人数）
+      与 items_per_cart_avg（add_items ÷ carts）。🔴 按商品求和时只取 scope = 'PRODUCT'，否则与 TOTAL 行混加会翻倍。
+      周期汇总：件数、分桶、价值可跨天相加（例：SELECT sum(purchased_items), sum(add_items) FROM agg_daily_cart WHERE scope = 'TOTAL' AND stat_date BETWEEN … ；
+      按商品：… WHERE scope = 'PRODUCT' GROUP BY product_token）；carts 是去重人数，不能跨天相加——周 / 月「加购的用户数」用
+      agg_weekly_toko / agg_monthly_toko 的 atc_users（同一批人，周期内去重，D-12，Story 4.5）；中位数不能相加，跨天只能看分桶。
+    sources:
+      - "events_detail：toko_add_to_cart_tapped（product_token、sku_token、qty、unit_price）"
+      - "events_detail：toko_cart_item_removed（sku_token、reason；product_token / qty / unit_price 可能缺）"
+      - "events_detail：toko_cart_quantity_changed（sku_token、qty_after；product_token / qty_before / unit_price 可能缺）"
+      - "业务库：shop_orders（checkout_source = 'CART'、created_at、paid_at）+ shop_order_lines → shop_skus / shop_products 的 public token（经埋点库临时表匹配，不跨库）"
+      - "汇总表：agg_daily_cart（Story 4.6）；加购的用户数见 agg_daily_toko / agg_weekly_toko / agg_monthly_toko.atc_users（Story 4.5）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）；
+      业务库订单行只取下单人 USER + REAL。「立即购买」（checkout_source = 'BUY_NOW'）等非购物车订单不算购物车购买，即使同一 SKU。
+      不带 sku_token 的加购事件（旧版 App）不成件。
+    known_bias: >-
+      🔴 汇总层不存人：「是哪个用户、什么时间」的逐件明细只能在 events_detail 保留期（3 个月）内现查（toko_add_to_cart_tapped 按 user_id / 归属视图），
+      超过 3 个月只剩聚合（已告知电商）。
+      ① 其他设备、旧版 App（V1.5.0 之前没有移出 / 改数量事件）上的移出 / 清空，以及后台清空，都不可观测，会被算成「仍在车里」，仍在车里偏高。
+      ② 撤销删除：删除后点撤销以 CART_UNDO 重新加入，不补报加购，明细留一条 removed —— 该件算「已移出」，而商品其实回到了车里（Story 3.3）。
+      ③ 加购事件在请求前上报：游客放弃登录、加购请求失败也成件（游客无车，这类件只会落在已移出 / 仍在车里）；匿名人（从未登录）无法匹配订单。
+      ④ 加购 qty 是弹层所选数量，服务端合并同 SKU 后车内实际数量可能更大；以最近一次改数量的 qty_after 为准，没改过数量就偏小。
+      unit_price 是加购时 App 上报的 SKU 售价，非成交价（不含优惠券 / PawCoin），总价值不等于 GMV。
+      ⑤ 购物车重载期间的移出 / 改数量事件可能只带 sku_token（Story 3.3 复审 R1）：去向与数量只按 sku_token 匹配不受影响；
+      加购件缺商品 token 时取同 SKU 其他事件或订单行的 token，仍取不到只计入 TOTAL 行（PRODUCT 行之和可能略小于 TOTAL）。
+      ⑥ 先「立即购买」同一 SKU 不影响购物车件（仍在车里）；同一 SKU 在观察窗内再次加购不另起件（次日加购另起一件，前一件的移出 / 订单可能同时算到两件）。
+      ⑦ 7 天观察窗按加购日归档：is_final = false 的行（加购日 + 7 > 计算基准日）还会随每天回补变化；每次运行回补最近 8 个 WIB 日（[昨天 − 7, 昨天]），
+      晚到超过回补窗口的事件不再回算。已购买以运行时业务库 paid_at 为准，退款 / 取消仍算已购买（D-13）。
+      员工与测试账号按正常用户算。
+    sql_path: analytics/rollup/cart.sql
+    changelog:
+      - { date: "2026-11-12", change: "Story 4.6：新增；汇总落地 agg_daily_cart（cart.sql），只存聚合；新增「下单未付款」去向；逐件明细只在明细层 3 个月内可查，需告知电商" }
+  - code: "电商#8"
+    name: "最具潜力的前 3 个商品"
+    definition: >-
+      统计周期内「商品详情浏览次数 + 加购次数」最多的 3 个商品。日表 agg_daily_product 存每个商品每天的原始计数，不预排名：
+      detail_views = 当天 toko_product_detail_viewed 条数，add_to_cart = 当天 toko_add_to_cart_tapped 条数（按 product_token，D-13）。
+      计数可相加，按周期求和后排序：
+      SELECT product_token, max(product_name) AS product_name, sum(detail_views + add_to_cart) AS score
+      FROM agg_daily_product WHERE stat_date BETWEEN '<起>' AND '<止>' GROUP BY product_token ORDER BY score DESC LIMIT 3;
+      行集合 = 业务库全部商品（含下架，is_active 标明）。
+    sources:
+      - "events_detail：toko_product_detail_viewed、toko_add_to_cart_tapped（product_token）"
+      - "业务库：shop_products（public_token、name、is_active）"
+      - "汇总表：agg_daily_product（Story 4.6）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户的事件（Q5）。
+      明细里出现、业务库查不到的商品 token（已删除商品）丢弃（只在日志计数）。
+    known_bias: >-
+      次数不去重人：同一人反复打开同一商品详情都算。详情浏览在详情加载前上报，商品已下架 / 加载失败也算一次；
+      加购在请求前上报，游客放弃登录、加购失败也算（同电商 #6 ③ ④）。V1.5.0 之前没有自建数据。
+      每次运行回补最近 3 个 WIB 日，晚到超过回补窗口的事件不再回算。
+    sql_path: analytics/rollup/product.sql
+    changelog:
+      - { date: "2026-11-12", change: "Story 4.6：新增；汇总落地 agg_daily_product.detail_views / add_to_cart" }
+  - code: "电商#9"
+    name: "已售罄但关注度高的商品"
+    definition: >-
+      库存为 0 的商品，按近 30 天的实际销量（已付款件数）+ 商品详情浏览次数排序。agg_daily_product 每个商品每天一行：
+      sellable_stock = 业务库可售库存 Σ max(actual − locked, 0)（全部 SKU 相加）、is_sold_out = sellable_stock = 0、
+      paid_qty_30d = paid_at 落在 [统计日 − 29, 统计日]（WIB 日）的已付款订单行件数 Σ qty（D-13，下单人 USER + REAL）、
+      detail_views 同电商 #8。不预排名，例（以最近一天的售罄状态为准）：
+      SELECT d.product_token, d.product_name, d.paid_qty_30d + v.views_30d AS score
+      FROM agg_daily_product d
+      JOIN (SELECT product_token, sum(detail_views) AS views_30d FROM agg_daily_product
+            WHERE stat_date BETWEEN '<止>'::date - 29 AND '<止>' GROUP BY product_token) v USING (product_token)
+      WHERE d.stat_date = '<止>' AND d.is_sold_out ORDER BY score DESC;
+    sources:
+      - "业务库：sku_inventory（actual、locked）、shop_orders.paid_at + shop_order_lines.qty（经 shop_skus / shop_products 的 public token）"
+      - "events_detail：toko_product_detail_viewed（product_token）"
+      - "汇总表：agg_daily_product（Story 4.6）"
+    exclusions: >-
+      已付款件数只算下单人 users.role = 'USER' 且 account_type = 'REAL'；浏览次数同电商 #8。
+    known_bias: >-
+      库存是快照：业务库只有「此刻」库存，没有历史；sellable_stock / is_sold_out / stock_captured_at（及名称、上下架）是该行首次写入时
+      （汇总任务运行时，约次日 03:00 WIB）读到的值，回补重算不覆盖；手动重跑从未写过的旧日期时，记的是重跑当时的库存（看 stock_captured_at）。
+      paid_qty_30d 不扣退款（refunded_qty）：退款 / 取消的已付款订单仍算（D-13）；每次回补随业务库刷新。
+      可售 = 实际 − 锁定，已下单未付款锁定的库存不算可售，可能显示售罄但仓库里还有货。没有 SKU 的商品不出现。
+    sql_path: analytics/rollup/product.sql
+    changelog:
+      - { date: "2026-11-12", change: "Story 4.6：新增；汇总落地 agg_daily_product.sellable_stock / is_sold_out / paid_qty_30d（库存为快照，只首次写）" }
   - code: "产品#2"
     name: "Toko 支付成功率"
     definition: >-

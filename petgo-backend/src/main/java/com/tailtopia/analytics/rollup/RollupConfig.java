@@ -90,4 +90,22 @@ public class RollupConfig {
     public RollupFamily tokoRollupFamily(BusinessPlacementReader businessPlacementReader) {
         return new TokoFamily(businessPlacementReader);
     }
+
+    /**
+     * 购物车停留（Story 4.6，电商 #7）：{@code analytics/rollup/cart.sql} → {@code agg_daily_cart}（只存聚合）；业务库购物车订单行
+     * 窄查询在单元事务之外，复用 {@link BusinessPlacementReader}。{@code recomputeDays = 8}：7 天观察窗每次回补 {@code [昨天 − 7, 昨天]}。
+     */
+    @Bean
+    public RollupFamily cartRollupFamily(BusinessPlacementReader businessPlacementReader) {
+        return new CartFamily(businessPlacementReader);
+    }
+
+    /**
+     * 商品维度（Story 4.6，电商 #8 / #9）：{@code analytics/rollup/product.sql} → {@code agg_daily_product}；业务库商品 / 库存 /
+     * 近 30 天已付款件数窄查询在单元事务之外。{@code recomputeDays = 3}；库存快照只在行首次写入时记录。
+     */
+    @Bean
+    public RollupFamily productRollupFamily(BusinessPlacementReader businessPlacementReader) {
+        return new ProductFamily(businessPlacementReader);
+    }
 }

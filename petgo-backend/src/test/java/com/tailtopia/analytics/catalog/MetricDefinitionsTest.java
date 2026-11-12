@@ -176,6 +176,36 @@ class MetricDefinitionsTest {
         assertThat(p2.knownBias()).contains("覆盖率未达 90%", "orders_paid ÷ orders_created_biz");
     }
 
+    /** Story 4.6 T6：电商 #7 / #8 / #9 指向 cart.sql / product.sql，写明算法、7 天观察窗、四种去向、已知偏差与逐件明细只在明细层 3 个月。 */
+    @Test
+    void story46CartAndProductMetrics() {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+        assertThat(m.isLoaded()).isTrue();
+        java.util.function.Function<String, MetricDefinition> byCode =
+                code -> m.metrics().stream().filter(d -> d.code().equals(code)).findFirst().orElseThrow();
+        MetricDefinition cart = byCode.apply("电商#7");
+        assertThat(cart.sqlPath()).isEqualTo("analytics/rollup/cart.sql");
+        assertThat(cart.definition()).contains("agg_daily_cart", "7 天观察窗", "removed_items", "purchased_items",
+                "ordered_unpaid_items", "in_cart_items", "checkout_source = 'CART'", "sku_token", "dwell_p50_minutes",
+                "cart_value_idr", "scope = 'PRODUCT'", "atc_users", "D-12");
+        assertThat(cart.exclusions()).contains("account_type = 'REAL'", "BUY_NOW");
+        // AC3：逐件「哪个用户」只在明细层 3 个月内可查；Story 3.3 的已知偏差
+        assertThat(cart.knownBias()).contains("events_detail 保留期（3 个月）", "其他设备", "后台清空", "撤销删除",
+                "CART_UNDO", "请求前上报", "qty_after", "非成交价", "只带 sku_token", "is_final");
+        assertThat(cart.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 4.6"));
+        for (String code : new String[] {"电商#8", "电商#9"}) {
+            MetricDefinition d = byCode.apply(code);
+            assertThat(d.sqlPath()).as(code).isEqualTo("analytics/rollup/product.sql");
+            assertThat(d.definition()).as(code).contains("agg_daily_product", "不预排名");
+            assertThat(d.changelog()).as(code).singleElement()
+                    .satisfies(c -> assertThat(c.change()).contains("Story 4.6"));
+        }
+        assertThat(byCode.apply("电商#8").definition()).contains("detail_views + add_to_cart", "LIMIT 3");
+        MetricDefinition soldOut = byCode.apply("电商#9");
+        assertThat(soldOut.definition()).contains("is_sold_out", "paid_qty_30d", "actual − locked", "D-13");
+        assertThat(soldOut.knownBias()).contains("快照", "回补重算不覆盖", "不扣退款");
+    }
+
     /** Story 4.3 AC5：市场 #1–#3、产品 #1、产品 #5 指向汇总 SQL，写明按周加权的现算 SQL、已知偏差与变更记录。 */
     @Test
     void story43RetentionAndInstallProfileMetrics() {
