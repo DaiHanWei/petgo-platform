@@ -49,6 +49,9 @@ class _Repo implements DetailRepository {
       CommentPage(items: comments, nextCursor: null, hasMore: false);
 
   @override
+  Future<CommentAnchor> getCommentAnchor(int commentId) => throw UnimplementedError();
+
+  @override
   Future<CommentPage> getReplies(int parentId, {String? cursor}) async {
     final int index = cursor == null ? 0 : int.parse(cursor);
     expandedParents.add(parentId);

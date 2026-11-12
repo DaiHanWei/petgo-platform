@@ -24,6 +24,20 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_COMMENTED', 'abc'), '/content/abc');
   });
 
+  test('V1.4.2 评论点赞（CONTENT_LIKED + commentId）→ 详情 + 评论区 + 评论锚点；帖子点赞不变', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_LIKED', '55', commentId: 70),
+        '/content/55?focus=comments&commentId=70');
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_LIKED', '55'), '/content/55');
+    // 缺 targetRef 仍兜底通知中心，绝不拼出 /content/null。
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_LIKED', null, commentId: 70),
+        DeepLinkRoutes.notificationsCenter);
+    // commentId 只对 CONTENT_LIKED 生效：评论通知 / @ 提及的落点不受影响。
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_COMMENTED', '55', commentAnchor: true, commentId: 70),
+        '/content/55?focus=comments');
+    expect(DeepLinkRoutes.pushPayloadToLocation('CONTENT_MENTIONED', 'COMMENT:55', commentId: 70),
+        '/content/55?focus=comments');
+  });
+
   test('NEW_CONSULT_REQUEST → 兽医工作台', () {
     expect(DeepLinkRoutes.pushPayloadToLocation('NEW_CONSULT_REQUEST', 'x'), '/vet/workbench');
   });

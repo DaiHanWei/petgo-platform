@@ -273,10 +273,12 @@ class _NotificationCenterPageState
   ///
   /// ⚠️ 与线格式**刻意分开**：线格式是 UPPER_SNAKE 的枚举名，埋点取值由 PRD 定死；
   /// 直接把枚举名发上去会让这条事件与 PRD 的判读口径对不上。
-  static String _notifTypeForAnalytics(String type) => switch (type) {
+  ///
+  /// V1.4.2：评论点赞与帖子点赞同 type（`CONTENT_LIKED`），靠 commentId 区分 → 报 `comment_like`。
+  static String _notifTypeForAnalytics(NotificationItem item) => switch (item.type) {
     'MILESTONE_SM_NODE' => 'milestone_sm',
     'MILESTONE_NODE' => 'milestone_l',
-    'CONTENT_LIKED' => 'like',
+    'CONTENT_LIKED' => item.commentId != null ? 'comment_like' : 'like',
     'CONTENT_COMMENTED' => 'comment',
     'VET_REPLY' => 'vet_reply',
     // V1.4.0 multi-pet Story 2.4 · AC6.1：名额到期两类（显式登记，取值与线格式小写同形）。
@@ -289,7 +291,7 @@ class _NotificationCenterPageState
     'SHOP_ORDER_REORDERED' => 'shop_order_reordered',
     // v1.4.2 shop Story 9.3 · AC4.4：券快过期（显式登记）。
     'COUPON_EXPIRING' => 'coupon_expiring',
-    _ => type.toLowerCase(),
+    final type => type.toLowerCase(),
   };
 
   /// 里程碑级别（S/M/L），从编码里取（形如 `C-S14`）。非里程碑通知返回 null。
@@ -305,7 +307,7 @@ class _NotificationCenterPageState
   Future<void> _onTap(NotificationItem item) async {
     // 埋点（V1.1.6 Story 6.1 · AC6）：**所有类型都报** —— 只报里程碑就没法横向对比点击率，
     // 而"S/M 通知到底是留痕还是召回"这个判断恰恰要靠与点赞/评论类的对比得出。
-    final props = <String, Object>{'notif_type': _notifTypeForAnalytics(item.type)};
+    final props = <String, Object>{'notif_type': _notifTypeForAnalytics(item)};
     // 里程碑类另带级别（S/M/L）——判读时要能把 S/M 与 L 拆开看。
     final level = _milestoneLevelOf(item);
     if (level != null) {
@@ -368,6 +370,8 @@ class _NotificationCenterPageState
         token: token,
         targetRef: targetRef,
         commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
+        // V1.4.2 评论点赞：带被赞评论 id → 进帖子并定位该评论（帖子点赞为 null，落点不变）。
+        commentId: item.commentId,
       );
       if (!mounted) return;
       // 兜底落点是本页自身时不重复跳转。

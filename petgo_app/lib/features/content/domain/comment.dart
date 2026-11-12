@@ -140,3 +140,24 @@ class CommentPage {
     );
   }
 }
+
+/// 评论锚点（V1.4.2 评论点赞通知，对应 `GET /comments/{id}/anchor`）。
+///
+/// [thread] 与评论列表 `items[]` 同形（一级评论 + replyCount + 内嵌回复）：
+/// - 目标本身是一级 → `targetId == thread.id`，内嵌回复照常是前 3 条；
+/// - 目标是回复 → [thread] 是它的一级父，内嵌回复**只含目标那条**（replyCount 仍是全量，「查看全部」照常可展开）。
+class CommentAnchor {
+  const CommentAnchor({required this.postId, required this.targetId, required this.thread});
+
+  final int postId;
+
+  /// 被定位（高亮）的那条评论 id —— 可能是 [thread] 本身，也可能是它的某条回复。
+  final int targetId;
+  final Comment thread;
+
+  factory CommentAnchor.fromJson(Map<String, dynamic> json) => CommentAnchor(
+        postId: (json['postId'] as num).toInt(),
+        targetId: (json['targetId'] as num).toInt(),
+        thread: Comment.fromJson((json['thread'] as Map).cast<String, dynamic>()),
+      );
+}

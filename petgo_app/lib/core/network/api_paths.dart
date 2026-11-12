@@ -387,6 +387,9 @@ class ApiPaths {
   /// 某一级评论的二级回复展开（Story 3.3）。
   static String commentReplies(int parentId) => '$base/comments/$parentId/replies';
 
+  /// 评论锚点（V1.4.2 评论点赞通知）：GET → `{postId, targetId, thread}`，游客可读；不可见 / 已删 → 404。
+  static String commentAnchor(int commentId) => '$base/comments/$commentId/anchor';
+
   /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
   static String contentPostLike(int id) => '$base/content-posts/$id/like';
 

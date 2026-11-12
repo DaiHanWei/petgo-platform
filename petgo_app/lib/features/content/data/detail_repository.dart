@@ -18,6 +18,10 @@ abstract class DetailRepository {
 
   Future<CommentPage> getReplies(int parentId, {String? cursor});
 
+  /// 评论锚点（V1.4.2 评论点赞通知 → 详情页定位那条评论）。游客可读；404 / 网络失败直接抛，
+  /// 调用方（评论区）静默降级为普通「滚到评论区」。
+  Future<CommentAnchor> getCommentAnchor(int commentId);
+
   /// 发表一级评论（Story 3.5，≤200 字服务端权威）。
   ///
   /// [mentionedUserIds]：这条评论 @ 到的人（V1.3.0 batch-b1 Story 3.2 · AC4）。
@@ -91,6 +95,12 @@ class DioDetailRepository implements DetailRepository {
       queryParameters: cursor == null ? null : {'cursor': cursor},
     );
     return CommentPage.fromJson(resp.data!);
+  }
+
+  @override
+  Future<CommentAnchor> getCommentAnchor(int commentId) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.commentAnchor(commentId));
+    return CommentAnchor.fromJson(resp.data!);
   }
 
   @override
