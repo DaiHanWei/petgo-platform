@@ -39,3 +39,4 @@
 | v1.4.0 | 四条线并行：① Tailrent Level 等级 / ② 多宠物 / ③ 送礼 / ④ 推送开关与收藏，集成分支 `dev_1.4.0`；先做共用地基 Story 0.1 | `planning-artifacts/v1.4.0/` | 规划入库（2026-10-18），地基 story 待开发 |
 | v1.4.0-toko-废弃 | ~~精选自营电商（Toko）~~ 旧 V1.4.0 规划 | `planning-artifacts/v1.4.0-toko-废弃/` | ⛔ 已废除（2026-10-18），勿参考，仅历史留存 |
 | admin-backend | 运营后台重构（Lark 登录 / 审计 / 兽医·用户·内容管理） | `planning-artifacts/admin-backend/` | 已上线 |
+| analytics-pipeline | 自建埋点（替代已停用的 PostHog）：后端接收 / 分层存储 / T+1 汇总 / AI 查数，不挂版本，App 侧随 V1.5.0 切换；分支 `feat/analytics-pipeline` | `planning-artifacts/analytics-pipeline/`（PRD / 架构 / epics / 就绪度）；执行顺序 `implementation-artifacts/analytics-pipeline/sprint-status-analytics-pipeline.yaml` | 规划完成（2026-11-12），28 story 待建 story 文件 |

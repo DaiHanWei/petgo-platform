@@ -1,0 +1,89 @@
+# generated: 2026-11-12
+# last_updated: 2026-11-12
+# project: 自建埋点（analytics-pipeline）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts/analytics-pipeline
+
+# 主题 analytics-pipeline，不归属任何版本（App 侧随 V1.5.0 切换）。分支 feat/analytics-pipeline，基于 main。
+# Epics: _bmad-output/planning-artifacts/analytics-pipeline/epics.md
+# 架构: _bmad-output/planning-artifacts/analytics-pipeline/architecture.md（冲突以架构为准；跨 story 契约以 CROSS-STORY-DECISIONS.md 为准）
+# 执行顺序: Epic 1 → Epic 2 / Epic 3 并行 → Epic 4。批次 ① = Epic 1–3，批次 ② = Epic 4。后端先于 App 上生产。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-11-12
+last_updated: 2026-11-12
+project: 自建埋点（analytics-pipeline）
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/analytics-pipeline
+
+development_status:
+  # Epic 1：后端埋点管道上线（后端；先上 stag，V1.5.0 发版前上生产）
+  epic-1: backlog
+  1-1-埋点库骨架: backlog
+  1-2-事件清单盘点与口径骨架: backlog
+  1-3-原始层与分区维护: backlog
+  1-4-批量接收接口: backlog
+  1-5-身份校验与关联表: backlog
+  1-6-明细层转换: backlog
+  1-7-明细分区-原始层清理与重算: backlog
+  1-8-注销擦除: backlog
+  1-9-服务端事件改走自建: backlog
+  1-10-存储水位与停写熔断: backlog
+  epic-1-retrospective: optional
+  # Epic 2：App 切到自建上报（随 V1.5.0）（App；随 V1.5.0；依赖 Epic 1 已上 stag）
+  epic-2: backlog
+  2-1-自建上报器-本地队列与匿名-id: backlog
+  2-2-身份绑定: backlog
+  2-3-生命周期事件: backlog
+  2-4-页面浏览事件: backlog
+  2-5-环境与生产标记: backlog
+  2-6-移除-posthog-与事件名比对: backlog
+  epic-2-retrospective: optional
+  # Epic 3：补齐团队指标需要的事件（随 V1.5.0）（App 为主；随 V1.5.0；可与 Epic 2 并行）
+  epic-3: backlog
+  3-1-运营位曝光与点击核对: backlog
+  3-2-推送打开统一事件: backlog
+  3-3-购物车事件补全: backlog
+  3-4-漏斗与引导事件核对: backlog
+  epic-3-retrospective: optional
+  # Epic 4：指标汇总、日活对账与 AI 查数（批次 ②）（后端；批次 ②，发版后可补）
+  epic-4: backlog
+  4-1-汇总框架与活跃-安装-注册: backlog
+  4-2-ga4-快照与日活对账: backlog
+  4-3-留存与引导转化: backlog
+  4-4-运营位与推送效果: backlog
+  4-5-toko-浏览-漏斗与加购转化: backlog
+  4-6-购物车与商品: backlog
+  4-7-以日活为分母的比率指标: backlog
+  4-8-口径文档补全与-ai-查数接入: backlog
+  epic-4-retrospective: optional
