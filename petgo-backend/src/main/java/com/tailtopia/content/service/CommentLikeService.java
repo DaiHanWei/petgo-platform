@@ -1,9 +1,12 @@
 package com.tailtopia.content.service;
 
 import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.CommentModerationStatus;
+import com.tailtopia.content.event.CommentLikedEvent;
 import com.tailtopia.content.repository.CommentLikeRepository;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.shared.error.AppException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,22 +26,33 @@ public class CommentLikeService {
 
     private final CommentRepository comments;
     private final CommentLikeRepository likes;
+    private final ApplicationEventPublisher events;
 
-    public CommentLikeService(CommentRepository comments, CommentLikeRepository likes) {
+    public CommentLikeService(CommentRepository comments, CommentLikeRepository likes,
+            ApplicationEventPublisher events) {
         this.comments = comments;
         this.likes = likes;
+        this.events = events;
     }
 
     /**
      * 点赞一条评论。幂等：已赞过再点仍然成功，不产生第二行。
      *
      * <p>软删的评论不可点赞（AC9：它不该出现在任何列表里，能被点到说明客户端拿着过期数据）。
+     *
+     * <p>修复线：真正新增一条点赞（insert 返回 1）且不是自赞时，发 {@link CommentLikedEvent} 通知评论作者。
+     * 重复点赞（返回 0）不发 —— 否则同一人连点会反复推送。
      */
     @Transactional
     public void like(long commentId, long userId) {
-        requireAliveComment(commentId);
+        Comment c = requireAliveComment(commentId);
         // 并发双击：uq_comment_likes_comment_user 兜底 → 返回 0，视为已赞，不报错。
-        likes.insertIfAbsent(commentId, userId);
+        int inserted = likes.insertIfAbsent(commentId, userId);
+        // 只对已公开（VISIBLE）的评论发：审核中 / 被拒 / 下架的评论通知点进去看不到东西。
+        if (inserted > 0 && c.getAuthorId() != userId
+                && c.getModerationStatus() == CommentModerationStatus.VISIBLE) {
+            events.publishEvent(new CommentLikedEvent(c.getPostId(), commentId, userId, c.getAuthorId(), c.getBody()));
+        }
     }
 
     /** 取消点赞。没赞过也算成功（幂等，客户端不必先查状态）。 */
@@ -54,12 +68,13 @@ public class CommentLikeService {
      * 能点到这条评论说明它已经渲染在某人屏幕上了，此时因为可见性规则把点赞拒掉，
      * 用户只会看到一个点不动的心 —— 而可见性本身是无感知设计（AC3 无感知）。
      */
-    private void requireAliveComment(long commentId) {
+    private Comment requireAliveComment(long commentId) {
         Comment c = comments.findById(commentId)
                 .filter(x -> x.getDeletedAt() == null)
                 .orElseThrow(() -> AppException.notFound("评论不存在或已删除"));
         if (c.getId() == null) {
             throw AppException.notFound("评论不存在或已删除");
         }
+        return c;
     }
 }

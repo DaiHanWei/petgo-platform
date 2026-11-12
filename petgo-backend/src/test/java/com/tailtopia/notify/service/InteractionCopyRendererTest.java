@@ -110,6 +110,19 @@ class InteractionCopyRendererTest {
     }
 
     @Test
+    void commentLikedVariantSaysCommentNotPost() {
+        String v = Notification.VARIANT_COMMENT;
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, v, new ActorSummary(1L, "Rani", "t", 0), ID))
+                .isEqualTo("Rani menyukai komentarmu");
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, v, new ActorSummary(1L, "Rani", "t", 2), ID))
+                .isEqualTo("Rani dan 2 lainnya menyukai komentarmu");
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, v, new ActorSummary(1L, "Rani", "t", 0), EN))
+                .isEqualTo("Rani liked your comment");
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, v, new ActorSummary(1L, "Rani", "t", 2), EN))
+                .isEqualTo("Rani and 2 others liked your comment");
+    }
+
+    @Test
     void othersCountHasNoThousandsSeparator() {
         assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", "t", 1234), ID))
                 .isEqualTo("Rani dan 1234 lainnya menyukai postinganmu");

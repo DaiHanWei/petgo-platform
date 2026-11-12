@@ -154,9 +154,13 @@ public class InteractionCopyRenderer {
                     : msg("notify.tpl.giftReceived.many" + suffix, locale, name, others, pet, total);
         }
         return switch (type) {
-            case CONTENT_LIKED -> s.others() == 0
-                    ? msg("notify.tpl.liked.one", locale, name)
-                    : msg("notify.tpl.liked.many", locale, name, others);
+            case CONTENT_LIKED -> Notification.VARIANT_COMMENT.equals(variant)
+                    ? (s.others() == 0
+                            ? msg("notify.tpl.commentLiked.one", locale, name)
+                            : msg("notify.tpl.commentLiked.many", locale, name, others))
+                    : (s.others() == 0
+                            ? msg("notify.tpl.liked.one", locale, name)
+                            : msg("notify.tpl.liked.many", locale, name, others));
             case PLACE_COMMENTED -> s.others() == 0
                     ? msg("notify.tpl.placeCommented.one", locale, name)
                     : msg("notify.tpl.placeCommented.many", locale, name, others);

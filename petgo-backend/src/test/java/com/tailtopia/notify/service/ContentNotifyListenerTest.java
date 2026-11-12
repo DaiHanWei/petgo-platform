@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.content.event.CommentLikedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
@@ -47,6 +48,28 @@ class ContentNotifyListenerTest {
         listener().onContentLiked(new ContentLikedEvent(55L, 2L, 9L, Instant.now()));
         verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L,
                 "LIKE:POST:55", "55", null, null, null);
+    }
+
+    // ===== 修复线：评论被点赞 → 评论作者（复用 CONTENT_LIKED + VARIANT_COMMENT，按评论合并）=====
+
+    @Test
+    void commentLikedNotifiesCommentAuthorMergedPerComment() {
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 2L, 9L, "halo"));
+        verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L,
+                "LIKE:COMMENT:70", "55", 70L, Notification.VARIANT_COMMENT, "halo");
+    }
+
+    @Test
+    void selfCommentLikeNotPushed() {
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 9L, 9L, "halo"));
+        verifyNoInteractionSent();
+    }
+
+    @Test
+    void commentLikeFromHiddenUserIsSuppressed() {
+        when(hideRelations.isHidden(9L, 2L)).thenReturn(true);
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 2L, 9L, "halo"));
+        verifyNoInteractionSent();
     }
 
     @Test

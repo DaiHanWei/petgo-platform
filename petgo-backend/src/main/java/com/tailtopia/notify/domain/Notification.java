@@ -78,6 +78,13 @@ public class Notification {
     /** {@code variant} 取值：回复了你的评论（Story 3.1）。DB 无 CHECK，取值只在这里收口。 */
     public static final String VARIANT_REPLY = "REPLY";
 
+    /**
+     * {@code variant} 取值：{@code CONTENT_LIKED} 的「赞了你的评论」（修复线）。
+     * 复用 CONTENT_LIKED 而不新增类型：免重列 {@code ck_notifications_type}，且旧版 App 已把 CONTENT_LIKED 列为
+     * 「显示后端整句文案」的类型 —— 不发版即可正确显示。{@code commentId} 指向被赞的评论，列表据此现查原文。
+     */
+    public static final String VARIANT_COMMENT = "COMMENT";
+
     protected Notification() {
     }
 

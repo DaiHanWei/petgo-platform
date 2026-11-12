@@ -289,6 +289,8 @@ class NotificationServiceTest {
     @Test
     void debounceKeysFollowAggregatePrefix() {
         assertThat(NotificationService.debounceKey("LIKE:POST:55")).isEqualTo("notify:likepush:55");
+        // 修复线：评论点赞单独一把键，不与同号帖子撞
+        assertThat(NotificationService.debounceKey("LIKE:COMMENT:55")).isEqualTo("notify:likepush:comment:55");
         assertThat(NotificationService.debounceKey("COMMENT:PLACE:abc")).isEqualTo("notify:placecommentpush:abc");
         assertThat(NotificationService.debounceKey(null)).isNull();
     }

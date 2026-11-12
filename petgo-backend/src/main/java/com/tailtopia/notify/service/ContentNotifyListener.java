@@ -1,5 +1,6 @@
 package com.tailtopia.notify.service;
 
+import com.tailtopia.content.event.CommentLikedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
@@ -86,6 +87,24 @@ public class ContentNotifyListener {
         // V1.3.4 follow · Story 3.1：带触发人、同帖未读即合并（AD-9）；取消点赞不发事件、不回退通知。
         notificationService.sendInteraction(event.authorId(), NotificationType.CONTENT_LIKED, event.likerId(),
                 "LIKE:POST:" + event.postId(), String.valueOf(event.postId()), null, null, null);
+    }
+
+    /**
+     * 评论被点赞（修复线）→ 评论作者「赞了你的评论」。复用 {@code CONTENT_LIKED} + {@link Notification#VARIANT_COMMENT}：
+     * 同一条评论未读即合并（{@code LIKE:COMMENT:{commentId}}）、10 分钟推送去抖、走「点赞」推送分类 —— 全部同帖子点赞。
+     * targetRef = 帖子 id（点击落到帖子），commentId 供列表现查评论原文。自赞已在 content 侧不发事件，这里双保险。
+     */
+    @TransactionalEventListener
+    public void onCommentLiked(CommentLikedEvent event) {
+        if (event.likerId() == event.commentAuthorId()) {
+            return;
+        }
+        if (suppressed(event.commentAuthorId(), event.likerId(), event.commentAuthorId())) {
+            return;
+        }
+        notificationService.sendInteraction(event.commentAuthorId(), NotificationType.CONTENT_LIKED, event.likerId(),
+                "LIKE:COMMENT:" + event.commentId(), String.valueOf(event.postId()), event.commentId(),
+                Notification.VARIANT_COMMENT, event.commentBody());
     }
 
     @TransactionalEventListener

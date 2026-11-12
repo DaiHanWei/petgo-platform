@@ -531,6 +531,10 @@ public class NotificationService {
         if (aggregateKey.startsWith("LIKE:POST:")) {
             return LIKE_PUSH_KEY_PREFIX + aggregateKey.substring("LIKE:POST:".length());
         }
+        // 修复线：评论被赞同样 10 分钟内同一条评论只推一次；键与帖子分开（id 空间不同，不能共用 likepush:{id}）。
+        if (aggregateKey.startsWith("LIKE:COMMENT:")) {
+            return LIKE_PUSH_KEY_PREFIX + "comment:" + aggregateKey.substring("LIKE:COMMENT:".length());
+        }
         if (aggregateKey.startsWith("COMMENT:PLACE:")) {
             return PLACE_COMMENT_PUSH_KEY_PREFIX + aggregateKey.substring("COMMENT:PLACE:".length());
         }
@@ -551,7 +555,8 @@ public class NotificationService {
     /** 落库兜底标题（沿用改造前的中文串；不含昵称，AD-3）。通知中心由 App / Story 3.3 按 type 本地化。 */
     private static String fallbackTitle(NotificationType type, String variant) {
         return switch (type) {
-            case CONTENT_LIKED -> "有人赞了你的内容";
+            case CONTENT_LIKED -> Notification.VARIANT_COMMENT.equals(variant)
+                    ? "有人赞了你的评论" : "有人赞了你的内容";
             case CONTENT_COMMENTED -> Notification.VARIANT_REPLY.equals(variant)
                     ? "有人回复了你的评论" : "有人评论了你的内容";
             case USER_FOLLOWED -> "有人关注了你";
