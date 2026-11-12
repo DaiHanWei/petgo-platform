@@ -66,7 +66,7 @@ development_status:
   2-2-身份绑定: review
   2-3-生命周期事件: review
   2-4-页面浏览事件: review
-  2-5-环境与生产标记: ready-for-dev
+  2-5-环境与生产标记: review
   2-6-移除-posthog-与事件名比对: ready-for-dev
   epic-2-retrospective: optional
   # Epic 3：补齐团队指标需要的事件（随 V1.5.0）（App 为主；随 V1.5.0；可与 Epic 2 并行）

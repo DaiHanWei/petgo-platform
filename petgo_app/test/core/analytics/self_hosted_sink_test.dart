@@ -674,6 +674,97 @@ void main() {
       expect(bearers, ['jwt-a', 'jwt-b']);
     });
   });
+
+  group('环境上下文（Story 2.5 AC1、AC3）', () {
+    const env = <String, Object>{
+      'appVersion': '1.5.0',
+      'appBuild': '21',
+      'platform': 'android',
+      'osVersion': '14',
+      'deviceModel': 'Google sdk_gphone64_arm64',
+      'isPhysicalDevice': false,
+      'installSource': 'simulator',
+      'isProduction': false,
+    };
+    late int envLoads;
+    late String? screenNow;
+
+    SelfHostedSink envSink({Future<Map<String, Object>> Function()? load}) {
+      final s = SelfHostedSink.test(
+        transport: transport,
+        now: () => clock,
+        store: store,
+        loadEnvironment: load ??
+            () async {
+              envLoads++;
+              return env;
+            },
+        currentScreen: () => screenNow,
+      );
+      addTearDown(s.dispose);
+      return s;
+    }
+
+    setUp(() {
+      envLoads = 0;
+      screenNow = null;
+    });
+
+    test('入队事件带环境字段 + 入队那一刻的 screen（之后换页不改已入队事件）', () async {
+      final s = envSink();
+      await s.start();
+      await settle();
+      screenNow = '/shop/products/:token';
+      s.enqueue('e1', null);
+      screenNow = 'home_page';
+      s.enqueue('e2', null);
+      screenNow = null;
+      s.enqueue('e3', null);
+      await s.flush();
+      final b = batchOf(bodies.single);
+      expect(b[0]['context'], {...env, 'screen': '/shop/products/:token'});
+      expect(b[1]['context'], {...env, 'screen': 'home_page'});
+      expect(b[2]['context'], env); // 未报过页面：不放 screen 键
+      expect(envLoads, 1);
+    });
+
+    test('队列打开前入队：screen 入队时取，环境字段写盘前补上；enqueue 不等环境', () async {
+      final gate = Completer<Map<String, Object>>();
+      final s = envSink(load: () {
+        envLoads++;
+        return gate.future;
+      });
+      final starting = s.start();
+      screenNow = 'a_page';
+      s.enqueue('early', null); // 环境未就绪，不阻塞
+      screenNow = 'b_page';
+      expect(await store.readAll(), isEmpty);
+      gate.complete(env);
+      await starting;
+      await settle();
+      final e = batchOf(bodies.single).single;
+      expect(e['event'], 'early');
+      expect(e['context'], {...env, 'screen': 'a_page'});
+      expect(envLoads, 1);
+    });
+
+    test('多次 start 只加载一次环境', () async {
+      final s = envSink();
+      await s.start();
+      await s.start();
+      await settle();
+      expect(envLoads, 1);
+    });
+
+    test('环境加载抛异常：降级为 isProduction=false，事件照发', () async {
+      final s = envSink(load: () async => throw StateError('plugin'));
+      await s.start();
+      await settle();
+      s.enqueue('e', null);
+      await s.flush();
+      expect(batchOf(bodies.single).single['context'], {'isProduction': false});
+    });
+  });
 }
 
 class _ThrowingStore implements EventQueueStore {

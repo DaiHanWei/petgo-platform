@@ -9,8 +9,10 @@ import 'package:flutter/widgets.dart';
 
 import '../network/dio_client.dart' show kApiBaseUrl;
 import '../storage/secure_storage.dart';
+import 'analytics.dart' show Analytics;
 import 'anonymous_id.dart';
 import 'event_queue_file.dart';
+import 'production_flags.dart';
 
 /// 一次上报请求的结果。[retryAfter] 为原始 `Retry-After` 头（秒数或 HTTP 日期）。
 class SinkResponse {
@@ -26,6 +28,9 @@ typedef SinkTransport = Future<SinkResponse> Function(String body, String? beare
 
 /// 读当前 access token（Story 2.2）。返回 null 或抛异常都按「无 token」发送。
 typedef SinkTokenReader = Future<String?> Function();
+
+/// 读环境上下文（Story 2.5）。生产为 [AnalyticsEnvironment.load]（只采集一次并缓存）。
+typedef SinkEnvironmentLoader = Future<Map<String, Object>> Function();
 
 /// 自建埋点上报器（analytics-pipeline Story 2.1，FR-1–3 / A2）。
 ///
@@ -54,6 +59,11 @@ typedef SinkTokenReader = Future<String?> Function();
 /// 发送时读 access token 加 `Authorization`；用独立 Dio，**不挂 `AuthInterceptor`**，埋点请求绝不
 /// 触发续期 / 转游客 / 登录弹框。token 不进队列文件、日志、事件属性。
 ///
+/// **环境上下文（Story 2.5）**：[start] 先 await 环境上下文（[AnalyticsEnvironment]，已缓存），
+/// 再打开队列。信封 `context` = 环境上下文 + 入队那一刻的 `screen`（`Analytics.currentScreen`：
+/// **最近一次 `Analytics.screen()` 传入的页面名**，不保证是当前可见页）。队列打开前入队的事件先放
+/// 内存缓冲，`screen` 入队时已取好，环境字段在合并写盘前补上 —— `enqueue` 从不等环境信息。
+///
 /// **不打扰主流程**：debug 包 `enabled=false`，[enqueue] 直接返回、不写文件、不起定时器；
 /// 一切异常内部吞掉，日志只打条数 / 状态码，绝不打事件内容。
 class SelfHostedSink with WidgetsBindingObserver {
@@ -65,8 +75,12 @@ class SelfHostedSink with WidgetsBindingObserver {
     double Function()? jitter,
     EventQueueStore? store,
     Future<EventQueueStore> Function()? openStore,
+    SinkEnvironmentLoader? loadEnvironment,
+    String? Function()? currentScreen,
     bool registerLifecycle = true,
   })  : _transport = transport ?? _dioTransport(),
+        _loadEnvironment = loadEnvironment ?? AnalyticsEnvironment.load,
+        _currentScreen = currentScreen ?? _analyticsScreen,
         _readToken = readToken ?? _readAccessToken,
         _now = now ?? DateTime.now,
         _jitter = jitter ?? _defaultJitter,
@@ -83,6 +97,8 @@ class SelfHostedSink with WidgetsBindingObserver {
     DateTime Function()? now,
     double Function()? jitter,
     EventQueueStore? store,
+    SinkEnvironmentLoader? loadEnvironment,
+    String? Function()? currentScreen,
   }) =>
       SelfHostedSink._(
         enabled: enabled,
@@ -91,6 +107,8 @@ class SelfHostedSink with WidgetsBindingObserver {
         now: now,
         jitter: jitter ?? () => 1.0,
         store: store ?? MemoryEventQueueStore(),
+        loadEnvironment: loadEnvironment ?? () async => const <String, Object>{},
+        currentScreen: currentScreen ?? () => null,
         registerLifecycle: false,
       );
 
@@ -111,6 +129,9 @@ class SelfHostedSink with WidgetsBindingObserver {
   /// `sentAt` 发送时才填，单条体积检查时预留它的字节数。
   static const int _sentAtReserve = 48;
 
+  /// 队列打开前入队的事件，环境字段稍后才补，体积检查时预留（实际不到 400 字节）。
+  static const int _contextReserve = 1024;
+
   static const Duration defaultRetryAfter = Duration(seconds: 60);
   static const Duration backoffBase = Duration(seconds: 5);
   static const Duration backoffMax = Duration(minutes: 5);
@@ -124,9 +145,14 @@ class SelfHostedSink with WidgetsBindingObserver {
   final DateTime Function() _now;
   final double Function() _jitter;
   final Future<EventQueueStore> Function() _openStore;
+  final SinkEnvironmentLoader _loadEnvironment;
+  final String? Function() _currentScreen;
   final bool _registerLifecycle;
 
   EventQueueStore? _store;
+
+  /// 环境上下文；与 [_store] 同时赋值（不变式：`_store != null` ⇔ `_env != null`）。
+  Map<String, Object>? _env;
 
   /// 当前用户标识（`distinctIdFor` 哈希）；null = 未登录 / 兽医 / 冷启动恢复前。只在内存。
   String? _currentUserKey;
@@ -172,6 +198,13 @@ class SelfHostedSink with WidgetsBindingObserver {
     if (!enabled || _store != null || _starting) return;
     _starting = true;
     try {
+      Map<String, Object> env;
+      try {
+        env = await _loadEnvironment();
+      } catch (e) {
+        debugPrint('[Analytics] environment load failed: ${e.runtimeType}');
+        env = const {'isProduction': false};
+      }
       EventQueueStore s;
       try {
         s = await _openStore();
@@ -183,6 +216,11 @@ class SelfHostedSink with WidgetsBindingObserver {
       // 从这里到 `_store = s` 没有 await：期间不会有新事件漏进缓冲。
       final pending = List.of(_pending);
       _pending.clear();
+      // 缓冲期入队的事件：补环境字段（保留入队时取的 screen）后再写盘。
+      for (final e in pending) {
+        e['context'] = _withScreen(env, (e['context'] as Map?)?['screen'] as String?);
+      }
+      _env = env;
       _store = s;
       if (pending.isNotEmpty) unawaited(s.append(pending));
       _sinceFlush = pending.length;
@@ -212,12 +250,13 @@ class SelfHostedSink with WidgetsBindingObserver {
         // Story 2.2：入队那一刻绑定，之后改 _currentUserKey 不影响已入队事件。
         'userId': _currentUserKey,
         'properties': properties ?? const <String, Object>{},
-        // Story 2.5 填环境字段。
-        'context': const <String, Object>{},
+        // Story 2.5：环境字段（队列打开前为空，写盘前补）+ 入队那一刻的 screen，按发生时刻冻结。
+        'context': _withScreen(_env ?? const {}, _screenNow()),
       };
       // 序列化一次：校验能编码 + 量体积；超 32 KB 整批会 413，提前丢掉。
       final bytes = utf8.encode(jsonEncode(envelope)).length;
-      if (bytes + _sentAtReserve > maxEventBytes) {
+      final reserve = _sentAtReserve + (_env == null ? _contextReserve : 0);
+      if (bytes + reserve > maxEventBytes) {
         _drop(1, 'oversize');
         return;
       }
@@ -234,6 +273,17 @@ class SelfHostedSink with WidgetsBindingObserver {
       _drop(1, 'encode ${e.runtimeType}');
     }
   }
+
+  String? _screenNow() {
+    try {
+      return _currentScreen();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Map<String, Object> _withScreen(Map<String, Object> env, String? screen) =>
+      <String, Object>{...env, 'screen': ?screen};
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -385,6 +435,8 @@ class SelfHostedSink with WidgetsBindingObserver {
       } catch (_) {}
     }
   }
+
+  static String? _analyticsScreen() => Analytics.currentScreen;
 
   static double _defaultJitter() => 0.8 + Random().nextDouble() * 0.4;
 

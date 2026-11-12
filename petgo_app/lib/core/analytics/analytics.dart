@@ -10,6 +10,7 @@ import 'button_ids.dart';
 import 'event_names.dart';
 import 'lifecycle_events.dart';
 import 'meta_client.dart';
+import 'production_flags.dart';
 import 'self_hosted_sink.dart';
 import 'tiktok_client.dart';
 
@@ -69,6 +70,9 @@ class Analytics {
   /// PostHog setup **互相独立**：任何一个失败都不影响另一个。sink 在队列加载完成前收到的事件
   /// 先放内存缓冲，加载完成后合并写盘，不丢。
   ///
+  /// 环境上下文（Story 2.5，[AnalyticsEnvironment]：版本 / 平台 / 机型 / 生产标记）在 sink 启动前
+  /// 采集一次并缓存（各插件限时 3 秒，失败只降级为非生产）；不阻塞首帧（`main.dart` 不 await init）。
+  ///
   /// 生命周期事件（Story 2.3）在 sink 启动之后开始（[LifecycleEvents.start]），不等 PostHog。
   static Future<void> init() async {
     await Future.wait([
@@ -87,6 +91,7 @@ class Analytics {
 
   static Future<void> _startSelfHostedSink() async {
     try {
+      await AnalyticsEnvironment.load();
       await SelfHostedSink.instance.start();
     } catch (e) {
       debugPrint('[Analytics] sink start failed: ${e.runtimeType}');
