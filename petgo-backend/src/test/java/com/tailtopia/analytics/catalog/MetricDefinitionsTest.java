@@ -54,7 +54,7 @@ class MetricDefinitionsTest {
         assertThat(s1.knownBias()).contains("GA4");
         // Story 4.2：观察期取 ga4_daily_snapshot.active_users_all，切换由 Dai 决定（analytics.dau-source）
         assertThat(s1.knownBias()).contains("ga4_daily_snapshot.active_users_all", "analytics.dau-source");
-        assertThat(s1.changelog()).hasSize(3).first().satisfies(c -> {
+        assertThat(s1.changelog()).hasSize(4).first().satisfies(c -> {
             assertThat(c.date()).isEqualTo("2026-11-13");
             assertThat(c.change()).isEqualTo("初版骨架");
         });
@@ -287,5 +287,33 @@ class MetricDefinitionsTest {
                 """;
         assertThatThrownBy(() -> MetricDefinitions.parse(new StringReader(yaml), "inline.yaml"))
                 .hasMessageContaining("metrics[0].sources[1] 必须是非空字符串");
+    }
+
+    /** Story 4.7 AC1 / AC3 / AC4：S4、产品 #3、内容 #1 指向 ratio.sql，逐表列出判据、分母规则、月比率与回访用户定义。 */
+    @Test
+    void story47RatioMetrics() {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+        assertThat(m.isLoaded()).isTrue();
+        java.util.function.Function<String, MetricDefinition> byCode =
+                code -> m.metrics().stream().filter(d -> d.code().equals(code)).findFirst().orElseThrow();
+        for (String code : new String[] {"S4", "产品#3", "内容#1"}) {
+            MetricDefinition d = byCode.apply(code);
+            assertThat(d.sqlPath()).as(code).isEqualTo("analytics/rollup/ratio.sql");
+            assertThat(String.join("\n", d.sources())).as(code).contains("agg_daily_ratio", "ga4_daily_snapshot.active_users_all",
+                    "agg_daily_activity.dau_person");
+            assertThat(d.exclusions()).as(code).contains("account_type = 'REAL'");
+            assertThat(d.changelog()).as(code).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 4.7"));
+        }
+        MetricDefinition s4 = byCode.apply("S4");
+        assertThat(s4.definition()).contains("toko_buyers ÷ dau", "dau_source", "算术平均", "跳过分母为空的日子", "skipped_days",
+                "analytics.dau-source");
+        MetricDefinition p3 = byCode.apply("产品#3");
+        assertThat(p3.definition()).contains("ID_HD", "PAWCOIN", "id_card_hd_purchases", "TS_MATCH", "BOARDING_PASS",
+                "RENT', 'RENEW", "ai_consult_orders", "consult_orders", "去重并集", "payers_gift", "payers_topup");
+        assertThat(p3.exclusions()).contains("MERCHANT_PO", "SHOP_ORDER", "ADMIN_GRANT", "DUPLICATE_PAID");
+        assertThat(p3.knownBias()).contains("不经过 payment_intents", "不含 PawCoin 充值", "送礼", "updated_at");
+        MetricDefinition c1 = byCode.apply("内容#1");
+        assertThat(c1.definition()).contains("users.created_at", "dau − new_users", "算术平均");
+        assertThat(c1.knownBias()).contains("signup_succeeded", "可能为负");
     }
 }

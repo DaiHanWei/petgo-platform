@@ -21,10 +21,10 @@ class RollupSqlFilesTest {
     /**
      * 已注册的 SQL 指标族（与 {@link RollupConfig} 一致；dau_reconcile 的口径断言见 {@code DauReconcileFamilyTest}，
      * placement / push 的分段与口径断言见 {@code PlacementPushFamilyTest}，toko 见 {@code TokoFamilyTest}，
-     * cart / product 见 {@code CartFamilyTest} / {@code ProductFamilyTest}）。
+     * cart / product 见 {@code CartFamilyTest} / {@code ProductFamilyTest}，ratio 见 {@code RatioRollupTest}）。
      */
     static final List<String> FAMILIES = List.of("activity", "install", "dau_reconcile", "retention", "install_profile",
-            "placement", "push", "toko", "cart", "product");
+            "placement", "push", "toko", "cart", "product", "ratio");
 
     private static final Set<String> ALLOWED_PARAMS = Set.of("stat_date", "as_of", "lookback_start", "computed_at");
     private static final Pattern PARAM = Pattern.compile("(?<![:\\w]):([a-z_][a-z0-9_]*)");

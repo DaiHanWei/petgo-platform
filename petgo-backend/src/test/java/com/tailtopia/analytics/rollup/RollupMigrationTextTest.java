@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
-/** L0：Story 4.1 / 4.3 / 4.4 / 4.5 / 4.6 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
+/** L0：Story 4.1 / 4.3 / 4.4 / 4.5 / 4.6 / 4.7 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
 class RollupMigrationTextTest {
 
     private static final String PATH = "db/analytics-migration/V20261113_1300__rollup_framework_activity_install.sql";
@@ -20,6 +20,8 @@ class RollupMigrationTextTest {
     private static final String PATH_45 = "db/analytics-migration/V20261113_1400__agg_toko.sql";
 
     private static final String PATH_46 = "db/analytics-migration/V20261113_1410__agg_cart_product.sql";
+
+    private static final String PATH_47 = "db/analytics-migration/V20261113_1420__agg_daily_ratio.sql";
 
     private static String sql() throws IOException {
         return read(PATH);
@@ -163,5 +165,34 @@ class RollupMigrationTextTest {
         assertThat(s).contains("rolname = '${readerRole}'").doesNotContain("TO analytics_reader");
         assertThat(s).doesNotContainIgnoringCase("REFERENCES");
         assertThat(s).doesNotContain("user_id", "anonymous_id", "person_key");
+    }
+
+    /** Story 4.7 AC1 / AC2 / AC5：agg_daily_ratio 的列、可空列、来源约束、计数列 integer、口径注释与授权；不含可识别个人的列。 */
+    @Test
+    void ratioTable() throws IOException {
+        String s = read(PATH_47);
+        assertThat(s).contains("CREATE TABLE agg_daily_ratio (", "COMMENT ON TABLE agg_daily_ratio IS",
+                "format('GRANT SELECT ON %I TO %I', 'agg_daily_ratio', '${readerRole}')",
+                "stat_date            date          PRIMARY KEY",
+                "CONSTRAINT ck_agg_daily_ratio_source CHECK (dau_source IN ('GA4', 'SELF'))");
+        assertThat(s).containsPattern("COMMENT ON COLUMN agg_daily_ratio\\.stat_date IS 'WIB 日期");
+        for (String c : new String[] {"toko_buyers", "nontoko_payers", "payers_ktp", "payers_tailsonality",
+            "payers_passport", "payers_pet_slot", "payers_ai_unlock", "payers_vet_consult", "payers_gift",
+            "payers_topup", "new_users"}) {
+            assertThat(s).containsPattern("(?m)^    " + c + " +integer +NOT NULL,$");
+        }
+        // 分母缺失时可空的列
+        assertThat(s).containsPattern("(?m)^    dau +integer,$").containsPattern("(?m)^    returning_users +integer,$")
+                .containsPattern("(?m)^    s4_ratio +numeric\\(9,6\\),$")
+                .containsPattern("(?m)^    p3_ratio +numeric\\(9,6\\),$")
+                .containsPattern("(?m)^    dau_source +varchar\\(8\\) +NOT NULL,$");
+        assertThat(s).containsPattern("COMMENT ON COLUMN agg_daily_ratio\\.dau IS '[^']*NULL")
+                .containsPattern("COMMENT ON COLUMN agg_daily_ratio\\.payers_gift IS '参照（不进分子）")
+                .containsPattern("COMMENT ON COLUMN agg_daily_ratio\\.payers_topup IS '参照（不进分子）")
+                .containsPattern("COMMENT ON TABLE agg_daily_ratio IS '[^']*算术平均");
+        assertThat(s).doesNotContainIgnoringCase("smallint");
+        assertThat(s).contains("rolname = '${readerRole}'").doesNotContain("TO analytics_reader");
+        assertThat(s).doesNotContainIgnoringCase("REFERENCES");
+        assertThat(s).doesNotContain("user_id", "anonymous_id", "person_key", "sender_id");
     }
 }

@@ -108,4 +108,14 @@ public class RollupConfig {
     public RollupFamily productRollupFamily(BusinessPlacementReader businessPlacementReader) {
         return new ProductFamily(businessPlacementReader);
     }
+
+    /**
+     * 以日活为分母的比率（Story 4.7，S4 / 产品 #3 / 内容 #1）：{@code analytics/rollup/ratio.sql} → {@code agg_daily_ratio}；
+     * 分子经 {@link PayerCountReader} 窄查询业务库（单元事务之外），分母按 {@link AnalyticsDauSourceProperties}（GA4 / SELF）。
+     * 依赖 activity；{@code recomputeDays = 3}（D-6，与 GA4 回拉 3 天一致）。
+     */
+    @Bean
+    public RollupFamily ratioRollupFamily(PayerCountReader payerCountReader, AnalyticsDauSourceProperties dauSource) {
+        return new RatioRollup(payerCountReader, dauSource);
+    }
 }

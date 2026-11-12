@@ -40,10 +40,15 @@ metrics:
       之前从未关联过的匿名 id，事后登录兽医 / 虚拟号时才被识别并排除；从未登录的兽医设备无法识别，按游客计入。
       晚到超过 3 天的事件进明细但不回算（D-6）；V1.5.0 之前的版本没有自建数据。
     sql_path: analytics/rollup/activity.sql
+    # 日活来源切换日期（Story 4.7）：analytics.dau-source 从 GA4 切到 SELF 时填 "YYYY-MM-DD"（加引号，WIB 日期），
+    # 并在下面 changelog 写一条切换原因。SELF 而本字段为空时后端启动打 WARN + TECH 告警（不阻断启动）。
+    # 切换后只有回补窗口（3 天）内的 agg_daily_ratio 行被改写为新来源，更早的行保留旧来源——以每行 dau_source 为准。
+    dau_source_switch: null
     changelog:
       - { date: "2026-11-13", change: "初版骨架" }
       - { date: "2026-11-13", change: "Story 4.1：自建口径落地 agg_daily_activity.dau_person（含游客、按人、分平台 + all），SQL 文件由 dau.sql 改为 activity.sql；注明观察期内以 GA4 为准" }
       - { date: "2026-11-13", change: "Story 4.2：观察期内取 ga4_daily_snapshot.active_users_all；新增日活来源开关 analytics.dau-source（默认 GA4），切换由 Dai 决定、切换日期写进本条（Story 4.7）" }
+      - { date: "2026-11-13", change: "Story 4.7：新增字段 dau_source_switch（初始 null；切到 SELF 时填切换日期）；S1 同时是 S4 / 产品 #3 / 内容 #1 的分母（agg_daily_ratio.dau）" }
   - code: "S1-登录"
     name: "登录用户日活"
     definition: >-
@@ -627,3 +632,82 @@ metrics:
     sql_path: analytics/rollup/dau_reconcile.sql
     changelog:
       - { date: "2026-11-13", change: "Story 4.2：新增（FR-24 / FR-25；新增 NO_GA4 状态）" }
+  - code: S4
+    name: "电商交易占日活"
+    definition: >-
+      WIB 自然日内有已付款 Toko 订单的去重人数 ÷ 当天日活（agg_daily_ratio.s4_ratio = toko_buyers ÷ dau，六位小数四舍五入）。
+      分子 toko_buyers = 业务库 shop_orders.paid_at 的 WIB 日期 = 当天的去重下单人数（D-13：paid_at 非空即已付款，退款 / 取消仍算）。
+      分母 dau 按开关 analytics.dau-source 取：GA4（默认，观察期内）= ga4_daily_snapshot.active_users_all（GA4 全版本日活，按设备、含游客；
+      不是对账用的 V1.5.0+ 日活）；SELF = agg_daily_activity 的 all 行 dau_person（自建日活，含游客，按人）。
+      dau_source 列记每行实际用的来源，以每行为准。分母取不到（GA4 当天未拉到、stag 无 GA4）时 dau 与比率为空，分子照写；分母为 0 时比率为空。
+      月比率 = 当月每日比率的算术平均（跳过分母为空的日子，并注明跳过了几天），由日表现算，不建月表：
+      SELECT date_trunc('month', stat_date)::date AS m, avg(s4_ratio) AS s4_month, count(*) FILTER (WHERE s4_ratio IS NULL) AS skipped_days
+      FROM agg_daily_ratio GROUP BY 1 ORDER BY 1;
+    sources:
+      - "业务库：shop_orders.paid_at（分子）；JOIN users 只算 role = 'USER' 且 account_type = 'REAL'"
+      - "分母：ga4_daily_snapshot.active_users_all（GA4）或 agg_daily_activity.dau_person（platform = 'all'，SELF）"
+      - "汇总表：agg_daily_ratio（toko_buyers、dau、dau_source、s4_ratio；Story 4.7）"
+    exclusions: >-
+      分子按下单人 users.role = 'USER' 且 account_type = 'REAL' 过滤（兽医 / 虚拟号排除）。
+      分母 GA4 不做任何排除（按设备）；SELF 同 S1 自建口径（生产、非可疑、source = 'APP'、按人归属后排除非 USER / 非 REAL）。
+    known_bias: >-
+      分子按人（业务库账号）、GA4 分母按设备：口径不同，比率是近似值；切到 SELF 后分子分母都按人。
+      分子覆盖所有 App 版本；SELF 分母只来自 V1.5.0+ 的自建上报，新版覆盖率低时比率偏高。
+      员工与测试账号算作正常用户。每次运行回补最近 3 天（与 GA4 回拉 3 天一致），GA4 补上后自动填上分母；更早缺的日子需手动重跑。
+      开关切换后只有回补窗口内的行改写成新来源，更早的行保留旧来源（以每行 dau_source 为准，切换日期见 S1 的 dau_source_switch）。
+    sql_path: analytics/rollup/ratio.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.7：新增；汇总落地 agg_daily_ratio.toko_buyers / dau / dau_source / s4_ratio" }
+  - code: "产品#3"
+    name: "付费用户占日活（非 Toko 付费解锁）"
+    definition: >-
+      WIB 自然日内有非 Toko 付费解锁的去重人数 ÷ 当天日活（agg_daily_ratio.p3_ratio = nontoko_payers ÷ dau，六位小数四舍五入）。
+      分子 nontoko_payers = 下列六类付费人的去重并集（同一人跨类只算一次，不是六列相加），各类人数另存一列（D-13 逐表列出）：
+      payers_ktp（KTP 高清解锁：QRIS = payment_intents purpose = 'ID_HD' 且 status = 'PAID'，按 updated_at；
+      PawCoin = id_card_hd_purchases pay_channel = 'PAWCOIN'，按 purchased_at；两渠道合并去重）；
+      payers_tailsonality（keepsake_purchases sku IN ('TAILSONALITY', 'TS_MATCH') 且 status = 'PAID'，按 paid_at）；
+      payers_passport（keepsake_purchases sku IN ('PASSPORT_SNAP', 'BOARDING_PASS') 且 status = 'PAID'，按 paid_at）；
+      payers_pet_slot（pet_slot_purchases status = 'PAID' 且 kind IN ('RENT', 'RENEW')，按 paid_at）；
+      payers_ai_unlock（ai_consult_orders status = 'COMPLETED'，按 paid_at）；
+      payers_vet_consult（consult_orders paid_at 非空，含之后退款的，按 paid_at）。
+      参照列（不进分子）：payers_gift（gift_orders.sender_id，status IN ('DELIVERED', 'UNDELIVERED_REFUND_PENDING',
+      'UNDELIVERED_REFUNDED', 'REFUND_MANUAL')，按 delivered_at、无则 created_at）；
+      payers_topup（payment_intents purpose = 'PAWCOIN_TOPUP' 且 status = 'PAID'，按 updated_at）。
+      分母与 dau_source 同 S4。月比率 = 当月每日 p3_ratio 的算术平均（跳过分母为空的日子，并注明跳过几天），由日表现算。
+    sources:
+      - "业务库：payment_intents、id_card_hd_purchases、keepsake_purchases、pet_slot_purchases、ai_consult_orders、consult_orders（分子）；gift_orders、payment_intents（参照列）；JOIN users 只算 role = 'USER' 且 account_type = 'REAL'"
+      - "分母：ga4_daily_snapshot.active_users_all（GA4）或 agg_daily_activity.dau_person（platform = 'all'，SELF）"
+      - "汇总表：agg_daily_ratio（nontoko_payers、payers_*、dau、dau_source、p3_ratio；Story 4.7）"
+    exclusions: >-
+      只算付款人 users.role = 'USER' 且 account_type = 'REAL'。一律排除 SHOP_ORDER（Toko，归 S4）与 MERCHANT_PO（门店进货单，
+      payment_intents.user_id 为负的门店 id，与用户不相交，JOIN users 时自然排除）。keepsake_purchases 的 DUPLICATE_PAID / ORPHAN_PAID
+      （到账但发放失败、交人工）不算；pet_slot_purchases 的运营补发 ADMIN_GRANT 不算。
+    known_bias: >-
+      🔴 PawCoin 付款不经过 payment_intents（扣币直接写各业务购买行，只有 QRIS 才建支付意图），只查 payment_intents.status = 'PAID' 会漏掉 PawCoin 付费；
+      KTP 的 QRIS 在发起时就写 id_card_hd_purchases 的 attempt 行，故 QRIS 按支付意图、PawCoin 按购买行。
+      payment_intents 没有 paid_at 列，updated_at 是到账时刻的近似（之后若再有更新会漂移）。
+      口径（Dai 2026-11-12 拍板）：「付费解锁」不含 PawCoin 充值（买币不是解锁，计入会与之后的扣币解锁重复）和送礼（不是解锁），
+      两者人数另存参照列；若口径调整，只改并集定义，表结构不变。分子按人、GA4 分母按设备，比率是近似值（同 S4）。
+      退款的兽医问诊仍算付费（D-13）。每次运行回补最近 3 天。
+    sql_path: analytics/rollup/ratio.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.7：新增（D-13 逐表列出判据；不含充值与送礼，Dai 2026-11-12 拍板）" }
+  - code: "内容#1"
+    name: "新用户与回访用户"
+    definition: >-
+      新用户 new_users = 业务库 users.created_at 的 WIB 日期 = 当天、role = 'USER' 且 account_type = 'REAL' 的人数。
+      回访用户 returning_users = 当天日活 dau − new_users（dau 同 S4 分母、按 dau_source 取；dau 为空时回访为空）。
+      占比可现算：new_users ÷ dau、returning_users ÷ dau；月度按日表现算（每日比率的算术平均，跳过分母为空的日子并注明跳过几天）。
+    sources:
+      - "业务库：users.created_at、role、account_type"
+      - "分母：ga4_daily_snapshot.active_users_all（GA4）或 agg_daily_activity.dau_person（platform = 'all'，SELF）"
+      - "汇总表：agg_daily_ratio（new_users、returning_users、dau、dau_source；Story 4.7）"
+    exclusions: >-
+      新用户只算 users.role = 'USER' 且 account_type = 'REAL'；分母排除规则同 S4。
+    known_bias: >-
+      与 S3 注册数（agg_daily_install.signups，按 signup_succeeded 事件）口径不同：本条读业务库，含旧版 App 注册、不受新版覆盖率影响；
+      S3 只来自 V1.5.0+ 的自建上报。回访用户 = 日活 − 新用户，日活按设备（GA4）或按人（SELF）、新用户按账号，可能为负，不截断；
+      当天注册但没打开 App 的人（极少）也会被减掉。每次只回补最近 3 天，更早的行不随业务库后来的变化而改。
+    sql_path: analytics/rollup/ratio.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.7：新增；汇总落地 agg_daily_ratio.new_users / returning_users" }

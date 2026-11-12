@@ -261,5 +261,17 @@ FROM agg_daily_dau_reconcile ORDER BY stat_date DESC LIMIT 35;
 ```
 
 - 观察期 = 覆盖率首次 ≥ 90% 的那天起 4 周；期内 |差值| ≤ 10% 为 `NORMAL`，否则 `ABNORMAL`；之前 `NOT_STARTED`、之后 `ENDED`；GA4 没拉到为 `NO_GA4`。
-- 改用自建日活由 Dai 决定：设 `ANALYTICS_DAU_SOURCE=SELF`（默认 `GA4`）并重建容器，切换日期写进口径 S1 的变更记录（Story 4.7）。
+- 改用自建日活由 Dai 决定：设 `ANALYTICS_DAU_SOURCE=SELF`（默认 `GA4`）并重建容器；同一次发版在 `analytics/metric-definitions.yaml` 的 S1 条目填 `dau_source_switch: "YYYY-MM-DD"`（WIB 切换日）并在 changelog 写原因（Story 4.7）。`SELF` 而该字段为空时启动打 WARN、TECH 群收到「【埋点口径缺切换日期】」（不阻断启动，同一 WIB 日只发一次）。
+
+### 5.3 以日活为分母的比率（Story 4.7，自动）
+
+指标族 `ratio`（依赖 `activity`，每次重算最近 3 天）每天写 `agg_daily_ratio`：分子（S4 Toko 付款人、产品 #3 非 Toko 付费解锁人、内容 #1 新用户，另存送礼 / 充值参照列）由业务库窄查询得出，分母按 `ANALYTICS_DAU_SOURCE` 取 GA4 全版本日活或自建日活，`dau_source` 列记每行实际来源。
+
+```sql
+SELECT stat_date, dau, dau_source, toko_buyers, s4_ratio, nontoko_payers, p3_ratio, new_users, returning_users
+FROM agg_daily_ratio ORDER BY stat_date DESC LIMIT 35;
+```
+
+- 分母缺失（GA4 当天没拉到、stag 无 GA4）时 `dau` / 两个比率 / `returning_users` 为空、分子照写；GA4 补拉成功后 3 天回补窗口内自动填上。更早缺的日子按 §4.2 插 `rollup_rerun_requests`（`families` = `{ratio}`，只能在明细保留期内）手动重跑。
+- 月比率 = 当月每日比率的算术平均（跳过分母为空的日子），由日表现算，不建月表。
 - 超过 14 天仍缺的 GA4 日期不再自动补拉：临时设 env `ANALYTICS_GA4SNAPSHOT_BACKFILLDAYS=<天数>`（Spring 宽松绑定，3–92）放大补拉窗口、重建容器等一次 02:30 运行后撤掉。对账表的 GA4 数会在下一次 03:00 汇总时随整表重算刷新，无需手动重跑。
