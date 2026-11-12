@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 媒体上传（Story 2.1/2.3/4.3/7.1：发布/分诊/头像）：相机 + 相册读取。
          image_picker 前 permission_handler 闸门需 manifest 声明对应权限方可授予。 -->
     <uses-permission android:name="android.permission.CAMERA"/>
@@ -27,10 +28,16 @@
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <!-- android:name 指向 TIMPush 要求的 Application 子类（系统推送）；勿改回 ${applicationName}。 -->
+    <!-- 备份规则（analytics-pipeline Story 2.1 / A3）：排除埋点目录 filesDir/analytics/（匿名 id + 本地队列），
+         其余照常备份。AppsFlyer SDK 的 manifest 也声明了这两个属性，故 tools:replace；
+         AppsFlyer 要求的排除项已并入我们的规则文件。 -->
     <application
         android:label="TailTopia"
         android:name=".TailTopiaApplication"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:replace="android:fullBackupContent,android:dataExtractionRules">
         <!-- Google 地图密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
              🔴 这里**只有占位符**，真实值由 build.gradle.kts 从环境变量或 gitignored 的
              android/maps.properties 注入 —— 密钥绝不入库。

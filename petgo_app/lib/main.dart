@@ -9,6 +9,7 @@ import 'package:image_picker_platform_interface/image_picker_platform_interface.
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:tailtopia/app.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/analytics/anonymous_id.dart';
 import 'package:tailtopia/core/analytics/appsflyer_client.dart';
 import 'package:tailtopia/core/analytics/att_gate.dart';
 import 'package:tailtopia/core/analytics/firebase_stats.dart';
@@ -33,7 +34,15 @@ Future<void> main() async {
   }
   // 本地化日期格式化的 locale 数据（id 非默认 locale，DateFormat 用前必须初始化）。
   await initializeDateFormatting();
-  // 前端行为分析（PostHog）：**发起但不 await**（2026-08-07 冷启动耗时治理）。
+  // 自建埋点匿名 id（analytics-pipeline Story 2.1，A3）：**必须 await，且早于任何事件入队**
+  // （首条事件是启动屏 `/splash` 的页面浏览）。只读应用支持目录下一个小文件，耗时可忽略；
+  // 失败也不抛 —— 值留在内存里本进程照用。Story 2.3 的生命周期快照在同一位置读同一文件。
+  try {
+    await AnonymousId.load();
+  } catch (e) {
+    debugPrint('[Analytics] anonymous id load failed: ${e.runtimeType}');
+  }
+  // 前端行为分析（自建 sink + PostHog 残留）：**发起但不 await**（2026-08-07 冷启动耗时治理）。
   //
   // 改前是 `await Analytics.init()` —— 原生 setup（超时上限 3s）被压在首帧之前，那一段
   // 画面还是原生启动屏，用户在纯等待，而首帧之前没有任何东西需要 PostHog 就绪。

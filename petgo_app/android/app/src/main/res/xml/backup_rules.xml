@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11（API 30）及以下的备份规则（android:fullBackupContent）。
+     analytics-pipeline Story 2.1 / 架构 A3（Dai 2026-11-12 拍板）：埋点目录
+     getApplicationSupportDirectory()/analytics/（= filesDir/analytics/，内含匿名 id 的 state.json
+     与本地队列 queue.jsonl）不随备份恢复，卸载重装后匿名 id 必然重新生成。其余数据照常备份。
+     AppsFlyer SDK 自带同名属性（@xml/appsflyer_backup_rules），本文件用 tools:replace 覆盖它，
+     因此下面原样保留 AppsFlyer 要求排除的三项（af-android-sdk 6.18.1 的规则），升级 SDK 时核对。 -->
+<full-backup-content>
+    <exclude domain="file" path="analytics/"/>
+    <exclude domain="sharedpref" path="appsflyer-data"/>
+    <exclude domain="sharedpref" path="appsflyer-purchase-data"/>
+    <exclude domain="database" path="afpurchases.db"/>
+</full-backup-content>

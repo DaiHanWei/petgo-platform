@@ -8,9 +8,11 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
 import 'meta_client.dart';
+import 'self_hosted_sink.dart';
 import 'tiktok_client.dart';
 
-/// 前端行为分析门面（PostHog Cloud EU · project 211847）。
+/// 前端行为分析门面：事件底层已换成自建上报（[SelfHostedSink] → `POST /api/v1/analytics/batch`，
+/// analytics-pipeline Story 2.1）。PostHog 的 init / screen / identify / reset 残留由 Story 2.6 统一清理。
 ///
 /// 设计约束（CLAUDE.md 护栏）：
 /// - Project Token / Host 走 dart-define 注入，带生产默认值，对齐 `dio_client.dart`。
@@ -61,7 +63,23 @@ class Analytics {
   static const int _maxStringValueLen = 64;
 
   /// `runApp` 前调用一次。初始化失败不抛（分析非关键路径）。
+  ///
+  /// 自建 sink 启动（打开队列文件、加载上次未发完的事件、注册生命周期观察者、起定时器）与
+  /// PostHog setup **互相独立**：任何一个失败都不影响另一个。sink 在队列加载完成前收到的事件
+  /// 先放内存缓冲，加载完成后合并写盘，不丢。
   static Future<void> init() async {
+    await Future.wait([_startSelfHostedSink(), _setupPosthog()]);
+  }
+
+  static Future<void> _startSelfHostedSink() async {
+    try {
+      await SelfHostedSink.instance.start();
+    } catch (e) {
+      debugPrint('[Analytics] sink start failed: ${e.runtimeType}');
+    }
+  }
+
+  static Future<void> _setupPosthog() async {
     try {
       final config = PostHogConfig(_apiKey)
         ..host = _host
@@ -149,44 +167,17 @@ class Analytics {
   /// 同步回传 Meta / TikTok 的付款成功事件（投放渠道看付费率 / ROAS 用）。只能经 [capturePurchase] 发。
   static const String adPurchaseEvent = 'af_purchase';
 
-  /// V1.4.2（2026-11-08 拍板）：**金额一律不进 PostHog**，事件本身照发（漏斗 / 次数不受影响）。
-  ///
-  /// 只在 PostHog 这一路剥：AppsFlyer / Meta / TikTok 的 `af_revenue` / `af_price` 是投放 ROAS 口径，照旧带。
-  /// 调用点仍可传这些键（KTP / Tailsonality / 礼物 / 结账等），统一在出口去掉 —— 新增金额类键必须登记到这里。
-  /// 历史上已进 PostHog 的金额数据不删（同日拍板）。
-  static const Set<String> posthogMoneyKeys = {
-    'price',
-    'price_idr',
-    'total_amount',
-    'coin_used',
-    'shipping_fee',
-    'order_amount',
-    'amount',
-    'af_revenue',
-    'af_price',
-  };
-
-  /// 发往 PostHog 的属性：去掉 [posthogMoneyKeys]（纯函数，L0 可测）。
-  @visibleForTesting
-  static Map<String, Object>? posthogProperties(Map<String, Object>? clean) {
-    if (clean == null) return null;
-    return {
-      for (final e in clean.entries)
-        if (!posthogMoneyKeys.contains(e.key)) e.key: e.value,
-    };
-  }
-
   /// 事件是否分发 AppsFlyer（纯函数，L0 可测）。
   static bool isAppsFlyerEvent(String event) => appsflyerEvents.contains(event);
 
   /// 测试观察点（Story 6.1）：非 null 时，每条 [capture] / [screen] 都同步回调一次
-  /// **净化后**的属性（含金额键 —— 即 AppsFlyer 一路收到的形态；PostHog 实收的是
-  /// [posthogProperties] 再去掉金额后的那份，见其单测）。埋点断言必须看到端上真正发出的形态，所以钩子挂在 scrub 之后。
+  /// **净化后**的属性（含金额键 —— 即自建上报与 AppsFlyer 两路实收的形态；FR-1：数据进自有库，
+  /// 金额允许上报）。埋点断言必须看到端上真正发出的形态，所以钩子挂在 scrub 之后。
   /// 生产路径恒为 null（`main.dart` 从不赋值），不影响上报。
   @visibleForTesting
   static void Function(String event, Map<String, Object>? properties)? debugCaptureSink;
 
-  /// 自定义事件上报。properties 先经 [scrub] 剥离敏感键再上报；
+  /// 自定义事件上报。properties 先经 [scrub] 剥离敏感键，再原样（含金额键）进自建上报队列；
   /// 白名单内事件用**同一份净化后属性**同步分发 AppsFlyer（单通路，无旁路）。
   static Future<void> capture(String event, [Map<String, Object>? properties]) async {
     final clean = properties == null ? null : scrub(properties);
@@ -218,11 +209,8 @@ class Analytics {
         orderId: orderId is String ? orderId : null,
       ));
     }
-    try {
-      await Posthog().capture(eventName: event, properties: posthogProperties(clean));
-    } catch (e) {
-      debugPrint('[Analytics] capture failed: $e');
-    }
+    // 自建上报（Story 2.1）：同步入本地队列，发送由 sink 攒批异步完成；enqueue 内部吞全部异常。
+    SelfHostedSink.instance.enqueue(event, clean);
   }
 
   /// **现金付款成功**的唯一上报入口（2026-10-09 起覆盖全部 QRIS 入口：PawCoin 充值 / 兽医问诊 /

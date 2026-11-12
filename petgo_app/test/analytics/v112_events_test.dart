@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import 'package:tailtopia/features/auth/domain/user_state.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
+import 'package:tailtopia/features/media/domain/media_upload_use_case.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
@@ -24,6 +26,7 @@ import 'package:tailtopia/features/profile/presentation/diary_guest_page.dart';
 import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/timeline_item_tile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/utils/media_permission.dart';
 import 'package:tailtopia/shared/widgets/bottom_tab_bar.dart';
 
 import '../support/fake_feed_repository.dart';
@@ -43,6 +46,18 @@ class Recorded {
   final Map<String, Object>? props;
   @override
   String toString() => '$event $props';
+}
+
+/// 系统选择器里取消：单张返回 null、多张返回空。
+class _CancelledPicker implements MediaUploadUseCase {
+  @override
+  Future<Uint8List?> pickAndProcess({required MediaSource source, BuildContext? context}) async => null;
+
+  @override
+  Future<List<Uint8List>> pickMultiAndProcess({required int limit, BuildContext? context}) async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _TestAuthController extends AuthController {
@@ -125,6 +140,10 @@ Widget _guestApp() => ProviderScope(
 
 Widget _composeApp() => ProviderScope(
       overrides: [
+        // analytics-pipeline Story 2.1：`Analytics.capture` 不再挂在 PostHog 平台通道上，选完来源后
+        // 真的会走到取图 —— 未 mock 的图片选择器永不返回，「处理中」转圈让 pumpAndSettle 超时。
+        // 这里模拟用户在系统选择器里取消（本组只断言「选了哪条路」，不关心取图结果）。
+        mediaUploadUseCaseProvider.overrideWithValue(_CancelledPicker()),
         authControllerProvider.overrideWith(() => _TestAuthController(
               AuthState(
                 status: AuthStatus.authenticated,
