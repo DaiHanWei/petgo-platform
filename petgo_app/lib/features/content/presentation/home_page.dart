@@ -393,7 +393,12 @@ class _BerandaTop extends StatelessWidget {
         // 话题行（V1.4.2 Story 4.3 · AC4 · UI C1）：分类标签之后、顶置卡之前；只在 Discover（本组件只在
         // Discover 分支渲染）；随 Feed 滚动不吸顶；0 个 / 取不到 → 组件内部整行不渲染、不留占位。
         const HomeTopicRow(),
-        const SizedBox(height: 8),
+        // 话题行出现时不再补 8：它自带上下 8 的点击区，再叠 8 + Feed 顶部 16 会让首帖离话题过远
+        // （2026-11-12 实机反馈）。话题行不渲染时维持原 8，其余布局逐像素不变。
+        Consumer(builder: (context, ref, _) {
+          final topics = ref.watch(homeTopicRowProvider).value;
+          return topics == null || topics.isEmpty ? const SizedBox(height: 8) : const SizedBox.shrink();
+        }),
       ],
     );
   }

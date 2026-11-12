@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/format/idr_compact.dart';
+import '../../../../shared/media/image_lightbox.dart';
 import '../../../../shared/utils/compact_count.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
@@ -90,6 +91,19 @@ class PetInfoCard extends StatelessWidget {
     );
   }
 
+  /// 点头像看大图（修复线；同用户主页 V1.4.2 做法，复用全屏灯箱）。无头像（emoji 占位）不可点。
+  Widget _avatarTappable(BuildContext context, Widget child) {
+    final url = profile.avatarUrl;
+    if (url == null || url.isEmpty) return child;
+    return GestureDetector(
+      key: const ValueKey('petAvatarTap'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => ImageLightbox.open(context,
+          urls: [url], initialIndex: 0, heroTagPrefix: 'pet_diary_avatar', source: 'pet_diary_avatar'),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -124,7 +138,7 @@ class PetInfoCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
+              _avatarTappable(context, Container(
                 width: 62,
                 height: 62,
                 decoration: const BoxDecoration(
@@ -143,7 +157,7 @@ class PetInfoCard extends StatelessWidget {
                   decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.violet100),
                   child: _avatar(),
                 ),
-              ),
+              )),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
