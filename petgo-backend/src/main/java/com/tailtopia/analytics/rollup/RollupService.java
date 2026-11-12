@@ -329,7 +329,8 @@ public class RollupService {
                     log.warn("analytics rollup progress not advanced: family={} lastDone={} from={} (gap left for the "
                             + "scheduled run)", f.name(), base, day);
                 }
-                status = runUnit(f, day.toString(), advanceTo, ctx, () -> f.computeDay(day, asOf, ctx));
+                status = runUnit(f, day.toString(), advanceTo, ctx, () -> f.prepareDay(day, asOf, ctx),
+                        () -> f.computeDay(day, asOf, ctx));
                 if (status != UnitStatus.OK) {
                     break;
                 }
@@ -340,6 +341,7 @@ public class RollupService {
             }
             if (status == UnitStatus.OK && f.hasPeriods()) {
                 status = runUnit(f, "periods-" + range.to(), null, ctx,
+                        () -> f.preparePeriods(range.from(), range.to(), asOf, ctx),
                         () -> f.computePeriods(range.from(), range.to(), asOf, ctx));
                 if (status == UnitStatus.OK) {
                     done++;
@@ -361,10 +363,14 @@ public class RollupService {
     /**
      * 一个单元事务：锁 → 放宽超时 → 临时表 → 计算 → 推进进度（{@code advanceTo} 非空时），同一事务提交。
      * 失败时在事务回滚<b>之后</b>写 {@code last_error} 并告警。
+     *
+     * <p>{@code prepare}（Story 4.4）在事务<b>之前</b>执行（业务库窄查询 / 埋点库短查询，不占着埋点事务连接）；它抛异常按单元失败处理。
      */
-    private UnitStatus runUnit(RollupFamily f, String label, LocalDate advanceTo, RollupContext ctx, Runnable work) {
+    private UnitStatus runUnit(RollupFamily f, String label, LocalDate advanceTo, RollupContext ctx, Runnable prepare,
+            Runnable work) {
         long t0 = System.nanoTime();
         try {
+            prepare.run();
             tx.executeWithoutResult(s -> {
                 Boolean locked = jdbc.queryForObject(LOCK_SQL, Boolean.class, AnalyticsLockKeys.NAMESPACE,
                         AnalyticsLockKeys.ROLLUP);

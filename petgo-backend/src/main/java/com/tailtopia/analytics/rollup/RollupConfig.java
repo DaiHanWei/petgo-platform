@@ -1,7 +1,9 @@
 package com.tailtopia.analytics.rollup;
 
+import com.tailtopia.admin.alert.OpsAlertService;
 import com.tailtopia.analytics.AnalyticsDauSourceProperties;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,7 +12,8 @@ import org.springframework.context.annotation.Configuration;
  * 汇总装配（analytics-pipeline Story 4.1）。
  *
  * <p>🔴 {@code @EnableConfigurationProperties} 不能漏：没有它 {@link AnalyticsRollupProperties}（以及 Story 4.2 的
- * {@link Ga4SnapshotProperties} / {@link ReconcileProperties} / {@link AnalyticsDauSourceProperties}）不会被绑定，配了 env 也永远取默认值，
+ * {@link Ga4SnapshotProperties} / {@link ReconcileProperties} / {@link AnalyticsDauSourceProperties}，Story 4.4 的
+ * {@link PushRollupProperties}）不会被绑定，配了 env 也永远取默认值，
  * 且没有任何报错（见 {@code DailyReportConfig} 注释的教训）。
  *
  * <p>指标族在这里注册成 {@link RollupFamily} bean，{@link RollupService} 按 {@link RollupFamily#dependsOn()} 排序执行。
@@ -18,7 +21,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({AnalyticsRollupProperties.class, Ga4SnapshotProperties.class,
-        ReconcileProperties.class, AnalyticsDauSourceProperties.class})
+        ReconcileProperties.class, AnalyticsDauSourceProperties.class, PushRollupProperties.class})
 public class RollupConfig {
 
     /** 留存指标族名（= SQL 文件名）。 */
@@ -57,5 +60,24 @@ public class RollupConfig {
     @Bean
     public RollupFamily installProfileRollupFamily() {
         return new InstallProfileFamily();
+    }
+
+    /**
+     * 运营位（Story 4.4）：{@code analytics/rollup/placement.sql} → {@code agg_daily_placement} / {@code agg_weekly_placement} /
+     * {@code agg_monthly_placement}；业务库窄查询（运营位配置、已付款订单）在单元事务之外。{@code recomputeDays = 10}：7 天带单窗口 + 3 天晚到。
+     */
+    @Bean
+    public RollupFamily placementRollupFamily(BusinessPlacementReader businessPlacementReader) {
+        return new PlacementFamily(businessPlacementReader);
+    }
+
+    /**
+     * 推送（Story 4.4）：{@code analytics/rollup/push.sql} → {@code agg_daily_push} / {@code agg_weekly_push} /
+     * {@code agg_monthly_push}；运营推送活动经业务库窄查询（单元事务之外）。配置非法只停用累计打开人数并在就绪时 TECH 告警。
+     */
+    @Bean
+    public PushFamily pushRollupFamily(BusinessPlacementReader businessPlacementReader, PushRollupProperties props,
+            OpsAlertService alerts, @Value("${analytics.app-env:dev}") String appEnv) {
+        return new PushFamily(businessPlacementReader, props, alerts, appEnv);
     }
 }

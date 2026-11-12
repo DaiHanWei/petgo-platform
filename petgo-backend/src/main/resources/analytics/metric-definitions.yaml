@@ -116,6 +116,17 @@ metrics:
       点击率 = 点击次数 ÷ 曝光次数，按 placement_token、WIB 自然日。
       「是否推广 Toko」由 Story 4.4 读业务库运营位配置的跳转目标决定（FR-17 第 3 条）；新人券弹窗恒属 Toko；
       toko_banner_tapped 另带 target_type。运营推送（ops_notification_campaigns）的打开由 Story 3.2 的 push_opened + campaign_token 覆盖，不在本条。
+      汇总（Story 4.4）：agg_daily_placement 按 WIB 日 × placement_type × placement_token 记曝光次数 impressions、点击次数 clicks、
+      点击人数 click_persons（按 D-10 归属到人去重）；agg_weekly_placement（周一至周日）/ agg_monthly_placement（WIB 自然月）的
+      点击人数与带单数为周期内重新去重（D-12，不是日表相加），曝光 / 点击为周期内求和，is_complete = 周期末 ≤ 计算基准日。
+      点击率 = clicks ÷ impressions 现算，例：SELECT placement_token, sum(clicks)::numeric / NULLIF(sum(impressions), 0)
+      FROM agg_daily_placement WHERE stat_date BETWEEN … GROUP BY placement_token。
+      带单 paid_orders_7d（FR-22）：当期点击过该运营位的登录用户，每次点击之后 7 天内（点击时间 < paid_at ≤ 点击时间 + 7 天）
+      付款的 Toko 订单数（业务库 shop_orders.paid_at IS NOT NULL，D-13，付款后退款 / 取消仍算），按订单去重；
+      orders_window_complete = 统计日（周期末）+ 7 ≤ 计算基准日，之前带单数仍会增加。业务库与埋点按用户 + 时间在 Java 里匹配，不跨库 SQL。
+      是否推广 Toko promotes_toko（FR-17 第 3 条）按计算当时的业务库配置判定：ops_popup 看 ops_popups.target_type ——
+      PRODUCT / CATEGORY，或 APP_PAGE 且 target_value = 'TOKO' 为 true，NONE / EXTERNAL / 其他 APP_PAGE（HOME、PUBLISH、KNOW_YOUR_PET、HEALTH）为 false；
+      toko_banner 一律 true（shop_banners 只出现在 Toko 页）；newbie_coupon 一律 true（Toko 新人券）；配置已删、查不到 token 为空。
     sources:
       - "events_detail：ops_popup_shown / ops_popup_tapped / ops_popup_closed（placement_type = ops_popup）"
       - "events_detail：toko_banner_shown / toko_banner_tapped（placement_type = toko_banner）"
@@ -123,6 +134,9 @@ metrics:
       - "placement_token 来源表（业务库）：ops_popup → ops_popups.public_token（App 取 OpsPopupCandidate.token）"
       - "placement_token 来源表（业务库）：toko_banner → shop_banners.public_token（V20261030_0330 加列，App 取 ShopBanner.bannerId）"
       - "placement_token 来源表（业务库）：newbie_coupon → shop_coupons.public_token（新人券模板，GET /shop/coupons/newbie-campaign 下发，App 取 NewbieCampaign.campaignToken）"
+      - "汇总表：agg_daily_placement / agg_weekly_placement / agg_monthly_placement（Story 4.4）"
+      - "业务库（窄查询，只取 token / 跳转列）：ops_popups(public_token, target_type, target_value)、shop_banners(public_token, target_type)"
+      - "业务库（窄查询）：shop_orders(user_id, public_token, paid_at)，paid_at IS NOT NULL = 已付款（D-13）"
     exclusions: >-
       只算生产数据（生产标记）；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
       非运营位弹窗 / 横幅不算：growth_backfill_popup_shown、growth_celebration_shown（成长体系功能弹窗）、
@@ -134,9 +148,75 @@ metrics:
       横幅曝光以「当前页」为单位，自动轮播翻到的每张各算一次曝光。
       新人券弹窗只对游客展示，点击（注册）后到登录完成之间可能流失，点击 ≠ 领券；领券看 toko_coupon_claimed（source = newbie）。
       旧后端未下发横幅 token 时 toko_banner_tapped 不带 banner_id / placement_token；新人券活动 token 解析失败（空串）时不带 placement_token。
-      SQL 由 Story 4.4 填。
+      汇总只按 placement_type + placement_token 统计：属性与事件名不一致、缺 token、token 超过 64 字符的事件跳过（条数只进汇总日志）；
+      V1.5.0 之前的旧属性（popup_id、banner_id、coupon_id）不兼容。
+      带单是「点击后 7 天内的已付款订单」，不代表订单一定由该运营位带来；同一订单可同时计入多个运营位（各运营位分别去重）。
+      匿名点击且之后从未登录的人无法匹配订单（按 D-10 归属：点击后登录的匿名点击归到该账号后可匹配）。
+      promotes_toko 按计算时的配置判定，回补窗口（10 天）内运营改了跳转会改变历史行；配置已删的为空；新人券不查配置，恒为 true。
+      曝光只在新版 App（Story 3.1 之后）统一为「露出超过 50% 计一次」。
+      带单重算窗口 10 天（7 天带单 + 3 天晚到，D-6）：之后再晚到的事件不回算。员工与测试账号按正常用户算。
+    sql_path: analytics/rollup/placement.sql
     changelog:
       - { date: "2026-11-12", change: "Story 3.1：核对运营位清单（ops_popup / toko_banner / newbie_coupon）、事件名、token 来源表，统一曝光规则与点击判定；新人券弹窗曝光改为首帧后上报" }
+      - { date: "2026-11-13", change: "Story 4.4：汇总落地 agg_daily/weekly/monthly_placement（曝光、点击、点击人数周期去重、点击后 7 天已付款 Toko 订单数、推广 Toko 判定），SQL 见 analytics/rollup/placement.sql" }
+  - code: "S5-推送"
+    name: "推送发送、接收与打开"
+    definition: >-
+      每条运营推送的发送、接收、打开与打开率，系统推送按类型的打开（FR-23，department-data-summary S5）。
+      打开：push_opened（Story 3.2，前台 / 后台 / 冷启动点开推送都报，通知中心列表点击不报），push_type = 推送载荷 type
+      （NotificationType 枚举名或 VET_REPLY；缺失为 unknown），运营推送另带 campaign_token = ops_notification_campaigns.public_token。
+      agg_daily_push 按 WIB 日 × push_type × campaign_token（非运营推送为空串）记打开次数 opened_count、打开人数 opened_persons（按 D-10 归属到人去重）；
+      agg_weekly_push / agg_monthly_push 的打开人数为周期内重新去重（D-12，不是日表相加），发送数 / 打开次数为周期内求和。
+      运营推送（push_type = 'OPS_ANNOUNCEMENT'）：一条活动一行，planned_count = 开始发送时解析出的计划人数，
+      recipient_count = 接收 = 写入通知中心人数（近似，见已知偏差）；campaign_opened_persons_cum = 从发送日到统计日的去重打开人数
+      （只计发送后 analytics.rollup.push-campaign-days 天内，默认 14）。发送后 14 天内每天都有一行（当天没打开记 0），
+      所以一条推送的打开率 = 该活动最新一行的 campaign_opened_persons_cum ÷ recipient_count，例：
+      SELECT DISTINCT ON (campaign_token) campaign_token, campaign_opened_persons_cum::numeric / NULLIF(recipient_count, 0)
+      FROM agg_daily_push WHERE push_type = 'OPS_ANNOUNCEMENT' AND campaign_token <> '' ORDER BY campaign_token, stat_date DESC。
+      promotes_toko：活动跳转目标是否推广 Toko，规则同 S5（PRODUCT / CATEGORY / APP_PAGE=TOKO 为 true）。
+      券过期推送（COUPON_EXPIRING）：发送数 sent_count = 服务端事件 toko_coupon_expiry_push_sent（source = 'SERVER'，确实推送时才上报）条数，
+      每天必有一行（发送 0 次记 0）；打开率 = 打开人数 ÷ 发送数（每人每天至多一条，近似人数）。
+      其他系统推送：没有发送记录（见下方 A13 勘察），只统计打开次数与打开人数，sent_count 为空。
+      A13 / Q4 系统推送发送记录勘察（Story 4.4，按 V20261105_1620 重建的 ck_notifications_type 全集逐类核对）：
+      ① 有发送记录：OPS_ANNOUNCEMENT —— ops_notification_campaigns.recipient_count（写入通知中心）/ failed_count（写入失败或推送重试 3 次仍失败）/
+      planned_count，逐人同步推送结果只汇总为计数，关了「促销与活动」的人只进通知中心、人数不单独落库；
+      COUPON_EXPIRING —— 服务端事件 toko_coupon_expiry_push_sent（确实推送才报）+ coupon_expiry_notify_log（每人每 WIB 日一行，含只进通知中心的人，可互相核对）。
+      ② 只有「计划推送」去重标记（标记在投递之前写，不代表推送已发出，屏蔽 / 虚拟号 / 推送失败也有标记）：LIFECYCLE_D1 / LIFECYCLE_D3 / LIFECYCLE_D7 /
+      LIFECYCLE_WINBACK（lifecycle_push_marks）；PET_BIRTHDAY / COMPANION_ANNIVERSARY / MILESTONE_NODE（scheduled_push_marks）；
+      PET_DIARY_POSTED（pet_diary_notify_log，每个追更者每宠物每 WIB 日一行）。
+      ③ 只有通知中心记录（notifications 行，写入即有，屏蔽推送 / 无推送权限 / 推送失败也有行）：VET_REPLY（问诊回复通知；
+      另有 IM 会话消息本身的离线推送由腾讯 IM 发出，后端无任何记录，两者的 push_opened 都记 VET_REPLY）、CONSULT_CLOSED、CONTENT_LIKED、CONTENT_COMMENTED、
+      CONTENT_MENTIONED、PET_FOLLOWED、USER_FOLLOWED、PLACE_COMMENTED、PET_GIFT_RECEIVED、GIFT_UNDELIVERED_REFUND、GROWTH_LEVEL_UP、
+      PET_SLOT_EXPIRING、PET_SLOT_EXPIRED、CONTENT_REMOVED、REPORT_REVIEWED、CONTENT_REVIEW_APPROVED、CONTENT_REVIEW_REJECTED、
+      CONTENT_REVIEW_TIMED_OUT、NAME_RESET、AVATAR_RESET、REFUND_REJECTED、TICKET_RESOLVED、CSAT_SURVEY、IDENTITY_REQUIRE_MODIFY、
+      ACCOUNT_WARNED、ACCOUNT_SUSPENDED、SHOP_ORDER_SHIPPED、SHOP_ORDER_EXCEPTION、SHOP_RETURN_UPDATED、SHOP_ORDER_REORDERED、REPURCHASE_FOOD_LOW。
+      MILESTONE_SM_NODE 只进通知中心、不发推送。
+      ④ 无任何记录：NEW_CONSULT_REQUEST（只推兽医、不写通知中心，兽医按 Q5 排除）。
+      推送投递（NotificationPusher → 腾讯 IM 离线推送）是 @Async 发完即弃，成功 / 失败只打日志、不落库。
+      结论：除 OPS_ANNOUNCEMENT（接收近似）与 COUPON_EXPIRING（发送数）外，其余系统推送只统计打开数；②③ 的记录不能当作「推送已发出」。
+    sources:
+      - "events_detail：push_opened（push_type、campaign_token；source = 'APP'）"
+      - "events_detail：toko_coupon_expiry_push_sent（source = 'SERVER'，券过期推送发送数）"
+      - "业务库（窄查询）：ops_notification_campaigns(public_token, planned_count, recipient_count, target_type, target_value, COALESCE(started_at, scheduled_at, created_at))，status 不是 PENDING / CANCELED"
+      - "汇总表：agg_daily_push / agg_weekly_push / agg_monthly_push（Story 4.4）"
+    exclusions: >-
+      只算生产数据、非可疑；按 v_events_person 归属到人之后只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）——
+      兽医点开 VET_REPLY / NEW_CONSULT_REQUEST 推送也报 push_opened，在此排除（Story 3.2 复审 R4）。
+      运营推送只算已开始发送的活动（status 不是 PENDING / CANCELED）；「发送时间」= COALESCE(started_at, scheduled_at, created_at)，
+      与 OpsNotificationCampaignRepository 一致，换算成 WIB 日期。
+    known_bias: >-
+      运营推送接收数 recipient_count 是写入通知中心的人数，不是推送送达数：关了「促销与活动」推送的人、推送失败的人
+      （failed_count 含推送重试 3 次仍失败）也计入，打开率偏低，口径为「近似」。planned_count 存量活动（V20261015_1209 之前）为空。
+      活动发送 14 天（push-campaign-days）后的打开不计入累计打开人数；累计打开人数受明细保留期（约 3 个月）限制；
+      该配置写错时累计打开人数停算（列为空）并 TECH 告警，日 / 周 / 月打开数不受影响。
+      运营推送打开事件缺 campaign_token 的记在 campaign_token = '' 行，不归属到任何活动。
+      没有发送记录的系统推送只有打开数（以上方 A13 勘察结论为准）；需要补发送记录的类型由 Dai 决定。
+      同一条推送在 TIMPush 上是否可能回调两次未实测（Story 3.2），若有重复会使打开次数偏高，打开人数不受影响。
+      promotes_toko 按计算时的配置判定；活动查不到为空。晚到超过 3 天的打开事件不回算日表（D-6），但仍会计入跟踪期内之后各天的累计打开人数。
+      员工与测试账号按正常用户算；V1.5.0 之前没有自建数据。
+    sql_path: analytics/rollup/push.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.4：新增；汇总落地 agg_daily/weekly/monthly_push，A13 / Q4 系统推送发送记录勘察结论写入本条" }
   - code: "电商#6"
     name: "Toko 分析漏斗"
     definition: >-

@@ -306,6 +306,89 @@ class RollupServiceTest {
         verify(progress).markDone("activity", d("2026-11-12"), CLOCK.instant());
     }
 
+    /** 有准备步骤的指标族（Story 4.4）：prepare 经 hook 记录，指定日期的 prepare 抛异常。 */
+    private static final class PreparingFamily implements RollupFamily {
+
+        final Runnable hook;
+        final LocalDate prepareFailOn;
+        final List<String> calls = new ArrayList<>();
+
+        PreparingFamily(Runnable hook, LocalDate prepareFailOn) {
+            this.hook = hook;
+            this.prepareFailOn = prepareFailOn;
+        }
+
+        @Override
+        public String name() {
+            return "placement";
+        }
+
+        @Override
+        public boolean hasPeriods() {
+            return true;
+        }
+
+        @Override
+        public void prepareDay(LocalDate statDate, LocalDate asOf, RollupContext ctx) {
+            hook.run();
+            calls.add("prepare " + statDate);
+            if (statDate.equals(prepareFailOn)) {
+                throw new DataAccessResourceFailureException("business down");
+            }
+        }
+
+        @Override
+        public void computeDay(LocalDate statDate, LocalDate asOf, RollupContext ctx) {
+            calls.add("compute " + statDate);
+        }
+
+        @Override
+        public void preparePeriods(LocalDate windowStart, LocalDate windowEnd, LocalDate asOf, RollupContext ctx) {
+            hook.run();
+            calls.add("preparePeriods " + windowStart + ".." + windowEnd);
+        }
+
+        @Override
+        public void computePeriods(LocalDate windowStart, LocalDate windowEnd, LocalDate asOf, RollupContext ctx) {
+            calls.add("computePeriods " + windowStart + ".." + windowEnd);
+        }
+    }
+
+    /** Story 4.4：prepare 在每个单元事务<b>之前</b>调用（业务库窄查询不占埋点事务连接），紧跟同一日的 compute。 */
+    @Test
+    void prepareRunsBeforeEachUnitTransaction() {
+        Runnable hook = mock(Runnable.class);
+        PreparingFamily f = new PreparingFamily(hook, null);
+        RunResult r = service(f).runScheduled(AS_OF);
+
+        assertThat(r.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(f.calls).containsExactly("prepare 2026-11-18", "compute 2026-11-18", "prepare 2026-11-19",
+                "compute 2026-11-19", "prepare 2026-11-20", "compute 2026-11-20",
+                "preparePeriods 2026-11-18..2026-11-20", "computePeriods 2026-11-18..2026-11-20");
+        InOrder o = inOrder(hook, txm);
+        for (int i = 0; i < 4; i++) {
+            o.verify(hook).run();
+            o.verify(txm).getTransaction(any());
+        }
+    }
+
+    /** Story 4.4：prepare 失败 = 单元失败：不开事务、不推进进度、事务外告警，周期单元不跑。 */
+    @Test
+    void prepareFailureFailsUnitWithoutTransaction() {
+        Runnable hook = mock(Runnable.class);
+        PreparingFamily f = new PreparingFamily(hook, d("2026-11-19"));
+        RunResult r = service(f).runScheduled(AS_OF);
+
+        assertThat(r.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(r.failedFamilies()).containsExactly("placement");
+        assertThat(f.calls).containsExactly("prepare 2026-11-18", "compute 2026-11-18", "prepare 2026-11-19");
+        verify(progress).markDone("placement", d("2026-11-18"), CLOCK.instant());
+        verify(progress, never()).markDone("placement", d("2026-11-19"), CLOCK.instant());
+        verify(progress).recordError(eq("placement"), startsWith("DataAccessResourceFailureException"),
+                eq(CLOCK.instant()));
+        verify(alerts).send(eq(OpsChannel.TECH), eq("analytics-rollup:placement:2026-11-19"), anyString());
+    }
+
     @Test
     void describeHasOnlyClassNames() {
         String s = RollupService.describe(new DataAccessResourceFailureException("secret", new SQLException("pw")));

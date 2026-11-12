@@ -8,12 +8,14 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
-/** L0：Story 4.1 / 4.3 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
+/** L0：Story 4.1 / 4.3 / 4.4 埋点库迁移的文本约束（授权白名单写法、无外键、视图、请求表不授权）。 */
 class RollupMigrationTextTest {
 
     private static final String PATH = "db/analytics-migration/V20261113_1300__rollup_framework_activity_install.sql";
 
     private static final String PATH_43 = "db/analytics-migration/V20261113_1320__cohort_retention_and_install_profile.sql";
+
+    private static final String PATH_44 = "db/analytics-migration/V20261113_1330__placement_and_push.sql";
 
     private static String sql() throws IOException {
         return read(PATH);
@@ -71,5 +73,32 @@ class RollupMigrationTextTest {
         assertThat(s).doesNotContainIgnoringCase("REFERENCES");
         // 汇总表不含可识别个人的列
         assertThat(s).doesNotContain("user_id", "anonymous_id", "person_key");
+    }
+
+    /** Story 4.4：运营位与推送的日 / 周 / 月表、主键、周一 / 月初约束、口径注释与授权；不含可识别个人的列。 */
+    @Test
+    void placementAndPush() throws IOException {
+        String s = read(PATH_44);
+        String[] tables = {"agg_daily_placement", "agg_weekly_placement", "agg_monthly_placement", "agg_daily_push",
+            "agg_weekly_push", "agg_monthly_push"};
+        for (String t : tables) {
+            assertThat(s).contains("CREATE TABLE " + t + " (", "COMMENT ON TABLE " + t + " IS",
+                    "format('GRANT SELECT ON %I TO %I', '" + t + "', '${readerRole}')");
+        }
+        assertThat(s).contains("PRIMARY KEY (stat_date, placement_type, placement_token)",
+                "PRIMARY KEY (period_start, placement_type, placement_token)",
+                "PRIMARY KEY (stat_date, push_type, campaign_token)", "PRIMARY KEY (period_start, push_type, campaign_token)",
+                "campaign_token               varchar(32)  NOT NULL DEFAULT ''",
+                "CHECK (extract(isodow FROM period_start) = 1)",
+                "CHECK (period_start = date_trunc('month', period_start)::date)",
+                "CHECK (placement_type IN ('ops_popup', 'toko_banner', 'newbie_coupon'))");
+        // 口径注释：周期内去重、接收近似、只有券过期有发送数
+        assertThat(s).containsPattern("COMMENT ON COLUMN agg_weekly_placement\\.click_persons IS '周内去重")
+                .containsPattern("COMMENT ON COLUMN agg_monthly_push\\.opened_persons IS '月内去重")
+                .containsPattern("COMMENT ON COLUMN agg_daily_push\\.recipient_count IS '[^']*近似")
+                .containsPattern("COMMENT ON COLUMN agg_daily_push\\.sent_count IS '只用于券过期推送");
+        assertThat(s).contains("rolname = '${readerRole}'").doesNotContain("TO analytics_reader");
+        assertThat(s).doesNotContainIgnoringCase("REFERENCES");
+        assertThat(s).doesNotContain("user_id", "anonymous_id", "person_key", "order_token");
     }
 }

@@ -208,9 +208,11 @@ fi
 
 `RollupJob` 每天 WIB 03:00（晚于 02:00 的注销擦除）运行，`asOf` = WIB 昨天：
 
-- 每个指标族（`activity`、`install`、`dau_reconcile`、`retention`、`install_profile`，后续 story 追加）按 `agg_progress.last_done_date` 续算到 `asOf`，**每次至少重算最近 3 天**（晚到事件，D-6）。首次运行只算最近 3 天，更早的历史用下面的重跑回补。
+- 每个指标族（`activity`、`install`、`dau_reconcile`、`retention`、`install_profile`、`placement`、`push`，后续 story 追加）按 `agg_progress.last_done_date` 续算到 `asOf`，**每次至少重算最近 3 天**（晚到事件，D-6）。首次运行只算最近 3 天，更早的历史用下面的重跑回补。
 - 例外：`retention`（`agg_cohort_retention`，按组日期 X 一行）每次重算最近 **16** 天——W1 要看到 X+13，再留 3 天晚到；未满 N 天的列为空（`X+N > asOf`）。重跑旧组日期时成熟度仍按当前的 `asOf` 判断，已有值不会变回空。
 - `install_profile`（`agg_monthly_install_profile`）没有日表，按 WIB 自然月写：与重算窗口相交的月份都重算，月中是「截至昨天」的值（`is_complete = false`），月末次日起写终值；月初早于保留期下限的月份重跑时跳过（明细已清理）。
+- `placement`（Story 4.4，`agg_daily/weekly/monthly_placement`）每次重算最近 **10** 天（7 天带单窗口 + 3 天晚到）；`push`（`agg_daily/weekly/monthly_push`）重算 3 天。两者的周表 / 月表与重算窗口相交的周期都重算（周期内重新去重，不是日表相加），`is_complete = false` 为「截至昨天」的值。每个单元先在埋点事务**之外**读业务库（运营位配置、已付款订单、运营推送活动，窄查询只取 token 与计数列），再开埋点事务写汇总；业务库读失败按该单元失败处理（告警、下次补）。
+- `push` 的运营推送累计打开人数只计发送后 `ANALYTICS_ROLLUP_PUSH_CAMPAIGN_DAYS`（默认 14）天内的打开；该 env 写错不影响启动，只停用累计打开人数（列写空）并在启动就绪时 TECH 告警「【埋点配置非法】」，改对后重建容器即恢复。
 - 每个（指标族, WIB 日）一个短事务：写汇总表与推进 `agg_progress` 同一事务提交。
 - 某指标族某日失败：该指标族本轮停止、进度不推进，`agg_progress.last_error` 记异常类名，TECH 群收到「【埋点汇总失败】」；下一次运行自动从缺的日期补。其他指标族照常。
 - 进度落后超过明细保留期（92 天）时只从保留期下限续算，TECH 群收到「【埋点汇总进度落后超过明细保留期】」（被跳过的日期明细已清理，无法再算）。

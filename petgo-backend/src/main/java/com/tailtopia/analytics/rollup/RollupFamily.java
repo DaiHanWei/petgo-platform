@@ -43,6 +43,21 @@ public interface RollupFamily {
      */
     void computeDay(LocalDate statDate, LocalDate asOf, RollupContext ctx);
 
+    /**
+     * 单元事务<b>之前</b>的准备步骤（Story 4.4：业务库窄查询放在埋点库事务之外，避免占着埋点连接——池只有 3 条）。
+     *
+     * <p>{@link RollupService} 对每个日单元串行调用 {@code prepareDay(d)} → 开单元事务 → {@link #computeDay computeDay(d)}；
+     * 不在任何埋点事务内，可用 {@link RollupContext#jdbcTemplate()} 做埋点库短查询（自动提交、用完即还连接）、
+     * 用业务库 {@code JdbcTemplate} 做窄查询，结果由实现暂存给紧接着的 {@code computeDay}（JVM 内运行锁保证串行）。
+     * 抛异常 = 该单元失败（同 {@code computeDay} 失败：进度不推进、事务外 TECH 告警）。默认什么都不做。
+     */
+    default void prepareDay(LocalDate statDate, LocalDate asOf, RollupContext ctx) {
+    }
+
+    /** 同 {@link #prepareDay}，在周期单元（{@link #computePeriods}）的事务之前调用。默认什么都不做。 */
+    default void preparePeriods(LocalDate windowStart, LocalDate windowEnd, LocalDate asOf, RollupContext ctx) {
+    }
+
     /** 是否有周 / 月表要算（Story 4.3 / 4.4 起使用）。为 true 时 {@link RollupService} 在逐日计算全部成功后调 {@link #computePeriods}。 */
     default boolean hasPeriods() {
         return false;

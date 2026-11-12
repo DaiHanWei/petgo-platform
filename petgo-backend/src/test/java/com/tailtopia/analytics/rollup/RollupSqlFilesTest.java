@@ -18,8 +18,12 @@ import org.junit.jupiter.api.Test;
  */
 class RollupSqlFilesTest {
 
-    /** 已注册的 SQL 指标族（与 {@link RollupConfig} 一致；dau_reconcile 的口径断言见 {@code DauReconcileFamilyTest}）。 */
-    static final List<String> FAMILIES = List.of("activity", "install", "dau_reconcile", "retention", "install_profile");
+    /**
+     * 已注册的 SQL 指标族（与 {@link RollupConfig} 一致；dau_reconcile 的口径断言见 {@code DauReconcileFamilyTest}，
+     * placement / push 的分段与口径断言见 {@code PlacementPushFamilyTest}）。
+     */
+    static final List<String> FAMILIES = List.of("activity", "install", "dau_reconcile", "retention", "install_profile",
+            "placement", "push");
 
     private static final Set<String> ALLOWED_PARAMS = Set.of("stat_date", "as_of", "lookback_start", "computed_at");
     private static final Pattern PARAM = Pattern.compile("(?<![:\\w]):([a-z_][a-z0-9_]*)");

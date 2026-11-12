@@ -75,8 +75,52 @@ class MetricDefinitionsTest {
                 "ops_popups.public_token", "shop_banners.public_token", "shop_coupons.public_token");
         assertThat(s5.exclusions()).contains("account_type = 'REAL'", "growth_backfill_popup_shown", "app_update_prompt_shown");
         assertThat(s5.knownBias()).contains("_reportImpression");
-        assertThat(s5.sqlPath()).isNull();
-        assertThat(s5.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 3.1"));
+        // Story 4.4 填 SQL 位置
+        assertThat(s5.changelog()).first().satisfies(c -> assertThat(c.change()).contains("Story 3.1"));
+    }
+
+    /** Story 4.4 T6 / T7：S5 运营位指向 placement.sql，写明带单、推广 Toko 判定与已知偏差；S5-推送 写明接收近似与 A13 勘察结论。 */
+    @Test
+    void story44PlacementAndPushMetrics() throws java.io.IOException {
+        MetricDefinitions m = load(MetricDefinitions.DEFAULT_LOCATION);
+        assertThat(m.isLoaded()).isTrue();
+        java.util.function.Function<String, MetricDefinition> byCode =
+                code -> m.metrics().stream().filter(d -> d.code().equals(code)).findFirst().orElseThrow();
+
+        MetricDefinition s5 = byCode.apply("S5");
+        assertThat(s5.sqlPath()).isEqualTo("analytics/rollup/placement.sql");
+        assertThat(s5.definition()).contains("agg_daily_placement", "agg_weekly_placement", "agg_monthly_placement",
+                "paid_orders_7d", "点击时间 < paid_at ≤ 点击时间 + 7 天", "paid_at IS NOT NULL", "promotes_toko",
+                "target_value = 'TOKO'", "clicks ÷ impressions");
+        assertThat(String.join("\n", s5.sources())).contains("shop_orders(user_id, public_token, paid_at)",
+                "ops_popups(public_token, target_type, target_value)");
+        assertThat(s5.knownBias()).contains("不代表订单一定由该运营位带来", "从未登录的人无法匹配订单", "回补窗口",
+                "露出超过 50%").doesNotContain("SQL 由 Story 4.4 填");
+        assertThat(s5.changelog()).hasSize(2).last().satisfies(c -> assertThat(c.change()).contains("Story 4.4"));
+
+        MetricDefinition push = byCode.apply("S5-推送");
+        assertThat(push.sqlPath()).isEqualTo("analytics/rollup/push.sql");
+        assertThat(push.definition()).contains("push_opened", "OPS_ANNOUNCEMENT", "recipient_count", "近似",
+                "campaign_opened_persons_cum", "toko_coupon_expiry_push_sent", "COUPON_EXPIRING", "A13",
+                "只统计打开数");
+        assertThat(push.exclusions()).contains("account_type = 'REAL'", "VET_REPLY");
+        assertThat(push.knownBias()).contains("不是推送送达数", "14 天", "只有打开数");
+        assertThat(push.changelog()).singleElement().satisfies(c -> assertThat(c.change()).contains("Story 4.4"));
+
+        // AC5：A13 勘察逐类覆盖 ck_notifications_type 当前全集（取当前树里最后一条重建它的迁移）
+        String ck;
+        try (java.io.InputStream in = new org.springframework.core.io.ClassPathResource(
+                "db/migration/V20261105_1620__rebuild_ck_notifications_type_shop_coupon_reorder.sql").getInputStream()) {
+            ck = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        java.util.regex.Matcher t = java.util.regex.Pattern.compile("'([A-Z][A-Z0-9_]+)'")
+                .matcher(ck.substring(ck.indexOf("ADD CONSTRAINT ck_notifications_type")));
+        int n = 0;
+        while (t.find()) {
+            n++;
+            assertThat(push.definition()).as("A13 勘察漏了 %s", t.group(1)).containsPattern("(?<![A-Z0-9_])" + t.group(1) + "(?![A-Z0-9_])");
+        }
+        assertThat(n).isGreaterThan(40);
     }
 
     /** Story 3.4：电商 #6 / 产品 #1 / 产品 #5 口径条目按代码核对后的实际事件名与变更记录。 */

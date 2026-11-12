@@ -554,6 +554,9 @@ analytics:
     retention-days: 92
     rerun-fixed-delay-ms: 60000
     rerun-initial-delay-ms: 60000
+    # 运营推送累计打开人数只计发送后多少天内的打开（Story 4.4，见 PushRollupProperties；1–92，默认 14）。
+    # 值非法不阻断启动：只停用累计打开人数（列写空）+ WARN + 就绪时 TECH 告警。
+    push-campaign-days: ${ANALYTICS_ROLLUP_PUSH_CAMPAIGN_DAYS:14}
   # GA4 快照（analytics-pipeline Story 4.2，D-11）。见 Ga4SnapshotProperties。Ga4DailySnapshotJob 每天 WIB 02:30（早于 03:00 汇总）
   # 经 Ga4ActiveUsersClient（复用 petgo.daily-report.ga4 的凭证，不加新 env）拉 GA4 全版本日活与 V1.5.0+ 日活写 ga4_daily_snapshot：
   # 每次回拉 D−1..D−3 覆盖旧值，另补拉最近 backfill-days 天内缺行的日期。GA4 未配置 → 跳过记 INFO；拉取失败 → TECH 告警、下次补拉。
