@@ -86,6 +86,8 @@ import tools.jackson.databind.ObjectMapper;
             // PartitionMaintenanceJobIntegrationTest 并发 DETACH / 建分区。由该测试类直接调用 run() 验证
             // （启动时的那一次照常跑，属于上下文初始化，不与用例并发）。
             "analytics.partition.cron=-",
+            // analytics-pipeline Story 1.4：未登记事件每日告警同理关闭，由 AnalyticsBatchIntegrationTest 直接调 run(日期) 验证。
+            "analytics.unknown-event-alert.cron=-",
             // V1.3.4 Story 6.2：运营通知定时扫描（默认首延 60s、每 60s）会把共享库里别的测试遗留的
             // PENDING 全量（ALL）活动发出去 —— 给库里所有用户各写一条通知、角标 +1，
             // 让「新用户未读数 = N」类断言随机红。首延拉到 1 天 = 测试期内不自动跑；

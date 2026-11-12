@@ -43,11 +43,27 @@ public class ApiAccessLoggingFilter extends OncePerRequestFilter {
         this.sanitizer = sanitizer;
     }
 
+    /**
+     * 不记访问日志的 {@code /api/} 路径。
+     *
+     * <p>🔴 {@code /api/v1/analytics/batch}（analytics-pipeline Story 1.4 AC9 / 架构 §实现规范 4）：埋点批量上报，
+     * 请求体是整批事件内容（匿名 id、用户标识哈希、属性、上下文），量又大 —— 记下来既泄露行为数据也撑爆日志盘。
+     * 该接口自己只打条数和 {@code messageId}。
+     */
+    static final java.util.Set<String> EXCLUDED_API_PATHS = java.util.Set.of("/api/v1/analytics/batch");
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String p = request.getRequestURI();
+        if (EXCLUDED_API_PATHS.contains(stripTrailingSlash(p))) {
+            return true;
+        }
         boolean logged = p.startsWith("/api/") || p.equals("/im/callback");
         return !logged;
+    }
+
+    private static String stripTrailingSlash(String p) {
+        return p != null && p.length() > 1 && p.endsWith("/") ? p.substring(0, p.length() - 1) : p;
     }
 
     @Override

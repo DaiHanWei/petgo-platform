@@ -497,6 +497,25 @@ analytics:
   # 启动后另立即跑一次。失败 / DEFAULT 分区非空只 TECH 告警，不影响接收。测试设 "-" 关闭，直接调 run()。
   partition:
     cron: "0 5 0 * * *"
+  # 埋点批量接收（analytics-pipeline Story 1.4，A6 / D2 / FR-7–10）：POST /api/v1/analytics/batch。见 IngestProperties。
+  ingest:
+    # A6：请求 500 KB / 单条 32 KB / 每批 500 条，超限 413
+    max-request-bytes: 512000
+    max-event-bytes: 32768
+    max-events-per-batch: 500
+    # 内存队列按估算字节的上限（D2 护栏破例，64 MB），满了 429 + Retry-After
+    queue-max-bytes: 67108864
+    queue-full-retry-after-seconds: 30
+    # IngestFlusher：每 1 秒或攒够 500 条批量写 events_raw
+    flush-batch-size: 500
+    flush-interval-ms: 1000
+    # 优雅停机时把队列写完的最长等待（须小于 Spring 每阶段默认 30s）
+    shutdown-drain-timeout: 20s
+    # 限流以匿名 id 为主；IP 只做很宽的兜底（印尼移动网络普遍 CGNAT，阈值待压测后定）。IP 只哈希进 Redis 键。
+    rate-limit: { per-device: 120, per-ip: 3000, window-seconds: 60 }
+  # 未登记事件每日告警（Story 1.4 AC4）：每天 UTC 01:30 统计前一个 UTC 日。测试设 "-" 关闭，直接调 run(日期)。
+  unknown-event-alert:
+    cron: "0 30 1 * * *"
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

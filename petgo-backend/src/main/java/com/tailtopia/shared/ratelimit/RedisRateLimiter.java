@@ -36,4 +36,35 @@ public class RedisRateLimiter {
             throw AppException.rateLimited("操作过于频繁，请稍后再试");
         }
     }
+
+    /**
+     * 与 {@link #check} 同一固定窗口计数，但<b>不抛异常</b>，返回是否放行（analytics-pipeline Story 1.4：
+     * 埋点接口要自己构造带 {@code Retry-After} 的 429）。Redis 异常照常向外抛，由调用方决定放行还是拒绝。
+     *
+     * @return {@code true} = 本次计数后未超限
+     */
+    public boolean tryAcquire(String key, int limit, Duration window) {
+        Long count = redis.opsForValue().increment(key);
+        if (count != null && count == 1L) {
+            redis.expire(key, window);
+        }
+        return count == null || count <= limit;
+    }
+
+    /**
+     * 窗口剩余秒数（向上取整，至少 1），给 {@code Retry-After} 用。键没有过期时间（上次 {@code expire} 失败）时补设
+     * 并返回窗口长度；取不到（键不存在 / Redis 返回空）也返回窗口长度。
+     */
+    public long secondsUntilReset(String key, Duration window) {
+        long windowSeconds = Math.max(1, window.toSeconds());
+        Long ttl = redis.getExpire(key);
+        if (ttl == null || ttl == -2L) {
+            return windowSeconds;
+        }
+        if (ttl == -1L) {
+            redis.expire(key, window);
+            return windowSeconds;
+        }
+        return Math.max(1, Math.min(ttl, windowSeconds));
+    }
 }

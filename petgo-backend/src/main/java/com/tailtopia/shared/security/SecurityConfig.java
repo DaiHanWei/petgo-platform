@@ -434,6 +434,10 @@ public class SecurityConfig {
                         // 不限 HttpMethod（只限 GET 的话 HEAD 会落到兜底规则、照样执行 GET 处理器）。
                         .requestMatchers("/api/v1/me/collections/posts",
                                 "/api/v1/me/collections/places").hasRole("USER")
+                        // analytics-pipeline Story 1.4：埋点批量接收，匿名可写（App 未登录也要上报；限流按匿名 id + IP 兜底在
+                        // controller 里做）。JWT 可选，只透传给 IdentityResolver；兽医 token 由 1.5 的判定按无 JWT 处理。
+                        // ⚠️ 带了无效 / 过期 token 仍会被资源服务器过滤器先 401（全局行为）。精确路径，不写通配。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/analytics/batch").permitAll()
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

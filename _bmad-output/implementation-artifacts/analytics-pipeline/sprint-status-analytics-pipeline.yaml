@@ -52,7 +52,7 @@ development_status:
   1-1-埋点库骨架: review
   1-2-事件清单盘点与口径骨架: review
   1-3-原始层与分区维护: review
-  1-4-批量接收接口: ready-for-dev
+  1-4-批量接收接口: review
   1-5-身份校验与关联表: ready-for-dev
   1-6-明细层转换: ready-for-dev
   1-7-明细分区-原始层清理与重算: ready-for-dev
