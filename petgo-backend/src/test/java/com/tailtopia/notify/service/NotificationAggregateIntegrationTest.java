@@ -87,7 +87,7 @@ class NotificationAggregateIntegrationTest extends ApiIntegrationTest {
         assertThat(third.getDeepLinkToken()).as("合并沿用原行 token").isEqualTo(first.getDeepLinkToken());
         // 去抖：10 分钟内同帖只推一次。
         verify(pusher, times(1)).pushToUser(eq(author.getId()), anyString(), anyString(), anyString(),
-                anyString(), anyString());
+                anyString(), anyString(), org.mockito.ArgumentMatchers.isNull());
     }
 
     /** T-29：同一人取消赞再赞、仍未读 → 什么都不做（actor 不重复、时间不刷新）。 */
@@ -151,7 +151,7 @@ class NotificationAggregateIntegrationTest extends ApiIntegrationTest {
             // 3.1 code-review F9：并发下角标也只 +1、去抖后只推 1 次。
             assertThat(badge(author) - before).isEqualTo(1);
             verify(pusher, times(1)).pushToUser(eq(author.getId()), anyString(), anyString(), anyString(),
-                    anyString(), anyString());
+                    anyString(), anyString(), org.mockito.ArgumentMatchers.isNull());
         } finally {
             pool.shutdownNow();
         }
@@ -179,7 +179,7 @@ class NotificationAggregateIntegrationTest extends ApiIntegrationTest {
         assertThat(actorsOf(toParent.getId())).containsExactly(commenter.getId());
         // 评论每次都推，正文 = 原文。
         verify(pusher).pushToUser(eq(parent.getId()), anyString(), eq("halo"), eq("CONTENT_COMMENTED"),
-                anyString(), eq(String.valueOf(postId)));
+                anyString(), eq(String.valueOf(postId)), org.mockito.ArgumentMatchers.isNull());
     }
 
     @Test
@@ -191,10 +191,10 @@ class NotificationAggregateIntegrationTest extends ApiIntegrationTest {
 
         like(author, newUser(), postId);
         verify(pusher, never()).pushToUser(anyLong(), anyString(), anyString(), anyString(), anyString(),
-                anyString());
+                anyString(), org.mockito.ArgumentMatchers.isNull());
 
         like(author, newUser(), newPostId());
         verify(pusher, times(1)).pushToUser(eq(author.getId()), anyString(), anyString(), anyString(),
-                anyString(), anyString());
+                anyString(), anyString(), org.mockito.ArgumentMatchers.isNull());
     }
 }

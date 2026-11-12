@@ -29,7 +29,7 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
 /**
- * L1（V1.3.0 Story 6.4 · D3 套模板 D + 变更记录抽屉）：整页单卡 15 项（V1.4.0 ① Story 3.4 加作者等级加权） + 页头「变更记录」按钮、无页尾常驻表；抽屉 fragment 200 / 403 / 非 htmx 302；
+ * L1（V1.3.0 Story 6.4 · D3 套模板 D + 变更记录抽屉）：整页单卡 19 项（V1.4.0 ① Story 3.4 加作者等级加权；修复线 2026-11-12 加 4 项） + 页头「变更记录」按钮、无页尾常驻表；抽屉 fragment 200 / 403 / 非 htmx 302；
  * 按参数与 WIB 时间段筛选命中；操作人显示名；分页每页 20；{@code POST /admin/algo-params} 回归（htmx 成功回卡、校验码不变 422、PRG 不变）。
  */
 class AdminAlgoParamDrawerIntegrationTest extends ApiIntegrationTest {
@@ -76,7 +76,7 @@ class AdminAlgoParamDrawerIntegrationTest extends ApiIntegrationTest {
                 "seenWindowDays", "windowSize", "attrFunQuota", "attrEduQuota", "attrLifeQuota", "speciesMainQuota", "speciesOtherQuota", "speciesGeneralQuota"}) {
             assertThat(html).as(name).contains("name=\"" + name + "\"");
         }
-        assertThat(html.split(q("class=\"field\""), -1).length - 1).isEqualTo(15);
+        assertThat(html.split(q("class=\"field\""), -1).length - 1).isEqualTo(19); // 修复线加 4 项
         // 只看不改：输入禁用 + 只读注释
         String ro = mvc.perform(get("/admin/algo-params").param("lang", "zh_CN").with(authentication(staffWith(AdminPermissions.CONFIG_ALGO_PARAM_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

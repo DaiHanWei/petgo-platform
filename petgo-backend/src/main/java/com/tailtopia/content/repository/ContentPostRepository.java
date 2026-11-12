@@ -923,6 +923,40 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /**
+     * 优质老帖候选池（修复线 2026-11-12）：近 {@code since} 以来发布、互动量（赞 + w × 评）最高的前 {@code limit} 条 id。
+     *
+     * <p>🛡 只做<b>粗选</b>：这里只套与查看者无关的条件（未删 / 已发布 / 公开 / 作者有效、互动量 &gt; 0），
+     * 调用方拿 id 再走 {@link #findRankableByIds} 套全部查看者过滤（举报、拉黑隐藏）——过滤口径只有那一处。
+     * 评论计数同 {@code FeedRankInteractionStats}：未删 + VISIBLE（不排影子评论，粗选够用；精确计数在打分时另取）。
+     *
+     * <p>⚠️ 按「近 N 天的帖子集合」先圈定再分组计数，不逐条 LATERAL —— 每次下拉刷新都会跑一次。
+     *
+     * @return 帖子 id，互动量降序
+     */
+    @Query(value = """
+            WITH cand AS (
+                SELECT p.id, p.created_at FROM content_posts p
+                JOIN users u ON u.id = p.author_id AND u.deleted_at IS NULL AND u.status = 'ACTIVE'
+                WHERE p.created_at >= :since AND p.deleted_at IS NULL
+                  AND p.status = 'PUBLISHED' AND p.visibility = 'PUBLIC'
+            ),
+            lk AS (SELECT l.post_id, COUNT(*) AS n FROM content_likes l JOIN cand ON cand.id = l.post_id
+                   GROUP BY l.post_id),
+            cm AS (SELECT c.post_id, COUNT(*) AS n FROM comments c JOIN cand ON cand.id = c.post_id
+                   WHERE c.deleted_at IS NULL AND c.moderation_status = 'VISIBLE'
+                   GROUP BY c.post_id)
+            SELECT cand.id FROM cand
+            LEFT JOIN lk ON lk.post_id = cand.id
+            LEFT JOIN cm ON cm.post_id = cand.id
+            WHERE COALESCE(lk.n, 0) + CAST(:w AS double precision) * COALESCE(cm.n, 0) > 0
+            ORDER BY COALESCE(lk.n, 0) + CAST(:w AS double precision) * COALESCE(cm.n, 0) DESC,
+                     cand.created_at DESC, cand.id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Number> findQualityCandidateIds(@Param("since") Instant since, @Param("w") double commentWeight,
+            @Param("limit") int limit);
+
+    /**
      * 按 id 取内容，<b>并重新套一遍候选池过滤</b>（V1.1.6 Story 16.3 · AC4）。
      *
      * <p>🔴 <b>这个方法存在的唯一理由</b>：序列快照有 30 分钟寿命，期间内容可能被删、被挂起、

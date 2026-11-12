@@ -131,7 +131,7 @@ class FollowAndPlaceNotifyIntegrationTest extends ApiIntegrationTest {
         assertThat(rows.get(0).get("target_ref")).isEqualTo(String.valueOf(a.getId()));
         assertThat(badge(b) - before).isEqualTo(1);
         verify(pusher, times(1)).pushToUser(eq(b.getId()), anyString(), eq(""), eq("USER_FOLLOWED"), anyString(),
-                eq(String.valueOf(a.getId())));
+                eq(String.valueOf(a.getId())), org.mockito.ArgumentMatchers.isNull()); // 修复线：互动类推送走带 commentId 的重载（非评论点赞恒传 null，Ext 不变）
 
         unfollow(a, b);
         assertThat(notificationsOf(b, "USER_FOLLOWED")).as("取关不发").hasSize(1);
@@ -173,7 +173,7 @@ class FollowAndPlaceNotifyIntegrationTest extends ApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT comment_id FROM notifications WHERE id = ?", Long.class, id))
                 .as("comment_id 留空（place_comments 与 comments id 空间独立）").isNull();
         verify(pusher, times(1)).pushToUser(eq(creator.getId()), anyString(), eq(""), eq("PLACE_COMMENTED"),
-                anyString(), eq(p.getPublicToken()));
+                anyString(), eq(p.getPublicToken()), org.mockito.ArgumentMatchers.isNull());
 
         jdbc.update("UPDATE notifications SET is_read = true, read_at = now() WHERE id = ?", id);
         approvedComment(p, newUser());

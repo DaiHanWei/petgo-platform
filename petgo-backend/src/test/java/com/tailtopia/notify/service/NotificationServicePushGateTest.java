@@ -121,7 +121,7 @@ class NotificationServicePushGateTest {
 
         service.sendInteraction(9L, NotificationType.CONTENT_COMMENTED, 2L, null, "55", 7L, null, "halo");
         verify(pusher, times(1)).pushToUser(eq(9L), any(), any(),
-                eq(NotificationType.CONTENT_COMMENTED.name()), any(), any());
+                eq(NotificationType.CONTENT_COMMENTED.name()), any(), any(), any());
     }
 
     @Test
@@ -144,7 +144,7 @@ class NotificationServicePushGateTest {
         service.sendInteraction(9L, NotificationType.CONTENT_LIKED, 3L, "LIKE:POST:55", "55", null, null, null);
 
         verify(valueOps).setIfAbsent("notify:likepush:55", "1", Duration.ofMinutes(10));
-        verify(pusher, times(1)).pushToUser(eq(9L), any(), any(), eq("CONTENT_LIKED"), any(), any());
+        verify(pusher, times(1)).pushToUser(eq(9L), any(), any(), eq("CONTENT_LIKED"), any(), any(), any());
     }
 
     @Test
@@ -197,7 +197,9 @@ class NotificationServicePushGateTest {
         service.sendWithCopy(7L, NotificationType.PET_BIRTHDAY, "PET_BIRTHDAY", null, "t", "b", "r");
         service.sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L, "LIKE:POST:55", "55", null, null, null);
 
-        verify(pusher, times(3)).pushToUser(anyLong(), any(), any(), any(), any(), any());
+        // send / sendWithCopy 走 6 参；互动走带 commentId 的 7 参重载（修复线）
+        verify(pusher, times(2)).pushToUser(anyLong(), any(), any(), any(), any(), any());
+        verify(pusher, times(1)).pushToUser(anyLong(), any(), any(), any(), any(), any(), any());
         verify(repo, times(2)).save(any(Notification.class));
     }
 
@@ -212,6 +214,7 @@ class NotificationServicePushGateTest {
         verifyNoInteractions(prefs);
         verify(pusher).pushToVet(eq(3L), any(), any(), eq("NEW_CONSULT_REQUEST"), any(), any());
         verify(pusher, never()).pushToUser(anyLong(), any(), any(), any(), any(), any());
+        verify(pusher, never()).pushToUser(anyLong(), any(), any(), any(), any(), any(), any());
     }
 
     // ===== V1.4.0 push-collect Story 3.1 · AC1.2：③ sendGiftReceived 直接 pushToUser 出口的闸门 =====

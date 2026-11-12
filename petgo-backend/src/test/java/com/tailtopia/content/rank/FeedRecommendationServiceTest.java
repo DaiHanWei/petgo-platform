@@ -100,7 +100,16 @@ class FeedRecommendationServiceTest {
 
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
-                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles, growth);
+                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles, growth,
+                new FeedQualityPoolCache(noCacheRedis(), posts));
+    }
+
+    /** 修复线：优质老帖缓存永远未命中 → 每次都走 posts.findQualityCandidateIds（本类验取数，缓存另有专测）。 */
+    @SuppressWarnings("unchecked")
+    private static org.springframework.data.redis.core.StringRedisTemplate noCacheRedis() {
+        var redis = mock(org.springframework.data.redis.core.StringRedisTemplate.class);
+        when(redis.opsForValue()).thenReturn(mock(org.springframework.data.redis.core.ValueOperations.class));
+        return redis;
     }
 
     private static ContentPost post(long id, long authorId) {
@@ -500,7 +509,7 @@ class FeedRecommendationServiceTest {
         FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
         FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles,
-                growth);
+                growth, new FeedQualityPoolCache(noCacheRedis(), posts));
 
         FeedRecommendationService.RankedPage p = svc.page(viewerId, null, null, 20, null);
 
@@ -752,7 +761,7 @@ class FeedRecommendationServiceTest {
         FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
         FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags,
                 species, pets, seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000),
-                platformConfig, throttles, growth);
+                platformConfig, throttles, growth, new FeedQualityPoolCache(noCacheRedis(), posts));
         generationPath(Map.of());
         List<ContentPost> pool = new ArrayList<>();
         for (long i = 1; i <= 30; i++) {
@@ -972,5 +981,132 @@ class FeedRecommendationServiceTest {
     void boostOfOneMeansEmptyMapAndNoLevelQuery() {
         assertThat(service.authorFactors(List.of(cand(1, 15)), 1.0)).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(growth);
+    }
+
+    // ── 修复线（2026-11-12）：优质老帖池 / 互动冷却 / 看过暂不出现 ───────────────
+
+    private List<ContentPost> mainPool(int n) {
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= n; i++) {
+            pool.add(post(i, i));
+        }
+        return pool;
+    }
+
+    /** 主池之外的 60 天前高互动帖经优质老帖池进入序列，且按查看者口径过滤（拉黑 / 举报不被绕过）。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void qualityPoolBringsOlderPopularPostsIntoTheSequence() {
+        when(cfg.getQualityPoolDays()).thenReturn(30);
+        when(cfg.getQualityPoolSize()).thenReturn(300);
+        Instant old = Instant.now().minus(java.time.Duration.ofDays(20));
+        ContentPost p501 = post(501, 501);
+        ContentPost p502 = post(502, 502);
+        try {
+            var c = ContentPost.class.getDeclaredField("createdAt");
+            c.setAccessible(true);
+            c.set(p501, old);
+            c.set(p502, old);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        generationPath(Map.of(501L, p501, 502L, p502));
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(mainPool(30));
+        when(posts.findQualityCandidateIds(any(), org.mockito.ArgumentMatchers.anyDouble(), eq(300)))
+                .thenReturn(List.of(501L, 502L));
+
+        Instant before = Instant.now();
+        service.page(9L, null, null, 20, null);
+
+        assertThat(appendedSequence()).contains(501L, 502L);
+        org.mockito.ArgumentCaptor<Instant> since = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        verify(posts).findQualityCandidateIds(since.capture(), eq(2.0), eq(300));
+        assertThat(since.getValue()).isBefore(before.minus(java.time.Duration.ofDays(29)))
+                .isAfter(before.minus(java.time.Duration.ofDays(31)));
+        org.mockito.ArgumentCaptor<Collection<Long>> filtered = org.mockito.ArgumentCaptor.forClass(Collection.class);
+        verify(posts, org.mockito.Mockito.atLeastOnce()).findRankableByIds(filtered.capture(), eq(true), eq(9L));
+        assertThat(filtered.getAllValues()).anySatisfy(ids -> assertThat(ids).containsExactly(501L, 502L));
+    }
+
+    @Test
+    void qualityPoolSizeZeroSkipsTheQuery() {
+        when(cfg.getQualityPoolDays()).thenReturn(30);
+        when(cfg.getQualityPoolSize()).thenReturn(0);
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(mainPool(30));
+
+        service.page(9L, null, null, 20, null);
+
+        verify(posts, never()).findQualityCandidateIds(any(), org.mockito.ArgumentMatchers.anyDouble(), anyInt());
+    }
+
+    /** 本人近 3 天点过赞（3）/ 评论过（4）的帖子不进序列。 */
+    @Test
+    void postsTheViewerRecentlyLikedOrCommentedAreExcluded() {
+        when(cfg.getInteractedCooldownDays()).thenReturn(3);
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(mainPool(30));
+        when(likes.findPostIdsLikedSince(eq(9L), any())).thenReturn(List.of(3L));
+        when(comments.findPostIdsCommentedSince(eq(9L), any())).thenReturn(List.of(4L));
+
+        Instant before = Instant.now();
+        service.page(9L, null, null, 20, null);
+
+        assertThat(appendedSequence()).doesNotContain(3L, 4L).contains(1L, 2L, 5L);
+        org.mockito.ArgumentCaptor<Instant> since = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        verify(likes).findPostIdsLikedSince(eq(9L), since.capture());
+        assertThat(since.getValue()).isBefore(before.minus(java.time.Duration.ofDays(3)).plusSeconds(5))
+                .isAfter(before.minus(java.time.Duration.ofDays(3)).minusSeconds(5));
+    }
+
+    @Test
+    void cooldownDoesNotApplyToGuestsOrWhenZero() {
+        when(cfg.getInteractedCooldownDays()).thenReturn(3);
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(mainPool(30));
+
+        service.page(null, "anon", null, 20, null);
+
+        verify(likes, never()).findPostIdsLikedSince(org.mockito.ArgumentMatchers.anyLong(), any());
+        verify(comments, never()).findPostIdsCommentedSince(org.mockito.ArgumentMatchers.anyLong(), any());
+    }
+
+    /** 没看过的够用：24 小时内下发过的（1..10）一条都不出现。 */
+    @Test
+    void recentlySeenPostsStayOutWhenThereIsEnoughUnseen() {
+        when(cfg.getSeenHideHours()).thenReturn(24);
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(mainPool(150));
+        Set<Long> held = new java.util.HashSet<>();
+        for (long i = 1; i <= 10; i++) {
+            held.add(i);
+        }
+        when(seen.recentlySeen(any(), anyList(), any(), eq(24))).thenReturn(held);
+
+        service.page(9L, null, null, 20, null);
+
+        List<Long> seq = appendedSequence();
+        assertThat(seq).hasSize(100); // 序列段长 100，全部来自没看过的 140 条
+        assertThat(seq).doesNotContainAnyElementsOf(held);
+    }
+
+    /** 没看过的不够：先排完没看过的，再把看过的补在后面（不会刷空）。 */
+    @Test
+    void recentlySeenPostsRefillOnlyAfterUnseenRunOut() {
+        when(cfg.getSeenHideHours()).thenReturn(24);
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(mainPool(30));
+        Set<Long> held = new java.util.HashSet<>();
+        for (long i = 1; i <= 10; i++) {
+            held.add(i);
+        }
+        when(seen.recentlySeen(any(), anyList(), any(), eq(24))).thenReturn(held);
+
+        service.page(9L, null, null, 20, null);
+
+        List<Long> seq = appendedSequence();
+        assertThat(seq).hasSize(30).doesNotHaveDuplicates();
+        assertThat(seq.subList(0, 20)).doesNotContainAnyElementsOf(held); // 没看过的 20 条在前
+        assertThat(seq.subList(20, 30)).containsExactlyInAnyOrderElementsOf(held); // 看过的补在后
     }
 }

@@ -489,14 +489,11 @@ public class NotificationService {
             return;
         }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
-        String title = copy.title(type, variant, summary.get(), locale);
-        if (Notification.VARIANT_COMMENT.equals(variant) && commentId != null) {
-            // 修复线：「赞了你的评论」推送 Ext 带 commentId，新版 App 点开直达帖子并定位这条评论。
-            pusher.pushToUser(recipientUserId, title, truncateBody(pushBodyText), type.name(), token, targetRef,
-                    commentId);
-            return;
-        }
-        pusher.pushToUser(recipientUserId, title, truncateBody(pushBodyText), type.name(), token, targetRef);
+        // 修复线：只有「赞了你的评论」推送 Ext 带 commentId（新版 App 点开直达帖子并定位这条评论），其余为 null = Ext 不变。
+        // ⚠️ 保持单一调用点：PushExitStructureTest 要求每个 pushToUser 调用点各配一道 pushAllowed 闸门。
+        Long extCommentId = Notification.VARIANT_COMMENT.equals(variant) ? commentId : null;
+        pusher.pushToUser(recipientUserId, copy.title(type, variant, summary.get(), locale),
+                truncateBody(pushBodyText), type.name(), token, targetRef, extCommentId);
     }
 
     /**

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import com.tailtopia.config.service.PlatformConfigService;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -116,6 +117,34 @@ public class FeedSeenStore {
             Double s = scores.get(i);
             if (s != null && s >= cutoff) {
                 out.put(contentIds.get(i), cfg.getExposureDecay());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 这批内容里 {@code hours} 小时内下发过的（修复线 2026-11-12：「看过暂不出现」）。
+     *
+     * <p>与 {@link #decayFactors} 读同一个 ZSET（score = 曝光时刻），一次 ZMSCORE 批量取完。
+     * 🛡 游客、{@code hours <= 0}、Redis 不可用 → 空集（规则不生效，回到只降权的老行为，不报错）。
+     */
+    public Set<Long> recentlySeen(FeedRankCacheKey cacheKey, List<Long> contentIds, Instant now, int hours) {
+        if (cacheKey.guest() || hours <= 0 || contentIds == null || contentIds.isEmpty()) {
+            return Set.of();
+        }
+        String key = key(cacheKey);
+        Object[] members = contentIds.stream().map(String::valueOf).toArray();
+        List<Double> scores = FeedRankRedisGuard.guard("recentlySeen",
+                () -> redis.opsForZSet().score(key, members), null);
+        if (scores == null) {
+            return Set.of();
+        }
+        double cutoff = cutoff(java.time.Duration.ofHours(hours), now);
+        Set<Long> out = new java.util.HashSet<>();
+        for (int i = 0; i < contentIds.size() && i < scores.size(); i++) {
+            Double s = scores.get(i);
+            if (s != null && s >= cutoff) {
+                out.add(contentIds.get(i));
             }
         }
         return out;
