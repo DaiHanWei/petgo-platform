@@ -42,6 +42,16 @@ import tools.jackson.databind.ObjectMapper;
         properties = {
             "spring.datasource.hikari.maximum-pool-size=3",
             "spring.datasource.hikari.minimum-idle=0",
+            // analytics-pipeline Story 1.1：埋点库是第二个数据源 = 每个测试上下文多一个池，理由同上压到最小。
+            // 🔴 不能压到 1：埋点 Flyway 跑在这个池上，迁移要同时占 2 条连接（历史表 + 迁移本身），池为 1 时
+            //    取连接超时 → 管道以 MIGRATION_FAILED 停用（2026-11-12 实测）。启动后埋点池基本闲置，
+            //    idle-timeout=10s 让闲置上下文的连接很快归还，稳态不占 max_connections。
+            // 指向独立的埋点测试库（CI 由 backend-ci.yml 建；本地 `createdb petgo_analytics_test`）。
+            // 库不存在也能跑：埋点管道停用、非埋点测试不受影响（这本身就是 AC4）。
+            "analytics.datasource.url=jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${ANALYTICS_TEST_DB_NAME:petgo_analytics_test}",
+            "analytics.datasource.hikari.maximum-pool-size=2",
+            "analytics.datasource.hikari.minimum-idle=0",
+            "analytics.datasource.hikari.idle-timeout=10000",
             // V1.1.6 Story 16.3：ALL Tab 走推荐序，候选池默认是「最近 1000 条」。
             //
             // 🔴 共享测试库里堆着**几千条历史测试数据**，其中大量带赞/评（互动度高）。

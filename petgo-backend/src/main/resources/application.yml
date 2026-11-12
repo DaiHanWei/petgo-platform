@@ -468,6 +468,26 @@ analytics:
     host: ${POSTHOG_HOST:}
     # 出网必须有超时：埋点走专用有界线程池，但没有超时仍会把那个池挂满、丢事件（code-review 2026-08-04）
     timeout-seconds: ${POSTHOG_TIMEOUT_SECONDS:3}
+  # 自建埋点库（analytics-pipeline Story 1.1）：与业务库同一 postgres 实例（复用 DB_HOST / DB_PORT），独立库、独立账号、
+  # 独立小连接池、独立 Flyway（classpath:db/analytics-migration，历史表在埋点库内）。见 AnalyticsDataSourceConfig。
+  # 🔴 库连不上 / 迁移失败只停埋点管道 + TECH 告警，后端照常启动（AnalyticsBootstrap）。
+  # 部署前先建库：scripts/ops/create-analytics-db.sql，见 docs/runbooks/runbook-analytics-pipeline.md。
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${ANALYTICS_DB_NAME:petgo_analytics}
+    username: ${ANALYTICS_DB_USER:${DB_USER:petgo}}
+    password: ${ANALYTICS_DB_PASSWORD:${DB_PASSWORD:petgo}}
+    # 迁移里逐表 GRANT 的只读角色名（Flyway 占位符 readerRole）：生产 analytics_reader，stag analytics_reader_stag
+    reader-role: ${ANALYTICS_DB_READER_ROLE:analytics_reader}
+    hikari:
+      pool-name: analytics
+      # A8：接收写库 1 + DetailBuilder 1 + 定时任务 1；stag 由 env 配 2。
+      # ⚠️ 不得小于 2：埋点 Flyway 跑在这个池上，迁移同时要 2 条连接，池为 1 时启动即 MIGRATION_FAILED 停用。
+      maximum-pool-size: ${ANALYTICS_DB_POOL_SIZE:3}
+      minimum-idle: 0
+      # 库不在时别让启动卡 30 秒
+      connection-timeout: 5000
+      # 建池不连库，连不上不抛（由 AnalyticsBootstrap 判停用）
+      initialization-fail-timeout: -1
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

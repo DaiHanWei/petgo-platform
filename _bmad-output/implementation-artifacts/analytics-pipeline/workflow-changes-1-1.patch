@@ -1,0 +1,50 @@
+diff --git a/.github/workflows/backend-ci.yml b/.github/workflows/backend-ci.yml
+index cf97b22c..a18ead2e 100644
+--- a/.github/workflows/backend-ci.yml
++++ b/.github/workflows/backend-ci.yml
+@@ -47,6 +47,8 @@ jobs:
+       REDIS_HOST: localhost
+       REDIS_PORT: 6379
+       SPRING_PROFILES_ACTIVE: dev
++      # analytics-pipeline Story 1.1：埋点测试库（ApiIntegrationTest 读它拼 analytics.datasource.url）
++      ANALYTICS_TEST_DB_NAME: petgo_analytics_test
+ 
+     steps:
+       - uses: actions/checkout@v4
+@@ -108,6 +110,12 @@ jobs:
+             flyway/flyway:11 $URL -locations=filesystem:/flyway/sql \
+             -table=flyway_schema_history_merchant -outOfOrder=true -baselineOnMigrate=true -baselineVersion=0 migrate
+ 
++      # analytics-pipeline Story 1.1：建埋点测试库（第二数据源 + 第二套 Flyway）。由 petgo 用户建、属主就是它；
++      #   埋点迁移里的条件 GRANT 因只读角色不存在而跳过（预期）。库不建也能跑，但埋点管道会停用、相关 L1 测试会红。
++      #   上面「Apply TailTopia + merchant migrations」只针对业务库，不动。
++      - name: Create analytics test database
++        run: PGPASSWORD=petgo psql -h localhost -U petgo -d petgo -c "CREATE DATABASE $ANALYTICS_TEST_DB_NAME"
++
+       # 使用项目级 .mvn/settings.xml（直连 Maven Central，见 maven.config）。含测试 → 出 jar。
+       - name: Build & test (mvn package)
+         run: ./mvnw -B package
+diff --git a/.github/workflows/flyway-guard.yml b/.github/workflows/flyway-guard.yml
+index 410a2def..8f98fb91 100644
+--- a/.github/workflows/flyway-guard.yml
++++ b/.github/workflows/flyway-guard.yml
+@@ -1,16 +1,18 @@
+ name: flyway-guard
+ 
+-# Flyway 迁移号守门（决策 E6）：树内重号 / 动冻结迁移 / 非时间戳新号 / 与 main 撞号 → 不绿
++# Flyway 迁移号守门（决策 E6；analytics-pipeline 1.1 起业务库 / 埋点库两个目录分别检查）：树内重号 / 动冻结迁移 / 非时间戳新号 / 与 main 撞号 → 不绿
+ on:
+   push:
+     branches: [main]
+     paths:
+       - "petgo-backend/src/main/resources/db/migration/**"
++      - "petgo-backend/src/main/resources/db/analytics-migration/**"
+       - ".github/workflows/flyway-guard.yml"
+       - "scripts/ci/check-flyway-versions.sh"
+   pull_request:
+     paths:
+       - "petgo-backend/src/main/resources/db/migration/**"
++      - "petgo-backend/src/main/resources/db/analytics-migration/**"
+       - ".github/workflows/flyway-guard.yml"
+       - "scripts/ci/check-flyway-versions.sh"
+ 
