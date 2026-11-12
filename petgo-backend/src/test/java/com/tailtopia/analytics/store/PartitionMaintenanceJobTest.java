@@ -162,6 +162,113 @@ class PartitionMaintenanceJobTest {
         verifyNoInteractions(alerts);
     }
 
+    // ---------------------------------------------------------------- Story 1.7：过期删除
+    // CLOCK：UTC 2026-12-31 → 原始层 35 天界线 2026-11-26；WIB 2027-01-01 → 明细层 3 个月界线 2026-10-01。
+
+    private void stubPartitions(List<String> detail, List<String> raw) {
+        when(jdbc.queryForList(DetailPartitions.BUILT_SQL, String.class)).thenReturn(detail);
+        when(jdbc.queryForList(PartitionMaintenanceJob.RAW_BUILT_SQL, String.class)).thenReturn(raw);
+    }
+
+    private void stubCursor(Instant cursor) {
+        when(jdbc.query(eq(DetailBuilder.PROGRESS_SQL),
+                org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.ResultSetExtractor<Instant>>any(),
+                eq(DetailBuilder.PIPELINE))).thenReturn(cursor);
+    }
+
+    @Test
+    void dropsExpiredDetailAndRawPartitionsWhenCursorPast() {
+        stubPartitions(List.of("events_detail_p20260930", "events_detail_p20261001"),
+                List.of("events_raw_pdefault", "events_raw_p20261125", "events_raw_p20261126"));
+        stubCursor(Instant.parse("2026-12-31T17:00:00Z"));
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0), DETAIL_OK, Boolean.TRUE);
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(r.retention().detailDropped()).containsExactly("events_detail_p20260930");
+        assertThat(r.retention().rawDropped()).containsExactly("events_raw_p20261125");
+        assertThat(r.retention().rawBlocked()).isEmpty();
+        verifyNoInteractions(alerts);
+    }
+
+    @Test
+    void rawBlockedByCursorIsKeptAndAlertedByWibDay() {
+        stubPartitions(List.of(), List.of("events_raw_p20261120", "events_raw_p20261125"));
+        // 游标停在 11-21 中午：11-20 可删，11-25 被挡
+        stubCursor(Instant.parse("2026-11-21T12:00:00Z"));
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0), DETAIL_OK, Boolean.TRUE);
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(r.retention().rawDropped()).containsExactly("events_raw_p20261120");
+        assertThat(r.retention().rawBlocked()).containsExactly(java.time.LocalDate.of(2026, 11, 25));
+        verify(alerts).send(eq(OpsChannel.TECH), eq("analytics:raw-retention-blocked:2027-01-01"),
+                contains("2026-11-25"));
+    }
+
+    @Test
+    void rawDeletionDeferredWhileRecomputeRunning() {
+        stubPartitions(List.of(), List.of("events_raw_p20261120"));
+        stubCursor(Instant.parse("2026-12-31T17:00:00Z"));
+        when(jdbc.queryForObject(DetailBuilder.RECOMPUTE_RUNNING_SQL, Boolean.class)).thenReturn(true);
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0), DETAIL_OK);
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(r.retention().rawDropped()).isEmpty();
+        assertThat(r.retention().rawDeferred()).containsExactly(java.time.LocalDate.of(2026, 11, 20));
+        verifyNoInteractions(alerts);
+    }
+
+    @Test
+    void dropFailureIsIsolatedPerPartitionAndAlerted() {
+        stubPartitions(List.of("events_detail_p20260901", "events_detail_p20260902"), List.of());
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0), DETAIL_OK)
+                .thenThrow(new org.springframework.dao.CannotAcquireLockException("lock timeout on secret-host"))
+                .thenReturn(Boolean.TRUE);
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(r.retention().failed()).containsExactly("events_detail_p20260901");
+        assertThat(r.retention().detailDropped()).containsExactly("events_detail_p20260902");
+        assertThat(state.isEnabled()).isTrue();
+        verify(alerts).send(eq(OpsChannel.TECH), eq("analytics-retention-failed:2026-12-31"),
+                contains("CannotAcquireLockException"));
+        verify(alerts, never()).send(any(), anyString(), contains("secret-host"));
+    }
+
+    @Test
+    void dropLockHeldElsewhereSkipsQuietly() {
+        stubPartitions(List.of("events_detail_p20260901"), List.of());
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0), DETAIL_OK,
+                Boolean.FALSE);
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.DONE);
+        assertThat(r.retention().lockSkipped()).containsExactly("events_detail_p20260901");
+        verifyNoInteractions(alerts);
+    }
+
+    @Test
+    void retentionListingFailureAlertsAndNeverThrows() {
+        when(jdbc.queryForList(DetailPartitions.BUILT_SQL, String.class))
+                .thenThrow(new IllegalStateException("password=x"));
+        when(tx.execute(any())).thenReturn(new RawResult(true, List.of(), List.of(), 0, 0), DETAIL_OK);
+
+        RunResult r = job.run();
+
+        assertThat(r.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(r.retention()).isNull();
+        verify(alerts).send(eq(OpsChannel.TECH), eq("analytics-retention-failed:2026-12-31"),
+                contains("IllegalStateException"));
+        verify(alerts, never()).send(any(), anyString(), contains("password"));
+    }
+
     @Test
     void describeHasClassNamesOnly() {
         String d = PartitionMaintenanceJob.describe(

@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,6 +68,11 @@ import tools.jackson.databind.node.ObjectNode;
  * <h2>🔴 失败只告警</h2>
  * 管道停用时直接返回。任何异常（含某行 {@code event_date} 的分区不存在 → 整片回滚、不推进进度）→ WARN（只打异常类名）+
  * TECH 告警（按 WIB 日去重），绝不抛出 {@code @Scheduled}。告警一律在埋点事务返回后发。
+ *
+ * <h2>重算（Story 1.7）</h2>
+ * {@link DetailRecomputeJob} 复用本类同一套「转换 → 查重 → 写入」（{@code writeRows}）：{@link #recomputeSlice} 按<b>当前</b>清单
+ * 过滤事件名、只写请求区间内的行、不推进进度。存在 {@code RUNNING} 的重算请求时，实时增量在锁内看到即整片跳过
+ * （{@link Outcome#SKIPPED_RECOMPUTING}）—— 重算期间明细新鲜度暂停。
  *
  * <p>日志只打条数，不打事件内容、{@code user_id} / {@code user_key} / 匿名 id。埋点库只经 {@code @Qualifier("analytics")}
  * 的 {@link JdbcTemplate} / {@link TransactionTemplate} 访问，禁止 JPA。
@@ -110,6 +116,15 @@ public class DetailBuilder {
             + "ON CONFLICT (event_date, message_id) DO NOTHING";
     /** 业务库只读窄查询（用户角色与账号类型）。 */
     static final String USERS_SQL = "SELECT id, role, account_type FROM users WHERE id = ANY(?)";
+    /** Story 1.7：存在进行中的重算请求时实时增量整片跳过（重算清空分区期间，跨日查重会漏判）。 */
+    static final String RECOMPUTE_RUNNING_SQL =
+            "SELECT EXISTS (SELECT 1 FROM detail_recompute_requests WHERE status = 'RUNNING')";
+    /** Story 1.7 重算：不看原始层 {@code unknown_event} 标记，按<b>当前</b>清单登记的事件名过滤（补登记的事件同样转入）。 */
+    static final String RECOMPUTE_USER_IDS_SQL = "SELECT DISTINCT user_id FROM events_raw "
+            + "WHERE received_at > ? AND received_at <= ? AND event = ANY(?) AND user_id IS NOT NULL";
+    static final String RECOMPUTE_READ_SQL = "SELECT DISTINCT ON (message_id) message_id, event, client_ts, sent_at, "
+            + "received_at, anonymous_id, user_key, user_id, source, properties::text, context::text FROM events_raw "
+            + "WHERE received_at > ? AND received_at <= ? AND event = ANY(?) ORDER BY message_id, received_at";
 
     /** 原始层一行（{@code DISTINCT ON} 之后）。 */
     record RawRow(String messageId, String event, Instant clientTs, Instant sentAt, Instant receivedAt,
@@ -133,6 +148,8 @@ public class DetailBuilder {
         SKIPPED_DISABLED,
         /** 没拿到锁（别的实例 / 线程在跑），一片也没处理。 */
         SKIPPED_LOCKED,
+        /** Story 1.7：有进行中的重算请求（{@code RUNNING}），本轮暂停（明细新鲜度暂停，重算完自动续上）。 */
+        SKIPPED_RECOMPUTING,
         /** 运行完成（可能 0 片：已追平）。 */
         DONE,
         /** 运行异常（已告警，未向外抛；出错那一片已回滚，进度停在它之前）。 */
@@ -149,7 +166,7 @@ public class DetailBuilder {
     }
 
     /** 一个时间片的结局。 */
-    enum SliceStatus { PROCESSED, LOCKED, CAUGHT_UP, MOVED_ELSEWHERE }
+    enum SliceStatus { PROCESSED, LOCKED, CAUGHT_UP, MOVED_ELSEWHERE, RECOMPUTING }
 
     record SliceResult(SliceStatus status, long read, long written, long duplicates, long suspicious,
             long nonProduction, long unknownUsers) {
@@ -235,9 +252,10 @@ public class DetailBuilder {
             Set<LocalDate> built = DetailPartitions.builtDates(jdbc);
             while (Duration.between(started, clock.instant()).compareTo(runBudget) < 0) {
                 SliceResult s = runSlice(built);
-                if (s.status() == SliceStatus.LOCKED) {
+                if (s.status() == SliceStatus.LOCKED || s.status() == SliceStatus.RECOMPUTING) {
                     if (slices == 0) {
-                        outcome = Outcome.SKIPPED_LOCKED;
+                        outcome = s.status() == SliceStatus.LOCKED ? Outcome.SKIPPED_LOCKED
+                                : Outcome.SKIPPED_RECOMPUTING;
                     }
                     break;
                 }
@@ -319,10 +337,30 @@ public class DetailBuilder {
         if (!Boolean.TRUE.equals(locked)) {
             return SliceResult.of(SliceStatus.LOCKED);
         }
+        // Story 1.7：重算在同一把锁下先置 RUNNING（已提交）再清分区，所以锁内看到 RUNNING 即可保证不与清空交错
+        if (Boolean.TRUE.equals(jdbc.queryForObject(RECOMPUTE_RUNNING_SQL, Boolean.class))) {
+            return SliceResult.of(SliceStatus.RECOMPUTING);
+        }
         if (!lower.equals(readProgress())) {
             return SliceResult.of(SliceStatus.MOVED_ELSEWHERE);
         }
         List<RawRow> raws = jdbc.query(READ_SQL, DetailBuilder::mapRaw, utc(lower), utc(upper));
+        SliceResult r = writeRows(raws, built, users, d -> true);
+        jdbc.update(UPDATE_PROGRESS_SQL, utc(upper), PIPELINE);
+        beforeCommit();
+        return r;
+    }
+
+    /**
+     * 实时增量与重算（Story 1.7）共用的「转换 → 查重 → 写入」。在调用方的埋点事务内、已持有
+     * {@link AnalyticsLockKeys#DETAIL_BUILDER} 锁时调用。
+     *
+     * @param raws  本片原始行（已 {@code DISTINCT ON (message_id)}、已按清单过滤事件名）
+     * @param keep  只写 {@code event_date} 满足它的行（实时恒真；重算只写请求区间内的行，区间外的读进来丢掉）。
+     *              不满足的行不检查分区是否存在，也不计数
+     */
+    private SliceResult writeRows(List<RawRow> raws, Set<LocalDate> built, Map<Long, UserAccount> users,
+            Predicate<LocalDate> keep) {
         List<DetailRow> candidates = new ArrayList<>(raws.size());
         long suspicious = 0;
         long nonProduction = 0;
@@ -330,6 +368,9 @@ public class DetailBuilder {
         for (RawRow raw : raws) {
             Mapped m = toDetail(raw, built, catalog::allowedPropertyKeys, users);
             DetailRow row = m.row();
+            if (!keep.test(row.eventDate())) {
+                continue;
+            }
             if (!built.contains(row.eventDate())) {
                 throw new DetailPartitionMissingException(row.eventDate());
             }
@@ -354,10 +395,80 @@ public class DetailBuilder {
                 }
             }
         }
-        jdbc.update(UPDATE_PROGRESS_SQL, utc(upper), PIPELINE);
-        beforeCommit();
-        return new SliceResult(SliceStatus.PROCESSED, raws.size(), written, raws.size() - written, suspicious,
-                nonProduction, unknownUsers);
+        return new SliceResult(SliceStatus.PROCESSED, candidates.size(), written, candidates.size() - written,
+                suspicious, nonProduction, unknownUsers);
+    }
+
+    // ---------------------------------------------------------------- Story 1.7：重算（由 DetailRecomputeJob 驱动）
+
+    /** 当前清单登记的全部事件名（任何 status）。重算按它过滤，不看原始层的 {@code unknown_event} 标记。 */
+    List<String> registeredEvents() {
+        List<String> names = new ArrayList<>();
+        for (EventCatalog.EventDefinition e : catalog.events()) {
+            names.add(e.name());
+        }
+        return List.copyOf(names);
+    }
+
+    /**
+     * 重算一个时间片 {@code (lower, upper]}：一个埋点事务，拿同一把 {@link AnalyticsLockKeys#DETAIL_BUILDER} 锁
+     * （<b>阻塞等待</b>，最多 {@link #RECOMPUTE_LOCK_TIMEOUT}：实时增量的单片事务很短），只写
+     * {@code event_date ∈ [from, to]} 的行，<b>不推进</b> {@code pipeline_progress}。
+     *
+     * @param registered {@link #registeredEvents()}（一次重算取一次，整个请求用同一份清单）
+     */
+    SliceResult recomputeSlice(Instant lower, Instant upper, Set<LocalDate> built, List<String> registered,
+            LocalDate from, LocalDate to) {
+        String[] events = registered.toArray(String[]::new);
+        Map<Long, UserAccount> users = lookupUsers(jdbc.query(RECOMPUTE_USER_IDS_SQL, ps -> {
+            ps.setObject(1, utc(lower));
+            ps.setObject(2, utc(upper));
+            ps.setArray(3, ps.getConnection().createArrayOf("varchar", events));
+        }, (rs, n) -> rs.getLong(1)));
+        return tx.execute(status -> {
+            lockDetailBuilderBlocking();
+            List<RawRow> raws = jdbc.query(RECOMPUTE_READ_SQL, ps -> {
+                ps.setObject(1, utc(lower));
+                ps.setObject(2, utc(upper));
+                ps.setArray(3, ps.getConnection().createArrayOf("varchar", events));
+            }, DetailBuilder::mapRaw);
+            return writeRows(raws, built, users, d -> !d.isBefore(from) && !d.isAfter(to));
+        });
+    }
+
+    /** 重算等实时增量当前那一片提交的最长时间；超时抛错 → 请求置 FAILED。 */
+    static final String RECOMPUTE_LOCK_TIMEOUT = "60s";
+
+    /** 在调用方的埋点事务内阻塞拿 {@link AnalyticsLockKeys#DETAIL_BUILDER}（事务级，提交即释放）。 */
+    void lockDetailBuilderBlocking() {
+        jdbc.execute("SET LOCAL lock_timeout = '" + RECOMPUTE_LOCK_TIMEOUT + "'");
+        jdbc.query("SELECT pg_advisory_xact_lock(?, ?)", rs -> null, AnalyticsLockKeys.NAMESPACE,
+                AnalyticsLockKeys.DETAIL_BUILDER);
+    }
+
+    /** 明细进度游标（{@code pipeline='detail'}）；进度行缺失返回 {@code null}。 */
+    Instant progressOrNull() {
+        return queryInstant(PROGRESS_SQL, PIPELINE);
+    }
+
+    /** {@code (lower, limit]} 内最早的 {@code received_at}，无行为 {@code null}（供 {@link #sliceUpper} 跳过空区间）。 */
+    Instant nextReceived(Instant lower, Instant limit) {
+        return queryInstant(NEXT_RECEIVED_SQL, utc(lower), utc(limit));
+    }
+
+    /**
+     * 重算前清空 {@code event_date ∈ [from, to]} 的明细行：一个埋点事务，阻塞拿 {@link AnalyticsLockKeys#DETAIL_BUILDER}
+     * （调用方须先把请求置 {@code RUNNING} 并提交，之后拿到锁的实时增量片都会看到 RUNNING 而跳过）。
+     * 用 {@code DELETE}（写入账号即表主，权限够；事务内可回滚，不涉及 DDL 锁）。
+     *
+     * @return 删除的行数
+     */
+    long clearForRecompute(LocalDate from, LocalDate to) {
+        Integer n = tx.execute(status -> {
+            lockDetailBuilderBlocking();
+            return jdbc.update("DELETE FROM events_detail WHERE event_date BETWEEN ? AND ?", from, to);
+        });
+        return n == null ? 0 : n;
     }
 
     /** 测试钩子：写完数据与进度、提交之前调用（集成测试在这里抛错验证同事务回滚）。 */

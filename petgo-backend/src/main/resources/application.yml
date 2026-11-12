@@ -521,6 +521,12 @@ analytics:
   detail:
     fixed-delay-ms: 60000
     initial-delay-ms: 60000
+  # 明细重算（analytics-pipeline Story 1.7，D-7 / FR-13）：DetailRecomputeJob 每分钟看一次埋点库 detail_recompute_requests，
+  # 一次处理一条（插请求见 docs/runbooks/runbook-analytics-pipeline.md「重算明细」）。重算期间 DetailBuilder 暂停。
+  # 测试把首延拉到 1 天，直接调 runOnce()。
+  recompute:
+    fixed-delay-ms: 60000
+    initial-delay-ms: 60000
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

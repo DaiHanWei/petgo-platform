@@ -94,3 +94,41 @@ docker exec petgo-postgres psql -U petgo -d petgo_analytics \
 ```
 
 业务库 `petgo` / `petgo_stag` 里不应出现 `event_catalog`、`metric_definitions`。
+
+## 2. 过期分区删除与重算明细（Story 1.7）
+
+### 2.1 过期分区删除（自动，无需操作）
+
+`PartitionMaintenanceJob`（每天 UTC 00:05 + 启动后一次）在预建之后删过期分区：
+
+- 明细层 `events_detail_pYYYYMMDD`（WIB 日）：早于「WIB 今天 − 3 个自然月」的删掉。
+- 原始层 `events_raw_pYYYYMMDD`（UTC 日）：早于「UTC 今天 − 35 天」**且**明细进度游标 `pipeline_progress.detail` 已越过那一天的才删；游标没越过的保留，TECH 群收到「【埋点原始层过期分区未删：明细进度落后】」——先查明细转换为什么卡住，修好后下一次维护自动删。`events_raw_pdefault` 永不删。
+- 每个分区一个事务，`DROP` 等表锁最多 5 秒；拿不到（AI 长查询 / 写入在途）就跳过并告警「【埋点过期分区删除失败】」，第二天自动重试，不影响接收。
+- 有重算请求处于 `RUNNING` 时，原始层当天不删（重算正在读它），第二天再删。
+
+### 2.2 重算明细
+
+口径修正（如属性白名单调整）、补登记了之前未登记的事件、或怀疑某几天明细漏转时，从原始层重算这几天的明细。**只能重算原始层保留期（35 天）内的日期**；更早的请求会被拒绝（`REJECTED` / `RAW_RETENTION_EXCEEDED`）并告警。
+
+用**写入账号**连埋点库（密码交互输入，不进 shell history），插一行请求（日期是 **WIB 日期，含两端**）：
+
+```bash
+# 生产；staging 换成 analytics_writer_stag / petgo_analytics_stag
+docker exec -it petgo-postgres psql -h localhost -U analytics_writer -d petgo_analytics
+```
+
+```sql
+INSERT INTO detail_recompute_requests(from_date, to_date) VALUES ('2026-11-01','2026-11-07');
+
+-- 看进度：PENDING → RUNNING → DONE / FAILED / REJECTED
+SELECT id, from_date, to_date, status, error_code, requested_at, started_at, done_at
+FROM detail_recompute_requests ORDER BY id DESC LIMIT 5;
+```
+
+- `DetailRecomputeJob` 每分钟看一次，一次处理一条（按 id 顺序）。**建议单次 ≤ 7 天**；更长的拆成几条。
+- 🔴 **重算期间明细层暂停更新**：`RUNNING` 时实时转换（`DetailBuilder`）整轮跳过，重算完自动追上（数据在原始层，不丢）。
+- 重算按**当前**事件清单判定事件是否已登记、保留哪些属性键；原始层的 `unknown_event` 标记不看（补登记的事件会进明细）。
+- 重算先清空区间内的明细行再从原始层重写，结果与首次处理一致；极少数行的 `event_date` 可能因「当时 / 现在已建分区不同」而不同（规则本身的结果）。
+- `FAILED`（`error_code` 为异常类名）不自动重试：查后端日志 `analytics detail recompute failed`，修好后
+  `UPDATE detail_recompute_requests SET status = 'PENDING' WHERE id = <id>;` 再跑。该区间明细在重跑完成前可能不完整。
+- 后端在 `RUNNING` 时重启：重启后从头重跑这条请求（幂等）。

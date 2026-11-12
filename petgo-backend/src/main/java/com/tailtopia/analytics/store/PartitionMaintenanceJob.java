@@ -10,9 +10,12 @@ import com.tailtopia.analytics.AnalyticsPipelineState;
 import com.tailtopia.analytics.AnalyticsPipelineState.Reason;
 import com.tailtopia.analytics.config.AnalyticsDataSourceConfig;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,8 +33,14 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>原始层预建（Story 1.3，{@link #ensureRawPartitions}）：保证 UTC 今天起 8 天的 {@code events_raw_pYYYYMMDD} 都存在。
  * 明细层预建（Story 1.6，{@link #ensureDetailPartitions}）：保证 <b>WIB</b> 今天起 8 天的 {@code events_detail_pYYYYMMDD}
- * 都存在（明细层没有 DEFAULT 兜底，缺分区时 {@code DetailBuilder} 整片回滚、不推进进度）。Story 1.7 再加「过期删除」——
- * 各自一个方法，由 {@link #run()} 串起来，不要把逻辑写进 {@code @Scheduled} 方法。
+ * 都存在（明细层没有 DEFAULT 兜底，缺分区时 {@code DetailBuilder} 整片回滚、不推进进度）。
+ * 过期删除（Story 1.7，{@link #runRetention}）：明细层删超过 3 个月的分区；原始层删超过 35 天、且明细进度游标已越过那一天的分区，
+ * 被游标挡住的不删并告警。判定在纯函数 {@link RetentionPolicy}。各自一个方法，由 {@link #run()} 串起来，不要把逻辑写进
+ * {@code @Scheduled} 方法。
+ *
+ * <p>删除时<b>每个分区单独一个埋点事务</b>（拿同一把维护锁 + {@code SET LOCAL lock_timeout = '5s'}）：{@code DROP} 分区要父表的
+ * ACCESS EXCLUSIVE 锁，拿不到（AI 长查询、接收写入在途）就超时失败、告警、下次调度重试，绝不排在锁队列里挡住接收写入；
+ * 一个分区失败不影响其他分区。存在 {@code RUNNING} 的重算请求时，原始层本轮不删（重算正在读它）。
  *
  * <p>原始层、明细层各一个埋点事务，拿同一把维护锁；一层失败不影响另一层照常预建。
  *
@@ -64,6 +73,16 @@ public class PartitionMaintenanceJob {
     static final String ALERT_DEFAULT_NONEMPTY = "analytics-raw-default-nonempty:";
     static final String ALERT_FAILED = "analytics-partition-failed:";
     static final String ALERT_DETAIL_FAILED = "analytics-detail-partition-failed:";
+    /** Story 1.7：原始层分区年龄已过、但明细进度没越过（按 WIB 日去重，story 指定键名）。 */
+    static final String ALERT_RAW_RETENTION_BLOCKED = "analytics:raw-retention-blocked:";
+    /** Story 1.7：过期分区删除失败（含拿不到表锁超时），按 UTC 日去重。 */
+    static final String ALERT_RETENTION_FAILED = "analytics-retention-failed:";
+
+    /** 删分区 DDL 等表锁的上限：拿不到就失败、告警、下次重试，不排队挡接收写入。 */
+    static final String DROP_LOCK_TIMEOUT = "5s";
+
+    static final String RAW_BUILT_SQL = "SELECT c.relname FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid "
+            + "WHERE i.inhparent = '" + PARENT + "'::regclass";
 
     /** 一次运行的结局。 */
     public enum Outcome {
@@ -108,13 +127,31 @@ public class PartitionMaintenanceJob {
     }
 
     /**
-     * 一次运行的汇总。{@code raw} / {@code detail} 为对应层成功运行的结果，失败或未运行时为空；
-     * 任一层失败 → {@link Outcome#FAILED}（已告警）。
+     * 过期删除结果（Story 1.7）。
+     *
+     * @param detailDropped 本次删掉的明细层分区
+     * @param rawDropped    本次删掉的原始层分区
+     * @param rawBlocked    年龄已过但被明细进度挡住、未删的原始层分区日（UTC）
+     * @param rawDeferred   有进行中的重算、本轮未删的原始层分区日（UTC）
+     * @param lockSkipped   没拿到维护锁（别的实例在跑）而跳过的分区
+     * @param failed        删除失败的分区（已告警，下次重试）
      */
-    public record RunResult(Outcome outcome, RawResult raw, DetailResult detail) {
+    public record RetentionResult(List<String> detailDropped, List<String> rawDropped, List<LocalDate> rawBlocked,
+            List<LocalDate> rawDeferred, List<String> lockSkipped, List<String> failed) {
+    }
+
+    /**
+     * 一次运行的汇总。{@code raw} / {@code detail} / {@code retention} 为对应步骤成功运行的结果，失败或未运行时为空；
+     * 任一步失败（含个别分区删除失败）→ {@link Outcome#FAILED}（已告警）。
+     */
+    public record RunResult(Outcome outcome, RawResult raw, DetailResult detail, RetentionResult retention) {
 
         RunResult(Outcome outcome, RawResult raw) {
-            this(outcome, raw, null);
+            this(outcome, raw, null, null);
+        }
+
+        RunResult(Outcome outcome, RawResult raw, DetailResult detail) {
+            this(outcome, raw, detail, null);
         }
     }
 
@@ -176,7 +213,8 @@ public class PartitionMaintenanceJob {
                     + "每天 UTC 00:05 自动重试，已预建 " + RawPartitionPlanner.DAYS_AHEAD + " 天，有修复时间。\n"
                     + "处理：检查埋点库与写入账号权限（建表 / ALTER events_raw）；修好后重建后端容器会立即补跑一次。");
             DetailResult detail = runDetail();
-            return new RunResult(Outcome.FAILED, null, detail);
+            RetentionResult retention = runRetention();
+            return new RunResult(Outcome.FAILED, null, detail, retention);
         }
         if (raw == null || !raw.lockAcquired()) {
             log.info("analytics partition maintenance skipped: lock held elsewhere");
@@ -196,7 +234,9 @@ public class PartitionMaintenanceJob {
                     + "处理：核对服务器时钟与分区维护日志；超出预建范围的行需人工按 received_at 建分区后搬移。");
         }
         DetailResult detail = runDetail();
-        return new RunResult(detail == null ? Outcome.FAILED : Outcome.DONE, raw, detail);
+        RetentionResult retention = runRetention();
+        boolean ok = detail != null && retention != null && retention.failed().isEmpty();
+        return new RunResult(ok ? Outcome.DONE : Outcome.FAILED, raw, detail, retention);
     }
 
     /**
@@ -302,6 +342,115 @@ public class PartitionMaintenanceJob {
             }
         }
         return new DetailResult(true, List.copyOf(created));
+    }
+
+    /**
+     * 过期删除（Story 1.7）：先明细层、后原始层，每个分区一个埋点事务。失败只告警、绝不抛；列举阶段就失败返回 {@code null}。
+     */
+    RetentionResult runRetention() {
+        Instant now = clock.instant();
+        LocalDate todayUtc = RawPartitionPlanner.utcDay(now);
+        LocalDate todayWib = EventTimeCorrector.wibDate(now);
+        List<String> detailDropped = new ArrayList<>();
+        List<String> rawDropped = new ArrayList<>();
+        List<String> lockSkipped = new ArrayList<>();
+        List<String> failed = new ArrayList<>();
+        List<String> failCauses = new ArrayList<>();
+        RetentionPolicy.RawDecision decision;
+        List<LocalDate> rawDeferred = List.of();
+        Instant cursor;
+        try {
+            for (LocalDate d : RetentionPolicy.detailPartitionsToDrop(DetailPartitions.builtDates(jdbc), todayWib)) {
+                dropPartition(DetailPartitions.partitionName(d), detailDropped, lockSkipped, failed, failCauses);
+            }
+            cursor = detailCursor();
+            decision = RetentionPolicy.rawPartitionsToDrop(rawBuiltDates(jdbc), todayUtc, cursor);
+            if (!decision.drop().isEmpty() && recomputeRunning()) {
+                // 重算正在按收到时间读原始层：本轮不删，明天再删（数据不丢，只是晚一天释放磁盘）
+                rawDeferred = decision.drop();
+                log.info("analytics raw retention deferred: detail recompute running, partitions={}", rawDeferred.size());
+            } else {
+                for (LocalDate d : decision.drop()) {
+                    dropPartition(RawPartitionPlanner.partitionName(d), rawDropped, lockSkipped, failed, failCauses);
+                }
+            }
+        } catch (RuntimeException | Error e) {
+            String cause = describe(e);
+            log.warn("analytics partition retention failed: {}", cause);
+            alert(ALERT_RETENTION_FAILED + todayUtc, retentionFailedText(cause));
+            return null;
+        }
+        if (!detailDropped.isEmpty() || !rawDropped.isEmpty()) {
+            log.info("analytics partitions dropped: detail={} raw={}", detailDropped, rawDropped);
+        }
+        if (!decision.blocked().isEmpty()) {
+            log.warn("analytics raw retention blocked by detail progress: partitions={}", decision.blocked());
+            alert(ALERT_RAW_RETENTION_BLOCKED + todayWib, "【埋点原始层过期分区未删：明细进度落后】环境 " + appEnv + "\n"
+                    + "被挡住的分区（UTC 日）：" + decision.blocked() + "\n"
+                    + "明细进度游标（pipeline_progress.detail）：" + (cursor == null ? "缺失" : cursor.toString()) + "\n"
+                    + "含义：这些分区已超过 " + RetentionPolicy.RAW_RETENTION_DAYS + " 天，但那一天的原始行还没全部转进明细层，"
+                    + "删了就永久丢数，所以保留。\n"
+                    + "处理：查 DetailBuilder 的失败告警 / 日志（analytics detail build failed），修好后进度追上，下次维护自动删除。");
+        }
+        if (!failed.isEmpty()) {
+            log.warn("analytics partition drop failed: partitions={} causes={}", failed, failCauses);
+            alert(ALERT_RETENTION_FAILED + todayUtc, retentionFailedText(
+                    "删除失败的分区 " + failed + "；原因 " + failCauses));
+        }
+        return new RetentionResult(List.copyOf(detailDropped), List.copyOf(rawDropped), decision.blocked(),
+                rawDeferred, List.copyOf(lockSkipped), List.copyOf(failed));
+    }
+
+    private String retentionFailedText(String cause) {
+        return "【埋点过期分区删除失败】环境 " + appEnv + "\n"
+                + "原因：" + cause + "\n"
+                + "影响：埋点接收与明细转换不受影响，只是过期数据晚删、多占磁盘。常见原因是 " + DROP_LOCK_TIMEOUT
+                + " 内拿不到表锁（AI 长查询 / 写入在途），每天 UTC 00:05 自动重试。\n"
+                + "处理：连续多天出现时，检查埋点库长事务（pg_stat_activity）与写入账号权限。";
+    }
+
+    /** 删一个分区：独立埋点事务，先拿维护锁，再设 lock_timeout，最后 DROP。失败记入 {@code failed}，不抛。 */
+    private void dropPartition(String name, List<String> dropped, List<String> lockSkipped, List<String> failed,
+            List<String> failCauses) {
+        try {
+            Boolean done = tx.execute(status -> {
+                Boolean locked = jdbc.queryForObject("SELECT pg_try_advisory_xact_lock(?, ?)", Boolean.class,
+                        AnalyticsLockKeys.NAMESPACE, AnalyticsLockKeys.PARTITION_MAINTENANCE);
+                if (!Boolean.TRUE.equals(locked)) {
+                    return Boolean.FALSE;
+                }
+                jdbc.execute("SET LOCAL lock_timeout = '" + DROP_LOCK_TIMEOUT + "'");
+                jdbc.execute("DROP TABLE IF EXISTS " + name);
+                return Boolean.TRUE;
+            });
+            if (Boolean.TRUE.equals(done)) {
+                dropped.add(name);
+            } else {
+                lockSkipped.add(name);
+            }
+        } catch (RuntimeException e) {
+            failed.add(name);
+            failCauses.add(describe(e));
+        }
+    }
+
+    private Instant detailCursor() {
+        return jdbc.query(DetailBuilder.PROGRESS_SQL, rs -> {
+            if (!rs.next()) {
+                return null;
+            }
+            OffsetDateTime t = rs.getObject(1, OffsetDateTime.class);
+            return t == null ? null : t.toInstant();
+        }, DetailBuilder.PIPELINE);
+    }
+
+    private boolean recomputeRunning() {
+        return Boolean.TRUE.equals(jdbc.queryForObject(DetailBuilder.RECOMPUTE_RUNNING_SQL, Boolean.class));
+    }
+
+    /** 当前挂在 {@code events_raw} 上的日分区（UTC 日期，不含 DEFAULT）。重算的保留期校验也用它。 */
+    static Set<LocalDate> rawBuiltDates(JdbcTemplate jdbc) {
+        return RetentionPolicy.rawPartitionDates(jdbc.queryForList(RAW_BUILT_SQL, String.class));
     }
 
     private void alert(String dedupeKey, String text) {
