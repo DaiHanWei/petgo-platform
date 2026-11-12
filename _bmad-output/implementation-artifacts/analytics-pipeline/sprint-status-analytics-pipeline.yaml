@@ -64,7 +64,7 @@ development_status:
   epic-2: in-progress
   2-1-自建上报器-本地队列与匿名-id: review
   2-2-身份绑定: review
-  2-3-生命周期事件: ready-for-dev
+  2-3-生命周期事件: review
   2-4-页面浏览事件: ready-for-dev
   2-5-环境与生产标记: ready-for-dev
   2-6-移除-posthog-与事件名比对: ready-for-dev

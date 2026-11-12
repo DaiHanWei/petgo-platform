@@ -7,12 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/app.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/analytics/anonymous_id.dart';
 import 'package:tailtopia/core/analytics/appsflyer_client.dart';
 import 'package:tailtopia/core/analytics/att_gate.dart';
 import 'package:tailtopia/core/analytics/firebase_stats.dart';
+import 'package:tailtopia/core/analytics/lifecycle_events.dart';
 import 'package:tailtopia/core/analytics/tiktok_client.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/rive/rive_runtime.dart';
@@ -36,11 +38,24 @@ Future<void> main() async {
   await initializeDateFormatting();
   // 自建埋点匿名 id（analytics-pipeline Story 2.1，A3）：**必须 await，且早于任何事件入队**
   // （首条事件是启动屏 `/splash` 的页面浏览）。只读应用支持目录下一个小文件，耗时可忽略；
-  // 失败也不抛 —— 值留在内存里本进程照用。Story 2.3 的生命周期快照在同一位置读同一文件。
+  // 失败也不抛 —— 值留在内存里本进程照用。
+  //
+  // Story 2.3 生命周期快照紧随其后、**必须早于 `_loadSavedLocale()`**：`AppPrefs.create()` 会删旧键
+  // `petgo.splash_last_shown_date`，之后的启动链还会写 `petgo.push_permission_asked` 等键，晚取会把
+  // 新装误判为升级。复用 `AnonymousId.load` 读到的 `state.json`（安装标记）；`SharedPreferences`
+  // 与后面 `AppPrefs.create()` 共用同一实例。任一步失败 → 快照未知，本次跳过 Installed / Updated。
+  AnalyticsStateRead? analyticsState;
   try {
-    await AnonymousId.load();
+    analyticsState = await AnonymousId.load();
   } catch (e) {
     debugPrint('[Analytics] anonymous id load failed: ${e.runtimeType}');
+  }
+  try {
+    if (analyticsState != null) {
+      LifecycleEvents.takeSnapshot(await SharedPreferences.getInstance(), analyticsState);
+    }
+  } catch (e) {
+    debugPrint('[Analytics] lifecycle snapshot failed: ${e.runtimeType}');
   }
   // 前端行为分析（自建 sink + PostHog 残留）：**发起但不 await**（2026-08-07 冷启动耗时治理）。
   //

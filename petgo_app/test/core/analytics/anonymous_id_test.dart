@@ -64,6 +64,16 @@ void main() {
     expect(AnonymousId.value, matches(v4));
   });
 
+  test('state.json 存在但读 IO 失败：不覆盖写回（Story 2.3 补复审 R4），值留内存', () async {
+    // 同名路径放目录 → 存在但 readAsString 抛 FileSystemException。
+    await Directory('${base.path}/analytics/state.json').create(recursive: true);
+    final read = await AnonymousId.load(baseDir: base);
+    expect(read.readable, isFalse);
+    expect(AnonymousId.value, matches(v4));
+    expect(FileSystemEntity.isDirectorySync(stateFile().path), isTrue);
+    expect(File('${stateFile().path}.tmp').existsSync(), isFalse);
+  });
+
   test('load 之前读取：懒生成内存值不抛；load 后以已落盘值为准', () async {
     final early = AnonymousId.value;
     expect(early, matches(v4));

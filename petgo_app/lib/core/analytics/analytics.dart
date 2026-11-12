@@ -8,6 +8,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
 import 'event_names.dart';
+import 'lifecycle_events.dart';
 import 'meta_client.dart';
 import 'self_hosted_sink.dart';
 import 'tiktok_client.dart';
@@ -67,8 +68,21 @@ class Analytics {
   /// 自建 sink 启动（打开队列文件、加载上次未发完的事件、注册生命周期观察者、起定时器）与
   /// PostHog setup **互相独立**：任何一个失败都不影响另一个。sink 在队列加载完成前收到的事件
   /// 先放内存缓冲，加载完成后合并写盘，不丢。
+  ///
+  /// 生命周期事件（Story 2.3）在 sink 启动之后开始（[LifecycleEvents.start]），不等 PostHog。
   static Future<void> init() async {
-    await Future.wait([_startSelfHostedSink(), _setupPosthog()]);
+    await Future.wait([
+      _startSelfHostedSink().then((_) => _startLifecycleEvents()),
+      _setupPosthog(),
+    ]);
+  }
+
+  static Future<void> _startLifecycleEvents() async {
+    try {
+      await LifecycleEvents.start();
+    } catch (e) {
+      debugPrint('[Analytics] lifecycle start failed: ${e.runtimeType}');
+    }
   }
 
   static Future<void> _startSelfHostedSink() async {
