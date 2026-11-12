@@ -24,11 +24,81 @@ metrics:
       - "对账通过后（FR-24）：events_detail 的 Application Opened"
     exclusions: >-
       只算生产数据；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+      自建口径（agg_daily_activity.dau_person）：event_date = 统计日、is_production、NOT is_suspicious、source = 'APP'
+      （H5 访客不是 App 设备，不算）；按 v_events_person 归属到人之后再排除非 USER / 非 REAL 用户
+      （匿名事件经关联表归到兽医 / 虚拟号的也排除）。
     known_bias: >-
+      观察期内 S1 以 GA4 为准（ga4_daily_snapshot，见 Story 4.2）；自建 dau_person 对账通过、由 Dai 决定切换后才作为 S1，
+      切换日期写进本条变更记录（Story 4.7）。
       员工与测试账号算作正常用户；日去重人数不能跨天相加（§4.5.1），周合计是日活之和、不是周去重人数。
-    sql_path: analytics/rollup/dau.sql
+      自建口径：按「人」去重（D-10：登录前、登出后的匿名事件按关联表归到账号），从未登录的设备按匿名 id 算一人；
+      卸载重装生成新匿名 id，未登录的同一台设备会算两人。分平台各自去重，all 行整体单独去重（同一人两端都用，all 只算一次，各平台相加 ≥ all）。
+      Android 跳外部全屏 Activity（系统 Photo Picker、相机、Custom Tabs 登录、外部支付 App）回来会多报一次
+      Application Opened（from_background = true；自建上报没有 PostHog 约 700ms 的去抖），按人去重不影响日活，但打开次数偏高。
+      冷启动慢的机器上生产标记的环境插件超过 3 秒才返回时，整个会话的事件记为非生产、不计入（宁可少算生产，日活略偏低）。
+      之前从未关联过的匿名 id，事后登录兽医 / 虚拟号时才被识别并排除；从未登录的兽医设备无法识别，按游客计入。
+      晚到超过 3 天的事件进明细但不回算（D-6）；V1.5.0 之前的版本没有自建数据。
+    sql_path: analytics/rollup/activity.sql
     changelog:
       - { date: "2026-11-13", change: "初版骨架" }
+      - { date: "2026-11-13", change: "Story 4.1：自建口径落地 agg_daily_activity.dau_person（含游客、按人、分平台 + all），SQL 文件由 dau.sql 改为 activity.sql；注明观察期内以 GA4 为准" }
+  - code: "S1-登录"
+    name: "登录用户日活"
+    definition: >-
+      WIB 自然日内，事件发生时已登录（明细 user_id 非空）且有 Application Opened 的去重用户数。
+      不经关联表推断（登录前 / 登出后的匿名打开不算），分平台 + all。
+    sources:
+      - "events_detail：Application Opened（user_id 非空）"
+      - "汇总表：agg_daily_activity.dau_logged_in"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
+    known_bias: >-
+      员工与测试账号算作正常用户；all 行整体单独去重，不是各平台相加。
+      登出状态下打开 App 不算登录用户日活（但按人归属计入 S1 自建日活）。
+      晚到超过 3 天的事件不回算（D-6）；V1.5.0 之前没有自建数据。
+    sql_path: analytics/rollup/activity.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.1：新增" }
+  - code: S2
+    name: "安装量（新装数）"
+    definition: >-
+      WIB 自然日内首次出现 Application Installed 的去重人数（agg_daily_install.new_installs）。
+      「首次」= 在明细保留期（回看 92 天）内该人最早一条 Application Installed 的 event_date 等于统计日。
+      分 android / ios（平台取该人最早那条安装事件的平台）+ all，各平台相加 = all。升级（Application Updated）不算新装（FR-3）。
+      周 / 月安装量按日相加即可（每人只在首次安装那天计一次）。
+    sources:
+      - "events_detail：Application Installed"
+      - "identity_links（D-10：未登录时的安装事件归到之后首次登录的账号）"
+      - "汇总表：agg_daily_install.new_installs"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；按 v_events_person 归属到人之后排除非 USER / 非 REAL 用户（Q5）。
+    known_bias: >-
+      卸载重装生成新匿名 id：重装后一直未登录的算一次新装；重装后登录了原账号的，安装事件按 D-10 归回原账号，
+      若原账号的首次安装仍在保留期内则不再算新装——但登录晚于 3 天重算窗口时，当天已计入的新装不回退。
+      「首次」只能在明细保留期（约 3 个月）内判断：更早装过、换了设备的同一用户会再算一次新装。
+      员工与测试账号按正常用户算；生产标记的环境插件超过 3 秒才返回的会话记为非生产，不计入（偏低）。
+      兽医 / 虚拟号设备登录前的安装按关联表归到该账号后排除；从未登录的兽医设备无法识别，按游客计入。
+      晚到超过 3 天的事件进明细但不回算（D-6）；V1.5.0 之前没有自建数据（旧版升级上来的设备报 Application Updated，不算新装）。
+    sql_path: analytics/rollup/install.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.1：新增" }
+  - code: S3
+    name: "注册数与注册率"
+    definition: >-
+      注册数 = WIB 自然日内首次出现 signup_succeeded 的去重人数（agg_daily_install.signups），「首次」判断同 S2（回看 92 天）。
+      注册率 = 注册数 ÷ 安装量（S2），同一周期，由汇总表现算。分 android / ios + all，各平台相加 = all。
+    sources:
+      - "events_detail：signup_succeeded（App 唯一上报入口 petgo_app/lib/core/analytics/analytics.dart）"
+      - "汇总表：agg_daily_install.signups（分子）、agg_daily_install.new_installs（分母）"
+    exclusions: >-
+      只算生产数据、非可疑、source = 'APP'；按人归属后排除非 USER / 非 REAL 用户（Q5）。
+    known_bias: >-
+      注册率的分子分母都按「当期首次」计，分子不要求来自当期安装的人（团队原文口径）。
+      「首次」只在明细保留期内判断。员工与测试账号按正常用户算。
+      晚到超过 3 天的事件不回算（D-6）；V1.5.0 之前没有自建数据。
+    sql_path: analytics/rollup/install.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.1：新增" }
   - code: S5
     name: "运营位曝光与点击"
     definition: >-

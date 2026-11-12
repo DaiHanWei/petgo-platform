@@ -541,6 +541,19 @@ analytics:
     breaker-check-ms: 300000
     breaker-initial-delay-ms: 0
     breaker-retry-after-seconds: 300
+  # 指标汇总（analytics-pipeline Story 4.1，D-5 / D-6）。见 AnalyticsRollupProperties。RollupJob 每天 WIB 03:00（晚于 02:00 擦除），
+  # asOf = WIB 昨天，按 agg_progress 续算、每次重算最近 3 天；单元事务内 SET LOCAL statement_timeout 放宽。
+  # 失败只 TECH 告警、进度不推进，下次自动补。手动重跑：写入账号往 rollup_rerun_requests 插一行，RollupRerunJob 每分钟消费
+  # （见 docs/runbooks/runbook-analytics-pipeline.md「重跑汇总」）。测试设 cron "-" 关闭、重跑首延 1 天，直接调方法。
+  rollup:
+    enabled: true
+    cron: "0 0 3 * * *"
+    statement-timeout: 600s
+    # 「首次安装 / 首次注册」回看天数与重跑下限，均 = 明细保留期（约 3 个月）
+    install-lookback-days: 92
+    retention-days: 92
+    rerun-fixed-delay-ms: 60000
+    rerun-initial-delay-ms: 60000
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

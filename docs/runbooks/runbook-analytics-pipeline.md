@@ -201,3 +201,35 @@ fi
 
 - **验证方法**：①手工执行一次脚本确认无报错；②把 `THRESHOLD_GB` 临时改成大于当前可用值（如 99999）再跑一次，确认技术群收到告警，然后改回；③`sudo crontab -l` 确认条目存在；④一天后看 `grep CRON /var/log/syslog`（或 `journalctl -u cron`）有执行记录。
 - 本检查不去重：余量持续不足时每 30 分钟提醒一次，处理完自动停止。
+
+## 4. 指标汇总与重跑汇总（Story 4.1）
+
+### 4.1 每日汇总（自动，无需操作）
+
+`RollupJob` 每天 WIB 03:00（晚于 02:00 的注销擦除）运行，`asOf` = WIB 昨天：
+
+- 每个指标族（`activity`、`install`，后续 story 追加）按 `agg_progress.last_done_date` 续算到 `asOf`，**每次至少重算最近 3 天**（晚到事件，D-6）。首次运行只算最近 3 天，更早的历史用下面的重跑回补。
+- 每个（指标族, WIB 日）一个短事务：写汇总表与推进 `agg_progress` 同一事务提交。
+- 某指标族某日失败：该指标族本轮停止、进度不推进，`agg_progress.last_error` 记异常类名，TECH 群收到「【埋点汇总失败】」；下一次运行自动从缺的日期补。其他指标族照常。
+- 进度落后超过明细保留期（92 天）时只从保留期下限续算，TECH 群收到「【埋点汇总进度落后超过明细保留期】」（被跳过的日期明细已清理，无法再算）。
+- 数据截至哪天：`SELECT family, last_done_date, last_run_at, last_error FROM agg_progress;`
+
+### 4.2 重跑汇总
+
+口径修正、明细重算（§2.2）之后、或回补首次上线前的历史时，按 WIB 日期区间重跑汇总。**只能重跑明细保留期内**（`from ≥ max(昨天 − 92 天, 今天 − 3 个月)`——后者是明细层实际保留的最早分区；`to ≤ 昨天`），否则 `REJECTED` / `OUT_OF_RANGE`；指标族名写错为 `UNKNOWN_FAMILY`。被拒都会告警。
+
+用**写入账号**连埋点库（同 §2.2），插一行请求（日期是 **WIB 日期，含两端**；`families` 不写 = 全部指标族）：
+
+```sql
+INSERT INTO rollup_rerun_requests (from_date, to_date) VALUES ('2026-11-01', '2026-11-07');
+INSERT INTO rollup_rerun_requests (from_date, to_date, families) VALUES ('2026-11-01', '2026-11-07', '{install}');
+
+-- 看进度：PENDING → RUNNING → DONE / FAILED / REJECTED
+SELECT id, from_date, to_date, families, status, error_code, requested_at, started_at, done_at
+FROM rollup_rerun_requests ORDER BY id DESC LIMIT 5;
+```
+
+- `RollupRerunJob` 每分钟看一次，一次处理一条；每日汇总正在跑时等它跑完。
+- 重跑是幂等的（先删当天再写），`agg_progress.last_done_date` 只前进不倒退。
+- `FAILED`（`error_code` 列出失败的指标族）不自动重试：查后端日志 `analytics rollup unit failed`，修好后
+  `UPDATE rollup_rerun_requests SET status = 'PENDING' WHERE id = <id>;` 再跑。
