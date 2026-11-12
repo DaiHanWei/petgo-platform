@@ -105,6 +105,9 @@ import tools.jackson.databind.ObjectMapper;
             // RollupActivityInstallIntegrationTest 并发写同一批 agg_* 行 / 抢同一条重跑请求。由该测试类直接调用验证。
             "analytics.rollup.cron=-",
             "analytics.rollup.rerun-initial-delay-ms=86400000",
+            // analytics-pipeline Story 4.2：GA4 快照（WIB 02:30）关闭 —— 测试库未配 GA4 时本就跳过，但套件跨点时不该有定时任务
+            // 与 Ga4SnapshotAndReconcileIntegrationTest 并发写 ga4_daily_snapshot。由该测试类直接调 run() 验证。
+            "analytics.ga4-snapshot.cron=-",
             // V1.3.4 Story 6.2：运营通知定时扫描（默认首延 60s、每 60s）会把共享库里别的测试遗留的
             // PENDING 全量（ALL）活动发出去 —— 给库里所有用户各写一条通知、角标 +1，
             // 让「新用户未读数 = N」类断言随机红。首延拉到 1 天 = 测试期内不自动跑；

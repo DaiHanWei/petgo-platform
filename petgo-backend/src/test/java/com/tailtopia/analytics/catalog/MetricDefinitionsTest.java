@@ -52,7 +52,9 @@ class MetricDefinitionsTest {
         // Story 4.1：自建口径落地 activity.sql，并注明观察期以 GA4 为准
         assertThat(s1.sqlPath()).isEqualTo("analytics/rollup/activity.sql");
         assertThat(s1.knownBias()).contains("GA4");
-        assertThat(s1.changelog()).hasSize(2).first().satisfies(c -> {
+        // Story 4.2：观察期取 ga4_daily_snapshot.active_users_all，切换由 Dai 决定（analytics.dau-source）
+        assertThat(s1.knownBias()).contains("ga4_daily_snapshot.active_users_all", "analytics.dau-source");
+        assertThat(s1.changelog()).hasSize(3).first().satisfies(c -> {
             assertThat(c.date()).isEqualTo("2026-11-13");
             assertThat(c.change()).isEqualTo("初版骨架");
         });

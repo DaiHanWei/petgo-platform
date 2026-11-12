@@ -20,7 +20,7 @@ metrics:
       WIB 自然日内有 Application Opened 的去重人数。另含（周 = 周一至周日）：周合计 = 每日日活之和；
       周均值 = 周合计 ÷ 天数；周内最高 / 最低日；周增长率 =（本周 − 上周）÷ 上周；工作日（周一至周五）与周末平均日活。
     sources:
-      - "观察期：ga4_daily_snapshot（GA4 日活，含游客）"
+      - "观察期：ga4_daily_snapshot.active_users_all（GA4 全版本日活，按设备、含游客；Story 4.2）"
       - "对账通过后（FR-24）：events_detail 的 Application Opened"
     exclusions: >-
       只算生产数据；按人统计时只算 users.role = 'USER' 且 account_type = 'REAL'（Q5）。
@@ -28,7 +28,8 @@ metrics:
       （H5 访客不是 App 设备，不算）；按 v_events_person 归属到人之后再排除非 USER / 非 REAL 用户
       （匿名事件经关联表归到兽医 / 虚拟号的也排除）。
     known_bias: >-
-      观察期内 S1 以 GA4 为准（ga4_daily_snapshot，见 Story 4.2）；自建 dau_person 对账通过、由 Dai 决定切换后才作为 S1，
+      观察期内 S1 取 ga4_daily_snapshot.active_users_all（GA4 全版本日活，按设备、含游客，见 Story 4.2「GA4 日活（含游客）」条目）；
+      自建 dau_person 对账通过（见「对账差值与状态」条目）后，是否切换由 Dai 决定（开关 analytics.dau-source = GA4 / SELF），
       切换日期写进本条变更记录（Story 4.7）。
       员工与测试账号算作正常用户；日去重人数不能跨天相加（§4.5.1），周合计是日活之和、不是周去重人数。
       自建口径：按「人」去重（D-10：登录前、登出后的匿名事件按关联表归到账号），从未登录的设备按匿名 id 算一人；
@@ -42,6 +43,7 @@ metrics:
     changelog:
       - { date: "2026-11-13", change: "初版骨架" }
       - { date: "2026-11-13", change: "Story 4.1：自建口径落地 agg_daily_activity.dau_person（含游客、按人、分平台 + all），SQL 文件由 dau.sql 改为 activity.sql；注明观察期内以 GA4 为准" }
+      - { date: "2026-11-13", change: "Story 4.2：观察期内取 ga4_daily_snapshot.active_users_all；新增日活来源开关 analytics.dau-source（默认 GA4），切换由 Dai 决定、切换日期写进本条（Story 4.7）" }
   - code: "S1-登录"
     name: "登录用户日活"
     definition: >-
@@ -212,3 +214,78 @@ metrics:
       SQL 由 Story 4.3 / 4.5 填。
     changelog:
       - { date: "2026-11-12", change: "Story 3.4：按代码修正：onboarding_completed 改为请求成功后上报、失败不报（D-13）；锚点取首次 onboarding_completed；需告知产品团队" }
+  - code: "S1-GA4"
+    name: "GA4 日活（含游客）"
+    definition: >-
+      GA4 Data API runReport 的 activeUsers（Firebase 统计，iOS + Android 合计，按设备去重、含未登录用户），单日查询，
+      日期按 GA4 属性时区解释（属性时区必须设为雅加达 = WIB 自然日）。每天 WIB 02:30 由 Ga4DailySnapshotJob 拉取：
+      全版本 → ga4_daily_snapshot.active_users_all；appVersion ≥ min_app_version（默认 1.5.0，按数字逐段比较，1.10.0 > 1.9.9）
+      → active_users_new_version（先按 appVersion 维度拿到当天出现过的版本清单，再把满足阈值的版本放进 inListFilter
+      无维度拉一次，GA4 侧已按设备去重；清单里没有新版本记 0）。
+    sources:
+      - "GA4 Data API：properties/{GA4_PROPERTY_ID}:runReport，metrics = activeUsers，维度 appVersion（与日报同一服务账号凭证）"
+      - "快照表：ga4_daily_snapshot（active_users_all、active_users_new_version、min_app_version、fetched_at）"
+    exclusions: >-
+      不做任何排除：GA4 按设备计数，含游客、兽医、虚拟号、员工与测试设备（stag 包不上报 GA4，GA4 属性只有生产包数据）。
+      版本号含非数字段（如 (not set)、1.5.0-beta）的不算新版本。
+    known_bias: >-
+      GA4 有处理延迟：02:30 拉到的 D−1 是初值，每次运行回拉最近 3 天覆盖旧值，之后两天修正；拉取失败的日期在最近 14 天内会补拉，
+      超过 14 天仍缺的需手动处理。GA4 按设备计数，同一人多台设备算多人、卸载重装（新的 App 实例 id）算两人；
+      与自建 S1（按人，D-10）口径不同，不能直接相减（对账见「自建对账日活」）。stag 关闭快照任务，表为空。
+    sql_path: analytics/rollup/dau_reconcile.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.2：新增（D-11）" }
+  - code: "S1-对账自建"
+    name: "自建对账日活"
+    definition: >-
+      WIB 自然日内 events_detail 中 event = 'Application Opened'、source = 'APP'、NOT is_suspicious 的
+      count(DISTINCT anonymous_id)（agg_daily_dau_reconcile.self_reconcile_dau）。按设备（匿名 id）去重，与 GA4 按设备计数同口径。
+    sources:
+      - "events_detail：Application Opened（source = 'APP'）"
+      - "汇总表：agg_daily_dau_reconcile.self_reconcile_dau"
+    exclusions: >-
+      🔴 Epic 4 通用规则的有意例外（D-11，Dai 2026-11-12 拍板）：不走身份归属视图、不做生产排除（不看 is_production）、
+      不排除兽医 / 虚拟号等账号——与 GA4 口径一致。仍只算 source = 'APP'（H5 访客、服务端事件不计入）、仍排除可疑事件。
+    known_bias: >-
+      只用于和 GA4 V1.5.0+ 对账，不是 S1：S1 自建口径按人去重并做生产 / 账号排除（agg_daily_activity.dau_person）。
+      新版 App（V1.5.0+）才上报自建事件，所以天然只含 V1.5.0+。卸载重装生成新匿名 id，算两台设备（GA4 同样）。
+      模拟器 / TestFlight / 侧载包的设备也计入（GA4 只收生产包，此处略偏高）。晚到超过 3 天的事件不回算（D-6）。
+    sql_path: analytics/rollup/dau_reconcile.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.2：新增（D-11 同口径对账）" }
+  - code: "S1-覆盖率"
+    name: "新版覆盖率"
+    definition: >-
+      GA4 V1.5.0+ 日活 ÷ GA4 全版本日活（ga4_daily_snapshot.active_users_new_version ÷ active_users_all），
+      小数、四位小数四舍五入（agg_daily_dau_reconcile.coverage）。用来判断新版是否已覆盖大多数设备、对账是否有意义。
+    sources:
+      - "ga4_daily_snapshot.active_users_new_version / active_users_all"
+      - "汇总表：agg_daily_dau_reconcile.coverage"
+    exclusions: >-
+      同「GA4 日活（含游客）」：不做任何排除。GA4 缺数或全版本为 0 时为空。
+    known_bias: >-
+      近似值：GA4 的 appVersion 取当天上报时的版本，升级当天的设备新旧版本各算一次，分子分母都按 GA4 去重，覆盖率略偏低或偏高都可能。
+      随 GA4 回拉（最近 3 天）变化。
+    sql_path: analytics/rollup/dau_reconcile.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.2：新增（注明近似）" }
+  - code: "S1-对账"
+    name: "对账差值与状态"
+    definition: >-
+      差值 =（自建对账日活 − GA4 V1.5.0+ 日活）÷ GA4 V1.5.0+ 日活，小数（0.0523 = 5.23%），四位小数四舍五入；GA4 为空或 0 时为空。
+      观察期 = 新版覆盖率首次 ≥ 90% 的那天起 4 周（28 天，含两端），起点写在 observation_start（全表同值，随 GA4 回拉可能变化）。
+      状态：观察期之后 ENDED；否则当天 GA4 没拉到 NO_GA4；观察期之前或尚无起点 NOT_STARTED；期内 |差值| ≤ 10%（含 10%）NORMAL，
+      否则 ABNORMAL（GA4 V1.5.0+ 为 0 时，自建也为 0 算 NORMAL，否则 ABNORMAL）。
+      表里另带自建日活（含游客，按人）与登录用户日活作参照（取 agg_daily_activity 的 all 行）。
+    sources:
+      - "汇总表：agg_daily_dau_reconcile（diff_pct、coverage、status、observation_start、dau_person、dau_logged_in）"
+      - "ga4_daily_snapshot、events_detail、agg_daily_activity"
+    exclusions: >-
+      同「自建对账日活」与「GA4 日活（含游客）」：两边都按设备、不做生产排除。
+    known_bias: >-
+      NO_GA4 是 epics 四种状态（未开始 / 正常 / 异常 / 已结束）之外新增的，用来区分「GA4 没拉到」与「对不上」；
+      stag 不拉 GA4，状态全部为 NO_GA4。阈值比较用四舍五入后的四位小数。每次汇总都整表重算状态，GA4 回拉改动覆盖率后观察期起点可能前移或后移。
+      结果只存库，不推飞书日报（FR-25）；是否改用自建日活由 Dai 看本表决定（analytics.dau-source）。
+    sql_path: analytics/rollup/dau_reconcile.sql
+    changelog:
+      - { date: "2026-11-13", change: "Story 4.2：新增（FR-24 / FR-25；新增 NO_GA4 状态）" }

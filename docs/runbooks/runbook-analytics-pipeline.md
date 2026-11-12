@@ -208,7 +208,7 @@ fi
 
 `RollupJob` 每天 WIB 03:00（晚于 02:00 的注销擦除）运行，`asOf` = WIB 昨天：
 
-- 每个指标族（`activity`、`install`，后续 story 追加）按 `agg_progress.last_done_date` 续算到 `asOf`，**每次至少重算最近 3 天**（晚到事件，D-6）。首次运行只算最近 3 天，更早的历史用下面的重跑回补。
+- 每个指标族（`activity`、`install`、`dau_reconcile`，后续 story 追加）按 `agg_progress.last_done_date` 续算到 `asOf`，**每次至少重算最近 3 天**（晚到事件，D-6）。首次运行只算最近 3 天，更早的历史用下面的重跑回补。
 - 每个（指标族, WIB 日）一个短事务：写汇总表与推进 `agg_progress` 同一事务提交。
 - 某指标族某日失败：该指标族本轮停止、进度不推进，`agg_progress.last_error` 记异常类名，TECH 群收到「【埋点汇总失败】」；下一次运行自动从缺的日期补。其他指标族照常。
 - 进度落后超过明细保留期（92 天）时只从保留期下限续算，TECH 群收到「【埋点汇总进度落后超过明细保留期】」（被跳过的日期明细已清理，无法再算）。
@@ -233,3 +233,29 @@ FROM rollup_rerun_requests ORDER BY id DESC LIMIT 5;
 - 重跑是幂等的（先删当天再写），`agg_progress.last_done_date` 只前进不倒退。
 - `FAILED`（`error_code` 列出失败的指标族）不自动重试：查后端日志 `analytics rollup unit failed`，修好后
   `UPDATE rollup_rerun_requests SET status = 'PENDING' WHERE id = <id>;` 再跑。
+
+## 5. GA4 快照与日活对账（Story 4.2）
+
+### 5.1 GA4 快照（自动）
+
+`Ga4DailySnapshotJob` 每天 WIB 02:30（早于 03:00 的汇总）用日报同一套 GA4 凭证（`GA4_PROPERTY_ID` / `GA4_SA_KEY_B64`，不加新 env）拉 GA4 全版本日活与 V1.5.0+ 日活，写 `ga4_daily_snapshot`：
+
+- 每次回拉 D−1、D−2、D−3 覆盖旧值（GA4 有处理延迟），并补拉最近 14 天内缺行的日期。
+- GA4 未配置 → 跳过、只记 INFO；某日拉取失败 → 旧行不动，TECH 群收到「【GA4 日活快照失败】」，下次运行自动补拉。
+- 版本阈值 `analytics.reconcile.min-app-version`（默认 `1.5.0`）；GA4 属性时区必须是雅加达。
+- 配置值写错（如 `ANALYTICS_GA4_SNAPSHOT_ENABLED=flase`、补拉天数不在 3–92、版本阈值格式不对、`ANALYTICS_DAU_SOURCE` 不是 `GA4` / `SELF`）**不会让后端起不来**：快照任务停用（日活来源回退 `GA4`），启动日志打 WARN，TECH 群收到「【埋点配置非法】」。改正 env 后重建容器即可。
+
+🔴 **stag**：GA4 属性只有生产包的数据，stag 对出来没有意义 —— `~/.env.petgo-stag` 加 `ANALYTICS_GA4_SNAPSHOT_ENABLED=false`（改 env 后重建容器，见 §1.3）。stag 的 `agg_daily_dau_reconcile` 只有自建列，状态全部为 `NO_GA4`。
+
+### 5.2 日活对账（自动，只存库不推飞书）
+
+指标族 `dau_reconcile`（依赖 `activity`）每天写 `agg_daily_dau_reconcile`，并整表重算观察期与状态：
+
+```sql
+SELECT stat_date, self_reconcile_dau, ga4_new_version_dau, diff_pct, coverage, status, observation_start
+FROM agg_daily_dau_reconcile ORDER BY stat_date DESC LIMIT 35;
+```
+
+- 观察期 = 覆盖率首次 ≥ 90% 的那天起 4 周；期内 |差值| ≤ 10% 为 `NORMAL`，否则 `ABNORMAL`；之前 `NOT_STARTED`、之后 `ENDED`；GA4 没拉到为 `NO_GA4`。
+- 改用自建日活由 Dai 决定：设 `ANALYTICS_DAU_SOURCE=SELF`（默认 `GA4`）并重建容器，切换日期写进口径 S1 的变更记录（Story 4.7）。
+- 超过 14 天仍缺的 GA4 日期不再自动补拉：临时设 env `ANALYTICS_GA4SNAPSHOT_BACKFILLDAYS=<天数>`（Spring 宽松绑定，3–92）放大补拉窗口、重建容器等一次 02:30 运行后撤掉。对账表的 GA4 数会在下一次 03:00 汇总时随整表重算刷新，无需手动重跑。

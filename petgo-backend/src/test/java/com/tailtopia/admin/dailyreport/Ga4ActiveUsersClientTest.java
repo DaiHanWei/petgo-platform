@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tailtopia.admin.dailyreport.Ga4ActiveUsersClient.Ga4VersionSplit;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
@@ -16,9 +17,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,6 +49,8 @@ class Ga4ActiveUsersClientTest {
 
     private volatile int reportStatus = 200;
     private volatile String reportResponse = "{\"rows\":[{\"metricValues\":[{\"value\":\"812\"}]}]}";
+    /** Story 4.2：按顺序逐次返回的（状态码, 响应体）；空了再回退到 reportStatus / reportResponse。 */
+    private final Deque<Object[]> scripted = new ConcurrentLinkedDeque<>();
 
     @BeforeEach
     void start() throws Exception {
@@ -67,7 +73,12 @@ class Ga4ActiveUsersClientTest {
             reportPath.set(ex.getRequestURI().getPath());
             reportAuth.add(ex.getRequestHeaders().getFirst("Authorization"));
             reportBodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            reply(ex, reportStatus, reportResponse);
+            Object[] next = scripted.poll();
+            if (next != null) {
+                reply(ex, (Integer) next[0], (String) next[1]);
+            } else {
+                reply(ex, reportStatus, reportResponse);
+            }
         });
         server.start();
         base = "http://127.0.0.1:" + server.getAddress().getPort();
@@ -193,5 +204,147 @@ class Ga4ActiveUsersClientTest {
 
         assertThat(tokenCalls.get()).isZero();
         assertThat(reportBodies).isEmpty();
+    }
+
+    // ---------------------------------------------------------------- Story 4.2：按 appVersion 拆分
+
+    private static String total(long n) {
+        return "{\"rows\":[{\"metricValues\":[{\"value\":\"" + n + "\"}]}]}";
+    }
+
+    private static String versions(String... vs) throws Exception {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (String v : vs) {
+            rows.add(Map.of("dimensionValues", List.of(Map.of("value", v)),
+                    "metricValues", List.of(Map.of("value", "7"))));
+        }
+        return JSON.writeValueAsString(Map.of("rows", rows));
+    }
+
+    private void script(int status, String body) {
+        scripted.add(new Object[] {status, body});
+    }
+
+    @Test
+    @DisplayName("4.2 isConfigured：两项都非空才为 true，与取数方法的「未配置」同一判据")
+    void isConfigured() throws Exception {
+        assertThat(client("123456", credentialsB64()).isConfigured()).isTrue();
+        assertThat(client("", credentialsB64()).isConfigured()).isFalse();
+        assertThat(client("123456", " ").isConfigured()).isFalse();
+    }
+
+    @Test
+    @DisplayName("4.2 按版本拆分：全版本无维度 → appVersion 清单 → ≥1.5.0 的版本 inListFilter 无维度再拉一次")
+    void byVersionThreeRequests() throws Exception {
+        script(200, total(1000));
+        script(200, versions("1.4.9", "1.5.0", "1.10.0", "(not set)", "1.5.0-beta", "1.5.1"));
+        script(200, total(640));
+
+        Ga4VersionSplit split = client("123456", credentialsB64()).activeUsersByVersion(LocalDate.of(2026, 11, 20),
+                "1.5.0");
+
+        assertThat(split).isEqualTo(new Ga4VersionSplit(1000, 640));
+        assertThat(reportBodies).hasSize(3);
+        assertThat(tokenCalls.get()).isEqualTo(1);
+        JsonNode all = JSON.readTree(reportBodies.get(0));
+        assertThat(all.at("/dateRanges/0/startDate").asText()).isEqualTo("2026-11-20");
+        assertThat(all.at("/dateRanges/0/endDate").asText()).isEqualTo("2026-11-20");
+        assertThat(all.at("/metrics/0/name").asText()).isEqualTo("activeUsers");
+        assertThat(all.has("dimensions")).isFalse();
+        assertThat(all.has("dimensionFilter")).isFalse();
+
+        JsonNode list = JSON.readTree(reportBodies.get(1));
+        assertThat(list.at("/dimensions/0/name").asText()).isEqualTo("appVersion");
+        assertThat(list.at("/metrics/0/name").asText()).isEqualTo("activeUsers");
+        assertThat(list.has("dimensionFilter")).isFalse();
+
+        JsonNode filtered = JSON.readTree(reportBodies.get(2));
+        assertThat(filtered.has("dimensions")).isFalse();
+        assertThat(filtered.at("/dimensionFilter/filter/fieldName").asText()).isEqualTo("appVersion");
+        List<String> values = new ArrayList<>();
+        filtered.at("/dimensionFilter/filter/inListFilter/values").forEach(v -> values.add(v.asText()));
+        assertThat(values).containsExactly("1.5.0", "1.10.0", "1.5.1");
+        assertThat(filtered.at("/dateRanges/0/startDate").asText()).isEqualTo("2026-11-20");
+    }
+
+    @Test
+    @DisplayName("4.2 清单里没有新版本（或当天无行）→ newVersion = 0，不发第三次请求")
+    void byVersionNoNewVersionSkipsThirdRequest() throws Exception {
+        script(200, total(500));
+        script(200, versions("1.4.9", "1.4.10", "(not set)"));
+        assertThat(client("123456", credentialsB64()).activeUsersByVersion(LocalDate.of(2026, 11, 20), "1.5.0"))
+                .isEqualTo(new Ga4VersionSplit(500, 0));
+        assertThat(reportBodies).hasSize(2);
+
+        reportBodies.clear();
+        script(200, "{\"rowCount\":0}");
+        script(200, "{\"rowCount\":0}");
+        assertThat(client("123456", credentialsB64()).activeUsersByVersion(LocalDate.of(2026, 11, 20), "1.5.0"))
+                .isEqualTo(new Ga4VersionSplit(0, 0));
+        assertThat(reportBodies).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("🔴 4.2 任一次非 200 / 结构不符 → null、不抛；未配置 → null 且不发请求")
+    void byVersionFailuresAreNull() throws Exception {
+        LocalDate day = LocalDate.of(2026, 11, 20);
+        // 第一次就 500
+        script(500, "{}");
+        assertThat(client("123456", credentialsB64()).activeUsersByVersion(day, "1.5.0")).isNull();
+        // 清单请求 403
+        script(200, total(10));
+        script(403, "{}");
+        assertThat(client("123456", credentialsB64()).activeUsersByVersion(day, "1.5.0")).isNull();
+        // 第三次请求 429
+        script(200, total(10));
+        script(200, versions("1.5.0"));
+        script(429, "{}");
+        assertThat(client("123456", credentialsB64()).activeUsersByVersion(day, "1.5.0")).isNull();
+        // 清单结构不符（维度值缺失）
+        script(200, total(10));
+        script(200, "{\"rows\":[{\"metricValues\":[{\"value\":\"3\"}]}]}");
+        assertThat(client("123456", credentialsB64()).activeUsersByVersion(day, "1.5.0")).isNull();
+        // 全版本结构不符
+        script(200, "{\"rows\":[{\"metricValues\":[{}]}]}");
+        assertThat(client("123456", credentialsB64()).activeUsersByVersion(day, "1.5.0")).isNull();
+        assertThat(scripted).isEmpty();
+
+        int before = reportBodies.size();
+        assertThat(client("", credentialsB64()).activeUsersByVersion(day, "1.5.0")).isNull();
+        assertThat(reportBodies).hasSize(before);
+    }
+
+    @Test
+    @DisplayName("4.2 401 → null 并清 token 缓存，下次重新换")
+    void byVersionUnauthorizedClearsToken() throws Exception {
+        Ga4ActiveUsersClient c = client("123456", credentialsB64());
+        script(401, "{}");
+        assertThat(c.activeUsersByVersion(LocalDate.of(2026, 11, 20), "1.5.0")).isNull();
+        script(200, total(9));
+        script(200, versions("1.4.0"));
+        assertThat(c.activeUsersByVersion(LocalDate.of(2026, 11, 20), "1.5.0")).isEqualTo(new Ga4VersionSplit(9, 0));
+        assertThat(tokenCalls.get()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("4.2 版本比较：按数字逐段（1.10.0 > 1.9.9），缺段按 0，非数字段 / 空 / 解析失败视为不满足")
+    void versionComparison() {
+        assertThat(Ga4ActiveUsersClient.atLeast("1.5.0", "1.5.0")).isTrue();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.5.1", "1.5.0")).isTrue();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.10.0", "1.9.9")).isTrue();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.10.0", "1.5.0")).isTrue();
+        assertThat(Ga4ActiveUsersClient.atLeast("2.0", "1.5.0")).isTrue();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.5", "1.5.0")).isTrue();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.9.9", "1.10.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.4.99", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.4", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("(not set)", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.5.0-beta", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.5.0+12", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("1..5", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast(null, "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("99999999999.0", "1.5.0")).isFalse();
+        assertThat(Ga4ActiveUsersClient.atLeast("1.6.0", "abc")).isFalse();
     }
 }

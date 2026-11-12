@@ -16,7 +16,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,25 +78,8 @@ public class Ga4ActiveUsersClient {
             return null;
         }
         try {
-            String body = JSON.writeValueAsString(Map.of(
-                    "dateRanges", new Object[] {Map.of("startDate", day.toString(), "endDate", day.toString())},
-                    "metrics", new Object[] {Map.of("name", "activeUsers")}));
-            HttpRequest req = HttpRequest.newBuilder(URI.create(
-                            apiBase + "/v1beta/properties/" + cfg.getPropertyId().trim() + ":runReport"))
-                    .timeout(Duration.ofSeconds(props.getTimeoutSeconds()))
-                    .header("Authorization", "Bearer " + accessToken(cfg))
-                    .header("Content-Type", "application/json; charset=utf-8")
-                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                    .build();
-            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (resp.statusCode() != 200) {
-                if (resp.statusCode() == 401) {
-                    clearToken(); // token 被吊销 / 密钥轮换：下次重新换，不必等缓存自然过期
-                }
-                log.warn("ga4 runReport failed: HTTP {}", resp.statusCode());
-                return null;
-            }
-            return parseActiveUsers(resp.body());
+            String resp = runReport(cfg, reportBody(day, null, null));
+            return resp == null ? null : parseActiveUsers(resp);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("ga4 runReport interrupted");
@@ -102,6 +88,168 @@ public class Ga4ActiveUsersClient {
             log.warn("ga4 runReport failed: {}", e.getClass().getSimpleName());
             return null;
         }
+    }
+
+    /** GA4 是否已配置（property-id 与服务账号密钥都非空）。让调用方区分「未配置」与「拉取失败」（两者取数方法都返回 null）。 */
+    public boolean isConfigured() {
+        return props.getGa4().isEnabled();
+    }
+
+    /**
+     * 某天按 App 版本拆分的活跃用户（analytics-pipeline Story 4.2，架构 D-11）。
+     *
+     * <p>三次 {@code runReport}：①无维度 → 全版本 {@code all}；②{@code dimensions=[appVersion]} → 当天出现过的版本清单；
+     * ③把清单里 ≥ {@code minVersion}（按数字逐段比较，见 {@link #atLeast}）的版本放进 {@code inListFilter}、无维度再拉一次
+     * → {@code newVersion}（GA4 侧已按设备去重，同一设备当天用过两个新版本只算一次）。清单里没有新版本 → {@code newVersion = 0}，
+     * 不发第三次请求。
+     *
+     * @return 未配置或任何一次请求失败 / 响应结构不符 → {@code null}（与 {@link #activeUsers} 同一失败语义）
+     */
+    public Ga4VersionSplit activeUsersByVersion(LocalDate day, String minVersion) {
+        DailyReportProperties.Ga4 cfg = props.getGa4();
+        if (!cfg.isEnabled()) {
+            return null;
+        }
+        try {
+            String allResp = runReport(cfg, reportBody(day, null, null));
+            if (allResp == null) {
+                return null;
+            }
+            long all = parseActiveUsers(allResp);
+            String listResp = runReport(cfg, reportBody(day, "appVersion", null));
+            if (listResp == null) {
+                return null;
+            }
+            List<String> newVersions = new ArrayList<>();
+            for (String v : parseDimensionValues(listResp)) {
+                if (atLeast(v, minVersion)) {
+                    newVersions.add(v);
+                }
+            }
+            if (newVersions.isEmpty()) {
+                return new Ga4VersionSplit(all, 0);
+            }
+            String newResp = runReport(cfg, reportBody(day, null, newVersions));
+            if (newResp == null) {
+                return null;
+            }
+            return new Ga4VersionSplit(all, parseActiveUsers(newResp));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("ga4 runReport by version interrupted");
+            return null;
+        } catch (Exception e) {
+            log.warn("ga4 runReport by version failed: {}", e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /**
+     * 按版本拆分的 GA4 日活。
+     *
+     * @param all        全版本 activeUsers
+     * @param newVersion appVersion ≥ 阈值版本的 activeUsers（GA4 侧去重）
+     */
+    public record Ga4VersionSplit(long all, long newVersion) {
+    }
+
+    /**
+     * runReport 请求体：单日、{@code metrics=[activeUsers]}；{@code dimension} 非空时按该维度拆行；
+     * {@code appVersions} 非空时加 {@code appVersion inListFilter}。
+     */
+    static Map<String, Object> reportBody(LocalDate day, String dimension, List<String> appVersions) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("dateRanges", List.of(Map.of("startDate", day.toString(), "endDate", day.toString())));
+        if (dimension != null) {
+            body.put("dimensions", List.of(Map.of("name", dimension)));
+        }
+        body.put("metrics", List.of(Map.of("name", "activeUsers")));
+        if (appVersions != null) {
+            body.put("dimensionFilter", Map.of("filter", Map.of(
+                    "fieldName", "appVersion",
+                    "inListFilter", Map.of("values", List.copyOf(appVersions)))));
+        }
+        return body;
+    }
+
+    /**
+     * 发一次 runReport。非 200 → 记状态码返回 {@code null}（401 顺带清 token 缓存）；网络 / 鉴权异常向上抛，由调用方转 null。
+     * 🔴 不打印 token、密钥或响应体。
+     */
+    private String runReport(DailyReportProperties.Ga4 cfg, Map<String, Object> body) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(
+                        apiBase + "/v1beta/properties/" + cfg.getPropertyId().trim() + ":runReport"))
+                .timeout(Duration.ofSeconds(props.getTimeoutSeconds()))
+                .header("Authorization", "Bearer " + accessToken(cfg))
+                .header("Content-Type", "application/json; charset=utf-8")
+                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body), StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (resp.statusCode() != 200) {
+            if (resp.statusCode() == 401) {
+                clearToken(); // token 被吊销 / 密钥轮换：下次重新换，不必等缓存自然过期
+            }
+            log.warn("ga4 runReport failed: HTTP {}", resp.statusCode());
+            return null;
+        }
+        return resp.body();
+    }
+
+    /** 按维度拆行的 runReport 响应 → 每行第一个维度值。无 rows = 空清单；结构不符抛异常（由调用方转 null）。 */
+    static List<String> parseDimensionValues(String body) throws Exception {
+        JsonNode rows = JSON.readTree(body).path("rows");
+        List<String> out = new ArrayList<>();
+        if (rows.isMissingNode() || rows.isEmpty()) {
+            return out;
+        }
+        if (!rows.isArray()) {
+            throw new IllegalStateException("unexpected runReport shape");
+        }
+        for (JsonNode row : rows) {
+            JsonNode value = row.path("dimensionValues").path(0).path("value");
+            if (!value.isTextual()) {
+                throw new IllegalStateException("unexpected runReport shape");
+            }
+            out.add(value.asText());
+        }
+        return out;
+    }
+
+    /**
+     * {@code version ≥ min}：按 {@code .} 分段逐段按数字比较（{@code 1.10.0 > 1.9.9}），缺的段按 0（{@code 1.5 = 1.5.0}）。
+     * 任一方含非数字段（如 {@code (not set)}、{@code 1.5.0-beta}、{@code 1.5.0+12}）或为空 → {@code false}（视为不满足）。
+     */
+    static boolean atLeast(String version, String min) {
+        int[] v = parseVersion(version);
+        int[] m = parseVersion(min);
+        if (v == null || m == null) {
+            return false;
+        }
+        for (int i = 0; i < Math.max(v.length, m.length); i++) {
+            int a = i < v.length ? v[i] : 0;
+            int b = i < m.length ? m[i] : 0;
+            if (a != b) {
+                return a > b;
+            }
+        }
+        return true;
+    }
+
+    /** {@code 1.5.0} → {@code [1, 5, 0]}；非纯数字段、空段、超长 → null。 */
+    static int[] parseVersion(String version) {
+        if (version == null || version.isBlank() || version.length() > 64) {
+            return null;
+        }
+        String[] parts = version.strip().split("\\.", -1);
+        int[] out = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i];
+            if (p.isEmpty() || p.length() > 9 || !p.chars().allMatch(c -> c >= '0' && c <= '9')) {
+                return null;
+            }
+            out[i] = Integer.parseInt(p);
+        }
+        return out;
     }
 
     /** runReport 响应 → activeUsers。无 rows（当天无数据）= 0；结构不符抛异常（由调用方转 null）。 */

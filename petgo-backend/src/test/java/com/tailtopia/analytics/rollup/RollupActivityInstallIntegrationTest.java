@@ -71,7 +71,7 @@ class RollupActivityInstallIntegrationTest extends ApiIntegrationTest {
     @BeforeEach
     void setUp() {
         assertThat(state.isEnabled()).as("埋点测试库可用时管道应启用，原因=%s", state.reason()).isTrue();
-        assertThat(springService.familyNames()).containsExactly("activity", "install");
+        assertThat(springService.familyNames()).containsExactly("activity", "install", "dau_reconcile");
         alerts = mock(OpsAlertService.class);
         progress = new RollupProgressRepository(analyticsJdbc);
         long n = SEQ.incrementAndGet();
