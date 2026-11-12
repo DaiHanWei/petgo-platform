@@ -191,6 +191,7 @@ void main() {
   setUp(() {
     events = <Recorded>[];
     Analytics.debugCaptureSink = (e, p) => events.add(Recorded(e, p));
+    Analytics.debugResetCurrentScreen();
     resetDiaryGuestViewSession();
   });
   tearDown(() => Analytics.debugCaptureSink = null);
@@ -630,7 +631,7 @@ void main() {
   });
 
   group('T-1/T-2 落地与 Tab 切换（AC2：此前完全无埋点的 P0 缺口）', () {
-    testWidgets(r'冷启动落地上报 app_launch_landed_on_tab + 落地页 $screen（游客 → Diary）', (tester) async {
+    testWidgets('冷启动落地上报 app_launch_landed_on_tab + 落地页 screen_viewed（游客 → Diary）', (tester) async {
       final container = ProviderContainer(
         overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
       );
@@ -644,10 +645,10 @@ void main() {
       expect(landing.props!['tab'], 'diary');
       expect(landing.props!['user_state'], AppUserState.guest.wire,
           reason: 'user_state 必须取落地矩阵的同一枚举，不得另写一份判定');
-      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('diary_page'));
+      expect(_of('screen_viewed').map((e) => e.props!['screen']), contains('diary_page'));
     });
 
-    testWidgets(r'点 Tab 上报 bottom_nav_tab_switched（from/to/user_state）并补一条 $screen', (tester) async {
+    testWidgets('点 Tab 上报 bottom_nav_tab_switched（from/to/user_state）并补一条 screen_viewed', (tester) async {
       final container = ProviderContainer(
         overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
       );
@@ -665,8 +666,78 @@ void main() {
       expect(ev.props!['from_tab'], 'diary', reason: '游客落地在 Diary');
       expect(ev.props!['to_tab'], 'social');
       expect(ev.props!['user_state'], AppUserState.guest.wire);
-      // goBranch 不 push 根路由 → PosthogObserver 收不到；缺的这条浏览事件由我们自己补。
-      expect(_of(r'$screen').map((e) => e.props![r'$screen_name']), contains('social_page'));
+      // goBranch 不 push 根路由 → AnalyticsRouteObserver 收不到；缺的这条浏览事件由我们自己补。
+      expect(_of('screen_viewed').map((e) => e.props!['screen']), contains('social_page'));
+    });
+
+    testWidgets("context.go('/shop') 切到 Toko 分支：补报且只报一次 toko_page（汇总修订）", (tester) async {
+      final container = ProviderContainer(
+        overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: const TailTopiaApp()),
+      );
+      await tester.pumpAndSettle();
+      events.clear();
+
+      // 运营弹窗 / 购物车空态 / 下架页「Ke Toko」都是这种 go，不经点 Tab 的补报。
+      GoRouter.of(tester.element(find.byType(BottomTabBar))).go('/shop');
+      // Toko 首页有加载动画（无后端），pumpAndSettle 会超时；分支切换的补报在首帧重建即发生。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final names = _of('screen_viewed').map((e) => e.props!['screen']).toList();
+      expect(names.where((n) => n == 'toko_page'), hasLength(1),
+          reason: 'go 进 Toko 必须补一条 toko_page，否则 Toko 浏览与漏斗第 1 步漏报');
+      expect(_of('bottom_nav_tab_switched'), isEmpty, reason: '不是点 Tab，不得伪造切 Tab 事件');
+    });
+
+    testWidgets('外壳新挂载（从顶层页 go 回 Tab）也补报且只报一次 toko_page（复审 2026-11-12）', (tester) async {
+      final container = ProviderContainer(
+        overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: const TailTopiaApp()),
+      );
+      await tester.pumpAndSettle();
+      // 冷启动落地只报一次 diary_page（落地补报在 go 之前，外壳挂载时按去重跳过）。
+      expect(_of('screen_viewed').where((e) => e.props!['screen'] == 'diary_page'), hasLength(1));
+
+      // `go` 到顶层页 ⇒ 外壳被移出栈；再 `go('/shop')` ⇒ 外壳重新挂载（冷启动深链直达 Tab 同机制），
+      // 不经 didUpdateWidget。
+      final router = GoRouter.of(tester.element(find.byType(BottomTabBar)));
+      router.go('/places');
+      // 等旧外壳页的转场彻底结束（否则新旧外壳同帧共存 → GlobalKey 冲突，属测试时序假象）。
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      events.clear();
+      router.go('/shop');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final names = _of('screen_viewed').map((e) => e.props!['screen']).toList();
+      expect(names.where((n) => n == 'toko_page'), hasLength(1),
+          reason: '外壳重新挂载进入 Toko 同样是一次 Toko 浏览，不得漏报');
+    });
+
+    testWidgets('点 Tab 切分支：screen_viewed 只报一次（点击补报与分支切换补报去重）', (tester) async {
+      final container = ProviderContainer(
+        overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: const TailTopiaApp()),
+      );
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(_tabButton('Social'));
+      await tester.pumpAndSettle();
+
+      final names = _of('screen_viewed').map((e) => e.props!['screen']).toList();
+      expect(names.where((n) => n == 'social_page'), hasLength(1));
     });
   });
 

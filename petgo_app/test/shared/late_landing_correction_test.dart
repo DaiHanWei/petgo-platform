@@ -146,7 +146,8 @@ void main() {
         expect(k, matches(RegExp(r'^[a-z][a-z0-9_]*$')));
       }
       // 不得引入新的埋点 SDK / 不得绕过门面直调 SDK。
-      // 注：`PosthogObserver` 是 Story 6.1 既有的自动页面追踪 observer，属既有实现，不在此列。
+      // 注：`AnalyticsRouteObserver` 是自动页面追踪 observer（analytics-pipeline Story 2.4 取代
+      // Story 6.1 的 PosthogObserver），内部同样经 Analytics 门面上报，不在此列。
       // 这一条**保留源码断言**：它守的是「不出现某个写法」，而不是某段行为 ——
       // 反例天生只能从源码上判定，行为测试看不见「有人偷偷直调了 SDK」。
       final src = File('lib/core/router/app_router.dart').readAsStringSync();

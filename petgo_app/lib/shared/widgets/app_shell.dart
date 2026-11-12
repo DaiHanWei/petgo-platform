@@ -69,6 +69,10 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    // analytics-pipeline Story 2.4 复审：外壳**新挂载**也算进入该 Tab —— 冷启动深链直达 Tab 根
+    //（推送 / 运营位 `go('/shop')`，深链路径不走落地补报）、从顶层页（外壳已被 `go` 移出栈）
+    // 再 `go` 回 Tab，都不经 didUpdateWidget ⇒ 此前漏报。普通冷启动落地已在 go 之前补报过，按去重跳过。
+    _reportBranchEnteredIfMissing(widget.navigationShell.currentIndex);
     // V1.3.4 Story 5.4：冷启动运营弹窗协调器挂到路由上（attach 幂等）。
     // 协调器第一步就等启动链结束（StartupPopupLedger.startupChainDone），widget 测试里永不放行。
     // router 取承载本外壳的那个 GoRouter（生产即 routerProvider 的实例），不另建。
@@ -87,6 +91,7 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     super.didUpdateWidget(oldWidget);
     if (oldWidget.navigationShell.currentIndex != widget.navigationShell.currentIndex) {
       _fade.forward(from: 0);
+      _reportBranchEnteredIfMissing(widget.navigationShell.currentIndex);
     }
   }
 
@@ -103,10 +108,26 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     );
   }
 
+  /// 非点 Tab 的分支切换补报 Tab 根页浏览（analytics-pipeline Story 2.4 汇总修订）。
+  ///
+  /// 运营弹窗跳 Toko、购物车空态、商品下架页「Ke Toko」等入口用 `context.go('/shop')` 切分支，
+  /// 不经 [_onTabSelected] ⇒ 此前 `toko_page` 漏报（电商 #4、漏斗第 1 步偏低）。这里凡分支切换
+  /// 都补一次 `<tab>_page`。
+  ///
+  /// **去重**：点 Tab（[_reportTabEntered]）与冷启动迟到纠正（`app_router.dart`）都在切换**之前**
+  /// 已调过 `Analytics.screen('<tab>_page')`，此时 [Analytics.currentScreen] 已是本页名 ⇒ 不再报，
+  /// 同一次切换只报一次。
+  void _reportBranchEnteredIfMissing(int index) {
+    if (index < 0 || index >= AppTab.values.length) return;
+    final String name = '${AppTab.values[index].analyticsName}_page';
+    if (Analytics.currentScreen == name) return;
+    Analytics.screen(name);
+  }
+
   /// Tab 切换 + Tab 根页浏览埋点（Story 6.1 · T-1/T-2 · AC2）。
   ///
-  /// PostHog 的 `$screen` 由路由 observer 产生，而 Tab 切换走 `StatefulShellRoute.goBranch`
-  /// （不 push 根路由）→ **不产生 `$screen`**，所以必须自己埋。
+  /// 页面浏览 `screen_viewed` 由路由 observer（`AnalyticsRouteObserver`）产生，而 Tab 切换走
+  /// `StatefulShellRoute.goBranch`（不 push 根路由）→ **不产生 `screen_viewed`**，所以必须自己埋。
   /// `user_state` 取 Story 2.4 落地矩阵的同源判定，避免埋点口径与实际分流对不上。
   ///
   /// ⚠️ **只在真的切过去了才上报**（code-review 2026-08-04）。两条曾经踩过的坑：

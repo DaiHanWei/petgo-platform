@@ -4,10 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:posthog_flutter/posthog_flutter.dart';
 
 import '../../app.dart' show deepLinkToLocation;
 import '../analytics/analytics.dart';
+import '../analytics/analytics_route_observer.dart';
 import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
 
@@ -483,8 +483,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
 
   router = GoRouter(
     navigatorKey: rootNavigatorKey,
-    // PostHog 自动页面追踪：路由跳转 → $screen 事件（页面名取自路由 path）。
-    observers: [PosthogObserver()],
+    // 自动页面追踪（analytics-pipeline Story 2.4，取代 PosthogObserver）：路由跳转 →
+    // screen_viewed 事件（属性 screen 取自路由 path 模板，与 PostHog 时期 $screen 同名）。
+    observers: [AnalyticsRouteObserver()],
     refreshListenable: authRefresh,
     initialLocation: kDebugMode && _devRoute.isNotEmpty ? _devRoute : '/splash',
     redirect: (context, state) {

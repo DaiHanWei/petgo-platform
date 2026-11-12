@@ -287,22 +287,33 @@ class Analytics {
         },
       });
 
-  /// 页面浏览事件（PostHog `$screen`）。
+  /// 页面浏览事件 `screen_viewed`（analytics-pipeline Story 2.4，取代 PostHog 的 `$screen`；
+  /// 页面名放属性 `screen`，名字本身与 PostHog 时期一致，不改不加工）。
   ///
-  /// **为什么需要它**（Story 6.1 AC2，PRD 点名的 P0 缺口）：底部 Tab 走
-  /// `StatefulShellRoute.goBranch` 切分支，**不 push 根路由** → `PosthogObserver` 收不到
-  /// `didPush`，四个 Tab 根页此前一个浏览事件都没有，落地页分流是否生效无从验证。
-  /// 这里补的是「Tab 根页」这一层，详情页仍由 observer 自动上报，两者不重复。
+  /// 两类来源走同一条路径：
+  /// - 路由自动上报：`AnalyticsRouteObserver` 在 push / replace / pop 时调本方法，页面名是
+  ///   路由路径模板（如 `/shop/products/:token`）；
+  /// - 手工补报（Story 6.1 AC2）：底部 Tab 走 `StatefulShellRoute.goBranch` 切分支，**不 push
+  ///   根路由** → observer 收不到；Tab 根页与冷启动落地由调用方补 `<产品叫法>_page`。
+  ///
+  /// 走 [capture]：自动经 [scrub]、`debugCaptureSink` 与自建队列；不在 AppsFlyer 白名单，不外发。
+  /// 同时更新 [currentScreen]（供自建上报器写入每条事件的 `context.screen`，Story 2.5）。
   ///
   /// [name] 必须是稳定的受控字面量（Tab 名 / 路由名），**不得**传 UI 文案。
-  static Future<void> screen(String name) async {
-    debugCaptureSink?.call(r'$screen', {r'$screen_name': name});
-    try {
-      await Posthog().screen(screenName: name);
-    } catch (e) {
-      debugPrint('[Analytics] screen failed: $e');
-    }
+  static Future<void> screen(String name) {
+    _currentScreen = name;
+    return capture(AnalyticsEvents.screenViewed, {'screen': name});
   }
+
+  static String? _currentScreen;
+
+  /// 最近一次 [screen] 的页面名（PostHog 时期由 SDK 以 `$screen_name` 自动附到每条事件；
+  /// 换自建后由本字段承接，Story 2.5 组装 `context.screen` 时读取）。未上报过任何页面时为 null。
+  static String? get currentScreen => _currentScreen;
+
+  /// 测试用：清空 [currentScreen]。
+  @visibleForTesting
+  static void debugResetCurrentScreen() => _currentScreen = null;
 
   /// 白名单：可上报的按钮 id 全集（埋点治理 P0）。与 [ButtonId] 常量一一对应，
   /// 新增按钮先登记 [ButtonId] 再加入此表。
@@ -320,7 +331,7 @@ class Analytics {
   /// 唯一的按钮上报入口（埋点治理 P0）：id 必须是 [ButtonId] 常量。未登记 id 在 debug
   /// 断言失败、release 静默丢弃——绝不回退到从 UI 文本推导标签的旧路径。
   /// 字段用 `button_id`（受控枚举），与治理前的自由文本 `button_name` 彻底分离，
-  /// 新旧数据不混在同一属性里。当前屏幕由 SDK 以 `$screen_name` 注入，[screen] 仅按需覆写。
+  /// 新旧数据不混在同一属性里。当前屏幕由自建上报器写入 `context.screen`（取 [currentScreen]），[screen] 仅按需覆写。
   static Future<void> buttonTapped(String id, {String? screen}) {
     assert(isRegisteredButtonId(id), 'Unregistered button id: $id');
     if (!isRegisteredButtonId(id)) return Future.value();
