@@ -71,7 +71,7 @@ FR-17–20（补埋点缺口）跨①和④两个组件。
 6. **故障隔离（只丢埋点，不伤业务）**：
    - 磁盘水位过低时，接收端主动停写。
    - 内存队列设上限，满了返回 429。
-   - 提前建好 7 天的分区，再加一个 DEFAULT 分区兜底。
+   - 提前建好 7 天的分区；原始层再加一个 DEFAULT 分区兜底，明细层不设 DEFAULT（见 D-3）。
 7. **数据新鲜度与可观测**：汇总进度表；查数时能看到「数据截至哪天」；汇总失败要告警。
 8. **事件清单作为唯一来源**：事件名和属性只维护一份清单，App 上报和汇总 SQL 都对照它，防止改名后数据悄悄归零。
 
@@ -81,7 +81,7 @@ FR-17–20（补埋点缺口）跨①和④两个组件。
 - 事件量没有历史数据可以校准（PostHog 已停用）：先按研究估算上线，上线一周后用实测量回看水位和告警阈值。
 - 核实 `flyway-guard` 能覆盖第二个迁移目录（已核实：`MIG_DIR` 写死，需扩展）。
 - iOS TestFlight 真包验证 `installerStore`。
-- stag 用 10 倍量压测接收端，对比业务接口 P95（NFR ≤10%）。
+- 10 倍量压测接收端，对比业务接口 P95（NFR ≤10%）。**不在 stag 做**：stag 与生产共用同一 PG 实例和 Redis，改在本地 docker 按生产参数（`shared_buffers=128MB`、`max_connections=100`）起的实例上做。
 
 ## 底座评估（存量项目，不引入脚手架）
 
@@ -130,57 +130,60 @@ FR-17–20（补埋点缺口）跨①和④两个组件。
 | # | 决策 | 理由 |
 |---|---|---|
 | D-1 | 埋点库：生产 `petgo_analytics`、stag `petgo_analytics_stag`，都在 `petgo-postgres` 实例上。**不加 env 列**：进哪个库取决于哪个后端收到（stag 包连 stag 后端） | 环境天然隔离，口径不用再过滤环境 |
-| D-2 | **原始层按 `received_at`（UTC）每天一个分区**，只追加，允许重复 | 离线补发的旧事件永远写进当天分区，不会写进已删除或已汇总的分区 |
-| D-3 | **明细层按 `event_date`（WIB）每天一个分区**。`event_date` 由**校正后**的发生时间算出（FR-9：发生时间 +（收到时间 − 发送时间））。去重两层：`DetailBuilder` 写入前查算出日期**前后各 1 天**分区内是否已有同一 `message_id`；唯一键（`event_date`, `message_id`）+ `ON CONFLICT DO NOTHING` 兜底 | 唯一约束必须含分区键；重试时网络延迟不同，校正时间可能跨过午夜，单靠唯一键拦不住 |
-| D-4 | **A9 明细瘦身**：只留解析列，即事件名、`client_ts`（原始发生时间）、`event_time`（校正后）、`event_date`、`is_suspicious`（FR-9 可疑判定，汇总排除）、匿名 id、`user_id`、`user_key`、平台、App 版本、系统版本、机型、生产标记。属性 JSONB **只留事件清单登记过的字段**。完整原始报文只在原始层 | 明细体积可控；口径只依赖登记字段 |
+| D-2 | **原始层按 `received_at`（UTC）每天一个分区**，只追加（注销擦除的 UPDATE 除外），允许重复；增加 `source` 列（`APP` / `SERVER` / `H5`）和 `unknown_event` 标记。分区边界 DDL 一律写成带 `+00` 的时间字面量，不依赖会话时区 | 离线补发的旧事件永远写进当天分区，不会写进已删除或已汇总的分区 |
+| D-3 | **明细层按 `event_date`（WIB）每天一个分区，不设 DEFAULT 分区**。`event_date` 由**校正后**的发生时间算出（FR-9：发生时间 +（收到时间 − 发送时间））；**可疑事件**（见 D-4）和算出日期不在已建分区范围内的事件，`event_date` 一律取 `received_at` 的 WIB 日期，`event_time` 原样保留。去重：批内先按 `message_id` `DISTINCT ON`；写入前查算出日期**前后各 1 天**分区内是否已有同一 `message_id`；唯一键（`event_date`, `message_id`）+ `ON CONFLICT DO NOTHING` 兜底（就绪度评审 2026-11-12 修订） | 唯一约束必须含分区键；重试时校正时间可能跨午夜；DEFAULT 分区一旦接住某天的行，之后预建该天分区会直接报错 |
+| D-4 | **A9 明细瘦身**：只留解析列，即事件名、`client_ts`（原始发生时间）、`event_time`（校正后）、`event_date`、`is_suspicious`（FR-9 可疑判定，汇总排除；「晚于收到时间」留 5 秒容差）、`source`、匿名 id、`user_id`、`user_key`、平台、App 版本、系统版本、机型、生产标记。属性 JSONB **只留事件清单登记过的字段**。完整原始报文只在原始层 | 明细体积可控；口径只依赖登记字段 |
 | D-5 | 汇总表按指标族分（`agg_daily_*`），写入时 upsert；**`agg_progress` 记录每个任务已完成的日期**，既用于续算，也是新鲜度标记 | 一张表同时解决续算和「数据截至哪天」 |
 | D-6 | **晚到数据**：每次汇总重算最近 3 天（WIB）。更晚到的进明细层但不回算，写进口径文档作为已知偏差 | 离线补发多数在 3 天内到达；重算幂等 |
-| D-7 | **事件清单唯一来源**：`petgo-backend/src/main/resources/analytics/event-catalog.yaml`。后端启动时加载，用于过滤明细属性，并同步到埋点库 `event_catalog` 表供 AI 查。App 加 L0 测试，比对 Dart 事件常量与这份 yaml | 改名在 CI 就红，不会悄悄归零 |
+| D-7 | **事件清单唯一来源**：`petgo-backend/src/main/resources/analytics/event-catalog.yaml`。后端启动时加载，同步到埋点库 `event_catalog` 表供 AI 查；用途是过滤明细属性，并标出哪些属性是用户标识（擦除时一并清掉）。**不在清单里的事件照样写进原始层**，标 `unknown_event`，不转入明细层，按天计数告警；补登记后用重算入口恢复（就绪度评审 2026-11-12 修订）。App 加 L0 测试：扫描 `lib/` 下 `Analytics.capture(` 等调用的字符串字面量与 yaml 比对，动态事件名列白名单 | 漂移不再永久丢数；改名在 CI 就红 |
 | D-9 | **口径文档唯一来源**（FR-26）：`petgo-backend/src/main/resources/analytics/metric-definitions.yaml`，每个指标写编号、定义、来源表 / 事件、排除规则、已知偏差、SQL 文件位置、变更记录。后端启动时同步进埋点库 `metric_definitions` 表，机制同 D-7 | AI 查数只能读库 |
-| D-10 | **身份关联按时间判定**（FR-14）：`identity_links` 每条关联记录建立时间；汇总时取「事件时间之前最近一次关联」 | 一个匿名 id 换过账号时归属正确 |
-| D-11 | **新版覆盖率**（FR-24）：GA4 `activeUsers` 按 `appVersion` 拆，与 GA4 日活一起每天落库 | 复用现有 GA4 接入 |
-| D-8 | **分区维护**：每天跑一次。提前建好 7 天分区；DEFAULT 分区兜底，非空即告警。原始层删超过 35 天的分区，**前提是那一天已转进明细层**（汇总读明细，不读原始层；2026-11-12 拆 story 时更正）；明细层删超过 3 个月的分区 | 落实故障隔离与时间边界 |
+| D-10 | **身份关联与归属**（FR-14）：`identity_links` 只追加，每次登录一行（匿名 id、`user_id`、`user_key`、`linked_at`），主键（匿名 id, `linked_at`）。带用户标识的事件归该用户；匿名事件按「人」归属：①事件之前有关联 → 归**最近一次**关联的用户（含登出之后的事件，Dai 2026-11-12 拍板）；②事件之前没有关联、之后有 → 归该匿名 id 的**第一个**关联用户（登录前的事件归到首次登录的人）；③从未关联 → 算匿名 id 这个人（就绪度评审 2026-11-12 修订） | 安装、首启等登录前事件能归到人，留存和注册率不被低估 |
+| D-11 | **GA4 快照与对账口径**（FR-24、FR-25）：`Ga4ActiveUsersClient` 新增按 `appVersion` 维度拉取的方法；每天拉 GA4 全版本日活（指标分母用）和 V1.5.0 及以上日活（对账用），**每次回拉最近 3 天覆盖旧值**（GA4 有处理延迟）。**对账同口径**：GA4 V1.5.0+ 日活 vs 自建「按设备（匿名 id）去重、不做生产排除」的对账日活；阈值仍 ±10%（Dai 2026-11-12 拍板）。新版覆盖率 = V1.5.0+ ÷ 全版本，按版本拆分会跨版本重复计人，注明为近似值 | 两边口径一致，差值才有意义 |
+| D-8 | **分区维护**：每天跑一次，按 UTC（原始层）/ WIB（明细层）计算日期。提前建好 7 天分区。原始层保留 DEFAULT 分区兜底，非空即告警；建分区前若 DEFAULT 里有落在该区间的行，先 DETACH DEFAULT、建分区、搬行、再 ATTACH。原始层删超过 35 天的分区，**前提是那一天已转进明细层**；明细层删超过 3 个月的分区。明细处理进度存 `pipeline_progress`（由明细层 story 建），不复用 `agg_progress` | 落实故障隔离与时间边界 |
+| D-12 | **周期去重指标单独入表**：「统计周期内去重人数」不能由日表相加（§4.5.1），凡团队定义按周期去重的指标（电商 #4、#5、#6 周漏斗、#7 加购人数、S5 点击 / 打开人数等），另建 `agg_weekly_*`（周一至周日）与 `agg_monthly_*`（WIB 自然月），周期结束次日计算、按 D-6 回补；比率类月指标（取每日比率平均）仍由日表现算（就绪度评审 2026-11-12 修订） | 明细只留 3 个月，过期后周期去重数只能来自汇总 |
+| D-13 | **业务库判据**：Toko「已付款」= `shop_orders.paid_at IS NOT NULL`，按 `paid_at` 的 WIB 日期归日；付款后退款或取消的仍算已付款（Dai 2026-11-12 拍板），口径注明。非 Toko 付费按各业务表逐项列出（`payment_intents.status = 'PAID'` 及 KTP、Tailsonality、名额等），写进口径条目。业务库与埋点关联**一律用 public token**（商品、SKU、运营位、活动），业务库窄查询返回 token | 业务库没有 `PAID` 订单状态；App 事件只带 token |
 
 ### 二、身份与安全
 
 | # | 决策 |
 |---|---|
 | **A3** | 匿名 id 是 App 首次启动时生成的 UUIDv4，存 `shared_preferences`，**不放 secure storage**（避开 BAD_DECRYPT 坑）。卸载后重新生成，登出不重置 |
-| **A4** | App 上报的用户标识沿用 `AnalyticsDistinctId`，即 `sha256('tailtopia-user-'+id)`，前后端已逐字对齐。埋点库内部另存 `user_id`（bigint）供 C 类指标关联业务库；它不对外暴露，不违反「对外标识不可枚举」 |
+| **A4** | App 上报的用户标识沿用 `AnalyticsDistinctId`，即 `sha256('tailtopia-user-'+id)`，前后端已逐字对齐；App 请求的 `user_id` 由 JWT 与关联表得出。服务端事件：`AnalyticsClient` 新增 `captureForUser(long userId, …)` 与 `captureForVisitor(String visitorId, …)`，原 `capture(distinctId, …)` 标为废弃，约 12 处调用点做机械改动（就绪度评审 2026-11-12 修订）。埋点库内部另存 `user_id`（bigint）供 C 类指标关联业务库；它不对外暴露，不违反「对外标识不可枚举」 |
 | **A7** | 带 JWT 的请求以 token 用户为准，逐条事件判断：<br>• 事件里没有用户标识：按匿名事件处理。<br>• 用户标识等于 token 用户：通过。<br>• 用户标识不等于 token 用户（跨账号补发）：查关联表，看（匿名 id，该用户）之前登录时是否建立过关联。有就通过；没有就去掉用户标识，标记 `identity_unverified`。<br>不带 JWT 但带了用户标识的请求，同样走关联表校验 |
-| 接口 | `POST /api/v1/analytics/batch`，可不带 JWT。用 `RedisRateLimiter` 按 IP + 匿名 id 限流；体积限制按 A6；匿名 id 必须是合法 UUID |
-| **A10** | `AccountDeletionService`（DB 状态机）新增一个参与者：往埋点库 `erasure_requests` 写一行，写失败抛异常，由状态机现有重试兜住。**每晚在汇总之前**批量处理：删关联表，把明细层和原始层中这些用户的 `user_id` / `user_key` 置空。汇总层不动。最晚 24 小时内生效 |
+| 接口 | `POST /api/v1/analytics/batch`，可不带 JWT。限流**以匿名 id 为主**，IP 只设很宽的兜底阈值（印尼移动网络普遍 CGNAT 共用出口 IP，阈值压测后定）；429 响应由接收端补上 `Retry-After`（现有 `AppException.rateLimited` 不带）。必填字段：`messageId`、`event`、`timestamp`、`sentAt`、`anonymousId`（UUID）；其余缺失不拒收。体积限制按 A6 |
+| **A10** | `AccountDeletionService`（DB 状态机）新增一个参与者：往埋点库 `erasure_requests` 写一行，写失败抛异常，由状态机现有重试兜住（埋点库不可用会延后业务侧注销完成，作为已知取舍）。**每晚在汇总之前**批量处理：删关联表；把明细层和原始层中这些用户的 `user_id` / `user_key` 置空，并删掉事件清单里标为用户标识的属性键（原始层用 `properties - key`）；原始层**按分区逐个处理**，任务内 `SET LOCAL statement_timeout` 放宽。汇总层不动。最晚 24 小时内生效（以注销作业完成为起点） |
 
 ### 三、接收与资源
 
 | # | 决策 |
 |---|---|
-| 队列 | 有界内存队列，容量 50,000 条（D2 破例，记录在案）。**满了返回 429**，App 保留事件稍后重试。写库线程每 1 秒或攒够 500 条，用 `JdbcTemplate` 批量写入原始层 |
+| 队列 | 有界内存队列，**按估算字节数设上限 64 MB**（D2 破例，记录在案），满了返回 429，App 保留事件稍后重试；服务端事件无法重试，队列满或熔断时丢弃并计数。写库线程每 1 秒或攒够 500 条，用 `JdbcTemplate` 批量写入原始层 |
 | 部署丢失 | 优雅停机时先把队列写完再退出。只有进程被强杀或 OOM 时才会丢，作为可接受风险记录 |
-| **A8** | 埋点写入连接池最多 3 个（接收 1 + 汇总 1 + 分区和擦除 1）；写入账号设 `CONNECTION LIMIT 5`、`statement_timeout=120s`。stag 连接池最多 2 个。AI 查数用**独立账号 `analytics_reader`**（FR-27，与业务库 `claude_bot` 分开），`CONNECTION LIMIT 3`，只读明细层、汇总层、关联表、对账结果、口径表；**原始层不开放**（完整报文、无业务索引，扫一次即全表扫描）。**合计最多占 100 个连接中的 10 个** |
+| **A8** | 埋点写入连接池最多 3 个（接收写库 1 + `DetailBuilder` 1 + 定时任务 1；`@Scheduled` 默认单线程，任务本就串行）；写入账号 `CONNECTION LIMIT 5`、`statement_timeout=120s`，汇总和擦除在任务内 `SET LOCAL` 放宽。**stag 用独立角色**（`analytics_writer_stag` / `analytics_reader_stag`），各自限额，避免和生产共享 `CONNECTION LIMIT`、也避免生产 AI 连上 stag 库。AI 查数用**独立账号 `analytics_reader`**（FR-27），`CONNECTION LIMIT 3`；**不用全局默认授权**，按白名单逐表 `GRANT`（明细、汇总、关联、对账、口径表），`events_raw` 及其分区、`erasure_requests`、`pipeline_progress` 不授权（就绪度评审 2026-11-12 修订）。合计最多占 100 个连接中的 10 个 |
 | 磁盘熔断 | 埋点库超过 40 GB 告警（FR-16）；**超过 50 GB 接收端停写**（返回 429）。主机整盘余量后端容器看不到，另在主机上加 cron 检查（运维项） |
 | 汇总 | WIB 03:00 运行，`@Scheduled` + advisory lock，按天分块；C 类指标对业务库只做窄查询 |
-| 告警 | 沿用 `OpsAlertService` 的 TECH 渠道：汇总失败、DEFAULT 分区非空、容量水位、接收端熔断 |
+| 告警 | 沿用 `OpsAlertService` 的 TECH 渠道：汇总失败、原始层 DEFAULT 分区非空、未登记事件计数、容量水位、接收端熔断、埋点库不可用 |
+| 启动隔离 | 业务数据源和 `JdbcTemplate` 显式 `@Primary`（定义第二个 `DataSource` 后 Spring Boot 不再自动配置业务数据源，现有大量按类型注入的 `JdbcTemplate` 会报歧义）；埋点 bean 用 `@Qualifier`。**埋点库连不上或第二套 Flyway 失败时，后端照常启动**，埋点管道整体停用（接收端返回 503），并告警（就绪度评审 2026-11-12 修订） |
 
 ### 四、App 端
 
 | # | 决策 |
 |---|---|
-| **A5** | 生产标记由 App 判定，作为上下文字段写在每条事件里；明细层保留，**汇总时排除**，便于审计。规则：<br>• debug 包不上报。<br>• 模拟器：`isPhysicalDevice=false`。<br>• iOS：`installerStore` 为 `com.apple.testflight` 判为 TestFlight，为 `com.apple.simulator` 判为模拟器。<br>• Android：安装来源**只认 `com.android.vending`（Google Play）**，其他一律判为侧载。<br>• `installerStore` 为 null：算生产数据，写进口径文档作为已知偏差。<br>TestFlight 判定需用真包验证一次 |
-| 生命周期事件 | 自己实现：<br>• `Application Installed`：没有「上次版本号」记录时发。<br>• `Application Updated`：版本号变了时发。<br>• `Application Opened`：冷启动和每次回到前台时发 |
+| **A5** | 生产标记由 App 判定，作为上下文字段写在每条事件里；明细层保留，**汇总时排除**，便于审计。规则：<br>• debug 包不上报（联调用 profile / release 包连 stag）。<br>• 模拟器：`isPhysicalDevice=false`。<br>• iOS：`installerStore` 为 `com.apple.testflight` 判为 TestFlight，为 `com.apple.simulator` 判为模拟器，为 null 算生产（已知偏差）。<br>• Android：安装来源**只认 `com.android.vending`（Google Play）**，其他（含 null，多为 adb / 侧载）一律判为侧载（就绪度评审 2026-11-12 修订）。<br>TestFlight 判定需用真包验证一次 |
+| 生命周期事件 | 自己实现（与 PRD FR-3 一致（就绪度评审 2026-11-12 修订））：<br>• `Application Installed`：既没有自建安装标记、也没有旧版 App 留下的本地数据时发，并写安装标记。<br>• `Application Updated`：有旧版本地数据但没有安装标记（从旧版升级），或版本号变化时发；**升级不报 Installed**。旧版数据的判据键要选旧版每台设备首启必写、未登录用户也有的键。<br>• `Application Opened`：冷启动和每次回到前台时发 |
 
 ### 五、口径排除与运营位
 
 | # | 决策 |
 |---|---|
-| **Q5** | 不建员工名单。统计只排除 `users.role != 'USER'`（官方号）和 `account_type = 'VIRTUAL'`（虚拟号 / 种子号）。员工用真实账号产生的数据算正常用户，写进口径文档作为已知偏差（Dai 2026-11-12 拍板：影响不大） |
+| **Q5** | 不建员工名单。统计只算 `users.role = 'USER'` 且 `account_type = 'REAL'`：排除官方号（ADMIN）、兽医（VET，Dai 2026-11-12 拍板）、虚拟号 / 种子号。员工真实账号和测试账号的数据算正常用户，写进口径文档作为已知偏差（Dai：影响不大） |
 | **A12** | 运营位按 3 类：弹窗（`ops_popups`，已有展示 / 点击事件）、Toko 横幅（`shop_banners`）、运营推送（`ops_notification_campaigns`）。后续发现遗漏，补进事件清单即可，不影响架构 |
 
 ### 六、过渡与收尾
 
 | # | 决策 |
 |---|---|
-| 服务端事件 | `AnalyticsClient` 的实现直接换成自建，**不双写**（PostHog 已停用）。上线后用业务库核对，比如每天的 `shop_payment_paid` 事件数对照当天 `PAID` 订单数。PRD §5「不迁移服务端事件」改为迁移 |
+| 服务端事件 | `AnalyticsClient` 的实现直接换成自建，**不双写**（PostHog 已停用），调用点改用 `captureForUser` / `captureForVisitor`（见 A4）。上线后用业务库核对，比如每天的 `shop_payment_paid` 事件数对照当天 `paid_at` 不为空的订单数。PRD §5「不迁移服务端事件」改为迁移 |
 | PostHog 清理 | PostHog 已停用。V1.5.0 移除 App 的 `posthog_flutter` 和 `POSTHOG_*` dart-define，后端删除 `PostHogAnalyticsClient` 和 `POSTHOG_*` 环境变量。旧版 App 发往 PostHog 的请求无人接收，没有影响 |
 
 ### 实现顺序与依赖
@@ -202,7 +205,7 @@ FR-17–20（补埋点缺口）跨①和④两个组件。
 
 | 对象 | 规则 |
 |---|---|
-| 埋点库表 | `events_raw`、`events_detail`、`identity_links`、`erasure_requests`、`agg_progress`、`event_catalog`、`agg_daily_<指标族>` |
+| 埋点库表 | `events_raw`、`events_detail`、`identity_links`、`erasure_requests`、`pipeline_progress`、`agg_progress`、`event_catalog`、`metric_definitions`、`storage_watermarks`、`ga4_daily_snapshot`；汇总表 `agg_daily_<指标族>`、`agg_weekly_<指标族>`、`agg_monthly_<指标族>`、`agg_cohort_<指标族>`（按组的留存类） |
 | 分区 | `events_raw_p20261112`、`events_detail_p20261112`；DEFAULT 分区叫 `*_pdefault` |
 | 时间列 | `*_at` 用 `timestamptz`，存 UTC；只有 `event_date`（date）是 **WIB 日期**，在列注释里写明 |
 | 事件名 | 只有 3 个生命周期事件用 Segment 写法：`Application Installed`、`Application Updated`、`Application Opened`。其余沿用现有 snake_case，格式 `<领域>_<对象>_<动作过去式>`，如 `toko_add_to_cart_tapped` |
@@ -351,6 +354,10 @@ App 门面 ─┐
 
 - FR-1–27 全部有架构落点。FR-23 依赖 A13（系统推送发送记录现状），按 PRD 属批次 ②。
 - NFR：不拖累业务（独立连接池、熔断、低峰汇总、压测验证）；隔离（独立库与账号）；10 倍余量（日分区 + 水位）；合规（注销 24 小时内擦除、日志不打事件内容）。
+
+### 就绪度评审修订（2026-11-12）
+
+独立审查（见 readiness.md）发现的问题已就地修进 D-2、D-3、D-4、D-7、D-8、D-10、D-11、A4、A5、A8、A10、Q5、接口、队列、启动隔离、生命周期事件、服务端事件，并新增 D-12（周期去重入表）、D-13（业务库判据与 token 关联）。修订处标「（就绪度评审 2026-11-12 修订）」。
 
 ### 校验中补上的缺口
 
