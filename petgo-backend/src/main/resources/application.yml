@@ -526,6 +526,21 @@ analytics:
   erasure:
     cron: "0 0 2 * * *"
     statement-timeout: 30min
+  # 存储水位与停写熔断（analytics-pipeline Story 1.10，FR-16 / 架构「磁盘熔断」）。见 AnalyticsStorageProperties。
+  # 字节阈值可写 40GB（= 40×1024³）或纯字节数。只看本环境连接的埋点库（D-1）；主机整盘余量是运维 cron，见 runbook。
+  storage:
+    # StorageWatermarkJob 每天 WIB 04:30 写 storage_watermarks；超 alert-bytes TECH 告警；
+    # 月事件量 ≥ month-events-hint 或按月增速外推 hint-months 个月内触及 alert-bytes → 告警提示「评估切回第三方」
+    alert-bytes: 40GB
+    month-events-hint: 60000000
+    hint-months: 3
+    watermark-cron: "0 30 4 * * *"
+    # IngestCircuitBreaker 每 breaker-check-ms 查一次 pg_database_size，超 stop-bytes 接收端 429 + Retry-After，
+    # 降回阈值及以下自动恢复；熔断和恢复都 TECH 告警。启动即检查一次（breaker-initial-delay-ms，测试基类拉到 1 天）。
+    stop-bytes: 50GB
+    breaker-check-ms: 300000
+    breaker-initial-delay-ms: 0
+    breaker-retry-after-seconds: 300
 
 # OpenAPI 3.1 文档（springdoc）
 springdoc:

@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -321,6 +322,35 @@ class AnalyticsBatchControllerTest {
         assertProblem(r, 429);
         r.andExpect(header().string("Retry-After", "30"));
         assertThat(queue.size()).isZero();
+    }
+
+    @Test
+    @DisplayName("Story 1.10 停写熔断 → 429 + Retry-After 300（与队列满同一套构造），不消耗限流配额、整批不进；恢复后 202")
+    void writeStoppedByBreaker() throws Exception {
+        AtomicBoolean open = new AtomicBoolean(true);
+        queue = new IngestQueue(64L * 1024 * 1024, open::get);
+        mvc = build(IngestProperties.defaults());
+
+        ResultActions r = postBody(batchOf(event("a", "")));
+
+        assertProblem(r, 429);
+        r.andExpect(header().string("Retry-After", "300"));
+        assertThat(queue.size()).isZero();
+        verify(limiter, never()).tryAcquire(anyString(), anyInt(), any());
+
+        open.set(false);
+        postBody(batchOf(event("b", ""))).andExpect(status().isAccepted());
+        assertThat(queue.size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Story 1.10：管道停用优先于熔断 → 仍是 503")
+    void disabledBeatsBreaker() throws Exception {
+        queue = new IngestQueue(64L * 1024 * 1024, () -> true);
+        mvc = build(IngestProperties.defaults());
+        state.disable(Reason.DB_UNAVAILABLE, "x");
+
+        assertProblem(postBody(batchOf(event("a", ""))), 503);
     }
 
     @Test

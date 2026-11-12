@@ -3,6 +3,7 @@ package com.tailtopia.analytics.ingest;
 import com.tailtopia.analytics.AnalyticsPipelineState;
 import com.tailtopia.analytics.AnalyticsPipelineState.Reason;
 import com.tailtopia.analytics.catalog.EventCatalog;
+import com.tailtopia.analytics.config.AnalyticsStorageProperties;
 import com.tailtopia.analytics.identity.IdentityResolver;
 import com.tailtopia.shared.error.ErrorTypes;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
@@ -50,8 +51,10 @@ import tools.jackson.databind.json.JsonMapper;
  *       —— 超大请求不会先被整体读进内存。</li>
  *   <li>解析（Jackson 3 树）：不是 JSON / 根不是对象 / {@code batch} 不是数组 / {@code batch} 为空 → 400；
  *       条数 &gt; 500 → 413；任一条重新序列化后 &gt; 32 KB → 整批 413。</li>
- *   <li>管道状态：停用（含 {@link Reason#CATALOG_INVALID}：清单坏了无法判 {@code unknown_event}）/ 停机中 → 503 + {@code Retry-After}。
- *       Story 1.10 的熔断（429）接在这里之后、入队之前。</li>
+ *   <li>管道状态：停用（含 {@link Reason#CATALOG_INVALID}：清单坏了无法判 {@code unknown_event}）/ 停机中 → 503 + {@code Retry-After}。</li>
+ *   <li>停写熔断（Story 1.10，{@link IngestQueue#isWriteStopped()}，埋点库超过 {@code analytics.storage.stop-bytes}）→ 429 +
+ *       {@code Retry-After}（{@code analytics.storage.breaker-retry-after-seconds}，默认 300）。放在限流之前：熔断期间不消耗限流配额、
+ *       不做校验。入队时若恰好刚熔断（{@code offerAll} 被停写门拒）同样按熔断 429 返回。</li>
  *   <li>限流（逐条校验之前，用请求体里的原始 {@code anonymousId}）：IP 兜底 + 每个不同匿名 id 各计一次 → 429 + {@code Retry-After}。</li>
  *   <li>逐条校验（{@link IngestValidator}）→ 身份判定（{@link IdentityResolver}）→ 整批入队，满了 429 + {@code Retry-After}。</li>
  *   <li>202 {@code {accepted, rejected}}。</li>
@@ -89,22 +92,34 @@ public class AnalyticsBatchController {
     private final AnalyticsPipelineState state;
     private final RedisRateLimiter rateLimiter;
     private final IngestProperties props;
+    private final int breakerRetryAfterSeconds;
     private final Clock clock;
 
     @Autowired
     public AnalyticsBatchController(IngestQueue queue, EventCatalog catalog, IdentityResolver identity,
-            AnalyticsPipelineState state, RedisRateLimiter rateLimiter, IngestProperties props) {
-        this(queue, catalog, identity, state, rateLimiter, props, Clock.systemUTC());
+            AnalyticsPipelineState state, RedisRateLimiter rateLimiter, IngestProperties props,
+            AnalyticsStorageProperties storage) {
+        this(queue, catalog, identity, state, rateLimiter, props, storage.breakerRetryAfterSeconds(),
+                Clock.systemUTC());
+    }
+
+    /** 测试用：熔断 {@code Retry-After} 取默认值。 */
+    AnalyticsBatchController(IngestQueue queue, EventCatalog catalog, IdentityResolver identity,
+            AnalyticsPipelineState state, RedisRateLimiter rateLimiter, IngestProperties props, Clock clock) {
+        this(queue, catalog, identity, state, rateLimiter, props,
+                AnalyticsStorageProperties.defaults().breakerRetryAfterSeconds(), clock);
     }
 
     AnalyticsBatchController(IngestQueue queue, EventCatalog catalog, IdentityResolver identity,
-            AnalyticsPipelineState state, RedisRateLimiter rateLimiter, IngestProperties props, Clock clock) {
+            AnalyticsPipelineState state, RedisRateLimiter rateLimiter, IngestProperties props,
+            int breakerRetryAfterSeconds, Clock clock) {
         this.queue = queue;
         this.catalog = catalog;
         this.identity = identity;
         this.state = state;
         this.rateLimiter = rateLimiter;
         this.props = props;
+        this.breakerRetryAfterSeconds = breakerRetryAfterSeconds;
         this.clock = clock;
     }
 
@@ -148,9 +163,14 @@ public class AnalyticsBatchController {
             }
         }
 
-        // 3. 管道状态（停用 / 清单无效 / 停机中 → 503）。Story 1.10 熔断（429）接在此后。
+        // 3. 管道状态（停用 / 清单无效 / 停机中 → 503）
         if (!state.isEnabled() || queue.isClosed()) {
             return unavailable();
+        }
+
+        // 3b. 停写熔断（Story 1.10）→ 429
+        if (queue.isWriteStopped()) {
+            return writeStopped();
         }
 
         // 4. 限流
@@ -165,6 +185,9 @@ public class AnalyticsBatchController {
         if (!queue.offerAll(events)) {
             if (queue.isClosed()) {
                 return unavailable();
+            }
+            if (queue.isWriteStopped()) {
+                return writeStopped();
             }
             log.warn("analytics ingest queue full: rejectedBatch={} queueBytes={}", events.size(),
                     queue.currentBytes());
@@ -260,6 +283,11 @@ public class AnalyticsBatchController {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(Math.max(1, retryAfterSeconds)))
                 .body(pd);
+    }
+
+    /** 停写熔断：与队列满同一套 429 构造，{@code Retry-After} 取熔断配置。 */
+    private ResponseEntity<ProblemDetail> writeStopped() {
+        return tooManyRequests(breakerRetryAfterSeconds, "埋点存储已达停写线，请稍后再试");
     }
 
     private static ResponseEntity<ProblemDetail> unavailable() {

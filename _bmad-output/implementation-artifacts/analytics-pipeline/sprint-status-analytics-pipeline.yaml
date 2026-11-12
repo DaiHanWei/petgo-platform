@@ -58,7 +58,7 @@ development_status:
   1-7-明细分区-原始层清理与重算: review
   1-8-注销擦除: review
   1-9-服务端事件改走自建: review
-  1-10-存储水位与停写熔断: ready-for-dev
+  1-10-存储水位与停写熔断: review
   epic-1-retrospective: optional
   # Epic 2：App 切到自建上报（随 V1.5.0）（App；随 V1.5.0；依赖 Epic 1 已上 stag）
   epic-2: in-progress

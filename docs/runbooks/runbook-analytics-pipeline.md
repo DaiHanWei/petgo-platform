@@ -132,3 +132,72 @@ FROM detail_recompute_requests ORDER BY id DESC LIMIT 5;
 - `FAILED`（`error_code` 为异常类名）不自动重试：查后端日志 `analytics detail recompute failed`，修好后
   `UPDATE detail_recompute_requests SET status = 'PENDING' WHERE id = <id>;` 再跑。该区间明细在重跑完成前可能不完整。
 - 后端在 `RUNNING` 时重启：重启后从头重跑这条请求（幂等）。
+
+## 3. 存储水位与停写熔断（Story 1.10）
+
+### 3.1 后端两道线（自动，无需操作）
+
+| 机制 | 频率 | 阈值（`analytics.storage.*`） | 动作 |
+|---|---|---|---|
+| `StorageWatermarkJob` | 每天 WIB 04:30 | `alert-bytes` 40GB；`month-events-hint` 6,000 万；`hint-months` 3 | 写 `storage_watermarks` 一行（同日重跑覆盖）；超 40 GB → TECH「【埋点库容量超线】」；月事件量达标或按月增速外推 3 个月内到 40 GB → TECH「【埋点库容量提示】」，文案含「评估切回第三方」 |
+| `IngestCircuitBreaker` | 每 5 分钟 + 启动即查 | `stop-bytes` 50GB | 超过 → `POST /api/v1/analytics/batch` 返回 429 + `Retry-After: 300`，服务端事件丢弃计数；降回 50 GB 及以下 → 自动恢复。熔断、恢复各告警一次 |
+
+- 两者都只看**本环境连接的埋点库**（`pg_database_size(current_database())`）：生产后端看 `petgo_analytics`，stag 后端看 `petgo_analytics_stag`。同实例上业务库、另一环境埋点库的增长**不在**这两道线里 —— 由 §3.3 的主机整盘检查兜底。
+- 熔断只拦新写入：内存队列里已有的事件照常写完；明细转换、分区维护、注销擦除照常运行（删分区正是降水位的手段）。
+- 看水位（用**写入账号**；只读账号未被授予此表，架构 A8 白名单未列）：
+
+```sql
+SELECT snapshot_date, pg_size_pretty(db_bytes) AS db, pg_size_pretty(raw_bytes) AS raw,
+       pg_size_pretty(detail_bytes) AS detail, events_on_day, month_events,
+       pg_size_pretty(month_growth_bytes) AS growth_30d
+FROM storage_watermarks ORDER BY snapshot_date DESC LIMIT 14;
+```
+
+- 口径：`snapshot_date` 是 WIB 运行日；`events_on_day` 计的是运行时刻已完整结束的前一个 UTC 日（WIB 04:30 运行 = `snapshot_date − 2` 那个 UTC 日的原始层分区）；`month_events` = 本 WIB 月各行 `events_on_day` 之和（某天任务失败没写行，那天的量不进累计）。
+
+### 3.2 熔断后的处置
+
+1. 查 `storage_watermarks`（上面的 SQL）看增长来源：原始层（`raw`）还是明细层（`detail`）涨得快、`events_on_day` 是否异常飙升（App 埋点 bug 刷量？）。
+2. 释放空间：
+   - 🔴 **`DELETE` 不会让 `pg_database_size` 下降**，只有 `DROP` 分区（或 `VACUUM FULL`，会长时间锁表，不推荐）才释放磁盘。
+   - 手工删过期分区：先确认分区日期早于保留期（原始层 35 天且明细游标已越过、明细层 3 个月），用写入账号
+     `ALTER TABLE events_raw DETACH PARTITION events_raw_pYYYYMMDD; DROP TABLE events_raw_pYYYYMMDD;`（明细层同理）。
+     自动删除逻辑见 §2.1，手工删的规则一致。
+   - 或缩短保留期（改代码 / 配置后重新部署，需另行拍板）。
+3. 占用降回 50 GB 及以下后，**5 分钟内**下一次检查自动恢复接收，TECH 群收到「【埋点停写恢复】」。无需重启。
+4. App 端在熔断期间按 `Retry-After` 保留重发，恢复后自动补传；服务端事件在熔断期间丢弃（无法重试），后端日志 `server analytics dropped` 有按原因的计数（熔断计在 `QUEUE_FULL` 下）。
+
+### 3.3 主机整盘余量检查（运维项，不在后端实现）
+
+后端容器看不到主机整盘余量；`petgo-postgres` 所在主机上业务库、两个环境的埋点库、日志、镜像共用同一块盘。**这是与后端 40 / 50 GB 水位相互独立的第二道防线**：后端水位只管「埋点库别涨太大」，整盘检查管「整台机器别写满」（不管是谁写的）。
+
+- **安装位置**：`petgo-postgres` 所在主机（生产服务器）的 root crontab（`sudo crontab -e`），脚本放 `/usr/local/bin/petgo-disk-check.sh`（`chmod 700`，root 所有）。
+- **检查对象**：PG 数据目录所在挂载点。数据卷是 docker volume `petgo_pgdata`，先查它在主机上的路径：
+  `docker volume inspect petgo_pgdata --format '{{ .Mountpoint }}'`（一般在 `/var/lib/docker/volumes/...`，即根分区或 docker 数据盘）。
+- **阈值**：可用空间 **< 15 GB** 告警。理由：埋点库到 50 GB 才停写，15 GB 余量给业务库、日志、镜像拉取和同机其他服务留出缓冲；如磁盘总量变化，按「总量 − 业务库预期 − 50 GB − 安全余量」重算。
+- **频率**：每 30 分钟。
+- **告警渠道**：飞书技术群（与后端 TECH 渠道同一个群）。webhook URL / 签名密钥放主机上 root-only 文件（如 `/root/.petgo-disk-alert.env`，`chmod 600`），**不进仓库**。
+- **示例**（按实际挂载点改 `MOUNT`；若技术群机器人开了签名校验，需按飞书文档补 `timestamp` / `sign` 字段）：
+
+```bash
+#!/usr/bin/env bash
+# /usr/local/bin/petgo-disk-check.sh —— 主机整盘余量检查（runbook-analytics-pipeline §3.3）
+set -euo pipefail
+source /root/.petgo-disk-alert.env          # 提供 LARK_TECH_WEBHOOK
+MOUNT=/var/lib/docker                        # PG 数据目录所在挂载点
+THRESHOLD_GB=15
+avail_kb=$(df -P "$MOUNT" | awk 'NR==2 {print $4}')
+avail_gb=$(( avail_kb / 1024 / 1024 ))
+if [ "$avail_gb" -lt "$THRESHOLD_GB" ]; then
+  curl -sS -X POST -H 'Content-Type: application/json' \
+    -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"【主机磁盘余量不足】$(hostname) ${MOUNT} 可用 ${avail_gb} GB < ${THRESHOLD_GB} GB。查 docker system df、PG 各库大小（SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database）、日志。\"}}" \
+    "$LARK_TECH_WEBHOOK" >/dev/null
+fi
+```
+
+```cron
+*/30 * * * * /usr/local/bin/petgo-disk-check.sh >/dev/null 2>&1
+```
+
+- **验证方法**：①手工执行一次脚本确认无报错；②把 `THRESHOLD_GB` 临时改成大于当前可用值（如 99999）再跑一次，确认技术群收到告警，然后改回；③`sudo crontab -l` 确认条目存在；④一天后看 `grep CRON /var/log/syslog`（或 `journalctl -u cron`）有执行记录。
+- 本检查不去重：余量持续不足时每 30 分钟提醒一次，处理完自动停止。

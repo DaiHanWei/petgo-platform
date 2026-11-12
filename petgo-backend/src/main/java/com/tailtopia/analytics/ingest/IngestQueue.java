@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BooleanSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,9 @@ import org.springframework.stereotype.Component;
  *   <li>{@link #offer}：Story 1.9 服务端事件用，满了返回 {@code false}，调用方丢弃计数。</li>
  *   <li>{@link #drain}：只给 {@link IngestFlusher} 用。</li>
  *   <li>{@link #close}：停机时由 flusher 调用，之后一律拒收（controller 据 {@link #isClosed()} 返回 503）。</li>
+ *   <li>停写门（Story 1.10）：{@link IngestCircuitBreaker} 打开时 {@link #offerAll} / {@link #offer} 一律拒收
+ *       （controller 据 {@link #isWriteStopped()} 返回 429，{@code SelfHostedAnalyticsClient} 计入丢弃）。
+ *       只拦新写入，{@link #drain} 不受影响 —— 已入队的照常写完。</li>
  * </ul>
  *
  * <p>🔴 架构 §实现规范 5 反例：<b>业务模块不准直接注入本队列</b>，只能走 {@code AnalyticsClient}
@@ -34,6 +38,8 @@ import org.springframework.stereotype.Component;
 public class IngestQueue {
 
     private final long maxBytes;
+    /** Story 1.10 停写门：为真时拒收新事件。 */
+    private final BooleanSupplier writeStopped;
     private final ArrayDeque<RawEvent> deque = new ArrayDeque<>();
     private final AtomicLong bytes = new AtomicLong();
     private final ReentrantLock lock = new ReentrantLock();
@@ -41,25 +47,34 @@ public class IngestQueue {
     private boolean closed;
 
     @Autowired
-    IngestQueue(IngestProperties props) {
-        this(props.queueMaxBytes());
+    IngestQueue(IngestProperties props, IngestCircuitBreaker breaker) {
+        this(props.queueMaxBytes(), breaker::isOpen);
     }
 
+    /** 测试用：不接停写门（永不熔断）。 */
     IngestQueue(long maxBytes) {
+        this(maxBytes, () -> false);
+    }
+
+    IngestQueue(long maxBytes, BooleanSupplier writeStopped) {
         if (maxBytes <= 0) {
             throw new IllegalArgumentException("queue-max-bytes 必须为正");
         }
         this.maxBytes = maxBytes;
+        this.writeStopped = writeStopped;
     }
 
     /**
      * 整批入队：全进或全不进。
      *
-     * @return {@code false} = 放不下（字节超上限）或队列已关闭，一条都没进
+     * @return {@code false} = 放不下（字节超上限）、队列已关闭或停写熔断中，一条都没进
      */
     boolean offerAll(List<RawEvent> events) {
         if (events.isEmpty()) {
             return !isClosed();
+        }
+        if (isWriteStopped()) {
+            return false;
         }
         long sum = 0;
         for (RawEvent e : events) {
@@ -82,7 +97,7 @@ public class IngestQueue {
     /**
      * 单条入队（Story 1.9 服务端事件）。
      *
-     * @return {@code false} = 满了或已关闭，调用方丢弃并计数
+     * @return {@code false} = 满了、已关闭或停写熔断中，调用方丢弃并计数
      */
     public boolean offer(RawEvent event) {
         return offerAll(List.of(event));
@@ -141,6 +156,11 @@ public class IngestQueue {
         } finally {
             lock.unlock();
         }
+    }
+
+    /** 是否停写熔断中（Story 1.10，{@link IngestCircuitBreaker} 打开）。 */
+    public boolean isWriteStopped() {
+        return writeStopped.getAsBoolean();
     }
 
     /** 当前条数。 */
