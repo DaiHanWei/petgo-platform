@@ -53,8 +53,8 @@ if (googleMapsApiKey.isBlank()) {
 
 android {
     namespace = "com.tailtopia.app"
-    // posthog_flutter 4.11.0 连带的 androidx（fragment 1.7.1 / activity 1.8.1 / lifecycle 2.7.0 等）
-    // 要求 compileSdk ≥ 34；显式提到 36（仅编译期可用 API，不改 targetSdk 运行时行为）。
+    // 保底 compileSdk 36（仅编译期可用 API，不改 targetSdk 运行时行为）。原因已非 PostHog（Story 2.6 已移除）：
+    // 当前 Flutter 默认即 36，maxOf 结果不变；保留是防日后默认值变化时 rive / geolocator / 地图等插件编译失败。
     compileSdk = maxOf(flutter.compileSdkVersion, 36)
     ndkVersion = flutter.ndkVersion
 

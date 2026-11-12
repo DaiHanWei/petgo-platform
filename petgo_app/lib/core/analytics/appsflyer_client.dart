@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 /// - **业务代码不得直接调本类的 [logEvent]**——事件一律走 `Analytics.capture`
 ///   门面，经同一 `scrub` 净化 + AppsFlyer 白名单分发（TT-DPR-2026-001 红线，
 ///   禁止另开绕过 sanitizer 的上报通路）。
-/// - Dev Key 走 dart-define 注入带默认值，与 `POSTHOG_KEY` 同款管理方式
+/// - Dev Key 走 dart-define 注入带默认值
 ///   （write-only、打进包体可被逆向，非密钥级机密，但不贴公开渠道）。
 /// - `manualStart: true`：initSdk 不上报启动，等首帧后（iOS 等 ATT 结果后）
 ///   显式 [start]，为后续隐私同意弹窗（印尼 PDP）留口子。

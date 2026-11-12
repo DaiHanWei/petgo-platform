@@ -57,20 +57,9 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('[Analytics] lifecycle snapshot failed: ${e.runtimeType}');
   }
-  // 前端行为分析（自建 sink + PostHog 残留）：**发起但不 await**（2026-08-07 冷启动耗时治理）。
-  //
-  // 改前是 `await Analytics.init()` —— 原生 setup（超时上限 3s）被压在首帧之前，那一段
-  // 画面还是原生启动屏，用户在纯等待，而首帧之前没有任何东西需要 PostHog 就绪。
-  //
-  // 为什么不 await 也**不会丢首帧那条 `$screen`**（漏斗「过启动页」这一步的来源）：
-  // `Posthog().setup()` 在本行**同步**把 setup 消息投进 `posthog_flutter` 平台通道
-  // （Dart 侧从调用到 `invokeMethod` 之间没有 await），而后续 capture / screen 走**同一条
-  // 通道**、原生侧按序取用且 setup 是同步处理的 ⇒「setup 先于任何上报被执行」由通道的
-  // 顺序性保证，不需要 Dart 侧 await 来串。
-  //
-  // ⚠️ 因此本行**必须留在 `runApp` 之前**。一旦挪到首帧之后（比如并进下面的 postFrame
-  // 回调），PosthogObserver 为启动屏打的那条 `$screen` 就会排在 setup 前面 —— 原生 SDK
-  // 对 setup 前的事件是**直接丢弃**（不缓冲），启动漏斗的第一级会凭空消失。
+  // 前端行为分析（自建 sink）：**发起但不 await**，不拖首帧（2026-08-07 冷启动耗时治理）。
+  // 匿名 id 与生命周期快照已在上方 await 好（Story 2.1 / 2.3）；sink 加载完成前收到的事件先进
+  // 内存缓冲，不丢。
   unawaited(Analytics.init());
   // V1：锁定竖屏（portrait-only）。
   SystemChrome.setPreferredOrientations(const [

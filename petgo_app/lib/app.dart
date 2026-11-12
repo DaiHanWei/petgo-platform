@@ -275,10 +275,10 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
       }
       if (next.status != AuthStatus.guest && nextId != null) {
         // 非 guest 且拿到 id（含 newUserPendingOnboarding 引导期）。仅在 id 变化时上报，避免改资料重复 identify；
-        // 直接切到另一用户（中途未过 guest）时先 reset 再 identify，遵守 PostHog「换人先 reset」规约。
+        // 直接切到另一用户（中途未过 guest）时先 reset 再 identify，让上一账号的事件先按旧身份发出（Story 2.2）。
         if (nextId != prevId) {
           if (prevId != null) Analytics.reset();
-          // role 随 identify 落成 person property：留存看板据此把兽医号剔出宠主大盘。
+          // role 随 identify 写进 user_identified 事件属性：留存看板据此把兽医号剔出宠主大盘。
           Analytics.identifyUser(nextId, role: next.role);
         }
       } else if (next.status == AuthStatus.guest && prevId != null) {

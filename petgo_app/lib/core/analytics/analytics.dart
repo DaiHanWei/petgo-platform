@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:posthog_flutter/posthog_flutter.dart';
 
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
@@ -16,30 +15,19 @@ import 'tiktok_client.dart';
 
 /// 前端行为分析门面：事件底层已换成自建上报（[SelfHostedSink] → `POST /api/v1/analytics/batch`，
 /// analytics-pipeline Story 2.1）；identify / reset 已改走自建身份绑定（Story 2.2）。
-/// PostHog 的 init / screen 残留由 Story 2.6 统一清理。
+/// 端上已不含 PostHog SDK（Story 2.6 移除）。
 ///
 /// 设计约束（CLAUDE.md 护栏）：
-/// - Project Token / Host 走 dart-define 注入，带生产默认值，对齐 `dio_client.dart`。
+/// - 上报地址跟随 `dio_client.dart` 的后端基址，无额外 Token / Host 配置。
 /// - **绝不**上报 PII（email/昵称/姓名/电话）或健康数据。
-/// - 用户标识一律用 [distinctIdFor] 的哈希，**不上报明文数字 id**（原 PostHog 专项豁免
-///   `internal_user_id` 自建库不沿用，Story 2.2 AC2；埋点库内部 `user_id` 由后端从 JWT / 关联表得出）。
+/// - 用户标识一律用 [distinctIdFor] 的哈希，**不上报明文数字 id**（埋点库内部 `user_id`
+///   由后端从 JWT / 关联表得出，Story 2.2 AC2）。
 /// - 所有上报调用 try/catch 吞错，分析失败绝不阻断主流程。
+/// - debug 构建不真发送（[SelfHostedSink] 生产单例 `enabled=false`）。
 ///
 /// 本期为基建层：提供 init / identify / reset / 脱敏 capture，不批量埋业务事件。
 class Analytics {
   Analytics._();
-
-  /// write-only Project Token（可安全入端）。dart-define `POSTHOG_KEY` 覆盖，默认生产值。
-  static const String _apiKey = String.fromEnvironment(
-    'POSTHOG_KEY',
-    defaultValue: 'phc_mww2QxsJpXeHkcyyd4ahjAXUUh6aruzMxLfcFmg8ePzC',
-  );
-
-  /// 数据节点。dart-define `POSTHOG_HOST` 覆盖，默认 EU Cloud（project 211847）。
-  static const String _host = String.fromEnvironment(
-    'POSTHOG_HOST',
-    defaultValue: 'https://eu.i.posthog.com',
-  );
 
   /// 误传也不出端的敏感键黑名单：PII / 健康数据 / 凭证 / 精确位置 兜底剥离。
   /// 比对前对键做归一化（小写 + 去 `_`/`-`），故 `display_name`/`displayName` 等同命中。
@@ -66,19 +54,16 @@ class Analytics {
 
   /// `runApp` 前调用一次。初始化失败不抛（分析非关键路径）。
   ///
-  /// 自建 sink 启动（打开队列文件、加载上次未发完的事件、注册生命周期观察者、起定时器）与
-  /// PostHog setup **互相独立**：任何一个失败都不影响另一个。sink 在队列加载完成前收到的事件
-  /// 先放内存缓冲，加载完成后合并写盘，不丢。
+  /// 自建 sink 启动（打开队列文件、加载上次未发完的事件、注册生命周期观察者、起定时器）失败
+  /// 只记日志不抛。sink 在队列加载完成前收到的事件先放内存缓冲，加载完成后合并写盘，不丢。
   ///
   /// 环境上下文（Story 2.5，[AnalyticsEnvironment]：版本 / 平台 / 机型 / 生产标记）在 sink 启动前
   /// 采集一次并缓存（各插件限时 3 秒，失败只降级为非生产）；不阻塞首帧（`main.dart` 不 await init）。
   ///
-  /// 生命周期事件（Story 2.3）在 sink 启动之后开始（[LifecycleEvents.start]），不等 PostHog。
+  /// 生命周期事件（Story 2.3）在 sink 启动之后开始（[LifecycleEvents.start]）。
   static Future<void> init() async {
-    await Future.wait([
-      _startSelfHostedSink().then((_) => _startLifecycleEvents()),
-      _setupPosthog(),
-    ]);
+    await _startSelfHostedSink();
+    await _startLifecycleEvents();
   }
 
   static Future<void> _startLifecycleEvents() async {
@@ -95,22 +80,6 @@ class Analytics {
       await SelfHostedSink.instance.start();
     } catch (e) {
       debugPrint('[Analytics] sink start failed: ${e.runtimeType}');
-    }
-  }
-
-  static Future<void> _setupPosthog() async {
-    try {
-      final config = PostHogConfig(_apiKey)
-        ..host = _host
-        ..debug = kDebugMode // release 自动关，避免日志泄露
-        ..captureApplicationLifecycleEvents = true
-        ..sessionReplay = false
-        // debug 下每条即时上送，便于本地/控制台实时验收；release 保持默认批量(20)。
-        ..flushAt = kDebugMode ? 1 : 20;
-      // 限时：setup 卡住（弱网/原生异常）不得阻塞 runApp 拖慢首帧。
-      await Posthog().setup(config).timeout(const Duration(seconds: 3));
-    } catch (e) {
-      debugPrint('[Analytics] init failed/timeout: $e');
     }
   }
 
@@ -165,7 +134,7 @@ class Analytics {
     }
   }
 
-  /// 需要同步分发给 AppsFlyer 的事件白名单（仅归因/投放相关，非 PostHog 全量复制）。
+  /// 需要同步分发给 AppsFlyer 的事件白名单（仅归因/投放相关，非自建埋点全量复制）。
   /// `af_` 前缀 = AppsFlyer 预定义名（TikTok/Meta/Google 渠道可识别用于投放优化），
   /// 其余为自定义名（仅内部分析）。新增事件先过合规评估再登记（交付文档 §4）。
   static const Set<String> appsflyerEvents = {
@@ -346,9 +315,9 @@ class Analytics {
     });
   }
 
-  /// 稳定、非明文的用户标识（送 PostHog 的 distinctId）。纯函数，L0 可测。
+  /// 稳定、非明文的用户标识（自建上报信封 `userId`，同值设给 AppsFlyer / TikTok / Meta）。纯函数，L0 可测。
   ///
-  /// 注：这是无盐 sha256，可被持 PostHog 读权限者暴力反推回内部自增 id；但该 id 本身
+  /// 注：这是无盐 sha256，可被持埋点数据读权限者暴力反推回内部自增 id；但该 id 本身
   /// 既非 PII 也非健康数据，且 distinctId 不是对外 API 面（无 IDOR 枚举风险）。V1 接受；
   /// 若日后需真正不可枚举，应由后端下发不透明分析 token（见 deferred-work）。
   static String distinctIdFor(int userId) =>

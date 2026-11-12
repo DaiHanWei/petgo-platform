@@ -88,7 +88,7 @@ void main() {
     }
   });
 
-  test('不进 AppsFlyer 白名单（送礼事件只发 PostHog）', () {
+  test('不进 AppsFlyer 白名单（送礼事件只进自建埋点）', () {
     for (final e in inventory.values) {
       expect(Analytics.isAppsFlyerEvent(e), isFalse, reason: e);
     }
