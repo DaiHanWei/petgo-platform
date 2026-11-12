@@ -362,6 +362,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('cartRemoveInvalid_x')));
       await tester.pumpAndSettle();
       expect(ctrl.removed, ['x']);
+      // analytics-pipeline Story 3.3：失效行「Hapus」是用户手动删，埋点 reason 用默认 manual。
+      expect(ctrl.removeReasons, [CartRemoveReason.manual]);
     });
 
     testWidgets('复审修复：「Hapus」防重入 —— 请求进行中双击只发一次 DELETE', (tester) async {
@@ -575,6 +577,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(ctrl.removed, ['sku-a']);
+      expect(ctrl.removeReasons, [CartRemoveReason.manual]);
       expect(find.byKey(const ValueKey('appToastAction')), findsOneWidget);
       expect(find.text('Urungkan'), findsOneWidget);
       expect(find.textContaining('dihapus'), findsOneWidget);
@@ -805,6 +808,7 @@ class _FakeCartController extends CartController {
   CartEstimate? nextEstimate;
 
   final removed = <String>[];
+  final removeReasons = <CartRemoveReason>[];
   final added = <({String sku, int qty, String? entrySource})>[];
   final selectedCalls = <({String sku, bool selected})>[];
   final selectAllCalls = <bool>[];
@@ -831,8 +835,9 @@ class _FakeCartController extends CartController {
   Future<void> refresh() async => refreshes++;
 
   @override
-  Future<void> remove(String skuToken) async {
+  Future<void> remove(String skuToken, {CartRemoveReason reason = CartRemoveReason.manual}) async {
     removed.add(skuToken);
+    removeReasons.add(reason);
     final g = removeGate;
     if (g != null) await g.future;
     _cart = _rebuild(

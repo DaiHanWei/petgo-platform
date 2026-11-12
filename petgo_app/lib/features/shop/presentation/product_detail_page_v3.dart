@@ -1029,6 +1029,8 @@ class _ProductDetailPageV3State extends ConsumerState<ProductDetailPageV3> {
       Analytics.capture('toko_add_to_cart_tapped', {
         'product_token': widget.token,
         'sku_token': pick.sku.token,
+        'qty': pick.qty,
+        'unit_price': pick.sku.price,
       });
     }
     void perform() {

@@ -197,6 +197,10 @@ void main() {
       // - placement_type：运营位类型，受控词表 ops_popup / toko_banner / newbie_coupon，与个人无关
       // - placement_token：运营位 / 活动的公开 token（banner token、新人券活动 token，后台运营配置），
       //   与 banner_id / coupon_id 同值，不可枚举，与个人无关
+      // analytics-pipeline Story 3.3（购物车事件补全）新增三项，已逐个确认（qty / reason 已在）：
+      // - unit_price：SKU 单价（整数 IDR），商品价格，与个人无关
+      // - qty_before / qty_after：toko_cart_quantity_changed 修改前后件数（整数），与个人无关
+      //   （reason 新增取值 manual / invalid_cleared，键名不变；🔒 刻意不带商品名 / 规格名）
       expect(props, {
         'reason', 'is_retry', 'destination', 'channel',
         'exception_type',
@@ -209,6 +213,7 @@ void main() {
         'banner_id', 'position', 'target_type',
         'entry', 'coupon_ids', 'coin_used', 'courier', 'shipping_fee', 'insurance',
         'placement_type', 'placement_token',
+        'unit_price', 'qty_before', 'qty_after',
       });
     });
 

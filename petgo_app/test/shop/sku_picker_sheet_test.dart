@@ -198,7 +198,7 @@ void main() {
     expect(r.cart.added.single, (sku: 'a', qty: 2, entrySource: 'TOKO_ALL_FEATURED', buyNow: false));
     expect(find.text('Ditambahkan ke keranjang'), findsOneWidget);
     expect(events.where((e) => e.$1 == 'toko_add_to_cart_tapped').single.$2,
-        {'product_token': 'prod1', 'sku_token': 'a'});
+        {'product_token': 'prod1', 'sku_token': 'a', 'qty': 2, 'unit_price': 100000});
     await t.pump(const Duration(seconds: 3));
   });
 
@@ -235,5 +235,8 @@ void main() {
     expect(r.pushed, ['/shop/checkout?source=buy_now&sku=a&qty=2&from=TOKO_ALL_FEATURED']);
     expect(r.cart.added, isEmpty);
     expect(events.where((e) => e.$1 == 'toko_buy_now_tapped'), hasLength(1));
+    // analytics-pipeline Story 3.3：立即购买分支属性保持原样（不带 qty / unit_price）。
+    expect(events.where((e) => e.$1 == 'toko_buy_now_tapped').single.$2!.keys,
+        unorderedEquals(['product_token', 'sku_token']));
   });
 }

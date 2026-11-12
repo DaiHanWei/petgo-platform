@@ -677,6 +677,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('checkoutRemoveUnavailableInline')));
     await tester.pumpAndSettle();
     expect(cart.removed, ['s2']);
+    // analytics-pipeline Story 3.3：结算页移除不可购买行 → 埋点口径 invalid_cleared。
+    expect(cart.removeReasons, [CartRemoveReason.invalidCleared]);
     expect(find.byKey(const ValueKey('checkoutUnavailableCard')), findsNothing);
     expect(submitEnabled(tester), isTrue);
   });
@@ -715,6 +717,9 @@ void main() {
       expect(find.byType(CheckoutPageV3), findsNothing, reason: 'pushReplacement');
       expect(cart.refreshes, 1);
       expect(names(), isNot(contains('toko_order_payment_succeeded')));
+      // analytics-pipeline Story 3.3 AC4：下单后商品离开购物车只 refresh，不调 remove、不报移出。
+      expect(cart.removed, isEmpty);
+      expect(names(), isNot(contains('toko_cart_item_removed')));
     });
 
     testWidgets('🔴 纯币 → /shop/orders/x/paid、不调 /pay、上报 payment_succeeded{PAWCOIN}', (tester) async {
@@ -1263,6 +1268,7 @@ class _FakeCheckoutRepo implements CheckoutRepository {
 /// 🔴 BUY_NOW 断言「不调 cartProvider 任何变更方法」靠 [mutations] / [refreshes] 计数。
 class _FakeCart extends CartController {
   final removed = <String>[];
+  final removeReasons = <CartRemoveReason>[];
   int mutations = 0;
   int refreshes = 0;
   VoidCallback? onRemove;
@@ -1274,9 +1280,10 @@ class _FakeCart extends CartController {
   Future<void> refresh() async => refreshes++;
 
   @override
-  Future<void> remove(String skuToken) async {
+  Future<void> remove(String skuToken, {CartRemoveReason reason = CartRemoveReason.manual}) async {
     mutations++;
     removed.add(skuToken);
+    removeReasons.add(reason);
     onRemove?.call();
   }
 

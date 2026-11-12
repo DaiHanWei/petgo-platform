@@ -102,8 +102,9 @@ void main() {
 
   test('自检：字面量 / 三元 / 常量 / 派生四条提取路径都在工作', () {
     const expected = {
-      'toko_add_to_cart_tapped': _Via.ternary,
-      'toko_buy_now_tapped': _Via.ternary,
+      // analytics-pipeline Story 3.3 把 sku_picker_sheet 的加购 / 立即购买三元式拆成两个字面量调用。
+      'toko_add_to_cart_tapped': _Via.literal,
+      'toko_buy_now_tapped': _Via.literal,
       'user_followed': _Via.ternary,
       'user_unfollowed': _Via.ternary,
       'keepsake_card_generated': _Via.constant,

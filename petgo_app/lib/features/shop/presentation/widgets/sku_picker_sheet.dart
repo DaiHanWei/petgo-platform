@@ -66,10 +66,20 @@ Future<void> showSkuPickerSheet(
       onSkuChanged: onSkuChanged);
   if (pick == null || !context.mounted) return;
   final isBuy = mode == SkuPickerMode.buyNow;
-  Analytics.capture(isBuy ? 'toko_buy_now_tapped' : 'toko_add_to_cart_tapped', {
-    'product_token': productToken,
-    'sku_token': pick.sku.token,
-  });
+  // 事件名写字面量（与详情页 `_onDockTapped` 同一写法；analytics-pipeline Story 3.3 拆掉三元式）。
+  if (isBuy) {
+    Analytics.capture('toko_buy_now_tapped', {
+      'product_token': productToken,
+      'sku_token': pick.sku.token,
+    });
+  } else {
+    Analytics.capture('toko_add_to_cart_tapped', {
+      'product_token': productToken,
+      'sku_token': pick.sku.token,
+      'qty': pick.qty,
+      'unit_price': pick.sku.price,
+    });
+  }
   void perform() {
     if (!context.mounted) return;
     if (isBuy) {

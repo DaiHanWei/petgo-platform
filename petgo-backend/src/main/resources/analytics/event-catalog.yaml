@@ -1708,11 +1708,13 @@ events:
     source: APP
     status: ACTIVE
     domain: toko
-    description: "商品详情 SKU 选择面板点「加入购物车」"
+    description: "商品详情 / 商品卡 SKU 选择面板点「加入购物车」（弹层确认即报，在登录判断与加购请求之前）"
     code_ref: petgo_app/lib/features/shop/presentation/product_detail_page_v3.dart
     properties:
       - { name: product_token, type: string, description: "商品公开 token" }
       - { name: sku_token, type: string, description: "SKU 公开 token" }
+      - { name: qty, type: int, description: "弹层里选的加购数量（服务端合并同 SKU 后车内实际数量可能更大；Story 3.3）；不是用户标识" }
+      - { name: unit_price, type: int, description: "SKU 当前售价（整数 IDR；Story 3.3）；不是用户标识" }
   - name: toko_banner_shown
     source: APP
     status: ACTIVE
@@ -1754,11 +1756,16 @@ events:
     properties: []
   - name: toko_cart_item_removed
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: toko
-    description: "购物车移除商品（手动删除或清空失效商品，按商品各报一次；下单后离开购物车不报）（Story 3.3）"
+    description: "购物车移除商品成功（手动删除或清空失效商品，按商品各报一次；下单后离开购物车不报；撤销删除不补报）（Story 3.3）"
+    code_ref: petgo_app/lib/features/shop/data/cart_repository.dart
     properties:
-      - { name: reason, type: string, description: "移除原因（manual / invalid_cleared）" }
+      - { name: product_token, type: string, description: "商品公开 token（购物车状态未加载时不带）；不是用户标识" }
+      - { name: sku_token, type: string, description: "SKU 公开 token（恒带）；不是用户标识" }
+      - { name: qty, type: int, description: "移除前该行车内数量（购物车状态未加载时不带）；不是用户标识" }
+      - { name: unit_price, type: int, description: "该行单价（整数 IDR；购物车状态未加载时不带）；不是用户标识" }
+      - { name: reason, type: string, description: "移除原因（受控枚举：manual = 用户手动删除；invalid_cleared = 清空失效商品 / 结算页移除不可购买行）" }
   - name: toko_cart_page_viewed
     source: APP
     status: ACTIVE
@@ -1768,10 +1775,16 @@ events:
     properties: []
   - name: toko_cart_quantity_changed
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: toko
-    description: "购物车修改商品数量（Story 3.3）"
-    properties: []
+    description: "购物车修改商品数量成功（前后数量相同不报）（Story 3.3）"
+    code_ref: petgo_app/lib/features/shop/data/cart_repository.dart
+    properties:
+      - { name: product_token, type: string, description: "商品公开 token（购物车状态未加载时不带）；不是用户标识" }
+      - { name: sku_token, type: string, description: "SKU 公开 token（恒带）；不是用户标识" }
+      - { name: qty_before, type: int, description: "修改前车内数量（购物车状态未加载时不带）；不是用户标识" }
+      - { name: qty_after, type: int, description: "修改后数量；不是用户标识" }
+      - { name: unit_price, type: int, description: "该行单价（整数 IDR；购物车状态未加载时不带）；不是用户标识" }
   - name: toko_checkout_out_of_range_shown
     source: APP
     status: ACTIVE

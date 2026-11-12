@@ -533,6 +533,11 @@ void main() {
         // **服务端已发券**之后才报（已领 / 领完 / 不在发放期不报；新人券由 entry 返回已发放时报），描述结果而非点击。
         // ⚠️ 只放这个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_saved` / `_paid` 先例）。
         '_claimed',
+        // 购物车移出 / 改数量（analytics-pipeline Story 3.3 · `toko_cart_item_removed` / `toko_cart_quantity_changed`）：
+        // 都只在**服务端确认成功后**才报（失败不报），描述结果而非点击。
+        // 名字由 analytics-pipeline 架构 / Story 1.2 定死，只放精确词尾，不放宽成 `_removed` / `_changed`。
+        '_item_removed',
+        '_quantity_changed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -621,6 +626,9 @@ void main() {
         // analytics-pipeline Story 3.2（push_opened · FR-18）：push_type = 推送载荷 type 受控枚举（缺失记 unknown）；
         // campaign_token = 运营通知活动 public_token（仅 OPS_ANNOUNCEMENT 带），与个人无关。
         'push_type', 'campaign_token',
+        // analytics-pipeline Story 3.3（购物车事件）：qty / qty_before / qty_after = 整数件数；unit_price = SKU 单价（整数 IDR）；
+        // reason ∈ manual / invalid_cleared（受控枚举，toko_cart_item_removed），与个人无关。
+        'qty', 'unit_price', 'qty_before', 'qty_after', 'reason',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

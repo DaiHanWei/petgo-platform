@@ -60,7 +60,8 @@ class EventCatalogTest {
         verify(alerts, never()).send(eq(OpsChannel.TECH), anyString(), anyString());
         assertThat(c.events()).hasSizeGreaterThan(200);
         assertThat(c.isRegistered("toko_add_to_cart_tapped")).isTrue();
-        assertThat(c.allowedPropertyKeys("toko_add_to_cart_tapped")).containsExactlyInAnyOrder("product_token", "sku_token");
+        assertThat(c.allowedPropertyKeys("toko_add_to_cart_tapped"))
+                .containsExactlyInAnyOrder("product_token", "sku_token", "qty", "unit_price");
         assertThat(c.isRegistered("no_such_event")).isFalse();
         assertThat(c.allowedPropertyKeys("no_such_event")).isEmpty();
         assertThat(c.isRegistered(null)).isFalse();
@@ -73,8 +74,7 @@ class EventCatalogTest {
     void ac2PlannedEventsPreRegistered() {
         EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);
         List<String> planned = List.of("user_identified", "screen_viewed", "Application Installed",
-                "Application Updated", "Application Opened", "toko_cart_item_removed",
-                "toko_cart_quantity_changed");
+                "Application Updated", "Application Opened");
         Map<String, EventDefinition> byName = new LinkedHashMap<>();
         c.events().forEach(e -> byName.put(e.name(), e));
 
@@ -85,7 +85,6 @@ class EventCatalogTest {
         assertThat(c.allowedPropertyKeys("screen_viewed")).contains("screen");
         assertThat(c.allowedPropertyKeys("Application Opened")).contains("from_background");
         assertThat(c.allowedPropertyKeys("push_opened")).contains("push_type", "campaign_token");
-        assertThat(c.allowedPropertyKeys("toko_cart_item_removed")).contains("reason");
         // user_identified 不带明文用户 id
         assertThat(c.allowedPropertyKeys("user_identified")).doesNotContain("internal_user_id", "user_id");
         // PostHog 的 $screen 不登记，由 screen_viewed 取代
@@ -107,6 +106,26 @@ class EventCatalogTest {
                 }
             }
         }
+    }
+
+    /** Story 3.3：购物车两个事件落地（PLANNED → ACTIVE），加购补 qty / unit_price；全部不是用户标识（擦除不清）。 */
+    @Test
+    void cartEventsActiveWithTokensQtyAndUnitPrice() {
+        EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);
+        Map<String, EventDefinition> byName = new LinkedHashMap<>();
+        c.events().forEach(e -> byName.put(e.name(), e));
+
+        for (String name : List.of("toko_cart_item_removed", "toko_cart_quantity_changed")) {
+            assertThat(byName.get(name).status()).as(name).isEqualTo(Status.ACTIVE);
+            assertThat(byName.get(name).codeRef()).as(name)
+                    .isEqualTo("petgo_app/lib/features/shop/data/cart_repository.dart");
+        }
+        assertThat(c.allowedPropertyKeys("toko_cart_item_removed"))
+                .containsExactlyInAnyOrder("product_token", "sku_token", "qty", "unit_price", "reason");
+        assertThat(c.allowedPropertyKeys("toko_cart_quantity_changed"))
+                .containsExactlyInAnyOrder("product_token", "sku_token", "qty_before", "qty_after", "unit_price");
+        assertThat(c.userIdentifierKeys())
+                .doesNotContain("product_token", "sku_token", "qty", "unit_price", "reason", "qty_before", "qty_after");
     }
 
     /** Story 3.2：push_opened 落地（PLANNED → ACTIVE），只登记 push_type / campaign_token，都不算用户标识（擦除不清）。 */

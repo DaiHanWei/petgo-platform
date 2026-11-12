@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/problem_detail.dart';
@@ -127,6 +128,20 @@ enum CartMutationError {
   }
 }
 
+/// 购物车移除原因（analytics-pipeline Story 3.3，`toko_cart_item_removed.reason` 的受控枚举）。
+enum CartRemoveReason {
+  /// 用户手动删除（购物车有效行 / 失效行的删除）。
+  manual('manual'),
+
+  /// 清空失效商品，或结算页移除不可购买的行。
+  invalidCleared('invalid_cleared');
+
+  const CartRemoveReason(this.wire);
+
+  /// 埋点值（与 event-catalog.yaml 登记一致）。
+  final String wire;
+}
+
 /// 购物车状态。**全局单例**：购物车页读它，Toko / 详情页的角标也读它，
 /// 任何一处加购后角标立刻跟上（同一份 state，不需要各自刷新）。
 class CartController extends AsyncNotifier<CartView> {
@@ -187,11 +202,28 @@ class CartController extends AsyncNotifier<CartView> {
           buyNow: buyNow,
           regionKecamatanId: region));
 
-  Future<void> setQty(String skuToken, int qty) =>
-      _mutate((repo, region) => repo.setQty(skuToken, qty, regionKecamatanId: region));
+  /// 改数量。成功且前后数量不同 → 报 `toko_cart_quantity_changed`（analytics-pipeline Story 3.3）；失败不报。
+  Future<void> setQty(String skuToken, int qty) async {
+    // 快照在 _mutate 之前取：成功后 state 已被新车覆盖，取不到改前数量。
+    final before = _lineSnapshot(skuToken);
+    await _mutate((repo, region) => repo.setQty(skuToken, qty, regionKecamatanId: region));
+    if (before?.qty == qty) return;
+    Analytics.capture('toko_cart_quantity_changed', {
+      'product_token': ?before?.productToken,
+      'sku_token': skuToken,
+      'qty_before': ?before?.qty,
+      'qty_after': qty,
+      'unit_price': ?before?.price,
+    });
+  }
 
-  Future<void> remove(String skuToken) =>
-      _mutate((repo, region) => repo.remove(skuToken, regionKecamatanId: region));
+  /// 删除一行。成功（服务端已删，哪怕结果因序号过时被丢弃）→ 报一次 `toko_cart_item_removed`；
+  /// 失败抛 [CartMutationError]、不报（analytics-pipeline Story 3.3）。
+  Future<void> remove(String skuToken, {CartRemoveReason reason = CartRemoveReason.manual}) async {
+    final line = _lineSnapshot(skuToken);
+    await _mutate((repo, region) => repo.remove(skuToken, regionKecamatanId: region));
+    _captureRemoved(skuToken, line, reason);
+  }
 
   /// 勾选 / 取消勾选单行。
   ///
@@ -205,8 +237,35 @@ class CartController extends AsyncNotifier<CartView> {
   Future<void> setAllSelected(bool selected) =>
       _mutate((repo, region) => repo.setAllSelected(selected, regionKecamatanId: region));
 
-  Future<void> clearInvalid() =>
-      _mutate((repo, region) => repo.clearInvalid(regionKecamatanId: region));
+  /// 清空失效商品。成功后按调用前的失效行各报一次 `toko_cart_item_removed{reason: invalid_cleared}`。
+  Future<void> clearInvalid() async {
+    final invalid = List<CartLine>.of(state.asData?.value.invalidLines ?? const <CartLine>[]);
+    await _mutate((repo, region) => repo.clearInvalid(regionKecamatanId: region));
+    for (final line in invalid) {
+      _captureRemoved(line.skuToken, line, CartRemoveReason.invalidCleared);
+    }
+  }
+
+  /// 当前已加载的车里按 [skuToken] 找行（有效行 + 失效行）；未加载 / 找不到 → null。
+  CartLine? _lineSnapshot(String skuToken) {
+    final v = state.asData?.value;
+    if (v == null) return null;
+    for (final l in [...v.lines, ...v.invalidLines]) {
+      if (l.skuToken == skuToken) return l;
+    }
+    return null;
+  }
+
+  /// 只报 token、整数数量与单价、受控枚举；不报商品名 / 规格名（自由文本）。不 await。
+  void _captureRemoved(String skuToken, CartLine? line, CartRemoveReason reason) {
+    Analytics.capture('toko_cart_item_removed', {
+      'product_token': ?line?.productToken,
+      'sku_token': skuToken,
+      'qty': ?line?.qty,
+      'unit_price': ?line?.price,
+      'reason': reason.wire,
+    });
+  }
 
   /// 写操作统一出口：成功用返回的整份 CartView 覆盖，失败**保留原状态**
   /// （不把整页打成错误态——用户的车还在，只是这一次操作没成）。

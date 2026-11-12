@@ -831,7 +831,7 @@ void main() {
       expect(location(r), '/shop/products/tok1');
       expect(t.widget<ShopImageButton>(find.byKey(const ValueKey('cartBadgeV2'))).badgeCount, 2);
       final ev = events.where((e) => e.$1 == 'toko_add_to_cart_tapped').single;
-      expect(ev.$2, {'product_token': 'tok1', 'sku_token': 's1'});
+      expect(ev.$2, {'product_token': 'tok1', 'sku_token': 's1', 'qty': 1, 'unit_price': 185000});
       await settleToast(t);
     });
 

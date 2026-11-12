@@ -1135,7 +1135,8 @@ class _CheckoutPageV3State extends ConsumerState<CheckoutPageV3> {
     if (_locked) return;
     for (final sku in skuTokens) {
       try {
-        await ref.read(cartProvider.notifier).remove(sku);
+        // 不可购买行（下单 409 / 预览里的不可购买行，用户确认后移除）→ 埋点口径算「清空失效」。
+        await ref.read(cartProvider.notifier).remove(sku, reason: CartRemoveReason.invalidCleared);
       } on CartMutationError {
         // 单行移除失败不阻断其余行；重新试算后用户会看到真实状态
       }
