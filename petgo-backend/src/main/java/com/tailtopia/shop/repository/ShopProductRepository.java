@@ -49,17 +49,22 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
      * 运营调过的权重在后台看到的顺序就跟 App 对不上了。
      *
      * <p>{@code countQuery} 显式给出（派生的 count 会把 ORDER BY 带上，有的方言下报错）。
+     *
+     * <p>2026-11-13 后台按商品名搜索：{@code pattern} 必须是已转小写、已转义、已加 %% 的整串；
+     * 不搜时传 {@code "%"}（name 非空，等于不过滤）——不用 {@code :pattern is null}，避免 PG 推不出参数类型。
      */
     @Query(value = "select p from ShopProduct p "
             + "where (:category is null or p.category = :category) "
             + "  and (:active is null or p.active = :active) "
+            + "  and lower(p.name) like :pattern escape '\\' "
             + "order by p.sortWeight desc, p.id desc",
             countQuery = "select count(p) from ShopProduct p "
             + "where (:category is null or p.category = :category) "
-            + "  and (:active is null or p.active = :active)")
+            + "  and (:active is null or p.active = :active) "
+            + "  and lower(p.name) like :pattern escape '\\'")
     org.springframework.data.domain.Page<ShopProduct> adminSearch(
             @Param("category") ProductCategory category, @Param("active") Boolean active,
-            org.springframework.data.domain.Pageable pageable);
+            @Param("pattern") String pattern, org.springframework.data.domain.Pageable pageable);
 
     /**
      * V1.4.2 shop-admin Story 4.2（G5「包裹数据 · 缺重量体积」）：同 {@link #adminSearch}，只留至少一个 SKU 缺包裹参数的商品。
@@ -68,17 +73,19 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
     @Query(value = "select p from ShopProduct p "
             + "where (:category is null or p.category = :category) "
             + "  and (:active is null or p.active = :active) "
+            + "  and lower(p.name) like :pattern escape '\\' "
             + "  and exists (select 1 from ShopSku s where s.productId = p.id and ("
             + MISSING_PACKAGE + ")) "
             + "order by p.sortWeight desc, p.id desc",
             countQuery = "select count(p) from ShopProduct p "
             + "where (:category is null or p.category = :category) "
             + "  and (:active is null or p.active = :active) "
+            + "  and lower(p.name) like :pattern escape '\\' "
             + "  and exists (select 1 from ShopSku s where s.productId = p.id and ("
             + MISSING_PACKAGE + "))")
     org.springframework.data.domain.Page<ShopProduct> adminSearchMissingPackage(
             @Param("category") ProductCategory category, @Param("active") Boolean active,
-            org.springframework.data.domain.Pageable pageable);
+            @Param("pattern") String pattern, org.springframework.data.domain.Pageable pageable);
 
     /** SKU 缺包裹参数（任一项空或非正）的 JPQL 条件，别名 {@code s}。 */
     String MISSING_PACKAGE = "s.packageWeightG is null or s.packageLengthCm is null or s.packageWidthCm is null "

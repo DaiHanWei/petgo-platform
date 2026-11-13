@@ -104,10 +104,14 @@ public class AdminShopProductController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "packageData", required = false) String packageData,
+            @RequestParam(value = "name", required = false) String name,
             HxRequest hx, Model model) {
         // V1.4.2 shop-admin Story 4.2（G5）：「包裹数据」筛选 —— 全部 / MISSING（缺重量体积）
         boolean missingPackage = "MISSING".equals(packageData);
-        var found = service.page(category, active, missingPackage, page, PAGE_SIZE);
+        // 2026-11-13：按商品名搜索；超长输入截到列宽（name 列 60），免得拼出无意义的长 LIKE
+        String nameQuery = name == null || name.isBlank() ? null
+                : name.strip().substring(0, Math.min(name.strip().length(), 60));
+        var found = service.page(category, active, missingPackage, nameQuery, page, PAGE_SIZE);
         List<ShopProduct> rows = found.getContent();
         Map<Long, Integer> skuCount = new LinkedHashMap<>();
         Map<Long, Long> minPrice = new LinkedHashMap<>();
@@ -130,6 +134,7 @@ public class AdminShopProductController {
         model.addAttribute("filterCategory", category);
         model.addAttribute("filterActive", active);
         model.addAttribute("filterPackage", missingPackage ? "MISSING" : null);
+        model.addAttribute("filterName", nameQuery);
         model.addAttribute("missingPackageByProduct", missingBySku);
         model.addAttribute("canEdit", has(admin, AdminPermissions.SHOP_PRODUCT_EDIT));
         // 🔴 告警条与「阻止上架」共用 AdminShopListingService 的同一口径，不在此另算一遍

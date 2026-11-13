@@ -312,7 +312,7 @@ public class ShopProductQueryService {
      * <p>大小写用 {@link java.util.Locale#ROOT} 归一——印尼语无特殊大小写映射，
      * 但用默认 locale 会让结果随服务器区域设置漂移（土耳其语 I/ı 是经典坑）。
      */
-    static String likePattern(String raw) {
+    public static String likePattern(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
