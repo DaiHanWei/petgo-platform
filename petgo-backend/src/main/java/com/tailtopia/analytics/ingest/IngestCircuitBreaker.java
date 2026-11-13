@@ -18,7 +18,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,6 +25,7 @@ import org.springframework.stereotype.Component;
  * {@code analytics.storage.stop-bytes}（默认 50 GB）→ 打开，接收端返回 429 + {@code Retry-After}；降回阈值及以下 → 自动关闭。
  *
  * <ul>
+ *   <li>熔断相关键（{@code stop-bytes} / {@code breaker-*}）非法（Story 4.9 AC10）→ 不检查、不打开，接收照常。</li>
  *   <li>每 {@code analytics.storage.breaker-check-ms}（默认 5 分钟）检查一次，启动即检查一次（首延默认 0；
  *       集成测试基类把首延拉到 1 天，由用例直接调 {@link #check(long)}）。</li>
  *   <li>检查只做一次 {@code SELECT pg_database_size(current_database())}（只查本环境连接的埋点库，D-1）。查询失败 →
@@ -63,7 +63,7 @@ public class IngestCircuitBreaker {
     }
 
     /** 一次检查的结局。 */
-    public enum Outcome { SKIPPED_DISABLED, FAILED, UNCHANGED, OPENED, CLOSED }
+    public enum Outcome { SKIPPED_DISABLED, SKIPPED_INVALID_CONFIG, FAILED, UNCHANGED, OPENED, CLOSED }
 
     private final AnalyticsPipelineState pipeline;
     private final LongSupplier dbBytesReader;
@@ -128,8 +128,11 @@ public class IngestCircuitBreaker {
         return props.breakerRetryAfterSeconds();
     }
 
-    @Scheduled(fixedDelayString = "${analytics.storage.breaker-check-ms:300000}",
-            initialDelayString = "${analytics.storage.breaker-initial-delay-ms:0}")
+    /**
+     * 定时入口：间隔 {@code analytics.storage.breaker-check-ms}、首延 {@code breaker-initial-delay-ms}，由
+     * {@code AnalyticsSchedulingConfig} 按 {@link AnalyticsStorageProperties} 已校验的值编程式注册（Story 4.9 AC11：
+     * 原 {@code @Scheduled(fixedDelayString = "${…}")} 遇非法值会让启动失败）。
+     */
     public void scheduled() {
         check(props.stopBytes().toBytes());
     }
@@ -143,6 +146,10 @@ public class IngestCircuitBreaker {
         try {
             if (!pipelineUsable()) {
                 return Outcome.SKIPPED_DISABLED;
+            }
+            if (!props.breakerEnabled()) {
+                // Story 4.9 AC10：熔断相关键（stop-bytes / breaker-*）非法 → 只停用「按水位停收」，接收照常（就绪时已 TECH 告警）
+                return Outcome.SKIPPED_INVALID_CONFIG;
             }
             long dbBytes;
             try {

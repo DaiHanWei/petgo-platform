@@ -24,7 +24,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -183,7 +182,7 @@ public class PartitionMaintenanceJob {
     }
 
     /** 每天 UTC 00:05。 */
-    @Scheduled(cron = "${analytics.partition.cron:0 5 0 * * *}", zone = "UTC")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         run();
     }

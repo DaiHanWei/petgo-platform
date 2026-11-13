@@ -17,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -83,7 +82,7 @@ public class UnknownEventAlertJob {
     }
 
     /** 每天 UTC 01:30，统计前一个 UTC 日。 */
-    @Scheduled(cron = "${analytics.unknown-event-alert.cron:0 30 1 * * *}", zone = "UTC")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         run(clock.instant().atZone(ZoneOffset.UTC).toLocalDate().minusDays(1));
     }

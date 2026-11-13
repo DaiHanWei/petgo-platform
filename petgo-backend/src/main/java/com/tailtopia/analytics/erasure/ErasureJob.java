@@ -33,7 +33,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -150,6 +149,7 @@ public class ErasureJob {
     private final OpsAlertService alerts;
     private final String appEnv;
     private final String statementTimeout;
+    private final String invalidReason;
     private final Clock clock;
 
     @Autowired
@@ -175,12 +175,29 @@ public class ErasureJob {
         this.catalog = catalog;
         this.alerts = alerts;
         this.appEnv = appEnv;
-        this.statementTimeout = requireValidTimeout(statementTimeout);
+        // Story 4.9 AC11：非法值不再抛（原先让整个后端起不来）。擦除是合规承诺（24 小时脱钩），不能停用：回退默认 30min 照常跑，
+        // WARN + 就绪时由 AnalyticsConfigAlert 发 TECH 告警。
+        String timeout;
+        String reason = null;
+        try {
+            timeout = requireValidTimeout(statementTimeout);
+        } catch (IllegalArgumentException e) {
+            timeout = DEFAULT_STATEMENT_TIMEOUT;
+            reason = "analytics.erasure.statement-timeout 格式非法（已回退 " + DEFAULT_STATEMENT_TIMEOUT + "）";
+            log.warn("analytics erasure statement timeout invalid, using default: ({})", reason);
+        }
+        this.statementTimeout = timeout;
+        this.invalidReason = reason;
         this.clock = clock;
     }
 
+    /** {@code analytics.erasure.statement-timeout} 非法时的原因（只含键名，已回退默认）；合法 = null。 */
+    public String invalidReason() {
+        return invalidReason;
+    }
+
     /** 每晚 WIB 02:00（早于批次 ② 汇总的 03:00）。 */
-    @Scheduled(cron = "${analytics.erasure.cron:0 0 2 * * *}", zone = "Asia/Jakarta")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         runOnce();
     }

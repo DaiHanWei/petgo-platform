@@ -53,6 +53,24 @@ class IdentityLinkRepositoryTest {
     }
 
     @Test
+    @DisplayName("Story 4.9 AC4 / AC5：findUserId 走请求线程模板（带查询超时），appendAll 走写库线程模板")
+    @SuppressWarnings("unchecked")
+    void lookupUsesRequestTemplateAndAppendUsesWriterTemplate() {
+        JdbcTemplate writer = mock(JdbcTemplate.class);
+        JdbcTemplate request = mock(JdbcTemplate.class);
+        IdentityLinkRepository repo = new IdentityLinkRepository(writer, request);
+
+        repo.findUserId("aid", "key");
+        repo.appendAll(List.of(new IdentityLink("aid", 1L, "k", T, "m")));
+
+        verify(request).query(org.mockito.ArgumentMatchers.eq(IdentityLinkRepository.FIND_SQL),
+                any(org.springframework.jdbc.core.ResultSetExtractor.class), any(), any());
+        verify(writer).batchUpdate(anyString(), any(BatchPreparedStatementSetter.class));
+        org.mockito.Mockito.verifyNoMoreInteractions(request);
+        org.mockito.Mockito.verifyNoMoreInteractions(writer);
+    }
+
+    @Test
     @DisplayName("绑定：5 列顺序、linked_at 为 UTC")
     void bind() throws Exception {
         PreparedStatement ps = mock(PreparedStatement.class);

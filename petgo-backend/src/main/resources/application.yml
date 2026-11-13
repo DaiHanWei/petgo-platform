@@ -480,6 +480,12 @@ analytics:
       connection-timeout: 5000
       # 建池不连库，连不上不抛（由 AnalyticsBootstrap 判停用）
       initialization-fail-timeout: -1
+      # 🔴 Story 4.9：本节由 AnalyticsDataSourceConfig 手工绑定，值非法（如 ANALYTICS_DB_POOL_SIZE=3x）不阻断启动，
+      #    按上面这组默认值建池 + 就绪时 TECH 告警。
+    # HTTP 请求线程上的埋点库查询（身份关联表查找）客户端超时（Story 4.9 AC4）：超时按「查不到」剥离身份并标记，接口照常 202。
+    # 只用于请求线程专用的 analyticsRequestJdbcTemplate；后台 job / 写库线程不设客户端超时（汇总、擦除会 SET LOCAL 放宽到 10 / 30 分钟）。
+    # 请求线程最坏等待 = 5s 拿连接（connection-timeout）+ 本值。纯数字按秒。
+    request-query-timeout: ${ANALYTICS_REQUEST_QUERY_TIMEOUT:2s}
   # 事件清单 / 指标口径（analytics-pipeline Story 1.2，D-7 / D-9）：启动时加载并同步进埋点库 event_catalog / metric_definitions。
   # yaml 无效 → 埋点管道停用（CATALOG_INVALID）+ TECH 告警，不阻断启动。位置一般不改，测试可覆盖。
   catalog:
@@ -489,6 +495,9 @@ analytics:
   # 启动后另立即跑一次。失败 / DEFAULT 分区非空只 TECH 告警，不影响接收。测试设 "-" 关闭，直接调 run()。
   partition:
     cron: "0 5 0 * * *"
+  # 🔴 Story 4.9（架构「启动隔离」）：本节以下各 analytics.* 键写错（格式非法、负数、flase、非法 cron）都不再让后端起不来 ——
+  #    只停用 / 回退对应埋点功能并在就绪时 TECH 告警「【埋点配置非法】」。定时任务由 AnalyticsSchedulingConfig 编程式注册，
+  #    "-" 仍表示不注册。逐键行为见 docs/runbooks/runbook-analytics-pipeline.md §8。
   # 埋点批量接收（analytics-pipeline Story 1.4，A6 / D2 / FR-7–10）：POST /api/v1/analytics/batch。见 IngestProperties。
   ingest:
     # A6：请求 500 KB / 单条 32 KB / 每批 500 条，超限 413
@@ -503,6 +512,10 @@ analytics:
     flush-interval-ms: 1000
     # 优雅停机时把队列写完的最长等待（须小于 Spring 每阶段默认 30s）
     shutdown-drain-timeout: 20s
+    # 写库线程看门狗（Story 4.9）：每 watchdog-interval 检查一次；线程不在了 → 重启 + TECH 告警；
+    # 线程在但超过 stall-threshold 没完成一轮 → 只 TECH 告警（多半卡在埋点库，不重启）。
+    watchdog-interval: ${ANALYTICS_INGEST_WATCHDOG_INTERVAL:60s}
+    stall-threshold: ${ANALYTICS_INGEST_STALL_THRESHOLD:5m}
     # 限流以匿名 id 为主；IP 只做很宽的兜底（印尼移动网络普遍 CGNAT，阈值待压测后定）。IP 只哈希进 Redis 键。
     rate-limit: { per-device: 120, per-ip: 3000, window-seconds: 60 }
   # 未登记事件每日告警（Story 1.4 AC4）：每天 UTC 01:30 统计前一个 UTC 日。测试设 "-" 关闭，直接调 run(日期)。

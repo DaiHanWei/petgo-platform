@@ -1,5 +1,6 @@
 package com.tailtopia.analytics.rollup;
 
+import com.tailtopia.analytics.config.ConfigValues;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +19,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * <ul>
  *   <li>{@code enabled}：开关（默认 true；stag 设 {@code ANALYTICS_GA4_SNAPSHOT_ENABLED=false}：GA4 属性只有生产包数据）</li>
- *   <li>{@code cron}：cron（WIB，默认 {@code 0 30 2 * * *}，早于 03:00 的汇总；{@code @Scheduled} 直接读同名占位符，这里只做记录）</li>
+ *   <li>{@code cron}：cron（WIB，默认 {@code 0 30 2 * * *}，早于 03:00 的汇总；{@code "-"} = 不注册；Story 4.9 起由
+ *       {@code AnalyticsSchedulingConfig} 读本类的值编程式注册，非法 cron = 停用快照）</li>
  *   <li>{@code backfill-days}：补拉窗口：最近多少天内 {@code ga4_daily_snapshot} 缺行的日期也补拉（默认 14，须在 3–92 之间）</li>
  * </ul>
  */
@@ -30,6 +32,7 @@ public final class Ga4SnapshotProperties {
     /** 每次固定回拉的天数（D−1、D−2、D−3，架构 D-11）。 */
     public static final int REFETCH_DAYS = 3;
     static final int DEFAULT_BACKFILL_DAYS = 14;
+    static final String DEFAULT_CRON = "0 30 2 * * *";
     static final int MAX_BACKFILL_DAYS = 92;
 
     private final boolean enabled;
@@ -59,8 +62,15 @@ public final class Ga4SnapshotProperties {
             reason = reason == null ? "analytics.ga4-snapshot.backfill-days 须为 3–92 的整数" : reason;
             days = DEFAULT_BACKFILL_DAYS;
         }
+        String c = cron == null ? "" : cron.strip();
+        if (!ConfigValues.isValidCronOrDisabled(c)) {
+            // Story 4.9 AC11：非法 cron 原先在 @Scheduled 解析时让启动失败；现由 AnalyticsSchedulingConfig 编程式注册，非法 = 停用快照
+            on = false;
+            reason = ConfigValues.join(reason, "analytics.ga4-snapshot.cron 不是合法 cron");
+            c = DEFAULT_CRON;
+        }
         this.enabled = on;
-        this.cron = cron;
+        this.cron = c;
         this.backfillDays = days;
         this.invalidReason = reason;
         if (reason != null) {

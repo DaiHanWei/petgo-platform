@@ -37,7 +37,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
@@ -267,8 +266,7 @@ public class DetailBuilder {
     }
 
     /** 每分钟一轮（上一轮结束后再等 {@code fixed-delay-ms}）。 */
-    @Scheduled(fixedDelayString = "${analytics.detail.fixed-delay-ms:60000}",
-            initialDelayString = "${analytics.detail.initial-delay-ms:60000}")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         runOnce();
     }

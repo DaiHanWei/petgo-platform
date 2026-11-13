@@ -1,11 +1,18 @@
 package com.tailtopia.analytics.config;
 
+import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import javax.sql.DataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.health.autoconfigure.contributor.ConditionalOnEnabledHealthIndicator;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -15,6 +22,7 @@ import org.springframework.boot.jdbc.health.DataSourceHealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -52,6 +60,14 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>埋点 Flyway 同理<b>不注册成 bean</b>（{@code FlywayAutoConfiguration} 对 {@code Flyway} 类型退让 = 业务迁移不跑），
  *       由 {@link AnalyticsBootstrap} 以普通对象运行。</li>
  *   <li>连接池 {@code initialization-fail-timeout=-1}：建池不连库，库不在时启动不抛；连不上由 Bootstrap 判停用。</li>
+ *   <li>🔴 {@code analytics.datasource.hikari.*} <b>手工绑定</b>（Story 4.9 AC11）：原 {@code @ConfigurationProperties} 遇到
+ *       非法值（如 env {@code ANALYTICS_DB_POOL_SIZE=3x}）类型转换失败，整个后端起不来。现在先套用与 application.yml 一致的
+ *       安全默认值，再试绑定；绑定失败 → 保持安全默认值建池、WARN、登记到 {@link AnalyticsConfigProblems}（就绪时 TECH 告警）。</li>
+ *   <li>{@link #analyticsRequestJdbcTemplate}（{@code @Qualifier("analyticsRequest")}，Story 4.9 AC4–AC6）：<b>HTTP 请求线程</b>上的
+ *       埋点库查询专用（目前只有 {@code IdentityLinkRepository.findUserId}），同一个池，带客户端查询超时
+ *       {@code analytics.datasource.request-query-timeout}（默认 2s）。请求线程最坏要等「5s 拿连接（{@code connection-timeout}）+
+ *       2s 查询」。后台 job 与写库线程继续用 {@link #analyticsJdbcTemplate}（不设客户端超时：汇总 / 擦除会
+ *       {@code SET LOCAL statement_timeout} 放宽到 10 / 30 分钟，客户端超时会误杀）。</li>
  * </ul>
  *
  * <p>埋点表一律走 {@code JdbcTemplate}，禁止 JPA 实体（架构 §实现规范 5）。
@@ -59,8 +75,16 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Configuration(proxyBeanMethods = false)
 public class AnalyticsDataSourceConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(AnalyticsDataSourceConfig.class);
+
     /** 埋点侧 bean 的统一限定符。 */
     public static final String QUALIFIER = "analytics";
+
+    /** 请求线程专用（带查询超时）的埋点 {@link JdbcTemplate} 限定符（Story 4.9）。 */
+    public static final String REQUEST_QUALIFIER = "analyticsRequest";
+
+    static final String HIKARI_PREFIX = "analytics.datasource.hikari";
+    static final Duration DEFAULT_REQUEST_QUERY_TIMEOUT = Duration.ofSeconds(2);
 
     // ---------------------------------------------------------------- 业务库（@Primary，保持原行为）
 
@@ -121,17 +145,77 @@ public class AnalyticsDataSourceConfig {
 
     @Bean(defaultCandidate = false)
     @Qualifier(QUALIFIER)
-    @ConfigurationProperties("analytics.datasource.hikari")
     public HikariDataSource analyticsDataSource(
             @Value("${analytics.datasource.url}") String url,
             @Value("${analytics.datasource.username}") String username,
-            @Value("${analytics.datasource.password}") String password) {
-        return DataSourceBuilder.create()
+            @Value("${analytics.datasource.password}") String password,
+            Environment environment, AnalyticsConfigProblems problems) {
+        HikariDataSource ds = DataSourceBuilder.create()
                 .type(HikariDataSource.class)
                 .url(url)
                 .username(username)
                 .password(password)
                 .build();
+        String reason = bindHikari(Binder.get(environment), ds);
+        if (reason != null) {
+            log.warn("analytics datasource pool config invalid, using safe defaults: ({})", reason);
+            problems.report(reason);
+        }
+        return ds;
+    }
+
+    /**
+     * 安全默认值（与 application.yml 一致）→ 先在一个临时 {@link HikariConfig} 上试绑，成功才绑到真的池上。
+     * 试绑失败时真的池保持安全默认值，不会处于「绑了一半」的状态。
+     *
+     * @return 非法时的原因（只含键名）；合法 = null
+     */
+    static String bindHikari(Binder binder, HikariDataSource ds) {
+        applySafeDefaults(ds);
+        try {
+            HikariConfig probe = new HikariConfig();
+            applySafeDefaults(probe);
+            binder.bind(HIKARI_PREFIX, Bindable.ofInstance(probe));
+        } catch (RuntimeException e) {
+            return HIKARI_PREFIX + ".* 有非法值（已按默认值建池：池大小 3、拿连接等待 5s）";
+        }
+        binder.bind(HIKARI_PREFIX, Bindable.ofInstance(ds));
+        return null;
+    }
+
+    static void applySafeDefaults(HikariConfig c) {
+        c.setPoolName("analytics");
+        c.setMaximumPoolSize(3);
+        c.setMinimumIdle(0);
+        c.setConnectionTimeout(5000);
+        c.setInitializationFailTimeout(-1);
+    }
+
+    /**
+     * 请求线程专用：同一个埋点池，带客户端查询超时（Story 4.9 AC4）。超时抛 {@code QueryTimeoutException}，调用方按
+     * 「查不到」处理（剥离身份并标记），不返回 500。
+     */
+    @Bean(defaultCandidate = false)
+    @Qualifier(REQUEST_QUALIFIER)
+    public JdbcTemplate analyticsRequestJdbcTemplate(@Qualifier(QUALIFIER) DataSource analyticsDataSource,
+            @Value("${analytics.datasource.request-query-timeout:2s}") String requestQueryTimeout,
+            AnalyticsConfigProblems problems) {
+        JdbcTemplate template = new JdbcTemplate(analyticsDataSource);
+        template.setQueryTimeout(requestQueryTimeoutSeconds(requestQueryTimeout, problems));
+        return template;
+    }
+
+    /** 解析请求线程查询超时：纯数字按秒；不足 1 秒按 1 秒（JDBC 只支持整秒）；非法 → 默认 2s + 登记问题。 */
+    static int requestQueryTimeoutSeconds(String raw, AnalyticsConfigProblems problems) {
+        Duration d = ConfigValues.duration(raw, ChronoUnit.SECONDS, false);
+        if (d == null) {
+            String reason = "analytics.datasource.request-query-timeout 须为正的时长（已回退 2s）";
+            log.warn("analytics request query timeout invalid, using default: ({})", reason);
+            problems.report(reason);
+            d = DEFAULT_REQUEST_QUERY_TIMEOUT;
+        }
+        long ms = d.toMillis();
+        return (int) Math.max(1, Math.min(Integer.MAX_VALUE, (ms + 999) / 1000));
     }
 
     @Bean(defaultCandidate = false)

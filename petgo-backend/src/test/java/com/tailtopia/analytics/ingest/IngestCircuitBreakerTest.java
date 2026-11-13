@@ -147,6 +147,36 @@ class IngestCircuitBreakerTest {
     }
 
     @Test
+    @DisplayName("Story 4.9 AC10：analytics.storage.* 非法 → 只停用按水位停收：超阈值也不打开、不告警、不查库")
+    void invalidStorageConfigNeverOpens() {
+        java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+        AnalyticsStorageProperties invalid = new AnalyticsStorageProperties(null, null, 60_000_000L, 3, 300_000L, 300);
+        assertThat(invalid.valid()).isFalse();
+        IngestCircuitBreaker b = new IngestCircuitBreaker(pipeline, () -> {
+            reads.incrementAndGet();
+            return STOP + GB;
+        }, alerts, invalid, "test", CLOCK);
+
+        assertThat(b.check(STOP)).isEqualTo(Outcome.SKIPPED_INVALID_CONFIG);
+        assertThat(b.isOpen()).isFalse();
+        assertThat(reads).hasValue(0);
+        verify(alerts, never()).send(eq(OpsChannel.TECH), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("复审 R3：只有非熔断键（alert-bytes 等）非法时熔断照常工作")
+    void unrelatedInvalidKeyKeepsBreaker() {
+        AnalyticsStorageProperties partlyInvalid = new AnalyticsStorageProperties(null,
+                org.springframework.util.unit.DataSize.ofBytes(STOP), 60_000_000L, 3, 300_000L, 300);
+        assertThat(partlyInvalid.valid()).isFalse();
+        assertThat(partlyInvalid.breakerEnabled()).isTrue();
+        IngestCircuitBreaker b = new IngestCircuitBreaker(pipeline, () -> STOP + GB, alerts, partlyInvalid, "test",
+                CLOCK);
+
+        assertThat(b.check(STOP)).isEqualTo(Outcome.OPENED);
+    }
+
+    @Test
     @DisplayName("管道因库不可用停用：跳过检查、保持原状态；清单无效时库是好的，照常检查")
     void pipelineDisabled() {
         AnalyticsPipelineState down = new AnalyticsPipelineState();

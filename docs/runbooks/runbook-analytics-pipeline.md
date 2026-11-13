@@ -300,3 +300,43 @@ FROM agg_daily_ratio ORDER BY stat_date DESC LIMIT 35;
 - 表权限：迁移里按白名单逐表 `GRANT SELECT ON <表> TO ${readerRole}`（明细 `events_detail`、`identity_links`、`v_events_person`、全部 `agg_*`、`agg_progress`、`ga4_daily_snapshot`、`event_catalog`、`metric_definitions`），**不用** `ALTER DEFAULT PRIVILEGES`。`events_raw` 及其分区、`pipeline_progress`、`detail_recompute_requests`、`storage_watermarks`、`rollup_rerun_requests` 不授权；擦除登记在业务库 `analytics_erasure_outbox`，埋点库只读账号在业务库无表权限、读不到；注意 AI 的业务库账号 `claude_bot` / `claude_bot_stag` 按其「全表 SELECT + 默认授权」能读到该表（只有内部 user_id 与哈希 user_key，属业务库账号既有范围）。新增表必须在迁移里决定是否授权（CI：`AnalyticsReaderGrantsTextTest`）。
 - 核验：`ai-query-agent/deploy/sql/verify_analytics_reader.sql`（见 `runbook-ai-query-agent.md` §2 第 6 步）。
 - 口径唯一来源：`petgo-backend/src/main/resources/analytics/metric-definitions.yaml`，启动时同步进 `metric_definitions`；新增汇总表必须有条目在 `tables` 里引用它（CI：`MetricDefinitionsCoverageTest`）。
+
+## 8. 管道加固：写库线程、请求超时、配置非法（Story 4.9）
+
+### 8.1 告警键表（本节相关，TECH 渠道）
+
+| 去重键 | 触发 | 处置 |
+|---|---|---|
+| `analytics-ingest-flusher-error:<UTC 日>` | 写库线程某一轮抛出任何异常（含 `OutOfMemoryError` 等 Error）。线程不退出，退避 1 秒继续；若发生在写库时，当前这批丢弃（不重试） | 看后端日志 `analytics ingest flusher round failed`（只有异常类名和消息）；OOM 先查堆大小与 `analytics.ingest.queue-max-bytes` |
+| `analytics-ingest-flusher-restarted:<UTC 日>` | 看门狗发现写库线程不在了（不在停机过程中），已重启 | 查重启前后的 ERROR 日志，确认终止原因 |
+| `analytics-ingest-flusher-stalled:<UTC 日>` | 线程在，但超过 `stall-threshold`（默认 5 分钟）没完成一轮。**不重启** | 多半卡在埋点库：查 `pg_stat_activity` 里 analytics 池的会话（锁等待 / 连接耗尽 / 网络假死）；队列满 64 MB 后接收端 429 |
+| `analytics-config-invalid:<UTC 日>` | 应用就绪时发现埋点配置非法（汇总、存储水位、接收、擦除超时、数据源池参数、请求查询超时、调度 cron / 时长） | 文案列出键名与影响；改正 env 后**重建容器**（§1.3） |
+| `analytics-ga4-config-invalid` / `analytics-rollup-push-config-invalid` | 4.2 / 4.4 既有：GA4 快照（含 Story 4.9 起的 `analytics.ga4-snapshot.cron`）/ 推送天数配置非法 | 同上 |
+
+看门狗每 `analytics.ingest.watchdog-interval`（默认 60 秒）只做内存检查，不碰库、不占连接；管道停用时跳过。`/actuator/health` 不受埋点影响（`db` 健康项只看业务库，有意为之）。
+
+### 8.2 请求线程查询超时
+
+`POST /api/v1/analytics/batch` 在请求线程上只有一处查埋点库：身份关联表查找（`IdentityLinkRepository.findUserId`）。它走单独的 `analyticsRequestJdbcTemplate`（同一个池），客户端超时 `analytics.datasource.request-query-timeout`（默认 2s）。超时 / 埋点库不可用 → 该批需要查表的事件剥离身份并标记 `identity_unverified`，接口照常 202。**请求线程最坏等待 = 5s 拿连接 + 2s 查询**。
+后台 job（汇总、擦除、明细、分区、水位）与写库线程仍用不设客户端超时的模板，靠写入账号的 `statement_timeout`（120s，汇总 / 擦除事务内放宽到 10 / 30 分钟）兜底。
+⚠️ 残余风险：JDBC 查询超时靠向 PG 发取消请求实现；若到埋点库的网络完全假死（取消请求也到不了），读操作仍会卡到 TCP 超时。URL 未加 `socketTimeout`（会误杀长事务的汇总 / 擦除），如遇到再按连接拆池处理。
+
+### 8.3 配置表：值非法时的行为
+
+所有键写错（格式非法、负数、`flase`、非法 cron）都**不阻断后端启动**；WARN 日志与就绪告警只含键名、不含值。定时任务由 `AnalyticsSchedulingConfig` 编程式注册，`"-"` 表示不注册。
+
+| 键（`analytics.` 下） | env | 默认 | 值非法时 |
+|---|---|---|---|
+| `rollup.enabled` / `cron` / `statement-timeout` / `install-lookback-days` / `retention-days` / `rerun-fixed-delay-ms` / `rerun-initial-delay-ms` | — | `true` / `0 0 3 * * *` / `600s` / 92 / 92 / 60000 / 60000 | **停用汇总**：每日汇总与手动重跑都不注册、手工调用也跳过；`analytics-config-invalid` 告警 |
+| `rollup.push-campaign-days` | `ANALYTICS_ROLLUP_PUSH_CAMPAIGN_DAYS` | 14 | 只停用推送累计打开人数（4.4 既有） |
+| `ga4-snapshot.enabled` / `cron` / `backfill-days`、`reconcile.min-app-version` | `ANALYTICS_GA4_SNAPSHOT_ENABLED` | `true` / `0 30 2 * * *` / 14 / `1.5.0` | 停用 GA4 快照（cron 非法时不注册）；4.2 既有告警 |
+| `dau-source` | `ANALYTICS_DAU_SOURCE` | `GA4` | 回退 GA4（4.2 既有） |
+| `storage.alert-bytes` / `stop-bytes` / `month-events-hint` / `hint-months` / `breaker-check-ms` / `breaker-initial-delay-ms` / `breaker-retry-after-seconds` / `watermark-cron` | — | 40GB / 50GB / 6000 万 / 3 / 300000 / 0 / 300 / `0 30 4 * * *` | 该键回退默认；其中 `stop-bytes` / `breaker-*` 非法时**只停用「按水位停收」**（熔断不再打开，接收照常），其余键非法不影响熔断；水位记录与水位告警照常 |
+| `ingest.*`（请求 / 单条 / 批大小、队列上限、Retry-After、写库批量 / 间隔、停机等待、`rate-limit.*`） | — | 见 application.yml | 该键回退默认，接收照常 |
+| `ingest.watchdog-interval` / `stall-threshold` | `ANALYTICS_INGEST_WATCHDOG_INTERVAL` / `ANALYTICS_INGEST_STALL_THRESHOLD` | `60s` / `5m`（纯数字按秒） | 回退默认 |
+| `datasource.request-query-timeout` | `ANALYTICS_REQUEST_QUERY_TIMEOUT` | `2s`（纯数字按秒） | 回退 2s |
+| `datasource.hikari.*`（`maximum-pool-size` 等） | `ANALYTICS_DB_POOL_SIZE` | 池 3、`connection-timeout` 5000、`initialization-fail-timeout` -1 | 整组按默认值建池 |
+| `erasure.statement-timeout` | — | `30min` | 回退 30min（擦除是合规承诺，不停用） |
+| `partition.cron` / `unknown-event-alert.cron` / `erasure.cron` | — | `0 5 0 * * *`（UTC）/ `0 30 1 * * *`（UTC）/ `0 0 2 * * *`（WIB） | 按默认调度照常注册 |
+| `detail.fixed-delay-ms` / `initial-delay-ms`、`recompute.fixed-delay-ms` / `initial-delay-ms` | — | 60000 | 按默认 60000 毫秒照常注册 |
+| `datasource.url` / `username` / `password` / `reader-role`、`app-env`、`catalog.*` | 见 §1.2 | — | 字符串，不存在格式问题；库连不上 / 清单无效由 1.1 / 1.2 的停用逻辑处理 |

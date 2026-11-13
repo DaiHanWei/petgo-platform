@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -123,6 +124,14 @@ class ErasureJobTest {
         assertThatThrownBy(() -> ErasureJob.requireValidTimeout("30min'; DROP TABLE x; --"))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> ErasureJob.requireValidTimeout(null)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Story 4.9 AC11：statement-timeout 非法不再让启动失败 —— 回退 30min 照常擦除（合规承诺不停用），invalidReason 只含键名")
+    void invalidTimeoutFallsBackWithoutThrowing() {
+        ErasureJob bad = new ErasureJob(state, jdbc, tx, business, catalog, alerts, "test", "30min'; DROP", CLOCK);
+        assertThat(bad.invalidReason()).contains("analytics.erasure.statement-timeout").doesNotContain("DROP");
+        assertThat(job.invalidReason()).isNull();
     }
 
     // ---------------------------------------------------------------- 跳过 / 锁 / 失败

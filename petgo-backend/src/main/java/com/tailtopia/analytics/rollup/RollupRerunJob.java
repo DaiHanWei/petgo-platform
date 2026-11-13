@@ -18,7 +18,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -97,8 +96,7 @@ public class RollupRerunJob {
     }
 
     /** 每分钟看一次有没有请求（上一轮结束后再等 {@code rerun-fixed-delay-ms}）。 */
-    @Scheduled(fixedDelayString = "${analytics.rollup.rerun-fixed-delay-ms:60000}",
-            initialDelayString = "${analytics.rollup.rerun-initial-delay-ms:60000}")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         runOnce();
     }
@@ -106,6 +104,7 @@ public class RollupRerunJob {
     /** 处理至多一条请求。绝不抛。 */
     public Outcome runOnce() {
         AnalyticsRollupProperties props = service.properties();
+        // Story 4.9 AC8：配置非法时 props.enabled() 恒为 false → isEnabled() 为 false，直接跳过
         if (!service.isEnabled()) {
             return Outcome.SKIPPED_DISABLED;
         }

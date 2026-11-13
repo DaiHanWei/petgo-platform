@@ -77,9 +77,13 @@ class SqlRollupFamilyTest {
     void propertiesValidateTimeout() {
         assertThat(AnalyticsRollupProperties.defaults().statementTimeout()).isEqualTo("600s");
         assertThat(new AnalyticsRollupProperties(true, "-", " 10min ", 92, 92).statementTimeout()).isEqualTo("10min");
-        assertThatThrownBy(() -> new AnalyticsRollupProperties(true, "-", "600s'; DROP", 92, 92))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new AnalyticsRollupProperties(true, "-", "600s", 0, 92))
-                .isInstanceOf(IllegalArgumentException.class);
+        // Story 4.9 AC8：非法值不再抛（会让后端起不来），改为停用汇总；被拼进 SET LOCAL 的值回退默认，非法值绝不流出
+        AnalyticsRollupProperties injected = new AnalyticsRollupProperties(true, "-", "600s'; DROP", 92, 92);
+        assertThat(injected.enabled()).isFalse();
+        assertThat(injected.statementTimeout()).isEqualTo("600s");
+        assertThat(injected.invalidReason()).contains("analytics.rollup.statement-timeout").doesNotContain("DROP");
+        AnalyticsRollupProperties zero = new AnalyticsRollupProperties(true, "-", "600s", 0, 92);
+        assertThat(zero.enabled()).isFalse();
+        assertThat(zero.installLookbackDays()).isEqualTo(92);
     }
 }

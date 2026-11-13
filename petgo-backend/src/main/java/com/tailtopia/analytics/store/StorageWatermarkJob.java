@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -121,7 +120,7 @@ public class StorageWatermarkJob {
     }
 
     /** 每天 WIB 04:30。 */
-    @Scheduled(cron = "${analytics.storage.watermark-cron:0 30 4 * * *}", zone = "Asia/Jakarta")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         Instant now = clock.instant();
         run(snapshotDateOf(now), eventsDayOf(now));

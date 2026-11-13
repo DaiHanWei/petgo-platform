@@ -20,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -118,7 +117,7 @@ public class Ga4DailySnapshotJob {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${analytics.ga4-snapshot.cron:0 30 2 * * *}", zone = "Asia/Jakarta")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         run();
     }

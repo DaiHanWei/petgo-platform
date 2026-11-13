@@ -8,7 +8,6 @@ import java.time.LocalDate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -37,7 +36,7 @@ public class RollupJob {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${analytics.rollup.cron:0 0 3 * * *}", zone = "Asia/Jakarta")
+    // Story 4.9 AC11：调度由 AnalyticsSchedulingConfig 编程式注册（键名 / 默认值不变，非法值不再让启动失败）
     public void scheduled() {
         run();
     }
@@ -45,6 +44,12 @@ public class RollupJob {
     /** 跑一轮（asOf = WIB 昨天）。绝不抛。 */
     public RunResult run() {
         LocalDate asOf = asOf(clock);
+        AnalyticsRollupProperties props = service.properties();
+        if (props != null && props.invalidReason() != null) {
+            // Story 4.9 AC8：配置非法 → 直接跳过（就绪时已 TECH 告警；定时任务本就不注册，这里防手工调用）
+            log.info("analytics rollup job skipped: invalid config");
+            return RunResult.of(Outcome.SKIPPED_DISABLED);
+        }
         try {
             return service.runScheduled(asOf);
         } catch (RuntimeException e) {

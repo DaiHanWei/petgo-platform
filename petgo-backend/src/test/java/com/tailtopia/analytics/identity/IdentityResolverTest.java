@@ -237,6 +237,20 @@ class IdentityResolverTest {
     }
 
     @Test
+    @DisplayName("Story 4.9 AC4：请求线程查询超时（QueryTimeoutException）走「查不到」分支：剥离 + 标记，不抛")
+    void queryTimeoutDegradesToUnverified() {
+        when(repo.findUserId(anyString(), anyString()))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("canceling statement"));
+        List<RawEvent> out = resolver.resolve(List.of(event("m1", "app_open", KEY_A)), null);
+
+        assertThat(out.get(0).userKey()).isNull();
+        assertThat(out.get(0).userId()).isNull();
+        assertThat(out.get(0).identityUnverified()).isTrue();
+        assertThat(logs.list).anySatisfy(l -> assertThat(l.getFormattedMessage()).contains("QueryTimeoutException"));
+        assertNoIdentifiersLogged();
+    }
+
+    @Test
     @DisplayName("不通过计数累加；5 分钟汇总打一条 INFO、清零；日志不含任何标识")
     void unverifiedCountAndSummaryLog() {
         resolver.resolve(List.of(event("m1", "app_open", KEY_A), event("m2", "app_open", KEY_B)), null);
