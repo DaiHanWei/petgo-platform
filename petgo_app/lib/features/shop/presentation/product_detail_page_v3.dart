@@ -879,9 +879,9 @@ class _ProductDetailPageV3State extends ConsumerState<ProductDetailPageV3> {
           children: [
             Text(l10n.tokoDetailSectionTitle, style: ShopText.sectionTitle),
             const SizedBox(height: 7),
-            // 修复线 2026-11-13（实机反馈）：原 11 号字 + 1.75 倍行距，字太小、行距比字还显眼。
+            // 修复线 2026-11-13（实机反馈）：原 11 号字 + 1.75 倍行距，字太小、行距比字还显眼；13/1.5 仍嫌小、挤 → 15/1.6（与「Ship to」等行同级）。
             Text(stripShopHtml(d.detailHtml!),
-                style: ShopText.body.copyWith(fontSize: 13, height: 1.5)),
+                style: ShopText.body.copyWith(fontSize: 15, height: 1.6)),
           ],
         ),
       );
