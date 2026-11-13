@@ -138,8 +138,12 @@ public class IngestFlusher implements SmartLifecycle {
     @Override
     public void start() {
         synchronized (lifecycleMonitor) {
-            if (worker != null || queue.isClosed()) {
+            if (started) {
                 return;
+            }
+            // stop 之后再次 start（Spring 7 测试上下文暂停 / 恢复）：重开队列。stop 已把队列写完、worker 已置空
+            if (queue.isClosed()) {
+                queue.reopen();
             }
             started = true;
             spawn();

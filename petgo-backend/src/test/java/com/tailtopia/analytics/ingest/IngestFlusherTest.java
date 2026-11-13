@@ -110,6 +110,31 @@ class IngestFlusherTest {
     }
 
     @Test
+    @DisplayName("stop 之后再 start（Spring 7 测试上下文暂停 / 恢复）：队列重开，照常接收并写库")
+    void restartAfterStopReopensQueue() throws Exception {
+        jdbcRecordsWrites();
+        IngestFlusher f = flusher(500, Duration.ofMillis(50));
+        f.start();
+        f.stop();
+        assertThat(queue.isClosed()).isTrue();
+
+        f.start();
+        try {
+            assertThat(f.isRunning()).isTrue();
+            assertThat(queue.isClosed()).isFalse();
+            assertThat(queue.offerAll(events(2))).isTrue();
+            long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (written.size() < 2 && System.nanoTime() < deadline) {
+                Thread.sleep(20);
+            }
+            assertThat(written).containsExactly("m0", "m1");
+        } finally {
+            f.stop();
+        }
+        assertThat(queue.isClosed()).isTrue();
+    }
+
+    @Test
     @DisplayName("运行中按间隔把零散事件写出去")
     void flushesOnInterval() throws Exception {
         jdbcRecordsWrites();

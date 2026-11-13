@@ -46,8 +46,10 @@ abstract class ServerEventsTestSupport extends ApiIntegrationTest {
 
     private long seedUser() {
         long n = SEQ.incrementAndGet();
-        jdbc.update("INSERT INTO users (nickname, status) VALUES (?, 'ACTIVE')", "srvevt" + n);
-        return jdbc.queryForObject("SELECT id FROM users WHERE nickname = ?", Long.class, "srvevt" + n);
+        // users.nickname 是 VARCHAR(20)；SEQ 起点是 nanoTime（16 位），十进制拼前缀会超长 → 用 36 进制（约 10 位）
+        String nick = "sv" + Long.toString(n, 36);
+        jdbc.update("INSERT INTO users (nickname, status) VALUES (?, 'ACTIVE')", nick);
+        return jdbc.queryForObject("SELECT id FROM users WHERE nickname = ?", Long.class, nick);
     }
 
     private String seedSku(long stock, long price) {

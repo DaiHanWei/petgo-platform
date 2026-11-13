@@ -71,7 +71,8 @@ class RollupActivityInstallIntegrationTest extends ApiIntegrationTest {
     @BeforeEach
     void setUp() {
         assertThat(state.isEnabled()).as("埋点测试库可用时管道应启用，原因=%s", state.reason()).isTrue();
-        assertThat(springService.familyNames()).containsExactly("activity", "install", "dau_reconcile", "retention",
+        // 4.1~4.3 的族在前、顺序固定；4.4 起各 story 追加的族由各自测试校验，这里不逐个列（否则每加一族都要改本类）
+        assertThat(springService.familyNames()).startsWith("activity", "install", "dau_reconcile", "retention",
                 "install_profile");
         alerts = mock(OpsAlertService.class);
         progress = new RollupProgressRepository(analyticsJdbc);
@@ -316,6 +317,9 @@ class RollupActivityInstallIntegrationTest extends ApiIntegrationTest {
 
             @Override
             public void computeDay(LocalDate statDate, LocalDate asOfDate, RollupContext ctx) {
+                // 与真实族同约定：先删后插（否则下面「重算旧日期」撞主键）
+                ctx.jdbcTemplate().update("DELETE FROM agg_daily_activity WHERE stat_date = ? AND platform = ?",
+                        statDate, platform);
                 ctx.jdbcTemplate().update("INSERT INTO agg_daily_activity (stat_date, platform, dau_person, "
                         + "dau_logged_in, computed_at) VALUES (?, ?, 1, 1, ?)", statDate, platform,
                         utc(ctx.runAt()));

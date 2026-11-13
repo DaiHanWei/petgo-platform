@@ -52,7 +52,7 @@ class EventCatalogSyncIntegrationTest extends ApiIntegrationTest {
         assertThat(eventRows()).isEqualTo(catalog.events().size());
         assertThat(analyticsJdbc.queryForObject(
                 "SELECT status FROM event_catalog WHERE event = 'Application Opened'", String.class))
-                .isEqualTo("PLANNED");
+                .isEqualTo("ACTIVE"); // Epic 2 落地后改 ACTIVE（2026-11-13）
         // properties 是 jsonb 数组，用户标识标记保留
         assertThat(analyticsJdbc.queryForObject("""
                 SELECT count(*) FROM event_catalog, jsonb_array_elements(properties) p

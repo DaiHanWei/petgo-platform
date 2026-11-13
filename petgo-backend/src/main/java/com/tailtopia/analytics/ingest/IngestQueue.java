@@ -148,6 +148,21 @@ public class IngestQueue {
         }
     }
 
+    /**
+     * 重新打开（{@link IngestFlusher#start()} 在 stop 之后再次启动时调用）。
+     *
+     * <p>生产只在停机时 stop 一次，用不到；但 SmartLifecycle 允许 stop 后再 start —— Spring 7 的测试上下文缓存会
+     * 「暂停」不在用的上下文（stop 全部 SmartLifecycle）、复用时再 start，不重开队列就会永久拒收（返回 503）。
+     */
+    void reopen() {
+        lock.lock();
+        try {
+            closed = false;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /** 是否已关闭（停机中）。 */
     public boolean isClosed() {
         lock.lock();
