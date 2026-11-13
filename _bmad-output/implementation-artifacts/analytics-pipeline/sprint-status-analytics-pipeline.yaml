@@ -1,5 +1,5 @@
 # generated: 2026-11-12
-# last_updated: 2026-11-12
+# last_updated: 2026-11-13
 # project: 自建埋点（analytics-pipeline）
 # project_key: NOKEY
 # tracking_system: file-system
@@ -40,7 +40,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-11-12
-last_updated: 2026-11-12
+last_updated: 2026-11-13
 project: 自建埋点（analytics-pipeline）
 project_key: NOKEY
 tracking_system: file-system
@@ -86,4 +86,5 @@ development_status:
   4-6-购物车与商品: review
   4-7-以日活为分母的比率指标: review
   4-8-口径文档补全与-ai-查数接入: review
+  4-9-埋点管道加固: ready-for-dev
   epic-4-retrospective: optional

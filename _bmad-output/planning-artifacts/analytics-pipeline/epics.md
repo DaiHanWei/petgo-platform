@@ -609,3 +609,17 @@ So that 不同人问同一个数，得到同一个结果。
 **And** AI 查数服务新增埋点库连接，使用 `analytics_reader`（只读、3 个连接、30 秒超时）；用该账号查 `events_raw`、`events_raw_p<今天>`、`erasure_requests`、`pipeline_progress` 都返回 permission denied（FR-27）〔L1〕
 **And** AI 查数的说明文档写明：先查 `metric_definitions`，按口径计算；周期去重用周表 / 月表，不把日表相加；跨库问题只用预拼好的汇总表〔L0〕
 **And** 用 5 个典型问题（昨日日活、上周 D1 留存、某弹窗上周点击人数、Toko 漏斗、某推送打开率）在 stag 实测，答案与直接查表一致，记进 Completion Notes〔L2〕
+
+### Story 4.9：埋点管道加固（2026-11-13 追加）
+
+As a 后端负责人,
+I want 写库线程意外终止、埋点库卡住、配置写错时都能被发现且不拖垮主业务,
+So that 埋点不会静默丢数据，也不会让后端起不来或让 App 请求挂住。
+
+来源：云端 28 个 story 完成后报告的已知风险。须在合入 dev 前完成。
+
+**Given** 写库线程遇到任意 Throwable **Then** 不退出，告警后继续；看门狗发现线程死掉就重启并告警，发现停滞就告警〔L0〕
+**And** 请求线程上的埋点库查询用单独的 JdbcTemplate，超时 2 秒，超时按「查不到」处理；后台 job 不受影响〔L0 / L1〕
+**And** 4.1 汇总配置、1.10 存储配置以及所有 analytics 配置项非法时，后端照常启动，只停用对应功能并告警（D-12）〔L0〕
+
+详细验收标准见 `_bmad-output/implementation-artifacts/analytics-pipeline/4-9-埋点管道加固.md`
