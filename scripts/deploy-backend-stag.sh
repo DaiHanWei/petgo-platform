@@ -156,7 +156,7 @@ docker run -d \\
 
 # 等待健康检查（health 含 db + redis）
 echo "等待 actuator/health..."
-for i in \$(seq 1 18); do
+for i in \$(seq 1 48); do  # 48×5s = 4 分钟（启动约 2~3 分钟，90s 会误报失败）
   sleep 5
   if curl -fs http://127.0.0.1:$HOST_PORT/actuator/health 2>/dev/null | grep -q '"status":"UP"'; then
     echo "✓ $CONTAINER UP"
@@ -165,7 +165,7 @@ for i in \$(seq 1 18); do
   fi
   echo "  ... \$((i*5))s"
 done
-echo "ERROR: 90s 未 UP，看日志:"
+echo "ERROR: 4 分钟未 UP，看日志:"
 docker logs --tail 60 $CONTAINER
 exit 1
 EOF
