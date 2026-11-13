@@ -100,7 +100,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                 child: AspectRatio(
                   aspectRatio: canvas.width / canvas.height,
                   // 防截图水印（bug 20260728-383）：水印是 RepaintBoundary 的 Stack 兄弟，
-                  // 预览/截图恒带水印；HD 导出 toImage 只截 boundary 子树 → 导出图无水印。
+                  // 未解锁时预览/截图带水印；HD 导出 toImage 只截 boundary 子树 → 导出图无水印。
                   child: Stack(
                     fit: StackFit.expand, // 卡面保持 AspectRatio 紧约束（loose 会让 FittedBox 撑到画布原尺寸）
                     children: [
@@ -122,7 +122,10 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                             if (!card.hdUnlocked)
                               IdCardLowResCover(
                                   sourceKey: idCardBoundaryKey, canvas: canvas, canvasRadius: radius),
-                            IdCardWatermark(canvas: canvas, canvasRadius: radius),
+                            // 修复线 2026-11-13（产品）：付费解锁后页面上看到的就是无水印高清卡面；
+                            // 未解锁才盖水印。导出边界关系不变（水印仍在 idCardBoundaryKey 子树之外）。
+                            if (!card.hdUnlocked)
+                              IdCardWatermark(canvas: canvas, canvasRadius: radius),
                           ],
                         ),
                       ),
@@ -253,9 +256,11 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     try {
       final origin = _shareOrigin();
       // 🛡 AC2：截**含水印**的那个 boundary。无水印仍需付费。
-      // V1.4.2 KTP 防绕过 §3.2：免费分享图降到与预览同档（约 1/3），付费高清那一路不动。
-      final bytes =
-          await _capture(idCardWatermarkedBoundaryKey, downscale: kIdCardPreviewDownscale);
+      // V1.4.2 KTP 防绕过 §3.2：免费分享图降到与预览同档（1/8），付费高清那一路不动。
+      // 修复线 2026-11-13：已付费的卡页面上已无水印，分享也给原清晰度的无水印图（与页面所见一致）。
+      final bytes = card.hdUnlocked
+          ? await _capture(idCardBoundaryKey)
+          : await _capture(idCardWatermarkedBoundaryKey, downscale: kIdCardPreviewDownscale);
       if (bytes == null) return;
       // D-7：card_style 保留（KTP 0 / 护照 1 / 学生卡 2 / SIM 3 / 居住证 4），另加 card_type / card_variant（wire 值）。
       Analytics.capture('id_card_share_tapped', {

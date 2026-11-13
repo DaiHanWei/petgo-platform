@@ -245,6 +245,57 @@ class AdminFeedRankConfigTest {
         Mockito.verifyNoInteractions(changeLogs, audit);
     }
 
+    // ── 修复线（2026-11-12）：优质老帖池 / 互动冷却 / 看过暂不出现 ─────────────
+
+    /** 与 {@link #formWithBoost(double)} 同一套其余取值（= 夹具现值），只改末尾 4 项。 */
+    private static FeedRankForm formWithPoolRules(int days, int size, int cooldown, int hideHours) {
+        return new FeedRankForm(0.6, 0.4, 2.0, 0.3, VALID_SHUFFLE, VALID_THROTTLE, 1.05, 7, 10, 5, 3, 2, 6, 2, 2,
+                days, size, cooldown, hideHours);
+    }
+
+    @Test
+    void poolRulesAreSavedAndEachChangeLogged() {
+        svc.updateFeedRank(formWithPoolRules(60, 0, 0, 0), 7L);
+
+        assertThat(cfg.getQualityPoolDays()).isEqualTo(60);
+        assertThat(cfg.getQualityPoolSize()).isZero();
+        assertThat(cfg.getInteractedCooldownDays()).isZero();
+        assertThat(cfg.getSeenHideHours()).isZero();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ConfigChangeLog>> logs = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(changeLogs).saveAll(logs.capture());
+        assertThat(logs.getValue()).extracting(ConfigChangeLog::getField).containsExactly(
+                "quality_pool_days", "quality_pool_size", "interacted_cooldown_days", "seen_hide_hours");
+    }
+
+    @Test
+    void poolRuleDefaultsMatchMigrationAndUnchangedWritesNothing() {
+        svc.updateFeedRank(formWithPoolRules(30, 300, 3, 24), 7L);
+        Mockito.verifyNoInteractions(changeLogs, audit);
+    }
+
+    @Test
+    void poolRulesOutOfRangeAreRejectedAndUnchanged() {
+        record Bad(FeedRankForm form, String code) {
+        }
+        for (Bad b : List.of(
+                new Bad(formWithPoolRules(0, 300, 3, 24), "admin.err.config.qualityPoolDaysRange"),
+                new Bad(formWithPoolRules(181, 300, 3, 24), "admin.err.config.qualityPoolDaysRange"),
+                new Bad(formWithPoolRules(30, -1, 3, 24), "admin.err.config.qualityPoolSizeRange"),
+                new Bad(formWithPoolRules(30, 2001, 3, 24), "admin.err.config.qualityPoolSizeRange"),
+                new Bad(formWithPoolRules(30, 300, 31, 24), "admin.err.config.interactedCooldownDaysRange"),
+                new Bad(formWithPoolRules(30, 300, 3, 241), "admin.err.config.seenHideHoursRange"),
+                // 曝光窗口 7 天 = 168 小时：曝光记录只留这么久，超出部分等于没生效
+                new Bad(formWithPoolRules(30, 300, 3, 169), "admin.err.config.seenHideHoursRange"))) {
+            assertThatThrownBy(() -> svc.updateFeedRank(b.form(), 7L))
+                    .isInstanceOf(com.tailtopia.shared.error.AppException.class)
+                    .satisfies(e -> assertThat(((com.tailtopia.shared.error.AppException) e).getMessageCode())
+                            .isEqualTo(b.code()));
+        }
+        assertThat(cfg.getQualityPoolSize()).isEqualTo(300);
+        Mockito.verifyNoInteractions(changeLogs, audit);
+    }
+
     // ── AC4：🛡 配比自洽是硬校验 ────────────────────────────────────
 
     /**

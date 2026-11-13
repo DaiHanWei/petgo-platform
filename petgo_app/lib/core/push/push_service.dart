@@ -22,14 +22,21 @@ import '../storage/prefs.dart';
 
 /// 推送点击透传载荷（`OfflinePushInfo.Ext` JSON）。契约：只含 `type` + `token`（+可选 `targetRef`），
 /// 绝不带顺序 id / PII / 健康数据明文（后端 TencentImClient 同一契约）。
+/// V1.4.2：评论点赞推送另带 `commentId`（后端下发字符串，容错数字）。
 @immutable
 class PushPayload {
-  const PushPayload({this.type, this.token, this.targetRef});
+  const PushPayload({this.type, this.token, this.targetRef, this.commentId});
 
   final String? type;
   final String? token;
   final String? targetRef;
+
+  /// 被点赞的评论 id（只有评论点赞推送带；type 仍是 `CONTENT_LIKED`，targetRef 仍是帖子 id）。
+  final int? commentId;
 }
+
+/// 是否评论点赞推送（`CONTENT_LIKED` + commentId）。这类推送**直达帖子并定位评论**，不落通知中心。
+bool isCommentLikePush(String? type, int? commentId) => type == 'CONTENT_LIKED' && commentId != null;
 
 /// 解析推送 ext（纯函数，L0 可测）。非 JSON / 字段缺失 → 空载荷（点击兜底落通知中心，不崩）。
 PushPayload parsePushExt(String ext) {
@@ -40,6 +47,8 @@ PushPayload parsePushExt(String ext) {
       type: decoded['type'] as String?,
       token: decoded['token'] as String?,
       targetRef: decoded['targetRef']?.toString(),
+      // 后端下发字符串（"70"），也容错数字；解析不出 → null（按帖子点赞处理，落通知中心）。
+      commentId: int.tryParse(decoded['commentId']?.toString() ?? ''),
     );
   } catch (_) {
     return const PushPayload();
@@ -76,8 +85,17 @@ void reportCouponExpiryPushOpened(PushPayload p) {
 ///   `SHOP_ORDER_REORDERED`（v1.4.2 shop Story 9.1 · UI F22 / C-10）→ 新订单详情；
 ///   `COUPON_EXPIRING`（v1.4.2 shop Story 9.3 · G9 / C-10）→ 我的券。
 ///   深链本身兜底为通知中心时照旧落通知中心。
-String pushClickLocation({required bool hasToken, required String deepLink, String? type}) {
+/// - **评论点赞**（V1.4.2，`CONTENT_LIKED` + [commentId]）→ 直达帖子详情并定位那条评论
+///   （`/content/{postId}?focus=comments&commentId={id}`）。帖子点赞（无 commentId）照旧落通知中心。
+///   已读照标：[NotificationDeepLink.openFromPush] 在算 location 之前已按 token 标记已读（与直达类同一路径）。
+String pushClickLocation({
+  required bool hasToken,
+  required String deepLink,
+  String? type,
+  int? commentId,
+}) {
   if (kPushDirectTypes.contains(type)) return deepLink;
+  if (isCommentLikePush(type, commentId)) return deepLink;
   return hasToken ? DeepLinkRoutes.notificationsCenter : deepLink;
 }
 
@@ -269,9 +287,14 @@ class PushService {
           type: p.type,
           token: p.token,
           targetRef: p.targetRef,
+          commentId: p.commentId,
         );
         location = pushClickLocation(
-            hasToken: p.token != null && p.token!.isNotEmpty, deepLink: deepLink, type: p.type);
+          hasToken: p.token != null && p.token!.isNotEmpty,
+          deepLink: deepLink,
+          type: p.type,
+          commentId: p.commentId,
+        );
       } catch (_) {
         // 标记已读/映射失败 → 兜底通知中心。
         location = DeepLinkRoutes.notificationsCenter;

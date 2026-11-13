@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,9 +37,14 @@ class CommentSection extends ConsumerStatefulWidget {
     this.currentUserId,
     this.postAuthorId,
     this.isContentAuthor = false,
+    this.anchorCommentId,
   });
 
   final int postId;
+
+  /// 评论锚点（V1.4.2 评论点赞通知 → `?commentId=`）。非空时首屏另拉一次锚点：
+  /// 那条评论所在楼**置顶**到一级列表最前，并短暂高亮目标行。拉不到（404 / 断网）静默降级为普通评论区。
+  final int? anchorCommentId;
   final int? currentUserId;
 
   /// 帖子作者 id：评论区拉黑/举报的对象**恰好是帖主**时，除了刷 Feed 还要退出本详情页
@@ -79,6 +86,18 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 各父评论回复区的锚点（parentId → key），滚动定位用。
   final Map<int, GlobalKey> _replyAnchors = {};
 
+  /// 评论锚点楼（V1.4.2 评论点赞通知）。与 [sessionPinnedCommentsProvider]（「我刚发的」）**刻意分开**：
+  /// - 只活在本区 State 里，不进 provider，不参与游标（游标仍取服务端那一页的最后一条）；
+  /// - 渲染时排在最前、服务端那几页里的同 id 楼去重（只出现一次，在顶部）；
+  /// - 用的是锚点接口回来的那份（目标是回复时只内嵌目标那一条，「查看全部」照常展开）。
+  Comment? _anchorThread;
+
+  /// 要高亮的那条评论 id（一级楼本身或它的某条回复）。高亮放完即清空 —— 展开回复后不重放。
+  int? _highlightId;
+
+  /// 高亮行的 key：锚点到位后滚进视野用（不在视野里才滚）。
+  final GlobalKey _anchorTargetKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -101,24 +120,34 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   ///
   /// 🔴 这里只动**展示顺序**，`_nextCursor` 仍然来自服务端返回的那一页的最后一条
   /// —— 置顶项不参与游标计算，否则会制造重复/漏条（AC6）。
+  ///
+  /// V1.4.2：评论锚点楼（[_anchorThread]）排在最最前（先于「我刚发的」），同 id 在后面一律去重。
   List<Comment> get _orderedTopLevel {
     final pinned = ref.watch(sessionPinnedCommentsProvider(widget.postId));
-    if (pinned.isEmpty) return _topLevel;
+    final anchor = _anchorThread;
+    if (pinned.isEmpty && anchor == null) return _topLevel;
 
     final byId = {for (final c in _topLevel) c.id: c};
     // 服务端那份优先（赞数、审核态都更新）；服务端这一页没返回它时用本地存下的那份
     // —— 热度序下 0 赞的新评论很可能压根不在第一页，这一步才是「始终可见」的保证。
-    final mine = [for (final id in pinned.keys) byId[id] ?? pinned[id]!];
+    final mine = [
+      for (final id in pinned.keys)
+        if (id != anchor?.id) byId[id] ?? pinned[id]!,
+    ];
     final rest = [
       for (final c in _topLevel)
-        if (!pinned.containsKey(c.id)) c,
+        if (!pinned.containsKey(c.id) && c.id != anchor?.id) c,
     ];
-    return [...mine, ...rest];
+    return [?anchor, ...mine, ...rest];
   }
 
   Future<void> _loadInitial() async {
+    // 锚点与首屏**并行**拉：两者一起落地，避免列表先出来、锚点楼再插到顶上把内容顶下去。
+    final anchorId = widget.anchorCommentId;
+    final anchorFuture = anchorId == null ? null : _fetchAnchor(anchorId);
     try {
       final page = await _repo.getComments(widget.postId);
+      final anchor = await anchorFuture;
       if (!mounted) return;
       setState(() {
         _topLevel
@@ -127,10 +156,44 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         _nextCursor = page.nextCursor;
         _hasMore = page.hasMore;
         _loading = false;
+        if (anchor != null) {
+          _anchorThread = anchor.thread;
+          _highlightId = anchor.targetId;
+        }
       });
+      if (anchor != null) _scrollAnchorIntoView();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// 拉评论锚点。**任何失败都吞掉返回 null**（404 = 评论已删 / 不可见 / 帖子没了；或断网）——
+  /// 降级为普通「滚到评论区」，不弹任何提示。帖子 id 对不上（理论上不该发生）同样当没有锚点。
+  Future<CommentAnchor?> _fetchAnchor(int commentId) async {
+    try {
+      final anchor = await _repo.getCommentAnchor(commentId);
+      return anchor.postId == widget.postId ? anchor : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 锚点到位后把高亮行滚到视野上部（约 1/5 处）。
+  ///
+  /// ⚠️ 不能指望详情页 `?focus=comments` 的那次滚动：它在挂载当帧执行，此时评论还没加载、页面不够长，
+  /// 标题根本滚不上去；锚点到了也只停在屏幕底边（2026-11-12 模拟器实测）。所以锚点到位后**主动**对齐一次，
+  /// 内容不够长时滚到底为止（ensureVisible 自动夹到可滚范围内）。
+  void _scrollAnchorIntoView() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _anchorTargetKey.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.2,
+        duration: AppMotion.sheet,
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Future<void> _loadMore() async {
@@ -178,9 +241,16 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   }
 
   /// 静默重拉首屏（发表/回复/删除后，不闪骨架）。
+  ///
+  /// 评论锚点楼的口径（V1.4.2）：**重拉时一并重拉锚点** —— 置顶保留且内容是新的（赞数 / 回复数）；
+  /// 锚点评论被删 / 变不可见（404）或断网 → 置顶摘掉，该楼回到服务端排序里的原位。
+  /// 不保留旧副本：删了锚点评论之后若还用旧副本置顶，就是把已删内容补回列表。高亮不重放。
   Future<void> _reload() async {
     try {
+      final anchorId = _anchorThread == null ? null : widget.anchorCommentId;
+      final anchorFuture = anchorId == null ? null : _fetchAnchor(anchorId);
       final page = await _repo.getComments(widget.postId);
+      final anchor = await anchorFuture;
       if (!mounted) return;
       setState(() {
         _topLevel
@@ -189,6 +259,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         _nextCursor = page.nextCursor;
         _hasMore = page.hasMore;
         _expanded.clear();
+        _anchorThread = anchor?.thread;
       });
       // 🔴 落点必须在**重拉之后**消费：上一行刚把 _expanded 清空，
       // 先展开再刷新等于白展开（Story 2.6 · AC5）。
@@ -216,6 +287,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     _landingNotifier.clear();
     // 父评论可能只存在于本会话置顶集合里（热度序下 0 赞的新评论通常不在第一页）——那也算「在列表里」。
     if (!_topLevel.any((c) => c.id == landing.parentId) &&
+        _anchorThread?.id != landing.parentId &&
         !ref
             .read(sessionPinnedCommentsProvider(widget.postId))
             .containsKey(landing.parentId)) {
@@ -311,6 +383,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     for (var i = 0; i < _topLevel.length; i++) {
       _topLevel[i] = _replaceIn(_topLevel[i], id, update);
     }
+    // 评论锚点楼（V1.4.2）：它不在服务端那几页里时，界面渲染的就是这份。
+    final anchor = _anchorThread;
+    if (anchor != null) _anchorThread = _replaceIn(anchor, id, update);
     // 第四处：本会话置顶的本地副本。它不在服务端那一页时，界面渲染的就是这份。
     for (final pinnedId in ref.read(sessionPinnedCommentsProvider(widget.postId)).keys) {
       _pinnedNotifier.update(pinnedId, (top) => _replaceIn(top, id, update));
@@ -552,7 +627,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         ),
       );
     }
-    if (_topLevel.isEmpty) {
+    if (_topLevel.isEmpty && _anchorThread == null) {
       // AC5 空态：一枚 emoji + 引导语（改前只有一行纯文字）。
       // 底部固定输入框不受影响 —— 它在详情页的 Column 里，与本区域同级。
       return Padding(
@@ -655,6 +730,20 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   }
 
   Widget _tile(AppLocalizations l10n, Comment c, {bool isReply = false}) {
+    final tile = _buildTile(l10n, c, isReply: isReply);
+    if (c.id != _highlightId) return tile;
+    // 评论锚点高亮（V1.4.2）：放完一次即清 id —— 之后展开回复、重拉都不再重放。
+    return _AnchorHighlight(
+      key: _anchorTargetKey,
+      commentId: c.id,
+      onDone: () {
+        if (mounted) setState(() => _highlightId = null);
+      },
+      child: tile,
+    );
+  }
+
+  Widget _buildTile(AppLocalizations l10n, Comment c, {bool isReply = false}) {
     final name = c.authorDeleted
         ? l10n.feedDeletedUser
         : (c.authorNickname ?? l10n.feedDeletedUser);
@@ -715,6 +804,69 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       isPostAuthor:
           widget.postAuthorId != null && c.authorId == widget.postAuthorId,
       isReply: isReply,
+    );
+  }
+}
+
+/// 评论锚点的一次性高亮（V1.4.2 评论点赞通知）：浅紫底先停留，再淡出到透明，总长约 2 秒。
+///
+/// 系统「减少动态效果」（`disableAnimations`）下不做淡出动画：浅紫底照样停留同样时长后直接消失
+/// （高亮本身是信息，不是动效；去掉的只是过渡）。
+class _AnchorHighlight extends StatefulWidget {
+  const _AnchorHighlight({
+    super.key,
+    required this.commentId,
+    required this.onDone,
+    required this.child,
+  });
+
+  final int commentId;
+  final VoidCallback onDone;
+  final Widget child;
+
+  /// 高亮停留时长，之后开始淡出。
+  static const Duration hold = Duration(milliseconds: 1200);
+
+  /// 淡出时长（hold + fade ≈ 2s）。
+  static const Duration fade = Duration(milliseconds: 800);
+
+  @override
+  State<_AnchorHighlight> createState() => _AnchorHighlightState();
+}
+
+class _AnchorHighlightState extends State<_AnchorHighlight> {
+  bool _lit = true;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(_AnchorHighlight.hold, () {
+      if (!mounted) return;
+      setState(() => _lit = false);
+      final still = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      _timer = Timer(still ? Duration.zero : _AnchorHighlight.fade, widget.onDone);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return AnimatedContainer(
+      key: ValueKey('commentAnchorHighlight_${widget.commentId}'),
+      duration: still ? Duration.zero : _AnchorHighlight.fade,
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: _lit ? AppColors.violet100 : AppColors.violet100.withValues(alpha: 0),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: widget.child,
     );
   }
 }

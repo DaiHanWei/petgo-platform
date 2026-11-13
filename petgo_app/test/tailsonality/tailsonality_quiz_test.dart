@@ -13,7 +13,6 @@ import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart'
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_quiz_page.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_image_option_grid.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_routes.dart';
-import 'package:tailtopia/features/tailsonality/presentation/widgets/tailsonality_intro_sheet.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// V1.3.2 Story 2.3 · L0：说明抽屉、答题页（分页 / 禁用 / 返回 / 占位图 / 间距）、提交与失败保留、埋点、不存进度。
@@ -33,59 +32,6 @@ void main() {
       expect(tsQuestionSetFor('DOG'), 'DOG');
       expect(tsQuestionSetFor('OTHER'), 'GENERAL');
       expect(tsQuestionSetFor(null), 'GENERAL');
-    });
-  });
-
-  group('说明抽屉（AC2）', () {
-    Future<void> pumpSheet(WidgetTester tester, PetProfile pet, {Locale locale = const Locale('id')}) async {
-      final router = GoRouter(routes: [
-        GoRoute(
-          path: '/',
-          builder: (c, s) => Scaffold(
-            body: Builder(
-              builder: (ctx) => TextButton(
-                key: const ValueKey('open'),
-                onPressed: () => showTailsonalityIntroSheet(ctx, pet),
-                child: const Text('open'),
-              ),
-            ),
-          ),
-        ),
-        GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const Scaffold(body: Text('quiz-page'))),
-      ]);
-      await tester.pumpWidget(MaterialApp.router(
-        locale: locale,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        routerConfig: router,
-      ));
-      await tester.tap(find.byKey(const ValueKey('open')));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('名字 · 品种；海报出图；点开始进答题页', (tester) async {
-      await pumpSheet(tester, const PetProfile(id: 1, name: 'Momo', cardToken: 't', petType: 'CAT', breed: 'Anggora'));
-      expect(find.text('Tes kepribadian Momo · Anggora'), findsOneWidget);
-      expect(find.text('18 pertanyaan · ± 3 menit'), findsOneWidget);
-      // 海报已入库（2026-10-05）：出真图、不出占位。
-      expect(find.byKey(const ValueKey('tsIntroPosterPlaceholder')), findsNothing);
-      expect(find.byWidgetPredicate((w) => w is Image && w.image is AssetImage && (w.image as AssetImage).assetName == kTsIntroPosterAsset),
-          findsOneWidget);
-      expect(File('assets/tailsonality/intro_poster.webp').existsSync(), isTrue);
-      await tester.tap(find.byKey(const ValueKey('tsIntroStart')));
-      await tester.pumpAndSettle();
-      expect(find.text('quiz-page'), findsOneWidget);
-      expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
-    });
-
-    testWidgets('无品种：猫狗回落物种名，OTHER 省略整段', (tester) async {
-      await pumpSheet(tester, const PetProfile(id: 1, name: 'Momo', cardToken: 't', petType: 'DOG'));
-      expect(find.text('Tes kepribadian Momo · Anjing'), findsOneWidget);
-    });
-
-    testWidgets('OTHER 且无品种 → 只有名字', (tester) async {
-      await pumpSheet(tester, const PetProfile(id: 1, name: 'Kiki', cardToken: 't', petType: 'OTHER', breed: '  '));
-      expect(find.text('Tes kepribadian Kiki'), findsOneWidget);
     });
   });
 

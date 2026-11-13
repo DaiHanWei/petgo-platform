@@ -23,6 +23,18 @@ void main() {
       expect(p.targetRef, '88');
     });
 
+    test('V1.4.2 评论点赞：commentId 字符串 / 数字都解析；缺键 / 非数字 → null', () {
+      expect(
+          parsePushExt('{"type":"CONTENT_LIKED","token":"t","targetRef":"55","commentId":"70"}')
+              .commentId,
+          70);
+      expect(parsePushExt('{"type":"CONTENT_LIKED","token":"t","targetRef":"55","commentId":70}')
+          .commentId, 70);
+      expect(parsePushExt('{"type":"CONTENT_LIKED","token":"t","targetRef":"55"}').commentId, isNull);
+      expect(parsePushExt('{"type":"CONTENT_LIKED","commentId":"x"}').commentId, isNull);
+      expect(parsePushExt('{"type":"CONTENT_LIKED","commentId":null}').commentId, isNull);
+    });
+
     test('targetRef 数字型 JSON 值也归一为字符串', () {
       final p = parsePushExt('{"type":"VET_REPLY","targetRef":88}');
       expect(p.targetRef, '88');
@@ -120,6 +132,41 @@ void main() {
       expect(
         pushClickLocation(hasToken: true, deepLink: '/me/coupons', type: 'COUPON_EXPIRING'),
         '/me/coupons',
+      );
+    });
+
+    test('V1.4.2 评论点赞推送（CONTENT_LIKED + commentId）→ 直达帖子并定位评论；帖子点赞照旧落通知中心', () {
+      // 端到端：ext → 深链 → 落点（与 _onNotificationClicked 同一串调用）。
+      final p = parsePushExt('{"type":"CONTENT_LIKED","token":"t","targetRef":"55","commentId":"70"}');
+      final deepLink = DeepLinkRoutes.pushPayloadToLocation(p.type, p.targetRef, commentId: p.commentId);
+      expect(
+        pushClickLocation(hasToken: true, deepLink: deepLink, type: p.type, commentId: p.commentId),
+        '/content/55?focus=comments&commentId=70',
+      );
+      // 帖子点赞（无 commentId）：不变，落通知中心。
+      final post = parsePushExt('{"type":"CONTENT_LIKED","token":"t","targetRef":"55"}');
+      expect(
+        pushClickLocation(
+            hasToken: true,
+            deepLink: DeepLinkRoutes.pushPayloadToLocation(post.type, post.targetRef),
+            type: post.type,
+            commentId: post.commentId),
+        DeepLinkRoutes.notificationsCenter,
+      );
+      // 只认 CONTENT_LIKED：别的类型带了 commentId 也不直达。
+      expect(
+        pushClickLocation(
+            hasToken: true, deepLink: '/content/55?focus=comments', type: 'CONTENT_COMMENTED', commentId: 70),
+        DeepLinkRoutes.notificationsCenter,
+      );
+      // 深链已兜底成通知中心（缺 targetRef）→ 照样落通知中心。
+      expect(
+        pushClickLocation(
+            hasToken: true,
+            deepLink: DeepLinkRoutes.pushPayloadToLocation('CONTENT_LIKED', null, commentId: 70),
+            type: 'CONTENT_LIKED',
+            commentId: 70),
+        DeepLinkRoutes.notificationsCenter,
       );
     });
 

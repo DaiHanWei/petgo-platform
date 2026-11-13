@@ -174,7 +174,14 @@ class _QrPaymentSheet extends StatefulWidget {
   State<_QrPaymentSheet> createState() => _QrPaymentSheetState();
 }
 
-class _QrPaymentSheetState extends State<_QrPaymentSheet> {
+class _QrPaymentSheetState extends State<_QrPaymentSheet> with WidgetsBindingObserver {
+  /// 单次到账查询的上限（修复线 2026-11-12）。
+  ///
+  /// 🔴 用户切去银行 App 付款时本 App 进后台，部分安卓机型会限制后台联网 —— 那一刻在途的查询会一直挂到
+  /// dio 的 30 秒读超时，而 [_inFlight] 期间后续轮询全部跳过：回到 App 后抽屉还停在「等待付款」，
+  /// 用户只好手动关掉才发现早已到账（生产网关回调中位 0.1 秒、最慢 2.3 秒，迟的从来不是后端）。
+  static const Duration pollTimeout = Duration(seconds: 8);
+
   Timer? _poll;
   Timer? _clock;
   bool _closing = false;
@@ -205,6 +212,7 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _poll = Timer.periodic(const Duration(seconds: 3), (_) => _tick());
     if (widget.expiresAt != null) {
       // 1 秒心跳只为刷新倒计时与判定过期（照 recharge_page 的 _displayTimer）；到账仍以轮询为准。
@@ -234,19 +242,31 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _clock?.cancel();
     super.dispose();
   }
 
+  /// 回到前台（付完款从银行 App 切回来）→ 立刻查一次，不等下一个 3 秒，也不被后台时挂住的那次查询挡住。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _tick(force: true);
+  }
+
   bool _inFlight = false;
 
-  Future<void> _tick() async {
-    if (_closing || _inFlight) return; // 慢网时不让多次轮询并发堆叠
+  /// 查询代次：强制重查时 +1，旧代次的结果到得再晚也只丢弃，不会把面板关错或卡住新一轮。
+  int _generation = 0;
+
+  Future<void> _tick({bool force = false}) async {
+    if (_closing) return;
+    if (_inFlight && !force) return; // 慢网时不让多次轮询并发堆叠
+    final int gen = ++_generation;
     _inFlight = true;
     try {
-      final bool paid = await widget.pollPaid();
-      if (!mounted || _closing) return;
+      final bool paid = await widget.pollPaid().timeout(pollTimeout);
+      if (!mounted || _closing || gen != _generation) return;
       if (paid) {
         _closing = true;
         _poll?.cancel();
@@ -254,7 +274,7 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
         Navigator.of(context).pop(true);
       }
     } on QrPaymentAborted catch (abort) {
-      if (!mounted || _closing) return;
+      if (!mounted || _closing || gen != _generation) return;
       _closing = true;
       _poll?.cancel();
       _clock?.cancel();
@@ -263,9 +283,9 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
       widget.onAborted?.call(abort);
       Navigator.of(context).pop(false);
     } catch (_) {
-      // 忽略单次轮询失败，下个 tick 再试。
+      // 忽略单次轮询失败（含超时），下个 tick 再试。
     } finally {
-      _inFlight = false;
+      if (gen == _generation) _inFlight = false; // 旧代次结束不能放开新代次的闸
     }
   }
 
@@ -340,6 +360,9 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
       payload: _payload,
       orderRef: widget.orderRef,
       expired: _expired,
+      // 修复线（2026-11-12 产品）：抽屉不显示「Waiting for payment…」转圈行 —— 到账后抽屉自动关闭，
+      // 一直转的圈反而让人以为卡住了。充值页 / 问诊付款页仍沿用组件默认（显示）。
+      showWaiting: false,
       expiredBody: widget.expiredBody,
       failed: _failed,
       onRetry: (_failed && !_expired && !_retrying && !_retryClosed && widget.onRetryCode != null) ? _retryCode : null,

@@ -16,12 +16,14 @@ class NotificationDeepLink {
   /// - 所有类型的通知行都带 token（6.1 `NotificationService.send` 生成），故无论固定目标类
   ///   （生日/纪念日/里程碑，location 不依赖 token）还是 token 寻址类，**都按 token 标记已读**。
   /// - 标记失败不阻断跳转（与列表点击同口径）。
+  /// - [commentId]：评论点赞（`CONTENT_LIKED`）被赞的评论 id → location 带评论锚点（V1.4.2）。
   static Future<String> open(
     WidgetRef ref, {
     required String? type,
     required String? token,
     String? targetRef,
     bool commentAnchor = false,
+    int? commentId,
   }) {
     return _open(
       markRead: (t) => ref.read(notificationRepositoryProvider).markRead(t),
@@ -30,6 +32,7 @@ class NotificationDeepLink {
       token: token,
       targetRef: targetRef,
       commentAnchor: commentAnchor,
+      commentId: commentId,
     );
   }
 
@@ -42,6 +45,7 @@ class NotificationDeepLink {
     required String? token,
     String? targetRef,
     bool commentAnchor = false,
+    int? commentId,
   }) {
     return _open(
       markRead: (t) => ref.read(notificationRepositoryProvider).markRead(t),
@@ -50,6 +54,7 @@ class NotificationDeepLink {
       token: token,
       targetRef: targetRef,
       commentAnchor: commentAnchor,
+      commentId: commentId,
     );
   }
 
@@ -60,6 +65,7 @@ class NotificationDeepLink {
     required String? token,
     String? targetRef,
     bool commentAnchor = false,
+    int? commentId,
   }) async {
     if (token != null && token.isNotEmpty) {
       try {
@@ -70,6 +76,7 @@ class NotificationDeepLink {
       }
     }
     // 标记已读用 token；跳转用 targetRef（id 寻址类目标页按数字 id 解析，不能用随机 token）。
-    return DeepLinkRoutes.pushPayloadToLocation(type, targetRef, commentAnchor: commentAnchor);
+    return DeepLinkRoutes.pushPayloadToLocation(type, targetRef,
+        commentAnchor: commentAnchor, commentId: commentId);
   }
 }

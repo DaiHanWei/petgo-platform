@@ -879,8 +879,9 @@ class _ProductDetailPageV3State extends ConsumerState<ProductDetailPageV3> {
           children: [
             Text(l10n.tokoDetailSectionTitle, style: ShopText.sectionTitle),
             const SizedBox(height: 7),
+            // 修复线 2026-11-13（实机反馈）：原 11 号字 + 1.75 倍行距，字太小、行距比字还显眼；13/1.5 仍嫌小、挤 → 15/1.6（与「Ship to」等行同级）。
             Text(stripShopHtml(d.detailHtml!),
-                style: ShopText.body.copyWith(fontSize: 11, height: 1.75)),
+                style: ShopText.body.copyWith(fontSize: 15, height: 1.6)),
           ],
         ),
       );
@@ -1077,8 +1078,10 @@ class _ProductDetailPageV3State extends ConsumerState<ProductDetailPageV3> {
 /// 后台富文本 → 纯文本（v2 `_stripHtml` 原样）：块级标签换成换行，不引富文本渲染器（XSS 面 + 排版控制权）。
 String stripShopHtml(String html) => html
     .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+    // 列表项：开标签起新行、闭标签不再补换行 —— 否则「</li><li>」成了两次换行，每条之间空一行（实机反馈）。
     .replaceAll(RegExp(r'<li[^>]*>', caseSensitive: false), '\n• ')
-    .replaceAll(RegExp(r'</(p|div|li|h[1-6]|tr|ul|ol)\s*>', caseSensitive: false), '\n')
+    .replaceAll(RegExp(r'</(p|div|h[1-6]|tr|ul|ol)\s*>', caseSensitive: false), '\n')
+    .replaceAll(RegExp(r'</li\s*>', caseSensitive: false), '')
     .replaceAll(RegExp(r'<[^>]*>'), ' ')
     .replaceAll('&nbsp;', ' ')
     .replaceAll('&amp;', '&')
@@ -1088,6 +1091,8 @@ String stripShopHtml(String html) => html
     .replaceAll(RegExp(r'[ \t]+'), ' ')
     .replaceAll(RegExp(r' *\n *'), '\n')
     .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+    // 列表项之间（含前一段与第一条之间）不留空行。
+    .replaceAll(RegExp(r'\n\n(?=• )'), '\n')
     .trim();
 
 /// 图上的购物车按钮（带件数角标；加购成功后 +N，B11）。

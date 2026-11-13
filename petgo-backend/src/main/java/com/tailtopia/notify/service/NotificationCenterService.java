@@ -252,7 +252,7 @@ public class NotificationCenterService {
                 continue;
             }
             anyVisible = true;
-            if (n.getType() == NotificationType.CONTENT_COMMENTED && n.getCommentId() != null) {
+            if (showsCommentText(n)) {
                 commentIds.add(n.getCommentId());
             } else if (n.getType() == NotificationType.USER_FOLLOWED) {
                 followerIds.add(s.get().latestActorId());
@@ -404,7 +404,7 @@ public class NotificationCenterService {
         Boolean iFollow = null;
         Boolean followsMe = null;
         boolean bodyDeleted = false;
-        if (n.getType() == NotificationType.CONTENT_COMMENTED && n.getCommentId() != null) {
+        if (showsCommentText(n)) {
             NotificationCommentSnapshot c = snapshots.get(n.getCommentId());
             bodyDeleted = c == null || c.gone();
             body = bodyDeleted ? copy.commentDeleted(locale) : c.body();
@@ -416,6 +416,18 @@ public class NotificationCenterService {
         // PET_FOLLOWED 不带回关字段（actorIFollow / actorFollowsMe 只对 USER_FOLLOWED），App 据此不显示回关按钮
         return NotificationItem.rendered(n, title, body, s.latestActorId(), s.latestNickname(), s.latestToken(),
                 s.total(), iFollow, followsMe, bodyDeleted, petName);
+    }
+
+    /**
+     * 条目正文要不要现查评论原文：评论 / 回复通知（{@code CONTENT_COMMENTED}），以及修复线的「赞了你的评论」
+     * （{@code CONTENT_LIKED} + {@link Notification#VARIANT_COMMENT}，显示被赞的那条评论）。帖子点赞没有正文。
+     */
+    private static boolean showsCommentText(Notification n) {
+        if (n.getCommentId() == null) {
+            return false;
+        }
+        return n.getType() == NotificationType.CONTENT_COMMENTED
+                || (n.getType() == NotificationType.CONTENT_LIKED && Notification.VARIANT_COMMENT.equals(n.getVariant()));
     }
 
     private static String petNameOfVariant(Notification n, Map<Long, String> names) {

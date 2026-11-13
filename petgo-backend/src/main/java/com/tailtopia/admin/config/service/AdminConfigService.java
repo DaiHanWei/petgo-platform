@@ -366,6 +366,18 @@ public class AdminConfigService {
         require(form.authorLevelBoost() >= 1.0 && form.authorLevelBoost() <= 2.0,
                 "作者等级加权须在 1–2（1 = 不加权；小于 1 就成了降权）",
                 "admin.err.config.authorLevelBoostRange");
+        // 修复线（2026-11-12）：与 V20261112_1815 的 CHECK 同一口径，这里给人话理由（CHECK 兜底会以 500 露出）。
+        require(form.qualityPoolDays() >= 1 && form.qualityPoolDays() <= 180,
+                "优质老帖回看天数须在 1–180", "admin.err.config.qualityPoolDaysRange");
+        require(form.qualityPoolSize() >= 0 && form.qualityPoolSize() <= 2000,
+                "优质老帖条数须在 0–2000（0 = 关闭；过大会拖慢每次刷新）", "admin.err.config.qualityPoolSizeRange");
+        require(form.interactedCooldownDays() >= 0 && form.interactedCooldownDays() <= 30,
+                "互动后不再推送天数须在 0–30（0 = 关闭）", "admin.err.config.interactedCooldownDaysRange");
+        // 看过暂不出现靠曝光记录判断，而曝光记录只保留「曝光窗口」那么久 —— 超出窗口的小时数等于没生效。
+        require(form.seenHideHours() >= 0 && form.seenHideHours() <= 240
+                        && form.seenHideHours() <= form.seenWindowDays() * 24,
+                "看过后暂不出现小时数须在 0–240，且不超过曝光窗口（天 × 24）",
+                "admin.err.config.seenHideHoursRange");
 
         AttributeTemplate.Rejection attrProblem = AttributeTemplate.rejectUnusableQuotasDetailed(
                 form.attrFunQuota(), form.attrEduQuota(), form.attrLifeQuota(), form.windowSize());
@@ -402,6 +414,11 @@ public class AdminConfigService {
         diff(logs, t, "species_main_quota", c.getSpeciesMainQuota(), form.speciesMainQuota(), adminId);
         diff(logs, t, "species_other_quota", c.getSpeciesOtherQuota(), form.speciesOtherQuota(), adminId);
         diff(logs, t, "species_general_quota", c.getSpeciesGeneralQuota(), form.speciesGeneralQuota(), adminId);
+        diff(logs, t, "quality_pool_days", c.getQualityPoolDays(), form.qualityPoolDays(), adminId);
+        diff(logs, t, "quality_pool_size", c.getQualityPoolSize(), form.qualityPoolSize(), adminId);
+        diff(logs, t, "interacted_cooldown_days", c.getInteractedCooldownDays(), form.interactedCooldownDays(),
+                adminId);
+        diff(logs, t, "seen_hide_hours", c.getSeenHideHours(), form.seenHideHours(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不审计（沿用本类既有口径）。
         }
@@ -420,6 +437,10 @@ public class AdminConfigService {
         c.setSpeciesMainQuota(form.speciesMainQuota());
         c.setSpeciesOtherQuota(form.speciesOtherQuota());
         c.setSpeciesGeneralQuota(form.speciesGeneralQuota());
+        c.setQualityPoolDays(form.qualityPoolDays());
+        c.setQualityPoolSize(form.qualityPoolSize());
+        c.setInteractedCooldownDays(form.interactedCooldownDays());
+        c.setSeenHideHours(form.seenHideHours());
         feedRankRepo.save(c);
         commit(logs, adminId, "FEED_RANK", "feed_rank_config");
     }

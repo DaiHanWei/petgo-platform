@@ -1184,9 +1184,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         // 首页评论按钮沿用同一个名字 —— 两侧同名是硬要求，且接通后通知那条链路也跟着好了。
         //
         // ⚠️ 别与 `/profile/health?focus=<记录编号>` 混淆：同名不同义，路由不同不冲突。
+        //
+        // `?commentId=` → 评论锚点（V1.4.2 评论点赞通知）：评论区把那条评论所在楼置顶并短暂高亮。
+        // 非数字 → null（照常只滚到评论区）。
         builder: (c, s) => ContentDetailPage(
           postId: int.parse(s.pathParameters['id']!),
           focusComments: s.uri.queryParameters['focus'] == 'comments',
+          anchorCommentId: int.tryParse(s.uri.queryParameters['commentId'] ?? ''),
         ),
       ),
       // 用户公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118）。shell 外顶层 push（隐藏 Tab Bar）。

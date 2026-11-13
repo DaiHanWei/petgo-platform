@@ -210,12 +210,18 @@ public class LiveTencentImClient implements TencentImClient {
     @Override
     public void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
             String targetRef) {
+        pushOffline(imUserId, title, body, deepLinkType, deepLinkToken, targetRef, null);
+    }
+
+    @Override
+    public void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
+            String targetRef, Long commentId) {
         // 推送接入（2026-08-07）：/v4/timpush/batch 指定 UserID 推送（1~500/批，此处单收件人）。
         // 不进 IM 会话、默认不增未读；离线经厂商通道（FCM 证书 9088 / APNs 17703·17704）落通知栏。
         // 前置：收件人须已注册过 TIMPush（客户端 registerPush）；未注册用户腾讯侧静默不投，无副作用。
         pushLimited(buildBatchPushBody(props.getAdminIdentifier(),
                 ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
-                imUserId, title, body, deepLinkType, deepLinkToken, targetRef));
+                imUserId, title, body, deepLinkType, deepLinkToken, targetRef, commentId));
     }
 
     /**
@@ -245,12 +251,23 @@ public class LiveTencentImClient implements TencentImClient {
      */
     static Map<String, Object> buildBatchPushBody(String fromAccount, int msgRandom, String imUserId,
             String title, String body, String deepLinkType, String deepLinkToken, String targetRef) {
+        return buildBatchPushBody(fromAccount, msgRandom, imUserId, title, body, deepLinkType, deepLinkToken,
+                targetRef, null);
+    }
+
+    /** 同上，Ext 另带可选 {@code commentId}（数字，修复线「赞了你的评论」推送定位用）。 */
+    static Map<String, Object> buildBatchPushBody(String fromAccount, int msgRandom, String imUserId,
+            String title, String body, String deepLinkType, String deepLinkToken, String targetRef,
+            Long commentId) {
         StringBuilder ext = new StringBuilder("{\"type\":\"").append(jsonEscape(deepLinkType)).append('"');
         if (deepLinkToken != null && !deepLinkToken.isBlank()) {
             ext.append(",\"token\":\"").append(jsonEscape(deepLinkToken)).append('"');
         }
         if (targetRef != null && !targetRef.isBlank()) {
             ext.append(",\"targetRef\":\"").append(jsonEscape(targetRef)).append('"');
+        }
+        if (commentId != null) {
+            ext.append(",\"commentId\":\"").append(commentId).append('"');
         }
         ext.append('}');
         return Map.of(

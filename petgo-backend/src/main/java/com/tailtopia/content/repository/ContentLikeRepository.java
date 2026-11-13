@@ -140,4 +140,10 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
     /** 内容删除级联：物理清该帖全部点赞（点赞无保留价值，Story 3.6）。 */
     @Transactional
     void deleteByPostId(long postId);
+
+    /**
+     * 本人在 {@code since} 之后点过赞的帖子 id（修复线：Discover 互动冷却）。走 {@code idx_content_likes_user_created}。
+     */
+    @Query("SELECT DISTINCT l.postId FROM ContentLike l WHERE l.userId = :userId AND l.createdAt >= :since")
+    List<Long> findPostIdsLikedSince(@Param("userId") long userId, @Param("since") java.time.Instant since);
 }

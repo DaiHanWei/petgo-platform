@@ -10,6 +10,7 @@ import '../../features/mention/domain/mention_context.dart';
 import '../../features/social/presentation/widgets/follow_button.dart';
 import '../../l10n/app_localizations.dart';
 import '../rich_text/rich_body_text.dart';
+import '../utils/preview_text.dart';
 import 'feed_image.dart';
 import 'content_tag_chip.dart';
 import 'user_tag_row.dart';
@@ -323,22 +324,35 @@ class MasonryCard extends StatelessWidget {
                     //    TextSpan 上的 recognizer 命中更深，同一次点击只会有一个赢家，
                     //    所以点 @ 不会顺带把详情页也推出来（有测试钉着这一条）。
                     // V1.4.2 Story 4.4：话题同理（点话题进话题页、点其余区域仍进帖子）。
-                    child: onTapMention == null && onTapTopic == null
-                        ? Text(item.body!,
-                            style: AppTypography.body,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis)
-                        : RichBodyText(
-                            text: item.body!,
-                            mentions: item.mentions,
-                            topicNames: item.topicNames,
-                            onTapUser: onTapMention,
-                            onTapTopic: onTapTopic,
-                            mentionContext: MentionContext.post,
-                            style: AppTypography.body,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    //
+                    // 修复线 2026-11-13：截断点落在换行符上时系统不画「…」，读者以为帖子写完了 ——
+                    // 先按实际宽度判一次，必要时补上「…」（见 [previewTextWithEllipsis]）。
+                    child: LayoutBuilder(builder: (context, constraints) {
+                      final body = previewTextWithEllipsis(
+                        item.body!,
+                        style: DefaultTextStyle.of(context).style.merge(AppTypography.body),
+                        maxWidth: constraints.maxWidth,
+                        maxLines: 2,
+                        textScaler: MediaQuery.textScalerOf(context),
+                        textDirection: Directionality.of(context),
+                      );
+                      return onTapMention == null && onTapTopic == null
+                          ? Text(body,
+                              style: AppTypography.body,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis)
+                          : RichBodyText(
+                              text: body,
+                              mentions: item.mentions,
+                              topicNames: item.topicNames,
+                              onTapUser: onTapMention,
+                              onTapTopic: onTapTopic,
+                              mentionContext: MentionContext.post,
+                              style: AppTypography.body,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            );
+                    }),
                   ),
               ],
             ),

@@ -49,7 +49,7 @@
             <span th:text="${feedRank.p95RecomputedAt} != null ? ${@adminTime.wib(feedRank.p95RecomputedAt)} : #{admin.algo.p95Never}">-</span>
           </p>
 
-          <!-- AC2：15 项一行一项、两栏排布填满卡宽（.cfg-grid-2） -->
+          <!-- AC2：19 项一行一项、两栏排布填满卡宽（.cfg-grid-2）；修复线加 4 项 -->
           <div class="cfg-grid-2">
             <label class="field"><span th:text="#{admin.algo.freshnessWeight}">新鲜度权重（默认 0.6）</span>
               <input class="inp field-full" type="number" step="0.01" min="0" name="freshnessWeight" th:value="${feedRank.freshnessWeight}" th:disabled="${!canEdit}"/></label>
@@ -85,6 +85,16 @@
               <input class="inp field-full" type="number" min="0" name="speciesOtherQuota" th:value="${feedRank.speciesOtherQuota}" th:disabled="${!canEdit}"/></label>
             <label class="field"><span th:text="#{admin.algo.speciesGeneralQuota}">物种配比 · 通用（默认 2）</span>
               <input class="inp field-full" type="number" min="0" name="speciesGeneralQuota" th:value="${feedRank.speciesGeneralQuota}" th:disabled="${!canEdit}"/></label>
+            <!-- 修复线（2026-11-12）：Discover 推荐流——优质老帖候选池 / 互动冷却 / 看过暂不出现（0 = 关闭，除回看天数） -->
+            <p class="hint cfg-grid-full" data-notice="pool-rules" th:utext="#{admin.algo.poolRulesNote}">🛡 以下 4 项只影响 Discover 推荐流。</p>
+            <label class="field"><span th:text="#{admin.algo.qualityPoolDays}">优质老帖：回看天数（默认 30）</span>
+              <input class="inp field-full" type="number" min="1" max="180" name="qualityPoolDays" th:value="${feedRank.qualityPoolDays}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.algo.qualityPoolSize}">优质老帖：条数（默认 300；0 = 关闭）</span>
+              <input class="inp field-full" type="number" min="0" max="2000" name="qualityPoolSize" th:value="${feedRank.qualityPoolSize}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.algo.interactedCooldownDays}">点赞 / 评论后不再推送（天，默认 3；0 = 关闭）</span>
+              <input class="inp field-full" type="number" min="0" max="30" name="interactedCooldownDays" th:value="${feedRank.interactedCooldownDays}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.algo.seenHideHours}">看过后暂不出现（小时，默认 24；0 = 关闭）</span>
+              <input class="inp field-full" type="number" min="0" max="240" name="seenHideHours" th:value="${feedRank.seenHideHours}" th:disabled="${!canEdit}"/></label>
             <!-- AC1：右栏底部「不对普通运营开放 / 生效范围」提醒（占右栏一格，紧跟 15 项之后） -->
             <p class="hint cfg-grid-right" data-notice="algo-scope" th:utext="#{admin.v130.algo.scope}">🛡 不对普通运营开放；改这里无需发版，下一次刷新即生效。</p>
           </div>

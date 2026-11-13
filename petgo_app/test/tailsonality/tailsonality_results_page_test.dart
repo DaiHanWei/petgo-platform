@@ -40,6 +40,7 @@ void main() {
       {List<TailsonalityResult>? items, bool fails = false, bool petFails = false}) async {
     final router = GoRouter(initialLocation: TailsonalityRoutes.results, routes: [
       GoRoute(path: TailsonalityRoutes.results, builder: (c, s) => const TailsonalityResultsPage()),
+      GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const Scaffold(body: Text('quiz-page'))),
       GoRoute(
         path: TailsonalityRoutes.resultPattern,
         builder: (c, s) {
@@ -103,13 +104,13 @@ void main() {
     expect((pushedExtra! as TailsonalityResult).token, 'b');
   });
 
-  testWidgets('空列表 → EmptyState（Mulai Tes → 说明抽屉），无吸底重测', (tester) async {
+  testWidgets('空列表 → EmptyState（Mulai Tes → 直接进答题页），无吸底重测', (tester) async {
     await pump(tester, items: const []);
     expect(find.text('Belum ada hasil tes'), findsOneWidget);
     expect(find.byKey(const ValueKey('tsResultsRetake')), findsNothing);
     await tester.tap(find.text('Mulai Tes'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
+    expect(find.text('quiz-page'), findsOneWidget);
   });
 
   testWidgets('失败 → 通用失败文案 + 重试', (tester) async {
@@ -119,18 +120,7 @@ void main() {
     expect(find.text(l10n.detailNetworkError), findsOneWidget);
   });
 
-  testWidgets('空态 Mulai Tes：档案取不到 → 提示、不开抽屉', (tester) async {
-    await pump(tester, items: const [], petFails: true);
-    await tester.tap(find.text('Mulai Tes'));
-    await tester.pump();
-    await tester.pump();
-    final l10n = await AppLocalizations.delegate.load(const Locale('id'));
-    expect(find.text(l10n.detailNetworkError), findsOneWidget);
-    expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
-    await tester.pumpAndSettle(const Duration(seconds: 5));
-  });
-
-  testWidgets('吸底「Tes Ulang」→ 同一重测流程：确认 → 埋点 → 说明抽屉', (tester) async {
+  testWidgets('吸底「Tes Ulang」→ 同一重测流程：确认 → 埋点 → 直接进答题页', (tester) async {
     await pump(tester, items: three);
     await tester.tap(find.byKey(const ValueKey('tsResultsRetake')));
     await tester.pumpAndSettle();
@@ -138,7 +128,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('confirmSheetConfirm')));
     await tester.pumpAndSettle();
     expect(events.where((e) => e.$1 == 'tailsonality_retake_confirmed'), hasLength(1));
-    expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
+    expect(find.text('quiz-page'), findsOneWidget);
   });
 
   test('源码：结果页与列表页都走 startTailsonalityRetake，且都不再各自引用 kTsRetakeDialog', () {

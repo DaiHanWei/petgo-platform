@@ -105,6 +105,77 @@ class CommentQueryServiceTest {
         assertThat(service.notificationSnapshots(List.of())).isEmpty();
     }
 
+    // ===== 修复线：评论定位（通知点开定位到某条评论）=====
+
+    private Comment visibleComment(long id, Long parentId, long authorId) {
+        Comment c = comment(id, parentId, authorId, Instant.now());
+        setField(c, Comment.class, "moderationStatus", com.tailtopia.content.domain.CommentModerationStatus.VISIBLE);
+        when(comments.findById(id)).thenReturn(Optional.of(c));
+        return c;
+    }
+
+    @Test
+    void anchorOfTopLevelReturnsItWithFirstThreeReplies() {
+        visibleComment(10L, null, 5L);
+        List<Comment> replies = IntStream.rangeClosed(1, 5)
+                .mapToObj(i -> comment(100L + i, 10L, 6L, Instant.now())).toList();
+        when(comments.findRepliesForParents(eq(List.of(10L)), anyBoolean(), any(), anyLong())).thenReturn(replies);
+
+        var a = service.anchor(10L, 9L);
+
+        assertThat(a.postId()).isEqualTo(1L);
+        assertThat(a.targetId()).isEqualTo(10L);
+        assertThat(a.thread().id()).isEqualTo(10L);
+        assertThat(a.thread().replyCount()).isEqualTo(5);
+        assertThat(a.thread().replies()).extracting(r -> r.id()).containsExactly(101L, 102L, 103L);
+    }
+
+    @Test
+    void anchorOfReplyReturnsParentWithOnlyTheTargetInline() {
+        visibleComment(10L, null, 5L);
+        visibleComment(105L, 10L, 6L);
+        List<Comment> replies = IntStream.rangeClosed(1, 5)
+                .mapToObj(i -> comment(100L + i, 10L, 6L, Instant.now())).toList();
+        when(comments.findRepliesForParents(eq(List.of(10L)), anyBoolean(), any(), anyLong())).thenReturn(replies);
+
+        var a = service.anchor(105L, 9L);
+
+        assertThat(a.targetId()).isEqualTo(105L);
+        assertThat(a.thread().id()).isEqualTo(10L);
+        assertThat(a.thread().replyCount()).as("总数照旧，「查看全部」仍可展开").isEqualTo(5);
+        assertThat(a.thread().replies()).extracting(r -> r.id()).containsExactly(105L);
+    }
+
+    @Test
+    void anchorIs404WhenTargetDeletedOrUnderReviewForOthers() {
+        Comment deleted = visibleComment(10L, null, 5L);
+        setField(deleted, Comment.class, "deletedAt", Instant.now());
+        assertThatThrownBy(() -> service.anchor(10L, 9L)).isInstanceOf(AppException.class);
+
+        Comment pending = visibleComment(11L, null, 5L);
+        setField(pending, Comment.class, "moderationStatus",
+                com.tailtopia.content.domain.CommentModerationStatus.UNDER_REVIEW);
+        assertThatThrownBy(() -> service.anchor(11L, 9L)).isInstanceOf(AppException.class);
+        // 本人看自己审核中的评论：可以定位
+        when(comments.findRepliesForParents(anyList(), anyBoolean(), any(), anyLong())).thenReturn(List.of());
+        assertThat(service.anchor(11L, 5L).targetId()).isEqualTo(11L);
+    }
+
+    @Test
+    void anchorIs404WhenParentHiddenForViewer() {
+        visibleComment(10L, null, 5L);
+        visibleComment(105L, 10L, 6L);
+        when(hideRelations.isHidden(9L, 5L)).thenReturn(true); // viewer 隐藏了一级作者 → 整串不展示
+        assertThatThrownBy(() -> service.anchor(105L, 9L)).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void anchorIs404WhenPostNotVisible() {
+        visibleComment(10L, null, 5L);
+        when(posts.findById(anyLong())).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.anchor(10L, 9L)).isInstanceOf(AppException.class);
+    }
+
     private static Comment comment(long id, Long parentId, long authorId, Instant ts) {
         Comment c = newComment();
         setField(c, Comment.class, "id", id);

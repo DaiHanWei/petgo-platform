@@ -20,6 +20,7 @@ class NotificationItem {
     this.bodyDeleted = false,
     this.opsTarget,
     this.petName,
+    this.commentId,
   });
 
   /// 后端拼好文案的互动类型（V1.3.4 follow · Story 3.3 / 3.4）。
@@ -72,6 +73,13 @@ class NotificationItem {
   /// 下发，标题里与 [actorName] 一起加粗；其余类型 / 宠物已删缺键 → null。
   final String? petName;
 
+  /// 被点赞的那条评论 id（V1.4.2 评论点赞通知）：**只有评论点赞**条目下发；type 仍是 `CONTENT_LIKED`
+  /// （与帖子点赞同型，老 App 照常渲染后端标题），[targetRef] 仍是帖子 id。帖子点赞 / 其它类型 = null。
+  final int? commentId;
+
+  /// 评论点赞条目（`CONTENT_LIKED` + [commentId]）：点开进帖子并定位到那条评论。
+  bool get isCommentLike => type == 'CONTENT_LIKED' && commentId != null;
+
   /// 评论已删除：[body] 是后端给的「评论已删除」占位文案，按稿显示灰色斜体（缺键 = false）。
   final bool bodyDeleted;
 
@@ -97,6 +105,8 @@ class NotificationItem {
         actorFollowsMe: json['actorFollowsMe'] as bool?,
         bodyDeleted: json['bodyDeleted'] == true,
         petName: json['petName'] as String?,
+        // 缺键 / 非数字容错（旧后端不下发 → null，按帖子点赞处理）。
+        commentId: (json['commentId'] as num?)?.toInt(),
         opsTarget: json['opsTarget'] is Map
             ? OpsTarget.fromJson((json['opsTarget'] as Map).cast<String, dynamic>())
             : null,

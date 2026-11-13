@@ -355,4 +355,11 @@ public interface CommentRepository extends JpaRepository<Comment, Long>,
     /** 后台内容详情：一批一级评论的全部二级回复（含已删），时间正序；service 端裁「收起前 3 条」。 */
     java.util.List<Comment> findByParentIdInOrderByCreatedAtAscIdAsc(
             java.util.Collection<Long> parentIds);
+
+    /**
+     * 本人在 {@code since} 之后评论 / 回复过的帖子 id（修复线：Discover 互动冷却）。
+     * 含已删、审核中的评论 —— 「评论过」是用户的行为，与评论现状无关。走 {@code idx_comments_author_created}。
+     */
+    @Query("SELECT DISTINCT c.postId FROM Comment c WHERE c.authorId = :userId AND c.createdAt >= :since")
+    List<Long> findPostIdsCommentedSince(@Param("userId") long userId, @Param("since") java.time.Instant since);
 }

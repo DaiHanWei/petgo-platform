@@ -102,10 +102,12 @@ class PushGateIntegrationTest extends ApiIntegrationTest {
         assertThat(badge(b) - before).isEqualTo(1);
         assertThat(redis.hasKey(NotificationService.LIKE_PUSH_KEY_PREFIX + postId)).isFalse();
         verify(pusher, never()).pushToUser(eq(b.getId()), any(), any(), any(), any(), any());
+        verify(pusher, never()).pushToUser(eq(b.getId()), any(), any(), any(), any(), any(), any());
 
         unmute(b, "LIKE");
         like(c, postId);
-        verify(pusher, times(1)).pushToUser(eq(b.getId()), any(), any(), eq("CONTENT_LIKED"), any(), any());
+        // 修复线：互动类推送走带 commentId 的重载（帖子点赞传 null）
+        verify(pusher, times(1)).pushToUser(eq(b.getId()), any(), any(), eq("CONTENT_LIKED"), any(), any(), any());
     }
 
     @Test
@@ -121,7 +123,7 @@ class PushGateIntegrationTest extends ApiIntegrationTest {
 
         notifications.sendInteraction(b.getId(), NotificationType.CONTENT_COMMENTED, a.getId(), null, "1", null,
                 null, "halo");
-        verify(pusher, times(1)).pushToUser(eq(b.getId()), any(), any(), eq("CONTENT_COMMENTED"), any(), any());
+        verify(pusher, times(1)).pushToUser(eq(b.getId()), any(), any(), eq("CONTENT_COMMENTED"), any(), any(), any());
         assertThat(count(b, "CONTENT_MENTIONED")).isEqualTo(1);
     }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -161,5 +162,75 @@ void main() {
     // 「付款已不可能完成」与「我先关掉待会再付」是两件事：混在一起就会把
     // 「关个面板」显示成「订单没了」。这条用例是那道分界线。
     expect(abortCalls, 0);
+  });
+
+  // ================================================================
+  // 修复线（2026-11-12）：付完款从银行 App 切回来，抽屉仍停在「等待付款」
+  // ================================================================
+
+  Future<void> openSheet(WidgetTester tester, Future<bool> Function() poll, void Function(bool?) done) async {
+    tester.platformDispatcher.localesTestValue = const [Locale('id')];
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: Builder(
+          builder: (ctx) => ElevatedButton(
+            onPressed: () async => done(await showQrPaymentSheet(ctx, payload: 'QR-DATA', pollPaid: poll)),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+  }
+
+  testWidgets('后台时挂住的那次查询不再挡路：回到前台立刻重查，到账即关闭返回 true', (tester) async {
+    bool? outcome;
+    int calls = 0;
+    final hang = Completer<bool>(); // 第一次查询永远不返回（模拟后台被限网）
+    await openSheet(tester, () {
+      calls++;
+      return calls == 1 ? hang.future : Future.value(true);
+    }, (v) => outcome = v);
+
+    await tester.pump(const Duration(seconds: 3)); // 第一次轮询发出并挂住
+    expect(calls, 1);
+    await tester.pump(const Duration(seconds: 3)); // 挂住期间的 tick 被闸住，不并发
+    expect(calls, 1);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); // 从银行 App 切回
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(calls, 2);
+    expect(outcome, isTrue);
+    expect(find.byKey(const ValueKey('qrPayImage')), findsNothing);
+    hang.complete(false); // 迟到的旧结果被丢弃，不报错
+    await tester.pump();
+  });
+
+  testWidgets('单次查询超过 8 秒即放弃，下一轮照常查到到账', (tester) async {
+    bool? outcome;
+    int calls = 0;
+    await openSheet(tester, () {
+      calls++;
+      return calls == 1 ? Completer<bool>().future : Future.value(true);
+    }, (v) => outcome = v);
+
+    await tester.pump(const Duration(seconds: 3)); // 第 1 次挂住
+    await tester.pump(const Duration(seconds: 8)); // 超时放弃
+    await tester.pump(const Duration(seconds: 3)); // 下一轮
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(calls, greaterThanOrEqualTo(2));
+    expect(outcome, isTrue);
   });
 }

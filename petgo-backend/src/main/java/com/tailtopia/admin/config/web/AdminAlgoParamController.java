@@ -93,7 +93,12 @@ public class AdminAlgoParamController {
             new AlgoField("attr_life_quota", "attrLifeQuota", "admin.algo.attrLifeQuota"),
             new AlgoField("species_main_quota", "speciesMainQuota", "admin.algo.speciesMainQuota"),
             new AlgoField("species_other_quota", "speciesOtherQuota", "admin.algo.speciesOtherQuota"),
-            new AlgoField("species_general_quota", "speciesGeneralQuota", "admin.algo.speciesGeneralQuota"));
+            new AlgoField("species_general_quota", "speciesGeneralQuota", "admin.algo.speciesGeneralQuota"),
+            // 修复线（2026-11-12）：优质老帖候选池 / 互动冷却 / 看过暂不出现
+            new AlgoField("quality_pool_days", "qualityPoolDays", "admin.algo.qualityPoolDays"),
+            new AlgoField("quality_pool_size", "qualityPoolSize", "admin.algo.qualityPoolSize"),
+            new AlgoField("interacted_cooldown_days", "interactedCooldownDays", "admin.algo.interactedCooldownDays"),
+            new AlgoField("seen_hide_hours", "seenHideHours", "admin.algo.seenHideHours"));
 
     /** 422 错误码 → 卡内字段名（模板 D 行内红边，同 6.3 {@code AdminConfigController.ERROR_FIELDS}）；校验本身一行不动。 */
     static final String ERROR_FIELDS = "{"
@@ -105,6 +110,10 @@ public class AdminAlgoParamController {
             + "\"admin.err.config.throttleFactorRange\":\"throttleFactor\","
             + "\"admin.err.config.authorLevelBoostRange\":\"authorLevelBoost\","
             + "\"admin.err.config.seenWindowDaysMin\":\"seenWindowDays\","
+            + "\"admin.err.config.qualityPoolDaysRange\":\"qualityPoolDays\","
+            + "\"admin.err.config.qualityPoolSizeRange\":\"qualityPoolSize\","
+            + "\"admin.err.config.interactedCooldownDaysRange\":\"interactedCooldownDays\","
+            + "\"admin.err.config.seenHideHoursRange\":\"seenHideHours,seenWindowDays\","
             + "\"admin.err.config.attrWindowTooSmall\":\"windowSize\","
             + "\"admin.err.config.attrQuotaNegative\":\"attrFunQuota,attrEduQuota,attrLifeQuota\","
             + "\"admin.err.config.attrQuotaSumMismatch\":\"attrFunQuota,attrEduQuota,attrLifeQuota,windowSize\","
@@ -161,12 +170,22 @@ public class AdminAlgoParamController {
             @RequestParam int windowSize, @RequestParam int attrFunQuota,
             @RequestParam int attrEduQuota, @RequestParam int attrLifeQuota,
             @RequestParam int speciesMainQuota, @RequestParam int speciesOtherQuota,
-            @RequestParam int speciesGeneralQuota, HxRequest hx, Model model, HttpServletResponse response,
+            @RequestParam int speciesGeneralQuota,
+            // 修复线 4 项可缺省：发版那一刻仍开着旧页面的运营提交时不带它们 —— 缺省 = 保持当前值，而不是 400。
+            @RequestParam(required = false) Integer qualityPoolDays,
+            @RequestParam(required = false) Integer qualityPoolSize,
+            @RequestParam(required = false) Integer interactedCooldownDays,
+            @RequestParam(required = false) Integer seenHideHours,
+            HxRequest hx, Model model, HttpServletResponse response,
             RedirectAttributes flash) {
         FeedRankForm form = new FeedRankForm(freshnessWeight, interactionWeight, commentWeight,
                 exposureDecay, shuffleStrength, throttleFactor, authorLevelBoost, seenWindowDays, windowSize,
                 attrFunQuota,
-                attrEduQuota, attrLifeQuota, speciesMainQuota, speciesOtherQuota, speciesGeneralQuota);
+                attrEduQuota, attrLifeQuota, speciesMainQuota, speciesOtherQuota, speciesGeneralQuota,
+                orCurrent(qualityPoolDays, read.feedRank().getQualityPoolDays()),
+                orCurrent(qualityPoolSize, read.feedRank().getQualityPoolSize()),
+                orCurrent(interactedCooldownDays, read.feedRank().getInteractedCooldownDays()),
+                orCurrent(seenHideHours, read.feedRank().getSeenHideHours()));
         if (hx.isHtmx()) {
             write.updateFeedRank(form, admin.getAdminAccountId());
             populateCard(model);
@@ -219,6 +238,10 @@ public class AdminAlgoParamController {
         model.addAttribute("from", from);
         model.addAttribute("to", to);
         return "admin/fragments/drawer-algo-changes :: drawer";
+    }
+
+    private static int orCurrent(Integer submitted, int current) {
+        return submitted != null ? submitted : current;
     }
 
     private static LocalDate parseDate(String raw) {

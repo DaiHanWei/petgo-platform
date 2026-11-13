@@ -229,7 +229,8 @@ class InteractionNotifySuppressionIntegrationTest extends ApiIntegrationTest {
         reply(d.getId(), cReply, "D 回复 C");
 
         assertThat(notificationTypesOf(c.getId())).containsExactly("CONTENT_COMMENTED"); // 新增：D→C
-        assertThat(notificationTypesOf(b.getId())).containsExactly("CONTENT_COMMENTED", "CONTENT_COMMENTED");
+        // 修复线（2026-11-12）：只有直接回复 B 才通知 B —— C 回复 B 那条 B 收到，D 回复 C 那条 B 不再收到。
+        assertThat(notificationTypesOf(b.getId())).containsExactly("CONTENT_COMMENTED");
         assertThat(notificationTypesOf(d.getId())).isEmpty();
     }
 

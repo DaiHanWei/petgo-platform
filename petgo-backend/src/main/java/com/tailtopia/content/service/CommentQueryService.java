@@ -3,8 +3,10 @@ package com.tailtopia.content.service;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.PostStatus;
+import com.tailtopia.content.dto.CommentAnchorResponse;
 import com.tailtopia.content.dto.CommentPageResponse;
 import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.repository.CommentLikeRepository;
@@ -231,6 +233,63 @@ public class CommentQueryService {
                         MentionViewService.pick(c.getMentionedUserIds(), mentions)))
                 .toList();
         return new CommentPageResponse(items, nextCursor(hasMore, page), hasMore);
+    }
+
+    /**
+     * 评论定位（修复线：通知点开直接定位到某条评论）。返回目标所在的一级评论（形状同列表项），
+     * 目标是二级回复时内嵌回复只放目标本身（见 {@link CommentAnchorResponse}）。
+     *
+     * <p>可见性与列表<b>完全同口径</b>：帖子须可见；目标与其一级父都必须未删、对 viewer 可见
+     * （{@code VISIBLE}，或 viewer 本人写的）、且不被 R1 / R2 隐藏。任一不满足 → 404，
+     * App 退化为「只打开帖子、滚到评论区」—— 404 不暴露到底是删了、审核中还是被屏蔽（AC3 无感知）。
+     */
+    @Transactional(readOnly = true)
+    public CommentAnchorResponse anchor(long commentId, Long viewerId) {
+        Comment target = comments.findById(commentId)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> AppException.notFound(COMMENT_GONE));
+        long postAuthorId = requireVisiblePost(target.getPostId()).getAuthorId();
+        Comment top = target.isTopLevel() ? target
+                : comments.findById(target.getParentId())
+                        .filter(c -> c.getDeletedAt() == null)
+                        .orElseThrow(() -> AppException.notFound(COMMENT_GONE));
+        if (!visibleTo(top, viewerId, postAuthorId) || !visibleTo(target, viewerId, postAuthorId)) {
+            throw AppException.notFound(COMMENT_GONE);
+        }
+
+        // 一级父的全部可见回复：replyCount 用它的条数（与列表同一个查询 → 同一口径）。
+        List<Comment> replies = comments.findRepliesForParents(List.of(top.getId()), viewerId != null, viewerId,
+                postAuthorId);
+        List<Comment> inline = target.isTopLevel()
+                ? replies.stream().limit(INLINE_REPLY_COUNT).toList()
+                : List.of(target);
+
+        Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
+                Stream.concat(Stream.of(top), inline.stream()).map(Comment::getAuthorId).toList());
+        LikeView likes = loadLikes(Stream.concat(Stream.of(top), inline.stream()).map(Comment::getId).toList(),
+                viewerId);
+        Map<Long, MentionView> mentions = resolveMentions(viewerId, Stream.concat(Stream.of(top), inline.stream()));
+        List<CommentResponse> inlineViews = inline.stream()
+                .map(r -> CommentResponse.reply(r, authors.get(r.getAuthorId()),
+                        likes.countOf(r.getId()), likes.likedBy(r.getId()),
+                        MentionViewService.pick(r.getMentionedUserIds(), mentions)))
+                .toList();
+        CommentResponse thread = CommentResponse.topLevel(top, authors.get(top.getAuthorId()), replies.size(),
+                inlineViews, likes.countOf(top.getId()), likes.likedBy(top.getId()),
+                MentionViewService.pick(top.getMentionedUserIds(), mentions));
+        return new CommentAnchorResponse(top.getPostId(), target.getId(), thread);
+    }
+
+    /** 定位不到时的统一提示（不区分删除 / 审核中 / 屏蔽）。 */
+    static final String COMMENT_GONE = "评论不存在或已删除";
+
+    /** 单条评论对 viewer 是否可见：审核态（VISIBLE 或本人）+ R1 / R2，与列表 SQL 同义。 */
+    private boolean visibleTo(Comment c, Long viewerId, long postAuthorId) {
+        boolean own = viewerId != null && viewerId.longValue() == c.getAuthorId();
+        if (c.getModerationStatus() != CommentModerationStatus.VISIBLE && !own) {
+            return false;
+        }
+        return !isHiddenForViewer(c.getAuthorId(), viewerId, postAuthorId);
     }
 
     /**

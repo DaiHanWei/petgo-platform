@@ -190,6 +190,33 @@ class _NotificationCenterPageState
     });
   }
 
+  /// 下拉刷新（修复线 2026-11-12：此前通知中心不能下拉刷新）。
+  ///
+  /// 与 [_loadFirstPage] 同一口径重拉首页，但**不切回整页转圈**：刷新期间旧列表留在原地，拿到新数据才整体替换；
+  /// 失败保留旧列表、只给轻提示（不把已显示的内容换成错误页）。结束后校准铃铛角标（服务端拉首页时自愈计数）。
+  Future<void> _refresh() async {
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    try {
+      final page = await ref.read(notificationRepositoryProvider).list();
+      if (!mounted) return;
+      setState(() {
+        _page = Future.value(page);
+        _followEpochs.clear();
+        _recordEpoch(page.items, epoch);
+        _items
+          ..clear()
+          ..addAll(page.items);
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+        _loadMoreFailed = false;
+      });
+    } catch (_) {
+      if (mounted) showAppToast(context, AppLocalizations.of(context).detailNetworkError);
+    } finally {
+      if (mounted) ref.invalidate(unreadCountProvider);
+    }
+  }
+
   /// 重拉列表（bug 20260625-088：加载失败态的重试）。
   void _reload() {
     setState(_loadFirstPage);
@@ -273,10 +300,12 @@ class _NotificationCenterPageState
   ///
   /// ⚠️ 与线格式**刻意分开**：线格式是 UPPER_SNAKE 的枚举名，埋点取值由 PRD 定死；
   /// 直接把枚举名发上去会让这条事件与 PRD 的判读口径对不上。
-  static String _notifTypeForAnalytics(String type) => switch (type) {
+  ///
+  /// V1.4.2：评论点赞与帖子点赞同 type（`CONTENT_LIKED`），靠 commentId 区分 → 报 `comment_like`。
+  static String _notifTypeForAnalytics(NotificationItem item) => switch (item.type) {
     'MILESTONE_SM_NODE' => 'milestone_sm',
     'MILESTONE_NODE' => 'milestone_l',
-    'CONTENT_LIKED' => 'like',
+    'CONTENT_LIKED' => item.commentId != null ? 'comment_like' : 'like',
     'CONTENT_COMMENTED' => 'comment',
     'VET_REPLY' => 'vet_reply',
     // V1.4.0 multi-pet Story 2.4 · AC6.1：名额到期两类（显式登记，取值与线格式小写同形）。
@@ -289,7 +318,7 @@ class _NotificationCenterPageState
     'SHOP_ORDER_REORDERED' => 'shop_order_reordered',
     // v1.4.2 shop Story 9.3 · AC4.4：券快过期（显式登记）。
     'COUPON_EXPIRING' => 'coupon_expiring',
-    _ => type.toLowerCase(),
+    final type => type.toLowerCase(),
   };
 
   /// 里程碑级别（S/M/L），从编码里取（形如 `C-S14`）。非里程碑通知返回 null。
@@ -305,7 +334,7 @@ class _NotificationCenterPageState
   Future<void> _onTap(NotificationItem item) async {
     // 埋点（V1.1.6 Story 6.1 · AC6）：**所有类型都报** —— 只报里程碑就没法横向对比点击率，
     // 而"S/M 通知到底是留痕还是召回"这个判断恰恰要靠与点赞/评论类的对比得出。
-    final props = <String, Object>{'notif_type': _notifTypeForAnalytics(item.type)};
+    final props = <String, Object>{'notif_type': _notifTypeForAnalytics(item)};
     // 里程碑类另带级别（S/M/L）——判读时要能把 S/M 与 L 拆开看。
     final level = _milestoneLevelOf(item);
     if (level != null) {
@@ -368,6 +397,8 @@ class _NotificationCenterPageState
         token: token,
         targetRef: targetRef,
         commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
+        // V1.4.2 评论点赞：带被赞评论 id → 进帖子并定位该评论（帖子点赞为 null，落点不变）。
+        commentId: item.commentId,
       );
       if (!mounted) return;
       // 兜底落点是本页自身时不重复跳转。
@@ -612,12 +643,27 @@ class _NotificationCenterPageState
           // 否则每次 setState 重建都会把翻页加载到的内容抹回第一页。
           final items = _items;
           if (items.isEmpty) {
-            return EmptyState(
-              key: const ValueKey('notificationEmpty'),
-              icon: Icons.notifications_off_outlined, // 稿 D6：静音铃铛
-              iconBackground: AppColors.cream2, // 浅紫圆底盘（原型 notif-empty）
-              title: l10n.notificationEmpty,
-              message: l10n.notificationEmptyHint,
+            // 空态也能下拉刷新：撑满视口的可滚动容器，否则手势拉不动。
+            return RefreshIndicator(
+              key: const ValueKey('notificationRefresh'),
+              onRefresh: _refresh,
+              child: LayoutBuilder(
+                builder: (context, c) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: c.maxHeight),
+                    child: Center(
+                      child: EmptyState(
+                        key: const ValueKey('notificationEmpty'),
+                        icon: Icons.notifications_off_outlined, // 稿 D6：静音铃铛
+                        iconBackground: AppColors.cream2, // 浅紫圆底盘（原型 notif-empty）
+                        title: l10n.notificationEmpty,
+                        message: l10n.notificationEmptyHint,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             );
           }
           return _notificationList(l10n, items);
@@ -670,8 +716,13 @@ class _NotificationCenterPageState
     }
     // bug 20260730-436：显式 padding 会关掉 ScrollView 自动注入的底部安全区补偿，
     // edge-to-edge 下末条会被系统手势条/三键遮挡——固定 20 之上叠加安全区高度。
-    return ListView(
+    return RefreshIndicator(
+      key: const ValueKey('notificationRefresh'),
+      onRefresh: _refresh,
+      child: ListView(
       controller: _scroll, // 滚到底附近自动加载下一页（_onScroll）
+      // 条目少于一屏时也要能下拉刷新
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + MediaQuery.paddingOf(context).bottom),
       children: [
         ...sections,
@@ -694,6 +745,7 @@ class _NotificationCenterPageState
             ),
           ),
       ],
+      ),
     );
   }
 

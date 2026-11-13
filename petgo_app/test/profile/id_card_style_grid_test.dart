@@ -153,43 +153,9 @@ void main() {
     expect(propsOf('id_card_tab_viewed'), isEmpty, reason: '首个结果出来前不报');
   });
 
-  group('new 角标', () {
-    test('idCardStyleShowsNewBadge：截止前 / 截止时刻 / 截止后', () {
-      final cutoff = kIdCardNewStylesBadgeUntil;
-      final before = cutoff.subtract(const Duration(seconds: 1));
-      final after = cutoff.add(const Duration(days: 1));
-      expect(idCardStyleShowsNewBadge(IdCardStyle.sim, now: before), isTrue);
-      expect(idCardStyleShowsNewBadge(IdCardStyle.sim, now: cutoff), isFalse);
-      expect(idCardStyleShowsNewBadge(IdCardStyle.sim, now: after), isFalse);
-      // 非 new 款永不显示。
-      expect(idCardStyleShowsNewBadge(IdCardStyle.ktp, now: before), isFalse);
-      expect(idCardStyleShowsNewBadge(IdCardStyle.studentKlasik, now: before), isFalse);
-      // 本地时区的 now 同样按 UTC 比较。
-      expect(idCardStyleShowsNewBadge(IdCardStyle.kitas, now: before.toLocal()), isTrue);
-    });
-
-    testWidgets('截止前恰好 5 个角标，就是那 5 款', (tester) async {
-      await _pump(tester, () async => const []);
-      final shown = [
-        for (final s in IdCardStyle.values)
-          if (find.byKey(ValueKey('idCardStyleNewBadge_${s.name}')).evaluate().isNotEmpty) s
-      ];
-      expect(shown, [
-        IdCardStyle.kitas,
-        IdCardStyle.sim,
-        IdCardStyle.studentBintang,
-        IdCardStyle.studentMalam,
-        IdCardStyle.studentCeria,
-      ]);
-      expect(find.text('new'), findsNWidgets(5));
-    });
-
-    testWidgets('截止后一个角标都没有', (tester) async {
-      await _pump(tester, () async => const [], now: kIdCardNewStylesBadgeUntil);
-      for (final s in IdCardStyle.values) {
-        expect(find.byKey(ValueKey('idCardStyleNewBadge_${s.name}')), findsNothing);
-      }
-    });
+  testWidgets('修复线：卡款一律不显示「new」角标', (tester) async {
+    await _pump(tester, () async => const []);
+    expect(find.text('new'), findsNothing);
   });
 
   testWidgets('点 Malam 格 → 建卡页 ?style=studentMalam + style_tapped{STUDENT, MALAM}', (tester) async {

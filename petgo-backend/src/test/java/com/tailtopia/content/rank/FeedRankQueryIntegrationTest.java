@@ -315,4 +315,41 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
         int end = body.indexOf('"', start);
         return body.substring(start, end);
     }
+
+    // ── 修复线（2026-11-12）：优质老帖池原生 SQL ─────────────────────────────
+
+    private void like(long postId, int n) {
+        for (int i = 0; i < n; i++) {
+            jdbc.update("INSERT INTO content_likes (post_id, user_id, created_at) VALUES (?, ?, now())",
+                    postId, newUser().getId());
+        }
+    }
+
+    /**
+     * 窗口内按互动量降序；0 互动、窗口外、私密的都不入选。
+     * 共享库里有别的数据，所以只断言「我们造的这几条之间」的相对顺序与在不在场（limit 放大）。
+     */
+    @Test
+    void qualityCandidatesAreWindowedRankedByInteractionAndSkipZeroAndPrivate() {
+        ContentPost hot = publish(newUser().getId(), ContentType.DAILY);
+        ContentPost warm = publish(newUser().getId(), ContentType.DAILY);
+        ContentPost cold = publish(newUser().getId(), ContentType.DAILY);
+        ContentPost tooOld = publish(newUser().getId(), ContentType.DAILY);
+        ContentPost hidden = publish(newUser().getId(), ContentType.GROWTH_MOMENT);
+        hidden.setVisibility(ContentVisibility.PRIVATE);
+        posts.save(hidden);
+        like(hot.getId(), 3);
+        like(warm.getId(), 1);
+        like(tooOld.getId(), 5);
+        like(hidden.getId(), 5);
+        backdate(hot.getId(), java.time.Duration.ofDays(20)); // 主池（最近 N 条）之外的老帖
+        backdate(tooOld.getId(), java.time.Duration.ofDays(40)); // 出了 30 天窗口
+
+        List<Long> ids = posts.findQualityCandidateIds(java.time.Instant.now().minus(java.time.Duration.ofDays(30)),
+                2.0, 100000).stream().map(Number::longValue).toList();
+
+        assertThat(ids).contains(hot.getId(), warm.getId())
+                .doesNotContain(cold.getId(), tooOld.getId(), hidden.getId());
+        assertThat(ids.indexOf(hot.getId())).isLessThan(ids.indexOf(warm.getId()));
+    }
 }

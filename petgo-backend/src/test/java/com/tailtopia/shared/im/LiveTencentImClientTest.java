@@ -155,6 +155,17 @@ class LiveTencentImClientTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void buildBatchPushBodyCarriesOptionalCommentId() {
+        // 修复线：「赞了你的评论」推送 Ext 多带 commentId（旧版 App 只读 type/token/targetRef，多一个键无影响）。
+        java.util.Map<String, Object> body = LiveTencentImClient.buildBatchPushBody(
+                "administrator", 1, "u_7", "t", "b", "CONTENT_LIKED", "tok", "55", 70L);
+        java.util.Map<String, Object> push = (java.util.Map<String, Object>) body.get("OfflinePushInfo");
+        assertThat(push.get("Ext"))
+                .isEqualTo("{\"type\":\"CONTENT_LIKED\",\"token\":\"tok\",\"targetRef\":\"55\",\"commentId\":\"70\"}");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void buildBatchPushBodyOmitsBlankTokenAndTargetRef() {
         // 固定目标类（兽医新单/生日等）：无 token/targetRef → Ext 只带 type，不产出空字段。
         java.util.Map<String, Object> body = LiveTencentImClient.buildBatchPushBody(

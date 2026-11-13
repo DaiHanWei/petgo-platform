@@ -55,7 +55,12 @@ import 'widgets/content_linked_pets.dart';
 /// 多态完整（UX-DR18）：404 失效页 / 403 无权限页 / 网络错误 / 加载骨架。
 /// 「···」举报入口[3.7] + 作者删除入口[3.6]、点赞按钮行为[3.4]、作者点击迷你卡[3.8] 本 Story 仅占位。
 class ContentDetailPage extends ConsumerWidget {
-  const ContentDetailPage({super.key, required this.postId, this.focusComments = false});
+  const ContentDetailPage({
+    super.key,
+    required this.postId,
+    this.focusComments = false,
+    this.anchorCommentId,
+  });
 
   final int postId;
 
@@ -65,6 +70,9 @@ class ContentDetailPage extends ConsumerWidget {
   /// 通知深链早就在产出它，只是详情页一直没消费。首页评论按钮沿用同一个名字，
   /// 满足「两侧必须同名」的要求，也顺带把通知深链的评论锚点接通了。
   final bool focusComments;
+
+  /// 评论锚点（V1.4.2 评论点赞通知，路由 `?commentId=`）：评论区把这条评论所在楼置顶并短暂高亮。
+  final int? anchorCommentId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -89,7 +97,12 @@ class ContentDetailPage extends ConsumerWidget {
         loading: () => _shell(context, body: const Center(
             child: CircularProgressIndicator(color: AppColors.accentGrowth))),
         error: (err, _) => _shell(context, body: _errorBody(context, ref, l10n, err)),
-        data: (d) => _DetailScaffold(postId: postId, detail: d, focusComments: focusComments),
+        data: (d) => _DetailScaffold(
+          postId: postId,
+          detail: d,
+          focusComments: focusComments,
+          anchorCommentId: anchorCommentId,
+        ),
       ),
     );
   }
@@ -200,11 +213,13 @@ class _DetailScaffold extends ConsumerWidget {
     required this.postId,
     required this.detail,
     this.focusComments = false,
+    this.anchorCommentId,
   });
 
   final int postId;
   final ContentDetail detail;
   final bool focusComments;
+  final int? anchorCommentId;
 
   /// 关联宠物胶囊的显示条件（AC4.2）：只 Diary 且 `pets` 非空（1 只也显示）。Feed 卡片不加。
   List<ContentPetRef> get _linkedPets =>
@@ -380,6 +395,7 @@ class _DetailScaffold extends ConsumerWidget {
                             currentUserId: currentUserId,
                             postAuthorId: detail.authorId,
                             isContentAuthor: detail.isAuthor,
+                            anchorCommentId: anchorCommentId,
                           ),
                         ],
                       ),

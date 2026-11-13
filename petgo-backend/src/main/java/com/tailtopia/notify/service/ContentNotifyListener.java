@@ -1,5 +1,6 @@
 package com.tailtopia.notify.service;
 
+import com.tailtopia.content.event.CommentLikedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
@@ -88,6 +89,29 @@ public class ContentNotifyListener {
                 "LIKE:POST:" + event.postId(), String.valueOf(event.postId()), null, null, null);
     }
 
+    /**
+     * 评论被点赞（修复线）→ 评论作者「赞了你的评论」。复用 {@code CONTENT_LIKED} + {@link Notification#VARIANT_COMMENT}：
+     * 同一条评论未读即合并（{@code LIKE:COMMENT:{commentId}}）、10 分钟推送去抖、走「点赞」推送分类 —— 全部同帖子点赞。
+     * targetRef = 帖子 id（点击落到帖子），commentId 供列表现查评论原文。自赞已在 content 侧不发事件，这里双保险。
+     */
+    @TransactionalEventListener
+    public void onCommentLiked(CommentLikedEvent event) {
+        if (event.likerId() == event.commentAuthorId()) {
+            return;
+        }
+        if (suppressed(event.commentAuthorId(), event.likerId(), event.commentAuthorId())) {
+            return;
+        }
+        String key = "LIKE:COMMENT:" + event.commentId();
+        // 一人一条评论只通知一次：取消赞、取消后再赞都不再发（含通知已读之后 —— 未读期间 upsert 本就会挡）。
+        if (notificationService.actorEverNotified(event.commentAuthorId(), key, event.likerId())) {
+            return;
+        }
+        notificationService.sendInteraction(event.commentAuthorId(), NotificationType.CONTENT_LIKED, event.likerId(),
+                key, String.valueOf(event.postId()), event.commentId(),
+                Notification.VARIANT_COMMENT, event.commentBody());
+    }
+
     @TransactionalEventListener
     public void onContentCommented(ContentCommentedEvent event) {
         String ref = String.valueOf(event.postId());
@@ -104,8 +128,15 @@ public class ContentNotifyListener {
         // ⚠️ 这里就是 R3 的落点：接收者是 parent（第三方 C），而第二条判据的 holder 是
         // contentAuthorId（A）——**两个不同的人**，所以最容易漏。漏了 C 就会收到一条
         // 点进去什么都没有的通知（那条回复已被 R2 对所有人隐藏）。
+        //
+        // V1.4.2 修复线：只有「直接回复 B」才通知 B。回复的是 B 楼里别人的二级评论（replyTo 是别人）时，
+        // B 不再收「回复了你的评论」—— 楼越热闹 B 被打扰越多，点进去还发现回复的不是自己。
+        // replyTo == null（直接回复一级评论）或 replyTo 就是 B 本人（回复 B 在自己楼里的二级评论）才算直接回复。
         Long parent = event.parentAuthorId();
-        if (parent != null && parent != event.commenterId() && parent != event.contentAuthorId()
+        Long replyTo = event.replyToAuthorId();
+        boolean repliedToParentDirectly = replyTo == null || replyTo.equals(parent);
+        if (parent != null && repliedToParentDirectly
+                && parent != event.commenterId() && parent != event.contentAuthorId()
                 && !suppressed(parent, event.commenterId(), event.contentAuthorId())) {
             notificationService.sendInteraction(parent, NotificationType.CONTENT_COMMENTED, event.commenterId(),
                     null, ref, event.commentId(), Notification.VARIANT_REPLY, event.body());
@@ -113,7 +144,6 @@ public class ContentNotifyListener {
         // V1.4.2：回复的是一条二级评论时，再通知被回复的那条二级评论作者 C（「回复了你的评论」，复用 REPLY 文案）。
         // 去重：同一个人最多一条 —— C 是回复者本人 / 帖主 A / 一级评论作者 B 时，上面已发或不该发，跳过。
         // 屏蔽口径与 B 那条完全一致（C 也是第三方，R3 同样适用）。
-        Long replyTo = event.replyToAuthorId();
         if (replyTo != null && replyTo != event.commenterId() && replyTo != event.contentAuthorId()
                 && !replyTo.equals(parent)
                 && !suppressed(replyTo, event.commenterId(), event.contentAuthorId())) {

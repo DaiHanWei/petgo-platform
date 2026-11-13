@@ -81,9 +81,12 @@ void main() {
         reason: '盖太狠会让卡面本身看不清，免费分享就没人愿意发了');
   });
 
-  testWidgets('详情页卡面盖防截图水印（已解锁 HD 也不消失）', (tester) async {
-    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true));
+  // 修复线 2026-11-13（产品）：付费解锁后页面直接展示无水印卡面；未解锁仍盖水印。
+  testWidgets('详情页：未解锁盖水印，已解锁 HD 页面上不再有水印', (tester) async {
+    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: false));
     expect(find.byType(IdCardWatermark), findsOneWidget);
+    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true));
+    expect(find.byType(IdCardWatermark), findsNothing);
   });
 
   testWidgets('未解锁同样盖水印；8 款卡（含 SIM / 居住证占位与四款学生卡）每款恰好一个水印',
@@ -108,7 +111,8 @@ void main() {
   // 契约：水印绝不能进导出边界（GlobalKey 标记的 RepaintBoundary 子树），
   // 否则付费 HD 导出/分享的 PNG 会带水印——预览有、导出无是本需求的核心不变量。
   testWidgets('水印在 HD 导出 RepaintBoundary 子树之外', (tester) async {
-    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true));
+    await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: false));
+    expect(find.byType(IdCardWatermark), findsOneWidget);
     // 导出边界 = 卡面最近的 RepaintBoundary 祖先（页面用 GlobalKey 标记，_exportHd 用它 toImage）。
     RepaintBoundary? exportBoundary;
     tester.element(find.byType(KtpCardFront)).visitAncestorElements((el) {
@@ -157,7 +161,7 @@ void main() {
               id: 1,
               serialId: 12,
               name: 'Mochi',
-              hdUnlocked: true,
+              hdUnlocked: false,
               cardType: 'STUDENT',
               cardVariant: style.cardVariant,
               cardNo: 'TT230326020110'));
@@ -172,7 +176,7 @@ void main() {
   testWidgets('SIM / 居住证：水印同样在 HD 导出 RepaintBoundary 子树之外', (tester) async {
     for (final (type, front) in [('SIM', find.byType(SimCardFront)), ('KITAS', find.byType(KitasCardFront))]) {
       await _pump(tester,
-          IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true, cardType: type, cardNo: 'TT730326020110'));
+          IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: false, cardType: type, cardNo: 'TT730326020110'));
       expect(find.byType(IdCardWatermark), findsOneWidget, reason: type);
       expect(front, findsOneWidget, reason: type);
       expectWatermarkOutsideExportBoundary(tester, front);
@@ -187,8 +191,9 @@ void main() {
     expect(IdCardWatermark.bandOpacity, lessThan(0.25), reason: '条带压太深卡面文字就读不清了');
   });
 
-  test('预览 / 免费分享降清档位约为高清的 1/3', () {
-    expect(kIdCardPreviewDownscale, inInclusiveRange(2.5, 4.0));
+  // 修复线 2026-11-13 产品看实机四档对比后定 1/8：1/3、1/4 在手机屏上与高清几乎看不出差别。
+  test('预览 / 免费分享降清档位为高清的 1/8', () {
+    expect(kIdCardPreviewDownscale, 8.0);
   });
 
   testWidgets('水印绘制在 5 种画布比例下都不抛错', (tester) async {
@@ -223,9 +228,9 @@ void main() {
         findsNothing, reason: '🔴 遮罩进了导出边界 ⇒ 付费高清图变低清');
   });
 
-  testWidgets('已解锁：预览恢复清晰（无低清遮罩），水印沿用现状', (tester) async {
+  testWidgets('已解锁：预览恢复清晰（无低清遮罩），水印也去掉', (tester) async {
     await _pump(tester, IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true));
     expect(find.byType(IdCardLowResCover), findsNothing);
-    expect(find.byType(IdCardWatermark), findsOneWidget);
+    expect(find.byType(IdCardWatermark), findsNothing);
   });
 }

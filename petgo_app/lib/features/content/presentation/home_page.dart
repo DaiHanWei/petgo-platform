@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/feature_flags.dart';
 import '../../../core/router/route_intent.dart';
+import '../../../core/theme/spacing.dart';
 import '../../../core/theme/colors.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
@@ -246,8 +247,11 @@ class HomePage extends ConsumerWidget {
         }
         final pinnedAsync = ref.watch(pinnedSlotProvider);
         // 访客登录引导卡已下线（不再显示登录/注册按钮）；游客与登录态一致自动翻页浏览。
+        // 话题行出现时，首帖上方只留 6（话题行自带下方 6 的点击区），否则维持 16。
+        final topicRowShown = ref.watch(homeTopicRowProvider).value?.isNotEmpty ?? false;
         return FeedMasonryView(
           header: header,
+          cardsTopPadding: topicRowShown ? 6 : AppSpacing.screenEdge,
           // bug 20261012-586：发布成功页「去 Feed 看」→ 定位刚发的帖。
           // 🔴 首屏与顶置**都到手**才传：刷新中拿的是旧列表（会误判「没有」提前放弃）；
           //    顶置晚到会把卡片整体往下推，先滚过去就白滚了。
@@ -393,7 +397,12 @@ class _BerandaTop extends StatelessWidget {
         // 话题行（V1.4.2 Story 4.3 · AC4 · UI C1）：分类标签之后、顶置卡之前；只在 Discover（本组件只在
         // Discover 分支渲染）；随 Feed 滚动不吸顶；0 个 / 取不到 → 组件内部整行不渲染、不留占位。
         const HomeTopicRow(),
-        const SizedBox(height: 8),
+        // 话题行出现时不再补 8：它自带上下 8 的点击区，再叠 8 + Feed 顶部 16 会让首帖离话题过远
+        // （2026-11-12 实机反馈）。话题行不渲染时维持原 8，其余布局逐像素不变。
+        Consumer(builder: (context, ref, _) {
+          final topics = ref.watch(homeTopicRowProvider).value;
+          return topics == null || topics.isEmpty ? const SizedBox(height: 8) : const SizedBox.shrink();
+        }),
       ],
     );
   }

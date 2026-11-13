@@ -451,7 +451,8 @@ class CommentServiceTest {
 
     @Test
     void mentionOfSomeoneAlreadyNotifiedByCommentIsDropped() {
-        // 同一条评论每人最多一条：帖主 7、一级作者 3、被回复人 4 都已收「评论 / 回复」通知，@ 只剩 42。
+        // 同一条评论每人最多一条：帖主 7、被回复人 4 已收「评论 / 回复」通知，@ 里去掉。
+        // 修复线：回复的是 4 而不是一级作者 3，3 收不到回复通知 —— @ 了 3 就得保留「提到了你」。
         Comment c = underReview(91L, 10L, 9L, 1L);
         setField(c, Comment.class, "replyToCommentId", 20L);
         setField(c, Comment.class, "mentionedUserIds", java.util.List.of(4L, 3L, 7L, 42L));
@@ -460,6 +461,19 @@ class CommentServiceTest {
         when(comments.findById(20L)).thenReturn(Optional.of(existingComment(20L, 10L, 4L, 1L)));
         postBy(1L, 7L);
         service.approveComment(91L);
+        assertThat(mentionEvents()).singleElement()
+                .satisfies(e -> assertThat(e.mentionedUserIds()).containsExactlyInAnyOrder(3L, 42L));
+    }
+
+    @Test
+    void mentionOfParentAuthorDroppedWhenRepliedToDirectly() {
+        // 直接回复一级评论（无 replyToCommentId）：一级作者 3 会收「回复了你的评论」，@ 里去掉。
+        Comment c = underReview(93L, 10L, 9L, 1L);
+        setField(c, Comment.class, "mentionedUserIds", java.util.List.of(3L, 42L));
+        when(comments.findById(93L)).thenReturn(Optional.of(c));
+        when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
+        postBy(1L, 7L);
+        service.approveComment(93L);
         assertThat(mentionEvents()).singleElement()
                 .satisfies(e -> assertThat(e.mentionedUserIds()).containsExactly(42L));
     }

@@ -111,7 +111,7 @@ void main() {
     expect(find.text('+ PawCoin Rp 12.000 sudah ditahan'), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayCopy')), findsOneWidget);
-    expect(find.text(l10n.rechargeWaiting), findsOneWidget);
+    expect(find.text(l10n.rechargeWaiting), findsNothing); // 修复线：抽屉不再显示「等待付款」转圈行
     expect(find.text('Simpan Kode QR'), findsOneWidget);
     expect(find.text('Saya sudah bayar'), findsOneWidget);
     expect(find.byKey(const ValueKey('qrPayCancel')), findsNothing);

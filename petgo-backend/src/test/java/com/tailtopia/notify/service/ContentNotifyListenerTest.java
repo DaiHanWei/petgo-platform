@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.content.event.CommentLikedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
@@ -47,6 +48,37 @@ class ContentNotifyListenerTest {
         listener().onContentLiked(new ContentLikedEvent(55L, 2L, 9L, Instant.now()));
         verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L,
                 "LIKE:POST:55", "55", null, null, null);
+    }
+
+    // ===== 修复线：评论被点赞 → 评论作者（复用 CONTENT_LIKED + VARIANT_COMMENT，按评论合并）=====
+
+    @Test
+    void commentLikedNotifiesCommentAuthorMergedPerComment() {
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 2L, 9L, "halo"));
+        verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L,
+                "LIKE:COMMENT:70", "55", 70L, Notification.VARIANT_COMMENT, "halo");
+    }
+
+    @Test
+    void commentLikeAlreadyNotifiedBeforeIsNotSentAgain() {
+        // 取消赞、取消后再赞（哪怕上一条已读）：同一人同一条评论只通知一次。
+        when(notificationService.actorEverNotified(9L, "LIKE:COMMENT:70", 2L)).thenReturn(true);
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 2L, 9L, "halo"));
+        verify(notificationService, org.mockito.Mockito.never()).sendInteraction(anyLong(), any(), anyLong(), any(),
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void selfCommentLikeNotPushed() {
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 9L, 9L, "halo"));
+        verifyNoInteractionSent();
+    }
+
+    @Test
+    void commentLikeFromHiddenUserIsSuppressed() {
+        when(hideRelations.isHidden(9L, 2L)).thenReturn(true);
+        listener().onCommentLiked(new CommentLikedEvent(55L, 70L, 2L, 9L, "halo"));
+        verifyNoInteractionSent();
     }
 
     @Test
@@ -206,12 +238,28 @@ class ContentNotifyListenerTest {
     }
 
     @Test
-    void replyToSecondLevelNotifiesAllThreeOnce() {
+    void replyToSecondLevelNotifiesContentAuthorAndReplyTargetButNotParent() {
+        // 修复线：D 回复的是 B 楼里 C 的二级评论 —— 不是直接回复 B，B 不再收通知。
         listener().onContentCommented(replyToSecondLevel(D, A, B, C));
         verify(notificationService).sendInteraction(A, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L, null, "halo");
+        verify(notificationService).sendInteraction(C, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
+                Notification.VARIANT_REPLY, "halo");
+        org.mockito.Mockito.verifyNoMoreInteractions(notificationService);
+    }
+
+    @Test
+    void replyToParentsOwnSecondLevelStillNotifiesParent() {
+        // D 回复的是 B 在自己楼里发的二级评论 —— 被回复的就是 B，算直接回复。
+        listener().onContentCommented(replyToSecondLevel(D, A, B, B));
         verify(notificationService).sendInteraction(B, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
                 Notification.VARIANT_REPLY, "halo");
-        verify(notificationService).sendInteraction(C, NotificationType.CONTENT_COMMENTED, D, null, "55", 7L,
+    }
+
+    @Test
+    void ownerThreadScenarioParentOnlyNotifiedWhenRepliedDirectly() {
+        // 用户场景：我（A）的帖子，B 的一级评论楼里，我回复 C 的回复 → C 收；B 不收；我自己不收。
+        listener().onContentCommented(replyToSecondLevel(A, A, B, C));
+        verify(notificationService).sendInteraction(C, NotificationType.CONTENT_COMMENTED, A, null, "55", 7L,
                 Notification.VARIANT_REPLY, "halo");
         org.mockito.Mockito.verifyNoMoreInteractions(notificationService);
     }
@@ -241,7 +289,8 @@ class ContentNotifyListenerTest {
         org.mockito.Mockito.lenient().when(hideRelations.isHidden(C, D)).thenReturn(true);
         listener().onContentCommented(replyToSecondLevel(D, A, B, C));
         verifyNoInteractionSentTo(C);
-        verify(notificationService).sendInteraction(eq(B), any(), anyLong(), any(), any(), any(), any(), any());
+        verifyNoInteractionSentTo(B); // 修复线：非直接回复 B，本就不发
+        verify(notificationService).sendInteraction(eq(A), any(), anyLong(), any(), any(), any(), any(), any());
     }
 
     @Test

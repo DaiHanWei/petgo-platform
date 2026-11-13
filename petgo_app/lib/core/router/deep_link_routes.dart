@@ -55,7 +55,8 @@ class DeepLinkRoutes {
   /// （`ContentDetailPage(postId)` / `ConsultConversationPage(sessionId)`，builder 内 `int.parse(:id)`），
   /// **不可**用通知自身的随机 `deepLinkToken`（会 `int.parse` 抛异常/查无此帖）。
   /// - `VET_REPLY` / `CONSULT_CLOSED` → 问诊会话（评分态由会话页据状态展示）。
-  /// - `CONTENT_LIKED` → 内容详情。
+  /// - `CONTENT_LIKED` → 内容详情；**带 [commentId]（评论点赞，V1.4.2）** → 内容详情 + 评论区 + 评论锚点
+  ///   （`/content/{postId}?focus=comments&commentId={id}`，详情页置顶并高亮那条评论）。
   /// - `CONTENT_COMMENTED` → 内容详情 + 评论区锚点（`?focus=comments`）。
   ///
   /// **固定目标类**（V1 单宠物，目标页自解析当前用户宠物，不依赖 ref，FR-40/41/42）：
@@ -66,7 +67,12 @@ class DeepLinkRoutes {
   /// - `PET_SLOT_EXPIRING` / `PET_SLOT_EXPIRED` → 名额管理页（V1.4.0 multi-pet Story 2.4 · K1）。
   ///
   /// 其它/空 → 通知中心兜底。
-  static String pushPayloadToLocation(String? type, String? targetRef, {bool commentAnchor = false}) {
+  static String pushPayloadToLocation(
+    String? type,
+    String? targetRef, {
+    bool commentAnchor = false,
+    int? commentId,
+  }) {
     if (type == null) return notificationsCenter;
     // 固定目标类：不依赖 targetRef（生日/纪念日/里程碑节点/兽医新请求，决策 F2/F5）。
     switch (type) {
@@ -160,7 +166,10 @@ class DeepLinkRoutes {
       case 'CONSULT_CLOSED':
         return '/consult/conversation/$targetRef';
       case 'CONTENT_LIKED':
-        return '/content/$targetRef';
+        // V1.4.2 评论点赞：同 type、靠 commentId 区分（targetRef 仍是帖子 id）。不带 commentId = 帖子点赞，落点不变。
+        return commentId == null
+            ? '/content/$targetRef'
+            : '/content/$targetRef?focus=comments&commentId=$commentId';
       case 'CONTENT_COMMENTED':
         return commentAnchor ? '/content/$targetRef?focus=comments' : '/content/$targetRef';
       case 'CONTENT_REMOVED':

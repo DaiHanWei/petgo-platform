@@ -14,7 +14,6 @@ import '../data/tailsonality_repository.dart';
 import '../domain/tailsonality_result.dart';
 import 'tailsonality_retake.dart';
 import 'tailsonality_routes.dart';
-import 'widgets/tailsonality_intro_sheet.dart';
 import 'widgets/ts_result_row.dart';
 import '../../profile/data/current_pet_provider.dart';
 import '../../profile/data/pet_list_repository.dart';
@@ -32,7 +31,6 @@ class TailsonalityResultsPage extends ConsumerStatefulWidget {
 }
 
 class _TailsonalityResultsPageState extends ConsumerState<TailsonalityResultsPage> {
-  bool _opening = false;
 
   /// 正在请求的结果 token（防重复点；请求中该行显示 loading，其它行照常）。
   String? _busyToken;
@@ -117,20 +115,11 @@ class _TailsonalityResultsPageState extends ConsumerState<TailsonalityResultsPag
     );
   }
 
-  /// 空态「Mulai Tes」：档案加载中会等一会儿，期间再点忽略（否则叠两层抽屉）；取不到给提示。
-  Future<void> _startFromEmpty() async {
-    if (_opening) return;
+  /// 空态「Mulai Tes」：直接进答题页（修复线：去掉说明抽屉）。
+  void _startFromEmpty() {
     // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 付费 / 新增类入口先弹 E1（不发请求）。
     if (!guardPetWritable(context, ref)) return;
-    _opening = true;
-    final pet = await readPetForTailsonality(ref);
-    _opening = false;
-    if (!mounted) return;
-    if (pet == null) {
-      showAppToast(context, AppLocalizations.of(context).detailNetworkError);
-      return;
-    }
-    await showTailsonalityIntroSheet(context, pet);
+    context.push(TailsonalityRoutes.quiz);
   }
 
   @override

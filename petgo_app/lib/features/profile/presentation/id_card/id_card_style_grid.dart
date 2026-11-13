@@ -32,8 +32,14 @@ class IdCardStyleGrid extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
           // T-13：标题句放在第一个组标题上方（UI 稿 B1 未画）。
-          Text(l10n.idCardStyleGridTitle,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink)),
+          Text(
+            l10n.idCardStyleGridTitle,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.ink,
+            ),
+          ),
           const SizedBox(height: 14),
           _groupTitle(l10n.idCardStyleGroupIdentity),
           _grid(stylesOf(IdCardStyleGroup.identity), l10n, now),
@@ -46,96 +52,93 @@ class IdCardStyleGrid extends StatelessWidget {
   }
 
   Widget _groupTitle(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(text,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink2)),
-      );
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: AppColors.ink2,
+      ),
+    ),
+  );
 
   Widget _grid(List<IdCardStyle> styles, AppLocalizations l10n, DateTime? now) {
     final rows = <Widget>[];
     for (var i = 0; i < styles.length; i += 2) {
       if (rows.isNotEmpty) rows.add(const SizedBox(height: 10));
-      rows.add(IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: _cell(styles[i], l10n, now)),
-            const SizedBox(width: 10),
-            Expanded(child: i + 1 < styles.length ? _cell(styles[i + 1], l10n, now) : const SizedBox()),
-          ],
+      rows.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _cell(styles[i], l10n, now)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: i + 1 < styles.length
+                    ? _cell(styles[i + 1], l10n, now)
+                    : const SizedBox(),
+              ),
+            ],
+          ),
         ),
-      ));
+      );
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: rows,
+    );
   }
 
   Widget _cell(IdCardStyle style, AppLocalizations l10n, DateTime? now) {
-    final showNew = idCardStyleShowsNewBadge(style, now: now);
-    return Stack(
-      clipBehavior: Clip.none,
-      fit: StackFit.passthrough,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(color: Color(0x0F2E2A45), blurRadius: 2, offset: Offset(0, 1)),
-              BoxShadow(color: Color(0x0A2E2A45), blurRadius: 12, offset: Offset(0, 4)),
-            ],
+    // 修复线（2026-11-12 产品）：去掉新卡款右上角的「new」角标。
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F2E2A45),
+            blurRadius: 2,
+            offset: Offset(0, 1),
           ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: ValueKey('idCardStyleCell_${style.name}'),
-              onTap: () => onTap(style),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AspectRatio(aspectRatio: 994 / 600, child: _thumbnail(style)),
-                    const SizedBox(height: 8),
-                    Text(
-                      style.label(l10n),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
-                    ),
-                  ],
+          BoxShadow(
+            color: Color(0x0A2E2A45),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: ValueKey('idCardStyleCell_${style.name}'),
+          onTap: () => onTap(style),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AspectRatio(aspectRatio: 994 / 600, child: _thumbnail(style)),
+                const SizedBox(height: 8),
+                Text(
+                  style.label(l10n),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
-        if (showNew)
-          Positioned(
-            top: -5,
-            right: 8,
-            child: IgnorePointer(
-              child: Container(
-                key: ValueKey('idCardStyleNewBadge_${style.name}'),
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.danger,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  l10n.insightNewBadge,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
@@ -143,7 +146,10 @@ class IdCardStyleGrid extends StatelessWidget {
   /// 素材缺失回落为同尺寸 mintTint 圆角块，不崩。
   Widget _thumbnail(IdCardStyle style) {
     final fallback = Container(
-      decoration: BoxDecoration(color: AppColors.mintTint, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: AppColors.mintTint,
+        borderRadius: BorderRadius.circular(8),
+      ),
     );
     final aspect = style.canvas.width / style.canvas.height;
     return Center(
@@ -154,7 +160,11 @@ class IdCardStyleGrid extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.asset(style.thumbnailAsset, fit: BoxFit.cover, errorBuilder: (_, _, _) => fallback),
+              Image.asset(
+                style.thumbnailAsset,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallback,
+              ),
               IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(

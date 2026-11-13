@@ -192,7 +192,7 @@ class NotificationServiceTest {
         verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
         verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(java.time.Duration.class));
         verify(pusher).pushToUser(eq(9L), eq("Rani menyukai postinganmu"), eq("halo"),
-                eq(NotificationType.CONTENT_COMMENTED.name()), anyString(), eq("55"));
+                eq(NotificationType.CONTENT_COMMENTED.name()), anyString(), eq("55"), isNull()); // 修复线：互动类推送走带 commentId 的重载
     }
 
     @Test
@@ -212,7 +212,7 @@ class NotificationServiceTest {
         verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
         verify(aggregates, never()).touch(org.mockito.ArgumentMatchers.anyLong());
         verify(pusher).pushToUser(eq(9L), eq("Rani menyukai postinganmu"), eq(""),
-                eq(NotificationType.CONTENT_LIKED.name()), eq("tok"), eq("55"));
+                eq(NotificationType.CONTENT_LIKED.name()), eq("tok"), eq("55"), isNull()); // 修复线：互动类推送走带 commentId 的重载
     }
 
     @Test
@@ -283,12 +283,14 @@ class NotificationServiceTest {
         interactionService().sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L, "LIKE:POST:55", "55",
                 null, null, null);
 
-        verify(pusher).pushToUser(eq(9L), anyString(), eq(""), anyString(), eq("tok"), eq("55"));
+        verify(pusher).pushToUser(eq(9L), anyString(), eq(""), anyString(), eq("tok"), eq("55"), isNull()); // 修复线：互动类推送走带 commentId 的重载
     }
 
     @Test
     void debounceKeysFollowAggregatePrefix() {
         assertThat(NotificationService.debounceKey("LIKE:POST:55")).isEqualTo("notify:likepush:55");
+        // 修复线：评论点赞单独一把键，不与同号帖子撞
+        assertThat(NotificationService.debounceKey("LIKE:COMMENT:55")).isEqualTo("notify:likepush:comment:55");
         assertThat(NotificationService.debounceKey("COMMENT:PLACE:abc")).isEqualTo("notify:placecommentpush:abc");
         assertThat(NotificationService.debounceKey(null)).isNull();
     }

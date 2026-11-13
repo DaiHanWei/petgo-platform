@@ -105,6 +105,9 @@ public class FeedRecommendationService {
      */
     private final GrowthQueryService growth;
 
+    /** 优质老帖候选 id（修复线 2026-11-12；全站共用一份，Redis 存 10 分钟）。 */
+    private final FeedQualityPoolCache qualityPool;
+
     /** 作者等级加权门槛（PRD 拍板写死，不做参数）。 */
     static final int AUTHOR_BOOST_MIN_LEVEL = 15;
 
@@ -113,7 +116,7 @@ public class FeedRecommendationService {
             ContentSpeciesResolver speciesResolver, PetProfileRepository pets,
             FeedSeenStore seenStore, FeedSequenceStore sequenceStore, FeedRankEngine engine,
             FeedRankProperties props, PlatformConfigService platformConfig,
-            RankThrottleService rankThrottles, GrowthQueryService growth) {
+            RankThrottleService rankThrottles, GrowthQueryService growth, FeedQualityPoolCache qualityPool) {
         this.posts = posts;
         this.likes = likes;
         this.comments = comments;
@@ -127,6 +130,7 @@ public class FeedRecommendationService {
         this.platformConfig = platformConfig;
         this.rankThrottles = rankThrottles;
         this.growth = growth;
+        this.qualityPool = qualityPool;
     }
 
     /**
@@ -320,6 +324,7 @@ public class FeedRecommendationService {
      */
     private List<Long> generate(FeedRankCacheKey key, String seed, Long viewerId,
             Set<Long> exclude, int wanted, Instant now) {
+        FeedRankConfig cfg = platformConfig.feedRank();
         List<ContentPost> pool = posts.findRankCandidatePool(viewerId != null, viewerId,
                 PageRequest.of(0, props.candidatePoolSize()));
         // V1.3.4 FR-122：教育类槽位另取近 90 天全部 KNOWLEDGE（不受主池「最近 N 条」截断），与主池按 id 合并。
@@ -332,9 +337,15 @@ public class FeedRecommendationService {
         for (ContentPost p : eduPool) {
             merged.putIfAbsent(p.getId(), p);
         }
+        // 修复线（2026-11-12）：优质老帖池 —— 主池只有最近 N 条（生产约 4 天），更早的高互动帖子此前永远进不来。
+        for (ContentPost p : qualityPoolPosts(viewerId, cfg, now)) {
+            merged.putIfAbsent(p.getId(), p);
+        }
+        // 修复线：本人近 N 天点过赞 / 评论过的帖子不再推给本人（硬排除，不回补）。
+        Set<Long> cooldown = interactedRecently(viewerId, cfg, now);
         // 🛡 exclude（已缓存序列 id）在合并之后套：教育池里已下发过的内容续算时同样被排掉。
         List<ContentPost> usable = merged.values().stream()
-                .filter(p -> !exclude.contains(p.getId())).toList();
+                .filter(p -> !exclude.contains(p.getId()) && !cooldown.contains(p.getId())).toList();
         if (usable.isEmpty()) {
             return List.of();
         }
@@ -367,7 +378,6 @@ public class FeedRecommendationService {
                     commentCounts.getOrDefault(p.getId(), 0L)));
         }
 
-        FeedRankConfig cfg = platformConfig.feedRank();
         RankParams params = params(cfg, candidates);
         AttributeSchedule schedule = AttributeTemplate.forQuotas(cfg.getAttrFunQuota(),
                 cfg.getAttrEduQuota(), cfg.getAttrLifeQuota(), cfg.getWindowSize());
@@ -382,16 +392,61 @@ public class FeedRecommendationService {
 
         Map<Long, Double> authorBoost = authorFactors(candidates, cfg.getAuthorLevelBoost());
 
-        FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(candidates,
+        // 修复线（2026-11-12）：看过暂不出现 —— 近 N 小时下发过的先不排，没看过的排完仍不够 wanted 才回补
+        // （回补那批照常吃曝光衰减）。分两次排而不是一次排完再截：一次排的话看过的会和没看过的混排，规则形同虚设。
+        Set<Long> held = seenStore.recentlySeen(key,
+                candidates.stream().map(RankCandidate::id).toList(), now, cfg.getSeenHideHours());
+        List<RankCandidate> unseen = held.isEmpty() ? candidates
+                : candidates.stream().filter(c -> !held.contains(c.id())).toList();
+        Map<String, Integer> speciesCounts = viewerSpeciesCounts(viewerId);
+        List<Long> picked = new ArrayList<>(rankBatch(unseen, decay, honored, throttle, authorBoost, now, params,
+                schedule, seed, speciesCounts, wanted));
+        if (picked.size() < wanted && !held.isEmpty()) {
+            List<RankCandidate> refill = candidates.stream().filter(c -> held.contains(c.id())).toList();
+            picked.addAll(rankBatch(refill, decay, honored, throttle, authorBoost, now, params, schedule, seed,
+                    speciesCounts, wanted - picked.size()));
+        }
+        return picked;
+    }
+
+    /** 引擎排一批（{@link #generate} 的两段共用）。 */
+    private List<Long> rankBatch(List<RankCandidate> batch, Map<Long, Double> decay, Set<Long> honored,
+            Map<Long, Double> throttle, Map<Long, Double> authorBoost, Instant now, RankParams params,
+            AttributeSchedule schedule, String seed, Map<String, Integer> speciesCounts, int wanted) {
+        if (batch.isEmpty() || wanted <= 0) {
+            return List.of();
+        }
+        FeedRankEngine.Result r = engine.rank(new FeedRankEngine.Input(batch,
                 decay, honored, throttle, authorBoost, now, params, schedule, seed,
-                viewerSpeciesCounts(viewerId)), wanted);
+                speciesCounts), wanted);
         if (r.attributeRelaxed() > 0 || r.speciesRelaxed() > 0) {
             // 🛡 级别 1、2 是**预期行为，不告警** —— 只记 debug 供排查（§6.2）。
             log.debug("推荐序降级 池={} 属性放宽={} 物种放宽={} 防扎堆让步={}",
-                    candidates.size(), r.attributeRelaxed(), r.speciesRelaxed(),
+                    batch.size(), r.attributeRelaxed(), r.speciesRelaxed(),
                     r.antiClumpOverridden());
         }
         return r.picked().stream().map(RankCandidate::id).toList();
+    }
+
+    /**
+     * 优质老帖池（修复线 2026-11-12）：近 N 天互动最高的前 M 条，经 {@link ContentPostRepository#findRankableByIds}
+     * 套完查看者过滤后返回。条数 0 = 关闭。
+     */
+    private List<ContentPost> qualityPoolPosts(Long viewerId, FeedRankConfig cfg, Instant now) {
+        List<Long> ids = qualityPool.topIds(cfg.getQualityPoolDays(), cfg.getQualityPoolSize(),
+                cfg.getCommentWeight(), now);
+        return ids.isEmpty() ? List.of() : posts.findRankableByIds(ids, viewerId != null, viewerId);
+    }
+
+    /** 本人近 N 天点过赞 / 评论过的帖子 id（修复线）。游客、天数 0 → 空集。 */
+    private Set<Long> interactedRecently(Long viewerId, FeedRankConfig cfg, Instant now) {
+        if (viewerId == null || cfg.getInteractedCooldownDays() <= 0) {
+            return Set.of();
+        }
+        Instant since = now.minus(Duration.ofDays(cfg.getInteractedCooldownDays()));
+        Set<Long> out = new HashSet<>(likes.findPostIdsLikedSince(viewerId, since));
+        out.addAll(comments.findPostIdsCommentedSince(viewerId, since));
+        return out;
     }
 
     /**

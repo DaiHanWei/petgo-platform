@@ -27,6 +27,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 class PinnedSlotIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate feedRankJdbc;
+
+    /**
+     * 修复线（2026-11-12）：本类验的是推荐流的<b>过滤 / 翻页</b>口径，不是排序。共享测试库积累了大量近期带赞的测试帖，
+     * 开着优质老帖池时每次多 300 条高互动候选，刚造的 0 互动帖会被挤出所翻的 10 页 —— 与被测口径无关的红。
+     * 用例期间关掉该池（条数 0），结束还原默认 300；优质老帖池另有 FeedRecommendationServiceTest / FeedRankQueryIntegrationTest 覆盖。
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void disableQualityPool() {
+        feedRankJdbc.update("UPDATE feed_rank_config SET quality_pool_size = 0 WHERE id = 1");
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreQualityPool() {
+        feedRankJdbc.update("UPDATE feed_rank_config SET quality_pool_size = 300 WHERE id = 1");
+    }
+
+    @Autowired
     private ContentPostRepository posts;
 
     @Autowired

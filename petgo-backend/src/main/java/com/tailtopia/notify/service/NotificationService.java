@@ -208,6 +208,14 @@ public class NotificationService {
      *
      * @return 落库（或被合并到）的那一行；T-29 跳过时也返回那一行
      */
+    /**
+     * 该触发人是否曾（含已读）就这个合并键通知过该接收人 —— 修复线评论点赞「取消后再赞不再发第二条」用。
+     */
+    @Transactional(readOnly = true)
+    public boolean actorEverNotified(long recipientUserId, String aggregateKey, long actorUserId) {
+        return aggregates.actorEverNotified(recipientUserId, aggregateKey, actorUserId);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Notification sendInteraction(long recipientUserId, NotificationType type, long actorUserId,
             String aggregateKey, String targetRef, Long commentId, String variant, String pushBodyText) {
@@ -240,7 +248,8 @@ public class NotificationService {
         // （角标已 +1、去抖键已占，通知却没了）。提交后再推，任何异常都只丢这一次推送。无事务（单测）时直接执行。
         runAfterCommit(() -> {
             try {
-                pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, pushBodyText);
+                pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, commentId,
+                        pushBodyText);
             } catch (RuntimeException e) {
                 log.warn("互动推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
             }
@@ -458,7 +467,7 @@ public class NotificationService {
     }
 
     private void pushInteraction(long recipientUserId, NotificationType type, String variant, String aggregateKey,
-            long notificationId, String token, String targetRef, String pushBodyText) {
+            long notificationId, String token, String targetRef, Long commentId, String pushBodyText) {
         // D-9：官方内容账号（role=ADMIN 的作者 shim）不登录 App、不接收推送，与虚拟号同样跳过（3.1 code-review F3）。
         if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
             return;
@@ -480,8 +489,11 @@ public class NotificationService {
             return;
         }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+        // 修复线：只有「赞了你的评论」推送 Ext 带 commentId（新版 App 点开直达帖子并定位这条评论），其余为 null = Ext 不变。
+        // ⚠️ 保持单一调用点：PushExitStructureTest 要求每个 pushToUser 调用点各配一道 pushAllowed 闸门。
+        Long extCommentId = Notification.VARIANT_COMMENT.equals(variant) ? commentId : null;
         pusher.pushToUser(recipientUserId, copy.title(type, variant, summary.get(), locale),
-                truncateBody(pushBodyText), type.name(), token, targetRef);
+                truncateBody(pushBodyText), type.name(), token, targetRef, extCommentId);
     }
 
     /**
@@ -531,6 +543,10 @@ public class NotificationService {
         if (aggregateKey.startsWith("LIKE:POST:")) {
             return LIKE_PUSH_KEY_PREFIX + aggregateKey.substring("LIKE:POST:".length());
         }
+        // 修复线：评论被赞同样 10 分钟内同一条评论只推一次；键与帖子分开（id 空间不同，不能共用 likepush:{id}）。
+        if (aggregateKey.startsWith("LIKE:COMMENT:")) {
+            return LIKE_PUSH_KEY_PREFIX + "comment:" + aggregateKey.substring("LIKE:COMMENT:".length());
+        }
         if (aggregateKey.startsWith("COMMENT:PLACE:")) {
             return PLACE_COMMENT_PUSH_KEY_PREFIX + aggregateKey.substring("COMMENT:PLACE:".length());
         }
@@ -551,7 +567,8 @@ public class NotificationService {
     /** 落库兜底标题（沿用改造前的中文串；不含昵称，AD-3）。通知中心由 App / Story 3.3 按 type 本地化。 */
     private static String fallbackTitle(NotificationType type, String variant) {
         return switch (type) {
-            case CONTENT_LIKED -> "有人赞了你的内容";
+            case CONTENT_LIKED -> Notification.VARIANT_COMMENT.equals(variant)
+                    ? "有人赞了你的评论" : "有人赞了你的内容";
             case CONTENT_COMMENTED -> Notification.VARIANT_REPLY.equals(variant)
                     ? "有人回复了你的评论" : "有人评论了你的内容";
             case USER_FOLLOWED -> "有人关注了你";

@@ -159,4 +159,25 @@ class FeedSeenStoreTest {
 
         store.markSeen(FeedRankCacheKey.forUser(1L), List.of(9L), NOW);
     }
+
+    // ── 修复线（2026-11-12）：看过暂不出现 ──────────────────────────────
+
+    @Test
+    void recentlySeenReturnsOnlyThoseWithinTheHourWindow() {
+        FeedRankCacheKey key = FeedRankCacheKey.forUser(1L);
+        List<Double> scores = new java.util.ArrayList<>();
+        scores.add((double) NOW.minus(java.time.Duration.ofHours(2)).toEpochMilli()); // 2 小时前 → 在 24h 内
+        scores.add((double) NOW.minus(java.time.Duration.ofHours(30)).toEpochMilli()); // 30 小时前 → 不在
+        scores.add(null); // 从未下发
+        when(zset.score("feed:seen:u:1", "10", "11", "12")).thenReturn(scores);
+
+        assertThat(store.recentlySeen(key, List.of(10L, 11L, 12L), NOW, 24)).containsExactly(10L);
+    }
+
+    @Test
+    void recentlySeenIsEmptyForGuestOrZeroHoursWithoutTouchingRedis() {
+        assertThat(store.recentlySeen(FeedRankCacheKey.forGuest("anon"), List.of(10L), NOW, 24)).isEmpty();
+        assertThat(store.recentlySeen(FeedRankCacheKey.forUser(1L), List.of(10L), NOW, 0)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(zset);
+    }
 }

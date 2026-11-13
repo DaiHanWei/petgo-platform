@@ -52,6 +52,19 @@ public class NotificationAggregateDao {
     }
 
     /** 记一个触发人；已在这条通知里 → 什么都不做。返回是否新加（T-29：已存在则上层整条跳过）。 */
+    /**
+     * 这位触发人是否<b>曾经</b>（含已读）出现在该接收人、该合并键的通知里（修复线：评论点赞「一人一条评论只通知一次」）。
+     * 未读期间的重复由 upsert 的 SAME_ACTOR 分支挡住；本查询补上「已读后取消再赞」那一种。
+     */
+    public boolean actorEverNotified(long recipientUserId, String aggregateKey, long actorUserId) {
+        Boolean hit = jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM notifications n
+                               JOIN notification_actors a ON a.notification_id = n.id
+                               WHERE n.recipient_user_id = ? AND n.aggregate_key = ? AND a.actor_user_id = ?)
+                """, Boolean.class, recipientUserId, aggregateKey, actorUserId);
+        return Boolean.TRUE.equals(hit);
+    }
+
     public boolean addActor(long notificationId, long actorUserId) {
         return jdbc.update("""
                 INSERT INTO notification_actors (notification_id, actor_user_id, acted_at)

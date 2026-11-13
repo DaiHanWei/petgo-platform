@@ -106,6 +106,22 @@ public class FeedRankConfig {
     @Column(name = "edu_freshness_half_life_hours", nullable = false)
     private double eduFreshnessHalfLifeHours;
 
+    /** 优质老帖候选池：回看天数（修复线 2026-11-12，默认 30）。4 项初值与 V20261112_1815 的库默认一致。 */
+    @Column(name = "quality_pool_days", nullable = false)
+    private int qualityPoolDays = 30;
+
+    /** 优质老帖候选池：按互动量取前 N 条（默认 300；0 = 关闭）。 */
+    @Column(name = "quality_pool_size", nullable = false)
+    private int qualityPoolSize = 300;
+
+    /** 点赞 / 评论过的帖子多少天内不再推给本人（默认 3；0 = 关闭）。 */
+    @Column(name = "interacted_cooldown_days", nullable = false)
+    private int interactedCooldownDays = 3;
+
+    /** 下发过的帖子多少小时内先不出现，不够才回补（默认 24；0 = 关闭）。 */
+    @Column(name = "seen_hide_hours", nullable = false)
+    private int seenHideHours = 24;
+
     @Column(name = "p95_recomputed_at")
     private Instant p95RecomputedAt;
 
@@ -266,6 +282,38 @@ public class FeedRankConfig {
 
     public void setSpeciesGeneralQuota(int v) {
         this.speciesGeneralQuota = v;
+    }
+
+    public int getQualityPoolDays() {
+        return qualityPoolDays;
+    }
+
+    public void setQualityPoolDays(int v) {
+        this.qualityPoolDays = v;
+    }
+
+    public int getQualityPoolSize() {
+        return qualityPoolSize;
+    }
+
+    public void setQualityPoolSize(int v) {
+        this.qualityPoolSize = v;
+    }
+
+    public int getInteractedCooldownDays() {
+        return interactedCooldownDays;
+    }
+
+    public void setInteractedCooldownDays(int v) {
+        this.interactedCooldownDays = v;
+    }
+
+    public int getSeenHideHours() {
+        return seenHideHours;
+    }
+
+    public void setSeenHideHours(int v) {
+        this.seenHideHours = v;
     }
 
     public Instant getP95RecomputedAt() {
