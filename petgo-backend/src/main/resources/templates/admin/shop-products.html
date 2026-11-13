@@ -54,6 +54,11 @@
                                 th:text="#{admin.v142.sku.filter.missing}">缺重量体积</option>
                     </select>
                 </label>
+                <!--/* 2026-11-13：按商品名搜索（不区分大小写，模糊匹配） */-->
+                <label class="field"><span th:text="#{admin.shop.products.filter.name}">商品名称</span>
+                    <input type="search" name="name" class="inp" maxlength="60" autocomplete="off"
+                           th:value="${filterName}" th:placeholder="#{admin.shop.products.filter.namePlaceholder}"/>
+                </label>
                 <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.search}">查询</button>
             </form>
 

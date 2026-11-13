@@ -69,16 +69,30 @@ public class AdminShopProductService {
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<ShopProduct> page(ProductCategory category,
             Boolean active, int page, int size) {
-        return page(category, active, false, page, size);
+        return page(category, active, false, null, page, size);
     }
 
     /** V1.4.2 shop-admin Story 4.2（G5）：{@code missingPackage = true} 只看至少一个 SKU 缺包裹参数的商品。 */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<ShopProduct> page(ProductCategory category,
             Boolean active, boolean missingPackage, int page, int size) {
+        return page(category, active, missingPackage, null, page, size);
+    }
+
+    /**
+     * 2026-11-13：{@code name} 按商品名模糊搜索（不区分大小写，{@code % _ \} 按字面匹配）；空 / 空白 = 不过滤。
+     * 只搜 name（运营要求），不像 App 侧搜索那样连 brand 一起搜。
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ShopProduct> page(ProductCategory category,
+            Boolean active, boolean missingPackage, String name, int page, int size) {
         var pr = org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(1, size));
-        return missingPackage ? products.adminSearchMissingPackage(category, active, pr)
-                : products.adminSearch(category, active, pr);
+        String pattern = com.tailtopia.shop.service.ShopProductQueryService.likePattern(name);
+        if (pattern == null) {
+            pattern = "%";
+        }
+        return missingPackage ? products.adminSearchMissingPackage(category, active, pattern, pr)
+                : products.adminSearch(category, active, pattern, pr);
     }
 
     /** 摘要条三格：上架商品数 · 下架商品数 · SKU 总数（AC1）。 */

@@ -6,7 +6,7 @@
   rows(oob)   — 表格 + 翻页（htmx 换 #shop-product-rows 的 innerHTML，摘要条以 oob 跟上）
   ⚠️ 操作列是「编辑」不是「详情」：2026-09-07 回滚的原文（AC1 点名），跳独立表单页而不是抽屉
      —— 这一页字段量太大，塞不进 480px 抽屉。
-  模型：products / summary / skuCount / minPrice / canEdit / filterCategory / filterActive / page / hasNext；
+  模型：products / summary / skuCount / minPrice / canEdit / filterCategory / filterActive / filterName / page / hasNext；
   V1.4.2 shop-admin 4.2：filterPackage（MISSING|null）/ missingPackageByProduct（商品 id → 缺包裹参数的 SKU 数）。
 -->
 <body>
@@ -96,10 +96,10 @@
     </div>
     <div class="pager" th:if="${!#lists.isEmpty(products)}" th:attr="data-page=${page}">
         <a th:if="${page > 0}" href="#" th:text="#{admin.v130.places.pager.prev}"
-           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},packageData=${filterPackage},page=${page - 1})}"
+           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},packageData=${filterPackage},name=${filterName},page=${page - 1})}"
            hx-target="#shop-product-rows" hx-swap="innerHTML" hx-push-url="true">上一页</a>
         <a th:if="${hasNext}" href="#" th:text="#{admin.v130.places.pager.next}"
-           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},packageData=${filterPackage},page=${page + 1})}"
+           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},packageData=${filterPackage},name=${filterName},page=${page + 1})}"
            hx-target="#shop-product-rows" hx-swap="innerHTML" hx-push-url="true">下一页</a>
     </div>
 </th:block>
