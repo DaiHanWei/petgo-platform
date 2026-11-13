@@ -1,16 +1,18 @@
 name: flyway-guard
 
-# Flyway 迁移号守门（决策 E6）：树内重号 / 动冻结迁移 / 非时间戳新号 / 与 main 撞号 → 不绿
+# Flyway 迁移号守门（决策 E6；analytics-pipeline 1.1 起业务库 / 埋点库两个目录分别检查）：树内重号 / 动冻结迁移 / 非时间戳新号 / 与 main 撞号 → 不绿
 on:
   push:
     branches: [main]
     paths:
       - "petgo-backend/src/main/resources/db/migration/**"
+      - "petgo-backend/src/main/resources/db/analytics-migration/**"
       - ".github/workflows/flyway-guard.yml"
       - "scripts/ci/check-flyway-versions.sh"
   pull_request:
     paths:
       - "petgo-backend/src/main/resources/db/migration/**"
+      - "petgo-backend/src/main/resources/db/analytics-migration/**"
       - ".github/workflows/flyway-guard.yml"
       - "scripts/ci/check-flyway-versions.sh"
 

@@ -47,6 +47,8 @@ jobs:
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       SPRING_PROFILES_ACTIVE: dev
+      # analytics-pipeline Story 1.1：埋点测试库（ApiIntegrationTest 读它拼 analytics.datasource.url）
+      ANALYTICS_TEST_DB_NAME: petgo_analytics_test
 
     steps:
       - uses: actions/checkout@v4
@@ -107,6 +109,12 @@ jobs:
             -v "$GITHUB_WORKSPACE/merchant-repo/src/main/resources/db/migration:/flyway/sql:ro" \
             flyway/flyway:11 $URL -locations=filesystem:/flyway/sql \
             -table=flyway_schema_history_merchant -outOfOrder=true -baselineOnMigrate=true -baselineVersion=0 migrate
+
+      # analytics-pipeline Story 1.1：建埋点测试库（第二数据源 + 第二套 Flyway）。由 petgo 用户建、属主就是它；
+      #   埋点迁移里的条件 GRANT 因只读角色不存在而跳过（预期）。库不建也能跑，但埋点管道会停用、相关 L1 测试会红。
+      #   上面「Apply TailTopia + merchant migrations」只针对业务库，不动。
+      - name: Create analytics test database
+        run: PGPASSWORD=petgo psql -h localhost -U petgo -d petgo -c "CREATE DATABASE $ANALYTICS_TEST_DB_NAME"
 
       # 使用项目级 .mvn/settings.xml（直连 Maven Central，见 maven.config）。含测试 → 出 jar。
       - name: Build & test (mvn package)

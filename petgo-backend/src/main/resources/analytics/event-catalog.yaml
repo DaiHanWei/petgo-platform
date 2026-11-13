@@ -23,7 +23,7 @@ events:
   # ======== app (12)
   - name: "Application Installed"
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: app
     description: "新装首启（Story 2.3）：既无自建安装标记、也无旧版本地数据时发"
     properties:
@@ -31,14 +31,14 @@ events:
       - { name: build, type: string, description: "App 构建号（PackageInfo.buildNumber）" }
   - name: "Application Opened"
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: app
     description: "冷启动或每次回到前台（Story 2.3）；静默推送唤醒不报"
     properties:
       - { name: from_background, type: bool, description: "true = 从后台回到前台；false = 冷启动" }
   - name: "Application Updated"
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: app
     description: "升级后首启或版本号变化（Story 2.3）；升级不报 Installed"
     properties:
@@ -123,7 +123,7 @@ events:
       - { name: source, type: string, description: "来源 / 入口（受控枚举）" }
   - name: screen_viewed
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: app
     description: "页面浏览，取代 PostHog 的 $screen（Story 2.4）；页面名放属性 screen，如 toko_page"
     properties:
@@ -211,7 +211,7 @@ events:
     properties: []
   - name: user_identified
     source: APP
-    status: PLANNED
+    status: ACTIVE
     domain: auth
     description: "登录后关联身份（Story 2.2）：信封带 userId，属性不带任何明文用户 id"
     properties:

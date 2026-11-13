@@ -70,6 +70,7 @@ class EventCatalogTest {
         assertThat(c.allowedPropertyKeys("diary_only_toggled")).containsExactly("on");
     }
 
+    /** Story 1.2 预登记、Epic 2 落地后改 ACTIVE（PLANNED → ACTIVE）。 */
     @Test
     void ac2PlannedEventsPreRegistered() {
         EventCatalog c = load(EventCatalog.DEFAULT_LOCATION);
@@ -80,7 +81,7 @@ class EventCatalogTest {
 
         for (String name : planned) {
             assertThat(c.isRegistered(name)).as(name).isTrue();
-            assertThat(byName.get(name).status()).as(name).isEqualTo(Status.PLANNED);
+            assertThat(byName.get(name).status()).as(name).isEqualTo(Status.ACTIVE);
         }
         assertThat(c.allowedPropertyKeys("screen_viewed")).contains("screen");
         assertThat(c.allowedPropertyKeys("Application Opened")).contains("from_background");
