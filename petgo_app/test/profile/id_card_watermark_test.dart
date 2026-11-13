@@ -191,9 +191,9 @@ void main() {
     expect(IdCardWatermark.bandOpacity, lessThan(0.25), reason: '条带压太深卡面文字就读不清了');
   });
 
-  // 修复线 2026-11-13 产品定档 1/4：1/3 在手机屏上与高清几乎看不出差别。
-  test('预览 / 免费分享降清档位为高清的 1/4', () {
-    expect(kIdCardPreviewDownscale, 4.0);
+  // 修复线 2026-11-13 产品看实机四档对比后定 1/8：1/3、1/4 在手机屏上与高清几乎看不出差别。
+  test('预览 / 免费分享降清档位为高清的 1/8', () {
+    expect(kIdCardPreviewDownscale, 8.0);
   });
 
   testWidgets('水印绘制在 5 种画布比例下都不抛错', (tester) async {

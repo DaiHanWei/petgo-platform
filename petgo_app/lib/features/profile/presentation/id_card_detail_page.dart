@@ -256,7 +256,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     try {
       final origin = _shareOrigin();
       // 🛡 AC2：截**含水印**的那个 boundary。无水印仍需付费。
-      // V1.4.2 KTP 防绕过 §3.2：免费分享图降到与预览同档（约 1/4），付费高清那一路不动。
+      // V1.4.2 KTP 防绕过 §3.2：免费分享图降到与预览同档（1/8），付费高清那一路不动。
       // 修复线 2026-11-13：已付费的卡页面上已无水印，分享也给原清晰度的无水印图（与页面所见一致）。
       final bytes = card.hdUnlocked
           ? await _capture(idCardBoundaryKey)
