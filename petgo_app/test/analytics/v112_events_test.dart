@@ -377,6 +377,9 @@ void main() {
         // 游客展示页「真实宠物」区（V1.5.0 onboarding-recall Story 1.3 · FR-175）。模块是「游客态的真实宠物区」——
         // 它挂在游客 Diary 展示页上，但 `diary_guest_*` 已用于示例内容引导；事件名由 PRD §4 定死，扩表、不改名。
         'guest_',
+        // 新手任务卡（V1.5.0 onboarding-recall Story 3.1 · FR-176）。模块是「新手任务」这件事 ——
+        // 同一张卡挂在宠物里程碑页与账号级里程碑页两处（page 属性区分），不属于任何单页；事件名由 PRD §4 定死。
+        'newbie_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[

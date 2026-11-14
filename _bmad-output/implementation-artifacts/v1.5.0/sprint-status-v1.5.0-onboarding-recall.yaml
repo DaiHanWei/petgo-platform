@@ -58,8 +58,8 @@ development_status:
   2-4-新手存量补算: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-新手任务卡改版: ready-for-dev
+  epic-3: in-progress
+  3-1-新手任务卡改版: review
   3-2-新手账号成就区与我的页入口: ready-for-dev
   3-3-新手毕业庆祝与通知落点: ready-for-dev
   epic-3-retrospective: optional

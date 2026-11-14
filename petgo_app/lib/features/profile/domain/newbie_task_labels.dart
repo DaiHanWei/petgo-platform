@@ -1,22 +1,33 @@
-import 'package:flutter/widgets.dart';
+import '../../../l10n/app_localizations.dart';
 
-/// 新手任务标签本地化（en / id）（Story 7.3 · FR-47）。后端只回稳定 `key`；显示串一律客户端出，
-/// 杜绝后端语言泄漏。兜底：未知 key 返回 key 本身，绝不回退到后端中文。
+/// 新手任务 7 项的对外 key（V1.5.0 onboarding-recall Story 3.1 · FR-176，与后端 `NewbieTask` 逐字一致，固定顺序）。
+const List<String> kNewbieTaskKeys = [
+  'FIRST_DIARY',
+  'FIRST_LIKE_RECEIVED',
+  'FIRST_FOLLOW',
+  'FIRST_LIKE_GIVEN',
+  'FIRST_COMMENT',
+  'FIRST_REPLY',
+  'ONE_WEEK',
+];
+
+/// 任务名（本地化，arb 逐字照整合稿「新增文案」表）。
 ///
-/// ⚠️ id 翻译为工程初稿，建议印尼母语者复核。
-const Map<String, ({String en, String id})> kNewbieTaskLabels = {
-  'CREATE_PROFILE': (en: 'Create pet profile', id: 'Buat profil hewan'),
-  'FIRST_PHOTO': (en: 'Upload first growth photo', id: 'Unggah foto pertama'),
-  'SHARE_CARD': (en: 'Share pet ID card', id: 'Bagikan kartu identitas'),
-  // bug 20260727-367 文案调整（en 为提报指定；id 随之对齐，仍待母语复核）。
-  'SAVE_CONSULT': (en: 'Save a consult result', id: 'Simpan hasil konsultasi'),
-  'FIRST_DAILY': (en: 'Post a moment', id: 'Posting momen'),
-  'FIRST_HEALTH_RECORD': (en: 'Add a health record', id: 'Tambah catatan kesehatan'),
-};
+/// 🔴 未知 key 返回 null —— 调用方**不渲染该行**，不再把大写 key 原样露给用户（V1.5.0 之前的兜底会露原文）。
+/// V1.5.0 之前的 6 个旧 key 已随后端改为 7 项而删除。
+String? newbieTaskLabel(String key, AppLocalizations l10n) => switch (key) {
+      'FIRST_DIARY' => l10n.newbieTaskFirstDiary,
+      'FIRST_LIKE_RECEIVED' => l10n.newbieTaskFirstLikeReceived,
+      'FIRST_FOLLOW' => l10n.newbieTaskFirstFollow,
+      'FIRST_LIKE_GIVEN' => l10n.newbieTaskFirstLikeGiven,
+      'FIRST_COMMENT' => l10n.newbieTaskFirstComment,
+      'FIRST_REPLY' => l10n.newbieTaskFirstReply,
+      'ONE_WEEK' => l10n.newbieTaskOneWeek,
+      _ => null,
+    };
 
-/// 按 key + locale 返回本地化新手任务标签。未知 key 兜底返回 key。
-String localizedNewbieTaskLabel(String key, Locale locale) {
-  final t = kNewbieTaskLabels[key];
-  if (t == null) return key;
-  return locale.languageCode == 'id' ? t.id : t.en;
+/// 任务的对外序号 1–7（埋点 `task`）；未知 key → null。
+int? newbieTaskOrdinal(String key) {
+  final i = kNewbieTaskKeys.indexOf(key);
+  return i < 0 ? null : i + 1;
 }
