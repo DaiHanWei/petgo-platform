@@ -75,6 +75,10 @@ public class GiftCatalogItem {
     @Column(name = "updated_by")
     private Long updatedBy;
 
+    /** V1.5.0 gift-pack Story 1-1（D-1）：所属分类（{@code gift_categories.id}）；专属礼物恒空。写入在 Story 1-2。 */
+    @Column(name = "category_id")
+    private Long categoryId;
+
     protected GiftCatalogItem() {
     }
 
@@ -229,6 +233,11 @@ public class GiftCatalogItem {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    /** 所属分类 id（可空：专属礼物 / 上线前未归类）。 */
+    public Long getCategoryId() {
+        return categoryId;
     }
 
     public Long getUpdatedBy() {

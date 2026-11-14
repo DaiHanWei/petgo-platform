@@ -94,4 +94,16 @@ public interface GiftOrderRepository extends JpaRepository<GiftOrder, Long> {
     List<GiftOrder> findDeliveredForNotify(@Param("petIds") java.util.Collection<Long> petIds,
             @Param("senderIds") java.util.Collection<Long> senderIds, @Param("status") GiftOrderStatus status,
             @Param("since") java.time.Instant since, @Param("until") java.time.Instant until);
+
+    /**
+     * V1.5.0 gift-pack Story 1-1（D-3）：目录「谁送过」——这只宠物已送达订单按（礼物, 送礼人）聚合的最近送达时刻，
+     * 一行三列 {@code [gift_id, sender_id, last_at]}。一次请求一条 SQL（不 N+1），走 {@code ix_gift_orders_pet_status}。
+     */
+    @Query(value = """
+            SELECT gift_id, sender_id, max(delivered_at) AS last_at
+              FROM gift_orders
+             WHERE pet_id = :petId AND status = 'DELIVERED'
+             GROUP BY gift_id, sender_id
+            """, nativeQuery = true)
+    List<Object[]> deliveredSendersOfPet(@Param("petId") long petId);
 }

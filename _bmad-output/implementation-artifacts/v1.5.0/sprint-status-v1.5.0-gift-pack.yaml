@@ -51,8 +51,8 @@ development_status:
   4-1-礼包权益次数表与发放扣减接口: review
 
   # —— 送礼优化 ——
-  epic-1: backlog
-  1-1-送礼分类数据与目录接口: ready-for-dev
+  epic-1: in-progress
+  1-1-送礼分类数据与目录接口: review
   1-2-送礼后台分类管理: ready-for-dev
   1-3-送礼祝福语与拆开状态: ready-for-dev
   1-4-送礼逐笔列表拆礼物与详情接口: ready-for-dev
