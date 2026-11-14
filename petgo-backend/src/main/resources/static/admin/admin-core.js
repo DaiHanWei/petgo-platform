@@ -73,6 +73,12 @@ function tailtopiaSecondConfirmPassed(form) {
 function tailtopiaConfirmMessage(form) {
     var msg = form.getAttribute && form.getAttribute('data-confirm');
     if (!msg) { return null; }
+    // V1.5.0 gift-pack Story 5-1：data-confirm-uncheck="字段名" —— 只在该 checkbox 由勾变不勾时才确认（停售确认；重新勾选不问）。
+    var uncheck = form.getAttribute('data-confirm-uncheck');
+    if (uncheck) {
+        var box = form.querySelector('input[type="checkbox"][name="' + uncheck + '"]');
+        if (!box || !box.defaultChecked || box.checked) { return null; }
+    }
     if (msg.indexOf('{') !== -1) {
         var args = tailtopiaConfirmArgs(form);
         for (var i = 0; i < Math.max(args.length, 3); i++) {
@@ -1569,4 +1575,21 @@ document.addEventListener('submit', function (e) {
     } else {
         window.location.href = url;
     }
+});
+
+// V1.5.0 gift-pack Story 5-1 · AC2.2：运营弹窗 / 系统通知选「超值礼包页」且礼包已停售 → 显示提示（[data-show-when-app-page]）。
+//   服务端首屏已按当前值渲染 hidden；这里只在改「跳转类型」或「App 页面」下拉时重算。
+function tailtopiaSyncAppPageBanners(form) {
+    if (!form || !form.querySelectorAll) { return; }
+    var type = form.querySelector('select[name="targetType"]');
+    var page = form.querySelector('select[name="targetValue"][id$="-tpage"]');
+    Array.prototype.forEach.call(form.querySelectorAll('[data-show-when-app-page]'), function (el) {
+        var want = el.getAttribute('data-show-when-app-page');
+        el.hidden = !(type && type.value === 'APP_PAGE' && page && page.value === want);
+    });
+}
+document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t || !t.name || (t.name !== 'targetType' && t.name !== 'targetValue')) { return; }
+    tailtopiaSyncAppPageBanners(t.closest && t.closest('form'));
 });

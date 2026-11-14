@@ -9,11 +9,12 @@
   readonly（true = 保存钮固定禁用并显示 readonlyNote）、confirmDiffNote（可选：确认弹层末尾追加的一句提醒，V1.3.2 Story 3.1；缺省 = 行为不变）。
   confirmDiffTitle（可选：确认弹层标题，V1.4.0 ① Story 4.1；缺省仍取 admin.v130.config.confirm.title，输出逐字不变）。
   cfgFootSlot（可选：插在页脚保存钮左侧的片段，V1.4.0 L2 第四轮 · 等级表「＋ 追加等级」；缺省 = 输出逐字不变）。
+  confirmMsg / confirmUncheck（可选，V1.5.0 gift-pack Story 5-1）：静态确认文案 + 只在该 checkbox「由勾变不勾」时才确认（admin-core.js）；缺省 = 输出逐字不变。
   需要服务端确认弹层的卡（V1.3.4 AB-22）不设 confirmDiff，hxPost 指向只校验的预检端点，由它回 fragments/confirm-modal 到页面 #confirm-host。
 -->
 <body>
 <form class="cfg-card card" th:fragment="configCard(titleSlot, formSlot, saveLabelSlot)" method="post" data-config-card
-      th:attr="action=${action},id=${cardId},hx-post=${hxPost},hx-target=${hxPost != null and cardId != null} ? ('#' + ${cardId} + '-err') : null,hx-swap=${hxPost != null} ? 'innerHTML' : null,data-confirm-diff=${confirmDiff} ? 'true' : null,data-error-fields=${errorFields},data-readonly=${readonly} ? 'true' : null,data-confirm-diff-title=${confirmDiff} ? (${confirmDiffTitle} ?: #{admin.v130.config.confirm.title}) : null,data-confirm-diff-line=${confirmDiff} ? #{admin.v130.config.confirm.diff} : null,data-confirm-diff-on=${confirmDiff} ? #{admin.v130.config.confirm.on} : null,data-confirm-diff-off=${confirmDiff} ? #{admin.v130.config.confirm.off} : null,data-confirm-diff-note=${confirmDiffNote != null and confirmDiff == true} ? ${confirmDiffNote} : null">
+      th:attr="action=${action},id=${cardId},hx-post=${hxPost},hx-target=${hxPost != null and cardId != null} ? ('#' + ${cardId} + '-err') : null,hx-swap=${hxPost != null} ? 'innerHTML' : null,data-confirm-diff=${confirmDiff} ? 'true' : null,data-error-fields=${errorFields},data-readonly=${readonly} ? 'true' : null,data-confirm-diff-title=${confirmDiff} ? (${confirmDiffTitle} ?: #{admin.v130.config.confirm.title}) : null,data-confirm-diff-line=${confirmDiff} ? #{admin.v130.config.confirm.diff} : null,data-confirm-diff-on=${confirmDiff} ? #{admin.v130.config.confirm.on} : null,data-confirm-diff-off=${confirmDiff} ? #{admin.v130.config.confirm.off} : null,data-confirm-diff-note=${confirmDiffNote != null and confirmDiff == true} ? ${confirmDiffNote} : null,data-confirm=${confirmMsg},data-confirm-uncheck=${confirmUncheck}">
     <div class="cfg-head">
         <h2 class="cfg-title" th:replace="${titleSlot} ?: ~{}"></h2>
         <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>

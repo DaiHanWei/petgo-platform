@@ -5,6 +5,8 @@ import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PetSlotPricingForm;
+import com.tailtopia.admin.config.service.StarterPackConfigChange;
+import com.tailtopia.admin.config.dto.StarterPackConfigForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.admin.config.service.AdminConfigService;
@@ -87,6 +89,10 @@ public class AdminConfigController {
             "petSlot", json(Map.of(
                     "admin.err.config.petSlotPriceMin", "petSlotMonthlyPrice",
                     "admin.err.config.petSlotPriceMax", "petSlotMonthlyPrice")),
+            // V1.5.0 gift-pack Story 5-1：超值礼包卡（三档价一起标红，服务端不区分哪一档越界）
+            "valuePack", json(Map.of(
+                    "admin.err.config.starterPackPriceMin", "starterPackTier1Price,starterPackTier2Price,starterPackTier3Price",
+                    "admin.err.config.starterPackPriceMax", "starterPackTier1Price,starterPackTier2Price,starterPackTier3Price")),
             "pawcoin", json(Map.of(
                     "admin.err.config.premiumRateRange", "premiumRate",
                     "admin.err.config.premiumFixedNegative", "premiumFixed")),
@@ -626,6 +632,41 @@ public class AdminConfigController {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
+    }
+
+    /**
+     * 「超值礼包」配置卡（V1.5.0 gift-pack Story 5-1 · AC1）：三档价 + 总开关。权限沿用 {@code config.edit}（看 {@code config.view}）。
+     * ⚠️ checkbox 未勾选时浏览器不提交该参数 ⇒ {@code starterPackEnabled} 必须 {@code defaultValue="false"}（同分享奖励卡）。
+     * flash 按变化类型：改价 / 停售 / 恢复销售（同时改价与开关 → 取开关那条）；无变化仍回卡（不审计）。
+     */
+    @PostMapping("/admin/config/value-pack")
+    @PreAuthorize(EDIT_AUTH)
+    public String updateValuePack(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam long starterPackTier1Price, @RequestParam long starterPackTier2Price,
+            @RequestParam long starterPackTier3Price,
+            @RequestParam(defaultValue = "false") boolean starterPackEnabled, HxRequest hx, Model model,
+            HttpServletResponse response, RedirectAttributes flash) {
+        StarterPackConfigForm form = new StarterPackConfigForm(starterPackTier1Price, starterPackTier2Price,
+                starterPackTier3Price, starterPackEnabled);
+        if (hx.isHtmx()) {
+            StarterPackConfigChange change = write.updateStarterPack(form, admin.getAdminAccountId());
+            return savedCard("cfg-value-pack", "config-card-value-pack", valuePackFlashKey(change), model, response);
+        }
+        try {
+            StarterPackConfigChange change = write.updateStarterPack(form, admin.getAdminAccountId());
+            flash.addFlashAttribute("toast", msg.get(valuePackFlashKey(change)));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/config";
+    }
+
+    static String valuePackFlashKey(StarterPackConfigChange change) {
+        return switch (change) {
+            case DISABLED -> "admin.v150.valuePack.toast.disabled";
+            case ENABLED -> "admin.v150.valuePack.toast.enabled";
+            case PRICES, NONE -> "admin.v150.valuePack.toast.prices";
+        };
     }
 
     @PostMapping("/admin/config/pawcoin")

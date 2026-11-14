@@ -107,6 +107,10 @@
             </div>
         </div>
     </div>
+    <!--/* V1.5.0 gift-pack Story 5-1 · AC2.2：选了「超值礼包页」且礼包已停售 → 提示（admin-core.js 随下拉切换重算）。 */-->
+    <div class="banner warn" th:if="${@starterPackAdminView.disabled()}" data-show-when-app-page="STARTER_PACK"
+         th:hidden="${form.targetType != 'APP_PAGE' or form.targetValue != 'STARTER_PACK'}"
+         th:text="#{admin.v150.valuePack.popupOffBanner}">超值礼包已停售：App 里点按钮只会关闭弹窗，不会跳转。</div>
 </th:block>
 
 <!--/* 只读展示：类型 + 值（列表单元格 / 只读详情共用）。t = 类型名字符串，v = 值。 */-->

@@ -293,6 +293,9 @@ public final class AuditActions {
     public static final String GROWTH_RULE_UPDATED = "GROWTH_RULE_UPDATED";
     /** 改消费换算（两档比例 + 支付用途归档）。target = {@code spend}。 */
     public static final String GROWTH_SPEND_CONFIG_UPDATED = "GROWTH_SPEND_CONFIG_UPDATED";
+
+    /** V1.5.0 gift-pack Story 5-1：「超值礼包」配置卡保存（{@code AdminConfigService.commit} 拼出 {@code CONFIG_UPDATE_VALUE_PACK}）。 */
+    public static final String CONFIG_UPDATE_VALUE_PACK = "CONFIG_UPDATE_VALUE_PACK";
     /** 改等级表（门槛 / 末尾追加一级），并入库一次全量重算任务。target = {@code levels}。 */
     public static final String GROWTH_LEVEL_TABLE_UPDATED = "GROWTH_LEVEL_TABLE_UPDATED";
     /** 失败 / 僵死的重算任务重新执行。target = 新任务 id。 */

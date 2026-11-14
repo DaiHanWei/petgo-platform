@@ -5,6 +5,7 @@ import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PetSlotPricingForm;
+import com.tailtopia.admin.config.dto.StarterPackConfigForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.ConfigChangeLog;
@@ -183,6 +184,44 @@ public class AdminConfigService {
         c.setPetSlotMonthlyPrice(form.petSlotMonthlyPrice());
         pricingRepo.save(c);
         commit(logs, adminId, "PRICING", "pricing_config");
+    }
+
+    /**
+     * 「超值礼包」配置卡（V1.5.0 gift-pack Story 5-1 · AC1.4 · D-21）：三档价 ≥100 且 ≤ {@link #MAX_TIER_AMOUNT}（否则 422）；
+     * 真变化才写 {@code config_change_logs}（PRICING，字段名 = 列名）+ 审计 {@code CONFIG_UPDATE_VALUE_PACK}；无变化不写不审计。
+     *
+     * @return 变化类型（控制器按它选 flash：改价 / 停售 / 恢复销售；开关变化优先）
+     */
+    @Transactional
+    public StarterPackConfigChange updateStarterPack(StarterPackConfigForm form, long adminId) {
+        for (long price : new long[] {form.tier1Price(), form.tier2Price(), form.tier3Price()}) {
+            require(price >= MIN_UNLOCK_PRICE, "价格须为 ≥100 的整数（IDR）", "admin.err.config.starterPackPriceMin");
+            require(price <= MAX_TIER_AMOUNT, "价格须 ≤ 100000000 IDR", "admin.err.config.starterPackPriceMax");
+        }
+        PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.PRICING, "starter_pack_tier1_price", c.getStarterPackTier1Price(), form.tier1Price(),
+                adminId);
+        diff(logs, ConfigType.PRICING, "starter_pack_tier2_price", c.getStarterPackTier2Price(), form.tier2Price(),
+                adminId);
+        diff(logs, ConfigType.PRICING, "starter_pack_tier3_price", c.getStarterPackTier3Price(), form.tier3Price(),
+                adminId);
+        boolean switched = c.isStarterPackEnabled() != form.enabled();
+        diff(logs, ConfigType.PRICING, "starter_pack_enabled", c.isStarterPackEnabled(), form.enabled(), adminId);
+        if (logs.isEmpty()) {
+            return StarterPackConfigChange.NONE; // 无变更 → 不写、不审计。
+        }
+        c.setStarterPackTier1Price(form.tier1Price());
+        c.setStarterPackTier2Price(form.tier2Price());
+        c.setStarterPackTier3Price(form.tier3Price());
+        c.setStarterPackEnabled(form.enabled());
+        pricingRepo.save(c);
+        commit(logs, adminId, "VALUE_PACK", "pricing_config");
+        if (switched) {
+            return form.enabled() ? StarterPackConfigChange.ENABLED : StarterPackConfigChange.DISABLED;
+        }
+        return StarterPackConfigChange.PRICES;
     }
 
     // ── PawCoin ───────────────────────────────────────────────────────────────

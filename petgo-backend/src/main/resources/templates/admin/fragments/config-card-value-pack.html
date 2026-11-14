@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · 「超值礼包」卡（V1.5.0 gift-pack Story 5-1 · AB-41 · 后台稿 H 泳道）。套模板 D，插在「宠物名额月租价格」卡之后。
+  POST /admin/config/value-pack（starterPackTier1Price / 2 / 3：≥100 且 ≤100000000；starterPackEnabled：checkbox，未勾选不提交 ⇒ false）。
+  权限沿用 config.edit / config.view。每档旁「单买合计 Rp{0}（按当前单价）」由服务端 StarterPackTier.separateTotal 算（@starterPackAdminView）。
+  取消勾选保存时原生确认（data-confirm + data-confirm-uncheck，admin-core.js）；重新勾选不确认。停售时标题旁「已停售」标签。
+-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/config/value-pack},hxPost=@{/admin/config/value-pack},cardId='cfg-value-pack',confirmDiff=false,
+                   confirmMsg=#{admin.v150.valuePack.confirmDisable},confirmUncheck='starterPackEnabled',
+                   errorFields=${errorFields?.get('valuePack')},view=${@starterPackAdminView},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::vp-title}, ~{::vp-form}, #{admin.config.petSlot.btn.save})}">
+        <h2 class="cfg-title" th:fragment="vp-title">
+            <span th:text="#{admin.v150.valuePack.title}">超值礼包</span>
+            <span class="badge badge-warn" th:if="${!pricing.starterPackEnabled}" data-value-pack-off
+                  th:text="#{admin.v150.valuePack.offTag}">已停售</span>
+        </h2>
+        <div th:fragment="vp-form">
+            <p class="hint" th:text="#{admin.v150.valuePack.desc}">三档价格只影响之后的新购买；已买到的次数和名额照常可用。礼包内容固定，不能在这里改。</p>
+            <!--/* 价格行同宠物名额卡：Rp 前缀 + 行内校验（admin-core.js data-price-row）。⚠️ 行标签必须是 label 内第一个 span。 */-->
+            <label class="field price-row" data-price-row th:each="t : ${view.tiers()}">
+                <span class="price-row-label" th:text="#{admin.v150.valuePack.tierLabel(${t.tier()})}">档 1</span>
+                <span class="price-inp">
+                    <span class="price-inp-prefix" aria-hidden="true">Rp</span>
+                    <input class="inp price-inp-field" type="number" min="100" max="100000000" step="1" required
+                           inputmode="numeric" data-money th:name="${'starterPackTier' + t.tier() + 'Price'}"
+                           th:value="${t.price()}" th:disabled="${!canEdit}"
+                           th:attr="aria-describedby=${'cfg-value-pack-err-tier' + t.tier()}"/>
+                </span>
+                <span class="hint" data-value-pack-ref
+                      th:text="#{admin.v150.valuePack.tierRef(${#numbers.formatInteger(t.separateTotal(), 1, 'POINT')})}">单买合计 Rp13.000（按当前单价）</span>
+                <span class="row-error" role="alert" hidden data-row-error th:id="${'cfg-value-pack-err-tier' + t.tier()}"
+                      th:attr="data-msg-min=#{admin.v150.valuePack.priceInvalid},data-msg-max=#{admin.err.config.starterPackPriceMax}"></span>
+            </label>
+            <!--/* 只读权限：总开关灰显（disabled，同分享奖励卡）。 */-->
+            <label class="field field-check"><span th:text="#{admin.v150.valuePack.switch}">超值礼包总开关（关掉即停售）</span>
+                <input type="checkbox" name="starterPackEnabled" value="true" th:checked="${pricing.starterPackEnabled}"
+                       th:disabled="${!canEdit}"/></label>
+            <p class="hint" th:text="#{admin.v150.valuePack.switchHint}">停售后 App 的礼包入口、付费抽屉推荐行、开屏弹窗的礼包页跳转都会消失；已买的次数照常可用，「Koin &amp; Jatah」入口不受影响。</p>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-value-pack :: card}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

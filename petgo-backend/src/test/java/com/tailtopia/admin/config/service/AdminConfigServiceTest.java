@@ -78,6 +78,10 @@ class AdminConfigServiceTest {
         set(c, "tailsonalityMatchUnlockPrice", 3000L);
         set(c, "monthlyFreeQuota", 1);
         set(c, "petSlotMonthlyPrice", 5000L);
+        set(c, "starterPackTier1Price", 8000L);
+        set(c, "starterPackTier2Price", 11000L);
+        set(c, "starterPackTier3Price", 13000L);
+        set(c, "starterPackEnabled", true);
         when(pricingRepo.findById(1L)).thenReturn(Optional.of(c));
         return c;
     }
@@ -243,6 +247,62 @@ class AdminConfigServiceTest {
         verify(audit, times(1)).record(eq(7L), eq("CONFIG_UPDATE_PRICING"), anyString(), anyString(), anyString());
         svc.updatePetSlotPricing(new PetSlotPricingForm(100), 7L); // 恰好下限可存
         svc.updatePetSlotPricing(new PetSlotPricingForm(AdminConfigService.MAX_TIER_AMOUNT), 7L); // 恰好上限可存
+    }
+
+    // ---- V1.5.0 gift-pack Story 5-1 · AC1.7：超值礼包配置卡 ----
+
+    @Test
+    void starterPackRejectsPriceBelowHundredOrAboveMaxOnAnyTier() {
+        seedPricing();
+        assertThatThrownBy(() -> svc.updateStarterPack(
+                new com.tailtopia.admin.config.dto.StarterPackConfigForm(8000, 99, 13000, true), 7L))
+                .isInstanceOf(AppException.class).hasMessageContaining("≥100");
+        assertThatThrownBy(() -> svc.updateStarterPack(new com.tailtopia.admin.config.dto.StarterPackConfigForm(
+                8000, 11000, AdminConfigService.MAX_TIER_AMOUNT + 1, true), 7L))
+                .isInstanceOf(AppException.class).hasMessageContaining("100000000");
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(pricingRepo, never()).save(any());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void starterPackNoChangeWritesNothing() {
+        seedPricing();
+        assertThat(svc.updateStarterPack(
+                new com.tailtopia.admin.config.dto.StarterPackConfigForm(8000, 11000, 13000, true), 7L))
+                .isEqualTo(StarterPackConfigChange.NONE);
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void starterPackPriceChangeAuditsOnceAsValuePack() {
+        PricingConfig c = seedPricing();
+        assertThat(svc.updateStarterPack(
+                new com.tailtopia.admin.config.dto.StarterPackConfigForm(9000, 11000, 13000, true), 7L))
+                .isEqualTo(StarterPackConfigChange.PRICES);
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).singleElement().satisfies(l -> {
+            assertThat(l.getField()).isEqualTo("starter_pack_tier1_price");
+            assertThat(l.getOldValue()).isEqualTo("8000");
+            assertThat(l.getNewValue()).isEqualTo("9000");
+        });
+        assertThat(c.getStarterPackTier1Price()).isEqualTo(9000);
+        verify(audit, times(1)).record(eq(7L), eq("CONFIG_UPDATE_VALUE_PACK"), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void starterPackSwitchChangeIsAuditedAndWinsOverPriceChange() {
+        PricingConfig c = seedPricing();
+        assertThat(svc.updateStarterPack(
+                new com.tailtopia.admin.config.dto.StarterPackConfigForm(9000, 11000, 13000, false), 7L))
+                .isEqualTo(StarterPackConfigChange.DISABLED);
+        assertThat(c.isStarterPackEnabled()).isFalse();
+        assertThat(svc.updateStarterPack(
+                new com.tailtopia.admin.config.dto.StarterPackConfigForm(9000, 11000, 13000, true), 7L))
+                .isEqualTo(StarterPackConfigChange.ENABLED);
+        verify(audit, times(2)).record(eq(7L), eq("CONFIG_UPDATE_VALUE_PACK"), anyString(), anyString(), anyString());
     }
 
     @Test
