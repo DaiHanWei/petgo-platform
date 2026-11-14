@@ -24,6 +24,20 @@ public enum LifecycleVariant {
     /** 已建档但仍未发布，D3 内容钩子 → Feed。先让他看见别人家的宠物，再谈自己动手。 */
     FEED,
 
-    /** 已发布 → 成长档案 Tab 看周回顾。留存钩子 + 分享获客的起点。 */
-    REVIEW
+    /** 已发布 → 成长档案 Tab 看周回顾。留存钩子 + 分享获客的起点。（V1.5.0 起计划器不再产出，保留供旧通知落点） */
+    REVIEW,
+
+    // ---- V1.5.0 onboarding-recall Story 6.1 · OR-23（旧值保留：旧通知 targetRef 仍可能是它们）----
+
+    /** 去看推荐宠物（App → {@code /pet-recommendations}）：没宠物 / 待互动 / 待发帖（D3）。 */
+    DISCOVER,
+
+    /** 第 7 天还差 N 项新手任务（App → 里程碑分发页）。 */
+    NEWBIE_TASKS,
+
+    /** 第 7 天新手毕业（App → 里程碑分发页 + {@code celebrate=lulus}）；这是 Lulus 唯一一次推送。 */
+    GRADUATED,
+
+    /** 当天已来过 → D1 / D3 作废：<b>只写 mark</b>（防窗口第二天补推），不推送、不写通知、不下发。 */
+    SKIPPED_ACTIVE
 }

@@ -33,17 +33,33 @@ class LifecyclePushCopyTest {
 
     private static final List<String> LOCALES = List.of("id", "en", "zh_CN");
 
-    /** 全部「节点 × 分层」组合，与 {@link LifecyclePushPlanner} 实际会产出的一致。 */
+    /**
+     * 全部「节点 × 分层」组合，与 {@link LifecyclePushPlanner} 实际会产出的一致（V1.5.0 onboarding-recall Story 6.1 · OR-23）。
+     * V1.5.0 前的 {@code D3.FEED / D7.REVIEW / D7.RECORD} 计划器已不产出（键仍保留在文件里，不再守）。
+     */
     private static final List<String> COPY_KEYS = List.of(
-            "LIFECYCLE_D1.RECORD", "LIFECYCLE_D1.CREATE_PROFILE",
-            "LIFECYCLE_D3.FEED", "LIFECYCLE_D3.CREATE_PROFILE",
-            "LIFECYCLE_D7.REVIEW", "LIFECYCLE_D7.RECORD", "LIFECYCLE_D7.CREATE_PROFILE",
+            "LIFECYCLE_D1.NO_PET", "LIFECYCLE_D1.CREATE_PROFILE", "LIFECYCLE_D1.RECORD", "LIFECYCLE_D1.SQUAD",
+            "LIFECYCLE_D1.ACTIVE",
+            "LIFECYCLE_D3.NO_PET", "LIFECYCLE_D3.CREATE_PROFILE", "LIFECYCLE_D3.SQUAD", "LIFECYCLE_D3.BESTIE",
+            "LIFECYCLE_D7.CREATE_PROFILE", "LIFECYCLE_D7.GRADUATED", "LIFECYCLE_D7.TASKS_LEFT",
             "LIFECYCLE_WINBACK.RECORD", "LIFECYCLE_WINBACK.CREATE_PROFILE");
 
-    /** 已建档分层：文案必须说得出宠物的名字。 */
+    /** 有宠物的分层（C / D / E）：文案必须说得出宠物的名字（手册铁律）。 */
     private static final List<String> MUST_NAME_THE_PET = List.of(
-            "LIFECYCLE_D1.RECORD", "LIFECYCLE_D3.FEED",
-            "LIFECYCLE_D7.REVIEW", "LIFECYCLE_D7.RECORD", "LIFECYCLE_WINBACK.RECORD");
+            "LIFECYCLE_D1.RECORD", "LIFECYCLE_D1.SQUAD", "LIFECYCLE_D1.ACTIVE",
+            "LIFECYCLE_D3.SQUAD", "LIFECYCLE_D3.BESTIE", "LIFECYCLE_WINBACK.RECORD");
+
+    /** A 没宠物 / B 待建档：没有宠物可叫，文案<b>不得</b>带宠物名。 */
+    private static final List<String> MUST_NOT_NAME_A_PET = List.of(
+            "LIFECYCLE_D1.NO_PET", "LIFECYCLE_D3.NO_PET",
+            "LIFECYCLE_D1.CREATE_PROFILE", "LIFECYCLE_D3.CREATE_PROFILE", "LIFECYCLE_D7.CREATE_PROFILE");
+
+    /**
+     * OQ-5 例外：第 7 天「刚毕业」「还差 N 项」是<b>账号级内容</b>（新手任务属于账号，不属于某只宠物），
+     * 豁免「必须带宠物名」规则；A 层（没宠物）也会收到，所以同样不得带宠物名。
+     */
+    private static final List<String> ACCOUNT_LEVEL_EXEMPT = List.of(
+            "LIFECYCLE_D7.GRADUATED", "LIFECYCLE_D7.TASKS_LEFT");
 
     /**
      * 手册明令禁止的空话。命中即失败 —— 「回来看看」不给用户任何回来的理由，
@@ -81,6 +97,44 @@ class LifecyclePushCopyTest {
     }
 
     @Test
+    void copyForUsersWithoutAPetNeverNamesOne() throws IOException {
+        for (String locale : LOCALES) {
+            Properties props = load(locale);
+            for (String key : concat(MUST_NOT_NAME_A_PET, ACCOUNT_LEVEL_EXEMPT)) {
+                String text = props.getProperty("notify." + key + ".title") + " "
+                        + props.getProperty("notify." + key + ".body");
+                assertThat(text).as(locale + " 的 " + key + " 是 A / B 层或账号级内容，不得带宠物名 {0}")
+                        .doesNotContain("{0}");
+            }
+        }
+    }
+
+    @Test
+    void tasksLeftCarriesTheCount() throws IOException {
+        for (String locale : LOCALES) {
+            assertThat(load(locale).getProperty("notify.LIFECYCLE_D7.TASKS_LEFT.body"))
+                    .as(locale + " 还差 N 项必须带 {2}").contains("{2}");
+        }
+    }
+
+    @Test
+    void speciesWordsExistForEveryPetType() throws IOException {
+        for (String locale : LOCALES) {
+            Properties props = load(locale);
+            for (String type : List.of("CAT", "DOG", "OTHER")) {
+                assertThat(props.getProperty("notify.species." + type)).as(locale + " 缺 notify.species." + type)
+                        .isNotBlank();
+            }
+        }
+    }
+
+    private static List<String> concat(List<String> a, List<String> b) {
+        List<String> out = new ArrayList<>(a);
+        out.addAll(b);
+        return out;
+    }
+
+    @Test
     void everyCopyRendersCleanlyThroughMessageFormat() throws IOException {
         for (String locale : LOCALES) {
             Properties props = load(locale);
@@ -88,14 +142,15 @@ class LifecyclePushCopyTest {
                 for (String suffix : List.of("title", "body")) {
                     String raw = props.getProperty("notify." + key + "." + suffix);
                     String rendered = new MessageFormat(raw, Locale.forLanguageTag("id"))
-                            .format(new Object[] {"Mochi"});
+                            .format(new Object[] {"Mochi", "Persia", "3"});
                     // 渲染后不得残留占位符（说明串里写了 {1} 之类没人给值的参数）。
                     assertThat(rendered).as(locale + " · " + key + "." + suffix + " 渲染后仍有占位符")
                             .doesNotContain("{").doesNotContain("}");
                     // 单引号没转义时 MessageFormat 会吞掉后面的内容 —— 用「渲染前后长度骤减」兜住。
                     assertThat(rendered.length())
                             .as(locale + " · " + key + "." + suffix + " 疑似单引号未转义（内容被吞）")
-                            .isGreaterThanOrEqualTo(raw.length() - "{0}".length());
+                            .isGreaterThanOrEqualTo(raw.length() - countPlaceholders(raw) * "{0}".length()
+                                    - countDoubledQuotes(raw));
                 }
             }
         }
@@ -176,6 +231,14 @@ class LifecyclePushCopyTest {
                         .doesNotContain("{0}");
             }
         }
+    }
+
+    private static int countPlaceholders(String raw) {
+        return raw.split("\\{[0-9]}", -1).length - 1;
+    }
+
+    private static int countDoubledQuotes(String raw) {
+        return raw.split("''", -1).length - 1;
     }
 
     private static Properties load(String locale) throws IOException {

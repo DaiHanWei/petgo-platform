@@ -240,6 +240,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("status") UserStatus status);
 
     /**
+     * 生命周期推送候选按节点窗口收窄（V1.5.0 onboarding-recall Story 6.1 · OR-21）：REAL USER ACTIVE、未注销、未停用，
+     * 且 WIB 注册日 ∈ {@code wibDates}（D1 / D3 / D7 两天窗口）。不再对全量 REAL 用户扫。
+     */
+    @Query(value = "SELECT * FROM users u WHERE u.role = 'USER' AND u.account_type = 'REAL' "
+            + "AND u.deleted_at IS NULL AND u.enabled = true AND u.status = 'ACTIVE' "
+            + "AND (u.created_at AT TIME ZONE 'Asia/Jakarta')::date IN (:wibDates)", nativeQuery = true)
+    List<User> findLifecyclePushCandidatesRegisteredOn(
+            @Param("wibDates") java.util.Collection<java.time.LocalDate> wibDates);
+
+    /**
      * 刷新最后活跃时刻，<b>每日至多写一次</b>（留存手册抓手 1 的流失判定依据）。
      *
      * <p>{@code dayStart} 之后已刷过则 WHERE 不命中 → Postgres 不产生行版本、不写 WAL，

@@ -5,6 +5,7 @@ import com.tailtopia.notify.repository.LifecyclePushMarkRepository;
 import com.tailtopia.notify.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -56,14 +57,19 @@ public class LifecyclePushDispatcher {
                     .orElse(false)) {
                 return;
             }
-            // 先落去重标记（唯一约束兜底并发）；再投递。
+            // 先落去重标记（唯一约束兜底并发）；再投递。variant 列存 <层>_<变体>（V1.5.0 Story 6.1 · OR-23，复盘用）。
             marks.save(LifecyclePushMark.of(push.userId(), push.type().name(), push.nodeKey(),
-                    push.variant().name()));
+                    push.markVariant()));
+            if (push.variant() == LifecycleVariant.SKIPPED_ACTIVE) {
+                return; // AC5：当天已来过 → 本节点作废，只留 mark（不推送、不写通知）
+            }
             String petName = push.petName() == null || push.petName().isBlank()
                     ? PET_NAME_FALLBACK : push.petName();
-            notificationService.sendWithCopy(push.userId(), push.type(), push.copyKey(),
-                    new Object[] {petName}, fallbackTitle(push), fallbackBody(push, petName),
-                    push.variant().name());
+            // V1.5.0 Story 6.1 · AC10：通知中心存渲染结果（sendRendered），与推送同一句。
+            // 参数固定 {0} 宠物名、{1} 品种词（品种为空 → 按收件人语言取 notify.species.<PetType>）、{2} N。
+            notificationService.sendRendered(push.userId(), push.type(), push.copyKey(),
+                    new Object[] {petName, breedArg(push), String.valueOf(push.remaining())},
+                    fallbackTitle(push), fallbackBody(push, petName), push.variant().name(), true);
         } catch (DataIntegrityViolationException dup) {
             // 并发/重扫撞唯一约束 → 已推，安全跳过。
         } catch (RuntimeException e) {
@@ -74,25 +80,49 @@ public class LifecyclePushDispatcher {
     }
 
     /**
+     * 品种词参数：默认宠物 {@code breed}（trim 非空）原样；否则物种词 {@code notify.species.<PetType>}，交给
+     * MessageSource 按收件人语言解析（{@link DefaultMessageSourceResolvable} 参数在渲染时同 locale 解析）；
+     * 无物种 → {@code OTHER}。缺键兜底印尼语 {@code Anabul}。
+     */
+    static Object breedArg(LifecyclePlannedPush push) {
+        if (push.breedWord() != null && !push.breedWord().isBlank()) {
+            return push.breedWord().trim();
+        }
+        String type = push.petType() == null || push.petType().isBlank() ? "OTHER" : push.petType();
+        return new DefaultMessageSourceResolvable(new String[] {"notify.species." + type, "notify.species.OTHER"},
+                null, "Anabul");
+    }
+
+    /**
      * i18n 缺键时的兜底标题（印尼语，市场主语言）。
      *
      * <p>兜底串刻意也写全 —— 缺键回退成一句英文调试文本，用户是会真的收到的。
      */
     private String fallbackTitle(LifecyclePlannedPush push) {
-        return switch (push.variant()) {
-            case CREATE_PROFILE -> "Tinggal satu langkah lagi";
-            case RECORD -> "Catat momen hari ini";
-            case FEED -> "Lihat kabar anabul lain";
-            case REVIEW -> "Rangkuman minggu ini";
+        return switch (push.copy()) {
+            case "CREATE_PROFILE" -> "Tinggal satu langkah lagi";
+            case "RECORD" -> "Catat momen hari ini";
+            case "NO_PET" -> "Gemesnya anabul hari ini 🥹";
+            case "SQUAD" -> "Geng anabul lagi ngumpul 🐾";
+            case "BESTIE" -> "Anabulmu belum punya bestie nih 🥺";
+            case "ACTIVE" -> "Anabulmu lagi ngapain hari ini? 👀";
+            case "GRADUATED" -> "Yeay, Lulus Pemula! 🎓";
+            case "TASKS_LEFT" -> "Seminggu bareng TailTopia 🥳";
+            default -> "Lihat kabar anabul hari ini";
         };
     }
 
     private String fallbackBody(LifecyclePlannedPush push, String petName) {
-        return switch (push.variant()) {
-            case CREATE_PROFILE -> "Bikin profil anabulmu, cuma butuh 30 detik";
-            case RECORD -> "Catat satu momen " + petName + " hari ini";
-            case FEED -> "Lihat apa yang dilakukan anabul lain hari ini";
-            case REVIEW -> "Lihat perkembangan " + petName + " minggu ini";
+        return switch (push.copy()) {
+            case "CREATE_PROFILE" -> "Bikin profil anabulmu, cuma butuh 30 detik";
+            case "RECORD" -> "Catat satu momen " + petName + " hari ini";
+            case "NO_PET" -> "Kucing, anjing, semua lagi pamer gaya. Ikuti yang bikin kamu meleleh 🐾";
+            case "SQUAD" -> "Kenalin " + petName + " ke teman sejenisnya, siapa tahu jadi bestie 💜";
+            case "BESTIE" -> "Yuk cariin teman buat " + petName + ", banyak yang lagi aktif! 🐾";
+            case "ACTIVE" -> "Satu foto lagi, biar Diary " + petName + " makin seru! 📸";
+            case "GRADUATED" -> "Semua Tugas Pemula beres! Ketuk buat rayain 🎉";
+            case "TASKS_LEFT" -> "Tinggal " + push.remaining() + " Tugas Pemula lagi, Lulus Pemula udah di depan mata! 💪";
+            default -> "Catat satu momen " + petName + " hari ini";
         };
     }
 }

@@ -73,8 +73,8 @@ development_status:
   5-2-推送纪念日催发布与生日改时: review
   epic-5-retrospective: optional
 
-  epic-6: backlog
-  6-1-召回分层节点与文案: ready-for-dev
+  epic-6: in-progress
+  6-1-召回分层节点与文案: review
   6-2-召回放量开关与版本门槛: ready-for-dev
   epic-6-retrospective: optional
 

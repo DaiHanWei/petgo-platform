@@ -2,12 +2,13 @@ package com.tailtopia.notify.lifecycle;
 
 import com.tailtopia.auth.dto.UserLifecycleSnapshot;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.notify.port.LifecycleContextPort;
+import com.tailtopia.notify.port.LifecycleContextPort.LifecycleContext;
 import com.tailtopia.notify.repository.LifecyclePushMarkRepository;
-import com.tailtopia.profile.service.PetProfileQueryService;
+import com.tailtopia.shared.schedule.ScheduleWindow;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -30,22 +31,31 @@ public class LifecyclePushJob {
     private static final Logger log = LoggerFactory.getLogger(LifecyclePushJob.class);
 
     private final AccountQueryService accounts;
-    private final PetProfileQueryService petProfiles;
+    private final LifecycleContextPort context;
     private final LifecyclePushPlanner planner;
     private final LifecyclePushDispatcher dispatcher;
     private final LifecyclePushProperties props;
     private final LifecyclePushMarkRepository marks;
+    private final Clock clock;
 
-    public LifecyclePushJob(AccountQueryService accounts, PetProfileQueryService petProfiles,
+    @org.springframework.beans.factory.annotation.Autowired
+    public LifecyclePushJob(AccountQueryService accounts, LifecycleContextPort context,
             LifecyclePushPlanner planner, LifecyclePushDispatcher dispatcher,
             LifecyclePushProperties props,
             LifecyclePushMarkRepository marks) {
+        this(accounts, context, planner, dispatcher, props, marks, Clock.systemUTC());
+    }
+
+    LifecyclePushJob(AccountQueryService accounts, LifecycleContextPort context, LifecyclePushPlanner planner,
+            LifecyclePushDispatcher dispatcher, LifecyclePushProperties props, LifecyclePushMarkRepository marks,
+            Clock clock) {
         this.accounts = accounts;
-        this.petProfiles = petProfiles;
+        this.context = context;
         this.planner = planner;
         this.dispatcher = dispatcher;
         this.props = props;
         this.marks = marks;
+        this.clock = clock;
     }
 
     /** 每日 19:00 WIB（12:00 UTC）扫描；cron 与开关可经配置覆盖。 */
@@ -55,11 +65,11 @@ public class LifecyclePushJob {
             log.info("lifecycle push disabled, skip daily scan");
             return;
         }
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        List<UserLifecycleSnapshot> users = accounts.lifecycleSnapshots();
-        Map<Long, String> petNames = petNameByOwner();
-        List<LifecyclePlannedPush> planned =
-                planner.plan(today, users, petNames, props.getWinbackAfterDays());
+        // V1.5.0 onboarding-recall Story 6.1 · AC1：日期一律 WIB；候选按 D1 / D3 / D7 窗口在 SQL 里收窄（OR-21）。
+        LocalDate today = LocalDate.now(clock.withZone(ScheduleWindow.WIB));
+        List<UserLifecycleSnapshot> users = accounts.lifecycleSnapshots(today);
+        LifecycleContext ctx = context.contextOf(users.stream().map(UserLifecycleSnapshot::userId).toList(), today);
+        List<LifecyclePlannedPush> planned = planner.plan(today, users, ctx, planOptions());
 
         int cap = Math.max(0, props.getDailyCap());
         // 🔴 先剔除已推过的计划项再套上限：planner 不知道去重表（D1 两天窗口、召回每天都重新计划），
@@ -69,26 +79,26 @@ public class LifecyclePushJob {
                         push.userId(), push.type().name(), push.nodeKey()))
                 .toList();
         int sent = 0;
+        int skippedActive = 0;
         for (LifecyclePlannedPush push : due) {
+            if (push.variant() == LifecycleVariant.SKIPPED_ACTIVE) {
+                dispatcher.dispatch(push); // 只写作废 mark，不占当日推送上限
+                skippedActive++;
+                continue;
+            }
             if (sent >= cap) {
                 break; // planned 已按 D1→D3→D7→召回 排序，截断先砍掉最不紧迫的召回。
             }
             dispatcher.dispatch(push); // @Async 逐条；去重 + 投递在内。
             sent++;
         }
-        // 手册每日 SOP「看召回漏斗」的第一行数据。planned > sent 说明当天被上限压住了，
-        // 剩下的明天补 —— 不记 userId / 宠物名（日志禁 PII）。
-        log.info("lifecycle push daily scan: users={} planned={} due={} dispatched={} cap={} deferred={}",
-                users.size(), planned.size(), due.size(), sent, cap, Math.max(0, due.size() - sent));
+        // 手册每日 SOP「看召回漏斗」的第一行数据 —— 不记 userId / 宠物名（日志禁 PII）。
+        log.info("lifecycle push daily scan: users={} planned={} due={} dispatched={} skippedActive={} cap={}",
+                users.size(), planned.size(), due.size(), sent, skippedActive, cap);
     }
 
-    /**
-     * owner → 宠物名映射（<b>键存在即已建档</b>）。
-     *
-     * <p>V1.4.0 multi-pet（Story 1.2 · X24，AD-13）：名字固定取<b>默认宠物</b>（{@code DefaultPetPolicy}），
-     * 不再依赖无序遍历，推送里的名字不会每天换一只。
-     */
-    private Map<Long, String> petNameByOwner() {
-        return petProfiles.defaultPetNameByOwner();
+    /** 召回节点本 story 先关（6-2 接 {@code winback-enabled} 配置）。 */
+    LifecyclePlanOptions planOptions() {
+        return new LifecyclePlanOptions(false, props.getWinbackAfterDays());
     }
 }

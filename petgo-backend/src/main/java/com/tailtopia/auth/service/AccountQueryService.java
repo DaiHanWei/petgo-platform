@@ -396,21 +396,35 @@ public class AccountQueryService {
     }
 
     /**
-     * 生命周期推送日扫快照（留存手册抓手 1）。只读端口 —— notify 模块<b>不直访</b> users 表。
+     * 生命周期推送<b>全量</b>快照（留存手册抓手 1；召回节点开着时用，见 V1.5.0 Story 6.2）。只读端口 —— notify 模块<b>不直访</b> users 表。
      *
-     * <p>日期一律折 UTC：定时日扫、{@code created_at}、{@code last_active_at} 三者必须同一基准，
-     * 否则「注册满 1 天」会在时区边界上抖动，同一个人可能连着两天各收一条 D1。
+     * <p>V1.5.0 onboarding-recall Story 6.1 · OR-21：注册日改按 <b>WIB</b> 折算（与日扫 {@code today = WIB} 同基准，
+     * 否则「注册满 1 天」会在时区边界上抖动）；{@code lastActiveDate} 仍 UTC（只供召回判流失）；带 {@code petStatus}。
      */
     @Transactional(readOnly = true)
     public List<UserLifecycleSnapshot> lifecycleSnapshots() {
         return users.findLifecyclePushCandidates(Role.USER, AccountType.REAL, UserStatus.ACTIVE)
-                .stream()
-                .map(u -> new UserLifecycleSnapshot(
-                        u.getId(),
-                        toUtcDate(u.getCreatedAt()),
-                        toUtcDate(u.getLastActiveAt()),
-                        u.getPublishedCount()))
-                .toList();
+                .stream().map(AccountQueryService::toLifecycleSnapshot).toList();
+    }
+
+    /**
+     * 生命周期推送 D1 / D3 / D7 候选（V1.5.0 onboarding-recall Story 6.1 · OR-21）：只取 WIB 注册日落在
+     * {@code wibToday − {1,2,3,4,7,8}} 的 REAL USER ACTIVE 账号（SQL 收窄，一次查询）。
+     */
+    @Transactional(readOnly = true)
+    public List<UserLifecycleSnapshot> lifecycleSnapshots(LocalDate wibToday) {
+        List<LocalDate> dates = java.util.stream.Stream.of(1, 2, 3, 4, 7, 8).map(wibToday::minusDays).toList();
+        return users.findLifecyclePushCandidatesRegisteredOn(dates)
+                .stream().map(AccountQueryService::toLifecycleSnapshot).toList();
+    }
+
+    private static UserLifecycleSnapshot toLifecycleSnapshot(User u) {
+        return new UserLifecycleSnapshot(
+                u.getId(),
+                u.getCreatedAt() == null ? null : u.getCreatedAt().atZone(WIB).toLocalDate(),
+                toUtcDate(u.getLastActiveAt()),
+                u.getPublishedCount(),
+                u.getPetStatus() == null ? null : u.getPetStatus().name());
     }
 
     /**

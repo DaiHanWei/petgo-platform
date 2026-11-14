@@ -4,191 +4,272 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tailtopia.auth.dto.UserLifecycleSnapshot;
 import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.port.LifecycleContextPort.DefaultPet;
+import com.tailtopia.notify.port.LifecycleContextPort.LifecycleContext;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * 留存运营作战手册 · 抓手 1 金标单测：生命周期推送计划器纯逻辑
- * （注入当天 + 假用户快照 + 宠物名映射）。
- *
- * <p>覆盖：四节点触发窗口、分层选择（未建档/已建档未发布/已发布）、
- * 一人一天至多一条、召回按月去重与「已过 D7 才算流失」、投递优先级排序。
+ * L0 金标：生命周期推送计划器（V1.5.0 onboarding-recall Story 6.1 · OR-22 / OR-23 重写）—— 5 层 × 3 节点表格驱动、
+ * 当天已来过作废（D1 / D3）、D3 E 不推、毕业两种判据、N 计算、窗口与排序、WIB 边界、召回开关。
  */
 class LifecyclePushPlannerTest {
 
-    private static final LocalDate TODAY = LocalDate.of(2026, 8, 21);
-    private static final int WINBACK_DAYS = 7;
+    private static final LocalDate TODAY = LocalDate.of(2026, 11, 15);
+    private static final LifecyclePlanOptions NO_WINBACK = new LifecyclePlanOptions(false, 7);
 
     private final LifecyclePushPlanner planner = new LifecyclePushPlanner();
 
-    /** 注册于 {@code TODAY - ageDays}，最后活跃于 {@code TODAY - inactiveDays}（null=从未记录）。 */
-    private static UserLifecycleSnapshot user(long id, int ageDays, Integer inactiveDays, int published) {
-        return new UserLifecycleSnapshot(id, TODAY.minusDays(ageDays),
-                inactiveDays == null ? null : TODAY.minusDays(inactiveDays), published);
+    /** 一个用户在某层的构造：快照 + 宠物 + 标记。 */
+    private record Fixture(UserLifecycleSnapshot user, DefaultPet pet, Set<String> marks) {
     }
 
-    private static Map<Long, String> withPet(long id, String name) {
-        return Map.of(id, name);
+    private static final DefaultPet MOCHI = new DefaultPet("Mochi", "Persia", "CAT");
+
+    private static Fixture layer(LifecycleLayer l, long id, int age) {
+        LocalDate reg = TODAY.minusDays(age);
+        return switch (l) {
+            case A -> new Fixture(new UserLifecycleSnapshot(id, reg, null, 0, "PLANNING"), null, Set.of());
+            case B -> new Fixture(new UserLifecycleSnapshot(id, reg, null, 0, "HAS_PET"), null, Set.of());
+            case C -> new Fixture(new UserLifecycleSnapshot(id, reg, null, 0, "HAS_PET"), MOCHI, Set.of());
+            case D -> new Fixture(new UserLifecycleSnapshot(id, reg, null, 1, "HAS_PET"), MOCHI, Set.of("FIRST_DIARY"));
+            case E -> new Fixture(new UserLifecycleSnapshot(id, reg, null, 1, "HAS_PET"), MOCHI,
+                    Set.of("FIRST_DIARY", "FIRST_FOLLOW"));
+        };
     }
 
-    private List<LifecyclePlannedPush> plan(List<UserLifecycleSnapshot> users, Map<Long, String> pets) {
-        return planner.plan(TODAY, users, pets, WINBACK_DAYS);
+    private List<LifecyclePlannedPush> run(List<Fixture> fs, Set<Long> activeToday, Set<Long> graduated,
+            LifecyclePlanOptions o) {
+        Map<Long, DefaultPet> pets = new HashMap<>();
+        Map<Long, Set<String>> marks = new HashMap<>();
+        for (Fixture f : fs) {
+            if (f.pet() != null) {
+                pets.put(f.user().userId(), f.pet());
+            }
+            marks.put(f.user().userId(), f.marks());
+        }
+        return planner.plan(TODAY, fs.stream().map(Fixture::user).toList(),
+                new LifecycleContext(pets, marks, activeToday, graduated), o);
     }
 
-    // ===================== D1：手册的第一武器 =====================
+    private List<LifecyclePlannedPush> run(Fixture f) {
+        return run(List.of(f), Set.of(), Set.of(), NO_WINBACK);
+    }
+
+    // ===== 表格（OR-23）=====
+
+    static Stream<Arguments> table() {
+        return Stream.of(
+                // 节点天数, 层, 期望变体, 期望文案键（null = 不产出）
+                Arguments.of(1, LifecycleLayer.A, LifecycleVariant.DISCOVER, "LIFECYCLE_D1.NO_PET"),
+                Arguments.of(1, LifecycleLayer.B, LifecycleVariant.CREATE_PROFILE, "LIFECYCLE_D1.CREATE_PROFILE"),
+                Arguments.of(1, LifecycleLayer.C, LifecycleVariant.RECORD, "LIFECYCLE_D1.RECORD"),
+                Arguments.of(1, LifecycleLayer.D, LifecycleVariant.DISCOVER, "LIFECYCLE_D1.SQUAD"),
+                Arguments.of(1, LifecycleLayer.E, LifecycleVariant.RECORD, "LIFECYCLE_D1.ACTIVE"),
+                Arguments.of(3, LifecycleLayer.A, LifecycleVariant.DISCOVER, "LIFECYCLE_D3.NO_PET"),
+                Arguments.of(3, LifecycleLayer.B, LifecycleVariant.CREATE_PROFILE, "LIFECYCLE_D3.CREATE_PROFILE"),
+                Arguments.of(3, LifecycleLayer.C, LifecycleVariant.DISCOVER, "LIFECYCLE_D3.SQUAD"),
+                Arguments.of(3, LifecycleLayer.D, LifecycleVariant.DISCOVER, "LIFECYCLE_D3.BESTIE"),
+                Arguments.of(3, LifecycleLayer.E, null, null),
+                Arguments.of(7, LifecycleLayer.A, LifecycleVariant.NEWBIE_TASKS, "LIFECYCLE_D7.TASKS_LEFT"),
+                Arguments.of(7, LifecycleLayer.B, LifecycleVariant.CREATE_PROFILE, "LIFECYCLE_D7.CREATE_PROFILE"),
+                Arguments.of(7, LifecycleLayer.C, LifecycleVariant.NEWBIE_TASKS, "LIFECYCLE_D7.TASKS_LEFT"),
+                Arguments.of(7, LifecycleLayer.D, LifecycleVariant.NEWBIE_TASKS, "LIFECYCLE_D7.TASKS_LEFT"),
+                Arguments.of(7, LifecycleLayer.E, LifecycleVariant.NEWBIE_TASKS, "LIFECYCLE_D7.TASKS_LEFT"));
+    }
+
+    @ParameterizedTest(name = "D{0} × {1} → {2} · {3}")
+    @MethodSource("table")
+    void nodeByLayerTable(int age, LifecycleLayer l, LifecycleVariant variant, String copyKey) {
+        for (int offset : new int[] {0, 1}) { // 两天窗口都一样
+            List<LifecyclePlannedPush> out = run(layer(l, 1, age + offset));
+            if (variant == null) {
+                assertThat(out).as("D%d+%d × %s 不产出", age, offset, l).isEmpty();
+                continue;
+            }
+            assertThat(out).singleElement().satisfies(p -> {
+                assertThat(p.variant()).isEqualTo(variant);
+                assertThat(p.copyKey()).isEqualTo(copyKey);
+                assertThat(p.layer()).isEqualTo(l);
+                assertThat(p.nodeKey()).isEqualTo(LifecyclePlannedPush.ONCE);
+                assertThat(p.markVariant()).isEqualTo(l.name() + "_" + variant.name());
+                // A / B 层不带宠物名；C / D / E 带默认宠物名与品种
+                if (l == LifecycleLayer.A || l == LifecycleLayer.B) {
+                    assertThat(p.petName()).isNull();
+                } else {
+                    assertThat(p.petName()).isEqualTo("Mochi");
+                    assertThat(p.breedWord()).isEqualTo("Persia");
+                    assertThat(p.petType()).isEqualTo("CAT");
+                }
+            });
+        }
+    }
 
     @Test
-    void d1_with_profile_asks_to_record_that_pet_by_name() {
-        var out = plan(List.of(user(1, 1, 0, 0)), withPet(1, "Mochi"));
-        assertThat(out).hasSize(1);
-        assertThat(out.get(0).type()).isEqualTo(NotificationType.LIFECYCLE_D1);
-        assertThat(out.get(0).variant()).isEqualTo(LifecycleVariant.RECORD);
-        // 铁律：文案必须带宠物名——planner 必须把名字带下去，否则 dispatcher 无从渲染。
-        assertThat(out.get(0).petName()).isEqualTo("Mochi");
-        assertThat(out.get(0).copyKey()).isEqualTo("LIFECYCLE_D1.RECORD");
-        assertThat(out.get(0).nodeKey()).isEqualTo(LifecyclePlannedPush.ONCE);
-    }
-
-    @Test
-    void d1_without_profile_goes_to_create_profile_and_carries_no_pet_name() {
-        var out = plan(List.of(user(1, 1, 0, 0)), Map.of());
-        assertThat(out).hasSize(1);
-        assertThat(out.get(0).variant()).isEqualTo(LifecycleVariant.CREATE_PROFILE);
-        assertThat(out.get(0).petName()).isNull(); // 没建档就没有名字可说
-    }
-
-    @Test
-    void node_window_tolerates_one_missed_scan_but_not_a_stale_backlog() {
-        // 第 2 天补发（日扫漏跑一次的补偿窗口）。
-        assertThat(plan(List.of(user(1, 2, 0, 0)), withPet(1, "Mochi")))
-                .singleElement()
-                .extracting(LifecyclePlannedPush::type)
-                .isEqualTo(NotificationType.LIFECYCLE_D1);
-        // 第 3 天已出窗——绝不能给两个月前注册的老用户补一条「你昨天注册了」。
-        assertThat(plan(List.of(user(1, 3, 0, 5)), withPet(1, "Mochi")))
-                .noneMatch(p -> p.type() == NotificationType.LIFECYCLE_D1);
-    }
-
-    @Test
-    void registered_today_gets_nothing() {
-        assertThat(plan(List.of(user(1, 0, 0, 0)), withPet(1, "Mochi"))).isEmpty();
-    }
-
-    // ===================== D3：内容钩子，只给还没发布的人 =====================
-
-    @Test
-    void d3_unpublished_with_profile_gets_feed_hook() {
-        var out = plan(List.of(user(1, 3, 0, 0)), withPet(1, "Mochi"));
-        assertThat(out).singleElement().satisfies(p -> {
-            assertThat(p.type()).isEqualTo(NotificationType.LIFECYCLE_D3);
+    @DisplayName("A 层且 ③④⑤ 任一完成（没宠物也能关注 / 点赞 / 评论）→ D1 / D3 落 FEED，文案仍是 NO_PET")
+    void noPetButInteractedGoesFeed() {
+        Fixture f = new Fixture(new UserLifecycleSnapshot(1, TODAY.minusDays(1), null, 0, null), null,
+                Set.of("FIRST_LIKE_GIVEN"));
+        assertThat(run(f)).singleElement().satisfies(p -> {
+            assertThat(p.layer()).isEqualTo(LifecycleLayer.A);
             assertThat(p.variant()).isEqualTo(LifecycleVariant.FEED);
+            assertThat(p.copyKey()).isEqualTo("LIFECYCLE_D1.NO_PET");
         });
     }
 
     @Test
-    void d3_skipped_for_already_published_user() {
-        // 已发布 = 已经完成我们想要的动作，不该再被内容钩子打扰。
-        assertThat(plan(List.of(user(1, 3, 0, 2)), withPet(1, "Mochi"))).isEmpty();
+    @DisplayName("分层：petStatus 为空 / ENTHUSIAST / PLANNING 没宠物都是 A；有宠物行一律不是 A / B（不看 petStatus）")
+    void layerRules() {
+        assertThat(LifecyclePushPlanner.layerOf(new UserLifecycleSnapshot(1, TODAY, null, 0, null), null, Set.of()))
+                .isEqualTo(LifecycleLayer.A);
+        assertThat(LifecyclePushPlanner.layerOf(new UserLifecycleSnapshot(1, TODAY, null, 0, "ENTHUSIAST"), null,
+                Set.of())).isEqualTo(LifecycleLayer.A);
+        assertThat(LifecyclePushPlanner.layerOf(new UserLifecycleSnapshot(1, TODAY, null, 0, "PLANNING"), MOCHI,
+                Set.of())).isEqualTo(LifecycleLayer.C);
+        assertThat(LifecyclePushPlanner.layerOf(new UserLifecycleSnapshot(1, TODAY, null, 2, null), MOCHI,
+                Set.of("FIRST_COMMENT"))).isEqualTo(LifecycleLayer.E);
+        assertThat(LifecyclePushPlanner.layerOf(new UserLifecycleSnapshot(1, TODAY, null, 2, null), MOCHI,
+                Set.of("FIRST_REPLY", "FIRST_LIKE_RECEIVED"))).as("②⑥ 不算互动").isEqualTo(LifecycleLayer.D);
     }
 
-    // ===================== D7：周回顾 / 兜底引导 =====================
+    // ===== AC5：当天已来过 =====
 
     @Test
-    void d7_published_gets_weekly_review() {
-        var out = plan(List.of(user(1, 7, 0, 3)), withPet(1, "Mochi"));
-        assertThat(out).singleElement().satisfies(p -> {
-            assertThat(p.type()).isEqualTo(NotificationType.LIFECYCLE_D7);
-            assertThat(p.variant()).isEqualTo(LifecycleVariant.REVIEW);
-            assertThat(p.petName()).isEqualTo("Mochi");
+    @DisplayName("AC5：D1 / D3 当天已来过 → SKIPPED_ACTIVE（只写 mark）；D7 不受影响照发")
+    void activeTodaySkipsEarlyNodesOnly() {
+        Fixture d1 = layer(LifecycleLayer.D, 1, 1);
+        Fixture d3 = layer(LifecycleLayer.C, 2, 3);
+        Fixture d7 = layer(LifecycleLayer.D, 3, 7);
+        List<LifecyclePlannedPush> out = run(List.of(d1, d3, d7), Set.of(1L, 2L, 3L), Set.of(), NO_WINBACK);
+        assertThat(out).extracting(LifecyclePlannedPush::userId, LifecyclePlannedPush::variant,
+                LifecyclePlannedPush::markVariant).containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(1L, LifecycleVariant.SKIPPED_ACTIVE, "D_SKIPPED_ACTIVE"),
+                        org.assertj.core.groups.Tuple.tuple(2L, LifecycleVariant.SKIPPED_ACTIVE, "C_SKIPPED_ACTIVE"),
+                        org.assertj.core.groups.Tuple.tuple(3L, LifecycleVariant.NEWBIE_TASKS, "D_NEWBIE_TASKS"));
+    }
+
+    @Test
+    @DisplayName("AC6：D3 E 层即使当天来过也不产出（不写 mark）")
+    void d3LayerENeverProduces() {
+        assertThat(run(List.of(layer(LifecycleLayer.E, 1, 3)), Set.of(1L), Set.of(), NO_WINBACK)).isEmpty();
+    }
+
+    // ===== D7 毕业 / N =====
+
+    @Test
+    @DisplayName("D7 毕业判据 ①：已有 LULUS_PEMULA flag（标记不全也算）→ GRADUATED")
+    void graduatedByFlag() {
+        Fixture f = layer(LifecycleLayer.C, 1, 7);
+        assertThat(run(List.of(f), Set.of(), Set.of(1L), NO_WINBACK)).singleElement().satisfies(p -> {
+            assertThat(p.variant()).isEqualTo(LifecycleVariant.GRADUATED);
+            assertThat(p.copyKey()).isEqualTo("LIFECYCLE_D7.GRADUATED");
+            assertThat(p.remaining()).isZero();
         });
     }
 
     @Test
-    void d7_profile_but_never_published_gets_record_nudge() {
-        assertThat(plan(List.of(user(1, 7, 0, 0)), withPet(1, "Mochi")))
-                .singleElement()
-                .extracting(LifecyclePlannedPush::variant)
-                .isEqualTo(LifecycleVariant.RECORD);
+    @DisplayName("D7 毕业判据 ②：①–⑥ 标记齐全（不依赖 NewbieWeekJob 是否已跑）→ GRADUATED")
+    void graduatedByMarks() {
+        Fixture f = new Fixture(new UserLifecycleSnapshot(1, TODAY.minusDays(8), null, 3, "HAS_PET"), MOCHI,
+                new HashSet<>(LifecyclePushPlanner.NEWBIE_FIRST_SIX));
+        assertThat(run(f)).singleElement()
+                .satisfies(p -> assertThat(p.variant()).isEqualTo(LifecycleVariant.GRADUATED));
     }
 
     @Test
-    void d7_without_profile_still_goes_to_create_profile() {
-        assertThat(plan(List.of(user(1, 7, 0, 0)), Map.of()))
-                .singleElement()
-                .extracting(LifecyclePlannedPush::variant)
-                .isEqualTo(LifecycleVariant.CREATE_PROFILE);
-    }
-
-    // ===================== 流失召回 =====================
-
-    @Test
-    void winback_fires_for_lapsed_user_past_the_d7_window_and_dedupes_by_month() {
-        var out = plan(List.of(user(1, 30, 10, 0)), Map.of());
-        assertThat(out).singleElement().satisfies(p -> {
-            assertThat(p.type()).isEqualTo(NotificationType.LIFECYCLE_WINBACK);
-            // 手册：ROI 最高的一刀是把「装了没建档」的人直接送到建档页。
-            assertThat(p.variant()).isEqualTo(LifecycleVariant.CREATE_PROFILE);
-            assertThat(p.nodeKey()).isEqualTo("2026-08"); // 每月至多一次
+    @DisplayName("D7 还差 N 项：4/7（3 个标记 + ⑦）→ N=3；0 个标记 → N=6")
+    void remainingCount() {
+        Fixture four = new Fixture(new UserLifecycleSnapshot(1, TODAY.minusDays(7), null, 1, "HAS_PET"), MOCHI,
+                Set.of("FIRST_DIARY", "FIRST_FOLLOW", "FIRST_REPLY", "ONE_WEEK"));
+        assertThat(run(four)).singleElement().satisfies(p -> {
+            assertThat(p.variant()).isEqualTo(LifecycleVariant.NEWBIE_TASKS);
+            assertThat(p.remaining()).isEqualTo(3);
         });
+        assertThat(run(layer(LifecycleLayer.A, 2, 7))).singleElement()
+                .satisfies(p -> assertThat(p.remaining()).isEqualTo(6));
+    }
+
+    // ===== 窗口 / 排序 / WIB =====
+
+    @Test
+    @DisplayName("窗口外（0 / 5 / 6 / 9 / 10 天）不产出；未来注册日 / 注册日空跳过")
+    void outsideWindows() {
+        for (int age : new int[] {0, 5, 6, 9, 10, 30}) {
+            assertThat(run(layer(LifecycleLayer.C, 1, age))).as("age=" + age).isEmpty();
+        }
+        assertThat(run(layer(LifecycleLayer.C, 1, -1))).isEmpty();
+        assertThat(planner.plan(TODAY, List.of(new UserLifecycleSnapshot(1, null, null, 0)),
+                LifecycleContext.EMPTY, NO_WINBACK)).isEmpty();
     }
 
     @Test
-    void winback_skipped_for_recently_active_user() {
-        assertThat(plan(List.of(user(1, 30, 2, 4)), withPet(1, "Mochi"))).isEmpty();
+    @DisplayName("一人一天一条、按 D1 → D3 → D7 排序")
+    void orderedByUrgency() {
+        List<LifecyclePlannedPush> out = run(List.of(layer(LifecycleLayer.C, 7, 7), layer(LifecycleLayer.C, 3, 3),
+                layer(LifecycleLayer.C, 1, 1)), Set.of(), Set.of(), NO_WINBACK);
+        assertThat(out).extracting(LifecyclePlannedPush::type).containsExactly(NotificationType.LIFECYCLE_D1,
+                NotificationType.LIFECYCLE_D3, NotificationType.LIFECYCLE_D7);
     }
 
     @Test
-    void winback_never_competes_with_the_d1_to_d7_nodes() {
-        // 注册 7 天、7 天没回来——同时满足 D7 与「流失」。必须只出一条，且是 D7。
-        var out = plan(List.of(user(1, 7, 7, 0)), withPet(1, "Mochi"));
-        assertThat(out).hasSize(1);
-        assertThat(out.get(0).type()).isEqualTo(NotificationType.LIFECYCLE_D7);
+    @DisplayName("AC1 WIB 边界：UTC 11-11 20:00 注册 = WIB 11-12 03:00 → D1 在 WIB 11-13")
+    void wibRegisteredDate() {
+        LocalDate wibReg = Instant.parse("2026-11-11T20:00:00Z").atZone(ZoneId.of("Asia/Jakarta")).toLocalDate();
+        assertThat(wibReg).isEqualTo(LocalDate.of(2026, 11, 12));
+        UserLifecycleSnapshot u = new UserLifecycleSnapshot(1, wibReg, null, 0, "HAS_PET");
+        LifecycleContext ctx = new LifecycleContext(Map.of(1L, MOCHI), Map.of(), Set.of(), Set.of());
+        assertThat(planner.plan(LocalDate.of(2026, 11, 13), List.of(u), ctx, NO_WINBACK)).singleElement()
+                .satisfies(p -> assertThat(p.type()).isEqualTo(NotificationType.LIFECYCLE_D1));
+        assertThat(planner.plan(LocalDate.of(2026, 11, 12), List.of(u), ctx, NO_WINBACK)).isEmpty();
+    }
+
+    // ===== 召回（开关）=====
+
+    @Test
+    @DisplayName("召回：开关关 → 30 天没来的老用户不产出；开 → 按月 nodeKey，已建档 RECORD / 未建档 CREATE_PROFILE")
+    void winbackBehindOption() {
+        UserLifecycleSnapshot lapsedWithPet = new UserLifecycleSnapshot(1, TODAY.minusDays(60), TODAY.minusDays(30),
+                2, "HAS_PET");
+        UserLifecycleSnapshot lapsedNoPet = new UserLifecycleSnapshot(2, TODAY.minusDays(60), null, 0, null);
+        UserLifecycleSnapshot recent = new UserLifecycleSnapshot(3, TODAY.minusDays(60), TODAY.minusDays(2), 2,
+                "HAS_PET");
+        LifecycleContext ctx = new LifecycleContext(Map.of(1L, MOCHI, 3L, MOCHI), Map.of(), Set.of(), Set.of());
+        List<UserLifecycleSnapshot> users = List.of(lapsedWithPet, lapsedNoPet, recent);
+
+        assertThat(planner.plan(TODAY, users, ctx, NO_WINBACK)).isEmpty();
+        assertThat(planner.plan(TODAY, users, ctx, new LifecyclePlanOptions(true, 7)))
+                .extracting(LifecyclePlannedPush::userId, LifecyclePlannedPush::variant, LifecyclePlannedPush::nodeKey)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(1L, LifecycleVariant.RECORD, "2026-11"),
+                        org.assertj.core.groups.Tuple.tuple(2L, LifecycleVariant.CREATE_PROFILE, "2026-11"));
     }
 
     @Test
-    void missing_last_active_falls_back_to_registration_date() {
-        // 存量数据回填前 last_active_at 可能为空。宁可误判为流失（代价一条召回），
-        // 也不要因为缺一个字段就把手册最想捞回来的那 506 人永久排除在外。
-        assertThat(plan(List.of(user(1, 40, null, 0)), Map.of()))
-                .singleElement()
-                .extracting(LifecyclePlannedPush::type)
-                .isEqualTo(NotificationType.LIFECYCLE_WINBACK);
-    }
-
-    // ===================== 全局不变量 =====================
-
-    @Test
-    void output_is_ordered_by_urgency_so_the_daily_cap_cuts_winback_first() {
-        var users = List.of(
-                user(1, 30, 20, 0),  // 召回
-                user(2, 7, 0, 1),    // D7
-                user(3, 1, 0, 0),    // D1
-                user(4, 3, 0, 0));   // D3
-        var out = plan(users, Map.of(2L, "B", 3L, "C", 4L, "D"));
-        assertThat(out).extracting(LifecyclePlannedPush::type).containsExactly(
-                NotificationType.LIFECYCLE_D1,
-                NotificationType.LIFECYCLE_D3,
-                NotificationType.LIFECYCLE_D7,
-                NotificationType.LIFECYCLE_WINBACK);
-    }
-
-    @Test
-    void at_most_one_push_per_user_per_day() {
-        // 每个用户都只出一条：同一天既收「记录 Mochi」又收「回来看看」，
-        // 用户学到的不是「该记录了」，而是「这个 App 很吵」。
-        var users = List.of(user(1, 1, 0, 0), user(2, 3, 0, 0), user(3, 7, 0, 0), user(4, 60, 30, 0));
-        var out = plan(users, Map.of(1L, "A", 2L, "B", 3L, "C", 4L, "D"));
-        assertThat(out).extracting(LifecyclePlannedPush::userId)
-                .doesNotHaveDuplicates()
-                .hasSize(4);
-    }
-
-    @Test
-    void garbage_dates_are_skipped_not_turned_into_negative_ages() {
-        var noRegisterDate = new UserLifecycleSnapshot(1, null, TODAY, 0);
-        var futureRegisterDate = new UserLifecycleSnapshot(2, TODAY.plusDays(3), TODAY, 0);
-        assertThat(plan(List.of(noRegisterDate, futureRegisterDate), Map.of())).isEmpty();
+    @DisplayName("宠物名 / 品种空白 → null（dispatcher 兜底）；品种 trim")
+    void blankNameAndBreed() {
+        Fixture f = new Fixture(new UserLifecycleSnapshot(1, TODAY.minusDays(1), null, 1, null),
+                new DefaultPet(" ", "  Persia ", "CAT"), Set.of());
+        assertThat(run(f)).singleElement().satisfies(p -> {
+            assertThat(p.petName()).isNull();
+            assertThat(p.breedWord()).isEqualTo("Persia");
+        });
+        Fixture noBreed = new Fixture(new UserLifecycleSnapshot(2, TODAY.minusDays(1), null, 1, null),
+                new DefaultPet("Kopi", " ", "DOG"), Set.of());
+        assertThat(run(noBreed)).singleElement().satisfies(p -> {
+            assertThat(p.breedWord()).isNull();
+            assertThat(p.petType()).isEqualTo("DOG");
+        });
     }
 }
