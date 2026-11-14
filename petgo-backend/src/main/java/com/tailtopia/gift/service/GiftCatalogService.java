@@ -109,6 +109,7 @@ public class GiftCatalogService {
             onlineCategories.put(c.getId(), c);
         }
         Map<Long, List<GiftItem>> byCategory = new HashMap<>();
+        List<Long> uncategorized = new ArrayList<>();
 
         Map<Long, List<GiftItem>> tiers = new TreeMap<>();
         Map<Integer, List<GiftItem>> exclusive = new TreeMap<>();
@@ -121,7 +122,7 @@ public class GiftCatalogService {
                 if (cid != null && onlineCategories.containsKey(cid)) {
                     byCategory.computeIfAbsent(cid, k -> new ArrayList<>()).add(it);
                 } else {
-                    log.warn("gift catalog item without online category giftId={}", g.getId());
+                    uncategorized.add(g.getId());
                 }
             } else if (g.getMinLevel() != null && g.getMinLevel() <= level) {
                 exclusive.computeIfAbsent(g.getMinLevel(), k -> new ArrayList<>())
@@ -129,6 +130,11 @@ public class GiftCatalogService {
             } else if (g.getMinLevel() != null && (requiredLevel == null || g.getMinLevel() < requiredLevel)) {
                 requiredLevel = g.getMinLevel();
             }
+        }
+        if (!uncategorized.isEmpty()) {
+            // 一次请求一行（code review #3：逐件 WARN 会刷屏）；只记礼物 id。
+            log.warn("gift catalog items without online category count={} giftIds={}", uncategorized.size(),
+                    uncategorized);
         }
         List<Category> categoryGroups = new ArrayList<>();
         for (GiftCategory c : onlineCategories.values()) {

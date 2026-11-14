@@ -89,7 +89,8 @@ class GiftCatalogIntegrationTest extends ApiIntegrationTest {
         assertThat(rf.get("senders")).hasSize(3);
         assertThat(rf.get("more").asInt()).isEqualTo(1);
         assertThat(rf.get("senders").get(0).get("deleted").asBoolean()).isTrue();
-        assertThat(rf.get("senders").get(0).get("nickname").isNull()).isTrue();
+        // 全局 non_null：null 昵称不序列化（code review #1）
+        assertThat(rf.get("senders").get(0).has("nickname")).isFalse();
         assertThat(item.has("senderExp")).isTrue();
     }
 }
