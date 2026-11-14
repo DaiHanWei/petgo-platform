@@ -21,8 +21,9 @@ void main() {
     test('wire 集合与后端枚举逐字一致', () {
       expect(OpsTargetType.values.map((t) => t.wire).toList(),
           ['NONE', 'PRODUCT', 'CATEGORY', 'APP_PAGE', 'EXTERNAL']);
+      // V1.5.0 pet-species Story 3.5：末尾加 PET_SPECIES（地基已在后端 OpsAppPage 加，只往后加）。
       expect(OpsAppPage.values.map((p) => p.wire).toList(),
-          ['HOME', 'PUBLISH', 'TOKO', 'KNOW_YOUR_PET', 'HEALTH']);
+          ['HOME', 'PUBLISH', 'TOKO', 'KNOW_YOUR_PET', 'HEALTH', 'PET_SPECIES']);
     });
 
     test('null / type 缺失 / 未知 / 小写 / 非字符串 → none，不抛', () {
@@ -84,6 +85,14 @@ void main() {
       expect(PetInsightsRoutes.hub, '/profile/pet-insights');
       expect(r(OpsTargetType.appPage, 'HEALTH'),
           const OpsPushAction('/profile/health', requiresLogin: true));
+    });
+
+    test('V1.5.0：PET_SPECIES → OpsPetSpeciesAction（需登录）；小写 pet_species → 不跳', () {
+      expect(OpsAppPage.fromWire('PET_SPECIES'), OpsAppPage.petSpecies);
+      expect(OpsAppPage.fromWire('pet_species'), isNull);
+      expect(r(OpsTargetType.appPage, 'PET_SPECIES'), const OpsPetSpeciesAction());
+      expect(const OpsPetSpeciesAction().requiresLogin, isTrue);
+      expect(r(OpsTargetType.appPage, 'pet_species'), no);
     });
 
     test('APP_PAGE 非法：home / SETTINGS / null', () {

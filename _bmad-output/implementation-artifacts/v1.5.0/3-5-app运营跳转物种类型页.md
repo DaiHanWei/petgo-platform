@@ -1,6 +1,6 @@
 # Story 3.5: app运营跳转物种类型页
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 主题 pet-species（会话 ④）· 分支 `feat/1.5.0-pet-species`
 > 口径优先级：`decision-log.md` > PRD §3.5「点开跳哪里」/ §6「上线推送」> `architecture-v1.5.0-pet-species-delta.md`（D-15）> App UI 稿 E1；`CROSS-STORY-DECISIONS.md`「2026-11-14 V1.5.0 六会话共用地基」（`OpsAppPage.PET_SPECIES` 后端已由地基加，App 值与跳转归本线）。
@@ -53,10 +53,10 @@ so that 不用自己找入口，顺手就给小家伙换上新身份。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：`ops_target.dart` 仍是 5 值（若 ② 已合进 dev 且本分支看得到 `starterPack`，按 AC1.1 处理）；`open_ops_target.dart` 的 ref 契约注释未变
-- [ ] **T1** 枚举 + 动作 + 纯函数测试（AC1）
-- [ ] **T2** 执行层分流（AC2）+ 词条
-- [ ] **T3** 测试（AC4）；`flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
+- [x] **T0 开工核对**：`ops_target.dart` 仍是 5 值（若 ② 已合进 dev 且本分支看得到 `starterPack`，按 AC1.1 处理）；`open_ops_target.dart` 的 ref 契约注释未变
+- [x] **T1** 枚举 + 动作 + 纯函数测试（AC1）
+- [x] **T2** 执行层分流（AC2）+ 词条
+- [x] **T3** 测试（AC4）；`flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
 
 ## Dev Notes
 
@@ -79,6 +79,26 @@ so that 不用自己找入口，顺手就给小家伙换上新身份。
 
 ### Agent Model Used
 
+Claude（云端 L0 会话，2026-11-14）
+
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC5（stag 后台发「App 内页面 → 宠物类型」通知，用 0 / 1 / 2 只宠物账号点开核落点；E1 抽屉截图；1.4.2 正式包点同一推送不闪退不跳转）留本地。
+- L0：`flutter analyze` 相对基线零新增；`flutter test` 全量 4988 例通过（3 例存量 skip），`test/ops/` 113 例在最后一轮改动后复跑全绿。
+- T0：本分支 `ops_target.dart` 仍是 5 值（超值礼包线的 `starterPack` 未合入），按 AC1.1 末尾加 `petSpecies`；`open_ops_target.dart` 的 ref 契约注释未变。
+- 实现：`OpsAppPage.petSpecies('PET_SPECIES')`；`OpsPetSpeciesAction`（`requiresLogin = true`）+ `resolveOpsTarget` 映射；执行层新分支经 `_runGated`：入口同步取根 `ProviderContainer`，续跑时 `refresh(petListProvider.future)`（强制刷新共享列表）→ 0 只 push `/profile/create`、1 只 `currentPetIdProvider.notifier.select(id)` 后 push `/profile/edit`、多只 `showPetPickerSheet(multiSelect: false, title: Pilih hewan, body: petSpeciesPushPickHint)`，细分类型仍是 `OTHER` 的排最前；任何失败静默。`showPetPickerSheet` 已有 `body` 参数，未改组件。新词条 `petSpeciesPushPickHint`。
+- AC3：未新增事件；`ops_notification_opened` 仍在通知中心 / 推送入口先于 `openOpsTarget` 上报（`notification_center_page.dart` / `push_service.dart`，未动）。
+- 测试：`test/ops/ops_target_test.dart`（wire 列表加 `PET_SPECIES`、解析与小写不跳）；新增 `test/ops/open_ops_target_pet_species_test.dart`（排序：只有 OTHER 提前、CIVET 原位、旧后端无 species 按大类；0 只 → 建档；游客 → 强弹登录不取列表；1 只 → select + 编辑页；2 只 → 抽屉首行 OTHER、点它 select + 编辑页；列表抛错 → 不导航不抛）。
+- 复审（code-review medium）已修：#1 / #9 原先直接调仓库取列表而不刷新共享 `petListProvider`，编辑页按旧缓存定位宠物可能打开错的那只 → 改为刷新共享 provider；切换当前宠物也改在续跑时经容器读取（登录后换账号的 `bindUser` 不再与预先拿到的 notifier 错位）；#3 旧后端无 species 时按大类 OTHER 排前；#6 枚举注释写清后端顺序（`STARTER_PACK` 在 `PET_SPECIES` 前，合并后由 4.2 核对一致）；#8 测试去掉无用字段。
+- 待确认：
+  - 复审 #5：只有 1 只且为只读宠物时仍直接进编辑页（Q-7 默认：由现有只读态处理）。
+  - 本分支 App 枚举与后端顺序暂不一致（后端已有 `STARTER_PACK`）；App 按 wire 名解析、不依赖序号，合并 ② 后两边一致。
+  - 云端 `pubspec.lock` / 插件注册文件的 SDK 差异改动未提交（同前几条）。
+
 ### File List
+
+- petgo_app/lib/features/ops/domain/ops_target.dart
+- petgo_app/lib/features/ops/domain/ops_target_action.dart
+- petgo_app/lib/features/ops/presentation/open_ops_target.dart
+- petgo_app/lib/l10n/app_{en,id}.arb
+- petgo_app/test/ops/ops_target_test.dart、petgo_app/test/ops/open_ops_target_pet_species_test.dart（新）

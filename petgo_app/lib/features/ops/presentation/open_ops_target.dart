@@ -9,6 +9,10 @@ import '../../../core/router/route_intent.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_guide_controller.dart';
 import '../../content/presentation/publish_compose_page.dart';
+import '../../profile/data/current_pet_provider.dart';
+import '../../profile/data/pet_list_repository.dart';
+import '../../profile/presentation/widgets/pet_picker_sheet.dart';
+import '../../../l10n/app_localizations.dart';
 import '../domain/ops_target.dart';
 import '../domain/ops_target_action.dart';
 
@@ -66,6 +70,16 @@ Future<void> openOpsTarget(
           final c = rootNavigatorKey.currentContext;
           if (c != null && c.mounted) PublishComposePage.open(c);
         });
+      case OpsPetSpeciesAction(:final requiresLogin):
+        // 入口处同步取根 ProviderContainer（调用契约：之后不再碰 ref）。登录后续跑时才刷新列表、切换当前宠物，
+        // 用的都是这个长寿命容器——刷新的就是全 App 共享的 petListProvider，编辑页按同一份列表定位宠物。
+        final container = ProviderScope.containerOf(nav, listen: false);
+        _runGated(auth, loginGuide, nav, requiresLogin, () {
+          openPetSpeciesLanding(
+            () => container.refresh(petListProvider.future),
+            (id) => container.read(currentPetIdProvider.notifier).select(id),
+          );
+        });
       case OpsExternalAction(:final uri):
         await _launchExternal(uri, launcher ?? _defaultLauncher);
     }
@@ -119,3 +133,50 @@ Future<void> _launchExternal(Uri uri, OpsUrlLauncher launcher) async {
     // 静默。
   }
 }
+
+/// 「宠物类型」落地（V1.5.0 pet-species Story 3.5 · D-15 · UI E1）：刷新共享的「我的宠物」列表（不用可能过期的缓存）——
+/// 0 只 → 建档页；1 只 → 切为当前宠物 → 编辑页；多只 → 选宠物抽屉（细分类型仍是 `OTHER` 的排最前，其余按创建顺序），
+/// 选了同 1 只的处理，关掉抽屉什么都不做。只读宠物照常列出（进编辑页由现有只读态处理，Q-7）。
+/// 任何失败静默（运营跳转不打扰用户）。导航一律用根 Navigator 的 context。
+@visibleForTesting
+Future<void> openPetSpeciesLanding(
+    Future<List<PetListItem>> Function() loadPets, Future<void> Function(int) selectPet) async {
+  try {
+    final pets = await loadPets();
+    final c = rootNavigatorKey.currentContext;
+    if (c == null || !c.mounted) return;
+    if (pets.isEmpty) {
+      c.push('/profile/create');
+      return;
+    }
+    int? id;
+    if (pets.length == 1) {
+      id = pets.single.id;
+    } else {
+      final ordered = petsForSpeciesLanding(pets);
+      final l10n = AppLocalizations.of(c);
+      final picked = await showPetPickerSheet(
+        c,
+        pets: ordered,
+        title: l10n.petPickerChooseTitle,
+        body: l10n.petSpeciesPushPickHint,
+        multiSelect: false,
+      );
+      if (picked == null || picked.isEmpty) return;
+      id = picked.first;
+    }
+    await selectPet(id);
+    final c2 = rootNavigatorKey.currentContext;
+    if (c2 != null && c2.mounted) c2.push('/profile/edit');
+  } catch (_) {
+    // 静默。
+  }
+}
+
+/// 落地抽屉的顺序：细分类型**仍是** `OTHER` 的排最前（CIVET 等已细分的不算；旧后端无 species 时按大类 OTHER 算），
+/// 其余保持接口顺序（创建顺序）。
+List<PetListItem> petsForSpeciesLanding(List<PetListItem> pets) {
+  bool stillOther(PetListItem p) => (p.species ?? p.petType) == 'OTHER';
+  return [...pets.where(stillOther), ...pets.where((p) => !stillOther(p))];
+}
+

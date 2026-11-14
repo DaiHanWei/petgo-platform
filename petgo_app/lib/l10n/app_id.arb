@@ -121,6 +121,7 @@
   "petTypeChangeConfirmYes": "Ubah",
   "petTypeChangeableFrom": "Bisa diubah lagi {date}",
   "petTypeCooldownToast": "Jenis hewan baru bisa diubah lagi {date}",
+  "petSpeciesPushPickHint": "Pilih hewan yang mau diperbarui jenisnya",
   "petTypeLockedHint": "Tidak bisa diubah",
   "petProfileName": "Nama",
   "petProfileNameHint": "Nama hewan Anda",

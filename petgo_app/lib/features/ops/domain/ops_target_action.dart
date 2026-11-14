@@ -72,6 +72,22 @@ final class OpsOpenPublishAction extends OpsTargetAction {
   int get hashCode => Object.hash(OpsOpenPublishAction, requiresLogin);
 }
 
+/// 宠物类型落地（V1.5.0 pet-species Story 3.5 · D-15）：按「我的宠物」只数分流——0 只建档、1 只编辑、多只先选。
+final class OpsPetSpeciesAction extends OpsTargetAction {
+  const OpsPetSpeciesAction({this.requiresLogin = true});
+
+  final bool requiresLogin;
+
+  @override
+  bool operator ==(Object other) => other is OpsPetSpeciesAction && other.requiresLogin == requiresLogin;
+
+  @override
+  int get hashCode => Object.hash(OpsPetSpeciesAction, requiresLogin);
+
+  @override
+  String toString() => 'OpsPetSpeciesAction(requiresLogin: $requiresLogin)';
+}
+
 /// 外部链接：App 内浏览器打开（系统默认配色，D-9），失败退系统浏览器。恒不需要登录。
 final class OpsExternalAction extends OpsTargetAction {
   const OpsExternalAction(this.uri);
@@ -117,6 +133,7 @@ OpsTargetAction resolveOpsTarget(OpsTarget t) {
         OpsAppPage.knowYourPet =>
           const OpsPushAction(PetInsightsRoutes.hub, requiresLogin: true),
         OpsAppPage.health => const OpsPushAction('/profile/health', requiresLogin: true),
+        OpsAppPage.petSpecies => const OpsPetSpeciesAction(),
       };
     case OpsTargetType.external:
       final uri = _httpUri(value);

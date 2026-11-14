@@ -27,13 +27,17 @@ enum OpsTargetType {
   }
 }
 
-/// `APP_PAGE` 允许的 App 内页面（对应后端 `OpsAppPage`，**只这 5 个**，PRD 补充细则）。
+/// `APP_PAGE` 允许的 App 内页面（对应后端 `OpsAppPage`，只往后加；按 wire 名解析，不依赖序号）。
+/// V1.5.0 pet-species Story 3.5 末尾加 `petSpecies`（宠物类型）。⚠️ 后端地基已是 `…, STARTER_PACK, PET_SPECIES`；
+/// 超值礼包线在本枚举加 `starterPack`，合并时两值都留、`starterPack` 在前，届时与后端顺序完全一致（Story 4.2 核对）。
+/// 不认识的值 → null（旧版 App 不跳转）。
 enum OpsAppPage {
   home('HOME'),
   publish('PUBLISH'),
   toko('TOKO'),
   knowYourPet('KNOW_YOUR_PET'),
-  health('HEALTH');
+  health('HEALTH'),
+  petSpecies('PET_SPECIES');
 
   const OpsAppPage(this.wire);
 

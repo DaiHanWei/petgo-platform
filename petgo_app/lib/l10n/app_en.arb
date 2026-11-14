@@ -193,6 +193,8 @@
   "@petTypeChangeableFrom": {"description": "v1.5.0 pet-species Story 3.3 — edit page type change", "placeholders": {"date": {"type": "String"}}},
   "petTypeCooldownToast": "Pet type can be changed again on {date}",
   "@petTypeCooldownToast": {"description": "v1.5.0 pet-species Story 3.3 — edit page type change", "placeholders": {"date": {"type": "String"}}},
+  "petSpeciesPushPickHint": "Choose which pet to update",
+  "@petSpeciesPushPickHint": {"description": "v1.5.0 pet-species Story 3.5 — ops push landing pet picker body"},
   "petTypeLockedHint": "Can't be changed",
   "petProfileName": "Name",
   "petProfileNameHint": "Your pet's name",
