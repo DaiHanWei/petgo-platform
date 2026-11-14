@@ -25,6 +25,8 @@ import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/pet_form_fields.dart';
+import 'widgets/pet_health_status_section.dart';
+import '../../../core/analytics/analytics.dart';
 
 /// 宠物档案编辑页（Story 2.8）。复用 2.2 创建表单结构，预填既有值；部分更新 PATCH。
 /// 两入口（档案 Tab 信息卡「编辑」/「我的」Tab）经 go_router 复用本页（/profile/edit）。
@@ -46,6 +48,9 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   /// 🔒 体重（kg），Story 6.1。**PII 邻近的健康数据 —— 禁止写入日志或埋点属性**（NFR-5）。
   /// 可留空：建档与编辑都不设必填，设必填会挡住既有转化。
   final _weightController = TextEditingController();
+
+  /// V1.5.0 健康记录提醒 Story 3.3：「Status Kesehatan」分组的状态（绝育 / 家里有猫 / 怀孕哺乳）。
+  final _healthStatus = PetHealthStatusDraft();
   DateTime? _birthday;
   String? _avatarUrl;
   String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
@@ -67,6 +72,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _breedController.dispose();
     _introController.dispose();
     _weightController.dispose();
+    _healthStatus.dispose();
     super.dispose();
   }
 
@@ -83,6 +89,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _avatarUrl = p.avatarUrl;
     _petType = p.petType;
     _sex = p.sex; // 漏这行 = 存住了但重进页面又变回「请选择」
+    _healthStatus.load(p);
   }
 
   /// 15.0 → "15"；15.5 → "15.5"。别让用户每次进来都看到一个多余的小数点。
@@ -121,6 +128,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       return;
     }
     setState(() => _submitting = true);
+    // V1.5.0 Story 3.3 · AC2：健康状态只发变化了的字段；sex 改成 MALE 时不带怀孕项。
+    final neuterChanged = _healthStatus.changedNeuterStatus;
+    final catChanged = _healthStatus.changedCatInHome(_petType);
+    final pregnantChanged = _healthStatus.changedPregnant(_sex);
     try {
       await ref.read(profileRepositoryProvider).update(
             petId: _petId,
@@ -132,7 +143,12 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             intro: _emptyToNull(_introController.text),
             // 🔒 体重：留空 = 不改动（部分更新语义），不会把已填的值清掉
             weightKg: double.tryParse(_weightController.text.trim()),
+            neuterStatus: neuterChanged,
+            catInHome: catChanged,
+            pregnantNursing: pregnantChanged,
           );
+      _reportHealthFields(neuter: neuterChanged, cat: catChanged, pregnant: pregnantChanged);
+      // 刷新档案 → 自动关闭日期行（pregnantAutoOffDate）随新档案出现（AC2.3）。
       ref.invalidate(petProfileProvider);
       // V1.4.0 multi-pet：名字 / 头像也显示在宠物列表（我的页 / Diary 切换器）里。
       ref.invalidate(petListProvider);
@@ -146,6 +162,18 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// `health_profile_field_updated`（PRD §4）：每个变化字段报一次；值只放枚举小写 / 布尔。
+  void _reportHealthFields({String? neuter, bool? cat, bool? pregnant}) {
+    void report(String field, Object value) => Analytics.capture('health_profile_field_updated', {
+          'pet_id': ?_petId,
+          'field': field,
+          'value': value,
+        });
+    if (neuter != null) report('neuter_status', neuter.toLowerCase());
+    if (cat != null) report('cat_in_home', cat);
+    if (pregnant != null) report('pregnant_nursing', pregnant);
   }
 
   /// 正在编辑的那只在宠物列表里的项（列表未加载 → null，放行由后端兜底）。
@@ -453,6 +481,11 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
               key: const ValueKey('petProfileEditWeightHint'),
               style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
           const SizedBox(height: 16),
+          // V1.5.0 健康记录提醒 Story 3.3（FR-162）：Berat badan 与 Bio 之间的独立分组；非猫狗不显示。
+          if (PetHealthStatusSection.showsGroup(_petType)) ...[
+            PetHealthStatusSection(draft: _healthStatus, petType: _petType, sex: _sex),
+            const SizedBox(height: 16),
+          ],
           _sectionLabel(l10n.petProfileBioLabel),
           const SizedBox(height: 6),
           TextField(

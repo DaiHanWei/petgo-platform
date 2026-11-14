@@ -58,6 +58,8 @@ class _FakeRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    bool? catInHome,
+    bool? pregnantNursing,
     int? petId,
   }) async {
     updatedName = name;

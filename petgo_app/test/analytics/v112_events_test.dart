@@ -457,6 +457,9 @@ void main() {
         // 记录被删（V1.5.0 健康记录提醒 PRD §4 `health_record_deleted`）：`_deleted` = **服务端确认删除后**才报，
         // 与 `_saved` 成对（看提醒带来的记录有多少被删掉）。名字由 PRD §4 定死，扩表、不改名。
         '_deleted',
+        // 档案字段被改（V1.5.0 健康记录提醒 PRD §4 `health_profile_field_updated`，FR-162）：`_updated` = **保存成功后**
+        // 每个变化字段报一次（值放 `field` / `value`）。名字由 PRD §4 定死，扩表、不改名。
+        '_updated',
         // 付费失败（2026-09-25 KTP 付费漏斗 `ktp_unlock_failed`，名字按运营需求）：`_failed` = 这次付费
         // **有了明确的失败结局**，与 `_succeeded` 成对，原因由属性 failure_reason 承载。
         // 🔴 刻意不用 `_dismissed`：那是用户自己放弃（没有结局）；也不用 `_blocked`：那是门控拦截。

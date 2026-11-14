@@ -161,6 +161,8 @@ class _FakeProfileRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    bool? catInHome,
+    bool? pregnantNursing,
     int? petId,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');

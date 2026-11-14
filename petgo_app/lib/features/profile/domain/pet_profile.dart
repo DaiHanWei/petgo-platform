@@ -19,6 +19,9 @@ class PetProfile {
     this.weightKg,
     this.neuterStatus,
     this.tailsonalityBadge,
+    this.catInHome,
+    this.pregnantNursing = false,
+    this.pregnantAutoOffDate,
   });
 
   final int id;
@@ -53,6 +56,16 @@ class PetProfile {
   /// 服务端算好下发，客户端只展示；copyWith 不暴露（编辑档案改不了它）。
   final String? tailsonalityBadge;
 
+  /// V1.5.0 健康记录提醒（FR-162）：家里有猫（只对 DOG 有意义）；null = 没填。
+  /// 🔒 健康相关档案字段：禁止写入日志；埋点只报枚举 / 布尔（`health_profile_field_updated`）。
+  final bool? catInHome;
+
+  /// 怀孕 / 哺乳（sex=MALE 时后端恒 false）。
+  final bool pregnantNursing;
+
+  /// 怀孕标记的自动关闭日（后端算好下发：设为「是」那天 + 4 个日历月）；未设为「是」→ null。
+  final DateTime? pregnantAutoOffDate;
+
   /// 档案是否完整到能给出精准推荐（有生日 + 有体重）。
   bool get isCompleteForReco => birthday != null && weightKg != null;
   /// 页头视图模型（V1.1.6 Story 2.3）。页头只需要这几样，不需要 id / cardToken。
@@ -83,6 +96,9 @@ class PetProfile {
         weightKg: (json['weightKg'] as num?)?.toDouble(),
         neuterStatus: json['neuterStatus'] as String?,
         tailsonalityBadge: json['tailsonalityBadge'] as String?,
+        catInHome: json['catInHome'] as bool?,
+        pregnantNursing: (json['pregnantNursing'] ?? false) as bool,
+        pregnantAutoOffDate: _parseDate(json['pregnantAutoOffDate']),
       );
 
   PetProfile copyWith({
@@ -111,6 +127,9 @@ class PetProfile {
         weightKg: weightKg ?? this.weightKg,
         neuterStatus: neuterStatus ?? this.neuterStatus,
         tailsonalityBadge: tailsonalityBadge,
+        catInHome: catInHome,
+        pregnantNursing: pregnantNursing,
+        pregnantAutoOffDate: pregnantAutoOffDate,
       );
 
   static DateTime? _parseDate(Object? raw) {

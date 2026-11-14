@@ -48,6 +48,9 @@ abstract class ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    /// V1.5.0 健康记录提醒 Story 3.3（FR-162）：家里有猫（只 DOG）/ 怀孕哺乳；null = 不改动。
+    bool? catInHome,
+    bool? pregnantNursing,
   });
 
   /// V1.4.0 multi-pet（Story 1.3）：[petId] 只删这一只；null = 后端默认宠物。
@@ -108,6 +111,9 @@ class DioProfileRepository implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    /// V1.5.0 健康记录提醒 Story 3.3（FR-162）：家里有猫（只 DOG）/ 怀孕哺乳；null = 不改动。
+    bool? catInHome,
+    bool? pregnantNursing,
   }) async {
     final data = <String, dynamic>{};
     if (name != null) data['name'] = name;
@@ -118,6 +124,8 @@ class DioProfileRepository implements ProfileRepository {
     if (intro != null) data['intro'] = intro;
     if (weightKg != null) data['weightKg'] = weightKg;
     if (neuterStatus != null) data['neuterStatus'] = neuterStatus;
+    if (catInHome != null) data['catInHome'] = catInHome;
+    if (pregnantNursing != null) data['pregnantNursing'] = pregnantNursing;
     final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.petProfileMe, petId), data: data);
     return PetProfile.fromJson(resp.data!);
   }
