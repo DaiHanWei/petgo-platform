@@ -63,7 +63,17 @@
                 <select class="inp" th:name="${cm.select.name}" th:required="${cm.select.required}">
                     <option th:if="${cm.select.required}" value=""></option>
                     <option th:each="o : ${cm.select.options}" th:value="${o.value}" th:selected="${o.selected}" th:text="${o.label}"></option>
+                    <!--/* V1.5.0 pet-species Story 2.1：平铺项之后的分组（空则不输出）。 */-->
+                    <optgroup th:each="g : ${cm.select.groups}" th:label="${g.label}">
+                        <option th:each="o : ${g.options}" th:value="${o.value}" th:selected="${o.selected}" th:text="${o.label}"></option>
+                    </optgroup>
                 </select>
+            </label>
+            <!--/* V1.5.0 pet-species Story 2.1 · G2：多行输入（如「修改原因」）；null 则不输出。 */-->
+            <label class="field cm-textarea" th:if="${cm.textArea != null}" data-confirm-textarea>
+                <span th:text="${cm.textArea.label}">原因</span>
+                <textarea class="inp" rows="3" th:name="${cm.textArea.name}" th:attr="maxlength=${cm.textArea.maxLength},placeholder=${cm.textArea.placeholder}"
+                          th:required="${cm.textArea.required}"></textarea>
             </label>
             <label class="cm-typed" th:if="${cm.typed()}">
                 <span class="cm-typed-prompt" th:utext="${cm.typedPromptHtml}"></span>

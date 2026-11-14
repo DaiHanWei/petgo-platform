@@ -32,6 +32,8 @@ public final class AdminPermissions {
     public static final String USER_GRANT_PAWCOIN = "user.grant_pawcoin";
     /** V1.4.0 ② AB-34：运营补发宠物名额（Story 4.3 · AD-15；预授 OPS_MANAGER，见 {@link AdminRole}）。 */
     public static final String USER_PET_SLOT_ADJUST = "user.pet_slot_adjust";
+    /** V1.5.0 pet-species AB-42：运营代改宠物类型（Story 2.1 · D-14；不预授，只 SUPER_ADMIN 天然有，待拍板 Q-3）。 */
+    public static final String USER_PET_TYPE_CHANGE = "user.pet_type_change";
     /**
      * 用户标签管理（V1.1.6 Story 11.3 · AB-12A）。查看 / 编辑分两码。
      * ⚠️ 编辑权限**不要下放得比其它模块更宽** —— 该页的分配支持批量，
@@ -395,7 +397,8 @@ public final class AdminPermissions {
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
                     CONTENT_PIN_MANAGE, CONTENT_TAG_MANAGE, TOPIC_MANAGE,
-                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST, USER_TAG_MANAGE,
+                    USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN, USER_PET_SLOT_ADJUST, USER_PET_TYPE_CHANGE,
+                    USER_TAG_MANAGE,
                     VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD, VET_QUALIFY,
                     CONSULT_HANDLE,
                     SUPPORT_HANDLE, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT,

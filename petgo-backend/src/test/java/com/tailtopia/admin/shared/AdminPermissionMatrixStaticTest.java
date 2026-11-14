@@ -140,7 +140,9 @@ class AdminPermissionMatrixStaticTest {
      */
     @Test
     void thePermissionRegisterHasExactlyNinetyOneCodes() {
-        assertThat(AdminPermissions.ALL).hasSize(91); // + ops-ai-query ai.query
+        // + ops-ai-query ai.query = 91；+ V1.5.0 pet-species Story 2.1 user.pet_type_change（不预授）= 92
+        assertThat(AdminPermissions.ALL).hasSize(92);
+        assertThat(AdminPermissions.ALL).contains(AdminPermissions.USER_PET_TYPE_CHANGE);
         assertThat(AdminPermissions.ALL)
                 .contains(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST,
                         AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,

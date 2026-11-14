@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  用户抽屉 · 「宠物档案」页签（V1.5.0 pet-species Story 2.1 · AB-42 · UI G1 ~ G5）。一宠一卡。
+  参数：visible（是否显示）、userId、pets（List<AdminUserDetailView.PetRow>）、expandedPetId（代改成功后展开这只的修改记录；可 null）。
+  🔴 根元素仍是 data-utab-panel="pets" 的 section（页签头与 data-utab-panel 名不改）；加 id="user-pets-panel"
+     供代改成功后 HX-Retarget outerHTML 只换本页签（整抽屉重渲染会把页签切回「基本信息」）。
+  原有信息全部保留：头像、名字、类型徽标、品种、性别、生日、档案 ID（性别 / 生日是 PRD §5 ③ 第 2 条例外，纯读展示）。
+  类型名 / emoji 只走 @petSpeciesLabels（不在模板里写映射）；运营填的原因原样输出（th:text 转义）。
+*/-->
+<body>
+<section th:fragment="panel(visible, userId, pets, expandedPetId)" class="card card-full ud-card"
+         data-utab-panel="pets" id="user-pets-panel" th:hidden="${!visible}">
+    <p class="hint" th:if="${#lists.isEmpty(pets)}" th:text="#{admin.userdetail.none}">无</p>
+    <div class="ud-pets">
+        <div class="ud-pet ud-ps-pet" th:each="p : ${pets}" th:attr="data-pet-id=${p.id()}">
+            <div class="ud-pet-avatar" aria-hidden="true" th:text="${@petSpeciesLabels.emojiOf(p.species())}">🐾</div>
+            <div class="ud-ps-main">
+                <p class="ud-pet-name">
+                    <b th:text="${p.name()}">旺财</b>
+                    <span class="badge badge-neutral" th:if="${p.species() != null}" data-pet-species-badge
+                          th:text="${p.otherGroupMember()} ? #{admin.petSpecies.groupPrefix} + ${#messages.msg(@petSpeciesLabels.keyOf(p.species()))} : ${#messages.msg(@petSpeciesLabels.keyOf(p.species()))}">兔</span>
+                    <span class="muted rv-small ud-ps-group" th:if="${p.petType() != null}"
+                          th:text="#{admin.petSpecies.group(${#messages.msg('admin.petSpecies.' + p.petType())})}">大类：其他</span>
+                </p>
+                <p class="muted rv-small">
+                    <span th:text="#{admin.userdetail.col.breed}">品种</span>:
+                    <span th:text="${p.breed()} ?: '—'">—</span>
+                    · <span th:text="#{admin.v130.users.pet.sex}">性别</span>:
+                    <span th:text="${p.sex() != null} ? #{'admin.v130.users.pet.sex.' + ${p.sex()}} : '—'">—</span>
+                </p>
+                <p class="muted rv-small">
+                    <span th:text="#{admin.v130.users.pet.birthday}">生日</span>:
+                    <!--/* ⚠️ birthday 是 LocalDate（不是时刻）：不能用 @adminTime.wib，日期本身没有时区。 */-->
+                    <span th:text="${p.birthday() != null} ? ${#temporals.format(p.birthday(), 'yyyy-MM-dd')} : '—'">—</span>
+                    · <span th:text="#{admin.v130.users.pet.ktp}">档案 ID</span>:
+                    <span th:text="${p.id()}">1</span>
+                </p>
+                <!--/* G1：下次可改（speciesChangeableFrom 为 null = 现在可改；从未改过不显示括号）。 */-->
+                <p class="muted rv-small ud-ps-next" data-pet-species-next>
+                    <span th:text="#{admin.petSpecies.nextChange(${p.speciesChangeableFrom() != null} ? ${#temporals.format(p.speciesChangeableFrom(), 'yyyy-MM-dd')} : ${#messages.msg('admin.petSpecies.canChangeNow')})}">下次可改：现在可改</span><span
+                        th:if="${p.petTypeChangedAt() != null}"
+                        th:text="#{admin.petSpecies.lastChanged(${@adminTime.fmtDate(p.petTypeChangedAt())})}">（用户上次修改 2026-11-24）</span>
+                </p>
+                <!--/* G4 / G5：类型修改记录（纯前端展开；数据随页签一起渲染）。代改成功后展开那只。 */-->
+                <details class="ud-ps-log" th:open="${expandedPetId != null and expandedPetId == p.id()}" data-pet-species-log>
+                    <summary th:text="#{admin.petSpecies.log.toggle}">类型修改记录 ▾</summary>
+                    <p class="ud-ps-log-title" th:text="#{admin.petSpecies.log.title}">类型修改记录</p>
+                    <p class="hint" th:if="${#lists.isEmpty(p.speciesChanges())}" th:text="#{admin.petSpecies.log.empty}">暂无修改记录</p>
+                    <table class="tbl ud-ps-table" th:unless="${#lists.isEmpty(p.speciesChanges())}">
+                        <thead>
+                        <tr>
+                            <th th:text="#{admin.petSpecies.log.col.time}">时间（WIB）</th>
+                            <th th:text="#{admin.petSpecies.log.col.change}">修改</th>
+                            <th th:text="#{admin.petSpecies.log.col.source}">来源</th>
+                            <th th:text="#{admin.petSpecies.log.col.operator}">操作人</th>
+                            <th th:text="#{admin.petSpecies.log.col.reason}">原因</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="c : ${p.speciesChanges()}" th:attr="data-change-source=${c.source()}">
+                            <td th:text="${@adminTime.fmt(c.createdAt())}">2026-12-02 14:20</td>
+                            <td><span th:text="${#messages.msg(@petSpeciesLabels.keyOf(c.fromSpecies()))}">兔</span>
+                                → <span th:text="${#messages.msg(@petSpeciesLabels.keyOf(c.toSpecies()))}">仓鼠</span></td>
+                            <td><span class="badge" th:classappend="${c.source() == 'MIGRATION'} ? 'badge-neutral ud-ps-src-migration'"
+                                      th:text="#{'admin.petSpecies.log.source.' + ${c.source()}}">运营</span></td>
+                            <td th:text="${c.source() == 'MIGRATION'} ? #{admin.petSpecies.log.system} : (${c.operatorName()} ?: '—')">—</td>
+                            <td th:text="${c.reason()} ?: '—'">—</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </details>
+            </div>
+            <!--/* G1：代改类型（无权限不渲染；表达式与 AdminPetSpeciesController.PET_TYPE_CHANGE_AUTH 逐字一致）。 */-->
+            <div class="ud-ps-actions">
+                <button type="button" class="btn btn-neutral btn-sm" data-pet-species-change
+                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.pet_type_change')"
+                        th:attr="hx-post=@{/admin/users/{u}/pets/{p}/species/confirm(u=${userId},p=${p.id()})}"
+                        hx-target="#user-drawer-err" hx-swap="innerHTML"
+                        th:text="#{admin.petSpecies.changeBtn}">代改类型</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!--/* 代改成功（G4）：只换本页签（HX-Retarget #user-pets-panel outerHTML，展开该宠物记录）+ toast oob + 清抽屉错误槽。 */-->
+<th:block th:fragment="saved">
+    <section th:replace="~{admin/fragments/drawer-users-pets :: panel(true, ${petsTabUserId}, ${petsTabRows}, ${petsTabExpanded})}"></section>
+    <div id="user-drawer-err" hx-swap-oob="innerHTML"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已修改</div>
+    </div>
+</th:block>
+</body>
+</html>

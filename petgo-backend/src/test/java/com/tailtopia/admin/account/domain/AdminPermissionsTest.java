@@ -141,6 +141,7 @@ class AdminPermissionsTest {
         // 2026-11-06（V1.4.2 exp-reverse）：order.reverse_exp ⇒ 89 + 1 = 90。
         // 2026-11-09（主题 ops-ai-query）：AI 查数 ai.query（不预授任何预置角色）⇒ 90 + 1 = 91。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(91);
+        // 2026-11-14（V1.5.0 pet-species Story 2.1 · AB-42）：运营代改宠物类型 user.pet_type_change（不预授）⇒ 91 + 1 = 92。
+        assertThat(all).hasSize(92);
     }
 }

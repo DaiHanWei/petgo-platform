@@ -117,4 +117,26 @@ class AdminConfirmModalTest {
         assertThat(m.nativePost()).isFalse();
         assertThat(m.formSwap()).isEqualTo("innerHTML");
     }
+
+    /** V1.5.0 pet-species Story 2.1 · G2：下拉分组（optgroup）与多行输入只追加，不传时不出块。 */
+    @Test
+    void optionGroupsAndTextAreaRender() {
+        assertThat(render(base())).doesNotContain("data-confirm-textarea").doesNotContain("<optgroup");
+        AdminConfirmModal cm = base()
+                .withSelect(new AdminConfirmModal.SelectField("species", "新类型 *", List.of(
+                        new AdminConfirmModal.Option("RABBIT", "兔", true)), true,
+                        List.of(new AdminConfirmModal.OptionGroup("其他",
+                                List.of(new AdminConfirmModal.Option("CIVET", "麝香猫", false))))))
+                .withTextArea(new AdminConfirmModal.TextAreaField("reason", "修改原因 *", "写清为什么改", 200, true));
+        String html = render(cm);
+        assertThat(html).contains("<optgroup label=\"其他\"").contains("value=\"CIVET\"")
+                .contains("value=\"RABBIT\" selected");
+        assertThat(html).contains("data-confirm-textarea").contains("<textarea").contains("name=\"reason\"")
+                .contains("maxlength=\"200\"").contains("placeholder=\"写清为什么改\"");
+        // 其他 with* 不丢多行输入。
+        assertThat(cm.withSuccessTarget("#x", null).textArea()).isNotNull();
+        assertThat(cm.asNativePost().textArea()).isNotNull();
+        assertThat(cm.withAmounts(List.of()).textArea()).isNotNull();
+        assertThat(new AdminConfirmModal.SelectField("s", "l", List.of(), true).groups()).isEmpty();
+    }
 }

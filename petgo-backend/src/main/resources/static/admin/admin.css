@@ -1726,3 +1726,21 @@ td.is-missing { color: var(--danger); }
 .aiq-scope > p, .aiq-scope > ul, .aiq-scope > ol { display: inline; margin: 0; }
 .aiq-scope > ul, .aiq-scope > ol { display: block; padding-left: 18px; }
 .aiq-inline { display: inline; margin: 0; }
+
+/* ===== V1.5.0 pet-species Story 2.1 · 用户详情「宠物档案」页签：类型 / 下次可改 / 代改 / 修改记录（UI G1 ~ G5）===== */
+.ud-ps-pet { align-items: flex-start; }
+.ud-ps-main { flex: 1; min-width: 0; }
+.ud-ps-group { font-weight: 400; }
+.ud-ps-next { margin-top: 2px; }
+.ud-ps-actions { flex-shrink: 0; }
+.ud-ps-log { margin-top: 4px; }
+.ud-ps-log > summary { cursor: pointer; color: var(--brand); font-size: 12px; list-style: none; }
+.ud-ps-log > summary::-webkit-details-marker { display: none; }
+.ud-ps-log-title { margin: 6px 0 4px; font-weight: 600; font-size: 12px; }
+.ud-ps-table { width: 100%; font-size: 12px; }
+.ud-ps-table td, .ud-ps-table th { padding: 4px 6px; vertical-align: top; }
+.ud-ps-src-migration { color: var(--muted, #888); }
+/* 代改弹层 G3：原因为空 → 服务端 422 写进 #confirm-modal-err，原因框随之红框。 */
+.cm-textarea { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.cm-textarea textarea { width: 100%; resize: vertical; }
+.cm-form:has(#confirm-modal-err:not(:empty)) .cm-textarea textarea { border-color: var(--danger, #d33); }

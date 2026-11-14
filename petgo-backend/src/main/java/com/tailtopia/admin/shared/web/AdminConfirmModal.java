@@ -40,12 +40,23 @@ import java.util.Map;
  *                      原表单的 hx-target 搬到这里，错误（422 / 403）仍落弹层内错误槽；null = 现状（只靠 admin:confirm-close）
  * @param successSwap   成功时的 swap 方式（原表单的 hx-swap；null = innerHTML）
  * @param nativePost    true = 弹层表单按原生 POST 整页提交（原表单本就是非 htmx 的 POST + 重定向）
+ * @param textArea      多行输入（V1.5.0 pet-species Story 2.1 · G2「修改原因」）；null = 不渲染
  */
 public record AdminConfirmModal(String title, String danger, List<DiffLine> diffs, String note,
         String typedPromptHtml, String typedName, String typedExpected,
         String actionPath, Map<String, String> hidden, String confirmLabel, boolean dangerButton,
         boolean warnBanner, List<Fact> facts, List<AmountLine> amounts, ChoiceGroup choices, SelectField select,
-        String successTarget, String successSwap, boolean nativePost) {
+        String successTarget, String successSwap, boolean nativePost, TextAreaField textArea) {
+
+    /** 19 参（V1.4.2 AD-3 形态）：无多行输入（V1.5.0 新增，未传时与之前逐字一致）。 */
+    public AdminConfirmModal(String title, String danger, List<DiffLine> diffs, String note,
+            String typedPromptHtml, String typedName, String typedExpected,
+            String actionPath, Map<String, String> hidden, String confirmLabel, boolean dangerButton,
+            boolean warnBanner, List<Fact> facts, List<AmountLine> amounts, ChoiceGroup choices, SelectField select,
+            String successTarget, String successSwap, boolean nativePost) {
+        this(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath, hidden, confirmLabel,
+                dangerButton, warnBanner, facts, amounts, choices, select, successTarget, successSwap, nativePost, null);
+    }
 
     /** 13 参（V1.4.0 ① facts）。V1.4.2 新增的可选块一律不渲染，形态与之前逐字一致。 */
     public AdminConfirmModal(String title, String danger, List<DiffLine> diffs, String note,
@@ -112,11 +123,34 @@ public record AdminConfirmModal(String title, String danger, List<DiffLine> diff
     public record Option(String value, String label, boolean selected) {
     }
 
-    /** 下拉（以 {@code name} 提交；{@code required} 时首项为空占位且必选）。 */
-    public record SelectField(String name, String label, List<Option> options, boolean required) {
+    /**
+     * 下拉（以 {@code name} 提交；{@code required} 时首项为空占位且必选）。
+     * {@code groups}（V1.5.0 pet-species Story 2.1）：平铺项之后的 {@code <optgroup>} 分组，空 = 不渲染。
+     */
+    public record SelectField(String name, String label, List<Option> options, boolean required,
+            List<OptionGroup> groups) {
         public SelectField {
             options = options == null ? List.of() : List.copyOf(options);
+            groups = groups == null ? List.of() : List.copyOf(groups);
         }
+
+        /** 4 参（无分组，V1.5.0 前的形态）。 */
+        public SelectField(String name, String label, List<Option> options, boolean required) {
+            this(name, label, options, required, List.of());
+        }
+    }
+
+    /** 下拉分组（{@code <optgroup label>}，V1.5.0 pet-species Story 2.1）。 */
+    public record OptionGroup(String label, List<Option> options) {
+        public OptionGroup {
+            options = options == null ? List.of() : List.copyOf(options);
+        }
+    }
+
+    /**
+     * 多行输入（V1.5.0 pet-species Story 2.1 · G2）：以 {@code name} 提交；G3 的红框由 CSS 按弹层错误槽非空判定。
+     */
+    public record TextAreaField(String name, String label, String placeholder, int maxLength, boolean required) {
     }
 
     public AdminConfirmModal {
@@ -138,34 +172,42 @@ public record AdminConfirmModal(String title, String danger, List<DiffLine> diff
     public AdminConfirmModal withAmounts(List<AmountLine> lines) {
         return new AdminConfirmModal(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath,
                 hidden, confirmLabel, dangerButton, warnBanner, facts, lines, choices, select, successTarget,
-                successSwap, nativePost);
+                successSwap, nativePost, textArea);
     }
 
     /** 加单选组。 */
     public AdminConfirmModal withChoices(ChoiceGroup group) {
         return new AdminConfirmModal(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath,
                 hidden, confirmLabel, dangerButton, warnBanner, facts, amounts, group, select, successTarget,
-                successSwap, nativePost);
+                successSwap, nativePost, textArea);
     }
 
     /** 加下拉。 */
     public AdminConfirmModal withSelect(SelectField field) {
         return new AdminConfirmModal(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath,
                 hidden, confirmLabel, dangerButton, warnBanner, facts, amounts, choices, field, successTarget,
-                successSwap, nativePost);
+                successSwap, nativePost, textArea);
+    }
+
+    /** 加多行输入（V1.5.0 pet-species Story 2.1）。 */
+    public AdminConfirmModal withTextArea(TextAreaField field) {
+        return new AdminConfirmModal(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath,
+                hidden, confirmLabel, dangerButton, warnBanner, facts, amounts, choices, select, successTarget,
+                successSwap, nativePost, field);
     }
 
     /** 成功后把响应换进原表单的目标（替换 {@code data-confirm} 用；错误仍落弹层内）。 */
     public AdminConfirmModal withSuccessTarget(String target, String swap) {
         return new AdminConfirmModal(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath,
                 hidden, confirmLabel, dangerButton, warnBanner, facts, amounts, choices, select, target, swap,
-                false);
+                false, textArea);
     }
 
     /** 弹层表单改为原生整页 POST（原表单是非 htmx 的 POST + 重定向）。 */
     public AdminConfirmModal asNativePost() {
         return new AdminConfirmModal(title, danger, diffs, note, typedPromptHtml, typedName, typedExpected, actionPath,
-                hidden, confirmLabel, dangerButton, warnBanner, facts, amounts, choices, select, null, null, true);
+                hidden, confirmLabel, dangerButton, warnBanner, facts, amounts, choices, select, null, null, true,
+                textArea);
     }
 
     /** 简单确认（替换原生 {@code data-confirm}）：标题 + 说明 + 确认钮，带原表单字段。 */

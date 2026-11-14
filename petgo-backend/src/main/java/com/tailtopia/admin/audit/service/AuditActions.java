@@ -141,6 +141,11 @@ public final class AuditActions {
     public static final String CONSULT_ORDER_EXP_REVERSED = "CONSULT_ORDER_EXP_REVERSED";
     /** 运营补发宠物名额（V1.4.0 ② Story 4.3 · AB-34.2；summary 含天数/到期/原因/幂等键，不落 PII）。 */
     public static final String PET_SLOT_GRANTED = "PET_SLOT_GRANTED";
+    /**
+     * 运营代改宠物类型（V1.5.0 pet-species Story 2.1 · AB-42）。targetType {@code PET}、targetId 档案 id；
+     * summary 只含「旧→新 user=…」，🔒 <b>不含修改原因</b>（可能有工单号，留在 pet_species_changes）。
+     */
+    public static final String PET_SPECIES_CHANGED = "PET_SPECIES_CHANGED";
 
     // ===== 内容审核补充规范 story 8（后台审核增强）=====
     /** 调整人工审核队列项优先级（story 8，§5.1，含旧→新优先级）。 */

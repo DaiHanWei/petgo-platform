@@ -90,36 +90,8 @@
             <b th:text="${#numbers.formatInteger(user.pawcoinBalance(), 0, 'COMMA')}">0</b></p>
     </section>
 
-    <!--/* ② 宠物档案：一宠一卡。性别 / 生日是 PRD §5 ③ 第 2 条例外（纯读展示）。 */-->
-    <section class="card card-full ud-card" data-utab-panel="pets" hidden>
-        <p class="hint" th:if="${#lists.isEmpty(user.pets())}" th:text="#{admin.userdetail.none}">无</p>
-        <div class="ud-pets">
-            <div class="ud-pet" th:each="p : ${user.pets()}">
-                <div class="ud-pet-avatar" aria-hidden="true">🐾</div>
-                <div>
-                    <p class="ud-pet-name">
-                        <b th:text="${p.name()}">旺财</b>
-                        <span class="badge badge-neutral" th:if="${p.petType() != null}"
-                              th:text="${p.petType()}">DOG</span>
-                    </p>
-                    <p class="muted rv-small">
-                        <span th:text="#{admin.userdetail.col.breed}">品种</span>:
-                        <span th:text="${p.breed()} ?: '—'">—</span>
-                        · <span th:text="#{admin.v130.users.pet.sex}">性别</span>:
-                        <span th:text="${p.sex() != null} ? #{'admin.v130.users.pet.sex.' + ${p.sex()}} : '—'">—</span>
-                    </p>
-                    <p class="muted rv-small">
-                        <span th:text="#{admin.v130.users.pet.birthday}">生日</span>:
-                        <!--/* ⚠️ birthday 是 LocalDate（不是时刻）：不能用 @adminTime.wib，
-                               那个是给 Instant 折算时区的；日期本身没有时区。 */-->
-                        <span th:text="${p.birthday() != null} ? ${#temporals.format(p.birthday(), 'yyyy-MM-dd')} : '—'">—</span>
-                        · <span th:text="#{admin.v130.users.pet.ktp}">档案 ID</span>:
-                        <span th:text="${p.id()}">1</span>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
+    <!--/* ② 宠物档案：一宠一卡（V1.5.0 pet-species Story 2.1 起抽到 drawer-users-pets，代改成功后只换本页签）。 */-->
+    <section th:replace="~{admin/fragments/drawer-users-pets :: panel(false, ${user.id()}, ${user.pets()}, null)}"></section>
 
     <!--/* ③ 发布内容：只读，点行去 B1 抽屉（Story 7.1 的 ?open=） */-->
     <section class="card card-full ud-card" data-utab-panel="posts" hidden>

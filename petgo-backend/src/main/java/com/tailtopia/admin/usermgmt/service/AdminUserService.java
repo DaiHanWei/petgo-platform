@@ -54,6 +54,8 @@ public class AdminUserService {
     private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
     /** 导出表头与状态文案随当前 locale（Story 8.1 走 AdminExportWriter 之后）。 */
     private final com.tailtopia.shared.i18n.Messages msg;
+    /** V1.5.0 pet-species Story 2.1：宠物行（细分类型 / 下次可改 / 修改记录）；null = 旧形态（单测）。 */
+    private final AdminPetRows petRows;
 
     public AdminUserService(AccountQueryService accountQuery, PetResolver petResolver,
             ContentService contentService, ConsultHistoryService consultHistory,
@@ -62,6 +64,19 @@ public class AdminUserService {
             PawCoinWalletService pawCoinWallet, UserRepository users,
             org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc,
             com.tailtopia.shared.i18n.Messages msg) {
+        this(accountQuery, petResolver, contentService, consultHistory, authService, consultInterrupt, auditService,
+                accountDeletionService, pawCoinWallet, users, jdbc, msg, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AdminUserService(AccountQueryService accountQuery, PetResolver petResolver,
+            ContentService contentService, ConsultHistoryService consultHistory,
+            AuthService authService, ConsultInterruptService consultInterrupt,
+            AdminAuditService auditService, AccountDeletionService accountDeletionService,
+            PawCoinWalletService pawCoinWallet, UserRepository users,
+            org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc,
+            com.tailtopia.shared.i18n.Messages msg, AdminPetRows petRows) {
+        this.petRows = petRows;
         this.accountQuery = accountQuery;
         this.petResolver = petResolver;
         this.contentService = contentService;
@@ -396,9 +411,9 @@ public class AdminUserService {
                 .orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
 
         // V1.4.0 multi-pet（Story 1.2 · X29）：「宠物档案」块列账号全部宠物（按创建时间）。
-        List<AdminUserDetailView.PetRow> pets = petResolver.listOwned(userId).stream()
-                .map(AdminUserService::toPetRow)
-                .toList();
+        // V1.5.0 pet-species Story 2.1：细分类型 / 下次可改 / 修改记录（批量，不 N+1）。
+        List<AdminUserDetailView.PetRow> pets = petRows != null ? petRows.rowsOf(userId)
+                : petResolver.listOwned(userId).stream().map(AdminUserService::toPetRow).toList();
 
         boolean deleted = u.getDeletedAt() != null;
         // 已注销：显示名/邮箱取注销前快照列（仅后台展示）；未注销：昵称优先（同 toRow）。
