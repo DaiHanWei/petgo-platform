@@ -1,0 +1,65 @@
+# generated: 2026-11-14
+# last_updated: 2026-11-14  # 12 条 story 文件已生成，均 ready-for-dev（Epic 4 联调留本地，云端不跑）
+# project: TailTopia V1.5.0 · 会话 ⑥ ops-activity（运营活动规则引擎 FR-193 / AB-40）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.5.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.5.0/epics-v1.5.0-ops-activity.md (4 Epic / 12 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.5.0/architecture-v1.5.0-ops-activity-delta.md (OA-1~OA-22 · §8 契约缺口)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.5.0/运营活动规则引擎/1-5-0运营活动规则引擎prd.md
+# 依赖契约: {project-root}/_bmad-output/planning-artifacts/v1.5.0/architecture-v1.5.0-gift-pack-delta.md §5（gift-pack 4-1 EntitlementCreditService.grant，冻结）
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.5.0/decision-log.md
+# 云端须知: {project-root}/_bmad-output/implementation-artifacts/v1.5.0/cloud-rules-ops-activity.md
+#
+# 🔴 口径优先级：CROSS-STORY-DECISIONS.md > decision-log.md > PRD > 架构增量 > UI 稿。
+# 🔴 同一版本目录还有 ①②③④⑤ 各线 story，编号同号——只按本文件的完整 key 取。
+# 🔴 分支 feat/1.5.0-ops-activity，从「gift-pack 4-1 已合入之后」的 dev_1.5.0 切出；全部 story 同一分支串行。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 执行顺序（严格按下列顺序，不跳序）=====
+# ① 1-1（第 0 步核对 4-1 契约在树里，不在就停）→ 1-2 → 1-3 → 1-4 → 1-5 → 1-6
+# ② 2-1 → 2-2 → 2-3
+# ③ 3-1 → 3-2
+# ④ 4-1（本地联调，云端跳过）
+#
+# ===== 迁移预分配（时间戳制，日期 20261115，HHMM 0600–0659 为本线专属号段）=====
+# 1-1 V20261115_0600 ops_activities / ops_activity_topics / ops_activity_grants / ops_activity_user_stops / ops_activity_notify_days / ops_activity_rank_entries
+# 1-2 V20261115_0605 growth_ledger.activity_id
+# 1-2 V20261115_0610 rebuild ck_user_coupons_source(+ACTIVITY, 6 值) + user_coupons.activity_id
+# 备用 V20261115_0615 ~ _0659（实现中需补列时按序取，回写本表与架构 §7）
+# 🔴 本线不改 ck_notifications_type（地基 V20261114_1000 所有）、不改任何 entitlement_* 约束。
+
+generated: 2026-11-14
+last_updated: 2026-11-14
+project: TailTopia V1.5.0 ops-activity
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.5.0"
+
+development_status:
+  epic-1: backlog
+  1-1-运营活动表与配置服务: ready-for-dev
+  1-2-运营活动发奖执行与幂等: ready-for-dev
+  1-3-运营活动参与即奖判定: ready-for-dev
+  1-4-运营活动扣回与下架联动: ready-for-dev
+  1-5-运营活动排名结算与发放: ready-for-dev
+  1-6-运营活动名按语言下发: ready-for-dev
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-后台运营活动列表与编辑抽屉: ready-for-dev
+  2-2-后台运营活动参与即奖详情: ready-for-dev
+  2-3-后台运营活动排名结算与待办: ready-for-dev
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-app运营活动通知与推送直达: ready-for-dev
+  3-2-app运营活动pawcoin记录活动名: ready-for-dev
+  epic-3-retrospective: optional
+
+  epic-4: backlog                      # 本地联调，云端不跑
+  4-1-运营活动全链路联调: ready-for-dev
+  epic-4-retrospective: optional

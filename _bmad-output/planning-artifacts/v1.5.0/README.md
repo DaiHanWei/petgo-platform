@@ -9,7 +9,7 @@
 | ③ 首日与召回 | `首日与新手任务/` → `推送与召回/` | `feat/1.5.0-onboarding-recall`（先首日、后召回） | 规划完成，待起云端 |
 | ④ 物种 | `宠物物种扩展/` | `feat/1.5.0-pet-species` | 规划完成，待起云端 |
 | ⑤ 点赞 | `自动点赞/` + `Feed双击点赞/` | `feat/1.5.0-likes`（先自动点赞、后双击） | 规划完成，待起云端 |
-| ⑥ 运营活动（第二批） | `运营活动规则引擎/` | `feat/1.5.0-ops-activity` | 等 ② 的权益次数表合进 dev 后起 |
+| ⑥ 运营活动（第二批） | `运营活动规则引擎/` | `feat/1.5.0-ops-activity` | 规划完成；分支等 ② 的 4-1 合进 dev 后再切、再起云端 |
 
 - 合并顺序：送礼优化 → 超值礼包 → 运营活动；首日与新手任务 → 推送与召回、Feed 双击点赞；宠物物种扩展最后。
 - 跨 PRD 决策日志：`decision-log.md`（原 `.decision-log.md`）。
@@ -26,5 +26,6 @@
 | onboarding-recall | `architecture-v1.5.0-onboarding-recall-delta.md` / `epics-v1.5.0-onboarding-recall.md` | 18 | 4-1 后记首日检查点继续；4-1/8-1 的 L1/L2 留本地 |
 | pet-species | `architecture-v1.5.0-pet-species-delta.md` / `epics-v1.5.0-pet-species.md` | 12 | 到 3-5 |
 | likes | `architecture-v1.5.0-likes-delta.md` / `epics-v1.5.0-likes.md` | 10 | 到 4-2 |
+| ops-activity | `architecture-v1.5.0-ops-activity-delta.md` / `epics-v1.5.0-ops-activity.md` | 12 | 到 3-2（1-1 第 0 步先核对 4-1 契约在树里） |
 
 各线「待拍板」在各自 epics 文末，已按推荐默认写进 story，不阻塞开发。
