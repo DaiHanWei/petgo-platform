@@ -40,11 +40,14 @@ public class MilestoneController {
     private final MilestoneShareService shareService;
     private final MilestoneCelebrationService celebrationService;
     private final PetResolver petResolver;
+    private final com.tailtopia.profile.service.AccountMilestoneQueryService accountMilestones;
 
     public MilestoneController(MilestoneService milestoneService,
             MilestoneCheckInService checkInService, MilestoneShareService shareService,
-            MilestoneCelebrationService celebrationService, PetResolver petResolver) {
+            MilestoneCelebrationService celebrationService, PetResolver petResolver,
+            com.tailtopia.profile.service.AccountMilestoneQueryService accountMilestones) {
         this.petResolver = petResolver;
+        this.accountMilestones = accountMilestones;
         this.milestoneService = milestoneService;
         this.checkInService = checkInService;
         this.shareService = shareService;
@@ -57,8 +60,16 @@ public class MilestoneController {
             @RequestParam(name = "petId", required = false) Long petId,
             @org.springframework.web.bind.annotation.RequestHeader(
                     value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
+        long ownerId = currentUserId(jwt);
+        // V1.5.0 onboarding-recall Story 2.3（OR-11）：≥ 1.5.0 新口径（账号成就组 + S 组 / 计数去掉账号级）；
+        // 旧版仍走 LegacyMilestoneCompat（1.4.2 ≤ v < 1.5.0 原样；< 1.4.2 去掉 1.4.2 编码），逐字不变。
+        if (com.tailtopia.profile.service.ClientAppVersion.isV150OrLater(appVersion)) {
+            var pet = petResolver.resolve(ownerId, petId);
+            return accountMilestones.withAccountGroup(ownerId, pet.getPetType(),
+                    milestoneService.getMilestones(ownerId, pet.getId()));
+        }
         return com.tailtopia.profile.service.LegacyMilestoneCompat.forClient(
-                milestoneService.getMilestones(currentUserId(jwt), petId), appVersion);
+                milestoneService.getMilestones(ownerId, petId), appVersion);
     }
 
     /**

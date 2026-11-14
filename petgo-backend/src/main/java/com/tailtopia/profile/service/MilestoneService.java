@@ -99,10 +99,23 @@ public class MilestoneService {
     /** 新里程碑的总数（按宠物类型清单）、已完成数、已完成未庆祝数。 */
     @Transactional(readOnly = true)
     public V142Share v142Share(long petProfileId, PetType petType) {
+        return share(petProfileId, petType, LegacyMilestoneCompat::hiddenForLegacy);
+    }
+
+    /**
+     * 账号级 3 项在这只宠物名下的份额（V1.5.0 onboarding-recall Story 2.3 · OR-11）：新口径统计扣减用，
+     * 判定经 {@link MilestoneCounting#isAccountLevel}（唯一入口）。
+     */
+    @Transactional(readOnly = true)
+    public V142Share accountShare(long petProfileId, PetType petType) {
+        return share(petProfileId, petType, MilestoneCounting::isAccountLevel);
+    }
+
+    private V142Share share(long petProfileId, PetType petType, java.util.function.Predicate<String> inShare) {
         int total = (int) com.tailtopia.profile.domain.MilestoneCatalog.forType(petType).stream()
-                .filter(d -> LegacyMilestoneCompat.hiddenForLegacy(d.code())).count();
+                .filter(d -> inShare.test(d.code())).count();
         List<Long> ids = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
-                .filter(m -> LegacyMilestoneCompat.hiddenForLegacy(m.getCode()))
+                .filter(m -> inShare.test(m.getCode()))
                 .map(PetMilestone::getId).toList();
         if (ids.isEmpty()) {
             return new V142Share(0, total, 0);

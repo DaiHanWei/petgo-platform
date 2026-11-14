@@ -43,16 +43,21 @@ class VisitorProjectionServiceTest {
     @Test
     void statsUseThatPet() {
         when(timelineService.getStats(OWNER, PET_B)).thenReturn(new ArchiveStatsResponse(3, 1, 2, 31, 9, 0, 0, 12));
+        // V1.5.0 onboarding-recall Story 2.3（OR-11）：访客一律新口径——扣掉账号级 3 项里已完成的 1 项。
+        when(milestoneService.accountShare(PET_B, PetType.DOG)).thenReturn(new MilestoneService.V142Share(1, 3, 0));
 
         VisitorStats s = service.stats(petB);
 
         assertThat(s.happyMomentCount()).isEqualTo(3);
         assertThat(s.consultCount()).isEqualTo(1);
-        assertThat(s.milestoneCompleted()).isEqualTo(2);
+        assertThat(s.milestoneCompleted()).isEqualTo(1);
+        assertThat(s.milestoneTotal()).isEqualTo(32); // 狗 35 − 账号级 3
         // V1.4.2 social-topic Story 1.1：追更人数透传作者态同一份（字段名两处一致）。
         assertThat(s.followerCount()).isEqualTo(12);
         verify(timelineService).getStats(OWNER, PET_B);
         verify(timelineService, never()).getStats(anyLong());
+        // 旧版客户端也是同一份新口径（不再单独扣 1.4.2 编码，否则扣两次）。
+        assertThat(service.stats(petB, true)).isEqualTo(s);
     }
 
     @Test

@@ -110,6 +110,37 @@ public class MilestoneCelebrationService {
     }
 
     /**
+     * 账号级庆祝回报（V1.5.0 onboarding-recall Story 2.3 · AC2 · {@code POST /api/v1/me/account-milestones/celebrations}）：
+     * 无宠物账号补弹 Lulus Pemula 后也要能记「已庆祝」。codes 里的账号级编码（任一物种写法）→ 置对应 flag 的
+     * {@code celebrated_at} + 该账号全部宠物同 flag 完成行的 {@code celebrated_at}（都只置 NULL 的）；非账号级编码静默忽略。
+     *
+     * @return 本次置位行数（flag 行 + 宠物完成行）
+     */
+    @Transactional
+    public int reportAccountCelebrated(long ownerId, List<String> codes) {
+        List<AccountMilestoneFlag> hit = new LinkedHashSet<>(codes == null ? List.<String>of() : codes).stream()
+                .map(AccountMilestoneFlag::ofCode)
+                .flatMap(Optional::stream)
+                .distinct()
+                .toList();
+        if (hit.isEmpty()) {
+            return 0;
+        }
+        Instant now = Instant.now();
+        int marked = 0;
+        for (AccountMilestoneFlag f : hit) {
+            marked += flags.markCelebrated(ownerId, f.name(), now);
+        }
+        List<String> allCodes = hit.stream().flatMap(f -> f.codes().stream()).toList();
+        List<Long> rows = milestones.findIdsByOwnerIdAndCodeIn(ownerId, allCodes);
+        if (!rows.isEmpty()) {
+            marked += completions.markCelebrated(rows, now);
+        }
+        log.info("account milestone celebration reported: flags={} marked={}", hit.size(), marked);
+        return marked;
+    }
+
+    /**
      * 该宠物「已完成且未庆祝」的条目数（角标用，AD-A2.2）。
      *
      * <p>由成长档案页头部**本来就要发的那个请求**顺带下发 —— 不新开接口、不额外发一次请求。

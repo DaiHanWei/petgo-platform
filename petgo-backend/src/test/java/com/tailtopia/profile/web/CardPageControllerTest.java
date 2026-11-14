@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +46,9 @@ class CardPageControllerTest {
         accountQueryService = mock(AccountQueryService.class);
         timelineService = mock(TimelineService.class);
         milestoneService = mock(com.tailtopia.profile.service.MilestoneService.class);
+        // V1.5.0 onboarding-recall Story 2.3（OR-11）：H5 名片一律新口径（账号级 3 项不计入），默认账号级都未完成。
+        when(milestoneService.accountShare(anyLong(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(com.tailtopia.profile.service.MilestoneService.V142Share.NONE);
         // V1.1.6 Story 2.1：控制器不再直连这些 service，改经访客投影层。
         // ⚠️ 这里用**真的**投影层套在同一批 mock 上，而不是把投影层也 mock 掉 ——
         // 否则下面那条「零里程碑不许碰 MilestoneService」的用例就会变成自说自话
@@ -238,7 +242,10 @@ class CardPageControllerTest {
                 org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
     }
 
-    /** 总数按物种取常量目录（猫 35，V1.3.4 +C-S17/C-S18，V1.4.2 +C-S19/C-S20），<b>不是</b>视觉稿里那个示意的 30。 */
+    /**
+     * 总数按物种取常量目录（猫 35，V1.3.4 +C-S17/C-S18，V1.4.2 +C-S19/C-S20），<b>不是</b>视觉稿里那个示意的 30。
+     * V1.5.0 onboarding-recall Story 2.3（OR-11）：H5 名片新口径扣掉账号级 3 项 → 32。
+     */
     @Test
     void milestoneTotalComesFromCatalogNotTheMockupNumber() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
@@ -251,8 +258,8 @@ class CardPageControllerTest {
         int catTotal = com.tailtopia.profile.domain.MilestoneCatalog
                 .forType(com.tailtopia.profile.domain.PetType.CAT).size();
         assertThat(catTotal).isEqualTo(35);
-        assertThat(model.getAttribute("milestoneTotal")).isEqualTo(catTotal);
-        assertThat(model.getAttribute("milestoneMore")).isEqualTo(35L); // 一个没完成 → +35
+        assertThat(model.getAttribute("milestoneTotal")).isEqualTo(catTotal - 3);
+        assertThat(model.getAttribute("milestoneMore")).isEqualTo(32L); // 一个没完成 → +32
     }
 
     /** 具名徽章取<b>最近完成</b>的若干条，且标题是<b>印尼语</b>（AC3：页面不得出现中文）。 */

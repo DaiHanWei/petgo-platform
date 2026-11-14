@@ -99,6 +99,30 @@ class MilestoneCelebrationServiceTest {
                     org.mockito.ArgumentMatchers.eq("LULUS_PEMULA"), any());
         }
 
+        /** V1.5.0 Story 2.3 · AC2：账号级回报端点——任一物种写法都认、置 flag + 全部宠物同 flag 行；非账号级忽略。 */
+        @Test
+        void accountEndpointMarksFlagAndAllPetRows() {
+            when(flags.markCelebrated(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.eq("LULUS_PEMULA"),
+                    any())).thenReturn(1);
+            when(milestones.findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), anyCollection()))
+                    .thenReturn(List.of(501L, 502L));
+            when(completions.markCelebrated(anyCollection(), any())).thenReturn(2);
+
+            int marked = service.reportAccountCelebrated(7L, List.of("G-S9", "C-S1", "nope"));
+
+            assertThat(marked).isEqualTo(3);
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<String>> codes = ArgumentCaptor.forClass(Collection.class);
+            verify(milestones).findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), codes.capture());
+            assertThat(codes.getValue()).containsExactlyInAnyOrder("C-S16", "D-S16", "G-S9");
+        }
+
+        @Test
+        void accountEndpointIgnoresNonAccountCodes() {
+            assertThat(service.reportAccountCelebrated(7L, List.of("C-S1", "D-M3"))).isZero();
+            org.mockito.Mockito.verifyNoInteractions(flags);
+        }
+
         /** 另两个账号级 flag 回报不碰 flag 表。 */
         @Test
         void reportingOtherAccountCodeDoesNotTouchFlagTable() {

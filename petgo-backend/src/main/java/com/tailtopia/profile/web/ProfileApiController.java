@@ -216,7 +216,8 @@ public class ProfileApiController {
             @RequestParam(name = "petId", required = false) Long petId,
             @org.springframework.web.bind.annotation.RequestHeader(
                     value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
-        return timelineService.getStats(currentUserId(jwt), petId, !com.tailtopia.profile.service.ClientAppVersion.isV142OrLater(appVersion));
+        // V1.5.0 onboarding-recall Story 2.3（OR-11）：按版本三档，与该版本里程碑列表页同口径。
+        return timelineService.getStatsForClient(currentUserId(jwt), petId, appVersion);
     }
 
     /**

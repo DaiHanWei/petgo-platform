@@ -43,6 +43,9 @@ public interface UserMilestoneFlagRepository extends JpaRepository<UserMilestone
     int markCelebrated(@Param("userId") long userId, @Param("flagKey") String flagKey,
             @Param("at") java.time.Instant at);
 
+    /** 该账号全部 flag 行（V1.5.0 Story 2.3 账号成就接口 / 列表账号组）。 */
+    List<UserMilestoneFlag> findAllByUserId(long userId);
+
     /** 该账号是否已有某个 flag（V1.5.0：Lulus Pemula 已解锁判定）。 */
     boolean existsByUserIdAndFlagKey(long userId, String flagKey);
 

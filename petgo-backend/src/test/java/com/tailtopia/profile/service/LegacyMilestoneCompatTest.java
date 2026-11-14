@@ -45,4 +45,20 @@ class LegacyMilestoneCompatTest {
 
         assertThat(LegacyMilestoneCompat.forClient(r, "1.4.2")).isSameAs(r);
     }
+
+    /**
+     * V1.5.0 onboarding-recall Story 2.3 · AC4：1.4.2 ≤ v &lt; 1.5.0 原样（账号级 3 项仍在 S 组、计入计数、无 accountGroup）；
+     * 序列化形状不带 accountGroup 字段（NON_NULL）。
+     */
+    @Test
+    @DisplayName("1.4.2 ≤ v < 1.5.0 原样；旧形状不序列化 accountGroup")
+    void v142To149KeepsOldShape() throws Exception {
+        var s = new MilestoneGroupResponse("S", 2, 4,
+                List.of(item("C-S1", true), item("C-S16", false), item("C-S19", true), item("C-S20", false)));
+        var r = new MilestoneListResponse("Mochi", null, 2, 4, List.of(s));
+        assertThat(LegacyMilestoneCompat.forClient(r, "1.4.9")).isSameAs(r);
+        assertThat(r.accountGroup()).isNull();
+        String json = new tools.jackson.databind.json.JsonMapper().writeValueAsString(r);
+        assertThat(json).doesNotContain("accountGroup");
+    }
 }

@@ -653,6 +653,24 @@ public class TimelineService {
                 s.giftTotalValue(), s.followerCount());
     }
 
+    /**
+     * 按客户端版本出统计栏（V1.5.0 onboarding-recall Story 2.3 · OR-11），与该版本的里程碑列表页同口径：
+     * ≥ 1.5.0 里程碑完成数 / 总数不含账号级 3 项（{@link MilestoneCounting}）；1.4.2 ≤ v &lt; 1.5.0 原样；
+     * &lt; 1.4.2 扣掉 1.4.2 两个编码（{@link #getStats(long, Long, boolean)}）。未庆祝角标三版都不变（含账号级行，补弹仍走它）。
+     */
+    @Transactional(readOnly = true)
+    public ArchiveStatsResponse getStatsForClient(long ownerId, Long petId, String appVersion) {
+        if (!ClientAppVersion.isV150OrLater(appVersion)) {
+            return getStats(ownerId, petId, !ClientAppVersion.isV142OrLater(appVersion));
+        }
+        ArchiveStatsResponse s = getStats(ownerId, petId);
+        PetProfile profile = requireProfile(ownerId, petId);
+        MilestoneService.V142Share a = milestoneService.accountShare(profile.getId(), profile.getPetType());
+        return new ArchiveStatsResponse(s.happyMomentCount(), s.consultCount(),
+                Math.max(0, s.milestoneCompleted() - a.completed()), Math.max(0, s.milestoneTotal() - a.total()),
+                s.healthRecordCount(), s.milestoneUncelebrated(), s.giftTotalValue(), s.followerCount());
+    }
+
     /** V1.4.0 multi-pet：指定宠物的统计栏（{@code petId} 为 null = 默认宠物）。 */
     @Transactional(readOnly = true)
     public ArchiveStatsResponse getStats(long ownerId, Long petId) {
