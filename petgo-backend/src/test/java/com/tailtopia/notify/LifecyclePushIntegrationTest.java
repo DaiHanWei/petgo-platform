@@ -66,7 +66,9 @@ class LifecyclePushIntegrationTest extends ApiIntegrationTest {
         User u = newUser(status);
         Instant created = LocalDate.now(ScheduleWindow.WIB).minusDays(days).atTime(12, 0)
                 .atZone(ScheduleWindow.WIB).toInstant();
-        jdbc.update("UPDATE users SET created_at = ? WHERE id = ?", java.sql.Timestamp.from(created), u.getId());
+        // 6-2 版本门槛：只推 App ≥ 1.5.0
+        jdbc.update("UPDATE users SET created_at = ?, last_app_version = '1.5.0' WHERE id = ?",
+                java.sql.Timestamp.from(created), u.getId());
         return u;
     }
 

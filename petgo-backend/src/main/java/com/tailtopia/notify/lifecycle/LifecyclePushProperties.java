@@ -21,8 +21,17 @@ public class LifecyclePushProperties {
      */
     private boolean enabled = false;
 
-    /** 每日投递上限。超出的推迟到下一次日扫（planner 已按 D1→D3→D7→召回排序，先保时效性最强的）。 */
-    private int dailyCap = 200;
+    /**
+     * 召回节点（{@code LIFECYCLE_WINBACK}）开关，<b>默认关</b>（V1.5.0 onboarding-recall Story 6.2 · OR-24 · PRD AC25）。
+     * {@link #enabled} 只管 D1 / D3 / D7；本开关为 false 时计划器不产出召回、日扫也不为召回额外取全量快照。
+     */
+    private boolean winbackEnabled = false;
+
+    /**
+     * 每日投递上限（V1.5.0 Story 6.2：默认 200 → 2000）。超出的推迟到下一次日扫（planner 已按 D1→D3→D7→召回排序，
+     * 先保时效性最强的）。上线第 1 天运维设 300，第 3 天起删 env 回默认。
+     */
+    private int dailyCap = 2000;
 
     /** 「多久没回来算流失」（天）。手册定义为 7。 */
     private int winbackAfterDays = 7;
@@ -42,6 +51,14 @@ public class LifecyclePushProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isWinbackEnabled() {
+        return winbackEnabled;
+    }
+
+    public void setWinbackEnabled(boolean winbackEnabled) {
+        this.winbackEnabled = winbackEnabled;
     }
 
     public int getDailyCap() {

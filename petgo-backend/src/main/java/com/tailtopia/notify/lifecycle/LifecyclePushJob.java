@@ -5,10 +5,12 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.notify.port.LifecycleContextPort;
 import com.tailtopia.notify.port.LifecycleContextPort.LifecycleContext;
 import com.tailtopia.notify.repository.LifecyclePushMarkRepository;
+import com.tailtopia.notify.service.AppVersionGate;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -36,25 +38,27 @@ public class LifecyclePushJob {
     private final LifecyclePushDispatcher dispatcher;
     private final LifecyclePushProperties props;
     private final LifecyclePushMarkRepository marks;
+    private final AppVersionGate versionGate;
     private final Clock clock;
 
     @org.springframework.beans.factory.annotation.Autowired
     public LifecyclePushJob(AccountQueryService accounts, LifecycleContextPort context,
             LifecyclePushPlanner planner, LifecyclePushDispatcher dispatcher,
             LifecyclePushProperties props,
-            LifecyclePushMarkRepository marks) {
-        this(accounts, context, planner, dispatcher, props, marks, Clock.systemUTC());
+            LifecyclePushMarkRepository marks, AppVersionGate versionGate) {
+        this(accounts, context, planner, dispatcher, props, marks, versionGate, Clock.systemUTC());
     }
 
     LifecyclePushJob(AccountQueryService accounts, LifecycleContextPort context, LifecyclePushPlanner planner,
             LifecyclePushDispatcher dispatcher, LifecyclePushProperties props, LifecyclePushMarkRepository marks,
-            Clock clock) {
+            AppVersionGate versionGate, Clock clock) {
         this.accounts = accounts;
         this.context = context;
         this.planner = planner;
         this.dispatcher = dispatcher;
         this.props = props;
         this.marks = marks;
+        this.versionGate = versionGate;
         this.clock = clock;
     }
 
@@ -67,7 +71,9 @@ public class LifecyclePushJob {
         }
         // V1.5.0 onboarding-recall Story 6.1 · AC1：日期一律 WIB；候选按 D1 / D3 / D7 窗口在 SQL 里收窄（OR-21）。
         LocalDate today = LocalDate.now(clock.withZone(ScheduleWindow.WIB));
-        List<UserLifecycleSnapshot> users = accounts.lifecycleSnapshots(today);
+        // V1.5.0 Story 6.2 · AC1：召回开着才取全量（全量本就含窗口内的人）；否则只取 D1 / D3 / D7 窗口候选。
+        List<UserLifecycleSnapshot> users = props.isWinbackEnabled() ? accounts.lifecycleSnapshots()
+                : accounts.lifecycleSnapshots(today);
         LifecycleContext ctx = context.contextOf(users.stream().map(UserLifecycleSnapshot::userId).toList(), today);
         List<LifecyclePlannedPush> planned = planner.plan(today, users, ctx, planOptions());
 
@@ -78,9 +84,18 @@ public class LifecyclePushJob {
                 .filter(push -> !marks.existsByUserIdAndPushKindAndNodeKey(
                         push.userId(), push.type().name(), push.nodeKey()))
                 .toList();
+        // V1.5.0 Story 6.2 · AC3（FR-185）：剔除已推之后、套上限之前过版本门槛（一次批量）。旧版（含从没上报 / 解析不了）
+        // 本节点跳过：不推送、不写通知、不写 mark（窗口内升级到 1.5.0 仍能收到）；SKIPPED_ACTIVE 作废 mark 同样只写新版。
+        Set<Long> onNewApp = due.isEmpty() ? Set.of()
+                : versionGate.usersOnV150OrLater(due.stream().map(LifecyclePlannedPush::userId).distinct().toList());
+        int skippedOldApp = 0;
         int sent = 0;
         int skippedActive = 0;
         for (LifecyclePlannedPush push : due) {
+            if (!onNewApp.contains(push.userId())) {
+                skippedOldApp++;
+                continue;
+            }
             if (push.variant() == LifecycleVariant.SKIPPED_ACTIVE) {
                 dispatcher.dispatch(push); // 只写作废 mark，不占当日推送上限
                 skippedActive++;
@@ -93,12 +108,13 @@ public class LifecyclePushJob {
             sent++;
         }
         // 手册每日 SOP「看召回漏斗」的第一行数据 —— 不记 userId / 宠物名（日志禁 PII）。
-        log.info("lifecycle push daily scan: users={} planned={} due={} dispatched={} skippedActive={} cap={}",
-                users.size(), planned.size(), due.size(), sent, skippedActive, cap);
+        log.info("lifecycle push daily scan: users={} planned={} due={} dispatched={} skippedActive={} "
+                + "skippedOldApp={} cap={}", users.size(), planned.size(), due.size(), sent, skippedActive,
+                skippedOldApp, cap);
     }
 
-    /** 召回节点本 story 先关（6-2 接 {@code winback-enabled} 配置）。 */
+    /** 召回节点由 {@code winback-enabled} 驱动（V1.5.0 Story 6.2 · AC1）。 */
     LifecyclePlanOptions planOptions() {
-        return new LifecyclePlanOptions(false, props.getWinbackAfterDays());
+        return new LifecyclePlanOptions(props.isWinbackEnabled(), props.getWinbackAfterDays());
     }
 }
