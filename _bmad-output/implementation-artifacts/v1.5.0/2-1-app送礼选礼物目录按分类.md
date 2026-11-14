@@ -67,6 +67,16 @@ so that 挑礼物更直观。
   - 入口切换（现有 `showGiftPanelSheet` 调用方改 push 新页）放在 2-2 与包装页一起做；旧面板本 story 不删。
   - 文案：`giftCatalogPrice`「{price} PawCoin」、`giftCatalogExp`「+{n} EXP」、`giftReceivedFrom`「dari {names}」、`giftReceivedFromMore`「dari {names} +{n}」（表里「dari {a}, {b}, {c} +{n}」：App 把最多 3 个名字用「, 」拼成 `names` 传入，效果逐字相同）。
 
+- Code review（独立复审）处置：
+  - CONFIRMED #1 滚到底时最后几个分组标题到不了顶、tab 永不高亮 → 滚到底直接激活最后一个。已修。
+  - CONFIRMED #2 tab 条是懒加载 ListView、当前 tab 不滚进可见区 → 改为非懒加载 Row，激活时 `ensureVisible` 居中。已修。
+  - CONFIRMED #3 「到顶」阈值按整页（含状态栏 / 顶栏）算 → 改为以列表视口为基准（阈值 24）。已修。
+  - PLAUSIBLE #4 连点两个 tab 时动画标志被提前放开 → 改计数。已修。
+  - #5 新页尚无入口 → 2-2 已把 `runGiftSendFlow` 改为 push 本页（与包装页同批）。
+  - #6 数量不在本屏：UI 稿 B1「本屏不再有选中态，点礼物直接进 C1」，数量（×1/×5/×10 + 步进，上限 99）挪到 2-2 包装页。
+  - #7 补测：锁区块 pop、目录拒绝 pop、点 tab 激活。tab chip 加 `shrinkWrap` 触控区（原 40 高容器里被裁）。
+  - #8 PawCoin 数额在 EN 也用点号千分位：与 App 其余 PawCoin 金额口径一致，保留。
+
 ### File List
 
 - `petgo_app/lib/features/gift/domain/gift_catalog.dart`（改：`categories`、`senderExp`、`receivedFrom`）

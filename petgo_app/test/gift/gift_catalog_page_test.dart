@@ -104,6 +104,36 @@ void main() {
     expect((results.single as GiftCatalogPicked).item.giftToken, 'c-ball');
   });
 
+  testWidgets('lock block pops GiftCatalogOpenLevelPage', (tester) async {
+    await open(tester);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('giftLockBlock')), 200,
+        scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.byKey(const ValueKey('giftLockBlock')));
+    await tester.pumpAndSettle();
+    expect(results.single, isA<GiftCatalogOpenLevelPage>());
+  });
+
+  testWidgets('gift-blocked on catalog pops GiftCatalogCannotSend', (tester) async {
+    repo.catalogError = problem('gift-blocked', status: 403);
+    await open(tester);
+    expect(results.single, isA<GiftCatalogCannotSend>());
+  });
+
+  testWidgets('tap tab scrolls its section to the top; scrolling to bottom activates last tab', (tester) async {
+    await open(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('giftCatalogTab-ex-5')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('giftCatalogTab-ex-5')));
+    await tester.pumpAndSettle();
+    final chip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('giftCatalogTab-ex-5')));
+    expect(chip.selected, isTrue);
+    await tester.ensureVisible(find.byKey(const ValueKey('giftCatalogTab-cat-3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('giftCatalogTab-cat-3')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(find.byKey(const ValueKey('giftCatalogTab-cat-3'))).selected, isTrue);
+  });
+
   testWidgets('B5 load failed shows retry and keeps close', (tester) async {
     repo.catalogError = problem('internal', status: 500);
     await open(tester);

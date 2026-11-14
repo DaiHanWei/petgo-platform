@@ -94,16 +94,32 @@ class GiftCatalogPage extends ConsumerStatefulWidget {
 
 class _GiftCatalogPageState extends ConsumerState<GiftCatalogPage> {
   final _scroll = ScrollController();
+  final _viewportKey = GlobalKey();
   final Map<String, GlobalKey> _anchors = {};
+  final Map<String, GlobalKey> _chips = {};
   String? _activeTab;
   bool _closing = false;
   bool _shownReported = false;
-  bool _jumping = false;
+
+  /// 点 tab 的滚动动画进行中（计数：连点两个 tab 时前一次结束不提前放开，code review #4）。
+  int _jumps = 0;
 
   @override
   void dispose() {
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _setActive(String key) {
+    if (key == _activeTab) return;
+    setState(() => _activeTab = key);
+    // tab 条跟随：把当前 tab 滚进可见区（code review #2）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _chips[key]?.currentContext;
+      if (ctx != null && mounted) {
+        Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 200), alignment: 0.5);
+      }
+    });
   }
 
   GlobalKey _anchor(String key) => _anchors.putIfAbsent(key, GlobalKey.new);
@@ -117,27 +133,35 @@ class _GiftCatalogPageState extends ConsumerState<GiftCatalogPage> {
   }
 
   Future<void> _jumpTo(String key) async {
-    setState(() => _activeTab = key);
+    _setActive(key);
     final ctx = _anchors[key]?.currentContext;
     if (ctx == null) return;
-    _jumping = true;
-    await Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 250), alignment: 0);
-    _jumping = false;
+    _jumps++;
+    try {
+      await Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 250), alignment: 0);
+    } finally {
+      _jumps--;
+    }
   }
 
-  /// 手动滑动时 tab 跟随当前可见分组：取顶部已越过视口顶的最后一个分组。
+  /// 手动滑动时 tab 跟随当前可见分组：以列表视口顶为基准（不含状态栏 / 顶栏，code review #3），取已到顶的最后一个分组；
+  /// 滚到底时最后几个分组的标题到不了顶 → 直接取最后一个（code review #1）。
   void _syncTab(List<GiftCatalogSection> sections) {
-    if (_jumping || sections.isEmpty) return;
+    if (_jumps > 0 || sections.isEmpty) return;
+    final viewport = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (viewport == null) return;
     String current = sections.first.key;
-    for (final s in sections) {
-      final ctx = _anchors[s.key]?.currentContext;
-      final box = ctx?.findRenderObject() as RenderBox?;
-      if (box == null || !box.attached) continue;
-      final viewport = context.findRenderObject() as RenderBox?;
-      final dy = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
-      if (dy <= 160) current = s.key;
+    if (_scroll.hasClients && _scroll.position.pixels >= _scroll.position.maxScrollExtent - 1) {
+      current = sections.last.key;
+    } else {
+      for (final s in sections) {
+        final box = _anchors[s.key]?.currentContext?.findRenderObject() as RenderBox?;
+        if (box == null || !box.attached) continue;
+        final dy = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+        if (dy <= 24) current = s.key;
+      }
     }
-    if (current != _activeTab) setState(() => _activeTab = current);
+    _setActive(current);
   }
 
   @override
@@ -241,20 +265,24 @@ class _GiftCatalogPageState extends ConsumerState<GiftCatalogPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          height: 40,
-          child: ListView(
+          height: 44,
+          // 非懒加载：全部 tab 都在树上，才能把当前 tab 滚进可见区（code review #2）
+          child: SingleChildScrollView(
             key: const ValueKey('giftCatalogTabs'),
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
+            child: Row(children: [
               for (final s in sections)
                 Padding(
+                  key: _chips.putIfAbsent(s.key, GlobalKey.new),
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                   child: ChoiceChip(
                     key: ValueKey('giftCatalogTab-${s.key}'),
                     label: Text(s.title),
                     selected: s.key == active,
                     showCheckmark: false,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
                     selectedColor: AppColors.mintTint,
                     labelStyle: TextStyle(
                         fontSize: 12.5,
@@ -263,7 +291,7 @@ class _GiftCatalogPageState extends ConsumerState<GiftCatalogPage> {
                     onSelected: (_) => _jumpTo(s.key),
                   ),
                 ),
-            ],
+            ]),
           ),
         ),
         Expanded(
@@ -273,7 +301,7 @@ class _GiftCatalogPageState extends ConsumerState<GiftCatalogPage> {
               return false;
             },
             child: SingleChildScrollView(
-              key: const ValueKey('giftCatalogGrid'),
+              key: _viewportKey,
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               child: LayoutBuilder(builder: (context, c) {
