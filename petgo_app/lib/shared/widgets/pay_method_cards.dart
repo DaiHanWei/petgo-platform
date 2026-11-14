@@ -24,6 +24,7 @@ class PayMethodCards extends StatelessWidget {
     required this.onTopUp,
     this.directDisabledReason,
     this.directChannelLabel = 'QRIS',
+    this.amountPending = false,
     super.key,
   });
 
@@ -45,7 +46,11 @@ class PayMethodCards extends StatelessWidget {
   final String? directDisabledReason;
   final String directChannelLabel;
 
-  bool get coinShort => balance < coinAmount;
+  /// 金额尚未取到（价格加载中 / 失败，V1.5.0 Story 6-1 通用付费抽屉）：两张卡金额显示「…」、不判余额不足。
+  /// 缺省 false = 行为不变（2-2 送礼包装页）。
+  final bool amountPending;
+
+  bool get coinShort => !amountPending && balance < coinAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +67,7 @@ class PayMethodCards extends StatelessWidget {
             disabled: false,
             onTap: short ? onTopUp : () => onSelect(PayMethod.pawcoin),
             title: l10n.payMethodPawcoin,
-            amount: '${formatIdrAmount(coinAmount)} PawCoin',
+            amount: amountPending ? '… PawCoin' : '${formatIdrAmount(coinAmount)} PawCoin',
             lines: short
                 ? [
                     Text(l10n.payMethodBalanceShort(formatIdrAmount(balance), formatIdrAmount(coinAmount - balance)),
@@ -88,7 +93,7 @@ class PayMethodCards extends StatelessWidget {
             onTap: directDisabled ? null : () => onSelect(PayMethod.direct),
             title: l10n.payMethodDirect,
             badge: directChannelLabel,
-            amount: directDisabledReason ?? 'Rp${formatIdrAmount(cashAmount)}',
+            amount: directDisabledReason ?? (amountPending ? 'Rp…' : 'Rp${formatIdrAmount(cashAmount)}'),
             lines: const [],
           ),
         ),

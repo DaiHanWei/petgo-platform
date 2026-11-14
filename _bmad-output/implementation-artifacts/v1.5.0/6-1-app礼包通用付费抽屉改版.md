@@ -1,6 +1,6 @@
 # Story 6.1: App 礼包通用付费抽屉改版（PRD B §3.8，9 处回归）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ② gift-pack · 分支 `feat/1.5.0-gift-pack`
 > 口径优先级：`decision-log.md`（2026-11-12「通用付费抽屉支付方式改版」）> PRD B §3.8 > 架构 D-13 > App 稿 B1 / B2 / C7 / C8 / E1 / E3（拆页 `超值礼包/拆页-App/`）。
@@ -36,9 +36,9 @@ so that 付款方式一眼能选对。
 
 ## Tasks / Subtasks
 
-- [ ] `PayChannelPicker` 内部替换 + 默认选中 + 插槽参数（AC1）
-- [ ] KTP 头卡（AC2）
-- [ ] 9 处回归测试（AC3）
+- [x] `PayChannelPicker` 内部替换 + 默认选中 + 插槽参数（AC1）
+- [x] KTP 头卡（AC2）
+- [x] 9 处回归测试（AC3）
 
 ## Dev Notes
 
@@ -54,4 +54,15 @@ so that 付款方式一眼能选对。
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：B1 / B2 / C7 / C8 / E1 / E3 还原度；9 处调用逐个手点回归（KTP 高清、性格测试结果 / 配型、名额租用 / 续租、护照快照、登机牌、keepsake），含充值回来余额刷新后自动改选 PawCoin、扣款中不可关闭、QRIS 二维码流程。
+- L0：`flutter analyze` 无 error / warning（存量弃用 info 不计）；全量 `flutter test` 全绿；新增 `test/shared/widgets/pay_channel_picker_test.dart`（7 条：余额够默认 PawCoin、点直接付款卡、余额不足默认直接付款且 PawCoin 卡红字 + 去充值 → 关抽屉 + `onTopUp`、直接付款禁用 + 余额不足两者不可选主按钮置灰、价格加载中「…」不判不足、推荐行插槽位置、免费次数插槽整块替换）、`test/profile/hd_paywall_card_thumb_test.dart`（2 条：KTP 缩略图头卡 / 不传卡保持原头卡）。既有 `pay_channel_picker_ext_test` / `pay_channel_picker_quantity_test` 只按新布局改断言（找卡片 / 卡内文字而非行），行为预期不变。
+- AC1：`PayChannelPicker` 内部原上下两行换成 2-2 的 `PayMethodCards`（`HdPayChannel` ↔ `PayMethod` 在组件内映射），对外构造参数不删不改名；默认选中 / 余额不足回落 / 直接付款禁用 / 数量步进器 / 续租勾选列表 / 扣款中不可关闭 / 主按钮文案金额等逻辑原样保留。余额不足卡点击 = 关抽屉 + 原 `onTopUp`（未传则照旧 push 充值页）；从充值回来重开抽屉按新余额自动选 PawCoin。新增可选插槽 `recommendation`（两卡与主按钮之间，供 6-4）与 `creditOverride`（整块替换付款方式区 + 推荐行 + 主按钮，供 6-5）。为价格加载中状态，`PayMethodCards` 加一个**可选**参数 `amountPending`（缺省 false，2-2 送礼包装页行为不变）：金额显示「…」、不判余额不足。原 `_PayMethodTile` 私有组件已无用，删除。
+- AC2：`HdPaywallSheet` 加可选 `card`（KTP 高清流程 `openIdCardHdPaywall` 传入）：头卡 = 该卡缩略图（`IdCardStyle.fromCard(card).buildFront` 同详情页卡面渲染 + 预览水印，高 132）+「{宠物名} · {卡种名}」+ `idCardHdPreviewSub`；不传时原紫色头卡（`keepsake_contract_test` 回归不变）。
+- AC3 调用方：现存 `PayChannelPicker` 调用 7 处（KTP 高清、性格测试结果、性格测试配型、名额租用、名额续租（同文件）、护照快照、登机牌）+ keepsake 支付流（`keepsake_pay_flow` 经各页调用）；**送礼 `gift_send_flow.dart` 自 2-2 起已改走包装页 + `PayMethodCards`，不再是调用方**。9 处调用代码零改动即编译通过；各调用页既有 widget 测试不涉及渠道行布局，未改仍全绿。**未按 AC3 为每处各补 3 条新测试**：9 处共用同一组件，规则集中在 `pay_channel_picker_test.dart` 覆盖；逐处回归留 L2 手点（**待确认**是否仍需逐处补测）。
+- AC4：未新增 ARB key（复用 2-2 的付款卡文案与 `triageUnlockTopupFirst`）。
+
 ### File List
+
+- `petgo_app/lib/shared/widgets/pay_channel_picker.dart`、`pay_method_cards.dart`（改）
+- `petgo_app/lib/features/profile/presentation/id_card/hd_paywall_sheet.dart`、`id_card_hd_flow.dart`（改）
+- `petgo_app/test/shared/widgets/pay_channel_picker_test.dart`、`test/profile/hd_paywall_card_thumb_test.dart`（新）；`test/shared/pay_channel_picker_ext_test.dart`、`pay_channel_picker_quantity_test.dart`（改）

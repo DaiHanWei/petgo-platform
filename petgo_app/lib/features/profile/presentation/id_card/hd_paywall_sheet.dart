@@ -5,6 +5,9 @@ import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/pay_channel_picker.dart';
 import '../../data/id_card_repository.dart';
+import '../../domain/id_card.dart';
+import '../../domain/id_card_style.dart';
+import 'id_card_watermark.dart';
 
 /// HD 付费方式选择底部抽屉（Story 6.3；6-7 多卡详情页复用）。返回选中的 [HdPayChannel]，下滑关闭 → null。
 /// PawCoin 余额足则默认选；不足 → 显充值链接跳 /me/pawcoin/recharge。
@@ -12,7 +15,7 @@ import '../../data/id_card_repository.dart';
 /// V1.3.2 Story 3.2：渠道选择主体抽到 [PayChannelPicker]，本类只保留 KTP 头部卡与文案（视觉 / key 不变）。
 class HdPaywallSheet extends ConsumerWidget {
   const HdPaywallSheet(
-      {super.key, this.petName, this.serialId, this.cardNo, this.avatarUrl, required this.balance});
+      {super.key, this.petName, this.serialId, this.cardNo, this.avatarUrl, required this.balance, this.card});
 
   final String? petName;
   final int? serialId;
@@ -21,6 +24,10 @@ class HdPaywallSheet extends ConsumerWidget {
   final String? cardNo;
   final String? avatarUrl;
   final int balance;
+
+  /// V1.5.0 gift-pack Story 6-1 · AC2：传入时头卡改为**这只宠物这款 KTP 卡**的缩略图（同详情页卡面渲染，带预览水印），
+  /// 下方「{宠物名} · {卡种名}」+ 说明；不传 = 原紫色头卡（其他调用处不变）。
+  final IdCard? card;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,7 +43,7 @@ class HdPaywallSheet extends ConsumerWidget {
       title: l10n.idCardHdPaywallTitle,
       body: l10n.idCardHdPaywallBody,
       confirmLabel: (_) => l10n.idCardHdPayConfirm,
-      header: Container(
+      header: card != null ? _CardThumbHeader(card: card!) : Container(
         padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -61,6 +68,47 @@ class HdPaywallSheet extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// KTP 头卡缩略图（V1.5.0 gift-pack Story 6-1 · AC2）：卡面 + 预览水印，高 132，下方「{宠物名} · {卡种名}」+ 说明。
+class _CardThumbHeader extends StatelessWidget {
+  const _CardThumbHeader({required this.card});
+
+  final IdCard card;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final style = IdCardStyle.fromCard(card);
+    final canvas = style.canvas;
+    return Column(
+      key: const ValueKey('hdPaywallCardThumb'),
+      children: [
+        SizedBox(
+          height: 132,
+          child: AspectRatio(
+            aspectRatio: canvas.width / canvas.height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                FittedBox(fit: BoxFit.contain, child: style.buildFront(card.toIdCardData())),
+                IdCardWatermark(canvas: canvas, canvasRadius: style.canvasRadius),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text('${card.name} · ${style.label(l10n)}',
+            key: const ValueKey('hdPaywallCardTitle'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.ink, fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(l10n.idCardHdPreviewSub, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+      ],
     );
   }
 }

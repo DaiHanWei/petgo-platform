@@ -91,6 +91,7 @@ Future<IdCardHdFlowResult> openIdCardHdPaywall(
       cardNo: card.cardNo,
       avatarUrl: card.avatarUrl,
       balance: balance,
+      card: card, // V1.5.0 Story 6-1 · AC2：头卡显示这款卡的缩略图
     ),
   );
   final priceIdr = priceSub.read().value;

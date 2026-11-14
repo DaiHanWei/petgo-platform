@@ -86,7 +86,7 @@ void main() {
   group('不传新参数 = 改动前行为', () {
     testWidgets('余额够 → 默认 PawCoin，确认 pop(PAWCOIN)', (tester) async {
       await open(tester);
-      expect(find.byKey(const ValueKey('payQrisDisabled')), findsNothing);
+      expect(find.text('Minimal Rp10.000'), findsNothing);
       expect(find.byKey(const ValueKey('payQrisDisabledHint')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('hdPayConfirm')));
       await tester.pumpAndSettle();
@@ -116,7 +116,8 @@ void main() {
           balance: 10000,
           qrisDisabledReason: 'Minimal Rp10.000',
           qrisDisabledHint: 'Isi PawCoin biar kirim hadiah lebih praktis.');
-      expect(find.byKey(const ValueKey('payQrisDisabled')), findsOneWidget);
+      // V1.5.0 Story 6-1：付款方式改左右两张卡 —— 直接付款卡置灰，金额位换成禁用原因。
+      expect(find.byKey(const ValueKey('payMethodCard-direct')), findsOneWidget);
       expect(find.text('Minimal Rp10.000'), findsOneWidget);
       expect(find.text('Rp5.000'), findsNothing, reason: 'QRIS 副标题被禁用原因取代');
       expect(find.byKey(const ValueKey('payQrisDisabledHint')), findsOneWidget);

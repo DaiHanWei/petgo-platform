@@ -81,7 +81,9 @@ void main() {
     expect(find.text('pay:5000'), findsOneWidget);
     // 余额 8000 ≥ 5000：PawCoin 可选（无「去充值」）。
     expect(find.text(l10n.triageUnlockTopupFirst), findsNothing);
-    expect(find.text(l10n.idCardHdPawcoinSub('8.000', '5.000')), findsOneWidget);
+    // V1.5.0 Story 6-1：PawCoin 卡 =「{n} PawCoin」+ 灰字「Saldo {n}」。
+    expect(find.text('5.000 PawCoin'), findsOneWidget);
+    expect(find.text(l10n.payMethodBalance('8.000')), findsOneWidget);
 
     // 下限 1：减号无效。
     await tester.tap(find.byKey(const ValueKey('payQtyMinus')));
@@ -150,7 +152,8 @@ void main() {
     await pump(tester, itemsArea: const Text('rows'), itemsTotal: 15000, balance: 20000);
     expect(find.text('pay:15000'), findsOneWidget);
     expect(find.text('Rp15.000'), findsNWidgets(2));
-    expect(find.text(l10n.idCardHdPawcoinSub('20.000', '15.000')), findsOneWidget);
+    expect(find.text('15.000 PawCoin'), findsOneWidget);
+    expect(find.text(l10n.payMethodBalance('20.000')), findsOneWidget);
   });
 
   testWidgets('L2 r2 D11：条目区一个都没勾 → 金额 Rp0、确认置灰，PawCoin 选中不被切到 QRIS', (tester) async {
@@ -158,9 +161,9 @@ void main() {
     expect(find.text('…'), findsNothing);
     expect(find.text('pay:0'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('hdPayConfirm'))).onPressed, isNull);
-    final selected = find.byIcon(Icons.check_circle);
-    expect(selected, findsOneWidget);
-    expect(tester.getCenter(selected).dy, lessThan(tester.getCenter(find.text('QRIS')).dy),
-        reason: '选中的是上面的 PawCoin 行，不是 QRIS');
+    // V1.5.0 Story 6-1：左右两张卡 —— 勾在 PawCoin 卡里，不在直接付款卡里。
+    expect(find.descendant(of: find.byKey(const ValueKey('payMethodCard-pawcoin')),
+        matching: find.byKey(const ValueKey('payMethodCheck'))), findsOneWidget,
+        reason: '选中的是 PawCoin 卡，不是直接付款');
   });
 }

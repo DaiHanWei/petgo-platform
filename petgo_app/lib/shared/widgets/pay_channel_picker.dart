@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/colors.dart';
 import '../../features/profile/domain/id_card.dart';
-import '../../l10n/app_localizations.dart';
+import 'pay_method_cards.dart';
 import 'price_load_retry.dart';
 
 /// 印尼千分位（点分隔）：`5000` → `5.000`。付费抽屉与购买按钮共用，展示口径只有一份。
@@ -77,6 +77,8 @@ class PayChannelPicker extends StatefulWidget {
     this.qrisDisabledHint,
     this.onConfirm,
     this.onTopUp,
+    this.recommendation,
+    this.creditOverride,
   });
 
   /// 抽屉顶部的商品头卡；null = 不画（V1.4.0 multi-pet D11 续租稿无头卡，标题直接起）。
@@ -114,6 +116,12 @@ class PayChannelPicker extends StatefulWidget {
   /// 非空 → 余额不足时「先充值」改为 `pop()` 后回调它（由调用方 await 充值页再重开抽屉，S3）；
   /// 为 null 时沿用 `pop(); push('/me/pawcoin/recharge')`。
   final VoidCallback? onTopUp;
+
+  /// V1.5.0 gift-pack Story 6-1 · AC1.6（供 6-4）：推荐行，插在两张付款卡与主按钮之间；null = 不显示。
+  final Widget? recommendation;
+
+  /// V1.5.0 gift-pack Story 6-1 · AC1.6（供 6-5）：非空时整块替换「付款方式区 + 推荐行 + 主按钮」。
+  final Widget? creditOverride;
 
   @override
   State<PayChannelPicker> createState() => _PayChannelPickerState();
@@ -167,7 +175,6 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final priceAsync = widget.price;
     final int? unitIdr = priceAsync.value;
     final qtyCfg = widget.itemsArea == null ? widget.quantity : null;
@@ -233,88 +240,76 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
               ),
               const SizedBox(height: 10),
             ],
-            _PayMethodTile(
-              icon: Icons.savings_outlined,
-              title: 'PawCoin',
-              subtitle: priceIdr == null
-                  ? l10n.idCardHdPawcoinSub(formatIdrAmount(widget.balance), '…')
-                  : l10n.idCardHdPawcoinSub(formatIdrAmount(widget.balance), formatIdrAmount(priceIdr)),
-              selected: enoughCoin && selected == HdPayChannel.pawcoin,
-              enabled: enoughCoin,
-              trailingAction: priceIdr == null || enoughCoin ? null : l10n.triageUnlockTopupFirst,
-              onTap: _busy
-                  ? null
-                  : enoughCoin
-                      ? () => setState(() => _picked = HdPayChannel.pawcoin)
-                      : priceIdr == null
-                          ? () {}
-                          : widget.onTopUp != null
-                              ? () {
-                                  Navigator.of(context).pop();
-                                  widget.onTopUp!();
-                                }
-                              : () {
-                                  Navigator.of(context).pop();
-                                  context.push('/me/pawcoin/recharge');
-                                },
-            ),
-            const SizedBox(height: 10),
-            if (qrisDisabled)
-              Opacity(
-                key: const ValueKey('payQrisDisabled'),
-                opacity: 0.5,
-                child: _PayMethodTile(
-                  icon: Icons.qr_code_2,
-                  title: 'QRIS',
-                  subtitle: widget.qrisDisabledReason!,
-                  selected: false,
-                  enabled: false,
-                  hideIndicator: true,
-                  onTap: null,
-                ),
-              )
-            else
-              _PayMethodTile(
-                icon: Icons.qr_code_2,
-                title: 'QRIS',
-                subtitle: priceIdr == null ? '…' : 'Rp${formatIdrAmount(priceIdr)}',
-                selected: selected == HdPayChannel.qris,
-                onTap: _busy ? null : () => setState(() => _picked = HdPayChannel.qris),
+            if (widget.creditOverride != null)
+              // V1.5.0 gift-pack Story 6-1 · AC1.6：有免费次数时（6-5）整块替换「付款方式区 + 推荐行 + 主按钮」。
+              widget.creditOverride!
+            else ...[
+              // V1.5.0 gift-pack Story 6-1 · AC1.1：原上下两行换成左右两张付款卡（2-2 共享组件，接口冻结）；
+              // HdPayChannel ↔ PayMethod 在这里映射（pawcoin ↔ pawcoin、qris ↔ direct）。
+              PayMethodCards(
+                key: const ValueKey('payMethodCards'),
+                coinAmount: priceIdr ?? 0,
+                cashAmount: priceIdr ?? 0,
+                balance: widget.balance,
+                amountPending: priceIdr == null,
+                selected: selected == null
+                    ? null
+                    : (selected == HdPayChannel.pawcoin ? PayMethod.pawcoin : PayMethod.direct),
+                directDisabledReason: widget.qrisDisabledReason,
+                onSelect: (m) {
+                  if (_busy || priceIdr == null) return;
+                  setState(() => _picked = m == PayMethod.pawcoin ? HdPayChannel.pawcoin : HdPayChannel.qris);
+                },
+                onTopUp: () {
+                  if (_busy || priceIdr == null) return;
+                  Navigator.of(context).pop();
+                  if (widget.onTopUp != null) {
+                    widget.onTopUp!();
+                  } else {
+                    context.push('/me/pawcoin/recharge');
+                  }
+                },
               ),
-            if (widget.qrisDisabledHint != null) ...[
-              const SizedBox(height: 6),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(widget.qrisDisabledHint!,
-                    key: const ValueKey('payQrisDisabledHint'),
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
+              if (widget.qrisDisabledHint != null) ...[
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(widget.qrisDisabledHint!,
+                      key: const ValueKey('payQrisDisabledHint'),
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
+                ),
+              ],
+              // V1.5.0 gift-pack Story 6-1 · AC1.6：推荐行插槽（6-4 填内容），插在两张卡与主按钮之间。
+              if (widget.recommendation != null) ...[
+                const SizedBox(height: 12),
+                widget.recommendation!,
+              ],
+              const SizedBox(height: 18),
+              FilledButton(
+                key: widget.confirmKey,
+                // 价格未取到（加载中/失败）禁付款：用户必须先看到本次费用（417 同类无兜底）。
+                // 无选中（送礼 C4）同样禁；扣款中（C5）按钮保持紫底、点击无效。
+                onPressed: priceIdr == null || selected == null || nothingChosen
+                    ? null
+                    : _busy
+                        ? () {}
+                        : () => _confirm(selected),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.mint,
+                  foregroundColor: AppColors.onAccent,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _busy
+                    ? const SizedBox(
+                        key: ValueKey('payConfirmBusy'),
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(widget.confirmLabel(priceIdr),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ],
-            const SizedBox(height: 18),
-            FilledButton(
-              key: widget.confirmKey,
-              // 价格未取到（加载中/失败）禁付款：用户必须先看到本次费用（417 同类无兜底）。
-              // 无选中（送礼 C4）同样禁；扣款中（C5）按钮保持紫底、点击无效。
-              onPressed: priceIdr == null || selected == null || nothingChosen
-                  ? null
-                  : _busy
-                      ? () {}
-                      : () => _confirm(selected),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.mint,
-                foregroundColor: AppColors.onAccent,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              child: _busy
-                  ? const SizedBox(
-                      key: ValueKey('payConfirmBusy'),
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(widget.confirmLabel(priceIdr),
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-            ),
           ],
         ),
       ),
@@ -415,86 +410,3 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
       );
 }
 
-class _PayMethodTile extends StatelessWidget {
-  const _PayMethodTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-    this.enabled = true,
-    this.trailingAction,
-    this.hideIndicator = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final bool enabled;
-  final String? trailingAction;
-
-  /// true → 右侧不画单选圈（QRIS 被禁用时，C2）。
-  final bool hideIndicator;
-
-  /// null = 不可点（扣款中 / QRIS 被禁用）。
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.mintTint2 : AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: selected ? AppColors.mint : AppColors.line, width: selected ? 1.6 : 1.2),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: enabled ? AppColors.mintTint : AppColors.cream2,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(icon, size: 20, color: enabled ? AppColors.mint : AppColors.muted),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: enabled ? AppColors.ink : AppColors.textTertiary)),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-                ],
-              ),
-            ),
-            if (trailingAction != null) ...[
-              const SizedBox(width: 8),
-              Text(trailingAction!,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
-            ] else if (hideIndicator)
-              const SizedBox.shrink()
-            else if (selected)
-              const Icon(Icons.check_circle, size: 22, color: AppColors.mint)
-            else
-              Icon(Icons.radio_button_unchecked, size: 22, color: AppColors.line),
-          ],
-        ),
-      ),
-    );
-  }
-}
