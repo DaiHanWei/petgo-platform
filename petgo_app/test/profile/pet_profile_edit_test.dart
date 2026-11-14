@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +24,10 @@ class _FakeRepo implements ProfileRepository {
   /// V1.4.0 multi-pet：删除 / 更新实际带出去的 petId。
   int? deletedPetId;
   int? updatedPetId;
+  /// V1.5.0 pet-species Story 3.3：PATCH 带出去的 species / breed；cooldownUntil 非空 → 回 409 pet-species-cooldown。
+  String? updatedSpecies;
+  String? updatedBreed;
+  String? cooldownUntil;
 
   @override
   Future<void> deleteMyProfile({int? petId}) async {
@@ -57,12 +62,24 @@ class _FakeRepo implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
-    int? petId,
-  }) async {
+    int? petId, String? species}) async {
     updatedName = name;
     updatedSex = sex;
     updateCalled = true;
     updatedPetId = petId;
+    updatedSpecies = species;
+    updatedBreed = breed;
+    if (cooldownUntil != null) {
+      final req = RequestOptions(path: '/pet-profiles/me');
+      throw DioException(
+        requestOptions: req,
+        response: Response(requestOptions: req, statusCode: 409, data: {
+          'type': 'https://petgo/errors/pet-species-cooldown',
+          'status': 409,
+          'changeableFrom': cooldownUntil,
+        }),
+      );
+    }
     return profile.copyWith(name: name, sex: sex);
   }
 }
@@ -141,18 +158,135 @@ void main() {
     expect(repo.deleted, isFalse);
   });
 
-  testWidgets('F6: pet_type 置灰只读，展示既有类型不可改', (tester) async {
+  // V1.5.0 pet-species Story 3.3：规则按设计改变——原「类型恒锁」，现为「可改（C1）/ 90 天冷却中锁定（C6）」两态。
+  testWidgets('F6 → V1.5.0：从没改过（无 speciesChangeableFrom）→ 类型可改，展示既有类型', (tester) async {
     final repo = _FakeRepo(const PetProfile(id: 1, name: 'Momo', cardToken: 'TOK', petType: 'DOG'));
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
+    final speciesField = tester.widget<SpeciesField>(find.byKey(const ValueKey('petProfileEditTypeField')));
+    expect(speciesField.species, 'DOG'); // 旧后端无 species → 大类线上值
+    expect(speciesField.locked, isFalse);
+    expect(speciesField.onChanged, isNotNull);
+  });
 
-    // JENIS HEWAN 改为锁定下拉字段（SpeciesField locked）：展示既有类型，不可改。
-    final speciesField =
-        tester.widget<SpeciesField>(find.byKey(const ValueKey('petProfileEditTypeReadonly')));
-    expect(speciesField.species, 'DOG'); // 既有类型（V1.5.0：旧后端无 species → 大类线上值）
-    expect(speciesField.locked, isTrue); // 锁定不可改
-    expect(speciesField.onChanged, isNull); // 无变更回调
-    // update() 签名无 petType 参数 → 结构上不可能随 PATCH 提交（后端 DTO 亦无该字段）。
+  group('V1.5.0 pet-species Story 3.3：改类型与冷却', () {
+    const rabbit = PetProfile(
+        id: 1, name: 'Momo', cardToken: 'TOK', petType: 'OTHER', species: 'RABBIT', breed: 'Holland Lop');
+
+    Future<void> pumpEdit(WidgetTester tester, _FakeRepo repo) async {
+      await tester.binding.setSurfaceSize(const Size(440, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          profileRepositoryProvider.overrideWithValue(repo),
+          petProfileProvider.overrideWith((ref) async => repo.profile),
+        ],
+        child: const MaterialApp(
+          locale: Locale('id'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PetProfileEditPage(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> pickType(WidgetTester tester, String wire) async {
+      await tester.tap(find.byKey(const ValueKey('petProfileEditTypeField')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('speciesCell_$wire')));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> save(WidgetTester tester) async {
+      final submit = find.byKey(const ValueKey('petProfileEditSubmit'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('选不同类型 → 确认；Batal 不变、Ubah 清空品种；选相同不弹', (tester) async {
+      final repo = _FakeRepo(rabbit);
+      await pumpEdit(tester, repo);
+      await pickType(tester, 'RABBIT'); // 相同 → 不弹
+      expect(find.byKey(const ValueKey('petTypeChangeConfirm')), findsNothing);
+      await pickType(tester, 'HAMSTER');
+      expect(find.text('Ubah jenis hewan?'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('petTypeChangeCancel')));
+      await tester.pumpAndSettle();
+      expect(find.text('Holland Lop'), findsOneWidget);
+      expect(find.textContaining('Kelinci'), findsWidgets);
+      await pickType(tester, 'HAMSTER');
+      await tester.tap(find.byKey(const ValueKey('petTypeChangeConfirm')));
+      await tester.pumpAndSettle();
+      expect(find.text('Holland Lop'), findsNothing);
+      expect(find.text('Pilih ras'), findsOneWidget);
+    });
+
+    testWidgets('保存：改了类型 → 带 species 与 breed=空串；没改 → 不带 species', (tester) async {
+      final repo = _FakeRepo(rabbit);
+      await pumpEdit(tester, repo);
+      await save(tester);
+      expect(repo.updatedSpecies, isNull);
+      await tester.pump(const Duration(seconds: 4));
+
+      final repo2 = _FakeRepo(rabbit);
+      await pumpEdit(tester, repo2);
+      await pickType(tester, 'HAMSTER');
+      await tester.tap(find.byKey(const ValueKey('petTypeChangeConfirm')));
+      await tester.pumpAndSettle();
+      await save(tester);
+      expect(repo2.updatedSpecies, 'HAMSTER');
+      expect(repo2.updatedBreed, '');
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('改类型后又改回原类型 → 不带 species、品种按清空提交', (tester) async {
+      final repo = _FakeRepo(rabbit);
+      await pumpEdit(tester, repo);
+      await pickType(tester, 'HAMSTER');
+      await tester.tap(find.byKey(const ValueKey('petTypeChangeConfirm')));
+      await tester.pumpAndSettle();
+      await pickType(tester, 'RABBIT');
+      await tester.tap(find.byKey(const ValueKey('petTypeChangeConfirm')));
+      await tester.pumpAndSettle();
+      await save(tester);
+      expect(repo.updatedSpecies, isNull);
+      expect(repo.updatedBreed, '');
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('冷却中 → 锁定显示「Bisa diubah lagi 12 Feb」、点击无反应、品种仍可改', (tester) async {
+      final repo = _FakeRepo(PetProfile(
+          id: 1, name: 'Momo', cardToken: 'TOK', petType: 'OTHER', species: 'RABBIT', breed: 'Holland Lop',
+          speciesChangeableFrom: DateTime(2027, 2, 12)));
+      await pumpEdit(tester, repo);
+      final field = tester.widget<SpeciesField>(find.byKey(const ValueKey('petProfileEditTypeField')));
+      expect(field.locked, isTrue);
+      expect(find.text('Bisa diubah lagi 12 Feb'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('petProfileEditTypeField')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('speciesPickerGrid')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('petProfileEditBreedField')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('breedPickerList')), findsOneWidget);
+    });
+
+    testWidgets('409 冷却 → toast 含日期、类型品种回滚并锁定、名字输入保留', (tester) async {
+      final repo = _FakeRepo(rabbit)..cooldownUntil = '2027-02-12';
+      await pumpEdit(tester, repo);
+      await pickType(tester, 'HAMSTER');
+      await tester.tap(find.byKey(const ValueKey('petTypeChangeConfirm')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('petProfileEditNameField')), 'Momo 2');
+      await tester.pump();
+      await save(tester);
+      expect(find.text('Jenis hewan baru bisa diubah lagi 12 Feb'), findsOneWidget);
+      expect(find.text('Holland Lop'), findsOneWidget);
+      expect(tester.widget<SpeciesField>(find.byKey(const ValueKey('petProfileEditTypeField'))).locked, isTrue);
+      expect(find.text('Momo 2'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+    });
   });
 
   // ===== V1.1.6 Story 1.1：性别字段落地 =====

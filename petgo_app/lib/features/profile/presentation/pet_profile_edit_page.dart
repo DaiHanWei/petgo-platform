@@ -4,6 +4,7 @@ import 'package:date_picker_plus/date_picker_plus.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
@@ -24,7 +25,9 @@ import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pet_profile.dart';
+import '../domain/pet_species.dart';
 import '../domain/pet_species_display.dart';
+import 'widgets/species_picker_sheet.dart';
 import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案编辑页（Story 2.8）。复用 2.2 创建表单结构，预填既有值；部分更新 PATCH。
@@ -49,8 +52,17 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   final _weightController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
-  String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
-  String? _species; // V1.5.0 pet-species：细分类型（显示走 petSpeciesView）
+  String? _petType; // 大类（旧后端无 species 时的兜底）
+  // V1.5.0 pet-species Story 3.3：细分类型（线上值）。保存时与进页原值不同才提交；90 天冷却以服务端为准。
+  String? _species;
+  String? _originalSpecies;
+  String? _originalBreed;
+
+  /// 本次编辑里经确认改过类型（品种因此被清空）：即使最后又改回原类型，空品种也按「清空」提交。
+  bool _breedClearedByTypeChange = false;
+
+  /// 冷却中的最早可改日（WIB 日期，来自接口 `speciesChangeableFrom` 或 409 扩展成员）；null = 现在可改。
+  DateTime? _changeableFrom;
   // KELAMIN（性别）：MALE/FEMALE，null = 未填。V1.1.6 Story 1.1 起**真正落库**
   // （此前是纯前端占位：能选能显示，但不提交不持久化）。
   // ⚠️ 无「清空」路径：PATCH 语义是「传 null = 不改动」，故选了就改不回未填 —— 已知且接受。
@@ -84,7 +96,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _birthday = p.birthday;
     _avatarUrl = p.avatarUrl;
     _petType = p.petType;
-    _species = p.species;
+    _species = p.species ?? p.petType; // 旧后端无 species → 大类线上值（CAT/DOG/OTHER 同样是合法细分类型）
+    _originalSpecies = _species;
+    _originalBreed = p.breed;
+    _changeableFrom = p.speciesChangeableFrom;
     _sex = p.sex; // 漏这行 = 存住了但重进页面又变回「请选择」
   }
 
@@ -124,12 +139,18 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       return;
     }
     setState(() => _submitting = true);
+    // V1.5.0 pet-species：细分类型与进页原值不同才提交 species（含「其他」组内换物种——那只是改品种，后端不占冷却）；
+    // 改过类型且品种为空 → 显式清空。
+    final speciesChanged = _species != null && _species != _originalSpecies;
+    final breedText = _breedController.text.trim();
+    final clearBreed = breedText.isEmpty && (speciesChanged || _breedClearedByTypeChange);
     try {
       await ref.read(profileRepositoryProvider).update(
             petId: _petId,
             name: _nameController.text.trim(),
             avatarUrl: _avatarUrl,
-            breed: _emptyToNull(_breedController.text),
+            breed: clearBreed ? '' : (breedText.isEmpty ? null : breedText),
+            species: speciesChanged ? _species : null,
             birthday: _birthday,
             sex: _sex,
             intro: _emptyToNull(_introController.text),
@@ -145,6 +166,29 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
       // 后端兜底 409 `pet-read-only`（AC5.6）→ 统一弹 E1，不报保存失败。
       final pd = e is DioException ? ProblemDetail.fromDioException(e) : null;
       if (pd != null && handlePetReadOnly(context, ref, pd)) return;
+      // V1.5.0 pet-species（C7）：另一端刚改过类型 → 409 冷却。后端整次回滚：类型与品种恢复原值并锁定，
+      // 其他字段的输入留在表单里，用户可再点保存。
+      if (pd != null && pd.typeSlug == 'pet-species-cooldown') {
+        final from = DateTime.tryParse('${pd.extensions['changeableFrom'] ?? ''}');
+        // 409 说明另一端刚改过：以服务端最新的类型 / 品种为准（取不到再退回进页原值），并失效缓存。
+        PetProfile? latest;
+        try {
+          latest = await ref.read(profileRepositoryProvider).getMyProfile(petId: _petId);
+        } catch (_) {}
+        if (!mounted) return;
+        ref.invalidate(petProfileProvider);
+        ref.invalidate(petListProvider);
+        setState(() {
+          _species = latest?.species ?? latest?.petType ?? _originalSpecies;
+          _breedController.text = latest == null ? (_originalBreed ?? '') : (latest.breed ?? '');
+          _originalSpecies = _species;
+          _originalBreed = _breedController.text;
+          _breedClearedByTypeChange = false;
+          _changeableFrom = from ?? latest?.speciesChangeableFrom ?? _changeableFrom;
+        });
+        _toast(from == null ? l10n.petProfileSaveFailed : l10n.petTypeCooldownToast(_fmtChangeDate(l10n, from)));
+        return;
+      }
       _toast(l10n.petProfileSaveFailed);
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -234,6 +278,32 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
+  }
+
+  /// 「12 Feb」/「Feb 12」（界面语言的日 + 月缩写）。
+  static String _fmtChangeDate(AppLocalizations l10n, DateTime d) => DateFormat.MMMd(l10n.localeName).format(d);
+
+  /// 类型抽屉选中（C2 ~ C4）：同一宫格项 → 不算修改；不同 → 确认（品种清空、90 天后才能再改），只改本地表单。
+  Future<void> _onTypePicked(PetSpeciesPick pick) async {
+    final l10n = AppLocalizations.of(context);
+    final current = PetSpeciesCode.fromWire(_species);
+    if (current != null && current.pickerType == pick.code.pickerType) return;
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.petTypeChangeConfirmTitle,
+      message: l10n.petTypeChangeConfirmBody,
+      confirmLabel: l10n.petTypeChangeConfirmYes,
+      cancelLabel: l10n.commonCancel,
+      icon: Icons.swap_horiz_rounded,
+      confirmKey: const ValueKey('petTypeChangeConfirm'),
+      cancelKey: const ValueKey('petTypeChangeCancel'),
+    );
+    if (!ok || !mounted) return;
+    setState(() {
+      _species = pick.code.wire;
+      _breedController.clear();
+      _breedClearedByTypeChange = true;
+    });
   }
 
   void _toast(String msg) {
@@ -374,11 +444,16 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           // JENIS HEWAN（F6 编辑态锁定）：灰底锁定字段，「🔒 Tidak bisa diubah」红字在框内右侧（稿 C1）。
           _sectionLabel(l10n.petProfileTypeLabel),
           const SizedBox(height: 6),
+          // V1.5.0 pet-species Story 3.3：可改（C1）/ 冷却中锁定（C6，品种仍可改）两态。
           SpeciesField(
-              key: const ValueKey('petProfileEditTypeReadonly'),
-              species: _species ?? _petType, // 旧后端无 species → 大类线上值（CAT/DOG/OTHER）同样可解析
-              locked: true,
-              lockedHint: l10n.petTypeLockedHint),
+              key: const ValueKey('petProfileEditTypeField'),
+              species: _species,
+              scene: 'edit',
+              locked: _changeableFrom != null,
+              lockedHint: _changeableFrom == null
+                  ? null
+                  : l10n.petTypeChangeableFrom(_fmtChangeDate(l10n, _changeableFrom!)),
+              onChanged: _changeableFrom == null ? _onTypePicked : null),
           const SizedBox(height: 16),
           // RAS（品种）+ KELAMIN（性别）两列（原型 pet-edit）。
           Row(
@@ -391,8 +466,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                     _sectionLabel(l10n.petProfileBreedLabel),
                     const SizedBox(height: 6),
                     BreedField(
-                      species: _species ?? _petType,
+                      species: _species,
                       scene: 'edit',
+                      // 「其他」组内经品种换物种（Musang Pandan → Small-clawed Otter）：不弹确认、不占冷却（后端按宫格项判）。
+                      onPicked: (pick) => setState(() => _species = pick.species.wire),
                       controller: _breedController,
                       onChanged: () => setState(() {}),
                       fieldKey: const ValueKey('petProfileEditBreedField'),

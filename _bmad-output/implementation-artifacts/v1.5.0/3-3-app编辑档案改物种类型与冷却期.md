@@ -1,6 +1,6 @@
 # Story 3.3: app编辑档案改物种类型与冷却期
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 主题 pet-species（会话 ④）· 分支 `feat/1.5.0-pet-species`
 > 口径优先级：`decision-log.md` > PRD §3.3.1 / §3.3.2 / §6 > `architecture-v1.5.0-pet-species-delta.md`（D-8、D-9）> App UI 稿 C1 ~ C8（`宠物物种扩展/拆页-App/`）。
@@ -54,12 +54,12 @@ so that 我敢改，也不会因为误触浪费 90 天的机会。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：1.2 的 409 type 与扩展成员名、3.1 / 3.2 的组件签名；编辑页行号（健康线可能已改这页——本线在功能分支上开发时看到的是地基版本，以实际为准）
-- [ ] **T1** 类型框两态（AC1）
-- [ ] **T2** 确认抽屉与本地状态（AC2）
-- [ ] **T3** `ProfileRepository.update` + `_submit` 错误分支（AC3）
-- [ ] **T4** 文案（AC4）、测试（AC5）
-- [ ] **T5** `flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
+- [x] **T0 开工核对**：1.2 的 409 type 与扩展成员名、3.1 / 3.2 的组件签名；编辑页行号（健康线可能已改这页——本线在功能分支上开发时看到的是地基版本，以实际为准）
+- [x] **T1** 类型框两态（AC1）
+- [x] **T2** 确认抽屉与本地状态（AC2）
+- [x] **T3** `ProfileRepository.update` + `_submit` 错误分支（AC3）
+- [x] **T4** 文案（AC4）、测试（AC5）
+- [x] **T5** `flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
 
 ## Dev Notes
 
@@ -81,6 +81,23 @@ so that 我敢改，也不会因为误触浪费 90 天的机会。
 
 ### Agent Model Used
 
+Claude（云端 L0 会话，2026-11-14）
+
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC6（stag 首次改类型成功后再进锁定且日期 = 今天 + 90 天 WIB；curl 直接 PATCH 拿 409 + `changeableFrom`；猫 → 兔后里程碑变「其他」清单）与 C1 ~ C8 截图还原度留本地。
+- L0：`flutter analyze` 相对基线零新增；`flutter test` 全量 4976 例通过（3 例存量 skip；跑全量时有 1 例是本 story 刚加、修复未编译进去的用例，修复后单跑 17/17 通过）。
+- 测试（`pet_profile_edit_test.dart`）：原「F6：pet_type 置灰只读」按新规则改写为「从没改过 → 可改」（key `petProfileEditTypeReadonly` → `petProfileEditTypeField`）；新增组「改类型与冷却」5 例：选相同不弹 / 不同弹确认、Batal 不变、Ubah 清空品种；保存改了类型带 `species` + `breed: ''`、没改不带 `species`；改类型后又改回原类型仍按清空品种提交；冷却态锁定显示「Bisa diubah lagi 12 Feb」（locale id）、点了不开抽屉、品种仍可改；409 冷却 → toast 含日期、类型品种回滚并锁定、名字输入保留。5 个 `ProfileRepository` 替身的 `update` 补 `String? species`。
+- T0：1.2 的 409 type 末段 `pet-species-cooldown` 与扩展成员 `changeableFrom`、3.2 的组件签名一致；编辑页仍是地基版本（健康线 ① 未合入本分支）。
+- 实现说明：`_species` / `_originalSpecies` / `_originalBreed` / `_changeableFrom` 状态；类型框两态（`SpeciesField.locked` + `lockedHint = petTypeChangeableFrom(MMMd)`）；确认用 `showConfirmSheet`（`swap_horiz_rounded`，不传 `onConfirm`）；`ProfileRepository.update` 加 `species`；日期格式 `DateFormat.MMMd(localeName)`（未见超值礼包线的日期工具，Story 4.2 统一）。`petTypeLockedHint` 词条保留未删。
+- 复审（code-review medium）已修：#1 / #5 409 冷却后改为向服务端重取最新档案作为类型 / 品种基准（另一端刚改过，进页原值已过期），并失效 `petProfileProvider` / `petListProvider`；#3 改类型后又改回原类型时品种清空照样提交；#6 去掉冗余的 `?? _petType` 兜底；注释与接口参数排版。
+- 待确认：
+  - 409 时用服务端最新值回填类型 / 品种（AC3.3 原文是「恢复为进页时的原值」；两者在「另一端没动品种」时一致，另一端改过时以服务端为准更保守）；重取失败才退回进页原值。
+  - 「其他」组内经品种换物种（CIVET → OTTER）也会提交 `species`（不占冷却，后端按宫格项判）。
+
 ### File List
+
+- petgo_app/lib/features/profile/presentation/pet_profile_edit_page.dart
+- petgo_app/lib/features/profile/data/profile_repository.dart
+- petgo_app/lib/l10n/app_{en,id}.arb
+- petgo_app/test/profile/pet_profile_edit_test.dart，及 `ProfileRepository` 替身：test/profile/{archive_prompt_dialog_test,pet_profile_create_test}.dart、test/content/publish_compose_test.dart、test/mention/mention_entry_test.dart

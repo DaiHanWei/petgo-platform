@@ -51,6 +51,9 @@ abstract class ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+  
+    /// 细分类型（V1.5.0 pet-species · D-8）：null = 不改；改宫格项受 90 天冷却（409 `pet-species-cooldown`）。
+    String? species,
   });
 
   /// V1.4.0 multi-pet（Story 1.3）：[petId] 只删这一只；null = 后端默认宠物。
@@ -113,8 +116,10 @@ class DioProfileRepository implements ProfileRepository {
     String? intro,
     double? weightKg,
     String? neuterStatus,
+    String? species,
   }) async {
     final data = <String, dynamic>{};
+    if (species != null) data['species'] = species;
     if (name != null) data['name'] = name;
     if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
     if (breed != null) data['breed'] = breed;
