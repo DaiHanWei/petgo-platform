@@ -70,6 +70,14 @@ Widget 测试：`disableAnimations = true` 直接渲染 E3；「Lewati」跳 E3�
 - 顺序调整：送达后先推送达页，同时刷新余额、回调入口（`onDelivered`）、报 `gift_payment_succeeded`；用户点「Lanjut」回到入口页后再拉升级庆祝（不叠在送达页上）。
 - EXP：PawCoin 取响应 `senderExp`；QRIS 到账取目录 `senderExp × 数量`。
 
+- Code review（独立复审）处置：
+  - CONFIRMED #1 兜底从进页起算，图下载 + 解码最多 3 秒会把 5 秒动画截短 → 真 Rive 时兜底改为「动画就绪开始播」起算，另设进页起 10 秒硬上限防卡住；注入替身视为进页即就绪。已修。
+  - PLAUSIBLE #2 换图未统一尺寸 / 下载原图 → 改取 OSS 1000 宽缩放版；非方图在槽位中的形变需设计师确认槽位是否为 layout 节点（L2 验收「不同尺寸礼物图」）。
+  - CONFIRMED #3 `RenderImage` / 图片属性句柄未释放、跳过后仍继续解码 → 交出后立即 dispose（资源与 VM 各自持有引用），下载后先判 `mounted`。已修。
+  - #4 QRIS 到账 EXP 用「目录单件 senderExp × 数量」与服务端「总额取整」可能差 1：story 指定该口径，**待产品 / 后端确认**（可改为轮询单笔订单时带回 senderExp）。
+  - #5 补测 `sendDone` 事件；切后台补判逻辑依赖平台生命周期，L2 验收。
+  - #6 `gift_send_animation.dart` 已无调用方，保留不删（AC4 允许保留）。
+
 ### File List
 
 - `petgo_app/assets/rive/send_gift.riv`、`assets/rive/receive_gift.riv`、`assets/gift/gift_box_closed.webp`（新）；`pubspec.yaml`（改）

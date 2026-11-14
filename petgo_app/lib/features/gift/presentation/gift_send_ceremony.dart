@@ -18,7 +18,10 @@ const String kSendGiftRive = 'assets/rive/send_gift.riv';
 /// 送出动画兜底：设计师补 `sendDone` 事件前一律靠它（现文件约 5 秒播完）。
 const Duration giftSendCeremonyFallback = Duration(milliseconds: 5500);
 
-/// 送出动画区域的构建器（测试注入替身，不渲染 Rive）。[onDone] 由动画结束事件调用；[onError] 加载失败。
+/// 送出动画兜底的硬上限（从进页起算）：Rive 一直没就绪也不会卡住。
+const Duration giftSendCeremonyHardCap = Duration(seconds: 10);
+
+/// 送出动画区域的构建器（测试注入替身，不渲染 Rive；替身视为进页即就绪）。[onDone] 由动画结束事件调用；[onError] 加载失败。
 typedef GiftSendRiveBuilder = Widget Function(
     BuildContext context, String? giftIconUrl, VoidCallback onDone, void Function(Object error) onError);
 
@@ -68,10 +71,23 @@ class _GiftSendCeremonyPageState extends State<GiftSendCeremonyPage> with Widget
       _done = true;
       return;
     }
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.riveBuilder != null) {
+      _armFallback();
+    } else {
+      // 真 Rive：兜底从「动画就绪开始播」起算（code review #1：图下载 + 解码可能要几秒，不能从进页算），
+      // 另设进页起算的硬上限，Rive 一直没就绪也不卡住。
+      _hardCap = Timer(giftSendCeremonyHardCap, _finish);
+    }
+  }
+
+  Timer? _hardCap;
+
+  /// 开始 5.5 秒兜底计时（只开一次）。切后台回来按真实时间补判（[didChangeAppLifecycleState]）。
+  void _armFallback() {
+    if (_deadline != null || _done) return;
     _deadline = DateTime.now().add(widget.fallback);
     _timer = Timer(widget.fallback, _finish);
-    // 切后台回来：Timer 在部分平台被挂起，按真实时间补判一次
-    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -85,12 +101,14 @@ class _GiftSendCeremonyPageState extends State<GiftSendCeremonyPage> with Widget
   void _finish() {
     if (!mounted || _done) return;
     _timer?.cancel();
+    _hardCap?.cancel();
     setState(() => _done = true);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _hardCap?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -132,9 +150,8 @@ class _GiftSendCeremonyPageState extends State<GiftSendCeremonyPage> with Widget
     ]);
   }
 
-  static Widget _defaultRive(
-          BuildContext context, String? iconUrl, VoidCallback onDone, void Function(Object) onError) =>
-      _SendGiftRive(giftIconUrl: iconUrl, onDone: onDone, onError: onError);
+  Widget _defaultRive(BuildContext context, String? iconUrl, VoidCallback onDone, void Function(Object) onError) =>
+      _SendGiftRive(giftIconUrl: iconUrl, onDone: onDone, onError: onError, onReady: _armFallback);
 
   Widget _delivered(AppLocalizations l10n) {
     const sentinel = '\u0000';
@@ -210,10 +227,13 @@ class _GiftSendCeremonyPageState extends State<GiftSendCeremonyPage> with Widget
 /// Rive 送出动画（接法照 `stamp_ceremony.dart`）：数据绑定 `giftImage`，退回 `assetLoader` 按 `plushy-image` 换图；
 /// 监听 `sendDone`。礼物图下载失败 → 用文件自带默认图，不阻塞。
 class _SendGiftRive extends StatefulWidget {
-  const _SendGiftRive({required this.giftIconUrl, required this.onDone, required this.onError});
+  const _SendGiftRive({required this.giftIconUrl, required this.onDone, required this.onError, required this.onReady});
 
   final String? giftIconUrl;
   final VoidCallback onDone;
+
+  /// 动画就绪开始播（兜底计时由此起算）。
+  final VoidCallback onReady;
   final void Function(Object error) onError;
 
   @override
@@ -245,7 +265,9 @@ class _SendGiftRiveState extends State<_SendGiftRive> {
     final url = widget.giftIconUrl;
     if (url == null || url.isEmpty) return null;
     try {
-      final data = await NetworkAssetBundle(Uri.parse(url)).load(url).timeout(const Duration(seconds: 3));
+      // 取 OSS 1000 宽缩放版（动画槽位按 1000×1000 设计，原图可能更大；非 OSS 地址原样）。
+      final sized = AppImage.ossResized(url, width: 1000);
+      final data = await NetworkAssetBundle(Uri.parse(sized)).load(sized).timeout(const Duration(seconds: 3));
       return await rive.Factory.rive.decodeImage(data.buffer.asUint8List());
     } catch (e) {
       debugPrint('GiftSend: gift image unavailable: $e');
@@ -257,14 +279,21 @@ class _SendGiftRiveState extends State<_SendGiftRive> {
     rive.File? file;
     rive.RiveWidgetController? controller;
     rive.ViewModelInstance? vm;
+    rive.RenderImage? image;
     try {
-      final image = await _giftImage();
+      image = await _giftImage();
+      // 跳过 / 离开发生在下载期间：不再解码 .riv（code review #3）
+      if (!mounted) {
+        image?.dispose();
+        return;
+      }
+      final loaded = image;
       file = await rive.File.asset(
         kSendGiftRive,
         riveFactory: rive.Factory.rive,
         assetLoader: (asset, bytes) {
-          if (image != null && asset is rive.ImageAsset && asset.name == _imageAssetName) {
-            return asset.renderImage(image);
+          if (loaded != null && asset is rive.ImageAsset && asset.name == _imageAssetName) {
+            return asset.renderImage(loaded);
           }
           return false;
         },
@@ -276,7 +305,14 @@ class _SendGiftRiveState extends State<_SendGiftRive> {
         stateMachineSelector: rive.StateMachineSelector.byName(_stateMachine),
       );
       vm = controller.dataBind(rive.DataBind.auto());
-      if (image != null) vm.image('giftImage')?.value = image;
+      if (image != null) {
+        final prop = vm.image('giftImage');
+        prop?.value = image;
+        prop?.dispose();
+      }
+      // 资源与 VM 各自持有引用（rive_native ref_rcp）：交出后立即释放本地引用（code review #3）
+      image?.dispose();
+      image = null;
       controller.stateMachine.addEventListener(_onEvent);
       if (!mounted) {
         controller.stateMachine.removeEventListener(_onEvent);
@@ -290,8 +326,10 @@ class _SendGiftRiveState extends State<_SendGiftRive> {
         _controller = controller;
         _vm = vm;
       });
+      widget.onReady();
     } catch (e) {
       debugPrint('GiftSend: $e');
+      image?.dispose();
       vm?.dispose();
       controller?.dispose();
       file?.dispose();

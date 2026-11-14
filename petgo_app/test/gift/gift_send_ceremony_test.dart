@@ -70,6 +70,15 @@ void main() {
     expect(find.byKey(const ValueKey('giftDeliveredPage')), findsOneWidget);
   });
 
+  testWidgets('sendDone event → E3 and timer cancelled', (tester) async {
+    await pump(tester);
+    await tester.doubleTap(find.byKey(const ValueKey('fakeRive')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('giftDeliveredPage')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('rive load error → E3', (tester) async {
     await pump(tester);
     await tester.longPress(find.byKey(const ValueKey('fakeRive')));
