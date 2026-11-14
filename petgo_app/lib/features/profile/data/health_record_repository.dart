@@ -14,11 +14,15 @@ abstract class HealthRecordRepository {
   /// 混排列表：结构化记录（可编辑）+ 问诊存档（只读）按 event_date 倒序。无档案 → 空/抛。
   Future<List<HealthListItem>> list({int? petId});
 
-  Future<void> create(HealthRecordDraft draft, {int? petId});
+  /// 新建；返回新记录 id（V1.5.0 Story 3.2：`health_record_saved.record_id` 用；响应无 id → null）。
+  Future<int?> create(HealthRecordDraft draft, {int? petId});
 
   Future<void> update(int id, HealthRecordDraft draft, {int? petId});
 
   Future<void> delete(int id, {int? petId});
+
+  /// 表单预填（V1.5.0 Story 3.2 · AC2.3，架构增量 §6.1）：只读不落库；规则只在后端。
+  Future<HealthRecordPreview> preview(HealthRecordPreviewRequest request, {int? petId});
 }
 
 class DioHealthRecordRepository implements HealthRecordRepository {
@@ -35,9 +39,10 @@ class DioHealthRecordRepository implements HealthRecordRepository {
   }
 
   @override
-  Future<void> create(HealthRecordDraft draft, {int? petId}) async {
-    await dio.post<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.healthRecords, petId),
+  Future<int?> create(HealthRecordDraft draft, {int? petId}) async {
+    final res = await dio.post<Map<String, dynamic>>(ApiPaths.withPet(ApiPaths.healthRecords, petId),
         data: draft.toJson());
+    return (res.data?['id'] as num?)?.toInt();
   }
 
   @override
@@ -49,6 +54,14 @@ class DioHealthRecordRepository implements HealthRecordRepository {
   @override
   Future<void> delete(int id, {int? petId}) async {
     await dio.delete<void>(ApiPaths.withPet('${ApiPaths.healthRecords}/$id', petId));
+  }
+
+  @override
+  Future<HealthRecordPreview> preview(HealthRecordPreviewRequest request, {int? petId}) async {
+    final res = await dio.post<Map<String, dynamic>>(
+        ApiPaths.withPet(ApiPaths.healthRecordPreview, petId),
+        data: request.toJson());
+    return HealthRecordPreview.fromJson(res.data ?? const {});
   }
 }
 

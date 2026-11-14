@@ -15,16 +15,12 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/design/online_pulse_dot.dart';
 import '../data/current_pet_provider.dart';
 import '../data/health_record_repository.dart';
-import '../data/milestone_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/health_list_item.dart';
 import '../domain/health_record_icons.dart';
-import '../domain/health_milestones.dart';
 import '../domain/milestone.dart';
-import '../data/milestone_celebration_reporter.dart';
-import 'widgets/milestone_celebration.dart';
+import 'widgets/health_record_form.dart';
 import '../data/pet_list_repository.dart';
-import '../../../core/network/problem_detail.dart';
 import '../../pet_slot/presentation/pet_readonly_block.dart';
 
 /// 健康记录列表页 `p-health-list`（Story 7.2 · FR-45B/45C · UX-DR10）。结构化记录（可编辑）+ 问诊存档
@@ -40,6 +36,7 @@ class HealthListPage extends ConsumerStatefulWidget {
     this.prefill = const HealthRecordPrefill(),
     this.safety = const [],
     this.notificationToken,
+    this.fromConsult = false,
   });
 
   final String? presetAddType;
@@ -51,8 +48,11 @@ class HealthListPage extends ConsumerStatefulWidget {
   /// 页顶警示框（`safety=PREGNANT,PERMETHRIN`，PRD FR-167）。非空时不自动弹表单。
   final List<String> safety;
 
-  /// 健康通知 token（`nid`），3.4 归因用；本页不读。
+  /// 健康通知 token（`nid`），3.4 归因用；本页只用它判断 `health_record_saved.source`。
   final String? notificationToken;
+
+  /// 从 Kesehatan 页「+ Kontrol dokter」进来（`?from=consult`，3.5 传）→ `health_record_saved.entry = consult_page`。
+  final bool fromConsult;
 
   /// 进页后要**定位并高亮**的结构化健康记录 id（`?focus=<id>`）。
   ///
@@ -95,6 +95,9 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
   /// 纯页面状态：不改路由、不发请求、不记忆（新进页 / 切宠物一律无筛选）。
   String? _filter;
   int? _filterPetId;
+
+  /// 当前宠物物种原值（表单按 CAT / DOG / 其他分支）；build 时刷新。
+  String? _currentPetType;
 
   /// 路由带来的警示框，按 [HealthListPage.safetyOrder] 排序、去掉不认识的值。
   List<String> get _safety => [
@@ -165,7 +168,19 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     if (preset != null && HealthListPage.recordTypes.contains(preset) && _safety.isEmpty) {
       // 首帧后弹（build 完成才有合法 sheet 挂载点）。
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openForm(context, ref, presetType: preset, prefill: widget.prefill);
+        if (mounted) {
+          // health_record_saved.source：带健康通知 token 进来 = 提醒；「+ Kontrol dokter」= 手动；
+          // 其余 `?add=` 只来自里程碑入口。
+          // （30 分钟归因 + notification_id / kind 归 Story 3.4。）
+          _openForm(context, ref,
+              presetType: preset,
+              prefill: widget.prefill,
+              source: widget.notificationToken != null
+                  ? 'health_reminder'
+                  : (widget.fromConsult ? 'manual' : 'milestone'),
+              // 只有「+ Kontrol dokter」自动弹出的这一张算 consult_page；之后在本页再开的表单都是 health_page。
+              entry: widget.fromConsult ? 'consult_page' : 'health_page');
+        }
       });
     }
   }
@@ -185,6 +200,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       if (p.id == petId) currentPet = p;
     }
     final readOnly = currentPet?.isReadOnly ?? false;
+    _currentPetType = currentPet?.petType;
     // AC4.5：筛选不记忆 —— 切宠物即清除（本页 State 不随宠物重建）。
     if (petId != _filterPetId) {
       _filterPetId = petId;
@@ -399,7 +415,7 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     final count = items.where((i) => !i.isConsult && i.type == c.type).length;
     Analytics.capture('health_category_filtered', {
       'pet_id': ?petId,
-      'category': c.type,
+      'category': c.type.toLowerCase(), // 枚举值小写蛇形（cloud-rules 埋点约定）
       'record_count': count,
     });
   }
@@ -770,6 +786,8 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     HealthListItem? existing,
     String? presetType,
     HealthRecordPrefill prefill = const HealthRecordPrefill(),
+    String source = 'manual',
+    String entry = 'health_page',
   }) async {
     // V1.4.0 multi-pet Story 2.4 · AC5.5：当前宠物只读 → 新增前端先拦（不发请求），弹 E1。
     // 打开**已有**记录不拦（AD-8：查看永不受限，code review #4）——拦在表单的保存 / 删除上。
@@ -781,8 +799,14 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) =>
-          _HealthRecordForm(existing: existing, presetType: presetType, prefill: prefill),
+      builder: (_) => HealthRecordForm(
+        existing: existing,
+        presetType: presetType,
+        prefill: prefill,
+        petType: _currentPetType,
+        entry: entry,
+        source: source,
+      ),
     );
     if (outcome != null) {
       // AC4.4：保存后筛选切到所存类型；Kontrol dokter 没有分类卡 → 清除。删除不动筛选（删光 → 筛选空态）。
@@ -815,16 +839,8 @@ class HealthFormOutcome {
   final String? savedType;
 }
 
-/// 健康记录类型名（列表 / 表单共用一份）。未知类型 → Lainnya。
-String healthTypeLabel(AppLocalizations l10n, String type) => switch (type) {
-      'VACCINE' => l10n.healthTypeVaccine,
-      'DEWORM' => l10n.healthTypeDeworm,
-      'MENSTRUATION' => l10n.healthTypeMenstruation,
-      'NEUTER' => l10n.healthTypeNeuter,
-      'VET_VISIT' => l10n.healthTypeVetVisit,
-      'CONSULT' => l10n.healthTypeConsult,
-      _ => l10n.healthTypeCustom,
-    };
+/// 健康记录类型名（列表 / 表单共用一份）：转调图标总表旁的 [healthRecordLabel]（全项目一份文案映射）。
+String healthTypeLabel(AppLocalizations l10n, String type) => healthRecordLabel(l10n, type);
 
 /// 疫苗预设标签（架构 §3.1）。OTHER / 空 / 不认识 → null（调用方显示 `vaccineName` 原文）。
 String? vaccinePresetLabel(AppLocalizations l10n, String? preset) => switch (preset) {
@@ -848,319 +864,6 @@ String? dewormTypeLabel(AppLocalizations l10n, String? type) => switch (type) {
       'HEARTWORM' => l10n.healthDewormHeartworm,
       _ => null,
     };
-
-/// 新增/编辑结构化健康记录表单（Story 7.2）。type 下拉 + 日期（不可未来）+ 条件名 + 备注。关闭时返回 [HealthFormOutcome]（null = 未保存）。
-class _HealthRecordForm extends ConsumerStatefulWidget {
-  const _HealthRecordForm({
-    this.existing,
-    this.presetType,
-    this.prefill = const HealthRecordPrefill(),
-  });
-
-  final HealthListItem? existing;
-  final String? presetType;
-
-  /// 提醒带来的预填（V1.5.0 Story 3.1 原样透传；预设 / 剂次 / 驱虫类型 / 日期留空的用法归 3.2）。
-  final HealthRecordPrefill prefill;
-
-  @override
-  ConsumerState<_HealthRecordForm> createState() => _HealthRecordFormState();
-}
-
-class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
-  late String _type;
-  late DateTime _date;
-  late final TextEditingController _name;
-  late final TextEditingController _note;
-  bool _busy = false;
-
-  /// 本次保存落到的宠物（V1.4.0 multi-pet）；里程碑庆祝检测按它取列表。
-  int? _petId;
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.existing;
-    _type = e?.type ?? widget.presetType ?? 'VACCINE';
-    _date = e?.eventDate ?? DateTime.now();
-    _name = TextEditingController(
-        text: e?.customName ?? e?.vaccineName ?? widget.prefill.customName ?? '');
-    _note = TextEditingController(text: e?.note ?? '');
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _note.dispose();
-    super.dispose();
-  }
-
-  bool get _needsName => _type == 'VACCINE' || _type == 'CUSTOM';
-
-  Future<void> _save() async {
-    final l10n = AppLocalizations.of(context);
-    // V1.4.0 multi-pet Story 2.4（code review #4）：只读宠物的已有记录可看，保存时才弹 E1。
-    if (!guardPetWritable(context, ref)) return;
-    final name = _name.text.trim();
-    if (_type == 'CUSTOM' && name.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.healthCustomNameRequired)));
-      return;
-    }
-    setState(() => _busy = true);
-    final draft = HealthRecordDraft(
-      type: _type,
-      eventDate: _date,
-      customName: _type == 'CUSTOM' ? name : null,
-      vaccineName: _type == 'VACCINE' ? name : null,
-      note: _note.text.trim(),
-    );
-    try {
-      final repo = ref.read(healthRecordRepositoryProvider);
-      // V1.4.0 multi-pet（Story 1.5）：记录落到当前宠物（列表取不到 → null = 后端默认宠物）。
-      final petId = await readRequestPetId(ref);
-      _petId = petId;
-      if (widget.existing != null) {
-        await repo.update(widget.existing!.id, draft, petId: petId);
-        if (!mounted) return;
-        Navigator.of(context).pop(HealthFormOutcome.saved(_type));
-        return;
-      }
-      // 新记录：保存前先取里程碑完成集（provider 命中缓存即秒回；冷取限时 2s——
-      // 弱网/测试环境挂起时放弃庆祝检测，不拖慢保存主流程）。
-      MilestoneList? before;
-      try {
-        if (petId != null) {
-          before = await ref
-              .read(milestoneListProvider(petId).future)
-              .timeout(const Duration(seconds: 2));
-        }
-      } catch (_) {}
-      await repo.create(draft, petId: petId);
-      // bug 20260729-405：解锁瞬间自动弹庆祝层（此前只有 SnackBar 提示，用户需自己去里程碑页才看到）。
-      final unlocked = await _pollNewlyUnlocked(before);
-      if (!mounted) return;
-      if (unlocked != null) {
-        await _celebrate(unlocked);
-        if (!mounted) return;
-      }
-      // ⚠️ 无新解锁时**不提示任何里程碑文案**（2026-08-05 用户实机反馈）：原 F3 的垫底 toast
-      // 「里程碑进度已更新 🏆」只看 type 是不是 VACCINE/DEWORM，不看是否真有变化 —— 第二针起
-      // 每存一次都弹一次，带奖杯的措辞让人误以为又解锁了一个节点。真解锁走上面的庆祝层，
-      // 这里静默即可（表单关闭 + 列表新增一条已是足够反馈）。**别再加回"顺带提一句"的提示。**
-      Navigator.of(context).pop(HealthFormOutcome.saved(_type));
-    } catch (e) {
-      if (mounted) {
-        setState(() => _busy = false);
-        // V1.4.0 multi-pet Story 2.4 · AC5.6：后端兜底 409 `pet-read-only` → 统一弹 E1，不报保存失败。
-        final pd = e is DioException ? ProblemDetail.fromDioException(e) : null;
-        if (pd != null && handlePetReadOnly(context, ref, pd)) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.healthSaveError)));
-      }
-    }
-  }
-
-  /// 保存后短轮询检测本次新解锁的里程碑（VACCINE→M3 / DEWORM→M4 / 聚合 Lulus Pemula）。
-  ///
-  /// 后端完成是 AFTER_COMMIT + @Async（MilestoneAutoCompleteListener）——create 返回瞬间大概率
-  /// 尚未落库，须延时重拉。仅当存在解锁候选才轮询（否则每次保存都白等 ~2.5s）；
-  /// [before] 拉取失败（null）时无法可靠 diff，宁可不弹也不误弹旧里程碑。
-  Future<MilestoneItem?> _pollNewlyUnlocked(MilestoneList? before) async {
-    final petId = _petId;
-    if (petId == null || before == null || !_mayUnlockMilestone(before)) return null;
-    final beforeCodes = <String>{
-      for (final g in before.groups)
-        for (final it in g.items)
-          if (it.completed) it.code,
-    };
-    for (final ms in const [500, 800, 1200]) {
-      await Future<void>.delayed(Duration(milliseconds: ms));
-      ref.invalidate(milestoneListProvider);
-      try {
-        final now = await ref
-            .read(milestoneListProvider(petId).future)
-            .timeout(const Duration(seconds: 2));
-        // Story 5.2 · AC3：一次保存可能同时点亮多条（如首针疫苗 → M3 + 聚合「Lulus Pemula」）。
-        // 收集**全部**新解锁，取**级别最高**的一条去庆祝（只弹一次），其余由弹层底部的
-        // 「已解锁收藏」圆点带承载。此前是「遇到第一条就返回」，级别可能不是最高的。
-        final fresh = <MilestoneItem>[
-          for (final g in now.groups)
-            for (final it in g.items)
-              if (it.completed && !beforeCodes.contains(it.code)) it,
-        ];
-        if (fresh.isNotEmpty) {
-          return highestLevelMilestone(fresh);
-        }
-      } catch (_) {
-        return null; // 拉取失败：放弃庆祝，不阻塞保存收尾。
-      }
-    }
-    return null;
-  }
-
-  bool _mayUnlockMilestone(MilestoneList list) => mayUnlockHealthMilestone(_type, list);
-
-  /// 弹 P-35 解锁庆祝（与发布「去发布」回填路径同 UX，见 publish_compose_page）。
-  Future<void> _celebrate(MilestoneItem done) async {
-    final petId = _petId;
-    final listData = petId == null ? null : ref.read(milestoneListProvider(petId)).asData?.value;
-    final petName = listData?.petName ?? '';
-    final collection = listData == null
-        ? const <MilestoneItem>[]
-        : [for (final g in listData.groups) ...g.items];
-    // V1.4.2 Story 3.2 · D-21：弹出前取好 container —— 庆祝关闭（尤其「发到社区」后发布页才关）时本页可能已销毁。
-    final container = ProviderScope.containerOf(context, listen: false);
-    // 弹出前先记本地：短轮询已把「未庆祝」写进列表缓存，回报又要等弹窗关掉才发。
-    markMilestonesCelebrating(ref, [done.code]);
-    await showMilestoneCelebration(
-      context,
-      done,
-      petName: petName,
-      // 存健康记录后 500/800/1200ms 三次短轮询拉到的即时庆祝（既有路径，本 story 保留不动）。
-      path: MilestoneCelebrationPath.instant,
-      collection: collection,
-      petId: petId,
-    );
-    // 即时庆祝同样要回报，否则这条会在下次进里程碑列表页时被当成"未庆祝"再弹一遍（AD-A3.1）。
-    reportMilestoneCelebratedIn(container, [done.code]);
-  }
-
-  Future<void> _delete() async {
-    if (!guardPetWritable(context, ref)) return;
-    setState(() => _busy = true);
-    try {
-      final petId = await readRequestPetId(ref);
-      await ref.read(healthRecordRepositoryProvider).delete(widget.existing!.id, petId: petId);
-      if (mounted) Navigator.of(context).pop(const HealthFormOutcome.deleted());
-    } catch (_) {
-      if (mounted) {
-        setState(() => _busy = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).healthSaveError)));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final dateStr =
-        '${_date.year}-${_date.month.toString().padLeft(2, '0')}'
-        '-${_date.day.toString().padLeft(2, '0')}';
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 18,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.existing == null ? l10n.healthAddTitle : l10n.healthEditTitle,
-              style: const TextStyle(
-                color: AppColors.ink,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              key: const ValueKey('healthTypeDropdown'),
-              initialValue: _type,
-              decoration: InputDecoration(
-                labelText: l10n.healthFieldType,
-                border: const OutlineInputBorder(),
-              ),
-              items: [
-                for (final t in HealthListPage.recordTypes)
-                  DropdownMenuItem(value: t, child: Text(_label(l10n, t))),
-              ],
-              onChanged: (v) => setState(() => _type = v ?? _type),
-            ),
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _date,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime.now(), // 不可未来
-                );
-                if (picked != null) setState(() => _date = picked);
-              },
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: l10n.healthFieldDate,
-                  border: const OutlineInputBorder(),
-                ),
-                child: Text(dateStr),
-              ),
-            ),
-            if (_needsName) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _name,
-                maxLength: _type == 'CUSTOM' ? 20 : 30,
-                decoration: InputDecoration(
-                  labelText: _type == 'CUSTOM'
-                      ? l10n.healthFieldCustomName
-                      : l10n.healthFieldVaccineName,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: _note,
-              maxLength: 100,
-              decoration: InputDecoration(
-                labelText: l10n.healthFieldNote,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _busy ? null : _save,
-              child: _busy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(l10n.healthSave),
-            ),
-            if (widget.existing != null) ...[
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _busy ? null : _delete,
-                child: Text(l10n.healthDelete, style: const TextStyle(color: AppColors.popRed)),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _label(AppLocalizations l10n, String type) => healthTypeLabel(l10n, type);
-}
 
 /// 健康记录分类卡的静态定义（0711 KATEGORI 网格：类型 + 标签 + 是否问诊类）。
 /// 图标与主色不在此声明 —— 一律经 [healthRecordIconFor] 取 FR-84 图标总表，避免两份定义走歧。

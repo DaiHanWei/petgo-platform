@@ -292,6 +292,9 @@ class ApiPaths {
   /// 结构化健康记录 CRUD + 问诊存档只读混排（Story 7.1/7.2）。GET 返混排；POST/PATCH/{id}/DELETE/{id} 仅结构化。
   static const String healthRecords = '$base/pet-profiles/me/health-records';
 
+  /// V1.5.0 健康记录提醒 Story 3.2：表单预填（POST，只读不落库，`?petId=`）。
+  static const String healthRecordPreview = '$base/pet-profiles/me/health-records/preview';
+
   /// 成长档案日历月视图 / 当天详情 / 统计栏（Story 2.4 AC5/AC6 · F9）。
   static const String petProfileCalendar = '$base/pet-profiles/me/calendar';
   static const String petProfileDay = '$base/pet-profiles/me/day';

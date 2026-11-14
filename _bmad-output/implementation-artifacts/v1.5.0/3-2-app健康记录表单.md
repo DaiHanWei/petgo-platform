@@ -1,6 +1,6 @@
 # Story 3.2: App 健康记录表单
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ① 健康记录提醒 · 分支 `feat/1.5.0-health-reminder`
 > 口径优先级：CROSS-STORY-DECISIONS 地基段 > 架构增量 §6.1（预填接口、DTO）、§7 > PRD FR-158 UI、FR-159 UI、FR-160 UI 与 Helper text、FR-161 Type dropdown / Icon、FR-167 UI「Form, date empty」、FR-169 文案表、FR-171（Neutered 提示、后续记录只读）、§4 `health_record_saved` / `health_record_deleted`、AC2、AC5、AC6、AC10、AC13 > UI 稿 B1 ~ B10、C1 ~ C8、D1 ~ D8、E1 ~ E3（整合稿页头「代码落点」：顺序 类型 → 子类型 → 剂次 / 时长 → 日期 → 下次日期 → 备注）。
@@ -63,16 +63,16 @@ so that 记一条记录几秒钟，日期还准。
 
 ## Tasks / Subtasks
 
-- [ ] T1 字段与顺序、各类型分支、Kontrol dokter（AC1）
-- [ ] T2 预填接口仓储方法 + 防抖 + 手改标记 + 只读 / 隐藏逻辑（AC2）
-- [ ] T3 提示 / 警示（AC3）
-- [ ] T4 字段级报错（AC4）
-- [ ] T5 prefill 与编辑回填（AC5）
-- [ ] T6 `healthFormDirtyProvider`（AC6）
-- [ ] T7 图标与 arb（AC7），`flutter gen-l10n`
-- [ ] T8 埋点（AC8）
-- [ ] T9 widget 测试：猫 / 狗 / 其他物种预设列表（AC6）、剂次 chip 只在系列预设出现、驱虫必填报错（AC10）、Heartworm 只狗、Eksternal 时长 chip、预填覆盖与手改不覆盖（假仓储）、发情只读、Sterilisasi 无下次日期、dateEmpty 报错、编辑 Legacy 驱虫必须选类型
-- [ ] T10 `flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
+- [x] T1 字段与顺序、各类型分支、Kontrol dokter（AC1）
+- [x] T2 预填接口仓储方法 + 防抖 + 手改标记 + 只读 / 隐藏逻辑（AC2）
+- [x] T3 提示 / 警示（AC3）
+- [x] T4 字段级报错（AC4）
+- [x] T5 prefill 与编辑回填（AC5）
+- [x] T6 `healthFormDirtyProvider`（AC6）
+- [x] T7 图标与 arb（AC7），`flutter gen-l10n`
+- [x] T8 埋点（AC8）
+- [x] T9 widget 测试：猫 / 狗 / 其他物种预设列表（AC6）、剂次 chip 只在系列预设出现、驱虫必填报错（AC10）、Heartworm 只狗、Eksternal 时长 chip、预填覆盖与手改不覆盖（假仓储）、发情只读、Sterilisasi 无下次日期、dateEmpty 报错、编辑 Legacy 驱虫必须选类型
+- [x] T10 `flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -89,4 +89,40 @@ so that 记一条记录几秒钟，日期还准。
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：AC1 / AC2 / AC3 的 `[L2]` 部分（模拟器对照 UI 稿 B1 ~ E3 逐屏、chip 36 高 / 圆角 10 的观感、印尼语日期选择器按钮文字「真机确认」项）未做；真后端联调（预填接口、`X-App-Version` ≥ 1.5.0 才生效的新字段）留 4.1。本 story 无 L1 项。
+- L0：`flutter analyze` 无 error / warning（仅工具链 3.50 的全仓 deprecation info 与 `health_list_page.dart` 既有的 rendering import info）；`flutter test` 全量 4983 例绿；新增 `test/profile/health_record_form_test.dart` 28 例（猫 / 狗 / 其他物种预设、剂次 chip 只在系列预设、Lainnya 自由框、Heartworm 只狗、Eksternal 时长 chip 默认 1 个月、Kontrol dokter 只有日期 / 下次日期 / 备注、Sterilisasi 无下次日期、字段顺序、预填覆盖 vs 手改不覆盖 + `clearNextDate`、预填失败静默、`nextDateAllowed=false` 隐藏、发情只读锁定、7 个提示 + PERMETHRIN 警示框位置 + 未知 code 忽略、驱虫必填 / dateEmpty / 自定义名字段报错、存量无类型驱虫编辑必须先选、prefill 初值 + 立即预填、编辑回填 OTHER / 预设、脏标记、两个埋点）。
+- 表单从 `health_list_page.dart` 拆到 `presentation/widgets/health_record_form.dart`（公开类 `HealthRecordForm`）；里程碑庆祝 / 轮询逻辑原样搬过去。键盘避让改用 `KeyboardInset`（原手写 `viewInsets` padding）。
+- **App 不实现日期规则**：下次日期的建议、可选范围、显示 / 只读、提示全来自预填接口。接口还没回来时只做两个非规则的界面兜底：Sterilisasi 恒不显示；Berahi 先不显示（避免闪一下又消失）；下次日期 picker 范围接口缺省时取「事件日 +1 天 ~ 2100」，越界交后端校验。
+- 编辑已有记录：已存的下次日期视为用户值，打开时**不被预填覆盖**（保守口径：怕把兽医给的日期冲掉）；用户清空后再改依赖字段也不覆盖。**待确认**：若产品希望编辑时改事件日期也跟着重算，需另定。
+- 疫苗名：选预设时 `vaccineName` 写预设标签（arb 两语同文，等于架构 §3.1 标签表；后端缺省时也会自补同一串），Lainnya / 其他物种写自由文本。
+- **字段报错**：驱虫类型、日期（`dateEmpty=1`，占位复用 `petProfileBirthdayPick`）、自定义名（原 SnackBar 改为字段 `errorText`，文案沿用 `healthCustomNameRequired`）。后端 4xx 且驱虫未分型 → 映射为驱虫字段报错，不直出 `detail`。
+- **AC7 图标**：当前 SDK 的 `Icons` 没有 `stethoscope` → 存 Material Symbols「stethoscope」outlined 24px（Apache-2.0，google/material-design-icons）为 `assets/icons/stethoscope.svg`，`svgAsset` 机制。**偏离 story**：`icon` 兜底没用 story 建议的 `medical_services_outlined`——它已是日历「当天多条记录」通用标记 `kHealthRecordGenericIcon`，`calendar_cell_priority_test` 明确禁止撞车；改用 `monitor_heart_outlined`。
+- 类型名映射收敛到既有的 `healthRecordLabel`（图标表旁，加 VET_VISIT）；3.1 的 `healthTypeLabel` 改为转调它，全项目一份。
+- **埋点**：枚举值一律小写蛇形（cloud-rules 埋点约定，优先于 story / PRD 表里的大写写法）——`species` cat / dog / other、`type` vaccine / vet_visit…、`deworm_type`、`vaccine_preset`。同时把 3.1 已提交的 `health_category_filtered.category` 由大写改为小写（`vaccine` / `deworm` / …；PRD §4 写的是大写 code，此处按 cloud-rules 小写，**待确认**看板口径），3.1 测试同步。
+  - `health_record_saved`：`next_date_prefilled` = 本次打开出现过预填；`next_date_edited` = 出现过预填且用户亲手选过 / 清过；`entry` 只有从 `?from=consult` 自动弹出的那一张是 `consult_page`；`source` = 带 `nid` → `health_reminder`（`notification_id` / `notification_kind` 与 30 分钟归因归 3.4 的 `HealthReminderAttribution`，本条未报），`?add=` 且非 consult → `milestone`，其余 `manual`。路由新增 `?from=consult` 解析（3.5 传）。
+  - `health_record_deleted`：列表接口不下发记录来源与创建时刻 → `source` 恒报 `manual`、不报 `record_created_at`（story AC8.2 允许，在此记录）。
+  - `test/analytics/v112_events_test.dart` 动作词表加 `_deleted`（名字由 PRD §4 定死，扩表不改名）。
+- `healthFormDirtyProvider`（`domain/health_form_dirty.dart`，Riverpod 3 `Notifier<bool>`）：字段快照与初值比较；保存成功 / 抽屉关闭（dispose）置 false；容器已销毁时忽略。
+- 仓储：`create` 改返回新记录 id（`Future<int?>`，取响应 `id`），新增 `preview`；`ApiPaths.healthRecordPreview`。4 个测试假仓储同步实现（`health_list_page_test`、`health_focus_from_timeline_test`、`consult_shop_boundary_test`、`pet_readonly_block_test`）。
+- 新 arb 键（FR-169 表原文）：`healthVaccinePresetOther`、`healthVaccineOtherName`、`healthDoseOptional`、`healthDewormTypeField`、`healthDurationField`、`healthDurationMonths`（EN 单复数）、`healthNextDateField`、`healthNextDateHelper`、`healthNextDateLockedHelper`、`healthErrorDewormType`、`healthErrorDate`、6 个 `healthHint*`；PERMETHRIN 复用 3.1 的 `healthSafetyPermethrin`。下次日期清除按钮 tooltip 复用 `healthDelete`（「Hapus」）。
+- 3.1 测试按 3.2 新规则调整：AC67 改类型为驱虫时需先选驱虫类型（驱虫必填）。
+- 未运行 `bmad-dev-story` / `bmad-code-review` 技能文件（仓库内不存在），按 story 手动执行；code review 由本会话逐项核对 diff：修 3 处（长选项让下拉溢出 → `isExpanded`；`entry=consult_page` 原先会扩散到同页后续打开的表单；`?add=VET_VISIT&from=consult` 原先被记成 `milestone`）。
+
 ### File List
+
+- `petgo_app/lib/features/profile/presentation/widgets/health_record_form.dart`（新）
+- `petgo_app/lib/features/profile/presentation/health_list_page.dart`
+- `petgo_app/lib/features/profile/domain/health_form_dirty.dart`（新）
+- `petgo_app/lib/features/profile/domain/health_list_item.dart`
+- `petgo_app/lib/features/profile/domain/health_record_icons.dart`
+- `petgo_app/lib/features/profile/data/health_record_repository.dart`
+- `petgo_app/lib/core/network/api_paths.dart`
+- `petgo_app/lib/core/router/app_router.dart`
+- `petgo_app/assets/icons/stethoscope.svg`（新）
+- `petgo_app/lib/l10n/app_id.arb`、`petgo_app/lib/l10n/app_en.arb`
+- `petgo_app/test/profile/health_record_form_test.dart`（新）
+- `petgo_app/test/profile/health_list_page_test.dart`
+- `petgo_app/test/profile/health_focus_from_timeline_test.dart`
+- `petgo_app/test/shop/consult_shop_boundary_test.dart`
+- `petgo_app/test/pet_slot/pet_readonly_block_test.dart`
+- `petgo_app/test/analytics/v112_events_test.dart`

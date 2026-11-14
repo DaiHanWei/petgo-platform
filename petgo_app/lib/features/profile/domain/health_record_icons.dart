@@ -36,6 +36,15 @@ const Map<String, HealthRecordIcon> kHealthRecordIcons = {
   // OQ-11B 已定稿（2026-08-04）：深紫红 #B03060 —— 与 coral #F0425A 拉开距离，
   // 免得在日历格子里与「危险 / 点赞 / 疫苗 / 问诊」的红撞成一个意思。
   'MENSTRUATION': HealthRecordIcon(icon: Icons.water_drop, color: AppColors.menstruationRed),
+  // V1.5.0 健康记录提醒 Story 3.2（PRD FR-161 Icon）：Kontrol dokter = 听诊器 + coral。当前 SDK 的 `Icons` 没有
+  // stethoscope → 用 Material Symbols「stethoscope」outlined 24px（Apache-2.0，google/material-design-icons）
+  // 存成单色 SVG。不支持 svgAsset 的场景（列表 / 时间线胶囊用 IconData）回退到 monitor_heart_outlined：
+  // story 建议的 medical_services_outlined 已是「当天多条记录」通用标记 [kHealthRecordGenericIcon]，
+  // 撞了日历格子就分不清（calendar_cell_priority_test 守着这条）。
+  'VET_VISIT': HealthRecordIcon(
+      icon: Icons.monitor_heart_outlined,
+      color: AppColors.coral,
+      svgAsset: 'assets/icons/stethoscope.svg'),
   'CUSTOM': HealthRecordIcon(icon: Icons.description_outlined, color: AppColors.muted),
   'CONSULT': HealthRecordIcon(icon: Icons.local_hospital_outlined, color: AppColors.coral),
 };
@@ -77,5 +86,6 @@ String healthRecordLabel(AppLocalizations l10n, String? type) => switch (type) {
       'NEUTER' => l10n.healthTypeNeuter,
       'MENSTRUATION' => l10n.healthTypeMenstruation,
       'CONSULT' => l10n.healthTypeConsult,
+      'VET_VISIT' => l10n.healthTypeVetVisit,
       _ => l10n.healthTypeCustom,
     };

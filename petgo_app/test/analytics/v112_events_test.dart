@@ -454,6 +454,9 @@ void main() {
         // **施加**了一个筛选（清除不报），价值在 `category` + `record_count`。🔴 刻意不用 `_tapped`：同一张卡
         // 再点是清除，`_tapped` 会把两种方向混成一个分母。名字由 PRD §4 定死，扩表、不改名。
         '_filtered',
+        // 记录被删（V1.5.0 健康记录提醒 PRD §4 `health_record_deleted`）：`_deleted` = **服务端确认删除后**才报，
+        // 与 `_saved` 成对（看提醒带来的记录有多少被删掉）。名字由 PRD §4 定死，扩表、不改名。
+        '_deleted',
         // 付费失败（2026-09-25 KTP 付费漏斗 `ktp_unlock_failed`，名字按运营需求）：`_failed` = 这次付费
         // **有了明确的失败结局**，与 `_succeeded` 成对，原因由属性 failure_reason 承载。
         // 🔴 刻意不用 `_dismissed`：那是用户自己放弃（没有结局）；也不用 `_blocked`：那是门控拦截。

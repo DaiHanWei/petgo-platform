@@ -22,9 +22,10 @@ class _FakeHealthRepo implements HealthRecordRepository {
   Future<List<HealthListItem>> list({int? petId}) async => _items;
 
   @override
-  Future<void> create(HealthRecordDraft draft, {int? petId}) async {
+  Future<int?> create(HealthRecordDraft draft, {int? petId}) async {
     createCalls++;
     lastDraft = draft;
+    return 100 + createCalls;
   }
 
   @override
@@ -32,6 +33,10 @@ class _FakeHealthRepo implements HealthRecordRepository {
 
   @override
   Future<void> delete(int id, {int? petId}) async {}
+
+  @override
+  Future<HealthRecordPreview> preview(HealthRecordPreviewRequest request, {int? petId}) async =>
+      const HealthRecordPreview();
 }
 
 /// list 恒抛指定 DioException（无档案 404 / 5xx），记录调用次数以断言是否被自动重试。
@@ -421,7 +426,7 @@ void main() {
       // AC68 埋点口径：每次「施加」报一次，清除不报。
       final filtered = events.where((e) => e.$1 == 'health_category_filtered').toList();
       expect(filtered, hasLength(2));
-      expect(filtered.first.$2, {'pet_id': 1, 'category': 'VACCINE', 'record_count': 2});
+      expect(filtered.first.$2, {'pet_id': 1, 'category': 'vaccine', 'record_count': 2});
 
       await tester.tap(find.byKey(const ValueKey('healthCat_CONSULT')));
       await tester.pumpAndSettle();
@@ -476,6 +481,13 @@ void main() {
       await tester.pumpAndSettle();
       if (typeLabel == 'Custom') {
         await tester.enterText(find.byType(TextField).first, 'Grooming');
+      }
+      if (typeLabel == 'Deworming') {
+        // V1.5.0 Story 3.2：驱虫类型必填（AC4），先选一个。
+        await tester.tap(find.byKey(const ValueKey('healthDewormDropdown')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Internal (worms)').last);
+        await tester.pumpAndSettle();
       }
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();

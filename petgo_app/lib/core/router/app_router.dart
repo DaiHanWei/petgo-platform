@@ -991,6 +991,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
                 if (v.trim().isNotEmpty) v.trim(),
             ],
             notificationToken: nonEmpty('nid'),
+            fromConsult: q['from'] == 'consult',
           );
         },
       ),

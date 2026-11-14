@@ -273,11 +273,14 @@ class _FakeHealthRepo implements HealthRecordRepository {
   @override
   Future<List<HealthListItem>> list({int? petId}) async => _items;
   @override
-  Future<void> create(HealthRecordDraft draft, {int? petId}) async {}
+  Future<int?> create(HealthRecordDraft draft, {int? petId}) async => null;
   @override
   Future<void> update(int id, HealthRecordDraft draft, {int? petId}) async {}
   @override
   Future<void> delete(int id, {int? petId}) async {}
+  @override
+  Future<HealthRecordPreview> preview(HealthRecordPreviewRequest request, {int? petId}) async =>
+      const HealthRecordPreview();
 }
 
 /// 只喂入站消息的 IM 替身（不触真实腾讯 SDK）。

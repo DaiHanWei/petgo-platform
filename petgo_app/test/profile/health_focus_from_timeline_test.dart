@@ -22,13 +22,16 @@ class _FakeHealthRepo implements HealthRecordRepository {
   Future<List<HealthListItem>> list({int? petId}) async => _items;
 
   @override
-  Future<void> create(HealthRecordDraft draft, {int? petId}) async {}
+  Future<int?> create(HealthRecordDraft draft, {int? petId}) async => null;
 
   @override
   Future<void> update(int id, HealthRecordDraft draft, {int? petId}) async {}
 
   @override
   Future<void> delete(int id, {int? petId}) async {}
+  @override
+  Future<HealthRecordPreview> preview(HealthRecordPreviewRequest request, {int? petId}) async =>
+      const HealthRecordPreview();
 }
 
 /// 造一串够长的记录，保证目标条目在首屏之外 —— 否则「有没有滚动」测不出来。
