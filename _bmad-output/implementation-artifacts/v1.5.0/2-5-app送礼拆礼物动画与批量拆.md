@@ -1,6 +1,6 @@
 # Story 2.5: App 送礼拆礼物动画与批量拆（G1 ~ G6）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ② gift-pack · 分支 `feat/1.5.0-gift-pack`
 > 口径优先级：`decision-log.md`（11-02 收礼通知直接拆；11-13 设计师新稿 + riv 实测）> PRD A §3.4 / §3.8（FR-190）> 架构 D-7、D-9、D-14 > App 稿 G 泳道、F 泳道主路径注释。
@@ -44,10 +44,10 @@ Widget：连点礼盒只发一次 open 请求；无祝福语不渲染「⋯」�
 
 ## Tasks / Subtasks
 
-- [ ] 单个拆页面与 Rive 接入（AC1）
-- [ ] 批量拆汇总 / 分页 / 逐条（AC2）
-- [ ] 通知深链与 `open=latest`（AC3）
-- [ ] ARB + 测试（AC4、AC5）
+- [x] 单个拆页面与 Rive 接入（AC1）
+- [x] 批量拆汇总 / 分页 / 逐条（AC2）
+- [x] 通知深链与 `open=latest`（AC3）
+- [x] ARB + 测试（AC4、AC5）
 
 ## Dev Notes
 
@@ -64,4 +64,21 @@ Widget：连点礼盒只发一次 open 请求；无祝福语不渲染「⋯」�
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：G1 ~ G6 逐屏还原度（客厅插画 + `receive_gift.riv` 真渲染、礼盒轻晃、点开约 2 秒、文字淡入）；通知点开直接拆；QA 场景（连点礼盒、批量 1 / 9 / >9、加载慢 / 失败、减弱动态效果、切后台）；真后端 open 接口与 `ownerExp`。
+- L0：`flutter analyze` 无 error / warning（存量弃用 info 不计）；`flutter test test/gift test/notify test/analytics` 全绿（新增 `test/gift/gift_reveal_page_test.dart` 14 条：解析、分页 1 / 9 / 10、连点只发一次 open 且只触发一次 `GiftVM.open`、关闭不拆、G2 字段与 ⋯ 菜单、G3 无祝福语无 ⋯ / EXP 0 / 注销无 Lihat profil、隐藏文案、减弱动效直出终态仍调接口、接口失败 toast、批量汇总与分页圆点、部分有祝福语的 G6 轮播、`open=latest` 两分支）。测试放 `test/gift/`（仓库现有目录），非 story 写的 `test/features/gift/`、`test/core/router/`；深链映射单测在 2-4 已改（`test/notify/deep_link_routes_test.dart`）。
+- 实现要点：新页 `gift_reveal_page.dart`（`GiftRevealPage(petId, orderTokens | all)`）。G1：Rive `GiftReveal` / `GiftSM`（`Fit.cover`）+ 左上白色圆形关闭（不拆，pop false）+「Ketuk untuk membuka」。点礼盒（整块舞台接手势，Rive 自身不吃手势，故文件里的 `TapBox` 不会重复触发）→ 置标志后触发 `GiftVM.open` + 同时调 `POST /pets/{petId}/gift-orders/open`；结束 = `revealDone` 事件或 2.5 秒兜底（自点开起算）。接口失败：动画照播，结束后 toast 通用错误、只留「Lanjut」，pop true 让礼物页按服务端刷新。减弱动态效果 / Rive 不可用或加载失败 → 静态礼盒 + 直接终态（仍调 open）。动画区可注入替身（`riveBuilder` / 测试钩子 `giftRevealRiveBuilderOverride`）。
+- **礼物图未接**：`receive_gift.riv` 现无 `GiftVM.giftImage`（小熊为矢量，App 换不掉），本版不传图，显示小熊属预期；设计师补属性后在 `_ReceiveGiftRive` 加数据绑定即可（同 2-3 写法）。
+- G2 / G3 / G6 版式：压淡底 + 顶部送礼人头像 +「{nama} mengirim {n} {hadiah} untuk {petName}」（注销显示 `feedDeletedUser`）+「⋯」（仅 `canReport`）+ 礼物 + 祝福语 / 隐藏文案 +「Kamu dapat {n} EXP」（`ownerExp`，0 不显示，复用 2-3 key）+「Lanjut」+「Lihat profil {nama}」（注销 / 无 userId 不显示）→ `/users/{userId}`。
+- 批量：「Buka Semua」→ 同一礼盒 → `open {all: true}` → 汇总 G4（`n` = 笔数、每格礼物 + 右下送礼人头像 +「×N 礼物名」+ 灰字「dari 谁」、合计 `totalOwnerExp`），每页 9 格、>9 分页圆点（G5）；有祝福语笔数 > 0 →「Berikutnya」→ G6 只轮播 `message != null` 的笔，圆点为进度，末条「Lanjut」。批量判定 = `all` 或多于 1 个 token（批量只有 1 份也走汇总）。「Lanjut」pop true → 礼物页刷新（未拆筛选随之变化）。
+- 「⋯ → Laporkan ucapan」调 `gift_order_actions.dart` 的 `reportGiftMessage`（**2-6 填实举报抽屉**，本 story 为空实现）；同理 `open=latest` 无未拆分支调 `showGiftOrderDetail`（2-6）。
+- `open=latest`（AC3.3）：礼物页首屏加载后（仅主人，且只一次）拉 `filter=UNOPENED` 第一条 → 有则 push G1；没有则取 `ALL` 第一条 → 详情（2-6）。AC3.1 / 3.2 的深链与通知中心处理 2-4 已改为 `?open=latest`（通知中心按 `location.startsWith('/pets/')` 判定，无需再改）。
+- 文案：`giftRevealTapToOpen`、`giftRevealTitle`、`giftViewSenderProfile`、`giftReportMessage`（Laporkan ucapan，2-6 复用）、`giftRevealReceivedCount`、`giftRevealNext`、`giftMessageHidden`（2-6 复用）均逐字取 App 稿新文案表；另加 `giftRevealQtyName`「×{n} {gift}」（汇总格，稿面写法）与 `giftOpenFailed`（通用错误，文案同仓库现有「Terjadi kesalahan, coba lagi」/「Something went wrong, please try again」）。
+- 仓库：`openPetGiftOrders(petId, {orderTokens, all})`；模型 `gift_order_detail.dart`（`GiftOrderDetail` / `GiftDetailSender` / `GiftOpenResult`，2-6 共用）。
+
 ### File List
+
+- `petgo_app/lib/features/gift/presentation/gift_reveal_page.dart`（新）
+- `petgo_app/lib/features/gift/domain/gift_order_detail.dart`（新）
+- `petgo_app/lib/features/gift/presentation/gift_order_actions.dart`、`gift_page.dart`、`lib/features/gift/data/gift_repository.dart`（改）
+- `petgo_app/lib/l10n/app_en.arb`、`app_id.arb`（改）
+- `petgo_app/test/gift/gift_reveal_page_test.dart`（新）

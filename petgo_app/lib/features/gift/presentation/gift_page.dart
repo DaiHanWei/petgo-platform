@@ -65,6 +65,9 @@ class _GiftPageState extends ConsumerState<GiftPage> {
   bool _sending = false;
   bool _reported = false;
   bool _senderListReported = false;
+
+  /// `?open=latest` 只执行一次（返回礼物页不再自动弹，2-5 AC3.3）。
+  bool _latestHandled = false;
   int _generation = 0;
 
   bool get _valid => widget.petId > 0;
@@ -112,6 +115,10 @@ class _GiftPageState extends ConsumerState<GiftPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scroll.hasClients && _scroll.position.maxScrollExtent <= 0) _loadMore();
       });
+      if (widget.openLatest && !_latestHandled) {
+        _latestHandled = true;
+        if (_owner == true) WidgetsBinding.instance.addPostFrameCallback((_) => _openLatest());
+      }
     } on DioException catch (_) {
       if (!mounted || gen != _generation) return;
       setState(() {
@@ -170,6 +177,29 @@ class _GiftPageState extends ConsumerState<GiftPage> {
       if (changed && mounted) _refreshAll();
     } else {
       await showGiftOrderDetail(context, ref, orderToken: c.orderToken);
+    }
+  }
+
+  /// 收礼通知点开（2-5 AC3.3 · D-9）：主人有未拆 → 直接拆最新一笔（G1）；没有 → 打开最新一笔详情（2-6 H1）。
+  Future<void> _openLatest() async {
+    if (!mounted) return;
+    final repo = ref.read(giftRepositoryProvider);
+    try {
+      final unopened = await repo.fetchPetGiftOrders(widget.petId, filter: const GiftOrderFilter.unopened());
+      if (!mounted) return;
+      if (unopened.items.isNotEmpty) {
+        final changed =
+            await openGiftOrders(context, ref, petId: widget.petId, orderTokens: [unopened.items.first.orderToken]);
+        if (changed && mounted) _refreshAll();
+        return;
+      }
+      final latest = _filter == const GiftOrderFilter.all() && _items.isNotEmpty
+          ? _items.first
+          : (await repo.fetchPetGiftOrders(widget.petId)).items.firstOrNull;
+      if (!mounted || latest == null) return;
+      await showGiftOrderDetail(context, ref, orderToken: latest.orderToken);
+    } on DioException catch (_) {
+      // 拉不到就停在礼物页（列表本身有失败态）
     }
   }
 

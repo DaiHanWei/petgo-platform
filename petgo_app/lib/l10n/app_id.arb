@@ -3391,5 +3391,14 @@
   "giftFilterUnopened": "Belum dibuka",
   "giftStillWrapped": "Masih terbungkus",
   "giftNewBadge": "Baru",
-  "giftOpenAll": "Buka Semua"
+  "giftOpenAll": "Buka Semua",
+  "giftRevealTapToOpen": "Ketuk untuk membuka",
+  "giftRevealTitle": "{name} mengirim {n} {gift} untuk {petName}",
+  "giftViewSenderProfile": "Lihat profil {name}",
+  "giftReportMessage": "Laporkan ucapan",
+  "giftRevealReceivedCount": "Kamu menerima {n} hadiah",
+  "giftRevealNext": "Berikutnya",
+  "giftMessageHidden": "Ucapan ini disembunyikan karena melanggar pedoman komunitas.",
+  "giftRevealQtyName": "×{n} {gift}",
+  "giftOpenFailed": "Terjadi kesalahan, coba lagi"
 }

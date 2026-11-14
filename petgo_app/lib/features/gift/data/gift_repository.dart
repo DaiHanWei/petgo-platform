@@ -5,6 +5,7 @@ import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/gift_catalog.dart';
 import '../domain/gift_order_browse.dart';
+import '../domain/gift_order_detail.dart';
 import '../domain/gift_order_history.dart';
 import '../domain/gift_send_result.dart';
 import '../domain/gift_showcase.dart';
@@ -63,6 +64,13 @@ class GiftRepository {
   Future<GiftPreview> fetchPetGiftPreview(int petId) async {
     final res = await dio.get<Map<String, dynamic>>(ApiPaths.petGiftOrdersPreview(petId));
     return GiftPreview.fromJson(res.data ?? const {});
+  }
+
+  /// V1.5.0 gift-pack Story 2-5：拆礼物（[orderTokens] 1..50 与 [all] 二选一；幂等，已拆的带 `alreadyOpened`）。
+  Future<GiftOpenResult> openPetGiftOrders(int petId, {List<String> orderTokens = const [], bool all = false}) async {
+    final res = await dio.post<Map<String, dynamic>>(ApiPaths.petGiftOrdersOpen(petId),
+        data: all ? {'all': true} : {'orderTokens': orderTokens});
+    return GiftOpenResult.fromJson(res.data ?? const {});
   }
 
   /// 礼物页汇总 + 礼物墙（V1.4.0 gift Story 2.2 · AC3.2）。403 / 404 原样抛出，页面一律 E6。
