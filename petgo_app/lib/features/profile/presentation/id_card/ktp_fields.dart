@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../domain/id_card.dart';
+import '../../domain/pet_species_display.dart';
 import 'ktp_card.dart';
 
 /// KTP 预览会话编辑覆盖（Story 6.2 · AC3）。**仅存本地会话**，绝不写档案、后端不接收。
@@ -71,17 +72,10 @@ class KtpDefaults {
   static const String berlakuHingga = 'SEUMUR HIDUP';
   static const String namaFallback = 'MOCHI';
 
-  /// petType(CAT/DOG/OTHER) → 印尼语物种（KTP 展示常量；App 不渲染后端显示串，按 code 本地化）。
-  static String spesies(String? petType) {
-    switch (petType) {
-      case 'CAT':
-        return 'KUCING';
-      case 'DOG':
-        return 'ANJING';
-      default:
-        return 'HEWAN';
-    }
-  }
+  /// 卡快照类型 → 印尼语物种大写（KTP 展示常量；App 不渲染后端显示串，按 code 本地化）。
+  /// V1.5.0 pet-species：转调统一函数，有 [species] 按细分类型（KELINCI …），旧卡按 [petType]；「其他」→ HEWAN。
+  static String spesies(String? petType, {String? species}) =>
+      petSpeciesView(species: species, petType: petType).cardNameId.toUpperCase();
 
   /// gender wire 值 → KTP 卡面 Jenis Kelamin（印尼语设计常量，非 app-locale）。
   /// null（旧卡/无字段）→ 维持旧默认 [jenisKelamin]，旧卡展示零变化。
@@ -154,7 +148,7 @@ KtpFields buildKtpFields(IdCardData data, KtpEdits edits) {
     nik: (data.cardNo?.isNotEmpty == true) ? data.cardNo! : _buildNik(data.serialId, birthday),
     nama: edits.nama ?? data.name ?? KtpDefaults.namaFallback,
     tempatTglLahir: tempatTgl,
-    spesies: edits.spesies ?? KtpDefaults.spesies(data.petType),
+    spesies: edits.spesies ?? KtpDefaults.spesies(data.petType, species: data.species),
     ras: edits.ras ?? (data.breed?.isNotEmpty == true ? data.breed! : '-'),
     jenisKelamin: edits.jenisKelamin ?? KtpDefaults.jenisKelaminFor(data.gender),
     alamat: edits.alamat ?? _upperOrNull(data.address) ?? KtpDefaults.alamat,

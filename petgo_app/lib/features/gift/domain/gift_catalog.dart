@@ -82,12 +82,16 @@ class GiftRecipient {
     this.avatarUrl,
     this.petType,
     this.breed,
+    this.species,
   });
 
   final int petId;
   final String name;
   final String? avatarUrl;
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
   final String? breed;
 
   factory GiftRecipient.fromJson(Map<String, dynamic> json) => GiftRecipient(
@@ -95,6 +99,7 @@ class GiftRecipient {
         name: json['name'] as String? ?? '',
         avatarUrl: json['avatarUrl'] as String?,
         petType: json['petType'] as String?,
+        species: json['species'] as String?,
         breed: json['breed'] as String?,
       );
 }

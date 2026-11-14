@@ -3,6 +3,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../domain/pet_species_display.dart';
+
 /// SIM / 居住证卡面趣味默认值（FR-142D.5：同 KTP 默认语义；大小写按 UI 稿首字母大写，T-3）。
 abstract final class NewCardDefaults {
   static const String nama = 'Mochi';
@@ -11,12 +13,9 @@ abstract final class NewCardDefaults {
   static const String alamat = 'Jl. Melati No. 25, Bandung';
   static const String pekerjaan = 'Chief Happiness Officer';
 
-  /// petType → 印尼语物种（首字母大写）。
-  static String spesies(String? petType) => switch (petType) {
-        'CAT' => 'Kucing',
-        'DOG' => 'Anjing',
-        _ => 'Hewan',
-      };
+  /// 卡快照类型 → 印尼语物种（首字母大写）。V1.5.0 pet-species：转调统一函数（有 [species] 按细分类型）。
+  static String spesies(String? petType, {String? species}) =>
+      petSpeciesView(species: species, petType: petType).cardNameId;
 
   /// gender wire 值 → Jenis Kelamin：公 Jantan / 母 Betina / 未知 `-`；null（不应出现）→ Jantan（同 KTP 旧默认）。
   static String jenisKelamin(String? gender) => switch (gender) {

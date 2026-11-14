@@ -22,6 +22,7 @@ class PublicProfilePet {
     this.petType,
     this.birthday,
     this.tailsonalityBadge,
+    this.species,
   });
 
   /// 拿它进站内访客视图（AD-4 Rule 1 明写按 petId 寻址）。
@@ -32,6 +33,9 @@ class PublicProfilePet {
 
   /// 物种线格式：CAT / DOG / OTHER。客户端本地化成「Kucing」/「Anjing」。
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
 
   /// 生日。⚠️ 服务端下发的是**日期**不是算好的「2th 3bln」——
   /// 算好的字符串每过一天就得靠缓存失效才准。
@@ -48,6 +52,7 @@ class PublicProfilePet {
         name: (json['name'] ?? '') as String,
         avatarUrl: json['avatarUrl'] as String?,
         petType: json['petType'] as String?,
+        species: json['species'] as String?,
         birthday: DateTime.tryParse((json['birthday'] ?? '') as String? ?? ''),
         diaryCount: (json['diaryCount'] ?? 0) as int,
         tailsonalityBadge: json['tailsonalityBadge'] as String?,

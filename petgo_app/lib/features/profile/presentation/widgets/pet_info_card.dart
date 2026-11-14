@@ -7,6 +7,7 @@ import '../../../../shared/utils/compact_count.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
 import '../../domain/pet_header_info.dart';
+import '../../domain/pet_species_display.dart';
 import '../../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart';
 
 /// 宠物护照卡（Story 2.4 · paspor.html 1:1 还原）。
@@ -64,11 +65,8 @@ class PetInfoCard extends StatelessWidget {
 
   /// 无头像时的 emoji 占位：**按物种取**（原先恒为 🐱，狗主人会看到自家狗顶着猫脸 ——
   /// 2026-08-04 用户实机反馈）。未知物种走中性爪印。
-  String get _placeholderEmoji => switch (profile.petType) {
-        'CAT' => '🐱',
-        'DOG' => '🐶',
-        _ => '🐾',
-      };
+  /// V1.5.0 pet-species：走统一函数，兔子 🐰、「其他」组物种 🐾。
+  String get _placeholderEmoji => petSpeciesView(species: profile.species, petType: profile.petType).emoji;
 
   /// 头像：有 avatarUrl 渲染真实头像图（填满圆圈，与 Me/编辑页同用 AppImage），
   /// 加载中/失败回退 emoji 占位。无 URL → 按物种的 emoji 占位。
@@ -95,12 +93,8 @@ class PetInfoCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     // A3/A4 稿的 meta 行是「物种 · 品种 · 年龄」；此前漏了物种，只有品种时
     // 「Pomeranian」这类品种名并不能让人一眼看出是猫还是狗（我的页宠物卡一直是带物种的）。
-    final species = switch (profile.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+    // V1.5.0 pet-species：统一函数（Kelinci · Holland Lop · 1 thn 2 bln，UI F1）；认不出的类型整段省略（同旧口径）。
+    final species = petSpeciesLabel(l10n, profile.petType, species: profile.species);
     final sub = [
       ?species,
       if (profile.breed != null && profile.breed!.isNotEmpty) profile.breed!,

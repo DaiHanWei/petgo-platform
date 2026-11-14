@@ -230,7 +230,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       hit = pets.where((p) => p.id == id).firstOrNull;
     }
     if (hit != null) {
-      return [CelebrationPet(name: hit.name, avatarUrl: hit.avatarUrl, petType: hit.petType, id: hit.id)];
+      return [CelebrationPet(name: hit.name, avatarUrl: hit.avatarUrl, petType: hit.petType, id: hit.id, species: hit.species)];
     }
     final code = widget.item.code;
     final type = code.startsWith('C') ? 'CAT' : code.startsWith('D') ? 'DOG' : null;
@@ -617,7 +617,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
                         BoxShadow(color: Colors.white.withValues(alpha: 0.25), spreadRadius: 2),
                       ],
                     ),
-                    child: PetSpeciesAvatar(avatarUrl: p.avatarUrl, petType: p.petType, size: 40),
+                    child: PetSpeciesAvatar(avatarUrl: p.avatarUrl, petType: p.petType, size: 40, species: p.species),
                   ),
                   const SizedBox(height: 4),
                   Text(p.name,

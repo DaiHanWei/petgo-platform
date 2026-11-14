@@ -26,6 +26,7 @@ class IdCardData {
     this.school,
     this.faculty,
     this.createdAt,
+    this.species,
   });
 
   final bool generated;
@@ -43,6 +44,9 @@ class IdCardData {
 
   /// 宠物类型枚举原始值（CAT/DOG/OTHER）——展示前本地化，App 绝不渲染后端显示串。
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
   final String? breed;
   final DateTime? birthday;
   final String? avatarUrl;
@@ -75,6 +79,7 @@ class IdCardData {
       gender: json['gender'] as String?,
       name: json['name'] as String?,
       petType: json['petType'] as String?,
+      species: json['species'] as String?,
       breed: json['breed'] as String?,
       birthday: json['birthday'] == null
           ? null
@@ -121,6 +126,7 @@ class IdCard {
     this.school,
     this.faculty,
     this.numberReused = false,
+    this.species,
   });
 
   /// 卡自身主键（授权态内部用；详情端点 `GET /pet-profiles/me/id-cards/{id}` 寻址）。
@@ -139,6 +145,9 @@ class IdCard {
 
   /// 宠物类型枚举原始值（CAT/DOG/OTHER）——展示前本地化，App 绝不渲染后端显示串。
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
   final String? breed;
   final DateTime? birthday;
   final String? avatarUrl;
@@ -179,6 +188,7 @@ class IdCard {
       gender: json['gender'] as String?,
       name: json['name'] as String?,
       petType: json['petType'] as String?,
+      species: json['species'] as String?,
       breed: json['breed'] as String?,
       birthday: json['birthday'] == null ? null : DateTime.tryParse(json['birthday'] as String),
       avatarUrl: json['avatarUrl'] as String?,
@@ -209,6 +219,7 @@ class IdCard {
         gender: gender,
         name: name,
         petType: petType,
+        species: species,
         breed: breed,
         birthday: birthday,
         avatarUrl: avatarUrl,

@@ -24,6 +24,7 @@ import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pet_profile.dart';
+import '../domain/pet_species_display.dart';
 import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案编辑页（Story 2.8）。复用 2.2 创建表单结构，预填既有值；部分更新 PATCH。
@@ -49,6 +50,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   DateTime? _birthday;
   String? _avatarUrl;
   String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
+  String? _species; // V1.5.0 pet-species：细分类型（显示走 petSpeciesView）
   // KELAMIN（性别）：MALE/FEMALE，null = 未填。V1.1.6 Story 1.1 起**真正落库**
   // （此前是纯前端占位：能选能显示，但不提交不持久化）。
   // ⚠️ 无「清空」路径：PATCH 语义是「传 null = 不改动」，故选了就改不回未填 —— 已知且接受。
@@ -82,6 +84,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _birthday = p.birthday;
     _avatarUrl = p.avatarUrl;
     _petType = p.petType;
+    _species = p.species;
     _sex = p.sex; // 漏这行 = 存住了但重进页面又变回「请选择」
   }
 
@@ -334,7 +337,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                             : (_avatarUrl == null
                                 // 按物种占位（同 PetInfoCard 口径；原先恒为 🐱，狗也顶着猫脸，L2 第二轮 P3-6）。
                                 ? Text(
-                                    switch (_petType) { 'CAT' => '🐱', 'DOG' => '🐶', _ => '🐾' },
+                                    petSpeciesView(species: _species, petType: _petType).emoji,
                                     style: const TextStyle(fontSize: 38))
                                 : null),
                       ),

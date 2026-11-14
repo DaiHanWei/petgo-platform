@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/pet_breeds.dart';
+import '../../domain/pet_species_display.dart';
 
-/// 物种展示文案（emoji + 本地化名）。
-String petTypeDisplay(AppLocalizations l10n, String type) => switch (type) {
-      'CAT' => '🐱 ${l10n.petTypeCat}',
-      'DOG' => '🐶 ${l10n.petTypeDog}',
-      _ => '🐾 ${l10n.petTypeOther}',
-    };
+/// 物种展示文案（emoji + 本地化名）。V1.5.0 pet-species：转调统一函数 [petSpeciesView]；
+/// 旧调用点不传 [species] 时按大类显示（Story 4.2 合并后补齐）。
+String petTypeDisplay(AppLocalizations l10n, String type, {String? species}) =>
+    petSpeciesView(species: species, petType: type).display(l10n);
 
 /// JENIS HEWAN 选择字段（原型 P-30/P-32）。
 /// [locked]=true → 灰底锁定只读（编辑态 F6：创建后不可改）；否则点击弹底部清单按枚举选。

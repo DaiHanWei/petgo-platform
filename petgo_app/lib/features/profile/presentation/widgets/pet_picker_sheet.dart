@@ -225,7 +225,7 @@ class _PetPickerSheetState extends State<PetPickerSheet> {
     final disabled = widget.disabledPetIds.contains(p.id);
     final selected = _selected.contains(p.id);
     final meta = [
-      ?petSpeciesLabel(l10n, p.petType),
+      ?petSpeciesLabel(l10n, p.petType, species: p.species),
       ?formatPetAge(l10n, p.birthday)?.replaceAll(' ', ' '),
     ].join(' · ');
     final locked = !disabled && widget.lockedPetIds.contains(p.id);
@@ -253,6 +253,7 @@ class _PetPickerSheetState extends State<PetPickerSheet> {
       key: ValueKey('petPickerRow-${p.id}'),
       avatarUrl: p.avatarUrl,
       petType: p.petType,
+      species: p.species,
       name: p.name,
       subtitle: subtitle,
       trailing: trailing,
@@ -280,9 +281,13 @@ class PetCardRow extends StatelessWidget {
     this.disabled = false,
     this.locked = false,
     this.onTap,
+    this.species,
   });
 
   final String? avatarUrl;
+
+  /// 细分类型（V1.5.0 pet-species）；null 时按 [petType] 大类出占位。
+  final String? species;
 
   /// 无头像时按物种出 emoji 占位（bug 593）；null → 中性爪印。
   final String? petType;
@@ -302,7 +307,7 @@ class PetCardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget avatar = PetSpeciesAvatar(avatarUrl: avatarUrl, petType: petType, size: 40);
+    Widget avatar = PetSpeciesAvatar(avatarUrl: avatarUrl, petType: petType, size: 40, species: species);
     Widget nameText = Text(name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

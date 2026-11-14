@@ -14,6 +14,7 @@ import '../domain/gift_send_result.dart';
 import '../domain/gift_showcase.dart';
 import 'gift_send_flow.dart';
 import 'gift_style.dart';
+import '../../profile/domain/pet_species_display.dart';
 import 'gift_supporters_controller.dart';
 
 /// 礼物页：礼物墙 + 粉丝榜同一页（V1.4.0 gift Story 2.2 · AC3 · decision-log ③ Q1 / Q2 · UI 稿 E1 ~ E7）。
@@ -406,11 +407,7 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final avatar = AppImage.provider(data.pet.avatarUrl, thumbWidth: 200);
-    final emoji = switch (data.pet.petType) {
-      'CAT' => '🐱',
-      'DOG' => '🐶',
-      _ => '🐾',
-    };
+    final emoji = petSpeciesView(species: data.pet.species, petType: data.pet.petType).emoji; // V1.5.0 pet-species
     // 稿 `.ghero`：135° #F3EDFF → #FBF8FF、r20、内边距 16；头像 56 带「2 白 + 2 #C2B0EC」双圈描边（`.pic-av`）。
     return Container(
       key: const ValueKey('giftSummaryCard'),

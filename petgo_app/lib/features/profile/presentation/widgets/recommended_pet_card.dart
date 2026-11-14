@@ -11,6 +11,7 @@ import '../../../../shared/widgets/app_image.dart';
 import '../../../../shared/widgets/initial_avatar.dart';
 import '../../../auth/domain/auth_guard.dart';
 import '../../data/pet_recommendation_repository.dart';
+import '../../domain/pet_age.dart';
 import '../visitor_archive_view.dart';
 
 /// 推荐位埋点的 `from` 取值（Story 4.1 AC7 / 4.3 / 4.4 各一个位置）。
@@ -210,12 +211,7 @@ class RecommendedPetCard extends ConsumerWidget {
   /// 「物种 · 陪伴天数」（UI 稿 E2）—— **逐项复用既有文案**（物种文案 / `petCardDays`），不另起口径。
   /// 物种未知时只剩天数，不留孤零零的分隔符。
   String _meta(AppLocalizations l10n) {
-    final species = switch (pet.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+    final species = petSpeciesLabel(l10n, pet.petType, species: pet.species); // V1.5.0 pet-species：统一函数
     return [
       ?species,
       l10n.petCardDays(pet.companionDays),

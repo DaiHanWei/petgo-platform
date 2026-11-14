@@ -23,6 +23,8 @@ class PetListItem {
     this.isDefault = false,
     this.tailsonalityBadge,
     this.diaryCount,
+    this.species,
+    this.speciesChangeableFrom,
   });
 
   static const String statusActive = 'ACTIVE';
@@ -32,6 +34,12 @@ class PetListItem {
   final String name;
   final String? avatarUrl;
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
+
+  /// 类型冷却中才有值（WIB 日期，最早可再改的那天）；null = 现在可改（V1.5.0 pet-species）。
+  final DateTime? speciesChangeableFrom;
   final String? breed;
   final DateTime? birthday;
   final DateTime? createdAt;
@@ -53,6 +61,8 @@ class PetListItem {
       name: json['name'] as String? ?? '',
       avatarUrl: json['avatarUrl'] as String?,
       petType: json['petType'] as String?,
+      species: json['species'] as String?,
+      speciesChangeableFrom: _parseDate(json['speciesChangeableFrom']),
       breed: json['breed'] as String?,
       birthday: _parseDate(json['birthday']),
       createdAt: _parseDate(json['createdAt']),

@@ -48,6 +48,7 @@ class OrderDetail {
     this.consultSessionId,
     this.targetKind,
     this.targetToken,
+    this.species,
   });
 
   final OrderType orderType;
@@ -64,6 +65,9 @@ class OrderDetail {
   // 兽医：宠物（已删→null + petDeleted）
   final String? petName;
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
   final String? petAvatarUrl;
   final bool petDeleted;
   final DateTime? sessionStartedAt;
@@ -99,6 +103,7 @@ class OrderDetail {
         paidAt: _dt(j['paidAt']),
         petName: j['petName'] as String?,
         petType: j['petType'] as String?,
+        species: j['species'] as String?,
         petAvatarUrl: j['petAvatarUrl'] as String?,
         petDeleted: (j['petDeleted'] ?? false) as bool,
         sessionStartedAt: _dt(j['sessionStartedAt']),

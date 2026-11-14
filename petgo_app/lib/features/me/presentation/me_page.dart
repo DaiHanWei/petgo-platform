@@ -339,6 +339,7 @@ class _PetCard extends ConsumerWidget {
                 name: pets[i].name,
                 avatarUrl: pets[i].avatarUrl,
                 petType: pets[i].petType,
+                species: pets[i].species,
                 birthday: pets[i].birthday,
                 tailsonalityBadge: pets[i].tailsonalityBadge,
                 diaryCount: pets[i].diaryCount,

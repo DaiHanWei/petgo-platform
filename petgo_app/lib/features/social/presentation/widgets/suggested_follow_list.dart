@@ -94,7 +94,7 @@ class _SuggestedFollowListState extends ConsumerState<SuggestedFollowList> {
   /// 「物种 · 年龄」；两项都缺 → null（不画副标题）。
   static String? _subtitle(AppLocalizations l10n, FollowListItem item) {
     final parts = [
-      ?petSpeciesLabel(l10n, item.petType),
+      ?petSpeciesLabel(l10n, item.petType, species: item.species),
       ?formatPetAge(l10n, item.petBirthday),
     ];
     return parts.isEmpty ? null : parts.join(' · ');

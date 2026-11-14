@@ -418,7 +418,7 @@ class _Cell extends StatelessWidget {
                     const BoxShadow(color: Colors.white, spreadRadius: 2),
                   ],
           ),
-          child: PetSpeciesAvatar(avatarUrl: pet.avatarUrl, petType: pet.petType, size: size),
+          child: PetSpeciesAvatar(avatarUrl: pet.avatarUrl, petType: pet.petType, size: size, species: pet.species),
         );
         if (pet.isReadOnly) avatar = ColorFiltered(colorFilter: _greyscale, child: avatar);
         circle = Stack(

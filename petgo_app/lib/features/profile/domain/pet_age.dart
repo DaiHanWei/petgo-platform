@@ -1,4 +1,6 @@
 import '../../../l10n/app_localizations.dart';
+import 'pet_species.dart';
+import 'pet_species_display.dart';
 
 /// 宠物年龄（由 birthday 计算，前端计算——记录于 2.4 Completion Notes）。
 class PetAge {
@@ -52,10 +54,10 @@ String? formatPetAge(AppLocalizations l10n, DateTime? birthday, {DateTime? now})
   return l10n.growthArchiveAge(age.years, age.months);
 }
 
-/// 宠物物种文案（`CAT` / `DOG` / `OTHER`）；未知或 null 返回 null，由调用方整段省略。
-String? petSpeciesLabel(AppLocalizations l10n, String? petType) => switch (petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+/// 宠物类型文案。V1.5.0 pet-species：转调统一函数 [petSpeciesView]（有 [species] 显示细分类型，
+/// 「其他」组物种显示 Lainnya）；[species] 与 [petType] 都认不出（含都为 null）→ null，由调用方整段省略。
+String? petSpeciesLabel(AppLocalizations l10n, String? petType, {String? species}) {
+  final known = PetSpeciesCode.fromWire(species) != null || const {'CAT', 'DOG', 'OTHER'}.contains(petType);
+  if (!known) return null;
+  return petSpeciesView(species: species, petType: petType).label(l10n);
+}

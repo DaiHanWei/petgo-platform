@@ -31,6 +31,7 @@ class FollowListItem {
     this.followEpoch = 0,
     this.petType,
     this.petBirthday,
+    this.species,
   });
 
   /// 对方数字 id（跳现有主页路由）。
@@ -62,6 +63,9 @@ class FollowListItem {
   /// 推荐关注行的宠物物种（`CAT` / `DOG` / `OTHER`）；无宠物 → null。
   final String? petType;
 
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
+
   /// 推荐关注行的宠物生日；无宠物 / 缺省 → null。
   final DateTime? petBirthday;
 
@@ -77,6 +81,7 @@ class FollowListItem {
         self: self,
         followEpoch: epoch,
         petType: petType,
+        species: species,
         petBirthday: petBirthday,
       );
 
@@ -92,6 +97,7 @@ class FollowListItem {
         blockedByMe: (json['blockedByMe'] ?? false) as bool,
         self: (json['self'] ?? false) as bool,
         petType: json['petType'] as String?,
+        species: json['species'] as String?,
         petBirthday: DateTime.tryParse((json['petBirthday'] as String?) ?? ''),
       );
 }

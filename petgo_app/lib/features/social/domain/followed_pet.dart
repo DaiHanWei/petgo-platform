@@ -12,6 +12,7 @@ class FollowedPet {
     this.iFollow = false,
     this.iFollowOwner = false,
     this.followEpoch = 0,
+    this.species,
   });
 
   /// 宠物 id（与站内访客路由 `/pets/{petId}` 同一标识）。
@@ -20,6 +21,9 @@ class FollowedPet {
 
   /// 物种线格式（`CAT` / `DOG` / `OTHER`）；缺键 → null。
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
 
   /// 宠物头像；无头像缺键 → null（按物种 emoji 占位）。
   final String? avatarUrl;
@@ -43,6 +47,7 @@ class FollowedPet {
         petId: petId,
         name: name,
         petType: petType,
+        species: species,
         avatarUrl: avatarUrl,
         ownerNickname: ownerNickname,
         ownerToken: ownerToken,
@@ -56,6 +61,7 @@ class FollowedPet {
         petId: (json['petId'] as num).toInt(),
         name: (json['name'] ?? '') as String,
         petType: json['petType'] as String?,
+        species: json['species'] as String?,
         avatarUrl: json['avatarUrl'] as String?,
         ownerNickname: json['ownerNickname'] as String?,
         ownerToken: json['ownerToken'] as String?,

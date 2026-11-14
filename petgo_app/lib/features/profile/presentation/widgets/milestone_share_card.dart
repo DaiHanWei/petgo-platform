@@ -386,7 +386,7 @@ class _Footer extends StatelessWidget {
             image: AppImage.provider(p.avatarUrl, thumbWidth: 240),
             width: size,
             height: size,
-            fallback: (_) => PetSpeciesAvatar(avatarUrl: null, petType: p.petType, size: size),
+            fallback: (_) => PetSpeciesAvatar(avatarUrl: null, petType: p.petType, size: size, species: p.species),
           ),
         ),
       );

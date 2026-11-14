@@ -1,6 +1,6 @@
 # Story 3.1: app物种清单与统一显示函数
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 主题 pet-species（会话 ④）· 分支 `feat/1.5.0-pet-species`
 > 口径优先级：`decision-log.md`（11-13：emoji 照稿、品种显示全文）> PRD §3.1 / 附录 A / 附录 B / §6「App」> `architecture-v1.5.0-pet-species-delta.md`（D-16、D-17、G-1、G-2）> App UI 稿 F1 与页头文案表（`宠物物种扩展/拆页-App/`）。
@@ -142,15 +142,15 @@ so that 我的宠物不再是一只「其他」。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：对照 1.1 / 1.3 实际提交的 JSON 字段名（`species`、`speciesChangeableFrom`）；AC6 表行号未漂移
-- [ ] **T1** `pet_species.dart` 清单 + `pet_breeds.dart` 兼容（AC1）
-- [ ] **T2** 匹配 / 高亮 / 手填解析（AC2）
-- [ ] **T3** `pet_species_display.dart` + 旧函数转调（AC3）
-- [ ] **T4** l10n（AC4）
-- [ ] **T5** 模型字段（AC5）
-- [ ] **T6** 调用点（AC6）
-- [ ] **T7** 守卫测试（AC7）
-- [ ] **T8** `flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
+- [x] **T0 开工核对**：对照 1.1 / 1.3 实际提交的 JSON 字段名（`species`、`speciesChangeableFrom`）；AC6 表行号未漂移
+- [x] **T1** `pet_species.dart` 清单 + `pet_breeds.dart` 兼容（AC1）
+- [x] **T2** 匹配 / 高亮 / 手填解析（AC2）
+- [x] **T3** `pet_species_display.dart` + 旧函数转调（AC3）
+- [x] **T4** l10n（AC4）
+- [x] **T5** 模型字段（AC5）
+- [x] **T6** 调用点（AC6）
+- [x] **T7** 守卫测试（AC7）
+- [x] **T8** `flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
 
 ## Dev Notes
 
@@ -168,6 +168,43 @@ so that 我的宠物不再是一只「其他」。
 
 ### Agent Model Used
 
+Claude（云端 L0 会话，2026-11-14）
+
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC8.2（兔子在 Diary 档案卡 / 我的头像排 / 选宠物抽屉 / 访客页 / 送礼面板 / 登机牌 / KTP 卡面截图对 UI F1）留本地模拟器；连 stag 真接口验字段留 L1。
+- L0：`flutter analyze` 相对基线**零新增**（云端 SDK 为 Flutter 3.50 / Dart 3.14，比项目基线 3.44 新：存量代码有约 800 条 `material.dart` 弃用 info + 94 条 riverpod `exists` 等弃用 info，均为环境差异、与本 story 无关；按「基线差集」判定）。`flutter test` 全量 4954 例：本 story 引入的 2 例失败已按新规则更新后通过（见下），其余全绿（另有 3 例存量 skip）。
+- 新增测试：`test/features/profile/{pet_species_test, pet_species_match_test, pet_species_display_test, pet_species_backend_sync_test, pet_species_export_sql_sync_test, pet_species_widgets_test}.dart`（同步守卫读 `../petgo-backend/.../PetSpecies.java` 与 `../scripts/ops/pet-species/export-push-groups.sql`，都在本分支）。
+- 按设计更新的既有测试：`test/l10n/microcopy_rules_test.dart` 的同形词表加 `hamster / sugar / glider / otter`（PRD 3.1 表与 UI 文案表里这三个类型名印尼语与英语同形，是一次判定、非放宽）。
+- T0：后端字段名 `species` / `speciesChangeableFrom` 与 1.1 / 1.3 实际提交一致。包名为 `tailtopia`（测试 import 用）。
+- AC6 调用点清单（文件 → 改法）：
+  - `pet_form_fields.dart` `petTypeDisplay` → 转调 `petSpeciesView`（加可选 `species`）；`pet_age.dart` `petSpeciesLabel` → 转调（加可选 `species`，认不出仍返回 null）；`pet_species_avatar.dart` `petSpeciesEmoji / petSpeciesTint / PetSpeciesAvatar` → 转调（加可选 `species`）。
+  - 传 `species`：`content_linked_pets.dart`（行 + 副标题）、`suggested_follow_list.dart`、`pet_avatar_item.dart`（新增 `species` 参数，`me_page` / `public_profile_page` / `pet_switcher` 透传）、`pet_picker_sheet.dart`（`PetCardRow` 新增 `species`）、`pet_slot_pet_row.dart`、`pet_slot_page.dart`、`milestone_share_card.dart`、`milestone_celebration.dart`（`CelebrationPet` 构造两处 + 头像）、`account_celebration_pets.dart`、`gift_entry.dart`。
+  - switch 换函数：`pet_info_card.dart`（占位 emoji + 第二行类型名）、`pet_profile_edit_page.dart` / `pet_profile_create_page.dart`（头像占位；编辑页新增 `_species` 状态，建档页未选类型仍 🐱）、`gift_panel_sheet.dart`、`gift_page.dart`（只换函数调用一行）、`boarding_pass_card.dart`、`followed_pet_row.dart`（两处）、`recommended_pet_card.dart`、`pet_card_page.dart`（删 `_speciesLabel`，有档案时未知兜底「其他」、占位 emoji 不再写死 🐱；无档案示例名片仍按猫）、`ktp_fields.dart` / `new_card_text.dart` / `student_card.dart`（卡面物种走 `cardNameId`，传卡快照 `species`）。
+- 明确未改（大类逻辑）：`ktp_fields.dart` `speciesCodeFor`、`tailsonality_*`、`shop_reco_grid.dart`、`age_card_page.dart` / `age_card_template.dart`、`pet_insights_page.dart`、`milestone_celebration.dart` 按 code 前缀取物种、`profile_created_flow.dart`、`vet_*_page.dart`（Q-5）——均未动。
+- 模型加 `species`（AC5）：`PetProfile`（+ `speciesChangeableFrom`、`header`、`copyWith`）、`PetHeaderInfo`、`PetListItem`（+ `speciesChangeableFrom`）、`VisitorProfile`、`PublicProfilePet`、`RecommendedPet`、`FollowedPet`、`FollowListItem`、`ContentPetRef`、`GiftRecipient`、`GiftShowcasePet`、`BoardingPassDetail`、`IdCardData` / `IdCard`、`OrderDetail`、`CelebrationPet`。
+- 复审（code-review medium）已修：#4 `pickerType` / `isOtherGroupMember` 改用显式集合（不按序号区间，防以后在 OTHER 后追加独立类型被误归「其他」）；#5 手填解析也认英语组名与「Other {group}」；#8 `breedsForPetType` 结果缓存。
+- 待确认：
+  - 复审 #1 / #2：编辑页类型框与建档 / 编辑页品种框仍按大类（`SpeciesField` / `BreedField` 改造归 3.2 / 3.3）。
+  - 复审 #6：12 个分组名 l10n 键按 AC4 已加，但界面组标题按 UI 稿显示 `titleId` 大写（印尼语设计常量），暂无引用；保留给 3.2 之后英语界面需要时用。
+  - 后端 `PetSpecies.pickerType()` 仍按序号区间（`ordinal >= CIVET`），与 App 显式集合口径一致但写法不同；以后加物种时两边一起看。
+  - 云端 `flutter pub get` 会把 `pubspec.lock` 与 macOS / Windows 插件注册文件改成 3.50 SDK 版本，**未提交**。
+
 ### File List
+
+- petgo_app/lib/features/profile/domain/pet_species.dart（新）
+- petgo_app/lib/features/profile/domain/pet_species_display.dart（新）
+- petgo_app/lib/features/profile/domain/{pet_breeds,pet_age,pet_profile,pet_header_info,visitor_profile,id_card,celebration_pet}.dart
+- petgo_app/lib/features/profile/data/{pet_list_repository,pet_recommendation_repository,account_celebration_pets}.dart
+- petgo_app/lib/features/profile/presentation/{pet_profile_edit_page,pet_profile_create_page,pet_card_page}.dart
+- petgo_app/lib/features/profile/presentation/widgets/{pet_form_fields,pet_species_avatar,pet_info_card,pet_avatar_item,pet_picker_sheet,pet_switcher,milestone_celebration,milestone_share_card,recommended_pet_card}.dart
+- petgo_app/lib/features/profile/presentation/id_card/{ktp_fields,new_card_text,kitas_card,student_card}.dart
+- petgo_app/lib/features/gift/domain/{gift_catalog,gift_showcase}.dart、gift/presentation/{gift_panel_sheet,gift_page}.dart、gift/presentation/widgets/gift_entry.dart
+- petgo_app/lib/features/social/domain/{followed_pet,follow_list_item}.dart、social/presentation/widgets/{followed_pet_row,suggested_follow_list}.dart
+- petgo_app/lib/features/user_profile/data/public_profile_pet_repository.dart、user_profile/presentation/public_profile_page.dart、me/presentation/me_page.dart
+- petgo_app/lib/features/content/domain/content_pet_ref.dart、content/presentation/widgets/content_linked_pets.dart
+- petgo_app/lib/features/boarding_pass/domain/boarding_pass.dart、boarding_pass/presentation/widgets/boarding_pass_card.dart
+- petgo_app/lib/features/order/domain/order_detail.dart
+- petgo_app/lib/features/pet_slot/presentation/{pet_slot_page,pet_slot_pet_row}.dart
+- petgo_app/lib/l10n/app_{en,id}.arb（+ gen-l10n 产物，未手改）
+- petgo_app/test/features/profile/*（6 个新测试文件）、petgo_app/test/l10n/microcopy_rules_test.dart

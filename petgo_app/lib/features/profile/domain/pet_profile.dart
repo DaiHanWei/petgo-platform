@@ -19,6 +19,8 @@ class PetProfile {
     this.weightKg,
     this.neuterStatus,
     this.tailsonalityBadge,
+    this.species,
+    this.speciesChangeableFrom,
   });
 
   final int id;
@@ -54,6 +56,12 @@ class PetProfile {
   final String? tailsonalityBadge;
 
   /// 档案是否完整到能给出精准推荐（有生日 + 有体重）。
+  /// 细分类型（V1.5.0 pet-species · 后端 `species`；旧后端无此键 → null，显示按 [petType] 大类兜底）。
+  final String? species;
+
+  /// 类型冷却中才有值（WIB 日期，最早可再改的那天；后端 `speciesChangeableFrom`，yyyy-MM-dd）；null = 现在可改。
+  final DateTime? speciesChangeableFrom;
+
   bool get isCompleteForReco => birthday != null && weightKg != null;
   /// 页头视图模型（V1.1.6 Story 2.3）。页头只需要这几样，不需要 id / cardToken。
   PetHeaderInfo get header => PetHeaderInfo(
@@ -65,6 +73,7 @@ class PetProfile {
         sex: sex,
         intro: intro,
         tailsonalityBadge: tailsonalityBadge,
+        species: species,
       );
 
   factory PetProfile.fromJson(Map<String, dynamic> json) => PetProfile(
@@ -83,6 +92,8 @@ class PetProfile {
         weightKg: (json['weightKg'] as num?)?.toDouble(),
         neuterStatus: json['neuterStatus'] as String?,
         tailsonalityBadge: json['tailsonalityBadge'] as String?,
+        species: json['species'] as String?,
+        speciesChangeableFrom: _parseDate(json['speciesChangeableFrom']),
       );
 
   PetProfile copyWith({
@@ -100,7 +111,7 @@ class PetProfile {
         id: id,
         name: name ?? this.name,
         cardToken: cardToken,
-        petType: petType, // 创建后不可改，恒保留
+        petType: petType, // petType / species 由服务端返回覆盖（V1.5.0 起类型可改，改后用响应整体替换）
         avatarUrl: avatarUrl ?? this.avatarUrl,
         breed: breed ?? this.breed,
         birthday: birthday ?? this.birthday,
@@ -111,6 +122,8 @@ class PetProfile {
         weightKg: weightKg ?? this.weightKg,
         neuterStatus: neuterStatus ?? this.neuterStatus,
         tailsonalityBadge: tailsonalityBadge,
+        species: species,
+        speciesChangeableFrom: speciesChangeableFrom,
       );
 
   static DateTime? _parseDate(Object? raw) {

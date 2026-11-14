@@ -24,10 +24,14 @@ class VisitorProfile {
     this.iFollowOwner,
     this.ownerToken,
     this.followEpoch = 0,
+    this.species,
   });
 
   final String name;
   final String petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
   final String? avatarUrl;
   final String? breed;
 
@@ -57,6 +61,7 @@ class VisitorProfile {
   VisitorProfile withFollowEpoch(int epoch) => VisitorProfile(
         name: name,
         petType: petType,
+        species: species,
         avatarUrl: avatarUrl,
         breed: breed,
         sex: sex,
@@ -73,6 +78,7 @@ class VisitorProfile {
   PetHeaderInfo get header => PetHeaderInfo(
         name: name,
         petType: petType,
+        species: species,
         avatarUrl: avatarUrl,
         breed: breed,
         birthday: birthday,
@@ -85,6 +91,7 @@ class VisitorProfile {
     return VisitorProfile(
       name: (json['name'] as String?) ?? '',
       petType: (json['petType'] as String?) ?? 'OTHER',
+      species: json['species'] as String?,
       avatarUrl: json['avatarUrl'] as String?,
       breed: json['breed'] as String?,
       sex: json['sex'] as String?,

@@ -772,6 +772,7 @@ class _PetSection extends ConsumerWidget {
       name: pet.name,
       avatarUrl: pet.avatarUrl,
       petType: pet.petType,
+      species: pet.species,
       birthday: pet.birthday,
       tailsonalityBadge: pet.tailsonalityBadge,
       diaryCount: pet.diaryCount,

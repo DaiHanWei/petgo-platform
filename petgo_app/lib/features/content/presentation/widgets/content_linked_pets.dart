@@ -170,9 +170,10 @@ class _LinkedPetsSheet extends StatelessWidget {
                         key: ValueKey('detailLinkedPetRow-${p.petId}'),
                         avatarUrl: p.avatarUrl,
                         petType: p.petType,
+                        species: p.species,
                         name: p.name,
                         // 详情响应只有物种（无生日）→ 副标题只出物种。
-                        subtitle: petSpeciesLabel(l10n, p.petType) ?? '',
+                        subtitle: petSpeciesLabel(l10n, p.petType, species: p.species) ?? '',
                         trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.ink2),
                         onTap: () => Navigator.of(context).pop(p.petId),
                       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../shared/widgets/app_image.dart';
+import '../../domain/pet_species_display.dart';
 import '../../domain/id_card.dart';
 
 /// 学生卡（Story 6-8，bug 20260721-330）逻辑画布：底图 `student_front_bg.png` 994×600 的 2×。
@@ -43,7 +44,7 @@ StudentFields buildStudentFields(IdCardData data) {
   return StudentFields(
     name: (data.name?.isNotEmpty == true ? data.name! : 'MOCHI').toUpperCase(),
     birthday: data.birthday == null ? '01-01-2022' : _dmy(data.birthday!),
-    species: _species(data.petType),
+    species: _species(data.petType, data.species),
     school: (data.school?.trim().isNotEmpty == true)
         ? data.school!.trim().toUpperCase()
         : 'TAILTOPIA ACADEMY',
@@ -55,11 +56,9 @@ StudentFields buildStudentFields(IdCardData data) {
   );
 }
 
-String _species(String? petType) => switch (petType) {
-      'CAT' => 'KUCING',
-      'DOG' => 'ANJING',
-      _ => 'HEWAN',
-    };
+/// V1.5.0 pet-species：转调统一函数（卡快照细分类型优先，旧卡按大类）。
+String _species(String? petType, String? species) =>
+    petSpeciesView(species: species, petType: petType).cardNameId.toUpperCase();
 
 String _dmy(DateTime d) => '${_p2(d.day)}-${_p2(d.month)}-${d.year}';
 String _p2(int n) => n.toString().padLeft(2, '0');

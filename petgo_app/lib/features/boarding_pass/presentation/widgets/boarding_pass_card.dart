@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_image.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
 import '../../../place/domain/place_summary.dart';
 import '../../../place/presentation/widgets/place_stamp_view.dart';
+import '../../../profile/domain/pet_age.dart';
 import '../../domain/boarding_pass.dart';
 
 /// 卡面字段标签：机票版式的固定英文，**不进 ARB**（两语同形，与航空登机牌一致；翻成印尼语反而不像机票）。
@@ -221,12 +222,7 @@ class BoardingPassCard extends StatelessWidget {
   /// Breed 栏 =「物种 + 品种」（设计稿「Kucing Domestic」；物种按界面语言本地化）。缺哪段省哪段，都缺 → 「—」。
   static String _breedLine(BuildContext context, BoardingPassDetail p) {
     final l10n = AppLocalizations.of(context);
-    final species = switch (p.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+    final species = petSpeciesLabel(l10n, p.petType, species: p.species); // V1.5.0 pet-species：统一函数
     final parts = [?species, ?p.breed];
     return parts.isEmpty ? '—' : parts.join(' ');
   }

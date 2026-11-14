@@ -41,6 +41,7 @@ class PetSwitcher extends ConsumerWidget {
                 name: p.name,
                 avatarUrl: p.avatarUrl,
                 petType: p.petType,
+                species: p.species,
                 birthday: p.birthday,
                 tailsonalityBadge: null,
                 // 切换器不画 diary 角标（UI 稿 B1 只有头像 + 名字）。

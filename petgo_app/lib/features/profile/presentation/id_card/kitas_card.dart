@@ -41,7 +41,7 @@ KitasFields buildKitasFields(IdCardData data) {
   final cardNo = data.cardNo;
   return KitasFields(
     nama: newCardTrimOrNull(data.name) ?? NewCardDefaults.nama,
-    spesies: NewCardDefaults.spesies(data.petType),
+    spesies: NewCardDefaults.spesies(data.petType, species: data.species),
     // 品种空 → `-`（同 KTP）。
     ras: newCardTrimOrNull(data.breed) ?? '-',
     tanggalLahir: data.birthday == null ? NewCardDefaults.tanggalLahir : newCardDmy(data.birthday!),

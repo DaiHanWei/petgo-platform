@@ -5,6 +5,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
+import '../domain/pet_species_display.dart';
 import '../domain/pet_age.dart';
 
 /// 宠物名片公开分享页（FR-14 · namecard.html 1:1 还原）。
@@ -33,8 +34,12 @@ class PetCardPage extends ConsumerWidget {
     final ageLine = age.isUnderOneMonth
         ? formatPetAge(l10n, profile?.birthday)
         : l10n.petCardYears(age.years);
+    // V1.5.0 pet-species：统一函数。无档案（示例名片 Mochi）仍按猫；有档案时未知值兜底「其他」（原先兜底成猫）。
+    final speciesView = profile == null
+        ? petSpeciesView(petType: 'CAT')
+        : petSpeciesView(species: profile.species, petType: profile.petType);
     final breedLine = [
-      _speciesLabel(l10n, profile?.petType),
+      speciesView.label(l10n),
       if (profile?.breed != null && profile!.breed!.isNotEmpty) profile.breed!,
       ?ageLine,
     ].join(' · ');
@@ -93,7 +98,7 @@ class PetCardPage extends ConsumerWidget {
                             BoxShadow(color: AppColors.mint.withValues(alpha: 0.12), blurRadius: 0, spreadRadius: 8),
                           ],
                         ),
-                        child: const Text('🐱', style: TextStyle(fontSize: 42)),
+                        child: Text(speciesView.emoji, style: const TextStyle(fontSize: 42)),
                       ),
                       const SizedBox(height: 12),
                       Text(name,
@@ -323,17 +328,6 @@ class PetCardPage extends ConsumerWidget {
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         ),
       );
-
-  static String _speciesLabel(AppLocalizations l10n, String? petType) {
-    switch (petType) {
-      case 'CAT':
-        return l10n.petTypeCat;
-      case 'DOG':
-        return l10n.petTypeDog;
-      default:
-        return l10n.petTypeCat;
-    }
-  }
 
   static String _badgeLabel(AppLocalizations l10n, String key) => switch (key) {
         'birthday' => l10n.petCardBadgeBirthday,

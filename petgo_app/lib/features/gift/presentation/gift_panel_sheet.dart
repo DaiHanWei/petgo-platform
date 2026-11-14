@@ -11,6 +11,7 @@ import '../../../shared/widgets/pay_channel_picker.dart';
 import '../data/gift_repository.dart';
 import '../domain/gift_catalog.dart';
 import '../domain/gift_send_result.dart';
+import '../../profile/domain/pet_age.dart';
 import 'gift_style.dart';
 
 /// 面板里选定的一份礼物（礼物 + 数量）。
@@ -314,12 +315,7 @@ class _GiftPanelSheetState extends ConsumerState<GiftPanelSheet> {
 
   /// 标题行：头像 32（双环）+ 「Kirim hadiah untuk {petName}」+ 物种 · 品种。
   Widget _titleRow(AppLocalizations l10n, GiftRecipient r) {
-    final species = switch (r.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+    final species = petSpeciesLabel(l10n, r.petType, species: r.species); // V1.5.0 pet-species：统一函数
     final sub = [?species, if (r.breed != null && r.breed!.isNotEmpty) r.breed!].join(' · ');
     final avatar = AppImage.provider(r.avatarUrl, thumbWidth: 96);
     return Padding(

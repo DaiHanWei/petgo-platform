@@ -32,10 +32,10 @@ class PetSlotPetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final locked = showLock && pet.isReadOnly;
-    Widget avatar = PetSpeciesAvatar(avatarUrl: pet.avatarUrl, petType: pet.petType, size: avatarSize);
+    Widget avatar = PetSpeciesAvatar(avatarUrl: pet.avatarUrl, petType: pet.petType, size: avatarSize, species: pet.species);
     if (locked) avatar = ColorFiltered(colorFilter: _greyscale, child: avatar);
     final meta = [
-      ?petSpeciesLabel(l10n, pet.petType),
+      ?petSpeciesLabel(l10n, pet.petType, species: pet.species),
       ?formatPetAge(l10n, pet.birthday)?.replaceAll(' ', ' '),
     ].join(' · ');
     return Row(

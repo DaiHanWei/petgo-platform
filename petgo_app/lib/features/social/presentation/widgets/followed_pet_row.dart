@@ -9,6 +9,8 @@ import '../../../../shared/widgets/app_image.dart';
 import '../../../auth/domain/auth_guard.dart';
 import '../../../profile/presentation/visitor_archive_view.dart';
 import '../../domain/followed_pet.dart';
+import '../../../profile/domain/pet_age.dart';
+import '../../../profile/domain/pet_species_display.dart';
 import 'pet_follow_button.dart';
 
 /// 关注列表 Hewan 的一行（V1.4.2 social-topic · Story 1.5 · AC2 / AC3 · UI 稿 A6 / A7 / A9）。
@@ -26,21 +28,14 @@ class FollowedPetRow extends ConsumerWidget {
   final bool showButton;
 
   /// 无头像按物种 emoji 占位（同 `pet_info_card.dart` 的规则）。
-  static String placeholderEmoji(String? petType) => switch (petType) {
-        'CAT' => '🐱',
-        'DOG' => '🐶',
-        _ => '🐾',
-      };
+  /// V1.5.0 pet-species：转调统一函数（旧签名保留，新增可选 [species]）。
+  static String placeholderEmoji(String? petType, {String? species}) =>
+      petSpeciesView(species: species, petType: petType).emoji;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final species = switch (pet.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+    final species = petSpeciesLabel(l10n, pet.petType, species: pet.species); // V1.5.0 pet-species：统一函数
     final owner = pet.ownerNickname;
     final subtitle = [
       ?species,
@@ -110,7 +105,7 @@ class FollowedPetRow extends ConsumerWidget {
   }
 
   Widget _avatar() {
-    final emoji = Text(placeholderEmoji(pet.petType), style: const TextStyle(fontSize: 20));
+    final emoji = Text(placeholderEmoji(pet.petType, species: pet.species), style: const TextStyle(fontSize: 20));
     final provider = AppImage.provider(pet.avatarUrl, thumbWidth: 120);
     return Container(
       key: ValueKey('followedPetAvatar_${pet.petId}'),

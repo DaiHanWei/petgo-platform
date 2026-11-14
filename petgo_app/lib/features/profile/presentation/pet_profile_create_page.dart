@@ -25,6 +25,7 @@ import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pending_archive.dart';
 import '../domain/profile_created_flow.dart';
+import '../domain/pet_species_display.dart';
 import 'widgets/pet_form_fields.dart';
 
 /// 宠物档案创建表单（Story 2.2 · F1）。
@@ -470,7 +471,8 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                         ? (_uploading
                             ? const CircularProgressIndicator()
                             // 按物种占位（同编辑页口径；原先恒为 🐱，L2 第三轮 P3）。
-                            : Text(switch (_petType) { 'DOG' => '🐶', 'OTHER' => '🐾', _ => '🐱' },
+                            // V1.5.0 pet-species：统一函数；未选类型仍是 🐱（原口径）。
+                            : Text(_petType == null ? '🐱' : petSpeciesView(petType: _petType).emoji,
                                 style: const TextStyle(fontSize: 38)))
                         : ClipOval(
                             child: AppImage.widget(_avatarUrl!,

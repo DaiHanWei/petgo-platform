@@ -192,6 +192,7 @@ class _GiftDetailZoneState extends ConsumerState<GiftDetailZone> {
               name: p.name,
               avatarUrl: p.avatarUrl,
               petType: linked[p.petId]?.petType,
+              species: linked[p.petId]?.species,
               birthday: linked[p.petId]?.birthday),
       ],
       title: l10n.giftPickPetTitle,

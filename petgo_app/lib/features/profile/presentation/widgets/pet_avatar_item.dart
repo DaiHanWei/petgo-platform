@@ -38,6 +38,7 @@ class PetAvatarItem extends StatelessWidget {
     this.selected = false,
     this.compact = false,
     this.lockKey,
+    this.species,
   });
 
   /// 改动前的头像直径（CircleAvatar radius 32）。
@@ -46,6 +47,9 @@ class PetAvatarItem extends StatelessWidget {
   final String name;
   final String? avatarUrl;
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species）；null 时按 [petType] 大类显示。
+  final String? species;
   final DateTime? birthday;
   final String? tailsonalityBadge;
 
@@ -85,6 +89,7 @@ class PetAvatarItem extends StatelessWidget {
       key: ValueKey('petAvatar-$avatarUrl'),
       avatarUrl: avatarUrl,
       petType: petType,
+      species: species,
       size: size,
       thumbWidth: 200,
     );
@@ -208,7 +213,7 @@ class PetAvatarItem extends StatelessWidget {
 
   /// 「物种 · 年龄」—— **不含品种、不含 diary 数**（diary 数在头像角标上，UI 稿 A2）。
   String _meta(AppLocalizations l10n) => [
-        ?petSpeciesLabel(l10n, petType),
+        ?petSpeciesLabel(l10n, petType, species: species),
         // 不满 1 个月按天表达，避免「0th 0bln」（与档案页同一出口）。
         ?formatPetAge(l10n, birthday)?.replaceAll(' ', '\u00A0'),
       ].join(' · ');

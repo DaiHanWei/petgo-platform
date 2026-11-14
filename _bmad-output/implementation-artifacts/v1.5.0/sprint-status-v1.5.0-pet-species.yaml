@@ -58,8 +58,8 @@ development_status:
   2-1-后台用户详情物种显示与代改: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-app物种清单与统一显示函数: ready-for-dev
+  epic-3: in-progress
+  3-1-app物种清单与统一显示函数: review
   3-2-app物种类型品种选择抽屉: ready-for-dev
   3-3-app编辑档案改物种类型与冷却期: ready-for-dev
   3-4-app身份证建卡物种选择抽屉: ready-for-dev

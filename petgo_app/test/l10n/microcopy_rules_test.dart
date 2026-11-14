@@ -122,6 +122,8 @@ const _sameInBothLocales = {
   'tailtopia', 'pawcoin', 'qris', 'gopay', 'ovo', 'ktp', 'hd',
   // V1.3.2 Story 2.3：性格测试产品名，三语同形。
   'tailsonality',
+  // V1.5.0 pet-species Story 3.1：宠物类型名，PRD 3.1 表与 UI 稿文案表印尼语与英语同形（Hamster / Sugar Glider / Otter）。
+  'hamster', 'sugar', 'glider', 'otter',
   // v1.4.2 shop Story 8.1：推荐依据年龄段「senior」—— 印尼语借词与英语同形（PRD §6 A1 两列同写）。
   'senior',
   // V1.3.2 Story 3.2：能量档位 High / Low 与代号后缀 H / L 对应，story l10n 表规定两语同写（「Level energi High」）。

@@ -21,6 +21,7 @@ class RecommendedPet {
     required this.companionDays,
     this.birthday,
     this.coverImageUrl,
+    this.species,
   });
 
   /// 点击落点用它 —— 复用 Story 2.3 的**站内**访客入口 `/pets/{petId}`，不新建通道（AC5）。
@@ -30,6 +31,9 @@ class RecommendedPet {
   /// 宠物档案头像（小圆头像）。
   final String avatarUrl;
   final String petType;
+
+  /// 细分类型（V1.5.0 pet-species，后端 `species`；可空，显示走 `petSpeciesView(species:, petType:)`）。
+  final String? species;
 
   /// 陪伴天数（「一起 238 天」）—— 后端与 H5 名片同一个算法算好下发。
   final int companionDays;
@@ -45,6 +49,7 @@ class RecommendedPet {
         name: (json['name'] ?? '') as String,
         avatarUrl: (json['avatarUrl'] ?? '') as String,
         petType: (json['petType'] ?? '') as String,
+        species: json['species'] as String?,
         companionDays: (json['companionDays'] ?? 0) as int,
         birthday: json['birthday'] == null
             ? null
