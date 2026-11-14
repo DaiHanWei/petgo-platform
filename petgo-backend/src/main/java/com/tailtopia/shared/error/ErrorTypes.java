@@ -220,6 +220,18 @@ public final class ErrorTypes {
      */
     public static final URI SHOP_PRODUCT_DELISTED = URI.create(BASE + "product-delisted");
 
+    /** V1.5.0 gift-pack Story 4-1（架构 §5）：发放数量不在 1..100（422）。 */
+    public static final URI ENTITLEMENT_QUANTITY_INVALID = URI.create(BASE + "entitlement-quantity-invalid");
+
+    /** V1.5.0 gift-pack Story 4-1：发放对象不存在 / 已注销 / 注销受理中 / 虚拟号（422）。 */
+    public static final URI ENTITLEMENT_USER_INACTIVE = URI.create(BASE + "entitlement-user-inactive");
+
+    /** V1.5.0 gift-pack Story 4-1（D-31）：「任意款」KTP 次数只能由运营活动发放（422）。 */
+    public static final URI ENTITLEMENT_TYPE_NOT_ALLOWED = URI.create(BASE + "entitlement-type-not-allowed");
+
+    /** V1.5.0 gift-pack Story 4-1（D-25）：可用免费次数不足（409）。 */
+    public static final URI ENTITLEMENT_INSUFFICIENT = URI.create(BASE + "entitlement-insufficient");
+
     private ErrorTypes() {
     }
 }

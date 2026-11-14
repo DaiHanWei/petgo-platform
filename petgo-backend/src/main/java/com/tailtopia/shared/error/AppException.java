@@ -362,4 +362,24 @@ public class AppException extends RuntimeException {
     public static AppException productDelisted(String detail) {
         return new AppException(HttpStatus.GONE, ErrorTypes.SHOP_PRODUCT_DELISTED, detail);
     }
+
+    /** V1.5.0 gift-pack Story 4-1：发放数量不在 1..100（422）。 */
+    public static AppException entitlementQuantityInvalid(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.ENTITLEMENT_QUANTITY_INVALID, detail);
+    }
+
+    /** V1.5.0 gift-pack Story 4-1：发放对象无效（不存在 / 注销 / 注销中 / 虚拟号，422）。 */
+    public static AppException entitlementUserInactive(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.ENTITLEMENT_USER_INACTIVE, detail);
+    }
+
+    /** V1.5.0 gift-pack Story 4-1（D-31）：该来源不允许发此类型（422）。 */
+    public static AppException entitlementTypeNotAllowed(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.ENTITLEMENT_TYPE_NOT_ALLOWED, detail);
+    }
+
+    /** V1.5.0 gift-pack Story 4-1（D-25）：可用免费次数不足（409）。 */
+    public static AppException entitlementInsufficient(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.ENTITLEMENT_INSUFFICIENT, detail);
+    }
 }

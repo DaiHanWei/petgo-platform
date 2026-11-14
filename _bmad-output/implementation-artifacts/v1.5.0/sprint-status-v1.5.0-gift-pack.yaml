@@ -39,7 +39,7 @@
 # 🔴 本线不改 ck_notifications_type（地基 V20261114_1000 所有）。
 
 generated: 2026-11-14
-last_updated: 2026-11-14
+last_updated: 2026-11-14  # 云端 4-1 → review
 project: TailTopia V1.5.0 gift-pack
 project_key: NOKEY
 tracking_system: file-system
@@ -47,8 +47,8 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.5.0"
 
 development_status:
   # —— 提前执行：⑥ 契约 ——
-  epic-4: backlog
-  4-1-礼包权益次数表与发放扣减接口: ready-for-dev
+  epic-4: in-progress
+  4-1-礼包权益次数表与发放扣减接口: review
 
   # —— 送礼优化 ——
   epic-1: backlog
