@@ -153,6 +153,10 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
     @Query("delete from ContentLike l where l.postId = :postId and l.userId = :userId")
     int deleteByPostIdAndUserId(@Param("postId") long postId, @Param("userId") long userId);
 
+    /** 自动点赞选号（V1.5.0 FR-216）：给定的号里哪些已经赞过这帖（这些号不再选）。 */
+    @Query("SELECT l.userId FROM ContentLike l WHERE l.postId = :postId AND l.userId IN :ids")
+    List<Long> findLikerIdsAmong(@Param("postId") long postId, @Param("ids") Collection<Long> ids);
+
     /**
      * 自动点赞写入（V1.5.0 likes FR-215）：已赞则不插，返回插入行数（0 / 1）。
      * 不靠异常判重——外层事务里吞唯一约束异常会把事务标成 rollback-only。

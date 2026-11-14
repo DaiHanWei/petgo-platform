@@ -98,6 +98,10 @@ import tools.jackson.databind.ObjectMapper;
             // V1.4.2 shop Story 3.3：电商定时查单会把共享库里别的测试遗留的电商意图按 stub 查单推进（EXPIRED）；
             // 首延 1 天 = 测试期内不自动跑，由 ShopPaymentWindowIntegrationTest 直接调 run() 验证。
             "petgo.shop.payment-reconcile-initial-delay-ms=86400000",
+            // V1.5.0 likes Story 2.3：自动点赞派发器（默认首延 30s、每 60s）即使开关关也会把共享库里过窗口的 PLANNED
+            // 收成 MISSED、ACTIVE run 收成 DONE，与拨钟的派发用例并发推进状态。首延 1 天 = 测试期内不自动跑；
+            // 派发逻辑由 AutoLikeDispatchIntegrationTest 直接调用验证。
+            "petgo.auto-like.dispatch-initial-delay-ms=86400000",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
