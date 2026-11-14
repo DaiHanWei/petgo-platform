@@ -16,7 +16,13 @@ public record HealthRecordResponse(
         LocalDate eventDate,
         String note,
         boolean editable,
-        Instant createdAt) {
+        Instant createdAt,
+        // ===== V1.5.0 健康记录提醒 Story 1.1 =====
+        String vaccinePreset,
+        Integer dose,
+        String dewormType,
+        Integer productDurationMonths,
+        LocalDate nextDate) {
 
     public static HealthRecordResponse from(HealthRecord r) {
         return new HealthRecordResponse(
@@ -27,6 +33,11 @@ public record HealthRecordResponse(
                 r.getEventDate(),
                 r.getNote(),
                 true,
-                r.getCreatedAt());
+                r.getCreatedAt(),
+                r.getVaccinePreset() == null ? null : r.getVaccinePreset().name(),
+                r.getDose(),
+                r.getDewormType() == null ? null : r.getDewormType().name(),
+                r.getProductDurationMonths(),
+                r.getNextDate());
     }
 }

@@ -68,6 +68,9 @@ public final class MilestoneAutoCompleteMap {
         put(t, MilestoneAutoEvent.HEALTH_RECORD_VACCINE, "C-M3", "D-M3", "G-M2");
         put(t, MilestoneAutoEvent.HEALTH_RECORD_DEWORM, "C-M4", "D-M4", null);
         put(t, MilestoneAutoEvent.HEALTH_RECORD_NEUTER, "C-M9", "D-M9", null);
+        // V1.5.0 FR-161（架构 Z-10）：Kontrol dokter 只点亮通用清单 G-M2「第一次健康检查 / 疫苗」——该节点本义就是
+        // 「健康检查或疫苗」，与录疫苗共用同一 code 是刻意的；猫狗清单没有对应节点。
+        put(t, MilestoneAutoEvent.HEALTH_RECORD_VET_VISIT, null, null, "G-M2");
         // 真人问诊结束 →「第一次看兽医」：猫狗 M5，通用宠物 G-M1（Story 1.2 接入，AD-A5.2）。
         // ⚠️ AI 分诊不发 ConsultClosedEvent（模块隔离），无需也不要再加一层 AI 判断分支。
         put(t, MilestoneAutoEvent.CONSULT_CLOSED, "C-M5", "D-M5", "G-M1");

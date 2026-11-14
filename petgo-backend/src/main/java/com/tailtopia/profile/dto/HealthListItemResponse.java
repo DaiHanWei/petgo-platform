@@ -19,19 +19,31 @@ public record HealthListItemResponse(
         String note,
         String symptomSummary,
         String aiLevel,
-        LocalDate eventDate) {
+        LocalDate eventDate,
+        // ===== V1.5.0 健康记录提醒 Story 1.1（架构增量 §6.1）：存储原值，编辑表单用 =====
+        String vaccinePreset,
+        Integer dose,
+        String dewormType,
+        Integer productDurationMonths,
+        LocalDate nextDate) {
 
     public static HealthListItemResponse ofRecord(HealthRecord r) {
         return new HealthListItemResponse(
                 "RECORD", r.getId(), true, r.getType().name(),
                 r.getCustomName(), r.getVaccineName(), r.getNote(),
-                null, null, r.getEventDate());
+                null, null, r.getEventDate(),
+                r.getVaccinePreset() == null ? null : r.getVaccinePreset().name(),
+                r.getDose(),
+                r.getDewormType() == null ? null : r.getDewormType().name(),
+                r.getProductDurationMonths(),
+                r.getNextDate());
     }
 
     public static HealthListItemResponse ofConsult(HealthEvent e) {
         return new HealthListItemResponse(
                 "CONSULT", e.getId(), false, "CONSULT",
                 null, null, null,
-                e.getSymptomSummary(), e.getAiLevel(), e.getEventDate());
+                e.getSymptomSummary(), e.getAiLevel(), e.getEventDate(),
+                null, null, null, null, null);
     }
 }

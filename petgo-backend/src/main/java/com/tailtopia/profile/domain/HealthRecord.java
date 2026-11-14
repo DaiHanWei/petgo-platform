@@ -46,6 +46,35 @@ public class HealthRecord {
     @Column(name = "note", length = 100)
     private String note;
 
+    // ===== V1.5.0 健康记录提醒 Story 1.1（V20261115_0100）=====
+    // 🔒 全部是健康数据（PII）：日志禁记。整数列一律 Integer ↔ INTEGER（禁 SMALLINT，validate 会红）。
+
+    /** 下次日期（WIB 日历日）。null = 未设 / 无。 */
+    @Column(name = "next_date")
+    private LocalDate nextDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vaccine_preset", length = 24)
+    private VaccinePreset vaccinePreset;
+
+    /** 剂次 1–5；只在系列预设上落库。 */
+    @Column(name = "dose")
+    private Integer dose;
+
+    /** 驱虫类型；null = 存量未分型（Legacy）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deworm_type", length = 16)
+    private DewormType dewormType;
+
+    /** 产品时长（月）1 / 3 / 8；只在 EXTERNAL 落库。 */
+    @Column(name = "product_duration_months")
+    private Integer productDurationMonths;
+
+    /** 记录来源；新建默认 APP（Java 侧显式赋值，与列默认值一致）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "record_origin", nullable = false, length = 16)
+    private RecordOrigin recordOrigin = RecordOrigin.APP;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -125,6 +154,54 @@ public class HealthRecord {
 
     public void setNote(String note) {
         this.note = note;
+    }
+
+    public LocalDate getNextDate() {
+        return nextDate;
+    }
+
+    public void setNextDate(LocalDate nextDate) {
+        this.nextDate = nextDate;
+    }
+
+    public VaccinePreset getVaccinePreset() {
+        return vaccinePreset;
+    }
+
+    public void setVaccinePreset(VaccinePreset vaccinePreset) {
+        this.vaccinePreset = vaccinePreset;
+    }
+
+    public Integer getDose() {
+        return dose;
+    }
+
+    public void setDose(Integer dose) {
+        this.dose = dose;
+    }
+
+    public DewormType getDewormType() {
+        return dewormType;
+    }
+
+    public void setDewormType(DewormType dewormType) {
+        this.dewormType = dewormType;
+    }
+
+    public Integer getProductDurationMonths() {
+        return productDurationMonths;
+    }
+
+    public void setProductDurationMonths(Integer productDurationMonths) {
+        this.productDurationMonths = productDurationMonths;
+    }
+
+    public RecordOrigin getRecordOrigin() {
+        return recordOrigin;
+    }
+
+    public void setRecordOrigin(RecordOrigin recordOrigin) {
+        this.recordOrigin = recordOrigin;
     }
 
     public Instant getCreatedAt() {

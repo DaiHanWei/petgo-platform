@@ -33,7 +33,7 @@ class HealthRecordServiceTest {
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final HealthRecordService service =
             new HealthRecordService(records, healthEvents, new PetResolver(profiles), events,
-                    new PetWriteGuard(profiles));
+                    new PetWriteGuard(profiles), profiles);
 
     @BeforeEach
     void setUp() {
@@ -85,13 +85,18 @@ class HealthRecordServiceTest {
         assertThat(cap.getValue().getVaccineName()).isEqualTo("Rabies");
 
         // 里程碑第四路径（AC2）：create 发 HealthRecordCreatedEvent 供 listener 完成 M3。
+        // V1.5.0 Story 1.1 · AC6：另发一条 HealthRecordChangedEvent（提醒重建），两者互不替代。
         ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
-        verify(events).publishEvent(ev.capture());
-        assertThat(ev.getValue()).isInstanceOf(
-                com.tailtopia.profile.event.HealthRecordCreatedEvent.class);
+        verify(events, org.mockito.Mockito.times(2)).publishEvent(ev.capture());
+        var created = ev.getAllValues().stream()
+                .filter(com.tailtopia.profile.event.HealthRecordCreatedEvent.class::isInstance)
+                .map(com.tailtopia.profile.event.HealthRecordCreatedEvent.class::cast)
+                .toList();
+        assertThat(created).hasSize(1);
         // V1.4.0 multi-pet（Story 1.3 · AC6）：事件带录入记录的这只宠物。
-        assertThat(((com.tailtopia.profile.event.HealthRecordCreatedEvent) ev.getValue()).petProfileId())
-                .isEqualTo(5L);
+        assertThat(created.get(0).petProfileId()).isEqualTo(5L);
+        assertThat(ev.getAllValues()).anySatisfy(o -> assertThat(o)
+                .isInstanceOf(com.tailtopia.profile.event.HealthRecordChangedEvent.class));
     }
 
     @Test
@@ -195,5 +200,311 @@ class HealthRecordServiceTest {
         when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.create(7L, 99L, req("VACCINE", null)))
                 .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(404));
+    }
+
+    // ================= V1.5.0 健康记录提醒 Story 1.1 · AC4 / AC6：按客户端版本分流 =================
+
+    private static final LocalDate EVENT = LocalDate.of(2026, 10, 1);
+
+    /** 真实宠物（物种 / 性别 / 绝育按需），挂在 petId 上；save 回传入参并补 id。 */
+    private PetProfile realPet(long id, com.tailtopia.profile.domain.PetType type) {
+        PetProfile p = com.tailtopia.profile.support.PetFixtures.pet(7L, id, type, java.time.Instant.EPOCH);
+        when(profiles.findByIdAndOwnerId(id, 7L)).thenReturn(Optional.of(p));
+        when(records.save(any())).thenAnswer(inv -> {
+            HealthRecord r = inv.getArgument(0);
+            if (r.getId() == null) {
+                org.springframework.test.util.ReflectionTestUtils.setField(r, "id", 100L);
+            }
+            return r;
+        });
+        return p;
+    }
+
+    private static HealthRecordCreateRequest v150(String type, String vaccineName, String preset, Integer dose,
+            String deworm, Integer months, LocalDate nextDate, Boolean clear) {
+        return new HealthRecordCreateRequest(type, null, vaccineName, EVENT, null, preset, dose, deworm, months,
+                nextDate, clear);
+    }
+
+    private HealthRecord savedRecord() {
+        ArgumentCaptor<HealthRecord> cap = ArgumentCaptor.forClass(HealthRecord.class);
+        verify(records).save(cap.capture());
+        return cap.getValue();
+    }
+
+    private HealthRecord existing(long id, long petId, HealthRecordType type) {
+        HealthRecord r = HealthRecord.create(petId, type, null, null, EVENT, "old");
+        org.springframework.test.util.ReflectionTestUtils.setField(r, "id", id);
+        when(records.findByIdAndPetProfileId(id, petId)).thenReturn(Optional.of(r));
+        return r;
+    }
+
+    @Test
+    void v150CreateWritesNewFieldsAndAppOrigin() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        service.create(7L, 20L, v150("VACCINE", "F4 (Tetracat)", "F4", 2, null, null, EVENT.plusWeeks(4), null), true);
+        HealthRecord r = savedRecord();
+        assertThat(r.getVaccinePreset()).isEqualTo(com.tailtopia.profile.domain.VaccinePreset.F4);
+        assertThat(r.getDose()).isEqualTo(2);
+        assertThat(r.getNextDate()).isEqualTo(EVENT.plusWeeks(4));
+        assertThat(r.getRecordOrigin()).isEqualTo(com.tailtopia.profile.domain.RecordOrigin.APP);
+    }
+
+    @Test
+    void v150SingleDosePresetDropsDose() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        service.create(7L, 20L, v150("VACCINE", "Rabies", "RABIES", 3, null, null, null, null), true);
+        assertThat(savedRecord().getDose()).isNull();
+    }
+
+    @Test
+    void v150PresetForWrongSpecies400() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        assertThatThrownBy(() -> service.create(7L, 20L,
+                v150("VACCINE", "Puppy DP", "PUPPY_DP", 1, null, null, null, null), true))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(422));
+        verify(records, never()).save(any());
+    }
+
+    @Test
+    void v150OtherSpeciesStoresNoPreset() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.OTHER);
+        service.create(7L, 20L, v150("VACCINE", "Vaksin X", "F4", 1, null, null, null, null), true);
+        HealthRecord r = savedRecord();
+        assertThat(r.getVaccinePreset()).isNull();
+        assertThat(r.getDose()).isNull();
+        assertThat(r.getVaccineName()).isEqualTo("Vaksin X");
+    }
+
+    @Test
+    void v150DewormWithoutType400() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.DOG);
+        assertThatThrownBy(() -> service.create(7L, 20L, v150("DEWORM", null, null, null, null, null, null, null), true))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(422));
+    }
+
+    @Test
+    void v150HeartwormOnCat400() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        assertThatThrownBy(() -> service.create(7L, 20L,
+                v150("DEWORM", null, null, null, "HEARTWORM", null, null, null), true))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void v150ExternalDefaultsDurationToOneAndFleaWormKeepsNull() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.DOG);
+        service.create(7L, 20L, v150("DEWORM", null, null, null, "EXTERNAL", null, null, null), true);
+        assertThat(savedRecord().getProductDurationMonths()).isEqualTo(1);
+
+        org.mockito.Mockito.clearInvocations(records);
+        service.create(7L, 20L, v150("DEWORM", null, null, null, "FLEA_WORM", 3, null, null), true);
+        HealthRecord r = savedRecord();
+        assertThat(r.getDewormType()).isEqualTo(com.tailtopia.profile.domain.DewormType.FLEA_WORM);
+        assertThat(r.getProductDurationMonths()).isNull();
+    }
+
+    @Test
+    void v150InvalidDuration400() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.DOG);
+        assertThatThrownBy(() -> service.create(7L, 20L,
+                v150("DEWORM", null, null, null, "EXTERNAL", 2, null, null), true))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void v150NextDateRangeEnforced() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        assertThatThrownBy(() -> service.create(7L, 20L,
+                v150("CUSTOM", null, null, null, null, null, EVENT, null), true))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.create(7L, 20L,
+                v150("VET_VISIT", null, null, null, null, null, EVENT.plusYears(3).plusDays(1), null), true))
+                .isInstanceOf(AppException.class);
+        service.create(7L, 20L, v150("VET_VISIT", null, null, null, null, null, EVENT.plusYears(3), null), true);
+        assertThat(savedRecord().getNextDate()).isEqualTo(EVENT.plusYears(3));
+    }
+
+    @Test
+    void v150ClearNextDateOnEditAndBackfillBecomesApp() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord r = existing(30L, 20L, HealthRecordType.VET_VISIT);
+        r.setNextDate(EVENT.plusMonths(6));
+        r.setRecordOrigin(com.tailtopia.profile.domain.RecordOrigin.BACKFILL);
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest(null, null, null, null, null,
+                null, null, null, null, null, true), true);
+        assertThat(r.getNextDate()).isNull();
+        assertThat(r.getRecordOrigin()).isEqualTo(com.tailtopia.profile.domain.RecordOrigin.APP);
+    }
+
+    @Test
+    void v150EditWithoutNextDateKeepsItAndOrigin() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord r = existing(30L, 20L, HealthRecordType.CUSTOM);
+        r.setCustomName("Grooming");
+        r.setNextDate(EVENT.plusMonths(1));
+        r.setRecordOrigin(com.tailtopia.profile.domain.RecordOrigin.BACKFILL);
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest(null, null, null, null, "note"), true);
+        assertThat(r.getNextDate()).isEqualTo(EVENT.plusMonths(1));
+        assertThat(r.getRecordOrigin()).isEqualTo(com.tailtopia.profile.domain.RecordOrigin.BACKFILL);
+    }
+
+    @Test
+    void v150EditingLegacyUntypedDewormNoteOnly400() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.DOG);
+        existing(30L, 20L, HealthRecordType.DEWORM);
+        assertThatThrownBy(() -> service.update(7L, 20L, 30L,
+                new HealthRecordUpdateRequest(null, null, null, null, "just note"), true))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(422));
+    }
+
+    @Test
+    void legacyCreateIgnoresNewFieldsAndMarksLegacyOrigin() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        service.create(7L, 20L, v150("VACCINE", "Tricat", "F3", 2, null, null, EVENT.plusYears(1), null), false);
+        HealthRecord r = savedRecord();
+        assertThat(r.getVaccinePreset()).isNull();
+        assertThat(r.getDose()).isNull();
+        assertThat(r.getNextDate()).isNull();
+        assertThat(r.getRecordOrigin()).isEqualTo(com.tailtopia.profile.domain.RecordOrigin.LEGACY_APP);
+    }
+
+    @Test
+    void legacyUntypedDewormAllowed() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.DOG);
+        service.create(7L, 20L, req("DEWORM", null), false);
+        assertThat(savedRecord().getDewormType()).isNull();
+    }
+
+    @Test
+    void legacyEditKeepsNewFields() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord r = existing(30L, 20L, HealthRecordType.VACCINE);
+        r.setVaccinePreset(com.tailtopia.profile.domain.VaccinePreset.F4);
+        r.setDose(2);
+        r.setNextDate(EVENT.plusWeeks(4));
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest(null, null, null, null, "note",
+                "RABIES", 1, null, null, EVENT.plusYears(2), true), false);
+        assertThat(r.getVaccinePreset()).isEqualTo(com.tailtopia.profile.domain.VaccinePreset.F4);
+        assertThat(r.getDose()).isEqualTo(2);
+        assertThat(r.getNextDate()).isEqualTo(EVENT.plusWeeks(4));
+    }
+
+    @Test
+    void legacyVetVisitRejected() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        assertThatThrownBy(() -> service.create(7L, 20L, req("VET_VISIT", null), false))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(422));
+        existing(30L, 20L, HealthRecordType.CUSTOM).setCustomName("x");
+        assertThatThrownBy(() -> service.update(7L, 20L, 30L,
+                new HealthRecordUpdateRequest("VET_VISIT", null, null, null, null), false))
+                .isInstanceOf(AppException.class);
+        verify(records, never()).save(any());
+    }
+
+    @Test
+    void legacyListFiltersVetVisitV150KeepsIt() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord visit = HealthRecord.create(20L, HealthRecordType.VET_VISIT, null, null, EVENT, null);
+        org.springframework.test.util.ReflectionTestUtils.setField(visit, "id", 1L);
+        HealthRecord vac = HealthRecord.create(20L, HealthRecordType.VACCINE, null, "F4", EVENT, null);
+        org.springframework.test.util.ReflectionTestUtils.setField(vac, "id", 2L);
+        when(records.findByPetProfileIdOrderByEventDateDescIdDesc(20L)).thenReturn(java.util.List.of(visit, vac));
+        when(healthEvents.findByPetId(20L)).thenReturn(java.util.List.of());
+        assertThat(service.timeline(7L, 20L, false)).extracting(i -> i.type()).containsExactly("VACCINE");
+        assertThat(service.timeline(7L, 20L, true)).extracting(i -> i.type())
+                .containsExactlyInAnyOrder("VET_VISIT", "VACCINE");
+    }
+
+    @Test
+    void neuterRecordMarksPetNeuteredAndDeleteDoesNotRevert() {
+        PetProfile pet = realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        service.create(7L, 20L, req("NEUTER", null), true);
+        assertThat(pet.getNeuterStatus()).isEqualTo(com.tailtopia.profile.domain.NeuterStatus.NEUTERED);
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
+        verify(events, org.mockito.Mockito.atLeastOnce()).publishEvent(ev.capture());
+        assertThat(ev.getAllValues()).anySatisfy(o -> {
+            assertThat(o).isInstanceOf(com.tailtopia.profile.event.PetHealthProfileChangedEvent.class);
+            assertThat(((com.tailtopia.profile.event.PetHealthProfileChangedEvent) o).neuterChanged()).isTrue();
+        });
+
+        existing(31L, 20L, HealthRecordType.NEUTER);
+        service.delete(7L, 20L, 31L);
+        assertThat(pet.getNeuterStatus()).isEqualTo(com.tailtopia.profile.domain.NeuterStatus.NEUTERED);
+    }
+
+    @Test
+    void editingTypeToNeuterMarksPetNeutered() {
+        PetProfile pet = realPet(20L, com.tailtopia.profile.domain.PetType.DOG);
+        existing(30L, 20L, HealthRecordType.CUSTOM).setCustomName("x");
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest("NEUTER", null, null, null, null), false);
+        assertThat(pet.getNeuterStatus()).isEqualTo(com.tailtopia.profile.domain.NeuterStatus.NEUTERED);
+    }
+
+    @Test
+    void noteOnlyEditIsNotReminderRelevantOtherFieldIs() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        existing(30L, 20L, HealthRecordType.VET_VISIT);
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest(null, null, null, null, "new note"), true);
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest(null, null, null, EVENT.minusDays(1), null), true);
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
+        verify(events, org.mockito.Mockito.times(2)).publishEvent(ev.capture());
+        var changes = ev.getAllValues().stream()
+                .map(com.tailtopia.profile.event.HealthRecordChangedEvent.class::cast).toList();
+        assertThat(changes.get(0).reminderRelevant()).isFalse();
+        assertThat(changes.get(1).reminderRelevant()).isTrue();
+        assertThat(changes.get(1).change())
+                .isEqualTo(com.tailtopia.profile.event.HealthRecordChangedEvent.Change.UPDATED);
+    }
+
+    @Test
+    void deletePublishesDeletedChange() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        existing(30L, 20L, HealthRecordType.CUSTOM);
+        service.delete(7L, 20L, 30L);
+        verify(events).publishEvent(new com.tailtopia.profile.event.HealthRecordChangedEvent(7L, 20L, 30L,
+                com.tailtopia.profile.event.HealthRecordChangedEvent.Change.DELETED, true));
+    }
+
+    // ---- 复审修正（Story 1.1 code review） ----
+
+    @Test
+    void v150EditMovingEventDatePastStoredNextDate422() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord r = existing(30L, 20L, HealthRecordType.VET_VISIT);
+        r.setNextDate(EVENT.plusDays(28));
+        assertThatThrownBy(() -> service.update(7L, 20L, 30L,
+                new HealthRecordUpdateRequest(null, null, null, EVENT.plusDays(35), null), true))
+                .isInstanceOfSatisfying(AppException.class, e -> assertThat(e.getStatus().value()).isEqualTo(422));
+    }
+
+    @Test
+    void legacyTypeChangeDropsOtherTypesFields() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord r = existing(30L, 20L, HealthRecordType.VACCINE);
+        r.setVaccinePreset(com.tailtopia.profile.domain.VaccinePreset.F4);
+        r.setDose(2);
+        r.setNextDate(EVENT.plusWeeks(4));
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest("DEWORM", null, null, null, null), false);
+        assertThat(r.getVaccinePreset()).isNull();
+        assertThat(r.getDose()).isNull();
+        assertThat(r.getNextDate()).isEqualTo(EVENT.plusWeeks(4)); // Next date 不是类型专属字段，保留
+    }
+
+    @Test
+    void v150PresetChangeReplacesOldLabelButKeepsCustomName() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord r = existing(30L, 20L, HealthRecordType.VACCINE);
+        r.setVaccinePreset(com.tailtopia.profile.domain.VaccinePreset.F4);
+        r.setVaccineName("F4 (Tetracat)");
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest(null, null, null, null, null,
+                "RABIES", null, null, null, null, null), true);
+        assertThat(r.getVaccineName()).isEqualTo("Rabies");
+
+        r.setVaccineName("Vaksin dari klinik");
+        service.update(7L, 20L, 30L, new HealthRecordUpdateRequest(null, null, null, null, null,
+                "F3", 1, null, null, null, null), true);
+        assertThat(r.getVaccineName()).isEqualTo("Vaksin dari klinik");
+        assertThat(r.getVaccinePreset()).isEqualTo(com.tailtopia.profile.domain.VaccinePreset.F3);
     }
 }

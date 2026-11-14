@@ -160,6 +160,7 @@ public class MilestoneAutoCompleteListener {
             case VACCINE -> MilestoneAutoEvent.HEALTH_RECORD_VACCINE;
             case DEWORM -> MilestoneAutoEvent.HEALTH_RECORD_DEWORM;
             case NEUTER -> MilestoneAutoEvent.HEALTH_RECORD_NEUTER; // Story 5.1 新增（2026-07-29 产品确认）
+            case VET_VISIT -> MilestoneAutoEvent.HEALTH_RECORD_VET_VISIT; // V1.5.0 FR-161：只有通用清单 G-M2
             case MENSTRUATION, CUSTOM -> null;
         };
     }

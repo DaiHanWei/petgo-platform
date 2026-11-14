@@ -4,6 +4,7 @@ import com.tailtopia.profile.dto.HealthListItemResponse;
 import com.tailtopia.profile.dto.HealthRecordCreateRequest;
 import com.tailtopia.profile.dto.HealthRecordResponse;
 import com.tailtopia.profile.dto.HealthRecordUpdateRequest;
+import com.tailtopia.profile.service.ClientAppVersion;
 import com.tailtopia.profile.service.HealthRecordService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -51,33 +53,37 @@ public class HealthRecordController {
     /** 健康时间线混排（Story 7.2）：结构化记录（editable）+ 问诊存档（只读）按 event_date 倒序。无档案 → 404。 */
     @GetMapping
     public List<HealthListItemResponse> list(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "petId", required = false) Long petId) {
-        return service.timeline(currentUserId(jwt), petId);
+            @RequestParam(name = "petId", required = false) Long petId,
+            @RequestHeader(value = ClientAppVersion.HEADER, required = false) String appVersion) {
+        return service.timeline(currentUserId(jwt), petId, ClientAppVersion.isV150OrLater(appVersion));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public HealthRecordResponse create(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(name = "petId", required = false) Long petId,
+            @RequestHeader(value = ClientAppVersion.HEADER, required = false) String appVersion,
             @Valid @RequestBody HealthRecordCreateRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:health-record:write:" + ownerId, WRITE_LIMIT, WINDOW);
-        return service.create(ownerId, petId, req);
+        return service.create(ownerId, petId, req, ClientAppVersion.isV150OrLater(appVersion));
     }
 
     @PatchMapping("/{id}")
     public HealthRecordResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
             @RequestParam(name = "petId", required = false) Long petId,
+            @RequestHeader(value = ClientAppVersion.HEADER, required = false) String appVersion,
             @Valid @RequestBody HealthRecordUpdateRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:health-record:write:" + ownerId, WRITE_LIMIT, WINDOW);
-        return service.update(ownerId, petId, id, req);
+        return service.update(ownerId, petId, id, req, ClientAppVersion.isV150OrLater(appVersion));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
             @RequestParam(name = "petId", required = false) Long petId) {
+        // V1.5.0 Story 1.1：删除不涉及新字段，两种客户端同一行为，不读版本头。
         service.delete(currentUserId(jwt), petId, id);
     }
 

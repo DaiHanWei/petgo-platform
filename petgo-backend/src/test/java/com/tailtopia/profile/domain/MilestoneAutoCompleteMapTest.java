@@ -191,16 +191,32 @@ class MilestoneAutoCompleteMapTest {
         }
     }
 
-    /** 同一物种内不得两个事件指向同一个 code（否则两件不同的事会互相顶掉对方的完成态）。 */
+    /**
+     * 同一物种内不得两个事件指向同一个 code（否则两件不同的事会互相顶掉对方的完成态）。
+     *
+     * <p>唯一例外是显式登记的「同义事件」：V1.5.0 FR-161（架构 Z-10）通用清单 G-M2 的本义就是
+     * 「第一次健康检查 / 疫苗」，录疫苗与录 Kontrol dokter 都是在完成它，两件事完成的是<b>同一个</b>节点，不存在互相顶掉。
+     */
     @Test
     void noTwoEventsShareOneCodeWithinASpecies() {
         for (PetType species : ALL_SPECIES) {
             List<String> mapped = java.util.Arrays.stream(MilestoneAutoEvent.values())
+                    .filter(e -> !(species == PetType.OTHER && e == MilestoneAutoEvent.HEALTH_RECORD_VET_VISIT))
                     .map(e -> MilestoneAutoCompleteMap.codeOf(species, e))
                     .filter(java.util.Objects::nonNull)
                     .toList();
             assertThat(mapped).as("%s 的映射出现重复 code", species).doesNotHaveDuplicates();
         }
+    }
+
+    /** V1.5.0 FR-161（架构 Z-10）：Kontrol dokter → 猫狗无节点、通用 G-M2（与录疫苗同义，见上一条例外）。 */
+    @Test
+    void v150VetVisitLightsUpOnlyGenericGm2() {
+        assertThat(code(PetType.CAT, MilestoneAutoEvent.HEALTH_RECORD_VET_VISIT)).isNull();
+        assertThat(code(PetType.DOG, MilestoneAutoEvent.HEALTH_RECORD_VET_VISIT)).isNull();
+        assertThat(code(PetType.OTHER, MilestoneAutoEvent.HEALTH_RECORD_VET_VISIT)).isEqualTo("G-M2");
+        assertThat(code(PetType.OTHER, MilestoneAutoEvent.HEALTH_RECORD_VET_VISIT))
+                .isEqualTo(code(PetType.OTHER, MilestoneAutoEvent.HEALTH_RECORD_VACCINE));
     }
 
     private static String code(PetType species, MilestoneAutoEvent event) {

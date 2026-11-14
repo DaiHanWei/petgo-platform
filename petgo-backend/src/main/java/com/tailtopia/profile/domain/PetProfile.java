@@ -97,6 +97,23 @@ public class PetProfile {
     @Column(name = "neuter_status", length = 16)
     private NeuterStatus neuterStatus;
 
+    // ===== V1.5.0 健康记录提醒 Story 1.1（V20261115_0110，FR-162）=====
+    /** 家里有猫（只对 DOG 有意义）；null = 没填，按「否」处理。 */
+    @Column(name = "cat_in_home")
+    private Boolean catInHome;
+
+    /** 怀孕 / 哺乳中；sex=MALE 时读取一律当 false（见 {@link #isPregnantNursingEffective()}）。 */
+    @Column(name = "pregnant_nursing", nullable = false)
+    private boolean pregnantNursing = false;
+
+    /** 最近一次被设为 true 的时刻；设为 false 时清空。 */
+    @Column(name = "pregnant_set_at")
+    private Instant pregnantSetAt;
+
+    /** sex 从空首次变为非空的时刻（只记第一次）。 */
+    @Column(name = "sex_set_at")
+    private Instant sexSetAt;
+
     /**
      * 宠物状态（V1.4.0 multi-pet Story 2.1 · AD-4）。新建默认 {@link PetStatus#ACTIVE}；
      * 🔴 只经 {@code PetSlotStateService.reconcile} 改（{@code PetStatusSingleEntryGuardTest} 守卫）。
@@ -177,6 +194,44 @@ public class PetProfile {
     public void setNeuterStatus(NeuterStatus value) {
         this.neuterStatus = value;
         this.updatedAt = Instant.now();
+    }
+
+    public Boolean getCatInHome() {
+        return catInHome;
+    }
+
+    public void setCatInHome(Boolean catInHome) {
+        this.catInHome = catInHome;
+        this.updatedAt = Instant.now();
+    }
+
+    /** 落库原值（不看性别）。业务读取一律用 {@link #isPregnantNursingEffective()}。 */
+    public boolean isPregnantNursing() {
+        return pregnantNursing;
+    }
+
+    /** 业务口径：sex=MALE 恒 false（FR-162）。 */
+    public boolean isPregnantNursingEffective() {
+        return pregnantNursing && sex != PetSex.MALE;
+    }
+
+    public Instant getPregnantSetAt() {
+        return pregnantSetAt;
+    }
+
+    /** 设为 true（含 true → true）刷新 {@code pregnant_set_at}；false 清空。 */
+    public void setPregnantNursing(boolean value, Instant now) {
+        this.pregnantNursing = value;
+        this.pregnantSetAt = value ? now : null;
+        this.updatedAt = Instant.now();
+    }
+
+    public Instant getSexSetAt() {
+        return sexSetAt;
+    }
+
+    public void setSexSetAt(Instant sexSetAt) {
+        this.sexSetAt = sexSetAt;
     }
 
     public Long getId() {

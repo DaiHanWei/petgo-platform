@@ -38,6 +38,8 @@ public enum MilestoneAutoEvent {
     HEALTH_RECORD_DEWORM,
     /** 录入 {@code NEUTER} 类型健康记录。 */
     HEALTH_RECORD_NEUTER,
+    /** 录入 {@code VET_VISIT}（Kontrol dokter）类型健康记录（V1.5.0 健康记录提醒 Story 1.1，FR-161，架构 Z-10）。 */
+    HEALTH_RECORD_VET_VISIT,
     /** 陪伴满 30 天（每日定时扫描）。 */
     COMPANION_30_DAYS,
     /** 第一个生日当天发布成长日历记录。 */

@@ -9,5 +9,7 @@ public enum HealthRecordType {
     DEWORM,
     MENSTRUATION,
     NEUTER,
-    CUSTOM
+    CUSTOM,
+    /** Kontrol dokter（V1.5.0 健康记录提醒 Story 1.1，FR-161）。只有 eventDate / note / nextDate 有意义；旧版客户端写入一律 400。 */
+    VET_VISIT
 }

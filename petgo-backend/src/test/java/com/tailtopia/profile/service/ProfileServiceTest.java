@@ -412,4 +412,119 @@ class ProfileServiceTest {
         Mockito.verify(profiles, Mockito.never()).save(any(PetProfile.class));
         Mockito.verify(events, Mockito.never()).publishEvent(any(Object.class));
     }
+
+    // ================= V1.5.0 健康记录提醒 Story 1.1 · AC5 / AC6：档案健康状态字段 =================
+
+    private PetProfile healthPet(PetType type, com.tailtopia.profile.domain.PetSex sex) {
+        PetProfile p = withId(PetProfile.create(1L, type, "H", null, null, LocalDate.of(2024, 1, 1), null, "TOK_H"), 12L);
+        if (sex != null) {
+            p.setSex(sex);
+        }
+        when(profiles.findByIdAndOwnerId(12L, 1L)).thenReturn(java.util.Optional.of(p));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        return p;
+    }
+
+    private static com.tailtopia.profile.dto.PetProfileUpdateRequest health(String sex, Boolean catInHome,
+            Boolean pregnant) {
+        return new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, null, null, null, sex, null, null, null,
+                catInHome, pregnant);
+    }
+
+    private java.util.List<com.tailtopia.profile.event.PetHealthProfileChangedEvent> healthEvents() {
+        org.mockito.ArgumentCaptor<Object> cap = org.mockito.ArgumentCaptor.forClass(Object.class);
+        Mockito.verify(events, Mockito.atLeast(0)).publishEvent(cap.capture());
+        return cap.getAllValues().stream()
+                .filter(com.tailtopia.profile.event.PetHealthProfileChangedEvent.class::isInstance)
+                .map(com.tailtopia.profile.event.PetHealthProfileChangedEvent.class::cast).toList();
+    }
+
+    @Test
+    void pregnantYesStampsSetAtAndRefreshesOnYesAgain() throws Exception {
+        PetProfile p = healthPet(PetType.CAT, com.tailtopia.profile.domain.PetSex.FEMALE);
+        PetProfileResponse resp = service.update(1L, 12L, health(null, null, true));
+        java.time.Instant first = p.getPregnantSetAt();
+        assertThat(first).isNotNull();
+        assertThat(resp.pregnantNursing()).isTrue();
+        assertThat(resp.pregnantAutoOffDate())
+                .isEqualTo(first.atZone(com.tailtopia.shared.schedule.ScheduleWindow.WIB).toLocalDate().plusMonths(4));
+        Thread.sleep(2);
+        service.update(1L, 12L, health(null, null, true));
+        assertThat(p.getPregnantSetAt()).isAfter(first);
+        assertThat(healthEvents()).hasSize(2).allSatisfy(e -> assertThat(e.pregnantSetYes()).isTrue());
+    }
+
+    @Test
+    void pregnantNoClearsSetAtAndPublishesCleared() {
+        PetProfile p = healthPet(PetType.DOG, com.tailtopia.profile.domain.PetSex.FEMALE);
+        p.setPregnantNursing(true, java.time.Instant.now());
+        PetProfileResponse resp = service.update(1L, 12L, health(null, null, false));
+        assertThat(p.getPregnantSetAt()).isNull();
+        assertThat(resp.pregnantNursing()).isFalse();
+        assertThat(resp.pregnantAutoOffDate()).isNull();
+        assertThat(healthEvents()).singleElement().satisfies(e -> {
+            assertThat(e.pregnantCleared()).isTrue();
+            assertThat(e.pregnantSetYes()).isFalse();
+        });
+    }
+
+    @Test
+    void maleIgnoresPregnantWriteAndReadsFalse() {
+        PetProfile p = healthPet(PetType.CAT, com.tailtopia.profile.domain.PetSex.MALE);
+        PetProfileResponse resp = service.update(1L, 12L, health(null, null, true));
+        assertThat(p.isPregnantNursing()).isFalse();
+        assertThat(p.getPregnantSetAt()).isNull();
+        assertThat(resp.pregnantNursing()).isFalse();
+        assertThat(healthEvents()).isEmpty();
+    }
+
+    @Test
+    void catInHomeOnlyStoredForDogs() {
+        PetProfile dog = healthPet(PetType.DOG, null);
+        service.update(1L, 12L, health(null, true, null));
+        assertThat(dog.getCatInHome()).isTrue();
+
+        PetProfile cat = healthPet(PetType.CAT, null);
+        service.update(1L, 12L, health(null, true, null));
+        assertThat(cat.getCatInHome()).isNull();
+    }
+
+    @Test
+    void sexSetAtStampedOnlyOnFirstNullToValue() {
+        PetProfile p = healthPet(PetType.DOG, null);
+        service.update(1L, 12L, health("FEMALE", null, null));
+        java.time.Instant first = p.getSexSetAt();
+        assertThat(first).isNotNull();
+        service.update(1L, 12L, health("MALE", null, null));
+        assertThat(p.getSexSetAt()).isEqualTo(first);
+        assertThat(healthEvents()).hasSize(2).allSatisfy(e -> assertThat(e.sexChanged()).isTrue());
+
+        PetProfile already = healthPet(PetType.CAT, com.tailtopia.profile.domain.PetSex.FEMALE);
+        service.update(1L, 12L, health("MALE", null, null));
+        assertThat(already.getSexSetAt()).isNull(); // 存量已有性别：保持 null（视作建档时就有）
+    }
+
+    @Test
+    void neuterAndBirthdayChangesPublishHealthEventNameOnlyDoesNot() {
+        healthPet(PetType.CAT, null);
+        service.update(1L, 12L, new com.tailtopia.profile.dto.PetProfileUpdateRequest(
+                null, null, null, null, null, null, null, "NEUTERED"));
+        service.update(1L, 12L, new com.tailtopia.profile.dto.PetProfileUpdateRequest(
+                null, null, null, LocalDate.of(2023, 5, 5), null));
+        service.update(1L, 12L, new com.tailtopia.profile.dto.PetProfileUpdateRequest(
+                null, "Rename", null, null, null));
+        var evs = healthEvents();
+        assertThat(evs).hasSize(2);
+        assertThat(evs.get(0).neuterChanged()).isTrue();
+        assertThat(evs.get(1).birthdayChanged()).isTrue();
+    }
+
+    @Test
+    void switchingToMaleClearsStoredPregnancy() {
+        PetProfile p = healthPet(PetType.DOG, com.tailtopia.profile.domain.PetSex.FEMALE);
+        p.setPregnantNursing(true, java.time.Instant.now());
+        service.update(1L, 12L, health("MALE", null, null));
+        assertThat(p.isPregnantNursing()).isFalse();
+        assertThat(healthEvents()).singleElement().satisfies(e -> assertThat(e.pregnantCleared()).isTrue());
+    }
 }

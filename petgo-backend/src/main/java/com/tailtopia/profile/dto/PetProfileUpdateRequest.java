@@ -34,11 +34,21 @@ public record PetProfileUpdateRequest(
         @DecimalMin(value = "0.1", message = "体重需大于 0")
         @DecimalMax(value = "200", message = "体重不能超过 200 kg") BigDecimal weightKg,
         /** NEUTERED / INTACT / UNKNOWN，可空 = 不改动。 */
-        String neuterStatus) {
+        String neuterStatus,
+        /** V1.5.0 健康记录提醒 Story 1.1（FR-162）：家里有猫；只对 DOG 落库；null = 不改动。 */
+        Boolean catInHome,
+        /** V1.5.0 健康记录提醒 Story 1.1（FR-162）：怀孕 / 哺乳；sex=MALE 时忽略；null = 不改动。 */
+        Boolean pregnantNursing) {
 
     /** 便捷构造：不改动性别/体重/绝育状态（部分更新语义下 null = 不动）。 */
     public PetProfileUpdateRequest(String avatarUrl, String name, String breed,
             LocalDate birthday, String intro) {
-        this(avatarUrl, name, breed, birthday, null, intro, null, null);
+        this(avatarUrl, name, breed, birthday, null, intro, null, null, null, null);
+    }
+
+    /** 兼容构造（V1.5.0 之前的 8 字段形状）：不改动健康状态字段。 */
+    public PetProfileUpdateRequest(String avatarUrl, String name, String breed, LocalDate birthday, String sex,
+            String intro, BigDecimal weightKg, String neuterStatus) {
+        this(avatarUrl, name, breed, birthday, sex, intro, weightKg, neuterStatus, null, null);
     }
 }

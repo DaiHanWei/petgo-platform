@@ -11,6 +11,7 @@ import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.dto.PetProfileCreateRequest;
 import com.tailtopia.profile.dto.PetProfileResponse;
 import com.tailtopia.profile.dto.PetProfileUpdateRequest;
+import com.tailtopia.profile.event.PetHealthProfileChangedEvent;
 import com.tailtopia.profile.event.ProfileCreatedEvent;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.profile.slot.PetSlotFullException;
@@ -223,6 +224,12 @@ public class ProfileService {
         if (req.breed() != null) {
             profile.setBreed(blankToNull(req.breed()));
         }
+        // V1.5.0 健康记录提醒 Story 1.1（AC5/AC6）：记下健康相关字段改前的值，末尾按实际变化发事件。
+        Instant now = Instant.now();
+        java.time.LocalDate birthdayBefore = profile.getBirthday();
+        PetSex sexBefore = profile.getSex();
+        com.tailtopia.profile.domain.NeuterStatus neuterBefore = profile.getNeuterStatus();
+        boolean pregnantBefore = profile.isPregnantNursingEffective();
         if (req.birthday() != null) {
             profile.setBirthday(req.birthday());
         }
@@ -231,6 +238,10 @@ public class ProfileService {
         // 传 null = 不改动（本接口统一语义），故无清空路径；取值已由 @Pattern 挡在 422。
         if (req.sex() != null) {
             profile.setSex(PetSex.valueOf(req.sex()));
+            // V1.5.0 FR-162：sex 首次从空变为非空 → 记时刻（只记第一次；用于「性别空着时绝育建议顺延」）。
+            if (sexBefore == null && profile.getSexSetAt() == null) {
+                profile.setSexSetAt(now);
+            }
         }
         // Story 6.1：体重与绝育状态。🔒 体重是 PII 邻近的健康数据 —— 下面任何一行都不得进日志。
         if (req.weightKg() != null) {
@@ -242,7 +253,30 @@ public class ProfileService {
         if (req.intro() != null) {
             profile.setIntro(blankToNull(req.intro()));
         }
+        // V1.5.0 FR-162：家里有猫只对 DOG 落库；怀孕 / 哺乳在 sex=MALE 时忽略写入。🔒 健康数据，日志禁记。
+        if (req.catInHome() != null && profile.getPetType() == PetType.DOG) {
+            profile.setCatInHome(req.catInHome());
+        }
+        boolean pregnantSetYes = false;
+        if (req.pregnantNursing() != null && profile.getSex() != PetSex.MALE) {
+            // true（含 true → true）刷新 pregnant_set_at；false 清空。
+            profile.setPregnantNursing(req.pregnantNursing(), now);
+            pregnantSetYes = req.pregnantNursing();
+        }
+        if (profile.getSex() == PetSex.MALE && profile.isPregnantNursing()) {
+            // 改成公的：落库值一并清掉，免得日后改回母的时旧标记「复活」。
+            profile.setPregnantNursing(false, now);
+        }
         profiles.save(profile);
+        boolean birthdayChanged = !java.util.Objects.equals(birthdayBefore, profile.getBirthday());
+        boolean sexChanged = sexBefore != profile.getSex();
+        boolean neuterChanged = neuterBefore != profile.getNeuterStatus();
+        // 「清除」= 由「是」变为「否」（含：改成 MALE 让有效值变 false）。
+        boolean pregnantCleared = pregnantBefore && !profile.isPregnantNursingEffective();
+        if (birthdayChanged || sexChanged || neuterChanged || pregnantSetYes || pregnantCleared) {
+            events.publishEvent(new PetHealthProfileChangedEvent(ownerId, profile.getId(), birthdayChanged,
+                    sexChanged, neuterChanged, pregnantSetYes, pregnantCleared, now));
+        }
         if (nameChanged) {
             events.publishEvent(new NameSubmittedEvent(NameTargetType.PET_NAME, profile.getId(), profile.getName()));
         }
