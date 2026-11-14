@@ -12,3 +12,7 @@ logging:
 # 退款 PII 加密 dev/test 占位密钥（Story 4.3，非真实密钥；生产走 env REFUND_PII_KEY）。base64 的 32 字节。
 refund:
   pii-key: cGV0Z28tcmVmdW5kLXBpaS1kZXZrZXktMzJieXRlcyE=
+# V1.5.0 自动点赞：本机 / dev 默认关（PRD FR-221，决策 2026-11-11）。要在本机试跑就显式设 AUTO_LIKE_ENABLED=true。
+petgo:
+  auto-like:
+    enabled: ${AUTO_LIKE_ENABLED:false}

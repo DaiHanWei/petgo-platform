@@ -47,8 +47,8 @@ development_status:
   1-2-点赞排除排行推荐与统计口径: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-自动点赞配置目标集与检查: ready-for-dev
+  epic-2: in-progress
+  2-1-自动点赞配置目标集与检查: review
   2-2-自动点赞计划与多实例防重: ready-for-dev
   2-3-自动点赞派发复查与留档: ready-for-dev
   2-4-自动点赞日报行与上线核对: ready-for-dev

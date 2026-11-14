@@ -42,6 +42,28 @@ petgo:
     min-post-age: ${AUTO_COMMENT_MIN_POST_AGE:2h}
     max-per-run: ${AUTO_COMMENT_MAX_PER_RUN:200}
     max-attempts: ${AUTO_COMMENT_MAX_ATTEMPTS:2}
+  # V1.5.0 自动点赞（PRD 自动点赞 FR-212~223）：发帖 36–60 小时时检查一次，赞数不足 5 的帖子进目标集，
+  # 每天早晚两轮各给每帖最多一个虚拟号的赞（随机散布在 3 小时内），到 5 赞或满 7 天离开。留档 auto_like_*。
+  # 🔴 enabled 默认 true（stag / 生产部署即生效，同自动评论）；application-dev.yml 覆盖为 false，本机连真库也不会点赞、推送。
+  # stag 想立刻验证：把 AUTO_LIKE_MORNING_CRON 临时设成 "0 */10 * * * *"（每 10 分钟）。
+  # likes-per-run 启动校验只接受 1（FR-212）；holdout-salt 各环境相同、不进 env（改盐 = 换对照组）。改任何值需重启。
+  auto-like:
+    enabled: ${AUTO_LIKE_ENABLED:true}
+    morning-cron: ${AUTO_LIKE_MORNING_CRON:0 30 10 * * *}
+    evening-cron: ${AUTO_LIKE_EVENING_CRON:0 30 16 * * *}
+    check-window-min: ${AUTO_LIKE_CHECK_WINDOW_MIN:36h}
+    check-window-max: ${AUTO_LIKE_CHECK_WINDOW_MAX:60h}
+    max-post-age: ${AUTO_LIKE_MAX_POST_AGE:7d}
+    like-target: ${AUTO_LIKE_TARGET:5}
+    likes-per-run: 1
+    max-likes-per-author-per-run: ${AUTO_LIKE_MAX_PER_AUTHOR:1}
+    spread-window: ${AUTO_LIKE_SPREAD_WINDOW:3h}
+    holdout-percent: ${AUTO_LIKE_HOLDOUT_PERCENT:10}
+    holdout-salt: tt-auto-like-holdout-v1
+    max-failures: ${AUTO_LIKE_MAX_FAILURES:3}
+    stop-after-consecutive-failures: ${AUTO_LIKE_STOP_AFTER_FAILURES:10}
+    dispatch-interval-ms: ${AUTO_LIKE_DISPATCH_INTERVAL_MS:60000}
+    dispatch-batch: 200
   # AI 智能分诊（Story 4.1）：Gemini Developer API（gemini-2.5-flash，签名 URL 直拉私密图）。
   # mode=stub（默认）走打桩客户端，无凭证即可启动并验状态机；mode=live 才打真实 Gemini（L2，需 key）。
   ai:
