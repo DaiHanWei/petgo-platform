@@ -222,9 +222,14 @@ public class GiftSendService {
         if (raw == null) {
             return null;
         }
-        String m = raw.trim();
+        // strip()（而非 trim()）：与 App 的 Dart trim 一样去掉 Unicode 空白（NBSP / 全角空格），code review #2。
+        String m = raw.strip();
         if (m.isEmpty()) {
             return null;
+        }
+        if (m.indexOf('\u0000') >= 0) {
+            // Postgres 文本列不收 0x00：不拦会在落库时变成 500（code review #1，同 MentionCandidateQueryService）。
+            throw AppException.validation("祝福语包含无效字符");
         }
         if (m.codePointCount(0, m.length()) > MESSAGE_MAX_CODE_POINTS) {
             throw AppException.validation("祝福语不能超过 500 字");

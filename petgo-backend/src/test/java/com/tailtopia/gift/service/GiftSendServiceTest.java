@@ -553,6 +553,20 @@ class GiftSendServiceTest {
     }
 
     @Test
+    void nulCharacterRejectedAndUnicodeWhitespaceStripped() {
+        assertThatThrownBy(() -> service.send(SENDER, PET, withMessage("hi\u0000x")))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        verify(orders, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void fullWidthSpaceOnlyIsNoMessage() {
+        service.send(SENDER, PET, withMessage("\u3000\u00A0"));
+        assertThat(savedOrder().getMessage()).isNull();
+    }
+
+    @Test
     void l1KeywordBlockedWithoutDebitOrOrder() {
         assertThatThrownBy(() -> service.send(SENDER, PET, withMessage("ayo main JUDI")))
                 .isInstanceOf(AppException.class)
