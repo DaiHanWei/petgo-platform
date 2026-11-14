@@ -137,6 +137,17 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
     @Query("delete from ContentLike l where l.postId = :postId and l.userId = :userId")
     int deleteByPostIdAndUserId(@Param("postId") long postId, @Param("userId") long userId);
 
+    /**
+     * 自动点赞写入（V1.5.0 likes FR-215）：已赞则不插，返回插入行数（0 / 1）。
+     * 不靠异常判重——外层事务里吞唯一约束异常会把事务标成 rollback-only。
+     * 原生 INSERT 不经 {@code @PrePersist}，显式写 {@code created_at = now()}。
+     */
+    @Modifying
+    @Query(value = "INSERT INTO content_likes (post_id, user_id, created_at, is_automated) "
+            + "VALUES (:postId, :userId, now(), true) "
+            + "ON CONFLICT ON CONSTRAINT uq_content_likes_post_user DO NOTHING", nativeQuery = true)
+    int insertAutomatedIfAbsent(@Param("postId") long postId, @Param("userId") long userId);
+
     /** 内容删除级联：物理清该帖全部点赞（点赞无保留价值，Story 3.6）。 */
     @Transactional
     void deleteByPostId(long postId);

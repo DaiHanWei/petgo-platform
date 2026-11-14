@@ -128,6 +128,9 @@ public class GrowthActivityListener {
         if (e.likerId() == e.authorId()) {
             return; // 自赞 content 侧本就不发事件；这里再挡一层。
         }
+        if (e.automated()) {
+            return; // V1.5.0 自动点赞：作者不得 LIKE_RECEIVED（不占当日额度）；虚拟号本就拿不到 LIKE_GIVEN。
+        }
         List<Long> pets = postPetIds(e.postId());
         String ref = String.valueOf(e.postId());
         Instant at = orNow(e.createdAt());

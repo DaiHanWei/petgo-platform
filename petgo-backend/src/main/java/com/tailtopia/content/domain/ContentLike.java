@@ -29,6 +29,14 @@ public class ContentLike {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * 是否由自动点赞任务创建（V1.5.0 likes FR-218）。只有自动点赞任务写 {@code true}（走
+     * {@code ContentLikeRepository#insertAutomatedIfAbsent} 原生 INSERT）；App / 后台 / 运营点赞一律 {@code false}。
+     * 排序 / 推荐 / 热度 / 运营统计排除；展示赞数、点赞人、主页 Suka 不排除。
+     */
+    @Column(name = "is_automated", nullable = false)
+    private boolean automated;
+
     protected ContentLike() {
     }
 
@@ -36,6 +44,13 @@ public class ContentLike {
         ContentLike l = new ContentLike();
         l.postId = postId;
         l.userId = userId;
+        return l;
+    }
+
+    /** 仅供测试造数：一条自动赞。生产写入走 {@code ContentLikeRepository#insertAutomatedIfAbsent}。 */
+    public static ContentLike automated(long postId, long userId) {
+        ContentLike l = of(postId, userId);
+        l.automated = true;
         return l;
     }
 
@@ -58,5 +73,9 @@ public class ContentLike {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isAutomated() {
+        return automated;
     }
 }

@@ -52,6 +52,24 @@ public class LikeService {
         return new LikeResponse(true, likes.countByPostId(postId));
     }
 
+    /** 自动点赞结果：{@code created} = 本次真新建了一行；{@code likeCount} = 写入后的展示赞数（含自动赞）。 */
+    public record AutomatedLikeResult(boolean created, long likeCount) {
+    }
+
+    /**
+     * 自动点赞专用（V1.5.0 likes FR-215 / FR-217）。不做可见性校验（调用方已在同一事务里复查，比
+     * {@link #requireVisible} 更严）；只有真新建一行才发事件（{@code automated = true}）。
+     * 事件各监听 AFTER_COMMIT 才跑：外层事务回滚 = 无通知、无里程碑（A-AC35）。
+     */
+    @Transactional
+    public AutomatedLikeResult likeAutomated(long postId, long virtualUserId, long authorId) {
+        int inserted = likes.insertAutomatedIfAbsent(postId, virtualUserId);
+        if (inserted == 1 && virtualUserId != authorId) {
+            events.publishEvent(new ContentLikedEvent(postId, virtualUserId, authorId, Instant.now(), true));
+        }
+        return new AutomatedLikeResult(inserted == 1, likes.countByPostId(postId));
+    }
+
     /**
      * 取消点赞（幂等：未赞 DELETE 亦成功）。真删到行且非自赞时发 {@link ContentUnlikedEvent}
      * （V1.4.0 ① 扣回点赞成长值）；未赞时取消、自赞取消都不发。

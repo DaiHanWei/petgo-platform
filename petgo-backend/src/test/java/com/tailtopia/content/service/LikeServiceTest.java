@@ -130,6 +130,56 @@ class LikeServiceTest {
         verify(events, never()).publishEvent(any(Object.class));
     }
 
+    /** V1.5.0 likes Story 1.1 · AC3：真新建一行 → created=true，发 automated=true 事件。 */
+    @Test
+    void likeAutomatedInsertsAndPublishesAutomatedEvent() {
+        when(likes.insertAutomatedIfAbsent(1L, 15L)).thenReturn(1);
+        when(likes.countByPostId(1L)).thenReturn(3L);
+
+        LikeService.AutomatedLikeResult r = service.likeAutomated(1L, 15L, 7L);
+
+        assertThat(r.created()).isTrue();
+        assertThat(r.likeCount()).isEqualTo(3L);
+        ArgumentCaptor<ContentLikedEvent> ev = ArgumentCaptor.forClass(ContentLikedEvent.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue().postId()).isEqualTo(1L);
+        assertThat(ev.getValue().likerId()).isEqualTo(15L);
+        assertThat(ev.getValue().authorId()).isEqualTo(7L);
+        assertThat(ev.getValue().automated()).isTrue();
+        verify(likes, never()).save(any());
+        verify(posts, never()).findById(anyLong());
+    }
+
+    /** AC3：该号已赞（插入 0 行）→ created=false，不发事件。 */
+    @Test
+    void likeAutomatedAlreadyLikedIsNoOpWithoutEvent() {
+        when(likes.insertAutomatedIfAbsent(1L, 15L)).thenReturn(0);
+        when(likes.countByPostId(1L)).thenReturn(2L);
+
+        LikeService.AutomatedLikeResult r = service.likeAutomated(1L, 15L, 7L);
+
+        assertThat(r.created()).isFalse();
+        assertThat(r.likeCount()).isEqualTo(2L);
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    /** AC3 / A-AC46：App 点赞发出的事件 automated=false。 */
+    @Test
+    void appLikeEventIsNotAutomated() {
+        postBy(1L, 7L);
+        when(likes.existsByPostIdAndUserId(1L, 9L)).thenReturn(false);
+        when(likes.countByPostId(1L)).thenReturn(1L);
+
+        service.like(1L, 9L);
+
+        ArgumentCaptor<ContentLikedEvent> ev = ArgumentCaptor.forClass(ContentLikedEvent.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue().automated()).isFalse();
+        ArgumentCaptor<ContentLike> saved = ArgumentCaptor.forClass(ContentLike.class);
+        verify(likes).save(saved.capture());
+        assertThat(saved.getValue().isAutomated()).isFalse();
+    }
+
     @Test
     void likeOnMissingPostIsNotFound() {
         when(posts.findById(99L)).thenReturn(Optional.empty());

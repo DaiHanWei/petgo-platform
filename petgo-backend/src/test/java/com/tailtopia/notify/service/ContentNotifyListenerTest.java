@@ -49,6 +49,14 @@ class ContentNotifyListenerTest {
                 "LIKE:POST:55", "55", null, null, null);
     }
 
+    /** V1.5.0 likes Story 1.1 · A-AC27：自动赞（automated=true）照常发 CONTENT_LIKED，同一合并键。 */
+    @Test
+    void automatedLikeStillNotifiesAuthorWithSameMergeKey() {
+        listener().onContentLiked(new ContentLikedEvent(55L, 2L, 9L, Instant.now(), true));
+        verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L,
+                "LIKE:POST:55", "55", null, null, null);
+    }
+
     @Test
     void selfLikeNotPushed() {
         listener().onContentLiked(new ContentLikedEvent(55L, 9L, 9L, Instant.now()));

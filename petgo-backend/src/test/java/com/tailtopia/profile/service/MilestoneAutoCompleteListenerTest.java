@@ -145,6 +145,15 @@ class MilestoneAutoCompleteListenerTest {
         verifyNeverAccountWide();
     }
 
+    /** V1.5.0 likes Story 1.1 · A-AC31：自动赞照常完成 FIRST_LIKE。 */
+    @Test
+    void automatedLikeStillCompletesFirstLike() {
+        when(contentService.growthMomentPetIdsOf(100L)).thenReturn(List.of(PET_B));
+        listener.onContentLiked(new ContentLikedEvent(100L, 99L, OWNER, NOW, true));
+        verify(completion).completeForPet(PET_B, MilestoneAutoEvent.FIRST_LIKE, AUTO);
+        verifyNeverAccountWide();
+    }
+
     @Test
     void likeOnMomentGoesToDefaultPet() {
         when(contentService.growthMomentPetIdsOf(100L)).thenReturn(List.of());

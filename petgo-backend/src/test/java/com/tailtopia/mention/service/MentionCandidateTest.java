@@ -95,6 +95,14 @@ class MentionCandidateTest {
         verify(repo, never()).touch(eq(5L), eq(9L), any());
     }
 
+    /** V1.5.0 likes Story 1.1 · A-AC32：自动赞（automated=true）照常把点赞的虚拟号写进作者的 @ 候选。 */
+    @Test
+    void anAutomatedLikeStillPutsTheLikerIntoTheAuthorsList() {
+        listener.onContentLiked(new ContentLikedEvent(1L, 5L, 9L, AT, true));
+
+        verify(repo).touch(9L, 5L, AT);
+    }
+
     /**
      * 🔴 **「与我互相回复对话过」= 二级回复时那第二对关系**。
      *

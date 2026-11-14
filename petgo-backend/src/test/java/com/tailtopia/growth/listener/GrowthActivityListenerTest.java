@@ -139,6 +139,16 @@ class GrowthActivityListenerTest {
         assertThat(cs.get(2).petIds()).containsExactly(9L, 10L);
     }
 
+    /** V1.5.0 likes Story 1.1 · A-AC30：自动赞 → 作者无 LIKE_RECEIVED、虚拟号无 LIKE_GIVEN（整段跳过，不复查）。 */
+    @Test
+    void automatedLikeAccruesNothing() {
+        postWithPet(5L, 9L);
+        listener.onLiked(new ContentLikedEvent(5L, 3L, 7L, NOW, true));
+        verify(ledger, never()).accrue(any());
+        verify(ledger, never()).reverse(any());
+        verify(likes, never()).existsByPostIdAndUserId(5L, 3L);
+    }
+
     /** Story 4.4 · AC4.2 / AC4.5：他人点赞多宠帖 → LIKE_RECEIVED 写全部关联宠物；查询抛错 → null 且照常入账。 */
     @Test
     void likeOnMultiPetPostWritesAllPetsAndQueryFailureStillAccrues() {
