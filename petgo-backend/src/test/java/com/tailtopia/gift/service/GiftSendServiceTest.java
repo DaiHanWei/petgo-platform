@@ -23,6 +23,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.content.domain.ModerationKeywordRule;
+import com.tailtopia.content.moderation.KeywordRuleEngine;
+import com.tailtopia.growth.domain.RuleCode;
+import com.tailtopia.growth.service.GrowthLedgerService;
+import java.util.List;
 import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.gift.domain.GiftCatalogItem;
 import com.tailtopia.gift.domain.GiftOrder;
@@ -80,6 +85,9 @@ class GiftSendServiceTest {
     private GiftSendService service;
     private final AtomicLong ids = new AtomicLong(100);
 
+    private KeywordRuleEngine keywords;
+    private GrowthLedgerService ledger;
+
     @BeforeEach
     void setUp() {
         orders = mock(GiftOrderRepository.class);
@@ -113,9 +121,17 @@ class GiftSendServiceTest {
         catalogHas(gift(2, 10_000, false, false, false, 0));
         catalogHas(exclusive(3, 20_000, 5, 0));
 
+        keywords = new KeywordRuleEngine(null);
+        keywords.apply(List.of(
+                ModerationKeywordRule.of("L1_BLOCK", "SUBSTRING", "judi", "GAMBLING", "id", true),
+                ModerationKeywordRule.of("L1_BLOCK", "SUBSTRING", "anjing", "HARASSMENT", "id", true),
+                ModerationKeywordRule.of("L3_WHITELIST", "EXACT", "anjing", "PET_SAFE", "id", true)));
+        ledger = mock(GrowthLedgerService.class);
+        when(ledger.pointsForAmount(eq(RuleCode.GIFT_SENT), anyLong()))
+                .thenAnswer(inv -> (int) ((long) inv.getArgument(1) / 200));
         service = new GiftSendService(orders, catalog, new GiftRecipientGuard(pets, hides), growth, config, wallet,
                 paymentIntents, gateway, delivery, tokens, Clock.fixed(Instant.parse("2026-10-18T08:00:00Z"),
-                        ZoneOffset.UTC));
+                        ZoneOffset.UTC), keywords, ledger);
     }
 
     private void catalogHas(GiftCatalogItem g) {
@@ -493,5 +509,90 @@ class GiftSendServiceTest {
         assertThat(service.replayExisting(SENDER, "req-9")).get()
                 .extracting(GiftSendResponse::orderToken).isEqualTo(existing.getPublicToken());
         assertThat(service.replayExisting(SENDER, "req-unknown")).isEmpty();
+    }
+
+    // ——————————————————— V1.5.0 gift-pack Story 1-3 · 祝福语（D-6）———————————————————
+
+    private static GiftSendRequest withMessage(String message) {
+        return new GiftSendRequest("g1", 1, PayChannel.PAWCOIN, "req-m", "diary_tab", null, message);
+    }
+
+    private GiftOrder savedOrder() {
+        ArgumentCaptor<GiftOrder> c = ArgumentCaptor.forClass(GiftOrder.class);
+        verify(orders).saveAndFlush(c.capture());
+        return c.getValue();
+    }
+
+    @Test
+    void message501CodePointsRejectedBeforeAnyWrite() {
+        assertThatThrownBy(() -> service.send(SENDER, PET, withMessage("a".repeat(501))))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        verify(orders, never()).saveAndFlush(any());
+        verifyNoInteractions(wallet);
+    }
+
+    @Test
+    void message500CodePointsWithEmojiPasses() {
+        String m = "😀".repeat(500); // 1000 个 char、500 个码点
+        GiftSendResponse r = service.send(SENDER, PET, withMessage(m));
+        assertThat(r.delivered()).isTrue();
+        assertThat(savedOrder().getMessage()).isEqualTo(m);
+    }
+
+    @Test
+    void blankMessageStoredAsNull() {
+        service.send(SENDER, PET, withMessage("   \n "));
+        assertThat(savedOrder().getMessage()).isNull();
+    }
+
+    @Test
+    void messageTrimmed() {
+        service.send(SENDER, PET, withMessage("  Selamat ulang tahun!  "));
+        assertThat(savedOrder().getMessage()).isEqualTo("Selamat ulang tahun!");
+    }
+
+    @Test
+    void l1KeywordBlockedWithoutDebitOrOrder() {
+        assertThatThrownBy(() -> service.send(SENDER, PET, withMessage("ayo main JUDI")))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getType().toString()).asString().endsWith("gift-message-blocked");
+        verify(orders, never()).saveAndFlush(any());
+        verify(wallet, never()).debit(anyLong(), anyLong(), any(), anyString(), anyLong(), anyString());
+    }
+
+    @Test
+    void l3WhitelistExemptPasses() {
+        GiftSendResponse r = service.send(SENDER, PET, withMessage("anjing"));
+        assertThat(r.delivered()).isTrue();
+    }
+
+    @Test
+    void replayDoesNotValidateMessage() {
+        GiftOrder existing = GiftTestFixtures.order(78L, PayChannel.PAWCOIN, 1, 1_000);
+        ReflectionTestUtils.setField(existing, "status", GiftOrderStatus.DELIVERED);
+        when(orders.findByIdemKey("GIFT:" + SENDER + ":req-m")).thenReturn(Optional.of(existing));
+        GiftSendResponse r = service.send(SENDER, PET, withMessage("judi " + "x".repeat(600)));
+        assertThat(r.delivered()).isTrue();
+        verify(orders, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void deliveredResponseCarriesSenderExp() {
+        GiftSendResponse r = service.send(SENDER, PET, new GiftSendRequest("g2", 2, PayChannel.PAWCOIN, "req-x",
+                "diary_tab", null));
+        assertThat(r.senderExp()).isEqualTo(100); // 10,000 × 2 / 200
+        when(growth.getLevel(SENDER)).thenReturn(GrowthLevel.NOT_PARTICIPATING);
+        GiftSendResponse r2 = service.send(SENDER, PET, new GiftSendRequest("g2", 2, PayChannel.PAWCOIN, "req-y",
+                "diary_tab", null));
+        assertThat(r2.senderExp()).isZero();
+    }
+
+    @Test
+    void newRequestFieldAppendedAtEnd() {
+        assertThat(GiftSendRequest.class.getRecordComponents()).extracting(c -> c.getName()).containsExactly(
+                "giftToken", "quantity", "channel", "requestId", "source", "postId", "message");
+        assertThat(GiftSendResponse.class.getRecordComponents()).extracting(c -> c.getName()).containsExactly(
+                "delivered", "payment", "payload", "orderToken", "status", "senderExp");
     }
 }

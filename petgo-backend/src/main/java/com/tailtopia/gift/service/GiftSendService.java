@@ -2,7 +2,10 @@ package com.tailtopia.gift.service;
 
 import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.gift.domain.GiftCatalogItem;
+import com.tailtopia.content.moderation.KeywordRuleEngine;
 import com.tailtopia.gift.domain.GiftKind;
+import com.tailtopia.growth.domain.RuleCode;
+import com.tailtopia.growth.service.GrowthLedgerService;
 import com.tailtopia.gift.domain.GiftOrder;
 import com.tailtopia.gift.domain.GiftOrderStatus;
 import com.tailtopia.gift.domain.GiftSource;
@@ -44,7 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <h2>校验顺序（全部在任何写库之前，失败即抛，不留任何行）</h2>
  * ① 宠物可送达（{@link GiftRecipientGuard}：不存在 / 主人注销 404，封号放行）→ ② 非自己的宠物 422 →
  * ③ 送礼人未拉黑主人 403（只拦单向）→ ④ 礼物 ONLINE，否则 409 → ⑤ 专属礼物等级（{@link GrowthQueryService}）403 →
- * ⑥ 数量 1~99 → ⑦ 渠道（MIXED 显式拒绝）→ ⑧ QRIS 总额 ≥ {@code pricing.giftQrisMinAmount} 422 → ⑨ {@code source} 三值。
+ * ⑥ 数量 1~99 → ⑦ 渠道（MIXED 显式拒绝）→ ⑧ QRIS 总额 ≥ {@code pricing.giftQrisMinAmount} 422 → ⑨ {@code source} 三值
+ * → ⑩ 祝福语（V1.5.0 gift-pack Story 1-3 · D-6：trim，空 = 不写；&gt; 500 码点 422 {@code validation}；
+ * {@link KeywordRuleEngine} L1 命中 422 {@code gift-message-blocked}）。日志不记祝福语正文。
  *
  * <h2>幂等</h2>
  * 订单 {@code idem_key = GiftIdemKeys.send(sender, requestId)}。已有订单 → <b>不再校验、不再扣款</b>，按订单当前状态返回
@@ -73,6 +78,9 @@ public class GiftSendService {
      */
     static final String COIN_REF_TYPE = "GIFT";
 
+    /** 祝福语上限（Unicode 码点，D-6）。 */
+    static final int MESSAGE_MAX_CODE_POINTS = 500;
+
     static final int MIN_QUANTITY = 1;
     static final int MAX_QUANTITY = 99;
     private static final String CURRENCY = "IDR";
@@ -88,20 +96,24 @@ public class GiftSendService {
     private final GiftDeliveryService delivery;
     private final GiftTokenGenerator tokens;
     private final Clock clock;
+    private final KeywordRuleEngine keywords;
+    private final GrowthLedgerService ledger;
 
     @Autowired
     public GiftSendService(GiftOrderRepository orders, GiftCatalogRepository catalog, GiftRecipientGuard recipients,
             GrowthQueryService growth, PlatformConfigService platformConfig, PawCoinWalletService wallet,
             PaymentIntentService paymentIntents, PaymentGateway gateway, GiftDeliveryService delivery,
-            GiftTokenGenerator tokens) {
+            GiftTokenGenerator tokens, KeywordRuleEngine keywords, GrowthLedgerService ledger) {
         this(orders, catalog, recipients, growth, platformConfig, wallet, paymentIntents, gateway, delivery, tokens,
-                Clock.systemUTC());
+                Clock.systemUTC(), keywords, ledger);
     }
 
     GiftSendService(GiftOrderRepository orders, GiftCatalogRepository catalog, GiftRecipientGuard recipients,
             GrowthQueryService growth, PlatformConfigService platformConfig, PawCoinWalletService wallet,
             PaymentIntentService paymentIntents, PaymentGateway gateway, GiftDeliveryService delivery,
-            GiftTokenGenerator tokens, Clock clock) {
+            GiftTokenGenerator tokens, Clock clock, KeywordRuleEngine keywords, GrowthLedgerService ledger) {
+        this.keywords = keywords;
+        this.ledger = ledger;
         this.orders = orders;
         this.catalog = catalog;
         this.recipients = recipients;
@@ -158,10 +170,12 @@ public class GiftSendService {
         // ⑨ 入口
         GiftSource source = GiftSource.fromWire(req.source())
                 .orElseThrow(() -> AppException.validation("未知的送礼入口"));
+        // ⑩ 祝福语（D-6）：在任何写库之前
+        String message = checkMessage(req.message());
 
         GiftOrder order = orders.saveAndFlush(GiftOrder.pending(tokens.generate(), senderId, pet.petId(),
                 pet.ownerId(), pet.name(), gift, quantity, channel, source,
-                GiftIdemKeys.send(senderId, req.requestId()), Instant.now(clock)));
+                GiftIdemKeys.send(senderId, req.requestId()), Instant.now(clock), message));
         return switch (channel) {
             case PAWCOIN -> payWithCoins(order);
             case QRIS -> payWithQris(order);
@@ -183,6 +197,9 @@ public class GiftSendService {
         if (order.getStatus() == GiftOrderStatus.PENDING && order.getChannel() == PayChannel.QRIS) {
             return replayQris(order);
         }
+        if (order.getStatus() == GiftOrderStatus.DELIVERED) {
+            return GiftSendResponse.delivered(order.getPublicToken(), senderExpOf(order));
+        }
         return GiftSendResponse.ofStatus(order.getPublicToken(), order.getStatus());
     }
 
@@ -194,7 +211,38 @@ public class GiftSendService {
             // PawCoin 同步成交：刚校验过可送达，走到这里只可能是并发删宠物 / 拉黑。整笔回滚（扣币、订单一起撤销）。
             throw AppException.conflict("礼物未能送达，本次未扣费，请重试");
         }
-        return GiftSendResponse.delivered(order.getPublicToken());
+        return GiftSendResponse.delivered(order.getPublicToken(), senderExpOf(order));
+    }
+
+    /**
+     * 祝福语校验（D-6）：trim；空 → null；码点 &gt; 500 → 422 {@code validation}；L1 敏感词 → 422
+     * {@code gift-message-blocked}。不记正文。
+     */
+    String checkMessage(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String m = raw.trim();
+        if (m.isEmpty()) {
+            return null;
+        }
+        if (m.codePointCount(0, m.length()) > MESSAGE_MAX_CODE_POINTS) {
+            throw AppException.validation("祝福语不能超过 500 字");
+        }
+        if (keywords.classify(m).l1Blocked()) {
+            throw AppException.giftMessageBlocked("祝福语包含不当内容，请修改后再送");
+        }
+        return m;
+    }
+
+    /** 送礼人本单 EXP（D-7）：参与成长体系 ? pointsForAmount(GIFT_SENT, 面值) : 0。 */
+    private int senderExpOf(GiftOrder order) {
+        GrowthLevel lv = growth.getLevel(order.getSenderId());
+        if (lv == null || !lv.participating()) {
+            return 0;
+        }
+        return ledger.pointsForAmount(RuleCode.GIFT_SENT, Math.multiplyExact(order.getUnitPrice(),
+                (long) order.getQuantity()));
     }
 
     private GiftSendResponse payWithQris(GiftOrder order) {

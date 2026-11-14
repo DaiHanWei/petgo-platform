@@ -112,6 +112,21 @@ public class GiftOrder {
     @Column(name = "refunded_at")
     private Instant refundedAt;
 
+    /** V1.5.0 gift-pack Story 1-3（D-5 / D-6）：祝福语（trim 后 1..500 码点，可空）；下单时定，不可改。 */
+    @Column(name = "message", updatable = false, length = 500)
+    private String message;
+
+    /**
+     * V1.5.0：拆开时刻（空 = 未拆，按笔记）。🔴 只经条件 UPDATE 写（Story 1-4 拆礼物），实体不写：
+     * {@code updatable = false} 保证实体 flush 不会覆盖条件语句写入的值。
+     */
+    @Column(name = "opened_at", updatable = false)
+    private Instant openedAt;
+
+    /** V1.5.0：祝福语被举报处理后隐藏的时刻（Story 1-5 条件 UPDATE 写，实体不写）。 */
+    @Column(name = "message_hidden_at", updatable = false)
+    private Instant messageHiddenAt;
+
     protected GiftOrder() {
     }
 
@@ -121,7 +136,16 @@ public class GiftOrder {
      */
     public static GiftOrder pending(String publicToken, long senderId, long petId, long ownerId, String petName,
             GiftCatalogItem gift, int quantity, PayChannel channel, GiftSource source, String idemKey, Instant now) {
+        return pending(publicToken, senderId, petId, ownerId, petName, gift, quantity, channel, source, idemKey, now,
+                null);
+    }
+
+    /** V1.5.0 gift-pack Story 1-3：带祝福语（已 trim、空串已转 null、已校验长度与敏感词）。 */
+    public static GiftOrder pending(String publicToken, long senderId, long petId, long ownerId, String petName,
+            GiftCatalogItem gift, int quantity, PayChannel channel, GiftSource source, String idemKey, Instant now,
+            String message) {
         GiftOrder o = new GiftOrder();
+        o.message = message;
         o.publicToken = publicToken;
         o.senderId = senderId;
         o.petId = petId;
@@ -167,6 +191,23 @@ public class GiftOrder {
         }
         status = to;
         return true;
+    }
+
+    /** V1.5.0：是否已拆（{@code opened_at} 非空）。 */
+    public boolean isOpened() {
+        return openedAt != null;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public Instant getOpenedAt() {
+        return openedAt;
+    }
+
+    public Instant getMessageHiddenAt() {
+        return messageHiddenAt;
     }
 
     public boolean isPending() {

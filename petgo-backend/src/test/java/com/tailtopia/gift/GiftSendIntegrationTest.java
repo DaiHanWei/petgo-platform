@@ -245,4 +245,46 @@ class GiftSendIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get("/api/v1/gifts/catalog").param("petId", String.valueOf(pet.getId())))
                 .andExpect(status().isUnauthorized());
     }
+
+    // ——————————————————— V1.5.0 gift-pack Story 1-3 · 祝福语 ———————————————————
+
+    private ResultActions sendWithMessage(long sender, long petId, String giftToken, String requestId, String message)
+            throws Exception {
+        return mvc.perform(post("/api/v1/pets/" + petId + "/gifts")
+                .header(HttpHeaders.AUTHORIZATION, userBearer(sender))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("giftToken", giftToken, "quantity", 1, "channel", "PAWCOIN",
+                        "requestId", requestId, "source", "diary_tab", "message", message))));
+    }
+
+    @Test
+    void messageStoredAndNewOrderIsUnopened() throws Exception {
+        User sender = newUser();
+        PetProfile pet = newPet(newUser(), PetType.DOG);
+        fund(sender.getId(), 5_000);
+        String token = json.readTree(sendWithMessage(sender.getId(), pet.getId(), universal.getPublicToken(), "m-1",
+                        "  Selamat ulang tahun 🎂  ")
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.delivered").value(true))
+                        .andReturn().getResponse().getContentAsString())
+                .get("orderToken").asText();
+        assertThat(jdbc.queryForObject("SELECT message FROM gift_orders WHERE public_token = ?", String.class, token))
+                .isEqualTo("Selamat ulang tahun 🎂");
+        assertThat(jdbc.queryForObject("SELECT opened_at IS NULL FROM gift_orders WHERE public_token = ?",
+                Boolean.class, token)).isTrue();
+    }
+
+    @Test
+    void blockedMessageKeepsBalanceAndLeavesNoOrder() throws Exception {
+        User sender = newUser();
+        PetProfile pet = newPet(newUser(), PetType.DOG);
+        fund(sender.getId(), 5_000);
+        long before = wallet.balanceOf(sender.getId());
+        sendWithMessage(sender.getId(), pet.getId(), universal.getPublicToken(), "m-2", "ayo main judi")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type").value(org.hamcrest.Matchers.endsWith("gift-message-blocked")));
+        assertThat(wallet.balanceOf(sender.getId())).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM gift_orders WHERE sender_id = ?", Long.class,
+                sender.getId())).isZero();
+    }
 }
