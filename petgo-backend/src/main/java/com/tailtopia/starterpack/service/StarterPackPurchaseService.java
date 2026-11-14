@@ -39,6 +39,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,6 +83,9 @@ public class StarterPackPurchaseService {
     private final PetSlotService slots;
     private final NamedParameterJdbcTemplate jdbc;
     private final Clock clock;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Autowired
     public StarterPackPurchaseService(StarterPackPurchaseRepository purchases, StarterPackFulfillmentService fulfillment,
@@ -232,8 +238,10 @@ public class StarterPackPurchaseService {
         PaymentIntent intent = intentOf(p);
         if (intent == null) {
             log.warn("starter pack pending without intent purchaseId={}", p.getId());
-            p.markExpired();
-            purchases.saveAndFlush(p);
+            if (lockAndRefresh(p)) {
+                p.markExpired();
+                purchases.saveAndFlush(p);
+            }
             return StarterPackPurchaseResponse.ofStatus(p.getStatus().name(), p.getPublicToken());
         }
         PaymentStatus status = paymentIntents.statusOf(p.getUserId(), intent.getPublicToken());
@@ -247,12 +255,15 @@ public class StarterPackPurchaseService {
                         PaymentIntentResponse.of(intent), null);
             }
             case EXPIRED, FAILED -> {
-                if (status == PaymentStatus.FAILED) {
-                    p.markFailed();
-                } else {
-                    p.markExpired();
+                // 锁行重读后再关单：并发到账已置 PAID 时不得覆盖（4-2 复审 #1）
+                if (lockAndRefresh(p)) {
+                    if (status == PaymentStatus.FAILED) {
+                        p.markFailed();
+                    } else {
+                        p.markExpired();
+                    }
+                    purchases.saveAndFlush(p);
                 }
-                purchases.saveAndFlush(p);
                 return StarterPackPurchaseResponse.ofStatus(p.getStatus().name(), p.getPublicToken());
             }
             default -> throw new IllegalStateException("未知支付状态 " + status);
@@ -268,10 +279,13 @@ public class StarterPackPurchaseService {
             if (intent.getStatus() != PaymentStatus.FAILED) {
                 throw e;
             }
-            p.markFailed();
-            purchases.saveAndFlush(p);
-            log.warn("starter pack qris charge failed purchaseId={} intentId={} reason={}", p.getId(),
-                    intent.getId(), e.getMessage());
+            if (lockAndRefresh(p)) {
+                p.markFailed();
+                purchases.saveAndFlush(p);
+            }
+            // 只记异常类名：网关异常消息可能带返回体（4-2 复审 #6）
+            log.warn("starter pack qris charge failed purchaseId={} intentId={} cause={}", p.getId(),
+                    intent.getId(), e.getClass().getSimpleName());
             return StarterPackPurchaseResponse.ofStatus(p.getStatus().name(), p.getPublicToken());
         }
         return new StarterPackPurchaseResponse(p.getStatus().name(), p.getPublicToken(),
@@ -359,12 +373,24 @@ public class StarterPackPurchaseService {
 
     /** 过窗 PENDING → EXPIRED；意图经 {@code statusOf} 走支付模块自己的懒过期（不绕过意图状态机）。 */
     private void expirePending(StarterPackPurchase p) {
+        if (!lockAndRefresh(p)) {
+            return; // 并发到账已改状态（如 PAID）：不覆盖（4-2 复审 #1）
+        }
         p.markExpired();
         purchases.saveAndFlush(p);
         PaymentIntent intent = intentOf(p);
         if (intent != null) {
             paymentIntents.statusOf(p.getUserId(), intent.getPublicToken());
         }
+    }
+
+    /**
+     * 关单前锁行并按库内现值刷新实体（{@code SELECT … FOR UPDATE}）：实体无 {@code @Version}，按旧快照整行写回会把并发到账写入的
+     * PAID / paid_at 覆盖成 EXPIRED（收了钱不发货，4-2 复审 #1）。返回刷新后是否仍 PENDING。
+     */
+    private boolean lockAndRefresh(StarterPackPurchase p) {
+        entityManager.refresh(p, LockModeType.PESSIMISTIC_WRITE);
+        return p.isPending();
     }
 
     private PaymentIntent intentOf(StarterPackPurchase p) {

@@ -36,8 +36,13 @@ public interface StarterPackPurchaseRepository extends JpaRepository<StarterPack
     @Query("SELECT p FROM StarterPackPurchase p WHERE p.id = :id")
     Optional<StarterPackPurchase> findByIdForUpdate(@Param("id") long id);
 
-    /** 补发候选（走 {@code ix_starter_pack_purchases_unfulfilled}）：已付未发放且到账超过宽限。 */
+    /**
+     * 补发候选（走 {@code ix_starter_pack_purchases_unfulfilled}）：已付未发放、到账超过宽限且仍在补跑窗口内
+     * （{@code paid_at ∈ [after, before)}；超窗的不再自动补跑，交人工，4-2 复审 #5）。
+     */
     @Query("SELECT p.id FROM StarterPackPurchase p WHERE p.status = com.tailtopia.starterpack.domain"
-            + ".StarterPackPurchaseStatus.PAID AND p.fulfilledAt IS NULL AND p.paidAt < :before ORDER BY p.paidAt")
-    List<Long> findUnfulfilledPaidBefore(@Param("before") Instant before, Pageable page);
+            + ".StarterPackPurchaseStatus.PAID AND p.fulfilledAt IS NULL AND p.paidAt < :before"
+            + " AND p.paidAt >= :after ORDER BY p.paidAt")
+    List<Long> findUnfulfilledPaidBetween(@Param("after") Instant after, @Param("before") Instant before,
+            Pageable page);
 }

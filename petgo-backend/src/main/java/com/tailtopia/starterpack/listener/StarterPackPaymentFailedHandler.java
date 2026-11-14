@@ -5,6 +5,9 @@ import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.starterpack.domain.StarterPackPurchase;
 import com.tailtopia.starterpack.repository.StarterPackPurchaseRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,9 @@ public class StarterPackPaymentFailedHandler {
 
     private final StarterPackPurchaseRepository purchases;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public StarterPackPaymentFailedHandler(StarterPackPurchaseRepository purchases) {
         this.purchases = purchases;
     }
@@ -29,7 +35,11 @@ public class StarterPackPaymentFailedHandler {
             return;
         }
         purchases.findByPaymentIntentId(event.intentId())
-                .filter(StarterPackPurchase::isPending)
+                .filter(p -> {
+                    // 锁行重读：并发到账已置 PAID 时不覆盖（4-2 复审 #1）
+                    entityManager.refresh(p, LockModeType.PESSIMISTIC_WRITE);
+                    return p.isPending();
+                })
                 .ifPresent(p -> {
                     if (event.failureCategory() == PaymentFailureCategory.EXPIRED) {
                         p.markExpired();

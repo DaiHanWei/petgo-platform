@@ -11,6 +11,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -32,6 +35,9 @@ public class StarterPackPaidHandler {
     private final StarterPackPurchaseRepository purchases;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Autowired
     public StarterPackPaidHandler(StarterPackPurchaseRepository purchases, ApplicationEventPublisher events) {
@@ -63,6 +69,10 @@ public class StarterPackPaidHandler {
             log.warn("starter pack paid without purchase intentId={}", event.intentId());
             return;
         }
+        // 与下单同一把用户锁（purchase_index 不重号，4-2 复审 #2），再锁行重读（与过期关单串行，4-2 复审 #1）。
+        entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext(:k))")
+                .setParameter("k", "starter_pack:" + p.getUserId()).getSingleResult();
+        entityManager.refresh(p, LockModeType.PESSIMISTIC_WRITE);
         StarterPackPurchaseStatus was = p.getStatus();
         if (was == StarterPackPurchaseStatus.PAID) {
             return; // 重放幂等
