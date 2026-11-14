@@ -5163,5 +5163,13 @@
   "couponScopeProduct": "Selected products",
   "@couponScopeProduct": {"description": "v1.4.2 shop Story 9.3 — UI draft, not in PRD §6 (pending design confirmation)"},
   "couponLockedByPendingOrder": "In use by an unpaid order",
-  "@couponLockedByPendingOrder": {"description": "v1.4.2 shop Story 9.3 — UI draft, not in PRD §6 (pending design confirmation)"}
+  "@couponLockedByPendingOrder": {"description": "v1.4.2 shop Story 9.3 — UI draft, not in PRD §6 (pending design confirmation)"},
+  "giftCatalogPrice": "{price} PawCoin",
+  "@giftCatalogPrice": {"description": "V1.5.0 gift-pack Story 2-1 · 选礼物目录（App 稿新文案表）", "placeholders": {"price": {"type": "String"}}},
+  "giftCatalogExp": "+{n} EXP",
+  "@giftCatalogExp": {"description": "V1.5.0 gift-pack Story 2-1 · 选礼物目录（App 稿新文案表）", "placeholders": {"n": {"type": "int"}}},
+  "giftReceivedFrom": "from {names}",
+  "@giftReceivedFrom": {"description": "V1.5.0 gift-pack Story 2-1 · 选礼物目录（App 稿新文案表）", "placeholders": {"names": {"type": "String"}}},
+  "giftReceivedFromMore": "from {names} +{n}",
+  "@giftReceivedFromMore": {"description": "V1.5.0 gift-pack Story 2-1 · 选礼物目录（App 稿新文案表）", "placeholders": {"names": {"type": "String"}, "n": {"type": "int"}}}
 }

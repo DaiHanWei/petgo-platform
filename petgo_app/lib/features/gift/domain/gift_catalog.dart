@@ -11,7 +11,12 @@ class GiftCatalog {
     this.tiers = const [],
     this.exclusiveGroups = const [],
     this.lockBlock,
+    this.categories = const [],
   });
+
+  /// V1.5.0 gift-pack Story 2-1（D-3）：普通礼物按后台分类分组（后端已排好分类与组内顺序）。
+  /// 后端未部署（旧接口无此字段）→ 空，选礼物页按价格档 + `giftTierName` 兜底。
+  final List<GiftCategoryGroup> categories;
 
   /// 收礼宠物（`petId` 交给发起接口）。
   final GiftRecipient recipient;
@@ -39,10 +44,10 @@ class GiftCatalog {
   List<GiftExclusiveGroup> get sortedExclusiveGroups =>
       [...exclusiveGroups]..sort((a, b) => a.minLevel.compareTo(b.minLevel));
 
-  /// 按 token 找礼物（目录刷新后已下线 → null）。
+  /// 按 token 找礼物（目录刷新后已下线 → null）。V1.5.0：分类里的礼物也找（与 tiers 是同一批普通礼物）。
   GiftItem? itemByToken(String? token) {
     if (token == null) return null;
-    for (final item in orderedItems) {
+    for (final item in [...orderedItems, for (final c in categories) ...c.gifts]) {
       if (item.giftToken == token) return item;
     }
     return null;
@@ -70,8 +75,74 @@ class GiftCatalog {
             ]
           : const [],
       lockBlock: rawLock is Map ? GiftLockBlock.fromJson(rawLock.cast<String, dynamic>()) : null,
+      categories: json['categories'] is List
+          ? [
+              for (final c in json['categories'] as List)
+                if (c is Map) GiftCategoryGroup.fromJson(c.cast<String, dynamic>()),
+            ]
+          : const [],
     );
   }
+}
+
+/// 一个礼物分类（V1.5.0 gift-pack Story 2-1）。`categoryId` 是参考数据例外（D-4）。
+class GiftCategoryGroup {
+  const GiftCategoryGroup({
+    required this.categoryId,
+    required this.nameEn,
+    required this.nameId,
+    this.gifts = const [],
+  });
+
+  final int categoryId;
+  final String nameEn;
+  final String nameId;
+  final List<GiftItem> gifts;
+
+  /// 与礼物名同口径：`id` → `nameId`，其余 → `nameEn`；一侧为空退另一侧。
+  String nameFor(Locale locale) {
+    final preferred = locale.languageCode == 'id' ? nameId : nameEn;
+    if (preferred.isNotEmpty) return preferred;
+    return locale.languageCode == 'id' ? nameEn : nameId;
+  }
+
+  factory GiftCategoryGroup.fromJson(Map<String, dynamic> json) => GiftCategoryGroup(
+        categoryId: _int(json['categoryId']),
+        nameEn: json['nameEn'] as String? ?? '',
+        nameId: json['nameId'] as String? ?? '',
+        gifts: _items(json['gifts']),
+      );
+}
+
+/// 这只宠物收到过这件礼物的送礼人（最近送达倒序最多 3 人，`more` = 其余人数）。
+class GiftReceivedFrom {
+  const GiftReceivedFrom({this.senders = const [], this.more = 0});
+
+  final List<GiftReceivedSender> senders;
+  final int more;
+
+  factory GiftReceivedFrom.fromJson(Map<String, dynamic> json) => GiftReceivedFrom(
+        senders: json['senders'] is List
+            ? [
+                for (final s in json['senders'] as List)
+                  if (s is Map) GiftReceivedSender.fromJson(s.cast<String, dynamic>()),
+              ]
+            : const [],
+        more: _int(json['more']),
+      );
+}
+
+/// 送礼人（已注销：nickname 为 null、deleted = true）。
+class GiftReceivedSender {
+  const GiftReceivedSender({this.nickname, this.deleted = false});
+
+  final String? nickname;
+  final bool deleted;
+
+  factory GiftReceivedSender.fromJson(Map<String, dynamic> json) => GiftReceivedSender(
+        nickname: json['nickname'] as String?,
+        deleted: json['deleted'] == true,
+      );
 }
 
 /// 收礼宠物（`petType` = CAT / DOG / OTHER；头像与品种可空）。
@@ -145,7 +216,15 @@ class GiftItem {
     this.iconUrl,
     this.kind = 'NORMAL',
     this.minLevel,
+    this.senderExp = 0,
+    this.receivedFrom,
   });
+
+  /// V1.5.0：送 1 个时送礼人可得 EXP（不参与成长体系 = 0 → 不显示 EXP 行）。
+  final int senderExp;
+
+  /// V1.5.0：这只宠物收到过这件礼物的送礼人；没收到过（或旧接口）= null。
+  final GiftReceivedFrom? receivedFrom;
 
   /// 礼物 `public_token`（发起送礼 / 埋点 `gift_id` 用，不可枚举）。
   final String giftToken;
@@ -177,6 +256,10 @@ class GiftItem {
         price: _int(json['price']),
         kind: json['kind'] as String? ?? 'NORMAL',
         minLevel: json['minLevel'] is num ? (json['minLevel'] as num).toInt() : null,
+        senderExp: _int(json['senderExp']),
+        receivedFrom: json['receivedFrom'] is Map
+            ? GiftReceivedFrom.fromJson((json['receivedFrom'] as Map).cast<String, dynamic>())
+            : null,
       );
 }
 

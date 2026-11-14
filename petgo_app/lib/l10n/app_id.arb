@@ -3368,5 +3368,9 @@
   "couponScopeProduct": "Produk tertentu",
   "@couponScopeProduct": {"description": "v1.4.2 shop Story 9.3 — UI draft, not in PRD §6 (pending design confirmation)"},
   "couponLockedByPendingOrder": "Dipakai di pesanan menunggu bayar",
-  "@couponLockedByPendingOrder": {"description": "v1.4.2 shop Story 9.3 — UI draft, not in PRD §6 (pending design confirmation)"}
+  "@couponLockedByPendingOrder": {"description": "v1.4.2 shop Story 9.3 — UI draft, not in PRD §6 (pending design confirmation)"},
+  "giftCatalogPrice": "{price} PawCoin",
+  "giftCatalogExp": "+{n} EXP",
+  "giftReceivedFrom": "dari {names}",
+  "giftReceivedFromMore": "dari {names} +{n}"
 }

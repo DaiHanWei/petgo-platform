@@ -1,6 +1,6 @@
 # Story 2.1: App 送礼选礼物目录按分类（B1 ~ B5）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ② gift-pack · 分支 `feat/1.5.0-gift-pack`
 > 口径优先级：`decision-log.md`（11-02 / 11-11）> PRD A §3.1 / §3.7（FR-187、FR-225）> 架构 D-3、§4.1 > App 稿 B 泳道（拆页 `ui-gift-optimization/拆页-App/B1 ~ B5`，页头「新文案表」）。
@@ -39,9 +39,9 @@ so that 挑礼物更直观。
 
 ## Tasks / Subtasks
 
-- [ ] 模型与解析 + 单测（AC1）
-- [ ] 选礼物页 UI（AC2、AC3）
-- [ ] ARB（AC4）
+- [x] 模型与解析 + 单测（AC1）
+- [x] 选礼物页 UI（AC2、AC3）
+- [x] ARB（AC4）
 
 ## Dev Notes
 
@@ -58,4 +58,18 @@ so that 挑礼物更直观。
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：B1 ~ B5 逐屏还原度（Android 模拟器 + 真后端）、tab 跟随滚动的手感待本地。
+- L0：`flutter analyze` 无 error / warning（云端 Flutter 3.50 对存量代码报约 800 条 `material.dart` / `ref.exists` 弃用 info，非本线引入；本线新文件无新增 info 以外问题）；`flutter test test/gift test/l10n` 120 条全绿（新增 `gift_catalog_test.dart` 2 条、`gift_catalog_page_test.dart` 5 条）。
+- 测试放在 `test/gift/`（仓库现有送礼测试目录），而非 story 写的 `test/features/gift/`。
+- 实现要点：
+  - 新页 `gift_catalog_page.dart`（整页，B1 ~ B5）：顶栏关闭 + `giftPanelTitle` + 「物种 · 品种」+ 32 双环头像；顶部分类 tab（横滑，点 tab `ensureVisible` 定位，滚动时按「越过视口顶的最后一个分组」跟随）；分组 = 后端 `categories`（空分类不渲染）→ 专属按等级（复用 `giftExclusiveGroup` + 段位渐变）→ 锁区块（复用 `giftLockTitle` / `giftLockSubtitle`）。后端未部署（无 `categories`）→ 价格档 + `giftTierName` 兜底。
+  - 礼物格：图标 + 名称 +「{n} PawCoin」+「+{n} EXP」（0 不显示）；收到过 → 紫色「dari …」（最多两行，注销显示 `feedDeletedUser`），替代 EXP 行。点礼物直接 pop `GiftCatalogPicked`（本屏无选中态，2-2 接包装页）；锁区块 pop `GiftCatalogOpenLevelPage`；目录接口拒绝 pop `GiftCatalogCannotSend`。
+  - 入口切换（现有 `showGiftPanelSheet` 调用方改 push 新页）放在 2-2 与包装页一起做；旧面板本 story 不删。
+  - 文案：`giftCatalogPrice`「{price} PawCoin」、`giftCatalogExp`「+{n} EXP」、`giftReceivedFrom`「dari {names}」、`giftReceivedFromMore`「dari {names} +{n}」（表里「dari {a}, {b}, {c} +{n}」：App 把最多 3 个名字用「, 」拼成 `names` 传入，效果逐字相同）。
+
 ### File List
+
+- `petgo_app/lib/features/gift/domain/gift_catalog.dart`（改：`categories`、`senderExp`、`receivedFrom`）
+- `petgo_app/lib/features/gift/presentation/gift_catalog_page.dart`（新）
+- `petgo_app/lib/l10n/app_en.arb`、`app_id.arb` + 生成产物（改）
+- `petgo_app/test/gift/gift_catalog_test.dart`、`gift_catalog_page_test.dart`（新）

@@ -59,8 +59,8 @@ development_status:
   1-5-送礼祝福语举报: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-app送礼选礼物目录按分类: ready-for-dev
+  epic-2: in-progress
+  2-1-app送礼选礼物目录按分类: review
   2-2-app送礼包装页祝福语与支付区: ready-for-dev
   2-3-app送礼送出动画与送达页: ready-for-dev
   2-4-app送礼礼物页逐笔列表与diary礼物行: ready-for-dev
