@@ -97,6 +97,9 @@ public class AccountDeletionService {
     /** V1.4.2 social-topic Story 2.1：账号级里程碑 flag 随注销物理删除。 */
     private final com.tailtopia.profile.service.AccountMilestoneService accountMilestones;
 
+    /** V1.5.0 onboarding-recall Story 2.1：新手任务账号记录（注销显式删）。 */
+    private final com.tailtopia.profile.repository.UserNewbieMarkDao newbieMarks;
+
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
             ConsultAnonymizationService consultAnonymization,
@@ -116,7 +119,8 @@ public class AccountDeletionService {
             PushPreferenceService pushPreferences, CollectDeletionService collectDeletion,
             PetSlotAccountDeletionService petSlotDeletion,
             PetFollowService petFollowService,
-            com.tailtopia.profile.service.AccountMilestoneService accountMilestones) {
+            com.tailtopia.profile.service.AccountMilestoneService accountMilestones,
+            com.tailtopia.profile.repository.UserNewbieMarkDao newbieMarks) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -146,6 +150,7 @@ public class AccountDeletionService {
         this.petSlotDeletion = petSlotDeletion;
         this.petFollowService = petFollowService;
         this.accountMilestones = accountMilestones;
+        this.newbieMarks = newbieMarks;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -240,6 +245,8 @@ public class AccountDeletionService {
         growthDeletion.deleteByUserId(userId);
         // V1.4.2 social-topic Story 2.1（AC10）：账号级里程碑 flag 物理删（users 行只匿名化，FK CASCADE 在注销路径不触发）。
         accountMilestones.deleteByUserId(userId);
+        // V1.5.0 onboarding-recall Story 2.1（AC13）：新手任务账号记录物理删（同上，FK CASCADE 在注销路径不触发）。
+        newbieMarks.deleteByUserId(userId);
         // V1.4.0 ④ Story 2.1：本人的帖子 / 场所收藏物理删（users 行只匿名化，FK CASCADE 不触发），在 authDeletion 之前。
         // ⚠️ 他人收藏的、指向本人帖子的行不删：帖子置 AUTHOR_DEACTIVATED 后列表读时显示不可见，由对方自行移除。
         collectDeletion.deleteByUserId(userId);

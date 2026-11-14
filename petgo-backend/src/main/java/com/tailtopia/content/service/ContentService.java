@@ -1076,6 +1076,15 @@ public class ContentService {
         return java.util.Set.copyOf(likes.findLikedPostIds(viewerId, postIds));
     }
 
+    /**
+     * 新手任务 ⑥「去完成」落点（V1.5.0 onboarding-recall Story 2.1）：我作为作者、未删 {@code PUBLISHED} 帖子里，
+     * 最近一条别人发的未删评论所在帖子 id。经 service 暴露，profile 不直读 content 表（架构边界）。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<Long> latestPostCommentedByOthers(long authorId) {
+        return posts.findLatestPostCommentedByOthers(authorId);
+    }
+
     /** JDBC 可能给回 Timestamp 或 Instant，两种都收（native query 的返回类型不由我们定）。 */
     private static Instant toInstant(Object value) {
         if (value instanceof Instant instant) {

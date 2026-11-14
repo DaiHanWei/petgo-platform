@@ -36,7 +36,7 @@ class NewbieTaskEndpointIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private MilestoneCompletionService completionService;
     @Autowired
-    private com.tailtopia.profile.service.NewbieTaskService newbieTaskService;
+    private com.tailtopia.profile.service.LegacyNewbieTaskCompat newbieTaskService;
 
     private PetProfile seedPetWithRoster(long ownerId, PetType type) {
         long seq = SEQ.incrementAndGet();
@@ -61,10 +61,39 @@ class NewbieTaskEndpointIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void noProfileReturns404() throws Exception {
-        User u = newUser(PetStatus.PLANNING); // 无 pet_profiles 行 → 404
+        User u = newUser(PetStatus.PLANNING); // 无 pet_profiles 行 → 404（< 1.5.0 旧版口径，OR-9）
 
         mvc.perform(get("/api/v1/me/newbie-tasks").header("Authorization", userBearer(u.getId())))
                 .andExpect(status().isNotFound());
+    }
+
+    /** V1.5.0 onboarding-recall Story 2.1 · AC8 / AC10：≥ 1.5.0 客户端无宠物也 200、7 项账号级。 */
+    @Test
+    void v150ClientWithoutPetGetsSevenTasks() throws Exception {
+        User u = newUser(PetStatus.PLANNING);
+
+        mvc.perform(get("/api/v1/me/newbie-tasks").header("Authorization", userBearer(u.getId()))
+                        .header("X-App-Version", "1.5.0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total", is(7)))
+                .andExpect(jsonPath("$.items.length()", is(7)))
+                .andExpect(jsonPath("$.items[0].key", is("FIRST_DIARY")))
+                .andExpect(jsonPath("$.hasPet", is(false)))
+                .andExpect(jsonPath("$.oneWeekDaysLeft", is(7)));
+    }
+
+    /** 旧版响应保持旧形状：不带 V1.5.0 新字段。 */
+    @Test
+    void legacyClientKeepsOldShape() throws Exception {
+        User u = newUser();
+        seedPetWithRoster(u.getId(), PetType.CAT);
+
+        mvc.perform(get("/api/v1/me/newbie-tasks").header("Authorization", userBearer(u.getId()))
+                        .header("X-App-Version", "1.4.2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total", is(6)))
+                .andExpect(jsonPath("$.hasPet").doesNotExist())
+                .andExpect(jsonPath("$.oneWeekDaysLeft").doesNotExist());
     }
 
     @Test

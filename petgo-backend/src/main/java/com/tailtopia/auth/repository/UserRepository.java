@@ -219,6 +219,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + "order by u.id")
     List<User> findOfficialAccounts();
 
+    /**
+     * 新手任务 ⑦ 每日判定的候选（V1.5.0 onboarding-recall Story 2.1 · AC9）：WIB 注册日 ∈ [from, to] 的
+     * 真人（{@code REAL}）普通用户（{@code USER}）、{@code ACTIVE}、启用、未注销。按 id 升序。
+     */
+    @Query(value = """
+            SELECT u.id FROM users u
+             WHERE u.role = 'USER' AND u.account_type = 'REAL' AND u.status = 'ACTIVE'
+               AND u.enabled = true AND u.deleted_at IS NULL
+               AND (u.created_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN :fromWib AND :toWib
+             ORDER BY u.id
+            """, nativeQuery = true)
+    List<Number> findRealUserIdsRegisteredWibBetween(@Param("fromWib") java.time.LocalDate fromWib,
+            @Param("toWib") java.time.LocalDate toWib);
+
     @Query("select u from User u where u.role = :role and u.accountType = :accountType "
             + "and u.deletedAt is null and u.enabled = true and u.status = :status")
     List<User> findLifecyclePushCandidates(@Param("role") Role role,

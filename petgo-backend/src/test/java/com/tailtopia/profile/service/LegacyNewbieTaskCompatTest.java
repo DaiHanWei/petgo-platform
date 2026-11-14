@@ -22,14 +22,17 @@ import org.mockito.Mockito;
 
 /**
  * L0（Story 7.3 · FR-47）：新手任务独立计数 + Lulus Pemula 解锁态推导 + 无档案 404。纯 Mockito。
+ *
+ * <p>V1.5.0 onboarding-recall Story 2.1（OR-9）：原 {@code NewbieTaskServiceTest} 的用例照搬到旧版兼容层
+ * （&lt; 1.5.0 客户端仍是这 6 项旧逻辑）；新版 7 项见新的 {@code NewbieTaskServiceTest}。
  */
-class NewbieTaskServiceTest {
+class LegacyNewbieTaskCompatTest {
 
     private PetProfileRepository profiles;
     private PetMilestoneRepository milestones;
     private MilestoneCompletionRepository completions;
     private HealthRecordRepository healthRecords;
-    private NewbieTaskService service;
+    private LegacyNewbieTaskCompat service;
 
     private long nextId = 1;
 
@@ -39,7 +42,8 @@ class NewbieTaskServiceTest {
         milestones = Mockito.mock(PetMilestoneRepository.class);
         completions = Mockito.mock(MilestoneCompletionRepository.class);
         healthRecords = Mockito.mock(HealthRecordRepository.class);
-        service = new NewbieTaskService(profiles, milestones, completions, healthRecords);
+        service = new LegacyNewbieTaskCompat(profiles, milestones, completions, healthRecords,
+                new LulusPemulaReader(milestones, completions));
     }
 
     private PetProfile profile(PetType type, long id) {

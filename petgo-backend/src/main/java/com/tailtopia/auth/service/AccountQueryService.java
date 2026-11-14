@@ -385,6 +385,17 @@ public class AccountQueryService {
     }
 
     /**
+     * 新手任务 ⑦ 每日判定的候选账号（V1.5.0 onboarding-recall Story 2.1 · AC9）：WIB 注册日 ∈ [fromWib, toWib]
+     * 的 REAL + USER + ACTIVE + 未注销账号 id。只读端口 —— profile 模块不直访 users 表。
+     */
+    @Transactional(readOnly = true)
+    public List<Long> realUserIdsRegisteredWibBetween(java.time.LocalDate fromWib, java.time.LocalDate toWib) {
+        return users.findRealUserIdsRegisteredWibBetween(fromWib, toWib).stream()
+                .map(Number::longValue)
+                .toList();
+    }
+
+    /**
      * 生命周期推送日扫快照（留存手册抓手 1）。只读端口 —— notify 模块<b>不直访</b> users 表。
      *
      * <p>日期一律折 UTC：定时日扫、{@code created_at}、{@code last_active_at} 三者必须同一基准，

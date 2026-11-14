@@ -51,8 +51,8 @@ development_status:
   1-3-首日游客展示页真实宠物区: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-新手任务账号记录与七项判定: ready-for-dev
+  epic-2: in-progress
+  2-1-新手任务账号记录与七项判定: review
   2-2-新手毕业账号级里程碑与成长值: ready-for-dev
   2-3-新手账号成就接口与里程碑计数口径: ready-for-dev
   2-4-新手存量补算: ready-for-dev

@@ -30,6 +30,9 @@ petgo:
     winback-after-days: ${LIFECYCLE_PUSH_WINBACK_AFTER_DAYS:7}
     # 12:00 UTC = 19:00 WIB，晚间黄金时段。别照抄 Story 6.7 的 01:00 UTC（=08:00 WIB 通勤路上）。
     cron: ${LIFECYCLE_PUSH_CRON:0 0 12 * * *}
+  # V1.5.0 onboarding-recall Story 2.1 · AC9：新手任务 ⑦「注册满一周」每日补记（Asia/Jakarta 时区；须早于 19:00 WIB 召回）。
+  newbie:
+    week-cron: ${NEWBIE_WEEK_CRON:0 5 0 * * *}
   # V1.5.0 onboarding-recall Story 1.1 · OR-5：游客推荐（/api/v1/public/pet-recommendations）进程内单值快照有效期。
   # 只缓存那一份全站第一页（PRD 拍板的唯一例外）；登录态推荐仍实时。
   public-pet-recommendations:

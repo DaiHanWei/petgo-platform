@@ -1,85 +1,79 @@
 package com.tailtopia.profile.service;
 
-import com.tailtopia.profile.domain.MilestoneCatalog;
+import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.service.ContentService;
 import com.tailtopia.profile.domain.NewbieTask;
 import com.tailtopia.profile.domain.PetProfile;
-import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.dto.NewbieTaskResponse;
-import com.tailtopia.profile.repository.HealthRecordRepository;
-import com.tailtopia.profile.repository.MilestoneCompletionRepository;
-import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
-import com.tailtopia.shared.error.AppException;
+import com.tailtopia.profile.repository.UserNewbieMarkDao;
+import com.tailtopia.shared.schedule.ScheduleWindow;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 新手任务进度服务（Story 7.3 · FR-47）。归 profile 域。**只读聚合**——不物化、不写完成；
- * 任务完成态由既有里程碑完成（S1–S5）与 {@code health_records} 存在性推导，独立计数。
+ * 新手任务进度（V1.5.0 onboarding-recall Story 2.1 · FR-176 · OR-1）—— ≥ 1.5.0 客户端。
  *
- * <p>解锁副作用（6 任务全达成 → 完成 Lulus Pemula）由 {@link MilestoneCompletionService}
- * 承载（运行时事件触发），本服务不写。V1.4.0 multi-pet（Story 1.3 · P-2）：对账号全部宠物，
- * 每项任务「任意一只完成即算」；Lulus Pemula 已解锁 = 任一只已解锁。
+ * <p>按<b>账号</b>算：①–⑥ 读 {@code user_newbie_marks}（做过即记、永不撤）；⑦ 按 WIB 注册日直接判定
+ * （{@code 注册日 + 7 ≤ 今天}，不依赖标记，保证「不打开 App 也当天完成」与读到的一致）。<b>没宠物也返回 200</b>。
+ * &lt; 1.5.0 客户端走 {@link LegacyNewbieTaskCompat}（OR-9）。
  */
 @Service
 public class NewbieTaskService {
 
+    /** ⑦ 需要的天数。 */
+    static final int ONE_WEEK_DAYS = 7;
+
     private final PetProfileRepository profiles;
-    private final PetMilestoneRepository milestones;
-    private final MilestoneCompletionRepository completions;
-    private final HealthRecordRepository healthRecords;
+    private final UserNewbieMarkDao marks;
+    private final AccountQueryService accounts;
+    private final ContentService contentService;
+    private final LulusPemulaReader lulus;
 
-    public NewbieTaskService(PetProfileRepository profiles, PetMilestoneRepository milestones,
-            MilestoneCompletionRepository completions, HealthRecordRepository healthRecords) {
+    public NewbieTaskService(PetProfileRepository profiles, UserNewbieMarkDao marks, AccountQueryService accounts,
+            ContentService contentService, LulusPemulaReader lulus) {
         this.profiles = profiles;
-        this.milestones = milestones;
-        this.completions = completions;
-        this.healthRecords = healthRecords;
+        this.marks = marks;
+        this.accounts = accounts;
+        this.contentService = contentService;
+        this.lulus = lulus;
     }
 
-    /** 当前用户 6 新手任务进度（无档案 → 404 防枚举）。每项任务账号下任意一只宠物完成即算（P-2）。 */
+    /** 当前用户 7 新手任务进度（固定顺序）。 */
     @Transactional(readOnly = true)
-    public NewbieTaskResponse progress(long ownerId) {
-        List<PetProfile> pets = profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId);
-        if (pets.isEmpty()) {
-            throw AppException.notFound("尚未创建宠物档案");
-        }
+    public NewbieTaskResponse progress(long ownerId, Instant now) {
+        Set<String> done = marks.keysOf(ownerId);
+        long daysSinceSignup = accounts.createdAtOf(ownerId)
+                .map(created -> Math.max(0, ChronoUnit.DAYS.between(wibDate(created), wibDate(now))))
+                .orElse(0L);
+        boolean oneWeekDone = daysSinceSignup >= ONE_WEEK_DAYS;
 
-        List<NewbieTaskResponse.Item> items = new ArrayList<>();
-        int done = 0;
+        List<NewbieTaskResponse.Item> items = new ArrayList<>(NewbieTask.ALL.size());
+        int completed = 0;
         for (NewbieTask task : NewbieTask.ALL) {
-            boolean completed = pets.stream().anyMatch(pet -> task.isHealthRecord()
-                    ? healthRecords.existsByPetProfileId(pet.getId())
-                    : isMilestoneDone(pet.getId(), pet.getPetType(), task.milestoneSuffix()));
-            if (completed) {
-                done++;
+            boolean ok = task == NewbieTask.ONE_WEEK ? oneWeekDone : done.contains(task.name());
+            if (ok) {
+                completed++;
             }
-            items.add(new NewbieTaskResponse.Item(task.name(), completed));
+            items.add(new NewbieTaskResponse.Item(task.name(), ok));
         }
 
-        boolean lulusUnlocked = pets.stream().anyMatch(pet -> isMilestoneDoneByCode(
-                pet.getId(), MilestoneCatalog.lulusPemulaCode(pet.getPetType())));
-        return new NewbieTaskResponse(items, done, NewbieTask.ALL.size(), lulusUnlocked);
+        List<PetProfile> pets = profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId);
+        int daysLeft = oneWeekDone ? 0 : (int) Math.max(1, ONE_WEEK_DAYS - daysSinceSignup);
+        Long replyGoPostId = done.contains(NewbieTask.FIRST_REPLY.name())
+                ? null
+                : contentService.latestPostCommentedByOthers(ownerId).orElse(null);
+        return new NewbieTaskResponse(items, completed, NewbieTask.ALL.size(), lulus.unlocked(ownerId, pets),
+                !pets.isEmpty(), daysLeft, replyGoPostId);
     }
 
-    private boolean isMilestoneDone(long petProfileId, PetType petType, String suffix) {
-        return isMilestoneDoneByCode(petProfileId, prefixOf(petType) + "-" + suffix);
-    }
-
-    private boolean isMilestoneDoneByCode(long petProfileId, String code) {
-        return milestones.findByPetProfileIdAndCode(petProfileId, code)
-                .map(m -> completions.existsByPetMilestoneId(m.getId()))
-                .orElse(false);
-    }
-
-    /** pet_type → 清单 code 前缀（CAT→C / DOG→D / OTHER→G）。 */
-    private static String prefixOf(PetType type) {
-        return switch (type) {
-            case CAT -> "C";
-            case DOG -> "D";
-            case OTHER -> "G";
-        };
+    static LocalDate wibDate(Instant at) {
+        return at.atZone(ScheduleWindow.WIB).toLocalDate();
     }
 }

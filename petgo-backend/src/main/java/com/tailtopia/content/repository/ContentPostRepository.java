@@ -188,6 +188,24 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     List<Object[]> findLatestPublicCoverPosts(@Param("petIds") java.util.Collection<Long> petIds);
 
     /**
+     * 新手任务 ⑥「去完成」落点（V1.5.0 onboarding-recall Story 2.1 · AC8）：我作为作者、未删、{@code PUBLISHED}
+     * 的帖子里，最近一条「别人发的、未删」评论所在的帖子 id。没有 → 空。
+     */
+    @Query(value = """
+            SELECT c.post_id
+              FROM comments c
+              JOIN content_posts p ON p.id = c.post_id
+             WHERE p.author_id = :authorId
+               AND p.deleted_at IS NULL
+               AND p.status = 'PUBLISHED'
+               AND c.author_id <> :authorId
+               AND c.deleted_at IS NULL
+             ORDER BY c.created_at DESC, c.id DESC
+             LIMIT 1
+            """, nativeQuery = true)
+    java.util.Optional<Long> findLatestPostCommentedByOthers(@Param("authorId") long authorId);
+
+    /**
      * 这批宠物各自**最近一张公开照片**（Story 4.1 · AC4 的卡片大图）。
      *
      * <h2>🔴 与左下角小圆头像是**两个不同字段、不同来源**</h2>
