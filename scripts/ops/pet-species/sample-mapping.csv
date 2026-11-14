@@ -1,0 +1,6 @@
+pet_id,pet_name,current_type,target_species,target_breed,confidence,reason
+900001,Momo,OTHER,RABBIT,Holland Lop,HIGH,照片是垂耳兔
+900002,Pandan,OTHER,CIVET,Musang Pandan,HIGH,名字与照片均为麝香猫
+900003,Oyen,OTHER,CAT,Kucing Kampung,HIGH,照片是橘猫（误存为其他）
+900004,Bubu,OTHER,HAMSTER,,LOW,照片模糊
+900005,Kiki,OTHER,BIRD,Lovebird,HIGH,照片是爱情鸟

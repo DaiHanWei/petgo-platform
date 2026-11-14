@@ -1,6 +1,6 @@
 # Story 1.4: 物种存量迁移脚本与推送导出SQL（运维脚本）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 主题 pet-species（会话 ④）· 分支 `feat/1.5.0-pet-species`
 > 口径优先级：`decision-log.md` > PRD §3.4（FR-208）/ §3.5（FR-224 分组）/ §6 > `architecture-v1.5.0-pet-species-delta.md`（D-19、D-20）。
@@ -55,12 +55,12 @@ so that 11-25 的上线推送能按 A / B / C / D 四组各发一条。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：确认 1.2 的 `pet_species_changes` 列名、唯一索引名与架构一致；`OpsAudienceSql.BASE_FILTER` 未漂移
-- [ ] **T1** `apply-mapping.sql` + `run-migration.sh` + `sample-mapping.csv`（AC2）
-- [ ] **T2** `export-push-groups.sql`（AC3）
-- [ ] **T3** README（AC1）
-- [ ] **T4** 集成测试（AC4）；能编译即可，云端不跑；Completion Notes 标「L1 待本地验收」
-- [ ] **T5** `shellcheck run-migration.sh`（云端有就跑，没有记一句）
+- [x] **T0 开工核对**：确认 1.2 的 `pet_species_changes` 列名、唯一索引名与架构一致；`OpsAudienceSql.BASE_FILTER` 未漂移
+- [x] **T1** `apply-mapping.sql` + `run-migration.sh` + `sample-mapping.csv`（AC2）
+- [x] **T2** `export-push-groups.sql`（AC3）
+- [x] **T3** README（AC1）
+- [x] **T4** 集成测试（AC4）；能编译即可，云端不跑；Completion Notes 标「L1 待本地验收」
+- [x] **T5** `shellcheck run-migration.sh`（云端有就跑，没有记一句）
 
 ## Dev Notes
 
@@ -79,6 +79,31 @@ so that 11-25 的上线推送能按 A / B / C / D 四组各发一条。
 
 ### Agent Model Used
 
+Claude（云端 L0 会话，2026-11-14）
+
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：`PetSpeciesOpsScriptIntegrationTest`（HIGH 迁移兔 / 麝香猫 / 误存的猫 → `pet_type=CAT` 且 `milestone_track` 仍 OTHER；LOW / 名字不符 / 用户改过 / 宠物不存在 / 无目标跳过；已有品种不覆盖；重复 `pet_id` 与非法物种整批报错；重跑幂等且统计为 `NOT_OTHER`；导出分组互斥；迁移后猫的里程碑仍是 G 清单）已写好、能编译，云端未跑。脚本**未连任何库执行**（stag / 生产执行按 README 由操作者确认后做，不属本 story）。
+- L0：`clean package -DskipTests` 绿；新增 `PetSpeciesOpsScriptStaticTest`（5 例：迁移脚本不写 `milestone_track` / `pet_type_changed_at`、无事务控制与 psql 元命令、物种白名单 = `PetSpecies`、type_changed / group_changed 列表与 `pickerType()` / `group()` 一致、导出猫 39 / 狗 43 + 基础人群、脚本无凭证）全过；`bash -n run-migration.sh` 通过。T5：云端无 `shellcheck`，以 `bash -n` 代替。
+- T0 核对：1.2 实际的 `pet_species_changes` 列名与唯一索引名 `uq_pet_species_changes_migration` 与架构一致；`OpsAudienceSql.BASE_FILTER` 未漂移（2026-11-14）。
+- 与本文件写法的出入：
+  - psql 的 `\copy` 参数不做变量替换（`:'csv'` 无效），映射 CSV 改由 `run-migration.sh` 经 stdin（`pstdin`）喂入；`apply-mapping.sql` 用 `\i` 绝对路径引入（路径中的单引号已转义）。
+  - 导出 SQL 的「不含 `\copy` 的视图式查询」放在同一文件的 `-- BEGIN push_groups_view` / `-- END push_groups_view` 之间（`CREATE TEMP VIEW pet_species_push_groups`），测试截取这一段执行；猫 / 狗 VALUES 也在这一段，供 3.1 的 App 同步守卫读取。
+- 复审（code-review medium）已修：
+  - #1 先 `UPDATE … RETURNING` 再按真正改到的行写 `MIGRATION` 记录与统计（判定后被用户并发改掉的计 `CHANGED_CONCURRENTLY`，不留假记录）。
+  - #2 type_changed / group_changed 的手抄列表加 L0 守卫与 `PetSpecies` 比对。
+  - #3 导出整段包在 `BEGIN ISOLATION LEVEL REPEATABLE READ … ROLLBACK`，三份 CSV 与自检同一快照。
+  - #4 `pet_id` 为空的行整批报错；#5 名字比对两边都 trim；#6 `DROP … IF EXISTS pg_temp.*` 防误删同名永久对象；#7 `target_species` / `confidence` 大小写与空格不敏感；#8 路径单引号转义；#9 集成测试补 `PET_NOT_FOUND` / `NO_TARGET` / 重跑 `NOT_OTHER` 断言。
+- 待确认：
+  - C 组「品种不在新清单」按选项全文（如 `Pudel / Poodle`）小写比对（AC3.3 原文）；只存了别名（如旧值 `Poodle`）的猫狗会进 C 组——与 App「不在清单 = 手填」的判定一致。
+  - 迁移不发埋点（Q-4 默认），迁移量看 `pet_species_changes`（README 第 ⑥ 步核对查询）。
+
 ### File List
+
+- scripts/ops/pet-species/README.md（新）
+- scripts/ops/pet-species/run-migration.sh（新）
+- scripts/ops/pet-species/apply-mapping.sql（新）
+- scripts/ops/pet-species/export-push-groups.sql（新）
+- scripts/ops/pet-species/sample-mapping.csv（新）
+- petgo-backend/src/test/java/com/tailtopia/profile/species/PetSpeciesOpsScriptStaticTest.java（新，L0）
+- petgo-backend/src/test/java/com/tailtopia/profile/species/PetSpeciesOpsScriptIntegrationTest.java（新，L1）
