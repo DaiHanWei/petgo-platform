@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 /**
  * 账号级里程碑 flag（V1.4.2 social-topic Story 2.1 · FR-154 · D-4 / D-12）。
  *
- * <p>与按宠物里程碑的区别：触发源是「账号做了什么」（第一次手动关注一个人 / 第一次收藏帖子），账号内只算一次，
+ * <p>与按宠物里程碑的区别：触发源是「账号做了什么」（第一次手动关注一个人 / 第一次收藏帖子 / V1.5.0 起 7 项新手任务全部完成），账号内只算一次，
  * 记在 {@code user_milestone_flags}；完成时扇到账号下所有 ACTIVE 宠物，各写一条本物种编码的完成行。
  * 通知 / 成长值 / 埋点按账号只算一次（见 {@code AccountMilestoneService}）。
  *
@@ -22,7 +22,13 @@ import java.util.stream.Collectors;
 public enum AccountMilestoneFlag {
 
     FIRST_FOLLOW_USER(MilestoneAutoEvent.FIRST_FOLLOW_USER),
-    FIRST_COLLECT_CONTENT(MilestoneAutoEvent.FIRST_COLLECT_CONTENT);
+    FIRST_COLLECT_CONTENT(MilestoneAutoEvent.FIRST_COLLECT_CONTENT),
+    /**
+     * 7 项新手任务全部完成（V1.5.0 onboarding-recall Story 2.2 · FR-177 · OR-6）。与上面两个不同：
+     * 无 ACTIVE 宠物也发通知；成长值走 {@code NEWBIE_GRADUATED}（+20）而非 {@code MILESTONE_S}；
+     * 「已庆祝」另记在 {@code user_milestone_flags.celebrated_at}（无宠物账号的补弹判据）。
+     */
+    LULUS_PEMULA(MilestoneAutoEvent.LULUS_PEMULA);
 
     private final MilestoneAutoEvent event;
 
@@ -55,7 +61,7 @@ public enum AccountMilestoneFlag {
         return code == null ? Optional.empty() : Optional.ofNullable(BY_CODE.get(code));
     }
 
-    /** 该完整 code 是否账号级里程碑编码（6 个之一）。 */
+    /** 该完整 code 是否账号级里程碑编码（9 个之一：3 flag × 3 物种；V1.5.0 起含 Lulus Pemula）。 */
     public static boolean isAccountLevel(String code) {
         return ofCode(code).isPresent();
     }

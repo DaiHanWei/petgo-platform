@@ -1,12 +1,14 @@
 package com.tailtopia.profile.service;
 
 import com.tailtopia.profile.domain.AccountMilestoneFlag;
+import com.tailtopia.profile.domain.MilestoneCatalog;
 import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.MilestoneCelebrationReportResponse;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.profile.repository.UserMilestoneFlagRepository;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,12 +42,15 @@ public class MilestoneCelebrationService {
     private final PetProfileRepository profiles;
     private final PetMilestoneRepository milestones;
     private final MilestoneCompletionRepository completions;
+    private final UserMilestoneFlagRepository flags;
 
     public MilestoneCelebrationService(PetProfileRepository profiles,
-            PetMilestoneRepository milestones, MilestoneCompletionRepository completions) {
+            PetMilestoneRepository milestones, MilestoneCompletionRepository completions,
+            UserMilestoneFlagRepository flags) {
         this.profiles = profiles;
         this.milestones = milestones;
         this.completions = completions;
+        this.flags = flags;
     }
 
     /**
@@ -84,13 +89,19 @@ public class MilestoneCelebrationService {
                 .distinct()
                 .flatMap(f -> f.codes().stream())
                 .toList();
+        Instant now = Instant.now();
         if (!accountCodes.isEmpty()) {
             Set<Long> merged = new LinkedHashSet<>(targetIds);
             merged.addAll(milestones.findIdsByOwnerIdAndCodeIn(ownerId, accountCodes));
             targetIds = new ArrayList<>(merged);
+            // V1.5.0 onboarding-recall Story 2.2（AC9 · OR-6）：Lulus Pemula 的「已庆祝」按账号记 ——
+            // 回报含任一 Lulus 编码时同时置 user_milestone_flags.celebrated_at（只置 NULL 的）。
+            if (requested.stream().anyMatch(MilestoneCatalog::isLulusPemula)) {
+                flags.markCelebrated(ownerId, AccountMilestoneFlag.LULUS_PEMULA.name(), now);
+            }
         }
 
-        int marked = targetIds.isEmpty() ? 0 : completions.markCelebrated(targetIds, Instant.now());
+        int marked = targetIds.isEmpty() ? 0 : completions.markCelebrated(targetIds, now);
         long remaining = completions.countByPetMilestoneIdInAndCelebratedAtIsNull(rosterIds);
         // 不落 PII / 不落 code 明细：条数足够定位问题，且 code 在日志里没有诊断价值。
         log.info("milestone celebration reported: requested={} marked={} remaining={}",

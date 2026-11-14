@@ -54,34 +54,6 @@ public final class MilestoneCatalog {
             "D-L4", Set.of("D-M3", "D-M4", "D-M5"));
 
     /**
-     * 聚合里程碑「Lulus Pemula」（新手毕业，Story 7.3 / FR-47）的 5 个里程碑前置**语义后缀**。
-     * S1–S5 在 CAT/DOG/OTHER 三清单语义一致、后缀统一（G-S1..G-S5 同义），故可用统一 suffix 判定。
-     * 第 6 任务「录入一条健康记录」非里程碑节点，取 {@code health_records} 存在性，判定在
-     * {@code MilestoneCompletionService.maybeUnlockLulusPemula} 内联（不塞进本目录）。
-     */
-    public static final Set<String> NEWBIE_PREREQ_SUFFIXES = Set.of("S1", "S2", "S3", "S4", "S5");
-
-    /**
-     * 同一组前置的**按物种完整 code**（V1.3.0 Story 1.1 · AD-A4）：判定「6 新手任务是否全达成」时
-     * 要逐条去 roster 查行，那里只认完整 code。**显式列举，不由前缀拼接** —— 拼接正是 AD-A4 要消除的
-     * 寻址方式，即便 S1–S5 三张清单恰好对齐，也不给它留一个还活着的样板。
-     */
-    private static final Map<PetType, List<String>> NEWBIE_PREREQ_CODES = Map.of(
-            PetType.CAT, List.of("C-S1", "C-S2", "C-S3", "C-S4", "C-S5"),
-            PetType.DOG, List.of("D-S1", "D-S2", "D-S3", "D-S4", "D-S5"),
-            PetType.OTHER, List.of("G-S1", "G-S2", "G-S3", "G-S4", "G-S5"));
-
-    /** 该物种的 5 个新手任务里程碑前置的完整 code（有序，仅供存在性判定）。 */
-    public static List<String> newbiePrereqCodes(PetType petType) {
-        return NEWBIE_PREREQ_CODES.get(petType);
-    }
-
-    /** 该完整 code 是否为新手任务前置之一。 */
-    public static boolean isNewbiePrereq(String code) {
-        return code != null && NEWBIE_PREREQ_CODES.values().stream().anyMatch(l -> l.contains(code));
-    }
-
-    /**
      * Lulus Pemula 按 pet_type 的 code（CAT/DOG=S16、OTHER=S9；V1.3.4 前的末位；V1.3.4 起其后追加了打卡 / 性格测试两条）。
      */
     public static String lulusPemulaCode(PetType petType) {

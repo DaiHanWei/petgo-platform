@@ -30,6 +30,25 @@ public interface UserMilestoneFlagRepository extends JpaRepository<UserMilestone
     List<String> findFlagKeysByUserId(@Param("userId") long userId);
 
     /** 注销清理（D1/D2）：users 行只匿名化不删，FK CASCADE 在注销路径不触发，必须显式删。 */
+    /**
+     * 账号级「已庆祝」置位（V1.5.0 onboarding-recall Story 2.2 · AC9）：只置 NULL 的（重复回报幂等）。
+     *
+     * @return 本次置位行数（0 = 没有该 flag 或已庆祝过）
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE user_milestone_flags SET celebrated_at = :at
+             WHERE user_id = :userId AND flag_key = :flagKey AND celebrated_at IS NULL
+            """, nativeQuery = true)
+    int markCelebrated(@Param("userId") long userId, @Param("flagKey") String flagKey,
+            @Param("at") java.time.Instant at);
+
+    /** 该账号是否已有某个 flag（V1.5.0：Lulus Pemula 已解锁判定）。 */
+    boolean existsByUserIdAndFlagKey(long userId, String flagKey);
+
+    /** 该账号某个 flag 行（V1.5.0 Story 2.3 账号成就接口读 {@code celebrated_at}）。 */
+    java.util.Optional<UserMilestoneFlag> findByUserIdAndFlagKey(long userId, String flagKey);
+
     @Modifying
     @Query("delete from UserMilestoneFlag f where f.userId = :userId")
     int deleteByUserId(@Param("userId") long userId);

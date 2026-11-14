@@ -155,6 +155,14 @@ class MilestoneAutoCompleteMapTest {
         assertThat(code(PetType.OTHER, MilestoneAutoEvent.FIRST_COLLECT_CONTENT)).isEqualTo("G-S13");
     }
 
+    /** V1.5.0 onboarding-recall Story 2.2（OR-6）：Lulus Pemula 改账号级，编码与 MilestoneCatalog.lulusPemulaCode 一致。 */
+    @Test
+    void v150LulusPemulaMapsToExistingLulusCodes() {
+        for (PetType species : ALL_SPECIES) {
+            assertThat(code(species, MilestoneAutoEvent.LULUS_PEMULA)).isEqualTo(MilestoneCatalog.lulusPemulaCode(species));
+        }
+    }
+
     // ===== 全表结构性约束 =====
 
     /** 每个事件都必须为三个物种各登记一行（值可以是 null，但不能"没这一行"）。 */

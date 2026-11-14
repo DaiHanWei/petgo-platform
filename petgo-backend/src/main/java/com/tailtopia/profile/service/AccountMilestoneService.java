@@ -101,7 +101,8 @@ public class AccountMilestoneService {
         if (flags.insertIfAbsent(userId, flag.name()) == 0) {
             return; // AC4 / AC8：已触发过（或并发另一条已登记）→ 整条路径 no-op
         }
-        List<PetProfile> active = profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(userId).stream()
+        List<PetProfile> all = profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(userId);
+        List<PetProfile> active = all.stream()
                 .filter(AccountMilestoneService::isActive)
                 .toList();
         List<Long> petIds = new ArrayList<>();
@@ -117,10 +118,10 @@ public class AccountMilestoneService {
                 }
             });
         }
-        String target = active.isEmpty() ? null : flag.codeOf(active.get(0).getPetType());
+        String target = targetCodeOf(flag, active, all);
         log.info("account milestone triggered userId={} flag={} activePets={} completed={}",
                 userId, flag.name(), active.size(), petIds.size());
-        // 无 ACTIVE 宠物也发：成长值监听照样 +5（G-3）；通知侧按 petIds 判空不发。
+        // 无 ACTIVE 宠物也发：成长值监听照样记（G-3）；通知侧按 petIds 判空不发（V1.5.0 起 Lulus Pemula 例外，照发）。
         events.publishEvent(new AccountMilestoneCompletedEvent(userId, flag.name(), petIds, codes, target));
     }
 
@@ -182,6 +183,23 @@ public class AccountMilestoneService {
         } catch (IllegalArgumentException | NullPointerException e) {
             return Optional.empty(); // CHECK 约束兜着，理论不可达；未知 key 不点亮任何东西
         }
+    }
+
+    /**
+     * 通知 {@code targetRef} 用的编码：最早一只 ACTIVE 宠物的本物种编码；无 ACTIVE 宠物时 →
+     * V1.5.0 onboarding-recall Story 2.2（AC7）：Lulus Pemula 取账号最早一只宠物（含只读）的编码，再没有用 CAT 编码
+     * （通知照发、不能没有落点）；另两个 flag 维持 null（通知侧 petIds 空不发）。放在这里生成，通知监听不查库。
+     */
+    static String targetCodeOf(AccountMilestoneFlag flag, List<PetProfile> active, List<PetProfile> all) {
+        if (!active.isEmpty()) {
+            return flag.codeOf(active.get(0).getPetType());
+        }
+        if (flag != AccountMilestoneFlag.LULUS_PEMULA) {
+            return null;
+        }
+        return all.isEmpty()
+                ? flag.codeOf(com.tailtopia.profile.domain.PetType.CAT)
+                : flag.codeOf(all.get(0).getPetType());
     }
 
     private static boolean isActive(PetProfile p) {

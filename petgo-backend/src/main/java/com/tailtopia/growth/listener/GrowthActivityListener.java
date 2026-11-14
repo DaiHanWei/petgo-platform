@@ -196,7 +196,8 @@ public class GrowthActivityListener {
     @Async
     @TransactionalEventListener
     public void onMilestone(MilestoneCompletedEvent e) {
-        // V1.4.2 Story 2.1（D-12）：账号级 6 个编码只按账号给分（onAccountMilestone），屏蔽按宠物路径的重复入账。
+        // V1.4.2 Story 2.1（D-12）：账号级编码（V1.5.0 起 9 个，含 Lulus Pemula）只按账号给分（onAccountMilestone），
+        // 屏蔽按宠物路径的重复入账。
         if (AccountMilestoneFlag.isAccountLevel(e.code())) {
             return;
         }
@@ -216,7 +217,12 @@ public class GrowthActivityListener {
     @Async
     @TransactionalEventListener
     public void onAccountMilestone(AccountMilestoneCompletedEvent e) {
-        accrue(new AccrualCommand(e.userId(), RuleCode.MILESTONE_S, null,
+        // V1.5.0 onboarding-recall Story 2.2（OR-8）：Lulus Pemula 账号级 → NEWBIE_GRADUATED（+20）；另两个仍 MILESTONE_S。
+        // 幂等键不变 MILESTONE_ACCT:{u}:{flag}。
+        RuleCode rule = AccountMilestoneFlag.LULUS_PEMULA.name().equals(e.flagKey())
+                ? RuleCode.NEWBIE_GRADUATED
+                : RuleCode.MILESTONE_S;
+        accrue(new AccrualCommand(e.userId(), rule, null,
                 GrowthIdemKeys.milestoneAccount(e.userId(), e.flagKey()), REF_MILESTONE, e.flagKey(),
                 petIds(e.petIds()), clock.instant()));
     }

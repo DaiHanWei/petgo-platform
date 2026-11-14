@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <h2>只在真正新写入时</h2>
  * {@code INSERT … ON CONFLICT DO NOTHING} 返回 1 才：① 同步上报 {@code newbie_task_completed {task, days_since_signup}}
  * （{@link AnalyticsClient#capture}，同步、不加 {@code @Async}，同 {@code MilestoneAnalyticsListener}）；
- * ② 调 {@link NewbieMarkHooks#afterMarked}（Story 2-2 毕业判定）。并发两次同一任务只有一次返回 1。
+ * ② 本事务提交后调 {@link NewbieMarkHooks#afterMarked}（Story 2-2 毕业判定）。并发两次同一任务只有一次返回 1。
  * 补算（Story 2-4，纯 SQL）不经本类、不报埋点。
  */
 @Service
@@ -70,8 +70,27 @@ public class NewbieMarkService {
         analytics.capture(AnalyticsDistinctId.of(userId), EVENT_TASK_COMPLETED, Map.of(
                 "task", task.ordinalForAnalytics(),
                 "days_since_signup", daysSinceSignup(userId, now)));
-        hooks.orderedStream().forEach(h -> h.afterMarked(userId, task));
+        afterCommit(() -> hooks.orderedStream().forEach(h -> h.afterMarked(userId, task)));
         return true;
+    }
+
+    /**
+     * 本事务<b>提交后</b>再跑扩展点（Story 2-2 毕业判定）：两条「最后一项」并发写入时，各自事务内都看不到对方未提交的行，
+     * 在事务内判毕业会两边都判「差一项」而漏掉；提交后判，至少后提交的那条能看到全部标记。
+     * 没有活动事务（单测直接调用）→ 立即执行。扩展点失败只影响毕业判定，不回滚已提交的标记。
+     */
+    private static void afterCommit(Runnable action) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            action.run();
+                        }
+                    });
+        } else {
+            action.run();
+        }
     }
 
     /** WIB 注册日到今天（WIB）的天数（≥ 0；取不到注册时间按 0）。 */

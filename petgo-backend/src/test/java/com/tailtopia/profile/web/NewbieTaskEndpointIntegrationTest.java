@@ -96,29 +96,25 @@ class NewbieTaskEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.oneWeekDaysLeft").doesNotExist());
     }
 
+    /**
+     * V1.5.0 onboarding-recall Story 2.2（OR-6）：旧 6 项全做完 + 健康记录也**不再**按宠物解锁 Lulus Pemula
+     * （改账号级 7 项）；旧版接口 6/6，但 {@code lulusPemulaUnlocked} 读账号 flag → 仍 false。
+     */
     @Test
-    void allFiveMilestonesWithoutHealthRecordDoesNotUnlockLulusPemula() {
+    void legacySixOfSixNoLongerUnlocksLulusPemula() {
         User u = newUser();
         PetProfile pet = seedPetWithRoster(u.getId(), PetType.CAT);
 
-        for (String code : com.tailtopia.profile.domain.MilestoneCatalog
-                .newbiePrereqCodes(PetType.CAT)) {
+        for (String code : java.util.List.of("C-S1", "C-S2", "C-S3", "C-S4", "C-S5")) {
             completionService.completeCodeForPet(
                     pet.getId(), code, MilestoneCompletionSource.SYSTEM_AUTO, null);
         }
-
-        // 无健康记录 → 5/6，Lulus Pemula 未解锁。
-        var progress = newbieTaskService.progress(u.getId());
-        org.assertj.core.api.Assertions.assertThat(progress.completedCount()).isEqualTo(5);
-        org.assertj.core.api.Assertions.assertThat(progress.lulusPemulaUnlocked()).isFalse();
-
-        // 补一条健康记录 → 触发聚合解锁。
         healthRecords.save(HealthRecord.create(
                 pet.getId(), HealthRecordType.CUSTOM, "体重", null, LocalDate.now(), null));
         completionService.maybeUnlockLulusPemulaForOwner(u.getId());
 
         var after = newbieTaskService.progress(u.getId());
         org.assertj.core.api.Assertions.assertThat(after.completedCount()).isEqualTo(6);
-        org.assertj.core.api.Assertions.assertThat(after.lulusPemulaUnlocked()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(after.lulusPemulaUnlocked()).isFalse();
     }
 }

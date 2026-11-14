@@ -83,6 +83,8 @@ public final class MilestoneAutoCompleteMap {
         // V1.4.2 FR-154（D-4；决策日志 B1）：账号级两项。🔴 通用清单是 G-S12 / G-S13，不是 S19 / S20。
         put(t, MilestoneAutoEvent.FIRST_FOLLOW_USER, "C-S19", "D-S19", "G-S12");
         put(t, MilestoneAutoEvent.FIRST_COLLECT_CONTENT, "C-S20", "D-S20", "G-S13");
+        // V1.5.0 onboarding-recall Story 2.2（OR-6）：Lulus Pemula 改账号级（编码不变，与 MilestoneCatalog.lulusPemulaCode 一致）。
+        put(t, MilestoneAutoEvent.LULUS_PEMULA, "C-S16", "D-S16", "G-S9");
         return Map.copyOf(t);
     }
 

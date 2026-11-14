@@ -57,4 +57,9 @@ public enum MilestoneAutoEvent {
     FIRST_FOLLOW_USER,
     /** 账号内第一次收藏帖子（V1.4.2 FR-154，账号级；自收藏也算，场所收藏不算）。 */
     FIRST_COLLECT_CONTENT,
+    /**
+     * 7 项新手任务全部完成（V1.5.0 onboarding-recall Story 2.2 · FR-177 · OR-6，账号级：由
+     * {@code NewbieGraduationService} 判定后经 {@code AccountMilestoneService} 扇到所有 ACTIVE 宠物）。
+     */
+    LULUS_PEMULA,
 }

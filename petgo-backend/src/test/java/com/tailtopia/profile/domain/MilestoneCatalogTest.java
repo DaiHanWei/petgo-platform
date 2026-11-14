@@ -84,7 +84,6 @@ class MilestoneCatalogTest {
             assertThat(tailsonality.titleId()).isEqualTo("Kenal kepribadian");
         }
         for (String code : List.of("C-S17", "C-S18", "D-S17", "D-S18", "G-S10", "G-S11")) {
-            assertThat(MilestoneCatalog.isNewbiePrereq(code)).as("%s 不是新手前置", code).isFalse();
             assertThat(MilestoneCatalog.isLulusPemula(code)).isFalse();
         }
     }
@@ -121,18 +120,15 @@ class MilestoneCatalogTest {
             assertThat(collect.titleId()).isEqualTo("Simpan pertama");
         }
         for (String code : List.of("C-S19", "C-S20", "D-S19", "D-S20", "G-S12", "G-S13")) {
-            assertThat(MilestoneCatalog.isNewbiePrereq(code)).as("%s 不是新手前置", code).isFalse();
             assertThat(MilestoneCatalog.isLulusPemula(code)).isFalse();
         }
         assertThat(MilestoneCatalog.byCode("G-S19")).isNull();
         assertThat(MilestoneCatalog.byCode("G-S20")).isNull();
     }
 
+    /** V1.5.0 onboarding-recall Story 2.2：新手前置（S1–S5）表随按宠物 Lulus 判定一起删除；S1 仍三清单同义。 */
     @Test
-    void newbiePrereqSuffixesAreS1ThroughS5() {
-        assertThat(MilestoneCatalog.NEWBIE_PREREQ_SUFFIXES)
-                .containsExactlyInAnyOrder("S1", "S2", "S3", "S4", "S5");
-        // 三清单 S1–S5 语义一致（统一后缀可判定）。
+    void s1MeansProfileCreatedOnAllThreeLists() {
         for (String prefix : List.of("C", "D", "G")) {
             assertThat(MilestoneCatalog.byCode(prefix + "-S1").titleZh()).isEqualTo("宠物档案创建完成");
         }

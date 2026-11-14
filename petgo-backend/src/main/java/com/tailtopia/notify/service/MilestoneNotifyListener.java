@@ -2,6 +2,7 @@ package com.tailtopia.notify.service;
 
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.profile.domain.MilestoneLevel;
+import com.tailtopia.profile.domain.AccountMilestoneFlag;
 import com.tailtopia.profile.event.AccountMilestoneCompletedEvent;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
 import org.springframework.scheduling.annotation.Async;
@@ -76,7 +77,10 @@ public class MilestoneNotifyListener {
     @Async
     @TransactionalEventListener
     public void onAccountMilestone(AccountMilestoneCompletedEvent e) {
-        if (e.petIds().isEmpty() || e.targetCode() == null) {
+        // V1.5.0 onboarding-recall Story 2.2（AC7 · FR-177）：Lulus Pemula 无 ACTIVE 宠物也发（PRD：照常解锁、发通知）；
+        // targetCode 由 AccountMilestoneService 生成时已兜底（本监听不查库）。另两个 flag「没写完成就不通知」不变。
+        boolean lulus = AccountMilestoneFlag.LULUS_PEMULA.name().equals(e.flagKey());
+        if (e.targetCode() == null || (!lulus && e.petIds().isEmpty())) {
             return;
         }
         notificationService.sendWithoutPush(e.userId(), NotificationType.MILESTONE_SM_NODE,

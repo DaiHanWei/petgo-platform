@@ -39,6 +39,8 @@ class MilestoneCompletionServiceTest {
     private MilestoneCompletionRepository completions;
     private HealthRecordRepository healthRecords;
     private org.springframework.context.ApplicationEventPublisher events;
+    /** V1.5.0 onboarding-recall Story 2.2：Lulus Pemula 改账号级毕业判定（本类只委托）。 */
+    private NewbieGraduationService graduation;
     private MilestoneCompletionService service;
 
     private long nextId = 1;
@@ -50,7 +52,8 @@ class MilestoneCompletionServiceTest {
         completions = Mockito.mock(MilestoneCompletionRepository.class);
         healthRecords = Mockito.mock(HealthRecordRepository.class);
         events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
-        service = new MilestoneCompletionService(profiles, milestones, completions, healthRecords, events);
+        graduation = Mockito.mock(NewbieGraduationService.class);
+        service = new MilestoneCompletionService(profiles, milestones, completions, events, graduation);
     }
 
     private PetProfile profile(PetType type, long id) {
@@ -131,11 +134,11 @@ class MilestoneCompletionServiceTest {
 
         service.onGrowthMomentCountForPet(10L, 10);
 
-        // S2 ∈ 新手前置：完成后会再被 Lulus Pemula 前置扫描查一次（7.3），故 atLeastOnce。
+        // V1.5.0 Story 2.2：S2 完成后不再做按宠物的 Lulus Pemula 前置扫描（改账号级）；仍 atLeastOnce 不收紧。
         verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndCode(10, "D-S2");
         verify(milestones).findByPetProfileIdAndCode(10, "D-M10");
         verify(milestones, never()).findByPetProfileIdAndCode(10, "D-L5");
-        verify(completions, times(2)).save(any()); // S2 + M10（无健康记录 → 不解锁 Lulus Pemula）
+        verify(completions, times(2)).save(any()); // S2 + M10（不再按宠物解锁 Lulus Pemula）
     }
 
     @Test
@@ -227,38 +230,12 @@ class MilestoneCompletionServiceTest {
                 .containsExactlyInAnyOrder(m5, l4);
     }
 
-    // ── Lulus Pemula 聚合（Story 7.3）─────────────────────────────────────────────
+    // ── Lulus Pemula（V1.5.0 onboarding-recall Story 2.2 · OR-6：改账号级 7 项新手任务）──────────
+    // 原「S1–S5 + 健康记录按宠物聚合解锁」三条用例按新规则改写：本类不再按宠物解锁，只委托毕业判定。
 
-    /** S1–S4 已完成 + 本次完成 S5 + 有健康记录 → 解锁 Lulus Pemula（C-S16）。 */
+    /** S1–S4 已完成 + 本次完成 S5 + 有健康记录 → 只存 S5，不再按宠物解锁 C-S16。 */
     @Test
-    void lulusPemulaUnlocksWhenAllFivePlusHealthRecord() {
-        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
-        long s1 = stubRoster(10, "C-S1");
-        long s2 = stubRoster(10, "C-S2");
-        long s3 = stubRoster(10, "C-S3");
-        long s4 = stubRoster(10, "C-S4");
-        long s5 = stubRoster(10, "C-S5");
-        long lp = stubRoster(10, "C-S16");
-        when(completions.existsByPetMilestoneId(s1)).thenReturn(true);
-        when(completions.existsByPetMilestoneId(s2)).thenReturn(true);
-        when(completions.existsByPetMilestoneId(s3)).thenReturn(true);
-        when(completions.existsByPetMilestoneId(s4)).thenReturn(true);
-        when(completions.existsByPetMilestoneId(s5)).thenReturn(false, true); // guard false → 本次存 → 复查 true
-        when(healthRecords.existsByPetProfileId(10)).thenReturn(true);
-
-        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
-                MilestoneCompletionSource.SYSTEM_AUTO);
-
-        assertThat(done).isTrue();
-        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
-        verify(completions, times(2)).save(cap.capture());
-        assertThat(cap.getAllValues().stream().map(MilestoneCompletion::getPetMilestoneId))
-                .containsExactlyInAnyOrder(s5, lp); // S5 + Lulus Pemula
-    }
-
-    /** S1–S5 全完成但**无健康记录** → 不解锁 Lulus Pemula（仅存 S5）。 */
-    @Test
-    void lulusPemulaNotUnlockedWithoutHealthRecord() {
+    void completingS5NoLongerUnlocksLulusPemulaPerPet() {
         when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
         long s1 = stubRoster(10, "C-S1");
         long s2 = stubRoster(10, "C-S2");
@@ -271,36 +248,27 @@ class MilestoneCompletionServiceTest {
         when(completions.existsByPetMilestoneId(s3)).thenReturn(true);
         when(completions.existsByPetMilestoneId(s4)).thenReturn(true);
         when(completions.existsByPetMilestoneId(s5)).thenReturn(false, true);
-        when(healthRecords.existsByPetProfileId(10)).thenReturn(false); // 无健康记录
-
-        service.completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
-                MilestoneCompletionSource.SYSTEM_AUTO);
-
-        // 仅 S5 落库，C-S16 不解锁。
-        verify(completions, times(1)).save(any());
-        verify(milestones, never()).findByPetProfileIdAndCode(10, "C-S16");
-    }
-
-    /** 健康记录事件路径：S1–S5 已全完成，创建健康记录后经 owner 入口解锁 Lulus Pemula。 */
-    @Test
-    void healthRecordPathUnlocksLulusPemulaWhenFiveAlreadyDone() {
-        when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.CAT, 10)));
-        long s1 = stubRoster(10, "C-S1");
-        long s2 = stubRoster(10, "C-S2");
-        long s3 = stubRoster(10, "C-S3");
-        long s4 = stubRoster(10, "C-S4");
-        long s5 = stubRoster(10, "C-S5");
-        long lp = stubRoster(10, "C-S16");
-        for (long id : new long[] {s1, s2, s3, s4, s5}) {
-            when(completions.existsByPetMilestoneId(id)).thenReturn(true);
-        }
         when(healthRecords.existsByPetProfileId(10)).thenReturn(true);
 
+        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isTrue();
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions, times(1)).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(s5);
+        verify(milestones, never()).findByPetProfileIdAndCode(10, "C-S16");
+        verify(graduation, never()).checkAndGraduate(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** 健康记录事件路径保留（PRD）：owner 入口改为委托账号级毕业判定，本类不写任何完成行、不查健康记录。 */
+    @Test
+    void healthRecordPathDelegatesToAccountGraduation() {
         service.maybeUnlockLulusPemulaForOwner(7L);
 
-        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
-        verify(completions).save(cap.capture());
-        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(lp);
+        verify(graduation).checkAndGraduate(7L);
+        verify(completions, never()).save(any());
+        verify(healthRecords, never()).existsByPetProfileId(org.mockito.ArgumentMatchers.anyLong());
     }
 
     // ===== V1.3.4 Story 4.2：completeForPet（按宠物 id 达成，不经 owner 反查） =====
@@ -416,45 +384,29 @@ class MilestoneCompletionServiceTest {
         verify(completions, never()).save(any());
     }
 
+    /** V1.5.0 Story 2.2：多宠账号只按账号判一次（不再逐只判）。 */
     @Test
-    void lulusPemulaJudgedPerPet() {
-        // A：前置全完成 + 有健康记录 → 解锁；B：无健康记录 → 不解锁。
+    void lulusPemulaJudgedOncePerAccountNotPerPet() {
         when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(
                 profile(PetType.CAT, 10), profile(PetType.CAT, 11)));
-        for (long pet : new long[] {10, 11}) {
-            for (String c : new String[] {"C-S1", "C-S2", "C-S3", "C-S4", "C-S5"}) {
-                long id = stubRoster(pet, c);
-                when(completions.existsByPetMilestoneId(id)).thenReturn(true);
-            }
-        }
-        long lpA = stubRoster(10, "C-S16");
-        stubRoster(11, "C-S16");
-        when(healthRecords.existsByPetProfileId(10)).thenReturn(true);
-        when(healthRecords.existsByPetProfileId(11)).thenReturn(false);
 
         service.maybeUnlockLulusPemulaForOwner(7L);
 
-        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
-        verify(completions, times(1)).save(cap.capture());
-        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(lpA);
+        verify(graduation, times(1)).checkAndGraduate(7L);
+        verify(completions, never()).save(any());
     }
 
+    /** 按宠物入口：找到主人后委托毕业判定；宠物不存在 → no-op。 */
     @Test
-    void lulusPemulaForPetJudgesOnlyThatPet() {
+    void lulusPemulaForPetDelegatesToOwnerGraduation() {
         when(profiles.findById(11L)).thenReturn(Optional.of(profile(PetType.CAT, 11)));
-        for (String c : new String[] {"C-S1", "C-S2", "C-S3", "C-S4", "C-S5"}) {
-            long id = stubRoster(11, c);
-            when(completions.existsByPetMilestoneId(id)).thenReturn(true);
-        }
-        long lp = stubRoster(11, "C-S16");
-        when(healthRecords.existsByPetProfileId(11)).thenReturn(true);
+        when(profiles.findById(12L)).thenReturn(Optional.empty());
 
         service.maybeUnlockLulusPemulaForPet(11L);
+        service.maybeUnlockLulusPemulaForPet(12L);
 
-        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
-        verify(completions).save(cap.capture());
-        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(lp);
-        verify(healthRecords, never()).existsByPetProfileId(10);
+        verify(graduation, times(1)).checkAndGraduate(7L);
+        verify(completions, never()).save(any());
     }
 
     // ===== V1.4.0 multi-pet Story 1.3：Diary 计数 / L 级回填 / 默认宠物 只碰一只 =====

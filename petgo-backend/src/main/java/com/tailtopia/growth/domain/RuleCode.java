@@ -26,7 +26,12 @@ public enum RuleCode {
     /** 系统代码：上线存量补算（Story 2.2），后台不可编辑。 */
     LAUNCH_BACKFILL,
     /** 系统代码：运营手动调整（Epic 4），后台不可编辑。 */
-    ADMIN_ADJUST;
+    ADMIN_ADJUST,
+    /**
+     * 新手毕业：7 项新手任务全部完成、账号级 Lulus Pemula 解锁时 +20（V1.5.0 onboarding-recall Story 2.2 · OR-8，后台可调）。
+     * 加在 {@code ADMIN_ADJUST} 之后，不改既有顺序；不是里程碑规则（{@link #isMilestone} 为 false，不受「同 code 5 次」上限）。
+     */
+    NEWBIE_GRADUATED;
 
     /** 被动三项共用的每日额度 counter_key / cap_group 值。 */
     public static final String PASSIVE_CAP_GROUP = "PASSIVE";

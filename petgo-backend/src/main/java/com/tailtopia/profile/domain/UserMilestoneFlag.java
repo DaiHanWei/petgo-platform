@@ -32,6 +32,13 @@ public class UserMilestoneFlag {
     @Column(name = "occurred_at", nullable = false, updatable = false)
     private Instant occurredAt;
 
+    /**
+     * 账号级「已庆祝」（V1.5.0 onboarding-recall Story 2.2 · OR-6，可空，UTC）。只对 {@code LULUS_PEMULA} 有业务含义；
+     * 写入只经 {@code UserMilestoneFlagRepository.markCelebrated}（条件 UPDATE），实体侧只读。
+     */
+    @Column(name = "celebrated_at", insertable = false, updatable = false)
+    private Instant celebratedAt;
+
     protected UserMilestoneFlag() {
     }
 
@@ -45,6 +52,10 @@ public class UserMilestoneFlag {
 
     public Instant getOccurredAt() {
         return occurredAt;
+    }
+
+    public Instant getCelebratedAt() {
+        return celebratedAt;
     }
 
     /** 复合主键。 */

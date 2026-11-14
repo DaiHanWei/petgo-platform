@@ -40,6 +40,9 @@ import org.mockito.Mockito;
  */
 class MilestoneCelebrationServiceTest {
 
+    /** V1.5.0 onboarding-recall Story 2.2：Lulus Pemula 账号级「已庆祝」。 */
+    private com.tailtopia.profile.repository.UserMilestoneFlagRepository flags;
+
     private PetProfileRepository profiles;
     private PetMilestoneRepository milestones;
     private MilestoneCompletionRepository completions;
@@ -52,7 +55,8 @@ class MilestoneCelebrationServiceTest {
         profiles = Mockito.mock(PetProfileRepository.class);
         milestones = Mockito.mock(PetMilestoneRepository.class);
         completions = Mockito.mock(MilestoneCompletionRepository.class);
-        service = new MilestoneCelebrationService(profiles, milestones, completions);
+        flags = org.mockito.Mockito.mock(com.tailtopia.profile.repository.UserMilestoneFlagRepository.class);
+        service = new MilestoneCelebrationService(profiles, milestones, completions, flags);
     }
 
     /** 给 owner 7 挂一只猫，并铺一份只含指定 code 的 roster；返回 code → rosterId。 */
@@ -81,6 +85,31 @@ class MilestoneCelebrationServiceTest {
     @Nested
     @DisplayName("V1.4.2 AC6 账号级编码按账号回报")
     class AccountLevel {
+
+        /** V1.5.0 onboarding-recall Story 2.2 · AC9：回报含 Lulus 编码 → 同时置账号 flag 的 celebrated_at。 */
+        @Test
+        void reportingLulusCodeAlsoMarksAccountFlagCelebrated() {
+            var ids = seedRoster("C-S1", "C-S16");
+            when(milestones.findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), anyCollection()))
+                    .thenReturn(List.of(ids.get("C-S16")));
+
+            service.reportCelebrated(7L, 10L, List.of("C-S16"));
+
+            verify(flags).markCelebrated(org.mockito.ArgumentMatchers.eq(7L),
+                    org.mockito.ArgumentMatchers.eq("LULUS_PEMULA"), any());
+        }
+
+        /** 另两个账号级 flag 回报不碰 flag 表。 */
+        @Test
+        void reportingOtherAccountCodeDoesNotTouchFlagTable() {
+            var ids = seedRoster("C-S1", "C-S19");
+            when(milestones.findIdsByOwnerIdAndCodeIn(org.mockito.ArgumentMatchers.eq(7L), anyCollection()))
+                    .thenReturn(List.of(ids.get("C-S19")));
+
+            service.reportCelebrated(7L, 10L, List.of("C-S19"));
+
+            org.mockito.Mockito.verifyNoInteractions(flags);
+        }
 
         @Test
         void reportingAccountCodeMarksSameFlagOnEveryPetOfTheOwner() {

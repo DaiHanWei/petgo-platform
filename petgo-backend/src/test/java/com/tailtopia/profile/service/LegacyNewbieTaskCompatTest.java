@@ -43,7 +43,8 @@ class LegacyNewbieTaskCompatTest {
         completions = Mockito.mock(MilestoneCompletionRepository.class);
         healthRecords = Mockito.mock(HealthRecordRepository.class);
         service = new LegacyNewbieTaskCompat(profiles, milestones, completions, healthRecords,
-                new LulusPemulaReader(milestones, completions));
+                new LulusPemulaReader(milestones, completions,
+                        Mockito.mock(com.tailtopia.profile.repository.UserMilestoneFlagRepository.class)));
     }
 
     private PetProfile profile(PetType type, long id) {

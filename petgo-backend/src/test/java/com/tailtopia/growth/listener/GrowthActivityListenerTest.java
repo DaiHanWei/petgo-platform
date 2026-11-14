@@ -329,6 +329,28 @@ class GrowthActivityListenerTest {
         assertThat(c.petIds()).isNull();
     }
 
+    /** V1.5.0 onboarding-recall Story 2.2 · AC6：Lulus Pemula 账号级走 NEWBIE_GRADUATED，幂等键不变；无宠物也记。 */
+    @Test
+    void lulusPemulaAccruesNewbieGraduatedNotMilestoneS() {
+        listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(7L,
+                "LULUS_PEMULA", List.of(), List.of(), "C-S16"));
+
+        AccrualCommand c = accrued(1).get(0);
+        assertThat(c.rule()).isEqualTo(RuleCode.NEWBIE_GRADUATED);
+        assertThat(c.idemKey()).isEqualTo("MILESTONE_ACCT:7:LULUS_PEMULA");
+        assertThat(c.refId()).isEqualTo("LULUS_PEMULA");
+        assertThat(c.petIds()).isNull();
+    }
+
+    /** V1.5.0 Story 2.2：Lulus 编码走按宠物路径时被屏蔽（账号级只按账号给分）。 */
+    @Test
+    void lulusPemulaPerPetMilestoneEventIsIgnored() {
+        listener.onMilestone(new com.tailtopia.profile.event.MilestoneCompletedEvent(7L, "D-S16",
+                com.tailtopia.profile.domain.MilestoneLevel.S, "Lulus Pemula",
+                com.tailtopia.profile.domain.MilestoneCompletionSource.SYSTEM_AUTO, 9L));
+        accrued(0);
+    }
+
     @Test
     void takedownReversesOnlyThePostPoints() {
         listener.onRemoved(new ContentRemovedEvent(5L, 7L, NOW));

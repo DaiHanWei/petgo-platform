@@ -108,4 +108,16 @@ class MilestoneNotifyListenerTest {
         verify(notificationService, never()).send(anyLong(), any(), any(), any(), any(), any());
         verify(notificationService, never()).sendWithoutPush(anyLong(), any(), any(), any(), any(), any());
     }
+
+    /** V1.5.0 onboarding-recall Story 2.2 · AC7：Lulus Pemula 无 ACTIVE 宠物也发 1 条（targetRef = 事件里已兜底的编码）。 */
+    @Test
+    void lulusPemulaWithoutActivePetsStillNotifies() {
+        listener.onAccountMilestone(new com.tailtopia.profile.event.AccountMilestoneCompletedEvent(7L,
+                "LULUS_PEMULA", java.util.List.of(), java.util.List.of(), "G-S9"));
+
+        verify(notificationService, never()).send(anyLong(), any(), any(), any(), any(), any());
+        verify(notificationService, org.mockito.Mockito.times(1)).sendWithoutPush(eq(7L),
+                eq(NotificationType.MILESTONE_SM_NODE), any(), any(), eq(NotificationType.MILESTONE_NODE.name()),
+                eq("G-S9"));
+    }
 }

@@ -52,7 +52,7 @@ public class AdminGrowthConfigService {
     public static final List<RuleCode> RULE_ORDER = List.of(RuleCode.DAILY_LOGIN, RuleCode.POST_PUBLISHED,
             RuleCode.COMMENT_POSTED, RuleCode.LIKE_GIVEN, RuleCode.PLACE_CHECKIN, RuleCode.LIKE_RECEIVED,
             RuleCode.COMMENT_RECEIVED, RuleCode.COLLECT_RECEIVED, RuleCode.MILESTONE_S, RuleCode.MILESTONE_M,
-            RuleCode.MILESTONE_L, RuleCode.OPS_CAMPAIGN, RuleCode.GIFT_SENT, RuleCode.GIFT_RECEIVED,
+            RuleCode.MILESTONE_L, RuleCode.NEWBIE_GRADUATED, RuleCode.OPS_CAMPAIGN, RuleCode.GIFT_SENT, RuleCode.GIFT_RECEIVED,
             RuleCode.SPEND_DIGITAL, RuleCode.SPEND_SHOP);
 
     /** 支付用途归档表的固定顺序（UI G4）。 */

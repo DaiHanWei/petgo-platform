@@ -10,7 +10,6 @@ import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.event.MilestoneCompletedEvent;
-import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -50,17 +49,17 @@ public class MilestoneCompletionService {
     private final PetProfileRepository profiles;
     private final PetMilestoneRepository milestones;
     private final MilestoneCompletionRepository completions;
-    private final HealthRecordRepository healthRecords;
     private final ApplicationEventPublisher events;
+    private final NewbieGraduationService graduation;
 
     public MilestoneCompletionService(PetProfileRepository profiles, PetMilestoneRepository milestones,
-            MilestoneCompletionRepository completions, HealthRecordRepository healthRecords,
-            ApplicationEventPublisher events) {
+            MilestoneCompletionRepository completions, ApplicationEventPublisher events,
+            NewbieGraduationService graduation) {
         this.profiles = profiles;
         this.milestones = milestones;
         this.completions = completions;
-        this.healthRecords = healthRecords;
         this.events = events;
+        this.graduation = graduation;
     }
 
     /**
@@ -167,50 +166,27 @@ public class MilestoneCompletionService {
                 resolveOwnerId(petProfileId), code, m.getLevel(),
                 def != null ? def.titleZh() : code, source, petProfileId));
         maybeUnlockHealthCombo(petProfileId, petType, code);
-        // Lulus Pemula 聚合（7.3）：S1–S5 任一新完成后，若 6 新手任务全达成则解锁。
-        if (MilestoneCatalog.isNewbiePrereq(code)) {
-            checkAndUnlockLulusPemula(petProfileId, petType);
-        }
+        // V1.5.0 onboarding-recall Story 2.2（OR-6）：Lulus Pemula 不再按宠物由 S1–S5 + 健康记录聚合解锁 ——
+        // 改为账号级 7 项新手任务（NewbieGraduationService），这里不再触发。
         return true;
     }
 
     /**
-     * 聚合里程碑「Lulus Pemula」运行时解锁入口（Story 7.3）：由健康记录创建事件触发
-     * （{@link MilestoneAutoCompleteListener#onHealthRecordCreated}）——健康记录任务可能是最后一块。
-     * V1.4.0 multi-pet（Story 1.2 · P8）：逐只判定（每只自己判前置）。幂等（{@link #complete} 唯一约束短路）。
+     * 「Lulus Pemula」运行时检查入口（Story 7.3）：由健康记录创建事件触发
+     * （{@link MilestoneAutoCompleteListener#onHealthRecordCreated}）。
+     *
+     * <p>V1.5.0 onboarding-recall Story 2.2（OR-6 · PRD「录健康记录时的徽章检查保留不动，只把判定换成新 7 项」）：
+     * 方法名保留、改为委托账号级毕业判定 {@link NewbieGraduationService#checkAndGraduate}（不再要求健康记录、不再按宠物）。
      */
     @Transactional
     public void maybeUnlockLulusPemulaForOwner(long ownerId) {
-        for (PetProfile p : profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId)) {
-            checkAndUnlockLulusPemula(p.getId(), p.getPetType());
-        }
+        graduation.checkAndGraduate(ownerId);
     }
 
-    /** 按宠物判定 Lulus Pemula（V1.4.0 multi-pet Story 1.2 预留，供 1.3 按宠物路由的监听用）。宠物不存在 → no-op。 */
+    /** 同 {@link #maybeUnlockLulusPemulaForOwner}，按宠物找到主人后委托（宠物不存在 → no-op）。 */
     @Transactional
     public void maybeUnlockLulusPemulaForPet(long petProfileId) {
-        profiles.findById(petProfileId)
-                .ifPresent(p -> checkAndUnlockLulusPemula(p.getId(), p.getPetType()));
-    }
-
-    /**
-     * 6 新手任务全达成判定：S1–S5 里程碑全完成 **且** 该宠物有 ≥1 条健康记录 → 完成 Lulus Pemula。
-     * 未全达成 → no-op。第 6 任务（健康记录）非里程碑节点，故内联存在性判定（不入 combo map）。
-     */
-    private void checkAndUnlockLulusPemula(long petProfileId, PetType petType) {
-        boolean allMilestonePrereqs = MilestoneCatalog.newbiePrereqCodes(petType).stream()
-                .allMatch(code -> milestones
-                        .findByPetProfileIdAndCode(petProfileId, code)
-                        .map(pm -> completions.existsByPetMilestoneId(pm.getId()))
-                        .orElse(false));
-        if (!allMilestonePrereqs) {
-            return;
-        }
-        if (!healthRecords.existsByPetProfileId(petProfileId)) {
-            return;
-        }
-        complete(petProfileId, petType, MilestoneCatalog.lulusPemulaCode(petType),
-                MilestoneCompletionSource.SYSTEM_AUTO, null);
+        profiles.findById(petProfileId).ifPresent(p -> graduation.checkAndGraduate(p.getOwnerId()));
     }
 
     /**

@@ -56,7 +56,10 @@ class AccountMilestoneBackfillMigrationScriptTest {
     @Test
     void codeTableMatchesAccountMilestoneFlagForEverySpecies() throws IOException {
         String sql = body(read(SCRIPT));
-        for (AccountMilestoneFlag flag : AccountMilestoneFlag.values()) {
+        // V1.5.0 onboarding-recall Story 2.2：LULUS_PEMULA 加入枚举后，1.4.2 这条已应用的补算脚本（冻结、不得改）
+        // 只覆盖它当时的两个 flag；Lulus Pemula 的补算在 V1.5.0 的 V20261115_0320（Story 2-4）。
+        for (AccountMilestoneFlag flag : java.util.List.of(AccountMilestoneFlag.FIRST_FOLLOW_USER,
+                AccountMilestoneFlag.FIRST_COLLECT_CONTENT)) {
             for (PetType type : PetType.values()) {
                 assertThat(sql).as("%s × %s", flag, type).containsPattern(
                         "\\('" + flag.name() + "',\\s*'" + type.name() + "',\\s*'" + flag.codeOf(type) + "'\\)");
