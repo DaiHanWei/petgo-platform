@@ -26,7 +26,7 @@ void main() {
                   senderExp: exp,
                   riveBuilder: (_, _, onDone, onError) => GestureDetector(
                     key: const ValueKey('fakeRive'),
-                    onDoubleTap: onDone,
+                    onTap: onDone,
                     onLongPress: () => onError(StateError('x')),
                   ),
                 ),
@@ -72,7 +72,7 @@ void main() {
 
   testWidgets('sendDone event → E3 and timer cancelled', (tester) async {
     await pump(tester);
-    await tester.doubleTap(find.byKey(const ValueKey('fakeRive')));
+    await tester.tap(find.byKey(const ValueKey('fakeRive')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('giftDeliveredPage')), findsOneWidget);
     await tester.pump(const Duration(seconds: 6));
