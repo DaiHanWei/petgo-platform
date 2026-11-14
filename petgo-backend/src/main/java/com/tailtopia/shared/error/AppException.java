@@ -383,6 +383,28 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.ENTITLEMENT_INSUFFICIENT, detail);
     }
 
+    /** V1.5.0 gift-pack Story 4-2（D-22）：礼包已停售 → 409 {@code starter-pack-disabled}。 */
+    public static AppException starterPackDisabled(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.STARTER_PACK_DISABLED, detail);
+    }
+
+    /** V1.5.0 gift-pack Story 4-2（D-22）：已有未过窗待付单 → 409 {@code starter-pack-pending}（扩展成员 {@code purchaseToken}）。 */
+    public static AppException starterPackPending(String purchaseToken) {
+        return new StarterPackConflictException(ErrorTypes.STARTER_PACK_PENDING, "有一笔礼包订单待付款",
+                java.util.Map.of("purchaseToken", purchaseToken));
+    }
+
+    /** V1.5.0 gift-pack Story 4-2（D-22）：冷却中 → 409 {@code starter-pack-cooldown}（扩展成员 {@code until}，ISO-8601 UTC）。 */
+    public static AppException starterPackCooldown(java.time.Instant until) {
+        return new StarterPackConflictException(ErrorTypes.STARTER_PACK_COOLDOWN, "距上次购买未满 7 天",
+                java.util.Map.of("until", until.toString()));
+    }
+
+    /** V1.5.0 gift-pack Story 4-2（D-22）：名额已满且无可延长租用名额 → 409 {@code starter-pack-slots-full}。 */
+    public static AppException starterPackSlotsFull(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.STARTER_PACK_SLOTS_FULL, detail);
+    }
+
     /** V1.5.0 gift-pack Story 1-3（D-6）：送礼祝福语命中 L1 敏感词（422）。 */
     public static AppException giftMessageBlocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_MESSAGE_BLOCKED, detail);

@@ -46,5 +46,11 @@ public enum PaymentPurpose {
      * （{@code PurchaseOrderPayer}），负数与任何 {@code users.id} 都不相交；成长值档位 NONE + locked，
      * {@code GrowthSpendListener} 另有代码层排除。到账唯一消费者 = {@code PurchaseOrderPaidHandler}。
      */
-    MERCHANT_PO
+    MERCHANT_PO,
+    /**
+     * V1.5.0 gift-pack 超值礼包（D-20）。🔴 末尾追加。DB 侧 CHECK 全量重建见 V20261115_0225（13 值）。
+     * 到账唯一消费者 = {@code StarterPackPaidHandler}；成长值按 DIGITAL 档（{@code growth_spend_tiers}，消费返 EXP 走
+     * {@code GrowthSpendListener} 正常路径）。
+     */
+    STARTER_PACK
 }

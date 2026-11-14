@@ -5,5 +5,7 @@ public enum PetSlotRentalSource {
     /** 用户租用（含续租时名额已过期改为新建的那一行）。 */
     RENT,
     /** 运营补发（Story 4.3）。 */
-    ADMIN_GRANT
+    ADMIN_GRANT,
+    /** V1.5.0 超值礼包发放（D-23）。 */
+    PACK_GRANT
 }

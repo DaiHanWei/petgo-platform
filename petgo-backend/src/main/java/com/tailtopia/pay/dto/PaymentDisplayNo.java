@@ -44,6 +44,8 @@ public final class PaymentDisplayNo {
             case GIFT -> "PAYGIFT";
             case PET_SLOT_RENT -> "PAYSLOT";
             case MERCHANT_PO -> "PAYPO";
+            // V1.5.0 gift-pack：超值礼包（订单号前缀 PAKET，D-26；支付号刻意不同名）。
+            case STARTER_PACK -> "PAYPAKET";
         };
         return prefix + "-" + p.getCreatedAt().atZone(WIB).format(YMD)
                 + "-" + String.format("%06d", p.getId());

@@ -60,6 +60,20 @@ public class PricingConfig {
     @Column(name = "gift_qris_min_amount", nullable = false)
     private long giftQrisMinAmount;
 
+    /** V1.5.0 gift-pack · D-21 超值礼包三档价（IDR = PawCoin，≥100，默认 8000 / 11000 / 13000）；改价只影响新下单。 */
+    @Column(name = "starter_pack_tier1_price", nullable = false)
+    private long starterPackTier1Price;
+
+    @Column(name = "starter_pack_tier2_price", nullable = false)
+    private long starterPackTier2Price;
+
+    @Column(name = "starter_pack_tier3_price", nullable = false)
+    private long starterPackTier3Price;
+
+    /** V1.5.0 gift-pack · D-21 礼包开关（默认 true，待拍板 Q-6）；false → 查询 {@code enabled=false}、下单 409。 */
+    @Column(name = "starter_pack_enabled", nullable = false)
+    private boolean starterPackEnabled;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -170,5 +184,37 @@ public class PricingConfig {
     /** 只由后台礼物目录页改（V1.4.0 gift Story 3.1 · AC8）；≥100 由服务层先拦，库级 CHECK 兜底。 */
     public void setGiftQrisMinAmount(long v) {
         this.giftQrisMinAmount = v;
+    }
+
+    public long getStarterPackTier1Price() {
+        return starterPackTier1Price;
+    }
+
+    public void setStarterPackTier1Price(long v) {
+        this.starterPackTier1Price = v;
+    }
+
+    public long getStarterPackTier2Price() {
+        return starterPackTier2Price;
+    }
+
+    public void setStarterPackTier2Price(long v) {
+        this.starterPackTier2Price = v;
+    }
+
+    public long getStarterPackTier3Price() {
+        return starterPackTier3Price;
+    }
+
+    public void setStarterPackTier3Price(long v) {
+        this.starterPackTier3Price = v;
+    }
+
+    public boolean isStarterPackEnabled() {
+        return starterPackEnabled;
+    }
+
+    public void setStarterPackEnabled(boolean v) {
+        this.starterPackEnabled = v;
     }
 }

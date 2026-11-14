@@ -25,7 +25,9 @@ class GrowthSpendTierResolverTest {
             Map.entry("PASSPORT_SNAP", SpendTier.DIGITAL), Map.entry("BOARDING_PASS", SpendTier.DIGITAL),
             Map.entry("TS_MATCH", SpendTier.DIGITAL), Map.entry("PET_SLOT_RENT", SpendTier.DIGITAL),
             Map.entry("SHOP_ORDER", SpendTier.TOKO), Map.entry("PAWCOIN_TOPUP", SpendTier.NONE),
-            Map.entry("GIFT", SpendTier.GIFT), Map.entry("MERCHANT_PO", SpendTier.NONE));
+            Map.entry("GIFT", SpendTier.GIFT), Map.entry("MERCHANT_PO", SpendTier.NONE),
+            // V1.5.0 gift-pack Story 4-2（V20261115_0225）。
+            Map.entry("STARTER_PACK", SpendTier.DIGITAL));
 
     private final GrowthSpendTierRepository repo = mock(GrowthSpendTierRepository.class);
     private final GrowthSpendTierResolver resolver = new GrowthSpendTierResolver(repo);

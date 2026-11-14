@@ -83,6 +83,10 @@ public class PetSlotPurchase {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    /** V1.5.0 超值礼包发放 / 延长行关联的礼包购买（后台「档 n」显示用，D-23）；其余为 NULL。 */
+    @Column(name = "starter_pack_purchase_id", updatable = false)
+    private Long starterPackPurchaseId;
+
     protected PetSlotPurchase() {
     }
 
@@ -130,6 +134,35 @@ public class PetSlotPurchase {
         p.days = days;
         p.operatorAdminId = operatorAdminId;
         p.reason = reason;
+        p.status = PetSlotPurchaseStatus.PENDING;
+        p.createdAt = now;
+        return p;
+    }
+
+    /**
+     * V1.5.0 超值礼包名额行（D-23）：{@code PACK_GRANT} 新建 1 个 / {@code PACK_EXTEND} 延长所选 1 个，30 天、金额 0、
+     * 无渠道 / 意图，关联礼包购买 id。先落 PENDING 拿 id，发放后同一事务内 {@link #settle} 成 PAID。
+     *
+     * @param rentalIds {@code PACK_EXTEND} 时 = 被延长的那个名额；{@code PACK_GRANT} 为 null（发放后回填）
+     */
+    public static PetSlotPurchase pack(String publicToken, long userId, PetSlotPurchaseKind kind, String idemKey,
+            long starterPackPurchaseId, List<Long> rentalIds, Instant now) {
+        if (kind != PetSlotPurchaseKind.PACK_GRANT && kind != PetSlotPurchaseKind.PACK_EXTEND) {
+            throw new IllegalArgumentException("not a pack kind: " + kind);
+        }
+        PetSlotPurchase p = new PetSlotPurchase();
+        p.publicToken = publicToken;
+        p.userId = userId;
+        p.kind = kind;
+        p.quantity = 1;
+        p.unitPrice = 0L;
+        p.total = 0L;
+        p.channel = null;
+        p.paymentIntentId = null;
+        p.idemKey = idemKey;
+        p.rentalIds = rentalIds == null ? null : rentalIds.toArray(Long[]::new);
+        p.days = RENTAL_DAYS;
+        p.starterPackPurchaseId = starterPackPurchaseId;
         p.status = PetSlotPurchaseStatus.PENDING;
         p.createdAt = now;
         return p;
@@ -224,5 +257,9 @@ public class PetSlotPurchase {
 
     public Instant getPaidAt() {
         return paidAt;
+    }
+
+    public Long getStarterPackPurchaseId() {
+        return starterPackPurchaseId;
     }
 }

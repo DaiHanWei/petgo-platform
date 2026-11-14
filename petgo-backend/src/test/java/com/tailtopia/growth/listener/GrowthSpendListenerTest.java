@@ -70,6 +70,27 @@ class GrowthSpendListenerTest {
     }
 
     @Test
+    void starterPackIntentPaidAccruesDigital() {
+        // V1.5.0 gift-pack Story 4-2 · AC8：STARTER_PACK 走消费返成长值正常路径（不在排除集），13.000 → 65。
+        listener.onIntentPaid(paid(43L, PaymentPurpose.STARTER_PACK, 13_000));
+
+        AccrualCommand c = accrued();
+        assertThat(c.rule()).isEqualTo(RuleCode.SPEND_DIGITAL);
+        assertThat(c.pointsOverride()).isEqualTo(65);
+        assertThat(c.refType()).isEqualTo("STARTER_PACK");
+    }
+
+    @Test
+    void starterPackCoinSpentAccruesDigital() {
+        listener.onCoinSpent(new PawCoinSpentEvent(7L, 13_000, "STARTER_PACK", 5L, "STARTER_PACK_COIN:tok"));
+
+        AccrualCommand c = accrued();
+        assertThat(c.rule()).isEqualTo(RuleCode.SPEND_DIGITAL);
+        assertThat(c.pointsOverride()).isEqualTo(65);
+        assertThat(c.idemKey()).isEqualTo("SPEND:COIN:STARTER_PACK_COIN:tok");
+    }
+
+    @Test
     void intentPaidForShopTopupOrGiftIsIgnored() {
         listener.onIntentPaid(paid(1L, PaymentPurpose.SHOP_ORDER, 200_000));
         listener.onIntentPaid(paid(2L, PaymentPurpose.PAWCOIN_TOPUP, 50_000));

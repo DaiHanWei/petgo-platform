@@ -154,10 +154,24 @@ public class PetSlotGranter {
         return new Result(Outcome.GRANTED, issued, trigger);
     }
 
-    /** 名额来源：运营补发行 → ADMIN_GRANT（Story 4.3）；新租 / 续租改新建 → RENT（2.2 原口径）。 */
+    /**
+     * V1.5.0 超值礼包延长（D-23）：与续租同一条 {@link #EXTEND_SQL}（{@code expires_at += days}、重置 {@code reminded_at}）。
+     * 调用方须已持账号锁（{@link PetSlotLock#lockUser}）并确认该名额 ACTIVE 且未到期；不新增名额、不需 reconcile。
+     *
+     * @return 受影响行数（0 = 名额不属于该用户）
+     */
+    public int extend(long userId, long rentalId, int days) {
+        return jdbc.update(EXTEND_SQL, new MapSqlParameterSource("days", days).addValue("id", rentalId)
+                .addValue("uid", userId));
+    }
+
+    /** 名额来源：运营补发行 → ADMIN_GRANT（Story 4.3）；礼包发放 → PACK_GRANT（V1.5.0 D-23）；新租 / 续租改新建 → RENT（2.2 原口径）。 */
     static PetSlotRentalSource sourceOf(PetSlotPurchase row) {
-        return row.getKind() == PetSlotPurchaseKind.ADMIN_GRANT ? PetSlotRentalSource.ADMIN_GRANT
-                : PetSlotRentalSource.RENT;
+        return switch (row.getKind()) {
+            case ADMIN_GRANT -> PetSlotRentalSource.ADMIN_GRANT;
+            case PACK_GRANT -> PetSlotRentalSource.PACK_GRANT; // V1.5.0 超值礼包（D-23）
+            case RENT, RENEW, PACK_EXTEND -> PetSlotRentalSource.RENT;
+        };
     }
 
     private long insert(PetSlotPurchase row, OffsetDateTime startsAt) {

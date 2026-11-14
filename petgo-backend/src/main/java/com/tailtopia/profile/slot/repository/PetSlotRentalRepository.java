@@ -30,6 +30,10 @@ public interface PetSlotRentalRepository extends JpaRepository<PetSlotRental, Lo
     /** 续租寻址：按对外 token + 归属取（非本人 = 查不到 → 404）。 */
     Optional<PetSlotRental> findByPublicTokenAndUserId(String publicToken, long userId);
 
+    /** V1.5.0 超值礼包延长（D-23）：该用户生效中且未到期、{@code expires_at} 最早的租用名额。 */
+    Optional<PetSlotRental> findFirstByUserIdAndStatusAndExpiresAtAfterOrderByExpiresAtAscIdAsc(long userId,
+            PetSlotRentalStatus status, Instant now);
+
     // ---------------------------------------------------------------------------------------------
     // Story 2.3 到期扫描（走索引 ix_pet_slot_rentals_status_expires）
     // ---------------------------------------------------------------------------------------------

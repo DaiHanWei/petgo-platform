@@ -432,6 +432,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/pets/*/gift-orders/open").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/gift-orders/*").hasRole("USER")
                         .requestMatchers(HttpMethod.POST, "/api/v1/gift-orders/*/message-reports").hasRole("USER")
+                        // V1.5.0 gift-pack Story 4-2：超值礼包查询 / 下单 / 状态（controller 把 jwt.sub 当 users.id 用，只给 USER）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/starter-pack").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/starter-pack/purchases").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/starter-pack-purchases/*").hasRole("USER")
                         // V1.4.0 ④ Story 1.1：推送分类设置，仅 role=USER（controller 把 jwt.sub 当 users.id 用；
                         // 兽医 token 的 sub=vetId 与 users.id 撞号，落 anyRequest().authenticated() 会以同号用户名义读写推送设置）。精确路径，不写 /api/v1/me/** 通配。
                         .requestMatchers("/api/v1/me/push-settings").hasRole("USER")

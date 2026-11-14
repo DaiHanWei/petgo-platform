@@ -232,6 +232,18 @@ public final class ErrorTypes {
     /** V1.5.0 gift-pack Story 4-1（D-25）：可用免费次数不足（409）。 */
     public static final URI ENTITLEMENT_INSUFFICIENT = URI.create(BASE + "entitlement-insufficient");
 
+    /** V1.5.0 gift-pack Story 4-2（D-22）：礼包已停售（409）。 */
+    public static final URI STARTER_PACK_DISABLED = URI.create(BASE + "starter-pack-disabled");
+
+    /** V1.5.0 gift-pack Story 4-2（D-22）：已有未过窗的待付礼包单（409，扩展成员 {@code purchaseToken}）。 */
+    public static final URI STARTER_PACK_PENDING = URI.create(BASE + "starter-pack-pending");
+
+    /** V1.5.0 gift-pack Story 4-2（D-22）：距上次购买未满 7 × 24 小时（409，扩展成员 {@code until}）。 */
+    public static final URI STARTER_PACK_COOLDOWN = URI.create(BASE + "starter-pack-cooldown");
+
+    /** V1.5.0 gift-pack Story 4-2（D-22）：档 2 / 3 名额已满且无可延长的租用名额（409）。 */
+    public static final URI STARTER_PACK_SLOTS_FULL = URI.create(BASE + "starter-pack-slots-full");
+
     /** V1.5.0 gift-pack Story 1-3（D-6）：送礼祝福语命中 L1 敏感词（422，在任何写库 / 扣款之前）。 */
     public static final URI GIFT_MESSAGE_BLOCKED = URI.create(BASE + "gift-message-blocked");
 
