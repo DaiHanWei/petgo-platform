@@ -24,6 +24,8 @@ void main() {
     String? qrisDisabledReason,
     Widget? recommendation,
     Widget? creditOverride,
+    Widget? itemsArea,
+    int? itemsTotal,
   }) async {
     final router = GoRouter(routes: [
       GoRoute(
@@ -48,6 +50,9 @@ void main() {
                     onTopUp: () => topUps.add('topup'),
                     recommendation: recommendation,
                     creditOverride: creditOverride,
+                    itemsArea: itemsArea,
+                    itemsTotal: itemsTotal,
+                    itemsLineLabel: itemsArea == null ? null : 'L',
                   ),
                 );
                 results.add(r);
@@ -108,6 +113,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(topUps, ['topup']);
     expect(results, [null], reason: '抽屉已关闭');
+  });
+
+  testWidgets('条目区一个都没勾 + 余额不足单价 → PawCoin 卡出「余额不足 / 去充值」，默认直接付款（6-1 review #1）',
+      (tester) async {
+    await open(tester, balance: 3000, itemsArea: const SizedBox(key: ValueKey('items')), itemsTotal: 0);
+    expect(check('direct'), findsOneWidget);
+    expect(find.byKey(const ValueKey('payMethodShort')), findsOneWidget);
+    expect(find.byKey(const ValueKey('payMethodTopUp')), findsOneWidget);
+    expect(confirm(tester).onPressed, isNull, reason: '没勾 → 确认置灰');
   });
 
   testWidgets('直接付款被禁用 + 余额不足 → 两者都不可选、主按钮置灰', (tester) async {

@@ -60,6 +60,7 @@ so that 付款方式一眼能选对。
 - AC2：`HdPaywallSheet` 加可选 `card`（KTP 高清流程 `openIdCardHdPaywall` 传入）：头卡 = 该卡缩略图（`IdCardStyle.fromCard(card).buildFront` 同详情页卡面渲染 + 预览水印，高 132）+「{宠物名} · {卡种名}」+ `idCardHdPreviewSub`；不传时原紫色头卡（`keepsake_contract_test` 回归不变）。
 - AC3 调用方：现存 `PayChannelPicker` 调用 7 处（KTP 高清、性格测试结果、性格测试配型、名额租用、名额续租（同文件）、护照快照、登机牌）+ keepsake 支付流（`keepsake_pay_flow` 经各页调用）；**送礼 `gift_send_flow.dart` 自 2-2 起已改走包装页 + `PayMethodCards`，不再是调用方**。9 处调用代码零改动即编译通过；各调用页既有 widget 测试不涉及渠道行布局，未改仍全绿。**未按 AC3 为每处各补 3 条新测试**：9 处共用同一组件，规则集中在 `pay_channel_picker_test.dart` 覆盖；逐处回归留 L2 手点（**待确认**是否仍需逐处补测）。
 - AC4：未新增 ARB key（复用 2-2 的付款卡文案与 `triageUnlockTopupFirst`）。
+- Code review 修复：#1 条目区一个都没勾 + 余额不足单价时，`PayMethodCards.coinAmount` 改按单价传（与 `enoughCoin` 同口径），PawCoin 卡恢复「余额不足 / 去充值」（原先显示正常却点不中）；补测 1 条（`pay_channel_picker_test` 共 8 条）。未修（非缺陷 / 留后续）：扣款中卡片无障碍 enabled 态（行为与改版前一致）、`idCardHdPawcoinSub` 已无调用（死 key，留后续清理）、AC3 逐处补测（同上**待确认**）、选中底色 mintTint（按 2-2 设计，L2 视觉核对）。
 
 ### File List
 

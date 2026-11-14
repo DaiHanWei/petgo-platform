@@ -248,7 +248,8 @@ class _PayChannelPickerState extends State<PayChannelPicker> {
               // HdPayChannel ↔ PayMethod 在这里映射（pawcoin ↔ pawcoin、qris ↔ direct）。
               PayMethodCards(
                 key: const ValueKey('payMethodCards'),
-                coinAmount: priceIdr ?? 0,
+                // 没勾时按单价判余额（与 enoughCoin 同口径），否则 PawCoin 卡不出「余额不足 / 去充值」而点了又选不中（6-1 review #1）。
+                coinAmount: nothingChosen ? unitIdr : (priceIdr ?? 0),
                 cashAmount: priceIdr ?? 0,
                 balance: widget.balance,
                 amountPending: priceIdr == null,
