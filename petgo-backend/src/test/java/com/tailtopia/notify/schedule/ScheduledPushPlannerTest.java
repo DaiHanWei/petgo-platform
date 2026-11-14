@@ -130,4 +130,51 @@ class ScheduledPushPlannerTest {
                         || t == NotificationType.COMPANION_ANNIVERSARY
                         || t == NotificationType.MILESTONE_NODE);
     }
+
+    // ===== V1.5.0 onboarding-recall Story 5.2：两个日扫拆分（AC1 ~ AC4）=====
+
+    @Test
+    void planBirthdays_only_birthday_and_first_birthday() {
+        LocalDate today = LocalDate.of(2026, 6, 8);
+        var p = pet(1, "Momo", LocalDate.of(2025, 6, 9), today.minusDays(30));
+        assertThat(planner.planBirthdays(today, List.of(p), Set.of())).extracting(PlannedPush::type)
+                .containsExactlyInAnyOrder(NotificationType.PET_BIRTHDAY, NotificationType.MILESTONE_NODE);
+        assertThat(planner.planBirthdays(today, List.of(p), Set.of())).allMatch(PlannedPush::push);
+    }
+
+    @Test
+    void planAnniversaries_only_anniversary() {
+        LocalDate today = LocalDate.of(2026, 6, 8);
+        var p = pet(1, "Momo", LocalDate.of(2025, 6, 9), today.minusDays(30));
+        assertThat(planner.planAnniversaries(today, List.of(p), Set.of())).singleElement().satisfies(x -> {
+            assertThat(x.type()).isEqualTo(NotificationType.COMPANION_ANNIVERSARY);
+            assertThat(x.push()).isTrue();
+        });
+    }
+
+    @Test
+    void plan_is_union_of_both() {
+        LocalDate today = LocalDate.of(2026, 6, 8);
+        var p = pet(1, "Momo", LocalDate.of(2025, 6, 9), today.minusDays(30));
+        assertThat(planner.plan(today, List.of(p), Set.of())).hasSize(3);
+    }
+
+    @Test
+    void planAnniversaries_same_owner_two_pets_one_push_and_read_only_excluded() {
+        LocalDate today = LocalDate.of(2026, 6, 8);
+        java.time.Instant t = java.time.Instant.parse("2026-05-09T05:00:00Z"); // WIB 05-09 12:00 → 30 天
+        var first = new PetProfileSnapshot(1, 10, "Kopi", null, today.minusDays(30), today.minusDays(30), "ACTIVE",
+                true, t);
+        var second = new PetProfileSnapshot(2, 10, "Mochi", null, today.minusDays(30), today.minusDays(30), "ACTIVE",
+                true, t.plusSeconds(60));
+        var readOnly = new PetProfileSnapshot(3, 20, "Ro", null, today.minusDays(30), today.minusDays(30),
+                "READ_ONLY", true, t);
+        List<PlannedPush> out = planner.planAnniversaries(today, List.of(second, first, readOnly), Set.of());
+        assertThat(out).extracting(PlannedPush::petProfileId, PlannedPush::push).containsExactly(
+                org.assertj.core.groups.Tuple.tuple(2L, false), org.assertj.core.groups.Tuple.tuple(1L, true));
+        // 健康提醒线调 plan() 判占用：并集里同样剔除只读，且只含 push=true 的那只（非最早那只不算占用）
+        assertThat(planner.plan(today, List.of(readOnly), Set.of())).isEmpty();
+        assertThat(planner.plan(today, List.of(second, first, readOnly), Set.of()))
+                .extracting(PlannedPush::petProfileId).containsExactly(1L);
+    }
 }

@@ -50,9 +50,15 @@ public class ScheduledPushDispatcher {
             //    宠物名没了，而且计划器明明是**提前 1 天**推的，文案却说"今天"。
             //    留存作战手册的铁律恰恰是「文案必须带宠物名」——「记录 Mochi 的一个瞬间」
             //    和「回来看看」是两个转化率量级。改用参数化键 + {0}=宠物名 / {1}=数字。
-            notificationService.sendWithCopy(push.ownerId(), push.type(), copyKey(push),
-                    new Object[] {petName(push), String.valueOf(push.number())},
-                    text[0], text[1], String.valueOf(push.petProfileId()));
+            Object[] args = new Object[] {petName(push), String.valueOf(push.number())};
+            if (push.type() == com.tailtopia.notify.domain.NotificationType.COMPANION_ANNIVERSARY) {
+                // V1.5.0 onboarding-recall Story 5.2 · FR-182：纪念日通知中心存渲染结果；同主人同天非最早那只 push=false
+                notificationService.sendRendered(push.ownerId(), push.type(), copyKey(push), args,
+                        text[0], text[1], String.valueOf(push.petProfileId()), push.push());
+            } else {
+                notificationService.sendWithCopy(push.ownerId(), push.type(), copyKey(push), args,
+                        text[0], text[1], String.valueOf(push.petProfileId()));
+            }
         } catch (DataIntegrityViolationException dup) {
             // 并发/重扫撞唯一约束 → 已推，安全跳过。
         } catch (RuntimeException e) {
@@ -87,9 +93,9 @@ public class ScheduledPushDispatcher {
                     "🎂 Pengingat ulang tahun",
                     name + " besok berusia " + push.number() + " tahun! Catat momen spesial yuk"};
             case COMPANION_ANNIVERSARY -> new String[] {
-                    "🎉 Hari jadi kebersamaan",
-                    "Kamu dan " + name + " sudah bersama " + push.number()
-                            + " hari — lihat kisah tumbuh kembangnya"};
+                    "🎉 Hari ke-" + push.number() + " bareng " + name + "!",
+                    "Cheers buat " + push.number() + " hari kalian! Abadikan gaya " + name
+                            + " hari ini, satu foto aja cukup 📸"};
             case MILESTONE_NODE -> new String[] {
                     "🎖️ Tonggak tumbuh kembang",
                     name + " akan segera merayakan ulang tahun pertamanya — tonggak yang patut dikenang"};

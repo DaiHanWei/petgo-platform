@@ -43,6 +43,13 @@ petgo:
   follow-update-push:
     enabled: ${FOLLOW_UPDATE_PUSH_ENABLED:true}
     daily-cap: ${FOLLOW_UPDATE_PUSH_DAILY_CAP:3}
+  # V1.5.0 onboarding-recall Story 5.2 · OR-16：定时推送拆两个日扫（cron 按 UTC 解释）。
+  # 生日 + 第一个生日 11:00 WIB；陪伴纪念日 19:00 WIB（anniversary-enabled=false → 纪念日日扫 no-op）。
+  # 旧键 petgo.scheduled-push.cron 已废弃（env 若有残留无害）。
+  scheduled-push:
+    birthday-cron: ${BIRTHDAY_PUSH_CRON:0 0 4 * * *}
+    anniversary-cron: ${ANNIVERSARY_PUSH_CRON:0 0 12 * * *}
+    anniversary-enabled: ${ANNIVERSARY_PUSH_ENABLED:true}
   # 自动评论（2026-09-29）：每天 09:30 / 20:00（WIB）给发帖满 2 小时、零评论、已过审的公开帖，
   # 用 AI（Gemini，复用下方 ai.gemini 配置）读首图写一句评论，以虚拟账号直接发出，每帖留档 auto_comment_logs。
   # 🔴 enabled 默认 false：部署层开关，按环境在 env 打开（stag 先验、生产再开）。GEMINI_MODE 非 live 时整轮跳过。

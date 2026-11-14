@@ -34,25 +34,45 @@ public class PetProfileQueryService {
 
     private final PetProfileRepository petProfiles;
     private final IdCardRepository idCards;
+    /** V1.5.0 onboarding-recall Story 5.2：快照的 {@code ownerActive}（一次批量）。2 参构造（单测）为 null → 一律 true。 */
+    private final com.tailtopia.auth.service.AccountQueryService accounts;
 
     public PetProfileQueryService(PetProfileRepository petProfiles, IdCardRepository idCards) {
+        this(petProfiles, idCards, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public PetProfileQueryService(PetProfileRepository petProfiles, IdCardRepository idCards,
+            com.tailtopia.auth.service.AccountQueryService accounts) {
         this.petProfiles = petProfiles;
         this.idCards = idCards;
+        this.accounts = accounts;
     }
 
     /**
-     * 全量档案快照（定时推送日扫用）。≤500 DAU 单机日扫足够；建档日期按 UTC 折算。
+     * 全量档案快照（定时推送日扫用）。≤500 DAU 单机日扫足够；{@code createdDate} 按 UTC 折算（旧口径）。
      * V1.4.0 multi-pet（Story 1.2 · Q1）：按 {@code created_at, id} 升序（{@code LifecyclePushJob} 依赖顺序）。
+     * V1.5.0 onboarding-recall Story 5.2：另带 {@code createdDateWib}（WIB 折算）、{@code status}、{@code ownerActive}
+     * （主人有效性 {@code activeIdsAmong} 一次批量）、{@code createdAt}。
      */
     @Transactional(readOnly = true)
     public List<PetProfileSnapshot> allSnapshots() {
-        return petProfiles.findAll(CREATED_ASC).stream()
+        List<PetProfile> all = petProfiles.findAll(CREATED_ASC);
+        Set<Long> activeOwners = accounts == null ? null
+                : accounts.activeIdsAmong(all.stream().map(PetProfile::getOwnerId).distinct().toList());
+        return all.stream()
                 .map(p -> new PetProfileSnapshot(
                         p.getId(),
                         p.getOwnerId(),
                         p.getName(),
                         p.getBirthday(),
-                        p.getCreatedAt() == null ? null : p.getCreatedAt().atZone(ZoneOffset.UTC).toLocalDate()))
+                        p.getCreatedAt() == null ? null : p.getCreatedAt().atZone(ZoneOffset.UTC).toLocalDate(),
+                        p.getCreatedAt() == null ? null
+                                : p.getCreatedAt().atZone(com.tailtopia.shared.schedule.ScheduleWindow.WIB)
+                                        .toLocalDate(),
+                        p.getStatus() == null ? PetProfileSnapshot.STATUS_ACTIVE : p.getStatus().name(),
+                        activeOwners == null || activeOwners.contains(p.getOwnerId()),
+                        p.getCreatedAt()))
                 .toList();
     }
 

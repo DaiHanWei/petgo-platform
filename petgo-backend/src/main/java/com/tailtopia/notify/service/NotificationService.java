@@ -734,6 +734,59 @@ public class NotificationService {
         return saved;
     }
 
+    /** 通知中心 title / body 列宽（{@code notifications.title VARCHAR(120)} / {@code body VARCHAR(255)}）。 */
+    static final int TITLE_MAX = 120;
+    static final int BODY_MAX = 255;
+
+    /**
+     * 发送「通知中心存渲染结果」的参数化通知（V1.5.0 onboarding-recall Story 5.2 · FR-182 · 6-1 召回复用）。
+     *
+     * <p>与 {@link #sendWithCopy} 的差别：按收件人 {@code localeOf} 渲染 {@code notify.<copyKey>.title/body}（缺键回退
+     * {@code fallbackTitle / fallbackBody}），<b>落库存渲染结果</b>（title ≤ {@value #TITLE_MAX}、body ≤ {@value #BODY_MAX}，
+     * 按码点截断、不劈 emoji），推送用同一句。{@code push=false} → 只写通知 + 角标（如同主人同天第二只纪念日）。
+     * {@code push=true} 时虚拟号 / 官方号不推、分类关闭（{@code pushAllowed}）不推；推送在本事务提交之后，失败只 warn。
+     *
+     * <p>⚠️ {@code args != null} 时走 {@code MessageFormat}，串里单引号必须写 {@code ''}。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification sendRendered(long recipientUserId, NotificationType type, String copyKey, Object[] args,
+            String fallbackTitle, String fallbackBody, String targetRef, boolean push) {
+        java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+        String title = truncateCodePoints(formatCopy(copyKey, "title", args, locale, fallbackTitle), TITLE_MAX);
+        String body = truncateCodePoints(formatCopy(copyKey, "body", args, locale, fallbackBody), BODY_MAX);
+        String token = generateToken();
+        Notification saved = repo.save(Notification.of(recipientUserId, type, title, body, type.name(), token,
+                targetRef));
+        bumpUnreadBadge(recipientUserId);
+        if (!push) {
+            return saved;
+        }
+        Long id = saved.getId();
+        runAfterCommit(() -> {
+            try {
+                if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
+                    return;
+                }
+                if (!pushAllowed(recipientUserId, type)) {
+                    return; // 关了这类推送 → 只留通知中心
+                }
+                pusher.pushToUser(recipientUserId, title, body, type.name(), token, targetRef);
+            } catch (RuntimeException e) {
+                log.warn("渲染型通知推送失败（通知已落库）notificationId={} type={} cause={}", id, type,
+                        e.getClass().getSimpleName());
+            }
+        });
+        return saved;
+    }
+
+    /** 按码点截断到 {@code max} 个码点（不劈代理对 / emoji）；null 原样。 */
+    static String truncateCodePoints(String s, int max) {
+        if (s == null || s.codePointCount(0, s.length()) <= max) {
+            return s;
+        }
+        return s.substring(0, s.offsetByCodePoints(0, max));
+    }
+
     /**
      * 虚拟号（VIRTUAL）没有 IM 账号，推过去必回 90001——直接跳过推送（通知中心照常落库 + 角标）。
      * 与 {@code localeOf} 同在本方法的 REQUIRES_NEW 事务里，findById 命中一级缓存，不多打一次库。
