@@ -1728,6 +1728,8 @@ td.is-missing { color: var(--danger); }
 .aiq-inline { display: inline; margin: 0; }
 
 /* V1.5.0 gift-pack Story 1-2 · 礼物分类（K1 / K4 / L5） */
+/* .btn 的 display:inline-block 会盖掉 [hidden]（页头「新建礼物 / 新建分类」按页签切 hidden，code review #2） */
+.btn[hidden] { display: none; }
 .gift-cat-count b { font-weight: 600; }
 .gift-cat-count .muted { color: var(--muted); }
 .gift-warn-reason { color: var(--warn); font-size: 12px; }

@@ -89,7 +89,7 @@
                     <select name="categoryId" class="sel field-full" required>
                         <option value="" th:selected="${g.categoryId == null}" disabled th:text="#{admin.v150.giftCategory.form.choose}">选择分类</option>
                         <option th:if="${curOffline}" th:value="${g.categoryId}" selected
-                                th:text="${g.categoryNameEn} + ' / ' + ${g.categoryNameId} + #{admin.v150.giftCategory.offlineSuffix}">Seasonal / Musiman（已下线）</option>
+                                th:text="${g.categoryNameEn} + ' / ' + ${g.categoryNameId} + (${#locale.language == 'zh'} ? '' : ' ') + #{admin.v150.giftCategory.offlineSuffix}">Seasonal / Musiman（已下线）</option>
                         <option th:each="oc : ${onlineCategories}" th:value="${oc.id}" th:selected="${oc.id == g.categoryId}"
                                 th:text="${oc.nameEn} + ' / ' + ${oc.nameId}">Snacks / Camilan</option>
                     </select>
@@ -137,7 +137,7 @@
             <dd th:unless="${g.exclusive()}" th:text="#{admin.v140.gift.kind.NORMAL}">普通</dd>
             <th:block th:unless="${g.exclusive()}">
                 <dt th:text="#{admin.v150.giftCategory.field}">分类</dt>
-                <dd data-gift-category-ro th:text="${g.categoryNameEn == null} ? '—' : (${g.categoryNameEn} + ' / ' + ${g.categoryNameId} + (${g.categoryOffline} ? #{admin.v150.giftCategory.offlineSuffix} : ''))">Toys / Mainan</dd>
+                <dd data-gift-category-ro th:text="${g.categoryNameEn == null} ? '—' : (${g.categoryNameEn} + ' / ' + ${g.categoryNameId} + (${g.categoryOffline} ? ((${#locale.language == 'zh'} ? '' : ' ') + #{admin.v150.giftCategory.offlineSuffix}) : ''))">Toys / Mainan</dd>
             </th:block>
             <dt th:text="#{admin.v140.gift.col.sortOrder}">排序</dt>
             <dd th:text="${g.sortOrder}">0</dd>

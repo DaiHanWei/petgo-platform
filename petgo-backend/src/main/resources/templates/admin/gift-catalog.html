@@ -45,6 +45,10 @@
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
+        <!--/* 页面级遮罩放在两个页签 section 之前：admin-drawer.js 只取第一个 [data-drawer-mask]，
+               不能落在被 hidden 的 section 里（code review #4）。 */-->
+        <div class="drawer-mask" hidden data-drawer-mask></div>
+
         <section data-gtab-panel="gift" th:hidden="${tab != 'gift'}">
 
         <!--/* 送礼 QRIS 最低金额配置行（AC8 / UI L1 · L6）：「修改」行内展开 → 服务端确认弹层 */-->
@@ -96,13 +100,18 @@
         <!--/* V1.5.0 gift-pack Story 1-2 · K1 / K2：分类页签（说明 → 表格；点行开 480 抽屉 res=giftcat，行内无按钮） */-->
         <section data-gtab-panel="category" th:hidden="${tab != 'category'}" th:with="res='giftcat'">
             <p class="muted" th:text="#{admin.v150.giftCategory.intro}">决定 App 送礼面板里普通礼物怎么分组……</p>
-            <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{}, ~{::giftcat-table}, ~{::giftcat-drawer})}">
-                <div th:fragment="giftcat-table" id="gift-category-rows"
-                     th:attr="hx-get=@{/admin/gift-catalog/categories}"
-                     hx-trigger="admin:gift-category-list-refresh from:body" hx-swap="innerHTML">
-                    <div th:replace="~{admin/fragments/gift-category-list :: rows}"></div>
+            <!--/* 不再套第二个 tpl-b-list（会重复 #admin-inline-error、多一个遮罩）：自建 [data-list] 容器 + tpl-shared 抽屉壳
+                   （行点击按 closest [data-list] 找本区 .drawer → res=giftcat）。 */-->
+            <div class="lst" data-list>
+                <div class="lst-table">
+                    <div id="gift-category-rows" th:attr="hx-get=@{/admin/gift-catalog/categories}"
+                         hx-trigger="admin:gift-category-list-refresh from:body" hx-swap="innerHTML">
+                        <div th:replace="~{admin/fragments/gift-category-list :: rows}"></div>
+                    </div>
                 </div>
-                <div th:fragment="giftcat-drawer" class="drawer-title" th:text="#{admin.v150.giftCategory.drawer.detailTitle}">分类详情</div>
+                <th:block th:replace="~{admin/fragments/tpl-shared :: drawer('giftcat', ~{::giftcat-drawer})}">
+                    <div th:fragment="giftcat-drawer" class="drawer-title" th:text="#{admin.v150.giftCategory.drawer.detailTitle}">分类详情</div>
+                </th:block>
             </div>
         </section>
 

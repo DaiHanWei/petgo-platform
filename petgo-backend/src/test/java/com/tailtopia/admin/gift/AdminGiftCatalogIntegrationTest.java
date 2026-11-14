@@ -209,7 +209,7 @@ class AdminGiftCatalogIntegrationTest extends ApiIntegrationTest {
                         .header("HX-Request", "true").header("HX-Target", "gift-drawer-err")
                         .header(HttpHeaders.ACCEPT_LANGUAGE, "zh-CN")
                         .param("nameEn", jpgName).param("nameId", "Tulang").param("price", "1000")
-                        .param("kind", "NORMAL"))
+                        .param("kind", "NORMAL").param("categoryId", String.valueOf(snacksId())))
                 .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
         assertThat(body).contains("礼物图标");
 

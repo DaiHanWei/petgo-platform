@@ -3,7 +3,8 @@
 <!--/*
   礼物分类表（V1.5.0 gift-pack Story 1-2 · AB-43，后台稿 K1 / K2）。
     rows      — 表格 + 空态（K2）；分类抽屉处置后 HX-Trigger admin:gift-category-list-refresh 重拉
-    row(c)    — 单行；点行开 480 抽屉（res=giftcat），行内无按钮
+    row(c)    — 单行；点行开 480 抽屉（res=giftcat），行内无按钮。
+              ⚠️ 不写 data-id：admin-drawer.js 会把 data-id 写进 ?open=，刷新时按 tr[data-id] 找行会先命中礼物表同 id 的行（code review #3）。
   列：名称（EN / ID）· 礼物数（在线 / 全部，在线加粗）· 排序 · 状态（在线但 0 个在线礼物加 .badge-muted「App 不显示」）· 更新时间。
 */-->
 <body>
@@ -30,7 +31,7 @@
 
 <table th:remove="tag"><tbody th:remove="tag">
     <tr th:fragment="row(c)" th:id="'gift-category-row-' + ${c.id}"
-        th:data-id="${c.id}" th:data-drawer-url="@{/admin/gift-catalog/categories/{id}/drawer(id=${c.id})}" tabindex="0"
+        th:data-category-id="${c.id}" th:data-drawer-url="@{/admin/gift-catalog/categories/{id}/drawer(id=${c.id})}" tabindex="0"
         th:classappend="${c.offline()} ? 'row-muted'">
         <td>
             <div th:text="${c.nameEn}">Snacks</div>

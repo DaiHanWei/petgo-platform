@@ -214,8 +214,9 @@ public class AdminGiftCategoryService {
             return categories.saveAndFlush(c);
         } catch (DataIntegrityViolationException e) {
             // 事务已中止，不能再查库：按本次提交的 EN 名报重名（并发竞态下的兜底，正常路径已在 checkDuplicate 拦住）。
+            // 不知道撞的是 EN 还是 ID（code review #6）：两个名称一起报，冲突分类名用「—」。
             throw AppException.validation("名称已被其他分类使用").code("admin.v150.giftCategory.err.duplicate",
-                    "EN", p.nameEn(), p.nameEn());
+                    "EN / ID", p.nameEn() + " / " + p.nameId(), "—");
         }
     }
 

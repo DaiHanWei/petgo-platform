@@ -164,7 +164,7 @@ public class AdminGiftCatalogController {
         if (hx.isHtmx()) {
             categories.create(admin.getAdminAccountId(), form);
             AdminFragmentResponses.trigger(response, AdminHxEvents.GIFT_CATEGORY_LIST_REFRESH,
-                    AdminHxEvents.DRAWER_CLOSE);
+                    AdminHxEvents.GIFT_CATALOG_LIST_REFRESH, AdminHxEvents.DRAWER_CLOSE);
             model.addAttribute("toast", msg.get("admin.v150.giftCategory.flash.created"));
             return "admin/fragments/drawer-gift :: created";
         }
@@ -222,7 +222,9 @@ public class AdminGiftCatalogController {
     private String afterCategoryAction(long id, String toast, Model model, HttpServletResponse response) {
         populateCategoryDrawer(id, model);
         model.addAttribute("toast", toast);
-        AdminFragmentResponses.trigger(response, AdminHxEvents.GIFT_CATEGORY_LIST_REFRESH);
+        // 分类改名 / 上下线也要刷新礼物表的「分类」列（code review #5）。
+        AdminFragmentResponses.trigger(response, AdminHxEvents.GIFT_CATEGORY_LIST_REFRESH,
+                AdminHxEvents.GIFT_CATALOG_LIST_REFRESH);
         return "admin/fragments/drawer-gift-category :: afterAction";
     }
 
