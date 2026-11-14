@@ -180,6 +180,17 @@ public class InteractionCopyRenderer {
     }
 
     /**
+     * 关注更新标题（V1.5.0 onboarding-recall Story 5.1 · FR-180）：Diary 且有宠物名 → {@code notify.tpl.userPostPublished.diary}
+     * （{0} 作者昵称、{1} 宠物名）；否则（Moment / Tips / 无宠物名）→ {@code .post}（{0} 作者昵称）。
+     */
+    public String userPostPublishedTitle(String authorNickname, String petName, boolean isDiary, Locale locale) {
+        String nick = authorNickname == null ? "" : authorNickname;
+        return isDiary && petName != null && !petName.isBlank()
+                ? msg("notify.tpl.userPostPublished.diary", locale, nick, petName)
+                : msg("notify.tpl.userPostPublished.post", locale, nick);
+    }
+
+    /**
      * 收礼推送标题（单笔文案，V1.4.0 gift Story 1.2 · AC5.3）：{@code notify.tpl.giftReceived.push}
      * （{0} 送礼人昵称、{1} 礼物、{2} 宠物名）。{@code giftLabel} 由调用方给：数量 1 时为礼物名、≥ 2 时「礼物名 ×N」。
      */

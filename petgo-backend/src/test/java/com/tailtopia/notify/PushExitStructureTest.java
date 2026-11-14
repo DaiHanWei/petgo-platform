@@ -71,6 +71,8 @@ class PushExitStructureTest {
             // V1.4.2 social-topic Story 1.2：被追更 / 追更宠物新 Diary（提交后直接推，各自带 pushAllowed）
             "NotificationService#sendPetFollowed",
             "NotificationService#sendPetDiaryPosted",
+            // V1.5.0 onboarding-recall Story 5.1：关注更新（提交后按序判定：账号 / 分类 / 版本 / 同作者 / 名额）
+            "NotificationService#sendUserPostPublished",
             "OpsNotificationDispatcher#push");
 
     private static final Pattern METHOD_DECL = Pattern.compile(

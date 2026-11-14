@@ -1,6 +1,7 @@
 package com.tailtopia.social.read;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,4 +23,10 @@ public interface FollowReader {
      * <p>空集合直接返回空表、不发查询；入参里的每个 id 都有值，缺失的填 {@link FollowState#NONE}。
      */
     Map<Long, FollowState> followStates(long viewerId, Collection<Long> targetIds);
+
+    /**
+     * {@code followeeId} 的全部关注者 id（V1.5.0 onboarding-recall Story 5.1 · OR-13：关注更新推送扇出）——<b>一次查询</b>，
+     * 不分 {@code source}（手动 / 系统自动关注都算），不过滤有效性（调用方自行批量过滤）。顺序按关注时间升序。
+     */
+    List<Long> followerIdsOf(long followeeId);
 }

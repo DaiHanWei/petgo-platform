@@ -1,5 +1,6 @@
 package com.tailtopia.notify.schedule;
 
+import com.tailtopia.notify.repository.FollowUpdatePushDao;
 import com.tailtopia.notify.repository.PetDiaryNotifyLogDao;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import java.time.Clock;
@@ -17,6 +18,9 @@ import org.springframework.stereotype.Component;
  * <p>⚠️ 架构 D-5 写「随按天浏览一起清理」；Story 4.1 已决定<b>不合并</b>（避免 content→notify 循环依赖），
  * 与 {@code ContentViewDayCleanupJob} 各自每日清理。
  * 失败只记日志（异常类名），不重试；下一天自然补删。日期一律 {@link ScheduleWindow#WIB}（P-6）。
+ *
+ * <p>V1.5.0 onboarding-recall Story 5.1 · AC12：同时清理关注更新推送三表（{@code user_post_notify_log} /
+ * {@code user_post_push_daily} / {@code follow_update_push_quota}），同一截止日；两组各自 try，一组失败不影响另一组。
  */
 @Component
 public class PetDiaryNotifyLogCleanupJob {
@@ -27,15 +31,17 @@ public class PetDiaryNotifyLogCleanupJob {
     static final int RETENTION_DAYS = 30;
 
     private final PetDiaryNotifyLogDao dao;
+    private final FollowUpdatePushDao followUpdates;
     private final Clock clock;
 
     @Autowired
-    public PetDiaryNotifyLogCleanupJob(PetDiaryNotifyLogDao dao) {
-        this(dao, Clock.systemUTC());
+    public PetDiaryNotifyLogCleanupJob(PetDiaryNotifyLogDao dao, FollowUpdatePushDao followUpdates) {
+        this(dao, followUpdates, Clock.systemUTC());
     }
 
-    PetDiaryNotifyLogCleanupJob(PetDiaryNotifyLogDao dao, Clock clock) {
+    PetDiaryNotifyLogCleanupJob(PetDiaryNotifyLogDao dao, FollowUpdatePushDao followUpdates, Clock clock) {
         this.dao = dao;
+        this.followUpdates = followUpdates;
         this.clock = clock;
     }
 
@@ -47,6 +53,12 @@ public class PetDiaryNotifyLogCleanupJob {
             log.info("pet_diary_notify_log cleanup: cutoff={} deleted={}", cutoff, deleted);
         } catch (RuntimeException e) {
             log.warn("pet_diary_notify_log 清理失败 cutoff={} cause={}", cutoff, e.getClass().getSimpleName());
+        }
+        try {
+            int deleted = followUpdates.deleteBefore(cutoff);
+            log.info("follow-update push tables cleanup: cutoff={} deleted={}", cutoff, deleted);
+        } catch (RuntimeException e) {
+            log.warn("关注更新推送三表清理失败 cutoff={} cause={}", cutoff, e.getClass().getSimpleName());
         }
     }
 

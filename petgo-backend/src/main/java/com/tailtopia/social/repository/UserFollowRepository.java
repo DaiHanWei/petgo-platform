@@ -179,4 +179,9 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
     @Query(value = "DELETE FROM user_follows WHERE follower_id = :userId OR followee_id = :userId",
             nativeQuery = true)
     int deleteAllInvolving(@Param("userId") long userId);
+
+    /** V1.5.0 onboarding-recall Story 5.1：某人的全部关注者 id（关注更新推送扇出），按关注时间升序。 */
+    @Query(value = "SELECT follower_id FROM user_follows WHERE followee_id = :followeeId ORDER BY created_at, follower_id",
+            nativeQuery = true)
+    List<Long> findFollowerIdsOf(@Param("followeeId") long followeeId);
 }

@@ -37,6 +37,12 @@ petgo:
   # 只缓存那一份全站第一页（PRD 拍板的唯一例外）；登录态推荐仍实时。
   public-pet-recommendations:
     ttl: ${PUBLIC_PET_RECOMMEND_TTL:PT10M}
+  # V1.5.0 onboarding-recall Story 5.1 · OR-14 / OR-15：关注更新推送（USER_POST_PUBLISHED）。
+  # enabled=false → 关注更新整条 no-op（不写通知、不推；追更 PET_DIARY_POSTED 不受影响）。
+  # daily-cap = 关注更新 + 追更新 Diary 两类合计每人每 WIB 日推送上限（超出只写通知中心）。
+  follow-update-push:
+    enabled: ${FOLLOW_UPDATE_PUSH_ENABLED:true}
+    daily-cap: ${FOLLOW_UPDATE_PUSH_DAILY_CAP:3}
   # 自动评论（2026-09-29）：每天 09:30 / 20:00（WIB）给发帖满 2 小时、零评论、已过审的公开帖，
   # 用 AI（Gemini，复用下方 ai.gemini 配置）读首图写一句评论，以虚拟账号直接发出，每帖留档 auto_comment_logs。
   # 🔴 enabled 默认 false：部署层开关，按环境在 env 打开（stag 先验、生产再开）。GEMINI_MODE 非 live 时整轮跳过。

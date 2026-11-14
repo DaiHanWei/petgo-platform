@@ -52,4 +52,10 @@ public class FollowReaderImpl implements FollowReader {
         }
         return out;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> followerIdsOf(long followeeId) {
+        return follows.findFollowerIdsOf(followeeId);
+    }
 }

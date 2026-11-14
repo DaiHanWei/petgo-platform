@@ -85,6 +85,13 @@ public class NotificationService {
      * 按 noPet 文案推。用 {@link ObjectProvider} 懒取，避免与宠物侧 bean 成环。
      */
     private final ObjectProvider<NotificationPetNames> petNames;
+    /**
+     * V1.5.0 onboarding-recall Story 5.1（OR-13 / OR-14）：关注更新推送的去重表 / 两类合计名额 / 版本门槛。
+     * 旧 10 / 11 参构造（单测）传 null：名额闸门不生效（照常推）、关注更新推送不可用（只写通知）。
+     */
+    private final com.tailtopia.notify.repository.FollowUpdatePushDao followUpdates;
+    private final FollowUpdatePushQuota quota;
+    private final AppVersionGate versionGate;
     private final SecureRandom random = new SecureRandom();
 
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
@@ -95,14 +102,29 @@ public class NotificationService {
         this(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, unreadResolver, prefs, null);
     }
 
-    @Autowired
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
             NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
             com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
             NotificationActorRepository actors, InteractionCopyRenderer copy,
             InteractionActorResolver unreadResolver, PushPreferenceService prefs,
             ObjectProvider<NotificationPetNames> petNames) {
+        this(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, unreadResolver, prefs,
+                petNames, null, null, null);
+    }
+
+    @Autowired
+    public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
+            NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
+            com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
+            NotificationActorRepository actors, InteractionCopyRenderer copy,
+            InteractionActorResolver unreadResolver, PushPreferenceService prefs,
+            ObjectProvider<NotificationPetNames> petNames,
+            com.tailtopia.notify.repository.FollowUpdatePushDao followUpdates, FollowUpdatePushQuota quota,
+            AppVersionGate versionGate) {
         this.petNames = petNames;
+        this.followUpdates = followUpdates;
+        this.quota = quota;
+        this.versionGate = versionGate;
         this.repo = repo;
         this.redis = redis;
         this.pusher = pusher;
@@ -442,12 +464,91 @@ public class NotificationService {
                 if (!pushAllowed(recipientUserId, type)) {
                     return; // 关了「追更宠物」→ 只留通知中心
                 }
+                // V1.5.0 Story 5.1 · OR-14：与关注更新两类合计每人每 WIB 日名额；满了只留通知中心（不加版本门槛）
+                if (quota != null && !quota.tryClaim(recipientUserId)) {
+                    return;
+                }
                 pusher.pushToUser(recipientUserId, title, "", type.name(), token, targetRef);
             } catch (RuntimeException e) {
                 log.warn("追更日提醒推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
             }
         });
         return saved;
+    }
+
+    /**
+     * 关注的人发了新公开帖（V1.5.0 onboarding-recall Story 5.1 · FR-180 · OR-13）：{@code USER_POST_PUBLISHED}，不带触发人行，
+     * 每次触发都写一条（不合并）。
+     *
+     * <p>标题在<b>写入时</b>按收件人语言渲染并落库：Diary 且有宠物名 → {@code notify.tpl.userPostPublished.diary}
+     * （{@code {0}} 作者昵称、{@code {1}} 第一只关联宠物名），否则 → {@code .post}；{@code body} 落空串；
+     * {@code deepLinkType = USER_POST_PUBLISHED}、{@code targetRef} = 帖子 id、{@code variant = null}。角标 +1。
+     * 同事务插 {@code user_post_notify_log}（初值 {@link UserPostPushOutcome#MUTED}）。
+     *
+     * <p>推送在本事务<b>提交之后</b>，按序判定、任一命中即停并回写 outcome：虚拟号 / 官方号 → {@code NO_PUSH_ACCT}；
+     * 分类关闭（{@code PET_DIARY}）→ {@code MUTED}；最后上报版本 &lt; 1.5.0 → {@code OLD_APP}；今天已推过该作者 →
+     * {@code AUTHOR_DUP}；两类合计名额满 → {@code CAP_REACHED}；投递失败 → {@code FAILED}；成功 → {@code PUSHED}。
+     * 推送标题同通知标题、正文空；失败只 warn、不重推。
+     *
+     * <p>{@code REQUIRED}：由 {@link UserPostNotifyWriter} 的 {@code REQUIRES_NEW} 事务调用。同收件人同帖已登记过
+     * （重复事件）→ 什么都不写，返回 {@code null}。作者 / 收件人过滤<b>不在这里</b>（在 {@link UserPostNotifyListener}）。
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public Notification sendUserPostPublished(long recipientUserId, long postId, long authorId, String authorNickname,
+            String petName, boolean isDiary) {
+        NotificationType type = NotificationType.USER_POST_PUBLISHED;
+        java.time.LocalDate wibDate = quota != null ? quota.today()
+                : java.time.LocalDate.now(com.tailtopia.shared.schedule.ScheduleWindow.WIB);
+        if (followUpdates != null && !followUpdates.insertNotifyLog(recipientUserId, postId, authorId, wibDate,
+                UserPostPushOutcome.MUTED.name())) {
+            return null;
+        }
+        java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+        String title = copy.userPostPublishedTitle(authorNickname, petName, isDiary, locale);
+        String targetRef = String.valueOf(postId);
+        Notification saved = repo.save(Notification.interaction(recipientUserId, type, title, "", type.name(),
+                generateToken(), targetRef, null, null, null));
+        bumpUnreadBadge(recipientUserId);
+        Long id = saved.getId();
+        String token = saved.getDeepLinkToken();
+        runAfterCommit(() -> {
+            UserPostPushOutcome outcome;
+            try {
+                if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
+                    outcome = UserPostPushOutcome.NO_PUSH_ACCT;
+                } else if (!pushAllowed(recipientUserId, type)) {
+                    outcome = UserPostPushOutcome.MUTED;
+                } else if (versionGate == null || !versionGate.reportedV150OrLater(recipientUserId)) {
+                    outcome = UserPostPushOutcome.OLD_APP;
+                } else if (followUpdates == null
+                        || !followUpdates.claimAuthorDaily(recipientUserId, authorId, wibDate)) {
+                    outcome = UserPostPushOutcome.AUTHOR_DUP;
+                } else if (quota != null && !quota.tryClaim(recipientUserId, wibDate)) {
+                    outcome = UserPostPushOutcome.CAP_REACHED;
+                } else {
+                    outcome = pusher.pushToUserNow(recipientUserId, title, "", type.name(), token, targetRef)
+                            ? UserPostPushOutcome.PUSHED : UserPostPushOutcome.FAILED;
+                }
+            } catch (RuntimeException e) {
+                log.warn("关注更新推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
+                outcome = UserPostPushOutcome.FAILED;
+            }
+            recordUserPostOutcome(recipientUserId, postId, outcome);
+        });
+        return saved;
+    }
+
+    /** 回写 {@code user_post_notify_log.push_outcome}（初值已是 MUTED，相同就不写）；失败只 warn。 */
+    private void recordUserPostOutcome(long recipientUserId, long postId, UserPostPushOutcome outcome) {
+        if (followUpdates == null || outcome == UserPostPushOutcome.MUTED) {
+            return;
+        }
+        try {
+            followUpdates.updateOutcome(recipientUserId, postId, outcome.name());
+        } catch (RuntimeException e) {
+            log.warn("关注更新推送结果回写失败 recipient={} post={} cause={}", recipientUserId, postId,
+                    e.getClass().getSimpleName());
+        }
     }
 
     /** 合并前（不含本次触发人）的触发人是否全被过滤。 */
