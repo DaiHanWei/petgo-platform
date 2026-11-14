@@ -1735,6 +1735,8 @@
   "@petHealthPregnantAutoOff": {"description": "Under Pregnant = Yes: the date the flag turns itself off (FR-162)", "placeholders": {"date": {"type": "String"}}},
   "healthReminderFormDirtyToast": "Simpan atau tutup catatan ini dulu, lalu buka lagi pengingatnya.",
   "healthReminderPetUnavailable": "Hewan ini sudah tidak tersedia.",
+  "consultHistoryVetVisitTitle": "Kontrol dokter · {name}",
+  "@consultHistoryVetVisitTitle": {"description": "Konsultasi saya: Kontrol dokter (vet visit) item title with the pet name (V1.5.0 FR-161)", "placeholders": {"name": {"type": "String"}}},
   "healthTypeVetVisit": "Kontrol dokter",
   "healthConsultCardSubtitle": "Gejala & dokter",
   "healthFilterTitle": "{category} · TERBARU",

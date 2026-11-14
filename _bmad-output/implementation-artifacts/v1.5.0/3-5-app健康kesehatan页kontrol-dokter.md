@@ -1,6 +1,6 @@
 # Story 3.5: App Kesehatan 页 Kontrol dokter
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ① 健康记录提醒 · 分支 `feat/1.5.0-health-reminder`
 > 口径优先级：CROSS-STORY-DECISIONS 地基段 > 架构增量 §6.3 > PRD FR-161 UI（Adding / Kesehatan reloads / listed in "Konsultasi saya"）、AC69 > UI 稿 A10（整合稿页头「代码落点」第 2 行）。
@@ -34,9 +34,9 @@ so that 线下看兽医的记录也和线上问诊放在一起。
 
 ## Tasks / Subtasks
 
-- [ ] T1 按钮与选择器流程（AC1）
-- [ ] T2 模型与 tile（AC2）
-- [ ] T3 测试（AC3）；`flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
+- [x] T1 按钮与选择器流程（AC1）
+- [x] T2 模型与 tile（AC2）
+- [x] T3 测试（AC3）；`flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -52,4 +52,19 @@ so that 线下看兽医的记录也和线上问诊放在一起。
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：AC1 / AC2 的 `[L2]` 部分与 AC4（模拟器对照 UI 稿 A10，还原度 ≥95%）未做，留 4.1 统一打分；真后端联调（`/consult/history` 在 `X-App-Version` ≥ 1.5.0 时下发 `VET_VISIT`）留 4.1。本 story 无 L1 项。
+- L0：`flutter analyze` 无 error / warning（仅工具链 3.50 的全仓 deprecation info 与既有 rendering import info）；新增 `test/triage/triage_page_vet_visit_test.dart` 9 例（游客 / 无宠物不显示按钮、1 只直接 push 不弹选择器 + 返回重拉、2 只先弹选择器并切宠物报 `pet_switched{consult_page}`、选择器取消什么都不做、VET_VISIT 条目标题 / 日期 / 备注 2 行 / 胶囊、只有 Kontrol dokter 不是空态、点条目切宠物 + push focus + 返回重拉、未知 type 不崩、三类全无才空态）；`flutter test` 全量 5022 例绿。
+- 「+ Kontrol dokter」：文案 = `'+ ' + healthTypeVetVisit`（story 要求复用类型名 arb，不另起键）；显示条件 = 已登录（该段本就只在登录态渲染）且 `petListProvider` 非空。选择器复用 `pickPetForConsult`，`purpose` 选 `vetConsult`（标题「Konsultasi untuk siapa?」/ 说明「Dokter akan melihat profil hewan ini.」）——**待确认**：Kontrol dokter 是线下看诊记录，这两句是线上咨询的口吻，PRD / UI 稿未给专用文案，暂复用、未新造文案。
+- 切宠物：`effectivePetIdProvider` 当前值不同才 `currentPetIdProvider.select` + `pet_switched {from_pet_id, to_pet_id, source: consult_page}`（不带宠物名；`consult_page` 为新增来源值，story 允许）。返回后重拉用块体 `setState(() { _load(); })`（story Dev Notes 点名的坑）。
+- VET_VISIT 条目：新 `_VetVisitTile`（AI / VET 的 `_HistoryTile` 一行未改）；头像 = 3.2 图标表 `VET_VISIT` 行（听诊器 SVG + coral，coralTint 圆底）；标题新 arb 键 `consultHistoryVetVisitTitle`（「Kontrol dokter · {name}」/「Vet visit · {name}」）；日期用记录卡同一格式 `formatDayMonthYear(eventDate)`；状态胶囊复用 3.1 的胶囊——为此把 3.1 页面里的私有 `_statusPill` 抽成公共 widget `widgets/health_status_pill.dart`（`HealthStatusPill`，健康记录页改为用它，测试 key 不变）。
+- `ConsultHistoryItem` 追加 8 字段 + `isVetVisit`；`fromJson` 对未知 `type` 保持原默认行为。空态条件不变（`items.isEmpty`，三类都没有才显示）。
+- 未运行 `bmad-dev-story` / `bmad-code-review` 技能文件（仓库内不存在），按 story 手动执行；code review 由本会话逐项核对 diff，无 CONFIRMED 问题。
+
 ### File List
+
+- `petgo_app/lib/features/triage/presentation/triage_page.dart`
+- `petgo_app/lib/features/consult/domain/consult_history_item.dart`
+- `petgo_app/lib/features/profile/presentation/widgets/health_status_pill.dart`（新）
+- `petgo_app/lib/features/profile/presentation/health_list_page.dart`
+- `petgo_app/lib/l10n/app_id.arb`、`petgo_app/lib/l10n/app_en.arb`
+- `petgo_app/test/triage/triage_page_vet_visit_test.dart`（新）

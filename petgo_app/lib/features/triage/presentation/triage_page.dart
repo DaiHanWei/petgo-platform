@@ -19,7 +19,14 @@ import '../../consult/domain/consult_history_item.dart';
 import '../../consult/domain/consult_session.dart';
 import '../../consult/presentation/consult_rating_dialog.dart';
 import '../../consult/presentation/consult_refresh.dart';
+import '../../profile/data/current_pet_provider.dart';
+import '../../profile/data/pet_list_repository.dart';
+import '../../profile/domain/health_list_item.dart' show HealthRecordStatus;
+import '../../profile/domain/health_record_icons.dart';
+import '../../profile/presentation/widgets/health_status_pill.dart';
 import '../../profile/presentation/widgets/pet_pick_for_consult.dart';
+import '../../../shared/utils/date_format.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'triage_upload_page.dart' show triageUploadLocation;
 
 /// Konsultasi Kilat 问诊 hub（TailTopia Prototype 换肤 · Story 4.3 + 5.8）。
@@ -63,6 +70,46 @@ class _TriagePageState extends ConsumerState<TriagePage> {
       if (a != null) a.then((_) {}).catchError((_) {}),
       if (h != null) h.then((_) {}).catchError((_) {}),
     ]);
+  }
+
+  /// V1.5.0 健康记录提醒 Story 3.5：切到 [petId]（与当前不同才切并报 `pet_switched`，不带宠物名）。
+  void _switchPet(int petId) {
+    final current = ref.read(effectivePetIdProvider).value;
+    if (current == petId) return;
+    Analytics.capture('pet_switched', {
+      'from_pet_id': ?current,
+      'to_pet_id': petId,
+      'source': 'consult_page',
+    });
+    ref.read(currentPetIdProvider.notifier).select(petId);
+  }
+
+  /// 「+ Kontrol dokter」（PRD AC69）：≥2 只先选宠物（同「Cek Gejala」选择器，取消 = 什么都不做）→ 切宠物 →
+  /// 健康记录页自动弹 Kontrol dokter 表单；返回后重拉「Konsultasi saya」。
+  Future<void> _addVetVisit() async {
+    final pick = await pickPetForConsult(context, ref, purpose: PetPickPurpose.vetConsult);
+    final petId = pick?.petId;
+    if (petId == null || !mounted) return;
+    _switchPet(petId);
+    await context.push('/profile/health?add=VET_VISIT&from=consult');
+    if (!mounted) return;
+    // ⚠️ 块体：箭头形式 `setState(() => _load())` 在 debug 下会因返回值被静默忽略（项目踩过的坑）。
+    setState(() {
+      _load();
+    });
+  }
+
+  /// Kontrol dokter 条目：切到那只宠物 → 健康记录页定位到该条；返回后重拉。
+  Future<void> _openVetVisit(ConsultHistoryItem item) async {
+    final petId = item.petId;
+    final recordId = item.recordId;
+    if (petId == null || recordId == null) return;
+    _switchPet(petId);
+    await context.push('/profile/health?focus=$recordId');
+    if (!mounted) return;
+    setState(() {
+      _load();
+    });
   }
 
   /// 兽医卡：登录态读 [consultAvailabilityProvider] 的在线 bool 驱动绿点（在线→脉冲「Dokter tersedia」，
@@ -228,7 +275,23 @@ class _TriagePageState extends ConsumerState<TriagePage> {
               ),
               // ⑤ 我的问诊历史列表。
               const SizedBox(height: AppSpacing.section),
-              Text(l10n.consultHistoryTitle, style: AppTypography.title),
+              Row(
+                children: [
+                  Expanded(child: Text(l10n.consultHistoryTitle, style: AppTypography.title)),
+                  // V1.5.0 Story 3.5 · AC1：已登录且至少 1 只宠物才显示（游客整段不渲染；无宠物不显示）。
+                  if ((ref.watch(petListProvider).value ?? const <PetListItem>[]).isNotEmpty)
+                    TextButton(
+                      key: const ValueKey('consultAddVetVisit'),
+                      onPressed: _addVetVisit,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.mint,
+                        minimumSize: const Size(48, 40),
+                      ),
+                      child: Text('+ ${l10n.healthTypeVetVisit}',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.md),
               FutureBuilder<ConsultHistoryPage>(
                 future: _history,
@@ -244,7 +307,12 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                           key: const ValueKey('consultHistoryEmpty'), style: AppTypography.caption),
                     );
                   }
-                  return Column(children: [for (final it in items) _HistoryTile(item: it)]);
+                  return Column(children: [
+                    for (final it in items)
+                      it.isVetVisit
+                          ? _VetVisitTile(item: it, onTap: () => _openVetVisit(it))
+                          : _HistoryTile(item: it),
+                  ]);
                 },
               ),
             ],
@@ -397,6 +465,62 @@ class _CtaButton extends StatelessWidget {
 }
 
 /// 历史条目（Story 5.8 F2）：头像 + 严重度胶囊/星评 + 相对时间 + 摘要。
+/// 「Konsultasi saya」里的 Kontrol dokter 条目（V1.5.0 Story 3.5 · AC2，UI 稿 A10）：红色听诊器头像、
+/// 「Kontrol dokter · {nama}」、右侧记录卡格式日期（不用相对时间）、备注最多 2 行、与记录卡同一个状态胶囊。
+class _VetVisitTile extends StatelessWidget {
+  const _VetVisitTile({required this.item, required this.onTap});
+
+  final ConsultHistoryItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final icon = healthRecordIconFor('VET_VISIT');
+    final date = item.eventDate ?? item.date;
+    final status = HealthRecordStatus.parse(item.recordStatus);
+    final note = item.note ?? '';
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: ListTile(
+        key: ValueKey('historyVetVisit_${item.recordId}'),
+        onTap: onTap,
+        leading: CircleAvatar(
+          backgroundColor: AppColors.coralTint,
+          child: icon.svgAsset == null
+              ? Icon(icon.icon, color: icon.color)
+              : SvgPicture.asset(icon.svgAsset!,
+                  width: 22, height: 22, colorFilter: ColorFilter.mode(icon.color, BlendMode.srcIn)),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(l10n.consultHistoryVetVisitTitle(item.petName ?? ''),
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (date != null) ...<Widget>[
+              const SizedBox(width: AppSpacing.sm),
+              Text(formatDayMonthYear(context, date), style: AppTypography.micro),
+            ],
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (note.isNotEmpty) Text(note, maxLines: 2, overflow: TextOverflow.ellipsis),
+            if (HealthStatusPill.shows(status, item.nextDate)) ...<Widget>[
+              const SizedBox(height: 4),
+              HealthStatusPill(status: status, nextDate: item.nextDate, keyId: 'vv${item.recordId}'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HistoryTile extends StatelessWidget {
   const _HistoryTile({required this.item});
 

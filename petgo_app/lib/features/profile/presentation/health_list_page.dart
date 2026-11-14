@@ -20,6 +20,7 @@ import '../domain/health_list_item.dart';
 import '../domain/health_record_icons.dart';
 import '../domain/milestone.dart';
 import 'widgets/health_record_form.dart';
+import 'widgets/health_status_pill.dart';
 import '../data/pet_list_repository.dart';
 import '../../pet_slot/presentation/pet_readonly_block.dart';
 
@@ -570,7 +571,10 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
     // 问诊只读卡按 done 显示（AC2.3）。
     final status = item.isConsult ? HealthRecordStatus.done : item.recordStatus;
     final done = status == HealthRecordStatus.done;
-    final pill = done ? null : _statusPill(context, l10n, item, status);
+    // 状态胶囊抽到 widgets/health_status_pill.dart（3.5 的 Konsultasi saya 条目复用同一个）。
+    final pill = HealthStatusPill.shows(status, item.displayNextDate)
+        ? HealthStatusPill(status: status, nextDate: item.displayNextDate, keyId: item.id)
+        : null;
     return AnimatedContainer(
       key: focused ? _focusKey : null,
       duration: const Duration(milliseconds: 260),
@@ -699,61 +703,6 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       ),
     );
   }
-
-  /// 状态胶囊（AC2.3，架构 §7）：每种状态都有图标 + 文字，不只靠颜色。done 不出胶囊。
-  Widget? _statusPill(
-      BuildContext context, AppLocalizations l10n, HealthListItem item, HealthRecordStatus status) {
-    final next = item.displayNextDate;
-    final String text;
-    final IconData icon;
-    final Color bg;
-    final Color fg;
-    switch (status) {
-      case HealthRecordStatus.overdue:
-        text = l10n.healthStatusOverdue;
-        icon = Icons.error_outline_rounded;
-        bg = AppColors.coralTint;
-        fg = AppColors.healthEventText;
-      case HealthRecordStatus.dueSoon:
-        if (next == null) return null;
-        text = l10n.healthStatusNext(_nextDateLabel(context, next));
-        icon = Icons.alarm_rounded;
-        bg = AppColors.goldTint;
-        fg = AppColors.tipsBadgeText;
-      case HealthRecordStatus.upcoming:
-        if (next == null) return null;
-        text = l10n.healthStatusNext(_nextDateLabel(context, next));
-        icon = Icons.calendar_today_rounded;
-        bg = AppColors.violet100;
-        fg = AppColors.mint700;
-      case HealthRecordStatus.done:
-        return null;
-    }
-    return Container(
-      key: ValueKey('healthStatus_${status.name}_${item.id}'),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9999)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: fg),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: fg, fontSize: 11.5, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 本年不写年、跨年写年（AC2.3）。
-  static String _nextDateLabel(BuildContext context, DateTime d) =>
-      d.year == DateTime.now().year ? formatDayMonth(context, d) : formatDayMonthYear(context, d);
 
   String _recordTitle(AppLocalizations l10n, HealthListItem item) {
     switch (item.type) {

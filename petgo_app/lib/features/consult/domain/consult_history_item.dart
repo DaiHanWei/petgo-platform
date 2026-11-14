@@ -12,6 +12,14 @@ class ConsultHistoryItem {
     this.userStars,
     this.archived,
     this.terminalState,
+    this.recordId,
+    this.petId,
+    this.petName,
+    this.eventDate,
+    this.note,
+    this.nextDate,
+    this.overdue,
+    this.recordStatus,
   });
 
   final String type; // AI | VET
@@ -27,8 +35,18 @@ class ConsultHistoryItem {
   final int? userStars;
   final bool? archived;
   final String? terminalState; // CLOSED | INTERRUPTED
+  // VET_VISIT（V1.5.0 健康记录提醒 Story 3.5，后端 2.5：仅 1.5.0 客户端下发；Kontrol dokter，账号全部宠物）
+  final int? recordId;
+  final int? petId;
+  final String? petName;
+  final DateTime? eventDate;
+  final String? note;
+  final DateTime? nextDate;
+  final bool? overdue;
+  final String? recordStatus; // OVERDUE | DUE_SOON | UPCOMING | DONE
 
   bool get isAi => type == 'AI';
+  bool get isVetVisit => type == 'VET_VISIT';
 
   factory ConsultHistoryItem.fromJson(Map<String, dynamic> json) => ConsultHistoryItem(
         type: (json['type'] ?? 'AI') as String,
@@ -42,6 +60,14 @@ class ConsultHistoryItem {
         userStars: (json['userStars'] as num?)?.toInt(),
         archived: json['archived'] as bool?,
         terminalState: json['terminalState'] as String?,
+        recordId: (json['recordId'] as num?)?.toInt(),
+        petId: (json['petId'] as num?)?.toInt(),
+        petName: json['petName'] as String?,
+        eventDate: json['eventDate'] == null ? null : DateTime.tryParse(json['eventDate'] as String),
+        note: json['note'] as String?,
+        nextDate: json['nextDate'] == null ? null : DateTime.tryParse(json['nextDate'] as String),
+        overdue: json['overdue'] as bool?,
+        recordStatus: json['recordStatus'] as String?,
       );
 }
 

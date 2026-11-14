@@ -2595,6 +2595,8 @@
   "@healthReminderFormDirtyToast": {"description": "Toast: a health reminder was tapped while a health record form has unsaved changes (FR-167)"},
   "healthReminderPetUnavailable": "This pet is no longer available.",
   "@healthReminderPetUnavailable": {"description": "Toast: the reminder's pet was deleted or is no longer accessible (FR-167)"},
+  "consultHistoryVetVisitTitle": "Vet visit · {name}",
+  "@consultHistoryVetVisitTitle": {"description": "Konsultasi saya: Kontrol dokter (vet visit) item title with the pet name (V1.5.0 FR-161)", "placeholders": {"name": {"type": "String"}}},
   "healthTypeVetVisit": "Vet visit",
   "@healthTypeVetVisit": {"description": "Record type name for vet follow-up visits (V1.5.0 FR-161)"},
   "healthConsultCardSubtitle": "Symptoms · vet",
