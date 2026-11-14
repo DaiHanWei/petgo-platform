@@ -45,8 +45,8 @@ development_status:
   1-3-健康档案上线回填与怀孕自动清除: review
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-健康提醒表与重建引擎: ready-for-dev
+  epic-2: in-progress
+  2-1-健康提醒表与重建引擎: review
   2-2-健康档案类提醒与上线排队: ready-for-dev
   2-3-健康提醒日跑与投递规则: ready-for-dev
   2-4-健康提醒文案通知与点开接口: ready-for-dev

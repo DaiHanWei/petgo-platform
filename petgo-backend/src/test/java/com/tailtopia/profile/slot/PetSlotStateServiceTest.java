@@ -39,8 +39,11 @@ class PetSlotStateServiceTest {
     private final PetSlotLock lock = mock(PetSlotLock.class);
     private final com.tailtopia.profile.service.AccountMilestoneService accountMilestones =
             mock(com.tailtopia.profile.service.AccountMilestoneService.class);
+    private final org.springframework.context.ApplicationEventPublisher events =
+            mock(org.springframework.context.ApplicationEventPublisher.class);
     private final PetSlotStateService service =
-            new PetSlotStateService(profiles, slots, lock, new PetResolver(profiles), accountMilestones);
+            new PetSlotStateService(profiles, slots, lock, new PetResolver(profiles), accountMilestones,
+                    events);
 
     private PetProfile a;
     private PetProfile b;

@@ -96,4 +96,23 @@ class HealthReminderMigrationTest {
             }
         }
     }
+
+    // ---- Story 2.1：V20261115_0120 ----
+
+    private static final Path TABLES = DIR.resolve("V20261115_0120__create_health_reminder_tables.sql");
+
+    @Test
+    void reminderTablesShape() throws Exception {
+        String sql = sqlOnly(read(TABLES));
+        assertThat(sql).contains("CREATE TABLE health_reminder_settings")
+                .contains("INSERT INTO health_reminder_settings (id) VALUES (1);")
+                .contains("CREATE TABLE health_notifications")
+                .contains("CREATE TABLE health_reminders")
+                .contains("CREATE TABLE health_reminder_user_launch")
+                .contains("CREATE UNIQUE INDEX ux_health_reminders_once ON health_reminders")
+                .contains("(pet_profile_id, COALESCE(source_record_id, 0), reminder_kind, push_point, due_date)")
+                .contains("WHERE status IN ('PENDING', 'SENT');")
+                .contains("'old_app'");
+        assertThat(sql.toUpperCase(Locale.ROOT)).doesNotContain("SMALLINT");
+    }
 }

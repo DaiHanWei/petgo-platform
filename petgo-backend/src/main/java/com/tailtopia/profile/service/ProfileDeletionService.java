@@ -1,5 +1,6 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.healthreminder.service.HealthReminderCleanup;
 import com.tailtopia.profile.domain.HealthEvent;
 import com.tailtopia.profile.domain.PetMilestone;
 import com.tailtopia.profile.domain.PetProfile;
@@ -46,6 +47,8 @@ public class ProfileDeletionService {
     private final TailsonalityDeletionService tailsonality;
     /** V1.4.0 multi-pet Story 2.1（AC6）：删一只后释放名额，只读宠物按序恢复（只恢复不降级）。 */
     private final PetSlotStateService petSlotState;
+    /** V1.5.0 健康记录提醒 Story 2.1：删宠 / 注销时清提醒行（删宠物行之前）。 */
+    private final HealthReminderCleanup healthReminderCleanup;
 
     public ProfileDeletionService(PetProfileRepository petProfiles, HealthEventRepository healthEvents,
             HealthRecordRepository healthRecords, PetMilestoneRepository petMilestones,
@@ -53,7 +56,9 @@ public class ProfileDeletionService {
             MilestoneShareRepository milestoneShares, ContentPostRepository contentPosts,
             SerialAllocationService serialAllocation, IdCardRepository idCards,
             PlaceCheckinDeletionService placeCheckins, PetPassportDeletionService petPassports,
-            TailsonalityDeletionService tailsonality, PetSlotStateService petSlotState) {
+            TailsonalityDeletionService tailsonality, PetSlotStateService petSlotState,
+            HealthReminderCleanup healthReminderCleanup) {
+        this.healthReminderCleanup = healthReminderCleanup;
         this.petProfiles = petProfiles;
         this.healthEvents = healthEvents;
         this.healthRecords = healthRecords;
@@ -113,6 +118,9 @@ public class ProfileDeletionService {
         }
         healthEvents.deleteByPetId(petId);
 
+        // V1.5.0 健康记录提醒（Story 2.1 · AC6）：PENDING 提醒逐条记 pet_deleted 后删提醒 / 健康通知行（FK 级联兜底）。
+        healthReminderCleanup.deleteForPet(petId);
+
         // 结构化健康记录硬删（Story 7.1 · PDP，个人健康数据不保留）。DB FK ON DELETE CASCADE 兜底，显式删更清晰。
         healthRecords.deleteByPetProfileId(petId);
 
@@ -166,6 +174,8 @@ public class ProfileDeletionService {
         for (PetProfile pet : petProfiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(userId)) {
             media = media.merge(deletePetRows(userId, pet.getId()).orElse(PersonalMedia.empty()));
         }
+        // V1.5.0 健康记录提醒（Story 2.1 · AC6）：个人上线行无 FK，注销时显式删。
+        healthReminderCleanup.deleteForAccount(userId);
         // 身份证卡打标（V108，2026-08-19 决策 F21）：卡快照不删（决策③旧卡保留），但记录「档案已删」。
         // 注销路径下 id_cards 行随 users FK 级联删除，本打标无害（与改造前注销路径同效）。
         idCards.markProfileDeleted(userId, Instant.now());

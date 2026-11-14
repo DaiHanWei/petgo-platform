@@ -61,6 +61,8 @@ class ProfileDeletionServiceTest {
     private final PetPassportDeletionService petPassports = mock(PetPassportDeletionService.class);
     private final TailsonalityDeletionService tailsonality = mock(TailsonalityDeletionService.class);
     private final PetSlotStateService petSlotState = mock(PetSlotStateService.class);
+    private final com.tailtopia.healthreminder.service.HealthReminderCleanup healthReminderCleanup =
+            mock(com.tailtopia.healthreminder.service.HealthReminderCleanup.class);
 
     private ProfileDeletionService service;
     private PetProfile a;
@@ -70,7 +72,7 @@ class ProfileDeletionServiceTest {
     void setUp() {
         service = new ProfileDeletionService(petProfiles, healthEvents, healthRecords, petMilestones,
                 milestoneCompletions, milestoneShares, contentPosts, serialAllocation, idCards,
-                placeCheckins, petPassports, tailsonality, petSlotState);
+                placeCheckins, petPassports, tailsonality, petSlotState, healthReminderCleanup);
         a = PetFixtures.pet(OWNER, PET_A, PetType.CAT, Instant.parse("2026-01-01T00:00:00Z"));
         b = PetFixtures.pet(OWNER, PET_B, PetType.DOG, Instant.parse("2026-02-01T00:00:00Z"));
         ReflectionTestUtils.setField(a, "serialId", 128L);

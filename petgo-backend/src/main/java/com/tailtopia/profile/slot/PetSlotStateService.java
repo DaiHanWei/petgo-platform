@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,9 +47,13 @@ public class PetSlotStateService {
     private final PetSlotLock lock;
     private final PetResolver petResolver;
     private final AccountMilestoneService accountMilestones;
+    /** V1.5.0 健康记录提醒 Story 2.1：状态实际变化后发 {@link PetStatusChangedEvent}（监听方 AFTER_COMMIT 重建提醒）。 */
+    private final ApplicationEventPublisher events;
 
     public PetSlotStateService(PetProfileRepository profiles, PetSlotService slots, PetSlotLock lock,
-            PetResolver petResolver, AccountMilestoneService accountMilestones) {
+            PetResolver petResolver, AccountMilestoneService accountMilestones,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.profiles = profiles;
         this.slots = slots;
         this.lock = lock;
@@ -147,6 +152,13 @@ public class PetSlotStateService {
         // 同一事务、同一把账号锁内；rearrange 与 restoreUpTo 两条路径的恢复都在 restored 里。
         for (PetProfile p : restored) {
             accountMilestones.applyExistingFlagsToPet(p);
+        }
+        // V1.5.0 健康记录提醒：只读 → 提醒清空；恢复正常 → 只保留未来点重建（监听方在本事务提交后处理）。
+        for (PetProfile p : demoted) {
+            events.publishEvent(new PetStatusChangedEvent(userId, p.getId(), PetStatus.READ_ONLY));
+        }
+        for (PetProfile p : restored) {
+            events.publishEvent(new PetStatusChangedEvent(userId, p.getId(), PetStatus.ACTIVE));
         }
         if (!demoted.isEmpty() || !restored.isEmpty()) {
             log.info("宠物状态 reconcile userId={} trigger={} demoted={} restored={}",

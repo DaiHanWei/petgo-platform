@@ -34,7 +34,7 @@ class HealthRecordServiceTest {
     private final HealthRecordService service =
             new HealthRecordService(records, healthEvents, new PetResolver(profiles), events,
                     new PetWriteGuard(profiles), profiles,
-                    new com.tailtopia.profile.health.TodayLaunchDateProvider());
+                    today -> today);
 
     @BeforeEach
     void setUp() {

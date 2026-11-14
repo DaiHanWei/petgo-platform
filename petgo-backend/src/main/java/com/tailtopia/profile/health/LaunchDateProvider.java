@@ -6,7 +6,7 @@ import java.time.LocalDate;
  * 「有效上线日」（V1.5.0 Story 1.2，架构增量 §3.4 回填静默）：回填记录的 Next date 早于它 → 不显示、不提醒。
  *
  * <p>真实值在 {@code health_reminder_settings.launch_date}（Story 2.1 建表）；未上线前 = 今天（WIB）。
- * Story 1.2 只提供 {@link TodayLaunchDateProvider}；2.1 用读表实现替换（{@code @Primary}）。
+ * 实现：{@code healthreminder.service.SettingsLaunchDateProvider}（Story 2.1 读表）。
  */
 public interface LaunchDateProvider {
 

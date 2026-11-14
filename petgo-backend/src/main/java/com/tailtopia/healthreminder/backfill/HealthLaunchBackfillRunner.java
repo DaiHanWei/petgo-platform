@@ -1,5 +1,6 @@
 package com.tailtopia.healthreminder.backfill;
 
+import com.tailtopia.healthreminder.service.HealthReminderSettingsDao;
 import com.tailtopia.profile.domain.HealthRecord;
 import com.tailtopia.profile.domain.NeuterStatus;
 import com.tailtopia.profile.domain.PetProfile;
@@ -7,6 +8,7 @@ import com.tailtopia.profile.health.HealthRecordSnapshot;
 import com.tailtopia.profile.health.PetHealthSnapshot;
 import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -39,9 +41,12 @@ public class HealthLaunchBackfillRunner implements ApplicationRunner {
     private final HealthRecordRepository records;
     private final PetProfileRepository profiles;
     private final TransactionTemplate tx;
+    /** Story 2.1：{@code backfill_done_at} 非空即跳过、跑完写入。 */
+    private final HealthReminderSettingsDao settings;
 
     public HealthLaunchBackfillRunner(HealthRecordRepository records, PetProfileRepository profiles,
-            TransactionTemplate tx) {
+            TransactionTemplate tx, HealthReminderSettingsDao settings) {
+        this.settings = settings;
         this.records = records;
         this.profiles = profiles;
         this.tx = tx;
@@ -54,7 +59,13 @@ public class HealthLaunchBackfillRunner implements ApplicationRunner {
 
     /** @return 改动的记录数 + 置 NEUTERED 的宠物数 */
     public int runBackfill() {
-        return runBackfill(records.findPetIdsWithBackfillRecords());
+        if (settings.read().backfillDoneAt() != null) {
+            log.info("health backfill skipped: already done");
+            return 0;
+        }
+        int changed = runBackfill(records.findPetIdsWithBackfillRecords());
+        settings.markBackfillDone(Instant.now());
+        return changed;
     }
 
     /** 只回填给定宠物（L1 测试用，避免改写共享库里别的测试的数据）。 */

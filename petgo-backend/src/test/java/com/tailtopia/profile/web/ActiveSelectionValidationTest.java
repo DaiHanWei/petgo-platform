@@ -45,7 +45,8 @@ class ActiveSelectionValidationTest {
     private final PetListService list = mock(PetListService.class);
     private final PetActiveSelectionController controller = new PetActiveSelectionController(
             new PetSlotStateService(profiles, slots, mock(PetSlotLock.class), new PetResolver(profiles),
-                    mock(com.tailtopia.profile.service.AccountMilestoneService.class)), list);
+                    mock(com.tailtopia.profile.service.AccountMilestoneService.class),
+                    mock(org.springframework.context.ApplicationEventPublisher.class)), list);
 
     private final Jwt jwt = new Jwt("t", Instant.EPOCH, Instant.EPOCH.plusSeconds(60),
             Map.of("alg", "none"), Map.of("sub", String.valueOf(OWNER)));

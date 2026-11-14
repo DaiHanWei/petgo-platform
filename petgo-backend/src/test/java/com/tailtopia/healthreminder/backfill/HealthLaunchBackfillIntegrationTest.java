@@ -50,7 +50,8 @@ class HealthLaunchBackfillIntegrationTest extends ApiIntegrationTest {
         HealthLaunchBackfillRunner runner = new HealthLaunchBackfillRunner(
                 ctx.getBean(com.tailtopia.profile.repository.HealthRecordRepository.class),
                 ctx.getBean(com.tailtopia.profile.repository.PetProfileRepository.class),
-                ctx.getBean(org.springframework.transaction.support.TransactionTemplate.class));
+                ctx.getBean(org.springframework.transaction.support.TransactionTemplate.class),
+                ctx.getBean(com.tailtopia.healthreminder.service.HealthReminderSettingsDao.class));
         runner.runBackfill(java.util.List.of(cat, dog));
 
         assertThat(jdbc.queryForObject("SELECT vaccine_preset FROM health_records WHERE id = ?", String.class, tricat))
