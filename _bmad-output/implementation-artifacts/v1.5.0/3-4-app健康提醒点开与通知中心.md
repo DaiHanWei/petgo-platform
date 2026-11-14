@@ -1,6 +1,6 @@
 # Story 3.4: App 健康提醒点开与通知中心
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ① 健康记录提醒 · 分支 `feat/1.5.0-health-reminder`
 > 口径优先级：CROSS-STORY-DECISIONS 地基段（`kPushDirectTypes` 三方取并集）> 架构增量 §0 Z-4/Z-5、§5.4、§7、§8 > PRD FR-167（全部）、FR-169 Settings description / UI notification center、§4 `health_notification_opened` + Attribution、AC44、AC46 ~ AC49、AC55、AC63 Open firing > UI 稿 E1 ~ E5、G1 ~ G3。
@@ -50,14 +50,14 @@ so that 不用自己找宠物、找类型、找第几针。
 
 ## Tasks / Subtasks
 
-- [ ] T1 `kPushDirectTypes` + `pushPayloadToLocation`（AC1）
-- [ ] T2 `HealthReminderOpenPage` + 路由 + 仓储（AC2）
-- [ ] T3 未保存拦截（AC3）
-- [ ] T4 埋点 + 归因（AC4）
-- [ ] T5 通知中心样式（AC5）
-- [ ] T6 推送设置描述（AC6）
-- [ ] T7 测试：`test/core/push_click_location_test.dart`（扩展）、`test/notify/health_reminder_open_page_test.dart`（假仓储：四种结果、切宠物、replace 路由参数）、`test/notify/notification_center_health_item_test.dart`（2 行、图标、stored copy）、未保存 toast 测试
-- [ ] T8 `flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
+- [x] T1 `kPushDirectTypes` + `pushPayloadToLocation`（AC1）
+- [x] T2 `HealthReminderOpenPage` + 路由 + 仓储（AC2）
+- [x] T3 未保存拦截（AC3）
+- [x] T4 埋点 + 归因（AC4）
+- [x] T5 通知中心样式（AC5）
+- [x] T6 推送设置描述（AC6）
+- [x] T7 测试：`test/core/push_click_location_test.dart`（扩展）、`test/notify/health_reminder_open_page_test.dart`（假仓储：四种结果、切宠物、replace 路由参数）、`test/notify/notification_center_health_item_test.dart`（2 行、图标、stored copy）、未保存 toast 测试
+- [x] T8 `flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -74,4 +74,31 @@ so that 不用自己找宠物、找类型、找第几针。
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：AC7 全部（Android + iOS 真机推送冷启动 / 后台 / 前台三态点开落点与 `health_notification_opened` 上报——PRD AC63「Open firing」必须真机验；通知中心 G2 / E5 还原度 ≥95%）与 AC2 的 `[L2]` 部分未做；真后端联调（点开接口四种结果、已读标记）留 4.1。本 story 无 L1 项。
+- L0：`flutter analyze` 无 error / warning（仅工具链 3.50 的全仓 deprecation info 与既有 rendering import info）；新增 `test/core/push_click_location_test.dart`（5 例）、`test/notify/health_reminder_open_page_test.dart`（7 例：FORM / PAGE / PAGE_SATISFIED / PET_UNAVAILABLE / 接口失败、切宠物 + `pet_switched`、replace 后返回回到点击前页面、归因 30 分钟窗口、push 只报一次、location 拼装）、`test/notify/notification_center_health_item_test.dart`（3 例：stored 文案 + 2 行 + 图标、点条目 src=inbox、未保存 toast 不导航不标已读）；`flutter test` 全量 5013 例绿。
+- **AC1**：`kHealthReminderTypes`（23 值，与后端 `NotificationType` 的 `HEALTH_*` 逐字一致）定义在 `core/push/push_service.dart`，`...` 展开进 `kPushDirectTypes`，原值不动。`pushPayloadToLocation` 对 `HEALTH_*` 返回 `/health-reminder/open?t=<targetRef>&src=inbox`（放在所有 switch 之前；targetRef 空 → 通知中心）；`pushClickLocation` 对健康类型用 `DeepLinkRoutes.withHealthSource` 把 `src` 换成 `push`（深链兜底为通知中心时原样返回）。路径用字面量常量 `DeepLinkRoutes.healthReminderOpen`（core 不 import feature 页面）。
+- **AC2**：`HealthReminderOpenPage`（`features/notify/presentation/`）+ 顶层路由 `/health-reminder/open`；`/health-reminder` 加入 `_controlledLocations`（与 `/profile` 同口径门控游客）。OK → `context.pushReplacement('/profile/health?…')`（返回键回到点击前页面；冷启动时栈底是首页）；PET_UNAVAILABLE → `go` 通知中心 + toast（根 Overlay，跨 `go` 存活）；接口失败 → `go` 通知中心无 toast。切宠物比较的是 `effectivePetIdProvider`（显示中的当前宠物），不同才 `select` + `pet_switched {from_pet_id, to_pet_id, source: health_reminder}`。仓储 `HealthNotificationRepository` + `ApiPaths.healthNotificationOpen(token)`。
+- **AC3**：未保存拦截两处：`PushService._onNotificationClicked` 在 `_navigate` 之前（location 以 `/health-reminder/open` 开头且 `healthFormDirtyProvider` 为 true → 根 context toast、return；不调点开接口、不切宠物）；通知中心 `_onTap` 在埋点 / 标已读之前（HEALTH_* 且 dirty → toast、return，条目保持未读可再点）。无确认抽屉。推送那条路径依赖原生 SDK 回调，L0 只测了通知中心路径，推送路径并入 AC7 真机验收。`push_service.dart`（core）为此 import 了 `features/profile/domain/health_form_dirty.dart`——该文件已有 import `features/*/domain` 的先例（auth / notify / growth）。
+- **AC4**：`health_notification_opened` 属性取接口 `analytics` 对象原值 + `source` + `route`（form / page / page_satisfied / inbox_fallback）；拿不到 analytics（接口失败）不报。`source=push` 每个 token 进程内最多一次（`HealthReminderAttribution.claimPushReport`）。`HealthReminderAttribution`（`features/notify/domain/`，Riverpod `Notifier`）记 `petId → (notificationId, kind, openedAt)`；3.2 的 `health_record_saved` 读它：同宠物 30 分钟内命中 → `source=health_reminder` + `notification_id` + `notification_kind`；未命中时入口带来的 `health_reminder`（`nid`）降为 `manual`（PRD：health_reminder 指归因命中）。换账号在 `app.dart` `resetUserScopedCaches` 里 `invalidate`。
+- **AC5**：通知中心 `HEALTH_*`：标题 / 正文走 `_storedTitle` / `_storedBody`（Dart 3 `final t when t.startsWith('HEALTH_')` 分支，免列 23 个）；正文沿用现有 2 行折叠（`maxLines: 2` + 溢出才出「展开」），**story 说「其他类型保持 1 行」与现状不符**——现状所有类型都是 2 行，未改其他类型，记此「待确认」；图标 `Icons.health_and_safety_rounded` / `mint` / `violet100`。点击走 `NotificationDeepLink.open` → `pushPayloadToLocation`（`src=inbox`），本地乐观置已读沿用现有逻辑。
+- **AC6**：只改 `pushSettingsPetReminderDesc`（ID「Ulang tahun, hari jadi & pengingat kesehatan」/ EN「Birthdays, anniversaries & health reminders」）；「Hewan yang kamu ikuti」未动。
+- 新 arb 键：`healthReminderFormDirtyToast`、`healthReminderPetUnavailable`（FR-169 表 / FR-167 原文）。
+- 未运行 `bmad-dev-story` / `bmad-code-review` 技能文件（仓库内不存在），按 story 手动执行；code review 由本会话逐项核对 diff，无 CONFIRMED 问题。
+
 ### File List
+
+- `petgo_app/lib/core/push/push_service.dart`
+- `petgo_app/lib/core/router/deep_link_routes.dart`
+- `petgo_app/lib/core/router/app_router.dart`
+- `petgo_app/lib/core/network/api_paths.dart`
+- `petgo_app/lib/app.dart`
+- `petgo_app/lib/features/notify/presentation/health_reminder_open_page.dart`（新）
+- `petgo_app/lib/features/notify/domain/health_reminder_open.dart`（新）
+- `petgo_app/lib/features/notify/domain/health_reminder_attribution.dart`（新）
+- `petgo_app/lib/features/notify/data/health_notification_repository.dart`（新）
+- `petgo_app/lib/features/notify/presentation/notification_center_page.dart`
+- `petgo_app/lib/features/profile/presentation/widgets/health_record_form.dart`
+- `petgo_app/lib/l10n/app_id.arb`、`petgo_app/lib/l10n/app_en.arb`
+- `petgo_app/test/core/push_click_location_test.dart`（新）
+- `petgo_app/test/notify/health_reminder_open_page_test.dart`（新）
+- `petgo_app/test/notify/notification_center_health_item_test.dart`（新）

@@ -19,6 +19,7 @@ import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 import '../../ops/presentation/open_ops_target.dart';
+import '../../profile/domain/health_form_dirty.dart';
 import '../../profile/domain/milestone_account_codes.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
@@ -316,6 +317,11 @@ class _NotificationCenterPageState
       props['actor_count'] = item.actorCount;
     }
     if (_opening) return;
+    // V1.5.0 Story 3.4 · AC3：健康记录表单有未保存改动 → 只 toast、不导航、不标已读（条目保持原状可再点）。
+    if (item.type.startsWith('HEALTH_') && ref.read(healthFormDirtyProvider)) {
+      showAppToast(context, AppLocalizations.of(context).healthReminderFormDirtyToast);
+      return;
+    }
     Analytics.capture('app_notification_item_tapped', props);
     // V1.4.0 ① Story 2.3：升级通知 → 等级页（深链表固定目标），进页来源 = notification。
     if (item.type == 'GROWTH_LEVEL_UP') {
@@ -833,6 +839,8 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.cream2,
     ),
     'PET_BIRTHDAY' => (Icons.cake_rounded, AppColors.gold, AppColors.goldTint),
+    // V1.5.0 健康记录提醒 Story 3.4 · AC5（UI G2）：健康提醒 = 紫色健康盾（violet100 底，同 PET_FOLLOWED 理由不用 cream2）。
+    final t when t.startsWith('HEALTH_') => (Icons.health_and_safety_rounded, AppColors.mint, AppColors.violet100),
     // V1.4.0 gift Story 2.2 · AC5.2（UI 稿 G1）：收礼金色礼物（同 PET_BIRTHDAY 金 / 金浅底，decision-log ③ #F6A609）。
     'PET_GIFT_RECEIVED' => (Icons.redeem_rounded, AppColors.gold, AppColors.goldTint),
     // v1.4.2 shop Story 9.3 · AC4.4（UI G9）：券快过期 = 金色券（与生日等提醒类同色系）。
@@ -1020,6 +1028,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
     // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 title，理由见 [_storedTitle]。
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedTitle(l10n),
+    // V1.5.0 健康记录提醒 Story 3.4 · AC5（架构 Z-5）：后端按收件人语言渲染后落库（含宠物名、疫苗、剂次）→ 原样显示。
+    final t when t.startsWith('HEALTH_') => _storedTitle(l10n),
     // V1.4.2 social-topic Story 1.5 · AC6.7：宠物已删（无 actorName）→ 读后端写入时按收件人语言渲染的整句，同上理由。
     'PET_DIARY_POSTED' => _storedTitle(l10n),
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：继运营通知后又一个读后端 title 的类型，理由见 [_refundTitle]。
@@ -1085,6 +1095,7 @@ class _NotificationTileState extends State<_NotificationTile> {
         : l10n.notifyBodyContentMentionedPost,
     // 运营通知（V1.3.4 Story 6.3）与名额到期两类（V1.4.0 multi-pet Story 2.4 · K1）：读后端 body，理由见 [_storedTitle]。
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedBody(l10n),
+    final t when t.startsWith('HEALTH_') => _storedBody(l10n),
     // V1.4.2 social-topic Story 1.5 · AC6.2：无正文 → 空串，不留正文行（见下方兜底布局）。
     'PET_DIARY_POSTED' => '',
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3）：读后端 body，理由见 [_refundTitle]。

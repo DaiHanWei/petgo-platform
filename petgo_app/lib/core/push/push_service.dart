@@ -14,6 +14,9 @@ import '../../features/auth/domain/auth_state.dart';
 import '../../features/notify/domain/app_update_controller.dart';
 import '../../features/notify/domain/app_version_check.dart';
 import '../../features/notify/domain/notification_deep_link.dart';
+import '../../features/profile/domain/health_form_dirty.dart';
+import '../../l10n/app_localizations.dart';
+import '../../shared/widgets/app_toast.dart';
 import '../analytics/analytics.dart';
 import '../im/im_service.dart';
 import '../router/app_router.dart';
@@ -57,7 +60,41 @@ void reportOpsNotificationOpenedFromPush(PushPayload p) {
 
 /// 推送点击直达深链目标的通知类型（其余通知类推送仍落通知中心，2026-08-07 产品口径）。
 /// v1.4.2 shop 9.3（C-10）：`COUPON_EXPIRING` 并入 → 我的券。
-const Set<String> kPushDirectTypes = {'GROWTH_LEVEL_UP', 'SHOP_ORDER_REORDERED', 'COUPON_EXPIRING'};
+const Set<String> kPushDirectTypes = {
+  'GROWTH_LEVEL_UP',
+  'SHOP_ORDER_REORDERED',
+  'COUPON_EXPIRING',
+  // V1.5.0 健康记录提醒 Story 3.4（PRD FR-167「Skips the inbox」）：23 个健康提醒推送直达点开路由页。
+  // ⚠️ ③ 推送与召回、⑥ 运营活动也往本集合加值 —— 合并时取并集，不删不改别人的值。
+  ...kHealthReminderTypes,
+};
+
+/// 健康提醒通知类型（与后端 `NotificationType` 中 `HEALTH_` 前缀的 23 个值逐字一致，地基 V20261114_1000）。
+const Set<String> kHealthReminderTypes = {
+  'HEALTH_VACCINE_D_MINUS_7',
+  'HEALTH_VACCINE_D_DAY',
+  'HEALTH_VACCINE_D_PLUS_7',
+  'HEALTH_DEWORM_INTERNAL_D_DAY',
+  'HEALTH_DEWORM_INTERNAL_D_PLUS_3',
+  'HEALTH_DEWORM_EXTERNAL_D_DAY',
+  'HEALTH_DEWORM_EXTERNAL_D_PLUS_3',
+  'HEALTH_DEWORM_FLEA_WORM_D_DAY',
+  'HEALTH_DEWORM_HEARTWORM_D_DAY',
+  'HEALTH_DEWORM_LEGACY_D_DAY',
+  'HEALTH_DEWORM_LEGACY_D_PLUS_3',
+  'HEALTH_FIRST_VACCINE',
+  'HEALTH_FIRST_DEWORM',
+  'HEALTH_HEAT_CAT_SECOND',
+  'HEALTH_HEAT_DOG_D_MINUS_7',
+  'HEALTH_HEAT_MALE_FIRST',
+  'HEALTH_PYOMETRA_WATCH',
+  'HEALTH_SPAY_NEUTER_SUGGESTION',
+  'HEALTH_STITCH_CHECK',
+  'HEALTH_CHECKUP',
+  'HEALTH_CUSTOM_D_DAY',
+  'HEALTH_VET_VISIT_D_MINUS_1',
+  'HEALTH_VET_VISIT_D_DAY',
+};
 
 /// 券快过期推送点开埋点（v1.4.2 shop Story 9.3 · AC4.3，PRD §4：本推送须单独埋）。
 /// 只在**推送点击**时调（通知中心列表点击不报）。`coupon_count` = targetRef 张数，解析不出则不带。
@@ -77,6 +114,8 @@ void reportCouponExpiryPushOpened(PushPayload p) {
 ///   `COUPON_EXPIRING`（v1.4.2 shop Story 9.3 · G9 / C-10）→ 我的券。
 ///   深链本身兜底为通知中心时照旧落通知中心。
 String pushClickLocation({required bool hasToken, required String deepLink, String? type}) {
+  // V1.5.0 Story 3.4：健康提醒推送点开 → 点开路由页带 `src=push`（通知中心点击保持 `src=inbox`）。
+  if (kHealthReminderTypes.contains(type)) return DeepLinkRoutes.withHealthSource(deepLink, 'push');
   if (kPushDirectTypes.contains(type)) return deepLink;
   return hasToken ? DeepLinkRoutes.notificationsCenter : deepLink;
 }
@@ -275,6 +314,15 @@ class PushService {
       } catch (_) {
         // 标记已读/映射失败 → 兜底通知中心。
         location = DeepLinkRoutes.notificationsCenter;
+      }
+      // V1.5.0 Story 3.4 · AC3（决策 2026-11-05「E4 取消二次确认」）：健康记录表单有未保存改动时点健康提醒 →
+      // 不切宠物、不导航，只 toast（点开接口也不调：落点页都没进）。没填内容的表单不算。
+      if (location.startsWith(DeepLinkRoutes.healthReminderOpen) && _ref.read(healthFormDirtyProvider)) {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          showAppToast(ctx, AppLocalizations.of(ctx).healthReminderFormDirtyToast);
+        }
+        return;
       }
       try {
         _navigate(location);

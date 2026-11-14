@@ -77,6 +77,7 @@ import '../../features/refund/presentation/refund_pawcoin_success_page.dart';
 import '../../features/refund/presentation/refund_account_page.dart';
 import '../../features/refund/presentation/refund_status_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
+import '../../features/notify/presentation/health_reminder_open_page.dart';
 import '../../features/profile/presentation/health_list_page.dart';
 import '../../features/profile/domain/health_list_item.dart' show HealthRecordPrefill;
 import '../../features/profile/presentation/id_card_create_page.dart';
@@ -178,6 +179,7 @@ const Map<String, String> _landingTabNames = {
 /// 新增的任何 `/profile/*`、`/me/*` … 子页**自动受控，无需逐个登记**。
 const Set<String> _controlledLocations = {
   '/profile',
+  '/health-reminder', // V1.5.0 Story 3.4：与 /profile 同口径，游客点开被门控
   '/triage',
   '/me',
   '/consult',
@@ -1138,6 +1140,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 通知中心（Story 6.6）+ 6.1 深链兜底落点。受控路由（需登录）。
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationCenterPage()),
+      // V1.5.0 健康记录提醒 Story 3.4：健康提醒点开路由页（推送 / 通知中心共用；shell 外顶层，受控前缀门控游客）。
+      GoRoute(
+        path: '/health-reminder/open',
+        builder: (c, s) => HealthReminderOpenPage(
+          token: s.uri.queryParameters['t'] ?? '',
+          source: s.uri.queryParameters['src'] ?? 'inbox',
+        ),
+      ),
       // 二级设置页（Story 7.1 · F8）：语言/退出/注销。受控（/me 前缀，需登录）。
       GoRoute(path: '/me/settings', builder: (c, s) => const SettingsPage()),
       // V1.4.0 ④ Story 1.3：通知设置页（推送分类开关）。受控（/me 前缀）；shell 外顶层隐 Tab Bar。

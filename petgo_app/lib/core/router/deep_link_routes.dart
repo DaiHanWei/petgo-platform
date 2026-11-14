@@ -10,6 +10,16 @@ class DeepLinkRoutes {
   /// 通知中心（6.6）——未知/缺失映射的安全兜底落点。
   static const String notificationsCenter = '/notifications';
 
+  /// V1.5.0 健康提醒点开路由页（`?t=<健康通知 token>&src=push|inbox`）。
+  static const String healthReminderOpen = '/health-reminder/open';
+
+  /// 把健康提醒点开路由的 `src` 换成 [source]；其他 location 原样返回。
+  static String withHealthSource(String location, String source) {
+    if (!location.startsWith(healthReminderOpen)) return location;
+    final uri = Uri.parse(location);
+    return uri.replace(queryParameters: {...uri.queryParameters, 'src': source}).toString();
+  }
+
   /// Shell 四 Tab 的分支根路由。**分支根只能 `go`（切分支），绝不能 `push`**：
   /// push 会在同一匹配链里二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏，
   /// 且此后该分支 `goBranch` 持续抛异常、Tab 永久点不进去（bug 20260729-纪念日通知白屏）。
@@ -68,6 +78,13 @@ class DeepLinkRoutes {
   /// 其它/空 → 通知中心兜底。
   static String pushPayloadToLocation(String? type, String? targetRef, {bool commentAnchor = false}) {
     if (type == null) return notificationsCenter;
+    // V1.5.0 健康记录提醒 Story 3.4（架构增量 §7）：`HEALTH_*` → 点开路由页（targetRef = 健康通知 token）；
+    // 默认 `src=inbox`（推送点击由 pushClickLocation 换成 `src=push`）。targetRef 空 → 通知中心。
+    // 字面量路径：core 不 import feature（同 `/me/growth`）。
+    if (type.startsWith('HEALTH_')) {
+      if (targetRef == null || targetRef.isEmpty) return notificationsCenter;
+      return '$healthReminderOpen?t=${Uri.encodeQueryComponent(targetRef)}&src=inbox';
+    }
     // 固定目标类：不依赖 targetRef（生日/纪念日/里程碑节点/兽医新请求，决策 F2/F5）。
     switch (type) {
       case 'NEW_CONSULT_REQUEST':

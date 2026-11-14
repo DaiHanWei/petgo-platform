@@ -10,6 +10,7 @@ import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/date_format.dart';
 import '../../../../shared/widgets/keyboard_safe_area.dart';
+import '../../../notify/domain/health_reminder_attribution.dart';
 import '../../../pet_slot/presentation/pet_readonly_block.dart';
 import '../../data/current_pet_provider.dart';
 import '../../data/health_record_repository.dart';
@@ -365,6 +366,12 @@ class _HealthRecordFormState extends ConsumerState<HealthRecordForm> {
 
   /// `health_record_saved`（PRD §4）：不报宠物名、备注、疫苗原文；枚举值小写蛇形。
   void _reportSaved(int? recordId, HealthRecordDraft d, {required bool isEdit}) {
+    // V1.5.0 Story 3.4 · AC4.2：同宠物 30 分钟内点开过健康提醒 → 归因到该通知。
+    // 没命中时，入口带来的 `health_reminder`（nid）降为 manual：PRD 的 health_reminder 指归因命中。
+    final attr = ref.read(healthReminderAttributionProvider.notifier).lookup(_petId);
+    final source = attr != null
+        ? 'health_reminder'
+        : (widget.source == 'health_reminder' ? 'manual' : widget.source);
     Analytics.capture('health_record_saved', {
       'record_id': ?recordId,
       'pet_id': ?_petId,
@@ -379,7 +386,9 @@ class _HealthRecordFormState extends ConsumerState<HealthRecordForm> {
       'next_date_edited': _nextEverPrefilled && _nextTouched,
       'is_edit': isEdit,
       'entry': widget.entry,
-      'source': widget.source,
+      'source': source,
+      if (attr != null) 'notification_id': attr.notificationId,
+      if (attr?.notificationKind != null) 'notification_kind': attr!.notificationKind!,
     });
   }
 

@@ -1,3 +1,4 @@
+import 'features/notify/domain/health_reminder_attribution.dart';
 import 'dart:async';
 import 'features/growth/domain/growth_popup_trigger.dart';
 
@@ -396,6 +397,8 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   // bug 20260730-421 同类隐患：健康记录/日历/日详情是宠物维度缓存（非 autoDispose），
   // 不登记则同设备换账号会看到上一用户的健康数据（隐私）。
   ref.invalidate(healthListProvider); // 健康记录页
+  // V1.5.0 Story 3.4：健康提醒 30 分钟归因 / 已报推送点开 token 是账号维度 —— 换账号清空。
+  ref.invalidate(healthReminderAttributionProvider);
   ref.invalidate(calendarMonthProvider); // 成长日记：日历（按月 family 整族失效）
   ref.invalidate(dayDetailProvider); // 成长日记：日详情（按日 family 整族失效）
   ref.invalidate(myPostsProvider); // 我的：我的发布

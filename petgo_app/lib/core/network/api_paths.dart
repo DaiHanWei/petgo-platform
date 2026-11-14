@@ -118,6 +118,10 @@ class ApiPaths {
 
   /// 通知中心（Story 6.6）。列表 / 未读角标 / 标记已读。
   static const String notifications = '$base/notifications';
+
+  /// V1.5.0 健康记录提醒 Story 3.4：点开健康提醒（GET，`?source=push|inbox`；后端置已读并返回落点）。
+  static String healthNotificationOpen(String token) =>
+      '$base/me/health-notifications/${Uri.encodeComponent(token)}/open';
   static const String notificationsUnreadCount = '$base/notifications/unread-count';
   static const String notificationsReadAll = '$base/notifications/read-all';
   static String notificationRead(String token) => '$base/notifications/$token/read';
