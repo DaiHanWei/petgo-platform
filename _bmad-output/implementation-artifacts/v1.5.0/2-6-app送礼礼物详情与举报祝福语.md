@@ -1,6 +1,6 @@
 # Story 2.6: App 送礼礼物详情与举报祝福语（H1 ~ H6）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ② gift-pack · 分支 `feat/1.5.0-gift-pack`
 > 口径优先级：`decision-log.md`（11-02 访客可看未拆含祝福语；举报复用现有举报后台）> PRD A §3.5（FR-191）> 架构 D-8、§4.1 > App 稿 H 泳道。
@@ -39,10 +39,10 @@ Widget：H1 / H2 字段渲染；H3 隐藏文案；H4 注销无按钮；`canRepor
 
 ## Tasks / Subtasks
 
-- [ ] 仓库方法 `fetchGiftOrderDetail`、`reportGiftMessage`
-- [ ] 详情抽屉与变体（AC1、AC2）
-- [ ] 举报接线（AC3）
-- [ ] ARB + 测试（AC4、AC5）
+- [x] 仓库方法 `fetchGiftOrderDetail`、`reportGiftMessage`
+- [x] 详情抽屉与变体（AC1、AC2）
+- [x] 举报接线（AC3）
+- [x] ARB + 测试（AC4、AC5）
 
 ## Dev Notes
 
@@ -60,4 +60,18 @@ Widget：H1 / H2 字段渲染；H3 隐藏文案；H4 注销无按钮；`canRepor
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：L1 真后端举报落库（`gift_message_reports`）、后台隐藏后详情显示隐藏文案；L2 H1 ~ H6 还原度（抽屉圆角 24、礼物浮在打开的礼盒上方、日期格式）。
+- L0：`flutter analyze` 无 error / warning（存量弃用 info 不计）；`flutter test test/gift test/l10n` 全绿（新增 `test/gift/gift_order_detail_sheet_test.dart` 8 条：H1 / H2 字段、数量 1 不显示、无宠物不显示「bersama」、H3 隐藏文案、H4 注销无按钮、无祝福语无 ⋯、加载失败重试、举报提交路径与成功态、举报 422 失败 toast）。测试放 `test/gift/`。
+- 实现：`gift_order_detail_sheet.dart` 的 `showGiftOrderDetailSheet(context, orderToken)`（底部抽屉、遮罩 + 上圆角 24；骨架 → 内容 / 失败 `giftLoadFailed` + `commonRetry`）。内容：「{hadiah} untuk {petName}」+「Diterima {tanggal}」（`formatBirthday` 即 `d MMMM yyyy` 按语言）+ 礼物 + 数量（>1 显示「×N」）+ 祝福语 / H3 隐藏文案 + 送礼人「dari {nama} · bersama {hewan}」（`petNames` 用「, 」连接，空则省略该段；注销显示 `feedDeletedUser`、无宠物段）+「Lihat profil {nama}」（注销 / 无 userId 不显示，先关抽屉再 push `/users/{id}`）。访客 / 主人同一抽屉，无「未拆」字样。
+- 「⋯」仅 `canReport = true` 显示 →「Laporkan ucapan」（复用 2-5 key）→ **原样复用** `report_sheet.dart` 的 `openReportSheet(submit: ...)`（与场所举报同做法，抽屉文案一字不改）；`submit` = `POST /api/v1/gift-orders/{token}/message-reports {reasonType}`；失败（含 422 `gift-message-not-reportable`）→ 通用失败 toast（复用 2-5 `giftOpenFailed`），抽屉留在表单态；成功后本地不隐藏祝福语。
+- 接线：`gift_order_actions.dart` 的 `showGiftOrderDetail` / `reportGiftMessage` 由空实现改为调本抽屉 / 举报（2-4 点卡片、2-5「⋯」与 `open=latest` 无未拆分支随之生效）。
+- 「礼物浮在打开的礼盒上方」：打开态礼盒素材未交付（仅有合盖 `gift_box_closed`），本版只放礼物图，正式素材到后补；L2 核对。
+- 文案：`giftDetailTitle`、`giftDetailReceivedOn`、`giftDetailWithPets` 逐字取 App 稿新文案表；另加 `giftDetailQuantity`「×{n}」（数量，稿面写法）。
+- 仓库：`fetchGiftOrderDetail(token)`、`reportGiftMessage(token, reasonWire)`。
+
 ### File List
+
+- `petgo_app/lib/features/gift/presentation/gift_order_detail_sheet.dart`（新）
+- `petgo_app/lib/features/gift/presentation/gift_order_actions.dart`、`lib/features/gift/data/gift_repository.dart`（改）
+- `petgo_app/lib/l10n/app_en.arb`、`app_id.arb`（改）
+- `petgo_app/test/gift/gift_order_detail_sheet_test.dart`（新）

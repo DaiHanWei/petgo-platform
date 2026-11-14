@@ -3400,5 +3400,9 @@
   "giftRevealNext": "Berikutnya",
   "giftMessageHidden": "Ucapan ini disembunyikan karena melanggar pedoman komunitas.",
   "giftRevealQtyName": "×{n} {gift}",
-  "giftOpenFailed": "Terjadi kesalahan, coba lagi"
+  "giftOpenFailed": "Terjadi kesalahan, coba lagi",
+  "giftDetailTitle": "{gift} untuk {petName}",
+  "giftDetailReceivedOn": "Diterima {date}",
+  "giftDetailWithPets": "bersama {pets}",
+  "giftDetailQuantity": "×{n}"
 }

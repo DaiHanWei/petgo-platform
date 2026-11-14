@@ -5227,5 +5227,13 @@
   "giftRevealQtyName": "×{n} {gift}",
   "@giftRevealQtyName": {"description": "V1.5.0 gift-pack Story 2-5 · 拆礼物 G1 ~ G6（App 稿新文案表）", "placeholders": {"n": {"type": "int"}, "gift": {"type": "String"}}},
   "giftOpenFailed": "Something went wrong, please try again",
-  "@giftOpenFailed": {"description": "V1.5.0 gift-pack Story 2-5 · 拆礼物 G1 ~ G6（App 稿新文案表）"}
+  "@giftOpenFailed": {"description": "V1.5.0 gift-pack Story 2-5 · 拆礼物 G1 ~ G6（App 稿新文案表）"},
+  "giftDetailTitle": "{gift} for {petName}",
+  "@giftDetailTitle": {"description": "V1.5.0 gift-pack Story 2-6 · 礼物详情抽屉 H1 ~ H4（App 稿新文案表）", "placeholders": {"gift": {"type": "String"}, "petName": {"type": "String"}}},
+  "giftDetailReceivedOn": "Received {date}",
+  "@giftDetailReceivedOn": {"description": "V1.5.0 gift-pack Story 2-6 · 礼物详情抽屉 H1 ~ H4（App 稿新文案表）", "placeholders": {"date": {"type": "String"}}},
+  "giftDetailWithPets": "with {pets}",
+  "@giftDetailWithPets": {"description": "V1.5.0 gift-pack Story 2-6 · 礼物详情抽屉 H1 ~ H4（App 稿新文案表）", "placeholders": {"pets": {"type": "String"}}},
+  "giftDetailQuantity": "×{n}",
+  "@giftDetailQuantity": {"description": "V1.5.0 gift-pack Story 2-6 · 礼物详情抽屉 H1 ~ H4（App 稿新文案表）", "placeholders": {"n": {"type": "int"}}}
 }

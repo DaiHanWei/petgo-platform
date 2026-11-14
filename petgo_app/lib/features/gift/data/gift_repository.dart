@@ -66,6 +66,17 @@ class GiftRepository {
     return GiftPreview.fromJson(res.data ?? const {});
   }
 
+  /// V1.5.0 gift-pack Story 2-6：单笔礼物详情（主人 / 访客同一接口，视角由服务端判）。
+  Future<GiftOrderDetail> fetchGiftOrderDetail(String orderToken) async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.giftOrder(orderToken));
+    return GiftOrderDetail.fromJson(res.data ?? const {});
+  }
+
+  /// V1.5.0 gift-pack Story 2-6：举报祝福语（五类原因，204；重复举报幂等）。
+  Future<void> reportGiftMessage(String orderToken, String reasonWire) async {
+    await dio.post<void>(ApiPaths.giftOrderMessageReports(orderToken), data: {'reasonType': reasonWire});
+  }
+
   /// V1.5.0 gift-pack Story 2-5：拆礼物（[orderTokens] 1..50 与 [all] 二选一；幂等，已拆的带 `alreadyOpened`）。
   Future<GiftOpenResult> openPetGiftOrders(int petId, {List<String> orderTokens = const [], bool all = false}) async {
     final res = await dio.post<Map<String, dynamic>>(ApiPaths.petGiftOrdersOpen(petId),

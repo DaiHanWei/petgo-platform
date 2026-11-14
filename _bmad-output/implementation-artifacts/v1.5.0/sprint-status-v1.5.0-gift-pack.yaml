@@ -65,7 +65,7 @@ development_status:
   2-3-app送礼送出动画与送达页: review
   2-4-app送礼礼物页逐笔列表与diary礼物行: review
   2-5-app送礼拆礼物动画与批量拆: review
-  2-6-app送礼礼物详情与举报祝福语: ready-for-dev
+  2-6-app送礼礼物详情与举报祝福语: review
   epic-2-retrospective: optional
 
   epic-3: backlog                      # 本地联调，云端不跑
