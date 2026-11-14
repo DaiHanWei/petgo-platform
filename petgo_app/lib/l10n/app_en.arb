@@ -5197,5 +5197,9 @@
   "payMethodBalanceShort": "Balance {n} · short {m}",
   "@payMethodBalanceShort": {"description": "V1.5.0 gift-pack Story 2-2 · 送礼包装页 / 两张付款卡（App 稿新文案表）", "placeholders": {"n": {"type": "String"}, "m": {"type": "String"}}},
   "payMethodBalance": "Balance {n}",
-  "@payMethodBalance": {"description": "V1.5.0 gift-pack Story 2-2 · 送礼包装页 / 两张付款卡（App 稿新文案表）", "placeholders": {"n": {"type": "String"}}}
+  "@payMethodBalance": {"description": "V1.5.0 gift-pack Story 2-2 · 送礼包装页 / 两张付款卡（App 稿新文案表）", "placeholders": {"n": {"type": "String"}}},
+  "giftDeliveredTitle": "Your gift has reached {petName}",
+  "@giftDeliveredTitle": {"description": "V1.5.0 gift-pack Story 2-3 · 送达页（App 稿新文案表）", "placeholders": {"petName": {"type": "String"}}},
+  "giftYouGotExp": "You got {n} EXP",
+  "@giftYouGotExp": {"description": "V1.5.0 gift-pack Story 2-3 · 送达页（App 稿新文案表）", "placeholders": {"n": {"type": "int"}}}
 }

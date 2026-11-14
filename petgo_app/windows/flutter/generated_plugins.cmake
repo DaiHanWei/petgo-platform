@@ -11,9 +11,9 @@ list(APPEND FLUTTER_PLUGIN_LIST
   geolocator_windows
   permission_handler_windows
   rive_native
-  share_plus
   tencent_cloud_chat_sdk
   url_launcher_windows
+  share_plus
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

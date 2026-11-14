@@ -6,7 +6,6 @@ import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/gift/data/gift_repository.dart';
 import 'package:tailtopia/features/gift/domain/gift_catalog.dart';
 import 'package:tailtopia/features/gift/domain/gift_send_result.dart';
-import 'package:tailtopia/features/gift/presentation/gift_send_animation.dart';
 import 'package:tailtopia/features/gift/presentation/gift_send_flow.dart';
 import 'package:tailtopia/features/growth/domain/growth_popup_trigger.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
@@ -28,6 +27,8 @@ void main() {
   void growthSink(GrowthPullReason r) => growthPulls.add(r);
 
   setUp(() {
+    // V1.5.0 gift-pack Story 2-3：送出动画替身（不渲染 Rive）
+    giftSendRiveBuilderOverride = (_, _, _, _) => const SizedBox.expand(key: ValueKey('fakeRive'));
     growthPulls = [];
     growthPopupTrigger.bind(growthSink);
     repo = FakeGiftRepository();
@@ -39,6 +40,7 @@ void main() {
     Analytics.debugCaptureSink = (e, p) => events.add((e, p));
   });
   tearDown(() {
+    giftSendRiveBuilderOverride = null;
     Analytics.debugCaptureSink = null;
     growthPopupTrigger.resetForTest();
   });
@@ -178,14 +180,21 @@ void main() {
     await tester.pump();
     expect(sendLabel(tester), 'Kirim · 1.000 PawCoin');
     final buildsBefore = pawBuilds.length;
+    repo.sendResults = [const GiftSendResult(delivered: true, orderToken: 'ord-1', senderExp: 25)];
     await kirim(tester, chip: 5, settle: false);
-    expect(find.byType(GiftSendAnimation), findsOneWidget, reason: '播放送出动效');
-    await tester.pump(giftSendAnimationDuration);
-    await tester.pump();
-    expect(find.text('Tulang ×5 terkirim ke Mochi'), findsOneWidget);
+    expect(find.byKey(const ValueKey('fakeRive')), findsOneWidget, reason: 'E1 送出动画');
+    await tester.pump(const Duration(milliseconds: 5600));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('giftDeliveredPage')), findsOneWidget, reason: '5.5 秒兜底 → E3');
+    expect(find.text('Kamu dapat 25 EXP'), findsOneWidget);
+    expect(find.text('Tulang ×5 terkirim ke Mochi'), findsNothing, reason: '旧 Toast 不再出现');
     await rereadBalance(tester);
     expect(pawBuilds.length, greaterThan(buildsBefore));
     expect(delivered, 1);
+    expect(growthPulls, isEmpty, reason: '升级庆祝在离开送达页之后');
+    await tester.tap(find.byKey(const ValueKey('giftDeliveredContinue')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('go')), findsOneWidget, reason: 'Lanjut → 回入口页');
     expect(growthPulls, [GrowthPullReason.afterAction]);
     final s = repo.sends.single;
     expect([s.petId, s.giftToken, s.quantity, s.channel, s.source, s.postId, s.message],
@@ -327,7 +336,8 @@ void main() {
     expect(wrap(), findsNothing);
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
-    expect(find.text('Tulang ×10 terkirim ke Mochi'), findsOneWidget);
+    expect(find.byKey(const ValueKey('giftDeliveredPage')), findsOneWidget, reason: '减弱动态效果 → 直接 E3');
+    expect(find.byKey(const ValueKey('giftDeliveredExp')), findsNothing, reason: '目录 senderExp = 0');
     expect(events.where((e) => e.$1 == 'gift_payment_succeeded').single.$2?['channel'], 'QRIS');
     expect(events.where((e) => e.$1 == 'af_purchase').single.$2!['af_order_id'], 'PAY-1');
     await tester.pump(const Duration(seconds: 3));

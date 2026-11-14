@@ -3385,5 +3385,7 @@
   "payMethodPawcoin": "PawCoin",
   "payMethodDirect": "Bayar langsung",
   "payMethodBalanceShort": "Saldo {n} · kurang {m}",
-  "payMethodBalance": "Saldo {n}"
+  "payMethodBalance": "Saldo {n}",
+  "giftDeliveredTitle": "Hadiahmu sudah sampai ke {petName}",
+  "giftYouGotExp": "Kamu dapat {n} EXP"
 }

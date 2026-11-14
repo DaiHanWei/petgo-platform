@@ -22,7 +22,7 @@ import '../domain/gift_send_result.dart';
 import 'gift_catalog_page.dart';
 import 'gift_panel_sheet.dart' show GiftSelection;
 import 'gift_wrap_page.dart';
-import 'gift_send_animation.dart';
+import 'gift_send_ceremony.dart';
 import 'gift_style.dart';
 
 /// 送礼入口 `source`（与后端 `GiftSource` 小写值一致；`gift_page` 由 Story 2.2 的礼物页传）。
@@ -78,6 +78,10 @@ Future<void> runGiftSendFlow({
     }
   }
 }
+
+/// 测试注入：送出动画区域替身（不渲染 Rive）。null = 真 Rive。
+@visibleForTesting
+GiftSendRiveBuilder? giftSendRiveBuilderOverride;
 
 /// 送礼 `requestId`：16 字节安全随机数的 hex（32 位，后端上限 64；不引 uuid 依赖）。
 @visibleForTesting
@@ -337,27 +341,32 @@ class _GiftSendFlow {
 
   /// D1 → D2：送出动效（尊重「减少动态效果」）→ Toast → 刷新余额 → 埋点。
   Future<void> _celebrate(GiftSelection sel, HdPayChannel channel, {int senderExp = 0}) async {
-    final disable =
-        context.mounted ? (MediaQuery.maybeDisableAnimationsOf(context) ?? false) : true;
-    await playGiftSendAnimation(
-      overlay: overlay,
-      iconUrl: sel.item.iconUrl,
-      quantity: sel.quantity,
-      targetKey: flightTargetKey,
-      disableAnimations: disable,
-    );
-    // P-4：Toast 用礼物名（按语言取 EN / ID 快照），不用 emoji。
-    _toast(l10n.giftSentToast(sel.item.nameFor(locale), sel.quantity, sel.catalog.recipient.name));
+    // V1.5.0 gift-pack Story 2-3：送出动画（E1 / E2）→ 送达页（E3）取代旧飞行动效 + Toast。
+    // EXP：PawCoin 送达取接口响应 senderExp；QRIS 到账取目录 senderExp × 数量（D-7）。
+    final exp = channel == HdPayChannel.qris ? sel.item.senderExp * sel.quantity : senderExp;
+    final ceremony = context.mounted
+        ? Navigator.of(context).push<void>(MaterialPageRoute(
+            builder: (_) => GiftSendCeremonyPage(
+              petName: sel.catalog.recipient.name,
+              petAvatarUrl: sel.catalog.recipient.avatarUrl,
+              giftIconUrl: sel.item.iconUrl,
+              senderExp: exp,
+              riveBuilder: giftSendRiveBuilderOverride,
+            ),
+          ))
+        : null;
+    // 送达即刷新余额 / 回调入口页（入口在送达页下面先刷新，用户「Lanjut」回去时已是新数据）/ 埋点。
     if (context.mounted) ref.invalidate(pawCoinProvider);
     onDelivered?.call();
-    // L2 第二轮 P1-2：送礼返成长值（送礼人 + 主人）后可能升级 → 当前页立即拉一次庆祝（PawCoin / QRIS 两条路都到这里）。
-    growthPopupTrigger.afterAction();
     Analytics.capture('gift_payment_succeeded', {
       'gift_id': sel.item.giftToken,
       'quantity': sel.quantity,
       'total_amount': sel.total,
       'channel': channel.wire,
     });
+    if (ceremony != null) await ceremony;
+    // L2 第二轮 P1-2：送礼返成长值后可能升级 → 回到入口页再拉一次庆祝（不叠在送达页上）。
+    growthPopupTrigger.afterAction();
   }
 }
 

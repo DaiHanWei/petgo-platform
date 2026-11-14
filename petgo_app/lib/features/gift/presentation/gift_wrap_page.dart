@@ -10,6 +10,7 @@ import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../../profile/domain/id_card.dart' show HdPayChannel;
 import '../domain/gift_catalog.dart';
 import 'gift_panel_sheet.dart' show giftMaxQuantity, giftMinQuantity;
+import 'gift_send_ceremony.dart' show kGiftBoxClosedAsset;
 import 'gift_style.dart';
 
 /// 祝福语上限（Unicode 码点，D-6；与服务端 `codePointCount` 同口径）。
@@ -179,15 +180,12 @@ class _GiftWrapPageState extends ConsumerState<GiftWrapPage> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
         child: Row(children: [
-          // 默认礼盒（不可选）：正式素材由 2-3 接入 `assets/gift/`，此处先用图标占位。
-          Container(
-            key: const ValueKey('giftWrapBox'),
-            width: 56,
-            height: 56,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: const Color(0xFFFFE4E6), borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.card_giftcard, color: Color(0xFFE11D48), size: 30),
-          ),
+          // 默认礼盒（不可选，D-14 `kGiftBoxClosedAsset`；正式图同名覆盖）
+          Image.asset(kGiftBoxClosedAsset,
+              key: const ValueKey('giftWrapBox'),
+              width: 56,
+              height: 56,
+              errorBuilder: (_, _, _) => const Icon(Icons.card_giftcard, color: Color(0xFFE11D48), size: 30)),
           const SizedBox(width: 10),
           giftIcon(widget.item.iconUrl, size: 40),
           const SizedBox(width: 10),

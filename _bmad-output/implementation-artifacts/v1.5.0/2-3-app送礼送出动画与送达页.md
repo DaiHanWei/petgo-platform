@@ -1,6 +1,6 @@
 # Story 2.3: App 送礼送出动画与送达页（E1 ~ E3）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ② gift-pack · 分支 `feat/1.5.0-gift-pack`
 > 口径优先级：`decision-log.md`（11-13 设计师新稿 + riv 实测）> PRD A §3.3 / §3.8（FR-189）> 架构 D-14 > App 稿 E 泳道与页头「待补素材」「实现提示」。
@@ -41,11 +41,11 @@ Widget 测试：`disableAnimations = true` 直接渲染 E3；「Lewati」跳 E3�
 
 ## Tasks / Subtasks
 
-- [ ] 素材与 pubspec（AC1）
-- [ ] 送出动画组件（AC2）
-- [ ] 送达页（AC3）
-- [ ] 接到 2-2 的成功回调、移除旧 toast（AC4）
-- [ ] ARB + 测试（AC5、AC6）
+- [x] 素材与 pubspec（AC1）
+- [x] 送出动画组件（AC2）
+- [x] 送达页（AC3）
+- [x] 接到 2-2 的成功回调、移除旧 toast（AC4）
+- [x] ARB + 测试（AC5、AC6）
 
 ## Dev Notes
 
@@ -62,4 +62,18 @@ Widget 测试：`disableAnimations = true` 直接渲染 E3；「Lewati」跳 E3�
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：真机 / 模拟器看 Rive（礼物图替换、约 5 秒播完进 E3、跳过、切后台、加载慢 / 失败、不同尺寸礼物图），E1 ~ E3 还原度。现 `send_gift.riv` 尚无 `sendDone` 事件，开发期走 5.5 秒兜底，属预期。
+- L0：`flutter analyze` 无 error / warning；`flutter test test/gift`（含新 `gift_send_ceremony_test.dart` 5 条：减弱动效直出 E3、Lewati、兜底计时、加载失败、EXP=0）114 条全绿；其余送礼相关测试 199 条全绿。测试放 `test/gift/`。
+- 素材：`send_gift.riv`、`receive_gift.riv` 已复制进 `assets/rive/`；礼盒临时图用 Pillow 无损转 `assets/gift/gift_box_closed.webp`（258×312），`pubspec.yaml` 加 `assets/gift/`，路径常量 `kGiftBoxClosedAsset`。2-2 包装页的默认礼盒同步换成该图（原图标占位）。
+- 实现要点：`GiftSendCeremonyPage`（`gift_send_ceremony.dart`）：全屏白底；默认 Rive 接法照 `stamp_ceremony.dart`——先下载礼物图（3 秒超时，失败用文件自带图），`assetLoader` 按 `plushy-image` 换图 + 数据绑定 `giftImage`；监听 `sendDone`；Rive 运行时不可用 / 加载失败 → 直接 E3。兜底计时 + `WidgetsBindingObserver` 回前台按真实时间补判。送达页：头像右下压礼盒、富文本「Hadiahmu sudah sampai ke **{petName}**」（宠物名紫色大字，用占位分割实现）、「Kamu dapat {n} EXP」（0 不显示）、吸底「Lanjut」（复用 `onboardingContinue`）pop 回入口页。动画区可注入替身（`riveBuilder` / 测试钩子 `giftSendRiveBuilderOverride`）。
+- AC4：送礼成功路径不再调用 `playGiftSendAnimation` 与 `giftSentToast`；`gift_send_animation.dart` 与其测试保留（无其他调用方，可后续清理）。`runGiftSendFlow` 的 `flightTargetKey` 参数保留但已不使用（入口不改签名）。
+- 顺序调整：送达后先推送达页，同时刷新余额、回调入口（`onDelivered`）、报 `gift_payment_succeeded`；用户点「Lanjut」回到入口页后再拉升级庆祝（不叠在送达页上）。
+- EXP：PawCoin 取响应 `senderExp`；QRIS 到账取目录 `senderExp × 数量`。
+
 ### File List
+
+- `petgo_app/assets/rive/send_gift.riv`、`assets/rive/receive_gift.riv`、`assets/gift/gift_box_closed.webp`（新）；`pubspec.yaml`（改）
+- `petgo_app/lib/features/gift/presentation/gift_send_ceremony.dart`（新）
+- `petgo_app/lib/features/gift/presentation/gift_send_flow.dart`、`gift_wrap_page.dart`（改）
+- `petgo_app/lib/l10n/app_en.arb`、`app_id.arb`（改）
+- `petgo_app/test/gift/gift_send_ceremony_test.dart`（新）、`gift_send_flow_test.dart`（改）

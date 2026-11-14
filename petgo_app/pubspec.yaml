@@ -164,6 +164,7 @@ flutter:
   assets:
     - assets/seed/
     - assets/rive/
+    - assets/gift/
     # Diary 游客引导态的内置示例配图（FR-80 · NFR-5 零网络）。
     # 目前是 assets/seed 的缩图占位（OQ-1 未闭合）；素材到位后同名替换即可，不需改代码。
     - assets/demo_diary/
