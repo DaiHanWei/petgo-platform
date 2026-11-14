@@ -30,6 +30,7 @@ import '../domain/milestone_titles.dart';
 import 'widgets/milestone_badge.dart';
 import 'widgets/milestone_celebration.dart';
 import 'widgets/newbie_task_card.dart';
+import 'widgets/account_achievements_section.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
 /// （彩色/灰锁）+ 点击弹层分流（系统类→说明文案 / 打卡类→「已打卡 / 去发布」两入口）。
@@ -69,7 +70,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       if (!mounted) return;
       if (sheet == 'milestone') {
         // 选一个「打卡类未完成」item 以展现两入口；无则取首个。
-        final items = [for (final g in data.groups) ...g.items];
+        final items = data.allItems;
         final item = items.firstWhere((i) => i.trigger.isCheckin && !i.completed,
             orElse: () => items.isNotEmpty ? items.first : _devItem(MilestoneLevel.s));
         _showBadgeSheet(context, ref, item);
@@ -82,7 +83,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
         showMilestoneCelebration(context, _devItem(level),
             petName: data.petName,
             path: MilestoneCelebrationPath.revisit, // debug 钩子，按"回看"计
-            collection: [for (final g in data.groups) ...g.items]);
+            collection: data.allItems);
       }
     });
   }
@@ -104,7 +105,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     // 本页重新成为栈顶时 isCurrent 变化触发 rebuild，再判一次、照常补弹。
     if (ModalRoute.of(context)?.isCurrent != true) return;
     final catchup = resolveCatchup(
-      [for (final g in data.groups) ...g.items],
+      data.allItems,
       // 本次导航带来的 + 本 App 会话内已在本机弹过的（回报在途/已落库）一并扣除。
       justCelebrated: {
         ...widget.justCelebrated,
@@ -136,7 +137,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       // 弹出前先记本地：回报要等弹窗关掉才发，这期间列表若被重拉不能再补一次。
       // ⚠️ 必须在帧后记：本方法从 build 里调用，build 期间改 provider 会直接抛。
       markMilestonesCelebrating(ref, catchup.codesToReport);
-      final collection = [for (final g in data.groups) ...g.items];
+      final collection = data.allItems;
       // V1.4.2 Story 3.2：当前列表宠物（站外建链 / 发到社区预选 / 卡面）。
       final listPetId = ref.read(effectivePetIdProvider).value;
       // 先回报再展示还是先展示再回报？——**先展示**（AD-A3.1：展示成功后才回报）。
@@ -242,6 +243,15 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
               const SizedBox(height: AppSpacing.lg),
               const NewbieTaskCard(page: kNewbieCardPagePetMilestones),
               const SizedBox(height: AppSpacing.lg),
+              // V1.5.0 onboarding-recall Story 3.2 · AC1：L / M / S 上方「Pencapaian akun」（账号级 3 项，后端 accountGroup）。
+              if (data.accountGroup case final account?) ...[
+                AccountAchievementsSection(
+                  completed: account.completedCount,
+                  total: account.totalCount,
+                  badges: [for (final item in account.items) _Badge(item: item, levelColor: _levelColor(account.level))],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               for (final group in data.groups) ...[
                 _GroupSection(group: group),
                 const SizedBox(height: AppSpacing.lg),
@@ -512,7 +522,7 @@ MilestoneList? _currentMilestones(WidgetRef ref) {
 void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
   final data = _currentMilestones(ref);
   final petName = data?.petName ?? '';
-  final collection = data == null ? const <MilestoneItem>[] : [for (final g in data.groups) ...g.items];
+  final collection = data == null ? const <MilestoneItem>[] : data.allItems;
   // V1.4.2 Story 3.2：当前列表宠物（站外建链 / 发到社区预选 / 卡面）。
   final petId = ref.read(effectivePetIdProvider).value;
   final router = GoRouter.maybeOf(context);
@@ -892,8 +902,7 @@ class _CandidateTile extends ConsumerWidget {
       final collection = listData == null
           ? const <MilestoneItem>[]
           : [
-              for (final g in listData.groups)
-                for (final it in g.items) it.code == completed.code ? completed : it,
+              for (final it in listData.allItems) it.code == completed.code ? completed : it,
             ];
       navigator.pop(); // 关 picker
       if (!context.mounted) return;

@@ -203,6 +203,8 @@
   "newbieTaskDaysLeft": "{n} hari lagi!",
   "@newbieTaskDaysLeft": {"placeholders": {"n": {"type": "int"}}},
   "newbieCardNextUp": "Habis ini, coba 👇",
+  "accountAchievementsTitle": "Pencapaian akun",
+  "myAchievementsTitle": "Pencapaian kamu",
   "milestoneListComingSoon": "Fitur tonggak segera hadir",
   "milestoneLevelL": "L · Tonggak besar",
   "milestoneLevelM": "M · Tonggak penting",

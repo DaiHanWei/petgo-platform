@@ -137,6 +137,7 @@ class MilestoneList {
     required this.completedCount,
     required this.totalCount,
     required this.groups,
+    this.accountGroup,
   });
 
   final String petName;
@@ -144,6 +145,17 @@ class MilestoneList {
   final int completedCount;
   final int totalCount;
   final List<MilestoneGroup> groups;
+
+  /// 账号成就组（V1.5.0 onboarding-recall Story 3.2 · OR-11）：Teman pertama / Simpan pertama / Lulus Pemula。
+  /// ≥ 1.5.0 后端下发（S 组与总计数已不含它们）；旧后端 / 缺字段 → null（不渲染该区）。
+  final MilestoneGroup? accountGroup;
+
+  /// 全部条目（L/M/S 组 + 账号成就组）。补庆祝判定、庆祝合集预览等「找一条里程碑」的地方都用它，
+  /// 否则账号级（含 Lulus Pemula）离开 S 组后会被漏掉。
+  List<MilestoneItem> get allItems => [
+        for (final g in groups) ...g.items,
+        ...?accountGroup?.items,
+      ];
 
   factory MilestoneList.fromJson(Map<String, dynamic> json) => MilestoneList(
         petName: (json['petName'] ?? '') as String,
@@ -153,5 +165,8 @@ class MilestoneList {
         groups: ((json['groups'] ?? const []) as List)
             .map((e) => MilestoneGroup.fromJson(e as Map<String, dynamic>))
             .toList(),
+        accountGroup: json['accountGroup'] is Map
+            ? MilestoneGroup.fromJson(Map<String, dynamic>.from(json['accountGroup'] as Map))
+            : null,
       );
 }

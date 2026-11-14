@@ -51,6 +51,7 @@ import 'package:tailtopia/features/collect/presentation/collection_list_controll
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'features/profile/data/current_pet_provider.dart';
 import 'features/pet_slot/data/pet_slot_repository.dart';
+import 'features/profile/data/account_milestone_repository.dart';
 
 /// 成长档案分享页深链 → go_router location 的纯映射（L0 可测）。
 ///
@@ -421,6 +422,7 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(idCardListProvider); // 身份证：多卡列表
   ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
+  ref.invalidate(accountMilestonesProvider); // V1.5.0 Story 3.2：账号级里程碑（按账号算，换账号必须重取）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
   ref.invalidate(onboardingMarksProvider); // 一次性引导标记（按账号存：换账号不得沿用上个账号的）
   // v1.4.2 shop Story 8.1：「给你的券」按当前用户算；进入 Toko 的 60 秒去重是进程级，换账号必须清零

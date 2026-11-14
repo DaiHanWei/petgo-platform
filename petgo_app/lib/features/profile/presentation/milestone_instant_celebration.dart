@@ -124,7 +124,7 @@ Future<void> _celebrate(BuildContext context, WidgetRef ref, MilestoneList list,
     {int? petId}) async {
   if (!_hostIsCurrent(context)) return;
   final petName = list.petName;
-  final collection = [for (final g in list.groups) ...g.items];
+  final collection = list.allItems;
   final router = GoRouter.maybeOf(context);
   // 在 show 之前取好 notifier：关闭时宿主页可能已销毁，不能再在已销毁的 WidgetRef 上 read。
   final notifier = ref.read(locallyCelebratedMilestonesProvider.notifier);

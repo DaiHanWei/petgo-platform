@@ -18,6 +18,8 @@ void main() {
     // Story 3.1 · FR-176 新手任务卡
     'newbie_task_card_viewed',
     'newbie_task_go_tapped',
+    // Story 3.2 · FR-178「我的」页里程碑入口
+    'me_milestone_entry_tapped',
   ];
 
   test('🔴 V1.5.0 onboarding-recall 清单里的事件在 lib/ 里都有字面量上报点', () {

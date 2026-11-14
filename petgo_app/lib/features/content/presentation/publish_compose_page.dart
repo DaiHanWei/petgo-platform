@@ -759,8 +759,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         final collection = listData == null
             ? const <MilestoneItem>[]
             : [
-                for (final g in listData.groups)
-                  for (final it in g.items) it.code == done.code ? done : it,
+                // V1.5.0 Story 3.2：含账号成就组（账号级编码已不在 S 组里）。
+                for (final it in listData.allItems) it.code == done.code ? done : it,
               ];
         final router = GoRouter.maybeOf(context);
         // V1.4.2 Story 3.2 · D-21：弹出前取好 container —— 回报 / 收尾时本 sheet 可能已关、ref 已销毁。

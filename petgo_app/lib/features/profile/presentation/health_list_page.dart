@@ -720,9 +720,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
     final petId = _petId;
     if (petId == null || before == null || !_mayUnlockMilestone(before)) return null;
     final beforeCodes = <String>{
-      for (final g in before.groups)
-        for (final it in g.items)
-          if (it.completed) it.code,
+      for (final it in before.allItems)
+        if (it.completed) it.code,
     };
     for (final ms in const [500, 800, 1200]) {
       await Future<void>.delayed(Duration(milliseconds: ms));
@@ -735,9 +734,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
         // 收集**全部**新解锁，取**级别最高**的一条去庆祝（只弹一次），其余由弹层底部的
         // 「已解锁收藏」圆点带承载。此前是「遇到第一条就返回」，级别可能不是最高的。
         final fresh = <MilestoneItem>[
-          for (final g in now.groups)
-            for (final it in g.items)
-              if (it.completed && !beforeCodes.contains(it.code)) it,
+          for (final it in now.allItems)
+            if (it.completed && !beforeCodes.contains(it.code)) it,
         ];
         if (fresh.isNotEmpty) {
           return highestLevelMilestone(fresh);
@@ -758,7 +756,7 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
     final petName = listData?.petName ?? '';
     final collection = listData == null
         ? const <MilestoneItem>[]
-        : [for (final g in listData.groups) ...g.items];
+        : listData.allItems;
     // V1.4.2 Story 3.2 · D-21：弹出前取好 container —— 庆祝关闭（尤其「发到社区」后发布页才关）时本页可能已销毁。
     final container = ProviderScope.containerOf(context, listen: false);
     // 弹出前先记本地：短轮询已把「未庆祝」写进列表缓存，回报又要等弹窗关掉才发。

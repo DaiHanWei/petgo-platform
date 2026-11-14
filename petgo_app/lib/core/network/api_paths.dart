@@ -135,6 +135,10 @@ class ApiPaths {
   /// 6 个新手任务进度 + Lulus Pemula 解锁态（Story 7.3，FR-47）。
   static const String meNewbieTasks = '$base/me/newbie-tasks';
 
+  /// 账号级里程碑（V1.5.0 onboarding-recall Story 3.2 · OR-10）：没宠物也能用。
+  static const String meAccountMilestones = '$base/me/account-milestones';
+  static const String meAccountMilestoneCelebrations = '$base/me/account-milestones/celebrations';
+
   /// V1.4.0 ① Tailrent Level：等级页首屏 / EXP 明细游标分页（Story 1.4 后端 · 1.5 App）。
   static const String meGrowth = '$base/me/growth';
   static const String meGrowthLedger = '$meGrowth/ledger';

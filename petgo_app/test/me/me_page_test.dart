@@ -14,6 +14,7 @@ import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/me_page.dart';
 import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
+import 'package:tailtopia/features/profile/data/account_milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/pet_avatar_item.dart';
@@ -62,6 +63,9 @@ Future<void> _pump(
     }),
     // V1.4.0 multi-pet（Story 1.5）：Hewanku 改读宠物列表；diary 角标取列表项的 diaryCount
     // （原先取统计栏 happyMomentCount = 12，这里给同一个数，断言不变）。测试不打真实后端。
+    // V1.5.0 Story 3.2：无宠物时「我的」页出账号成就入口（读账号级里程碑），测试不打真实后端。
+    accountMilestonesProvider.overrideWith((ref) async =>
+        const AccountMilestones(items: [], completedCount: 0, totalCount: 3)),
     petListProvider.overrideWith((ref) async => pets ?? _listOf(pet)),
   ]);
   addTearDown(container.dispose);
@@ -93,6 +97,9 @@ Future<void> _pumpRouted(WidgetTester tester,
       return counts;
     }),
     // V1.4.0 multi-pet（Story 1.5）：宠物区改读宠物列表（原 petProfileProvider / archiveStatsProvider 桩，合并后换成它）。
+    // V1.5.0 Story 3.2：无宠物时「我的」页出账号成就入口（读账号级里程碑），测试不打真实后端。
+    accountMilestonesProvider.overrideWith((ref) async =>
+        const AccountMilestones(items: [], completedCount: 0, totalCount: 3)),
     petListProvider.overrideWith((ref) async => const <PetListItem>[]),
   ]);
   addTearDown(container.dispose);
@@ -422,6 +429,9 @@ void main() {
         myPostsProvider.overrideWith((ref) async => const []),
         meCountsProvider.overrideWith((ref, userId) async =>
             const MeCounts(postCount: 0, likeCount: 0, followingCount: 0, followerCount: 0)),
+        // V1.5.0 Story 3.2：无宠物时「我的」页出账号成就入口（读账号级里程碑），测试不打真实后端。
+        accountMilestonesProvider.overrideWith((ref) async =>
+            const AccountMilestones(items: [], completedCount: 0, totalCount: 3)),
         petListProvider.overrideWith((ref) async => pets),
       ]);
       addTearDown(container.dispose);
@@ -530,6 +540,9 @@ void main() {
         myPostsProvider.overrideWith((ref) async => const []),
         meCountsProvider.overrideWith((ref, userId) async =>
             const MeCounts(postCount: 0, likeCount: 0, followingCount: 0, followerCount: 0)),
+        // V1.5.0 Story 3.2：无宠物时「我的」页出账号成就入口（读账号级里程碑），测试不打真实后端。
+        accountMilestonesProvider.overrideWith((ref) async =>
+            const AccountMilestones(items: [], completedCount: 0, totalCount: 3)),
         petListProvider.overrideWith((ref) async {
           calls++;
           return [
@@ -592,6 +605,9 @@ void main() {
     final container = ProviderContainer(retry: (_, _) => null, overrides: [
       myPostsProvider.overrideWith((ref) async => const <MyPost>[]),
       meCountsProvider.overrideWith((ref, userId) async => const MeCounts(postCount: 1, growth: brief)),
+      // V1.5.0 Story 3.2：无宠物时「我的」页出账号成就入口（读账号级里程碑），测试不打真实后端。
+      accountMilestonesProvider.overrideWith((ref) async =>
+          const AccountMilestones(items: [], completedCount: 0, totalCount: 3)),
       petListProvider.overrideWith((ref) async => two),
       collectRepositoryProvider.overrideWithValue(FakeCollectRepo()),
     ]);
@@ -635,5 +651,27 @@ void main() {
     expect(find.byKey(const ValueKey('savedSegPost')), findsOneWidget);
     expect(find.byKey(const ValueKey('meNoPosts')), findsNothing);
     expectHeadAndPets();
+  });
+
+  // ===== V1.5.0 onboarding-recall Story 3.2 · AC2（D1）：「🏆 Pencapaian kamu」入口 =====
+  group('V1.5.0 账号成就入口', () {
+    testWidgets('账号下没有任何宠物 → Edit Profil 下方显示入口', (tester) async {
+      await _pump(tester, profile: const UserProfile(id: 1, nickname: 'A', petStatus: 'PLANNING'), pets: const []);
+      expect(find.byKey(const ValueKey('meAchievementsEntry')), findsOneWidget);
+      expect(find.text('0 / 3'), findsOneWidget);
+    });
+
+    testWidgets('选了 HAS_PET 但没建档也显示（在 Hewanku 引导卡上方）', (tester) async {
+      await _pump(tester, profile: const UserProfile(id: 1, nickname: 'A', petStatus: 'HAS_PET'), pets: const []);
+      final entry = find.byKey(const ValueKey('meAchievementsEntry'));
+      expect(entry, findsOneWidget);
+    });
+
+    testWidgets('有只读宠物也算有宠物 → 不显示', (tester) async {
+      await _pump(tester,
+          profile: const UserProfile(id: 1, nickname: 'A', petStatus: 'HAS_PET'),
+          pets: const [PetListItem(id: 9, name: 'Ro', petType: 'CAT', status: PetListItem.statusReadOnly)]);
+      expect(find.byKey(const ValueKey('meAchievementsEntry')), findsNothing);
+    });
   });
 }

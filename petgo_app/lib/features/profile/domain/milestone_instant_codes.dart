@@ -8,10 +8,9 @@ const Set<String> kTailsonalityMilestoneCodes = {'C-S18', 'D-S18', 'G-S11'};
 
 /// 列表里属于 [codes] 的那一条（单宠清单只会命中一条）；没有 → null。
 MilestoneItem? findMilestoneByCodes(MilestoneList list, Set<String> codes) {
-  for (final g in list.groups) {
-    for (final it in g.items) {
-      if (codes.contains(it.code)) return it;
-    }
+  // V1.5.0 Story 3.2：含账号成就组。
+  for (final it in list.allItems) {
+    if (codes.contains(it.code)) return it;
   }
   return null;
 }

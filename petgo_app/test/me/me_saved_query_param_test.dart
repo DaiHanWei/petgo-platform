@@ -12,6 +12,7 @@ import 'package:tailtopia/features/collect/data/collect_repository.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/me_page.dart';
+import 'package:tailtopia/features/profile/data/account_milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -36,6 +37,9 @@ void main() {
       meCountsProvider.overrideWith((ref, userId) async =>
           const MeCounts(postCount: 0, likeCount: 0, followingCount: 0, followerCount: 0)),
       // 四线合并（V1.4.0 multi-pet Story 1.5）：「我的」页宠物区改读宠物列表，原 petProfileProvider / archiveStatsProvider 桩换成它。
+      // V1.5.0 Story 3.2：无宠物时「我的」页出账号成就入口（读账号级里程碑），测试不打真实后端。
+      accountMilestonesProvider.overrideWith((ref) async =>
+          const AccountMilestones(items: [], completedCount: 0, totalCount: 3)),
       petListProvider.overrideWith((ref) async => const <PetListItem>[]),
       collectRepositoryProvider.overrideWithValue(FakeCollectRepo()),
     ]);

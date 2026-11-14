@@ -88,6 +88,8 @@ import '../../features/profile/domain/pet_profile.dart';
 import '../../features/profile/domain/profile_created_flow.dart';
 import '../../features/profile/data/milestone_celebration_reporter.dart';
 import '../../features/onboarding/presentation/onboarding_recommend_page.dart';
+import '../../features/profile/presentation/account_milestones_page.dart';
+import '../../features/profile/data/pet_list_repository.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
@@ -1050,6 +1052,25 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
       GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
+      // V1.5.0 onboarding-recall Story 3.2 · FR-178：账号级里程碑页（没宠物的用户从「我的」页进）。受控（/me 前缀）。
+      GoRoute(
+        path: kAccountMilestonesRoute,
+        builder: (c, s) => AccountMilestonesPage(celebrate: s.uri.queryParameters['celebrate']),
+      ),
+      // V1.5.0 Story 3.2 · OR-26：里程碑分发——有宠物（ACTIVE 或只读）→ /profile/milestones，否则账号级页；query 透传。
+      // 3-3 毕业通知、7-1 召回 D7 落点都走它。宠物列表取失败按「有宠物」处理（宠物页自带失败态与建档引导）。
+      GoRoute(
+        path: kMilestonesEntryRoute,
+        redirect: (c, s) async {
+          bool hasPet;
+          try {
+            hasPet = (await ref.read(petListProvider.future)).isNotEmpty;
+          } catch (_) {
+            hasPet = true;
+          }
+          return milestonesEntryLocation(hasPet: hasPet, query: s.uri.queryParameters);
+        },
+      ),
       // Story 3-3：路径不变，多接一个可选 `?orderToken=` 用来预选关联订单（可改可清空）。
       // 无参数进入（「我」页那条路）时行为与今天一致。
       GoRoute(

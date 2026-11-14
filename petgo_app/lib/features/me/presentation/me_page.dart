@@ -20,7 +20,9 @@ import '../../growth/presentation/level_capsule.dart';
 import '../../growth/presentation/level_page.dart';
 import '../../pet_slot/presentation/add_pet_flow.dart';
 import '../../profile/data/current_pet_provider.dart';
+import '../../profile/data/account_milestone_repository.dart';
 import '../../profile/data/pet_list_repository.dart';
+import '../../profile/presentation/account_milestones_page.dart' show kAccountMilestonesRoute;
 import '../../collect/domain/collect_target.dart';
 import '../../collect/presentation/saved_collections_section.dart';
 import '../../profile/presentation/widgets/pet_avatar_item.dart';
@@ -100,6 +102,8 @@ class MePage extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
           // ③ 整宽「Edit Profil」（AC2.4，UI 稿 `.wbtn.ghost`）。
           _EditProfileButton(onEdit: () => openProfileEditSheet(context, ref)),
+          // V1.5.0 onboarding-recall Story 3.2 · AC2（D1）：账号下没有任何宠物时，Edit Profil 下方出「🏆 Pencapaian kamu」入口。
+          const _AchievementsEntry(),
           // ④ Hewanku（AC3）：只在 HAS_PET 时出现（含未建档的引导卡，T-13）。
           const _PetZone(),
           const SizedBox(height: AppSpacing.lg),
@@ -114,6 +118,79 @@ class MePage extends ConsumerWidget {
     );
   }
 
+}
+
+/// 「🏆 Pencapaian kamu  x / 3」入口（V1.5.0 onboarding-recall Story 3.2 · AC2 · UI 稿 D1）。
+///
+/// 🔴 只在账号下**没有任何宠物**（ACTIVE 与只读都没有，含选了 HAS_PET 但没建档的）时显示；
+/// 判据用现有 [petListProvider]（不新开接口），列表还没回来时不显示（避免有宠物用户闪一下）。
+/// 建第一只宠物后（建档成功会失效 [petListProvider]）入口立即消失，改从 Diary 进。
+/// 样式照搬 Diary 页「🏆 Pencapaian」进度卡（`diary_header.dart` 的 `_milestoneBarCard`），数字是账号成就完成数。
+class _AchievementsEntry extends ConsumerWidget {
+  const _AchievementsEntry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pets = ref.watch(petListProvider);
+    if (!pets.hasValue || pets.value!.isNotEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    final account = ref.watch(accountMilestonesProvider).value;
+    final completed = account?.completedCount ?? 0;
+    final total = account?.totalCount ?? 3;
+    final ratio = total == 0 ? 0.0 : completed / total;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: GestureDetector(
+        key: const ValueKey('meAchievementsEntry'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          Analytics.capture('me_milestone_entry_tapped', const {});
+          context.push(kAccountMilestonesRoute);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8)],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text('🏆 ${l10n.myAchievementsTitle}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.ink)),
+                  ),
+                  Text('$completed / $total',
+                      key: const ValueKey('meAchievementsCount'),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                          color: AppColors.mint)),
+                ],
+              ),
+              const SizedBox(height: 7),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 5,
+                  backgroundColor: AppColors.cream2,
+                  color: AppColors.mint,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 GrowthBrief? _growthOf(MeCounts? counts, UserProfile? profile) =>
