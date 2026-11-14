@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../../../shared/format/idr_compact.dart';
 import '../../../../shared/utils/compact_count.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
@@ -201,7 +200,7 @@ class PetInfoCard extends StatelessWidget {
             child: Row(
               children: [
                 _statCol(happyCount, l10n.petInfoStatHappyMoments),
-                _giftCol(l10n),
+                // V1.5.0 gift-pack Story 2-4 · AC3.3：去掉「Hadiah」格（剩 Diary / Milestone / Pengikut）；礼物改为下方礼物行。
                 _statCol(milestoneCount, l10n.petInfoStatMilestone),
                 if (followerCount != null) _followerCol(context, l10n, followerCount!),
               ],
@@ -229,68 +228,6 @@ class PetInfoCard extends StatelessWidget {
           ),
         ),
       );
-
-  /// 礼物格（AC2.2）：数字 16 号，「Rp」与「rb / jt」0.6 倍字号；可点（进礼物页）时紫色强调，否则同其余两格深色。
-  Widget _giftCol(AppLocalizations l10n) {
-    final numberStyle = TextStyle(
-        fontSize: 16, fontWeight: FontWeight.w700, color: onOpenGifts != null ? AppColors.mint : AppColors.ink);
-    final v = giftTotalValue;
-    final Widget value;
-    if (v == null) {
-      value = Text('·', style: numberStyle);
-    } else {
-      final p = idrCompactParts(v);
-      final unitStyle = numberStyle.copyWith(fontSize: 16 * 0.6);
-      value = Text.rich(
-        key: const ValueKey('petInfoGiftValue'),
-        TextSpan(children: [
-          TextSpan(text: 'Rp', style: unitStyle),
-          TextSpan(text: p.number, style: numberStyle),
-          if (p.unit.isNotEmpty) TextSpan(text: p.unit, style: unitStyle),
-        ]),
-        maxLines: 1,
-      );
-    }
-    final tappable = onOpenGifts != null;
-    final column = Padding(
-      padding: EdgeInsets.symmetric(horizontal: _hp, vertical: 6),
-      child: Column(
-        children: [
-          // 4 格时（V1.4.2 social-topic 1.4 · AC2.3）：360dp 小屏「Rp999,9rb」放不下 → 等比缩小、不截断。
-          // 3 格保持原样（不包），像素不变。
-          if (followerCount != null) FittedBox(fit: BoxFit.scaleDown, child: value) else value,
-          const SizedBox(height: 1),
-          Text.rich(
-            TextSpan(children: [
-              TextSpan(text: l10n.giftStatLabel),
-              if (tappable)
-                const TextSpan(
-                    text: ' ›',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.mint)),
-            ]),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11, color: AppColors.ink2),
-          ),
-        ],
-      ),
-    );
-    return Expanded(
-      child: tappable
-          ? Semantics(
-              button: true,
-              child: InkWell(
-                key: const ValueKey('petInfoGiftStat'),
-                borderRadius: BorderRadius.circular(12),
-                onTap: onOpenGifts,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: column,
-                ),
-              ),
-            )
-          : KeyedSubtree(key: const ValueKey('petInfoGiftStat'), child: column),
-    );
-  }
 
   /// 第 4 格「{N} Pengikut」（AC2）：数字 16 / w700 `ink` + 等宽数字（乐观 +1 不跳宽），
   /// 计数格式同 1.3.4（[formatCompactCount]）；标签 11 号 `ink2`；不可点。

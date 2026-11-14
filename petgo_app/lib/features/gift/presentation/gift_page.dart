@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,46 +8,39 @@ import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/empty_state.dart';
-import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/pay_channel_picker.dart' show formatIdrAmount;
 import '../data/gift_repository.dart';
+import '../domain/gift_order_browse.dart';
 import '../domain/gift_send_result.dart';
-import '../domain/gift_showcase.dart';
+import 'gift_order_actions.dart';
+import 'gift_send_ceremony.dart' show kGiftBoxClosedAsset;
 import 'gift_send_flow.dart';
 import 'gift_style.dart';
-import 'gift_supporters_controller.dart';
 
-/// 礼物页：礼物墙 + 粉丝榜同一页（V1.4.0 gift Story 2.2 · AC3 · decision-log ③ Q1 / Q2 · UI 稿 E1 ~ E7）。
+/// 礼物页（V1.5.0 gift-pack Story 2-4 · UI 稿 A4 ~ A6 / F2 ~ F4）：逐份礼物列表，取代 1.4.0 的汇总卡 + 礼物墙 + 粉丝榜。
 ///
-/// 自上而下：汇总卡（头像 + 完整金额 + 「N hadiah dari M pendukung」）→ 礼物墙（4 列，默认两行 8 格，
-/// 「Lihat semua ▾」展开）→ 粉丝榜（分页）→ 访客视角吸底「Kirim Hadiah」（主人无）。
-///
-/// 🛡 客户端**不做任何过滤**：主人隐藏的送礼人由服务端剔除；403（我拉黑了主人）/ 404（宠物已删 /
-/// 主人拉黑了我）一律 E6，不区分原因、不提示「你被拉黑」。
-///
-/// 多宠物（gift Story 4.1 · AC6.2）：本页只认路由里的 `petId`（墙 / 榜 provider 均按 petId 分族），
-/// Diary Tab 入口取当前宠物（`effectivePetIdProvider`），切换宠物后进来的就是新那只。
+/// - 顶栏「Hadiah {petName}」；主人有未拆时右侧「Buka Semua」（→ 2-5 批量拆）。
+/// - 筛选胶囊：Semua / 主人才有 Belum dibuka / 后台分类（首页响应 `categories`）。
+/// - 3 列：主人未拆 = 礼盒图 +「Masih terbungkus」+「Baru」角标（后端已排在最前）；其余 = 礼物本身 +「dari {nama}」。
+/// - 访客吸底「Kirim Hadiah」，主人无。点卡片：主人未拆 → 拆（2-5）；其余 → 详情抽屉（2-6）。
+/// - 🛡 403 / 404 一律 A6 加载失败（不区分原因）。
 class GiftPage extends ConsumerStatefulWidget {
-  const GiftPage({super.key, required this.petId, this.wallInitiallyExpanded = false});
+  const GiftPage({super.key, required this.petId, this.wallInitiallyExpanded = false, this.openLatest = false});
 
-  /// 宠物 id；路由里解析失败传 0 → 直接 E6（不发请求、不崩）。
+  /// 宠物 id；路由里解析失败传 0 → 直接 A6（不发请求、不崩）。
   final int petId;
 
-  /// `?wall=expanded`（收礼通知深链，AC6.4）：墙初始即展开全部。
+  /// 旧版 `?wall=expanded`（1.4.x 收礼通知深链）：新版忽略。
   final bool wallInitiallyExpanded;
 
-  /// 独立顶层路由（与 `/pets/:petId` 访客视图并列；go_router 按整段匹配，`/pets/5/gifts` 不会落到访客视图）。
-  /// ⚠️ 不进 `_controlledLocations`：登录门控在入口处（`requireLogin`）+ 服务端（仅 role=USER）。
+  /// `?open=latest`（收礼通知，D-9）：主人有未拆 → 拆最新一笔未拆；否则打开最新一笔详情。行为由 Story 2-5 实现。
+  final bool openLatest;
+
   static const String routePattern = '/pets/:petId/gifts';
-
-  /// `?wall=` 的取值。
   static const String wallExpandedQuery = 'expanded';
+  static const String openLatestQuery = 'latest';
 
-  static String routeFor(int petId, {bool wallExpanded = false}) =>
-      '/pets/$petId/gifts${wallExpanded ? '?wall=$wallExpandedQuery' : ''}';
-
-  /// 墙默认露出的格数（两行 × 4 列）。
-  static const int collapsedWallCount = 8;
+  static String routeFor(int petId, {bool wallExpanded = false, bool openLatest = false}) =>
+      '/pets/$petId/gifts${openLatest ? '?open=$openLatestQuery' : ''}';
 
   @override
   ConsumerState<GiftPage> createState() => _GiftPageState();
@@ -54,12 +48,24 @@ class GiftPage extends ConsumerStatefulWidget {
 
 class _GiftPageState extends ConsumerState<GiftPage> {
   final ScrollController _scroll = ScrollController();
-  final GlobalKey _viewportKey = GlobalKey(debugLabel: 'giftPageViewport');
-  final GlobalKey _supportersKey = GlobalKey(debugLabel: 'giftSupportersSection');
-  late bool _wallExpanded = widget.wallInitiallyExpanded;
-  bool _wallReported = false;
-  bool _supportersReported = false;
+  GiftOrderFilter _filter = const GiftOrderFilter.all();
+
+  // 首页元数据（宠物 / 视角 / 分类）：只在「全部」首页取到时更新，切筛选不丢。
+  String? _petName;
+  bool? _owner;
+  List<GiftCategoryChip> _categories = const [];
+
+  List<GiftOrderCard> _items = const [];
+  String? _next;
+  int? _unopenedCount;
+  bool _loading = true;
+  bool _failed = false;
+  bool _loadingMore = false;
+  bool _loadMoreFailed = false;
   bool _sending = false;
+  bool _reported = false;
+  bool _senderListReported = false;
+  int _generation = 0;
 
   bool get _valid => widget.petId > 0;
 
@@ -67,73 +73,109 @@ class _GiftPageState extends ConsumerState<GiftPage> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
-    if (_valid) {
-      // AC7.1：`gift_wall_opened` 在首个 data 回调报一次（不放 build：build 随每次数据到达重跑）。
-      ref.listenManual<AsyncValue<PetGiftShowcase>>(petGiftShowcaseProvider(widget.petId), (_, next) {
-        final data = next.value;
-        if (data == null || _wallReported) return;
-        _wallReported = true;
-        Analytics.capture('gift_wall_opened', {'is_owner': data.viewerIsOwner});
-      }, fireImmediately: true);
-    }
+    if (_valid) _reload();
   }
 
   @override
   void dispose() {
-    _scroll.removeListener(_onScroll);
     _scroll.dispose();
     super.dispose();
   }
 
-  bool _seenCheckScheduled = false;
-
-  void _onScroll() {
-    _maybeReportSupportersSeen();
-    // 滚动回调发生在本帧布局之前：区块可能这一帧才被建出来 / 位置才更新 → 布局后再判一次。
-    if (!_supportersReported && !_seenCheckScheduled) {
-      _seenCheckScheduled = true;
+  Future<void> _reload() async {
+    final gen = ++_generation;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final page = await ref.read(giftRepositoryProvider).fetchPetGiftOrders(widget.petId, filter: _filter);
+      if (!mounted || gen != _generation) return;
+      setState(() {
+        _items = page.items;
+        _next = page.nextCursor;
+        _unopenedCount = page.unopenedCount;
+        if (page.pet != null) _petName = page.pet!.name;
+        if (page.viewerIsOwner != null) _owner = page.viewerIsOwner;
+        if (page.categories != null) _categories = page.categories!;
+        _loading = false;
+      });
+      if (!_reported && _owner != null) {
+        _reported = true;
+        Analytics.capture('gift_wall_opened', {'is_owner': _owner!});
+      }
+      // 逐笔列表取代旧「送礼人列表」：沿用 1.4.0 口径事件，首次加载到非空列表报一次（不新增埋点，PRD A §4）。
+      if (!_senderListReported && _owner != null && _items.isNotEmpty) {
+        _senderListReported = true;
+        Analytics.capture('gift_sender_list_opened', {'is_owner': _owner!});
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _seenCheckScheduled = false;
-        _maybeReportSupportersSeen();
+        if (mounted && _scroll.hasClients && _scroll.position.maxScrollExtent <= 0) _loadMore();
+      });
+    } on DioException catch (_) {
+      if (!mounted || gen != _generation) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
       });
     }
-    if (!_scroll.hasClients) return;
-    if (_scroll.position.extentAfter < 400) _autoLoadMore();
   }
 
-  void _autoLoadMore() {
-    final s = ref.read(giftSupportersProvider(widget.petId)).value;
-    if (s == null || !s.hasMore || s.loadingMore || s.loadMoreFailed) return;
-    ref.read(giftSupportersProvider(widget.petId).notifier).loadMore();
+  void _onScroll() {
+    if (_scroll.hasClients && _scroll.position.extentAfter < 400) _loadMore();
   }
 
-  /// AC7.2：粉丝榜区块**首次进入视口**时报一次（页面 ScrollController + 区块 GlobalKey 判位置；首屏可见则首帧报）。
-  void _maybeReportSupportersSeen() {
-    if (_supportersReported || !mounted) return;
-    final data = ref.read(petGiftShowcaseProvider(widget.petId)).value;
-    if (data == null) return;
-    final section = _supportersKey.currentContext?.findRenderObject();
-    final viewport = _viewportKey.currentContext?.findRenderObject();
-    if (section is! RenderBox || viewport is! RenderBox || !section.attached || !viewport.attached) return;
-    final top = section.localToGlobal(Offset.zero).dy;
-    final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy;
-    if (top >= bottom) return;
-    _supportersReported = true;
-    Analytics.capture('gift_sender_list_opened', {'is_owner': data.viewerIsOwner});
+  Future<void> _loadMore() async {
+    final cursor = _next;
+    if (cursor == null || _loadingMore || _loadMoreFailed) return;
+    final gen = _generation;
+    setState(() => _loadingMore = true);
+    try {
+      final page =
+          await ref.read(giftRepositoryProvider).fetchPetGiftOrders(widget.petId, filter: _filter, cursor: cursor);
+      if (!mounted || gen != _generation) return;
+      final seen = {for (final c in _items) c.orderToken};
+      setState(() {
+        // 主人翻页期间拆过礼物会改变排序键：按 orderToken 去重（D-12，1-4 复审 #5）
+        _items = [..._items, ...page.items.where((c) => !seen.contains(c.orderToken))];
+        _next = page.nextCursor;
+        _loadingMore = false;
+      });
+    } on DioException catch (_) {
+      if (!mounted || gen != _generation) return;
+      setState(() {
+        _loadingMore = false;
+        _loadMoreFailed = true;
+      });
+    }
   }
 
-  void _afterFrame() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _maybeReportSupportersSeen();
-      // 首页行数不足一屏（不可滚）时滚动监听永不触发 —— 这里补一次加载更多。
-      if (_scroll.hasClients && _scroll.position.maxScrollExtent <= 0) _autoLoadMore();
-    });
+  void _setFilter(GiftOrderFilter f) {
+    if (f == _filter) return;
+    _filter = f;
+    _next = null;
+    _loadMoreFailed = false;
+    _reload();
   }
 
-  void _retryAll() {
+  void _refreshAll() {
+    ref.invalidate(giftPreviewProvider(widget.petId));
     ref.invalidate(petGiftShowcaseProvider(widget.petId));
-    ref.invalidate(giftSupportersProvider(widget.petId));
+    _reload();
+  }
+
+  Future<void> _tap(GiftOrderCard c) async {
+    if (_owner == true && c.unopened) {
+      final changed = await openGiftOrders(context, ref, petId: widget.petId, orderTokens: [c.orderToken]);
+      if (changed && mounted) _refreshAll();
+    } else {
+      await showGiftOrderDetail(context, ref, orderToken: c.orderToken);
+    }
+  }
+
+  Future<void> _openAll() async {
+    final changed = await openGiftOrders(context, ref, petId: widget.petId, all: true);
+    if (changed && mounted) _refreshAll();
   }
 
   Future<void> _send() async {
@@ -146,9 +188,7 @@ class _GiftPageState extends ConsumerState<GiftPage> {
         recipient: GiftRecipientRef.pet(widget.petId),
         source: giftSourceGiftPage,
         onDelivered: () {
-          if (!mounted) return;
-          ref.invalidate(petGiftShowcaseProvider(widget.petId));
-          ref.invalidate(giftSupportersProvider(widget.petId));
+          if (mounted) _refreshAll();
         },
       );
     } finally {
@@ -159,35 +199,19 @@ class _GiftPageState extends ConsumerState<GiftPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    if (!_valid) {
-      return Scaffold(
-        backgroundColor: AppColors.cream,
-        appBar: _appBar(l10n.giftStatLabel),
-        body: _error(l10n),
-      );
-    }
-    final async = ref.watch(petGiftShowcaseProvider(widget.petId));
-    final data = async.value;
-    final title = data == null ? l10n.giftStatLabel : l10n.giftPageTitle(data.pet.name);
+    final title = _petName == null ? l10n.giftStatLabel : l10n.giftPageTitle(_petName!);
     final Widget body;
-    if (data != null) {
-      body = data.giftCount <= 0 ? _empty(l10n, data) : _content(l10n, data);
-    } else if (async.hasError) {
+    if (!_valid || (_failed && _items.isEmpty && _owner == null)) {
       body = _error(l10n);
+    } else if (_loading && _owner == null) {
+      body = const Center(key: ValueKey('giftPageLoading'), child: CircularProgressIndicator(color: AppColors.mint));
     } else {
-      body = const Center(
-          key: ValueKey('giftPageLoading'), child: CircularProgressIndicator(color: AppColors.mint));
+      body = _content(l10n);
     }
+    final showOpenAll = _owner == true && (_unopenedCount ?? 0) > 0;
     return Scaffold(
       backgroundColor: AppColors.cream,
-      appBar: _appBar(title),
-      body: body,
-      // E1 / E3 访客吸底「Kirim Hadiah」；主人（E2 / E4）无；加载中 / 失败无。
-      bottomNavigationBar: data != null && !data.viewerIsOwner ? _sendBar(l10n) : null,
-    );
-  }
-
-  PreferredSizeWidget _appBar(String title) => AppBar(
+      appBar: AppBar(
         backgroundColor: AppColors.cream,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -196,43 +220,36 @@ class _GiftPageState extends ConsumerState<GiftPage> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-      );
+        actions: [
+          if (showOpenAll)
+            TextButton(
+              key: const ValueKey('giftPageOpenAll'),
+              onPressed: _openAll,
+              child: Text(l10n.giftOpenAll,
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.mint)),
+            ),
+        ],
+      ),
+      body: body,
+      bottomNavigationBar: _owner == false ? _sendBar(l10n) : null,
+    );
+  }
 
-  /// E6：加载失败（含 403 / 404，同形态）。
   Widget _error(AppLocalizations l10n) => Center(
         key: const ValueKey('giftPageError'),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off, size: 48, color: AppColors.muted),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.cloud_off, size: 48, color: AppColors.muted),
+            const SizedBox(height: AppSpacing.md),
+            Text(l10n.giftLoadFailed,
+                textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: AppColors.ink2)),
+            if (_valid) ...[
               const SizedBox(height: AppSpacing.md),
-              Text(l10n.detailNetworkError,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 14, color: AppColors.ink2)),
-              if (_valid) ...[
-                const SizedBox(height: AppSpacing.md),
-                OutlinedButton(
-                  key: const ValueKey('giftPageRetry'),
-                  onPressed: _retryAll,
-                  child: Text(l10n.commonRetry),
-                ),
-              ],
+              OutlinedButton(key: const ValueKey('giftPageRetry'), onPressed: _reload, child: Text(l10n.commonRetry)),
             ],
-          ),
+          ]),
         ),
-      );
-
-  /// E3（访客）/ E4（主人）：还没收到礼物。
-  Widget _empty(AppLocalizations l10n, PetGiftShowcase data) => EmptyState(
-        key: const ValueKey('giftPageEmpty'),
-        icon: Icons.redeem_rounded,
-        iconBackground: AppColors.cream2,
-        title: l10n.giftPageEmptyTitle(data.pet.name),
-        message: data.viewerIsOwner
-            ? l10n.giftPageEmptyOwnerHint
-            : l10n.giftPageEmptyVisitorHint(data.pet.name),
       );
 
   Widget _sendBar(AppLocalizations l10n) => SafeArea(
@@ -256,392 +273,164 @@ class _GiftPageState extends ConsumerState<GiftPage> {
         ),
       );
 
-  Widget _content(AppLocalizations l10n, PetGiftShowcase data) {
-    final supporters = ref.watch(giftSupportersProvider(widget.petId));
-    _afterFrame();
-    final lang = Localizations.localeOf(context).languageCode;
-    return CustomScrollView(
-      key: _viewportKey,
-      controller: _scroll,
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
-          sliver: SliverList.list(children: [
-            _SummaryCard(data: data),
-            // 稿 `.sec2.ttl`：上 20 下 4（墙 / 榜与标题之间再各留一点呼吸）。
-            const SizedBox(height: 20),
-            _sectionHeader(l10n.giftWallTitle, l10n.giftWallKinds(data.wall.length),
-                key: const ValueKey('giftWallHeader')),
-            const SizedBox(height: 8),
-            _wall(l10n, data.wall, lang),
-            const SizedBox(height: 20),
-            KeyedSubtree(
-              key: _supportersKey,
-              child: _sectionHeader(l10n.giftSupportersTitle, l10n.giftSupportersCount(data.supporterCount),
-                  key: const ValueKey('giftSupportersHeader')),
-            ),
-            const SizedBox(height: 4),
-          ]),
-        ),
-        ..._supporterSlivers(l10n, supporters),
-        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
-      ],
+  Widget _chips(AppLocalizations l10n) {
+    final locale = Localizations.localeOf(context);
+    Widget chip(String key, String label, GiftOrderFilter f) => Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: ChoiceChip(
+            key: ValueKey('giftPageFilter-$key'),
+            label: Text(label),
+            selected: _filter == f,
+            showCheckmark: false,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            selectedColor: AppColors.mintTint,
+            onSelected: (_) => _setFilter(f),
+          ),
+        );
+    return SingleChildScrollView(
+      key: const ValueKey('giftPageFilters'),
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+      child: Row(children: [
+        chip('all', l10n.orderFilterAll, const GiftOrderFilter.all()),
+        if (_owner == true) chip('unopened', l10n.giftFilterUnopened, const GiftOrderFilter.unopened()),
+        for (final c in _categories)
+          chip('cat-${c.categoryId}', c.nameFor(locale), GiftOrderFilter.category(c.categoryId)),
+      ]),
     );
   }
 
-  /// 稿 `.sec2.ttl`：标题 15 / w700 居左，计数 12 / w500 muted **靠右**（L2 第二轮：原为「· N」紧跟标题）。
-  Widget _sectionHeader(String title, String trailing, {Key? key}) => Padding(
-        key: key,
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
-            ),
-            const SizedBox(width: 8),
-            Text(trailing,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.muted)),
-          ],
+  Widget _content(AppLocalizations l10n) {
+    final name = _petName ?? '';
+    final Widget list;
+    if (_loading) {
+      list = const SliverFillRemaining(
+          hasScrollBody: false, child: Center(child: CircularProgressIndicator(color: AppColors.mint)));
+    } else if (_failed) {
+      list = SliverFillRemaining(hasScrollBody: false, child: _error(l10n));
+    } else if (_items.isEmpty) {
+      list = SliverFillRemaining(
+        hasScrollBody: false,
+        child: EmptyState(
+          key: const ValueKey('giftPageEmpty'),
+          icon: Icons.redeem_rounded,
+          iconBackground: AppColors.cream2,
+          title: l10n.giftPageEmptyTitle(name),
+          message: _owner == true ? l10n.giftPageEmptyOwnerHint : l10n.giftPageEmptyVisitorHint(name),
         ),
       );
-
-  Widget _wall(AppLocalizations l10n, List<GiftWallItem> wall, String lang) {
-    final overflow = wall.length > GiftPage.collapsedWallCount;
-    final shown = (_wallExpanded || !overflow) ? wall : wall.take(GiftPage.collapsedWallCount).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(builder: (context, c) {
-          const gap = 8.0;
-          final w = (c.maxWidth - gap * 3) / 4;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (var i = 0; i < shown.length; i++)
-                SizedBox(
-                  width: w,
-                  child: _WallCell(key: ValueKey('giftWallCell_$i'), item: shown[i], lang: lang),
+    } else {
+      list = SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        sliver: SliverGrid.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 0.78),
+          itemCount: _items.length,
+          itemBuilder: (_, i) => GiftOrderTile(
+            key: ValueKey('giftOrderTile-${_items[i].orderToken}'),
+            card: _items[i],
+            onTap: () => _tap(_items[i]),
+          ),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () async => _refreshAll(),
+      child: CustomScrollView(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(child: _chips(l10n)),
+          list,
+          if (_loadingMore)
+            const SliverToBoxAdapter(
+                child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint)))),
+          if (_loadMoreFailed)
+            SliverToBoxAdapter(
+              child: Center(
+                child: TextButton(
+                  key: const ValueKey('giftPageLoadMoreRetry'),
+                  onPressed: () {
+                    setState(() => _loadMoreFailed = false);
+                    _loadMore();
+                  },
+                  child: Text(l10n.commonRetry),
                 ),
-            ],
-          );
-        }),
-        if (overflow && !_wallExpanded)
-          Center(
-            child: TextButton(
-              key: const ValueKey('giftWallShowAll'),
-              onPressed: () => setState(() => _wallExpanded = true),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(l10n.giftWallShowAll,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mint)),
-                  const Icon(Icons.expand_more, size: 18, color: AppColors.mint),
-                ],
               ),
             ),
-          ),
-      ],
-    );
-  }
-
-  List<Widget> _supporterSlivers(AppLocalizations l10n, AsyncValue<GiftSupportersState> async) {
-    final notifier = ref.read(giftSupportersProvider(widget.petId).notifier);
-    final s = async.value;
-    if (s == null) {
-      if (async.hasError) {
-        // 榜首页失败：区块内行内重试（与 E7 同组件），墙照常。
-        return [
-          SliverToBoxAdapter(
-            child: _InlineRetry(key: const ValueKey('giftSupportersRetry'), onRetry: notifier.retry),
-          ),
-        ];
-      }
-      return const [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-            child: Center(
-                child: SizedBox(
-                    width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint))),
-          ),
-        ),
-      ];
-    }
-    return [
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        sliver: SliverList.builder(
-          itemCount: s.items.length,
-          itemBuilder: (context, i) => _SupporterRow(row: s.items[i]),
-        ),
-      ),
-      if (s.loadMoreFailed)
-        SliverToBoxAdapter(
-          child: _InlineRetry(key: const ValueKey('giftSupportersLoadMoreRetry'), onRetry: notifier.loadMore),
-        )
-      else if (s.loadingMore)
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Center(
-                child: SizedBox(
-                    width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.mint))),
-          ),
-        ),
-    ];
-  }
-}
-
-/// 汇总卡：宠物头像 56 + 完整金额大字（不缩写）+ 「N hadiah dari M pendukung」。
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.data});
-
-  final PetGiftShowcase data;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final avatar = AppImage.provider(data.pet.avatarUrl, thumbWidth: 200);
-    final emoji = switch (data.pet.petType) {
-      'CAT' => '🐱',
-      'DOG' => '🐶',
-      _ => '🐾',
-    };
-    // 稿 `.ghero`：135° #F3EDFF → #FBF8FF、r20、内边距 16；头像 56 带「2 白 + 2 #C2B0EC」双圈描边（`.pic-av`）。
-    return Container(
-      key: const ValueKey('giftSummaryCard'),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFF3EDFF), Color(0xFFFBF8FF)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Container(
-            key: const ValueKey('giftSummaryAvatarRing'),
-            padding: const EdgeInsets.all(2),
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              boxShadow: [BoxShadow(color: Color(0xFFC2B0EC), spreadRadius: 2)],
-            ),
-            child: CircleAvatar(
-              radius: 28,
-              backgroundColor: GiftStyle.avatarBg,
-              backgroundImage: avatar,
-              child: avatar == null ? Text(emoji, style: const TextStyle(fontSize: 26)) : null,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Rp${formatIdrAmount(data.totalValue)}',
-                    key: const ValueKey('giftSummaryTotal'),
-                    style: const TextStyle(
-                        fontSize: 28,
-                        height: 1.1,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.ink,
-                        fontFeatures: [FontFeature.tabularFigures()])),
-                const SizedBox(height: 2),
-                Text(l10n.giftPageSummary(data.giftCount, data.supporterCount),
-                    key: const ValueKey('giftSummaryLine'),
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.ink2)),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-/// 礼物墙一格：图标 + 按语言取的名字 + 右上紫色小胶囊「×N」。
-class _WallCell extends StatelessWidget {
-  const _WallCell({super.key, required this.item, required this.lang});
+/// 一份礼物格（礼物页 3 列；主人未拆 = 礼盒 +「Masih terbungkus」+「Baru」）。
+class GiftOrderTile extends StatelessWidget {
+  const GiftOrderTile({super.key, required this.card, required this.onTap});
 
-  final GiftWallItem item;
-  final String lang;
+  final GiftOrderCard card;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    // 稿 `.gw>div`：白底 + 1px #F0EDF5、r14、上 10 下 8；图标坐在 40 浅紫圆（#F8F6FF）里；
-    // 「×N」浅紫胶囊（#F8F2FF 底 / #845EC9 字）**收在格子内**右上 6/6（L2 第二轮：原先格子按内容收窄、角标溢出到格外）。
-    return Stack(
-      children: [
+    final l10n = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context);
+    final wrapped = card.unopened;
+    final sender = card.sender.deleted || card.sender.nickname == null ? l10n.feedDeletedUser : card.sender.nickname!;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Stack(clipBehavior: Clip.none, children: [
         Container(
           width: double.infinity,
-          height: 92,
-          padding: const EdgeInsets.fromLTRB(2, 10, 2, 8),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: GiftStyle.cellBorder),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(color: AppColors.mintTint2, shape: BoxShape.circle),
-                child: giftIcon(item.iconUrl, size: 28),
-              ),
-              const SizedBox(height: 5),
-              Text(item.nameFor(lang),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 10.5, height: 1.2, color: AppColors.ink2)),
-            ],
-          ),
+          padding: const EdgeInsets.fromLTRB(6, 12, 6, 8),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: wrapped
+                  ? Image.asset(kGiftBoxClosedAsset,
+                      key: const ValueKey('giftOrderTileBox'),
+                      errorBuilder: (_, _, _) => const Icon(Icons.card_giftcard, color: AppColors.mint, size: 40))
+                  : giftIcon(card.giftIconUrl, size: 48),
+            ),
+            const SizedBox(height: 6),
+            Text(wrapped ? l10n.giftStillWrapped : card.nameFor(locale),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink)),
+            const SizedBox(height: 2),
+            Text(l10n.giftReceivedFrom(sender),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
+          ]),
         ),
-        Positioned(
-          top: 6,
-          right: 6,
-          child: Container(
-            key: const ValueKey('giftWallCellCount'),
-            height: 17,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: const Color(0xFFF8F2FF), borderRadius: BorderRadius.circular(999)),
-            child: Text('×${item.count}',
-                style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.mint,
-                    fontFeatures: [FontFeature.tabularFigures()])),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 粉丝榜一行（不可点）：排名圆 + 头像 40 + 昵称 / 礼物 + 累计金额。
-class _SupporterRow extends StatelessWidget {
-  const _SupporterRow({required this.row});
-
-  final GiftSupporter row;
-
-  /// 前三名实色圆（金 / 银 / 铜 + 白字）；第 4 名起灰底灰字。不用奖牌 emoji（跨平台不一致）。
-  static Color? podiumColor(int rank) => switch (rank) {
-        1 => AppColors.gold,
-        2 => AppColors.rankSilver,
-        3 => AppColors.rankBronze,
-        _ => null,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final lang = Localizations.localeOf(context).languageCode;
-    final podium = podiumColor(row.rank);
-    final name = row.deleted ? l10n.feedDeletedUser : (row.nickname ?? '');
-    // 稿 `.fan`：上下 10 + 底部 1px 分隔线；排名圆 26（第 4 名起 #F7F7F7 底）。
-    return Container(
-      key: ValueKey('giftSupporterRow_${row.rank}'),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.line2))),
-      child: Row(
-        children: [
-          Container(
-            key: ValueKey('giftRankBadge_${row.rank}'),
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: podium ?? const Color(0xFFF7F7F7), shape: BoxShape.circle),
-            child: Text('${row.rank}',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: podium != null ? Colors.white : AppColors.muted)),
-          ),
-          const SizedBox(width: 10),
-          LetterAvatar(url: row.deleted ? null : row.avatarUrl, name: name, deleted: row.deleted, size: 40),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: row.deleted ? AppColors.muted : AppColors.ink)),
-                const SizedBox(height: 2),
-                _giftsLine(lang),
-              ],
+        if (wrapped)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              key: const ValueKey('giftOrderTileNew'),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(999)),
+              child: Text(l10n.giftNewBadge,
+                  style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
           ),
-          const SizedBox(width: 8),
-          Text('Rp${formatIdrAmount(row.totalAmount)}',
-              key: ValueKey('giftSupporterAmount_${row.rank}'),
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                  fontFeatures: [FontFeature.tabularFigures()])),
-        ],
-      ),
-    );
-  }
-
-  /// 「[图标]×n · [图标]×n」（后端已截到最多 3 种）+「+moreKinds」。
-  Widget _giftsLine(String lang) {
-    const style = TextStyle(fontSize: 12, letterSpacing: 0.2, color: AppColors.muted);
-    final parts = <Widget>[];
-    for (var i = 0; i < row.gifts.length && i < 3; i++) {
-      final g = row.gifts[i];
-      if (i > 0) parts.add(const Text(' · ', style: style));
-      parts.add(Semantics(
-        label: giftNameFor(lang, nameEn: g.nameEn, nameId: g.nameId),
-        child: giftIcon(g.iconUrl, size: 14),
-      ));
-      parts.add(Text('×${g.count}', style: style));
-    }
-    if (row.moreKinds > 0) parts.add(Text('  +${row.moreKinds}', style: style));
-    return Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: parts);
-  }
-}
-
-/// E7 / 榜首页失败：行内「Gagal memuat · Coba lagi」，点击只重试（已加载行保留）。
-class _InlineRetry extends StatelessWidget {
-  const _InlineRetry({super.key, required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return InkWell(
-      onTap: onRetry,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
-        child: Center(
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(text: '${l10n.giftLoadMoreFailed} · ', style: const TextStyle(color: AppColors.muted)),
-              TextSpan(
-                  text: l10n.commonRetry,
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.mint)),
-            ]),
-            style: const TextStyle(fontSize: 13),
-          ),
-        ),
-      ),
+      ]),
     );
   }
 }
+
+/// 送礼人小头像（Diary 礼物行右下）。
+Widget giftSenderAvatar(GiftOrderSender s, {double size = 16}) => CircleAvatar(
+      radius: size / 2,
+      backgroundColor: AppColors.mintTint,
+      backgroundImage: s.deleted ? null : AppImage.provider(s.avatarUrl, thumbWidth: 64),
+    );

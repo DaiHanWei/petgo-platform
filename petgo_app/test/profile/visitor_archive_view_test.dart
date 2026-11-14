@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/gift/data/gift_repository.dart' show giftPreviewProvider;
+import 'package:tailtopia/features/gift/domain/gift_order_browse.dart' show GiftPreview;
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -69,6 +71,7 @@ Widget _wrap({
 }) {
   return ProviderScope(
     overrides: [
+      giftPreviewProvider(_petId).overrideWith((ref) async => const GiftPreview()),
       authControllerProvider.overrideWith(() => _TestAuthController(auth)),
       visitorProfileProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => profile),
       visitorStatsProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => const ArchiveStats(
@@ -89,6 +92,7 @@ Widget _wrapInApp({List<TimelineItem> items = const []}) {
   const scope = ArchiveScope.inAppVisitor(_petId);
   return ProviderScope(
     overrides: [
+      giftPreviewProvider(_petId).overrideWith((ref) async => const GiftPreview()),
       authControllerProvider.overrideWith(() => _TestAuthController(
           const AuthState(status: AuthStatus.authenticated, role: 'USER'))),
       visitorProfileProvider(scope).overrideWith((ref) async => _profile),
@@ -189,16 +193,13 @@ void main() {
       expect(find.byKey(const ValueKey('visitorViewCalendar')), findsNothing);
       // 统计数字与作者态同源（AD-1 Rule 8）
       expect(find.text('24'), findsOneWidget);
-      // V1.4.0 gift Story 2.2 · AC2.5：中间格由问诊数换成礼物总价值（缩写），不再出现 Consultations。
-      expect(find.text('Rp188rb'), findsOneWidget);
+      // V1.5.0 gift-pack Story 2-4 · AC3.3：统计条去掉礼物格（不再显示 Rp 总价值），不再出现 Consultations。
+      expect(find.text('Rp188rb'), findsNothing);
       expect(find.text('3'), findsNothing);
       expect(find.text('Consultations'), findsNothing);
-      // AC2.6：分享 token 态拿不到 petId → 礼物格只显示数值、不可点、无「›」。
-      expect(find.text('Gifts'), findsOneWidget);
-      expect(find.text('Gifts ›'), findsNothing);
-      expect(
-          find.descendant(of: find.byKey(const ValueKey('petInfoGiftStat')), matching: find.byType(InkWell)),
-          findsNothing);
+      // 分享 token 态拿不到 petId：没有礼物格、也没有礼物行。
+      expect(find.byKey(const ValueKey('petInfoGiftStat')), findsNothing);
+      expect(find.byKey(const ValueKey('giftDiaryRow')), findsNothing);
     });
 
     /// AD-4：Diary 页从来没有「陪伴天数」，那是 H5 名片独有的，访客态不得引入。
@@ -276,7 +277,7 @@ void main() {
 
   /// V1.4.0 gift Story 2.2 · AC2.4（A1 → E1）：站内入口礼物格可点，push 该宠物礼物页。
   group('礼物格（V1.4.0 gift 2.2）', () {
-    testWidgets('站内态：显示 Rp188rb +「Gifts ›」，点击 push /pets/{id}/gifts', (tester) async {
+    testWidgets('站内态（V1.5.0 2-4）：礼物行标题点击 push /pets/{id}/gifts', (tester) async {
       const scope = ArchiveScope.inAppVisitor(_petId);
       final router = GoRouter(routes: [
         GoRoute(path: '/', builder: (c, s) => const VisitorArchiveView(scope: scope)),
@@ -287,6 +288,7 @@ void main() {
       addTearDown(router.dispose);
       await tester.pumpWidget(ProviderScope(
         overrides: [
+          giftPreviewProvider(_petId).overrideWith((ref) async => const GiftPreview()),
           authControllerProvider.overrideWith(() => _TestAuthController(
               const AuthState(status: AuthStatus.authenticated, role: 'USER'))),
           visitorProfileProvider(scope).overrideWith((ref) async => _profile),
@@ -305,9 +307,10 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Rp188rb'), findsOneWidget);
-      expect(find.text('Gifts ›'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('petInfoGiftStat')));
+      expect(find.byKey(const ValueKey('petInfoGiftStat')), findsNothing);
+      await tester.ensureVisible(find.byKey(const ValueKey('giftDiaryRowTitle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('giftDiaryRowTitle')));
       await tester.pumpAndSettle();
       expect(find.text('GIFT PAGE $_petId'), findsOneWidget);
     });
@@ -534,7 +537,7 @@ void main() {
       expect(find.byKey(const ValueKey('petInfoFollowerStat')), findsNothing);
     });
 
-    testWidgets('页头合并：返回键 / 标题 / 送礼胶囊同一行（同一 y 中心），整行 44 高', (tester) async {
+    testWidgets('页头合并：返回键 / 标题同一行（同一 y 中心），整行 44 高；V1.5.0 起送礼胶囊不在标题行', (tester) async {
       await tester.pumpWidget(_wrapFollow(repo: _PetRepo()));
       await tester.pumpAndSettle();
 
@@ -545,9 +548,7 @@ void main() {
       final row = find.ancestor(of: back, matching: find.byType(Row)).first;
       expect(find.descendant(of: row, matching: title), findsOneWidget, reason: '返回键与标题在同一 Row');
       expect(tester.getCenter(back).dy, closeTo(tester.getCenter(title).dy, 0.5));
-      final pill = find.byKey(const ValueKey('giftSendPill'));
-      expect(find.descendant(of: row, matching: pill), findsOneWidget, reason: '送礼胶囊同一行');
-      expect(tester.getCenter(pill).dy, closeTo(tester.getCenter(back).dy, 0.5));
+      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing, reason: '送礼改到信息卡内与 Ikuti 并排');
       expect(tester.getSize(back), const Size(44, 44));
       expect(tester.getSize(row).height, 44);
       // 返回键在标题左侧
@@ -748,6 +749,7 @@ Widget _wrapFollow({
   final l10nDelegates = AppLocalizations.localizationsDelegates;
   return ProviderScope(
     overrides: [
+      giftPreviewProvider(_petId).overrideWith((ref) async => const GiftPreview()),
       authControllerProvider.overrideWith(() => _TestAuthController(auth)),
       if (guide != null) loginGuideControllerProvider.overrideWithValue(guide),
       petFollowRepositoryProvider.overrideWithValue(repo),

@@ -3387,5 +3387,9 @@
   "payMethodBalanceShort": "Saldo {n} · kurang {m}",
   "payMethodBalance": "Saldo {n}",
   "giftDeliveredTitle": "Hadiahmu sudah sampai ke {petName}",
-  "giftYouGotExp": "Kamu dapat {n} EXP"
+  "giftYouGotExp": "Kamu dapat {n} EXP",
+  "giftFilterUnopened": "Belum dibuka",
+  "giftStillWrapped": "Masih terbungkus",
+  "giftNewBadge": "Baru",
+  "giftOpenAll": "Buka Semua"
 }

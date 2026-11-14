@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/gift_catalog.dart';
+import '../domain/gift_order_browse.dart';
 import '../domain/gift_order_history.dart';
 import '../domain/gift_send_result.dart';
 import '../domain/gift_showcase.dart';
@@ -47,6 +48,23 @@ class GiftRepository {
     return GiftSendResult.fromJson(res.data ?? const {});
   }
 
+  /// V1.5.0 gift-pack Story 2-4：逐笔礼物列表一页（[cursor] 为 null = 首页，另带分类 / 宠物 / 视角）。
+  Future<GiftOrderPage> fetchPetGiftOrders(int petId,
+      {GiftOrderFilter filter = const GiftOrderFilter.all(), String? cursor}) async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.petGiftOrders(petId), queryParameters: {
+      'filter': filter.unopened ? 'UNOPENED' : 'ALL',
+      'categoryId': ?filter.categoryId,
+      'cursor': ?cursor,
+    });
+    return GiftOrderPage.fromJson(res.data ?? const {});
+  }
+
+  /// V1.5.0 gift-pack Story 2-4：Diary 礼物行。
+  Future<GiftPreview> fetchPetGiftPreview(int petId) async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.petGiftOrdersPreview(petId));
+    return GiftPreview.fromJson(res.data ?? const {});
+  }
+
   /// 礼物页汇总 + 礼物墙（V1.4.0 gift Story 2.2 · AC3.2）。403 / 404 原样抛出，页面一律 E6。
   Future<PetGiftShowcase> getPetGifts(int petId) async {
     final res = await dio.get<Map<String, dynamic>>(ApiPaths.petGifts(petId));
@@ -81,6 +99,12 @@ final giftRepositoryProvider =
 /// ⚠️ `retry: (_, _) => null`（照 `boarding_pass_repository.dart`，bug 20261006-583）：Riverpod 3 默认对抛错的
 /// provider 指数退避重试，期间是 AsyncLoading —— 断网时面板会一直转圈，B7「Coba lagi」要 40 多秒后才出来。
 /// 另：`gift-pet-gone` / `gift-own-pet` / `gift-blocked` 是确定性拒绝，重试只会白打三次后端。
+/// V1.5.0 gift-pack Story 2-4：Diary 礼物行（主人 / 访客同一接口，视角由服务端判）。
+final giftPreviewProvider = FutureProvider.autoDispose.family<GiftPreview, int>(
+  (ref, petId) => ref.read(giftRepositoryProvider).fetchPetGiftPreview(petId),
+  retry: (_, _) => null,
+);
+
 final giftCatalogProvider = FutureProvider.autoDispose.family<GiftCatalog, GiftRecipientRef>(
   (ref, recipient) => ref
       .read(giftRepositoryProvider)

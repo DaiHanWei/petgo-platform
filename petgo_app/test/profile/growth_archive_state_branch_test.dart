@@ -380,19 +380,18 @@ void main() {
     });
 
     // V1.4.0 gift Story 4.1 · AC6.1 / AC6.2：礼物格取当前宠物的统计；切换后随之变，点进的是当前宠物的礼物页。
-    testWidgets('gift 4.1：切换 A → B 礼物格数值随之变、点礼物格进 B 的礼物页', (tester) async {
+    testWidgets('gift 4.1 / V1.5.0 2-4：切换 A → B 后点礼物行进 B 的礼物页', (tester) async {
       final pushed = <String>[];
       await pump(tester, giftValues: const {1: 53000, 2: 5000}, pushed: pushed);
-      String giftText() =>
-          tester.widget<Text>(find.byKey(const ValueKey('petInfoGiftValue'))).textSpan!.toPlainText();
-      expect(giftText(), 'Rp53rb');
+      expect(find.byKey(const ValueKey('petInfoGiftStat')), findsNothing, reason: '统计条去掉礼物格');
 
       await tester.tap(find.byKey(const ValueKey('petSwitcherItem-2')));
       await tester.pumpAndSettle();
       expect(title('Kopi'), findsOneWidget);
-      expect(giftText(), 'Rp5rb');
 
-      await tester.tap(find.byKey(const ValueKey('petInfoGiftStat')));
+      await tester.ensureVisible(find.byKey(const ValueKey('giftDiaryRowTitle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('giftDiaryRowTitle')));
       await tester.pumpAndSettle();
       expect(pushed, ['/pets/2/gifts']);
     });

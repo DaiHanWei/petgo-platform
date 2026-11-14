@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/gift/data/gift_repository.dart';
+import 'package:tailtopia/features/gift/domain/gift_order_browse.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/content/data/detail_repository.dart';
@@ -24,7 +26,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// V1.4.0 gift Story 1.3 · AC1（L0）：送礼入口显示 / 不显示（A1 / A3 / A6 / 分享链接）。
 void main() {
-  group('A1 访客视图「Kirim Hadiah」胶囊', () {
+  group('A1 访客视图「Kirim Hadiah」按钮（V1.5.0 起与 Ikuti 并排）', () {
     const visitor = VisitorProfile(name: 'Mochi', petType: 'CAT', ownerNickname: 'Rina');
 
     Future<void> pump(WidgetTester tester, ArchiveScope scope,
@@ -39,6 +41,7 @@ void main() {
           petProfileProvider.overrideWith((ref) => mine()),
           // V1.4.2 social-topic 1.4 复审：「自己的宠物」同时比对我名下全部宠物（多宠）。
           petListProvider.overrideWith((ref) => myPets?.call() ?? Future.value(const <PetListItem>[])),
+          giftPreviewProvider(42).overrideWith((ref) async => const GiftPreview()),
         ],
         child: MaterialApp(
           locale: const Locale('id'),
@@ -55,54 +58,59 @@ void main() {
 
     PetProfile pet(int id) => PetProfile(id: id, name: 'Mine', cardToken: 'ct');
 
-    testWidgets('他人的宠物 → 显示（标题行右侧、文案 Kirim Hadiah）', (tester) async {
+    testWidgets('他人的宠物 → 信息卡内与 Ikuti 并排（各占一半、高 40）', (tester) async {
       await pump(tester, const ArchiveScope.inAppVisitor(42), mine: () async => pet(7));
-      expect(find.byKey(const ValueKey('giftSendPill')), findsOneWidget);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsOneWidget);
       expect(find.text('Kirim Hadiah'), findsOneWidget);
-      expect(tester.getSize(find.byKey(const ValueKey('giftSendPill'))).height,
-          greaterThanOrEqualTo(44), reason: '点击热区补到 44');
+      expect(tester.getSize(find.byKey(const ValueKey('giftDiarySendButton'))).height, 40);
+      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing, reason: '标题行胶囊去掉');
+      final send = tester.getRect(find.byKey(const ValueKey('giftDiarySendButton')));
+      final follow = tester.getRect(find.byKey(const ValueKey('petFollowButton')));
+      expect(send.width, closeTo(follow.width, 1));
+      expect(send.left - follow.right, closeTo(8, 0.5));
+      expect(find.byKey(const ValueKey('giftDiaryRow')), findsOneWidget, reason: 'A1 礼物行');
     });
 
     testWidgets('还没建宠物（petProfile = null）→ 显示', (tester) async {
       await pump(tester, const ArchiveScope.inAppVisitor(42), mine: () async => null);
-      expect(find.byKey(const ValueKey('giftSendPill')), findsOneWidget);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsOneWidget);
     });
 
     testWidgets('自己的宠物 → 不显示', (tester) async {
       await pump(tester, const ArchiveScope.inAppVisitor(42), mine: () async => pet(42));
-      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsNothing);
     });
 
     testWidgets('petProfileProvider 加载中 → 不显示（防自己的宠物闪现）', (tester) async {
       final never = Completer<PetProfile?>();
       await pump(tester, const ArchiveScope.inAppVisitor(42), mine: () => never.future);
       expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
-      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsNothing);
     });
 
     testWidgets('多宠：我名下另一只宠物（当前宠物不是它）→ 不显示', (tester) async {
       await pump(tester, const ArchiveScope.inAppVisitor(42),
           mine: () async => pet(7),
           myPets: () async => const [PetListItem(id: 7, name: 'A'), PetListItem(id: 42, name: 'B')]);
-      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsNothing);
     });
 
     testWidgets('petListProvider 加载中 → 不显示', (tester) async {
       final never = Completer<List<PetListItem>>();
       await pump(tester, const ArchiveScope.inAppVisitor(42), mine: () async => pet(7), myPets: () => never.future);
       expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
-      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsNothing);
     });
 
     testWidgets('petProfileProvider 失败 → 不显示', (tester) async {
       await pump(tester, const ArchiveScope.inAppVisitor(42),
           mine: () => Future<PetProfile?>.error(Exception('x')));
-      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsNothing);
     });
 
     testWidgets('分享链接进入（petId == null）→ 本分支不显示', (tester) async {
       await pump(tester, const ArchiveScope.visitor('SHARE'), mine: () async => pet(7));
-      expect(find.byKey(const ValueKey('giftSendPill')), findsNothing);
+      expect(find.byKey(const ValueKey('giftDiarySendButton')), findsNothing);
     });
   });
 

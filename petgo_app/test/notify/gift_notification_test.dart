@@ -74,7 +74,7 @@ Future<void> _pump(WidgetTester tester, List<NotificationItem> items, {List<PetL
             path: '/pets/:petId/gifts',
             builder: (_, s) => Scaffold(
                 appBar: AppBar(),
-                body: Text('gift:${s.pathParameters['petId']}:${s.uri.queryParameters['wall']}')),
+                body: Text('gift:${s.pathParameters['petId']}:${s.uri.queryParameters['open']}')),
           ),
         ],
       ),
@@ -138,13 +138,13 @@ void main() {
     expect(find.text('Hadiahmu tidak terkirim. PawCoin sudah dikembalikan ke saldomu.'), findsOneWidget);
   });
 
-  testWidgets('点收礼条目：先落 Diary Tab（/profile），下一帧叠礼物页且墙展开；返回回到 Diary Tab', (tester) async {
+  testWidgets('点收礼条目：先落 Diary Tab（/profile），下一帧叠礼物页（open=latest，V1.5.0 2-4）；返回回到 Diary Tab', (tester) async {
     await _pump(tester, [_received()]);
     await tester.tap(_tile('tok-g'));
     await tester.pumpAndSettle();
-    expect(find.text('gift:12:expanded'), findsOneWidget);
+    expect(find.text('gift:12:latest'), findsOneWidget);
 
-    final ctx = tester.element(find.text('gift:12:expanded'));
+    final ctx = tester.element(find.text('gift:12:latest'));
     GoRouter.of(ctx).pop();
     await tester.pumpAndSettle();
     expect(find.text('DIARY TAB'), findsOneWidget);
@@ -161,7 +161,7 @@ void main() {
     await tester.tap(_tile('tok-g'));
     await tester.pumpAndSettle();
     expect(c.read(currentPetIdProvider), 12);
-    expect(find.text('gift:12:expanded'), findsOneWidget);
+    expect(find.text('gift:12:latest'), findsOneWidget);
   });
 
   testWidgets('多宠物：宠物不在自己的列表（已删 / 已转手）→ 不切，照常进礼物页', (tester) async {
@@ -170,6 +170,6 @@ void main() {
     await tester.tap(_tile('tok-g'));
     await tester.pumpAndSettle();
     expect(c.read(currentPetIdProvider), isNull);
-    expect(find.text('gift:12:expanded'), findsOneWidget);
+    expect(find.text('gift:12:latest'), findsOneWidget);
   });
 }

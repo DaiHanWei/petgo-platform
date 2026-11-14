@@ -643,4 +643,11 @@ class ApiPaths {
   /// 礼物页粉丝榜（V1.4.0 gift Story 2.1 / 2.2）：GET `?cursor=` → `GiftSupporterPage`，每页 20。
   /// 礼物页汇总 + 墙是 GET [petGifts]（与发起送礼同路径不同方法）。仅 role=USER。
   static String petGiftSupporters(int petId) => '$base/pets/$petId/gifts/supporters';
+
+  /// V1.5.0 gift-pack Story 2-4：逐笔礼物列表 / Diary 礼物行 / 拆礼物 / 单笔详情 / 举报祝福语（仅 role=USER）。
+  static String petGiftOrders(int petId) => '$base/pets/$petId/gift-orders';
+  static String petGiftOrdersPreview(int petId) => '$base/pets/$petId/gift-orders/preview';
+  static String petGiftOrdersOpen(int petId) => '$base/pets/$petId/gift-orders/open';
+  static String giftOrder(String token) => '$base/gift-orders/$token';
+  static String giftOrderMessageReports(String token) => '$base/gift-orders/$token/message-reports';
 }

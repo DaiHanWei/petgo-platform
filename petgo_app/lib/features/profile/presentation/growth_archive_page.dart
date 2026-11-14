@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../gift/presentation/gift_page.dart';
+import '../../gift/presentation/widgets/gift_diary_row.dart';
 import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -588,6 +589,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           //    （另一个位 `toko_profile_reco` 不受影响）。看板上这个位的曲线会归零，
           //    那是预期的，不是埋点坏了。
           // ⚠️ 「管理推荐」的关闭入口长在该组件内部，随组件留在 Toko —— 用户仍关得掉。
+          // V1.5.0 gift-pack Story 2-4 · F1：进度卡与 Linimasa 之间的礼物行（当前宠物）。
+          GiftDiaryRow(petId: ref.watch(effectivePetIdProvider).value ?? widget.petId, petName: widget.profile.name),
           _viewToggleRow(l10n),
           const SizedBox(height: 10),
           // 时间线**始终挂载**、只在切到日历时 offstage（code-review 2026-08-04）：

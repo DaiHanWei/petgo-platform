@@ -5201,5 +5201,13 @@
   "giftDeliveredTitle": "Your gift has reached {petName}",
   "@giftDeliveredTitle": {"description": "V1.5.0 gift-pack Story 2-3 · 送达页（App 稿新文案表）", "placeholders": {"petName": {"type": "String"}}},
   "giftYouGotExp": "You got {n} EXP",
-  "@giftYouGotExp": {"description": "V1.5.0 gift-pack Story 2-3 · 送达页（App 稿新文案表）", "placeholders": {"n": {"type": "int"}}}
+  "@giftYouGotExp": {"description": "V1.5.0 gift-pack Story 2-3 · 送达页（App 稿新文案表）", "placeholders": {"n": {"type": "int"}}},
+  "giftFilterUnopened": "Unopened",
+  "@giftFilterUnopened": {"description": "V1.5.0 gift-pack Story 2-4 · 礼物页逐笔列表（App 稿新文案表）"},
+  "giftStillWrapped": "Still wrapped",
+  "@giftStillWrapped": {"description": "V1.5.0 gift-pack Story 2-4 · 礼物页逐笔列表（App 稿新文案表）"},
+  "giftNewBadge": "New",
+  "@giftNewBadge": {"description": "V1.5.0 gift-pack Story 2-4 · 礼物页逐笔列表（App 稿新文案表）"},
+  "giftOpenAll": "Open All",
+  "@giftOpenAll": {"description": "V1.5.0 gift-pack Story 2-4 · 礼物页逐笔列表（App 稿新文案表）"}
 }

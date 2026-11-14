@@ -165,10 +165,10 @@ void main() {
   });
 
   // V1.4.0 gift Story 2.2 · AC6.1 / AC6.2。
-  test('PET_GIFT_RECEIVED → 该宠物礼物页且墙展开（targetRef = 宠物 id）；非数字 / 空 → 通知中心', () {
-    expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', '12'), '/pets/12/gifts?wall=expanded');
+  test('PET_GIFT_RECEIVED → 该宠物礼物页 ?open=latest（V1.5.0 D-9）；非数字 / 空 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', '12'), '/pets/12/gifts?open=latest');
     expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', '12'),
-        GiftPage.routeFor(12, wallExpanded: true));
+        GiftPage.routeFor(12, openLatest: true));
     expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', 'abc'), DeepLinkRoutes.notificationsCenter);
     expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', null), DeepLinkRoutes.notificationsCenter);
     expect(DeepLinkRoutes.pushPayloadToLocation('PET_GIFT_RECEIVED', ''), DeepLinkRoutes.notificationsCenter);

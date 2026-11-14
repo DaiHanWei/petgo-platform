@@ -11,8 +11,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/gone_icon.dart';
 import '../../social/domain/pet_follow_state.dart';
 import '../../social/presentation/widgets/pet_follow_button.dart';
-import '../../gift/presentation/gift_page.dart';
-import '../../gift/presentation/widgets/gift_entry.dart';
+import '../../gift/presentation/widgets/gift_diary_row.dart';
 import '../data/pet_list_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
@@ -125,14 +124,14 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
                 // 🛡 只读：编辑铅笔与入口网格两张卡整块不渲染。
                 readOnly: true,
                 // 分享按钮不传（访客不得二次转发）。V1.4.0 gift Story 1.3 · A1：标题行右侧放送礼胶囊
-                // （只站内入口、且不是自己的宠物；见 [_giftPill]）。
-                titleAction: _giftPill(),
+                // （V1.5.0 起改为信息卡内并排按钮，见 [_followButton]）。
+                // V1.5.0 gift-pack Story 2-4 · AC4：标题行送礼胶囊去掉，改为信息卡内与「Ikuti」并排。
+                titleAction: null,
                 avatarKey: _avatarKey,
                 happyCount: stats?.happyMomentCount,
                 // V1.4.0 gift Story 2.2 · A1：中间格礼物总价值。只读态同样可点（站内入口才有 petId）；
                 // 分享 token 态拿不到 petId → 只显示数值、不可点（待确认，同 1.3 送礼胶囊）。
-                giftTotalValue: stats?.giftTotalValue,
-                onOpenGifts: _openGifts(),
+                // V1.5.0 gift-pack Story 2-4 · AC3.3：统计条去掉「Hadiah」格（改为下方礼物行）。
                 milestoneCompleted: stats?.milestoneCompleted,
                 milestoneTotal: stats?.milestoneTotal,
                 // 里程碑进度条只展示，不跳转（跳的是当前登录用户自己的里程碑页）。
@@ -149,30 +148,14 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
               //
               // 后端的访客日历接口已建好并有测试（Story 2.2）：真要恢复，把切换行与
               // ArchiveCalendar 加回本处即可，服务端无需改动。
+              // V1.5.0 gift-pack Story 2-4 · A1：Pencapaian 进度卡下方礼物行（只站内他人宠物有 petId）。
+              if (_othersInAppPetId() case final petId?) GiftDiaryRow(petId: petId, petName: profile.name),
               const SizedBox(height: 10),
               _timeline(l10n, profile.name),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  /// A1 送礼胶囊（V1.4.0 gift Story 1.3 · AC1.1 / AC1.5）。
-  ///
-  /// - 只有**站内入口**有 petId；分享链接（`/pet/:token`）拿不到 petId → 本分支不显示（待确认）。
-  /// - 自己的宠物不显示；`petProfileProvider` 加载中 / 失败时**也不显示**（防自己的宠物闪现一下送礼按钮）。
-  /// - 只在档案加载成功的分支里调（失效页不去读当前用户的宠物档案）。
-  Widget? _giftPill() {
-    final petId = _othersInAppPetId();
-    if (petId == null) return null;
-    return GiftSendPill(
-      petId: petId,
-      flightTargetKey: _avatarKey,
-      // 送达后失效统计 → 礼物格（Story 2.2）的总价值随之刷新。
-      onDelivered: () {
-        if (mounted) ref.invalidate(visitorStatsProvider(widget.scope));
-      },
     );
   }
 
@@ -203,12 +186,12 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
         snapshotEpoch: stats!.followEpoch);
   }
 
-  /// A1 / A2 追更按钮（V1.4.2 social-topic Story 1.4 · AC1）：只站内他人宠物（同 [_giftPill] 判定）；
+  /// A1 / A2 追更按钮（V1.4.2 social-topic Story 1.4 · AC1）：只站内他人宠物（[_othersInAppPetId] 判定）；
   /// 分享 token 落地态、自己的宠物不显示。
   Widget? _followButton(VisitorProfile profile, ArchiveStats? stats) {
     final petId = _othersInAppPetId();
     if (petId == null) return null;
-    return PetFollowButton(
+    final follow = PetFollowButton(
       petId: petId,
       initialFollow: profile.iFollow ?? false,
       serverFollowerCount: stats?.followerCount,
@@ -223,6 +206,16 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
         if (mounted) ref.invalidate(visitorProfileProvider(widget.scope));
       },
     );
+    // V1.5.0 gift-pack Story 2-4 · AC4：与「Kirim Hadiah」并排，一次只有一个实心主按钮。
+    return GiftFollowAndSendRow(
+      petId: petId,
+      followButton: follow,
+      serverFollow: profile.iFollow ?? false,
+      followSnapshotEpoch: profile.followEpoch,
+      onDelivered: () {
+        if (mounted) ref.invalidate(visitorStatsProvider(widget.scope));
+      },
+    );
   }
 
   /// A15「Coba lagi」：三个 provider 一起重取，回到居中转圈。
@@ -230,13 +223,6 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
     ref.invalidate(visitorProfileProvider(widget.scope));
     ref.invalidate(visitorStatsProvider(widget.scope));
     ref.invalidate(visitorTimelineProvider(widget.scope));
-  }
-
-  /// 礼物格点击（V1.4.0 gift Story 2.2 · AC2.4 / AC2.6）：站内入口 → 该宠物礼物页（E1）；分享 token 态 null。
-  VoidCallback? _openGifts() {
-    final petId = widget.scope.petId;
-    if (!widget.scope.isInApp || petId == null) return null;
-    return () => context.push(GiftPage.routeFor(petId));
   }
 
   /// 只有分享链接落地态、且查得到昵称才显示来源横幅。

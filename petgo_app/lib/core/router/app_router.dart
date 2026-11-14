@@ -1213,6 +1213,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => GiftPage(
           petId: int.tryParse(s.pathParameters['petId'] ?? '') ?? 0,
           wallInitiallyExpanded: s.uri.queryParameters['wall'] == GiftPage.wallExpandedQuery,
+          // V1.5.0 gift-pack Story 2-4 / 2-5：收礼通知 `?open=latest`（D-9）
+          openLatest: s.uri.queryParameters['open'] == GiftPage.openLatestQuery,
         ),
       ),
       GoRoute(

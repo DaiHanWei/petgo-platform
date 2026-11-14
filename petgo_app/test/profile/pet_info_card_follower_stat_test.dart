@@ -40,23 +40,21 @@ void main() {
       .map((p) => p.padding as EdgeInsets)
       .firstWhere((p) => p.top == 6);
 
-  testWidgets('followerCount null → 3 格、内边距 8（与改动前一致）、礼物格不包 FittedBox', (tester) async {
+  testWidgets('followerCount null → 2 格（V1.5.0 去掉 Hadiah）、内边距 8', (tester) async {
     await pump(tester);
     expect(find.byKey(const ValueKey('petInfoFollowerStat')), findsNothing);
     expect(find.text('Pengikut'), findsNothing);
     final happy = find.ancestor(of: find.text('12'), matching: find.byType(Expanded)).first;
     expect(cellPadding(tester, happy), const EdgeInsets.symmetric(horizontal: 8, vertical: 6));
-    final gift = find.byKey(const ValueKey('petInfoGiftStat'));
-    expect(cellPadding(tester, gift), const EdgeInsets.symmetric(horizontal: 8, vertical: 6));
-    expect(find.descendant(of: gift, matching: find.byType(FittedBox)), findsNothing);
+    expect(find.byKey(const ValueKey('petInfoGiftStat')), findsNothing);
   });
 
-  testWidgets('followerCount 128 → 4 格、每格内边距 4、数字 16/w700 ink + tabular、标签 Pengikut、不可点',
+  testWidgets('followerCount 128 → 3 格（V1.5.0 去掉 Hadiah）、每格内边距 4、数字 16/w700 ink + tabular、标签 Pengikut、不可点',
       (tester) async {
     await pump(tester, followerCount: 128);
     final cell = find.byKey(const ValueKey('petInfoFollowerStat'));
     expect(cell, findsOneWidget);
-    expect(cells(), findsNWidgets(4));
+    expect(cells(), findsNWidgets(3));
     final number = tester.widget<Text>(find.byKey(const ValueKey('petInfoFollowerCount')));
     expect(number.data, '128');
     expect(number.style!.fontSize, 16);
@@ -69,17 +67,7 @@ void main() {
     expect(cellPadding(tester, cell), const EdgeInsets.symmetric(horizontal: 4, vertical: 6));
     final happy = find.ancestor(of: find.text('12'), matching: find.byType(Expanded)).first;
     expect(cellPadding(tester, happy), const EdgeInsets.symmetric(horizontal: 4, vertical: 6));
-    final gift = find.byKey(const ValueKey('petInfoGiftStat'));
-    expect(cellPadding(tester, gift), const EdgeInsets.symmetric(horizontal: 4, vertical: 6));
-  });
-
-  testWidgets('4 格时礼物格数值外包 FittedBox(scaleDown)', (tester) async {
-    await pump(tester, followerCount: 1);
-    final box = tester.widget<FittedBox>(find.descendant(
-        of: find.byKey(const ValueKey('petInfoGiftStat')), matching: find.byType(FittedBox)));
-    expect(box.fit, BoxFit.scaleDown);
-    expect(find.descendant(of: find.byType(FittedBox), matching: find.byKey(const ValueKey('petInfoGiftValue'))),
-        findsOneWidget);
+    expect(find.byKey(const ValueKey('petInfoGiftStat')), findsNothing);
   });
 
   testWidgets('计数格式同 1.3.4：9999 → 9,9K（id）/ 9.9K（en）', (tester) async {

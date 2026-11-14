@@ -181,12 +181,13 @@ class DeepLinkRoutes {
       case 'USER_FOLLOWED':
         final id = int.tryParse(targetRef);
         return id == null ? notificationsCenter : '/users/$id';
-      // 收礼（V1.4.0 gift Story 2.2 · AC6.1）：targetRef = 宠物 id（Story 1.2）→ 该宠物礼物页、墙展开。
+      // 收礼（V1.4.0 gift Story 2.2 · AC6.1）：targetRef = 宠物 id（Story 1.2）→ 该宠物礼物页。
+      // V1.5.0 gift-pack（D-9）：带 `?open=latest`——主人有未拆 → 直接拆最新一笔，否则打开最新一笔详情（Story 2-5）。
       // 🛡 非数字落通知中心（同 USER_FOLLOWED 防崩）。core 不 import feature 页面，故写字面量
-      // （与 `GiftPage.routeFor(id, wallExpanded: true)` 同形）。
+      // （与 `GiftPage.routeFor(id, openLatest: true)` 同形）。
       case 'PET_GIFT_RECEIVED':
         final id = int.tryParse(targetRef);
-        return id == null ? notificationsCenter : '/pets/$id/gifts?wall=expanded';
+        return id == null ? notificationsCenter : '/pets/$id/gifts?open=latest';
       // V1.4.2 social-topic Story 1.5 · AC6.6（D-10 / D-23）：被追更 → 追更者主页（targetRef = 追更者 user id，
       // 同 USER_FOLLOWED）；非数字落通知中心（防 int.parse 崩）。
       case 'PET_FOLLOWED':
