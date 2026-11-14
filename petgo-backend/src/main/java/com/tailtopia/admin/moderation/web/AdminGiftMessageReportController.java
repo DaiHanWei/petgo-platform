@@ -53,6 +53,10 @@ public class AdminGiftMessageReportController {
             return "redirect:/admin/manual-review?tab=gift";
         }
         int n = reports.hide(id, admin.getAdminAccountId());
+        if (n == 0) {
+            // 无待处理举报：不写审计、不报成功（code review #2）
+            return done(id, msg.get("admin.flash.places.noChange"), hx, model, response);
+        }
         audit.record(admin.getAdminAccountId(), AuditActions.GIFT_MESSAGE_HIDDEN, "gift_orders", String.valueOf(id),
                 "actioned=" + n);
         return done(id, msg.get("admin.v150.giftMessage.flash.hidden"), hx, model, response);
@@ -68,6 +72,9 @@ public class AdminGiftMessageReportController {
             return "redirect:/admin/manual-review?tab=gift";
         }
         int n = reports.dismiss(id, admin.getAdminAccountId());
+        if (n == 0) {
+            return done(id, msg.get("admin.flash.places.noChange"), hx, model, response);
+        }
         audit.record(admin.getAdminAccountId(), AuditActions.GIFT_MESSAGE_REPORT_DISMISSED, "gift_orders",
                 String.valueOf(id), "dismissed=" + n);
         return done(id, msg.get("admin.v150.giftMessage.flash.dismissed", n), hx, model, response);

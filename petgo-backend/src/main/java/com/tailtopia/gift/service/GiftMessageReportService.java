@@ -57,6 +57,10 @@ public class GiftMessageReportService {
     @Transactional
     public int hide(long orderId, long adminId) {
         int n = closePending(orderId, adminId, "ACTIONED");
+        if (n == 0) {
+            // 没有待处理举报（不存在的订单 / 重复点击 / 别人已处理）：不隐藏、由调用方不写审计（code review #2）
+            return 0;
+        }
         jdbc.update("UPDATE gift_orders SET message_hidden_at = now() WHERE id = :id AND message_hidden_at IS NULL",
                 Map.of("id", orderId));
         return n;

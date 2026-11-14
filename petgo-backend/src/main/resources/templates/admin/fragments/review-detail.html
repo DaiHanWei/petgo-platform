@@ -267,7 +267,7 @@
                 </p>
             </th:block>
         </th:block>
-        <p class="muted" th:if="${d.pending() and d.targetDeleted and d.tab.name() != 'PLACE'}" th:text="#{admin.v130.review.targetDeleted}">对象已注销，单据作废（只读）</p>
+        <p class="muted" th:if="${d.pending() and d.targetDeleted and d.tab.name() != 'PLACE' and d.tab.name() != 'GIFT'}" th:text="#{admin.v130.review.targetDeleted}">对象已注销，单据作废（只读）</p>
     </section>
 </div>
 </body>

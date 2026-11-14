@@ -76,6 +76,14 @@ class UnifiedTicketGiftMessageIntegrationTest extends ApiIntegrationTest {
         return token;
     }
 
+    private String rows(AdminUserDetails admin, String token) throws Exception {
+        long senderId = jdbc.queryForObject("SELECT sender_id FROM gift_orders WHERE public_token = ?", Long.class,
+                token);
+        return mvc.perform(get("/admin/manual-review").param("tab", "gift").param("q", String.valueOf(senderId))
+                        .with(user(admin)).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    }
+
     private long orderId(String token) {
         return jdbc.queryForObject("SELECT id FROM gift_orders WHERE public_token = ?", Long.class, token);
     }
@@ -92,10 +100,9 @@ class UnifiedTicketGiftMessageIntegrationTest extends ApiIntegrationTest {
         String toHide = sendWithMessage(pet, g, "ucapan jelek " + n);
         String toDismiss = sendWithMessage(pet, g, "ucapan biasa " + n);
 
-        String rows = mvc.perform(get("/admin/manual-review").param("tab", "gift").with(user(admin))
-                        .header("HX-Request", "true"))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(rows).contains("review-row-gift-" + orderId(toHide)).contains("review-row-gift-" + orderId(toDismiss));
+        // 共享测试库不清表：按被举报账号（送礼人 id）精确检索，免得旧工单挤满第一页（code review #1）
+        assertThat(rows(admin, toHide)).contains("review-row-gift-" + orderId(toHide));
+        assertThat(rows(admin, toDismiss)).contains("review-row-gift-" + orderId(toDismiss));
 
         String detail = mvc.perform(get("/admin/manual-review/" + orderId(toHide) + "/detail").param("tab", "gift")
                         .with(user(admin)).header("HX-Request", "true"))
@@ -111,11 +118,8 @@ class UnifiedTicketGiftMessageIntegrationTest extends ApiIntegrationTest {
                         .with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk());
 
-        String after = mvc.perform(get("/admin/manual-review").param("tab", "gift").with(user(admin))
-                        .header("HX-Request", "true"))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(after).doesNotContain("review-row-gift-" + orderId(toHide))
-                .doesNotContain("review-row-gift-" + orderId(toDismiss));
+        assertThat(rows(admin, toHide)).doesNotContain("review-row-gift-" + orderId(toHide));
+        assertThat(rows(admin, toDismiss)).doesNotContain("review-row-gift-" + orderId(toDismiss));
 
         JsonNode app = json.readTree(mvc.perform(get("/api/v1/gift-orders/" + toHide)
                         .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId())))

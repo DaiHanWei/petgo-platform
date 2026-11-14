@@ -70,7 +70,7 @@ public class AdminGiftMessageReviewQuery {
         GiftMessageReviewView v = rows.get(0);
         return Optional.of(new GiftMessageReviewView(v.orderId(), v.message(), v.hidden(), v.giftNameEn(),
                 v.giftNameId(), v.quantity(), v.senderUserId(), v.senderNickname(), v.senderDeleted(), v.petName(),
-                Map.copyOf(reasons)));
+                java.util.Collections.unmodifiableMap(reasons)));
     }
 
     private static Instant instant(Timestamp t) {
