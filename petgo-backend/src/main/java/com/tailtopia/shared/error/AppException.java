@@ -383,6 +383,11 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.ENTITLEMENT_INSUFFICIENT, detail);
     }
 
+    /** V1.5.0 gift-pack Story 4-3（D-17）：免费次数只能送 1.000 档礼物 → 422 {@code gift-credit-not-applicable}。 */
+    public static AppException giftCreditNotApplicable(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_CREDIT_NOT_APPLICABLE, detail);
+    }
+
     /** V1.5.0 gift-pack Story 4-2（D-22）：礼包已停售 → 409 {@code starter-pack-disabled}。 */
     public static AppException starterPackDisabled(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.STARTER_PACK_DISABLED, detail);

@@ -423,6 +423,15 @@ public class ProfileApiController {
         return idCardHdService.purchaseCard(ownerId, cardId, req.channel());
     }
 
+    /** V1.5.0 gift-pack Story 4-3：用免费次数解锁某卡 HD（无 body；限流与 hd-download 共用桶）。 */
+    @PostMapping("/me/id-cards/{cardId}/hd-credit-unlock")
+    public com.tailtopia.entitlement.dto.CreditUnlockResponse unlockCardHdWithCredit(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long cardId) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idhd:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardHdService.unlockCardWithCredit(ownerId, cardId);
+    }
+
     private static long currentUserId(Jwt jwt) {
         if (jwt == null || jwt.getSubject() == null) {
             throw AppException.unauthorized("需要登录后访问");

@@ -147,7 +147,7 @@ class GiftSendIntegrationTest extends ApiIntegrationTest {
                 SELECT total_amount FROM gift_pet_supporters WHERE pet_id = ? AND sender_id = ?""",
                 Long.class, pet.getId(), sender.getId())).isEqualTo(10_000L);
         assertThat(events.stream(GiftSentEvent.class).filter(e -> e.giftOrderId() == orderId))
-                .containsExactly(new GiftSentEvent(orderId, sender.getId(), owner.getId(), pet.getId(), 10_000L));
+                .containsExactly(new GiftSentEvent(orderId, sender.getId(), owner.getId(), pet.getId(), 10_000L, false));
 
         mvc.perform(get("/api/v1/me/gift-orders/" + token).header(HttpHeaders.AUTHORIZATION, userBearer(sender.getId())))
                 .andExpect(status().isOk())

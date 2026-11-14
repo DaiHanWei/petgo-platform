@@ -107,6 +107,10 @@ public class KeepsakePurchaseService {
     // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
     @Transactional(noRollbackFor = PayException.class)
     public KeepsakePurchaseResponse start(long userId, KeepsakeRef ref, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         if (ref.alreadyUnlocked()) {
             throw AppException.keepsakeAlreadyUnlocked("已解锁，无需再次购买");
         }
@@ -115,6 +119,8 @@ public class KeepsakePurchaseService {
             case QRIS -> startQris(userId, ref);
             // 🔴 虚拟商品【恒单渠道】（AD-3）：MIXED 只用于电商实物订单。显式拒绝，不落 default。
             case MIXED -> throw AppException.validation("该商品不支持混合支付");
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，付费入口一律 422（KTP 用次数走 hd-credit-unlock）。
+            case PACK_CREDIT -> throw AppException.validation("该商品不支持免费次数");
         };
     }
 

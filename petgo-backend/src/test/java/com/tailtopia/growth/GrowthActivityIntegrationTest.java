@@ -106,7 +106,7 @@ class GrowthActivityIntegrationTest extends ApiIntegrationTest {
         User owner = newUser();
         long order = 9_000_000L + sender.getId();
 
-        tx.executeWithoutResult(s -> events.publishEvent(new GiftSentEvent(order, sender.getId(), owner.getId(), 1L, 12_500)));
+        tx.executeWithoutResult(s -> events.publishEvent(new GiftSentEvent(order, sender.getId(), owner.getId(), 1L, 12_500, false)));
         await(() -> count(owner.getId(), "GIFT_RECEIVED") == 1);
 
         assertThat(sum(sender.getId(), "GIFT_SENT")).isEqualTo(63);

@@ -81,7 +81,7 @@ class GiftNotifyListenerTest {
     }
 
     private static GiftSentEvent sent() {
-        return new GiftSentEvent(41L, SENDER, OWNER, PET, 5_000);
+        return new GiftSentEvent(41L, SENDER, OWNER, PET, 5_000, false);
     }
 
     @Test
@@ -106,7 +106,7 @@ class GiftNotifyListenerTest {
 
     @Test
     void selfGiftIsIgnoredDefensively() {
-        listener.onGiftSent(new GiftSentEvent(41L, OWNER, OWNER, PET, 5_000));
+        listener.onGiftSent(new GiftSentEvent(41L, OWNER, OWNER, PET, 5_000, false));
         verifyNoInteractions(notifications, orders);
     }
 

@@ -1,6 +1,12 @@
 package com.tailtopia.gift.service;
 
 import com.tailtopia.config.service.PlatformConfigService;
+import com.tailtopia.entitlement.domain.CreditType;
+import com.tailtopia.entitlement.domain.CreditUseKind;
+import com.tailtopia.entitlement.event.EntitlementUsedEvent;
+import com.tailtopia.entitlement.service.ConsumeCommand;
+import com.tailtopia.entitlement.service.ConsumeResult;
+import com.tailtopia.entitlement.service.EntitlementCreditService;
 import com.tailtopia.gift.domain.GiftCatalogItem;
 import com.tailtopia.content.moderation.KeywordRuleEngine;
 import com.tailtopia.gift.domain.GiftKind;
@@ -38,6 +44,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,6 +90,8 @@ public class GiftSendService {
 
     static final int MIN_QUANTITY = 1;
     static final int MAX_QUANTITY = 99;
+    /** V1.5.0 gift-pack（D-17）：免费次数只能送这一档单价的礼物。 */
+    static final long GIFT_CREDIT_UNIT_PRICE = 1000L;
     private static final String CURRENCY = "IDR";
 
     private final GiftOrderRepository orders;
@@ -98,20 +107,26 @@ public class GiftSendService {
     private final Clock clock;
     private final KeywordRuleEngine keywords;
     private final GrowthLedgerService ledger;
+    private final EntitlementCreditService credits;
+    private final ApplicationEventPublisher events;
 
     @Autowired
     public GiftSendService(GiftOrderRepository orders, GiftCatalogRepository catalog, GiftRecipientGuard recipients,
             GrowthQueryService growth, PlatformConfigService platformConfig, PawCoinWalletService wallet,
             PaymentIntentService paymentIntents, PaymentGateway gateway, GiftDeliveryService delivery,
-            GiftTokenGenerator tokens, KeywordRuleEngine keywords, GrowthLedgerService ledger) {
+            GiftTokenGenerator tokens, KeywordRuleEngine keywords, GrowthLedgerService ledger,
+            EntitlementCreditService credits, ApplicationEventPublisher events) {
         this(orders, catalog, recipients, growth, platformConfig, wallet, paymentIntents, gateway, delivery, tokens,
-                Clock.systemUTC(), keywords, ledger);
+                Clock.systemUTC(), keywords, ledger, credits, events);
     }
 
     GiftSendService(GiftOrderRepository orders, GiftCatalogRepository catalog, GiftRecipientGuard recipients,
             GrowthQueryService growth, PlatformConfigService platformConfig, PawCoinWalletService wallet,
             PaymentIntentService paymentIntents, PaymentGateway gateway, GiftDeliveryService delivery,
-            GiftTokenGenerator tokens, Clock clock, KeywordRuleEngine keywords, GrowthLedgerService ledger) {
+            GiftTokenGenerator tokens, Clock clock, KeywordRuleEngine keywords, GrowthLedgerService ledger,
+            EntitlementCreditService credits, ApplicationEventPublisher events) {
+        this.credits = credits;
+        this.events = events;
         this.keywords = keywords;
         this.ledger = ledger;
         this.orders = orders;
@@ -160,6 +175,12 @@ public class GiftSendService {
         switch (channel) {
             case PAWCOIN, QRIS -> {
             }
+            // V1.5.0 gift-pack（D-17）：礼包免费次数，只能送 1.000 档礼物（⑦′）；不建意图、不走 ⑧ QRIS 门槛。
+            case PACK_CREDIT -> {
+                if (gift.getPrice() != GIFT_CREDIT_UNIT_PRICE) {
+                    throw AppException.giftCreditNotApplicable("免费次数只能送 Rp1.000 的礼物");
+                }
+            }
             case MIXED -> throw AppException.validation("礼物不支持混合支付");
         }
         // ⑧ QRIS 最低金额（只在这里校验，不进通用 createIntent）
@@ -179,6 +200,7 @@ public class GiftSendService {
         return switch (channel) {
             case PAWCOIN -> payWithCoins(order);
             case QRIS -> payWithQris(order);
+            case PACK_CREDIT -> payWithCredits(order);
             case MIXED -> throw new IllegalStateException("MIXED 已在校验 ⑦ 拒绝");
         };
     }
@@ -212,6 +234,23 @@ public class GiftSendService {
             throw AppException.conflict("礼物未能送达，本次未扣费，请重试");
         }
         return GiftSendResponse.delivered(order.getPublicToken(), senderExpOf(order));
+    }
+
+    /**
+     * 免费次数送礼（V1.5.0 gift-pack Story 4-3 · AC5 · D-17）：同一事务扣 {@code GIFT_1K × quantity}（不足 409
+     * {@code entitlement-insufficient}，订单行一起回滚）→ 交付；未送达同样整笔回滚（次数与订单一起撤销）。
+     * 不调钱包、不建意图；送礼人不得 EXP（{@code GiftSentEvent.paidByCredit}）。
+     */
+    private GiftSendResponse payWithCredits(GiftOrder order) {
+        ConsumeResult used = credits.consume(new ConsumeCommand(order.getSenderId(), CreditUseKind.GIFT,
+                CreditType.GIFT_1K, order.getQuantity(), order.getId(), order.getPetName()));
+        if (delivery.deliver(order) != GiftDeliveryService.Result.DELIVERED) {
+            throw AppException.conflict("礼物未能送达，本次未扣次数，请重试");
+        }
+        if (!used.alreadyUsed()) {
+            events.publishEvent(new EntitlementUsedEvent(order.getSenderId(), CreditUseKind.GIFT, used.firstSource()));
+        }
+        return GiftSendResponse.delivered(order.getPublicToken(), 0);
     }
 
     /**
@@ -265,8 +304,11 @@ public class GiftSendService {
         return Character.isWhitespace(cp) || Character.isSpaceChar(cp);
     }
 
-    /** 送礼人本单 EXP（D-7）：参与成长体系 ? pointsForAmount(GIFT_SENT, 面值) : 0。 */
+    /** 送礼人本单 EXP（D-7）：参与成长体系 ? pointsForAmount(GIFT_SENT, 面值) : 0；免费次数单恒 0（D-16）。 */
     private int senderExpOf(GiftOrder order) {
+        if (order.getChannel() == PayChannel.PACK_CREDIT) {
+            return 0;
+        }
         GrowthLevel lv = growth.getLevel(order.getSenderId());
         if (lv == null || !lv.participating()) {
             return 0;

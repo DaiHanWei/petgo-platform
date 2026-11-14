@@ -63,8 +63,11 @@ public class TailsonalityKeepsakeGranter implements KeepsakeGranter {
         }
     }
 
-    /** 同一连接上执行（JdbcTemplate 取事务绑定的连接）。 */
-    private GrantOutcome unlock(long refId) {
+    /**
+     * 同一连接上执行（JdbcTemplate 取事务绑定的连接）。V1.5.0 gift-pack Story 4-3：包内可见，供
+     * {@code TailsonalityCreditUnlockService} 用免费次数解锁时复用同一段 SQL（不复制 SQL 字符串）。
+     */
+    GrantOutcome unlock(long refId) {
         Map<String, Long> p = Map.of("id", refId);
         int updated = jdbc.update(
                 "UPDATE tailsonality_results SET unlocked_at = now() WHERE id = :id AND unlocked_at IS NULL", p);

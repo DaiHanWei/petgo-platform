@@ -4,6 +4,7 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.gift.domain.GiftOrder;
 import com.tailtopia.gift.domain.GiftUndeliveredReason;
 import com.tailtopia.gift.event.GiftSentEvent;
+import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.gift.event.GiftUndeliveredEvent;
 import com.tailtopia.gift.port.GiftPetDirectory;
 import com.tailtopia.gift.port.GiftPetDirectory.GiftPet;
@@ -89,8 +90,10 @@ public class GiftDeliveryService {
         summaries.addToWall(petId, order.getGiftId(), order.getUnitPrice(), order.getGiftNameEn(),
                 order.getGiftNameId(), order.getGiftIconUrl(), order.getQuantity());
         summaries.addToSupporters(petId, order.getSenderId(), order.getTotal(), order.getQuantity());
+        // V1.5.0 gift-pack（D-16）：事件金额 = 面值（免费次数单实付 0，收礼方 EXP 仍按面值）；免费单送礼人不得 GIFT_SENT。
         events.publishEvent(new GiftSentEvent(order.getId(), order.getSenderId(), order.getOwnerId(), petId,
-                order.getTotal()));
+                Math.multiplyExact(order.getUnitPrice(), (long) order.getQuantity()),
+                order.getChannel() == PayChannel.PACK_CREDIT));
         log.info("gift order delivered orderId={} total={} channel={}", order.getId(), order.getTotal(),
                 order.getChannel());
         return Result.DELIVERED;

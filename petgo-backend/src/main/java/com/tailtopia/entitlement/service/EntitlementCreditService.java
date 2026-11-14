@@ -154,6 +154,23 @@ public class EntitlementCreditService {
         return EntitlementGrantRules.summarize(rows);
     }
 
+    /**
+     * V1.5.0 gift-pack Story 4-3：某类型当前可用剩余（解锁 / 送礼响应的 {@code remaining}）。KTP 某款 = 该款 + 「任意款」合计
+     * （与扣减口径 D-25 一致）；其余 = 该类型。只读，按调用方事务读（扣减后同事务读到的是扣后值）。
+     */
+    @Transactional(readOnly = true)
+    public int remainingFor(long userId, CreditType type) {
+        List<TypeSummary> rows = summary(userId).families().stream().flatMap(f -> f.types().stream()).toList();
+        int n = 0;
+        for (TypeSummary r : rows) {
+            if (r.type() == type || (type.family() == CreditFamily.KTP_HD && r.type() == CreditType.KTP_HD_ANY
+                    && type != CreditType.KTP_HD_ANY)) {
+                n += r.remaining();
+            }
+        }
+        return n;
+    }
+
     /** 不存在 / 已注销 / 注销受理中 / 虚拟号 → 422 entitlement-user-inactive。 */
     private void requireActiveUser(long userId) {
         User u = accounts.findUserById(userId).orElse(null);

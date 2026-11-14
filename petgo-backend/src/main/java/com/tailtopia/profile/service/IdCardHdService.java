@@ -1,5 +1,12 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.entitlement.domain.CreditType;
+import com.tailtopia.entitlement.domain.CreditUseKind;
+import com.tailtopia.entitlement.dto.CreditUnlockResponse;
+import com.tailtopia.entitlement.event.EntitlementUsedEvent;
+import com.tailtopia.entitlement.service.ConsumeCommand;
+import com.tailtopia.entitlement.service.ConsumeResult;
+import com.tailtopia.entitlement.service.EntitlementCreditService;
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentIntent;
@@ -53,12 +60,14 @@ public class IdCardHdService {
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
     private final PaymentGateway gateway;
     private final ApplicationEventPublisher events;
+    private final EntitlementCreditService credits;
 
     public IdCardHdService(PetProfileRepository profiles, IdCardHdPurchaseRepository purchases,
             IdCardRepository idCards, PawCoinWalletService wallet, PaymentIntentService paymentIntents,
             com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, EntitlementCreditService credits) {
         this.events = events;
+        this.credits = credits;
         this.profiles = profiles;
         this.purchases = purchases;
         this.idCards = idCards;
@@ -69,6 +78,31 @@ public class IdCardHdService {
     }
 
     // ---- Story 6-7：按【卡】解锁（多卡快照）。解锁真相 = IdCard.hdUnlocked。 ----
+
+    /**
+     * V1.5.0 gift-pack Story 4-3 · AC3（D-19）：用礼包 / 活动免费次数解锁某卡 HD。非本人 / 不存在 → 404；
+     * 已解锁 → 成功且<b>不扣</b>；扣该款（不够扣「任意款」）1 次（不足 409 {@code entitlement-insufficient}，整事务回滚）→
+     * 置卡解锁 + 记 {@code PACK_CREDIT} 购买行。不发 {@code IdHdPawcoinUnlockedEvent}（不报 ktp_unlock_succeeded、不产生消费 EXP）；
+     * 提交后报 {@code entitlement_used}。并发同卡：扣减的 {@code use_key = KTP_HD:{cardId}} 幂等，后到者不再写购买行。
+     */
+    @Transactional
+    public CreditUnlockResponse unlockCardWithCredit(long userId, long cardId) {
+        IdCard card = idCards.findByIdAndUserId(cardId, userId)
+                .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
+        CreditType type = CreditType.ktpHdOf(card.getCardType(), card.getCardVariant());
+        if (card.isHdUnlocked()) {
+            return CreditUnlockResponse.unlocked(credits.remainingFor(userId, type));
+        }
+        ConsumeResult used = credits.consume(new ConsumeCommand(userId, CreditUseKind.KTP_HD, type, 1, cardId,
+                card.getName()));
+        if (!used.alreadyUsed()) {
+            card.markHdUnlocked();
+            idCards.save(card);
+            purchases.save(IdCardHdPurchase.of(userId, null, cardId, PayChannel.PACK_CREDIT, null));
+            events.publishEvent(new EntitlementUsedEvent(userId, CreditUseKind.KTP_HD, used.firstSource()));
+        }
+        return CreditUnlockResponse.unlocked(credits.remainingFor(userId, type));
+    }
 
     /** 某卡 HD 是否已解锁。 */
     @Transactional(readOnly = true)
@@ -84,6 +118,10 @@ public class IdCardHdService {
     // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
     @Transactional(noRollbackFor = PayException.class)
     public HdPurchaseResponse purchaseCard(long userId, long cardId, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         IdCard card = idCards.findByIdAndUserId(cardId, userId)
                 .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
         if (card.isHdUnlocked()) {
@@ -117,6 +155,8 @@ public class IdCardHdService {
             //    显式拒绝而不是落到 default —— 前者在编译期就逼着每个新渠道的引入者
             //    来面对这个分支，后者会静默把新渠道当成某个旧分支处理。
             case MIXED -> throw AppException.validation("该商品不支持混合支付");
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，付费入口一律 422（KTP 用次数走 hd-credit-unlock）。
+            case PACK_CREDIT -> throw AppException.validation("该商品不支持免费次数");
         };
     }
 
@@ -190,6 +230,10 @@ public class IdCardHdService {
     // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
     @Transactional(noRollbackFor = PayException.class)
     public HdPurchaseResponse purchase(long userId, long petId, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         // V1.4.0 multi-pet（Story 1.2 · P4）：按指定宠物（控制器经 PetResolver 解析）；已购判定仍按账号。
         PetProfile pet = profiles.findByIdAndOwnerId(petId, userId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
@@ -221,6 +265,8 @@ public class IdCardHdService {
             }
             // 🔴 虚拟商品【恒单渠道】（AD-3）：MIXED 只用于电商实物订单。
             case MIXED -> throw AppException.validation("该商品不支持混合支付");
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，付费入口一律 422（KTP 用次数走 hd-credit-unlock）。
+            case PACK_CREDIT -> throw AppException.validation("该商品不支持免费次数");
         };
     }
 

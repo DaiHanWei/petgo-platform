@@ -232,6 +232,9 @@ public final class ErrorTypes {
     /** V1.5.0 gift-pack Story 4-1（D-25）：可用免费次数不足（409）。 */
     public static final URI ENTITLEMENT_INSUFFICIENT = URI.create(BASE + "entitlement-insufficient");
 
+    /** V1.5.0 gift-pack Story 4-3（D-17）：免费次数只能送 Rp1.000 的礼物（422）。 */
+    public static final URI GIFT_CREDIT_NOT_APPLICABLE = URI.create(BASE + "gift-credit-not-applicable");
+
     /** V1.5.0 gift-pack Story 4-2（D-22）：礼包已停售（409）。 */
     public static final URI STARTER_PACK_DISABLED = URI.create(BASE + "starter-pack-disabled");
 

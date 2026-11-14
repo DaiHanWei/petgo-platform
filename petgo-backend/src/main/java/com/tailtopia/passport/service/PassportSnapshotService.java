@@ -86,6 +86,10 @@ public class PassportSnapshotService {
     // noRollbackFor 与 KeepsakePurchaseService.start 一致：网关下单失败时意图 FAILED 行要随事务提交留档。
     @Transactional(noRollbackFor = PayException.class)
     public PassportSnapshotPurchaseResponse start(long userId, Long requestedPetId, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         // V1.4.0 multi-pet（Story 1.2 · X7）：指定宠物（控制器经 PetResolver 校验）；null = 默认宠物。
         long petId = passports.ensureIssuedFor(userId, requestedPetId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"))

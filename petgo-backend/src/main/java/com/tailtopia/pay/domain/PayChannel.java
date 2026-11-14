@@ -18,5 +18,11 @@ public enum PayChannel {
     QRIS,
     PAWCOIN,
     /** 混合支付：PawCoin 段 + 现金段（V1.4.0 Story 3.3，仅电商订单使用）。 */
-    MIXED
+    MIXED,
+    /**
+     * V1.5.0 gift-pack 免费次数（D-18）。🔴 末尾追加。<b>不是支付渠道</b>：只用于送礼订单（{@code gift_orders.channel}）与
+     * KTP 高清购买记录（{@code id_card_hd_purchases.pay_channel}），永不进 {@code payment_intents}
+     * （{@code PaymentIntentService.createIntent} 第一行即 422）；其余入口一律显式 422。
+     */
+    PACK_CREDIT
 }

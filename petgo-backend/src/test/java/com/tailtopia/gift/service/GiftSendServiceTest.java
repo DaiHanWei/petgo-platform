@@ -87,6 +87,8 @@ class GiftSendServiceTest {
 
     private KeywordRuleEngine keywords;
     private GrowthLedgerService ledger;
+    private com.tailtopia.entitlement.service.EntitlementCreditService credits;
+    private org.springframework.context.ApplicationEventPublisher events;
 
     @BeforeEach
     void setUp() {
@@ -127,11 +129,13 @@ class GiftSendServiceTest {
                 ModerationKeywordRule.of("L1_BLOCK", "SUBSTRING", "anjing", "HARASSMENT", "id", true),
                 ModerationKeywordRule.of("L3_WHITELIST", "EXACT", "anjing", "PET_SAFE", "id", true)));
         ledger = mock(GrowthLedgerService.class);
+        credits = mock(com.tailtopia.entitlement.service.EntitlementCreditService.class);
+        events = mock(org.springframework.context.ApplicationEventPublisher.class);
         when(ledger.pointsForAmount(eq(RuleCode.GIFT_SENT), anyLong()))
                 .thenAnswer(inv -> (int) ((long) inv.getArgument(1) / 200));
         service = new GiftSendService(orders, catalog, new GiftRecipientGuard(pets, hides), growth, config, wallet,
                 paymentIntents, gateway, delivery, tokens, Clock.fixed(Instant.parse("2026-10-18T08:00:00Z"),
-                        ZoneOffset.UTC), keywords, ledger);
+                        ZoneOffset.UTC), keywords, ledger, credits, events);
     }
 
     private void catalogHas(GiftCatalogItem g) {
@@ -310,6 +314,82 @@ class GiftSendServiceTest {
         assertThatThrownBy(() -> service.send(SENDER, PET, req("g2", 1, PayChannel.PAWCOIN)))
                 .isInstanceOfSatisfying(AppException.class,
                         e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    // ---------- PACK_CREDIT（V1.5.0 gift-pack Story 4-3 · AC5）----------
+
+    private void creditsAvailable() {
+        when(credits.consume(any())).thenReturn(new com.tailtopia.entitlement.service.ConsumeResult(false, 5,
+                List.of(1L), com.tailtopia.entitlement.domain.CreditSource.PACK));
+    }
+
+    @Test
+    void packCreditConsumesGiftCreditsThenDeliversWithZeroTotalAndExp() {
+        creditsAvailable();
+        GiftSendResponse r = service.send(SENDER, PET, req("g1", 5, PayChannel.PACK_CREDIT));
+
+        ArgumentCaptor<GiftOrder> saved = ArgumentCaptor.forClass(GiftOrder.class);
+        InOrder order = inOrder(orders, credits, delivery);
+        order.verify(orders).saveAndFlush(saved.capture());
+        ArgumentCaptor<com.tailtopia.entitlement.service.ConsumeCommand> cmd =
+                ArgumentCaptor.forClass(com.tailtopia.entitlement.service.ConsumeCommand.class);
+        order.verify(credits).consume(cmd.capture());
+        order.verify(delivery).deliver(saved.getValue());
+        assertThat(cmd.getValue().kind()).isEqualTo(com.tailtopia.entitlement.domain.CreditUseKind.GIFT);
+        assertThat(cmd.getValue().type()).isEqualTo(com.tailtopia.entitlement.domain.CreditType.GIFT_1K);
+        assertThat(cmd.getValue().quantity()).isEqualTo(5);
+        assertThat(cmd.getValue().targetId()).isEqualTo(saved.getValue().getId());
+        assertThat(cmd.getValue().userId()).isEqualTo(SENDER);
+        assertThat(saved.getValue().getTotal()).isZero();
+        assertThat(saved.getValue().getUnitPrice()).isEqualTo(1_000L);
+        assertThat(saved.getValue().getChannel()).isEqualTo(PayChannel.PACK_CREDIT);
+        verifyNoInteractions(wallet, paymentIntents, gateway);
+        assertThat(r.delivered()).isTrue();
+        assertThat(r.senderExp()).isZero();
+        verify(events).publishEvent(new com.tailtopia.entitlement.event.EntitlementUsedEvent(SENDER,
+                com.tailtopia.entitlement.domain.CreditUseKind.GIFT, com.tailtopia.entitlement.domain.CreditSource.PACK));
+    }
+
+    @Test
+    void packCreditOnlyForThousandGift() {
+        assertRejected(req("g2", 1, PayChannel.PACK_CREDIT), HttpStatus.UNPROCESSABLE_ENTITY,
+                "gift-credit-not-applicable");
+        verifyNoInteractions(credits);
+    }
+
+    @Test
+    void packCreditInsufficientPropagatesAndNothingDelivered() {
+        when(credits.consume(any())).thenThrow(AppException.entitlementInsufficient("可用免费次数不足"));
+        assertThatThrownBy(() -> service.send(SENDER, PET, req("g1", 5, PayChannel.PACK_CREDIT)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getType().toString()).endsWith("/entitlement-insufficient"));
+        verify(delivery, never()).deliver(any());
+        verifyNoInteractions(wallet);
+    }
+
+    @Test
+    void packCreditNotDeliveredRollsBackWholeTransaction() {
+        creditsAvailable();
+        when(delivery.deliver(any())).thenReturn(GiftDeliveryService.Result.UNDELIVERED);
+        assertThatThrownBy(() -> service.send(SENDER, PET, req("g1", 1, PayChannel.PACK_CREDIT)))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void packCreditReplayDoesNotConsumeAgainAndExpStaysZero() {
+        GiftOrder prior = GiftOrder.pending("ORDERTOKEN", SENDER, PET, OWNER, "Mochi", gift(1, 1_000, true, false,
+                false, 0), 2, PayChannel.PACK_CREDIT, GiftSource.DIARY_TAB, "GIFT:" + SENDER + ":req-1",
+                Instant.parse("2026-10-18T08:00:00Z"));
+        ReflectionTestUtils.setField(prior, "id", 77L);
+        ReflectionTestUtils.setField(prior, "status", GiftOrderStatus.DELIVERED);
+        when(orders.findByIdemKey("GIFT:" + SENDER + ":req-1")).thenReturn(Optional.of(prior));
+        GiftSendResponse r = service.send(SENDER, PET, req("g1", 2, PayChannel.PACK_CREDIT));
+        assertThat(r.delivered()).isTrue();
+        assertThat(r.senderExp()).isZero();
+        verifyNoInteractions(credits);
+        verify(delivery, never()).deliver(any());
     }
 
     // ---------- QRIS ----------

@@ -53,10 +53,13 @@ public class TailsonalityController {
     private final RedisRateLimiter rateLimiter;
     /** V1.4.0 multi-pet：按宠物端点的归属校验（不属于本人 → 404）。 */
     private final com.tailtopia.profile.service.PetResolver petResolver;
+    private final com.tailtopia.tailsonality.service.TailsonalityCreditUnlockService creditUnlockService;
 
     public TailsonalityController(TailsonalityResultService service, TailsonalityUnlockService unlockService,
             TailsonalityBadgeService badgeService, RedisRateLimiter rateLimiter,
-            com.tailtopia.profile.service.PetResolver petResolver) {
+            com.tailtopia.profile.service.PetResolver petResolver,
+            com.tailtopia.tailsonality.service.TailsonalityCreditUnlockService creditUnlockService) {
+        this.creditUnlockService = creditUnlockService;
         this.petResolver = petResolver;
         this.service = service;
         this.unlockService = unlockService;
@@ -97,6 +100,15 @@ public class TailsonalityController {
         long userId = currentUserId(jwt);
         rateLimiter.check("rl:tailsonality:unlock:" + userId, UNLOCK_LIMIT, UNLOCK_WINDOW);
         return unlockService.unlock(userId, token, req.channel());
+    }
+
+    /** V1.5.0 gift-pack Story 4-3：用免费次数解锁（无 body；与付费解锁同限流桶）。 */
+    @PostMapping("/results/{token}/credit-unlock")
+    public com.tailtopia.entitlement.dto.CreditUnlockResponse creditUnlock(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:tailsonality:unlock:" + userId, UNLOCK_LIMIT, UNLOCK_WINDOW);
+        return creditUnlockService.unlock(userId, token);
     }
 
     /** 配型单独解锁（2026-10-09）：与 {@link #unlock} 同形、同限流桶（同一个人的付费点击共用一份额度）。 */

@@ -101,6 +101,10 @@ public class ConsultPayService {
     // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
     @Transactional(noRollbackFor = PayException.class)
     public ConsultPayResponse pay(long userId, String requestToken, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         ConsultRequest req = requests.findByRequestToken(requestToken)
                 .orElseThrow(() -> AppException.conflict("该请求不存在或已处理"));
         if (req.getUserId() == null || req.getUserId() != userId
@@ -121,6 +125,8 @@ public class ConsultPayService {
             //    这里显式拒绝而不是让 switch 落到 default —— 前者在编译期就逼着
             //    每个新渠道的引入者来面对这个分支，后者会静默把新渠道当成某个旧分支处理。
             case MIXED -> throw AppException.validation("该商品不支持混合支付");
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，付费入口一律 422（KTP 用次数走 hd-credit-unlock）。
+            case PACK_CREDIT -> throw AppException.validation("该商品不支持免费次数");
         };
     }
 

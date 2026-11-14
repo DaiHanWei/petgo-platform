@@ -102,6 +102,10 @@ public class BoardingPassService {
     // noRollbackFor 与 start 一致：网关下单失败时意图 FAILED 行要随事务提交留档。
     @Transactional(noRollbackFor = PayException.class)
     public KeepsakePurchaseResponse unlock(long userId, long petId, String placeToken, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         PetPassportSubject pet = requirePet(userId, petId);
         // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、insertIfAbsent 之前校验可写。
         petWriteGuard.requireWritable(pet.petId());

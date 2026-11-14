@@ -45,6 +45,10 @@ public class TailsonalityUnlockService {
     // noRollbackFor 与 start 一致：网关下单失败时意图 FAILED 行要随事务提交留档（外层不跟着就会整笔回滚）。
     @Transactional(noRollbackFor = PayException.class)
     public KeepsakePurchaseResponse unlock(long userId, String token, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         TailsonalityResult row = lockOwned(userId, token);
         petWriteGuard.requireWritable(row.getPetProfileId()); // Story 2.1：归属（404）之后、付款之前
         KeepsakeRef ref = new KeepsakeRef(KeepsakeSku.TAILSONALITY, row.getId(), row.getPublicToken(),
@@ -55,6 +59,10 @@ public class TailsonalityUnlockService {
     /** 配型单独解锁：完整解读已解锁（已含配型）或已单独买过 → 409 {@code keepsake-already-unlocked}。 */
     @Transactional(noRollbackFor = PayException.class)
     public KeepsakePurchaseResponse unlockMatch(long userId, String token, PayChannel channel) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         TailsonalityResult row = lockOwned(userId, token);
         petWriteGuard.requireWritable(row.getPetProfileId()); // Story 2.1：归属（404）之后、付款之前
         KeepsakeRef ref = new KeepsakeRef(KeepsakeSku.TS_MATCH, row.getId(), row.getPublicToken(),

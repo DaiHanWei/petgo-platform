@@ -157,7 +157,8 @@ public class GiftOrder {
         o.giftIconUrl = gift.getIconUrl();
         o.unitPrice = gift.getPrice();
         o.quantity = quantity;
-        o.total = gift.getPrice() * quantity;
+        // V1.5.0 gift-pack（D-17）：免费次数单实付 0（库级 ck_gift_orders_total 两分支）；其余 = 单价 × 数量。
+        o.total = channel == PayChannel.PACK_CREDIT ? 0L : gift.getPrice() * quantity;
         o.channel = channel;
         o.source = source;
         o.idemKey = idemKey;

@@ -27,7 +27,7 @@ class GrowthGiftListenerTest {
         when(ledger.pointsForAmount(RuleCode.GIFT_SENT, 12_500)).thenReturn(63);
         when(ledger.pointsForAmount(RuleCode.GIFT_RECEIVED, 12_500)).thenReturn(50);
 
-        listener.onGiftSent(new GiftSentEvent(4L, 3L, 7L, 9L, 12_500));
+        listener.onGiftSent(new GiftSentEvent(4L, 3L, 7L, 9L, 12_500, false));
 
         ArgumentCaptor<AccrualCommand> c = ArgumentCaptor.forClass(AccrualCommand.class);
         verify(ledger, times(2)).accrue(c.capture());
@@ -51,8 +51,23 @@ class GrowthGiftListenerTest {
     void zeroPointsIsNotAccrued() {
         when(ledger.pointsForAmount(any(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(0);
 
-        listener.onGiftSent(new GiftSentEvent(4L, 3L, 7L, 9L, 50));
+        listener.onGiftSent(new GiftSentEvent(4L, 3L, 7L, 9L, 50, false));
 
         verify(ledger, never()).accrue(any());
+    }
+
+    @Test
+    void paidByCreditSkipsSenderButReceiverAccruesByFaceValue() {
+        // V1.5.0 gift-pack Story 4-3 · AC6：免费次数单只入收礼方一条（按面值），送礼人不得 GIFT_SENT。
+        when(ledger.pointsForAmount(RuleCode.GIFT_RECEIVED, 5_000)).thenReturn(20);
+
+        listener.onGiftSent(new GiftSentEvent(4L, 3L, 7L, 9L, 5_000, true));
+
+        ArgumentCaptor<AccrualCommand> c = ArgumentCaptor.forClass(AccrualCommand.class);
+        verify(ledger, times(1)).accrue(c.capture());
+        assertThat(c.getValue().userId()).isEqualTo(7L);
+        assertThat(c.getValue().rule()).isEqualTo(RuleCode.GIFT_RECEIVED);
+        assertThat(c.getValue().pointsOverride()).isEqualTo(20);
+        verify(ledger, never()).pointsForAmount(RuleCode.GIFT_SENT, 5_000);
     }
 }

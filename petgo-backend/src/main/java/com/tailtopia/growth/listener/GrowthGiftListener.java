@@ -47,8 +47,11 @@ public class GrowthGiftListener {
         Instant now = clock.instant();
         String ref = String.valueOf(e.giftOrderId());
         List<Long> pets = List.of(e.petId());
-        accrue(e.senderId(), RuleCode.GIFT_SENT, e.totalAmount(), GrowthIdemKeys.giftSent(e.giftOrderId()), ref,
-                pets, now);
+        if (!e.paidByCredit()) {
+            // V1.5.0 gift-pack（D-16）：用礼包免费次数送出的礼物，送礼人不得 GIFT_SENT（收礼方照常）。
+            accrue(e.senderId(), RuleCode.GIFT_SENT, e.totalAmount(), GrowthIdemKeys.giftSent(e.giftOrderId()), ref,
+                    pets, now);
+        }
         accrue(e.receiverOwnerId(), RuleCode.GIFT_RECEIVED, e.totalAmount(),
                 GrowthIdemKeys.giftReceived(e.giftOrderId()), ref, pets, now);
     }

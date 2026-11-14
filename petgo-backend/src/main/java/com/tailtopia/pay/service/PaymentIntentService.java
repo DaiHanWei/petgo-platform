@@ -82,6 +82,10 @@ public class PaymentIntentService {
     @Transactional
     public PaymentIntentResponse createIntent(long userId, PaymentPurpose purpose, PayChannel channel,
             long amount, String currency, String idempotencyKey, Duration ttl) {
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
         rateLimiter.check("rl:pay:create:" + userId, 20, Duration.ofMinutes(1));
 
         // 映射可能指向一行不存在的意图：建意图的事务在映射写入 Redis 之后回滚了（Redis 不随库回滚）。

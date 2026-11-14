@@ -513,6 +513,10 @@ public class PetSlotPurchaseService {
             // 🔴 虚拟商品【恒单渠道】：MIXED 只用于电商实物订单。显式拒绝（照 KeepsakePurchaseService.start）。
             throw AppException.validation("该商品不支持混合支付");
         }
+        if (channel == PayChannel.PACK_CREDIT) {
+            // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
+            throw AppException.validation("该商品不支持免费次数");
+        }
     }
 
     /** 续租名额列表：非空、无 null / 空串、不重复、≤ 5（防超长列表在持锁期间逐条查库）。 */

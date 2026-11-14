@@ -88,8 +88,21 @@ class GiftDeliveryServiceTest {
         seq.verify(orders).markDeliveredIfPending(31L);
         seq.verify(summaries).addToWall(PET, 5L, 2_000L, "Gift5", "Hadiah5", "https://cdn/g5.png", 5);
         seq.verify(summaries).addToSupporters(PET, SENDER, 10_000L, 5);
-        seq.verify(events).publishEvent(new GiftSentEvent(31L, SENDER, OWNER, PET, 10_000L));
+        seq.verify(events).publishEvent(new GiftSentEvent(31L, SENDER, OWNER, PET, 10_000L, false));
         verify(events, never()).publishEvent(any(GiftUndeliveredEvent.class));
+    }
+
+    @Test
+    void packCreditOrderPublishesFaceValueAndPaidByCredit() {
+        // V1.5.0 gift-pack Story 4-3 · AC6：免费次数单实付 0；事件金额 = 面值、paidByCredit = true；汇总榜仍按实付（0）。
+        GiftOrder credit = GiftTestFixtures.order(32L, PayChannel.PACK_CREDIT, 5, 1_000);
+        when(orders.markDeliveredIfPending(32L)).thenReturn(1);
+        assertThat(credit.getTotal()).isZero();
+
+        assertThat(service.deliver(credit)).isEqualTo(GiftDeliveryService.Result.DELIVERED);
+
+        verify(summaries).addToSupporters(PET, SENDER, 0L, 5);
+        verify(events).publishEvent(new GiftSentEvent(32L, SENDER, OWNER, PET, 5_000L, true));
     }
 
     @Test
