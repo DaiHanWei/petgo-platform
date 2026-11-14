@@ -37,7 +37,8 @@ void openGiftMessageReport(BuildContext context, WidgetRef ref, String orderToke
         await ref.read(giftRepositoryProvider).reportGiftMessage(orderToken, reason.wire);
       } catch (_) {
         // 含 422 `gift-message-not-reportable`（理论上 UI 已不展示入口）：通用失败提示，抽屉留在表单态
-        if (context.mounted) showAppToast(context, l10n.giftOpenFailed);
+        // 抽屉仍开着：toast 置顶，不盖住「Kirim Laporan」（照 Story 2.2 AC7 / account_report_sheet，2-6 复审 #1）
+        if (context.mounted) showAppToast(context, l10n.giftOpenFailed, top: true);
         rethrow;
       }
     },
@@ -129,7 +130,9 @@ class _DetailBody extends ConsumerWidget {
     final locale = Localizations.localeOf(context);
     final d = detail;
     final s = d.sender;
-    final name = s.deleted ? l10n.feedDeletedUser : (s.nickname ?? '');
+    // 昵称缺失（防御，2-6 复审 #2）按注销口径显示
+    final nick = s.nickname?.trim() ?? '';
+    final name = s.deleted || nick.isEmpty ? l10n.feedDeletedUser : nick;
     final message = d.message;
     final receivedAt = d.receivedAt;
     final userId = s.userId;
@@ -213,7 +216,7 @@ class _DetailBody extends ConsumerWidget {
                 ),
               ),
             ]),
-            if (!s.deleted && userId != null)
+            if (!s.deleted && userId != null && nick.isNotEmpty)
               TextButton(
                 key: const ValueKey('giftDetailSenderProfile'),
                 style: TextButton.styleFrom(minimumSize: const Size(44, 44)),

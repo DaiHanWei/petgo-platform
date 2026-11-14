@@ -69,6 +69,13 @@ Widget：H1 / H2 字段渲染；H3 隐藏文案；H4 注销无按钮；`canRepor
 - 文案：`giftDetailTitle`、`giftDetailReceivedOn`、`giftDetailWithPets` 逐字取 App 稿新文案表；另加 `giftDetailQuantity`「×{n}」（数量，稿面写法）。
 - 仓库：`fetchGiftOrderDetail(token)`、`reportGiftMessage(token, reasonWire)`。
 
+- Code review（独立复审）处置：
+  - CONFIRMED #1 举报失败 toast 默认在底部、盖住抽屉的「Kirim Laporan / Batal」→ 置顶（`top: true`，照 Story 2.2 AC7 / `account_report_sheet`）。已修。
+  - PLAUSIBLE #2 未注销但昵称缺失时显示「dari 」→ 昵称为空按注销口径显示 `feedDeletedUser` 且不出「Lihat profil」。已修。
+  - PLAUSIBLE #3 抽屉开着时祝福语被隐藏、举报 422 后不刷新：AC 未要求，保留（理论上入口已不展示）。
+  - #4 抽屉底色 `Colors.white` 与举报抽屉 `AppColors.surface` 不同：照 App 稿白底，L2 核对。
+  - 测试缺口：Dio 路径 / 请求体已人工核对（`ApiPaths.giftOrderMessageReports` + `{reasonType}`）；UTC 近午夜日期、「Lihat profil」跳转、游客登录门控留 L2 / 本地。
+
 ### File List
 
 - `petgo_app/lib/features/gift/presentation/gift_order_detail_sheet.dart`（新）
