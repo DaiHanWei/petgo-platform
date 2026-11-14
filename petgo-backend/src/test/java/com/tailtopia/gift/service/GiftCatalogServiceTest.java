@@ -195,4 +195,14 @@ class GiftCatalogServiceTest {
         assertThat(GiftItem.class.getRecordComponents()).extracting(c -> c.getName())
                 .doesNotContain("id", "sortOrder", "forCat", "forDog", "forOther");
     }
+
+    /** V1.5.0 pet-species Story 1.3 · AC1：收礼宠物透传细分类型（显示用）；petType 仍是大类。 */
+    @Test
+    void recipientCarriesSpecies() {
+        when(pets.pet(PET)).thenReturn(Optional.of(new com.tailtopia.gift.port.GiftPetDirectory.GiftPet(
+                PET, OWNER, "Mochi", null, "OTHER", null, true, false, "RABBIT")));
+        GiftCatalogResponse r = service.catalog(SENDER, PET, null);
+        assertThat(r.recipient().species()).isEqualTo("RABBIT");
+        assertThat(r.recipient().petType()).isEqualTo("OTHER");
+    }
 }

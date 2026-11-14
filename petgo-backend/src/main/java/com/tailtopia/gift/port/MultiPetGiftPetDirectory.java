@@ -104,6 +104,7 @@ public class MultiPetGiftPetDirectory implements GiftPetDirectory {
         String breed = profiles.findById(v.id()).map(PetProfile::getBreed).orElse(null);
         return Optional.of(new GiftPet(v.id(), v.ownerId(), v.name(), v.avatarUrl(),
                 v.petType() == null ? null : v.petType().name(), breed,
-                !deleted && u.getStatus() == UserStatus.ACTIVE, deleted));
+                !deleted && u.getStatus() == UserStatus.ACTIVE, deleted,
+                v.species() == null ? null : v.species().name()));
     }
 }

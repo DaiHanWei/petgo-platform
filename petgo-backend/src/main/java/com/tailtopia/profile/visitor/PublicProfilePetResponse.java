@@ -35,7 +35,15 @@ public record PublicProfilePetResponse(
         PetType petType,
         LocalDate birthday,
         long diaryCount,
-        String tailsonalityBadge) {
+        String tailsonalityBadge,
+        /** 细分类型（V1.5.0 pet-species · D-10，PetSpecies 名）；{@code petType} 仍是大类三值。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型，species = null，App 按 petType 兜底）。 */
+    public PublicProfilePetResponse(long petId, String name, String avatarUrl, PetType petType, LocalDate birthday,
+            long diaryCount, String tailsonalityBadge) {
+        this(petId, name, avatarUrl, petType, birthday, diaryCount, tailsonalityBadge, null);
+    }
 
     static PublicProfilePetResponse of(PetProfile p, long diaryCount, String tailsonalityBadge) {
         return new PublicProfilePetResponse(
@@ -46,6 +54,7 @@ public record PublicProfilePetResponse(
                 p.getPetType(),
                 p.getBirthday(),
                 diaryCount,
-                tailsonalityBadge);
+                tailsonalityBadge,
+                p.getPetSpecies() == null ? null : p.getPetSpecies().name());
     }
 }

@@ -33,6 +33,14 @@ public interface GiftPetDirectory {
      * @param ownerDeleted 主人已注销（{@code users.deleted_at IS NOT NULL}）。🔴 送礼只拦注销，封号主人可收礼（PRD / P-6）
      */
     record GiftPet(long petId, long ownerId, String name, String avatarUrl, String petType, String breed,
-            boolean ownerActive, boolean ownerDeleted) {
+            boolean ownerActive, boolean ownerDeleted,
+            /** 细分类型（V1.5.0 pet-species · D-10）：只透传给显示；礼物适用物种 / 排序仍按 {@code petType}（大类）。 */
+            String species) {
+
+        /** 便捷构造：V1.5.0 前的形态（species = null）。 */
+        public GiftPet(long petId, long ownerId, String name, String avatarUrl, String petType, String breed,
+                boolean ownerActive, boolean ownerDeleted) {
+            this(petId, ownerId, name, avatarUrl, petType, breed, ownerActive, ownerDeleted, null);
+        }
     }
 }

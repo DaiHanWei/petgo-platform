@@ -22,5 +22,13 @@ public record FollowedPetItem(
         String ownerNickname,
         String ownerToken,
         boolean iFollow,
-        boolean iFollowOwner) {
+        boolean iFollowOwner,
+        /** 细分类型（V1.5.0 pet-species · D-10，PetSpecies 名）；{@code petType} 仍是大类三值。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型，species = null，App 按 petType 兜底）。 */
+    public FollowedPetItem(long petId, String name, PetType petType, String avatarUrl, String ownerNickname,
+            String ownerToken, boolean iFollow, boolean iFollowOwner) {
+        this(petId, name, petType, avatarUrl, ownerNickname, ownerToken, iFollow, iFollowOwner, null);
+    }
 }

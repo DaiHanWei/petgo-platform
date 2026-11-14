@@ -20,7 +20,15 @@ public record IdCardDataResponse(
         LocalDate birthday,
         String avatarUrl,
         String intro,
-        boolean hdUnlocked) {
+        boolean hdUnlocked,
+        /** 档案细分类型（V1.5.0 pet-species · D-10）：建卡预填类型用。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（species = null）。 */
+    public IdCardDataResponse(boolean generated, Long serialId, String name, String petType, String breed,
+            LocalDate birthday, String avatarUrl, String intro, boolean hdUnlocked) {
+        this(generated, serialId, name, petType, breed, birthday, avatarUrl, intro, hdUnlocked, null);
+    }
 
     public static IdCardDataResponse from(PetProfile p, boolean hdUnlocked) {
         return new IdCardDataResponse(
@@ -32,6 +40,7 @@ public record IdCardDataResponse(
                 p.getBirthday(),
                 p.getAvatarUrl(),
                 p.getIntro(),
-                hdUnlocked);
+                hdUnlocked,
+                p.getPetSpecies() == null ? null : p.getPetSpecies().name());
     }
 }

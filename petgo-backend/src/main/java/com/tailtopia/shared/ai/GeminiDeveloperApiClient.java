@@ -218,17 +218,19 @@ public class GeminiDeveloperApiClient implements GeminiClient {
                 + "<pet>\n" + lines + "</pet>";
     }
 
-    /** 物种枚举名 → 中文（只认已知枚举；未知 / 空 → null，整行不写，绝不原样拼入）。 */
+    /**
+     * 物种枚举名 → 中文（V1.5.0 pet-species · D-12：细分类型 27 值）。空 → null（整行不写）；
+     * 不认识的值 → 「其他伴侣动物」——<b>绝不原样拼入</b>提示词。
+     */
     static String speciesLabel(String species) {
         if (species == null) {
             return null;
         }
-        return switch (species) {
-            case "CAT" -> "猫";
-            case "DOG" -> "狗";
-            case "OTHER" -> "其他伴侣动物";
-            default -> null;
-        };
+        // 名字表只有 PetSpecies.zhName 一份（猫 / 狗 / 兔……）；OTHER 在提示词里写全称「其他伴侣动物」。
+        return com.tailtopia.profile.domain.PetSpecies.parse(species)
+                .filter(s -> s != com.tailtopia.profile.domain.PetSpecies.OTHER)
+                .map(com.tailtopia.profile.domain.PetSpecies::zhName)
+                .orElse("其他伴侣动物");
     }
 
     /** 整月龄 → 「约 N 个月」（&lt; 12）/「约 Y 岁 M 个月」（M = 0 省略「M 个月」）；null / 负数 → null。 */

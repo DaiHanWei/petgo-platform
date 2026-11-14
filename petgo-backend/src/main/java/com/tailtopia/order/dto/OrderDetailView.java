@@ -51,7 +51,20 @@ public record OrderDetailView(
         Long triageTaskId,
         Long consultSessionId,
         String targetKind,
-        String targetToken) {
+        String targetToken,
+        /** 细分类型（V1.5.0 pet-species · D-10，PetSpecies 名）；{@code petType} 仍是大类三值。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型，species = null，App 按 petType 兜底）。 */
+    public OrderDetailView(String orderType, String orderToken, String displayNo, String statusCode,
+            String statusColor, Long amount, String payChannel, Instant createdAt, Instant paidAt, String petName,
+            String petType, String petAvatarUrl, boolean petDeleted, Instant sessionStartedAt, Instant sessionEndedAt,
+            String refundStage, Long refundNetAmount, Long coins, Long triageTaskId, Long consultSessionId,
+            String targetKind, String targetToken) {
+        this(orderType, orderToken, displayNo, statusCode, statusColor, amount, payChannel, createdAt, paidAt, petName,
+                petType, petAvatarUrl, petDeleted, sessionStartedAt, sessionEndedAt, refundStage, refundNetAmount,
+                coins, triageTaskId, consultSessionId, targetKind, targetToken, null);
+    }
 
     /** V1.3.2 前的 20 参形态（既有 5 个构造点不改）：无查看目标。 */
     public OrderDetailView(String orderType, String orderToken, String displayNo, String statusCode,

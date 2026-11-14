@@ -17,7 +17,14 @@ public record GiftCatalogResponse(Recipient recipient, long qrisMinAmount, List<
         List<ExclusiveGroup> exclusiveGroups, LockBlock lockBlock) {
 
     /** 收礼宠物（{@code petType} = CAT / DOG / OTHER；{@code avatarUrl} / {@code breed} 可空）。 */
-    public record Recipient(long petId, String name, String avatarUrl, String petType, String breed) {
+    public record Recipient(long petId, String name, String avatarUrl, String petType, String breed,
+            /** 细分类型（V1.5.0 pet-species · D-10）：送礼面板显示用。 */
+            String species) {
+
+        /** 便捷构造：V1.5.0 前的形态（species = null）。 */
+        public Recipient(long petId, String name, String avatarUrl, String petType, String breed) {
+            this(petId, name, avatarUrl, petType, breed, null);
+        }
     }
 
     /** 一个价位档（组内已按「适用该物种 → 通用 → 其他」再 {@code sort_order} 排好）。 */

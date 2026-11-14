@@ -129,4 +129,20 @@ class FollowSuggestionServiceTest {
         assertThat(items).hasSize(1);
         assertThat(items.get(0).petType()).isEqualTo("DOG");
     }
+
+    /** V1.5.0 pet-species Story 1.3 · AC1：副标题类型显示用细分类型，petType 仍是大类。 */
+    @Test
+    void rabbitCandidateCarriesSpecies() {
+        when(follows.findSuggestionIds(anyLong(), org.mockito.ArgumentMatchers.any(), anyInt()))
+                .thenReturn(List.of(10L));
+        com.tailtopia.profile.domain.PetProfile rabbit = com.tailtopia.profile.support.PetFixtures.pet(10L, 1L,
+                com.tailtopia.profile.domain.PetType.OTHER, Instant.parse("2026-01-01T00:00:00Z"));
+        rabbit.applySpecies(com.tailtopia.profile.domain.PetSpecies.RABBIT);
+        when(pets.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(anyCollection())).thenReturn(List.of(rabbit));
+
+        FollowListItem item = service.suggestionsFor(VIEWER).items().get(0);
+
+        assertThat(item.species()).isEqualTo("RABBIT");
+        assertThat(item.petType()).isEqualTo("OTHER");
+    }
 }

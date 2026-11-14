@@ -10,7 +10,8 @@ import java.math.BigDecimal;
  * 也杜绝经档案字段向模型注入指令。拼进 prompt 时只拼进<b>用户侧内容</b>（{@code contents}），
  * 绝不进 {@code systemInstruction}；{@code SafetyRuleLayer} 不以它为文本信号源。
  *
- * @param species   物种枚举名（{@code CAT} / {@code DOG} / {@code OTHER}），可空；未知值拼 prompt 时整行省略
+ * @param species   细分类型枚举名（V1.5.0 起为 {@code PetSpecies} 27 值，如 {@code RABBIT}），可空（空 → 整行省略）；
+ *                  不认识的值拼 prompt 时写「其他伴侣动物」，绝不原样拼入
  * @param ageMonths 按生日换算的 UTC 整月龄（未来生日钳 0），生日缺失为 null
  * @param weightKg  体重（kg），可空
  */

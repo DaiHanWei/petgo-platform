@@ -27,6 +27,13 @@ public record PetGiftShowcaseResponse(
      * @param avatarUrl 已去 EXIF 的分发地址（与访客视图同口径）；无头像为 null
      * @param petType   {@code CAT} / {@code DOG} / {@code OTHER}
      */
-    public record PetView(long petId, String name, String avatarUrl, String petType) {
+    public record PetView(long petId, String name, String avatarUrl, String petType,
+            /** 细分类型（V1.5.0 pet-species · D-10）：礼物墙 / 礼物页显示用。 */
+            String species) {
+
+        /** 便捷构造：V1.5.0 前的形态（species = null）。 */
+        public PetView(long petId, String name, String avatarUrl, String petType) {
+            this(petId, name, avatarUrl, petType, null);
+        }
     }
 }

@@ -84,6 +84,6 @@ public class PetQueryService {
 
     private static PetView toView(PetProfile p) {
         return new PetView(p.getId(), p.getOwnerId(), p.getName(), p.getAvatarUrl(), p.getPetType(),
-                p.getStatus(), p.getCreatedAt());
+                p.getStatus(), p.getCreatedAt(), p.getPetSpecies());
     }
 }

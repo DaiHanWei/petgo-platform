@@ -70,7 +70,7 @@ public class PetGiftShowcaseController {
         return new PetGiftShowcaseResponse(
                 new PetGiftShowcaseResponse.PetView(pet.petId(), pet.name(),
                         pet.avatarUrl() == null ? null : AliyunOssClient.exifStrippedDeliveryUrl(pet.avatarUrl()),
-                        pet.petType()),
+                        pet.petType(), pet.species()),
                 v.viewerIsOwner(), summary.totalValue(), summary.giftCount(), supporterCount, wall);
     }
 

@@ -35,7 +35,17 @@ public record FollowListItem(
         java.time.LocalDate petBirthday,
         Integer level,
         String tier,
-        String frame) {
+        String frame,
+        /** 细分类型（V1.5.0 pet-species · D-10，PetSpecies 名）；{@code petType} 仍是大类三值。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型，species = null，App 按 petType 兜底）。 */
+    public FollowListItem(long userId, String userToken, String nickname, String avatarUrl, boolean deleted,
+            boolean iFollow, boolean followsMe, boolean blockedByMe, boolean self, String petType,
+            java.time.LocalDate petBirthday, Integer level, String tier, String frame) {
+        this(userId, userToken, nickname, avatarUrl, deleted, iFollow, followsMe, blockedByMe, self, petType,
+                petBirthday, level, tier, frame, null);
+    }
 
     /** 不带宠物字段的便捷构造（关注 / 粉丝列表用）。 */
     public FollowListItem(long userId, String userToken, String nickname, String avatarUrl, boolean deleted,

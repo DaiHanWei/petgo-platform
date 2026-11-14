@@ -31,13 +31,25 @@ public record IdCardResponse(
         String school,
         String faculty,
         boolean hdUnlocked,
-        Instant createdAt) {
+        Instant createdAt,
+        /** 建卡时细分类型快照（V1.5.0 pet-species · D-10）；旧卡 null → NON_NULL 省略，App 回退 {@code petType}。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（species = null）。 */
+    public IdCardResponse(long id, Long serialId, String name, String petType, String breed, LocalDate birthday,
+            String avatarUrl, String intro, String gender, String cardNo, String passportNo, String birthCity,
+            String address, String occupation, String maritalStatus, String cardType, String cardVariant,
+            String school, String faculty, boolean hdUnlocked, Instant createdAt) {
+        this(id, serialId, name, petType, breed, birthday, avatarUrl, intro, gender, cardNo, passportNo, birthCity,
+                address, occupation, maritalStatus, cardType, cardVariant, school, faculty, hdUnlocked, createdAt,
+                null);
+    }
 
     public static IdCardResponse from(IdCard c) {
         return new IdCardResponse(c.getId(), c.getSerialId(), c.getName(), c.getPetType(),
                 c.getBreed(), c.getBirthday(), c.getAvatarUrl(), c.getIntro(), c.getGender(),
                 c.getCardNo(), c.getPassportNo(), c.getBirthCity(), c.getAddress(),
                 c.getOccupation(), c.getMaritalStatus(), c.getCardType(), c.getCardVariant(), c.getSchool(),
-                c.getFaculty(), c.isHdUnlocked(), c.getCreatedAt());
+                c.getFaculty(), c.isHdUnlocked(), c.getCreatedAt(), c.getPetSpecies());
     }
 }

@@ -79,7 +79,8 @@ public class FollowSuggestionService {
                             false, false, s.followsMe(), false, false,
                             pet == null || pet.getPetType() == null ? null : pet.getPetType().name(),
                             pet == null ? null : pet.getBirthday(),
-                            v.badgeLevel(), v.badgeTier(), v.badgeFrame());
+                            v.badgeLevel(), v.badgeTier(), v.badgeFrame(),
+                            pet == null || pet.getPetSpecies() == null ? null : pet.getPetSpecies().name());
                 })
                 .toList();
         return new FollowSuggestionsResponse(items);

@@ -316,7 +316,8 @@ public class OrderCenterService {
                 petDeleted ? null : pet.getAvatarUrl(),
                 petDeleted,
                 o.getSessionStartedAt(), o.getSessionEndedAt(),
-                stage == null ? null : stage.name(), refundNet, null, null, o.getConsultSessionId());
+                stage == null ? null : stage.name(), refundNet, null, null, o.getConsultSessionId(), null, null,
+                petDeleted || pet.getPetSpecies() == null ? null : pet.getPetSpecies().name());
     }
 
     private OrderDetailView aiDetail(AiConsultOrder o) {
@@ -523,7 +524,8 @@ public class OrderCenterService {
                 petDeleted || pet.getPetType() == null ? null : pet.getPetType().name(),
                 petDeleted ? null : pet.getAvatarUrl(),
                 petDeleted, null, null, null, null, null, null, null,
-                resolver == null ? null : resolver.targetKind(), targetToken);
+                resolver == null ? null : resolver.targetKind(), targetToken,
+                petDeleted || pet.getPetSpecies() == null ? null : pet.getPetSpecies().name());
     }
 
     private static OrderType parseType(String type) {

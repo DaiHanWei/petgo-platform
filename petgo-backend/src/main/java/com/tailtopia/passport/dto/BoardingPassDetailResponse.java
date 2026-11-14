@@ -18,5 +18,17 @@ import java.time.LocalDate;
 public record BoardingPassDetailResponse(String placeToken, String passenger, String breed, String placeName,
         String passportNo, LocalDate lastVisitDate, LocalDate firstVisitDate, long visitCount, String seat,
         PlaceType placeType, PlaceAvailability placeStatus, String placeImageUrl, String stampImageUrl,
-        String addressText, String city, boolean unlocked, String unlockToken, String petType) {
+        String addressText, String city, boolean unlocked, String unlockToken, String petType,
+        /** 细分类型（V1.5.0 pet-species · D-10）：Breed 栏「物种 + 品种」显示用。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（species = null）。 */
+    public BoardingPassDetailResponse(String placeToken, String passenger, String breed, String placeName,
+            String passportNo, LocalDate lastVisitDate, LocalDate firstVisitDate, long visitCount, String seat,
+            PlaceType placeType, PlaceAvailability placeStatus, String placeImageUrl, String stampImageUrl,
+            String addressText, String city, boolean unlocked, String unlockToken, String petType) {
+        this(placeToken, passenger, breed, placeName, passportNo, lastVisitDate, firstVisitDate, visitCount, seat,
+                placeType, placeStatus, placeImageUrl, stampImageUrl, addressText, city, unlocked, unlockToken, petType,
+                null);
+    }
 }

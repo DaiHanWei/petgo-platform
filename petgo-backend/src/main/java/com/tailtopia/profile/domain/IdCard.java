@@ -118,6 +118,13 @@ public class IdCard {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * 建卡时细分类型快照（V1.5.0 pet-species · D-6，PetSpecies 名）。旧卡为 null（App 按 {@link #petType} 显示）。
+     * {@code pet_type} 仍存大类：卡号物种码、「编号沿用」查询都按它。
+     */
+    @Column(name = "pet_species", length = 32)
+    private String petSpecies;
+
     protected IdCard() {
     }
 
@@ -132,7 +139,19 @@ public class IdCard {
             String gender, String cardNo, String passportNo,
             String birthCity, String address, String occupation, String maritalStatus,
             String cardType, String cardVariant, String school, String faculty) {
+        return snapshot(userId, serialId, name, petType, breed, birthday, avatarUrl, intro, gender, cardNo,
+                passportNo, birthCity, address, occupation, maritalStatus, cardType, cardVariant, school, faculty,
+                petType);
+    }
+
+    /** 同上，另带细分类型快照（V1.5.0 pet-species · D-13）；{@code petType} 须为其大类。 */
+    public static IdCard snapshot(long userId, long serialId, String name, String petType,
+            String breed, LocalDate birthday, String avatarUrl, String intro,
+            String gender, String cardNo, String passportNo,
+            String birthCity, String address, String occupation, String maritalStatus,
+            String cardType, String cardVariant, String school, String faculty, String petSpecies) {
         IdCard c = new IdCard();
+        c.petSpecies = petSpecies;
         c.userId = userId;
         c.serialId = serialId;
         c.name = name;
@@ -154,6 +173,11 @@ public class IdCard {
         c.school = school;
         c.faculty = faculty;
         return c;
+    }
+
+    /** 建卡时细分类型快照（V1.5.0 起；旧卡 null）。 */
+    public String getPetSpecies() {
+        return petSpecies;
     }
 
     /**

@@ -203,7 +203,8 @@ public class ContentDetailService {
                 .map(v -> new com.tailtopia.content.dto.ContentPetView(v.id(), v.name(),
                         v.avatarUrl() == null ? null
                                 : com.tailtopia.shared.media.AliyunOssClient.exifStrippedDeliveryUrl(v.avatarUrl()),
-                        v.petType() == null ? null : v.petType().name(), bd.get(v.id())))
+                        v.petType() == null ? null : v.petType().name(), bd.get(v.id()),
+                        v.species() == null ? null : v.species().name()))
                 .toList();
         return out.isEmpty() ? null : out;
     }

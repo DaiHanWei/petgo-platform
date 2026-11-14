@@ -12,5 +12,14 @@ import java.time.Instant;
  * @param createdAt 建档时刻 —— KTP 号源「卡须晚于建档」的判据
  * @param breed     品种原文（可空；V1.4.0 multi-pet Story 1.2：登机牌 BREED 直接从 subject 取）
  */
-public record PetPassportSubject(long petId, String name, String petType, Instant createdAt, String breed) {
+public record PetPassportSubject(long petId, String name, String petType, Instant createdAt, String breed,
+        /**
+         * 细分类型（V1.5.0 pet-species · D-10）：<b>只给登机牌 Breed 栏显示</b>；护照号物种段继续按 {@code petType}（大类）。
+         */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（species = null）。 */
+    public PetPassportSubject(long petId, String name, String petType, Instant createdAt, String breed) {
+        this(petId, name, petType, createdAt, breed, null);
+    }
 }

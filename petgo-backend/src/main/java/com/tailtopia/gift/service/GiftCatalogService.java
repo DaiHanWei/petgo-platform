@@ -80,7 +80,7 @@ public class GiftCatalogService {
             }
         }
         return new GiftCatalogResponse(
-                new Recipient(pet.petId(), pet.name(), pet.avatarUrl(), pet.petType(), pet.breed()),
+                new Recipient(pet.petId(), pet.name(), pet.avatarUrl(), pet.petType(), pet.breed(), pet.species()),
                 platformConfig.pricing().getGiftQrisMinAmount(),
                 tiers.entrySet().stream().map(e -> new Tier(e.getKey(), List.copyOf(e.getValue()))).toList(),
                 exclusive.entrySet().stream().map(e -> new ExclusiveGroup(e.getKey(), List.copyOf(e.getValue())))

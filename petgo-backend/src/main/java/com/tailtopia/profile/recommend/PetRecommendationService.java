@@ -216,7 +216,8 @@ public class PetRecommendationService {
                         pet.getPetType(),
                         pet.getBirthday(),
                         AliyunOssClient.exifStrippedThumbUrl(covers.get(pet.getId()), COVER_THUMB_WIDTH_PX),
-                        companionDays(pet.getCreatedAt(), now)))
+                        companionDays(pet.getCreatedAt(), now),
+                        pet.getPetSpecies() == null ? null : pet.getPetSpecies().name()))
                 .toList();
         return hasMore
                 ? new RecommendedPetResponse.Page(items, cursorOf(lastSeen), true)

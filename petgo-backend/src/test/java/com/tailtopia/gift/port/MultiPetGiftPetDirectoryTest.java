@@ -74,7 +74,8 @@ class MultiPetGiftPetDirectoryTest {
         when(accounts.findAccountById(7L)).thenReturn(Optional.of(owner));
         breed(10L, "Persia");
 
-        assertThat(dir.pet(10L)).contains(new GiftPet(10L, 7L, "pet10", "a10", "CAT", "Persia", true, false));
+        // V1.5.0 pet-species：第 9 个字段 species 透传 PetView.species（旧形态 PetView 构造 = 大类同名值）。
+        assertThat(dir.pet(10L)).contains(new GiftPet(10L, 7L, "pet10", "a10", "CAT", "Persia", true, false, "CAT"));
     }
 
     @Test

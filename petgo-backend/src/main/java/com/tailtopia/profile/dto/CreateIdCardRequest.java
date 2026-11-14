@@ -43,7 +43,20 @@ public record CreateIdCardRequest(
         @Pattern(regexp = CARD_TYPES) String cardType,
         @Size(max = 40) String school,
         @Size(max = 40) String faculty,
-        @Pattern(regexp = CARD_VARIANTS) String cardVariant) {
+        @Pattern(regexp = CARD_VARIANTS) String cardVariant,
+        /**
+         * 细分类型（V1.5.0 pet-species · D-13），可空：旧版 App 不传 → 快照 = {@code petType}。
+         * 传了则以它的大类作卡快照 {@code pet_type}（{@code petType} 若也传了须一致，否则 422）。
+         */
+        @Pattern(regexp = com.tailtopia.profile.domain.PetSpecies.WIRE_PATTERN) String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型）。 */
+    public CreateIdCardRequest(String name, String petType, String breed, LocalDate birthday, String gender,
+            String avatarUrl, String intro, String birthCity, String address, String occupation,
+            String maritalStatus, String cardType, String school, String faculty, String cardVariant) {
+        this(name, petType, breed, birthday, gender, avatarUrl, intro, birthCity, address, occupation,
+                maritalStatus, cardType, school, faculty, cardVariant, null);
+    }
 
     /** 卡种白名单（= {@code IdCardType} 枚举名，库内 {@code ck_id_cards_card_type} 同源）。 */
     public static final String CARD_TYPES = "KTP|PASSPORT|KITAS|SIM|STUDENT";

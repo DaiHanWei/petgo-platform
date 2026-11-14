@@ -211,7 +211,8 @@ public class PetProfileQueryService {
     public Optional<TriagePetContext> findTriageContext(long ownerId, long petId) {
         return petProfiles.findByIdAndOwnerId(petId, ownerId)
                 .map(p -> new TriagePetContext(
-                        p.getPetType() == null ? null : p.getPetType().name(),
+                        // V1.5.0 pet-species（D-12）：给 AI 细分类型（兔 / 仓鼠……），不再只说「其他伴侣动物」。
+                        p.getPetSpecies() == null ? null : p.getPetSpecies().name(),
                         ageMonths(p.getBirthday()),
                         p.getWeightKg()));
     }
@@ -224,7 +225,8 @@ public class PetProfileQueryService {
     }
 
     private static PetPassportSubject toSubject(PetProfile p) {
-        return new PetPassportSubject(p.getId(), p.getName(), p.getPetType().name(), p.getCreatedAt(), p.getBreed());
+        return new PetPassportSubject(p.getId(), p.getName(), p.getPetType().name(), p.getCreatedAt(), p.getBreed(),
+                p.getPetSpecies() == null ? null : p.getPetSpecies().name());
     }
 
     private static PetIdentityView toIdentity(PetProfile p) {

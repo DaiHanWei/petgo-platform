@@ -44,7 +44,15 @@ public record RecommendedPetResponse(
         PetType petType,
         LocalDate birthday,
         String coverImageUrl,
-        long companionDays) {
+        long companionDays,
+        /** 细分类型（V1.5.0 pet-species · D-10，PetSpecies 名）；{@code petType} 仍是大类三值。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型，species = null，App 按 petType 兜底）。 */
+    public RecommendedPetResponse(long petId, String name, String avatarUrl, PetType petType, LocalDate birthday,
+            String coverImageUrl, long companionDays) {
+        this(petId, name, avatarUrl, petType, birthday, coverImageUrl, companionDays, null);
+    }
 
     /**
      * 一页宠物卡（Story 4.3 · AC3 起带游标）。

@@ -11,7 +11,15 @@ package com.tailtopia.content.dto;
  *                 {@code VisitorProfileResponse.birthday} 同口径对外，供客户端算年龄；null → NON_NULL 省略）
  */
 public record ContentPetView(long petId, String name, String avatarUrl, String petType,
-        java.time.LocalDate birthday) {
+        java.time.LocalDate birthday,
+        /** 细分类型（V1.5.0 pet-species · D-10，PetSpecies 名）；{@code petType} 仍是大类三值。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型，species = null，App 按 petType 兜底）。 */
+    public ContentPetView(long petId, String name, String avatarUrl, String petType, java.time.LocalDate birthday) {
+        this(petId, name, avatarUrl, petType, birthday, null);
+    }
+
 
     /** 追加 {@code birthday} 前的四参构造（既有调用 / 测试不变，生日缺省）。 */
     public ContentPetView(long petId, String name, String avatarUrl, String petType) {

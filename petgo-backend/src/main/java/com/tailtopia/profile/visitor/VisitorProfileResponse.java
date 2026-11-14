@@ -44,7 +44,17 @@ public record VisitorProfileResponse(
         String ownerNickname,
         Boolean iFollow,
         Boolean iFollowOwner,
-        String ownerToken) {
+        String ownerToken,
+        /** 细分类型（V1.5.0 pet-species · D-10，PetSpecies 名）；{@code petType} 仍是大类三值。 */
+        String species) {
+
+    /** 便捷构造：V1.5.0 前的形态（不带细分类型，species = null，App 按 petType 兜底）。 */
+    public VisitorProfileResponse(String name, String avatarUrl, PetType petType, String breed, PetSex sex,
+            LocalDate birthday, String intro, String ownerNickname, Boolean iFollow, Boolean iFollowOwner,
+            String ownerToken) {
+        this(name, avatarUrl, petType, breed, sex, birthday, intro, ownerNickname, iFollow, iFollowOwner, ownerToken,
+                null);
+    }
 
     /** 分享 token 公开路径：不填追更 / 主人 token 三个字段（null → NON_NULL 省略）。 */
     static VisitorProfileResponse of(PetProfile p, String ownerNickname) {
@@ -65,6 +75,7 @@ public record VisitorProfileResponse(
                 ownerNickname,
                 iFollow,
                 iFollowOwner,
-                ownerToken);
+                ownerToken,
+                p.getPetSpecies() == null ? null : p.getPetSpecies().name());
     }
 }

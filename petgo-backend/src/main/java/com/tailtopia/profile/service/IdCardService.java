@@ -109,8 +109,12 @@ public class IdCardService {
     private IdCardCreateResponse create(long ownerId, CreateIdCardRequest req, boolean strict) {
         IdCardType cardType = normalizeCardType(req.cardType());
         String cardVariant = resolveVariant(cardType, req.cardVariant());
+        // V1.5.0 pet-species（D-13）：归一出大类 petType（卡号物种码 / 编号沿用都按它）与细分类型快照。
+        CardSpecies species = normalizeSpecies(req.petType(), req.species());
+        String petType = species.group();
+        String petSpecies = species.snapshot();
         if (strict) {
-            requireStrictFields(cardType, req);
+            requireStrictFields(cardType, req, petType);
         }
         // 取值白名单由 DTO 保证；旧接口 gender 空视同 UNKNOWN（1.3.3 口径），V2 已保证非空。
         String gender = req.gender() == null ? "UNKNOWN" : req.gender();
@@ -119,28 +123,49 @@ public class IdCardService {
         cardNumbers.lockOwnerForCardCreation(ownerId);
         long serial = serialAllocation.allocate(); // serial_id 照常每卡新取（沿用也不例外）
         Optional<IdCard> source =
-                idCards.findNumberSourceCard(ownerId, req.birthday(), gender, req.petType());
+                idCards.findNumberSourceCard(ownerId, req.birthday(), gender, petType);
         // 命中已解锁学生卡（三项相同）→ 复制两个号、不调发号器（计数器不前进）；只共号、不共解锁。
         String cardNo = source.map(IdCard::getCardNo)
-                .orElseGet(() -> cardNumbers.allocateCardNo(req.birthday(), gender, req.petType()));
+                .orElseGet(() -> cardNumbers.allocateCardNo(req.birthday(), gender, petType));
         String passportNo = source.map(IdCard::getPassportNo)
-                .orElseGet(() -> cardNumbers.allocatePassportNo(req.petType()));
+                .orElseGet(() -> cardNumbers.allocatePassportNo(petType));
         // AD-3：登记号的归属（同一用户可共用、跨用户不可），他人已持有 → 抛错整笔回滚（T-17）。
         cardNumbers.claimNumbers(ownerId, cardNo, passportNo);
         // intro：DTO 字段为兼容旧版 App 保留，一律不写入（PRD §3.4 / FR-142D.4）。
-        IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
+        IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), petType,
                 req.breed(), req.birthday(), req.avatarUrl(), null, gender, cardNo,
                 passportNo, blankToNull(req.birthCity()), blankToNull(req.address()),
                 blankToNull(req.occupation()), blankToNull(req.maritalStatus()),
                 cardType.name(), cardVariant, blankToNull(req.school()),
-                blankToNull(req.faculty())));
+                blankToNull(req.faculty()), petSpecies));
         source.ifPresent(src -> log.info("身份证编号沿用 card={} source={}", card.getId(), src.getId()));
         return IdCardCreateResponse.of(IdCardResponse.from(card), source.isPresent());
     }
 
-    /** V2 必填（AD-4 / D-17）：物种、性别；KTP / 居住证另加品种。 */
-    private static void requireStrictFields(IdCardType cardType, CreateIdCardRequest req) {
-        if (req.petType() == null) {
+    /**
+     * 归一建卡类型（V1.5.0 pet-species · D-13）→ {@code [大类 petType, 细分类型快照]}。
+     * 有 {@code species}：大类 = 其 group（{@code petType} 若也传了须一致，否则 422）；无：原逻辑，快照 = {@code petType}（可为 null）。
+     */
+    static CardSpecies normalizeSpecies(String rawPetType, String rawSpecies) {
+        if (rawSpecies != null && !rawSpecies.isBlank()) {
+            com.tailtopia.profile.domain.PetSpecies s = com.tailtopia.profile.domain.PetSpecies.parse(rawSpecies)
+                    .orElseThrow(() -> AppException.validation("细分类型不合法"));
+            String group = s.group().name();
+            if (rawPetType != null && !rawPetType.isBlank() && !group.equals(rawPetType)) {
+                throw AppException.validation("宠物类型与细分类型不一致");
+            }
+            return new CardSpecies(group, s.name());
+        }
+        return new CardSpecies(rawPetType, rawPetType);
+    }
+
+    /** 建卡归一结果：{@code group} 写卡快照 {@code pet_type}（卡号物种码 / 编号沿用按它），{@code snapshot} 写 {@code pet_species}。 */
+    record CardSpecies(String group, String snapshot) {
+    }
+
+    /** V2 必填（AD-4 / D-17）：物种（V1.5.0 起 species 或 petType 至少一个，传入归一后的大类）、性别；KTP / 居住证另加品种。 */
+    private static void requireStrictFields(IdCardType cardType, CreateIdCardRequest req, String petType) {
+        if (petType == null) {
             throw AppException.validation("物种必填");
         }
         if (req.gender() == null) {

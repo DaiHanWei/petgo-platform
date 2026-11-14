@@ -209,7 +209,8 @@ public class PetFollowService {
                             owner == null || owner.deleted() ? null : owner.nickname(),
                             tokens.get(p.getOwnerId()),
                             myPets.contains(p.getId()),
-                            ownerStates.getOrDefault(p.getOwnerId(), FollowState.NONE).iFollow());
+                            ownerStates.getOrDefault(p.getOwnerId(), FollowState.NONE).iFollow(),
+                            p.getPetSpecies() == null ? null : p.getPetSpecies().name());
                 })
                 .toList();
         PetFollow last = page.get(page.size() - 1);
