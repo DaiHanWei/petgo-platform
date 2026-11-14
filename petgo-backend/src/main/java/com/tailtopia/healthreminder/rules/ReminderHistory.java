@@ -61,4 +61,35 @@ public record ReminderHistory(List<Row> rows) {
                         && r.sourceRecordId() == sourceRecordId)
                 .map(Row::dueDate).min(LocalDate::compareTo);
     }
+
+    /**
+     * 上一个体检周期的终点：已发 CHECKUP 的发送日，或被日跑作废（名额 / 顺延到期 / 错过日跑 / 被生日等占用 / 旧版）的
+     * CHECKUP 的原定日，取较晚者。没有 → null。
+     *
+     * <p>PRD 只说「已发的体检」算 base；但一个周期若没发出去（被日跑作废），base 不前进，到期日永远停在过去、之后再也
+     * 不会有体检——这里把「已尝试过的周期」也当作终点，下一周期从它起算（Story 2.2 待确认）。
+     */
+    public LocalDate lastCheckupCycleEnd() {
+        LocalDate best = null;
+        for (Row r : rows) {
+            if (r.kind() != ReminderKind.CHECKUP) {
+                continue;
+            }
+            LocalDate d = null;
+            if (r.status() == ReminderStatus.SENT) {
+                d = r.sendDate();
+            } else if (r.status() == ReminderStatus.CANCELLED && r.cancelReason() != null
+                    && switch (r.cancelReason()) {
+                        case SKIPPED_CAP, EXPIRED_DEFER, MISSED_RUN, SKIPPED_SCHEDULED_PUSH, OLD_APP -> true;
+                        default -> false;
+                    }) {
+                // 排队行的原定日是上线日，真实尝试日是（逐日后移的）发送日。
+                d = r.origin() == ReminderOrigin.LAUNCH_QUEUE ? r.sendDate() : r.dueDate();
+            }
+            if (d != null && (best == null || d.isAfter(best))) {
+                best = d;
+            }
+        }
+        return best;
+    }
 }

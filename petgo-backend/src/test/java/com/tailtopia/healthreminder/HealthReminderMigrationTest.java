@@ -115,4 +115,18 @@ class HealthReminderMigrationTest {
                 .contains("'old_app'");
         assertThat(sql.toUpperCase(Locale.ROOT)).doesNotContain("SMALLINT");
     }
+
+    // ---- Story 2.2：V20261115_0130 ----
+
+    @Test
+    void vetConsultVisitsTableAndBackfillUseRealColumns() throws Exception {
+        String sql = sqlOnly(read(DIR.resolve("V20261115_0130__create_health_vet_consult_visits.sql")));
+        assertThat(sql).contains("CREATE TABLE health_vet_consult_visits")
+                .contains("session_id     BIGINT PRIMARY KEY")
+                .contains("co.consult_session_id = s.id")
+                .contains("JOIN pet_profiles p ON p.id = co.pet_profile_id")
+                .contains("AT TIME ZONE 'Asia/Jakarta'")
+                .contains("WHERE s.status = 'CLOSED'")
+                .contains("ON CONFLICT (session_id) DO NOTHING");
+    }
 }

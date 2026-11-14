@@ -6,6 +6,7 @@ import com.tailtopia.profile.domain.PetSex;
 import com.tailtopia.profile.domain.PetStatus;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.shared.schedule.ScheduleWindow;
+import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -14,14 +15,27 @@ import java.time.LocalDate;
  */
 public record PetHealthSnapshot(long petId, long ownerId, PetType petType, PetSex sex, LocalDate birthday,
         NeuterStatus neuterStatus, Boolean catInHome, boolean pregnantNursing, LocalDate createdDate,
-        PetStatus status) {
+        PetStatus status, Instant createdAt, Instant sexSetAt) {
+
+    /** 不带时刻的形状（Story 1.2 / 1.3 的规则不需要建档 / 设性别时刻）。 */
+    public PetHealthSnapshot(long petId, long ownerId, PetType petType, PetSex sex, LocalDate birthday,
+            NeuterStatus neuterStatus, Boolean catInHome, boolean pregnantNursing, LocalDate createdDate,
+            PetStatus status) {
+        this(petId, ownerId, petType, sex, birthday, neuterStatus, catInHome, pregnantNursing, createdDate, status,
+                null, null);
+    }
 
     public static PetHealthSnapshot of(PetProfile p) {
         return new PetHealthSnapshot(p.getId() == null ? 0L : p.getId(), p.getOwnerId() == null ? 0L : p.getOwnerId(),
                 p.getPetType(), p.getSex(), p.getBirthday(), p.getNeuterStatus(), p.getCatInHome(),
                 p.isPregnantNursingEffective(),
                 p.getCreatedAt() == null ? null : p.getCreatedAt().atZone(ScheduleWindow.WIB).toLocalDate(),
-                p.getStatus());
+                p.getStatus(), p.getCreatedAt(), p.getSexSetAt());
+    }
+
+    /** 建档后的第一次日跑（建档时刻未知 → 建档日）。 */
+    public LocalDate createdNextRunDate() {
+        return createdAt != null ? HealthDates.nextRunDate(createdAt) : createdDate;
     }
 
     public boolean isCat() {

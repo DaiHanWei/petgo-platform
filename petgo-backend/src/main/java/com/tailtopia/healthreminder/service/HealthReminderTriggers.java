@@ -73,7 +73,7 @@ public class HealthReminderTriggers {
     }
 
     /** 唯一索引冲突（并发写入同键）视为已有：整只重试一次。 */
-    void rebuild(long petId, RebuildTrigger trigger) {
+    public void rebuild(long petId, RebuildTrigger trigger) {
         try {
             try {
                 rebuilder.rebuildPet(petId, trigger);

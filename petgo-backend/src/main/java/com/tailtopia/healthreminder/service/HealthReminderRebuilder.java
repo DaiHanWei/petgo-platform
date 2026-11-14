@@ -65,6 +65,14 @@ public class HealthReminderRebuilder {
         rebuildInCurrentTx(petId, trigger, Instant.now());
     }
 
+    /**
+     * 新事务里以给定「当前时刻」重建：日跑 / 上线首跑传当天 00:00 WIB，使下一跑 = 当天（当天的点也排上）。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void rebuildPetAt(long petId, RebuildTrigger trigger, Instant now) {
+        rebuildInCurrentTx(petId, trigger, now);
+    }
+
     /** 在调用方事务里重建（日跑 / 上线首跑批量调用，调用方负责事务）。 */
     @Transactional(propagation = Propagation.MANDATORY)
     public void rebuildInCurrentTx(long petId, RebuildTrigger trigger, Instant now) {

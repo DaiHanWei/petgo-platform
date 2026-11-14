@@ -81,6 +81,6 @@ public final class BackfillPlanner {
     private static PetHealthSnapshot neutered(PetHealthSnapshot p) {
         return new PetHealthSnapshot(p.petId(), p.ownerId(), p.petType(), p.sex(), p.birthday(),
                 com.tailtopia.profile.domain.NeuterStatus.NEUTERED, p.catInHome(), p.pregnantNursing(),
-                p.createdDate(), p.status());
+                p.createdDate(), p.status(), p.createdAt(), p.sexSetAt());
     }
 }

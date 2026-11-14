@@ -23,10 +23,13 @@ public class HealthReminderCleanup {
     private final HealthReminderAnalytics analytics;
     private final JdbcTemplate jdbc;
     private final HealthReminderLock lock;
+    private final VetConsultVisitDao consultVisits;
 
     public HealthReminderCleanup(HealthReminderRepository reminders, HealthNotificationRepository notifications,
-            HealthReminderAnalytics analytics, JdbcTemplate jdbc, HealthReminderLock lock) {
+            HealthReminderAnalytics analytics, JdbcTemplate jdbc, HealthReminderLock lock,
+            VetConsultVisitDao consultVisits) {
         this.lock = lock;
+        this.consultVisits = consultVisits;
         this.reminders = reminders;
         this.notifications = notifications;
         this.analytics = analytics;
@@ -41,6 +44,7 @@ public class HealthReminderCleanup {
         AfterCommit.run(() -> pending.forEach(r -> analytics.cancelled(r, CancelReason.PET_DELETED, null, null)));
         reminders.deleteByPetProfileId(petId);
         notifications.deleteByPetProfileId(petId);
+        consultVisits.deleteForPet(petId);
     }
 
     /** 注销：该用户的个人上线行（无 FK，须显式删）。 */
