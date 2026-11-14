@@ -52,7 +52,7 @@ public class MilestoneShareService {
         // V1.4.0 multi-pet（Story 1.2 · P11）：按指定宠物（控制器经 PetResolver 解析），不属于本人 = 404。
         PetProfile pet = profiles.findByIdAndOwnerId(petId, ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
-        PetMilestone milestone = milestones.findByPetProfileIdAndCode(pet.getId(), code)
+        PetMilestone milestone = milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(pet.getId(), code)
                 .orElseThrow(() -> AppException.notFound("里程碑不存在"));
         MilestoneCompletion completion = completions.findByPetMilestoneId(milestone.getId())
                 .orElseThrow(() -> AppException.validation("里程碑尚未完成，不能分享"));

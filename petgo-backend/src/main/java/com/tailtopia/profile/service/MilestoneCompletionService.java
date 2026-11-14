@@ -75,7 +75,7 @@ public class MilestoneCompletionService {
             MilestoneCompletionSource source) {
         boolean any = false;
         for (PetProfile p : profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId)) {
-            any |= complete(p.getId(), p.getPetType(), event, source, null);
+            any |= complete(p.getId(), p.getMilestoneTrack(), event, source, null);
         }
         return any;
     }
@@ -89,7 +89,7 @@ public class MilestoneCompletionService {
     public boolean completeCodeForPet(long petProfileId, String code, MilestoneCompletionSource source,
             Long linkedContentId) {
         return profiles.findById(petProfileId)
-                .map(p -> complete(p.getId(), p.getPetType(), code, source, linkedContentId))
+                .map(p -> complete(p.getId(), p.getMilestoneTrack(), code, source, linkedContentId))
                 .orElse(false);
     }
 
@@ -97,7 +97,7 @@ public class MilestoneCompletionService {
     @Transactional
     public boolean completeForPet(long petProfileId, MilestoneAutoEvent event, MilestoneCompletionSource source) {
         return profiles.findById(petProfileId)
-                .map(p -> complete(p.getId(), p.getPetType(), event, source, null))
+                .map(p -> complete(p.getId(), p.getMilestoneTrack(), event, source, null))
                 .orElse(false);
     }
 
@@ -115,7 +115,7 @@ public class MilestoneCompletionService {
         if (petId != null) {
             Optional<PetProfile> pet = profiles.findByIdAndOwnerId(petId, ownerId);
             if (pet.isPresent()) {
-                return complete(pet.get().getId(), pet.get().getPetType(), event, source, null);
+                return complete(pet.get().getId(), pet.get().getMilestoneTrack(), event, source, null);
             }
         }
         return completeForDefaultPet(ownerId, event, source);
@@ -124,7 +124,7 @@ public class MilestoneCompletionService {
     @Transactional
     public boolean completeForDefaultPet(long ownerId, MilestoneAutoEvent event, MilestoneCompletionSource source) {
         return DefaultPetPolicy.pick(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId))
-                .map(p -> complete(p.getId(), p.getPetType(), event, source, null))
+                .map(p -> complete(p.getId(), p.getMilestoneTrack(), event, source, null))
                 .orElse(false);
     }
 
@@ -143,7 +143,7 @@ public class MilestoneCompletionService {
     @Transactional
     public boolean complete(long petProfileId, PetType petType, String code,
             MilestoneCompletionSource source, Long linkedContentId) {
-        Optional<PetMilestone> row = milestones.findByPetProfileIdAndCode(petProfileId, code);
+        Optional<PetMilestone> row = milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(petProfileId, code);
         if (row.isEmpty()) {
             // roster 里没有这一行。正常情况下走不到：自动路径的 code 出自映射表、已被
             // MilestoneAutoCompleteMapTest 逐条比对过该物种的清单；打卡路径在上游已查过 roster。
@@ -182,7 +182,7 @@ public class MilestoneCompletionService {
     @Transactional
     public void maybeUnlockLulusPemulaForOwner(long ownerId) {
         for (PetProfile p : profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(ownerId)) {
-            checkAndUnlockLulusPemula(p.getId(), p.getPetType());
+            checkAndUnlockLulusPemula(p.getId(), p.getMilestoneTrack());
         }
     }
 
@@ -190,7 +190,7 @@ public class MilestoneCompletionService {
     @Transactional
     public void maybeUnlockLulusPemulaForPet(long petProfileId) {
         profiles.findById(petProfileId)
-                .ifPresent(p -> checkAndUnlockLulusPemula(p.getId(), p.getPetType()));
+                .ifPresent(p -> checkAndUnlockLulusPemula(p.getId(), p.getMilestoneTrack()));
     }
 
     /**
@@ -200,7 +200,7 @@ public class MilestoneCompletionService {
     private void checkAndUnlockLulusPemula(long petProfileId, PetType petType) {
         boolean allMilestonePrereqs = MilestoneCatalog.newbiePrereqCodes(petType).stream()
                 .allMatch(code -> milestones
-                        .findByPetProfileIdAndCode(petProfileId, code)
+                        .findByPetProfileIdAndCodeAndRetiredAtIsNull(petProfileId, code)
                         .map(pm -> completions.existsByPetMilestoneId(pm.getId()))
                         .orElse(false));
         if (!allMilestonePrereqs) {
@@ -257,18 +257,18 @@ public class MilestoneCompletionService {
         java.time.LocalDate birthday = p.getBirthday();
         if (birthday != null && birthday.getMonthValue() == today.getMonthValue()
                 && birthday.getDayOfMonth() == today.getDayOfMonth()) {
-            complete(p.getId(), p.getPetType(), MilestoneAutoEvent.FIRST_BIRTHDAY,
+            complete(p.getId(), p.getMilestoneTrack(), MilestoneAutoEvent.FIRST_BIRTHDAY,
                     MilestoneCompletionSource.PUBLISH, null);
         }
         if (p.getCreatedAt() != null) {
             long days = java.time.temporal.ChronoUnit.DAYS.between(
                     p.getCreatedAt().atZone(WIB).toLocalDate(), today);
             if (days >= 100) {
-                complete(p.getId(), p.getPetType(), MilestoneAutoEvent.COMPANION_100_DAYS,
+                complete(p.getId(), p.getMilestoneTrack(), MilestoneAutoEvent.COMPANION_100_DAYS,
                         MilestoneCompletionSource.PUBLISH, null);
             }
             if (days >= 365) {
-                complete(p.getId(), p.getPetType(), MilestoneAutoEvent.COMPANION_365_DAYS,
+                complete(p.getId(), p.getMilestoneTrack(), MilestoneAutoEvent.COMPANION_365_DAYS,
                         MilestoneCompletionSource.PUBLISH, null);
             }
         }
@@ -283,7 +283,7 @@ public class MilestoneCompletionService {
                 continue;
             }
             boolean allDone = prereqs.stream().allMatch(pc -> milestones
-                    .findByPetProfileIdAndCode(petProfileId, pc)
+                    .findByPetProfileIdAndCodeAndRetiredAtIsNull(petProfileId, pc)
                     .map(pm -> completions.existsByPetMilestoneId(pm.getId()))
                     .orElse(false));
             if (allDone) {

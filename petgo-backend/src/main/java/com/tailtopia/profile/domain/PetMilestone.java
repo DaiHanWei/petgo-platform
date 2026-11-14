@@ -45,6 +45,10 @@ public class PetMilestone {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** 退役时刻（V1.5.0 pet-species · D-4）：非空 = 大类改变后不在当前清单；完成记录保留。 */
+    @Column(name = "retired_at")
+    private Instant retiredAt;
+
     protected PetMilestone() {
     }
 
@@ -89,5 +93,26 @@ public class PetMilestone {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getRetiredAt() {
+        return retiredAt;
+    }
+
+    /** 是否在当前清单（未退役）。 */
+    public boolean isActive() {
+        return retiredAt == null;
+    }
+
+    /** 退役（清单切换器用）；已退役不覆盖原时刻。 */
+    public void retire(Instant at) {
+        if (this.retiredAt == null) {
+            this.retiredAt = at;
+        }
+    }
+
+    /** 复活（来回改类型时旧清单的行重新生效）。 */
+    public void revive() {
+        this.retiredAt = null;
     }
 }

@@ -107,9 +107,9 @@ public class AccountMilestoneService {
         List<Long> petIds = new ArrayList<>();
         List<String> codes = new ArrayList<>();
         for (PetProfile p : active) {
-            String code = flag.codeOf(p.getPetType());
+            String code = flag.codeOf(p.getMilestoneTrack());
             // roster 行缺失（极老的无 roster 宠物）→ 跳过；首次打开列表 assignRoster 惰性物化时由钩子补「已完成且已庆祝」。
-            milestones.findByPetProfileIdAndCode(p.getId(), code).ifPresent(m -> {
+            milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(p.getId(), code).ifPresent(m -> {
                 if (!completions.existsByPetMilestoneId(m.getId())) {
                     completions.save(MilestoneCompletion.of(m.getId(), MilestoneCompletionSource.SYSTEM_AUTO, null));
                     petIds.add(p.getId());
@@ -117,7 +117,7 @@ public class AccountMilestoneService {
                 }
             });
         }
-        String target = active.isEmpty() ? null : flag.codeOf(active.get(0).getPetType());
+        String target = active.isEmpty() ? null : flag.codeOf(active.get(0).getMilestoneTrack());
         log.info("account milestone triggered userId={} flag={} activePets={} completed={}",
                 userId, flag.name(), active.size(), petIds.size());
         // 无 ACTIVE 宠物也发：成长值监听照样 +5（G-3）；通知侧按 petIds 判空不发。
@@ -155,8 +155,8 @@ public class AccountMilestoneService {
             if (flag.isEmpty()) {
                 continue;
             }
-            String code = flag.get().codeOf(pet.getPetType());
-            Optional<PetMilestone> m = milestones.findByPetProfileIdAndCode(pet.getId(), code);
+            String code = flag.get().codeOf(pet.getMilestoneTrack());
+            Optional<PetMilestone> m = milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(pet.getId(), code);
             if (m.isPresent() && !completions.existsByPetMilestoneId(m.get().getId())) {
                 completions.save(MilestoneCompletion.ofCelebrated(m.get().getId(),
                         MilestoneCompletionSource.SYSTEM_AUTO, at));

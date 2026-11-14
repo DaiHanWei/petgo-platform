@@ -31,7 +31,7 @@ class MilestoneServiceTest {
     /** V1.4.2 Story 2.1 T6.1：真正物化 roster 后调账号级钩子。 */
     @Test
     void assignRosterAppliesAccountFlagsAfterMaterialising() {
-        when(milestones.existsByPetProfileId(10L)).thenReturn(false);
+        when(milestones.existsByPetProfileIdAndRetiredAtIsNull(10L)).thenReturn(false);
 
         service.assignRoster(10L, com.tailtopia.profile.domain.PetType.CAT);
 
@@ -43,7 +43,7 @@ class MilestoneServiceTest {
     /** V1.4.2 Story 2.1 T6.1：已有 roster 的短路分支不调钩子（存量宠物走触发 / reconcile 路径）。 */
     @Test
     void assignRosterShortCircuitDoesNotApplyAccountFlags() {
-        when(milestones.existsByPetProfileId(10L)).thenReturn(true);
+        when(milestones.existsByPetProfileIdAndRetiredAtIsNull(10L)).thenReturn(true);
 
         service.assignRoster(10L, com.tailtopia.profile.domain.PetType.CAT);
 
@@ -53,7 +53,7 @@ class MilestoneServiceTest {
     /** V1.4.2 Story 2.1 T6.1：并发兜底（唯一约束冲突）分支不调钩子 —— 赢的那个事务已调过。 */
     @Test
     void assignRosterConcurrentLoserDoesNotApplyAccountFlags() {
-        when(milestones.existsByPetProfileId(10L)).thenReturn(false);
+        when(milestones.existsByPetProfileIdAndRetiredAtIsNull(10L)).thenReturn(false);
         when(milestones.saveAll(org.mockito.ArgumentMatchers.anyList()))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
 
@@ -65,7 +65,7 @@ class MilestoneServiceTest {
     /** V1.4.2 Story 2.1 AC1.5：分母随清单 —— 猫 / 狗 35、其他 20。 */
     @Test
     void progressDenominatorFollowsCatalog() {
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(anyLong())).thenReturn(List.of());
+        when(milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(anyLong())).thenReturn(List.of());
         org.assertj.core.api.Assertions.assertThat(
                 service.getProgress(10L, com.tailtopia.profile.domain.PetType.CAT).total()).isEqualTo(35);
         org.assertj.core.api.Assertions.assertThat(
@@ -77,22 +77,22 @@ class MilestoneServiceTest {
     @Test
     void petIdBReadsOnlyBsRoster() {
         when(petResolver.resolve(OWNER, 11L)).thenReturn(pet(OWNER, 11L, T0.plusSeconds(60)));
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(anyLong())).thenReturn(List.of());
+        when(milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(anyLong())).thenReturn(List.of());
 
         service.getMilestones(OWNER, 11L);
 
-        verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdOrderBySortOrderAsc(11L);
-        verify(milestones, never()).findByPetProfileIdOrderBySortOrderAsc(10L);
+        verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(11L);
+        verify(milestones, never()).findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(10L);
     }
 
     @Test
     void legacySignatureFallsBackToDefaultPet() {
         when(petResolver.resolve(OWNER, null)).thenReturn(pet(OWNER, 10L, T0));
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(anyLong())).thenReturn(List.of());
+        when(milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(anyLong())).thenReturn(List.of());
 
         service.getMilestones(OWNER);
 
-        verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdOrderBySortOrderAsc(10L);
+        verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(10L);
     }
 
     @Test

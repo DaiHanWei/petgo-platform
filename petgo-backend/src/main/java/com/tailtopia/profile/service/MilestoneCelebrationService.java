@@ -64,7 +64,7 @@ public class MilestoneCelebrationService {
         PetProfile pet = profiles.findByIdAndOwnerId(petId, ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
 
-        List<PetMilestone> roster = milestones.findByPetProfileIdOrderBySortOrderAsc(pet.getId());
+        List<PetMilestone> roster = milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(pet.getId());
         if (roster.isEmpty()) {
             return new MilestoneCelebrationReportResponse(0, 0L);
         }
@@ -106,7 +106,7 @@ public class MilestoneCelebrationService {
      */
     @Transactional(readOnly = true)
     public long countUncelebrated(long petProfileId) {
-        List<Long> rosterIds = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
+        List<Long> rosterIds = milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(petProfileId).stream()
                 .map(PetMilestone::getId).toList();
         return rosterIds.isEmpty() ? 0L
                 : completions.countByPetMilestoneIdInAndCelebratedAtIsNull(rosterIds);

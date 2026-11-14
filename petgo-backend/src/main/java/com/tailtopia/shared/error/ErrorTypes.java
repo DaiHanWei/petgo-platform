@@ -33,6 +33,9 @@ public final class ErrorTypes {
     /** V1.4.0 multi-pet Story 1.4（AD-3）：建档时名额已满（409），扩展成员见 {@code PetSlotFullException}。 */
     public static final URI PET_SLOT_FULL = URI.create(BASE + "pet-slot-full");
 
+    /** V1.5.0 pet-species Story 1.2（D-9）：宠物类型 90 天冷却中（409，扩展成员 changeableFrom）。 */
+    public static final URI PET_SPECIES_COOLDOWN = URI.create(BASE + "pet-species-cooldown");
+
     /** V1.4.0 multi-pet Story 1.4（AD-3）：已达每账号 5 只上限（409，优先于 {@link #PET_SLOT_FULL}）。 */
     public static final URI PET_LIMIT_REACHED = URI.create(BASE + "pet-limit-reached");
 

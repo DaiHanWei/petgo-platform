@@ -52,7 +52,7 @@ public class NewbieTaskService {
         for (NewbieTask task : NewbieTask.ALL) {
             boolean completed = pets.stream().anyMatch(pet -> task.isHealthRecord()
                     ? healthRecords.existsByPetProfileId(pet.getId())
-                    : isMilestoneDone(pet.getId(), pet.getPetType(), task.milestoneSuffix()));
+                    : isMilestoneDone(pet.getId(), pet.getMilestoneTrack(), task.milestoneSuffix()));
             if (completed) {
                 done++;
             }
@@ -60,7 +60,7 @@ public class NewbieTaskService {
         }
 
         boolean lulusUnlocked = pets.stream().anyMatch(pet -> isMilestoneDoneByCode(
-                pet.getId(), MilestoneCatalog.lulusPemulaCode(pet.getPetType())));
+                pet.getId(), MilestoneCatalog.lulusPemulaCode(pet.getMilestoneTrack())));
         return new NewbieTaskResponse(items, done, NewbieTask.ALL.size(), lulusUnlocked);
     }
 
@@ -69,7 +69,7 @@ public class NewbieTaskService {
     }
 
     private boolean isMilestoneDoneByCode(long petProfileId, String code) {
-        return milestones.findByPetProfileIdAndCode(petProfileId, code)
+        return milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(petProfileId, code)
                 .map(m -> completions.existsByPetMilestoneId(m.getId()))
                 .orElse(false);
     }

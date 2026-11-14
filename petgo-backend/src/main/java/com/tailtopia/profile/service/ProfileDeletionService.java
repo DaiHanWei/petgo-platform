@@ -117,7 +117,8 @@ public class ProfileDeletionService {
         healthRecords.deleteByPetProfileId(petId);
 
         // 里程碑级联删除（Story 8.1，归 profile 域）：先删完成记录（FK→roster）→ 再删 roster。
-        List<Long> milestoneIds = petMilestones.findByPetProfileIdOrderBySortOrderAsc(petId).stream()
+        // V1.5.0 pet-species：含退役行（大类改变后旧清单的行），否则其完成记录残留会让 deleteByPetProfileId 撞 FK。
+        List<Long> milestoneIds = petMilestones.findByPetProfileId(petId).stream()
                 .map(PetMilestone::getId).toList();
         if (!milestoneIds.isEmpty()) {
             milestoneCompletions.deleteByPetMilestoneIdIn(milestoneIds);

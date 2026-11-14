@@ -646,7 +646,7 @@ public class TimelineService {
             return s;
         }
         PetProfile profile = requireProfile(ownerId, petId);
-        MilestoneService.V142Share h = milestoneService.v142Share(profile.getId(), profile.getPetType());
+        MilestoneService.V142Share h = milestoneService.v142Share(profile.getId(), profile.getMilestoneTrack());
         return new ArchiveStatsResponse(s.happyMomentCount(), s.consultCount(),
                 Math.max(0, s.milestoneCompleted() - h.completed()), Math.max(0, s.milestoneTotal() - h.total()),
                 s.healthRecordCount(), Math.max(0, s.milestoneUncelebrated() - h.uncelebrated()),
@@ -661,7 +661,7 @@ public class TimelineService {
         HealthEventTimelineSource health = healthSource.getIfAvailable();
         long consult = health == null ? 0L : health.countHealthEvents(profile.getId());
         MilestoneService.MilestoneProgress progress =
-                milestoneService.getProgress(profile.getId(), profile.getPetType());
+                milestoneService.getProgress(profile.getId(), profile.getMilestoneTrack());
         long healthRecordCount = healthRecords.countByPetProfileId(profile.getId());
         // 角标数（V1.3.0 Story 1.4 · AD-A2.2）：搭这一次请求的顺风车，不为它多发一次。
         long uncelebrated = celebrationService.countUncelebrated(profile.getId());

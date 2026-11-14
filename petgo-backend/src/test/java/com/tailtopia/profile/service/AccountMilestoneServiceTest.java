@@ -70,7 +70,7 @@ class AccountMilestoneServiceTest {
     void setUp() {
         when(accounts.isActiveAccount(anyLong())).thenReturn(true);
         when(deletions.findByUserId(anyLong())).thenReturn(Optional.empty());
-        when(milestones.findByPetProfileIdAndCode(anyLong(), anyString())).thenAnswer(inv -> {
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(anyLong(), anyString())).thenAnswer(inv -> {
             Long id = rosterIds.get(inv.getArgument(0) + "/" + inv.getArgument(1));
             if (id == null) {
                 return Optional.empty();

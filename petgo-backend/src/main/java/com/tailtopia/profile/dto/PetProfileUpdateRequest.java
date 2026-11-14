@@ -34,11 +34,23 @@ public record PetProfileUpdateRequest(
         @DecimalMin(value = "0.1", message = "体重需大于 0")
         @DecimalMax(value = "200", message = "体重不能超过 200 kg") BigDecimal weightKg,
         /** NEUTERED / INTACT / UNKNOWN，可空 = 不改动。 */
-        String neuterStatus) {
+        String neuterStatus,
+        /**
+         * 细分类型（V1.5.0 pet-species Story 1.2 · D-8），可空 = 保留原值（旧版 App 不传）。
+         * 改宫格项受 90 天冷却（409 {@code pet-species-cooldown}）；「其他」组内换物种不受限。
+         */
+        @Pattern(regexp = com.tailtopia.profile.domain.PetSpecies.WIRE_PATTERN, message = "细分类型不合法")
+        String species) {
 
     /** 便捷构造：不改动性别/体重/绝育状态（部分更新语义下 null = 不动）。 */
     public PetProfileUpdateRequest(String avatarUrl, String name, String breed,
             LocalDate birthday, String intro) {
         this(avatarUrl, name, breed, birthday, null, intro, null, null);
+    }
+
+    /** 便捷构造：V1.5.0 前的 8 参形态（不改细分类型）。 */
+    public PetProfileUpdateRequest(String avatarUrl, String name, String breed, LocalDate birthday, String sex,
+            String intro, BigDecimal weightKg, String neuterStatus) {
+        this(avatarUrl, name, breed, birthday, sex, intro, weightKg, neuterStatus, null);
     }
 }

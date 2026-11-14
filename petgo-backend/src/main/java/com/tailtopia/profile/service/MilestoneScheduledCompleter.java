@@ -46,7 +46,7 @@ public class MilestoneScheduledCompleter {
             // 物种差异（猫狗 M8 / 通用 G-M3）本就在这条路径上被正确处理过，V1.3.0 Story 1.1 只是把它
             // 从这里的局部 switch 收进 MilestoneAutoCompleteMap —— 行为一字不变，但从此与其余自动
             // 路径共用同一张表，不会再出现「某一条路径单独漏改」的分叉。
-            if (completion.complete(pet.getId(), pet.getPetType(),
+            if (completion.complete(pet.getId(), pet.getMilestoneTrack(),
                     MilestoneAutoEvent.COMPANION_30_DAYS,
                     MilestoneCompletionSource.SYSTEM_AUTO, null)) {
                 newlyCompleted++;

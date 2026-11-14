@@ -282,7 +282,7 @@ public class VisitorProjectionService {
             return s;
         }
         com.tailtopia.profile.service.MilestoneService.V142Share h =
-                milestoneService.v142Share(profile.getId(), profile.getPetType());
+                milestoneService.v142Share(profile.getId(), profile.getMilestoneTrack());
         return new VisitorStats(s.happyMomentCount(), s.consultCount(),
                 Math.max(0, s.milestoneCompleted() - h.completed()), Math.max(0, s.milestoneTotal() - h.total()),
                 s.giftTotalValue(), s.followerCount());
@@ -295,7 +295,7 @@ public class VisitorProjectionService {
                 authorStats.happyMomentCount(),
                 authorStats.consultCount(),
                 authorStats.milestoneCompleted(),
-                MilestoneCatalog.forType(profile.getPetType()).size(),
+                MilestoneCatalog.forType(profile.getMilestoneTrack()).size(),
                 // V1.4.0 gift Story 2.1：礼物总价值复用作者态同一次计算，不另写一份。
                 authorStats.giftTotalValue(),
                 // V1.4.2 social-topic Story 1.1：追更人数同样透传作者态那一份。

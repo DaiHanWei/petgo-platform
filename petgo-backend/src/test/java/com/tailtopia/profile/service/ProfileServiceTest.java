@@ -57,9 +57,60 @@ class ProfileServiceTest {
         events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
         when(petSlots.unitPrice()).thenReturn(PetSlotService.DEFAULT_UNIT_PRICE);
         when(petSlots.quotaOf(org.mockito.ArgumentMatchers.anyLong())).thenReturn(quota(1, 0, 5));
+        speciesChanges = Mockito.mock(PetSpeciesChangeService.class);
         service = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
                 mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock,
-                new PetWriteGuard(profiles));
+                new PetWriteGuard(profiles), speciesChanges);
+    }
+
+    private PetSpeciesChangeService speciesChanges;
+
+    // ---------- V1.5.0 pet-species Story 1.2 · AC4：编辑接口改类型（逻辑本体见 PetSpeciesChangeServiceTest）----------
+
+    @Test
+    void updateWithoutSpeciesKeepsTypeAndSkipsChange() {
+        PetProfile existing = PetProfile.create(1L, com.tailtopia.profile.domain.PetSpecies.RABBIT, "Old", null,
+                null, LocalDate.of(2020, 1, 1), null, "TOK");
+        when(profiles.findDefault(1L)).thenReturn(java.util.Optional.of(existing));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
+
+        PetProfileResponse resp = service.update(1L,
+                new com.tailtopia.profile.dto.PetProfileUpdateRequest(null, "New", null, null, null));
+
+        assertThat(resp.species()).isEqualTo("RABBIT");
+        assertThat(resp.petType()).isEqualTo("OTHER");
+        Mockito.verifyNoInteractions(speciesChanges);
+    }
+
+    @Test
+    void updateWithSpeciesDelegatesBeforeOtherFields() {
+        PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", null, "Persia",
+                LocalDate.of(2020, 1, 1), null, "TOK");
+        when(profiles.findDefault(1L)).thenReturn(java.util.Optional.of(existing));
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100L));
+
+        service.update(1L, new com.tailtopia.profile.dto.PetProfileUpdateRequest(
+                null, null, null, null, null, null, null, null, "rabbit"));
+        Mockito.verify(speciesChanges).applyUserChange(existing, com.tailtopia.profile.domain.PetSpecies.RABBIT, true);
+
+        service.update(1L, new com.tailtopia.profile.dto.PetProfileUpdateRequest(
+                null, null, "Lop", null, null, null, null, null, "RABBIT"));
+        Mockito.verify(speciesChanges).applyUserChange(existing, com.tailtopia.profile.domain.PetSpecies.RABBIT, false);
+    }
+
+    @Test
+    void updateCooldownRejectsWholeRequest() {
+        PetProfile existing = PetProfile.create(1L, PetType.CAT, "Old", null, null,
+                LocalDate.of(2020, 1, 1), null, "TOK");
+        when(profiles.findDefault(1L)).thenReturn(java.util.Optional.of(existing));
+        when(speciesChanges.applyUserChange(any(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenThrow(new PetSpeciesCooldownException(LocalDate.of(2027, 2, 22)));
+
+        assertThatThrownBy(() -> service.update(1L, new com.tailtopia.profile.dto.PetProfileUpdateRequest(
+                null, "New", null, null, null, null, null, null, "DOG")))
+                .isInstanceOf(PetSpeciesCooldownException.class);
+        assertThat(existing.getName()).isEqualTo("Old"); // 其他字段不生效
+        Mockito.verify(profiles, Mockito.never()).save(any(PetProfile.class));
     }
 
     private PetProfileCreateRequest req() {
@@ -340,7 +391,7 @@ class ProfileServiceTest {
         var events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
         ProfileService svc = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
                 mediaDeletion, events, tailsonalityBadges, new PetResolver(profiles), petSlots, petSlotLock,
-                new PetWriteGuard(profiles));
+                new PetWriteGuard(profiles), Mockito.mock(PetSpeciesChangeService.class));
         PetProfile b = withId(PetProfile.create(1L, PetType.DOG, "B", null, null, null, null, "TOK_B"), 11L);
         when(profiles.findByIdAndOwnerId(11L, 1L)).thenReturn(java.util.Optional.of(b));
         svc.recordCardShared(1L, 11L);

@@ -67,6 +67,11 @@ public interface MilestoneCompletionRepository extends JpaRepository<MilestoneCo
             + "m.code, m.level, c.completedAt, c.linkedContentId) "
             + "from MilestoneCompletion c join PetMilestone m on m.id = c.petMilestoneId "
             + "where m.petProfileId = :petProfileId and c.completedAt < :upperBound "
+            // V1.5.0 pet-species（D-4）：退役行的完成记录保留在时间线上；但若当前清单里已有一条按事实补记的同一时刻
+            // 完成（MilestoneTrackSwitcher 沿用旧完成时间），只显示当前清单那条，同一件事不出现两次。
+            + "and (m.retiredAt is null or not exists (select 1 from MilestoneCompletion c2 "
+            + "join PetMilestone m2 on m2.id = c2.petMilestoneId where m2.petProfileId = m.petProfileId "
+            + "and m2.retiredAt is null and c2.completedAt = c.completedAt)) "
             + "order by c.completedAt desc")
     List<MilestoneTimelineView> findTimelineViewsBefore(@Param("petProfileId") long petProfileId,
             @Param("upperBound") Instant upperBound, Pageable page);

@@ -69,7 +69,8 @@ class MilestoneCheckInServiceTest {
 
     @Test
     void candidatesMarkLinkedContents() {
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(10L))
+        // V1.5.0 pet-species：「已关联」按全部 roster 行（含退役）判定。
+        when(milestones.findByPetProfileId(10L))
                 .thenReturn(List.of(milestone("C-S6", 1)));
         when(completions.findByPetMilestoneIdIn(List.of(1L)))
                 .thenReturn(List.of(MilestoneCompletion.of(1L, MilestoneCompletionSource.USER_CHECKIN, 2L)));
@@ -86,7 +87,7 @@ class MilestoneCheckInServiceTest {
 
     @Test
     void checkInSucceedsForCheckinMilestone() {
-        when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
         when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
@@ -105,7 +106,7 @@ class MilestoneCheckInServiceTest {
 
     @Test
     void checkInRejectsNonCheckinMilestone() {
-        when(milestones.findByPetProfileIdAndCode(10L, "C-S1"))
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "C-S1"))
                 .thenReturn(Optional.of(milestone("C-S1", 6))); // SYSTEM_AUTO
         assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S1", 99L))
                 .isInstanceOf(AppException.class).hasMessageContaining("非用户打卡");
@@ -113,7 +114,7 @@ class MilestoneCheckInServiceTest {
 
     @Test
     void checkInRejectsAlreadyCompleted() {
-        when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(true);
         assertThatThrownBy(() -> service.checkIn(7L, 10L, "C-S6", 99L))
@@ -122,7 +123,7 @@ class MilestoneCheckInServiceTest {
 
     @Test
     void checkInRejectsForeignContent() {
-        when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
         when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(false);
@@ -134,7 +135,7 @@ class MilestoneCheckInServiceTest {
 
     @Test
     void checkInRejectsAlreadyLinkedContent() {
-        when(milestones.findByPetProfileIdAndCode(10L, "C-S6"))
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "C-S6"))
                 .thenReturn(Optional.of(milestone("C-S6", 5)));
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
         when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
@@ -151,7 +152,7 @@ class MilestoneCheckInServiceTest {
         when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
         PetMilestone m = PetMilestone.of(11L, MilestoneCatalog.byCode("D-S6"));
         setField(m, "id", 8L);
-        when(milestones.findByPetProfileIdAndCode(11L, "D-S6")).thenReturn(Optional.of(m));
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(11L, "D-S6")).thenReturn(Optional.of(m));
         when(completions.existsByPetMilestoneId(8L)).thenReturn(false);
         when(contentService.isOwnGrowthMomentOfPet(7L, 11L, 99L)).thenReturn(true);
         when(completions.existsByLinkedContentId(99L)).thenReturn(false);
@@ -162,7 +163,7 @@ class MilestoneCheckInServiceTest {
 
         org.mockito.Mockito.verify(completionService).completeCodeForPet(
                 11L, "D-S6", MilestoneCompletionSource.USER_CHECKIN, 99L);
-        org.mockito.Mockito.verify(milestones, org.mockito.Mockito.never()).findByPetProfileIdAndCode(10L, "D-S6");
+        org.mockito.Mockito.verify(milestones, org.mockito.Mockito.never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "D-S6");
 
         when(profiles.findByIdAndOwnerId(99L, 7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.checkIn(7L, 99L, "C-S6", 99L)).isInstanceOf(AppException.class);
@@ -177,8 +178,8 @@ class MilestoneCheckInServiceTest {
         when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
         PetMilestone mb = PetMilestone.of(11L, MilestoneCatalog.byCode("C-S6"));
         setField(mb, "id", 8L);
-        when(milestones.findByPetProfileIdAndCode(11L, "C-S6")).thenReturn(Optional.of(mb));
-        when(milestones.findByPetProfileIdAndCode(10L, "C-S6")).thenReturn(Optional.of(milestone("C-S6", 5)));
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(11L, "C-S6")).thenReturn(Optional.of(mb));
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "C-S6")).thenReturn(Optional.of(milestone("C-S6", 5)));
         when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
         when(contentService.isOwnGrowthMomentOfPet(7L, 11L, 99L)).thenReturn(false);
         when(completionService.completeCodeForPet(10L, "C-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
@@ -203,7 +204,7 @@ class MilestoneCheckInServiceTest {
         when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
         PetMilestone mb = PetMilestone.of(11L, MilestoneCatalog.byCode("C-S6"));
         setField(mb, "id", 8L);
-        when(milestones.findByPetProfileIdAndCode(11L, "C-S6")).thenReturn(Optional.of(mb));
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(11L, "C-S6")).thenReturn(Optional.of(mb));
         // 关联表里 A、B 都有这条帖（pet_id 兼容字段只记 A）。
         when(contentService.isOwnGrowthMomentOfPet(7L, 10L, 99L)).thenReturn(true);
         when(contentService.isOwnGrowthMomentOfPet(7L, 11L, 99L)).thenReturn(true);
@@ -258,6 +259,6 @@ class MilestoneCheckInServiceTest {
                     assertThat(e.getType()).isEqualTo(com.tailtopia.shared.error.ErrorTypes.PET_READ_ONLY);
                 });
         Mockito.verifyNoInteractions(completionService);
-        Mockito.verify(milestones, Mockito.never()).findByPetProfileIdAndCode(Mockito.anyLong(), Mockito.anyString());
+        Mockito.verify(milestones, Mockito.never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(Mockito.anyLong(), Mockito.anyString());
     }
 }

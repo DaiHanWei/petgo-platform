@@ -10,11 +10,16 @@ import org.springframework.data.repository.query.Param;
 
 public interface PetMilestoneRepository extends JpaRepository<PetMilestone, Long> {
 
-    List<PetMilestone> findByPetProfileIdOrderBySortOrderAsc(long petProfileId);
+    // V1.5.0 pet-species（D-4）：读路径只读活跃清单（retired_at IS NULL）；退役行 = 大类改变后的旧清单，完成记录保留。
 
-    boolean existsByPetProfileId(long petProfileId);
+    List<PetMilestone> findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(long petProfileId);
 
-    Optional<PetMilestone> findByPetProfileIdAndCode(long petProfileId, String code);
+    boolean existsByPetProfileIdAndRetiredAtIsNull(long petProfileId);
+
+    Optional<PetMilestone> findByPetProfileIdAndCodeAndRetiredAtIsNull(long petProfileId, String code);
+
+    /** 含退役行的全部 roster（清单切换器、删档级联用）。 */
+    List<PetMilestone> findByPetProfileId(long petProfileId);
 
     void deleteByPetProfileId(long petProfileId);
 
@@ -23,6 +28,6 @@ public interface PetMilestoneRepository extends JpaRepository<PetMilestone, Long
      * 同模块联表（都在 profile 域）。
      */
     @Query("select m.id from PetMilestone m join PetProfile p on p.id = m.petProfileId "
-            + "where p.ownerId = :ownerId and m.code in :codes")
+            + "where p.ownerId = :ownerId and m.code in :codes and m.retiredAt is null")
     List<Long> findIdsByOwnerIdAndCodeIn(@Param("ownerId") long ownerId, @Param("codes") Collection<String> codes);
 }

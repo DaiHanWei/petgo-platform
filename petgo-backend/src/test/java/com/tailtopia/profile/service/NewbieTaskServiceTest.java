@@ -53,7 +53,7 @@ class NewbieTaskServiceTest {
         long id = nextId++;
         PetMilestone m = PetMilestone.of(petProfileId, MilestoneCatalog.byCode(code));
         setField(m, "id", id);
-        when(milestones.findByPetProfileIdAndCode(petProfileId, code)).thenReturn(Optional.of(m));
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(petProfileId, code)).thenReturn(Optional.of(m));
         when(completions.existsByPetMilestoneId(id)).thenReturn(done);
     }
 

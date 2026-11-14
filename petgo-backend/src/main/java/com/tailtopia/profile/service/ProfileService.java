@@ -56,13 +56,16 @@ public class ProfileService {
     /** V1.4.0 multi-pet Story 2.1（AD-8）：只读宠物不可编辑档案（409 {@code pet-read-only}）。 */
     private final PetWriteGuard petWriteGuard;
 
+    private final PetSpeciesChangeService speciesChanges;
+
     public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
             MilestoneService milestoneService, ProfileDeletionService profileDeletion,
             MediaDeletionService mediaDeletion, ApplicationEventPublisher events,
             com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges,
             PetResolver petResolver, PetSlotService petSlots, PetSlotLock petSlotLock,
-            PetWriteGuard petWriteGuard) {
+            PetWriteGuard petWriteGuard, PetSpeciesChangeService speciesChanges) {
         this.petWriteGuard = petWriteGuard;
+        this.speciesChanges = speciesChanges;
         this.tailsonalityBadges = tailsonalityBadges;
         this.petResolver = petResolver;
         this.petSlots = petSlots;
@@ -200,6 +203,13 @@ public class ProfileService {
         PetProfile profile = petResolver.resolve(ownerId, petId);
         // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、任何改动之前校验可写；409 时控制器不触发名片重渲染。
         petWriteGuard.requireWritable(profile);
+        // V1.5.0 pet-species Story 1.2（D-8）：类型在其他字段之前处理。null = 保留原值（旧版 App 不传，迁移过的兔子不会被改回）；
+        // 冷却中改宫格项 → 409，整次请求回滚（其他字段也不存，Q-2）。
+        if (req.species() != null) {
+            PetSpecies newSpecies = PetSpecies.parse(req.species())
+                    .orElseThrow(() -> AppException.validation("细分类型不合法"));
+            speciesChanges.applyUserChange(profile, newSpecies, req.breed() == null);
+        }
 
         boolean nameChanged = false;
         if (req.name() != null) {

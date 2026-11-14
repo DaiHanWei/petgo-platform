@@ -89,7 +89,7 @@ class ProfileDeletionServiceTest {
         when(healthEvents.findByPetId(PET_A)).thenReturn(List.of(e));
         PetMilestone m = PetMilestone.of(PET_A, MilestoneCatalog.byCode("C-S1"));
         ReflectionTestUtils.setField(m, "id", 501L);
-        when(petMilestones.findByPetProfileIdOrderBySortOrderAsc(PET_A)).thenReturn(List.of(m));
+        when(petMilestones.findByPetProfileId(PET_A)).thenReturn(List.of(m));
 
         PersonalMedia media = service.deleteByPetId(OWNER, PET_A);
 

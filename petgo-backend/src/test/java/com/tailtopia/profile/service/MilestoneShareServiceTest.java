@@ -58,7 +58,7 @@ class MilestoneShareServiceTest {
         PetMilestone m = Mockito.mock(PetMilestone.class);
         when(m.getId()).thenReturn(MILESTONE_ID);
         when(m.getLevel()).thenReturn(MilestoneLevel.S);
-        when(milestones.findByPetProfileIdAndCode(PET_ID, CODE)).thenReturn(Optional.of(m));
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(PET_ID, CODE)).thenReturn(Optional.of(m));
 
         MilestoneCompletion c = Mockito.mock(MilestoneCompletion.class);
         when(c.getCompletedAt()).thenReturn(Instant.parse("2026-06-01T00:00:00Z"));
@@ -117,7 +117,7 @@ class MilestoneShareServiceTest {
 
     @Test
     void unknownMilestoneRejected() {
-        when(milestones.findByPetProfileIdAndCode(PET_ID, CODE)).thenReturn(Optional.empty());
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(PET_ID, CODE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createOrRefresh(OWNER, PET_ID, CODE, req()))
                 .isInstanceOf(AppException.class);

@@ -82,7 +82,7 @@ public class MilestoneCheckInService {
         PetProfile pet = requireProfile(ownerId, petId);
         // V1.4.0 multi-pet Story 2.1（AD-8）：归属（404）之后、任何写之前校验可写。
         petWriteGuard.requireWritable(pet);
-        PetMilestone milestone = milestones.findByPetProfileIdAndCode(pet.getId(), code)
+        PetMilestone milestone = milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(pet.getId(), code)
                 .orElseThrow(() -> AppException.notFound("里程碑不存在"));
         if (milestone.getTriggerType() != MilestoneTriggerType.USER_CHECKIN) {
             throw AppException.validation("该里程碑非用户打卡类，不支持手动关联");
@@ -115,7 +115,8 @@ public class MilestoneCheckInService {
     }
 
     private Set<Long> linkedContentIds(long petProfileId) {
-        List<Long> rosterIds = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
+        // V1.5.0 pet-species：含退役行——旧清单打卡已关联过的帖子仍算「已用」，不因换清单被再次关联。
+        List<Long> rosterIds = milestones.findByPetProfileId(petProfileId).stream()
                 .map(PetMilestone::getId).toList();
         Set<Long> linked = new HashSet<>();
         if (!rosterIds.isEmpty()) {

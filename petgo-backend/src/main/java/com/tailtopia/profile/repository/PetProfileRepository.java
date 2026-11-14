@@ -5,7 +5,9 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -63,4 +65,12 @@ public interface PetProfileRepository extends JpaRepository<PetProfile, Long> {
     /** 重新读出 {@code follower_count}（实体值是加载时快照，追更写入后要最新值时用）；宠物不存在为 null。 */
     @Query(value = "SELECT follower_count FROM pet_profiles WHERE id = :petId", nativeQuery = true)
     Integer findFollowerCount(@Param("petId") long petId);
+
+    /**
+     * 对宠物行加悲观写锁后读取（V1.5.0 pet-species · D-8：冷却判定是读后写，防两台设备同时改绕过冷却）。
+     * 须在事务内调用。
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from PetProfile p where p.id = :id")
+    Optional<PetProfile> findByIdForUpdate(@Param("id") long id);
 }

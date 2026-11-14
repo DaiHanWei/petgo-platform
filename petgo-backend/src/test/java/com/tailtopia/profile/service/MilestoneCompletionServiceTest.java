@@ -64,7 +64,7 @@ class MilestoneCompletionServiceTest {
         long id = nextId++;
         PetMilestone m = PetMilestone.of(petProfileId, MilestoneCatalog.byCode(code));
         setField(m, "id", id);
-        when(milestones.findByPetProfileIdAndCode(petProfileId, code)).thenReturn(Optional.of(m));
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(petProfileId, code)).thenReturn(Optional.of(m));
         when(completions.existsByPetMilestoneId(id)).thenReturn(false);
         return id;
     }
@@ -105,7 +105,7 @@ class MilestoneCompletionServiceTest {
                 MilestoneCompletionSource.SYSTEM_AUTO);
 
         assertThat(done).isFalse();
-        verify(milestones, never()).findByPetProfileIdAndCode(org.mockito.ArgumentMatchers.anyLong(),
+        verify(milestones, never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyString());
         verify(completions, never()).save(any());
     }
@@ -114,7 +114,7 @@ class MilestoneCompletionServiceTest {
     @Test
     void noopWhenCodeMissingFromRoster() {
         when(profiles.findAllByOwnerIdOrderByCreatedAtAscIdAsc(7L)).thenReturn(java.util.List.of(profile(PetType.OTHER, 10)));
-        when(milestones.findByPetProfileIdAndCode(10, "G-S1")).thenReturn(Optional.empty());
+        when(milestones.findByPetProfileIdAndCodeAndRetiredAtIsNull(10, "G-S1")).thenReturn(Optional.empty());
 
         boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
                 MilestoneCompletionSource.SYSTEM_AUTO);
@@ -132,9 +132,9 @@ class MilestoneCompletionServiceTest {
         service.onGrowthMomentCountForPet(10L, 10);
 
         // S2 ∈ 新手前置：完成后会再被 Lulus Pemula 前置扫描查一次（7.3），故 atLeastOnce。
-        verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndCode(10, "D-S2");
-        verify(milestones).findByPetProfileIdAndCode(10, "D-M10");
-        verify(milestones, never()).findByPetProfileIdAndCode(10, "D-L5");
+        verify(milestones, org.mockito.Mockito.atLeastOnce()).findByPetProfileIdAndCodeAndRetiredAtIsNull(10, "D-S2");
+        verify(milestones).findByPetProfileIdAndCodeAndRetiredAtIsNull(10, "D-M10");
+        verify(milestones, never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(10, "D-L5");
         verify(completions, times(2)).save(any()); // S2 + M10（无健康记录 → 不解锁 Lulus Pemula）
     }
 
@@ -278,7 +278,7 @@ class MilestoneCompletionServiceTest {
 
         // 仅 S5 落库，C-S16 不解锁。
         verify(completions, times(1)).save(any());
-        verify(milestones, never()).findByPetProfileIdAndCode(10, "C-S16");
+        verify(milestones, never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(10, "C-S16");
     }
 
     /** 健康记录事件路径：S1–S5 已全完成，创建健康记录后经 owner 入口解锁 Lulus Pemula。 */
@@ -359,7 +359,7 @@ class MilestoneCompletionServiceTest {
                 MilestoneCompletionSource.SYSTEM_AUTO);
 
         assertThat(done).isTrue();
-        verify(milestones).findByPetProfileIdAndCode(10L, "G-S11");
+        verify(milestones).findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "G-S11");
     }
 
     // ===== V1.4.0 multi-pet Story 1.2：账号级入口逐只、打卡只完成指定宠物 =====
@@ -402,7 +402,7 @@ class MilestoneCompletionServiceTest {
         boolean done = service.completeCodeForPet(11L, "C-M5", MilestoneCompletionSource.USER_CHECKIN, 99L);
 
         assertThat(done).isTrue();
-        verify(milestones, never()).findByPetProfileIdAndCode(10L, "C-M5");
+        verify(milestones, never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(10L, "C-M5");
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions).save(cap.capture());
         assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(b);
@@ -469,7 +469,7 @@ class MilestoneCompletionServiceTest {
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions).save(cap.capture());
         assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(b);
-        verify(milestones, never()).findByPetProfileIdAndCode(org.mockito.ArgumentMatchers.eq(10L),
+        verify(milestones, never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(org.mockito.ArgumentMatchers.eq(10L),
                 org.mockito.ArgumentMatchers.anyString());
         verify(profiles, never()).findAllByOwnerIdOrderByCreatedAtAscIdAsc(org.mockito.ArgumentMatchers.anyLong());
     }
@@ -494,7 +494,7 @@ class MilestoneCompletionServiceTest {
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions).save(cap.capture());
         assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(a);
-        verify(milestones, never()).findByPetProfileIdAndCode(11L, "D-S5");
+        verify(milestones, never()).findByPetProfileIdAndCodeAndRetiredAtIsNull(11L, "D-S5");
     }
 
     @Test

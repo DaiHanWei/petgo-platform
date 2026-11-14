@@ -49,7 +49,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.5.0"
 development_status:
   epic-1: in-progress
   1-1-物种字段迁移与建档接口: review
-  1-2-物种修改冷却与里程碑清单切换: ready-for-dev
+  1-2-物种修改冷却与里程碑清单切换: review
   1-3-物种显示字段下发与AI提示词: ready-for-dev
   1-4-物种存量迁移脚本与推送导出SQL: ready-for-dev
   epic-1-retrospective: optional

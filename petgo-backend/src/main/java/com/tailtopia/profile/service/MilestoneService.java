@@ -54,7 +54,7 @@ public class MilestoneService {
      */
     @Transactional
     public void assignRoster(long petProfileId, PetType petType) {
-        if (milestones.existsByPetProfileId(petProfileId)) {
+        if (milestones.existsByPetProfileIdAndRetiredAtIsNull(petProfileId)) {
             return;
         }
         List<PetMilestone> roster = new ArrayList<>();
@@ -81,7 +81,7 @@ public class MilestoneService {
     @Transactional(readOnly = true)
     public MilestoneProgress getProgress(long petProfileId, PetType petType) {
         int total = com.tailtopia.profile.domain.MilestoneCatalog.forType(petType).size();
-        List<Long> ids = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
+        List<Long> ids = milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(petProfileId).stream()
                 .map(PetMilestone::getId).toList();
         long completed = ids.isEmpty() ? 0L : completions.countByPetMilestoneIdIn(ids);
         return new MilestoneProgress(completed, total);
@@ -101,7 +101,7 @@ public class MilestoneService {
     public V142Share v142Share(long petProfileId, PetType petType) {
         int total = (int) com.tailtopia.profile.domain.MilestoneCatalog.forType(petType).stream()
                 .filter(d -> LegacyMilestoneCompat.hiddenForLegacy(d.code())).count();
-        List<Long> ids = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId).stream()
+        List<Long> ids = milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(petProfileId).stream()
                 .filter(m -> LegacyMilestoneCompat.hiddenForLegacy(m.getCode()))
                 .map(PetMilestone::getId).toList();
         if (ids.isEmpty()) {
@@ -124,10 +124,10 @@ public class MilestoneService {
         PetProfile pet = petResolver.resolve(ownerId, petId);
         long petProfileId = pet.getId();
 
-        List<PetMilestone> roster = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId);
+        List<PetMilestone> roster = milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(petProfileId);
         if (roster.isEmpty()) {
-            assignRoster(petProfileId, pet.getPetType());
-            roster = milestones.findByPetProfileIdOrderBySortOrderAsc(petProfileId);
+            assignRoster(petProfileId, pet.getMilestoneTrack());
+            roster = milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(petProfileId);
         }
 
         Set<Long> completedMilestoneIds = new java.util.HashSet<>();

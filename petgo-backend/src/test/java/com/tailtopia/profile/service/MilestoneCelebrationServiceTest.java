@@ -72,7 +72,7 @@ class MilestoneCelebrationServiceTest {
             ids.put(code, id);
             roster.add(m);
         }
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(10L)).thenReturn(roster);
+        when(milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(10L)).thenReturn(roster);
         return ids;
     }
 
@@ -288,7 +288,7 @@ class MilestoneCelebrationServiceTest {
     @Test
     @DisplayName("AC6 未庆祝计数：roster 缺失 → 0，不炸")
     void countUncelebratedReturnsZeroWhenRosterMissing() {
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(10L)).thenReturn(List.of());
+        when(milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(10L)).thenReturn(List.of());
 
         assertThat(service.countUncelebrated(10L)).isZero();
         verify(completions, never()).countByPetMilestoneIdInAndCelebratedAtIsNull(anyCollection());
@@ -308,12 +308,12 @@ class MilestoneCelebrationServiceTest {
         PetProfile b = PetProfile.create(7L, PetType.DOG, "Bobo", null, null, null, null, "TOKB");
         setField(b, "id", 11L);
         when(profiles.findByIdAndOwnerId(11L, 7L)).thenReturn(Optional.of(b));
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(11L)).thenReturn(List.of());
+        when(milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(11L)).thenReturn(List.of());
 
         service.reportCelebrated(7L, 11L, List.of("D-S1"));
 
-        verify(milestones).findByPetProfileIdOrderBySortOrderAsc(11L);
-        verify(milestones, never()).findByPetProfileIdOrderBySortOrderAsc(10L);
+        verify(milestones).findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(11L);
+        verify(milestones, never()).findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(10L);
     }
 
     @Test
@@ -321,7 +321,7 @@ class MilestoneCelebrationServiceTest {
         PetProfile p = PetProfile.create(7L, PetType.CAT, "Momo", null, null, null, null, "TOK");
         setField(p, "id", 10L);
         when(profiles.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(p));
-        when(milestones.findByPetProfileIdOrderBySortOrderAsc(10L)).thenReturn(List.of());
+        when(milestones.findByPetProfileIdAndRetiredAtIsNullOrderBySortOrderAsc(10L)).thenReturn(List.of());
 
         MilestoneCelebrationReportResponse resp = service.reportCelebrated(7L, 10L, List.of("C-S1"));
 
