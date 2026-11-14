@@ -64,10 +64,23 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
             """)
     long sumLikesOnOwnPostsByAuthor(@Param("authorId") long authorId);
 
-    /** 批量点赞数（Feed 卡片 likeCount，PRD-642）：一次 GROUP BY 取一页帖子的赞数，避免 N+1。 */
+    /**
+     * 批量点赞数（Feed 卡片 likeCount，PRD-642）：一次 GROUP BY 取一页帖子的赞数，避免 N+1。
+     *
+     * <p>⚠️ <b>展示口径，含自动赞</b>（V1.5.0）；排序 / 推荐 / 热度请用 {@link #countOrganicByPostIdIn}。
+     * 本方法<b>禁止加过滤</b>。
+     */
     @Query("SELECT l.postId AS postId, COUNT(l) AS likeCount FROM ContentLike l "
             + "WHERE l.postId IN :postIds GROUP BY l.postId")
     List<PostLikeCount> countByPostIdIn(@Param("postIds") Collection<Long> postIds);
+
+    /**
+     * 排序 / 推荐 / 热度用的批量赞数：不含自动赞（V1.5.0 自动点赞 FR-218）。
+     * ⚠️ 展示赞数（Feed 卡、后台列表默认模式）仍用 {@link #countByPostIdIn}，两者不得混用。
+     */
+    @Query("SELECT l.postId AS postId, COUNT(l) AS likeCount FROM ContentLike l "
+            + "WHERE l.postId IN :postIds AND l.automated = false GROUP BY l.postId")
+    List<PostLikeCount> countOrganicByPostIdIn(@Param("postIds") Collection<Long> postIds);
 
     /**
      * 某时间窗内**产生的**点赞数，按窗口内赞数从多到少（2026-08-28，取代互动积分页的口径B）。
@@ -79,9 +92,12 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
      *
      * <p>⚠️ 只返回**窗口内有赞**的帖子 —— 零赞的不在结果里（GROUP BY 不给空组造行）。
      * 这正是这一档口径想要的行数：没产生互动的内容不该占周报的位置。
+     *
+     * <p>V1.5.0 自动点赞 FR-218：排除自动赞（{@code l.automated = false}）——运营统计口径。
      */
+    // V1.5.0 自动点赞 FR-218：排除自动赞
     @Query("SELECT l.postId AS postId, COUNT(l) AS likeCount FROM ContentLike l "
-            + "WHERE l.createdAt >= :from AND l.createdAt < :to "
+            + "WHERE l.automated = false AND l.createdAt >= :from AND l.createdAt < :to "
             + "GROUP BY l.postId ORDER BY COUNT(l) DESC, l.postId DESC")
     List<PostLikeCount> countInWindow(@Param("from") Instant from, @Param("to") Instant to,
             org.springframework.data.domain.Pageable pageable);

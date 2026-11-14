@@ -111,6 +111,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                    AND p.status = 'PUBLISHED'
                    AND p.deleted_at IS NULL
                    AND l.created_at >= :since
+                   AND NOT l.is_automated -- V1.5.0 自动点赞 FR-218：排除自动赞
                  GROUP BY cp.pet_profile_id
             )
             SELECT c.pet_id                AS pet_id,
@@ -828,7 +829,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             FROM content_posts p
             JOIN content_topics ct ON ct.post_id = p.id AND ct.topic_id = :topicId
             JOIN users u ON u.id = p.author_id AND u.deleted_at IS NULL AND u.status = 'ACTIVE'
-            LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM content_likes l WHERE l.post_id = p.id) lk ON true
+            LEFT JOIN LATERAL (SELECT COUNT(*) AS n FROM content_likes l
+                               WHERE l.post_id = p.id AND NOT l.is_automated -- V1.5.0 自动点赞 FR-218：排除自动赞
+                              ) lk ON true
             LEFT JOIN LATERAL (
                 SELECT COUNT(*) AS n FROM comments c
                 WHERE c.post_id = p.id AND c.deleted_at IS NULL AND c.moderation_status = 'VISIBLE'

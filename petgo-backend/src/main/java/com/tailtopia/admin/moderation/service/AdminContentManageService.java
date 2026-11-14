@@ -372,6 +372,7 @@ public class AdminContentManageService {
                 .atStartOfDay(WIB).toInstant();
         Instant toI = (to == null ? LocalDate.now(WIB) : to).plusDays(1).atStartOfDay(WIB).toInstant();
 
+        // V1.5.0 自动点赞 FR-218：窗口赞数是运营统计口径，不含自动赞；默认列表模式的赞数是展示口径（含自动赞），两者可不同。
         List<ContentLikeRepository.PostLikeCount> pool = likes.countInWindow(fromI, toI,
                 org.springframework.data.domain.PageRequest.of(0, LIKE_WINDOW_POOL));
         boolean poolFull = pool.size() >= LIKE_WINDOW_POOL;

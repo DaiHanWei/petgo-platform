@@ -341,7 +341,8 @@ public class FeedRecommendationService {
         List<Long> ids = usable.stream().map(ContentPost::getId).toList();
 
         // 🛡 三次批量聚合，一次取完整池（AC5：禁止逐条 COUNT）
-        Map<Long, Long> likeCounts = likes.countByPostIdIn(ids).stream()
+        // V1.5.0 自动点赞 FR-218：排除自动赞（排序口径；展示仍用 countByPostIdIn）
+        Map<Long, Long> likeCounts = likes.countOrganicByPostIdIn(ids).stream()
                 .collect(Collectors.toMap(ContentLikeRepository.PostLikeCount::getPostId,
                         ContentLikeRepository.PostLikeCount::getLikeCount));
         Map<Long, Long> commentCounts = comments.countVisibleForViewerIn(ids, viewerId).stream()

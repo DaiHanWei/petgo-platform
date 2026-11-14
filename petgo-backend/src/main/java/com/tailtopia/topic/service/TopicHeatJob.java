@@ -70,6 +70,7 @@ public class TopicHeatJob {
                 SELECT v.topic_id, COUNT(*) AS likes
                 FROM vis v
                 JOIN content_likes l ON l.post_id = v.post_id AND l.created_at >= :since
+                 AND NOT l.is_automated -- V1.5.0 自动点赞 FR-218：排除自动赞
                 GROUP BY v.topic_id
             ),
             agg_comments AS (

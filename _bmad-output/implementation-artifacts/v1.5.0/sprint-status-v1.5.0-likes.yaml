@@ -44,7 +44,7 @@ story_location: _bmad-output/implementation-artifacts/v1.5.0
 development_status:
   epic-1: in-progress
   1-1-点赞自动点赞标记列与事件: review
-  1-2-点赞排除排行推荐与统计口径: ready-for-dev
+  1-2-点赞排除排行推荐与统计口径: review
   epic-1-retrospective: optional
 
   epic-2: backlog

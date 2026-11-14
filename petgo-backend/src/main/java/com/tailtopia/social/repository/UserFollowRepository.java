@@ -111,7 +111,8 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
      *       {@code enabled}、{@code status=ACTIVE}（封号排除，D-8 / T-26），
      *       且至少一条 PUBLIC + PUBLISHED + 未软删的帖；虚拟号与真人都包括。</li>
      *   <li>排除：自己、viewer 已关注的人、viewer 作为 holder 有<b>任意来源</b>隐藏关系的人（单向，T-26）。</li>
-     *   <li>排序：{@code since} 起在其 PUBLIC + PUBLISHED + 未软删帖上的点赞数倒序（口径同主页「Suka」，T-27），
+     *   <li>排序：{@code since} 起在其 PUBLIC + PUBLISHED + 未软删帖上的点赞数倒序（帖子集合口径同主页「Suka」，T-27；
+     *       但<b>不含自动赞</b>——V1.5.0 自动点赞 FR-218，排序口径，Suka 是展示口径含自动赞），
      *       并列按最近一条公开帖时间倒序、再按 id 倒序（T-22）。</li>
      * </ul>
      */
@@ -127,6 +128,7 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
                   FROM content_likes l
                   JOIN content_posts p ON p.id = l.post_id
                  WHERE l.created_at >= :since
+                   AND NOT l.is_automated -- V1.5.0 自动点赞 FR-218：排除自动赞
                    AND p.visibility = 'PUBLIC' AND p.status = 'PUBLISHED' AND p.deleted_at IS NULL
                  GROUP BY p.author_id
             )

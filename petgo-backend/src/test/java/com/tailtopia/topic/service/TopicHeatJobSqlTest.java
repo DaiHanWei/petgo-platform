@@ -47,6 +47,14 @@ class TopicHeatJobSqlTest {
                 .contains("p.deleted_at IS NULL AND p.status = 'PUBLISHED' AND p.visibility = 'PUBLIC'");
     }
 
+    /** V1.5.0 自动点赞 FR-218 第 3 项：话题热度的点赞聚合排除自动赞。 */
+    @Test
+    void likeAggregationExcludesAutomatedLikes() {
+        assertThat(TopicHeatJob.RECOMPUTE_SQL)
+                .containsPattern("JOIN content_likes l ON l\\.post_id = v\\.post_id AND l\\.created_at >= :since\\s+"
+                        + "AND NOT l\\.is_automated");
+    }
+
     @Test
     void usesTryLockToSkipConcurrentRuns() {
         assertThat(TopicHeatJob.TRY_LOCK_SQL).isEqualTo("SELECT pg_try_advisory_xact_lock(hashtext('topic_heat'))");

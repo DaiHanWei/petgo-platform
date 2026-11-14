@@ -62,7 +62,7 @@ class FeedRecommendationServiceTest {
         seen = mock(FeedSeenStore.class);
         sequences = mock(FeedSequenceStore.class);
 
-        when(likes.countByPostIdIn(anyList())).thenReturn(List.of());
+        when(likes.countOrganicByPostIdIn(anyList())).thenReturn(List.of());
         when(comments.countVisibleForViewerIn(anyList(), any())).thenReturn(List.of());
         when(tags.findVisibleTags(any(), any())).thenReturn(Map.of());
         when(species.resolveAll(anyList())).thenReturn(Map.of());
@@ -405,7 +405,9 @@ class FeedRecommendationServiceTest {
 
         service.page(9L, null, null, 20, null);
 
-        verify(likes, times(1)).countByPostIdIn(anyList());
+        verify(likes, times(1)).countOrganicByPostIdIn(anyList());
+        // V1.5.0 自动点赞 FR-218：排序走 organic 口径，展示口径 countByPostIdIn 一次都不该被碰
+        verify(likes, never()).countByPostIdIn(anyList());
         verify(comments, times(1)).countVisibleForViewerIn(anyList(), any());
         // 🛡 逐条方法一次都不该被碰
         verify(likes, never()).existsByPostIdAndUserId(org.mockito.ArgumentMatchers.anyLong(),
@@ -484,7 +486,7 @@ class FeedRecommendationServiceTest {
                 return n;
             }
         }));
-        when(likes.countByPostIdIn(anyList())).thenReturn(lc);
+        when(likes.countOrganicByPostIdIn(anyList())).thenReturn(lc);
         when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
         when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
             Collection<Long> asked = inv.getArgument(0);
@@ -720,7 +722,7 @@ class FeedRecommendationServiceTest {
         List<Long> seq = appendedSequence();
         assertThat(seq).doesNotHaveDuplicates().contains(7L);
         org.mockito.ArgumentCaptor<List<Long>> counted = org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(likes, times(1)).countByPostIdIn(counted.capture());
+        verify(likes, times(1)).countOrganicByPostIdIn(counted.capture());
         assertThat(counted.getValue()).doesNotHaveDuplicates().hasSize(30);
     }
 
