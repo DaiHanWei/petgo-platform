@@ -58,8 +58,8 @@ development_status:
   3-1-feed点赞状态按帖子统一管理: review
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-feed图片区双击点赞手势: ready-for-dev
+  epic-4: in-progress
+  4-1-feed图片区双击点赞手势: review
   4-2-feed双击点赞红心动效与触感: ready-for-dev
   4-3-feed双击点赞与首日推荐页合并回归: ready-for-dev   # 不在云端会话执行，见头注释
   epic-4-retrospective: optional

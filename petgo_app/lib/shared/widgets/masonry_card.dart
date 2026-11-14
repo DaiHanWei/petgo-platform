@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show kTouchSlop;
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/spacing.dart';
 import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_image_layout.dart';
 import '../../features/content/domain/feed_item.dart';
+import '../../features/auth/domain/auth_guard.dart';
+import '../../features/content/domain/post_like_state.dart';
 import '../../features/content/presentation/like_button.dart';
 import '../../features/mention/domain/mention_context.dart';
 import '../../features/social/presentation/widgets/follow_button.dart';
 import '../../l10n/app_localizations.dart';
+import '../media/feed_tap_arbiter.dart';
 import '../rich_text/rich_body_text.dart';
 import 'feed_image.dart';
 import 'content_tag_chip.dart';
@@ -260,8 +266,11 @@ class MasonryCard extends StatelessWidget {
           ),
           // 图片：**全宽出血**，是这一版唯一贴边的东西。
           // 整块可点区从这里开始（图片 / 正文都进详情页顶部）。
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          // V1.5.0 FR-209：**只图片区**单击进详情（220ms 后）、双击点赞；正文区手势一行不动。
+          _FeedImageTapArea(
+            item: item,
+            feedTab: feedTab,
+            rankMode: rankMode,
             onTap: onTap,
             onLongPress: onLongPress,
             child: Column(
@@ -412,6 +421,135 @@ class MasonryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Feed 卡图片区的点击仲裁（V1.5.0 FR-209，架构 F-4 / F-5）：单击（220ms 内无第二下）→ [onTap] 进详情；
+/// 双击 → 点赞（未赞时）+ 动效钩子。卡片本身仍是 `StatelessWidget`，状态（判定器）只在这一小块里。
+///
+/// - 只挂 `onTapUp` / `onTapCancel`：纵向滚动、多图横滑开始时 Tap 识别器收到 cancel → 撤销待执行的单击、不算双击；
+///   第二下轻微位移在拖动阈值内 Tap 仍胜出 → 不翻页。
+/// - 长按开始先撤销待执行的单击，再走原来的长按菜单。
+/// - 读屏（`accessibleNavigation`）或卡片本就不可点（`onTap == null`）：退回原来的手势，不挂判定器。
+/// - 延迟的单击触发前复查：卡片所在路由仍是当前页、所在 Tab 仍在前台；否则丢弃（已经去了别处，不得再推详情）。
+class _FeedImageTapArea extends ConsumerStatefulWidget {
+  const _FeedImageTapArea({
+    required this.item,
+    required this.feedTab,
+    required this.rankMode,
+    required this.onTap,
+    required this.onLongPress,
+    required this.child,
+  });
+
+  final FeedItem item;
+  final String? feedTab;
+  final String? rankMode;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final Widget child;
+
+  @override
+  ConsumerState<_FeedImageTapArea> createState() => _FeedImageTapAreaState();
+}
+
+class _FeedImageTapAreaState extends ConsumerState<_FeedImageTapArea> {
+  late final FeedTapArbiter _arbiter = FeedTapArbiter(onSingleTap: _onSingleTap, onDoubleTap: _onDoubleTap);
+
+  /// 新一次按下的位置：移动超过触摸阈值（开始滚动 / 横滑）→ 撤销上一下待执行的单击。
+  /// 快速轻扫可能在 tap-down 之前就被拖动手势赢走，Tap 识别器收不到 cancel，所以这里直接看指针。
+  Offset? _downAt;
+
+  void _onSingleTap() {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return; // 窗口内已推了别的页（含两下超距时第一下已进详情）
+    if (!TickerMode.valuesOf(context).enabled) return; // 窗口内切走了 Tab（IndexedStack 里仍挂着）
+    widget.onTap?.call();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FeedImageTapArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 列表刷新 / 插入时同位置的 State 被复用给另一条帖子：上一条帖子的待执行单击不得打开这一条。
+    if (oldWidget.item.id != widget.item.id) _arbiter.cancel();
+  }
+
+  @override
+  void deactivate() {
+    _arbiter.cancel(); // 卡片滑出 / 销毁：不再进详情
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
+    _arbiter.dispose();
+    super.dispose();
+  }
+
+  /// 大心动效钩子（V1.5.0 FR-211，Story 4.2 实现）。
+  void _playBurst() {}
+
+  /// 双击动作表（F-5）：游客只弹登录窗；已赞 / 飞行中只播动效；未赞才震动 + 点赞 + 按钮弹跳。
+  void _onDoubleTap(Offset _) {
+    if (!mounted) return;
+    if (!requireLogin(ref, context, onAllowed: () {}, entrySource: 'double_tap_like')) return;
+    final item = widget.item;
+    final store = ref.read(postLikeStoreProvider.notifier);
+    final view = store.effective(item.id,
+        snapLiked: item.liked, snapCount: item.likeCount, snapEpoch: item.likeEpoch);
+    if (view.liked || view.inFlight) {
+      _playBurst(); // 不发请求、不震、不报、按钮不弹（Q-9）
+      return;
+    }
+    HapticFeedback.lightImpact();
+    _playBurst();
+    // 失败由 store 回滚按钮与计数；动效照常播完、不提示（B-AC8）。
+    store.toggle(item.id,
+        current: view,
+        wantLiked: true,
+        bounce: true,
+        tracking: LikeTracking(
+          source: 'feed',
+          trigger: 'double_tap',
+          feedTab: widget.feedTab,
+          rankMode: widget.rankMode,
+          reason: widget.feedTab == 'following' ? item.reason : null,
+        ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.accessibleNavigationOf(context) || widget.onTap == null) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: widget.child,
+      );
+    }
+    return Listener(
+      onPointerDown: (e) => _downAt = e.position,
+      onPointerMove: (e) {
+        final down = _downAt;
+        if (down != null && (e.position - down).distance > kTouchSlop) {
+          _downAt = null;
+          _arbiter.cancel();
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (d) => _arbiter.tapUp(d.globalPosition),
+        onTapCancel: _arbiter.cancel,
+        onLongPress: widget.onLongPress == null
+            ? null
+            : () {
+                _arbiter.cancel();
+                widget.onLongPress!();
+              },
+        child: widget.child,
       ),
     );
   }

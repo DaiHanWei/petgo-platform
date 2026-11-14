@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/media/lightbox_gestures.dart';
 import 'package:tailtopia/shared/widgets/feed_image.dart';
 import 'package:tailtopia/shared/widgets/masonry_card.dart';
 
@@ -204,7 +205,10 @@ void main() {
       var tapped = 0;
       await _pump(tester, _item(urls: _threeImages), onTap: () => tapped++);
       await tester.tap(find.byType(PageView));
+      // V1.5.0 FR-209：图片区单击要等 220ms 双击窗口过去才进详情（kLightboxSingleTapDelay）。
       await tester.pump();
+      expect(tapped, 0);
+      await tester.pump(kLightboxSingleTapDelay);
       expect(tapped, 1);
     });
 
@@ -212,7 +216,10 @@ void main() {
       var tapped = 0;
       await _pump(tester, _item(), onTap: () => tapped++);
       await tester.tap(find.byType(FeedImage));
+      // V1.5.0 FR-209：图片区单击要等 220ms 双击窗口过去才进详情（kLightboxSingleTapDelay）。
       await tester.pump();
+      expect(tapped, 0);
+      await tester.pump(kLightboxSingleTapDelay);
       expect(tapped, 1);
     });
 

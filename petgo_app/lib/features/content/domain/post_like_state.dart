@@ -23,7 +23,8 @@ class PostLikeOverride {
   /// 写入时的全局点赞版本号（见 [_likeEpochCounter]）。
   final int epoch;
 
-  /// 爱心按钮弹跳信号（只增不减，V1.5.0 FR-211 / 4.1 / 4.2 用）。本 story 只保留、不递增。
+  /// 爱心按钮弹跳信号（只增不减，V1.5.0 FR-211）：Feed 图片区双击真正发起点赞时 +1（[PostLikeStore.toggle] 的
+  /// `bounce`），`LikeButton` 监听到变化播一次弹跳（弹跳动画在 4.2）。已赞 / 飞行中再双击不加（Q-9）。
   final int bounceTick;
 }
 
@@ -128,7 +129,10 @@ class PostLikeStore extends Notifier<Map<int, PostLikeOverride>> {
   /// [current] = 调用方此刻看到的有效值。飞行中 → 忽略；已是目标态 → 忽略；否则报埋点 → 乐观覆盖 →
   /// 调仓库 → 成功写后端真值并写回 Feed 两条流；失败写回点击前的有效值（不是删除覆盖：删除会让别处退回更旧的快照）。
   Future<LikeToggleOutcome> toggle(int postId,
-      {required LikeView current, required bool wantLiked, required LikeTracking tracking}) async {
+      {required LikeView current,
+      required bool wantLiked,
+      required LikeTracking tracking,
+      bool bounce = false}) async {
     // 飞行中：既看调用方的视图，也看 store 自己的覆盖（别处的按钮 / 双击可能刚发起）——只这一处判断。
     if (current.inFlight || (state[postId]?.inFlight ?? false)) {
       return const LikeToggleOutcome(LikeToggleStatus.ignoredInFlight);
@@ -136,7 +140,8 @@ class PostLikeStore extends Notifier<Map<int, PostLikeOverride>> {
     if (current.liked == wantLiked) return const LikeToggleOutcome(LikeToggleStatus.ignoredNoChange);
     // 🛡 事件名不动（改名会切断已有的点赞历史序列）；只在真正发起请求时报。
     Analytics.capture('post_like_tapped', tracking.props(wantLiked));
-    _write(postId, liked: wantLiked, count: current.count + (wantLiked ? 1 : -1), inFlight: true);
+    _write(postId,
+        liked: wantLiked, count: current.count + (wantLiked ? 1 : -1), inFlight: true, bounce: bounce);
     try {
       final repo = ref.read(likeRepositoryProvider);
       final result = wantLiked ? await repo.like(postId) : await repo.unlike(postId);
@@ -164,8 +169,10 @@ class PostLikeStore extends Notifier<Map<int, PostLikeOverride>> {
     _write(postId, liked: liked, count: count, inFlight: false);
   }
 
-  void _write(int postId, {required bool liked, required int count, required bool inFlight}) {
+  void _write(int postId,
+      {required bool liked, required int count, required bool inFlight, bool bounce = false}) {
     _likeEpochCounter++;
+    final tick = state[postId]?.bounceTick ?? 0;
     state = {
       ...state,
       postId: PostLikeOverride(
@@ -173,7 +180,7 @@ class PostLikeStore extends Notifier<Map<int, PostLikeOverride>> {
         count: count,
         inFlight: inFlight,
         epoch: _likeEpochCounter,
-        bounceTick: state[postId]?.bounceTick ?? 0,
+        bounceTick: bounce ? tick + 1 : tick,
       ),
     };
   }

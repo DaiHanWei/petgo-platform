@@ -1,6 +1,6 @@
 # Story 4.1: Feed 图片区双击点赞手势（App）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 主题 likes（会话 ⑤）· 分支 `feat/1.5.0-likes`
 > 口径优先级：`decision-log.md` > PRD B `Feed双击点赞/1-5-0Feed双击点赞prd.md`（FR-209、§4 埋点）> `architecture-v1.5.0-likes-delta.md`（F-4、F-5、F-9、待拍板 Q-9）> UI 稿 `ui-1-5-0-feed-double-tap-like-integrated-v1.html` 与 `拆页-App/`（A1 ~ A4、B1 ~ B4、C1 ~ C3、D2）。
@@ -71,11 +71,11 @@ class FeedTapArbiter {
 
 ## Tasks / Subtasks
 
-- [ ] T0 开工核对：3.1 已在本分支且 `like_button` 旧测试全绿；`masonry_card.dart` 行号
-- [ ] T1 `FeedTapArbiter` + 单测（AC1）
-- [ ] T2 `_FeedImageTapArea` 接入、读屏退回（AC2）
-- [ ] T3 双击动作表（AC3）+ 埋点（AC4）
-- [ ] T4 widget test（AC5、AC6）+ L0；Completion Notes 标「L2 待本地」
+- [x] T0 开工核对：3.1 已在本分支且 `like_button` 旧测试全绿；`masonry_card.dart` 行号
+- [x] T1 `FeedTapArbiter` + 单测（AC1）
+- [x] T2 `_FeedImageTapArea` 接入、读屏退回（AC2）
+- [x] T3 双击动作表（AC3）+ 埋点（AC4）
+- [x] T4 widget test（AC5、AC6）+ L0；Completion Notes 标「L2 待本地」
 
 ## Dev Notes
 
@@ -100,7 +100,22 @@ class FeedTapArbiter {
 ## Dev Agent Record
 
 ### Completion Notes
-（待填）
+- **L1/L2 待本地验收**：真机手感（双击节奏、多图横滑、纵向滚动、长按）、读屏、震动、B-AC1 连 stag 真后端（`content_likes` 新行 + 作者通知）云端未做；动效本身在 4.2（本 story `_playBurst()` 为空实现）。
+- **L0**：`flutter test` 全量 4971 通过；`flutter analyze` 0 error / 0 warning，相对基线无新增非弃用类 info（SDK 3.50 与 lock 说明同 3.1）。
+- T0 核对：3.1 已在本分支（f18ddd3b），`like_button_test` / `like_button_split_test` / `like_button_reason_test` 断言未改全绿；`masonry_card.dart` 图片区 `GestureDetector` 在 `:263` 附近，与 story 一致。
+- 实现：
+  - `lib/shared/media/feed_tap_arbiter.dart`：纯逻辑判定器（窗口 = `kLightboxSingleTapDelay`，`slop = kDoubleTapSlop`）；`lightbox_gestures.dart` / `image_lightbox.dart` 未改。
+  - `MasonryCard` 图片区抽成私有 `_FeedImageTapArea`（`ConsumerStatefulWidget`），卡片仍是 `StatelessWidget`、无新对外参数；正文区手势一行未动。双击动作表照 F-5；已赞 / 飞行中只播动效（不请求、不震、不报、按钮不弹，Q-9）；未赞时 `HapticFeedback.lightImpact()` + `store.toggle(..., bounce: true, trigger: 'double_tap')`。
+  - store：`toggle` 新增可选 `bounce`，为 true 时乐观写入把 `bounceTick + 1`（3.1 预留字段）。
+  - 复审后加固：延迟单击触发前复查「所在路由仍是当前页、所在 Tab 仍在前台（`TickerMode`）」，否则丢弃（窗口内已切走 / 两下超距第一下已进详情时不再推第二次）；同位置 State 被复用给另一条帖子时撤销待执行单击；新指针移动超过 `kTouchSlop` 即撤销（快速轻扫在 tap-down 前就被拖动赢走时 Tap 识别器收不到 cancel）；`onTap == null` 的卡片退回原手势、不挂判定器。
+- **按设计打破的既有测试**：`test/content/feed_carousel_test.dart` 两例「点击图片仍进详情」改为「先断言 0、再 `pump(kLightboxSingleTapDelay)` 后断言 1」——表达新规则「图片区单击 220ms 后进详情」，未删、未 skip。
+- 新增测试：`test/shared/feed_tap_arbiter_test.dart`（单击 220ms、双击、三连击、超距、窗口外、cancel、dispose；用 `testWidgets` 假时钟——`fake_async` 只是传递依赖，直接 import 会触发 lint）；`test/content/feed_double_tap_like_test.dart`（B-AC1 ~ AC10 各一例 + 飞行中、读屏、推广卡、窗口内滚动 / 换页两条加固）。游客用例用默认测试视图：测试字体比真机宽，390 宽下登录弹窗溢出 2px（测试环境问题，与本 story 无关）。
+- **待确认**：`bounceTick` 按帖子计（F-5 设计）——同一帖同时出现在顶置卡与普通卡时，4.2 接上弹跳后两个爱心都会弹一下。
 
 ### File List
-（待填）
+- `petgo_app/lib/shared/media/feed_tap_arbiter.dart`（新）
+- `petgo_app/lib/shared/widgets/masonry_card.dart`
+- `petgo_app/lib/features/content/domain/post_like_state.dart`
+- `petgo_app/test/shared/feed_tap_arbiter_test.dart`（新）
+- `petgo_app/test/content/feed_double_tap_like_test.dart`（新）
+- `petgo_app/test/content/feed_carousel_test.dart`
