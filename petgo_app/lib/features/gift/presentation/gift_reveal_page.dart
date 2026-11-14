@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -115,10 +114,13 @@ class _GiftRevealPageState extends ConsumerState<GiftRevealPage> {
       _animDone = true;
       _stage = _Stage.result;
     });
+    // 请求已先失败（如点开后 riv 才加载失败）：补提示（2-5 复审 #4）
+    if (_failed) _toastFailed();
   }
 
   void _onAnimDone() {
-    if (!mounted || _animDone) return;
+    // 只认点开后的结束（待机循环若发出 revealDone 不算，2-5 复审 #1）
+    if (!mounted || _animDone || _stage != _Stage.opening) return;
     _fallbackTimer?.cancel();
     setState(() {
       _animDone = true;
@@ -142,7 +144,8 @@ class _GiftRevealPageState extends ConsumerState<GiftRevealPage> {
           .openPetGiftOrders(widget.petId, orderTokens: widget.orderTokens, all: widget.all);
       if (!mounted) return;
       setState(() => _result = r);
-    } on DioException catch (_) {
+    } catch (_) {
+      // 网络与解析错误同样处理，避免无限转圈（2-5 复审 #2）
       if (!mounted) return;
       setState(() => _failed = true);
       // 动画照播：结束后再提示（AC1.2）；已到终态则立即提示。
@@ -233,8 +236,9 @@ class _GiftRevealPageState extends ConsumerState<GiftRevealPage> {
   Widget _resultLayer(BuildContext context, AppLocalizations l10n) {
     final result = _result;
     final Widget body;
-    if (result == null) {
-      body = _failed
+    if (result == null || result.items.isEmpty) {
+      // 失败 / 空响应（如别处已拆完）：只留「Lanjut」（2-5 复审 #3）
+      body = _failed || result != null
           ? _ResultFrame(primaryLabel: l10n.onboardingContinue, onPrimary: _close, child: const SizedBox.shrink())
           : const Center(child: CircularProgressIndicator(key: ValueKey('giftRevealLoading')));
     } else if (!widget.batch && result.items.isNotEmpty) {

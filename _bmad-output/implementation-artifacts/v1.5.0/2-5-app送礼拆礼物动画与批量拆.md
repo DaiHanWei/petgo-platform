@@ -75,6 +75,16 @@ Widget：连点礼盒只发一次 open 请求；无祝福语不渲染「⋯」�
 - 文案：`giftRevealTapToOpen`、`giftRevealTitle`、`giftViewSenderProfile`、`giftReportMessage`（Laporkan ucapan，2-6 复用）、`giftRevealReceivedCount`、`giftRevealNext`、`giftMessageHidden`（2-6 复用）均逐字取 App 稿新文案表；另加 `giftRevealQtyName`「×{n} {gift}」（汇总格，稿面写法）与 `giftOpenFailed`（通用错误，文案同仓库现有「Terjadi kesalahan, coba lagi」/「Something went wrong, please try again」）。
 - 仓库：`openPetGiftOrders(petId, {orderTokens, all})`；模型 `gift_order_detail.dart`（`GiftOrderDetail` / `GiftDetailSender` / `GiftOpenResult`，2-6 共用）。
 
+- Code review（独立复审）处置：
+  - PLAUSIBLE #1 待机循环若发出 `revealDone` 会跳终态且不调接口、无限转圈 → 只认点开后的结束事件。已修（补测）。
+  - CONFIRMED #2 open 接口解析错误等非网络异常无限转圈 → 捕获所有异常，按失败处理。已修。
+  - CONFIRMED #3 空响应（别处已拆完）显示「Kamu menerima 0 hadiah」→ 空响应只留「Lanjut」。已修（补测）。
+  - PLAUSIBLE #4 请求先失败、riv 后加载失败时漏 toast → 直出终态时补提示。已修。
+  - PLAUSIBLE #5 AC2.5「未拆筛选随之清空」：理解为「回礼物页刷新后未拆列表随之变空」，保留当前筛选不强切到 Semua（**待产品确认**是否要求切回 Semua）。
+  - PLAUSIBLE #6 `open=latest` 拉取在途时手动点卡片 / Buka Semua 可叠两层 G1 → 礼物页拆 / 详情动作加在途互斥。已修。
+  - #7 客厅插画背景：设计稿背景即 `receive_gift.riv` 渲染画面（decision-log 11-13），App 只给近似底色兜底，L2 核对。
+  - 测试缺口：补「系统返回拆前 false / 拆后 true」；真 Rive（`_ReceiveGiftRive` 迟加载补触发、待机发事件、加载中销毁）依赖原生运行时，L2 验收。
+
 ### File List
 
 - `petgo_app/lib/features/gift/presentation/gift_reveal_page.dart`（新）

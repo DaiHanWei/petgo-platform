@@ -290,6 +290,39 @@ void main() {
     expect(popped, [true]);
   });
 
+  testWidgets('待机时 revealDone 不算：不进终态、不调接口（复审 #1）', (tester) async {
+    await pump(tester);
+    _done!();
+    await tester.pumpAndSettle();
+    expect(find.text('Ketuk untuk membuka'), findsOneWidget);
+    expect(repo.openCalls, isEmpty);
+  });
+
+  testWidgets('空响应（别处已拆完）：只留 Lanjut，不显示「0 hadiah」（复审 #3）', (tester) async {
+    repo.openResult = const GiftOpenResult();
+    final popped = await pump(tester, tokens: const [], all: true);
+    await openAndFinish(tester);
+    expect(find.textContaining('menerima'), findsNothing);
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(popped, [true]);
+  });
+
+  testWidgets('系统返回：拆前 pop false，拆后 pop true', (tester) async {
+    repo.openResult = GiftOpenResult(items: [_detail('t1')]);
+    var popped = await pump(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(popped, [false]);
+    expect(repo.openCalls, isEmpty);
+
+    popped = await pump(tester);
+    await openAndFinish(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(popped, [true]);
+  });
+
   group('礼物页 open=latest（AC3.3）', () {
     const pet = GiftShowcasePet(petId: 42, name: 'Mochi', petType: 'CAT');
     GiftOrderPage page(List<GiftOrderCard> items) => GiftOrderPage(items: items, pet: pet, viewerIsOwner: true);

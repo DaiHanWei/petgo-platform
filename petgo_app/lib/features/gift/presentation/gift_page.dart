@@ -180,7 +180,22 @@ class _GiftPageState extends ConsumerState<GiftPage> {
     return _reload();
   }
 
-  Future<void> _tap(GiftOrderCard c) async {
+  /// 拆礼物 / 详情在途：防 `open=latest` 与手动点卡片 / Buka Semua 叠两层（2-5 复审 #6）。
+  bool _actionBusy = false;
+
+  Future<void> _guarded(Future<void> Function() action) async {
+    if (_actionBusy) return;
+    _actionBusy = true;
+    try {
+      await action();
+    } finally {
+      _actionBusy = false;
+    }
+  }
+
+  Future<void> _tap(GiftOrderCard c) => _guarded(() => _tapInner(c));
+
+  Future<void> _tapInner(GiftOrderCard c) async {
     if (_owner == true && c.unopened) {
       final changed = await openGiftOrders(context, ref, petId: widget.petId, orderTokens: [c.orderToken]);
       if (changed && mounted) _refreshAll();
@@ -190,7 +205,9 @@ class _GiftPageState extends ConsumerState<GiftPage> {
   }
 
   /// 收礼通知点开（2-5 AC3.3 · D-9）：主人有未拆 → 直接拆最新一笔（G1）；没有 → 打开最新一笔详情（2-6 H1）。
-  Future<void> _openLatest() async {
+  Future<void> _openLatest() => _guarded(_openLatestInner);
+
+  Future<void> _openLatestInner() async {
     if (!mounted) return;
     final repo = ref.read(giftRepositoryProvider);
     try {
@@ -212,7 +229,9 @@ class _GiftPageState extends ConsumerState<GiftPage> {
     }
   }
 
-  Future<void> _openAll() async {
+  Future<void> _openAll() => _guarded(_openAllInner);
+
+  Future<void> _openAllInner() async {
     final changed = await openGiftOrders(context, ref, petId: widget.petId, all: true);
     if (changed && mounted) _refreshAll();
   }
