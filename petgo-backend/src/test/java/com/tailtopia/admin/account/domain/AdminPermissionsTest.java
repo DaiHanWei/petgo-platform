@@ -141,6 +141,7 @@ class AdminPermissionsTest {
         // 2026-11-06（V1.4.2 exp-reverse）：order.reverse_exp ⇒ 89 + 1 = 90。
         // 2026-11-09（主题 ops-ai-query）：AI 查数 ai.query（不预授任何预置角色）⇒ 90 + 1 = 91。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(91);
+        // 2026-11-14（V1.5.0 gift-pack Story 5-2 · D-30）：补发免费次数 user.entitlement_grant（预授 OPS_MANAGER）⇒ 91 + 1 = 92。
+        assertThat(all).hasSize(92);
     }
 }

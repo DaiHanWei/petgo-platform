@@ -39,7 +39,9 @@ public class AdminUserPurchasesQuery {
                                     WHEN pi.status = 'PAID' THEN pi.updated_at END)
                       FROM id_card_hd_purchases h
                       LEFT JOIN payment_intents pi ON pi.id = h.payment_intent_id
-                     WHERE h.card_id = c.id) AS unlocked_at
+                     WHERE h.card_id = c.id) AS unlocked_at,
+                   EXISTS (SELECT 1 FROM id_card_hd_purchases h2
+                            WHERE h2.card_id = c.id AND h2.pay_channel = 'PACK_CREDIT') AS free_credit
               FROM id_cards c
              WHERE c.user_id = :u AND c.hd_unlocked
              ORDER BY unlocked_at DESC NULLS LAST, c.id DESC
@@ -86,7 +88,8 @@ public class AdminUserPurchasesQuery {
         return new UserPurchasesView(
                 jdbc.query(KTP_SQL, p, (rs, i) -> new UserPurchasesView.KtpCard(
                         rs.getLong("serial_id"), rs.getString("name"), instant(rs, "unlocked_at"),
-                        rs.getString("card_type"), rs.getString("card_variant"), rs.getString("card_no"))),
+                        rs.getString("card_type"), rs.getString("card_variant"), rs.getString("card_no"),
+                        rs.getBoolean("free_credit"))),
                 jdbc.query(SNAPSHOT_SQL, p, (rs, i) -> new UserPurchasesView.PassportSnapshot(
                         rs.getString("name"), rs.getInt("version"), rs.getInt("stamp_count"), instant(rs, "paid_at"))),
                 jdbc.query(BOARDING_SQL, p, (rs, i) -> new UserPurchasesView.BoardingPass(

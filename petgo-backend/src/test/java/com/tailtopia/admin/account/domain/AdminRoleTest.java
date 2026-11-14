@@ -41,7 +41,8 @@ class AdminRoleTest {
         assertThat(AdminRole.OPS_MANAGER.isTableBacked()).isFalse();
         // OPS_MANAGER 预授码数：基线 41 + V1.4.0 ① P-5 growth.user_adjust + ② AD-15 user.pet_slot_adjust ⇒ 43
         //     （两线各 +1，合入 dev_1.4.0 后实测）；V1.4.2 exp-reverse E-1 order.reverse_exp ⇒ 44。
-        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(44);
+        // V1.5.0 gift-pack Story 5-2 · D-30 user.entitlement_grant（按 PRD 预授）⇒ 45。
+        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(45);
         assertThat(AdminRole.SUPER_ADMIN.isTableBacked()).isFalse();
         assertThat(AdminRole.CUSTOM.isTableBacked()).isFalse();
     }
@@ -110,6 +111,20 @@ class AdminRoleTest {
             } else {
                 assertThat(AdminRoleSeedSnapshot.effective(role)).as(role + " 不应预授 user.pet_slot_adjust")
                         .doesNotContain(AdminPermissions.USER_PET_SLOT_ADJUST);
+            }
+        }
+    }
+
+    /** V1.5.0 gift-pack Story 5-2 · D-30：user.entitlement_grant 按 PRD 只预授 OPS_MANAGER，其余预置角色一律没有。 */
+    @Test
+    void entitlementGrantPreGrantedOnlyToOpsManager() {
+        assertThat(AdminPermissions.isValid(AdminPermissions.USER_ENTITLEMENT_GRANT)).isTrue();
+        for (AdminRole role : AdminRole.values()) {
+            if (role == AdminRole.OPS_MANAGER) {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).contains(AdminPermissions.USER_ENTITLEMENT_GRANT);
+            } else {
+                assertThat(AdminRoleSeedSnapshot.effective(role)).as(role + " 不应预授 user.entitlement_grant")
+                        .doesNotContain(AdminPermissions.USER_ENTITLEMENT_GRANT);
             }
         }
     }

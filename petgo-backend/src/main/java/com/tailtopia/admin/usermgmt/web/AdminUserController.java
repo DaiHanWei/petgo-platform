@@ -159,6 +159,22 @@ public class AdminUserController {
         model.addAttribute("petSlotGrantToken", java.util.UUID.randomUUID().toString());
         // V1.4.2 shop-admin Story 2.3：「优惠券」页签（只读，权限沿用本抽屉 user.view）
         model.addAttribute("couponsTab", userCoupons.tab(userId));
+        // V1.5.0 gift-pack Story 5-2：「已购解锁」页签的礼包 / 免费次数三块 + 补发卡（一次性幂等 token，键 ADMIN:{token}）。
+        if (userEntitlements != null) {
+            model.addAttribute("entitlementsTab", userEntitlements.tab(userId));
+            model.addAttribute("entitlementGrantToken", java.util.UUID.randomUUID().toString());
+            model.addAttribute("entitlementGrantTypes",
+                    com.tailtopia.admin.entitlement.service.AdminUserEntitlementsService.GRANTABLE);
+            model.addAttribute("entitlementUserId", userId);
+        }
+    }
+
+    // V1.5.0 gift-pack Story 5-2：setter 注入（既有构造器与测试构造点不改）。
+    private com.tailtopia.admin.entitlement.service.AdminUserEntitlementsService userEntitlements;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUserEntitlements(com.tailtopia.admin.entitlement.service.AdminUserEntitlementsService userEntitlements) {
+        this.userEntitlements = userEntitlements;
     }
 
     /**

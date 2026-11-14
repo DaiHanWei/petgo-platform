@@ -30,7 +30,13 @@ public record UserPurchasesView(List<KtpCard> ktpCards, List<PassportSnapshot> s
      * @param cardNo      身份码；V95 前老卡 null → 显示流水号补零（与 App 列表同口径）
      */
     public record KtpCard(long serialId, String petName, Instant unlockedAt, String cardType,
-            String cardVariant, String cardNo) {
+            String cardVariant, String cardNo, boolean freeCredit) {
+
+        /** V1.5.0 前的 6 参形态（既有构造点不改）：非免费次数解锁。 */
+        public KtpCard(long serialId, String petName, Instant unlockedAt, String cardType, String cardVariant,
+                String cardNo) {
+            this(serialId, petName, unlockedAt, cardType, cardVariant, cardNo, false);
+        }
 
         /** 卡种名 i18n key 后缀：学生卡 {@code STUDENT.<配色>}，其余为卡种本身（D-6：8 款各显示自己的名称）。 */
         public String styleKey() {

@@ -33,6 +33,9 @@ public interface StarterPackPurchaseRepository extends JpaRepository<StarterPack
 
     Optional<StarterPackPurchase> findByPublicToken(String publicToken);
 
+    /** 后台用户抽屉「超值礼包」卡（V1.5.0 gift-pack Story 5-2）：该用户全部 PAID 礼包。 */
+    List<StarterPackPurchase> findByUserIdAndStatusOrderByPaidAtDesc(long userId, StarterPackPurchaseStatus status);
+
     /**
      * 订单中心第 6 源（V1.5.0 gift-pack Story 4-4 · D-26）：PAID 全部 + 未过窗 PENDING；与 {@code KeepsakePurchaseRepository
      * .findOrderCenterPageBefore} <b>同形</b>（排序键 {@code created_at DESC, id DESC}，同刻组靠 {@code beforeId}）。

@@ -131,7 +131,15 @@ public class AdminPetSlotTabService {
      */
     public record PurchaseRow(String createdAtWib, String kind, String status, String operatorName, int days,
             int quantity, Long totalOrNull, String channelOrNull, String intentTokenOrNull,
-            String intentTokenShort) {
+            String intentTokenShort, Integer packTier, Integer slotSeq) {
+
+        /** V1.5.0 前的 10 参形态：非礼包行（{@code packTier} / {@code slotSeq} 为 null）。 */
+        public PurchaseRow(String createdAtWib, String kind, String status, String operatorName, int days,
+                int quantity, Long totalOrNull, String channelOrNull, String intentTokenOrNull,
+                String intentTokenShort) {
+            this(createdAtWib, kind, status, operatorName, days, quantity, totalOrNull, channelOrNull,
+                    intentTokenOrNull, intentTokenShort, null, null);
+        }
 
         /** 已收款但未发放名额（ORPHAN_PAID / OVERPAID）：模板标红、提示人工补发或退款。 */
         public boolean exception() {
@@ -182,15 +190,30 @@ public class AdminPetSlotTabService {
         Map<Long, String> intentTokens = intentTokens(shown);
         List<PurchaseRow> purchaseRows = new ArrayList<>();
         boolean exceptions = false;
+        Map<Long, Integer> packTiers = packTiers(shown);
+        // V1.5.0 gift-pack Story 5-2（K 泳道）：名额序号 = 该名额在用户生效租用名额里按 starts_at 的序号（1 起）。
+        List<Long> liveByStart = live.stream()
+                .sorted(Comparator.comparing(PetSlotRental::getStartsAt).thenComparing(PetSlotRental::getId,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(PetSlotRental::getId).toList();
         for (PetSlotPurchase p : shown) {
-            boolean grant = p.getKind() == PetSlotPurchaseKind.ADMIN_GRANT;
+            boolean pack = p.getKind() == PetSlotPurchaseKind.PACK_GRANT || p.getKind() == PetSlotPurchaseKind.PACK_EXTEND;
+            boolean grant = p.getKind() == PetSlotPurchaseKind.ADMIN_GRANT || pack;
             String token = p.getPaymentIntentId() == null ? null : intentTokens.get(p.getPaymentIntentId());
             String operator = grant && p.getOperatorAdminId() != null
                     ? operatorNames.getOrDefault(p.getOperatorAdminId(), "#" + p.getOperatorAdminId())
                     : null;
+            Integer tier = pack && p.getStarterPackPurchaseId() != null ? packTiers.get(p.getStarterPackPurchaseId())
+                    : null;
+            Integer slotSeq = null;
+            if (p.getKind() == PetSlotPurchaseKind.PACK_EXTEND && !p.rentalIdList().isEmpty()) {
+                int idx = liveByStart.indexOf(p.rentalIdList().get(0));
+                slotSeq = idx < 0 ? null : idx + 1;
+            }
             PurchaseRow row = new PurchaseRow(time.fmt(p.getCreatedAt()), p.getKind().name(), p.getStatus().name(),
                     operator, p.getDays(), p.getQuantity(), grant ? null : p.getTotal(),
-                    grant || p.getChannel() == null ? null : p.getChannel().name(), token, shortToken(token));
+                    grant || p.getChannel() == null ? null : p.getChannel().name(), token, shortToken(token), tier,
+                    slotSeq);
             exceptions |= row.exception();
             purchaseRows.add(row);
         }
@@ -199,6 +222,25 @@ public class AdminPetSlotTabService {
         return new Tab(userId, false, deletionPending, quota.total() >= PetSlotService.MAX_PETS, quota.total(),
                 quota.defaultSlots(), quota.levelSlots(), live.size(), quota.petCount(), pets, rentalRows,
                 purchaseRows, truncated, exceptions);
+    }
+
+    // V1.5.0 gift-pack Story 5-2：礼包档位（setter 注入，既有构造器与测试构造点不改）。
+    private com.tailtopia.starterpack.repository.StarterPackPurchaseRepository starterPacks;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setStarterPacks(com.tailtopia.starterpack.repository.StarterPackPurchaseRepository starterPacks) {
+        this.starterPacks = starterPacks;
+    }
+
+    /** 礼包名额行 → 档位：一次批量查询（空集 / 未注入不查）。 */
+    private Map<Long, Integer> packTiers(List<PetSlotPurchase> rows) {
+        Set<Long> ids = new LinkedHashSet<>();
+        rows.stream().map(PetSlotPurchase::getStarterPackPurchaseId).filter(Objects::nonNull).forEach(ids::add);
+        Map<Long, Integer> out = new HashMap<>();
+        if (!ids.isEmpty() && starterPacks != null) {
+            starterPacks.findAllById(ids).forEach(sp -> out.put(sp.getId(), sp.getTier()));
+        }
+        return out;
     }
 
     /** 操作人显示名：一次批量查询（空集不查）。 */

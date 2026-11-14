@@ -139,13 +139,13 @@ class AdminPermissionMatrixStaticTest {
      * + V1.4.2 shop-admin Story 1.1 两码（`shop.coupon_view` / `shop.coupon_edit`，不预授，O-7）= 89。
      */
     @Test
-    void thePermissionRegisterHasExactlyNinetyOneCodes() {
-        assertThat(AdminPermissions.ALL).hasSize(91); // + ops-ai-query ai.query
+    void thePermissionRegisterHasExactlyNinetyTwoCodes() {
+        assertThat(AdminPermissions.ALL).hasSize(92); // + ops-ai-query ai.query + V1.5.0 gift-pack 5-2 user.entitlement_grant
         assertThat(AdminPermissions.ALL)
                 .contains(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST,
                         AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT, AdminPermissions.OPS_POPUP_MANAGE,
                         AdminPermissions.OPS_NOTIFY_VIEW, AdminPermissions.OPS_NOTIFY_SEND,
-                        AdminPermissions.USER_PET_SLOT_ADJUST,
+                        AdminPermissions.USER_PET_SLOT_ADJUST, AdminPermissions.USER_ENTITLEMENT_GRANT,
                         AdminPermissions.GIFT_CATALOG_VIEW, AdminPermissions.GIFT_CATALOG_EDIT,
                         AdminPermissions.GIFT_ORDER_VIEW,
                         AdminPermissions.TOPIC_VIEW, AdminPermissions.TOPIC_MANAGE,

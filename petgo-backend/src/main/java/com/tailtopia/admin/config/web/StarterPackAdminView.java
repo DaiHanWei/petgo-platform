@@ -18,9 +18,26 @@ public class StarterPackAdminView {
     }
 
     private final PlatformConfigService platformConfig;
+    private final com.tailtopia.starterpack.repository.StarterPackPurchaseRepository purchases;
+    private final com.tailtopia.pay.repository.PaymentIntentRepository intents;
 
-    public StarterPackAdminView(PlatformConfigService platformConfig) {
+    public StarterPackAdminView(PlatformConfigService platformConfig,
+            com.tailtopia.starterpack.repository.StarterPackPurchaseRepository purchases,
+            com.tailtopia.pay.repository.PaymentIntentRepository intents) {
         this.platformConfig = platformConfig;
+        this.purchases = purchases;
+        this.intents = intents;
+    }
+
+    /** V1.5.0 gift-pack Story 5-2（L 泳道）：支付意图 token → 礼包档位（非礼包 / 查不到 → null）。 */
+    public Integer tierOfIntentToken(String intentToken) {
+        if (intentToken == null) {
+            return null;
+        }
+        return intents.findByPublicToken(intentToken)
+                .flatMap(pi -> purchases.findByPaymentIntentId(pi.getId()))
+                .map(com.tailtopia.starterpack.domain.StarterPackPurchase::getTier)
+                .orElse(null);
     }
 
     /** 礼包是否已停售（{@code starter_pack_enabled = false}）。 */

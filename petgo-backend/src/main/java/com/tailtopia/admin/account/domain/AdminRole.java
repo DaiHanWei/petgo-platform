@@ -43,6 +43,7 @@ import static com.tailtopia.admin.account.domain.AdminPermissions.SUPPORT_VIEW;
 import static com.tailtopia.admin.account.domain.AdminPermissions.USER_DEACTIVATE;
 import static com.tailtopia.admin.account.domain.AdminPermissions.USER_GRANT_PAWCOIN;
 import static com.tailtopia.admin.account.domain.AdminPermissions.USER_PET_SLOT_ADJUST;
+import static com.tailtopia.admin.account.domain.AdminPermissions.USER_ENTITLEMENT_GRANT;
 import static com.tailtopia.admin.account.domain.AdminPermissions.USER_VIEW;
 import static com.tailtopia.admin.account.domain.AdminPermissions.VET_BAN;
 import static com.tailtopia.admin.account.domain.AdminPermissions.VET_CREATE;
@@ -108,6 +109,7 @@ public enum AdminRole {
             CONTENT_PROACTIVE_TAKEDOWN, CONTENT_MANUAL_REVIEW,
             USER_VIEW, USER_DEACTIVATE, USER_GRANT_PAWCOIN,
             USER_PET_SLOT_ADJUST, // V1.4.0 ② AD-15：按 PRD 预授，偏离『新码不预授』惯例
+            USER_ENTITLEMENT_GRANT, // V1.5.0 gift-pack D-30：按 PRD 预授，偏离『新码不预授』惯例
             VET_VIEW, VET_CREATE, VET_EDIT, VET_BAN, VET_RESET_PASSWORD,
             VET_QUALIFY, VET_QUALIFY_VIEW, RATING_VIEW,
             CONSULT_VIEW_ANOMALIES, CONSULT_HANDLE, CONSULT_VIEW_SESSIONS,

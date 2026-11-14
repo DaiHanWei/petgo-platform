@@ -296,6 +296,9 @@ public final class AuditActions {
 
     /** V1.5.0 gift-pack Story 5-1：「超值礼包」配置卡保存（{@code AdminConfigService.commit} 拼出 {@code CONFIG_UPDATE_VALUE_PACK}）。 */
     public static final String CONFIG_UPDATE_VALUE_PACK = "CONFIG_UPDATE_VALUE_PACK";
+
+    /** V1.5.0 gift-pack Story 5-2（D-30）：运营补发免费次数（target user/&lt;userId&gt;；摘要「{类型} × {次数} · {原因}」）。 */
+    public static final String ENTITLEMENT_ADMIN_GRANT = "ENTITLEMENT_ADMIN_GRANT";
     /** 改等级表（门槛 / 末尾追加一级），并入库一次全量重算任务。target = {@code levels}。 */
     public static final String GROWTH_LEVEL_TABLE_UPDATED = "GROWTH_LEVEL_TABLE_UPDATED";
     /** 失败 / 僵死的重算任务重新执行。target = 新任务 id。 */

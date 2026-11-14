@@ -82,9 +82,12 @@
                 <tbody><tr th:each="pu : ${ps.purchases()}" data-ps-purchase
                            th:classappend="${pu.exception()} ? 'ud-ps-exception' : ''">
                     <td class="num" th:text="${pu.createdAtWib()}">2026-10-01 10:12</td>
-                    <td><span th:text="${pu.kind() == 'ADMIN_GRANT'}
-                                ? #{admin.v140.petSlots.purchases.kind.ADMIN_GRANT(${pu.operatorName()}, ${pu.days()})}
-                                : ${#messages.msg('admin.v140.petSlots.purchases.kind.' + pu.kind())}">租用</span>
+                    <td><span th:switch="${pu.kind()}">
+                            <th:block th:case="'ADMIN_GRANT'" th:text="#{admin.v140.petSlots.purchases.kind.ADMIN_GRANT(${pu.operatorName()}, ${pu.days()})}">运营补发</th:block>
+                            <!--/* V1.5.0 gift-pack Story 5-2（K 泳道）：礼包赠送 / 延长；金额 / 方式 / 支付单显示「—」 */-->
+                            <th:block th:case="'PACK_GRANT'" th:text="#{admin.v150.valuePack.slot.grant(${pu.packTier() ?: '?'})}">超值礼包赠送 · 档 3 · 30 天</th:block>
+                            <th:block th:case="'PACK_EXTEND'" th:text="#{admin.v150.valuePack.slot.extend(${pu.packTier() ?: '?'}, ${pu.slotSeq() ?: '—'})}">超值礼包延长 · 档 3 · 名额 2 · +30 天</th:block>
+                            <th:block th:case="*" th:text="${#messages.msg('admin.v140.petSlots.purchases.kind.' + pu.kind())}">租用</th:block></span>
                         <span class="badge badge-danger" th:if="${pu.exception()}"
                               th:text="${#messages.msg('admin.v140.petSlots.purchases.status.' + pu.status())}">已到账 · 名额发放失败（待人工处理）</span></td>
                     <td class="num" th:text="${pu.quantity()}">1</td>

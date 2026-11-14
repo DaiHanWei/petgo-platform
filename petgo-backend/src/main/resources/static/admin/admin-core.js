@@ -47,6 +47,19 @@ window.tailtopiaBadgeRefresh = function () {
 //     新增 / 移除条数，填 {0} {1}，{2} = data-confirm-args（受影响账号数）。
 // 通用能力，Story 2.2 拆 admin-core.js 时原样搬迁。
 function tailtopiaConfirmArgs(form) {
+    // V1.5.0 gift-pack Story 5-2：data-confirm-inputs="a|b" —— 依次取表单字段当前值填 {0} {1}（下拉取选中项文字）。
+    var multi = form.getAttribute('data-confirm-inputs');
+    if (multi) {
+        return multi.split('|').map(function (n) {
+            var el = form.querySelector('[name="' + n + '"]');
+            if (!el) { return ''; }
+            if (el.tagName === 'SELECT') {
+                var o = el.options[el.selectedIndex];
+                return o ? (o.text || '').trim() : '';
+            }
+            return (el.value || '').trim();
+        });
+    }
     var raw = form.getAttribute('data-confirm-args');
     var args = raw === null ? [] : raw.split('|');
     if (form.hasAttribute('data-role-matrix')) {

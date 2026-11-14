@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  用户抽屉「已购解锁」页签 · 超值礼包与免费次数（V1.5.0 gift-pack Story 5-2 · AB-41 · 后台稿 J 泳道）。
+  top：「超值礼包」（全部 PAID 礼包）+「免费次数（剩余）」，放在原四张卡之上；panel：「免费次数记录」（最近 20 条）+「补发次数」，放在之下。
+  需要宿主 model：entitlementsTab（AdminUserEntitlementsService.View）、entitlementGrantToken、entitlementGrantTypes、entitlementUserId。
+  ⚠️ 补发卡 sec:authorize 与 AdminEntitlementController.GRANT_AUTH 逐字一致；无权限置灰不隐藏。补发成功只换 panel（HX-Retarget
+  #user-entitlements-panel），top oob 刷新。
+-->
+<body>
+<div th:fragment="top(oob)" id="user-entitlements-top" th:with="et=${entitlementsTab}"
+     th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
+    <th:block th:if="${et != null}">
+        <div class="card card-full ud-card" th:if="${!#lists.isEmpty(et.packs())}" data-ent-packs>
+            <h3 class="ud-pc-title"><span th:text="#{admin.v150.valuePack.drawer.packs}">超值礼包</span>
+                <span class="badge badge-neutral" th:text="${#lists.size(et.packs())}">1</span></h3>
+            <table class="ud-table ud-pc-table">
+                <thead><tr><th th:text="#{admin.v150.valuePack.drawer.col.tier}">档位</th>
+                    <th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">时间</th>
+                    <th th:text="#{admin.v140.petSlots.purchases.col.channel}">方式</th>
+                    <th class="num" th:text="#{admin.v140.petSlots.purchases.col.amount}">金额</th></tr></thead>
+                <tbody><tr th:each="pk : ${et.packs()}">
+                    <td th:text="#{admin.v150.valuePack.tierLabel(${pk.tier()})}">档 3</td>
+                    <td class="num" th:text="${pk.paidAtWib()}">2026-11-14 10:00</td>
+                    <td th:text="${#messages.msg('admin.v140.petSlots.purchases.channel.' + pk.channel())}">PawCoin</td>
+                    <td class="num" th:text="'Rp' + ${#numbers.formatInteger(pk.price(), 1, 'POINT')}">Rp13.000</td>
+                </tr></tbody>
+            </table>
+        </div>
+        <div class="card card-full ud-card" th:if="${!#lists.isEmpty(et.credits())}" data-ent-credits>
+            <h3 class="ud-pc-title" th:text="#{admin.v150.valuePack.drawer.credits}">免费次数（剩余）</h3>
+            <table class="ud-table ud-pc-table">
+                <thead><tr><th th:text="#{admin.v150.valuePack.drawer.col.type}">类型</th>
+                    <th class="num" th:text="#{admin.v150.valuePack.drawer.col.remaining}">剩余 / 最早到期（WIB）</th></tr></thead>
+                <tbody><tr th:each="c : ${et.credits()}" th:classappend="${c.soon()} ? 'ud-ps-exception' : ''">
+                    <td th:text="${c.template() != null}
+                            ? #{admin.v150.valuePack.type.KTP_HD(${#messages.msg('admin.v134.idcard.style.' + c.template())})}
+                            : ${#messages.msg('admin.v150.valuePack.type.' + c.typeKey())}">KTP 高清 · KTP</td>
+                    <td class="num"><span th:text="${c.remaining()}">1</span> / <span
+                            th:classappend="${c.soon()} ? 'danger' : ''" th:text="${c.earliestExpiryWib()}">2026-12-01 10:00</span></td>
+                </tr></tbody>
+            </table>
+            <p class="hint" th:text="#{admin.v150.valuePack.drawer.creditsNote}">7 天内到期的标红；0 次的类型不显示。</p>
+        </div>
+    </th:block>
+</div>
+
+<section th:fragment="panel" id="user-entitlements-panel" th:with="et=${entitlementsTab}">
+    <div class="card card-full ud-card" th:if="${et != null and !#lists.isEmpty(et.history())}" data-ent-history>
+        <h3 class="ud-pc-title" th:text="#{admin.v150.valuePack.drawer.history}">免费次数记录</h3>
+        <table class="ud-table ud-pc-table">
+            <thead><tr><th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">时间</th>
+                <th th:text="#{admin.v150.valuePack.drawer.col.type}">类型</th>
+                <th th:text="#{admin.v150.valuePack.drawer.col.change}">变动 / 来源 / 用途</th></tr></thead>
+            <tbody><tr th:each="h : ${et.history()}">
+                <td class="num" th:text="${h.atWib()}">2026-11-14 10:00</td>
+                <td th:text="${h.template() != null}
+                        ? #{admin.v150.valuePack.type.KTP_HD(${#messages.msg('admin.v134.idcard.style.' + h.template())})}
+                        : ${#messages.msg('admin.v150.valuePack.type.' + h.typeKey())}">Rp1.000 礼物</td>
+                <td><b th:text="${h.change()}">+5</b>
+                    <span class="muted" th:if="${h.sourceKey() != null}"
+                          th:text="${#messages.msg(h.sourceKey(), h.sourceArg())}">超值礼包 · 档 3</span>
+                    <span class="muted" th:if="${h.useKey() != null}"
+                          th:text="${#messages.msg(h.useKey(), h.useArg())}">送给 Mochi</span></td>
+            </tr></tbody>
+        </table>
+    </div>
+    <div class="card card-full ud-card" data-ent-grant
+         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.entitlement_grant')">
+        <h3 th:text="#{admin.v150.valuePack.grant.title}">补发次数</h3>
+        <form class="inline"
+              th:attr="hx-post=@{/admin/users/{id}/entitlements/grant(id=${entitlementUserId})},
+                       data-confirm=#{admin.v150.valuePack.grant.confirm}"
+              data-confirm-inputs="quantity|creditType"
+              hx-target="#user-drawer-err" hx-swap="innerHTML">
+            <!--/* 一次性幂等 token：每次渲染换新的（补发成功后面板重渲染 = 新 token）。 */-->
+            <input type="hidden" name="grantToken" th:value="${entitlementGrantToken}"/>
+            <select name="creditType" class="inp" required th:attr="aria-label=#{admin.v150.valuePack.grant.type}">
+                <option th:each="t : ${entitlementGrantTypes}" th:value="${t.value()}"
+                        th:text="${t.template() != null}
+                            ? #{admin.v150.valuePack.type.KTP_HD(${#messages.msg('admin.v134.idcard.style.' + t.template())})}
+                            : ${#messages.msg('admin.v150.valuePack.type.' + t.typeKey())}">Tailsonality 结果</option>
+            </select>
+            <select name="quantity" class="inp" required th:attr="aria-label=#{admin.v150.valuePack.grant.type}">
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            </select>
+            <input type="text" name="reason" class="inp" maxlength="200" required
+                   th:placeholder="#{admin.v140.petSlots.grant.reason}"/>
+            <button type="submit" class="btn btn-primary" th:text="#{admin.v150.valuePack.grant.submit}">补发</button>
+        </form>
+        <p class="hint" th:text="#{admin.v150.valuePack.grant.hint}">有效期 3 个月，补发后立即可用。原因会写入操作审计，请勿填写用户隐私（手机号、地址等）。</p>
+    </div>
+    <!--/* 无权限：置灰不隐藏，注明所缺权限。 */-->
+    <div class="card card-full ud-card" data-ent-grant-denied
+         sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('user.entitlement_grant'))">
+        <h3 th:text="#{admin.v150.valuePack.grant.title}">补发次数</h3>
+        <div class="inline">
+            <select class="inp" disabled><option th:text="#{admin.v150.valuePack.grant.type}">类型 / 次数（1–3）</option></select>
+            <input type="text" class="inp" disabled th:placeholder="#{admin.v140.petSlots.grant.reason}"/>
+            <button type="button" class="btn btn-primary" disabled
+                    th:title="#{admin.v130.err.forbidden(#{perm.user.entitlement_grant})}"
+                    th:text="#{admin.v150.valuePack.grant.submit}">补发</button>
+        </div>
+        <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.user.entitlement_grant})}">需要「补发免费次数」权限</p>
+    </div>
+</section>
+
+<!--/* 补发成功：面板 outerHTML（HX-Retarget #user-entitlements-panel）+ 顶部两卡 oob + 清错误槽 + toast oob。 */-->
+<th:block th:fragment="afterGrant">
+    <section th:replace="~{admin/fragments/drawer-users-entitlements :: panel}"></section>
+    <div th:replace="~{admin/fragments/drawer-users-entitlements :: top(true)}"></div>
+    <div id="user-drawer-err" hx-swap-oob="innerHTML"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已补发 1 次 Tailsonality 结果（有效期 3 个月）</div>
+    </div>
+</th:block>
+</body>
+</html>
