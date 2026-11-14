@@ -87,9 +87,14 @@ public class IdCardHdService {
      */
     @Transactional
     public CreditUnlockResponse unlockCardWithCredit(long userId, long cardId) {
-        IdCard card = idCards.findByIdAndUserId(cardId, userId)
+        IdCard card = idCards.findForUpdateByIdAndUserId(cardId, userId)
                 .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
-        CreditType type = CreditType.ktpHdOf(card.getCardType(), card.getCardVariant());
+        CreditType type;
+        try {
+            type = CreditType.ktpHdOf(card.getCardType(), card.getCardVariant());
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("该卡种不支持免费次数"); // 存量脏数据：422 而不是 500（4-3 复审 #6）
+        }
         if (card.isHdUnlocked()) {
             return CreditUnlockResponse.unlocked(credits.remainingFor(userId, type));
         }
@@ -122,7 +127,7 @@ public class IdCardHdService {
             // V1.5.0 gift-pack（D-18）：免费次数不是支付渠道，显式 422，不落「非 QRIS 即扣币」分支。
             throw AppException.validation("该商品不支持免费次数");
         }
-        IdCard card = idCards.findByIdAndUserId(cardId, userId)
+        IdCard card = idCards.findForUpdateByIdAndUserId(cardId, userId)
                 .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
         if (card.isHdUnlocked()) {
             return HdPurchaseResponse.granted();

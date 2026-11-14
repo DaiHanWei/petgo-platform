@@ -63,10 +63,10 @@ class TailsonalityCreditUnlockIntegrationTest extends ApiIntegrationTest {
     void unlocksAutoEquipsWithoutKeepsakeRowAndOnlyOnce() throws Exception {
         User u = userWithPet();
         String token = submit(u);
-        PackCreditTestSupport.grant(tx, credits, u.getId(), CreditType.TAILSONALITY, 1, "ts-" + u.getId());
+        PackCreditTestSupport.grant(tx, credits, u.getId(), CreditType.TAILSONALITY, 2, "ts-" + u.getId());
         mvc.perform(post(BASE + "/" + token + "/credit-unlock").header("Authorization", userBearer(u.getId())))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.unlocked").value(true))
-                .andExpect(jsonPath("$.remaining").value(0));
+                .andExpect(jsonPath("$.remaining").value(1));
         assertThat(count("SELECT count(*) FROM tailsonality_results WHERE public_token = ? AND unlocked_at IS NOT NULL",
                 token)).isEqualTo(1);
         assertThat(count("SELECT count(*) FROM tailsonality_badges b JOIN tailsonality_results r ON r.id = b.result_id"

@@ -160,9 +160,9 @@ public class EntitlementCreditService {
      */
     @Transactional(readOnly = true)
     public int remainingFor(long userId, CreditType type) {
-        List<TypeSummary> rows = summary(userId).families().stream().flatMap(f -> f.types().stream()).toList();
+        // 直接按类型读（summary 只为 KTP 大类展开 types，非 KTP 类型从 summary 读会恒为 0；4-3 复审 #1）
         int n = 0;
-        for (TypeSummary r : rows) {
+        for (var r : dao.availableByType(userId, clock.instant())) {
             if (r.type() == type || (type.family() == CreditFamily.KTP_HD && r.type() == CreditType.KTP_HD_ANY
                     && type != CreditType.KTP_HD_ANY)) {
                 n += r.remaining();

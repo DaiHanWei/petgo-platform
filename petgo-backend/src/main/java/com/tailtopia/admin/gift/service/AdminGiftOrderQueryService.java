@@ -74,7 +74,7 @@ public class AdminGiftOrderQueryService {
     }
 
     /** 送礼只有两个渠道（{@code ck_gift_orders_channel}）。 */
-    public static final List<String> CHANNELS = List.of("PAWCOIN", "QRIS");
+    public static final List<String> CHANNELS = List.of("PAWCOIN", "QRIS", "PACK_CREDIT"); // V1.5.0 gift-pack：免费次数
 
     /**
      * 筛选条件。任一为 {@code null} = 不限。

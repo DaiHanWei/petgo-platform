@@ -18,6 +18,14 @@ public interface IdCardRepository extends JpaRepository<IdCard, Long> {
     Optional<IdCard> findByIdAndUserId(long id, long userId);
 
     /**
+     * V1.5.0 gift-pack Story 4-3：按卡解锁前锁卡行（付费解锁与用次数解锁同卡串行，防「扣了币又扣次数」，4-3 复审 #5）。
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT c FROM IdCard c WHERE c.id = :id AND c.userId = :userId")
+    Optional<IdCard> findForUpdateByIdAndUserId(@org.springframework.data.repository.query.Param("id") long id,
+            @org.springframework.data.repository.query.Param("userId") long userId);
+
+    /**
      * 档案删除打标（V108，2026-08-19 决策）：给该用户全部未打标卡记录档案删除时刻。
      * 付费卡照打标——可见性规则（hdUnlocked 恒可见）保证其展示不受影响；只打未打标行保证幂等
      * （删档→重建→再删档时，老卡保留首次删除时刻）。

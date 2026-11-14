@@ -35,7 +35,7 @@ public class AdminUserPurchasesQuery {
      */
     static final String KTP_SQL = """
             SELECT c.serial_id, c.name, c.card_type, c.card_variant, c.card_no,
-                   (SELECT MIN(CASE WHEN h.pay_channel = 'PAWCOIN' THEN h.purchased_at
+                   (SELECT MIN(CASE WHEN h.pay_channel IN ('PAWCOIN', 'PACK_CREDIT') THEN h.purchased_at
                                     WHEN pi.status = 'PAID' THEN pi.updated_at END)
                       FROM id_card_hd_purchases h
                       LEFT JOIN payment_intents pi ON pi.id = h.payment_intent_id

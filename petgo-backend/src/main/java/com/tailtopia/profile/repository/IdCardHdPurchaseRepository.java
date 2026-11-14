@@ -22,6 +22,7 @@ public interface IdCardHdPurchaseRepository extends JpaRepository<IdCardHdPurcha
                 SELECT 1 FROM id_card_hd_purchases h
                 LEFT JOIN payment_intents pi ON pi.id = h.payment_intent_id
                 WHERE h.user_id = :userId
+                  AND h.pay_channel <> 'PACK_CREDIT'
                   AND (h.payment_intent_id IS NULL OR pi.status = 'PAID'))
             """, nativeQuery = true)
     boolean existsPaidByUserId(@org.springframework.data.repository.query.Param("userId") long userId);
