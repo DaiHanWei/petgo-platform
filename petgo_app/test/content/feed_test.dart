@@ -114,7 +114,8 @@ void main() {
   });
 
   testWidgets('MasonryCard 注销作者显示占位文案 + 默认头像', (tester) async {
-    await tester.pumpWidget(MaterialApp(
+    // V1.5.0 FR-210：卡片里的 LikeButton 读 postLikeStoreProvider，需要 ProviderScope（断言不变）。
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -123,7 +124,7 @@ void main() {
           deletedUserLabel: 'Deleted user',
         ),
       ),
-    ));
+    )));
     await tester.pump();
     expect(find.text('Deleted user'), findsOneWidget);
     expect(find.byIcon(Icons.person_rounded), findsOneWidget); // 默认头像

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
@@ -21,13 +22,14 @@ void main() {
 
   Future<void> pumpCard(WidgetTester tester, FeedItem feedItem,
       {required VoidCallback onTap, void Function(String)? onTapTopic}) async {
-    await tester.pumpWidget(MaterialApp(
+    // V1.5.0 FR-210：卡片里的 LikeButton 读 postLikeStoreProvider，需要 ProviderScope（断言不变）。
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: MasonryCard(item: feedItem, deletedUserLabel: 'x', onTap: onTap, onTapTopic: onTapTopic),
       ),
-    ));
+    )));
     await tester.pumpAndSettle();
   }
 

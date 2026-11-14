@@ -40,6 +40,16 @@ class PinnedSlot {
           promo: promo,
         );
 
+  /// 给顶置内容条目打上点赞快照版本号（V1.5.0 FR-210）；推广卡没有点赞，原样返回。
+  PinnedSlot withLikeEpoch(int epoch) => item == null
+      ? this
+      : PinnedSlot(
+          pinConfigId: pinConfigId,
+          pinType: pinType,
+          item: item!.copyWith(likeEpoch: epoch),
+          promo: promo,
+        );
+
   /// 无生效配置 → null（客户端什么都不渲染、**不留占位**）。
   static PinnedSlot? fromJson(Map<String, dynamic> json) {
     final pin = json['pin'];

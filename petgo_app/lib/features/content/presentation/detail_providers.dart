@@ -4,6 +4,7 @@ import '../../social/domain/follow_state.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import '../domain/content_detail.dart';
+import '../domain/post_like_state.dart';
 
 /// 内容详情（按 id 的 family）。AsyncValue 三态：loading 骨架 / data / error（多态分类）。
 ///
@@ -14,8 +15,11 @@ final detailProvider = FutureProvider.autoDispose.family<ContentDetail, int>(
     // V1.3.4 Story 2.1 AC3.3 + 裁定 T-18：快照版本号取「本次进入详情页」那一刻的值 ——
     // 发 / 删评论引起的重拉**不算刷新**，沿用进入时的版本号，关注按钮保持；重新进入才按最新状态。
     final epoch = ref.watch(detailEntryFollowEpochProvider(id));
+    // V1.5.0 FR-210：点赞版本号取**本次取数**那一刻 —— 评论刷新重拉带回的 liked / likeCount 是后端新值，
+    // 以它为准不会回退（飞行中的覆盖不论版本号都优先）。
+    final likeEpoch = ref.read(postLikeStoreProvider.notifier).currentEpoch;
     final detail = await ref.read(detailRepositoryProvider).getDetail(id);
-    return detail.withFollowEpoch(epoch);
+    return detail.withFollowEpoch(epoch).withLikeEpoch(likeEpoch);
   },
 );
 

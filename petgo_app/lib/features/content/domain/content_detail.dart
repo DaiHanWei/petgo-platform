@@ -35,6 +35,7 @@ class ContentDetail {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
+    this.likeEpoch = 0,
     this.pets = const [],
     this.giftPets = const [],
     this.collected = false,
@@ -67,8 +68,16 @@ class ContentDetail {
   /// 这份快照发请求前读到的全局关注版本号（不来自 JSON，见 `FeedItem.followEpoch`）。
   final int followEpoch;
 
+  /// 这份快照发请求前读到的全局点赞版本号（不来自 JSON，V1.5.0 FR-210，见 `FeedItem.likeEpoch`）。
+  final int likeEpoch;
+
   /// 带上快照版本号的拷贝（`detailProvider` 用；其余字段原样）。
-  ContentDetail withFollowEpoch(int epoch) => ContentDetail(
+  ContentDetail withFollowEpoch(int epoch) => _withEpochs(followEpoch: epoch, likeEpoch: likeEpoch);
+
+  /// 带上点赞快照版本号的拷贝（V1.5.0 FR-210，`detailProvider` 用；其余字段原样）。
+  ContentDetail withLikeEpoch(int epoch) => _withEpochs(followEpoch: followEpoch, likeEpoch: epoch);
+
+  ContentDetail _withEpochs({required int followEpoch, required int likeEpoch}) => ContentDetail(
         id: id,
         authorId: authorId,
         authorDeleted: authorDeleted,
@@ -92,7 +101,8 @@ class ContentDetail {
         checkinPlace: checkinPlace,
         authorToken: authorToken,
         authorFollowState: authorFollowState,
-        followEpoch: epoch,
+        followEpoch: followEpoch,
+        likeEpoch: likeEpoch,
         pets: pets,
         giftPets: giftPets,
         // 🔴 V1.4.0 ④：漏拷 → 进详情收藏态恒为 false、作者看不到收藏数。

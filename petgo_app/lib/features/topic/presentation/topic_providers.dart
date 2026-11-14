@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../content/domain/feed_item.dart';
 import '../../content/domain/pinned_slot.dart';
+import '../../content/domain/post_like_state.dart';
 import '../../social/domain/follow_state.dart';
 import '../data/topic_repository.dart';
 import '../domain/topic.dart';
@@ -23,7 +24,10 @@ final topicPinnedProvider = FutureProvider.autoDispose.family<PinnedSlot?, Strin
     try {
       // 顶置卡同样在发请求前记关注版本号（V1.3.4 Story 2.1 AC3.3）。
       final epoch = ref.read(followStateProvider.notifier).currentEpoch;
-      return (await ref.read(topicRepositoryProvider).getPinnedSlot(name))?.withFollowEpoch(epoch);
+      final likeEpoch = ref.read(postLikeStoreProvider.notifier).currentEpoch; // V1.5.0 FR-210
+      return (await ref.read(topicRepositoryProvider).getPinnedSlot(name))
+          ?.withFollowEpoch(epoch)
+          .withLikeEpoch(likeEpoch);
     } catch (_) {
       return null;
     }
@@ -107,18 +111,19 @@ class TopicPostsController extends AsyncNotifier<TopicPostsState> {
   @override
   Future<TopicPostsState> build() async {
     final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    final likeEpoch = ref.read(postLikeStoreProvider.notifier).currentEpoch; // V1.5.0 FR-210
     final page = await ref
         .read(topicRepositoryProvider)
         .getPosts(_name, sort: _sort, page: _sort == TopicSort.popular ? 1 : null);
-    return _stateFrom(page, epoch, const [], 1);
+    return _stateFrom(page, epoch, likeEpoch, const [], 1);
   }
 
-  TopicPostsState _stateFrom(FeedPage page, int epoch, List<FeedItem> before, int pageNo) {
+  TopicPostsState _stateFrom(FeedPage page, int epoch, int likeEpoch, List<FeedItem> before, int pageNo) {
     final have = {for (final i in before) i.id};
     final items = [
       ...before,
       for (final i in page.items)
-        if (!have.contains(i.id)) i.copyWith(followEpoch: epoch),
+        if (!have.contains(i.id)) i.copyWith(followEpoch: epoch, likeEpoch: likeEpoch),
     ];
     final popular = _sort == TopicSort.popular;
     final hasMore = popular
@@ -140,6 +145,7 @@ class TopicPostsController extends AsyncNotifier<TopicPostsState> {
     if (popular ? current.nextPage == null : current.nextCursor == null) return;
     state = AsyncData(current.copyWith(loadingMore: true, loadMoreFailed: false));
     final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    final likeEpoch = ref.read(postLikeStoreProvider.notifier).currentEpoch;
     try {
       final page = await ref.read(topicRepositoryProvider).getPosts(
             _name,
@@ -148,7 +154,7 @@ class TopicPostsController extends AsyncNotifier<TopicPostsState> {
             page: popular ? current.nextPage : null,
           );
       if (!ref.mounted) return;
-      state = AsyncData(_stateFrom(page, epoch, current.items, popular ? current.nextPage! : 0));
+      state = AsyncData(_stateFrom(page, epoch, likeEpoch, current.items, popular ? current.nextPage! : 0));
     } catch (_) {
       if (!ref.mounted) return;
       state = AsyncData(current.copyWith(loadingMore: false, loadMoreFailed: true));

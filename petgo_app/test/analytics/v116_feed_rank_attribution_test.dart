@@ -138,6 +138,8 @@ void main() {
       'source': 'feed',
       'feed_tab': 'all',
       'rank_mode': 'recommend',
+      // V1.5.0 PRD B §4：只加属性 trigger（爱心按钮 = button），其余不变。
+      'trigger': 'button',
     });
   });
 
@@ -155,7 +157,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('likeButton_2')));
     await tester.pumpAndSettle();
 
-    expect(propsOf('post_like_tapped'), {'liked': true, 'source': 'detail'});
+    // V1.5.0 PRD B §4：只加属性 trigger；详情页仍不带 feed_tab / rank_mode。
+    expect(propsOf('post_like_tapped'), {'liked': true, 'source': 'detail', 'trigger': 'button'});
   });
 
   // ── AC2 命名规范 ───────────────────────────────────────────────

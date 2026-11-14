@@ -14,6 +14,7 @@ import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
+import 'package:tailtopia/features/content/domain/post_like_state.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/content/presentation/following_feed_controller.dart';
 import 'package:tailtopia/features/social/data/following_strip_repository.dart';
@@ -407,6 +408,8 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(followingStripProvider);
   // V1.4.2 social-topic Story 1.4 · AC1.8：追更覆盖表是账号维度 —— 换账号必须清，否则 B 看到 A 的追更态。
   ref.invalidate(petFollowStateProvider);
+  // V1.5.0 FR-210：帖子点赞覆盖表（postLikeStoreProvider）—— 已赞态是账号维度，换账号必须清，否则 B 看到 A 的点赞态。
+  ref.invalidate(postLikeStoreProvider);
   // V1.4.2 social-topic Story 1.5 · AC9.1：追更宠物列表的 iFollow / iFollowOwner 相对查看者 → 换账号重取。
   ref.invalidate(followedPetListControllerProvider);
   // V1.4.2 social-topic Story 4.3：话题页列表 / 顶置卡带查看者相关的点赞 / 关注快照 → 换账号整族重取。

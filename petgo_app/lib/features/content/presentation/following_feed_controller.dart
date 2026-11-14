@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../social/domain/follow_state.dart';
 import '../data/feed_repository.dart';
 import '../domain/feed_item.dart';
+import '../domain/post_like_state.dart';
 import 'feed_controller.dart';
 
 /// 关注流控制器（V1.3.4 following 流）。与 [FeedController] 同签名同语义，
@@ -17,9 +18,10 @@ class FollowingFeedController extends AsyncNotifier<FeedState> {
     _gen++;
     // 同 FeedController：发请求前读全局关注版本号写进快照（Story 2.1 AC3.3）。
     final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    final likeEpoch = ref.read(postLikeStoreProvider.notifier).currentEpoch; // V1.5.0 FR-210
     final page = await ref.read(feedRepositoryProvider).getFollowingFeed();
     return FeedState(
-      items: [for (final i in page.items) i.copyWith(followEpoch: epoch)],
+      items: [for (final i in page.items) i.copyWith(followEpoch: epoch, likeEpoch: likeEpoch)],
       category: FeedCategory.all,
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
@@ -40,12 +42,16 @@ class FollowingFeedController extends AsyncNotifier<FeedState> {
       }
       state = AsyncData(current.copyWith(loadingMore: true, loadMoreFailed: false));
       final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+      final likeEpoch = ref.read(postLikeStoreProvider.notifier).currentEpoch;
       final gen = _gen;
       try {
         final page = await ref.read(feedRepositoryProvider).getFollowingFeed(cursor: current.nextCursor);
         if (!ref.mounted || gen != _gen) return;
         state = AsyncData(current.copyWith(
-          items: [...current.items, for (final i in page.items) i.copyWith(followEpoch: epoch)],
+          items: [
+            ...current.items,
+            for (final i in page.items) i.copyWith(followEpoch: epoch, likeEpoch: likeEpoch),
+          ],
           nextCursor: page.nextCursor,
           hasMore: page.hasMore,
           loadingMore: false,

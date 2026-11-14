@@ -37,6 +37,7 @@ import '../../user_profile/presentation/public_profile_page.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
+import '../domain/post_like_state.dart';
 import '../domain/content_type_badge.dart';
 import '../domain/content_type.dart';
 import 'comment_composer.dart';
@@ -79,6 +80,9 @@ class ContentDetailPage extends ConsumerWidget {
       if (d == null) return;
       syncFeedCounts(ref, d.id,
           commentCount: d.commentCount, likeCount: d.likeCount, liked: d.liked);
+      // V1.5.0 FR-210：详情快照比旧覆盖新 → 采纳为覆盖，其它位置（快照 likeEpoch 更旧）一起跟上。
+      ref.read(postLikeStoreProvider.notifier)
+          .adoptFresherSnapshot(d.id, liked: d.liked, count: d.likeCount, snapEpoch: d.likeEpoch);
     });
 
     // bug 20260923-539（PRD E-10）：停留时长埋点包在最外层 —— 加载 / 错误 / 数据三态切换

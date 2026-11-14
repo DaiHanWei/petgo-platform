@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/mention/domain/mention_view.dart';
@@ -32,7 +33,8 @@ void main() {
     required VoidCallback onTap,
     required void Function(int userId)? onTapMention,
   }) async {
-    await tester.pumpWidget(MaterialApp(
+    // V1.5.0 FR-210：卡片里的 LikeButton 读 postLikeStoreProvider，需要 ProviderScope（断言不变）。
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -43,7 +45,7 @@ void main() {
           onTapMention: onTapMention,
         ),
       ),
-    ));
+    )));
     await tester.pumpAndSettle();
   }
 

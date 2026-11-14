@@ -23,7 +23,6 @@ import '../../mention/presentation/mention_picker.dart';
 import '../data/detail_repository.dart';
 import 'content_detail_page.dart';
 import 'detail_providers.dart';
-import 'feed_controller.dart';
 import '../../../shared/rich_text/topic_mention_text_controller.dart';
 import 'like_button.dart';
 
@@ -466,9 +465,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
             likersSource: 'content_detail',
             // 底栏外层已有 44dp 命中框：不再放大数字热区，爱心 + 数字保持拆分前的位置。
             expandCountHitArea: false,
-            // bug 20260923-538：详情页点赞后回写 Feed 快照，返回 Social 不再是旧的点赞态/数。
-            onSettled: (liked, count) =>
-                syncFeedCounts(ref, detail.id, liked: liked, likeCount: count),
+            // V1.5.0 FR-210：快照点赞版本号。bug 20260923-538 的 Feed 回写（原 onSettled → syncFeedCounts）
+            // 已由 postLikeStoreProvider 落定时统一做，这里不再重复写。
+            snapshotEpoch: detail.likeEpoch,
           ),
         ),
         // iconGap 是**可见**间距：两个 44 热区各自已带 (44-19)/2 的透明边，

@@ -368,6 +368,8 @@ class MasonryCard extends StatelessWidget {
                   postId: item.id,
                   initialLiked: item.liked,
                   initialCount: item.likeCount,
+                  // V1.5.0 FR-210：快照点赞版本号 —— 同帖在顶置卡 / 发现 / 关注 / 话题页读同一个 store 覆盖。
+                  snapshotEpoch: item.likeEpoch,
                   // 🛡 两侧都要传，否则「首页点赞是净增还是把详情页的前移了」无从判断。
                   source: 'feed',
                   likersSource: 'feed_card',

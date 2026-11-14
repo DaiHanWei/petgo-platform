@@ -110,6 +110,7 @@ class FeedItem {
     this.authorToken,
     this.authorFollowState = FollowState.none,
     this.followEpoch = 0,
+    this.likeEpoch = 0,
     this.reason,
     this.topicNames = const [],
   });
@@ -135,6 +136,10 @@ class FeedItem {
   /// 这份快照**发请求前**读到的全局关注版本号（不来自 JSON，AD-7 / Story 2.1 AC3.3）。
   /// 覆盖的 epoch 大于它才生效；数据源重拉 = 新快照 = 旧覆盖自动失效（按位置算「刷新」）。
   final int followEpoch;
+
+  /// 这份快照**发请求前**读到的全局点赞版本号（不来自 JSON，V1.5.0 FR-210）：
+  /// `postLikeStoreProvider` 的覆盖 epoch 大于它才生效（同 [followEpoch] 的做法，计数器独立）。
+  final int likeEpoch;
 
   /// 作者已注销（NFR-8）：前端渲染本地化「已注销用户」+ 默认头像，且头像不可点（Story 3.8）。
   final bool authorDeleted;
@@ -230,7 +235,8 @@ class FeedItem {
   /// ⚠️ 只开放点赞态、点赞数、评论数三项（+ V1.3.4 的快照版本号）—— 其余字段是内容本身。
   /// ⚠️ 关注快照（[authorToken] / [authorFollowState] / [followEpoch]）**原样带过去**：
   /// `syncCounts` 回写计数时丢了它们，按钮的版本号判断就乱了。
-  FeedItem copyWith({int? likeCount, bool? liked, int? commentCount, int? followEpoch}) => FeedItem(
+  FeedItem copyWith({int? likeCount, bool? liked, int? commentCount, int? followEpoch, int? likeEpoch}) =>
+      FeedItem(
         id: id,
         authorId: authorId,
         authorDeleted: authorDeleted,
@@ -254,6 +260,7 @@ class FeedItem {
         authorToken: authorToken,
         authorFollowState: authorFollowState,
         followEpoch: followEpoch ?? this.followEpoch,
+        likeEpoch: likeEpoch ?? this.likeEpoch,
         reason: reason,
         topicNames: topicNames,
       );
