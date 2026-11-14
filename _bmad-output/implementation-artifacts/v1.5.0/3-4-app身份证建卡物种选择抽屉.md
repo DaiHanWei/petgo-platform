@@ -1,6 +1,6 @@
 # Story 3.4: app身份证建卡物种选择抽屉
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 主题 pet-species（会话 ④）· 分支 `feat/1.5.0-pet-species`
 > 口径优先级：`decision-log.md`（11-13：「统一一下，身份证也弹宫格抽屉」，`IdCardSpeciesDropdown / IdCardBreedDropdown` 删掉）> PRD §3.2（AC3）/ §3.3.3（卡是快照）> `architecture-v1.5.0-pet-species-delta.md`（D-13、D-18）> App UI 稿 D1 ~ D4。
@@ -47,11 +47,11 @@ so that 兔子能选「Kelinci」、品种能搜，卡上印的就是「KELINCI�
 
 ## Tasks / Subtasks
 
-- [ ] **T0 开工核对**：1.3 的建卡字段名、3.2 的抽屉签名；`id_card_create_page.dart` 行号（:553-590 状态、:699-730 类型 / 品种两项）
-- [ ] **T1** 删下拉（AC1）
-- [ ] **T2** 换抽屉（AC2）
-- [ ] **T3** 表单数据 / 预填 / 提交 / 卡面（AC3）
-- [ ] **T4** 测试（AC4）；`flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
+- [x] **T0 开工核对**：1.3 的建卡字段名、3.2 的抽屉签名；`id_card_create_page.dart` 行号（:553-590 状态、:699-730 类型 / 品种两项）
+- [x] **T1** 删下拉（AC1）
+- [x] **T2** 换抽屉（AC2）
+- [x] **T3** 表单数据 / 预填 / 提交 / 卡面（AC3）
+- [x] **T4** 测试（AC4）；`flutter analyze` + `flutter test`；Completion Notes 标「L1 / L2 待本地验收」
 
 ## Dev Notes
 
@@ -73,6 +73,22 @@ so that 兔子能选「Kelinci」、品种能搜，卡上印的就是「KELINCI�
 
 ### Agent Model Used
 
+Claude（云端 L0 会话，2026-11-14）
+
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：AC5（stag 兔子建 KTP 卡 `species = RABBIT`、卡号物种段 00、改仓鼠后卡仍 KELINCI；D1 ~ D4 截图还原度）留本地。
+- L0：`flutter analyze` 相对基线零新增；`flutter test` 全量 4975 例中仅 1 例为全量跑期间刚改的文件编译时机导致的加载失败（`pet_species_test.dart`），修改落定后单跑通过（相关 81 例全绿）。`grep -rn "IdCardSpeciesDropdown\|IdCardBreedDropdown" petgo_app/` = 0（AC1.2）。
+- 实现：删除 `id_card/id_card_pet_type_fields.dart` 整个文件（只含两个下拉及其私有件）；「Ubah info」类型 / 品种改用 `SpeciesField(scene: 'id_card', error: …)` / `BreedField(scene: 'id_card', onPicked: …)`，叠在「Ubah info」上弹 3.2 的抽屉；`SpeciesField` 末尾追加可选 `error`（必填未选红框）。`IdCardFormDraft`（story 写的 `IdCardFormData` 实名为 `IdCardFormDraft`）末尾加 `species`，必填判定改为 `species != null || petType != null`；草稿 `petType` 由 `species` 推大类。预填取档案 `species`（无则 `petType`）。`CreateIdCardRequest` 加 `species`（请求体同时带大类 `petType`）。卡号 / 护照号预览仍按大类；卡面物种文字预览用草稿 `species`、已建卡用卡快照 `species`（3.1 已接）。
+- 测试：`id_card_create_page_test.dart` 原三例下拉用例按新规则改写（叠弹宫格抽屉、选 DOG 清空品种；品种抽屉「Pakai」手填后预览更新；档案手填品种 → 抽屉预填且「Pakai」打勾），新增「选 Kelinci → 兔子清单 → 提交 `species=RABBIT` / `petType=OTHER`、卡面 KELINCI」；新增 `test/features/profile/id_card_species_test.dart`（卡号物种段 00、旧卡 KUCING、请求体与必填判定）。
+- 复审（code-review medium）已修：#2 测试注释里的旧类名（影响 AC1.2 grep）；#4 选类型规则抽成 `applySpeciesPick`（建档页与身份证共用，加单测）；#6「手填值 Pakai 打勾」断言改为看勾选图标。
+- 待确认：复审 #7 新测试放在 `test/features/profile/`（沿用 3.1 story 指定的目录），与既有 `test/profile/` 并存。
+
 ### File List
+
+- petgo_app/lib/features/profile/presentation/id_card/id_card_pet_type_fields.dart（删除）
+- petgo_app/lib/features/profile/presentation/id_card_create_page.dart
+- petgo_app/lib/features/profile/presentation/id_card/id_card_form.dart
+- petgo_app/lib/features/profile/domain/id_card.dart、domain/pet_species.dart（`applySpeciesPick`）
+- petgo_app/lib/features/profile/presentation/widgets/pet_form_fields.dart（`SpeciesField.error`）、presentation/pet_profile_create_page.dart（改用 `applySpeciesPick`）
+- petgo_app/test/profile/id_card_create_page_test.dart、test/features/profile/{id_card_species_test（新）,pet_species_test}.dart

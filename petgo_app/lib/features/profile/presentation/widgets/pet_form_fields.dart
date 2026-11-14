@@ -23,7 +23,11 @@ class SpeciesField extends StatelessWidget {
     this.locked = false,
     this.lockedHint,
     this.scene = 'create',
+    this.error = false,
   });
+
+  /// 必填未选：描边变红（身份证建卡「Ubah info」D6 `bad` 态）。
+  final bool error;
 
   /// 细分类型线上值（如 RABBIT / CIVET）；null = 未选。
   final String? species;
@@ -58,7 +62,7 @@ class SpeciesField extends StatelessWidget {
         decoration: BoxDecoration(
           color: locked ? const Color(0xFFF7F7F7) : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.line, width: 1.5),
+          border: Border.all(color: error ? AppColors.danger : AppColors.line, width: 1.5),
         ),
         child: Row(
           children: [

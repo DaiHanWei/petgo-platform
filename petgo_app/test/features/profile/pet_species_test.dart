@@ -74,4 +74,13 @@ void main() {
     expect(breedsForPetType(null), isEmpty);
     expect(breedsForPetType('RABBIT'), hasLength(19));
   });
+
+  test('applySpeciesPick：换宫格项清品种；重选 Lainnya 保留已细分物种', () {
+    expect(applySpeciesPick(null, PetSpeciesCode.cat), (species: PetSpeciesCode.cat, typeChanged: true));
+    expect(applySpeciesPick(PetSpeciesCode.cat, PetSpeciesCode.dog), (species: PetSpeciesCode.dog, typeChanged: true));
+    expect(applySpeciesPick(PetSpeciesCode.civet, PetSpeciesCode.other),
+        (species: PetSpeciesCode.civet, typeChanged: false));
+    expect(applySpeciesPick(PetSpeciesCode.rabbit, PetSpeciesCode.rabbit),
+        (species: PetSpeciesCode.rabbit, typeChanged: false));
+  });
 }

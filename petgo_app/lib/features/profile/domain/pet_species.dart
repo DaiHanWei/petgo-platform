@@ -352,3 +352,14 @@ PetSpeciesCode resolveCustomBreed(PetSpeciesCode currentType, String text) {
   }
   return PetSpeciesCode.other;
 }
+
+/// 类型抽屉选中后的新细分类型（建档 / 身份证建卡共用，不许各写一份）。
+/// 宫格项变了 → 新值、`typeChanged = true`（调用方清空品种）；同一项重选 → 若当前已在「其他」里细分（如 CIVET）
+/// 则保留细分类型（与已选品种一致），否则取新值。
+({PetSpeciesCode species, bool typeChanged}) applySpeciesPick(PetSpeciesCode? current, PetSpeciesCode picked) {
+  if (current == null || current.pickerType != picked.pickerType) {
+    return (species: picked, typeChanged: true);
+  }
+  return (species: current.isOtherGroupMember ? current : picked, typeChanged: false);
+}
+

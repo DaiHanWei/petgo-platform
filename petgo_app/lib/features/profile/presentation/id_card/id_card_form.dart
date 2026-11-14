@@ -19,6 +19,7 @@ class IdCardFormDraft {
     this.maritalStatus = '',
     this.school = '',
     this.faculty = '',
+    this.species,
   });
 
   final String name;
@@ -36,6 +37,9 @@ class IdCardFormDraft {
   final String maritalStatus;
   final String school;
   final String faculty;
+
+  /// 细分类型 wire（V1.5.0 pet-species Story 3.4）；[petType] 由它推出大类（卡号物种码 / 编号沿用按大类）。
+  final String? species;
 }
 
 /// 字段在表单中的固定顺序（AC3.1）；不在卡款字段集内的跳过。
@@ -76,7 +80,7 @@ List<IdCardFormField> idCardMissingFields(IdCardStyle style, IdCardFormDraft d) 
 
 bool _filled(IdCardFormField f, IdCardFormDraft d) => switch (f) {
       IdCardFormField.name => d.name.trim().isNotEmpty,
-      IdCardFormField.petType => d.petType != null,
+      IdCardFormField.petType => d.species != null || d.petType != null,
       IdCardFormField.breed => d.breed.trim().isNotEmpty,
       IdCardFormField.gender => d.gender != null,
       IdCardFormField.birthday => d.birthday != null,

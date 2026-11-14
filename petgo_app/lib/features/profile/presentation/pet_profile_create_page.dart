@@ -362,13 +362,10 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
               species: _species?.wire,
               scene: 'create',
               onChanged: (pick) => setState(() {
-                // 宫格项变了 → 品种清单变，清空已选 RAS；同一项（如「其他」）重选不清。
-                if (_species?.pickerType != pick.code.pickerType) {
-                  _breedController.clear();
-                  _species = pick.code;
-                } else if (_species == null || !_species!.isOtherGroupMember) {
-                  _species = pick.code;
-                } // 已在「其他」里细分（如 CIVET）且重选 Lainnya → 保留细分类型与品种，二者一致
+                // 宫格项变了 → 品种清单变，清空已选 RAS；同一项（如「其他」）重选不清、保留已细分的物种。
+                final r = applySpeciesPick(_species, pick.code);
+                if (r.typeChanged) _breedController.clear();
+                _species = r.species;
               }),
             ),
             const SizedBox(height: 16),

@@ -254,10 +254,14 @@ class CreateIdCardRequest {
     this.cardVariant,
     this.school,
     this.faculty,
+    this.species,
   });
 
   final String name;
   final String? petType;
+
+  /// 细分类型（V1.5.0 pet-species · D-13）；[petType] 仍传大类。
+  final String? species;
   final String? breed;
   final DateTime? birthday;
   final String? gender;
@@ -282,6 +286,7 @@ class CreateIdCardRequest {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'name': name,
         if (petType != null) 'petType': petType,
+        if (species != null) 'species': species,
         if (breed != null) 'breed': breed,
         if (birthday != null) 'birthday': _isoDate(birthday!),
         if (gender != null) 'gender': gender,

@@ -20,7 +20,8 @@ import '../domain/ktp_prefill_pet.dart';
 import '../domain/pet_profile.dart';
 import 'id_card/id_card_form.dart';
 import 'id_card/id_card_hd_flow.dart';
-import 'id_card/id_card_pet_type_fields.dart';
+import 'widgets/pet_form_fields.dart';
+import '../domain/pet_species.dart';
 import 'id_card/id_card_ui_style.dart';
 import 'id_card/id_card_low_res_cover.dart';
 import 'id_card/id_card_watermark.dart';
@@ -145,6 +146,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     _draft = IdCardFormDraft(
       name: p.name,
       petType: p.petType,
+      species: p.species ?? p.petType, // V1.5.0：档案细分类型预填（旧后端无 → 大类线上值）
       breed: p.breed ?? '',
       birthday: p.birthday,
       gender: idCardGenderFromPetSex(p.sex),
@@ -201,6 +203,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         generated: true,
         name: _emptyToNull(_draft.name),
         petType: _draft.petType,
+        species: _draft.species, // 卡面物种文字按细分类型（KELINCI）；卡号 / 护照号预览仍按大类
         breed: _emptyToNull(_draft.breed),
         birthday: _draft.birthday,
         gender: _draft.gender,
@@ -396,6 +399,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
       card = await ref.read(idCardRepositoryProvider).createCard(CreateIdCardRequest(
             name: _draft.name.trim(),
             petType: _draft.petType,
+            species: _draft.species,
             breed: has(IdCardFormField.breed) ? _emptyToNull(_draft.breed) : null,
             birthday: _draft.birthday,
             gender: _draft.gender,
@@ -538,9 +542,6 @@ class _EditInfoSheet extends StatefulWidget {
   State<_EditInfoSheet> createState() => _EditInfoSheetState();
 }
 
-/// 当前展开的下拉（同一时刻最多一个）。
-enum _Dropdown { species, breed }
-
 class _EditInfoSheetState extends State<_EditInfoSheet> {
   late final TextEditingController _name;
   late final TextEditingController _breed;
@@ -551,9 +552,11 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
   late final TextEditingController _school;
   late final TextEditingController _faculty;
   late String? _petType;
+
+  /// 细分类型 wire（V1.5.0 pet-species Story 3.4）；大类 [_petType] 由它推出。
+  late String? _species;
   late DateTime? _birthday;
   late String? _gender;
-  _Dropdown? _open;
 
   @override
   void initState() {
@@ -568,6 +571,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     _school = TextEditingController(text: d.school);
     _faculty = TextEditingController(text: d.faculty);
     _petType = d.petType;
+    _species = d.species ?? d.petType;
     _birthday = d.birthday;
     _gender = d.gender;
   }
@@ -582,7 +586,8 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
 
   IdCardFormDraft get _current => IdCardFormDraft(
         name: _name.text.trim(),
-        petType: _petType,
+        petType: PetSpeciesCode.fromWire(_species)?.groupWire ?? _petType,
+        species: _species,
         breed: _breed.text.trim(),
         gender: _gender,
         birthday: _birthday,
@@ -594,15 +599,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
         faculty: _faculty.text.trim(),
       );
 
-  void _toggle(_Dropdown d) => setState(() => _open = _open == d ? null : d);
-
-  /// 点其他字段时收起下拉。
-  void _closeDropdown() {
-    if (_open != null) setState(() => _open = null);
-  }
-
   Future<void> _pickBirthday() async {
-    _closeDropdown();
     final now = DateTime.now();
     final first = DateTime(now.year - 40);
     // 档案预填的生日可能落在可选范围外（更早 / 时钟偏差晚于今天），夹到范围内，避免 picker 断言。
@@ -691,7 +688,6 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
             key: const ValueKey('idCardEditName'),
             controller: _name,
             maxLength: 60,
-            onTap: _closeDropdown,
             onChanged: (_) => setState(() {}),
             decoration: idCardInputDecoration(hintText: l10n.petProfileNameHint),
           ),
@@ -700,30 +696,33 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
         return [
           label(l10n.petTypeLabel),
           const SizedBox(height: 6),
-          IdCardSpeciesDropdown(
-            petType: _petType,
-            expanded: _open == _Dropdown.species,
-            error: _petType == null,
-            onToggle: () => _toggle(_Dropdown.species),
-            onSelected: (t) => setState(() {
-              if (t != _petType) _breed.clear(); // 改物种清空品种
-              _petType = t;
-              _open = null; // 选中即收起
+          // V1.5.0 pet-species Story 3.4（D1 / D2）：与档案页同一个类型抽屉（叠在「Ubah info」上弹）；
+          // 卡是独立快照，换类型不弹 90 天确认。宫格项变 → 清空品种。
+          SpeciesField(
+            key: const ValueKey('idCardSpeciesField'),
+            species: _species,
+            scene: 'id_card',
+            error: _species == null,
+            onChanged: (pick) => setState(() {
+              final r = applySpeciesPick(PetSpeciesCode.fromWire(_species), pick.code);
+              if (r.typeChanged) _breed.clear();
+              _species = r.species.wire;
             }),
           ),
-          if (_petType == null) _errorText(l10n.idCardPetTypeRequired),
+          if (_species == null) _errorText(l10n.idCardPetTypeRequired),
         ];
       case IdCardFormField.breed:
         return [
           label(l10n.petProfileBreedLabel),
           const SizedBox(height: 6),
-          IdCardBreedDropdown(
-            petType: _petType,
+          // V1.5.0 pet-species Story 3.4（D3 / D4）：与档案页同一个品种抽屉（搜索 / Pakai / 「其他」分组）。
+          BreedField(
+            fieldKey: const ValueKey('idCardBreedField'),
+            species: _species,
+            scene: 'id_card',
             controller: _breed,
-            expanded: _open == _Dropdown.breed,
-            onToggle: () => _toggle(_Dropdown.breed),
             onChanged: () => setState(() {}),
-            onInputTap: _closeDropdown,
+            onPicked: (pick) => setState(() => _species = pick.species.wire),
           ),
         ];
       case IdCardFormField.gender:
@@ -823,7 +822,6 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
       key: ValueKey('idCardGender_$wire'),
       onTap: () => setState(() {
         _gender = wire;
-        _open = null;
       }),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -847,7 +845,6 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
         key: ValueKey(key),
         controller: controller,
         maxLength: maxLength,
-        onTap: _closeDropdown,
         decoration: idCardInputDecoration(hintText: hint),
       );
 

@@ -268,51 +268,71 @@ void main() {
     expect(find.text('Please choose a gender'), findsNothing);
   });
 
-  testWidgets('物种下拉在页面内展开、当前项打勾；选 DOG 清空品种', (tester) async {
+  // V1.5.0 pet-species Story 3.4：原页内物种 / 品种下拉删掉，改为与档案页同一个
+  // 类型 / 品种抽屉（叠在「Ubah info」上弹）。以下三例按新规则改写，不删。
+  testWidgets('物种：点类型叠弹宫格抽屉、当前项打勾；选 DOG 清空品种', (tester) async {
     await _pump(tester, IdCardStyle.ktp, repo: _Repo());
     await _openForm(tester);
     await tester.tap(find.byKey(const ValueKey('idCardSpeciesField')));
     await tester.pumpAndSettle();
-    for (final w in ['CAT', 'DOG', 'OTHER']) {
-      expect(find.byKey(ValueKey('idCardSpeciesOption_$w')), findsOneWidget);
-    }
-    expect(find.byType(BottomSheet), findsOneWidget, reason: '只有编辑抽屉本身，没有再弹一层');
-    expect(find.descendant(of: find.byKey(const ValueKey('idCardSpeciesOption_CAT')), matching: find.byIcon(Icons.check_rounded)),
+    expect(find.byKey(const ValueKey('speciesPickerGrid')), findsOneWidget, reason: '弹的是新抽屉，不是下拉浮层');
+    expect(find.byType(BottomSheet), findsNWidgets(2), reason: '叠在「Ubah info」抽屉上');
+    expect(find.descendant(of: find.byKey(const ValueKey('speciesCell_CAT')), matching: find.byIcon(Icons.check_circle)),
         findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('idCardSpeciesOption_DOG')));
+    await tester.tap(find.byKey(const ValueKey('speciesCell_DOG')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('idCardSpeciesOption_CAT')), findsNothing, reason: '选中即收起');
+    expect(find.byKey(const ValueKey('speciesPickerGrid')), findsNothing, reason: '选中即收起，回到「Ubah info」');
+    expect(find.byType(BottomSheet), findsOneWidget);
     await _done(tester);
     // KTP 品种被清空 → 置灰并提示 breed。
     expect(find.text('Fill in breed first'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('idCardCreateSubmit'))).onPressed, isNull);
   });
 
-  testWidgets('品种下拉：Lainnya 原位展开输入框，输入后 Selesai → 预览品种更新', (tester) async {
+  testWidgets('品种：抽屉里「Pakai」手填，Selesai → 预览品种更新', (tester) async {
     await _pump(tester, IdCardStyle.ktp, repo: _Repo(), profile: _profile(breed: kCatBreeds.first));
-    expect(find.byKey(const ValueKey('idCardBreedCustomInput')), findsNothing);
     await _openForm(tester);
     await tester.tap(find.byKey(const ValueKey('idCardBreedField')));
     await tester.pumpAndSettle();
-    // 菜单约 5 项高、超出在菜单内滚动：「Lainnya」是末项，滚到它。
-    final menu = find.descendant(of: find.byKey(const ValueKey('idCardBreedMenu')), matching: find.byType(Scrollable));
-    expect(tester.getSize(menu).height, lessThanOrEqualTo(44 * 5 + 0.5));
-    await tester.scrollUntilVisible(find.byKey(const ValueKey('idCardBreedOption_OTHER')), 100, scrollable: menu);
-    expect(find.byKey(const ValueKey('idCardBreedOption_OTHER')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('idCardBreedOption_OTHER')));
+    expect(find.byKey(const ValueKey('breedPickerList')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('speciesPickerSearch')), 'Kampung');
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('idCardBreedCustomInput')), findsOneWidget);
-    await tester.enterText(find.byKey(const ValueKey('idCardBreedCustomInput')), 'Kampung');
+    await tester.tap(find.byKey(const ValueKey('breedPickerCustom')));
     await tester.pumpAndSettle();
     await _done(tester);
     expect(find.text('KAMPUNG'), findsOneWidget, reason: 'KTP 卡面「Ras」显示新品种（卡面统一大写）');
   });
 
-  testWidgets('档案自定义品种（不在清单）→ Lainnya 打勾、输入框预填', (tester) async {
+  testWidgets('档案自定义品种（不在清单）→ 品种抽屉打开时预填、Pakai 打勾', (tester) async {
     await _pump(tester, IdCardStyle.kitas, repo: _Repo(), profile: _profile(breed: 'Oren Liar'));
     await _openForm(tester);
-    expect(find.byKey(const ValueKey('idCardBreedCustomInput')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('idCardBreedField')));
+    await tester.pumpAndSettle();
     expect(find.widgetWithText(TextField, 'Oren Liar'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('breedPickerCustom')), matching: find.byIcon(Icons.check_rounded)),
+        findsOneWidget, reason: '已选手填值 →「Pakai」行打勾');
+  });
+
+  testWidgets('V1.5.0：选 Kelinci → 品种为兔子清单；提交带 species=RABBIT、petType=OTHER；卡面 KELINCI、卡号物种段 00',
+      (tester) async {
+    final repo = _Repo();
+    await _pump(tester, IdCardStyle.ktp, repo: repo);
+    await _openForm(tester);
+    await tester.tap(find.byKey(const ValueKey('idCardSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesCell_RABBIT')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('idCardBreedField')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('breedOption_Holland Lop')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('breedOption_Holland Lop')));
+    await tester.pumpAndSettle();
+    await _done(tester);
+    expect(find.text('KELINCI'), findsOneWidget);
+    await _submit(tester);
+    final json = repo.last!.toJson();
+    expect(json['species'], 'RABBIT');
+    expect(json['petType'], 'OTHER');
   });
 
   testWidgets('KTP 品种为空置灰；Paspor 品种为空不影响', (tester) async {
