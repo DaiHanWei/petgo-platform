@@ -227,7 +227,8 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
         String token = createProfileAndGetToken(owner);
         String zero = render(token);
         assertThat(zero).contains("Hadiah").doesNotContain("Konsultasi");
-        assertThat(zero).contains("<span class=\"u\">Rp</span><span>0</span>");
+        // V1.5.0 gift-pack Story 1-4（D-11）：Hadiah 列改为礼物个数（千分位按 id）
+        assertThat(zero).contains("style=\"color:var(--green)\">0</div>").doesNotContain("<span class=\"u\">Rp</span>");
 
         long petId = profiles.findDefault(owner.getId()).orElseThrow().getId();
         long n = SEQ.incrementAndGet();
@@ -240,7 +241,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                 VALUES (?, ?, 47000, 'Cake', 'Kue', 'https://cdn/cake.png', 4)""", petId, giftId);
         String html = render(token);
         assertThat(html).contains("Hadiah").doesNotContain("Konsultasi");
-        assertThat(html).contains("<span class=\"u\">Rp</span><span>188</span><span class=\"u\">rb</span>");
+        assertThat(html).contains("style=\"color:var(--green)\">4</div>");
     }
 
     /** 存量档案没有生日 / 性别 / 品种也能正常渲染（AC3 的容错半条）。 */

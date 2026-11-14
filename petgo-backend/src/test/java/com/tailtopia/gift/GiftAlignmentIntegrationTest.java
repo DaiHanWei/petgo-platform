@@ -285,8 +285,11 @@ class GiftAlignmentIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         String cardB = mvc.perform(get("/p/" + b.getCardToken())).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(cardA).contains("Rp</span><span>53</span>");
-        assertThat(cardB).contains("Rp</span><span>5</span>").doesNotContain("Rp</span><span>53</span>");
+        // V1.5.0 gift-pack Story 1-4（D-11）：H5 名片「Hadiah」改为礼物个数（每只各收 1 件），不再显示 Rp 总价值。
+        assertThat(cardA).contains("style=\"color:var(--green)\">1</div>").doesNotContain("Rp</span>");
+        assertThat(cardB).contains("style=\"color:var(--green)\">1</div>").doesNotContain("Rp</span>");
+        assertThat(getJson("/api/v1/pet-profiles/me/archive-stats?petId=" + a.getId(), owner.getId())
+                .get("giftCount").asLong()).isEqualTo(1L);
     }
 
     // ———————————————— AC7.3 ————————————————

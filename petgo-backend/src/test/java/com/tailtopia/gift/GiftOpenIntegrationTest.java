@@ -34,6 +34,14 @@ class GiftOpenIntegrationTest extends GiftOrderTestSupport {
         PetProfile pet = newPet(owner);
         GiftCatalogItem g = newGift(1_000, "Snacks");
         String t = send(newUser(), pet, g, null);
+        // GrowthGiftListener 是 @Async AFTER_COMMIT：等送达的 GIFT_RECEIVED 行落库后再取基线（code review #2）
+        long orderId = jdbc.queryForObject("SELECT id FROM gift_orders WHERE public_token = ?", Long.class, t);
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (jdbc.queryForObject("SELECT count(*) FROM growth_ledger WHERE idem_key = ?", Long.class,
+                "GIFT_RECEIVED:" + orderId) == 0 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(30);
+        }
+        Thread.sleep(150);
         long before = ledgerRows(owner.getId());
         JsonNode first = json.readTree(open(owner.getId(), pet.getId(), Map.of("orderTokens", List.of(t)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());

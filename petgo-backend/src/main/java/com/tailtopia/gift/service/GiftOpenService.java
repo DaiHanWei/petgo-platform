@@ -41,9 +41,19 @@ public class GiftOpenService {
     public record Result(List<Long> involvedIds, Set<Long> openedNow) {
     }
 
+    /**
+     * 同一只宠物的拆礼物串行（code review #4）：「全部拆开」与按 token 拆可能以不同顺序锁同一批行而死锁，
+     * 事务级 advisory lock 随事务释放。
+     */
+    private void lockPet(long petId) {
+        jdbc.query("SELECT pg_advisory_xact_lock(hashtext('gift-open:' || :petId))", Map.of("petId", petId),
+                rs -> null);
+    }
+
     /** 按 token 拆（不属于这只宠物 / 未送达的 token 忽略）。 */
     @Transactional
     public Result openTokens(long petId, Collection<String> tokens) {
+        lockPet(petId);
         Set<String> distinct = new LinkedHashSet<>(tokens);
         List<Long> opened = jdbc.queryForList("""
                 UPDATE gift_orders SET opened_at = now()
@@ -57,6 +67,7 @@ public class GiftOpenService {
     /** 全部拆开：最早的 200 笔未拆（外层再判 {@code opened_at IS NULL}，并发重检时已被拆的自动剔除）。 */
     @Transactional
     public Result openAll(long petId) {
+        lockPet(petId);
         List<Long> opened = jdbc.queryForList("""
                 UPDATE gift_orders SET opened_at = now()
                  WHERE opened_at IS NULL AND status = 'DELIVERED' AND pet_id = :petId

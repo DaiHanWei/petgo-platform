@@ -184,7 +184,11 @@ public class GiftOrderBrowseService {
         boolean owner = v.viewerIsOwner();
         Map<Long, AuthorView> people = accounts.findAuthorViewsWithoutTags(
                 rows.stream().map(GiftOrderRow::senderId).distinct().toList());
-        Map<Long, List<String>> petNames = new HashMap<>();
+        // 一次批量取全部（未注销）送礼人的宠物名（code review #3：open-all 最多 200 笔，不得逐人查）
+        List<Long> activeSenders = rows.stream().map(GiftOrderRow::senderId).distinct()
+                .filter(id -> people.get(id) != null && !people.get(id).deleted()).toList();
+        Map<Long, List<String>> petNames = activeSenders.isEmpty() ? Map.of()
+                : pets.petNamesOfOwners(activeSenders, SENDER_PET_NAMES);
         boolean ownerParticipating = false;
         if (owner) {
             GrowthLevel lv = growth.getLevel(v.pet().ownerId());
@@ -195,7 +199,7 @@ public class GiftOrderBrowseService {
         for (GiftOrderRow r : rows) {
             AuthorView who = people.get(r.senderId());
             List<String> names = who == null || who.deleted() ? List.of()
-                    : petNames.computeIfAbsent(r.senderId(), id -> pets.petNamesOfOwner(id, SENDER_PET_NAMES));
+                    : petNames.getOrDefault(r.senderId(), List.of());
             Integer exp = null;
             if (owner) {
                 boolean p = ownerParticipating;

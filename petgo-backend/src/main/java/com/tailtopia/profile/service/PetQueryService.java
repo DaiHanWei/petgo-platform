@@ -37,6 +37,25 @@ public class PetQueryService {
         return petResolver.listOwned(userId).stream().map(PetQueryService::toView).toList();
     }
 
+    /**
+     * V1.5.0 gift-pack Story 1-4：多个账号名下宠物名（含只读），各按创建顺序取前 {@code limit} 个；一条查询。
+     * 没有宠物的账号不在 Map 里。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, List<String>> namesByOwners(Collection<Long> ownerIds, int limit) {
+        if (ownerIds == null || ownerIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<String>> out = new java.util.LinkedHashMap<>();
+        for (PetProfile p : profiles.findAllByOwnerIdInOrderByCreatedAtAscIdAsc(ownerIds)) {
+            List<String> names = out.computeIfAbsent(p.getOwnerId(), k -> new java.util.ArrayList<>());
+            if (names.size() < limit) {
+                names.add(p.getName());
+            }
+        }
+        return out;
+    }
+
     /** 按 id 取；不存在 → empty。不校验归属、不校验只读。 */
     @Transactional(readOnly = true)
     public Optional<PetView> get(long petId) {

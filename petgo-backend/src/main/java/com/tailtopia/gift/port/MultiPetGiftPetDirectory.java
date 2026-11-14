@@ -100,6 +100,12 @@ public class MultiPetGiftPetDirectory implements GiftPetDirectory {
         return petQuery.listByOwner(ownerId).stream().map(PetView::name).limit(limit).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, List<String>> petNamesOfOwners(java.util.Collection<Long> ownerIds, int limit) {
+        return petQuery.namesByOwners(ownerIds, limit);
+    }
+
     private Optional<GiftPet> toGiftPet(PetView v, Map<Long, Optional<User>> ownerCache) {
         Optional<User> owner = ownerCache.computeIfAbsent(v.ownerId(), accounts::findAccountById);
         if (owner.isEmpty()) {

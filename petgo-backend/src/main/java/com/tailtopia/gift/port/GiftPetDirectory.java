@@ -28,6 +28,18 @@ public interface GiftPetDirectory {
         return List.of();
     }
 
+    /** 批量版（一条查询，不 N+1）：{@code ownerId → 宠物名}；没有宠物的账号不在 Map 里。默认逐个调单个版本。 */
+    default java.util.Map<Long, List<String>> petNamesOfOwners(java.util.Collection<Long> ownerIds, int limit) {
+        java.util.Map<Long, List<String>> out = new java.util.HashMap<>();
+        for (Long id : ownerIds) {
+            List<String> names = petNamesOfOwner(id, limit);
+            if (!names.isEmpty()) {
+                out.put(id, names);
+            }
+        }
+        return out;
+    }
+
     /**
      * 收礼宠物视图。
      *
