@@ -23,6 +23,7 @@ public record DailyReport(LocalDate date, Metrics current, Metrics previous, Lon
      *
      * @param dau          登录用户日活（服务器口径，活跃率的分母）；该日尚无逐日活跃记录（上线前 / 上线当天不完整）时为 null —— 不编数字
      * @param autoComments 当日自动评论发出条数（虚拟账号发的，<b>不</b>计入 comments 与活跃率；只展示、不做环比）
+     * @param autoLikes    当日自动点赞成功数（V1.5.0：虚拟账号自动点的赞，<b>不</b>计入 likes 与活跃率；只展示、不做环比）
      */
     public record Metrics(
             long newUsers,
@@ -30,6 +31,7 @@ public record DailyReport(LocalDate date, Metrics current, Metrics previous, Lon
             long newPosts,
             long comments,
             long autoComments,
+            long autoLikes,
             long likes,
             long paidOrders,
             long payingUsers,

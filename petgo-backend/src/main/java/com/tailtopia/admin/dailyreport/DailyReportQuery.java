@@ -52,6 +52,10 @@ public class DailyReportQuery {
     static final String SQL_AUTO_COMMENTS =
             "SELECT count(*) FROM auto_comment_logs l WHERE l.status = 'POSTED' AND " + day("l.updated_at") + " = ?";
 
+    /** 当日自动点赞成功数（V1.5.0 自动点赞 FR-220）：只看成功数、不做环比，同自动评论。按尝试时刻的 WIB 日期数。 */
+    static final String SQL_AUTO_LIKES =
+            "SELECT count(*) FROM auto_like_logs l WHERE l.status = 'LIKED' AND " + day("l.attempted_at") + " = ?";
+
     static final String SQL_LIKES =
             "SELECT (SELECT count(*) FROM content_likes l JOIN users u ON u.id = l.user_id AND " + REAL
                     + " WHERE " + day("l.created_at") + " = ?)"
@@ -85,6 +89,7 @@ public class DailyReportQuery {
                 count(SQL_NEW_POSTS, d),
                 count(SQL_COMMENTS, d),
                 count(SQL_AUTO_COMMENTS, d),
+                count(SQL_AUTO_LIKES, d),
                 count(SQL_LIKES, d, d),
                 num(pay.get("orders")),
                 num(pay.get("users")),

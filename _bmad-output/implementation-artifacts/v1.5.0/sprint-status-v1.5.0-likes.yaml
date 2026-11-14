@@ -51,7 +51,7 @@ development_status:
   2-1-自动点赞配置目标集与检查: review
   2-2-自动点赞计划与多实例防重: review
   2-3-自动点赞派发复查与留档: review
-  2-4-自动点赞日报行与上线核对: ready-for-dev
+  2-4-自动点赞日报行与上线核对: review
   epic-2-retrospective: optional
 
   epic-3: backlog

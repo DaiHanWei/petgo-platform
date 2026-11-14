@@ -22,7 +22,8 @@ public final class DailyReportCard {
             + "电商订单 = 当日下单且已付款，GMV 含 PawCoin 抵扣｜"
             + "日活（含游客）来自 Firebase（GA4），按设备计、含未登录用户，24–48 小时内可能小幅修正｜"
             + "登录用户日活为服务器口径｜活跃率 = 评论数或 like 数 ÷ 登录用户日活｜"
-            + "自动评论 = 虚拟账号自动发出的条数，不计入评论数与活跃率，不做环比";
+            + "自动评论 = 虚拟账号自动发出的条数，不计入评论数与活跃率，不做环比"
+            + "；自动点赞 = 虚拟账号自动点的赞，不计入点赞数与活跃率，不做环比";
 
     private DailyReportCard() {
     }
@@ -43,6 +44,8 @@ public final class DailyReportCard {
                 field("评论数", count(c.comments()), DailyReport.changePct(c.comments(), p.comments())),
                 // 紧跟真实评论数；只给当日成功数，不做环比（2026-09-30 产品要）。
                 fieldNoChange("自动评论成功数", count(c.autoComments())),
+                // V1.5.0 自动点赞 FR-220：同自动评论，只给当日成功数，不做环比。
+                fieldNoChange("自动点赞成功数", count(c.autoLikes())),
                 field("like 数", count(c.likes()), DailyReport.changePct(c.likes(), p.likes())),
                 field("评论活跃率", rate(c.commentRate()), DailyReport.changePct(c.commentRate(), p.commentRate())),
                 field("like 活跃率", rate(c.likeRate()), DailyReport.changePct(c.likeRate(), p.likeRate()))));

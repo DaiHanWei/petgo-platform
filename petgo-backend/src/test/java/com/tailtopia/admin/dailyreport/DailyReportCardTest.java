@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class DailyReportCardTest {
 
     private static DailyReport.Metrics m(Long dau, long comments, long newUsers, long paid) {
-        return new DailyReport.Metrics(newUsers, dau, 10, comments, 7, 40, 3, 2, paid, 5, 1_234_000);
+        return new DailyReport.Metrics(newUsers, dau, 10, comments, 7, 120, 40, 3, 2, paid, 5, 1_234_000);
     }
 
     @Test
@@ -118,6 +118,36 @@ class DailyReportCardTest {
 
         int comments = community.indexOf(community.stream().filter(c -> c.startsWith("**评论数**")).findFirst().orElseThrow());
         assertThat(community.get(comments + 1)).isEqualTo("**自动评论成功数**\n7");
+    }
+
+    @Test
+    @DisplayName("V1.5.0 自动点赞成功数：紧跟在「自动评论成功数」后面，只显示当日数，不带环比；脚注写明不计入点赞数")
+    @SuppressWarnings("unchecked")
+    void autoLikesRightAfterAutoCommentsWithoutChange() throws Exception {
+        DailyReport r = new DailyReport(LocalDate.of(2026, 11, 20), m(50L, 20, 12, 0), m(40L, 10, 10, 0));
+        Map<String, Object> card = (Map<String, Object>) DailyReportCard.build(r).get("card");
+        List<Map<String, Object>> els = (List<Map<String, Object>>) card.get("elements");
+
+        List<String> community = els.stream()
+                .filter(e -> e.containsKey("fields"))
+                .map(e -> (List<Map<String, Object>>) e.get("fields"))
+                .filter(fs -> fs.stream().anyMatch(f -> content(f).startsWith("**评论数**")))
+                .findFirst().orElseThrow()
+                .stream().map(DailyReportCardTest::content).toList();
+
+        int auto = community.indexOf("**自动评论成功数**\n7");
+        assertThat(auto).isNotNegative();
+        // 整格精确相等 = 只有当日数、没有环比箭头
+        assertThat(community.get(auto + 1)).isEqualTo("**自动点赞成功数**\n120");
+        assertThat(community.get(auto + 2)).startsWith("**like 数**");
+        assertThat(DailyReportCard.NOTE).contains("自动点赞 = 虚拟账号自动点的赞，不计入点赞数与活跃率，不做环比");
+    }
+
+    @Test
+    @DisplayName("V1.5.0 日报自动点赞 SQL：只数 LIKED，按尝试时刻切 WIB 日")
+    void autoLikesSql() {
+        assertThat(DailyReportQuery.SQL_AUTO_LIKES).contains("FROM auto_like_logs l").contains("l.status = 'LIKED'")
+                .contains("l.attempted_at");
     }
 
     @SuppressWarnings("unchecked")

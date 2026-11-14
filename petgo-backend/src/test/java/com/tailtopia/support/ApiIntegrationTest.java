@@ -102,6 +102,10 @@ import tools.jackson.databind.ObjectMapper;
             // 收成 MISSED、ACTIVE run 收成 DONE，与拨钟的派发用例并发推进状态。首延 1 天 = 测试期内不自动跑；
             // 派发逻辑由 AutoLikeDispatchIntegrationTest 直接调用验证。
             "petgo.auto-like.dispatch-initial-delay-ms=86400000",
+            // 自动点赞早晚计划：用例会临时把开关打开（setEnabled(true)）拨钟直调 planner；套件若跨 10:30 / 16:30 WIB，
+            // 真 cron 会在开着的窗口里排一轮真时间的 run，挡住用例的「上一轮未结束」判定。"-" = 关闭。
+            "petgo.auto-like.morning-cron=-",
+            "petgo.auto-like.evening-cron=-",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
