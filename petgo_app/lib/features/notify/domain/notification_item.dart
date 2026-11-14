@@ -34,6 +34,20 @@ class NotificationItem {
     // V1.4.2 social-topic Story 1.5 · AC6.1（D-10 / 决策日志 I5）：被追更 / 追更宠物新 Diary，后端按收件人语言拼整句。
     'PET_FOLLOWED',
     'PET_DIARY_POSTED',
+    // V1.5.0 onboarding-recall Story 7.2：关注更新——后端若带了作者昵称（actorName）则按后端文案条目加粗昵称；
+    // 没带则走 [storedCopyTypes] 原样显示后端整句。
+    'USER_POST_PUBLISHED',
+  };
+
+  /// 读后端存储文案的类型（V1.5.0 onboarding-recall Story 7.2 · FR-180 / FR-182 / FR-183）：后端按收件人语言渲染后落库，
+  /// 与推送同一句——标题 / 正文直接读 [title] / [body]，**不要求 [actorName] 非空**。
+  /// [title] 为空（改版前的旧纪念日 / 召回通知）→ 回落按类型的本地固定文案。
+  static const Set<String> storedCopyTypes = {
+    'USER_POST_PUBLISHED',
+    'COMPANION_ANNIVERSARY',
+    'LIFECYCLE_D1',
+    'LIFECYCLE_D3',
+    'LIFECYCLE_D7',
   };
 
   // VET_REPLY|CONSULT_CLOSED|CONTENT_LIKED|CONTENT_COMMENTED|NEW_CONSULT_REQUEST|PET_BIRTHDAY|COMPANION_ANNIVERSARY|MILESTONE_NODE|OPS_ANNOUNCEMENT（V1.3.4 运营通知）|USER_FOLLOWED|PLACE_COMMENTED|PET_SLOT_EXPIRING|PET_SLOT_EXPIRED（V1.4.0 multi-pet 名额到期，读后端 title / body）|…
@@ -78,6 +92,22 @@ class NotificationItem {
   /// 「后端文案条目」：四种互动类型且后端给了触发人昵称 —— 只有这类读 [title] / [body]（AC3.2）。
   /// 其余（含无触发人的存量点赞 / 评论，库值是中文兜底串）一律走本地文案。
   bool get hasServerCopy => actorName != null && actorName!.isNotEmpty && serverCopyTypes.contains(type);
+
+  /// 「存储文案条目」（V1.5.0 Story 7.2 · AC2）：[storedCopyTypes] 且后端给了非空标题（且不是后端文案条目）。
+  bool get hasStoredCopy {
+    final t = title?.trim() ?? '';
+    return !hasServerCopy && storedCopyTypes.contains(type) && t.isNotEmpty && !legacyFallbackTitles.contains(t);
+  }
+
+  /// 改版前（< V1.5.0 后端）纪念日 / 召回通知落库的是**印尼语兜底串**而不是渲染文案（`sendWithCopy` 只把渲染结果给推送）。
+  /// 这几句视同「未存文案」，回落本地按类型的文案——否则英语用户会在通知中心看到印尼语。
+  static const Set<String> legacyFallbackTitles = {
+    '🎉 Hari jadi kebersamaan',
+    'Tinggal satu langkah lagi',
+    'Catat momen hari ini',
+    'Lihat kabar anabul lain',
+    'Rangkuman minggu ini',
+  };
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) => NotificationItem(
         type: (json['type'] ?? '') as String,

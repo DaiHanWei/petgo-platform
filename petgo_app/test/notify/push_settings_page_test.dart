@@ -350,8 +350,10 @@ void main() {
     expect(icon.color, AppColors.mint);
     final circle = tester.widget<Container>(find.ancestor(of: find.byWidget(icon), matching: find.byType(Container)).first);
     expect((circle.decoration! as BoxDecoration).color, AppColors.cream2);
-    expect(find.text('Hewan yang kamu ikuti'), findsOneWidget);
-    expect(find.text('Diary baru dari hewan yang kamu ikuti'), findsOneWidget);
+    // V1.5.0 onboarding-recall Story 7.2 · AC5（UI A5）：改名「Yang kamu ikuti」（key / 图标 / 位置 / 开关不变）。
+    expect(find.text('Yang kamu ikuti'), findsOneWidget);
+    expect(find.text('Postingan baru dari orang dan hewan yang kamu ikuti'), findsOneWidget);
+    expect(find.text('Hewan yang kamu ikuti'), findsNothing);
     expect(switchOf(tester, PushCategoryCode.petDiary).value, isTrue);
   });
 

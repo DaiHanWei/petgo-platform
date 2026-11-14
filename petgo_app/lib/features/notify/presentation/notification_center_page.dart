@@ -285,6 +285,8 @@ class _NotificationCenterPageState
     // V1.4.2 social-topic Story 1.5 · AC6.8：被追更 / 追更宠物新 Diary（显式登记）。
     'PET_FOLLOWED' => 'pet_followed',
     'PET_DIARY_POSTED' => 'pet_diary_posted',
+    // V1.5.0 onboarding-recall Story 7.2 · AC6：关注更新（显式登记）。
+    'USER_POST_PUBLISHED' => 'user_post_published',
     // v1.4.2 shop Story 9.1 · AC6.4：迟到款重新下单（显式登记）。
     'SHOP_ORDER_REORDERED' => 'shop_order_reordered',
     // v1.4.2 shop Story 9.3 · AC4.4：券快过期（显式登记）。
@@ -432,7 +434,13 @@ class _NotificationCenterPageState
   /// V1.4.2 social-topic Story 1.5 · AC6.5：追更宠物新 Diary（`PET_DIARY_POSTED`）同样先探。
   Future<bool> _postGone(NotificationItem item) async {
     final type = item.deepLinkType;
-    if (type != 'CONTENT_LIKED' && type != 'CONTENT_COMMENTED' && type != 'PET_DIARY_POSTED') return false;
+    // V1.5.0 onboarding-recall Story 7.2 · AC1：关注更新（`USER_POST_PUBLISHED`）同样先探。
+    if (type != 'CONTENT_LIKED' &&
+        type != 'CONTENT_COMMENTED' &&
+        type != 'PET_DIARY_POSTED' &&
+        type != 'USER_POST_PUBLISHED') {
+      return false;
+    }
     final postId = int.tryParse(item.targetRef ?? '');
     if (postId == null) return false;
     try {
@@ -841,6 +849,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     // 追更宠物新 Diary = 紫色爪印。两者底色都用 violet100（**不用 cream2**：未读条目底色就是 cream2，图标块会「消失」）。
     'PET_FOLLOWED' => (Icons.person_add_rounded, AppColors.mint, AppColors.violet100),
     'PET_DIARY_POSTED' => (Icons.pets_rounded, AppColors.mint, AppColors.violet100),
+    // V1.5.0 onboarding-recall Story 7.2 · AC1（UI A3）：关注更新 = 同追更新 Diary 的紫色爪印。
+    'USER_POST_PUBLISHED' => (Icons.pets_rounded, AppColors.mint, AppColors.violet100),
     // v1.4.2 shop Story 9.1 · AC6.4（UI F22）：重新下单 = 紫色货车（violet100 底，同上理由不用 cream2）。
     'SHOP_ORDER_REORDERED' => (Icons.local_shipping_rounded, AppColors.mint, AppColors.violet100),
     // UI 稿 G3：退回用紫色钱包（钱回来了）—— **不用** REFUND_REJECTED 的红色。
@@ -929,8 +939,9 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.mint,
       AppColors.cream2,
     ),
+    // V1.5.0 onboarding-recall Story 7.2 · AC4（UI C7）：第 7 天改毕业帽。
     'LIFECYCLE_D7' => (
-      Icons.calendar_month_rounded,
+      Icons.school_rounded,
       AppColors.gold,
       AppColors.goldTint,
     ),
@@ -1022,6 +1033,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedTitle(l10n),
     // V1.4.2 social-topic Story 1.5 · AC6.7：宠物已删（无 actorName）→ 读后端写入时按收件人语言渲染的整句，同上理由。
     'PET_DIARY_POSTED' => _storedTitle(l10n),
+    // V1.5.0 Story 7.2：关注更新无本地句子——空 title（理论上不会）落中性兜底。
+    'USER_POST_PUBLISHED' => _storedTitle(l10n),
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3 · 拍板 P-5）：继运营通知后又一个读后端 title 的类型，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundTitle(l10n),
     // v1.4.2 shop Story 9.1 · AC6.4（F22）：读后端整句（正文带新单号，App 无从本地拼），空则本地兜底。
@@ -1087,6 +1100,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'OPS_ANNOUNCEMENT' || 'PET_SLOT_EXPIRING' || 'PET_SLOT_EXPIRED' => _storedBody(l10n),
     // V1.4.2 social-topic Story 1.5 · AC6.2：无正文 → 空串，不留正文行（见下方兜底布局）。
     'PET_DIARY_POSTED' => '',
+    // V1.5.0 Story 7.2 · AC1：关注更新只有标题、无正文行。
+    'USER_POST_PUBLISHED' => '',
     // 送礼退回（V1.4.0 gift Story 2.2 · AC5.3）：读后端 body，理由见 [_refundTitle]。
     'GIFT_UNDELIVERED_REFUND' => _refundBody(l10n),
     'SHOP_ORDER_REORDERED' => _reorderedBody(l10n),
@@ -1331,6 +1346,36 @@ class _NotificationTileState extends State<_NotificationTile> {
     );
   }
 
+  /// 存储文案条目（V1.5.0 onboarding-recall Story 7.2 · AC2 / AC3）：标题 / 正文原样显示后端按收件人语言存好的整句
+  /// （与推送同一句，不按 App 当前语言再选）；正文最多 2 行省略、无展开按钮；正文为空（关注更新）不留正文行。
+  Widget _storedCopyContent(AppLocalizations l10n) {
+    final title = widget.item.title!.trim();
+    final body = widget.item.body?.trim() ?? '';
+    final bodyStyle = DefaultTextStyle.of(context).style.merge(_kBodyStyle);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          key: ValueKey('notificationStoredTitle_${widget.item.deepLinkToken ?? widget.item.type}'),
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+        ),
+        if (body.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            body,
+            key: ValueKey('notificationStoredBody_${widget.item.deepLinkToken ?? widget.item.type}'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: bodyStyle,
+          ),
+        ],
+        const SizedBox(height: 6),
+        _timeText(l10n),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -1360,6 +1405,8 @@ class _NotificationTileState extends State<_NotificationTile> {
                 Expanded(
                   child: widget.item.hasServerCopy
                       ? _serverCopyContent(l10n)
+                      : widget.item.hasStoredCopy
+                      ? _storedCopyContent(l10n)
                       : LayoutBuilder(builder: (context, constraints) {
                     // bug 20260727-368：只在正文折叠态(2 行)真溢出时才显示 展开/收起 按钮。
                     // 测量必须与正文 Text 同 style、同可用宽、同 textScaler（clamp≤1.3 后的实际值）。

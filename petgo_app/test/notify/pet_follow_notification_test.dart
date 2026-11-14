@@ -276,4 +276,109 @@ void main() {
     expect(_bold(tester, 'pf2'), ['Rani']);
     expect(_plain(tester, 'pf2'), 'Rani started following your pet');
   });
+
+  // ===== V1.5.0 onboarding-recall Story 7.2（UI A3 / B2 / C7）=====
+
+  NotificationItem stored(String type, String token,
+          {String? title, String? body, String? targetRef, String? actorName}) =>
+      NotificationItem(
+        type: type,
+        deepLinkType: type,
+        deepLinkToken: token,
+        targetRef: targetRef,
+        title: title,
+        body: body,
+        read: false,
+        createdAt: DateTime.now().toUtc(),
+        actorName: actorName,
+      );
+
+  test('7.2 AC2：storedCopyTypes 五类；title 为空不算存储文案条目', () {
+    expect(NotificationItem.storedCopyTypes, {
+      'USER_POST_PUBLISHED', 'COMPANION_ANNIVERSARY', 'LIFECYCLE_D1', 'LIFECYCLE_D3', 'LIFECYCLE_D7',
+    });
+    expect(stored('LIFECYCLE_D1', 'x', title: 'Hi').hasStoredCopy, isTrue);
+    expect(stored('LIFECYCLE_D1', 'x', title: ' ').hasStoredCopy, isFalse);
+    expect(stored('COMPANION_ANNIVERSARY', 'x').hasStoredCopy, isFalse);
+    expect(stored('PET_BIRTHDAY', 'x', title: 'Hi').hasStoredCopy, isFalse);
+    // 改版前落库的印尼语兜底串视同未存文案
+    expect(stored('COMPANION_ANNIVERSARY', 'x', title: '🎉 Hari jadi kebersamaan').hasStoredCopy, isFalse);
+    expect(stored('LIFECYCLE_D7', 'x', title: 'Rangkuman minggu ini').hasStoredCopy, isFalse);
+  });
+
+  testWidgets('7.2 A3：关注更新 / 追更新 Diary 对照——读后端整句、爪印紫 / violet100、无正文行', (tester) async {
+    await _pump(tester, _Repo([
+      stored('USER_POST_PUBLISHED', 'up1',
+          title: 'Rani just updated Mochi\'s Diary, take a peek 👀', body: '', targetRef: '77'),
+      stored('USER_POST_PUBLISHED', 'up2', title: 'Budi just posted something new, take a peek 👀', targetRef: '78'),
+      _diary(),
+    ]));
+    expect(find.text("Rani just updated Mochi's Diary, take a peek 👀"), findsOneWidget);
+    expect(find.text('Budi just posted something new, take a peek 👀'), findsOneWidget);
+    for (final t in ['up1', 'up2', 'pd1']) {
+      final (icon, bg) = _iconOf(tester, t);
+      expect(icon.icon, Icons.pets_rounded, reason: t);
+      expect(bg, AppColors.violet100, reason: t);
+    }
+    expect(find.byKey(const ValueKey('notificationStoredBody_up1')), findsNothing);
+    expect(find.text(l10n.notifyTypeSystem), findsNothing);
+  });
+
+  testWidgets('7.2 AC1：关注更新点击先探帖子 → /content/{id}；notif_type=user_post_published', (tester) async {
+    final probe = _Probe();
+    final nav = await _pump(tester, _Repo([stored('USER_POST_PUBLISHED', 'up1', title: 'Budi posted', targetRef: '77')]),
+        probe: probe);
+    await tester.tap(_tile('up1'));
+    await tester.pumpAndSettle();
+    expect(probe.probed, [77]);
+    expect(nav.pushed, '/content/77');
+    expect(events.firstWhere((e) => e.$1 == 'app_notification_item_tapped').$2!['notif_type'], 'user_post_published');
+  });
+
+  testWidgets('7.2 AC1：关注更新帖子已删 → toast、留在通知中心', (tester) async {
+    final repo = _Repo([stored('USER_POST_PUBLISHED', 'up1', title: 'Budi posted', targetRef: '77')]);
+    final nav = await _pump(tester, repo, probe: _Probe(gone: true));
+    await tester.tap(_tile('up1'));
+    await tester.pump();
+    expect(find.text(l10n.detailGoneTitle), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(nav.pushed, isNull);
+    expect(repo.markReadTokens, ['up1']);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('7.2 B2：新纪念日读存储文案、正文 2 行省略；旧纪念日空 title 回落本地固定文案', (tester) async {
+    const longBody = 'Cheers to 30 days together! Snap Mochi\'s look today, one photo is all it takes 📸 '
+        'Cheers to 30 days together! Snap Mochi\'s look today, one photo is all it takes 📸';
+    await _pump(tester, _Repo([
+      stored('COMPANION_ANNIVERSARY', 'an1', title: '🎉 Day 30 with Mochi!', body: longBody, targetRef: '5'),
+      stored('COMPANION_ANNIVERSARY', 'an0', title: '', body: '', targetRef: '5'),
+    ]));
+    expect(find.text('🎉 Day 30 with Mochi!'), findsOneWidget);
+    final body = tester.widget<Text>(find.byKey(const ValueKey('notificationStoredBody_an1')));
+    expect(body.maxLines, 2);
+    expect(body.overflow, TextOverflow.ellipsis);
+    expect(find.text(l10n.notifyTypeCompanionAnniversary), findsOneWidget);
+    expect(find.text(l10n.notifyBodyCompanionAnniversary), findsOneWidget);
+  });
+
+  testWidgets('7.2 C7：D1 / D3 / D7 读存储文案；D7 毕业帽 / goldTint；D1 / D3 图标不变', (tester) async {
+    await _pump(tester, _Repo([
+      stored('LIFECYCLE_D1', 'l1', title: 'The Persia squad is hanging out 🐾',
+          body: 'Introduce Mochi to fellow Persia pals, maybe they\'ll be besties 💜', targetRef: 'DISCOVER'),
+      stored('LIFECYCLE_D3', 'l3', title: 'Mochi still needs a bestie 🥺', body: 'Let\'s find Mochi a friend', targetRef: 'DISCOVER'),
+      stored('LIFECYCLE_D7', 'l7', title: 'Yay, Lulus Pemula! 🎓', body: 'All Beginner Tasks done! Tap to celebrate 🎉',
+          targetRef: 'GRADUATED'),
+    ]));
+    expect(find.text('The Persia squad is hanging out 🐾'), findsOneWidget);
+    expect(find.text('Mochi still needs a bestie 🥺'), findsOneWidget);
+    expect(find.text('Yay, Lulus Pemula! 🎓'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('notificationStoredBody_l7'))).maxLines, 2);
+    final (d7, d7bg) = _iconOf(tester, 'l7');
+    expect(d7.icon, Icons.school_rounded);
+    expect(d7bg, AppColors.goldTint);
+    expect(_iconOf(tester, 'l1').$1.icon, Icons.auto_stories_rounded);
+    expect(_iconOf(tester, 'l3').$1.icon, Icons.explore_rounded);
+  });
 }

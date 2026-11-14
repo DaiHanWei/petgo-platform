@@ -93,7 +93,7 @@ void main() {
         const NotificationItem(
             type: 'PET_BIRTHDAY', title: '生日快乐', deepLinkToken: 'b1', read: false),
         const NotificationItem(
-            type: 'COMPANION_ANNIVERSARY', title: '陪伴纪念', deepLinkToken: 'a1', read: true),
+            type: 'COMPANION_ANNIVERSARY', title: '🎉 Hari jadi kebersamaan', deepLinkToken: 'a1', read: true),
         const NotificationItem(
             type: 'MILESTONE_NODE', title: '里程碑达成', deepLinkToken: 'm1', read: true),
       ]),
