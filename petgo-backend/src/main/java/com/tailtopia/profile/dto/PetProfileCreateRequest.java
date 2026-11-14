@@ -13,7 +13,7 @@ import java.time.LocalDate;
  *
  * <p>必填/选填边界（决策 F6 + R2/AC3）：
  * <ul>
- *   <li><b>必填</b>：{@code petType}（CAT/DOG/OTHER，创建后不可改）/ {@code name}（≤20）/
+ *   <li><b>必填</b>：{@code petType}（CAT/DOG/OTHER；V1.5.0 起可由 {@code species} 推出）/ {@code name}（≤20）/
  *       {@code birthday}（完整年月日 {@code date}，年份用于年龄计算与里程碑触发）。</li>
  *   <li><b>选填</b>：{@code avatarUrl}（缺省展示侧占位）/ {@code breed}（自由文本纯展示）/
  *       {@code intro}（≤30）。</li>
@@ -28,7 +28,8 @@ import java.time.LocalDate;
  */
 public record PetProfileCreateRequest(
         @Size(max = 1024) String avatarUrl,
-        @NotBlank(message = "宠物类型必选") String petType,
+        // V1.5.0 pet-species（D-7）：去掉 @NotBlank，改服务层判——带 species 时可不传；不带时仍必填（同文案 422）。
+        String petType,
         @NotBlank(message = "宠物名不能为空") @Size(max = 20, message = "宠物名不能超过 20 字") String name,
         @Size(max = 60) String breed,
         // 允许生日=今天（当天出生合法；前端选择器 maxDate=now，与此对齐——bug：选今天被 @Past 拒 422）。
@@ -56,7 +57,13 @@ public record PetProfileCreateRequest(
          * 两边走散会出现「建档能存、编辑存不进去」这类只在特定路径下复现的怪事。
          */
         @jakarta.validation.constraints.Pattern(regexp = "MALE|FEMALE",
-                message = "性别只能是 MALE 或 FEMALE") String sex) {
+                message = "性别只能是 MALE 或 FEMALE") String sex,
+        /**
+         * 细分类型（V1.5.0 pet-species Story 1.1 · D-7），可空：旧版 App 不传 → 按 {@code petType} 推。
+         * 传了则以它为准，{@code petType} 若也传了须等于其大类，否则 422。
+         */
+        @jakarta.validation.constraints.Pattern(regexp = com.tailtopia.profile.domain.PetSpecies.WIRE_PATTERN,
+                message = "细分类型不合法") String species) {
 
     /**
      * 便捷构造：不带体重、绝育状态与性别。
@@ -67,5 +74,11 @@ public record PetProfileCreateRequest(
     public PetProfileCreateRequest(String avatarUrl, String petType, String name, String breed,
             LocalDate birthday, String intro) {
         this(avatarUrl, petType, name, breed, birthday, intro, null, null, null);
+    }
+
+    /** 便捷构造：V1.5.0 前的 9 参形态（不带细分类型），既有调用点不必补 null。 */
+    public PetProfileCreateRequest(String avatarUrl, String petType, String name, String breed,
+            LocalDate birthday, String intro, java.math.BigDecimal weightKg, String neuterStatus, String sex) {
+        this(avatarUrl, petType, name, breed, birthday, intro, weightKg, neuterStatus, sex, null);
     }
 }

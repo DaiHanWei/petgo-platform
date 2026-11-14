@@ -82,7 +82,7 @@ class ProfileApiControllerTest {
     @Test
     void createUsesOwnerFromJwtAndRateLimits() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null, null, null);
         when(service.create(eq(77L), org.mockito.ArgumentMatchers.any(), eq(true))).thenReturn(stub);
 
         PetProfileResponse resp = controller.create(
@@ -97,7 +97,7 @@ class ProfileApiControllerTest {
     @Test
     void createPassesLegacyFlagForOldOrMissingVersion() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null, null, null);
         when(service.create(eq(77L), org.mockito.ArgumentMatchers.any(), eq(false))).thenReturn(stub);
         var req = new PetProfileCreateRequest(null, "CAT", "Momo", null, java.time.LocalDate.of(2022,1,1), null);
 
@@ -117,7 +117,7 @@ class ProfileApiControllerTest {
     @Test
     void myProfileDelegatesWithJwtUser() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null, null, null);
         when(service.getMyProfile(77L, null)).thenReturn(stub);
         assertThat(controller.myProfile(jwt("77"), null).cardToken()).isEqualTo("TOK");
     }
@@ -135,7 +135,7 @@ class ProfileApiControllerTest {
     void updateUsesJwtOwnerAndTriggersRerender() {
         // 参数序：id, avatarUrl, petType, name, breed, birthday, sex, intro, cardToken, isSystemDefaultName, createdAt
         PetProfileResponse updated = new PetProfileResponse(
-                5L, null, "CAT", "Momo2", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
+                5L, null, "CAT", "Momo2", null, null, null, null, "TOK", false, null, null, Instant.now(), null, null, null);
         when(service.update(eq(77L), ArgumentMatchers.isNull(), ArgumentMatchers.any())).thenReturn(updated);
 
         // 参数序：avatarUrl, name, breed, birthday, sex, intro, weightKg, neuterStatus

@@ -51,7 +51,7 @@ class ContentPetsMigrationIntegrationTest extends ApiIntegrationTest {
         User u = newUser();
         Long petId = jdbc.queryForObject(
                 "INSERT INTO pet_profiles (owner_id, pet_type, name, is_system_default_name, card_token,"
-                        + " created_at, updated_at) VALUES (?, 'CAT', 'Lama', false, ?, now(), now()) RETURNING id",
+                        + " created_at, updated_at, pet_species, milestone_track) VALUES (?, 'CAT', 'Lama', false, ?, now(), now(), 'CAT', 'CAT') RETURNING id",
                 Long.class, u.getId(), "mig" + SEQ.incrementAndGet());
         // 「存量」：只写 pet_id，不写关联（模拟迁移前的行），含一条软删帖。
         Long live = jdbc.queryForObject("""

@@ -97,9 +97,9 @@ class RepurchaseIntegrationTest extends ApiIntegrationTest {
             BigDecimal weightKg) {
         jdbc.update("""
                 INSERT INTO pet_profiles (owner_id, pet_type, name, birthday, card_token,
-                        weight_kg, created_at, updated_at)
-                VALUES (?, ?, 'Mochi', ?, ?, ?, now(), now())
-                """, ownerId, petType, birthday, "pc" + SEQ.incrementAndGet(), weightKg);
+                        weight_kg, created_at, updated_at, pet_species, milestone_track)
+                VALUES (?, ?, 'Mochi', ?, ?, ?, now(), now(), ?, ?)
+                """, ownerId, petType, birthday, "pc" + SEQ.incrementAndGet(), weightKg, petType, petType);
         return profiles.findDefault(ownerId).orElseThrow();
     }
 

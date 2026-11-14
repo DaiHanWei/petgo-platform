@@ -251,7 +251,7 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         publicPost(withPet, now.minus(Duration.ofHours(2)));
         publicPost(noPet, now.minus(Duration.ofHours(3)));
         jdbc.update("INSERT INTO pet_profiles (owner_id, pet_type, name, birthday, card_token, created_at,"
-                + " updated_at) VALUES (?, 'DOG', 'Momo', DATE '2024-01-01', ?, now(), now())",
+                + " updated_at, pet_species, milestone_track) VALUES (?, 'DOG', 'Momo', DATE '2024-01-01', ?, now(), now(), 'DOG', 'DOG')",
                 withPet.getId(), "sp" + withPet.getId());
 
         List<FollowListItem> items = service.suggestionsFor(viewer.getId()).items();

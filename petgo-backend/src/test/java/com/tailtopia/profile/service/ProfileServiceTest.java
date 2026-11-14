@@ -101,6 +101,56 @@ class ProfileServiceTest {
                 .hasMessageContaining("CAT/DOG/OTHER");
     }
 
+    /** V1.5.0 pet-species Story 1.1 · AC4：带细分类型建档 → 大类由它推出、roster 按清单归属（= 大类）。 */
+    @Test
+    void createWithSpeciesDerivesGroupAndTrack() {
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> withId(inv.getArgument(0), 101L));
+
+        PetProfileResponse resp = service.create(1L, new PetProfileCreateRequest(
+                null, null, "Momo", null, LocalDate.of(2022, 1, 1), null, null, null, null, "RABBIT"));
+
+        assertThat(resp.petType()).isEqualTo("OTHER");
+        assertThat(resp.species()).isEqualTo("RABBIT");
+        assertThat(resp.speciesChangeableFrom()).isNull();
+        org.mockito.Mockito.verify(milestoneService).assignRoster(101L, PetType.OTHER);
+    }
+
+    @Test
+    void legacyCreateSpeciesEqualsPetType() {
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
+        when(profiles.save(any(PetProfile.class))).thenAnswer(inv -> {
+            PetProfile p = inv.getArgument(0);
+            assertThat(p.getPetSpecies()).isEqualTo(com.tailtopia.profile.domain.PetSpecies.CAT);
+            assertThat(p.getMilestoneTrack()).isEqualTo(PetType.CAT);
+            assertThat(p.getPetTypeChangedAt()).isNull();
+            return withId(p, 102L);
+        });
+
+        PetProfileResponse resp = service.create(1L, req());
+
+        assertThat(resp.species()).isEqualTo("CAT");
+        org.mockito.Mockito.verify(milestoneService).assignRoster(102L, PetType.CAT);
+    }
+
+    @Test
+    void speciesGroupMismatchRejected() {
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
+        assertThatThrownBy(() -> service.create(1L, new PetProfileCreateRequest(
+                null, "CAT", "Momo", null, LocalDate.of(2022, 1, 1), null, null, null, null, "RABBIT")))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("宠物类型与细分类型不一致");
+    }
+
+    @Test
+    void missingBothRejectedWithLegacyMessage() {
+        when(profiles.countByOwnerId(1L)).thenReturn(0L);
+        assertThatThrownBy(() -> service.create(1L, new PetProfileCreateRequest(
+                null, null, "Momo", null, LocalDate.of(2022, 1, 1), null)))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("宠物类型必选");
+    }
+
     @Test
     void blankPetTypeRejected() {
         when(profiles.countByOwnerId(1L)).thenReturn(0L);

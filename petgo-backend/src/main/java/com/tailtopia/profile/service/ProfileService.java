@@ -7,6 +7,7 @@ import com.tailtopia.namemoderation.domain.NameTargetType;
 import com.tailtopia.namemoderation.event.NameSubmittedEvent;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetSex;
+import com.tailtopia.profile.domain.PetSpecies;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.dto.PetProfileCreateRequest;
 import com.tailtopia.profile.dto.PetProfileResponse;
@@ -94,6 +95,8 @@ public class ProfileService {
      */
     @Transactional
     public PetProfileResponse create(long ownerId, PetProfileCreateRequest req, boolean multiPetClient) {
+        // V1.5.0 pet-species：petType 去掉 @NotBlank 后改在这里判；放在加锁 / 名额之前，保持「类型缺失 → 422」的原优先级。
+        PetSpecies species = resolveCreateSpecies(req.petType(), req.species());
         petSlotLock.lockUser(ownerId);
         long count = profiles.countByOwnerId(ownerId);
         if (!multiPetClient && count >= 1) {
@@ -110,10 +113,9 @@ public class ProfileService {
         if (name == null || name.isEmpty()) {
             throw AppException.validation("宠物名不能为空");
         }
-        PetType petType = parsePetType(req.petType());
         PetProfile profile = PetProfile.create(
                 ownerId,
-                petType,
+                species,
                 name,
                 blankToNull(req.avatarUrl()),
                 blankToNull(req.breed()),
@@ -134,8 +136,8 @@ public class ProfileService {
         }
         try {
             PetProfile saved = profiles.save(profile);
-            // 建档按 pet_type 自动分配里程碑 roster（Story 8.1，同模块直调，非事件订阅；幂等）。
-            milestoneService.assignRoster(saved.getId(), saved.getPetType());
+            // 建档按清单归属（V1.5.0 pet-species：= 大类）自动分配里程碑 roster（Story 8.1，同模块直调，非事件订阅；幂等）。
+            milestoneService.assignRoster(saved.getId(), saved.getMilestoneTrack());
             // 里程碑 C-S1「档案创建完成」自动完成（Story 8.3，AFTER_COMMIT 异步订阅，幂等）。
             events.publishEvent(new ProfileCreatedEvent(ownerId, saved.getId(), Instant.now()));
             // 内容审核 story 4：宠物名首次提交先放行立即生效 + 事务提交后异步送审（§5.3）。
@@ -351,6 +353,22 @@ public class ProfileService {
             }
         }
         throw AppException.validation("绝育状态不合法");
+    }
+
+    /**
+     * 建档类型解析（V1.5.0 pet-species · D-7）：有 {@code species} 以它为准（{@code petType} 若也传了须等于其大类）；
+     * 无 {@code species}（旧版 App）→ {@code petType} 必填，细分类型 = 大类。
+     */
+    static PetSpecies resolveCreateSpecies(String rawPetType, String rawSpecies) {
+        if (rawSpecies != null && !rawSpecies.isBlank()) {
+            PetSpecies species = PetSpecies.parse(rawSpecies)
+                    .orElseThrow(() -> AppException.validation("细分类型不合法"));
+            if (rawPetType != null && !rawPetType.isBlank() && parsePetType(rawPetType) != species.group()) {
+                throw AppException.validation("宠物类型与细分类型不一致");
+            }
+            return species;
+        }
+        return PetSpecies.fromGroup(parsePetType(rawPetType));
     }
 
     private static PetType parsePetType(String raw) {

@@ -210,8 +210,8 @@ class MetricQueryParityTest extends ApiIntegrationTest {
         jdbc.update("UPDATE users SET created_at = ? WHERE id = ?", ts(wib(D1, 9, 0)), v);
 
         // 档案：A 于 D1 首次建档
-        jdbc.update("INSERT INTO pet_profiles (owner_id, name, card_token, created_at, updated_at, pet_type, is_system_default_name)"
-                + " VALUES (?, ?, ?, ?, ?, 'CAT', false)", a, "P" + n, "ct32" + UUID.randomUUID().toString().replace("-", "").substring(0, 20),
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, card_token, created_at, updated_at, pet_type, is_system_default_name, pet_species, milestone_track)"
+                + " VALUES (?, ?, ?, ?, ?, 'CAT', false, 'CAT', 'CAT')", a, "P" + n, "ct32" + UUID.randomUUID().toString().replace("-", "").substring(0, 20),
                 ts(wib(D1, 10, 0)), ts(wib(D1, 10, 0)));
 
         p1 = post(a, "DAILY", "PUBLISHED", wib(D1, 10, 0), null);

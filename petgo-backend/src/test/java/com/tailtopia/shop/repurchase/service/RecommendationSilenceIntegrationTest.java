@@ -56,8 +56,8 @@ class RecommendationSilenceIntegrationTest extends ApiIntegrationTest {
     private long seedPet(long ownerId) {
         jdbc.update("""
                 INSERT INTO pet_profiles (owner_id, pet_type, name, birthday, card_token,
-                        weight_kg, created_at, updated_at)
-                VALUES (?, 'CAT', 'Miko', ?, ?, ?, now(), now())
+                        weight_kg, created_at, updated_at, pet_species, milestone_track)
+                VALUES (?, 'CAT', 'Miko', ?, ?, ?, now(), now(), 'CAT', 'CAT')
                 """, ownerId, LocalDate.of(2025, 12, 1), "sc" + SEQ.incrementAndGet(),
                 new BigDecimal("3.4"));
         return profiles.findDefault(ownerId).orElseThrow().getId();

@@ -59,8 +59,8 @@ class PetFollowIntegrationTest extends ApiIntegrationTest {
 
     private long newPet(User owner, String status) {
         String token = "it-pf-" + SEQ.incrementAndGet();
-        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, status, created_at, updated_at) "
-                + "VALUES (?, 'Miu', 'CAT', ?, ?, now(), now())", owner.getId(), token, status);
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, status, created_at, updated_at, pet_species, milestone_track) "
+                + "VALUES (?, 'Miu', 'CAT', ?, ?, now(), now(), 'CAT', 'CAT')", owner.getId(), token, status);
         return jdbc.queryForObject("SELECT id FROM pet_profiles WHERE card_token = ?", Long.class, token);
     }
 

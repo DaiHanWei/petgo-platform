@@ -2,6 +2,7 @@ package com.tailtopia.profile.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.service.PetSpeciesCooldown;
 import com.tailtopia.profile.domain.PetStatus;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,7 +28,11 @@ public record PetListItemResponse(
         @JsonProperty("isDefault") boolean isDefault,
         String tailsonalityBadge,
         /** 该宠物 Diary 数（与 Diary Tab 统计 {@code happyMomentCount} 同一实现）。 */
-        long diaryCount) {
+        long diaryCount,
+        /** 细分类型（V1.5.0 pet-species · D-10）；{@code petType} 仍是大类三值（旧版 App 契约）。 */
+        String species,
+        /** 类型冷却中才有值（WIB 日期，最早可再改的那天）；未改过 / 已过冷却 → null（NON_NULL 省略）。 */
+        LocalDate speciesChangeableFrom) {
 
     /** 正常状态的线上取值（= {@link PetStatus#ACTIVE}）；Story 2.1 起 {@code status} 读真实列。 */
     public static final String STATUS_ACTIVE = PetStatus.ACTIVE.name();
@@ -46,6 +51,8 @@ public record PetListItemResponse(
                 p.isKeepActive(),
                 isDefault,
                 tailsonalityBadge,
-                diaryCount);
+                diaryCount,
+                p.getPetSpecies() == null ? null : p.getPetSpecies().name(),
+                PetSpeciesCooldown.changeableFromOrNull(p, PetSpeciesCooldown.todayWib()));
     }
 }

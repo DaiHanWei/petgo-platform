@@ -68,8 +68,9 @@ class OpsNotificationDispatchIntegrationTest extends ApiIntegrationTest {
     }
 
     private void addPet(long ownerId, String petType) {
-        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at) "
-                + "VALUES (?, 'Mochi', ?, ?, now(), now())", ownerId, petType, "ops-it-" + SEQ.incrementAndGet());
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at, pet_species, milestone_track) "
+                + "VALUES (?, 'Mochi', ?, ?, now(), now(), ?, ?)", ownerId, petType, "ops-it-" + SEQ.incrementAndGet(),
+                petType, petType);
     }
 
     private void addOrder(long userId, String status) {

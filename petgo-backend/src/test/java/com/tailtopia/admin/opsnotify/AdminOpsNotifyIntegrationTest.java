@@ -614,8 +614,8 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
     // ===== V1.4.2 Story 7.1 · AB-37 变量与净人数（L1，待本地验收）=====
 
     private void addPet(long ownerId, String name) {
-        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at) "
-                + "VALUES (?, ?, 'CAT', ?, now(), now())", ownerId, name, "opsn-var-" + SEQ.incrementAndGet());
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at, pet_species, milestone_track) "
+                + "VALUES (?, ?, 'CAT', ?, now(), now(), 'CAT', 'CAT')", ownerId, name, "opsn-var-" + SEQ.incrementAndGet());
     }
 
     @Test

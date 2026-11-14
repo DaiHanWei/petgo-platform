@@ -1,11 +1,11 @@
 package com.tailtopia.profile.domain;
 
 /**
- * 宠物类型（FR-11 / 决策 F6，落库 varchar，枚举名即存储值/API 契约值）。
+ * 宠物大类（FR-11 / 决策 F6，落库 varchar，枚举名即存储值/API 契约值）。
  *
- * <p>必选结构化字段，**创建后不可修改**（{@code PetProfileUpdateRequest} 不含此字段，
- * 服务端无任何变更路径）。决定 FR-42 里程碑清单（CAT/DOG 30 项、OTHER 15 项），
- * 但里程碑本体属 mini-epic，本字段仅承载类型本身。
+ * <p>V1.5.0 pet-species 起降为「大类」：由细分类型 {@link PetSpecies#group()} 推出，
+ * 🔴 只经 {@code PetProfile.applySpecies} 改（{@code PetSpeciesWriteGuardTest} 守）。健康提醒、送礼物种排序、
+ * 首页推荐分池、运营人群等业务逻辑继续按大类走。里程碑清单归属另见 {@code PetProfile.milestoneTrack}。
  */
 public enum PetType {
     CAT,

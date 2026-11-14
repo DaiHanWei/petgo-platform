@@ -50,8 +50,8 @@ public final class MultiPetDbFixture {
         Timestamp ts = Timestamp.from(createdAt);
         return jdbc.queryForObject(
                 "INSERT INTO pet_profiles (owner_id, pet_type, name, is_system_default_name, card_token,"
-                        + " created_at, updated_at) VALUES (?, ?, ?, false, ?, ?, ?) RETURNING id",
-                Long.class, ownerId, petType, name, token, ts, ts);
+                        + " created_at, updated_at, pet_species, milestone_track) VALUES (?, ?, ?, false, ?, ?, ?, ?, ?) RETURNING id",
+                Long.class, ownerId, petType, name, token, ts, ts, petType, petType);
     }
 
     /** 删一只测试宠物及其无级联派生行（顺序：子表 → 宠物）。 */

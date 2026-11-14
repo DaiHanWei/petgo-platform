@@ -41,8 +41,9 @@ class OpsAudienceTargetingIntegrationTest extends ApiIntegrationTest {
     }
 
     private void pet(long ownerId, String type) {
-        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at) "
-                + "VALUES (?, 'Mochi', ?, ?, now(), now())", ownerId, type, "aud-it-" + SEQ.incrementAndGet());
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at, pet_species, milestone_track) "
+                + "VALUES (?, 'Mochi', ?, ?, now(), now(), ?, ?)", ownerId, type, "aud-it-" + SEQ.incrementAndGet(),
+                type, type);
     }
 
     private void intent(long userId, String channel, String status) {

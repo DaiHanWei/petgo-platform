@@ -36,7 +36,7 @@ public class PetProfile {
     @Column(name = "avatar_url", length = 1024)
     private String avatarUrl;
 
-    /** 宠物类型（F6）：必选，**创建后不可改**（无 setter，update 路径不含此字段）。 */
+    /** 宠物大类（F6）：必选，由 {@code petSpecies.group()} 推出，🔴 只经 {@link #applySpecies} 改（V1.5.0 pet-species）。 */
     @Enumerated(EnumType.STRING)
     @Column(name = "pet_type", nullable = false, length = 16)
     private PetType petType;
@@ -123,14 +123,42 @@ public class PetProfile {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * 细分类型（V1.5.0 pet-species Story 1.1 · D-2）。大类 {@link #petType} 由它推出；
+     * 🔴 只经 {@link #applySpecies} 改（{@code PetSpeciesWriteGuardTest} 守）。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pet_species", nullable = false, length = 32)
+    private PetSpecies petSpecies;
+
+    /**
+     * 里程碑 / 新手任务清单归属（V1.5.0 pet-species · D-3）。与大类分离：存量迁移把误存「其他」的猫改成 CAT，
+     * 清单仍是 OTHER。建档 = 大类；只由里程碑清单切换器改，迁移脚本不改。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "milestone_track", nullable = false, length = 16)
+    private PetType milestoneTrack;
+
+    /** 用户最近一次修改类型的时间（UTC，V1.5.0 pet-species · D-8）；只记用户修改，冷却 90 天按 WIB 日期。 */
+    @Column(name = "pet_type_changed_at")
+    private Instant petTypeChangedAt;
+
     protected PetProfile() {
     }
 
     public static PetProfile create(long ownerId, PetType petType, String name, String avatarUrl,
             String breed, LocalDate birthday, String intro, String cardToken) {
+        return create(ownerId, PetSpecies.fromGroup(petType), name, avatarUrl, breed, birthday, intro,
+                cardToken);
+    }
+
+    /** 按细分类型建档（V1.5.0 pet-species · D-7）：大类由 {@code species.group()} 推出，清单归属 = 大类。 */
+    public static PetProfile create(long ownerId, PetSpecies species, String name, String avatarUrl,
+            String breed, LocalDate birthday, String intro, String cardToken) {
         PetProfile p = new PetProfile();
         p.ownerId = ownerId;
-        p.petType = petType;
+        p.applySpecies(species);
+        p.milestoneTrack = species.group();
         p.name = name;
         p.avatarUrl = avatarUrl;
         p.breed = breed;
@@ -195,7 +223,7 @@ public class PetProfile {
         this.avatarUrl = avatarUrl;
     }
 
-    /** 宠物类型（只读：创建后不可改，无 setter）。 */
+    /** 宠物大类（由细分类型推出；只经 {@link #applySpecies} 改）。 */
     public PetType getPetType() {
         return petType;
     }
@@ -319,5 +347,42 @@ public class PetProfile {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    /** 细分类型（V1.5.0 pet-species）。 */
+    public PetSpecies getPetSpecies() {
+        return petSpecies;
+    }
+
+    /** 里程碑 / 新手任务清单归属（V1.5.0 pet-species · D-3）；里程碑 code 只按它算。 */
+    public PetType getMilestoneTrack() {
+        return milestoneTrack;
+    }
+
+    /** 用户最近一次修改类型的时间（UTC）；null = 从未改过。 */
+    public Instant getPetTypeChangedAt() {
+        return petTypeChangedAt;
+    }
+
+    /**
+     * 🔴 细分类型与大类的<b>唯一写入口</b>（V1.5.0 pet-species · D-2）：同时写 {@code petSpecies} 与
+     * {@code petType = s.group()}，DB {@code ck_pet_profiles_species_group} 兜底。不碰 {@code milestoneTrack}。
+     */
+    public void applySpecies(PetSpecies s) {
+        if (s == null) {
+            throw new IllegalArgumentException("species 不能为空");
+        }
+        this.petSpecies = s;
+        this.petType = s.group();
+    }
+
+    /** 🔴 只给里程碑清单切换器（{@code MilestoneTrackSwitcher}）调用；迁移与其他路径不得改清单归属。 */
+    public void setMilestoneTrack(PetType track) {
+        this.milestoneTrack = track;
+    }
+
+    /** 🔴 只给用户改类型路径调用（运营代改、迁移都不写）。 */
+    public void markTypeChangedAt(Instant at) {
+        this.petTypeChangedAt = at;
     }
 }

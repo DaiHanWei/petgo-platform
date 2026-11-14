@@ -365,8 +365,8 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         User owner = newUser();
         // 造一条宠物档案，拿到 id 后直接删掉 —— 模拟「档案已删、审核记录还在」。
         // card_token 是 NOT NULL 且唯一（对外不可枚举名片 token），造数要给一个唯一值。
-        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at) "
-                + "VALUES (?, '待删的宠物', 'DOG', ?, now(), now())",
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, created_at, updated_at, pet_species, milestone_track) "
+                + "VALUES (?, '待删的宠物', 'DOG', ?, now(), now(), 'DOG', 'DOG')",
                 owner.getId(), "tok-" + SEQ.incrementAndGet());
         Long petId = jdbc.queryForObject("SELECT id FROM pet_profiles WHERE owner_id = ?",
                 Long.class, owner.getId());

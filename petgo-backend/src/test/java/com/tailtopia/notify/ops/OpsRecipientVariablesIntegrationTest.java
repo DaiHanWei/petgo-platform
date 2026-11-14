@@ -64,9 +64,9 @@ class OpsRecipientVariablesIntegrationTest extends ApiIntegrationTest {
     // ---------- 造数 ----------
 
     private void addPet(long ownerId, String name, String petType, String status, int minutesAgo) {
-        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, status, created_at, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, now() - (? * interval '1 minute'), now())", ownerId, name, petType,
-                "ops-var-it-" + SEQ.incrementAndGet(), status, minutesAgo);
+        jdbc.update("INSERT INTO pet_profiles (owner_id, name, pet_type, card_token, status, created_at, updated_at, pet_species, milestone_track) "
+                + "VALUES (?, ?, ?, ?, ?, now() - (? * interval '1 minute'), now(), ?, ?)", ownerId, name, petType,
+                "ops-var-it-" + SEQ.incrementAndGet(), status, minutesAgo, petType, petType);
     }
 
     private User user(String nickname, String locale) {

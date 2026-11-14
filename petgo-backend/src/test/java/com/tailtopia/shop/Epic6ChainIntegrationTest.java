@@ -91,8 +91,8 @@ class Epic6ChainIntegrationTest extends ApiIntegrationTest {
     private void seedPetWithWeight(long ownerId, BigDecimal weightKg) {
         jdbc.update("""
                 INSERT INTO pet_profiles (owner_id, pet_type, name, birthday, card_token,
-                        weight_kg, created_at, updated_at)
-                VALUES (?, 'DOG', 'Mochi', ?, ?, ?, now(), now())
+                        weight_kg, created_at, updated_at, pet_species, milestone_track)
+                VALUES (?, 'DOG', 'Mochi', ?, ?, ?, now(), now(), 'DOG', 'DOG')
                 """, ownerId, LocalDate.now().minusYears(3),
                 "e6pc" + SEQ.incrementAndGet(), weightKg);
     }
