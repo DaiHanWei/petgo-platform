@@ -104,7 +104,7 @@
                    （行点击按 closest [data-list] 找本区 .drawer → res=giftcat）。 */-->
             <div class="lst" data-list>
                 <div class="lst-table">
-                    <div id="gift-category-rows" th:attr="hx-get=@{/admin/gift-catalog/categories}"
+                    <div id="gift-category-rows" th:attr="hx-get=@{/admin/gift-catalog/categories/fragment}"
                          hx-trigger="admin:gift-category-list-refresh from:body" hx-swap="innerHTML">
                         <div th:replace="~{admin/fragments/gift-category-list :: rows}"></div>
                     </div>

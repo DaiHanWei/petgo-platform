@@ -114,8 +114,8 @@ public class AdminGiftCatalogController {
 
     // ——————————————————— 礼物分类（V1.5.0 gift-pack Story 1-2 · AB-43）———————————————————
 
-    /** 分类表局部刷新（分类抽屉处置后 HX-Trigger 重拉）。非 htmx 直达 → 回分类页签。 */
-    @GetMapping(BASE + "/categories")
+    /** 分类表局部刷新（分类抽屉处置后 HX-Trigger 重拉）。路径以 /fragment 结尾：不算「页面」（AdminPageCatalogCoverageTest）。 */
+    @GetMapping(BASE + "/categories/fragment")
     @PreAuthorize(VIEW_AUTH)
     public String categoryList(HxRequest hx, Model model) {
         if (!hx.isHtmx()) {
