@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.Immutable;
 import java.time.Instant;
 
 /**
@@ -19,6 +20,7 @@ import java.time.Instant;
  * <p>生产写入走 {@link AutoLikeTargetRepository} 的原生 INSERT / UPDATE；实体主要供读取与测试造数。
  */
 @Entity
+@Immutable
 @Table(name = "auto_like_targets")
 public class AutoLikeTarget {
 
