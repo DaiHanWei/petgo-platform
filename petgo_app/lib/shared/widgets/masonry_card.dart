@@ -17,6 +17,7 @@ import '../../l10n/app_localizations.dart';
 import '../media/feed_tap_arbiter.dart';
 import '../rich_text/rich_body_text.dart';
 import 'feed_image.dart';
+import 'feed_like_burst.dart';
 import 'content_tag_chip.dart';
 import 'user_tag_row.dart';
 import 'letter_avatar.dart';
@@ -273,7 +274,7 @@ class MasonryCard extends StatelessWidget {
             rankMode: rankMode,
             onTap: onTap,
             onLongPress: onLongPress,
-            child: Column(
+            builder: (likeBurst) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // 高度按**三段口径**定（实际比例 → 收敛闭区间 → 高度护栏）。
@@ -299,6 +300,8 @@ class MasonryCard extends StatelessWidget {
                         (item.decorationTags.isEmpty
                             ? null
                             : ContentTagChip.overlay(tag: item.decorationTags.first, position: 'feed')),
+                    // V1.5.0 FR-211：双击点赞大红心（临时中央动效层），由图片区点击仲裁持有。
+                    likeBurst: likeBurst,
                   ),
               ],
             ),
@@ -441,7 +444,7 @@ class _FeedImageTapArea extends ConsumerStatefulWidget {
     required this.rankMode,
     required this.onTap,
     required this.onLongPress,
-    required this.child,
+    required this.builder,
   });
 
   final FeedItem item;
@@ -449,7 +452,9 @@ class _FeedImageTapArea extends ConsumerStatefulWidget {
   final String? rankMode;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
-  final Widget child;
+
+  /// 图片区内容；拿到本区持有的大心动效 controller 传给 `FeedImage`。
+  final Widget Function(FeedLikeBurstController likeBurst) builder;
 
   @override
   ConsumerState<_FeedImageTapArea> createState() => _FeedImageTapAreaState();
@@ -474,7 +479,10 @@ class _FeedImageTapAreaState extends ConsumerState<_FeedImageTapArea> {
   void didUpdateWidget(covariant _FeedImageTapArea oldWidget) {
     super.didUpdateWidget(oldWidget);
     // 列表刷新 / 插入时同位置的 State 被复用给另一条帖子：上一条帖子的待执行单击不得打开这一条。
-    if (oldWidget.item.id != widget.item.id) _arbiter.cancel();
+    if (oldWidget.item.id != widget.item.id) {
+      _arbiter.cancel();
+      _burst.stop(); // 上一条帖子的红心不得留在这一条上
+    }
   }
 
   @override
@@ -486,11 +494,14 @@ class _FeedImageTapAreaState extends ConsumerState<_FeedImageTapArea> {
   @override
   void dispose() {
     _arbiter.dispose();
+    _burst.dispose();
     super.dispose();
   }
 
-  /// 大心动效钩子（V1.5.0 FR-211，Story 4.2 实现）。
-  void _playBurst() {}
+  final FeedLikeBurstController _burst = FeedLikeBurstController();
+
+  /// 大心动效（V1.5.0 FR-211）。动效只在这一层，出错不影响点赞（点赞在 store 里）。
+  void _playBurst() => _burst.play();
 
   /// 双击动作表（F-5）：游客只弹登录窗；已赞 / 飞行中只播动效；未赞才震动 + 点赞 + 按钮弹跳。
   void _onDoubleTap(Offset _) {
@@ -527,7 +538,7 @@ class _FeedImageTapAreaState extends ConsumerState<_FeedImageTapArea> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,
-        child: widget.child,
+        child: widget.builder(_burst),
       );
     }
     return Listener(
@@ -549,7 +560,7 @@ class _FeedImageTapAreaState extends ConsumerState<_FeedImageTapArea> {
                 _arbiter.cancel();
                 widget.onLongPress!();
               },
-        child: widget.child,
+        child: widget.builder(_burst),
       ),
     );
   }

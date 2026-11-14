@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -95,7 +96,29 @@ class LikeButton extends ConsumerStatefulWidget {
   ConsumerState<LikeButton> createState() => _LikeButtonState();
 }
 
-class _LikeButtonState extends ConsumerState<LikeButton> {
+class _LikeButtonState extends ConsumerState<LikeButton> with SingleTickerProviderStateMixin {
+  /// 爱心弹跳（V1.5.0 FR-211）：1.0 → 1.2 → 1.0 约 200ms，只缩放图标，不改热区与布局。
+  /// 由 store 覆盖的 `bounceTick` 变化触发（点爱心点赞 / Feed 图片区双击点赞时 +1）。
+  late final AnimationController _bounce =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+  late final Animation<double> _bounceScale = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.2).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
+    TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+  ]).animate(_bounce);
+
+  @override
+  void dispose() {
+    _bounce.dispose();
+    super.dispose();
+  }
+
+  void _onBounceTick(int? prev, int next) {
+    if (next <= (prev ?? 0)) return;
+    // 减少动态效果：不弹跳，直接变红 +1（震动照常，由发起方调）。
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+    _bounce.forward(from: 0);
+  }
+
   /// 有效值 = 快照或 store 覆盖（覆盖比快照新、或飞行中才生效）。
   ///
   /// 🔴 原来 State 里存 `_liked/_count/_inFlight` 并在 `didUpdateWidget` 跟随外部值 —— V1.5.0 FR-210 起
@@ -111,10 +134,14 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
     // 门控：未登录 → FR-0C，不发请求。
     final allowed = requireLogin(ref, context, onAllowed: () {});
     if (!allowed) return;
+    // V1.5.0 FR-211：点爱心**点赞**（未赞 → 已赞）时轻震 + 弹跳；取消不弹不震；点爱心不出大红心。
+    final liking = !view.liked;
+    if (liking) HapticFeedback.lightImpact();
     final out = await ref.read(postLikeStoreProvider.notifier).toggle(
           widget.postId,
           current: view,
-          wantLiked: !view.liked,
+          wantLiked: liking,
+          bounce: liking,
           tracking: LikeTracking(
             source: widget.source,
             trigger: 'button',
@@ -140,6 +167,7 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
   @override
   Widget build(BuildContext context) {
     final view = _view(ref.watch(postLikeStoreProvider.select((m) => m[widget.postId])));
+    ref.listen<int>(postLikeStoreProvider.select((m) => m[widget.postId]?.bounceTick ?? 0), _onBounceTick);
     final color = view.liked ? AppColors.likeHeart : AppColors.textSecondary;
     // V1.3.4：爱心与数字是**两个互不重叠**的热区 —— 爱心 = 点赞（行为与拆分前一致），
     // 数字 = 点赞人列表。数字热区吃掉原先图标与数字之间的空隙并向右多出
@@ -152,11 +180,14 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
         _heartHitArea(InkWell(
           key: ValueKey('likeButton_${widget.postId}'),
           onTap: _toggle,
-          child: Icon(
-            view.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            size: LikeButton.heartSize,
-            // 点赞红心（设计稿）：激活态用暖红 likeHeart，与 Feed 卡片点赞一致。
-            color: color,
+          child: ScaleTransition(
+            scale: _bounceScale,
+            child: Icon(
+              view.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              size: LikeButton.heartSize,
+              // 点赞红心（设计稿）：激活态用暖红 likeHeart，与 Feed 卡片点赞一致。
+              color: color,
+            ),
           ),
         )),
         GestureDetector(

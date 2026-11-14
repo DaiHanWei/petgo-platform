@@ -1,6 +1,6 @@
 # Story 4.2: Feed 双击点赞红心动效与触感（App）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 主题 likes（会话 ⑤）· 分支 `feat/1.5.0-likes`
 > 口径优先级：`decision-log.md` > PRD B `Feed双击点赞/1-5-0Feed双击点赞prd.md`（FR-211）> `architecture-v1.5.0-likes-delta.md`（F-3 弹跳、F-6 ~ F-8）> UI 稿 `ui-1-5-0-feed-double-tap-like-integrated-v1.html`（**D1 时间轴与数值为准**、D3 定位、D4 大心、B5 减少动态效果）与 `拆页-App/D1-时间轴与数值.html`。
@@ -76,12 +76,12 @@ static const Color likeHeartDeep = Color(0xFFD42A55);  // 双击大心渐变暗�
 
 ## Tasks / Subtasks
 
-- [ ] T0 开工核对：3.1 / 4.1 已在本分支；读 `拆页-App/D1`、`D3`、`D4`
-- [ ] T1 颜色常量（AC1）
-- [ ] T2 `FeedLikeBurst` + 心形 / 圆点 painter（AC2）
-- [ ] T3 `FeedImage` 挂层、`_FeedImageTapArea` 接 controller（AC3）
-- [ ] T4 `LikeButton` 弹跳 + 爱心点赞震动（AC4）
-- [ ] T5 结构断言（AC5）+ 架构文档一句（AC6）+ L0；Completion Notes 标「L2 待本地」
+- [x] T0 开工核对：3.1 / 4.1 已在本分支；读 `拆页-App/D1`、`D3`、`D4`
+- [x] T1 颜色常量（AC1）
+- [x] T2 `FeedLikeBurst` + 心形 / 圆点 painter（AC2）
+- [x] T3 `FeedImage` 挂层、`_FeedImageTapArea` 接 controller（AC3）
+- [x] T4 `LikeButton` 弹跳 + 爱心点赞震动（AC4）
+- [x] T5 结构断言（AC5）+ 架构文档一句（AC6）+ L0；Completion Notes 标「L2 待本地」
 
 ## Dev Notes
 
@@ -100,7 +100,24 @@ static const Color likeHeartDeep = Color(0xFFD42A55);  // 双击大心渐变暗�
 ## Dev Agent Record
 
 ### Completion Notes
-（待填）
+- **L1/L2 待本地验收**：AC7 全部（中低端 Android + iOS：时长、多卡互不干扰、滚动帧率 / DevTools 帧图、轻震、浅 / 深色图上清晰度、对 `拆页-App/A2 ~ A4、B1 ~ B5、D1 ~ D4` 逐屏还原度 ≥ 95%）云端未做。按规定**不写 golden**，视觉只做结构断言。
+- **L0**：`flutter test` 全量 4987 通过；`flutter analyze` 0 error / 0 warning，相对基线无新增非弃用类 info（SDK 3.50 与 lock 说明同 3.1）。
+- T0 核对：3.1（f18ddd3b）/ 4.1（8bf1bc71）已在本分支；读了 `拆页-App/D4-大心动效.html`（渐变 stops 0 / .55 / 1、对角方向；高光椭圆 (7.4, 8.3) rx 1.9 ry 1.15 旋 -38°、65%；小白点 (9.6, 6.5) r .55、55%），数值照 story 内联的 D1。
+- 实现：
+  - `AppColors.likeHeartLight` / `likeHeartDeep`（AC1），业务代码无写死 hex。
+  - `lib/shared/widgets/feed_like_burst.dart`：`FeedLikeBurstController`（`play` / `stop`）+ `FeedLikeBurst`（670ms，`TweenSequence` 按 ms 权重：0–180 / 180–330 / 330–430 / 430–600；小心 `Interval(70/670, 1)`；圆点 `Interval(80/670, 530/670)` 位置 easeOut、透明度线性）；心形 `CustomPainter` 用 HEART_D（相对坐标换算为绝对）、渐变铺在心形外框（同 SVG objectBoundingBox）、1.4 圆角描边、高光、同色柔光（0/6、blur 14、32%）。重播 `forward(from: 0.27)`；减少动态效果 400ms 只淡入淡出、无缩放 / 上飘 / 小心 / 圆点；`deactivate` 停住并清可见态（不在 deactivate 里 `reset()`——那会在 build 阶段触发重建，复审 / 测试发现后改正）。
+  - `FeedImage` 新增可选 `likeBurst`，在三个角位之后 `Positioned.fill` 挂层（null 时不加）；`_FeedImageTapArea` 持有 controller，`_playBurst()` = `play()`；同位置 State 复用给另一条帖子时 `stop()`。
+  - `LikeButton`：`ref.listen` 本帖 `bounceTick` → `ScaleTransition` 1.0→1.2→1.0（200ms，只缩放图标，热区不变）；点爱心**点赞**时 `HapticFeedback.lightImpact()` + `toggle(bounce: true)`；取消不弹不震；减少动态效果不弹、照常震。
+- AC5 结构断言写在新建的 `test/shared/feed_like_burst_test.dart`（8 条全覆盖 + 播放中点击穿透 + `stop`），另含按钮弹跳 3 例。PRD / UI 稿里写的「更新 `feed_overlay_test.dart`」：**该文件不存在**，按 AC5 执行。
+- **AC6 待确认**：story 要求在 `_bmad-output/planning-artifacts/architecture.md` 的「AD-8 Rule 6」处补一句，但该文件里**没有** AD-8 Rule 6 段落（AD-8 定义在 `v1.1.6/architecture-v1.1.6-delta.md`，且那里也没有「三个角位」的字面条文，「Rule 6 三个角位」只出现在代码注释与 v1.1.6 epics）。按最保守做法：在基线 `architecture.md` 新增小节「Feed 图片区叠加层（AD-8 Rule 6，V1.1.6 起；V1.5.0 增补）」，先复述三角位规则再写增补句；`feed_image.dart` 头注释同步补一句。是否挪到别处由主会话定。
+- **待确认**：弹跳按帖子计（`bounceTick` 是 store 里按 postId 的计数）——同一帖同时挂在顶置卡与普通卡、或详情底栏盖在 Feed 卡之上时，所有该帖的爱心按钮都会弹一次（被盖住的按钮会在返回后已播完，无残留）。若要只弹被操作的那张卡，需要把弹跳信号改成按「位置」而不是按帖子，属 F-5 设计变更。
+- **待确认**（性能，L2 复测）：播放期间每帧重建 Stack / Opacity / Transform，心形柔光用 `MaskFilter.blur`；曲线已改为静态共享。若真机掉帧可再改为 `FadeTransition` / 预渲染阴影。
 
 ### File List
-（待填）
+- `petgo_app/lib/core/theme/colors.dart`
+- `petgo_app/lib/shared/widgets/feed_like_burst.dart`（新）
+- `petgo_app/lib/shared/widgets/feed_image.dart`
+- `petgo_app/lib/shared/widgets/masonry_card.dart`
+- `petgo_app/lib/features/content/presentation/like_button.dart`
+- `petgo_app/test/shared/feed_like_burst_test.dart`（新）
+- `_bmad-output/planning-artifacts/architecture.md`（AD-8 Rule 6 增补小节）

@@ -491,6 +491,11 @@ petgo_app/
 - **测试**：后端 `src/test` 镜像模块；前端 `test/features` 镜像；关键路径优先（分诊状态机、安全规则层、登录门控、深链路由、注销级联）。
 - **资产**：DB 迁移 `db/migration`；H5 模板 `templates/`；安全清单 `safety/high_risk_symptoms.yml`；前端图标/字体随主题 `core/theme`。
 
+### Feed 图片区叠加层（AD-8 Rule 6，V1.1.6 起；V1.5.0 增补）
+
+- **AD-8 Rule 6**：Feed 卡图片区（`FeedImage`）的叠加层只有三个写死的角位——底边居中 = 轮播圆点、右上 = 顶置角标、左下 = 装饰标签；后来者只往角位里挂内容，不得改图片区结构（V1.1.6 Story 3.4，`content_tag_test.dart` / `feed_carousel_test.dart` 钉住）。
+- **V1.5.0 增补（FR-211）**：图片区除三个角位外，另有一个**临时中央动效层**（Feed 双击点赞红心，V1.5.0 FR-211）：`IgnorePointer`、播完即移除、不占角位、不改图片区结构；其他功能不得借用此层放常驻内容。
+
 ### Development Workflow Integration
 
 - **开发**：`docker-compose up`(PG+Redis) + `mvn spring-boot:run`；`flutter run`（dev profile 指向本地后端）。

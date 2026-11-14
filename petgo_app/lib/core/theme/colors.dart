@@ -181,6 +181,8 @@ class AppColors {
 
   /// 点赞红心 —— 迁为 coral。
   static const Color likeHeart = coral;
+  static const Color likeHeartLight = Color(0xFFFF8FA0); // 双击大心渐变亮端（V1.5.0 FR-211）
+  static const Color likeHeartDeep = Color(0xFFD42A55); // 双击大心渐变暗端（V1.5.0 FR-211）
 
   // ============================================================
   // V1.4.0 ① Tailrent Level 段位色（架构 §5.6，UI 稿 A1「白天到星夜」，OQ-12）

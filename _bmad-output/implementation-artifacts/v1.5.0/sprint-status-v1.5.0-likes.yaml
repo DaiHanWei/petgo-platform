@@ -1,5 +1,5 @@
 # generated: 2026-11-14
-# last_updated: 2026-11-14  # 10 条 story 文件已生成，均 ready-for-dev（4-3 不在云端会话执行）
+# last_updated: 2026-11-14  # 云端会话：1-1 ~ 4-2 已 review（L1/L2 待本地验收）；4-3 留 ready-for-dev（不在云端执行）
 # project: TailTopia V1.5.0 · 主题 likes（会话 ⑤：自动点赞 PRD A 后端 + Feed 双击点赞 PRD B App）
 # project_key: NOKEY
 # tracking_system: file-system
@@ -60,6 +60,6 @@ development_status:
 
   epic-4: in-progress
   4-1-feed图片区双击点赞手势: review
-  4-2-feed双击点赞红心动效与触感: ready-for-dev
+  4-2-feed双击点赞红心动效与触感: review
   4-3-feed双击点赞与首日推荐页合并回归: ready-for-dev   # 不在云端会话执行，见头注释
   epic-4-retrospective: optional

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../features/content/domain/feed_image_layout.dart';
 import 'app_image.dart';
+import 'feed_like_burst.dart';
 import 'post_cover.dart';
 
 /// Feed 卡片的图片区（V1.1.6 Story 3.3 定高 / Story 3.4 轮播与叠加层）。
@@ -15,6 +16,8 @@ import 'post_cover.dart';
 ///
 /// 🔴 Epic 4 与 Epic 5 **只往这两个入参里挂内容，不得再改图片区结构**。
 /// 三处分居三角、互不重叠，这是架构层面定死的，不是本组件的实现自由度。
+/// V1.5.0 FR-211 增补：三个角位之上另有一个**临时中央动效层**（[likeBurst]，双击点赞红心）——`IgnorePointer`、
+/// 播完即空、不占角位；其他功能不得借用此层放常驻内容。
 /// `feed_overlay_test.dart` 会钉住这件事。
 ///
 /// ## 为什么要有占位（必做项，不是优化）
@@ -67,6 +70,7 @@ class FeedImage extends StatefulWidget {
     this.thumbWidth = 800,
     this.topRight,
     this.bottomLeft,
+    this.likeBurst,
     this.sizes = const [],
     this.cropOffsets = const [],
   });
@@ -106,6 +110,10 @@ class FeedImage extends StatefulWidget {
 
   /// 🛡 左下角位 —— 装饰标签（Epic 5）。本 story 只交付空位。
   final Widget? bottomLeft;
+
+  /// 临时中央动效层（V1.5.0 FR-211 双击点赞红心）：有值时在三个角位**之上**挂一层 `IgnorePointer` 的
+  /// [FeedLikeBurst]，播完即空；为 null 时不加这一层。本组件不感知点赞逻辑。
+  final FeedLikeBurstController? likeBurst;
 
   @override
   State<FeedImage> createState() => _FeedImageState();
@@ -348,6 +356,11 @@ class _FeedImageState extends State<FeedImage> {
           // UI 稿 `.deco-on-card`：left/bottom 均为 10。
           if (widget.bottomLeft != null)
             Positioned(left: 10, bottom: 10, child: widget.bottomLeft!),
+
+          // 🛡 临时中央动效层（V1.5.0 FR-211，AD-8 Rule 6 增补）：最上层、IgnorePointer、不占角位、播完即空。
+          // 按 AspectRatio 之后的可见区定位（心中心 = 宽 60% / 高 50%），四种比例天然一致。
+          if (widget.likeBurst != null)
+            Positioned.fill(child: FeedLikeBurst(controller: widget.likeBurst!)),
         ],
       ),
     );
