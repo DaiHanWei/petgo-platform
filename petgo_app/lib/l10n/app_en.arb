@@ -169,6 +169,20 @@
   "@petSpeciesGroupMouse": {"description": "v1.5.0 pet-species Story 3.1 — Other-group species title"},
   "petSpeciesGroupOther": "Other {group}",
   "@petSpeciesGroupOther": {"description": "v1.5.0 pet-species Story 3.1 — last item of each Other group", "placeholders": {"group": {"type": "String"}}},
+  "petSpeciesSearchHint": "Search pet type",
+  "@petSpeciesSearchHint": {"description": "v1.5.0 pet-species Story 3.2 — species/breed picker"},
+  "petBreedSearchHint": "Search breed",
+  "@petBreedSearchHint": {"description": "v1.5.0 pet-species Story 3.2 — species/breed picker"},
+  "petSpeciesNoResultTitle": "No \"{q}\" type yet",
+  "@petSpeciesNoResultTitle": {"description": "v1.5.0 pet-species Story 3.2 — species/breed picker", "placeholders": {"q": {"type": "String"}}},
+  "petSpeciesNoResultBody": "Pick Other, then search the breed list.",
+  "@petSpeciesNoResultBody": {"description": "v1.5.0 pet-species Story 3.2 — species/breed picker"},
+  "petBreedNoResult": "Not on the list yet",
+  "@petBreedNoResult": {"description": "v1.5.0 pet-species Story 3.2 — species/breed picker"},
+  "petBreedWriteOwn": "Write my own",
+  "@petBreedWriteOwn": {"description": "v1.5.0 pet-species Story 3.2 — species/breed picker"},
+  "petBreedUseCustom": "Use \"{q}\"",
+  "@petBreedUseCustom": {"description": "v1.5.0 pet-species Story 3.2 — species/breed picker", "placeholders": {"q": {"type": "String"}}},
   "petTypeLockedHint": "Can't be changed",
   "petProfileName": "Name",
   "petProfileNameHint": "Your pet's name",
@@ -1452,7 +1466,7 @@
   "@petProfileTypeLabel": {
     "description": "Pet profile form: type field section label"
   },
-  "petProfileTypeImmutableHint": "(cannot be changed after creation)",
+  "petProfileTypeImmutableHint": "(can be changed once every 90 days)",
   "@petProfileTypeImmutableHint": {
     "description": "Pet profile create: pet type immutability hint"
   },

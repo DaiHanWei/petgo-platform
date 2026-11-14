@@ -2,34 +2,56 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../domain/pet_breeds.dart';
+import '../../domain/pet_species.dart';
 import '../../domain/pet_species_display.dart';
+import 'species_picker_sheet.dart';
 
 /// 物种展示文案（emoji + 本地化名）。V1.5.0 pet-species：转调统一函数 [petSpeciesView]；
 /// 旧调用点不传 [species] 时按大类显示（Story 4.2 合并后补齐）。
 String petTypeDisplay(AppLocalizations l10n, String type, {String? species}) =>
     petSpeciesView(species: species, petType: type).display(l10n);
 
-/// JENIS HEWAN 选择字段（原型 P-30/P-32）。
-/// [locked]=true → 灰底锁定只读（编辑态 F6：创建后不可改）；否则点击弹底部清单按枚举选。
+/// JENIS HEWAN 选择字段（原型 P-30/P-32；V1.5.0 pet-species Story 3.2 起点开类型抽屉 [showPetSpeciesPicker]）。
+/// [locked]=true → 灰底锁定只读（3.3：90 天冷却中）；否则点开类型抽屉，选中回调 [onChanged]。
+/// 显示走统一函数：emoji + 宫格项名（「其他」组物种显示 Lainnya）。
 class SpeciesField extends StatelessWidget {
-  const SpeciesField(
-      {super.key, required this.petType, this.onChanged, this.locked = false, this.lockedHint});
+  const SpeciesField({
+    super.key,
+    this.species,
+    @Deprecated('V1.5.0：传 species（细分类型 wire）；Story 4.2 合并后清理') this.petType,
+    this.onChanged,
+    this.locked = false,
+    this.lockedHint,
+    this.scene = 'create',
+  });
 
+  /// 细分类型线上值（如 RABBIT / CIVET）；null = 未选。
+  final String? species;
+
+  /// 旧入参（大类）：别的线的旧调用点不传 [species] 时按大类显示。
   final String? petType;
-  final ValueChanged<String>? onChanged;
+
+  final ValueChanged<PetSpeciesPick>? onChanged;
   final bool locked;
 
-  /// 锁定态框内右侧的红色说明（V1.4.0 稿 C1 `.fi.lk em`：「🔒 Tidak bisa diubah」在输入框内）；null = 只画灰锁。
+  /// 锁定态框内右侧的红色说明（框内「🔒 …」）；null = 只画灰锁。
   final String? lockedHint;
+
+  /// 埋点场景：create / edit / id_card。
+  final String scene;
+
+  // ignore: deprecated_member_use_from_same_package
+  String? get _legacyPetType => petType;
+
+  bool get _has => species != null || _legacyPetType != null;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final has = petType != null;
+    final has = _has;
     return InkWell(
       key: const ValueKey('petProfileSpeciesField'),
-      onTap: locked ? null : () => _pick(context, l10n),
+      onTap: locked ? null : () => _pick(context),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
@@ -42,7 +64,9 @@ class SpeciesField extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                has ? petTypeDisplay(l10n, petType!) : l10n.petProfileTypePick,
+                has
+                    ? petSpeciesView(species: species, petType: _legacyPetType).display(l10n)
+                    : l10n.petProfileTypePick,
                 style: TextStyle(
                     fontSize: 14,
                     color: !has
@@ -70,55 +94,56 @@ class SpeciesField extends StatelessWidget {
     );
   }
 
-  Future<void> _pick(BuildContext context, AppLocalizations l10n) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final t in const ['CAT', 'DOG', 'OTHER'])
-              ListTile(
-                key: ValueKey('speciesOption_$t'),
-                title: Text(petTypeDisplay(l10n, t)),
-                onTap: () => Navigator.of(ctx).pop(t),
-              ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _pick(BuildContext context) async {
+    final current = _has ? petSpeciesView(species: species, petType: _legacyPetType).code : null;
+    final picked = await showPetSpeciesPicker(context, current: current, scene: scene);
     if (picked != null) onChanged?.call(picked);
   }
 }
 
-/// RAS 选择字段（原型 P-30/P-32）：按物种精选清单 + 「Lainnya」手填。
-/// breed 真值存于 [controller]（自由 String，后端 VARCHAR60）；变更后回调 [onChanged] 通知父重建。
-/// 未选物种 → 禁用（先选 JENIS HEWAN）；物种=OTHER → 直接手填（无清单）。
+/// RAS 选择字段（原型 P-30/P-32；V1.5.0 pet-species Story 3.2 起点开品种抽屉 [showPetBreedPicker]，
+/// 取代原「Lainnya」弹窗手填——清单外的值在抽屉里「Pakai "…"」直接用）。
+/// breed 真值存于 [controller]（自由 String，后端 VARCHAR60）；选中写回 controller 后回调 [onChanged]，
+/// 并把 [BreedPick] 交给 [onPicked]（「其他」里选了某组品种时，父页据 `pick.species` 更新细分类型）。
+/// 未选类型 → 禁用（先选 JENIS HEWAN）。
 class BreedField extends StatelessWidget {
   const BreedField({
     super.key,
-    required this.petType,
+    this.species,
+    @Deprecated('V1.5.0：传 species（细分类型 wire）；Story 4.2 合并后清理') this.petType,
     required this.controller,
     required this.onChanged,
+    this.onPicked,
     this.fieldKey,
+    this.scene = 'create',
   });
 
+  final String? species;
   final String? petType;
   final TextEditingController controller;
   final VoidCallback onChanged;
+  final ValueChanged<BreedPick>? onPicked;
   final Key? fieldKey;
+  final String scene;
+
+  // ignore: deprecated_member_use_from_same_package
+  String? get _legacyPetType => petType;
+
+  PetSpeciesCode? get _type => species != null || _legacyPetType != null
+      ? petSpeciesView(species: species, petType: _legacyPetType).code
+      : null;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final enabled = petType != null;
+    final enabled = _type != null;
     final value = controller.text;
     final display = value.isNotEmpty
         ? value
         : (enabled ? l10n.petProfileBreedPick : l10n.petProfileBreedNeedType);
     return InkWell(
       key: fieldKey ?? const ValueKey('petProfileBreedField'),
-      onTap: enabled ? () => _pick(context, l10n) : null,
+      onTap: enabled ? () => _pick(context) : null,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
@@ -143,70 +168,14 @@ class BreedField extends StatelessWidget {
     );
   }
 
-  Future<void> _pick(BuildContext context, AppLocalizations l10n) async {
-    final list = breedsForPetType(petType);
-    // OTHER 物种：无清单 → 直接手填。
-    if (list.isEmpty) {
-      await _enterCustom(context, l10n);
-      return;
-    }
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final b in list)
-              ListTile(
-                key: ValueKey('breedOption_$b'),
-                title: Text(b),
-                onTap: () => Navigator.of(ctx).pop(b),
-              ),
-            ListTile(
-              key: const ValueKey('breedOption_OTHER'),
-              title: Text(l10n.petProfileBreedOther),
-              onTap: () => Navigator.of(ctx).pop('__OTHER__'),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _pick(BuildContext context) async {
+    final type = _type;
+    if (type == null) return;
+    final picked = await showPetBreedPicker(context,
+        type: type, current: controller.text.isEmpty ? null : controller.text, scene: scene);
     if (picked == null) return;
-    if (picked == '__OTHER__') {
-      if (context.mounted) await _enterCustom(context, l10n);
-    } else {
-      controller.text = picked;
-      onChanged();
-    }
-  }
-
-  /// 「Lainnya」手填：弹输入框（预填既有自定义值），保存后写回 controller。
-  Future<void> _enterCustom(BuildContext context, AppLocalizations l10n) async {
-    final isPreset = breedsForPetType(petType).contains(controller.text);
-    final ctrl = TextEditingController(text: isPreset ? '' : controller.text);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.petProfileBreedOther),
-        content: TextField(
-          key: const ValueKey('petProfileBreedCustomInput'),
-          controller: ctrl,
-          autofocus: true,
-          maxLength: 60,
-          decoration: InputDecoration(hintText: l10n.petProfileBreedHint),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l10n.commonCancel)),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
-            child: Text(l10n.commonSave),
-          ),
-        ],
-      ),
-    );
-    if (result != null) {
-      controller.text = result;
-      onChanged();
-    }
+    controller.text = picked.label;
+    onPicked?.call(picked);
+    onChanged();
   }
 }

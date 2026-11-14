@@ -376,7 +376,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           const SizedBox(height: 6),
           SpeciesField(
               key: const ValueKey('petProfileEditTypeReadonly'),
-              petType: _petType,
+              species: _species ?? _petType, // 旧后端无 species → 大类线上值（CAT/DOG/OTHER）同样可解析
               locked: true,
               lockedHint: l10n.petTypeLockedHint),
           const SizedBox(height: 16),
@@ -391,7 +391,8 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
                     _sectionLabel(l10n.petProfileBreedLabel),
                     const SizedBox(height: 6),
                     BreedField(
-                      petType: _petType,
+                      species: _species ?? _petType,
+                      scene: 'edit',
                       controller: _breedController,
                       onChanged: () => setState(() {}),
                       fieldKey: const ValueKey('petProfileEditBreedField'),

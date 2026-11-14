@@ -377,6 +377,9 @@ void main() {
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
         // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
         '_submitted', '_started',
+        // V1.5.0 pet-species Story 3.2（PRD §4 定死 `pet_breed_search_no_result`）：品种搜索「无结果」这一结果
+        // （输入停 800ms 仍为空才报）。⚠️ 只放这个精确词尾，扩表、不改名。
+        '_no_result',
         // Tailrent Level（V1.4.0 ① PRD §4，事件名定死 `growth_level_up`）：「等级提升」这一结果。
         // 与 `_shown`（庆祝曝光）分开：前者是数据层拿到升级，后者是用户真的看见。
         // ⚠️ 只放这个精确词尾，不放宽成 `_up`；扩表、不改名。

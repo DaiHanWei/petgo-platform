@@ -99,8 +99,7 @@ class _FakeProfileRepo implements ProfileRepository {
     double? weightKg,
     String? neuterStatus,
     String? sex,
-    String? idempotencyKey,
-  }) async =>
+    String? idempotencyKey, String? species}) async =>
       PetProfile(id: 99, name: name, cardToken: 'T', petType: petType, birthday: birthday);
   @override
   Future<PetProfile?> getMyProfile({int? petId}) async => null;
@@ -335,7 +334,7 @@ void main() {
     // JENIS HEWAN 下拉：弹层选 Anjing。
     await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('speciesOption_DOG')));
+    await tester.tap(find.byKey(const ValueKey('speciesCell_DOG')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('petProfileNameField')), 'Rocky');
     await tester.pump();

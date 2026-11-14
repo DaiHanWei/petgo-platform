@@ -25,6 +25,7 @@ import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/pending_archive.dart';
 import '../domain/profile_created_flow.dart';
+import '../domain/pet_species.dart';
 import '../domain/pet_species_display.dart';
 import 'widgets/pet_form_fields.dart';
 
@@ -60,7 +61,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   final _introController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
-  String? _petType; // F6 必选：CAT/DOG/OTHER
+  PetSpeciesCode? _species; // F6 必选；V1.5.0 pet-species：细分类型（大类由它推出）
   bool _uploading = false;
   bool _submitting = false;
   // 名字/简介触达上限各给一次 toast（maxLength 静默硬截断本身无反馈，参照评论 bug 20260702-218）。
@@ -80,7 +81,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
 
   // 必填（F6 + R2/AC3）：类型 + 名字 + 生日（完整年月日）齐全方可提交。
   bool get _canSubmit =>
-      _petType != null &&
+      _species != null &&
       _nameController.text.trim().isNotEmpty &&
       _birthday != null &&
       !_submitting &&
@@ -107,21 +108,24 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
     final name = _nameController.text.trim();
-    final petType = _petType;
+    final species = _species;
+    final petType = species?.groupWire;
     final birthday = _birthday;
     // 必填守卫（与 _canSubmit 一致；按钮已禁用，此处双保险）：类型/名字/生日齐全。
-    if (petType == null || name.isEmpty || birthday == null) {
+    if (species == null || petType == null || name.isEmpty || birthday == null) {
       _toast(l10n.petProfileNameRequired);
       return;
     }
     // species 为受控枚举（CAT/DOG/OTHER），供归因分发（AppsFlyer P1）；不传宠物名等自由文本。
+    // ⚠️ V1.5.0：属性 `species` 仍报大类（AppsFlyer 归因口径不变）。
     Analytics.capture('pet_profile_create_submitted', {'species': petType});
     setState(() => _submitting = true);
     // 建档**前**取只数（建完列表会被失效重取）。
     final petIndex = _petIndexAfterCreate();
     try {
       final created = await ref.read(profileRepositoryProvider).create(
-            petType: petType,
+            petType: petType, // 大类照传：回滚到旧后端也能建档
+            species: species.wire,
             name: name,
             birthday: birthday,
             avatarUrl: _avatarUrl,
@@ -355,10 +359,16 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             const SizedBox(height: 8),
             // JENIS HEWAN：下拉按枚举选（原型 P-30）。
             SpeciesField(
-              petType: _petType,
-              onChanged: (t) => setState(() {
-                _petType = t;
-                _breedController.clear(); // 物种切换 → 品种清单变，清空已选 RAS
+              species: _species?.wire,
+              scene: 'create',
+              onChanged: (pick) => setState(() {
+                // 宫格项变了 → 品种清单变，清空已选 RAS；同一项（如「其他」）重选不清。
+                if (_species?.pickerType != pick.code.pickerType) {
+                  _breedController.clear();
+                  _species = pick.code;
+                } else if (_species == null || !_species!.isOtherGroupMember) {
+                  _species = pick.code;
+                } // 已在「其他」里细分（如 CIVET）且重选 Lainnya → 保留细分类型与品种，二者一致
               }),
             ),
             const SizedBox(height: 16),
@@ -366,9 +376,12 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
             _sectionLabel(l10n.petProfileBreedLabel),
             const SizedBox(height: 6),
             BreedField(
-              petType: _petType,
+              species: _species?.wire,
+              scene: 'create',
               controller: _breedController,
               onChanged: () => setState(() {}),
+              // 「其他」里选了某组品种 / 手填对上某组 → 细分类型随之变（类型框仍显示 Lainnya）。
+              onPicked: (pick) => setState(() => _species = pick.species),
             ),
             const SizedBox(height: 16),
             // 🔴 性别（bug 20260827）：此前**只有编辑页有这个字段**，建档页没有 ——
@@ -472,7 +485,7 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
                             ? const CircularProgressIndicator()
                             // 按物种占位（同编辑页口径；原先恒为 🐱，L2 第三轮 P3）。
                             // V1.5.0 pet-species：统一函数；未选类型仍是 🐱（原口径）。
-                            : Text(_petType == null ? '🐱' : petSpeciesView(petType: _petType).emoji,
+                            : Text(_species == null ? '🐱' : petSpeciesView(species: _species!.wire).emoji,
                                 style: const TextStyle(fontSize: 38)))
                         : ClipOval(
                             child: AppImage.widget(_avatarUrl!,

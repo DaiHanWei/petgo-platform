@@ -27,6 +27,8 @@ class _FakeRepo implements ProfileRepository {
   int createdId = 1;
   String? lastPetType;
   String? lastSex;
+  String? lastSpecies;
+  String? lastBreed;
 
   @override
   Future<PetProfile> create({
@@ -39,10 +41,11 @@ class _FakeRepo implements ProfileRepository {
     double? weightKg,
     String? neuterStatus,
     String? sex,
-    String? idempotencyKey,
-  }) async {
+    String? idempotencyKey, String? species}) async {
     createCalled = true;
     lastPetType = petType;
+    lastSpecies = species;
+    lastBreed = breed;
     lastSex = sex;
     if (fail409Body != null) {
       final req = RequestOptions(path: '/pet-profiles');
@@ -133,7 +136,7 @@ Future<void> _pumpRouted(WidgetTester tester, ProviderContainer container) async
 Future<void> _fillAndSubmit(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('speciesOption_CAT')));
+  await tester.tap(find.byKey(const ValueKey('speciesCell_CAT')));
   await tester.pumpAndSettle();
   await tester.enterText(find.byKey(const ValueKey('petProfileNameField')), 'Momo');
   await tester.pump();
@@ -238,7 +241,7 @@ void main() {
     // 仅选类型（下拉弹层选 Kucing）→ 仍禁用（缺名字/生日）
     await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('speciesOption_CAT')));
+    await tester.tap(find.byKey(const ValueKey('speciesCell_CAT')));
     await tester.pumpAndSettle();
     expect(_submitBtn(tester).onPressed, isNull);
 
@@ -253,6 +256,88 @@ void main() {
     await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
     await tester.pumpAndSettle();
     expect(_submitBtn(tester).onPressed, isNotNull);
+  });
+
+  // ---------- V1.5.0 pet-species Story 3.2 · AC7.2 ----------
+  testWidgets('V1.5.0：选兔 → 品种抽屉可开；提交带 species=RABBIT、petType=OTHER；换类型清空品种', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(440, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repo = _FakeRepo();
+    final container = ProviderContainer(overrides: [
+      profileRepositoryProvider.overrideWithValue(repo),
+      petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+    ]);
+    addTearDown(container.dispose);
+    await _pumpRouted(tester, container);
+    expect(find.text('(bisa diubah 90 hari sekali)').evaluate().isNotEmpty ||
+        find.text('(can be changed once every 90 days)').evaluate().isNotEmpty, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesCell_RABBIT')));
+    await tester.pumpAndSettle();
+    expect(find.text('🐰'), findsWidgets); // 头像占位跟类型变（A5）
+    await tester.tap(find.byKey(const ValueKey('petProfileBreedField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('breedOption_Holland Lop')));
+    await tester.pumpAndSettle();
+    expect(find.text('Holland Lop'), findsOneWidget);
+
+    // 换类型（兔 → 仓鼠）→ 品种清空
+    await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesCell_HAMSTER')));
+    await tester.pumpAndSettle();
+    expect(find.text('Holland Lop'), findsNothing);
+
+    // 回到兔并提交
+    await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesCell_RABBIT')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('petProfileNameField')), 'Momo');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('petProfileBirthdayTile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('petProfileSubmit')));
+    await tester.pumpAndSettle();
+    expect(repo.lastSpecies, 'RABBIT');
+    expect(repo.lastPetType, 'OTHER');
+  });
+
+  testWidgets('V1.5.0：「其他」里选 Musang Pandan → species=CIVET、类型框仍显示 Lainnya', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(440, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repo = _FakeRepo();
+    final container = ProviderContainer(overrides: [
+      profileRepositoryProvider.overrideWithValue(repo),
+      petProfileProvider.overrideWith((ref) => repo.getMyProfile()),
+    ]);
+    addTearDown(container.dispose);
+    await _pumpRouted(tester, container);
+    await tester.tap(find.byKey(const ValueKey('petProfileSpeciesField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('speciesCell_OTHER')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('petProfileBreedField')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('breedOption_Musang Pandan')));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byKey(const ValueKey('petProfileSpeciesField')), matching: find.textContaining('🐾')),
+        findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('petProfileNameField')), 'Kiko');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('petProfileBirthdayTile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('petProfileSubmit')));
+    await tester.pumpAndSettle();
+    expect(repo.lastSpecies, 'CIVET');
+    expect(repo.lastPetType, 'OTHER');
+    expect(repo.lastBreed, 'Musang Pandan');
   });
 
   testWidgets('AC3: 头像未传 → 渲染默认占位（add photo）；选填品种/介绍可空', (tester) async {

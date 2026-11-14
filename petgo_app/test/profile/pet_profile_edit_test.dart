@@ -41,8 +41,7 @@ class _FakeRepo implements ProfileRepository {
     double? weightKg,
     String? neuterStatus,
     String? sex,
-    String? idempotencyKey,
-  }) async =>
+    String? idempotencyKey, String? species}) async =>
       profile;
 
   @override
@@ -150,7 +149,7 @@ void main() {
     // JENIS HEWAN 改为锁定下拉字段（SpeciesField locked）：展示既有类型，不可改。
     final speciesField =
         tester.widget<SpeciesField>(find.byKey(const ValueKey('petProfileEditTypeReadonly')));
-    expect(speciesField.petType, 'DOG'); // 既有类型
+    expect(speciesField.species, 'DOG'); // 既有类型（V1.5.0：旧后端无 species → 大类线上值）
     expect(speciesField.locked, isTrue); // 锁定不可改
     expect(speciesField.onChanged, isNull); // 无变更回调
     // update() 签名无 petType 参数 → 结构上不可能随 PATCH 提交（后端 DTO 亦无该字段）。

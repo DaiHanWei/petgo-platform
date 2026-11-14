@@ -26,6 +26,9 @@ abstract class ProfileRepository {
     /// 此前只有编辑接口能填，于是身份证卡上「性别」永远是空。
     String? sex,
     String? idempotencyKey,
+
+    /// 细分类型（V1.5.0 pet-species · 后端 `species`）；传了以它为准，[petType] 仍传大类（兼容旧后端）。
+    String? species,
   });
 
   /// 当前用户档案；不存在返回 null（后端 404 归一）。
@@ -74,9 +77,11 @@ class DioProfileRepository implements ProfileRepository {
     String? neuterStatus,
     String? sex,
     String? idempotencyKey,
+    String? species,
   }) async {
     final data = <String, dynamic>{
       'petType': petType,
+      'species': ?species,
       'name': name,
       'birthday': _isoDate(birthday),
     };

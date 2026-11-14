@@ -144,8 +144,7 @@ class _FakeProfileRepo implements ProfileRepository {
     double? weightKg,
     String? neuterStatus,
     String? sex,
-    String? idempotencyKey,
-  }) async =>
+    String? idempotencyKey, String? species}) async =>
       PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
 
   @override
