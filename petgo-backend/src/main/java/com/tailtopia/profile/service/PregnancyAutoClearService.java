@@ -33,11 +33,18 @@ public class PregnancyAutoClearService {
         this.events = events;
     }
 
-    /** @return 本次清除的宠物数 */
+    /** @return 本次业务上由「是」变「否」的宠物数（公的残留落库值也会清，但不计入）。 */
     @Transactional
     public int clearExpired(LocalDate day) {
+        return clearExpiredPets(day).size();
+    }
+
+    /** 同 {@link #clearExpired}，返回业务上「由是变否」的宠物 id（日跑据此同步走恢复处理）。 */
+    @Transactional
+    public java.util.List<Long> clearExpiredPets(LocalDate day) {
+        java.util.List<Long> clearedPets = new java.util.ArrayList<>();
         Instant clearedAt = day.atStartOfDay(ScheduleWindow.WIB).toInstant();
-        int cleared = 0;
+        int rows = 0;
         for (PetProfile pet : profiles.findByPregnantNursingTrue()) {
             if (!PregnancyFlag.expiredOn(pet, day)) {
                 continue;
@@ -48,11 +55,12 @@ public class PregnancyAutoClearService {
             // 公的（业务上从未怀孕）只清落库值，不发「清除」事件，免得监听方对它走恢复补发。
             if (wasEffective) {
                 events.publishEvent(new PetHealthProfileChangedEvent(pet.getOwnerId(), pet.getId(),
-                        false, false, false, false, true, clearedAt));
+                        false, false, false, false, true, clearedAt, true));
+                clearedPets.add(pet.getId());
             }
-            cleared++;
+            rows++;
         }
-        log.info("health pregnancy auto-clear day={} cleared={}", day, cleared);
-        return cleared;
+        log.info("health pregnancy auto-clear day={} cleared={} rowsReset={}", day, clearedPets.size(), rows);
+        return clearedPets;
     }
 }

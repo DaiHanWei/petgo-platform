@@ -15,6 +15,11 @@ public interface HealthReminderRepository extends JpaRepository<HealthReminder, 
 
     List<HealthReminder> findByPetProfileIdAndStatus(long petProfileId, ReminderStatus status);
 
+    /** 日跑：某状态、发送日早于 / 等于某天的行（PENDING 量小，单机）。 */
+    List<HealthReminder> findByStatusAndSendDateBefore(ReminderStatus status, java.time.LocalDate day);
+
+    List<HealthReminder> findByStatusAndSendDate(ReminderStatus status, java.time.LocalDate day);
+
     @Modifying
     @Query("delete from HealthReminder r where r.petProfileId = :petId")
     int deleteByPetProfileId(@Param("petId") long petId);

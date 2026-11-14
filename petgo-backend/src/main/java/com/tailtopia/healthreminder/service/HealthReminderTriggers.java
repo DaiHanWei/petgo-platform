@@ -49,7 +49,7 @@ public class HealthReminderTriggers {
         if (e.birthdayChanged() || e.sexChanged() || e.neuterChanged() || e.pregnantSetYes()) {
             rebuild(e.petId(), RebuildTrigger.of("profile_changed"));
         }
-        if (e.pregnantCleared()) {
+        if (e.pregnantCleared() && !e.autoCleared()) { // 自动清除由日跑同步走恢复表
             try {
                 resumeHandler.onPregnancyCleared(e.petId(), e.changedAt());
             } catch (RuntimeException ex) {

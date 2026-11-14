@@ -100,7 +100,28 @@ public final class ReminderPlanRules {
         if (history.catchUpUsed(r.id(), next)) {
             return; // 该 Next date 已用过恢复补发：保持「已完成」
         }
-        // 到期疫苗 / 剂次 = event date 当时命中的分支（即使用户后来手改了 Next date，FR-159 Due vaccine）。
+        VaccineSnapshot v = vaccineSnapshot(pet, r, all);
+        VaccinePreset storedPreset = v.preset();
+        String dueName = v.name();
+        Integer dueDose = v.dose();
+        out.add(new DesiredReminder(r.id(), ReminderKind.VACCINE_D_MINUS_7, PushPoint.D_MINUS_7, ReminderOrigin.RECORD,
+                next, next.minusDays(7), storedPreset, dueName, dueDose, null, null));
+        out.add(new DesiredReminder(r.id(), ReminderKind.VACCINE_D_DAY, PushPoint.D_DAY, ReminderOrigin.RECORD,
+                next, next, storedPreset, dueName, dueDose, null, null));
+        out.add(new DesiredReminder(r.id(), ReminderKind.VACCINE_D_PLUS_7, PushPoint.D_PLUS_7, ReminderOrigin.RECORD,
+                next, next.plusDays(7), storedPreset, dueName, dueDose, null, null));
+    }
+
+    /** 疫苗提醒的文案 / 落点快照：到期疫苗、名字、到期剂次。 */
+    public record VaccineSnapshot(VaccinePreset preset, String name, Integer dose) {
+    }
+
+    /**
+     * 到期疫苗 / 剂次 = event date 当时系列规则命中的分支（即使用户后来手改了 Next date，FR-159 Due vaccine）；
+     * OTHER / 无预设 → 记录自己的预设与原文名、剂次空。恢复补发（2.3）也用它。
+     */
+    public static VaccineSnapshot vaccineSnapshot(PetHealthSnapshot pet, HealthRecordSnapshot r,
+            List<HealthRecordSnapshot> all) {
         VaccinePreset preset = RecordKinds.effectivePreset(r, pet.petType());
         VaccinePreset duePreset = preset;
         Integer dueDose = null;
@@ -115,13 +136,7 @@ public final class ReminderPlanRules {
         }
         String dueName = duePreset != null && duePreset.label() != null ? duePreset.label()
                 : truncate(r.vaccineName(), 30);
-        VaccinePreset storedPreset = duePreset != null ? duePreset : r.vaccinePreset();
-        out.add(new DesiredReminder(r.id(), ReminderKind.VACCINE_D_MINUS_7, PushPoint.D_MINUS_7, ReminderOrigin.RECORD,
-                next, next.minusDays(7), storedPreset, dueName, dueDose, null, null));
-        out.add(new DesiredReminder(r.id(), ReminderKind.VACCINE_D_DAY, PushPoint.D_DAY, ReminderOrigin.RECORD,
-                next, next, storedPreset, dueName, dueDose, null, null));
-        out.add(new DesiredReminder(r.id(), ReminderKind.VACCINE_D_PLUS_7, PushPoint.D_PLUS_7, ReminderOrigin.RECORD,
-                next, next.plusDays(7), storedPreset, dueName, dueDose, null, null));
+        return new VaccineSnapshot(duePreset != null ? duePreset : r.vaccinePreset(), dueName, dueDose);
     }
 
     private static void dewormPoints(HealthRecordSnapshot r, LocalDate next, List<DesiredReminder> out) {

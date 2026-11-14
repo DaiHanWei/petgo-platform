@@ -44,7 +44,7 @@ class PregnancyAutoClearServiceTest {
         assertThat(expired.getPregnantSetAt()).isNull();
         assertThat(fresh.isPregnantNursing()).isTrue();
         verify(events).publishEvent(new PetHealthProfileChangedEvent(7L, 1L, false, false, false, false, true,
-                Instant.parse("2027-04-30T17:00:00Z")));
+                Instant.parse("2027-04-30T17:00:00Z"), true));
     }
 
     @Test
@@ -61,11 +61,12 @@ class PregnancyAutoClearServiceTest {
         PetProfile noSetAt = pregnantSince(2L, "2027-04-01");
         org.springframework.test.util.ReflectionTestUtils.setField(noSetAt, "pregnantSetAt", null);
         when(profiles.findByPregnantNursingTrue()).thenReturn(List.of(male, noSetAt));
-        assertThat(service.clearExpired(LocalDate.parse("2027-05-01"))).isEqualTo(2);
+        // 返回业务上由「是」变「否」的宠物数：公的只清落库值，不计入、不发事件。
+        assertThat(service.clearExpired(LocalDate.parse("2027-05-01"))).isEqualTo(1);
         assertThat(male.isPregnantNursing()).isFalse();
         assertThat(noSetAt.isPregnantNursing()).isFalse();
         verify(events).publishEvent(new PetHealthProfileChangedEvent(7L, 2L, false, false, false, false, true,
-                Instant.parse("2027-04-30T17:00:00Z")));
+                Instant.parse("2027-04-30T17:00:00Z"), true));
         verify(events, org.mockito.Mockito.times(1)).publishEvent(any(Object.class));
     }
 }

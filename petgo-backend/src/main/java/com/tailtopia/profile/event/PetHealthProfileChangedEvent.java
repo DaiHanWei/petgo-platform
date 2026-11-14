@@ -8,8 +8,17 @@ import java.time.Instant;
  * {@code HealthRecordService}）在写事务内发布；监听方一律 AFTER_COMMIT。
  *
  * <p>{@code pregnantSetYes} = 本次设为「是」（含 true → true 刷新）；{@code pregnantCleared} = 由「是」变为「否」
- * （用户改，或 Story 1.3 的自动清除，此时 {@code changedAt} = 当天 00:00 WIB）。🔒 不带任何健康字段值。
+ * （用户改，或 Story 1.3 的自动清除，此时 {@code changedAt} = 当天 00:00 WIB、{@code autoCleared = true}——
+ * 自动清除的恢复处理由日跑同步执行，异步监听跳过，避免跑两次）。🔒 不带任何健康字段值。
  */
 public record PetHealthProfileChangedEvent(long ownerId, long petId, boolean birthdayChanged, boolean sexChanged,
-        boolean neuterChanged, boolean pregnantSetYes, boolean pregnantCleared, Instant changedAt) {
+        boolean neuterChanged, boolean pregnantSetYes, boolean pregnantCleared, Instant changedAt,
+        boolean autoCleared) {
+
+    /** 用户 / 档案编辑触发（非日跑自动清除）。 */
+    public PetHealthProfileChangedEvent(long ownerId, long petId, boolean birthdayChanged, boolean sexChanged,
+            boolean neuterChanged, boolean pregnantSetYes, boolean pregnantCleared, Instant changedAt) {
+        this(ownerId, petId, birthdayChanged, sexChanged, neuterChanged, pregnantSetYes, pregnantCleared, changedAt,
+                false);
+    }
 }
