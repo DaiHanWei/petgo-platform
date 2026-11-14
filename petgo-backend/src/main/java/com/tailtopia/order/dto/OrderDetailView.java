@@ -51,7 +51,30 @@ public record OrderDetailView(
         Long triageTaskId,
         Long consultSessionId,
         String targetKind,
-        String targetToken) {
+        String targetToken,
+        StarterPackOrderDetail starterPack,
+        String purchaseToken) {
+
+    /**
+     * V1.5.0 gift-pack 礼包详情（D-26）：档位、内容、次数到期、名额结果（{@code slot} 档 1 / 未发放为 null）。
+     */
+    public record StarterPackOrderDetail(int tier, java.util.List<String> contents, Instant creditsExpireAt,
+            Slot slot) {
+
+        public record Slot(String outcome, Instant expiresAt, String petName) {
+        }
+    }
+
+    /** V1.3.2 的 22 参形态（既有构造点不改）：无礼包字段。 */
+    public OrderDetailView(String orderType, String orderToken, String displayNo, String statusCode,
+            String statusColor, Long amount, String payChannel, Instant createdAt, Instant paidAt, String petName,
+            String petType, String petAvatarUrl, boolean petDeleted, Instant sessionStartedAt, Instant sessionEndedAt,
+            String refundStage, Long refundNetAmount, Long coins, Long triageTaskId, Long consultSessionId,
+            String targetKind, String targetToken) {
+        this(orderType, orderToken, displayNo, statusCode, statusColor, amount, payChannel, createdAt, paidAt, petName,
+                petType, petAvatarUrl, petDeleted, sessionStartedAt, sessionEndedAt, refundStage, refundNetAmount,
+                coins, triageTaskId, consultSessionId, targetKind, targetToken, null, null);
+    }
 
     /** V1.3.2 前的 20 参形态（既有 5 个构造点不改）：无查看目标。 */
     public OrderDetailView(String orderType, String orderToken, String displayNo, String statusCode,
@@ -60,6 +83,6 @@ public record OrderDetailView(
             String refundStage, Long refundNetAmount, Long coins, Long triageTaskId, Long consultSessionId) {
         this(orderType, orderToken, displayNo, statusCode, statusColor, amount, payChannel, createdAt, paidAt, petName,
                 petType, petAvatarUrl, petDeleted, sessionStartedAt, sessionEndedAt, refundStage, refundNetAmount,
-                coins, triageTaskId, consultSessionId, null, null);
+                coins, triageTaskId, consultSessionId, null, null, null, null);
     }
 }

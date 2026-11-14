@@ -438,6 +438,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/me/starter-pack-purchases/*").hasRole("USER")
                         // V1.5.0 gift-pack Story 4-3：KTP 用免费次数解锁（性格测试那条已在 /api/v1/pet-profiles/me/tailsonality/** 内）。
                         .requestMatchers(HttpMethod.POST, "/api/v1/pet-profiles/me/id-cards/*/hd-credit-unlock").hasRole("USER")
+                        // V1.5.0 gift-pack Story 4-4：「Koin & Jatah Saya」权益汇总 / 记录（只给 USER；游客 401）。
+                        .requestMatchers("/api/v1/me/entitlements", "/api/v1/me/entitlements/**").hasRole("USER")
                         // V1.4.0 ④ Story 1.1：推送分类设置，仅 role=USER（controller 把 jwt.sub 当 users.id 用；
                         // 兽医 token 的 sub=vetId 与 users.id 撞号，落 anyRequest().authenticated() 会以同号用户名义读写推送设置）。精确路径，不写 /api/v1/me/** 通配。
                         .requestMatchers("/api/v1/me/push-settings").hasRole("USER")

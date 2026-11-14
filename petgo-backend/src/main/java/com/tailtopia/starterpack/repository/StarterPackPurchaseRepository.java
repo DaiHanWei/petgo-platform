@@ -31,6 +31,25 @@ public interface StarterPackPurchaseRepository extends JpaRepository<StarterPack
 
     long countByUserIdAndStatus(long userId, StarterPackPurchaseStatus status);
 
+    Optional<StarterPackPurchase> findByPublicToken(String publicToken);
+
+    /**
+     * 订单中心第 6 源（V1.5.0 gift-pack Story 4-4 · D-26）：PAID 全部 + 未过窗 PENDING；与 {@code KeepsakePurchaseRepository
+     * .findOrderCenterPageBefore} <b>同形</b>（排序键 {@code created_at DESC, id DESC}，同刻组靠 {@code beforeId}）。
+     */
+    @Query("""
+            SELECT p FROM StarterPackPurchase p
+            WHERE p.userId = :userId
+              AND (p.status = com.tailtopia.starterpack.domain.StarterPackPurchaseStatus.PAID
+                   OR (p.status = com.tailtopia.starterpack.domain.StarterPackPurchaseStatus.PENDING
+                       AND p.payExpiresAt > :now))
+              AND (p.createdAt < :beforeTs
+                   OR (p.createdAt = :beforeTs AND p.id < :beforeId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<StarterPackPurchase> findOrderCenterPageBefore(@Param("userId") long userId, @Param("now") Instant now,
+            @Param("beforeTs") Instant beforeTs, @Param("beforeId") long beforeId, Pageable page);
+
     /** 发放锁行（D-24：幂等判 {@code fulfilled_at} 前先锁）。 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM StarterPackPurchase p WHERE p.id = :id")

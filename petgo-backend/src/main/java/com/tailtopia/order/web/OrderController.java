@@ -42,9 +42,12 @@ public class OrderController {
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false, defaultValue = "false") boolean includeEcommerce,
             // V1.3.2 Story 3.6：一次性解锁三类的显式加入闸门（理由同 includeEcommerce：老 App 不认识这些类型）。
-            @RequestParam(required = false, defaultValue = "false") boolean includeKeepsake) {
+            @RequestParam(required = false, defaultValue = "false") boolean includeKeepsake,
+            // V1.5.0 gift-pack Story 4-4：超值礼包的显式加入闸门（D-26，理由同上）。
+            @RequestParam(required = false, defaultValue = "false") boolean includeStarterPack) {
         int size = limit == null ? DEFAULT_LIMIT : Math.min(Math.max(limit, 1), MAX_LIMIT);
-        return orderCenter.listOrders(currentUserId(jwt), type, cursor, size, includeEcommerce, includeKeepsake);
+        return orderCenter.listOrders(currentUserId(jwt), type, cursor, size, includeEcommerce, includeKeepsake,
+                includeStarterPack);
     }
 
     /** 订单详情（Story 5.3，按 token 跨 3 源；仅 owner；宠物已删→占位 200 非 500）。 */

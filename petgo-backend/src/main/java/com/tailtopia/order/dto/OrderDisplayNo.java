@@ -30,6 +30,8 @@ public final class OrderDisplayNo {
     public static final String BOARDING_PASS = "BPASS";
     /** Tailsonality 配型单独解锁（2026-10-09）；订单中心与完整解读同归「Tailsonality」类，靠前缀区分。 */
     public static final String TS_MATCH = "TSM";
+    /** V1.5.0 gift-pack 超值礼包（D-26）。 */
+    public static final String STARTER_PACK = "PAKET";
 
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
     private static final DateTimeFormatter YMD = DateTimeFormatter.ofPattern("yyyyMMdd");

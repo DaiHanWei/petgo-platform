@@ -43,6 +43,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.domain.PageRequest;
+import com.tailtopia.starterpack.domain.StarterPackPurchase;
+import com.tailtopia.starterpack.domain.StarterPackPurchaseStatus;
+import com.tailtopia.starterpack.domain.StarterPackSlotOutcome;
+import com.tailtopia.starterpack.repository.StarterPackPurchaseRepository;
+import com.tailtopia.starterpack.service.StarterPackSlotPetNameResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,6 +78,17 @@ public class OrderCenterService {
     // ── V1.3.2 Story 3.6 追加的第 5 个数据源（一次性解锁，唯一新源 keepsake_purchases · AD-8）。既有 8 个依赖一行未动。
     private final KeepsakePurchaseRepository keepsakes;
     private final Map<KeepsakeSku, KeepsakeTargetResolver> keepsakeTargets;
+    // ── V1.5.0 gift-pack Story 4-4 追加的第 6 个数据源（超值礼包 · D-26）：setter 注入，既有构造器与构造点不改。
+    private StarterPackPurchaseRepository starterPacks;
+    private StarterPackSlotPetNameResolver starterPackPetNames;
+
+    /** V1.5.0 gift-pack Story 4-4：礼包源（未注入 → 礼包分支不出行、详情查不到礼包 token）。 */
+    @Autowired(required = false)
+    void setStarterPackSource(StarterPackPurchaseRepository starterPacks,
+            StarterPackSlotPetNameResolver starterPackPetNames) {
+        this.starterPacks = starterPacks;
+        this.starterPackPetNames = starterPackPetNames;
+    }
 
     public OrderCenterService(ConsultOrderRepository consultOrders, AiConsultOrderRepository aiOrders,
             PaymentIntentRepository intents, PawCoinWalletService wallet,
@@ -128,6 +145,16 @@ public class OrderCenterService {
     @Transactional(readOnly = true)
     public OrderPage listOrders(long userId, String type, String cursor, int limit,
             boolean includeEcommerce, boolean includeKeepsake) {
+        return listOrders(userId, type, cursor, limit, includeEcommerce, includeKeepsake, false);
+    }
+
+    /**
+     * 同上 + V1.5.0 gift-pack Story 4-4 的 {@code includeStarterPack} 闸门（D-26）：默认聚合只有新 App 显式传 true 才混入礼包单；
+     * {@code type=STARTER_PACK} 不受闸门约束。老 App 不传 → 结果与改动前逐字一致。
+     */
+    @Transactional(readOnly = true)
+    public OrderPage listOrders(long userId, String type, String cursor, int limit,
+            boolean includeEcommerce, boolean includeKeepsake, boolean includeStarterPack) {
         OrderType filter = parseType(type);
         OrderCenterCursor at = parseCursor(cursor);
         // 首页上界用 now+60s 而不是 now：库里的 created_at 是 Postgres 的 now()，
@@ -184,6 +211,15 @@ public class OrderCenterService {
                 merged.add(new Row(mapKeepsake(k), RANK_KEEPSAKE, k.getId()));
             }
         }
+        // 🔴 V1.5.0 gift-pack Story 4-4：第 6 个分支【追加在 if 链末尾】，既有分支与映射器一行未改（照 3.6）。
+        //    PAID 全部 + 未过窗 PENDING（「继续支付」，照充值待支付）；EXPIRED / FAILED 不入。默认聚合过闸门。
+        if (starterPacks != null && ((filter == null && includeStarterPack) || filter == OrderType.STARTER_PACK)) {
+            long bound = idBound(at, RANK_STARTER_PACK);
+            for (StarterPackPurchase p : starterPacks.findOrderCenterPageBefore(userId, Instant.now(), before, bound,
+                    page)) {
+                merged.add(new Row(mapStarterPack(p), RANK_STARTER_PACK, p.getId()));
+            }
+        }
         // ID_HD：无源，Epic 6 接入（filter==ID_HD → merged 为空）。
 
         merged.sort(ORDER);
@@ -215,6 +251,8 @@ public class OrderCenterService {
     private static final int RANK_SHOP = 3;
     /** V1.3.2 Story 3.6：一次性解锁三类共用（同一张表）。 */
     private static final int RANK_KEEPSAKE = 4;
+    /** V1.5.0 gift-pack Story 4-4：超值礼包。 */
+    private static final int RANK_STARTER_PACK = 5;
 
     /**
      * 订单中心的<b>唯一</b>全序：{@code createdAt DESC, sourceRank ASC, id DESC}。
@@ -285,6 +323,13 @@ public class OrderCenterService {
         if (keep.isPresent() && keep.get().getUserId() == userId
                 && KEEPSAKE_ORDER_STATUSES.contains(keep.get().getStatus())) {
             return keepsakeDetail(keep.get());
+        }
+        // 🔴 V1.5.0 gift-pack Story 4-4 追加：同形（先按 token，再校验 owner 与「已付 / 未过窗待付」），越权 / 不存在同为 404。
+        if (starterPacks != null) {
+            Optional<StarterPackPurchase> pack = starterPacks.findByPublicToken(orderToken);
+            if (pack.isPresent() && pack.get().getUserId() == userId && isStarterPackListed(pack.get())) {
+                return starterPackDetail(pack.get());
+            }
         }
         throw AppException.notFound("订单不存在");
     }
@@ -568,4 +613,43 @@ public class OrderCenterService {
      * 同刻组一条都不放行，等价于旧的严格 {@code <}。
      */
     private static final int LEGACY_RANK = Integer.MAX_VALUE;
+
+    // ---- V1.5.0 gift-pack Story 4-4 超值礼包（独立映射方法，不与既有映射器纠缠）----
+
+    private static boolean isStarterPackListed(StarterPackPurchase p) {
+        return p.getStatus() == StarterPackPurchaseStatus.PAID
+                || (p.isPending() && p.getPayExpiresAt() != null && p.getPayExpiresAt().isAfter(Instant.now()));
+    }
+
+    private static String starterPackStatusCode(StarterPackPurchase p) {
+        return p.getStatus() == StarterPackPurchaseStatus.PAID ? "PAID" : "PENDING";
+    }
+
+    private static OrderStatusColor starterPackStatusColor(StarterPackPurchase p) {
+        return p.getStatus() == StarterPackPurchaseStatus.PAID ? OrderStatusColor.SUCCESS : OrderStatusColor.WARN;
+    }
+
+    /** 卡片：PAID → SUCCESS；未过窗 PENDING → WARN（照 {@link #mapTopupPending}）；金额 = 下单价快照。 */
+    private OrderSummaryView mapStarterPack(StarterPackPurchase p) {
+        return new OrderSummaryView(OrderType.STARTER_PACK.name(), p.getPublicToken(),
+                OrderDisplayNo.of(OrderDisplayNo.STARTER_PACK, p.getId(), p.getCreatedAt()), starterPackStatusCode(p),
+                starterPackStatusColor(p).name(), p.getPrice(), p.getPayChannel().name(), p.getCreatedAt(), null,
+                null, null, p.getTier());
+    }
+
+    private OrderDetailView starterPackDetail(StarterPackPurchase p) {
+        StarterPackSlotOutcome outcome = p.getSlotOutcome();
+        OrderDetailView.StarterPackOrderDetail.Slot slot = outcome == null || outcome == StarterPackSlotOutcome.NONE
+                ? null
+                : new OrderDetailView.StarterPackOrderDetail.Slot(outcome.name(), p.getSlotExpiresAt(),
+                        outcome == StarterPackSlotOutcome.EXTENDED && starterPackPetNames != null
+                                ? starterPackPetNames.resolve(p.getUserId()) : null);
+        OrderDetailView.StarterPackOrderDetail detail = new OrderDetailView.StarterPackOrderDetail(p.getTier(),
+                p.tierEnum().contents().stream().map(Enum::name).toList(), p.getCreditsExpireAt(), slot);
+        return new OrderDetailView(OrderType.STARTER_PACK.name(), p.getPublicToken(),
+                OrderDisplayNo.of(OrderDisplayNo.STARTER_PACK, p.getId(), p.getCreatedAt()), starterPackStatusCode(p),
+                starterPackStatusColor(p).name(), p.getPrice(), p.getPayChannel().name(), p.getCreatedAt(),
+                p.getPaidAt(), null, null, null, false, null, null, null, null, null, null, null, null, null, detail,
+                p.isPending() ? p.getPublicToken() : null);
+    }
 }

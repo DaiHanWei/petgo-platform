@@ -142,7 +142,9 @@ class OrderCenterKeepsakeTest {
     void enumAppendedAtTheEndAndPrefixesDistinctFromPaymentNos() {
         assertThat(List.of(OrderType.values()).stream().map(Enum::name).toList()).containsExactly(
                 "VET_CONSULT", "AI_UNLOCK", "PAWCOIN_TOPUP", "ID_HD", "ECOMMERCE",
-                "TAILSONALITY", "PASSPORT_SNAP", "BOARDING_PASS");
+                "TAILSONALITY", "PASSPORT_SNAP", "BOARDING_PASS",
+                // V1.5.0 gift-pack Story 4-4（末尾追加）
+                "STARTER_PACK");
         assertThat(List.of(OrderDisplayNo.TAILSONALITY, OrderDisplayNo.PASSPORT_SNAP, OrderDisplayNo.BOARDING_PASS))
                 .doesNotContain("PAYTS", "PAYPASS", "PAYBP").doesNotHaveDuplicates();
     }

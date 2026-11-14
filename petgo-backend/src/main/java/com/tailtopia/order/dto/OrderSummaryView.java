@@ -16,6 +16,7 @@ import java.time.Instant;
  * @param thumbnailUrl 商品主图（Story 3.9 电商卡片；其余 4 类恒 null）
  * @param itemTitle    首个商品名 + 规格（电商；其余 4 类恒 null）
  * @param itemCount    件数（电商，多商品时前端展示「等 N 件」；其余 4 类恒 null）
+ * @param starterPackTier V1.5.0 gift-pack：礼包档位 1 / 2 / 3（仅 {@code STARTER_PACK}；其余恒 null）
  */
 public record OrderSummaryView(
         String orderType,
@@ -28,7 +29,16 @@ public record OrderSummaryView(
         Instant createdAt,
         String thumbnailUrl,
         String itemTitle,
-        Integer itemCount) {
+        Integer itemCount,
+        Integer starterPackTier) {
+
+    /** Story 3.9 的 11 参形态（电商映射器不改）：无礼包档位。 */
+    public OrderSummaryView(String orderType, String orderToken, String displayNo, String statusCode,
+            String statusColor, Long amount, String payChannel, Instant createdAt, String thumbnailUrl,
+            String itemTitle, Integer itemCount) {
+        this(orderType, orderToken, displayNo, statusCode, statusColor, amount, payChannel, createdAt, thumbnailUrl,
+                itemTitle, itemCount, null);
+    }
 
     /**
      * 既有 4 类的 8 参构造（Story 3.9 追加字段时保留）。
@@ -41,6 +51,6 @@ public record OrderSummaryView(
             String statusCode, String statusColor, Long amount, String payChannel,
             Instant createdAt) {
         this(orderType, orderToken, displayNo, statusCode, statusColor, amount, payChannel,
-                createdAt, null, null, null);
+                createdAt, null, null, null, null);
     }
 }

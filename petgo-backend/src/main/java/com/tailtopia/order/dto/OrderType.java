@@ -22,5 +22,7 @@ public enum OrderType {
      */
     TAILSONALITY,
     PASSPORT_SNAP,
-    BOARDING_PASS
+    BOARDING_PASS,
+    /** V1.5.0 gift-pack 超值礼包（D-26）。🔴 末尾追加。 */
+    STARTER_PACK
 }
