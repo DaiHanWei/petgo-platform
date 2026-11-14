@@ -16,9 +16,9 @@
                 <td class="nowrap" th:text="${p.displayNo != null ? p.displayNo : p.publicToken}">no</td></tr>
             <tr><th th:text="#{admin.common.userId}">用户 ID</th><td th:text="${p.userId}">0</td></tr>
             <tr><th th:text="#{admin.payments.col.purpose}">用途</th>
-                <td><span th:text="#{'admin.payments.purpose.' + ${p.purpose}}">兽医咨询</span><!--/* V1.5.0 gift-pack Story 5-2（L 泳道）：礼包拼「 · 档 n」 */--><span
-                        th:if="${p.purpose == 'STARTER_PACK' and @starterPackAdminView.tierOfIntentToken(p.publicToken) != null}"
-                        th:text="' · ' + #{admin.v150.valuePack.tierLabel(${@starterPackAdminView.tierOfIntentToken(p.publicToken)})}"> · 档 3</span></td></tr>
+                <td th:with="packTier=${p.purpose == 'STARTER_PACK'} ? ${@starterPackAdminView.tierOfIntentToken(p.publicToken)} : null"><span
+                        th:text="#{'admin.payments.purpose.' + ${p.purpose}}">兽医咨询</span><!--/* V1.5.0 gift-pack Story 5-2（L 泳道）：礼包拼「 · 档 n」 */--><span
+                        th:if="${packTier != null}" th:text="' · ' + #{admin.v150.valuePack.tierLabel(${packTier})}"> · 档 3</span></td></tr>
             <tr><th th:text="#{admin.common.channel}">渠道</th><td th:text="${p.channel}">QRIS</td></tr>
             <tr><th th:text="#{admin.common.amount}">金额</th>
                 <td th:text="${p.currency} + ' ' + ${#numbers.formatInteger(p.amount, 1, 'COMMA')}">IDR 0</td></tr>

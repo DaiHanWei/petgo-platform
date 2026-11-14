@@ -10,13 +10,19 @@
 <body>
 <div th:fragment="top(oob)" id="user-entitlements-top" th:with="et=${entitlementsTab}"
      th:attr="hx-swap-oob=${oob} ? 'outerHTML' : null">
+    <!--/* 空态（原线上卡，5-2 复审 #2 挪进本片段）：补发后 top oob 刷新，空态随之消失。需要宿主 model purchases。 */-->
+    <div class="card card-full ud-card ud-empty"
+         th:if="${(purchases == null or purchases.isEmpty()) and (et == null or et.isEmpty())}">
+        <p th:text="#{admin.v132.users.purchases.emptyTitle}">该用户还没有任何已购解锁</p>
+        <p class="muted" th:text="#{admin.v132.users.purchases.emptyNote}">KTP 高清、护照快照、登机牌、Tailsonality 结果、超值礼包均未购买，也没有免费次数。</p>
+    </div>
     <th:block th:if="${et != null}">
         <div class="card card-full ud-card" th:if="${!#lists.isEmpty(et.packs())}" data-ent-packs>
             <h3 class="ud-pc-title"><span th:text="#{admin.v150.valuePack.drawer.packs}">超值礼包</span>
                 <span class="badge badge-neutral" th:text="${#lists.size(et.packs())}">1</span></h3>
             <table class="ud-table ud-pc-table">
                 <thead><tr><th th:text="#{admin.v150.valuePack.drawer.col.tier}">档位</th>
-                    <th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">时间</th>
+                    <th class="num" th:text="#{admin.v140.petSlots.purchases.col.time}">时间（WIB）</th>
                     <th th:text="#{admin.v140.petSlots.purchases.col.channel}">方式</th>
                     <th class="num" th:text="#{admin.v140.petSlots.purchases.col.amount}">金额</th></tr></thead>
                 <tbody><tr th:each="pk : ${et.packs()}">
@@ -49,7 +55,7 @@
     <div class="card card-full ud-card" th:if="${et != null and !#lists.isEmpty(et.history())}" data-ent-history>
         <h3 class="ud-pc-title" th:text="#{admin.v150.valuePack.drawer.history}">免费次数记录</h3>
         <table class="ud-table ud-pc-table">
-            <thead><tr><th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">时间</th>
+            <thead><tr><th class="num" th:text="#{admin.v140.petSlots.purchases.col.time}">时间（WIB）</th>
                 <th th:text="#{admin.v150.valuePack.drawer.col.type}">类型</th>
                 <th th:text="#{admin.v150.valuePack.drawer.col.change}">变动 / 来源 / 用途</th></tr></thead>
             <tbody><tr th:each="h : ${et.history()}">

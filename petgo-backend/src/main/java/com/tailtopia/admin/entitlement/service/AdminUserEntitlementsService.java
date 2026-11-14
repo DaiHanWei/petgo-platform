@@ -152,7 +152,7 @@ public class AdminUserEntitlementsService {
                 sourceKey = i.source() == null ? null : "admin.v150.valuePack.history.source." + i.source();
                 sourceArg = switch (i.source() == null ? "" : i.source()) {
                     case "PACK" -> i.packTier() == null ? "?" : String.valueOf(i.packTier());
-                    case "ACTIVITY" -> i.labelId() == null ? "—" : i.labelId();
+                    case "ACTIVITY" -> activityLabel(i);
                     case "ADMIN" -> reasons.getOrDefault(row.id(), "—");
                     default -> "";
                 };
@@ -165,6 +165,14 @@ public class AdminUserEntitlementsService {
                     useKey, useArg));
         }
         return List.copyOf(out);
+    }
+
+    /** 活动名快照按后台当前语言取：印尼语 → labelId，其余 → labelEn；缺一方回落另一方（5-2 复审 #7）。 */
+    private static String activityLabel(EntitlementHistoryPage.Item i) {
+        boolean id = "id".equals(org.springframework.context.i18n.LocaleContextHolder.getLocale().getLanguage());
+        String first = id ? i.labelId() : i.labelEn();
+        String second = id ? i.labelEn() : i.labelId();
+        return first != null ? first : (second != null ? second : "—");
     }
 
     /** 类型文案键后缀：KTP 模板 → {@code KTP_HD}（配 {@code template}）、任意款 → {@code KTP_HD_ANY}，其余同名。 */

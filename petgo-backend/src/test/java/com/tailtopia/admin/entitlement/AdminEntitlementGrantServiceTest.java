@@ -37,6 +37,7 @@ class AdminEntitlementGrantServiceTest {
     private EntitlementCreditService credits;
     private AdminAuditService audit;
     private AdminEntitlementGrantService service;
+    private org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
 
     @BeforeEach
     void setUp() {
@@ -47,7 +48,10 @@ class AdminEntitlementGrantServiceTest {
         User u = mock(User.class);
         when(accounts.findUserById(7L)).thenReturn(Optional.of(u));
         when(deletions.findByUserId(7L)).thenReturn(Optional.empty());
-        service = new AdminEntitlementGrantService(credits, accounts, deletions, audit);
+        jdbc = mock(org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate.class);
+        when(jdbc.queryForList(anyString(), any(org.springframework.jdbc.core.namedparam.SqlParameterSource.class)))
+                .thenReturn(java.util.List.of());
+        service = new AdminEntitlementGrantService(credits, accounts, deletions, audit, jdbc);
     }
 
     private void rejected(CreditType type, int qty, String reason, String token) {
@@ -87,5 +91,13 @@ class AdminEntitlementGrantServiceTest {
         when(credits.grant(any())).thenReturn(new GrantResult(1L, Instant.EPOCH, true));
         assertThat(service.grant(7L, CreditType.GIFT_1K, 3, "补偿", TOKEN, 3L).replayed()).isTrue();
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void tokenReusedForAnotherUserOrTypeIsRejected() {
+        when(jdbc.queryForList(anyString(), any(org.springframework.jdbc.core.namedparam.SqlParameterSource.class)))
+                .thenReturn(java.util.List.of(java.util.Map.of("user_id", 8L, "credit_type", "GIFT_1K", "quantity", 3)));
+        rejected(CreditType.GIFT_1K, 3, "补偿", TOKEN);
+        verify(credits, never()).grant(any());
     }
 }

@@ -35,13 +35,16 @@ public class AdminEntitlementGrantService {
     private final AccountQueryService accounts;
     private final AccountDeletionRepository deletions;
     private final AdminAuditService audit;
+    private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
 
     public AdminEntitlementGrantService(EntitlementCreditService credits, AccountQueryService accounts,
-            AccountDeletionRepository deletions, AdminAuditService audit) {
+            AccountDeletionRepository deletions, AdminAuditService audit,
+            org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc) {
         this.credits = credits;
         this.accounts = accounts;
         this.deletions = deletions;
         this.audit = audit;
+        this.jdbc = jdbc;
     }
 
     /** 补发结果（{@code replayed} = 同 token 重放，未重复发放 / 审计）。 */
@@ -69,8 +72,22 @@ public class AdminEntitlementGrantService {
         }
         User target = accounts.findUserById(userId)
                 .orElseThrow(() -> AppException.notFound("用户不存在").code("admin.err.user.notFound"));
-        if (target.getDeletedAt() != null || deletions.findByUserId(userId).isPresent()) {
+        if (target.getDeletedAt() != null || deletions.findByUserId(userId).isPresent()
+                || target.getAccountType() == com.tailtopia.auth.domain.AccountType.VIRTUAL) {
+            // 虚拟号同样不能收次数（发放口会 422 entitlement-user-inactive，这里先给后台文案，5-2 复审 #5）
             throw AppException.validation("该账号已注销，不可补发").code("admin.err.entitlement.userDeleted");
+        }
+        // 同一 token 只认「同一用户、同一类型、同一次数」的重放；拿去给别的用户 / 改类型 / 改次数 → 请刷新换新 token
+        // （发放口按 (idemKey, type) 幂等、不分用户，跨用户复用会静默不发，5-2 复审 #1 / #4）。
+        for (java.util.Map<String, Object> prior : jdbc.queryForList(
+                "SELECT user_id, credit_type, quantity FROM entitlement_credits WHERE idem_key = :k",
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("k", "ADMIN:" + token))) {
+            boolean same = ((Number) prior.get("user_id")).longValue() == userId
+                    && type.wire().equals(prior.get("credit_type"))
+                    && ((Number) prior.get("quantity")).intValue() == quantity;
+            if (!same) {
+                throw AppException.conflict("缺少幂等标识，请刷新页面后重试").code("admin.err.entitlement.missingToken");
+            }
         }
         GrantResult g = credits.grant(new GrantCommand(userId, type, quantity, CreditSource.ADMIN, token,
                 "ADMIN:" + token, null, null, adminId, r));

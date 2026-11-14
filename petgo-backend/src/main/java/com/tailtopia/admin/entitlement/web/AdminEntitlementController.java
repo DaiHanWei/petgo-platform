@@ -38,12 +38,14 @@ public class AdminEntitlementController {
     private final AdminEntitlementGrantService grants;
     private final AdminUserEntitlementsService tabs;
     private final Messages msg;
+    private final com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases;
 
     public AdminEntitlementController(AdminEntitlementGrantService grants, AdminUserEntitlementsService tabs,
-            Messages msg) {
+            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases) {
         this.grants = grants;
         this.tabs = tabs;
         this.msg = msg;
+        this.purchases = purchases;
     }
 
     @PostMapping("/admin/users/{userId}/entitlements/grant")
@@ -91,6 +93,7 @@ public class AdminEntitlementController {
         model.addAttribute("entitlementGrantToken", UUID.randomUUID().toString());
         model.addAttribute("entitlementGrantTypes", AdminUserEntitlementsService.GRANTABLE);
         model.addAttribute("entitlementUserId", userId);
+        model.addAttribute("purchases", purchases.forUser(userId)); // top 片段的空态判定要用
     }
 
     static CreditType parseType(String raw) {
