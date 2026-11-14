@@ -76,4 +76,13 @@ class GrowthIdemKeysTest {
         assertThat(GrowthIdemKeys.reverse(Long.MAX_VALUE, "REFUND:" + "r".repeat(64)).length())
                 .isLessThanOrEqualTo(GrowthIdemKeys.MAX_LENGTH);
     }
+
+    /** V1.5.0 onboarding-recall Story 2.4 · AC5：新手毕业补算键，与迁移 SQL 拼法一致、与其他补算前缀不撞。 */
+    @org.junit.jupiter.api.Test
+    void backfillNewbieKey() {
+        org.assertj.core.api.Assertions.assertThat(GrowthIdemKeys.backfillNewbie(7L)).isEqualTo("BACKFILL150:7:LULUS_PEMULA");
+        org.assertj.core.api.Assertions.assertThat(GrowthIdemKeys.backfillNewbie(7L))
+                .isNotEqualTo(GrowthIdemKeys.backfillAccountMilestone(7L, "LULUS_PEMULA"))
+                .isNotEqualTo(GrowthIdemKeys.milestoneAccount(7L, "LULUS_PEMULA"));
+    }
 }

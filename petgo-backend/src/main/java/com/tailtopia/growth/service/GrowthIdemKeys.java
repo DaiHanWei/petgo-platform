@@ -116,6 +116,14 @@ public final class GrowthIdemKeys {
         return "BACKFILL142:" + userId + ":" + flagKey;
     }
 
+    /**
+     * 新手毕业存量补算（V1.5.0 onboarding-recall Story 2.4 · OR-12；迁移 V20261115_0320 里以 SQL 写同一格式）：
+     * {@code BACKFILL150:{u}:LULUS_PEMULA}，按账号一次。前缀与 {@code BACKFILL:} / {@code BACKFILL142:} 不同，互不冲突。
+     */
+    public static String backfillNewbie(long userId) {
+        return "BACKFILL150:" + userId + ":LULUS_PEMULA";
+    }
+
     /** 后台单个调整 / 运营活动（Story 4.2）：{@code ADMIN:{grantToken}}，token 为页面渲染时生成的一次性 UUID。 */
     public static String admin(String grantToken) {
         return "ADMIN:" + grantToken;
