@@ -93,6 +93,8 @@ class PetNotifyMigrationTest {
         Set<String> enumAfterShop = new LinkedHashSet<>(now);
         enumAfterShop.add("COUPON_EXPIRING");
         enumAfterShop.add("SHOP_ORDER_REORDERED");
+        // V1.5.0 地基 Story 0.1 又加一批（V20261114_1000 重建）
+        enumAfterShop.addAll(V150NotificationTypes.ADDED);
         assertThat(Arrays.stream(NotificationType.values()).map(Enum::name)
                 .collect(Collectors.toSet())).isEqualTo(enumAfterShop);
     }

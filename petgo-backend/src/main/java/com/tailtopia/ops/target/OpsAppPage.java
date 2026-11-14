@@ -12,5 +12,12 @@ public enum OpsAppPage {
     PUBLISH,
     TOKO,
     KNOW_YOUR_PET,
-    HEALTH
+    HEALTH,
+    /**
+     * V1.5.0 超值礼包页（地基 Story 0.1 占位，只往后加）。App 跳转与停售 toast 由 {@code feat/1.5.0-starter-pack} 实现；
+     * 旧版 App 不认识本值 → 解析为空、不跳转（{@code ops_target.dart} fromWire 返回 null）。
+     */
+    STARTER_PACK,
+    /** V1.5.0 宠物类型页（地基 Story 0.1 占位，只往后加）。App 跳转由 {@code feat/1.5.0-pet-species} 实现。 */
+    PET_SPECIES
 }

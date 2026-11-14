@@ -47,14 +47,41 @@ public enum PushCategory {
             case CONTENT_MENTIONED -> MENTION;
             // V1.4.2：被追更与被关注同归「新粉丝」
             case USER_FOLLOWED, PET_FOLLOWED -> FOLLOWER;
-            case PET_DIARY_POSTED -> PET_DIARY;
+            // V1.5.0 推送与召回：关注更新并入「追更宠物」
+            case PET_DIARY_POSTED, USER_POST_PUBLISHED -> PET_DIARY;
             case PET_GIFT_RECEIVED -> GIFT;
-            case PET_BIRTHDAY, COMPANION_ANNIVERSARY -> PET_REMINDER;
+            case PET_BIRTHDAY, COMPANION_ANNIVERSARY,
+                    // V1.5.0 健康记录提醒：23 种提醒全归「宠物提醒」
+                    HEALTH_VACCINE_D_MINUS_7,
+                    HEALTH_VACCINE_D_DAY,
+                    HEALTH_VACCINE_D_PLUS_7,
+                    HEALTH_FIRST_VACCINE,
+                    HEALTH_DEWORM_INTERNAL_D_DAY,
+                    HEALTH_DEWORM_EXTERNAL_D_DAY,
+                    HEALTH_DEWORM_FLEA_WORM_D_DAY,
+                    HEALTH_DEWORM_HEARTWORM_D_DAY,
+                    HEALTH_DEWORM_INTERNAL_D_PLUS_3,
+                    HEALTH_DEWORM_EXTERNAL_D_PLUS_3,
+                    HEALTH_DEWORM_LEGACY_D_DAY,
+                    HEALTH_DEWORM_LEGACY_D_PLUS_3,
+                    HEALTH_FIRST_DEWORM,
+                    HEALTH_VET_VISIT_D_MINUS_1,
+                    HEALTH_VET_VISIT_D_DAY,
+                    HEALTH_STITCH_CHECK,
+                    HEALTH_HEAT_DOG_D_MINUS_7,
+                    HEALTH_PYOMETRA_WATCH,
+                    HEALTH_HEAT_CAT_SECOND,
+                    HEALTH_HEAT_MALE_FIRST,
+                    HEALTH_SPAY_NEUTER_SUGGESTION,
+                    HEALTH_CHECKUP,
+                    HEALTH_CUSTOM_D_DAY -> PET_REMINDER;
             case MILESTONE_NODE, MILESTONE_SM_NODE, GROWTH_LEVEL_UP -> ACHIEVEMENT;
             case OPS_ANNOUNCEMENT, LIFECYCLE_D1, LIFECYCLE_D3, LIFECYCLE_D7, LIFECYCLE_WINBACK,
                     REPURCHASE_FOOD_LOW, CSAT_SURVEY,
                     // V1.4.2 shop：券快过期提醒归「促销与活动」（可关）
-                    COUPON_EXPIRING -> PROMO;
+                    COUPON_EXPIRING,
+                    // V1.5.0 超值礼包免费次数快到期 / 运营活动到账与获奖
+                    PACK_CREDIT_EXPIRING, OPS_ACTIVITY_REWARDED, OPS_ACTIVITY_RANK_WON -> PROMO;
             // 订单与支付（V1.4.2 shop：迟到款已重新下单）
             case SHOP_ORDER_SHIPPED, SHOP_ORDER_EXCEPTION, SHOP_RETURN_UPDATED, SHOP_ORDER_REORDERED, REFUND_REJECTED,
                     PET_SLOT_EXPIRING, PET_SLOT_EXPIRED, GIFT_UNDELIVERED_REFUND,

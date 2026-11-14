@@ -38,4 +38,15 @@ class ClientAppVersionTest {
         assertThat(ClientAppVersion.isV142OrLater(null)).isFalse();
         assertThat(ClientAppVersion.isV142OrLater("abc")).isFalse();
     }
+
+    @Test
+    void v150FromHeaderLegacyOtherwise() {
+        assertThat(ClientAppVersion.isV150OrLater("1.5.0")).isTrue();
+        assertThat(ClientAppVersion.isV150OrLater("1.5.0-stag")).isTrue();
+        assertThat(ClientAppVersion.isV150OrLater("1.10.0")).isTrue();
+        assertThat(ClientAppVersion.isV150OrLater("1.4.2")).isFalse();
+        assertThat(ClientAppVersion.isV150OrLater("1.4.10")).isFalse();
+        assertThat(ClientAppVersion.isV150OrLater(null)).isFalse();
+        assertThat(ClientAppVersion.isV150OrLater("")).isFalse();
+    }
 }

@@ -93,10 +93,11 @@ class MentionNotifyTest {
     }
 
     @Test
-    void 电商线两值进了最新重建迁移() throws IOException {
+    void 电商线两值与V150地基值都进了最新重建迁移() throws IOException {
         // 防止新迁移因格式问题没被识别为「最后一条」、让旧文件冒充最新重建而空转。
-        assertThat(lastRebuildMigration().getFileName().toString()).startsWith("V20261105_1620__");
-        assertThat(lastRebuiltTypeValues()).contains("COUPON_EXPIRING", "SHOP_ORDER_REORDERED");
+        assertThat(lastRebuildMigration().getFileName().toString()).startsWith("V20261114_1000__");
+        assertThat(lastRebuiltTypeValues()).contains("COUPON_EXPIRING", "SHOP_ORDER_REORDERED")
+                .containsAll(com.tailtopia.notify.V150NotificationTypes.ADDED);
     }
 
     @Test

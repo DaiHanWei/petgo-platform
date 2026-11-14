@@ -1,0 +1,8 @@
+# V1.5.0 集成分支 dev_1.5.0 的总表：地基 + 各会话入口（各会话的 story 顺序见各自的 sprint-status-v1.5.0-<主题>.yaml）
+generated: 2026-11-14
+project: TailTopia
+story_location: _bmad-output/implementation-artifacts/v1.5.0
+
+development_status:
+  epic-0: done
+  0-1-六会话共用地基: done

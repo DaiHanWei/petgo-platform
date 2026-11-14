@@ -419,6 +419,19 @@ public class AccountQueryService {
         return users.recordActiveDay(userId, now.atZone(WIB).toLocalDate()) == 1;
     }
 
+    /**
+     * 记下最后上报的 App 版本（V1.5.0 地基 Story 0.1，推送版本门槛用，见 {@code AppVersionGate}）。
+     * 空头不写；超长截到 32 字符。独立事务，理由同 {@link #touchLastActive}。
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void touchAppVersion(long userId, String header) {
+        if (header == null || header.isBlank()) {
+            return;
+        }
+        String v = header.strip();
+        users.touchLastAppVersion(userId, v.length() > 32 ? v.substring(0, 32) : v);
+    }
+
     /** 日报切日时区（运营在雅加达）。 */
     private static final java.time.ZoneId WIB = com.tailtopia.shared.schedule.ScheduleWindow.WIB;
 

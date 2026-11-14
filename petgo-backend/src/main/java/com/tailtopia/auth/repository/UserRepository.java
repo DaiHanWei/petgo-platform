@@ -242,6 +242,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("dayStart") Instant dayStart);
 
     /**
+     * 记下最后上报的 App 版本（V1.5.0 地基 Story 0.1）。与库里相同时 WHERE 不命中、不产生写；
+     * native 刻意不走 {@code @PreUpdate}，不动 {@code updated_at}（同 {@link #touchLastActiveAt}）。
+     */
+    @Modifying
+    @Query(value = "UPDATE users SET last_app_version = :version "
+            + "WHERE id = :userId AND last_app_version IS DISTINCT FROM :version", nativeQuery = true)
+    int touchLastAppVersion(@Param("userId") long userId, @Param("version") String version);
+
+    /** 批量取最后上报的 App 版本：每行 {@code [id, last_app_version]}，版本可空；不存在的 id 不返回。 */
+    @Query(value = "SELECT id, last_app_version FROM users WHERE id IN (:userIds)", nativeQuery = true)
+    List<Object[]> findLastAppVersions(@Param("userIds") java.util.Collection<Long> userIds);
+
+    /**
      * 记一笔「某人某个 WIB 自然日来过」（日报 DAU 口径，见 V20260925_1330）。
      * 同日重复调用命中主键冲突即跳过 —— 只是一次索引查找，不产生写。
      */

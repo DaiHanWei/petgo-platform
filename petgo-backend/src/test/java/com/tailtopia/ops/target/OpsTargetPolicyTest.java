@@ -49,12 +49,15 @@ class OpsTargetPolicyTest {
 
     @Test
     void appPage() {
-        for (String page : new String[] {"HOME", "PUBLISH", "TOKO", "KNOW_YOUR_PET", "HEALTH"}) {
+        for (String page : new String[] {"HOME", "PUBLISH", "TOKO", "KNOW_YOUR_PET", "HEALTH",
+                // V1.5.0 地基 Story 0.1
+                "STARTER_PACK", "PET_SPECIES"}) {
             assertThat(OpsTargetPolicy.isWellFormed(OpsTargetType.APP_PAGE, page)).as(page).isTrue();
         }
-        assertThat(OpsAppPage.values()).hasSize(5);
+        assertThat(OpsAppPage.values()).containsExactly(OpsAppPage.HOME, OpsAppPage.PUBLISH, OpsAppPage.TOKO,
+                OpsAppPage.KNOW_YOUR_PET, OpsAppPage.HEALTH, OpsAppPage.STARTER_PACK, OpsAppPage.PET_SPECIES);
         assertThat(OpsTargetPolicy.isWellFormed(OpsTargetType.APP_PAGE, "home")).as("小写非法").isFalse();
-        assertThat(OpsTargetPolicy.isWellFormed(OpsTargetType.APP_PAGE, "SETTINGS")).as("非 5 值").isFalse();
+        assertThat(OpsTargetPolicy.isWellFormed(OpsTargetType.APP_PAGE, "SETTINGS")).as("不在枚举里").isFalse();
     }
 
     @Test

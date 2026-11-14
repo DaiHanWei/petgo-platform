@@ -2,6 +2,7 @@ package com.tailtopia.auth.web;
 
 import com.tailtopia.auth.event.UserDailyActiveEvent;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.profile.service.ClientAppVersion;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -31,6 +32,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *   <li><b>放在链后、异常全吞</b>：活跃刷新失败最多让召回晚一轮；让用户的请求 500 是真事故。</li>
  *   <li><b>当天首次活跃发 {@link UserDailyActiveEvent}</b>（V1.4.0 ① Story 1.1，每日登录成长值）：
  *       仅当 {@code touchLastActive} 返回 true；发布失败同样吞掉。</li>
+ *   <li><b>记最后上报的 App 版本</b>（V1.5.0 地基 Story 0.1）：每个请求都调，同值不写库；失败吞掉。</li>
  * </ol>
  */
 @Component
@@ -66,6 +68,12 @@ public class UserActivityFilter extends OncePerRequestFilter {
                     }
                 } catch (Exception ignored) {
                     // 刷新失败绝不可影响业务响应。
+                }
+                try {
+                    // V1.5.0 地基 Story 0.1：最后上报的 App 版本（推送版本门槛）
+                    accounts.touchAppVersion(userId, request.getHeader(ClientAppVersion.HEADER));
+                } catch (Exception ignored) {
+                    // 同上：记不上版本最多让新推送晚一天放给这个人。
                 }
             }
         }

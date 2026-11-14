@@ -267,5 +267,115 @@ public enum NotificationType {
      *
      * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（见 {@code V20261105_1620__rebuild_ck_notifications_type_shop_coupon_reorder.sql}）。
      */
-    SHOP_ORDER_REORDERED
+    SHOP_ORDER_REORDERED,
+
+    // ---------------------------------------------------------------- V1.5.0 地基 Story 0.1
+    // 以下 27 个值由地基一次占位（CROSS-STORY-DECISIONS「2026-11-14 V1.5.0 六会话共用地基」），
+    // 文案、触发与路由由各线实现；各线只用、不改名、不再加删。
+
+    /**
+     * V1.5.0 健康记录提醒：提醒目录（PRD 附录 C）{@code VACCINE_D_MINUS_7} → 宠物主人。推送分类「宠物提醒」（{@code PET_REMINDER}）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.5.0-health-reminder} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261114_1000__v150_rebuild_ck_notifications_type.sql}）；V1.5.0 六个会话不再改该约束。
+     */
+    HEALTH_VACCINE_D_MINUS_7,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code VACCINE_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_VACCINE_D_DAY,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code VACCINE_D_PLUS_7}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_VACCINE_D_PLUS_7,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code FIRST_VACCINE}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_FIRST_VACCINE,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_INTERNAL_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_INTERNAL_D_DAY,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_EXTERNAL_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_EXTERNAL_D_DAY,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_FLEA_WORM_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_FLEA_WORM_D_DAY,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_HEARTWORM_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_HEARTWORM_D_DAY,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_INTERNAL_D_PLUS_3}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_INTERNAL_D_PLUS_3,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_EXTERNAL_D_PLUS_3}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_EXTERNAL_D_PLUS_3,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_LEGACY_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_LEGACY_D_DAY,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code DEWORM_LEGACY_D_PLUS_3}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_DEWORM_LEGACY_D_PLUS_3,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code FIRST_DEWORM}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_FIRST_DEWORM,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code VET_VISIT_D_MINUS_1}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_VET_VISIT_D_MINUS_1,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code VET_VISIT_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_VET_VISIT_D_DAY,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code STITCH_CHECK}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_STITCH_CHECK,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code HEAT_DOG_D_MINUS_7}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_HEAT_DOG_D_MINUS_7,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code PYOMETRA_WATCH}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_PYOMETRA_WATCH,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code HEAT_CAT_SECOND}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_HEAT_CAT_SECOND,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code HEAT_MALE_FIRST}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_HEAT_MALE_FIRST,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code SPAY_NEUTER_SUGGESTION}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_SPAY_NEUTER_SUGGESTION,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code CHECKUP}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_CHECKUP,
+
+    /** V1.5.0 健康记录提醒：提醒目录 {@code CUSTOM_D_DAY}（同 {@link #HEALTH_VACCINE_D_MINUS_7} 的约定）。 */
+    HEALTH_CUSTOM_D_DAY,
+
+    /**
+     * V1.5.0 推送与召回（FR-180）：我关注的人发了新帖 → 关注者。推送分类「追更宠物」（{@code PET_DIARY}）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.5.0-push-recall} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261114_1000__v150_rebuild_ck_notifications_type.sql}）；V1.5.0 六个会话不再改该约束。
+     */
+    USER_POST_PUBLISHED,
+
+    /**
+     * V1.5.0 超值礼包：免费权益次数到期前 7 天 → 本人。只写通知中心、不发推送；推送分类按「促销与活动」（{@code PROMO}）归类。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.5.0-starter-pack} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261114_1000__v150_rebuild_ck_notifications_type.sql}）；V1.5.0 六个会话不再改该约束。
+     */
+    PACK_CREDIT_EXPIRING,
+
+    /**
+     * V1.5.0 运营活动规则引擎（§3.3）：参与即奖的活动奖励到账 → 本人。推送分类「促销与活动」（{@code PROMO}）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.5.0-ops-activity} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261114_1000__v150_rebuild_ck_notifications_type.sql}）；V1.5.0 六个会话不再改该约束。
+     */
+    OPS_ACTIVITY_REWARDED,
+
+    /**
+     * V1.5.0 运营活动规则引擎（§3.5）：排名活动获奖 → 本人，点推送直达帖子。推送分类「促销与活动」（{@code PROMO}）。
+     *
+     * <p>本值由 Story 0.1 地基占位，文案与触发由 {@code feat/1.5.0-ops-activity} 实现。
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261114_1000__v150_rebuild_ck_notifications_type.sql}）；V1.5.0 六个会话不再改该约束。
+     */
+    OPS_ACTIVITY_RANK_WON
 }

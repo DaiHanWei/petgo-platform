@@ -23,6 +23,9 @@ public final class ClientAppVersion {
      */
     private static final int[] V142_MIN = {1, 4, 2};
 
+    /** V1.5.0 客户端：健康提醒 / 关注更新 / 召回推送的版本门槛（地基 Story 0.1，见 {@code AppVersionGate}）。 */
+    private static final int[] V150_MIN = {1, 5, 0};
+
     private static final Pattern LEADING = Pattern.compile("^\\s*(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})");
 
     private ClientAppVersion() {
@@ -36,6 +39,11 @@ public final class ClientAppVersion {
     /** 客户端是否为 V1.4.2 及以上；缺头 / 解析不了按旧版（false）。 */
     public static boolean isV142OrLater(String header) {
         return atLeast(header, V142_MIN);
+    }
+
+    /** 客户端是否为 V1.5.0 及以上；缺头 / 空 / 解析不了按旧版（false）。 */
+    public static boolean isV150OrLater(String header) {
+        return atLeast(header, V150_MIN);
     }
 
     private static boolean atLeast(String header, int[] min) {

@@ -83,4 +83,26 @@ class UserActivityFilterTest {
         verify(accounts, never()).touchLastActive(anyLong(), any());
         verify(events, never()).publishEvent(any(Object.class));
     }
+
+    @Test
+    void appVersionHeaderIsRecordedEvenWhenActivityTouchFails() throws Exception {
+        loginAs("7", "ROLE_USER");
+        when(accounts.touchLastActive(eq(7L), any())).thenThrow(new IllegalStateException("db down"));
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/v1/feed");
+        req.setRequestURI("/api/v1/feed");
+        req.addHeader("X-App-Version", "1.5.0");
+
+        filter.doFilter(req, new MockHttpServletResponse(), mock(FilterChain.class));
+
+        verify(accounts).touchAppVersion(7L, "1.5.0");
+    }
+
+    @Test
+    void vetDoesNotRecordAppVersion() throws Exception {
+        loginAs("7", "ROLE_VET");
+
+        run();
+
+        verify(accounts, never()).touchAppVersion(anyLong(), any());
+    }
 }

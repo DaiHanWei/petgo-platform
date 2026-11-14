@@ -61,11 +61,39 @@ class PushCategoryTest {
             Map.entry(NEW_CONSULT_REQUEST, PushCategory.ORDER_ACCOUNT),
             Map.entry(CONSULT_CLOSED, PushCategory.ORDER_ACCOUNT),
             Map.entry(CONTENT_REVIEW_APPROVED, PushCategory.ORDER_ACCOUNT),
-            Map.entry(IDENTITY_REQUIRE_MODIFY, PushCategory.ORDER_ACCOUNT));
+            Map.entry(IDENTITY_REQUIRE_MODIFY, PushCategory.ORDER_ACCOUNT),
+            // V1.5.0 地基 Story 0.1
+            Map.entry(HEALTH_VACCINE_D_MINUS_7, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_VACCINE_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_VACCINE_D_PLUS_7, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_FIRST_VACCINE, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_INTERNAL_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_EXTERNAL_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_FLEA_WORM_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_HEARTWORM_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_INTERNAL_D_PLUS_3, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_EXTERNAL_D_PLUS_3, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_LEGACY_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_DEWORM_LEGACY_D_PLUS_3, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_FIRST_DEWORM, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_VET_VISIT_D_MINUS_1, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_VET_VISIT_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_STITCH_CHECK, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_HEAT_DOG_D_MINUS_7, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_PYOMETRA_WATCH, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_HEAT_CAT_SECOND, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_HEAT_MALE_FIRST, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_SPAY_NEUTER_SUGGESTION, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_CHECKUP, PushCategory.PET_REMINDER),
+            Map.entry(HEALTH_CUSTOM_D_DAY, PushCategory.PET_REMINDER),
+            Map.entry(USER_POST_PUBLISHED, PushCategory.PET_DIARY),
+            Map.entry(PACK_CREDIT_EXPIRING, PushCategory.PROMO),
+            Map.entry(OPS_ACTIVITY_REWARDED, PushCategory.PROMO),
+            Map.entry(OPS_ACTIVITY_RANK_WON, PushCategory.PROMO));
 
     @Test
     void everyTypeMapsToACategory() {
-        assertThat(NotificationType.values()).hasSize(43);
+        assertThat(NotificationType.values()).hasSize(70);
         for (NotificationType t : NotificationType.values()) {
             assertThat(PushCategory.of(t)).as(t.name()).isNotNull();
         }
@@ -90,11 +118,11 @@ class PushCategoryTest {
                 Map.entry(PushCategory.COMMENT, 2L),
                 Map.entry(PushCategory.MENTION, 1L),
                 Map.entry(PushCategory.FOLLOWER, 2L),
-                Map.entry(PushCategory.PET_DIARY, 1L),
+                Map.entry(PushCategory.PET_DIARY, 2L),
                 Map.entry(PushCategory.GIFT, 1L),
-                Map.entry(PushCategory.PET_REMINDER, 2L),
+                Map.entry(PushCategory.PET_REMINDER, 25L),
                 Map.entry(PushCategory.ACHIEVEMENT, 3L),
-                Map.entry(PushCategory.PROMO, 8L),
+                Map.entry(PushCategory.PROMO, 11L),
                 Map.entry(PushCategory.ORDER_ACCOUNT, 22L));
     }
 

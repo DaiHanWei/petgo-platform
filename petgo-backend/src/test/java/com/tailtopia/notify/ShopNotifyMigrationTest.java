@@ -66,8 +66,11 @@ class ShopNotifyMigrationTest {
 
     @Test
     void typesEqualEnum() throws IOException {
-        assertThat(types(REBUILD)).isEqualTo(Arrays.stream(NotificationType.values()).map(Enum::name)
-                .collect(Collectors.toSet()));
+        // V1.5.0 地基 Story 0.1 之后枚举又加了一批（V20261114_1000 重建），先减去再比
+        Set<String> enumBeforeV150 = Arrays.stream(NotificationType.values()).map(Enum::name)
+                .collect(Collectors.toSet());
+        enumBeforeV150.removeAll(V150NotificationTypes.ADDED);
+        assertThat(types(REBUILD)).isEqualTo(enumBeforeV150);
     }
 
     @Test
