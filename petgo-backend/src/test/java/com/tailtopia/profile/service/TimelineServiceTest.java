@@ -370,13 +370,16 @@ class TimelineServiceTest {
         when(healthProvider.getIfAvailable()).thenReturn(null);
         when(milestoneService.getProgress(anyLong(), eq(PetType.DOG)))
                 .thenReturn(new MilestoneService.MilestoneProgress(0L, 30));
-        when(giftShowcase.totalValueOfPet(42L)).thenReturn(53_000L);
+        // V1.5.0 gift-pack Story 1-4：同一条汇总 SQL 取总价值与个数
+        when(giftShowcase.summariesOf(java.util.List.of(42L))).thenReturn(java.util.Map.of(42L,
+                new com.tailtopia.gift.service.GiftShowcaseQuery.PetGiftSummary(53_000L, 7L, 2)));
 
         ArchiveStatsResponse resp = service.getStats(1L);
 
         assertThat(resp.giftTotalValue()).isEqualTo(53_000L);
+        assertThat(resp.giftCount()).isEqualTo(7L);
         assertThat(resp.consultCount()).isZero(); // consultCount 保留（旧版 App 仍在读）
-        verify(giftShowcase).totalValueOfPet(42L);
+        verify(giftShowcase).summariesOf(java.util.List.of(42L));
     }
 
     @Test

@@ -94,6 +94,12 @@ public class MultiPetGiftPetDirectory implements GiftPetDirectory {
         return List.copyOf(out);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> petNamesOfOwner(long ownerId, int limit) {
+        return petQuery.listByOwner(ownerId).stream().map(PetView::name).limit(limit).toList();
+    }
+
     private Optional<GiftPet> toGiftPet(PetView v, Map<Long, Optional<User>> ownerCache) {
         Optional<User> owner = ownerCache.computeIfAbsent(v.ownerId(), accounts::findAccountById);
         if (owner.isEmpty()) {

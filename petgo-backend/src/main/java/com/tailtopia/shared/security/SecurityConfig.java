@@ -426,6 +426,11 @@ public class SecurityConfig {
                         // 兽医 token 的 sub 与 users.id 撞号会被误判成主人 → 只给 USER。精确路径，不影响 /api/v1/pets/*/visitor/**。
                         .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gifts/supporters").hasRole("USER")
+                        // V1.5.0 gift-pack Story 1-4：逐笔列表 / Diary 礼物行 / 拆礼物 / 订单详情（主人判定同上，只给 USER）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gift-orders").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pets/*/gift-orders/preview").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/pets/*/gift-orders/open").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/gift-orders/*").hasRole("USER")
                         // V1.4.0 ④ Story 1.1：推送分类设置，仅 role=USER（controller 把 jwt.sub 当 users.id 用；
                         // 兽医 token 的 sub=vetId 与 users.id 撞号，落 anyRequest().authenticated() 会以同号用户名义读写推送设置）。精确路径，不写 /api/v1/me/** 通配。
                         .requestMatchers("/api/v1/me/push-settings").hasRole("USER")

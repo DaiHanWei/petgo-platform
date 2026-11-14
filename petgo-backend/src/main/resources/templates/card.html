@@ -277,10 +277,10 @@
                 <div class="l">Momen</div>
             </div>
             <div class="vr"></div>
-            <!--/* V1.4.0 gift：礼物总价值（Rp + 缩写数字 + rb / jt），始终渲染；「Rp」与单位 0.6 倍字号（.stub .n .u，UI 稿「定稿后修订」第 2 条）。
+            <!--/* V1.5.0 gift-pack Story 1-4（D-11）：礼物个数（Σ quantity，千分位按页面语言），始终渲染；布局不变。
                  CSS 注释会原样下发给用户（AC3 禁中文），说明只写在这条解析器级注释里。 */-->
             <div>
-                <div class="n" style="color:var(--green)"><span class="u">Rp</span><span th:text="${giftValueNumber}">0</span><span class="u" th:if="${giftValueUnit != null and !#strings.isEmpty(giftValueUnit)}" th:text="${giftValueUnit}">rb</span></div>
+                <div class="n" style="color:var(--green)" th:text="${giftCountText}">0</div>
                 <div class="l">Hadiah</div>
             </div>
             <div class="vr" th:if="${hasMilestones}"></div>

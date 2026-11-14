@@ -650,7 +650,7 @@ public class TimelineService {
         return new ArchiveStatsResponse(s.happyMomentCount(), s.consultCount(),
                 Math.max(0, s.milestoneCompleted() - h.completed()), Math.max(0, s.milestoneTotal() - h.total()),
                 s.healthRecordCount(), Math.max(0, s.milestoneUncelebrated() - h.uncelebrated()),
-                s.giftTotalValue(), s.followerCount());
+                s.giftTotalValue(), s.followerCount(), s.giftCount());
     }
 
     /** V1.4.0 multi-pet：指定宠物的统计栏（{@code petId} 为 null = 默认宠物）。 */
@@ -667,10 +667,13 @@ public class TimelineService {
         long uncelebrated = celebrationService.countUncelebrated(profile.getId());
         // V1.4.0 gift Story 2.1（AD-10）：礼物总价值 —— 按<b>这只宠物</b>算（不按主人汇总：多宠合入后会混算）。
         // 主人 / 站内访客 / 分享 token / H5 名片四处都出自这一句。
-        long giftTotalValue = giftShowcase.totalValueOfPet(profile.getId());
+        // V1.5.0 gift-pack Story 1-4（D-11）：同一条汇总 SQL 同时取总价值与个数（不多发查询）。
+        com.tailtopia.gift.service.GiftShowcaseQuery.PetGiftSummary gifts = giftShowcase
+                .summariesOf(java.util.List.of(profile.getId()))
+                .getOrDefault(profile.getId(), com.tailtopia.gift.service.GiftShowcaseQuery.PetGiftSummary.EMPTY);
         // V1.4.2 social-topic Story 1.1：追更人数从已取到的 profile 直读，不加查询。
         return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total(),
-                healthRecordCount, uncelebrated, giftTotalValue, profile.getFollowerCount());
+                healthRecordCount, uncelebrated, gifts.totalValue(), profile.getFollowerCount(), gifts.giftCount());
     }
 
     /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2 &gt; 场所打卡=3（V1.3.2）。 */

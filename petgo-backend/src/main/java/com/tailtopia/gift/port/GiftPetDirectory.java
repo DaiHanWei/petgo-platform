@@ -21,6 +21,14 @@ public interface GiftPetDirectory {
     List<GiftPet> petsOfPost(long postId);
 
     /**
+     * V1.5.0 gift-pack Story 1-4：某账号名下宠物名（含只读、不含已删），按建档时间，最多 {@code limit} 个
+     * （礼物详情「送礼人的宠物」）。默认空表——只有多宠实现给真值。
+     */
+    default List<String> petNamesOfOwner(long ownerId, int limit) {
+        return List.of();
+    }
+
+    /**
      * 收礼宠物视图。
      *
      * @param petId        宠物 id

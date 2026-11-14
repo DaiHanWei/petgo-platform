@@ -124,12 +124,9 @@ public class CardPageController {
         // 健康记录条数在投影层就没进来，本处即便想下发也没有可下发的东西。
         VisitorStats stats = visitors.stats(profile);
         model.addAttribute("happyCount", stats.happyMomentCount());
-        // V1.4.0 gift Story 2.1（AC6 · decision-log ③ S6）：票根第二列 Konsultasi → Hadiah（礼物总价值），始终显示。
-        // 数字与单位拆开下发，模板给「Rp」与「rb / jt」单独设 0.6 倍字号；缩写规则与 App 同一张用例表（IdrCompact）。
-        com.tailtopia.shared.format.IdrCompact.Parts gift =
-                com.tailtopia.shared.format.IdrCompact.parts(stats.giftTotalValue());
-        model.addAttribute("giftValueNumber", gift.number());
-        model.addAttribute("giftValueUnit", gift.unit());
+        // V1.5.0 gift-pack Story 1-4（D-11 · FR-192）：票根「Hadiah」列由礼物总价值改为礼物个数（Σ quantity），
+        // 整数千分位按页面语言（lang=id → 点号），不再出现「Rp」与 IdrCompact 单位；布局不变。
+        model.addAttribute("giftCountText", giftCountText(stats.giftCount()));
         model.addAttribute("milestoneCompleted", stats.milestoneCompleted());
         model.addAttribute("hasMilestones", stats.milestoneCompleted() > 0);
         // ② 里程碑收藏区（V1.1.6 Story 1.2）：完成数 / 总数 + 具名徽章 + 锁定位 + 「+N」。
@@ -371,5 +368,10 @@ public class CardPageController {
         public String getText() {
             return text;
         }
+    }
+
+    /** 礼物个数的页面显示（页面 lang=id：千分位点号，如 {@code 1.234}）。 */
+    static String giftCountText(long count) {
+        return java.text.NumberFormat.getIntegerInstance(java.util.Locale.forLanguageTag("id")).format(count);
     }
 }

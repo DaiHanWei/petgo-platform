@@ -285,7 +285,7 @@ public class VisitorProjectionService {
                 milestoneService.v142Share(profile.getId(), profile.getPetType());
         return new VisitorStats(s.happyMomentCount(), s.consultCount(),
                 Math.max(0, s.milestoneCompleted() - h.completed()), Math.max(0, s.milestoneTotal() - h.total()),
-                s.giftTotalValue(), s.followerCount());
+                s.giftTotalValue(), s.followerCount(), s.giftCount());
     }
 
     public VisitorStats stats(PetProfile profile) {
@@ -299,7 +299,9 @@ public class VisitorProjectionService {
                 // V1.4.0 gift Story 2.1：礼物总价值复用作者态同一次计算，不另写一份。
                 authorStats.giftTotalValue(),
                 // V1.4.2 social-topic Story 1.1：追更人数同样透传作者态那一份。
-                authorStats.followerCount());
+                authorStats.followerCount(),
+                // V1.5.0 gift-pack Story 1-4：礼物个数同样透传。
+                authorStats.giftCount());
         // healthRecordCount 到此为止，不进 VisitorStats。
     }
 

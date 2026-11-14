@@ -24,6 +24,8 @@ package com.tailtopia.profile.dto;
  *        ⚠️ {@code consultCount} <b>保留</b>：旧版 App 仍在读，不随统计卡换格删除
  * @param followerCount 追更这只宠物的人数（V1.4.2 social-topic Story 1.1 · D-8，{@code pet_profiles.follower_count} 直读）。
  *        访客态 {@code VisitorStats.followerCount} 同名同值
+ * @param giftCount 这只宠物收到的礼物个数（Σ quantity，已送达；V1.5.0 gift-pack Story 1-4 · D-11）：新版 App
+ *        Diary 去掉「Hadiah」格、H5 名片改显示个数。旧字段 {@code giftTotalValue} 保留、值不变（旧版 App 用）
  */
 public record ArchiveStatsResponse(
         long happyMomentCount,
@@ -33,5 +35,13 @@ public record ArchiveStatsResponse(
         long healthRecordCount,
         long milestoneUncelebrated,
         long giftTotalValue,
-        long followerCount) {
+        long followerCount,
+        long giftCount) {
+
+    /** V1.5.0 之前的 8 字段形状（{@code giftCount = 0}）。 */
+    public ArchiveStatsResponse(long happyMomentCount, long consultCount, long milestoneCompleted, int milestoneTotal,
+            long healthRecordCount, long milestoneUncelebrated, long giftTotalValue, long followerCount) {
+        this(happyMomentCount, consultCount, milestoneCompleted, milestoneTotal, healthRecordCount,
+                milestoneUncelebrated, giftTotalValue, followerCount, 0L);
+    }
 }

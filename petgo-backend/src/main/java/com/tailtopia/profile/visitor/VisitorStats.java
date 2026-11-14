@@ -29,6 +29,7 @@ package com.tailtopia.profile.visitor;
  *                           ⚠️ {@code consultCount} 保留给旧版 App，新版 App 中间格改显示本字段
  * @param followerCount      追更这只宠物的人数（V1.4.2 social-topic Story 1.1 · D-8）。与作者态
  *                           {@code ArchiveStatsResponse.followerCount} 同名同值
+ * @param giftCount          收到的礼物个数（Σ quantity，V1.5.0 gift-pack Story 1-4 · D-11）。与作者态同名同值
  */
 public record VisitorStats(
         long happyMomentCount,
@@ -36,5 +37,12 @@ public record VisitorStats(
         long milestoneCompleted,
         int milestoneTotal,
         long giftTotalValue,
-        long followerCount) {
+        long followerCount,
+        long giftCount) {
+
+    /** V1.5.0 之前的 6 字段形状（{@code giftCount = 0}）。 */
+    public VisitorStats(long happyMomentCount, long consultCount, long milestoneCompleted, int milestoneTotal,
+            long giftTotalValue, long followerCount) {
+        this(happyMomentCount, consultCount, milestoneCompleted, milestoneTotal, giftTotalValue, followerCount, 0L);
+    }
 }
