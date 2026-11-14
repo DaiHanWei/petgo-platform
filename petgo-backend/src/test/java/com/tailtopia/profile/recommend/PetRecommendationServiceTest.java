@@ -63,7 +63,7 @@ class PetRecommendationServiceTest {
         service = new PetRecommendationService(content, profiles, accounts, hideRelations, petFollows);
         when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(Set.of());
         when(hideRelations.hiddenEitherWay(anyLong(), anyCollection())).thenReturn(Set.of());
-        when(content.findLatestPublicCovers(anyCollection())).thenReturn(Map.of());
+        when(content.findLatestPublicCoverPosts(anyCollection())).thenReturn(Map.of());
         // 默认：这批 owner 全部有效（未注销、未封号）。
         when(accounts.activeIdsAmong(anyCollection())).thenAnswer(
                 inv -> new java.util.HashSet<>(inv.<java.util.Collection<Long>>getArgument(0)));
@@ -97,7 +97,7 @@ class PetRecommendationServiceTest {
                     id, NOW.minusSeconds(++offset * 60), 5L, 10L));
         }
         when(content.findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(), anyInt(),
-                org.mockito.ArgumentMatchers.any())).thenReturn(rows);
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(rows);
     }
 
     private void withProfiles(PetProfile... pets) {
@@ -128,7 +128,7 @@ class PetRecommendationServiceTest {
         ArgumentCaptor<Instant> since = ArgumentCaptor.forClass(Instant.class);
         ArgumentCaptor<Integer> minRecords = ArgumentCaptor.forClass(Integer.class);
         verify(content).findRecommendablePets(since.capture(), minRecords.capture(), anyInt(),
-                org.mockito.ArgumentMatchers.any());
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         assertThat(ChronoUnit.DAYS.between(since.getValue(), NOW)).isEqualTo(14);
         assertThat(minRecords.getValue()).isEqualTo(3);
     }
@@ -143,7 +143,7 @@ class PetRecommendationServiceTest {
 
         ArgumentCaptor<Integer> limit = ArgumentCaptor.forClass(Integer.class);
         verify(content).findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(),
-                limit.capture(), org.mockito.ArgumentMatchers.any());
+                limit.capture(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         assertThat(limit.getValue()).isGreaterThan(10);
     }
 
@@ -156,12 +156,12 @@ class PetRecommendationServiceTest {
         service.recommendFor(VIEWER, 10, NOW);
 
         verify(content, times(1)).findRecommendablePets(org.mockito.ArgumentMatchers.any(),
-                anyInt(), anyInt(), org.mockito.ArgumentMatchers.any());
+                anyInt(), anyInt(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         verify(profiles, times(1)).findAllById(anyCollection());
         verify(accounts, times(1)).activeIdsAmong(anyCollection());
         verify(hideRelations, times(1)).hiddenEitherWay(anyLong(), anyCollection());
         verify(petFollows, times(1)).followedAmong(anyLong(), anyCollection());
-        verify(content, times(1)).findLatestPublicCovers(anyCollection());
+        verify(content, times(1)).findLatestPublicCoverPosts(anyCollection());
     }
 
     @Test
@@ -288,7 +288,7 @@ class PetRecommendationServiceTest {
         ArgumentCaptor<Integer> poolSize = ArgumentCaptor.forClass(Integer.class);
         verify(content, org.mockito.Mockito.atLeastOnce())
                 .findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(),
-                        poolSize.capture(), org.mockito.ArgumentMatchers.any());
+                        poolSize.capture(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         assertThat(poolSize.getAllValues()).allSatisfy(v -> assertThat(v).isLessThan(1000));
     }
 
@@ -384,8 +384,8 @@ class PetRecommendationServiceTest {
         // 🔴 UI 稿 UX-DR15 专门点过：做成同一张图重复摆放是明显 bug。
         candidates(List.of(10L));
         withProfiles(pet(10L, 110L, "https://cdn/avatar.jpg", NOW));
-        when(content.findLatestPublicCovers(anyCollection()))
-                .thenReturn(Map.of(10L, "https://cdn/latest-post.jpg"));
+        when(content.findLatestPublicCoverPosts(anyCollection()))
+                .thenReturn(Map.of(10L, new ContentService.CoverPost(910L, "https://cdn/latest-post.jpg", 0L)));
 
         RecommendedPetResponse card = service.recommendFor(VIEWER, 10, NOW).getFirst();
         assertThat(card.avatarUrl()).startsWith("https://cdn/avatar.jpg?");
@@ -402,8 +402,8 @@ class PetRecommendationServiceTest {
     void 两张图都经服务端去EXIF且带缩放() {
         candidates(List.of(10L));
         withProfiles(pet(10L, 110L, "https://cdn/avatar.jpg", NOW));
-        when(content.findLatestPublicCovers(anyCollection()))
-                .thenReturn(Map.of(10L, "https://cdn/latest-post.jpg"));
+        when(content.findLatestPublicCoverPosts(anyCollection()))
+                .thenReturn(Map.of(10L, new ContentService.CoverPost(910L, "https://cdn/latest-post.jpg", 0L)));
 
         RecommendedPetResponse card = service.recommendFor(VIEWER, 10, NOW).getFirst();
         assertThat(card.avatarUrl()).isEqualTo(com.tailtopia.shared.media.AliyunOssClient
@@ -421,7 +421,7 @@ class PetRecommendationServiceTest {
         // AC1 的门槛里**没有**「必须有配图」这一条 —— 3 条公开记录全是纯文字的宠物照样推。
         candidates(List.of(10L));
         withProfiles(pet(10L, 110L, "a10", NOW));
-        when(content.findLatestPublicCovers(anyCollection())).thenReturn(Map.of());
+        when(content.findLatestPublicCoverPosts(anyCollection())).thenReturn(Map.of());
 
         RecommendedPetResponse card = service.recommendFor(VIEWER, 10, NOW).getFirst();
         assertThat(card.coverImageUrl()).isNull();
@@ -435,7 +435,7 @@ class PetRecommendationServiceTest {
         withProfiles(pet(10L, 110L, null, NOW), pet(20L, 120L, "a20", NOW));
         service.recommendFor(VIEWER, 10, NOW);
         ArgumentCaptor<java.util.Collection<Long>> ids = ArgumentCaptor.forClass(java.util.Collection.class);
-        verify(content).findLatestPublicCovers(ids.capture());
+        verify(content).findLatestPublicCoverPosts(ids.capture());
         assertThat(ids.getValue()).containsExactly(20L);
     }
 

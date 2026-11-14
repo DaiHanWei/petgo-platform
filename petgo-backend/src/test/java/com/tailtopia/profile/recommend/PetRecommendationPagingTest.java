@@ -61,7 +61,7 @@ class PetRecommendationPagingTest {
         service = new PetRecommendationService(content, profiles, accounts, hideRelations, petFollows);
         when(petFollows.followedAmong(anyLong(), anyCollection())).thenReturn(Set.of());
         when(hideRelations.hiddenEitherWay(anyLong(), anyCollection())).thenReturn(Set.of());
-        when(content.findLatestPublicCovers(anyCollection())).thenReturn(Map.of());
+        when(content.findLatestPublicCoverPosts(anyCollection())).thenReturn(Map.of());
         when(accounts.activeIdsAmong(anyCollection()))
                 .thenAnswer(inv -> new java.util.HashSet<>(
                         inv.<java.util.Collection<Long>>getArgument(0)));
@@ -78,7 +78,7 @@ class PetRecommendationPagingTest {
     }
 
     private void candidates(List<ContentService.RecommendablePet> rows) {
-        when(content.findRecommendablePets(any(), anyInt(), anyInt(), any())).thenReturn(rows);
+        when(content.findRecommendablePets(any(), anyInt(), anyInt(), any(), any())).thenReturn(rows);
     }
 
     private PetProfile pet(long petId, long ownerId, String avatarUrl) {
@@ -113,7 +113,8 @@ class PetRecommendationPagingTest {
     void 游标是整个排序键而不是最后那只宠物的id() {
         // 🔴 只带 petId 的表现是「第二页从一个与排序无关的位置开始」：
         //    重复第一页看过的宠物，同时另一批永远刷不到。
-        List<ContentService.RecommendablePet> rows = rows(3);
+        // V1.5.0 Story 1.1：恰好取完最后一段最后一行时 hasMore=false（AC3）—— 这里多给一行，确保还有下一页。
+        List<ContentService.RecommendablePet> rows = rows(4);
         candidates(rows);
         withProfilesFor(rows);
 
@@ -139,7 +140,7 @@ class PetRecommendationPagingTest {
 
         ArgumentCaptor<ContentService.RecommendCursor> passed =
                 ArgumentCaptor.forClass(ContentService.RecommendCursor.class);
-        verify(content).findRecommendablePets(any(), anyInt(), anyInt(), passed.capture());
+        verify(content).findRecommendablePets(any(), anyInt(), anyInt(), passed.capture(), any());
         assertThat(passed.getValue()).isNotNull();
         assertThat(passed.getValue().interactions()).isEqualTo(42L);
         assertThat(passed.getValue().petId()).isEqualTo(77L);
@@ -154,7 +155,7 @@ class PetRecommendationPagingTest {
         service.pageFor(VIEWER, 10, null, NOW);
         ArgumentCaptor<ContentService.RecommendCursor> passed =
                 ArgumentCaptor.forClass(ContentService.RecommendCursor.class);
-        verify(content).findRecommendablePets(any(), anyInt(), anyInt(), passed.capture());
+        verify(content).findRecommendablePets(any(), anyInt(), anyInt(), passed.capture(), any());
         assertThat(passed.getValue()).isNull();
     }
 

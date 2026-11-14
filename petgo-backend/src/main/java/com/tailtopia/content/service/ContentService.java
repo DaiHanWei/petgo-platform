@@ -985,11 +985,28 @@ public class ContentService {
     @Transactional(readOnly = true)
     public List<RecommendablePet> findRecommendablePets(Instant since, int minRecords, int limit,
             RecommendCursor afterCursor) {
+        return findRecommendablePets(since, minRecords, limit, afterCursor, RecommendFilter.ANY);
+    }
+
+    /**
+     * 同 {@link #findRecommendablePets(Instant, int, int, RecommendCursor)}，另加段过滤
+     * （V1.5.0 onboarding-recall Story 1.1 · OR-3）。
+     *
+     * <p>content 侧不知道「段」的业务含义（同品种 / 同物种 / 全站是 profile.recommend 的口径），
+     * 只收过滤参数；段内排序与游标比较与改动前逐字相同。
+     *
+     * @param filter 过滤参数（{@link RecommendFilter#ANY} = 不加物种 / 品种条件）
+     */
+    @Transactional(readOnly = true)
+    public List<RecommendablePet> findRecommendablePets(Instant since, int minRecords, int limit,
+            RecommendCursor afterCursor, RecommendFilter filter) {
+        RecommendFilter f = filter == null ? RecommendFilter.ANY : filter;
         return posts.findRecommendablePets(since, minRecords, limit,
                         afterCursor != null,
                         afterCursor == null ? null : afterCursor.lastPostedAt(),
                         afterCursor == null ? null : afterCursor.interactions(),
-                        afterCursor == null ? null : afterCursor.petId())
+                        afterCursor == null ? null : afterCursor.petId(),
+                        f.mode().name(), f.petType(), f.breedNorm())
                 .stream()
                 .map(row -> new RecommendablePet(
                         ((Number) row[0]).longValue(),
@@ -1020,6 +1037,43 @@ public class ContentService {
             }
         }
         return out;
+    }
+
+    /**
+     * 这批宠物各自<b>最近一条带图公开帖</b>（V1.5.0 onboarding-recall Story 1.1 · OR-4）：
+     * 帖子 id + 首图 + 该帖当前赞数，推荐卡大图与点赞胶囊绑同一条帖子。
+     *
+     * <p>与 {@link #findLatestPublicCovers} 的区别是<b>不限 Diary</b>（PRD「最近一条带图的公开帖子」）。
+     *
+     * @return petId → 封面帖；没有带图公开帖的宠物<b>不在结果里</b>
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, CoverPost> findLatestPublicCoverPosts(java.util.Collection<Long> petIds) {
+        if (petIds == null || petIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, CoverPost> out = new java.util.HashMap<>();
+        for (Object[] row : posts.findLatestPublicCoverPosts(petIds)) {
+            String url = (String) row[2];
+            if (url != null && !url.isBlank()) {
+                out.put(((Number) row[0]).longValue(), new CoverPost(((Number) row[1]).longValue(), url,
+                        row[3] == null ? 0L : ((Number) row[3]).longValue()));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * {@code viewerId} 在这批帖子里赞过哪些（一次批量，同 Feed 的 {@code findLikedPostIds} 口径）。
+     *
+     * @return 赞过的 postId 集合；入参为空直接空集、不查库
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> likedAmong(long viewerId, java.util.Collection<Long> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(likes.findLikedPostIds(viewerId, postIds));
     }
 
     /** JDBC 可能给回 Timestamp 或 Instant，两种都收（native query 的返回类型不由我们定）。 */
@@ -1056,6 +1110,30 @@ public class ContentService {
      * 就像它不知道宠物有没有头像一样（架构边界）。
      */
     public record RecommendCursor(long interactions, Instant lastPostedAt, long petId) {
+    }
+
+    /**
+     * 推荐候选的段过滤参数（V1.5.0 onboarding-recall Story 1.1 · OR-3）—— 只是参数载体。
+     *
+     * @param mode      过滤模式
+     * @param petType   物种线格式（{@code CAT / DOG / OTHER}；{@code ANY} 时为 null）
+     * @param breedNorm 规范化品种 {@code lower(btrim(breed))}；null = 无品种
+     */
+    public record RecommendFilter(RecommendFilterMode mode, String petType, String breedNorm) {
+        public static final RecommendFilter ANY = new RecommendFilter(RecommendFilterMode.ANY, null, null);
+    }
+
+    /** 段过滤模式（SQL 里逐字比较，改名须同步 {@code ContentPostRepository.findRecommendablePets}）。 */
+    public enum RecommendFilterMode { SAME_BREED, SAME_SPECIES_OTHER_BREED, OTHER_SPECIES, ANY }
+
+    /**
+     * 一只宠物的封面帖（V1.5.0 Story 1.1 · OR-4）。
+     *
+     * @param postId    帖子 id（帖子详情 {@code /content/{id}} 的现有对外口径）
+     * @param imageUrl  首图原始 URL（调用方负责去 EXIF 缩略）
+     * @param likeCount 该帖当前赞数
+     */
+    public record CoverPost(long postId, String imageUrl, long likeCount) {
     }
 
     /**

@@ -79,6 +79,13 @@ class PetRecommendationIntegrationTest extends ApiIntegrationTest {
                 postId, liker.getId(), Timestamp.from(at));
     }
 
+    /** V1.5.0 Story 1.1：指定物种 / 品种的可入池宠物。 */
+    private long[] recommendablePet(User owner, String name, Instant postedAt, String petType, String breed) {
+        long[] r = recommendablePet(owner, name, postedAt);
+        jdbc.update("UPDATE pet_profiles SET pet_type = ?, breed = ? WHERE id = ?", petType, breed, r[0]);
+        return r;
+    }
+
     /** 翻完集合页，收集所有返回过的 petId（同时验证游标连续：不重复）。 */
     private List<Long> allPages(User viewer) throws Exception {
         List<Long> seen = new ArrayList<>();
@@ -142,7 +149,7 @@ class PetRecommendationIntegrationTest extends ApiIntegrationTest {
         }
 
         List<Object[]> rows = posts.findRecommendablePets(Instant.now().minus(Duration.ofDays(14)), 3, 10_000,
-                false, null, null, null);
+                false, null, null, null, "ANY", null, null);
         List<Long> order = new ArrayList<>();
         for (Object[] r : rows) {
             long id = ((Number) r[0]).longValue();
@@ -151,5 +158,76 @@ class PetRecommendationIntegrationTest extends ApiIntegrationTest {
             }
         }
         assertThat(order).containsExactly(fresh[0], stale[0]);
+    }
+
+    // ===== V1.5.0 onboarding-recall Story 1.1 · AC1 / AC3 / AC5 / AC6 =====
+
+    @Test
+    void threeTiersOrderAndCoverFieldsAndPublicEndpoint() throws Exception {
+        User viewer = newUser();
+        long mine = MultiPetDbFixture.insertPet(jdbc, viewer.getId(), "Mine", "DOG", Instant.now());
+        extraPets.add(mine);
+        jdbc.update("UPDATE pet_profiles SET breed = ' Corgi ' WHERE id = ?", mine);
+
+        Instant recent = Instant.now().minus(Duration.ofHours(3));
+        long sameBreed = recommendablePet(newUser(), "A", recent, "DOG", "corgi ")[0];
+        long sameSpecies = recommendablePet(newUser(), "B", recent.plusSeconds(60), "DOG", "Husky")[0];
+        long other = recommendablePet(newUser(), "C", recent.plusSeconds(120), "CAT", null)[0];
+
+        // 封面帖：给 sameBreed 补一条带图 Moment（不限 Diary），它就是封面且赞数 2、查看者已赞。
+        User sameBreedOwner = newUser();
+        ContentPost moment = posts.save(ContentPost.publish(sameBreedOwner.getId(), ContentType.DAILY, sameBreed,
+                "m", List.of("https://cdn.test/moment.jpg"), null));
+        jdbc.update("INSERT INTO content_pets (post_id, pet_profile_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                moment.getId(), sameBreed);
+        like(moment.getId(), Instant.now());
+        jdbc.update("INSERT INTO content_likes (post_id, user_id, created_at) VALUES (?, ?, now())",
+                moment.getId(), viewer.getId());
+
+        List<Long> order = new ArrayList<>();
+        JsonNode coverCard = null;
+        String cursor = null;
+        for (int guard = 0; guard < 50; guard++) {
+            var req = get(URL).header(HttpHeaders.AUTHORIZATION, userBearer(viewer.getId())).param("limit", "10");
+            if (cursor != null) {
+                req = req.param("cursor", cursor);
+            }
+            JsonNode page = json.readTree(mvc.perform(req).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString());
+            for (JsonNode n : page.get("items")) {
+                long id = n.get("petId").asLong();
+                if (id == sameBreed || id == sameSpecies || id == other) {
+                    order.add(id);
+                }
+                if (id == sameBreed) {
+                    coverCard = n;
+                    assertThat(n.get("match").asText()).isEqualTo("SAME_BREED");
+                }
+                if (id == sameSpecies) {
+                    assertThat(n.get("match").asText()).isEqualTo("SAME_SPECIES");
+                }
+                if (id == other) {
+                    assertThat(n.get("match").asText()).isEqualTo("GLOBAL");
+                }
+            }
+            if (!page.get("hasMore").asBoolean()) {
+                break;
+            }
+            cursor = page.get("nextCursor").asText();
+        }
+        assertThat(order).containsExactly(sameBreed, sameSpecies, other);
+        assertThat(coverCard).isNotNull();
+        assertThat(coverCard.get("coverPostId").asLong()).isEqualTo(moment.getId());
+        assertThat(coverCard.get("coverLikeCount").asLong()).isEqualTo(2L);
+        assertThat(coverCard.get("coverLikedByViewer").asBoolean()).isTrue();
+        assertThat(coverCard.get("coverImageUrl").asText()).startsWith("https://cdn.test/moment.jpg");
+
+        // 游客端点：无 token 200、只一页、已赞恒 false。
+        JsonNode pub = json.readTree(mvc.perform(get("/api/v1/public/pet-recommendations").param("limit", "6"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(pub.get("hasMore").asBoolean()).isFalse();
+        assertThat(pub.get("nextCursor").isNull()).isTrue();
+        assertThat(pub.get("items").size()).isLessThanOrEqualTo(6);
+        pub.get("items").forEach(n -> assertThat(n.get("coverLikedByViewer").asBoolean()).isFalse());
     }
 }

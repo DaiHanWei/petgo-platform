@@ -84,6 +84,10 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * @param cursorLastAt        游标行的最后发帖时刻
      * @param cursorInteractions  游标行的互动量
      * @param cursorPetId         游标行的 petId
+     * @param tierMode   V1.5.0 Story 1.1 · OR-3 段过滤：{@code SAME_BREED / SAME_SPECIES_OTHER_BREED / OTHER_SPECIES / ANY}
+     *                   （content 不知道「段」的业务含义，只收过滤参数；段内排序与游标比较不变）
+     * @param petType    物种（{@code ANY} 时忽略）
+     * @param breedNorm  规范化品种 {@code lower(btrim(breed))}（null = 查看者无品种）
      * @return 每行 {@code [petId(Long), lastPostedAt(Instant), publicRecords(Long), interactions(Long)]}
      */
     @Query(value = """
@@ -93,10 +97,22 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                        COUNT(*)          AS total
                   FROM content_posts p
                   JOIN content_pets cp ON cp.post_id = p.id
+                  JOIN pet_profiles pp ON pp.id = cp.pet_profile_id
                  WHERE p.type = 'GROWTH_MOMENT'
                    AND p.visibility = 'PUBLIC'
                    AND p.status = 'PUBLISHED'
                    AND p.deleted_at IS NULL
+                   AND (CAST(:tierMode AS varchar) = 'ANY'
+                        OR (CAST(:tierMode AS varchar) = 'SAME_BREED'
+                            AND pp.pet_type = CAST(:petType AS varchar)
+                            AND lower(btrim(pp.breed)) = CAST(:breedNorm AS varchar))
+                        OR (CAST(:tierMode AS varchar) = 'SAME_SPECIES_OTHER_BREED'
+                            AND pp.pet_type = CAST(:petType AS varchar)
+                            AND (CAST(:breedNorm AS varchar) IS NULL
+                                 OR pp.breed IS NULL OR btrim(pp.breed) = ''
+                                 OR lower(btrim(pp.breed)) <> CAST(:breedNorm AS varchar)))
+                        OR (CAST(:tierMode AS varchar) = 'OTHER_SPECIES'
+                            AND pp.pet_type <> CAST(:petType AS varchar)))
                  GROUP BY cp.pet_profile_id
                 HAVING COUNT(*) >= :minRecords
                    AND MAX(p.created_at) >= :since
@@ -135,7 +151,41 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             @Param("hasCursor") boolean hasCursor,
             @Param("cursorLastAt") java.time.Instant cursorLastAt,
             @Param("cursorInteractions") Long cursorInteractions,
-            @Param("cursorPetId") Long cursorPetId);
+            @Param("cursorPetId") Long cursorPetId,
+            @Param("tierMode") String tierMode,
+            @Param("petType") String petType,
+            @Param("breedNorm") String breedNorm);
+
+    /**
+     * 这批宠物各自<b>最近一条带图公开帖</b>（V1.5.0 onboarding-recall Story 1.1 · OR-4 · FR-174）：
+     * 推荐卡大图与点赞胶囊绑的是<b>同一条帖子</b>。
+     *
+     * <p>与 {@link #findLatestPublicCovers} 的区别：① <b>不限 {@code GROWTH_MOMENT}</b>（PRD「最近一条带图的公开帖子」
+     * 不限类型）；② 一并带出帖子 id 与该帖当前赞数（相关子查询只对每只宠物的那一条执行，≤ 一页卡数）。
+     * <p>⚠️ 三行图片谓词照 {@link #findLatestPublicCovers} 逐字写（{@code jsonb_typeof} 必须在 length 之前，
+     * 原因见那边注释）；不带表别名同理。
+     *
+     * @return 每行 {@code [petId(Long), postId(Long), firstImageUrl(String), likeCount(Long)]}；
+     *     没有带图公开帖的宠物不出现
+     */
+    @Query(value = """
+            SELECT DISTINCT ON (cp.pet_profile_id)
+                   cp.pet_profile_id AS pet_id,
+                   p.id AS post_id,
+                   (p.image_urls ->> 0) AS cover_url,
+                   (SELECT count(*) FROM content_likes l WHERE l.post_id = p.id) AS like_count
+              FROM content_posts p
+              JOIN content_pets cp ON cp.post_id = p.id
+             WHERE cp.pet_profile_id IN (:petIds)
+               AND p.visibility = 'PUBLIC'
+               AND p.status = 'PUBLISHED'
+               AND p.deleted_at IS NULL
+               AND image_urls IS NOT NULL
+               AND jsonb_typeof(image_urls) = 'array'
+               AND jsonb_array_length(image_urls) > 0
+             ORDER BY cp.pet_profile_id, p.created_at DESC, p.id DESC
+            """, nativeQuery = true)
+    List<Object[]> findLatestPublicCoverPosts(@Param("petIds") java.util.Collection<Long> petIds);
 
     /**
      * 这批宠物各自**最近一张公开照片**（Story 4.1 · AC4 的卡片大图）。

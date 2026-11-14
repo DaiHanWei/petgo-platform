@@ -12,7 +12,7 @@ import java.util.List;
  * <table>
  *   <tr><th>位置</th><th>字段</th><th>来源</th></tr>
  *   <tr><td>卡片大图</td><td>{@link #coverImageUrl}</td>
- *       <td>该宠物<b>最近一条带配图的公开成长日历帖</b>的首图</td></tr>
+ *       <td>该宠物<b>最近一条带配图的公开帖</b>的首图（V1.5.0 起不限 Diary，与 {@link #coverPostId} 同源）</td></tr>
  *   <tr><td>左下角小圆头像</td><td>{@link #avatarUrl}</td>
  *       <td><b>宠物档案自身</b>的头像（{@code PetProfile.avatarUrl}）</td></tr>
  * </table>
@@ -29,13 +29,23 @@ import java.util.List;
  * 点击落点是 Story 2.3 的**站内**访客入口（按 petId），对外分享 token 不该给访客
  * （AD-4 / Story 2.3 的既定口径）。
  *
+ * <h2>V1.5.0 onboarding-recall Story 1.1 · OR-4：大图与点赞是同一条帖子</h2>
+ * {@link #coverImageUrl} 的来源改为这只宠物<b>最近一条带图公开帖</b>（不再限 Diary），
+ * 与 {@link #coverPostId} / {@link #coverLikeCount} / {@link #coverLikedByViewer} <b>同源</b>；
+ * 纯文字帖不当封面（四个字段一起为空 / 0 / false）。新字段只追加在末尾，旧字段语义不变。
+ *
  * @param petId          宠物档案 id —— 点击落点用它（复用 Story 2.3 的站内入口，不新建通道）
  * @param name           宠物名
  * @param avatarUrl      宠物档案头像（小圆头像；恒非空）
  * @param petType        物种
  * @param birthday       生日（可空；客户端据此算年龄文案）
- * @param coverImageUrl  最近一张公开照片（卡片大图；<b>可空</b>）
+ * @param coverImageUrl  封面帖首图（卡片大图；<b>可空</b>）
  * @param companionDays  陪伴天数（「一起 238 天」）——与 H5 名片同一个算法
+ * @param breed          品种（可空；卡片第二行「品种 · Bersama N hari」，无品种客户端回落物种）
+ * @param coverPostId    封面帖 id（可空；点赞胶囊绑它，帖子详情 {@code /content/{id}} 的现有口径）
+ * @param coverLikeCount 封面帖当前赞数（无封面帖为 0）
+ * @param coverLikedByViewer 查看者是否已赞封面帖（游客恒 false）
+ * @param match          命中哪一段（埋点用）：{@code SAME_BREED / SAME_SPECIES / GLOBAL}
  */
 public record RecommendedPetResponse(
         long petId,
@@ -44,7 +54,12 @@ public record RecommendedPetResponse(
         PetType petType,
         LocalDate birthday,
         String coverImageUrl,
-        long companionDays) {
+        long companionDays,
+        String breed,
+        Long coverPostId,
+        long coverLikeCount,
+        boolean coverLikedByViewer,
+        RecommendMatch match) {
 
     /**
      * 一页宠物卡（Story 4.3 · AC3 起带游标）。

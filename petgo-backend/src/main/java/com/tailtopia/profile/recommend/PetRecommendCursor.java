@@ -30,16 +30,30 @@ import java.util.Base64;
  * keyset 分页在这种列表上的固有行为是「极少数宠物可能跨页重复或漏掉一次」——
  * 这是**已接受的代价**：替代方案是把整份排名快照下来，而那就是 AC2 禁止的缓存。
  *
+ * <h2>V1.5.0 onboarding-recall Story 1.1 · OR-3：追加段号 {@link #tier}</h2>
+ * 推荐改为三段 keyset（同品种 → 同物种其他品种 → 全站），游标须带上「最后看过的那一行在哪一段」。
+ * 编码把 tier 追加在<b>末尾</b>（{@code <interactions>:<micros>:<petId>:<tier>}）：旧客户端手里的三段旧串
+ * 照样能解（缺 tier → 段 0）；坏串仍按第一页。
+ *
  * @param interactions 该行的互动量（点赞总数）
  * @param lastPostedAt 该行最后一条公开成长帖的时刻（<b>微秒</b>精度，UTC）
  * @param petId        宠物 id（最后一层 tie-breaker）
+ * @param tier         该行所在段：0 同品种 / 1 同物种 / 2 全站（见 {@code PetRecommendationService}）
  */
-public record PetRecommendCursor(long interactions, Instant lastPostedAt, long petId) {
+public record PetRecommendCursor(long interactions, Instant lastPostedAt, long petId, int tier) {
 
-    /** 编码为对外 token：{@code base64url("<interactions>:<epochMicros>:<petId>")}。 */
+    /** 段号上限（含）。 */
+    static final int MAX_TIER = 2;
+
+    /** 旧形态（V1.5.0 之前无段号）—— 等价于段 0。 */
+    public PetRecommendCursor(long interactions, Instant lastPostedAt, long petId) {
+        this(interactions, lastPostedAt, petId, 0);
+    }
+
+    /** 编码为对外 token：{@code base64url("<interactions>:<epochMicros>:<petId>:<tier>")}。 */
     public String encode() {
         long micros = lastPostedAt.getEpochSecond() * 1_000_000L + lastPostedAt.getNano() / 1_000L;
-        String raw = interactions + ":" + micros + ":" + petId;
+        String raw = interactions + ":" + micros + ":" + petId + ":" + tier;
         return Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(raw.getBytes(StandardCharsets.UTF_8));
     }
@@ -58,16 +72,21 @@ public record PetRecommendCursor(long interactions, Instant lastPostedAt, long p
         try {
             String raw = new String(Base64.getUrlDecoder().decode(token), StandardCharsets.UTF_8);
             String[] parts = raw.split(":");
-            if (parts.length != 3) {
+            if (parts.length != 3 && parts.length != 4) {
                 return null;
             }
             long interactions = Long.parseLong(parts[0]);
             long micros = Long.parseLong(parts[1]);
             long petId = Long.parseLong(parts[2]);
+            // 旧串（V1.5.0 之前）无段号 → 段 0。
+            int tier = parts.length == 4 ? Integer.parseInt(parts[3]) : 0;
+            if (tier < 0 || tier > MAX_TIER) {
+                return null;
+            }
             return new PetRecommendCursor(interactions,
                     Instant.ofEpochSecond(Math.floorDiv(micros, 1_000_000L),
                             Math.floorMod(micros, 1_000_000L) * 1_000L),
-                    petId);
+                    petId, tier);
         } catch (RuntimeException e) {
             return null;
         }

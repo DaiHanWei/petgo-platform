@@ -7,8 +7,9 @@ import java.util.Optional;
  * 一次性引导标记的**键登记表**（V1.3.0 批次 A · Story 5.4 · AD-A21.3）。
  *
  * <h2>🔴 一个引导一个键，禁止共用</h2>
- * 现有两个键，各管一个引导：{@link #KTP_MOVED}（「身份证挪进 Know Your Pet 了」，V1.3.0）与
- * {@link #TAILSONALITY_ENTRY}（「性格测试也在这里」，V1.3.2 Story 2.7）。PRD 明确那是**两次独立触发**，
+ * 现有三个键，各管一个引导：{@link #KTP_MOVED}（「身份证挪进 Know Your Pet 了」，V1.3.0）、
+ * {@link #TAILSONALITY_ENTRY}（「性格测试也在这里」，V1.3.2 Story 2.7）与
+ * {@link #FIRST_DAY_RECOMMEND}（首日推荐页只出现一次，V1.5.0 Story 1.1）。PRD 明确那是**两次独立触发**，
  * 共用一个键会让看过第一次的人再也收不到第二次；以后的引导同样另起一个键，不做「引导版本号」之类的通用机制。
  *
  * <h2>为什么是枚举而不是随便一个字符串</h2>
@@ -22,7 +23,10 @@ public enum OnboardingMarkKey {
     KTP_MOVED("ktp_moved"),
 
     /** 「性格测试（Tailsonality）也在聚合页」的第二次入口引导（V1.3.2 Story 2.7 · AD-16 · D-17）。 */
-    TAILSONALITY_ENTRY("tailsonality_entry");
+    TAILSONALITY_ENTRY("tailsonality_entry"),
+
+    /** 首日推荐页「只出现一次」（V1.5.0 onboarding-recall Story 1.1 · OR-7 · FR-173）。 */
+    FIRST_DAY_RECOMMEND("first_day_recommend");
 
     OnboardingMarkKey(String wire) {
         this.wire = wire;
