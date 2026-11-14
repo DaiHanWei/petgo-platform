@@ -222,8 +222,9 @@ public class GiftSendService {
         if (raw == null) {
             return null;
         }
-        // strip()（而非 trim()）：与 App 的 Dart trim 一样去掉 Unicode 空白（NBSP / 全角空格），code review #2。
-        String m = raw.strip();
+        // 去首尾 Unicode 空白（含 NBSP / 全角空格），与 App 的 Dart trim 一致（code review #2；
+        // Java strip() 不认 NBSP，故按 isWhitespace || isSpaceChar 手写）。
+        String m = stripUnicodeSpace(raw);
         if (m.isEmpty()) {
             return null;
         }
@@ -238,6 +239,30 @@ public class GiftSendService {
             throw AppException.giftMessageBlocked("祝福语包含不当内容，请修改后再送");
         }
         return m;
+    }
+
+    static String stripUnicodeSpace(String s) {
+        int start = 0;
+        int end = s.length();
+        while (start < end) {
+            int cp = s.codePointAt(start);
+            if (!isSpace(cp)) {
+                break;
+            }
+            start += Character.charCount(cp);
+        }
+        while (end > start) {
+            int cp = s.codePointBefore(end);
+            if (!isSpace(cp)) {
+                break;
+            }
+            end -= Character.charCount(cp);
+        }
+        return s.substring(start, end);
+    }
+
+    private static boolean isSpace(int cp) {
+        return Character.isWhitespace(cp) || Character.isSpaceChar(cp);
     }
 
     /** 送礼人本单 EXP（D-7）：参与成长体系 ? pointsForAmount(GIFT_SENT, 面值) : 0。 */
