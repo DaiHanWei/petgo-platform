@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.tailtopia.consult.domain.ConsultRating;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.ConsultSource;
+import com.tailtopia.consult.dto.ConsultHistoryItem;
 import com.tailtopia.consult.dto.ConsultHistoryPage;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
@@ -44,9 +45,11 @@ class ConsultHistoryServiceTest {
     VetAccountService vetAccounts;
     @Mock
     HealthEventRepository healthEvents;
+    @Mock
+    com.tailtopia.profile.service.VetVisitHistoryQuery vetVisits;
 
     private ConsultHistoryService service() {
-        return new ConsultHistoryService(sessions, ratings, triageService, vetAccounts, healthEvents);
+        return new ConsultHistoryService(sessions, ratings, triageService, vetAccounts, healthEvents, vetVisits);
     }
 
     private ConsultSession closedVetSession(long id, Instant created) {
@@ -119,5 +122,53 @@ class ConsultHistoryServiceTest {
         assertThat(page.items()).hasSize(2);
         assertThat(page.hasMore()).isTrue();
         assertThat(page.nextCursor()).isNotNull();
+    }
+
+    // ===== V1.5.0 健康记录提醒 Story 2.5：Kontrol dokter 条目 =====
+
+    private static com.tailtopia.profile.service.VetVisitHistoryQuery.VetVisitHistoryRow visit(long id, long petId,
+            String day, String createdAtUtc, com.tailtopia.profile.health.RecordStatus status) {
+        return new com.tailtopia.profile.service.VetVisitHistoryQuery.VetVisitHistoryRow(id, petId, "Pet" + petId,
+                java.time.LocalDate.parse(day), "note", java.time.LocalDate.parse("2027-04-01"), status,
+                Instant.parse(createdAtUtc));
+    }
+
+    @Test
+    void v150MergesVetVisitsAcrossPetsByDateAndPagesWithoutGapsOrDuplicates() {
+        when(triageService.historyForUser(7L)).thenReturn(List.of(
+                new TriageHistoryItem(1L, DangerLevel.GREEN.name(), "s", Instant.parse("2027-03-02T05:00:00Z"))));
+        when(sessions.findByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any())).thenReturn(List.of());
+        when(vetVisits.forOwner(7L)).thenReturn(List.of(
+                visit(100L, 20L, "2027-03-03", "2027-03-03T02:00:00Z", com.tailtopia.profile.health.RecordStatus.UPCOMING),
+                // 同一天两条：按创建时刻（WIB 时分秒）排
+                visit(101L, 21L, "2027-03-01", "2027-03-05T09:00:00Z", com.tailtopia.profile.health.RecordStatus.OVERDUE),
+                visit(102L, 21L, "2027-03-01", "2027-03-01T01:00:00Z", com.tailtopia.profile.health.RecordStatus.DONE)));
+        ConsultHistoryPage first = service().history(7L, null, 2, true);
+        assertThat(first.items()).extracting(ConsultHistoryItem::type).containsExactly("VET_VISIT", "AI");
+        assertThat(first.items().get(0).recordId()).isEqualTo(100L);
+        assertThat(first.items().get(0).petName()).isEqualTo("Pet20");
+        ConsultHistoryPage second = service().history(7L, first.nextCursor(), 2, true);
+        assertThat(second.items()).extracting(ConsultHistoryItem::recordId).containsExactly(101L, 102L);
+        assertThat(second.items().get(0).overdue()).isTrue();
+        assertThat(second.items().get(0).recordStatus()).isEqualTo("OVERDUE");
+        assertThat(second.hasMore()).isFalse();
+    }
+
+    @Test
+    void legacyClientGetsNoVetVisitAndEmptyConsultsStillListsVisits() {
+        when(triageService.historyForUser(7L)).thenReturn(List.of());
+        when(sessions.findByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any())).thenReturn(List.of());
+        assertThat(service().history(7L, null, 20, false).items()).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(vetVisits);
+        when(vetVisits.forOwner(7L)).thenReturn(List.of(
+                visit(100L, 20L, "2027-03-03", "2027-03-03T02:00:00Z", com.tailtopia.profile.health.RecordStatus.DONE)));
+        assertThat(service().history(7L, null, 20, true).items()).hasSize(1);
+    }
+
+    @Test
+    void sortInstantIsEventDayPlusWibTimeOfCreation() {
+        // 创建于 2027-03-05 09:00 UTC = 16:00 WIB → 2027-03-01 16:00 WIB
+        assertThat(ConsultHistoryService.sortInstant(java.time.LocalDate.parse("2027-03-01"),
+                Instant.parse("2027-03-05T09:00:00Z"))).isEqualTo(Instant.parse("2027-03-01T09:00:00Z"));
     }
 }

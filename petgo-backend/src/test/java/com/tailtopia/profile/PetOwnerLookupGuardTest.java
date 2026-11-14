@@ -55,6 +55,9 @@ class PetOwnerLookupGuardTest {
             "admin/moderation/service/UnifiedTicketQueryService.java",
             "admin/usermgmt/service/AdminUserPurchasesQuery.java",
             "auth/service/OpsAudienceSql.java",
+            // V1.5.0 健康记录提醒：日跑 / 个人上线按主人取「全部」宠物（批量，非取单只），无 LIMIT 1。
+            "healthreminder/schedule/DailyRunStore.java",
+            "healthreminder/service/LaunchService.java",
             "passport/service/BoardingPassDuplicateQuery.java",
             "profile/domain/PetProfile.java",
             // V1.4.2 social-topic Story 1.1：拉黑联动删「holder 对 owner 名下<b>所有</b>宠物」的追更行（按 owner 批量，非取单行）。

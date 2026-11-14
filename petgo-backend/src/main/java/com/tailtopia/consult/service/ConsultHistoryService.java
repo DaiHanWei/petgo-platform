@@ -33,10 +33,13 @@ public class ConsultHistoryService {
     private final VetAccountService vetAccounts;
     // 直接用仓储而不是 HealthEventService：后者挂着 profile 一串服务，consult→profile 服务层互引有循环风险
     private final HealthEventRepository healthEvents;
+    /** V1.5.0 Story 2.5：Kontrol dokter 条目经 profile 只读端口取（不注入 profile 的健康记录仓储）。 */
+    private final com.tailtopia.profile.service.VetVisitHistoryQuery vetVisits;
 
     public ConsultHistoryService(ConsultSessionRepository sessions, ConsultRatingRepository ratings,
             TriageService triageService, VetAccountService vetAccounts,
-            HealthEventRepository healthEvents) {
+            HealthEventRepository healthEvents, com.tailtopia.profile.service.VetVisitHistoryQuery vetVisits) {
+        this.vetVisits = vetVisits;
         this.healthEvents = healthEvents;
         this.sessions = sessions;
         this.ratings = ratings;
@@ -69,7 +72,22 @@ public class ConsultHistoryService {
      */
     @Transactional(readOnly = true)
     public ConsultHistoryPage history(long userId, String cursor, int limit) {
+        return history(userId, cursor, limit, false);
+    }
+
+    /**
+     * V1.5.0 Story 2.5：{@code v150Client=true} 时把该账号全部宠物的 Kontrol dokter（VET_VISIT 记录）并进同一列表排序 / 游标
+     * 切分；旧版客户端不认识第三种 type，不返回。
+     */
+    @Transactional(readOnly = true)
+    public ConsultHistoryPage history(long userId, String cursor, int limit, boolean v150Client) {
         List<ConsultHistoryItem> all = new ArrayList<>();
+        if (v150Client) {
+            for (var v : vetVisits.forOwner(userId)) {
+                all.add(ConsultHistoryItem.vetVisit(v.recordId(), v.petId(), v.petName(), v.eventDate(), v.note(),
+                        v.displayNextDate(), v.recordStatus().name(), sortInstant(v.eventDate(), v.createdAt())));
+            }
+        }
 
         List<TriageHistoryItem> triages = triageService.historyForUser(userId);
         // PENDING_CLOSE(兽医已结束、30min 续聊窗口) 也归入历史,带 terminalState=PENDING_CLOSE 标记——
@@ -131,6 +149,13 @@ public class ConsultHistoryService {
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /** 排序时刻：event date 当天 + 记录创建时刻的 WIB 时分秒（PRD：同日按创建时刻）。 */
+    static java.time.Instant sortInstant(java.time.LocalDate eventDate, java.time.Instant createdAt) {
+        java.time.LocalTime time = createdAt == null ? java.time.LocalTime.NOON
+                : createdAt.atZone(com.tailtopia.shared.schedule.ScheduleWindow.WIB).toLocalTime();
+        return eventDate.atTime(time).atZone(com.tailtopia.shared.schedule.ScheduleWindow.WIB).toInstant();
     }
 
     private static long parseCursor(String cursor) {

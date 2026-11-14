@@ -50,7 +50,7 @@ development_status:
   2-2-健康档案类提醒与上线排队: review
   2-3-健康提醒日跑与投递规则: review
   2-4-健康提醒文案通知与点开接口: review
-  2-5-健康问诊历史加kontrol-dokter: ready-for-dev
+  2-5-健康问诊历史加kontrol-dokter: review
   epic-2-retrospective: optional
 
   epic-3: backlog

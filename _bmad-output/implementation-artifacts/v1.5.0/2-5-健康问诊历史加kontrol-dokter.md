@@ -1,6 +1,6 @@
 # Story 2.5: 健康问诊历史加 Kontrol dokter（后端）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ① 健康记录提醒 · 分支 `feat/1.5.0-health-reminder`
 > 口径优先级：CROSS-STORY-DECISIONS 地基段 > 架构增量 §6.3 > PRD FR-161「Kontrol dokter records are listed in "Konsultasi saya"」、§9 Consult history > UI 稿 A10。
@@ -27,10 +27,10 @@ so that 看病记录集中在一处。
 
 ## Tasks / Subtasks
 
-- [ ] T1 `VetVisitHistoryQuery`（profile 只读端口）
-- [ ] T2 `ConsultHistoryItem` 字段与工厂、`ConsultHistoryService` 合并、Controller 读头
-- [ ] T3 测试：`ConsultHistoryServiceTest` 补 VET_VISIT 用例（L0，mock 端口）；`ConsultHistoryVetVisitIntegrationTest`（L1）能编译
-- [ ] T4 L0 跑绿，Completion Notes 标「L1 待本地验收」
+- [x] T1 `VetVisitHistoryQuery`（profile 只读端口）
+- [x] T2 `ConsultHistoryItem` 字段与工厂、`ConsultHistoryService` 合并、Controller 读头
+- [x] T3 测试：`ConsultHistoryServiceTest` 补 VET_VISIT 用例（L0，mock 端口）；`ConsultHistoryVetVisitIntegrationTest`（L1）能编译
+- [x] T4 L0 跑绿，Completion Notes 标「L1 待本地验收」
 
 ## Dev Notes
 
@@ -46,4 +46,19 @@ so that 看病记录集中在一处。
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：`ConsultHistoryVetVisitIntegrationTest`（两宠交错混排、游标翻页不重不漏、同日按创建时刻、旧版头无 VET_VISIT、空问诊 + 有 Vet visit 非空）已写、能编译，云端未跑（需 postgres）。AC1 的 `[L1]` 部分未勾为完成。
+- L0：`./mvnw -B clean package -DskipTests` 绿；`ConsultHistoryServiceTest`（新增 3 例：v150 混排 + 同日按创建时刻、旧版不出 VET_VISIT、空问诊只有 Vet visit 时非空）及 guard / boundary / structure 类 248 例绿。另跑了一遍全量 `mvn test` 观察回归：Failures 0；Errors 全部落在需要 Spring 上下文 / DB 的 *IntegrationTest / ApiIntegrationTest 子类上，无单元测试回归。
+- `VetVisitHistoryQuery`（profile 只读端口）按宠物取记录，`RecordDisplayStatus.compute` 复用 1.2 规则得 `displayNextDate` / `recordStatus`；consult 包只注入该端口，不注入 profile 仓储。`date` = event date + `created_at` 的 WIB 时分秒（`created_at` 缺失时取 12:00，仅防御）。
+- JSON 省略空字段靠全局 `spring.jackson.default-property-inclusion: non_null`（既有），AI / VET 条目不会多出新字段。
+- **顺带修复（前序 story 漏网）**：`PetOwnerLookupGuardTest` 在 2-2（`LaunchService`）、2-3（`DailyRunStore`）提交时就会红（按 owner 的原生 SQL 未进白名单），当时只跑了指定 L0 类没发现；本条把两处加入白名单并写明理由（批量按账号聚合、非「当前宠物」解析）。
+- 未运行 `bmad-dev-story` / `bmad-code-review` 技能文件（仓库内不存在，gitignored），按 story 手动执行；code review 由本会话对 diff 逐项核对，无 CONFIRMED 问题。
+
 ### File List
+
+- `petgo-backend/src/main/java/com/tailtopia/profile/service/VetVisitHistoryQuery.java`（新）
+- `petgo-backend/src/main/java/com/tailtopia/consult/dto/ConsultHistoryItem.java`
+- `petgo-backend/src/main/java/com/tailtopia/consult/service/ConsultHistoryService.java`
+- `petgo-backend/src/main/java/com/tailtopia/consult/web/ConsultHistoryController.java`
+- `petgo-backend/src/test/java/com/tailtopia/consult/service/ConsultHistoryServiceTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/consult/ConsultHistoryVetVisitIntegrationTest.java`（新，L1）
+- `petgo-backend/src/test/java/com/tailtopia/profile/PetOwnerLookupGuardTest.java`

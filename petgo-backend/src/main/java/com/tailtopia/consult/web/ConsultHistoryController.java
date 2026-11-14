@@ -32,9 +32,13 @@ public class ConsultHistoryController {
     @GetMapping("/history")
     public ConsultHistoryPage history(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String cursor,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
         int size = limit == null ? DEFAULT_LIMIT : Math.min(Math.max(limit, 1), MAX_LIMIT);
-        return historyService.history(currentUserId(jwt), cursor, size);
+        // V1.5.0 Story 2.5：只有 1.5.0 客户端才认识 VET_VISIT 条目。
+        return historyService.history(currentUserId(jwt), cursor, size,
+                com.tailtopia.profile.service.ClientAppVersion.isV150OrLater(appVersion));
     }
 
     private static long currentUserId(Jwt jwt) {
