@@ -32,14 +32,16 @@ void main() {
     // PET_BIRTHDAY → 「+发布」预选成长日历（FR-40）
     expect(DeepLinkRoutes.pushPayloadToLocation('PET_BIRTHDAY', 'tok'),
         '/publish?preset=growth-calendar');
-    // COMPANION_ANNIVERSARY → 成长档案 Tab（FR-41）
-    expect(DeepLinkRoutes.pushPayloadToLocation('COMPANION_ANNIVERSARY', 'tok'), '/profile');
+    // COMPANION_ANNIVERSARY → 这只宠物的 Diary 发布页（V1.5.0 Story 7.1；targetRef 非数字 → 不带 petId）
+    expect(DeepLinkRoutes.pushPayloadToLocation('COMPANION_ANNIVERSARY', 'tok'),
+        '/publish?preset=growth-calendar&entry=push_anniversary');
     // MILESTONE_NODE → 里程碑列表页壳（FR-42）
     expect(DeepLinkRoutes.pushPayloadToLocation('MILESTONE_NODE', 'tok'), '/profile/milestones');
     // 固定目标类不依赖 token：空/缺 token 仍命中固定目标（非兜底）
     expect(DeepLinkRoutes.pushPayloadToLocation('PET_BIRTHDAY', null),
         '/publish?preset=growth-calendar');
-    expect(DeepLinkRoutes.pushPayloadToLocation('COMPANION_ANNIVERSARY', ''), '/profile');
+    expect(DeepLinkRoutes.pushPayloadToLocation('COMPANION_ANNIVERSARY', ''),
+        '/publish?preset=growth-calendar&entry=push_anniversary');
     expect(DeepLinkRoutes.pushPayloadToLocation('MILESTONE_NODE', null), '/profile/milestones');
   });
 
@@ -105,7 +107,7 @@ void main() {
         expect(DeepLinkRoutes.pushPayloadToLocation(type, 'CREATE_PROFILE'), '/profile/create',
             reason: '$type + CREATE_PROFILE 应直达建档页');
         expect(DeepLinkRoutes.pushPayloadToLocation(type, 'RECORD'),
-            '/publish?preset=growth-calendar',
+            '/publish?preset=growth-calendar&entry=push_lifecycle',
             reason: '$type + RECORD 应直达「+发布」预选成长日历');
         expect(DeepLinkRoutes.pushPayloadToLocation(type, 'FEED'), '/home',
             reason: '$type + FEED 应落 Feed');
@@ -234,5 +236,39 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', null), '/me/coupons');
     expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', ''), '/me/coupons');
     expect(DeepLinkRoutes.pushPayloadToLocation('COUPON_EXPIRING', '3'), '/me/coupons');
+  });
+
+  group('V1.5.0 onboarding-recall Story 7.1：推送直达落点（OR-26）', () {
+    test('USER_POST_PUBLISHED → 帖子详情；非数字 / 空 → 通知中心', () {
+      expect(DeepLinkRoutes.pushPayloadToLocation('USER_POST_PUBLISHED', '77'), '/content/77');
+      expect(DeepLinkRoutes.pushPayloadToLocation('USER_POST_PUBLISHED', 'abc'), DeepLinkRoutes.notificationsCenter);
+      expect(DeepLinkRoutes.pushPayloadToLocation('USER_POST_PUBLISHED', null), DeepLinkRoutes.notificationsCenter);
+      expect(DeepLinkRoutes.pushPayloadToLocation('USER_POST_PUBLISHED', ''), DeepLinkRoutes.notificationsCenter);
+    });
+
+    test('COMPANION_ANNIVERSARY → 这只宠物的发布页（新旧通知 targetRef 同为宠物 id）', () {
+      expect(DeepLinkRoutes.pushPayloadToLocation('COMPANION_ANNIVERSARY', '12'),
+          '/publish?preset=growth-calendar&petId=12&entry=push_anniversary');
+      expect(DeepLinkRoutes.pushPayloadToLocation('COMPANION_ANNIVERSARY', null),
+          '/publish?preset=growth-calendar&entry=push_anniversary');
+    });
+
+    test('召回新变体：DISCOVER / NEWBIE_TASKS / GRADUATED；旧变体与未知不变', () {
+      for (final type in ['LIFECYCLE_D1', 'LIFECYCLE_D3', 'LIFECYCLE_D7', 'LIFECYCLE_WINBACK']) {
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'DISCOVER'), '/pet-recommendations');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'NEWBIE_TASKS'), '/me/milestones-entry');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'GRADUATED'), '/me/milestones-entry?celebrate=lulus');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'FEED'), '/home');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'REVIEW'), '/profile');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'CREATE_PROFILE'), '/profile/create');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'SKIPPED_ACTIVE'), '/profile/create',
+            reason: 'SKIPPED_ACTIVE 后端从不下发；万一出现按未知兜底');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, null), '/profile/create');
+      }
+    });
+
+    test('PET_DIARY_POSTED 落点不变', () {
+      expect(DeepLinkRoutes.pushPayloadToLocation('PET_DIARY_POSTED', '88'), '/content/88');
+    });
   });
 }

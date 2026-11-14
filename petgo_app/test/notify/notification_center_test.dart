@@ -228,14 +228,17 @@ void main() {
     expect(location, DeepLinkRoutes.publishGrowthCalendar);
   });
 
-  testWidgets('回归 bug 20260729: 纪念日通知落 Diary 分支根须 go 不得 push（push 白屏+Tab 永久失效）',
+  // V1.5.0 onboarding-recall Story 7.1：纪念日落点改为发布页（非分支根），本回归改用仍落 Diary 分支根的
+  // 生命周期 REVIEW 变体（`/profile`）钉住「分支根须 go 不得 push」。
+  testWidgets('回归 bug 20260729: 落 Diary 分支根的通知须 go 不得 push（push 白屏+Tab 永久失效）',
       (tester) async {
     final repo = _FakeNotifyRepo(items: [
       const NotificationItem(
-          type: 'COMPANION_ANNIVERSARY',
-          deepLinkType: 'COMPANION_ANNIVERSARY',
-          title: '3 个月纪念日',
-          deepLinkToken: 'annivTok',
+          type: 'LIFECYCLE_D7',
+          deepLinkType: 'LIFECYCLE_D7',
+          title: 'Rangkuman minggu ini',
+          deepLinkToken: 'reviewTok',
+          targetRef: 'REVIEW',
           read: false),
     ]);
     StatefulNavigationShell? shell;
@@ -270,8 +273,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // 点纪念日通知（标题按 type 本地化渲染）→ 必须落到 Diary 分支（go 切分支），无 GlobalKey 撞车。
-    await tester.tap(find.text('Companion anniversary'));
+    // 点 D7 周回顾通知（旧变体 REVIEW → /profile）→ 必须落到 Diary 分支（go 切分支），无 GlobalKey 撞车。
+    expect(DeepLinkRoutes.pushPayloadToLocation('LIFECYCLE_D7', 'REVIEW'), DeepLinkRoutes.growthArchive);
+    await tester.tap(find.text('Your week in review'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(router.state.uri.toString(), DeepLinkRoutes.growthArchive);

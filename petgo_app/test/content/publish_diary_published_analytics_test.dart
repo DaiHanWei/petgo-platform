@@ -25,6 +25,7 @@ import 'package:tailtopia/features/content/domain/published_post.dart';
 /// - Moment / Tips 不报；发布失败不报。
 void main() {
   late List<(String, Map<String, Object>?)> events;
+  late PublishController lastController;
 
   setUp(() {
     events = [];
@@ -38,7 +39,11 @@ void main() {
       bool fail = false,
       String? failSlug,
       int? status,
-      BragPostSource? entrySource}) async {
+      BragPostSource? entrySource,
+      List<int>? initialPetIds,
+      String? entry,
+      List<PetListItem> pets = _threePets,
+      bool submit = true}) async {
     tester.view.physicalSize = const Size(1200, 3200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -49,16 +54,16 @@ void main() {
       publishControllerProvider.overrideWithValue(controller),
       profileRepositoryProvider.overrideWithValue(_Profiles()),
       authControllerProvider.overrideWith(_Auth.new),
-      petListProvider.overrideWith((ref) async => const [
-            PetListItem(id: 1, name: 'Orenji'),
-            PetListItem(id: 2, name: 'Kopi'),
-            PetListItem(id: 3, name: 'Mochi'),
-          ]),
+      petListProvider.overrideWith((ref) async => pets),
     ]);
     addTearDown(container.dispose);
     final router = GoRouter(initialLocation: '/home', routes: [
       GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('home'))),
-      GoRoute(path: '/compose', builder: (c, s) => Scaffold(body: PublishComposePage(preset: preset, entrySource: entrySource))),
+      GoRoute(
+          path: '/compose',
+          builder: (c, s) => Scaffold(
+              body: PublishComposePage(
+                  preset: preset, entrySource: entrySource, initialPetIds: initialPetIds, entry: entry))),
       GoRoute(path: '/publish/done', builder: (c, s) => PublishDonePage(args: s.extra as PublishResultArgs)),
       GoRoute(
           path: '/publish/rejected', builder: (c, s) => PublishRejectedPage(args: s.extra as PublishResultArgs)),
@@ -78,6 +83,8 @@ void main() {
       await tester.tap(find.byKey(ValueKey('publishPetChip-$id')));
       await tester.pump();
     }
+    lastController = controller;
+    if (!submit) return;
     events.clear();
     await tester.tap(find.byKey(const ValueKey('publishSubmit')));
     await tester.pump();
@@ -136,6 +143,46 @@ void main() {
     expect(find.byType(PublishDonePage), findsNothing);
     expect(find.byKey(const ValueKey('publishPetChips')), findsOneWidget);
     expect(diaryEvents(), isEmpty);
+  });
+
+  // ===== V1.5.0 onboarding-recall Story 7.1 · AC4 / AC5：纪念日直达预选这只宠物 + entry 埋点 =====
+
+  testWidgets('7.1 AC5：entry=push_anniversary → diary_published 带 entry；其余属性不变', (tester) async {
+    await publish(tester, preset: ContentType.growthMoment, initialPetIds: [2], entry: 'push_anniversary');
+    expect(diaryEvents().single, {'pet_count': 1, 'entry': 'push_anniversary'});
+  });
+
+  testWidgets('7.1 AC5：entry=push_lifecycle → diary_published 带 entry', (tester) async {
+    await publish(tester, preset: ContentType.growthMoment, tapPets: [1], entry: 'push_lifecycle');
+    expect(diaryEvents().single, {'pet_count': 1, 'entry': 'push_lifecycle'});
+  });
+
+  testWidgets('7.1 AC5：未知 entry 值不带（只认两个推送入口）', (tester) async {
+    await publish(tester, preset: ContentType.growthMoment, tapPets: [1], entry: 'whatever');
+    expect(diaryEvents().single, {'pet_count': 1});
+  });
+
+  testWidgets('7.1 AC4：petId 有效（本账号 ACTIVE）→ 只选中这一只（默认宠物不选）', (tester) async {
+    await publish(tester, preset: ContentType.growthMoment, initialPetIds: [3], submit: false);
+    expect(lastController.type, ContentType.growthMoment);
+    expect(lastController.petIds, [3]);
+  });
+
+  testWidgets('7.1 AC4：petId 是别人的 / 已删 → 忽略，走现有默认（多只不预选）', (tester) async {
+    await publish(tester, preset: ContentType.growthMoment, initialPetIds: [99], submit: false);
+    expect(lastController.petIds, isEmpty);
+  });
+
+  testWidgets('7.1 AC4：petId 是只读宠物 → 忽略；只剩 1 只正常宠物 → 现有 F4 自动选中那只', (tester) async {
+    await publish(tester,
+        preset: ContentType.growthMoment,
+        initialPetIds: [2],
+        pets: const [
+          PetListItem(id: 1, name: 'Orenji'),
+          PetListItem(id: 2, name: 'Kopi', status: PetListItem.statusReadOnly),
+        ],
+        submit: false);
+    expect(lastController.petIds, [1]);
   });
 }
 
@@ -200,3 +247,9 @@ class _Auth extends AuthController {
   @override
   Future<void> ensureRestored() => Future<void>.value();
 }
+
+const List<PetListItem> _threePets = [
+  PetListItem(id: 1, name: 'Orenji'),
+  PetListItem(id: 2, name: 'Kopi'),
+  PetListItem(id: 3, name: 'Mochi'),
+];

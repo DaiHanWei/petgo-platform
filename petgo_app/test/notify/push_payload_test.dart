@@ -115,6 +115,29 @@ void main() {
       );
     });
 
+    test('V1.5.0 Story 7.1：直达集合 = 原 3 个 + 本线 6 个（只加不删）', () {
+      expect(kPushDirectTypes, containsAll(<String>[
+        'GROWTH_LEVEL_UP', 'SHOP_ORDER_REORDERED', 'COUPON_EXPIRING',
+        'USER_POST_PUBLISHED', 'PET_DIARY_POSTED', 'COMPANION_ANNIVERSARY',
+        'LIFECYCLE_D1', 'LIFECYCLE_D3', 'LIFECYCLE_D7',
+      ]));
+      expect(kPushDirectTypes, isNot(contains('LIFECYCLE_WINBACK')), reason: '召回节点不在本线直达名单');
+      // 有 token 的通知类推送：直达类型落深链，不经通知中心
+      for (final t in ['USER_POST_PUBLISHED', 'PET_DIARY_POSTED', 'LIFECYCLE_D1']) {
+        expect(pushClickLocation(hasToken: true, deepLink: '/content/9', type: t), '/content/9');
+      }
+      expect(
+        pushClickLocation(
+            hasToken: true,
+            deepLink: '/publish?preset=growth-calendar&petId=3&entry=push_anniversary',
+            type: 'COMPANION_ANNIVERSARY'),
+        '/publish?preset=growth-calendar&petId=3&entry=push_anniversary',
+      );
+      // 非直达类型照旧落通知中心
+      expect(pushClickLocation(hasToken: true, deepLink: '/content/9', type: 'CONTENT_LIKED'),
+          DeepLinkRoutes.notificationsCenter);
+    });
+
     test('v1.4.2 shop 9.3：券快过期推送（有 token）→ 直达我的券', () {
       expect(kPushDirectTypes, contains('COUPON_EXPIRING'));
       expect(

@@ -89,6 +89,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.initialPetIds,
     this.entrySource,
     this.fromOnboarding = false,
+    this.entry,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -126,6 +127,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// `entry=after_post&landing=profile`，替换掉 `/publish/done`。不发的去向由着陆页兜底。
   final bool fromOnboarding;
 
+  /// 推送入口（V1.5.0 onboarding-recall Story 7.1 · PRD §4）：`push_anniversary` / `push_lifecycle`；
+  /// 仅用于发布成功埋点 `diary_published.entry`，其余入口为 null（不带）。
+  final String? entry;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
@@ -139,6 +144,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     List<int>? initialPetIds,
     BragPostSource? entrySource,
     bool fromOnboarding = false,
+    String? entry,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -166,6 +172,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
           initialPetIds: initialPetIds,
           entrySource: entrySource,
           fromOnboarding: fromOnboarding,
+          entry: entry,
         ),
       ),
     );
@@ -692,6 +699,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         Analytics.capture('diary_published', {
           'pet_count': controller.petIds.length,
           if (widget.entrySource == BragPostSource.milestoneCelebration) 'source': 'milestone_celebration',
+          // V1.5.0 onboarding-recall Story 7.1：推送直达发布页（纪念日 / 召回）带 entry；其余入口不带。
+          if (widget.entry == 'push_anniversary') 'entry': 'push_anniversary',
+          if (widget.entry == 'push_lifecycle') 'entry': 'push_lifecycle',
         });
       }
       // V1.4.2 social-topic Story 4.4 · AC6（R-2 / PRD §4）：发布成功后按**服务端返回的 topics** 逐个上报

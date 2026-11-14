@@ -1349,6 +1349,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             milestoneCode: s.uri.queryParameters['milestoneCode'],
             // V1.5.0 onboarding-recall Story 1.2 · OR-7：只认 `onboarding`（发布成功 / 不发都进首日推荐页）。
             fromOnboarding: s.uri.queryParameters['from'] == 'onboarding',
+            // V1.5.0 onboarding-recall Story 7.1 · FR-184：纪念日直达预选这只宠物（不在本账号 ACTIVE 宠物里由发布页忽略）。
+            petId: int.tryParse(s.uri.queryParameters['petId'] ?? ''),
+            // 只认 push_anniversary / push_lifecycle（发布成功埋点用），其余丢弃。
+            entry: DeepLinkRoutes.publishEntries.contains(s.uri.queryParameters['entry'])
+                ? s.uri.queryParameters['entry']
+                : null,
           );
         },
       ),

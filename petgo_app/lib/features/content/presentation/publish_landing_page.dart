@@ -13,7 +13,13 @@ import 'publish_compose_page.dart';
 /// （可预选类型），关闭后回上一页（无上一页才回首页）。发布本身仍走既有 [PublishComposePage] sheet（不另起全屏页）。
 class PublishLandingPage extends ConsumerStatefulWidget {
   const PublishLandingPage(
-      {super.key, this.preset, this.presetEventDate, this.milestoneCode, this.fromOnboarding = false});
+      {super.key,
+      this.preset,
+      this.presetEventDate,
+      this.milestoneCode,
+      this.fromOnboarding = false,
+      this.petId,
+      this.entry});
 
   /// 预选发布类型（如生日深链预选成长日历）；为空时与「＋」入口行为一致。
   final ContentType? preset;
@@ -27,6 +33,13 @@ class PublishLandingPage extends ConsumerStatefulWidget {
   /// 首日引导进来（`/publish?from=onboarding`，V1.5.0 onboarding-recall Story 1.2 · OR-7）：
   /// 发布成功 → 首日推荐页 `entry=after_post`；不发（✕ / 返回 / 被拒页返回）→ `entry=skip_post`；落点都是 `/profile`。
   final bool fromOnboarding;
+
+  /// 预选宠物（`/publish?petId=`，V1.5.0 onboarding-recall Story 7.1 · 纪念日直达）：透传为发布页 `initialPetIds: [petId]`；
+  /// 不在本账号 ACTIVE 宠物里由发布页忽略。
+  final int? petId;
+
+  /// 推送入口（`push_anniversary` / `push_lifecycle`，V1.5.0 Story 7.1）：发布成功 `diary_published` 带 `entry`。
+  final String? entry;
 
   @override
   ConsumerState<PublishLandingPage> createState() => _PublishLandingPageState();
@@ -54,7 +67,9 @@ class _PublishLandingPageState extends ConsumerState<PublishLandingPage> {
         preset: widget.preset,
         presetEventDate: widget.presetEventDate,
         milestoneCode: widget.milestoneCode,
-        fromOnboarding: widget.fromOnboarding);
+        fromOnboarding: widget.fromOnboarding,
+        initialPetIds: widget.petId == null ? null : [widget.petId!],
+        entry: widget.entry);
     if (!mounted) return;
     // 所有入口统一走「重新成为栈顶才离开」（bug 20260924-564）：
     // 原先非里程碑路径在这里无条件 go('/home') 清栈 —— 从 Diary 日历「+」进来放弃发布，

@@ -57,7 +57,19 @@ void reportOpsNotificationOpenedFromPush(PushPayload p) {
 
 /// 推送点击直达深链目标的通知类型（其余通知类推送仍落通知中心，2026-08-07 产品口径）。
 /// v1.4.2 shop 9.3（C-10）：`COUPON_EXPIRING` 并入 → 我的券。
-const Set<String> kPushDirectTypes = {'GROWTH_LEVEL_UP', 'SHOP_ORDER_REORDERED', 'COUPON_EXPIRING'};
+/// V1.5.0 onboarding-recall Story 7.1（FR-184 · OR-25）：追加关注更新 / 追更新 Diary / 纪念日 / 召回 D1·D3·D7 六类
+/// （🔴 三线共用集合，只加不删；健康提醒 / 运营活动线也会往这里加，合并取并集）。
+const Set<String> kPushDirectTypes = {
+  'GROWTH_LEVEL_UP',
+  'SHOP_ORDER_REORDERED',
+  'COUPON_EXPIRING',
+  'USER_POST_PUBLISHED',
+  'PET_DIARY_POSTED',
+  'COMPANION_ANNIVERSARY',
+  'LIFECYCLE_D1',
+  'LIFECYCLE_D3',
+  'LIFECYCLE_D7',
+};
 
 /// 券快过期推送点开埋点（v1.4.2 shop Story 9.3 · AC4.3，PRD §4：本推送须单独埋）。
 /// 只在**推送点击**时调（通知中心列表点击不报）。`coupon_count` = targetRef 张数，解析不出则不带。

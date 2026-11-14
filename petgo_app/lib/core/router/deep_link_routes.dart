@@ -39,6 +39,26 @@ class DeepLinkRoutes {
   /// 字面量：core 不 import feature（与 `account_milestones_page.dart` 的 `kMilestonesEntryRoute` 同值）。
   static const String milestonesEntryLulus = '/me/milestones-entry?celebrate=lulus';
 
+  /// 里程碑分发路由（V1.5.0 onboarding-recall Story 7.1 · OR-26）：有宠物 → 宠物里程碑页，否则账号级里程碑页。
+  static const String milestonesEntry = '/me/milestones-entry';
+
+  /// 推荐宠物集合页（V1.5.0 Story 7.1：召回 `DISCOVER` 落点）。
+  static const String petRecommendations = '/pet-recommendations';
+
+  /// 发布页 `entry`（只认这两个值，V1.5.0 Story 7.1 · PRD §4）：发布成功 `diary_published` 带上。
+  static const String publishEntryPushAnniversary = 'push_anniversary';
+  static const String publishEntryPushLifecycle = 'push_lifecycle';
+  static const Set<String> publishEntries = {publishEntryPushAnniversary, publishEntryPushLifecycle};
+
+  /// 纪念日推送落点（V1.5.0 Story 7.1 · FR-184 / PRD AC14）：直接打开这只宠物的 Diary 发布页；
+  /// targetRef 非数字（异常数据）→ 不带 petId，发布页走默认宠物逻辑。
+  static String anniversaryPublishLocation(String? targetRef) {
+    final id = int.tryParse(targetRef ?? '');
+    return id == null
+        ? '$publishGrowthCalendar&entry=$publishEntryPushAnniversary'
+        : '$publishGrowthCalendar&petId=$id&entry=$publishEntryPushAnniversary';
+  }
+
   /// Lulus Pemula 三物种编码（与 `milestone_account_codes.dart` 的 `kLulusPemulaCodes` 同值；core 不 import feature）。
   static const Set<String> _lulusPemulaCodes = {'C-S16', 'D-S16', 'G-S9'};
 
@@ -68,7 +88,7 @@ class DeepLinkRoutes {
   /// **固定目标类**（V1 单宠物，目标页自解析当前用户宠物，不依赖 ref，FR-40/41/42）：
   /// - `NEW_CONSULT_REQUEST` → 兽医工作台。
   /// - `PET_BIRTHDAY` → 「+发布」预选成长日历。
-  /// - `COMPANION_ANNIVERSARY` → 成长档案 Tab。
+  /// - `COMPANION_ANNIVERSARY` → 这只宠物的 Diary 发布页（V1.5.0 Story 7.1，targetRef = 宠物 id）。
   /// - `MILESTONE_NODE` → 里程碑列表页（壳）。
   /// - `PET_SLOT_EXPIRING` / `PET_SLOT_EXPIRED` → 名额管理页（V1.4.0 multi-pet Story 2.4 · K1）。
   ///
@@ -82,7 +102,8 @@ class DeepLinkRoutes {
       case 'PET_BIRTHDAY':
         return publishGrowthCalendar;
       case 'COMPANION_ANNIVERSARY':
-        return growthArchive;
+        // V1.5.0 onboarding-recall Story 7.1（OR-26）：纪念日 → 这只宠物的 Diary 发布页（targetRef = 宠物 id，新旧通知同）。
+        return anniversaryPublishLocation(targetRef);
       case 'MILESTONE_NODE':
       case 'MILESTONE_SM_NODE':
         // V1.5.0 onboarding-recall Story 3.3 · AC5（OR-26）：Lulus Pemula 毕业通知（S 级留痕的 deepLinkType 是
@@ -131,9 +152,14 @@ class DeepLinkRoutes {
         type == 'LIFECYCLE_D7' ||
         type == 'LIFECYCLE_WINBACK') {
       return switch (targetRef) {
-        'RECORD' => publishGrowthCalendar,
+        // V1.5.0 Story 7.1：发布成功埋点带 entry=push_lifecycle。
+        'RECORD' => '$publishGrowthCalendar&entry=$publishEntryPushLifecycle',
         'FEED' => feedHome,
         'REVIEW' => growthArchive,
+        // V1.5.0 onboarding-recall Story 7.1（OR-26）：召回新变体。
+        'DISCOVER' => petRecommendations,
+        'NEWBIE_TASKS' => milestonesEntry,
+        'GRADUATED' => milestonesEntryLulus,
         // CREATE_PROFILE 与任何未知/缺失 variant 一律落建档页：
         // 会收到这四类推送的人，绝大多数缺的就是这一步。
         _ => createPetProfile,
@@ -206,6 +232,8 @@ class DeepLinkRoutes {
         return id == null ? notificationsCenter : '/users/$id';
       // 追更宠物新 Diary → 帖子详情（targetRef = 帖子 id）；非数字落通知中心。
       case 'PET_DIARY_POSTED':
+      // V1.5.0 onboarding-recall Story 7.1：关注的人发了新帖 → 帖子详情（targetRef = 帖子 id）；非数字落通知中心。
+      case 'USER_POST_PUBLISHED':
         final id = int.tryParse(targetRef);
         return id == null ? notificationsCenter : '/content/$id';
       // v1.4.2 shop Story 9.1 · AC6.4（F22）：迟到款已重新下单 → 新订单详情（targetRef = 新单 token，4.2）。
