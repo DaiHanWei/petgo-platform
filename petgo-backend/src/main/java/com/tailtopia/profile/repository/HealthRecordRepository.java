@@ -63,4 +63,12 @@ public interface HealthRecordRepository extends JpaRepository<HealthRecord, Long
      */
     boolean existsByPetProfileIdAndTypeInAndEventDateBetween(long petProfileId,
             Collection<HealthRecordType> types, LocalDate from, LocalDate to);
+
+    /** V1.5.0 Story 1.3 上线回填：一批宠物的全部记录。 */
+    List<HealthRecord> findByPetProfileIdIn(Collection<Long> petProfileIds);
+
+    /** V1.5.0 Story 1.3 上线回填：有存量（BACKFILL）记录的宠物 id，升序。 */
+    @Query(value = "SELECT DISTINCT pet_profile_id FROM health_records WHERE record_origin = 'BACKFILL' "
+            + "ORDER BY pet_profile_id", nativeQuery = true)
+    List<Long> findPetIdsWithBackfillRecords();
 }

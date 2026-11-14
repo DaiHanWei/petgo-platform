@@ -85,6 +85,9 @@ import tools.jackson.databind.ObjectMapper;
             // V1.4.0 multi-pet Story 2.3：名额到期每小时扫描会把共享库里别的测试遗留的过期名额置 EXPIRED、给其用户发通知
             // （「未读数 = N」类断言随机红）。"-" = 关闭；扫描由 PetSlotExpiryScanIntegrationTest 直接调 scan(now) 验证。
             "petgo.pet-slot.expiry-scan-cron=-",
+            // V1.5.0 健康记录提醒 Story 1.3：上线回填随启动跑会改写共享库里别的测试造的存量健康记录；
+            // 测试里关闭，由 HealthLaunchBackfillIntegrationTest 显式调用 runBackfill() 验证。
+            "petgo.health-reminder.backfill-on-startup=false",
             // V1.4.2 shop Story 2.3：券快过期提醒（每天 WIB 10:00）跨点时会给共享库用户发通知，同上理由关闭；
             // 由 CouponExpiryReminderIntegrationTest 直接调 run(now) 验证。
             "petgo.shop.coupon.expiry-reminder-cron=-",

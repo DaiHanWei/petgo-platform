@@ -2,7 +2,7 @@ package com.tailtopia.profile.health;
 
 import com.tailtopia.profile.domain.HealthRecord;
 import com.tailtopia.profile.domain.HealthRecordType;
-import com.tailtopia.profile.domain.VaccinePreset;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -10,8 +10,8 @@ import java.util.List;
  * PRD FR-168 Old app versions）。
  *
  * <p>旧版 App 不认识新字段：<b>新建</b>（Story 1.2）时疫苗名走 {@link VaccineKeywordMatcher}、按 {@link NextDateRules}
- * 写默认 Next date（无类型驱虫 = Legacy +3 个月）；<b>编辑</b>（Story 1.3）按「改了疫苗名 → 重匹配、清剂次；
- * 改了日期使 next_date ≤ eventDate → 重算」处理。其余情况新字段一律不动。
+ * 写默认 Next date（无类型驱虫 = Legacy +3 个月）；<b>编辑</b>（Story 1.3）按「改了疫苗名 → 重匹配、清剂次、
+ * 按新预设重算 Next date；改了日期使 next_date ≤ eventDate → 重算」处理。其余情况新字段一律不动（PRD AC54）。
  */
 public final class HealthRecordDefaults {
 
@@ -33,26 +33,33 @@ public final class HealthRecordDefaults {
      */
     public static void applyForLegacyClient(PetHealthSnapshot pet, HealthRecord record,
             List<HealthRecordSnapshot> others, LegacyChange change) {
-        if (!change.created()) {
-            // TODO(v1.5.0 Story 1.3)：编辑 → 改名重匹配 / 改日期重算。
-            return;
+        boolean renamedVaccine = change.vaccineNameChanged() && record.getType() == HealthRecordType.VACCINE;
+        if (pet.isCatOrDog() && (change.created() || renamedVaccine)) {
+            // 新建，或旧版改了疫苗名（AC54 例外一）：关键词匹配预设、清剂次，按默认值写 Next date；
+            // 没有默认值时保留原值（PRD：旧版编辑从不清空新字段）。OTHER 物种不存预设、永不预填（FR-158）。
+            if (record.getType() == HealthRecordType.VACCINE) {
+                record.setVaccinePreset(VaccineKeywordMatcher.match(record.getVaccineName(), pet.petType()));
+                record.setDose(null);
+            }
+            LocalDate next = defaultNextDate(pet, record, others);
+            if (next != null) {
+                record.setNextDate(next);
+            }
         }
-        if (!pet.isCatOrDog()) {
-            return; // OTHER 物种：不存预设、永不预填（FR-158）
-        }
-        if (record.getType() == HealthRecordType.VACCINE) {
-            record.setVaccinePreset(VaccineKeywordMatcher.match(record.getVaccineName(), pet.petType()));
-            record.setDose(null);
-        }
-        NextDatePlan plan = NextDateRules.plan(pet, draftOf(record), others);
-        if (plan.allowed() && !plan.locked() && plan.suggestion() != null) {
-            record.setNextDate(plan.suggestion().nextDate());
+        // AC54 例外二：新 event date 让已存 Next date 失效（≤ event date）→ 按当前字段重算；没有默认值就清掉
+        // （失效值不能留）。任何物种、含同时改名的编辑都要过这一道。
+        LocalDate stored = record.getNextDate();
+        if (!change.created() && stored != null && !stored.isAfter(record.getEventDate())) {
+            record.setNextDate(pet.isCatOrDog() ? defaultNextDate(pet, record, others) : null);
         }
     }
 
+    private static LocalDate defaultNextDate(PetHealthSnapshot pet, HealthRecord record,
+            List<HealthRecordSnapshot> others) {
+        return NextDateRules.defaultNextDate(pet, draftOf(record), others);
+    }
+
     static RecordDraft draftOf(HealthRecord r) {
-        return new RecordDraft(r.getId(), r.getType(), r.getVaccinePreset() == VaccinePreset.OTHER ? null
-                : r.getVaccinePreset(), r.getVaccineName(), r.getDose(), r.getDewormType(),
-                r.getProductDurationMonths(), r.getEventDate(), r.getCreatedAt());
+        return RecordDraft.of(HealthRecordSnapshot.of(r), null);
     }
 }

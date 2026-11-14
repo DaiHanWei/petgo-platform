@@ -63,4 +63,7 @@ public interface PetProfileRepository extends JpaRepository<PetProfile, Long> {
     /** 重新读出 {@code follower_count}（实体值是加载时快照，追更写入后要最新值时用）；宠物不存在为 null。 */
     @Query(value = "SELECT follower_count FROM pet_profiles WHERE id = :petId", nativeQuery = true)
     Integer findFollowerCount(@Param("petId") long petId);
+
+    /** V1.5.0 Story 1.3：怀孕 / 哺乳标记仍为是的宠物（日跑自动清除候选；量小，只取标记行）。 */
+    List<PetProfile> findByPregnantNursingTrue();
 }

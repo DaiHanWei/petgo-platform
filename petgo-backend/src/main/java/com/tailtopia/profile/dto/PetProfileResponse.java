@@ -1,7 +1,7 @@
 package com.tailtopia.profile.dto;
 
 import com.tailtopia.profile.domain.PetProfile;
-import com.tailtopia.shared.schedule.ScheduleWindow;
+import com.tailtopia.profile.health.PregnancyFlag;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -74,14 +74,8 @@ public record PetProfileResponse(
                 pregnantAutoOffDate(p));
     }
 
-    /**
-     * 怀孕标记的自动关闭日（Story 1.1 先内联，Story 1.3 收口到 {@code profile.health.PregnancyFlag.autoOffDate}）：
-     * {@code pregnant_set_at} 的 WIB 日期 + 4 个日历月（Java {@code plusMonths} 自带月末钳制）。
-     */
+    /** 怀孕标记的自动关闭日（{@link PregnancyFlag#autoOffDate}）；未设为「是」→ null。 */
     private static LocalDate pregnantAutoOffDate(PetProfile p) {
-        if (!p.isPregnantNursingEffective() || p.getPregnantSetAt() == null) {
-            return null;
-        }
-        return p.getPregnantSetAt().atZone(ScheduleWindow.WIB).toLocalDate().plusMonths(4);
+        return p.isPregnantNursingEffective() ? PregnancyFlag.autoOffDate(p.getPregnantSetAt()) : null;
     }
 }

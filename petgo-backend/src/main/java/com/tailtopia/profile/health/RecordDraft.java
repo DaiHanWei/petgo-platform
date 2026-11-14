@@ -14,6 +14,13 @@ import java.time.LocalDate;
 public record RecordDraft(Long recordId, HealthRecordType type, VaccinePreset vaccinePreset, String vaccineName,
         Integer dose, DewormType dewormType, Integer durationMonths, LocalDate eventDate, Instant createdAt) {
 
+    /** 由已存记录快照构造（预设 OTHER 视同无预设：不预填）。 */
+    public static RecordDraft of(HealthRecordSnapshot r, VaccinePreset presetOverride) {
+        VaccinePreset preset = presetOverride != null ? presetOverride : r.vaccinePreset();
+        return new RecordDraft(r.id(), r.type(), preset == VaccinePreset.OTHER ? null : preset, r.vaccineName(),
+                r.dose(), r.dewormType(), r.durationMonths(), r.eventDate(), r.createdAt());
+    }
+
     /** 新建记录在周期 / 组内排序时的 id 占位（排在同日已有记录之后）。 */
     static final long NEW_RECORD_ID = Long.MAX_VALUE;
 

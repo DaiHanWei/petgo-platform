@@ -64,6 +64,13 @@ public final class NextDateRules {
         return new NextDatePlan(true, false, null, NextDateSuggestion.of(next));
     }
 
+    /** 默认 Next date：允许、未锁定且有建议时的日期，否则 null（旧版默认值、上线回填共用）。 */
+    public static LocalDate defaultNextDate(PetHealthSnapshot pet, RecordDraft draft,
+            List<HealthRecordSnapshot> history) {
+        NextDatePlan p = plan(pet, draft, history);
+        return p.allowed() && !p.locked() && p.suggestion() != null ? p.suggestion().nextDate() : null;
+    }
+
     /** 宠物是否已有 Puppy DP 记录（Combo 的 young 系列因此为 2 剂）。 */
     static boolean hasPuppyDp(List<HealthRecordSnapshot> records, PetHealthSnapshot pet) {
         return records.stream().anyMatch(r -> RecordKinds.effectivePreset(r, pet.petType()) == VaccinePreset.PUPPY_DP);
