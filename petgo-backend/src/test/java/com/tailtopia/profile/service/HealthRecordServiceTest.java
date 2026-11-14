@@ -33,7 +33,8 @@ class HealthRecordServiceTest {
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final HealthRecordService service =
             new HealthRecordService(records, healthEvents, new PetResolver(profiles), events,
-                    new PetWriteGuard(profiles), profiles);
+                    new PetWriteGuard(profiles), profiles,
+                    new com.tailtopia.profile.health.TodayLaunchDateProvider());
 
     @BeforeEach
     void setUp() {
@@ -361,9 +362,10 @@ class HealthRecordServiceTest {
     @Test
     void legacyCreateIgnoresNewFieldsAndMarksLegacyOrigin() {
         realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
-        service.create(7L, 20L, v150("VACCINE", "Tricat", "F3", 2, null, null, EVENT.plusYears(1), null), false);
+        service.create(7L, 20L, v150("VACCINE", "Vaksin X", "F3", 2, null, null, EVENT.plusYears(2), null), false);
         HealthRecord r = savedRecord();
-        assertThat(r.getVaccinePreset()).isNull();
+        // 请求里的预设 / 剂次 / Next date 一律不读；名字无关键词 → OTHER，无预填（Story 1.2 默认值）。
+        assertThat(r.getVaccinePreset()).isEqualTo(com.tailtopia.profile.domain.VaccinePreset.OTHER);
         assertThat(r.getDose()).isNull();
         assertThat(r.getNextDate()).isNull();
         assertThat(r.getRecordOrigin()).isEqualTo(com.tailtopia.profile.domain.RecordOrigin.LEGACY_APP);
@@ -373,7 +375,10 @@ class HealthRecordServiceTest {
     void legacyUntypedDewormAllowed() {
         realPet(20L, com.tailtopia.profile.domain.PetType.DOG);
         service.create(7L, 20L, req("DEWORM", null), false);
-        assertThat(savedRecord().getDewormType()).isNull();
+        HealthRecord r = savedRecord();
+        assertThat(r.getDewormType()).isNull();
+        // Story 1.2：旧版无类型驱虫 = Legacy，默认 Next date = event + 3 个月（PRD AC54）。
+        assertThat(r.getNextDate()).isEqualTo(LocalDate.of(2024, 4, 1));
     }
 
     @Test
@@ -506,5 +511,33 @@ class HealthRecordServiceTest {
                 "F3", 1, null, null, null, null), true);
         assertThat(r.getVaccineName()).isEqualTo("Vaksin dari klinik");
         assertThat(r.getVaccinePreset()).isEqualTo(com.tailtopia.profile.domain.VaccinePreset.F3);
+    }
+
+    // ---- Story 1.2 · AC8：旧版新建写默认值；列表带显示字段 ----
+
+    @Test
+    void legacyCreateKeywordMatchesAndPrefills() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        service.create(7L, 20L, new HealthRecordCreateRequest("VACCINE", null, "Vaksin tricat",
+                LocalDate.of(2026, 2, 1), null), false);
+        HealthRecord r = savedRecord();
+        assertThat(r.getVaccinePreset()).isEqualTo(com.tailtopia.profile.domain.VaccinePreset.F3);
+        assertThat(r.getVaccineName()).isEqualTo("Vaksin tricat"); // 原文不动
+        assertThat(r.getNextDate()).isEqualTo(LocalDate.of(2027, 2, 1)); // 成年 / 无生日 空剂次 → +1 年（AC50）
+    }
+
+    @Test
+    void timelineCarriesDisplayStatus() {
+        realPet(20L, com.tailtopia.profile.domain.PetType.CAT);
+        HealthRecord vac = HealthRecord.create(20L, HealthRecordType.VACCINE, null, "F4", LocalDate.of(2020, 1, 1),
+                null);
+        org.springframework.test.util.ReflectionTestUtils.setField(vac, "id", 2L);
+        vac.setVaccinePreset(com.tailtopia.profile.domain.VaccinePreset.F4);
+        vac.setNextDate(LocalDate.of(2020, 2, 1));
+        when(records.findByPetProfileIdOrderByEventDateDescIdDesc(20L)).thenReturn(java.util.List.of(vac));
+        when(healthEvents.findByPetId(20L)).thenReturn(java.util.List.of());
+        var item = service.timeline(7L, 20L, true).get(0);
+        assertThat(item.recordStatus()).isEqualTo("OVERDUE");
+        assertThat(item.displayNextDate()).isEqualTo(LocalDate.of(2020, 2, 1));
     }
 }

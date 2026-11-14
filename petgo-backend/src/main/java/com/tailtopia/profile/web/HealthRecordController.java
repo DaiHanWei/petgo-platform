@@ -2,9 +2,12 @@ package com.tailtopia.profile.web;
 
 import com.tailtopia.profile.dto.HealthListItemResponse;
 import com.tailtopia.profile.dto.HealthRecordCreateRequest;
+import com.tailtopia.profile.dto.HealthRecordPreviewRequest;
+import com.tailtopia.profile.dto.HealthRecordPreviewResponse;
 import com.tailtopia.profile.dto.HealthRecordResponse;
 import com.tailtopia.profile.dto.HealthRecordUpdateRequest;
 import com.tailtopia.profile.service.ClientAppVersion;
+import com.tailtopia.profile.service.HealthRecordPreviewService;
 import com.tailtopia.profile.service.HealthRecordService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
@@ -40,14 +43,32 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthRecordController {
 
     private static final int WRITE_LIMIT = 30;
+    /** V1.5.0 Story 1.2：表单预填只读，字段每变一次调一次，限流放宽到 60 次 / 分钟。 */
+    private static final int PREVIEW_LIMIT = 60;
     private static final Duration WINDOW = Duration.ofMinutes(1);
 
     private final HealthRecordService service;
+    private final HealthRecordPreviewService previewService;
     private final RedisRateLimiter rateLimiter;
 
-    public HealthRecordController(HealthRecordService service, RedisRateLimiter rateLimiter) {
+    public HealthRecordController(HealthRecordService service, HealthRecordPreviewService previewService,
+            RedisRateLimiter rateLimiter) {
         this.service = service;
+        this.previewService = previewService;
         this.rateLimiter = rateLimiter;
+    }
+
+    /**
+     * 表单预填（V1.5.0 Story 1.2 · AC7）：Next date 建议、可选范围、锁定、到期疫苗 / 剂次、提示 code。只读不落库。
+     * 宠物归属同其余端点（不属于本人 → 404）。
+     */
+    @PostMapping("/preview")
+    public HealthRecordPreviewResponse preview(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "petId", required = false) Long petId,
+            @RequestBody HealthRecordPreviewRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:health-record:preview:" + ownerId, PREVIEW_LIMIT, WINDOW);
+        return previewService.preview(ownerId, petId, req);
     }
 
     /** 健康时间线混排（Story 7.2）：结构化记录（editable）+ 问诊存档（只读）按 event_date 倒序。无档案 → 404。 */

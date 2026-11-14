@@ -17,7 +17,12 @@ import com.tailtopia.profile.dto.HealthRecordUpdateRequest;
 import com.tailtopia.profile.event.HealthRecordChangedEvent;
 import com.tailtopia.profile.event.HealthRecordCreatedEvent;
 import com.tailtopia.profile.event.PetHealthProfileChangedEvent;
+import com.tailtopia.profile.health.HealthDates;
 import com.tailtopia.profile.health.HealthRecordDefaults;
+import com.tailtopia.profile.health.HealthRecordSnapshot;
+import com.tailtopia.profile.health.LaunchDateProvider;
+import com.tailtopia.profile.health.PetHealthSnapshot;
+import com.tailtopia.profile.health.RecordDisplayStatus;
 import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -27,6 +32,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -47,13 +53,16 @@ public class HealthRecordService {
     private final PetWriteGuard petWriteGuard;
     /** V1.5.0 Story 1.1：保存 NEUTER 记录时把宠物置 NEUTERED。 */
     private final PetProfileRepository profiles;
+    /** V1.5.0 Story 1.2：回填静默的「有效上线日」（2.1 起读 health_reminder_settings）。 */
+    private final LaunchDateProvider launchDates;
 
     private static final String LEGACY_VET_VISIT_MESSAGE = "当前 App 版本不支持 Kontrol dokter 记录，请升级到最新版本";
 
     public HealthRecordService(HealthRecordRepository records, HealthEventRepository healthEvents,
             PetResolver petResolver, ApplicationEventPublisher events, PetWriteGuard petWriteGuard,
-            PetProfileRepository profiles) {
+            PetProfileRepository profiles, LaunchDateProvider launchDates) {
         this.profiles = profiles;
+        this.launchDates = launchDates;
         this.petWriteGuard = petWriteGuard;
         this.records = records;
         this.healthEvents = healthEvents;
@@ -81,13 +90,20 @@ public class HealthRecordService {
      */
     @Transactional(readOnly = true)
     public List<HealthListItemResponse> timeline(long ownerId, Long petIdOrNull, boolean v150Client) {
-        long petId = requirePet(ownerId, petIdOrNull);
+        PetProfile pet = petResolver.resolve(ownerId, petIdOrNull);
+        long petId = pet.getId();
+        List<HealthRecord> petRecords = records.findByPetProfileIdOrderByEventDateDescIdDesc(petId);
+        // V1.5.0 Story 1.2：显示状态在服务端按全部记录算（含旧版看不到的 VET_VISIT——它不参与其他组，不影响结果）。
+        LocalDate today = HealthDates.today();
+        Map<Long, RecordDisplayStatus.Display> display = RecordDisplayStatus.compute(
+                petRecords.stream().map(HealthRecordSnapshot::of).toList(), PetHealthSnapshot.of(pet), today,
+                launchDates.effectiveLaunchDate(today));
         List<HealthListItemResponse> merged = new ArrayList<>();
-        for (HealthRecord r : records.findByPetProfileIdOrderByEventDateDescIdDesc(petId)) {
+        for (HealthRecord r : petRecords) {
             if (!v150Client && r.getType() == HealthRecordType.VET_VISIT) {
                 continue;
             }
-            merged.add(HealthListItemResponse.ofRecord(r));
+            merged.add(HealthListItemResponse.ofRecord(r, display.get(r.getId())));
         }
         for (HealthEvent e : healthEvents.findByPetId(petId)) {
             if (e.getArchiveDecision() == ArchiveDecision.ARCHIVED) {
@@ -139,7 +155,8 @@ public class HealthRecordService {
                     req.vaccineName() != null);
         } else {
             r.setRecordOrigin(RecordOrigin.LEGACY_APP);
-            HealthRecordDefaults.applyForLegacyClient(pet, r, HealthRecordDefaults.LegacyChange.ofCreate());
+            HealthRecordDefaults.applyForLegacyClient(PetHealthSnapshot.of(pet), r, historyOf(petId),
+                    HealthRecordDefaults.LegacyChange.ofCreate());
         }
         HealthRecord persisted = records.save(r);
         HealthRecordResponse saved = HealthRecordResponse.from(persisted);
@@ -210,9 +227,13 @@ public class HealthRecordService {
                 // 旧版改了类型：新字段对同类型保留原值，但不留旧类型的残值（如改成驱虫后还挂着疫苗预设 / 剂次）。
                 clearFieldsNotBelongingTo(r);
             }
-            HealthRecordDefaults.applyForLegacyClient(pet, r, new HealthRecordDefaults.LegacyChange(false,
+            HealthRecordDefaults.LegacyChange change = new HealthRecordDefaults.LegacyChange(false,
                     !Objects.equals(before.vaccineName(), r.getVaccineName()),
-                    !Objects.equals(before.eventDate(), r.getEventDate())));
+                    !Objects.equals(before.eventDate(), r.getEventDate()));
+            // 只有改名 / 改日期才可能重算（Story 1.3），其余编辑不读历史。
+            List<HealthRecordSnapshot> others = change.vaccineNameChanged() || change.eventDateChanged()
+                    ? historyOf(petId).stream().filter(h -> h.id() != recordId).toList() : List.of();
+            HealthRecordDefaults.applyForLegacyClient(PetHealthSnapshot.of(pet), r, others, change);
         }
         HealthRecordResponse saved = HealthRecordResponse.from(records.save(r));
         Snapshot after = Snapshot.of(r);
@@ -240,6 +261,11 @@ public class HealthRecordService {
                 HealthRecordChangedEvent.Change.DELETED, true));
     }
 
+    private List<HealthRecordSnapshot> historyOf(long petId) {
+        return records.findByPetProfileIdOrderByEventDateDescIdDesc(petId).stream()
+                .map(HealthRecordSnapshot::of).toList();
+    }
+
     /** 1.5.0 客户端随请求带上的新字段。 */
     private record V150Fields(String vaccinePreset, Integer dose, String dewormType, Integer productDurationMonths,
             LocalDate nextDate, Boolean clearNextDate) {
@@ -257,13 +283,9 @@ public class HealthRecordService {
 
         if (type == HealthRecordType.VACCINE) {
             if (f.vaccinePreset() != null) {
-                VaccinePreset preset = parseEnum(VaccinePreset.class, f.vaccinePreset(), "疫苗预设不合法");
-                if (!catOrDog) {
-                    // 非猫狗物种不存预设（只有自由文本）。
-                    preset = null;
-                } else if (!preset.appliesTo(species)) {
-                    throw AppException.validation("疫苗预设与宠物物种不符");
-                }
+                // 非猫狗物种不存预设（只有自由文本）；猫狗须适用于该物种。
+                VaccinePreset preset = presetForSpecies(
+                        parseEnum(VaccinePreset.class, f.vaccinePreset(), "疫苗预设不合法"), species);
                 VaccinePreset previous = r.getVaccinePreset();
                 r.setVaccinePreset(preset);
                 // 名字跟着预设走：本次没带名字、且原名为空或是旧预设的标签 → 换成新预设的标签。
@@ -291,15 +313,11 @@ public class HealthRecordService {
                 // 1.5.0 客户端的驱虫必须分型（含编辑一条存量未分型记录，哪怕只改备注）。
                 throw AppException.validation("请选择驱虫类型");
             }
-            if (r.getDewormType() == DewormType.HEARTWORM && species != PetType.DOG) {
-                throw AppException.validation("心丝虫预防只适用于狗");
-            }
+            requireHeartwormForDog(r.getDewormType(), species);
             if (r.getDewormType() == DewormType.EXTERNAL) {
                 Integer months = f.productDurationMonths();
                 if (months != null) {
-                    if (months != 1 && months != 3 && months != 8) {
-                        throw AppException.validation("产品时长只能是 1 / 3 / 8 个月");
-                    }
+                    requireValidDuration(months);
                     r.setProductDurationMonths(months);
                 } else if (r.getProductDurationMonths() == null) {
                     r.setProductDurationMonths(1);
@@ -331,6 +349,31 @@ public class HealthRecordService {
         if (next != null && (!next.isAfter(r.getEventDate()) || next.isAfter(r.getEventDate().plusYears(3)))) {
             throw AppException.validation("下次日期须晚于记录日期，且不超过 3 年");
         }
+    }
+
+    /** 产品时长只允许 1 / 3 / 8 个月（预填与保存同一口径）。 */
+    static void requireValidDuration(Integer months) {
+        if (months != null && months != 1 && months != 3 && months != 8) {
+            throw AppException.validation("产品时长只能是 1 / 3 / 8 个月");
+        }
+    }
+
+    /** 心丝虫只适用于狗（预填与保存同一口径）。 */
+    static void requireHeartwormForDog(DewormType type, PetType species) {
+        if (type == DewormType.HEARTWORM && species != PetType.DOG) {
+            throw AppException.validation("心丝虫预防只适用于狗");
+        }
+    }
+
+    /** 预设须适用于物种；非猫狗物种一律不存预设 → 返回 null（预填与保存同一口径）。 */
+    static VaccinePreset presetForSpecies(VaccinePreset preset, PetType species) {
+        if (preset == null || (species != PetType.CAT && species != PetType.DOG)) {
+            return null;
+        }
+        if (!preset.appliesTo(species)) {
+            throw AppException.validation("疫苗预设与宠物物种不符");
+        }
+        return preset;
     }
 
     /** 清掉不属于当前类型的新字段：预设 / 剂次只属于疫苗，驱虫类型 / 产品时长只属于驱虫。 */
@@ -370,10 +413,6 @@ public class HealthRecordService {
         }
     }
 
-    private long requirePet(long ownerId, Long petId) {
-        return petResolver.resolve(ownerId, petId).getId();
-    }
-
     /** 写路径：先归属（{@link PetResolver}，404）再可写（{@link PetWriteGuard}，只读 409）。 */
     private PetProfile requireWritablePet(long ownerId, Long petId) {
         PetProfile pet = petResolver.resolve(ownerId, petId);
@@ -381,7 +420,7 @@ public class HealthRecordService {
         return pet;
     }
 
-    private static HealthRecordType parseType(String raw) {
+    static HealthRecordType parseType(String raw) {
         if (raw == null) {
             throw AppException.validation("记录类型必选");
         }
@@ -392,7 +431,7 @@ public class HealthRecordService {
         }
     }
 
-    private static <E extends Enum<E>> E parseEnum(Class<E> type, String raw, String message) {
+    static <E extends Enum<E>> E parseEnum(Class<E> type, String raw, String message) {
         try {
             return Enum.valueOf(type, raw.trim());
         } catch (IllegalArgumentException e) {

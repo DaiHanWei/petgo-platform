@@ -2,6 +2,8 @@ package com.tailtopia.profile.dto;
 
 import com.tailtopia.profile.domain.HealthEvent;
 import com.tailtopia.profile.domain.HealthRecord;
+import com.tailtopia.profile.health.RecordDisplayStatus;
+import com.tailtopia.profile.health.RecordStatus;
 import java.time.LocalDate;
 
 /**
@@ -25,9 +27,13 @@ public record HealthListItemResponse(
         Integer dose,
         String dewormType,
         Integer productDurationMonths,
-        LocalDate nextDate) {
+        LocalDate nextDate,
+        // ===== V1.5.0 Story 1.2（架构增量 §3.4）：服务端算好的显示字段，App 只按 recordStatus 选样式 =====
+        LocalDate displayNextDate,
+        String recordStatus,
+        boolean nextDateLocked) {
 
-    public static HealthListItemResponse ofRecord(HealthRecord r) {
+    public static HealthListItemResponse ofRecord(HealthRecord r, RecordDisplayStatus.Display display) {
         return new HealthListItemResponse(
                 "RECORD", r.getId(), true, r.getType().name(),
                 r.getCustomName(), r.getVaccineName(), r.getNote(),
@@ -36,7 +42,10 @@ public record HealthListItemResponse(
                 r.getDose(),
                 r.getDewormType() == null ? null : r.getDewormType().name(),
                 r.getProductDurationMonths(),
-                r.getNextDate());
+                r.getNextDate(),
+                display == null ? null : display.displayNextDate(),
+                display == null ? null : display.recordStatus().name(),
+                display != null && display.nextDateLocked());
     }
 
     public static HealthListItemResponse ofConsult(HealthEvent e) {
@@ -44,6 +53,7 @@ public record HealthListItemResponse(
                 "CONSULT", e.getId(), false, "CONSULT",
                 null, null, null,
                 e.getSymptomSummary(), e.getAiLevel(), e.getEventDate(),
-                null, null, null, null, null);
+                null, null, null, null, null,
+                null, RecordStatus.DONE.name(), false);
     }
 }
