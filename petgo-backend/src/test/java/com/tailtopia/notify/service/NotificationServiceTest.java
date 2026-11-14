@@ -655,4 +655,48 @@ class NotificationServiceTest {
         verify(repo).save(any(Notification.class));
         org.mockito.Mockito.verifyNoInteractions(pusher);
     }
+
+    // ===== V1.5.0 健康记录提醒 Story 2.4 · AC3：sendHealthReminder =====
+
+    private NotificationService healthService() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(n, "id", 900L);
+            return n;
+        });
+        when(redis.opsForValue()).thenReturn(valueOps);
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy,
+                resolver, prefs);
+    }
+
+    @Test
+    void healthReminderStoresRenderedCopyAndPushesSameText() {
+        when(pusher.pushToUserNow(eq(7L), eq("Hari ini hari vaksin Mochi!"), eq("Satu suntikan…"),
+                eq("HEALTH_VACCINE_D_DAY"), anyString(), eq("hnTok"))).thenReturn(true);
+        HealthPushOutcome out = healthService().sendHealthReminder(7L, NotificationType.HEALTH_VACCINE_D_DAY,
+                "Hari ini hari vaksin Mochi!", "Satu suntikan…", "hnTok");
+        assertThat(out).isEqualTo(new HealthPushOutcome(900L, HealthPushOutcome.Result.SENT));
+        org.mockito.ArgumentCaptor<Notification> saved = org.mockito.ArgumentCaptor.forClass(Notification.class);
+        verify(repo).save(saved.capture());
+        assertThat(saved.getValue().getTitle()).isEqualTo("Hari ini hari vaksin Mochi!");
+        assertThat(saved.getValue().getTargetRef()).isEqualTo("hnTok");
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "7");
+    }
+
+    @Test
+    void healthReminderMutedVirtualAndFailedOutcomes() {
+        NotificationService svc = healthService();
+        when(prefs.isEnabled(7L, NotificationType.HEALTH_CHECKUP)).thenReturn(false);
+        assertThat(svc.sendHealthReminder(7L, NotificationType.HEALTH_CHECKUP, "t", "b", "x").result())
+                .isEqualTo(HealthPushOutcome.Result.MUTED);
+        when(accountQuery.isVirtual(8L)).thenReturn(true);
+        assertThat(svc.sendHealthReminder(8L, NotificationType.HEALTH_CHECKUP, "t", "b", "x").result())
+                .isEqualTo(HealthPushOutcome.Result.NO_TOKEN);
+        when(pusher.pushToUserNow(eq(9L), anyString(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(false);
+        assertThat(svc.sendHealthReminder(9L, NotificationType.HEALTH_CHECKUP, "t", "b", "x").result())
+                .isEqualTo(HealthPushOutcome.Result.FAILED);
+        verify(pusher, org.mockito.Mockito.never()).pushToUser(org.mockito.ArgumentMatchers.anyLong(), anyString(),
+                anyString(), anyString(), anyString(), anyString());
+    }
 }

@@ -39,9 +39,13 @@ public class NotificationController {
     @GetMapping
     public NotificationPage list(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String cursor,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    value = com.tailtopia.profile.service.ClientAppVersion.HEADER, required = false) String appVersion) {
         int size = limit == null ? DEFAULT_LIMIT : Math.min(Math.max(limit, 1), MAX_LIMIT);
-        return service.list(currentUserId(jwt), cursor, size);
+        // V1.5.0 健康记录提醒：旧版 App 不认识 HEALTH_* 类型，列表里不返回（架构增量 §6.4）。
+        return service.list(currentUserId(jwt), cursor, size,
+                com.tailtopia.profile.service.ClientAppVersion.isV150OrLater(appVersion));
     }
 
     @GetMapping("/unread-count")

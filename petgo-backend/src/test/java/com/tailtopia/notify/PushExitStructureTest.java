@@ -71,6 +71,8 @@ class PushExitStructureTest {
             // V1.4.2 social-topic Story 1.2：被追更 / 追更宠物新 Diary（提交后直接推，各自带 pushAllowed）
             "NotificationService#sendPetFollowed",
             "NotificationService#sendPetDiaryPosted",
+            // V1.5.0 健康记录提醒 Story 2.4：健康提醒（同步推送，自带 pushAllowed；③ 若也加方法，合并时取并集）
+            "NotificationService#sendHealthReminder",
             "OpsNotificationDispatcher#push");
 
     private static final Pattern METHOD_DECL = Pattern.compile(

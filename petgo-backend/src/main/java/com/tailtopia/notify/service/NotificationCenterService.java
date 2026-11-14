@@ -111,6 +111,20 @@ public class NotificationCenterService {
      */
     @Transactional(readOnly = true)
     public NotificationPage list(long userId, String cursor, int limit) {
+        return list(userId, cursor, limit, true);
+    }
+
+    /** 健康提醒类型（V1.5.0）：旧版 App 列表里不返回（架构增量 §6.4）。 */
+    private static final java.util.Set<NotificationType> HEALTH_TYPES = java.util.Arrays.stream(NotificationType.values())
+            .filter(t -> t.name().startsWith("HEALTH_"))
+            .collect(Collectors.toUnmodifiableSet());
+
+    /**
+     * V1.5.0 健康记录提醒 Story 2.4 · AC4：{@code includeHealth=false}（请求头 &lt; 1.5.0）时在 SQL 层排除 {@code HEALTH_*}；
+     * 未读角标口径不变（旧版本就收不到这些推送）。
+     */
+    @Transactional(readOnly = true)
+    public NotificationPage list(long userId, String cursor, int limit, boolean includeHealth) {
         KeysetCursor c = parseCursor(cursor);
         // 首页：未读互动条目与本页候选合成<b>一批</b>解析触发人 —— 角标校准不再单独多跑一遍 ①②③（3.3 code-review F6）。
         List<Long> unreadIds = cursor == null ? actors.unreadInteractionIds(userId) : List.of();
@@ -120,8 +134,10 @@ public class NotificationCenterService {
         Notification last = null;
         int round = 0;
         do {
-            List<Notification> rows = repo.findPageBefore(
-                    userId, c.createdAt(), c.id(), PageRequest.of(0, limit + 1));
+            List<Notification> rows = includeHealth
+                    ? repo.findPageBefore(userId, c.createdAt(), c.id(), PageRequest.of(0, limit + 1))
+                    : repo.findPageBeforeExcluding(userId, c.createdAt(), c.id(), HEALTH_TYPES,
+                            PageRequest.of(0, limit + 1));
             hasMore = rows.size() > limit;
             List<Notification> pageRows = hasMore ? rows.subList(0, limit) : rows;
             Rendered r = renderPage(userId, pageRows, round == 0 ? unreadIds : List.of());
@@ -438,6 +454,21 @@ public class NotificationCenterService {
             repo.save(n);
             decrementBadge(userId);
         }
+    }
+
+    /**
+     * 按主键标记本人的一条通知已读 + 角标递减（V1.5.0 健康记录提醒 Story 2.4：点开健康提醒时同步把通知中心条目标已读）。
+     * 不存在 / 不是本人 → 什么都不做。
+     */
+    @Transactional
+    public void markReadById(long userId, long notificationId) {
+        repo.findByIdAndRecipientUserId(notificationId, userId).ifPresent(n -> {
+            if (!n.isRead()) {
+                n.markRead();
+                repo.save(n);
+                decrementBadge(userId);
+            }
+        });
     }
 
     /** 全部标记已读 + 角标清零。 */

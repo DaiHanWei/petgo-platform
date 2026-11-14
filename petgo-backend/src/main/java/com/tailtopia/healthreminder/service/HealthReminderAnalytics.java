@@ -1,6 +1,7 @@
 package com.tailtopia.healthreminder.service;
 
 import com.tailtopia.healthreminder.domain.CancelReason;
+import com.tailtopia.healthreminder.domain.HealthNotification;
 import com.tailtopia.healthreminder.domain.HealthReminder;
 
 /**
@@ -11,4 +12,10 @@ public interface HealthReminderAnalytics {
 
     /** {@code health_reminder_cancelled}。{@code displacedBy}、{@code byRecordId} 可空。 */
     void cancelled(HealthReminder row, CancelReason reason, String displacedBy, Long byRecordId);
+
+    /** {@code health_notification_sent}：每条通知一次。 */
+    void notificationSent(HealthNotification notification);
+
+    /** {@code health_reminder_sent}：通知里每条提醒一次（同一 notification_id）。 */
+    void reminderSent(HealthReminder row, HealthNotification notification);
 }

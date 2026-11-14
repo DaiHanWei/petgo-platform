@@ -15,6 +15,9 @@ public interface HealthReminderRepository extends JpaRepository<HealthReminder, 
 
     List<HealthReminder> findByPetProfileIdAndStatus(long petProfileId, ReminderStatus status);
 
+    /** 一条健康通知承载的提醒行（点开接口判满足 / 预填用）。 */
+    List<HealthReminder> findByHealthNotificationId(long healthNotificationId);
+
     /** 日跑：某状态、发送日早于 / 等于某天的行（PENDING 量小，单机）。 */
     List<HealthReminder> findByStatusAndSendDateBefore(ReminderStatus status, java.time.LocalDate day);
 

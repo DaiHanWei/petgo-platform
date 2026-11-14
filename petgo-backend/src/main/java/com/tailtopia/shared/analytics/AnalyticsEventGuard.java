@@ -72,7 +72,11 @@ public class AnalyticsEventGuard {
             // ---- V1.3.2 Story 3.5：登机牌单张解锁成功（事件名暂定，待产品确认）----
             com.tailtopia.passport.service.BoardingPassAnalyticsListener.EVENT_UNLOCKED,
             // ---- V1.4.2 shop Story 2.3：券快过期提醒确实推送时（服务端报，PRD §4；事件名字面量 P-9）----
-            "toko_coupon_expiry_push_sent");
+            "toko_coupon_expiry_push_sent",
+            // ---- V1.5.0 健康记录提醒 Story 2.4（PRD §4，服务端报）----
+            com.tailtopia.healthreminder.delivery.PostHogHealthReminderAnalytics.EVENT_NOTIFICATION_SENT,
+            com.tailtopia.healthreminder.delivery.PostHogHealthReminderAnalytics.EVENT_REMINDER_SENT,
+            com.tailtopia.healthreminder.delivery.PostHogHealthReminderAnalytics.EVENT_REMINDER_CANCELLED);
 
     /**
      * 属性键白名单。
@@ -108,7 +112,16 @@ public class AnalyticsEventGuard {
             "card_type",                        // KTP / PASSPORT / KITAS / SIM / STUDENT
             "card_variant",                     // 学生卡配色 BINTANG / MALAM / CERIA / KLASIK
             // ---- V1.4.2 shop Story 2.3：toko_coupon_expiry_push_sent。int，本次提醒的券张数 ----
-            "coupon_count");
+            "coupon_count",
+            // ---- V1.5.0 健康记录提醒 Story 2.4：全是 id / 枚举 / 数字。🛡 不带宠物名 / 文案 / 疫苗原文 / 明文 user_id ----
+            "notification_id",                  // 健康通知 public_token（不可枚举）
+            "pet_id",                           // 宠物 id
+            "notification_kind", "reminder_kind", // 附录 C ID
+            "push_point", "origin", "reason",   // 小写蛇形枚举
+            "push_result",                      // sent / muted / no_token / failed
+            "merged_count", "deferred_days",    // int
+            "reminder_id", "record_id", "by_record_id", // id
+            "displaced_by");                    // 赢家 kind 或 scheduled_push
 
     /**
      * 字符串属性值的长度上限。

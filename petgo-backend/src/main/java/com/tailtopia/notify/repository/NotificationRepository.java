@@ -42,6 +42,26 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("beforeTs") Instant beforeTs, @Param("beforeId") long beforeId,
             Pageable pageable);
 
+    /**
+     * 同 {@link #findPageBefore}，但在 SQL 层排除给定类型（V1.5.0 健康记录提醒 Story 2.4：旧版 App 不认识 {@code HEALTH_*}，
+     * 在库里过滤，游标分页仍正确）。
+     */
+    @Query("""
+            SELECT n FROM Notification n
+            WHERE n.recipientUserId = :userId
+              AND n.type NOT IN :excluded
+              AND (n.createdAt < :beforeTs
+                   OR (n.createdAt = :beforeTs AND n.id < :beforeId))
+            ORDER BY n.createdAt DESC, n.id DESC
+            """)
+    List<Notification> findPageBeforeExcluding(@Param("userId") long userId,
+            @Param("beforeTs") Instant beforeTs, @Param("beforeId") long beforeId,
+            @Param("excluded") java.util.Collection<com.tailtopia.notify.domain.NotificationType> excluded,
+            Pageable pageable);
+
+    /** 本人的一条通知（按主键）。 */
+    java.util.Optional<Notification> findByIdAndRecipientUserId(long id, long recipientUserId);
+
     /** 某用户全部通知（倒序，全序唯一）。⚠️ 无分页，只给测试与小规模内部核对用。 */
     List<Notification> findByRecipientUserIdOrderByCreatedAtDescIdDesc(long recipientUserId);
 

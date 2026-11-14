@@ -634,6 +634,36 @@ public class NotificationService {
     }
 
     /**
+     * V1.5.0 健康记录提醒（Story 2.4，架构增量 §5.3 / Z-5 / Z-6 / Z-7）：落一条通知中心条目 + 角标，并<b>同步</b>推送。
+     *
+     * <p>与 {@link #sendWithCopy} 不同：这里落库的 {@code title / body} 就是用户看到的那句（已按收件人语言渲染好，App 走
+     * {@code _storedTitle / _storedBody} 原样显示），推送也是同一句（PRD OQ-1 豁免：健康提醒可含健康数据明文；日志仍禁记）。
+     * {@code deepLinkType = type.name()}，{@code targetRef} = 健康通知的不可枚举 {@code public_token}（App 点开后据此调
+     * {@code /me/health-notifications/{token}/open}）。
+     *
+     * <p>结果：虚拟号 → {@code NO_TOKEN}；分类被关（{@code !pushAllowed}）→ {@code MUTED}（只留通知中心，PRD AC44）；
+     * {@code pushToUserNow} 返回 false → {@code FAILED}；否则 {@code SENT}。REQUIRES_NEW 的理由同 {@link #send}。
+     * 限速沿用 {@code TencentImClient} 内的全局限速，不另加。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public HealthPushOutcome sendHealthReminder(long recipientUserId, NotificationType type, String title,
+            String body, String targetRef) {
+        String token = generateToken();
+        Notification saved = repo.save(Notification.of(
+                recipientUserId, type, title, body, type.name(), token, targetRef));
+        bumpUnreadBadge(recipientUserId);
+        if (skipPushForVirtual(recipientUserId)) {
+            return new HealthPushOutcome(saved.getId(), HealthPushOutcome.Result.NO_TOKEN);
+        }
+        if (!pushAllowed(recipientUserId, type)) {
+            return new HealthPushOutcome(saved.getId(), HealthPushOutcome.Result.MUTED);
+        }
+        boolean ok = pusher.pushToUserNow(recipientUserId, title, body, type.name(), token, targetRef);
+        return new HealthPushOutcome(saved.getId(),
+                ok ? HealthPushOutcome.Result.SENT : HealthPushOutcome.Result.FAILED);
+    }
+
+    /**
      * 虚拟号（VIRTUAL）没有 IM 账号，推过去必回 90001——直接跳过推送（通知中心照常落库 + 角标）。
      * 与 {@code localeOf} 同在本方法的 REQUIRES_NEW 事务里，findById 命中一级缓存，不多打一次库。
      */

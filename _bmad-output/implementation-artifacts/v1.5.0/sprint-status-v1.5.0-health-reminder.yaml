@@ -49,7 +49,7 @@ development_status:
   2-1-健康提醒表与重建引擎: review
   2-2-健康档案类提醒与上线排队: review
   2-3-健康提醒日跑与投递规则: review
-  2-4-健康提醒文案通知与点开接口: ready-for-dev
+  2-4-健康提醒文案通知与点开接口: review
   2-5-健康问诊历史加kontrol-dokter: ready-for-dev
   epic-2-retrospective: optional
 
