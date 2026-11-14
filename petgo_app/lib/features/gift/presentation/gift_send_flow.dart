@@ -11,7 +11,6 @@ import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
-import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../growth/domain/growth_popup_trigger.dart';
 import '../../growth/presentation/level_page.dart';
@@ -20,7 +19,9 @@ import '../../profile/domain/id_card.dart';
 import '../data/gift_repository.dart';
 import '../domain/gift_catalog.dart';
 import '../domain/gift_send_result.dart';
-import 'gift_panel_sheet.dart';
+import 'gift_catalog_page.dart';
+import 'gift_panel_sheet.dart' show GiftSelection;
+import 'gift_wrap_page.dart';
 import 'gift_send_animation.dart';
 import 'gift_style.dart';
 
@@ -37,8 +38,8 @@ const String _purchasePurpose = 'GIFT';
 
 /// 送礼全流程（V1.4.0 gift Story 1.3 · AC3.4 ~ 3.6、AC4、AC5；AD-13）。
 ///
-/// 状态机：面板 → 选渠道 →（充值 → 选渠道）→（关闭 → 面板）→ 成功 / 结束。
-/// 🔴 **任何时刻只有一层抽屉**（S1）：面板 `pop` 之后才弹选渠道，选渠道关掉才重开面板。
+/// 状态机（V1.5.0 gift-pack Story 2-2 起）：选礼物页 → 包装页（祝福语 + 数量 + 付款方式；充值往返内容保留）
+/// →（返回 → 选礼物页）→ 成功 / 结束。旧底部面板与 `PayChannelPicker` 不再用于送礼。
 ///
 /// [flightTargetKey]：送出动效的落点（访客视图 = 宠物头像，详情页 = 礼物区）；取不到 → 屏幕中上。
 /// [onDelivered]：送达后回调（访客视图用来失效统计，供 Story 2.2 的「Hadiah」格接上）。
@@ -91,13 +92,18 @@ sealed class _PayOutcome {
 }
 
 class _Delivered extends _PayOutcome {
-  const _Delivered(this.channel);
+  const _Delivered(this.channel, this.selection, this.senderExp);
   final HdPayChannel channel;
+  final GiftSelection selection;
+
+  /// 响应里的送礼人 EXP（D-7，2-3 送达页显示）。
+  final int senderExp;
 }
 
 class _QrisPending extends _PayOutcome {
-  const _QrisPending(this.result);
+  const _QrisPending(this.result, this.selection);
   final GiftSendResult result;
+  final GiftSelection selection;
 }
 
 /// 结束流程（C9 / 未解锁），带一句提示。
@@ -110,9 +116,6 @@ class _Terminal extends _PayOutcome {
 class _Unavailable extends _PayOutcome {
   const _Unavailable();
 }
-
-/// 选渠道这一段走完之后，面板那层怎么办。
-enum _AfterPay { reopenPanel, refreshPanel, finished }
 
 class _GiftSendFlow {
   _GiftSendFlow({
@@ -151,36 +154,38 @@ class _GiftSendFlow {
   }
 
   Future<void> run() async {
-    String? giftToken;
-    var quantity = 1;
     while (true) {
       if (!context.mounted) return;
-      final res = await showGiftPanelSheet(
-        context,
-        recipient: recipient,
-        initialGiftToken: giftToken,
-        initialQuantity: quantity,
-        onCatalogShown: _reportPanelOpened,
-      );
-      if (res == null) return; // 关掉面板
-      if (res is GiftPanelCannotSend) {
+      // V1.5.0 gift-pack Story 2-1 / 2-2：选礼物整页 → 包装页（替代旧的底部面板 + PayChannelPicker）。
+      final res = await Navigator.of(context).push<GiftCatalogResult>(MaterialPageRoute(
+        builder: (_) => GiftCatalogPage(recipient: recipient, onCatalogShown: _reportPanelOpened),
+      ));
+      if (res == null) return; // 关掉选礼物页
+      if (res is GiftCatalogCannotSend) {
         _toast(l10n.giftCannotSend);
         return;
       }
-      if (res is GiftPanelOpenLevelPage) {
-        // B1 / B2 锁区块（gift Story 4.1 · AC7.1）：面板已关，进 ① 等级页；本次送礼结束（返回不重开面板）。
+      if (res is GiftCatalogOpenLevelPage) {
         if (context.mounted) unawaited(context.push(LevelPage.location));
         return;
       }
-      final selection = (res as GiftPanelSend).selection;
-      giftToken = selection.item.giftToken;
-      quantity = selection.quantity;
-      switch (await _pay(selection)) {
-        case _AfterPay.finished:
+      final picked = res as GiftCatalogPicked;
+      if (!context.mounted) return;
+      final outcome = await _wrap(picked.catalog, picked.item);
+      switch (outcome) {
+        case null:
+          continue; // 包装页返回 → 回选礼物页
+        case _Delivered(:final channel, :final selection, :final senderExp):
+          await _celebrate(selection, channel, senderExp: senderExp);
           return;
-        case _AfterPay.reopenPanel:
-          continue;
-        case _AfterPay.refreshPanel:
+        case _QrisPending(:final result, :final selection):
+          await _qris(selection, result);
+          return;
+        case _Terminal(:final message):
+          _toast(message);
+          return;
+        case _Unavailable():
+          _toast(l10n.giftUnavailable);
           if (!context.mounted) return;
           ref.invalidate(giftCatalogProvider(recipient));
           continue;
@@ -199,170 +204,89 @@ class _GiftSendFlow {
     });
   }
 
-  Future<int> _balance() async {
-    try {
-      // 限时：余额读失败会被 Riverpod 自动重试，`future` 可能一直不 resolve；读不到按 0（照 keepsake_pay_flow）。
-      return (await ref.read(pawCoinProvider.future).timeout(const Duration(seconds: 10))).balance;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  /// 一次「Kirim」之后的选渠道段（含充值回流与扣款中保持打开）。
-  Future<_AfterPay> _pay(GiftSelection sel) async {
-    final total = sel.total;
-    final catalog = sel.catalog;
-    final lowAmount = total < catalog.qrisMinAmount;
-    final petName = catalog.recipient.name;
-    final giftName = sel.item.nameFor(locale);
-    // requestId：本次「Kirim」里针对某一渠道第一次确认时生成；同渠道重试复用，换渠道新生成（AC4.2）。
+  /// 包装页（C1 ~ C9）：一次或多次「Kirim」，直到送达 / QRIS 出码 / 终止，或用户返回（null）。
+  Future<_PayOutcome?> _wrap(GiftCatalog catalog, GiftItem item) async {
+    // requestId：针对某一渠道第一次确认时生成；同渠道重试复用，换渠道新生成（AC4.2）。
     HdPayChannel? idChannel;
     String? requestId;
     var lowAmountReported = false;
 
-    while (true) {
-      if (!context.mounted) return _AfterPay.finished;
-      final balance = await _balance();
-      if (!context.mounted) return _AfterPay.finished;
-      if (lowAmount && !lowAmountReported) {
+    Future<GiftWrapSubmitResult> submit(GiftWrapRequest req) async {
+      final sel = GiftSelection(catalog: catalog, item: item, quantity: req.quantity);
+      final channel = req.channel;
+      if (sel.total < catalog.qrisMinAmount && !lowAmountReported) {
         lowAmountReported = true;
-        Analytics.capture('gift_qris_low_amount_shown', {'total_amount': total});
+        Analytics.capture('gift_qris_low_amount_shown', {'total_amount': sel.total});
       }
-
-      _PayOutcome? outcome;
-      Future<bool>? inFlight;
-      var topUp = false;
-
-      Future<bool> confirm(HdPayChannel channel) async {
-        if (requestId == null || idChannel != channel) {
-          requestId = newGiftRequestId();
-          idChannel = channel;
+      if (requestId == null || idChannel != channel) {
+        requestId = newGiftRequestId();
+        idChannel = channel;
+      }
+      try {
+        final r = await repo.send(
+          petId: catalog.recipient.petId,
+          giftToken: item.giftToken,
+          quantity: req.quantity,
+          channel: channel.wire,
+          requestId: requestId!,
+          source: source,
+          postId: sourcePostId,
+          message: req.message,
+        );
+        if (r.delivered) {
+          return GiftWrapDone(_Delivered(channel, sel, r.senderExp));
         }
-        try {
-          final r = await repo.send(
-            petId: catalog.recipient.petId,
-            giftToken: sel.item.giftToken,
-            quantity: sel.quantity,
-            channel: channel.wire,
-            requestId: requestId!,
-            source: source,
-            postId: sourcePostId,
-          );
-          if (r.delivered) {
-            outcome = _Delivered(channel);
-            return true;
-          }
-          final payload = r.payload;
-          if (channel == HdPayChannel.qris &&
-              payload != null &&
-              payload.isNotEmpty &&
-              r.orderToken != null) {
-            outcome = _QrisPending(r);
-            return true;
-          }
-          if (r.status == GiftOrderStatus.failed || r.status == GiftOrderStatus.expired) {
-            // 这笔单已关（如网关出码失败置 FAILED）：同 requestId 重放只会拿回这笔无码的单，
-            // 重试恒失败 → 下次确认换新 requestId 重新下单（OCR #4，后端幂等键 GIFT:{sender}:{requestId}）。
+        final payload = r.payload;
+        if (channel == HdPayChannel.qris && payload != null && payload.isNotEmpty && r.orderToken != null) {
+          return GiftWrapDone(_QrisPending(r, sel));
+        }
+        if (r.status == GiftOrderStatus.failed || r.status == GiftOrderStatus.expired) {
+          // 这笔单已关：同 requestId 重放只会拿回这笔无码的单 → 下次确认换新 requestId（OCR #4）。
+          requestId = null;
+        }
+        _toast(l10n.idCardHdPurchaseError, top: true);
+        return const GiftWrapStay();
+      } on DioException catch (e) {
+        final slug = ProblemDetail.fromDioException(e)?.typeSlug;
+        switch (slug) {
+          case 'gift-message-blocked':
+            // 422 在任何写库之前：订单未建，换祝福语后用新 requestId（旧键不会重放出这单）。
             requestId = null;
-          }
-          _toast(l10n.idCardHdPurchaseError, top: true);
-          return false;
-        } on DioException catch (e) {
-          final slug = ProblemDetail.fromDioException(e)?.typeSlug;
-          switch (slug) {
-            case 'pawcoin-insufficient':
-              _toast(l10n.idCardHdInsufficientBalance, top: true);
-              if (context.mounted) ref.invalidate(pawCoinProvider);
-              return false;
-            case 'gift-pet-gone' || 'gift-own-pet' || 'gift-blocked':
-              outcome = _Terminal(l10n.giftCannotSend);
-              return true;
-            case 'gift-locked':
-              outcome = _Terminal(l10n.giftLockedError);
-              return true;
-            case 'gift-unavailable':
-              outcome = const _Unavailable();
-              return true;
-            default:
-              // 网络 / 5xx / rate-limited / gift-qris-below-min：抽屉保留可重试（C8）。
-              _toast(l10n.idCardHdPurchaseError, top: true);
-              return false;
-          }
-        } catch (_) {
-          _toast(l10n.idCardHdPurchaseError, top: true);
-          return false;
+            return const GiftWrapMessageBlocked();
+          case 'pawcoin-insufficient':
+            _toast(l10n.idCardHdInsufficientBalance, top: true);
+            if (context.mounted) ref.invalidate(pawCoinProvider);
+            return const GiftWrapStay();
+          case 'gift-pet-gone' || 'gift-own-pet' || 'gift-blocked':
+            return GiftWrapDone(_Terminal(l10n.giftCannotSend));
+          case 'gift-locked':
+            return GiftWrapDone(_Terminal(l10n.giftLockedError));
+          case 'gift-unavailable':
+            return const GiftWrapDone(_Unavailable());
+          default:
+            // 网络 / 5xx / rate-limited / gift-qris-below-min：停留本页可重试（C8）。
+            _toast(l10n.idCardHdPurchaseError, top: true);
+            return const GiftWrapStay();
         }
-      }
-
-      await showModalBottomSheet<HdPayChannel>(
-        context: context,
-        backgroundColor: AppColors.card,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        // 余额跟着 pawCoinProvider 走：`pawcoin-insufficient` 后 invalidate → 抽屉里的余额 / PawCoin 行 /
-        // 默认选中随之刷新（AC4.4「刷新余额」）；刷新中 / 读不到时沿用打开前读到的值（那次读失败已按 0）。
-        // key 随余额变 → 选择状态重置，不会留着过期的「已选 PawCoin」再撞一次 409。
-        builder: (_) => Consumer(builder: (_, sheetRef, _) {
-          final shown = sheetRef.watch(pawCoinProvider).value?.balance ?? balance;
-          return PayChannelPicker(
-            key: ValueKey('giftPayPicker-$shown'),
-            header: GiftPaySummaryCard(
-              iconUrl: sel.item.iconUrl,
-              giftName: giftName,
-              quantity: sel.quantity,
-              petName: petName,
-            ),
-            title: l10n.giftPayTitle,
-            body: l10n.giftPayBody,
-            price: AsyncValue<int>.data(total),
-            onRetryPrice: () {},
-            balance: shown,
-            confirmLabel: (p) => l10n.keepsakePayConfirm(formatIdrAmount(p ?? total)),
-            qrisDisabledReason:
-                lowAmount ? l10n.giftQrisMinimum(formatIdrAmount(catalog.qrisMinAmount)) : null,
-            qrisDisabledHint: lowAmount ? l10n.giftQrisMinimumHint : null,
-            onTopUp: () => topUp = true,
-            onConfirm: (channel) => inFlight = confirm(channel),
-          );
-        }),
-      );
-      // 抽屉在请求途中被关掉（理论上 PopScope 已挡）：等结果出来再判，不能把已扣的钱当没发生。
-      final pending = inFlight;
-      if (pending != null) {
-        try {
-          await pending;
-        } catch (_) {}
-      }
-
-      if (topUp) {
-        // S3：照 vet_timed_pay_page._topUp —— await 充值页 → 刷新余额 → 自动重开选渠道（礼物、数量保留）。
-        if (!context.mounted) return _AfterPay.finished;
-        await context.push(_rechargeRoute);
-        if (!context.mounted) return _AfterPay.finished;
-        ref.invalidate(pawCoinProvider);
-        continue;
-      }
-
-      final o = outcome;
-      switch (o) {
-        case null:
-          return _AfterPay.reopenPanel; // 关掉选渠道 → 回面板（S1）
-        case _Delivered(:final channel):
-          await _celebrate(sel, channel);
-          return _AfterPay.finished;
-        case _QrisPending(:final result):
-          await _qris(sel, result);
-          return _AfterPay.finished;
-        case _Terminal(:final message):
-          _toast(message);
-          return _AfterPay.finished;
-        case _Unavailable():
-          _toast(l10n.giftUnavailable);
-          return _AfterPay.refreshPanel;
+      } catch (_) {
+        _toast(l10n.idCardHdPurchaseError, top: true);
+        return const GiftWrapStay();
       }
     }
+
+    Future<void> topUp() async {
+      // S3：await 充值页 → 刷新余额（礼物 / 数量 / 祝福语保留在包装页的 State 里）。
+      if (!context.mounted) return;
+      await context.push(_rechargeRoute);
+      if (!context.mounted) return;
+      ref.invalidate(pawCoinProvider);
+    }
+
+    if (!context.mounted) return null;
+    final popped = await Navigator.of(context).push<Object>(MaterialPageRoute(
+      builder: (_) => GiftWrapPage(catalog: catalog, item: item, onSubmit: submit, onTopUp: topUp),
+    ));
+    return popped is _PayOutcome ? popped : null;
   }
 
   /// C6 / C7：QRIS 二维码 + 轮询单笔订单状态。
@@ -412,7 +336,7 @@ class _GiftSendFlow {
   }
 
   /// D1 → D2：送出动效（尊重「减少动态效果」）→ Toast → 刷新余额 → 埋点。
-  Future<void> _celebrate(GiftSelection sel, HdPayChannel channel) async {
+  Future<void> _celebrate(GiftSelection sel, HdPayChannel channel, {int senderExp = 0}) async {
     final disable =
         context.mounted ? (MediaQuery.maybeDisableAnimationsOf(context) ?? false) : true;
     await playGiftSendAnimation(

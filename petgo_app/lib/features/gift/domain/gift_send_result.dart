@@ -11,7 +11,11 @@ class GiftSendResult {
     this.status = GiftOrderStatus.unknown,
     this.paymentAmount,
     this.paymentExpiresAt,
+    this.senderExp = 0,
   });
+
+  /// V1.5.0 gift-pack Story 2-2：送礼人本单 EXP（仅已送达有意义；旧后端无此字段 = 0）。
+  final int senderExp;
 
   /// true = 已送达（PawCoin 当场成交 / 幂等重放时订单已送达）。
   final bool delivered;
@@ -44,6 +48,7 @@ class GiftSendResult {
       status: GiftOrderStatus.fromWire(json['status'] as String?),
       paymentAmount: (p?['amount'] as num?)?.toInt(),
       paymentExpiresAt: DateTime.tryParse(p?['expiresAt'] as String? ?? ''),
+      senderExp: (json['senderExp'] as num?)?.toInt() ?? 0,
     );
   }
 }

@@ -64,7 +64,8 @@ void main() {
 
   Finder sendButton() => find.byKey(const ValueKey('giftDetailSendButton'));
   Finder picker() => find.byKey(const ValueKey('petPickerTitle'));
-  Finder panel() => find.byKey(const ValueKey('giftPanelLoaded'));
+  // V1.5.0 gift-pack Story 2-2：送礼面板改为选礼物整页（B1）。
+  Finder panel() => find.byKey(const ValueKey('giftCatalogLoaded'));
 
   bool radioOn(WidgetTester tester, int id) =>
       tester.widget<Icon>(find.byKey(ValueKey('petPickerRadio-$id'))).icon == Icons.check_circle;
@@ -155,9 +156,9 @@ void main() {
     await pump(tester, const [a], onDelivered: () => delivered++);
     await tester.tap(sendButton());
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('giftSendButton')));
+    await tester.tap(find.byKey(const ValueKey('giftCell-g-tulang')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('hdPayConfirm')));
+    await tester.tap(find.byKey(const ValueKey('giftWrapSend')));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 3));
     expect(delivered, 1);
@@ -203,7 +204,7 @@ void main() {
     await tester.tap(sendButton());
     await tester.pumpAndSettle();
     expect(panel(), findsOneWidget);
-    await tester.tapAt(const Offset(400, 20)); // 下滑 / 点遮罩关面板
+    await tester.tap(find.byKey(const ValueKey('giftCatalogClose'))); // 关闭选礼物页
     await tester.pumpAndSettle();
 
     expect(panel(), findsNothing);

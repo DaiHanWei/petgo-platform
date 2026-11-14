@@ -51,7 +51,8 @@ DioException problem(String slug, {int status = 409}) {
 
 class SendCall {
   SendCall(this.petId, this.giftToken, this.quantity, this.channel, this.requestId, this.source,
-      this.postId);
+      this.postId, [this.message]);
+  final String? message;
   final int petId;
   final String giftToken;
   final int quantity;
@@ -102,8 +103,9 @@ class FakeGiftRepository extends GiftRepository {
     required String requestId,
     required String source,
     int? postId,
+    String? message,
   }) async {
-    sends.add(SendCall(petId, giftToken, quantity, channel, requestId, source, postId));
+    sends.add(SendCall(petId, giftToken, quantity, channel, requestId, source, postId, message));
     final i = sends.length - 1;
     final r = sendResults[i < sendResults.length ? i : sendResults.length - 1];
     if (r is GiftSendResult) return r;

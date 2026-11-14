@@ -1,6 +1,6 @@
 # Story 2.2: App 送礼包装页祝福语与支付区（C1 ~ C9）
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ② gift-pack · 分支 `feat/1.5.0-gift-pack`
 > 口径优先级：`decision-log.md`（11-10 支付区开关行、11-12「通用付费抽屉支付方式改版（并统一送礼支付区）」、11-13 对齐超值礼包 C7）> PRD A §3.2（FR-188）> 架构 D-6、D-13 > App 稿 C 泳道（拆页 `C1 ~ C9`）。
@@ -62,10 +62,10 @@ class PayMethodCards extends StatelessWidget {
 
 ## Tasks / Subtasks
 
-- [ ] `PayMethodCards` + widget 测试（AC1）
-- [ ] 包装页 UI 与状态（AC2、AC3）
-- [ ] 送出调用与错误映射（AC4）
-- [ ] ARB（AC5）
+- [x] `PayMethodCards` + widget 测试（AC1）
+- [x] 包装页 UI 与状态（AC2、AC3）
+- [x] 送出调用与错误映射（AC4）
+- [x] ARB（AC5）
 
 ## Dev Notes
 
@@ -83,4 +83,22 @@ class PayMethodCards extends StatelessWidget {
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：真后端命中敏感词不扣款（L1）；C1 ~ C9 还原度、充值往返保留内容、默认礼盒视觉（L2）待本地。
+- L0：`flutter analyze` 无 error / warning；`flutter test test/shared/widgets/pay_method_cards_test.dart test/gift test/l10n` 118 条全绿；其余引用送礼的测试（content / profile / notify / analytics / pawcoin 等 15 个文件）199 条全绿。
+- 测试目录：`test/gift/`（仓库现有），`test/shared/widgets/pay_method_cards_test.dart`（新）。
+- 实现要点：
+  - `PayMethodCards`（`lib/shared/widgets/pay_method_cards.dart`）接口逐字照 AC1 冻结；四态 widget 测试覆盖。
+  - 包装页 `gift_wrap_page.dart`：顶栏「Bungkus hadiah untuk {petName}」+ 物种 · 品种；礼物区（默认礼盒占位 + 礼物图标 + 名称 + EXP 行 = `senderExp × 数量`，0 不显示）；祝福语（标签 / 占位 / 常驻「{len}/500」按 runes 计数，`RuneLimitFormatter` 防粘贴超限）；数量 ×1/×5/×10 + 步进（1–99，边界置灰）；支付区收起 / 展开（余额不足自动展开；默认 PawCoin；不足且够门槛 → 直接付款；不足且低于门槛 → 主按钮置灰「PawCoin tidak cukup · {n} PawCoin」；低于门槛直接付款卡写「Minimal Rp{n}」+ `giftQrisMinimumHint`）；扣款中主按钮转圈、页面不可操作、返回被拦。
+  - 编排 `gift_send_flow.dart`：`runGiftSendFlow` 改为 push 选礼物页（2-1）→ push 包装页；保留幂等 `requestId`（同渠道复用 / 换渠道新生成 / 已关单清空）、QRIS 出码与轮询、送出动效与埋点；`gift-message-blocked` → 留在包装页、框变红 + 提示、并清 `requestId`（该次请求在写库前即被拒，换祝福语后用新键）；充值往返 push `/me/pawcoin/recharge` 后刷新余额，回到包装页时清掉用户选择、余额够即选回 PawCoin，礼物 / 数量 / 祝福语留在页面 State。旧 `GiftPanelSheet` / `PayChannelPicker` 不再用于送礼，但未删除（`PayChannelPicker` 归 6-1 改；面板代码与其测试保留）。
+  - 仓储 `send` 新增 `message`（null 不传）；`GiftSendResult.senderExp` 解析（2-3 送达页用，已透传到 `_celebrate`）。
+  - 默认礼盒：素材 `assets/gift/gift_box_closed.webp` 由 2-3 接入，本页先用图标占位。
+- 文案：13 条新 key 逐字取 App 稿新文案表；「Saldo PawCoin: {n}」用 `pawcoinBalanceLabel` + 「: {n}」拼接（该 key 无占位符）。
+
 ### File List
+
+- `petgo_app/lib/shared/widgets/pay_method_cards.dart`（新）
+- `petgo_app/lib/features/gift/presentation/gift_wrap_page.dart`（新）
+- `petgo_app/lib/features/gift/presentation/gift_send_flow.dart`（改：选礼物页 → 包装页编排）
+- `petgo_app/lib/features/gift/data/gift_repository.dart`、`domain/gift_send_result.dart`（改：`message` / `senderExp`）
+- `petgo_app/lib/l10n/app_en.arb`、`app_id.arb`（改）
+- `petgo_app/test/shared/widgets/pay_method_cards_test.dart`（新）；`test/gift/gift_send_flow_test.dart`（重写为新流程）、`gift_pick_pet_test.dart`、`gift_fakes.dart`（改）

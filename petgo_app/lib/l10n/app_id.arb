@@ -3372,5 +3372,18 @@
   "giftCatalogPrice": "{price} PawCoin",
   "giftCatalogExp": "+{n} EXP",
   "giftReceivedFrom": "dari {names}",
-  "giftReceivedFromMore": "dari {names} +{n}"
+  "giftReceivedFromMore": "dari {names} +{n}",
+  "giftWrapTitle": "Bungkus hadiah untuk {petName}",
+  "giftWrapExpHint": "Dapat {n} EXP setelah hadiah ini terkirim",
+  "giftMessageLabel": "Ucapan · Opsional",
+  "giftMessageHint": "Tulis ucapan singkat untuk {petName}…",
+  "giftMessageBlocked": "Ucapan berisi kata yang tidak diperbolehkan. Ubah dulu, ya.",
+  "giftPayWithCoins": "Bayar dengan PawCoin",
+  "giftSendCoins": "Kirim · {n} PawCoin",
+  "giftCoinsNotEnough": "PawCoin tidak cukup · {n} PawCoin",
+  "payMethodChoose": "Pilih metode bayar",
+  "payMethodPawcoin": "PawCoin",
+  "payMethodDirect": "Bayar langsung",
+  "payMethodBalanceShort": "Saldo {n} · kurang {m}",
+  "payMethodBalance": "Saldo {n}"
 }

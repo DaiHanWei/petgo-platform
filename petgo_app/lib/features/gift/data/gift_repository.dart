@@ -32,8 +32,11 @@ class GiftRepository {
     required String requestId,
     required String source,
     int? postId,
+    String? message,
   }) async {
     final res = await dio.post<Map<String, dynamic>>(ApiPaths.petGifts(petId), data: {
+      // V1.5.0 gift-pack Story 2-2：祝福语（trim 后空则不传）
+      'message': ?message,
       'giftToken': giftToken,
       'quantity': quantity,
       'channel': channel,
