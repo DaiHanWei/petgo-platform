@@ -1,0 +1,96 @@
+# generated: 2026-11-14
+# last_updated: 2026-11-14  # 24 条 story 文件已生成，均 ready-for-dev（Epic 3、Epic 7 联调留本地，云端不跑）
+# project: TailTopia V1.5.0 · 会话 ② gift-pack（送礼优化 FR-187~192 / FR-225 / AB-43 → 超值礼包 FR-194 / FR-195 / AB-41 + 通用付费抽屉改版）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.5.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.5.0/epics-v1.5.0-gift-pack.md (7 Epic / 24 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.5.0/architecture-v1.5.0-gift-pack-delta.md (D-1~D-31 · §5 ⑥ 契约)
+# prd_a: {project-root}/_bmad-output/planning-artifacts/v1.5.0/ui-gift-optimization/1-5-0送礼优化prd.md
+# prd_b: {project-root}/_bmad-output/planning-artifacts/v1.5.0/超值礼包/1-5-0超值礼包prd.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.5.0/decision-log.md
+# 云端须知: {project-root}/_bmad-output/implementation-artifacts/v1.5.0/cloud-rules-gift-pack.md
+#
+# 🔴 口径优先级：CROSS-STORY-DECISIONS.md > decision-log.md > PRD > 架构增量 > UI 稿。
+# 🔴 同一版本目录还有 ①③④⑤⑥ 各线 story，编号同号——只按本文件的完整 key 取。
+# 🔴 分支 feat/1.5.0-gift-pack（从 dev_1.5.0 切出），全部 story 同一分支串行。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 执行顺序（严格按下列顺序，不跳序）=====
+# ① 4-1（⑥ 前置契约，全线第一个做；做完 push，Completion Notes 写「可单独合 dev」）
+# ② 1-1 → 1-2 → 1-3 → 1-4 → 1-5 → 2-1 → 2-2 → 2-3 → 2-4 → 2-5 → 2-6
+# ③ 3-1（本地联调，云端跳过）
+# ④ 4-2 → 4-3 → 4-4 → 5-1 → 5-2 → 6-1 → 6-2 → 6-3 → 6-4 → 6-5
+# ⑤ 7-1（本地联调，云端跳过）
+# 下方 development_status 已按此顺序排列（epic-4 的 4-1 单独提前一段）。
+#
+# ===== 迁移预分配（时间戳制，日期 20261115，HHMM 0200–0259 为本线专属号段）=====
+# 1-1 V20261115_0200 gift_categories + gift_catalog.category_id
+# 1-3 V20261115_0205 gift_orders message / opened_at / message_hidden_at（存量视为已拆）
+# 1-5 V20261115_0210 gift_message_reports
+# 4-1 V20261115_0220 entitlement_credits + entitlement_credit_uses
+# 4-2 V20261115_0225 rebuild ck_payment_intents_purpose(+STARTER_PACK, 13 值) + growth_spend_tiers + pricing_config 礼包四列 + starter_pack_purchases
+# 4-2 V20261115_0230 rebuild ck_pet_slot_purchases_kind / ck_pet_slot_rentals_source（+PACK_GRANT / PACK_EXTEND）
+# 4-3 V20261115_0235 rebuild ck_gift_orders_channel / ck_gift_orders_total / ck_id_card_hd_purchases_channel（+PACK_CREDIT）
+# 备用 V20261115_0240 ~ _0259（实现中需补列时按序取，回写本表与架构 §7）
+# 🔴 本线不改 ck_notifications_type（地基 V20261114_1000 所有）。
+
+generated: 2026-11-14
+last_updated: 2026-11-14
+project: TailTopia V1.5.0 gift-pack
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.5.0"
+
+development_status:
+  # —— 提前执行：⑥ 契约 ——
+  epic-4: backlog
+  4-1-礼包权益次数表与发放扣减接口: ready-for-dev
+
+  # —— 送礼优化 ——
+  epic-1: backlog
+  1-1-送礼分类数据与目录接口: ready-for-dev
+  1-2-送礼后台分类管理: ready-for-dev
+  1-3-送礼祝福语与拆开状态: ready-for-dev
+  1-4-送礼逐笔列表拆礼物与详情接口: ready-for-dev
+  1-5-送礼祝福语举报: ready-for-dev
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-app送礼选礼物目录按分类: ready-for-dev
+  2-2-app送礼包装页祝福语与支付区: ready-for-dev
+  2-3-app送礼送出动画与送达页: ready-for-dev
+  2-4-app送礼礼物页逐笔列表与diary礼物行: ready-for-dev
+  2-5-app送礼拆礼物动画与批量拆: ready-for-dev
+  2-6-app送礼礼物详情与举报祝福语: ready-for-dev
+  epic-2-retrospective: optional
+
+  epic-3: backlog                      # 本地联调，云端不跑
+  3-1-送礼优化全链路联调: ready-for-dev
+  epic-3-retrospective: optional
+
+  # —— 超值礼包（4-1 已在上方提前）——
+  4-2-礼包购买支付配置与到账发放: ready-for-dev
+  4-3-礼包免费次数解锁与免费送礼: ready-for-dev
+  4-4-礼包订单中心权益查询与到期提醒: ready-for-dev
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-礼包后台配置卡与跳转目标: ready-for-dev
+  5-2-礼包后台用户免费次数与记录展示: ready-for-dev
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-app礼包通用付费抽屉改版: ready-for-dev
+  6-2-app礼包页付款与购买成功: ready-for-dev
+  6-3-app礼包koin与jatah合并页: ready-for-dev
+  6-4-app礼包入口与订单: ready-for-dev
+  6-5-app礼包用免费次数: ready-for-dev
+  epic-6-retrospective: optional
+
+  epic-7: backlog                      # 本地联调，云端不跑
+  7-1-超值礼包全链路联调: ready-for-dev
+  epic-7-retrospective: optional

@@ -1,0 +1,88 @@
+# generated: 2026-11-14
+# last_updated: 2026-11-14  # 18 条 story 文件已生成，均 ready-for-dev（云端单会话串行）
+# project: TailTopia V1.5.0 · 主题 onboarding-recall（会话 ③ 首日与召回：首日与新手任务 FR-173~179 → 推送与召回 FR-180~186）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.5.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.5.0/epics-v1.5.0-onboarding-recall.md (8 Epic / 18 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.5.0/architecture-v1.5.0-onboarding-recall-delta.md (OR-1~OR-26)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.5.0/首日与新手任务/1-5-0首日与新手任务prd.md
+#      {project-root}/_bmad-output/planning-artifacts/v1.5.0/推送与召回/1-5-0推送与召回prd.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.5.0/decision-log.md
+# 地基: {project-root}/_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md「2026-11-14 V1.5.0 六会话共用地基」+ 0-1-六会话共用地基.md
+# ui: 首日与新手任务/ui-1-5-0-onboarding-newbie-integrated-v1.html + 拆页-App/（21 屏）
+#     推送与召回/ui-1-5-0-push-recall-integrated-v1.html + 拆页-App/（16 屏）
+# 云端规则: {project-root}/_bmad-output/implementation-artifacts/v1.5.0/cloud-rules-onboarding-recall.md
+#
+# 🔴 口径优先级：decision-log > CROSS-STORY 地基 > PRD > 架构增量 > UI 稿。
+# 🔴 同一版本目录有其他五条线的 story，编号会重复（1-1-* 有多条）——只按本文件的完整 key 取。
+# 🔴 分支 feat/1.5.0-onboarding-recall（从 dev_1.5.0 切出），全部 story 同一分支、云端单会话串行。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 依赖 =====
+# 串行 Epic 1 -> 8；每个 epic 内按序号。E1~E4 = 首日与新手任务；E5~E8 = 推送与召回。
+# 4-1 完成即「首日检查点」（epics 待拍板 Q-1：操作者可在此正向合入 dev_1.5.0，供 Feed 双击点赞线对齐；云端不自行合并）。
+# 6-1 依赖 2-1（新手标记）、2-2（Lulus flag）、5-2（sendRendered）。
+#
+# ===== 迁移预分配（时间戳制，本线专用号段 V20261115_0300 ~ V20261115_0359）=====
+# 2-1 V20261115_0300 user_newbie_marks（①）
+# 2-2 V20261115_0310 ck_user_milestone_flags_key 重建（+LULUS_PEMULA）+ user_milestone_flags.celebrated_at（②）
+# 2-2 V20261115_0315 growth_rules 插 NEWBIE_GRADUATED +20（③）
+# 2-4 V20261115_0320 新手任务存量补算（④，须在 ①②③ 之后）
+# 5-1 V20261115_0330 user_post_notify_log + user_post_push_daily + follow_update_push_quota（⑤）
+# 备用 V20261115_0340 ~ _0359：实现中确需新迁移时按序取用并回写本表。
+# 🔴 不改 ck_notifications_type（地基 V20261114_1000 已含 USER_POST_PUBLISHED），不改 ck_user_push_mutes_category。
+# 若实现时发现与其他分支撞号，按 CLAUDE.md 在本号段内重新取号，并回写本表。
+
+generated: 2026-11-14
+last_updated: 2026-11-14
+project: TailTopia V1.5.0 onboarding-recall
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/v1.5.0
+
+development_status:
+  epic-1: backlog
+  1-1-首日推荐宠物接口排序与游客访问: ready-for-dev
+  1-2-首日推荐页与引导出口: ready-for-dev
+  1-3-首日游客展示页真实宠物区: ready-for-dev
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-新手任务账号记录与七项判定: ready-for-dev
+  2-2-新手毕业账号级里程碑与成长值: ready-for-dev
+  2-3-新手账号成就接口与里程碑计数口径: ready-for-dev
+  2-4-新手存量补算: ready-for-dev
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-新手任务卡改版: ready-for-dev
+  3-2-新手账号成就区与我的页入口: ready-for-dev
+  3-3-新手毕业庆祝与通知落点: ready-for-dev
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-首日与新手联调验收: ready-for-dev
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-推送关注更新与每日上限: ready-for-dev
+  5-2-推送纪念日催发布与生日改时: ready-for-dev
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-召回分层节点与文案: ready-for-dev
+  6-2-召回放量开关与版本门槛: ready-for-dev
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-推送直达与发布页按宠物预选: ready-for-dev
+  7-2-推送通知中心新类型与设置改名: ready-for-dev
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-推送召回联调与上线清单: ready-for-dev
+  epic-8-retrospective: optional

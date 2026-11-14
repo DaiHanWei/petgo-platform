@@ -259,3 +259,13 @@
 - App `kPushDirectTypes`（`core/push/push_service.dart`）由 ①③⑥ 各自往同一个集合里加，合并时三方取并集，不删别人的值。
 - 「首日与新手任务」先于「推送与召回」、「Feed 双击点赞」在 ③ 的首日之后合（推荐页点赞要接上）、「宠物物种扩展」最后合；② 内部送礼优化先于超值礼包，⑥ 在 ② 之后。
 - 功能分支与 `dev_1.5.0` 冲突时**不反向合并 dev 进功能分支**，从 dev 切对齐分支处理。
+
+### 2026-11-14 V1.5.0 五线规划后补充的跨线口径
+
+- **自动点赞**（⑤ likes）：`content_likes.is_automated`。今后对点赞做**排序 / 推荐 / 统计**的查询一律排除自动赞（新增 `countOrganicByPostIdIn` 等），**展示的赞数不排除**。`ContentLikedEvent` 加 `automated` 字段并保留原 4 参构造器；`automated=true` **只有成长值监听跳过**，里程碑、@ 候选、通知、③ 新手任务 ② 照常计入。
+- **送礼事件**（② gift-pack 4-3）：`GiftSentEvent` 加 `paidByCredit`，免费单金额按面值；成长值监听据此让主人照常得 EXP、送礼人不得。
+- **权益发放接口**（② gift-pack 4-1，⑥ 调用）：`com.tailtopia.entitlement.service.EntitlementCreditService.grant(GrantCommand)`，签名冻结，见 `planning-artifacts/v1.5.0/architecture-v1.5.0-gift-pack-delta.md` §5。gift-pack 先做 4-1，单独 PR 合进 `dev_1.5.0` 后再起 ⑥。
+- **通知写入新方法**：③ 新增 `NotificationService.sendRendered`（按收件人语言落库），① 新增 `sendHealthReminder`；两者都要进 `PushExitStructureTest` 白名单。合并时同一文件两处新增都保留，不互相替换。
+- **生日 / 纪念日日扫**：③ 把 `ScheduledPushJob` 拆成生日（11:00 WIB）与纪念日（19:00 WIB）两个日扫，但保留 `ScheduledPushPlanner.plan(...)` 与 `PetProfileSnapshot` 原签名，① 只调用不改。
+- **App `OpsAppPage`**：② 与 ④ 都在 `ops_target.dart` 末尾加值，合并时两个都留，顺序 `starterPack` 在前、`petSpecies` 在后（同后端）。
+- **本地留做的 story**：② 3-1 / 7-1，① 4-1（云端只做 AC1），③ 4-1 / 8-1 的 L1 / L2 部分，④ 4-1 / 4-2（4-2 在 `feat/1.5.0-pet-species-align`），⑤ 4-3（在 `feat/1.5.0-likes-align`，等 ③ 首日合入 dev）。

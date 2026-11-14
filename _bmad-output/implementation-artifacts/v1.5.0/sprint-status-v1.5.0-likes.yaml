@@ -1,0 +1,65 @@
+# generated: 2026-11-14
+# last_updated: 2026-11-14  # 10 条 story 文件已生成，均 ready-for-dev（4-3 不在云端会话执行）
+# project: TailTopia V1.5.0 · 主题 likes（会话 ⑤：自动点赞 PRD A 后端 + Feed 双击点赞 PRD B App）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.5.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.5.0/epics-v1.5.0-likes.md (4 Epic / 10 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.5.0/architecture-v1.5.0-likes-delta.md (L-1~L-14 · F-1~F-9 · G-1~G-6)
+# prd_a: {project-root}/_bmad-output/planning-artifacts/v1.5.0/自动点赞/1-5-0自动点赞prd.md (FR-212~223 · AC1~AC50，英文)
+# prd_b: {project-root}/_bmad-output/planning-artifacts/v1.5.0/Feed双击点赞/1-5-0Feed双击点赞prd.md (FR-209~211 · AC1~AC24)
+# ui_b: {project-root}/_bmad-output/planning-artifacts/v1.5.0/Feed双击点赞/ui-1-5-0-feed-double-tap-like-integrated-v1.html + 拆页-App/（16 屏）
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.5.0/decision-log.md
+# 云端规则: {project-root}/_bmad-output/implementation-artifacts/v1.5.0/cloud-rules-likes.md
+#
+# 🔴 口径优先级：决策日志 > PRD（变更记录最晚一条）> 架构增量 > UI 稿。
+# 🔴 同一版本目录有其他五条线的 story（同号前缀 1-1 / 2-1 …），只按本文件的完整 key 取。
+# 🔴 分支 feat/1.5.0-likes（从 dev_1.5.0 地基 0.1 之后切出），全部 story 同一分支、云端单会话串行。
+# 🔴 4-3 只在 ③ feat/1.5.0-onboarding 合进 dev_1.5.0 之后、在对齐分支 feat/1.5.0-likes-align 上本地做；云端会话做到 4-2 为止。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 依赖 =====
+# 串行 Epic 1 -> 2 -> 3 -> 4；epic 内按序号。PRD A（Epic 1-2）与 PRD B（Epic 3-4）互不依赖，A 先做。
+# 1-2 用 1-1 的列；2-3 用 1-1 的 likeAutomated；2-2 用 2-1；2-3 用 2-2；2-4 用 2-3。4-1 必须在 3-1 的 like_button 旧测试全绿之后。
+# Epic 2 结束时在 2-4 Completion Notes 记提交 sha：主会话可把分支截到该点单独合 dev_1.5.0，让后端先上（待拍板 Q-7）。
+#
+# ===== 迁移预分配（时间戳制，号段 V20261115_0500 ~ V20261115_0559 归本主题）=====
+# 1-1 V20261115_0500 add_content_likes_is_automated
+# 2-1 V20261115_0510 init_auto_like_targets
+# 2-2 V20261115_0520 init_auto_like_runs_and_logs
+# 预留 V20261115_0530 ~ V20261115_0559（实现中确需新增时顺取，并回写本表）
+# 本主题不改 ck_notifications_type（地基所有）。PRD B 无迁移。
+# 若实现时发现撞号，按 CLAUDE.md 在本号段内另取并回写本表。
+
+generated: 2026-11-14
+last_updated: 2026-11-14
+project: TailTopia V1.5.0 likes
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/v1.5.0
+
+development_status:
+  epic-1: backlog
+  1-1-点赞自动点赞标记列与事件: ready-for-dev
+  1-2-点赞排除排行推荐与统计口径: ready-for-dev
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-自动点赞配置目标集与检查: ready-for-dev
+  2-2-自动点赞计划与多实例防重: ready-for-dev
+  2-3-自动点赞派发复查与留档: ready-for-dev
+  2-4-自动点赞日报行与上线核对: ready-for-dev
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-feed点赞状态按帖子统一管理: ready-for-dev
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-feed图片区双击点赞手势: ready-for-dev
+  4-2-feed双击点赞红心动效与触感: ready-for-dev
+  4-3-feed双击点赞与首日推荐页合并回归: ready-for-dev   # 不在云端会话执行，见头注释
+  epic-4-retrospective: optional

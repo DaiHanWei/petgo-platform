@@ -1,0 +1,66 @@
+# generated: 2026-11-14
+# last_updated: 2026-11-14  # 14 条 story 文件已生成，均 ready-for-dev（云端批跑）
+# project: TailTopia V1.5.0 · 会话 ① 主题 health-reminder（健康记录提醒：记录字段 / 预填 / 提醒引擎 / 10:00 日跑 / 点开直达 / 档案健康字段 / Kontrol dokter：后端 + App）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.5.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.5.0/epics-v1.5.0-health-reminder.md (4 Epic / 14 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.5.0/architecture-v1.5.0-health-reminder-delta.md (§0 漂移 Z-1~Z-15 · §1 数据模型 · §4 引擎 · §5 日跑与投递 · §6 API)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.5.0/宠物健康记录提醒/1-5-0健康记录提醒prd.md
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.5.0/宠物健康记录提醒/ui-1-5-0-health-reminder-integrated-v1.html（页头交研发说明）
+#     {project-root}/_bmad-output/planning-artifacts/v1.5.0/宠物健康记录提醒/拆页-App/（53 屏，从 00-目录.html 进）
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.5.0/decision-log.md（2026-11-05 健康提醒 E4 两条）
+# 云端追加规则: {project-root}/_bmad-output/implementation-artifacts/v1.5.0/cloud-rules-health-reminder.md
+#
+# 🔴 口径优先级：CROSS-STORY-DECISIONS「2026-11-14 V1.5.0 六会话共用地基」> 架构增量 > PRD > UI 稿。
+# 🔴 同一版本目录还有其他五个会话的 story，编号会重复（1-1、2-1 …）——只按本文件的完整 key 取。
+# 🔴 分支 feat/1.5.0-health-reminder（从 dev_1.5.0 地基 9680309cf 之后切出），全部 story 同一分支、云端单会话串行。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+#
+# ===== 依赖 =====
+# 串行 Epic 1 -> 4；epic 内按序号。1.2 依赖 1.1；1.3 依赖 1.2；2.x 依赖 1.x 的规则与快照；3.x 依赖 1.x/2.x 的接口契约；4.1 本地执行。
+#
+# ===== 迁移预分配（时间戳制；本线号段 V20261115_0100 ~ V20261115_0159）=====
+# 1.1 V20261115_0100 health_records 加列 + 重建 ck_health_records_type（+VET_VISIT）
+# 1.1 V20261115_0110 pet_profiles 加 cat_in_home / pregnant_nursing / pregnant_set_at / sex_set_at
+# 2.1 V20261115_0120 health_reminder_settings / health_notifications / health_reminders / health_reminder_user_launch
+# 2.2 V20261115_0130 health_vet_consult_visits + 存量兽医会话回填
+# 备用 V20261115_0140、V20261115_0150（本线修正用，按序取并回写此处）
+# 🔴 不改 ck_notifications_type（地基 V20261114_1000 所有）。撞号则在本线号段内顺延取号并回写本表。
+
+generated: 2026-11-14
+last_updated: 2026-11-14
+project: TailTopia V1.5.0 health-reminder
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.5.0"
+
+development_status:
+  epic-1: backlog
+  1-1-健康记录与档案字段迁移: ready-for-dev
+  1-2-健康下次日期规则与预填接口: ready-for-dev
+  1-3-健康档案上线回填与怀孕自动清除: ready-for-dev
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-健康提醒表与重建引擎: ready-for-dev
+  2-2-健康档案类提醒与上线排队: ready-for-dev
+  2-3-健康提醒日跑与投递规则: ready-for-dev
+  2-4-健康提醒文案通知与点开接口: ready-for-dev
+  2-5-健康问诊历史加kontrol-dokter: ready-for-dev
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-app健康记录页状态与筛选: ready-for-dev
+  3-2-app健康记录表单: ready-for-dev
+  3-3-app宠物档案健康状态字段: ready-for-dev
+  3-4-app健康提醒点开与通知中心: ready-for-dev
+  3-5-app健康kesehatan页kontrol-dokter: ready-for-dev
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-健康提醒联调与真机验收: ready-for-dev
+  epic-4-retrospective: optional
