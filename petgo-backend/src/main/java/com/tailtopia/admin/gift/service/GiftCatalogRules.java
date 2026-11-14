@@ -22,6 +22,9 @@ public final class GiftCatalogRules {
     /** 排序值范围。 */
     public static final int SORT_ORDER_MAX = 9999;
 
+    /** V1.5.0 gift-pack Story 1-2：礼物分类名称上限（{@code gift_categories.name_* VARCHAR(40)}，同 {@link #NAME_MAX}）。 */
+    public static final int CATEGORY_NAME_MAX = NAME_MAX;
+
     /** 送礼 QRIS 最低金额下限（= DB CHECK，AD-4）。 */
     public static final long MIN_QRIS_AMOUNT = 100L;
     /** 送礼 QRIS 最低金额上限（同礼物单价上限）。 */

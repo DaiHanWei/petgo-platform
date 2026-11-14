@@ -59,6 +59,20 @@ public class GiftCategory {
         return c;
     }
 
+    /** 后台编辑（Story 1-2）：名称 / 排序；已下线的分类仍可改。 */
+    public void edit(String nameEn, String nameId, int sortOrder, Long updatedBy) {
+        this.nameEn = nameEn;
+        this.nameId = nameId;
+        this.sortOrder = sortOrder;
+        this.updatedBy = updatedBy;
+    }
+
+    /** 上 / 下线（Story 1-2）。只下线不删除。 */
+    public void setStatus(GiftCategoryStatus status, Long updatedBy) {
+        this.status = status;
+        this.updatedBy = updatedBy;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

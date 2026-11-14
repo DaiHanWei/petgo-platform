@@ -31,6 +31,7 @@
         <tr>
             <th th:text="#{admin.v140.gift.col.icon}">图标</th>
             <th th:text="#{admin.v140.gift.col.name}">名称（EN / ID）</th>
+            <th th:text="#{admin.v150.giftCategory.field}">分类</th>
             <th class="num" th:text="#{admin.v140.gift.col.price}">价格</th>
             <th th:text="#{admin.v140.gift.col.species}">适用物种</th>
             <th th:text="#{admin.v140.gift.col.kind}">类型</th>
@@ -64,6 +65,15 @@
         <td>
             <div th:text="${g.nameEn}">Bone</div>
             <div class="muted" style="font-size:12px" th:text="${g.nameId}">Tulang</div>
+        </td>
+        <!--/* V1.5.0 gift-pack Story 1-2：分类列（EN / ID 两行；专属「—」；分类已下线加灰字「· 已下线」） */-->
+        <td data-gift-category>
+            <th:block th:if="${!g.exclusive() and g.categoryNameEn != null}">
+                <div><span th:text="${g.categoryNameEn}">Snacks</span><span class="muted" th:if="${g.categoryOffline}"
+                        th:text="' · ' + #{admin.v140.gift.status.OFFLINE}"> · 已下线</span></div>
+                <div class="muted" style="font-size:12px" th:text="${g.categoryNameId}">Camilan</div>
+            </th:block>
+            <span th:unless="${!g.exclusive() and g.categoryNameEn != null}">—</span>
         </td>
         <td class="num nowrap" th:text="'Rp' + ${#numbers.formatInteger(g.price, 1, 'COMMA')}">Rp1,000</td>
         <td class="nowrap">

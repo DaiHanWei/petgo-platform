@@ -318,6 +318,15 @@ public final class AuditActions {
     public static final String GIFT_CATALOG_OFFLINED = "GIFT_CATALOG_OFFLINED";
     /** 重新上线礼物。 */
     public static final String GIFT_CATALOG_ONLINED = "GIFT_CATALOG_ONLINED";
+    // ===== 礼物分类（V1.5.0 gift-pack Story 1-2，AB-43）=====
+    /** 新建礼物分类。摘要记名称 / 排序。 */
+    public static final String GIFT_CATEGORY_CREATED = "GIFT_CATEGORY_CREATED";
+    /** 编辑礼物分类。摘要记改前 → 改后；无真变化不写。 */
+    public static final String GIFT_CATEGORY_UPDATED = "GIFT_CATEGORY_UPDATED";
+    /** 下线礼物分类（分类下有在线礼物时被拒）。 */
+    public static final String GIFT_CATEGORY_OFFLINED = "GIFT_CATEGORY_OFFLINED";
+    /** 重新上线礼物分类。 */
+    public static final String GIFT_CATEGORY_ONLINED = "GIFT_CATEGORY_ONLINED";
     /** 改送礼 QRIS 最低金额（{@code pricing_config.gift_qris_min_amount}，只对送礼生效）。 */
     public static final String GIFT_QRIS_MIN_UPDATED = "GIFT_QRIS_MIN_UPDATED";
 

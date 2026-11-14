@@ -19,17 +19,33 @@
     <div th:fragment="content" th:remove="tag" th:with="res='gift'">
         <div class="wb-title-row">
             <h1 th:text="#{admin.v140.gift.title}">礼物目录</h1>
-            <!--/* 只读用户不渲染（L7，用户标签现状）；sec:authorize 与 Controller EDIT_AUTH 逐字一致 */-->
-            <button type="button" class="btn btn-primary btn-sm"
+            <!--/* 只读用户不渲染（L7，用户标签现状）；sec:authorize 与 Controller EDIT_AUTH 逐字一致。
+                   V1.5.0 gift-pack Story 1-2：主按钮随页签切换「新建礼物 / 新建分类」（data-gtab-show，下方脚本切 hidden）。 */-->
+            <button type="button" class="btn btn-primary btn-sm" data-gtab-show="gift" th:hidden="${tab != 'gift'}"
                     th:attr="data-drawer-open=@{/admin/gift-catalog/new/drawer},data-drawer-autoopen=${openCreate} ? 'true' : null"
                     data-drawer-res="gift"
                     sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('gift.catalog_edit')"
                     th:text="#{admin.v140.gift.new}">＋ 新建礼物</button>
+            <button type="button" class="btn btn-primary btn-sm" data-gtab-show="category" th:hidden="${tab != 'category'}"
+                    th:attr="data-drawer-open=@{/admin/gift-catalog/categories/new/drawer}"
+                    data-drawer-res="giftcat"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('gift.catalog_edit')"
+                    th:text="#{admin.v150.giftCategory.new}">新建分类</button>
         </div>
         <p class="muted" th:text="#{admin.v140.gift.subtitle}">App 送礼面板里的礼物。</p>
 
+        <!--/* V1.5.0 gift-pack Story 1-2：页签「礼物 / 分类」（照 growth.html 的 .tabs / tab--on / data-gtab，纯前端切换） */-->
+        <div class="tabs" role="tablist" data-gift-tabs>
+            <button type="button" class="tab" role="tab" data-gtab="gift" th:classappend="${tab == 'gift'} ? 'tab--on'"
+                    th:attr="aria-selected=${tab == 'gift'}" th:text="#{admin.v150.giftCategory.tab.gifts}">礼物</button>
+            <button type="button" class="tab" role="tab" data-gtab="category" th:classappend="${tab == 'category'} ? 'tab--on'"
+                    th:attr="aria-selected=${tab == 'category'}" th:text="#{admin.v150.giftCategory.tab.categories}">分类</button>
+        </div>
+
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <section data-gtab-panel="gift" th:hidden="${tab != 'gift'}">
 
         <!--/* 送礼 QRIS 最低金额配置行（AC8 / UI L1 · L6）：「修改」行内展开 → 服务端确认弹层 */-->
         <div th:replace="~{admin/fragments/gift-qris-line :: line}"></div>
@@ -45,6 +61,12 @@
                        🔴 必须 hx-include 筛选表单（closest form），否则刷新会丢筛选（用户标签页没有筛选，不能照抄静态 URL）。 */-->
                 <span hidden data-gift-refresh th:attr="hx-get=@{/admin/gift-catalog}" hx-include="closest form"
                       hx-trigger="admin:gift-catalog-list-refresh from:body" hx-target="#gift-rows" hx-swap="innerHTML"></span>
+                <!--/* V1.5.0 gift-pack Story 1-2：筛选栏最前「全部分类」（列全部分类含已下线），参数 category */-->
+                <select name="category" class="sel" th:attr="aria-label=#{admin.v150.giftCategory.field}">
+                    <option value="" th:selected="${fCategory == null}" th:text="#{admin.v150.giftCategory.filter.all}">全部分类</option>
+                    <option th:each="c : ${allCategories}" th:value="${c.id}" th:selected="${fCategory == c.id}"
+                            th:text="${c.nameEn} + ' / ' + ${c.nameId}">Snacks / Camilan</option>
+                </select>
                 <!--/* UI L1：筛选为不带标签的下拉（.fbar）；首项「全部××」+ aria-label 承担字段名。 */-->
                 <select name="price" class="sel" th:attr="aria-label=#{admin.v140.gift.col.price}">
                     <option value="" th:selected="${fPrice == null}" th:text="#{admin.v140.gift.filter.allPrices}">全部价格</option>
@@ -69,6 +91,20 @@
 
             <div th:fragment="gift-drawer" class="drawer-title" th:text="#{admin.v140.gift.drawer.detailTitle}">礼物详情</div>
         </div>
+        </section>
+
+        <!--/* V1.5.0 gift-pack Story 1-2 · K1 / K2：分类页签（说明 → 表格；点行开 480 抽屉 res=giftcat，行内无按钮） */-->
+        <section data-gtab-panel="category" th:hidden="${tab != 'category'}" th:with="res='giftcat'">
+            <p class="muted" th:text="#{admin.v150.giftCategory.intro}">决定 App 送礼面板里普通礼物怎么分组……</p>
+            <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{}, ~{::giftcat-table}, ~{::giftcat-drawer})}">
+                <div th:fragment="giftcat-table" id="gift-category-rows"
+                     th:attr="hx-get=@{/admin/gift-catalog/categories}"
+                     hx-trigger="admin:gift-category-list-refresh from:body" hx-swap="innerHTML">
+                    <div th:replace="~{admin/fragments/gift-category-list :: rows}"></div>
+                </div>
+                <div th:fragment="giftcat-drawer" class="drawer-title" th:text="#{admin.v150.giftCategory.drawer.detailTitle}">分类详情</div>
+            </div>
+        </section>
 
         <!--/* ?open=<id> 深链兜底（admin-drawer.js 先按当前页找行，找不到就用这里给的 URL）。 */-->
         <span hidden th:if="${open != null}" data-drawer-res="gift"
@@ -76,6 +112,29 @@
 
         <!--/* 服务端确认弹层宿主（QRIS 最低金额 · UI L6；fragments/confirm-modal.html 以 HX-Retarget 换进来） */-->
         <div id="confirm-host"></div>
+
+        <script>
+            (function () {
+                var root = document.querySelector('[data-gift-tabs]');
+                if (!root) { return; }
+                root.addEventListener('click', function (e) {
+                    var btn = e.target.closest('[data-gtab]');
+                    if (!btn) { return; }
+                    var name = btn.getAttribute('data-gtab');
+                    root.querySelectorAll('[data-gtab]').forEach(function (b) {
+                        var on = b === btn;
+                        b.classList.toggle('tab--on', on);
+                        b.setAttribute('aria-selected', String(on));
+                    });
+                    document.querySelectorAll('[data-gtab-panel]').forEach(function (p) {
+                        p.hidden = p.getAttribute('data-gtab-panel') !== name;
+                    });
+                    document.querySelectorAll('[data-gtab-show]').forEach(function (b) {
+                        b.hidden = b.getAttribute('data-gtab-show') !== name;
+                    });
+                });
+            })();
+        </script>
     </div>
 </div>
 </body>

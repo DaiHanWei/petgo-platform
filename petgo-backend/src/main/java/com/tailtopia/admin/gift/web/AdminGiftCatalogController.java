@@ -2,6 +2,8 @@ package com.tailtopia.admin.gift.web;
 
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.gift.dto.GiftCatalogForm;
+import com.tailtopia.admin.gift.dto.GiftCategoryForm;
+import com.tailtopia.admin.gift.service.AdminGiftCategoryService;
 import com.tailtopia.admin.gift.service.AdminGiftCatalogService;
 import com.tailtopia.admin.gift.service.AdminGiftCatalogService.Filter;
 import com.tailtopia.admin.gift.service.AdminGiftCatalogService.QrisMinChange;
@@ -57,11 +59,14 @@ public class AdminGiftCatalogController {
     private final AdminGiftCatalogService service;
     private final AdminTagIconService icons;
     private final Messages msg;
+    private final AdminGiftCategoryService categories;
 
-    public AdminGiftCatalogController(AdminGiftCatalogService service, AdminTagIconService icons, Messages msg) {
+    public AdminGiftCatalogController(AdminGiftCatalogService service, AdminTagIconService icons, Messages msg,
+            AdminGiftCategoryService categories) {
         this.service = service;
         this.icons = icons;
         this.msg = msg;
+        this.categories = categories;
     }
 
     // ——————————————————— 列表 ———————————————————
@@ -75,11 +80,13 @@ public class AdminGiftCatalogController {
     public String list(@RequestParam(value = "price", required = false) String price,
             @RequestParam(value = "kind", required = false) String kind,
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "tab", required = false) String tab,
             @RequestParam(value = "open", required = false) Long open,
             @RequestParam(value = "create", required = false) String create,
             HxRequest hx, Model model) {
         Filter filter = new Filter(parsePrice(price), parseEnum(GiftKind.class, kind),
-                parseEnum(GiftCatalogStatus.class, status));
+                parseEnum(GiftCatalogStatus.class, status), parsePrice(category));
         var page = service.page(filter);
         model.addAttribute("active", "gift-catalog");
         model.addAttribute("gifts", page.rows());
@@ -89,6 +96,8 @@ public class AdminGiftCatalogController {
         model.addAttribute("fPrice", filter.price());
         model.addAttribute("fKind", filter.kind() == null ? null : filter.kind().name());
         model.addAttribute("fStatus", filter.status() == null ? null : filter.status().name());
+        model.addAttribute("fCategory", filter.categoryId());
+        model.addAttribute("allCategories", categories.allCategories());
         if (hx.isHtmx()) {
             return "admin/fragments/gift-catalog-list :: rows(oob=true)";
         }
@@ -97,7 +106,124 @@ public class AdminGiftCatalogController {
         model.addAttribute("statuses", List.of(GiftCatalogStatus.ONLINE.name(), GiftCatalogStatus.OFFLINE.name()));
         model.addAttribute("open", open);
         model.addAttribute("openCreate", create != null);
+        // V1.5.0 gift-pack Story 1-2：页签「礼物 / 分类」（纯前端切换；tab=category 默认停在分类）
+        model.addAttribute("tab", "category".equals(tab) ? "category" : "gift");
+        model.addAttribute("categoryRows", categories.list());
         return "admin/gift-catalog";
+    }
+
+    // ——————————————————— 礼物分类（V1.5.0 gift-pack Story 1-2 · AB-43）———————————————————
+
+    /** 分类表局部刷新（分类抽屉处置后 HX-Trigger 重拉）。非 htmx 直达 → 回分类页签。 */
+    @GetMapping(BASE + "/categories")
+    @PreAuthorize(VIEW_AUTH)
+    public String categoryList(HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:" + BASE + "?tab=category";
+        }
+        model.addAttribute("categoryRows", categories.list());
+        return "admin/fragments/gift-category-list :: rows";
+    }
+
+    /** 新建分类抽屉（K3）。 */
+    @GetMapping(BASE + "/categories/new/drawer")
+    @PreAuthorize(EDIT_AUTH)
+    public String newCategoryDrawer(HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:" + BASE + "?tab=category";
+        }
+        model.addAttribute("maxSortOrder", GiftCatalogRules.SORT_ORDER_MAX);
+        return "admin/fragments/drawer-gift-category :: createForm";
+    }
+
+    /** 分类详情抽屉（K4 / K7 / K8）。不存在 → 404。 */
+    @GetMapping(BASE + "/categories/{id}/drawer")
+    @PreAuthorize(VIEW_AUTH)
+    public String categoryDrawer(@PathVariable long id, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:" + BASE + "?tab=category";
+        }
+        populateCategoryDrawer(id, model);
+        return "admin/fragments/drawer-gift-category :: drawer";
+    }
+
+    private void populateCategoryDrawer(long id, Model model) {
+        model.addAttribute("c", categories.detail(id));
+        model.addAttribute("maxSortOrder", GiftCatalogRules.SORT_ORDER_MAX);
+    }
+
+    /** 新建分类（K3）：htmx 成功 → toast「分类已新建」+ 关抽屉 + 分类表刷新；422 留在抽屉错误槽（K5）。 */
+    @PostMapping(BASE + "/categories")
+    @PreAuthorize(EDIT_AUTH)
+    public String createCategory(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(value = "nameEn", required = false) String nameEn,
+            @RequestParam(value = "nameId", required = false) String nameId,
+            @RequestParam(value = "sortOrder", required = false) String sortOrder,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        GiftCategoryForm form = new GiftCategoryForm(nameEn, nameId, sortOrder);
+        if (hx.isHtmx()) {
+            categories.create(admin.getAdminAccountId(), form);
+            AdminFragmentResponses.trigger(response, AdminHxEvents.GIFT_CATEGORY_LIST_REFRESH,
+                    AdminHxEvents.DRAWER_CLOSE);
+            model.addAttribute("toast", msg.get("admin.v150.giftCategory.flash.created"));
+            return "admin/fragments/drawer-gift :: created";
+        }
+        try {
+            categories.create(admin.getAdminAccountId(), form);
+            flash.addFlashAttribute("notice", msg.get("admin.v150.giftCategory.flash.created"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:" + BASE + "?tab=category";
+    }
+
+    /** 编辑分类（K4 / K7）。无真变化不写审计，toast 照样「已保存」。 */
+    @PostMapping(BASE + "/categories/{id}/edit")
+    @PreAuthorize(EDIT_AUTH)
+    public String editCategory(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @RequestParam(value = "nameEn", required = false) String nameEn,
+            @RequestParam(value = "nameId", required = false) String nameId,
+            @RequestParam(value = "sortOrder", required = false) String sortOrder,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        GiftCategoryForm form = new GiftCategoryForm(nameEn, nameId, sortOrder);
+        if (hx.isHtmx()) {
+            categories.update(admin.getAdminAccountId(), id, form);
+            return afterCategoryAction(id, msg.get("admin.flash.gift.saved"), model, response);
+        }
+        try {
+            categories.update(admin.getAdminAccountId(), id, form);
+            flash.addFlashAttribute("notice", msg.get("admin.flash.gift.saved"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:" + BASE + "?tab=category";
+    }
+
+    /** 分类下线 / 重新上线（K6 / K7）。有在线礼物时下线 → 422（K4 前端已置灰，这里是服务端兜底）。 */
+    @PostMapping(BASE + "/categories/{id}/status")
+    @PreAuthorize(EDIT_AUTH)
+    public String categoryStatus(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @RequestParam("online") boolean online,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        String toast = online ? msg.get("admin.flash.gift.onlined") : msg.get("admin.flash.gift.offlined");
+        if (hx.isHtmx()) {
+            categories.setOnline(admin.getAdminAccountId(), id, online);
+            return afterCategoryAction(id, toast, model, response);
+        }
+        try {
+            categories.setOnline(admin.getAdminAccountId(), id, online);
+            flash.addFlashAttribute("notice", toast);
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:" + BASE + "?tab=category";
+    }
+
+    private String afterCategoryAction(long id, String toast, Model model, HttpServletResponse response) {
+        populateCategoryDrawer(id, model);
+        model.addAttribute("toast", toast);
+        AdminFragmentResponses.trigger(response, AdminHxEvents.GIFT_CATEGORY_LIST_REFRESH);
+        return "admin/fragments/drawer-gift-category :: afterAction";
     }
 
     // ——————————————————— 抽屉 ———————————————————
@@ -134,6 +260,7 @@ public class AdminGiftCatalogController {
         model.addAttribute("minPrice", GiftCatalogRules.MIN_PRICE);
         model.addAttribute("maxPrice", GiftCatalogRules.MAX_PRICE);
         model.addAttribute("maxSortOrder", GiftCatalogRules.SORT_ORDER_MAX);
+        model.addAttribute("onlineCategories", categories.onlineCategories());
     }
 
     private void populateDrawer(long id, Model model) {
@@ -169,9 +296,10 @@ public class AdminGiftCatalogController {
             @RequestParam(value = "kind", required = false) String kind,
             @RequestParam(value = "minLevel", required = false) String minLevel,
             @RequestParam(value = "sortOrder", required = false) String sortOrder,
+            @RequestParam(value = "categoryId", required = false) String categoryId,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         GiftCatalogForm form = new GiftCatalogForm(nameEn, nameId, price, forCat, forDog, forOther, kind, minLevel,
-                sortOrder);
+                sortOrder, categoryId);
         if (hx.isHtmx()) {
             service.create(admin.getAdminAccountId(), form, iconFile);
             AdminFragmentResponses.trigger(response, AdminHxEvents.GIFT_CATALOG_LIST_REFRESH,
@@ -202,9 +330,10 @@ public class AdminGiftCatalogController {
             @RequestParam(value = "kind", required = false) String kind,
             @RequestParam(value = "minLevel", required = false) String minLevel,
             @RequestParam(value = "sortOrder", required = false) String sortOrder,
+            @RequestParam(value = "categoryId", required = false) String categoryId,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         GiftCatalogForm form = new GiftCatalogForm(nameEn, nameId, price, forCat, forDog, forOther, kind, minLevel,
-                sortOrder);
+                sortOrder, categoryId);
         if (hx.isHtmx()) {
             service.update(admin.getAdminAccountId(), id, form, iconFile);
             return afterAction(id, msg.get("admin.flash.gift.saved"), model, response);

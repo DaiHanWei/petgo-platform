@@ -146,6 +146,11 @@ class AdminGiftCatalogIntegrationTest extends ApiIntegrationTest {
                 "AG-" + SEQ.incrementAndGet()));
     }
 
+    /** V1.5.0 gift-pack Story 1-2：迁移建的在线分类 Snacks。 */
+    private long snacksId() {
+        return jdbc.queryForObject("SELECT id FROM gift_categories WHERE name_en = 'Snacks'", Long.class);
+    }
+
     private Long giftIdByName(String nameEn) {
         return jdbc.queryForObject("SELECT id FROM gift_catalog WHERE name_en = ?", Long.class, nameEn);
     }
@@ -170,7 +175,8 @@ class AdminGiftCatalogIntegrationTest extends ApiIntegrationTest {
         mvc.perform(multipart(BASE).file(png()).with(authentication(editor())).with(csrf())
                         .header("HX-Request", "true")
                         .param("nameEn", name).param("nameId", "Tulang").param("price", "4321")
-                        .param("forCat", "true").param("kind", "NORMAL").param("sortOrder", ""))
+                        .param("forCat", "true").param("kind", "NORMAL").param("sortOrder", "")
+                        .param("categoryId", String.valueOf(snacksId())))
                 .andExpect(status().isOk());
         Long id = giftIdByName(name);
         assertThat(jdbc.queryForObject("SELECT status FROM gift_catalog WHERE id = ?", String.class, id))
@@ -232,7 +238,8 @@ class AdminGiftCatalogIntegrationTest extends ApiIntegrationTest {
         mvc.perform(multipart(BASE + "/" + g.getId() + "/edit").with(authentication(editor())).with(csrf())
                         .header("HX-Request", "true")
                         .param("nameEn", g.getNameEn()).param("nameId", g.getNameId()).param("price", "8000")
-                        .param("kind", "NORMAL").param("sortOrder", "0"))
+                        .param("kind", "NORMAL").param("sortOrder", "0")
+                        .param("categoryId", String.valueOf(snacksId())))
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT price FROM gift_catalog WHERE id = ?", Long.class, g.getId()))
                 .isEqualTo(8_000L);
@@ -330,5 +337,63 @@ class AdminGiftCatalogIntegrationTest extends ApiIntegrationTest {
     void unauthorizedStaffGets403() throws Exception {
         mvc.perform(get(BASE).with(authentication(staffWith(AdminPermissions.USER_TAG_VIEW))))
                 .andExpect(status().isForbidden());
+    }
+
+    // ——————————————————— V1.5.0 gift-pack Story 1-2 · AC3.7 分类 ———————————————————
+
+    @Test
+    void categoryTabRendersAndViewerCannotCreateOrEdit() throws Exception {
+        String page = mvc.perform(get(BASE).param("tab", "category").with(authentication(editor())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(page).contains("data-gift-tabs").contains("data-gift-category-table")
+                .contains("/admin/gift-catalog/categories/new/drawer").contains("Snacks");
+        String ro = mvc.perform(get(BASE).param("tab", "category").with(authentication(viewer())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(ro).doesNotContain("/admin/gift-catalog/categories/new/drawer");
+        String drawer = mvc.perform(get(BASE + "/categories/" + snacksId() + "/drawer")
+                        .with(authentication(viewer())).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(drawer).contains("data-gift-category-readonly").doesNotContain("giftCategoryEditForm");
+        mvc.perform(post(BASE + "/categories").with(authentication(viewer())).with(csrf())
+                        .param("nameEn", "X").param("nameId", "Y"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(BASE + "/categories/" + snacksId() + "/status").with(authentication(viewer())).with(csrf())
+                        .param("online", "false"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void categoryFilterAndOfflineBlockedWhileOnlineGifts() throws Exception {
+        long n = SEQ.incrementAndGet();
+        String en = "Cat" + n;
+        mvc.perform(post(BASE + "/categories").with(authentication(editor())).with(csrf())
+                        .header("HX-Request", "true").param("nameEn", en).param("nameId", "Kat" + n)
+                        .param("sortOrder", "70"))
+                .andExpect(status().isOk());
+        long catId = jdbc.queryForObject("SELECT id FROM gift_categories WHERE name_en = ?", Long.class, en);
+        assertThat(auditCount("GIFT_CATEGORY_CREATED", String.valueOf(catId))).isEqualTo(1L);
+        // 重名（大小写不同）→ 422
+        mvc.perform(post(BASE + "/categories").with(authentication(editor())).with(csrf())
+                        .header("HX-Request", "true").param("nameEn", en.toUpperCase()).param("nameId", "Lain" + n))
+                .andExpect(status().isUnprocessableEntity());
+
+        GiftCatalogItem g = catalog.save(GiftCatalogItem.create("cf" + n, "Gift" + n, "Hadiah" + n,
+                "https://cdn/g.png", 1_000, false, false, false, GiftKind.NORMAL, null, 0));
+        jdbc.update("UPDATE gift_catalog SET category_id = ? WHERE id = ?", catId, g.getId());
+
+        String filtered = mvc.perform(get(BASE).param("category", String.valueOf(catId)).with(authentication(editor()))
+                        .header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(filtered).contains("Gift" + n);
+        String other = mvc.perform(get(BASE).param("category", String.valueOf(snacksId()))
+                        .with(authentication(editor())).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(other).doesNotContain("Gift" + n);
+
+        mvc.perform(post(BASE + "/categories/" + catId + "/status").with(authentication(editor())).with(csrf())
+                        .header("HX-Request", "true").param("online", "false"))
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT status FROM gift_categories WHERE id = ?", String.class, catId))
+                .isEqualTo("ONLINE");
     }
 }

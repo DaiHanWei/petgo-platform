@@ -137,6 +137,11 @@ public class GiftCatalogItem {
         this.updatedBy = updatedBy;
     }
 
+    /** V1.5.0 gift-pack Story 1-2：改所属分类（普通礼物必为在线分类、专属礼物恒为 null，由后台服务保证）。 */
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
+    }
+
     /** 记录最近一次修改的后台账号（新建时由后台服务写入）。 */
     public void setUpdatedBy(Long updatedBy) {
         this.updatedBy = updatedBy;

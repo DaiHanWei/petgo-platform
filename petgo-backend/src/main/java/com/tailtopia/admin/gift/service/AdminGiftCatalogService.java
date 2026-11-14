@@ -14,14 +14,18 @@ import com.tailtopia.config.repository.PricingConfigRepository;
 import com.tailtopia.gift.domain.GiftCatalogItem;
 import com.tailtopia.gift.domain.GiftCatalogStatus;
 import com.tailtopia.gift.domain.GiftKind;
+import com.tailtopia.gift.domain.GiftCategory;
 import com.tailtopia.gift.repository.GiftCatalogRepository;
+import com.tailtopia.gift.repository.GiftCategoryRepository;
 import com.tailtopia.gift.repository.GiftOrderRepository;
 import com.tailtopia.gift.service.GiftTokenGenerator;
 import com.tailtopia.growth.service.GrowthDisplayLevelService;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
@@ -45,8 +49,13 @@ import org.springframework.web.multipart.MultipartFile;
 public class AdminGiftCatalogService {
 
     /** 筛选条件（宽松解析后的结果；null = 不限）。 */
-    public record Filter(Long price, GiftKind kind, GiftCatalogStatus status) {
-        public static final Filter NONE = new Filter(null, null, null);
+    public record Filter(Long price, GiftKind kind, GiftCatalogStatus status, Long categoryId) {
+        public static final Filter NONE = new Filter(null, null, null, null);
+
+        /** 不带分类筛选的旧形状。 */
+        public Filter(Long price, GiftKind kind, GiftCatalogStatus status) {
+            this(price, kind, status, null);
+        }
     }
 
     /** 列表页一次取数：表格行（已筛选、已排序）+ 全目录摘要 + 价格下拉选项 + 目录是否为空。 */
@@ -64,7 +73,7 @@ public class AdminGiftCatalogService {
 
     /** 校验通过的礼物字段。 */
     record Parsed(String nameEn, String nameId, long price, boolean forCat, boolean forDog, boolean forOther,
-            GiftKind kind, Integer minLevel, int sortOrder) {
+            GiftKind kind, Integer minLevel, int sortOrder, Long categoryId) {
     }
 
     /** 列表排序：下线的最后 → 普通先于专属 → 价格 → 排序值 → id（AC3.2）。 */
@@ -85,10 +94,13 @@ public class AdminGiftCatalogService {
     private final ConfigChangeLogRepository changeLogs;
     private final AdminAuditService audit;
     private final GrowthDisplayLevelService growthLevels;
+    private final GiftCategoryRepository categories;
 
     public AdminGiftCatalogService(GiftCatalogRepository catalog, GiftOrderRepository orders,
             GiftTokenGenerator tokens, AdminTagIconService icons, PricingConfigRepository pricing,
-            ConfigChangeLogRepository changeLogs, AdminAuditService audit, GrowthDisplayLevelService growthLevels) {
+            ConfigChangeLogRepository changeLogs, AdminAuditService audit, GrowthDisplayLevelService growthLevels,
+            GiftCategoryRepository categories) {
+        this.categories = categories;
         this.catalog = catalog;
         this.orders = orders;
         this.tokens = tokens;
@@ -132,12 +144,14 @@ public class AdminGiftCatalogService {
             }
         }
         List<Long> prices = all.stream().map(GiftCatalogItem::getPrice).distinct().sorted().toList();
+        Map<Long, GiftCategory> cats = categoryMap();
         List<GiftCatalogRow> rows = all.stream()
                 .filter(g -> f.price() == null || g.getPrice() == f.price())
                 .filter(g -> f.kind() == null || g.getKind() == f.kind())
                 .filter(g -> f.status() == null || g.getStatus() == f.status())
+                .filter(g -> f.categoryId() == null || f.categoryId().equals(g.getCategoryId()))
                 .sorted(ADMIN_ORDER)
-                .map(GiftCatalogRow::of)
+                .map(g -> GiftCatalogRow.of(g, g.getCategoryId() == null ? null : cats.get(g.getCategoryId())))
                 .toList();
         return new CatalogPage(rows, new GiftCatalogSummary(online, exclusive, offline), prices, all.isEmpty());
     }
@@ -154,7 +168,8 @@ public class AdminGiftCatalogService {
             received = toLong(row.length > 0 ? row[0] : null);
             sent = toLong(row.length > 1 ? row[1] : null);
         }
-        return new GiftDetail(GiftCatalogRow.of(g), received, sent);
+        GiftCategory cat = g.getCategoryId() == null ? null : categories.findById(g.getCategoryId()).orElse(null);
+        return new GiftDetail(GiftCatalogRow.of(g, cat), received, sent);
     }
 
     /** 当前送礼 QRIS 最低金额（每次读库，无缓存）。 */
@@ -172,6 +187,7 @@ public class AdminGiftCatalogService {
     @Transactional
     public long create(long adminId, GiftCatalogForm form, MultipartFile iconFile) {
         Parsed p = validate(form, maxMinLevel());
+        requireOnlineCategory(p);
         if (iconFile == null || iconFile.isEmpty()) {
             throw AppException.validation("新建礼物必须上传图标。").code("admin.err.gift.iconRequired");
         }
@@ -182,9 +198,11 @@ public class AdminGiftCatalogService {
         GiftCatalogItem g = GiftCatalogItem.create(tokens.generate(), p.nameEn(), p.nameId(), iconUrl, p.price(),
                 p.forCat(), p.forDog(), p.forOther(), p.kind(), p.minLevel(), p.sortOrder());
         g.setUpdatedBy(adminId);
+        g.setCategoryId(p.categoryId());
         g = catalog.save(g);
         audit.record(adminId, AuditActions.GIFT_CATALOG_CREATED, "gift_catalog", String.valueOf(g.getId()),
                 "name_en=" + p.nameEn() + "; name_id=" + p.nameId() + "; price=" + p.price()
+                        + "; category_id=" + p.categoryId()
                         + "; kind=" + p.kind() + "; min_level=" + p.minLevel()
                         + "; for_cat=" + p.forCat() + "; for_dog=" + p.forDog() + "; for_other=" + p.forOther()
                         + "; sort_order=" + p.sortOrder());
@@ -200,6 +218,7 @@ public class AdminGiftCatalogService {
     public boolean update(long adminId, long id, GiftCatalogForm form, MultipartFile iconFile) {
         GiftCatalogItem g = require(id);
         Parsed p = validate(form, maxMinLevel());
+        requireOnlineCategory(p);
         String newIcon = icons.uploadOrKeep(iconFile, IconPurpose.GIFT);
 
         List<String> changes = new ArrayList<>();
@@ -212,6 +231,7 @@ public class AdminGiftCatalogService {
         diff(changes, "kind", g.getKind(), p.kind());
         diff(changes, "min_level", g.getMinLevel(), p.minLevel());
         diff(changes, "sort_order", g.getSortOrder(), p.sortOrder());
+        diff(changes, "category_id", g.getCategoryId(), p.categoryId());
         if (newIcon != null && !newIcon.equals(g.getIconUrl())) {
             // 🔒 换图只记一句，不记 URL。
             changes.add("icon changed");
@@ -221,6 +241,7 @@ public class AdminGiftCatalogService {
         }
         g.edit(p.nameEn(), p.nameId(), newIcon, p.price(), p.forCat(), p.forDog(), p.forOther(), p.kind(),
                 p.minLevel(), p.sortOrder(), adminId);
+        g.setCategoryId(p.categoryId());
         catalog.save(g);
         audit.record(adminId, AuditActions.GIFT_CATALOG_UPDATED, "gift_catalog", String.valueOf(id),
                 String.join("; ", changes));
@@ -239,6 +260,15 @@ public class AdminGiftCatalogService {
         GiftCatalogStatus target = online ? GiftCatalogStatus.ONLINE : GiftCatalogStatus.OFFLINE;
         if (g.getStatus() == target) {
             return false;
+        }
+        if (online && g.getKind() == GiftKind.NORMAL) {
+            // L5：所在分类已下线（或未归类）的普通礼物不能重新上线
+            boolean categoryOnline = g.getCategoryId() != null
+                    && categories.findById(g.getCategoryId()).map(GiftCategory::isOnline).orElse(false);
+            if (!categoryOnline) {
+                throw AppException.validation("所在分类已下线，先改选分类。")
+                        .code("admin.v150.giftCategory.onlineBlocked");
+            }
         }
         GiftCatalogStatus before = g.getStatus();
         g.setStatus(target, adminId);
@@ -326,8 +356,31 @@ public class AdminGiftCatalogService {
                     "排序须为 0 ~ 9999 的整数", "admin.err.gift.sortOrderRange");
             sortOrder = so.intValue();
         }
+        // V1.5.0 gift-pack Story 1-2：普通礼物必须选分类（是否在线由 requireOnlineCategory 查库判）；专属礼物清空。
+        Long categoryId = null;
+        if (kind == GiftKind.NORMAL) {
+            categoryId = parseLong(form.categoryId());
+            require(categoryId != null && categoryId > 0, "请选择分类", "admin.v150.giftCategory.err.required");
+        }
         return new Parsed(nameEn, nameId, price, form.forCat(), form.forDog(), form.forOther(), kind, minLevel,
-                sortOrder);
+                sortOrder, categoryId);
+    }
+
+    /** 普通礼物的分类必须存在且在线（L4 / L5 服务端兜底）。 */
+    private void requireOnlineCategory(Parsed p) {
+        if (p.categoryId() == null) {
+            return;
+        }
+        boolean ok = categories.findById(p.categoryId()).map(GiftCategory::isOnline).orElse(false);
+        require(ok, "请选择分类", "admin.v150.giftCategory.err.required");
+    }
+
+    private Map<Long, GiftCategory> categoryMap() {
+        Map<Long, GiftCategory> m = new HashMap<>();
+        for (GiftCategory c : categories.findAll()) {
+            m.put(c.getId(), c);
+        }
+        return m;
     }
 
     // ——————————————————— 工具 ———————————————————

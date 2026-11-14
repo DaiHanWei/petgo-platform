@@ -27,7 +27,10 @@ import com.tailtopia.config.repository.ConfigChangeLogRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
 import com.tailtopia.gift.domain.GiftCatalogItem;
 import com.tailtopia.gift.domain.GiftCatalogStatus;
+import com.tailtopia.gift.domain.GiftCategory;
+import com.tailtopia.gift.domain.GiftCategoryStatus;
 import com.tailtopia.gift.domain.GiftKind;
+import com.tailtopia.gift.repository.GiftCategoryRepository;
 import com.tailtopia.gift.repository.GiftCatalogRepository;
 import com.tailtopia.gift.repository.GiftOrderRepository;
 import com.tailtopia.gift.service.GiftTokenGenerator;
@@ -62,6 +65,7 @@ class AdminGiftCatalogServiceTest {
     /** ① seed 等级表最高级（Lv20）。 */
     private static final int MAX_LEVEL = 20;
     private AdminGiftCatalogService service;
+    private GiftCategoryRepository categories;
     private PricingConfig pricingRow;
 
     @BeforeEach
@@ -88,7 +92,17 @@ class AdminGiftCatalogServiceTest {
         when(pricing.findById(PricingConfig.SINGLETON_ID)).thenReturn(Optional.of(pricingRow));
         growthLevels = mock(GrowthDisplayLevelService.class);
         when(growthLevels.maxLevel()).thenReturn(MAX_LEVEL);
-        service = new AdminGiftCatalogService(catalog, orders, tokens, icons, pricing, changeLogs, audit, growthLevels);
+        categories = mock(GiftCategoryRepository.class);
+        GiftCategory snacks = GiftCategory.create("Snacks", "Camilan", 10, null);
+        setField(snacks, "id", 1L);
+        GiftCategory seasonal = GiftCategory.create("Seasonal", "Musiman", 60, null);
+        setField(seasonal, "id", 2L);
+        seasonal.setStatus(GiftCategoryStatus.OFFLINE, null);
+        when(categories.findById(1L)).thenReturn(Optional.of(snacks));
+        when(categories.findById(2L)).thenReturn(Optional.of(seasonal));
+        when(categories.findAll()).thenReturn(List.of(snacks, seasonal));
+        service = new AdminGiftCatalogService(catalog, orders, tokens, icons, pricing, changeLogs, audit, growthLevels,
+                categories);
     }
 
     // ——————————————————— 夹具 ———————————————————
@@ -112,6 +126,9 @@ class AdminGiftCatalogServiceTest {
         GiftCatalogItem g = GiftCatalogItem.create("tok" + id, "Gift" + id, "Hadiah" + id,
                 "https://cdn.example/icon" + id + ".png", price, false, false, false, kind, minLevel, sortOrder);
         setField(g, "id", id);
+        if (kind == GiftKind.NORMAL) {
+            g.setCategoryId(1L); // V1.5.0：普通礼物默认在在线分类 Snacks
+        }
         if (status == GiftCatalogStatus.OFFLINE) {
             g.setStatus(GiftCatalogStatus.OFFLINE, null);
         }
@@ -119,7 +136,7 @@ class AdminGiftCatalogServiceTest {
     }
 
     private static GiftCatalogForm form(String price, String kind, String minLevel, String sortOrder) {
-        return new GiftCatalogForm("Bone", "Tulang", price, false, true, false, kind, minLevel, sortOrder);
+        return new GiftCatalogForm("Bone", "Tulang", price, false, true, false, kind, minLevel, sortOrder, "1");
     }
 
     private static MockMultipartFile png() {
@@ -155,19 +172,19 @@ class AdminGiftCatalogServiceTest {
     @Test
     void namesMustBePresentAndAtMostFortyChars() {
         assertCode(() -> AdminGiftCatalogService.validate(
-                new GiftCatalogForm("  ", "Tulang", "1000", false, false, false, "NORMAL", null, null), MAX_LEVEL),
+                new GiftCatalogForm("  ", "Tulang", "1000", false, false, false, "NORMAL", null, null, "1"), MAX_LEVEL),
                 "admin.err.gift.nameRequired");
         assertCode(() -> AdminGiftCatalogService.validate(
-                new GiftCatalogForm("Bone", null, "1000", false, false, false, "NORMAL", null, null), MAX_LEVEL),
+                new GiftCatalogForm("Bone", null, "1000", false, false, false, "NORMAL", null, null, "1"), MAX_LEVEL),
                 "admin.err.gift.nameRequired");
         String n41 = "x".repeat(41);
         assertCode(() -> AdminGiftCatalogService.validate(
-                new GiftCatalogForm(n41, "Tulang", "1000", false, false, false, "NORMAL", null, null), MAX_LEVEL),
+                new GiftCatalogForm(n41, "Tulang", "1000", false, false, false, "NORMAL", null, null, "1"), MAX_LEVEL),
                 "admin.err.gift.nameTooLong");
         // trim 后计长：40 个字 + 两侧空白放行
         var ok = AdminGiftCatalogService.validate(
                 new GiftCatalogForm("  " + "y".repeat(40) + " ", "Tulang", "1000", false, false, false, null, null,
-                        null), MAX_LEVEL);
+                        null, "1"), MAX_LEVEL);
         assertThat(ok.nameEn()).hasSize(40);
         assertThat(ok.kind()).as("缺省类型 = 普通").isEqualTo(GiftKind.NORMAL);
     }
@@ -287,7 +304,7 @@ class AdminGiftCatalogServiceTest {
         GiftCatalogItem g = gift(6L, 1000L, GiftKind.NORMAL, null, 0, GiftCatalogStatus.ONLINE);
         when(catalog.findById(6L)).thenReturn(Optional.of(g));
         service.update(ADMIN, 6L,
-                new GiftCatalogForm("Gift6", "Hadiah6", "1000", false, false, false, "NORMAL", null, "0"), png());
+                new GiftCatalogForm("Gift6", "Hadiah6", "1000", false, false, false, "NORMAL", null, "0", "1"), png());
         assertThat(g.getIconUrl()).isEqualTo("https://cdn.example/public/gift-icon/new.png");
         ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
         verify(audit).record(eq(ADMIN), eq(AuditActions.GIFT_CATALOG_UPDATED), anyString(), anyString(),
@@ -300,7 +317,7 @@ class AdminGiftCatalogServiceTest {
         GiftCatalogItem g = gift(7L, 1000L, GiftKind.NORMAL, null, 2, GiftCatalogStatus.ONLINE);
         when(catalog.findById(7L)).thenReturn(Optional.of(g));
         boolean changed = service.update(ADMIN, 7L,
-                new GiftCatalogForm(" Gift7 ", "Hadiah7", "1000", false, false, false, "NORMAL", "9", "2"), null);
+                new GiftCatalogForm(" Gift7 ", "Hadiah7", "1000", false, false, false, "NORMAL", "9", "2", "1"), null);
         assertThat(changed).isFalse();
         verify(catalog, never()).save(any());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
@@ -311,7 +328,7 @@ class AdminGiftCatalogServiceTest {
         GiftCatalogItem g = gift(8L, 1000L, GiftKind.EXCLUSIVE, 3, 0, GiftCatalogStatus.ONLINE);
         when(catalog.findById(8L)).thenReturn(Optional.of(g));
         service.update(ADMIN, 8L,
-                new GiftCatalogForm("Gift8", "Hadiah8", "1000", false, false, false, "NORMAL", "3", "0"), null);
+                new GiftCatalogForm("Gift8", "Hadiah8", "1000", false, false, false, "NORMAL", "3", "0", "1"), null);
         assertThat(g.getKind()).isEqualTo(GiftKind.NORMAL);
         assertThat(g.getMinLevel()).isNull();
     }
@@ -428,5 +445,98 @@ class AdminGiftCatalogServiceTest {
         assertCode(() -> service.updateQrisMin(ADMIN, "50"), "admin.err.gift.qrisMinRange");
         verify(pricing, never()).save(any());
         verify(changeLogs, never()).save(any());
+    }
+
+    // ——————————————————— V1.5.0 gift-pack Story 1-2 · AC2 分类 ———————————————————
+
+    @Test
+    void normalGiftWithoutCategoryIsRejected() {
+        assertThatThrownBy(() -> AdminGiftCatalogService.validate(
+                new GiftCatalogForm("Bone", "Tulang", "1000", false, false, false, "NORMAL", null, null), MAX_LEVEL))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo("admin.v150.giftCategory.err.required"));
+        assertThatThrownBy(() -> service.create(ADMIN,
+                new GiftCatalogForm("Bone", "Tulang", "1000", false, false, false, "NORMAL", null, null, "abc"), png()))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo("admin.v150.giftCategory.err.required"));
+        verify(catalog, never()).save(any());
+    }
+
+    @Test
+    void normalGiftWithOfflineOrMissingCategoryIsRejected() {
+        assertThatThrownBy(() -> service.create(ADMIN,
+                new GiftCatalogForm("Bone", "Tulang", "1000", false, false, false, "NORMAL", null, null, "2"), png()))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo("admin.v150.giftCategory.err.required"));
+        when(categories.findById(77L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.create(ADMIN,
+                new GiftCatalogForm("Bone", "Tulang", "1000", false, false, false, "NORMAL", null, null, "77"), png()))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo("admin.v150.giftCategory.err.required"));
+        verify(catalog, never()).save(any());
+    }
+
+    @Test
+    void createNormalStoresCategoryAndAudits() {
+        service.create(ADMIN, form("1000", "NORMAL", null, "0"), png());
+        ArgumentCaptor<GiftCatalogItem> saved = ArgumentCaptor.forClass(GiftCatalogItem.class);
+        verify(catalog).save(saved.capture());
+        assertThat(saved.getValue().getCategoryId()).isEqualTo(1L);
+        verify(audit).record(eq(ADMIN), eq(AuditActions.GIFT_CATALOG_CREATED), eq("gift_catalog"), eq("99"),
+                org.mockito.ArgumentMatchers.contains("category_id=1"));
+    }
+
+    @Test
+    void exclusiveGiftCategoryIsCleared() throws Exception {
+        GiftCatalogItem g = gift(20L, 1000L, GiftKind.NORMAL, null, 0, GiftCatalogStatus.ONLINE);
+        when(catalog.findById(20L)).thenReturn(Optional.of(g));
+        service.update(ADMIN, 20L,
+                new GiftCatalogForm("Gift20", "Hadiah20", "1000", false, false, false, "EXCLUSIVE", "5", "0", "1"), null);
+        assertThat(g.getCategoryId()).isNull();
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        verify(audit).record(eq(ADMIN), eq(AuditActions.GIFT_CATALOG_UPDATED), anyString(), anyString(),
+                summary.capture());
+        assertThat(summary.getValue()).contains("category_id 1→null");
+    }
+
+    @Test
+    void changingCategoryIsAuditedBeforeAfter() throws Exception {
+        GiftCatalogItem g = gift(21L, 1000L, GiftKind.NORMAL, null, 0, GiftCatalogStatus.ONLINE);
+        g.setCategoryId(3L);
+        when(categories.findById(3L)).thenReturn(Optional.of(GiftCategory.create("Toys", "Mainan", 30, null)));
+        when(catalog.findById(21L)).thenReturn(Optional.of(g));
+        service.update(ADMIN, 21L,
+                new GiftCatalogForm("Gift21", "Hadiah21", "1000", false, false, false, "NORMAL", null, "0", "1"), null);
+        assertThat(g.getCategoryId()).isEqualTo(1L);
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        verify(audit).record(eq(ADMIN), eq(AuditActions.GIFT_CATALOG_UPDATED), anyString(), anyString(),
+                summary.capture());
+        assertThat(summary.getValue()).isEqualTo("category_id 3→1");
+    }
+
+    @Test
+    void giftInOfflineCategoryCannotGoBackOnline() throws Exception {
+        GiftCatalogItem g = gift(22L, 1000L, GiftKind.NORMAL, null, 0, GiftCatalogStatus.OFFLINE);
+        g.setCategoryId(2L);
+        when(catalog.findById(22L)).thenReturn(Optional.of(g));
+        assertThatThrownBy(() -> service.setOnline(ADMIN, 22L, true))
+                .satisfies(t -> assertThat(codeOf(t)).isEqualTo("admin.v150.giftCategory.onlineBlocked"));
+        assertThat(g.getStatus()).isEqualTo(GiftCatalogStatus.OFFLINE);
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+        var row = service.detail(22L).gift();
+        assertThat(row.categoryOffline()).isTrue();
+        assertThat(row.onlineBlockedByCategory()).isTrue();
+    }
+
+    @Test
+    void listFiltersByCategoryAndCarriesCategoryNames() throws Exception {
+        GiftCatalogItem a = gift(30L, 1000L, GiftKind.NORMAL, null, 0, GiftCatalogStatus.ONLINE);
+        GiftCatalogItem b = gift(31L, 1000L, GiftKind.NORMAL, null, 0, GiftCatalogStatus.OFFLINE);
+        b.setCategoryId(2L);
+        GiftCatalogItem x = gift(32L, 20_000L, GiftKind.EXCLUSIVE, 5, 0, GiftCatalogStatus.ONLINE);
+        when(catalog.findAll()).thenReturn(List.of(a, b, x));
+        CatalogPage page = service.page(new Filter(null, null, null, 2L));
+        assertThat(page.rows()).extracting(GiftCatalogRow::id).containsExactly(31L);
+        assertThat(page.rows().get(0).categoryNameEn()).isEqualTo("Seasonal");
+        assertThat(page.rows().get(0).categoryOffline()).isTrue();
+        CatalogPage all = service.page(Filter.NONE);
+        GiftCatalogRow ex = all.rows().stream().filter(r -> r.id() == 32L).findFirst().orElseThrow();
+        assertThat(ex.categoryNameEn()).isNull();
     }
 }

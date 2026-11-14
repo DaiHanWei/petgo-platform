@@ -10,4 +10,7 @@ public interface GiftCategoryRepository extends JpaRepository<GiftCategory, Long
 
     /** 在线分类，按 {@code sort_order ASC, id ASC}（App 目录 / 礼物页筛选胶囊）。 */
     List<GiftCategory> findAllByStatusOrderBySortOrderAscIdAsc(GiftCategoryStatus status);
+
+    /** 后台分类页签 / 筛选下拉：全部（含已下线），按 {@code sort_order ASC, id ASC}。 */
+    List<GiftCategory> findAllByOrderBySortOrderAscIdAsc();
 }

@@ -13,4 +13,9 @@ public interface GiftCatalogRepository extends JpaRepository<GiftCatalogItem, Lo
     List<GiftCatalogItem> findByStatus(GiftCatalogStatus status);
 
     Optional<GiftCatalogItem> findByPublicToken(String publicToken);
+
+    /** V1.5.0 gift-pack Story 1-2：分类下的礼物数（下线校验 / 抽屉统计）。 */
+    long countByCategoryIdAndStatus(Long categoryId, GiftCatalogStatus status);
+
+    long countByCategoryId(Long categoryId);
 }

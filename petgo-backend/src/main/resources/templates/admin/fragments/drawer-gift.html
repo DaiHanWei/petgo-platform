@@ -10,6 +10,7 @@
      AdminBusinessExceptionAdvice 按它 Retarget）；错误槽放在提交钮正上方（422 落表单顶部时早已滚出 480px 视口）。
   🔴 没有删除按钮（只下线不物理删除，AD-1）。下线用浏览器原生 confirm（data-confirm，decision-log ③）。
   🔴 改价 / 改名 / 换图 / 下线只影响之后的新订单；已发起未付款的 QRIS 订单按原价、照常交付（AD-2 / AD-7）。
+  V1.5.0 gift-pack Story 1-2：「类型」下加「分类」下拉（只列在线分类；当前分类已下线时 L5 红框红字 +「重新上线」置灰写原因）。
   ⚠️ 礼物编码只读展示 gift-<id>（与用户标签 ut-<id> 同口径），不落库、不对外；App 只见 public_token。
 */-->
 <body>
@@ -79,6 +80,25 @@
                 </div>
             </fieldset>
 
+            <!--/* V1.5.0 gift-pack Story 1-2 · L3 / L5：分类（普通显示且必选，专属隐藏；下拉只列在线分类）。
+                   当前分类已下线：额外渲染带「（已下线）」的选中项 + 红框 + 红字。 */-->
+            <div data-gift-category th:with="curOffline=${g.categoryId != null and g.categoryOffline}"
+                 th:classappend="${curOffline} ? 'gift-cat-offline'">
+                <label class="field field-full">
+                    <span th:text="#{admin.v150.giftCategory.field}">分类</span>
+                    <select name="categoryId" class="sel field-full" required>
+                        <option value="" th:selected="${g.categoryId == null}" disabled th:text="#{admin.v150.giftCategory.form.choose}">选择分类</option>
+                        <option th:if="${curOffline}" th:value="${g.categoryId}" selected
+                                th:text="${g.categoryNameEn} + ' / ' + ${g.categoryNameId} + #{admin.v150.giftCategory.offlineSuffix}">Seasonal / Musiman（已下线）</option>
+                        <option th:each="oc : ${onlineCategories}" th:value="${oc.id}" th:selected="${oc.id == g.categoryId}"
+                                th:text="${oc.nameEn} + ' / ' + ${oc.nameId}">Snacks / Camilan</option>
+                    </select>
+                </label>
+                <p class="gift-cat-offline-hint" th:if="${curOffline}" data-category-offline-hint
+                   th:text="#{admin.v150.giftCategory.form.categoryOffline}">这个分类已下线……</p>
+                <p class="hint" th:unless="${curOffline}" th:text="#{admin.v150.giftCategory.form.hintEdit}">改分类只影响 App 送礼面板的分组……</p>
+            </div>
+
             <!--/* 最低等级：只在「专属」时显示（下方脚本按单选切 hidden）；无脚本时始终显示、由服务端判 */-->
             <div data-gift-minlevel>
                 <label class="field field-full">
@@ -115,6 +135,10 @@
             <dt th:text="#{admin.v140.gift.col.kind}">类型</dt>
             <dd th:if="${g.exclusive()}" th:text="#{admin.v140.gift.readonly.kindLevel(#{admin.v140.gift.kind.EXCLUSIVE}, ${g.minLevel})}">专属 · Lv5</dd>
             <dd th:unless="${g.exclusive()}" th:text="#{admin.v140.gift.kind.NORMAL}">普通</dd>
+            <th:block th:unless="${g.exclusive()}">
+                <dt th:text="#{admin.v150.giftCategory.field}">分类</dt>
+                <dd data-gift-category-ro th:text="${g.categoryNameEn == null} ? '—' : (${g.categoryNameEn} + ' / ' + ${g.categoryNameId} + (${g.categoryOffline} ? #{admin.v150.giftCategory.offlineSuffix} : ''))">Toys / Mainan</dd>
+            </th:block>
             <dt th:text="#{admin.v140.gift.col.sortOrder}">排序</dt>
             <dd th:text="${g.sortOrder}">0</dd>
         </dl>
@@ -125,12 +149,15 @@
     <!--/* ③ 操作条：左收送统计，右下线 / 重新上线 */-->
     <section class="pl-actions sticky-footer" data-gift-actions>
         <span class="muted" data-gift-stats th:text="#{admin.v140.gift.stats(${received}, ${sent})}">已收到 0 个 · 送出 0 次</span>
+        <span class="gift-warn-reason" th:if="${g.onlineBlockedByCategory()}" data-online-blocked
+              th:text="#{admin.v150.giftCategory.onlineBlocked}">所在分类已下线，先改选分类。</span>
         <form class="inline" th:if="${canEdit}"
               th:attr="hx-post=@{/admin/gift-catalog/{id}/status(id=${g.id})},
                        data-confirm=${g.offline()} ? null : #{admin.v140.gift.offlineConfirm(${g.nameEn})}"
               hx-target="#gift-drawer-err" hx-swap="innerHTML">
             <input type="hidden" name="online" th:value="${g.offline()}"/>
             <button type="submit" class="btn btn-sm" th:classappend="${g.offline()} ? '' : 'btn-danger'"
+                    th:disabled="${g.onlineBlockedByCategory()}"
                     th:text="${g.offline()} ? #{admin.v140.gift.online} : #{admin.v140.gift.offline}">下线</button>
         </form>
         <button type="button" class="btn btn-sm" th:classappend="${g.offline()} ? '' : 'btn-danger'" disabled th:unless="${canEdit}"
@@ -219,6 +246,19 @@
             </div>
         </fieldset>
 
+        <!--/* V1.5.0 gift-pack Story 1-2 · L2 / L4：分类（普通必选，原生 required 校验） */-->
+        <div data-gift-category>
+            <label class="field field-full">
+                <span th:text="#{admin.v150.giftCategory.field}">分类</span>
+                <select name="categoryId" class="sel field-full" required>
+                    <option value="" selected disabled th:text="#{admin.v150.giftCategory.form.choose}">选择分类</option>
+                    <option th:each="oc : ${onlineCategories}" th:value="${oc.id}"
+                            th:text="${oc.nameEn} + ' / ' + ${oc.nameId}">Snacks / Camilan</option>
+                </select>
+            </label>
+            <p class="hint" th:text="#{admin.v150.giftCategory.form.hintCreate}">决定这个礼物在 App 送礼面板里归哪一组……</p>
+        </div>
+
         <div data-gift-minlevel>
             <label class="field field-full">
                 <span th:text="#{admin.v140.gift.form.minLevel}">最低等级</span>
@@ -260,11 +300,16 @@
             var box = form.querySelector('[data-gift-minlevel]');
             if (!box) { return; }
             var input = box.querySelector('input[name=minLevel]');
+            // V1.5.0 gift-pack Story 1-2：分类与最低等级共用位置——普通显示分类（必选），专属显示最低等级；隐藏的去掉 required。
+            var catBox = form.querySelector('[data-gift-category]');
+            var catSel = catBox ? catBox.querySelector('select[name=categoryId]') : null;
             function sync() {
                 var picked = form.querySelector('[data-gift-kind]:checked');
                 var exclusive = !!picked && picked.value === 'EXCLUSIVE';
                 box.hidden = !exclusive;
                 if (input) { input.required = exclusive; }
+                if (catBox) { catBox.hidden = exclusive; }
+                if (catSel) { catSel.required = !exclusive; catSel.disabled = exclusive; }
             }
             form.querySelectorAll('[data-gift-kind]').forEach(function (r) { r.addEventListener('change', sync); });
             sync();

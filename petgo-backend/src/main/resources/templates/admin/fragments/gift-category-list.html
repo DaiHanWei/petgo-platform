@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  礼物分类表（V1.5.0 gift-pack Story 1-2 · AB-43，后台稿 K1 / K2）。
+    rows      — 表格 + 空态（K2）；分类抽屉处置后 HX-Trigger admin:gift-category-list-refresh 重拉
+    row(c)    — 单行；点行开 480 抽屉（res=giftcat），行内无按钮
+  列：名称（EN / ID）· 礼物数（在线 / 全部，在线加粗）· 排序 · 状态（在线但 0 个在线礼物加 .badge-muted「App 不显示」）· 更新时间。
+*/-->
+<body>
+<th:block th:fragment="rows">
+    <table th:if="${!#lists.isEmpty(categoryRows)}" class="gift-table" data-gift-category-table>
+        <thead>
+        <tr>
+            <th th:text="#{admin.v140.gift.col.name}">名称（EN / ID）</th>
+            <th th:text="#{admin.v150.giftCategory.col.gifts}">礼物数（在线 / 全部）</th>
+            <th class="num" th:text="#{admin.v140.gift.col.sortOrder}">排序</th>
+            <th th:text="#{admin.v140.gift.col.status}">状态</th>
+            <th class="nowrap" th:text="#{admin.v150.giftCategory.col.updated}">更新时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="c : ${categoryRows}"><tr th:replace="~{admin/fragments/gift-category-list :: row(${c})}"></tr></th:block>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(categoryRows)}" data-empty="category">
+        <span class="empty-emoji">🗂️</span>
+        <p th:text="#{admin.v150.giftCategory.empty}">还没有分类，点右上角「新建分类」开始。</p>
+    </div>
+</th:block>
+
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(c)" th:id="'gift-category-row-' + ${c.id}"
+        th:data-id="${c.id}" th:data-drawer-url="@{/admin/gift-catalog/categories/{id}/drawer(id=${c.id})}" tabindex="0"
+        th:classappend="${c.offline()} ? 'row-muted'">
+        <td>
+            <div th:text="${c.nameEn}">Snacks</div>
+            <div class="muted" style="font-size:12px" th:text="${c.nameId}">Camilan</div>
+        </td>
+        <td class="nowrap gift-cat-count"><b th:text="${c.onlineGifts}">10</b> <span class="muted" th:text="'/ ' + ${c.totalGifts}">/ 10</span></td>
+        <td class="num nowrap" th:text="${c.sortOrder}">10</td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${c.offline()} ? 'dot--done' : 'dot--ok'"></span>
+            <span class="badge" th:classappend="${c.offline()} ? 'badge-muted' : 'badge-ok'"
+                  th:text="#{'admin.v140.gift.status.' + ${c.status}}">在线</span>
+            <span class="badge badge-muted" th:if="${c.hiddenInApp()}" data-hidden-in-app
+                  th:text="#{admin.v150.giftCategory.hiddenInApp}">App 不显示</span>
+        </td>
+        <td class="nowrap" th:text="${c.updatedAt == null} ? '—' : ${#temporals.format(c.updatedAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">2026-11-25 10:00</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

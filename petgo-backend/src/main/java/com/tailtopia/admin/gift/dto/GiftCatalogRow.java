@@ -12,12 +12,23 @@ import java.util.List;
  */
 public record GiftCatalogRow(long id, String nameEn, String nameId, String iconUrl, long price,
         boolean forCat, boolean forDog, boolean forOther, String kind, Integer minLevel, int sortOrder,
-        String status) {
+        String status, Long categoryId, String categoryNameEn, String categoryNameId, boolean categoryOffline) {
 
     public static GiftCatalogRow of(GiftCatalogItem g) {
+        return of(g, null);
+    }
+
+    /** V1.5.0 gift-pack Story 1-2：带所属分类（{@code category} 为空 = 专属 / 未归类 / 分类不存在）。 */
+    public static GiftCatalogRow of(GiftCatalogItem g, com.tailtopia.gift.domain.GiftCategory category) {
         return new GiftCatalogRow(g.getId(), g.getNameEn(), g.getNameId(), g.getIconUrl(), g.getPrice(),
                 g.isForCat(), g.isForDog(), g.isForOther(), g.getKind().name(), g.getMinLevel(), g.getSortOrder(),
-                g.getStatus().name());
+                g.getStatus().name(), g.getCategoryId(), category == null ? null : category.getNameEn(),
+                category == null ? null : category.getNameId(), category != null && !category.isOnline());
+    }
+
+    /** 普通礼物、已下线、且所在分类已下线（或缺失）→ 不能重新上线（L5）。 */
+    public boolean onlineBlockedByCategory() {
+        return offline() && !exclusive() && (categoryNameEn == null || categoryOffline);
     }
 
     public String code() {
