@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>A5 追更失败 · 首日与新手任务 V1.5.0</title>
+<link rel="stylesheet" href="deck.css">
+</head>
+<body>
+<div class="page">
+<div class="nav"><a href="00-目录.html">← 目录</a><a href="A4-推荐页-加载中.html">‹ A4</a><a href="B1-展示页-真实宠物区.html">B1 ›</a><a href="../ui-1-5-0-onboarding-newbie-integrated-v1.html">整合稿（页头执行说明）</a></div>
+<section class="lane">
+  <h2>A · 首日推荐页（FR-173）</h2>
+  <p class="desc">首日引导的终点：所有新用户走完引导都进这一页，追更宠物或给它最新一条帖子点赞，可以跳过。每个账号只出现一次。</p>
+  <div class="flow">
+    <em>入口：</em>建档引导点「Nanti saja」<i>／</i>选「没宠物 / 计划养 / 爱好者」<i>／</i>建档庆祝页次按钮<i>／</i>发布页返回不发<i>／</i>发布成功（关闭 S2 即时庆祝后）<i>→</i> <s>A4</s> 加载中 <i>→</i> <s>A1</s> 初始
+    <span class="nl"></span>
+    <em>主路径：</em><s>A1</s> 追更或点赞 1 次 <i>→</i> <s>A2</s> 主按钮变「Selesai」<i>→</i> 落点（有宠物 <code>/profile</code>，否则 <code>/home</code>）
+    <span class="nl"></span>
+    <em>跳过：</em><s>A1</s> 右上角或底部「Lewati」<i>→</i> 落点
+    <span class="nl"></span>
+    <em>变体：</em><s>A3</s> 不足 6 只（替代 A1）<i>／</i><s>A5</s> 追更失败（在 A1 / A2 上弹 toast）
+    <span class="nl"></span>
+    <em>不出屏：</em>接口失败或一只都没有 <i>→</i> 直接进落点
+  </div>
+  <div class="frames">
+    <div><span class="frame-tag"><b>A5</b>追更失败<span class="k kr">复用 toast</span></span><div class="phone-shell"><div class="sc v142"><div class="phone-screen "><div class="sb"><span>9:41</span><span class="sb-r"><span class="ms" style="font-size:14px;color:var(--ink);font-variation-settings:'FILL' 1;">signal_cellular_alt</span><span class="ms" style="font-size:14px;color:var(--ink);font-variation-settings:'FILL' 1;">wifi</span><span class="ms" style="font-size:14px;color:var(--ink);font-variation-settings:'FILL' 1;">battery_full</span></span></div><div class="ab"><span style="width:16px"></span><span class="ab-t"></span><span class="ab-r"><span class="n-skip">Lewati</span></span></div><div class="n-rp"><div class="n-rh"><b>Kenalan sama anabul lain</b><span>Ini geng anabul yang mirip Orenji 🐾 Yuk, ikuti atau kasih like!</span></div><div class="n-grid"><div class="n-pc"><div class="n-cv" style="background:#FEF3DE"><span class="n-cvi">🐱</span><span class="n-like"><span class="ms" style="font-size:16px;color:var(--ink2);font-variation-settings:'FILL' 0;">favorite</span><em>24</em></span><span class="n-av" style="background:#FEF3DE">🐱</span></div><div class="n-tx"><b>Mochi</b><span>Persia · Bersama 412 hari</span></div><span class="fbtn n-fb">Ikuti</span></div><div class="n-pc"><div class="n-cv" style="background:#EDE3FF"><span class="n-cvi">🐱</span><span class="n-like"><span class="ms" style="font-size:16px;color:var(--ink2);font-variation-settings:'FILL' 0;">favorite</span><em>8</em></span><span class="n-av" style="background:#EDE3FF">🐱</span></div><div class="n-tx"><b>Kumo</b><span>Persia · Bersama 96 hari</span></div><span class="fbtn n-fb">Ikuti</span></div><div class="n-pc"><div class="n-cv" style="background:#DDF5EA"><span class="n-cvi">🐱</span><span class="n-like"><span class="ms" style="font-size:16px;color:var(--ink2);font-variation-settings:'FILL' 0;">favorite</span><em>41</em></span><span class="n-av" style="background:#DDF5EA">🐱</span></div><div class="n-tx"><b>Bubu</b><span>Anggora · Bersama 230 hari</span></div><span class="fbtn n-fb">Ikuti</span></div><div class="n-pc"><div class="n-cv" style="background:#FDE7EB"><span class="n-cvi">🐱</span><span class="n-like"><span class="ms" style="font-size:16px;color:var(--ink2);font-variation-settings:'FILL' 0;">favorite</span><em>5</em></span><span class="n-av" style="background:#FDE7EB">🐱</span></div><div class="n-tx"><b>Oyen</b><span>Domestik · Bersama 61 hari</span></div><span class="fbtn n-fb">Ikuti</span></div><div class="n-pc"><div class="n-cv" style="background:#E8F1FB"><span class="n-cvi">🐶</span><span class="n-like"><span class="ms" style="font-size:16px;color:var(--ink2);font-variation-settings:'FILL' 0;">favorite</span><em>67</em></span><span class="n-av" style="background:#E8F1FB">🐶</span></div><div class="n-tx"><b>Kopi</b><span>Corgi · Bersama 300 hari</span></div><span class="fbtn n-fb">Ikuti</span></div><div class="n-pc"><div class="n-cv" style="background:#F3EDE4"><span class="n-cvi">🐶</span><span class="n-like"><span class="ms" style="font-size:16px;color:var(--ink2);font-variation-settings:'FILL' 0;">favorite</span><em>12</em></span><span class="n-av" style="background:#F3EDE4">🐶</span></div><div class="n-tx"><b>Brownie</b><span>Beagle · Bersama 148 hari</span></div><span class="fbtn n-fb">Ikuti</span></div></div></div><div class="n-bar"><span class="n-cta ghost">Lewati</span></div><div class="toast top">Gagal mengikuti, coba lagi</div></div></div></div><p class="frame-cap">复用 <code>PetFollowButton</code> 现有失败处理：按钮回滚 + 顶部 toast「Gagal mengikuti, coba lagi」（<code>followFailed</code>；超频时为底部「Terlalu sering. Coba lagi nanti.」）。点赞失败沿用现有点赞按钮的处理，不新增。</p></div>
+  </div>
+</section>
+</div>
+</body>
+</html>
