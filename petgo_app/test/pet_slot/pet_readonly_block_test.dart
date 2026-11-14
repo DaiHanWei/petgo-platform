@@ -210,8 +210,12 @@ void main() {
       expect(find.text(l10n.petSlotHealthTitleNamed('Orenji')), findsOneWidget);
       expect(find.text(l10n.petReadonlyHealthCount(2)), findsNothing);
       expect(find.text('2 Sep 2026'), findsWidgets);
-      expect(find.text(l10n.healthCategoryEmpty), findsNWidgets(4));
+      // V1.5.0 Story 3.1 · AC3.2：Konsultasi 卡副标题固定「Gejala & dokter」，不再显示「Belum ada」→ 空卡 3 张
+      // （Sterilisasi / Berahi / Lainnya）。
+      expect(find.text(l10n.healthCategoryEmpty), findsNWidgets(3));
+      // AC3.1：AppBar 不再有「+」（含只读锁图标变体）。
       expect(find.byKey(const ValueKey('healthAddTopLocked')), findsNothing);
+      expect(find.byKey(const ValueKey('healthAddTop')), findsNothing);
     });
 
     testWidgets('只读：已有记录可打开查看（AD-8），保存 / 删除时才弹 E1', (tester) async {
@@ -235,15 +239,21 @@ void main() {
       expect(find.text(l10n.healthListTitle), findsOneWidget);
     });
 
-    testWidgets('只读：「+」/「Tambah catatan」带锁，点了弹 E1、不开表单；分类卡点击同样拦', (tester) async {
+    // V1.5.0 Story 3.1：AppBar「+」已删（AC3.1）；分类卡改为页内筛选、不再开表单（FR-172）——
+    // 只读拦截只剩「Tambah catatan」（含筛选状态下的预选类型入口），分类卡筛选属于查看，不拦（AD-8）。
+    testWidgets('只读：「Tambah catatan」带锁，点了弹 E1、不开表单；筛选后再点同样拦；分类卡筛选不拦', (tester) async {
       await pumpHealth(tester, [orenji, boba], 2);
-      expect(find.byKey(const ValueKey('healthAddTopLocked')), findsOneWidget);
+      expect(find.byKey(const ValueKey('healthAddTopLocked')), findsNothing);
       expect(find.descendant(of: find.byKey(const ValueKey('healthAddBottom')), matching: find.byIcon(Icons.lock_outline)),
           findsOneWidget);
-      for (final key in ['healthAddTop', 'healthAddBottom', 'healthCat_VACCINE']) {
-        await tester.tap(find.byKey(ValueKey(key)));
+      await tester.tap(find.byKey(const ValueKey('healthCat_VACCINE')));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.petReadonlyBlockTitle('Boba')), findsNothing, reason: '筛选是查看，不拦');
+      expect(find.byKey(const ValueKey('healthFilterClear')), findsOneWidget);
+      for (var round = 0; round < 2; round++) {
+        await tester.tap(find.byKey(const ValueKey('healthAddBottom')));
         await tester.pumpAndSettle();
-        expect(find.text(l10n.petReadonlyBlockTitle('Boba')), findsOneWidget, reason: key);
+        expect(find.text(l10n.petReadonlyBlockTitle('Boba')), findsOneWidget, reason: 'round $round');
         await tester.tap(find.byKey(const ValueKey('petReadonlyBlockLater')));
         await tester.pumpAndSettle();
       }

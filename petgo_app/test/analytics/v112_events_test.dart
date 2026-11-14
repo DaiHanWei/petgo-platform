@@ -450,6 +450,10 @@ void main() {
         // `_dwell` = **离页时上报一次这段停留有多久**，价值全在 `duration_ms`。
         // 🔴 刻意不用 `_viewed`：那是进页即报的曝光，分母口径完全不同；名字由 PRD 定死，扩表、不改名。
         '_dwell',
+        // 列表被筛选（V1.5.0 健康记录提醒 PRD §4 `health_category_filtered`，FR-172）：`_filtered` = 用户点分类卡
+        // **施加**了一个筛选（清除不报），价值在 `category` + `record_count`。🔴 刻意不用 `_tapped`：同一张卡
+        // 再点是清除，`_tapped` 会把两种方向混成一个分母。名字由 PRD §4 定死，扩表、不改名。
+        '_filtered',
         // 付费失败（2026-09-25 KTP 付费漏斗 `ktp_unlock_failed`，名字按运营需求）：`_failed` = 这次付费
         // **有了明确的失败结局**，与 `_succeeded` 成对，原因由属性 failure_reason 承载。
         // 🔴 刻意不用 `_dismissed`：那是用户自己放弃（没有结局）；也不用 `_blocked`：那是门控拦截。

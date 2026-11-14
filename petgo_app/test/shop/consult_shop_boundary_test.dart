@@ -199,11 +199,16 @@ void main() {
     });
   });
 
-  group('FR-110 ③ 品类跳转的实际形态（唯一允许的商品关联）', () {
+  // V1.5.0 健康记录提醒 PRD §6.1（Story 3.1 · AC2.4）：健康记录卡下的「Lihat produk Obat & Vitamin」行下线。
+  // 规则从「只有驱虫挂品类入口、且只跳品类」收紧为「健康记录页任何卡片都不挂商品入口」——改断言表达新规则。
+  group('FR-110 ③ 健康记录页不挂任何商品入口（V1.5.0 §6.1 起品类跳转行下线）', () {
     final records = [
       HealthListItem(
           kind: 'RECORD', id: 1, editable: true, type: 'DEWORM',
           eventDate: DateTime(2026, 3, 1)),
+      HealthListItem(
+          kind: 'RECORD', id: 3, editable: true, type: 'VACCINE',
+          eventDate: DateTime(2026, 3, 4)),
       HealthListItem(
           kind: 'RECORD', id: 2, editable: true, type: 'NEUTER',
           eventDate: DateTime(2026, 3, 2)),
@@ -212,36 +217,24 @@ void main() {
           symptomSummary: 'Muntah', eventDate: DateTime(2026, 3, 3)),
     ];
 
-    testWidgets('🔴 只有驱虫记录挂品类入口；绝育与问诊存档都没有', (t) async {
-      await _pumpHealth(t, records);
-      expect(find.byKey(const ValueKey('healthCategoryJump_DEWORM')), findsOneWidget);
-      expect(find.byKey(const ValueKey('healthCategoryJump_NEUTER')), findsNothing);
-      // 🔴 问诊存档条目一律不挂 —— 「问诊结论旁边就是购物入口」正是要防的观感
-      expect(find.byKey(const ValueKey('healthCategoryJump_CONSULT')), findsNothing);
-    });
-
-    testWidgets('🔴 点它去的是【品类】而不是某个商品，埋点只带 record_type', (t) async {
-      final events = <MapEntry<String, Map<String, Object>?>>[];
-      Analytics.debugCaptureSink = (e, p) => events.add(MapEntry(e, p));
+    testWidgets('🔴 疫苗 / 驱虫 / 绝育 / 问诊存档都没有品类入口，也没有商店图标', (t) async {
+      final events = <String>[];
+      Analytics.debugCaptureSink = (e, p) => events.add(e);
       addTearDown(() => Analytics.debugCaptureSink = null);
 
       _lastShopUri = null;
       await _pumpHealth(t, records);
-      await t.tap(find.byKey(const ValueKey('healthCategoryJump_DEWORM')));
+      for (final type in ['DEWORM', 'VACCINE', 'NEUTER', 'CONSULT']) {
+        expect(find.byKey(ValueKey('healthCategoryJump_$type')), findsNothing, reason: type);
+      }
+      expect(find.byIcon(Icons.storefront_outlined), findsNothing);
+      expect(find.text('Lihat produk Obat & Vitamin'), findsNothing);
+
+      // 点卡片只开编辑表单，不会落到 Toko，也不会报品类跳转埋点。
+      await t.tap(find.byKey(const ValueKey('healthTile_RECORD_1')));
       await t.pumpAndSettle();
-
-      // 🔴 落地是 Toko 首页，URL 里没有、也不可能有 SKU
-      // 落点 URI 由 /shop 路由的 builder 现场记下 —— 比读 routerDelegate 的内部形态稳
-      // v1.4.2 shop Story 8.1（D-17）按设计改写：品类筛选下线，原期望 `/shop?category=OBAT_VITAMIN` → `/shop`。
-      expect(find.text('toko'), findsOneWidget);
-      final loc = _lastShopUri.toString();
-      expect(loc, '/shop');
-      expect(loc.contains('products'), isFalse,
-          reason: '🔴 跳转带上了具体商品 —— FR-110 只允许跳到品类');
-
-      final jump = events.firstWhere((e) => e.key == 'triage_category_jump_tapped');
-      // 🔒 NFR-5：只带受控词表值，无宠物信息、无健康描述、无 SKU
-      expect(jump.value, {'record_type': 'DEWORM'});
+      expect(_lastShopUri, isNull);
+      expect(events, isNot(contains('triage_category_jump_tapped')));
     });
   });
 }

@@ -1,6 +1,6 @@
 # Story 3.1: App 健康记录页状态与筛选
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.5.0 · 会话 ① 健康记录提醒 · 分支 `feat/1.5.0-health-reminder`
 > 口径优先级：CROSS-STORY-DECISIONS 地基段 > 架构增量 §7 > PRD FR-158 UI、FR-161 UI（Konsultasi 卡）、FR-167 UI（定位 / 警示框）、FR-172（全部）、§6.1（去掉商城行）、AC64 ~ AC68、AC70 > UI 稿 A1 ~ A12（整合稿页头「代码落点」第 1 行）。
@@ -55,13 +55,13 @@ so that 我能快速找到某类记录（比如给兽医看疫苗史），并知
 
 ## Tasks / Subtasks
 
-- [ ] T1 模型字段（AC1）
-- [ ] T2 记录卡日期位置、标题、状态胶囊、删商城行（AC2）
-- [ ] T3 AppBar 去按钮、Konsultasi 卡副标题 + 绿点 + 埋点、Berahi 改名（AC3）
-- [ ] T4 筛选（AC4）
-- [ ] T5 路由参数 + 警示框（AC5）
-- [ ] T6 arb + gen-l10n + 测试（AC6）；widget 测试用假 `healthRecordRepositoryProvider`
-- [ ] T7 `flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
+- [x] T1 模型字段（AC1）
+- [x] T2 记录卡日期位置、标题、状态胶囊、删商城行（AC2）
+- [x] T3 AppBar 去按钮、Konsultasi 卡副标题 + 绿点 + 埋点、Berahi 改名（AC3）
+- [x] T4 筛选（AC4）
+- [x] T5 路由参数 + 警示框（AC5）
+- [x] T6 arb + gen-l10n + 测试（AC6）；widget 测试用假 `healthRecordRepositoryProvider`
+- [x] T7 `flutter analyze` + `flutter test`；Completion Notes 标「L2 待本地验收」
 
 ## Dev Notes
 
@@ -79,4 +79,34 @@ so that 我能快速找到某类记录（比如给兽医看疫苗史），并知
 
 ### Completion Notes
 
+- **L1/L2 待本地验收**：AC2 / AC3 / AC4 / AC5 的 `[L2]` 部分（模拟器对照 UI 稿 A1 ~ A12 逐屏还原度 ≥95%，含状态胶囊配色、选中卡描边、警示框样式、绿点脉冲观感）与 AC7 未做，留 4.1 统一打分；本 story 无 L1 项。真后端联调（列表新字段契约）留 4.1。
+- L0：`flutter analyze` 无 error / warning（仅有工具链 3.50 带来的全仓 `deprecated_member_use` info，以及本文件既有的 `flutter/rendering.dart` unnecessary_import info——注释写明 3.44 需要它，未动）；`flutter test` 全量绿（首轮仅 D-3 同形词规则红，已按下条处理后复跑 `test/l10n` 绿）。`flutter gen-l10n` 已跑。
+- `test/profile/health_list_page_test.dart` 新增 19 例：AC1 模型容错与类型顺序、AC2 日期位置 / 标题拼接 / 三色胶囊（图标 + 文字）/ done 无胶囊 / 跨年写年、AC3 AppBar 无按钮 / Konsultasi 卡副标题 + 绿点 + 埋点 / Berahi 改名、AC64 ~ AC68、筛选中保存 Kontrol dokter 清除筛选、AC5 警示框顺序与不自动弹表单、预填透传。
+- **按设计改写的既有测试（改断言表达新规则，未删 / 未 skip）**：
+  - `test/shop/consult_shop_boundary_test.dart` FR-110 ③：由「只有驱虫挂品类入口、只跳品类」改为「健康记录页任何卡片都不挂商品入口、点卡不落 Toko、不报 `triage_category_jump_tapped`」（PRD §6.1）。`TriageCategoryJump` 桥本身未删（仍有桥的契约测试；现无 lib 调用方，删不删留给后续清理）。
+  - `test/analytics/v140_events_inventory_test.dart`：`triage_category_jump_tapped` 从「必须存在」移到新 `retiredV150`「必须不存在」（同 V1.4.2 `retiredV142` 先例）。
+  - `test/pet_slot/pet_readonly_block_test.dart`：AppBar「+」已删 → 断言不存在；空分类卡由 4 → 3（Konsultasi 不再显示「Belum ada」）；只读拦截只剩「Tambah catatan」（筛选前后各点一次都弹 E1），分类卡筛选属查看不拦（AD-8）。
+  - `test/l10n/microcopy_rules_test.dart`（D-3 英文基线同形词表）：加入疫苗预设标签与 Heartworm 的词（国际通用药名，架构 §3.1 两语同写）。
+  - `test/analytics/v112_events_test.dart`：动作词表加 `_filtered`（事件名 `health_category_filtered` 由 PRD §4 定死，按「扩表、不改名」先例）。
+- **绿点脉冲与测试**：`OnlinePulseDot(pulsing: true)` 是常驻 `repeat()` 动画，会让所有以 `pumpAndSettle` 驱动本页的测试（十余个文件）超时。处理：页面加 `@visibleForTesting static bool debugConsultPulse = true`（产品口径恒为 true），`test/flutter_test_config.dart` 统一置 false（同文件既有 `TsRemoteArt.debugLoader` 先例），专门用例打开并断言 `pulsing: true`。
+- 分类卡点击由「弹预选表单」改为「切换筛选」（FR-172 取代 FR-45C）；只读宠物点卡不再弹 E1（筛选是查看）。
+- 表单关闭结果由 `bool` 改为 `HealthFormOutcome`（`saved(type)` / `deleted()`），用于 AC4.4 保存后切筛选；删除不动筛选（删光 → 筛选空态）。无筛选时保存保持无筛选（PRD AC66）。
+- 路由 `/profile/health` 新 query：`preset` / `dose` / `deworm` / `custom` / `dateEmpty=1` → `HealthRecordPrefill`（domain 新类）原样传给表单（本 story 只消费 `custom` 作名称初值，其余归 3.2）；`safety` 逗号分隔，未知值丢弃，按 PREGNANT → PERMETHRIN 排序；`nid` → `notificationToken`（3.4 用）。
+- 疫苗预设标签 9 个新 arb 键（`healthVaccinePreset*`，ID / EN 同文，取架构 §3.1 标签表；3.2 表单复用）；`OTHER` / 空 / 未知预设 → 显示 `vaccineName` 原文。驱虫类型 4 键、状态 / 筛选 / 警示 / Konsultasi 副标题等键按 story 文案；`healthTypeMenstruation` 改 Berahi / Heat。
+- 类型名映射抽成顶层 `healthTypeLabel`（列表与表单共用，加了 VET_VISIT），`vaccinePresetLabel` / `dewormTypeLabel` 同文件顶层函数。
+- **待确认（发版风险，未自行处理）**：App `pubspec.yaml` 仍是 `1.4.2+20`，而后端按 `X-App-Version` ≥ 1.5.0 才返回新字段、才接受 `VET_VISIT`（旧版保存 Kontrol dokter → 422）。本线不改共享的版本号，需在集成 / 发版时升到 1.5.0，否则 4.1 联调会看到状态胶囊全为空、Kontrol dokter 保存被拒。
+- 未运行 `bmad-dev-story` / `bmad-code-review` 技能文件（仓库内不存在，gitignored），按 story 手动执行；code review 由本会话逐项核对 diff：修 1 处（记录卡类型行 `Spacer` 与 `Flexible` 分宽导致标签被无谓截断 → 改为 `Expanded` 包左侧），其余无 CONFIRMED 问题。
+
 ### File List
+
+- `petgo_app/lib/features/profile/domain/health_list_item.dart`
+- `petgo_app/lib/features/profile/presentation/health_list_page.dart`
+- `petgo_app/lib/core/router/app_router.dart`
+- `petgo_app/lib/l10n/app_id.arb`、`petgo_app/lib/l10n/app_en.arb`
+- `petgo_app/test/profile/health_list_page_test.dart`
+- `petgo_app/test/flutter_test_config.dart`
+- `petgo_app/test/shop/consult_shop_boundary_test.dart`
+- `petgo_app/test/analytics/v140_events_inventory_test.dart`
+- `petgo_app/test/analytics/v112_events_test.dart`
+- `petgo_app/test/pet_slot/pet_readonly_block_test.dart`
+- `petgo_app/test/l10n/microcopy_rules_test.dart`

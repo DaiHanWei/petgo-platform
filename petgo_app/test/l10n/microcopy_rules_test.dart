@@ -140,6 +140,10 @@ const _sameInBothLocales = {
   'total',
   // 配对连接符「{宠物} x {主人}」（V1.3.2 · 2026-10-05 分享卡设计稿）：小写 x 当「×」用，两语同写，不是词。
   'x',
+  // V1.5.0 健康记录提醒 Story 3.1：疫苗预设标签与驱虫类型 Heartworm 是疫苗 / 药品的国际通用名，
+  // 架构增量 §3.1 标签表两语同写（后端也把同一串写进 vaccine_name），不是漏译。
+  'f', 'tricat', 'tetracat', 'rabies', 'felv', 'puppy', 'dp', 'combo', 'dhppi', 'leptospirosis',
+  'kennel', 'cough', 'canine', 'influenza', 'heartworm',
   // 印尼语直接借用的英文词
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',

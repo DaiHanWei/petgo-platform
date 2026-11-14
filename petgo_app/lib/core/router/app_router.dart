@@ -78,6 +78,7 @@ import '../../features/refund/presentation/refund_account_page.dart';
 import '../../features/refund/presentation/refund_status_page.dart';
 import '../../features/profile/presentation/growth_archive_page.dart';
 import '../../features/profile/presentation/health_list_page.dart';
+import '../../features/profile/domain/health_list_item.dart' show HealthRecordPrefill;
 import '../../features/profile/presentation/id_card_create_page.dart';
 import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
@@ -968,12 +969,30 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
       // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。
       // ?focus=<记录 id>：进页滚到该条并短暂高亮（Diary 时间线类④ 点击 → 定位到对应条目）。
+      // V1.5.0 Story 3.1 · AC5（健康提醒落页，3.4 拼参数）：?preset= &dose= &deworm= &custom= &dateEmpty=1
+      //   = 表单预填；?safety=PREGNANT,PERMETHRIN = 页顶警示框；?nid=<健康通知 token>（归因）。
       GoRoute(
         path: '/profile/health',
-        builder: (c, s) => HealthListPage(
-          presetAddType: s.uri.queryParameters['add'],
-          focusRecordId: int.tryParse(s.uri.queryParameters['focus'] ?? ''),
-        ),
+        builder: (c, s) {
+          final q = s.uri.queryParameters;
+          String? nonEmpty(String key) => (q[key] ?? '').isEmpty ? null : q[key];
+          return HealthListPage(
+            presetAddType: q['add'],
+            focusRecordId: int.tryParse(q['focus'] ?? ''),
+            prefill: HealthRecordPrefill(
+              vaccinePreset: nonEmpty('preset'),
+              dose: int.tryParse(q['dose'] ?? ''),
+              dewormType: nonEmpty('deworm'),
+              customName: nonEmpty('custom'),
+              dateEmpty: q['dateEmpty'] == '1',
+            ),
+            safety: [
+              for (final v in (q['safety'] ?? '').split(','))
+                if (v.trim().isNotEmpty) v.trim(),
+            ],
+            notificationToken: nonEmpty('nid'),
+          );
+        },
       ),
       // 成长档案当天详情（Story 2.4 AC6 · F9）。?date=yyyy-MM-dd；受控（/profile/ 前缀）。
       GoRoute(

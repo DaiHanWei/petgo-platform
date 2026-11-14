@@ -46,7 +46,9 @@ void main() {
     'profile_reco_clicked': 'toko_profile_reco_tapped',
     // Epic 9（跨切口收尾）
     'push_permission_revoked': 'notify_push_permission_toggled',
-    'triage_to_category_jump': 'triage_category_jump_tapped',
+    // ⚠️ 'triage_to_category_jump' → 'triage_category_jump_tapped' 已随 V1.5.0 健康记录提醒 PRD §6.1
+    //    （Story 3.1 · AC2.4：去掉健康记录卡下的「Lihat produk Obat & Vitamin」行）停用，
+    //    移到下方 [retiredV150] 断言「必须不存在」。
   };
 
   test('🔴 §5 清单逐条都有落地实现（声明与实现不许脱节）', () {
@@ -79,12 +81,27 @@ void main() {
         reason: '复购卡已随 FR-136 下线，这些事件不该再有上报点（死埋点会让看板误读）');
   });
 
-  test('🔴 Epic 9 的两条跨切口事件确实存在（本 story 自己的交付物）', () {
+  /// V1.5.0 健康记录提醒 PRD §6.1（Story 3.1 · AC2.4）：健康记录卡下的品类跳转行下线，事件随入口删除。
+  /// 规则变了就改断言表达新规则，而不是删掉（同 [retiredV142]）。
+  const retiredV150 = <String, String>{
+    'triage_to_category_jump': 'triage_category_jump_tapped',
+  };
+
+  test('🔴 V1.5.0 §6.1 已停用的品类跳转事件必须不存在于 lib/', () {
+    final inSource = _eventNamesInSource();
+    final stillThere = [
+      for (final e in retiredV150.entries)
+        if (inSource.contains(e.value)) '${e.key} → ${e.value}',
+    ];
+    expect(stillThere, isEmpty,
+        reason: '品类跳转行已随 V1.5.0 PRD §6.1 下线，事件不该再有上报点（死埋点会让看板误读）');
+  });
+
+  test('🔴 Epic 9 的跨切口事件确实存在（本 story 自己的交付物）', () {
     final inSource = _eventNamesInSource();
     expect(inSource, contains('notify_push_permission_toggled'),
         reason: '推送疲劳的终点信号 —— 没有它只能看到打开率跌，说不清有多少人彻底退出');
-    expect(inSource, contains('triage_category_jump_tapped'),
-        reason: 'FR-110 边界侵蚀监控 —— 问诊→商品的跳转占比要能被单独看见');
+    // V1.5.0 起 FR-110 的品类跳转入口已下线（见上方 retiredV150），这里不再要求 triage_category_jump_tapped。
     expect(PushPermissionChangeReporter.event, 'notify_push_permission_toggled',
         reason: '常量与源码里的字面量脱节了');
   });
