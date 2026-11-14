@@ -87,3 +87,6 @@ const String kOnboardingMarkKtpMoved = 'ktp_moved';
 
 /// 第二次引导：「性格测试也在这里」（V1.3.2 Story 2.7，聚合页）。与后端 `OnboardingMarkKey.TAILSONALITY_ENTRY` 同值。
 const String kOnboardingMarkTailsonalityEntry = 'tailsonality_entry';
+
+/// 首日推荐页「只出现一次」（V1.5.0 onboarding-recall Story 1.2 · OR-7）。与后端 `OnboardingMarkKey.FIRST_DAY_RECOMMEND` 同值。
+const String kOnboardingMarkFirstDayRecommend = 'first_day_recommend';

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/deep_link_routes.dart';
+import '../../onboarding/presentation/onboarding_recommend_page.dart';
 import '../domain/content_type.dart';
 import 'publish_compose_page.dart';
 
@@ -12,7 +13,7 @@ import 'publish_compose_page.dart';
 /// （可预选类型），关闭后回上一页（无上一页才回首页）。发布本身仍走既有 [PublishComposePage] sheet（不另起全屏页）。
 class PublishLandingPage extends ConsumerStatefulWidget {
   const PublishLandingPage(
-      {super.key, this.preset, this.presetEventDate, this.milestoneCode});
+      {super.key, this.preset, this.presetEventDate, this.milestoneCode, this.fromOnboarding = false});
 
   /// 预选发布类型（如生日深链预选成长日历）；为空时与「＋」入口行为一致。
   final ContentType? preset;
@@ -22,6 +23,10 @@ class PublishLandingPage extends ConsumerStatefulWidget {
 
   /// 里程碑「去发布」回填（Story 8.4）：携里程碑 code，发布成功后自动打卡并弹庆祝。
   final String? milestoneCode;
+
+  /// 首日引导进来（`/publish?from=onboarding`，V1.5.0 onboarding-recall Story 1.2 · OR-7）：
+  /// 发布成功 → 首日推荐页 `entry=after_post`；不发（✕ / 返回 / 被拒页返回）→ `entry=skip_post`；落点都是 `/profile`。
+  final bool fromOnboarding;
 
   @override
   ConsumerState<PublishLandingPage> createState() => _PublishLandingPageState();
@@ -48,7 +53,8 @@ class _PublishLandingPageState extends ConsumerState<PublishLandingPage> {
     await PublishComposePage.open(context,
         preset: widget.preset,
         presetEventDate: widget.presetEventDate,
-        milestoneCode: widget.milestoneCode);
+        milestoneCode: widget.milestoneCode,
+        fromOnboarding: widget.fromOnboarding);
     if (!mounted) return;
     // 所有入口统一走「重新成为栈顶才离开」（bug 20260924-564）：
     // 原先非里程碑路径在这里无条件 go('/home') 清栈 —— 从 Diary 日历「+」进来放弃发布，
@@ -69,6 +75,12 @@ class _PublishLandingPageState extends ConsumerState<PublishLandingPage> {
       if (!mounted || _leaving) return;
       if (ModalRoute.of(context)?.isCurrent != true) return;
       _leaving = true;
+      // V1.5.0 Story 1.2 · AC3：首日引导里没发就离开 → 首日推荐页（成功路径由 compose 直接 go 过去，到不了这里）。
+      if (widget.fromOnboarding) {
+        context.go(onboardingRecommendLocation(
+            entry: kOnboardingRecommendEntrySkipPost, landing: kOnboardingRecommendLandingProfile));
+        return;
+      }
       if (context.canPop()) {
         context.pop();
       } else {

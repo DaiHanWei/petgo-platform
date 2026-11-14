@@ -1,8 +1,14 @@
+import '../../onboarding/domain/onboarding_recommend_route.dart';
+
 /// 宠物状态选择后的分叉去向（AC2，纯函数）。
 ///
-/// HAS_PET 我有宠物 → 档案创建引导（Story 1.7）；PLANNING/ENTHUSIAST → 直接进首页（不显示档案提示条）。
+/// HAS_PET 我有宠物 → 档案创建引导（Story 1.7）；其余（没宠物 / 计划养 / 爱好者）→ 首日推荐页
+/// （V1.5.0 onboarding-recall Story 1.2 · AC2：`entry=no_pet`，结束落 `/home`）。
 String petStatusBranchLocation(String petStatus) {
-  return petStatus.toUpperCase() == 'HAS_PET' ? '/onboarding/profile' : '/home';
+  return petStatus.toUpperCase() == 'HAS_PET'
+      ? '/onboarding/profile'
+      : onboardingRecommendLocation(
+          entry: kOnboardingRecommendEntryNoPet, landing: kOnboardingRecommendLandingHome);
 }
 
 /// 运行期改宠物状态的后续动作（Story 1.6 R2 / AC5 · FR-21 · 决策 F15 邻接）。

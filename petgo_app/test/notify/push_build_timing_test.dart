@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/onboarding/domain/onboarding_recommend_route.dart';
 
 /// 建档完成之后的**时机编排**（产品 2026-08-27 改）。
 ///
@@ -53,8 +54,13 @@ void main() {
 
   test('建档庆祝页的主 CTA 落到内容发布，而不是首页', () {
     final block = startExploreCode();
-    expect(block.contains("'/publish'"), isTrue,
+    // V1.5.0 onboarding-recall Story 1.2：去向收口到纯函数 celebrationPublishLocation（首日引导带 from=onboarding）——
+    // 回调里调它，它的两个分支都必须落在 /publish。
+    expect(block.contains("'/publish'") || block.contains('celebrationPublishLocation('), isTrue,
         reason: '🔴 按钮写着「记录第一个瞬间」，落点必须是发布');
+    for (final fromOnboarding in [true, false]) {
+      expect(Uri.parse(celebrationPublishLocation(fromOnboarding: fromOnboarding)).path, '/publish');
+    }
     expect(block.contains("go('/home')"), isFalse,
         reason: '🔴 又落回首页了 —— 文案承诺的事一件没发生');
   });

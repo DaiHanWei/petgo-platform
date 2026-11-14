@@ -205,12 +205,12 @@ void main() {
       expect(find.byKey(const ValueKey('recommendedPetAvatar_7')), findsOneWidget);
     });
 
-    // UI 稿 E2：名字下面只有**一行** micro 灰字「物种 · 陪伴天数」（Kucing · 238 hari）。
+    // UI 稿 E2：名字下面只有**一行** micro 灰字；V1.5.0 Story 1.2 · AC8 起「品种 · Bersama N hari」，无品种回落物种。
     testWidgetsWithImages('陪伴天数与物种同一行（「Kucing · 238 hari」）', (tester) async {
       await pumpGrid(tester, _FakeRepo([_pet(7, days: 238)]));
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       final meta = tester.widget<Text>(find.byKey(const ValueKey('recommendedPetDays_7')));
-      expect(meta.data, '${l10n.petTypeCat} · ${l10n.petCardDays(238)}');
+      expect(meta.data, '${l10n.petTypeCat} · ${l10n.petRecommendCompanionDays(238)}');
       // 灰字（micro 默认色），不再是单独一行品牌色。
       expect(meta.style?.color, AppColors.textTertiary);
     });
@@ -223,7 +223,7 @@ void main() {
       final card = find.byKey(const ValueKey('recommendedPet_7'));
       expect(find.descendant(of: card, matching: find.byType(Text)), findsNWidgets(2));
       expect(find.text('Mochi7'), findsOneWidget);
-      expect(find.text('${l10n.petTypeCat} · ${l10n.petCardDays(238)}'), findsOneWidget);
+      expect(find.text('${l10n.petTypeCat} · ${l10n.petRecommendCompanionDays(238)}'), findsOneWidget);
       // 年龄不在卡上（UI 稿 E2），更不会出现「0 岁 0 月」。
       expect(find.textContaining(l10n.growthArchiveAge(0, 0)), findsNothing);
     });
@@ -232,7 +232,7 @@ void main() {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       await pumpGrid(tester, _FakeRepo([_pet(7, petType: 'UNKNOWN')]));
       final meta = tester.widget<Text>(find.byKey(const ValueKey('recommendedPetDays_7')));
-      expect(meta.data, l10n.petCardDays(238));
+      expect(meta.data, l10n.petRecommendCompanionDays(238));
     });
   });
 

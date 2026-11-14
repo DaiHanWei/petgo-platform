@@ -87,6 +87,7 @@ import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/profile/domain/profile_created_flow.dart';
 import '../../features/profile/data/milestone_celebration_reporter.dart';
+import '../../features/onboarding/presentation/onboarding_recommend_page.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
@@ -812,6 +813,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/onboarding/nickname', builder: (c, s) => const NicknamePage()),
       GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
       GoRoute(path: '/onboarding/profile', builder: (c, s) => const ProfileOnboardingPage()),
+      // V1.5.0 onboarding-recall Story 1.2 · FR-173：首日推荐页（所有引导出口的终点，每账号只一次）。
+      // query：entry（埋点）/ landing（profile|home，结束后 go 过去）。「只出现一次」在页内判（AC5）。
+      GoRoute(
+        path: kOnboardingRecommendRoute,
+        builder: (c, s) => OnboardingRecommendPage(
+          entry: s.uri.queryParameters['entry'] ?? '',
+          landing: s.uri.queryParameters['landing'] ?? kOnboardingRecommendLandingHome,
+        ),
+      ),
       // 宠物档案创建表单（Story 2.2）。受控路由（/profile/ 前缀，游客被门控）。
       // V1.4.0 multi-pet：extra = 「+」入口取到的名额摘要（推 pet_added.slot_source 用），可缺省。
       GoRoute(
@@ -845,6 +855,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             return const SizedBox.shrink();
           }
           final s1Code = profileCreatedMilestoneCode(created.petType);
+          // V1.5.0 onboarding-recall Story 1.2：只有首日引导（/onboarding/profile → 建档）来的才进首日推荐页；
+          // 其他入口建档（Diary / 我的 / 添加宠物）保持原去向（PRD「只给 1.5.0 起注册的新用户」）。
+          final fromOnboarding = s.uri.queryParameters['flow'] == 'onboarding';
           return ProfileCreatedCelebrationPage(
             petName: created.name,
             avatarUrl: created.avatarUrl,
@@ -871,7 +884,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
               ref
                   .read(locallyCelebratedMilestonesProvider.notifier)
                   .report([s1Code]);
-              if (c.mounted) c.go('/publish');
+              // V1.5.0 onboarding-recall Story 1.2 · OR-7：首日引导带 from=onboarding —— 发布成功 / 不发都进首日推荐页。
+              if (c.mounted) c.go(celebrationPublishLocation(fromOnboarding: fromOnboarding));
             },
             // 次链接「Lihat profil dulu」（V1.4.0 L2 第二轮 P3-7）：只去 Diary Tab（新建的这只已在建档页
             // 设为当前宠物），不拉起发布。S1 同样算已在本页庆祝过 → 一并回报。
@@ -879,7 +893,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
               ref
                   .read(locallyCelebratedMilestonesProvider.notifier)
                   .report([s1Code]);
-              if (c.mounted) c.go('/profile');
+              // V1.5.0 onboarding-recall Story 1.2 · AC3：首日引导的次链接 → 首日推荐页（结束落 /profile）。
+              if (c.mounted) c.go(celebrationViewProfileLocation(fromOnboarding: fromOnboarding));
             },
           );
         },
@@ -1311,6 +1326,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             presetEventDate: dateRaw != null ? DateTime.tryParse(dateRaw) : null,
             // 里程碑「去发布」回填（Story 8.4）：携里程碑 code，发布成功后自动打卡。
             milestoneCode: s.uri.queryParameters['milestoneCode'],
+            // V1.5.0 onboarding-recall Story 1.2 · OR-7：只认 `onboarding`（发布成功 / 不发都进首日推荐页）。
+            fromOnboarding: s.uri.queryParameters['from'] == 'onboarding',
           );
         },
       ),

@@ -370,6 +370,10 @@ void main() {
         // 🔴 刻意不并进 `topic_`：那是话题页 / 话题本身，这是首页入口的点击（分母是首页曝光），两组数不是同一漏斗。
         // 名字由 PRD §4 定。⚠️ 新模块入表，不是为遗留事件放宽规则。
         'home_topic_',
+        // 首日推荐页（V1.5.0 onboarding-recall Story 1.2 · FR-173）。模块是「首日引导」这件事本身 ——
+        // 推荐页是引导流程的终点，不属于 Diary / Social 任何一个 Tab；事件名由 PRD §4 定死，扩表、不改名。
+        // ⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'onboarding_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -513,6 +517,10 @@ void main() {
         // **服务端已发券**之后才报（已领 / 领完 / 不在发放期不报；新人券由 entry 返回已发放时报），描述结果而非点击。
         // ⚠️ 只放这个精确词尾；名字由 PRD 定死，扩表、不改名（同 `_saved` / `_paid` 先例）。
         '_claimed',
+        // V1.5.0 onboarding-recall Story 1.2（PRD §4 FR-173 定死的事件名）：
+        // `onboarding_recommend_action`（追更 / 点赞成功，action 属性区分）与 `onboarding_recommend_exited`（离开推荐页）。
+        '_action',
+        '_exited',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

@@ -99,15 +99,22 @@ GoRouter _flowRouter() => GoRouter(
         GoRoute(path: '/onboarding/pet-status', builder: (c, s) => const PetStatusPage()),
         GoRoute(path: '/onboarding/profile', builder: (c, s) => const ProfileOnboardingPage()),
         GoRoute(path: '/home', builder: (c, s) => const HomePage()),
+        // V1.5.0 Story 1.2：B/C 先进首日推荐页（页面本身另有 widget 测试，这里只断去向）。
+        GoRoute(
+            path: '/onboarding/recommend',
+            builder: (c, s) => Scaffold(
+                body: Text('RECOMMEND ${s.uri.queryParameters['entry']} ${s.uri.queryParameters['landing']}'))),
       ],
     );
 
 void main() {
   group('AC2 分叉（纯函数）', () {
-    test('A → 档案创建引导；B/C → 首页', () {
+    // V1.5.0 onboarding-recall Story 1.2 · AC2：B/C 不再直进首页，先进首日推荐页（结束落 /home）。
+    test('A → 档案创建引导；B/C → 首日推荐页（落点首页）', () {
       expect(petStatusBranchLocation('HAS_PET'), '/onboarding/profile');
-      expect(petStatusBranchLocation('PLANNING'), '/home');
-      expect(petStatusBranchLocation('ENTHUSIAST'), '/home');
+      expect(petStatusBranchLocation('PLANNING'), '/onboarding/recommend?entry=no_pet&landing=home');
+      expect(petStatusBranchLocation('ENTHUSIAST'), '/onboarding/recommend?entry=no_pet&landing=home');
+      expect(petStatusBranchLocation('NO_PET'), '/onboarding/recommend?entry=no_pet&landing=home');
     });
   });
 
@@ -281,7 +288,7 @@ void main() {
     expect(find.text("Create your pet's profile"), findsOneWidget);
   });
 
-  testWidgets('AC2: 选 B 完成 → 进首页（无提示条）', (tester) async {
+  testWidgets('AC2: 选 B 完成 → 进首日推荐页（entry=no_pet，落点首页）', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         meRepositoryProvider.overrideWithValue(_FakeMeRepository()),
@@ -300,10 +307,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('petStatusComplete')));
     await tester.pumpAndSettle();
 
-    // 进 Discovery（Story 3.2 Feed 已就位）。
-    // 原断言「B 状态不显示档案提示条」已随 FR-0H 整条废止而失效（V1.1.2 Story 2.3）：
-    // 提示条组件本身已删除，Discovery 顶部只有分类 Tab —— 由 story 2.3 的
-    // 「Discovery 顶部无建档提示」回归测试统一守门。
-    expect(find.byType(FeedTabRow), findsOneWidget);
+    // V1.5.0 onboarding-recall Story 1.2 · AC2：不再直进 Discovery，先进首日推荐页（结束落 /home）。
+    // 原断言「B 状态不显示档案提示条」已随 FR-0H 整条废止而失效（V1.1.2 Story 2.3）。
+    expect(find.text('RECOMMEND no_pet home'), findsOneWidget);
+    expect(find.byType(FeedTabRow), findsNothing);
   });
 }

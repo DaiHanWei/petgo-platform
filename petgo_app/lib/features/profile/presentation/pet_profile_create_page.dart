@@ -144,7 +144,10 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
       final origin =
           buildOriginFromName(GoRouterState.of(context).uri.queryParameters['origin']);
       if (showsBuildCelebration(origin)) {
-        context.go('/profile/created', extra: created);
+        // V1.5.0 onboarding-recall Story 1.2：首日引导来的建档把 flow=onboarding 带给庆祝页。
+        final flow = GoRouterState.of(context).uri.queryParameters['flow'];
+        context.go(flow == 'onboarding' ? '/profile/created?flow=onboarding' : '/profile/created',
+            extra: created);
       } else if (origin == BuildOrigin.graySelectPublish) {
         // AC7（F15）：灰选成长日历触发的建档完成 → 跳过庆祝页，回发布着陆页预选成长日历续发
         // （复用 /publish 着陆页首帧开 sheet 的稳健路径，不从已失效的建档页 context 直接开 sheet）。

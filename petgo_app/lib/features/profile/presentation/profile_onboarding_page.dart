@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../onboarding/presentation/onboarding_recommend_page.dart';
 
 /// 状态 A 档案创建引导页（Story 1.7 F1 · onboard.html 1:1 还原）。
 ///
@@ -65,7 +66,9 @@ class ProfileOnboardingPage extends ConsumerWidget {
                       width: double.infinity,
                       child: FilledButton(
                         key: const ValueKey('profileOnboardingCreate'),
-                        onPressed: () => context.push('/profile/create'),
+                        // V1.5.0 onboarding-recall Story 1.2：标记「来自首日引导」，建档庆祝页的两个出口据此进首日推荐页
+                        // （其他入口建档——Diary / 我的 / 添加宠物——不进，PRD「只给 1.5.0 起注册的新用户」）。
+                        onPressed: () => context.push('/profile/create?flow=onboarding'),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.mint,
                           foregroundColor: AppColors.onAccent,
@@ -81,7 +84,10 @@ class ProfileOnboardingPage extends ConsumerWidget {
                     const SizedBox(height: 13),
                     TextButton(
                       key: const ValueKey('profileOnboardingSkip'),
-                      onPressed: () => context.go('/home'),
+                      // V1.5.0 onboarding-recall Story 1.2 · AC3：「Nanti saja」→ 首日推荐页（结束落 /home）。
+                      onPressed: () => context.go(onboardingRecommendLocation(
+                          entry: kOnboardingRecommendEntrySkipProfile,
+                          landing: kOnboardingRecommendLandingHome)),
                       child: Text(l10n.profileOnboardingSkip,
                           style: const TextStyle(
                               fontSize: 13, color: AppColors.textTertiary)),

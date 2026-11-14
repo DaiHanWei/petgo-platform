@@ -53,6 +53,7 @@ import '../../profile/data/pet_list_repository.dart';
 import '../../profile/presentation/widgets/pet_names.dart';
 import '../../pet_slot/data/pet_slot_repository.dart' show kPetReadOnlySlug;
 import '../../../shared/widgets/app_image.dart';
+import '../../onboarding/presentation/onboarding_recommend_page.dart';
 
 /// 发布控制器 provider（autoDispose：sheet 关闭即 dispose，清空内存草稿，NFR-10 无持久草稿）。
 final publishControllerProvider = Provider.autoDispose<PublishController>((
@@ -87,6 +88,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.initialImages,
     this.initialPetIds,
     this.entrySource,
+    this.fromOnboarding = false,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -120,6 +122,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// [BragPostSource.milestoneCelebration] 时 `diary_published` 追加 `source`；不影响任何发布逻辑。
   final BragPostSource? entrySource;
 
+  /// 首日引导进来（V1.5.0 onboarding-recall Story 1.2 · OR-7）：发布成功（任何类型）→ 首日推荐页
+  /// `entry=after_post&landing=profile`，替换掉 `/publish/done`。不发的去向由着陆页兜底。
+  final bool fromOnboarding;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
@@ -132,6 +138,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
     List<Uint8List>? initialImages,
     List<int>? initialPetIds,
     BragPostSource? entrySource,
+    bool fromOnboarding = false,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -158,6 +165,7 @@ class PublishComposePage extends ConsumerStatefulWidget {
           initialImages: initialImages,
           initialPetIds: initialPetIds,
           entrySource: entrySource,
+          fromOnboarding: fromOnboarding,
         ),
       ),
     );
@@ -805,6 +813,15 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           return;
         }
         finish();
+        return;
+      }
+      if (widget.fromOnboarding) {
+        // V1.5.0 onboarding-recall Story 1.2 · AC1：首日引导发出第一条（任何类型）→ 首日推荐页，不进 /publish/done。
+        // 先取 router：pop 之后本 sheet 的 context 即将卸载。go 清栈 → 着陆页随之销毁，不会再走它的兜底。
+        final router = GoRouter.of(context);
+        Navigator.of(context).pop(); // 关闭发布 sheet
+        router.go(onboardingRecommendLocation(
+            entry: kOnboardingRecommendEntryAfterPost, landing: kOnboardingRecommendLandingProfile));
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet

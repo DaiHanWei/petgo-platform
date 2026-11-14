@@ -21,6 +21,11 @@ class RecommendedPet {
     required this.companionDays,
     this.birthday,
     this.coverImageUrl,
+    this.breed,
+    this.coverPostId,
+    this.coverLikeCount = 0,
+    this.coverLikedByViewer = false,
+    this.match,
   });
 
   /// 点击落点用它 —— 复用 Story 2.3 的**站内**访客入口 `/pets/{petId}`，不新建通道（AC5）。
@@ -38,7 +43,25 @@ class RecommendedPet {
   final DateTime? birthday;
 
   /// 最近一张公开照片（卡片大图）。可空 → 客户端按占位渲染。
+  ///
+  /// V1.5.0 onboarding-recall Story 1.1 / 1.2（OR-4）：与 [coverPostId] **同一条帖子**
+  /// （这只宠物最近一条带图公开帖，不再限 Diary）。
   final String? coverImageUrl;
+
+  /// 品种（V1.5.0 OR-4）。可空 → 卡片第二行回落物种名。
+  final String? breed;
+
+  /// 封面帖 id（V1.5.0 OR-4）：推荐页 / 游客区的点赞胶囊绑它。null = 没有带图公开帖 → 不显示胶囊。
+  final int? coverPostId;
+
+  /// 封面帖当前赞数（无封面帖为 0）。
+  final int coverLikeCount;
+
+  /// 我是否已赞封面帖（游客恒 false）。
+  final bool coverLikedByViewer;
+
+  /// 命中哪一段：`SAME_BREED` / `SAME_SPECIES` / `GLOBAL`（埋点用；旧后端缺省 null）。
+  final String? match;
 
   factory RecommendedPet.fromJson(Map<String, dynamic> json) => RecommendedPet(
         petId: json['petId'] as int,
@@ -50,7 +73,19 @@ class RecommendedPet {
             ? null
             : DateTime.tryParse(json['birthday'] as String),
         coverImageUrl: json['coverImageUrl'] as String?,
+        // V1.5.0（OR-4）：缺字段一律容错（旧后端 / 游客接口不抛）。
+        breed: _nonBlank(json['breed']),
+        coverPostId: (json['coverPostId'] as num?)?.toInt(),
+        coverLikeCount: (json['coverLikeCount'] as num?)?.toInt() ?? 0,
+        coverLikedByViewer: json['coverLikedByViewer'] == true,
+        match: json['match'] as String?,
       );
+
+  static String? _nonBlank(Object? v) {
+    if (v is! String) return null;
+    final t = v.trim();
+    return t.isEmpty ? null : t;
+  }
 }
 
 /// 一页推荐宠物（V1.3.0 batch-b1 Story 4.3 · AC3 起带游标）。
@@ -158,3 +193,17 @@ final petRecommendationsProvider = FutureProvider.autoDispose<List<RecommendedPe
 void invalidatePetRecommendations(WidgetRef ref) {
   ref.invalidate(petRecommendationsProvider);
 }
+
+/// 首日推荐页一屏的张数（V1.5.0 onboarding-recall Story 1.2 · FR-173：一屏 6 张）。
+const int kOnboardingRecommendLimit = 6;
+
+/// 首日推荐页的数据（V1.5.0 onboarding-recall Story 1.2 · AC6）。
+///
+/// autoDispose + 不重试：失败或空 → 页面直接去落点（PRD AC6「不出现空白页」），重试只会拖慢进 App。
+final onboardingRecommendProvider = FutureProvider.autoDispose<List<RecommendedPet>>(
+  (ref) async => (await ref
+          .read(petRecommendationRepositoryProvider)
+          .recommendations(limit: kOnboardingRecommendLimit))
+      .items,
+  retry: (_, _) => null,
+);

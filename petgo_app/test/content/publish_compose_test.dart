@@ -714,6 +714,67 @@ void main() {
     expect(router.routerDelegate.currentConfiguration.uri.path, '/profile');
   });
 
+  // ===== V1.5.0 onboarding-recall Story 1.2 · AC1 / AC3：首日引导 /publish?from=onboarding =====
+  GoRouter onboardingPublishRouter() => GoRouter(
+        initialLocation: '/publish?preset=growth-calendar&from=onboarding',
+        routes: [
+          GoRoute(
+              path: '/publish',
+              builder: (c, s) => PublishLandingPage(
+                    preset: ContentType.growthMoment,
+                    fromOnboarding: s.uri.queryParameters['from'] == 'onboarding',
+                  )),
+          GoRoute(
+              path: '/publish/done',
+              builder: (c, s) => PublishDonePage(args: s.extra as PublishResultArgs)),
+          GoRoute(
+              path: '/onboarding/recommend',
+              builder: (c, s) => Scaffold(
+                  body: Text(
+                      'recommend ${s.uri.queryParameters['entry']} ${s.uri.queryParameters['landing']}'))),
+          GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('home'))),
+        ],
+      );
+
+  testWidgets('V1.5.0 1.2 AC1：from=onboarding 发布成功 → 首日推荐页 after_post，不进 /publish/done', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider
+          .overrideWithValue(_controller(_OkRepo())..setText('Oyen sehat hari ini')),
+      profileRepositoryProvider.overrideWithValue(_WithPetProfileRepo()),
+      effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
+      authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 1, name: 'Oyen')]),
+    ]);
+    addTearDown(container.dispose);
+    final router = onboardingPublishRouter();
+
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+    await pumpThroughReviewing(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PublishDonePage), findsNothing);
+    expect(find.text('recommend after_post profile'), findsOneWidget);
+  });
+
+  testWidgets('V1.5.0 1.2 AC3：from=onboarding ✕ 不发 → 首日推荐页 skip_post', (tester) async {
+    _tallView(tester);
+    final container = milestoneContainer();
+    addTearDown(container.dispose);
+    final router = onboardingPublishRouter();
+
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    expect(find.byType(PublishComposePage), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('publishClose')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('recommend skip_post profile'), findsOneWidget);
+    expect(find.text('home'), findsNothing);
+  });
+
   _multiPetGroup();
 }
 

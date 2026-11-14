@@ -231,7 +231,8 @@ void main() {
 
     /// 🔴 一个引导一个键：V1.3.2 Story 2.7 的性格测试引导**另起了一个键** ——
     /// 共用会让看过第一次的人再也收不到第二次（PRD 明确那是两次独立触发）。
-    test('客户端侧的键与服务端登记的一致，恰为这两个', () {
+    // V1.5.0 onboarding-recall Story 1.2（OR-7）：新加 first_day_recommend 是「首日推荐页只出现一次」的新键，不复用旧键。
+    test('客户端侧的键与服务端登记的一致，恰为这三个', () {
       expect(kOnboardingMarkKtpMoved, 'ktp_moved');
       expect(kOnboardingMarkTailsonalityEntry, 'tailsonality_entry');
 
@@ -241,7 +242,7 @@ void main() {
           .allMatches(repoSrc)
           .map((m) => m.group(1))
           .toList();
-      expect(keys, ['ktp_moved', 'tailsonality_entry'], reason: '以后再加键时这条会红 —— 那是有意的：加的必须是新键');
+      expect(keys, ['ktp_moved', 'tailsonality_entry', 'first_day_recommend'], reason: '以后再加键时这条会红 —— 那是有意的：加的必须是新键');
     });
 
     /// 服务端的键登记表（枚举）与客户端常量必须是同一个字符串 ——

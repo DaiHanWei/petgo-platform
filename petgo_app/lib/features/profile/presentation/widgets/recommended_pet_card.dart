@@ -58,9 +58,27 @@ const String kPetRecommendFromFollowListEmpty = 'follow_list_empty';
 /// `/pets/{petId}`。游客点击走 FR-0C 强登录引导、**不发请求**
 /// （站内访客接口仅登录可用，与公开主页那张宠物卡逐字同一套）。
 class RecommendedPetCard extends ConsumerWidget {
-  const RecommendedPetCard({super.key, required this.pet, required this.from});
+  const RecommendedPetCard({
+    super.key,
+    required this.pet,
+    required this.from,
+    this.onTapOverride,
+    this.likeSlot,
+    this.footer,
+  });
 
   final RecommendedPet pet;
+
+  /// 替换默认点击（V1.5.0 onboarding-recall Story 1.2 · AC7）：首日推荐页传空实现 →
+  /// 头像 / 名字点击**不跳转**（那一页只有追更与点赞两个动作）。null = 现有行为（进站内访客页）。
+  final VoidCallback? onTapOverride;
+
+  /// 大图右上角的点赞胶囊（V1.5.0 Story 1.2 / 1.3）。null = 不显示（现有推荐位不变）。
+  final Widget? likeSlot;
+
+  /// 卡片文字区下方的附加区（V1.5.0 Story 1.2：首日推荐页放 `PetFollowButton(listCompact)`）。
+  /// null = 不显示（现有推荐位不变）。网格格高须用 [gridCellExtent] 的 `footerExtent` 同步让出。
+  final Widget? footer;
 
   /// 埋点的 `from`（AC7）：`diary_empty`（Story 4.1）/ 全屏集合页与横滑行各自的值（4.3 / 4.4）。
   ///
@@ -83,7 +101,7 @@ class RecommendedPetCard extends ConsumerWidget {
   /// 窄屏上大图被压扁、宽屏上被拉高，只有 375dp 附近接近 1:1。改为按实际格宽 + 文字行高
   /// （随系统字号缩放）算出每格高度 —— 大图恒为正方形，文字行也不会被裁。
   /// ⚠️ 与 [build] 里文字区的排法（半个头像 + 名字一行 + 天数一行）同源，改一边要改另一边。
-  static double gridCellExtent(BuildContext context, double cellWidth) {
+  static double gridCellExtent(BuildContext context, double cellWidth, {double footerExtent = 0}) {
     final scaler = MediaQuery.textScalerOf(context);
     final textBlock = _avatarDiameter / 2 +
         AppSpacing.xxs +
@@ -91,7 +109,7 @@ class RecommendedPetCard extends ConsumerWidget {
         AppSpacing.xxs +
         scaler.scale(AppTypography.micro.fontSize!) * AppTypography.micro.height!;
     // +4：字体度量取整的余量，宁可多一线空白也不能裁掉天数那一行。
-    return cellWidth + textBlock + 4;
+    return cellWidth + textBlock + 4 + footerExtent;
   }
 
   @override
@@ -104,7 +122,7 @@ class RecommendedPetCard extends ConsumerWidget {
       child: InkWell(
         key: ValueKey('recommendedPet_${pet.petId}'),
         borderRadius: _coverRadius,
-        onTap: () => openRecommendedPet(context, ref, pet: pet, from: from),
+        onTap: onTapOverride ?? () => openRecommendedPet(context, ref, pet: pet, from: from),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -126,7 +144,7 @@ class RecommendedPetCard extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: AppSpacing.xxs),
-                  // UI 稿 E2：名字下面**只有一行** micro 灰字「物种 · 陪伴天数」（Kucing · 238 hari）。
+                  // UI 稿 E2：名字下面**只有一行** micro 灰字；V1.5.0 起「品种 · Bersama N hari」（Corgi · Bersama 300 hari）。
                   // 陪伴天数由后端与 H5 名片同一个算法算好下发。
                   Text(
                     _meta(l10n),
@@ -138,6 +156,7 @@ class RecommendedPetCard extends ConsumerWidget {
                 ],
               ),
             ),
+            ?footer,
           ],
         ),
       ),
@@ -192,6 +211,8 @@ class RecommendedPetCard extends ConsumerWidget {
             ),
           ),
         ),
+        // V1.5.0 Story 1.2 / 1.3：大图右上角点赞胶囊（调用方给的组件自带 44 高热区）。
+        if (likeSlot != null) Positioned(top: 0, right: 0, child: likeSlot!),
       ],
     );
   }
@@ -207,8 +228,9 @@ class RecommendedPetCard extends ConsumerWidget {
     );
   }
 
-  /// 「物种 · 陪伴天数」（UI 稿 E2）—— **逐项复用既有文案**（物种文案 / `petCardDays`），不另起口径。
-  /// 物种未知时只剩天数，不留孤零零的分隔符。
+  /// 「品种 · Bersama N hari」（V1.5.0 onboarding-recall Story 1.2 · AC8 / FR-174：所有推荐卡位置一起变）。
+  /// 无品种回落物种名（既有文案）；物种也未知时只剩天数，不留孤零零的分隔符。
+  /// 陪伴天数用 `petRecommendCompanionDays`（「Bersama N hari」）。
   String _meta(AppLocalizations l10n) {
     final species = switch (pet.petType) {
       'CAT' => l10n.petTypeCat,
@@ -216,9 +238,10 @@ class RecommendedPetCard extends ConsumerWidget {
       'OTHER' => l10n.petTypeOther,
       _ => null,
     };
+    final kind = pet.breed ?? species;
     return [
-      ?species,
-      l10n.petCardDays(pet.companionDays),
+      ?kind,
+      l10n.petRecommendCompanionDays(pet.companionDays),
     ].join(' · ');
   }
 }

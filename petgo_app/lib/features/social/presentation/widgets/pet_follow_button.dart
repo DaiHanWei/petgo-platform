@@ -49,6 +49,7 @@ class PetFollowButton extends ConsumerStatefulWidget {
     this.onNotFound,
     this.invalidatesFollowedPetList = true,
     this.hitHeight,
+    this.onSettled,
   });
 
   /// 宠物 id（覆盖表的键 / 接口路径 / 埋点 `pet_id`，与站内访客路由 `/pets/{petId}` 同一标识）。
@@ -89,6 +90,10 @@ class PetFollowButton extends ConsumerStatefulWidget {
   /// 热区高度（Story 1.5 · AC4.4 推荐卡：按钮 30 高、热区上下各扩 7 到 44）。null = 热区即按钮本身。
   /// 按钮外的那一圈透明区域同样触发追更（外层 GestureDetector 接住按钮没吃掉的点击）。
   final double? hitHeight;
+
+  /// 服务端确认追更 / 取消成功后的回调（V1.5.0 onboarding-recall Story 1.2：首日推荐页据此计互动数、报
+  /// `onboarding_recommend_action`）。失败回滚、游客拦截不回调。null = 不回调（现有调用方不变）。
+  final ValueChanged<bool>? onSettled;
 
   @override
   ConsumerState<PetFollowButton> createState() => _PetFollowButtonState();
@@ -174,6 +179,7 @@ class _PetFollowButtonState extends ConsumerState<PetFollowButton> {
       if (accountAtTap != null) container.invalidate(publicProfileProvider(accountAtTap));
       // Story 1.5 · AC9.3：我（及任何人）的追更宠物列表重取；列表行 / 推荐卡自己不失效（见 [invalidatesFollowedPetList]）。
       if (widget.invalidatesFollowedPetList) container.invalidate(followedPetListControllerProvider);
+      if (mounted) widget.onSettled?.call(result.iFollow);
     } catch (e) {
       if (!sameAccount()) return;
       notifier.restore(petId, before);
