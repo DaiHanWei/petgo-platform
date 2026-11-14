@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../gift/data/gift_repository.dart' show giftPreviewProvider;
 import '../../gift/presentation/gift_page.dart';
 import '../../gift/presentation/widgets/gift_diary_row.dart';
 import '../../tailsonality/presentation/tailsonality_routes.dart';
@@ -503,6 +504,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         // bug 20260727-365：日历视图的数据在 calendarMonthProvider（按年月分族），漏失效会导致
         // 日历 tab 下拉刷新只走动画不刷数据；整族失效（含非当前月缓存），照 pet_profile_edit_page 先例。
         ref.invalidate(calendarMonthProvider);
+        ref.invalidate(giftPreviewProvider); // V1.5.0 gift-pack 2-4 复审 #2：Diary 礼物行随下拉刷新
       },
       child: ListView(
         controller: _scroll,

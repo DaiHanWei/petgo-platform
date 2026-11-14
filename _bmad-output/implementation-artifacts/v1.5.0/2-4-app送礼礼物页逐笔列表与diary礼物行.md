@@ -75,6 +75,14 @@ so that 收到的礼物看得见、送礼入口顺手。
 - 埋点：PRD A §4 本线不加埋点。1.4.0 的 `gift_wall_opened` 保留（礼物页首次加载报一次）；`gift_sender_list_opened` 原挂在已删的「Pendukung」列表，改为逐笔列表首次加载到非空时报一次（口径最接近的保守做法，**待产品确认**是否废弃该事件）。
 - 文案：`giftFilterUnopened`「Belum dibuka / Unopened」、`giftStillWrapped`「Masih terbungkus / Still wrapped」、`giftNewBadge`「Baru / New」、`giftOpenAll`「Buka Semua / Open All」。
 
+- Code review（独立复审）处置：
+  - CONFIRMED #1 翻页在途时切筛选 `_loadingMore` 永久 true、翻页卡死 → `_reload` 重置 `_loadingMore` / `_loadMoreFailed`。已修。
+  - CONFIRMED #2 主人 Diary 礼物行永不刷新 → Diary 下拉刷新整族失效 `giftPreviewProvider`。已修。
+  - CONFIRMED #3 横向 ListView 撑满交叉轴、送礼人头像被裁约 2px → 子项 `Align(topLeft)` 保住 52×52。已修。
+  - PLAUSIBLE #4 `giftPreviewProvider` 未登记 `resetUserScopedCaches` → 已登记（整族失效）。
+  - CONFIRMED #5 下拉刷新后旧「Coba lagi」翻页脚残留 → 同 #1。已修。
+  - #6 列表加载改为捕获所有异常（解析错误也进 A6 失败态）；每次翻页后都查「填不满视口继续翻」；下拉刷新等待重载完成；`giftPreviewProvider` 移到目录 provider 注释之上。已修。
+
 ### File List
 
 - `petgo_app/lib/features/gift/domain/gift_order_browse.dart`（新）

@@ -90,6 +90,9 @@ class _GiftPageState extends ConsumerState<GiftPage> {
     setState(() {
       _loading = true;
       _failed = false;
+      // 换筛选 / 刷新时作废在途翻页（2-4 复审 #1 #5：否则 _loadingMore 永久为 true、翻页卡死）
+      _loadingMore = false;
+      _loadMoreFailed = false;
     });
     try {
       final page = await ref.read(giftRepositoryProvider).fetchPetGiftOrders(widget.petId, filter: _filter);
@@ -112,20 +115,25 @@ class _GiftPageState extends ConsumerState<GiftPage> {
         _senderListReported = true;
         Analytics.capture('gift_sender_list_opened', {'is_owner': _owner!});
       }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _scroll.hasClients && _scroll.position.maxScrollExtent <= 0) _loadMore();
-      });
+      _fillViewport();
       if (widget.openLatest && !_latestHandled) {
         _latestHandled = true;
         if (_owner == true) WidgetsBinding.instance.addPostFrameCallback((_) => _openLatest());
       }
-    } on DioException catch (_) {
+    } catch (_) {
       if (!mounted || gen != _generation) return;
       setState(() {
         _loading = false;
         _failed = true;
       });
     }
+  }
+
+  /// 一页填不满视口时继续翻（每次加载后都查，2-4 复审 #6）。
+  void _fillViewport() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients && _scroll.position.maxScrollExtent <= 0) _loadMore();
+    });
   }
 
   void _onScroll() {
@@ -148,7 +156,8 @@ class _GiftPageState extends ConsumerState<GiftPage> {
         _next = page.nextCursor;
         _loadingMore = false;
       });
-    } on DioException catch (_) {
+      _fillViewport();
+    } catch (_) {
       if (!mounted || gen != _generation) return;
       setState(() {
         _loadingMore = false;
@@ -165,10 +174,10 @@ class _GiftPageState extends ConsumerState<GiftPage> {
     _reload();
   }
 
-  void _refreshAll() {
+  Future<void> _refreshAll() {
     ref.invalidate(giftPreviewProvider(widget.petId));
     ref.invalidate(petGiftShowcaseProvider(widget.petId));
-    _reload();
+    return _reload();
   }
 
   Future<void> _tap(GiftOrderCard c) async {
@@ -365,7 +374,7 @@ class _GiftPageState extends ConsumerState<GiftPage> {
       );
     }
     return RefreshIndicator(
-      onRefresh: () async => _refreshAll(),
+      onRefresh: _refreshAll,
       child: CustomScrollView(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),

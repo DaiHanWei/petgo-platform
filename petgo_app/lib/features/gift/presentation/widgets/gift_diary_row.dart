@@ -61,7 +61,10 @@ class GiftDiaryRow extends ConsumerWidget {
               separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (_, i) {
                 final c = preview.recent[i];
-                return GestureDetector(
+                // 横向 ListView 会把子项撑满交叉轴高度：顶对齐保住 52×52，送礼人头像不被裁（2-4 复审 #3）
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: GestureDetector(
                   key: ValueKey('giftDiaryRowItem-${c.orderToken}'),
                   onTap: open,
                   child: SizedBox(
@@ -92,6 +95,7 @@ class GiftDiaryRow extends ConsumerWidget {
                           ),
                         ),
                     ]),
+                  ),
                   ),
                 );
               },

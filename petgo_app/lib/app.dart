@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'features/gift/data/gift_repository.dart' show giftPreviewProvider;
 import 'features/growth/domain/growth_popup_trigger.dart';
 
 import 'package:app_links/app_links.dart';
@@ -422,6 +423,7 @@ void resetUserScopedCaches(WidgetRef ref, {int? userId}) {
   ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
+  ref.invalidate(giftPreviewProvider); // V1.5.0 gift-pack 2-4 复审 #4：Diary 礼物行（主人视角未拆 / 计数，按 petId 整族失效）
   ref.invalidate(onboardingMarksProvider); // 一次性引导标记（按账号存：换账号不得沿用上个账号的）
   // v1.4.2 shop Story 8.1：「给你的券」按当前用户算；进入 Toko 的 60 秒去重是进程级，换账号必须清零
   //    —— 新账号首次进 Toko 要立刻判新人发券（AC4.1 / AC4.4）。

@@ -102,17 +102,17 @@ class GiftRepository {
 final giftRepositoryProvider =
     Provider<GiftRepository>((ref) => GiftRepository(dio: ref.read(dioProvider)));
 
-/// 按收礼方取目录。**无本地兜底**：失败为 AsyncError，面板显示 B7 重试。
-///
-/// ⚠️ `retry: (_, _) => null`（照 `boarding_pass_repository.dart`，bug 20261006-583）：Riverpod 3 默认对抛错的
-/// provider 指数退避重试，期间是 AsyncLoading —— 断网时面板会一直转圈，B7「Coba lagi」要 40 多秒后才出来。
-/// 另：`gift-pet-gone` / `gift-own-pet` / `gift-blocked` 是确定性拒绝，重试只会白打三次后端。
 /// V1.5.0 gift-pack Story 2-4：Diary 礼物行（主人 / 访客同一接口，视角由服务端判）。
 final giftPreviewProvider = FutureProvider.autoDispose.family<GiftPreview, int>(
   (ref, petId) => ref.read(giftRepositoryProvider).fetchPetGiftPreview(petId),
   retry: (_, _) => null,
 );
 
+/// 按收礼方取目录。**无本地兜底**：失败为 AsyncError，面板显示 B7 重试。
+///
+/// ⚠️ `retry: (_, _) => null`（照 `boarding_pass_repository.dart`，bug 20261006-583）：Riverpod 3 默认对抛错的
+/// provider 指数退避重试，期间是 AsyncLoading —— 断网时面板会一直转圈，B7「Coba lagi」要 40 多秒后才出来。
+/// 另：`gift-pet-gone` / `gift-own-pet` / `gift-blocked` 是确定性拒绝，重试只会白打三次后端。
 final giftCatalogProvider = FutureProvider.autoDispose.family<GiftCatalog, GiftRecipientRef>(
   (ref, recipient) => ref
       .read(giftRepositoryProvider)
