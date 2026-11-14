@@ -53,11 +53,12 @@ Finder _inView(Finder f) => find.descendant(of: find.byKey(const ValueKey('miles
 void main() {
   // ===== T1 账号级编码判定 =====
   group('T1 kAccountMilestoneCodes', () {
-    test('恰 6 个，== kMilestoneBadgeKeys 中 first_friend / first_save 的 key 集合', () {
-      expect(kAccountMilestoneCodes, hasLength(6));
+    // V1.5.0 onboarding-recall Story 3.3（OR-6）：Lulus Pemula 改账号级 → 6 → 9（+ lulus_pemula 三码）。
+    test('恰 9 个，== kMilestoneBadgeKeys 中 first_friend / first_save / lulus_pemula 的 key 集合', () {
+      expect(kAccountMilestoneCodes, hasLength(9));
       final fromBadges = {
         for (final e in kMilestoneBadgeKeys.entries)
-          if (e.value == 'first_friend' || e.value == 'first_save') e.key,
+          if (e.value == 'first_friend' || e.value == 'first_save' || e.value == 'lulus_pemula') e.key,
       };
       expect(kAccountMilestoneCodes, fromBadges);
     });

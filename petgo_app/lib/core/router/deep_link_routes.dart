@@ -35,6 +35,13 @@ class DeepLinkRoutes {
   /// 里程碑列表页（壳）（L级里程碑节点深链落点，FR-42；本体属里程碑 mini-epic）。
   static const String milestoneList = '/profile/milestones';
 
+  /// Lulus Pemula 毕业通知落点（V1.5.0 onboarding-recall Story 3.3 · OR-26）：分发路由 + 优先补弹。
+  /// 字面量：core 不 import feature（与 `account_milestones_page.dart` 的 `kMilestonesEntryRoute` 同值）。
+  static const String milestonesEntryLulus = '/me/milestones-entry?celebrate=lulus';
+
+  /// Lulus Pemula 三物种编码（与 `milestone_account_codes.dart` 的 `kLulusPemulaCodes` 同值；core 不 import feature）。
+  static const Set<String> _lulusPemulaCodes = {'C-S16', 'D-S16', 'G-S9'};
+
   /// 宠物建档页（生命周期召回深链落点，留存作战手册抓手 1）。
   /// 手册里 ROI 最高的一刀：557 人只打开过 1 天、1.1.0 还残留 506 人装了却没建档，
   /// 获客成本已经沉没，只差把他们直接送到这一页。
@@ -77,7 +84,12 @@ class DeepLinkRoutes {
       case 'COMPANION_ANNIVERSARY':
         return growthArchive;
       case 'MILESTONE_NODE':
-        return milestoneList;
+      case 'MILESTONE_SM_NODE':
+        // V1.5.0 onboarding-recall Story 3.3 · AC5（OR-26）：Lulus Pemula 毕业通知（S 级留痕的 deepLinkType 是
+        // MILESTONE_NODE，targetRef = Lulus 编码）→ 分发路由，有宠物进宠物里程碑页、没宠物进账号级页，并优先补弹。
+        if (targetRef != null && _lulusPemulaCodes.contains(targetRef)) return milestonesEntryLulus;
+        // 其余 MILESTONE_SM_NODE 维持现状进通知中心；MILESTONE_NODE 照旧进里程碑列表。
+        return type == 'MILESTONE_NODE' ? milestoneList : notificationsCenter;
       case 'GROWTH_LEVEL_UP':
         // V1.4.0 ① Story 2.3：升级通知 → 等级页（字面量：core 不 import feature；与 LevelPage.location 一致）。
         return '/me/growth';

@@ -28,7 +28,10 @@ const List<String> _kShortMonthsEn = [
 /// - 账号级（[isAccountMilestone]）：预选 [accountPets] 全部（调用方给的 ACTIVE、建档顺序、≤5 只）；
 ///   ≥ 2 只 → 「Kami / We」句式；只 1 只 → 用那只的名字走单宠句式；[accountPets] 为空（读失败）→ 退化为非账号级。
 /// - `{title}` = [localizedMilestoneTitle]（与卡面一致）；**不带 `#话题`**。
-({String text, List<int> petIds}) milestoneComposePreset({
+/// V1.5.0 onboarding-recall Story 3.3 · AC4（E4）：账号级里程碑且账号下**没有正常（ACTIVE）宠物**（无账号宠物、无当前宠物）→
+/// 发布页预选 **Moment**（不是 Diary：Diary 必须关联宠物），预填 `milestoneShareComposeNoPet`（不带宠物名 / 「Kami」）。
+/// 其余照 1.4.2：Diary + 选中全部 ACTIVE 宠物 / 当前宠物。
+({String text, List<int> petIds, bool moment}) milestoneComposePreset({
   required MilestoneItem item,
   required int petId,
   required String petName,
@@ -37,13 +40,18 @@ const List<String> _kShortMonthsEn = [
   required Locale locale,
 }) {
   final title = localizedMilestoneTitle(item.code, locale);
+  // 没有当前宠物（petId ≤ 0：账号级页补弹、账号下无正常宠物）才走 Moment；有当前宠物而账号宠物读失败（空表）
+  // 仍退化为这一只 + 单宠句式（V1.4.2 既有口径）。
+  if (isAccountMilestone(item.code) && accountPets.isEmpty && petId <= 0) {
+    return (text: l10n.milestoneShareComposeNoPet(title), petIds: const <int>[], moment: true);
+  }
   if (isAccountMilestone(item.code) && accountPets.isNotEmpty) {
     final ids = [for (final p in accountPets) ?p.id];
     final petIds = ids.isEmpty ? [petId] : ids;
     if (accountPets.length >= 2) {
-      return (text: l10n.milestoneShareComposeMulti(title), petIds: petIds);
+      return (text: l10n.milestoneShareComposeMulti(title), petIds: petIds, moment: false);
     }
-    return (text: l10n.milestoneShareComposeSingle(accountPets.single.name, title), petIds: petIds);
+    return (text: l10n.milestoneShareComposeSingle(accountPets.single.name, title), petIds: petIds, moment: false);
   }
-  return (text: l10n.milestoneShareComposeSingle(petName, title), petIds: [petId]);
+  return (text: l10n.milestoneShareComposeSingle(petName, title), petIds: [petId], moment: false);
 }

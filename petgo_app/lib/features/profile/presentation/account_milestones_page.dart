@@ -6,11 +6,15 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/account_milestone_repository.dart';
+import '../data/milestone_celebration_reporter.dart';
+import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
 import '../domain/milestone.dart';
+import '../domain/milestone_account_codes.dart';
 import '../domain/milestone_titles.dart';
 import 'widgets/account_achievements_section.dart';
 import 'widgets/milestone_badge.dart';
+import 'widgets/milestone_celebration.dart';
 import 'widgets/newbie_task_card.dart';
 
 /// 账号级里程碑页路由（V1.5.0 onboarding-recall Story 3.2 · FR-178 · UI 稿 D2 / D3）。
@@ -29,14 +33,66 @@ String milestonesEntryLocation({required bool hasPet, Map<String, String> query 
 /// 账号级里程碑页（没宠物的用户从「我的」页进；V1.5.0 Story 3.2 · D2）：
 /// 顶栏「Pencapaian kamu」→ 新手任务卡（`page = account_milestones`，① 无宠物显示「Buat profil」）→「Pencapaian akun」。
 /// 无页头卡、无 L / M / S。任一接口失败 → 整页 D3 失败态 + 重试（不显示半截内容）。
-class AccountMilestonesPage extends ConsumerWidget {
+class AccountMilestonesPage extends ConsumerStatefulWidget {
   const AccountMilestonesPage({super.key, this.celebrate});
 
-  /// `?celebrate=lulus`（3-3：优先补弹 Lulus 庆祝）；本 story 只透传、不消费。
+  /// `?celebrate=lulus`（3-3 / 7-1：从毕业通知 / 召回 D7 来）。本页本就只会补弹 Lulus Pemula
+  /// （账号级里只有它有「待庆祝」），参数只用于埋点 path 之外的语义对齐，不改变判定。
   final String? celebrate;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountMilestonesPage> createState() => _AccountMilestonesPageState();
+}
+
+class _AccountMilestonesPageState extends ConsumerState<AccountMilestonesPage> {
+  /// 补弹只做一次（build 会因 provider 刷新反复跑）。
+  bool _catchupDone = false;
+
+  /// V1.5.0 onboarding-recall Story 3.3 · AC3：没宠物的账号进本页时，Lulus Pemula `pendingCelebration` → 补弹一次
+  /// （E4 布局：无宠物行、只留日期），**展示后**异步回报 `POST /me/account-milestones/celebrations`（best-effort，
+  /// 失败下次再弹）。弹出前先记本地（本会话不再弹）；后端回报会把账号下宠物同 flag 行一并置位 → 宠物页也不再弹。
+  void _maybeCatchUp(AccountMilestones data) {
+    if (_catchupDone) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    final local = ref.read(locallyCelebratedMilestonesProvider);
+    final entry = data.items
+        .where((e) => e.flagKey == 'LULUS_PEMULA' && e.completed && e.pendingCelebration && !local.contains(e.code))
+        .firstOrNull;
+    if (entry == null) return;
+    _catchupDone = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        _catchupDone = false;
+        return;
+      }
+      final codes = kLulusPemulaCodes.toList();
+      markMilestonesCelebrating(ref, codes);
+      final container = ProviderScope.containerOf(context, listen: false);
+      final item = MilestoneItem(
+        code: entry.code,
+        title: entry.code,
+        level: MilestoneLevel.s,
+        trigger: MilestoneTrigger.systemAuto,
+        completed: true,
+        completedAt: entry.completedAt,
+      );
+      await showMilestoneCelebration(
+        context,
+        item,
+        petName: '',
+        path: MilestoneCelebrationPath.catchup,
+      );
+      // best-effort：不阻塞、失败静默（同宠物页回报口径 AD-A3.1）。
+      container.read(accountMilestoneRepositoryProvider).reportCelebrated([entry.code]).then((_) {
+        container.invalidate(accountMilestonesProvider);
+        container.invalidate(milestoneListProvider);
+      }, onError: (_) {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final tasks = ref.watch(newbieTasksProvider);
     final account = ref.watch(accountMilestonesProvider);
@@ -53,6 +109,7 @@ class AccountMilestonesPage extends ConsumerWidget {
       );
     } else {
       final data = account.value!;
+      _maybeCatchUp(data);
       body = RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(newbieTasksProvider);

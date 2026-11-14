@@ -25,6 +25,27 @@ class MilestoneCelebrationCopy {
 }
 
 const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
+  // V1.5.0 onboarding-recall Story 3.3 · FR-177：Lulus Pemula 账号级（三物种同一句，不带宠物名；逐字照整合稿）。
+  'C-S16': MilestoneCelebrationCopy(
+    titleId: 'Lulus Pemula! 🎓',
+    bodyId: 'Semua Tugas Pemula beres! Selamat datang resmi di geng TailTopia.',
+    titleEn: 'Beginner graduate! 🎓',
+    bodyEn: 'All Beginner Tasks done! Welcome to the TailTopia gang, officially.',
+  ),
+  // V1.5.0 onboarding-recall Story 3.3 · FR-177：Lulus Pemula 账号级（三物种同一句，不带宠物名；逐字照整合稿）。
+  'D-S16': MilestoneCelebrationCopy(
+    titleId: 'Lulus Pemula! 🎓',
+    bodyId: 'Semua Tugas Pemula beres! Selamat datang resmi di geng TailTopia.',
+    titleEn: 'Beginner graduate! 🎓',
+    bodyEn: 'All Beginner Tasks done! Welcome to the TailTopia gang, officially.',
+  ),
+  // V1.5.0 onboarding-recall Story 3.3 · FR-177：Lulus Pemula 账号级（三物种同一句，不带宠物名；逐字照整合稿）。
+  'G-S9': MilestoneCelebrationCopy(
+    titleId: 'Lulus Pemula! 🎓',
+    bodyId: 'Semua Tugas Pemula beres! Selamat datang resmi di geng TailTopia.',
+    titleEn: 'Beginner graduate! 🎓',
+    bodyEn: 'All Beginner Tasks done! Welcome to the TailTopia gang, officially.',
+  ),
   // ===== CAT (C) · S 级 =====
   'C-S1': MilestoneCelebrationCopy(
     titleId: 'Profil {name} sudah lengkap! 🎉',

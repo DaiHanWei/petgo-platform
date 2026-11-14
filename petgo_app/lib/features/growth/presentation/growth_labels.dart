@@ -19,6 +19,8 @@ class GrowthLabels {
         'GIFT_SENT' || 'GIFT_RECEIVED' => Icons.redeem,
         'SPEND_DIGITAL' => Icons.payments,
         'SPEND_SHOP' => Icons.shopping_bag,
+        // V1.5.0 onboarding-recall Story 3.3 · AC6：新手毕业 +20。
+        'NEWBIE_GRADUATED' => Icons.school_rounded,
         _ => Icons.bolt,
       };
 
@@ -33,6 +35,7 @@ class GrowthLabels {
         'GIFT_RECEIVED' => l10n.growthRuleGiftReceived,
         'SPEND_DIGITAL' => l10n.growthRuleSpendDigital,
         'SPEND_SHOP' => l10n.growthRuleSpendShop,
+        'NEWBIE_GRADUATED' => l10n.growthRuleNewbieGraduated,
         _ => l10n.growthExpGeneric,
       };
 
@@ -98,6 +101,8 @@ class GrowthLabels {
         return l10n.growthExpMilestone('M');
       case 'MILESTONE_L':
         return l10n.growthExpMilestone('L');
+      case 'NEWBIE_GRADUATED':
+        return l10n.growthRuleNewbieGraduated;
       case 'GIFT_SENT':
         return l10n.growthRuleGiftSent;
       case 'GIFT_RECEIVED':

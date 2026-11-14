@@ -1386,6 +1386,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/milestones',
         builder: (c, s) => MilestoneListPage(
           justCelebrated: s.extra is Set<String> ? s.extra! as Set<String> : const {},
+          // V1.5.0 onboarding-recall Story 3.3 · AC5：毕业通知 / 召回 D7 → 优先补弹 Lulus。
+          celebrateLulus: s.uri.queryParameters['celebrate'] == 'lulus',
         ),
       ),
       StatefulShellRoute.indexedStack(

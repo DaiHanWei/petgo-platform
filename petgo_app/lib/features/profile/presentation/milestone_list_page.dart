@@ -31,6 +31,7 @@ import 'widgets/milestone_badge.dart';
 import 'widgets/milestone_celebration.dart';
 import 'widgets/newbie_task_card.dart';
 import 'widgets/account_achievements_section.dart';
+import '../data/account_milestone_repository.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
 /// （彩色/灰锁）+ 点击弹层分流（系统类→说明文案 / 打卡类→「已打卡 / 去发布」两入口）。
@@ -38,7 +39,11 @@ import 'widgets/account_achievements_section.dart';
 /// 承接 `MILESTONE_NODE` 推送深链（`/profile/milestones`）。三级庆祝动效在 8.5；
 /// 「已打卡」picker + 打卡 API、「去发布」预选成长日历的完成回填在 8.4。
 class MilestoneListPage extends ConsumerStatefulWidget {
-  const MilestoneListPage({super.key, this.justCelebrated = const {}});
+  const MilestoneListPage({super.key, this.justCelebrated = const {}, this.celebrateLulus = false});
+
+  /// `?celebrate=lulus`（V1.5.0 onboarding-recall Story 3.3 · AC5）：从毕业通知 / 召回 D7 来 ——
+  /// 补庆祝时优先弹 Lulus Pemula（它若已庆祝则照常规则走，不弹）。
+  final bool celebrateLulus;
 
   /// 本次导航内**刚庆祝过**的 code（V1.3.0 Story 1.5 · AD-A2.3c）。
   ///
@@ -104,7 +109,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     // 时不补弹（同即时庆祝 `_hostIsCurrent` 口径：盖在当前页上才弹）。本方法在 build 里调用，`ModalRoute.of` 会登记依赖 ——
     // 本页重新成为栈顶时 isCurrent 变化触发 rebuild，再判一次、照常补弹。
     if (ModalRoute.of(context)?.isCurrent != true) return;
-    final catchup = resolveCatchup(
+    var catchup = resolveCatchup(
       data.allItems,
       // 本次导航带来的 + 本 App 会话内已在本机弹过的（回报在途/已落库）一并扣除。
       justCelebrated: {
@@ -112,6 +117,13 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
         ...ref.read(locallyCelebratedMilestonesProvider),
       },
     );
+    // V1.5.0 Story 3.3 · AC5：毕业通知来的优先弹 Lulus Pemula（仍只弹一条，回报覆盖的那批不变）。
+    if (widget.celebrateLulus) {
+      final lulus = data.allItems.where((i) => isLulusPemulaCode(i.code)).firstOrNull;
+      if (lulus != null && catchup.codesToReport.contains(lulus.code)) {
+        catchup = MilestoneCatchup(toCelebrate: lulus, codesToReport: catchup.codesToReport);
+      }
+    }
     if (catchup.isEmpty) return;
     _catchupDone = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -172,6 +184,8 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       if (hasAccount) {
         container.invalidate(milestoneListProvider);
         container.invalidate(archiveStatsProvider);
+        // V1.5.0 Story 3.3：Lulus 回报后端同时置了账号 flag → 账号级页 / 「我的」页入口一并刷新。
+        container.invalidate(accountMilestonesProvider);
       }
       if (!mounted) return;
       // 回报落库后刷新（列表已由 reporter 统一刷新），让档案 Tab 的角标口径立刻一致。

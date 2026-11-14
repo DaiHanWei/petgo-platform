@@ -14,7 +14,13 @@ const Set<String> _kFirstFriendCodes = {'C-S19', 'D-S19', 'G-S12'};
 const Set<String> _kFirstSaveCodes = {'C-S20', 'D-S20', 'G-S13'};
 
 /// 6 个账号级里程碑完整编码。
-const Set<String> kAccountMilestoneCodes = {..._kFirstFriendCodes, ..._kFirstSaveCodes};
+/// Lulus Pemula（V1.5.0 onboarding-recall Story 3.3 · FR-177 · OR-6：改为账号级，编码不变）。
+const Set<String> kLulusPemulaCodes = {'C-S16', 'D-S16', 'G-S9'};
+
+const Set<String> kAccountMilestoneCodes = {..._kFirstFriendCodes, ..._kFirstSaveCodes, ...kLulusPemulaCodes};
+
+/// 是否 Lulus Pemula 编码（三物种任一写法）。
+bool isLulusPemulaCode(String code) => kLulusPemulaCodes.contains(code);
 
 /// [code] 是否账号级里程碑编码（6 个之一，精确匹配）。
 bool isAccountMilestone(String code) => kAccountMilestoneCodes.contains(code);
@@ -26,6 +32,7 @@ bool isAccountMilestone(String code) => kAccountMilestoneCodes.contains(code);
 Set<String> accountSiblings(String code) {
   if (_kFirstFriendCodes.contains(code)) return _kFirstFriendCodes;
   if (_kFirstSaveCodes.contains(code)) return _kFirstSaveCodes;
+  if (kLulusPemulaCodes.contains(code)) return kLulusPemulaCodes;
   return {code};
 }
 

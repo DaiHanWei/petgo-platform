@@ -141,7 +141,8 @@ Future<void> showMilestoneCelebration(
     await BragPostEntry.openPrepared(ctx,
         jpeg: exit.jpeg,
         text: preset.text,
-        preset: ContentType.growthMoment,
+        // V1.5.0 Story 3.3 · AC4（E4）：没有正常宠物 → 预选 Moment、不预选宠物。
+        preset: preset.moment ? ContentType.daily : ContentType.growthMoment,
         petIds: petIds.isEmpty ? null : petIds,
         source: BragPostSource.milestoneCelebration);
   } catch (_) {
@@ -345,7 +346,10 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
         ? (widget.item.completedAt == null ? '' : _formatLongDate(widget.item.completedAt!, locale))
         : widget.item.completedAt == null
             ? widget.petName
-            : '${widget.petName} · ${_formatLongDate(widget.item.completedAt!, locale)}';
+            // V1.5.0 Story 3.3（E4）：没有宠物名（账号级页补弹、无正常宠物）→ 只留日期，不出孤零零的「 · 」。
+            : widget.petName.isEmpty
+                ? _formatLongDate(widget.item.completedAt!, locale)
+                : '${widget.petName} · ${_formatLongDate(widget.item.completedAt!, locale)}';
     // 整页纯深色（#141019），非半透明遮罩——与原型一致。
     return Material(
       color: AppColors.splashInk,

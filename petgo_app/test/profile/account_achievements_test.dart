@@ -5,6 +5,7 @@ import 'package:tailtopia/features/profile/data/account_milestone_repository.dar
 import 'package:tailtopia/features/profile/data/current_pet_provider.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
+import 'package:tailtopia/features/profile/data/pet_list_repository.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/domain/newbie_tasks.dart';
 import 'package:tailtopia/features/profile/presentation/account_milestones_page.dart';
@@ -30,24 +31,28 @@ const _tasks = NewbieTasks(
   hasPet: false,
 );
 
-Future<void> _pumpPetPage(WidgetTester tester, MilestoneList list) async {
-  tester.view.physicalSize = const Size(1080, 5000);
-  tester.view.devicePixelRatio = 2.75;
+Future<void> _pumpPetPage(WidgetTester tester, MilestoneList list, {bool celebrateLulus = false}) async {
+  // 庆祝页日期胶囊在测试字体（Ahem，字宽偏大）下需要更宽的逻辑宽度，不是产品布局问题。
+  tester.view.physicalSize = Size(celebrateLulus ? 1200 : 1080, 5000);
+  tester.view.devicePixelRatio = celebrateLulus ? 1.0 : 2.75;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(ProviderScope(
     overrides: [
       effectivePetIdProvider.overrideWithValue(const AsyncData(1)),
       milestoneListProvider.overrideWith((ref, _) async => list),
       newbieTasksProvider.overrideWith((ref) async => _tasks),
+      petListProvider.overrideWith((ref) async => const [PetListItem(id: 1, name: 'Orenji', petType: 'CAT')]),
     ],
-    child: const MaterialApp(
-      locale: Locale('id'),
+    child: MaterialApp(
+      locale: const Locale('id'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: MilestoneListPage(),
+      home: MilestoneListPage(celebrateLulus: celebrateLulus),
     ),
   ));
-  await tester.pumpAndSettle();
+  await tester.pump();
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
 }
 
 Future<void> _pumpAccountPage(WidgetTester tester, {Object? tasksError, Object? accountError}) async {
@@ -155,5 +160,24 @@ void main() {
     expect(a.accountGroup, isNotNull);
     expect(a.accountGroup!.totalCount, 3);
     expect(MilestoneList.fromJson({'petName': 'x', 'groups': []}).accountGroup, isNull);
+  });
+
+  /// V1.5.0 Story 3.3 · AC5：`celebrate=lulus` → 补弹优先 Lulus（即便还有更高级别的未庆祝）。
+  testWidgets('celebrateLulus：补弹优先 Lulus Pemula', (tester) async {
+    MilestoneItem pending(String code, String level) => MilestoneItem.fromJson({
+          'code': code, 'title': code, 'level': level, 'triggerType': 'SYSTEM_AUTO', 'completed': true,
+          'completedAt': '2026-11-15T03:00:00Z', 'celebratedAt': null,
+        });
+    final list = MilestoneList(
+      petName: 'Orenji',
+      completedCount: 1,
+      totalCount: 32,
+      groups: [MilestoneGroup(level: MilestoneLevel.l, completedCount: 1, totalCount: 1, items: [pending('C-L2', 'L')])],
+      accountGroup: MilestoneGroup(level: MilestoneLevel.s, completedCount: 1, totalCount: 3, items: [
+        _item('C-S19'), _item('C-S20'), pending('C-S16', 'S'),
+      ]),
+    );
+    await _pumpPetPage(tester, list, celebrateLulus: true);
+    expect(find.text('Lulus Pemula! 🎓'), findsOneWidget);
   });
 }
