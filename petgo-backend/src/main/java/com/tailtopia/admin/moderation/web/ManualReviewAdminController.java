@@ -71,7 +71,8 @@ public class ManualReviewAdminController {
      */
     private static final java.util.Set<TicketType> SCOPE = java.util.EnumSet.of(
             TicketType.CONTENT_REPORT, TicketType.ACCOUNT_IDENTITY, TicketType.CONTENT_SUBMISSION,
-            TicketType.PLACE_REPORT); // V1.3.0 Story 5.4：场所举报页签
+            TicketType.PLACE_REPORT, // V1.3.0 Story 5.4：场所举报页签
+            TicketType.GIFT_MESSAGE_REPORT); // V1.5.0 gift-pack Story 1-5：祝福语举报页签
 
     private static final int PAGE_SIZE = 20;
 

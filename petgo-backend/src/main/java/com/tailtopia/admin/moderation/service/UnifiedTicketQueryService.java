@@ -278,6 +278,32 @@ public class UnifiedTicketQueryService {
                   FROM place_reports pr
                   JOIN places pl ON pl.id = pr.place_id
                  GROUP BY pr.place_id, pl.marked_by_user_id, pl.name, pl.status
+
+                UNION ALL
+
+                -- ⑦ 送礼祝福语举报（V1.5.0 gift-pack Story 1-5，D-8）：**按订单聚合**，写法照⑥。
+                --    唯一键 (gift_order_id, reporter_user_id) ⇒ 分数 = 举报人数；target_user = 送礼人。
+                --    祝福语已隐藏（message_hidden_at 非空）的订单不再算待处理；preview = 祝福语前 60 字；
+                --    action_ref = 任一 PENDING 举报 id；content_ref = gift_orders.id。
+                SELECT 'GIFT_MESSAGE_REPORT'::text,
+                       gr.gift_order_id,
+                       string_agg(DISTINCT gr.reason_type, ' / '),
+                       go.sender_id,
+                       CASE WHEN bool_or(gr.status = 'PENDING') AND go.message_hidden_at IS NULL THEN 'PENDING'
+                            WHEN bool_or(gr.status = 'ACTIONED') OR go.message_hidden_at IS NOT NULL THEN 'RESOLVED'
+                            ELSE 'NO_ACTION' END,
+                       COUNT(DISTINCT gr.reporter_user_id)::bigint,
+                       COUNT(*)::bigint,
+                       0::bigint,
+                       COUNT(DISTINCT gr.reporter_user_id)::bigint,
+                       MIN(gr.created_at),
+                       LEFT(COALESCE(go.message, ''), 60),
+                       MIN(gr.id) FILTER (WHERE gr.status = 'PENDING'),
+                       gr.gift_order_id,
+                       MAX(gr.handled_at)
+                  FROM gift_message_reports gr
+                  JOIN gift_orders go ON go.id = gr.gift_order_id
+                 GROUP BY gr.gift_order_id, go.sender_id, go.message, go.message_hidden_at
             )
             """.formatted(FREQUENT_REPORTER_THRESHOLD,
             IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL,

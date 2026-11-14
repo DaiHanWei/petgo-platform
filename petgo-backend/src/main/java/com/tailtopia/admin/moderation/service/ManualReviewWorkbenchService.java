@@ -60,7 +60,8 @@ public class ManualReviewWorkbenchService {
             com.tailtopia.admin.moderation.dto.TicketType.CONTENT_REPORT,
             com.tailtopia.admin.moderation.dto.TicketType.ACCOUNT_IDENTITY,
             com.tailtopia.admin.moderation.dto.TicketType.CONTENT_SUBMISSION,
-            com.tailtopia.admin.moderation.dto.TicketType.PLACE_REPORT); // V1.3.0 Story 5.4
+            com.tailtopia.admin.moderation.dto.TicketType.PLACE_REPORT, // V1.3.0 Story 5.4
+            com.tailtopia.admin.moderation.dto.TicketType.GIFT_MESSAGE_REPORT); // V1.5.0 gift-pack Story 1-5
 
     private final UnifiedTicketQueryService tickets;
     private final ManualReviewItemRepository items;
@@ -76,6 +77,8 @@ public class ManualReviewWorkbenchService {
     /** V1.3.0 Story 5.4：场所举报页签的快照（复用 B6 抽屉视图）与举报明细。 */
     private final PlaceReportRepository placeReports;
     private final AdminPlaceQueryService placeQuery;
+    /** V1.5.0 gift-pack Story 1-5：祝福语举报只读查询（setter 注入，不动既有构造器签名与测试）。 */
+    private AdminGiftMessageReviewQuery giftMessageReviews;
 
     public ManualReviewWorkbenchService(UnifiedTicketQueryService tickets, ManualReviewItemRepository items,
             NameModerationRecordRepository names, AvatarReviewRepository avatars, ReportService reports,
@@ -95,6 +98,11 @@ public class ManualReviewWorkbenchService {
         this.users = users;
         this.pets = pets;
         this.adminAccounts = adminAccounts;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setGiftMessageReviews(AdminGiftMessageReviewQuery giftMessageReviews) {
+        this.giftMessageReviews = giftMessageReviews;
     }
 
     /** 左栏一页（按页签 / 两态 / 筛选；排序沿用 CTE）。已处理态补结果 / 操作人 / 时间 / 理由。 */
@@ -174,6 +182,7 @@ public class ManualReviewWorkbenchService {
         String machineReason = null;
         long pendingEntries = 0;
         PlaceDrawerView place = null;
+        com.tailtopia.admin.moderation.dto.GiftMessageReviewView giftMessage = null;
         switch (tab) {
             case SUBMISSION -> {
                 ManualReviewItem item = items.findById(sourceId).orElse(null);
@@ -227,6 +236,17 @@ public class ManualReviewWorkbenchService {
                 entries = list.stream().map(r -> new ReportEntryView(r.getReporterUserId(), nick.get(r.getReporterUserId()),
                         r.getReasonType() == null ? null : r.getReasonType().name(), r.getCreatedAt(), null)).toList();
             }
+            case GIFT -> {
+                // V1.5.0 gift-pack Story 1-5：订单快照 + 举报单（订单已删 → 只允许驳回）
+                giftMessage = giftMessageReviews.snapshot(sourceId).orElse(null);
+                contentDeleted = giftMessage == null;
+                List<com.tailtopia.admin.moderation.service.AdminGiftMessageReviewQuery.Entry> list =
+                        giftMessageReviews.entries(sourceId);
+                pendingEntries = list.stream().filter(e -> "PENDING".equals(e.status())).count();
+                Map<Long, String> nick = nicknamesOf(list.stream().map(e -> e.reporterId()).toList());
+                entries = list.stream().map(e -> new ReportEntryView(e.reporterId(), nick.get(e.reporterId()),
+                        e.reasonType(), e.createdAt(), null)).toList();
+            }
             case AVATAR -> {
                 AvatarReview rev = avatars.findById(sourceId).orElse(null);
                 if (rev != null) {
@@ -243,7 +263,7 @@ public class ManualReviewWorkbenchService {
         return new ReviewDetailView(tab, sourceId, row.subType(), row.status(), row.targetUserId(), row.targetNickname(),
                 row.targetDeleted(), row.disposalCount(), row.earliestAt(), priority, row.overdue(), post, commentBody,
                 row.contentRefId(), contentDeleted, entries, pendingEntries, row.actionRef(), submittedValue, currentValue,
-                submittedAvatar, currentAvatar, machineReason, place);
+                submittedAvatar, currentAvatar, machineReason, place, giftMessage);
     }
 
     private static UnifiedTicketQueryService.Extra extraFor(ReviewFilters f) {
@@ -307,6 +327,18 @@ public class ManualReviewWorkbenchService {
                 if (rev != null) {
                     result = rev.getVerdict() == null ? rev.getStatus().name() : rev.getVerdict().name();
                     at = rev.getUpdatedAt();
+                }
+            }
+            case GIFT -> {
+                // 按订单聚合：最近一条已处置的举报作结果 / 操作人 / 时间（隐藏 → ACTIONED，驳回 → DISMISSED）
+                var e = giftMessageReviews.entries(r.sourceId()).stream().filter(x -> x.handledAt() != null)
+                        .max(java.util.Comparator.comparing(
+                                com.tailtopia.admin.moderation.service.AdminGiftMessageReviewQuery.Entry::handledAt))
+                        .orElse(null);
+                if (e != null) {
+                    result = e.status();
+                    by = e.handledBy();
+                    at = e.handledAt();
                 }
             }
             case PLACE -> {

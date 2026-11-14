@@ -35,6 +35,26 @@
                    th:text="#{admin.review.viewContent}">查看内容</a>
             </div>
         </th:block>
+        <!-- 祝福语举报（V1.5.0 gift-pack Story 1-5）：祝福语全文、礼物名 × 数量、送礼人、收礼宠物、举报理由分布 -->
+        <th:block th:if="${d.tab.name() == 'GIFT'}">
+            <p class="err" th:if="${d.contentDeleted}" th:text="#{admin.v130.review.contentDeleted}">内容已删除</p>
+            <div th:if="${d.giftMessage != null}" class="rv-gift-message" th:with="gm=${d.giftMessage}">
+                <span class="badge badge-muted" th:if="${gm.hidden}" th:text="#{admin.v150.giftMessage.hiddenBadge}">已隐藏</span>
+                <blockquote class="rv-comment" th:text="${gm.message}">祝福语全文</blockquote>
+                <div class="sum">
+                    <div class="sum-item"><div class="sum-label" th:text="#{admin.v150.giftMessage.col.gift}">礼物</div>
+                        <div class="sum-value rv-small" th:text="${gm.giftNameEn} + ' / ' + ${gm.giftNameId} + ' × ' + ${gm.quantity}">Bone × 1</div></div>
+                    <div class="sum-item"><div class="sum-label" th:text="#{admin.v150.giftMessage.col.sender}">送礼人</div>
+                        <div class="sum-value rv-small" th:text="${gm.senderDeleted} ? #{admin.review.subject.deactivated} : (${gm.senderNickname} + ' #' + ${gm.senderUserId})">昵称</div></div>
+                    <div class="sum-item"><div class="sum-label" th:text="#{admin.v150.giftMessage.col.pet}">收礼宠物</div>
+                        <div class="sum-value rv-small" th:text="${gm.petName}">Mochi</div></div>
+                </div>
+                <p class="muted">
+                    <span th:text="#{admin.v150.giftMessage.col.reasons}">举报理由</span>
+                    <th:block th:each="rc, st : ${gm.reasonCounts}"><code th:text="${rc.key}">REASON</code> × <span th:text="${rc.value}">1</span><th:block th:unless="${st.last}"> · </th:block></th:block>
+                </p>
+            </div>
+        </th:block>
         <!-- 场所举报（Story 5.4）：场所快照（名称 / 类型 / 城市 / 地址 / 坐标 / 标记人 / 状态 / 照片缩略 / 最近 5 条评论） -->
         <th:block th:if="${d.tab.name() == 'PLACE'}">
             <p class="err" th:if="${d.contentDeleted}" th:text="#{admin.v130.review.place.deleted}">场所已删除</p>
@@ -101,11 +121,11 @@
         <div class="sum">
             <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.score}">优先级分</div><div class="sum-value" th:text="${d.priority ?: ''}">P1</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.disposals}">历史处置</div><div class="sum-value" th:text="${d.disposalCount}">0</div></div>
-            <div class="sum-item" th:if="${d.tab.name() == 'REPORT' or d.tab.name() == 'PLACE'}"><div class="sum-label" th:text="#{admin.tickets.col.reports}">举报数</div><div class="sum-value" th:text="${#lists.size(d.entries)}">0</div></div>
+            <div class="sum-item" th:if="${d.tab.name() == 'REPORT' or d.tab.name() == 'PLACE' or d.tab.name() == 'GIFT'}"><div class="sum-label" th:text="#{admin.tickets.col.reports}">举报数</div><div class="sum-value" th:text="${#lists.size(d.entries)}">0</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.review.col.earliest}">最早时间</div><div class="sum-value rv-small" th:text="${@adminTime.wib(d.earliestAt)}">时间</div></div>
         </div>
         <p class="muted" th:if="${d.tab.name() == 'SUBMISSION'}" th:text="#{admin.v130.review.machineReason}">机审判定：拿不准，送人工复核</p>
-        <ul th:if="${(d.tab.name() == 'REPORT' or d.tab.name() == 'PLACE') and !#lists.isEmpty(d.entries)}" class="rv-entries">
+        <ul th:if="${(d.tab.name() == 'REPORT' or d.tab.name() == 'PLACE' or d.tab.name() == 'GIFT') and !#lists.isEmpty(d.entries)}" class="rv-entries">
             <li th:each="e : ${d.entries}">
                 <span th:text="${e.reporterNickname ?: #messages.msg('admin.review.subject.deactivated')}">举报人</span>
                 <span class="muted" th:if="${e.reporterId != null}" th:text="'#' + ${e.reporterId}">#0</span>
@@ -119,7 +139,7 @@
     <section class="wb-actions rv-actions" th:with="url='/admin/manual-review'">
         <p class="muted" th:unless="${d.pending()}" th:text="#{admin.v130.review.readonly}">已处理，只读回看</p>
         <!-- 场所举报的对象是场所条目，标记人注销不作废单据（targetDeleted 只对账号 / 内容类生效） -->
-        <th:block th:if="${d.pending() and (!d.targetDeleted or d.tab.name() == 'PLACE')}">
+        <th:block th:if="${d.pending() and (!d.targetDeleted or d.tab.name() == 'PLACE' or d.tab.name() == 'GIFT')}">
             <!-- 内容送审：通过 / 拒绝（原因常驻，未选禁用）/ 调优先级 -->
             <th:block th:if="${d.tab.name() == 'SUBMISSION'}">
                 <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')" class="rv-action-group">
@@ -172,6 +192,26 @@
                 <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))">
                     <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}" th:text="#{admin.review.act.takedown}">下架</button>
                     <button type="button" class="btn btn-neutral" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}" th:text="#{admin.review.act.dismiss}">无需处置</button>
+                    <span th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</span>
+                </p>
+            </th:block>
+            <!-- 祝福语举报（V1.5.0 gift-pack Story 1-5）：隐藏祝福语（全部 PENDING → ACTIONED + 隐藏）/ 驳回（全部 → DISMISSED）；
+                 权限沿用内容举报处置 content.takedown；订单已删 → 「隐藏」禁用，「驳回」仍可用 -->
+            <th:block th:if="${d.tab.name() == 'GIFT'}">
+                <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')" class="rv-action-group">
+                    <form th:attr="hx-post=@{/admin/gift-messages/{id}/hide(id=${d.sourceId})},data-confirm=#{admin.v150.giftMessage.confirm.hide}"
+                          hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                        <button type="submit" class="btn btn-danger" th:disabled="${d.contentDeleted}"
+                                th:text="#{admin.v150.giftMessage.action.hide}">隐藏祝福语</button>
+                    </form>
+                    <form th:attr="hx-post=@{/admin/gift-messages/{id}/reports/dismiss-all(id=${d.sourceId})},data-confirm=#{admin.v150.giftMessage.confirm.dismissAll},data-confirm-args=${d.pendingEntries}"
+                          hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                        <button type="submit" class="btn btn-neutral" th:text="#{admin.v130.review.place.act.dismissAll}">驳回举报</button>
+                    </form>
+                </div>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))">
+                    <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}" th:text="#{admin.v150.giftMessage.action.hide}">隐藏祝福语</button>
+                    <button type="button" class="btn btn-neutral" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}" th:text="#{admin.v130.review.place.act.dismissAll}">驳回举报</button>
                     <span th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</span>
                 </p>
             </th:block>

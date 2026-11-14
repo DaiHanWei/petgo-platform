@@ -327,6 +327,11 @@ public final class AuditActions {
     public static final String GIFT_CATEGORY_OFFLINED = "GIFT_CATEGORY_OFFLINED";
     /** 重新上线礼物分类。 */
     public static final String GIFT_CATEGORY_ONLINED = "GIFT_CATEGORY_ONLINED";
+    // ===== 送礼祝福语举报（V1.5.0 gift-pack Story 1-5，D-8）=====
+    /** 隐藏祝福语（该订单全部 PENDING 举报 → ACTIONED）。target = {@code gift_orders} / 订单 id；摘要记条数，不记正文。 */
+    public static final String GIFT_MESSAGE_HIDDEN = "GIFT_MESSAGE_HIDDEN";
+    /** 驳回祝福语举报（全部 PENDING → DISMISSED）。 */
+    public static final String GIFT_MESSAGE_REPORT_DISMISSED = "GIFT_MESSAGE_REPORT_DISMISSED";
     /** 改送礼 QRIS 最低金额（{@code pricing_config.gift_qris_min_amount}，只对送礼生效）。 */
     public static final String GIFT_QRIS_MIN_UPDATED = "GIFT_QRIS_MIN_UPDATED";
 

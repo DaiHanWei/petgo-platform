@@ -41,7 +41,20 @@ public record ReviewDetailView(
         String currentAvatarUrl,
         String machineReason,
         /** 场所举报页签（V1.3.0 Story 5.4）：场所快照（复用 B6 抽屉视图）；场所已软删 → null（contentDeleted=true）。 */
-        PlaceDrawerView place) {
+        PlaceDrawerView place,
+        /** 祝福语举报页签（V1.5.0 gift-pack Story 1-5）：订单快照；订单已删 → null（contentDeleted=true）。 */
+        GiftMessageReviewView giftMessage) {
+
+    /** 23 参构造（V1.3.0 场所页签起，无祝福语快照）。 */
+    public ReviewDetailView(ReviewTab tab, long sourceId, String subType, TicketStatusBucket status, Long targetUserId,
+            String targetNickname, boolean targetDeleted, long disposalCount, Instant earliestAt, String priority, boolean overdue,
+            ContentService.AdminPostDetail post, String commentBody, Long contentRefId, boolean contentDeleted,
+            List<ReportEntryView> entries, long pendingEntries, Long actionRef, String submittedValue, String currentValue,
+            String submittedAvatarUrl, String currentAvatarUrl, String machineReason, PlaceDrawerView place) {
+        this(tab, sourceId, subType, status, targetUserId, targetNickname, targetDeleted, disposalCount, earliestAt, priority, overdue,
+                post, commentBody, contentRefId, contentDeleted, entries, pendingEntries, actionRef, submittedValue, currentValue,
+                submittedAvatarUrl, currentAvatarUrl, machineReason, place, null);
+    }
 
     /** 旧 22 参构造（非场所页签）。 */
     public ReviewDetailView(ReviewTab tab, long sourceId, String subType, TicketStatusBucket status, Long targetUserId,

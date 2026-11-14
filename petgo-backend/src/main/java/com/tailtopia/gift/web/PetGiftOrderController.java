@@ -1,5 +1,6 @@
 package com.tailtopia.gift.web;
 
+import com.tailtopia.gift.service.GiftMessageReportService;
 import com.tailtopia.gift.service.GiftOrderBrowseService;
 import com.tailtopia.gift.service.GiftOrderBrowseService.Filter;
 import com.tailtopia.gift.web.dto.GiftOpenRequest;
@@ -7,7 +8,13 @@ import com.tailtopia.gift.web.dto.GiftOpenResponse;
 import com.tailtopia.gift.web.dto.GiftOrderDetail;
 import com.tailtopia.gift.web.dto.GiftOrderPreview;
 import com.tailtopia.gift.web.dto.PetGiftOrderPage;
+import com.tailtopia.moderation.dto.ReportRequest;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
+import jakarta.validation.Valid;
+import java.time.Duration;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,15 +33,35 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code GET /api/v1/pets/{petId}/gift-orders/preview}</li>
  *   <li>{@code POST /api/v1/pets/{petId}/gift-orders/open}</li>
  *   <li>{@code GET /api/v1/gift-orders/{orderToken}}（与送礼人轮询 {@code /api/v1/me/gift-orders/{token}} 是两条路由）</li>
+ *   <li>{@code POST /api/v1/gift-orders/{orderToken}/message-reports}（Story 1-5）</li>
  * </ul>
  */
 @RestController
 public class PetGiftOrderController {
 
-    private final GiftOrderBrowseService service;
+    /** 祝福语举报限流（Story 1-5 · AC2.4）：10 次 / 10 分钟 / 用户。 */
+    static final int REPORT_LIMIT = 10;
+    static final Duration REPORT_WINDOW = Duration.ofMinutes(10);
 
-    public PetGiftOrderController(GiftOrderBrowseService service) {
+    private final GiftOrderBrowseService service;
+    private final GiftMessageReportService reports;
+    private final RedisRateLimiter rateLimiter;
+
+    public PetGiftOrderController(GiftOrderBrowseService service, GiftMessageReportService reports,
+            RedisRateLimiter rateLimiter) {
         this.service = service;
+        this.reports = reports;
+        this.rateLimiter = rateLimiter;
+    }
+
+    /** V1.5.0 gift-pack Story 1-5：举报祝福语（复用五类原因 {@code ReportRequest}）；204，重复举报幂等。 */
+    @PostMapping("/api/v1/gift-orders/{orderToken}/message-reports")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reportMessage(@AuthenticationPrincipal Jwt jwt, @PathVariable String orderToken,
+            @Valid @RequestBody ReportRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:gift:msgreport:" + userId, REPORT_LIMIT, REPORT_WINDOW);
+        reports.report(userId, orderToken, req.reasonType());
     }
 
     @GetMapping("/api/v1/pets/{petId}/gift-orders")

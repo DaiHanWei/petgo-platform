@@ -14,7 +14,9 @@ public enum ReviewTab {
     /** 场所举报（V1.3.0 Story 5.4）：按场所聚合，处置权限 place.manage（D-40：无权限看得到页签、按钮禁用）。 */
     PLACE("place", TicketType.PLACE_REPORT, Set.of()),
     NAME("name", TicketType.ACCOUNT_IDENTITY, Set.of("NICKNAME", "PET_NAME")),
-    AVATAR("avatar", TicketType.ACCOUNT_IDENTITY, Set.of("USER_AVATAR", "PET_AVATAR"));
+    AVATAR("avatar", TicketType.ACCOUNT_IDENTITY, Set.of("USER_AVATAR", "PET_AVATAR")),
+    /** 送礼祝福语举报（V1.5.0 gift-pack Story 1-5）：按订单聚合，处置权限 content.takedown。 */
+    GIFT("gift", TicketType.GIFT_MESSAGE_REPORT, Set.of());
 
     private final String param;
     private final TicketType type;
@@ -72,6 +74,7 @@ public enum ReviewTab {
                 case CONTENT_SUBMISSION -> SUBMISSION;
                 case CONTENT_REPORT -> REPORT;
                 case PLACE_REPORT -> PLACE;
+                case GIFT_MESSAGE_REPORT -> GIFT;
                 case ACCOUNT_IDENTITY -> NAME;
                 default -> null;
             };
@@ -87,6 +90,9 @@ public enum ReviewTab {
         }
         if (row.type() == TicketType.PLACE_REPORT) {
             return PLACE;
+        }
+        if (row.type() == TicketType.GIFT_MESSAGE_REPORT) {
+            return GIFT;
         }
         return row.type() == TicketType.CONTENT_REPORT ? REPORT : SUBMISSION;
     }

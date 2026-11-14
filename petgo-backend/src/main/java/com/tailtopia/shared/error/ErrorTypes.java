@@ -235,6 +235,9 @@ public final class ErrorTypes {
     /** V1.5.0 gift-pack Story 1-3（D-6）：送礼祝福语命中 L1 敏感词（422，在任何写库 / 扣款之前）。 */
     public static final URI GIFT_MESSAGE_BLOCKED = URI.create(BASE + "gift-message-blocked");
 
+    /** V1.5.0 gift-pack Story 1-5（D-8）：无祝福语 / 已隐藏 / 举报人是送礼人本人（422）。 */
+    public static final URI GIFT_MESSAGE_NOT_REPORTABLE = URI.create(BASE + "gift-message-not-reportable");
+
     private ErrorTypes() {
     }
 }

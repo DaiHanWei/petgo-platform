@@ -34,5 +34,12 @@ public enum TicketType {
      * 场所举报（V1.3.0 Story 5.4，D-5）—— 源表 {@code place_reports}，**按场所聚合**（多人举报同一场所 = 一条工单）。
      * 处置对象是场所条目本身：下架（全部 PENDING → ACTIONED）/ 驳回（全部 PENDING → DISMISSED），权限 {@code place.manage}。
      */
-    PLACE_REPORT
+    PLACE_REPORT,
+
+    /**
+     * 送礼祝福语举报（V1.5.0 gift-pack Story 1-5，D-8）—— 源表 {@code gift_message_reports}，**按订单聚合**
+     * （多人举报同一条祝福语 = 一条工单）。处置：隐藏祝福语（全部 PENDING → ACTIONED + {@code gift_orders.message_hidden_at}）
+     * / 驳回（→ DISMISSED），权限沿用内容举报处置 {@code content.takedown}。祝福语已隐藏的订单不进待处理。
+     */
+    GIFT_MESSAGE_REPORT
 }

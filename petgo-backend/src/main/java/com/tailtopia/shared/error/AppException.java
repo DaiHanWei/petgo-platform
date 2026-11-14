@@ -387,4 +387,9 @@ public class AppException extends RuntimeException {
     public static AppException giftMessageBlocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_MESSAGE_BLOCKED, detail);
     }
+
+    /** V1.5.0 gift-pack Story 1-5（D-8）：该祝福语不可举报（422）。 */
+    public static AppException giftMessageNotReportable(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.GIFT_MESSAGE_NOT_REPORTABLE, detail);
+    }
 }
