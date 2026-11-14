@@ -30,12 +30,12 @@ public class EntitlementHistoryQuery {
                   FROM entitlement_credits c
                   LEFT JOIN starter_pack_purchases s
                          ON c.source_type = 'PACK' AND s.user_id = c.user_id AND CAST(s.id AS VARCHAR) = c.source_ref
-                 WHERE c.user_id = :uid
+                 WHERE c.user_id = :uid AND c.created_at <= :beforeTs
                 UNION ALL
                 SELECT 'USE', 1, min(u.id), min(u.created_at), (array_agg(u.credit_type ORDER BY u.id))[1],
                        CAST(sum(u.quantity) AS INT), NULL, NULL, NULL, NULL, min(u.use_kind), min(u.pet_name)
                   FROM entitlement_credit_uses u
-                 WHERE u.user_id = :uid
+                 WHERE u.user_id = :uid AND u.created_at <= :beforeTs
                  GROUP BY u.use_key
             ) t
             WHERE t.at < :beforeTs

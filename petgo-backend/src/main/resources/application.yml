@@ -194,6 +194,9 @@ petgo:
   # 先置到期 + reconcile、再发到期前 3 天提醒；状态列幂等，重复执行不重复通知。"-" = 关闭（集成测试基类关掉，测试直调 scan）。
   pet-slot:
     expiry-scan-cron: ${PET_SLOT_EXPIRY_SCAN_CRON:0 5 * * * *}
+  # V1.5.0 gift-pack Story 4-4（D-27）：免费次数到期提醒（每天 WIB 10:00 = 03:00 UTC，窗口 (now, now+7 天]）。"-" = 关闭。
+  entitlement:
+    expiry-reminder-cron: ${ENTITLEMENT_EXPIRY_REMINDER_CRON:0 0 3 * * *}
   shop:
     # V1.4.2 shop-admin Story 1.3 · AD-5 / O-10：电商运营提醒发到三个飞书群自定义机器人（客服 / 运营 / 技术）。
     # 🔴 URL 留空 = 该群不发，只写 WARN 日志（本地 / 测试天然关闭）。webhook 与签名密钥 env 注入，绝不入库、绝不落日志。

@@ -39,7 +39,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>候选：{@code used < quantity AND expires_at ∈ (now, now + 7 天] AND expiry_notified_at IS NULL}，按用户 keyset 分批；</li>
  *   <li>每个（用户, 大类）一个独立事务：条件置 {@code expiry_notified_at}（只认仍为 NULL 的批）→ 发一条
  *       {@code PACK_CREDIT_EXPIRING}（{@code sendWithoutPush}，不推送）；发送失败整组回滚、下次重试（WARN 只记 userId / family）；</li>
- *   <li>注销 / 注销受理中 / 虚拟号：只置位不发（免得每天重扫）。</li>
+ *   <li>注销 / 注销受理中 / 封号 / 虚拟号：只置位不发（免得每天重扫）。</li>
+ *   <li>投递语义：发送在通知服务自己的新事务里提交、置位随本组事务提交 → 发送失败必回滚置位（下次重试，AC4.4）；
+ *       极端情况下通知已提交而本组提交失败 → 次日重复一条（at-least-once，宁重勿漏）。</li>
  * </ul>
  * 标题 / 正文按收件人语言从 {@code messages*.properties} 取后落库。不改 {@code ck_notifications_type}、不推送。
  */
@@ -51,6 +53,8 @@ public class EntitlementExpiryReminderJob {
     static final String TRY_LOCK_SQL = "SELECT pg_try_advisory_xact_lock(hashtext('entitlement_expiry_reminder'))";
     static final Duration WINDOW = Duration.ofDays(7);
     static final int BATCH_USERS = 500;
+    /** 本轮最多处理的用户数（照 {@code CouponExpiryReminderJob.MAX_USERS_PER_RUN}）；剩余明天再扫（WARN）。 */
+    static final int MAX_USERS_PER_RUN = 20_000;
     static final String DEEP_LINK_TYPE = "PACK_CREDIT_EXPIRING";
 
     private static final String CANDIDATE_USERS_SQL = """
@@ -132,7 +136,12 @@ public class EntitlementExpiryReminderJob {
             int markedOnly = 0;
             int failed = 0;
             long after = 0L;
+            int scannedUsers = 0;
             while (true) {
+                if (scannedUsers >= MAX_USERS_PER_RUN) {
+                    log.warn("entitlement expiry reminder hit per-run cap users={}", scannedUsers);
+                    break;
+                }
                 List<Long> users = jdbc.queryForList(CANDIDATE_USERS_SQL, new MapSqlParameterSource("now", at)
                         .addValue("until", to).addValue("after", after).addValue("lim", BATCH_USERS), Long.class);
                 if (users.isEmpty()) {
@@ -150,6 +159,7 @@ public class EntitlementExpiryReminderJob {
                     }
                 }
                 after = users.get(users.size() - 1);
+                scannedUsers += users.size();
             }
             return new Result(false, groups, sent, markedOnly, failed);
         });
@@ -198,10 +208,10 @@ public class EntitlementExpiryReminderJob {
         }
     }
 
-    /** 收件人可收：存在、未注销、无注销受理、非虚拟号。 */
+    /** 收件人可收：有效账号（存在、未注销、未封号，4-4 复审 #2）、无注销受理、非虚拟号。 */
     private boolean eligible(long userId) {
         User u = accounts.findUserById(userId).orElse(null);
-        return u != null && u.getDeletedAt() == null && u.getAccountType() != AccountType.VIRTUAL
+        return u != null && accounts.isActiveAccount(userId) && u.getAccountType() != AccountType.VIRTUAL
                 && deletions.findByUserId(userId).isEmpty();
     }
 
