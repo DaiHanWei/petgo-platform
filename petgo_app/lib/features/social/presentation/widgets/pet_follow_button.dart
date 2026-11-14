@@ -50,6 +50,7 @@ class PetFollowButton extends ConsumerStatefulWidget {
     this.invalidatesFollowedPetList = true,
     this.hitHeight,
     this.onSettled,
+    this.loginEntrySource = 'pet_follow',
   });
 
   /// 宠物 id（覆盖表的键 / 接口路径 / 埋点 `pet_id`，与站内访客路由 `/pets/{petId}` 同一标识）。
@@ -95,6 +96,9 @@ class PetFollowButton extends ConsumerStatefulWidget {
   /// `onboarding_recommend_action`）。失败回滚、游客拦截不回调。null = 不回调（现有调用方不变）。
   final ValueChanged<bool>? onSettled;
 
+  /// 游客点击时登录引导的 `entry_source`（缺省 `pet_follow` = 现状；V1.5.0 Story 1.3 游客展示页传 `guest_real_pets`）。
+  final String loginEntrySource;
+
   @override
   ConsumerState<PetFollowButton> createState() => _PetFollowButtonState();
 }
@@ -135,7 +139,7 @@ class _PetFollowButtonState extends ConsumerState<PetFollowButton> {
   Future<void> _onTap() async {
     if (_inFlight) return;
     // 游客：只弹登录，登录后不自动追更（同 FR-140.19）。
-    if (!requireLogin(ref, context, entrySource: 'pet_follow')) return;
+    if (!requireLogin(ref, context, entrySource: widget.loginEntrySource)) return;
     final l10n = AppLocalizations.of(context);
     // ⚠️ 先把 notifier / repo / container 拿在手里：请求期间页面可能被关掉（State 卸载后 ref 不可用），
     //    回滚与失效仍必须执行（同 `FollowButton._onTap`）。

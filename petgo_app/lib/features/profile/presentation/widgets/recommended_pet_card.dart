@@ -65,6 +65,7 @@ class RecommendedPetCard extends ConsumerWidget {
     this.onTapOverride,
     this.likeSlot,
     this.footer,
+    this.onCoverTap,
   });
 
   final RecommendedPet pet;
@@ -79,6 +80,9 @@ class RecommendedPetCard extends ConsumerWidget {
   /// 卡片文字区下方的附加区（V1.5.0 Story 1.2：首日推荐页放 `PetFollowButton(listCompact)`）。
   /// null = 不显示（现有推荐位不变）。网格格高须用 [gridCellExtent] 的 `footerExtent` 同步让出。
   final Widget? footer;
+
+  /// 只点**大图**时的动作（V1.5.0 Story 1.3：游客区点图进帖子详情）。null = 大图与头像 / 名字同一个点击（现状）。
+  final VoidCallback? onCoverTap;
 
   /// 埋点的 `from`（AC7）：`diary_empty`（Story 4.1）/ 全屏集合页与横滑行各自的值（4.3 / 4.4）。
   ///
@@ -129,7 +133,16 @@ class RecommendedPetCard extends ConsumerWidget {
             // 🛡 大图**吃剩下的高度**，不锁 1:1 —— 网格的 `childAspectRatio` 是个定值，
             //    而下面两行文字的高度随系统字号/机型变。锁死 1:1 的表现是
             //    窄屏（360dp）上「物种 · 天数」那一行被裁掉（code-review 2026-09-15）。
-            Expanded(child: _cover()),
+            Expanded(
+              child: onCoverTap == null
+                  ? _cover()
+                  : GestureDetector(
+                      key: ValueKey('recommendedPetCoverTap_${pet.petId}'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onCoverTap,
+                      child: _cover(),
+                    ),
+            ),
             Padding(
               // 顶部让出**半个头像**（它从大图下沿探出来），再留一点呼吸。
               padding: const EdgeInsets.fromLTRB(

@@ -195,8 +195,8 @@ void main() {
     expect(find.byKey(const ValueKey('recommendedPet_3')), findsOneWidget);
     expect(find.byKey(const ValueKey('recommendedPet_4')), findsNothing);
     expect(find.text(l10n.onboardingRecommendSubtitleNoPet), findsOneWidget);
-    expect(find.byKey(const ValueKey('onboardingLikePill_11')), findsOneWidget);
-    expect(find.byKey(const ValueKey('onboardingLikePill_13')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recommendLikePill_11')), findsOneWidget);
+    expect(find.byKey(const ValueKey('recommendLikePill_13')), findsOneWidget);
     expect(find.byKey(const ValueKey('petFollowList_2')), findsOneWidget);
   });
 

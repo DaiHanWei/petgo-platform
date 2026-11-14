@@ -12,6 +12,9 @@ void main() {
     'onboarding_recommend_viewed',
     'onboarding_recommend_action',
     'onboarding_recommend_exited',
+    // Story 1.3 · FR-175 游客展示页真实宠物区
+    'guest_real_pets_viewed',
+    'guest_real_pets_tapped',
   ];
 
   test('🔴 V1.5.0 onboarding-recall 清单里的事件在 lib/ 里都有字面量上报点', () {

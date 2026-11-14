@@ -28,6 +28,7 @@ class LikeButton extends ConsumerStatefulWidget {
     this.reason,
     this.onSettled,
     this.expandCountHitArea = true,
+    this.loginEntrySource,
   });
 
   final int postId;
@@ -86,6 +87,10 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 失败回滚不回调（UI 回到原值，快照本就没变）。
   final void Function(bool liked, int likeCount)? onSettled;
 
+  /// 游客点爱心时登录引导的 `entry_source`（V1.5.0 onboarding-recall Story 1.3：游客展示页真实宠物区传
+  /// `guest_real_pets`）。null = 现状（`requireLogin` 的默认来源），其余调用方不变。
+  final String? loginEntrySource;
+
   @override
   ConsumerState<LikeButton> createState() => _LikeButtonState();
 }
@@ -124,7 +129,10 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
   Future<void> _toggle() async {
     if (_inFlight) return;
     // 门控：未登录 → FR-0C，不发请求。
-    final allowed = requireLogin(ref, context, onAllowed: () {});
+    final entrySource = widget.loginEntrySource;
+    final allowed = entrySource == null
+        ? requireLogin(ref, context, onAllowed: () {})
+        : requireLogin(ref, context, onAllowed: () {}, entrySource: entrySource);
     if (!allowed) return;
 
     // 🛡 只加 source 属性，**事件名不动** —— 改名会切断已有的点赞历史序列

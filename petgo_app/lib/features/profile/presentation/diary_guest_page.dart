@@ -14,6 +14,7 @@ import '../domain/timeline_item.dart';
 import 'diary_demo_detail_page.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/timeline_item_tile.dart';
+import 'widgets/guest_real_pets_strip.dart';
 
 /// Diary 游客引导态（V1.1.2 Story 2.2 · FR-80 · UI 稿 A1）。
 ///
@@ -111,6 +112,9 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
                   ),
                 const SizedBox(height: 10),
                 _emotionalBlock(l10n),
+                // V1.5.0 onboarding-recall Story 1.3 · FR-175：情感文案之后、吸底按钮之前的「真实宠物」横滑区——
+                // 本页**唯一联网**的部分，失败 / 空整块不渲染，不影响其余零网络内容。
+                const GuestRealPetsStrip(),
               ],
             ),
           ),

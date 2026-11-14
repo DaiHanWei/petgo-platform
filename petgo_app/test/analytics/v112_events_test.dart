@@ -374,6 +374,9 @@ void main() {
         // 推荐页是引导流程的终点，不属于 Diary / Social 任何一个 Tab；事件名由 PRD §4 定死，扩表、不改名。
         // ⚠️ 新模块入表，不是为遗留事件放宽规则。
         'onboarding_',
+        // 游客展示页「真实宠物」区（V1.5.0 onboarding-recall Story 1.3 · FR-175）。模块是「游客态的真实宠物区」——
+        // 它挂在游客 Diary 展示页上，但 `diary_guest_*` 已用于示例内容引导；事件名由 PRD §4 定死，扩表、不改名。
+        'guest_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[

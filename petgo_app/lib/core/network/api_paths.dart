@@ -616,6 +616,9 @@ class ApiPaths {
   /// 可选 `?limit=`；全屏集合页的游标分页属 Story 4.3，现在不先摆一个没人用的参数。
   static const String mePetRecommendations = '$base/me/pet-recommendations';
 
+  /// 游客版推荐宠物（V1.5.0 onboarding-recall Story 1.3 · OR-2）：全站段第一页，匿名可达，服务端 10 分钟快照。
+  static const String publicPetRecommendations = '$base/public/pet-recommendations';
+
   // ===== 运营弹窗（V1.3.4 Story 5.1 / 5.4 · AD-14）=====
   /// 候选弹窗（游客可读；带 USER token 时按用户过滤）。返回 `{"items": [...]}`，按优先级排好序。
   static const String opsPopupCandidates = '$base/ops-popups/candidates';

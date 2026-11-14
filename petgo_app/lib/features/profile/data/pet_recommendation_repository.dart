@@ -194,6 +194,52 @@ void invalidatePetRecommendations(WidgetRef ref) {
   ref.invalidate(petRecommendationsProvider);
 }
 
+/// 游客版推荐宠物（V1.5.0 onboarding-recall Story 1.3 · FR-175 · OR-2）。
+///
+/// 🔴 单独一个仓库类，不加进 [PetRecommendationRepository]：那是登录态（按查看者算）的接口，
+/// 两者语义不同（游客版是全站公共列表、只一页、服务端 10 分钟快照），且不该让既有实现 / 测试替身被迫跟着改。
+abstract class PublicPetRecommendationRepository {
+  /// `GET /api/v1/public/pet-recommendations?limit=`（匿名可达；limit 服务端上限 10）。
+  Future<List<RecommendedPet>> fetchPublic({int limit = kGuestRealPetsLimit});
+}
+
+class DioPublicPetRecommendationRepository implements PublicPetRecommendationRepository {
+  DioPublicPetRecommendationRepository(this.dio);
+
+  final Dio dio;
+
+  @override
+  Future<List<RecommendedPet>> fetchPublic({int limit = kGuestRealPetsLimit}) async {
+    final resp = await dio.get<Map<String, dynamic>>(
+      ApiPaths.publicPetRecommendations,
+      queryParameters: {'limit': limit},
+    );
+    return RecommendedPetPage.fromJson(resp.data ?? const <String, dynamic>{}).items;
+  }
+}
+
+final Provider<PublicPetRecommendationRepository> publicPetRecommendationRepositoryProvider =
+    Provider<PublicPetRecommendationRepository>(
+        (ref) => DioPublicPetRecommendationRepository(ref.read(dioProvider)));
+
+/// 游客展示页真实宠物区最多几张（FR-175）。
+const int kGuestRealPetsLimit = 6;
+
+/// 游客展示页「真实宠物」区的数据（V1.5.0 onboarding-recall Story 1.3 · AC4）。
+///
+/// autoDispose + 不重试 + **失败一律回空列表**：这是展示页唯一联网的一块，取不到就整块不渲染，
+/// 不出报错条、不影响页面其余部分；App 不做本地缓存（服务端已有 10 分钟快照）。
+final guestRealPetsProvider = FutureProvider.autoDispose<List<RecommendedPet>>(
+  (ref) async {
+    try {
+      return await ref.read(publicPetRecommendationRepositoryProvider).fetchPublic();
+    } catch (_) {
+      return const <RecommendedPet>[];
+    }
+  },
+  retry: (_, _) => null,
+);
+
 /// 首日推荐页一屏的张数（V1.5.0 onboarding-recall Story 1.2 · FR-173：一屏 6 张）。
 const int kOnboardingRecommendLimit = 6;
 

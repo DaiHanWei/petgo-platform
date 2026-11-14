@@ -7,10 +7,10 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../content/presentation/like_button.dart';
 import '../../profile/data/onboarding_mark_repository.dart';
 import '../../profile/data/pet_list_repository.dart';
 import '../../profile/data/pet_recommendation_repository.dart';
+import '../../profile/presentation/widgets/recommend_like_pill.dart';
 import '../../profile/presentation/widgets/recommended_pet_card.dart';
 import '../../social/presentation/widgets/pet_follow_button.dart';
 import '../domain/onboarding_recommend_route.dart';
@@ -239,7 +239,7 @@ class _OnboardingRecommendPageState extends ConsumerState<OnboardingRecommendPag
       onTapOverride: () {},
       likeSlot: postId == null
           ? null
-          : OnboardingLikePill(
+          : RecommendLikePill(
               postId: postId,
               initialLiked: pet.coverLikedByViewer,
               initialCount: pet.coverLikeCount,
@@ -335,74 +335,6 @@ class _OnboardingRecommendPageState extends ConsumerState<OnboardingRecommendPag
               child: Text(l10n.archivePromptSkip,
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ),
-    );
-  }
-}
-
-/// 大图右上角点赞胶囊（V1.5.0 Story 1.2 / 1.3 · AC7）。
-///
-/// 🔴 只用 [LikeButton] 的**公开参数**（Feed 双击点赞线会改造它的内部状态机，本线不 fork、不复制）。
-/// 热区：LikeButton 关掉数字放大（`expandCountHitArea: false`）后爱心与数字都撑满 44 高；
-/// 胶囊底色只画在中间 26 高，视觉尺寸不变。赞数等宽数字（`FontFeature.tabularFigures()`，经 DefaultTextStyle 合并）。
-class OnboardingLikePill extends StatelessWidget {
-  const OnboardingLikePill({
-    super.key,
-    required this.postId,
-    required this.initialLiked,
-    required this.initialCount,
-    required this.source,
-    this.onLiked,
-  });
-
-  final int postId;
-  final bool initialLiked;
-  final int initialCount;
-
-  /// [LikeButton.source] / [LikeButton.likersSource] 的埋点来源。
-  final String source;
-
-  /// 服务端确认「点赞」（不是取消）后回调一次。
-  final VoidCallback? onLiked;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      key: ValueKey('onboardingLikePill_$postId'),
-      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 4,
-            right: 4,
-            top: 9,
-            bottom: 9,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(13),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: DefaultTextStyle.merge(
-              style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
-              child: LikeButton(
-                postId: postId,
-                initialLiked: initialLiked,
-                initialCount: initialCount,
-                source: source,
-                likersSource: source,
-                expandCountHitArea: false,
-                onSettled: (liked, _) {
-                  if (liked) onLiked?.call();
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
