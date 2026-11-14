@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/pay_channel_picker.dart' show formatIdrAmount;
@@ -57,6 +58,10 @@ class RuneLimitFormatter extends TextInputFormatter {
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     final runes = newValue.text.runes;
     if (runes.length <= max) return newValue;
+    // 输入法组字中不截（截了会打乱组字区）；照 LengthLimitingTextInputFormatter：已满再输入 → 保持原值
+    // （不吞掉末尾、不跳光标，code review #5）。
+    if (newValue.composing.isValid) return newValue;
+    if (oldValue.text.runes.length >= max) return oldValue;
     final cut = String.fromCharCodes(runes.take(max));
     return TextEditingValue(text: cut, selection: TextSelection.collapsed(offset: cut.length));
   }
@@ -93,14 +98,19 @@ class _GiftWrapPageState extends ConsumerState<GiftWrapPage> {
   PayMethod? _choice;
   bool _busy = false;
   bool _blocked = false;
+  bool _wasShort = false;
+  bool _lowReported = false;
+  String _lastText = '';
 
   @override
   void initState() {
     super.initState();
     _qty = widget.initialQuantity.clamp(giftMinQuantity, giftMaxQuantity);
     _message.addListener(() {
-      if (_blocked) setState(() => _blocked = false);
-      setState(() {});
+      // 只有文字真变了才刷新计数 / 解除红态（光标移动不算，code review #6）
+      if (_message.text == _lastText) return;
+      _lastText = _message.text;
+      setState(() => _blocked = false);
     });
   }
 
@@ -117,16 +127,28 @@ class _GiftWrapPageState extends ConsumerState<GiftWrapPage> {
     final l10n = AppLocalizations.of(context);
     final locale = Localizations.localeOf(context);
     final r = widget.catalog.recipient;
-    final balance = ref.watch(pawCoinProvider).value?.balance ?? 0;
+    final balanceAsync = ref.watch(pawCoinProvider);
+    // 余额加载中：不当 0 处理（不自动展开、不默认直接付款、主按钮不可点，code review #2）
+    final balanceLoading = !balanceAsync.hasValue;
+    final balance = balanceAsync.value?.balance ?? 0;
     final total = _total;
-    final short = balance < total;
+    final short = !balanceLoading && balance < total;
     final lowAmount = total < widget.catalog.qrisMinAmount;
     // 有效选择：用户选的仍可用就用；否则默认（够 → PawCoin；不够 → 门槛以上直接付款，以下无可选）。
     PayMethod? effective = _choice;
     if (effective == PayMethod.pawcoin && short) effective = null;
     if (effective == PayMethod.direct && lowAmount) effective = null;
     effective ??= short ? (lowAmount ? null : PayMethod.direct) : PayMethod.pawcoin;
+    if (balanceLoading && effective == PayMethod.pawcoin) effective = null;
+    // 由够变不够（如加了数量）→ 重新自动展开（code review #7）
+    if (short && !_wasShort) _expanded = null;
+    _wasShort = short;
     final expanded = _expanded ?? short;
+    if (lowAmount && expanded && !_lowReported) {
+      // 低于 QRIS 门槛提示真正露出时才报（code review #3）
+      _lowReported = true;
+      Analytics.capture('gift_qris_low_amount_shown', {'total_amount': total});
+    }
     final exp = widget.item.senderExp * _qty;
 
     final species = switch (r.petType) {
@@ -168,7 +190,7 @@ class _GiftWrapPageState extends ConsumerState<GiftWrapPage> {
                 ],
               ),
             ),
-            _payArea(l10n, balance, total, short, lowAmount, effective, expanded),
+            _payArea(l10n, balance, total, short, lowAmount, effective, expanded, balanceLoading),
           ]),
         ),
       ),
@@ -250,10 +272,12 @@ class _GiftWrapPageState extends ConsumerState<GiftWrapPage> {
   }
 
   Widget _payArea(AppLocalizations l10n, int balance, int total, bool short, bool lowAmount, PayMethod? effective,
-      bool expanded) {
+      bool expanded, bool balanceLoading) {
     final amount = formatIdrAmount(total);
     final String label;
-    if (effective == PayMethod.pawcoin) {
+    if (balanceLoading && effective == null) {
+      label = l10n.giftSendCoins(amount);
+    } else if (effective == PayMethod.pawcoin) {
       label = l10n.giftSendCoins(amount);
     } else if (effective == PayMethod.direct) {
       label = l10n.giftSendConfirm(amount);
@@ -286,7 +310,7 @@ class _GiftWrapPageState extends ConsumerState<GiftWrapPage> {
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (!expanded)
           Row(children: [
-            Text(l10n.giftPayWithCoins,
+            Text(effective == PayMethod.direct ? l10n.payMethodDirect : l10n.giftPayWithCoins,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
             const Spacer(),
             Text('${l10n.pawcoinBalanceLabel}: ${formatIdrAmount(balance)}',

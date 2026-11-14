@@ -161,8 +161,22 @@ class _GiftSendFlow {
     while (true) {
       if (!context.mounted) return;
       // V1.5.0 gift-pack Story 2-1 / 2-2：选礼物整页 → 包装页（替代旧的底部面板 + PayChannelPicker）。
+      // 包装页压在选礼物页之上（返回时选礼物页原样还在，code review #4）；包装页给出结局才连同选礼物页一起收起。
       final res = await Navigator.of(context).push<GiftCatalogResult>(MaterialPageRoute(
-        builder: (_) => GiftCatalogPage(recipient: recipient, onCatalogShown: _reportPanelOpened),
+        builder: (_) => GiftCatalogPage(
+          recipient: recipient,
+          onCatalogShown: _reportPanelOpened,
+          onPick: (catalog, item) async {
+            final outcome = await _wrap(catalog, item);
+            if (outcome is _Unavailable) {
+              // 礼物已下线：提示后留在选礼物页并重拉目录
+              _toast(l10n.giftUnavailable);
+              if (context.mounted) ref.invalidate(giftCatalogProvider(recipient));
+              return null;
+            }
+            return outcome == null ? null : GiftCatalogFinished(outcome);
+          },
+        ),
       ));
       if (res == null) return; // 关掉选礼物页
       if (res is GiftCatalogCannotSend) {
@@ -173,12 +187,9 @@ class _GiftSendFlow {
         if (context.mounted) unawaited(context.push(LevelPage.location));
         return;
       }
-      final picked = res as GiftCatalogPicked;
-      if (!context.mounted) return;
-      final outcome = await _wrap(picked.catalog, picked.item);
+      if (res is! GiftCatalogFinished) return;
+      final outcome = res.outcome as _PayOutcome;
       switch (outcome) {
-        case null:
-          continue; // 包装页返回 → 回选礼物页
         case _Delivered(:final channel, :final selection, :final senderExp):
           await _celebrate(selection, channel, senderExp: senderExp);
           return;
@@ -189,10 +200,7 @@ class _GiftSendFlow {
           _toast(message);
           return;
         case _Unavailable():
-          _toast(l10n.giftUnavailable);
-          if (!context.mounted) return;
-          ref.invalidate(giftCatalogProvider(recipient));
-          continue;
+          return; // 已在 onPick 里处理（不会走到这里）
       }
     }
   }
@@ -210,21 +218,18 @@ class _GiftSendFlow {
 
   /// 包装页（C1 ~ C9）：一次或多次「Kirim」，直到送达 / QRIS 出码 / 终止，或用户返回（null）。
   Future<_PayOutcome?> _wrap(GiftCatalog catalog, GiftItem item) async {
-    // requestId：针对某一渠道第一次确认时生成；同渠道重试复用，换渠道新生成（AC4.2）。
-    HdPayChannel? idChannel;
+    // requestId：同一份「渠道 + 数量 + 祝福语」重试复用；任一项变了就新生成（code review #1：后端按键重放旧单、
+    // 不再校验，改了数量 / 祝福语还用旧键会拿回旧单却按新数量庆祝）。
+    String? idFingerprint;
     String? requestId;
-    var lowAmountReported = false;
 
     Future<GiftWrapSubmitResult> submit(GiftWrapRequest req) async {
       final sel = GiftSelection(catalog: catalog, item: item, quantity: req.quantity);
       final channel = req.channel;
-      if (sel.total < catalog.qrisMinAmount && !lowAmountReported) {
-        lowAmountReported = true;
-        Analytics.capture('gift_qris_low_amount_shown', {'total_amount': sel.total});
-      }
-      if (requestId == null || idChannel != channel) {
+      final fingerprint = '${channel.wire}|${req.quantity}|${req.message ?? ''}';
+      if (requestId == null || idFingerprint != fingerprint) {
         requestId = newGiftRequestId();
-        idChannel = channel;
+        idFingerprint = fingerprint;
       }
       try {
         final r = await repo.send(

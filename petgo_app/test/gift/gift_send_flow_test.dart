@@ -317,6 +317,31 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
+  testWidgets('requestId：改数量或祝福语后重试换新键（防重放旧单）', (tester) async {
+    repo.sendResults = [problem('internal', status: 500)];
+    await start(tester);
+    await pick(tester);
+    await kirim(tester);
+    await kirim(tester, chip: 5);
+    expect(repo.sends[1].requestId, isNot(repo.sends[0].requestId));
+    await tester.enterText(find.byKey(const ValueKey('giftWrapMessage')), 'baru');
+    await kirim(tester);
+    expect(repo.sends[2].requestId, isNot(repo.sends[1].requestId));
+    await kirim(tester);
+    expect(repo.sends[3].requestId, repo.sends[2].requestId);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('返回时选礼物页仍在下面（不重新加载）', (tester) async {
+    await start(tester);
+    final calls = repo.catalogCalls;
+    await pick(tester);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(catalogPage(), findsOneWidget);
+    expect(repo.catalogCalls, calls);
+  });
+
   testWidgets('QRIS 出码 → 二维码；pollPaid DELIVERED → Toast + capturePurchase', (tester) async {
     const pending = GiftSendResult(
       delivered: false,

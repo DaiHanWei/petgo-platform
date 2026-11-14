@@ -26,6 +26,12 @@ class GiftCatalogPicked extends GiftCatalogResult {
   final GiftItem item;
 }
 
+/// 包装页给出了结局（送达 / QRIS 出码 / 终止）：选礼物页随之收起，结局交回编排。
+class GiftCatalogFinished extends GiftCatalogResult {
+  const GiftCatalogFinished(this.outcome);
+  final Object outcome;
+}
+
 /// 点了锁区块：调用方进 `/me/growth`。
 class GiftCatalogOpenLevelPage extends GiftCatalogResult {
   const GiftCatalogOpenLevelPage();
@@ -83,10 +89,13 @@ String? giftReceivedFromText(GiftReceivedFrom? rf, AppLocalizations l10n) {
 ///
 /// 结局（pop 值）：[GiftCatalogResult] 或 null（关闭）。
 class GiftCatalogPage extends ConsumerStatefulWidget {
-  const GiftCatalogPage({super.key, required this.recipient, this.onCatalogShown});
+  const GiftCatalogPage({super.key, required this.recipient, this.onCatalogShown, this.onPick});
 
   final GiftRecipientRef recipient;
   final ValueChanged<GiftCatalog>? onCatalogShown;
+
+  /// 点礼物：给了就在本页之上打开下一步（包装页），返回非空结局才收起本页；不给则直接 pop [GiftCatalogPicked]。
+  final Future<GiftCatalogResult?> Function(GiftCatalog catalog, GiftItem item)? onPick;
 
   @override
   ConsumerState<GiftCatalogPage> createState() => _GiftCatalogPageState();
@@ -120,6 +129,24 @@ class _GiftCatalogPageState extends ConsumerState<GiftCatalogPage> {
         Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 200), alignment: 0.5);
       }
     });
+  }
+
+  bool _picking = false;
+
+  Future<void> _picked(GiftCatalog catalog, GiftItem item) async {
+    final onPick = widget.onPick;
+    if (onPick == null) {
+      Navigator.of(context).pop(GiftCatalogPicked(catalog, item));
+      return;
+    }
+    if (_picking) return;
+    _picking = true;
+    try {
+      final r = await onPick(catalog, item);
+      if (r != null && mounted) Navigator.of(context).pop(r);
+    } finally {
+      _picking = false;
+    }
   }
 
   GlobalKey _anchor(String key) => _anchors.putIfAbsent(key, GlobalKey.new);
@@ -323,7 +350,7 @@ class _GiftCatalogPageState extends ConsumerState<GiftCatalogPage> {
                                 item: g,
                                 name: g.nameFor(locale),
                                 exclusiveLevel: s.exclusiveLevel,
-                                onTap: () => Navigator.of(context).pop(GiftCatalogPicked(catalog, g)),
+                                onTap: () => _picked(catalog, g),
                               ),
                             ),
                         ],

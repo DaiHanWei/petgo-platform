@@ -94,6 +94,16 @@ class PayMethodCards extends StatelessWidget {
   - 默认礼盒：素材 `assets/gift/gift_box_closed.webp` 由 2-3 接入，本页先用图标占位。
 - 文案：13 条新 key 逐字取 App 稿新文案表；「Saldo PawCoin: {n}」用 `pawcoinBalanceLabel` + 「: {n}」拼接（该 key 无占位符）。
 
+- Code review（独立复审）处置：
+  - CONFIRMED #1 `requestId` 只按渠道复用：超时后改数量 / 祝福语再送会重放旧单、却按新数量庆祝 → 改按「渠道 + 数量 + 祝福语」指纹复用，任一变化即新键。已修并补测。
+  - CONFIRMED #2 余额加载中按 0 处理（会自动展开并默认直接付款）→ 加载中不自动展开、主按钮不可点。已修。
+  - CONFIRMED #3 `gift_qris_low_amount_shown` 改在提交时报 → 挪到包装页，低于门槛提示真正露出（展开）时报一次。已修。
+  - CONFIRMED #4 返回时选礼物页被重新 push、滚动与加载丢失 → 包装页改为压在选礼物页之上（`GiftCatalogPage.onPick`），返回原样还在；`gift-unavailable` 留在选礼物页并重拉目录。已修并补测。
+  - #5 `RuneLimitFormatter` 满 500 时中间输入会吞末尾、组字中截断 → 组字中不截；已满再输入保持原值。已修。
+  - #6 光标移动也会解除红态 → 只在文字真变化时解除。已修。
+  - #7 加数量由够变不够时不再自动展开；收起时 C9 仍写「Bayar dengan PawCoin」→ 由够变不够重新自动展开；收起标题随有效方式（直接付款时写「Bayar langsung」）。已修。
+  - #8 `senderExp` 未交出：2-3 已在送达页使用（PawCoin 取响应、QRIS 取目录 × 数量）。
+
 ### File List
 
 - `petgo_app/lib/shared/widgets/pay_method_cards.dart`（新）
